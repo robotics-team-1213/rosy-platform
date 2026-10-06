@@ -1115,3 +1115,15 @@
 - 변경: lane_keep.py가 626줄로 600줄 파일 예산을 넘어(사이드 플립 수정 +27줄) lane_keep_junction.py로 교차로 HOLD 규칙(_junction, _across_path, 네 상수)를 옮겼다. 동작은 같고 호출부가 편측 판정 거리를 인자로 넘긴다. 패키지 판정 기록을 44646으로 재판정했다.
 - 증거: architecture 33 PASS(예산 포함), 차선 관련 278 PASS/11 SKIP, known_failures 0 NEW. lane_keep.py는 573줄.
 - gate 변화: 없음. 분리는 순수 이동이며 장치·현장 수용 상태는 그대로다.
+
+## 2026-10-06 · uncommitted · feat(sim): sim LiDAR 모양, accept_simulation_scans, GAZEBO 투영 불확실도
+
+- 변경: `is_simulation_scan`이 공용 Gazebo 모델 모양(640 빔, `range_max` 12, `<ns>rplidar_link`)도 받는다(opt-in 뒤에만). `SafetyNode`의 `accept_simulation_scans`(기본 false, `use_sim_time` 필수)가 `enable_simulation_scans`를 부른다. `containment_payload`는 GAZEBO 지면에서만 `uncertainty_m = 2 × max_range / fx`를 낸다. NOMINAL·CALIBRATED는 `None` 그대로다.
+- 증거: `test_scan_acceptance.py`, `test_lane_containment_payload.py` 추가 시험 PASS.
+- gate 변화: 없음. D-468이 장치에서 쓰는 투영 불확실도는 여전히 미측정이다.
+
+## 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)
+
+- 변경: GAZEBO 지면 투영 불확실도의 2 px를 `GAZEBO_DETECTOR_LATERAL_PX`로 이름 붙였다. 측정이 아닌 휴리스틱이다. 동작은 같다.
+- 증거: `test_lane_containment_payload.py` 6 PASS.
+- gate 변화: 없음.
