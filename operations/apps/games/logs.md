@@ -306,3 +306,44 @@
 - 검증: 최초 remaining batch는 7 passed/7 failed(38.36s)였고 실패 모두 CSP EvalError로 실제 조건 전에 멈췄다. 정확한 실패 7개만 재실행하여 7 passed(18.99s). host 문구와 실제 구조 예산은 합동 35 passed(16.68s). 근거 X:/DevTemp/rosy-ui-unify/final/games_remaining.log 및 final-plan/games-csp.log, task6-host.log.
 - gate 변화: SOURCE/LOCAL 검증 복구이며 관측 완전성을 게임 운용 승인으로 해석하지 않는다.
 - 결정: D-439 Task6. 실제 CSP를 풀거나 실패 조건을 약화하지 않고 실행 가능한 함수로 검증한다.
+
+## 2026-10-06 · uncommitted · uiux(games): 관측 카드가 빈 높이를 차지하지 않음
+
+- 변경: 경기 보드에서 프레임이 없는 관측 카드를 내용 높이로 맞춰 피치를 주 초점으로 둔다. 데스크톱·전화 상태 캡처 5장을 D-153 회차에 보존한다.
+- 증거: 게임 브라우저 18 passed, 게임 모듈 113 passed, 변경 후 진행·최초·HOLD·정지 4 passed, 데스크톱·390px 배치 1 passed, known_failures 0 NEW. Impeccable CSS 검사 새 경고 0.
+- gate 변화: LOCAL UI 증거만 추가. 실제 카메라·로봇 readback과 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 최초 피치 대기·연결 오류 문구
+
+- 변경: 경기 정보가 없을 때 빈 피치 중앙에 대기·연결 오류 이유를 표시한다. 기존 마지막 수신 위치 경고는 유지하고, 정지 재시도 브라우저 시험은 CSP와 충돌하지 않는 DOM 대기로 관찰한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 최초 1280/390px·첫 오류·끊김·정지 실패 캡처. 브라우저 19 passed, 모듈 113 passed, `known_failures.py` 0 NEW.
+- gate 변화: 게임 보드 G3 부분 근거. 실제 경기·정지 readback과 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 320px 동일 폭 확인
+
+- 변경: 경기 보드의 320×568 최초·지연 화면에서 점수·피치·관측 패널이 같은 폭을 쓰는지 브라우저 계약에 추가했다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 원본 캡처 2장, 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL G2 부분 근거 추가. 실제 경기·정지 readback과 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 좁은 보드의 공·로봇 가독성
+
+- 변경: 캔버스가 축소돼도 공·로봇 표식·이름이 화면에서 읽히는 크기를 유지한다. 진행 중인 320/390px의 점수·피치·관측 동일 폭도 검사한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 전후 캡처. 기존 320px 공 반지름 화면상 2.6px, 수정 후 5px. 진행·좁은 폭 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Game Board LOCAL G2 부분 근거 추가. D-101 노트북 운영, 실제 경기·정지 readback과 G3는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(games): 좁은 복구 화면의 동등 폭
+
+- 변경: 첫 연결 실패와 경기 수신 후 연결 끊김을 320/390px에서 재생하고, 점수·피치·관측의 동등 폭, 연결 문구, 첫 화면 정지를 브라우저 계약에 추가했다. 제품 렌더링은 바꾸지 않았다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/game-recovery-mobile/` 원본 4장. 패널 폭 축소 변이에서 320px 검사 실패, 복구 후 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 게임 보드 LOCAL G2 상태·폭 근거를 추가했다. 실제 경기·정지 readback과 사용자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(games): HOLD 이유의 평문과 전화 폭
+
+- 변경: 실제 referee의 `lost_ball`·`lost_robots`를 경기 보드에서 한국어로 표시한다. 전화 폭 HOLD에서는 유실 이유를 피치보다 먼저 두어 320px 고정 정지 행 위에서 읽게 한다.
+- 증거: 두 사유·세 폭 브라우저 6 passed, 전체 보드 브라우저 29 passed, 게임 모듈 113 passed, 반응형·토큰 계약 44 passed, 각 성공 실행 `known_failures.py` 0 NEW. 320px 이유 가림·원시 코드 노출은 수정 전 적색, 관측 칸 4px 축소 변이에서 동등 폭 검사 적색. X: `captures/game-hold-width/games_board_{lost_ball,lost_robots}_{1280x800,390x844,320x568}.png`, `logs/game-hold-{reason-red,code-red,width-mutation,final,style-final,browser-full-final,module-final}.txt`.
+- gate 변화: 경기 보드 HOLD의 LOCAL G2 폭·어휘 부분 근거 추가. 실제 경기·정지 readback과 게임 호스트 사용자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(games): compact 정지 조작 전폭
+
+- 변경: 390/320px 경기 보드의 정지 버튼을 점수·피치·관측과 같은 가용 폭으로 맞췄다. 기존 96px 버튼은 320px의 272px 패널보다 좁았다.
+- 증거: 두 폭의 정지·머리·마커 브라우저가 너비 단언 추가 직후 2 failed → 수정 후 2 passed. 전체 보드 29 passed, 게임 모듈 113 passed, 반응형·토큰 계약 44 passed, 각 `known_failures.py` 0 NEW. X:/DevTemp/projects/rosy-platform/2026-10-06--032913--uiux-quality--199bc9/logs/game-stop-width-{red,green,browser-full,style,module}.txt 및 captures/game-stop-fullwidth/.
+- gate 변화: LOCAL G2 조작 폭 부분 근거. 실제 두 로봇 정지 readback과 게임 호스트 사용자 G3는 HOLD.

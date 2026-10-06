@@ -14,7 +14,10 @@ function readout(state, channel, label, freshValue) {
 
 export function mount(el, ctx) {
   const head = createNode("ui-head", "", "로봇 상태");
+  const status = createNode("ui-status", "", "로봇 상태를 확인하는 중입니다.");
+  status.setAttribute("state", "pending");
   const summary = createNode("dl", "ui-readout");
+  summary.hidden = true;
   // D-321 부록: 보정 세션이 살아 있는 동안 로봇 카드 맨 위에 경고 칩을 단다.
   const calibration = document.createElement("ui-tag");
   calibration.setAttribute("status", "warn");
@@ -30,6 +33,8 @@ export function mount(el, ctx) {
     calibration.title = active ? `보정 주체: ${owner?.label || owner?.role || owner?.id || "알 수 없음"}` : "";
   }
   function render(state) {
+    status.hidden = true;
+    summary.hidden = false;
     renderCalibration(state.activity);
     summary.replaceChildren();
     const pose = state.pose;
@@ -55,10 +60,13 @@ export function mount(el, ctx) {
     }
   }
   function fail(error) {
+    calibration.remove();
     summary.replaceChildren();
-    const note = createNode("ui-empty", "", `상태를 불러오지 못했습니다: ${error.message}`);
-    summary.append(note);
+    summary.hidden = true;
+    status.textContent = `상태를 불러오지 못했습니다: ${error.message}`;
+    status.setAttribute("state", "error");
+    status.hidden = false;
   }
-  el.append(head, summary);
+  el.append(head, status, summary);
   return ctx.store.state(render, fail);
 }

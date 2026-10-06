@@ -32,6 +32,7 @@
         <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false" title="밝게" data-action-icon="theme-light"><span class="sr-only">밝게</span></ui-button>
         <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템" data-action-icon="theme-system"><span class="sr-only">시스템</span></ui-button>
       </div>
+      <a class="topbar-cell-link" href="/console/cell">Cell 작업</a>
     </div>
     <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
     <ui-tag id="development-badge" status="warn" hidden title="같은 망 PC 누구나 1시간 운용자 세션을 받는다 (D-473)">개발 연결 모드</ui-tag>
@@ -40,6 +41,7 @@
     <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
+  <ui-status id="estop-feedback" hidden></ui-status>
 
   <nav id="console-workflow" class="console-workflow" aria-label="관제 준비 순서">
     <ol>
@@ -60,6 +62,8 @@
     <div>
       <strong id="dispatch-control-title">발행 상태 확인 중</strong>
       <small id="dispatch-control-detail">대기 작업과 정지 세대를 읽고 있습니다.</small>
+      <p id="cancel-all-result" hidden></p>
+      <a id="cancel-all-details" href="#log" hidden>로봇별 결과 보기</a>
     </div>
     <ui-button id="dispatch-rearm" kind="primary" type="button" hidden>
       대기 작업 재허가

@@ -304,7 +304,7 @@ def _sessions(manifest: dict) -> set[str]:
             | {v["session"] for v in manifest.get("labels") or [] if isinstance(v, dict) and "session" in v})
 
 
-def training_sessions(store, revision) -> tuple[str, set[str]] | None:
+def training_sessions(store, revision) -> tuple[str, set[str], set[str], set[str]] | None:
     """The store dataset version the model was trained on ("<name>@<sha>", its sessions),
     found as <store>/datasets/*/<revision>/manifest.json; None when it cannot be resolved
     (no store, a revision that is not a 64-hex content sha, no such folder)."""
@@ -312,7 +312,15 @@ def training_sessions(store, revision) -> tuple[str, set[str]] | None:
         return None
     for mf in sorted(Path(store).glob(f"datasets/*/{revision}/manifest.json")):
         try:
-            return f"{mf.parent.parent.name}@{revision}", _sessions(json.loads(mf.read_text(encoding="utf-8")))
+            doc = json.loads(mf.read_text(encoding="utf-8"))
+            groups = {row.get("capture_group") for row in doc["frames"] if row.get("capture_group")}
+            grouped_sessions = {row["session"] for row in doc["frames"] if row.get("capture_group")}
+            for row in doc.get("sources", []):
+                if isinstance(row, dict) and row.get("capture_group"):
+                    groups.add(row["capture_group"])
+                    grouped_sessions.add(row.get("session"))
+            return (f"{mf.parent.parent.name}@{revision}", _sessions(doc), groups,
+                    grouped_sessions)
         except (OSError, ValueError):
             continue
     return None
@@ -504,6 +512,10 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                     raise EvalSetError(f"eval set {eval_dir} is not a folder (gate eval_set)")
                 ev = evaluate(model, eval_dir, gate.get("eval_max_frames") or 400)
                 trained = training_sessions(store, getattr(manifest, "dataset_revision", None))
+                reservations = {}
+                if store:
+                    import store as store_module
+                    reservations = store_module.Store(store).eval_reservations()
                 if trained is None:
                     ev["disjoint"] = "unverified"
                     report.setdefault("warnings", []).append(
@@ -513,6 +525,10 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                     ev["training_dataset"], ev["disjoint"] = trained[0], not shared
                     if shared:
                         ev["shared_sessions"] = shared
+                    if reservations and (trained[1] & reservations.keys()
+                                         or trained[2] & set(reservations.values())
+                                         or trained[1] - trained[3]):
+                        ev["reserved_eval_overlap"] = True
                 champ = find_champion(out, ev["set"]["content_sha"], manifest.model_revision)
                 ev["champion_comparison"] = compare_to_champion(ev, champ)
                 ev["champion"] = None if champ is None else {
@@ -523,6 +539,8 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
         report["verdict"], report["reasons"] = judge(stats, gate)
         if report.get("eval"):
             report["reasons"] += judge_eval(report["eval"], gate)
+            if report["eval"].get("reserved_eval_overlap"):
+                report["reasons"].append("eval: training dataset overlaps or cannot exclude reserved eval sources")
             report["verdict"] = "fail" if report["reasons"] else "pass"
         if stats["frames"] == 0:  # no clips under root: a setup error, not the model's
             report["transient"] = True
