@@ -570,3 +570,10 @@
 - 증거: `test_peer_pairing.py` 신규 `ScreenCodeApproval` 10건(응답·pending·로그에 코드 없음, 5회 거절, 비밀 없이 승인 불가, 콘솔·코드 경합 단일 승인, 종료 상태별 파일 삭제, 168 h·challenge/session, 403, 속도 한도) 포함 api_web·foundation 867 passed. 장치 배포는 하지 않았다.
 - gate 변화: SOURCE/LOCAL만. DEVICE(9dfk LCD 코드·태블릿 입력)는 서명 릴리스 뒤 별도.
 - 결정: D-483
+
+## 2026-10-07 · uncommitted · fix(api): D-483 보안 검토 반영(M1·M2·L1·L2·L4·L6)
+
+- 변경: 대기 한도 16개는 살아 있는 pending만 세고 출처별 동시 대기를 2개로 묶었다. hand-over 파일은 살아 있는 요청을 최신순 최대 3개 `{"requests": [...]}`로 싣는다(새 요청이 먼저 온 코드를 가리지 않음). 관계 128개 상한에서 만료·폐기되었고 살아 있는 세션이 없는 관계를 지우고 `relationship_pruned` 감사 행을 남긴다(overlay의 grants를 통째로 바꿔 디스크에서도 지워진다, `patch_local_config(replace=...)`). CORE 시작 때 남은 approval.json을 지운다. 화면 코드 관계는 `approved_at`을 갖고 모델이 168 h 상한을 강제한다. 토큰 id `screen-code`는 읽지 않는다.
+- 증거: `test_peer_pairing.py` 38 passed(신규: 3개 동시 표시·출처별/전체 한도·시작 시 삭제·폐기 뒤 세션 거부(HTTP·소켓)·모델 거부 10종·예약 id·상한 정리와 디스크 반영, 속도 한도 시험은 코드 값과 무관). 장치 배포는 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483

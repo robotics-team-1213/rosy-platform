@@ -2282,13 +2282,17 @@ base64url이며 서버는 hash만 보관한다. 4자리 영숫자는 양쪽 화�
 승인·로그인 자격이 아니다. 상태 polling 간격은 최소 2초다.
 
 D-483 화면 승인 코드(v1.109): CORE는 요청마다 6자 승인 코드를 만들고 상수 시간
-hash 비교만 한다. 원문은 응답·상태·`pending`·로그에 없고, 기다리는 요청 중 가장
-최근 하나만 `/run/rosy-peer-display/approval.json`(`rosy-core:rosy-display` 2750,
-파일 0640, `{display_code, approval_code, label, expires_at}`)으로 rosy-face에 넘긴다.
-승인·거절·취소·만료·정리 때 지운다. `confirm`으로 생긴 관계는 `approved_by`·
-`issuer_id`·`issuer_source`가 `screen-code`, `issuer_digest`가 수신 키 지문,
-`persistent=false`, 수명 168시간이며 발급자 token 없이 관계 자체의 만료·폐기·수신
-키만 확인한다. 콘솔 `decision`과 경합하면 하나만 승인한다.
+hash 비교만 한다. 원문은 응답·상태·`pending`·로그에 없고, 살아 있는 대기 요청을
+가장 최근 것부터 최대 3개 `/run/rosy-peer-display/approval.json`(`rosy-core:rosy-display`
+2750, 파일 0640, `{"requests": [{display_code, approval_code, label, expires_at}]}`)으로
+rosy-face에 넘긴다. LCD는 요청마다 "표시 번호  승인 코드" 한 줄을 보인다. 대기 요청이
+없으면(승인·거절·취소·만료·정리) 파일을 지우고, CORE 시작 때 남은 파일도 지운다.
+pending 한도 16개는 살아 있는 대기 요청만 세며 출처별 동시 대기는 2개다. `confirm`으로
+생긴 관계는 `approved_by`·`issuer_id`·`issuer_source`가 `screen-code`, `issuer_digest`가
+수신 키 지문, `persistent=false`, `approved_at`부터 최대 168시간이며 발급자 token 없이
+관계 자체의 만료·폐기·수신 키만 확인한다. 토큰 id `screen-code`는 예약어다. 콘솔
+`decision`과 경합하면 하나만 승인한다. 관계 128개 상한에 닿으면 만료·폐기되었고 살아
+있는 세션이 없는 관계를 지우고 `relationship_pruned` 감사 행을 남긴다.
 
 Challenge fields: relationship_id, challenge_id, nonce, receiver_id,
 receiver_key_sha256, client_id, client_key_sha256, role, generation, expires_at.

@@ -495,3 +495,10 @@
 - 증거: JVM 신규 3건(screenCodeConfirmApprovesThroughTheStatusPoll, wrongScreenCodeReportsRemainingAttemptsAndKeepsWaiting, olderCoreWithoutConfirmRouteIsConsoleOnly) 포함 92 passed, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
 - gate 변화: SOURCE/LOCAL만.
 - 결정: D-483
+
+## 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
+
+- 변경: LCD가 요청 여러 개를 보일 수 있어 입력칸 안내를 "로봇 화면에서 <표시 번호> 옆의 승인 코드"로 바꿨다. `confirm`의 400은 `detail.remaining_attempts`가 있을 때만 틀린 코드로 보고, 없으면 `PeerRefused(400)`로 다룬다.
+- 증거: JVM 신규 badRequestWithoutRemainingAttemptsIsARefusalNotAWrongCode 포함 PeerClientTest 통과, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
