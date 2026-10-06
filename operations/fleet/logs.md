@@ -2169,3 +2169,9 @@
 - Change: The existing Cell browser scenario now checks partial and unknown stop-result messages at 1440/390/320px for first-viewport visibility, equal content width, and no horizontal overflow.
 - Evidence: 3 focused Chromium tests passed with 0 NEW known failures; six captures and hashes in `docs/validation/uiux-cell-stop-widths-2026-10-07/result.md`.
 - Gate: LOCAL synthetic G2 partial evidence. Physical stop readback and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell rejected-session widths
+
+- Change: Expanded the 401/403 stale-session browser scenario across 1440/390/320px; checked equal document widths, first-viewport notice and stop, and no horizontal overflow.
+- Evidence: 6 Chromium cases passed, 0 NEW known failures; six capture hashes in docs/validation/uiux-cell-auth-widths-2026-10-07/result.md.
+- Gate: LOCAL synthetic G2 partial evidence; real site/device and operator G3 remain HOLD.

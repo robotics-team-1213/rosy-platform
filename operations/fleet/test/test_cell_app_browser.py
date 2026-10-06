@@ -226,11 +226,12 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site):
 
 
 @pytest.mark.parametrize("denial,notice", [(401, "토큰"), (403, "운영자 토큰을 확인하고 다시 접속하세요")])
-def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice):
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice, width, height):
     from playwright.sync_api import expect
 
     page, _, _ = browser_site
-    page.set_viewport_size({"width": 320, "height": 568})
+    page.set_viewport_size({"width": width, "height": height})
     _prepare(page)
     expect(page.locator("#saved li")).to_have_count(2)
     page.route("**/api/fleet/session", lambda route: route.fulfill(status=denial, body="unauthorized"))
@@ -244,10 +245,14 @@ def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice):
     expect(page.locator("#recipe-revision")).to_have_text("저장 전")
     expect(page.locator("#summary")).not_to_contain_text("18회 전송")
     notice_box = page.locator("#notice").bounding_box()
-    assert notice_box and 0 <= notice_box["y"] < 568
+    assert notice_box and 0 <= notice_box["y"] < height
+    panels = [panel.bounding_box() for panel in page.locator(".documents > ui-section").all()]
+    assert len(panels) == 2 and abs(panels[0]["width"] - panels[1]["width"]) <= 1
+    stop_box = page.locator("#estop").bounding_box()
+    assert stop_box and 0 <= stop_box["y"] < height
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
-        page.screenshot(path=str(Path(output) / f"fleet-cell-auth-{denial}-320x568.png"))
+        page.screenshot(path=str(Path(output) / f"fleet-cell-auth-{denial}-{width}x{height}.png"))
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
