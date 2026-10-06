@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · uiux(games): CSP 수정 후 전체 재실행과 시간 결측 전화 폭
 - 2026-10-07 · uncommitted · uiux(games): 현재 보드 상태·폭 재검증
 - 2026-10-07 · uncommitted · uiux: 현재 main G1 재검증
 - 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
 - 2026-10-07 · uncommitted · uiux(learning): 작업·자료 등록의 응답 대기 시간
-- 2026-10-07 · uncommitted · uiux(fleet): LED 행동 추가 뒤 전화 폭 재검증

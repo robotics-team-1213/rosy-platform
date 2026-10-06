@@ -1221,12 +1221,12 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#map-tag')?.textContent.includes('paint-test')")
-        assert page.locator("#map-camera").is_visible()
+        # D-487: the calibrated canvas carries the frame; no second copy under the map.
+        assert page.locator("#map-camera").count() == 0
         assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
                              "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
                              "return p[0] > 150 && p[1] < 100 && p[2] < 100; }")
         frame_age["ms"] = "4000"
-        page.wait_for_function("() => document.querySelector('#map-camera').hidden", timeout=7000)
         page.wait_for_function("() => !document.querySelector('#map-tag')?.textContent.includes('paint-test')",
                                timeout=7000)
         assert not errors
@@ -2883,7 +2883,7 @@ def test_login_unlocks_operator_controls_before_a_slow_state_gather(console_url)
         page.wait_for_function(
             "() => document.querySelector('#user-role')?.textContent.includes('운영자')", timeout=3000)
         page.wait_for_timeout(500)
-        assert "토큰 필요" not in page.inner_text("#online-pill")
+        assert "접속 전" not in page.inner_text("#online-pill")
         assert page.locator("#token-save").is_enabled()
         assert not errors
         browser.close()
@@ -3184,7 +3184,7 @@ def test_paired_console_keeps_the_token_field_and_never_asks_for_a_session(conso
         browser, page, errors = open_page(p, 1920, 1080)
         page.route("**/api/**", serve_api)
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.getElementById('online-pill').textContent === '토큰 필요'",
+        page.wait_for_function("() => document.getElementById('online-pill').textContent === '접속 전'",
                                timeout=8000)
 
         assert page.is_hidden("#development-badge")

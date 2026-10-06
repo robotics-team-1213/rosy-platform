@@ -95,7 +95,7 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 앞선 외부 PC 점검은 다른 LAN에서 `.local`을 찾지 못했고 당시 SSH·8443 연결도 거절되어 현장 서비스를 판단할 수 없었다. **2026-10-06 21:22 KST**에 승인된 기존 사이트 PC로 Tailscale SSH가 열려 읽기 전용으로 다시 확인했다. 호스트 Avahi에는 사이트 Fleet·관제 카메라 광고와 두 로봇의 `_rosy._tcp` 광고가 있었고, 사용자의 mDNS bridge timer는 활성 상태에서 최근 두 장치 스캔을 Fleet에 전달했다. Fleet 컨테이너의 실제 서비스 UID(10001)로 두 로봇 `.local` 이름과 내부 `fleet`·`vision`·`proxy` 이름이 풀렸다. LAN 주소를 명시한 사이트 CA 검증 HTTPS `/healthz`와 `/console`은 각각 200이었다. 원본은 X: `logs/site-mdns-live/`에 둔다. 호스트 자체에서 실행한 Fleet mDNS locator는 같은 광고를 Docker·loopback·Wi-Fi 여러 주소로 받아 `ambiguous Fleet host advertisement`로 거절했다. 이는 호스트 자체 조회의 실패이며 로봇 LAN 클라이언트의 발견 실패로 판정하지 않는다. Fleet의 인증된 discovery 화면·등록 상태, 현재 `main`의 사이트 설치, 사용자 조작 G3, 로봇 상태 readback은 여전히 **미확인**이다. 관제 카메라 화면 readback은 아래 범위만 확인했다.
 
-브리지의 「전달」 로그는 `mdns-bridge.py`가 Fleet 스캔 POST의 HTTP 200을 받은 뒤에만 출력하므로 서버의 **수신 승인** 근거다. 인증된 discovery GET·화면의 표시 결과까지 증명하지는 않는다. 사이트의 Fleet·Vision·proxy 이미지 태그는 `e64815c5137e91aee261cee9569cd592e74afed0`이고 현재 `main`과 다르며, Fleet 웹 자산 12개 경로가 두 소스 사이에서 다르다(X: `logs/site-mdns-live/site-containers.txt`, `site-vs-branch-fleet-web.txt`). 따라서 사이트의 HTTPS 200은 현재 `main` UI의 현장 렌더나 G3 수용 근거가 아니다.
+브리지의 「전달」 로그는 `mdns-bridge.py`가 Fleet 스캔 POST의 HTTP 200을 받은 뒤에만 출력하므로 서버의 **수신 승인** 근거다. 인증된 discovery GET·화면의 표시 결과까지 증명하지는 않는다. 사이트의 Fleet·Vision·proxy 이미지 태그는 commit `e64815c5137e91aee261cee9569cd592e74afed0`이고 현재 `main`과 다르며, Fleet 웹 자산 12개 경로가 두 소스 사이에서 다르다(X: `logs/site-mdns-live/site-containers.txt`, `site-vs-branch-fleet-web.txt`). 따라서 사이트의 HTTPS 200은 현재 `main` UI의 현장 렌더나 G3 수용 근거가 아니다.
 
 **2026-10-06 23:22–23:23 KST**에는 같은 사이트 PC의 8443을 읽기 전용 SSH 포워딩으로 열어 배포된 `/console`을 320×568, 390×844, 1920×1080px 브라우저에서 보았다. 토큰을 입력하지 않은 상태에서 등록 로봇·현장 지도는 「관제 접속 필요」를 표시하고 비상 정지·전체 주행 취소·대형 작업은 비활성이다. 관제 카메라 `ceiling_north` 원본 영상은 표시되었으며 화면의 `sequence`가 **26364→26390**으로 증가하고 수신 나이는 **413→268ms**였다. 원본은 X: `captures/site-deployed-unauth/fleet-console-{320x568-fresh-full,390x844-full,1920x1080}.png`와 `logs/site-mdns-live/site-console-{unauth-320-snapshot,frame-a,frame-b}.txt`에 있다. 컨테이너 태그는 다시 조회해 위 `e64815c51`과 같았다(`site-containers-current.txt`). 이는 **배포된 옛 빌드의 미인증 상태와 카메라 프레임에 한정된 SITE 읽기 근거**다. 현재 `main` UI의 현장 설치, 인증된 로봇 목록·지도, 장치 조작 결과와 관제자 G3는 여전히 HOLD다.
 
@@ -155,7 +155,7 @@ G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나�
 | 7. 표면 질문 | [진행](captures/games-play-1280x800.png)은 점수·피치·로봇·공을 보이고, 결측에는 답을 아는 척하지 않는다. | 실물 경기 관측과 모든 선언 상태. |
 | 8. 표면 문법 | `game-board`의 focal 문법에 따라 피치를 초점으로 두고, 정지 행은 1280/390px 첫 화면에 남는다. | 실제 노트북 사용 환경의 시선·거리. |
 
-여덟 항목 모두 **부분 근거**다. 현재 트리의 게임 보드 브라우저 **19 passed**, 게임 모듈 **113 passed**, `known_failures.py` **0 NEW**다. 캡처는 PreviewServer와 fixture payload의 LOCAL 증거이며 G3 GO나 실제 정지 증거가 아니다.
+여덟 항목 모두 **부분 근거**다. 이 회차 앞선 실행의 게임 보드 브라우저 **19 passed**, 게임 모듈 **113 passed**, `known_failures.py` **0 NEW**다. 캡처는 PreviewServer와 fixture payload의 LOCAL 증거이며 G3 GO나 실제 정지 증거가 아니다.
 
 추가로 320×568에서 최초 대기와 지연 상태를 확인했다. 점수·피치·관측 패널의 시작점과 폭이 각각 같고, 가로 넘침 없이 정지가 첫 화면에 남는다. 두 브라우저 시험의 4개 셀은 통과했고 `known_failures.py`는 0 NEW다. 원본 캡처는 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\captures\game-320\games_board_initial_320x568.png`와 같은 폴더의 `games_board_delayed_320x568.png`에 있다. 이 fixture 검사는 실제 경기·정지 readback이나 전체 G2/G3 판정이 아니다.
 
@@ -275,6 +275,8 @@ Cell 작업 버튼의 비활성 사유 추가 후 현재 트리에서 D-153 명�
 정지 요청 실패·재시도 흐름은 1280×800, 390×844, 320×568에서 다시 확인했다. 세 뷰포트 모두 실패 이유와 재시도 안내, 정지 버튼이 화면 폭 안에 있고 가로 넘침 없이 표시되며 키보드 재시도 후에도 버튼에 초점이 남는다. 집중 브라우저 시험 **3 passed**, `known_failures.py` **0 NEW**; 캡처 `X:\DevTemp\games_board_stop_retry_{1280x800,390x844,320x568}.png`, 로그 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\logs\games-stop-width-rerun.txt`. 첫 실행의 데스크톱 Chromium 시작 제한 시간 초과는 재실행에서 재현되지 않았다. 이 증거는 PreviewServer fixture의 LOCAL 범위다.
 
 2026-10-07 로컬 `main` `e3b2d0bcb`에서 보드 브라우저 전체를 다시 실행한 결과는 **28 passed, 1 failed**였다. 실패는 320×568 `lost_robots` HOLD 시험의 `wait_for_function` 문자열이 CSP의 `unsafe-eval` 금지에 걸린 시험 코드 문제였다. 같은 파일의 원시 식 전달 9곳을 함수 식으로 고친 뒤 해당 320px 셀은 **1 passed**, `known_failures.py` **0 NEW**였다. 원본 26장은 `X:\DevTemp\projects\rosy-platform\2026-10-07-games-current\games_board_*.png`, 첫 실행과 재실행 로그는 같은 폴더의 `run.txt`·`failed-case-rerun.txt`다. 320px 최초 상태는 점수→피치→관측, HOLD는 점수→유실 이유→피치 순서이고 세 칸은 같은 가용 폭이다. 전체 29셀을 수정 뒤 다시 실행한 것은 아니므로 이 결과를 무오류 전체 통과로 적지 않는다. 실제 경기와 물리 정지·사용자 G3는 HOLD다.
+
+CSP 대기 식 수정 후 로컬 `main` `77c3748a3`의 보드 브라우저 전체는 **29 passed**, `known_failures.py` **0 NEW**였다(X: `X:\DevTemp\projects\rosy-platform\2026-10-07-games-csp-final\run.txt`). 이어 시간 근거가 빠진 이전 형식의 경기 응답을 1280×800·390×800·320×568에서 재생했다. 세 폭 모두 「시각 정보 없음」과 마지막 수신 정보임을 표시하며, 전화에서는 점수·피치·관측의 시작점과 폭 차이 ≤1px, 가로 넘침 0, 첫 화면 정지를 확인했다. 확장한 세 셀은 **3 passed**, **0 NEW**이고 원본은 X: `2026-10-07-games-unavailable/games_board_unavailable_{1280x800,390x800,320x568}.png`, 로그는 같은 폴더의 `run.txt`다. 전체 29셀 통과는 확장 시험 추가 **전** 결과다. 새 두 전화 셀을 포함한 전체 31셀은 재실행하지 않았고 실제 경기·장치·사용자 G3는 HOLD다.
 
 얼굴 PIL 렌더러는 이전 실행에서 **169 passed**, 기존 정보 카드 캡처 1 passed, `rosy-face` 호스트 시험 **153 passed / 1 skipped**였다. 모두 `known_failures.py` 0 NEW였다. 기존 네 정보 카드 이미지는 렌더러 직접 호출이며 `rosy-face`의 설치·입력·실물 LCD 출력을 통과한 사진이 아니다. D-433은 현재 **Proposed**이므로 실행 경로의 최종 결정·수용으로 읽지 않는다.
 

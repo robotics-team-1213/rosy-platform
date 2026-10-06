@@ -6653,3 +6653,9 @@ osy-d395-s1d\`.
 - 변경: 현재 보드 320px HOLD에서 유실 이유가 피치보다 먼저 보이는 순서를 회차 카드에 명시하고, 브라우저 시험의 CSP에 걸리는 원시 `wait_for_function` 식 9곳을 함수 식으로 고쳤다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-games-current/`; 전체 브라우저 28 passed/1 failed 뒤 실패 셀 1 passed, `known_failures.py` 0 NEW. 전체 재실행 통과 주장 없음.
 - gate 변화: 현 트리의 LOCAL 게임 보드 상태·폭 근거 갱신. 실제 경기·정지 readback과 사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(games): CSP 수정 후 전체 재실행과 시간 결측 전화 폭
+
+- 변경: 게임 보드의 시간 근거 없는 이전 형식 응답을 1280·390·320px에 확장해 전화의 동등 패널 폭·넘침·정지 가용성을 검사했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-games-csp-final/run.txt`에서 수정 뒤 전체 29 passed, `2026-10-07-games-unavailable/`에서 확장 3 passed와 캡처 3장, 각 `known_failures.py` 0 NEW. 확장 후 전체 31셀은 재실행하지 않았다.
+- gate 변화: 시간 근거 결측의 LOCAL 전화 폭 두 셀을 추가했다. 실제 경기·장치·G3는 HOLD.
