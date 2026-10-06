@@ -15,7 +15,7 @@
 3. **객체 클래스셋 입력은 Ultralytics `data.yaml`의 `names`(dict 또는 list)와 선택 `display`/`colors`다.** 첫 실행에 `--object-classes`로 준다. 앱은 `.pt`를 열지 않는다(pickle 실행 위험, Ultralytics AGPL-3.0). 모델 PC 도구가 `YOLO(path).names`를 `data.yaml`로 내보낸다.
 4. **범위는 검수, 승인, 학습 export뿐이다.** 로봇의 `object_det` manifest의 D-423 6클래스 계약(`manifest.py:179`)과 D-373 닫힌 lane role 목록은 바꾸지 않는다. 그 변경은 별도 ADR이다.
 5. **차선 5클래스 `classes.yaml`을 둔다.** `background`, `lane_left`, `lane_right`, `crosswalk`, `speed_bump`. `lane_left`/`lane_right`의 role은 `lane_marking`, `crosswalk`·`speed_bump`의 role은 `ignore`다. 후자 둘은 로봇 런타임에서 의미가 없다.
-6. **화면은 서버가 내려준 클래스셋(display, color)만 쓴다.** JS 하드코딩 이름표를 지운다. 숫자키 1–9는 클래스, A는 승인(전체 확인 체크 필수 유지, D-461), X는 제외다.
+6. **화면은 서버가 내려준 클래스셋(display, color)만 쓴다.** JS 하드코딩 이름표를 지운다. 숫자키 1–9는 클래스, A는 승인(전체 확인 체크 필수 유지, D-461), X는 검수 대기 사진의 제외다. display가 없는 클래스는 서버의 `DEFAULT_DISPLAY`(알려진 이름의 한국어), 그다음 이름을 보여 준다. display 도입 전에 바인딩된 작업 공간은 바인딩(sha256, classes_signature)을 그대로 두고, 표시 이름만 읽을 때 `DEFAULT_DISPLAY`에서 채운다.
 
 ### Alternatives
 

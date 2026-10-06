@@ -44,9 +44,10 @@ def browser_workspace(tmp_path):
 
 
 @pytest.fixture
-def custom_class_workspace(tmp_path):
+def custom_class_workspace(request, tmp_path):
     source, human, images = fixture_inputs(tmp_path)
-    record = class_sets.from_data_yaml('names: [car, traffic_light]\ndisplay: {car: 자동차}\n'.encode(), 'detect')
+    data = getattr(request, 'param', 'names: [car, traffic_light]\ndisplay: {car: 자동차}\n')
+    record = class_sets.from_data_yaml(data.encode(), 'detect')
     with serve(ReviewStore(tmp_path / 'state', source, human, images, record)) as value:
         yield value
 
@@ -219,12 +220,23 @@ def test_number_keys_pick_classes_and_a_x_decide(browser_workspace):
     page.wait_for_timeout(300)
     expect(page.locator('#complete')).not_to_be_checked()
     assert store.get(0)['status'] == 'pending'
+    # Right after ticking the checkbox, without moving focus back to the canvas.
     page.locator('#complete').check()
-    page.locator('#canvas').focus()
     page.keyboard.press('a')
     expect(page.locator('#status')).to_have_text('승인')
     assert store.get(0)['status'] == 'approved'
-    page.locator('#canvas').focus()
+    # X only excludes a pending photo; an approved one stays approved.
+    page.keyboard.press('x')
+    page.wait_for_timeout(300)
+    assert store.get(0)['status'] == 'approved'
+    page.locator('#reopen').click()
+    expect(page.locator('#status')).to_have_text('검수 대기')
+    # Korean IME: key is 'ㅁ' but the physical key is still KeyA.
+    page.locator('#complete').check()
+    page.evaluate("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ㅁ', code: 'KeyA', bubbles: true}))")
+    expect(page.locator('#status')).to_have_text('승인')
+    page.locator('#reopen').click()
+    expect(page.locator('#status')).to_have_text('검수 대기')
     page.keyboard.press('x')
     expect(page.locator('#status')).to_have_text('제외')
     assert store.get(0)['status'] == 'excluded'
@@ -240,3 +252,10 @@ def test_number_key_in_a_number_field_stays_typing(browser_workspace):
     page.wait_for_timeout(300)
     assert store.get(0)['review']['boxes'][0]['label'] == 'traffic_light'
     assert store.get(0)['status'] == 'approved'
+
+
+@pytest.mark.parametrize('custom_class_workspace', ["names: ['10', car, traffic_light]\n"], indirect=True)
+def test_class_options_keep_class_index_order(custom_class_workspace):
+    page, store, expect = custom_class_workspace
+    expect(page.locator('#boxes .box-top select').first.locator('option')).to_have_text(
+        ['클래스 선택 필요', '10', 'car', '신호등'])

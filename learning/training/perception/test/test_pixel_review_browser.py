@@ -201,3 +201,18 @@ def test_pixel_legend_shows_default_korean_names(browser_workspace):
     expect(page.locator('#pixel-legend')).to_contain_text('배경')
     expect(page.locator('#pixel-legend')).to_contain_text('차선')
     expect(page.locator('#pixel-class option').first).to_have_text('배경')
+
+
+def test_pixel_a_works_right_after_ticking_checks_and_x_only_on_pending(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('#pixel-fill').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    page.locator('#pixel-complete').check(); page.locator('#pixel-background').check()
+    page.keyboard.press('a')
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('x')
+    page.wait_for_timeout(300)
+    assert review_masks.get(store, 0)['status'] == 'approved'

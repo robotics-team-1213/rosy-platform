@@ -106,10 +106,13 @@ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&stroke){eve
     if(button&&!button.disabled){event.preventDefault();button.click();}
   }
   // Number keys pick the n-th class, A approves, X excludes (D-485); approval checks stay manual (D-461).
-  if(['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName)||event.ctrlKey||event.metaKey||event.altKey||busy||stroke)return;
-  const option=/^[1-9]$/.test(event.key)?[...$('pixel-class').options].filter(o=>o.value!=='255')[Number(event.key)-1]:null;
+  // Physical keys (event.code) so a Korean IME layout still works; checkboxes keep working.
+  if(event.target?.matches?.('input:not([type=checkbox]):not([type=radio]), textarea, select')||event.isComposing||event.keyCode===229||event.ctrlKey||event.metaKey||event.altKey||busy||stroke)return;
+  const digit=/^(?:Digit|Numpad)([1-9])$/.exec(event.code||''),key=digit?digit[1]:{KeyA:'a',KeyX:'x'}[event.code]||(/^[1-9ax]$/i.test(event.key)?event.key.toLowerCase():null);
+  const option=/^[1-9]$/.test(key)?[...$('pixel-class').options].filter(o=>o.value!=='255')[Number(key)-1]:null;
   if(option&&!$('pixel-class').disabled){event.preventDefault();$('pixel-class').value=option.value;}
-  const decision={a:'pixel-approve',x:'pixel-exclude'}[event.key.toLowerCase()];
+  // X only excludes a pending mask; approved or excluded ones change by mouse only.
+  const decision=key==='a'?'pixel-approve':key==='x'&&review?.status==='pending'?'pixel-exclude':null;
   if(decision&&!$(decision).disabled){event.preventDefault();$(decision).click();}
   });
 $('pixel-theme').value=document.documentElement.dataset.theme||'dark';$('pixel-theme').onchange=()=>{document.documentElement.dataset.theme=$('pixel-theme').value;try{localStorage.setItem('rosy.theme',$('pixel-theme').value);}catch{}clearPalette();document.dispatchEvent(new CustomEvent('rosy:theme'));if(review){legend();paint();}};
