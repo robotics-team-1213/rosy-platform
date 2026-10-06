@@ -706,7 +706,8 @@ def test_missing_overlay_after_play_marks_cached_score_as_last_received():
         server.close()
 
 
-def test_stalled_stop_request_recovers_for_retry():
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
+def test_stalled_stop_request_recovers_for_retry(width, height):
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
@@ -716,7 +717,8 @@ def test_stalled_stop_request_recovers_for_retry():
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+            browser, page, errors = open_page(playwright, width, height, url=url)
+            page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             page.evaluate("""() => {
               const original = window.fetch;
@@ -726,10 +728,24 @@ def test_stalled_stop_request_recovers_for_retry():
                 : original(url, options);
             }""")
             page.locator("#halt").click()
-            page.wait_for_function(
-                "() => document.getElementById('halt-status')?.dataset.state === 'error'",
-                timeout=8_000,
-            )
+            page.locator('#halt-status[data-state="pending"]').wait_for()
+            assert page.locator("#halt").get_attribute("aria-disabled") == "true"
+            for state in ("pending", "timeout"):
+                if state == "timeout":
+                    page.locator('#halt-status[data-state="error"]').wait_for(timeout=8_000)
+                layout = page.evaluate("""() => ({
+                  overflow: document.documentElement.scrollWidth - innerWidth,
+                  stop: document.querySelector('#halt').getBoundingClientRect().toJSON(),
+                  status: document.querySelector('#halt-status').getBoundingClientRect().toJSON(),
+                  score: document.querySelector('.score').getBoundingClientRect().toJSON(),
+                })""")
+                assert layout["overflow"] <= 0, (state, layout)
+                assert layout["stop"]["right"] <= width and layout["stop"]["bottom"] <= height, (state, layout)
+                assert layout["status"]["right"] <= width and layout["status"]["bottom"] <= height, (state, layout)
+                if width <= 390:
+                    assert abs(layout["stop"]["x"] - layout["score"]["x"]) <= 1, (state, layout)
+                    assert abs(layout["stop"]["width"] - layout["score"]["width"]) <= 1, (state, layout)
+                save_temp_screenshot(page, f"games_board_stop_{state}_{width}x{height}.png")
             assert "시간 초과" in page.locator("#halt-status").inner_text()
             assert page.locator("#halt").get_attribute("aria-disabled") == "false"
             assert not errors, f"페이지 오류: {errors}"
