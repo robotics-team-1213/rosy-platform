@@ -12,8 +12,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 import rosy_harness as harness
+import sim2real
 
 ROOT = Path(__file__).resolve().parents[1]
 KNOWN_ADRS = {"D-397"}
@@ -39,7 +41,7 @@ def repo(tmp_path):
 
 
 def _errors(repo: Path, *rows: dict) -> list[str]:
-    errors, _ = harness.validate_sim2real({"gaps": list(rows)}, repo, KNOWN_ADRS)
+    errors, _ = sim2real.validate({"gaps": list(rows)}, repo, KNOWN_ADRS)
     return errors
 
 
@@ -59,11 +61,11 @@ def test_valid_registry_has_no_errors(repo):
 
 
 def test_registry_must_list_gaps(repo):
-    errors, _ = harness.validate_sim2real({"gaps": "nope"}, repo, KNOWN_ADRS)
+    errors, _ = sim2real.validate({"gaps": "nope"}, repo, KNOWN_ADRS)
     assert errors == ["gaps must be a list"]
 
 
-@pytest.mark.parametrize("field", harness.SIM2REAL_REQUIRED)
+@pytest.mark.parametrize("field", sim2real.SIM2REAL_REQUIRED)
 def test_each_required_field_is_enforced(repo, field):
     assert any(f"missing field: {field}" in e for e in _errors(repo, _row(**{field: None})))
 
@@ -131,7 +133,7 @@ def test_branch_only_evidence_is_checked_on_that_branch(repo):
     gone = _row(evidence=[{"path": "docs/result.md", "branch": "docs/side"}])
     assert any("not found on docs/side: docs/result.md" in e for e in _errors(repo, gone))
 
-    errors, warnings = harness.validate_sim2real(
+    errors, warnings = sim2real.validate(
         {"gaps": [_row(evidence=[{"path": "x.md", "branch": "docs/landed"}])]}, repo, KNOWN_ADRS)
     assert errors == [] and any("docs/landed" in w for w in warnings)
 
@@ -139,8 +141,8 @@ def test_branch_only_evidence_is_checked_on_that_branch(repo):
 def test_repository_registry_is_clean_and_rendered():
     config = harness.load_config(ROOT)
     adr = harness.parse_adr_log((ROOT / config["adr_log"]).read_text(encoding="utf-8"), ROOT / "docs" / "adr")
-    data = harness.yaml.safe_load((ROOT / config["sim2real_gaps"]).read_text(encoding="utf-8"))
-    errors, _ = harness.validate_sim2real(data, ROOT, set(adr.index))
+    data = yaml.safe_load((ROOT / config["sim2real_gaps"]).read_text(encoding="utf-8"))
+    errors, _ = sim2real.validate(data, ROOT, set(adr.index))
     assert errors == []
     table = (ROOT / config["sim2real_table"]).read_text(encoding="utf-8")
     assert all(row["id"] in table for row in data["gaps"])
