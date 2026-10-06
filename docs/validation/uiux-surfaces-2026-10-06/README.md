@@ -54,6 +54,8 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 ### Fleet G2 상태 확인 — LOCAL 진행 중
 
+대형 HOLD 중 추가 안전 사건이 `pending_triggers`에 남으면 Fleet 서버가 재개를 거부한다. 관제 화면도 이때 재개를 비활성화하고, 원시 `nav.stuck`·`safety.estop` 대신 해당 로봇의 「주행 정체」·「비상 정지」를 표시한다. 추가 사건이 없는 별도 HOLD 상태에서는 재개가 활성화된다. 1920×1080, 390×844, 320×568에서 두 HOLD 상태와 첫 화면 비상 정지, 전화 폭의 지도·목록·작업 블록 및 네 대형 버튼 동일 폭, 가로 넘침 0을 확인했다. HOLD·대형 조회 끊김 브라우저 **7 passed**, 반응형·토큰·팔레트 계약 **61 passed**, 각 `known_failures.py` **0 NEW**, JS 구문 검사 통과. 재개가 잘못 활성화된 상태와 320px의 3+1 불균등 버튼은 각각 수정 전 브라우저 실패로 확인했다. 원본은 X: `captures/fleet-formation-hold/fleet_formation_hold_{blocked,ready}_{1920,390,320}.png`, 실행 기록은 `logs/fleet-formation-hold-{red,width-red,final,contracts}.txt`다. 이는 fixture 기반 LOCAL G2 일부 근거이며 실제 Fleet·로봇 readback과 관제자 G3는 HOLD다.
+
 대형 진행 중에 상태 조회가 끊긴 뒤 복구되는 흐름을 1920×1080, 390×844, 320×568에서 재생했다. 끊긴 동안 마지막 리더·전송률·지도 대형 표시를 지우고 시작·재구성·재개를 막는다. 원시 `FORMATION_UNAVAILABLE` 코드 대신 Fleet 연결을 확인하라는 안내를 표시한다. 복구 뒤에는 진행 상태와 대형 표시가 돌아온다. 전화 폭에서는 지도·목록·작업 블록의 시작점과 폭 차이가 ≤1px이고, 비상 정지는 첫 화면에 있으며 가로 넘침은 없다. 대형 끊김·복구와 HOLD 브라우저 **4 passed**, `known_failures.py` **0 NEW**. 320px에서 목록을 4px 줄인 변이에는 폭 검사가 실패했고 복원 뒤 통과했다. 원본은 X: `captures/fleet-formation-mobile/fleet_formation_read_{lost,recovered}_{1920,390,320}.png`, 실행 기록은 `logs/fleet-formation-{code-red,width-mutation,final}.txt`다. 이는 fixture 기반 LOCAL G2 일부 근거이며 실제 사이트·운영자 G3는 HOLD다.
 
 | 상태 | 현재 캡처 | 확인 범위 |

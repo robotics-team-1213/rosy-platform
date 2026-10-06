@@ -781,8 +781,8 @@ DELAYED_FORMATION = {
 HOLDING_FORMATION = {
     **FORMATION,
     "state": "HOLDING",
-    "reason": ["STREAM_LOST"],
-    "pending_triggers": [["stream", "rosy_03"]],
+    "reason": ["nav.stuck", "rosy_03"],
+    "pending_triggers": [],
 }
 
 UNREACHABLE_SNAPSHOT = {
@@ -953,6 +953,56 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         assert page.locator("#formation-resume").is_enabled()
         assert not errors
         save_temp_screenshot(page, "fleet_console_holding.png")
+        browser.close()
+
+
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_holding_formation_pending_trigger_blocks_resume_at_declared_widths(console_url, width, height):
+    """A pending safety trigger must not offer a resume action that the server rejects."""
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": {
+            **HOLDING_FORMATION,
+            "pending_triggers": [["safety.estop", "rosy_02"]],
+        },
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '유지 중'")
+        assert page.locator("#formation-resume").is_disabled()
+        assert "비상 정지" in page.inner_text("#formation-detail")
+        assert "safety.estop" not in page.inner_text("#formation-detail")
+        assert "주행 정체" in page.inner_text("#formation-detail")
+        assert "nav.stuck" not in page.inner_text("#formation-detail")
+        for state in ("blocked", "ready"):
+            if state == "ready":
+                api["/api/fleet/formation"] = HOLDING_FORMATION
+                page.reload(wait_until="networkidle")  # Separate HOLD with no pending trigger.
+                page.wait_for_function("() => !document.querySelector('#formation-resume')?.disabled", timeout=7000)
+                assert "재개 차단" not in page.inner_text("#formation-detail")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
+            if width < 480:
+                panels = [page.locator(selector).bounding_box() for selector in (
+                    'section[aria-labelledby="map-heading"]',
+                    'section[aria-labelledby="roster-heading"]',
+                    ".ops-block",
+                )]
+                assert max(panel["width"] for panel in panels) - min(panel["width"] for panel in panels) <= 1
+                assert max(panel["x"] for panel in panels) - min(panel["x"] for panel in panels) <= 1
+                actions = [page.locator(f"#formation-{name}").bounding_box() for name in (
+                    "start", "reform", "resume", "stop",
+                )]
+                assert max(action["width"] for action in actions) - min(action["width"] for action in actions) <= 1
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            page.locator("#formation-state").scroll_into_view_if_needed()
+            save_temp_screenshot(page, f"fleet_formation_hold_{state}_{width}.png")
+        assert errors == []
         browser.close()
 
 
