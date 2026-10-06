@@ -749,6 +749,7 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     assert fit["topbar"] <= 0.2 * height, fit
     halt = fit["halt"]
     assert halt["top"] >= 0 and halt["bottom"] <= height and halt["right"] <= width, fit
+    assert abs(halt["x"] - fit["panels"][0]["x"]) <= 1 and abs(halt["width"] - fit["panels"][0]["width"]) <= 1, fit
     assert max(panel["x"] for panel in fit["panels"]) - min(panel["x"] for panel in fit["panels"]) <= 1, fit
     assert max(panel["width"] for panel in fit["panels"]) - min(panel["width"] for panel in fit["panels"]) <= 1, fit
     assert fit["ballRadius"] * fit["canvasScale"] >= 4.99, fit

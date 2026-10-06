@@ -130,6 +130,8 @@ G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나�
 
 경기 보류의 실제 referee 사유 `lost_ball`·`lost_robots`를 사용해 1280×800, 390×844, 320×568에서 다시 렌더했다. 화면은 원시 코드를 각각 「공을 잃음」·「로봇을 잃음」으로 말한다. 전화 폭에서는 보류 이유를 피치보다 먼저 놓아 320px 고정 정지 행 위에서 읽을 수 있다. 두 사유·세 폭의 점수·피치·관측 칸은 같은 시작점과 폭이며 가로 넘침은 없다. HOLD 브라우저 **6 passed**, 전체 보드 브라우저 **29 passed**, 게임 모듈 **113 passed**, 반응형·토큰 계약 **44 passed**, 각 성공 실행 `known_failures.py` **0 NEW**다. 수정 전 320px 이유는 정지 행 아래에 있었고, 실제 `lost_ball` 코드는 그대로 노출됐다. 4px 관측 칸 축소 변이에서 동등 폭 검사가 실패했다. 원본은 X: `captures/game-hold-width/games_board_{lost_ball,lost_robots}_{1280x800,390x844,320x568}.png`, 기록은 `logs/game-hold-{reason-red,code-red,width-mutation,final,style-final,browser-full-final,module-final}.txt`다. 이는 PreviewServer와 fixture의 LOCAL 화면 근거이며 실제 경기·정지 readback과 운영자 G3는 HOLD다.
 
+390×844·320×568에서 정지 버튼도 점수·피치·관측 패널과 같은 시작점·가용 폭으로 맞췄다. 기존 버튼은 96px였고 320px 패널은 272px였다. 정지 첫 화면·머리 높이·마커 가독성 검사는 변경 전 새 너비 단언으로 **2 failed**, 변경 뒤 **2 passed**였다. 전체 보드 브라우저 **29 passed**, 게임 모듈 **113 passed**, 반응형·토큰 계약 **44 passed**, 각 성공 실행 `known_failures.py` **0 NEW**다. X: `logs/game-stop-width-{red,green,browser-full,style,module}.txt`, `captures/game-stop-fullwidth/games_board_live_{390x844,320x568}.png`. 이는 합성 경기의 LOCAL 조작 폭 근거이며 두 로봇의 물리 정지 확인은 아니다.
+
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |
 |---|---|---|
 | 1. 정직 | [최초](captures/games-initial-1280x800.png)는 점수를 `—`로 두고 피치에 대기를 말한다. [첫 연결 오류](captures/games-g3/games_board_first_error.png)는 이전 경기 정보가 있는 척하지 않는다. | 실제 카메라·로봇값의 결측과 정지 readback. |

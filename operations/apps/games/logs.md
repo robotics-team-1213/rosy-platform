@@ -341,3 +341,9 @@
 - 변경: 실제 referee의 `lost_ball`·`lost_robots`를 경기 보드에서 한국어로 표시한다. 전화 폭 HOLD에서는 유실 이유를 피치보다 먼저 두어 320px 고정 정지 행 위에서 읽게 한다.
 - 증거: 두 사유·세 폭 브라우저 6 passed, 전체 보드 브라우저 29 passed, 게임 모듈 113 passed, 반응형·토큰 계약 44 passed, 각 성공 실행 `known_failures.py` 0 NEW. 320px 이유 가림·원시 코드 노출은 수정 전 적색, 관측 칸 4px 축소 변이에서 동등 폭 검사 적색. X: `captures/game-hold-width/games_board_{lost_ball,lost_robots}_{1280x800,390x844,320x568}.png`, `logs/game-hold-{reason-red,code-red,width-mutation,final,style-final,browser-full-final,module-final}.txt`.
 - gate 변화: 경기 보드 HOLD의 LOCAL G2 폭·어휘 부분 근거 추가. 실제 경기·정지 readback과 게임 호스트 사용자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(games): compact 정지 조작 전폭
+
+- 변경: 390/320px 경기 보드의 정지 버튼을 점수·피치·관측과 같은 가용 폭으로 맞췄다. 기존 96px 버튼은 320px의 272px 패널보다 좁았다.
+- 증거: 두 폭의 정지·머리·마커 브라우저가 너비 단언 추가 직후 2 failed → 수정 후 2 passed. 전체 보드 29 passed, 게임 모듈 113 passed, 반응형·토큰 계약 44 passed, 각 `known_failures.py` 0 NEW. X:/DevTemp/projects/rosy-platform/2026-10-06--032913--uiux-quality--199bc9/logs/game-stop-width-{red,green,browser-full,style,module}.txt 및 captures/game-stop-fullwidth/.
+- gate 변화: LOCAL G2 조작 폭 부분 근거. 실제 두 로봇 정지 readback과 게임 호스트 사용자 G3는 HOLD.
