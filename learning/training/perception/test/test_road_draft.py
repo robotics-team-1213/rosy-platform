@@ -49,10 +49,11 @@ def test_footprint_seed_none_when_band_is_all_tape():
     assert rd.footprint_seed(bright, np.zeros((60, 80), bool)) is None
 
 
-def test_gate_drops_points_on_tape_or_lane():
+def test_gate_drops_points_on_tape_lane_or_outside():
     bright = np.zeros((10, 10), bool); bright[1, 1] = True
     lane = np.zeros((10, 10), bool); lane[2, 2] = True
-    assert rd.gate_road_points([[1, 1], [2, 2], [5, 5]], bright, lane) == [[5, 5]]
+    pts = [[1, 1], [2, 2], [5, 5], [-1, 5], [5, 10]]
+    assert rd.gate_road_points(pts, bright, lane) == [[5, 5]]
 
 
 def _scene():
@@ -83,14 +84,16 @@ def test_close_mask_fills_speckle():
     assert rd.close_mask(m)[10, 10]
 
 
-def test_compose_keeps_lane_wall_and_yellow():
+def test_compose_keeps_lane_wall_stop_line_and_yellow():
     base = np.full((4, 4), rd.FLOOR, np.uint8)
     base[0, :] = rd.WALL
     base[1, 0] = rd.LANE
+    base[1, 3] = 4                      # stop_line
+    base[2, 0] = 5                      # crosswalk
     base[3, 3] = rd.IGNORE
     road = np.ones((4, 4), bool)
     yellow = np.zeros((4, 4), bool); yellow[2, 2] = True
     out = rd.compose(base, road, yellow)
-    assert (out[0] == rd.WALL).all() and out[1, 0] == rd.LANE
+    assert (out[0] == rd.WALL).all() and out[1, 0] == rd.LANE and out[1, 3] == 4 and out[2, 0] == 5
     assert out[2, 2] == rd.FLOOR and out[3, 3] == rd.DRIVABLE and out[1, 1] == rd.DRIVABLE
     assert base[1, 1] == rd.FLOOR      # input untouched

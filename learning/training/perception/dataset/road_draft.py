@@ -58,7 +58,9 @@ def footprint_seed(bright, lane):
 
 def gate_road_points(points, bright, lane):
     """Keep VLM road points that sit on dark, non-lane pixels."""
-    return [[x, y] for x, y in points if not bright[y, x] and not lane[y, x]]
+    h, w = bright.shape
+    return [[x, y] for x, y in points
+            if 0 <= x < w and 0 <= y < h and not bright[y, x] and not lane[y, x]]
 
 
 def close_mask(mask, radius=2):
@@ -78,7 +80,8 @@ def robot_road(carpet, lane):
 
 
 def compose(base, road, yellow):
-    """Drivable on top of a base class map; base lane/wall and yellow ramps are kept."""
+    """Drivable on top of a base class map. Only floor and unlabelled pixels change, so
+    lane/wall/stop_line/crosswalk and yellow ramps keep their base value."""
     out = base.copy()
-    out[road & ~np.isin(base, (LANE, WALL)) & ~yellow] = DRIVABLE
+    out[road & np.isin(base, (FLOOR, IGNORE)) & ~yellow] = DRIVABLE
     return out

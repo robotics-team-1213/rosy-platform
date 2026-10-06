@@ -49,9 +49,40 @@ def extract_frames(video, folder):
     return n
 
 
-def lane_masks(proc, frames, n, torch, Image):
+def _np(x):
+    return x.cpu().numpy() if hasattr(x, "cpu") else np.asarray(x)
+
+
+def select_rows(rows, video_sha, n):
+    """Base rows this video can draft: same source video and a frame inside it.
+    Returns (kept [(row index, row)], skipped [{row, reason}])."""
+    kept, skipped = [], []
+    for i, row in enumerate(rows):
+        f = row.get("video_frame")
+        if row.get("source_video_sha256") != video_sha:
+            skipped.append({"row": i, "reason": "other video"})
+        elif not isinstance(f, int) or not 0 <= f < n:
+            skipped.append({"row": i, "reason": f"video_frame {f!r} outside 0..{n - 1}"})
+        else:
+            kept.append((i, row))
+    return kept, skipped
+
+
+def load_keypoints(path, every, video_sha):
+    """qwen_points rows -> {frame: points}; refuses keypoints made for another video or spacing."""
+    out = {}
+    for line in path.read_text().splitlines():
+        r = json.loads(line)
+        if r.get("every") != every or r.get("video_sha256") != video_sha:
+            sys.exit(f"{path}: keypoints were made with every={r.get('every')} for another video or spacing")
+        out[r["frame"]] = r["drivable"]
+    return out
+
+
+def lane_masks(proc, frames, n, need, torch, Image):
+    """SAM 3 text lanes, only for the frames that are used (keyframes and draft rows)."""
     lane = None
-    for i in range(n):
+    for i in sorted(need):
         im = Image.open(frames / f"{i:05d}.jpg").convert("RGB")
         with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
             out = proc.set_text_prompt(state=proc.set_image(im), prompt=LANE_PROMPT)
@@ -59,7 +90,7 @@ def lane_masks(proc, frames, n, torch, Image):
             lane = np.zeros((n, im.height, im.width), bool)
         for m, s in zip(out["masks"], out["scores"].tolist()):
             if s >= LANE_SCORE:
-                lane[i] |= m.squeeze().cpu().numpy().astype(bool)
+                lane[i] |= _np(m.squeeze()).astype(bool)
     return lane
 
 
@@ -86,7 +117,7 @@ def track_carpet(tracker, frames, rgb, lane, keypoints, every, torch):
         for fi, _, _, masks, _ in tracker.propagate_in_video(
                 state, start_frame_idx=k, max_frame_num_to_track=every - 1, reverse=False, propagate_preflight=True):
             if fi < n:
-                carpet[fi] = (masks[0, 0] > 0).cpu().numpy()
+                carpet[fi] = _np(masks[0, 0] > 0)
     return carpet, seeds
 
 
@@ -102,7 +133,8 @@ def main(argv=None):
     if args.out.exists():
         sys.exit(f"refusing to overwrite {args.out}")
     rows = [json.loads(l) for l in args.base.read_text().splitlines() if l.strip()]
-    keypoints = {r["frame"]: r["drivable"] for r in map(json.loads, args.keypoints.read_text().splitlines())}
+    video_sha = sha(args.video)
+    keypoints = load_keypoints(args.keypoints, args.every, video_sha)
 
     import torch
     from PIL import Image
@@ -112,9 +144,14 @@ def main(argv=None):
     t0 = time.time()
     frames = args.out / "frames"
     n = extract_frames(args.video, frames)
-    rgb = [cv2.cvtColor(cv2.imread(str(frames / f"{i:05d}.jpg")), cv2.COLOR_BGR2RGB).astype(np.float32) for i in range(n)]
+    kept, skipped = select_rows(rows, video_sha, n)
+    if not kept:
+        shutil.rmtree(args.out)
+        sys.exit(f"no base row belongs to {args.video} ({len(skipped)} skipped)")
+    need = set(range(0, n, args.every)) | {row["video_frame"] for _, row in kept}
+    rgb = {i: cv2.cvtColor(cv2.imread(str(frames / f"{i:05d}.jpg")), cv2.COLOR_BGR2RGB) for i in need}
     proc = Sam3Processor(build_sam3_image_model(checkpoint_path=str(args.checkpoint), load_from_HF=False))
-    lane = lane_masks(proc, frames, n, torch, Image)
+    lane = lane_masks(proc, frames, n, need, torch, Image)
     video_model = build_sam3_video_model(checkpoint_path=str(args.checkpoint), load_from_HF=False)
     tracker = video_model.tracker
     tracker.backbone = video_model.detector.backbone
@@ -122,14 +159,16 @@ def main(argv=None):
 
     (args.out / "drafts").mkdir()
     out_rows, stats = [], []
-    for i, row in enumerate(rows):
+    for i, row in kept:
         f = row["video_frame"]
         base = cv2.imread(str(args.base.parent / row["mask"]["indexed_png"]), cv2.IMREAD_UNCHANGED)
+        if base is None or base.shape != carpet[f].shape:
+            sys.exit(f"base mask for row {i} missing or not {carpet[f].shape}: {row['mask']['indexed_png']}")
         road, unsure = rd.robot_road(rd.close_mask(carpet[f]) & ~rd.yellow_mask(rgb[f]), lane[f])
         cm = rd.compose(base, road, rd.yellow_mask(rgb[f]))
         name = f"drafts/{i:06d}.png"
         cv2.imwrite(str(args.out / name), cm)
-        new = dict(row, collection=f"{row.get('collection', '')}+{COLLECTION}")
+        new = dict(row, collection="+".join(c for c in (row.get("collection"), COLLECTION) if c))
         new["mask"] = dict(row["mask"], indexed_png=name, sha256=sha(args.out / name))
         out_rows.append(new)
         stats.append({"row": i, "video_frame": f, "drivable%": round(100 * float((cm == rd.DRIVABLE).mean()), 1),
@@ -142,7 +181,7 @@ def main(argv=None):
     receipt = {"collection": COLLECTION, "source_commit": commit, "video_sha256": sha(args.video),
                "keypoints_sha256": sha(args.keypoints), "base_sha256": sha(args.base),
                "checkpoint_sha256": sha(args.checkpoint), "every": args.every, "lane_prompt": LANE_PROMPT,
-               "frames": n, "seconds": round(time.time() - t0, 1),
+               "frames": n, "skipped_rows": skipped, "seconds": round(time.time() - t0, 1),
                "peak_vram_mb": torch.cuda.max_memory_allocated() // 2**20, "seeds": seeds, "rows": stats}
     (args.out / "receipt.json").write_text(json.dumps(receipt, indent=1))
     print(json.dumps({k: receipt[k] for k in ("frames", "seconds", "peak_vram_mb")}))

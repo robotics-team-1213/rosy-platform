@@ -2,12 +2,14 @@
 
     qwen_points.py --video session.mp4 --every 15 --out keypoints.jsonl
 
-One JSON row per keyframe: {frame, drivable: [[x, y], ...] in pixels, seconds,
-model, prompt_id}. Training drafts only: eval frames take human points (D-475 §7).
+One JSON row per keyframe: {frame, every, video_sha256, drivable: [[x, y], ...]
+in pixels, seconds, model, prompt_id[, error]}; a failed frame keeps empty points
+and its error, and the run goes on (rows are written as they come). Training drafts only: eval frames take human points (D-475 §7).
 Ollama must listen on loopback (rosy-ollama unit on the model PC, D-465).
 """
 import argparse
 import base64
+import hashlib
 import json
 import sys
 import time
@@ -55,25 +57,37 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if args.out.exists():
         sys.exit(f"refusing to overwrite {args.out}")
+    video_sha = hashlib.sha256(args.video.read_bytes()).hexdigest()
     cap = cv2.VideoCapture(str(args.video))
-    rows, idx = [], 0
-    try:
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            if idx % args.every == 0:
-                t = time.time()
-                pts = parse_points(ask(frame, args.url, args.model), frame.shape[1], frame.shape[0])
-                rows.append({"frame": idx, "drivable": pts, "seconds": round(time.time() - t, 1),
-                             "model": args.model, "prompt_id": PROMPT_ID})
-            idx += 1
-    finally:
-        cap.release()
-        unload(args.url, args.model)
-    args.out.write_text("".join(json.dumps(r) + "\n" for r in rows))
-    print(f"{len(rows)} keyframes, {sum(1 for r in rows if not r['drivable'])} without points")
-
+    idx = written = errors = empty = 0
+    with args.out.open("x") as out:
+        try:
+            while True:
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                if idx % args.every == 0:
+                    t = time.time()
+                    row = {"frame": idx, "every": args.every, "video_sha256": video_sha,
+                           "model": args.model, "prompt_id": PROMPT_ID}
+                    try:
+                        row["drivable"] = parse_points(ask(frame, args.url, args.model), frame.shape[1], frame.shape[0])
+                    except (OSError, ValueError, KeyError, TypeError) as e:   # URLError/timeouts are OSError
+                        row["drivable"], row["error"] = [], f"{type(e).__name__}: {e}"[:200]
+                        errors += 1
+                    row["seconds"] = round(time.time() - t, 1)
+                    empty += not row["drivable"]
+                    out.write(json.dumps(row) + "\n")
+                    out.flush()
+                    written += 1
+                idx += 1
+        finally:
+            cap.release()
+            try:
+                unload(args.url, args.model)
+            except OSError as e:
+                print(f"warning: could not unload {args.model}: {e}", file=sys.stderr)
+    print(f"{written} keyframes, {empty} without points, {errors} errors")
 
 if __name__ == "__main__":
     main()
