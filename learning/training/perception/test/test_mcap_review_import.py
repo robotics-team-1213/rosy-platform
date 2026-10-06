@@ -9,9 +9,10 @@ import pytest
 pytest.importorskip("mcap_ros2")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dataset"))
-from review_app import ReviewStore  # noqa: E402
+from review_app import ReviewStore, Conflict  # noqa: E402
 import review_evidence  # noqa: E402
 import review_ingest  # noqa: E402
+import review_masks  # noqa: E402
 from test_mcap_proof import _fixture  # noqa: E402
 from mcap_proof import prove_frames  # noqa: E402
 from test_review_cycle import CLASSES  # noqa: E402
@@ -91,3 +92,17 @@ def test_mcap_import_refuses_auto_mask_draft(tmp_path):
     with pytest.raises(ValueError, match="empty pixel mask"):
         review_ingest.import_frames(store, {"path": str(catalog), "classes": str(classes)})
     assert store.list_frames() == []
+
+
+def test_eval_workspace_can_approve_pixels_but_cannot_export_training(tmp_path):
+    store = ReviewStore(tmp_path / "eval-state", empty_eval=True)
+    catalog, classes = _catalog(tmp_path)
+    review_ingest.import_frames(store, {"path": str(catalog), "classes": str(classes)})
+    painted = review_masks.update(store, 0, {"version": 1, "action": "fill", "label": 0}, Conflict)
+    approved = review_masks.update(store, 0, {"version": painted["version"],
+                                               "action": "approve", "complete_frame_review": True,
+                                               "background_reviewed": True}, Conflict)
+    assert approved["status"] == "approved"
+    assert review_evidence.validate_authority(review_evidence.decisions(store))
+    with pytest.raises(ValueError, match="cannot export training"):
+        store.prepare()

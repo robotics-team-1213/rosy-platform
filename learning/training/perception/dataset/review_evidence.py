@@ -278,7 +278,8 @@ def validate_authority(current):
                         'classes_signature': current['classes_signature'], 'ignore_index': 255,
                         'complete_frame_review': True, 'background_reviewed': True}
             if (not row['complete_frame_review'] or not row['background_reviewed']
-                    or row.get('pixel_approval') != expected or row.get('fixed_eval_overlap')
+                    or row.get('pixel_approval') != expected
+                    or (row.get('fixed_eval_overlap') and not row['identity'].startswith('mcap:'))
                     or not row['mask_sha256'] or not current['pixel_classes_sha256']):
                 raise ValueError('invalid exact pixel approval binding')
             approval = row['pixel_approval']

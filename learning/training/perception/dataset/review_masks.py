@@ -245,7 +245,8 @@ def update(store, index, body, conflict):
                 raise ValueError('사진 전체와 기본 배경을 각각 확인하세요.')
             if np.any(image == 255):
                 raise ValueError('미검수 픽셀이 남아 있습니다.')
-            if frame['source'].get('fixed_eval_overlap'):
+            if (frame['source'].get('fixed_eval_overlap') and
+                    frame['source'].get('source_kind') != 'mcap'):
                 raise ValueError('고정 평가와 겹치는 자료는 학습 승인할 수 없습니다.')
             store.image(index)
             complete = background = 1

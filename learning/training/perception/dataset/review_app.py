@@ -200,6 +200,10 @@ class ReviewStore:
         return self.get(index)
 
     def prepare(self):
+        with self.connect() as db:
+            kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
+        if kind and kind[0] == 'evaluation':
+            raise ValueError('evaluation workspace cannot export training reviews')
         with self.lock:
             captured = review_evidence.snapshot(self)
             frames = captured['frames']
