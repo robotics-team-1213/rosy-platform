@@ -4,6 +4,8 @@
 
 제품 전체 수용 기준은 사용자 확인에 따라 **활성 표면 모두의 G1, 선언한 G2 상태·폭 전부, G3 실제 사용자 검토와 해당 실물 장치 readback**이다. 일부 화면의 너비 보정이나 LOCAL 시험 통과로 이 판정을 올리지 않는다.
 
+G3 실제 운영자 독회는 요청자가 수행하기로 했다. 결과·관찰·재현 폭은 아직 받지 않았으므로 G3 판정은 HOLD다. 픽셀 검수의 class 파일 미연결 상태에서는 점/브러시 전환을 막고 연결 이유를 표시한다. 1440/800/390/320px 브라우저 회귀와 점 미리보기·브러시 조작 **10 passed**, `known_failures.py` **0 NEW**; 수정 후 320px 원본은 X: `captures/pixel-disabled-fix/learning-pixels-320.png`, 실행 기록은 `logs/merge-20261006/pixel-disabled-fix.txt`다.
+
 ## 이번 회차의 질문과 근거
 
 | 표면·질문 | 현재 LOCAL 캡처 | 확인한 것 | 남은 것 |
@@ -168,6 +170,8 @@ G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나�
 픽셀 검수의 사진 이동은 390px에서 이전 249px·다음 86px로 달라져 긴 비활성 이유가 이동 칸을 밀었다. 그 회차에는 사진·상태 선택을 각 전폭으로 놓고 이전·다음을 173px씩, 최신 내용 불러오기를 358px로 놓았다. 320px도 같은 구조였고 가로 넘침은 없었다. 객체·픽셀 1440/800/390/320px와 반응형 계약 **17 passed**, `known_failures.py` **0 NEW**다. 당시 캡처 `learning-nav-final/learning-pixels-{390,320}.png`는 같은 X: `captures/`에 있다. 실제 검수자 작업 독회는 남는다.
 
 현재 트리에서 그 두 반폭 버튼의 **비활성 이유가 320px에서 좁은 칸 안에 여러 줄로 압축**되는 것을 실제 캡처로 확인했다. compact에서는 이전·다음·다시 불러오기를 각각 작업 칸의 같은 전폭으로 쌓았다. 390/320px 너비 단언은 수정 전 **2 failed**, 수정 뒤 객체·픽셀 네 폭 **8 passed**, 픽셀 결정·자료 준비 네 폭 **4 passed**, 반응형 계약 **9 passed**였고 각 성공 실행의 `known_failures.py`는 **0 NEW**다. 현재 전체 화면 원본은 X: `captures/learning-pixel-nav-fullwidth/learning-{objects,pixels}-{1440,800,390,320}.png`, 실행 기록은 `logs/learning-pixel-nav-{red,green,decision-regression,responsive}.txt`다. 이는 합성 검수 자료의 LOCAL 가독성 근거이며 실제 검수자 G3는 HOLD다.
+
+`main`에 합쳐진 **0a915fdd6** 트리에서도 객체·픽셀 1440/800/390/320px와 객체 사진의 한 줄 가로 목록을 다시 렌더해 **9 passed**, `known_failures.py` **0 NEW**였다. 이전·다음·다시 불러오기의 compact 전폭, 두 편집 칸의 동등 폭과 가로 넘침 0을 재확인했고 320px 객체·픽셀 원본을 눈으로 읽었다. 원본은 X: `captures/learning-main-merged/learning-{objects,pixels}-{1440,800,390,320}.png`, 실행 기록은 `logs/merge-20261006/learning-main-visual.txt`다. 합성 자료의 LOCAL 화면이며 실제 검수자 G3와 실물 작업 수용은 HOLD다.
 
 객체 검수의 빈 필터 상태를 1440·800·390px에서 추가 재생했다. 처음에는 `.workspace`의 자동 여백 때문에 데스크톱 내용이 좁은 열에 모이고 작은 화면의 작업 목록이 머리 아래로 밀렸다. 현재는 작업 영역이 가용 폭을 채우고 머리 바로 아래에서 시작한다. 세 폭 모두 가로 넘침 없이 「전체 사진 보기」로 검수 화면에 복귀한다. 현재 트리의 객체 브라우저 **13 passed**, `known_failures.py` **0 NEW**이며 캡처 원본 `learning-objects-empty-{1440,800,390}.png`는 X: `2026-10-06--032913--uiux-quality--199bc9/captures/`에 둔다. 이는 빈 상태의 LOCAL G2 부분 근거다.
 

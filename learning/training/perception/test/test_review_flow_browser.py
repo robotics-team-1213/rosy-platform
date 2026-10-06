@@ -102,6 +102,8 @@ def test_review_editor_peer_widths(browser_workspace, route, left, right, width)
     page, _, _ = browser_workspace
     page.set_viewport_size({'width': width, 'height': 1000})
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    if route == '/pixels':
+        assert page.locator('#pixel-flood').get_attribute('disabled') is not None
     boxes = [page.locator(selector).bounding_box() for selector in (left, right)]
     assert all(box and box['width'] > 0 for box in boxes)
     assert abs(boxes[0]['width'] - boxes[1]['width']) <= 1
