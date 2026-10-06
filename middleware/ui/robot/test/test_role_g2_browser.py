@@ -257,7 +257,7 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                         records[-1]["hostOperationsImage"] = task_image
                     context.close()
         browser.close()
-    (CAPTURES / "matrix.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    (CAPTURES / "role-state-records.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def test_operator_waypoint_task_reaches_saved_readback(tmp_path):

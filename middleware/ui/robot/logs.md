@@ -1057,3 +1057,8 @@
 - 변경: 전방 카메라의 영상 확대·녹화 중지 행동을 390px에서 같은 폭으로 맞췄다. 320px에서는 공용 칸 반응 규칙에 따라 각각 전폭으로 쌓는다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 실제 역할 셸 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW. 전체 화면 원본은 X: `captures/robot-camera-equal/`.
 - gate 변화: 로봇 운용 LOCAL 폭 근거 추가. 실제 카메라·장치와 사용자 G3 독회는 HOLD.
+## 2026-10-06 · uncommitted · uiux(robot): 개발 연결 대기 이유와 G2 기록 이름
+
+- 변경: 호환 화면의 개발 연결 버튼에 요청 중·재시도 대기 이유를 붙이고, 활성화 때 지운다. 역할 G2의 목록형 기록은 D-329 규약의 `matrix.json`과 구분해 `role-state-records.json`으로 저장한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 기본·호환 경로 브라우저 2 passed. 이유 제거 변이에서 호환 경로 실패, 복원 뒤 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 현재 트리의 공유 UI 계약 실패 해소에 기여. 실제 장치·현장 G2/G3는 HOLD.

@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(web-common): 현재 트리 G1 계약 정합성
 - 2026-10-06 · uncommitted · uiux(pilot): 320px 전용 폭 선언
 - 2026-10-05 · uncommitted · uiux: scrim holes and canvas colours leave element style
 - 2026-10-05 · uncommitted · fix(ui): 확인창 닫기의 동기 소유권과 재사용 경계
 - 2026-10-05 · uncommitted · fix(ui): 네트워크 설치 작업을 연결 중심으로 정리
-- 2026-10-05 · uncommitted · fix(learning): bind review content and existing source identities

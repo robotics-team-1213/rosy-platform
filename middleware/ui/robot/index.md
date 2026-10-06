@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(robot): 개발 연결 대기 이유와 G2 기록 이름
 - 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
 - 2026-10-06 · uncommitted · uiux(robot): 320px 역할 셸 동일 폭
 - 2026-10-06 · uncommitted · uiux(robot): 운용 오류 문구와 G3 재생
 - 2026-10-06 · uncommitted · uiux(robot): 운용자 웨이포인트 작업 왕복 확인
-- 2026-10-06 · uncommitted · uiux(robot): 확인창 실행 이름과 열린 상태 캡처

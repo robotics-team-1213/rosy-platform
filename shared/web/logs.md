@@ -652,3 +652,8 @@
 - 변경: Pilot의 기존 22rem 미만 머리·제자리 회전·짧은 화면 배치를 `surfaces.yaml`의 선언된 breakpoint로 기록했다. 렌더링 규칙은 바꾸지 않았다.
 - 증거: `shared/web/test/test_responsive_tiers.py` 9 passed, `known_failures.py` 0 NEW.
 - gate 변화: 현재 브랜치의 반응형 계약 실패를 제거했다. Pilot 실제 운전자 G3와 장치 수용은 HOLD.
+## 2026-10-06 · uncommitted · uiux(web-common): 현재 트리 G1 계약 정합성
+
+- 변경: Fleet compact 머리의 현재 격자를 정적 계약에 반영하고, 비활성 사유 검사기가 `setOff(false)`·`setEnabled(true)`를 활성화로 읽도록 고쳤다. D-329 `matrix.json` 검사는 유지하고 다른 형식의 역할 기록 이름을 분리했다.
+- 증거: `shared/web/test` 231 passed, 25 skipped, `known_failures.py` 0 NEW. 수정 전 3건 실패, 수정 후 관련 4 passed 및 전체 재실행 녹색.
+- gate 변화: 현재 트리의 공유 UI 코드 계약을 녹색으로 회복했다. 표면별 G2/G3와 장치·현장 수용은 HOLD.

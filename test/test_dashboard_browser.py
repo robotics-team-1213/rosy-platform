@@ -455,6 +455,7 @@ def _launch_page(playwright, extra_init="", width=390, height=844, real_map=Fals
 DEV_ENTRY_INIT = """
 sessionStorage.removeItem('rosy.dashboard.token');
 window.__devSessions = 0;
+window.__devGate = new Promise(resolve => { window.__finishDevSession = resolve; });
 const stubbed = window.fetch;
 window.fetch = async (input, options = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url, location.href);
@@ -466,6 +467,7 @@ window.fetch = async (input, options = {}) => {
   if (url.pathname === '/api/v1/auth/development-session') {
     window.__devSessions += 1;
     window.__apiCalls.push({method: 'POST', path: url.pathname, search: '', body: null});
+    await window.__devGate;
     return new Response(JSON.stringify({id: 'dev-1', token: 'dev-session-token', role: 'operator',
       label: 'Pilot development session', source: 'pair-development',
       expires_at: new Date(Date.now() + 3600000).toISOString()}),
@@ -501,11 +503,28 @@ def test_development_entry_logs_in_without_a_code():
         page.wait_for_function(
             "window.__apiCalls.some((call) => call.path === '/api/v1/auth/development-session')")
         page.wait_for_function("window.__devSessions === 1")
+        page.evaluate("window.__finishDevSession()")
         # 엔트리 경로(/dashboard)에서는 로봇 상태 패널이 없으므로 목적지 영역으로 확인한다.
         page.wait_for_function("!document.getElementById('entry-destinations').hidden")
         assert sessionStorage_token(page) == "dev-session-token"
         page.wait_for_function(
             "document.querySelector('.entry-heading h1')?.textContent === '작업을 선택하세요'")
+        browser.close()
+
+def test_compatibility_development_entry_names_pending_reason():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, extra_init=DEV_ENTRY_INIT)
+        page.goto("http://rosy.test/dashboard?view=compatibility", wait_until="domcontentloaded")
+        page.wait_for_function("!document.getElementById('dev-connect-row').hidden")
+        page.click("#dev-connect")
+        page.wait_for_function("window.__devSessions === 1")
+        assert page.locator("#dev-connect").is_disabled()
+        assert page.locator("#dev-connect").get_attribute("reason") == "개발 연결 확인 중"
+        page.evaluate("window.__finishDevSession()")
+        page.wait_for_function("document.getElementById('dev-connect').getAttribute('reason') === null")
         browser.close()
 
 def sessionStorage_token(page):

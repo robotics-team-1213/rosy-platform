@@ -510,6 +510,7 @@ pageScope.listen(elements["dev-connect"], "click", async () => {
   invalidateAuth();
   const lifetime = authLifetime;
   setText("dev-message", "개발 연결 확인 중…");
+  elements["dev-connect"].setAttribute("reason", "개발 연결 확인 중");
   elements["dev-connect"].disabled = true;
   let identity = null;
   try {
@@ -517,15 +518,20 @@ pageScope.listen(elements["dev-connect"], "click", async () => {
   } catch (error) {
     if (lifetime !== authLifetime || lifetime.signal.aborted || !pageScope.capture().current()) return;
     setText("dev-message", error.message || "로봇에 닿지 못했습니다.");
+    elements["dev-connect"].setAttribute("reason", "재시도 대기 중");
     clearTimeout(devRetryTimer);
     devRetryTimer = setTimeout(() => {
-      if (lifetime === authLifetime && !lifetime.signal.aborted && pageScope.capture().current()) elements["dev-connect"].disabled = false;
+      if (lifetime === authLifetime && !lifetime.signal.aborted && pageScope.capture().current()) {
+        elements["dev-connect"].disabled = false;
+        elements["dev-connect"].removeAttribute("reason");
+      }
     }, (error.retryAfter || 0) * 1000);
     return;
   }
   if (lifetime !== authLifetime || lifetime.signal.aborted || !pageScope.capture().current()) return;
   const owner = authTicket();
   elements["dev-connect"].disabled = false;
+  elements["dev-connect"].removeAttribute("reason");
   stopVisionPreview("카메라 재인증 중");
   try {
     if (!await connect(owner)) return;

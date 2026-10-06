@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux: 현재 트리 공유 UI 계약 복구
 - 2026-10-06 · uncommitted · uiux(games): 전화 복구 상태 동등 폭
 - 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
 - 2026-10-06 · uncommitted · uiux(fleet): 동등한 카드 행동 폭
 - 2026-10-06 · uncommitted · uiux(pinky-review): 검수 결정과 자료 준비 결과
-- 2026-10-06 · uncommitted · uiux(pinky-review): 서비스 사용 불가를 연결 끊김과 구분
