@@ -214,6 +214,53 @@ def test_workspace_disconnect_hides_stale_review(browser_workspace, route, reloa
     expect(page.locator(content)).to_be_visible()
 
 
+@pytest.mark.parametrize('route,reload,content,empty,prepare,result,error', [
+    ('/', '#reload', '#review-content', '#empty-review', '#prepare', '#export-result', '#error'),
+    ('/pixels', '#pixel-reload', '#pixel-content', '#pixel-empty', '#pixel-export', '#pixel-export-result', '#pixel-error'),
+])
+@pytest.mark.parametrize('width', [1440, 390])
+def test_review_permission_denial_blocks_work_until_reload(
+    browser_workspace, route, reload, content, empty, prepare, result, error, width
+):
+    page, _, expect = browser_workspace
+    output = os.getenv('ROSY_UIUX_SCREENSHOT_DIR')
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    page.route('**/api/workspace', lambda request: request.fulfill(
+        status=403, content_type='application/json', body='{"error":"local host required"}'))
+    page.locator(reload).click()
+    expect(page.locator(content)).to_be_hidden()
+    expect(page.locator(empty)).to_be_visible()
+    denied = '#empty-review p' if route == '/' else '#pixel-status'
+    expect(page.locator(denied)).to_contain_text('권한')
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output:
+        from pathlib import Path
+        target = Path(output) / f'learning-{"objects" if route == "/" else "pixels"}-workspace-denied-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+    page.unroute('**/api/workspace')
+    page.locator('#show-all' if route == '/' else reload).click()
+    expect(page.locator(content)).to_be_visible()
+
+    page.route('**/api/prepare', lambda request: request.fulfill(
+        status=403, content_type='application/json', body='{"error":"local workspace authorization required"}'))
+    page.locator(prepare).click()
+    expect(page.locator(result)).to_contain_text('권한')
+    box = page.locator(result).bounding_box()
+    assert box and box['y'] >= 0 and box['y'] + box['height'] <= 844
+    expect(page.locator(error)).to_contain_text('권한')
+    expect(page.locator(prepare)).to_be_disabled()
+    expect(page.locator(reload)).to_be_enabled()
+    if output:
+        page.locator(result).scroll_into_view_if_needed()
+        target = Path(output) / f'learning-{"objects" if route == "/" else "pixels"}-prepare-denied-{width}.png'
+        page.screenshot(path=str(target))
+    page.unroute('**/api/prepare')
+    page.locator(reload).click()
+    expect(page.locator(prepare)).to_be_enabled()
+
+
 def test_arrow_keys_move_between_photos(browser_workspace):
     page, store, expect = browser_workspace
 

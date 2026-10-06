@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pinky-review): 권한 거부와 자료 준비 결과를 작업 위치에 표시
 - 2026-10-06 · uncommitted · uiux(fleet): 관제 여백을 본문 폭에 맞춤
 - 2026-10-06 · uncommitted · uiux(fleet): 비상 정지 응답을 첫 화면에 표시
 - 2026-10-06 · uncommitted · uiux(fleet): 전체 주행 취소 결과 가시성
 - 2026-10-06 · uncommitted · uiux(learning): 전화 저장 충돌 복구
-- 2026-10-06 · uncommitted · uiux(fleet): 팔로워 지연 모바일 독회

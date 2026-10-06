@@ -6463,3 +6463,9 @@ osy-d395-s1d\`.
 - 변경: Fleet 운용·설치의 비상 정지 응답, 운용 준비 순서, 접속 안내를 본문 패널의 좌우 시작점과 폭에 맞췄다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1920/390/320px 운용·설치 브라우저 6 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/fleet-width/`.
 - gate 변화: Fleet LOCAL 부분 근거 추가. 제품 전체 G2/G3와 현장 사용자 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 권한 거부와 자료 준비 결과를 작업 위치에 표시
+
+- 변경: 객체·픽셀 검수의 403을 연결 실패와 구분하고, 자료 준비 거부 이유를 버튼 옆 화면 안에 표시했다. 권한 거부 뒤 편집·자료 준비를 막고 최신 작업영역을 다시 읽으면 복구한다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/390px 객체·픽셀 권한 캡처, 관련 브라우저 43 passed와 결과 가시성 재검사 4 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/learning-permission/`.
+- gate 변화: `pinky-review` LOCAL G2 부분 근거 추가. 선언 상태 전체와 실제 검수자 G3는 HOLD다.
