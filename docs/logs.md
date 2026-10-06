@@ -6580,3 +6580,9 @@ osy-d395-s1d\`.
 - 변경: 기존 사이트 PC의 배포 `/console`을 읽기 전용으로 세 폭에서 렌더하고, 토큰이 없는 화면의 잠긴 조작과 관제 카메라 프레임 증가를 UI/UX 회차에 기록했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/site-deployed-unauth/`와 `logs/site-mdns-live/site-console-{unauth-320-snapshot,frame-a,frame-b}.txt`. `ceiling_north` sequence 26364→26390, 320/390/1920px 캡처, 배포 컨테이너 태그 재확인.
 - gate 변화: 옛 배포 빌드의 SITE 미인증 상태·카메라 프레임 부분 근거 추가. 현재 `main` 설치, 인증된 Fleet·로봇 상태, 실제 사용자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(learning): 병합된 검수 폭과 사진 목록 재확인
+
+- 변경: `main`에 병합된 객체·픽셀 검수 화면의 1440/800/390/320px와 전화 사진 한 줄 목록을 다시 렌더했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-main-merged/` 8장과 `logs/merge-20261006/learning-main-visual.txt`. 브라우저 9 passed, `known_failures.py` 0 NEW; 320px 두 화면은 원본 크기로 확인했다.
+- gate 변화: 병합된 현재 트리의 LOCAL G2 폭 근거 추가. 실제 검수자 G3와 제품 전체 수용은 HOLD.
