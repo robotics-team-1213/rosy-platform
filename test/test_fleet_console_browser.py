@@ -393,7 +393,8 @@ def test_mobile_fleet_empty_and_failure_keep_next_step_visible(console_url, widt
         browser.close()
 
 
-def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width, height):
     """The loading state keeps one state request in flight until it resolves."""
     from playwright.sync_api import sync_playwright
 
@@ -421,6 +422,7 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url):
     }
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api, init_script=delayed_state)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function("() => window.__stateCalls === 1")
         assert "로봇 목록 불러오는 중" in page.inner_text("#roster")
@@ -429,11 +431,20 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url):
         assert "로봇 목록 불러오는 중" in page.inner_text("#roster")
         assert page.locator(".queues-panel").is_hidden()
         assert page.locator("#roster-toggle").is_hidden()
-        save_temp_screenshot(page, "fleet_console_slow_loading.png")
-        page.evaluate("snapshot => window.__releaseState(snapshot)", SNAPSHOT)
-        page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === '3/3 연결'")
-        assert "rosy_03" in page.inner_text("#roster")
-        save_temp_screenshot(page, "fleet_console_slow_recovered.png")
+        for state in ("loading", "recovered"):
+            if state == "recovered":
+                page.evaluate("snapshot => window.__releaseState(snapshot)", SNAPSHOT)
+                page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === '3/3 연결'")
+                assert "rosy_03" in page.inner_text("#roster")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
+            map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
+            roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
+            assert abs(map_panel["width"] - roster_panel["width"]) <= 1
+            if width < 480:
+                assert abs(map_panel["x"] - roster_panel["x"]) <= 1
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            save_temp_screenshot(page, f"fleet_console_slow_{state}_{width}.png")
         assert not errors
         browser.close()
 

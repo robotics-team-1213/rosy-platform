@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(fleet): 느린 첫 상태 응답의 세 폭
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 저장 충돌·미리보기 실패
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 문서·행동 폭
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 세션 거부 전환
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 저장 문서 목록 상태
-- 2026-10-06 · uncommitted · uiux(fleet): Cell 작업 취소 확인과 320px 머리

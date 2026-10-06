@@ -58,7 +58,7 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 |---|---|---|
 | 빈 목록 | [1920px](captures/fleet-states/fleet_console_empty.png), [320px](captures/fleet-states/fleet_console_empty_320.png), [390px](captures/fleet-states/fleet_console_empty_390.png) | 등록할 로봇이 없다는 안내, 320/390px E-stop·패널 폭. |
 | 서버 실패 | [1920px](captures/fleet-states/fleet_console_gather-error.png), [320px](captures/fleet-states/fleet_console_gather-error_320.png), [390px](captures/fleet-states/fleet_console_gather-error_390.png) | Fleet 상태 확인 불가 안내, 320/390px E-stop·패널 폭. |
-| 느린 첫 응답과 회복 | [대기](captures/fleet-states/fleet_console_slow_loading.png), [회복](captures/fleet-states/fleet_console_slow_recovered.png) | 첫 응답을 기다리는 동안 중복 폴링 없이 회복된 목록을 표시한다. |
+| 느린 첫 응답과 회복 | [대기](captures/fleet-states/fleet_console_slow_loading.png), [회복](captures/fleet-states/fleet_console_slow_recovered.png); 1920/390/320px 최신 원본은 아래 X: 경로 | 첫 응답을 기다리는 동안 중복 폴링 없이 회복된 목록을 표시한다. 세 폭에서 지도·로봇 목록 패널 폭이 같고 E-stop이 첫 화면에 남는다. |
 | 수신 후 끊김·지연·HOLD | [수신 후 끊김](captures/fleet-states/fleet_console_gather-lost-after-live.png), [팔로워 지연](captures/fleet-states/fleet_console_delayed.png), [대형 HOLD](captures/fleet-states/fleet_console_holding.png); 지연 320/390px 원본은 아래 X: 경로 | 상태 변화를 화면에 드러낸다. 320/390px에서 지연 로봇이 첫 카드이며 비상 정지가 화면 안에 남고 가로 넘침이 없다. |
 | 로봇 연결 끊김 | [1920px](captures/fleet-states/fleet_console_unreachable.png); 320/390px 원본은 아래 X: 경로 | 실제 Fleet API의 `online: false, state: null` 계약으로 재촬영했다. 이전 fixture의 모순된 좌표·주행 상태를 제거했고, 해당 로봇 카드에 현재 좌표·NAVIGATING이 없음을 단언한다. 320/390px에서는 연결 끊긴 로봇이 목록 첫 카드이며 비상 정지가 화면 안에 남고 가로 넘침이 없다. |
 | 안전 상태 결측·비상 정지 | [결측](captures/fleet-g3/fleet_safety_unknown.png), [비상 정지](captures/fleet-g3/fleet_safety_stopped.png) | CORE의 `NAVIGATING` 값이 남아도 주행 중이라는 문구 대신 목표가 남았음을 표시한다. 두 상태 모두 목표 전송은 막힌다. |
@@ -66,6 +66,8 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 | 전체 비상 정지 | 운용·설치 1920/390/320px 응답과 320px 부분·미확인 원본은 아래 X: 경로 | 한 번 누르면 확인창 없이 POST한다. 응답 `3/3`·`1/3`과 물리 정지 미확인, 503의 결과 미확인·즉시 상태 확인을 머리 바로 아래에서 읽는다. 설치 화면도 비상 정지는 남기고 전체 주행 취소만 운용 화면에 둔다. |
 
 기존 상태 브라우저 **9 passed**, 320/390px 빈 목록·서버 실패 **4 passed**, 연결 끊김 1920/390/320px **3 passed**였고 각 실행의 `known_failures.py`는 **0 NEW**였다. 모바일 연결 끊김 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\captures\fleet-unreachable-mobile\`의 `fleet_console_unreachable_320.png`와 `fleet_console_unreachable_390.png`다. 이들은 fixture 기반 화면 검사다. Fleet의 선언 상태 전부와 카메라 연결, 실제 사이트 PC/로봇 readback, G3 사용자 독회는 남아 있어 G2/G3 GO로 판정하지 않는다.
+
+느린 첫 Fleet 상태 응답도 1920×1080·390×844·320×568에서 대기→회복을 재생했다. 대기 1.4초 동안 상태 GET은 1회이고 비어 있는 예외 큐는 숨긴다. 세 폭에서 지도·로봇 목록 칸의 렌더 폭 차이 ≤1px, 가로 넘침 0, 비상 정지 첫 화면을 확인했다. 세 폭 브라우저 **3 passed**, `known_failures.py` **0 NEW**다. 로봇 목록을 4px 좁힌 실제 스타일 변이를 적용한 320px 실행은 폭 단언에서 실패했고, 원복 후 같은 셀 **1 passed**였다. 실행 기록은 X: `logs/fleet-slow-{three-widths,width-mutation,width-restored}.txt`, 원본은 `captures/fleet-slow-mobile/fleet_console_slow_{loading,recovered}_{1920,390,320}.png`다. 이는 fixture 기반 LOCAL G2 부분 근거이며 사이트 PC·로봇 수신 증거가 아니다.
 
 팔로워 지연도 1920/390/320px **3 passed**, `known_failures.py` **0 NEW**로 다시 확인했다. 모바일 원본은 같은 X: 회차의 `captures\fleet-delayed-mobile\fleet_console_delayed_320.png`와 `fleet_console_delayed_390.png`다. 연결 끊김과 마찬가지로 fixture 기반 LOCAL 근거이며 G2/G3 판정은 HOLD다.
 
