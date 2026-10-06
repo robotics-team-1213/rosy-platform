@@ -24,7 +24,7 @@ class UiuxPreviewActivity : ComponentActivity() {
                 when (state) {
                     "pair-requested" -> PairingScreen(site, PairingState.Requested(site, "demo", "123456", ""), false, {}, {}, {}, {})
                     "pair-fingerprint" -> PairingScreen(site, PairingState.ConfirmFingerprint(site, "Demo receiver", "ceiling_demo", "ABCD-EF12-3456-7890", "demo-credential", ""), false, {}, {}, {}, {})
-                    "pair-rejected" -> PairingScreen(site, PairingState.Rejected("unreachable"), false, {}, {}, {}, {})
+                    "pair-rejected" -> PairingScreen(site, PairingState.Rejected(intent.getStringExtra("reason") ?: "unreachable"), false, {}, {}, {}, {})
                     "peer-pending" -> CameraPeerScreen(CameraPeerState.Pending(site, CameraPending("123456", "fleet_demo", Instant.now())), {}, {}, {}, {}, {})
                     "peer-certificate" -> CameraPeerScreen(CameraPeerState.Certificate(site, CameraCaOffer("", "A".repeat(64), "demo.local")), {}, {}, {}, {}, {})
                     "peer-failed" -> CameraPeerScreen(CameraPeerState.Failed(site, false), {}, {}, {}, {}, {})
