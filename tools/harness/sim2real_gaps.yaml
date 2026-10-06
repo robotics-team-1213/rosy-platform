@@ -157,3 +157,16 @@ gaps:
     owner: gz_sim / fleet
     status: OPEN
     next: rerun D-395 S2 on the model PC
+
+  - id: G-15
+    gap: device lane projection uncertainty 17-37 mm vs D-468 cap 15 mm; GAZEBO ground 4.3 mm; 260919 lane play 5 mm < achievable uncertainty at 320x240
+    evidence:
+      - middleware/perception/control/sensing/perception/lane_containment.py
+      - middleware/core/services/core_features/line_follow/lane_return_evidence.py
+      - middleware/perception/control/sensing/perception/camera_extrinsic.py
+      - D-468
+      - D-480
+    tier: [R, M]
+    owner: perception / calibration
+    status: IN-PROGRESS
+    next: S1 finer fit steps + ci95; S2 camera_board --store; S3 user places board + tape (robot static); S4 detector bias replay; S5 dynamic pitch drive (motion approval); S6 accept

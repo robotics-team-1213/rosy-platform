@@ -113,6 +113,49 @@ def test_record_bands_are_floored_at_one_fit_search_step():
     assert roll == pytest.approx(math.radians(1.5+ce.FINE_ROLL_STEP_DEG))
 
 
+
+def test_a_record_that_states_its_fit_step_is_floored_at_that_step():
+    from control.sensing.perception import camera_extrinsic as ce
+    tiny = {"pitch_deg": .01, "roll_deg": .01, "height_m": .0001}
+    pitch, height, roll, _px = geometry_error(RECORD, {"uncertainty": tiny, "fit_step": ce.PC_FINE_STEPS})
+    assert pitch == pytest.approx(math.radians(.1))
+    assert height == pytest.approx(.001)
+    assert roll == pytest.approx(math.radians(1.5+.1))
+    # A continuous fit (camera_board/1: solvePnP, no grid) states zero steps. Its scatter bands
+    # cannot see shared systematic error, so it must state "systematic", added to each band.
+    zero = {"pitch_deg": 0., "roll_deg": 0., "height_m": 0.}
+    systematic = {"pitch_deg": .2, "roll_deg": .1, "height_m": .002}
+    assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": zero}) is None
+    pitch, height, roll, _px = geometry_error(RECORD, {"uncertainty": tiny, "fit_step": zero, "systematic": systematic})
+    assert pitch == pytest.approx(math.radians(.01+.2)) and height == pytest.approx(.0001+.002)
+    assert roll == pytest.approx(math.radians(1.5+.01+.1))
+    for bad in ({"pitch_deg": -.1, "roll_deg": .1, "height_m": .001}, {"pitch_deg": .1},
+                {"pitch_deg": float("nan"), "roll_deg": .1, "height_m": .001}, "0.1", None):
+        assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": zero, "systematic": bad}) is None
+    for bad in ({"pitch_deg": -.1, "roll_deg": .1, "height_m": .001}, {"pitch_deg": .1}, "0.1", None):
+        assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": bad}) is None
+
+
+@pytest.mark.parametrize("step", [{"pitch_deg": 1e-9, "roll_deg": 1e-9, "height_m": 1e-9},
+                                  {"pitch_deg": .1, "roll_deg": 0., "height_m": .001},
+                                  {"pitch_deg": .05, "roll_deg": .1, "height_m": .001}])
+def test_a_step_finer_than_the_pc_grid_needs_a_systematic_term(step):
+    tiny = {"pitch_deg": .01, "roll_deg": .01, "height_m": .0001}
+    assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": step}) is None
+    systematic = {"pitch_deg": .2, "roll_deg": .1, "height_m": .002}
+    assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": step, "systematic": systematic}) is not None
+
+
+def test_a_stated_systematic_is_added_to_a_grid_fit_too():
+    from control.sensing.perception import camera_extrinsic as ce
+    tiny = {"pitch_deg": .01, "roll_deg": .01, "height_m": .0001}
+    systematic = {"pitch_deg": .2, "roll_deg": .1, "height_m": .002}
+    pitch, height, roll, _px = geometry_error(RECORD, {"uncertainty": tiny, "fit_step": ce.PC_FINE_STEPS,
+                                                       "systematic": systematic})
+    assert pitch == pytest.approx(math.radians(.1+.2)) and height == pytest.approx(.001+.002)
+    assert roll == pytest.approx(math.radians(1.5+.1+.1))
+    assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": ce.PC_FINE_STEPS, "systematic": "x"}) is None
+
 def test_receiver_extrapolation_is_mirrored():
     text = (REPO / "middleware" / "core" / "services" / "core_features" / "line_follow" /
             "lane_return_evidence.py").read_text(encoding="utf-8")
