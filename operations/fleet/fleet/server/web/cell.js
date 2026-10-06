@@ -103,17 +103,17 @@ function refreshControls() {
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
       (id === 'admit' ? job.status === 'PROPOSED' : id === 'cancel' ? ['READY', 'ACTION_SUCCEEDED', 'HOLD'].includes(job.status) && job.reason !== 'CANCELLED_BY_OPERATOR' : job.status === 'HOLD' && job.reason !== 'CANCELLED_BY_OPERATOR'));
     const allowed = role === 'operator' && !busy && jobAllowed && !sheetBlocked && (id !== 'propose' || previewRefs !== null);
-    $(id).disabled = !allowed;
+    let reason = '';
     if (!allowed) {
-      let reason = '저장 후 미리보기 필요';
+      reason = '저장 후 미리보기 필요';
       if (needsJob && !jobAllowed) reason = job?.mission_id === $('mission-id').value
         ? `현재 작업 상태에서는 ${jobActionLabels[id]}할 수 없습니다` : '작업 상태를 먼저 확인하세요';
       if (sheetBlocked) reason = '작업자 간지 삽입 확인 대기';
       if (role !== 'operator') reason = '운영자 접속 필요';
       if (busy) reason = '요청 처리 중';
-      $(id).setAttribute('reason', reason);
     }
-    else $(id).removeAttribute('reason');
+    $(id).disabled = !allowed;
+    $(id).setAttribute('reason', reason);
   }
 }
 async function action(fn) {
