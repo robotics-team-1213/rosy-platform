@@ -634,7 +634,9 @@ def test_build_captures_companion_but_uses_independent_png_proof(tmp_path):
     assert result['status'] == 'PUBLISHED_CONTENT_NOT_ADMITTED',result
     assert result['training_admission'] is False
     digest = hashlib.sha256((bundle/'manifest.json').read_bytes()).hexdigest()
-    published=Path(result['dataset_path'])
+    # Nested content-hash dirs pass Win32 MAX_PATH; read like the admission snapshot does.
+    from review_admission import _extended_path
+    published=_extended_path(result['dataset_path'])
     assert (published/'evidence'/'eval-companions'/digest/'manifest.json').read_bytes()==(bundle/'manifest.json').read_bytes()
     assert doc['frames'][0]['decoded_video_pixels_verified'] is False
 
