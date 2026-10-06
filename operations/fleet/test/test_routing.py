@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from fleet.routing.cost import RoutingConfig, classify, transition_cost
+from fleet.routing.cost import RoutingConfig, classify, transition_cost, turn_deg
 from fleet.routing.graph import build_graph
 from fleet.routing.planner import Goal, search
 from fleet.routing.snap import PlanError
@@ -97,10 +97,10 @@ def test_arrive_yaw_picks_the_arriving_lane_or_is_unreachable():
 
 
 def test_arrive_yaw_takes_a_longer_lane_when_one_arrives_facing_it():
-    places = {"Z": (-2, 0), "W": (-1, 0), "C": (0, 0), "S": (0, -1)}
+    places = {"Z": (-2, 0), "W": (-1, 0), "C": (0, 0), "S": (-0.3, -1)}  # S->C turn 128 deg, not 135
     site = _map(places, [("z_w", "Z", "W"), ("w_c", "W", "C"), ("w_s", "W", "S"), ("s_c", "S", "C")])
     assert _edges(_plan(site, (-1.5, 0, 0), "C")) == ["z_w", "w_c"]
-    assert _edges(_plan(site, (-1.5, 0, 0), "C", arrive_yaw=math.pi / 2)) == ["z_w", "w_s", "s_c"]
+    assert _edges(_plan(site, (-1.5, 0, 0), "C", arrive_yaw=1.28)) == ["z_w", "w_s", "s_c"]
 
 
 def test_via_place_is_never_a_uturn():
@@ -411,3 +411,20 @@ def test_routing_modules_import_only_the_standard_library_and_themselves():
                      else [node.module] if isinstance(node, ast.ImportFrom) else [])
             for name in names:
                 assert name in allowed or name.startswith("fleet.routing"), f"{path.name} imports {name}"
+
+
+def test_turn_actions_on_map_v2_fleet_follow_the_drawn_geometry():
+    """Re-review N1: the ring carries on straight; joining or leaving the ring is a right turn."""
+    graph = build_graph(from_lane_graph(LANE_GRAPH), version=1)
+    seen = {}
+    for arc in graph.arcs.values():
+        for nxt_id in graph.out_of[arc.end_place]:
+            nxt = graph.arcs[nxt_id]
+            if nxt.edge_id != arc.edge_id:
+                seen[(arc.id, nxt_id)] = classify(turn_deg(arc.end_tangent, nxt.start_tangent), CFG)
+    ring = [("ring_s:fwd", "ring_e:fwd"), ("ring_e:fwd", "ring_n:fwd"), ("ring_n:fwd", "ring_w:fwd"),
+            ("ring_w:fwd", "ring_s:fwd")]
+    assert {pair: seen.pop(pair) for pair in ring} == {pair: "straight" for pair in ring}
+    assert set(seen.values()) == {"right"} and len(seen) == 8
+    plan = plan_trip(graph, PlanRequest(1, graph.arcs["ring_s:fwd"].point_at(0.1), "NW"), CFG)
+    assert [a[1] for a in plan.actions] == ["straight", "straight", "stop"]

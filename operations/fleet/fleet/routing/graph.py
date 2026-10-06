@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from functools import cached_property
 
-#: Tangents are read over max(this, lane width), at most half the arc (D-489 부록), so a
-#: few-cm wiggle or a pinned end at a node is not read as a turn.
-TANGENT_MIN_M = 0.15
+#: Tangents are read over this much of the schema polyline as drawn (not the pinned one), at
+#: most half its length (D-489 부록 3): pinning moves only the end point, so the local
+#: direction stays the drawn one, and a short window does not bend a curved lane's end.
+TANGENT_M = 0.05
 
 Point = tuple[float, float]
 
@@ -24,6 +24,19 @@ def _knots(points: tuple[Point, ...]) -> tuple[float, ...]:
     for a, b in zip(points, points[1:]):
         knots.append(knots[-1] + math.dist(a, b))
     return tuple(knots)
+
+
+def lead_tangent(points) -> float:
+    """Heading from the first point to the point ``TANGENT_M`` along (at most half the line)."""
+    knots = _knots(tuple(points))
+    window = min(TANGENT_M, knots[-1] / 2)
+    for index in range(1, len(points)):
+        if knots[index] >= window and knots[index] > knots[index - 1]:
+            t = (window - knots[index - 1]) / (knots[index] - knots[index - 1])
+            (ax, ay), (bx, by) = points[index - 1], points[index]
+            x, y = ax + t * (bx - ax), ay + t * (by - ay)
+            return math.atan2(y - points[0][1], x - points[0][0])
+    return 0.0  # a zero-length line; the schema refuses those
 
 
 def pinned(polyline, start: Point, end: Point) -> tuple[Point, ...]:
@@ -49,6 +62,8 @@ class Arc:
     speed_cap_mps: float
     drive_mode: str
     robot_kinds: tuple[str, ...] | None
+    start_tangent: float = 0.0
+    end_tangent: float = 0.0
 
     @property
     def length_m(self) -> float:
@@ -87,21 +102,6 @@ class Arc:
             if dist < best[0]:
                 best = (dist, self.knots[index] + t * math.sqrt(span2), math.atan2(dy, dx))
         return best
-
-    @cached_property
-    def tangent_m(self) -> float:
-        return min(max(TANGENT_MIN_M, self.width_m), self.length_m / 2)
-
-    @cached_property
-    def start_tangent(self) -> float:
-        x, y, _ = self.point_at(self.tangent_m)
-        return math.atan2(y - self.polyline[0][1], x - self.polyline[0][0])
-
-    @cached_property
-    def end_tangent(self) -> float:
-        x, y = self.polyline[-1]
-        px, py, _ = self.point_at(self.length_m - self.tangent_m)
-        return math.atan2(y - py, x - px)
 
 
 @dataclass(frozen=True)
@@ -149,14 +149,17 @@ def build_graph(site_map, *, version: int | None = None) -> Graph:
     for edge in site_map.edges:
         start, end = places[edge.from_], places[edge.to]
         points = pinned(edge.polyline, (start.x, start.y), (end.x, end.y))
+        drawn = tuple((float(x), float(y)) for x, y in edge.polyline)
         kinds = tuple(edge.robot_kinds) if edge.robot_kinds is not None else None
-        ways = [(True, edge.from_, edge.to, points)]
+        ways = [(True, edge.from_, edge.to, points, drawn)]
         if edge.direction == "two_way":
-            ways.append((False, edge.to, edge.from_, tuple(reversed(points))))
-        for forward, src, dst, line in ways:
+            ways.append((False, edge.to, edge.from_, tuple(reversed(points)), tuple(reversed(drawn))))
+        for forward, src, dst, line, raw in ways:
             arc_id = f"{edge.id}:{'fwd' if forward else 'rev'}"
+            end_tangent = lead_tangent(tuple(reversed(raw))) + math.pi
             arcs[arc_id] = Arc(arc_id, edge.id, forward, src, dst, line, _knots(line),
-                               float(edge.width_m), float(edge.speed_cap_mps), edge.drive_mode, kinds)
+                               float(edge.width_m), float(edge.speed_cap_mps), edge.drive_mode, kinds,
+                               lead_tangent(raw), math.atan2(math.sin(end_tangent), math.cos(end_tangent)))
     arcs = dict(sorted(arcs.items()))
     out_of: dict[str, list[str]] = {place_id: [] for place_id in places}
     for arc in arcs.values():
