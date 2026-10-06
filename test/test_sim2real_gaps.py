@@ -137,6 +137,60 @@ def test_branch_only_evidence_is_checked_on_that_branch(repo):
         {"gaps": [_row(evidence=[{"path": "x.md", "branch": "docs/landed"}])]}, repo, KNOWN_ADRS)
     assert errors == [] and any("docs/landed" in w for w in warnings)
 
+    # validated_by is strict: an unavailable branch is an error, not a warning.
+    closed = _row(status="CLOSED", validated_by={"path": "x.md", "branch": "docs/landed"})
+    assert any("branch docs/landed not available" in e for e in _errors(repo, closed))
+
+
+@pytest.mark.parametrize("evidence, fragment", [
+    ("../outside.py", "outside the repository"),
+    ("/etc/passwd", "outside the repository"),
+    ({"path": "../x.md", "branch": "main"}, "outside the repository"),
+    ("src/launch.py:0", "lines start at 1"),
+    ("src/launch.py:3-2", "reversed range"),
+    ("src:1", "not a file"),
+])
+def test_evidence_path_shape_is_checked(repo, evidence, fragment):
+    assert any(fragment in e for e in _errors(repo, _row(evidence=[evidence])))
+
+
+def test_line_count_ignores_unicode_line_breaks(repo):
+    (repo / "src" / "ff.py").write_text("a\x0cb\u2028c\n", encoding="utf-8")
+    assert any("cites line 3" in e for e in _errors(repo, _row(evidence=["src/ff.py:3"])))
+
+
+@pytest.mark.parametrize("registry", [["not", "a", "mapping"], "text", None])
+def test_non_mapping_registry_is_an_error_not_a_crash(repo, registry):
+    errors, _ = sim2real.validate(registry, repo, KNOWN_ADRS)
+    assert errors
+    sim2real.render(registry)
+
+
+@pytest.mark.parametrize("row, fragment", [
+    ("not a row", "must be a mapping"),
+    ({**GOOD_ROW, "id": ["x"]}, "malformed id"),
+    ({**GOOD_ROW, "tier": [["M"]]}, "tier"),
+    ({**GOOD_ROW, "tier": [1]}, "tier"),
+    ({**GOOD_ROW, "status": ["OPEN"]}, "unknown status"),
+])
+def test_malformed_rows_are_errors_not_crashes(repo, row, fragment):
+    errors, _ = sim2real.validate({"gaps": [row, row]}, repo, KNOWN_ADRS)
+    assert any(fragment in e for e in errors)
+    sim2real.render({"gaps": [row]})
+
+
+def test_yaml_syntax_error_is_a_lint_error(tmp_path):
+    harness_dir = tmp_path / "tools" / "harness"
+    harness_dir.mkdir(parents=True)
+    (harness_dir / "harness.yaml").write_text(
+        "adr_log: log.md\nstatus: STATUS.md\nmodules: []\n"
+        "sim2real_gaps: gaps.yaml\nsim2real_table: gaps.md\n", encoding="utf-8")
+    (tmp_path / "log.md").write_text("# log\n", encoding="utf-8")
+    (tmp_path / "gaps.yaml").write_text("gaps: [\n  - id: G-01\n", encoding="utf-8")
+    errors, _ = harness.lint(tmp_path)
+    assert any(e.startswith("sim2real: cannot read gaps.yaml") for e in errors)
+    assert any(e.startswith("generated: cannot render") for e in errors)
+
 
 def test_repository_registry_is_clean_and_rendered():
     config = harness.load_config(ROOT)
@@ -144,5 +198,5 @@ def test_repository_registry_is_clean_and_rendered():
     data = yaml.safe_load((ROOT / config["sim2real_gaps"]).read_text(encoding="utf-8"))
     errors, _ = sim2real.validate(data, ROOT, set(adr.index))
     assert errors == []
-    table = (ROOT / config["sim2real_table"]).read_text(encoding="utf-8")
-    assert all(row["id"] in table for row in data["gaps"])
+    table = (ROOT / config["sim2real_table"]).read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert table == sim2real.render(data)
