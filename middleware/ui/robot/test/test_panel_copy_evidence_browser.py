@@ -167,9 +167,12 @@ def test_mode_panel_names_modes_in_korean_and_keeps_the_enum_in_title(panel):
 
 def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel):
     page = panel("console/overview.js", width=390)
-    pending = page.locator("dl.ui-readout ui-empty")
-    assert pending.inner_text() == "로봇 상태를 확인하는 중입니다."
-    assert abs(pending.bounding_box()["width"] - page.locator("dl.ui-readout").bounding_box()["width"]) <= 1
+    status = page.locator("#root > ui-status")
+    summary = page.locator("dl.ui-readout")
+    assert status.inner_text() == "로봇 상태를 확인하는 중입니다."
+    assert status.get_attribute("state") == "pending" and status.get_attribute("role") == "status"
+    assert summary.is_hidden()
+    assert abs(status.bounding_box()["width"] - page.locator("#root").bounding_box()["width"]) <= 1
     if shot_dir := os.environ.get("ROSY_SHOT_DIR"):
         Path(shot_dir).mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(Path(shot_dir) / "robot-overview-pending-390.png"))
@@ -180,8 +183,9 @@ def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel)
         evidence: {navigation: {evidence: 'delayed', received_at: ago},
                    pose: {evidence: 'fresh'}, battery: {evidence: 'fresh'}}});
     }""")
-    rows = page.locator("dl.ui-readout dd")
-    assert page.locator("dl.ui-readout ui-empty").count() == 0
+    rows = summary.locator("dd")
+    assert status.is_hidden() and summary.is_visible()
+    assert summary.locator(":scope > dt").count() == summary.locator(":scope > dd").count() == 4
     mode, navigation = rows.nth(0), rows.nth(1)
     assert mode.inner_text() == "수동"
     assert mode.get_attribute("title") == "MANUAL"
@@ -200,8 +204,9 @@ def test_overview_mode_and_navigation_carry_evidence_like_every_other_row(panel)
     assert rows.nth(1).inner_text() == "도착"
     assert rows.nth(1).get_attribute("title") == "ARRIVED"
     page.evaluate("() => __callbacks['/api/v1/robot/state'].onError(new Error('fixture'))")
-    assert "상태를 불러오지 못했습니다" in pending.inner_text()
-    assert abs(pending.bounding_box()["width"] - page.locator("dl.ui-readout").bounding_box()["width"]) <= 1
+    assert "상태를 불러오지 못했습니다" in status.inner_text()
+    assert status.get_attribute("state") == "error" and status.is_visible() and summary.is_hidden()
+    assert abs(status.bounding_box()["width"] - page.locator("#root").bounding_box()["width"]) <= 1
     if shot_dir:
         page.screenshot(path=str(Path(shot_dir) / "robot-overview-error-390.png"))
 

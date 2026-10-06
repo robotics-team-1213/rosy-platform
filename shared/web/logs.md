@@ -669,3 +669,9 @@
 - 변경: 공용 `ui-readout`의 `ui-empty`를 격자 전체 폭에 걸쳐 대기·오류 문구가 첫 라벨 열에 갇히지 않게 했다. 라벨·값의 두 열 배치는 유지한다(D-286).
 - 증거: 로봇 상태 패널의 390px 대기·오류 실제 폭 차이 ≤1px 브라우저 1 passed, 공용 반응형 9 passed, 조작 계약 27 passed; 각 `known_failures.py` 0 NEW. 캡처는 X: `captures/robot-overview-panel/`이다.
 - gate 변화: 공용 배치의 LOCAL 부분 근거 추가. 소비 표면별 G2/G3는 별도다.
+
+## 2026-10-06 · uncommitted · uiux(web-common): readout 임시 빈 상태 규칙 제거
+
+- 변경: 로봇 상태 메시지를 정의 목록 밖의 `ui-status`로 옮긴 뒤, 더는 쓰이지 않는 `ui-readout > ui-empty` 전폭 규칙을 제거했다. D-286 라벨·값 배치는 그대로다.
+- 증거: 로봇 상태 전환 브라우저 1 passed, 역할 셸과 공용 계약 51 passed, `known_failures.py` 0 NEW.
+- gate 변화: 공용 의미 구조의 LOCAL 보정. 소비 표면별 G2/G3는 별도다.

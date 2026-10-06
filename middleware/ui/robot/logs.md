@@ -1068,3 +1068,9 @@
 - 변경: 운용 화면의 로봇 상태 목록이 첫 CORE 상태를 받기 전 비어 보이지 않도록 「로봇 상태를 확인하는 중입니다」를 표시한다. 수신·오류 때 기존 값/오류로 교체한다.
 - 증거: 독립 패널에서 대기·수신·오류 전환과 390px 전폭 메시지 1 passed, 역할 셸 320/390px 2 passed, 공용 반응형 9 passed, 공용 조작 계약 27 passed; 각 `known_failures.py` 0 NEW. 대기·오류 패널 캡처는 X: `captures/robot-overview-panel/`이다.
 - gate 변화: 로봇 운용 LOCAL 첫 상태 부분 근거. 실제 CORE 스트림·장치와 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 상태 메시지 의미 구조 수정
+
+- 변경: 대기·오류 메시지를 `<dl>` 밖의 `ui-status`로 옮기고, 수신된 라벨·값이 있을 때만 `<dl>`을 보인다. 오류 때 오래된 보정 칩도 제거한다.
+- 증거: 390px 대기·오류 캡처 X: `captures/robot-overview-semantic/`; 전환·폭·`role=status` 브라우저 1 passed, 역할 셸과 공용 계약 51 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 의미 구조와 폭 근거 보정. 실제 CORE·장치 readback 및 G3는 HOLD다.

@@ -24,7 +24,7 @@
 
 전방 카메라의 동등한 「영상 확대」·「녹화 중지」 행동도 390px에서 같은 폭으로 맞췄다. 320px에서는 두 행동이 각각 패널의 전폭을 쓰며 쌓인다. 실제 역할 셸의 두 폭에서 렌더된 행동 폭 차이 ≤1px, 가로 넘침 0, 비상 정지 가시성을 확인한 브라우저 **2 passed**, `known_failures.py` **0 NEW**다. 전체 화면 원본은 X: `captures/robot-camera-equal/robot-console-{320x568,390x844}.png`다. 카메라 수신과 녹화의 실제 완료·사용자 독회는 남아 있다.
 
-기존 320px 카메라 폭 캡처의 「로봇 상태」 아래 빈 칸은 첫 상태 수신 전 화면이었다. 상태 목록에 「로봇 상태를 확인하는 중입니다」를 넣고, 공용 readout의 대기·오류 문구가 첫 라벨 열 대신 전체 폭을 차지하게 했다. 독립 패널의 대기와 오류 화면 원본은 X: `captures/robot-overview-panel/robot-overview-{pending,error}-390.png`이며, 390px 실제 메시지 폭과 목록 폭 차이 ≤1px이다. 대기→값→오류 브라우저 **1 passed**, 역할 셸 320/390px **2 passed**, 공용 반응형 **9 passed**, 조작 계약 **27 passed**, 각 `known_failures.py` **0 NEW**다. 기존 `captures/robot-camera-equal/robot-console-320x568.png`는 카메라 행동 폭 근거만으로 쓰고 상태 수신 근거로 쓰지 않는다. 이 결과는 LOCAL 가짜 상태 콜백이며 실제 CORE 스트림·장치 G3는 HOLD다.
+기존 320px 카메라 폭 캡처의 「로봇 상태」 아래 빈 칸은 첫 상태 수신 전 화면이었다. 첫 상태 전 대기와 오류를 라벨·값 정의 목록 밖의 공용 `ui-status`에 표시하고, 수신 뒤에만 정의 목록을 보인다. 메시지는 390px 패널 전체 폭이며 `role=status`로 상태 변경을 알린다. 독립 패널 원본은 X: `captures/robot-overview-semantic/robot-overview-{pending,error}-390.png`이다. 대기→값→오류 브라우저 **1 passed**, 역할 셸 320/390px과 공용 반응형·조작 계약 **51 passed**, 각 `known_failures.py` **0 NEW**다. 기존 `captures/robot-camera-equal/robot-console-320x568.png`는 카메라 행동 폭 근거만으로 쓰고 상태 수신 근거로 쓰지 않는다. 이 결과는 LOCAL 가짜 상태 콜백이며 실제 CORE 스트림·장치 G3는 HOLD다.
 
 작업 준비·장비 캡처는 같은 FastAPI fixture에서 생성했다. 첫 시도는 고급 네트워크 작업의 닫힌 disclosure 안에 있는 버튼을 바로 찾으려다 시험이 멈췄다. shipped UI대로 disclosure를 열어 비활성 버튼과 이유를 확인했다. 모바일 패널의 실제 내용 폭을 공용 폼의 container query가 읽도록 수정한 뒤 다시 실행해 **60셀 1 passed**, 반응형·셸 브라우저 **18 passed**, 별도 작업 패널 **6장**, `known_failures.py` **0 NEW**를 얻었다. 첫 실패를 제품 결함으로 분류하지 않는다.
 

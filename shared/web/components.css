@@ -559,7 +559,6 @@ ui-actions {
 
 .ui-readout dt { color: var(--nominal-quiet); }
 .ui-readout dd { margin: 0; font-variant-numeric: tabular-nums; }
-.ui-readout > ui-empty { grid-column: 1 / -1; }
 
 .ui-readback { min-width: 0; display: grid; gap: var(--gap-readback); }
 .ui-readback > h3,
