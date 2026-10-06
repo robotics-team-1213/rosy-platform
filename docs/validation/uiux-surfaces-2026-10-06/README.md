@@ -16,6 +16,8 @@
 
 로봇·Fleet 캡처는 FastAPI/Playwright fixture, 게임 캡처는 실제 PreviewServer와 fixture payload를 쓴 LOCAL 증거다. Fleet 전화의 `fleet_console_mobile_{width}.png`는 시험이 **전체 로봇 보기**를 누른 뒤 찍는 캡처여서 기본 예외 목록의 근거로 쓰지 않는다. 기본 목록은 위 `fleet-console-320x844.png`와 해당 브라우저 단언으로 확인했다.
 
+표의 학습 픽셀 390px 저장소 캡처는 편집기 입력 폭을 고치기 전 기록이다. 390/320px의 최신 원본과 검증 범위는 아래 픽셀 결정·자료 준비 단락의 X: 경로를 따른다.
+
 로봇 역할 셸의 `/console`·`/setup`·`/device`를 320×568과 390×844에서 다시 띄웠다. `/console`에서는 조작→감지→관측이 한 열로 쌓이고 세 칸의 시작점·폭이 같으며, 두 폭 모두 첫 화면과 하단 스크롤에서 비상 정지가 보인다. 문서 가로 넘침과 페이지 오류는 0, 브라우저 **2 passed**, `known_failures.py` **0 NEW**다. 320px 첫 화면 원본은 X: `captures/robot-console-320-width/robot-console-320x568.png`에 있다. 이는 정상 fixture의 LOCAL 배치 근거이며 실제 CORE 상태와 작업 완료·G3는 미검증이다.
 
 전방 카메라의 동등한 「영상 확대」·「녹화 중지」 행동도 390px에서 같은 폭으로 맞췄다. 320px에서는 두 행동이 각각 패널의 전폭을 쓰며 쌓인다. 실제 역할 셸의 두 폭에서 렌더된 행동 폭 차이 ≤1px, 가로 넘침 0, 비상 정지 가시성을 확인한 브라우저 **2 passed**, `known_failures.py` **0 NEW**다. 전체 화면 원본은 X: `captures/robot-camera-equal/robot-console-{320x568,390x844}.png`다. 카메라 수신과 녹화의 실제 완료·사용자 독회는 남아 있다.
@@ -135,6 +137,8 @@
 작업영역 응답을 보류한 객체·픽셀 1440/390px의 첫 기동과 다시 읽기도 확인했다. 보류 중에는 이전 편집을 내리고 「검수 내용을 확인하는 중」과 현재 작업 불가를 표시한다. 응답을 받으면 같은 화면에서 편집·자료 준비를 다시 열며, 브라우저 **4 passed**, `known_failures.py` **0 NEW**다. 원본은 같은 X: `captures/learning-waiting/learning-{objects,pixels}-waiting-{1440,390}.png`다. 관련 객체·픽셀 전체 실행은 **46 passed, 1 setup ERROR**였다. 오류는 브라우저가 fixture의 임의 포트 6697을 `ERR_UNSAFE_PORT`로 거부해 페이지 로드 전 발생했고, 해당 단일 셀 재실행은 **1 passed**, `known_failures.py` **0 NEW**였다. 따라서 이 전체 실행을 무오류 통과로 쓰지 않는다. 이 상태는 보류된 LOCAL 응답 근거이며 800px과 실제 검수자 G3는 남는다.
 
 객체·픽셀 검수의 결정 결과를 합성 원본으로 끝까지 재생했다. 객체는 제외→재검수→전체 확인→승인→자료 준비, 픽셀은 제외→재검수→전체 채우기→전체·배경 확인→승인→자료 준비 순서다. UI 상태와 저장소 상태를 각 전이에서 대조하고 제외·승인·준비 결과를 따로 캡처했다. 객체 1440/800/390/320px과 픽셀 1440/800/390px **7 passed**, `known_failures.py` **0 NEW**다. 390/320px 객체 화면에서는 짧은 한 행에 눌리던 세 사진 이동 버튼을 각각 같은 가용 폭으로 쌓았다. 원본은 X: `captures/learning-decision-result/learning-{objects,pixels}-{excluded,approved,decision-result}-{1440,800,390,320}.png`(픽셀 320px 셀 없음)에 있다. 이 결과는 LOCAL 합성 자료이며 실제 검수자의 원본 판단·자료 등록/학습 수용을 증명하지 않는다.
+
+픽셀 결정·자료 준비의 320px 셀도 추가했다. 사진 이동 칸의 같은 폭을 유지하면서, 편집기의 픽셀 클래스·브러시 반지름·허용치 방식·허용치·겹쳐 보기 입력을 390/320px에서 각각 가용 칸의 전폭으로 맞췄다. 기존 compact CSS 선택자는 사진 이동 칸에만 닿고 편집기 안의 입력 묶음에는 닿지 않았다. 수정 후 두 폭의 집중 브라우저 시험 **2 passed**, 픽셀 브라우저 전체 **11 passed**, 각 `known_failures.py` **0 NEW**이며 320px 이전·다음 이동 칸도 같은 폭으로 재확인했다. 원본은 같은 X: 회차의 `captures/learning-pixels-width-final/learning-pixels-decision-result-{390,320}.png`다. 합성 원본의 LOCAL 화면·작업 근거이며 실제 검수자 수용은 남아 있다.
 
 Pilot 팔 화면은 카메라 없는 Gazebo fixture에서 빈 영상 자리 때문에 두 조작 창이 오른쪽 좁은 칸에 2:1로 압축됐다. 현재 CSS는 영상이 없을 때 조작부를 먼저 배치하고 동등한 팔·그리퍼 창을 같은 폭으로 쓴다. 영상이 있으면 영상·조작부 병렬 구조를 유지한다. 태블릿 2종·전화·영상 있는 경로의 브라우저 **5 passed**, `known_failures.py` **0 NEW**였다. 명령 경로는 가짜 CORE fixture이며 실기 조작 증거가 아니다.
 

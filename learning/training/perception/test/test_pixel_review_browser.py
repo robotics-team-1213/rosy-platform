@@ -76,11 +76,25 @@ def test_unknown_pixels_cannot_be_approved_and_explicit_fill_persists(browser_wo
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
 
 
-@pytest.mark.parametrize('width', [1440, 800, 390])
+@pytest.mark.parametrize('width', [1440, 800, 390, 320])
 def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, width):
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     open_pixels(page, store, expect)
+    if width <= 390:
+        field_widths = page.evaluate("""() => ({
+          available: document.querySelector('.pixel-layout > section').getBoundingClientRect().width,
+          labels: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar > label')]
+            .map(node => node.getBoundingClientRect().width),
+          fields: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar .ui-field')]
+            .map(node => node.getBoundingClientRect().width),
+        })""")
+        assert all(abs(value - field_widths['available']) <= 1
+                   for value in field_widths['labels'] + field_widths['fields']), field_widths
+    if width == 320:
+        navigation = page.evaluate("""() => ['#pixel-prev', '#pixel-next']
+          .map(selector => document.querySelector(selector).getBoundingClientRect().width)""")
+        assert min(navigation) >= 100 and abs(navigation[0] - navigation[1]) <= 1, navigation
     def shot(state):
         if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
             from pathlib import Path

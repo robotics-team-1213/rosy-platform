@@ -98,5 +98,9 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
 @media (width < 30rem) {
   #pixel-main > .ui-workspace-bar { align-items: stretch; }
   #pixel-main > .ui-workspace-bar > label, #pixel-reload { flex: 1 1 100%; }
+  .pixel-layout .ui-workspace-bar { align-items: stretch; }
+  .pixel-layout .ui-workspace-bar > label { flex: 1 1 100%; }
+  .pixel-layout .ui-workspace-bar .ui-field { width: 100%; }
+  #pixel-radius { max-width: 100%; }
   #pixel-prev, #pixel-next { flex: 1 1 0; min-width: 0; }
 }
