@@ -88,6 +88,15 @@ def test_left_and_right_actions_follow_the_sign_of_the_turn():
     assert classify(10.0, CFG) == "straight" and classify(170.0, CFG) == "uturn"
 
 
+def test_turn_classes_hold_exactly_at_the_d489_thresholds():
+    assert classify(20.0, CFG) == "straight" and classify(20.5, CFG) == "left"
+    assert classify(135.0, CFG) == "left" and classify(-135.0, CFG) == "right"
+    assert classify(135.5, CFG) == "uturn" and classify(-135.5, CFG) == "uturn"
+    assert transition_cost(136.0, "junction", CFG) is None
+    assert transition_cost(136.0, "turnaround", CFG) == CFG.uturn_cost_s + CFG.place_pass_cost_s
+    assert transition_cost(135.0, "junction", CFG) == CFG.turn_cost_s + CFG.place_pass_cost_s
+
+
 def test_arrive_yaw_picks_the_arriving_lane_or_is_unreachable():
     site = _map(CROSS, CROSS_EDGES + [("s_w", "S", "W", True)])
     assert _edges(_plan(site, ON_W_C, "C")) == ["w_c"]
