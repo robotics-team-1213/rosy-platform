@@ -81,6 +81,7 @@ class PeerClientTest {
                             200 -> { approved = true; json(state("approved")) }
                             400 -> MockResponse().setResponseCode(400).setHeader("Content-Type", "application/json")
                                 .setBody(JSONObject().put("detail", JSONObject().put("message", "wrong approval code").put("remaining_attempts", 3)).toString())
+                            -400 -> MockResponse().setResponseCode(400).setBody("{\"detail\":\"invalid request\"}")
                             else -> MockResponse().setResponseCode(confirmStatus)
                         }
                     }
@@ -154,6 +155,14 @@ class PeerClientTest {
             val outcome = confirmWhilePending(f)
             assertTrue(outcome is PeerCodeWrong)
             assertEquals(3, (outcome as PeerCodeWrong).remaining)
+        }
+    }
+    @Test fun badRequestWithoutRemainingAttemptsIsARefusalNotAWrongCode() {
+        Fixture().use { f ->
+            f.confirmStatus = -400
+            val outcome = confirmWhilePending(f)
+            assertTrue(outcome is PeerRefused)
+            assertEquals(400, (outcome as PeerRefused).status)
         }
     }
     @Test fun olderCoreWithoutConfirmRouteIsConsoleOnly() {

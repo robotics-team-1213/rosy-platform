@@ -40,7 +40,8 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
                 val message = "${candidate.name} · ${pending.receiverId}\n\n로봇 화면에 뜬 승인 코드를 입력하거나 수신 화면에서 Rosy Pilot의 연결 요청을 승인하세요.\n요청 범위: 조종 화면 · 기존 안전 규칙과 사용 권한 유지\n요청 확인: ${pending.code}\n\n4문자는 요청을 찾는 표시입니다. 조종이나 관리자 권한을 발급하지 않습니다."
                 if (dialog == null) {
                     val code = EditText(activity).apply {
-                        hint = "로봇 화면의 승인 코드"
+                        // D-483 M1: the LCD may list several requests; ours is the line with our display code.
+                        hint = "로봇 화면에서 ${pending.code} 옆의 승인 코드"
                         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
                         filters = arrayOf(InputFilter.AllCaps(), InputFilter.LengthFilter(6))
                     }
@@ -68,7 +69,7 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
                                 note.text = when {
                                     outcome == null -> "승인 코드를 보냈습니다. 연결을 마무리합니다."
                                     outcome is PeerCodeWrong && outcome.remaining == 0 -> "승인 코드가 5번 틀려 요청이 거절되었습니다."
-                                    outcome is PeerCodeWrong -> "승인 코드가 맞지 않습니다." + (outcome.remaining?.let { " 남은 시도 ${it}번" } ?: "")
+                                    outcome is PeerCodeWrong -> "승인 코드가 맞지 않습니다. 남은 시도 ${outcome.remaining}번"
                                     outcome is PeerRefused && outcome.status == 404 -> {
                                         code.visibility = View.GONE; send.visibility = View.GONE
                                         "이 로봇은 콘솔 승인만 지원합니다"

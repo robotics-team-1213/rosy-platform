@@ -17,8 +17,8 @@ class PeerKeyChanged : IOException("receiver identity changed")
 class PeerCanceled : IOException("receiver request canceled")
 class PeerApprovalExpired : IOException("approval usage expired; local record retained")
 class PeerApprovalTimeout : IOException("receiver approval timed out")
-/** D-483: the robot-screen approval code did not match; null when the receiver gave no count. */
-class PeerCodeWrong(val remaining: Int?) : IOException("approval code did not match")
+/** D-483: the robot-screen approval code did not match; [remaining] attempts are left (0 = rejected). */
+class PeerCodeWrong(val remaining: Int) : IOException("approval code did not match")
 data class PeerPending(val code: String, val receiverId: String, val expiresAt: Instant)
 
 /** One selected endpoint, one cancelable approval/renewal; never retries a positive session POST. */
@@ -180,7 +180,8 @@ class PeerClient internal constructor(private val candidate: Candidate, private 
                     val body = response.body?.byteStream()?.let { MainActivity.readLimited(it, 4096).toString(Charsets.UTF_8) }
                     JSONObject(body ?: "{}").getJSONObject("detail").getInt("remaining_attempts").takeIf { it in 0..5 }
                 }.getOrNull()
-                throw PeerCodeWrong(remaining)
+                // D-483 L3: only the receiver's wrong-code answer carries the count; any other 400 is a refusal.
+                throw if (remaining != null) PeerCodeWrong(remaining) else PeerRefused(400)
             }
             if (!response.isSuccessful) throw PeerRefused(response.code)
         }
