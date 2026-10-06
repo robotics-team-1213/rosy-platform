@@ -88,8 +88,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · Cell 문서 파일 선택 어휘와 폭
 - 2026-10-07 · uncommitted · D-488 site-map G2 empty and conflict states
 - 2026-10-07 · uncommitted · D-488 현장 지도 표시 이름·선언 폭 확인
 - 2026-10-07 · uncommitted · D-488 M1 재검토 반영 (N1·L1–L3)
 - 2026-10-07 · uncommitted · D-488 M1 검토 반영과 ADR 번호 이동 (D-484/485/486 → D-488/489/490)
-- 2026-10-07 · 463ae393a · D-488 M1 현장 지도·주소·경로 계획 (D-489/D-490)
