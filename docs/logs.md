@@ -6574,3 +6574,9 @@ osy-d395-s1d\`.
 - 변경: Fleet `GET /api/fleet/auth/connection`·`POST /api/fleet/auth/development-session`(API Reference v1.108). `ROSY_DEPLOYMENT=development`와 `--connection-mode development`가 함께 있을 때만 같은 망(loopback·RFC1918·link-local·Tailscale) 브라우저에 1시간 메모리 운용자 세션(`development-<8hex>`, 이름 있는 운용자, 감사 기록)을 준다. 콘솔은 첫 401에서 자동 발급하고 "개발 연결 모드" 배지를 띄운다. site.env 두 키(기본 비움), README 절 추가.
 - 증거: 관련 호스트 pytest(`operations/fleet/test/test_development_session.py`, `test_cli.py`, 버전 고정 시험, `test/test_site_development_connection.py`)와 콘솔 브라우저 시험. 관제 PC에서 다른 PC 브라우저로 접속하는 FIELD 확인은 아직 하지 않았다.
 - gate 변화: SOURCE/LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-06 · uncommitted · uiux(site): 배포 콘솔의 미인증 화면과 카메라 프레임
+
+- 변경: 기존 사이트 PC의 배포 `/console`을 읽기 전용으로 세 폭에서 렌더하고, 토큰이 없는 화면의 잠긴 조작과 관제 카메라 프레임 증가를 UI/UX 회차에 기록했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/site-deployed-unauth/`와 `logs/site-mdns-live/site-console-{unauth-320-snapshot,frame-a,frame-b}.txt`. `ceiling_north` sequence 26364→26390, 320/390/1920px 캡처, 배포 컨테이너 태그 재확인.
+- gate 변화: 옛 배포 빌드의 SITE 미인증 상태·카메라 프레임 부분 근거 추가. 현재 `main` 설치, 인증된 Fleet·로봇 상태, 실제 사용자 G3는 HOLD.
