@@ -129,7 +129,7 @@ def write_cvat_zip(path: Path, classes, items) -> None:
             z.writestr(f"SegmentationClass/{name}.png", buf.tobytes())
 
 
-def _open_model(folder):
+def _open_model(folder, providers=None):
     """LaneSegModel plus the raw session it validated (for per-pixel logits)."""
     from control.sensing.perception.learned.runner import LaneSegModel
     sessions = []
@@ -139,7 +139,9 @@ def _open_model(folder):
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = threads
         s = ort.InferenceSession(str(path), sess_options=opts,
-                                 providers=["CPUExecutionProvider"])
+                                 providers=providers or ["CPUExecutionProvider"])
+        if providers and any(provider not in s.get_providers() for provider in providers):
+            raise RuntimeError("required ONNX provider unavailable")
         in_name = s.get_inputs()[0].name
 
         class _Session:

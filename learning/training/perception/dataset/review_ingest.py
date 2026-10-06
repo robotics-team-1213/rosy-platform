@@ -54,7 +54,8 @@ def import_frames(store, body):
     if not classes_path:
         draft = next((row.get('mask') for row in rows if row.get('mask')), None)
         if draft:
-            classes_path = str(Path(draft['zip']).parent / 'classes.yaml')
+            classes_path = (str(Path(draft['zip']).parent / 'classes.yaml') if 'zip' in draft
+                            else str(catalog.parent / 'classes.yaml'))
     binding = review_masks.classes(store)
     class_raw = bounded(classes_path, 1024 * 1024) if classes_path else None
     if class_raw:
@@ -81,16 +82,28 @@ def import_frames(store, body):
         mask, labelmap_sha = None, None
         if row.get('mask'):
             ref = row['mask']
-            with zipfile.ZipFile(ref['zip']) as archive:
-                entry = archive.getinfo(ref['entry'])
-                if entry.file_size > 32 * 1024 * 1024:
-                    raise ValueError('bounded draft mask required')
-                draft = archive.read(entry)
+            if not isinstance(ref, dict) or not re.fullmatch('[0-9a-f]{64}', ref.get('sha256', '')):
+                raise ValueError('draft mask digest required')
+            if set(ref) == {'indexed_png', 'sha256', 'classes_sha256'}:
+                if ref['classes_sha256'] != binding['sha256']:
+                    raise ValueError('indexed draft classes hash differs')
+                draft = bounded(edge_review.bound(catalog.parent, ref['indexed_png']))
                 if review_masks.sha(draft) != ref['sha256']:
                     raise ValueError('draft mask hash differs')
-                labelmap_raw = archive.read('labelmap.txt')
-                labelmap_sha = review_masks.sha(labelmap_raw)
-                mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
+                mask = review_masks.from_indexed(draft, width, height, binding)
+            elif set(ref) == {'zip', 'entry', 'sha256'}:
+                with zipfile.ZipFile(ref['zip']) as archive:
+                    entry = archive.getinfo(ref['entry'])
+                    if entry.file_size > 32 * 1024 * 1024:
+                        raise ValueError('bounded draft mask required')
+                    draft = archive.read(entry)
+                    if review_masks.sha(draft) != ref['sha256']:
+                        raise ValueError('draft mask hash differs')
+                    labelmap_raw = archive.read('labelmap.txt')
+                    labelmap_sha = review_masks.sha(labelmap_raw)
+                    mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
+            else:
+                raise ValueError('draft mask reference must be indexed PNG or color ZIP')
         normalized = {key: row.get(key) for key in
                       ('source_session', 'capture_group', 'source_video_sha256', 'video_frame',
                        'video_time_s', 'timestamp_basis', 'collection', 'dataset_memberships_snapshot')}
@@ -116,7 +129,7 @@ def import_frames(store, body):
         for source, data, suffix, mask in checked:
             source['image'] = freeze_image(store, data, suffix)
             frozen.append((source, review_masks.freeze(store, mask) if mask else None))
-        added, duplicates, aliases, draft_added, legacy_linked = [], 0, 0, 0, 0
+        added, duplicates, aliases, draft_added, legacy_linked, queued = [], 0, 0, 0, 0, 0
         with store.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             next_id = db.execute('SELECT COALESCE(MAX(id),-1)+1 FROM frames').fetchone()[0]
@@ -156,6 +169,11 @@ def import_frames(store, body):
                         raise ValueError('same source frame has conflicting dimensions')
                     if (existing.get('capture_group'), existing.get('source_session')) != (source['capture_group'], source['source_session']):
                         raise ValueError('same source frame has conflicting session identity')
+                    if mask is not None:
+                        current = db.execute('SELECT sha256 FROM masks WHERE frame=?', (index,)).fetchone()
+                        if not current or current['sha256'] != mask[1]:
+                            queued += db.execute('INSERT OR IGNORE INTO pixel_drafts VALUES (?,?,?,?)',
+                                                 (index, mask[1], mask[0], source['import_catalog_sha256'])).rowcount
                     duplicates += 1
                 else:
                     index = next_id
@@ -182,9 +200,10 @@ def import_frames(store, body):
                     db.execute('INSERT INTO masks(frame,version,status,path,sha256) VALUES (?,1,?,?,?)',
                                (index, 'pending', *mask))
                     draft_added += 1
-            if added or aliases or legacy_linked:
+            if added or aliases or legacy_linked or queued:
                 db.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='generation'")
     return {'added': len(added), 'indices': added, 'duplicate_representations': duplicates,
             'new_representations': aliases, 'pixel_reviews_pending': draft_added,
+            'draft_candidates_queued': queued,
             'legacy_primary_bindings': legacy_linked,
             'catalog_sha256': review_masks.sha(raw), 'original_video_verified': False}

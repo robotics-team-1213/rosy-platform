@@ -362,3 +362,23 @@ def test_another_tokens_teleop_stops_the_recording(rec_client):
     assert calls[-1] == (True, True)
     client.post("/api/v1/teleop", json={"linear": 0.05}, headers=ADMIN)
     assert calls[-1] == (False, False)
+
+
+@pytest.mark.parametrize("linear, angular, code", [
+    (0.00064, 0.0133, None),    # encoder-tick jitter seen parked on 9dfk (one tick at 30 Hz)
+    (-0.00064, -0.0133, None),
+    (0.0, 0.0, None),
+    (0.0, 0.05, "ROBOT_MOVING"),   # a real slow turn still counts as moving
+    (0.0, -0.05, "ROBOT_MOVING"),
+    (0.02, 0.0, "ROBOT_MOVING"),
+])
+def test_download_ignores_encoder_tick_jitter_but_not_slow_motion(rec_client, linear, angular, code):
+    client, svc, root = rec_client
+    _wire(svc)
+    _recording(root)
+    svc.state.set_velocity(linear, angular)
+    response = client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR)
+    if code is None:
+        assert response.status_code == 200
+    else:
+        assert response.json()["error"]["code"] == code

@@ -27,7 +27,19 @@ python learning/training/perception/dataset/review_app.py --state X:/DevTemp/pin
 
 `승인 자료 준비`는 서버에서 기존 `review_return.receive_review`를 호출한다. 수동 다운로드/JSONL 이동 없이 `<state>/exports/<id>`에 원본 크기별 YOLO 객체 라벨, 동결된 source/human 입력, hash manifest와 COMPLETE가 기록된다. 앱 안의 전달 정보에서 경로·승인 장수·제외 index·frame version·HOLD를 확인할 수 있다. 학습 세션은 이 export를 읽어 검증하고 session mapping, session-disjoint 분할, 고정 평가 세트 전체 `build.py --exclude-eval`을 확인한다. export는 학습 dataset 수용·학습 실행·모델 활성화가 아니다.
 
-운영 workspace에서 승인된 원본을 자동 테스트 승인으로 덮어쓰지 않는다. 브라우저 시나리오는 별도 `--state`에서 실행한다. 기본 loopback Host와 쓰기 token/origin 검사는 외부 사이트 요청을 거부하지만 인증된 검수자 신원을 증명하지 않는다. 원격 접근과 서비스 배포는 지원 범위 밖이다. SQLite·동결 원본·exports를 포함한 state 디렉터리가 재시작 정본이다.
+운영 workspace에서 승인된 원본을 자동 테스트 승인으로 덮어쓰지 않는다. 브라우저 시나리오는 별도 `--state`에서 실행한다. 기본 loopback Host와 쓰기 token/origin 검사는 외부 사이트 요청을 거부하지만 인증된 검수자 신원을 증명하지 않는다. 서비스 배포는 지원 범위 밖이다. 원격 접근은 아래 `--host`로만 연다. SQLite·동결 원본·exports를 포함한 state 디렉터리가 재시작 정본이다.
+
+### 신뢰 망에서 직접 열기 (D-478)
+
+기본은 loopback이다. 검수자가 SSH 터널 없이 모델 PC의 앱을 Tailscale로 열어야 할 때만 `--host`로 그 주소를 지정한다.
+
+```powershell
+python learning/training/perception/dataset/review_app.py --state X:/DevTemp/pinky-review-state --port 8768 --host 100.98.162.71
+```
+
+검수자는 `http://100.98.162.71:8768/pixels`를 연다. 받는 값은 loopback·사설(RFC1918)·link-local·Tailscale(100.64.0.0/10) 리터럴 IPv4뿐이다. `0.0.0.0`, 공인 주소, 호스트 이름은 시작 때 거부된다. HTTP만 쓰며 tailnet 구간은 이미 암호화된다.
+
+위험: 사용자 인증이 없다. 그 주소에 닿는 누구나 사진을 보고 수정하고 승인할 수 있고, 검수자 신원은 증명되지 않는다. 신뢰한 tailnet/LAN에서 필요한 동안만 켠다. 쓰기 token과 Host/Origin 검사는 그대로다.
 
 테스트:
 
