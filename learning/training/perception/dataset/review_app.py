@@ -226,7 +226,7 @@ class ReviewStore:
             return [json.loads(r[0]) for r in db.execute('SELECT receipt FROM exports ORDER BY rowid DESC LIMIT 10')]
 
 
-# D-476: loopback, RFC1918, link-local and Tailscale only; never wildcard or public.
+# D-478: loopback, RFC1918, link-local and Tailscale only; never wildcard or public.
 BIND_NETWORKS = [ipaddress.ip_network(n) for n in (
     '127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16', '100.64.0.0/10')]
 
@@ -394,7 +394,7 @@ def main():
     parser.add_argument('--human', type=Path)
     parser.add_argument('--images', type=Path)
     parser.add_argument('--port', type=int, default=8767)
-    parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-476)')
+    parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--cad-catalog', type=Path, help='verified CAD reference catalog shown in app')
     args = parser.parse_args()
