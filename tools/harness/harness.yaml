@@ -28,6 +28,10 @@ adr_gaps:
   D-244: "unused after a same-day numbering collision; the runtime note is D-246 and the E-Stop pilot is D-245"
 
 status: STATUS.md
+
+# sim2real gap registry (linted) and its generated table.
+sim2real_gaps: tools/harness/sim2real_gaps.yaml
+sim2real_table: docs/reference/sim2real-gaps.md
 stale_after_commits: 5
 
 # D-73: `tests` feeds generated index.md. `functional` is the module's own
