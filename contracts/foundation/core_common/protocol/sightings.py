@@ -13,6 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 _ROBOT_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
+#: How the worker measured this frame's image-to-map calibration (D-484).
+CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
+
 
 class SiteSightingPayload(BaseModel):
     """One robot pose projected into the configured site map by a vision worker."""
@@ -29,7 +32,10 @@ class SiteSightingPayload(BaseModel):
     calibration_revision: str = Field(min_length=1, max_length=128)
     processor_revision: str = Field(min_length=1, max_length=128)
     quality: float | None = Field(default=None, ge=0.0, le=1.0)
-    corner_marker_ids: tuple[int, int, int, int]
+    # D-484: optional for a field_boundary source; a payload without corner
+    # markers must name its calibration source instead.
+    corner_marker_ids: tuple[int, int, int, int] | None = None
+    calibration_source: str | None = Field(default=None, max_length=32)
 
     @field_validator("robot_id")
     @classmethod
@@ -63,12 +69,31 @@ class SiteSightingPayload(BaseModel):
 
     @field_validator("corner_marker_ids")
     @classmethod
-    def _four_unique_corner_ids(cls, value: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    def _four_unique_corner_ids(cls, value: tuple[int, int, int, int] | None):
+        if value is None:
+            return None
         if any(isinstance(marker_id, bool) or marker_id < 0 for marker_id in value):
             raise ValueError("corner marker ids must be non-negative integers")
         if len(set(value)) != 4:
             raise ValueError("four distinct corner marker ids are required")
         return value
+
+    @field_validator("calibration_source")
+    @classmethod
+    def _known_calibration_source(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in CALIBRATION_SOURCES:
+            raise ValueError(f"calibration source must be one of {', '.join(CALIBRATION_SOURCES)}")
+        return value
+
+    @model_validator(mode="after")
+    def _markers_and_source_agree(self) -> "SiteSightingPayload":
+        if self.calibration_source == "field_boundary" and self.corner_marker_ids is not None:
+            raise ValueError("a field_boundary sighting carries no corner marker ids")
+        if self.corner_marker_ids is None and self.calibration_source is None:
+            raise ValueError("a sighting needs corner marker ids or a calibration source")
+        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -81,4 +106,7 @@ class SiteSightingPayload(BaseModel):
             marker_ids = value.get("corner_marker_ids")
             if isinstance(marker_ids, (list, tuple)) and any(type(v) is not int for v in marker_ids):
                 raise ValueError("corner marker ids must be integers")
+            source = value.get("calibration_source")
+            if source is not None and not isinstance(source, str):
+                raise ValueError("calibration source must be a string")
         return value

@@ -470,3 +470,10 @@
 - 변경: 사용되지 않는 schemas 재수출을 제거한다. 소비자는 별도 lane_containment leaf를 직접 import하며 API v1.106 계약은 그대로다. schemas의 기존 1315줄 판정/무성장 한도를 유지한다.
 - 증거: SOURCE 구조 검사 포함 109 PASS, 0 NEW. 새 계약 모듈/입구 shape 변경 없음.
 - gate 변화: 계약 소유 경계만. 런타임 수용 없음.
+
+
+## 2026-10-06 · uncommitted · feat(core_common): D-484 sighting/preview 스키마 additive
+
+- 변경: `SiteSightingPayload.corner_marker_ids`를 선택화하고 `calibration_source`("corner_markers"|"field_boundary", 마커 id와 상호 검증)를 추가. `PreviewRectification`에 `mode: "manual"|"auto"`(기본 manual, 과거 리스 호환) 추가 — auto는 코너를 Vision의 필드 캘리브레이션이 정한다. 기존 필드명·값은 불변.
+- 증거: contracts/foundation 스위트 + vision/fleet 소비처 시험 통과. API Ref v1.109 행과 같은 변경.
+- gate 변화: 없음. envelope 1.0 불변, additive 규율(PRT-006) 준수.
