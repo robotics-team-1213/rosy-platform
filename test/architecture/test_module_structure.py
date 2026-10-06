@@ -109,8 +109,15 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        36_889,
-        "split: re-judged at 36645 on 2026-10-06 after integrated map camera display, "
+        37_182,
+        "split: independently re-judged at 37182 on 2026-10-07 after the 2026-10-06 Fleet UI/UX series (Cell actions, "
+        "states, failures and E-stop card in cell.js/css/html +167; console/install/formation feedback +69) "
+        "and D-484 field_boundary sighting sources (sightings, sightings_config, vision-view +43) added 293 "
+        "lines. Each change sits in its existing page or server owner; no new owner appeared. "
+        "The B2 server/UI split has no plan document and is unscheduled (D-362 queue item 3). Before the "
+        "next fleet re-judge, a dated plan under docs/plans/ naming owner fleet and the first web/server seam "
+        "must exist and be linked here. +150 allowance unchanged. "
+        "Previously re-judged at 36645 on 2026-10-06 after integrated map camera display, "
         "lamp identity routing, and transport evidence added 201 lines; the camera binding "
         "moved from console.js into its map view to keep the web file below 800 lines. "
         "The existing B2 server/UI split plan and +150 growth allowance remain in force. "
@@ -293,6 +300,23 @@ SIZE_VERDICTS = {
     "fleet/fleet/cli.py": (
         608,
         "accept: D-473 added the development-session connection-mode gate to the Fleet CLI, growing it past 600 lines (measured 608). The argument parsing stays with the one CLI entry owner for now; follow-up split: move the connection-mode and session CLI parsing into its own module when the CLI next grows. Budgets and allowance unchanged",
+    ),
+    "fleet/fleet/server/web/styles.css": (
+        809,
+        "accept: the Fleet console page stylesheet crossed the 800 web ceiling (measured 809) through "
+        "2026-10-06 UI/UX layout fixes (uniform peer widths, E-stop/cancel feedback placement, phone "
+        "server-loss state, formation resume). It stays the one token-only stylesheet of the console page "
+        "owner and adds no palette or runtime owner. Re-judge as split, with a dated Fleet item added to "
+        "docs/plans/2026-10-04-ui-release-and-live-refinement.md, before any further growth past 809. "
+        "Web ceiling and growth allowance unchanged",
+    ),
+    "ui/face/emotion/info_screen.py": (
+        602,
+        "accept: the LCD info-screen renderer crossed 600 lines (measured 602) when the 2026-10-06 "
+        "driving battery alert contrast fix added 4 lines. It keeps one role, payload to panel image, "
+        "with per-state renderers that share the font, alarm and fit helpers. Owner face/emotion. "
+        "Follow-up split: move the boot/AP-QR renderers (boot_lines, ap_qr, _draw_qr, render_boot) into "
+        "their own module when the file next grows. Budgets and allowance unchanged",
     ),
     "fleet/fleet/server/web/console.js": (
         832,
@@ -568,8 +592,12 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        44_646,
+        44_926,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
+        "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
+        "+133, with reviews), the camera AE/AWB re-lock (camera_controls/camera_visibility/v4l2_controls +77; "
+        "lock mixin camera_lock.py split out of camera_detect_node) and the D-468 sim-sensor flag (+15). The "
+        "ROS-free pieces sit inside sensing/perception and move with it — verdict unchanged); "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
         "inside sensing/perception and moves with it — verdict unchanged; re-judged 2026-09-30 at 35197 "
@@ -691,8 +719,10 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1133,
-        "accept: re-judged at 1133 on 2026-10-06 for D-483: the pair-request approval-code card "
+        1140,
+        "accept: re-judged at 1140 on 2026-10-07. An accepted fleet identify plays two "
+        "1400 Hz beeps from this same buzzer owner and leaves the health sound in place. "
+        "Re-judged at 1133 on 2026-10-06 for D-483: the pair-request approval-code card "
         "is one more status row of the same LCD owner; its strict reader and priority live in "
         "core_common.face_screen, rosy-face only passes the file and draws the notice. "
         "Re-judged at 1119 on 2026-10-06: bounded LED identity pulse joins the "

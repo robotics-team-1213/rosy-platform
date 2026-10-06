@@ -2109,6 +2109,12 @@
 - 변경: 관제·설치·Cell 문서의 표시 이름 `Rosy Console` → `Rosy Fleet`. 지도 아래 천장 카메라 사본(`#map-camera`) 제거 — 원본은 카메라 칸에 한 번, 보정 맞춤은 캔버스가 그린다. 지도가 없고 카메라가 살아 있으면 지도 칸이 한 줄로 줄고 카메라가 주 화면(110rem 이상 전체 폭). 접속 전 발행 띠를 접고 연결 표시는 `접속 전`(중립). `[data-role-lock]` 묶음 안 버튼은 사유를 되풀이하지 않고 묶음 안내 한 줄을 쓴다. id `console`·경로 `/console`·저장소 키는 그대로.
 - 증거: 아래 브랜치 시험 기록(`X:/DevTemp/fleet-name/`). DEVICE/FIELD 확인 없음.
 - gate 변화: LOCAL 화면 정리. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-07 · uncommitted · D-487 이후 Fleet 데스크톱 높이 보정
+
+- 변경: 1920×1080에서 관제 문서의 43px 세로 넘침을 확인하고 데스크톱 관제 칸 간격·안쪽 여백과 대형 readout의 기본 margin을 줄였다. D-415의 8줄 로그는 유지했다.
+- 증거: `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-d487\`의 `browser-fixed2.txt` **8 passed**, `connection.txt` **1 passed**, `contracts.txt` **60 passed**, `node-files.txt` **137 passed**, 각 Python 실행의 `known_failures.py` 0 NEW, `fleet_console_fit.png`에서 하단까지 표시.
+- gate 변화: LOCAL G2 부분 근거. 사이트 PC·카메라·로봇과 운영자 G3는 HOLD.
 ## 2026-10-07 · 463ae393a · D-488 M1 현장 지도·주소·경로 계획 (D-489/D-490)
 
 - 변경: `fleet/site_map.py`(`rosy.site_map/1` 장소·방향 있는 차로·선택 `turn_bans`, `lane_graph.yaml` 가져오기), `server/site_map_store.py`(초안 하나·불변 활성 버전·계획 기록, `--tasks-db` 또는 메모리), `site_map_routes.py`(`/api/fleet/site-map/{active,draft,activate}`, 활성화는 이름 있는 운영자·감사·`/route` 30 s 안 진행 시 409), `fleet/routing/`(차로 단위 상태 A*, 시간 비용·회전 분류·`fleet.routing` 설정, 표준 라이브러리만), `trip_routes.py`(`POST /trip` 계획만, `execute`·`/trips/{id}/start` 501). `meet/place.py` `default_graph()` 하드코딩을 없애고 `/route`와 만남 기하가 활성 지도를 읽는다. CLI `--site-map-import`·`--site-config`, 사이트 compose가 이미지의 `lane_graph.yaml`을 첫 지도로 가져온다. 콘솔 `/console/site-map`(지도 보기·초안 편집·활성화·주소/좌표 경로 미리보기). API Ref v1.109.

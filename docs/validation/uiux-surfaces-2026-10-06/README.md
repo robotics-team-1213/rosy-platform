@@ -95,7 +95,7 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 앞선 외부 PC 점검은 다른 LAN에서 `.local`을 찾지 못했고 당시 SSH·8443 연결도 거절되어 현장 서비스를 판단할 수 없었다. **2026-10-06 21:22 KST**에 승인된 기존 사이트 PC로 Tailscale SSH가 열려 읽기 전용으로 다시 확인했다. 호스트 Avahi에는 사이트 Fleet·관제 카메라 광고와 두 로봇의 `_rosy._tcp` 광고가 있었고, 사용자의 mDNS bridge timer는 활성 상태에서 최근 두 장치 스캔을 Fleet에 전달했다. Fleet 컨테이너의 실제 서비스 UID(10001)로 두 로봇 `.local` 이름과 내부 `fleet`·`vision`·`proxy` 이름이 풀렸다. LAN 주소를 명시한 사이트 CA 검증 HTTPS `/healthz`와 `/console`은 각각 200이었다. 원본은 X: `logs/site-mdns-live/`에 둔다. 호스트 자체에서 실행한 Fleet mDNS locator는 같은 광고를 Docker·loopback·Wi-Fi 여러 주소로 받아 `ambiguous Fleet host advertisement`로 거절했다. 이는 호스트 자체 조회의 실패이며 로봇 LAN 클라이언트의 발견 실패로 판정하지 않는다. Fleet의 인증된 discovery 화면·등록 상태, 현재 `main`의 사이트 설치, 사용자 조작 G3, 로봇 상태 readback은 여전히 **미확인**이다. 관제 카메라 화면 readback은 아래 범위만 확인했다.
 
-브리지의 「전달」 로그는 `mdns-bridge.py`가 Fleet 스캔 POST의 HTTP 200을 받은 뒤에만 출력하므로 서버의 **수신 승인** 근거다. 인증된 discovery GET·화면의 표시 결과까지 증명하지는 않는다. 사이트의 Fleet·Vision·proxy 이미지 태그는 `e64815c5137e91aee261cee9569cd592e74afed0`이고 현재 `main`과 다르며, Fleet 웹 자산 12개 경로가 두 소스 사이에서 다르다(X: `logs/site-mdns-live/site-containers.txt`, `site-vs-branch-fleet-web.txt`). 따라서 사이트의 HTTPS 200은 현재 `main` UI의 현장 렌더나 G3 수용 근거가 아니다.
+브리지의 「전달」 로그는 `mdns-bridge.py`가 Fleet 스캔 POST의 HTTP 200을 받은 뒤에만 출력하므로 서버의 **수신 승인** 근거다. 인증된 discovery GET·화면의 표시 결과까지 증명하지는 않는다. 사이트의 Fleet·Vision·proxy 이미지 태그는 commit `e64815c5137e91aee261cee9569cd592e74afed0`이고 현재 `main`과 다르며, Fleet 웹 자산 12개 경로가 두 소스 사이에서 다르다(X: `logs/site-mdns-live/site-containers.txt`, `site-vs-branch-fleet-web.txt`). 따라서 사이트의 HTTPS 200은 현재 `main` UI의 현장 렌더나 G3 수용 근거가 아니다.
 
 **2026-10-06 23:22–23:23 KST**에는 같은 사이트 PC의 8443을 읽기 전용 SSH 포워딩으로 열어 배포된 `/console`을 320×568, 390×844, 1920×1080px 브라우저에서 보았다. 토큰을 입력하지 않은 상태에서 등록 로봇·현장 지도는 「관제 접속 필요」를 표시하고 비상 정지·전체 주행 취소·대형 작업은 비활성이다. 관제 카메라 `ceiling_north` 원본 영상은 표시되었으며 화면의 `sequence`가 **26364→26390**으로 증가하고 수신 나이는 **413→268ms**였다. 원본은 X: `captures/site-deployed-unauth/fleet-console-{320x568-fresh-full,390x844-full,1920x1080}.png`와 `logs/site-mdns-live/site-console-{unauth-320-snapshot,frame-a,frame-b}.txt`에 있다. 컨테이너 태그는 다시 조회해 위 `e64815c51`과 같았다(`site-containers-current.txt`). 이는 **배포된 옛 빌드의 미인증 상태와 카메라 프레임에 한정된 SITE 읽기 근거**다. 현재 `main` UI의 현장 설치, 인증된 로봇 목록·지도, 장치 조작 결과와 관제자 G3는 여전히 HOLD다.
 
@@ -270,6 +270,8 @@ Cell 작업 버튼의 비활성 사유 추가 후 현재 트리에서 D-153 명�
 
 2026-10-07 로컬 `main` `42f9a617f`에서 D-153 명명 G1의 팔레트·토큰/스타일가이드·Fleet 문법·CORE 증거와 반응형 선언 검사를 다시 실행해 **90 passed, 1 warning**, `known_failures.py` **0 NEW**였다. 로그는 `X:\DevTemp\projects\rosy-platform\2026-10-07-g1-current\g1.txt`다. 경고는 Starlette의 테스트 클라이언트에서 나온 anyio 별칭 deprecation이다. 이 결과는 해당 커밋의 LOCAL 기계 계약에 한정되며, 후속 `main` 변경·G2·G3·실물 판정을 자동으로 보증하지 않는다.
 
+Fleet D-487 배치 보정까지 포함한 로컬 `main` `e9c507c2c`에서 D-153 명명 G1의 팔레트·토큰/스타일가이드·Fleet 문법·CORE 증거와 반응형 선언 검사를 다시 실행해 **90 passed, 1 warning**, `known_failures.py` **0 NEW**였다. 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-07-g1-current\g1-e9c507c2c.txt`이며 경고는 같은 Starlette/anyio deprecation이다. G1 기계 계약은 이 코드 후보에서 통과했지만, 활성 표면 전체의 선언 상태·폭 G2, 운영자 G3, 사이트 장치 readback은 아직 **HOLD**다.
+
 게임 보드 브라우저 전체는 현재 **19 passed**, 게임 모듈은 **113 passed**였다. 최초 1280/390px와 첫 연결 오류에서 피치 안의 명시적 대기·오류 문구를 확인했고, 정지 실패 뒤 재시도 시험의 관찰은 CSP에 걸리는 스크립트 대기 대신 DOM locator를 쓴다. 이 화면들은 관측 frame 없는 fixture이며 실제 카메라와 로봇 상태를 나타내지 않는다.
 
 정지 요청 실패·재시도 흐름은 1280×800, 390×844, 320×568에서 다시 확인했다. 세 뷰포트 모두 실패 이유와 재시도 안내, 정지 버튼이 화면 폭 안에 있고 가로 넘침 없이 표시되며 키보드 재시도 후에도 버튼에 초점이 남는다. 집중 브라우저 시험 **3 passed**, `known_failures.py` **0 NEW**; 캡처 `X:\DevTemp\games_board_stop_retry_{1280x800,390x844,320x568}.png`, 로그 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\logs\games-stop-width-rerun.txt`. 첫 실행의 데스크톱 Chromium 시작 제한 시간 초과는 재실행에서 재현되지 않았다. 이 증거는 PreviewServer fixture의 LOCAL 범위다.
@@ -356,6 +358,10 @@ G3 여덟 항목은 세 표면 모두 **미완료**다. 아래는 이번 회차�
 | 6. 어휘 | 검수자에게 객체·픽셀·승인 용어가 명확한지 확인 | 운전자에게 후보·연결·승인 문구가 명확한지 확인 | 설치자에게 LAN·Peer·송출 문구가 명확한지 확인 |
 | 7. 표면 질문 | 3폭에서 원본 대조부터 결과 확인까지 수행 | 3폭에서 발견부터 연결 확인까지 수행 | 2폭에서 수신기 선택부터 송출 확인까지 수행 |
 | 8. 표면 문법 | 검수 작업은 원본·편집·결정 순으로 읽히는지 확인 | 로비는 후보 선택·연결 상태가 먼저 읽히는지 확인 | 설치 절차는 발견·승인·송출·확인 순으로 읽히는지 확인 |
+
+### D-487 이후 Fleet 재확인 (2026-10-07)
+
+현재 `Rosy Fleet` 운용 화면을 1920×1080에서 다시 재생했다. 첫 검사에서 문서가 43px 넘쳐 작업 영역 하단이 잘렸다. 8줄 로그 높이는 D-415 계약이므로 유지하고, 데스크톱 관제 칸의 중복 여백과 대형 readout 기본 margin을 줄였다. 수정 후 문서 하단은 1079px로 뷰포트 안이며, 지도·등록 로봇 칸은 각각 928px, 대형·신호 패널과 로그도 보인다. 1920px 맞춤·카메라 상태와 compact 폭의 선별 브라우저 **8 passed**, 접속 전 안내→연결 **1 passed**, 서버·팔레트 계약 **60 passed**, 웹 모듈 **137 passed**, 각 Python 실행의 `known_failures.py` **0 NEW**. 현재 원본과 실행 기록은 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-d487\`의 `fleet_console_fit.png`, `connection-desktop.png`, `browser-fixed2.txt`, `connection.txt`, `contracts.txt`, `node-files.txt`다. 최신 `main` 병합 뒤 roster의 재렌더와 박스 계측이 경합한 320px 시험을 원자적으로 읽도록 고쳤고, 선별 브라우저 **8 passed**, 계약 **60 passed**, 웹 모듈 **137 passed**, `known_failures.py` **0 NEW**로 다시 확인했다(`post-merge-browser-final.txt`, `post-merge-contracts.txt`, `post-merge-node.txt`). 이 결과는 API fixture 기반 LOCAL G2 부분 근거다. 실제 사이트 이미지의 후보 SHA, 카메라 화면, 로봇 readback과 요청자가 수행할 G3 독회 결과는 아직 확인되지 않아 제품 전체 **HOLD**를 유지한다.
 
 ## 제품 범위와 판정 경계
 
