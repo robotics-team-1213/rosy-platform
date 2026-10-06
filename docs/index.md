@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · uiux(fleet): LED 행동 추가 뒤 전화 폭 재검증
+- 2026-10-07 · uncommitted · uiux(fleet): Cell 빈 평면도 공백 제거
 - 2026-10-07 · uncommitted · uiux(learning): 320px 서비스 장애 복구 확인
 - 2026-10-06 · uncommitted · docs(uiux): G3 항목별 결과 칸
 - 2026-10-06 · uncommitted · docs(uiux): 실제 사용자 G3 독회 기록지
-- 2026-10-06 · uncommitted · uiux(learning): class 파일 미연결 시 편집 도구 잠금
-- 2026-10-06 · uncommitted · uiux(learning): 병합된 검수 폭과 사진 목록 재확인

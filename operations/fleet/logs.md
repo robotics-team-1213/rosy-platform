@@ -2098,3 +2098,8 @@
 - 변경: `site-cameras.yaml` 검증과 `SightingService`가 `calibration_source: field_boundary`(코너 마커 없음, `corner_world_m` 필수)를 받고, payload의 `calibration_source`까지 일치 검사한다(불일치 409 CALIBRATION_MISMATCH). `GET /api/fleet/site-map` source에 `calibration_source`를 노출하고 field 소스는 `corner_marker_ids: null`이다. 설치 화면 영상 패널에 "자동 보정 (필드)" 보기 모드(리스 rectification `mode:"auto"`, 배지 "자동 보정 미리보기"/"자동 보정 대기")를 추가했다. 관제(/console) 화면은 기존대로 원본만(D-410).
 - 증거: `test_sightings_api.py`·`test_site_map_api.py` 확장(field 수용·양방향 불일치·설정 검증·site_map 노출), node 웹 시험 통과(`vision-badge.test.mjs` auto 케이스 포함).
 - gate 변화: 없음. sighting은 표시 전용(D-257 5항)·정책 증거 아님을 유지.
+## 2026-10-07 · uncommitted · Cell 빈 미리보기 평면도 숨김
+
+- 변경: 배치가 계산되기 전 또는 미리보기 결과가 무효가 된 동안 팔레트 선택과 빈 20rem 평면도를 함께 숨긴다. 배치가 있는 성공 결과에서만 다시 보인다.
+- 증거: 320px 초기·503/복구와 390px 초기·1440px 503/복구 Chromium **4 passed**, 공용 UI·토큰 계약 **62 passed**, 각 `known_failures.py` 0 NEW, JS 구문 검사 통과. UI/UX 회차 X: `captures/fleet-cell-empty-layout-fix/`와 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`.
+- gate 변화: LOCAL 화면 근거 추가. 현장 배치·운영자 G3는 HOLD.

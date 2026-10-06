@@ -64,7 +64,7 @@ function invalidate() {
   previewRefs = null; layoutData = null;
   $('summary').setAttribute('state', 'unavailable');
   $('summary').textContent = '저장한 레시피와 셀을 기준으로 계획을 계산합니다.';
-  $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); refreshControls();
+  $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); $('layout-preview').hidden = true; refreshControls();
 }
 function clearSession() {
   role = null; job = null; jobGeneration = null; invalidate();
@@ -330,6 +330,7 @@ $('compile').addEventListener('click', () => action(async () => {
     const option = document.createElement('option'); option.value = group;
     const [pallet, layer] = group.split('|'); option.textContent = `${pallet} · ${Number(layer) + 1}층`; return option;
   }));
+  $('layout-preview').hidden = !groups.length;
   renderLayout();
   if (!$('request-key').value) $('request-key').value = crypto.randomUUID();
   $('notice').textContent = '미리보기 완료 · 내용을 확인하고 작업 범위를 입력하세요.';
