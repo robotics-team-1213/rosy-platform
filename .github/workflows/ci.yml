@@ -136,7 +136,7 @@ jobs:
             --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
             --target /tmp/rosy-receiver-crypto \
             -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
-          PYTHONPATH=/tmp/rosy-receiver-crypto python3 -c 'import cryptography; from cryptography.x509.verification import PolicyBuilder, Store; assert cryptography.__version__ == "49.0.0"'
+          PYTHONPATH=/tmp/rosy-receiver-crypto python3 -c 'import cryptography; from cryptography.x509.verification import PolicyBuilder, Store; assert cryptography.__version__ == "50.0.0"'
           echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Install Fleet browser verification tools
