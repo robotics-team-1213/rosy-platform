@@ -6475,3 +6475,9 @@ osy-d395-s1d\`.
 - 변경: 객체·픽셀 검수의 첫 기동과 작업영역 다시 읽기에서 이전 편집을 내리고 응답 대기 상태를 표시했다. 최신 내용이 올 때까지 편집·자료 준비를 막는다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/390px 응답 보류 브라우저 4 passed, `known_failures.py` 0 NEW. 관련 전체 실행은 46 passed/1 임의 unsafe port setup ERROR, 해당 셀 별도 재실행 1 passed다. X: `captures/learning-waiting/`.
 - gate 변화: `pinky-review` LOCAL G2 일부 추가. 800px, 나머지 선언 상태와 실제 검수자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 작업 목록·자료 등록의 대기와 권한 거부
+
+- 변경: `/learning`·`/catalog`에서 응답 전 입력·등록을 막고, 403 뒤 오래된 결과를 내려 접근 이유·다시 확인을 표시했다. 등록 거부의 이유는 누른 자리에서 읽게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/800/390px 보류·거부 캡처. 집중 브라우저 8 passed, 두 경로 배치 회귀 6 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/learning-pages-load/`.
+- gate 변화: `pinky-review` LOCAL G2 일부 추가. 남은 선언 상태·실제 검수자 G3와 제품 전체는 HOLD다.

@@ -283,7 +283,6 @@ def test_review_waiting_workspace_hides_stale_editing(
     pending.pop().continue_()
     expect(page.locator(content)).to_be_visible()
     expect(page.locator(prepare)).to_be_enabled()
-
     page.locator(reload).click()
     expect(page.locator(empty)).to_be_visible()
     expect(page.locator(content)).to_be_hidden()
@@ -297,6 +296,90 @@ def test_review_waiting_workspace_hides_stale_editing(
     pending.pop().continue_()
     expect(page.locator(content)).to_be_visible()
     expect(page.locator(prepare)).to_be_enabled()
+
+
+@pytest.mark.parametrize('route,api,actions,status,retry', [
+    ('/learning', 'learning', ('#new-task', '#connect'), '#learning-status', '#refresh'),
+    ('/catalog', 'catalog', ('#import', '#cad'), '#catalog-load', '#catalog-retry'),
+])
+@pytest.mark.parametrize('width', [1440, 800, 390])
+def test_learning_list_and_catalog_wait_denial_and_retry(
+    browser_workspace, route, api, actions, status, retry, width
+):
+    page, _, expect = browser_workspace
+    output = os.getenv('ROSY_UIUX_SCREENSHOT_DIR')
+    page.set_viewport_size({'width': width, 'height': 844})
+    pending = []
+    page.route(f'**/api/{api}', lambda request: pending.append(request))
+    with page.expect_request(f'**/api/{api}'):
+        page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
+    expect(page.locator(status)).to_contain_text('확인하는 중')
+    for action in actions:
+        expect(page.locator(action)).to_be_disabled()
+    if route == '/learning':
+        expect(page.locator('#jobs')).to_be_hidden()
+    if output:
+        from pathlib import Path
+        target = Path(output) / f'learning-{api}-waiting-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+    assert pending
+    pending.pop().fulfill(status=403, content_type='application/json', body='{"error":"local host required"}')
+    expect(page.locator(status)).to_contain_text('권한')
+    for action in actions:
+        expect(page.locator(action)).to_be_disabled()
+    if route == '/learning':
+        expect(page.locator('#review-counts')).to_contain_text('확인 불가')
+        expect(page.locator('#search')).to_be_disabled()
+    else:
+        expect(page.locator('#catalog-path')).to_be_disabled()
+    expect(page.locator(retry)).to_be_enabled()
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output:
+        target = Path(output) / f'learning-{api}-denied-{width}.png'
+        page.screenshot(path=str(target))
+    page.locator(retry).click()
+    assert pending
+    pending.pop().continue_()
+    for action in actions:
+        expect(page.locator(action)).to_be_enabled()
+    expect(page.locator('#search' if route == '/learning' else '#catalog-path')).to_be_enabled()
+
+
+@pytest.mark.parametrize('route,post,action,status,retry', [
+    ('/learning', 'learning/register', '#connect', '#learning-status', '#refresh'),
+    ('/catalog', 'import', '#import', '#catalog-load', '#catalog-retry'),
+])
+def test_learning_registration_denial_blocks_repeat_until_retry(
+    browser_workspace, route, post, action, status, retry
+):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': 390, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    page.route(f'**/api/{post}', lambda request: request.fulfill(
+        status=403, content_type='application/json', body='{"error":"local workspace authorization required"}'))
+    if route == '/learning':
+        page.locator('#new-task').click()
+        page.locator('#name').fill('권한 확인')
+        page.locator('#path').fill('X:/DevTemp/permission-check')
+    else:
+        page.locator('#catalog-path').fill('X:/DevTemp/permission-check')
+    page.locator(action).click()
+    expect(page.locator(status)).to_contain_text('권한')
+    result = page.locator('#learning-error' if route == '/learning' else '#catalog-error')
+    expect(result).to_contain_text('권한')
+    box = result.bounding_box()
+    assert box and box['y'] >= 0 and box['y'] + box['height'] <= 844
+    expect(page.locator(action)).to_be_disabled()
+    expect(page.locator(retry)).to_be_enabled()
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-{route.strip("/")}-submit-denied-390.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+    page.unroute(f'**/api/{post}')
+    page.locator(retry).click()
+    expect(page.locator(action)).to_be_enabled()
 
 
 def test_arrow_keys_move_between_photos(browser_workspace):
