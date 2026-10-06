@@ -151,6 +151,8 @@ G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나�
 
 첫 연결 실패와 경기 수신 후 연결 끊김도 320×568/390×844에서 재생했다. 두 상태·두 폭 모두 점수·피치·관측 패널의 시작점과 폭 차이 ≤1px, 문서 가로 넘침 0, 연결 문구의 가로 잘림 0, 첫 화면의 정지를 확인했다. 첫 실패는 점수를 `—`로, 수신 후 끊김은 마지막 점수와 「현재 위치 아님」을 표시한다. 패널 폭을 일부러 줄이면 320px 검사가 실패했고 되돌린 뒤 브라우저 **2 passed**, `known_failures.py` **0 NEW**였다. 원본은 X: `captures/game-recovery-mobile/games_board_{first_error,lost_after_live}_{320x568,390x844}.png`다. 이는 PreviewServer와 fixture payload의 LOCAL 복구 화면 근거로, 실제 경기·카메라·정지 readback 또는 G3 판정은 아니다.
 
+같은 흐름을 **연결 복구까지** 이어 320×568/390×844에서 다시 확인했다. 복구 후 「호스트 연결됨」·점수 2·지연 안내 제거를 확인하고 세 패널의 시작점·폭 차이 ≤1px, 연결 문구 잘림 0, 첫 화면 정지를 재검사했다. 브라우저 **2 passed**, `known_failures.py` **0 NEW**이며, fresh 문구 분기를 고의로 막자 두 폭 모두 실패하고 원복 뒤 다시 통과했다. 원본은 X: `captures/game-recovery/games_board_{first_error,lost_after_live,recovered}_{320x568,390x844}.png`, 실행 기록은 `logs/game-recovery-{green-before-mutation,mutation-red,final}.txt`다. 이는 LOCAL fixture의 상태 전이·너비 근거이며 현장 경기·정지 readback과 G3는 HOLD다.
+
 학습 검수는 D-461의 병렬 원본·inspector 구조를 유지하면서 두 편집 창의 너비만 같게 했다. 현재 로컬 Chromium의 객체 작업 브라우저 **10 passed**, 픽셀 작업·반응형 계약 **14 passed**, 각 `known_failures.py` **0 NEW**였다. 1440/800/390px에서 두 창 너비와 가로 넘침을 검사했다. 이 캡처는 합성 검수 자료를 사용한 개발 도구 LOCAL 증거다.
 
 390px 검수 화면에서는 두 창의 폭은 같아도 작업 버튼이 내용 길이만큼만 차지했다. 객체·픽셀 편집 칸을 컨테이너로 선언하고, 24rem 미만에서는 기존 공용 `ui-actions` 동작처럼 버튼을 각 칸의 전폭으로 쌓았다. 현재 Chromium 측정에서 두 칸의 폭은 각각 358px, 첫 작업 버튼도 각각 358px이고 가로 넘침은 0이다. 객체·픽셀 1440/800/390px 브라우저 6건과 반응형 계약 9건 **15 passed**, `known_failures.py` **0 NEW**다. 전후 캡처는 X: `captures/learning-width-container{,-final}/learning-{objects,pixels}-390.png`에 둔다. 실제 검수자 G3 독회는 남는다.

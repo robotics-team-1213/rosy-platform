@@ -6521,3 +6521,9 @@ osy-d395-s1d\`.
 - 변경: 역할 G2 목록 기록과 D-329 매트릭스를 구분하고, Fleet compact 머리·비활성 사유 계약을 현재 렌더러에 맞췄다. 호환 화면 개발 연결에는 대기 이유를 표시한다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 `shared/web/test` 231 passed, 25 skipped와 브라우저 2 passed, 각 `known_failures.py` 0 NEW. 개발 연결 이유 제거 변이는 빨간 시험으로 확인했다.
 - gate 변화: G1 현재 트리 코드 계약을 회복했다. 제품 전체 G2/G3와 실물 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(games): 전화 연결 복구 너비와 현재 상태
+
+- 변경: 게임 보드의 320/390px 첫 실패→수신→끊김 브라우저 시나리오를 실제 재연결까지 연장했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/game-recovery/` 여섯 장과 `logs/game-recovery-{green-before-mutation,mutation-red,final}.txt`; 최종 2 passed, `known_failures.py` 0 NEW. fresh 문구 분기 변이에서 2 failed, 복원 후 2 passed.
+- gate 변화: LOCAL 상태 전이·폭 근거 추가. 제품 전체 G2/G3와 현장 수용은 HOLD.

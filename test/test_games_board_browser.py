@@ -640,6 +640,13 @@ def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, heigh
             assert "현재 위치 아님" in page.locator("#field-evidence").inner_text()
             assert page.locator(".score").get_attribute("aria-label") == "마지막 수신 점수"
             check_layout("lost_after_live")
+            page.unroute("**/overlay.json")
+            board.publish(_play_payload(), jpeg=None)
+            page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'fresh'")
+            assert page.locator("#connection").inner_text() == "호스트 연결됨"
+            assert page.locator("#field-evidence").is_hidden()
+            assert page.locator("#home-score").inner_text() == "2"
+            check_layout("recovered")
             assert not errors, errors
             browser.close()
     finally:
