@@ -2266,7 +2266,7 @@ Prefix: `/api/v1/auth/peer-pairing`.
 |---|---|---|
 | GET `/identity` | 검증할 HTTPS origin | receiver_id, receiver_public_key(SPKI DER base64), receiver_key_sha256, optional tls_hostname/tls_ca_pem/tls_ca_sha256 |
 | POST `/requests` | LAN, fields+P256 signature | request_id, request_secret, display_code, revision=0, state=pending, paired=false, expires_at |
-| GET `/pending` | 현재 named administrator | 최대 16개의 대기 요청; 비밀값 없음 |
+| GET `/pending` | 현재 named administrator | 대기 요청(D-483부터 최대 3개); 비밀값 없음 |
 | GET `/requests/{id}` | `X-Request-Secret` | state/revision, 승인됐다면 relationship_id/generation/persistent/authorization_expires_at/authorization_available |
 | DELETE `/requests/{id}` | 같은 요청 비밀 | pending만 cancelled로 전환 |
 | POST `/requests/{id}/decision` | 현재 named administrator; action=approve/reject, revision, persist_requested | 승인 거래 결과; **paired=false**, credential 발급과 구분 |
@@ -2284,10 +2284,12 @@ base64url이며 서버는 hash만 보관한다. 4자리 영숫자는 양쪽 화�
 D-483 화면 승인 코드(v1.109): CORE는 요청마다 6자 승인 코드를 만들고 상수 시간
 hash 비교만 한다. 원문은 응답·상태·`pending`·로그에 없고, 살아 있는 대기 요청을
 가장 최근 것부터 최대 3개 `/run/rosy-peer-display/approval.json`(`rosy-core:rosy-display`
-2750, 파일 0640, `{"requests": [{display_code, approval_code, label, expires_at}]}`)으로
+2750, 파일 0640, `{"requests": [{display_code, approval_code, expires_at}]}`)으로
 rosy-face에 넘긴다. LCD는 요청마다 "표시 번호  승인 코드" 한 줄을 보인다. 대기 요청이
 없으면(승인·거절·취소·만료·정리) 파일을 지우고, CORE 시작 때 남은 파일도 지운다.
-pending 한도 16개는 살아 있는 대기 요청만 세며 출처별 동시 대기는 2개다. `confirm`으로
+살아 있는 대기 요청은 LCD 목록과 같은 3개까지(끝난 요청은 세지 않음), 출처별 동시 대기는
+2개다. 요청 취소도 출처별 30회/분 한도에 센다. 상태 보관 행은 600초 전에는 승인되지 않은
+끝난 요청만 먼저 비운다. 화면 코드 행의 `approved_at`이 60초 넘게 미래이면 사용 시점에 거부한다. `confirm`으로
 생긴 관계는 `approved_by`·`issuer_id`·`issuer_source`가 `screen-code`, `issuer_digest`가
 수신 키 지문, `persistent=false`, `approved_at`부터 최대 168시간이며 발급자 token 없이
 관계 자체의 만료·폐기·수신 키만 확인한다. 토큰 id `screen-code`는 예약어다. 콘솔
@@ -2318,7 +2320,7 @@ administrator일 때만 허용한다. issuer ID/digest/source/named principal/sc
 동일 요청 승인 결과가 저장된 뒤 응답을 잃어도 같은 관계를 읽어 복구한다. 재시도는
 권한 기간을 늘리거나 관계를 중복 생성하지 않는다. nonce 소비·token digest·관계·
 감사는 CORE의 기존 config overlay 한 번의 atomic commit에 포함한다. 최대 관계
-128개, pending 16개/300초(상태 보관 600초), source 128개·신청 30회/분(잘못된
+128개, pending 3개/300초(D-483, 상태 보관 600초), source 128개·신청 30회/분(잘못된
 증명도 crypto 실행 전에 포함), challenge 64개/60초, 관계당 활성 세션 8개, audit
 256개를 넘기지 않는다. 용량이 가득 차면 기존 관계를 암묵적으로 삭제하지 않는다.
 

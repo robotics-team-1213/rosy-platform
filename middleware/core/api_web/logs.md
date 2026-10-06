@@ -577,3 +577,10 @@
 - 증거: `test_peer_pairing.py` 38 passed(신규: 3개 동시 표시·출처별/전체 한도·시작 시 삭제·폐기 뒤 세션 거부(HTTP·소켓)·모델 거부 10종·예약 id·상한 정리와 디스크 반영, 속도 한도 시험은 코드 값과 무관). 장치 배포는 하지 않았다.
 - gate 변화: SOURCE/LOCAL만.
 - 결정: D-483
+
+## 2026-10-07 · uncommitted · fix(api): D-483 재검토 반영(R1~R5)
+
+- 변경: 관계 행을 저장할 때 값이 없는 `approved_at`은 쓰지 않아 소유자 승인 행이 D-483 이전 릴리스 모델(Strict, extra 금지)로도 읽힌다(R1, ADR에 롤백 시 screen-code 행 정리 기록). 살아 있는 대기 요청은 LCD 목록과 같은 3개까지, 출처별 2개(R2). `approved_at`이 60초 넘게 미래인 screen-code 행은 `_grant`·`repo.issue`·세션 정책에서 거부(R3). approval.json에 label을 넣지 않는다(R4). 요청 취소도 출처별 속도 한도에 세고, 보관 행이 가득 차면 승인되지 않은 끝난 요청만 먼저 비운다(R5).
+- 증거: `test_peer_pairing.py` 42 passed(신규: 이전 릴리스 모델로 저장 행 검증, 미래 approved_at 거부, 취소 속도 한도, 승인 결과 보관, 상한 정리에서 살아 있는 세션을 가진 만료 행과 살아 있는 행이 남음). 장치 배포는 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
