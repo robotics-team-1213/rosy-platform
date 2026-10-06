@@ -62,6 +62,8 @@
 
 전체 비상 정지도 운용·설치 두 문서의 1920/390/320px 한 번 누름과 320px 부분 응답·503 미확인을 재생했다. 집중 브라우저 **10 passed**, 설치 작업 브라우저 회귀 **7 passed**, Fleet 팔레트·공용 토큰 계약 **52 passed**, 각 `known_failures.py` **0 NEW**이며 원본은 같은 X: 회차 `captures\fleet-estop-feedback\`의 `fleet_estop_result_{index,install}_{1920,390,320}.png`와 `fleet_estop_{partial,unknown}_{index,install}_320.png`다. 이전에는 응답이 긴 기록 칸에만 있었다. 지금은 머리 바로 아래에 요청 중·응답 수·물리 정지 미확인 또는 결과 미확인·즉시 확인 행동을 표시한다. 이 응답은 fixture의 API 결과일 뿐 실제 정지 readback이 아니다.
 
+비상 정지 응답과 관제 준비 순서의 좌우 끝을 본문 패널의 가용 폭에 맞췄다. 이전 320px 응답은 본문보다 양쪽 4px씩 좁았다. 운용·설치 1920/390/320px의 렌더된 좌우 끝과 가로 넘침을 확인한 브라우저 **6 passed**, 팔레트·토큰 계약 **52 passed**, 각 `known_failures.py` **0 NEW**다. 같은 X: 회차 `captures\fleet-width\fleet_estop_result_{index,install}_{1920,390,320}.png`가 최종 원본이다. 접속 안내도 같은 여백 규칙을 쓴다.
+
 설치 화면의 카메라 연결 승인 제목 아래에 건너뛴 `h5` 수준도 `h3`/`h4`로 정리했다. 글자 크기와 간격은 기존 토큰 값을 유지한다. 이는 문서 구조 수정이며 화면 사용성·현장 수용 판정은 위 상태 근거와 별개다.
 
 ### Fleet G3 독회 — LOCAL 진행 중

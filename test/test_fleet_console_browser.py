@@ -504,6 +504,16 @@ def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url, page_fil
         expect(feedback).to_contain_text("정지 요청 응답: 3/3 · 물리 정지 미확인")
         box = feedback.bounding_box()
         assert box and box["y"] >= 0 and box["y"] + box["height"] <= height
+        edges = page.locator("main").evaluate("""main => {
+            const box = main.getBoundingClientRect(), style = getComputedStyle(main);
+            return [box.left + parseFloat(style.paddingLeft), box.right - parseFloat(style.paddingRight)];
+        }""")
+        assert abs(box["x"] - edges[0]) < 1
+        assert abs(box["x"] + box["width"] - edges[1]) < 1
+        if page_file == "index.html":
+            workflow = page.locator("#console-workflow").bounding_box()
+            assert workflow and abs(workflow["x"] - edges[0]) < 1
+            assert abs(workflow["x"] + workflow["width"] - edges[1]) < 1
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         save_temp_screenshot(page, f"fleet_estop_result_{page_file[:-5]}_{width}.png")
         assert any(path == "/api/fleet/estop" for _method, path in posts), posts

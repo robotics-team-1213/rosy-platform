@@ -6457,3 +6457,9 @@ osy-d395-s1d\`.
 - 변경: Fleet 운용·설치 화면의 즉시 비상 정지 응답과 결과 미확인을 머리 아래에 표시하고 설치 안내의 취소·비상 정지 어휘를 구분했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320/390px 캡처; 집중 브라우저 10 passed, 설치 회귀 7 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW.
 - gate 변화: Fleet LOCAL G2/G3 일부 추가. 실물 정지와 현장 사용자 G3, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 관제 여백을 본문 폭에 맞춤
+
+- 변경: Fleet 운용·설치의 비상 정지 응답, 운용 준비 순서, 접속 안내를 본문 패널의 좌우 시작점과 폭에 맞췄다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1920/390/320px 운용·설치 브라우저 6 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/fleet-width/`.
+- gate 변화: Fleet LOCAL 부분 근거 추가. 제품 전체 G2/G3와 현장 사용자 수용은 HOLD다.
