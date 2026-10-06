@@ -1122,6 +1122,12 @@
 - 증거: `test_scan_acceptance.py`, `test_lane_containment_payload.py` 추가 시험 PASS.
 - gate 변화: 없음. D-468이 장치에서 쓰는 투영 불확실도는 여전히 미측정이다.
 
+## 2026-10-06 · c257fac01 · fix(perception): D-468 lane containment projection uncertainty
+- 변경: `sensing/perception/lane_containment.py`가 NOMINAL ground의 `uncertainty_m`을 기하 오차 한계(승인된 camera_profile 기록의 band, 없으면 `camera_nominal.yaml`의 보수적 한계와 `detector_lateral_px`)로 계산. 한계 모서리·roll 7단계·검출 픽셀 ±를 정확히 투영하고 수신측 0.3 m 외삽 범위까지 덮으며 2 % 표본 여유를 둔다. 한계가 없으면 None. `calibration_store.resolve(with_intervals=True)`, `line_observer_node`가 오차를 넘긴다. 라벨은 NOMINAL 그대로(CALIBRATED를 만들지 않음, D-344 driver hold 유지)
+- 증거: `test_lane_containment_payload.py` 독립 진값(roll 21단계, 끝점별 ±px) 통과, b1b20a6ee에서는 실패. 재검토 격자 max(true−stated) 음수
+- gate 변화: 없음. SOURCE만. 8kcn 기록 값 약 26–37 mm, URDF 공칭 약 75–100 mm로 15 mm 문턱 초과 → 장치에서는 여전히 excessive로 보류
+- 결정: D-468, D-185 CPU 예산: 경계 1개당 노트북 약 0.25 ms(벡터화, 252 조합), Pi 추정 약 1.2 ms, 경계 2개·8 fps면 코어의 약 2 %
+- 교훈: 오차가 roll에 단조가 아니라 모서리만 보면 최악이 내부에 숨는다. 시험의 진값은 코드의 표본과 달라야 한다
 ## 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)
 
 - 변경: GAZEBO 지면 투영 불확실도의 2 px를 `GAZEBO_DETECTOR_LATERAL_PX`로 이름 붙였다. 측정이 아닌 휴리스틱이다. 동작은 같다.

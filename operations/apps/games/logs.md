@@ -347,3 +347,9 @@
 - 변경: 390/320px 경기 보드의 정지 버튼을 점수·피치·관측과 같은 가용 폭으로 맞췄다. 기존 96px 버튼은 320px의 272px 패널보다 좁았다.
 - 증거: 두 폭의 정지·머리·마커 브라우저가 너비 단언 추가 직후 2 failed → 수정 후 2 passed. 전체 보드 29 passed, 게임 모듈 113 passed, 반응형·토큰 계약 44 passed, 각 `known_failures.py` 0 NEW. X:/DevTemp/projects/rosy-platform/2026-10-06--032913--uiux-quality--199bc9/logs/game-stop-width-{red,green,browser-full,style,module}.txt 및 captures/game-stop-fullwidth/.
 - gate 변화: LOCAL G2 조작 폭 부분 근거. 실제 두 로봇 정지 readback과 게임 호스트 사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · test(games): CSP 안전 대기 식
+
+- 변경: 보드 브라우저 시험의 원시 `wait_for_function` 식 9곳을 함수 식으로 고쳐 CSP에서 실행 가능한 대기 검사로 통일했다. 제품 보드 코드는 변경하지 않았다.
+- 증거: X: `2026-10-07-games-current/run.txt` 전체 28 passed/1 failed, `failed-case-rerun.txt`의 320px 유실 HOLD 1 passed, `known_failures.py` 0 NEW. 수정 뒤 전체 29셀 재실행은 하지 않았다.
+- gate 변화: LOCAL 시험 배관 복구. 실제 경기·정지 readback과 사용자 G3는 HOLD.

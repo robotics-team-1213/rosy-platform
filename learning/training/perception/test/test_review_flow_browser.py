@@ -485,6 +485,8 @@ def test_learning_list_and_catalog_show_delayed_response_age(browser_workspace, 
         page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
     expect(page.locator(status)).to_contain_text(re.compile(r'서버 응답 대기 [3-9]\d*초'), timeout=15000)
     expect(page.locator(action)).to_be_disabled()
+    if route == '/learning':
+        expect(page.locator('#empty-jobs')).to_be_hidden()
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path

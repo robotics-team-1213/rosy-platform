@@ -6635,3 +6635,21 @@ osy-d395-s1d\`.
 - 변경: 학습 작업 목록·자료 등록도 서버 응답이 3초 넘게 보류되면 경과 초를 표시한다. 응답 전 쓰기 행동은 계속 막고 회복 뒤 다시 연다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay/learning-{learning,catalog}-delayed-{1440,800,390}.png`. 브라우저 5 passed/1 timer timeout 뒤 해당 셀 1 passed, `known_failures.py` 0 NEW, JS 구문·diff 검사 통과.
 - gate 변화: 네 학습 경로의 느린 응답 LOCAL 부분 근거가 늘었다. 값별 신선도와 실제 검수자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
+
+- 변경: 학습 작업 목록을 읽는 동안 빈 결과 설명을 숨기고 하나의 경과 시간 상태만 보이게 했다. 실패·빈 결과는 응답 후 각자 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay-clean/learning-learning-{delayed,unavailable}-390.png`, 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 정보 위계 개선. 실제 검수자 G3와 제품 전체 G2는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux: 현재 main G1 재검증
+
+- 변경: D-153 명명 G1과 반응형 선언을 로컬 `main` `42f9a617f`에서 다시 실행하고 회차 평가에 결과를 고정했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-g1-current/g1.txt`; 90 passed, Starlette/anyio deprecation warning 1, `known_failures.py` 0 NEW.
+- gate 변화: 해당 커밋의 LOCAL G1 기계 계약 근거를 갱신했다. 선언 상태·폭 G2와 사용자 G3, 실물 readback은 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(games): 현재 보드 상태·폭 재검증
+
+- 변경: 현재 보드 320px HOLD에서 유실 이유가 피치보다 먼저 보이는 순서를 회차 카드에 명시하고, 브라우저 시험의 CSP에 걸리는 원시 `wait_for_function` 식 9곳을 함수 식으로 고쳤다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-games-current/`; 전체 브라우저 28 passed/1 failed 뒤 실패 셀 1 passed, `known_failures.py` 0 NEW. 전체 재실행 통과 주장 없음.
+- gate 변화: 현 트리의 LOCAL 게임 보드 상태·폭 근거 갱신. 실제 경기·정지 readback과 사용자 G3는 HOLD.
