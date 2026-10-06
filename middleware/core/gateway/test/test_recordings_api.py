@@ -6,6 +6,7 @@ import json
 import tarfile
 
 import pytest
+import yaml
 
 OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
 VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
@@ -88,7 +89,10 @@ def _recording(root):
 
 @pytest.fixture
 def rec_client(core_client, tmp_path):
-    client, svc = core_client(config_overrides={"recording": {"pilot_root": str(tmp_path / "rec")}})
+    from core_common.profile import robot_config_dir
+    robot = yaml.safe_load((robot_config_dir("pinky_pro") / "core.yaml").read_text(encoding="utf-8"))
+    client, svc = core_client(config_overrides={"recording": {"pilot_root": str(tmp_path / "rec")},
+                                                "odometry": robot["odometry"]})
     (tmp_path / "rec").mkdir()
     # Frozen evidence clock: a velocity set by the test stays fresh however slow the host is.
     svc.state._clock = lambda: 1_790_000_000.0
@@ -382,3 +386,13 @@ def test_download_ignores_encoder_tick_jitter_but_not_slow_motion(rec_client, li
         assert response.status_code == 200
     else:
         assert response.json()["error"]["code"] == code
+
+
+def test_unconfigured_odometry_uses_the_strict_still_floor(rec_client):
+    client, svc, root = rec_client
+    _wire(svc)
+    _recording(root)
+    svc.config.pop("odometry")
+    svc.state.set_velocity(0.0, 0.0133)  # one tick of jitter is moving without geometry
+    response = client.get(f"/api/v1/recordings/{RID}/archive", headers=OPERATOR)
+    assert response.json()["error"]["code"] == "ROBOT_MOVING"

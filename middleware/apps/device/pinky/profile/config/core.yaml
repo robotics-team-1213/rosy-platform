@@ -39,3 +39,12 @@ safety:
   # wheels to rest, so 500 ms measured 0.61-0.72 s on 9dfk (2026-10-01). 300 ms keeps
   # two missed 10 Hz commands of slack and lands the stop near 0.45 s.
   teleop_timeout_ms: 300
+
+# D-411 addendum 18 stop evidence: a parked robot's velocity flips by one encoder tick per odometry
+# period. Wheel values are URDF nominal (D-397 geometry.yaml wheels.radius_m / separation_m); the
+# encoder resolution and odometry rate are the motor adapter's (bringup 30 Hz timer).
+odometry:
+  wheel_radius_m: 0.028
+  wheel_separation_m: 0.0971
+  encoder_ticks_per_rev: 4096
+  publish_hz: 30.0
