@@ -277,11 +277,18 @@ export function expiryLabel(expiresAt) {
 }
 
 async function httpError(response) {
-  let message = `${response.status} ${response.statusText}`;
+  let message = response.status === 401 ? "로그인이 필요합니다"
+    : response.status === 403 ? "이 작업을 할 권한이 없습니다"
+    : response.status === 404 ? "요청한 정보를 찾을 수 없습니다"
+    : response.status === 409 ? "현재 상태에서 요청을 처리할 수 없습니다"
+    : response.status >= 500 ? "서버가 요청을 처리하지 못했습니다"
+    : "요청을 처리하지 못했습니다";
+  message += ` (HTTP ${response.status}). 상태를 다시 확인하세요.`;
   let code = null;
   try {
     const body = await response.json();
-    message = body.error?.message || body.detail || message;
+    const detail = body.error?.message || body.detail;
+    if (typeof detail === "string" && /[가-힣]/.test(detail)) message = detail;
     code = typeof body.error?.code === "string" ? body.error.code : null;
   } catch (_error) {
     // The HTTP status remains the safest fallback.

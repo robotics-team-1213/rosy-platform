@@ -435,6 +435,11 @@ DECLARED_WRITES = {
         # lgpio's notification files in LG_WD (the unit's own runtime directory).
         "/run/rosy-hw-test/.lgd-nfy0",
     },
+    # D-477: the one-shot tailnet join. The spent key leaves the provisioned
+    # file by an in-place rewrite, and the outcome lands in its StateDirectory.
+    "rosy-tailscale-join.service": {
+        "/etc/rosy/tailscale-join.json", "/var/lib/rosy/tailscale/join-result.json",
+    },
 }
 
 # Absolute paths a unit's program names but only reads.
@@ -551,6 +556,8 @@ PROGRAM_SOURCES = {
     "rosy-hw-probe.service": ["deploy/robot/pinky_pro/native/rosy-hw-probe.py"],
     # D-247 6: standard library; RPi.GPIO is imported lazily for the buzzer only.
     "rosy-hw-test.service": ["deploy/robot/pinky_pro/native/rosy-hw-test.py"],
+    # D-477: standard library only; the tailscale CLI is resolved at run time.
+    "rosy-tailscale-join.service": ["deploy/robot/pinky_pro/native/rosy-tailscale-join.py"],
     # D-412: the updater, its claim, and the programs it runs as children.
     "rosy-auto-update.service": ["deploy/robot/pinky_pro/native/rosy_auto_update.py",
                                  "deploy/robot/pinky_pro/native/rosy_claim.py",

@@ -71,19 +71,30 @@ class MainActivity : Activity() {
         setContentView(root)
         shownCandidates = null
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        val compact = resources.configuration.screenWidthDp < 720
         val columns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(columns, LinearLayout.LayoutParams(-1, -1))
-        val identity = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(32), views.dp(40), views.dp(32), views.dp(24)) }
-        columns.addView(identity, LinearLayout.LayoutParams(views.dp(260), -1))
-        identity.addView(label("ROSY", 22f).apply { setTextColor(PilotColors.rose) })
-        identity.addView(label("Pilot", 32f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
-        identity.addView(views.label("로봇을 선택하고\n직접 조종하세요.", 16f, true).apply { setPadding(0, views.dp(24), 0, 0) })
-        identity.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-        healthText = views.label("태블릿 상태 확인 중", 14f, true); identity.addView(healthText)
+        healthText = views.label("태블릿 상태 확인 중", 14f, true)
         lastHealth?.let { renderHealth(it) }
-        identity.addView(button("기기·연결") { deviceDetails() })
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(24), views.dp(40), views.dp(40), views.dp(24)) }
-        columns.addView(list, LinearLayout.LayoutParams(0, -1, 1f))
+        val deviceButton = button("기기·연결") { deviceDetails() }
+        if (!compact) {
+            val identity = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(32), views.dp(40), views.dp(32), views.dp(24)) }
+            columns.addView(identity, LinearLayout.LayoutParams(views.dp(260), -1))
+            identity.addView(label("ROSY", 22f).apply { setTextColor(PilotColors.rose) })
+            identity.addView(label("Pilot", 32f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
+            identity.addView(views.label("로봇을 선택하고\n직접 조종하세요.", 16f, true).apply { setPadding(0, views.dp(24), 0, 0) })
+            identity.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
+            identity.addView(healthText)
+            identity.addView(deviceButton)
+        }
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(
+                views.dp(if (compact) 16 else 24), views.dp(if (compact) 16 else 40),
+                views.dp(if (compact) 16 else 40), views.dp(if (compact) 16 else 24),
+            )
+        }
+        columns.addView(list, if (compact) LinearLayout.LayoutParams(-1, -1) else LinearLayout.LayoutParams(0, -1, 1f))
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
         header.addView(label("로봇 선택", 28f).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
@@ -91,6 +102,10 @@ class MainActivity : Activity() {
         status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", 16f, true).apply { setPadding(0, views.dp(16), 0, views.dp(28)) }; list.addView(status)
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         list.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        if (compact) {
+            list.addView(healthText)
+            list.addView(deviceButton, LinearLayout.LayoutParams(-1, -2))
+        }
     }
     private fun startDiscovery() {
         if (!foreground || opening || sleeping || cooling.coolingRequired || discovery != null) return

@@ -1,0 +1,51 @@
+[Unit]
+Description=ROSY tailnet join from the provisioned one-time key (D-477)
+# Root and outside CORE (D-161). The first-boot provisioner may write
+# /etc/rosy/tailscale-join.json (0600, from the one-time bundle); this oneshot
+# spends that key so the robot joins the team tailnet as a tagged resource.
+# tailscaled (the package unit) is the daemon; without the file the robot stays
+# LAN-only and the condition skips the unit entirely.
+ConditionPathExists=/etc/rosy/tailscale-join.json
+Wants=network-online.target
+After=network-online.target tailscaled.service
+# A failed join (no uplink at boot, an expired key) retries at the next boot.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# -I: no PYTHONPATH, no user site.
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-tailscale-join.py
+# The control-plane exchange can wait on a DERP relay; the program bounds each
+# step itself and never leaves the key running in the foreground.
+TimeoutStartSec=150
+Environment=PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
+UMask=0022
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+# The CLI reaches tailscaled on /run/tailscale (AF_UNIX) and may read interface
+# facts over netlink; the daemon, not this helper, holds the tailnet sockets.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# The join outcome for the operator/dashboard, beside the other rosy state.
+StateDirectory=rosy/tailscale
+StateDirectoryMode=0755
+# The join file is rewritten in place (same inode; /etc/rosy stays read-only)
+# once the key is spent. "-" keeps an absent file from failing the namespace.
+ReadWritePaths=-/etc/rosy/tailscale-join.json
+
+[Install]
+WantedBy=multi-user.target

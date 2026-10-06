@@ -346,6 +346,31 @@ def test_disjoint_training_dataset_is_recorded(tmp_path, monkeypatch):
     assert report["eval"]["disjoint"] is True and "warnings" not in report
 
 
+def test_reserved_eval_source_blocks_model_intake_before_eval_version_exists(tmp_path, monkeypatch):
+    from store import Store
+    _eval_set(tmp_path)
+    _store_dataset(tmp_path, ["t", "u"])
+    Store(tmp_path / "store").reserve_eval_source("heldout", "group-t")
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(), dataset_revision=DS_SHA),
+                      {"eval_set": EVAL_REL}, store=tmp_path / "store")
+    assert rc == 1 and any("reserved eval" in r for r in report["reasons"])
+
+
+def test_reserved_capture_group_blocks_model_intake_for_other_sessions(tmp_path, monkeypatch):
+    from store import Store
+    _eval_set(tmp_path)
+    _store_dataset(tmp_path, ["t", "u"])
+    path = tmp_path / "store" / "datasets" / "lanes" / DS_SHA / "manifest.json"
+    doc = json.loads(path.read_text())
+    doc["frames"][0]["capture_group"] = "shared-group"
+    doc["frames"][1]["capture_group"] = "other-group"
+    path.write_text(json.dumps(doc))
+    Store(tmp_path / "store").reserve_eval_source("heldout", "shared-group")
+    rc, report = _run(tmp_path, monkeypatch, _model(_pred(), dataset_revision=DS_SHA),
+                      {"eval_set": EVAL_REL}, store=tmp_path / "store")
+    assert rc == 1 and report["eval"]["reserved_eval_overlap"] is True
+
+
 @pytest.mark.parametrize("store_given, revision", [(False, DS_SHA), (True, "a" * 40), (True, "f" * 64)])
 def test_unresolved_training_dataset_is_unverified_not_a_fail(tmp_path, monkeypatch, store_given, revision):
     _eval_set(tmp_path)
