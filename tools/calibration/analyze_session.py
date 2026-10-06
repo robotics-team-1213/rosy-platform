@@ -300,7 +300,10 @@ def combine(device, runs, yaw_cfg_deg, profile):
     # Only runs whose camera fit passed its own gates (margin, wall points, not on a bound).
     cams = [r["camera"] for r in runs if "camera" in r and "error" not in r["camera"]
             and r["camera"].get("recommended")]
-    cam = {k: _stats([math.degrees(c[k]) if k.endswith("_rad") else c[k] for c in cams])
+    # Height: only the runs that fitted it (a kept base height is not a measurement).
+    fitted = [c for c in cams if c.get("height_source") == "fit"]
+    cam = {k: _stats([math.degrees(c[k]) if k.endswith("_rad") else c[k]
+                      for c in (fitted or cams if k == "height_m" else cams)])
            for k in ("pitch_rad", "roll_rad", "height_m")} if cams else None
     candidate = {
         "schema": "rosy.calibration.candidate/1",
@@ -323,7 +326,8 @@ def combine(device, runs, yaw_cfg_deg, profile):
         best = max(cams, key=lambda c: c["wall_points"])
         mean_fit = dict(best, pitch_rad=math.radians(cam["pitch_rad"]["mean"]),
                         roll_rad=math.radians(cam["roll_rad"]["mean"]), height_m=cam["height_m"]["mean"],
-                        uncertainty=camera_interval(cams, cam, best))
+                        height_source="fit" if fitted else "base",
+                        uncertainty=camera_interval(cams, cam))
         candidate["camera"] = CE.candidate_profile(
             profile, mean_fit, revision=f"camera-extrinsic-{device}-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}",
             source="tools/calibration/analyze_session.py: " + ", ".join(r["session"] for r in runs))
@@ -331,16 +335,17 @@ def combine(device, runs, yaw_cfg_deg, profile):
     return candidate
 
 
-def camera_interval(cams, across, best):
+def camera_interval(cams, across):
     """Half-width per quantity: max(widest run's score half-band, across-run ci95).
 
     The best run's band alone hid the run-to-run spread; the ci95 (Student t, n >= 2)
-    alone hides a single run's flat score. A height kept from the base (band None in the
-    best run) keeps None: no height was measured."""
+    alone hides a single run's flat score. Height counts only the runs that fitted it
+    (``across`` holds their stats); with none it is None: no height was measured."""
     out = {}
     for band, key in (("pitch_deg", "pitch_rad"), ("roll_deg", "roll_rad"), ("height_m", "height_m")):
-        widths = [c["uncertainty"].get(band) for c in cams if c["uncertainty"].get(band) is not None]
-        if best["uncertainty"].get(band) is None or not widths:
+        runs = [c for c in cams if c.get("height_source") == "fit"] if band == "height_m" else cams
+        widths = [c["uncertainty"].get(band) for c in runs if c["uncertainty"].get(band) is not None]
+        if not widths:
             out[band] = None
             continue
         ci95 = (across.get(key) or {}).get("ci95")

@@ -60,10 +60,30 @@ def test_camera_interval_is_the_larger_of_score_band_and_across_run_ci95(monkeyp
     assert cam["fit_step"] == AS.CE.PC_FINE_STEPS
 
 
-def test_a_kept_base_height_keeps_no_height_band(monkeypatch):
-    run = _cam_run(11.2, -1.5, 0.06343, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": None})
+def _base(run):
     run["camera"]["height_source"] = "base"
-    assert _combine([run], monkeypatch)["camera"]["uncertainty"]["height_m"] is None
+    return run
+
+
+def test_a_kept_base_height_keeps_no_height_band(monkeypatch):
+    run = _base(_cam_run(11.2, -1.5, 0.06343, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": None}))
+    cam = _combine([run], monkeypatch)["camera"]
+    assert cam["uncertainty"]["height_m"] is None
+    assert cam["height_source"] == "base"
+
+
+def test_only_fitted_heights_are_averaged_and_banded(monkeypatch):
+    # The best run kept the base height; two others fitted it. The height is the fitted
+    # runs' mean and its band the widest fitted run's (or their ci95), never None.
+    runs = [_base(_cam_run(11.2, -1.5, 0.06343, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": 0.0125}, 900)),
+            _cam_run(11.3, -1.5, 0.0600, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": 0.002}),
+            _cam_run(11.1, -1.5, 0.0602, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": 0.003})]
+    cam = _combine(runs, monkeypatch)["camera"]
+    assert cam["height_m"] == pytest.approx(0.0601, abs=1e-6)
+    assert cam["height_source"] == "fit"
+    ci95 = cam["across_runs"]["height_m"]["ci95"]
+    assert cam["across_runs"]["height_m"]["n"] == 2
+    assert cam["uncertainty"]["height_m"] == pytest.approx(max(0.003, ci95))
 
 
 def test_store_records_the_fit_step_and_the_pc_fit_uses_pc_steps(tmp_path):
