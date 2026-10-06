@@ -77,3 +77,87 @@ def test_upward_camera_is_not_reported_as_downward():
     shape, points, k = projected(pitch_deg=-5)
     with pytest.raises(ValueError, match='outside floor-camera range'):
         module().fit_corners(points, shape, k, .017)
+
+
+def pose(height=.054, pitch_deg=12., roll_deg=-1.):
+    return {'height_above_board_m': height, 'pitch_rad': math.radians(pitch_deg), 'roll_rad': math.radians(roll_deg)}
+
+
+def test_view_gate_is_2mm_015deg_03deg():
+    m = module()
+    assert (m.VIEW_HEIGHT_TOL_M, m.VIEW_PITCH_TOL_DEG, m.VIEW_ROLL_TOL_DEG) == (.002, .15, .3)
+    assert m.compare_views(pose(), pose(height=.0555), 0)['view_consistency_pass']
+    for other in (pose(height=.0565), pose(pitch_deg=12.2), pose(roll_deg=-.6)):
+        assert not m.compare_views(pose(), other, 0)['view_consistency_pass']
+
+
+PLACEMENTS = [pose(.054+d, 12.+p, -1.+r) for d, p, r in
+              ((0, 0, 0), (.0004, .03, .05), (-.0003, -.04, -.06), (.0002, .02, .1), (-.0002, -.01, -.08))]
+
+
+def test_placement_bands_are_the_across_placement_ci95():
+    m = module()
+    fit = m.placement_fit(PLACEMENTS, board_elevation_m=.006)
+    n = len(PLACEMENTS)
+    heights = np.array([p['height_above_board_m'] for p in PLACEMENTS])+.006
+    assert fit['values']['height_m'] == pytest.approx(heights.mean())
+    assert fit['values']['pitch_rad'] == pytest.approx(np.mean([p['pitch_rad'] for p in PLACEMENTS]))
+    assert fit['uncertainty']['height_m'] == pytest.approx(2.78*heights.std(ddof=1)/math.sqrt(n))
+    pitches = np.degrees([p['pitch_rad'] for p in PLACEMENTS])
+    assert fit['uncertainty']['pitch_deg'] == pytest.approx(2.78*pitches.std(ddof=1)/math.sqrt(n))
+    assert fit['consistency_pass'] and fit['placements'] == n
+
+
+def test_reseat_spread_widens_the_band():
+    m = module()
+    plain = m.placement_fit(PLACEMENTS, board_elevation_m=.006)
+    reseated = m.placement_fit(PLACEMENTS, board_elevation_m=.006, reseats=[pose(.0555, 12.4, -1.)])
+    mean_pitch = math.degrees(plain['values']['pitch_rad'])
+    assert reseated['uncertainty']['pitch_deg'] == pytest.approx((12.4-min(mean_pitch, 12.4))/2)
+    assert reseated['uncertainty']['pitch_deg'] > plain['uncertainty']['pitch_deg']
+    assert reseated['uncertainty']['height_m'] > plain['uncertainty']['height_m']
+    # The re-seat spread widens the band; the values stay the placement mean.
+    assert reseated['values'] == plain['values']
+
+
+def test_fewer_than_five_placements_or_unknown_elevation_are_refused():
+    m = module()
+    with pytest.raises(ValueError, match='5 placements'):
+        m.placement_fit(PLACEMENTS[:4], board_elevation_m=.006)
+    with pytest.raises(ValueError, match='elevation'):
+        m.placement_fit(PLACEMENTS, board_elevation_m=None)
+
+
+def test_spread_beyond_the_view_gate_fails_consistency():
+    m = module()
+    assert not m.placement_fit([*PLACEMENTS[:4], pose(.0575)], board_elevation_m=.006)['consistency_pass']
+
+
+def test_store_writes_a_camera_profile_candidate_geometry_error_reads(tmp_path):
+    import sys
+    m = module()
+    root = Path(__file__).resolve().parents[3]
+    sys.path[:0] = [str(root/'contracts'/'foundation'), str(root/'middleware'/'perception')]
+    from core_common.calibration_store import CalibrationStore, check_values
+    from control.sensing.perception.lane_containment import geometry_error
+    fit = m.placement_fit(PLACEMENTS, board_elevation_m=.006)
+    record_id = m.store_candidate(CalibrationStore(tmp_path), 'rosy-x', fit, sessions=['p1'], extra={'k': 1})
+    store = CalibrationStore(tmp_path)
+    rec = store.load('rosy-x', 'camera_profile', record_id)
+    assert rec['method'] == 'camera_board/1'
+    assert set(rec['values']) == {'pitch_rad', 'roll_rad', 'height_m'}
+    assert set(rec['intervals']['uncertainty']) == {'pitch_deg', 'roll_deg', 'height_m'}
+    assert rec['intervals']['fit_step'] == {'pitch_deg': 0., 'roll_deg': 0., 'height_m': 0.}
+    assert check_values('camera_profile', rec['values']) is None
+    assert store.current('rosy-x', 'camera_profile') is None  # a candidate, never accepted here
+    profile = {**rec['values'], 'detector_lateral_px': 3.}
+    pitch, height, roll, _px = geometry_error(profile, rec['intervals'])
+    assert pitch == pytest.approx(math.radians(fit['uncertainty']['pitch_deg']))  # no grid floor
+    assert height == pytest.approx(fit['uncertainty']['height_m'])
+
+
+def test_board_fit_refuses_to_run_on_a_robot(monkeypatch, tmp_path):
+    m = module()
+    monkeypatch.setattr(m, 'ROBOT_INSTALL', tmp_path)  # exists: looks like a robot
+    with pytest.raises(SystemExit):
+        m.main(['--placement', 'a.png', '--camera-profile', 'p.yaml', '--square-mm', '17', '--output', 'o.json'])
