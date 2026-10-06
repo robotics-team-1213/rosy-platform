@@ -7,11 +7,6 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-473: "ADR written on branches feat/d473-console-dev-mode and docs/zone-grant-and-console-dev, not yet on main; remove when it lands"
-  D-474: "ADR written on branches feat/d473-console-dev-mode and docs/zone-grant-and-console-dev, not yet on main; remove when it lands"
-  D-475: "ADR written on branch docs/human-reviewed-eval-truth, not yet on main; remove when it lands"
-  D-478: "ADR written on branch feat/review-app-tailnet-host, not yet on main; remove when it lands"
-  D-479: "ADR written on branch fix/camera-exposure-relock, not yet on main; remove when it lands"
   D-448: "Unused: model-PC code update ADR was renumbered to D-446 during concurrent work"
   D-440: "ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body"
   D-428: "ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on main; remove when it lands"

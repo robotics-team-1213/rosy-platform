@@ -18,7 +18,7 @@ from fastapi.responses import StreamingResponse
 
 from core_api_web.api.deps import AuthContext, CoreServicesLike, Mode, get_services
 from core_api_web.api.errors import ApiError
-from core_api_web.api.v1.common import operator, viewer
+from core_api_web.api.v1.common import operator, robot_still, viewer
 from core_common.domain.pilot_recording import RecordingRefused
 from core_common.domain.pilot_recording_store import archive_plan, iter_archive, list_recordings
 from core_common.protocol.recording import ACTIVE_STATES, PILOT_RECORDING_ROOT
@@ -40,12 +40,7 @@ def _download_blocker(svc: CoreServicesLike) -> str | None:
     if (svc.command.manual_active or svc.modes.mode in (Mode.NAVIGATION, Mode.DOCKING)
             or svc.line_follow.active):
         return "ROBOT_MOVING"
-    # The same stop evidence as traffic.py _robot_stopped, without its IDLE-only rule.
-    snapshot = svc.state.snapshot()
-    evidence = snapshot.evidence.get("velocity")
-    fresh = bool(evidence and evidence.evidence.value == "fresh")
-    still = abs(float(snapshot.velocity.linear)) <= 0.005 and abs(float(snapshot.velocity.angular)) <= 0.01
-    return None if svc.safety.estop or (fresh and still) else "ROBOT_MOVING"
+    return None if robot_still(svc) else "ROBOT_MOVING"
 
 
 def _once(action):

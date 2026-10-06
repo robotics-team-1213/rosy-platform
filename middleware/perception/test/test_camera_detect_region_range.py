@@ -72,7 +72,7 @@ def test_invalid_exposure_tick_keeps_raw_frame_and_evidence_fresh(node_module, m
     node = types.SimpleNamespace(
         _cam=types.SimpleNamespace(capture_array=lambda _: pixels),
         _worker=CameraPreprocessWorker(CameraPreprocessProfile(rotate_deg=0)),
-        _frame_id=0, _maybe_lock=lambda: None,
+        _frame_id=0, _maybe_lock=lambda: None, _watch_exposure=lambda _frame: None,
         get_clock=lambda: types.SimpleNamespace(now=lambda: types.SimpleNamespace(nanoseconds=1_000_000_000)),
         _line_controls_stable=lambda: True,
         _publish_front=lambda frame, stamp: raw.append((frame, stamp)),
@@ -220,3 +220,52 @@ def test_rejected_scans_are_reported_once(node_module, tmp_path, isolated_store)
         node_module.CameraDetectNode._on_scan(node, remote)
     warnings = [text for level, text in node.logger.lines if level == 'warn']
     assert node._scan is None and len(warnings) == 1 and 'accept_simulation_scans' in warnings[0]
+
+
+def relock_node(node_module, monkeypatch, colour, dwell=3.0, locked='exposure=66640us gain=8.000'):
+    """A fake node whose frozen camera sees `colour`; counts re-lock restarts."""
+    import numpy as np
+    from control.sensing.perception.camera_controls import RelockWatch
+    monkeypatch.setattr(node_module, 'String', lambda **kw: types.SimpleNamespace(**kw))
+    log = types.SimpleNamespace(warn=lambda *_a, **_k: None, info=lambda *_a, **_k: None)
+    node = types.SimpleNamespace(
+        _locked=locked, _lock_attempts=2, _settle_deadline=None, _cam=object(),
+        _relock_watch=RelockWatch(dwell, 30.0), restarts=0, published=[],
+        get_logger=lambda: log,
+        get_parameter=lambda name: types.SimpleNamespace(value={'camera_settle_seconds': 2.5}[name]),
+        controls_pub=types.SimpleNamespace(publish=lambda msg: node.published.append(msg.data)),
+        _line_controls_stable=lambda: node_module.CameraDetectNode._line_controls_stable(node))
+    node._stop_cam = lambda: setattr(node, '_cam', None)
+    node._start_cam = lambda: (setattr(node, 'restarts', node.restarts + 1), setattr(node, '_cam', object()))
+    return node, np.full((240, 320, 3), colour, dtype=np.uint8)
+
+
+@pytest.mark.parametrize('colour', [(255, 255, 255), (30, 15, 55)])
+def test_persistent_bad_exposure_relocks_the_node_once(node_module, monkeypatch, colour):
+    node, frame = relock_node(node_module, monkeypatch, colour)
+    clock = iter(x * 0.125 for x in range(1000))
+    monkeypatch.setattr(node_module.time, 'monotonic', lambda: 100.0 + next(clock))
+    for _ in range(80):                      # 10 s of frames
+        node_module.CameraDetectNode._watch_exposure(node, frame)
+        node._locked = node._locked or 'exposure=54258us gain=2.000'   # the re-lock lands
+    assert node.restarts == 1
+    assert node._lock_attempts == 0
+
+
+def test_one_bright_frame_does_not_relock_the_node(node_module, monkeypatch):
+    node, bright = relock_node(node_module, monkeypatch, (255, 255, 255))
+    _, normal = relock_node(node_module, monkeypatch, (120, 120, 120))
+    monkeypatch.setattr(node_module.time, 'monotonic', lambda: 100.0)
+    node_module.CameraDetectNode._watch_exposure(node, bright)
+    for _ in range(80):
+        node_module.CameraDetectNode._watch_exposure(node, normal)
+    assert node.restarts == 0
+
+
+def test_no_relock_while_the_camera_is_not_frozen(node_module, monkeypatch):
+    node, frame = relock_node(node_module, monkeypatch, (255, 255, 255), locked=None)
+    t = iter(range(100, 200))
+    monkeypatch.setattr(node_module.time, 'monotonic', lambda: float(next(t)))
+    for _ in range(40):
+        node_module.CameraDetectNode._watch_exposure(node, frame)
+    assert node.restarts == 0

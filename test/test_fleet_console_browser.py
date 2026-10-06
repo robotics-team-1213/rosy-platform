@@ -2876,3 +2876,72 @@ def test_line_stuck_confirm_follows_the_live_stuck_and_an_offline_robot(console_
         assert not [p for p in posts if p[0] == "POST" and p[1].endswith("/line-stuck/decision")]
         assert not errors
         browser.close()
+
+
+def test_development_mode_console_gets_a_session_and_shows_the_badge(console_url):
+    # D-473 4: no stored token -> 401 -> connection says development -> one session, badge stays up.
+    from playwright.sync_api import sync_playwright
+
+    issued: list[str] = []
+
+    def serve_api(route):
+        path = urlparse(route.request.url).path
+        authorization = route.request.headers.get("authorization", "")
+        if path == "/api/fleet/auth/connection":
+            route.fulfill(status=200, json={"mode": "development"})
+        elif path == "/api/fleet/auth/development-session" and route.request.method == "POST":
+            issued.append(f"dev-token-{len(issued) + 1}")
+            route.fulfill(status=201, json={"token": issued[-1], "principal_id": "development-0a1b2c3d",
+                                            "role": "operator", "expires_at": "2026-10-06T12:00:00+00:00"})
+        elif not authorization.startswith("Bearer dev-token-"):
+            route.fulfill(status=401, json={"detail": {"code": "UNAUTHORIZED"}})
+        elif path == "/api/fleet/session":
+            route.fulfill(status=200, json={"principal_id": "development-0a1b2c3d", "role": "operator"})
+        elif path in API:
+            route.fulfill(status=200, json=API[path])
+        else:
+            route.fulfill(status=404, json={"detail": "no such api"})
+
+    with sync_playwright() as p:
+        browser, page, errors = open_page(p, 1920, 1080)
+        page.route("**/api/**", serve_api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => document.getElementById('user-role').textContent.includes('development-0a1b2c3d')",
+            timeout=8000)
+
+        assert page.is_visible("#development-badge")
+        assert page.inner_text("#development-badge").strip() == "개발 연결 모드"
+        assert page.evaluate("() => sessionStorage.getItem('rosy-console-token')") == "dev-token-1"
+        assert issued == ["dev-token-1"], "one 401 must ask for one session, not loop"
+        assert not errors, f"페이지 오류: {errors}"
+        save_temp_screenshot(page, "fleet_console_development_mode.png")
+        browser.close()
+
+
+def test_paired_console_keeps_the_token_field_and_never_asks_for_a_session(console_url):
+    from playwright.sync_api import sync_playwright
+
+    posts: list[str] = []
+
+    def serve_api(route):
+        path = urlparse(route.request.url).path
+        if route.request.method == "POST":
+            posts.append(path)
+        if path == "/api/fleet/auth/connection":
+            route.fulfill(status=200, json={"mode": "paired"})
+        else:
+            route.fulfill(status=401, json={"detail": {"code": "UNAUTHORIZED"}})
+
+    with sync_playwright() as p:
+        browser, page, errors = open_page(p, 1920, 1080)
+        page.route("**/api/**", serve_api)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.getElementById('online-pill').textContent === '토큰 필요'",
+                               timeout=8000)
+
+        assert page.is_hidden("#development-badge")
+        assert page.is_visible("#console-token")
+        assert posts == []
+        assert not errors, f"페이지 오류: {errors}"
+        browser.close()

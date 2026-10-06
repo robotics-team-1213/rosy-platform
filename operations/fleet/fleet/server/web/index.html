@@ -33,6 +33,8 @@
         <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템" data-action-icon="theme-system"><span class="sr-only">시스템</span></ui-button>
       </div>
     </div>
+    <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
+    <ui-tag id="development-badge" status="warn" hidden title="같은 망 PC 누구나 1시간 운용자 세션을 받는다 (D-473)">개발 연결 모드</ui-tag>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
     <a class="topbar-cell-link" href="/console/cell">Cell 작업</a>
     <ui-text id="clock" scale="value">--:--:--</ui-text>

@@ -1948,3 +1948,9 @@
 - 변경: Fleet의 로봇별 단기 LED 요청을 CORE로 전달하고, 승인된 source/map/lens 보정이 맞는 최신 Rosy Cam 원본 프레임만 현장지도 배경으로 사용한다. 식별 응답은 영상 확인 대기이며 robot ID를 자동 확정하지 않는다.
 - 증거: 관련 호스트 pytest 274 passed/3 skipped, 웹 Node 135 passed. DEVICE/FIELD 점멸·영상 대조는 아직 확인되지 않았다.
 - gate 변화: SOURCE/LOCAL 코드 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-06 · uncommitted · D-473 관제 콘솔 개발 연결 모드
+
+- 변경: `fleet/server/development_session.py`(세션 저장소·LAN 주소·Host/Origin·분당 6회·상한 8·1시간 만료·발급 감사), `site_auth.build_authorize`의 개발 세션 우선 확인, `require_named_operator`의 `development-*` 허용, `--connection-mode`와 `ROSY_DEPLOYMENT` 이중 조건, 콘솔 자동 발급·배지.
+- 증거: 위 호스트 pytest와 브라우저 시험. 사이트 Caddy 뒤 `X-Forwarded-For`·`Host` 전달은 실사이트 확인이 필요하다.
+- gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.

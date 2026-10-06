@@ -104,10 +104,14 @@ def assert_pairing_sync_token_isolated(sync_token: str, *, console_token: Option
 
 def build_authorize(console_token: Optional[str],
                     principals: Mapping[str, SitePrincipal],
-                    task_service):
+                    task_service, development=None):
     def authorize(request: Request,
                   authorization: Optional[str] = Header(default=None)) -> SitePrincipal:
-        if principals:
+        # D-473 3: a live development session is a named operator beside the configured credentials.
+        principal = (development.principal(authorization[len("Bearer "):])
+                     if development is not None and authorization and authorization.startswith("Bearer ")
+                     else None)
+        if principal is None and principals:
             if not authorization or not authorization.startswith("Bearer "):
                 raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED",
                                                              "message": "valid site credential required"})
@@ -121,9 +125,9 @@ def build_authorize(console_token: Optional[str],
                 raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED",
                                                              "message": "valid site credential required"})
             principal = matched
-        elif console_token is None:
+        elif principal is None and console_token is None:
             principal = SitePrincipal("site-console", "operator")
-        else:
+        elif principal is None:
             if authorization != f"Bearer {console_token}":
                 raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED",
                                                              "message": "console token required"})
@@ -172,7 +176,8 @@ def build_role_guards(authorize, principals: Mapping[str, SitePrincipal]):
         return principal
 
     def require_named_operator(principal: SitePrincipal = Depends(require_operator)) -> SitePrincipal:
-        if not principals:
+        # D-473 3: without site-users the only named operator is a development session.
+        if not principals and not principal.principal_id.startswith("development-"):
             raise HTTPException(status_code=403, detail={
                 "code": "OPERATOR_IDENTITY_REQUIRED",
                 "message": "mission admission requires a configured named operator credential",

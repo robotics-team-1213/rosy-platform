@@ -91,6 +91,8 @@ function markLocked(reason = "auth") {
     visionView.reset(); visionView.refreshSources(); trackingView.reset(); startPointView.reset();
   }
   render();
+  // D-473 4 — the first 401 of a lock asks once whether this console is in development mode.
+  if (firstLock && reason === "auth") renewDevelopmentSession();
 }
 
 function markUnlocked() {
@@ -743,8 +745,12 @@ function tickClock() {
 // 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
 el("console-token").value = auth.token;
 function saveToken() {
+  useToken(el("console-token").value.trim());
+}
+
+function useToken(token) {
   pageScope.invalidate();
-  auth.token = el("console-token").value.trim();
+  auth.token = token;
   // 새 토큰은 직접 재시도한다 — 잠금 플래그가 있으면 직접 호출도 건너뛰므로 먼저 푼다.
   auth.role = null;
   applyRoleToControls(null, operatorControls());
@@ -764,6 +770,31 @@ pageScope.listen(el("console-token"), "keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
 
+// D-473 — development connection mode. The badge is on only while the server says development;
+// paired, 404 (an older Fleet) or an error leaves the token field as the way in.
+async function connectionMode() {
+  try {
+    const info = await fleetClient("/api/fleet/auth/connection");
+    el("development-badge").hidden = info?.mode !== "development";
+    return info?.mode === "development";
+  } catch (_err) {
+    return false;
+  }
+}
+
+// Called on the first 401 of a lock only, so a refused or rate-limited issue (403/429) is one
+// request, not a loop. useToken() invalidates in-flight polls so their stale 401s are dropped.
+async function renewDevelopmentSession() {
+  if (!(await connectionMode())) return;
+  let session;
+  try {
+    session = await fleetClient("/api/fleet/auth/development-session", { method: "POST" });
+  } catch (_err) {
+    return;
+  }
+  useToken(session.token);
+}
+
 // D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가
 // 바뀌면 다시 풀고 지도를 새로 고침 없이 다시 그린다(캐시는 ui.js가 먼저 비운다).
 const robotColours = () => ["--robot-1", "--robot-2", "--robot-3"].map((name) => window.RosyPalette.cssColor(name));
@@ -776,6 +807,7 @@ tickClock();
 pageScope.interval(tickClock, 1000);
 applyRoleToControls(null, operatorControls());
 render();
+connectionMode();
 refreshAuthorization();
 visionView.refreshSources();
 mapView.refresh();
