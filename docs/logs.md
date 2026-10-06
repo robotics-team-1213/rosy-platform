@@ -6403,3 +6403,9 @@ osy-d395-s1d\`.
 - 변경: 역할 셸 `/console`의 320/390px 조작·감지·관측 칸 시작점·폭과 첫 화면/하단 비상 정지를 브라우저 계약으로 확인했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320px 캡처, 브라우저 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: 로봇 LOCAL G2 부분 근거 추가. 실제 장치·운용자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 짧은 전화 도구 판 정리
+
+- 변경: Pilot 320×568의 HUD 보조 설정을 기존 도구 판에 넣어 HUD 스크롤을 없앴고, 한 화면에 영상·정지·상태·기본 주행을 유지했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px X: 화면·도구 판, 브라우저 9 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
