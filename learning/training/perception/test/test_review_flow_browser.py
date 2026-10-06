@@ -383,6 +383,39 @@ def test_review_service_unavailable_is_distinct_from_connection_failure(
         expect(page.locator(recovered)).to_be_visible()
 
 
+@pytest.mark.parametrize('width', [1440, 800, 390, 320])
+def test_object_decision_and_preparation_result_are_visible(browser_workspace, width):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    def shot(state):
+        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            from pathlib import Path
+            target = Path(output) / f'learning-objects-{state}-{width}.png'
+            target.parent.mkdir(parents=True, exist_ok=True)
+            page.evaluate('window.scrollTo(0, 0)')
+            page.screenshot(path=str(target), full_page=True)
+    page.locator('#exclude').click()
+    expect(page.locator('#status')).to_have_text('제외')
+    assert store.get(0)['status'] == 'excluded'
+    shot('excluded')
+    page.locator('#reopen').click()
+    expect(page.locator('#status')).to_have_text('검수 대기')
+    page.locator('#complete').check()
+    page.locator('#approve').click()
+    expect(page.locator('#status')).to_have_text('승인')
+    assert store.get(0)['status'] == 'approved'
+    shot('approved')
+    page.locator('#prepare').click()
+    expect(page.locator('#export-result')).to_contain_text('승인 1장 준비 완료')
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if width <= 390:
+        navigation = page.locator('.frame-navigation').bounding_box()
+        buttons = [page.locator(f'#{name}').bounding_box() for name in ('prev-frame', 'next-frame', 'next-pending')]
+        assert all(abs(button['width'] - navigation['width']) <= 1 for button in buttons)
+        assert buttons[0]['y'] < buttons[1]['y'] < buttons[2]['y']
+    shot('decision-result')
+
+
 @pytest.mark.parametrize('route,post,action,status,retry', [
     ('/learning', 'learning/register', '#connect', '#learning-status', '#refresh'),
     ('/catalog', 'import', '#import', '#catalog-load', '#catalog-retry'),

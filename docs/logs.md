@@ -6496,3 +6496,8 @@ osy-d395-s1d\`.
 - 변경: 네 학습 검수 경로가 HTML 503을 JSON 파싱 전에 식별해 서비스 복구 후 재시도를 안내한다. 전화 폭의 객체 검수·자료 등록 재시도는 가용 폭을 채우고 학습 목록은 실패 문구를 한 번만 표시한다.
 - 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 1440/800/390px 503·기존 장애 복구 브라우저 24 passed와 390px 최종 5 passed, 각 `known_failures.py` 0 NEW. 원본 X: `captures/learning-unavailable/`.
 - gate 변화: `pinky-review` LOCAL G2 사용 불가 부분 근거 추가. 실제 서버 장애·검수 결과·G3와 제품 전체는 HOLD.
+## 2026-10-06 · uncommitted · uiux(pinky-review): 검수 결정과 자료 준비 결과
+
+- 변경: 객체 검수의 390/320px 사진 이동 버튼을 동등한 전폭으로 쌓았다. 객체·픽셀 제외→재검수→승인→자료 준비를 합성 원본에서 재생하고 결과 캡처를 남겼다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 객체 4폭·픽셀 3폭 브라우저 7 passed, `known_failures.py` 0 NEW. 각 결정 상태 원본 X: `captures/learning-decision-result/`.
+- gate 변화: `pinky-review` LOCAL G2 결정·결과 부분 근거 추가. 실제 검수자·자료 등록·학습 수용과 제품 전체 G2/G3는 HOLD.

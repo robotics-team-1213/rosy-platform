@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pinky-review): 검수 결정과 자료 준비 결과
 - 2026-10-06 · uncommitted · uiux(pinky-review): 서비스 사용 불가를 연결 끊김과 구분
 - 2026-10-06 · uncommitted · uiux(pinky-review): 편집 행동 동등 폭과 800px 상태 근거
 - 2026-10-06 · uncommitted · uiux(pilot): 팔 영상·조작 동등 폭
 - 2026-10-06 · uncommitted · uiux(pinky-review): 작업 목록·자료 등록의 대기와 권한 거부
-- 2026-10-06 · uncommitted · uiux(pinky-review): 응답 대기 중 오래된 편집 숨김

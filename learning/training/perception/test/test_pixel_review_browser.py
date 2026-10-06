@@ -76,6 +76,39 @@ def test_unknown_pixels_cannot_be_approved_and_explicit_fill_persists(browser_wo
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
 
 
+@pytest.mark.parametrize('width', [1440, 800, 390])
+def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, width):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    open_pixels(page, store, expect)
+    def shot(state):
+        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            from pathlib import Path
+            target = Path(output) / f'learning-pixels-{state}-{width}.png'
+            target.parent.mkdir(parents=True, exist_ok=True)
+            page.evaluate('window.scrollTo(0, 0)')
+            page.screenshot(path=str(target), full_page=True)
+    page.locator('#pixel-exclude').click()
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 제외')
+    assert review_masks.get(store, 0)['status'] == 'excluded'
+    shot('excluded')
+    page.locator('#pixel-reopen').click()
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('#pixel-fill').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v3')
+    page.locator('#pixel-complete').check()
+    page.locator('#pixel-background').check()
+    page.locator('#pixel-approve').click()
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
+    assert review_masks.get(store, 0)['status'] == 'approved'
+    shot('approved')
+    page.locator('#pixel-export').click()
+    expect(page.locator('#pixel-export-result')).to_contain_text('픽셀 승인 1장 준비')
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    shot('decision-result')
+
+
 def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
