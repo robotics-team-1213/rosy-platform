@@ -131,7 +131,7 @@ class BoundedPeer(unittest.TestCase):
         self.receiver.cancel(first["request_id"], first["request_secret"])
         with self.assertRaises(Refused):
             self.receiver.decide(self.owner_id, first["request_id"], "approve", 0)
-        for n in range(16):  # D-483 M1: the cancelled request no longer holds a slot
+        for n in range(3):  # D-483: a cancelled request holds no slot; three live requests at most
             self.request(f"{n+1:064x}", f"fixture-lan-{n}")
         with self.assertRaises(Refused):
             self.request("f" * 64, "fixture-lan-x")
@@ -435,8 +435,8 @@ class ScreenCodeApproval(unittest.TestCase):
             request = self.request()
             shown, = self.shown()
             code = shown["approval_code"]
-            self.assertEqual({"display_code", "approval_code", "label", "expires_at"}, set(shown))
-            self.assertEqual((request["display_code"], "Tablet"), (shown["display_code"], shown["label"]))
+            self.assertEqual({"display_code", "approval_code", "expires_at"}, set(shown))  # no label (R4)
+            self.assertEqual(request["display_code"], shown["display_code"])
             self.assertRegex(code, r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$")
             if os.name == "posix":
                 self.assertEqual(0o640, self.file.stat().st_mode & 0o777)
@@ -522,15 +522,16 @@ class ScreenCodeApproval(unittest.TestCase):
             with self.subTest(name=name):
                 outcome(name)
 
-    def test_a_newer_request_never_hides_an_older_one(self):
+    def test_every_live_request_is_on_the_lcd_newest_first(self):
         made = []
-        for n, source in enumerate(("lan-a", "lan-b", "lan-c", "lan-d")):
+        for n, source in enumerate(("lan-a", "lan-b", "lan-c")):
             made.append(self.request(f"{n+1:064x}", source))
             self.now += timedelta(seconds=1)
-        shown = [r["display_code"] for r in self.shown()]
-        self.assertEqual([r["display_code"] for r in reversed(made[1:])], shown)  # three, newest first
-        self.receiver.cancel(made[3]["request_id"], made[3]["request_secret"])
-        self.assertEqual([r["display_code"] for r in reversed(made[:3])], [r["display_code"] for r in self.shown()])
+        self.assertEqual([r["display_code"] for r in reversed(made)], [r["display_code"] for r in self.shown()])
+        with self.assertRaises(Refused):
+            self.request("4" * 64, "lan-d")  # R2: never more live requests than the LCD lists
+        self.receiver.cancel(made[2]["request_id"], made[2]["request_secret"])
+        self.assertEqual([r["display_code"] for r in reversed(made[:2])], [r["display_code"] for r in self.shown()])
         # Each requester's own code sits next to its own display code.
         first = made[0]
         self.receiver.confirm(first["request_id"], first["request_secret"], self.code(first["display_code"]), "lan-a")
@@ -540,15 +541,38 @@ class ScreenCodeApproval(unittest.TestCase):
         self.request("2" * 64)
         with self.assertRaises(Refused):
             self.request("3" * 64)  # a third live request from the same source
-        for n in range(14):
-            self.request(f"{n + 16:064x}", f"lan-{n}")
+        self.request("4" * 64, "lan-b")
         with self.assertRaises(Refused):
-            self.request("f" * 64, "lan-x")  # sixteen live overall
+            self.request("5" * 64, "lan-c")  # three live overall
         # Terminal rows do not count: cancelling frees a slot at once.
-        for row_id, row in list(self.receiver._pending.items())[:2]:
+        for row in list(self.receiver._pending.values())[:2]:
             row["state"] = "cancelled"
-        self.request("e" * 64, "lan-x")
-        self.request("d" * 64)
+        self.request("6" * 64, "lan-c")
+        self.request("7" * 64)
+
+    def test_cancel_is_charged_to_the_source_rate_limit(self):
+        request = self.request()  # one charge
+        for _ in range(29):
+            with self.assertRaises(Refused) as refused:
+                self.receiver.cancel("x" * 32, request["request_secret"], "fixture-lan-peer")
+            self.assertNotIsInstance(refused.exception, RateLimited)
+        with self.assertRaises(RateLimited):
+            self.receiver.cancel(request["request_id"], request["request_secret"], "fixture-lan-peer")
+
+    def test_kept_rows_never_evict_an_approved_result_early(self):
+        from core_api_web.api.peer_pairing import receiver_service
+        approved = self.request("1" * 64, "lan-a")
+        self.receiver.confirm(approved["request_id"], approved["request_secret"], self.code(), "lan-a")
+        rejected = self.request("2" * 64, "lan-b")
+        self.receiver.decide(self.owner_id, rejected["request_id"], "reject", 0)
+        with patch.object(receiver_service, "ROW_LIMIT", 2):
+            self.request("3" * 64, "lan-c")  # evicts the rejected row, not the approved one
+            self.now += timedelta(seconds=3)
+            self.assertEqual("approved", self.receiver.status(approved["request_id"], approved["request_secret"])["state"])
+            with self.assertRaises(Refused):
+                self.receiver.status(rejected["request_id"], rejected["request_secret"])
+            with self.assertRaises(Refused):
+                self.request("4" * 64, "lan-d")  # only approved and pending rows left: refuse, keep both
 
     def test_startup_removes_a_leftover_hand_over(self):
         self.file.write_text('{"requests": []}', encoding="utf-8")
@@ -614,13 +638,16 @@ class ScreenCodeApproval(unittest.TestCase):
     def test_dead_relationships_are_pruned_at_capacity_with_an_audit_row(self):
         from core_common.protocol.peer_pairing import Relationship
         grant = self.screen_grant()
+        fields = self.receiver.challenge(grant)["fields"]
+        live_session = self.receiver.session(grant, fields, self.sign("session-request", fields))["id"]
         template = self.repo.grants()[grant]
         expired = (self.now - timedelta(hours=1)).isoformat()
         def fill(grants, tokens, document):
             for n in range(127):
                 key = f"{n:032d}"
+                # Row 1 is dead (expired) but still holds a live child session.
                 grants[key] = dict(template, id=key, approved_at=(self.now - timedelta(hours=2)).isoformat(),
-                                   expires_at=expired, session_ids=[])
+                                   expires_at=expired, session_ids=[live_session] if n == 1 else [])
         self.repo.update(fill, "fixture_fill")
         self.assertEqual(128, len(self.repo.grants()))
         self.now += timedelta(seconds=1)
@@ -628,12 +655,63 @@ class ScreenCodeApproval(unittest.TestCase):
         grants = self.repo.grants()
         self.assertLessEqual(len(grants), 128)
         self.assertNotIn("0" * 32, grants)
+        self.assertIn(f"{1:032d}", grants)  # dead row with a live session survives
+        self.assertIn(grant, grants)  # live row survives
         actions = [row["action"] for row in self.svc.config["auth"]["peer_pairing"]["audit"]]
         self.assertIn("relationship_pruned", actions)
         import yaml
         on_disk = yaml.safe_load(self.path.read_text(encoding="utf8"))["auth"]["peer_pairing"]["grants"]
         self.assertEqual(set(grants), set(on_disk))  # the prune reaches the overlay, not only memory
         Relationship(**grants[next(iter(grants))])
+
+    def test_stored_owner_rows_stay_readable_by_the_release_before_d483(self):
+        from typing import Literal
+        from pydantic import BaseModel, ConfigDict
+        import yaml
+
+        class MainRelationship(BaseModel):  # main's D-456 Relationship fields, Strict, extra forbidden
+            model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+            id: str
+            receiver_id: str
+            receiver_key_sha256: str
+            client_id: str
+            client_public_key: str
+            label: str
+            role: Literal["viewer", "operator"]
+            generation: int
+            revoked: bool
+            issuer_id: str
+            issuer_source: Literal["card", "manual", "pair-physical", "pair-admin"]
+            issuer_digest: str
+            approved_by: str
+            persistent: bool
+            persist_requested: bool
+            expires_at: str | None
+            used_challenges: list[str]
+            session_ids: list[str] = []
+
+        _, owner_grant = BoundedPeer.grant(self)
+        self.screen_grant_from("c" * 64)  # a screen-code row in the same write path
+        self.repo.update(lambda grants, tokens, document: None, "fixture_rewrite")
+        stored = yaml.safe_load(self.path.read_text(encoding="utf8"))["auth"]["peer_pairing"]["grants"]
+        MainRelationship(**stored[owner_grant])
+        self.assertNotIn("approved_at", stored[owner_grant])
+        self.assertNotIn("approved_at", self.svc.config["auth"]["peer_pairing"]["grants"][owner_grant])
+
+    def test_screen_code_row_dated_in_the_future_is_refused_at_use(self):
+        grant = self.screen_grant()
+        fields = self.receiver.challenge(grant)["fields"]
+        issued = self.receiver.session(grant, fields, self.sign("session-request", fields))
+        future = (self.now + timedelta(minutes=5)).isoformat()
+        def forge(grants, tokens, document):
+            grants[grant]["approved_at"] = future
+        self.repo.update(forge, "fixture_forge")
+        with self.assertRaises(Refused):
+            self.receiver.challenge(grant)
+        self.assertFalse(deps.token_alive(self.svc.config, issued["id"]))
+        from core_common.protocol.peer_pairing import RepositoryDenied
+        with self.assertRaises(RepositoryDenied):
+            self.repo.issue(grant, "C" * 32, self.receiver.identity()["receiver_key_sha256"], self.repo.grants()[grant])
 
     def screen_grant_from(self, nonce):
         request = self.request(nonce)

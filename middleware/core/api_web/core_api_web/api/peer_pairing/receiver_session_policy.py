@@ -1,7 +1,7 @@
 """Read-only policy for HTTP and live-socket checks of relationship sessions."""
 from datetime import datetime, timezone
 
-from core_common.protocol.peer_pairing import Relationship, SCREEN_CODE_ISSUER
+from core_common.protocol.peer_pairing import Relationship, SCREEN_CODE_ISSUER, screen_code_dated
 
 
 def session_allowed(config, record, records):
@@ -29,7 +29,8 @@ def session_allowed(config, record, records):
             return False
         if grant["issuer_source"] == SCREEN_CODE_ISSUER:
             # D-483 5: no issuer token; the model already pins the bounded, non-persistent shape.
-            return record["role"] == grant["role"] and record["paired_via"] == SCREEN_CODE_ISSUER
+            return (record["role"] == grant["role"] and record["paired_via"] == SCREEN_CODE_ISSUER
+                    and screen_code_dated(grant, now))
         issuer = next(r for r in records if r["id"] == grant["issuer_id"])
         from core_api_web.api import deps
         if (issuer["role"] != "administrator" or issuer["legacy"] or deps.is_expired(issuer, now)

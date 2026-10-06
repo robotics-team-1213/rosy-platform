@@ -75,7 +75,8 @@ async def status(request: Request, request_id: str = Path(pattern=r'^[A-Za-z0-9_
 
 @router.delete("/requests/{request_id}")
 async def cancel(request: Request, request_id: str = Path(pattern=r'^[A-Za-z0-9_-]{32}$'), x_request_secret: str = Header(max_length=128)):
-    return await call(service(request).cancel, request_id, x_request_secret, schema=StateSnapshot)
+    source = request.client.host if request.client else "unknown"
+    return await call(service(request).cancel, request_id, x_request_secret, source, schema=StateSnapshot)
 
 
 @router.post("/requests/{request_id}/decision")

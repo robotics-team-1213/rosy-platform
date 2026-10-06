@@ -40,6 +40,16 @@ APPROVAL_CODE_LENGTH = 6
 SCREEN_CODE_ISSUER = "screen-code"
 #: D-483 5: a screen-code approval never outlives this.
 SCREEN_CODE_LIFETIME = timedelta(hours=168)
+#: D-483 R3: clock skew tolerated before a screen-code approval dated in the future is refused.
+SCREEN_CODE_SKEW = timedelta(seconds=60)
+
+
+def screen_code_dated(grant, now) -> bool:
+    """False for a screen-code row whose approved_at lies in the future (a forged or skewed row)."""
+    if grant.get("issuer_source") != SCREEN_CODE_ISSUER:
+        return True
+    approved = grant.get("approved_at")
+    return approved is not None and datetime.fromisoformat(approved) <= now + SCREEN_CODE_SKEW
 
 
 class ApprovalCodeConfirm(Strict):
@@ -153,6 +163,14 @@ class Relationship(Strict):
                            - datetime.fromisoformat(self.approved_at) <= SCREEN_CODE_LIFETIME):
             raise ValueError('screen-code approval shape mismatch')
         return self
+
+    def stored(self) -> dict:
+        """The row as written to the overlay. A key added after D-456 is left out while unset,
+        so an owner row stays readable by a release before D-483 (its Strict model forbids extras)."""
+        row = self.model_dump()
+        if row["approved_at"] is None:
+            del row["approved_at"]
+        return row
 
     @field_validator("expires_at", "approved_at")
     @classmethod

@@ -11,7 +11,7 @@ from core_common.config import patch_local_config as patch_locked
 from core_common.config_transaction import transaction
 
 
-from core_common.protocol.peer_pairing import RepositoryDenied, Relationship, SCREEN_CODE_ISSUER
+from core_common.protocol.peer_pairing import RepositoryDenied, Relationship, SCREEN_CODE_ISSUER, screen_code_dated
 
 
 class OverlayRepository:
@@ -99,7 +99,7 @@ class OverlayRepository:
             try:
                 if any(not isinstance(v, dict) or k != v.get("id") for k, v in state["grants"].items()):
                     raise RepositoryDenied("invalid relationship identity")
-                state["grants"] = {k: Relationship(**v).model_dump() for k, v in state["grants"].items()}
+                state["grants"] = {k: Relationship(**v).stored() for k, v in state["grants"].items()}
             except (ValueError, TypeError) as exc:
                 raise RepositoryDenied("invalid relationship record") from exc
             stored = deps.stored_token_entries(tokens)
@@ -170,6 +170,8 @@ class OverlayRepository:
             if any(grant.get(key) != expected_grant.get(key) for key in fields):
                 raise RepositoryDenied("relationship changed during proof")
             if grant["issuer_source"] == SCREEN_CODE_ISSUER:
+                if not screen_code_dated(grant, self.clock()):
+                    raise RepositoryDenied("screen-code approval dated in the future")
                 issuer = {"id": SCREEN_CODE_ISSUER}  # D-483 5: bounded by the relationship's own expiry only.
             else:
                 issuer = self._owner(document, grant["issuer_id"])

@@ -11,7 +11,7 @@ import threading
 
 from .peer_crypto import PeerIdentity, ProofDenied, fingerprint, verify
 from core_common.protocol.peer_pairing import (APPROVAL_CODE_ALPHABET, APPROVAL_CODE_LENGTH, SCREEN_CODE_ISSUER,
-                                               RepositoryDenied)
+                                               RepositoryDenied, screen_code_dated)
 
 _log = logging.getLogger(__name__)
 #: D-483 4: wrong approval codes per request before it is rejected.
@@ -20,8 +20,9 @@ APPROVAL_CODE_ATTEMPTS = 5
 DISPLAY_FILE = "approval.json"
 DISPLAY_REQUESTS = 3
 #: D-483 4: live pending requests overall and per source; terminal rows do not count.
-PENDING_LIMIT, SOURCE_PENDING_LIMIT = 16, 2
-#: Rows kept for status reads (pending + terminal); the oldest terminal rows go first.
+#: Overall equals DISPLAY_REQUESTS so every live request is always on the LCD (review R2).
+PENDING_LIMIT, SOURCE_PENDING_LIMIT = DISPLAY_REQUESTS, 2
+#: Rows kept for status reads (pending + terminal); only unapproved terminal rows are evicted early.
 ROW_LIMIT = 256
 _UNSYNCED = object()
 
@@ -87,7 +88,7 @@ class PeerReceiver:
             return
         live = sorted(self._live(), key=lambda row: row["created"], reverse=True)[:DISPLAY_REQUESTS]
         shown = {"requests": [{"display_code": row["display_code"], "approval_code": row["approval_code"],
-                               "label": row["fields"]["label"], "expires_at": row["expires"].isoformat()}
+                               "expires_at": row["expires"].isoformat()}
                               for row in live]} if live else None
         if shown == self._display_shown:
             return
@@ -143,7 +144,8 @@ class PeerReceiver:
             if len(self._live(source)) >= SOURCE_PENDING_LIMIT:
                 raise Refused("source pending limit reached")
             if len(self._pending) >= ROW_LIMIT:
-                ended = sorted((k for k, v in self._pending.items() if v["state"] != "pending"),
+                # An approved row stays until keep_until (_prune) so its requester can still read the result.
+                ended = sorted((k for k, v in self._pending.items() if v["state"] in ("rejected", "cancelled", "expired")),
                                key=lambda k: self._pending[k]["created"])
                 if not ended:
                     raise Refused("request limit reached")
@@ -301,8 +303,10 @@ class PeerReceiver:
             self._sync_display()
             return self._view(request_id, row)
 
-    def cancel(self, request_id, secret):
+    def cancel(self, request_id, secret, source="unknown"):
         with self._lock:
+            self._prune()
+            self._admit_source(source)
             row = self._row(request_id, secret)
             if row["state"] != "pending":
                 raise Refused("request changed")
@@ -318,6 +322,8 @@ class PeerReceiver:
                 or grant["receiver_key_sha256"] != self._identity.fingerprint or grant["receiver_id"] != self.receiver_id):
             raise Refused("relationship unavailable")
         if grant["issuer_source"] == SCREEN_CODE_ISSUER:
+            if not screen_code_dated(grant, self.clock()):
+                raise Refused("relationship unavailable")
             return grant  # D-483 5: no issuer token; expiry, revocation and receiver key are checked above.
         try:
             issuer = self.repo.owner(grant["issuer_id"])
