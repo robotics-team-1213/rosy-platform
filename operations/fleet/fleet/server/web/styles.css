@@ -177,6 +177,7 @@ body {
 #dispatch-rearm[hidden] { display: none; }
 /* D-421 — 재허가와 전체 주행 취소는 글 뒤에서 오른쪽에 붙어 선다(한 열 단에서는 글 아래). */
 .dispatch-control > div { margin-right: auto; }
+.dispatch-control[hidden] { display: none; }
 
 /* ui-button의 display 규칙보다 hidden 속성이 우선해야 빈 목록에서 토글이 사라진다. */
 #roster-toggle[hidden] { display: none; }
@@ -266,6 +267,19 @@ main {
   .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > * { grid-column: 1 / -1; }
   .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > #vision-frame { grid-column: 1; grid-row: 3; }
   .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > #field-rectified { grid-column: 2; grid-row: 3; margin-top: 0; }
+  /* 버드아이 우선 — 지도가 없고 천장 카메라가 살아 있으면 카메라가 전체 폭을 쓰고,
+     한 줄로 줄어든 지도 상태는 그 아래에 선다. 지도가 오면 위 두 칸 배치로 돌아간다. */
+  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"])):has(> .vision-preview .vision-frame[data-state="online"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"])):has(> .vision-preview .vision-frame[data-state="online"]) > .vision-preview {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"])):has(> .vision-preview .vision-frame[data-state="online"]) > .map-stage {
+    grid-column: 1;
+    grid-row: 3;
+  }
 }
 
 .panel {
@@ -283,9 +297,19 @@ main {
 .map-head .spacer { flex: 1; }
 
 .map-stage { position: relative; }
-.map-camera { margin: var(--space-3) 0 0; }
-.map-camera img { display: block; width: 100%; max-height: 30rem; object-fit: contain; background: var(--ground-deep); }
-.map-camera figcaption { margin-top: var(--space-2); color: var(--ink-quiet); }
+/* 버드아이 우선 — 지도가 없을 때(접속 전·지도 없음·대기) 천장 카메라가 살아 있으면
+   빈 지도 칸은 한 줄 상태로 줄고, 위에서 내려다본 카메라가 주 화면이 된다. */
+.panel:has(> .vision-preview .vision-frame[data-state="online"]) > .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]) > #map-canvas { display: none; }
+.panel:has(> .vision-preview .vision-frame[data-state="online"]) > .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]) > .map-empty {
+  position: static;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  text-align: start;
+  padding: var(--space-2) var(--space-3);
+}
+.panel:has(> .vision-preview .vision-frame[data-state="online"]) > .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]) .map-empty-icon { display: none; }
+.panel:has(> .vision-preview .vision-frame[data-state="online"]) > .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]) .map-empty p { max-width: none; }
 .map-stage[data-map-state="unavailable"] #map-canvas { height: min(30dvh, 18rem); }
 .map-empty {
   position: absolute;
