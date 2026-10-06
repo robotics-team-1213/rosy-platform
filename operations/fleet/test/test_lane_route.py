@@ -12,15 +12,25 @@ from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
 from fleet.lane_route import STEP_M, LaneRouteError, next_step, route_lines
-from fleet.meet.place import painted_track
+from site_map_fixture import painted_track
 from fleet.server.app import GoalRequest, create_app
 from fleet.server.console import FleetConsole
+from fleet.server.site_map_store import SiteMapStore
+from fleet.site_map import from_lane_graph
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 
 ROOT = Path(__file__).resolve().parents[3]
 RING = ("ring_s", "ring_e", "ring_n", "ring_w")
+LANE_GRAPH = ROOT / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane_graph.yaml"
+
+
+def _site_maps() -> SiteMapStore:
+    """D-488: /route reads the active site map, imported from the configured lane graph."""
+    store = SiteMapStore()
+    store.import_if_empty(from_lane_graph(LANE_GRAPH), source="lane_graph.yaml")
+    return store
 
 
 def _localized(x: float, y: float, frame: str = "map") -> dict:
@@ -35,7 +45,7 @@ def _client(state: dict):
     robot = FakeRobot("rosy_60", state=state)
     console = FleetConsole(
         [RobotEndpoint("rosy_60", "http://127.0.0.1:8080", "t")], [robot])
-    return TestClient(create_app(console)), robot
+    return TestClient(create_app(console, site_maps=_site_maps())), robot
 
 
 def _goals(robot: FakeRobot) -> list[tuple]:
@@ -43,17 +53,17 @@ def _goals(robot: FakeRobot) -> list[tuple]:
 
 
 def test_ring_order_is_continuous_and_the_reverse_join_is_not():
-    assert route_lines(RING)
+    assert route_lines(RING, painted_track())
     with pytest.raises(LaneRouteError, match="ROUTE_DISCONTINUOUS"):
-        route_lines(("ring_s", "ring_w"))
+        route_lines(("ring_s", "ring_w"), painted_track())
     with pytest.raises(LaneRouteError, match="ROUTE_UNKNOWN_EDGE"):
-        route_lines(("not-an-edge",))
+        route_lines(("not-an-edge",), painted_track())
 
 
 def test_next_point_stays_on_ring_s_and_is_not_the_far_junction():
     line = painted_track().line("ring_s")
     start = line.point_at(0.0)
-    step = next_step(route_lines(("ring_s", "ring_e", "ring_n")), start[0], start[1])
+    step = next_step(route_lines(("ring_s", "ring_e", "ring_n"), painted_track()), start[0], start[1])
     expect = line.point_at(0.20)
     end = line.point_at(line.length_m)
 
@@ -67,7 +77,7 @@ def test_a_step_near_the_end_of_ring_s_continues_on_ring_e():
     south = painted_track().line("ring_s")
     east = painted_track().line("ring_e")
     pose = south.point_at(0.30)
-    step = next_step(route_lines(("ring_s", "ring_e")), pose[0], pose[1])
+    step = next_step(route_lines(("ring_s", "ring_e"), painted_track()), pose[0], pose[1])
     onto = 0.30 + 0.20 - south.length_m
     expect = east.point_at(onto)
     far = east.point_at(east.length_m)
@@ -79,7 +89,7 @@ def test_a_step_near_the_end_of_ring_s_continues_on_ring_e():
 
 def test_a_finished_lap_is_the_end_and_a_fresh_lap_is_the_start():
     close = painted_track().line("ring_w").point_at(painted_track().line("ring_w").length_m)
-    lines = route_lines(RING)
+    lines = route_lines(RING, painted_track())
     started = next_step(lines, close[0], close[1], along_m=0.0)
     finished = next_step(lines, close[0], close[1], along_m=1.5)
 
@@ -99,9 +109,9 @@ def test_the_lane_step_sits_outside_the_device_goal_ball():
 def test_the_ring_centre_and_the_route_end_do_not_dispatch():
     centre = (-0.3357, 0.0011)
     with pytest.raises(LaneRouteError, match="ROUTE_OFF_LANE"):
-        next_step(route_lines(RING), centre[0], centre[1])
+        next_step(route_lines(RING, painted_track()), centre[0], centre[1])
     end = painted_track().line("ring_s").point_at(painted_track().line("ring_s").length_m)
-    assert next_step(route_lines(("ring_s",)), end[0], end[1]) is None
+    assert next_step(route_lines(("ring_s",), painted_track()), end[0], end[1]) is None
 
 
 def test_a_localized_map_pose_sends_only_the_short_point():
@@ -197,7 +207,7 @@ def test_durable_task_records_the_short_point(tmp_path):
         [RobotEndpoint("rosy_60", "http://127.0.0.1:8080", "t")], [robot])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
     client = TestClient(create_app(
-        console, task_service=tasks,
+        console, task_service=tasks, site_maps=_site_maps(),
         site_users={sha256(b"operator-token").hexdigest():
                     {"principal_id": "bob", "role": "operator"}},
     ))
@@ -220,7 +230,7 @@ def test_durable_task_records_the_short_point(tmp_path):
 
 def test_route_contract_is_in_the_api_reference_and_goal_stays_a_point():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
-    assert "**Version:** v1.110" in reference
+    assert "**Version:** v1.111" in reference
     assert "`/api/fleet/robots/{robot_id}/route`" in reference
     assert "ROUTE_POSE_UNTRUSTED" in reference
     assert "D-463" in reference
