@@ -284,8 +284,10 @@ def test_undo_restores_boxes_without_restoring_approval(browser_workspace):
     expect(page.locator('#undo')).to_have_attribute('disabled', '')
 
 
-def test_stale_undo_never_overwrites_other_tab(browser_workspace):
+@pytest.mark.parametrize('width', [1440, 390])
+def test_stale_undo_never_overwrites_other_tab(browser_workspace, width):
     page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
     page.get_by_role('button', name='박스 1 삭제', exact=True).click()
     expect(page.locator('#undo')).not_to_have_attribute('disabled', '')
     row=store.get(0)
@@ -295,7 +297,17 @@ def test_stale_undo_never_overwrites_other_tab(browser_workspace):
     page.locator('#undo').click()
     expect(page.locator('#save-status')).to_contain_text('저장 실패')
     expect(page.locator('#undo')).to_have_attribute('disabled', '')
+    expect(page.locator('#approve')).to_have_attribute('disabled', '')
     assert store.get(0) == newer
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if width == 390:
+        reload = page.locator('#reload').bounding_box()
+        assert reload and reload['width'] >= width * .8 and reload['x'] + reload['width'] <= width
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-objects-conflict-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
     page.locator('#reload').click()
     expect(page.get_by_label('박스 1 x0',exact=True)).to_have_value('2')
     expect(page.locator('#undo')).to_have_attribute('disabled', '')

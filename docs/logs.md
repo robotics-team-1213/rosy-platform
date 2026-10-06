@@ -6439,3 +6439,9 @@ osy-d395-s1d\`.
 - 변경: Fleet 지연 팔로워를 1920/390/320px에서 확인하고 경고 카드 우선순위·비상 정지 가시성·가로 넘침을 계약에 남겼다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
 - gate 변화: Fleet LOCAL G2 일부 추가. 실제 장치·사이트·운영자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 전화 저장 충돌 복구
+
+- 변경: 객체·픽셀 검수의 다른 탭 저장 충돌을 1440/390px에서 재생하고, 승인 차단·복구 버튼 너비·서버 revision 재조회 경로를 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 충돌 화면 4장; 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: 학습 검수 LOCAL 충돌 G2 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.

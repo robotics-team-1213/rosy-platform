@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(learning): 전화 저장 충돌 복구
 - 2026-10-06 · uncommitted · uiux(fleet): 팔로워 지연 모바일 독회
 - 2026-10-06 · uncommitted · uiux(fleet): 연결 끊김 모바일 독회
 - 2026-10-06 · uncommitted · uiux: 현재 브랜치 D-153 G1 재실행
 - 2026-10-06 · uncommitted · uiux(pilot): 화면 폭 전환 도구 상태
-- 2026-10-06 · uncommitted · uiux(games): 축소 피치 표식 가독성

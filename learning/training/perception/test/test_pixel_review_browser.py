@@ -107,8 +107,10 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     assert review_masks.pixels(store, review_masks.get(store, 0))[12, 10] == 255
 
 
-def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace):
+@pytest.mark.parametrize('width', [1440, 390])
+def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace, width):
     page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
     open_pixels(page, store, expect)
     newer = review_masks.update(store, 0, {'version':0, 'action':'fill', 'label':2}, ValueError)
     page.once('dialog', lambda dialog: dialog.accept())
@@ -116,6 +118,15 @@ def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace):
     expect(page.locator('#pixel-error')).to_contain_text('다른 탭')
     expect(page.locator('#pixel-approve')).to_have_attribute('disabled', '')
     assert review_masks.get(store, 0) == newer
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if width == 390:
+        reload = page.locator('#pixel-reload').bounding_box()
+        assert reload and reload['width'] >= width * .8 and reload['x'] + reload['width'] <= width
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-pixels-conflict-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
     page.locator('#pixel-reload').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.locator('#pixel-frame').select_option('1')
