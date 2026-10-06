@@ -19,7 +19,7 @@ function enable(){const dirty=draft.length>0,hasSamples=seeds.length>0,locked=bu
  for(const id of ['pixel-class','pixel-radius','pixel-tolerance-mode','pixel-tolerance','pixel-complete','pixel-background'])$(id).disabled=!editable;
  for(const id of ['pixel-flood','pixel-fill','pixel-undo','pixel-exclude','pixel-reopen','pixel-approve']){$(id).disabled=id==='pixel-reopen'?locked||frame?.status==='excluded':!editable;$(id).reason=forbidden?'검수 권한이 거부되었습니다. 최신 내용을 다시 불러오세요.':locked?'사진 불러오기와 저장을 마친 뒤 다시 시도하세요.':excluded?'제외 사진은 먼저 재검수로 돌리세요.':!review?.classes?'자료 등록에서 검증된 class 파일을 연결하세요.':'';
   if((dirty||hasSamples)&&id!=='pixel-undo'){$(id).disabled=true;$(id).reason='현재 초안을 적용하거나 버린 뒤 진행하세요.';}}
- $('pixel-flood').disabled=locked||dirty||hasSamples||excluded;
+ $('pixel-flood').disabled=!editable||dirty||hasSamples;
  $('pixel-sample-apply').disabled=!hasSamples||previewing||samplePixels===0||locked||dirty;
  $('pixel-sample-clear').disabled=!hasSamples||busy;
  $('pixel-radius').disabled=!editable||flood;

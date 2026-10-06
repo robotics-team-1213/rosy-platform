@@ -6586,3 +6586,9 @@ osy-d395-s1d\`.
 - 변경: `main`에 병합된 객체·픽셀 검수 화면의 1440/800/390/320px와 전화 사진 한 줄 목록을 다시 렌더했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-main-merged/` 8장과 `logs/merge-20261006/learning-main-visual.txt`. 브라우저 9 passed, `known_failures.py` 0 NEW; 320px 두 화면은 원본 크기로 확인했다.
 - gate 변화: 병합된 현재 트리의 LOCAL G2 폭 근거 추가. 실제 검수자 G3와 제품 전체 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(learning): class 파일 미연결 시 편집 도구 잠금
+
+- 변경: 픽셀 검수의 점/브러시 전환 버튼이 class 파일 없이도 활성화되던 마지막 상태 덮어쓰기를 고쳤다. G3 운영자 독회는 요청자가 맡기로 했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/pixel-disabled-fix/learning-pixels-320.png`와 `logs/merge-20261006/pixel-disabled-fix.txt`. 수정 전 집중 브라우저 1 failed, 수정 후 10 passed, `known_failures.py` 0 NEW.
+- gate 변화: 미연결 상태의 잘못된 조작 표시를 LOCAL에서 바로잡았다. 실제 운영자 결과와 현장 설치는 HOLD.
