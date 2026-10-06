@@ -221,12 +221,14 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     (code / "model/watch.py").write_text("print('committed')\n")
     (code / "rosy_ml.py").write_text("print('committed')\n")
     profile = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
-    for name in ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py", profile]:
+    for name in ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py",
+                 "shared/web/shared-assets.json", profile]:
         dep = repo / name
         dep.parent.mkdir(parents=True)
         dep.write_text("PINNED = True\n")
     git("add", "learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
-        "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py", profile)
+        "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py",
+        "shared/web/shared-assets.json", profile)
     git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
     sha = git("rev-parse", "HEAD")
     (code / "rosy_ml.py").write_text("print('dirty')\n")
@@ -238,6 +240,7 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     assert not (tmp_path / "result/learning/training/perception/secret").exists()
     assert (tmp_path / "result/middleware/perception/control/__init__.py").read_text() == "PINNED = True\n"
     assert (tmp_path / "result/contracts/foundation/core_common/__init__.py").read_text() == "PINNED = True\n"
+    assert (tmp_path / "result/shared/web/shared-assets.json").read_text() == "PINNED = True\n"
     assert (tmp_path / "result" / profile).read_text() == "PINNED = True\n"
 
 

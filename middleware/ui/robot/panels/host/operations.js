@@ -233,7 +233,7 @@ export function mount(root, ctx) {
     const previous = release.data.previous;
     const networkMode = network.data.mode;
     confirming = true;
-    const confirmed = await confirmIrreversible({message: confirmText, action: "요청 전송", opener: button, signal: lifetime.signal});
+    const confirmed = await confirmIrreversible({message: confirmText, action: button.textContent.trim(), opener: button, signal: lifetime.signal});
     confirming = false;
     if (disposed || !confirmed) return;
     networkEnabled(network.wrap.dataset.available === "true"); syncReleaseActions();

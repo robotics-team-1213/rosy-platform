@@ -14,8 +14,8 @@
 
 ### Decision
 
-1. `inputs.lock.yaml`의 `ros.apt_snapshot_url`(`https://snapshots.ros.org/jazzy/2026-09-11/ubuntu`)이 날짜의 유일한 출처다.
-2. payload 워크플로는 `ros2-apt-source`를 설치한 뒤 `/etc/apt/sources.list.d/ros2.sources`의 `URIs:`를 락 값으로 바꾸고 `apt-get update` 한다. 값은 `snapshots.ros.org/jazzy/<날짜>/ubuntu` 형태만 받는다. 서명은 기존 ROS 키링으로 apt가 검증한다.
+1. `inputs.lock.yaml`의 `ros.apt_snapshot_url`(`http://snapshots.ros.org/jazzy/2026-09-11/ubuntu`)이 날짜의 유일한 출처다.
+2. payload 워크플로는 `ros2-apt-source`를 설치한 뒤 `/etc/apt/sources.list.d/ros2.sources`의 `URIs:`를 락 값으로 바꾸고 `apt-get update` 한다. 값은 `snapshots.ros.org/jazzy/<날짜>/ubuntu` 형태만 받는다. 서명은 기존 ROS 키링으로 apt가 검증한다. 스냅샷 호스트의 HTTPS 인증서가 호스트명과 맞지 않아(러너에서 `Certificate verification failed`, 2026-10-06 047 빌드) ROS 문서대로 `http://`를 쓰고, 무결성은 서명된 InRelease가 맡는다.
 3. 이미지 빌드(`customize-rootfs.sh`, `build-pinky-image.yml`)는 이 결정으로 바꾸지 않는다. 다음 이미지 빌드에서 같은 락 키를 쓰는 것은 별도 결정이다.
 4. 스냅샷 날짜를 올릴 때는 새 이미지 빌드와 같은 커밋에서 올리고, 로봇에 깔린 이미지의 `deb-packages.txt`와 대조한다.
 

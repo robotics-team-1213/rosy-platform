@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "training"))
 from recording_job import prepare, validate_config  # noqa: E402
 from job_state import JobError, Rejected  # noqa: E402
-from store import content_sha  # noqa: E402
+from store import Store, content_sha  # noqa: E402
 
 
 def config(tmp_path):
@@ -101,6 +101,28 @@ def test_heldout_and_identity_mismatch_refused_before_labelling(tmp_path):
     cfg["recordings"][0]["session"] = "different"
     with pytest.raises(JobError, match="identity"):
         prepare(cfg, tmp_path / "job2", runner=lambda *_: pytest.fail("must not label"))
+
+
+def test_reserved_recording_refused_before_labelling(tmp_path):
+    cfg = config(tmp_path)
+    Store(cfg["store"]).reserve_eval_source("train-a", "group-a")
+    with pytest.raises(JobError, match="reserved eval"):
+        prepare(cfg, tmp_path / "job", runner=lambda *_: pytest.fail("must not label"))
+
+
+def test_reserved_capture_group_is_checked_before_labelling(tmp_path):
+    cfg = config(tmp_path)
+    Store(cfg["store"]).reserve_eval_source("heldout", "shared-group")
+    with pytest.raises(JobError, match="group unknown"):
+        prepare(cfg, tmp_path / "unknown", runner=lambda *_: pytest.fail("must not label"))
+    cfg["recordings"][0]["capture_group"] = "shared-group"
+    cfg["recordings"][1]["capture_group"] = "separate-group"
+    with pytest.raises(JobError, match="reserved eval capture group"):
+        prepare(cfg, tmp_path / "overlap", runner=lambda *_: pytest.fail("must not label"))
+    cfg["recordings"][0]["capture_group"] = "another-group"
+    prepare(cfg, tmp_path / "allowed", runner=fake_labels, builder=fake_build)
+    meta = json.loads(next((tmp_path / "allowed").glob("labels-0-*/train-a/meta.json")).read_text())
+    assert meta["capture_group"] == "another-group"
 
 
 def test_harvest_never_allows_assume_idle_or_arbitrary_arguments(tmp_path):

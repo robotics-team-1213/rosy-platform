@@ -19,7 +19,7 @@ from std_msgs.msg import Bool, Float32, String, UInt16MultiArray, Float32MultiAr
 
 from ..sensing.filt import IrMedian, MedianLp
 from ..sensing.body import BODY, URDF_RADIUS, rotation_radius, use_radius
-from ..sensing.lidar import NOSE_YAW
+from ..sensing.lidar import NOSE_YAW, enable_simulation_scans
 from ..sensing.localization import lease_ready
 from ..sensing.pose import planar_pose
 from ..control.lidar_guard import (lidar_blocked, lidar_can_rotate,
@@ -97,6 +97,13 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
         # Commissioned only on the isolated wheel rig; physical stopping and
         # mixed-motion slip have not yet been measured on Pinky hardware.
         self.declare_parameter('simulation_motion_sweep_enabled', False)
+        # Gazebo only: CORE sets it from control.sensor_adapter.simulation_sensors and
+        # only under use_sim_time. Process-wide (every is_robot_scan caller in CORE).
+        self.declare_parameter('accept_simulation_scans', False)
+        if self.get_parameter('accept_simulation_scans').value is True:
+            if self.get_parameter('use_sim_time').value is not True:
+                raise ValueError('accept_simulation_scans needs use_sim_time')
+            enable_simulation_scans(True)
         self.init_obstacles()
         self.declare_parameter('scan_topic', 'scan')
         self.declare_parameter('us_topic', 'us_sensor/range')

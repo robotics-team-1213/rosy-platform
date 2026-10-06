@@ -312,6 +312,9 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
         inventory = _active_eval(store, folders, gate_eval_refs)
         refs, sessions, groups, videos, eval_images, complete = _eval_inventory(folders)
         eval_inventory = (list(refs), set(sessions), set(groups), set(videos), set(eval_images), complete)
+        reservations = store.eval_reservations()
+        sessions.update(reservations)
+        groups.update(reservations.values())
         companions = (validate_eval_companions(folders, eval_companion_files)
                       if eval_companion_files else None)
         if not complete:
@@ -453,7 +456,9 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
             latest, _ = _delivery(fetch_current, workspace_id, revision, authority_max_age_s, now)
             if latest != current:
                 raise ValueError('current authority changed before publication')
-            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != eval_inventory:
+            if (_active_eval(store, folders, gate_eval_refs) != inventory
+                    or _eval_inventory(folders) != eval_inventory
+                    or store.eval_reservations() != reservations):
                 raise ValueError('eval inventory changed before publication')
             if any(_stable_bytes(path) != raw for path, raw in observed.items()):
                 raise ValueError('source proof artifacts changed before publication')
@@ -465,7 +470,9 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
             latest, _ = _delivery(fetch_current, workspace_id, revision, authority_max_age_s, now)
             if latest != current:
                 raise ValueError('current authority changed after immutable publication')
-            if _active_eval(store, folders, gate_eval_refs) != inventory or _eval_inventory(folders) != eval_inventory:
+            if (_active_eval(store, folders, gate_eval_refs) != inventory
+                    or _eval_inventory(folders) != eval_inventory
+                    or store.eval_reservations() != reservations):
                 raise ValueError('eval changed after immutable publication')
             if any(_stable_bytes(path) != raw for path, raw in observed.items()):
                 raise ValueError('source proofs changed after immutable publication')

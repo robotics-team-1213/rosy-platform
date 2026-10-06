@@ -924,3 +924,9 @@
 - 변경: `local_return_allowed`의 동적 조회를 D-468/C6 예외 목록에 명시하고, 구 공급자에 메서드가 없을 때 복귀 후보를 거부하는 검사를 추가했다.
 - 증거: C6 구조 검사와 차선 복귀 센서 검사. 최종 명령 권한 변경 없음.
 - gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · feat(sim): simulation_sensors 플래그와 D-468 정책 시계
+
+- 변경: `control.sensor_adapter.simulation_sensors`(bool, `use_sim_time` 없으면 시작 거부)가 `resolve_safety_params(simulation=True)`로 worker에 `accept_simulation_scans`·`imu_angular_velocity_unit rad_s`·`use_sim_time`을 넘긴다(overlay 허용 키 아님). `bind_lane_return_motion(policy_clock)`: `use_sim_time`이면 D-468 바닥 증명은 worker 정책을 `time.monotonic`으로 묻고 몸 sweep은 line clock에 둔다. 장치는 플래그 없음·`policy_clock None`으로 전과 같다.
+- 증거: `test_safety_params.py`, `test_lane_return_sensors.py`, `test_control_sensor_adapter.py` 추가 시험 PASS. 모델 PC sim에서 정책 창 monotonic·`floor_observed True` 확인.
+- gate 변화: 없음.

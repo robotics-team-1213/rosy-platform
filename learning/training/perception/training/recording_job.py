@@ -35,8 +35,10 @@ def validate_config(cfg):
         source_keys = set(row) & {"video", "raw", "harvest"}
         if not safe_name(row["session"]) or len(source_keys) != 1:
             raise JobError("safe session and exactly one video/raw/harvest source required")
-        if set(row) - {"session", "video", "raw", "harvest", "pitch_deg"}:
+        if set(row) - {"session", "video", "raw", "harvest", "pitch_deg", "capture_group"}:
             raise JobError("unknown recording option")
+        if "capture_group" in row and not safe_name(row["capture_group"]):
+            raise JobError("safe capture_group required")
         if "harvest" in row:
             index = row["harvest"]
             if type(index) is not int or not 0 <= index < len(cfg["harvest"]):
@@ -92,7 +94,14 @@ def inputs(cfg):
 
 def evaluation(cfg):
     import yaml
-    from store import content_sha
+    from store import Store, content_sha
+    reservations = Store(cfg["store"]).eval_reservations()
+    if {row["session"] for row in cfg["recordings"]} & reservations.keys():
+        raise JobError("reserved eval recording cannot be labelled for training")
+    if reservations and any(not row.get("capture_group") for row in cfg["recordings"]):
+        raise JobError("reserved eval capture group cannot be excluded: recording group unknown")
+    if {row.get("capture_group") for row in cfg["recordings"]} & set(reservations.values()):
+        raise JobError("reserved eval capture group cannot be labelled for training")
     gate = Path(cfg["trainer"]["gate"])
     doc = yaml.safe_load(gate.read_text(encoding="utf-8"))
     if doc.get("require_eval") is not True or not isinstance(doc.get("eval_set"), str):
@@ -217,6 +226,13 @@ def prepare(cfg, out, *, runner=execute, builder=None):
                 runner(argv, out / f"label-{index}-{attempt}.log")
                 if not (target / "meta.json").is_file() or not (target / "labels.jsonl").is_file():
                     raise JobError("labeller did not complete metadata and labels")
+                if row.get("capture_group"):
+                    meta_path = target / "meta.json"
+                    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                    if meta.get("capture_group") not in (None, row["capture_group"]):
+                        raise JobError("labeller capture_group differs from recording assertion")
+                    meta["capture_group"] = row["capture_group"]
+                    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
                 return receipt({"folder": str(target)}, files_under(target))
             labelled.append(job.step(f"label-{index}", label_stage)["folder"])
             # Detect a source changed by another process during the label invocation.
