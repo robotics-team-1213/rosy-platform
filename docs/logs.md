@@ -6169,3 +6169,8 @@ osy-d395-s1d\`.
 - 변경: README를 소개·시작 위치 표·문서 지도·「같이 하는 깃」·「핵심 계약」으로 줄이고 구조·빌드·테스트·관제 배치·Pi 런타임·로드맵을 `docs/reference/developer-guide.md`로 옮겼다(옛 `src/` 트리는 현재 폴더 표로 교체). 팀 가이드를 첫날 명령·이슈에서 머지까지·막혔을 때 표로 다시 썼다. 루트 허용 목록 밖이던 `CONTRIBUTING.md`를 `.github/`로 옮겼다.
 - 증거: Windows 새 클론 + Python 3.12 venv에서 가이드 §1 명령 리허설, 문서 링크 검사 0 깨짐, README·문서 배치·harness·pre-push 계약 시험.
 - gate 변화: 없음.
+## 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
+
+- 변경: D-472와 ADR Log에 실제 Vision 프레임 기반 현장지도, 단독 소유 LED 점멸 신원 대조, 안전 선점·만료·주행 분리 결정을 기록했다.
+- 증거: 현장 두 로봇의 `rosy-face`와 램프 런타임 조회. 식별 점멸 API와 실제 영상 대조는 아직 없다.
+- gate 변화: 없음. 문서 제안이며 DEVICE/FIELD 수용이 아니다.
