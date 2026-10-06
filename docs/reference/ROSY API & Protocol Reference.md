@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.108
+**Version:** v1.109
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2270,6 +2270,7 @@ Prefix: `/api/v1/auth/peer-pairing`.
 | GET `/requests/{id}` | `X-Request-Secret` | state/revision, 승인됐다면 relationship_id/generation/persistent/authorization_expires_at/authorization_available |
 | DELETE `/requests/{id}` | 같은 요청 비밀 | pending만 cancelled로 전환 |
 | POST `/requests/{id}/decision` | 현재 named administrator; action=approve/reject, revision, persist_requested | 승인 거래 결과; **paired=false**, credential 발급과 구분 |
+| POST `/requests/{id}/confirm` | 인증 없음, `X-Request-Secret`; 본문 `{approval_code}`(6자, `23456789ABCDEFGHJKMNPQRSTUVWXYZ`) | D-483 (v1.109): 수신 LCD 승인 코드로 같은 요청을 승인. 200 StateSnapshot(approved, persistent=false, 168 h); 틀림 400 `detail.remaining_attempts`(5회째 rejected); 요청 역할 > operator 403; 출처별 30회/분 공유 429; 변경·만료·비밀 불일치 409 |
 | POST `/relationships/{id}/challenge` | 이미 승인된 관계 ID | fields와 receiver_signature; 최대 60초, 한 번만 사용 |
 | POST `/relationships/{id}/session` | 해당 client key의 fields+signature | 기존 digest token의 id/token/role/expires_at; 최대 1시간 |
 | DELETE `/relationships/{id}` | 현재 named administrator | revoked와 증가한 generation; 자식 세션 거부 |
@@ -2279,6 +2280,15 @@ client_public_key(SPKI DER base64), role(viewer/operator), nonce(64자 hex).
 관계 ID는 request ID와 같은 32자 base64url이다. 비밀 request_secret은 43자
 base64url이며 서버는 hash만 보관한다. 4자리 영숫자는 양쪽 화면의 요청 비교용이고,
 승인·로그인 자격이 아니다. 상태 polling 간격은 최소 2초다.
+
+D-483 화면 승인 코드(v1.109): CORE는 요청마다 6자 승인 코드를 만들고 상수 시간
+hash 비교만 한다. 원문은 응답·상태·`pending`·로그에 없고, 기다리는 요청 중 가장
+최근 하나만 `/run/rosy-peer-display/approval.json`(`rosy-core:rosy-display` 2750,
+파일 0640, `{display_code, approval_code, label, expires_at}`)으로 rosy-face에 넘긴다.
+승인·거절·취소·만료·정리 때 지운다. `confirm`으로 생긴 관계는 `approved_by`·
+`issuer_id`·`issuer_source`가 `screen-code`, `issuer_digest`가 수신 키 지문,
+`persistent=false`, 수명 168시간이며 발급자 token 없이 관계 자체의 만료·폐기·수신
+키만 확인한다. 콘솔 `decision`과 경합하면 하나만 승인한다.
 
 Challenge fields: relationship_id, challenge_id, nonce, receiver_id,
 receiver_key_sha256, client_id, client_key_sha256, role, generation, expires_at.
@@ -2357,6 +2367,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.109 | 2026-10-06 | Additive (D-483): D-456 요청의 수신 LCD 승인 코드 경로 POST `/api/v1/auth/peer-pairing/requests/{id}/confirm`(`X-Request-Secret`, `{approval_code}`). 화면 코드 관계는 168 h·persistent=false·발급자 token 없음(`screen-code`). 콘솔 `decision` 유지, envelope 1.0 유지 |
 | v1.108 | 2026-10-06 | Additive (D-473): Fleet `GET /api/fleet/auth/connection` and `POST /api/fleet/auth/development-session`. Development connection mode (both `ROSY_DEPLOYMENT=development` and `--connection-mode development`) gives same-LAN (or tailnet) console browsers a 1 h in-memory named operator session; paired mode unchanged. Robot API and envelope 1.0 unchanged |
 | v1.107 | 2026-10-06 | Fix (버전 번호 변경 없음) (fix/sensors-nonfinite-json): `GET /api/v1/sensors`·`/sensors/{type}` 가 LiDAR `ranges` 의 inf/NaN 때문에 500 이던 것을 비유한 값 `null` 로 직렬화. 필드 추가·이름 변경 없음 |
 | v1.107 | 2026-10-06 | Additive (D-472): CORE 후면 LED 단기 식별 요청과 Fleet 단일 로봇 전달 경로. Rosy Cam 프레임 표시만 연결하며 자동 신원·주행 권한은 열지 않음 |

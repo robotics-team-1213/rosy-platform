@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · feat(api): D-483 로봇 화면 승인 코드로 피어 요청 승인
 - 2026-10-06 · uncommitted · 식별 LED CORE 요청
 - 2026-10-05 · uncommitted · fix(api): D-468 계약 버전 표시 정렬
 - 2026-10-05 · uncommitted · fix(peer-pairing): 관계당 활성 세션 상한 4→8
 - 2026-10-05 · uncommitted · fix(api): align description with Fleet CAP-001 contract version
-- 2026-10-05 · uncommitted · fix(pairing): 구버전 TLS 검증 거절 순서

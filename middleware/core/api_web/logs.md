@@ -563,3 +563,10 @@
 - 변경: Operator 전용 `POST /api/v1/host/lamp/identify`가 blue/amber만 받아 기존 호스트 하드웨어 요청 큐로 전달한다. 응답은 영상 확인 대기 상태다.
 - 증거: API 입력·쿨다운 호스트 테스트 통과. 장치 적용과 실제 점멸은 미확인.
 - gate 변화: SOURCE/LOCAL만 확인. DEVICE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-06 · uncommitted · feat(api): D-483 로봇 화면 승인 코드로 피어 요청 승인
+
+- 변경: D-456 요청마다 6자 승인 코드를 만들고 hash만 비교한다. `POST /api/v1/auth/peer-pairing/requests/{id}/confirm`(인증 없음, `X-Request-Secret`, `{approval_code}`)이 맞으면 같은 요청을 승인한다. 5회 틀리면 rejected, 출처별 30회/분 한도 공유, 요청 역할이 operator를 넘으면 403. 화면 코드 관계는 `screen-code` 출처·168 h·persistent=false이고 `_grant`·`issue`·세션 정책이 발급자 token 대신 관계 자체의 만료·폐기·수신 키만 본다. 기다리는 가장 최근 요청을 `/run/rosy-peer-display/approval.json`(0640, tmp+rename)으로 rosy-face에 넘기고 끝나면 지운다. 쓰기 실패는 한 번만 기록하고 요청 흐름은 그대로다. 계약 v1.109.
+- 증거: `test_peer_pairing.py` 신규 `ScreenCodeApproval` 10건(응답·pending·로그에 코드 없음, 5회 거절, 비밀 없이 승인 불가, 콘솔·코드 경합 단일 승인, 종료 상태별 파일 삭제, 168 h·challenge/session, 403, 속도 한도) 포함 api_web·foundation 867 passed. 장치 배포는 하지 않았다.
+- gate 변화: SOURCE/LOCAL만. DEVICE(9dfk LCD 코드·태블릿 입력)는 서명 릴리스 뒤 별도.
+- 결정: D-483
