@@ -43,8 +43,11 @@ def geometry_error(profile, intervals, *, overridden=()):
     nominal file stands). A record's bands are fit half-widths; each is floored at one
     grid step of the fit, intervals["fit_step"]: a camera_extrinsic grid fit states its
     steps (one without fit_step predates them and ran the robot grid, FINE_STEPS), and a
-    continuous fit (camera_board/1) states zero steps. A band that is not positive, or a
-    fit_step that is not three non-negative reals, is refused. The ground ignores roll, so a
+    continuous fit (camera_board/1) states zero steps. Its bands are only the scatter of its
+    views, blind to error they share (distortion, intrinsics, print scale, elevation), so a
+    zero-step record must also state intervals["systematic"] {pitch_deg, roll_deg, height_m}
+    from an independent truth check; it is added to each band. A band that is not positive,
+    or a fit_step or systematic that is not three non-negative reals, is refused. The ground ignores roll, so a
     record's fitted roll is error too. An operator override of pitch or height states no
     error: None.
     """
@@ -66,6 +69,13 @@ def geometry_error(profile, intervals, *, overridden=()):
     if not all(_real(v) and v >= 0 for v in step):
         return None
     pitch_step, roll_step, height_step = step
+    shared = (0., 0., 0.)
+    if not any(step):
+        shared = intervals.get("systematic")
+        shared = [shared.get(k) for k in ("pitch_deg", "roll_deg", "height_m")] if isinstance(shared, dict) else [None]
+        if not all(_real(v) and v >= 0 for v in shared):
+            return None
+    pitch_shared, roll_shared, height_shared = shared
     pitch, roll_band, roll, height = band.get("pitch_deg"), band.get("roll_deg"), profile.get("roll_rad"), band.get("height_m")
     if not all(_real(v) for v in (pitch, roll_band, roll)) or min(pitch, roll_band) <= 0:
         return None
@@ -77,9 +87,9 @@ def geometry_error(profile, intervals, *, overridden=()):
     elif not (_real(height) and height > 0):
         return None
     else:
-        height = max(height, height_step)
-    return (math.radians(max(pitch, pitch_step)), float(height),
-            abs(roll)+math.radians(max(roll_band, roll_step)), float(px))
+        height = max(height, height_step)+height_shared
+    return (math.radians(max(pitch, pitch_step)+pitch_shared), float(height),
+            abs(roll)+math.radians(max(roll_band, roll_step)+roll_shared), float(px))
 
 
 def _ray(h, pitch, x, y):
