@@ -80,9 +80,9 @@ surfaces:
 
   - id: console
     api_owners: [Fleet]
-    app_name: Rosy Console
-    app_name_en: Rosy Console
-    short_name: Rosy Console
+    app_name: Rosy Fleet
+    app_name_en: Rosy Fleet
+    short_name: Rosy Fleet
     icon: shared/web/icons/console.svg
     path: operations/fleet/fleet/server/web
     themes: [dark, light]

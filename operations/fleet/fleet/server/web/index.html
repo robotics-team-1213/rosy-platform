@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101214">
-  <title>Rosy Console</title>
+  <title>Rosy Fleet</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
@@ -17,7 +17,7 @@
   <a class="skip-link" href="#fleet-main">본문으로 건너뛰기</a>
   <ui-shell grammar="exception">
   <ui-topbar>
-    <ui-brand><b>Rosy Console</b><small id="fleet-name">사이트</small></ui-brand>
+    <ui-brand><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
     <div class="spacer"></div>
     <!-- D-359 §6.4 — 좁은 창에서 접속·역할·테마는 이 토글 뒤로 접힌다. 넓은 창에서는 토글이 숨고 줄에 선다. -->
     <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" title="설정" data-action-icon="settings"><span class="sr-only">설정</span></ui-button>
@@ -73,7 +73,7 @@
   </section>
 
   <main id="fleet-main" tabindex="-1">
-    <h1 class="sr-only">Rosy Console — 사이트 관제</h1>
+    <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
     <!-- ADR-1000: Warning / Critical State Queues (MON-002) -->
     <div class="console-primary">
     <section class="panel queues-panel" aria-labelledby="queues-heading">
@@ -115,10 +115,6 @@
           <p id="map-empty-detail">Fleet에서 현장 지도를 확인하고 있습니다.</p>
         </div>
       </div>
-      <figure id="map-camera" class="map-camera" hidden>
-        <img id="map-camera-image" alt="Rosy Cam 현장 영상" />
-        <figcaption id="map-camera-meta">현장 영상 대기</figcaption>
-      </figure>
       <!-- 색은 클래스로만 준다. CSP 가 `style-src 'self'` 라 style 속성은 적용되지 않는다. -->
       <div class="legend" id="map-legend" hidden>
         <span data-legend="grid"><i class="sw free"></i>자유</span>
@@ -195,13 +191,14 @@
              D-406: 두 제안 도구는 설치·보정 묶음 안에 접힌다 — 운용 무대에는 영상만 남는다(D-201 좁힘). -->
                 <!-- D-410 — 보정·맞춤 도구도 설치 화면으로 갔다. -->
         <p class="hint install-link">경기장 찾기·맵 맞춤·왜곡 보정은 <a href="/console/install">설치·보정 화면</a>에서 합니다.</p>
+        <p class="hint install-link">주소·차로 편집과 경로 미리보기는 <a href="/console/site-map">현장 지도 화면</a>에서 합니다.</p>
 
       </section>
 
 
       <details class="note">
         <summary>관제 범위 안내</summary>
-        <p>이 화면은 사이트 관제입니다. 로봇 한 대의 현장 화면·수동 조작·비상정지는 그 로봇의 대시보드에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>
+        <p>이 화면은 Rosy Fleet 사이트 관제입니다. 위에서 내려다본 천장 카메라와 지도로 여러 로봇을 봅니다. 로봇 한 대의 전방 카메라·수동 조작·비상정지는 그 로봇의 Rosy Robot 화면에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>
       </details>
     </section>
     </div>

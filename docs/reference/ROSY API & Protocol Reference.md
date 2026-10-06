@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.109
+**Version:** v1.111
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1500,6 +1500,11 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 | POST | `/api/fleet/auth/development-session` | none (development mode only) | D-473 (v1.108): 201 `{token, principal_id, role: "operator", expires_at}` with `Cache-Control: no-store`. `principal_id` is `development-<8 hex>`; the token is returned once and lives 1 h in Fleet memory only (gone on restart). The caller address (the last `X-Forwarded-For` entry when Fleet runs with `--lan-camera-proxy` behind the site proxy, otherwise the TCP peer) must be loopback, RFC1918, link-local or the Tailscale tailnet `100.64.0.0/10`; `Host` must be a LAN IP literal, `localhost`, a `.local` name or the host name, and a present `Origin` must equal `Host`; otherwise, and always in paired mode, 403 `FORBIDDEN`. More than 6 requests per address per minute is 429 `RATE_LIMITED` with `Retry-After: 60`. At most 8 sessions are live; a ninth evicts the oldest. The session is a named operator: it passes the named-operator gate (missions included), and the issue and every later POST are written to the API audit under that principal; an unavailable audit is 503 `AUDIT_STORAGE_UNAVAILABLE` and no session. Robot credentials (`robots.yaml`, D-361 enrollment) and stop paths are unchanged. |
 | POST | `/api/fleet/robots/{robot_id}/goal` | `operator` bearer + `Idempotency-Key` | Validates the configured robot and finite goal, durably accepts the task as `QUEUED`, then lets the dispatcher request a CORE goal. |
 | POST | `/api/fleet/robots/{robot_id}/route` | `operator` bearer + `Idempotency-Key` when durable tasks are configured | D-463 (v1.100): body `{edges: [edge_id, ...]}` of 1 to 8 stored lane-graph edge ids; extra fields 422. Each edge must exist and its `to` must equal the next edge `from`, or 400 `ROUTE_UNKNOWN_EDGE` / `ROUTE_DISCONTINUOUS`. Fleet expands the stored polyline and submits only the next point about 0.20 m ahead, yaw equal to the tangent, through the existing goal path. It does not submit the far junction as that goal. The fresh snapshot must be `LOCALIZED` with `pose_frame` `map` and within 0.08 m of the polyline; otherwise 409 `ROUTE_POSE_UNTRUSTED` or `ROUTE_OFF_LANE` and CORE is not called. A snapshot with no localization block is refused. Within 0.05 m of the end the response is 200 `ROUTE_COMPLETE` and no goal. `GoalRequest` stays `{x, y, yaw}`. |
+| GET | `/api/fleet/site-map/active` | any configured user bearer | D-488 (v1.111): the active `rosy.site_map/1` (places `{id, name, x, y, yaw?, kind park/charge/stop/junction/turnaround}`, edges `{id, from, to, polyline, direction one_way/two_way, width_m, speed_cap_mps, drive_mode lane/free, robot_kinds?}`, optional `turn_bans {at, from_edge, to_edge}`) with `version`, `sha256`, `activated_by`, `activated_at`. Places are more than 0.05 m apart and every edge is longer than 0.10 m between its places. 404 `SITE_MAP_NOT_ACTIVE` when the site has none. Errors here and on `/trip` are `{"detail": {"code", "detail"}}`. `GET /api/fleet/site-map` (D-257 camera rectangle) is unchanged. |
+| GET / PUT | `/api/fleet/site-map/draft` | GET any user; PUT named `operator` | D-488 (v1.111): one editable draft. PUT `{map, expected_revision}` (body at most 2 MiB, else 413 `SITE_MAP_TOO_LARGE`); the map is validated or 422 `SITE_MAP_INVALID` with `detail.errors [{loc, msg}]` (no submitted values). A stale `expected_revision` is 409 `SITE_MAP_DRAFT_CHANGED`. Each save is a recorded site map event. A draft is never used for planning. |
+| POST | `/api/fleet/site-map/activate` | named `operator` | D-488 (v1.111): `{expected_revision}` copies the saved draft into a new immutable version that becomes active; audited. 409 `SITE_MAP_NO_DRAFT`, `SITE_MAP_DRAFT_CHANGED`, or `SITE_MAP_ROUTE_ACTIVE` while a lane route (`/route`) was stepped in the last 30 s; 422 `SITE_MAP_UNPLANNABLE` when the planner cannot use the map. The first version may come from `fleet console --site-map-import <lane_graph.yaml>` when the store is empty. `/route` reads the active map's edges and answers 409 `SITE_MAP_NOT_ACTIVE` without one. |
+| POST | `/api/fleet/robots/{robot_id}/trip` | named `operator` | D-488/D-490 (v1.111): body `{to: place_id or {x, y, yaw?}, via?: [place_id] (max 8), arrive_yaw?, speed_cap?, execute?: false}`. Plans one layered lane-state A* over the vias and the goal on the active map from the robot's fresh `LOCALIZED` map pose (start snaps within half the lane width) and returns 200 `{plan_id, map_version, segments [{edge_id, forward, s_from, s_to}], places, actions [{place_id, action straight/left/right/uturn/stop, theta_deg}], length_m, eta_s, expires_at}`; a robot already on the goal place gets an empty plan. Nothing is sent to CORE. Refusals are 422 `{code, detail}`: `TRIP_START_OFF_MAP`, `TRIP_HEADING_CONFLICT`, `TRIP_OFF_MAP`, `TRIP_UNKNOWN_PLACE`, `TRIP_NO_ROUTE` (`detail.segment`, `detail.unblock_would_help`), `TRIP_ARRIVE_YAW_UNREACHABLE`, `TRIP_NO_ACTIVE_MAP`, `TRIP_POSE_UNTRUSTED` (also a pose without yaw); 404 `UNKNOWN_ROBOT`; an unexpected planner failure is 500 `TRIP_PLAN_FAILED` in the same body. Every plan and refusal is recorded (last 1000 within 30 days). Costs come from site config `fleet.routing`. |
+| POST | `/api/fleet/trips/{plan_id}/start` | named `operator` | D-490 (v1.111): reserved for trip execution (D-488 M2). Answers 501 `TRIP_EXECUTION_NOT_AVAILABLE`, as does `/trip` with `execute: true`. |
 | POST | `/api/fleet/do` (when `do` is `navigate`) | `operator` bearer + `Idempotency-Key` | Uses the same task service; each navigation step gets a deterministic child key from the request key and step position. |
 | GET | `/api/fleet/tasks/{task_id}` | any configured user bearer | Returns the durable task projection and append-only status history. |
 | POST | `/api/fleet/tasks/{task_id}/cancel` | `operator` bearer | Cancels a task only while it is still queued; it does not cancel a goal already dispatched to CORE. |
@@ -2295,10 +2300,11 @@ Prefix: `/api/v1/auth/peer-pairing`.
 |---|---|---|
 | GET `/identity` | 검증할 HTTPS origin | receiver_id, receiver_public_key(SPKI DER base64), receiver_key_sha256, optional tls_hostname/tls_ca_pem/tls_ca_sha256 |
 | POST `/requests` | LAN, fields+P256 signature | request_id, request_secret, display_code, revision=0, state=pending, paired=false, expires_at |
-| GET `/pending` | 현재 named administrator | 최대 16개의 대기 요청; 비밀값 없음 |
+| GET `/pending` | 현재 named administrator | 대기 요청(D-483부터 최대 3개); 비밀값 없음 |
 | GET `/requests/{id}` | `X-Request-Secret` | state/revision, 승인됐다면 relationship_id/generation/persistent/authorization_expires_at/authorization_available |
 | DELETE `/requests/{id}` | 같은 요청 비밀 | pending만 cancelled로 전환 |
 | POST `/requests/{id}/decision` | 현재 named administrator; action=approve/reject, revision, persist_requested | 승인 거래 결과; **paired=false**, credential 발급과 구분 |
+| POST `/requests/{id}/confirm` | 인증 없음, `X-Request-Secret`; 본문 `{approval_code}`(6자, `23456789ABCDEFGHJKMNPQRSTUVWXYZ`) | D-483 (v1.110): 수신 LCD 승인 코드로 같은 요청을 승인. 200 StateSnapshot(approved, persistent=false, 168 h); 틀림 400 `detail.remaining_attempts`(5회째 rejected); 요청 역할 > operator 403; 출처별 30회/분 공유 또는 전체 틀린 코드 20회/10분 초과 429; 변경·만료·비밀 불일치 409 |
 | POST `/relationships/{id}/challenge` | 이미 승인된 관계 ID | fields와 receiver_signature; 최대 60초, 한 번만 사용 |
 | POST `/relationships/{id}/session` | 해당 client key의 fields+signature | 기존 digest token의 id/token/role/expires_at; 최대 1시간 |
 | DELETE `/relationships/{id}` | 현재 named administrator | revoked와 증가한 generation; 자식 세션 거부 |
@@ -2308,6 +2314,23 @@ client_public_key(SPKI DER base64), role(viewer/operator), nonce(64자 hex).
 관계 ID는 request ID와 같은 32자 base64url이다. 비밀 request_secret은 43자
 base64url이며 서버는 hash만 보관한다. 4자리 영숫자는 양쪽 화면의 요청 비교용이고,
 승인·로그인 자격이 아니다. 상태 polling 간격은 최소 2초다.
+
+D-483 화면 승인 코드(v1.110): CORE는 요청마다 6자 승인 코드를 만들고 상수 시간
+hash 비교만 한다. 원문은 응답·상태·`pending`·로그에 없고, 살아 있는 대기 요청을
+가장 최근 것부터 최대 3개 `/run/rosy-peer-display/approval.json`(`rosy-core:rosy-display`
+2750, 파일 0640, `{"requests": [{display_code, approval_code, expires_at}]}`)으로
+rosy-face에 넘긴다. LCD는 요청마다 "표시 번호  승인 코드" 한 줄을 보인다. 대기 요청이
+없으면(승인·거절·취소·만료·정리) 파일을 지우고, CORE 시작 때 남은 파일도 지운다.
+살아 있는 대기 요청은 LCD 목록과 같은 3개까지(끝난 요청은 세지 않음), 출처별 동시 대기는
+2개다. 요청 취소도 출처별 30회/분 한도에 센다. 모든 출처를 합친 틀린 승인 코드가 10분에
+20회에 이르면 그 창이 지날 때까지 `confirm`은 맞는 코드에도 429(콘솔 승인 안내)를 돌려준다.
+콘솔 `decision`은 영향이 없다. 상태 보관 행은 600초 전에는 승인되지 않은
+끝난 요청만 먼저 비운다. 화면 코드 행의 `approved_at`이 60초 넘게 미래이면 사용 시점에 거부한다. `confirm`으로
+생긴 관계는 `approved_by`·`issuer_id`·`issuer_source`가 `screen-code`, `issuer_digest`가
+수신 키 지문, `persistent=false`, `approved_at`부터 최대 168시간이며 발급자 token 없이
+관계 자체의 만료·폐기·수신 키만 확인한다. 토큰 id `screen-code`는 예약어다. 콘솔
+`decision`과 경합하면 하나만 승인한다. 관계 128개 상한에 닿으면 만료·폐기되었고 살아
+있는 세션이 없는 관계를 지우고 `relationship_pruned` 감사 행을 남긴다.
 
 Challenge fields: relationship_id, challenge_id, nonce, receiver_id,
 receiver_key_sha256, client_id, client_key_sha256, role, generation, expires_at.
@@ -2333,7 +2356,7 @@ administrator일 때만 허용한다. issuer ID/digest/source/named principal/sc
 동일 요청 승인 결과가 저장된 뒤 응답을 잃어도 같은 관계를 읽어 복구한다. 재시도는
 권한 기간을 늘리거나 관계를 중복 생성하지 않는다. nonce 소비·token digest·관계·
 감사는 CORE의 기존 config overlay 한 번의 atomic commit에 포함한다. 최대 관계
-128개, pending 16개/300초(상태 보관 600초), source 128개·신청 30회/분(잘못된
+128개, pending 3개/300초(D-483, 상태 보관 600초), source 128개·신청 30회/분(잘못된
 증명도 crypto 실행 전에 포함), challenge 64개/60초, 관계당 활성 세션 8개, audit
 256개를 넘기지 않는다. 용량이 가득 차면 기존 관계를 암묵적으로 삭제하지 않는다.
 
@@ -2386,6 +2409,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.111 | 2026-10-07 | Additive (D-488/D-490 M1): Fleet site map `GET /api/fleet/site-map/active`, `GET/PUT /api/fleet/site-map/draft`, `POST /api/fleet/site-map/activate`; `POST /api/fleet/robots/{robot_id}/trip` returns a lane-state A* plan only; `POST /api/fleet/trips/{plan_id}/start` is 501 until M2. `/route` reads the active site map instead of a repo lane graph. v1.109 (D-484) and v1.110 (D-483) landed first on main. Robot API and envelope 1.0 unchanged |
+| v1.110 | 2026-10-06 | Additive (D-483): D-456 요청의 수신 LCD 승인 코드 경로 POST `/api/v1/auth/peer-pairing/requests/{id}/confirm`(`X-Request-Secret`, `{approval_code}`). 화면 코드 관계는 168 h·persistent=false·발급자 token 없음(`screen-code`). 콘솔 `decision` 유지, envelope 1.0 유지 |
 | v1.109 | 2026-10-06 | Additive (D-484): 천장 카메라 측정 캘리브레이션에 필드 경계 자동 캘리브레이션 추가. `SiteSightingPayload.corner_marker_ids` 선택화·`calibration_source` 추가, 미리보기 리스 `rectification.mode: "auto"`와 `X-Frame-Rectified: auto`·`X-Field-Calib`·`X-Frame-State: field-unavailable`, site-map source에 `calibration_source`. 로봇 마커·전선·정책 증거 의미 불변 |
 | v1.108 | 2026-10-06 | Additive (D-473): Fleet `GET /api/fleet/auth/connection` and `POST /api/fleet/auth/development-session`. Development connection mode (both `ROSY_DEPLOYMENT=development` and `--connection-mode development`) gives same-LAN (or tailnet) console browsers a 1 h in-memory named operator session; paired mode unchanged. Robot API and envelope 1.0 unchanged |
 | v1.107 | 2026-10-06 | Fix (버전 번호 변경 없음) (fix/sensors-nonfinite-json): `GET /api/v1/sensors`·`/sensors/{type}` 가 LiDAR `ranges` 의 inf/NaN 때문에 500 이던 것을 비유한 값 `null` 로 직렬화. 필드 추가·이름 변경 없음 |

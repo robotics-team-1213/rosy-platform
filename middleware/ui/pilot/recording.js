@@ -76,6 +76,12 @@ export function recordingView(active) {
   return {...off, detail: active.state === "error" ? "녹화기 오류" : stopped ? `지난 녹화: ${stopped}` : ""};
 }
 
+// 한 파일은 로봇의 10분 상한(D-411 §3)을 지키고, 사용자가 끄지 않은 녹화는 다음 구간으로 잇는다.
+// wanted: 이 기기가 켜고 아직 끄지 않았다. 남이 멈췄거나(requested) 공간 한도면 잇지 않는다.
+export function continueRecording(wanted, active) {
+  return Boolean(wanted) && active?.state === "idle" && active.last_stop_reason === "max_duration";
+}
+
 function formatStarted(iso) {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return String(iso ?? "");

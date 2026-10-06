@@ -27,6 +27,7 @@ def core(**fields) -> dict:
 
 
 READY = {"stage": "CORE_READY", "state": rs.READY}
+PEER = {"requests": [{"display_code": "K7QM", "approval_code": "ABC234"}]}
 DRIVE = {"mode": "NAVIGATION", "speed": 0.12}
 
 
@@ -44,6 +45,7 @@ ROW_CASES = [
     ("booting", fs.STATUS, {"stage": "SETUP", "state": rs.CAUTION}),
     ("core_missing", fs.STATUS, {**READY, "core": None}),
     ("login", fs.STATUS, {**READY, "core": core(), "login": "code"}),
+    ("peer_request", fs.STATUS, {**READY, "core": core(), "peer": PEER}),
     ("face", fs.FACE, {**READY, "core": core()}),
     ("wake", fs.FACE, {**READY, "core": core(wake={"reason": "PROXIMITY", "hold_s": 4.0})}),
     ("drive", fs.FACE, {**READY, "core": core(robot_mode="NAVIGATION", face="happy", drive=DRIVE),
@@ -76,6 +78,7 @@ LAYERS = [
     ("update", {"update": {"release": "r"}}),
     ("stopped", {"core": core(robot_mode="EMERGENCY", estop=True)}),
     ("ap", {"ap_mode": True}),
+    ("peer_request", {"peer": PEER}),
     ("login", {"login": "code"}),
 ]
 
@@ -113,6 +116,39 @@ def test_failed_beats_a_booting_stage_and_update():
 
 def test_core_missing_names_core():
     assert fs.screen_for(**READY, core=None)["line"] == fs.CORE_MISSING_LINE
+
+
+def test_peer_request_card_needs_a_live_core_and_carries_the_codes():
+    assert fs.screen_for(**READY, core=None, peer=PEER)["row"] == "core_missing"
+    assert fs.screen_for(**READY, core=core(), peer=PEER)["peer"] == PEER
+
+
+def _row(**fields):
+    return {"display_code": "K7QM", "approval_code": "ABC234",
+            "expires_at": (NOW + timedelta(seconds=300)).isoformat(), **fields}
+
+
+def _approval(tmp_path, *rows, **fields):
+    path = tmp_path / "approval.json"
+    path.write_text(json.dumps({"requests": list(rows) or [_row(**fields)]}), encoding="utf-8")
+    return str(path)
+
+
+def test_peer_approval_reader_is_strict(tmp_path):
+    assert fs.read_peer_approval(_approval(tmp_path), NOW) == PEER
+    assert fs.read_peer_approval(str(tmp_path / "missing.json"), NOW) is None
+    for change in ({"expires_at": NOW.isoformat()}, {"expires_at": "2026-10-03T12:05:00"},
+                   {"approval_code": "ABC2O4"}, {"display_code": "K7QMX"}, {"padding": "x" * 2100}):
+        assert fs.read_peer_approval(_approval(tmp_path, **change), NOW) is None, change
+    # Several live requests keep CORE's order; a bad or expired entry drops alone; four is malformed.
+    second = _row(display_code="M2NP", approval_code="XYZ789")
+    assert fs.read_peer_approval(_approval(tmp_path, second, _row(approval_code="bad"), _row()), NOW) == {
+        "requests": [{"display_code": "M2NP", "approval_code": "XYZ789"}, PEER["requests"][0]]}
+    assert fs.read_peer_approval(_approval(tmp_path, *[_row()] * 4), NOW) is None
+    (tmp_path / "approval.json").write_text('{"display_code": "K7QM"}', encoding="utf-8")
+    assert fs.read_peer_approval(str(tmp_path / "approval.json"), NOW) is None
+    if hasattr(os, "getuid"):
+        assert fs.read_peer_approval(_approval(tmp_path), NOW, owner_uid=os.getuid() + 1) is None
 
 
 def test_burned_login_goes_to_the_face():
@@ -203,6 +239,52 @@ def test_charging_at_rest_is_a_strip():
     answer = fs.screen_for(**READY, core=core(battery_charging=True, battery_percent=63.4))
 
     assert answer["strip"] == "Charging 63%" and answer["strip_tone"] == "info"
+
+
+@pytest.mark.parametrize("mode,nav,line", [
+    ("IDLE", "IDLE", "Waiting"),
+    ("MANUAL", "IDLE", "Manual"),
+    ("NAVIGATION", "NAVIGATING", "Going"),
+    ("NAVIGATION", "BLOCKED", "Blocked"),
+    ("NAVIGATION", "FAILED", "Blocked"),
+    ("DOCKING", "IDLE", "Docking"),
+])
+def test_the_situation_line_names_the_mode_under_the_face(mode, nav, line):
+    answer = fs.screen_for(**READY, core=core(robot_mode=mode, nav_state=nav, face="happy"))
+
+    assert answer["kind"] == fs.FACE
+    assert answer["strip"] == line and answer["strip_tone"] == "info"
+    assert answer["face"] == "happy"
+
+
+def test_a_fleet_call_names_the_robot_and_wakes_a_sleeping_panel():
+    answer = fs.screen_for(**READY, core=core(power_mode="standby", robot_id="rosy_26"),
+                           test="identify_blue")
+
+    assert answer["kind"] == fs.FACE and answer["awake"] and answer["backlight"] == 100
+    assert answer["strip"] == "CALL rosy_26" and answer["face"] == "basic"
+
+
+def test_a_fleet_call_without_a_readable_id_still_says_call():
+    answer = fs.screen_for(**READY, core=core(robot_id="Rosy 26"), test="identify_amber")
+
+    assert answer["strip"] == "CALL" and answer["face"] == "basic"
+
+
+def test_caution_and_calibration_keep_their_strip_during_a_call():
+    caution = fs.screen_for(**READY, core=core(caution=["dock_failed"], robot_id="rosy_26"),
+                            test="identify_blue")
+    calibrating = fs.screen_for(**READY, core=core(activity_kind="CALIBRATING", robot_id="rosy_26"),
+                                test="identify_blue")
+
+    assert caution["strip"] == fs.CAUTION_TEXT["dock_failed"]
+    assert calibrating["strip"] == fs.CALIBRATING_STRIP
+
+
+def test_the_lcd_robot_id_pattern_matches_identity():
+    from core_common.identity import ROBOT_ID_PATTERN
+
+    assert fs._ROBOT_ID.pattern == ROBOT_ID_PATTERN.pattern
 
 
 def test_idle_power_dims_the_face():
@@ -351,4 +433,4 @@ def test_module_is_standard_library_only():
     imported |= {node.module.split(".")[0] for node in ast.walk(tree)
                  if isinstance(node, ast.ImportFrom) and node.module}
 
-    assert imported <= {"__future__", "datetime", "json", "math", "os", "stat", "typing", "core_common"}
+    assert imported <= {"__future__", "datetime", "json", "math", "os", "re", "stat", "typing", "core_common"}

@@ -2103,3 +2103,33 @@
 - 변경: 배치가 계산되기 전 또는 미리보기 결과가 무효가 된 동안 팔레트 선택과 빈 20rem 평면도를 함께 숨긴다. 배치가 있는 성공 결과에서만 다시 보인다.
 - 증거: 320px 초기·503/복구와 390px 초기·1440px 503/복구 Chromium **4 passed**, 공용 UI·토큰 계약 **62 passed**, 각 `known_failures.py` 0 NEW, JS 구문 검사 통과. UI/UX 회차 X: `captures/fleet-cell-empty-layout-fix/`와 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`.
 - gate 변화: LOCAL 화면 근거 추가. 현장 배치·운영자 G3는 HOLD.
+
+## 2026-10-07 · 93c606cbb · D-487 관제 화면 Rosy Fleet·버드아이 우선
+
+- 변경: 관제·설치·Cell 문서의 표시 이름 `Rosy Console` → `Rosy Fleet`. 지도 아래 천장 카메라 사본(`#map-camera`) 제거 — 원본은 카메라 칸에 한 번, 보정 맞춤은 캔버스가 그린다. 지도가 없고 카메라가 살아 있으면 지도 칸이 한 줄로 줄고 카메라가 주 화면(110rem 이상 전체 폭). 접속 전 발행 띠를 접고 연결 표시는 `접속 전`(중립). `[data-role-lock]` 묶음 안 버튼은 사유를 되풀이하지 않고 묶음 안내 한 줄을 쓴다. id `console`·경로 `/console`·저장소 키는 그대로.
+- 증거: 아래 브랜치 시험 기록(`X:/DevTemp/fleet-name/`). DEVICE/FIELD 확인 없음.
+- gate 변화: LOCAL 화면 정리. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-07 · uncommitted · D-487 이후 Fleet 데스크톱 높이 보정
+
+- 변경: 1920×1080에서 관제 문서의 43px 세로 넘침을 확인하고 데스크톱 관제 칸 간격·안쪽 여백과 대형 readout의 기본 margin을 줄였다. D-415의 8줄 로그는 유지했다.
+- 증거: `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-d487\`의 `browser-fixed2.txt` **8 passed**, `connection.txt` **1 passed**, `contracts.txt` **60 passed**, `node-files.txt` **137 passed**, 각 Python 실행의 `known_failures.py` 0 NEW, `fleet_console_fit.png`에서 하단까지 표시.
+- gate 변화: LOCAL G2 부분 근거. 사이트 PC·카메라·로봇과 운영자 G3는 HOLD.
+## 2026-10-07 · 463ae393a · D-488 M1 현장 지도·주소·경로 계획 (D-489/D-490)
+
+- 변경: `fleet/site_map.py`(`rosy.site_map/1` 장소·방향 있는 차로·선택 `turn_bans`, `lane_graph.yaml` 가져오기), `server/site_map_store.py`(초안 하나·불변 활성 버전·계획 기록, `--tasks-db` 또는 메모리), `site_map_routes.py`(`/api/fleet/site-map/{active,draft,activate}`, 활성화는 이름 있는 운영자·감사·`/route` 30 s 안 진행 시 409), `fleet/routing/`(차로 단위 상태 A*, 시간 비용·회전 분류·`fleet.routing` 설정, 표준 라이브러리만), `trip_routes.py`(`POST /trip` 계획만, `execute`·`/trips/{id}/start` 501). `meet/place.py` `default_graph()` 하드코딩을 없애고 `/route`와 만남 기하가 활성 지도를 읽는다. CLI `--site-map-import`·`--site-config`, 사이트 compose가 이미지의 `lane_graph.yaml`을 첫 지도로 가져온다. 콘솔 `/console/site-map`(지도 보기·초안 편집·활성화·주소/좌표 경로 미리보기). API Ref v1.109.
+- 증거: `python -m pytest operations/fleet/test -q -rfE -p no:cacheprovider` 2258 passed/55 skipped, `known_failures.py` 0 NEW(X:/DevTemp/fleet-map-route/run.txt). 계획기 시험: 시드 고정 무작위 그래프 200개 A* = Dijkstra, 규칙별 단위·골든 경로 5쌍·500차로 p95 ≤ 20 ms. 공유 UI 계약 42 passed, 사이트 배포 시험 569 passed, Chromium 지도 화면 1 passed(ROSY_BROWSER_TESTS=1), node 140 passed.
+- gate 변화: SOURCE/LOCAL 코드 근거만 추가. 로봇 능력 필드(종류·주행 방식·최대 속도)는 로봇 계약에 없어 기본값으로 계획한다. trip 실행·위치 중재·가르치기(M2), Gazebo(M3), 실차(M4)는 HOLD.
+
+## 2026-10-07 · uncommitted · D-488 M1 검토 반영과 ADR 번호 이동 (D-484/485/486 → D-488/489/490)
+
+- 변경: 독립 검토 REQUEST CHANGES 반영. 길이 0 간선·겹친 장소를 스키마가 거절하고 `point_at` 재귀를 없앴다(모든 `/trip` 500의 원인). 경유지는 `(경유지 번호, 차로)` 층 A* 한 번으로 푼다. 좌표 목표가 닫힌 상태 검사에 가려 길을 놓치던 결함도 고쳤다. 출발은 차로 폭 절반 안, 접선은 max(0.15 m, 폭), 좌표 yaw는 방향 먼저, 목표 장소 위 로봇은 빈 계획이다. 초안 저장은 이름 있는 운영자·2 MiB 상한·지도 사건 기록, 활성화는 계획 불가 지도를 거절한다. 오류 본문을 `{"detail": {"code", "detail"}}`로 맞추고 예상하지 못한 계획기 실패는 422 `TRIP_PLAN_FAILED`다. 거절도 계획 기록에 남기고 1000건·30일만 보존한다. 막힘 판단기는 활성 지도를 명시적으로 받는다. 개발·Gazebo 실행기에 `--site-map-import`를 넣었다. 콘솔은 동작에 주소 이름을 보이고 옛 지도 버전의 계획을 버린다. main의 D-484(경기장 경계 자동 보정)와 번호가 겹쳐 ADR을 D-488·D-489·D-490으로 옮기고 각 ADR에 구현 부록을 더했다. API Ref는 v1.111이다.
+- 증거: 아래 전체 Fleet 시험과 `known_failures.py`(X:/DevTemp/fleet-map-route/run.txt), 계획기 29 passed(교과서 Dijkstra 대조 2×200 그래프), 지도·trip API 28 passed, Chromium 지도 화면과 공유 UI 계약 43 passed, 계약 문서 시험 94 passed.
+- gate 변화: 없음. SOURCE/LOCAL 근거만 보강했다. D-487·main D-483/D-484와의 병합은 아직이다.
+
+## 2026-10-07 · uncommitted · D-488 M1 재검토 반영 (N1·L1–L3)
+
+- 변경: 차로 접선을 장소에 맞추기 전 그려진 폴리라인의 0.05 m로 읽는다(N1). max(0.15 m, 폭) 창은 map_v2_fleet 회전 교차로 이어짐을 모두 +42° 좌회전으로 읽었다. 지금은 이어짐 직진, 진입·진출 우회전이며 골든 시험이 이를 고정한다. 지도 저장소가 사이트 `fleet.routing` 설정으로 후속 표를 미리 만든다(L1). 계획기의 예상하지 못한 실패는 같은 본문의 500 `TRIP_PLAN_FAILED`다(L2). 스키마에 맞지 않는 초안은 422 `SITE_MAP_INVALID`와 필드 오류이고 콘솔이 보인다(L3). D-489·D-490 부록과 API Ref 행을 맞췄다. main 병합(D-483·D-484·D-487, API Ref v1.110) 뒤 이 가지의 행은 v1.111이고, D-485·D-486은 `adr_gaps`에 번호 이동으로 적었다.
+- 증거: 전체 Fleet 시험·계약 문서 시험과 `known_failures.py`(X:/DevTemp/fleet-map-route/run.txt, run_docs.txt), 하네스 lint 0 errors.
+- gate 변화: 없음. SOURCE/LOCAL 근거만 보강했다.
+

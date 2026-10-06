@@ -7,7 +7,8 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-483: "ADR written on branch feat/pilot-lcd-approval-code, not yet on main; remove when it lands"
+  D-486: "renumbered to D-489/D-490 on feat/fleet-map-address-route before landing"
+  D-485: "renumbered to D-489/D-490 on feat/fleet-map-address-route before landing; feat/review-class-sets also holds an ADR with this number, not yet on main; resolve when it lands"
   D-448: "Unused: model-PC code update ADR was renumbered to D-446 during concurrent work"
   D-440: "ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body"
   D-428: "ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on main; remove when it lands"
