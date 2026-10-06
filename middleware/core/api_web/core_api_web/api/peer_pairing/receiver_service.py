@@ -24,6 +24,8 @@ DISPLAY_REQUESTS = 3
 PENDING_LIMIT, SOURCE_PENDING_LIMIT = DISPLAY_REQUESTS, 2
 #: Rows kept for status reads (pending + terminal); only unapproved terminal rows are evicted early.
 ROW_LIMIT = 256
+#: D-483 N1: wrong approval codes allowed across all sources per window; then console approval only.
+CODE_FAILURE_BUDGET, CODE_FAILURE_WINDOW = 20, timedelta(minutes=10)
 _UNSYNCED = object()
 
 
@@ -32,6 +34,10 @@ class Refused(ValueError):
 
 
 class RateLimited(Refused):
+    pass
+
+
+class CodeBudgetSpent(RateLimited):
     pass
 
 
@@ -64,6 +70,7 @@ class PeerReceiver:
         self._pending = {}
         self._rates = {}
         self._challenges = {}
+        self._code_failures = []  # D-483 N1: when each wrong code arrived, across all sources
         self._sync_display()  # A file a previous CORE left behind names no live request.
 
     def identity(self):
@@ -276,7 +283,12 @@ class PeerReceiver:
             fields = row["fields"]
             if fields["role"] not in {"viewer", "operator"}:
                 raise RoleRefused("screen code approves operator at most")
+            now = self.clock()
+            self._code_failures = [t for t in self._code_failures if now - t < CODE_FAILURE_WINDOW]
+            if len(self._code_failures) >= CODE_FAILURE_BUDGET:
+                raise CodeBudgetSpent("approval code attempts exhausted")  # even a correct code waits
             if not hmac.compare_digest(row["code_hash"], _code_hash(code)):
+                self._code_failures.append(now)
                 row["code_failures"] += 1
                 remaining = APPROVAL_CODE_ATTEMPTS - row["code_failures"]
                 if remaining <= 0:

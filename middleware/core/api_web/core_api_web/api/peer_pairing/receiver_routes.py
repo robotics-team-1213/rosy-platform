@@ -89,7 +89,7 @@ async def decision(request: Request, request_id: str = Path(pattern=r'^[A-Za-z0-
 @router.post("/requests/{request_id}/confirm")
 async def confirm(request: Request, request_id: str = Path(pattern=r'^[A-Za-z0-9_-]{32}$'), x_request_secret: str = Header(max_length=128)):
     """D-483 4: the requester enters the robot-screen approval code; no session, the request secret binds it."""
-    from .receiver_service import RateLimited, RoleRefused, WrongCode
+    from .receiver_service import CodeBudgetSpent, RateLimited, RoleRefused, WrongCode
     candidate = service(request)
     parsed = await body(request, ApprovalCodeConfirm)
     source = request.client.host if request.client else "unknown"
@@ -99,6 +99,8 @@ async def confirm(request: Request, request_id: str = Path(pattern=r'^[A-Za-z0-9
         raise HTTPException(400, {"message": "wrong approval code", "remaining_attempts": exc.remaining}) from None
     except RoleRefused:
         raise HTTPException(403, "screen-code approval is limited to operator") from None
+    except CodeBudgetSpent:
+        raise HTTPException(429, "approval code attempts exhausted; approve from the console") from None
     except RateLimited:
         raise HTTPException(429, "source rate limit reached") from None
     except ValueError:

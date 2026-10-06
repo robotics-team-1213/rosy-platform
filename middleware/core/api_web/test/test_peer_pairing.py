@@ -713,6 +713,30 @@ class ScreenCodeApproval(unittest.TestCase):
         with self.assertRaises(RepositoryDenied):
             self.repo.issue(grant, "C" * 32, self.receiver.identity()["receiver_key_sha256"], self.repo.grants()[grant])
 
+    def test_global_wrong_code_budget_stops_guessing_across_sources(self):
+        from core_api_web.api.peer_pairing.receiver_service import CODE_FAILURE_BUDGET, CodeBudgetSpent
+        for n in range(CODE_FAILURE_BUDGET // 5):  # each source: one request, five wrong codes
+            source = f"guess-{n}"
+            request = self.request(f"{n+1:064x}", source)
+            code = self.code(request["display_code"])
+            for _ in range(5):
+                with self.assertRaises(WrongCode):
+                    self.receiver.confirm(request["request_id"], request["request_secret"], self.wrong(code), source)
+        honest = self.request("e" * 64, "honest")
+        code = self.code(honest["display_code"])
+        with self.assertRaises(CodeBudgetSpent):  # even the correct code waits
+            self.receiver.confirm(honest["request_id"], honest["request_secret"], code, "honest")
+        response = self.client().post(f"/api/v1/auth/peer-pairing/requests/{honest['request_id']}/confirm",
+                                      json={"approval_code": code}, headers={"X-Request-Secret": honest["request_secret"]})
+        self.assertEqual(429, response.status_code)
+        self.assertIn("console", response.json()["detail"])
+        self.assertEqual({}, self.repo.grants())
+        # Console approval is unaffected.
+        self.assertEqual("approved", self.receiver.decide(self.owner_id, honest["request_id"], "approve", 0)["state"])
+        # After the window the screen path opens again.
+        self.now += timedelta(minutes=10, seconds=1)
+        self.screen_grant_from("d" * 64)
+
     def screen_grant_from(self, nonce):
         request = self.request(nonce)
         return self.receiver.confirm(request["request_id"], request["request_secret"],
