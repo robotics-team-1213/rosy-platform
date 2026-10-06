@@ -27,6 +27,7 @@ def core(**fields) -> dict:
 
 
 READY = {"stage": "CORE_READY", "state": rs.READY}
+PEER = {"display_code": "K7QM", "approval_code": "ABC234"}
 DRIVE = {"mode": "NAVIGATION", "speed": 0.12}
 
 
@@ -44,6 +45,7 @@ ROW_CASES = [
     ("booting", fs.STATUS, {"stage": "SETUP", "state": rs.CAUTION}),
     ("core_missing", fs.STATUS, {**READY, "core": None}),
     ("login", fs.STATUS, {**READY, "core": core(), "login": "code"}),
+    ("peer_request", fs.STATUS, {**READY, "core": core(), "peer": PEER}),
     ("face", fs.FACE, {**READY, "core": core()}),
     ("wake", fs.FACE, {**READY, "core": core(wake={"reason": "PROXIMITY", "hold_s": 4.0})}),
     ("drive", fs.FACE, {**READY, "core": core(robot_mode="NAVIGATION", face="happy", drive=DRIVE),
@@ -76,6 +78,7 @@ LAYERS = [
     ("update", {"update": {"release": "r"}}),
     ("stopped", {"core": core(robot_mode="EMERGENCY", estop=True)}),
     ("ap", {"ap_mode": True}),
+    ("peer_request", {"peer": PEER}),
     ("login", {"login": "code"}),
 ]
 
@@ -113,6 +116,29 @@ def test_failed_beats_a_booting_stage_and_update():
 
 def test_core_missing_names_core():
     assert fs.screen_for(**READY, core=None)["line"] == fs.CORE_MISSING_LINE
+
+
+def test_peer_request_card_needs_a_live_core_and_carries_the_codes():
+    assert fs.screen_for(**READY, core=None, peer=PEER)["row"] == "core_missing"
+    assert fs.screen_for(**READY, core=core(), peer=PEER)["peer"] == PEER
+
+
+def _approval(tmp_path, **fields):
+    data = {"display_code": "K7QM", "approval_code": "ABC234", "label": "Tablet",
+            "expires_at": (NOW + timedelta(seconds=300)).isoformat(), **fields}
+    path = tmp_path / "approval.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return str(path)
+
+
+def test_peer_approval_reader_is_strict(tmp_path):
+    assert fs.read_peer_approval(_approval(tmp_path), NOW) == PEER
+    assert fs.read_peer_approval(str(tmp_path / "missing.json"), NOW) is None
+    for change in ({"expires_at": NOW.isoformat()}, {"expires_at": "2026-10-03T12:05:00"},
+                   {"approval_code": "ABC2O4"}, {"display_code": "K7QMX"}, {"label": "x" * 2000}):
+        assert fs.read_peer_approval(_approval(tmp_path, **change), NOW) is None, change
+    if hasattr(os, "getuid"):
+        assert fs.read_peer_approval(_approval(tmp_path), NOW, owner_uid=os.getuid() + 1) is None
 
 
 def test_burned_login_goes_to_the_face():
