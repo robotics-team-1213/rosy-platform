@@ -11,7 +11,7 @@
 ## 한눈에 보기
 
 ```mermaid
-flowchart LR
+flowchart TB
     op["관제 브라우저<br/>Fleet 콘솔"] -->|HTTPS| fleet
     cam["Rosy Cam<br/>천장 카메라 폰"] -->|영상| vision
     subgraph site["현장 PC"]
