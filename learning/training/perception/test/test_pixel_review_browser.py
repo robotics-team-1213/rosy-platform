@@ -40,7 +40,7 @@ def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
 
 
 @pytest.mark.parametrize('mode', ['manual', 'auto'])
-def test_touch_flood_respects_explicit_tolerance_mode(browser_workspace, mode):
+def test_touch_samples_preview_then_apply_with_explicit_tolerance(browser_workspace, mode):
     original_page, store, expect = browser_workspace
     context = original_page.context.browser.new_context(
         has_touch=True, viewport={'width': 800, 'height': 1000})
@@ -53,17 +53,22 @@ def test_touch_flood_respects_explicit_tolerance_mode(browser_workspace, mode):
         selector.select_option(mode)
         page.locator('#pixel-class').select_option('4')
         page.locator('#pixel-tolerance').fill('37')
-        page.locator('#pixel-flood').click()
+        with page.expect_request(lambda request: request.method == 'POST'
+                                 and request.url.endswith('/api/mask-preview/0')) as preview:
+            page.locator('#pixel-canvas').tap(position={'x': 10, 'y': 10})
+        assert preview.value.post_data_json['tolerance'] == (37 if mode == 'manual' else 'auto')
+        expect(page.locator('#pixel-draft')).to_contain_text('픽셀 미리보기')
+        assert review_masks.get(store, 0)['version'] == 0
         with page.expect_request(lambda request: request.method == 'POST'
                                  and request.url.endswith('/api/masks/0')) as sent:
-            page.locator('#pixel-canvas').tap(position={'x': 10, 'y': 10})
+            page.locator('#pixel-sample-apply').click()
         payload = sent.value.post_data_json
-        assert payload['action'] == 'flood'
+        assert payload['action'] == 'sample'
         assert payload['label'] == 4 and payload['version'] == 0
         if mode == 'manual':
             assert payload['tolerance'] == 37
         else:
-            assert 4 <= payload['tolerance'] <= 48
+            assert 8 <= payload['tolerance'] <= 40
         expect(page.locator('#pixel-status')).to_contain_text('v1')
         review = review_masks.get(store, 0)
         assert review['version'] == 1 and review['status'] == 'pending'
@@ -126,6 +131,7 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
     page.locator('#pixel-class').select_option('4')
+    page.locator('#pixel-flood').click()
     page.locator('#pixel-radius').fill('2')
     canvas = page.locator('#pixel-canvas')
     canvas.scroll_into_view_if_needed()
