@@ -1,0 +1,82 @@
+{
+ "rows": 319,
+ "loss": {
+  "t": 0.719,
+  "sim_t": 159.058,
+  "state": "HOLD",
+  "reason": "obstacle_ahead",
+  "gt": [
+   -1.2696498784467776,
+   0.20909146645016438,
+   -1.5758955990819332
+  ],
+  "odom": [
+   -1.2696498784467776,
+   0.20909146645016438,
+   -1.5758955990819332
+  ]
+ },
+ "sequence": [
+  {
+   "t": 0.719,
+   "sim_t": 159.058,
+   "state": "HOLD",
+   "reason": "obstacle_ahead"
+  },
+  {
+   "t": 1.059,
+   "sim_t": 159.387,
+   "state": "TRACKING",
+   "reason": "tracking"
+  },
+  {
+   "t": 6.971,
+   "sim_t": 165.074,
+   "state": "HOLD",
+   "reason": "obstacle_ahead"
+  },
+  {
+   "t": 7.418,
+   "sim_t": 165.507,
+   "state": "TRACKING",
+   "reason": "tracking"
+  },
+  {
+   "t": 16.527,
+   "sim_t": 174.279,
+   "state": "HOLD",
+   "reason": "obstacle_ahead"
+  },
+  {
+   "t": 16.863,
+   "sim_t": 174.596,
+   "state": "TRACKING",
+   "reason": "tracking"
+  },
+  {
+   "t": 28.784,
+   "sim_t": 186.211,
+   "state": "HOLD",
+   "reason": "camera_line_not_visible"
+  },
+  {
+   "t": 31.913,
+   "sim_t": 189.223,
+   "state": "LOST",
+   "reason": "camera_reselection_required"
+  }
+ ],
+ "lost_after_loss_sim_s": 30.165,
+ "min_wall_gap_after_loss_m": 0.0486,
+ "min_scan_after_loss_m": 0.0576,
+ "gt_m_loss_to_end_of_run": 1.1459,
+ "final": {
+  "state": "LOST",
+  "reason": "camera_reselection_required",
+  "gt": [
+   -0.7732432610123926,
+   -0.4390944245846819,
+   0.5844257151869278
+  ]
+ }
+}

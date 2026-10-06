@@ -333,6 +333,7 @@ export function buildControls(profile) {
                                  "aria-label": "주행 스틱 — 위 전진, 아래 후진, 좌우 조향, 옆으로만 밀면 제자리 회전"});
   stick.append(el("div", null, {"data-drive-stick-knob": ""}));
   right.append(stick);
+  if (profile.pivot !== false) right.append(el("span", "↓ 회전 조작", {"data-drive-scroll-cue": ""}));
 
   controls.append(left, right);
   return controls;

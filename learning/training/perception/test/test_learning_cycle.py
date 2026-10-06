@@ -93,6 +93,32 @@ def test_any_fixed_eval_session_overlap_is_blocked(setup):
     assert "fixed eval" in state["requests"][str(requests / "first.json")]["error"]
 
 
+def test_reserved_eval_session_blocks_training_before_eval_version_exists(setup):
+    config, out, requests = setup
+    Store(config["trainer"]["store"]).reserve_eval_source("b", "group-b")
+    state = cycle.run_once(config, out, trainer_fn=lambda *args: pytest.fail("must not train"))
+    assert "reserved eval" in state["requests"][str(requests / "first.json")]["error"]
+
+
+def test_reserved_eval_group_blocks_other_training_session(setup):
+    config, out, requests = setup
+    st = Store(config["trainer"]["store"])
+    st.reserve_eval_source("heldout", "group-a")
+    request = json.loads((requests / "first.json").read_text())
+    source = st.dataset_path(*cycle.parse_dataset_ref(request["dataset"]))
+    doc = json.loads((source / "manifest.json").read_text())
+    doc["frames"][0]["capture_group"] = "group-a"
+    doc["frames"][1]["capture_group"] = "group-b"
+    candidate = out.parent / "group-source"
+    candidate.mkdir()
+    (candidate / "manifest.json").write_text(json.dumps(doc))
+    _, digest = st.put_dataset(candidate, "lanes")
+    request["dataset"] = "lanes@" + digest
+    (requests / "first.json").write_text(json.dumps(request))
+    state = cycle.run_once(config, out, trainer_fn=lambda *args: pytest.fail("must not train"))
+    assert "reserved eval capture group" in state["requests"][str(requests / "first.json")]["error"]
+
+
 def make_review(tmp_path, excluded=False):
     folder = tmp_path / "export"
     (folder / "inputs/images").mkdir(parents=True)

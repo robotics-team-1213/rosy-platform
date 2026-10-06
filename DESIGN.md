@@ -133,7 +133,7 @@ components:
 
 > 계약은 ADR과 계약 시험이 소유한다. 이 문서는 안내다. 이 문서와 ADR이 다르면 ADR이 이긴다.
 > 근거: [D-359](docs/adr/D-359-theme-ready-tokens-shared-controls-and-responsive-tiers.md) §8.
-> 값의 원본은 [`tokens.css`](shared/web/tokens.css), 부품은 [`components.css`](shared/web/components.css)·[`ui.js`](shared/web/ui.js), 표면 목록은 [`surfaces.yaml`](shared/web/surfaces.yaml), 살아 있는 견본은 [`styleguide.html`](src/hmi/dashboard/styleguide.html)이다.
+> 값의 원본은 [`tokens.css`](shared/web/tokens.css), 부품은 [`components.css`](shared/web/components.css)·[`ui.js`](shared/web/ui.js), 표면 목록은 [`surfaces.yaml`](shared/web/surfaces.yaml), 살아 있는 견본은 [`styleguide.html`](middleware/ui/robot/styleguide.html)이다.
 > 위 frontmatter의 색은 기본(어둡게) 테마 값이다. 밝게 값은 `tokens.css`의 `[data-theme="light"]` 블록에 있다.
 
 ## Overview
@@ -244,6 +244,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 - **허용 목록**: 세 단 밖의 값은 `surfaces.yaml`의 그 표면 `breakpoints`에 값과 이유를 적는다. 예: Fleet `90rem` — 머리의 토큰·역할·테마를 `설정` 뒤로 접는 폭. `test_responsive_tiers.py`가 대조한다.
 - **칸 질의**: 공용 부품(`ui-form`, `ui-readout`, `ui-actions`)은 뷰포트가 아니라 자기 칸에 반응한다 — `@container (width < 22rem)`에서 한 열로 접힌다. 칸(`container-type: inline-size`)은 표면이 정한다. 22rem은 `surfaces.yaml` `container_breakpoints`에 있다. 표면이 공용 부품을 뷰포트 질의로 재정의하지 않는다.
 - **표면이 배치를 소유한다.** 공용 부품은 얼굴만 준다. 어디 놓을지는 표면 시트가 정한다.
+- **동등한 창은 같은 폭**: 같은 행의 운용 영역과 나란한 지도·카메라 창은 같은 너비를 쓴다. 좁은 화면에서는 한 열로 쌓아 각 창이 가용 너비를 채운다. 탐색 사이드바처럼 역할이 다른 칸은 콘텐츠에 필요한 폭을 쓴다.
 
 **The Header Budget Rule.** 390×844와 320×568에서 붙박이 상단바는 창 높이의 20% 이하다. 좁은 창에서는 두 줄로 모으거나 부가 항목(토큰 입력·역할·테마)을 접는다.
 
@@ -293,7 +294,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ## Components
 
-모든 부품은 [`components.css`](shared/web/components.css)가 그리고 [`ui.js`](shared/web/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](src/hmi/dashboard/styleguide.html)이다.
+모든 부품은 [`components.css`](shared/web/components.css)가 그리고 [`ui.js`](shared/web/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](middleware/ui/robot/styleguide.html)이다.
 
 ### 독립 작업의 선택 — `createTaskChooser()`
 
@@ -427,7 +428,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ### 공용 동작과 native 색 출처 (D-432)
 
-동작 아이콘과 이름은 `web_common/ui.js`의 `actionIcon(button, name)`으로 함께 구성한다.
+동작 아이콘과 이름은 `shared/web/ui.js`의 `actionIcon(button, name)`으로 함께 구성한다.
 아이콘 크기는 `.ui-icon`/`--text-value`, 색은 currentColor, 버튼 종류·터치 크기·비활성 사유는
 기존 공용 컨트롤을 따른다. 화면은 배치와 동작을 소유하며 공용 컴포넌트는 장비 명령을 보내지 않는다.
 

@@ -1004,3 +1004,73 @@
 - 변경: 개발 연결 모드(D-432) 로봇을 열면 로그인 서랍에 코드 없이 1시간 운전자 세션을 받는 '개발 연결로 계속'을 보여준다(프로덕션 paired 모드로선 누르는 경로가 없다). 대시보드 보안 패널에 임시 SSH 비밀번호 구역을 추가해 administrator가 분(1~60)을 정해 발급·표시·회수한다(응답 No-Store, 모듈이 저장하지 않음). 엔트리 경로는 dashboard-entry.js, 호환 경로는 app.js가 같은 두 기능을 보여준다.
 - 증거: 브라우저 신규 시험 test_development_entry_logs_in_without_a_code — 코드 폼 병행 표시, 한 번의 POST로 세션, 목적지 영역 전환. test_dashboard_browser 전체 79 passed 1 known. react중 노 --check 3 파일 통과.
 - gate 변화: SOURCE/LOCAL. 실기(8kcn, 모드 학장 driver) 검증은 별도.
+
+## 2026-10-06 · uncommitted · uiux: 모바일 운용 조작을 관측보다 먼저 배치
+
+- 변경: `uiux/rosy-operate-quality`에서 64rem 미만 운용 화면의 배너 다음에 조작, 로봇 상태·카메라, 지도를 순서대로 둔다. 데스크톱의 감지·관측·조작 3영역과 상단 비상 정지는 유지한다. 역할 G2 시험의 현재 폴더 import 경로를 바로잡고 캡처 위치를 환경 변수로 지정할 수 있게 했다.
+- 증거: 390×844 조작 위치가 수정 전 y=1013에서 수정 후 y=149로 올라갔다. 레이아웃·헤더 예산 브라우저 11 passed, 실제 FastAPI fixture의 운전 모드 피드백 1 passed, 각각 known_failures 0 new. 캡처는 X: 세션 evidence에 둔다.
+- gate 변화: 없음. 이는 모바일 조작 발견성의 LOCAL 개선이며 화면 전체의 현대성·가독성, G3 사람 평가, 실기 수용은 여전히 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 운용 영역 너비 통일
+
+- 변경: 데스크톱 운용 화면의 감지·관측·조작 세 영역을 같은 폭으로 맞췄다. 모바일은 각 영역이 전체 가용 폭을 사용한다.
+- 증거: 레이아웃·뷰포트 브라우저 11 passed, 실제 FastAPI fixture 운전 모드 캡처 1 passed, 동일 너비 단언 1 passed, known_failures 0 new. 1366×768에서 조작 잘림과 문서 스크롤 없음.
+- gate 변화: LOCAL UI 증거만 추가. D-153 G3 사람 평가 및 장치·현장 수용은 미완료.
+
+## 2026-10-06 · uncommitted · uiux(robot): 작업 준비·장비 절차 60셀 현재 캡처
+
+- 변경: 작업 패널을 너비 컨테이너로 만들어 390px에서 입력·행동이 같은 폭을 쓴다. 역할 절차 G2 시험이 닫힌 고급 네트워크 작업을 실제 UI처럼 연 뒤 지연·연결 끊김·결측에서 비활성 버튼을 확인하고 작업 패널 6장을 별도로 저장한다.
+- 증거: 현재 FastAPI/Chromium 60셀 1 passed, 반응형·셸 브라우저 18 passed, 390px 웨이포인트 입력·행동 너비 차 ≤1px, 페이지 오류·가로 넘침 0, 확인 취소 POST 0, known_failures 0 NEW, Impeccable 검사 새 경고 0. 이미지 66장과 matrix.json을 2026-10-06 검증 회차에 보존했다.
+- gate 변화: LOCAL G2 증거만 추가. 절차의 현장 사용성 G3 및 실제 Host Agent·장치 readback은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 작업 준비·장비 첫 기동 셀 확인
+
+- 변경: `/setup`·`/device` 첫 기동 6셀의 현재 캡처를 보존하고, G2 비상 정지 단언에 렌더된 너비 확인을 더했다. 숨겨진 0폭 요소가 화면 안 좌표로 오판되지 않는다.
+- 증거: FastAPI/Chromium 첫 기동 1 passed, 절차 60셀 재실행 1 passed, D-153 G1 팔레트·토큰·문법 74 passed, CORE 증거 7 passed, `known_failures.py` 모두 0 NEW. 첫 기동 1366/390px의 비상 정지·상태 대기·가로 넘침 0을 캡처했다.
+- gate 변화: LOCAL G1/G2 증거. G3 현장 작업 독회와 실제 장치 readback은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 확인창 실행 이름과 열린 상태 캡처
+
+- 변경: 작업 준비의 SLAM 세 행동과 관리자 호스트 작업 확인 버튼에 선택한 행동 이름을 표시한다. 절차 G2는 확인창이 열린 1366/390px 6장을 기록하고 취소 뒤 쓰기 0을 유지한다.
+- 증거: 절차 60셀 1 passed, 관련 작업 브라우저 10 passed, `known_failures.py` 0 NEW, 페이지 오류·가로 넘침 0. 맵핑·롤백 모바일 확인창에서 비상 정지가 보인다.
+- gate 변화: LOCAL 확인·취소 증거. 실제 장치 실행과 G3 전체 판정은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 운용자 웨이포인트 작업 왕복 확인
+
+- 변경: 390px `/setup`에서 운용자 이름 입력→FastAPI 201 저장→목록 readback까지 한 작업을 브라우저 시험으로 재생했다.
+- 증거: 1 passed, `known_failures.py` 0 NEW, 저장 POST 한 번, 입력 초기화·화면 목록·비상 정지 확인, 페이지 오류·가로 넘침 0. LOCAL 캡처를 UI/UX 회차에 보존했다.
+- gate 변화: G3 표면 질문의 한 작업 근거. 나머지 절차·실물 위치 정확도·현장 수용은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 운용 오류 문구와 G3 재생
+
+- 변경: HTTP 오류의 영문 전용 상세를 운용자용 한국어 상태·다음 확인으로 바꾸고, 한국어 서버 사유는 유지한다. 차선 추종 시험 fixture에 실제 구동 준비 필드를 넣고 닫힌 고급 네트워크 작업은 UI로 열어 검증한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 모드·수동·차선/도킹·지도 근거 1366/390px 캡처와 4개 매트릭스를 보존했다. 해당 브라우저 4 passed, 장비 disclosure 2 passed, 운용자 어휘 18 passed, `known_failures.py` 0 NEW.
+- gate 변화: 운용 G3 부분 근거. 실제 로봇 readback·사용자 독회와 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 320px 역할 셸 동일 폭
+
+- 변경: 실제 CORE 앱 응답의 `/console` 320/390px에서 조작·감지·관측 칸이 같은 폭으로 쌓이는지 브라우저 계약에 추가했다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 320px 캡처, `/console`·`/setup`·`/device` 2폭 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 로봇 역할 셸 LOCAL G2 배치 부분 근거 추가. 실제 CORE/장치 readback과 전체 G2/G3는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
+
+- 변경: 전방 카메라의 영상 확대·녹화 중지 행동을 390px에서 같은 폭으로 맞췄다. 320px에서는 공용 칸 반응 규칙에 따라 각각 전폭으로 쌓는다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 실제 역할 셸 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW. 전체 화면 원본은 X: `captures/robot-camera-equal/`.
+- gate 변화: 로봇 운용 LOCAL 폭 근거 추가. 실제 카메라·장치와 사용자 G3 독회는 HOLD.
+## 2026-10-06 · uncommitted · uiux(robot): 개발 연결 대기 이유와 G2 기록 이름
+
+- 변경: 호환 화면의 개발 연결 버튼에 요청 중·재시도 대기 이유를 붙이고, 활성화 때 지운다. 역할 G2의 목록형 기록은 D-329 규약의 `matrix.json`과 구분해 `role-state-records.json`으로 저장한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 기본·호환 경로 브라우저 2 passed. 이유 제거 변이에서 호환 경로 실패, 복원 뒤 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 현재 트리의 공유 UI 계약 실패 해소에 기여. 실제 장치·현장 G2/G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(robot): 첫 상태 수신 전 안내
+
+- 변경: 운용 화면의 로봇 상태 목록이 첫 CORE 상태를 받기 전 비어 보이지 않도록 「로봇 상태를 확인하는 중입니다」를 표시한다. 수신·오류 때 기존 값/오류로 교체한다.
+- 증거: 독립 패널에서 대기·수신·오류 전환과 390px 전폭 메시지 1 passed, 역할 셸 320/390px 2 passed, 공용 반응형 9 passed, 공용 조작 계약 27 passed; 각 `known_failures.py` 0 NEW. 대기·오류 패널 캡처는 X: `captures/robot-overview-panel/`이다.
+- gate 변화: 로봇 운용 LOCAL 첫 상태 부분 근거. 실제 CORE 스트림·장치와 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 상태 메시지 의미 구조 수정
+
+- 변경: 대기·오류 메시지를 `<dl>` 밖의 `ui-status`로 옮기고, 수신된 라벨·값이 있을 때만 `<dl>`을 보인다. 오류 때 오래된 보정 칩도 제거한다.
+- 증거: 390px 대기·오류 캡처 X: `captures/robot-overview-semantic/`; 전환·폭·`role=status` 브라우저 1 passed, 역할 셸과 공용 계약 51 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 의미 구조와 폭 근거 보정. 실제 CORE·장치 readback 및 G3는 HOLD다.

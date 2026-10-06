@@ -49,6 +49,8 @@ services:
       - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml
       - --site-lane-paint
       - /opt/rosy/maps/map_v2_fleet/road_lines.stl
+      - --connection-mode
+      - "${ROSY_FLEET_CONNECTION_MODE:-paired}"
       # D-341 2: the pairing routes exist only with the site CA (never the leaf) and a TLS host.
       - --pairing-ca
       - /run/secrets/site_ca

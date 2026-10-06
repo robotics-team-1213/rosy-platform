@@ -1943,6 +1943,143 @@
 - 증거: Fleet 권한 경계 테스트, Caddyfile adapt, 브라우저 JS 구문 및 관련 테스트. 실사이트 배포·영상 readback은 별도 확인이 필요하다.
 - gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
 
+## 2026-10-06 · uncommitted · uiux(fleet): 동등한 창 너비 통일
+
+- 변경: Fleet 현장 지도와 개입 영역을 같은 폭으로 맞췄다. 넓은 화면에서 나란한 지도·카메라 창도 같은 폭이다. 320px 상단바는 Cell 작업을 설정 안으로 옮겨 브랜드와 비상 정지의 가독성을 확보했다.
+- 증거: 1920×1080 Fleet 브라우저 71 passed, 너비 단언 포함 적합 검사 1 passed, known_failures 0 new. 320px 화면에서 가로 넘침과 상단바 겹침이 없고 Cell 작업 접근 가능. 캡처는 X: 관리 세션 evidence에 있다.
+- gate 변화: LOCAL UI 증거만 추가. D-153 G3 사람 평가 및 SITE/FIELD 수용은 미완료.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 기본 예외 목록 증거와 지도 바탕
+
+- 변경: 320/390px 브라우저 시험에서 전체 목록을 열기 전 기본 예외 목록을 단언하고 캡처한다. 지도의 레터박스는 미관측 raster 토큰으로 표시하고, 지도·카메라 동일 너비 주석과 110rem 이유를 현재 배치에 맞춘다.
+- 증거: Fleet 지도 적합·목표 2 passed, 모바일 기본 예외·넘침 2 passed, 관련 G1 83 passed, known_failures 0 NEW. 320px 기본 목록에서 오류 로봇 rosy_03이 첫 카드다.
+- gate 변화: LOCAL 증거만 추가. Fleet G2 전체 상태·G3와 SITE/FIELD readback은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 빈 목록·서버 실패의 모바일 폭과 연결 끊김 증거
+
+- 변경: 320/390px의 빈 목록·서버 실패에서 E-stop과 다음 단계가 보이고 가로 넘침이 없음을 브라우저로 확인했다. 연결 끊김 fixture를 실제 Fleet API의 `state: null` 계약에 맞춰 고쳤다.
+- 증거: 기존 상태 9 passed, 모바일 상태 4 passed, 연결 끊김 재실행 1 passed, 각 `known_failures.py` 0 NEW. 캡처는 [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 있다.
+- gate 변화: LOCAL G2 부분 근거. Fleet G2/G3와 SITE/FIELD는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 정지 중 목표 상태 문구와 G3 근거
+
+- 변경: 탐색 상태가 NAVIGATING으로 남아도 안전 상태가 결측이거나 E-stop이면 주행 중이라고 표현하지 않고 목표가 남았음을 알린다. 기존 공용 탐색 상태 번역을 재사용한다.
+- 증거: 안전 결측·정지와 목표 확인 브라우저 3 passed, Fleet 서버·팔레트 60 passed, 웹 Node 134 passed, `known_failures.py` 0 NEW. [G3 독회](../../docs/validation/uiux-surfaces-2026-10-06/README.md)는 LOCAL 부분 근거다.
+- gate 변화: Fleet G3·SITE/FIELD HOLD 유지.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 연결 끊김 모바일 독회
+
+- 변경: 로봇 연결 끊김 fixture를 1920/390/320px에서 재생해 첫 카드의 오류 우선순위, 오래된 상태 배제, 비상 정지 가시성, 가로 넘침 부재를 확인했다.
+- 증거: [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 부분 근거 추가. 실제 사이트 PC/로봇 readback과 G3 독회는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 팔로워 지연 모바일 독회
+
+- 변경: 팔로워 지연·끊김 화면을 1920/390/320px에서 재생해 경고 카드 우선순위, 비상 정지 가시성, 가로 넘침 부재를 확인했다.
+- 증거: [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 일부 추가. 실제 사이트 PC/로봇 readback과 G3 독회는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 전체 주행 취소 결과를 행동 옆에 표시
+
+- 변경: 전체 주행 취소 응답 요약과 로봇별 기록 링크를 버튼 가까이에 놓았다. 503은 물리 결과를 미확인으로 말하고 재확인을 안내한다.
+- 증거: [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 1920/390/320px 확인·부분 응답과 320px 오류 캡처; 브라우저 5 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2/G3 일부 추가. 실제 사이트 PC·로봇 readback과 현장 사용자 독회는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 비상 정지 응답 첫 화면
+
+- 변경: 운용·설치의 비상 정지 요청/부분 응답/결과 미확인을 머리 아래에서 바로 읽게 했다. 설치 안내는 비상 정지와 전체 주행 취소를 구분하고 카메라 승인 제목 수준을 정리했다.
+- 증거: [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 320/390px 캡처; 집중 브라우저 10 passed, 설치 회귀 7 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2/G3 일부 추가. 실제 로봇 정지 readback과 현장 사용자 독회는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 머리 아래 블록과 본문 폭 정렬
+
+- 변경: 운용·설치 비상 정지 응답과 운용 준비 순서·접속 안내의 좌우 여백을 본문 패널과 같게 했다.
+- 증거: 1920/390/320px 운용·설치 좌우 끝 브라우저 6 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW. 원본은 X: UI/UX 회차의 `captures/fleet-width/`.
+- gate 변화: Fleet LOCAL 폭 근거 추가. 전체 G2/G3와 현장 사용자 독회는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(fleet): 로봇 카드 행동 폭과 데스크톱 높이
+
+- 변경: 로봇 카드의 동등한 목표 지정·취소 버튼을 같은 폭으로 배치하고, 1920px 본문 하단 5px 넘침을 제거했다.
+- 증거: [UI/UX 평가](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320/390px 폭 단언과 1920px 높이 검사 등 Fleet 브라우저 6 passed, `known_failures.py` 0 NEW. 전화 원본은 X: `fleet_console_mobile_default_{320,390}.png`.
+- gate 변화: Fleet LOCAL 폭·높이 근거를 추가했다. 전체 G2/G3와 현장 사용자 독회는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 작업 화면의 비상 정지와 평가 카드
+
+- 변경: 활성 `/console/cell`에 첫 화면 비상 정지와 별도 결과 상태를 두고, 기존 관제 세션 토큰을 입력 칸에 이어 받는다. 긴 Cell 작업 요청 중에도 비상 정지는 비활성화하지 않는다. UI/UX 회차에 빠져 있던 Cell 질문·선언 폭·G2/G3 잔여 항목을 추가했다.
+- 증거: 1440/390/320px 첫 화면 브라우저 3 passed, 320px 부분 응답·503 미확인·본문 동등 폭 1 passed, Cell 브라우저 전체 13 passed, Fleet 계약 21 passed, G1 명명 계약 90 passed, JS 구문 검사 통과; 성공 실행마다 `known_failures.py` 0 NEW. X: `captures/fleet-cell/`, `logs/fleet-cell-{estop-green,estop-width,browser-full,contracts}.txt`, `logs/g1-after-fleet-cell.txt`.
+- gate 변화: Cell LOCAL 첫 화면과 정지 결과의 부분 근거. 선언 상태 전체 G2·실제 셀/로봇 readback·운영자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 작업 취소 확인과 320px 머리
+
+- 변경: Cell 작업 취소 전에 작업 ID·장치 정지 아님을 명시하는 공용 확인창을 열고, 취소·정지·계정 변경 시에는 작업 취소 요청을 보내지 않는다. 좁은 화면의 비상 정지를 머리 첫 줄에 두고 로그인 뒤 긴 세션 이름이 제품 이름·접속 버튼을 밀지 않게 폭을 제한했다.
+- 증거: 1440/390/320px 확인·취소 POST 0·정지 가용성·확인 POST 1 브라우저 3 passed, Cell 브라우저 전체 15 passed, Fleet 계약 21 passed, G1 90 passed, 각 성공 실행 `known_failures.py` 0 NEW. 공용 확인 모듈을 Cell 수입 허용 목록에 추가하기 전 Fleet 계약 1건이 실패했고 수정 후 통과했다. 원본 X: `captures/fleet-cell/fleet-cell-cancel-confirm-{1440x1000,390x844,320x568}.png`, 실행 `logs/fleet-cell-cancel-{3widths-final,full-final,contracts-final}.txt`, `logs/g1-after-cell-cancel.txt`.
+- gate 변화: Cell 불가역 확인 G2의 LOCAL 폭 근거 추가. 나머지 선언 상태, 실제 장치·운영자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 저장 문서 목록 상태
+
+- 변경: 접속 전·조회 중·빈 목록·조회 실패에 상태와 다음 단계를 표시하고, 자격 증명 변경 시 이전 목록을 숨긴다.
+- 증거: 1440/390/320px 빈 목록과 320px 실패·복구 브라우저 5 passed, Cell 전체 19 passed, Cell API 8 passed, 공용 UI 계약 231 passed/25 skipped, 각 성공 실행 `known_failures.py` 0 NEW. X: `captures/fleet-cell/fleet-cell-empty-{1440x1000,390x844,320x568}.png`, `fleet-cell-list-error-320x568.png`, `logs/fleet-cell-list-{focus,full,api,shared}.txt`.
+- gate 변화: 저장 문서 목록의 LOCAL G2 부분 근거 추가. 선언 상태 전체·실제 장치·운영자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 세션 거부 전환
+
+- 변경: 재확인 401·403에서 이전 계정·목록·저장 버전·미리보기·작업 상태를 내려 거부 상태로 전환한다. 작성 초안은 남기고 저장·제안은 막으며 거부 이유를 화면 안에 표시한다.
+- 증거: 320px 401·403 브라우저 2셀과 기존 실패·컴파일 회귀 4 passed, Cell 전체 21 passed, Cell API 8 passed, 공용 UI 계약 231 passed/25 skipped, 마지막 접속 안내 변경의 집중 재검사 3 passed, JS 구문 검사 통과, 각 성공 실행 `known_failures.py` 0 NEW. X: `captures/fleet-cell/fleet-cell-auth-{401,403}-320x568.png`, `logs/fleet-cell-auth-{focus-final,full,api,shared,final-focus}.txt`.
+- gate 변화: 권한 거부 전환의 LOCAL G2 부분 근거 추가. 나머지 선언 상태·실제 장치·운영자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 문서·행동 폭
+
+- 변경: 레시피·셀 문서 창의 세 선언 폭을 측정하고, 390/320px에서 문서·미리보기·제안·승인·복귀 행동이 각 칸의 가용 폭을 채우게 했다.
+- 증거: Cell 전체 24 passed와 공용 UI 계약 231 passed/25 skipped 뒤 마지막 미리보기 폭 보정. 현재 세 폭 브라우저 3 passed, 미리보기·취소 상호작용 4 passed, 각 성공 실행 `known_failures.py` 0 NEW. X: `captures/fleet-cell/fleet-cell-widths-{1440x1000,390x844,320x568}.png`, `logs/fleet-cell-{uniform-full,uniform-shared,uniform-widths-final,uniform-interaction}.txt`.
+- gate 변화: Cell 균일 폭의 LOCAL G2 부분 근거 추가. 전체 선언 상태·실제 장치·운영자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 저장 충돌·미리보기 실패
+
+- 변경: 편집한 문서를 저장 전 초안으로 표시하고, 저장 409·503 및 컴파일 503을 행동 위치의 공용 상태 칸에 구분해 표시한다. 컴파일 실패 시 이전 미리보기를 내리고 제안을 막는다.
+- 증거: 세 폭 충돌·복구와 미리보기 실패·복구 6 passed, 320px 저장 결과 미확인 1 passed, Cell 전체 31 passed, Cell API 8 passed, 공용 UI 계약 231 passed/25 skipped, 마지막 미저장 문서 문구 세 폭 3 passed, JS 구문 검사 통과, 각 성공 실행 `known_failures.py` 0 NEW. X: `captures/fleet-cell/fleet-cell-{save-conflict,preview-unavailable}-{1440x1000,390x844,320x568}.png`, `fleet-cell-save-unavailable-320x568.png`, `logs/fleet-cell-{write-final-focus,save-unavailable,write-full,write-api,write-shared,preview-precondition}.txt`.
+- gate 변화: 저장·컴파일 실패의 LOCAL G2 부분 근거 추가. 나머지 상태·실제 장치·운영자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 느린 첫 상태 응답의 세 폭
+
+- 변경: Fleet 관제의 기존 느린 상태 응답 브라우저 시험을 1920/390/320px로 확장하고, 지도·로봇 목록 폭과 첫 화면 정지를 대기·회복에 확인한다. 제품 스타일은 변경하지 않았다.
+- 증거: 세 폭 3 passed, 4px 로봇 목록 축소 변이에서 320px 실패, 원복 후 320px 1 passed, 성공 실행 `known_failures.py` 0 NEW. X: `captures/fleet-slow-mobile/fleet_console_slow_{loading,recovered}_{1920,390,320}.png`, `logs/fleet-slow-{three-widths,width-mutation,width-restored}.txt`.
+- gate 변화: Fleet 느린 첫 응답의 LOCAL G2 폭 근거 추가. 전체 선언 상태·실제 사이트 PC/로봇·관제자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 수신 후 끊김의 세 폭과 상태 표지
+
+- 변경: Fleet 관제의 수신 후 상태 상실·회복 시험을 1920/390/320px로 확장했다. 320px에서 잘리던 「Fleet 서버 없음」을 compact 시계의 보조 글자 크기로 읽히게 했다.
+- 증거: 세 폭 3 passed, 끊김/compact 머리 5 passed, 공유 시트 설치 화면 정지 3 passed, 반응형·팔레트·토큰 97 passed, 각 성공 실행 `known_failures.py` 0 NEW. 320px 표지 잘림은 수정 전 적색, 4px 목록 축소 변이에서 폭 단언 적색, 원복 후 320px 1 passed. X: `captures/fleet-loss-mobile/fleet_console_gather_{lost,recovered}_{1920,390,320}.png`, `logs/fleet-{gather-loss-three-widths,loss-pill-red,loss-pill-font,loss-current,loss-style-contracts,loss-width-mutation,loss-width-restored,loss-install-estop}.txt`.
+- gate 변화: 수신 후 끊김의 LOCAL G2 폭·정직 근거 추가. 선언 상태 전체·실제 사이트 PC/로봇·관제자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 대형 상태 조회 끊김과 복구의 세 폭
+
+- 변경: 대형 상태 조회 실패 시 원시 `FORMATION_UNAVAILABLE` 대신 Fleet 연결을 확인하라는 안내를 표시한다. 기존 대형 조회 끊김·복구 브라우저 검사를 1920/390/320px로 확장하고 전화 폭의 지도·목록·작업 블록 동일 폭, 첫 화면 비상 정지, 가로 넘침을 확인한다.
+- 증거: 대형 끊김·복구와 HOLD 브라우저 4 passed, `known_failures.py` 0 NEW, JS 구문 검사 통과. 원시 코드 노출에 대한 검사 실패 후 수정 통과, 4px 목록 축소 변이에서 폭 검사 실패 후 복원 통과. X: `captures/fleet-formation-mobile/fleet_formation_read_{lost,recovered}_{1920,390,320}.png`, `logs/fleet-formation-{code-red,width-mutation,final}.txt`.
+- gate 변화: Fleet 대형 조회 끊김의 LOCAL G2 부분 근거 추가. 전체 선언 상태·실제 사이트 PC/로봇·운영자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 대형 HOLD 재개 차단과 동일 폭 행동
+
+- 변경: 추가 안전 사건이 남은 HOLD 상태에서 재개를 비활성화하고 재구성 안내를 표시한다. 대형 이유·재개 차단 사건을 관제자 평문으로 바꿨다. 390/320px에서는 네 대형 버튼을 두 열의 동일 폭으로 정렬했다.
+- 증거: HOLD와 대형 조회 끊김 브라우저 7 passed, 반응형·토큰·팔레트 계약 61 passed, 각 `known_failures.py` 0 NEW, JS 구문 검사 통과. 재개 오활성 및 320px 버튼 불균등은 수정 전 적색. X: `captures/fleet-formation-hold/fleet_formation_hold_{blocked,ready}_{1920,390,320}.png`, `logs/fleet-formation-hold-{red,width-red,final,contracts}.txt`.
+- gate 변화: Fleet HOLD의 LOCAL G2 행동·폭·어휘 부분 근거 추가. 실제 사이트 PC/로봇과 관제자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 작업 상태 문구와 compact 머리 높이
+
+- 변경: Cell 제안·진행·취소·간지 접근 보류를 운영자 문구로 표시하고 원래 코드는 접힌 진행 원장에 남겼다. 토큰 접속을 붙박이 머리 아래로 내려 390/320px 머리를 177px에서 88px로 줄였으며 계정 상태와 비상 정지는 머리에 유지했다.
+- 증거: 상태 원문 노출과 20% 머리 한도 검사가 수정 전 실패한 뒤 Cell 브라우저 33 passed, Cell API 8 passed, 공유 UI 계약 89 passed, 각 `known_failures.py` 0 NEW. 1440/390/320px 간지 보류 화면 캡처와 로그는 X:/DevTemp/projects/rosy-platform/2026-10-06--032913--uiux-quality--199bc9/ 아래에 있다.
+- gate 보류: 합성 Fleet 응답의 LOCAL G2 부분 근거다. 사이트 PC Tailscale peer는 online이나 SSH 정책 거부, 8443 접속 실패, 현재 PC는 다른 LAN이라 현장 mDNS·Fleet 컨테이너 NSS·실제 장치 readback·운영자 G3는 미확인이다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 비활성 작업의 현재 상태 사유
+
+- 변경: 제안된 작업의 재승인과 보류 작업의 실행 승인에 저장·미리보기 안내가 보이던 공통 사유를 작업 상태 안내로 바꿨다. 버튼 허용 조건과 API 요청은 유지한다.
+- 증거: 1440/390/320px의 두 흐름에서 기존 6 failed → 수정 뒤 6 passed, Cell 전체 33 passed, `known_failures.py` 0 NEW, JS 구문 검사 통과. X:/DevTemp/projects/rosy-platform/2026-10-06--032913--uiux-quality--199bc9/logs/fleet-cell-action-reason-{red,green,full}.txt.
+- gate 보류: 합성 상태의 LOCAL G2 부분 근거. 현장 UI·장치 readback과 작업자 G3는 미확인이다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 비활성 사유 공용 계약 복구
+
+- 변경: 작업 버튼 사유를 계산한 뒤 비활성 상태와 바로 이어 갱신한다. 기존 작업 상태·권한·간지 접근 사유와 허용 조건은 유지한다.
+- 증거: 공용 비활성 사유 검사 1 failed → 1 passed; 공유 UI 전체 231 passed/25 skipped, Cell 세 폭의 작업 상태·간지 접근 브라우저 6 passed, `known_failures.py` 0 NEW. X: `logs/shared-ui-current-after-widths.txt`, `logs/shared-ui-after-cell-guard.txt`, `logs/cell-after-shared-guard.txt`.
+- gate 보류: LOCAL 계약·합성 상태 근거. 현장 UI·장치 readback과 작업자 G3는 미확인이다.
+
 ## 2026-10-06 · uncommitted · LED 식별 요청과 실영상 현장지도
 
 - 변경: Fleet의 로봇별 단기 LED 요청을 CORE로 전달하고, 승인된 source/map/lens 보정이 맞는 최신 Rosy Cam 원본 프레임만 현장지도 배경으로 사용한다. 식별 응답은 영상 확인 대기이며 robot ID를 자동 확정하지 않는다.
@@ -1954,3 +2091,9 @@
 - 변경: `fleet/server/development_session.py`(세션 저장소·LAN 주소·Host/Origin·분당 6회·상한 8·1시간 만료·발급 감사), `site_auth.build_authorize`의 개발 세션 우선 확인, `require_named_operator`의 `development-*` 허용, `--connection-mode`와 `ROSY_DEPLOYMENT` 이중 조건, 콘솔 자동 발급·배지.
 - 증거: 위 호스트 pytest와 브라우저 시험. 사이트 Caddy 뒤 `X-Forwarded-For`·`Host` 전달은 실사이트 확인이 필요하다.
 - gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-07 · uncommitted · Cell 빈 미리보기 평면도 숨김
+
+- 변경: 배치가 계산되기 전 또는 미리보기 결과가 무효가 된 동안 팔레트 선택과 빈 20rem 평면도를 함께 숨긴다. 배치가 있는 성공 결과에서만 다시 보인다.
+- 증거: 320px 초기·503/복구와 390px 초기·1440px 503/복구 Chromium **4 passed**, 공용 UI·토큰 계약 **62 passed**, 각 `known_failures.py` 0 NEW, JS 구문 검사 통과. UI/UX 회차 X: `captures/fleet-cell-empty-layout-fix/`와 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`.
+- gate 변화: LOCAL 화면 근거 추가. 현장 배치·운영자 G3는 HOLD.

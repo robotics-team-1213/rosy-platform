@@ -66,16 +66,26 @@ class Corridor:
     left: Boundary
     right: Boundary
     geometry_id: str
+    # Projection uncertainty the boundaries were already eroded by (lane_return_evidence).
+    uncertainty_m: float = 0.
 
     def __post_init__(self):
         if not self.geometry_id or self.left.intercept <= self.right.intercept:
             raise ValueError("ordered boundaries and geometry identity required")
+        _finite(self.uncertainty_m)
+        if self.uncertainty_m < 0:
+            raise ValueError("nonnegative projection uncertainty required")
 
     def margin(self, body):
         # Signed perpendicular distances at all four footprint corners.
         return min(min((self.left.y(x)-body.half_width)/math.hypot(1, self.left.slope),
                        (-body.half_width-self.right.y(x))/math.hypot(1, self.right.slope))
                    for x in (body.front, body.rear))
+
+    def free_half(self, body):
+        """Best margin this corridor allows the body (centred): half the lateral play."""
+        scale = math.hypot(1, self.left.slope)+math.hypot(1, self.right.slope)
+        return min((self.left.y(x)-self.right.y(x))/scale for x in (body.front, body.rear))-body.half_width
 
     @property
     def heading(self):
@@ -162,9 +172,24 @@ class ReturnController:
 
     Caller resets on OFF/authority session change. Numeric bounds are internal
     conservative defaults, not a bypass for the caller's lower live limits.
+
+    Containment (D-468 implementation note 2026-10-06). The corridor is already eroded by
+    the producer's uncertainty_m, its total lateral error bound. Entering "contained" needs
+    that eroded margin, less the lateral travel at the live linear limit over the evidence
+    age bound (conservative, also used in verify), to be at least body_margin_m. Errors not
+    in uncertainty_m (frame jitter, footprint tolerance) belong in body_margin_m. Once
+    contained while tracking, departure opens only when the geometric margin (eroded + u)
+    goes negative: a hysteresis band of width u, so jitter around the eroded line does not
+    flap. A normal checkpoint also needs the entry rule and at most (1 - checkpoint_fraction)
+    of the corridor's geometric lateral play used.
     """
-    def __init__(self, body):
+    EVIDENCE_TTL_S = .3
+
+    def __init__(self, body, body_margin_m=0., checkpoint_fraction=.5):
         self.body = body
+        self.body_margin_m = body_margin_m
+        self.checkpoint_fraction = checkpoint_fraction
+        self._entered = False
         self.trail = PoseTrail()
         self.checkpoint = None
         self.phase = "tracking"
@@ -184,8 +209,16 @@ class ReturnController:
         self._approach = CorridorApproach()
 
     @staticmethod
-    def _fresh(now, stamp, ttl=.3):
+    def _fresh(now, stamp, ttl=EVIDENCE_TTL_S):
         return stamp is not None and 0 <= now-stamp <= ttl
+
+    def _contained(self, lane, linear_limit):
+        drift = linear_limit*abs(math.sin(lane.heading))*self.EVIDENCE_TTL_S
+        return lane.margin(self.body)-drift >= self.body_margin_m
+
+    def _normal(self, lane):
+        u = lane.uncertainty_m
+        return lane.margin(self.body)+u >= self.checkpoint_fraction*(lane.free_half(self.body)+u)
 
     def restart_verification(self, now):
         """Accepted console RESUME rechecks the lane; it does not resume old motion."""
@@ -256,12 +289,17 @@ class ReturnController:
         source_stamp = inp.corridor_stamp_ns
         lane = (inp.corridor if self._fresh(inp.now, inp.corridor_at)
                 and type(source_stamp) is int and source_stamp >= 0 else None)
-        inside = lane is not None and lane.margin(self.body) >= .015
+        entered = lane is not None and self._contained(lane, inp.linear_limit)
+        # Hysteresis: a tracking robot already contained leaves only when the body is
+        # geometrically over the estimated boundary (margin + u < 0).
+        inside = entered or (lane is not None and self.phase == "tracking" and self._entered
+                             and lane.margin(self.body)+lane.uncertainty_m >= 0)
         same = (self.checkpoint is None or (not self._reference_invalid and
                 (fresh_pose and lane is not None and lane.matches(self.checkpoint[1], self.checkpoint[0], p)))
                 )
         if self.phase == "tracking":
             if fresh_pose and inside and same:
+                self._entered = True
                 if self.checkpoint is None and (self._candidate is None or
                         not lane.matches(self._candidate[1], self._candidate[0], p)):
                     self._candidate = (p, lane)
@@ -270,13 +308,14 @@ class ReturnController:
                 if self._last_evidence is None or source_stamp > self._last_evidence:
                     self._count += 1
                     self._last_evidence = source_stamp
-                if self._count >= 3 and lane.margin(self.body) >= .025 and abs(lane.heading) <= .12:
+                if self._count >= 3 and entered and self._normal(lane) and abs(lane.heading) <= .12:
                     self.checkpoint = (p, lane)
                     self._candidate = None
                 return ReturnAction(self.phase, "contained")
             self.phase, self._opened = "departure_stop", inp.now
             self._count = 0
             self._last_evidence = None
+            self._entered = False
             self.rebase_retrace()
             return self._hold("containment_unconfirmed")
         # Perception continues on every tick; no movement if authority or data is absent.
@@ -302,7 +341,7 @@ class ReturnController:
                 self._last_evidence = source_stamp
             if self._count >= 3 and inp.front_clear:
                 self.phase = "tracking"
-                if lane.margin(self.body) >= .025:
+                if self._normal(lane):
                     self.checkpoint = (p, lane)
                 self._opened = self._search_start = self._search_pose = None
                 self._search_attempt = 0

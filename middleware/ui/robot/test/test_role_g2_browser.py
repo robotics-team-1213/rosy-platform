@@ -15,9 +15,9 @@ from playwright.sync_api import sync_playwright
 
 
 ROOT = Path(__file__).resolve().parents[4]
-SRC = ROOT / "src"
-for package in ("runtime/api_web", "runtime/gateway", "runtime/events", "runtime/services", "contracts/foundation"):
-    sys.path.insert(0, str(SRC / package))
+for package in ("middleware/core/api_web", "middleware/core/gateway", "middleware/core/events",
+                "middleware/core/services", "contracts/foundation"):
+    sys.path.insert(0, str(ROOT / package))
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 TOKENS = {"operator": "rosy-dev-operator", "administrator": "rosy-dev-admin"}
-CAPTURES = Path("X:/DevTemp/rosy-uiux-d306-roles-g2")
+CAPTURES = Path(os.environ.get("ROSY_SCREENSHOT_DIR", "X:/DevTemp/rosy-uiux-d306-roles-g2"))
 SCENARIOS = {
     "setup": ("normal", "empty", "delayed", "disconnected", "unavailable", "unsupported", "forbidden", "error", "safe_stop", "confirm_cancel"),
     "device": ("normal", "empty", "delayed", "disconnected", "unavailable", "forbidden", "error", "safe_stop", "confirm_cancel"),
@@ -50,7 +50,7 @@ def _core_client(tmp_path):
     from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
-    config_dir = SRC.parent / "contracts/foundation/config"
+    config_dir = ROOT / "contracts/foundation/config"
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["auth"] = {**config["auth"], **yaml.safe_load(
         (config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))["auth"]}
@@ -136,6 +136,7 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                     errors = []
                     posts = []
                     dialogs = []
+                    confirm_image = None
                     page.on("pageerror", lambda error: errors.append(str(error)))
                     token = TOKENS[role]
                     page.add_init_script(f"sessionStorage.setItem('rosy.dashboard.token', {token!r})")
@@ -190,10 +191,15 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                                 && rollback && !rollback.disabled;
                             }""")
                         assert button.is_enabled(), (role, surface, scenario)
+                        action_label = button.inner_text().strip()
                         button.click()
                         dialog = page.locator('dialog.ui-confirm')
                         dialog.wait_for()
+                        assert dialog.is_visible()
+                        assert dialog.get_by_role('button', name=action_label, exact=True).is_visible()
                         dialogs.append(dialog.locator('p').inner_text())
+                        confirm_image = f"{role}-{surface}-confirm-dialog-{width}x{height}.png"
+                        page.screenshot(path=str(CAPTURES / confirm_image), full_page=True)
                         dialog.get_by_role('button', name='취소', exact=True).click()
                         page.wait_for_timeout(100)
                     filename = f"{role}-{surface}-{scenario}-{width}x{height}.png"
@@ -203,16 +209,29 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                       panelCount: document.querySelectorAll('ui-section[data-panel]').length,
                       status: document.querySelector('#surface-status')?.textContent || '',
                       notices: [...document.querySelectorAll('ui-status')].map(node => node.textContent.trim()).filter(Boolean).slice(0, 18),
-                      eStopVisible: (() => { const node=document.querySelector('#shell-estop'); return !!node && node.getBoundingClientRect().right <= innerWidth; })(),
+                      eStopVisible: (() => { const rect=document.querySelector('#shell-estop')?.getBoundingClientRect(); return !!rect && rect.width > 0 && rect.right <= innerWidth; })(),
                     })""")
                     records.append({"role": role, "surface": surface, "scenario": scenario,
                                     "viewport": f"{width}x{height}", "image": filename,
                                     "posts": posts, "dialogs": dialogs, "errors": errors, **measure})
+                    if confirm_image:
+                        records[-1]["confirmImage"] = confirm_image
                     assert errors == [], records[-1]
                     assert measure["overflowX"] == 0, records[-1]
+                    assert measure["eStopVisible"], records[-1]
                     if scenario == "confirm_cancel":
                         assert posts == [], records[-1]
                         assert len(dialogs) == 1, records[-1]
+                    if (role, surface, scenario, width) == ("operator", "setup", "normal", 390):
+                        widths = page.evaluate("""() => {
+                          const panel = document.querySelector('[id="procedure-setup.waypoints"]');
+                          const form = panel.querySelector('form.ui-form');
+                          return {form: form.getBoundingClientRect().width,
+                            input: form.querySelector('input').getBoundingClientRect().width,
+                            action: form.querySelector('ui-button').getBoundingClientRect().width};
+                        }""")
+                        assert abs(widths["form"] - widths["input"]) <= 1, widths
+                        assert abs(widths["input"] - widths["action"]) <= 1, widths
                     if role == "operator" and surface == "device":
                         assert page.locator('#surface-status a[href="/console"]').is_visible(), records[-1]
                         assert page.locator('#shell-role').inner_text() == "권한 제한", records[-1]
@@ -231,10 +250,61 @@ def test_role_procedure_g2_local_matrix(tmp_path):
                         _select_task(page, "host.operations")
                         card_status = page.locator("section.ui-readback ui-status").filter(has_text=expected).first.inner_text()
                         assert expected in card_status, records[-1]
+                        page.get_by_text("고급 네트워크 작업", exact=True).click()
                         assert page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True).is_disabled(), records[-1]
+                        task_image = f"administrator-device-{scenario}-host-operations-{width}x{height}.png"
+                        page.screenshot(path=str(CAPTURES / task_image), full_page=True)
+                        records[-1]["hostOperationsImage"] = task_image
                     context.close()
         browser.close()
-    (CAPTURES / "matrix.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    (CAPTURES / "role-state-records.json").write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_operator_waypoint_task_reaches_saved_readback(tmp_path):
+    client = _core_client(tmp_path)
+    CAPTURES.mkdir(parents=True, exist_ok=True)
+    posts = []
+    errors = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
+
+        def serve(route):
+            request = route.request
+            path = urlsplit(request.url).path
+            if request.method == "POST" and path == "/api/v1/waypoints":
+                response = client.post(path, json=request.post_data_json,
+                                       headers={"Authorization": f"Bearer {TOKENS['operator']}"})
+                posts.append({"path": path, "status": response.status_code})
+            elif request.method == "GET":
+                response = _response(client, path, TOKENS["operator"], "normal", "setup")
+            else:
+                route.fulfill(status=501, content_type="application/json", body='{"detail":"fixture blocks writes"}')
+                return
+            route.fulfill(status=response.status_code, headers={
+                "content-type": response.headers.get("content-type", "application/octet-stream"),
+                "cache-control": "no-store",
+            }, body=response.content if hasattr(response, "content") else response.body)
+
+        page.route("**/*", serve)
+        page.goto("http://rosy.test/setup", wait_until="domcontentloaded")
+        _select_task(page, "setup.waypoints")
+        field = page.get_by_role("textbox", name="웨이포인트 이름")
+        save = page.get_by_role("button", name="현재 위치 저장", exact=True)
+        page.wait_for_function("document.querySelector('[data-panel=\"setup.waypoints\"] ui-button')?.disabled === false")
+        field.fill("도크 접근")
+        save.click()
+        page.get_by_text("도크 접근 웨이포인트를 저장했습니다.", exact=True).wait_for()
+        page.get_by_text("도크 접근: 1.20, 0.30", exact=True).wait_for(timeout=10_000)
+        assert posts == [{"path": "/api/v1/waypoints", "status": 201}]
+        assert field.input_value() == ""
+        assert errors == []
+        assert page.evaluate("document.documentElement.scrollWidth - innerWidth") == 0
+        assert page.locator("#shell-estop").is_visible()
+        page.screenshot(path=str(CAPTURES / "operator-setup-waypoint-saved-390x844.png"), full_page=True)
+        browser.close()
 
 
 def test_existing_dock_type_ignores_hidden_new_type_fields(tmp_path):
@@ -333,6 +403,7 @@ def test_device_host_cards_clear_old_values_on_forbidden_and_recover(tmp_path):
           .slice(0, 2).every(card => card.querySelector('ui-status')?.textContent.includes('권한'))""", timeout=30_000)
         assert "site-fixture" not in cards.nth(0).locator("dl").text_content()
         assert "r1" not in cards.nth(1).locator("dl").text_content()
+        cards.nth(0).get_by_text("고급 네트워크 작업", exact=True).click()
         assert page.get_by_role("button", name="사업장 Wi-Fi로 전환", exact=True).is_disabled()
         assert page.get_by_role("button", name="이전 릴리스로 복귀", exact=True).is_disabled()
         phase["scenario"] = "normal"
@@ -369,6 +440,8 @@ def test_device_procedure_places_status_and_actions_before_long_readouts(tmp_pat
               return lines[0]?.textContent.includes('site-fixture') && lines[1]?.textContent.includes('이전 r1');
             }""")
             _select_task(page, "host.operations")
+            page.locator('[data-panel="host.operations"] section.ui-readback').first.get_by_text(
+                "고급 네트워크 작업", exact=True).click()
             result = page.evaluate("""() => {
               const host = document.querySelector('[data-panel="host.system"]');
               const operations = document.querySelector('[data-panel="host.operations"]');
@@ -464,7 +537,7 @@ def test_role_procedure_first_boot_full_screen(tmp_path):
                   safetyVisible: !document.querySelector('#safety-mode-status')?.hidden,
                   panelCount: document.querySelectorAll('ui-section[data-panel]').length,
                   overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
-                  eStopVisible: document.querySelector('#shell-estop').getBoundingClientRect().right <= innerWidth,
+                  eStopVisible: (() => { const rect=document.querySelector('#shell-estop')?.getBoundingClientRect(); return !!rect && rect.width > 0 && rect.right <= innerWidth; })(),
                 })""")
                 records.append({"role": role, "surface": surface, "viewport": f"{width}x{height}",
                                 "image": filename, "pending": page.evaluate("window.__pendingRequests"),
@@ -656,8 +729,8 @@ def test_console_teleop_feedback_full_shell_captures(tmp_path):
             readiness_status = panel.locator("ui-status").first
             release_text = action_feedback.inner_text()
             phase["fail_state"] = True
-            page.wait_for_function("document.querySelector('[data-panel=\"console.teleop\"] ui-status')?.textContent.includes('fixture robot state unavailable')")
-            assert readiness_status.inner_text().find("fixture robot state unavailable") >= 0
+            page.wait_for_function("document.querySelector('[data-panel=\"console.teleop\"] ui-status')?.textContent.includes('서버가 요청을 처리하지 못했습니다')")
+            assert "fixture robot state unavailable" not in readiness_status.inner_text()
             assert action_feedback.inner_text() == release_text
             filename = f"operator-console-teleop-feedback-{width}x{height}.png"
             page.screenshot(path=str(CAPTURES / filename), full_page=True)
@@ -714,11 +787,11 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
                     response = _response(client, path, TOKENS["operator"], "normal", "console")
                     manifest = response.json() if hasattr(response, "json") else json.loads(response.body)
                     additions = (
-                        {"id":"console.docking", "title":"Docking", "slot":"act", "order":40,
+                        {"id":"console.docking", "title":"도킹 운용", "slot":"act", "order":40,
                          "module":"/assets/panels/console/docking.js",
                          "css":["/assets/panels/surface-panels.css"], "action_group":"docking",
                          "state":"available", "reason":None},
-                        {"id":"console.line_follow", "title":"Line follow", "slot":"act", "order":50,
+                        {"id":"console.line_follow", "title":"차선 추종", "slot":"act", "order":50,
                          "module":"/assets/panels/console/line-follow.js",
                          "css":["/assets/panels/surface-panels.css"], "action_group":"line_follow",
                          "state":"available", "reason":None},
@@ -728,8 +801,8 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
                     groups = manifest.setdefault("action_groups", [])
                     group_ids = {group["id"] for group in groups}
                     groups.extend(group for group in (
-                        {"id":"docking", "title":"Docking", "order":20},
-                        {"id":"line_follow", "title":"Line follow", "order":30},
+                        {"id":"docking", "title":"도킹", "order":20},
+                        {"id":"line_follow", "title":"차선 추종", "order":30},
                     ) if group["id"] not in group_ids)
                     response = Response(content=json.dumps(manifest), media_type="application/json")
                 elif path == "/api/v1/line-follow":
@@ -739,14 +812,14 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
                     response = Response(content='{"mode":"OFF","state":"IDLE"}', media_type="application/json")
                 elif path == "/api/v1/docking/status":
                     if phase["docking_failed"]:
-                        route.fulfill(status=503, content_type="application/json", body='{"detail":"fixture docking status unavailable"}')
+                        route.fulfill(status=503, content_type="application/json", body='{"detail":"도킹 컨트롤러가 준비되지 않았습니다."}')
                         return
                     response = Response(content='{"supported":true,"state":"UNDOCKED"}', media_type="application/json")
                 elif path == "/api/v1/docking/docks":
                     response = Response(content='{"docks":[{"id":"dock-a","type":"charger"},{"id":"dock-b","type":"charger"}]}',
                                         media_type="application/json")
                 elif path == "/api/v1/system/capabilities":
-                    response = Response(content='{"navigation":{"goal_navigation":true}}', media_type="application/json")
+                    response = Response(content='{"navigation":{"goal_navigation":true},"teleop":true,"runtime":{"drive":"ready"}}', media_type="application/json")
                 else:
                     response = _response(client, path, TOKENS["operator"], "normal", "console")
                 route.fulfill(status=response.status_code, headers={
@@ -763,7 +836,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             line_panel.locator("ui-button").first.click()
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
-            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status')?.textContent.includes('fixture line status unavailable')")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status')?.textContent.includes('서버가 요청을 처리하지 못했습니다')")
             line_filename = f"operator-console-line-follow-{width}x{height}.png"
             page.screenshot(path=str(capture_dir / line_filename), full_page=True)
             line_measured = page.evaluate("""() => ({
@@ -773,7 +846,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               action: [...document.querySelectorAll('[data-panel="console.line_follow"] > ui-status[role="status"]')].at(-1)?.textContent || '',
             })""")
             assert line_measured["overflowX"] == 0 and line_measured["eStopVisible"]
-            assert "fixture line status unavailable" in line_measured["readback"] and "CORE" in line_measured["action"]
+            assert "서버가 요청을 처리하지 못했습니다" in line_measured["readback"] and "CORE" in line_measured["action"]
             records.append({"surface":"line_follow", "viewport":f"{width}x{height}",
                             "image":line_filename, "posts":list(posts), "errors":list(errors), **line_measured})
 
@@ -787,7 +860,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             dock_panel.locator("ui-button").first.click()
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
             page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
-            page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status')?.textContent.includes('fixture docking status unavailable')")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status')?.textContent.includes('도킹 컨트롤러가 준비되지 않았습니다')")
             assert dock_panel.locator("select").input_value() == "dock-b"
             assert len(posts) == 1, posts
             filename = f"operator-console-docking-{width}x{height}.png"
@@ -799,7 +872,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               dockAction: [...document.querySelectorAll('[data-panel="console.docking"] ui-status[role="status"]')].at(-1)?.textContent || '',
             })""")
             assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
-            assert "fixture docking status unavailable" in measured["dockReadback"] and "CORE" in measured["dockAction"]
+            assert "도킹 컨트롤러가 준비되지 않았습니다" in measured["dockReadback"] and "CORE" in measured["dockAction"]
             records.append({"surface":"docking", "viewport": f"{width}x{height}", "image": filename,
                             "posts": list(posts), "errors": list(errors), **measured})
             context.close()
@@ -887,13 +960,13 @@ def test_console_map_data_and_action_feedback_full_shell_captures(tmp_path):
                 overflowX:Math.max(0,document.documentElement.scrollWidth-innerWidth),
                 eStopVisible:document.querySelector('#shell-estop')?.getBoundingClientRect().right<=innerWidth,
                 mapData:document.querySelector('#map-status')?.textContent||'',
-                readiness:statuses.find(text=>text.includes('fixture robot state unavailable'))||'',
+                readiness:statuses.find(text=>text.includes('서버가 요청을 처리하지 못했습니다'))||'',
                 action:statuses.at(-1)||'',
               };
             }""")
             assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
             assert page.locator('[data-panel="console.map"] ui-empty').is_visible()
-            assert "fixture robot state unavailable" in measured["readiness"]
+            assert "서버가 요청을 처리하지 못했습니다" in measured["readiness"]
             assert measured["action"] and not posts
             records.append({"viewport":f"{width}x{height}", "image":filename,
                             "posts":posts, "errors":errors, **measured})
