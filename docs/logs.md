@@ -6192,3 +6192,9 @@ osy-d395-s1d\`.
 - 변경: D-473(관제 콘솔 개발 연결 모드 — 두 설정을 함께 둘 때만 같은 망 PC에 1시간 운용자 세션)과 D-474(주의점 단선에서 멈추고 Fleet 구역 허가 후 진입, 출구 이중선으로 점유 해제)를 ADR Log와 함께 기록했다.
 - 증거: 2026-10-06 실기 점검(콘솔 토큰이 시험을 막음, 9dfk만 연결, 주의점·로타리 점유 미구현).
 - gate 변화: 없음. 문서 결정이며 구현·SIM·DEVICE 수용이 아니다.
+
+## 2026-10-06 · uncommitted · feat(fleet): D-473 관제 콘솔 개발 연결 모드
+
+- 변경: Fleet `GET /api/fleet/auth/connection`·`POST /api/fleet/auth/development-session`(API Reference v1.108). `ROSY_DEPLOYMENT=development`와 `--connection-mode development`가 함께 있을 때만 같은 망(loopback·RFC1918·link-local·Tailscale) 브라우저에 1시간 메모리 운용자 세션(`development-<8hex>`, 이름 있는 운용자, 감사 기록)을 준다. 콘솔은 첫 401에서 자동 발급하고 "개발 연결 모드" 배지를 띄운다. site.env 두 키(기본 비움), README 절 추가.
+- 증거: 관련 호스트 pytest(`operations/fleet/test/test_development_session.py`, `test_cli.py`, 버전 고정 시험, `test/test_site_development_connection.py`)와 콘솔 브라우저 시험. 관제 PC에서 다른 PC 브라우저로 접속하는 FIELD 확인은 아직 하지 않았다.
+- gate 변화: SOURCE/LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.

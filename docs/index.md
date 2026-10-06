@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · feat(fleet): D-473 관제 콘솔 개발 연결 모드
 - 2026-10-06 · uncommitted · docs(adr): 콘솔 개발 연결 모드와 주의점 구역 허가
 - 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
 - 2026-10-06 · uncommitted · D-472 호스트 구현
 - 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
-- 2026-10-05 · uncommitted · docs(readme): short README, developer guide, verified team guide
