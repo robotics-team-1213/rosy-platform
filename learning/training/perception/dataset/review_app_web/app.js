@@ -281,6 +281,14 @@ document.addEventListener('keydown',event=> {
     const button=$(event.key==='ArrowLeft'?'prev-frame':'next-frame');
     if(button && !button.disabled) {event.preventDefault(); button.click();}
   }
+  // Number keys set the selected box's class, A approves, X excludes (D-485). Approval
+  // stays explicit (D-461): A only clicks an enabled 승인, never ticks 사진 전체 확인.
+  if(['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName) || event.ctrlKey || event.metaKey || event.altKey || busy || gesture) return;
+  const cls=workspace?.object_class_set.classes.find(c=>c.hotkey===event.key);
+  const field=cls && selected!==null ? $('boxes').children[selected]?.querySelector('select') : null;
+  if(field && !field.disabled) {event.preventDefault(); if(field.value!==cls.name) {field.value=cls.name; field.onchange();}}
+  const decision={a:'approve',x:'exclude'}[event.key.toLowerCase()];
+  if(decision && !$(decision).disabled) {event.preventDefault(); $(decision).click();}
 });
 function frameHeading() {
   $('status').setAttribute('status',frame.status==='pending'?'warn':'neutral');

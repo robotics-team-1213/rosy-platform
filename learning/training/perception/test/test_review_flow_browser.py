@@ -203,3 +203,40 @@ def test_custom_class_set_names_and_saves(custom_class_workspace):
     expect(page.locator('#save-status')).to_contain_text('v2')
     expect(page.locator('#boxes summary').first).to_contain_text('자동차')
     assert store.get(0)['review']['boxes'][0]['label'] == 'car'
+
+
+def test_number_keys_pick_classes_and_a_x_decide(browser_workspace):
+    page, store, expect = browser_workspace
+    page.get_by_role('button', name='박스 1 선택', exact=True).click()
+    page.locator('#canvas').focus()
+    page.keyboard.press('2')
+    expect(page.locator('#boxes .box-top select').first).to_have_value('obstacle_box')
+    expect(page.locator('#status')).to_have_text('검수 대기')
+    assert store.get(0)['review']['boxes'][0]['label'] == 'obstacle_box'
+    # Approval stays explicit (D-461): A never ticks the whole-photo check.
+    page.locator('#canvas').focus()
+    page.keyboard.press('a')
+    page.wait_for_timeout(300)
+    expect(page.locator('#complete')).not_to_be_checked()
+    assert store.get(0)['status'] == 'pending'
+    page.locator('#complete').check()
+    page.locator('#canvas').focus()
+    page.keyboard.press('a')
+    expect(page.locator('#status')).to_have_text('승인')
+    assert store.get(0)['status'] == 'approved'
+    page.locator('#canvas').focus()
+    page.keyboard.press('x')
+    expect(page.locator('#status')).to_have_text('제외')
+    assert store.get(0)['status'] == 'excluded'
+
+
+def test_number_key_in_a_number_field_stays_typing(browser_workspace):
+    page, store, expect = browser_workspace
+    field = page.get_by_label('박스 1 x0', exact=True)
+    field.focus()
+    page.keyboard.press('2')
+    expect(page.locator('#boxes .box-top select').first).to_have_value('traffic_light')
+    page.keyboard.press('Control+a')
+    page.wait_for_timeout(300)
+    assert store.get(0)['review']['boxes'][0]['label'] == 'traffic_light'
+    assert store.get(0)['status'] == 'approved'
