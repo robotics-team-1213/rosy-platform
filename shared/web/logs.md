@@ -663,3 +663,9 @@
 - 변경: `pinky-review`의 22rem 칸 경계를 등록했다. 320px 자료 등록 폼은 입력·행동을 전폭으로 쌓고, 390px은 같은 너비로 나란히 둔다. 320px 대기 사진 카드는 목록의 전폭을 쓴다.
 - 증거: 실제 로컬 서버의 합성 검증 폴더 등록→새 대기 검수 이동 브라우저 2 passed, 반응형 계약 9 passed, `known_failures.py` 각 0 NEW.
 - gate 변화: 없음. 합성 자료의 LOCAL 경로이며 실제 검수자·학습 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(web-common): readout 빈 상태 전폭
+
+- 변경: 공용 `ui-readout`의 `ui-empty`를 격자 전체 폭에 걸쳐 대기·오류 문구가 첫 라벨 열에 갇히지 않게 했다. 라벨·값의 두 열 배치는 유지한다(D-286).
+- 증거: 로봇 상태 패널의 390px 대기·오류 실제 폭 차이 ≤1px 브라우저 1 passed, 공용 반응형 9 passed, 조작 계약 27 passed; 각 `known_failures.py` 0 NEW. 캡처는 X: `captures/robot-overview-panel/`이다.
+- gate 변화: 공용 배치의 LOCAL 부분 근거 추가. 소비 표면별 G2/G3는 별도다.

@@ -15,6 +15,7 @@ function readout(state, channel, label, freshValue) {
 export function mount(el, ctx) {
   const head = createNode("ui-head", "", "로봇 상태");
   const summary = createNode("dl", "ui-readout");
+  summary.append(createNode("ui-empty", "", "로봇 상태를 확인하는 중입니다."));
   // D-321 부록: 보정 세션이 살아 있는 동안 로봇 카드 맨 위에 경고 칩을 단다.
   const calibration = document.createElement("ui-tag");
   calibration.setAttribute("status", "warn");

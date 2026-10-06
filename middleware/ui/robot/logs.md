@@ -1062,3 +1062,9 @@
 - 변경: 호환 화면의 개발 연결 버튼에 요청 중·재시도 대기 이유를 붙이고, 활성화 때 지운다. 역할 G2의 목록형 기록은 D-329 규약의 `matrix.json`과 구분해 `role-state-records.json`으로 저장한다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 기본·호환 경로 브라우저 2 passed. 이유 제거 변이에서 호환 경로 실패, 복원 뒤 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: 현재 트리의 공유 UI 계약 실패 해소에 기여. 실제 장치·현장 G2/G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(robot): 첫 상태 수신 전 안내
+
+- 변경: 운용 화면의 로봇 상태 목록이 첫 CORE 상태를 받기 전 비어 보이지 않도록 「로봇 상태를 확인하는 중입니다」를 표시한다. 수신·오류 때 기존 값/오류로 교체한다.
+- 증거: 독립 패널에서 대기·수신·오류 전환과 390px 전폭 메시지 1 passed, 역할 셸 320/390px 2 passed, 공용 반응형 9 passed, 공용 조작 계약 27 passed; 각 `known_failures.py` 0 NEW. 대기·오류 패널 캡처는 X: `captures/robot-overview-panel/`이다.
+- gate 변화: 로봇 운용 LOCAL 첫 상태 부분 근거. 실제 CORE 스트림·장치와 G3는 HOLD다.
