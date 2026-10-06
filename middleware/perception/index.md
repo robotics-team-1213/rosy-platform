@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · b53e1fe19 · fix(perception): camera fit grid steps, fine height band, record fit_step
 - 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)
 - 2026-10-06 · c257fac01 · fix(perception): D-468 lane containment projection uncertainty
 - 2026-10-06 · uncommitted · feat(sim): sim LiDAR 모양, accept_simulation_scans, GAZEBO 투영 불확실도
 - 2026-10-06 · uncommitted · refactor(perception): split the junction HOLD policy out of lane_keep
-- 2026-10-06 · uncommitted · fix(perception): flip a keep boundary's stale side after persistent contradiction
