@@ -158,7 +158,7 @@ thumbnail을 다시 만들지 않고, 픽셀 검수의 마스크 오버레이 �
 python learning/training/perception/dataset/review_app.py --state X:/DevTemp/<name>/state --source <source.jsonl> --human <human.jsonl> --images <image-root> --object-classes <data.yaml> --port 8767
 ```
 
-픽셀 `classes.yaml`은 항목마다 선택 항목 `display`를 둘 수 있다. 차선 모델(왼쪽/오른쪽 차선, 횡단보도, 과속방지턱)용 파일은 `learning/training/perception/classes/lane_lr5.yaml`이고 픽셀 클래스 입력으로 쓴다.
+픽셀 `classes.yaml`은 항목마다 선택 항목 `display`를 둘 수 있다. 차선 모델(왼쪽/오른쪽 차선, 횡단보도, 과속방지턱)용 파일은 `learning/training/perception/classes/lane_lr5.yaml`이다. 카탈로그 가져오기(`/api/import`) 요청 본문의 `classes`에 이 파일 경로를 넣는다. 비우면 초안 마스크 zip 옆이나 카탈로그 옆의 `classes.yaml`을 찾는다.
 
 모델 PC에서 `.pt`의 클래스 이름을 `data.yaml`로 뽑는다. 검수 앱은 모델을 열지 않는다.
 
@@ -173,6 +173,6 @@ python learning/training/perception/model/export_class_names.py best.pt --out da
 | 키 | 동작 |
 |---|---|
 | `1`-`9` | 클래스 선택 (선택한 박스에 지정) |
-| `A` | 승인 (전체 확인 체크 후에만) |
+| `A` | 승인 (전체 확인 체크 후에만, 픽셀 검수는 기본 배경 확인 체크도 필요) |
 | `X` | 제외 (검수 대기 사진만) |
 | `←` / `→` | 이전 / 다음 사진 |

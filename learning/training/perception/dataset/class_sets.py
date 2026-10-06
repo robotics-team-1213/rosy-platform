@@ -56,6 +56,10 @@ def from_data_yaml(raw, task):
         names = [names[i] for i in range(len(names))]
     if not isinstance(names, list):
         raise ValueError('data.yaml needs names')
+    # Ultralytics writes the model task; only 'detect' matches a set here (its 'segment' is instance masks).
+    file_task = doc.get('task')
+    if isinstance(file_task, str) and {'detect': 'detect'}.get(file_task) != task:
+        raise ValueError(f'data.yaml task {file_task!r} is not a {task} class set')
     return _record(names, task, {'kind': 'data_yaml', 'sha256': hashlib.sha256(raw).hexdigest()},
                    doc.get('display'), doc.get('colors'))
 
