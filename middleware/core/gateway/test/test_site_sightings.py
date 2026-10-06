@@ -26,7 +26,7 @@ def _payload(**changes):
 
 def test_site_sighting_round_trips_only_small_derived_evidence():
     sighting = SiteSightingPayload.model_validate(_payload())
-    assert sighting.model_dump(mode="json") == _payload()
+    assert sighting.model_dump(mode="json") == {**_payload(), "calibration_source": None}
 
 
 def test_sighting_can_explicitly_report_unmeasured_quality_as_null():
