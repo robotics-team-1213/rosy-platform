@@ -252,7 +252,6 @@ def test_camera_profile_intrinsics_must_be_finite_positive(extra, ok):
     assert (check_values("camera_profile", values) is None) is ok
 
 
-
 @pytest.mark.parametrize("px,ok", [(3.0, True), (5.0, True), (0.4, True), (0.0, False), (-1.0, False),
                                    (5.5, False), (float("nan"), False), (True, False), ("3", False)])
 def test_camera_profile_detector_lateral_px_is_in_0_to_5(px, ok):

@@ -141,7 +141,9 @@ def test_store_writes_a_camera_profile_candidate_geometry_error_reads(tmp_path):
     from core_common.calibration_store import CalibrationStore, check_values
     from control.sensing.perception.lane_containment import geometry_error
     fit = m.placement_fit(PLACEMENTS, board_elevation_m=.006)
-    record_id = m.store_candidate(CalibrationStore(tmp_path), 'rosy-x', fit, sessions=['p1'], extra={'k': 1})
+    systematic = m.systematic_from_truth(fit, TRUTH)
+    record_id = m.store_candidate(CalibrationStore(tmp_path), 'rosy-x', fit, systematic=systematic,
+                                  sessions=['p1'], extra={'k': 1})
     store = CalibrationStore(tmp_path)
     rec = store.load('rosy-x', 'camera_profile', record_id)
     assert rec['method'] == 'camera_board/1'
@@ -152,8 +154,36 @@ def test_store_writes_a_camera_profile_candidate_geometry_error_reads(tmp_path):
     assert store.current('rosy-x', 'camera_profile') is None  # a candidate, never accepted here
     profile = {**rec['values'], 'detector_lateral_px': 3.}
     pitch, height, roll, _px = geometry_error(profile, rec['intervals'])
-    assert pitch == pytest.approx(math.radians(fit['uncertainty']['pitch_deg']))  # no grid floor
-    assert height == pytest.approx(fit['uncertainty']['height_m'])
+    assert rec['intervals']['systematic'] == systematic
+    # No grid floor; the systematic term from the truth check is added to the scatter band.
+    assert pitch == pytest.approx(math.radians(fit['uncertainty']['pitch_deg']+systematic['pitch_deg']))
+    assert height == pytest.approx(fit['uncertainty']['height_m']+systematic['height_m'])
+
+
+# Independent truth check (tape-measured lens height, known-geometry target): value, tolerance.
+TRUTH = {'pitch_deg': (12.3, .05), 'roll_deg': (-1.3, .05), 'height_m': (.0617, .0005)}
+
+
+def test_board_bound_covers_truth_once_the_systematic_term_is_included():
+    # The synthetic board run read 0.3 deg / 1.7 mm off truth with scatter bands far smaller.
+    m = module()
+    fit = m.placement_fit(PLACEMENTS, board_elevation_m=.006)
+    sysm = m.systematic_from_truth(fit, TRUTH)
+    for key, scale in (('pitch_deg', math.degrees(1)), ('roll_deg', math.degrees(1)), ('height_m', 1.)):
+        value = fit['values']['height_m' if key == 'height_m' else key.replace('_deg', '_rad')]*scale
+        truth, _tol = TRUTH[key]
+        assert fit['uncertainty'][key] < abs(value-truth)  # scatter alone misses it
+        assert fit['uncertainty'][key]+sysm[key] >= abs(value-truth)
+        assert sysm[key] == pytest.approx(abs(value-truth)+TRUTH[key][1])
+
+
+def test_store_refuses_without_an_independent_truth_check(monkeypatch, tmp_path):
+    m = module()
+    monkeypatch.setattr(m, 'ROBOT_INSTALL', tmp_path/'absent')
+    argv = [a for i in range(5) for a in ('--placement', f'p{i}.png')]
+    with pytest.raises(SystemExit):
+        m.main([*argv, '--camera-profile', 'p.yaml', '--square-mm', '17', '--board-elevation-mm', '6',
+                '--store', 'rosy-x', '--output', str(tmp_path/'o.json')])
 
 
 def test_board_fit_refuses_to_run_on_a_robot(monkeypatch, tmp_path):

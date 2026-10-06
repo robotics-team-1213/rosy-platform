@@ -14,8 +14,11 @@ the wall-edge fitter on the robot over SSH.)
 (never accepts it): values pitch_rad, roll_rad, height_m (above the floor: the board fit
 plus the declared, measured board elevation); intervals.uncertainty pitch_deg, roll_deg,
 height_m, each max(across-placement ci95, half the re-seat spread) — the re-seat spread is
-over the placement mean and every --reseat view; intervals.fit_step all zero (solvePnP has
-no search grid, so lane_containment applies no grid floor); method camera_board/1.
+over the placement mean and every --reseat view; intervals.systematic, |board - truth| + the
+truth tolerance from an independent check (--truth-height-mm/-pitch-deg/-roll-deg VALUE TOL;
+--store refuses without it, because view scatter cannot see shared error such as distortion,
+seeded intrinsics, fy=fx, print scale or elevation); intervals.fit_step all zero (solvePnP
+has no grid; lane_containment adds systematic instead of a grid floor); method camera_board/1.
 """
 import argparse
 import hashlib
@@ -34,8 +37,6 @@ VIEW_PITCH_TOL_DEG = 0.15
 VIEW_ROLL_TOL_DEG = 0.3
 MIN_PLACEMENTS = 5
 METHOD = 'camera_board/1'
-# Student t, two-sided 95 %, by degrees of freedom (as tools/calibration/analyze_session.py T95).
-T95 = {4: 2.78, 5: 2.57, 6: 2.45, 7: 2.36, 8: 2.31, 9: 2.26, 10: 2.23}
 # The robot runtime's install root; its presence means this process runs on a robot.
 ROBOT_INSTALL = Path('/opt/rosy/current')
 REPO = Path(__file__).resolve().parents[2]
@@ -118,7 +119,9 @@ def placement_fit(placements, *, board_elevation_m, reseats=()):
         return np.array([f[key] for f in fits], float)
 
     n = len(placements)
-    t = T95.get(n - 1, 1.96)
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from analyze_session import t95
+    t = t95(n - 1)
     values, uncertainty, spread = {}, {}, {}
     for key, band, scale, tol in (('pitch_rad', 'pitch_deg', math.degrees(1), VIEW_PITCH_TOL_DEG),
                                   ('roll_rad', 'roll_deg', math.degrees(1), VIEW_ROLL_TOL_DEG),
@@ -136,13 +139,21 @@ def placement_fit(placements, *, board_elevation_m, reseats=()):
             'placements': n, 'reseats': len(reseats), 'consistency_pass': consistent}
 
 
-def store_candidate(store, robot, fit, *, sessions, extra):
+def systematic_from_truth(fit, truth):
+    """Shared error of the board fit from an independent truth check: per quantity
+    |board value - truth| + the truth's own tolerance. truth: {pitch_deg, roll_deg, height_m}
+    -> (value, tolerance), e.g. a tape-measured lens height and a known-geometry target."""
+    board = {'pitch_deg': math.degrees(fit['values']['pitch_rad']), 'roll_deg': math.degrees(fit['values']['roll_rad']),
+             'height_m': fit['values']['height_m']}
+    return {key: abs(board[key] - value) + tol for key, (value, tol) in truth.items()}
+
+
+def store_candidate(store, robot, fit, *, systematic, sessions, extra):
     """One camera_profile candidate record (never accepted here); returns its id."""
     return store.add(robot, 'camera_profile', dict(fit['values']), sessions=sessions, method=METHOD,
-                     intervals={'uncertainty': dict(fit['uncertainty']),
+                     intervals={'uncertainty': dict(fit['uncertainty']), 'systematic': dict(systematic),
                                 'fit_step': {'pitch_deg': 0., 'roll_deg': 0., 'height_m': 0.},
-                                'across_placements': {'n': fit['placements'], 'reseats': fit['reseats'],
-                                                      'spread': fit['placement_spread']}},
+                                'across_placements': {'n': fit['placements'], 'reseats': fit['reseats']}},
                      extra=extra)
 
 
@@ -194,6 +205,9 @@ def main(argv=None):
                         help='write a camera_profile candidate for ROBOT (device name) into --store-root')
     parser.add_argument('--store-root', type=Path, default=REPO / 'data' / 'calibration',
                         help='PC mirror of the calibration store (gitignored data/)')
+    for key, unit in (('height', 'mm'), ('pitch', 'deg'), ('roll', 'deg')):
+        parser.add_argument(f'--truth-{key}-{unit}', type=float, nargs=2, metavar=('VALUE', 'TOL'),
+                            help=f'independent truth check of the {key} ({unit}) and its tolerance; --store needs all three')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(argv)
     if ROBOT_INSTALL.exists():
@@ -208,6 +222,10 @@ def main(argv=None):
             parser.error(f'--store needs at least {MIN_PLACEMENTS} --placement images')
         if args.board_elevation_mm is None or args.board_elevation_estimated:
             parser.error('--store needs a measured --board-elevation-mm (not estimated)')
+        truth = (args.truth_height_mm, args.truth_pitch_deg, args.truth_roll_deg)
+        if any(t is None for t in truth) or not all(math.isfinite(v) for t in truth for v in t)                 or min(t[1] for t in truth) < 0:
+            parser.error('--store needs an independent truth check (--truth-height-mm, --truth-pitch-deg, '
+                         '--truth-roll-deg, each VALUE TOL): board scatter cannot see shared systematic error')
         return store_main(parser, args, checked_output(args.output))
     if args.placement or args.reseat:
         parser.error('--placement/--reseat are for --store')
@@ -274,16 +292,22 @@ def store_main(parser, args, output):
     fits = [first] + [fit_image(image, k, args.square_mm/1000, seed=first) for image in images[1:]]
     placements, reseats = fits[:len(args.placement)], fits[len(args.placement):]
     fit = placement_fit(placements, board_elevation_m=args.board_elevation_mm/1000, reseats=reseats)
+    systematic = systematic_from_truth(fit, {
+        'height_m': (args.truth_height_mm[0]/1000, args.truth_height_mm[1]/1000),
+        'pitch_deg': tuple(args.truth_pitch_deg), 'roll_deg': tuple(args.truth_roll_deg)})
     named = {f'placement_{i}': path for i, path in enumerate(args.placement)}
     named.update({f'reseat_{i}': path for i, path in enumerate(args.reseat)})
     result = {'status': 'candidate', 'applied': False, **fit, 'placement_fits': placements, 'reseat_fits': reseats,
-              **provenance(args, profile, k, named), 'store_record': None}
+              'systematic': systematic, **provenance(args, profile, k, named), 'store_record': None}
     if fit['consistency_pass']:
         sys.path.insert(0, str(REPO / 'contracts' / 'foundation'))
         from core_common.calibration_store import CalibrationStore
         result['store_record'] = store_candidate(
-            CalibrationStore(args.store_root), args.store, fit, sessions=[path.name for path in paths],
+            CalibrationStore(args.store_root), args.store, fit, systematic=systematic,
+            sessions=[path.name for path in paths],
             extra={'input_sha256': result['input_sha256'], 'board_elevation_mm': args.board_elevation_mm,
+                   'truth': {'height_mm': args.truth_height_mm, 'pitch_deg': args.truth_pitch_deg,
+                             'roll_deg': args.truth_roll_deg},
                    'square_size_mm': args.square_mm, 'placement_fits': placements, 'reseat_fits': reseats})
     write(output, result)
     return 0 if result['store_record'] else 2
