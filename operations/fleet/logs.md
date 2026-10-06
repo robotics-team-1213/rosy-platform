@@ -2091,3 +2091,10 @@
 - 변경: `fleet/server/development_session.py`(세션 저장소·LAN 주소·Host/Origin·분당 6회·상한 8·1시간 만료·발급 감사), `site_auth.build_authorize`의 개발 세션 우선 확인, `require_named_operator`의 `development-*` 허용, `--connection-mode`와 `ROSY_DEPLOYMENT` 이중 조건, 콘솔 자동 발급·배지.
 - 증거: 위 호스트 pytest와 브라우저 시험. 사이트 Caddy 뒤 `X-Forwarded-For`·`Host` 전달은 실사이트 확인이 필요하다.
 - gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-07 · feat/fleet-map-address-route · D-484 M1 현장 지도·주소·경로 계획 (D-485/D-486)
+
+- 변경: `fleet/site_map.py`(`rosy.site_map/1` 장소·방향 있는 차로·선택 `turn_bans`, `lane_graph.yaml` 가져오기), `server/site_map_store.py`(초안 하나·불변 활성 버전·계획 기록, `--tasks-db` 또는 메모리), `site_map_routes.py`(`/api/fleet/site-map/{active,draft,activate}`, 활성화는 이름 있는 운영자·감사·`/route` 30 s 안 진행 시 409), `fleet/routing/`(차로 단위 상태 A*, 시간 비용·회전 분류·`fleet.routing` 설정, 표준 라이브러리만), `trip_routes.py`(`POST /trip` 계획만, `execute`·`/trips/{id}/start` 501). `meet/place.py` `default_graph()` 하드코딩을 없애고 `/route`와 만남 기하가 활성 지도를 읽는다. CLI `--site-map-import`·`--site-config`, 사이트 compose가 이미지의 `lane_graph.yaml`을 첫 지도로 가져온다. 콘솔 `/console/site-map`(지도 보기·초안 편집·활성화·주소/좌표 경로 미리보기). API Ref v1.109.
+- 증거: `python -m pytest operations/fleet/test -q -rfE -p no:cacheprovider` 2258 passed/55 skipped, `known_failures.py` 0 NEW(X:/DevTemp/fleet-map-route/run.txt). 계획기 시험: 시드 고정 무작위 그래프 200개 A* = Dijkstra, 규칙별 단위·골든 경로 5쌍·500차로 p95 ≤ 20 ms. 공유 UI 계약 42 passed, 사이트 배포 시험 569 passed, Chromium 지도 화면 1 passed(ROSY_BROWSER_TESTS=1), node 140 passed.
+- gate 변화: SOURCE/LOCAL 코드 근거만 추가. 로봇 능력 필드(종류·주행 방식·최대 속도)는 로봇 계약에 없어 기본값으로 계획한다. trip 실행·위치 중재·가르치기(M2), Gazebo(M3), 실차(M4)는 HOLD.
+

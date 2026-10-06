@@ -89,6 +89,9 @@ adrs:
 - D-453
 - D-455
 - D-456
+- D-484
+- D-485
+- D-486
 plans:
 - docs/plans/2026-10-04-d442-omx-preempt-recovery.md
 - docs/plans/2026-10-04-d443-signal-supervision.md
@@ -111,6 +114,7 @@ plans:
 ---
 ## 현재 상태 (2026-09-27)
 
+- 2026-10-07 D-484 M1(SOURCE/LOCAL): `rosy.site_map/1` 스키마·초안/활성 버전 저장·이름 있는 운영자 활성화(차선 경로 진행 중 거절)·`--site-map-import` 첫 지도, `default_graph()` 하드코딩 제거(`/route`·만남 기하가 활성 지도를 읽음), D-485/D-486 차로 단위 상태 A* 계획기와 `POST /trip` 계획 응답(실행 없음, `/trips/{id}/start` 501), `/console/site-map` 보기·초안 편집·경로 미리보기. Gazebo·실차·로봇 능력 필드·trip 실행은 M2 이후다.
 - 2026-10-05 CLI 구조 후속: 기존 Mission·Cell·evidence·카메라 pairing·등록 TLS 생성 본문을 91줄 console builder로 옮겼다. optional imports, 기존 CLI 거절·alias, enrollment load→roster sync 및 한 번의 create_app 조립은 유지한다. CLI는 652→586줄이다. 기존 CLI/TLS 55 passed/Windows symlink 1 skipped와 본문 AST 동등·새 interpreter의 비활성 optional dependency 미로드를 확인했다. 런타임 권한·배포·기기 gate는 바꾸지 않았다.
 
 - 2026-10-05 D-456 등록 TLS 전송: 기존 암호화 등록 ID만 공개 origin·CA DER 지문에 묶어 HTTPS/WSS 발견 주소를 인증한다. 주소·ciphertext·principal·만료는 바꾸지 않는다. 공개 downgrade 방지 기록은 설정 누락·교체·재시작에도 남으며, 정상 로그아웃이 확인된 등록 행 삭제에만 함께 지운다. 관련 기존 회귀 206 passed/Windows 파일 권한·symlink 2 skipped, 마지막 새 테스트 23 passed/symlink 1 skipped, 독립 tail 5 passed와 SOURCE Safety 검토를 기록했다. TLS marker·CA·신원·WSS·await 경계 6개 실제 소스 변이는 각각 RED 뒤 원본 GREEN으로 확인했다. 실제 사이트 관리자 설정·TLS/WSS handshake·장기 승인 갱신·운용 수용은 별도다.
