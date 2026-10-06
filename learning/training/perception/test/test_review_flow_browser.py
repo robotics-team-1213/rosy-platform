@@ -145,6 +145,24 @@ def test_learning_pages_start_below_topbar(browser_workspace, route, main, width
         page.screenshot(path=str(target), full_page=True)
 
 
+@pytest.mark.parametrize('width', [390, 320])
+def test_catalog_compact_forms_use_the_same_full_width(browser_workspace, width):
+    page, _, _ = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/catalog', wait_until='networkidle')
+    for form, field, action in [('#import-form', '#catalog-path', '#import'),
+                                ('#cad-form', '#cad-path', '#cad')]:
+        bounds = [page.locator(selector).bounding_box() for selector in (form, field, action)]
+        assert all(abs(box['x'] - bounds[0]['x']) <= 1 for box in bounds), bounds
+        assert all(abs(box['width'] - bounds[0]['width']) <= 1 for box in bounds), bounds
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-catalog-form-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+
+
 @pytest.mark.parametrize('width', [1440, 800, 390])
 def test_empty_pixel_review_can_recover_at_declared_widths(browser_workspace, width):
     page, _, expect = browser_workspace
