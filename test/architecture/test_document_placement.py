@@ -41,6 +41,9 @@ MUST_IGNORE = [
     ".worktrees/topic/README.md",
     "fleet.sqlite3",
     "deploy/site/secrets/discovery_token",
+    # D-477: the operator's real tailnet join key lives in private/; the
+    # tracked form is the sd template beside the bundle tooling.
+    "private/tailscale-auth-key.txt",
 ]
 
 # D-226 table "추적하는 것": templates and public material next to the secrets.
@@ -54,6 +57,7 @@ MUST_TRACK = [
     "deploy/robot/pinky_pro/native/rosy-diag",
     "deploy/robot/pinky_pro/sd/rosy-config.template.yaml",
     "deploy/robot/pinky_pro/sd/provision.schema.json",
+    "deploy/robot/pinky_pro/sd/tailscale-auth-key.template.txt",
     "deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem",
     "operations/vision/signal_observer/config.example.json",
     "data/teleop/learning/teleop_20260919_151213_part01.mp4",

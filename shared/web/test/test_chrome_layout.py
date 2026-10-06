@@ -26,4 +26,4 @@ def test_header_keeps_one_recipe_of_named_areas():
     fleet = FLEET.read_text(encoding="utf-8")
     assert '"brand role estop" "nav nav estop"' in shell
     assert '"brand pill cell clock more estop"' in fleet
-    assert '"brand cell more estop" "pill clock clock estop"' in fleet
+    assert '"brand more estop" "pill clock estop"' in fleet

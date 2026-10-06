@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-06 · uncommitted · feat(fleet): D-473 관제 콘솔 개발 연결 모드
-- 2026-10-06 · uncommitted · docs(adr): 콘솔 개발 연결 모드와 주의점 구역 허가
-- 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
-- 2026-10-06 · uncommitted · D-472 호스트 구현
-- 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
+- 2026-10-07 · uncommitted · uiux(learning): 320px 서비스 장애 복구 확인
+- 2026-10-06 · uncommitted · docs(uiux): G3 항목별 결과 칸
+- 2026-10-06 · uncommitted · docs(uiux): 실제 사용자 G3 독회 기록지
+- 2026-10-06 · uncommitted · uiux(learning): class 파일 미연결 시 편집 도구 잠금
+- 2026-10-06 · uncommitted · uiux(learning): 병합된 검수 폭과 사진 목록 재확인

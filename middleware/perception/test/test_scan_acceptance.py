@@ -65,6 +65,21 @@ class ScanAcceptanceTest(unittest.TestCase):
         self.assertFalse(is_robot_scan(wrong_count))
         self.assertFalse(is_robot_scan(wrong_frame))
 
+    def test_shared_pinky_gazebo_lidar_shape_needs_the_opt_in(self):
+        # rosy_gz.urdf.xacro gpu_lidar: 640 samples, range_max 12, frame <ns>rplidar_link, sim stamp.
+        for frame in ('rplidar_link', 'pinky1/rplidar_link'):
+            scan = _open_front(n=640, stamp=12, range_max=12.0, frame=frame)
+            self.assertTrue(is_simulation_scan(scan))
+            self.assertFalse(is_robot_scan(scan))
+            lidar.enable_simulation_scans(True)
+            self.assertTrue(is_robot_scan(scan))
+            lidar.enable_simulation_scans(False)
+
+    def test_device_c1_shape_is_never_a_simulation_scan(self):
+        # The C1 also reports rplidar_link; its 40 m range_max keeps it out of the sim shape.
+        self.assertFalse(is_simulation_scan(_open_front(frame='rplidar_link')))
+        self.assertFalse(is_simulation_scan(_open_front(n=640, frame='rplidar_link')))
+
     def test_rebinding_a_copied_name_does_not_open_find_frontiers(self):
         scan = _open_front(stamp=12, range_max=8.0, frame='pinky/base/lidar')
         copied = lambda msg: True

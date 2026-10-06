@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import math
 from typing import Iterator
 
@@ -22,13 +23,32 @@ operator = require_role("operator")
 admin = require_role("administrator")
 
 
-# Stop evidence (D-411 addendum 17). Pinky odometry is 4096 pulse/rev, r 0.028 m, b 0.0971 m,
-# published at 30 Hz (bringup.py), so a parked robot's velocity flips between 0 and one encoder
-# tick per period. Still means "at most two ticks per period": below that is quantisation noise.
-_TICK_M = 2 * math.pi * 0.028 / 4096
-_ODOM_HZ = 30.0
+# Stop evidence (D-411 addendum 17/18). A parked robot's velocity flips between 0 and one encoder
+# tick per odometry period; "still" means at most two ticks per period. The geometry comes from the
+# robot package's ``odometry`` config section (URDF nominal, refined per robot), never from here.
 STILL_LINEAR_MPS = 0.005
-STILL_ANGULAR_RPS = 2 * _TICK_M / 0.0971 * _ODOM_HZ  # ~0.0265 rad/s; a 0.05 rad/s turn is moving
+#: Strict fallback when the robot package gives no odometry geometry: no tick-noise allowance.
+STILL_ANGULAR_FALLBACK_RPS = 0.01
+_log = logging.getLogger(__name__)
+_warned_no_odometry = False
+
+
+def still_angular_rps(config) -> float:
+    """Two encoder ticks per odometry period, as angular speed; strict fallback if unconfigured."""
+    global _warned_no_odometry
+    odo = (config or {}).get("odometry") or {}
+    try:
+        tick_m = 2 * math.pi * float(odo["wheel_radius_m"]) / float(odo["encoder_ticks_per_rev"])
+        limit = 2 * tick_m / float(odo["wheel_separation_m"]) * float(odo["publish_hz"])
+        if math.isfinite(limit) and limit > 0:
+            return limit
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        pass
+    if not _warned_no_odometry:
+        _warned_no_odometry = True
+        _log.warning("config odometry section missing or invalid; stop evidence uses strict %s rad/s",
+                     STILL_ANGULAR_FALLBACK_RPS)
+    return STILL_ANGULAR_FALLBACK_RPS
 
 
 def robot_still(svc: CoreServicesLike) -> bool:
@@ -39,7 +59,7 @@ def robot_still(svc: CoreServicesLike) -> bool:
     evidence = snapshot.evidence.get("velocity")
     return bool(evidence and evidence.evidence.value == "fresh"
                 and abs(float(snapshot.velocity.linear)) <= STILL_LINEAR_MPS
-                and abs(float(snapshot.velocity.angular)) <= STILL_ANGULAR_RPS)
+                and abs(float(snapshot.velocity.angular)) <= still_angular_rps(svc.config))
 
 
 def require_kept(svc: CoreServicesLike, flag: str) -> None:
