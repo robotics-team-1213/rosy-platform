@@ -195,7 +195,7 @@ Pilot 390×844에서 회전 조작을 첫 화면에 올리려고 아래 조작 �
 
 D-153이 이름 붙인 G1 시험 중 팔레트·토큰(스타일가이드 포함)·문법 **74 passed**, CORE 증거 **7 passed**를 UI/UX 브랜치 `d04f764c4`의 제품 코드에서 다시 실행했고 두 실행의 `known_failures.py`는 모두 0 NEW였다. 원본 실행 기록은 X: `logs/g1-current-{visual,evidence}.txt`다. `test_styleguide.py` 독립 파일은 현재 트리에 없고 스타일가이드 검사는 `shared/web/test/test_ui_token_contracts.py`에 있다. 이는 G1 코드 계약의 LOCAL 결과이며 G2/G3 판정은 별도다.
 
-현재 변경 트리에서 D-153의 팔레트·토큰/스타일가이드·문법·CORE 증거 계약과 반응형 선언 검사를 다시 실행해 **90 passed**, `known_failures.py` **0 NEW**를 확인했다. 원본은 X: `logs/catalog-width-current-contracts.txt`다. Pilot Shell 너비 변경 커밋 `f4fb54347` 뒤 같은 명명 계약을 재실행한 결과도 **90 passed**, **0 NEW**이며 원본은 X: `logs/g1-current-after-native.txt`다. 현재 코드 계약의 LOCAL 재확인이며 모든 표면의 G2/G3를 대신하지 않는다.
+현재 변경 트리에서 D-153의 팔레트·토큰/스타일가이드·문법·CORE 증거 계약과 반응형 선언 검사를 다시 실행해 **90 passed**, `known_failures.py` **0 NEW**를 확인했다. 원본은 X: `logs/catalog-width-current-contracts.txt`다. Pilot Shell 너비 변경 커밋 `f4fb54347` 뒤 같은 명명 계약을 재실행한 결과도 **90 passed**, **0 NEW**이며 원본은 X: `logs/g1-current-after-native.txt`다. Pilot 전화 폭 검사까지 반영된 HEAD `42d22b12e`에서도 동일한 G1 명명 계약이 **90 passed**, **0 NEW**였다(원본 X: `logs/g1-current-after-pilot.txt`). 현재 코드 계약의 LOCAL 재확인이며 모든 표면의 G2/G3를 대신하지 않는다.
 
 이번 브랜치의 전체 `shared/web/test` 재실행은 처음에 세 계약 실패를 드러냈다. 역할 화면의 단순 기록을 D-329 형식의 `matrix.json`과 구분해 `role-state-records.json`으로 이름 붙이고, Fleet compact 머리의 현재 격자 계약을 갱신했으며, 명시적인 활성화 호출을 비활성 사유 누락으로 읽던 검사기를 고쳤다. 개발 연결 버튼은 요청 중·재시도 대기의 비활성 이유를 제공한다. 수정 후 공유 UI 계약 **231 passed, 25 skipped**, 개발 연결의 기본·호환 경로 브라우저 **2 passed**, 각 `known_failures.py` **0 NEW**다. 이유 속성을 제거하면 호환 경로 시험이 실패하고 복원 후 통과했다. 원본 실행 기록은 X: `logs/g1-current-fixed.txt`와 `logs/dev-entry-post-mutation.txt`다. 25건의 skip과 표면별 G2/G3 미완료를 UI/UX GO로 해석하지 않는다.
 
