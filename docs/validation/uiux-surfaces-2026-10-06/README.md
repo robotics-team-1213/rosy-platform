@@ -104,6 +104,8 @@
 
 진행 중인 320×568/390×844 보드에서도 세 패널의 시작점·폭, 마커 칩 넘침, 첫 화면 정지를 검사했다. 320px 캔버스에서는 기존 공 반지름 7 내부 픽셀이 화면상 약 2.6px에 불과했다. 현재는 공 반지름을 화면상 최소 5px로, 로봇 표식·이름을 캔버스 표시 배율에 맞춰 그린다. 노트북 720px에서는 기존 크기다. 전후 원본은 X: `captures/games-live-width/`와 `captures/games-live-markers-final/`에 있으며, 진행·좁은 폭 브라우저 **3 passed**, `known_failures.py` **0 NEW**다. D-101의 운영 대상은 노트북이므로 전화 캡처는 추가 LOCAL 가독성 근거이며 실물 경기·운영자 G3는 HOLD다.
 
+첫 연결 실패와 경기 수신 후 연결 끊김도 320×568/390×844에서 재생했다. 두 상태·두 폭 모두 점수·피치·관측 패널의 시작점과 폭 차이 ≤1px, 문서 가로 넘침 0, 연결 문구의 가로 잘림 0, 첫 화면의 정지를 확인했다. 첫 실패는 점수를 `—`로, 수신 후 끊김은 마지막 점수와 「현재 위치 아님」을 표시한다. 패널 폭을 일부러 줄이면 320px 검사가 실패했고 되돌린 뒤 브라우저 **2 passed**, `known_failures.py` **0 NEW**였다. 원본은 X: `captures/game-recovery-mobile/games_board_{first_error,lost_after_live}_{320x568,390x844}.png`다. 이는 PreviewServer와 fixture payload의 LOCAL 복구 화면 근거로, 실제 경기·카메라·정지 readback 또는 G3 판정은 아니다.
+
 학습 검수는 D-461의 병렬 원본·inspector 구조를 유지하면서 두 편집 창의 너비만 같게 했다. 현재 로컬 Chromium의 객체 작업 브라우저 **10 passed**, 픽셀 작업·반응형 계약 **14 passed**, 각 `known_failures.py` **0 NEW**였다. 1440/800/390px에서 두 창 너비와 가로 넘침을 검사했다. 이 캡처는 합성 검수 자료를 사용한 개발 도구 LOCAL 증거다.
 
 390px 검수 화면에서는 두 창의 폭은 같아도 작업 버튼이 내용 길이만큼만 차지했다. 객체·픽셀 편집 칸을 컨테이너로 선언하고, 24rem 미만에서는 기존 공용 `ui-actions` 동작처럼 버튼을 각 칸의 전폭으로 쌓았다. 현재 Chromium 측정에서 두 칸의 폭은 각각 358px, 첫 작업 버튼도 각각 358px이고 가로 넘침은 0이다. 객체·픽셀 1440/800/390px 브라우저 6건과 반응형 계약 9건 **15 passed**, `known_failures.py` **0 NEW**다. 전후 캡처는 X: `captures/learning-width-container{,-final}/learning-{objects,pixels}-390.png`에 둔다. 실제 검수자 G3 독회는 남는다.

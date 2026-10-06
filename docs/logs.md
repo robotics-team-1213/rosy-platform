@@ -6511,3 +6511,8 @@ osy-d395-s1d\`.
 - 변경: 로봇 운용 콘솔의 전방 카메라 동등 행동을 390px에서 같은 폭으로, 320px에서 각 전폭으로 맞췄다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 실제 역할 셸 브라우저 2 passed, 카메라 회귀 2 passed, 반응형 계약 9 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/robot-camera-equal/`.
 - gate 변화: 로봇 운용 LOCAL G2 배치 근거 추가. 제품 전체 G2/G3와 현장 수용은 HOLD.
+## 2026-10-06 · uncommitted · uiux(games): 전화 복구 상태 동등 폭
+
+- 변경: 게임 보드의 첫 연결 실패와 수신 후 끊김을 320/390px에서 확인하는 브라우저 계약을 추가했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/game-recovery-mobile/` 원본 4장, 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 상태·폭 부분 근거 추가. 제품 전체 G2/G3와 실물 수용은 HOLD.

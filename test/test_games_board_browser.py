@@ -564,6 +564,59 @@ def test_overlay_failure_marks_last_received_match_as_stale():
         server.close()
 
 
+@pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
+def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, height):
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    board = PreviewBoard()
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, width, height)
+            page.route("**/overlay.json", lambda route: route.fulfill(status=503))
+            page.goto(url, wait_until="domcontentloaded")
+            page.wait_for_function("() => document.querySelector('#connection')?.textContent.includes('연결 오류')")
+            assert page.locator("#home-score").inner_text() == "—"
+            assert "경기장 정보 없음" in page.locator("#field-evidence").inner_text()
+
+            def check_layout(state):
+                layout = page.evaluate("""() => ({
+                  overflow: document.documentElement.scrollWidth - innerWidth,
+                  panels: ['.score', '.pitch-wrap', '.field-details']
+                    .map(selector => document.querySelector(selector).getBoundingClientRect().toJSON()),
+                  stop: document.querySelector('#halt').getBoundingClientRect().toJSON(),
+                  connection: (() => { const node = document.querySelector('#connection'); return {
+                    box: node.getBoundingClientRect().toJSON(),
+                    scrollWidth: node.scrollWidth, clientWidth: node.clientWidth,
+                  }; })(),
+                })""")
+                assert layout["overflow"] <= 0, (state, layout)
+                assert max(box["x"] for box in layout["panels"]) - min(box["x"] for box in layout["panels"]) <= 1, (state, layout)
+                assert max(box["width"] for box in layout["panels"]) - min(box["width"] for box in layout["panels"]) <= 1, (state, layout)
+                assert layout["stop"]["right"] <= width and layout["stop"]["bottom"] <= height, (state, layout)
+                connection = layout["connection"]
+                assert connection["box"]["left"] >= 0 and connection["box"]["right"] <= width, (state, connection)
+                assert connection["scrollWidth"] <= connection["clientWidth"], (state, connection)
+                page.wait_for_timeout(100)
+                save_temp_screenshot(page, f"games_board_{state}_{width}x{height}.png")
+
+            check_layout("first_error")
+            page.unroute("**/overlay.json")
+            board.publish(_play_payload(), jpeg=None)
+            page.wait_for_function("() => document.querySelector('#phase')?.dataset.phase === 'play'")
+            page.route("**/overlay.json", lambda route: route.fulfill(status=503))
+            page.wait_for_function("() => document.querySelector('#connection')?.textContent.includes('연결 오류')")
+            assert "현재 위치 아님" in page.locator("#field-evidence").inner_text()
+            assert page.locator(".score").get_attribute("aria-label") == "마지막 수신 점수"
+            check_layout("lost_after_live")
+            assert not errors, errors
+            browser.close()
+    finally:
+        server.close()
+
+
 def test_missing_overlay_after_play_marks_cached_score_as_last_received():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright

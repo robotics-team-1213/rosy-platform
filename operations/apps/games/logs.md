@@ -330,3 +330,8 @@
 - 변경: 캔버스가 축소돼도 공·로봇 표식·이름이 화면에서 읽히는 크기를 유지한다. 진행 중인 320/390px의 점수·피치·관측 동일 폭도 검사한다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 전후 캡처. 기존 320px 공 반지름 화면상 2.6px, 수정 후 5px. 진행·좁은 폭 브라우저 3 passed, `known_failures.py` 0 NEW.
 - gate 변화: Game Board LOCAL G2 부분 근거 추가. D-101 노트북 운영, 실제 경기·정지 readback과 G3는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(games): 좁은 복구 화면의 동등 폭
+
+- 변경: 첫 연결 실패와 경기 수신 후 연결 끊김을 320/390px에서 재생하고, 점수·피치·관측의 동등 폭, 연결 문구, 첫 화면 정지를 브라우저 계약에 추가했다. 제품 렌더링은 바꾸지 않았다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/game-recovery-mobile/` 원본 4장. 패널 폭 축소 변이에서 320px 검사 실패, 복구 후 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 게임 보드 LOCAL G2 상태·폭 근거를 추가했다. 실제 경기·정지 readback과 사용자 G3는 HOLD.
