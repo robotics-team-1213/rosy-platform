@@ -490,6 +490,13 @@
 - 증거: JVM 신규 2건 - mintedSessionIsStoredAndReusedUntilNaturalExpiry(재연결이 challenge·session POST 0회, Bearer 확인 2회), storedSessionPastExpiryIsDiscardedAndFreshMintReplacesIt - 전체 89 passed. 실기 8kcn: 연결 발급 1개 → 로봇 목록 복귀 → 재연결에도 발급 수 1 그대로(재사용 확인, 2026-10-06).
 - gate 변화: SOURCE/LOCAL 및 실기 관찰. FIELD는 별도.
 
+## 2026-10-06 · fix/pilot-expired-approval-rerequest · fix(pilot): 만료된 승인에서 재승인 요청 경로를 연다
+
+- 원인(실기 9dfk): 저장된 승인의 사용 기한이 끝나면 PeerClient가 네트워크 없이 PeerApprovalExpired를 던지고, 화면은 "수신 장치에서 재승인을 확인하세요"라고 안내했다. 앱이 새 요청을 보내지 않으므로 수신 쪽에 확인할 것이 없어 막다른 길이었다.
+- 변경: 만료가 나면 "다시 승인 요청" 대화상자를 띄운다. 사용자가 누르면 이 태블릿의 만료 기록만 지우고(기존 "이 앱의 연결 기록 지우기"와 같은 경로) 로봇이 다시 보이는 즉시 자동 재선택해 새 요청을 보낸다. 사용자 동작 없이 요청을 보내지 않는 기존 규칙(만료 = 네트워크 0회 JVM 시험)은 그대로다.
+- 증거: JVM 89 passed. 태블릿 실기(2026-10-06 9dfk): 대화상자 표시 → 승인 요청 → 수신 승인 대기 화면(새 요청) 확인.
+- gate 변화: SOURCE/LOCAL 및 실기 관찰.
+
 ## 2026-10-06 · uncommitted · uiux(pilot): 영상 없는 연습 화면의 조작 창 너비 통일
 
 - 변경: Gazebo 팔 연습에서 영상이 없으면 빈 영상 칸 대신 조작부를 먼저 전폭으로 보이고 팔·그리퍼 창을 같은 폭으로 맞췄다. 영상이 있으면 기존 영상·조작부 병렬 배치를 유지한다.
