@@ -307,22 +307,53 @@ def test_a_return_at_exactly_range_min_while_stationary_is_not_remembered():
     assert (status.state, status.clearance_source) == ("TRACKING", None)   # wall past horizon
 
 
-def test_a_post_that_slipped_under_c1_range_min_holds_while_stationary():
+@pytest.mark.parametrize("range_min, post", [
+    (C1_RANGE_MIN, (0.05, 0.02)),                     # C1: LiDAR range 0.070 -> 0.051 -> 0.034
+    (0.12, (0.12, 0.03)),                             # 0.12 overlay: 0.140 -> 0.121 -> 0.102
+])
+def test_a_post_that_slipped_under_range_min_holds_while_stationary(range_min, post):
     """The fix must keep D-422: a real post that went under range_min on approach stays."""
-    m = _manager()                                     # post at base (0.05, 0.02): LiDAR range 0.072
+    m = _manager()
     t, travelled = T, 0.0
     for _ in range(2):
-        seen = [p for p in [(0.05 - travelled + 0.017, 0.02)]
-                if math.hypot(*p) >= C1_RANGE_MIN]
-        _step(m, seen, t=t, range_min=C1_RANGE_MIN)
+        seen = [p for p in [(post[0] - travelled + 0.017, post[1])]
+                if math.hypot(*p) >= range_min]
+        assert seen                                                      # still visible
+        _step(m, seen, t=t, range_min=range_min)
         m.note_wheels(0.04, 0.0, owned=True, now=t)
         t += 0.5
         travelled += 0.02
-    assert math.hypot(0.05 - travelled + 0.017, 0.02) < C1_RANGE_MIN    # now invisible
+    assert math.hypot(post[0] - travelled + 0.017, post[1]) < range_min  # now invisible
     m.note_wheels(0.0, 0.0, owned=True, now=t)
     for index in range(40):
-        _, status = _step(m, [], t=t + 0.1 * index, range_min=C1_RANGE_MIN)
+        _, status = _step(m, [], t=t + 0.1 * index, range_min=range_min)
     assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+
+
+def test_a_point_just_past_the_tolerance_inside_range_min_is_remembered():
+    """Boundary: 2e-6 m inside range_min is inside (tolerance 1e-6 m), so it is remembered."""
+    m = _manager()
+    _step(m, [(C1_RANGE_MIN - 2e-6, 0.0)], range_min=C1_RANGE_MIN)
+    for index in range(40):
+        _, status = _step(m, [], t=T + 0.1 * (index + 1), range_min=C1_RANGE_MIN)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+
+
+def test_range_min_ring_then_turn_in_place_holds_from_memory_fail_closed():
+    """CURRENT behaviour, fail-closed availability gap (not a body_stop defect to fix here):
+    an in-place turn moves a range_min ring about the base origin, not the LiDAR, so part of
+    it lands mm inside range_min and is remembered; standing still never ages it. Real only
+    with a sim sensor whose range_min is inside the body (sim 0.05 vs device 0.12): sim2real
+    registry G-07. Flip this assertion when the sim sensor matches the device."""
+    m = _manager()
+    _step(m, _ring(C1_RANGE_MIN), range_min=C1_RANGE_MIN)
+    m.note_wheels(0.0, 0.5, owned=True, now=T)
+    _step(m, _ring(C1_RANGE_MIN), t=T + 0.2, range_min=C1_RANGE_MIN)   # turned 0.1 rad
+    m.note_wheels(0.0, 0.0, owned=True, now=T + 0.2)
+    clear = _wall(0.87)
+    for index in range(40):
+        _, status = _step(m, clear, t=T + 0.3 + 0.1 * index, range_min=C1_RANGE_MIN)
+    assert (status.state, status.clearance_source) == ("HOLD", "memory")
 
 
 def test_pinky_range_min_straight_stop_is_at_the_blind_edge():
