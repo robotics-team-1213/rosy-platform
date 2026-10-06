@@ -76,7 +76,8 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
             if None in (c.body_front_x_m,c.body_rear_x_m,c.body_half_width_m):
                 return self._stop_decision('HOLD','lane_return_body_unknown')
             self._return_controller=ReturnController(Footprint(
-                c.body_front_x_m,c.body_rear_x_m,c.body_half_width_m))
+                c.body_front_x_m,c.body_rear_x_m,c.body_half_width_m),
+                c.lane_return_body_margin_m,c.lane_return_checkpoint_fraction)
         # Existing console decisions have precedence once escalation has opened.
         if self._recovery.stuck_id is not None:
             # An accepted console YIELD owns the normal CORE recovery decision path until
