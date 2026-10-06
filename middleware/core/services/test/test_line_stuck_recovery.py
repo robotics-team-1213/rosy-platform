@@ -564,5 +564,19 @@ def test_repeated_require_operator_asks_once_per_stuck():
         machine.require_operator(_inp(i * 0.05, cause="lane_lost"))
     assert len(bus.named("nav.line_stuck_opened")) == 1
     asked = bus.named("nav.line_stuck_asked")
-    assert [a["reason"] for a in asked] == ["opened", "local_candidates_exhausted"]
+    assert [a["reason"] for a in asked] == ["local_candidates_exhausted"]
+    assert asked[0]["local_fallback_s"] is None and machine.phase == WAITING_CONSOLE
     assert len({a["stuck_id"] for a in asked}) == 1
+
+
+def test_fleet_required_refuses_back_and_retry():
+    decision, kw = "BACK_AND_RETRY", {}
+    machine, bus = _machine()
+    machine.require_operator(_inp(0.0, cause="lane_lost"))
+    with pytest.raises(AnswerRefused):
+        machine.answer(0.1, "stuck-1", decision, "operator", **kw)
+    machine.require_operator(_inp(0.2, cause="lane_lost"))
+    answered = bus.named("nav.line_stuck_answered")
+    assert answered[-1]["accepted"] is False and answered[-1]["reason"] == "lane_return_fleet_required"
+    assert machine.phase == WAITING_CONSOLE and not bus.named("nav.line_stuck_local_attempt")
+    assert len(bus.named("nav.line_stuck_asked")) == 1
