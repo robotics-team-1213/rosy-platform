@@ -324,3 +324,9 @@
 - 변경: 경기 보드의 320×568 최초·지연 화면에서 점수·피치·관측 패널이 같은 폭을 쓰는지 브라우저 계약에 추가했다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 원본 캡처 2장, 브라우저 4 passed, `known_failures.py` 0 NEW.
 - gate 변화: LOCAL G2 부분 근거 추가. 실제 경기·정지 readback과 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 좁은 보드의 공·로봇 가독성
+
+- 변경: 캔버스가 축소돼도 공·로봇 표식·이름이 화면에서 읽히는 크기를 유지한다. 진행 중인 320/390px의 점수·피치·관측 동일 폭도 검사한다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 전후 캡처. 기존 320px 공 반지름 화면상 2.6px, 수정 후 5px. 진행·좁은 폭 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Game Board LOCAL G2 부분 근거 추가. D-101 노트북 운영, 실제 경기·정지 readback과 G3는 HOLD다.

@@ -6409,3 +6409,9 @@ osy-d395-s1d\`.
 - 변경: Pilot 320×568의 HUD 보조 설정을 기존 도구 판에 넣어 HUD 스크롤을 없앴고, 한 화면에 영상·정지·상태·기본 주행을 유지했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px X: 화면·도구 판, 브라우저 9 passed, `known_failures.py` 0 NEW.
 - gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 축소 피치 표식 가독성
+
+- 변경: 좁은 경기 보드에서 공·로봇·이름의 화면상 크기를 유지하고 진행 상태의 세 패널 동일 폭을 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px X: 전후 캡처, 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Game Board LOCAL G2 일부 추가. 실제 노트북 경기·운영자 G3와 제품 전체는 HOLD다.

@@ -635,6 +635,13 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     try:
         with sync_playwright() as playwright:
             browser, page, errors = open_page(playwright, width, height)
+            page.add_init_script("""(() => {
+              const arc = CanvasRenderingContext2D.prototype.arc;
+              CanvasRenderingContext2D.prototype.arc = function(x, y, radius, ...rest) {
+                window.__ballRadius = radius;
+                return arc.call(this, x, y, radius, ...rest);
+              };
+            })()""")
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.querySelectorAll('#markers li').length === 8")
             page.get_by_text('마커 ID 자세히', exact=True).click()
@@ -643,9 +650,14 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
               overflow: document.documentElement.scrollWidth - innerWidth,
               topbar: document.querySelector('ui-topbar').getBoundingClientRect().height,
               halt: document.getElementById('halt').getBoundingClientRect().toJSON(),
+              panels: ['.score', '.pitch-wrap', '.field-details']
+                .map(selector => document.querySelector(selector).getBoundingClientRect().toJSON()),
+              ballRadius: window.__ballRadius,
+              canvasScale: document.querySelector('#pitch').clientWidth / document.querySelector('#pitch').width,
               chips: [...document.querySelectorAll('#markers li')]
                 .filter(li => li.scrollWidth > li.clientWidth).map(li => li.textContent),
             })""")
+            save_temp_screenshot(page, f"games_board_live_{width}x{height}.png")
             browser.close()
     finally:
         server.close()
@@ -655,6 +667,9 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     assert fit["topbar"] <= 0.2 * height, fit
     halt = fit["halt"]
     assert halt["top"] >= 0 and halt["bottom"] <= height and halt["right"] <= width, fit
+    assert max(panel["x"] for panel in fit["panels"]) - min(panel["x"] for panel in fit["panels"]) <= 1, fit
+    assert max(panel["width"] for panel in fit["panels"]) - min(panel["width"] for panel in fit["panels"]) <= 1, fit
+    assert fit["ballRadius"] * fit["canvasScale"] >= 4.99, fit
     assert fit["chips"] == [], fit
 def test_visibility_observations_are_not_operational_approval():
     from playwright.sync_api import sync_playwright, expect

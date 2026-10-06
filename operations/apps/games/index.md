@@ -52,8 +52,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(games): 좁은 보드의 공·로봇 가독성
 - 2026-10-06 · uncommitted · uiux(games): 320px 동일 폭 확인
 - 2026-10-06 · uncommitted · uiux(games): 최초 피치 대기·연결 오류 문구
 - 2026-10-06 · uncommitted · uiux(games): 관측 카드가 빈 높이를 차지하지 않음
 - 2026-10-04 · uncommitted · test(web): CSP 아래 경기 보드 조건 검증 복구
-- 2026-10-04 · uncommitted · fix(ui): 경기 보드 관측 상태와 마커 상세
