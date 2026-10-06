@@ -48,7 +48,8 @@ D-379 마스크와 프레임 밝기로 각 점을 확인한다.
 
 ### ③ SAM 3 전파 — `sam3_mask_draft.py`
 
-- SAM 3.1 비디오 예측기(`facebook/sam3.1`, `sam3.1_multiplex.pt`). 선마다 object id 하나, drivable 영역 object id 하나.
+- SAM 3.0 비디오 모델의 tracker(`facebook/sam3`, `sam3.pt`; `build_sam3_video_model().tracker`, SAM 2식 `add_new_points_or_box` → `propagate_in_video`). 선마다 object id 하나, drivable 영역 object id 하나.
+- SAM 3.1(multiplex)을 쓰지 않는 이유(2026-10-06 모델 PC 스모크): 고정 커밋 2345a4ad에서 `start_session`이 multiplex `init_state`가 받지 않는 `offload_state_to_cpu`를 넘김, 점 프롬프트만으로 객체 0개, 텍스트 경로는 16 GB에서 OOM. multiplex의 이득(많은 객체 동시 추적)은 객체 2~4개인 이 작업에 작다. SAM 3.0 tracker 측정: 320×240 23프레임, 0.20 s/frame, peak VRAM 4.2 GB, 바닥 점 하나로 회전 중 바닥 영역을 삼각대·벽·케이블을 빼고 추적.
 - 키프레임에 ②의 점을 넣고 이후 프레임으로 전파한다.
 - 재시드(그 프레임에서 ①②부터 다시) 조건, 하나라도 맞으면:
   - 마지막 seed 후 15프레임
@@ -92,10 +93,10 @@ D-465 추가 조항: §2의 SAM 2 계열에 SAM 3/3.1(점 프롬프트, 비디�
 
 ## 선행 조건
 
-- 모델 PC 이더넷 연결(현재 Wi-Fi만, 20–40 KB/s)
+- ~~모델 PC 이더넷 연결~~ 완료 2026-10-06 (1 Gbps, 기본 경로)
 - Hugging Face `facebook/sam3`, `facebook/sam3.1` gated 승인 + 토큰
 - Ollama 설치 + `qwen3-vl:8b-instruct` 받기
-- 공식 `facebookresearch/sam3` 설치(기존 `~/rosy-ml/.venv`의 torch 유지)
+- ~~공식 `facebookresearch/sam3` 설치~~ 완료 2026-10-06: USB 번들 `install.sh` → `~/rosy-ml/sam3-venv`(torch는 학습 venv 재사용), 번들에 빠진 `einops`·`pycocotools` 추가, 체크포인트 sha256 일치
 
 ## 하지 않는 것
 
