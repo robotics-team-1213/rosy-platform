@@ -102,16 +102,15 @@ async function start() {
     armRoot.hidden = false;
     document.querySelectorAll("[data-estop], [data-goto]").forEach((button) => { button.hidden = true; });
     mountArm(armRoot, target, omxSim);
-  } catch (error) {
-    if (notice?.textContent === "조종 대상을 확인하고 있습니다.") notice.textContent = `대상 확인 실패 · ${error.message}`;
+  } catch (_error) {
+    if (notice?.textContent === "조종 대상을 확인하고 있습니다.") notice.textContent = "";
     const heading = Object.assign(document.createElement("h2"), {id: "pilot-gate-heading", textContent: "조종 대상 확인"});
-    const message = Object.assign(document.createElement("ui-empty"), {textContent: "조종 대상을 확인하지 못했습니다. 연결을 확인한 뒤 다시 시도하세요."});
-    const detail = Object.assign(document.createElement("p"), {textContent: error.message});
+    const message = Object.assign(document.createElement("ui-empty"), {textContent: "조종 대상을 확인하지 못했습니다. 연결과 대상 정보를 확인한 뒤 다시 시도하세요."});
     const retry = document.createElement("ui-button");
     retry.setAttribute("kind", "quiet"); retry.setAttribute("type", "button");
     retry.dataset.discoveryRetry = ""; retry.textContent = "대상 다시 확인";
     retry.addEventListener("click", start);
-    connectRoot.replaceChildren(heading, message, detail, retry);
+    connectRoot.replaceChildren(heading, message, retry);
   } finally {
     discovering = false;
     const retry = connectRoot.querySelector("[data-discovery-retry]");

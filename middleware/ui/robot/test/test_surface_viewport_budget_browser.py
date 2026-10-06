@@ -38,6 +38,10 @@ MEASURE = """() => {
     topbar: box('ui-topbar'),
     sticky: getComputedStyle(document.querySelector('ui-topbar')).position,
     estop: box('#shell-estop'),
+    slots: ['act', 'sense', 'observe'].map(name => document.querySelector(`[data-slot="${name}"]`))
+      .filter(Boolean).map(node => node.getBoundingClientRect().toJSON()),
+    cameraActions: [...document.querySelectorAll('#vision-expand, #vision-record-stop')]
+      .map(node => node.getBoundingClientRect().toJSON()),
   };
 }"""
 
@@ -82,6 +86,9 @@ def test_role_surfaces_keep_the_header_budget_and_the_stop_in_view(tmp_path, wid
             }""")
             page.wait_for_timeout(300)
             first = page.evaluate(MEASURE)
+            if surface == "console" and (shot_dir := os.environ.get("ROSY_SHOT_DIR")):
+                Path(shot_dir).mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(Path(shot_dir) / f"robot-console-{width}x{height}.png"))
             page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
             page.wait_for_timeout(100)
             scrolled = page.evaluate(MEASURE)
@@ -97,5 +104,12 @@ def test_role_surfaces_keep_the_header_budget_and_the_stop_in_view(tmp_path, wid
             f"{surface} {width}×{height}: 머리 {first['topbar']['height']}px > 창 높이의 20%")
         assert _inside(first["estop"], width, height), (surface, first["estop"])
         assert first["sticky"] == "sticky", (surface, first["sticky"])
+        if surface == "console":
+            slots = first["slots"]
+            assert slots[0]["top"] < slots[1]["top"] < slots[2]["top"], (width, slots)
+            assert max(slot["x"] for slot in slots) - min(slot["x"] for slot in slots) <= 1, (width, slots)
+            assert max(slot["width"] for slot in slots) - min(slot["width"] for slot in slots) <= 1, (width, slots)
+            actions = first["cameraActions"]
+            assert len(actions) == 2 and abs(actions[0]["width"] - actions[1]["width"]) <= 1, (width, actions)
         assert _inside(scrolled["estop"], width, height), (
             f"{surface}: 끝까지 스크롤하면 비상 정지가 화면 밖이다", scrolled["estop"])

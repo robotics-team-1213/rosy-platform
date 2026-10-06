@@ -11,6 +11,7 @@ import build
 import edge_review
 import review_evidence
 import review_masks
+from mcap_proof import prove_frames
 
 
 def bounded(path, limit=32 * 1024 * 1024):
@@ -66,14 +67,48 @@ def import_frames(store, body):
             raise ValueError('pixel classes differ from existing workspace')
     if not binding:
         raise ValueError('verified classes.yaml required for pixel review')
+    mcap_groups = {}
+    with store.connect() as db:
+        kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
+    for row in rows:
+        if row.get('source_kind') == 'mcap':
+            if not kind or kind[0] != 'evaluation':
+                raise ValueError('MCAP evaluation requires a separate evaluation workspace')
+            if row.get('mask'):
+                raise ValueError('MCAP evaluation starts with an empty pixel mask')
+            mcap = row.get('mcap')
+            if not isinstance(mcap, dict) or not isinstance(mcap.get('frame'), dict):
+                raise ValueError('MCAP source proof required')
+            session = Path(mcap['session_dir'])
+            if session.name != row.get('source_session'):
+                raise ValueError('MCAP source session differs')
+            frame = mcap['frame']
+            selector = {key: frame[key] for key in
+                        ('topic', 'log_ns', 'bag', 'channel_id', 'message_ordinal', 'header_stamp_ns')}
+            mcap_groups.setdefault(session, []).append((row, mcap, {**selector, 'image': row['image']}))
+        elif kind and kind[0] == 'evaluation':
+            raise ValueError('evaluation workspace accepts only MCAP sources')
+    for session, group in mcap_groups.items():
+        first = group[0][1]
+        if any(mcap['metadata_sha256'] != first['metadata_sha256'] or
+               mcap['bags'] != first['bags'] for _, mcap, _ in group):
+            raise ValueError('MCAP bag inventory differs within catalog')
+        verified = prove_frames(session, [selector for _, _, selector in group],
+                                body.get('scratch', store.state), expected=first)
+        for (_, mcap, _), frame in zip(group, verified['frames']):
+            if frame != mcap['frame'] or verified['decoder'] != mcap.get('decoder'):
+                raise ValueError('MCAP source proof differs')
     checked = []
     for row in rows:
         if not all(isinstance(row.get(k), str) and row[k].strip() for k in ('source_session', 'capture_group')):
             raise ValueError('source_session and capture_group required')
-        if type(row.get('video_frame')) is not int or row['video_frame'] < 0:
-            raise ValueError('original video frame index required')
-        if not re.fullmatch('[0-9a-f]{64}', row.get('source_video_sha256', '')):
-            raise ValueError('declared source video SHA required')
+        if row.get('source_kind') == 'mcap':
+            mcap = row.get('mcap')
+        else:
+            if type(row.get('video_frame')) is not int or row['video_frame'] < 0:
+                raise ValueError('original video frame index required')
+            if not re.fullmatch('[0-9a-f]{64}', row.get('source_video_sha256', '')):
+                raise ValueError('declared source video SHA required')
         width, height = row['width'], row['height']
         if type(width) is not int or type(height) is not int:
             raise ValueError('integer image dimensions required')
@@ -108,10 +143,13 @@ def import_frames(store, body):
                       ('source_session', 'capture_group', 'source_video_sha256', 'video_frame',
                        'video_time_s', 'timestamp_basis', 'collection', 'dataset_memberships_snapshot')}
         normalized['source_session_declared'] = row['source_session']
-        try:
-            normalized['source_session'] = edge_review.session(row.get('source_video', ''))
-        except ValueError:
-            pass  # Preserve historical identities; never invent authenticated capture stamps.
+        if row.get('source_kind') == 'mcap':
+            normalized.update(source_kind='mcap', mcap=mcap)
+        else:
+            try:
+                normalized['source_session'] = edge_review.session(row.get('source_video', ''))
+            except ValueError:
+                pass  # Preserve historical identities; never invent authenticated capture stamps.
         normalized.update(video=row.get('source_video'), width=width, height=height,
                           image_sha256=row['image_sha256'], boxes=[],
                           original_video_verified=False, map_revision=None, map_pose=None,
@@ -140,7 +178,7 @@ def import_frames(store, body):
                     # Link only an exact primary image plus the same declared video/frame.
                     # Never match by pixels alone across captures or replace human decisions.
                     matches = []
-                    for candidate in db.execute('SELECT id,source FROM frames'):
+                    for candidate in db.execute('SELECT id,source FROM frames') if source.get('source_kind') != 'mcap' else ():
                         old = json.loads(candidate['source'])
                         if (not old.get('source_video_sha256') and
                                 old['image_sha256'] == source['image_sha256'] and

@@ -260,6 +260,15 @@ def build_fixture(tmp_path, shared_group=False):
                 staging_parent=tmp_path / 'scratch', now=lambda: 100), authority
 
 
+def test_reserved_capture_group_blocks_review_dataset_publication(tmp_path):
+    args, _ = build_fixture(tmp_path)
+    args['store'].reserve_eval_source('heldout-other', 'group1')
+    result = target.build_dataset(**args)
+    assert result['status'] == 'HOLD'
+    assert any('overlaps fixed evaluation' in reason for reason in result['blockers'])
+    assert args['store'].datasets() == {}
+
+
 def test_indexed_build_roundtrip(tmp_path):
     from store import content_sha
     args, authority = build_fixture(tmp_path)

@@ -1,8 +1,49 @@
 import {createFleetClient} from '/common/fleet-client.js';
+import {confirmIrreversible} from '/common/ui.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 
 const $ = id => document.getElementById(id);
+const JOB_STATUS_LABEL = {
+  PROPOSED: '제안됨 · 승인 대기', READY: '실행 대기', RUNNING: '실행 중',
+  ACTION_SUCCEEDED: '장치 동작 완료 · 목표 확인 대기', GOAL_CONFIRMED: '목표 확인 완료',
+  HOLD: '작업 보류', WAITING: '시작 대기',
+};
+const JOB_REASON_LABEL = {
+  CANCELLED_BY_OPERATOR: '운영자가 취소함',
+  OPERATOR_SHEET_ACCESS_UNAVAILABLE: '작업자 간지 접근 확인 필요',
+  SITE_AUTHORITY_CHANGED: '사이트 제어 권한 변경 · 재확인 필요',
+  FLEET_FENCE_CHANGED_BEFORE_SUBMISSION: '전송 전 정지 세대 변경',
+  FLEET_CLAIM_MISSING_BEFORE_SUBMISSION: '전송 전 장치 예약 확인 불가',
+  site_stop: '사이트 정지 · 실제 장치 상태 확인 필요',
+};
+function jobStatusLabel(status, reason) {
+  return reason === 'CANCELLED_BY_OPERATOR' ? '작업 취소됨' : JOB_STATUS_LABEL[status] || '상태 확인 필요';
+}
+function jobReasonLabel(reason) {
+  return !reason ? '' : JOB_REASON_LABEL[reason] || '사유 확인 필요 · 진행 원장 상세를 확인하세요';
+}
+$('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
+function stopNotice(message, state) {
+  const notice = $('estop-feedback');
+  notice.textContent = message;
+  notice.setAttribute('state', state);
+  notice.hidden = false;
+}
+$('estop').addEventListener('click', async () => {
+  stopNotice('비상 정지 요청 중…', 'pending');
+  try {
+    const result = await request('/api/fleet/estop', {method: 'POST'});
+    const summary = result.total > 0
+      ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
+      : '정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.';
+    stopNotice(summary, result.total > 0 && result.stopped === result.total ? 'warning' : 'error');
+  } catch (error) {
+    stopNotice(error.status >= 500 || !error.status
+      ? '비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요.'
+      : `비상 정지 요청 거절 — ${error.message}`, 'error');
+  }
+});
 let editEpoch = 0;
 async function api(path, options) {
   const epoch = editEpoch;
@@ -18,7 +59,30 @@ let job = null;
 let jobGeneration = null;
 let layoutData = null;
 const commands = ['recipe-save', 'cell-save', 'compile', 'propose', 'admit', 'reconcile', 'resume', 'cancel'];
-function invalidate() { previewRefs = null; layoutData = null; $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); refreshControls(); }
+const jobActionLabels = {admit: '실행 승인', reconcile: '실제 상태를 대조', resume: '재승인', cancel: '취소'};
+function invalidate() {
+  previewRefs = null; layoutData = null;
+  $('summary').setAttribute('state', 'unavailable');
+  $('summary').textContent = '저장한 레시피와 셀을 기준으로 계획을 계산합니다.';
+  $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); refreshControls();
+}
+function clearSession() {
+  role = null; job = null; jobGeneration = null; invalidate();
+  $('session').textContent = '접속 전';
+  revisions.clear();
+  for (const kind of ['recipe', 'cell']) {
+    $(kind + '-revision').setAttribute('state', 'empty');
+    $(kind + '-revision').textContent = '저장 전';
+  }
+  $('proposal').textContent = '';
+  $('job-state').textContent = '';
+  $('job-summary').textContent = '작업 ID로 상태를 확인하세요.';
+  $('step-progress').replaceChildren(); $('sheet-progress').replaceChildren();
+  $('saved').hidden = true;
+  $('saved-status').hidden = false;
+  $('saved-status').setAttribute('state', 'unavailable');
+  $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
+}
 function refreshControls() {
   for (const field of document.querySelectorAll('input, textarea, select')) {
     field.disabled = busy;
@@ -35,14 +99,21 @@ function refreshControls() {
   }
   for (const id of commands) {
     const sheetBlocked = id === 'resume' && job?.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS');
-    const needsJob = ['admit', 'reconcile', 'resume', 'cancel'].includes(id);
+    const needsJob = id in jobActionLabels;
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
       (id === 'admit' ? job.status === 'PROPOSED' : id === 'cancel' ? ['READY', 'ACTION_SUCCEEDED', 'HOLD'].includes(job.status) && job.reason !== 'CANCELLED_BY_OPERATOR' : job.status === 'HOLD' && job.reason !== 'CANCELLED_BY_OPERATOR'));
     const allowed = role === 'operator' && !busy && jobAllowed && !sheetBlocked && (id !== 'propose' || previewRefs !== null);
+    let reason = '';
+    if (!allowed) {
+      reason = '저장 후 미리보기 필요';
+      if (needsJob && !jobAllowed) reason = job?.mission_id === $('mission-id').value
+        ? `현재 작업 상태에서는 ${jobActionLabels[id]}할 수 없습니다` : '작업 상태를 먼저 확인하세요';
+      if (sheetBlocked) reason = '작업자 간지 삽입 확인 대기';
+      if (role !== 'operator') reason = '운영자 접속 필요';
+      if (busy) reason = '요청 처리 중';
+    }
     $(id).disabled = !allowed;
-    if (!allowed) $(id).setAttribute('reason', busy ? '요청 처리 중' : role !== 'operator' ? '운영자 접속 필요' :
-      sheetBlocked ? '작업자 간지 삽입 확인 대기' : '저장 후 미리보기 필요');
-    else $(id).removeAttribute('reason');
+    $(id).setAttribute('reason', reason);
   }
 }
 async function action(fn) {
@@ -50,8 +121,11 @@ async function action(fn) {
   busy = true; refreshControls();
   $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
-    if (error.status === 409 || error.status === 401 || error.status === 403) { job = null; jobGeneration = null; }
-    $('notice').textContent = error.message;
+    if (error.status === 401 || error.status === 403) clearSession();
+    else if (error.status === 409) { job = null; jobGeneration = null; }
+    $('notice').textContent = error.status === 403
+      ? '이 계정에는 Cell 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.' : error.message;
+    if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
   }
   finally { busy = false; refreshControls(); }
 }
@@ -67,15 +141,33 @@ function references() {
   return result;
 }
 async function list() {
-  const result = await api('/api/fleet/cell-app/documents');
-  $('saved').replaceChildren(...result.documents.map(item => {
+  const saved = $('saved'), status = $('saved-status');
+  saved.hidden = true;
+  status.hidden = false;
+  status.setAttribute('state', 'pending');
+  status.textContent = '저장된 문서를 확인하는 중입니다.';
+  let result;
+  try { result = await api('/api/fleet/cell-app/documents'); }
+  catch (error) {
+    status.setAttribute('state', 'error');
+    status.textContent = '저장된 문서를 확인하지 못했습니다. 접속 상태를 확인하고 다시 시도하세요.';
+    throw error;
+  }
+  saved.replaceChildren(...result.documents.map(item => {
     const li = document.createElement('li'); li.textContent = `${item.kind} · ${item.id} · ${item.updated_at}`; return li;
   }));
+  saved.hidden = result.documents.length === 0;
+  status.hidden = result.documents.length > 0;
+  if (!status.hidden) {
+    status.setAttribute('state', 'empty');
+    status.textContent = '저장된 문서가 없습니다. 위에서 레시피와 셀 문서를 작성하고 저장하세요.';
+  }
 }
 function loaded(kind, revision) {
   const text = JSON.stringify(revision.document, null, 2);
   $(kind + '-document').value = text;
   revisions.set(kind, {...revision, text});
+  $(kind + '-revision').setAttribute('state', 'ready');
   $(kind + '-revision').textContent = `저장된 버전 ${revision.digest.slice(0, 12)}`;
   invalidate();
   if (kind === 'recipe') recipeFields(revision.document);
@@ -143,6 +235,7 @@ function structuredFields(kind, value) {
       mutate(draft);
       $(kind + '-document').value = JSON.stringify(draft, null, 2);
       if (redraw) structuredFields(kind, draft);
+      $(kind + '-revision').setAttribute('state', 'warning');
       $(kind + '-revision').textContent = '수정한 문서 · 저장 전';
       refreshControls();
     } catch { $('notice').textContent = '문서 구조를 확인한 뒤 불러오세요.'; }
@@ -152,6 +245,8 @@ function structuredFields(kind, value) {
 for (const kind of ['recipe', 'cell']) {
   for (const part of ['id', 'document']) $(kind + '-' + part).addEventListener('input', () => {
     editEpoch++; invalidate();
+    $(kind + '-revision').setAttribute('state', 'warning');
+    $(kind + '-revision').textContent = '수정한 문서 · 저장 전';
     if (part === 'document') {
       try { const document = JSON.parse($(kind + '-document').value); if (kind === 'recipe') recipeFields(document); else cellFields(document); }
       catch { $(kind + '-fields').replaceChildren(); $(kind + '-structure').replaceChildren(); }
@@ -168,6 +263,7 @@ for (const kind of ['recipe', 'cell']) {
       if (!document || typeof document !== 'object' || Array.isArray(document)) throw new Error('문서는 JSON object여야 합니다.');
       $(kind + '-document').value = JSON.stringify(document, null, 2);
       if (kind === 'recipe') recipeFields(document); else cellFields(document);
+      $(kind + '-revision').setAttribute('state', 'warning');
       $(kind + '-revision').textContent = '가져온 문서 · 저장 전';
       $('notice').textContent = '파일을 불러왔습니다. 이름과 설정을 확인하고 저장하세요.';
     });
@@ -178,22 +274,53 @@ for (const kind of ['recipe', 'cell']) {
   }));
   $(kind + '-save').addEventListener('click', () => action(async () => {
     const id = $(kind + '-id').value, previous = revisions.get(kind);
-    const revision = await post(`/api/fleet/cell-app/documents/${kind}/${encodeURIComponent(id)}`, {
-      document: JSON.parse($(kind + '-document').value),
-      expected_digest: previous?.id === id ? previous.digest : null,
-    });
+    const status = $(kind + '-revision');
+    status.setAttribute('state', 'pending');
+    status.textContent = '저장 요청 중 · 결과 확인 대기';
+    let revision;
+    try {
+      revision = await post(`/api/fleet/cell-app/documents/${kind}/${encodeURIComponent(id)}`, {
+        document: JSON.parse($(kind + '-document').value),
+        expected_digest: previous?.id === id ? previous.digest : null,
+      });
+    } catch (error) {
+      status.setAttribute('state', 'error');
+      status.textContent = error.status === 409
+        ? '저장 충돌 · 작성 내용을 복사한 뒤 최신 문서를 불러와 비교하세요.'
+        : error instanceof SyntaxError ? '저장 전 JSON 형식을 확인하세요.'
+        : error.status && error.status < 500 ? '저장 거절 · 문서 형식과 권한을 확인하세요.'
+        : '저장 결과 확인 불가 · 문서 목록과 최신 버전을 확인한 뒤 다시 시도하세요.';
+      throw error;
+    }
     loaded(kind, revision); await list(); $('notice').textContent = '문서 저장 완료 · 실행 가능 여부는 미리보기에서 확인하세요.';
   }));
 }
-$('credential').addEventListener('input', () => { editEpoch++; role = null; job = null; jobGeneration = null; invalidate(); });
+$('credential').addEventListener('input', () => {
+  editEpoch++; clearSession();
+  $('notice').textContent = '운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.';
+});
 $('connect').addEventListener('click', () => action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
   $('session').textContent = `${session.principal_id} · ${role}`;
   await list(); $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
 }));
 $('compile').addEventListener('click', () => action(async () => {
-  invalidate(); const refs = references(); const result = await post('/api/fleet/cell-app/compile', refs);
+  invalidate();
+  let refs, result;
+  try { refs = references(); result = await post('/api/fleet/cell-app/compile', refs); }
+  catch (error) {
+    $('summary').setAttribute('state', refs ? 'error' : 'warning');
+    $('summary').textContent = !refs
+      ? '미리보기 전에 두 문서를 저장하거나 불러오세요.'
+      : error.status === 409
+      ? '미리보기 실패 · 저장된 문서가 바뀌었습니다. 최신 문서를 불러와 확인하세요.'
+      : error.status && error.status < 500
+      ? '미리보기 거절 · 문서 형식과 권한을 확인한 뒤 다시 확인하세요.'
+      : '미리보기 결과 확인 불가 · 문서와 연결 상태를 확인하고 다시 확인하세요.';
+    throw error;
+  }
   previewRefs = refs;
+  $('summary').setAttribute('state', 'ready');
   $('summary').textContent = `${result.summary.transfer_count}회 전송 · 팔레트 완료 표시 ${result.summary.pallet_markers.length}개`;
   $('preview').textContent = JSON.stringify(result.candidate.job, null, 2);
   layoutData = result.candidate;
@@ -212,7 +339,7 @@ $('propose').addEventListener('click', () => action(async () => {
   if (JSON.stringify(references()) !== JSON.stringify(previewRefs)) throw new Error('문서가 바뀌었습니다. 미리보기를 다시 확인하세요.');
   const result = await post('/api/fleet/cell-app/proposals', {...previewRefs,
     request_key: $('request-key').value, workcell_id: $('workcell').value, instance_id: $('instance').value});
-  $('proposal').textContent = `제안 ${result.proposal.proposal_id}\n상태 ${result.mission?.status || result.proposal.state}\n운영자 별도 승인 대기`;
+  $('proposal').textContent = `제안 ${result.proposal.proposal_id}\n상태 ${jobStatusLabel(result.mission?.status || result.proposal.state)}\n운영자 별도 승인 대기`;
   $('mission-id').value = result.proposal.proposal_id;
   job = null;
   $('notice').textContent = '제안 완료 · 관제에서 별도 승인 후 진행 상태를 확인하세요.';
@@ -253,11 +380,11 @@ async function readJob() {
   const control = await api('/api/fleet/dispatch-control');
   jobGeneration = control.generation;
   job = result.job; $('job-state').textContent = JSON.stringify(job, null, 2);
-  $('job-summary').textContent = `${job.status} · ${job.steps.length}단계 중 ${job.current_step_index + 1}단계 · ${job.reason || '확인한 상태'}`;
+  $('job-summary').textContent = `${jobStatusLabel(job.status, job.reason)} · ${job.steps.length}단계 중 ${job.current_step_index + 1}단계${job.reason ? ' · ' + jobReasonLabel(job.reason) : ''}`;
   $('step-progress').replaceChildren(...job.steps.map(step => {
     const li = document.createElement('li');
     const inputs = step.step.inputs;
-    li.textContent = `${step.step_index + 1} · ${inputs.pallet_id} · ${inputs.layer_index + 1}층 · ${inputs.item} · ${step.status}${step.reason ? ' · ' + step.reason : ''}`;
+    li.textContent = `${step.step_index + 1} · ${inputs.pallet_id} · ${inputs.layer_index + 1}층 · ${inputs.item} · ${jobStatusLabel(step.status, step.reason)}${step.reason ? ' · ' + jobReasonLabel(step.reason) : ''}`;
     return li;
   }));
   $('sheet-progress').replaceChildren(...(job.operator_checkpoints ?? []).map(row => {
@@ -267,7 +394,7 @@ async function readJob() {
     li.textContent = `${row.pallet_id} · ${row.layer_index + 1}층 · ${row.thickness_m * 1000} mm · ${instruction}`;
     return li;
   }));
-  $('notice').textContent = `작업 ${job.status} · ${job.reason || ''} · 확인한 정지 세대 ${jobGeneration}`;
+  $('notice').textContent = `작업 ${jobStatusLabel(job.status, job.reason)}${job.reason ? ' · ' + jobReasonLabel(job.reason) : ''} · 확인한 정지 세대 ${jobGeneration}`;
 }
 $('mission-id').addEventListener('input', () => { editEpoch++; job = null; jobGeneration = null; refreshControls(); });
 $('read-job').addEventListener('click', () => action(readJob));
@@ -277,19 +404,30 @@ $('new-proposal').addEventListener('click', () => {
   $('notice').textContent = '새 요청 키를 준비했습니다. 앞선 요청의 결과가 불명확하면 먼저 작업 ID로 상태를 확인하세요.';
 });
 for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
-  $(command).addEventListener('click', () => action(async () => {
-    if (!job || job.mission_id !== $('mission-id').value) throw new Error('작업 상태를 먼저 확인하세요.');
-    if (command === 'resume' && job.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS')) {
-      throw new Error('작업자 간지 삽입 확인 대기 · 일반 재승인으로 진행할 수 없습니다.');
+  $(command).addEventListener('click', async () => {
+    if (command === 'cancel') {
+      if (busy || role !== 'operator' || !job || job.mission_id !== $('mission-id').value) return;
+      const id = job.mission_id, epoch = editEpoch;
+      const allowed = await confirmIrreversible({
+        message: `작업 "${id}"을 취소할까요? 작업 취소는 실행 중인 장치를 정지하지 않습니다. 실제 장치 상태를 확인하세요.`,
+        action: '작업 취소', opener: $(command),
+      });
+      if (!allowed || busy || epoch !== editEpoch || role !== 'operator' || job?.mission_id !== id) return;
     }
-    const id = encodeURIComponent(job.mission_id);
-    let body = {};
-    if (command === 'admit' || command === 'resume') {
-      if (jobGeneration === null) throw new Error('정지 세대를 확인하려면 작업 상태를 다시 읽으세요.');
-      body = {expected_generation: jobGeneration};
-    }
-    const path = command === 'admit' ? `/api/fleet/missions/${id}/admit` : `/api/fleet/cell-jobs/${id}/${command}`;
-    await post(path, body); await readJob();
-  }));
+    await action(async () => {
+      if (!job || job.mission_id !== $('mission-id').value) throw new Error('작업 상태를 먼저 확인하세요.');
+      if (command === 'resume' && job.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS')) {
+        throw new Error('작업자 간지 삽입 확인 대기 · 일반 재승인으로 진행할 수 없습니다.');
+      }
+      const id = encodeURIComponent(job.mission_id);
+      let body = {};
+      if (command === 'admit' || command === 'resume') {
+        if (jobGeneration === null) throw new Error('정지 세대를 확인하려면 작업 상태를 다시 읽으세요.');
+        body = {expected_generation: jobGeneration};
+      }
+      const path = command === 'admit' ? `/api/fleet/missions/${id}/admit` : `/api/fleet/cell-jobs/${id}/${command}`;
+      await post(path, body); await readJob();
+    });
+  });
 }
 refreshControls();

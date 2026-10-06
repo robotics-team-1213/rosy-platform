@@ -6169,6 +6169,382 @@ osy-d395-s1d\`.
 - 변경: README를 소개·시작 위치 표·문서 지도·「같이 하는 깃」·「핵심 계약」으로 줄이고 구조·빌드·테스트·관제 배치·Pi 런타임·로드맵을 `docs/reference/developer-guide.md`로 옮겼다(옛 `src/` 트리는 현재 폴더 표로 교체). 팀 가이드를 첫날 명령·이슈에서 머지까지·막혔을 때 표로 다시 썼다. 루트 허용 목록 밖이던 `CONTRIBUTING.md`를 `.github/`로 옮겼다.
 - 증거: Windows 새 클론 + Python 3.12 venv에서 가이드 §1 명령 리허설, 문서 링크 검사 0 깨짐, README·문서 배치·harness·pre-push 계약 시험.
 - gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · uiux(docs): ROSY 디자인 목표와 현재 LOCAL 판정 경계
+
+- 변경: 현대성·사용성·정돈·구조·통일성을 상태·다음 행동·표면 문법·너비·증거 어휘로 관찰 가능한 목표에 묶었다. D-153 회차 카드에 로봇/Fleet 데스크톱·전화 캡처와 남은 G2/G3 범위를 기록했다.
+- 증거: 관련 G1 83 passed, Fleet 적합·목표 2 passed, 모바일 기본 예외·넘침 2 passed, 각각 known_failures 0 NEW. 캡처 4장은 LOCAL fixture다.
+- gate 변화: UI/UX 전체 HOLD. 다른 활성 표면의 현재 G2/G3와 장치·현장 readback은 미검증이다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 게임 보드 현재 LOCAL 캡처 추가
+
+- 변경: D-153 회차 카드에 게임 최초·진행·지연·HOLD 1280px과 지연 390px 캡처를 연결하고 관측 카드의 내용 높이 변경을 기록했다.
+- 증거: 브라우저 18 passed, 게임 모듈 113 passed, 변경 후 관련 5 passed, known_failures 0 NEW. LOCAL PreviewServer fixture다.
+- gate 변화: 제품 UI/UX HOLD 유지. 게임 전체 상태 행렬·G3·실물 수용은 미완료다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 로봇 얼굴 LOCAL 렌더와 실물 판정 경계
+
+- 변경: 현재 정보 카드 렌더러의 첫 기동·정상·E-STOP·배터리 위험 320×240 캡처를 D-153 회차 카드에 더했다. D-433 rosy-face 호스트 시험과 실제 설치·LCD 출력의 증거 계층을 분리했다.
+- 증거: PIL 렌더러 169 passed, 캡처 1 passed, rosy-face 호스트 153 passed/1 skipped, known_failures 0 NEW. 캡처는 직접 PIL 호출이다.
+- gate 변화: 로봇 얼굴 UI/UX HOLD. D-433 Proposed, 설치·실물 LCD 판독·카드 만료 뒤 GIF 복귀는 확인되지 않았다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 60셀 보존
+
+- 변경: D-153 회차에 /setup·/device의 역할·상태·뷰포트 60셀 matrix와 PNG 66장을 연결했다. 390px 패널의 입력·행동 폭을 통일한 결과를 보존하고, 첫 시험의 닫힌 고급 작업 버튼 조회 실패를 원인과 함께 구분했다.
+- 증거: shipped disclosure 경로를 연 재실행 1 passed, 반응형·셸 18 passed, matrix 셀 60개·이미지 66개 누락 0, 페이지 오류 0·가로 넘침 0, known_failures 0 NEW.
+- gate 변화: LOCAL G2만 진전. G3 작업 독회와 실제 Host Agent/장치 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 작업 준비·장비 첫 기동 6셀과 G1 재실행
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 `/setup`·`/device` 첫 기동 6셀과 두 폭의 캡처를 추가했다. 비상 정지의 렌더된 가시성 단언을 강화했다.
+- 증거: 첫 기동 1 passed, 절차 60셀 재실행 1 passed, D-153 G1 팔레트·토큰·문법 74 passed와 CORE 증거 7 passed, `known_failures.py` 0 NEW. 첫 기동 셀은 페이지 오류·가로 넘침 0이다.
+- gate 변화: LOCAL 증거 확장. 제품 전체 및 장치·현장 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 맵핑·롤백 확인창 증거
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 열린 확인창 6장과 행동별 실행 버튼을 연결했다. 취소 뒤 캡처만 있던 G2 공백을 채웠다.
+- 증거: 절차 60셀 1 passed, 관련 작업 브라우저 10 passed, `known_failures.py` 0 NEW. 확인 취소 6셀의 쓰기 요청 0, 참조 이미지 누락 0.
+- gate 변화: LOCAL 증거 확장. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): 절차 G3 항목별 근거와 잔여 범위
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 웨이포인트 저장 작업의 API·화면 왕복 증거와 D-153 G3 여덟 항목의 근거·남은 판정 범위를 기록했다.
+- 증거: 390px FastAPI/Chromium 1 passed, `known_failures.py` 0 NEW, 저장 201·목록 readback·가로 넘침 0. 여덟 항목은 모두 부분 근거로 남긴다.
+- gate 변화: G3 GO 아님. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(docs): Fleet 상태별 모바일 폭과 연결 끊김 근거
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Fleet 빈 목록·서버 실패의 320/390px, 느린 응답·회복·끊김·HOLD와 오프라인 캡처를 연결했다. 오프라인 fixture를 실제 API의 `state: null` 계약에 맞췄다.
+- 증거: 기존 상태 9 passed, 모바일 상태 4 passed, 오프라인 재실행 1 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: Fleet G2 일부만 LOCAL 확인. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 객체·픽셀 편집 창 너비 통일
+
+- 변경: Rosy Learning 객체·픽셀 검수의 원본 캔버스와 inspector를 데스크톱에서 같은 폭으로 맞췄다. 390px에서는 두 창이 같은 가용 폭으로 쌓인다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 1440/800/390px 캡처를 남겼다.
+- 증거: 객체 브라우저 10 passed, 픽셀 브라우저·반응형 계약 14 passed, 각 `known_failures.py` 0 NEW. 브라우저 가로 넘침 0.
+- gate 변화: 개발 도구 LOCAL 너비 근거만 추가. 제품 전체 UI/UX G3와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 팔 조작 창 너비와 제품 표면 범위
+
+- 변경: Pilot Gazebo 연습의 영상 없는 화면에서 빈 영상 칸을 빼고 팔·그리퍼 조작 창을 같은 폭으로 맞췄다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 태블릿·전화 캡처와 등록 표면별 남은 판정 증거를 추가했다.
+- 증거: Pilot 브라우저 5 passed(카메라 있는 경로 포함), `known_failures.py` 0 NEW. 실기 명령·현장 행동을 수행하지 않았다.
+- gate 변화: Pilot LOCAL 부분 근거. 제품 전체 UI/UX G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 목표 상태 문구와 G3 독회
+
+- 변경: 안전 상태 결측·비상 정지 중 `NAVIGATING`을 물리적 주행으로 보이게 하던 Fleet 배지를 `목표 남음`으로 바꾸고 [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 확인창·안전 상태 캡처와 G3 여덟 항목의 남은 판정 범위를 기록했다.
+- 증거: Fleet 브라우저 3 passed, 서버·팔레트 60 passed, 웹 Node 134 passed, Python `known_failures.py` 0 NEW. Cam APK 로컬 빌드는 성공했지만 에뮬레이터가 ADB에 나타나지 않아 네이티브 화면은 미검증이다.
+- gate 변화: Fleet G3와 제품 전체 UI/UX, 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 최초 경기 보드 상태와 G3 독회
+
+- 변경: 정보가 없는 경기 피치에 대기·첫 연결 오류를 표시하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 1280/390px 최초 캡처와 G3 여덟 항목의 근거·잔여 범위를 기록했다. Fleet 즉시 비상 정지의 결정 참조를 D-414로 바로잡았다.
+- 증거: 게임 보드 브라우저 19 passed, 게임 모듈 113 passed, `known_failures.py` 0 NEW. Stop 재시도 시험의 CSP 관찰 경합은 DOM locator로 확인한다.
+- gate 변화: LOCAL 부분 근거. 제품 전체 UI/UX와 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 운용 오류 문구와 G3 독회
+
+- 변경: 로봇 운용의 공통 HTTP 오류 문구를 운용자용 한국어 상태와 재확인 안내로 바꿨다. 한국어 서버 사유와 오류 코드는 유지한다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 모드·수동·차선 추종·도킹·지도 캡처와 G3 부분 근거를 추가했다.
+- 증거: FastAPI/Chromium 운용 브라우저 4 passed, 고급 네트워크 작업 disclosure 확인 2 passed, 운용자 문구 18 passed. 통과 실행의 `known_failures.py`는 0 NEW다. 실패했던 전체 역할 실행 2건은 닫힌 disclosure의 숨은 버튼을 찾던 시험 오류였고, disclosure를 연 뒤 별도 재실행에서 통과했다.
+- gate 변화: 로봇 운용 LOCAL G3 부분 근거. 실제 CORE/장치 readback·현장 독회와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 대상 발견 오류 캡처
+
+- 변경: Pilot 대상 발견 실패 화면의 내부 영문 예외를 운용자 문구로 바꾸고 [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 390px 화면을 기록했다.
+- 증거: 현재 트리 브라우저 재시도 1 passed, 가로 넘침 0, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL 오류 화면 부분 근거. 제품 전체 UI/UX와 실제 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 현재 주행 화면과 전화 조작 도달성
+
+- 변경: Pilot 390px 주행 화면에서 잘리던 조작을 접근 가능하게 하고, 영상 재시도 타이머 오류를 수정했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 현재 트리 태블릿·전화 첫 화면과 전화 회전 버튼 캡처를 연결했다.
+- 증거: 영상·조작 브라우저 4 passed, 스틱·페달 접촉 2 passed, `known_failures.py` 0 NEW. ADB 장치 목록이 비어 있어 네이티브 화면은 여전히 미검증이다.
+- gate 변화: Pilot LOCAL G2 부분 근거. 제품 전체 G2/G3와 실제 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(face): 주행 카드와 얼굴 G3 부분 근거
+
+- 변경: 320×240 주행 카드의 저배터리 숫자를 위험 채움 위 밝은 글자로 바꾸고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 수동·내비게이션·정지 캡처와 G3 여덟 항목의 남은 판정 범위를 추가했다.
+- 증거: 현재 트리 정보·주행 카드·팔레트 71 passed, `known_failures.py` 0 NEW. 캡처는 PIL 직접 출력이다.
+- gate 변화: 로봇 얼굴 LOCAL 부분 근거. D-433 설치 LCD·현장 판독과 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 페어링 화면 너비 통일
+
+- 변경: Cam 페어링 화면의 본문 너비와 동등한 선택 버튼 너비를 정리하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 미검증 범위를 기록했다.
+- 증거: Android `:app:compileDebugKotlin` 성공. ADB 장치가 없어 네이티브 캡처는 없다.
+- gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3와 실제 장치·현장 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 송출 화면 조작 너비
+
+- 변경: Cam 송출 화면의 짝을 이룬 조작 버튼은 같은 너비, 단독 조작 버튼은 본문 너비로 맞췄다.
+- 증거: Android `:app:compileDebugKotlin` 성공. 네이티브 화면 캡처와 작업 독회는 없다.
+- gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 연결·설정 화면 조작 너비
+
+- 변경: Cam LAN 연결과 설정 화면의 단독 조작은 본문 너비로, 설정의 뒤로·저장은 동등한 너비로 맞췄다.
+- 증거: Android `:app:compileDebugKotlin` 성공. 네이티브 화면 캡처와 설치자 독회는 없다.
+- gate 변화: Cam LOCAL 소스 부분 근거. 제품 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 네이티브 LAN·설정 화면 부분 확인
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Android 에뮬레이터 320px·390px/글자 130% 화면과 미검증 상태를 기록했다.
+- 증거: 현재 브랜치 debug APK 빌드·설치·실행, ADB 연결과 설정 뒤로·저장 동일 173px UI bounds 확인. 캡처 원본은 X:에 둔다.
+- gate 변화: Cam LOCAL 네이티브 G2 부분 근거. Peer·Pairing·송출 상태와 G3·실제 폰 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 태블릿 로비 좁은 폭 복구
+
+- 변경: Pilot Shell의 좁은 가로 화면에서 로봇 목록을 전폭으로 배치해 다시 찾기·상태·기기 연결을 복구하고, [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 네이티브 화면 결과를 기록했다.
+- 증거: Android JVM 89 passed, debug APK 빌드·에뮬레이터 3폭 캡처와 기기 대화상자 스크롤 확인. 캡처 원본은 X:에 둔다.
+- gate 변화: Pilot Shell LOCAL G2 부분 근거. 실제 태블릿·로봇 연결·G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 400dp 확대 글자 확인
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 Pilot Shell 400dp/글자 130% 네이티브 화면 판정을 추가했다.
+- 증거: 격리 Android 에뮬레이터 캡처·UI bounds에서 제목·다시 찾기·상태·기기 버튼이 화면 안에 있음을 확인했다. 원본은 X:에 둔다.
+- gate 변화: Pilot Shell LOCAL G2 부분 근거만 추가. 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux: 추가 활성 표면 평가 카드
+
+- 변경: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 학습 검수·Pilot Shell·Cam의 표면 질문, 뷰포트, G2 잔여 상태, D-153 여덟 G3 항목을 선언했다.
+- 증거: 기존 브라우저·에뮬레이터 LOCAL 캡처와 활성 표면 등록을 대조했다.
+- gate 변화: 세 표면과 제품 전체는 G2/G3 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 빈 검수 화면 폭 복구
+
+- 변경: 객체 검수 작업 영역을 전체 가용 폭으로 펴고 자동 세로 여백을 제거했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 빈 상태 3폭 판정을 남겼다.
+- 증거: Chromium 1440·800·390px 빈 필터 화면, 복귀 동작, 13 passed와 `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
+- gate 변화: 학습 검수 LOCAL G2 부분 근거 추가. 다른 상태·검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 작업·자료 화면 위쪽 정렬
+
+- 변경: 학습 작업 목록과 자료 등록의 자동 세로 여백을 없애 머리 아래에서 시작하게 했다. [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)에 두 경로 3폭 근거를 남겼다.
+- 증거: Chromium 두 경로 × 1440·800·390px 6 passed, 가로 넘침 0, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL G2 부분 근거 추가. 실제 작업 완료 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 빈 픽셀 검수 상태 정직성
+
+- 변경: 픽셀 필터 결과가 없을 때 이전 사진 제목·상태를 지우고 빈 선택기·이동 버튼을 숨겼다. 전체 보기 복귀는 유지했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 Chromium 1440·800·390px 캡처와 빈 상태 3 passed, 관련 픽셀 브라우저 11 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL G2/G3 부분 근거 추가. 전체 G2/G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 사진 없는 최초 사용 안내
+
+- 변경: 객체·픽셀 검수의 사진 0장 상태를 빈 필터와 구분하고 기존 자료 등록 화면으로 이어지는 행동을 표시했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 두 경로 캡처·이동, 객체·픽셀 브라우저 24 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL 최초 사용 G2 부분 근거 추가. 실제 등록·검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 검수 연결 끊김 복구
+
+- 변경: 객체·픽셀 검수의 작업 목록 요청 실패 때 로딩·오래된 편집을 숨기고 실패 이유와 다시 불러오기 행동을 표시했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440·390px 연결 실패 캡처, 정상 후 실패·복구 포함 브라우저 6 passed, `known_failures.py` 0 NEW. 캡처·로그는 X:에 둔다.
+- gate 변화: 학습 도구 LOCAL 연결 끊김 G2 일부 추가. 지연·거부·검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 확대 글자 설정 버튼 너비
+
+- 변경: Cam 설정의 뒤로·저장을 전폭 두 줄로 배치해 320px/글자 200%에서 버튼 글자 줄바꿈을 복구했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 Android 35 에뮬레이터 320·390px 캡처와 UI bounds, Gradle JVM 366 passed·APK 빌드 성공. 원본은 X:에 둔다.
+- gate 변화: Cam LOCAL 네이티브 G2 일부 추가. Pairing·Peer·송출과 실물 폰·G3, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 송출 대기 화면 전폭 조작
+
+- 변경: Cam 대기 화면의 잘린 반폭 버튼을 전폭으로 정리하고 연결·송출 정보가 좁은 화면에서도 보이게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 격리 Android 35 에뮬레이터 320·390px 캡처와 UI bounds, Gradle JVM 366 passed·APK 빌드 성공. 원본은 X:에 둔다.
+- gate 변화: Cam LOCAL 송출 대기 G2 일부 추가. Pairing·Peer·실제 송출·실물 폰·G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 전화 검수 조작 전폭
+
+- 변경: 객체·픽셀 검수의 편집 칸에 컨테이너 폭을 선언하고 390px 전화의 작업 버튼을 각 칸의 전폭으로 쌓았다. 표면별 24rem 경계를 `surfaces.yaml`에 이유와 함께 기록했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 전후 캡처와 Chromium 358px 측정, 객체·픽셀 폭 및 반응형 계약 15 passed, `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
+- gate 변화: 학습 검수 LOCAL G2 너비 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 픽셀 사진 이동 너비
+
+- 변경: 전화 픽셀 검수의 사진·상태 선택을 전폭으로 놓고 이전·다음 사진을 동등한 두 칸, 최신 내용 불러오기를 전폭으로 놓았다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390·320px 캡처와 Chromium 버튼 너비, 객체·픽셀 폭·반응형 계약 17 passed, `known_failures.py` 0 NEW. 캡처 원본은 X:에 둔다.
+- gate 변화: 학습 검수 LOCAL G2 너비 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작과 영상 면적의 경계 확인
+
+- 변경: 제품 CSS는 유지하고 Pilot 전화의 조작 칸·영상 면적 실험 결과를 UI/UX 회차에 기록했다. 390×844에서 조작 칸 높이를 키우면 영상 표시 면적이 0.126으로 줄어 기존 `>0.2` 계약 시험이 실패했다. 실험 CSS는 되돌렸고 4셀 재시험은 통과했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 실패 캡처와 X:의 전후 pytest 로그. 카메라 표시 면적을 유지한 채 조작 칸 내부 배치로 회전 발견성을 해결해야 한다.
+- gate 변화: 없음. 전화 회전 조작 발견성 G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 조작 위치 안내
+
+- 변경: Pilot 전화 주행 화면의 스틱 아래에 회전 조작 안내를 놓아 첫 화면에서 아래 조작을 알 수 있게 했다. 피벗이 없는 프로필에는 숨긴다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 캡처와 카메라·터치·프로필 브라우저 7 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체 UI/UX는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 자동 모드 안내 정합성
+
+- 변경: Pilot 전화에서 차선 자동 모드가 수동 회전 버튼을 숨길 때 회전 안내도 숨겼다. 수동 복귀 때 안내가 다시 보인다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 390px 자동·수동 캡처와 모드 전환 브라우저 1 passed, `known_failures.py` 0 NEW. 원본은 X:에 둔다.
+- gate 변화: Pilot LOCAL G2 일부 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 320px 패널 동일 폭
+
+- 변경: 게임 보드의 최초·지연 320×568에서 점수·피치·관측이 같은 가용 폭을 쓰고 정지가 첫 화면에 남는지 브라우저 계약에 추가했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 캡처 2장, 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: 게임 보드 LOCAL G2 부분 근거 추가. 실제 경기·정지 readback과 제품 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 머리 겹침 해소
+
+- 변경: 주행 머리 320px에서 제품 이름을 숨겨 「Rosy Robot」 이동과 비상 정지가 겹치지 않게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처와 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 회전 버튼 전폭
+
+- 변경: 320px 주행 조작에서 좌·우회전 버튼을 각각 열 전폭으로 쌓아 긴 글자가 반폭 칸 밖으로 넘지 않게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처, 내용 폭 baseline 57/66px, 수정 후 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 일부 추가. 실기 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320×568 영상 공간 복구
+
+- 변경: Pilot 짧은 전화 화면에서 영상 높이 0 문제를 고치고, 정지·연결 사실·전진/후진·스틱은 첫 화면에 보이게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처, 5폭 영상·2폭 모드 브라우저 7 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 두 스크롤 영역의 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 320px 운용 칸 동일 폭
+
+- 변경: 역할 셸 `/console`의 320/390px 조작·감지·관측 칸 시작점·폭과 첫 화면/하단 비상 정지를 브라우저 계약으로 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320px 캡처, 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 로봇 LOCAL G2 부분 근거 추가. 실제 장치·운용자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 짧은 전화 도구 판 정리
+
+- 변경: Pilot 320×568의 HUD 보조 설정을 기존 도구 판에 넣어 HUD 스크롤을 없앴고, 한 화면에 영상·정지·상태·기본 주행을 유지했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px X: 화면·도구 판, 브라우저 9 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실제 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(games): 축소 피치 표식 가독성
+
+- 변경: 좁은 경기 보드에서 공·로봇·이름의 화면상 크기를 유지하고 진행 상태의 세 패널 동일 폭을 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px X: 전후 캡처, 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Game Board LOCAL G2 일부 추가. 실제 노트북 경기·운영자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 화면 폭 전환 도구 상태
+
+- 변경: Pilot 도구 판을 연 채 전화 폭에서 넓은 폭으로 바꾸면 판·세부 내용을 닫고 설정을 현재 폭의 자리로 옮긴다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320→390→320 브라우저 1 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실기 전화·운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux: 현재 브랜치 D-153 G1 재실행
+
+- 변경: 최근 Pilot·게임·로봇 화면 변경을 포함한 제품 코드 `d04f764c4`에서 D-153 지정 팔레트·토큰·스타일가이드·문법·CORE 증거 시험을 다시 실행해 회차 근거를 갱신했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 실행 기록. 시각 계약 74 passed, CORE 증거 7 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: G1 LOCAL 재확인만. 선언 상태·뷰포트 G2와 실제 사용자 G3, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 연결 끊김 모바일 독회
+
+- 변경: Fleet 연결 끊김 상태를 1920/390/320px에서 재생하고 예외 카드 우선순위·비상 정지 가시성·가로 넘침을 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 일부 추가. 실제 장치·사이트·운영자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 팔로워 지연 모바일 독회
+
+- 변경: Fleet 지연 팔로워를 1920/390/320px에서 확인하고 경고 카드 우선순위·비상 정지 가시성·가로 넘침을 계약에 남겼다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 일부 추가. 실제 장치·사이트·운영자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(learning): 전화 저장 충돌 복구
+
+- 변경: 객체·픽셀 검수의 다른 탭 저장 충돌을 1440/390px에서 재생하고, 승인 차단·복구 버튼 너비·서버 revision 재조회 경로를 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 충돌 화면 4장; 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: 학습 검수 LOCAL 충돌 G2 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 전체 주행 취소 결과 가시성
+
+- 변경: Fleet 전체 주행 취소의 부분 응답·결과 미확인을 작업 버튼 옆에서 바로 읽고 로봇별 기록으로 이동하게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320/390px 캡처, 브라우저 5 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2/G3 일부 추가. 실제 현장 취소·정지와 운영자 수용, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 비상 정지 응답을 첫 화면에 표시
+
+- 변경: Fleet 운용·설치 화면의 즉시 비상 정지 응답과 결과 미확인을 머리 아래에 표시하고 설치 안내의 취소·비상 정지 어휘를 구분했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320/390px 캡처; 집중 브라우저 10 passed, 설치 회귀 7 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2/G3 일부 추가. 실물 정지와 현장 사용자 G3, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 관제 여백을 본문 폭에 맞춤
+
+- 변경: Fleet 운용·설치의 비상 정지 응답, 운용 준비 순서, 접속 안내를 본문 패널의 좌우 시작점과 폭에 맞췄다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1920/390/320px 운용·설치 브라우저 6 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/fleet-width/`.
+- gate 변화: Fleet LOCAL 부분 근거 추가. 제품 전체 G2/G3와 현장 사용자 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 권한 거부와 자료 준비 결과를 작업 위치에 표시
+
+- 변경: 객체·픽셀 검수의 403을 연결 실패와 구분하고, 자료 준비 거부 이유를 버튼 옆 화면 안에 표시했다. 권한 거부 뒤 편집·자료 준비를 막고 최신 작업영역을 다시 읽으면 복구한다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/390px 객체·픽셀 권한 캡처, 관련 브라우저 43 passed와 결과 가시성 재검사 4 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/learning-permission/`.
+- gate 변화: `pinky-review` LOCAL G2 부분 근거 추가. 선언 상태 전체와 실제 검수자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 응답 대기 중 오래된 편집 숨김
+
+- 변경: 객체·픽셀 검수의 첫 기동과 작업영역 다시 읽기에서 이전 편집을 내리고 응답 대기 상태를 표시했다. 최신 내용이 올 때까지 편집·자료 준비를 막는다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/390px 응답 보류 브라우저 4 passed, `known_failures.py` 0 NEW. 관련 전체 실행은 46 passed/1 임의 unsafe port setup ERROR, 해당 셀 별도 재실행 1 passed다. X: `captures/learning-waiting/`.
+- gate 변화: `pinky-review` LOCAL G2 일부 추가. 800px, 나머지 선언 상태와 실제 검수자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 작업 목록·자료 등록의 대기와 권한 거부
+
+- 변경: `/learning`·`/catalog`에서 응답 전 입력·등록을 막고, 403 뒤 오래된 결과를 내려 접근 이유·다시 확인을 표시했다. 등록 거부의 이유는 누른 자리에서 읽게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/800/390px 보류·거부 캡처. 집중 브라우저 8 passed, 두 경로 배치 회귀 6 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/learning-pages-load/`.
+- gate 변화: `pinky-review` LOCAL G2 일부 추가. 남은 선언 상태·실제 검수자 G3와 제품 전체는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(pilot): 팔 영상·조작 동등 폭
+
+- 변경: Pilot 팔의 영상 작업 공간과 조작 칸을 넓은 화면에서 1:1로 배치했다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 4개 집중 브라우저, 2000×1200 너비 차이 ≤1px, X: `captures/pilot-arm-equal/`.
+- gate 변화: LOCAL 폭 근거 추가. 실제 영상·태블릿과 제품 전체 G2/G3는 HOLD.
+## 2026-10-06 · uncommitted · uiux(pinky-review): 편집 행동 동등 폭과 800px 상태 근거
+
+- 변경: 객체·픽셀 편집 칸의 작업 행동을 기존 24rem 컨테이너 경계 위에서 동등 폭 두 열로 배치했다. 800px의 연결 끊김·권한 거부·응답 보류·저장 충돌 상태를 캡처했다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md), 두 경로 × 1440/800/390/320px 폭 브라우저 8 passed와 800px 상태 브라우저 16 passed, `known_failures.py` 0 NEW. 원본 X: `captures/learning-actions-equal/`.
+- gate 변화: `pinky-review` LOCAL G2 부분 근거 추가. 실제 검수 작업 완료·G3와 제품 전체는 HOLD.
+## 2026-10-06 · uncommitted · uiux(pinky-review): 서비스 사용 불가를 연결 끊김과 구분
+
+- 변경: 네 학습 검수 경로가 HTML 503을 JSON 파싱 전에 식별해 서비스 복구 후 재시도를 안내한다. 전화 폭의 객체 검수·자료 등록 재시도는 가용 폭을 채우고 학습 목록은 실패 문구를 한 번만 표시한다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 1440/800/390px 503·기존 장애 복구 브라우저 24 passed와 390px 최종 5 passed, 각 `known_failures.py` 0 NEW. 원본 X: `captures/learning-unavailable/`.
+- gate 변화: `pinky-review` LOCAL G2 사용 불가 부분 근거 추가. 실제 서버 장애·검수 결과·G3와 제품 전체는 HOLD.
+## 2026-10-06 · uncommitted · uiux(pinky-review): 검수 결정과 자료 준비 결과
+
+- 변경: 객체 검수의 390/320px 사진 이동 버튼을 동등한 전폭으로 쌓았다. 객체·픽셀 제외→재검수→승인→자료 준비를 합성 원본에서 재생하고 결과 캡처를 남겼다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 객체 4폭·픽셀 3폭 브라우저 7 passed, `known_failures.py` 0 NEW. 각 결정 상태 원본 X: `captures/learning-decision-result/`.
+- gate 변화: `pinky-review` LOCAL G2 결정·결과 부분 근거 추가. 실제 검수자·자료 등록·학습 수용과 제품 전체 G2/G3는 HOLD.
+## 2026-10-06 · uncommitted · uiux(fleet): 동등한 카드 행동 폭
+
+- 변경: Fleet 로봇 카드의 동등한 행동 버튼을 같은 폭으로 맞추고, 1920px 본문 하단 5px 넘침을 제거했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 320/390px 버튼 폭과 1920px 높이 검사 포함 브라우저 6 passed, `known_failures.py` 0 NEW. 원본은 X: `fleet_console_mobile_default_{320,390}.png`.
+- gate 변화: Fleet LOCAL 부분 근거를 추가했다. 제품 전체 G2/G3와 실제 현장 수용은 HOLD.
+## 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
+
+- 변경: 로봇 운용 콘솔의 전방 카메라 동등 행동을 390px에서 같은 폭으로, 320px에서 각 전폭으로 맞췄다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 실제 역할 셸 브라우저 2 passed, 카메라 회귀 2 passed, 반응형 계약 9 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/robot-camera-equal/`.
+- gate 변화: 로봇 운용 LOCAL G2 배치 근거 추가. 제품 전체 G2/G3와 현장 수용은 HOLD.
+## 2026-10-06 · uncommitted · uiux(games): 전화 복구 상태 동등 폭
+
+- 변경: 게임 보드의 첫 연결 실패와 수신 후 끊김을 320/390px에서 확인하는 브라우저 계약을 추가했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/game-recovery-mobile/` 원본 4장, 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 상태·폭 부분 근거 추가. 제품 전체 G2/G3와 실물 수용은 HOLD.
+## 2026-10-06 · uncommitted · uiux: 현재 트리 공유 UI 계약 복구
+
+- 변경: 역할 G2 목록 기록과 D-329 매트릭스를 구분하고, Fleet compact 머리·비활성 사유 계약을 현재 렌더러에 맞췄다. 호환 화면 개발 연결에는 대기 이유를 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 `shared/web/test` 231 passed, 25 skipped와 브라우저 2 passed, 각 `known_failures.py` 0 NEW. 개발 연결 이유 제거 변이는 빨간 시험으로 확인했다.
+- gate 변화: G1 현재 트리 코드 계약을 회복했다. 제품 전체 G2/G3와 실물 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(games): 전화 연결 복구 너비와 현재 상태
+
+- 변경: 게임 보드의 320/390px 첫 실패→수신→끊김 브라우저 시나리오를 실제 재연결까지 연장했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/game-recovery/` 여섯 장과 `logs/game-recovery-{green-before-mutation,mutation-red,final}.txt`; 최종 2 passed, `known_failures.py` 0 NEW. fresh 문구 분기 변이에서 2 failed, 복원 후 2 passed.
+- gate 변화: LOCAL 상태 전이·폭 근거 추가. 제품 전체 G2/G3와 현장 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(site): 기존 PC의 mDNS 경로 재확인
+
+- 변경: 외부 PC의 `.local` 실패와 사이트 PC 자체의 실제 발견·브리지·Fleet UID 조회를 구분해 UI/UX 회차에 기록했다. 비공개 PC·로봇 주소는 공개 기록에서 뺐다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `logs/site-mdns-live/` 원본. 사이트 Avahi에 로봇 둘, 사용자 bridge의 최근 2건 전달(Fleet POST 200), Fleet UID의 `.local`·내부 이름 조회 성공, 사이트 CA 검증 HTTPS health/console 200. 호스트 자체 locator는 여러 로컬 인터페이스 주소로 인한 ambiguous 오류. 사이트 이미지 `e64815c51`와 작업 브랜치 사이 Fleet 웹 자산 12개 경로가 다르다.
+- gate 변화: SITE mDNS·서비스 도달의 부분 근거 추가. 인증된 Fleet 화면, 브랜치 설치, 현장 사용자 G3와 로봇·카메라 readback은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): compact 픽셀 사진 이동 사유 가독성
+
+- 변경: 픽셀 검수의 이전·다음 버튼을 390/320px에서 각각 작업 칸 전폭으로 쌓아 긴 비활성 이유의 좁은 줄바꿈을 풀었다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-pixel-nav-fullwidth/`와 `logs/learning-pixel-nav-{red,green,decision-regression,responsive}.txt`. 수정 전 2 failed, 뒤 레이아웃 8 passed·픽셀 결정 4 passed·반응형 계약 9 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: 학습 도구의 LOCAL 너비·가독성 부분 근거 추가. 검수자 G3와 제품 전체 G2/G3는 HOLD.
 ## 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
 
 - 변경: D-472와 ADR Log에 실제 Vision 프레임 기반 현장지도, 단독 소유 LED 점멸 신원 대조, 안전 선점·만료·주행 분리 결정을 기록했다.
@@ -6198,3 +6574,39 @@ osy-d395-s1d\`.
 - 변경: Fleet `GET /api/fleet/auth/connection`·`POST /api/fleet/auth/development-session`(API Reference v1.108). `ROSY_DEPLOYMENT=development`와 `--connection-mode development`가 함께 있을 때만 같은 망(loopback·RFC1918·link-local·Tailscale) 브라우저에 1시간 메모리 운용자 세션(`development-<8hex>`, 이름 있는 운용자, 감사 기록)을 준다. 콘솔은 첫 401에서 자동 발급하고 "개발 연결 모드" 배지를 띄운다. site.env 두 키(기본 비움), README 절 추가.
 - 증거: 관련 호스트 pytest(`operations/fleet/test/test_development_session.py`, `test_cli.py`, 버전 고정 시험, `test/test_site_development_connection.py`)와 콘솔 브라우저 시험. 관제 PC에서 다른 PC 브라우저로 접속하는 FIELD 확인은 아직 하지 않았다.
 - gate 변화: SOURCE/LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-06 · uncommitted · uiux(site): 배포 콘솔의 미인증 화면과 카메라 프레임
+
+- 변경: 기존 사이트 PC의 배포 `/console`을 읽기 전용으로 세 폭에서 렌더하고, 토큰이 없는 화면의 잠긴 조작과 관제 카메라 프레임 증가를 UI/UX 회차에 기록했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/site-deployed-unauth/`와 `logs/site-mdns-live/site-console-{unauth-320-snapshot,frame-a,frame-b}.txt`. `ceiling_north` sequence 26364→26390, 320/390/1920px 캡처, 배포 컨테이너 태그 재확인.
+- gate 변화: 옛 배포 빌드의 SITE 미인증 상태·카메라 프레임 부분 근거 추가. 현재 `main` 설치, 인증된 Fleet·로봇 상태, 실제 사용자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(learning): 병합된 검수 폭과 사진 목록 재확인
+
+- 변경: `main`에 병합된 객체·픽셀 검수 화면의 1440/800/390/320px와 전화 사진 한 줄 목록을 다시 렌더했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-main-merged/` 8장과 `logs/merge-20261006/learning-main-visual.txt`. 브라우저 9 passed, `known_failures.py` 0 NEW; 320px 두 화면은 원본 크기로 확인했다.
+- gate 변화: 병합된 현재 트리의 LOCAL G2 폭 근거 추가. 실제 검수자 G3와 제품 전체 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(learning): class 파일 미연결 시 편집 도구 잠금
+
+- 변경: 픽셀 검수의 점/브러시 전환 버튼이 class 파일 없이도 활성화되던 마지막 상태 덮어쓰기를 고쳤다. G3 운영자 독회는 요청자가 맡기로 했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/pixel-disabled-fix/learning-pixels-320.png`와 `logs/merge-20261006/pixel-disabled-fix.txt`. 수정 전 집중 브라우저 1 failed, 수정 후 10 passed, `known_failures.py` 0 NEW.
+- gate 변화: 미연결 상태의 잘못된 조작 표시를 LOCAL에서 바로잡았다. 실제 운영자 결과와 현장 설치는 HOLD.
+
+## 2026-10-06 · uncommitted · docs(uiux): 실제 사용자 G3 독회 기록지
+
+- 변경: 요청자가 실제 사이트·장치에서 수행할 표면별 작업, D-153 여덟 항목, 빌드·값 출처·캡처 기록 칸을 회차 평가에 연결했다.
+- 근거: [실제 사용자 독회 기록지](validation/uiux-surfaces-2026-10-06/operator-walkthrough.md)는 아직 모두 미실시다. 기존 사이트 배포와 현재 후보가 다르면 옛 배포 피드백으로만 분류한다. 문서 계약 **127 passed, 1 skipped**, `known_failures.py` **0 NEW** (X: `logs/merge-20261006/operator-worksheet-docs.txt`); harness lint 0 errors.
+- gate 변화: 판정 변화 없음. G2 선언 셀·G3 사용자 결과·적용 실물 readback이 채워질 때까지 제품 전체 HOLD.
+
+## 2026-10-06 · uncommitted · docs(uiux): G3 항목별 결과 칸
+
+- 변경: 사용자 독회 기록지에 표면마다 복사할 8항 판정·근거 블록을 더해 실제 관찰을 채울 자리를 명확히 했다.
+- 근거: [기록 블록](validation/uiux-surfaces-2026-10-06/operator-walkthrough.md#표면별-결과-기록-블록)은 전부 HOLD/미실시로 시작한다.
+- gate 변화: 판정 변화 없음. 사용자 관찰·현재 빌드·실물 readback은 미확인.
+
+## 2026-10-07 · uncommitted · uiux(learning): 320px 서비스 장애 복구 확인
+
+- 변경: 학습 검수 네 경로의 503→재시도 브라우저 검사에 320px을 더하고 좁은 폭의 재시도 버튼 너비를 확인했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-unavailable-current/` 320/390px 8장과 `logs/merge-20261006/learning-unavailable-{current,320}.txt`. 각 폭 브라우저 4 passed, `known_failures.py` 0 NEW; 네 320px 화면 원본을 육안 확인했다.
+- gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.

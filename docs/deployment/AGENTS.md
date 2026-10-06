@@ -33,6 +33,7 @@ safety plan (D-246).
 | `pinky-pro-commissioning-body-templates.md` | Exact operator-attested G3-G5 JSON bodies; G5 binds MCAP and generated YAML/PGM hashes; invalid until physically measured |
 | `learned-perception-operators.md` | D-373 operator guide: `rosy_ml` setup and doctor, shadow deliver/rollback/harvest, lock and history, site auto-delivery install |
 | `robot-ssh-access.md` | D-418 운영자·수신자 안내: 화면 코드 기기 키 등록(`tools/ssh/rosy_ssh_enroll.py`), 임시 비밀번호 API(curl/PowerShell, 끄기), 팀 키 묶음 만들기·넘기기·회수(`tools/ssh/rosy_ssh_share.py`), R1–R3 보안 메모 |
+| `tailnet-remote-access.md` | D-477 테일넷 운영 안내: tailnet 승격·초대·ACL, auth key 보관(`private/`), 로봇 가입(번들·수동 join)과 확인, site 방화벽 `tailscale0`, 팀원 접속 요약, 회수 |
 | `learned-perception-pinky.md` | D-373 Pinky first-deploy runbook: layer table, new SD vs bench card, unit hand-install, `/etc/rosy/learned-perception.env` switch, first shadow measurement, capture/harvest, rollback |
 
 ## Subdirectories

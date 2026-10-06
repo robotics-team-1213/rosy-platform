@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -156,6 +157,7 @@ class Store:
         self.root = Path(root)
         self.datasets_dir = self.root / "datasets"
         self.evalsets_dir = self.root / "evalsets"
+        self.eval_reservations_dir = self.root / "eval-reservations"
         self.inbox = self.root / "models" / "inbox"
         self.accepted = self.root / "models" / "accepted"
         self.rejected = self.root / "models" / "rejected"
@@ -186,6 +188,54 @@ class Store:
 
     def evalsets(self) -> dict[str, list[str]]:
         return _versions(self.evalsets_dir)
+
+    def eval_reservations(self) -> dict[str, str]:
+        """Session -> capture group; malformed or changed reservations block training."""
+        base = self.eval_reservations_dir
+        if not base.exists() and not base.is_symlink():
+            return {}
+        if base.is_symlink() or not base.is_dir():
+            raise StoreError("invalid eval reservation directory")
+        result = {}
+        for directory in base.iterdir():
+            if directory.is_symlink() or not directory.is_dir() or not safe_name(directory.name):
+                raise StoreError("invalid eval reservation session")
+            files = list(directory.iterdir())
+            if len(files) != 1 or files[0].is_symlink() or not files[0].is_file():
+                raise StoreError("invalid eval reservation file")
+            path = files[0]
+            raw = path.read_bytes()
+            if (len(raw) > 512 or path.name != hashlib.sha256(raw).hexdigest() + ".json"):
+                raise StoreError("eval reservation changed")
+            try:
+                row = json.loads(raw)
+            except ValueError as exc:
+                raise StoreError("invalid eval reservation JSON") from exc
+            if (not isinstance(row, dict) or set(row) != {"schema", "source_session", "capture_group"}
+                    or row["schema"] != "rosy.eval-reservation/1"
+                    or row["source_session"] != directory.name
+                    or not safe_name(row["capture_group"])):
+                raise StoreError("invalid eval reservation identity")
+            result[directory.name] = row["capture_group"]
+        return result
+
+    def reserve_eval_source(self, source_session: str, capture_group: str) -> Path:
+        if not safe_name(source_session) or not safe_name(capture_group):
+            raise StoreError("invalid eval reservation identity")
+        self.eval_reservations()
+        publication_directory(self.eval_reservations_dir)
+        directory = self.eval_reservations_dir / source_session
+        try:
+            directory.mkdir()
+        except FileExistsError as exc:
+            raise StoreError(f"{source_session} already reserved") from exc
+        row = {"schema": "rosy.eval-reservation/1", "source_session": source_session,
+               "capture_group": capture_group}
+        raw = (json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        path = directory / (hashlib.sha256(raw).hexdigest() + ".json")
+        path.write_bytes(raw)
+        shared_publication_permissions(directory, publication_group(self.eval_reservations_dir))
+        return path
 
     def put_dataset(self, src_dir, name: str) -> tuple[Path, str]:
         """Copy src_dir to datasets/<name>/<content_sha>/ (temp sibling, then rename).
