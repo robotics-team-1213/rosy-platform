@@ -224,3 +224,71 @@ def test_pending_map_read_then_disconnect(page_site, width, height):
     pending[0].abort()
     expect(page.locator("#notice")).to_contain_text("연결이 끊겼습니다")
     expect(page.locator("#map-status")).to_contain_text("지도 조회 실패")
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_empty_site_map_names_the_next_step(page_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    page.route("**/api/fleet/site-map/active", lambda route: route.fulfill(
+        status=404, content_type="application/json", body='{"detail":{"code":"SITE_MAP_NOT_ACTIVE"}}'))
+    page.route("**/api/fleet/site-map/draft", lambda route: route.fulfill(
+        status=200, content_type="application/json", body='{"map":null,"revision":null}'))
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 없음")
+    expect(page.locator("#notice")).to_contain_text("관리자에게 현장 지도 가져오기를 요청")
+    expect(page.locator("#map-viewport")).to_be_hidden()
+    expect(page.locator("#save-draft")).to_be_disabled()
+    expect(page.locator("#activate")).to_be_disabled()
+    expect(page.locator("#trip-plan")).to_be_disabled()
+    expect(page.locator("#estop")).to_be_enabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-empty-{width}x{height}.png"), full_page=True)
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_no_robot_explains_why_trip_preview_is_unavailable(page_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    page.route("**/api/fleet/state", lambda route: route.fulfill(
+        status=200, content_type="application/json", body='{"robots":[]}'))
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    expect(page.locator("#trip-summary")).to_contain_text("등록된 로봇이 없습니다")
+    expect(page.locator("#trip-plan")).to_be_disabled()
+    expect(page.locator("#estop")).to_be_enabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-no-robot-{width}x{height}.png"), full_page=True)
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, width, height):
+    from playwright.sync_api import expect
+    from fleet.site_map import SiteMap
+
+    page, store, _ = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    page.locator('#site-map-svg [data-place="NW"]').click()
+    page.locator("#place-name").fill("북서 정차")
+    page.locator("#apply-edit").click()
+    store.save_draft(SiteMap.model_validate(store.active_view()["map"]), expected_revision=None, principal_id="alice")
+    page.locator("#save-draft").click()
+    expect(page.locator("#notice")).to_contain_text("변경 내용을 기록한 뒤 다시 접속")
+    expect(page.locator("#draft-status")).to_contain_text("저장 안 된 초안")
+    expect(page.locator("#activate")).to_be_disabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-conflict-{width}x{height}.png"), full_page=True)
+    page.locator("#connect").click()
+    expect(page.locator("#draft-status")).to_contain_text("저장된 초안")

@@ -20,7 +20,7 @@ export const TRIP_ERROR_LABEL = {
 export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
   SITE_MAP_NO_DRAFT: '저장된 초안이 없습니다',
-  SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다 · 다시 읽으세요',
+  SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 변경 내용을 기록한 뒤 다시 접속하세요.',
   SITE_MAP_ROUTE_ACTIVE: '차선 경로가 진행 중입니다 · 끝난 뒤 활성화하세요',
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',

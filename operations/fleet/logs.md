@@ -2145,3 +2145,9 @@
 - 변경: 새 `/console/site-map`의 탭·머리·홈 접근성 이름을 D-487의 `Rosy Fleet`으로 맞췄다. 1440/390/320px에서 초안 편집과 경로 미리보기 칸의 같은 폭, 가로 넘침 없음, 비상 정지 위치를 확인한다.
 - 증거: `X:/DevTemp/projects/rosy-platform/2026-10-07-fleet-g2/site-map-green.txt` 4 passed, `known_failures.py` 0 NEW; 같은 폴더 `site-map-*.png` 9장. 이름 검사 수정 전 1 failed.
 - gate 변화: 합성 서버의 LOCAL G2 부분 근거만 추가. 작은 지도 글씨의 운영자 판독, 예외 상태, 사이트 설치·G3는 HOLD.
+
+## 2026-10-07 · uncommitted · D-488 site-map G2 empty and conflict states
+
+- Change: The first-use empty map, empty robot roster, and draft revision conflict now give the operator a concrete next step without implying that a map or trip is available.
+- Evidence: 9 LOCAL Chromium cells at 1440x1000, 390x844, and 320x568; 28 site-map browser tests passed with 0 NEW known failures. Source screenshots and logs: X:/DevTemp/projects/rosy-platform/2026-10-07--site-map-edge-states/.
+- Gate: LOCAL G2 partial evidence only; site/device readback and operator G3 remain HOLD.

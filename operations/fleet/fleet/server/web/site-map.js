@@ -114,7 +114,7 @@ function syncButtons() {
       : (state.dirty ? '저장 안 된 초안' : '저장된 초안 없음'),
   state.loadState === 'pending' ? 'pending' : state.loadState === 'error' ? 'error'
     : state.draft?.revision ? 'ready' : 'empty');
-  gate('trip-plan', reason || (!state.active ? '활성 지도가 없습니다' : !$('trip-robot').value ? '로봇을 고르세요'
+  gate('trip-plan', reason || (!state.active ? '활성 지도가 없습니다' : !$('trip-robot').options.length ? '등록된 로봇이 없습니다 · 관리자에게 로봇 등록을 요청하세요' : !$('trip-robot').value ? '로봇을 고르세요'
     : ($('trip-pick').checked ? state.point : $('trip-place').value) ? '' : '목적지를 고르세요'));
   $('trip-pick').disabled = Boolean(reason);
   gate('estop', reason);
@@ -136,6 +136,7 @@ async function load() {
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map(place => new Option(`${place.name} (${place.id})`, place.id)));
   $('trip-robot').replaceChildren(...robots.map(robot => new Option(robot.robot_id, robot.robot_id)));
+  if (!robots.length) status('trip-summary', '경로 미리보기 불가 · 등록된 로봇이 없습니다. 관리자에게 로봇 등록을 요청하세요.', 'empty');
   select(null);
   syncButtons();
 }
@@ -168,7 +169,8 @@ $('connect').addEventListener('click', async () => {
     $('session').textContent = `${session.principal_id} · ${session.role}`;
     syncButtons();
     await load();
-    notice('지도를 읽었습니다.');
+    notice(!state.active && !state.working ? '활성 지도와 초안이 없습니다. 관리자에게 현장 지도 가져오기를 요청하세요.'
+      : !state.active ? '활성 지도는 없습니다. 초안을 확인하고 활성화하세요.' : '지도를 읽었습니다.');
   } catch (error) {
     state.loadState = error.status === 401 ? 'idle' : 'error';
     render();
