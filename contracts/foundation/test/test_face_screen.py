@@ -124,7 +124,7 @@ def test_peer_request_card_needs_a_live_core_and_carries_the_codes():
 
 
 def _row(**fields):
-    return {"display_code": "K7QM", "approval_code": "ABC234", "label": "Tablet",
+    return {"display_code": "K7QM", "approval_code": "ABC234",
             "expires_at": (NOW + timedelta(seconds=300)).isoformat(), **fields}
 
 
@@ -138,7 +138,7 @@ def test_peer_approval_reader_is_strict(tmp_path):
     assert fs.read_peer_approval(_approval(tmp_path), NOW) == PEER
     assert fs.read_peer_approval(str(tmp_path / "missing.json"), NOW) is None
     for change in ({"expires_at": NOW.isoformat()}, {"expires_at": "2026-10-03T12:05:00"},
-                   {"approval_code": "ABC2O4"}, {"display_code": "K7QMX"}, {"label": "x" * 2000}):
+                   {"approval_code": "ABC2O4"}, {"display_code": "K7QMX"}, {"padding": "x" * 2100}):
         assert fs.read_peer_approval(_approval(tmp_path, **change), NOW) is None, change
     # Several live requests keep CORE's order; a bad or expired entry drops alone; four is malformed.
     second = _row(display_code="M2NP", approval_code="XYZ789")

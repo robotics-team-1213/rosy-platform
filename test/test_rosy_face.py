@@ -1728,7 +1728,7 @@ def test_an_unused_login_code_keeps_the_card_until_it_burns(tmp_path):
 def _peer_approval(root: Path, expires_in: float = 300.0, **fields) -> None:
     from datetime import datetime, timezone
 
-    data = {"display_code": "K7QM", "approval_code": "ABC234", "label": "Tablet",
+    data = {"display_code": "K7QM", "approval_code": "ABC234",
             "expires_at": datetime.fromtimestamp(WALL + expires_in, timezone.utc).isoformat(), **fields}
     (root / "run/rosy-peer-display").mkdir(parents=True, exist_ok=True)
     (root / "run/rosy-peer-display/approval.json").write_text(json.dumps({"requests": [data]}), encoding="utf-8")
@@ -1782,7 +1782,7 @@ def test_an_oversized_peer_approval_is_ignored(tmp_path):
     module = _display()
     _status(tmp_path, "CORE_READY", runtime_mode="hardware")
     _face_inputs(tmp_path)
-    _peer_approval(tmp_path, label="x" * 2000)
+    _peer_approval(tmp_path, padding="x" * 2100)
     display, _lcd, _clock, _rendered, _opened, _lines = _face_loop(module, tmp_path)
 
     display.step()
