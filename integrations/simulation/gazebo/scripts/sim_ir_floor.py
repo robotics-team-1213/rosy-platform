@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gazebo stand-in for Pinky's IR ADC node (ir_sensor/range, UInt16MultiArray [left, mid, right]).
+"""Gazebo stand-in for the robot's IR ADC node (ir_sensor/range, UInt16MultiArray [left, mid, right]).
 
 Each channel is a one-ray gpu_lidar pointing down from the URDF IR link (description
 rosy_gz.urdf.xacro, ir_l/ir_mid/ir_r_link at 0.013 m above the floor). The ray decides only
