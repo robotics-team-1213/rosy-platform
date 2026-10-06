@@ -1731,7 +1731,7 @@ def _peer_approval(root: Path, expires_in: float = 300.0, **fields) -> None:
     data = {"display_code": "K7QM", "approval_code": "ABC234", "label": "Tablet",
             "expires_at": datetime.fromtimestamp(WALL + expires_in, timezone.utc).isoformat(), **fields}
     (root / "run/rosy-peer-display").mkdir(parents=True, exist_ok=True)
-    (root / "run/rosy-peer-display/approval.json").write_text(json.dumps(data), encoding="utf-8")
+    (root / "run/rosy-peer-display/approval.json").write_text(json.dumps({"requests": [data]}), encoding="utf-8")
 
 
 def test_a_peer_request_card_shows_the_approval_code_above_the_face_and_login(tmp_path, capsys):
@@ -1744,7 +1744,7 @@ def test_a_peer_request_card_shows_the_approval_code_above_the_face_and_login(tm
 
     display.step()
     assert _screen_row(rendered) == "peer_request"
-    assert rendered[-1]["screen"]["peer"] == {"display_code": "K7QM", "approval_code": "ABC234"}
+    assert rendered[-1]["screen"]["peer"] == {"requests": [{"display_code": "K7QM", "approval_code": "ABC234"}]}
 
     # An e-stop card outranks it; the code never reaches the journal.
     _face_inputs(tmp_path, robot_mode="EMERGENCY", estop=True)
@@ -1966,7 +1966,9 @@ def _info_screen():
     {"kind": "face", "row": "drive", "overlay": {"kind": "drive", "payload": {"kind": "drive", "mode": "MANUAL"}},
      "strip": "Charge the battery", "strip_tone": "caution"},
     {"kind": "face", "row": "wake", "overlay": {"kind": "wake", "payload": {"battery_percent": 50.0}}},
-    {"kind": "status", "row": "peer_request", "peer": {"display_code": "K7QM", "approval_code": "ABC234"}},
+    {"kind": "status", "row": "peer_request", "peer": {"requests": [
+        {"display_code": "K7QM", "approval_code": "ABC234"}, {"display_code": "M2NP", "approval_code": "XYZ789"},
+        {"display_code": "Q3RS", "approval_code": "DEF456"}]}},
 ])
 def test_every_card_renders_on_the_panel_size(screen):
     module = _display()

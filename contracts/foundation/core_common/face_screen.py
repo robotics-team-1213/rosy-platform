@@ -200,7 +200,9 @@ def read_face_inputs(path: str, now: datetime, owner_uid: Optional[int] = None) 
 
 #: CORE writes it while a D-456 peer request waits; rosy-core:rosy-display 2750, file 0640.
 PEER_APPROVAL_FILE = "/run/rosy-peer-display/approval.json"
-MAX_PEER_APPROVAL_BYTES = 1024
+MAX_PEER_APPROVAL_BYTES = 2048
+#: CORE lists at most this many live requests, newest first (D-483 M1).
+MAX_PEER_REQUESTS = 3
 _CODE_ALPHABET = frozenset("23456789ABCDEFGHJKMNPQRSTUVWXYZ")
 
 
@@ -211,22 +213,28 @@ def _code(value: Any, length: int) -> Optional[str]:
 
 
 def read_peer_approval(path: str, now: datetime, owner_uid: Optional[int] = None) -> Optional[dict]:
-    """``{"display_code", "approval_code"}`` of the pending request, or None (absent, malformed, expired).
+    """``{"requests": [{"display_code", "approval_code"}, ...]}`` of the live pending requests
+    (at most three, in CORE's newest-first order), or None (absent, malformed, all expired).
 
-    Read as strictly as ``read_face_inputs``. The approval code is a credential:
-    callers draw it and never log it.
+    Read as strictly as ``read_face_inputs``; a malformed or expired entry is dropped alone.
+    The approval code is a credential: callers draw it and never log it.
     """
     data = _read_bounded_json(path, MAX_PEER_APPROVAL_BYTES, owner_uid)
-    if not isinstance(data, Mapping):
+    rows = data.get("requests") if isinstance(data, Mapping) else None
+    if not isinstance(rows, list) or len(rows) > MAX_PEER_REQUESTS:
         return None
-    display, approval = _code(data.get("display_code"), 4), _code(data.get("approval_code"), 6)
-    try:
-        expires = datetime.fromisoformat(str(data.get("expires_at")))
-    except ValueError:
-        return None
-    if display is None or approval is None or expires.tzinfo is None or expires <= now:
-        return None
-    return {"display_code": display, "approval_code": approval}
+    shown = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        display, approval = _code(row.get("display_code"), 4), _code(row.get("approval_code"), 6)
+        try:
+            expires = datetime.fromisoformat(str(row.get("expires_at")))
+        except ValueError:
+            continue
+        if display is not None and approval is not None and expires.tzinfo is not None and expires > now:
+            shown.append({"display_code": display, "approval_code": approval})
+    return {"requests": shown} if shown else None
 
 
 def _read_bounded_json(path: str, limit: int, owner_uid: Optional[int]) -> Any:

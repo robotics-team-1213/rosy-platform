@@ -992,9 +992,9 @@ def card_renderer(info_screen) -> Callable[[dict], object]:
             image = info_screen.render_card(screen["overlay"]["payload"])
         elif screen.get("row") == "peer_request":
             # D-483: ASCII, as every card (the DejaVu card font has no Hangul).
-            peer = screen.get("peer") or {}
-            image = info_screen.render_notice("Pair request", [f"Request {peer.get('display_code') or '?'}",
-                                                               f"Code {peer.get('approval_code') or '?'}"])
+            # One "XXXX  CODE" line per live request, so each requester reads its own code.
+            rows = (screen.get("peer") or {}).get("requests") or []
+            image = info_screen.render_notice("Pair request", [f"{r['display_code']}  {r['approval_code']}" for r in rows])
         else:
             image = info_screen.render_boot(card, frame=frame)
         if kind == "face" and screen.get("strip"):

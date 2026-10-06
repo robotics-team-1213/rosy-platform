@@ -27,7 +27,7 @@ def core(**fields) -> dict:
 
 
 READY = {"stage": "CORE_READY", "state": rs.READY}
-PEER = {"display_code": "K7QM", "approval_code": "ABC234"}
+PEER = {"requests": [{"display_code": "K7QM", "approval_code": "ABC234"}]}
 DRIVE = {"mode": "NAVIGATION", "speed": 0.12}
 
 
@@ -123,11 +123,14 @@ def test_peer_request_card_needs_a_live_core_and_carries_the_codes():
     assert fs.screen_for(**READY, core=core(), peer=PEER)["peer"] == PEER
 
 
-def _approval(tmp_path, **fields):
-    data = {"display_code": "K7QM", "approval_code": "ABC234", "label": "Tablet",
+def _row(**fields):
+    return {"display_code": "K7QM", "approval_code": "ABC234", "label": "Tablet",
             "expires_at": (NOW + timedelta(seconds=300)).isoformat(), **fields}
+
+
+def _approval(tmp_path, *rows, **fields):
     path = tmp_path / "approval.json"
-    path.write_text(json.dumps(data), encoding="utf-8")
+    path.write_text(json.dumps({"requests": list(rows) or [_row(**fields)]}), encoding="utf-8")
     return str(path)
 
 
@@ -137,6 +140,13 @@ def test_peer_approval_reader_is_strict(tmp_path):
     for change in ({"expires_at": NOW.isoformat()}, {"expires_at": "2026-10-03T12:05:00"},
                    {"approval_code": "ABC2O4"}, {"display_code": "K7QMX"}, {"label": "x" * 2000}):
         assert fs.read_peer_approval(_approval(tmp_path, **change), NOW) is None, change
+    # Several live requests keep CORE's order; a bad or expired entry drops alone; four is malformed.
+    second = _row(display_code="M2NP", approval_code="XYZ789")
+    assert fs.read_peer_approval(_approval(tmp_path, second, _row(approval_code="bad"), _row()), NOW) == {
+        "requests": [{"display_code": "M2NP", "approval_code": "XYZ789"}, PEER["requests"][0]]}
+    assert fs.read_peer_approval(_approval(tmp_path, *[_row()] * 4), NOW) is None
+    (tmp_path / "approval.json").write_text('{"display_code": "K7QM"}', encoding="utf-8")
+    assert fs.read_peer_approval(str(tmp_path / "approval.json"), NOW) is None
     if hasattr(os, "getuid"):
         assert fs.read_peer_approval(_approval(tmp_path), NOW, owner_uid=os.getuid() + 1) is None
 
