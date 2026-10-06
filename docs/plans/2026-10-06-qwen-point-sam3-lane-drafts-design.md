@@ -15,14 +15,14 @@ D-379 자동 라벨은 벽·바닥은 LiDAR로 믿을 만하지만 drivable은 �
 | 원래 설계 | 파일럿 결과 | 수정 |
 |-----------|-------------|------|
 | lane_line을 Qwen 점 → SAM으로 | Qwen 선 점이 화면 가장자리·하단에 환각 열을 만들고 gate가 약 45% 버림. lane 6.1%, 미라벨 30.6%. SAM 3 텍스트 "white line"(rosy-42 v3)이 훨씬 깨끗함(lane 10.8%, 연속 IoU 중앙값 0.991) | **lane_line·wall은 SAM 3 텍스트 프롬프트.** Qwen은 lane에 쓰지 않는다 |
-| drivable = Qwen 도로 점 → SAM | SAM은 「카펫」을 분할할 뿐 「도로」를 구분하지 못함. Qwen 점이 흰 선 너머 띠(벽 앞)에 몰리면 로봇 앞 도로가 빠지고 선 너머가 drivable이 됨 | **drivable seed = 로봇 바로 앞 카펫(하단 중앙, D-379 footprint 원리) + Qwen 도로 점.** 최종 drivable = 흰 선(1px 팽창)을 넘지 않고 로봇 발판 띠와 겹침이 가장 큰 카펫 연결 성분. 선 너머 카펫은 255(사람 판단) |
+| drivable = Qwen 도로 점 → SAM | SAM은 「카펫」을 분할할 뿐 「도로」를 구분하지 못함. Qwen 점이 흰 선 너머 띠(벽 앞)에 몰리면 로봇 앞 도로가 빠지고 선 너머가 drivable이 됨 | **drivable seed = 로봇 바로 앞 카펫(하단 중앙, D-379 footprint 원리) + Qwen 도로 점.** 최종 drivable = 흰 선(1px 팽창)을 넘지 않고 로봇 발판 띠와 겹침이 가장 큰 카펫 연결 성분. 선 너머 카펫은 base 값 유지(D-475: 도로 밖 바닥은 floor), 사람이 판단 |
 | Qwen JSON 스키마 프롬프트 | 6장 중 5장 빈 결과 | Qwen 고유 `point_2d` 형식 + 3× 업스케일(320×240은 시각 토큰이 너무 적음) + `num_predict` 600 상한(없으면 160 s 폭주) + 정규식 파싱 |
 | 재시드 조건 3가지 | 고정 15프레임(1.9 s) 재시드로 경계 IoU 중앙값 0.989 | 고정 K=15로 시작. 조건부 재시드는 필요가 측정되면 추가 |
 
 측정(642프레임, RTX 5080 16 GB):
 - 속도: SAM 텍스트 lane 0.21 s/frame + tracker drivable 0.22 s/frame, Qwen 키프레임 평균 2.8 s(43장). peak VRAM 7.5 GB(SAM 영상·이미지 모델 동시). Qwen과 SAM은 같은 시간에 올리지 않는다(Qwen `keep_alive: 0`로 내림).
 - 안정성: drivable 연속 프레임 IoU 중앙값 0.998, p10 0.902, 0.5 미만 전환 5/641, 빈 도로 프레임 0.
-- 면적 평균: road(drivable) 29.1%, 선 너머 카펫(255) 15.6%, lane 10.3%.
+- 면적 평균: road(drivable) 29.1%, 선 너머 카펫(drivable 아님, 사람 판단) 15.6%, lane 10.3%.
 - 남은 오류: 노란 경사로 일부, 프레임 가장자리 회색 바닥 조각, 로봇이 선 위에 걸칠 때 발판 성분 선택이 갈림(전환 5건).
 
 수정된 흐름:
@@ -32,7 +32,7 @@ mp4 → 연속 프레임
   SAM 3 이미지 텍스트 "white line"/"wall" → lane_line, wall (프레임마다)
   K프레임마다: 발판 seed + Qwen point_2d 도로 점 → 밝기·lane gate
   SAM 3.0 tracker: 키프레임 seed → K프레임 전파
-  drivable = closing(track) − lane − 노란색, 로봇 발판과 연결된 성분만; 나머지 카펫 255
+  drivable = closing(track) − lane − 노란색, 로봇 발판과 연결된 성분만; 나머지 카펫은 base 값 유지
   → indexed PNG → verified-inputs → review_ingest
 ```
 
