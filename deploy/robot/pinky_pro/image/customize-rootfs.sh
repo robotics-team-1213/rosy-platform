@@ -428,7 +428,8 @@ systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.servic
     rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
     rosy-config.service rosy-network.service rosy-face.service \
     rosy-login-code.service rosy-hw-probe.service rosy-hw-probe.path rosy-hw-test.path \
-    rosy-auto-update.timer rosy-ssh-access.path rosy-ssh-access-boot.service
+    rosy-auto-update.timer rosy-ssh-access.path rosy-ssh-access-boot.service \
+    rosy-tailscale-join.service
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"
 ln -sfn /run/rosy-boot/issue "$ROOT/etc/issue.d/rosy.issue"
