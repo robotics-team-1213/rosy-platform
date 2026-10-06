@@ -476,29 +476,69 @@ def test_gather_loss_removes_last_known_robot_position(console_url):
 DECLINE_ESTOP_CONFIRM = DECLINE_CONFIRM
 
 
-def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url):
-    """D-413 — 전체 정지는 확인 없이 한 번의 누름으로 즉시 나간다(D-92a 좁힘).
+@pytest.mark.parametrize("page_file,width,height", [
+    ("index.html", 1920, 1080), ("index.html", 390, 844), ("index.html", 320, 568),
+    ("install.html", 1920, 1080), ("install.html", 390, 844), ("install.html", 320, 568),
+])
+def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url, page_file, width, height):
+    """D-414 — 전체 정지는 확인 없이 한 번의 누름으로 즉시 나간다(D-92a 좁힘).
 
     비상 정지는 비상 출구다: 확인 대화상자는 마찰이고, 거절 경로는 사고다.
     대화상자가 열리지 않는 것까지 확인한다(window.confirm 스텁이 한 번도
     불리지 않으면 통과).
     """
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright, expect
 
     posts: list[str] = []
     api = dict(API)
     api["/api/fleet/estop"] = {"stopped": 3, "total": 3, "robots": []}
     with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api, posts=posts, init_script=DECLINE_CONFIRM)
-        page.goto(console_url, wait_until="domcontentloaded")
-        page.fill("#console-token", "operator-token")
-        page.locator("#token-save").click()
+        browser, page, errors = _open_console(p, api, posts=posts, init_script=DECLINE_CONFIRM +
+            "sessionStorage.setItem('rosy-console-token','operator-token');")
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url.replace("index.html", page_file), wait_until="networkidle")
         page.wait_for_function(
             "() => document.querySelector('#user-role')?.textContent.includes('운영자')", timeout=3000)
         page.locator("#estop").click()
-        page.wait_for_function("() => window.__confirms !== undefined", timeout=3000)
-        page.wait_for_timeout(300)
+        feedback = page.locator("#estop-feedback")
+        expect(feedback).to_contain_text("정지 요청 응답: 3/3 · 물리 정지 미확인")
+        box = feedback.bounding_box()
+        assert box and box["y"] >= 0 and box["y"] + box["height"] <= height
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, f"fleet_estop_result_{page_file[:-5]}_{width}.png")
         assert any(path == "/api/fleet/estop" for _method, path in posts), posts
+        assert page.evaluate("() => window.__confirms.length") == 0
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize("page_file", ["index.html", "install.html"])
+@pytest.mark.parametrize("response,expected", [
+    ({"stopped": 1, "total": 3, "robots": [
+        {"robot_id": "rosy_02", "stopped": False, "error": {"code": "CONNECT_ERROR"}}]},
+     "정지 요청 응답: 1/3 · 물리 정지 미확인"),
+    ((503, {"detail": {"code": "SERVER_UNAVAILABLE"}}), "비상 정지 결과 확인 불가"),
+])
+def test_fleet_estop_partial_and_unknown_are_visible_on_phone(console_url, page_file, response, expected):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, "/api/fleet/estop": response}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api, init_script=DECLINE_CONFIRM +
+            "sessionStorage.setItem('rosy-console-token','operator-token');")
+        page.set_viewport_size({"width": 320, "height": 568})
+        page.goto(console_url.replace("index.html", page_file), wait_until="networkidle")
+        page.locator("#estop").click()
+        feedback = page.locator("#estop-feedback")
+        expect(feedback).to_contain_text(expected)
+        assert feedback.get_attribute("state") == "error"
+        assert "SERVER_UNAVAILABLE" not in feedback.inner_text()
+        box = feedback.bounding_box()
+        assert box and box["y"] >= 0 and box["y"] + box["height"] <= 568
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, f"fleet_estop_{'partial' if isinstance(response, dict) else 'unknown'}_{page_file[:-5]}_320.png")
+        if isinstance(response, dict):
+            assert "rosy_02" in page.locator("#log").inner_text()
         assert page.evaluate("() => window.__confirms.length") == 0
         assert not errors
         browser.close()

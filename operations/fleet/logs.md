@@ -1984,3 +1984,9 @@
 - 변경: 전체 주행 취소 응답 요약과 로봇별 기록 링크를 버튼 가까이에 놓았다. 503은 물리 결과를 미확인으로 말하고 재확인을 안내한다.
 - 증거: [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 1920/390/320px 확인·부분 응답과 320px 오류 캡처; 브라우저 5 passed, `known_failures.py` 0 NEW.
 - gate 변화: Fleet LOCAL G2/G3 일부 추가. 실제 사이트 PC·로봇 readback과 현장 사용자 독회는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 비상 정지 응답 첫 화면
+
+- 변경: 운용·설치의 비상 정지 요청/부분 응답/결과 미확인을 머리 아래에서 바로 읽게 했다. 설치 안내는 비상 정지와 전체 주행 취소를 구분하고 카메라 승인 제목 수준을 정리했다.
+- 증거: [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 320/390px 캡처; 집중 브라우저 10 passed, 설치 회귀 7 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2/G3 일부 추가. 실제 로봇 정지 readback과 현장 사용자 독회는 HOLD다.

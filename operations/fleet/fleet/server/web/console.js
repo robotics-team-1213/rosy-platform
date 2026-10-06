@@ -61,6 +61,12 @@ const auth = {
   locked: false,
 };
 const confirmedAction = createConfirmedAction({scope: pageScope, identity: () => ({...auth}), confirm: confirmIrreversible});
+function stopNotice(message = "", state = "warning") {
+  const notice = el("estop-feedback");
+  notice.textContent = message;
+  notice.hidden = !message;
+  notice.setAttribute("state", state);
+}
 function cancelAllNotice(message = "", details = false) {
   const result = el("cancel-all-result"), link = el("cancel-all-details");
   result.textContent = message;
@@ -78,6 +84,7 @@ const connectionView = createConnectionView({scope: pageScope, el});
 
 function markLocked(reason = "auth") {
   confirmedAction.cancel();
+  stopNotice();
   cancelAllNotice();
   const firstLock = !auth.locked;
   auth.locked = true;
@@ -631,16 +638,24 @@ pageScope.listen(el("map-canvas"), "keydown", async (event) => {
 pageScope.listen(el("estop"), "click", async () => {
   const life = pageScope.capture();
   life.check();
+  stopNotice("비상 정지 요청 중…", "pending");
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
     life.check();
+    const summary = result.total > 0
+      ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
+      : "정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.";
+    stopNotice(summary, result.total > 0 && result.stopped === result.total ? "warning" : "error");
+    log(summary, "bad");
+    (result.robots || []).filter((r) => !r.stopped)
+      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
     await refreshDispatchControl();
     life.check();
-    log(`정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`, "bad");
-    result.robots.filter((r) => !r.stopped)
-      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
   } catch (err) {
     if (err.name === "AbortError") return;
+    stopNotice(err.status >= 500 || !err.status
+      ? "비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요."
+      : `비상 정지 요청 거절 — ${err.message}`, "error");
     log(`전체 정지 실패 — ${err.message}`, "bad");
   }
 });
@@ -758,6 +773,7 @@ function tickClock() {
 // 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
 el("console-token").value = auth.token;
 function saveToken() {
+  stopNotice();
   cancelAllNotice();
   pageScope.invalidate();
   auth.token = el("console-token").value.trim();

@@ -11,6 +11,7 @@
 .connection-guide p { margin: 0; color: var(--ink-quiet); }
 .connection-guide a { display: inline-flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-button); color: var(--ink); }
 .console-workflow a:focus-visible, .connection-guide a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+#estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
 .start-point-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-3) 0; }
 .start-point-fields label { display: grid; gap: var(--space-2); min-width: 0; }
 .start-point-fields .ui-field { width: 100%; min-width: 0; }
@@ -775,7 +776,7 @@ main {
 .enroll-dialog-actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
 /* D-341 카메라 연결 승인: 지문·자격 ID는 등폭으로 크게, API가 준 4자 묶음 그대로. */
 .camera-link { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--line-14); }
-.camera-link h5 { margin: var(--space-3) 0 0; font-size: var(--text-label); font-weight: var(--weight-label); }
+.camera-link h3, .camera-link h4 { margin: var(--space-3) 0 0; font-size: var(--text-label); font-weight: var(--weight-label); }
 .camera-id { font-family: var(--mono); letter-spacing: var(--track-wide); overflow-wrap: anywhere; }
 .camera-list li { align-items: flex-start; }
 .camera-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }

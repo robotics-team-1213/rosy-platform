@@ -6451,3 +6451,9 @@ osy-d395-s1d\`.
 - 변경: Fleet 전체 주행 취소의 부분 응답·결과 미확인을 작업 버튼 옆에서 바로 읽고 로봇별 기록으로 이동하게 했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320/390px 캡처, 브라우저 5 passed, `known_failures.py` 0 NEW.
 - gate 변화: Fleet LOCAL G2/G3 일부 추가. 실제 현장 취소·정지와 운영자 수용, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 비상 정지 응답을 첫 화면에 표시
+
+- 변경: Fleet 운용·설치 화면의 즉시 비상 정지 응답과 결과 미확인을 머리 아래에 표시하고 설치 안내의 취소·비상 정지 어휘를 구분했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320/390px 캡처; 집중 브라우저 10 passed, 설치 회귀 7 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2/G3 일부 추가. 실물 정지와 현장 사용자 G3, 제품 전체는 HOLD다.

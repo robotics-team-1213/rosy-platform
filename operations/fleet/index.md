@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(fleet): 비상 정지 응답 첫 화면
 - 2026-10-06 · uncommitted · uiux(fleet): 전체 주행 취소 결과를 행동 옆에 표시
 - 2026-10-06 · uncommitted · uiux(fleet): 팔로워 지연 모바일 독회
 - 2026-10-06 · uncommitted · uiux(fleet): 연결 끊김 모바일 독회
 - 2026-10-06 · uncommitted · uiux(fleet): 정지 중 목표 상태 문구와 G3 근거
-- 2026-10-06 · uncommitted · uiux(fleet): 빈 목록·서버 실패의 모바일 폭과 연결 끊김 증거
