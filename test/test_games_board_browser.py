@@ -132,7 +132,8 @@ def test_match_board_names_server_judged_delay():
         server.close()
 
 
-def test_legacy_overlay_without_time_evidence_does_not_claim_fresh():
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 800), (320, 568)])
+def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height):
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
@@ -145,14 +146,23 @@ def test_legacy_overlay_without_time_evidence_does_not_claim_fresh():
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, 1280, 800)
+            browser, page, errors = open_page(playwright, width, height)
             page.route("**/overlay.json", lambda route: route.fulfill(json=legacy))
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.getElementById('connection')?.dataset.evidence === 'unavailable'")
             assert "시각 정보 없음" in page.locator("#connection").inner_text()
             assert "시각 정보 없음" in page.locator("#match-announcement").inner_text()
             assert "호스트 연결됨" not in page.locator("#connection").inner_text()
+            if width <= 390:
+                panels = [page.locator(selector).bounding_box() for selector in
+                          (".score", ".pitch-wrap", ".field-details")]
+                assert max(box["width"] for box in panels) - min(box["width"] for box in panels) <= 1
+                assert max(box["x"] for box in panels) - min(box["x"] for box in panels) <= 1
+                halt = page.locator("#halt").bounding_box()
+                assert halt["y"] + halt["height"] <= height
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert not errors
+            save_temp_screenshot(page, f"games_board_unavailable_{width}x{height}.png")
             browser.close()
     finally:
         server.close()
