@@ -470,3 +470,4 @@
 | D-472 | Rosy Cam 현장 영상을 지도에 표시하고 후면 LED 점멸로 로봇 신원을 대조한다 | Proposed (2026-10-06; 구현·DEVICE/FIELD 식별 별도) |
 | D-476 | 차선을 잃으면 곧바로 멈추지 않고, 알던 차로의 연장선을 짧게 잇는다(예상 도로 bridge) | Proposed (2026-10-06; 문서만, 기본 꺼짐; SOURCE/SIM/DEVICE/FIELD 별도) |
 | D-477 | 현장 LAN 밖 팀 협업 접속은 Tailscale tailnet으로 연다 — 전송 계층만 추가하고 SSH·콘솔 권한은 그대로 | Accepted (2026-10-06, 사용자 결정: 4명 팀 협업 원격 접속·비상업 확인·개발 기기 1대 우선; 구현·DEVICE/FIELD 별도) |
+| D-480 | sim2real 차이는 세 갈래로 나눈다 — 싸게 그릴 것은 시뮬에, 그리기 어려운 것은 실주행 재생에, 예외는 장치의 런타임 지원으로 | Proposed (2026-10-06, 사용자 결정: 시뮬 전용 enforce는 명시 플래그, 기본 기하 8kcn 보정, 레지스트리 harness YAML, Isaac 제외; 레지스트리 lint만, 시뮬·CORE 구현과 ROS-SIM/DEVICE/FIELD 별도) |
