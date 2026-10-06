@@ -6683,3 +6683,9 @@ osy-d395-s1d\`.
 - 변경: `3a6c5d43e` 코드 후보의 Fleet 브라우저 파일 전체를 재실행하고 75개 현재 PNG의 범위를 회차 평가에 기록했다.
 - 증거: X: `2026-10-07-fleet-full/run.txt`; **103 passed**, `known_failures.py` 0 NEW.
 - gate 변화: 현재 후보 LOCAL 상태 근거 강화. D-153의 상태 × 폭 전체 캡처, 사이트 설치·장치 readback·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · feat(review): D-485 검수 앱 클래스셋
+
+- 변경: 검수 앱이 `--object-classes <data.yaml>`로 모델별 객체 클래스를 받고(기본은 D-423 6개), 픽셀 `classes.yaml`은 선택 `display`를 받는다. 화면은 서버 클래스셋을 쓰고 숫자키 클래스·A 승인·X 제외 단축키를 키 코드로 매핑한다. `classes/lane_lr5.yaml`(차선 모델 5클래스)과 모델 PC용 `model/export_class_names.py`를 추가했다. 클래스셋 sha는 `review-contract.json`에만 있고 `/api/decisions`에는 넣지 않았다.
+- 증거: `learning/training/perception/test/` 호스트 pytest와 브라우저 시험, `test/known_failures.py` 비교, harness lint. 결과 수치는 브랜치 착지 때 확인한다.
+- gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.

@@ -360,3 +360,35 @@ def test_pixel_undo_walks_back_every_edit(tmp_path):
     assert np.all(review_masks.pixels(store, review) == 255)
     with pytest.raises(ValueError, match='되돌릴'):
         review_masks.update(store, 0, {'version':review['version'], 'action':'undo'}, Conflict)
+
+
+def test_pixel_display_names_are_kept_but_never_change_the_class_signature(tmp_path):
+    for name in 'abc':
+        (tmp_path / name).mkdir()
+    plain = review_masks.bind_classes(open_store(tmp_path / 'a'), CLASSES)
+    named = CLASSES.replace(b'name: lane_line,', 'name: lane_line, display: 차선,'.encode())
+    bound = review_masks.bind_classes(open_store(tmp_path / 'b'), named)
+    assert bound['classes'][1]['display'] == '차선' and 'display' not in bound['classes'][0]
+    assert bound['classes_signature'] == plain['classes_signature']
+    with pytest.raises(ValueError, match='display'):
+        review_masks.bind_classes(open_store(tmp_path / 'c'), CLASSES.replace(b'name: wall,', b'name: wall, display: 3,'))
+
+
+def test_served_pixel_classes_default_to_korean_display_without_touching_the_binding(tmp_path):
+    store = open_store(tmp_path)
+    bound = review_masks.bind_classes(store, CLASSES)
+    served = review_masks.get(store, 0)['classes']
+    assert [c['display'] for c in served['classes']] == ['배경', '차선', '벽', '주행 영역', '정지선', '횡단보도']
+    assert review_masks.classes(store) == bound and 'display' not in bound['classes'][0]
+    assert (served['sha256'], served['classes_signature']) == (bound['sha256'], bound['classes_signature'])
+
+
+def test_pixel_classes_with_display_round_trip_through_export_verification(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES.replace(b'name: lane_line,', 'name: lane_line, display: 차선,'.encode()))
+    review_masks.update(store, 0, dict(version=0, action='fill', label=0), Conflict)
+    review_masks.update(store, 0, dict(version=1, action='approve', complete_frame_review=True,
+                                       background_reviewed=True), Conflict)
+    receipt = store.prepare()
+    doc = review_evidence.verify_current(receipt['path'], review_evidence.decisions(store))
+    assert doc['pixel_approved_frames'] == 1

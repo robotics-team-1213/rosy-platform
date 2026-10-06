@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+import class_sets
 import review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence
@@ -37,7 +38,8 @@ class Conflict(ValueError):
 
 
 class ReviewStore:
-    def __init__(self, state, source=None, human=None, images=None, *, empty_eval=False):
+    def __init__(self, state, source=None, human=None, images=None, object_classes=None, *,
+                 empty_eval=False):
         self.state = Path(state).resolve()
         self.state.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
@@ -57,12 +59,16 @@ class ReviewStore:
                     raise ValueError('existing workspace: reopen with --state only')
                 if any(x is not None for x in (source, human, images)):
                     raise ValueError('existing workspace: restart with --state only; imports never overwrite reviews')
+                if object_classes is not None and object_classes.get('sha256') != class_sets.object_set(self)['sha256']:
+                    raise ValueError('workspace object classes differ; do not reinterpret labels')
                 review_masks.configure(self)
                 review_evidence.configure(self)
                 return
             if empty_eval:
                 if any(x is not None for x in (source, human, images)):
                     raise ValueError('empty evaluation workspace has no training inputs')
+                if object_classes is not None:
+                    class_sets.bind_object_set(self, object_classes, db)
                 db.execute("INSERT INTO metadata VALUES ('initialized','true')")
                 db.execute("INSERT INTO metadata VALUES ('workspace_kind','evaluation')")
                 db.commit()
@@ -73,7 +79,12 @@ class ReviewStore:
                 raise ValueError('first start requires source, human and images')
             # Existing receiver validates hashes, dimensions, boxes and the complete import.
             validation = self.state / ('import-' + uuid.uuid4().hex)
-            review_return.receive_review(source, human, images, validation)
+            record = object_classes or class_sets.legacy_object_set()
+            classes = tuple(c['name'] for c in record['classes'])
+            review_return.receive_review(source, human, images, validation, classes=classes)
+            # One transaction: the binding commits or rolls back with the frame rows.
+            db.execute('BEGIN IMMEDIATE')
+            class_sets.bind_object_set(self, record, db)
             originals = review_return._parse(Path(source).read_bytes())
             reviews = review_return._parse(Path(human).read_bytes())
             for index, row in originals.items():
@@ -88,7 +99,7 @@ class ReviewStore:
                 suffix = Path(row['image']).suffix.lower()
                 frozen = validation / 'inputs' / 'images' / f'{index:06d}{suffix}'
                 row = dict(row, image=frozen.relative_to(self.state).as_posix())
-                self.validate_boxes(row, review['boxes'])
+                self.validate_boxes(row, review['boxes'], classes=classes)
                 db.execute('INSERT INTO frames VALUES (?,?,?,?,1)',
                            (index, json.dumps(row), json.dumps(review), status))
                 db.execute('INSERT INTO events(frame,action,version,review) VALUES (?,?,?,?)',
@@ -107,13 +118,16 @@ class ReviewStore:
         finally:
             db.close()
 
+    def object_classes(self):
+        return tuple(c['name'] for c in class_sets.object_set(self)['classes'])
+
     @staticmethod
-    def validate_boxes(source, boxes, *, approved=False):
+    def validate_boxes(source, boxes, *, classes, approved=False):
         if not isinstance(boxes, list):
             raise ValueError('boxes must be a list')
         for box in boxes:
             review_return.exporter._check_human_box(box)
-            allowed = review_return.exporter.OBJECT_CLASSES + (() if approved else (None,))
+            allowed = classes + (() if approved else (None,))
             if box.get('label') not in allowed:
                 raise ValueError('known object class required')
             x0, y0, x1, y1 = box['bbox_xyxy']
@@ -149,6 +163,7 @@ class ReviewStore:
         return path
 
     def update(self, index, body):
+        classes = self.object_classes()
         with self.lock, self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             frame = self.get(index)
@@ -160,7 +175,7 @@ class ReviewStore:
                 if status == 'excluded':
                     raise ValueError('제외 사진은 재검수로 돌린 후 수정하세요.')
                 boxes = body.get('boxes')
-                self.validate_boxes(frame['source'], boxes)
+                self.validate_boxes(frame['source'], boxes, classes=classes)
                 review.update(boxes=boxes, review_status='pending_human', complete_frame_review=False,
                               review_origin='pinky_web_edit')
                 review.pop('disposition', None)
@@ -169,7 +184,7 @@ class ReviewStore:
                 if status == 'excluded' or body.get('complete_frame_review') is not True:
                     raise ValueError('전체 프레임 확인과 재검수 상태가 필요합니다.')
                 self.image(index)
-                self.validate_boxes(frame['source'], review['boxes'], approved=True)
+                self.validate_boxes(frame['source'], review['boxes'], classes=classes, approved=True)
                 review.update(review_status='approved', complete_frame_review=True,
                               review_origin='pinky_web_explicit_review')
                 status = 'approved'
@@ -177,7 +192,7 @@ class ReviewStore:
                 if status == 'excluded':
                     raise ValueError('제외 사진은 재검수로 돌린 후 초안을 가져오세요.')
                 boxes = frame['source'].get('objects', frame['source'].get('boxes', []))
-                self.validate_boxes(frame['source'], boxes)
+                self.validate_boxes(frame['source'], boxes, classes=classes)
                 review.update(boxes=boxes, review_status='pending_human', complete_frame_review=False,
                               review_origin='pinky_web_candidate_import')
                 review.pop('disposition', None)
@@ -220,7 +235,7 @@ class ReviewStore:
             human.write_bytes(review_return._jsonl(review_evidence.human_review(f) for f in frames if f['index'] not in unclassified))
             (inputs / 'application-snapshot.json').write_text(json.dumps(frames, ensure_ascii=False, indent=2), encoding='utf-8')
             out = self.state / 'exports' / export_id
-            receipt = review_return.receive_review(source, human, self.state, out)
+            receipt = review_return.receive_review(source, human, self.state, out, classes=self.object_classes())
             receipt.update(export_id=export_id, path=str(out),
                            frame_versions={str(f['index']): f['version'] for f in frames},
                            excluded_indices=[f['index'] for f in frames if f['status'] == 'excluded'],
@@ -289,9 +304,11 @@ def make_server(store, port=8767, host='127.0.0.1'):
                 if path == '/api/workspace':
                     frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
                               for row in store.list_frames()]
-                    return self.send({'frames': frames, 'classes': list(review_return.exporter.OBJECT_CLASSES),
+                    object_set = class_sets.object_set(store)
+                    return self.send({'frames': frames, 'classes': [c['name'] for c in object_set['classes']],
+                                      'object_class_set': object_set,
                                       'token': token, 'exports': store.exports(), 'segmentation_supported': True,
-                                      'pixel_classes': review_masks.classes(store),
+                                      'pixel_classes': review_masks.served_classes(store),
                                       'map_reference': review_evidence.map_reference(store)})
                 if path == '/api/decisions':
                     value = review_evidence.decisions(store)
@@ -419,9 +436,17 @@ def main():
     parser.add_argument('--port', type=int, default=8767)
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
+    parser.add_argument('--object-classes', type=Path,
+                        help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
     parser.add_argument('--cad-catalog', type=Path, help='verified CAD reference catalog shown in app')
     args = parser.parse_args()
-    store = ReviewStore(args.state, args.source, args.human, args.images,
+    object_classes = None
+    if args.object_classes:
+        try:
+            object_classes = class_sets.from_data_yaml(args.object_classes.read_bytes(), 'detect')
+        except (OSError, ValueError) as exc:
+            parser.error(f'--object-classes: {exc}')
+    store = ReviewStore(args.state, args.source, args.human, args.images, object_classes,
                         empty_eval=args.empty_eval)
     with store.connect() as db:
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
