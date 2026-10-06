@@ -2025,3 +2025,9 @@
 - 변경: 재확인 401·403에서 이전 계정·목록·저장 버전·미리보기·작업 상태를 내려 거부 상태로 전환한다. 작성 초안은 남기고 저장·제안은 막으며 거부 이유를 화면 안에 표시한다.
 - 증거: 320px 401·403 브라우저 2셀과 기존 실패·컴파일 회귀 4 passed, Cell 전체 21 passed, Cell API 8 passed, 공용 UI 계약 231 passed/25 skipped, 마지막 접속 안내 변경의 집중 재검사 3 passed, JS 구문 검사 통과, 각 성공 실행 `known_failures.py` 0 NEW. X: `captures/fleet-cell/fleet-cell-auth-{401,403}-320x568.png`, `logs/fleet-cell-auth-{focus-final,full,api,shared,final-focus}.txt`.
 - gate 변화: 권한 거부 전환의 LOCAL G2 부분 근거 추가. 나머지 선언 상태·실제 장치·운영자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 문서·행동 폭
+
+- 변경: 레시피·셀 문서 창의 세 선언 폭을 측정하고, 390/320px에서 문서·미리보기·제안·승인·복귀 행동이 각 칸의 가용 폭을 채우게 했다.
+- 증거: Cell 전체 24 passed와 공용 UI 계약 231 passed/25 skipped 뒤 마지막 미리보기 폭 보정. 현재 세 폭 브라우저 3 passed, 미리보기·취소 상호작용 4 passed, 각 성공 실행 `known_failures.py` 0 NEW. X: `captures/fleet-cell/fleet-cell-widths-{1440x1000,390x844,320x568}.png`, `logs/fleet-cell-{uniform-full,uniform-shared,uniform-widths-final,uniform-interaction}.txt`.
+- gate 변화: Cell 균일 폭의 LOCAL G2 부분 근거 추가. 전체 선언 상태·실제 장치·운영자 G3는 HOLD다.

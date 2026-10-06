@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(fleet): Cell 문서·행동 폭
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 세션 거부 전환
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 저장 문서 목록 상태
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 작업 취소 확인과 320px 머리
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 작업 화면의 비상 정지와 평가 카드
-- 2026-10-06 · uncommitted · uiux(fleet): 로봇 카드 행동 폭과 데스크톱 높이

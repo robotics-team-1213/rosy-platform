@@ -157,6 +157,29 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
         page.screenshot(path=str(Path(output) / f"fleet-cell-empty-{width}x{height}.png"))
 
 
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_panels_and_compact_actions_use_uniform_width(browser_site, width, height):
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
+    panels = [panel.bounding_box() for panel in page.locator(".documents > ui-section").all()]
+    assert len(panels) == 2 and abs(panels[0]["width"] - panels[1]["width"]) <= 1
+    if width < 480:
+        assert abs(panels[0]["x"] - panels[1]["x"]) <= 1
+        preview_head = page.locator("#compile").locator("..").bounding_box()
+        preview_action = page.locator("#compile").bounding_box()
+        assert abs(preview_action["x"] - preview_head["x"]) <= 1
+        assert abs(preview_action["width"] - preview_head["width"]) <= 1
+        for group in page.locator("main .actions").all():
+            row = group.bounding_box()
+            for action in group.locator("ui-button, a").all():
+                box = action.bounding_box()
+                assert abs(box["x"] - row["x"]) <= 1
+                assert abs(box["width"] - row["width"]) <= 1
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"fleet-cell-widths-{width}x{height}.png"), full_page=True)
+
+
 def test_cell_saved_documents_failure_retry_and_credential_change(browser_site):
     from playwright.sync_api import expect
 

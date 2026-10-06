@@ -24,6 +24,10 @@ a { color: var(--ink); }
 #estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
 @media (width < 30rem) {
   .documents, .scope { grid-template-columns: 1fr; }
+  .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .actions > * { box-sizing: border-box; width: 100%; min-width: 0; }
+  ui-head:has(#compile) { flex-direction: column; align-items: stretch; }
+  #compile { box-sizing: border-box; width: 100%; }
   ui-topbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8.5rem); grid-template-areas: "brand estop" "credential credential" "connect session"; }
   ui-topbar ui-brand { grid-area: brand; min-width: 0; }
   ui-topbar [data-spacer] { display: none; }
