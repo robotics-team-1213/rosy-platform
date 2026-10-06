@@ -15,6 +15,7 @@ export function createFleetClient(options = {}) {
       const error = new Error(detail.message || detail.code || `HTTP ${status}`);
       error.status = status;
       error.code = detail.code;
+      error.detail = detail.detail;
       throw error;
     }
     return body;
