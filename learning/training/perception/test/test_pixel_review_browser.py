@@ -97,6 +97,28 @@ def test_unknown_pixels_cannot_be_approved_and_explicit_fill_persists(browser_wo
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
 
 
+def test_pixel_decision_advances_to_next_editable_pending(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('#pixel-fill').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    page.locator('#pixel-complete').check(); page.locator('#pixel-background').check()
+    page.locator('#pixel-approve').click()
+    # Photo 2 is object-excluded, so its pixels cannot be edited: stay on photo 1.
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
+    expect(page.locator('#pixel-title')).to_contain_text('사진 1')
+    store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
+    page.reload(wait_until='networkidle')
+    page.locator('#pixel-reopen').click()
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
+    page.locator('#pixel-filter').select_option('pending')
+    page.locator('#pixel-exclude').click()
+    expect(page.locator('#pixel-title')).to_contain_text('사진 2')
+    expect(page.locator('#pixel-filter')).to_have_value('pending')
+    assert review_masks.get(store, 0)['status'] == 'excluded'
+
+
 def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)

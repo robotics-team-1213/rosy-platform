@@ -66,17 +66,26 @@ function list() {
       button.setAttribute('aria-pressed',String(item.index===frame?.index));
       button.querySelector('.frame-badge').textContent=statuses[item.status];
     }
+    revealSelected();
     return;
   }
   listKey=key;
   $('frames').replaceChildren();
   visible.forEach(f => {
     const button = document.createElement('ui-button'); button.setAttribute('kind','segment'); button.dataset.index=f.index; button.setAttribute('aria-pressed',String(f.index === frame?.index));
-    const thumb=document.createElement('img');thumb.src=`/api/images/${f.index}`;thumb.alt='';thumb.loading='lazy';thumb.className='frame-thumb';
+    // loading must precede src: Chromium starts an eager fetch the moment src is set.
+    const thumb=document.createElement('img');thumb.loading='lazy';thumb.alt='';thumb.className='frame-thumb';thumb.src=`/api/images/${f.index}`;
     const name=document.createElement('span');name.className='frame-label';name.textContent=`사진 ${f.index+1}`;button.append(thumb,name);
     const badge = document.createElement('span'); badge.className = 'frame-badge'; badge.textContent = statuses[f.status]; name.append(badge);
     button.onclick = () => { if (!busy && !gesture) select(f.index); }; $('frames').append(button);
   });
+  revealSelected();
+}
+// Narrow screens show the photos as one horizontal strip; keep the open photo in view
+// without scrolling the page away from the editor.
+function revealSelected() {
+  const strip=$('frames'), button=strip.querySelector('[aria-pressed="true"]');
+  if (button) strip.scrollLeft+=button.getBoundingClientRect().left-strip.getBoundingClientRect().left-8;
 }
 let listKey='';
 function paint() {
@@ -178,8 +187,12 @@ async function mutate(action, extras={}, restoring=false) {
     const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
     undo=restoring?null:['save','candidates'].includes(action)?{index:id,boxes:previous}:null;
-    if($('filter').value!=='all'&&frame.status!==$('filter').value) {$('filter').value='all';saveView();}
+    // A decision finishes this photo, so open the next pending one (D-461 next task first).
+    const decided=['approve','exclude'].includes(action), advance=decided&&nextPending(id);
+    if(!advance&&$('filter').value!=='all'&&frame.status!==$('filter').value) {$('filter').value='all';saveView();}
     $('status').textContent=statuses[frame.status]; $('save-status').textContent=`서버 저장됨 · v${frame.version}`;
+    if(decided) $('drag-status').textContent=`사진 ${id+1} ${statuses[frame.status]} · ${advance?'다음 검수 대기 사진입니다.':'검수 대기 사진을 모두 처리했습니다.'}`;
+    if(advance) {if($('filter').value!=='all') $('filter').value='pending'; select(advance.index); return;}
     frameHeading();
     coordinatePreview=null; if (selected>=frame.review.boxes.length) selected=null;
     renderBoxes(); list(); paint();
@@ -281,11 +294,11 @@ $('filter').onchange=applyFilter;
 $('show-all').onclick=()=> {$('filter').value='all';applyFilter();};
 $('prev-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index>0) select(visible[index-1].index);};
 $('next-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index<visible.length-1) select(visible[index+1].index);};
-$('next-pending').onclick=()=> {
-  const position=workspace.frames.findIndex(item=>item.index===frame.index);
-  const ordered=[...workspace.frames.slice(position+1),...workspace.frames.slice(0,position)];
-  const next=ordered.find(item=>item.status==='pending');if(next) {$('filter').value='pending';select(next.index);}
-};
+function nextPending(index) {
+  const position=workspace.frames.findIndex(item=>item.index===index);
+  return [...workspace.frames.slice(position+1),...workspace.frames.slice(0,position)].find(item=>item.status==='pending');
+}
+$('next-pending').onclick=()=> {const next=nextPending(frame.index);if(next) {$('filter').value='pending';select(next.index);}};
 $('reload').onclick=async()=> {if(!busy) await load(frame?.index);};
 $('theme').value=document.documentElement.dataset.theme || 'dark';
 $('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value; try {localStorage.setItem('rosy.theme',$('theme').value);} catch {} clearPalette(); document.dispatchEvent(new CustomEvent('rosy:theme')); paint();};
