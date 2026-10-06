@@ -6659,3 +6659,9 @@ osy-d395-s1d\`.
 - 변경: 게임 보드의 시간 근거 없는 이전 형식 응답을 1280·390·320px에 확장해 전화의 동등 패널 폭·넘침·정지 가용성을 검사했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-games-csp-final/run.txt`에서 수정 뒤 전체 29 passed, `2026-10-07-games-unavailable/`에서 확장 3 passed와 캡처 3장, 각 `known_failures.py` 0 NEW. 확장 후 전체 31셀은 재실행하지 않았다.
 - gate 변화: 시간 근거 결측의 LOCAL 전화 폭 두 셀을 추가했다. 실제 경기·장치·G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): D-487 이후 관제 높이 재확인
+
+- 변경: `Rosy Fleet` 운용 문서의 1920×1080 하단 넘침 43px을 데스크톱 여백과 대형 readout margin 보정으로 해소했다. D-415 로그 8줄과 패널 너비를 유지했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-fleet-d487/`; Fleet 선별 브라우저 8 passed, 접속 전 안내 1 passed, 서버·팔레트 계약 60 passed, 웹 모듈 137 passed, 각 Python 실행의 `known_failures.py` 0 NEW.
+- gate 변화: LOCAL G2 부분 근거. 현장 설치 SHA·장치 readback·사용자 G3는 HOLD.
