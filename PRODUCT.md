@@ -43,7 +43,7 @@ ROSY의 모든 활성 사용자 표면은 **현대적이고, 쉽게 쓰이며, �
 
 ## Capabilities and Constraints
 
-- 닫힌 토큰 집합(`src/hmi/web_common/tokens.css` 단일 출처), 공유 컴포넌트(`ui.js` 커스텀 엘리먼트 16종 + 클래스 부품, 실측 — D-398), 표면 문법 4종(spatial/exception/focal/procedure).
+- 닫힌 토큰 집합(`shared/web/tokens.css` 단일 출처), 공유 컴포넌트(`shared/web/ui.js` 커스텀 엘리먼트 16종 + 클래스 부품, 실측 — D-398), 표면 문법 4종(spatial/exception/focal/procedure).
 - 시각 체계 안내는 [`DESIGN.md`](DESIGN.md)다(D-359 §8). 계약은 ADR과 시험이 소유하고, 충돌하면 ADR이 이긴다.
 - D-220 정지 계약(장식 애니메이션 금지), D-202 색 대비, D-214 텍스트 대비 바닥 4.5:1.
 - 토큰·부품·문법의 추가는 ADR 동반만 허용된다(사용자 확인 2026-09-29: 이번 개선 계획에서 ADR 확장 허용).

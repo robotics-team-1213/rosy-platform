@@ -133,7 +133,7 @@ components:
 
 > 계약은 ADR과 계약 시험이 소유한다. 이 문서는 안내다. 이 문서와 ADR이 다르면 ADR이 이긴다.
 > 근거: [D-359](docs/adr/D-359-theme-ready-tokens-shared-controls-and-responsive-tiers.md) §8.
-> 값의 원본은 [`tokens.css`](shared/web/tokens.css), 부품은 [`components.css`](shared/web/components.css)·[`ui.js`](shared/web/ui.js), 표면 목록은 [`surfaces.yaml`](shared/web/surfaces.yaml), 살아 있는 견본은 [`styleguide.html`](src/hmi/dashboard/styleguide.html)이다.
+> 값의 원본은 [`tokens.css`](shared/web/tokens.css), 부품은 [`components.css`](shared/web/components.css)·[`ui.js`](shared/web/ui.js), 표면 목록은 [`surfaces.yaml`](shared/web/surfaces.yaml), 살아 있는 견본은 [`styleguide.html`](middleware/ui/robot/styleguide.html)이다.
 > 위 frontmatter의 색은 기본(어둡게) 테마 값이다. 밝게 값은 `tokens.css`의 `[data-theme="light"]` 블록에 있다.
 
 ## Overview
@@ -294,7 +294,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ## Components
 
-모든 부품은 [`components.css`](shared/web/components.css)가 그리고 [`ui.js`](shared/web/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](src/hmi/dashboard/styleguide.html)이다.
+모든 부품은 [`components.css`](shared/web/components.css)가 그리고 [`ui.js`](shared/web/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](middleware/ui/robot/styleguide.html)이다.
 
 ### 독립 작업의 선택 — `createTaskChooser()`
 
@@ -428,7 +428,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 
 ### 공용 동작과 native 색 출처 (D-432)
 
-동작 아이콘과 이름은 `web_common/ui.js`의 `actionIcon(button, name)`으로 함께 구성한다.
+동작 아이콘과 이름은 `shared/web/ui.js`의 `actionIcon(button, name)`으로 함께 구성한다.
 아이콘 크기는 `.ui-icon`/`--text-value`, 색은 currentColor, 버튼 종류·터치 크기·비활성 사유는
 기존 공용 컨트롤을 따른다. 화면은 배치와 동작을 소유하며 공용 컴포넌트는 장비 명령을 보내지 않는다.
 
