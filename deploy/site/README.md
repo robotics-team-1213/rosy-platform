@@ -56,6 +56,13 @@ address:
 | `ROSY_SITE_BIND_ADDRESS` | `127.0.0.1` (default) | `0.0.0.0` |
 | `ROSY_SITE_LAN_IFACE` | empty | the LAN interface name, e.g. `wlan0` or `eth0`; a bridged LAN needs the bridge name (`br0`); comma-separated for several |
 
+Remote team members reach the console the same way over the team tailnet
+(D-477): the site PC joins the tailnet and `tailscale0` is simply one more
+`ROSY_SITE_LAN_IFACE` entry (`wlan0,tailscale0`). The same interface filter
+admits it — no port forwarding, no public address — and the console's
+per-user tokens and roles (D-276) still apply. Operator runbook:
+`docs/deployment/tailnet-remote-access.md`.
+
 - **Bind the IPv4 wildcard.** `0.0.0.0` exists on every IPv4 host, so a new
   DHCP lease or a renumbered site LAN needs no edit and no restart, and
   loopback stays reachable for the discovery bridge. `::` and an empty bind

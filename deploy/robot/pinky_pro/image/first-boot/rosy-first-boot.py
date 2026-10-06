@@ -707,6 +707,17 @@ class FirstBootProvisioner:
         # D-191: validate_provision_bundle already refused a bundle without one.
         self._core_api(payload["core_api"]["record"], payload["fleet"])
         factory = self._factory_signature(payload.get("factory_release"))
+        if "tailscale" in payload:
+            # D-477: rosy-tailscale-join.service spends this key once (0600).
+            _json_atomic(
+                self._inside("etc/rosy/tailscale-join.json"),
+                {
+                    "auth_key": payload["tailscale"]["auth_key"],
+                    "tags": payload["tailscale"]["tags"],
+                    "hostname": identity["hostname"],
+                },
+                0o600,
+            )
 
         if not self.network_activate(SITE_PROFILE):
             # The site profile stays (0600, the bundle on the card holds the same
@@ -741,6 +752,11 @@ class FirstBootProvisioner:
         complete["core_api"] = {"token_id": payload["core_api"]["record"]["id"]}
         if factory is not None:
             complete["factory_release"] = factory
+        if "tailscale" in payload:
+            complete["tailscale"] = {
+                "tags": payload["tailscale"]["tags"],
+                "hostname": identity["hostname"],
+            }
         _json_atomic(self.complete, complete, 0o640)
         _json_atomic(self.state, {"state": "PROVISIONED"}, 0o600)
         bundle.unlink()
