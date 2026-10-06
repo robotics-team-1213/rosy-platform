@@ -347,6 +347,42 @@ def test_learning_list_and_catalog_wait_denial_and_retry(
     expect(page.locator('#search' if route == '/learning' else '#catalog-path')).to_be_enabled()
 
 
+@pytest.mark.parametrize('route,api,status,retry,recovered', [
+    ('/', 'workspace', '#empty-review h2', '#show-all', '#review-content'),
+    ('/pixels', 'workspace', '#pixel-status', '#pixel-reload', '#pixel-content'),
+    ('/learning', 'learning', '#learning-status', '#refresh', '#connect'),
+    ('/catalog', 'catalog', '#catalog-load', '#catalog-retry', '#import'),
+])
+@pytest.mark.parametrize('width', [1440, 800, 390])
+def test_review_service_unavailable_is_distinct_from_connection_failure(
+    browser_workspace, route, api, status, retry, recovered, width
+):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.route(f'**/api/{api}', lambda request: request.fulfill(
+        status=503, content_type='text/html', body='Service Unavailable'))
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    expect(page.locator(status)).to_contain_text('사용할 수 없습니다')
+    expect(page.locator(retry)).to_be_visible()
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if route == '/learning':
+        expect(page.locator('#learning-error')).to_be_hidden()
+    if route in ('/', '/catalog') and width == 390:
+        assert page.locator(retry).bounding_box()['width'] >= width * .8
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        name = 'objects' if route == '/' else route.lstrip('/')
+        target = Path(output) / f'learning-{name}-unavailable-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+    page.unroute(f'**/api/{api}')
+    page.locator(retry).click()
+    if route in ('/learning', '/catalog'):
+        expect(page.locator(recovered)).to_be_enabled()
+    else:
+        expect(page.locator(recovered)).to_be_visible()
+
+
 @pytest.mark.parametrize('route,post,action,status,retry', [
     ('/learning', 'learning/register', '#connect', '#learning-status', '#refresh'),
     ('/catalog', 'import', '#import', '#catalog-load', '#catalog-retry'),

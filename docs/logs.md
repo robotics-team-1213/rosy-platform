@@ -6491,3 +6491,8 @@ osy-d395-s1d\`.
 - 변경: 객체·픽셀 편집 칸의 작업 행동을 기존 24rem 컨테이너 경계 위에서 동등 폭 두 열로 배치했다. 800px의 연결 끊김·권한 거부·응답 보류·저장 충돌 상태를 캡처했다.
 - 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md), 두 경로 × 1440/800/390/320px 폭 브라우저 8 passed와 800px 상태 브라우저 16 passed, `known_failures.py` 0 NEW. 원본 X: `captures/learning-actions-equal/`.
 - gate 변화: `pinky-review` LOCAL G2 부분 근거 추가. 실제 검수 작업 완료·G3와 제품 전체는 HOLD.
+## 2026-10-06 · uncommitted · uiux(pinky-review): 서비스 사용 불가를 연결 끊김과 구분
+
+- 변경: 네 학습 검수 경로가 HTML 503을 JSON 파싱 전에 식별해 서비스 복구 후 재시도를 안내한다. 전화 폭의 객체 검수·자료 등록 재시도는 가용 폭을 채우고 학습 목록은 실패 문구를 한 번만 표시한다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 1440/800/390px 503·기존 장애 복구 브라우저 24 passed와 390px 최종 5 passed, 각 `known_failures.py` 0 NEW. 원본 X: `captures/learning-unavailable/`.
+- gate 변화: `pinky-review` LOCAL G2 사용 불가 부분 근거 추가. 실제 서버 장애·검수 결과·G3와 제품 전체는 HOLD.

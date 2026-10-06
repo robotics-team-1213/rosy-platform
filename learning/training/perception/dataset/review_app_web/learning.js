@@ -36,9 +36,10 @@ function setBusy(value) {
 }
 async function request(path,body) {
   const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':workspace.token},body:JSON.stringify(body)}:{});
+  if(response.status>=500){const error=new Error('학습 작업 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
   const value=await response.json();if(!response.ok){const error=new Error(response.status===403?'이 작업대의 학습 작업 접근 권한이 거부되었습니다.':'요청 실패 · '+(value.error||'원인을 확인할 수 없습니다.'));error.status=response.status;if(response.status===403)showUnavailable(error);throw error;}return value;
 }
-function showUnavailable(error){workspace=undefined;$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 거부되었습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('review-counts').textContent='검수 상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
+function showUnavailable(error){workspace=undefined;$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 거부되었습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('review-counts').textContent='검수 상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
 function fileHint() {
   const kind=workspace.workflows.find(row=>row.id===$('kind').value);
   $('expected-files').textContent=`지원 결과 파일: ${kind.files.join(', ')} 중 하나 이상`;
@@ -137,7 +138,7 @@ $('new-task').onclick=()=> {if(!workspace)return;$('connection-panel').open=true
 $('kind').onchange=fileHint;
 for(const id of ['search','kind-filter','state-filter']) $(id).addEventListener(id==='search'?'input':'change',render);
 $('reset-filters').onclick=()=> {$('search').value='';$('kind-filter').value='all';$('state-filter').value='all';render();$('search').focus();};
-$('refresh').onclick=async()=> {if(busy) return;message('learning-error','');try {await load();}catch(error){message('learning-error',error.message);}};
+$('refresh').onclick=()=> {if(busy) return;message('learning-error','');load().catch(()=>{});};
 $('theme').value=document.documentElement.dataset.theme||'dark';
 $('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
-load().catch(error=>message('learning-error',error.message));
+load().catch(()=>{});

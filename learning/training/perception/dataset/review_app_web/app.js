@@ -46,6 +46,7 @@ function enable() {
 }
 async function request(path, body) {
   const response = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json', 'X-Pinky-Token':workspace.token}, body:JSON.stringify(body)});
+  if (response.status >= 500) {const error=new Error('검수 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
   const value = await response.json();
   if (!response.ok) {
     if (response.status === 409) conflicted = true;
@@ -311,6 +312,6 @@ async function load(index) {
     const candidate=params.has('frame')?Number(params.get('frame')):undefined;
     const visible=visibleFrames(),wanted=index??candidate;
     if(visible.length) await select(visible.some(item=>item.index===wanted)?wanted:visible[0].index);else applyFilter();
-  } catch(e) {loading=false;loadFailed=true;workspace=undefined;frame=undefined;ready=false;listKey='';$('frames').replaceChildren();$('counts').textContent='상태를 확인할 수 없습니다.';$('filter').parentElement.hidden=true;$('empty-frames').textContent='사진 목록을 불러오지 못했습니다.';$('empty-frames').hidden=false;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent=forbidden?'검수 권한이 거부되었습니다':'검수 내용을 불러오지 못했습니다';$('empty-review').querySelector('p').textContent=forbidden?'이 작업대의 접근 권한을 확인한 뒤 다시 불러오세요.':'연결을 확인하고 다시 시도하세요.';$('show-all').hidden=false;$('show-all').textContent='다시 불러오기';enable();}
+  } catch(e) {loading=false;loadFailed=true;workspace=undefined;frame=undefined;ready=false;listKey='';$('frames').replaceChildren();$('counts').textContent='상태를 확인할 수 없습니다.';$('filter').parentElement.hidden=true;$('empty-frames').textContent='사진 목록을 불러오지 못했습니다.';$('empty-frames').hidden=false;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent=forbidden?'검수 권한이 거부되었습니다':e.status>=500?'검수 서비스를 사용할 수 없습니다':'검수 내용을 불러오지 못했습니다';$('empty-review').querySelector('p').textContent=forbidden?'이 작업대의 접근 권한을 확인한 뒤 다시 불러오세요.':e.status>=500?'서비스가 복구되면 다시 불러오세요.':'연결을 확인하고 다시 시도하세요.';$('show-all').hidden=false;$('show-all').textContent='다시 불러오기';enable();}
 }
 enable();load();
