@@ -16,6 +16,7 @@
 | D-184 | 동작 시험은 그 패키지가 가지고, core 시험은 공개 계약만 본다 |
 | D-228 | 판단은 core_features/decision 이다 — 런타임 개명과 제품 이름 패키지는 만들지 않는다 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
+| D-476 | 차선을 잃으면 곧바로 멈추지 않고, 알던 차로의 연장선을 짧게 잇는다(예상 도로 bridge) |
 
 ## 계획·결과 문서
 
@@ -37,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · feat(lane): D-476 expected-road bridge in CORE, default off
 - 2026-10-05 · uncommitted · fix(lane): retain scan provenance and operator fallback authority
 - 2026-10-05 · uncommitted · feat(lane): require complete scan and swept-body clearance for D-468
 - 2026-10-05 · uncommitted · feat(lane): arbitrate measured return before ordinary following
 - 2026-10-05 · uncommitted · fix(lane): normal return anchor and measured fallback approach
-- 2026-10-05 · uncommitted · feat(lane): bind original pose ledger to image geometry

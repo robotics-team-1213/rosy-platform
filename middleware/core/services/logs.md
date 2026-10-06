@@ -560,3 +560,10 @@
 - Change: preserve LiDAR source stamps, reject replayed/non-increasing scans, keep no-return rays unknown, and expand the full body sweep for worst-case motion since scan acquisition. Local exhaustion holds for operator input with actual geometry evidence; accepted operator YIELD retains CORE arbitration through its active phases.
 - Evidence: services suite 871 PASS, 0 NEW; D-468 focused manager/scan/API checks 53 PASS, 0 NEW. Full gateway suite is running with contract source paths configured.
 - Gate: host-only source evidence; signed deployment, device readback, and field recovery remain unverified.
+
+## 2026-10-06 · uncommitted · feat(lane): D-476 expected-road bridge in CORE, default off
+- 변경: `line_follow/lane_bridge.py` 추가. 짧은 차선 손실(`line_not_visible`·`observation_stale`·`no_observation`)이 검증된 차로 내부 추종 바로 뒤에 오면 D-468 checkpoint 차로의 직선 연장을 odom에서 천천히 따른다. 실측 이동 × 1.08로 D-384 0.10/0.25 m 사다리, `lost_after_s − 0.5 s`에서 끝. bridge 호를 D-422 의도로 두고 몸 간격과 D-468 동작 증명을 통과해야 한다. 끝나면 bridge 이동을 포함한 trail로 D-468 역추적 경로를 다시 만든다(`ReturnController.rebase_retrace`, 동작 같음). 손실 시계는 건드리지 않는다. `line_follow.bridge_*` 파라미터, 기본 `bridge_enabled: false`. safety 파일(`body_stop.py`·`clearance.py`)은 바꾸지 않았다.
+- 증거: `test_lane_bridge.py` 24 PASS(꺼짐 = 오늘 동작, 진입 거부 6종, 거리·시간 상한, 장애물·bridge 호 쓸기, 재획득, D-468 인계, LOST 시계 동일). services 전체 895 PASS, gateway 전체 2168 PASS·17 skip, known_failures 둘 다 0 new. 패키지 크기 guard는 main이 이미 13933+150 끝(14083)이라 14235로 다시 판정했다(`test/architecture/test_module_structure.py` SIZE_VERDICTS, 착지 전 독립 재검토 필요).
+- gate 변화: SOURCE 호스트 시험만. 결정 7의 재생·시뮬(모델·사이트 PC)·장치 단계 전에는 켜지 않는다.
+- 결정: D-476 (Proposed)
+- 교훈: 없음
