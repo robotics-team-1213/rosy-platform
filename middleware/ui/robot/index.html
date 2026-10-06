@@ -80,6 +80,14 @@
       <p>로봇 화면(LCD)이나 콘솔에 뜬 8자 로그인 코드로 이 브라우저 전용 키를 받습니다. 코드는 한 번만, 10분 동안 쓸 수 있습니다.</p>
       <p id="auth-notice" class="form-message" role="status" aria-live="polite"></p>
     </div>
+    <!-- D-432/D-471: 개발 연결 모드 로봇은 코드 없이 1시간 운전자 세션으로 들어간다. -->
+    <div id="dev-connect-row" hidden>
+      <p class="form-message">이 로봇은 개발 연결 모드입니다. 코드 없이 이 브라우저 전용 1시간 운전자 세션으로 계속할 수 있습니다.</p>
+      <div class="auth-row">
+        <ui-button kind="primary" id="dev-connect" type="button" class="primary-button">개발 연결로 계속</ui-button>
+      </div>
+      <p id="dev-message" class="form-message" role="status" aria-live="polite"></p>
+    </div>
     <!-- D-193 6: two tabs, the robot screen code first. -->
     <div class="view-switch auth-tabs" role="tablist" aria-label="로그인 방법">
       <ui-button kind="segment" id="auth-tab-code" class="view-tab" type="button" role="tab" aria-selected="true" aria-controls="code-form">로봇 화면 코드</ui-button>

@@ -1936,3 +1936,9 @@
 - 변경: 목표·대형·차선 문서 계약 테스트가 최신 API 문서 v1.106을 확인하도록 갱신했다.
 - 증거: 관련 문서 계약 테스트 36 PASS. 로봇 명령·런타임 변경 없음.
 - gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · feat(fleet): 내부망 카메라 미리보기
+
+- 변경: Caddy가 사설망 발신자의 Fleet 카메라 source·lease 요청에만 내부 표시를 붙이고, Fleet는 해당 두 경로에서만 토큰 없는 viewer lease를 발급한다. 콘솔은 인증된 관제 세션이 없어도 카메라를 갱신한다.
+- 증거: Fleet 권한 경계 테스트, Caddyfile adapt, 브라우저 JS 구문 및 관련 테스트. 실사이트 배포·영상 readback은 별도 확인이 필요하다.
+- gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.

@@ -25,6 +25,7 @@ from ..sensing.pose import planar_pose
 from ..control.lidar_guard import (lidar_blocked, lidar_can_rotate,
                                    translation_footprint_eligible, TranslationEvidence)
 from ..control.command_gate import GateInputs, evaluate_command
+from ..control.floor_evidence import floor_observed
 from ..control.policy_handoff import ControlPolicyProducer
 from ..control.obstacle_risk import TrackedEvidence
 from ..control.actuation import prepare_command
@@ -611,7 +612,9 @@ class SafetyNode(Node, Bumper, Hazard, Gate, Scale, Evidence, Obstacles):
                 localization_ready=(not self.get_parameter('localization_required').value or
                                     lease_ready(self.localization_status, self.now().nanoseconds * 1e-9)),
                 pickup=pickup, tilt=tilt, rear_blocked=self.rear_blocked,
-                obstacle=obstacle, cliff=self.cliff, can_rotate=can_rotate)
+                obstacle=obstacle, cliff=self.cliff, can_rotate=can_rotate,
+                floor_observed=floor_observed(self.ir_raw, fresh=self.observations.fresh('ir',handoff_now),
+                    enabled=self.get_parameter('cliff_enable').value,cliff=self.cliff,tilt=tilt,pickup=pickup))
             if self._policy_producer is not None:
                 self.sensor_policy_published = self._policy_producer.publish(
                     self.sensor_state, now=handoff_now, translation=translation_evidence,

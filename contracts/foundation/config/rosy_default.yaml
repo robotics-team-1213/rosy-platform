@@ -114,7 +114,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   lidar_forward_deg: 0.0           # LiDAR angle of the robot's forward (Pinky Pro: 180 in products/pinky_pro/profile/config/core.yaml)
   clearance_stale_s: 0.5           # hold when the LiDAR stops reporting mid-run
   obstacle_mode: sector            # sector = +-half_angle; path = swept corridor along the intended arc
-                                   # (path becomes default only after a Gazebo lap + device LiDAR left/right check)
+                                   # Pinky Pro core.yaml selects path. This default stays sector.
   obstacle_corridor_half_width_m: 0.09  # path: 0.06 m half footprint + 0.03 m margin
   obstacle_path_horizon_m: 0.40    # path: arc length checked (>= obstacle_resume_m); turn window
                                    # max(90 deg, resume/R) capped at 180 deg; returns within obstacle_stop_m

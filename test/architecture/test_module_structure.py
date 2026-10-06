@@ -97,14 +97,16 @@ SIZE_VERDICTS = {
         "growth allowance remain unchanged",
     ),
     "dashboard": (
-        10_148,
+        10_473,
         "split: D-447(b) adds a focused shared state-stream store to the already separated task "
         "panels; package total crosses 10k on integration, while individual asset ceilings and "
         "the +150 package allowance stay unchanged. The stream, REST fallback and scope teardown "
         "remain one owner (five Node regressions pass). Group robot role resources by their "
         "surface owner and identify remaining reusable assets for the existing shared/web owner "
         "under docs/plans/2026-10-04-ui-release-and-live-refinement.md; do not split transport or "
-        "duplicate its socket. Owner hmi; source-boundary follow-up after device acceptance",
+        "duplicate its socket. Re-judged at 10473 after the dashboard development entry and "
+        "temporary SSH credential view joined the same robot UI owner; the planned role-resource "
+        "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
         36_444,
@@ -542,7 +544,7 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        44_469,
+        44_646,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-09-30 at 33090 after D-356 added the ROS-free learned perception backend "
         "(sensing/perception/learned), the shadow node and the recording CLI; the learned backend sits "
@@ -618,7 +620,11 @@ SIZE_VERDICTS = {
         "-- launch-side config, no node logic, moves with the P1a split, verdict unchanged). "
         "Re-judged 2026-10-04 at 44469 for shared raw road-ROI visibility, invalid camera "
         "evidence/reset and optional raw/annotated recording: observation-only subjects stay "
-        "separate and move with the existing P1a split; no new command writer.",
+        "separate and move with the existing P1a split; no new command writer. "
+        "Re-judged 2026-10-06 at 44646 for the keep side-flip fix (SIDE_FLIP_FRAMES bounded "
+        "side tracking in lane_keep.py) with the junction HOLD policy split out to "
+        "lane_keep_junction.py to stay under the file budget — same subjects inside "
+        "sensing/perception, they move with the P1a split; verdict unchanged.",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "perception/web/diagnostic.html": (

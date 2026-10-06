@@ -1,4 +1,5 @@
 name: Build Pinky Pro native payload
+run-name: Pinky payload ${{ inputs.release_id }}
 
 # D-225 Decision 2.1: payload-only build for updating an already-flashed robot
 # without a card rewrite. Same native ROS/rosdep/lock/hardware-deps steps as

@@ -1,4 +1,4 @@
-﻿"""Synthetic sealed-package roundtrip and denial boundaries; never human GT."""
+"""Synthetic sealed-package roundtrip and denial boundaries; never human GT."""
 import copy
 import hashlib
 import json

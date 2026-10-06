@@ -26,7 +26,7 @@ class BundledAssetsTest {
                 override fun lookup(hostname: String): List<java.net.InetAddress> { dials.incrementAndGet(); throw java.net.UnknownHostException("offline") }
             }).build()
         }
-        val proxy = PilotProxy(connection, BundledAssets { File(directory, it).takeIf { file -> file.isFile }?.readBytes() }) {}
+        val proxy = PilotProxy(connection, BundledAssets { File(directory, it).takeIf { file -> file.isFile }?.readBytes() }, {})
         try {
             proxy.start(5000, false)
             for (path in listOf("/pilot", "/pilot/assets/app.js", "/common/tokens.css")) {
