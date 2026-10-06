@@ -14,11 +14,16 @@
 #   unset = off, as on the device, so the D-468 motion proof (return_sensor_allowed) is always false.
 # ENFORCE=1: control.sensor_adapter.mode enforce, launched through d476_real.launch.py (wall-clock
 #   mode, see its docstring) with sim_wall_shims.py (restamped scan/odom/camera, synthetic IR/IMU).
+#   Superseded by SIMSENS=1.
+# SIMSENS=1 (feat/sim-sensor-fidelity): stock launch on sim time with sim_sensors:=true (Gazebo IMU +
+#   IR floor rays) and the gz_sim config/sim_sensors_core.yaml fragment appended to the overlay
+#   (enforce, lidar/imu/ir, simulation_sensors). No shims.
 WS=${WS:-$HOME/rosy_d476_ws}
 PORT=${PORT:-8095}
 BRIDGE=${BRIDGE:-0}
 RECOVERY=${RECOVERY:-true}  # line_follow.recovery_local_enabled (D-468); false = pre-D-468 reference
 ENFORCE=${ENFORCE:-0}
+SIMSENS=${SIMSENS:-0}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 cd "$WS" || exit 1
 export PATH=/usr/bin:/bin:$PATH
@@ -50,6 +55,11 @@ control:
       lidar_use_tf: false   # TF is on sim stamps; use line_follow's 180 deg mount
 YAML
 fi
+if [ "$SIMSENS" = "1" ]; then
+  cat "$SHARE/config/sim_sensors_core.yaml" >> "$RUN/core_overlay.yaml"
+  set -- sim_sensors:=true "$@"
+fi
+pkill -f "sim_ir_floor"
 pkill -f "ros2 launch .*(map_v2_fleet_real|d476_real).launch.py"
 pkill -f "gz sim.*map_v2_fleet_real.world"
 pkill -f "$RUN/sim_jpeg_relay|sim_wall_shims"
@@ -70,5 +80,5 @@ fi
 for i in $(seq 1 60); do sleep 2; ros2 topic list 2>/dev/null | grep -qx /camera/front && break; done
 python3 "$RUN/sim_jpeg_relay.py" --ros-args -r camera/image_raw:=camera/front -p use_sim_time:=$SIMT \
   -r __node:=d476_jpeg_relay > "$RUN/relay.log" 2>&1 &
-echo "sim up: CORE http://127.0.0.1:$PORT bridge=$B enforce=$ENFORCE (launch pid $LPID)"
+echo "sim up: CORE http://127.0.0.1:$PORT bridge=$B enforce=$ENFORCE simsens=$SIMSENS (launch pid $LPID)"
 wait $LPID

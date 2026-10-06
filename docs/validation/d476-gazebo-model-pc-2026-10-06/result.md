@@ -14,6 +14,11 @@
 | D. 도색 공백 월드 | 하지 않음 | A–C가 움직이지 않아 월드 편집은 의미가 없었다 |
 | 참고: D-468 전 동작 (`recovery_local_enabled false`) | 측정함 | 손실 → 즉시 HOLD → LOST 2.98 / 3.02 s (sim), 손실 뒤 이동 ≤ 0.0001 m |
 
+> 2차 실행(아래 「2차 실행: sim 센서 보강 뒤」, 브랜치 `feat/sim-sensor-fidelity`)에서 sim 공백을 sim 전용으로
+> 닫았다. D-468은 이제 sim에서 움직이지만(센서 탐색 회전, Fleet 요청) 이 트랙에서는 차로 안 여유가 D-468 기준
+> 0.015 m에 닿지 않아 bridge가 여전히 무장되지 않는다. A·B·C 모두 **INCONCLUSIVE**(bridge 0 틱). 남은 원인은 sim이
+> 아니라 D-468 기하 조건이다.
+
 bridge 자체의 거리·시간 상한, 막힘 정지, 벽 여유는 **이 sim에서 한 번도 실행되지 않았다**. 결함은 bridge 코드가
 아니라 bridge가 서는 전제(D-468 동작 증명)가 sim에서 성립하지 않는다는 것이다. 아래 발견 1·2.
 
@@ -126,3 +131,108 @@ python3 evidence/d476_probe.py summary runs/ref_round_1
 
 `evidence/runs/`에는 run별 `summary.json`과 overlay 두 개만 두었다. 원시 기록(`log.jsonl`, `events.jsonl`,
 `launch.log`)은 저장소 밖 작업 디렉터리에 있다. 모델 PC의 sim 프로세스는 모두 멈췄다.
+
+## 2차 실행: sim 센서 보강 뒤 (같은 날, 브랜치 `feat/sim-sensor-fidelity`)
+
+증거 등급은 같다: **ROS-SIM (폐루프, 한 대)**. 장치·필드 수용이 아니다. 모델 PC의 별도 clone에 이 브랜치를
+git bundle로 가져와 `gz_sim core control description`만 다시 빌드했다. 실행은 `evidence/run_sim.sh`의
+`SIMSENS=1`(아래 2.4)이다. run별 요약은 `evidence/runs2/summary.json`, 원시 기록은 저장소 밖 작업 디렉터리에 있다.
+
+### 2.1 1차 발견 2의 셋째 원인: 벽시계 모드의 `obstacle_ahead` 230 틱
+
+원인은 시계도 bridge도 아니고 **D-422 근접점 기억(`BodyStopMixin._remember_near`)의 정지 중 래치**다.
+
+- 증거: 1차 `wall_mode_default`의 `nav.line_obstacle_hold` 사건이 `clearance_source: memory`, `body_gap_m: 0.0`을
+  남겼다. `obstacle_ahead`가 시작된 틱마다 LiDAR 최소값이 0.0563 m 또는 정확히 0.05000000074 m(float32 0.05,
+  `range_min`)였다. 그 자리(기본 출발)는 몸 옆면에서 벽까지 0.074 m이고, Gazebo LiDAR 잡음은 σ 0.02 m다.
+  Gazebo는 `range_min` 아래로 떨어진 값을 `range_min`으로 돌려준다.
+- 기제: 기억은 `range_min + 0.05` 안의 점을 저장하고, 다음 스캔에서 그 점이 `range_min`보다 가까우면 계속 둔다.
+  로봇이 서 있으면 주행 거리계가 늘지 않아 저장된 점이 지평(`obstacle_path_horizon_m`)을 넘지 않는다. 정확히
+  `range_min`에 놓인 점은 `(px + lidar_x) - lidar_x`의 부동소수 반올림 때문에 640 빔 방향 가운데 92개에서
+  `range_min`보다 조금 작게 다시 계산된다. LiDAR 반경 0.05 m 안의 점은 언제나 몸 윤곽 안이므로 `body_gap 0`이고,
+  서 있는 한 영영 풀리지 않는다.
+- 호스트 재현: 실제 `LineFollowManager`(Pinky URDF 몸, path 모드)에 0.08 m 옆벽 스캔을 주고, 한 번만 그 각도의
+  빔을 `range_min`으로 넣으면 그 틱은 `clearance_source lidar`, 다음 틱부터 깨끗한 스캔 40개 내내
+  `HOLD obstacle_ahead`, `clearance_source memory`, `gap 0.0`, 기억 점 1개였다. 1차의 벽시계 shim과 무관하다.
+  sim 시간 실행에서도 같은 값이 나오면 같은 래치가 생긴다(2차 `C_corner_*`에서 LiDAR 최소 0.050, `obstacle_ahead`
+  짧게 10 틱).
+- 분류: `line_follow/body_stop.py`는 `platform_parts.yaml`의 safety 모듈이라 이 브랜치에서 고치지 않았다
+  (Safety-Review 필요). 장치에서도 C1이 정확히 `range_min`을 내고 로봇이 서 있으면 같은 래치가 가능하다.
+  확인과 수정은 별도 작업이다.
+
+### 2.2 sim 전용 보강 (장치 기본값 그대로)
+
+| 공백 | 바꾼 것 | 켜는 곳 | 장치가 그대로인 이유 |
+|---|---|---|---|
+| worker가 sim `/scan`을 버림 | `is_simulation_scan`이 공용 Gazebo 모델 모양(640 빔, `range_max` 12, `<ns>rplidar_link`)도 받는다. `SafetyNode`의 새 파라미터 `accept_simulation_scans`(기본 false)가 `enable_simulation_scans`를 부르고, `use_sim_time`이 아니면 시작을 거부한다 | CORE overlay `control.sensor_adapter.simulation_sensors: true` → `resolve_safety_params(simulation=True)`가 worker에 `accept_simulation_scans`, `imu_angular_velocity_unit rad_s`, `use_sim_time`을 넘긴다 | 플래그가 없으면 파라미터가 아예 없다(리비전도 같음). overlay 허용 키가 아니어서 장치 overlay로 넣을 수 없다. `use_sim_time` 없이 플래그를 쓰면 CORE가 시작을 거부한다. C1은 `range_max` 40이라 sim 모양과 겹치지 않는다 |
+| 정책 시계 불일치 | `bind_lane_return_motion(..., policy_clock)`: `use_sim_time`이면 D-468 바닥 증명은 worker 정책을 `time.monotonic`(정책 창과 `SafetyManager`의 시계)으로 묻고, 몸 sweep은 line clock(sim 초)에 둔다 | `node.py`가 `use_sim_time`으로 고른다 | 장치는 `policy_clock=None`, `now`를 그대로 넘긴다(전과 같음) |
+| IMU 없음 | 모델의 기존 Gazebo IMU(`imu_raw`)를 둘째 bridge로 가져온다 | `launch_sim.launch.xml sim_sensors:=true` | 기본 false. Gazebo 모델 파일만 바뀐다 |
+| IR 없음 | URDF IR 링크 셋(`ir_l/ir_mid/ir_r_link`, 바닥 위 0.013 m)에 아래를 보는 한 줄 `gpu_lidar`. `scripts/sim_ir_floor.py`가 장치와 같은 `ir_sensor/range`(`UInt16MultiArray` [left, mid, right])로 바꾼다: 바닥 ≤ 0.05 m → 2000, 없음 → 0. 반사율(테이프·카펫)은 모델링하지 않는다 | 같은 `sim_sensors:=true` | 기본 false |
+| Gazebo LiDAR 각도 | `[-π, π]` 양끝 포함 640 빔(증분 2π/639)이 D-468 `return_scan_view`의 한 바퀴 검사에 걸려 모든 스캔이 거부됐다. `max_angle = π − 2π/640` | 늘 (Gazebo 모델) | Gazebo 모델 파일만 바뀐다 |
+| 차로 투영 불확실도 | `containment_payload`가 늘 `uncertainty_m None`을 보내 D-468이 `projection_uncertainty_unknown`으로 첫 프레임부터 이탈을 열었다. `GAZEBO` 지면(`allow_simulation_ground`에서만 생김)은 카메라 기하가 정확하므로 검출기 2 px 측면 오차 `2 × max_range / fx`(0.6 m, 281.6 px → 4.3 mm)를 낸다 | GAZEBO 지면일 때만 | NOMINAL·CALIBRATED는 여전히 `None` |
+
+sim overlay 조각은 `gz_sim config/sim_sensors_core.yaml`(enforce, `required [lidar, imu, ir]`,
+`simulation_sensors true`)이고 `run_sim.sh SIMSENS=1`이 overlay 끝에 붙인다. 장치 설정(`contracts/foundation/config`,
+`middleware/apps/device`, `deploy`)에 `simulation_sensors`가 없다는 것은 시험이 고정한다.
+
+확인한 것(모델 PC): `/imu_raw` 100 Hz, `/ir_sim/mid` 0.0127 m(URDF 0.013 m), `/ir_sensor/range` [2000, 2000, 2000],
+`cliff clear`, worker의 `no lidar` 경고 0회, 스캔 증분 0.0098175(2π/640). 임시 진단 로그(모델 PC clone에서만, 되돌림)로
+D-468 바닥 증명이 sim에서 서는 것을 봤다: 정책 창이 monotonic, `floor_observed True`, 직진·후진 후보 `sensor True`.
+
+### 2.3 결과 (`SIMSENS=1`)
+
+| run | 시나리오 | 출발 (gt) | 이동 / 회전 (gt) | TRACKING 틱 | bridge 틱 | 끝 사유 | LOST | 최소 벽 거리 (gt / LiDAR) |
+|---|---|---|---|---|---|---|---|---|
+| `A_round_1` | A. bridge 끔 | 회전교차로 (−0.585, −0.12, 1.571) | 0.009 m / 0.43 rad | 2 | 0 | 3.48 s `lane_return_sensor_search`(±0.15 rad/s) 뒤 `lane_return_fleet_required` | 없음 | 0.420 / 0.422 m |
+| `B_round_1..3` | B. bridge 켬 | 같음 | 0.0075–0.0077 m / 0.42 rad | 2–4 | 0 | 3.46–3.50 s 같은 흐름 | 없음 | 0.419 / 0.406–0.420 m |
+| `C_corner_1..2` | C. bridge 켬 | 기본 출발 (−1.270, 0.243, −1.571) | 0 m | 0 | 0 | 40 s 내내 `HOLD lane_return_space_or_floor_unconfirmed` | 없음 | 0.074 / 0.050–0.054 m |
+| `ref_simsens_corner` | 참고: D-468 끔 | 기본 출발 | 0.570 m | 443 | 0 | 60 s 추종(`obstacle_ahead` 12 틱) | 없음 | 0.072 / 0.053 m |
+
+A_round_1은 차로 불확실도 커밋 전 빌드, B·C·참고는 그 뒤 빌드다. 회전교차로에서는 두 빌드의 D-468 근거가 같다
+(`complete_corridor_unconfirmed`, 아래).
+
+- **A: INCONCLUSIVE.** D-468 기준선은 이제 sim에서 동작한다(±0.15 rad/s 센서 탐색 회전 뒤 3.5 s에 후보 소진으로 Fleet 요청). 하지만 차로 상실
+  자리까지 추종하지 못해 손실 뒤 bridge 거리·시간을 비교할 기준선이 없다.
+- **B: INCONCLUSIVE (3회).** bridge가 무장되지 않았다. 무장 조건은 직전 틱 D-468 `tracking` + `TRACKING`인데,
+  D-468 근거가 run마다 search·fleet 단계 내내 `complete_corridor_unconfirmed`(run당 546–550틱)(회전교차로 원호에서 양쪽 경계가 함께 잡히지 않음)였다.
+- **C: INCONCLUSIVE (2회).** D-468 근거는 `ready`였지만 몸이 차로 안에 있는 여유가 0.001 m(불확실도 4.3 mm를 뺀 값)로
+  추종 단계 기준 0.015 m에 못 미쳐 첫 프레임에서 이탈이 열렸다. 그 자리에서 제자리 회전 원(0.0826 m + 여유)이 옆벽
+  (중심에서 0.13 m, LiDAR 잡음으로 0.08 m까지)에 걸려 `(0, 0)` 바닥·공간 증명이 서지 않는다. 벽 접촉은 없다(움직이지
+  않았다). 남쪽 차로 중심 출발(`A_south_3`, 벽 여유 0.059 m)도 여유 −0.099 m로 같은 HOLD였다.
+- **D: 하지 않음.** bridge가 어디서도 무장되지 않으므로 도색 공백 월드는 의미가 없다.
+- **참고:** sim 센서와 enforce를 켠 채 D-468을 끄면 추종은 된다(60 s에 0.57 m). 1차 참고 run(정책 꺼짐)보다 느리다.
+  enforce 정책의 제한(벽 옆에서 `can_rotate False` → 회전 성분 `motion_limited`)으로 보이며 이 실행에서는 따로
+  나누지 않았다.
+
+### 2.4 발견 (2차)
+
+1. **D-468 기하 조건 (장치에도 해당):** D-468 추종 단계는 몸이 차로 경계 안쪽으로 양쪽 0.015 m(체크포인트는
+   0.025 m) 여유를 요구한다. 260919 트랙(이 월드는 그 STL)에서 Pinky(폭 0.113 m)가 차로 중심에 있을 때 측정된 여유는
+   불확실도 전 0.005 m 수준이다. 따라서 이 트랙에서는 D-468이 첫 프레임에 이탈을 열고, D-476 bridge는 무장될 수 없다.
+   불확실도를 0으로 둬도 기준에 닿지 않는다. sim 충실도 문제가 아니다. 결정은 D-468/D-476 쪽이다(차로 폭 기준 또는
+   몸 기준 재검토). 이 브랜치는 bridge·D-468 논리를 고치지 않았다.
+2. **D-468 투영 불확실도 (장치에도 해당):** 생산 쪽 `containment_payload`는 NOMINAL·CALIBRATED에서 늘
+   `uncertainty_m None`을 보내고 D-468은 그것을 `projection_uncertainty_unknown`으로 거부한다. 측정된 투영 오차 한계가
+   생기기 전에는 장치에서 `recovery_local_enabled`를 켜면 CAMERA_LINE이 첫 프레임부터 이탈 HOLD다(1차 발견 1과 같은
+   결론, 다른 원인).
+3. **D-422 근접점 기억 래치 (2.1, safety 모듈):** 서 있는 로봇에서 `range_min`에 걸린 빔 하나가 `obstacle_ahead`를
+   영구히 만든다. Safety-Review가 필요한 별도 수정이다.
+4. **사건 홍수:** D-468이 `lane_return_fleet_required`로 서 있는 동안 같은 `stuck_id`의 `nav.line_stuck_asked`
+   (`reason opened`)가 틱마다 나온다. `A_round_1` 36 s에 711건, `B_round_1` 26 s에 516건(약 20 건/s). 콘솔이 없는
+   sim이지만 장치에서도 같은 경로다.
+5. **bridge 코드 결함은 이번에도 찾지 못했다.** bridge가 진입하지 않았으므로 결함이 없다는 증거도 아니다.
+
+### 2.5 재현 (2차)
+
+```bash
+# 모델 PC, 작업공간 ~/rosy_d476_ws (src/rosy-platform -> 이 브랜치 clone). 빌드:
+colcon build --symlink-install --packages-select gz_sim core control description \
+  --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+SIMSENS=1 BRIDGE=0 bash evidence/run_sim.sh                  # A
+SIMSENS=1 BRIDGE=1 bash evidence/run_sim.sh                  # B, C
+RECOVERY=false SIMSENS=1 BRIDGE=0 bash evidence/run_sim.sh   # 참고
+python3 evidence/d476_probe.py run --x -0.585 --y -0.12 --yaw 1.5708 --out runs2/B_round_1 --duration 30
+python3 evidence/d476_probe.py run --x -1.26955 --y 0.24255 --yaw -1.5708 --out runs2/C_corner_1 --duration 40
+```
+
+모델 PC의 sim 프로세스는 모두 멈췄고 임시 진단 패치는 되돌렸다. GPU 학습은 돌고 있지 않았다(사용률 0 %).

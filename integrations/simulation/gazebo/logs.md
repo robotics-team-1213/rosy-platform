@@ -265,3 +265,9 @@
 - 변경: watchdog의 비유한 시각·잘못된 만료·비유한/비평면/0.15 m/s·0.5 rad/s 초과 명령은 zero로 닫는다. 수동 `--sim-only` 동의, 격리 ROS domain 120~199·localhost·D426 partition, 실제 ROS context domain·namespace·remap 이후 topic을 command publisher 생성 전에 대조한다. CORE/hardware runtime mode를 SIM이라는 새 값으로 덮지 않는다. 명시 STEADY_TIME clock으로 50 ms timer를 만들고 logger에 완성된 문자열을 준다. 동시 3779 namespace 정규화와 bounded entrypoint 시험의 의도를 보존했다.
 - 검증: 실제 순수 함수·합성 ROS port를 쓰는 원래 entrypoint 반례 8+10+2 FAIL을 재현했다. 원래 watchdog/scenario와 Fleet-loss 포함 최종 71 PASS(7.38s), owned flake8 0, known_failures 0 NEW다. 동의 없는 실행은 ROS import 전에 거부하고, 유효 SIM 동의 뒤 ROS dependency를 명시 차단한 별도 subprocess는 15 s 안에 안내·exit 3을 확인했다. 최초 관련 시험 파일명 오류와 중간 formatting 실패 로그를 보존했다.
 - gate 변화: SOURCE/HOST callback wiring만. 실제 DDS·STEADY timer scheduling·Gazebo base 연결·pause 장애 주입·CORE kill·장치 publisher·실물 정지는 실행하지 않았다. 0.30 s 입력 expiry 판정과 50 ms polling·scheduling/물리 정지 지연은 구분하며 T5 회차 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · feat(sim): Gazebo IMU·IR 바닥 광선과 sim_sensors
+
+- 변경: `launch_sim.launch.xml sim_sensors:=true`(기본 false)가 둘째 bridge(`params/rosy_bridge_sim_sensors.yaml`: 모델 IMU `imu_raw`, IR 광선 셋)와 `scripts/sim_ir_floor.py`(장치 모양 `ir_sensor/range`, 바닥 2000 / 없음 0, 반사율 미모델)를 띄운다. `map_v2_fleet_real.launch.py`가 인자를 넘긴다. `config/sim_sensors_core.yaml`은 CORE overlay 조각(enforce, lidar/imu/ir, `simulation_sensors`)이다.
+- 증거: `test/test_sim_sensors.py` 6 PASS. 모델 PC D-476 2차 실행(`docs/validation/d476-gazebo-model-pc-2026-10-06/result.md` 2차 절)에서 `/ir_sim/mid` 0.0127 m, `ir_sensor/range` [2000, 2000, 2000], `imu_raw` 확인.
+- gate 변화: 없음. ROS-SIM 한 대 실행이며 장치·현장 수용이 아니다.

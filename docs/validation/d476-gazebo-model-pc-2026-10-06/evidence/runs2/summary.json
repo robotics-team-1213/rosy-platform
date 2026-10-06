@@ -1,0 +1,253 @@
+{
+ "A_round_1": {
+  "start": [
+   -0.585,
+   -0.12,
+   1.5708
+  ],
+  "end": [
+   -0.5847,
+   -0.111,
+   1.5226
+  ],
+  "duration_s": 39.907,
+  "gt_path_m": 0.009,
+  "gt_turn_rad": 0.426,
+  "tracking_ticks": 2,
+  "bridge_ticks": 0,
+  "fleet_required_t": 3.483,
+  "lost_t": null,
+  "min_wall_gap_gt_m": 0.4197,
+  "min_lidar_m": 0.4218,
+  "states": {
+   "HOLD lane_return_fleet_required": 266,
+   "RECOVERING lane_return_sensor_search": 24,
+   "HOLD lane_return_search_candidate_finished": 3,
+   "TRACKING tracking": 2,
+   "HOLD lane_return_pose_stale": 2,
+   "WAITING camera_no_observation": 1
+  }
+ },
+ "B_round_1": {
+  "start": [
+   -0.585,
+   -0.12,
+   1.5708
+  ],
+  "end": [
+   -0.5849,
+   -0.1125,
+   1.5366
+  ],
+  "duration_s": 29.941,
+  "gt_path_m": 0.0075,
+  "gt_turn_rad": 0.42,
+  "tracking_ticks": 4,
+  "bridge_ticks": 0,
+  "fleet_required_t": 3.462,
+  "lost_t": null,
+  "min_wall_gap_gt_m": 0.4196,
+  "min_lidar_m": 0.4198,
+  "states": {
+   "HOLD lane_return_fleet_required": 193,
+   "RECOVERING lane_return_sensor_search": 24,
+   "TRACKING tracking": 4,
+   "WAITING camera_no_observation": 1,
+   "HOLD lane_return_containment_unconfirmed": 1
+  }
+ },
+ "B_round_2": {
+  "start": [
+   -0.585,
+   -0.12,
+   1.5708
+  ],
+  "end": [
+   -0.5849,
+   -0.1124,
+   1.5393
+  ],
+  "duration_s": 29.971,
+  "gt_path_m": 0.0076,
+  "gt_turn_rad": 0.423,
+  "tracking_ticks": 3,
+  "bridge_ticks": 0,
+  "fleet_required_t": 3.503,
+  "lost_t": null,
+  "min_wall_gap_gt_m": 0.4194,
+  "min_lidar_m": 0.406,
+  "states": {
+   "HOLD lane_return_fleet_required": 193,
+   "RECOVERING lane_return_sensor_search": 23,
+   "HOLD lane_return_search_candidate_finished": 3,
+   "TRACKING tracking": 3,
+   "WAITING no_observation": 1,
+   "HOLD lane_return_containment_unconfirmed": 1
+  }
+ },
+ "B_round_3": {
+  "start": [
+   -0.585,
+   -0.12,
+   1.5708
+  ],
+  "end": [
+   -0.5849,
+   -0.1123,
+   1.5439
+  ],
+  "duration_s": 29.903,
+  "gt_path_m": 0.0077,
+  "gt_turn_rad": 0.416,
+  "tracking_ticks": 2,
+  "bridge_ticks": 0,
+  "fleet_required_t": 3.491,
+  "lost_t": null,
+  "min_wall_gap_gt_m": 0.4195,
+  "min_lidar_m": 0.4159,
+  "states": {
+   "HOLD lane_return_fleet_required": 190,
+   "RECOVERING lane_return_sensor_search": 24,
+   "HOLD lane_return_pose_stale": 3,
+   "TRACKING tracking": 2,
+   "WAITING no_observation": 1,
+   "HOLD lane_return_search_candidate_finished": 1
+  }
+ },
+ "C_corner_1": {
+  "start": [
+   -1.2696,
+   0.2425,
+   -1.5708
+  ],
+  "end": [
+   -1.2696,
+   0.2425,
+   -1.5708
+  ],
+  "duration_s": 39.908,
+  "gt_path_m": 0.0,
+  "gt_turn_rad": 0.0,
+  "tracking_ticks": 0,
+  "bridge_ticks": 0,
+  "fleet_required_t": null,
+  "lost_t": null,
+  "min_wall_gap_gt_m": 0.0738,
+  "min_lidar_m": 0.0535,
+  "states": {
+   "HOLD lane_return_space_or_floor_unconfirmed": 283,
+   "HOLD obstacle_ahead": 10,
+   "WAITING no_observation": 1,
+   "HOLD lane_return_containment_unconfirmed": 1,
+   "HOLD lane_return_pose_stale": 1
+  }
+ },
+ "C_corner_2": {
+  "start": [
+   -1.2696,
+   0.2426,
+   -1.5708
+  ],
+  "end": [
+   -1.2696,
+   0.2426,
+   -1.5708
+  ],
+  "duration_s": 39.88,
+  "gt_path_m": 0.0,
+  "gt_turn_rad": 0.0,
+  "tracking_ticks": 0,
+  "bridge_ticks": 0,
+  "fleet_required_t": null,
+  "lost_t": null,
+  "min_wall_gap_gt_m": 0.0738,
+  "min_lidar_m": 0.05,
+  "states": {
+   "HOLD lane_return_space_or_floor_unconfirmed": 285,
+   "HOLD lane_return_pose_stale": 6,
+   "HOLD obstacle_ahead": 5,
+   "WAITING camera_no_observation": 1
+  }
+ },
+ "A_south_2": {
+  "start": [
+   -1.006,
+   -0.488,
+   -0.09
+  ],
+  "end": [
+   -1.006,
+   -0.488,
+   -0.09
+  ],
+  "duration_s": 39.911,
+  "gt_path_m": 0.0,
+  "gt_turn_rad": 0.0,
+  "tracking_ticks": 0,
+  "bridge_ticks": 0,
+  "fleet_required_t": null,
+  "lost_t": null,
+  "min_wall_gap_gt_m": 0.0769,
+  "min_lidar_m": 0.0678,
+  "states": {
+   "HOLD lane_return_space_or_floor_unconfirmed": 173,
+   "None None": 160,
+   "HOLD lane_return_pose_stale": 3,
+   "WAITING no_observation": 1,
+   "HOLD lane_return_containment_unconfirmed": 1
+  }
+ },
+ "A_south_3": {
+  "start": [
+   -1.079,
+   -0.509,
+   0.0
+  ],
+  "end": [
+   -1.079,
+   -0.509,
+   0.0
+  ],
+  "duration_s": 39.989,
+  "gt_path_m": 0.0,
+  "gt_turn_rad": 0.0,
+  "tracking_ticks": 0,
+  "bridge_ticks": 0,
+  "fleet_required_t": null,
+  "lost_t": null,
+  "min_wall_gap_gt_m": 0.0594,
+  "min_lidar_m": 0.05,
+  "states": {
+   "HOLD lane_return_space_or_floor_unconfirmed": 156,
+   "HOLD obstacle_ahead": 139,
+   "HOLD lane_return_pose_stale": 4,
+   "WAITING camera_no_observation": 1
+  }
+ },
+ "ref_simsens_corner": {
+  "start": [
+   -1.2695,
+   0.2425,
+   -1.5708
+  ],
+  "end": [
+   -1.2691,
+   -0.3276,
+   -1.5894
+  ],
+  "duration_s": 59.991,
+  "gt_path_m": 0.5702,
+  "gt_turn_rad": 0.296,
+  "tracking_ticks": 443,
+  "bridge_ticks": 0,
+  "fleet_required_t": null,
+  "lost_t": null,
+  "min_wall_gap_gt_m": 0.0717,
+  "min_lidar_m": 0.0529,
+  "states": {
+   "TRACKING tracking": 443,
+   "HOLD obstacle_ahead": 12,
+   "WAITING no_observation": 1
+  }
+ }
+}
