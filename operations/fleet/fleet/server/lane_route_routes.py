@@ -9,6 +9,7 @@ imports, while this goal-submitting route composes the lane geometry
 
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException
@@ -38,11 +39,21 @@ class RouteRequest(BaseModel):
         return self
 
 
-def install_lane_route_routes(app, *, console, task_service,
-                              require_operator, operator_guard) -> None:
+#: A route not stepped for this long is not running (D-488 activation check).
+# ponytail: the console re-posts /route per step; a trip state machine (D-488 M2) replaces this.
+ROUTE_ACTIVE_S = 30.0
+
+
+def install_lane_route_routes(app, *, console, task_service, site_maps,
+                              require_operator, operator_guard):
+    """Returns ``route_active()``: True while some robot followed a lane route recently."""
     # One process remembers how far each robot has followed each edge list.
     # A closed lap starts and ends on one point; without this the end is the start.
-    followed: dict[tuple[str, tuple[str, ...]], float] = {}
+    followed: dict[tuple, tuple[float, float]] = {}
+
+    def route_active() -> bool:
+        now = time.monotonic()
+        return any(now - seen < ROUTE_ACTIVE_S for _at, seen in followed.values())
 
     @app.post("/api/fleet/robots/{robot_id}/route", dependencies=operator_guard,
               tags=["fleet"])
@@ -52,8 +63,12 @@ def install_lane_route_routes(app, *, console, task_service,
         principal: SitePrincipal = Depends(require_operator),
     ) -> dict:
         """D-463. Expand stored lane edges and send only the next short point."""
+        active = site_maps.active()
+        if active is None:
+            raise HTTPException(status_code=409, detail={
+                "code": "SITE_MAP_NOT_ACTIVE", "message": "activate a site map first (D-488)"})
         try:
-            lines = route_lines(body.edges)
+            lines = route_lines(body.edges, active[3])
         except LaneRouteError as exc:
             raise HTTPException(status_code=400, detail={"code": str(exc)}) from exc
         if task_service is not None and not idempotency_key:
@@ -70,14 +85,15 @@ def install_lane_route_routes(app, *, console, task_service,
                 "code": "ROUTE_POSE_UNTRUSTED",
                 "message": "lane route needs a LOCALIZED map pose",
             })
-        route_key = (robot_id, tuple(body.edges))
+        route_key = (robot_id, active[0], tuple(body.edges))
         try:
-            step = next_step(lines, pose[0], pose[1], along_m=followed.get(route_key, 0.0))
+            step = next_step(lines, pose[0], pose[1], along_m=followed.get(route_key, (0.0, 0.0))[0])
         except LaneRouteError as exc:
             raise HTTPException(status_code=409, detail={"code": str(exc)}) from exc
         if step is not None:
-            followed[route_key] = step.at_m
+            followed[route_key] = (step.at_m, time.monotonic())
         if step is None:
+            followed.pop(route_key, None)
             return {"accepted": False, "queued": False, "reason": "ROUTE_COMPLETE",
                     "goal": None, "edges": list(body.edges)}
         goal = {"x": step.x, "y": step.y, "yaw": step.yaw}
@@ -102,3 +118,5 @@ def install_lane_route_routes(app, *, console, task_service,
             raise HTTPException(status_code=status, detail={"code": code}) from exc
         except (HubError, RobotApiError, OSError) as exc:
             raise http_error(exc) from exc
+
+    return route_active
