@@ -7,7 +7,11 @@ from datetime import datetime, timezone
 
 import pytest
 
+from fastapi import Depends, FastAPI
+from fastapi.testclient import TestClient
+
 from fleet.server.development_session import DevelopmentSessions, console_authority, lan_address
+from fleet.server.site_auth import SitePrincipal, build_authorize, build_role_guards
 
 
 class Clock:
@@ -92,3 +96,23 @@ def test_revoked_session_no_longer_authenticates():
     sessions.revoke(token)
 
     assert sessions.principal(token) is None
+
+
+def test_development_session_passes_the_named_operator_gate_without_site_users():
+    sessions = DevelopmentSessions()
+    token, principal, _ = sessions.issue()
+    authorize = build_authorize("registry-secret", {}, None, development=sessions)
+    _, _, named_operator, _ = build_role_guards(authorize, {})
+    app = FastAPI()
+
+    @app.post("/api/fleet/named")
+    def named(caller: SitePrincipal = Depends(named_operator)) -> dict:
+        return {"principal_id": caller.principal_id}
+
+    client = TestClient(app)
+    accepted = client.post("/api/fleet/named", headers={"Authorization": f"Bearer {token}"})
+    assert accepted.json() == {"principal_id": principal.principal_id}
+    shared = client.post("/api/fleet/named", headers={"Authorization": "Bearer registry-secret"})
+    assert shared.status_code == 403
+    assert shared.json()["detail"]["code"] == "OPERATOR_IDENTITY_REQUIRED"
+    assert client.post("/api/fleet/named", headers={"Authorization": "Bearer wrong"}).status_code == 401
