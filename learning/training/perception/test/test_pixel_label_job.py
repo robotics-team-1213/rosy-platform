@@ -117,6 +117,7 @@ def test_doctor_records_gpu_and_refuses_wrong_active_code(tmp_path, monkeypatch)
                                                  "memory_total_mib": 16000,
                                                  "memory_free_mib": 12000,
                                                  "driver": "test", "torch_cuda": True}, raising=False)
+    monkeypatch.setattr(module, "probe_onnx_cuda", lambda _path: {"verdict": "pass"})
     out = tmp_path / "private-receipt"
     assert module.main(["doctor", "--config", str(cfg), "--out", str(out)]) == 0
     receipt = json.loads((out / "doctor.json").read_text())
@@ -127,6 +128,23 @@ def test_doctor_records_gpu_and_refuses_wrong_active_code(tmp_path, monkeypatch)
                                   "environment_sha256": "b" * 64}))
     assert module.main(["doctor", "--config", str(cfg), "--out", str(tmp_path / "denied")]) == 1
     assert not (tmp_path / "denied").exists()
+
+
+def test_doctor_holds_when_onnx_cuda_cannot_open(tmp_path, monkeypatch):
+    config, _, _ = inputs(tmp_path)
+    active = tmp_path / "model-code-state.json"
+    active.write_text(json.dumps({"source_commit": "a" * 40,
+                                  "environment_sha256": "b" * 64}))
+    config["model_code_state"] = str(active)
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps(config))
+    module = job_module()
+    monkeypatch.setattr(module, "probe_gpu", lambda: {"verdict": "pass"})
+    monkeypatch.setattr(module.prelabel, "_open_model", lambda *_args, **_kwargs:
+                        (_ for _ in ()).throw(RuntimeError("required ONNX provider unavailable")))
+    out = tmp_path / "doctor"
+    assert module.main(["doctor", "--config", str(cfg), "--out", str(out)]) == 1
+    assert json.loads((out / "doctor.json").read_text())["gpu"]["verdict"] == "hold"
 
 
 @pytest.mark.parametrize("changed", ["image", "video", "classes", "invalid_classes",

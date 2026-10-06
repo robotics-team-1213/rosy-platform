@@ -155,3 +155,59 @@ def test_http_blocks_foreign_hosts_and_tokenless_writes(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def serve_as(monkeypatch, store, host):
+    """Bind loopback but advertise `host`, so the tailnet Host/Origin rules run without that interface."""
+    import threading
+    import review_app
+    real = review_app.ThreadingHTTPServer
+    monkeypatch.setattr(review_app, 'ThreadingHTTPServer', lambda addr, handler: real(('127.0.0.1', addr[1]), handler))
+    server = review_app.make_server(store, 0, host)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+def status(url, path, headers, data=None):
+    import urllib.error
+    import urllib.request
+    try:
+        return urllib.request.urlopen(urllib.request.Request(url + path, data, headers=headers)).status
+    except urllib.error.HTTPError as error:
+        return error.code
+
+
+def test_default_rejects_tailnet_host(tmp_path, monkeypatch):
+    server = serve_as(monkeypatch, open_store(tmp_path), '127.0.0.1')
+    try:
+        url = f'http://127.0.0.1:{server.server_port}'
+        assert status(url, '/api/workspace', {'Host': f'100.98.162.71:{server.server_port}'}) == 403
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_explicit_host_accepts_host_and_origin_but_keeps_token_and_foreign_origin(tmp_path, monkeypatch):
+    import urllib.request
+    server = serve_as(monkeypatch, open_store(tmp_path), '100.98.162.71')
+    try:
+        port = server.server_port
+        url = f'http://127.0.0.1:{port}'
+        host = {'Host': f'100.98.162.71:{port}'}
+        assert status(url, '/api/workspace', host) == 200
+        assert status(url, '/api/workspace', {}) == 200  # loopback forms stay allowed
+        token = json.load(urllib.request.urlopen(urllib.request.Request(url + '/api/workspace', headers=host)))['token']
+        origin = f'http://100.98.162.71:{port}'
+        assert status(url, '/api/prepare', dict(host, Origin=origin), b'{}') == 403  # no token
+        assert status(url, '/api/prepare', dict(host, Origin='https://foreign.example', **{'X-Pinky-Token': token}), b'{}') == 403
+        assert status(url, '/api/prepare', dict(host, Origin=origin, **{'X-Pinky-Token': token}), b'{}') == 200
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.parametrize('host', ['0.0.0.0', '::', '8.8.8.8', '100.128.0.1', 'localhost', 'example.com', '2001:db8::1'])
+def test_unsafe_bind_host_fails_at_startup(tmp_path, host):
+    from review_app import make_server
+    with pytest.raises(ValueError):
+        make_server(open_store(tmp_path), 0, host)
