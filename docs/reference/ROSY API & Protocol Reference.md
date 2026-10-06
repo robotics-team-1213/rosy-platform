@@ -2270,7 +2270,7 @@ Prefix: `/api/v1/auth/peer-pairing`.
 | GET `/requests/{id}` | `X-Request-Secret` | state/revision, 승인됐다면 relationship_id/generation/persistent/authorization_expires_at/authorization_available |
 | DELETE `/requests/{id}` | 같은 요청 비밀 | pending만 cancelled로 전환 |
 | POST `/requests/{id}/decision` | 현재 named administrator; action=approve/reject, revision, persist_requested | 승인 거래 결과; **paired=false**, credential 발급과 구분 |
-| POST `/requests/{id}/confirm` | 인증 없음, `X-Request-Secret`; 본문 `{approval_code}`(6자, `23456789ABCDEFGHJKMNPQRSTUVWXYZ`) | D-483 (v1.109): 수신 LCD 승인 코드로 같은 요청을 승인. 200 StateSnapshot(approved, persistent=false, 168 h); 틀림 400 `detail.remaining_attempts`(5회째 rejected); 요청 역할 > operator 403; 출처별 30회/분 공유 429; 변경·만료·비밀 불일치 409 |
+| POST `/requests/{id}/confirm` | 인증 없음, `X-Request-Secret`; 본문 `{approval_code}`(6자, `23456789ABCDEFGHJKMNPQRSTUVWXYZ`) | D-483 (v1.109): 수신 LCD 승인 코드로 같은 요청을 승인. 200 StateSnapshot(approved, persistent=false, 168 h); 틀림 400 `detail.remaining_attempts`(5회째 rejected); 요청 역할 > operator 403; 출처별 30회/분 공유 또는 전체 틀린 코드 20회/10분 초과 429; 변경·만료·비밀 불일치 409 |
 | POST `/relationships/{id}/challenge` | 이미 승인된 관계 ID | fields와 receiver_signature; 최대 60초, 한 번만 사용 |
 | POST `/relationships/{id}/session` | 해당 client key의 fields+signature | 기존 digest token의 id/token/role/expires_at; 최대 1시간 |
 | DELETE `/relationships/{id}` | 현재 named administrator | revoked와 증가한 generation; 자식 세션 거부 |
@@ -2288,7 +2288,9 @@ hash 비교만 한다. 원문은 응답·상태·`pending`·로그에 없고, �
 rosy-face에 넘긴다. LCD는 요청마다 "표시 번호  승인 코드" 한 줄을 보인다. 대기 요청이
 없으면(승인·거절·취소·만료·정리) 파일을 지우고, CORE 시작 때 남은 파일도 지운다.
 살아 있는 대기 요청은 LCD 목록과 같은 3개까지(끝난 요청은 세지 않음), 출처별 동시 대기는
-2개다. 요청 취소도 출처별 30회/분 한도에 센다. 상태 보관 행은 600초 전에는 승인되지 않은
+2개다. 요청 취소도 출처별 30회/분 한도에 센다. 모든 출처를 합친 틀린 승인 코드가 10분에
+20회에 이르면 그 창이 지날 때까지 `confirm`은 맞는 코드에도 429(콘솔 승인 안내)를 돌려준다.
+콘솔 `decision`은 영향이 없다. 상태 보관 행은 600초 전에는 승인되지 않은
 끝난 요청만 먼저 비운다. 화면 코드 행의 `approved_at`이 60초 넘게 미래이면 사용 시점에 거부한다. `confirm`으로
 생긴 관계는 `approved_by`·`issuer_id`·`issuer_source`가 `screen-code`, `issuer_digest`가
 수신 키 지문, `persistent=false`, `approved_at`부터 최대 168시간이며 발급자 token 없이
