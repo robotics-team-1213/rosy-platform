@@ -86,3 +86,18 @@ def test_payload_records_the_ros_debs_it_was_built_against():
     assert '"$RELEASE_ROOT/ros-packages.txt"' in script
     notes = (ROOT / "deploy" / "robot" / "pinky_pro" / "release" / "AGENTS.md").read_text(encoding="utf-8")
     assert "ros-packages.txt" in notes and "deb-packages.txt" in notes
+
+
+def test_ros_is_installed_from_the_image_locks_snapshot():
+    """D-482: payload ROS comes from the lock's dated snapshot, no date literal in the workflow."""
+    lock = yaml.safe_load(
+        (ROOT / "deploy/robot/pinky_pro/image/inputs.lock.yaml").read_text(encoding="utf-8-sig")
+    )
+    url = lock["ros"]["apt_snapshot_url"]
+    text = _run_text()
+
+    assert url.startswith("https://snapshots.ros.org/jazzy/") and url.endswith("/ubuntu")
+    assert "['ros']['apt_snapshot_url']" in text
+    assert "ros2.sources" in text
+    assert "snapshots.ros.org/jazzy/20" not in WORKFLOW.read_text(encoding="utf-8")
+    assert text.index("apt_snapshot_url") < text.index("ros-jazzy-ros-base")

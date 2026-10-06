@@ -108,6 +108,57 @@ def test_filter_selection_empty_recovery_and_reload(browser_workspace):
     assert [row['status'] for row in store.list_frames()] == ['approved', 'excluded']
 
 
+def test_approve_advances_to_next_pending_and_keeps_filter(browser_workspace):
+    page, store, expect = browser_workspace
+    for index in (0, 1):
+        store.update(index, {'version': store.get(index)['version'], 'action': 'reopen'})
+    page.goto(page.url.split('?')[0] + '?filter=pending', wait_until='networkidle')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
+    expect(page.locator('#image-message')).to_be_hidden()
+    page.locator('#complete').check()
+    page.locator('#approve').click()
+    # The reviewer lands on the next pending photo without a third click.
+    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    expect(page.locator('#filter')).to_have_value('pending')
+    expect(page.locator('#drag-status')).to_contain_text('사진 1 승인')
+    expect(page.locator('#complete')).not_to_be_checked()
+    expect(page.locator('#image-message')).to_be_hidden()
+    page.locator('#exclude').click()
+    # Nothing pending is left: stay on the decided photo and say the queue is done.
+    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    expect(page.locator('#drag-status')).to_contain_text('검수 대기 사진을 모두 처리했습니다')
+    assert [row['status'] for row in store.list_frames()] == ['approved', 'excluded']
+
+
+def test_decision_while_auditing_approved_does_not_jump_to_pending(browser_workspace):
+    page, store, expect = browser_workspace
+    store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
+    page.goto(page.url.split('?')[0] + '?filter=approved', wait_until='networkidle')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
+    expect(page.locator('#image-message')).to_be_hidden()
+    page.locator('#exclude').click()
+    # The audited photo stays open; the filter widens so it remains listed.
+    expect(page.locator('#save-status')).to_contain_text('서버 저장됨')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
+    expect(page.locator('#filter')).to_have_value('all')
+    assert store.get(0)['status'] == 'excluded'
+
+
+def test_phone_photo_list_is_one_strip_above_editor(browser_workspace):
+    page, _store, expect = browser_workspace
+    page.set_viewport_size({'width': 390, 'height': 844})
+    page.goto(page.url.split('?')[0] + '?frame=1', wait_until='networkidle')
+    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    layout = page.evaluate("""() => {
+      const strip = document.getElementById('frames');
+      const tops = [...strip.children].map(b => Math.round(b.getBoundingClientRect().top));
+      return {pageWidth: document.documentElement.scrollWidth, rows: new Set(tops).size,
+              direction: getComputedStyle(strip).flexDirection, overflow: getComputedStyle(strip).overflowX};
+    }""")
+    # Hundreds of photos must not push the editor below a full-page thumbnail grid.
+    assert layout == {'pageWidth': 390, 'rows': 1, 'direction': 'row', 'overflow': 'auto'}
+
+
 def test_undo_restores_boxes_without_restoring_approval(browser_workspace):
     page, store, expect = browser_workspace
     original = store.get(0)['review']['boxes']

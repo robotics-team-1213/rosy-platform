@@ -30,7 +30,7 @@ def _module():
     return module
 
 
-def _bundle(fleet_endpoint: str = "https://fleet.fixture.invalid:8443") -> dict:
+def _bundle(fleet_endpoint: str = "https://fleet.fixture.invalid:8443", **extra) -> dict:
     return create_provision_bundle(
         identity=DeviceIdentity(
             device_uid="9d40feaa-871f-4fd3-975a-a704e82d3af9",
@@ -51,6 +51,7 @@ def _bundle(fleet_endpoint: str = "https://fleet.fixture.invalid:8443") -> dict:
         created_at=datetime(2026, 9, 22, 1, 2, 3, tzinfo=UTC),
         nonce="fixture-first-boot-nonce",
         **CARD_API,
+        **extra,
     )
 
 
@@ -95,6 +96,31 @@ def test_valid_bundle_personalizes_ubuntu_and_is_consumed_once(tmp_path):
     assert complete["requested_preset"] == "hardware"
     assert complete["active_runtime"] == "core"
     assert "wpa_psk" not in json.dumps(complete)
+    assert not (root / "etc/rosy/tailscale-join.json").exists()
+
+
+def test_a_bundle_with_a_tailnet_key_writes_the_one_time_join_file(tmp_path):
+    # D-477: first boot hands the key to rosy-tailscale-join.service (0600) and
+    # keeps only membership facts in the completion record.
+    module = _module()
+    root, bundle = _case(tmp_path)
+    key = "tskey-auth-" + "k7m4tailnet01"
+    bundle.write_text(json.dumps(_bundle(tailscale_auth_key=key)), encoding="utf-8")
+    provisioner = module.FirstBootProvisioner(root=root, network_activate=lambda profile: True)
+
+    result = provisioner.apply(bundle=bundle, hardware_serial="10000000abcdef01")
+
+    assert result["ok"] is True
+    join_path = root / "etc/rosy/tailscale-join.json"
+    join = json.loads(join_path.read_text(encoding="utf-8"))
+    assert join == {"auth_key": key, "tags": ["tag:rosy-robot"], "hostname": "rosy-pinky-k7m4"}
+    if os.name == "posix":
+        assert os.stat(join_path).st_mode & 0o777 == 0o600
+    complete = json.loads(
+        (root / "var/lib/rosy/provisioning/complete.json").read_text(encoding="utf-8")
+    )
+    assert complete["tailscale"] == {"tags": ["tag:rosy-robot"], "hostname": "rosy-pinky-k7m4"}
+    assert key not in json.dumps(complete)
     fleet = json.loads((root / "etc/rosy/fleet-bootstrap.json").read_text(encoding="utf-8"))
     assert fleet["pairing_credential"] == "fixture-one-time-pairing-credential"
     if os.name == "posix":
