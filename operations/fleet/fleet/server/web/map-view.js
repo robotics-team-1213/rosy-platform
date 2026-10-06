@@ -13,8 +13,25 @@ import {
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
 import {drawStartPointMarks} from './start-point-layer.js';
+import { project as projectCamera } from "./map-fit.js";
+
+export function cameraMapCalibration(frame, calibrations, siteMap) {
+  if (!frame || frame.state !== "live" || frame.rectified || !siteMap
+    || !Number.isFinite(frame.ageMs) || frame.ageMs < 0 || frame.ageMs > 3000) return null;
+  return (calibrations || []).find((row) => row.source_id === frame.source
+    && (siteMap.maps || []).some((map) => map.map_id === row.map_id)
+    && row.image?.width === frame.image?.naturalWidth
+    && row.image?.height === frame.image?.naturalHeight
+    && (!row.lens || (row.lens.kind === frame.lens?.kind
+      && row.lens.focal_mm === frame.lens?.focal_mm
+      && row.lens.hfov_deg === frame.lens?.hfov_deg))
+    && Array.isArray(row.map_to_image) && row.map_to_image.length === 9) || null;
+}
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable }) {
+  let cameraFrame = null;
+  let calibrations = [];
+  let calibrationsAt = 0;
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
   const css = (name) => window.RosyPalette.cssColor(name);
   const font = (size) => window.RosyPalette.canvasFont(size, "mono");
@@ -365,21 +382,24 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const bounds = siteBounds(view.siteMap);
     if (!bounds) return;
     const canvas = el("map-canvas");
+    const calibration = cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
     // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
     const rect = canvas.getBoundingClientRect();
     const fallback = canvasSizeFor(bounds, 800);
-    const width = rect.width > 0 ? rect.width : fallback.width;
-    const height = rect.height > 0 ? rect.height : fallback.height;
-    const dpr = window.devicePixelRatio || 1;
+    const width = calibration ? cameraFrame.image.naturalWidth : rect.width > 0 ? rect.width : fallback.width;
+    const height = calibration ? cameraFrame.image.naturalHeight : rect.height > 0 ? rect.height : fallback.height;
+    const dpr = calibration ? 1 : window.devicePixelRatio || 1;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
     const t = fitTransform(bounds, width, height, 32);
-    const toPx = (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
-    ctx.fillStyle = css("--ground-deep");
-    ctx.fillRect(0, 0, width, height);
+    const toPx = calibration
+      ? (x, y) => { const p = projectCamera(calibration.map_to_image, x, y); return { x: p?.[0] ?? NaN, y: p?.[1] ?? NaN }; }
+      : (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
+    if (calibration) ctx.drawImage(cameraFrame.image, 0, 0, width, height);
+    else { ctx.fillStyle = css("--ground-deep"); ctx.fillRect(0, 0, width, height); }
     const labelFont = font(12);
 
     // 0.5 m 격자
@@ -484,7 +504,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         drawSiteView();
         const b = siteBounds(view.siteMap, 0);
         el("map-tag").textContent =
-          `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`;
+          `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`
+          + (cameraMapCalibration(cameraFrame, calibrations, view.siteMap)
+            ? ` · Rosy Cam 실영상 · ${cameraMapCalibration(cameraFrame, calibrations, view.siteMap).calibration_revision}` : "");
         el("map-canvas").setAttribute("aria-label",
           `천장 카메라 사이트 지도 — ${describeSightings()}. 이 지도에서는 목표를 지정할 수 없습니다.`);
       }
@@ -570,6 +592,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       life.check();
       view.siteMap = siteMap;
       el("map-stage").dataset.siteMap = "configured";
+      if (Date.now() - calibrationsAt > 30000) {
+        try {
+          const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
+          life.check();
+          calibrations = result.calibrations || [];
+          calibrationsAt = Date.now();
+        } catch (error) { if (error.name === "AbortError") return; calibrations = []; }
+      }
     } catch (err) {
       if (err.name === "AbortError") return;
       // NO_SITE_MAP — 카메라 사각형이 설정되지 않은 현장이다. 일시 실패면 직전 사각형을 둔다.
@@ -682,5 +712,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     draw();
   }
 
-  return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence };
+  function setCameraFrame(frame) {
+    cameraFrame = frame?.state === "live" ? frame : null;
+    if (!view.map && view.siteMap) draw();
+  }
+  return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence, setCameraFrame };
 }

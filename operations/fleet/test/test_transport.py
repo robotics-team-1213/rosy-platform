@@ -54,6 +54,19 @@ def test_follow_posts_the_params_with_a_bearer_token():
     assert seen["body"]["source"] == "fleet"
 
 
+def test_identity_request_uses_the_enrolled_robot_credential_and_fixed_color():
+    seen = {}
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(path=request.url.path, auth=request.headers.get("authorization"),
+                    body=json.loads(request.content))
+        return httpx.Response(200, json={"accepted": True, "request_id": "abc"})
+    assert run(_client(handler).identify_lamp("blue"))["accepted"] is True
+    assert seen == {"path": "/api/v1/host/lamp/identify", "auth": "Bearer op-token",
+                    "body": {"color": "blue"}}
+    with pytest.raises(ValueError):
+        run(_client(handler).identify_lamp("red"))
+
+
 def test_an_error_body_becomes_a_robot_api_error_with_the_robots_code():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(409, json={"error": {"code": "DOCKING_ACTIVE",

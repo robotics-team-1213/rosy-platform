@@ -140,6 +140,12 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
         *color = rgb(steps[step][0], steps[step][1], steps[step][2]);
         return 0;
     }
+    if (strcmp(pattern, "identify_blue") == 0 || strcmp(pattern, "identify_amber") == 0) {
+        if (elapsed_ms >= 3000) return 1;
+        int on = elapsed_ms < 1000 || elapsed_ms >= 2000;
+        *color = on ? (strcmp(pattern, "identify_blue") == 0 ? rgb(0, 0, DIM) : rgb(DIM, DIM / 3, 0)) : 0;
+        return 0;
+    }
     /* "off" */
     *color = 0;
     return 1;
@@ -148,7 +154,8 @@ static int frame(const char *pattern, long elapsed_ms, ws2811_led_t *color)
 static int known(const char *pattern)
 {
     static const char *names[] = {"booting", "ready", "failed", "caution", "manual", "illumination",
-                                  "navigating", "blocked", "docking", "emergency", "test", "off"};
+                                  "navigating", "blocked", "docking", "emergency", "test",
+                                  "identify_blue", "identify_amber", "off"};
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         if (strcmp(pattern, names[i]) == 0) {
             return 1;

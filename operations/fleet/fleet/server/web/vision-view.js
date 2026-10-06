@@ -89,7 +89,7 @@ const absentPanel = () => ({
   setAttribute: () => {},
 });
 
-export function createVisionView({ scope, el, call, isActive = () => true }) {
+export function createVisionView({ scope, el, call, isActive = () => true, rawOnly = false }) {
   const select = el("vision-source");
   const frame = el("vision-frame");
   const stage = el("vision-image-stage");
@@ -113,7 +113,7 @@ export function createVisionView({ scope, el, call, isActive = () => true }) {
   let previewLifetime = new AbortController();
   let lastSourcesAt = 0;
   let refreshTimer = null;
-  let viewMode = "adjusted";
+  let viewMode = rawOnly ? "raw" : "adjusted";
   let draggingPointerId = null;
   // D-360: 검토 중인 경기장 제안(정규 좌표 네 점). 수락 전에는 조정값에 들어가지 않는다.
   let proposalCorners = null;
@@ -376,11 +376,13 @@ export function createVisionView({ scope, el, call, isActive = () => true }) {
       if (!current() || source !== select.value) return;
       updateCornerOverlay();
       frame.dataset.state = "online";
-      frame.dataset.editing = String(viewMode === "raw");
-      cornerOverlay.toggleAttribute("hidden", viewMode !== "raw");
+      frame.dataset.editing = String(viewMode === "raw" && !rawOnly);
+      cornerOverlay.toggleAttribute("hidden", viewMode !== "raw" || rawOnly);
       el("vision-meta").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour12: false })} · ${source} · sequence ${response.headers.get("X-Frame-Seq") || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
       const seq = response.headers.get("X-Frame-Seq");
-      for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl });
+      const frameAge = response.headers.get("X-Frame-Age-Ms");
+      for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl,
+        lens: currentLensInfo, ageMs: frameAge === null ? NaN : Number(frameAge), state: badge.state });
     } catch (error) {
       if (error.name === "AbortError" || !current()) return;
       lease = null;

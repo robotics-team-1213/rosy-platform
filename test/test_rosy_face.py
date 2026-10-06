@@ -1443,6 +1443,39 @@ def test_a_handed_over_lamp_test_pauses_the_state_pattern_and_resumes_it(tmp_pat
     assert _answer(tmp_path)["detail"].endswith("(부팅 표시가 켬)")
 
 
+def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_idle(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+    spawn = FakeSpawn(code=0)
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    safe = {"estop": False, "robot_mode": "IDLE", "nav_state": "IDLE", "caution": []}
+    display._core = lambda: safe
+    _hand_over(tmp_path, "identify_blue")
+    assert display.handle_test() == "done"
+    assert spawn.patterns == ["ready", "identify_blue", "ready"]
+    assert lamp.pattern == "ready"
+    _hand_over(tmp_path, "identify_amber", request_id="1122334455667788")
+    safe["estop"] = True
+    assert display.handle_test() is None
+    assert spawn.patterns == ["ready", "identify_blue", "ready"]
+
+
+def test_identity_pulse_stops_without_restoring_old_pattern_when_safety_changes(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "BOOTING")
+    spawn = FakeSpawn()
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    state, detail = lamp.identify("amber", lambda: True)
+    assert state == "failed" and "중단" in detail
+    assert lamp.pattern is None
+    assert spawn.patterns == ["booting", "identify_amber"]
+    assert spawn.processes[-1].terminated == 1
+
+
 def test_a_lamp_test_without_a_usable_lamp_answers_unavailable(tmp_path):
     module = _display()
     _lamp_tree(tmp_path, channel="2")

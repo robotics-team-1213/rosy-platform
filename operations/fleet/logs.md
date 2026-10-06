@@ -1942,3 +1942,9 @@
 - 변경: Caddy가 사설망 발신자의 Fleet 카메라 source·lease 요청에만 내부 표시를 붙이고, Fleet는 해당 두 경로에서만 토큰 없는 viewer lease를 발급한다. 콘솔은 인증된 관제 세션이 없어도 카메라를 갱신한다.
 - 증거: Fleet 권한 경계 테스트, Caddyfile adapt, 브라우저 JS 구문 및 관련 테스트. 실사이트 배포·영상 readback은 별도 확인이 필요하다.
 - gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-06 · uncommitted · LED 식별 요청과 실영상 현장지도
+
+- 변경: Fleet의 로봇별 단기 LED 요청을 CORE로 전달하고, 승인된 source/map/lens 보정이 맞는 최신 Rosy Cam 원본 프레임만 현장지도 배경으로 사용한다. 식별 응답은 영상 확인 대기이며 robot ID를 자동 확정하지 않는다.
+- 증거: 관련 호스트 pytest 274 passed/3 skipped, 웹 Node 135 passed. DEVICE/FIELD 점멸·영상 대조는 아직 확인되지 않았다.
+- gate 변화: SOURCE/LOCAL 코드 검증만 추가. SITE/FIELD 상태는 그대로 둔다.

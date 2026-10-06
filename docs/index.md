@@ -300,6 +300,7 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · D-472 호스트 구현
 - 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
 - 2026-10-05 · uncommitted · feat(release): main CI to guarded robot CD
 - 2026-10-05 · uncommitted · docs(team): onboarding guide, PR template, CODEOWNERS, author guard
