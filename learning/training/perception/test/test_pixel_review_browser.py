@@ -177,7 +177,7 @@ def test_pixel_screen_shows_classes_yaml_display_names(browser_workspace):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
     expect(page.locator('#pixel-legend')).to_contain_text('왼쪽 차선')
     expect(page.locator('#pixel-class option').nth(1)).to_have_text('왼쪽 차선')
-    expect(page.locator('#pixel-class option').first).to_have_text('floor')
+    expect(page.locator('#pixel-class option').first).to_have_text('배경')
 
 
 
@@ -193,3 +193,11 @@ def test_pixel_number_keys_pick_class_and_x_excludes(browser_workspace):
     page.keyboard.press('x')
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 제외')
     assert review_masks.get(store, 0)['status'] == 'excluded'
+
+
+def test_pixel_legend_shows_default_korean_names(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    expect(page.locator('#pixel-legend')).to_contain_text('배경')
+    expect(page.locator('#pixel-legend')).to_contain_text('차선')
+    expect(page.locator('#pixel-class option').first).to_have_text('배경')

@@ -8,6 +8,7 @@ import numpy as np
 import yaml
 
 import build
+import class_sets
 
 
 def sha(data):
@@ -40,6 +41,15 @@ def classes(store):
     with store.connect() as db:
         row = db.execute("SELECT value FROM metadata WHERE key='pixel_classes'").fetchone()
     return json.loads(row[0]) if row else None
+
+
+def served_classes(store):
+    """The binding as screens see it: a default display filled in, stored binding untouched."""
+    binding = classes(store)
+    if binding:
+        for c in binding['classes']:
+            c.setdefault('display', class_sets.DEFAULT_DISPLAY.get(c['name'], c['name']))
+    return binding
 
 
 def signature(values):
@@ -98,7 +108,7 @@ def get(store, index):
                   if row is None or value['sha256'] != row['sha256']]
     result = dict(row) if row else {'frame': index, 'version': 0, 'status': 'pending',
                                    'path': None, 'sha256': None, 'complete': 0, 'background': 0}
-    result.update(width=frame['source']['width'], height=frame['source']['height'], classes=classes(store))
+    result.update(width=frame['source']['width'], height=frame['source']['height'], classes=served_classes(store))
     result['approval'] = json.loads(result['approval']) if result.get('approval') else None
     result['draft_candidates'] = drafts
     return result
@@ -272,7 +282,7 @@ def update(store, index, body, conflict):
         if status == 'approved':
             approval = {'image_sha256': frame['source']['image_sha256'], 'mask_sha256': digest,
                         'mask_version': version, 'classes_sha256': binding['sha256'],
-                        'classes_signature': sha(json.dumps(binding['classes'], sort_keys=True).encode()),
+                        'classes_signature': signature(binding['classes']),
                         'ignore_index': binding['ignore_index'], 'width': review['width'],
                         'height': review['height'], 'complete_frame_review': True,
                         'background_reviewed': True}

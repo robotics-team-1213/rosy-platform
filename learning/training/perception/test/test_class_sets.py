@@ -95,3 +95,10 @@ def test_bind_refuses_non_detect_and_forged_sha(tmp_path):
 def test_reject_label_is_reserved():
     with pytest.raises(ValueError, match='reserved'):
         class_sets.from_data_yaml(b'names: [car, none]\n', 'detect')
+
+
+def test_data_yaml_display_falls_back_to_default_korean_then_name():
+    record = class_sets.from_data_yaml(b'names: [car, traffic_light, lane_left]\ndisplay: {car: Car}\n', 'detect')
+    assert [c['display'] for c in record['classes']] == ['Car', '신호등', '왼쪽 차선']
+    plain = class_sets.from_data_yaml(b'names: [car, traffic_light, lane_left]\n', 'detect')
+    assert plain['sha256'] == record['sha256'] and plain['classes'][0]['display'] == 'car'

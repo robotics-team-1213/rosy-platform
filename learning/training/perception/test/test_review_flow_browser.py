@@ -198,7 +198,7 @@ def test_class_select_lists_the_workspace_class_set(browser_workspace):
 def test_custom_class_set_names_and_saves(custom_class_workspace):
     page, store, expect = custom_class_workspace
     select = page.locator('#boxes .box-top select').first
-    expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', 'traffic_light'])
+    expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', '신호등'])
     select.select_option('car')
     expect(page.locator('#save-status')).to_contain_text('v2')
     expect(page.locator('#boxes summary').first).to_contain_text('자동차')

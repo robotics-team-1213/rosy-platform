@@ -11,8 +11,12 @@ import yaml
 
 from object_boxes import OBJECT_CLASSES, REJECT
 
-KOREAN = {'robot': '로봇', 'obstacle_box': '장애물 상자', 'cone': '콘', 'traffic_light': '신호등',
-          'sign': '표지판', 'person_feet': '사람 발'}
+# Shown when a class file names no display of its own; presentation only, never identity.
+DEFAULT_DISPLAY = {'robot': '로봇', 'obstacle_box': '장애물 상자', 'cone': '콘', 'traffic_light': '신호등',
+                   'sign': '표지판', 'person_feet': '사람 발',
+                   'floor': '배경', 'background': '배경', 'lane_line': '차선', 'wall': '벽',
+                   'drivable': '주행 영역', 'stop_line': '정지선', 'crosswalk': '횡단보도',
+                   'lane_left': '왼쪽 차선', 'lane_right': '오른쪽 차선', 'speed_bump': '과속방지턱'}
 TASKS = ('detect', 'semantic')
 
 
@@ -35,7 +39,7 @@ def _record(names, task, source, display=None, colors=None):
             raise ValueError('color must be [r, g, b] ints 0..255')
     identity = json.dumps({'task': task, 'names': list(names)}, ensure_ascii=False).encode()
     return {'task': task, 'source': source, 'sha256': hashlib.sha256(identity).hexdigest(),
-            'classes': [{'index': i, 'name': n, 'display': display.get(n, n),
+            'classes': [{'index': i, 'name': n, 'display': display.get(n) or DEFAULT_DISPLAY.get(n, n),
                          'color': colors.get(n), 'hotkey': str(i + 1) if i < 9 else None}
                         for i, n in enumerate(names)]}
 
@@ -57,7 +61,7 @@ def from_data_yaml(raw, task):
 
 
 def legacy_object_set():
-    return _record(list(OBJECT_CLASSES), 'detect', {'kind': 'd423_v1'}, KOREAN)
+    return _record(list(OBJECT_CLASSES), 'detect', {'kind': 'd423_v1'})
 
 
 def object_set(store):

@@ -372,3 +372,12 @@ def test_pixel_display_names_are_kept_but_never_change_the_class_signature(tmp_p
     assert bound['classes_signature'] == plain['classes_signature']
     with pytest.raises(ValueError, match='display'):
         review_masks.bind_classes(open_store(tmp_path / 'c'), CLASSES.replace(b'name: wall,', b'name: wall, display: 3,'))
+
+
+def test_served_pixel_classes_default_to_korean_display_without_touching_the_binding(tmp_path):
+    store = open_store(tmp_path)
+    bound = review_masks.bind_classes(store, CLASSES)
+    served = review_masks.get(store, 0)['classes']
+    assert [c['display'] for c in served['classes']] == ['배경', '차선', '벽', '주행 영역', '정지선', '횡단보도']
+    assert review_masks.classes(store) == bound and 'display' not in bound['classes'][0]
+    assert (served['sha256'], served['classes_signature']) == (bound['sha256'], bound['classes_signature'])

@@ -289,7 +289,7 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     return self.send({'frames': frames, 'classes': [c['name'] for c in object_set['classes']],
                                       'object_class_set': object_set,
                                       'token': token, 'exports': store.exports(), 'segmentation_supported': True,
-                                      'pixel_classes': review_masks.classes(store),
+                                      'pixel_classes': review_masks.served_classes(store),
                                       'map_reference': review_evidence.map_reference(store)})
                 if path == '/api/decisions':
                     value = review_evidence.decisions(store)
