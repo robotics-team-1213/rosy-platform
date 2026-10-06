@@ -109,8 +109,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        36_444,
-        "split: independently re-judged at 36444 on 2026-10-05 for Fleet CAP-001 support: "
+        36_645,
+        "split: re-judged at 36645 on 2026-10-06 after integrated map camera display, "
+        "lamp identity routing, and transport evidence added 201 lines; the camera binding "
+        "moved from console.js into its map view to keep the web file below 800 lines. "
+        "The existing B2 server/UI split plan and +150 growth allowance remain in force. "
+        "Previously independently re-judged at 36444 on 2026-10-05 for Fleet CAP-001 support: "
         "101 production/web lines from this patch and 109 from integrated main above 36234. "
         "Transport, formation lifecycle, console gather/dispatch and UI readiness keep their "
         "existing owners. Retain B2/server/UI split obligations and every threshold, including "
@@ -330,8 +334,11 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_315,
-        "accept: D-457 re-judged at 1315 after current schema extraction: one bounded OverheadDetectionsPayload re-export; model lives in "
+        1_321,
+        "accept: re-judged at 1321 on 2026-10-06: six lines add the bounded display-only "
+        "LampIdentifyRequest to the existing public schema owner; no new protocol version or "
+        "runtime owner. Zero-growth allowance remains. D-457 re-judged at 1315 after "
+        "current schema extraction: one bounded OverheadDetectionsPayload re-export; model lives in "
         "overhead_detections.py, display-only, no version pin or runtime ownership change. "
         "accept: re-judged 2026-10-04 at 1319 after main's model extractions: Cell request models live in protocol/cell_app.py; only "
         "two public re-export lines join the canonical schema entrypoint. Zero-growth allowance unchanged. "
@@ -667,8 +674,10 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1074,
-        "accept: the one owner of LCD, buzzer and lamp (D-433, was rosy-boot-display.py) — one poll "
+        1119,
+        "accept: re-judged at 1119 on 2026-10-06: bounded LED identity pulse joins the "
+        "existing face lamp owner, gated by live IDLE and alarm state; the zero-growth "
+        "allowance remains. The one owner of LCD, buzzer and lamp (D-433, was rosy-boot-display.py) — one poll "
         "and one frame tick; the situation table lives in core_common.face_screen; covered by "
         "test/test_rosy_face.py (X5). 1048 after the review fixes (last good hand-over, "
         "shutdown-only poll). Re-judged 2026-10-04 at 1074: opt-in light session uses the "

@@ -716,5 +716,22 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     cameraFrame = frame?.state === "live" ? frame : null;
     if (!view.map && view.siteMap) draw();
   }
-  return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence, setCameraFrame };
+  function bindCamera(visionView) {
+    // The map panel shows the same authenticated Vision frame; Fleet does not relay image bytes.
+    let cancelMapCameraExpiry = () => {};
+    scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
+      const panel = el("map-camera");
+      cancelMapCameraExpiry();
+      setCameraFrame(frame);
+      if (frame.state !== "live" || !Number.isFinite(frame.ageMs) || frame.ageMs < 0 || frame.ageMs > 3000) {
+        panel.hidden = true; setCameraFrame(null); return;
+      }
+      el("map-camera-image").src = frame.url;
+      el("map-camera-meta").textContent = `Rosy Cam ${frame.source} · seq ${frame.seq || "?"} · age ${Number.isFinite(frame.ageMs) ? frame.ageMs : "?"} ms · 영상 관측 전용`;
+      panel.hidden = false;
+      cancelMapCameraExpiry = scope.timeout(() => { panel.hidden = true; setCameraFrame(null); },
+        Math.max(0, 3000 - frame.ageMs));
+    })));
+  }
+  return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence, setCameraFrame, bindCamera };
 }
