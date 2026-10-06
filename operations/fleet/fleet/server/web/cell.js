@@ -42,6 +42,7 @@ let layoutData = null;
 const commands = ['recipe-save', 'cell-save', 'compile', 'propose', 'admit', 'reconcile', 'resume', 'cancel'];
 function invalidate() {
   previewRefs = null; layoutData = null;
+  $('summary').setAttribute('state', 'unavailable');
   $('summary').textContent = '저장한 레시피와 셀을 기준으로 계획을 계산합니다.';
   $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); refreshControls();
 }
@@ -49,7 +50,10 @@ function clearSession() {
   role = null; job = null; jobGeneration = null; invalidate();
   $('session').textContent = '접속 전';
   revisions.clear();
-  for (const kind of ['recipe', 'cell']) $(kind + '-revision').textContent = '저장 전';
+  for (const kind of ['recipe', 'cell']) {
+    $(kind + '-revision').setAttribute('state', 'empty');
+    $(kind + '-revision').textContent = '저장 전';
+  }
   $('proposal').textContent = '';
   $('job-state').textContent = '';
   $('job-summary').textContent = '작업 ID로 상태를 확인하세요.';
@@ -136,6 +140,7 @@ function loaded(kind, revision) {
   const text = JSON.stringify(revision.document, null, 2);
   $(kind + '-document').value = text;
   revisions.set(kind, {...revision, text});
+  $(kind + '-revision').setAttribute('state', 'ready');
   $(kind + '-revision').textContent = `저장된 버전 ${revision.digest.slice(0, 12)}`;
   invalidate();
   if (kind === 'recipe') recipeFields(revision.document);
@@ -203,6 +208,7 @@ function structuredFields(kind, value) {
       mutate(draft);
       $(kind + '-document').value = JSON.stringify(draft, null, 2);
       if (redraw) structuredFields(kind, draft);
+      $(kind + '-revision').setAttribute('state', 'warning');
       $(kind + '-revision').textContent = '수정한 문서 · 저장 전';
       refreshControls();
     } catch { $('notice').textContent = '문서 구조를 확인한 뒤 불러오세요.'; }
@@ -212,6 +218,8 @@ function structuredFields(kind, value) {
 for (const kind of ['recipe', 'cell']) {
   for (const part of ['id', 'document']) $(kind + '-' + part).addEventListener('input', () => {
     editEpoch++; invalidate();
+    $(kind + '-revision').setAttribute('state', 'warning');
+    $(kind + '-revision').textContent = '수정한 문서 · 저장 전';
     if (part === 'document') {
       try { const document = JSON.parse($(kind + '-document').value); if (kind === 'recipe') recipeFields(document); else cellFields(document); }
       catch { $(kind + '-fields').replaceChildren(); $(kind + '-structure').replaceChildren(); }
@@ -228,6 +236,7 @@ for (const kind of ['recipe', 'cell']) {
       if (!document || typeof document !== 'object' || Array.isArray(document)) throw new Error('문서는 JSON object여야 합니다.');
       $(kind + '-document').value = JSON.stringify(document, null, 2);
       if (kind === 'recipe') recipeFields(document); else cellFields(document);
+      $(kind + '-revision').setAttribute('state', 'warning');
       $(kind + '-revision').textContent = '가져온 문서 · 저장 전';
       $('notice').textContent = '파일을 불러왔습니다. 이름과 설정을 확인하고 저장하세요.';
     });
@@ -238,10 +247,24 @@ for (const kind of ['recipe', 'cell']) {
   }));
   $(kind + '-save').addEventListener('click', () => action(async () => {
     const id = $(kind + '-id').value, previous = revisions.get(kind);
-    const revision = await post(`/api/fleet/cell-app/documents/${kind}/${encodeURIComponent(id)}`, {
-      document: JSON.parse($(kind + '-document').value),
-      expected_digest: previous?.id === id ? previous.digest : null,
-    });
+    const status = $(kind + '-revision');
+    status.setAttribute('state', 'pending');
+    status.textContent = '저장 요청 중 · 결과 확인 대기';
+    let revision;
+    try {
+      revision = await post(`/api/fleet/cell-app/documents/${kind}/${encodeURIComponent(id)}`, {
+        document: JSON.parse($(kind + '-document').value),
+        expected_digest: previous?.id === id ? previous.digest : null,
+      });
+    } catch (error) {
+      status.setAttribute('state', 'error');
+      status.textContent = error.status === 409
+        ? '저장 충돌 · 작성 내용을 복사한 뒤 최신 문서를 불러와 비교하세요.'
+        : error instanceof SyntaxError ? '저장 전 JSON 형식을 확인하세요.'
+        : error.status && error.status < 500 ? '저장 거절 · 문서 형식과 권한을 확인하세요.'
+        : '저장 결과 확인 불가 · 문서 목록과 최신 버전을 확인한 뒤 다시 시도하세요.';
+      throw error;
+    }
     loaded(kind, revision); await list(); $('notice').textContent = '문서 저장 완료 · 실행 가능 여부는 미리보기에서 확인하세요.';
   }));
 }
@@ -255,8 +278,22 @@ $('connect').addEventListener('click', () => action(async () => {
   await list(); $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
 }));
 $('compile').addEventListener('click', () => action(async () => {
-  invalidate(); const refs = references(); const result = await post('/api/fleet/cell-app/compile', refs);
+  invalidate();
+  let refs, result;
+  try { refs = references(); result = await post('/api/fleet/cell-app/compile', refs); }
+  catch (error) {
+    $('summary').setAttribute('state', refs ? 'error' : 'warning');
+    $('summary').textContent = !refs
+      ? '미리보기 전에 두 문서를 저장하거나 불러오세요.'
+      : error.status === 409
+      ? '미리보기 실패 · 저장된 문서가 바뀌었습니다. 최신 문서를 불러와 확인하세요.'
+      : error.status && error.status < 500
+      ? '미리보기 거절 · 문서 형식과 권한을 확인한 뒤 다시 확인하세요.'
+      : '미리보기 결과 확인 불가 · 문서와 연결 상태를 확인하고 다시 확인하세요.';
+    throw error;
+  }
   previewRefs = refs;
+  $('summary').setAttribute('state', 'ready');
   $('summary').textContent = `${result.summary.transfer_count}회 전송 · 팔레트 완료 표시 ${result.summary.pallet_markers.length}개`;
   $('preview').textContent = JSON.stringify(result.candidate.job, null, 2);
   layoutData = result.candidate;

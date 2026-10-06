@@ -93,7 +93,9 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 동등한 레시피·셀 문서 창은 1440×1000에서 같은 폭으로 나란히 놓이고 390×844·320×568에서 같은 가용 폭으로 쌓인다. compact의 문서·미리보기·제안·승인·복귀 행동도 각 행동 칸의 전폭을 쓴다. 기존에는 390/320px의 「불러오기」가 82px에 머물러 272px 칸을 채우지 못했고, 「미리보기」도 제목 옆의 좁은 버튼이었다. 먼저 Cell 전체 **24 passed**, 공용 UI 계약 **231 passed, 25 skipped**를 확인했다. 미리보기 폭을 마지막으로 맞춘 뒤 세 폭 기하 검사 **3 passed**, 미리보기·취소 상호작용 **4 passed**, 각 성공 실행의 `known_failures.py` **0 NEW**다. 전체 페이지 원본은 X: `captures/fleet-cell/fleet-cell-widths-{1440x1000,390x844,320x568}.png`, 실행 기록은 `logs/fleet-cell-{uniform-full,uniform-shared,uniform-widths-final,uniform-interaction}.txt`다. 긴 전화 화면에서 실제 작업 흐름을 찾는 G3 검토는 남는다.
 
-G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나머지 경로, 권한 거부의 나머지 경로·저장/컴파일 실패, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
+저장한 레시피를 수정하면 이전 「저장된 버전」 대신 저장 전 초안임을 표시한다. 저장 409 충돌은 작성 내용 복사→최신 문서 불러오기→내용 재적용→저장 순서를 알리고, 컴파일 503은 이전 미리보기 결과를 내리고 결과 미확인·재확인을 표시한다. 두 상태를 1440×1000·390×844·320×568에서 재생하고 로컬 상태 칸이 각 패널 폭을 채우며 제안이 막히는지 확인했다. 320px 저장 503도 결과 미확인으로 구분했다. Cell 전체 **31 passed**, Cell API **8 passed**, 공용 UI 계약 **231 passed, 25 skipped**를 확인한 뒤, 문서가 아직 저장되지 않아 미리보기를 시작할 수 없는 세 폭을 별도 문구로 **3 passed** 재검사했다. JS 구문 검사 통과, 각 성공 실행의 `known_failures.py` **0 NEW**다. 원본은 X: `captures/fleet-cell/fleet-cell-{save-conflict,preview-unavailable}-{1440x1000,390x844,320x568}.png`, `fleet-cell-save-unavailable-320x568.png`; 실행 기록은 `logs/fleet-cell-{write-final-focus,save-unavailable,write-full,write-api,write-shared,preview-precondition}.txt`다. 합성 응답의 LOCAL G2 부분 근거이며 실제 충돌·장치 실행을 검증하지 않는다.
+
+G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나머지 경로, 권한 거부와 저장/컴파일 실패의 나머지 경로, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
 
 ### Fleet G3 독회 — LOCAL 진행 중
 

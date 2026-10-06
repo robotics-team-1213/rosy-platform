@@ -2031,3 +2031,9 @@
 - 변경: 레시피·셀 문서 창의 세 선언 폭을 측정하고, 390/320px에서 문서·미리보기·제안·승인·복귀 행동이 각 칸의 가용 폭을 채우게 했다.
 - 증거: Cell 전체 24 passed와 공용 UI 계약 231 passed/25 skipped 뒤 마지막 미리보기 폭 보정. 현재 세 폭 브라우저 3 passed, 미리보기·취소 상호작용 4 passed, 각 성공 실행 `known_failures.py` 0 NEW. X: `captures/fleet-cell/fleet-cell-widths-{1440x1000,390x844,320x568}.png`, `logs/fleet-cell-{uniform-full,uniform-shared,uniform-widths-final,uniform-interaction}.txt`.
 - gate 변화: Cell 균일 폭의 LOCAL G2 부분 근거 추가. 전체 선언 상태·실제 장치·운영자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 저장 충돌·미리보기 실패
+
+- 변경: 편집한 문서를 저장 전 초안으로 표시하고, 저장 409·503 및 컴파일 503을 행동 위치의 공용 상태 칸에 구분해 표시한다. 컴파일 실패 시 이전 미리보기를 내리고 제안을 막는다.
+- 증거: 세 폭 충돌·복구와 미리보기 실패·복구 6 passed, 320px 저장 결과 미확인 1 passed, Cell 전체 31 passed, Cell API 8 passed, 공용 UI 계약 231 passed/25 skipped, 마지막 미저장 문서 문구 세 폭 3 passed, JS 구문 검사 통과, 각 성공 실행 `known_failures.py` 0 NEW. X: `captures/fleet-cell/fleet-cell-{save-conflict,preview-unavailable}-{1440x1000,390x844,320x568}.png`, `fleet-cell-save-unavailable-320x568.png`, `logs/fleet-cell-{write-final-focus,save-unavailable,write-full,write-api,write-shared,preview-precondition}.txt`.
+- gate 변화: 저장·컴파일 실패의 LOCAL G2 부분 근거 추가. 나머지 상태·실제 장치·운영자 G3는 HOLD다.

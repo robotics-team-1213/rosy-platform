@@ -151,6 +151,8 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
     expect(status).to_contain_text("저장된 문서가 없습니다")
     expect(status).to_contain_text("레시피와 셀 문서를 작성하고 저장하세요")
     assert page.locator("#saved").is_hidden()
+    page.locator("#compile").click()
+    expect(page.locator("#summary")).to_contain_text("두 문서를 저장하거나 불러오세요")
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
         status.scroll_into_view_if_needed()
@@ -232,6 +234,91 @@ def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice):
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"fleet-cell-auth-{denial}-320x568.png"))
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_save_conflict_marks_draft_and_recovers(browser_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
+    _prepare(page)
+    recipe = json.loads(page.locator("#recipe-document").input_value())
+    recipe["box"]["mass_kg"] = 0.04
+    page.locator("#recipe-document").fill(json.dumps(recipe))
+    revision = page.locator("#recipe-revision")
+    expect(revision).to_contain_text("저장 전")
+    page.route("**/api/fleet/cell-app/documents/recipe/*",
+               lambda route: route.fulfill(status=409, body='{"detail":{"code":"revision_conflict"}}'))
+    page.locator("#recipe-save").click()
+    expect(revision).to_contain_text("저장 충돌")
+    expect(revision).to_contain_text("작성 내용을 복사")
+    panel = page.locator(".documents > ui-section").first.bounding_box()
+    status_box = revision.bounding_box()
+    assert abs(panel["x"] - status_box["x"]) <= 1
+    assert abs(panel["width"] - status_box["width"]) <= 1
+    assert page.locator("#propose").is_disabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        revision.scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / f"fleet-cell-save-conflict-{width}x{height}.png"))
+    page.unroute("**/api/fleet/cell-app/documents/recipe/*")
+    page.locator("#recipe-load").click()
+    expect(revision).to_contain_text("저장된 버전")
+    page.locator("#recipe-document").fill(json.dumps(recipe))
+    expect(revision).to_contain_text("저장 전")
+    page.locator("#recipe-save").click()
+    expect(revision).to_contain_text("저장된 버전")
+
+
+def test_cell_save_unavailable_does_not_claim_success(browser_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": 320, "height": 568})
+    _prepare(page)
+    recipe = json.loads(page.locator("#recipe-document").input_value())
+    recipe["box"]["mass_kg"] = 0.04
+    page.locator("#recipe-document").fill(json.dumps(recipe))
+    page.route("**/api/fleet/cell-app/documents/recipe/*",
+               lambda route: route.fulfill(status=503, body="unavailable"))
+    page.locator("#recipe-save").click()
+    revision = page.locator("#recipe-revision")
+    expect(revision).to_contain_text("저장 결과 확인 불가")
+    expect(revision).to_contain_text("최신 버전")
+    assert page.locator("#propose").is_disabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        revision.scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / "fleet-cell-save-unavailable-320x568.png"))
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_preview_unavailable_clears_old_result_and_recovers(browser_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
+    _prepare(page)
+    expect(page.locator("#summary")).to_contain_text("18회 전송")
+    page.route("**/api/fleet/cell-app/compile",
+               lambda route: route.fulfill(status=503, body="unavailable"))
+    page.locator("#compile").click()
+    summary = page.locator("#summary")
+    expect(summary).to_contain_text("미리보기 결과 확인 불가")
+    expect(summary).to_contain_text("다시 확인")
+    panel = page.locator("main > ui-section").first.bounding_box()
+    status_box = summary.bounding_box()
+    assert abs(panel["x"] - status_box["x"]) <= 1
+    assert abs(panel["width"] - status_box["width"]) <= 1
+    assert page.locator("#propose").is_disabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        summary.scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / f"fleet-cell-preview-unavailable-{width}x{height}.png"))
+    page.unroute("**/api/fleet/cell-app/compile")
+    page.locator("#compile").click()
+    expect(summary).to_contain_text("18회 전송")
 
 
 def test_delayed_compile_cannot_restore_preview_for_changed_document(browser_site):

@@ -34,7 +34,7 @@
         <div id="recipe-structure" aria-label="팔레트와 층 설정 편집"></div>
         <details><summary>레시피 문서 편집 · JSON</summary><label for="recipe-document">레시피 문서</label><textarea class="ui-field" id="recipe-document" rows="14" spellcheck="false"></textarea></details>
         <div class="actions"><ui-button id="recipe-load" kind="quiet">불러오기</ui-button><ui-button id="recipe-save" kind="primary">레시피 저장</ui-button></div>
-        <ui-text id="recipe-revision" scale="label">저장 전</ui-text>
+        <ui-status id="recipe-revision" state="empty">저장 전</ui-status>
       </ui-section>
       <ui-section aria-labelledby="cell-heading">
         <ui-head><ui-text id="cell-heading" scale="label">2 · 셀 설정</ui-text></ui-head>
@@ -46,12 +46,12 @@
         <div id="cell-structure" aria-label="프레임과 스테이션 티칭값 입력"></div>
         <details><summary>셀 티칭 문서 편집 · JSON</summary><label for="cell-document">셀 문서</label><textarea class="ui-field" id="cell-document" rows="14" spellcheck="false"></textarea></details>
         <div class="actions"><ui-button id="cell-load" kind="quiet">불러오기</ui-button><ui-button id="cell-save" kind="primary">셀 저장</ui-button></div>
-        <ui-text id="cell-revision" scale="label">저장 전</ui-text>
+        <ui-status id="cell-revision" state="empty">저장 전</ui-status>
       </ui-section>
     </div>
     <ui-section aria-labelledby="preview-heading">
       <ui-head><ui-text id="preview-heading" scale="label">3 · 적재 계획 확인</ui-text><ui-button id="compile" kind="primary">미리보기</ui-button></ui-head>
-      <ui-text id="summary">저장한 레시피와 셀을 기준으로 계획을 계산합니다.</ui-text>
+      <ui-status id="summary" state="unavailable">저장한 레시피와 셀을 기준으로 계획을 계산합니다.</ui-status>
       <details><summary>계산된 계획 상세</summary><pre id="preview" aria-label="컴파일된 적재 계획"></pre></details>
       <label for="layout-layer">팔레트 · 층 선택</label><select class="ui-field" id="layout-layer" aria-label="팔레트와 층"></select>
       <svg id="layout" viewBox="0 0 800 320" role="img" aria-label="적재 위치 평면도 · base 좌표"></svg>
