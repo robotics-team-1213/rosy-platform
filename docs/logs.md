@@ -6391,3 +6391,9 @@ osy-d395-s1d\`.
 - 변경: 320px 주행 조작에서 좌·우회전 버튼을 각각 열 전폭으로 쌓아 긴 글자가 반폭 칸 밖으로 넘지 않게 했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처, 내용 폭 baseline 57/66px, 수정 후 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: Pilot LOCAL G2 일부 추가. 실기 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320×568 영상 공간 복구
+
+- 변경: Pilot 짧은 전화 화면에서 영상 높이 0 문제를 고치고, 정지·연결 사실·전진/후진·스틱은 첫 화면에 보이게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처, 5폭 영상·2폭 모드 브라우저 7 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 두 스크롤 영역의 실제 운전자 G3와 제품 전체는 HOLD다.

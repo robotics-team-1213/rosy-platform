@@ -680,7 +680,7 @@ MEASURE_VIDEO = """(() => {
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-@pytest.mark.parametrize("viewport", [(2000, 1200), (1333, 760), (1200, 2000), (390, 844)])
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1333, 760), (1200, 2000), (390, 844), (320, 568)])
 def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
     """D-363: 카메라는 원본 비율 그대로 전부 보이고, 조작부·HUD·상단 바가 영상을 덮지 않는다."""
     with playwright_sync.sync_playwright() as playwright:
@@ -688,7 +688,7 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
         page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
         try:
             _enter_drive(page, base_url)
-            page.wait_for_selector("[data-drive-frame][src]", timeout=10_000)
+            page.wait_for_selector("[data-drive-frame][src]", state="attached", timeout=10_000)
             page.wait_for_function("document.querySelector('[data-drive-frame]').naturalWidth > 0")
             page.wait_for_timeout(300)
             m = page.evaluate(MEASURE_VIDEO)
@@ -705,6 +705,15 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
             if viewport[0] < 480:
                 cue = page.locator("[data-drive-scroll-cue]").bounding_box()
                 stick = page.locator("[data-drive-stick]").bounding_box()
+                if viewport[0] == 320:
+                    hud = page.locator("[data-drive-hud]").bounding_box()
+                    idle = page.locator("[data-drive-idle]").bounding_box()
+                    assert idle and idle["y"] >= hud["y"] and idle["y"] + idle["height"] <= hud["y"] + hud["height"]
+                    facts = page.locator("[data-drive-facts]").bounding_box()
+                    assert facts and facts["y"] + facts["height"] <= hud["y"] + hud["height"]
+                    page.eval_on_selector("[data-drive-hud]", "hud => { hud.scrollTop = hud.scrollHeight; }")
+                    tools = page.locator("[data-drive-tools]").bounding_box()
+                    assert tools and tools["y"] + tools["height"] <= hud["y"] + hud["height"]
                 scrolled = page.evaluate("""() => ({
                   panel: (() => { const panel = document.querySelector('[data-drive-controls]');
                     panel.scrollTop = panel.scrollHeight; return panel.scrollTop; })(),
@@ -948,6 +957,9 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
         assert brand["x"] + brand["width"] <= robot["x"]
     assert stop["x"] + stop["width"] <= width
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if width == 320:
+        go = page.locator("[data-drive-go]").bounding_box()
+        assert go and go["y"] + go["height"] <= height
     assert not page.locator("[data-drive-scroll-cue]").is_visible()
     if output := os.environ.get("ROSY_SHOT_DIR"):
         Path(output).mkdir(parents=True, exist_ok=True)

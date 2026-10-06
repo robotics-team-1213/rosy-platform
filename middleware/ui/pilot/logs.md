@@ -543,3 +543,9 @@
 - 변경: 320px에서 제자리 좌·우회전 버튼의 내용이 반폭 칸을 넘쳐, 22rem 미만에서는 두 버튼을 조작 열 전폭으로 쌓았다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 전후 X: 캡처와 실제 내용 폭 57/66px, 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: Pilot LOCAL G2 부분 근거 추가. 실기 운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 320×568 카메라·조작 균형
+
+- 변경: 짧은 전화 화면에서 HUD·조작부가 카메라 높이를 0으로 만들던 배치를 줄였다. 속도·정지·연결 사실과 기본 주행은 첫 화면에, 부가 도구와 회전은 내부 스크롤에 둔다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320px 전후 X: 캡처. 5폭 영상 비율·비겹침·면적 계약과 2폭 모드 브라우저 7 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot 짧은 전화 LOCAL G2 부분 근거 추가. 실제 운전자 발견·조작 G3와 제품 전체는 HOLD다.
