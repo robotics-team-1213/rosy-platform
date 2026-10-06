@@ -2,7 +2,9 @@
 import hashlib
 import importlib.util
 import json
+from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -103,3 +105,72 @@ def test_doctor_rejects_changed_or_unbound_inputs(tmp_path, changed):
         (catalog.parent / row["image"]).write_bytes(b"other-frame")
     with pytest.raises(ValueError):
         job_module().verify_inputs(config)
+
+
+def test_draft_preserves_original_size_ignore_and_verified_resume(tmp_path, monkeypatch):
+    cv2, np = pytest.importorskip("cv2"), pytest.importorskip("numpy")
+    config, row, catalog = inputs(tmp_path)
+    active = tmp_path / "model-code-state.json"
+    active.write_text(json.dumps({"source_commit": "a" * 40,
+                                  "environment_sha256": "b" * 64}))
+    config["model_code_state"] = str(active)
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps(config))
+    mod = job_module()
+    monkeypatch.setattr(mod, "probe_gpu", lambda: {"verdict": "pass"})
+    monkeypatch.setattr(mod.train_job, "gpu_lease", nullcontext)
+    calls = []
+    classes = (SimpleNamespace(index=0, name="floor", role="background"),
+               SimpleNamespace(index=1, name="lane_line", role="lane_marking"))
+    spec = SimpleNamespace(height=8, width=8, shape=(1, 3, 8, 8), color="bgr",
+                           scale=1.0 / 255, mean=(0, 0, 0), std=(1, 1, 1))
+
+    class Session:
+        def run(self, image):
+            calls.append(image.shape)
+            logits = np.zeros((1, 2, 8, 8), np.float32)
+            logits[:, 1, :4, :] = 8
+            return logits
+
+    manifest_file = tmp_path / "model_manifest.json"
+    manifest_file.write_text("{}")
+    model = SimpleNamespace(manifest=SimpleNamespace(classes=classes, input=spec,
+                                                      folder=tmp_path,
+                                                      onnx_file=lambda: tmp_path / "model.onnx"),
+                            model_revision="lane-test")
+    monkeypatch.setattr(mod.prelabel, "_open_model", lambda path, providers=None: (model, Session()))
+    out = tmp_path / "job"
+    assert mod.main(["draft", "--config", str(cfg), "--out", str(out)]) == 0
+    mask_path = out / "drafts" / "000000.png"
+    mask = cv2.imread(str(mask_path), cv2.IMREAD_UNCHANGED)
+    assert mask.dtype == np.uint8 and mask.shape == (24, 32)
+    assert set(np.unique(mask)) == {1, 255}
+    receipt = json.loads((out / "draft-receipt.json").read_text())
+    assert receipt["frames"][0]["source_video_sha256"] == row["source_video_sha256"]
+    assert receipt["frames"][0]["mask_sha256"] == digest(mask_path)
+    assert receipt["frames"][0]["transform"] == "nearest_original_size"
+    assert len(calls) == 1
+    assert mod.main(["draft", "--config", str(cfg), "--out", str(out)]) == 0
+    assert len(calls) == 1
+    mask_path.write_bytes(b"changed")
+    assert mod.main(["draft", "--config", str(cfg), "--out", str(out)]) == 1
+    assert len(calls) == 1
+    assert not (out / "READY").exists()
+
+
+def test_model_only_drivable_is_unlabelled_and_bad_logits_fail():
+    np = pytest.importorskip("numpy")
+    mod = job_module()
+    classes = (SimpleNamespace(index=0, role="background"),
+               SimpleNamespace(index=1, role="lane_marking"),
+               SimpleNamespace(index=2, role="drivable"))
+    logits = np.zeros((1, 3, 2, 2), np.float32)
+    logits[0, 2, 0, 0] = 10
+    logits[0, 1, 0, 1] = 10
+    mask = mod.draft_mask(logits, classes, (4, 6), 0.6)
+    assert mask.shape == (4, 6)
+    assert mask[0, 0] == 255 and mask[0, -1] == 1
+    assert mask[-1, 0] == 255
+    logits[0, 1, 0, 1] = np.nan
+    with pytest.raises(ValueError, match="logits"):
+        mod.draft_mask(logits, classes, (4, 6), 0.6)
