@@ -11,9 +11,10 @@ CORE driver hold (D-344) still applies. CALIBRATED is never produced (user decis
 2026-10-06).
 """
 import hashlib
-import itertools
 import json
 import math
+
+import numpy as np
 
 from .camera_extrinsic import FINE_HEIGHT_STEP_M, FINE_PITCH_STEP_DEG, FINE_ROLL_STEP_DEG
 
@@ -23,6 +24,12 @@ GAZEBO_DETECTOR_LATERAL_PX = 2.0
 #: The receiver extrapolates a boundary this far past its observed support
 #: (core_features.line_follow.lane_return_evidence.LaneReturnEvidence.MAX_EXTRAPOLATION_M).
 RECEIVER_EXTRAPOLATION_M = 0.3
+#: Roll levels sampled across +-its bound (odd, so 0 is one). The re-review's 41-201 level
+#: scan found the worst roll interior, at most 0.3 % above the corners-and-centre value.
+ROLL_LEVELS = 7
+#: Raise on the sampled worst for roll between levels: the 0.3 % gap above with 3 levels,
+#: times about seven for safety. Checked by the 21-level test truths.
+SAMPLING_MARGIN = 0.02
 
 
 def _real(value):
@@ -74,24 +81,25 @@ def _ray(h, pitch, x, y):
 
 
 def _floor(h, pitch, roll, a, b):
-    """The floor point a camera at (h, pitch, roll) sees along normalized ray (a, b), or None."""
-    a, b = a*math.cos(roll)+b*math.sin(roll), -a*math.sin(roll)+b*math.cos(roll)
-    denominator = math.sin(pitch)+b*math.cos(pitch)
-    if denominator <= 0:
-        return None
-    depth = h/denominator
-    return depth*(math.cos(pitch)-b*math.sin(pitch)), a*depth
+    """Floor points (x, y) a camera at (h, pitch, roll) sees along normalized rays (a, b); NaN above the horizon."""
+    a, b = a*np.cos(roll)+b*np.sin(roll), -a*np.sin(roll)+b*np.cos(roll)
+    denominator = np.sin(pitch)+b*np.cos(pitch)
+    depth = np.where(denominator > 0, h/np.where(denominator > 0, denominator, 1.), np.nan)
+    return depth*(np.cos(pitch)-b*np.sin(pitch)), a*depth
 
 
 def projection_uncertainty_m(ground, error, segments):
     """Largest lateral error of the boundaries ``segments`` over the x range the receiver uses.
 
     Each segment is the two read ends ((x, y), (x, y)) on the floor, x ahead of the lens.
-    The read ends are imaged with the assumed geometry, each moved by the detector's pixels,
-    and read back with every corner (and centre) of the pitch/height/roll bounds; the true
-    line through them is compared with the read one at both ends of the support widened by
-    RECEIVER_EXTRAPOLATION_M (lines differ linearly, so the ends hold the maximum). The
-    vertical difference is used, which is not smaller than the perpendicular one.
+    The read ends are imaged with the assumed geometry, each end's image column moved by
+    +-the detector's pixels (row error is not modelled: a column shift already moves a steep
+    line the most), and read back with pitch and height at -bound/0/+bound and roll at
+    ROLL_LEVELS levels across +-bound (the error is not monotone in roll: its worst case can
+    be interior). The true line through them is compared with the read one at both ends of
+    the support widened by RECEIVER_EXTRAPOLATION_M (lines differ linearly, so the ends hold
+    the maximum), as the vertical difference (not smaller than the perpendicular one), and
+    the worst is raised by SAMPLING_MARGIN for the roll between sampled levels.
     Not modelled: camera yaw (the receiver's own odometry-matched heading carries it, and
     D-47 found a residual of about -0.2 deg), lens distortion (the NOMINAL intrinsics are
     undistorted pinhole fits, RMS 1.08 px, inside the detector pixels) and fx error (fx is
@@ -103,22 +111,23 @@ def projection_uncertainty_m(ground, error, segments):
     h, th, f = ground.height_m, ground.pitch_rad, ground.focal_px
     if not segments:
         return px*(ground.max_range_m*math.cos(th)+h*math.sin(th))/f
+    sp, sh, sr, su1, su2 = (v.ravel() for v in np.meshgrid(
+        (-1, 0, 1), (-1, 0, 1), np.linspace(-1, 1, ROLL_LEVELS), (-1, 1), (-1, 1), indexing="ij"))
+    hs, pitches, rolls = h+sh*height_e, th+sp*pitch_e, sr*roll_e
     worst = 0.
     for ends in segments:
         (x1, y1), (x2, y2) = ends
         slope = (y2-y1)/(x2-x1)
-        rays = [_ray(h, th, x, y) for x, y in ends]
-        extent = (min(x1, x2)-RECEIVER_EXTRAPOLATION_M, max(x1, x2)+RECEIVER_EXTRAPOLATION_M)
-        for sp, sh, sr, su1, su2 in itertools.product((-1, 0, 1), (-1, 0, 1), (-1, 0, 1), (-1, 1), (-1, 1)):
-            true = [_floor(h+sh*height_e, th+sp*pitch_e, sr*roll_e, a+su*px/f, b)
-                    for (a, b), su in zip(rays, (su1, su2))]
-            if None in true or abs(true[1][0]-true[0][0]) < 1e-9:
-                return 1.0
-            (tx1, ty1), (tx2, ty2) = true
-            true_slope = (ty2-ty1)/(tx2-tx1)
-            for x in extent:
-                worst = max(worst, abs(y1+slope*(x-x1)-(ty1+true_slope*(x-tx1))))
-    return min(worst, 1.0)
+        (a1, b1), (a2, b2) = (_ray(h, th, x, y) for x, y in ends)
+        tx1, ty1 = _floor(hs, pitches, rolls, a1+su1*px/f, b1)
+        tx2, ty2 = _floor(hs, pitches, rolls, a2+su2*px/f, b2)
+        span = tx2-tx1
+        if not (np.all(np.isfinite(span)) and np.all(np.abs(span) > 1e-9)):
+            return 1.0
+        true_slope = (ty2-ty1)/span
+        for x in (min(x1, x2)-RECEIVER_EXTRAPOLATION_M, max(x1, x2)+RECEIVER_EXTRAPOLATION_M):
+            worst = max(worst, float(np.max(np.abs(y1+slope*(x-x1)-(ty1+true_slope*(x-tx1))))))
+    return min(worst*(1+SAMPLING_MARGIN), 1.0)
 
 
 def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bounds=None):

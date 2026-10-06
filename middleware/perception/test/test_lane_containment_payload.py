@@ -4,6 +4,7 @@ import math
 import re
 from pathlib import Path
 from types import SimpleNamespace
+import numpy as np
 import pytest
 import yaml
 from control.sensing.perception.camera_ground import GroundPlane
@@ -119,45 +120,56 @@ def test_receiver_extrapolation_is_mirrored():
     assert RECEIVER_EXTRAPOLATION_M == .3
 
 
-def _image(x, y, h, pitch, roll, f, cx, cy):
-    # The true camera images the floor point x ahead of the lens, y aside (reviewer check.py).
-    depth = x*math.cos(pitch)+h*math.sin(pitch)
-    down = -x*math.sin(pitch)+h*math.cos(pitch)
-    xr, yr = y*math.cos(roll)-down*math.sin(roll), y*math.sin(roll)+down*math.cos(roll)
-    return cx+f*xr/depth, cy+f*yr/depth
+def _truth(h, pitch, roll, a, b):
+    # Independent rotation-matrix camera (reviewer check.py): floor point along normalized ray (a, b).
+    fwd = np.array([math.cos(pitch), 0., -math.sin(pitch)])
+    right, down = np.array([0., 1., 0.]), np.array([-math.sin(pitch), 0., -math.cos(pitch)])
+    r, d = right*math.cos(roll)+down*math.sin(roll), -right*math.sin(roll)+down*math.cos(roll)
+    ray = fwd+np.outer(a, r)+np.outer(b, d)
+    t = np.where(ray[:, 2] < 0, h/np.maximum(-ray[:, 2], 1e-12), np.nan)
+    return ray[:, 0]*t, ray[:, 1]*t
 
 
-def _excess(profile, error, truths):
-    # Worst (true error - declared bound) over far ranges, boundary slopes and true geometries.
+def _excess(profile, error, rolls):
+    # Worst (true error - declared bound) over read boundaries and true geometries: pitch and height
+    # at their bounds, roll at every level in ``rolls`` (interior too), each end's column +-px.
+    pitch_e, height_e, _roll, px = error
+    h, th, f = profile["height_m"], profile["pitch_rad"], profile["fx"]
     g = plane(profile)
+    u1, u2 = (u.ravel() for u in np.meshgrid([-px/f, px/f], [-px/f, px/f]))
     worst = -1.
-    for far, slope, (dp, dh, roll) in itertools.product((.15, .2, .3, .4), (0., .2, .4), truths):
-        near = .12-PROFILE["x_offset_m"]
-        line = lambda x: .0925+slope*(x-near)  # noqa: E731
-        read = []
-        for x in (near, far):
-            col, row = _image(x, line(x), g.height_m+dh, g.pitch_rad+dp, roll, g.focal_px, g.principal_x, g.principal_y)
-            read.append((g.distance(row), g.lateral(col, row)))
-        (x1, y1), (x2, y2) = read
-        read_slope = (y2-y1)/(x2-x1)
-        error_m = max(abs(y1+read_slope*(x-x1)-line(x))
-                      for x in (x1-RECEIVER_EXTRAPOLATION_M, x2+RECEIVER_EXTRAPOLATION_M))
-        worst = max(worst, error_m-projection_uncertainty_m(g, error, [tuple(read)]))
+    # The last two pairs/slopes hold the re-review's interior-roll worst cases.
+    for (x1, x2), s, y0 in itertools.product(((.12, .2), (.2, .3), (.12, .45), (.4, .45), (.09, .29), (.13, .43)),
+                                             (-.4, 0., .2, .4, .5), (-.12, 0., .06, .12)):
+        ends = ((x1, y0), (x2, y0+s*(x2-x1)))
+        stated = projection_uncertainty_m(g, error, [ends])
+        rays = []
+        for x, y in ends:
+            depth = x*math.cos(th)+h*math.sin(th)
+            rays.append((y/depth, (h*math.cos(th)-x*math.sin(th))/depth))
+        for dp, dh, roll in itertools.product((-pitch_e, pitch_e), (-height_e, height_e), rolls):
+            tx1, ty1 = _truth(h+dh, th+dp, roll, rays[0][0]+u1, np.full(4, rays[0][1]))
+            tx2, ty2 = _truth(h+dh, th+dp, roll, rays[1][0]+u2, np.full(4, rays[1][1]))
+            if np.isnan(tx1).any() or np.isnan(tx2).any():
+                assert stated == 1.0
+                continue
+            ts = (ty2-ty1)/(tx2-tx1)
+            true = max(np.abs(y0+s*(x-x1)-(ty1+ts*(x-tx1))).max()
+                       for x in (x1-RECEIVER_EXTRAPOLATION_M, x2+RECEIVER_EXTRAPOLATION_M))
+            worst = max(worst, min(true, 1.0)-stated)
     return worst
 
 
 def test_bound_covers_the_true_projection_error_for_the_nominal_profile():
-    p, h, r, _px = error = geometry_error(PROFILE, None)
-    truths = [(sp*p, sh*h, sr*r) for sp in (-1, 0, 1) for sh in (-1, 0, 1) for sr in (-1, 0, 1)]
-    assert _excess(PROFILE, error, truths) <= 0
+    error = geometry_error(PROFILE, None)
+    assert _excess(PROFILE, error, np.linspace(-error[2], error[2], 21)) <= 1e-12
 
 
 def test_bound_covers_the_true_projection_error_for_a_record():
+    # True roll anywhere in the record's -1.5 +-0.5 deg band, either sign convention.
     error = geometry_error(RECORD, INTERVALS)
-    p, h = math.radians(BANDS["pitch_deg"]), BANDS["height_m"]
-    rolls = [sign*math.radians(-1.5+sr*BANDS["roll_deg"]) for sign in (-1, 1) for sr in (-1, 0, 1)]
-    truths = [(sp*p, sh*h, roll) for sp in (-1, 1) for sh in (-1, 1) for roll in rolls]
-    assert _excess(RECORD, error, truths) <= 0
+    band = np.radians(np.linspace(-1.5-BANDS["roll_deg"], -1.5+BANDS["roll_deg"], 21))
+    assert _excess(RECORD, error, np.concatenate([band, -band])) <= 1e-12
 
 
 def test_a_ray_that_may_clear_the_true_horizon_is_excessive_not_bounded():
