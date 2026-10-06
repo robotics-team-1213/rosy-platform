@@ -27,5 +27,8 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x):
             observed_x_max_m=max(float(first[0]), float(last[0]))))
     # No bound on real projection error has been established by the nominal rig.
     # The receiver must not silently replace this null with a safe tolerance.
+    # GAZEBO (allow_simulation_ground only): the sim camera's height, pitch and intrinsics are
+    # exact, so the error left is the edge detector's, taken as 2 px lateral at the farthest range.
+    uncertainty = 2.0*float(ground.max_range_m)/float(ground.focal_px) if source == "GAZEBO" else None
     return dict(stamp=float(stamp), geometry_id=identity, ground_source=source,
-                uncertainty_m=None, boundaries=boundaries)
+                uncertainty_m=uncertainty, boundaries=boundaries)
