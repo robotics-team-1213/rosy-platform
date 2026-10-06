@@ -3,8 +3,8 @@
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {
-  ACTION_LABEL, PLACE_KINDS, PLACE_KIND_LABEL, arrowMarks, editEdge, editPlace, fitView,
-  planPolylines, tripErrorText,
+  PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
+  planIsCurrent, planPolylines, siteMapErrorText, tripErrorText,
 } from '/console/assets/site-map-model.js';
 
 const $ = id => document.getElementById(id);
@@ -55,7 +55,7 @@ function render() {
         transform: `translate(${px} ${py}) rotate(${-mark.angle * 180 / Math.PI})`}, svg);
     }
   }
-  if ($('map-source').value === 'active' && state.plan) {
+  if ($('map-source').value === 'active' && planIsCurrent(state.plan, state.active)) {
     for (const points of planPolylines(map, state.plan)) el('polyline', {class: 'plan', points: line(points)}, svg);
   }
   for (const place of map.places) {
@@ -122,7 +122,7 @@ async function load() {
 }
 
 async function guarded(work) {
-  try { await work(); } catch (error) { notice(error.message || String(error)); }
+  try { await work(); } catch (error) { notice(siteMapErrorText(error)); }
   syncButtons();
 }
 
@@ -207,11 +207,17 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
     return;
   }
   const plan = state.plan;
+  if (!planIsCurrent(plan, state.active)) {
+    state.plan = null;
+    await load();
+    status('trip-summary', `지도가 v${plan.map_version}로 바뀌었습니다 · 다시 계산하세요`, 'error');
+    return;
+  }
   status('trip-summary', `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s`
     + ` · 지도 v${plan.map_version} · 실행하지 않음`, 'ready');
-  $('trip-actions').replaceChildren(...plan.actions.map(item => {
+  $('trip-actions').replaceChildren(...actionRows(plan, state.active.map).map(text => {
     const row = document.createElement('li');
-    row.textContent = `${item.place_id || '찍은 좌표'} · ${ACTION_LABEL[item.action] || item.action}`;
+    row.textContent = text;
     return row;
   }));
   $('map-source').value = 'active';

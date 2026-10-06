@@ -14,7 +14,32 @@ export const TRIP_ERROR_LABEL = {
   TRIP_ARRIVE_YAW_UNREACHABLE: '그 방향으로 도착하는 차로가 없습니다',
   TRIP_NO_ACTIVE_MAP: '활성 지도가 없습니다',
   TRIP_POSE_UNTRUSTED: '로봇 위치가 LOCALIZED가 아닙니다',
+  TRIP_PLAN_FAILED: '이 지도에서 경로 계산이 실패했습니다 · 관리자에게 알리세요',
+  UNKNOWN_ROBOT: '등록되지 않은 로봇입니다',
 };
+export const SITE_MAP_ERROR_LABEL = {
+  SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
+  SITE_MAP_NO_DRAFT: '저장된 초안이 없습니다',
+  SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다 · 다시 읽으세요',
+  SITE_MAP_ROUTE_ACTIVE: '차선 경로가 진행 중입니다 · 끝난 뒤 활성화하세요',
+  SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
+  SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
+};
+
+export function siteMapErrorText(error) {
+  return SITE_MAP_ERROR_LABEL[error.code] || error.message || String(error);
+}
+
+/** Action rows with the address name; a plan made on another map version is stale. */
+export function actionRows(plan, map) {
+  const names = new Map((map?.places || []).map(place => [place.id, place.name]));
+  return plan.actions.map(item => `${item.place_id ? (names.get(item.place_id) || item.place_id) : '찍은 좌표'}`
+    + ` · ${ACTION_LABEL[item.action] || item.action}`);
+}
+
+export function planIsCurrent(plan, active) {
+  return Boolean(plan && active && plan.map_version === active.version);
+}
 
 export function tripErrorText(code, detail = {}) {
   const base = TRIP_ERROR_LABEL[code] || `경로 계획 거절 (${code || '알 수 없음'})`;

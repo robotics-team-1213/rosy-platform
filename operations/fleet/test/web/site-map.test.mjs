@@ -47,3 +47,13 @@ test('trip errors read in Korean with the leg and the unblock hint', () => {
   assert.match(tripErrorText('TRIP_NO_ROUTE', {segment: 1, unblock_would_help: true}), /2번째 구간.*막은 차로/);
   assert.match(tripErrorText('NEW_CODE'), /NEW_CODE/);
 });
+
+test('actions read the address names and stale plans are refused', async () => {
+  const {actionRows, planIsCurrent, siteMapErrorText} = await import('../../fleet/server/web/site-map-model.js');
+  const map = {places: [{id: 'B', name: '충전'}]};
+  const plan = {map_version: 2, actions: [{place_id: 'B', action: 'left'}, {place_id: null, action: 'stop'}]};
+  assert.deepEqual(actionRows(plan, map), ['충전 · 좌회전', '찍은 좌표 · 정지']);
+  assert.equal(planIsCurrent(plan, {version: 2}), true);
+  assert.equal(planIsCurrent(plan, {version: 3}), false);
+  assert.match(siteMapErrorText({code: 'SITE_MAP_ROUTE_ACTIVE'}), /진행 중/);
+});
