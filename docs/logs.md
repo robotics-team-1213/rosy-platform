@@ -6575,6 +6575,12 @@ osy-d395-s1d\`.
 - 증거: 관련 호스트 pytest(`operations/fleet/test/test_development_session.py`, `test_cli.py`, 버전 고정 시험, `test/test_site_development_connection.py`)와 콘솔 브라우저 시험. 관제 PC에서 다른 PC 브라우저로 접속하는 FIELD 확인은 아직 하지 않았다.
 - gate 변화: SOURCE/LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
 
+
+## 2026-10-06 · uncommitted · docs: D-484 ADR과 실행 계획, API Ref v1.109
+
+- 변경: ADR D-484(필드 경계 자동 캘리브레이션)와 로그 행, 실행 계획 문서 추가. adr_gaps에 D-483(브랜치 `feat/pilot-lcd-approval-code` 소유) 등록. API Ref v1.109: sighting payload 선택 필드·미리보기 mode auto·site-map source 노출·헤더 값 문서화.
+- 증거: `rosy_harness.py lint` 0 error(ADR 행·본문 일치, 갭 선언). app.py 버전 표기 v1.109 동기 갱신(정렬 시험 대상).
+- gate 변화: 없음.
 ## 2026-10-06 · uncommitted · uiux(site): 배포 콘솔의 미인증 화면과 카메라 프레임
 
 - 변경: 기존 사이트 PC의 배포 `/console`을 읽기 전용으로 세 폭에서 렌더하고, 토큰이 없는 화면의 잠긴 조작과 관제 카메라 프레임 증가를 UI/UX 회차에 기록했다.
@@ -6609,6 +6615,7 @@ osy-d395-s1d\`.
 
 - 변경: 학습 검수 네 경로의 503→재시도 브라우저 검사에 320px을 더하고 좁은 폭의 재시도 버튼 너비를 확인했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-unavailable-current/` 320/390px 8장과 `logs/merge-20261006/learning-unavailable-{current,320}.txt`. 각 폭 브라우저 4 passed, `known_failures.py` 0 NEW; 네 320px 화면 원본을 육안 확인했다.
+- gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.
 - gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.
 
 ## 2026-10-07 · uncommitted · uiux(fleet): Cell 빈 평면도 공백 제거

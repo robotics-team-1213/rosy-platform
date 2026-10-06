@@ -20,6 +20,9 @@ _MAX_TTL_S = 120
 class PreviewRectification:
     """Bounded, serializable preview-only lens and plane settings."""
 
+    #: D-484: "manual" corners come from this lease; "auto" asks Vision to use the
+    #: field-boundary calibration's accepted quad instead (lens fields still apply).
+    mode: str = "manual"
     fx: float = 1.0
     fy: float = 1.0
     cx: float = 0.5
@@ -35,6 +38,8 @@ class PreviewRectification:
     output_aspect: float = 0.0
 
     def __post_init__(self) -> None:
+        if self.mode not in ("manual", "auto"):
+            raise ValueError("rectification mode must be manual or auto")
         for name in ("fx", "fy"):
             _bounded(getattr(self, name), name, 0.25, 4.0)
         for name in ("cx", "cy"):
@@ -66,7 +71,7 @@ class PreviewRectification:
     def from_mapping(cls, raw: Mapping[str, object]) -> "PreviewRectification":
         if not isinstance(raw, Mapping):
             raise ValueError("rectification settings must be an object")
-        allowed = {"fx", "fy", "cx", "cy", "k1", "k2", "p1", "p2", "k3",
+        allowed = {"mode", "fx", "fy", "cx", "cy", "k1", "k2", "p1", "p2", "k3",
                    "corners", "output_aspect"}
         if raw.keys() - allowed:
             raise ValueError("rectification settings contain unknown fields")
@@ -79,14 +84,15 @@ class PreviewRectification:
         return cls(**values)
 
     def as_dict(self) -> dict:
-        return {"fx": self.fx, "fy": self.fy, "cx": self.cx, "cy": self.cy,
+        return {"mode": self.mode, "fx": self.fx, "fy": self.fy, "cx": self.cx, "cy": self.cy,
                 "k1": self.k1, "k2": self.k2, "p1": self.p1, "p2": self.p2,
                 "k3": self.k3, "corners": [list(point) for point in self.corners],
                 "output_aspect": self.output_aspect}
 
     @property
     def is_identity(self) -> bool:
-        return (self.fx == 1 and self.fy == 1 and self.cx == 0.5 and self.cy == 0.5
+        return (self.mode == "manual"
+                and self.fx == 1 and self.fy == 1 and self.cx == 0.5 and self.cy == 0.5
                 and all(getattr(self, name) == 0 for name in ("k1", "k2", "p1", "p2", "k3"))
                 and self.corners == ((0, 0), (1, 0), (1, 1), (0, 1))
                 and self.output_aspect == 0)

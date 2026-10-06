@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 from core_common.protocol.sightings import SiteSightingPayload
-from games.field.homography import Point, fit
+from games.field.homography import Homography, Point, fit
 
 MarkerQuad = tuple[Point, Point, Point, Point]
 
@@ -20,23 +20,34 @@ class CameraMap:
     map_id: str
     calibration_revision: str
     processor_revision: str
-    corner_marker_ids: tuple[int, int, int, int]
+    corner_marker_ids: tuple[int, int, int, int] | None
     corner_world_m: tuple[Point, Point, Point, Point]
     robot_markers: Mapping[str, int]
     heading_edge: tuple[int, int] = (0, 1)
+    #: D-484: where this frame's image-to-map homography is measured from.
+    #: "corner_markers" (default) needs four ArUco corners per frame;
+    #: "field_boundary" gets it from the accepted field quad + orientation.
+    calibration_source: str = "corner_markers"
 
     def __post_init__(self) -> None:
         if not self.source_id.strip() or not self.map_id.strip():
             raise ValueError("source and map identifiers are required")
         if not self.calibration_revision.strip() or not self.processor_revision.strip():
             raise ValueError("calibration and processor revisions are required")
-        if len(set(self.corner_marker_ids)) != 4 or any(type(v) is not int or v < 0
-                                                       for v in self.corner_marker_ids):
-            raise ValueError("four distinct non-negative corner marker ids are required")
+        if self.calibration_source not in ("corner_markers", "field_boundary"):
+            raise ValueError("calibration source must be corner_markers or field_boundary")
+        if self.calibration_source == "field_boundary" and self.corner_marker_ids is not None:
+            raise ValueError("a field_boundary source has no corner marker ids")
+        if self.calibration_source == "corner_markers":
+            if self.corner_marker_ids is None:
+                raise ValueError("four corner marker ids are required for corner_markers")
+            if (len(set(self.corner_marker_ids)) != 4
+                    or any(type(v) is not int or v < 0 for v in self.corner_marker_ids)):
+                raise ValueError("four distinct non-negative corner marker ids are required")
+            if set(self.corner_marker_ids).intersection(self.robot_markers.values()):
+                raise ValueError("robot marker ids cannot overlap calibration corners")
         if len(set(self.robot_markers.values())) != len(self.robot_markers):
             raise ValueError("each robot must have a unique marker id")
-        if set(self.corner_marker_ids).intersection(self.robot_markers.values()):
-            raise ValueError("robot marker ids cannot overlap calibration corners")
         if len(self.corner_world_m) != 4 or len(set(self.corner_world_m)) != 4:
             raise ValueError("four distinct map coordinates are required")
         if any(len(point) != 2 or any(not math.isfinite(value) for value in point)
@@ -56,7 +67,8 @@ class CameraMap:
 def marker_homography(camera: CameraMap, markers: Mapping[int, Sequence[Point]]):
     """Image-to-map homography from the four corner markers, or None unless all four are in view."""
 
-    if any(marker_id not in markers for marker_id in camera.corner_marker_ids):
+    if camera.corner_marker_ids is None or any(
+            marker_id not in markers for marker_id in camera.corner_marker_ids):
         return None
     try:
         corner_centers = tuple(_center(markers[marker_id]) for marker_id in camera.corner_marker_ids)
@@ -72,13 +84,23 @@ def project_frame(
     seq: int,
     captured_at: float,
     markers: Mapping[int, Sequence[Point]],
+    homography: Homography | None = None,
 ) -> tuple[SiteSightingPayload, ...]:
-    """Return display-only poses when every calibration corner is in this frame."""
+    """Return display-only poses for every configured robot marker in this frame.
+
+    ``corner_markers`` sources re-measure the homography from the frame's four
+    corner markers. ``field_boundary`` sources (D-484) use the calibrator's
+    accepted quad homography passed as ``homography``; None means this frame has
+    no measured calibration and no sightings.
+    """
 
     if source_id != camera.source_id:
         return ()
-    homography = marker_homography(camera, markers)
-    if homography is None:
+    if camera.calibration_source == "field_boundary":
+        measured = homography
+    else:
+        measured = marker_homography(camera, markers)
+    if measured is None:
         return ()
 
     sightings = []
@@ -93,8 +115,8 @@ def project_frame(
                 (quad[edge_a][0] + quad[edge_b][0]) / 2,
                 (quad[edge_a][1] + quad[edge_b][1]) / 2,
             )
-            x, y = homography.apply(*center)
-            yaw = homography.yaw(center, heading_tip)
+            x, y = measured.apply(*center)
+            yaw = measured.yaw(center, heading_tip)
         except (TypeError, ValueError, ZeroDivisionError):
             continue
         if not all(math.isfinite(value) for value in (x, y, yaw)):
@@ -111,6 +133,7 @@ def project_frame(
             processor_revision=camera.processor_revision,
             quality=None,
             corner_marker_ids=camera.corner_marker_ids,
+            calibration_source=camera.calibration_source,
         ))
     return tuple(sightings)
 
