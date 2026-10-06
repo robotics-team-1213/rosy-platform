@@ -109,7 +109,7 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        36_889,
+        37_134,
         "split: re-judged at 36645 on 2026-10-06 after integrated map camera display, "
         "lamp identity routing, and transport evidence added 201 lines; the camera binding "
         "moved from console.js into its map view to keep the web file below 800 lines. "
@@ -288,7 +288,8 @@ SIZE_VERDICTS = {
         "adds 5 and console wiring adds 2, while shared app/console composition removes 39. These "
         "are existing focused safety owners, not a duplicate command path. Independently counted "
         "both parents and the union; the B2 server grouping remains open and +150 is unchanged. "
-        "Re-judged 2026-10-06 at 36889 after D-473 added the development-session connection gate to the Fleet CLI and the console auto-session bootstrap (244 lines above 36645, all in cli.py and console.js, see their verdicts). No new command or motion owner; the B2 server/UI split and the +150 allowance stay unchanged",
+        "Re-judged 2026-10-06 at 36889 after D-473 added the development-session connection gate to the Fleet CLI and the console auto-session bootstrap (244 lines above 36645, all in cli.py and console.js, see their verdicts). No new command or motion owner; the B2 server/UI split and the +150 allowance stay unchanged. "
+        "Re-judged 2026-10-07 at 37134 after the 2026-10-06 UI quality pass (docs/validation/uiux-surfaces-2026-10-06/README.md) added 245 web lines above 36889, all in existing page owners: cell.js 138 and cell.css 21 (Cell states, inline failures, emergency stop and cancellation confirmation), console.js 33, install.js 18, formation.js 12, styles.css 12, html 9, roster.js 2. No Python, transport, command or motion owner changed; the B2 server/UI split (Task 9 of docs/plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md moves these assets to ui/console) and the +150 allowance stay unchanged",
     ),
     "fleet/fleet/cli.py": (
         608,
@@ -297,6 +298,14 @@ SIZE_VERDICTS = {
     "fleet/fleet/server/web/console.js": (
         832,
         "accept: D-473 added the development-session auto-session bootstrap to the console page (measured 832 against the 800 web ceiling). It belongs to the existing console page-scope owner and adds no second transport; follow-up split: move the auth/session bootstrap out of console.js into its own web asset with installed-resource parity checks. Budgets and allowance unchanged",
+    ),
+    "fleet/fleet/server/web/styles.css": (
+        809,
+        "split: the shared operate/install console stylesheet crossed the 800 web ceiling (measured 809) in the 2026-10-06 UI quality pass (emergency-stop and cancel feedback placement, phone topbar, formation actions; docs/validation/uiux-surfaces-2026-10-06/README.md). Splitting it now would change the stylesheet lists that index.html, install.html, static_routes.py and the grammar/palette tests pin, so group the rules by surface (operate, install, shared) when Task 9 of docs/plans/2026-10-03-app-ownership-shared-transport-and-layout-migration.md moves the console assets to ui/console with installed-resource parity checks. Owner fleet console. Web ceiling and growth allowance remain unchanged",
+    ),
+    "ui/face/emotion/info_screen.py": (
+        602,
+        "accept: the LCD info screen renderer reached 602 lines when the driving battery percentage took the existing critical-alarm treatment for contrast (_draw_alarm, 2026-10-06 UI quality pass). It stays one Pillow rendering owner for the face device, covered by test_info_screen*.py. Follow-up split: move the boot screen and AP QR rendering (boot_lines, ap_qr, _draw_qr, render_boot) into their own module when this file next grows. Budgets and allowance unchanged",
     ),
     "fleet/fleet/server/cell_job_store.py": (
         824,
