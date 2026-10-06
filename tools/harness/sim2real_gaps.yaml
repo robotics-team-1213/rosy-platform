@@ -1,6 +1,6 @@
 schema: rosy.sim2real-gaps.v1
 
-# sim2real gap registry (ADR on the tier split: M sim modelling, R real-drive
+# sim2real gap registry (D-480: M sim modelling, R real-drive
 # replay, D device runtime support, infra run environment).
 # `rosy_harness.py lint` checks every row; `generate` writes docs/reference/sim2real-gaps.md.
 #   tier: list, first = where the gap is handled now, later = where it moves.

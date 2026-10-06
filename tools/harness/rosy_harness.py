@@ -121,7 +121,7 @@ KNOWN_LEGACY_HEADINGS = frozenset({
     "## 2026-10-01 - D-392 P3 closed model-tool catalog",
 })
 
-# sim2real gap registry (tools/harness/sim2real_gaps.yaml).
+# sim2real gap registry (tools/harness/sim2real_gaps.yaml, D-480).
 SIM2REAL_REQUIRED = ("id", "gap", "evidence", "tier", "owner", "status", "next")
 SIM2REAL_TIERS = ("M", "R", "D", "infra")
 SIM2REAL_STATUSES = ("OPEN", "IN-PROGRESS", "CLOSED", "HOLD")
@@ -588,7 +588,7 @@ def render_sim2real(registry: dict) -> str:
         "# sim2real gap registry",
         "",
         "Tier: M 시뮬 모델링, R 실주행 재생, D 장치 런타임 지원, infra 실행 환경. "
-        "첫 tier가 지금 자리이고 뒤 tier는 옮겨 갈 자리다. 규칙은 `tools/harness/sim2real_gaps.yaml` 머리말과 `rosy_harness.py lint`가 정한다.",
+        "첫 tier가 지금 자리이고 뒤 tier는 옮겨 갈 자리다. 규칙은 D-480 결정 7과 `rosy_harness.py lint`가 정한다.",
         "",
         "| id | gap | evidence | tier | owner | status | next |",
         "|---|---|---|---|---|---|---|",
