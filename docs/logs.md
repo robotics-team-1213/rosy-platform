@@ -6421,3 +6421,9 @@ osy-d395-s1d\`.
 - 변경: Pilot 도구 판을 연 채 전화 폭에서 넓은 폭으로 바꾸면 판·세부 내용을 닫고 설정을 현재 폭의 자리로 옮긴다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320→390→320 브라우저 1 passed, `known_failures.py` 0 NEW.
 - gate 변화: Pilot LOCAL G2 부분 근거 추가. 실기 전화·운전자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux: 현재 브랜치 D-153 G1 재실행
+
+- 변경: 최근 Pilot·게임·로봇 화면 변경을 포함한 제품 코드 `d04f764c4`에서 D-153 지정 팔레트·토큰·스타일가이드·문법·CORE 증거 시험을 다시 실행해 회차 근거를 갱신했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 실행 기록. 시각 계약 74 passed, CORE 증거 7 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: G1 LOCAL 재확인만. 선언 상태·뷰포트 G2와 실제 사용자 G3, 제품 전체는 HOLD다.
