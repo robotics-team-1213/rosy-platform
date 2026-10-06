@@ -555,3 +555,14 @@ def test_refused_back_and_retry_answer_carries_the_judged_scan():
     assert (answered["trail_m"], answered["trail_yaw_deg"], answered["trail_age_s"],
             answered["rear_blind_m"]) == (0.15, 14.6, 20.1, 0.09)
     assert answered["principal_ref"] == "a1b2c3d4e5f6" and "token_id" not in answered
+
+
+def test_repeated_require_operator_asks_once_per_stuck():
+    # D-468 lane return calls this every tick while fleet_required; one ask per opening.
+    machine, bus = _machine()
+    for i in range(20):
+        machine.require_operator(_inp(i * 0.05, cause="lane_lost"))
+    assert len(bus.named("nav.line_stuck_opened")) == 1
+    asked = bus.named("nav.line_stuck_asked")
+    assert [a["reason"] for a in asked] == ["opened", "local_candidates_exhausted"]
+    assert len({a["stuck_id"] for a in asked}) == 1

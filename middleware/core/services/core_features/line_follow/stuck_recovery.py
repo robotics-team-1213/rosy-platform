@@ -225,6 +225,8 @@ class StuckRecovery:
             if inp.cause is None or inp.calibration_active:
                 return
             self._open(inp)
+        if self._phase == WAITING_CONSOLE:
+            return  # already escalated: called every tick, ask once per stuck opening
         self._console_only("local_candidates_exhausted", inp.now)
 
     # ---- console ----------------------------------------------------------------
