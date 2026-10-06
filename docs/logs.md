@@ -6180,3 +6180,9 @@ osy-d395-s1d\`.
 - 변경: Fleet→CORE→호스트→rosy-face의 단기 LED 식별 요청과 Rosy Cam 최신 원본 프레임의 현장지도 표시를 구현했다. 색/영상만으로 robot ID나 주행 좌표를 확정하지 않는다.
 - 증거: 호스트 pytest 274 passed/3 skipped, 웹 Node 135 passed. 장치 설치·현장 영상 식별은 미확인.
 - gate 변화: SOURCE/LOCAL 코드 검증. DEVICE/FIELD 수용은 아니다.
+
+## 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
+
+- 변경: README 「같이 하는 깃」(실험실 PC 경로 포함)을 `docs/reference/shared-checkout.md`로 옮기고 README에 배지·시스템 구성 다이어그램·구성 표·시작하기 표·분류별 문서 지도를 넣었다. 팀 가이드(첫날·작업 흐름·공유 범위)와 개발 가이드(시험 단계)에 mermaid 다이어그램. 참조 갱신: 루트 AGENTS, rosy-land-on-main 스킬, `test_readme_agent_start.py`.
+- 증거: affected 단계, 문서 링크 검사.
+- gate 변화: 없음.

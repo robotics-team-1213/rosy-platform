@@ -1,14 +1,16 @@
-"""README and AGENTS.md both record the shared-checkout procedure.
+"""The shared-checkout doc and AGENTS.md both record the shared-checkout procedure.
 
 A fresh session that opens only this repository must be able to start from
-either file. README carries the start order. AGENTS.md carries that order
-plus the commands.
+either file. docs/reference/shared-checkout.md (moved out of README on
+2026-10-06 so the GitHub landing page carries no lab-PC paths) carries the
+start order; README links it. AGENTS.md carries that order plus the commands.
 """
 
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
+SHARED = ROOT / "docs" / "reference" / "shared-checkout.md"
 AGENTS = ROOT / "AGENTS.md"
 
 WORKTREE = "git worktree add --relative-paths .worktrees/<짧은이름> -b <type>/<topic> main"
@@ -16,9 +18,7 @@ WORKTREE = "git worktree add --relative-paths .worktrees/<짧은이름> -b <type
 
 def _readme_section(text: str) -> str:
     start = text.index("## 같이 하는 깃")
-    end = text.index("## 핵심 계약")
-    assert start < end
-    return text[start:end]
+    return text[start:]
 
 
 def _agents_section(text: str) -> str:
@@ -29,7 +29,8 @@ def _agents_section(text: str) -> str:
 
 
 def test_readme_publishes_the_shared_checkout_start_before_the_product_contract():
-    section = _readme_section(README.read_text(encoding="utf-8"))
+    section = _readme_section(SHARED.read_text(encoding="utf-8"))
+    assert "docs/reference/shared-checkout.md" in README.read_text(encoding="utf-8")
 
     assert "공개 기준" in section
     assert WORKTREE in section
