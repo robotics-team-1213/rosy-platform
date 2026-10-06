@@ -94,11 +94,22 @@ def lane_masks(proc, frames, n, need, torch, Image):
     return lane
 
 
+def segment_dir(frames, k, every, n):
+    """A folder holding only frames k..k+every-1 renumbered from 0. The tracker loads
+    every frame of its folder at 1008 px float (~12 MB each): the whole 642-frame
+    video (~7.8 GB) hung the 15 GB model PC, one segment is ~180 MB."""
+    seg = Path(frames).parent / "segment"
+    shutil.rmtree(seg, ignore_errors=True)
+    seg.mkdir()
+    for j, fi in enumerate(range(k, min(n, k + every))):
+        shutil.copy(Path(frames) / f"{fi:05d}.jpg", seg / f"{j:05d}.jpg")
+    return seg
+
+
 def track_carpet(tracker, frames, rgb, lane, keypoints, every, torch):
-    """Per-frame carpet masks; reseed at every keyframe. Returns (carpet, seeds report)."""
+    """Per-frame carpet masks; a fresh tracker state per keyframe segment. Returns (carpet, seeds)."""
     n, h, w = lane.shape
     carpet = np.zeros_like(lane)
-    state = tracker.init_state(video_path=str(frames), offload_video_to_cpu=True)
     seeds = []
     for k in range(0, n, every):
         bright = rd.bright_mask(rd.luminance(rgb[k]))
@@ -107,17 +118,20 @@ def track_carpet(tracker, frames, rgb, lane, keypoints, every, torch):
         if foot:
             pos = [foot] + pos
         seeds.append({"frame": k, "qwen": len(keypoints.get(k, [])), "kept": len(pos), "footprint": foot is not None})
-        tracker.clear_all_points_in_video(state)
         if not pos:
             continue
+        seg = segment_dir(frames, k, every, n)
+        state = tracker.init_state(video_path=str(seg), offload_video_to_cpu=True)
         tracker.add_new_points_or_box(
-            inference_state=state, frame_idx=k, obj_id=1,
+            inference_state=state, frame_idx=0, obj_id=1,
             points=torch.tensor([[x / w, y / h] for x, y in pos], dtype=torch.float32),
             labels=torch.ones(len(pos), dtype=torch.int32))
-        for fi, _, _, masks, _ in tracker.propagate_in_video(
-                state, start_frame_idx=k, max_frame_num_to_track=every - 1, reverse=False, propagate_preflight=True):
-            if fi < n:
-                carpet[fi] = _np(masks[0, 0] > 0)
+        for j, _, _, masks, _ in tracker.propagate_in_video(
+                state, start_frame_idx=0, max_frame_num_to_track=every - 1, reverse=False, propagate_preflight=True):
+            if k + j < n:
+                carpet[k + j] = _np(masks[0, 0] > 0)
+        del state
+        shutil.rmtree(seg)
     return carpet, seeds
 
 
