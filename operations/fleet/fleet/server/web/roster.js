@@ -345,7 +345,10 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/identify`, {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ color }),
         });
-        log(`${robot.robot_id} ${color === "blue" ? "파랑" : "주황"} LED 점멸 요청 · 현장 영상 확인 필요`, "info");
+        // The robot face says CALL <id> for the same window. The map chip names who was called.
+        view.call = { robot_id: robot.robot_id, until: Date.now() + 6000 };
+        render();
+        log(`${robot.robot_id} 호출 · ${color === "blue" ? "파랑" : "주황"} LED · 얼굴에 이름 표시`, "info");
       } catch (error) { log(`${robot.robot_id} LED 시험 거부 · ${error.message}`, "bad"); }
     }));
     actions.append(aim, cancel, identify);

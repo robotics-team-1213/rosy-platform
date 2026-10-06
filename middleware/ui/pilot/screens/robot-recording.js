@@ -8,7 +8,7 @@ import {createVisionPreview} from "../vision.js";
 import {createCameraCapture, saveCameraFile} from "/common/evidence.js";
 import {api, apiBlob} from "../client.js";
 import {el, actionIcon} from "./drive-view.js";
-import {RECORDING_POLL_MS, errorText, recordingView, sheetNotice, sheetRows} from "../recording.js";
+import {RECORDING_POLL_MS, continueRecording, errorText, recordingView, sheetNotice, sheetRows} from "../recording.js";
 
 const NOTICE_POLLS = 5;            // 거부 사유를 HUD 칩에 남겨 두는 폴링 횟수(약 5 s)
 const REQUEST_TIMEOUT_MS = 2000;   // 폴링·시작·정지·목록 한 번의 시한
@@ -34,6 +34,8 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
   let disposed = false;
   let notice = "";
   let noticePolls = 0;
+  let wanted = false;         // 이 기기가 켜고 아직 끄지 않았다 — 10분 상한 뒤 다음 구간으로 잇는다
+  let segment = 1;
   let sheet = null;
   let stopSheetRefresh = null;
   let refreshing = false;
@@ -59,7 +61,8 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     toggle.setAttribute("aria-label", view.ariaLabel);
     const actualMode = active?.preview_mode;
     const format = actualMode === "annotated" ? "원본 + 모델 표시본 · 결과는 확인용" : actualMode === "raw" ? "원본" : "저장 형식 확인 대기";
-    const text = notice || (view.recording ? `${view.detail} · ${format}` : view.detail);
+    const part = view.recording && segment > 1 ? ` · ${segment}번째 구간` : "";
+    const text = notice || (view.recording ? `${view.detail} · ${format}${part}` : view.detail);
     detail.textContent = text;
     detail.hidden = !text;
     detail.dataset.state = notice ? "refused" : (active?.state ?? "offline");
@@ -75,6 +78,12 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     active = response?.status === 200 ? (response.body?.active ?? null) : null;
     annotatedReady = response?.body?.preview_modes?.includes("annotated") === true;
     if (noticePolls > 0 && --noticePolls === 0) notice = "";
+    if (continueRecording(wanted, active)) {
+      segment += 1;
+      press(false, `10분 구간이 끝나 ${segment}번째 녹화로 이어 갑니다`);
+      return;
+    }
+    if (active?.state === "idle" || active?.state === "error") { wanted = false; segment = 1; }
     render();
   }
 
@@ -90,22 +99,27 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
       notice = "";
       noticePolls = 0;
     } else {
+      if (!stopping) wanted = false;
       notice = response ? errorText(response.body?.error?.code, stopping ? "stop" : "start") : "연결 없음";
       noticePolls = NOTICE_POLLS;
     }
   }
 
-  toggle.addEventListener("click", () => {
+  function press(stopping, message = "") {
     if (pending) return;
-    pending = send(recordingView(active).recording).finally(() => {
+    wanted = !stopping;
+    pending = send(stopping).finally(() => {
       pending = null;
+      if (message && !notice) { notice = message; noticePolls = NOTICE_POLLS; }
       if (!disposed) {
         render();
         poll();
       }
     });
     render();
-  });
+  }
+
+  toggle.addEventListener("click", () => press(recordingView(active).recording));
 
   // --- "녹화본" 시트 ---------------------------------------------------------
   function placeSheet() {
@@ -276,6 +290,7 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     dispose() {
       download?.controller.abort();
       disposed = true;
+      wanted = false;
       stopPolling();
       closeSheet();
       modeLabel.remove();

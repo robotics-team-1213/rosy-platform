@@ -1462,6 +1462,47 @@ def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_idle(tmp_path):
     assert spawn.patterns == ["ready", "identify_blue", "ready"]
 
 
+def test_an_accepted_fleet_call_chirps_once_and_a_refused_call_stays_quiet(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    gpio = FakeGPIO()
+    spawn = FakeSpawn(code=0)
+    display, lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, gpio=gpio, spawn=spawn)
+    display.step()
+    assert len(_starts(gpio)) == 1  # ready, once
+    assert display._sound == "ready"
+    assert module.BUZZER_PATTERNS["call"] == (2, module.BUZZER_CALL_HZ)
+    assert module.BUZZER_CALL_HZ not in (module.BUZZER_FREQUENCY_HZ, module.BUZZER_LOW_HZ, 2500)
+    assert "call" not in module.SOUNDS
+
+    safe = {"estop": False, "robot_mode": "IDLE", "nav_state": "IDLE", "caution": []}
+    display._core = lambda: safe
+    _hand_over(tmp_path, "identify_blue")
+    assert display.handle_test() == "done"
+    assert len(_starts(gpio)) == 3
+    assert [event for event in gpio.events if event[0] == "change"] == [("change", module.BUZZER_CALL_HZ)]
+    assert display._sound == "ready"
+    assert spawn.patterns == ["ready", "identify_blue", "ready"]
+
+    clock.now += 1
+    display.step()  # still ready: the call did not arm another health chirp
+    assert len(_starts(gpio)) == 3
+
+    _hand_over(tmp_path, "identify_amber", request_id="1122334455667788")
+    safe["estop"] = True
+    assert display.handle_test() is None
+    safe["estop"] = False
+    safe["robot_mode"] = "MANUAL"
+    lamp.pattern = "manual"
+    assert display.handle_test() is None
+    safe["robot_mode"] = "IDLE"
+    lamp.pattern = "ready"
+    display.screen = {"kind": "stopped", "row": "stopped", "strip_tone": None}
+    assert display.handle_test() is None
+    assert len(_starts(gpio)) == 3
+
+
 def test_identity_pulse_stops_without_restoring_old_pattern_when_safety_changes(tmp_path):
     module = _display()
     _lamp_tree(tmp_path)
@@ -1644,11 +1685,13 @@ def test_face_owns_the_screen_with_a_fresh_handover(tmp_path):
     display, lcd, _clock, rendered, opened, _lines = _face_loop(module, tmp_path)
 
     assert display.step() is False and rendered == []
-    assert display.animating == ("basic", None, None)
+    assert display.animating == ("basic", "Waiting", "info")
     for _ in range(5):
         assert display.tick() is True
     # Lazily: three frames converted one per tick (skip 2 -> sources 0 and 2), then replayed.
-    assert [panel[1] for panel in lcd.panels] == [0, 2, 0, 2, 0]
+    # The situation strip rides each frame; the seek index stays the frame's second field.
+    assert [panel[0][1] for panel in lcd.panels] == [0, 2, 0, 2, 0]
+    assert {panel[1] for panel in lcd.panels} == {"Waiting"}
     assert opened == ["basic"]
 
 
@@ -1722,7 +1765,7 @@ def test_an_unused_login_code_keeps_the_card_until_it_burns(tmp_path):
     clock.now += 1
     _face_inputs(tmp_path)
     display.step()
-    assert display.animating == ("basic", None, None)
+    assert display.animating == ("basic", "Waiting", "info")
 
 
 def _peer_approval(root: Path, expires_in: float = 300.0, **fields) -> None:
@@ -1775,7 +1818,7 @@ def test_an_expired_or_malformed_peer_approval_is_ignored(tmp_path, change):
 
     display.step()
 
-    assert display.animating == ("basic", None, None)
+    assert display.animating == ("basic", "Waiting", "info")
 
 
 def test_an_oversized_peer_approval_is_ignored(tmp_path):
@@ -1787,7 +1830,7 @@ def test_an_oversized_peer_approval_is_ignored(tmp_path):
 
     display.step()
 
-    assert display.animating == ("basic", None, None)
+    assert display.animating == ("basic", "Waiting", "info")
 
 
 def test_the_ap_card_stays_after_core_ready(tmp_path):
@@ -1864,7 +1907,7 @@ def test_the_drive_card_passes_over_the_face_on_the_cadence(tmp_path):
     _face_inputs(tmp_path, robot_mode="NAVIGATION", nav_state="NAVIGATING", face="happy",
                  drive={"mode": "NAVIGATION", "speed": 0.12})
     display.step()
-    assert display.animating == ("happy", None, None)
+    assert display.animating == ("happy", "Going", "info")
     clock.now += 15  # 21 s after the mode began
     _face_inputs(tmp_path, robot_mode="NAVIGATION", nav_state="NAVIGATING", face="happy",
                  drive={"mode": "NAVIGATION", "speed": 0.12})
