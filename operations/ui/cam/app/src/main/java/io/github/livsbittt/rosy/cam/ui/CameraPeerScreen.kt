@@ -26,7 +26,7 @@ fun CameraLanScreen(onSelect: (OverheadServiceRecord) -> Unit, onSettings: () ->
         val discovery = OverheadServerDiscovery(context) { found, _, busy, connected -> records = found; scanning = busy; wifi = connected }
         discovery.start(); onDispose { discovery.stop() }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("영상 받을 기기", style = MaterialTheme.typography.headlineSmall)
         Text("같은 Wi-Fi의 기기를 선택하세요. 처음 연결할 때만 상대 화면에서 승인합니다.")
         if (!wifi) Text("Wi-Fi에 연결한 뒤 다시 찾으세요.")
@@ -52,7 +52,7 @@ fun CameraLanScreen(onSelect: (OverheadServiceRecord) -> Unit, onSettings: () ->
 fun CameraPeerScreen(state: CameraPeerState, onCertificate: (Boolean) -> Unit, onCancel: () -> Unit,
     onRetry: (PairableSite) -> Unit, onDone: () -> Unit, onForget: (PairableSite) -> Unit) {
     var forgetting by remember { mutableStateOf<PairableSite?>(null) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("기기 연결", style = MaterialTheme.typography.headlineSmall)
         when (state) {
             is CameraPeerState.Connecting -> { Text(state.site.serviceName); Text("연결을 확인하고 있습니다…") }

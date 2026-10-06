@@ -253,3 +253,9 @@
 - 변경: 인증서 값 확인과 실패 복구의 나란한 반폭 버튼을 같은 본문 전폭으로 쌓았다. 좁은 화면의 큰 글자에서도 결정 문구가 읽히도록 하는 소스 보정이다.
 - 증거: `:app:compileDebugKotlin` 성공. Pairing 화면에 들어갈 수 있는 수신기·ADB 장치가 없어 네이티브 렌더링과 설치자 터치는 미검증이다.
 - gate 변화: Cam SOURCE 부분 근거만 추가. Pairing/Peer G2·G3와 실물 폰 수용은 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): Pairing/Peer 합성 화면과 안전 영역
+
+- 변경: debug 전용 합성 상태 Activity로 Pairing 요청·인증서 확인·거부와 Peer 대기·인증서 확인·실패를 표시한다. LAN·Peer 스크롤의 상태 표시줄 침범을 `safeDrawingPadding`으로 고쳤다.
+- 증거: 격리 Android 35 AVD 320×640/글자 200%와 390×844/글자 130%의 여섯 상태별 캡처를 X: `captures/cam-pairing-preview/`에 보존했다. 320px 인증서 화면은 끝까지 스크롤해 같은 폭의 두 결정을 확인했다. `:app:assembleDebug`와 `:app:processReleaseMainManifest` 성공; preview Activity는 release manifest에 없다.
+- gate 변화: 합성 상태의 LOCAL G2 부분 근거. 실제 수신기 연결·승인/거부·송출, 실물 폰과 설치자 G3는 HOLD다.
