@@ -6665,3 +6665,9 @@ osy-d395-s1d\`.
 - 변경: `Rosy Fleet` 운용 문서의 1920×1080 하단 넘침 43px을 데스크톱 여백과 대형 readout margin 보정으로 해소했다. D-415 로그 8줄과 패널 너비를 유지했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-fleet-d487/`; Fleet 선별 브라우저 8 passed, 접속 전 안내 1 passed, 서버·팔레트 계약 60 passed, 웹 모듈 137 passed, 각 Python 실행의 `known_failures.py` 0 NEW.
 - gate 변화: LOCAL G2 부분 근거. 현장 설치 SHA·장치 readback·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): 병합 뒤 roster 계측 경합 제거
+
+- 변경: 320px 로봇 행동 너비 시험에서 버튼과 부모 폭을 한 DOM 평가로 읽어, 상태 폴링의 재렌더 사이에 부모 locator가 사라지는 경합을 없앴다.
+- 증거: X: `2026-10-07-fleet-d487/post-merge-browser-final.txt` 선별 브라우저 8 passed, `post-merge-contracts.txt` 60 passed, `post-merge-node.txt` 137 passed, Python `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 시험 안정화. 제품 전체 HOLD는 그대로.

@@ -1878,11 +1878,12 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         assert "rosy_03" in page.locator("#roster article").inner_text()
         save_temp_screenshot(page, f"fleet_console_mobile_default_{width}.png")
         actions = page.locator("#roster article .robot-actions")
-        action_widths = actions.locator("ui-button").evaluate_all(
-            "buttons => buttons.map(button => button.getBoundingClientRect().width)")
+        action_widths, actions_width = actions.locator("ui-button").evaluate_all(
+            "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
+            "buttons[0].parentElement.getBoundingClientRect().width]")
         assert len(action_widths) == 3 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
         if width == 320:
-            assert abs(action_widths[2] - actions.bounding_box()["width"]) <= 1, action_widths
+            assert abs(action_widths[2] - actions_width) <= 1, action_widths
         else:
             assert abs(action_widths[2] - action_widths[0]) <= 1, action_widths
         page.locator("#roster-toggle").click()
