@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · uiux: D-153 G1 현 후보 재확인
 - 2026-10-07 · uncommitted · uiux(fleet): 병합 뒤 roster 계측 경합 제거
 - 2026-10-07 · uncommitted · uiux(fleet): D-487 이후 관제 높이 재확인
 - 2026-10-07 · uncommitted · uiux(games): CSP 수정 후 전체 재실행과 시간 결측 전화 폭
 - 2026-10-07 · uncommitted · uiux(games): 현재 보드 상태·폭 재검증
-- 2026-10-07 · uncommitted · uiux: 현재 main G1 재검증

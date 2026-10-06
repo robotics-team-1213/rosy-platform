@@ -6671,3 +6671,9 @@ osy-d395-s1d\`.
 - 변경: 320px 로봇 행동 너비 시험에서 버튼과 부모 폭을 한 DOM 평가로 읽어, 상태 폴링의 재렌더 사이에 부모 locator가 사라지는 경합을 없앴다.
 - 증거: X: `2026-10-07-fleet-d487/post-merge-browser-final.txt` 선별 브라우저 8 passed, `post-merge-contracts.txt` 60 passed, `post-merge-node.txt` 137 passed, Python `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 시험 안정화. 제품 전체 HOLD는 그대로.
+
+## 2026-10-07 · uncommitted · uiux: D-153 G1 현 후보 재확인
+
+- 변경: Fleet D-487 보정이 포함된 `e9c507c2c` 코드 후보의 G1 결과를 UI/UX 회차 평가에 갱신했다.
+- 증거: X: `2026-10-07-g1-current/g1-e9c507c2c.txt`; 팔레트·토큰/스타일가이드·Fleet 문법·CORE 증거·반응형 선언 **90 passed**, `known_failures.py` 0 NEW.
+- gate 변화: 현 후보 G1 기계 계약 LOCAL 통과. 전체 G2/G3와 실물 readback은 HOLD.
