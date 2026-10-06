@@ -70,7 +70,7 @@ D-489는 무엇을 푸는지 정했다: 차로 단위 상태, 시간 비용, A*,
 
 M1 구현과 독립 검토에서 정한 것이다. 원래 번호는 D-486이었고 main 번호 충돌로 D-490이 됐다. API Reference는 v1.111이다(v1.109·v1.110은 다른 가지가 먼저 썼다).
 
-1. **오류 본문.** 4항의 `{error:{code, detail}}` 대신 Fleet의 FastAPI 오류 모양 `{"detail": {"code", "detail"}}`을 쓴다. 지도 API(`/api/fleet/site-map/*`)도 같은 모양이다. 계획기의 예상하지 못한 실패는 500이 아니라 422 `TRIP_PLAN_FAILED`이고, 지도 버전마다 한 번 기록한다.
+1. **오류 본문.** 4항의 `{error:{code, detail}}` 대신 Fleet의 FastAPI 오류 모양 `{"detail": {"code", "detail"}}`을 쓴다. 지도 API(`/api/fleet/site-map/*`)도 같은 모양이다. 계획기의 예상하지 못한 실패는 같은 본문의 500 `TRIP_PLAN_FAILED`다(서버 결함이라 요청 거절인 422가 아니다, 재검토 L2). 맨 추적 내용은 내보내지 않고 지도 버전마다 한 번만 로그에 남긴다.
 2. **자세.** 로봇 스냅샷 자세에 yaw가 없으면 `TRIP_POSE_UNTRUSTED`다.
 3. **지도 버전.** M1에서 요청과 그래프의 지도 버전이 다르면 `TRIP_NO_ACTIVE_MAP`이다. M2의 `/trips/{plan_id}/start`는 계획 뒤 지도가 바뀌면 `TRIP_MAP_CHANGED`로 거절한다. 그때까지 `/start`와 `execute: true`는 501 `TRIP_EXECUTION_NOT_AVAILABLE`이다.
 4. **활성화 검사.** 활성화는 그래프와 후속 차로 표를 미리 만들어 보고, 계획기가 쓸 수 없는 지도면 거절한다. 그래프와 표는 지도 버전마다 한 번 만든다.

@@ -287,7 +287,7 @@ def test_activation_refuses_a_map_the_planner_cannot_use(tmp_path, monkeypatch):
     assert store.active()[0] == 1
 
 
-def test_an_unexpected_planner_failure_is_a_coded_refusal_not_a_500(tmp_path, monkeypatch, caplog):
+def test_an_unexpected_planner_failure_is_a_coded_500_logged_once(tmp_path, monkeypatch, caplog):
     import fleet.server.trip_routes as trip_module
 
     client, _tasks, store, robot = _app(tmp_path)
@@ -299,7 +299,7 @@ def test_an_unexpected_planner_failure_is_a_coded_refusal_not_a_500(tmp_path, mo
     monkeypatch.setattr(trip_module, "plan_trip", broken)
     for _ in range(2):
         response = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
-        assert response.status_code == 422 and response.json()["detail"]["code"] == "TRIP_PLAN_FAILED"
+        assert response.status_code == 500 and response.json()["detail"]["code"] == "TRIP_PLAN_FAILED"
     assert sum("trip planner failed" in r.message for r in caplog.records) == 1
     assert store.plans()[0]["result"]["error"] == "TRIP_PLAN_FAILED"
 

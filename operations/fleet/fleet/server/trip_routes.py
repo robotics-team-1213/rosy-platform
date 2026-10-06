@@ -93,12 +93,12 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
         except PlanError as exc:
             record({"error": exc.code, "detail": exc.detail})
             raise _refuse(exc.code, exc.detail) from exc
-        except Exception as exc:  # a planner bug must not become a 500 on every trip
+        except Exception as exc:  # a planner bug is a coded 500, logged once, never a bare traceback
             if active[0] not in failed_versions:
                 failed_versions.add(active[0])
                 _LOG.exception("trip planner failed on site map v%s", active[0])
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
-            raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}) from exc
+            raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s})
         return {
             "plan_id": plan_id, "map_version": plan.map_version,
