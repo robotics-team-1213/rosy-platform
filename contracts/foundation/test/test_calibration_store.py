@@ -252,6 +252,14 @@ def test_camera_profile_intrinsics_must_be_finite_positive(extra, ok):
     assert (check_values("camera_profile", values) is None) is ok
 
 
+
+@pytest.mark.parametrize("px,ok", [(3.0, True), (5.0, True), (0.4, True), (0.0, False), (-1.0, False),
+                                   (5.5, False), (float("nan"), False), (True, False), ("3", False)])
+def test_camera_profile_detector_lateral_px_is_in_0_to_5(px, ok):
+    # D-468 lane projection: a record's detector pixel error (plan S3/S4) must be (0, 5] px.
+    values = {"pitch_rad": 0.195, "height_m": 0.058, "detector_lateral_px": px}
+    assert (check_values("camera_profile", values) is None) is ok
+
 def test_names_are_checked():
     store = CalibrationStore("/nonexistent")
     with pytest.raises(ValueError):
