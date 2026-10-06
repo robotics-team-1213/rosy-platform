@@ -38,6 +38,13 @@ acceptance; local Compose checks establish only LOCAL behavior.
 
 ## LAN access
 
+The site Caddy proxy lets a browser on a private LAN address open the camera
+preview in `/console` without a site user token. This grants only the configured
+source list and a 60-second, source-scoped Vision preview lease. The console's
+other state and command controls still require a site user token. Access through
+a public address retains the token requirement. This proxy exception depends
+on Fleet and Vision staying unpublished on the internal Compose network.
+
 On 2026-10-01 a site moved from 192.168.1.0/24 to 10.16.36.0/24. The proxy was
 published on the old interface IP, so the next start failed with "cannot
 assign requested address" and the console, cameras, robots and the discovery

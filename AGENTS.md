@@ -11,7 +11,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 | File | Description |
 |------|-------------|
-| `README.md` | Repo overview, shared-checkout start rules (`같이 하는 깃`), colcon/sim launch, Pi 5 runtime, phase roadmap |
+| `README.md` | Short overview, who-starts-where table and document map, shared-checkout start rules (`같이 하는 깃`), core contracts. Build/sim/test/Pi runtime moved to `docs/reference/developer-guide.md` |
 | `LICENSE` | Apache License 2.0 |
 | `env.sh` | Dev env: source ROS 2 Jazzy then workspace `install/setup.bash` |
 | `CONCEPTS.md` | Shared domain vocabulary — entities, named processes, status concepts with project-specific meaning |

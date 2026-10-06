@@ -31,6 +31,7 @@ services:
       - ROSY_SITE_DISCOVERY_TOKEN
       - --vision-preview-secret-env
       - ROSY_VISION_PREVIEW_SECRET
+      - --lan-camera-proxy
       - --users-file
       - /run/rosy-config/site-users.yaml
       - --sightings-config

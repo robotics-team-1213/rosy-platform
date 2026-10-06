@@ -58,6 +58,9 @@ ALLOWED = Counter({
     # load_snapshot) to load; a missing provider or factory fails closed with
     # an install hint instead of an ImportError. No private field is reached.
     ("bridge/control_sensor_adapter.py", "getattr", "provider", "attr"): 1,
+    # D-468 optional provider capability: absent/error/non-boolean results
+    # deny return motion; the control package owns the hook.
+    ("bridge/control_sensor_adapter.py", "getattr", "self.policy", "'local_return_allowed'"): 1,
     ("bridge/control_sensor_adapter.py", "hasattr", "observations", '"max_age"'): 1,
     ("node.py", "getattr", "self", '"get_namespace"'): 1,
     # Accepted (core-shutdown 2026-09-23): rclpy Jazzy's MultiThreadedExecutor never

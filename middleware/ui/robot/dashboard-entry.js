@@ -1,6 +1,6 @@
 // Authentication entry: credentials stay in client.js; CORE owns permissions.
 import { api, session, rememberToken, forgetToken, normalizeLoginCode, pairWithCode,
-  logout, PAIRED_SOURCES, sourceLabel, expiryLabel } from "./client.js";
+  logout, connectionOffer, developmentSession, PAIRED_SOURCES, sourceLabel, expiryLabel } from "./client.js";
 import { dashboardReturnTarget, completeDashboardAuthentication, dashboardSurfaceBridge } from "./surface-navigation.js";
 import { ROLE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 
@@ -43,6 +43,7 @@ function renderIdentity() {
   el("entry-role").hidden = !identity;
   el("entry-logout").hidden = !identity;
   el("auth-drawer").hidden = Boolean(identity);
+  el("dev-connect-row").hidden = Boolean(identity);
   document.querySelector(".entry-heading h1").textContent = identity ? "작업을 선택하세요" : "로봇에 연결";
   document.querySelector(".entry-heading p").textContent = identity ? "로그인이 확인되었습니다. 필요한 작업 화면을 열 수 있습니다." : "로그인한 뒤 수행할 작업을 선택하세요.";
   if (!identity) {
@@ -188,6 +189,36 @@ el("code-form").addEventListener("submit", async event => {
 });
 
 el("entry-retry").addEventListener("click", loadDestinations);
+
+// D-432/D-471: 개발 연결 모드 로봇은 로그인 서랍에 코드 없는 입장을 보여준다.
+let devEntryProbed = false;
+async function revealDevEntry() {
+  if (devEntryProbed || session.token) return;
+  devEntryProbed = true;
+  const offer = await connectionOffer();
+  if (!offer || session.token) return;
+  el("dev-connect-row").hidden = false;
+}
+el("dev-connect").addEventListener("click", async () => {
+  if (busy || retryUntil > Date.now()) return;
+  busy = true;
+  controls();
+  el("dev-message").textContent = "개발 연결을 확인하고 있습니다.";
+  try {
+    const identity = await developmentSession({signal: AbortSignal.timeout(REQUEST_MS)});
+    el("dev-message").textContent = "";
+    if (identity?.role) el("code-message").textContent = "";
+  } catch (error) {
+    el("dev-message").textContent = ["TimeoutError", "AbortError"].includes(error.name)
+      ? "개발 연결 확인 시간이 지났습니다. 연결을 확인하고 다시 시도하세요." : error.message;
+    retryUntil = Date.now() + (error.retryAfter || 0) * 1000;
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(controls, Math.max(0, retryUntil - Date.now()));
+    return;
+  } finally { busy = false; controls(); }
+  await loadDestinations();
+});
+
 el("entry-logout").addEventListener("click", async () => {
   if (busy) return;
   busy = true;
@@ -200,6 +231,8 @@ el("entry-logout").addEventListener("click", async () => {
     setStatus(deleted ? "로그아웃했습니다. 다시 로그인할 수 있습니다." : "이 브라우저에서 접속 키를 지웠습니다. 로봇의 키는 유지됩니다.");
     el("code-message").textContent = "";
     renderIdentity();
+    devEntryProbed = false;
+    revealDevEntry();
   } catch (error) {
     setStatus(`로그아웃하지 못했습니다. 연결을 확인하고 다시 시도하세요: ${error.message}`, "error");
   } finally { busy = false; controls(); }
@@ -232,4 +265,4 @@ stop.addEventListener("click", async () => {
 window.addEventListener("pagehide", () => { generation++; clearTimeout(retryTimer); clearTimeout(expiryTimer); });
 renderIdentity();
 if (session.token) loadDestinations();
-else setStatus("");
+else { setStatus(""); revealDevEntry(); }

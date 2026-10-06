@@ -144,7 +144,8 @@ class SiteUpdater:
         return None
 
     def is_newer(self, current: str, candidate: str) -> bool:
-        url = f"https://api.github.com/repos/{self.config['repo']}/compare/{current}...{candidate}"
+        # Later pages omit changed files but retain ancestry metadata.
+        url = f"https://api.github.com/repos/{self.config['repo']}/compare/{current}...{candidate}?per_page=1&page=2"
         try:
             comparison = json.loads(self.http.get(url, _LIST_LIMIT))
             return (comparison['status'] == 'ahead'

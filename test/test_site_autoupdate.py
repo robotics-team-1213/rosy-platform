@@ -97,7 +97,7 @@ class FakeHttp:
 
     def get(self, url: str, limit: int) -> bytes:
         if '/compare/' in url:
-            base, head = url.rsplit('/', 1)[-1].split('...')
+            base, head = url.rsplit('/', 1)[-1].split('?', 1)[0].split('...')
             commit = next((c for c in (OLD, NEW, NEWER) if head == _tag(c)), head)
             return json.dumps({'status': 'ahead' if commit > base else 'behind',
                                'merge_base_commit': {'sha': base}}).encode()
@@ -365,6 +365,18 @@ def test_local_runtime_drift_blocks_switch(host, field):
 
 
 # -- selection ------------------------------------------------------------------
+
+def test_commit_comparison_skips_large_first_page(tmp_path):
+    class RecordingHttp(FakeHttp):
+        def get(self, url, limit):
+            self.url = url
+            return super().get(url, limit)
+
+    http = RecordingHttp([], {})
+    updater = upd.SiteUpdater({"repo": REPO}, paths=upd.Paths(tmp_path), http=http)
+    assert updater.is_newer(OLD, _tag(NEW))
+    assert http.url.endswith("?per_page=1&page=2")
+
 
 def test_selection_picks_the_newest_signed_newer_candidate(tmp_path):
     old_assets, new_assets, newer_assets = _bundle(OLD), _bundle(NEW), _bundle(NEWER)
@@ -860,9 +872,25 @@ def test_truncated_http_body_is_retryable(tmp_path, operation):
     response = http.client.HTTPResponse(Socket())
     response.begin()
     client = upd.Http()
-    client._open = lambda url: response
+    client._open = lambda url, **kwargs: response
     with pytest.raises(upd.Transient):
         if operation == 'get':
             client.get('https://example.invalid', 100)
         else:
             client.download('https://example.invalid', tmp_path / 'download')
+
+
+def test_large_asset_download_gets_longer_idle_timeout(tmp_path):
+    class Opener:
+        def __init__(self):
+            self.timeouts = []
+
+        def open(self, request, timeout):
+            self.timeouts.append(timeout)
+            return io.BytesIO(b'ok')
+
+    client = upd.Http()
+    client.opener = Opener()
+    client.get('https://example.invalid/release.json', 100)
+    client.download('https://example.invalid/part00', tmp_path / 'part00')
+    assert client.opener.timeouts == [60, 300]

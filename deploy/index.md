@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · feat(site): 페어링 구성에도 LAN 카메라 보기 적용
+- 2026-10-06 · uncommitted · fix(release): 변수 참조를 비밀값으로 오인하지 않기
 - 2026-10-05 · uncommitted · fix(release): TLS 보정 확인 전 인증서 검증과 실패 시 배포 거절
 - 2026-10-05 · uncommitted · fix(release): 비공개 TLS 환경을 읽는 준비 상태 검사
 - 2026-10-05 · uncommitted · fix(discovery): TLS 인증서 이름을 포함하는 로봇 검색 광고
-- 2026-10-05 · uncommitted · fix(release): 실제 서명 목록 크기에 맞춘 TLS 설치 읽기 경계
-- 2026-10-05 · uncommitted · fix(discovery): 사용자 검색 서비스의 검증된 카메라 기능 표시
