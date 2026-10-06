@@ -6506,3 +6506,8 @@ osy-d395-s1d\`.
 - 변경: Fleet 로봇 카드의 동등한 행동 버튼을 같은 폭으로 맞추고, 1920px 본문 하단 5px 넘침을 제거했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 320/390px 버튼 폭과 1920px 높이 검사 포함 브라우저 6 passed, `known_failures.py` 0 NEW. 원본은 X: `fleet_console_mobile_default_{320,390}.png`.
 - gate 변화: Fleet LOCAL 부분 근거를 추가했다. 제품 전체 G2/G3와 실제 현장 수용은 HOLD.
+## 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
+
+- 변경: 로봇 운용 콘솔의 전방 카메라 동등 행동을 390px에서 같은 폭으로, 320px에서 각 전폭으로 맞췄다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 실제 역할 셸 브라우저 2 passed, 카메라 회귀 2 passed, 반응형 계약 9 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/robot-camera-equal/`.
+- gate 변화: 로봇 운용 LOCAL G2 배치 근거 추가. 제품 전체 G2/G3와 현장 수용은 HOLD.

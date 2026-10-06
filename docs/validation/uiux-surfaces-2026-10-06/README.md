@@ -18,6 +18,8 @@
 
 로봇 역할 셸의 `/console`·`/setup`·`/device`를 320×568과 390×844에서 다시 띄웠다. `/console`에서는 조작→감지→관측이 한 열로 쌓이고 세 칸의 시작점·폭이 같으며, 두 폭 모두 첫 화면과 하단 스크롤에서 비상 정지가 보인다. 문서 가로 넘침과 페이지 오류는 0, 브라우저 **2 passed**, `known_failures.py` **0 NEW**다. 320px 첫 화면 원본은 X: `captures/robot-console-320-width/robot-console-320x568.png`에 있다. 이는 정상 fixture의 LOCAL 배치 근거이며 실제 CORE 상태와 작업 완료·G3는 미검증이다.
 
+전방 카메라의 동등한 「영상 확대」·「녹화 중지」 행동도 390px에서 같은 폭으로 맞췄다. 320px에서는 두 행동이 각각 패널의 전폭을 쓰며 쌓인다. 실제 역할 셸의 두 폭에서 렌더된 행동 폭 차이 ≤1px, 가로 넘침 0, 비상 정지 가시성을 확인한 브라우저 **2 passed**, `known_failures.py` **0 NEW**다. 전체 화면 원본은 X: `captures/robot-camera-equal/robot-console-{320x568,390x844}.png`다. 카메라 수신과 녹화의 실제 완료·사용자 독회는 남아 있다.
+
 작업 준비·장비 캡처는 같은 FastAPI fixture에서 생성했다. 첫 시도는 고급 네트워크 작업의 닫힌 disclosure 안에 있는 버튼을 바로 찾으려다 시험이 멈췄다. shipped UI대로 disclosure를 열어 비활성 버튼과 이유를 확인했다. 모바일 패널의 실제 내용 폭을 공용 폼의 container query가 읽도록 수정한 뒤 다시 실행해 **60셀 1 passed**, 반응형·셸 브라우저 **18 passed**, 별도 작업 패널 **6장**, `known_failures.py` **0 NEW**를 얻었다. 첫 실패를 제품 결함으로 분류하지 않는다.
 
 첫 기동은 manifest와 CORE 첫 상태 응답을 보류한 별도 fixture다. **6셀 1 passed**, 60셀 재실행 **1 passed**, 각각 `known_failures.py` **0 NEW**였다. 비상 정지의 테스트 판정은 숨겨진 요소의 0폭 좌표가 통과하지 않도록 렌더된 폭을 확인한다. [관리자 장비 390×844](captures/roles-first-boot/administrator-device-first-boot-390x844.png)를 원본 크기로 확인했다.
@@ -153,6 +155,8 @@ Pilot 390×844에서 회전 조작을 첫 화면에 올리려고 아래 조작 �
 320×568에서는 기존 HUD와 최소 18rem 조작부가 카메라 높이를 0으로 만들었다. 첫 보정은 영상 면적 계약을 통과했지만 HUD와 조작부에 두 스크롤 영역이 생겼다. 현재 짧은 전화 화면은 조작부를 10rem으로 두고, 기존 「도구」 판에 모델·차선 인식·영상 맞춤/채우기 설정을 옮긴다. HUD 자체는 스크롤하지 않으며 속도·현재 동작·「정지 · 설정」·연결 사실·「도구」·조종 종료를 바로 보여 준다. 전진·후진·스틱과 자동 모드 진행은 첫 화면, 좌·우회전과 속도 설정은 조작부 스크롤로 닿는다. 영상 비율·비겹침·표시 면적 `>0.2`와 320/390px 재배치·기존 녹화 도구를 포함한 브라우저 **9 passed**, `known_failures.py` **0 NEW**다. 원본은 X: `captures/pilot-camera-320/`, `captures/pilot-short-tools-final/`, `captures/pilot-short-tools/pilot-tools-320x568.png`에 있다. 실제 전화 운전자가 이 순서와 도구 판을 이해하는지는 G3 HOLD다.
 
 도구 판을 열고 모델 세부 내용을 펼친 채 320×568→390×844→320×568로 화면을 바꾸면, 전환 때 열린 도구 판과 세부 내용이 닫히고 각 설정은 해당 폭의 자리로 이동한다. 반응형 브라우저 **1 passed**, `known_failures.py` **0 NEW**다. 이는 회전·창 크기 변경의 LOCAL 상태 정합성 근거이며 실제 전화 회전 중 운전자 판독은 G3 HOLD다.
+
+이 320px 전용 배치가 쓰는 22rem 경계는 `shared/web/surfaces.yaml`의 Pilot breakpoint에 사유와 함께 선언했다. 반응형 계약 **9 passed**, `known_failures.py` **0 NEW**다. 화면 동작을 추가로 바꾼 것은 아니다.
 
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 

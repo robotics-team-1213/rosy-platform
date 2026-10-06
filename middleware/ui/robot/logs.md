@@ -1052,3 +1052,8 @@
 - 변경: 실제 CORE 앱 응답의 `/console` 320/390px에서 조작·감지·관측 칸이 같은 폭으로 쌓이는지 브라우저 계약에 추가했다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 320px 캡처, `/console`·`/setup`·`/device` 2폭 브라우저 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: 로봇 역할 셸 LOCAL G2 배치 부분 근거 추가. 실제 CORE/장치 readback과 전체 G2/G3는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
+
+- 변경: 전방 카메라의 영상 확대·녹화 중지 행동을 390px에서 같은 폭으로 맞췄다. 320px에서는 공용 칸 반응 규칙에 따라 각각 전폭으로 쌓는다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 실제 역할 셸 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW. 전체 화면 원본은 X: `captures/robot-camera-equal/`.
+- gate 변화: 로봇 운용 LOCAL 폭 근거 추가. 실제 카메라·장치와 사용자 G3 독회는 HOLD.

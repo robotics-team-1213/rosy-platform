@@ -647,3 +647,8 @@
 - 변경: 확인창 스크림 구멍은 data-clip을 typed attr()가 읽는다. 캔버스 색 탐침은 채택 스타일시트 규칙 하나로 토큰과 color-mix를 푼다.
 - 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium에서 구멍은 정지 버튼을 맞추고 바깥은 스크림을 맞춘다. 팔레트 브라우저 시험 통과. 장치 수용은 없다.
 - gate 변화: 없음.
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 전용 폭 선언
+
+- 변경: Pilot의 기존 22rem 미만 머리·제자리 회전·짧은 화면 배치를 `surfaces.yaml`의 선언된 breakpoint로 기록했다. 렌더링 규칙은 바꾸지 않았다.
+- 증거: `shared/web/test/test_responsive_tiers.py` 9 passed, `known_failures.py` 0 NEW.
+- gate 변화: 현재 브랜치의 반응형 계약 실패를 제거했다. Pilot 실제 운전자 G3와 장치 수용은 HOLD.

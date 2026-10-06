@@ -172,6 +172,8 @@ surfaces:
     breakpoints:
       - value: 48rem
         reason: 태블릿 세로·휴대폰에서 스틱·페달·HUD 글자를 줄이는 주행 조작부 폭(D-363) — 세 단 값으로 옮기면 64rem 아래 태블릿 가로에서도 조작부가 작아진다
+      - value: 22rem
+        reason: 320px 휴대폰에서 머리 이름 겹침과 제자리 회전 버튼 잘림을 막고 짧은 화면의 카메라·조작부 공간을 지키는 폭 — 390px에는 이 압축 배치를 적용하지 않는다
     raw_colours:
       - file: styles.css
         block: "[data-drive-stage]"
