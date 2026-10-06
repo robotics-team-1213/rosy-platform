@@ -74,6 +74,8 @@ def import_frames(store, body):
         if row.get('source_kind') == 'mcap':
             if not kind or kind[0] != 'evaluation':
                 raise ValueError('MCAP evaluation requires a separate evaluation workspace')
+            if row.get('mask'):
+                raise ValueError('MCAP evaluation starts with an empty pixel mask')
             mcap = row.get('mcap')
             if not isinstance(mcap, dict) or not isinstance(mcap.get('frame'), dict):
                 raise ValueError('MCAP source proof required')

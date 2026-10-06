@@ -79,3 +79,15 @@ def test_mcap_ambiguous_log_time_requires_message_ordinal(tmp_path):
         prove_frames(session, [row], tmp_path)
     proof = prove_frames(session, [{**row, "message_ordinal": 0}], tmp_path)
     assert proof["frames"][0]["message_ordinal"] == 0
+
+
+def test_mcap_import_refuses_auto_mask_draft(tmp_path):
+    store = ReviewStore(tmp_path / "eval-state", empty_eval=True)
+    catalog, classes = _catalog(tmp_path)
+    row = json.loads(catalog.read_text())
+    row["mask"] = {"indexed_png": "auto.png", "sha256": "0" * 64,
+                   "classes_sha256": "0" * 64}
+    catalog.write_text(json.dumps(row) + "\n")
+    with pytest.raises(ValueError, match="empty pixel mask"):
+        review_ingest.import_frames(store, {"path": str(catalog), "classes": str(classes)})
+    assert store.list_frames() == []
