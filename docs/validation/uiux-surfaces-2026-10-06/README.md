@@ -51,20 +51,23 @@
 | 수신 후 끊김·지연·HOLD | [수신 후 끊김](captures/fleet-states/fleet_console_gather-lost-after-live.png), [팔로워 지연](captures/fleet-states/fleet_console_delayed.png), [대형 HOLD](captures/fleet-states/fleet_console_holding.png); 지연 320/390px 원본은 아래 X: 경로 | 상태 변화를 화면에 드러낸다. 320/390px에서 지연 로봇이 첫 카드이며 비상 정지가 화면 안에 남고 가로 넘침이 없다. |
 | 로봇 연결 끊김 | [1920px](captures/fleet-states/fleet_console_unreachable.png); 320/390px 원본은 아래 X: 경로 | 실제 Fleet API의 `online: false, state: null` 계약으로 재촬영했다. 이전 fixture의 모순된 좌표·주행 상태를 제거했고, 해당 로봇 카드에 현재 좌표·NAVIGATING이 없음을 단언한다. 320/390px에서는 연결 끊긴 로봇이 목록 첫 카드이며 비상 정지가 화면 안에 남고 가로 넘침이 없다. |
 | 안전 상태 결측·비상 정지 | [결측](captures/fleet-g3/fleet_safety_unknown.png), [비상 정지](captures/fleet-g3/fleet_safety_stopped.png) | CORE의 `NAVIGATING` 값이 남아도 주행 중이라는 문구 대신 목표가 남았음을 표시한다. 두 상태 모두 목표 전송은 막힌다. |
+| 전체 주행 취소 | 1920/390/320px 확인·부분 응답과 320px 실패 원본은 아래 X: 경로 | 확인 중 비상 정지가 화면 안에 남는다. 취소는 POST 0이고, 전송 뒤 부분 응답 `1/3`·물리 정지 미확인과 로봇별 기록 링크가 행동 옆에 보인다. 503은 취소 결과 미확인과 상태 재확인을 알린다. |
 
 기존 상태 브라우저 **9 passed**, 320/390px 빈 목록·서버 실패 **4 passed**, 연결 끊김 1920/390/320px **3 passed**였고 각 실행의 `known_failures.py`는 **0 NEW**였다. 모바일 연결 끊김 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\captures\fleet-unreachable-mobile\`의 `fleet_console_unreachable_320.png`와 `fleet_console_unreachable_390.png`다. 이들은 fixture 기반 화면 검사다. Fleet의 선언 상태 전부와 카메라 연결, 실제 사이트 PC/로봇 readback, G3 사용자 독회는 남아 있어 G2/G3 GO로 판정하지 않는다.
 
 팔로워 지연도 1920/390/320px **3 passed**, `known_failures.py` **0 NEW**로 다시 확인했다. 모바일 원본은 같은 X: 회차의 `captures\fleet-delayed-mobile\fleet_console_delayed_320.png`와 `fleet_console_delayed_390.png`다. 연결 끊김과 마찬가지로 fixture 기반 LOCAL 근거이며 G2/G3 판정은 HOLD다.
 
+전체 주행 취소의 1920/390/320px 확인→취소/전송→부분 응답과 320px 503 실패, 확인창 중 정지 가용성 회귀는 브라우저 **5 passed**, `known_failures.py` **0 NEW**다. 전후 원본은 같은 X: 회차 `captures\fleet-cancel-all-mobile\fleet_cancel_all_{confirm,result}_{320,390}.png`와 `fleet_cancel_all_failure_320.png`다. 이전에는 로봇별 결과가 긴 기록 아래에만 있어 320px 첫 화면에서 응답을 볼 수 없었다. 현재는 주행 취소 버튼 옆에 응답 요약과 기록 링크가 표시된다. 이는 API fixture의 LOCAL 요청·응답 근거이며 실제 로봇 취소·물리 정지는 미확인이다.
+
 ### Fleet G3 독회 — LOCAL 진행 중
 
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |
 |---|---|---|
-| 1. 정직 | [안전 상태 결측](captures/fleet-g3/fleet_safety_unknown.png)·[비상 정지](captures/fleet-g3/fleet_safety_stopped.png)에서 목표 전송을 막고 `NAVIGATING`을 물리적 주행으로 표현하지 않는다. | 다른 조작의 상태 가용성과 실제 CORE readback. |
+| 1. 정직 | [안전 상태 결측](captures/fleet-g3/fleet_safety_unknown.png)·[비상 정지](captures/fleet-g3/fleet_safety_stopped.png)에서 목표 전송을 막고 `NAVIGATING`을 물리적 주행으로 표현하지 않는다. 전체 주행 취소 부분 응답도 물리 정지 미확인으로 표시한다. | 다른 조작의 상태 가용성과 실제 CORE readback. |
 | 2. 증거 상태 | 느린 첫 응답, 수신 후 끊김, 로봇 연결 끊김, 안전 결측을 위 G2 캡처로 구분했다. | 각 값의 정상·지연·끊김·결측 전이 전체. |
 | 3. 색 | 정상 카드는 중립이고 안전 정지는 빨강, 영상 연결 불가는 주의색이다. | 다른 경보·현장 조명. |
 | 4. 위계 | [목표 확인창](captures/fleet-g3/fleet_goal_confirm_open.png)에서 보고 영역은 뒤로 물러나고 전송 선택이 올라온다. | 긴 목록과 현장 관제자의 시선 이동. |
-| 5. 불가역 | [목표 선택](captures/fleet-g3/fleet_goal_preconfirm.png)→[로봇·좌표 확인](captures/fleet-g3/fleet_goal_confirm_open.png)→취소를 재생했고 취소 전송 0을 단언한다. 비상 정지는 Accepted D-414의 즉시 접근 예외로 확인창 위에 남는다. | 실제 목표·정지 readback, 취소·전체 취소의 현장 절차. |
+| 5. 불가역 | [목표 선택](captures/fleet-g3/fleet_goal_preconfirm.png)→[로봇·좌표 확인](captures/fleet-g3/fleet_goal_confirm_open.png)→취소를 재생했고 취소 전송 0을 단언한다. 전체 주행 취소도 3폭에서 취소 POST 0과 결과 가시성을 확인했다. 비상 정지는 Accepted D-414의 즉시 접근 예외로 확인창 위에 남는다. | 실제 목표·정지·전체 취소 readback과 현장 절차. |
 | 6. 어휘 | 탐색 상태를 원시 `NAVIGATING` 대신 `목표 활성`/`목표 남음`으로 구분한다. | 나머지 메시지의 운용자 독해. |
 | 7. 표면 질문 | 320px 기본 예외 목록에서 오류 로봇이 먼저 나오고 결측·정지 카드에서 개입 불가 이유가 보인다. | 현장 관제자가 여러 로봇의 다음 행동을 고르는 작업. |
 | 8. 표면 문법 | 기본 목록은 주의가 필요한 로봇부터 보여 주며 전체 목록은 별도 선택이다. | 모든 선언 상태에서 정상 숨김과 예외 우선순위. |

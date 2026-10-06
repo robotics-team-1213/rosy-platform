@@ -1978,3 +1978,9 @@
 - 변경: 팔로워 지연·끊김 화면을 1920/390/320px에서 재생해 경고 카드 우선순위, 비상 정지 가시성, 가로 넘침 부재를 확인했다.
 - 증거: [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
 - gate 변화: Fleet LOCAL G2 일부 추가. 실제 사이트 PC/로봇 readback과 G3 독회는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 전체 주행 취소 결과를 행동 옆에 표시
+
+- 변경: 전체 주행 취소 응답 요약과 로봇별 기록 링크를 버튼 가까이에 놓았다. 503은 물리 결과를 미확인으로 말하고 재확인을 안내한다.
+- 증거: [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 1920/390/320px 확인·부분 응답과 320px 오류 캡처; 브라우저 5 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2/G3 일부 추가. 실제 사이트 PC·로봇 readback과 현장 사용자 독회는 HOLD다.

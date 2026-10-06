@@ -584,7 +584,8 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         browser.close()
 
 
-def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_url, width, height):
     """D-421 — 전체 주행 취소는 confirm을 지나고, 로봇별 결과와 물리 정지 미확인을 쓴다."""
     from playwright.sync_api import sync_playwright
 
@@ -625,20 +626,38 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
     with sync_playwright() as p:
         browser, page, errors = _open_console(
             p, api, posts=posts, init_script=DECLINE_CONFIRM)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.locator("#cancel-all").click()
         dialog = page.locator('dialog.ui-confirm')
         dialog.wait_for()
         confirms = [dialog.inner_text()]
+        stop = page.locator("#estop").bounding_box()
+        assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, "fleet_cancel_all_confirm.png" if width == 1920 else f"fleet_cancel_all_confirm_{width}.png")
         dialog.locator('ui-button[kind=quiet]').click()
         declined = [post for post in posts if post[1] == "/api/fleet/cancel-all"]
+        assert page.locator("#cancel-all-result").is_hidden()
         page.locator("#cancel-all").click()
         dialog.locator('ui-button[kind=irreversible]').click()
-        page.get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for()
+        page.locator("#log").get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for()
+        summary = page.locator("#cancel-all-result")
+        assert "1/3 · 물리 정지 미확인" in summary.inner_text()
+        result_box = summary.bounding_box()
+        assert result_box and result_box["y"] >= 0 and result_box["y"] + result_box["height"] <= height
         page.get_by_text("rosy_02 주행 취소 응답 없음 — 대형 추종 ConnectError · 내비게이션 ConnectError · 차선 추종 ConnectError").wait_for()
         page.get_by_text("rosy_03 주행 취소 실패 — 주소 미확인 — 차선 추종 끄기 미전송").wait_for()
         page.get_by_text("대기 작업 2개 취소 · 로봇 취소 확인 대기 작업 1개").wait_for()
-        save_temp_screenshot(page, "fleet_cancel_all_result.png")
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, "fleet_cancel_all_result.png" if width == 1920 else f"fleet_cancel_all_result_{width}.png")
+        details = page.locator("#cancel-all-details")
+        assert details.is_visible() and details.get_attribute("href") == "#log"
+        details.click()
+        assert page.evaluate("location.hash") == "#log"
+        assert page.locator("#log").is_visible()
+        page.locator("#log-clear").click()
+        assert details.is_hidden()
         assert not errors, f"페이지 오류: {errors}"
         browser.close()
 
@@ -646,6 +665,29 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
     assert declined == []
     assert ("POST", "/api/fleet/cancel-all") in posts
     assert ("POST", "/api/fleet/estop") not in posts
+
+
+def test_fleet_cancel_all_failure_is_visible_beside_action_on_phone(console_url):
+    from playwright.sync_api import sync_playwright, expect
+
+    api = {**API, "/api/fleet/cancel-all": (503, {"detail": {"code": "SERVER_UNAVAILABLE"}})}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({"width": 320, "height": 568})
+        page.goto(console_url, wait_until="networkidle")
+        page.locator("#cancel-all").click()
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        result = page.locator("#cancel-all-result")
+        expect(result).to_contain_text("주행 취소 결과 확인 불가")
+        expect(result).to_contain_text("로봇 상태를 다시 확인하세요")
+        assert "SERVER_UNAVAILABLE" not in result.inner_text()
+        box = result.bounding_box()
+        assert box and box["y"] >= 0 and box["y"] + box["height"] <= 568
+        assert page.locator("#cancel-all-details").is_hidden()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        save_temp_screenshot(page, "fleet_cancel_all_failure_320.png")
+        assert not errors
+        browser.close()
 
 
 DELAYED_FORMATION = {

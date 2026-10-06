@@ -168,6 +168,8 @@ body {
 .dispatch-control > div { display: grid; gap: var(--space-1); min-width: 0; }
 .dispatch-control strong { color: var(--ink); }
 .dispatch-control small { color: var(--ink-quiet); line-height: var(--leading-body); }
+#cancel-all-result { margin: 0; color: var(--ink); }
+#cancel-all-details { color: var(--ink); }
 #dispatch-rearm[hidden] { display: none; }
 /* D-421 — 재허가와 전체 주행 취소는 글 뒤에서 오른쪽에 붙어 선다(한 열 단에서는 글 아래). */
 .dispatch-control > div { margin-right: auto; }

@@ -6445,3 +6445,9 @@ osy-d395-s1d\`.
 - 변경: 객체·픽셀 검수의 다른 탭 저장 충돌을 1440/390px에서 재생하고, 승인 차단·복구 버튼 너비·서버 revision 재조회 경로를 확인했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 충돌 화면 4장; 브라우저 4 passed, `known_failures.py` 0 NEW.
 - gate 변화: 학습 검수 LOCAL 충돌 G2 일부 추가. 실제 검수자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 전체 주행 취소 결과 가시성
+
+- 변경: Fleet 전체 주행 취소의 부분 응답·결과 미확인을 작업 버튼 옆에서 바로 읽고 로봇별 기록으로 이동하게 했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 320/390px 캡처, 브라우저 5 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2/G3 일부 추가. 실제 현장 취소·정지와 운영자 수용, 제품 전체는 HOLD다.
