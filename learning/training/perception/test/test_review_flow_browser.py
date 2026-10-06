@@ -243,6 +243,40 @@ def test_learning_compact_actions_and_connection_form_use_full_width(browser_wor
         page.screenshot(path=str(target), full_page=True)
 
 
+@pytest.mark.parametrize('width', [1440, 800, 390, 320])
+def test_learning_report_age_advances_and_refreshes(browser_workspace, tmp_path, width):
+    page, _, expect = browser_workspace
+    report = tmp_path / 'learning-result'
+    report.mkdir()
+    (report / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
+    page.clock.install()
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.locator('#new-task').click()
+    page.locator('#name').fill('검수할 결과')
+    page.locator('#path').fill(str(report))
+    page.locator('#connect').click()
+    age = page.locator('[data-report-age]')
+    expect(age).to_contain_text('방금 확인')
+    expect(page.locator('#jobs')).to_contain_text('보고서 상태와 단계별 근거를 확인')
+    expect(page.locator('#jobs')).not_to_contain_text('실패·거절 이유')
+    page.clock.fast_forward(121_000)
+    expect(age).to_contain_text('2분 전 확인')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if width <= 390:
+        card = page.locator('#jobs .ui-task-row').bounding_box()
+        search = page.locator('#search').bounding_box()
+        assert abs(card['x'] - search['x']) <= 1 and abs(card['width'] - search['width']) <= 1
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-report-age-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.evaluate('window.scrollTo(0, 0)')
+        page.screenshot(path=str(target), full_page=True)
+    page.locator('#refresh').click()
+    expect(age).to_contain_text('방금 확인')
+
+
 @pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels'])
 @pytest.mark.parametrize('width,height', [(390, 844), (320, 568)])
 def test_learning_compact_header_stays_within_first_view_budget(browser_workspace, route, width, height):
