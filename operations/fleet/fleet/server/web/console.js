@@ -94,8 +94,8 @@ function markLocked(reason = "auth") {
   el("user-role").setAttribute("status", "crit");
   applyRoleToControls(null, operatorControls());
   const pill = el("online-pill");
-  pill.textContent = "토큰 필요";
-  pill.setAttribute("status", "crit");
+  pill.textContent = "접속 전";
+  pill.setAttribute("status", "neutral");
   if (auth.token && reason === "auth") el("console-token").setAttribute("aria-invalid", "true");
   const canvas = el("map-canvas"); canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
   connectionView.show(reason, auth.token);

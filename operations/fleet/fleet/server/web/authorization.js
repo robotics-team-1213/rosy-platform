@@ -26,11 +26,12 @@ export function applyRoleToControls(role, controls) {
         });
       }
       control.disabled = true;
-      if (control.localName === "ui-button") {
+      const note = lockNote(control);
+      // 묶음 안내가 있으면 버튼마다 같은 사유를 되풀이하지 않는다 — 안내 한 줄이 묶음 전체를 말한다.
+      if (control.localName === "ui-button" && !note) {
         control.setAttribute("reason", OPERATOR_REASON);
         continue;
       }
-      const note = lockNote(control);
       if (note) {
         note.hidden = false;
         describe(control, note.id, true);

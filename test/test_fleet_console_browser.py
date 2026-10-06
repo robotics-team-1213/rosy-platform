@@ -1221,12 +1221,12 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#map-tag')?.textContent.includes('paint-test')")
-        assert page.locator("#map-camera").is_visible()
+        # D-487: the calibrated canvas carries the frame; no second copy under the map.
+        assert page.locator("#map-camera").count() == 0
         assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
                              "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
                              "return p[0] > 150 && p[1] < 100 && p[2] < 100; }")
         frame_age["ms"] = "4000"
-        page.wait_for_function("() => document.querySelector('#map-camera').hidden", timeout=7000)
         page.wait_for_function("() => !document.querySelector('#map-tag')?.textContent.includes('paint-test')",
                                timeout=7000)
         assert not errors

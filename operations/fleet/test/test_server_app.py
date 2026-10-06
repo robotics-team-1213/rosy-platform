@@ -503,7 +503,8 @@ def test_console_page_and_its_assets_are_served():
     client = _client(FakeRobot("rosy_01"))
     page = client.get("/console")
     assert page.status_code == 200
-    assert "Rosy Console" in page.text
+    assert "Rosy Fleet" in page.text  # D-487
+    assert "Rosy Console" not in page.text
     assert "ROSY FLEET" not in page.text
     assert "SITE CONSOLE" not in page.text
     script = (Path(__file__).resolve().parents[1] / "fleet" / "server" / "web" / "console.js").read_text(encoding="utf-8")

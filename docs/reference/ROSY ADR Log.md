@@ -476,3 +476,4 @@
 | D-478 | Pinky 검수 웹앱은 명시한 신뢰 망 주소(loopback·사설·Tailscale)에만 선택적으로 바인딩한다(`--host`, 무인증, D-459 확장) | Accepted (2026-10-06, 사용자 결정; 구현은 `--host` 옵션; 착지·배포 승인 아님) |
 | D-479 | 카메라 AE/AWB 잠금은 한 번이 아니라, 잠긴 노출이 길 위를 못 쓰게 만들면 다시 건다 | Proposed (2026-10-06; rosy_26 실기 결함 — 어두운 곳에서 잠긴 노출이 밝은 곳에서 길 띠를 포화시킴; 코드·호스트 pytest까지, DEVICE 별도) |
 | D-482 | Payload 빌드는 이미지가 쓴 ROS 날짜 스냅샷에 고정한다 | Accepted (2026-10-06; payload ROS ABI 불일치 211/314 — 워크플로가 라이브 packages.ros.org에서 설치; 락의 snapshots.ros.org/jazzy/2026-09-11로 고정) |
+| D-487 | 사이트 관제 화면 표시 이름은 Rosy Fleet — 관제는 천장 카메라 버드아이, 로봇 한 대는 Rosy Robot; 카메라 원본 한 번만, 지도 없으면 카메라가 주 화면; 접속 전 안내 하나 | Accepted (2026-10-07, 사용자 결정; D-377 2항 관제 행 표시 이름 대체; id `console`·`console.svg`·`/console` 경로·저장소 키 유지) |

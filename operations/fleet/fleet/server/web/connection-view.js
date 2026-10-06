@@ -29,10 +29,9 @@ export function createConnectionView({scope, el}) {
     el("map-empty-title").textContent = title;
     el("map-empty-detail").textContent = "관제에 접속하면 지도와 로봇 좌표를 확인할 수 있습니다.";
     el("map-tag").textContent = "접속 필요";
-    el("dispatch-control-title").textContent = title;
-    el("dispatch-control-detail").textContent = "관제에 접속하면 대기 작업과 발행 상태를 확인할 수 있습니다.";
+    // 접속 안내는 위 띠 하나가 말한다. 발행 띠는 접속 전엔 읽을 상태가 없어 접는다.
+    el("dispatch-control").hidden = true;
     el("dispatch-rearm").hidden = true;
-
   }
-  return {open: () => setTopbarOpen(true), show, hide: () => { el("connection-guide").hidden = true; }};
+  return {open: () => setTopbarOpen(true), show, hide: () => { el("connection-guide").hidden = true; el("dispatch-control").hidden = false; }};
 }

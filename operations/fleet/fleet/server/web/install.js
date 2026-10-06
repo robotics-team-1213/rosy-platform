@@ -77,8 +77,8 @@ function markLocked() {
   el("user-role").textContent = "인증 필요";
   el("user-role").setAttribute("status", "crit");
   const pill = el("online-pill");
-  pill.textContent = "토큰 필요";
-  pill.setAttribute("status", "crit");
+  pill.textContent = "접속 전";
+  pill.setAttribute("status", "neutral");
   el("console-token").setAttribute("aria-invalid", "true");
   applyRole();
 }
