@@ -31,11 +31,19 @@ import cv2
 import numpy as np
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from student_t import t95  # noqa: E402
+
 # Two views (or every placement) of one static mount must agree this closely.
 VIEW_HEIGHT_TOL_M = 0.002
 VIEW_PITCH_TOL_DEG = 0.15
 VIEW_ROLL_TOL_DEG = 0.3
 MIN_PLACEMENTS = 5
+# Smallest tolerance a truth check may claim: a tape or caliper from the floor to the lens
+# centre reads to about 1 mm; a digital inclinometer to about 0.2 deg before mount error.
+TRUTH_MIN_TOL = {'pitch_deg': 0.2, 'roll_deg': 0.2, 'height_m': 0.001}
+# Starting guesses for a first image the detector misses: the profile pitch plus these (deg).
+GUESS_PITCH_OFFSETS_DEG = (0.0, 2.0, 4.0, -2.0)
 METHOD = 'camera_board/1'
 # The robot runtime's install root; its presence means this process runs on a robot.
 ROBOT_INSTALL = Path('/opt/rosy/current')
@@ -119,8 +127,6 @@ def placement_fit(placements, *, board_elevation_m, reseats=()):
         return np.array([f[key] for f in fits], float)
 
     n = len(placements)
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from analyze_session import t95
     t = t95(n - 1)
     values, uncertainty, spread = {}, {}, {}
     for key, band, scale, tol in (('pitch_rad', 'pitch_deg', math.degrees(1), VIEW_PITCH_TOL_DEG),
@@ -155,6 +161,33 @@ def store_candidate(store, robot, fit, *, systematic, sessions, extra):
                                 'fit_step': {'pitch_deg': 0., 'roll_deg': 0., 'height_m': 0.},
                                 'across_placements': {'n': fit['placements'], 'reseats': fit['reseats']}},
                      extra=extra)
+
+
+TRUTH_HELP = ('Accepted truth: height = tape or caliper from the floor to the lens centre (TOL >= 1 mm); '
+              'pitch/roll = digital inclinometer on the camera housing or on a flat reference of the mount '
+              '(TOL >= 0.2 deg plus the mount error). Never the wall-edge fit or anything through the same '
+              'intrinsics.')
+
+
+def fit_first(gray, k, square_m, profile, board_elevation_m):
+    """(fit, guess) for the first placement: no guess first, else guesses from the camera
+    profile (its pitch plus GUESS_PITCH_OFFSETS_DEG, its roll, its height above the board).
+    guess is None when none was needed. ValueError when no guess finds the board."""
+    try:
+        return fit_image(gray, k, square_m), None
+    except ValueError:
+        pass
+    for offset in GUESS_PITCH_OFFSETS_DEG:
+        guess = {'pitch_rad': float(profile['pitch_rad']) + math.radians(offset),
+                 'roll_rad': float(profile.get('roll_rad', 0.0)),
+                 'height_above_board_m': float(profile['height_m']) - board_elevation_m}
+        try:
+            return fit_image(gray, k, square_m, seed=guess), {**guess, 'source': 'camera_profile',
+                                                              'pitch_offset_deg': offset}
+        except ValueError:
+            continue
+    raise ValueError('checkerboard not found in the first placement, without a guess or with the camera '
+                     'profile guesses; retake it nearer and less steep, whole board in view')
 
 
 def fit_image(gray, k, square_m, seed=None):
@@ -207,7 +240,8 @@ def main(argv=None):
                         help='PC mirror of the calibration store (gitignored data/)')
     for key, unit in (('height', 'mm'), ('pitch', 'deg'), ('roll', 'deg')):
         parser.add_argument(f'--truth-{key}-{unit}', type=float, nargs=2, metavar=('VALUE', 'TOL'),
-                            help=f'independent truth check of the {key} ({unit}) and its tolerance; --store needs all three')
+                            help=f'independent truth of the camera {key} ({unit}) and its tolerance; --store needs '
+                                 f'all three. {TRUTH_HELP}')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(argv)
     if ROBOT_INSTALL.exists():
@@ -222,10 +256,15 @@ def main(argv=None):
             parser.error(f'--store needs at least {MIN_PLACEMENTS} --placement images')
         if args.board_elevation_mm is None or args.board_elevation_estimated:
             parser.error('--store needs a measured --board-elevation-mm (not estimated)')
-        truth = (args.truth_height_mm, args.truth_pitch_deg, args.truth_roll_deg)
-        if any(t is None for t in truth) or not all(math.isfinite(v) for t in truth for v in t)                 or min(t[1] for t in truth) < 0:
+        truth = {'height_m': args.truth_height_mm, 'pitch_deg': args.truth_pitch_deg, 'roll_deg': args.truth_roll_deg}
+        if any(value is None for value in truth.values()):
             parser.error('--store needs an independent truth check (--truth-height-mm, --truth-pitch-deg, '
                          '--truth-roll-deg, each VALUE TOL): board scatter cannot see shared systematic error')
+        for key, value in truth.items():
+            tol = value[1] / 1000 if key == 'height_m' else value[1]
+            if not all(math.isfinite(v) for v in value) or tol < TRUTH_MIN_TOL[key]:
+                parser.error(f'truth {key} tolerance {value[1]} is below the minimum '
+                             f'{TRUTH_MIN_TOL[key] * (1000 if key == "height_m" else 1)} ({TRUTH_HELP})')
         return store_main(parser, args, checked_output(args.output))
     if args.placement or args.reseat:
         parser.error('--placement/--reseat are for --store')
@@ -288,8 +327,16 @@ def store_main(parser, args, output):
     profile, k = load_intrinsics(args.camera_profile)
     paths = [*args.placement, *args.reseat]
     images = load_images(parser, profile, paths)
-    first = fit_image(images[0], k, args.square_mm/1000)
-    fits = [first] + [fit_image(image, k, args.square_mm/1000, seed=first) for image in images[1:]]
+    try:
+        first, guess = fit_first(images[0], k, args.square_mm/1000, profile, args.board_elevation_mm/1000)
+        fits = [first]
+        for path, image in zip(paths[1:], images[1:]):
+            try:
+                fits.append(fit_image(image, k, args.square_mm/1000, seed=first))
+            except ValueError as error:
+                raise ValueError(f'{path}: {error}') from error
+    except ValueError as error:
+        parser.error(str(error))
     placements, reseats = fits[:len(args.placement)], fits[len(args.placement):]
     fit = placement_fit(placements, board_elevation_m=args.board_elevation_mm/1000, reseats=reseats)
     systematic = systematic_from_truth(fit, {
@@ -298,7 +345,8 @@ def store_main(parser, args, output):
     named = {f'placement_{i}': path for i, path in enumerate(args.placement)}
     named.update({f'reseat_{i}': path for i, path in enumerate(args.reseat)})
     result = {'status': 'candidate', 'applied': False, **fit, 'placement_fits': placements, 'reseat_fits': reseats,
-              'systematic': systematic, **provenance(args, profile, k, named), 'store_record': None}
+              'systematic': systematic, 'first_placement_guess': guess, **provenance(args, profile, k, named),
+              'store_record': None}
     if fit['consistency_pass']:
         sys.path.insert(0, str(REPO / 'contracts' / 'foundation'))
         from core_common.calibration_store import CalibrationStore
@@ -308,7 +356,8 @@ def store_main(parser, args, output):
             extra={'input_sha256': result['input_sha256'], 'board_elevation_mm': args.board_elevation_mm,
                    'truth': {'height_mm': args.truth_height_mm, 'pitch_deg': args.truth_pitch_deg,
                              'roll_deg': args.truth_roll_deg},
-                   'square_size_mm': args.square_mm, 'placement_fits': placements, 'reseat_fits': reseats})
+                   'square_size_mm': args.square_mm, 'placement_fits': placements, 'reseat_fits': reseats,
+                   'first_placement_guess': guess})
     write(output, result)
     return 0 if result['store_record'] else 2
 

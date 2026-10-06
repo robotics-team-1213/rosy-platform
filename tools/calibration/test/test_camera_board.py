@@ -102,9 +102,9 @@ def test_placement_bands_are_the_across_placement_ci95():
     heights = np.array([p['height_above_board_m'] for p in PLACEMENTS])+.006
     assert fit['values']['height_m'] == pytest.approx(heights.mean())
     assert fit['values']['pitch_rad'] == pytest.approx(np.mean([p['pitch_rad'] for p in PLACEMENTS]))
-    assert fit['uncertainty']['height_m'] == pytest.approx(2.78*heights.std(ddof=1)/math.sqrt(n))
+    assert fit['uncertainty']['height_m'] == pytest.approx(2.776*heights.std(ddof=1)/math.sqrt(n))
     pitches = np.degrees([p['pitch_rad'] for p in PLACEMENTS])
-    assert fit['uncertainty']['pitch_deg'] == pytest.approx(2.78*pitches.std(ddof=1)/math.sqrt(n))
+    assert fit['uncertainty']['pitch_deg'] == pytest.approx(2.776*pitches.std(ddof=1)/math.sqrt(n))
     assert fit['consistency_pass'] and fit['placements'] == n
 
 
@@ -191,3 +191,56 @@ def test_board_fit_refuses_to_run_on_a_robot(monkeypatch, tmp_path):
     monkeypatch.setattr(m, 'ROBOT_INSTALL', tmp_path)  # exists: looks like a robot
     with pytest.raises(SystemExit):
         m.main(['--placement', 'a.png', '--camera-profile', 'p.yaml', '--square-mm', '17', '--output', 'o.json'])
+
+
+def steep_board(x0=.16, y0=.08, elevation=.003, scale=8):
+    """A 9x6 board on the floor seen by an 11.5 deg / -1.2 deg / 0.060 m camera at 320x240,
+    drawn 8x larger and area-averaged (drawing at 320x240 shifts corners by about 1 px)."""
+    pitch, roll, h, f = math.radians(11.5), math.radians(-1.2), .060, 281.6*scale
+    cx, cy = 160.5*scale-.5, 120.5*scale-.5
+    img = np.full((240*scale, 320*scale), 90, np.uint8)
+    for i in range(10):
+        for j in range(7):
+            quad = np.array([[x0+a*.017, y0-b*.017, elevation] for a, b in ((i, j), (i+1, j), (i+1, j+1), (i, j+1))])
+            dx, dy, dz = quad[:, 0], quad[:, 1], quad[:, 2]-h
+            depth, up = dx*math.cos(pitch)-dz*math.sin(pitch), dx*math.sin(pitch)+dz*math.cos(pitch)
+            x, y = -f*dy/depth, -f*up/depth
+            u, v = cx+math.cos(roll)*x-math.sin(roll)*y, cy+math.sin(roll)*x+math.cos(roll)*y
+            cv2.fillConvexPoly(img, np.round(np.column_stack([u, v])*16).astype(np.int32),
+                               20 if (i+j) % 2 == 0 else 235, cv2.LINE_AA, 4)
+    return cv2.resize(img, (320, 240), interpolation=cv2.INTER_AREA)
+
+
+def test_first_placement_falls_back_to_a_guess_from_the_camera_profile():
+    import yaml
+    m = module()
+    root = Path(__file__).resolve().parents[3]
+    profile = yaml.safe_load((root/'middleware'/'apps'/'device'/'pinky'/'profile'/'config'/'camera_nominal.yaml')
+                             .read_text(encoding='utf-8'))
+    k = np.array([[281.6, 0, 160], [0, 281.6, 120], [0, 0, 1]], float)
+    with pytest.raises(ValueError):
+        m.fit_image(steep_board(), k, .017)  # no guess: the steep board is not found
+    fit, guess = m.fit_first(steep_board(), k, .017, profile, .003)
+    assert guess is not None and guess['source'] == 'camera_profile'
+    assert math.degrees(fit['pitch_rad']) == pytest.approx(11.5, abs=.15)
+    assert fit['height_above_board_m']+.003 == pytest.approx(.060, abs=.001)
+    with pytest.raises(ValueError, match='not found'):
+        m.fit_first(np.full((240, 320), 90, np.uint8), k, .017, profile, .003)
+
+
+STORE_ARGV = [a for i in range(5) for a in ('--placement', f'p{i}.png')] + [
+    '--camera-profile', 'p.yaml', '--square-mm', '17', '--board-elevation-mm', '6', '--store', 'rosy-x']
+
+
+@pytest.mark.parametrize('truth', [('--truth-height-mm', '60', '0'), ('--truth-pitch-deg', '11.5', '0.1'),
+                                   ('--truth-roll-deg', '-1.2', '0.15'), ('--truth-height-mm', '60', '0.5')])
+def test_store_refuses_truth_tolerance_below_the_minimum(monkeypatch, tmp_path, capsys, truth):
+    m = module()
+    monkeypatch.setattr(m, 'ROBOT_INSTALL', tmp_path/'absent')
+    good = {'--truth-height-mm': ('60', '1'), '--truth-pitch-deg': ('11.5', '0.2'), '--truth-roll-deg': ('-1.2', '0.2')}
+    good[truth[0]] = truth[1:]
+    argv = [*STORE_ARGV, *[x for key, value in good.items() for x in (key, *value)], '--output', str(tmp_path/'o.json')]
+    with pytest.raises(SystemExit):
+        m.main(argv)
+    assert 'tolerance' in capsys.readouterr().err
+    assert (m.TRUTH_MIN_TOL['pitch_deg'], m.TRUTH_MIN_TOL['roll_deg'], m.TRUTH_MIN_TOL['height_m']) == (.2, .2, .001)
