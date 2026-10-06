@@ -4,7 +4,7 @@
 
 | 관찰 | 결과 |
 |---|---|
-| 현장 Fleet·Vision·proxy 이미지 | 세 컨테이너 모두 `e64815c5137e91aee261cee9569cd592e74afed0` 태그. 로컬 후보와 다르다. |
+| 현장 Fleet·Vision·proxy 이미지 | 세 컨테이너 모두 Git commit `e64815c5137e91aee261cee9569cd592e74afed0` 태그. 로컬 후보와 다르다. |
 | 사이트 mDNS | Avahi 활성, 사용자 발견 브리지 timer 활성. LAN에서 두 로봇의 `_rosy._tcp` 광고가 보였다. 광고의 `CORE_READY`는 광고된 값이며 로봇 런타임 검증은 아니다. |
 | Fleet 컨테이너 내부 | 실제 서비스 UID `10001`에서 두 로봇의 `.local` 이름과 `fleet`·`vision`·`proxy` 서비스 이름이 풀렸다. |
 | 개발 PC | 다른 네트워크에서 사이트 `.local` 이름이 풀리지 않았다. 사이트 LAN의 발견 실패로 해석하지 않는다. |
