@@ -16,6 +16,9 @@
   not inside the worker). lidar_yaw_offset is set through line_follow only.
 - The other measured keys stay the worker's defaults in this plan; their
   calibration-store kinds arrive with enforcement (D-400 plan 3).
+- simulation=True (control.sensor_adapter.simulation_sensors, Gazebo overlays only,
+  under use_sim_time): the worker takes the shared Gazebo LiDAR shape, the Gazebo IMU's
+  rad/s and sim time. Not overlay keys: a device overlay cannot set them.
 """
 from __future__ import annotations
 
@@ -34,6 +37,18 @@ INT_KEYS = ("cliff_raw_max", "cliff_clear_raw")
 BOOL_KEYS = ("cliff_enable", "lidar_use_tf")
 CLIFF_MODES = ("low", "high")  # hazard.py: 'high' inverts, anything else behaves as 'low'
 OVERLAY_KEYS = frozenset((*WORKER_DEFAULT_KEYS, *ENVELOPE_KEYS, *BOOL_KEYS))
+SIMULATION_PARAMETERS = {"accept_simulation_scans": True, "imu_angular_velocity_unit": "rad_s",
+                         "use_sim_time": True}
+
+
+def simulation_sensors(sensor_cfg: Mapping[str, Any], *, use_sim_time: bool) -> bool:
+    """control.sensor_adapter.simulation_sensors: explicit, bool, and only under use_sim_time."""
+    flag = sensor_cfg.get("simulation_sensors", False)
+    if type(flag) is not bool:
+        raise ValueError("control.sensor_adapter.simulation_sensors must be a bool")
+    if flag and use_sim_time is not True:
+        raise ValueError("control.sensor_adapter.simulation_sensors needs use_sim_time (Gazebo only)")
+    return flag
 
 
 @dataclass(frozen=True)
@@ -75,7 +90,7 @@ def _envelope(key: str, value: float, what: str) -> float:
 
 def resolve_safety_params(*, lidar_forward_deg: float, lidar_source: str,
                           caps: Sequence[tuple[float, float]],
-                          overlay: Mapping[str, Any]) -> SafetyParams:
+                          overlay: Mapping[str, Any], simulation: bool = False) -> SafetyParams:
     """caps = every CORE speed cap as (linear, angular) (SpeedLimits max/manual/fleet)."""
     if "lidar_yaw_offset" in overlay:
         raise ValueError("set the LiDAR mount through line_follow.lidar_forward_deg, "
@@ -107,6 +122,10 @@ def resolve_safety_params(*, lidar_forward_deg: float, lidar_source: str,
                     f"{key} {value!r} is below the CORE speed cap {cap_for[key]}")
         parameters[key] = value
         sources[key] = "operator overlay"
+
+    if simulation:
+        parameters.update(SIMULATION_PARAMETERS)
+        sources.update(dict.fromkeys(SIMULATION_PARAMETERS, "simulation_sensors"))
 
     use_tf = parameters.get("lidar_use_tf", True)  # worker default True
     sources["lidar_yaw_offset"] = (
