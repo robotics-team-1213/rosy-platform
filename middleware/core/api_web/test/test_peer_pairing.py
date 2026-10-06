@@ -3,6 +3,7 @@ import base64
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -18,7 +19,7 @@ from fastapi.testclient import TestClient
 from core_api_web.api import deps
 from core_api_web.api.errors import ApiError, register_exception_handlers
 from core_api_web.api.peer_pairing.peer_crypto import public_key, transcript, verify
-from core_api_web.api.peer_pairing.receiver_service import PeerReceiver, Refused
+from core_api_web.api.peer_pairing.receiver_service import PeerReceiver, RateLimited, Refused, WrongCode
 from core_api_web.api.peer_pairing.receiver_repository import OverlayRepository
 from core_api_web.api.peer_pairing.receiver_routes import router
 
@@ -397,6 +398,189 @@ class BoundedPeer(unittest.TestCase):
         with patch(module + '.verify', side_effect=AssertionError('crypto must not run after admission cap')):
             with self.assertRaises(Refused):
                 self.receiver.request(fields, 'invalid', 'fixture-invalid-source')
+
+
+class ScreenCodeApproval(unittest.TestCase):
+    """D-483: the robot-screen approval code entered by the requester."""
+    sign = BoundedPeer.sign
+
+    def setUp(self):
+        BoundedPeer.setUp(self)
+        self.display = Path(self.tmp.name) / "peer-display"
+        self.display.mkdir()
+        self.receiver = PeerReceiver("rosy_01", Path(self.tmp.name) / "identity.pem", self.repo,
+                                     clock=lambda: self.now, display_dir=str(self.display))
+        self.file = self.display / "approval.json"
+
+    def code(self):
+        return json.loads(self.file.read_text(encoding="utf-8"))["approval_code"]
+
+    def wrong(self, code):
+        alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+        return "".join(alphabet[(alphabet.index(c) + 1) % len(alphabet)] for c in code)
+
+    def client(self):
+        app = FastAPI()
+        app.state.peer_receiver = self.receiver
+        app.include_router(router)
+        return TestClient(app, base_url="https://receiver.test", client=("192.168.10.20", 40000))
+
+    def test_hand_over_shows_code_but_no_response_pending_or_log_carries_it(self):
+        with self.assertLogs("core_api_web.api.peer_pairing", "DEBUG") as logs:
+            logging.getLogger("core_api_web.api.peer_pairing").debug("fixture marker")
+            request = self.request()
+            shown = json.loads(self.file.read_text(encoding="utf-8"))
+            code = shown["approval_code"]
+            self.assertEqual({"display_code", "approval_code", "label", "expires_at"}, set(shown))
+            self.assertEqual((request["display_code"], "Tablet"), (shown["display_code"], shown["label"]))
+            self.assertRegex(code, r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$")
+            if os.name == "posix":
+                self.assertEqual(0o640, self.file.stat().st_mode & 0o777)
+            seen = [request, self.receiver.status(request["request_id"], request["request_secret"]),
+                    self.receiver.pending(self.owner_id)]
+            self.now += timedelta(seconds=3)
+            seen.append(self.receiver.confirm(request["request_id"], request["request_secret"], code, "fixture"))
+        for value in seen:
+            self.assertNotIn(code, json.dumps(value))
+        self.assertNotIn(code, "\n".join(logs.output))
+        self.assertNotIn(code, self.path.read_text())
+
+    def test_five_wrong_codes_reject_and_the_right_code_then_fails(self):
+        request = self.request()
+        code = self.code()
+        for remaining in (4, 3, 2, 1, 0):
+            with self.assertRaises(WrongCode) as wrong:
+                self.receiver.confirm(request["request_id"], request["request_secret"], self.wrong(code), "fixture")
+            self.assertEqual(remaining, wrong.exception.remaining)
+        self.assertFalse(self.file.exists())
+        with self.assertRaises(Refused):
+            self.receiver.confirm(request["request_id"], request["request_secret"], code, "fixture")
+        self.now += timedelta(seconds=3)
+        self.assertEqual("rejected", self.receiver.status(request["request_id"], request["request_secret"])["state"])
+        self.assertEqual({}, self.repo.grants())
+
+    def test_code_without_the_request_secret_cannot_approve(self):
+        request = self.request()
+        code = self.code()
+        client = self.client()
+        url = f"/api/v1/auth/peer-pairing/requests/{request['request_id']}/confirm"
+        self.assertEqual(422, client.post(url, json={"approval_code": code}).status_code)
+        self.assertEqual(409, client.post(url, json={"approval_code": code},
+                                          headers={"X-Request-Secret": "x" * 43}).status_code)
+        wrong = client.post(url, json={"approval_code": self.wrong(code)},
+                            headers={"X-Request-Secret": request["request_secret"]})
+        self.assertEqual(400, wrong.status_code)
+        self.assertEqual(4, wrong.json()["detail"]["remaining_attempts"])
+        self.assertEqual({}, self.repo.grants())
+        approved = client.post(url, json={"approval_code": code}, headers={"X-Request-Secret": request["request_secret"]})
+        self.assertEqual(200, approved.status_code)
+        self.assertEqual("approved", approved.json()["state"])
+        self.assertNotIn(code, approved.text)
+
+    def test_console_and_code_race_approves_once(self):
+        for _ in range(5):
+            request = self.request(nonce=os.urandom(32).hex())
+            code = self.code()
+            def console(_):
+                return self.receiver.decide(self.owner_id, request["request_id"], "approve", 0)
+            def screen(_):
+                return self.receiver.confirm(request["request_id"], request["request_secret"], code, "fixture")
+            def attempt(job):
+                try:
+                    return job(None)["state"]
+                except Refused:
+                    return None
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(attempt, [console, screen]))
+            self.assertEqual(1, results.count("approved"), results)
+            self.assertIn(request["request_id"], self.repo.grants())
+
+    def test_hand_over_removed_on_every_terminal_state(self):
+        def outcome(name):
+            request = self.request(nonce=os.urandom(32).hex())
+            self.assertTrue(self.file.exists())
+            if name == "approve":
+                self.receiver.decide(self.owner_id, request["request_id"], "approve", 0)
+            elif name == "reject":
+                self.receiver.decide(self.owner_id, request["request_id"], "reject", 0)
+            elif name == "cancel":
+                self.receiver.cancel(request["request_id"], request["request_secret"])
+            elif name == "confirm":
+                self.receiver.confirm(request["request_id"], request["request_secret"], self.code(), "fixture")
+            elif name == "expire":
+                self.now += timedelta(seconds=301)
+                self.receiver.status(request["request_id"], request["request_secret"])
+            elif name == "prune":
+                self.now += timedelta(seconds=601)
+                self.receiver.admit_proof("fixture")
+            self.assertFalse(self.file.exists(), name)
+        for name in ("approve", "reject", "cancel", "confirm", "expire", "prune"):
+            with self.subTest(name=name):
+                outcome(name)
+
+    def test_newest_pending_request_is_shown(self):
+        first = self.request("1" * 64)
+        self.now += timedelta(seconds=1)
+        second = self.request("2" * 64)
+        self.assertEqual(second["display_code"], json.loads(self.file.read_text())["display_code"])
+        self.receiver.cancel(second["request_id"], second["request_secret"])
+        self.assertEqual(first["display_code"], json.loads(self.file.read_text())["display_code"])
+
+    def test_unwritable_display_never_breaks_the_request(self):
+        self.receiver = PeerReceiver("rosy_01", Path(self.tmp.name) / "identity.pem", self.repo,
+                                     clock=lambda: self.now, display_dir=str(self.display / "missing"))
+        with self.assertLogs("core_api_web.api.peer_pairing", "WARNING") as logs:
+            request = self.request()
+            self.receiver.request(dict(self.last_fields, nonce="b" * 64),
+                                  self.sign("request", dict(self.last_fields, nonce="b" * 64)), "fixture-lan-peer")
+        self.assertEqual(1, len(logs.output))
+        self.assertEqual("pending", request["state"])
+
+    def request(self, nonce="a" * 64):
+        info = self.receiver.identity()
+        self.last_fields = {"receiver_id": info["receiver_id"], "receiver_key_sha256": info["receiver_key_sha256"],
+                            "client_id": "tablet-a", "label": "Tablet", "client_public_key": self.pub,
+                            "role": "operator", "nonce": nonce}
+        return self.receiver.request(self.last_fields, self.sign("request", self.last_fields), "fixture-lan-peer")
+
+    def test_screen_code_relationship_is_bounded_and_serves_challenge_and_session(self):
+        request = self.request()
+        decision = self.receiver.confirm(request["request_id"], request["request_secret"], self.code(), "fixture")
+        self.assertFalse(decision["persistent"])
+        self.assertEqual(self.now + timedelta(hours=168), datetime.fromisoformat(decision["authorization_expires_at"]))
+        stored = self.repo.grants()[request["request_id"]]
+        self.assertEqual(("screen-code", "screen-code", False), (stored["approved_by"], stored["issuer_source"],
+                                                                  stored["persistent"]))
+        self.assertEqual("screen-code", self.svc.config["auth"]["peer_pairing"]["audit"][-1]["actor"])
+        grant = decision["relationship_id"]
+        fields = self.receiver.challenge(grant)["fields"]
+        issued = self.receiver.session(grant, fields, self.sign("session-request", fields))
+        self.assertEqual("operator", issued["role"])
+        self.assertTrue(deps.token_alive(self.svc.config, issued["id"]))
+        self.assertEqual("operator", deps.authenticate(self.svc.config, "Bearer " + issued["token"], None).role)
+        self.now += timedelta(hours=169)
+        with self.assertRaises(Refused):
+            self.receiver.challenge(grant)
+
+    def test_role_above_operator_is_forbidden(self):
+        request = self.request()
+        code = self.code()
+        self.receiver._pending[request["request_id"]]["fields"]["role"] = "administrator"
+        response = self.client().post(f"/api/v1/auth/peer-pairing/requests/{request['request_id']}/confirm",
+                                      json={"approval_code": code},
+                                      headers={"X-Request-Secret": request["request_secret"]})
+        self.assertEqual(403, response.status_code)
+        self.assertEqual({}, self.repo.grants())
+
+    def test_confirm_shares_the_source_rate_limit(self):
+        request = self.request()  # the request itself counts against "fixture-lan-peer"
+        code = self.code()
+        for _ in range(29):
+            with self.assertRaises(Refused) as refused:
+                self.receiver.confirm(request["request_id"], request["request_secret"], "222222", "fixture-lan-peer")
+            self.assertNotIsInstance(refused.exception, RateLimited)
+        with self.assertRaises(RateLimited):
+            self.receiver.confirm(request["request_id"], request["request_secret"], code, "fixture-lan-peer")
 
 
 if __name__ == "__main__":

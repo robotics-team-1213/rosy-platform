@@ -33,6 +33,17 @@ class ReceiverDecision(Strict):
     persist_requested: bool = False
 
 
+#: D-483: the robot-screen approval code alphabet and length.
+APPROVAL_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+APPROVAL_CODE_LENGTH = 6
+#: D-483: the issuer marker of a relationship approved by the robot-screen code.
+SCREEN_CODE_ISSUER = "screen-code"
+
+
+class ApprovalCodeConfirm(Strict):
+    approval_code: str = Field(pattern=r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$")
+
+
 class ChallengeFields(Strict):
     relationship_id: str = Field(pattern=r'^[A-Za-z0-9_-]{32}$')
     challenge_id: str = Field(pattern=r'^[A-Za-z0-9_-]{32}$')
@@ -114,7 +125,7 @@ class Relationship(Strict):
     generation: int = Field(ge=0)
     revoked: bool
     issuer_id: str = Field(min_length=1, max_length=128)
-    issuer_source: Literal["card", "manual", "pair-physical", "pair-admin"]
+    issuer_source: Literal["card", "manual", "pair-physical", "pair-admin", "screen-code"]
     issuer_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     approved_by: str = Field(min_length=1, max_length=128)
     persistent: bool
@@ -129,6 +140,11 @@ class Relationship(Strict):
             raise ValueError('relationship lifetime shape mismatch')
         if self.persistent and (not self.persist_requested or self.issuer_source not in {'card', 'manual'}):
             raise ValueError('persistent issuer provenance required')
+        # D-483 5: a screen-code approval is always bounded and names no token issuer.
+        screen = SCREEN_CODE_ISSUER in (self.issuer_source, self.issuer_id, self.approved_by)
+        if screen and not (self.issuer_source == self.issuer_id == self.approved_by == SCREEN_CODE_ISSUER
+                           and self.issuer_digest == self.receiver_key_sha256 and self.expires_at is not None):
+            raise ValueError('screen-code approval shape mismatch')
         return self
 
     @field_validator("expires_at")

@@ -9,7 +9,7 @@ from starlette.concurrency import run_in_threadpool
 from core_api_web.api.deps import get_services
 from core_api_web.api.v1.common import admin
 from core_api_web.api.v1.auth import client_allowed
-from core_common.protocol.peer_pairing import (ReceiverDecision, SignedRequest, SignedSession, StateSnapshot, CreatedRequest,
+from core_common.protocol.peer_pairing import (ApprovalCodeConfirm, ReceiverDecision,SignedRequest, SignedSession, StateSnapshot, CreatedRequest,
     PendingRequest, IdentitySnapshot, ChallengeSnapshot, SessionSnapshot, RevokedSnapshot)
 
 router = APIRouter(prefix="/api/v1/auth/peer-pairing", tags=["auth"])
@@ -83,6 +83,26 @@ async def decision(request: Request, request_id: str = Path(pattern=r'^[A-Za-z0-
     candidate = service(request)
     parsed = await body(request, ReceiverDecision)
     return await call(candidate.decide, owner.token_id, request_id, parsed.action, parsed.revision, parsed.persist_requested, schema=StateSnapshot)
+
+
+@router.post("/requests/{request_id}/confirm")
+async def confirm(request: Request, request_id: str = Path(pattern=r'^[A-Za-z0-9_-]{32}$'), x_request_secret: str = Header(max_length=128)):
+    """D-483 4: the requester enters the robot-screen approval code; no session, the request secret binds it."""
+    from .receiver_service import RateLimited, RoleRefused, WrongCode
+    candidate = service(request)
+    parsed = await body(request, ApprovalCodeConfirm)
+    source = request.client.host if request.client else "unknown"
+    try:
+        result = await run_in_threadpool(candidate.confirm, request_id, x_request_secret, parsed.approval_code, source)
+    except WrongCode as exc:
+        raise HTTPException(400, {"message": "wrong approval code", "remaining_attempts": exc.remaining}) from None
+    except RoleRefused:
+        raise HTTPException(403, "screen-code approval is limited to operator") from None
+    except RateLimited:
+        raise HTTPException(429, "source rate limit reached") from None
+    except ValueError:
+        raise HTTPException(409, "request unavailable or changed") from None
+    return await call(lambda: result, schema=StateSnapshot)
 
 
 @router.post("/relationships/{relationship_id}/challenge")

@@ -4,20 +4,52 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import json
+import logging
+import os
 import secrets
 import threading
 
 from .peer_crypto import PeerIdentity, ProofDenied, fingerprint, verify
-from core_common.protocol.peer_pairing import RepositoryDenied
+from core_common.protocol.peer_pairing import (APPROVAL_CODE_ALPHABET, APPROVAL_CODE_LENGTH, SCREEN_CODE_ISSUER,
+                                               RepositoryDenied)
+
+_log = logging.getLogger(__name__)
+#: D-483 4: wrong approval codes per request before it is rejected.
+APPROVAL_CODE_ATTEMPTS = 5
+#: D-483 3: the hand-over file rosy-face reads (newest pending request only).
+DISPLAY_FILE = "approval.json"
 
 
 class Refused(ValueError):
     pass
 
 
+class RateLimited(Refused):
+    pass
+
+
+class RoleRefused(Refused):
+    pass
+
+
+class WrongCode(Refused):
+    def __init__(self, remaining):
+        super().__init__("wrong approval code")
+        self.remaining = remaining
+
+
+def _code_hash(code):
+    return hashlib.sha256(code.encode()).digest()
+
+
 class PeerReceiver:
-    def __init__(self, receiver_id, key_path, repository, clock=lambda: datetime.now(timezone.utc), anchor=None):
+    def __init__(self, receiver_id, key_path, repository, clock=lambda: datetime.now(timezone.utc), anchor=None,
+                 display_dir=None):
         self.receiver_id, self.repo, self.clock = receiver_id, repository, clock
+        # D-483 3: None (tests, hosts without an LCD hand-over) writes no display file.
+        self._display_dir = display_dir
+        self._display_shown = None
+        self._display_warned = False
         self._anchor = anchor or (lambda: {})
         self._lock = threading.RLock()
         grants = repository.grants()
@@ -36,14 +68,51 @@ class PeerReceiver:
         self._challenges = {k: v for k, v in self._challenges.items() if now < v["expires"]}
         self._rates = {k: [t for t in values if (now-t).total_seconds() < 60]
                        for k, values in self._rates.items() if values and (now-values[-1]).total_seconds() < 60}
+        self._sync_display()
+
+    def _sync_display(self):
+        """D-483 3: approval.json holds the newest pending request, or is absent. Called under the lock."""
+        if self._display_dir is None:
+            return
+        now = self.clock()
+        live = [row for row in self._pending.values() if row["state"] == "pending" and now < row["expires"]]
+        newest = max(live, key=lambda row: row["created"], default=None)
+        shown = None if newest is None else {
+            "display_code": newest["display_code"], "approval_code": newest["approval_code"],
+            "label": newest["fields"]["label"], "expires_at": newest["expires"].isoformat()}
+        if shown == self._display_shown:
+            return
+        target = os.path.join(self._display_dir, DISPLAY_FILE)
+        try:
+            if shown is None:
+                try:
+                    os.unlink(target)
+                except FileNotFoundError:
+                    pass
+            else:
+                temporary = target + ".tmp"
+                descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+                                     0o640)
+                with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                    json.dump(shown, handle)
+                os.chmod(temporary, 0o640)
+                os.replace(temporary, target)
+            self._display_shown = shown
+        except OSError as exc:
+            if not self._display_warned:  # The type only: never the code.
+                self._display_warned = True
+                _log.warning("peer approval display hand-over unavailable (%s)", type(exc).__name__)
+
+    def _admit_source(self, source):
+        if len(self._rates.get(source, [])) >= 30 or (source not in self._rates and len(self._rates) >= 128):
+            raise RateLimited("source rate limit reached")
+        self._rates.setdefault(source, []).append(self.clock())
 
     def request(self, fields, signature, source):
         from core_common.protocol.peer_pairing import PeerRequest
         with self._lock:
             self._prune()
-            if len(self._rates.get(source, [])) >= 30 or (source not in self._rates and len(self._rates) >= 128):
-                raise Refused("source rate limit reached")
-            self._rates.setdefault(source, []).append(self.clock())
+            self._admit_source(source)
         try:
             fields = PeerRequest(**fields).model_dump()
             if len(json.dumps(fields).encode()) > 4096:
@@ -64,9 +133,13 @@ class PeerReceiver:
             request_id, secret = secrets.token_urlsafe(24), secrets.token_urlsafe(32)
             row = {"fields": fields, "secret_hash": hashlib.sha256(secret.encode()).digest(),
                    "revision": 0, "state": "pending", "expires": now+timedelta(seconds=300),
-                   "keep_until": now+timedelta(seconds=600),
+                   "keep_until": now+timedelta(seconds=600), "created": now,
                    "display_code": ''.join(secrets.choice('23456789ABCDEFGHJKMNPQRSTUVWXYZ') for _ in range(4))}
+            # D-483 2: the plaintext stays in this row for the LCD hand-over only; checks use the hash.
+            row["approval_code"] = ''.join(secrets.choice(APPROVAL_CODE_ALPHABET) for _ in range(APPROVAL_CODE_LENGTH))
+            row["code_hash"], row["code_failures"] = _code_hash(row["approval_code"]), 0
             self._pending[request_id] = row
+            self._sync_display()
             return {"request_id": request_id, "request_secret": secret, "display_code": row["display_code"],
                     "state": "pending", "paired": False, "expires_at": row["expires"].isoformat()}
 
@@ -165,6 +238,45 @@ class PeerReceiver:
                 row["revision"] += 1
             except RepositoryDenied as exc:
                 raise Refused("owner approval unavailable") from exc
+            self._sync_display()
+            return self._view(request_id, row)
+
+    def confirm(self, request_id, secret, code, source):
+        """D-483 4: the requester enters the code the robot's LCD shows; it approves like decide()."""
+        with self._lock:
+            self._prune()
+            self._admit_source(source)
+            row = self._row(request_id, secret)
+            if row["state"] != "pending":
+                raise Refused("request changed")
+            fields = row["fields"]
+            if fields["role"] not in {"viewer", "operator"}:
+                raise RoleRefused("screen code approves operator at most")
+            if not hmac.compare_digest(row["code_hash"], _code_hash(code)):
+                row["code_failures"] += 1
+                remaining = APPROVAL_CODE_ATTEMPTS - row["code_failures"]
+                if remaining <= 0:
+                    row["state"] = "rejected"
+                    row["revision"] += 1
+                    self._sync_display()
+                raise WrongCode(max(remaining, 0))
+            relationship = {"id": request_id, "receiver_id": self.receiver_id,
+                            "receiver_key_sha256": self._identity.fingerprint,
+                            "client_id": fields["client_id"], "client_public_key": fields["client_public_key"],
+                            "label": fields["label"], "role": fields["role"], "generation": 0,
+                            "persist_requested": False, "persistent": False,
+                            "issuer_id": SCREEN_CODE_ISSUER, "issuer_source": SCREEN_CODE_ISSUER,
+                            "issuer_digest": self._identity.fingerprint, "approved_by": SCREEN_CODE_ISSUER,
+                            "revoked": False, "used_challenges": [],
+                            "expires_at": (self.clock()+timedelta(hours=168)).isoformat()}
+            try:
+                persisted = self.repo.approve_screen_code(relationship, row["expires"])
+            except RepositoryDenied as exc:
+                raise Refused("screen-code approval unavailable") from exc
+            row.update(state="approved", relationship_id=persisted["id"], persistent=persisted["persistent"],
+                       authorization_expires_at=persisted["expires_at"], generation=persisted["generation"],
+                       revision=row["revision"]+1)
+            self._sync_display()
             return self._view(request_id, row)
 
     def cancel(self, request_id, secret):
@@ -174,6 +286,7 @@ class PeerReceiver:
                 raise Refused("request changed")
             row["state"] = "cancelled"
             row["revision"] += 1
+            self._sync_display()
             return self._view(request_id, row)
 
     def _grant(self, grant_id):
@@ -182,6 +295,8 @@ class PeerReceiver:
                 (grant["expires_at"] is not None and datetime.fromisoformat(grant["expires_at"]) <= self.clock())
                 or grant["receiver_key_sha256"] != self._identity.fingerprint or grant["receiver_id"] != self.receiver_id):
             raise Refused("relationship unavailable")
+        if grant["issuer_source"] == SCREEN_CODE_ISSUER:
+            return grant  # D-483 5: no issuer token; expiry, revocation and receiver key are checked above.
         try:
             issuer = self.repo.owner(grant["issuer_id"])
             if issuer["digest"] != grant["issuer_digest"] or issuer["source"] != grant["issuer_source"]:
