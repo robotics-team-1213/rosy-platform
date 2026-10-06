@@ -1,4 +1,4 @@
-"""D-485 6·7·8 / D-486 2: one trip request -> one plan, or a ``PlanError``.
+"""D-489 6·7·8 / D-490 2: one trip request -> one plan, or a ``PlanError``.
 
 ``via`` places are solved in the same layered A* as the goal (``planner.search``), so the
 route is optimal over the whole trip and the arc that reaches a via carries on (no U-turn
@@ -98,7 +98,7 @@ def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan
 
 
 def _arrived(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan | None:
-    """D-485 부록: already standing on the goal place, facing its arrive yaw -> an empty plan."""
+    """D-489 부록: already standing on the goal place, facing its arrive yaw -> an empty plan."""
     if request.via or not isinstance(request.goal, str):
         return None
     x, y, yaw = request.start_pose

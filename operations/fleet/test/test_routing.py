@@ -1,4 +1,4 @@
-"""D-485/D-486 7 (a)(b)(c)(e): the lane-state A* planner on the D-484 site map."""
+"""D-489/D-490 7 (a)(b)(c)(e): the lane-state A* planner on the D-488 site map."""
 
 from __future__ import annotations
 
@@ -281,7 +281,7 @@ def _random_map(rng: random.Random) -> SiteMap:
 
 
 def _textbook(graph, start, s0, place=None, on_arcs=None, via=(), extra=None):
-    """Plain Dijkstra over (layer, arc) written from D-485 3 alone (no planner code)."""
+    """Plain Dijkstra over (layer, arc) written from D-489 3 alone (no planner code)."""
     extra = extra or {}
 
     def turn(a, b):

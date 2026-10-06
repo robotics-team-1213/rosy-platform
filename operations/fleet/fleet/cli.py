@@ -104,10 +104,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--site-lane-paint", action="append", default=None, metavar="[MAP_ID=]PATH",
                          help="lane paint STL (Vision's --map-paint file) drawn by the same view")
     console.add_argument("--site-map-import", default=None, type=Path, metavar="LANE_GRAPH",
-                         help="D-484: lane_graph.yaml imported as the first active site map when "
+                         help="D-488: lane_graph.yaml imported as the first active site map when "
                               "the store has none (stored in --tasks-db, else memory)")
     console.add_argument("--site-config", default=None, type=Path,
-                         help="site YAML; its fleet.routing section sets the D-486 planner costs")
+                         help="site YAML; its fleet.routing section sets the D-490 planner costs")
     console.add_argument("--no-localization-service", dest="localization_service",
                          action="store_false", default=True,
                          help="D-395: do not run the Fleet localization service (on by default)")
@@ -566,7 +566,7 @@ def run_console(args: argparse.Namespace) -> None:
 
 
 def _build_site_map(args, tasks_db):
-    """D-484/D-486: site map store (+ first import) and the planner's ``fleet.routing`` costs."""
+    """D-488/D-490: site map store (+ first import) and the planner's ``fleet.routing`` costs."""
     import yaml
 
     from fleet.routing.cost import RoutingConfig
@@ -586,10 +586,10 @@ def _build_site_map(args, tasks_db):
     except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"site map / routing config: {exc}")
     if tasks_db is None:
-        print("warning: no --tasks-db; the D-484 site map lives in memory and is lost on restart",
+        print("warning: no --tasks-db; the D-488 site map lives in memory and is lost on restart",
               file=sys.stderr, flush=True)
     if site_maps.active() is None:
-        print("warning: no active D-484 site map; /route and /trip are refused until one is "
+        print("warning: no active D-488 site map; /route and /trip are refused until one is "
               "imported (--site-map-import) or activated", file=sys.stderr, flush=True)
     return site_maps, routing_config
 

@@ -25,7 +25,7 @@ def test_fleet_serves_the_baked_lane_graph_and_paint():
     fleet = _service(compose, "fleet", "vision")
     assert "--site-lane-graph\n      - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml" in fleet
     assert "--site-lane-paint\n      - /opt/rosy/maps/map_v2_fleet/road_lines.stl" in fleet
-    assert "--site-map-import\n      - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml" in fleet  # D-484
+    assert "--site-map-import\n      - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml" in fleet  # D-488
     dockerfile = (SITE / "Dockerfile.fleet").read_text(encoding="utf-8")
     assert f"{MAP}/lane_graph.yaml {MAP}/meshes/road_lines.stl /opt/rosy/maps/map_v2_fleet/" in dockerfile
     ignore = (SITE / "Dockerfile.fleet.dockerignore").read_text(encoding="utf-8")

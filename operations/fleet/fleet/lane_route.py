@@ -41,7 +41,7 @@ class LaneStep:
 
 
 def route_lines(edge_ids: list[str] | tuple[str, ...], painted):
-    """Stored polylines in order from the active site map's ``Painted`` (D-484).
+    """Stored polylines in order from the active site map's ``Painted`` (D-488).
 
     Unknown or broken joins raise ``LaneRouteError``.
     """

@@ -1,4 +1,4 @@
-"""D-484 M1 site map page in real Chromium (opt-in, ROSY_BROWSER_TESTS=1). No robot moves."""
+"""D-488 M1 site map page in real Chromium (opt-in, ROSY_BROWSER_TESTS=1). No robot moves."""
 
 import os
 import socket

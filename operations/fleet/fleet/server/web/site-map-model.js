@@ -1,4 +1,4 @@
-// D-484 site map page — pure helpers (no DOM) so node tests cover them.
+// D-488 site map page — pure helpers (no DOM) so node tests cover them.
 
 export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'turnaround'];
 export const PLACE_KIND_LABEL = {

@@ -151,7 +151,7 @@ class _YieldPlan:
 
 class StuckResolver:
     def __init__(self, config: ResolverConfig, *, painted: Optional[Callable[[], object]] = None) -> None:
-        """``painted()`` is the active site map's ``Painted`` (D-484) or None: no meet rules."""
+        """``painted()`` is the active site map's ``Painted`` (D-488) or None: no meet rules."""
         self.config = config
         self._painted = painted or (lambda: None)
         self._warned_no_map = False
@@ -338,7 +338,7 @@ class StuckResolver:
         if me is None:
             return None
         painted = self._painted()
-        if painted is None:  # no active site map (D-484): R1/R2/R3 only
+        if painted is None:  # no active site map (D-488): R1/R2/R3 only
             if not self._warned_no_map:
                 self._warned_no_map = True
                 logging.getLogger(__name__).warning("stuck resolver: no active site map; meet rules off")

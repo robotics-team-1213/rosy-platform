@@ -36,8 +36,8 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/server/signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 형식 (`observer_url`·`observer_map` 포함) |
 | `fleet/server/app.py` | FastAPI 표면 — `/api/fleet/*` 와 `/console` UI |
 | `fleet/server/web/` | 관제 UI 정적 자산 (CSP `style-src 'self'` — 인라인 스타일 금지) |
-| `fleet/site_map.py` | D-484 `rosy.site_map/1` 스키마(장소·방향 있는 차로·회전 금지)와 `lane_graph.yaml` 가져오기. 순수 |
-| `fleet/routing/` | D-485/D-486 경로 계획기: 차로 단위 상태 A*(`graph`·`cost`·`planner`·`snap`·`trip`). 표준 라이브러리만, 네트워크·DB·시계 없음 |
+| `fleet/site_map.py` | D-488 `rosy.site_map/1` 스키마(장소·방향 있는 차로·회전 금지)와 `lane_graph.yaml` 가져오기. 순수 |
+| `fleet/routing/` | D-489/D-490 경로 계획기: 차로 단위 상태 A*(`graph`·`cost`·`planner`·`snap`·`trip`). 표준 라이브러리만, 네트워크·DB·시계 없음 |
 | `fleet/server/site_map_store.py`, `site_map_routes.py`, `trip_routes.py` | 지도 초안·활성 버전 저장과 활성화(이름 있는 운영자, 경로 진행 중 거절), `POST /trip` 계획 응답(실행 없음) |
 | `test/fakes.py` | Fake `RobotClient` + `FakeClock` shared by relay/session tests — no network |
 | `test/fake_signals.py` | Fake `SignalClient` — 장치의 409/403/충돌 가드 응답 모양을 고정 + `FakeObserver`/`observed_body()` (관측 v0.3 본문) |

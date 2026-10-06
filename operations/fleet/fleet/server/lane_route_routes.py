@@ -39,8 +39,8 @@ class RouteRequest(BaseModel):
         return self
 
 
-#: A route not stepped for this long is not running (D-484 activation check).
-# ponytail: the console re-posts /route per step; a trip state machine (D-484 M2) replaces this.
+#: A route not stepped for this long is not running (D-488 activation check).
+# ponytail: the console re-posts /route per step; a trip state machine (D-488 M2) replaces this.
 ROUTE_ACTIVE_S = 30.0
 
 
@@ -66,7 +66,7 @@ def install_lane_route_routes(app, *, console, task_service, site_maps,
         active = site_maps.active()
         if active is None:
             raise HTTPException(status_code=409, detail={
-                "code": "SITE_MAP_NOT_ACTIVE", "message": "activate a site map first (D-484)"})
+                "code": "SITE_MAP_NOT_ACTIVE", "message": "activate a site map first (D-488)"})
         try:
             lines = route_lines(body.edges, active[3])
         except LaneRouteError as exc:

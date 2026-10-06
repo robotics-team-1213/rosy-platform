@@ -1,4 +1,4 @@
-"""D-486 1·2: the active site map as directed lanes (arcs).
+"""D-490 1·2: the active site map as directed lanes (arcs).
 
 A ``one_way`` edge is one arc, a ``two_way`` edge two opposite arcs with the same
 ``edge_id``. Arc ids are ``<edge_id>:fwd`` / ``<edge_id>:rev`` (edge ids carry no ':').
@@ -12,7 +12,7 @@ import math
 from dataclasses import dataclass, field
 from functools import cached_property
 
-#: Tangents are read over max(this, lane width), at most half the arc (D-485 부록), so a
+#: Tangents are read over max(this, lane width), at most half the arc (D-489 부록), so a
 #: few-cm wiggle or a pinned end at a node is not read as a turn.
 TANGENT_MIN_M = 0.15
 
@@ -111,7 +111,7 @@ class Graph:
     out_of: dict[str, tuple[str, ...]]
     places: dict[str, object]
     bans: frozenset[tuple[str, str, str]]
-    #: Successor lists per routing config, built on first use (D-486 6: once per map version).
+    #: Successor lists per routing config, built on first use (D-490 6: once per map version).
     _successors: dict = field(default_factory=dict, compare=False, repr=False)
 
     def successors(self, config, transition) -> dict[str, tuple[tuple[str, float], ...]]:

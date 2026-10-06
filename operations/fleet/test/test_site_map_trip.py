@@ -1,5 +1,5 @@
-"""D-484 M1: rosy.site_map/1 schema, draft/active store, lane graph import, and the
-site map + D-486 trip API (plan only)."""
+"""D-488 M1: rosy.site_map/1 schema, draft/active store, lane graph import, and the
+site map + D-490 trip API (plan only)."""
 
 from __future__ import annotations
 
@@ -331,5 +331,5 @@ def test_cli_warns_about_an_in_memory_store_and_no_active_map(capsys):
 
     store, _routing = cli._build_site_map(cli.parse_args(["console"]), None)
     err = capsys.readouterr().err
-    assert "no --tasks-db" in err and "no active D-484 site map" in err
+    assert "no --tasks-db" in err and "no active D-488 site map" in err
     store.close()

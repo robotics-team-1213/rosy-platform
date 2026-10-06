@@ -1,4 +1,4 @@
-"""D-485 5·6: put a robot pose or a coordinate target onto a lane."""
+"""D-489 5·6: put a robot pose or a coordinate target onto a lane."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from fleet.routing.graph import Graph
 
 
 class PlanError(Exception):
-    """``code`` is the D-486 4 API code; ``detail`` goes into the response."""
+    """``code`` is the D-490 4 API code; ``detail`` goes into the response."""
 
     def __init__(self, code: str, detail: dict | None = None) -> None:
         super().__init__(code)

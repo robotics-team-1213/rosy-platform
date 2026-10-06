@@ -1,8 +1,8 @@
-"""D-484 site map storage: one editable draft and immutable activated versions.
+"""D-488 site map storage: one editable draft and immutable activated versions.
 
 The active map is the highest activated version. Activation copies the draft, is done by a
 named operator (routes) and is refused while a lane route is running. Every activation and
-every trip plan (D-486 8) is a row here beside the HTTP audit of the request. Draft saves
+every trip plan (D-490 8) is a row here beside the HTTP audit of the request. Draft saves
 and activations are rows in ``site_map_events``; plans keep the last ``PLAN_KEEP`` within
 ``PLAN_KEEP_S``. Activation refuses a map the planner cannot use.
 """
@@ -87,7 +87,7 @@ class SiteMapStore:
             self._cached = (row[0], site_map, graph, painted_from(site_map))
 
     def active(self) -> Optional[tuple[int, SiteMap, Graph, Painted]]:
-        """``(version, map, graph, painted)`` or None. Built once per version (D-486 6)."""
+        """``(version, map, graph, painted)`` or None. Built once per version (D-490 6)."""
         return self._cached
 
     def active_view(self) -> Optional[dict]:
@@ -173,7 +173,7 @@ class SiteMapStore:
         self._publish()
         return self.active_view()
 
-    # ---- trip plan audit (D-486 8) --------------------------------------------------
+    # ---- trip plan audit (D-490 8) --------------------------------------------------
 
     def record_plan(self, *, plan_id: str, robot_id: str, principal_id: str,
                     map_version: Optional[int], request: dict, result: dict) -> None:

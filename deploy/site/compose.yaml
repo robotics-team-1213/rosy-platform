@@ -53,7 +53,7 @@ services:
       - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml
       - --site-lane-paint
       - /opt/rosy/maps/map_v2_fleet/road_lines.stl
-      # D-484: first active site map when the store has none (later edits live in the store).
+      # D-488: first active site map when the store has none (later edits live in the store).
       - --site-map-import
       - /opt/rosy/maps/map_v2_fleet/lane_graph.yaml
       - --connection-mode

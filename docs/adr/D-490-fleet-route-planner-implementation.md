@@ -1,10 +1,10 @@
-## D-486 관제 경로 계획기 구현 — `fleet/routing` 순수 모듈, 표준 라이브러리 A*, 설정·오류 코드·API·시험 기준
+## D-490 관제 경로 계획기 구현 — `fleet/routing` 순수 모듈, 표준 라이브러리 A*, 설정·오류 코드·API·시험 기준
 
-**Status:** Proposed (2026-10-06, 사용자 요청: "우리가 구현하는 ADR까지 함께 기록"). [D-485](D-485-fleet-route-planning-concept-and-algorithm.md)의 구현 결정이다. [D-484](D-484-fleet-site-map-address-routes.md) M1의 계획기 부분이 이 ADR을 따른다.
+**Status:** Proposed (2026-10-06, 사용자 요청: "우리가 구현하는 ADR까지 함께 기록"). [D-489](D-489-fleet-route-planning-concept-and-algorithm.md)의 구현 결정이다. [D-488](D-488-fleet-site-map-address-routes.md) M1의 계획기 부분이 이 ADR을 따른다.
 
 ### Context
 
-D-485는 무엇을 푸는지 정했다: 차로 단위 상태, 시간 비용, A*, 출발·목표·경유지 규칙, 교차로 동작, 재계획. 이 ADR은 그것을 어디에, 어떤 모양으로 두고, 어떻게 시험하는지 정한다. Fleet 서버는 FastAPI이고, 이미지 의존성을 늘리지 않는다는 원칙이 있다(D-94 계열).
+D-489는 무엇을 푸는지 정했다: 차로 단위 상태, 시간 비용, A*, 출발·목표·경유지 규칙, 교차로 동작, 재계획. 이 ADR은 그것을 어디에, 어떤 모양으로 두고, 어떻게 시험하는지 정한다. Fleet 서버는 FastAPI이고, 이미지 의존성을 늘리지 않는다는 원칙이 있다(D-94 계열).
 
 ### Decision
 
@@ -12,7 +12,7 @@ D-485는 무엇을 푸는지 정했다: 차로 단위 상태, 시간 비용, A*,
    - `graph.py`: 활성 `rosy.site_map/1`에서 차로(arc) 목록, 들어오는/나가는 인덱스, 접선, 길이를 만든다. 불변 객체이며 지도 버전 id를 갖는다.
    - `cost.py`: 차로 비용, 전이 각도 θ와 분류(`straight`/`left`/`right`/`uturn`), 휴리스틱
    - `planner.py`: A*(`heapq`), 결정적 동률 처리, 가상 출발/목표 상태
-   - `snap.py`: 자세·좌표를 차로에 붙이기(D-485 5·6항)
+   - `snap.py`: 자세·좌표를 차로에 붙이기(D-489 5·6항)
    - `trip.py`: 경유지 구간 연결, 제외 규칙, 막힌 차로 진단, 결과 조립
 
    이 모듈들은 **순수**하다. 네트워크·DB·시계·FastAPI를 import하지 않는다. 서버(`server/trip_routes.py`)만 이를 부르고, 저장소에서 활성 지도를 읽고 로봇 스냅샷을 넘긴다. 외부 의존성은 표준 라이브러리뿐이다(networkx 없음).
@@ -31,7 +31,7 @@ D-485는 무엇을 푸는지 정했다: 차로 단위 상태, 시간 비용, A*,
    - `heading_tol_deg` 60
    - `snap_width_factor` 2.0
 
-   범위 밖 값은 기동 때 거절한다. 장소 종류에 `turnaround`를 더한다(D-484 1항 장소 종류 확장).
+   범위 밖 값은 기동 때 거절한다. 장소 종류에 `turnaround`를 더한다(D-488 1항 장소 종류 확장).
 4. **오류 코드(HTTP 422, `{error:{code, detail}}`).** 기존 Fleet 오류 모양을 따른다.
    - `TRIP_START_OFF_MAP`
    - `TRIP_HEADING_CONFLICT`
@@ -44,7 +44,7 @@ D-485는 무엇을 푸는지 정했다: 차로 단위 상태, 시간 비용, A*,
 5. **API 계약.** `POST /api/fleet/robots/{robot_id}/trip`. 이름 있는 operator 이상이고 감사 기록을 남긴다.
    - 본문: `{to: "<place id>" | {x, y, yaw?}, via?: ["<place id>"], arrive_yaw?, speed_cap?, execute?: false}`
    - 응답 200: `{plan_id, map_version, segments, places, actions, length_m, eta_s, expires_at}`
-   - `execute`가 기본 거짓이면 계획만 돌려준다. 실행은 `POST /api/fleet/trips/{plan_id}/start`로 따로 한다. 같은 지도 버전이고 계획 뒤 30 s 안이어야 한다. 실행 경로는 D-484 M2 이후에 연다. M1은 계획 응답과 콘솔 미리보기까지다.
+   - `execute`가 기본 거짓이면 계획만 돌려준다. 실행은 `POST /api/fleet/trips/{plan_id}/start`로 따로 한다. 같은 지도 버전이고 계획 뒤 30 s 안이어야 한다. 실행 경로는 D-488 M2 이후에 연다. M1은 계획 응답과 콘솔 미리보기까지다.
    - API Reference에 행을 더한다.
 6. **성능 예산.** 차로 500개 그래프에서 계획 1회는 호스트 기준 p95 20 ms 이하로 한다. 시험이 이를 잰다. 그래프 객체는 활성 지도 버전마다 한 번 만들어 캐시한다.
 7. **시험.**
@@ -58,10 +58,21 @@ D-485는 무엇을 푸는지 정했다: 차로 단위 상태, 시간 비용, A*,
 
 ### 범위 밖
 
-- trip 실행 상태기계와 로봇 지시 전송(D-484 M2), 다중 로봇 예약(후속 교통 ADR), 콘솔 지도 편집 UI의 세부(D-484 M1 콘솔 항목이 맡는다)
+- trip 실행 상태기계와 로봇 지시 전송(D-488 M2), 다중 로봇 예약(후속 교통 ADR), 콘솔 지도 편집 UI의 세부(D-488 M1 콘솔 항목이 맡는다)
 
 ### Consequences
 
 - 계획기는 지도·자세·설정만 받는 순수 함수라 콘솔 미리보기, 시험, 재계획이 같은 코드를 쓴다.
 - 비용 상수는 사이트 설정이라 실차 데이터로 조정할 수 있고, 조정해도 코드는 바뀌지 않는다.
 - 교통 층은 `blocked_edges`와 `extra_cost` 입력으로만 끼어든다.
+
+### 구현 부록 (2026-10-07)
+
+M1 구현과 독립 검토에서 정한 것이다. 원래 번호는 D-486이었고 main 번호 충돌로 D-490이 됐다. API Reference는 v1.111이다(v1.109·v1.110은 다른 가지가 먼저 썼다).
+
+1. **오류 본문.** 4항의 `{error:{code, detail}}` 대신 Fleet의 FastAPI 오류 모양 `{"detail": {"code", "detail"}}`을 쓴다. 지도 API(`/api/fleet/site-map/*`)도 같은 모양이다. 계획기의 예상하지 못한 실패는 500이 아니라 422 `TRIP_PLAN_FAILED`이고, 지도 버전마다 한 번 기록한다.
+2. **자세.** 로봇 스냅샷 자세에 yaw가 없으면 `TRIP_POSE_UNTRUSTED`다.
+3. **지도 버전.** M1에서 요청과 그래프의 지도 버전이 다르면 `TRIP_NO_ACTIVE_MAP`이다. M2의 `/trips/{plan_id}/start`는 계획 뒤 지도가 바뀌면 `TRIP_MAP_CHANGED`로 거절한다. 그때까지 `/start`와 `execute: true`는 501 `TRIP_EXECUTION_NOT_AVAILABLE`이다.
+4. **활성화 검사.** 활성화는 그래프와 후속 차로 표를 미리 만들어 보고, 계획기가 쓸 수 없는 지도면 거절한다. 그래프와 표는 지도 버전마다 한 번 만든다.
+5. **계획 기록 보존.** 계획과 거절(`UNKNOWN_ROBOT`, 자세 조회 실패 포함)은 모두 기록하고, 최근 1000건이면서 30일 안의 것만 남긴다.
+6. **시험.** 7항 (a)는 계획기 코드를 쓰지 않는 교과서 Dijkstra와 비교한다(장소·좌표 목표, 경유지, 차로 추가 비용). (e)는 캐시를 채운 뒤 40회의 p95를 재고, 바쁜 호스트에서는 두 번까지 다시 잰다. 예산 20 ms는 그대로다.

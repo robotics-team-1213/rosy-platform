@@ -1,4 +1,4 @@
-"""D-484 site map API: read the active map, edit one draft, activate it.
+"""D-488 site map API: read the active map, edit one draft, activate it.
 
 ``GET /api/fleet/site-map`` (D-257 camera rectangle) stays as it is; these live below it.
 Saving the draft and activating it need a named operator and are recorded as site map

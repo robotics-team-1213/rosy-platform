@@ -1,5 +1,5 @@
-// D-484 M1 site map page: view the active map or the draft, edit the draft, activate it,
-// and preview a D-486 trip plan. Nothing here moves a robot.
+// D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
+// and preview a D-490 trip plan. Nothing here moves a robot.
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {

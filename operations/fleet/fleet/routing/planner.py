@@ -1,4 +1,4 @@
-"""D-485 2·4·6: one A* over layered lane states with a time cost (``heapq``, deterministic ties).
+"""D-489 2·4·6: one A* over layered lane states with a time cost (``heapq``, deterministic ties).
 
 A state ``(k, arc)`` is "at the end of this arc, via places 0..k-1 already visited". Reaching
 via ``k``'s place moves the same arc end to layer ``k+1`` at no extra cost, so the arc that

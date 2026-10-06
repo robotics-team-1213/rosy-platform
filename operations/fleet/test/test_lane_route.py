@@ -27,7 +27,7 @@ LANE_GRAPH = ROOT / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane
 
 
 def _site_maps() -> SiteMapStore:
-    """D-484: /route reads the active site map, imported from the configured lane graph."""
+    """D-488: /route reads the active site map, imported from the configured lane graph."""
     store = SiteMapStore()
     store.import_if_empty(from_lane_graph(LANE_GRAPH), source="lane_graph.yaml")
     return store
@@ -230,7 +230,7 @@ def test_durable_task_records_the_short_point(tmp_path):
 
 def test_route_contract_is_in_the_api_reference_and_goal_stays_a_point():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
-    assert "**Version:** v1.109" in reference
+    assert "**Version:** v1.111" in reference
     assert "`/api/fleet/robots/{robot_id}/route`" in reference
     assert "ROUTE_POSE_UNTRUSTED" in reference
     assert "D-463" in reference

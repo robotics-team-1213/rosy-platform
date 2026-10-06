@@ -1,8 +1,8 @@
-"""D-484 ``rosy.site_map/1``: the site map Fleet owns — addresses (places) and directed lanes (edges).
+"""D-488 ``rosy.site_map/1``: the site map Fleet owns — addresses (places) and directed lanes (edges).
 
 Pure: pydantic and PyYAML only, no network, DB, or clock. The store and routes live in
 ``fleet.server.site_map_store`` / ``site_map_routes``; the planner reads this through
-``fleet.routing.graph`` (D-486).
+``fleet.routing.graph`` (D-490).
 
 ``from_lane_graph`` turns a generated ``lane_graph.yaml`` (map frame, metres) into the first
 map of a site. The file path is site configuration (``--site-map-import``), never a repo path.
@@ -72,7 +72,7 @@ class SiteEdge(BaseModel):
 
 
 class TurnBan(BaseModel):
-    """D-485 3: no turn from edge ``from_edge`` into edge ``to_edge`` at place ``at``."""
+    """D-489 3: no turn from edge ``from_edge`` into edge ``to_edge`` at place ``at``."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

@@ -1,8 +1,8 @@
-"""D-484 2 / D-486 5: ``POST /api/fleet/robots/{id}/trip`` plans and returns; it never drives.
+"""D-488 2 / D-490 5: ``POST /api/fleet/robots/{id}/trip`` plans and returns; it never drives.
 
 The robot's LOCALIZED map pose and the active site map go into the pure planner
-(``fleet.routing``). Every plan, refused or not, is a row in the site map store (D-486 8).
-Execution (``execute: true`` and ``POST /api/fleet/trips/{plan_id}/start``) opens with D-484
+(``fleet.routing``). Every plan, refused or not, is a row in the site map store (D-490 8).
+Execution (``execute: true`` and ``POST /api/fleet/trips/{plan_id}/start``) opens with D-488
 M2; until then both answer 501.
 """
 
@@ -25,7 +25,7 @@ from fleet.server.site_auth import SitePrincipal
 from fleet.swarm.transport import RobotApiError
 
 PlaceRef = Annotated[str, Field(min_length=1, max_length=64)]
-#: D-486 5: a plan may be started within this long on the same map version.
+#: D-490 5: a plan may be started within this long on the same map version.
 PLAN_TTL_S = 30.0
 _LOG = logging.getLogger(__name__)
 
@@ -47,12 +47,12 @@ class TripRequest(BaseModel):
 
 
 def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTPException:
-    """D-486 부록: every trip error is ``{"detail": {"code", "detail"}}``."""
+    """D-490 부록: every trip error is ``{"detail": {"code", "detail"}}``."""
     return HTTPException(status_code=status, detail={"code": code, "detail": detail or {}})
 
 
 def install_trip_routes(app, *, console, site_maps, routing_config, require_named_operator) -> None:
-    not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE", {"message": "trip execution opens with D-484 M2"}, 501)
+    not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE", {"message": "trip execution opens with D-488 M2"}, 501)
     failed_versions: set = set()  # an unexpected planner failure is logged once per map version
 
     @app.post("/api/fleet/robots/{robot_id}/trip", tags=["fleet"])

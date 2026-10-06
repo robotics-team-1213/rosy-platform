@@ -84,7 +84,7 @@ def install_static_routes(app: FastAPI) -> None:
             headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
         )
 
-    # D-484 — 현장 지도(주소·차로) 보기·초안 편집·경로 미리보기.
+    # D-488 — 현장 지도(주소·차로) 보기·초안 편집·경로 미리보기.
     @app.get("/console/site-map", include_in_schema=False)
     def site_map_page():
         return FileResponse(

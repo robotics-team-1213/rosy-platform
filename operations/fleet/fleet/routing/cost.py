@@ -1,4 +1,4 @@
-"""D-485 3·4 / D-486 3: time cost, turn angle and class, and the A* bound."""
+"""D-489 3·4 / D-490 3: time cost, turn angle and class, and the A* bound."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ STRAIGHT, LEFT, RIGHT, UTURN, STOP = "straight", "left", "right", "uturn", "stop
 
 @dataclass(frozen=True)
 class RoutingConfig:
-    """Site config ``fleet.routing`` (D-486 3). Out-of-range values are refused at start-up."""
+    """Site config ``fleet.routing`` (D-490 3). Out-of-range values are refused at start-up."""
 
     turn_cost_s: float = 2.0
     uturn_cost_s: float = 6.0

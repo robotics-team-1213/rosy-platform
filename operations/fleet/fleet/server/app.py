@@ -293,7 +293,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     # D-421: one fence shared by cancel-all and the dispatcher closes the overlap window.
     drive_cancel = DriveCancelFence()
-    if site_maps is None:  # D-484: no --tasks-db -> the site map lives in memory only
+    if site_maps is None:  # D-488: no --tasks-db -> the site map lives in memory only
         from fleet.server.site_map_store import SiteMapStore
         site_maps = SiteMapStore()
 
@@ -513,7 +513,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  require_operator=require_operator, require_named_operator=require_named_operator,
                                  read_guard=read_guard, operator_guard=operator_guard,
                                  drive_cancel=drive_cancel)
-    # D-484: the site map store (in memory without one) and the D-486 trip planner.
+    # D-488: the site map store (in memory without one) and the D-490 trip planner.
     from fleet.routing.cost import RoutingConfig
     from fleet.server.site_map_routes import install_site_map_routes
     from fleet.server.trip_routes import install_trip_routes
