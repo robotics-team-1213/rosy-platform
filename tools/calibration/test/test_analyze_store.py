@@ -29,3 +29,50 @@ def test_store_candidates_tolerates_nan_and_inf(tmp_path):
     assert rec["intervals"]["wheel_radius"] == [None, None]
     cam = CalibrationStore(tmp_path).load("rosy-x", "camera_profile", ids["camera_profile"])
     assert cam["values"]["roll_rad"] is None and math.isclose(cam["values"]["pitch_rad"], 0.195)
+
+
+def _cam_run(pitch_deg, roll_deg, height_m, bands, wall_points=500):
+    return {"session": f"s{pitch_deg}", "device": "rosy-x", "straights_only": True,
+            "records": [], "odometry": {},
+            "camera": {"pitch_rad": math.radians(pitch_deg), "roll_rad": math.radians(roll_deg),
+                       "height_m": height_m, "height_source": "fit", "score": 30.0, "score_at_base": 1.0,
+                       "wall_points": wall_points, "uncertainty": bands, "fit_step": AS.CE.PC_FINE_STEPS,
+                       "recommended": True, "why": "fit beats the base profile"}}
+
+
+def _combine(runs, monkeypatch):
+    monkeypatch.setattr(AS, "nominal_wheels", lambda: (0.028, 0.0971))
+    return AS.combine("rosy-x", runs, 181.9, AS.load_profile())
+
+
+def test_camera_interval_is_the_larger_of_score_band_and_across_run_ci95(monkeypatch):
+    # Three runs agree to 0.1 deg in roll but spread 1 deg in pitch: pitch takes the ci95,
+    # roll and height keep the widest run's score half-band (not the best run's).
+    runs = [_cam_run(10.7, -1.4, 0.0600, {"pitch_deg": 0.2, "roll_deg": 0.3, "height_m": 0.002}, 900),
+            _cam_run(11.2, -1.5, 0.0601, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": 0.003}),
+            _cam_run(11.7, -1.5, 0.0599, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": 0.002})]
+    cam = _combine(runs, monkeypatch)["camera"]
+    across = cam["across_runs"]
+    assert cam["uncertainty"]["pitch_deg"] == pytest.approx(across["pitch_rad"]["ci95"])
+    assert across["pitch_rad"]["ci95"] > 0.2
+    assert cam["uncertainty"]["roll_deg"] == pytest.approx(0.3)
+    assert cam["uncertainty"]["height_m"] == pytest.approx(0.003)
+    assert cam["fit_step"] == AS.CE.PC_FINE_STEPS
+
+
+def test_a_kept_base_height_keeps_no_height_band(monkeypatch):
+    run = _cam_run(11.2, -1.5, 0.06343, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": None})
+    run["camera"]["height_source"] = "base"
+    assert _combine([run], monkeypatch)["camera"]["uncertainty"]["height_m"] is None
+
+
+def test_store_records_the_fit_step_and_the_pc_fit_uses_pc_steps(tmp_path):
+    assert AS.CAMERA_FIT_STEPS == AS.CE.PC_FINE_STEPS
+    cand = {"sessions": ["s1"], "odometry": {"wheel_radius": None, "wheel_separation": None},
+            "lidar_yaw_offset_check": {"configured_deg": 181.9, "from_motion_deg": None},
+            "camera": {"pitch_rad": 0.195, "height_m": 0.06, "roll_rad": -0.02,
+                       "uncertainty": {"pitch_deg": 0.3, "roll_deg": 0.2, "height_m": 0.002},
+                       "fit_step": AS.CE.PC_FINE_STEPS, "across_runs": None}}
+    ids = AS.store_candidates(CalibrationStore(tmp_path), "rosy-x", cand)
+    rec = CalibrationStore(tmp_path).load("rosy-x", "camera_profile", ids["camera_profile"])
+    assert rec["intervals"]["fit_step"] == AS.CE.PC_FINE_STEPS
