@@ -7,6 +7,7 @@ obstacle_stop_m 0.12 / resume 0.17, path mode, cruise 0.04 m/s.
 """
 
 import math
+import struct
 from pathlib import Path
 
 import pytest
@@ -284,6 +285,44 @@ def test_memory_expires_after_the_horizon_of_motion():
     with m._lock:
         m._odometer += 0.31                                              # moved past the horizon
     assert _step(m, [], t=t, range_min=RANGE_MIN)[1].state == "TRACKING"
+
+
+# Pinky C1 range_min as the float32 the LaserScan carries (0.05000000074505806).
+C1_RANGE_MIN = struct.unpack("f", struct.pack("f", 0.05))[0]
+
+
+def _ring(radius, beams=640):
+    return [(radius * math.cos(2 * math.pi * i / beams), radius * math.sin(2 * math.pi * i / beams))
+            for i in range(beams)]
+
+
+def test_a_return_at_exactly_range_min_while_stationary_is_not_remembered():
+    """Gazebo 2026-10-06: returns at exactly range_min recompute a hair below it (float
+    rounding) and were remembered; standing still never ages them, so HOLD forever."""
+    m = _manager()
+    _step(m, _ring(C1_RANGE_MIN), range_min=C1_RANGE_MIN)
+    clear = _wall(0.87)
+    for index in range(40):
+        _, status = _step(m, clear, t=T + 0.1 * (index + 1), range_min=C1_RANGE_MIN)
+    assert (status.state, status.clearance_source) == ("TRACKING", None)   # wall past horizon
+
+
+def test_a_post_that_slipped_under_c1_range_min_holds_while_stationary():
+    """The fix must keep D-422: a real post that went under range_min on approach stays."""
+    m = _manager()                                     # post at base (0.05, 0.02): LiDAR range 0.072
+    t, travelled = T, 0.0
+    for _ in range(2):
+        seen = [p for p in [(0.05 - travelled + 0.017, 0.02)]
+                if math.hypot(*p) >= C1_RANGE_MIN]
+        _step(m, seen, t=t, range_min=C1_RANGE_MIN)
+        m.note_wheels(0.04, 0.0, owned=True, now=t)
+        t += 0.5
+        travelled += 0.02
+    assert math.hypot(0.05 - travelled + 0.017, 0.02) < C1_RANGE_MIN    # now invisible
+    m.note_wheels(0.0, 0.0, owned=True, now=t)
+    for index in range(40):
+        _, status = _step(m, [], t=t + 0.1 * index, range_min=C1_RANGE_MIN)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
 
 
 def test_pinky_range_min_straight_stop_is_at_the_blind_edge():
