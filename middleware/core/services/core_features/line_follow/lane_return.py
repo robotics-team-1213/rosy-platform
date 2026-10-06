@@ -66,16 +66,26 @@ class Corridor:
     left: Boundary
     right: Boundary
     geometry_id: str
+    # Projection uncertainty the boundaries were already eroded by (lane_return_evidence).
+    uncertainty_m: float = 0.
 
     def __post_init__(self):
         if not self.geometry_id or self.left.intercept <= self.right.intercept:
             raise ValueError("ordered boundaries and geometry identity required")
+        _finite(self.uncertainty_m)
+        if self.uncertainty_m < 0:
+            raise ValueError("nonnegative projection uncertainty required")
 
     def margin(self, body):
         # Signed perpendicular distances at all four footprint corners.
         return min(min((self.left.y(x)-body.half_width)/math.hypot(1, self.left.slope),
                        (-body.half_width-self.right.y(x))/math.hypot(1, self.right.slope))
                    for x in (body.front, body.rear))
+
+    def free_half(self, body):
+        """Best margin this corridor allows the body (centred): half the lateral play."""
+        scale = math.hypot(1, self.left.slope)+math.hypot(1, self.right.slope)
+        return min((self.left.y(x)-self.right.y(x))/scale for x in (body.front, body.rear))-body.half_width
 
     @property
     def heading(self):
@@ -162,9 +172,19 @@ class ReturnController:
 
     Caller resets on OFF/authority session change. Numeric bounds are internal
     conservative defaults, not a bypass for the caller's lower live limits.
+
+    Containment (D-468 implementation note 2026-10-06): the corridor is already eroded by
+    the measured projection uncertainty, so the URDF footprint corners are inside when the
+    margin, less the lateral travel at the live speed over the evidence age bound, is at
+    least body_margin_m. A normal checkpoint also uses at most (1 - checkpoint_fraction)
+    of the corridor's geometric lateral play.
     """
-    def __init__(self, body):
+    EVIDENCE_TTL_S = .3
+
+    def __init__(self, body, body_margin_m=0., checkpoint_fraction=.5):
         self.body = body
+        self.body_margin_m = body_margin_m
+        self.checkpoint_fraction = checkpoint_fraction
         self.trail = PoseTrail()
         self.checkpoint = None
         self.phase = "tracking"
@@ -184,8 +204,16 @@ class ReturnController:
         self._approach = CorridorApproach()
 
     @staticmethod
-    def _fresh(now, stamp, ttl=.3):
+    def _fresh(now, stamp, ttl=EVIDENCE_TTL_S):
         return stamp is not None and 0 <= now-stamp <= ttl
+
+    def _contained(self, lane, linear_limit):
+        drift = linear_limit*abs(math.sin(lane.heading))*self.EVIDENCE_TTL_S
+        return lane.margin(self.body)-drift >= self.body_margin_m
+
+    def _normal(self, lane):
+        u = lane.uncertainty_m
+        return lane.margin(self.body)+u >= self.checkpoint_fraction*(lane.free_half(self.body)+u)
 
     def restart_verification(self, now):
         """Accepted console RESUME rechecks the lane; it does not resume old motion."""
@@ -256,7 +284,7 @@ class ReturnController:
         source_stamp = inp.corridor_stamp_ns
         lane = (inp.corridor if self._fresh(inp.now, inp.corridor_at)
                 and type(source_stamp) is int and source_stamp >= 0 else None)
-        inside = lane is not None and lane.margin(self.body) >= .015
+        inside = lane is not None and self._contained(lane, inp.linear_limit)
         same = (self.checkpoint is None or (not self._reference_invalid and
                 (fresh_pose and lane is not None and lane.matches(self.checkpoint[1], self.checkpoint[0], p)))
                 )
@@ -270,7 +298,7 @@ class ReturnController:
                 if self._last_evidence is None or source_stamp > self._last_evidence:
                     self._count += 1
                     self._last_evidence = source_stamp
-                if self._count >= 3 and lane.margin(self.body) >= .025 and abs(lane.heading) <= .12:
+                if self._count >= 3 and self._normal(lane) and abs(lane.heading) <= .12:
                     self.checkpoint = (p, lane)
                     self._candidate = None
                 return ReturnAction(self.phase, "contained")
@@ -302,7 +330,7 @@ class ReturnController:
                 self._last_evidence = source_stamp
             if self._count >= 3 and inp.front_clear:
                 self.phase = "tracking"
-                if lane.margin(self.body) >= .025:
+                if self._normal(lane):
                     self.checkpoint = (p, lane)
                 self._opened = self._search_start = self._search_pose = None
                 self._search_attempt = 0

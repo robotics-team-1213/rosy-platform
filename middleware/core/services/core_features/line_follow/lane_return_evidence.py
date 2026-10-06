@@ -132,7 +132,7 @@ class LaneReturnEvidence:
         if set(edges) != {"left", "right"}:
             return ReturnEvidenceView("complete_corridor_unconfirmed", image_pose=image_pose, **base)
         try:
-            corridor = Corridor(edges["left"], edges["right"], evidence.geometry_id)
+            corridor = Corridor(edges["left"], edges["right"], evidence.geometry_id, evidence.uncertainty_m)
         except ValueError:
             return ReturnEvidenceView("boundary_order_invalid", image_pose=image_pose, **base)
         return ReturnEvidenceView("ready", image_pose=image_pose, corridor=corridor, **base)

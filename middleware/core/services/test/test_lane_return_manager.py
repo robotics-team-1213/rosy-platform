@@ -45,8 +45,8 @@ def scan_view(*points):
 def test_departure_blocks_normal_forward_before_attempting_local_return():
     r=rig()
     for t in (1.,1.05,1.1): assert frame(r,t).linear>0
-    # Actual measured sideways drift, retaining the last normal anchor.
-    for step in range(1,10): action=frame(r,1.1+step*.05,step*.003)
+    # Measured sideways drift; the body corner crosses the eroded boundary on the last frame.
+    for step in range(1,10): action=frame(r,1.1+step*.05,step*.0045)
     assert action.linear == action.angular == 0
     assert r[2].status().reason == 'lane_return_containment_unconfirmed'
     assert 'nav.line_stuck_opened' not in r[1].events

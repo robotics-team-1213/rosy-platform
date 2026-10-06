@@ -166,6 +166,11 @@ class LineFollowConfig:
     bridge_slow_scale: float = 0.5
     bridge_distance_scale: float = 1.08
     bridge_time_margin_s: float = 0.5
+    # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the measured
+    # projection uncertainty, so 0 already means every URDF footprint corner is inside. This is
+    # body clearance on top of that. A normal checkpoint uses at most (1 - fraction) of the play.
+    lane_return_body_margin_m: float = 0.0
+    lane_return_checkpoint_fraction: float = 0.5
 
     def __post_init__(self) -> None:
         self._check_recovery()
@@ -248,6 +253,12 @@ class LineFollowConfig:
         if (not _finite(self.recovery_rear_lateral_margin_m)
                 or not 0.0 <= self.recovery_rear_lateral_margin_m <= 0.10):
             raise ValueError("recovery_rear_lateral_margin_m must be in [0, 0.10]")
+        if (not _finite(self.lane_return_body_margin_m)
+                or not 0.0 <= self.lane_return_body_margin_m <= 0.05):
+            raise ValueError("lane_return_body_margin_m must be in [0, 0.05]")
+        if (not _finite(self.lane_return_checkpoint_fraction)
+                or not 0.0 <= self.lane_return_checkpoint_fraction <= 1.0):
+            raise ValueError("lane_return_checkpoint_fraction must be in [0, 1]")
         if self.body_half_width_m is not None and (
                 not _finite(self.body_half_width_m) or not 0.0 < self.body_half_width_m <= 0.5):
             raise ValueError("body_half_width_m must be in (0, 0.5]")
