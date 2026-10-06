@@ -34,3 +34,26 @@ def test_legacy_object_set_is_the_d423_list():
     legacy = class_sets.legacy_object_set()
     assert tuple(c['name'] for c in legacy['classes']) == OBJECT_CLASSES
     assert legacy['source']['kind'] == 'd423_v1'
+
+
+from test_review_app import open_store
+
+
+def test_old_workspace_reads_the_legacy_set_and_binding_is_write_once(tmp_path):
+    store = open_store(tmp_path)
+    assert class_sets.object_set(store)['sha256'] == class_sets.legacy_object_set()['sha256']
+    other = class_sets.from_data_yaml(b'names: [car, person]\n', 'detect')
+    with pytest.raises(ValueError, match='do not reinterpret'):
+        class_sets.bind_object_set(store, other)
+    class_sets.bind_object_set(store, class_sets.legacy_object_set())   # same sha: no-op
+
+
+def test_empty_workspace_accepts_a_new_set_then_is_write_once(tmp_path):
+    store = open_store(tmp_path)
+    with store.connect() as db:
+        db.execute('DELETE FROM frames')
+    other = class_sets.from_data_yaml(b'names: [car, person]\n', 'detect')
+    class_sets.bind_object_set(store, other)
+    assert class_sets.object_set(store)['sha256'] == other['sha256']
+    with pytest.raises(ValueError, match='do not reinterpret'):
+        class_sets.bind_object_set(store, class_sets.legacy_object_set())

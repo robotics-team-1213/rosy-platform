@@ -51,3 +51,22 @@ def from_data_yaml(raw, task):
 
 def legacy_object_set():
     return _record(list(OBJECT_CLASSES), 'detect', {'kind': 'd423_v1'}, KOREAN)
+
+
+def object_set(store):
+    with store.connect() as db:
+        row = db.execute("SELECT value FROM metadata WHERE key='object_class_set'").fetchone()
+    return json.loads(row[0]) if row else legacy_object_set()
+
+
+def bind_object_set(store, record):
+    with store.connect() as db:
+        db.execute('BEGIN IMMEDIATE')
+        row = db.execute("SELECT value FROM metadata WHERE key='object_class_set'").fetchone()
+        current = json.loads(row[0]) if row else legacy_object_set()
+        if current['sha256'] != record['sha256'] and (row or db.execute('SELECT 1 FROM frames LIMIT 1').fetchone()):
+            raise ValueError('workspace object classes differ; do not reinterpret labels')
+        if not row:
+            db.execute("INSERT INTO metadata VALUES ('object_class_set',?)", (json.dumps(record),))
+            db.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='generation'")
+    return record
