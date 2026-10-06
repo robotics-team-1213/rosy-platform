@@ -295,7 +295,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     drive_cancel = DriveCancelFence()
     if site_maps is None:  # D-488: no --tasks-db -> the site map lives in memory only
         from fleet.server.site_map_store import SiteMapStore
-        site_maps = SiteMapStore()
+        from fleet.routing.cost import RoutingConfig
+        site_maps = SiteMapStore(routing_config=routing_config or RoutingConfig())
 
     @asynccontextmanager
     async def lifespan(app):
@@ -523,7 +524,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_site_map_routes(app, site_maps=site_maps, route_active=route_active, read_guard=read_guard,
                             require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps,
-                        routing_config=routing_config or RoutingConfig(),
+                        routing_config=routing_config or site_maps.routing_config,
                         require_named_operator=require_named_operator)
 
     proposal_create = proposal_resolve = None

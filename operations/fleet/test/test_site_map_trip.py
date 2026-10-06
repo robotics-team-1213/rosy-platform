@@ -333,3 +333,12 @@ def test_cli_warns_about_an_in_memory_store_and_no_active_map(capsys):
     err = capsys.readouterr().err
     assert "no --tasks-db" in err and "no active D-488 site map" in err
     store.close()
+
+
+def test_the_store_warms_the_planner_with_the_site_routing_config():
+    from fleet.routing.cost import RoutingConfig
+
+    config = RoutingConfig(turn_cost_s=3.5)
+    store = SiteMapStore(routing_config=config)
+    store.import_if_empty(from_lane_graph(LANE_GRAPH), source="lane_graph.yaml")
+    assert list(store.active()[2]._successors) == [config]

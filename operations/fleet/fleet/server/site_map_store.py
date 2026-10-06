@@ -37,8 +37,11 @@ class SiteMapError(ValueError):
 
 
 class SiteMapStore:
-    def __init__(self, path: Optional[Path] = None, *, clock: Callable[[], float] = time.time) -> None:
+    def __init__(self, path: Optional[Path] = None, *, clock: Callable[[], float] = time.time,
+                 routing_config: Optional[RoutingConfig] = None) -> None:
         self.path = Path(path) if path is not None else None
+        #: The site's ``fleet.routing``: activation warms the successor table the planner uses.
+        self.routing_config = routing_config or RoutingConfig()
         self.clock = clock
         self._lock = threading.RLock()
         self._db = sqlite3.connect(str(self.path) if self.path else ":memory:", check_same_thread=False)
@@ -83,7 +86,7 @@ class SiteMapStore:
                 return
             site_map = SiteMap.model_validate(json.loads(row[1]))
             graph = build_graph(site_map, version=row[0])
-            prepare(graph, RoutingConfig())
+            prepare(graph, self.routing_config)
             self._cached = (row[0], site_map, graph, painted_from(site_map))
 
     def active(self) -> Optional[tuple[int, SiteMap, Graph, Painted]]:
@@ -98,10 +101,9 @@ class SiteMapStore:
         return {"version": row[0], "sha256": row[2], "activated_by": row[3],
                 "activated_at": row[4], "map": json.loads(row[1])}
 
-    @staticmethod
-    def _plannable(site_map: SiteMap) -> None:
+    def _plannable(self, site_map: SiteMap) -> None:
         try:
-            prepare(build_graph(site_map), RoutingConfig())
+            prepare(build_graph(site_map), self.routing_config)
         except (ValueError, ArithmeticError, RecursionError) as exc:
             raise SiteMapError(422, "SITE_MAP_UNPLANNABLE", f"the planner cannot use this map: {exc}") from exc
 

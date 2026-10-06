@@ -579,7 +579,7 @@ def _build_site_map(args, tasks_db):
             site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
         routing = ((site_config.get("fleet") or {}).get("routing") if isinstance(site_config, dict) else None)
         routing_config = RoutingConfig.from_mapping(routing)
-        site_maps = SiteMapStore(tasks_db)
+        site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
         source = getattr(args, "site_map_import", None)
         if source is not None:
             site_maps.import_if_empty(from_lane_graph(source), source=Path(source).name)
