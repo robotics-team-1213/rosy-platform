@@ -67,8 +67,9 @@ class ReviewStore:
             record = object_classes or class_sets.legacy_object_set()
             classes = tuple(c['name'] for c in record['classes'])
             review_return.receive_review(source, human, images, validation, classes=classes)
-            # Bind after validation (a refused import locks nothing) and before any frame row.
-            class_sets.bind_object_set(self, record)
+            # One transaction: the binding commits or rolls back with the frame rows.
+            db.execute('BEGIN IMMEDIATE')
+            class_sets.bind_object_set(self, record, db)
             originals = review_return._parse(Path(source).read_bytes())
             reviews = review_return._parse(Path(human).read_bytes())
             for index, row in originals.items():
@@ -413,8 +414,12 @@ def main():
                         help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
     parser.add_argument('--cad-catalog', type=Path, help='verified CAD reference catalog shown in app')
     args = parser.parse_args()
-    object_classes = (class_sets.from_data_yaml(args.object_classes.read_bytes(), 'detect')
-                      if args.object_classes else None)
+    object_classes = None
+    if args.object_classes:
+        try:
+            object_classes = class_sets.from_data_yaml(args.object_classes.read_bytes(), 'detect')
+        except (OSError, ValueError) as exc:
+            parser.error(f'--object-classes: {exc}')
     store = ReviewStore(args.state, args.source, args.human, args.images, object_classes)
     with store.connect() as db:
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:

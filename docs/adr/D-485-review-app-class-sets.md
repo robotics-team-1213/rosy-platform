@@ -31,6 +31,7 @@
 - 기존 작업 공간은 동작이 그대로이고 6클래스 클래스셋으로 읽힌다.
 - 다른 모델 클래스셋을 검수하려면 새 `--state`가 필요하다.
 - 로봇 쪽 계약은 이 ADR로 바뀌지 않는다. 다른 클래스를 로봇에 배포하려면 별도 ADR과 manifest 변경이 필요하다.
+- 객체 클래스셋 sha(`object_class_set_sha256`)는 `review-contract.json`과 `/api/workspace`에 있고 `/api/decisions`에는 없다. `decision_sha256`은 authority 객체 전체의 sha라서, 넣으면 기존 작업 공간의 sha가 같은 generation에서 바뀌어 `review_authority` same-generation 검사, `review_bridge`, `review_pipeline._logical_key`가 깨진다.
 - 수용: host pytest. 장치·현장 확인은 해당 없음.
 
 **References:** `docs/plans/2026-10-06-review-class-sets-plan.md`, `docs/assessments/2026-10-06-label-review-tool-survey.md`, `learning/training/perception/dataset/review_app.py`.

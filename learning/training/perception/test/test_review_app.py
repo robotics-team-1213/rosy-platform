@@ -260,3 +260,54 @@ def test_restart_keeps_the_bound_set_and_refuses_another(tmp_path):
     ReviewStore(tmp_path / 'state', object_classes=record)
     with pytest.raises(ValueError, match='object classes differ'):
         ReviewStore(tmp_path / 'state', object_classes=class_sets.legacy_object_set())
+
+
+def test_a_failed_import_after_binding_leaves_no_orphan_set(tmp_path):
+    source, human, images = fixture_inputs(tmp_path)
+    rows = [json.loads(line) for line in human.read_text().splitlines()]
+    rows[1]['boxes'][0]['label'] = 'none'   # the receiver accepts REJECT; the store refuses it
+    human.write_text('\n'.join(json.dumps(r) for r in rows), encoding='utf-8')
+    record = class_sets.from_data_yaml(CAR_LIGHT, 'detect')
+    with pytest.raises(ValueError, match='known object class'):
+        ReviewStore(tmp_path / 'state', source, human, images, object_classes=record)
+    (tmp_path / 'again').mkdir()
+    source, human, images = fixture_inputs(tmp_path / 'again')
+    other = class_sets.from_data_yaml(b'names: [traffic_light]\n', 'detect')
+    store = ReviewStore(tmp_path / 'state', source, human, images, object_classes=other)
+    assert class_sets.object_set(store)['sha256'] == other['sha256']
+
+
+def test_restart_with_the_same_names_but_new_display_is_accepted(tmp_path):
+    source, human, images = fixture_inputs(tmp_path)
+    record = class_sets.from_data_yaml(CAR_LIGHT, 'detect')
+    ReviewStore(tmp_path / 'state', source, human, images, object_classes=record)
+    shown = class_sets.from_data_yaml(
+        'names: [car, traffic_light]\ndisplay: {car: "자동차"}\n'.encode('utf-8'), 'detect')
+    ReviewStore(tmp_path / 'state', object_classes=shown)
+
+
+def test_legacy_decision_authority_is_unchanged_by_the_binding(tmp_path):
+    import review_evidence
+    store = open_store(tmp_path)
+    bound = review_evidence.decisions(store)
+    assert set(bound) == {'schema', 'workspace_id', 'generation', 'frames', 'pixel_classes_sha256',
+                          'classes_signature', 'ignore_index', 'map_reference_sha256', 'decision_sha256'}
+    with store.connect() as db:   # the same workspace as made before D-485
+        db.execute("DELETE FROM metadata WHERE key='object_class_set'")
+    assert review_evidence.decisions(store) == bound
+
+
+@pytest.mark.parametrize('content', [None, b'names: [a\n'])
+def test_bad_object_classes_file_is_a_usage_error(tmp_path, monkeypatch, capsys, content):
+    import sys
+    import review_app
+    path = tmp_path / 'data.yaml'
+    if content is not None:
+        path.write_bytes(content)
+    monkeypatch.setattr(sys, 'argv', ['review_app.py', '--state', str(tmp_path / 'state'),
+                                      '--object-classes', str(path)])
+    with pytest.raises(SystemExit) as stop:
+        review_app.main()
+    assert stop.value.code == 2
+    err = capsys.readouterr().err
+    assert '--object-classes' in err and 'Traceback' not in err

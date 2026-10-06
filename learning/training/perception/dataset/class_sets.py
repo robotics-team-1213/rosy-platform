@@ -9,7 +9,7 @@ import json
 
 import yaml
 
-from object_boxes import OBJECT_CLASSES
+from object_boxes import OBJECT_CLASSES, REJECT
 
 KOREAN = {'robot': '로봇', 'obstacle_box': '장애물 상자', 'cone': '콘', 'traffic_light': '신호등',
           'sign': '표지판', 'person_feet': '사람 발'}
@@ -21,6 +21,8 @@ def _record(names, task, source, display=None, colors=None):
         raise ValueError(f'task one of {TASKS}')
     if not names or len(set(names)) != len(names) or not all(isinstance(n, str) and n for n in names):
         raise ValueError('class names must be unique non-empty strings')
+    if REJECT in names:
+        raise ValueError(f'class name reserved: {REJECT!r} rejects a box')
     display = {} if display is None else display
     colors = {} if colors is None else colors
     if not isinstance(display, dict) or not isinstance(colors, dict):
@@ -64,19 +66,22 @@ def object_set(store):
     return json.loads(row[0]) if row else legacy_object_set()
 
 
-def bind_object_set(store, record):
+def bind_object_set(store, record, db=None):
+    """With `db`, the caller owns the open write transaction (binding commits with its frames)."""
     if record.get('task') != 'detect':
         raise ValueError('object class set must be a detect set')
     names = [c['name'] for c in record['classes']]
     if _record(names, record['task'], record['source'])['sha256'] != record['sha256']:
         raise ValueError('class set sha256 does not match its names')
-    with store.connect() as db:
-        db.execute('BEGIN IMMEDIATE')
-        row = db.execute("SELECT value FROM metadata WHERE key='object_class_set'").fetchone()
-        current = json.loads(row[0]) if row else legacy_object_set()
-        if current['sha256'] != record['sha256'] and (row or db.execute('SELECT 1 FROM frames LIMIT 1').fetchone()):
-            raise ValueError('workspace object classes differ; do not reinterpret labels')
-        if not row:
-            db.execute("INSERT INTO metadata VALUES ('object_class_set',?)", (json.dumps(record),))
-            db.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='generation'")
+    if db is None:
+        with store.connect() as own:
+            own.execute('BEGIN IMMEDIATE')
+            return bind_object_set(store, record, own)
+    row = db.execute("SELECT value FROM metadata WHERE key='object_class_set'").fetchone()
+    current = json.loads(row[0]) if row else legacy_object_set()
+    if current['sha256'] != record['sha256'] and (row or db.execute('SELECT 1 FROM frames LIMIT 1').fetchone()):
+        raise ValueError('workspace object classes differ; do not reinterpret labels')
+    if not row:
+        db.execute("INSERT INTO metadata VALUES ('object_class_set',?)", (json.dumps(record),))
+        db.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='generation'")
     return record

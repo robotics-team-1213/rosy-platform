@@ -43,7 +43,7 @@
 | Modify `dataset/object_boxes.py` | `to_yolo_lines`, `merge_review`가 클래스 목록을 인자로 받음(기본 `OBJECT_CLASSES`) |
 | Modify `dataset/review_return.py` | 검증·manifest가 넘겨받은 클래스 목록 사용 |
 | Modify `dataset/review_app.py` | `--object-classes` 첫 실행 인자, 저장 검증, `/api/workspace`에 `object_class_set` |
-| Modify `dataset/review_evidence.py` | `decisions`와 export contract에 `object_class_set_sha256` |
+| Modify `dataset/review_evidence.py` | export contract에 `object_class_set_sha256` (`decisions`에는 넣지 않음, Task 4 Step 4) |
 | Modify `dataset/review_app_web/app.js` | `names` 맵 삭제, 서버 클래스셋으로 select·제목 구성, 숫자키 |
 | Modify `dataset/review_app_web/pixels.js` | `names`·`classToken` 삭제, classes.yaml의 `display`·`color` 사용, 숫자키 |
 | Create `tools/perception/export_class_names.py` | 모델 PC 전용: `.pt` → `data.yaml` |
@@ -245,7 +245,7 @@ def test_yolo_lines_use_the_given_class_order():
 
 **Files:**
 - Modify: `dataset/review_app.py` (`validate_boxes`에 classes, `__init__`에 `object_classes=None`, `main`에 `--object-classes <data.yaml>`, `/api/workspace`)
-- Modify: `dataset/review_evidence.py` (`decisions` 응답과 `review-contract.json`에 `object_class_set_sha256`)
+- Modify: `dataset/review_evidence.py` (`review-contract.json`에 `object_class_set_sha256`; `decisions`에는 넣지 않음)
 - Test: `test/test_review_app.py`
 
 - [ ] **Step 1: 실패하는 시험**
@@ -273,7 +273,7 @@ def test_workspace_with_a_new_class_set_saves_and_exports_its_labels(tmp_path):
   - `/api/workspace`: `'classes'`를 지우지 말고(하위 호환) `'object_class_set': class_sets.object_set(store)`를 더한다.
   - `prepare()`: `review_return.receive_review(..., classes=names)`.
   - `main()`: `--object-classes PATH` → `class_sets.from_data_yaml(path.read_bytes(), 'detect')`.
-- [ ] **Step 4: 통과 + 기존 묶음 통과** — 기존 작업 공간(`legacy`)의 결정 sha가 바뀌지 않아야 한다. `decision_sha256`에 새 필드를 넣으면 기존 소비자의 sha가 바뀌므로, 필드는 `decisions` 최상위에만 더하고 frame row에는 넣지 않는다. `test_review_bridge*.py`, `test_review_authority.py`도 돌린다.
+- [ ] **Step 4: 통과 + 기존 묶음 통과** — 기존 작업 공간(`legacy`)의 결정 sha가 바뀌지 않아야 한다. `decision_sha256`은 authority 객체 전체(최상위 포함)의 sha라서 새 필드를 넣으면 같은 generation에서 sha가 바뀐다(`review_authority` same-generation 검사, `review_bridge`, `review_pipeline._logical_key`). 그래서 `object_class_set_sha256`은 `review-contract.json` 최상위와 `/api/workspace`에만 두고 `/api/decisions`에는 넣지 않는다. `test_review_bridge*.py`, `test_review_authority.py`도 돌린다.
 - [ ] **Step 5: 커밋** `feat(review): workspaces review and export their bound object class set`
 
 ### Task 5: 화면이 서버 클래스셋을 쓴다

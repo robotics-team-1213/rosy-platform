@@ -90,3 +90,8 @@ def test_bind_refuses_non_detect_and_forged_sha(tmp_path):
     forged['sha256'] = class_sets.legacy_object_set()['sha256']
     with pytest.raises(ValueError):
         class_sets.bind_object_set(store, forged)
+
+
+def test_reject_label_is_reserved():
+    with pytest.raises(ValueError, match='reserved'):
+        class_sets.from_data_yaml(b'names: [car, none]\n', 'detect')
