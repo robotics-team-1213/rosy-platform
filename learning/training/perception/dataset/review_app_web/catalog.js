@@ -12,8 +12,9 @@ $('import-form').onsubmit=register;$('import').onclick=register;$('cad-form').on
 $('theme').value=document.documentElement.dataset.theme||'dark';
 $('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
 async function load(){loading=true;token=undefined;controls();show('catalog-error','');$('catalog-load').hidden=false;$('catalog-load').setAttribute('state','pending');$('catalog-load').textContent='자료 등록 권한과 현재 연결을 확인하는 중입니다.';$('catalog-retry').hidden=true;$('map-status').setAttribute('state','pending');$('map-status').textContent='지도 참조 확인 중입니다.';
+  const started=performance.now();const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(loading&&seconds>=3)$('catalog-load').textContent=`서버 응답 대기 ${seconds}초 · 자료 등록 권한과 현재 연결을 확인하고 있습니다.`;},1000);
   try{const value=await request('/api/catalog');token=value.token;$('catalog-path').value=value.catalog||'';$('cad-path').value=value.cad_catalog||'';$('map-status').setAttribute('state','empty');$('map-status').textContent='아직 연결한 지도 참조가 없습니다.';map(value.map_reference);$('catalog-load').hidden=true;}
   catch(error){$('catalog-load').setAttribute('state','error');$('catalog-load').textContent=error.status>=500?error.message:error.message+' 접근 권한과 연결을 확인한 뒤 다시 확인하세요.';$('map-status').setAttribute('state','error');$('map-status').textContent='지도 참조를 확인할 수 없습니다.';$('catalog-retry').hidden=false;}
-  finally{loading=false;controls();}}
+  finally{clearInterval(timer);loading=false;controls();}}
 $('catalog-retry').onclick=load;
 controls();load();

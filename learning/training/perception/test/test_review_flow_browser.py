@@ -1,5 +1,6 @@
 """Real Chromium regression checks for filtered selection and safe label undo."""
 import os
+import re
 import threading
 
 import pytest
@@ -468,6 +469,34 @@ def test_review_delayed_workspace_shows_wait_age(browser_workspace, route, statu
         expect(page.locator(status)).not_to_contain_text('서버 응답 대기')
     else:
         expect(page.locator('#empty-review')).to_be_hidden()
+
+
+@pytest.mark.parametrize('route,api,status,action', [
+    ('/learning', 'learning', '#learning-status', '#new-task'),
+    ('/catalog', 'catalog', '#catalog-load', '#import'),
+])
+@pytest.mark.parametrize('width', [1440, 800, 390])
+def test_learning_list_and_catalog_show_delayed_response_age(browser_workspace, route, api, status, action, width):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    pending = []
+    page.route(f'**/api/{api}', lambda request: pending.append(request))
+    with page.expect_request(f'**/api/{api}'):
+        page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
+    expect(page.locator(status)).to_contain_text(re.compile(r'서버 응답 대기 [3-9]\d*초'), timeout=15000)
+    expect(page.locator(action)).to_be_disabled()
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-{api}-delayed-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+    pending.pop().continue_()
+    expect(page.locator(action)).to_be_enabled()
+    if route == '/catalog':
+        expect(page.locator(status)).to_be_hidden()
+    else:
+        expect(page.locator(status)).not_to_contain_text('서버 응답 대기')
 
 
 @pytest.mark.parametrize('route,api,actions,status,retry', [

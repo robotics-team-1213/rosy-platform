@@ -6622,3 +6622,9 @@ osy-d395-s1d\`.
 - 변경: Fleet 로스터의 기존 두 행동 가정 시험을 현재 세 행동과 320px 별도 전폭 행·390px 세 동등 폭 규칙에 맞췄다. 제품 스타일은 변경하지 않았다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-current\` 현재 트리 캡처 4장과 `fleet-mobile{,-updated}.txt`. 변경 전 320/390px 두 실패, 수정 뒤 브라우저 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: 합성 Fleet 화면의 현재 행동 집합·좁은 폭 근거를 갱신했다. 사이트 설치 빌드와 관제자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(learning): 작업·자료 등록의 응답 대기 시간
+
+- 변경: 학습 작업 목록·자료 등록도 서버 응답이 3초 넘게 보류되면 경과 초를 표시한다. 응답 전 쓰기 행동은 계속 막고 회복 뒤 다시 연다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay/learning-{learning,catalog}-delayed-{1440,800,390}.png`. 브라우저 5 passed/1 timer timeout 뒤 해당 셀 1 passed, `known_failures.py` 0 NEW, JS 구문·diff 검사 통과.
+- gate 변화: 네 학습 경로의 느린 응답 LOCAL 부분 근거가 늘었다. 값별 신선도와 실제 검수자 G3는 HOLD.
