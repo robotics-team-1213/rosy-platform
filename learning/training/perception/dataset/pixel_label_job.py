@@ -229,6 +229,21 @@ def probe_gpu():
         return {"verdict": "hold", "reason": type(exc).__name__}
 
 
+def probe_onnx_cuda(checkpoint):
+    """Exercise the exact ONNX CUDA path used by draft, including one inference."""
+    try:
+        checkpoint = Path(checkpoint).resolve()
+        model, session = prelabel._open_model(checkpoint.parent, providers=["CUDAExecutionProvider"])
+        if model.manifest.onnx_file().resolve() != checkpoint:
+            raise ValueError("model manifest checkpoint differs")
+        logits = session.run(np.zeros(model.manifest.input.shape, dtype=np.float32))
+        if not np.isfinite(logits).all():
+            raise ValueError("ONNX CUDA logits are not finite")
+        return {"verdict": "pass"}
+    except Exception as exc:
+        return {"verdict": "hold", "reason": f"ONNX CUDA {type(exc).__name__}"}
+
+
 def draft_mask(logits, classes, size, min_confidence):
     """Original-size indexed candidate; model-only drivable remains unlabelled."""
     h, w = size
@@ -375,6 +390,11 @@ def main(argv=None):
         print(f"HOLD: {exc}", file=sys.stderr)
         return 1
     gpu = probe_gpu()
+    if gpu["verdict"] == "pass":
+        onnx = probe_onnx_cuda(config["checkpoint"]["path"])
+        gpu["onnx_cuda"] = onnx["verdict"] == "pass"
+        if onnx["verdict"] != "pass":
+            gpu.update(onnx)
     args.out.mkdir(parents=True, exist_ok=True)
     target = args.out / "doctor.json"
     temporary = target.with_suffix(".json.tmp")
@@ -385,7 +405,7 @@ def main(argv=None):
         stream.flush()
         os.fsync(stream.fileno())
     os.replace(temporary, target)
-    print("doctor PASS" if gpu["verdict"] == "pass" else "doctor HOLD: GPU unknown")
+    print("doctor PASS" if gpu["verdict"] == "pass" else f"doctor HOLD: {gpu['reason']}")
     return 0 if gpu["verdict"] == "pass" else 1
 
 
