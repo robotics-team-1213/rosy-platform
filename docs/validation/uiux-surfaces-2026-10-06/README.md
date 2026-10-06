@@ -140,6 +140,8 @@
 
 픽셀 결정·자료 준비의 320px 셀도 추가했다. 사진 이동 칸의 같은 폭을 유지하면서, 편집기의 픽셀 클래스·브러시 반지름·허용치 방식·허용치·겹쳐 보기 입력을 390/320px에서 각각 가용 칸의 전폭으로 맞췄다. 기존 compact CSS 선택자는 사진 이동 칸에만 닿고 편집기 안의 입력 묶음에는 닿지 않았다. 수정 후 두 폭의 집중 브라우저 시험 **2 passed**, 픽셀 브라우저 전체 **11 passed**, 각 `known_failures.py` **0 NEW**이며 320px 이전·다음 이동 칸도 같은 폭으로 재확인했다. 원본은 같은 X: 회차의 `captures/learning-pixels-width-final/learning-pixels-decision-result-{390,320}.png`다. 합성 원본의 LOCAL 화면·작업 근거이며 실제 검수자 수용은 남아 있다.
 
+자료 등록은 합성 검증 폴더를 실제 로컬 서버에 제출한 뒤 새 사진 1장·중복 표현 1개·픽셀 검수 대기 1장의 결과와 저장소 상태를 대조하고, 「객체 검수 대기」를 눌러 새 대기 사진까지 이동했다. 390px에서 입력·등록 행동은 같은 폭의 나란한 칸이고, 320px에서는 둘 다 가용 폭으로 쌓이며 버튼 높이는 정상 조작 크기다. 새 대기 사진 카드도 320px에서 목록의 전폭을 쓰고 상태 문구가 한 줄에 남는다. 집중 브라우저 **2 passed**, `known_failures.py` **0 NEW**; 결과·다음 화면 원본은 같은 X: 회차 `captures/learning-import-final3/learning-import-{result,pending}-{390,320}.png`다. 합성 자료의 LOCAL 작업 근거이며 실제 입력 자료와 검수자 G3는 남아 있다.
+
 Pilot 팔 화면은 카메라 없는 Gazebo fixture에서 빈 영상 자리 때문에 두 조작 창이 오른쪽 좁은 칸에 2:1로 압축됐다. 현재 CSS는 영상이 없을 때 조작부를 먼저 배치하고 동등한 팔·그리퍼 창을 같은 폭으로 쓴다. 영상이 있으면 영상·조작부 병렬 구조를 유지한다. 태블릿 2종·전화·영상 있는 경로의 브라우저 **5 passed**, `known_failures.py` **0 NEW**였다. 명령 경로는 가짜 CORE fixture이며 실기 조작 증거가 아니다.
 
 영상이 있는 Pilot 팔 화면의 병렬 작업 공간과 조작 칸도 같은 폭으로 맞췄다. 2000×1200 브라우저에서 두 칸의 실제 너비 차이는 1px 이하이고, 2000×1200·1200×2000·390×844 조작 배치와 영상 경로의 집중 시험은 **4 passed**, `known_failures.py` **0 NEW**다. 영상 fixture의 이미지는 비어 있어 영상 내용의 가독성 근거가 아니며, 원본은 X: `captures/pilot-arm-equal/`에 있다. 실제 태블릿·로봇과 사용자 G3는 HOLD다.
@@ -182,6 +184,8 @@ Pilot 390×844에서 회전 조작을 첫 화면에 올리려고 아래 조작 �
 현재 트리의 관련 G1 팔레트·토큰·반응형·Fleet 문법 시험은 **83 passed**다. Fleet 지도 적합·키보드 목표 확인 2 passed, 전화 기본 예외·넘침 검사 2 passed이고 세 실행 모두 `known_failures.py`가 0 NEW를 보고했다. 이는 이 회차에서 실행한 범위의 증거이며 D-153 G1 전체를 대체하지 않는다.
 
 D-153이 이름 붙인 G1 시험 중 팔레트·토큰(스타일가이드 포함)·문법 **74 passed**, CORE 증거 **7 passed**를 UI/UX 브랜치 `d04f764c4`의 제품 코드에서 다시 실행했고 두 실행의 `known_failures.py`는 모두 0 NEW였다. 원본 실행 기록은 X: `logs/g1-current-{visual,evidence}.txt`다. `test_styleguide.py` 독립 파일은 현재 트리에 없고 스타일가이드 검사는 `shared/web/test/test_ui_token_contracts.py`에 있다. 이는 G1 코드 계약의 LOCAL 결과이며 G2/G3 판정은 별도다.
+
+현재 변경 트리에서 D-153의 팔레트·토큰/스타일가이드·문법·CORE 증거 계약과 반응형 선언 검사를 다시 실행해 **90 passed**, `known_failures.py` **0 NEW**를 확인했다. 원본은 X: `logs/catalog-width-current-contracts.txt`다. 현재 코드 계약의 LOCAL 재확인이며 모든 표면의 G2/G3를 대신하지 않는다.
 
 이번 브랜치의 전체 `shared/web/test` 재실행은 처음에 세 계약 실패를 드러냈다. 역할 화면의 단순 기록을 D-329 형식의 `matrix.json`과 구분해 `role-state-records.json`으로 이름 붙이고, Fleet compact 머리의 현재 격자 계약을 갱신했으며, 명시적인 활성화 호출을 비활성 사유 누락으로 읽던 검사기를 고쳤다. 개발 연결 버튼은 요청 중·재시도 대기의 비활성 이유를 제공한다. 수정 후 공유 UI 계약 **231 passed, 25 skipped**, 개발 연결의 기본·호환 경로 브라우저 **2 passed**, 각 `known_failures.py` **0 NEW**다. 이유 속성을 제거하면 호환 경로 시험이 실패하고 복원 후 통과했다. 원본 실행 기록은 X: `logs/g1-current-fixed.txt`와 `logs/dev-entry-post-mutation.txt`다. 25건의 skip과 표면별 G2/G3 미완료를 UI/UX GO로 해석하지 않는다.
 

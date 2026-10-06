@@ -41,6 +41,7 @@ surfaces:
     surface: dev
     medium: web
     container_breakpoints:
+      - {value: 22rem, reason: 자료 등록 폼의 좁은 칸에서 입력과 행동을 전폭으로 쌓는다.}
       - {value: 24rem, reason: 390px 전화의 검수 칸은 358px라 공용 22rem 경계 밖이다. 검수 조작을 칸 너비로 읽고 누르게 한다.}
     breakpoints:
       - {value: 90rem, reason: 사진 목록·캔버스·라벨 inspector의 세 칸을 좁은 데스크톱에서 압축한다 (D-461).}

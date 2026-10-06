@@ -5,7 +5,9 @@ import threading
 import pytest
 
 from test_review_app import open_store
+from test_review_cycle import CLASSES, catalog
 from review_app import make_server
+import review_masks
 
 pytestmark = pytest.mark.skipif(os.getenv('ROSY_RUN_BROWSER_TESTS') != '1',
                                 reason='requires explicit local Chromium browser run')
@@ -33,6 +35,44 @@ def browser_workspace(tmp_path):
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+
+
+@pytest.mark.parametrize('width', [390, 320])
+def test_catalog_import_reaches_pending_review_on_phone(browser_workspace, tmp_path, width):
+    page, store, expect = browser_workspace
+    folder, _, _ = catalog(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/catalog', wait_until='networkidle')
+    for form, field, action in [('import-form', 'catalog-path', 'import'),
+                                ('cad-form', 'cad-path', 'cad')]:
+        widths = page.evaluate("""selectors => selectors.map(selector =>
+          document.querySelector(selector).getBoundingClientRect().width)""",
+          [f'#{form}', f'#{form} label', f'#{field}', f'#{action}'])
+        if width == 320:
+            assert max(widths) - min(widths) <= 1, widths
+        else:
+            assert max(widths[1:]) - min(widths[1:]) <= 1, widths
+        assert 44 <= page.locator(f'#{action}').bounding_box()['height'] <= 72
+    page.locator('#catalog-path').fill(str(folder))
+    page.locator('#import').click()
+    expect(page.locator('#result')).to_contain_text('새 사진 1장 · 중복 표현 1개 · 새 픽셀 검수 대기 1장')
+    assert len(store.list_frames()) == 3 and store.get(2)['status'] == 'pending'
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-import-result-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+    page.locator('a[href="/?filter=pending"]').click()
+    expect(page.locator('#counts')).to_contain_text('대기 1')
+    expect(page.locator('#status')).to_contain_text('검수 대기')
+    if width == 320:
+        assert abs(page.locator('#frames ui-button').first.bounding_box()['width']
+                   - page.locator('#frames').bounding_box()['width']) <= 1
+    if output:
+        target = Path(output) / f'learning-import-pending-{width}.png'
+        page.screenshot(path=str(target), full_page=True)
 
 
 @pytest.mark.parametrize('route,left,right', [('/', '.review-stage', '.label-inspector'),

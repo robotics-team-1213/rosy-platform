@@ -657,3 +657,9 @@
 - 변경: Fleet compact 머리의 현재 격자를 정적 계약에 반영하고, 비활성 사유 검사기가 `setOff(false)`·`setEnabled(true)`를 활성화로 읽도록 고쳤다. D-329 `matrix.json` 검사는 유지하고 다른 형식의 역할 기록 이름을 분리했다.
 - 증거: `shared/web/test` 231 passed, 25 skipped, `known_failures.py` 0 NEW. 수정 전 3건 실패, 수정 후 관련 4 passed 및 전체 재실행 녹색.
 - gate 변화: 현재 트리의 공유 UI 코드 계약을 녹색으로 회복했다. 표면별 G2/G3와 장치·현장 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 자료 등록 폼의 칸 폭 선언
+
+- 변경: `pinky-review`의 22rem 칸 경계를 등록했다. 320px 자료 등록 폼은 입력·행동을 전폭으로 쌓고, 390px은 같은 너비로 나란히 둔다. 320px 대기 사진 카드는 목록의 전폭을 쓴다.
+- 증거: 실제 로컬 서버의 합성 검증 폴더 등록→새 대기 검수 이동 브라우저 2 passed, 반응형 계약 9 passed, `known_failures.py` 각 0 NEW.
+- gate 변화: 없음. 합성 자료의 LOCAL 경로이며 실제 검수자·학습 수용은 HOLD.
