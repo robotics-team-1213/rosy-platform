@@ -6,6 +6,17 @@
 
 이 문서를 위에서 아래로 따라 하면 첫 PR까지 갈 수 있다.
 
+```mermaid
+flowchart LR
+    subgraph day1["§1 첫날 (30분)"]
+        a1["초대 수락"] --> a2["클론 · 작성자"] --> a3["Python 3.12 venv"] --> a4["pre-push 훅"] --> a5["lint 확인"]
+    end
+    subgraph work["§3 매번"]
+        b1["이슈"] --> b2["브랜치"] --> b3["작업 · 시험"] --> b4["push"] --> b5["PR · CI"] --> b6["Squash 머지"]
+    end
+    day1 --> work
+```
+
 ---
 
 ## 1. 첫날 설정 (30분)
@@ -95,6 +106,21 @@ python tools/harness/rosy_harness.py lint
 
 ## 2. 공유하는 것 / 공유하지 않는 것
 
+```mermaid
+flowchart LR
+    subgraph pub["공개 — GitHub"]
+        g1["코드 · ADR · SRS"]
+        g2["Issues · Projects"]
+    end
+    subgraph team["팀만 — Notion"]
+        n1["회의록 · 일정"]
+        n2["로봇 IP · 현장 주소 · 접속 정보"]
+    end
+    subgraph never["어디에도 커밋 금지"]
+        x1["서명 키 · SSH 키 · API 토큰"]
+    end
+```
+
 | 무엇 | 어디 | 누가 보나 |
 |---|---|---|
 | 코드, ADR, SRS, API reference, 계획·검증 문서 | GitHub `robotics-team-1213/rosy-platform` | **전 세계 공개** |
@@ -119,6 +145,21 @@ GitHub push protection이 알려진 형식의 토큰은 push 단계에서 막는
 ## 3. 일하는 방법 — 이슈에서 머지까지
 
 ### 3.1 순서
+
+```mermaid
+flowchart TD
+    i["이슈 고르기 / 만들기"] --> br["main에서 브랜치<br/>feat/주제"]
+    br --> w["작업<br/>AGENTS.md · ADR 먼저 읽기"]
+    w --> t{"affected 시험<br/>NEW 실패?"}
+    t -- 있음 --> w
+    t -- 없음 --> c["내 파일만 add · commit"]
+    c --> p{"push<br/>pre-push 훅 통과?"}
+    p -- 실패 --> w
+    p -- 통과 --> pr["PR 열기<br/>템플릿 채우기"]
+    pr --> ci{"CI 녹색?"}
+    ci -- 빨강 --> w
+    ci -- 녹색 --> m["Squash and merge<br/>브랜치 자동 삭제"]
+```
 
 ```bash
 # 1) 최신 main에서 브랜치

@@ -52,6 +52,11 @@ bash tools/run_fleet_sim.sh
 
 테스트는 세 단계다 ([D-436](../adr/D-436-change-scoped-test-tiers.md)).
 
+```mermaid
+flowchart LR
+    a["affected<br/>작업 중 · 로컬<br/>바꾼 범위만"] --> q["quick<br/>push 직전 · pre-push 훅<br/>약 3분"] --> f["full<br/>GitHub CI<br/>main · PR · 야간 · 릴리스"]
+```
+
 | 단계 | 언제 | 명령 |
 |---|---|---|
 | affected | 작업하는 동안 | `python tools/harness/rosy_harness.py affected --base origin/main --run` — 바꾼 파일에 연결된 시험과 가드만 |
