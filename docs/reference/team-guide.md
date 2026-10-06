@@ -1,7 +1,7 @@
 # ROSY 팀 가이드
 
 - **대상:** `robotics-team-1213` org에 새로 합류한 팀원
-- **갱신:** 2026-10-05 · Windows 새 클론에서 §1 명령을 그대로 실행해 확인함
+- **갱신:** 2026-10-06 · Tailscale 접속(§1.7), Notion 역할, 로봇 팀 키 추가. §1.1–1.6은 2026-10-05 Windows 새 클론에서 확인함
 - **규칙 원본:** 이 문서는 안내다. 계약과 다르면 [README 「핵심 계약」](../../README.md#핵심-계약), SRS, ADR이 이긴다.
 
 이 문서를 위에서 아래로 따라 하면 첫 PR까지 갈 수 있다.
@@ -93,13 +93,32 @@ python tools/harness/rosy_harness.py lint
 
 마지막 줄이 `0 error(s)`면 된다. 경고(warning)는 기존 것이라 무시한다.
 
-### 1.7 첫날 체크리스트
+### 1.7 실물 장비 접속 — Tailscale
+
+로봇, 관제 PC, 모델 PC는 실험실 LAN에 있다. 팀원은 **Tailscale**로 어디서든 바로 닿는다. 무료 플랜(최대 6명)이다.
+
+1. 리드가 보낸 **Tailscale 초대 메일**을 수락한다.
+2. https://tailscale.com/download 에서 앱을 설치하고 그 계정으로 로그인한다.
+3. **Linux만:** `sudo tailscale up --accept-routes` — 로봇 LAN 경로를 받는다. Windows·macOS는 기본으로 켜져 있다.
+
+| 대상 | 접속 | 키 |
+|---|---|---|
+| 관제 PC, 모델 PC | `ssh <계정>@<Tailscale 장비 이름>` | 필요 없음 — Tailscale 로그인이 인증 (Tailscale SSH) |
+| 로봇 | `ssh <로봇 별칭>` | 리드가 주는 **팀 키 묶음**(zip) — 압축을 풀고 안의 `README.md`대로. passphrase는 다른 경로(메신저)로 받는다 (D-418) |
+| Fleet 콘솔 | 브라우저 `https://<관제 PC>:<콘솔 포트>` | 콘솔 로그인 |
+
+실제 주소·장비 이름·포트는 **Notion 비공개 페이지**에 있다. 이 저장소에는 적지 않는다 (D-226).
+
+> 로봇 LAN에서 팀원에게 열리는 것은 **팀 장비 고정 IP 구간(.200 이상)** 과 관제 PC, 모델 PC뿐이다. 개인 노트북·휴대폰은 닿지 않는다. 새 팀 장비를 들이면 리드가 공유기에서 .200 이상 고정 IP를 준다.
+
+### 1.8 첫날 체크리스트
 
 - [ ] org 초대 수락, People에 내 아이디가 보인다
 - [ ] `git config user.email`이 내 GitHub 이메일
 - [ ] venv를 켜면 `python --version`이 3.12.x
 - [ ] `.git/hooks/pre-push`가 있다
 - [ ] `rosy_harness.py lint`가 `0 error(s)`
+- [ ] Tailscale 로그인, 관제 PC에 `ssh`가 된다
 - [ ] §4 읽기 순서의 1–3번을 읽었다
 
 ---
@@ -124,10 +143,13 @@ flowchart LR
 | 무엇 | 어디 | 누가 보나 |
 |---|---|---|
 | 코드, ADR, SRS, API reference, 계획·검증 문서 | GitHub `robotics-team-1213/rosy-platform` | **전 세계 공개** |
-| 버그, 할 일 | GitHub Issues + Projects | 공개 |
-| 회의록, 일정 | Notion 팀 페이지 (리드가 게스트로 초대 — 준비 중) | 팀 |
-| 현장 주소, 로봇 IP, 접속 정보 | Notion 비공개 페이지 (준비 중) | 팀 |
-| Notion MCP 연동 토큰 | 리드가 메신저로 개별 전달 | 필요한 팀원 |
+| 버그, 할 일, 진행 상황 — **Claude가 갱신하는 것은 여기** | GitHub Issues + Projects, 저장소 문서 | 공개 |
+| 회의록, 일정 — **사람이 쓰는 것** | Notion 팀 페이지 (리드가 게스트로 초대) | 팀 |
+| 현장 주소, 로봇 IP, 장비 이름, 접속 정보 | Notion 비공개 페이지 | 팀 |
+| Notion MCP 연동 키 | 리드가 사람마다 따로 만들어(`rosy-<이름>`) 메신저로 전달. Claude로 Notion을 고칠 사람만 | 본인 |
+| 로봇 SSH 팀 키 묶음 + passphrase | 리드가 zip과 passphrase를 **서로 다른 경로**로 전달. 만료 90일 | 팀 |
+
+Notion 연동 키는 팀 페이지에만 연결된다. 비공개 페이지(주소·접속 정보)에는 어떤 연동도 연결하지 않는다. 팀원이 빠지면 그 사람의 연동 키와 Tailscale 계정을 지운다.
 
 **저장소에 절대 올리지 않는 것.** 공개 저장소라 한 번 push하면 회수할 수 없다.
 
@@ -262,7 +284,6 @@ git push
 |---|---|---|
 | `ci` 워크플로 실패 원인 정리 | 최근 실행의 절반 가까이가 실패. 녹색이 돼야 PR 필수 검사로 걸 수 있다 | CI |
 | `Payload boot smoke (arm64)` 실패 원인 정리 | 최근 10회 중 9회 실패 | CI·배포 |
-| `tools/*.sh`의 하드코딩 Bearer 토큰을 환경변수로 | 공개 저장소에 토큰 문자열이 남지 않게 | 도구 |
 | 5MB 넘는 파일 추가를 CI에서 경고 | 큰 바이너리가 이력에 쌓이지 않게 | CI |
 | [STATUS.md](../../STATUS.md)에서 `ROS-SIM`이 `HOLD`인 모듈을 시뮬로 올리기 | 장치 없이 게이트를 한 단계 올린다 | 각 모듈 |
 
@@ -279,6 +300,8 @@ git push
 | `main`에 push가 거절됨 | 정상. `main`은 PR로만 → §3.1 |
 | push가 `secret detected`로 거절됨 | 토큰이 커밋에 들어갔다 → 그 커밋에서 빼고 환경변수로 |
 | pre-push가 **내가 건드리지 않은** 시험에서 실패 | `python test/known_failures.py`로 확인. `NEW`인데 내 변경과 무관하면 main이 이미 깨진 것 → Issue로 알리고 리드에게 공유. 우회(`--no-verify`)하지 않는다 |
+| 로봇·관제 PC 주소에 닿지 않음 | Tailscale 앱이 켜져 있는지 → Linux는 `--accept-routes` (§1.7) → 그래도 안 되면 리드에게 (권한 정책) |
+| 로봇 `ssh`가 `Permission denied (publickey)` | 팀 키 묶음 설정이 안 됨, 또는 만료(90일) → 리드에게 새 묶음 요청 |
 | 줄 끝 경고 `LF will be replaced by CRLF` | 무시해도 된다 (`.gitattributes`가 정한다) |
 
 ## 7. 소통
