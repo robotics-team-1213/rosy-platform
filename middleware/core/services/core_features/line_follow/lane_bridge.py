@@ -32,6 +32,7 @@ def bridge_target(anchor, corridor, pose, lookahead):
 class LaneBridgeMixin:
     def _init_bridge(self):
         self._bridge = None  # None | 'armed' (last tick verified contained FOLLOW) | dict (bridging)
+        self._bridge_open = False  # a bridge ran last tick and has not yet been handed to D-468
         self._bridge_hint = None
 
     def set_bridge_route_hint(self, hint):
@@ -47,11 +48,18 @@ class LaneBridgeMixin:
         with self._lock:
             self._bridge_hint = hint
 
-    def _end_bridge(self):
-        if isinstance(self._bridge, dict) and self._return_controller is not None:
-            # A stopped bridge hands D-468 a retrace path that includes the bridged travel.
+    def _hand_back_bridge(self):
+        """Once, when a bridge stops: D-468 retraces over the measured trail incl. the bridge."""
+        if (self._bridge_open and not isinstance(self._bridge, dict)
+                and self._return_controller is not None):
             self._return_controller.rebase_retrace()
+        self._bridge_open = False
+
+    def _end_bridge(self):
+        """Stop a bridge outside the D-468 arbitration (invalid vision)."""
+        self._bridge_open = isinstance(self._bridge, dict)
         self._bridge = None
+        self._hand_back_bridge()
 
     def _bridge_step(self, now, state, view, authority, linear_limit, decision):
         """This tick's bridge decision, or None (D-468 owns the tick). Locked."""
@@ -66,7 +74,8 @@ class LaneBridgeMixin:
         anchor, corridor = ctrl.checkpoint
         pose = view.pose
         guard = self._ir_guard(now) if c.ir_guard_enabled else 'clear'
-        if (not authority or self._bridge_hint not in (None, 'straight') or guard != 'clear'
+        if (not authority or self._recovery.stuck_id is not None
+                or self._bridge_hint not in (None, 'straight') or guard != 'clear'
                 or pose is None or not 0 <= now-pose.received_at <= .3
                 or view.epoch != state['epoch'] or pose.frame != anchor.frame
                 or not c.body_stop_known or self._scan_points is None
@@ -76,9 +85,10 @@ class LaneBridgeMixin:
             state['travel'] += math.hypot(pose.x-state['last'][0], pose.y-state['last'][1])
         state['last'] = (pose.x, pose.y)
         travel = state['travel']*c.bridge_distance_scale  # measured odom, never the command
-        if (travel >= c.bridge_slow_m
-                or now-self._loss_started_at >= c.lost_after_s-c.bridge_time_margin_s):
-            return None
+        elapsed = now-self._loss_started_at
+        if (travel >= c.bridge_slow_m or elapsed < 0
+                or elapsed >= c.lost_after_s-c.bridge_time_margin_s):
+            return None  # a clock that ran backwards cannot prove the time bound
         linear = min(c.cruise_speed, linear_limit)
         if travel >= c.bridge_coast_m:
             linear *= c.bridge_slow_scale
@@ -90,7 +100,9 @@ class LaneBridgeMixin:
         if abs(angular) > cap:
             linear *= cap/abs(angular)  # keep the arc, go slower (D-344 §13)
             angular = math.copysign(cap, angular)
-        self._intended = (linear, angular)  # D-422 sweeps this arc from now on
+        # The arc is the intent even if this tick is blocked: D-422 must keep judging the arc
+        # the bridge would drive (not the stale follow intent) until the path is clear again.
+        self._intended = (linear, angular)
         gap, _, _, resume = self._body_clearance(now)
         if gap is not None and gap <= resume:
             return self._stop_decision('HOLD', 'lane_bridge_blocked')

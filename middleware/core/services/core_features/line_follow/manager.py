@@ -369,7 +369,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
                     or decision.mode is not self._mode
                     or self._mode is LineFollowMode.OFF):
                 return False
-            if (self._return_controller is not None and self._return_controller.phase != 'tracking'
+            if (self._return_controller is not None
+                    and (self._return_controller.phase != 'tracking' or isinstance(self._bridge, dict))
                     and (decision.linear or decision.angular)
                     and not self._return_submission_valid(self._clock(),decision)):
                 return False

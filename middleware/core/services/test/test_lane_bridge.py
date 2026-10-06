@@ -5,7 +5,8 @@ import pytest
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 from core_features.line_follow.manager import LineFollowManager
-from core_features.line_follow.model import LineFollowConfig, LineFollowMode, LineObservation
+from core_features.line_follow.model import (LineFollowConfig, LineFollowDecision, LineFollowMode,
+                                             LineObservation)
 
 DT = .05
 CAMERA = LineFollowMode.CAMERA_LINE
@@ -32,16 +33,28 @@ class Rig:
         self.m.bind_return_motion(probe)
         self.m.set_mode(CAMERA)
 
-    def _pose(self):
+    def _pose(self, pose=True, frame='odom'):
         stamp = round(self.now*1e9)
-        self.m.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame='odom',
-                                   x=self.x, y=self.y, yaw=self.yaw, received_at=self.now)
+        if pose:
+            self.m.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame=frame,
+                                       x=self.x, y=self.y, yaw=self.yaw, received_at=self.now)
         self.m.observe_scan_points(self.points, received_at=self.now)
 
-    def step(self, seen=True, *, confidence=.9, quality=None, move=True, slip=None):
-        self.now = round(self.now+DT, 6)
-        self._pose()
-        if seen:
+    def step(self, seen=True, *, confidence=.9, quality=None, move=True, slip=None,
+             dt=DT, pose=True, frame='odom', ir=None):
+        """seen: True lane, False invisible frame, None no camera frame at all.
+        ir: None no IR sample, else the IR line error (or 'none' for an invisible IR line)."""
+        self.now = round(self.now+dt, 6)
+        self._pose(pose, frame)
+        if ir is not None:
+            visible = ir != 'none'
+            self.m.observe(LineObservation(
+                LineFollowMode.IR_LINE, self.now, visible, ir if visible else None,
+                .9 if visible else 0., ir_calibrated=True, calibration_revision='ir-rig'),
+                received_at=self.now)
+        if seen is None:
+            obs = None
+        elif seen:
             edges = [dict(side=side, slope=-math.tan(self.yaw),
                           intercept_m=(edge-self.y)/math.cos(self.yaw),
                           observed_x_min_m=0., observed_x_max_m=.4)
@@ -52,7 +65,8 @@ class Rig:
             obs = LineObservation(CAMERA, self.now, True, 0., confidence, containment=containment)
         else:
             obs = LineObservation(CAMERA, self.now, False, None, 0., quality_reason=quality)
-        self.m.observe(obs, received_at=self.now, source_now=self.now)
+        if obs is not None:
+            self.m.observe(obs, received_at=self.now, source_now=self.now)
         decision = self.m.tick(self.now)
         if move:
             travel = decision.linear*DT if slip is None else slip
@@ -61,9 +75,9 @@ class Rig:
             self.yaw += decision.angular*DT
         return decision
 
-    def follow(self, frames=5):
+    def follow(self, frames=5, **kwargs):
         for _ in range(frames):
-            decision = self.step()
+            decision = self.step(**kwargs)
         assert self.m.status().state == 'TRACKING' and decision.linear > 0
         assert self.m._return_controller.checkpoint is not None
 
@@ -261,3 +275,134 @@ def test_route_hint_values():
 def test_bridge_config_is_validated(bad):
     with pytest.raises(ValueError):
         LineFollowConfig(**bad)
+
+
+def _unbound(r):
+    r.m._return_motion = None
+
+
+# (rig config, setup before the loss tick, loss-tick step kwargs, expected reason or None)
+REFUSALS = {
+    'ir_guard_not_clear': (dict(ir_guard_enabled=True), dict(ir='none'), dict(ir=-.5), None),
+    # IR centre = lane_departure: D-468 owns that tick (it holds), the bridge never enters.
+    'lane_departure': (dict(ir_guard_enabled=True), dict(ir='none'), dict(ir=0.),
+                       'lane_return_containment_unconfirmed'),
+    'stale_pose': ({}, {}, dict(pose=False, dt=.35), None),
+    'frame_mismatch': ({}, {}, dict(frame='map'), None),
+    'probe_false': (dict(probe=lambda now, v, w: False), {}, {}, 'lane_bridge_motion_unconfirmed'),
+    'probe_unbound': ({}, {}, dict(setup=_unbound), 'lane_bridge_motion_unconfirmed'),
+    'obstacle_on_loss_tick': ({}, {}, dict(points=((.10, 0.),)), 'obstacle_ahead'),
+}
+
+
+@pytest.mark.parametrize('case', sorted(REFUSALS))
+def test_bridge_is_refused_without_its_evidence(case):
+    config, follow, loss, expected = REFUSALS[case]
+    r = Rig(**config)
+    r.follow(**follow)
+    loss = dict(loss)
+    setup = loss.pop('setup', None)
+    if setup: setup(r)
+    r.points = loss.pop('points', r.points)
+    d = r.step(seen=False, **{**follow, **loss})
+    assert d.linear <= 0 and r.reason != 'lane_bridge'
+    if expected: assert r.reason == expected
+
+
+def test_epoch_change_mid_bridge_ends_it():
+    r = Rig()
+    r.follow()
+    assert r.step(seen=False).linear > 0 and r.reason == 'lane_bridge'
+    r.m.invalidate_return_pose()
+    for _ in range(5):
+        assert r.step(seen=False).linear <= 0 and r.reason != 'lane_bridge'
+
+
+def test_observation_stale_also_enters_the_bridge():
+    # A missing camera frame keeps the last one usable for stale_after_s, then bridges.
+    r = Rig()
+    r.follow()
+    d = r.step(seen=None, dt=.35)
+    assert r.reason == 'lane_bridge' and d.linear > 0
+
+
+def test_no_observation_cannot_follow_a_contained_track():
+    # no_observation exists only before the first frame of a mode; set_mode also drops the
+    # D-468 controller, so the bridge never has an armed checkpoint to start from there.
+    r = Rig()
+    r.follow()
+    r.m.set_mode(CAMERA)
+    assert r.m._bridge is None and r.m._return_controller is None
+    assert r.step(seen=None).linear <= 0 and r.reason == 'camera_no_observation'
+
+
+def test_bridge_never_exceeds_the_live_linear_ceiling():
+    r = Rig()
+    r.follow()
+    r.m.bind_recovery(linear_ceiling=lambda: .015)
+    d = r.step(seen=False)
+    assert r.reason == 'lane_bridge' and 0 < d.linear <= .015
+
+
+def test_bridge_submission_is_rechecked_at_apply_time():
+    r = Rig()
+    r.follow()
+    d = r.step(seen=False)
+    assert r.reason == 'lane_bridge'
+    r.m.bind_recovery(linear_ceiling=lambda: 0.)
+    assert not r.m.apply_if_current(d, lambda decision: pytest.fail('revoked bridge applied'))
+
+
+def _direct_step(r, state='armed'):
+    """_bridge_step on a fresh loss tick, called straight (as if no earlier gate stopped it)."""
+    r.m._status = r.m._status.model_copy(update={'state': 'HOLD',
+                                                 'reason': 'camera_line_not_visible'})
+    view = r.m.return_evidence(now=r.now)
+    if state != 'armed':
+        state = {'epoch': view.epoch, 'last': None, 'travel': 0.}
+    return r.m._bridge_step(r.now, state, view, True, .04, LineFollowDecision(mode=CAMERA))
+
+
+def test_direct_bridge_step_reaches_the_motion_when_nothing_blocks():
+    r = Rig()
+    r.follow()
+    r.m._loss_started_at = r.now
+    assert _direct_step(r).linear > 0
+
+
+def test_open_stuck_never_bridges():
+    r = Rig()
+    r.follow()
+    r.m._loss_started_at = r.now
+    r.m._recovery._id = 'stuck-x'  # whatever opened it, an open stuck owns the robot
+    assert _direct_step(r) is None
+
+
+def test_backwards_clock_ends_the_bridge():
+    r = Rig()
+    r.follow()
+    r.m._loss_started_at = r.now + 1.  # loss clock ahead of now: clock went backwards
+    assert _direct_step(r, state='bridging') is None
+
+
+def test_retrace_is_rebased_once_when_the_bridge_ends():
+    r = Rig()
+    r.follow()
+    calls = []
+    original = r.m._return_controller.rebase_retrace
+    r.m._return_controller.rebase_retrace = lambda: (calls.append(r.now), original())
+    assert r.step(seen=False, slip=.02).linear > 0 and r.reason == 'lane_bridge'
+    calls.clear()  # the loss tick's own D-468 departure transition built the first path
+    bridged = 0
+    while r.step(seen=False, slip=.02).linear > 0 and r.reason == 'lane_bridge':
+        bridged += 1
+    assert bridged > 2 and len(calls) == 1
+    for _ in range(5): r.step(seen=False)
+    assert len(calls) == 1
+
+
+def test_mode_change_clears_the_route_hint():
+    r = Rig()
+    r.m.set_bridge_route_hint('left')
+    r.m.set_mode(CAMERA)
+    assert r.m._bridge_hint is None

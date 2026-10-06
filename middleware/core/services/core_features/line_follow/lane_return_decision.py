@@ -56,9 +56,17 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
         return self._return_probe(now,decision.linear,decision.angular)
 
     def _apply_lane_return(self, now, decision):
+        # D-476: a bridge continues only if this tick bridges again; any return path that
+        # does not (obstacle, stuck, mode) hands it back to D-468 once.
+        bridge_state,self._bridge=self._bridge,None
+        self._bridge_open=isinstance(bridge_state,dict)
+        try:
+            return self._lane_return_step(now,decision,bridge_state)
+        finally:
+            self._hand_back_bridge()
+
+    def _lane_return_step(self, now, decision, bridge_state):
         c=self._config
-        bridge_state=self._bridge
-        self._end_bridge()  # D-476: continues only if this tick bridges again
         if self._mode is not LineFollowMode.CAMERA_LINE or not c.recovery_local_enabled:
             return None
         obs=self._observation
@@ -91,6 +99,8 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
         speed=min(.03,max(0.,linear))
         turn=min(.15,max(0.,angular))
         bridge=self._bridge_step(now,bridge_state,view,authority,max(0.,linear),decision)
+        if bridge is None:
+            self._hand_back_bridge()  # before D-468 plans its retrace this tick
         action=self._return_controller.tick(ReturnInput(now=now,pose=view.pose,
             corridor=view.corridor,corridor_at=view.received_at,
             corridor_stamp_ns=view.source_stamp_ns,epoch=view.epoch,
