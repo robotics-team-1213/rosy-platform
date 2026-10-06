@@ -102,6 +102,55 @@ def test_unknown_pixels_cannot_be_approved_and_explicit_fill_persists(browser_wo
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
 
 
+@pytest.mark.parametrize('width', [1440, 800, 390, 320])
+def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, width):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    open_pixels(page, store, expect)
+    if width <= 390:
+        field_widths = page.evaluate("""() => ({
+          available: document.querySelector('.pixel-layout > section').getBoundingClientRect().width,
+          labels: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar > label')]
+            .filter(node => node.getClientRects().length)
+            .map(node => node.getBoundingClientRect().width),
+          fields: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar .ui-field')]
+            .filter(node => node.getClientRects().length)
+            .map(node => node.getBoundingClientRect().width),
+        })""")
+        assert len(field_widths['labels']) >= 5 and len(field_widths['fields']) >= 5
+        assert all(abs(value - field_widths['available']) <= 1
+                   for value in field_widths['labels'] + field_widths['fields']), field_widths
+    if width == 320:
+        navigation = page.evaluate("""() => ['#pixel-prev', '#pixel-next']
+          .map(selector => document.querySelector(selector).getBoundingClientRect().width)""")
+        assert min(navigation) >= 100 and abs(navigation[0] - navigation[1]) <= 1, navigation
+    def shot(state):
+        if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+            from pathlib import Path
+            target = Path(output) / f'learning-pixels-{state}-{width}.png'
+            target.parent.mkdir(parents=True, exist_ok=True)
+            page.evaluate('window.scrollTo(0, 0)')
+            page.screenshot(path=str(target), full_page=True)
+    page.locator('#pixel-exclude').click()
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 제외')
+    assert review_masks.get(store, 0)['status'] == 'excluded'
+    shot('excluded')
+    page.locator('#pixel-reopen').click()
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('#pixel-fill').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v3')
+    page.locator('#pixel-complete').check()
+    page.locator('#pixel-background').check()
+    page.locator('#pixel-approve').click()
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
+    assert review_masks.get(store, 0)['status'] == 'approved'
+    shot('approved')
+    page.locator('#pixel-export').click()
+    expect(page.locator('#pixel-export-result')).to_contain_text('픽셀 승인 1장 준비')
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    shot('decision-result')
+
 def test_pixel_decision_advances_to_next_editable_pending(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
@@ -135,14 +184,16 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page.locator('#pixel-radius').fill('2')
     canvas = page.locator('#pixel-canvas')
     canvas.scroll_into_view_if_needed()
-    r = canvas.bounding_box()
     def point(x, y):
+        r = canvas.bounding_box()
         return r['x'] + x*r['width']/32, r['y'] + y*r['height']/24
     page.mouse.move(*point(10, 12)); page.mouse.down(); page.mouse.move(*point(15, 12))
     page.keyboard.press('Escape'); page.mouse.up()
     assert review_masks.get(store, 0)['version'] == 0
     page.mouse.move(*point(10, 12)); page.mouse.down(); page.mouse.move(*point(15, 12)); page.mouse.up()
-    page.mouse.move(*point(20, 5)); page.mouse.down(); page.mouse.up()
+    expect(page.locator('#pixel-draft')).to_contain_text('1획')
+    r = canvas.bounding_box()
+    canvas.click(position={'x': 20*r['width']/32, 'y': 5*r['height']/24})
     expect(page.locator('#pixel-draft')).to_contain_text('2획')
     expect(page.locator('#pixel-next')).to_have_attribute('disabled', '')
     assert review_masks.get(store, 0)['version'] == 0
@@ -159,8 +210,10 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     assert review_masks.pixels(store, review_masks.get(store, 0))[12, 10] == 255
 
 
-def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace):
+@pytest.mark.parametrize('width', [1440, 800, 390])
+def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace, width):
     page, store, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
     open_pixels(page, store, expect)
     newer = review_masks.update(store, 0, {'version':0, 'action':'fill', 'label':2}, ValueError)
     page.once('dialog', lambda dialog: dialog.accept())
@@ -168,6 +221,15 @@ def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace):
     expect(page.locator('#pixel-error')).to_contain_text('다른 탭')
     expect(page.locator('#pixel-approve')).to_have_attribute('disabled', '')
     assert review_masks.get(store, 0) == newer
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if width == 390:
+        reload = page.locator('#pixel-reload').bounding_box()
+        assert reload and reload['width'] >= width * .8 and reload['x'] + reload['width'] <= width
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-pixels-conflict-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
     page.locator('#pixel-reload').click()
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.locator('#pixel-frame').select_option('1')
