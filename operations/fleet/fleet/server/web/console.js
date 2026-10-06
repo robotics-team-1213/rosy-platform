@@ -96,6 +96,7 @@ function markLocked(reason = "auth") {
   const pill = el("online-pill");
   pill.textContent = "접속 전";
   pill.setAttribute("status", "neutral");
+  pill.dataset.locked = "true"; // 해제 때 문구가 아니라 이 표시로 잠금 pill을 알아본다
   if (auth.token && reason === "auth") el("console-token").setAttribute("aria-invalid", "true");
   const canvas = el("map-canvas"); canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
   connectionView.show(reason, auth.token);
@@ -334,6 +335,7 @@ async function refreshState() {
     view.signals = snapshot.signals || {};
     el("fleet-name").textContent = snapshot.fleet.name || "사이트";
     const pill = el("online-pill");
+    delete pill.dataset.locked;
     pill.textContent = `${snapshot.fleet.online}/${snapshot.fleet.total} 연결`;
     pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
     render();
@@ -464,7 +466,8 @@ async function refreshAuthorization() {
     // The session already proves the token: unlock now. The state gather can take seconds
     // when a robot times out, and must not hold the operator's controls locked behind it.
     const pill = el("online-pill");
-    if (pill.textContent === "토큰 필요") {
+    if (pill.dataset.locked === "true") {
+      delete pill.dataset.locked;
       pill.textContent = "상태 확인 중";
       pill.setAttribute("status", "neutral");
     }

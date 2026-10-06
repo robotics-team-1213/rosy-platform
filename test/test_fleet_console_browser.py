@@ -2878,7 +2878,7 @@ def test_login_unlocks_operator_controls_before_a_slow_state_gather(console_url)
         page.wait_for_function(
             "() => document.querySelector('#user-role')?.textContent.includes('운영자')", timeout=3000)
         page.wait_for_timeout(500)
-        assert "토큰 필요" not in page.inner_text("#online-pill")
+        assert "접속 전" not in page.inner_text("#online-pill")
         assert page.locator("#token-save").is_enabled()
         assert not errors
         browser.close()
@@ -3179,7 +3179,7 @@ def test_paired_console_keeps_the_token_field_and_never_asks_for_a_session(conso
         browser, page, errors = open_page(p, 1920, 1080)
         page.route("**/api/**", serve_api)
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.getElementById('online-pill').textContent === '토큰 필요'",
+        page.wait_for_function("() => document.getElementById('online-pill').textContent === '접속 전'",
                                timeout=8000)
 
         assert page.is_hidden("#development-badge")

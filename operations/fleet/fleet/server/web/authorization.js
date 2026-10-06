@@ -28,7 +28,8 @@ export function applyRoleToControls(role, controls) {
       control.disabled = true;
       const note = lockNote(control);
       // 묶음 안내가 있으면 버튼마다 같은 사유를 되풀이하지 않는다 — 안내 한 줄이 묶음 전체를 말한다.
-      if (control.localName === "ui-button" && !note) {
+      // 숨은 버튼은 묶음 안내를 켜지 않는다 — 화면에 없는 조작의 사유를 보이지 않는다.
+      if (control.localName === "ui-button" && (!note || control.hidden)) {
         control.setAttribute("reason", OPERATOR_REASON);
         continue;
       }

@@ -79,6 +79,7 @@ function markLocked() {
   const pill = el("online-pill");
   pill.textContent = "접속 전";
   pill.setAttribute("status", "neutral");
+  pill.dataset.locked = "true"; // 해제 때 문구가 아니라 이 표시로 잠금 pill을 알아본다
   el("console-token").setAttribute("aria-invalid", "true");
   applyRole();
 }
@@ -318,7 +319,8 @@ async function refreshAuthorization() {
     el("user-role").title = el("user-role").textContent;
     el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
     const pill = el("online-pill");
-    if (pill.textContent === "토큰 필요") {
+    if (pill.dataset.locked === "true") {
+      delete pill.dataset.locked;
       pill.textContent = "설치 준비 중";
       pill.setAttribute("status", "neutral");
     }

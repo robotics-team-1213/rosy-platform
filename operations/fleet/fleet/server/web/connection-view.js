@@ -33,5 +33,11 @@ export function createConnectionView({scope, el}) {
     el("dispatch-control").hidden = true;
     el("dispatch-rearm").hidden = true;
   }
-  return {open: () => setTopbarOpen(true), show, hide: () => { el("connection-guide").hidden = true; el("dispatch-control").hidden = false; }};
+  return {open: () => setTopbarOpen(true), show, hide: () => {
+    el("connection-guide").hidden = true;
+    // 지난 세션의 발행 문구를 살아 있는 상태처럼 보이지 않는다. 다음 조회가 덮어쓴다.
+    el("dispatch-control-title").textContent = "발행 상태 확인 중";
+    el("dispatch-control-detail").textContent = "대기 작업과 정지 세대를 읽고 있습니다.";
+    el("dispatch-control").hidden = false;
+  }};
 }
