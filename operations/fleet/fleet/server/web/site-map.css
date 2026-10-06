@@ -11,6 +11,7 @@ input, select { box-sizing: border-box; width: 100%; background: var(--field-bg)
 input[type="checkbox"] { width: auto; }
 input:focus-visible, select:focus-visible, a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 a { color: var(--ink); }
 .console-return { box-sizing: border-box; min-height: var(--target-secondary); display: inline-flex; align-items: center; padding: var(--space-3); }
 .map-viewport { min-width: 0; max-width: 100%; }
@@ -42,6 +43,7 @@ a { color: var(--ink); }
 }
 @media (width < 30rem) {
   .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .draft-actions { grid-template-columns: minmax(0, 1fr); }
   ui-topbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8.5rem); grid-template-areas: "brand estop" "session estop"; gap: var(--space-1); }
   ui-topbar ui-brand { grid-area: brand; min-width: 0; }
   ui-topbar ui-brand small, ui-topbar [data-spacer], #estop small { display: none; }

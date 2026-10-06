@@ -2157,3 +2157,9 @@
 - 변경: 레시피·셀 JSON 파일 선택을 한국어 전폭 조작과 선택한 파일명으로 표시한다. 네이티브 파일 입력과 기존 JSON 검증·저장 흐름은 유지한다.
 - 증거: 1440/390/320px 브라우저 4 red→4 green, Cell 전체 33 passed, D-153 G1 90 passed, Fleet 웹 144 passed; `docs/validation/uiux-cell-file-picker-2026-10-07/result.md`에 원본·해시.
 - gate 변화: 파일 선택 상태의 LOCAL G2 부분 근거. 현장 설치·작업자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · Site-map rejected credential widths
+
+- Change: Equalized the three draft action widths and checked a rejected reconnect at 1440/390/320px. The browser slow-load check now holds its fixture request until the pending assertions complete.
+- Evidence: Three Chromium captures; full site-map browser 30 passed, D-153 G1 90 passed, site-map Node 7 passed, Python known failures 0 NEW. See `docs/validation/uiux-site-map-auth-width-2026-10-07/result.md`.
+- Gate: LOCAL G2 partial evidence only; current site/device and operator G3 remain HOLD.
