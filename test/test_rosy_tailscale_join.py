@@ -231,6 +231,8 @@ def test_every_install_list_carries_the_join_unit():
     customizer = (ROOT / "deploy/robot/pinky_pro/image/customize-rootfs.sh").read_text(
         encoding="utf-8")
     assert "rosy-tailscale-join.service" in customizer
+    # The package daemon must come up for the join helper to talk to.
+    assert "tailscaled.service" in customizer
 
     twin = (ROOT / "tools/device_twin/image/install_twin.sh").read_text(encoding="utf-8")
     assert UNIT in twin

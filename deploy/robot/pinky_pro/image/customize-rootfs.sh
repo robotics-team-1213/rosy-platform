@@ -56,6 +56,8 @@ ROS_SOURCE_URL="$(lock_value ros apt_source_url)"
 ROS_SOURCE_SHA="$(lock_value ros apt_source_sha256)"
 WIRINGPI_URL="$(lock_value hardware_dependencies wiringpi_url)"
 WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
+TAILSCALE_URL="$(lock_value tailscale url)"
+TAILSCALE_SHA="$(lock_value tailscale sha256)"
 WS281X_COMMIT="$(lock_value hardware_dependencies rpi_ws281x_commit)"
 WS281X_URL="$(lock_value hardware_dependencies rpi_ws281x_url)"
 WS281X_SHA="$(lock_value hardware_dependencies rpi_ws281x_sha256)"
@@ -159,6 +161,14 @@ curl --fail --location --proto '=https' --proto-redir '=https' --retry 3 \
 ACTUAL_WIRINGPI_SHA="$(sha256sum "$WIRINGPI_TMP" | awk '{print $1}')"
 [[ "$ACTUAL_WIRINGPI_SHA" == "$WIRINGPI_SHA" ]] || fail "WiringPi package checksum mismatch"
 cp "$WIRINGPI_TMP" "$ROOT/tmp/wiringpi-arm64.deb"
+# D-477: the tailnet daemon+CLI deb, checksummed against the lock like the
+# packages above. Installed after apt has its dependencies ready.
+TAILSCALE_TMP="$(mktemp)"
+curl --fail --location --proto '=https' --proto-redir '=https' --retry 3 \
+    --output "$TAILSCALE_TMP" "$TAILSCALE_URL"
+ACTUAL_TAILSCALE_SHA="$(sha256sum "$TAILSCALE_TMP" | awk '{print $1}')"
+[[ "$ACTUAL_TAILSCALE_SHA" == "$TAILSCALE_SHA" ]] || fail "Tailscale package checksum mismatch"
+cp "$TAILSCALE_TMP" "$ROOT/tmp/tailscale.deb"
 
 mkdir -p "$ROOT/etc/apt/sources.list.d"
 python3 - "$LOCK" "$ROOT/etc/apt/sources.list.d/rosy-ubuntu.list" <<'PY'
@@ -186,13 +196,16 @@ chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     avahi-daemon avahi-utils ca-certificates chrony dnsmasq-base libnss-mdns locales network-manager \
     openssh-server openssl python3 python3-pip python3-yaml \
-    python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp
+    python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp iptables iproute2
 # D-190: the boot display (rosy-face.service since D-433). RPi.GPIO on the Pi 5 is
 # the rpi-lgpio compatibility layer; spidev drives the ST7789; PIL, numpy and
 # DejaVu draw the card. From the locked Ubuntu suites like every apt package
 # here; the versions land in deb-packages.txt and the verifier checks them.
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     python3-spidev python3-rpi-lgpio python3-numpy python3-pil fonts-dejavu-core
+# D-477: the tailnet daemon (tailscaled) and CLI, from the checksummed deb.
+# Its dependency (iptables) is already in from the locked suites above.
+chroot "$ROOT" dpkg -i /tmp/tailscale.deb
 
 RESOLVE_ROOT_ARGS=()
 for root in "${COLCON_ROOTS[@]}"; do
@@ -429,7 +442,7 @@ systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.servic
     rosy-config.service rosy-network.service rosy-face.service \
     rosy-login-code.service rosy-hw-probe.service rosy-hw-probe.path rosy-hw-test.path \
     rosy-auto-update.timer rosy-ssh-access.path rosy-ssh-access-boot.service \
-    rosy-tailscale-join.service
+    tailscaled.service rosy-tailscale-join.service
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"
 ln -sfn /run/rosy-boot/issue "$ROOT/etc/issue.d/rosy.issue"
