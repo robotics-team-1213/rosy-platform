@@ -89,7 +89,9 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 저장된 문서 목록의 접속 전·조회 중·빈 목록·조회 실패·다시 접속·문서 존재 상태를 로컬 브라우저에서 재생했다. 1440×1000·390×844·320×568의 빈 목록은 다음 작성 단계를 표시하고 가로 넘침이 없었다. 320px에서 목록 API 503은 실패와 재시도를 알리며, 복구 후 문서 두 개가 보인다. 자격 증명을 바꾸면 이전 접속의 목록을 즉시 숨긴다. 해당 브라우저 **5 passed**, Cell 전체 **19 passed**, Cell API **8 passed**, 공용 UI 계약 **231 passed, 25 skipped**, 각 성공 실행의 `known_failures.py` **0 NEW**다. 원본은 X: `captures/fleet-cell/fleet-cell-empty-{1440x1000,390x844,320x568}.png`, `fleet-cell-list-error-320x568.png`, 실행 기록은 `logs/fleet-cell-list-{focus,full,api,shared}.txt`다. 합성 서버 응답에 대한 LOCAL G2 부분 근거다.
 
-G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나머지 경로, 권한 거부·저장/컴파일 실패, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
+이미 접속한 Cell에서 세션 재확인이 401·403으로 거부될 때, 이전 계정·저장 문서 목록·저장 버전·미리보기 요약·작업 상태를 내려 현재 근거로 오인하지 않게 했다. 운영자 작성 초안은 남기되 저장·제안은 막고, 320px 첫 화면에 권한 확인과 재접속 안내를 표시한다. 거부 전 상태를 가진 로컬 브라우저 2셀을 재생했고 가로 넘침 0이다. Cell 브라우저 전체 **21 passed**, Cell API **8 passed**, 공용 UI 계약 **231 passed, 25 skipped**, 마지막 접속 안내 변경의 집중 재검사 **3 passed**, JS 구문 검사 통과, 각 성공 실행의 `known_failures.py` **0 NEW**다. 원본은 X: `captures/fleet-cell/fleet-cell-auth-{401,403}-320x568.png`, 실행 기록은 `logs/fleet-cell-auth-{focus-final,full,api,shared,final-focus}.txt`다. 이는 권한 거부 전환의 LOCAL G2 부분 근거이며 실제 계정 만료·권한 변경 검증은 남는다.
+
+G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나머지 경로, 권한 거부의 나머지 경로·저장/컴파일 실패, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
 
 ### Fleet G3 독회 — LOCAL 진행 중
 

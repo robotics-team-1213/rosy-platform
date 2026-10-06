@@ -40,7 +40,25 @@ let job = null;
 let jobGeneration = null;
 let layoutData = null;
 const commands = ['recipe-save', 'cell-save', 'compile', 'propose', 'admit', 'reconcile', 'resume', 'cancel'];
-function invalidate() { previewRefs = null; layoutData = null; $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); refreshControls(); }
+function invalidate() {
+  previewRefs = null; layoutData = null;
+  $('summary').textContent = '저장한 레시피와 셀을 기준으로 계획을 계산합니다.';
+  $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); refreshControls();
+}
+function clearSession() {
+  role = null; job = null; jobGeneration = null; invalidate();
+  $('session').textContent = '접속 전';
+  revisions.clear();
+  for (const kind of ['recipe', 'cell']) $(kind + '-revision').textContent = '저장 전';
+  $('proposal').textContent = '';
+  $('job-state').textContent = '';
+  $('job-summary').textContent = '작업 ID로 상태를 확인하세요.';
+  $('step-progress').replaceChildren(); $('sheet-progress').replaceChildren();
+  $('saved').hidden = true;
+  $('saved-status').hidden = false;
+  $('saved-status').setAttribute('state', 'unavailable');
+  $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
+}
 function refreshControls() {
   for (const field of document.querySelectorAll('input, textarea, select')) {
     field.disabled = busy;
@@ -72,8 +90,11 @@ async function action(fn) {
   busy = true; refreshControls();
   $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
-    if (error.status === 409 || error.status === 401 || error.status === 403) { job = null; jobGeneration = null; }
-    $('notice').textContent = error.message;
+    if (error.status === 401 || error.status === 403) clearSession();
+    else if (error.status === 409) { job = null; jobGeneration = null; }
+    $('notice').textContent = error.status === 403
+      ? '이 계정에는 Cell 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.' : error.message;
+    if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
   }
   finally { busy = false; refreshControls(); }
 }
@@ -225,11 +246,8 @@ for (const kind of ['recipe', 'cell']) {
   }));
 }
 $('credential').addEventListener('input', () => {
-  editEpoch++; role = null; job = null; jobGeneration = null; invalidate();
-  $('saved').hidden = true;
-  $('saved-status').hidden = false;
-  $('saved-status').setAttribute('state', 'unavailable');
-  $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
+  editEpoch++; clearSession();
+  $('notice').textContent = '운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.';
 });
 $('connect').addEventListener('click', () => action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;

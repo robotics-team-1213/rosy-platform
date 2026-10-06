@@ -182,6 +182,33 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site):
     page.locator("#credential input").fill("different-token")
     expect(status).to_have_attribute("state", "unavailable")
     assert page.locator("#saved").is_hidden()
+    expect(page.locator("#session")).to_have_text("접속 전")
+    expect(page.locator("#notice")).to_contain_text("운영자 계정으로 접속해")
+
+
+@pytest.mark.parametrize("denial,notice", [(401, "토큰"), (403, "운영자 토큰을 확인하고 다시 접속하세요")])
+def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": 320, "height": 568})
+    _prepare(page)
+    expect(page.locator("#saved li")).to_have_count(2)
+    page.route("**/api/fleet/session", lambda route: route.fulfill(status=denial, body="unauthorized"))
+    page.locator("#connect").click()
+    expect(page.locator("#notice")).to_contain_text(notice)
+    expect(page.locator("#session")).to_have_text("접속 전")
+    expect(page.locator("#saved-status")).to_contain_text("접속하면")
+    assert page.locator("#saved").is_hidden()
+    assert page.locator("#propose").is_disabled()
+    assert page.locator("#recipe-save").is_disabled()
+    expect(page.locator("#recipe-revision")).to_have_text("저장 전")
+    expect(page.locator("#summary")).not_to_contain_text("18회 전송")
+    notice_box = page.locator("#notice").bounding_box()
+    assert notice_box and 0 <= notice_box["y"] < 568
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"fleet-cell-auth-{denial}-320x568.png"))
 
 
 def test_delayed_compile_cannot_restore_preview_for_changed_document(browser_site):
