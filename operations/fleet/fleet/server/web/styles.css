@@ -618,6 +618,7 @@ main {
     padding: var(--space-2);
   }
   ui-topbar ui-brand { container-type: inline-size; }
+  #clock { font-size: var(--text-micro); }
   ui-topbar > .topbar-cell-link { display: none; }
   .topbar-extra .topbar-cell-link { display: inline-flex; }
   #estop { align-self: stretch; padding-inline: var(--space-2); gap: var(--space-1); }

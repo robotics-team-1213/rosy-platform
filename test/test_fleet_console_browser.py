@@ -449,7 +449,8 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width
         browser.close()
 
 
-def test_gather_loss_removes_last_known_robot_position(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_gather_loss_removes_last_known_robot_position(console_url, width, height):
     """A failed refresh must not present the last snapshot as a live position."""
     from playwright.sync_api import sync_playwright
 
@@ -462,6 +463,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url):
     }
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.locator("#roster-toggle").click()
         page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
@@ -475,11 +477,22 @@ def test_gather_loss_removes_last_known_robot_position(console_url):
         assert "로봇 위치 확인 불가" in page.inner_text("#map-tag")
         assert "로봇 위치 확인 불가" in page.locator("#map-canvas").get_attribute("aria-label")
         assert page.locator("#roster article ui-button").first.is_disabled()
-        save_temp_screenshot(page, "fleet_console_gather-lost-after-live.png")
-        api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 1, "total": 1},
-                                   "robots": [robot]}
-        page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
-        assert "로봇 위치 확인 불가" not in page.inner_text("#map-tag")
+        assert page.locator("#online-pill").evaluate("node => node.scrollWidth <= node.clientWidth")
+        for state in ("lost", "recovered"):
+            if state == "recovered":
+                api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 1, "total": 1},
+                                           "robots": [robot]}
+                page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
+                assert "로봇 위치 확인 불가" not in page.inner_text("#map-tag")
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
+            map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
+            roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
+            assert abs(map_panel["width"] - roster_panel["width"]) <= 1
+            if width < 480:
+                assert abs(map_panel["x"] - roster_panel["x"]) <= 1
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            save_temp_screenshot(page, f"fleet_console_gather_{state}_{width}.png")
         assert not errors
         browser.close()
 
