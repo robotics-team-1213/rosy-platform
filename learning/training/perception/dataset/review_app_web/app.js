@@ -79,13 +79,17 @@ function list() {
     const badge = document.createElement('span'); badge.className = 'frame-badge'; badge.textContent = statuses[f.status]; name.append(badge);
     button.onclick = () => { if (!busy && !gesture) select(f.index); }; $('frames').append(button);
   });
-  revealSelected();
+  revealed=null; revealSelected();
 }
 // Narrow screens show the photos as one horizontal strip; keep the open photo in view
 // without scrolling the page away from the editor.
+let revealed=null;
 function revealSelected() {
   const strip=$('frames'), button=strip.querySelector('[aria-pressed="true"]');
-  if (button) strip.scrollLeft+=button.getBoundingClientRect().left-strip.getBoundingClientRect().left-8;
+  // Only when the open photo changes, so a box edit does not undo the reviewer's own scrolling.
+  if (!button || button.dataset.index===revealed) return;
+  revealed=button.dataset.index;
+  strip.scrollLeft+=button.getBoundingClientRect().left-strip.getBoundingClientRect().left-8;
 }
 let listKey='';
 function paint() {
@@ -188,11 +192,12 @@ async function mutate(action, extras={}, restoring=false) {
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
     undo=restoring?null:['save','candidates'].includes(action)?{index:id,boxes:previous}:null;
     // A decision finishes this photo, so open the next pending one (D-461 next task first).
-    const decided=['approve','exclude'].includes(action), advance=decided&&nextPending(id);
+    // Audits inside the approved/excluded filters stay where they are.
+    const decided=['approve','exclude'].includes(action), advance=decided&&['all','pending'].includes($('filter').value)&&nextPending(id);
     if(!advance&&$('filter').value!=='all'&&frame.status!==$('filter').value) {$('filter').value='all';saveView();}
     $('status').textContent=statuses[frame.status]; $('save-status').textContent=`서버 저장됨 · v${frame.version}`;
-    if(decided) $('drag-status').textContent=`사진 ${id+1} ${statuses[frame.status]} · ${advance?'다음 검수 대기 사진입니다.':'검수 대기 사진을 모두 처리했습니다.'}`;
-    if(advance) {if($('filter').value!=='all') $('filter').value='pending'; select(advance.index); return;}
+    if(decided&&['all','pending'].includes($('filter').value)) $('drag-status').textContent=`사진 ${id+1} ${statuses[frame.status]} · ${advance?'다음 검수 대기 사진입니다.':'검수 대기 사진을 모두 처리했습니다.'}`;
+    if(advance) {select(advance.index); return;}
     frameHeading();
     coordinatePreview=null; if (selected>=frame.review.boxes.length) selected=null;
     renderBoxes(); list(); paint();

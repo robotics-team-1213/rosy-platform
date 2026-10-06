@@ -1,11 +1,12 @@
 """Open every Pinky review screen in headless Chromium and report what a reviewer would hit.
 
-Read-only: it sends GET requests only, so it never approves, saves or exports.
+It never touches the given state: with --state it serves a fresh copy under --out, because
+app startup may migrate the schema or bind pixel classes. The browser sends GET requests only.
 
     python tools/review_app_smoke.py --state X:/DevTemp/pinky-review-run/state
     python tools/review_app_smoke.py --base-url http://127.0.0.1:8767
 
-With --state it starts the app on a free loopback port and stops it afterwards.
+With --state it copies the state, starts the app on a free loopback port and stops it afterwards.
 Screenshots of each screen at desktop and phone width go to --out. Exit 1 on a page
 error, an HTTP error, a failed request, a sideways-scrolling page or an empty workspace.
 """
@@ -14,10 +15,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from pathlib import Path
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 
@@ -63,7 +66,9 @@ def check(base: str, out: Path) -> list[str]:
         for view, (width, height) in VIEWPORTS.items():
             page = browser.new_page(viewport={'width': width, 'height': height})
             page.on('pageerror', lambda e, v=view: problems.append(f'{v} page error: {e}'))
-            page.on('requestfailed', lambda r, v=view: problems.append(f'{v} request failed: {r.url}'))
+            # A lazy thumbnail cancelled by the next navigation is not a fault.
+            page.on('requestfailed', lambda r, v=view: 'ERR_ABORTED' not in (r.failure or '') and problems.append(
+                f'{v} request failed: {r.url} {r.failure}'))
             page.on('response', lambda r, v=view: r.status >= 400 and problems.append(
                 f'{v} HTTP {r.status}: {r.url}'))
             for name, path in SCREENS.items():
@@ -92,9 +97,13 @@ def main() -> int:
     if args.state:
         if not (args.state / 'reviews.sqlite3').is_file():
             sys.exit(f'{args.state} has no reviews.sqlite3; first run needs --source/--human/--images')
+        args.out.mkdir(parents=True, exist_ok=True)
+        copy = Path(tempfile.mkdtemp(prefix='state-', dir=args.out)) / 'state'
+        shutil.copytree(args.state, copy)
+        print(f'serving a copy: {copy}')
         port = free_port()
         base = f'http://127.0.0.1:{port}'
-        server = subprocess.Popen([sys.executable, str(APP), '--state', str(args.state), '--port', str(port)],
+        server = subprocess.Popen([sys.executable, str(APP), '--state', str(copy), '--port', str(port)],
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         wait_up(base, server)
@@ -104,7 +113,10 @@ def main() -> int:
     finally:
         if server:
             server.terminate()
-            server.wait(timeout=10)
+            try:
+                server.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                server.kill()
     if not counts['frames']:
         problems.append('workspace has no photos')
     for problem in problems:

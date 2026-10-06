@@ -22,7 +22,7 @@ ls -d /x/DevTemp/*/reviews.sqlite3 /x/DevTemp/*/*/reviews.sqlite3   # existing s
 mkdir -p X:/DevTemp/<name> && cp -r <state> X:/DevTemp/<name>/state
 ```
 
-`X:/DevTemp/pinky-review-flow-20261005/visual-state-ready` holds 357 real Pinky frames.
+`X:/DevTemp/pinky-review-flow-20261005/visual-state-ready` holds 357 real Pinky frames: copy from it, never serve it directly.
 With no state, the first run needs `--source <jsonl> --human <jsonl> --images <root>`.
 
 ## 2. Look before changing anything
@@ -31,13 +31,14 @@ With no state, the first run needs `--source <jsonl> --human <jsonl> --images <r
 python tools/review_app_smoke.py --state X:/DevTemp/<name>/state --out X:/DevTemp/<name>/smoke
 ```
 
-It serves the state on a free loopback port and opens `/`, `/?filter=pending`, `/pixels`,
-`/catalog` and `/learning` at 1440×900 and 390×844. It writes a screenshot of each screen
-and prints the object and pixel decision counts. It sends GET requests only. Exit 1 means
+It copies the state under `--out` (app startup may migrate the schema), serves the copy on a
+free loopback port and opens `/`, `/?filter=pending`, `/pixels`, `/catalog` and `/learning`
+at 1440×900 and 390×844. It writes a screenshot of each screen and prints the object and
+pixel decision counts. The browser sends GET requests only. Exit 1 means
 a page error, an HTTP ≥ 400, a failed request, sideways page scroll, or no photos. Then
 **Read the PNGs**. A passing exit code does not show whether the editor is usable.
 
-For a running app, use `--base-url http://127.0.0.1:<port>` instead. To keep one up while
+For a running app, use `--base-url http://127.0.0.1:<port>` instead (no copy is made). To keep one up while
 iterating, start it in the background. Static files are re-read on every request, so a
 browser reload picks up JS/CSS edits without restarting the server:
 
@@ -49,8 +50,10 @@ python learning/training/perception/dataset/review_app.py --state X:/DevTemp/<na
 
 The per-photo loop: check `#complete`, click `#approve` (or `#exclude`), and the next
 pending photo opens. The `pending` filter stays on, and `#drag-status` names the photo that
-was just decided. Pixel review has the same loop with `#pixel-complete` +
-`#pixel-background` → `#pixel-approve`.
+was just decided. Inside the `approved`/`excluded` filters (an audit) a decision stays on
+the photo and widens the filter to `all`. Pixel review has the same loop with
+`#pixel-complete` + `#pixel-background` → `#pixel-approve`, skips object-excluded photos and
+keeps the chosen paint class.
 
 | Element | Selector |
 |---|---|
@@ -70,6 +73,7 @@ original image has loaded and been hash-checked.
 ROSY_RUN_BROWSER_TESTS=1 PYTHONIOENCODING=utf-8 python -m pytest \
   learning/training/perception/test/test_review_flow_browser.py \
   learning/training/perception/test/test_pixel_review_browser.py \
+  learning/training/perception/test/test_review_app_smoke.py \
   -q -rfE -p no:cacheprovider --basetemp X:/DevTemp/<name>/bt > X:/DevTemp/<name>/browser.txt
 python test/known_failures.py X:/DevTemp/<name>/browser.txt
 ```

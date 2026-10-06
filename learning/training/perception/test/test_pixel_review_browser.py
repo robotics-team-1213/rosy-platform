@@ -113,8 +113,11 @@ def test_pixel_decision_advances_to_next_editable_pending(browser_workspace):
     page.locator('#pixel-reopen').click()
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
     page.locator('#pixel-filter').select_option('pending')
+    page.locator('#pixel-class').select_option('4')
     page.locator('#pixel-exclude').click()
     expect(page.locator('#pixel-title')).to_contain_text('사진 2')
+    # The paint class carries over so the next stroke is not silently the first class.
+    expect(page.locator('#pixel-class')).to_have_value('4')
     expect(page.locator('#pixel-filter')).to_have_value('pending')
     assert review_masks.get(store, 0)['status'] == 'excluded'
 

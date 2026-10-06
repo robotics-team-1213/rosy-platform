@@ -106,6 +106,20 @@ def test_approve_advances_to_next_pending_and_keeps_filter(browser_workspace):
     assert [row['status'] for row in store.list_frames()] == ['approved', 'excluded']
 
 
+def test_decision_while_auditing_approved_does_not_jump_to_pending(browser_workspace):
+    page, store, expect = browser_workspace
+    store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
+    page.goto(page.url.split('?')[0] + '?filter=approved', wait_until='networkidle')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
+    expect(page.locator('#image-message')).to_be_hidden()
+    page.locator('#exclude').click()
+    # The audited photo stays open; the filter widens so it remains listed.
+    expect(page.locator('#save-status')).to_contain_text('서버 저장됨')
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
+    expect(page.locator('#filter')).to_have_value('all')
+    assert store.get(0)['status'] == 'excluded'
+
+
 def test_phone_photo_list_is_one_strip_above_editor(browser_workspace):
     page, _store, expect = browser_workspace
     page.set_viewport_size({'width': 390, 'height': 844})
