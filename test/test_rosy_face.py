@@ -1768,6 +1768,71 @@ def test_an_unused_login_code_keeps_the_card_until_it_burns(tmp_path):
     assert display.animating == ("basic", "Waiting", "info")
 
 
+def _peer_approval(root: Path, expires_in: float = 300.0, **fields) -> None:
+    from datetime import datetime, timezone
+
+    data = {"display_code": "K7QM", "approval_code": "ABC234",
+            "expires_at": datetime.fromtimestamp(WALL + expires_in, timezone.utc).isoformat(), **fields}
+    (root / "run/rosy-peer-display").mkdir(parents=True, exist_ok=True)
+    (root / "run/rosy-peer-display/approval.json").write_text(json.dumps({"requests": [data]}), encoding="utf-8")
+
+
+def test_a_peer_request_card_shows_the_approval_code_above_the_face_and_login(tmp_path, capsys):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path)
+    _login(tmp_path, "ABCD-EFGH\noperator\n")
+    _peer_approval(tmp_path)
+    display, _lcd, clock, rendered, _opened, lines = _face_loop(module, tmp_path)
+
+    display.step()
+    assert _screen_row(rendered) == "peer_request"
+    assert rendered[-1]["screen"]["peer"] == {"requests": [{"display_code": "K7QM", "approval_code": "ABC234"}]}
+
+    # An e-stop card outranks it; the code never reaches the journal.
+    _face_inputs(tmp_path, robot_mode="EMERGENCY", estop=True)
+    clock.now += 1
+    display.step()
+    assert rendered[-1]["screen"]["kind"] == "stopped"
+    assert not any("ABC234" in line for line in lines) and "ABC234" not in capsys.readouterr().err
+
+    # CORE removed the file: back to the login card.
+    _face_inputs(tmp_path)
+    (tmp_path / "run/rosy-peer-display/approval.json").unlink()
+    clock.now += 1
+    display.step()
+    assert _screen_row(rendered) == "login"
+
+
+@pytest.mark.parametrize("change", [
+    {"expires_in": -1.0}, {"approval_code": "abc234"}, {"approval_code": "ABC23"}, {"display_code": "K7Q1"},
+    {"expires_at": "2026-10-06T10:00:00"}, {"approval_code": 123456},
+])
+def test_an_expired_or_malformed_peer_approval_is_ignored(tmp_path, change):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path)
+    expires_in = change.pop("expires_in", 300.0)
+    _peer_approval(tmp_path, expires_in, **change)
+    display, _lcd, _clock, _rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+
+    assert display.animating == ("basic", "Waiting", "info")
+
+
+def test_an_oversized_peer_approval_is_ignored(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path)
+    _peer_approval(tmp_path, padding="x" * 2100)
+    display, _lcd, _clock, _rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+
+    assert display.animating == ("basic", "Waiting", "info")
+
+
 def test_the_ap_card_stays_after_core_ready(tmp_path):
     module = _display()
     _status(tmp_path, "CORE_READY", runtime_mode="hardware")
@@ -1944,6 +2009,9 @@ def _info_screen():
     {"kind": "face", "row": "drive", "overlay": {"kind": "drive", "payload": {"kind": "drive", "mode": "MANUAL"}},
      "strip": "Charge the battery", "strip_tone": "caution"},
     {"kind": "face", "row": "wake", "overlay": {"kind": "wake", "payload": {"battery_percent": 50.0}}},
+    {"kind": "status", "row": "peer_request", "peer": {"requests": [
+        {"display_code": "K7QM", "approval_code": "ABC234"}, {"display_code": "M2NP", "approval_code": "XYZ789"},
+        {"display_code": "Q3RS", "approval_code": "DEF456"}]}},
 ])
 def test_every_card_renders_on_the_panel_size(screen):
     module = _display()

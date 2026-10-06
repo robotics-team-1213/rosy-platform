@@ -201,6 +201,53 @@ def read_face_inputs(path: str, now: datetime, owner_uid: Optional[int] = None) 
     CORE is less trusted than the display (D-260 M1), so the reader never follows
     what CORE could point it at and never reads more than the bound.
     """
+    data = _read_bounded_json(path, MAX_FACE_INPUTS_BYTES, owner_uid)
+    return None if data is None else validate_face_inputs(data, now)
+
+
+# --- the peer-request approval code (D-483) ------------------------------------------
+
+#: CORE writes it while a D-456 peer request waits; rosy-core:rosy-display 2750, file 0640.
+PEER_APPROVAL_FILE = "/run/rosy-peer-display/approval.json"
+MAX_PEER_APPROVAL_BYTES = 2048
+#: CORE lists at most this many live requests, newest first (D-483 M1).
+MAX_PEER_REQUESTS = 3
+_CODE_ALPHABET = frozenset("23456789ABCDEFGHJKMNPQRSTUVWXYZ")
+
+
+def _code(value: Any, length: int) -> Optional[str]:
+    if isinstance(value, str) and len(value) == length and set(value) <= _CODE_ALPHABET:
+        return value
+    return None
+
+
+def read_peer_approval(path: str, now: datetime, owner_uid: Optional[int] = None) -> Optional[dict]:
+    """``{"requests": [{"display_code", "approval_code"}, ...]}`` of the live pending requests
+    (at most three, in CORE's newest-first order), or None (absent, malformed, all expired).
+
+    Read as strictly as ``read_face_inputs``; a malformed or expired entry is dropped alone.
+    The approval code is a credential: callers draw it and never log it.
+    """
+    data = _read_bounded_json(path, MAX_PEER_APPROVAL_BYTES, owner_uid)
+    rows = data.get("requests") if isinstance(data, Mapping) else None
+    if not isinstance(rows, list) or len(rows) > MAX_PEER_REQUESTS:
+        return None
+    shown = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        display, approval = _code(row.get("display_code"), 4), _code(row.get("approval_code"), 6)
+        try:
+            expires = datetime.fromisoformat(str(row.get("expires_at")))
+        except ValueError:
+            continue
+        if display is not None and approval is not None and expires.tzinfo is not None and expires > now:
+            shown.append({"display_code": display, "approval_code": approval})
+    return {"requests": shown} if shown else None
+
+
+def _read_bounded_json(path: str, limit: int, owner_uid: Optional[int]) -> Any:
+    """JSON of a regular, unlinked file of at most ``limit`` bytes owned by ``owner_uid``; else None."""
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
     try:
         descriptor = os.open(path, flags)
@@ -208,22 +255,21 @@ def read_face_inputs(path: str, now: datetime, owner_uid: Optional[int] = None) 
         return None
     try:
         info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_FACE_INPUTS_BYTES:
+        if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
             return None
         if owner_uid is not None and info.st_uid != owner_uid:
             return None
-        raw = os.read(descriptor, MAX_FACE_INPUTS_BYTES + 1)
+        raw = os.read(descriptor, limit + 1)
     except OSError:
         return None
     finally:
         os.close(descriptor)
-    if len(raw) > MAX_FACE_INPUTS_BYTES:
+    if len(raw) > limit:
         return None
     try:
-        data = json.loads(raw.decode("utf-8"))
+        return json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
         return None
-    return validate_face_inputs(data, now)
 
 
 # --- the situation table ----------------------------------------------------------
@@ -241,6 +287,8 @@ KINDS = (SHUTDOWN, STATUS, UPDATE, STOPPED, FACE, SLEEP, LIGHT)
 ROWS = {
     "shutdown": 1, "failed": 2, "update": 3, "stopped": 4, "ap": 5, "booting": 6,
     "core_missing": 7, "login": 8, "standby": 18, "face": 17,
+    # D-483: a waiting peer request's approval code, just above the login card.
+    "peer_request": 8,
 }
 #: The backlight per CORE power mode (emotion_server's PWR-003 parameters).
 BACKLIGHT = {"active": 100, "idle": 30, "standby": 0}
@@ -266,7 +314,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
                core: Optional[Mapping[str, Any]] = None, update: Optional[Mapping[str, Any]] = None,
                test: Optional[str] = None, shutting_down: bool = False,
                drive_since: Optional[float] = None, now: float = 0.0,
-               light_assist: bool = False) -> dict:
+               light_assist: bool = False, peer: Optional[Mapping[str, Any]] = None) -> dict:
     """The one answer for the LCD (D-433 decision 2). Higher rows win.
 
     ``stage``: boot-status stage; ``state``: ``robot_state.evaluate``'s state;
@@ -276,7 +324,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     missing or stale; ``update``: ``{"release": ...}`` while an update or an
     activation runs; ``test``: ``"buzzer"``/``"lamp"`` while a D-247 test plays,
     or ``"identify_blue"``/``"identify_amber"`` during a fleet call;
-    ``drive_since``: when the current operating mode began (monotonic).
+    ``drive_since``: when the current operating mode began (monotonic);
+    ``peer``: ``read_peer_approval``'s answer while a D-456 request waits (D-483).
 
     The answer: ``kind`` (one of KINDS), ``row`` (the table row id), ``face``,
     ``overlay`` (``{"kind": "drive"|"wake", "payload": {...}}``), ``strip`` and
@@ -306,6 +355,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         return status("booting")
     if core is None:
         return status("core_missing", line=CORE_MISSING_LINE)
+    if peer is not None:  # D-483: below failure/e-stop/AP/boot, above the login card and the face.
+        return status("peer_request", peer=dict(peer))
     if login == "code":
         return status("login")
 

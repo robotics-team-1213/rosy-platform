@@ -110,6 +110,9 @@ TICK_S = 0.1  # face frames, 10 fps (5 fps at the idle backlight)
 #: D-433: CORE's hand-over (rosy-core's /run/rosy, 0644) and its writer's account.
 FACE_INPUTS = "run/rosy/face-inputs.json"
 CORE_USER = "rosy-core"
+#: D-483: CORE's pending peer-request approval code (rosy-core:rosy-display 2750, file 0640).
+#: The code is a credential: drawn on the card, never logged.
+PEER_APPROVAL = "run/rosy-peer-display/approval.json"
 #: The emotion GIFs the running release ships (share/emotion/emotion/<name>.gif).
 FACE_DIR = "opt/rosy/current/install/share/emotion/emotion"
 FACE_LOAD_SKIP = 2  # every second GIF frame, as emotion_server's load_frame_skip
@@ -772,6 +775,12 @@ class FaceDisplay:
             self._mode = mode
             self._drive_since = now if mode in robot_state.OPERATING_MODES else None
         login = "code" if view.get("login_code") else ("burned" if view.get("login_burned") else None)
+        # D-483: a release without the reader has no peer row in its table either.
+        extra = {}
+        if hasattr(face_screen, "read_peer_approval"):
+            extra["peer"] = face_screen.read_peer_approval(
+                str(self.root / PEER_APPROVAL), datetime.fromtimestamp(self._wall(), timezone.utc),
+                owner_uid=self._core_owner)
         quality = core.get("camera_quality") if core else None
         expires = core.get("camera_quality_until") if core else None
         fresh = quality is not None and expires is not None and self._wall() <= expires
@@ -785,7 +794,7 @@ class FaceDisplay:
             update=read_update(self.root, self._wall()),
             test=self._testing if now < self._testing_until else None,
             shutting_down=self.shutting_down, drive_since=self._drive_since, now=now,
-            light_assist=self._light_session)
+            light_assist=self._light_session, **extra)
         if screen["kind"] != "light":
             self._light_session = False
         return screen
@@ -988,6 +997,11 @@ def card_renderer(info_screen) -> Callable[[dict], object]:
                                               [str(card.get("device_name") or "")])
         elif kind == "face" and screen.get("overlay"):
             image = info_screen.render_card(screen["overlay"]["payload"])
+        elif screen.get("row") == "peer_request":
+            # D-483: ASCII, as every card (the DejaVu card font has no Hangul).
+            # One "XXXX  CODE" line per live request, so each requester reads its own code.
+            rows = (screen.get("peer") or {}).get("requests") or []
+            image = info_screen.render_notice("Pair request", [f"{r['display_code']}  {r['approval_code']}" for r in rows])
         else:
             image = info_screen.render_boot(card, frame=frame)
         if kind == "face" and screen.get("strip"):

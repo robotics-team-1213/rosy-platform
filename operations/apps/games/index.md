@@ -52,8 +52,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · test(games): 시간 결측의 선언 전화 폭
+- 2026-10-07 · uncommitted · test(games): CSP 안전 대기 식
 - 2026-10-06 · uncommitted · uiux(games): compact 정지 조작 전폭
 - 2026-10-06 · uncommitted · uiux(games): HOLD 이유의 평문과 전화 폭
 - 2026-10-06 · uncommitted · uiux(games): 좁은 복구 화면의 동등 폭
-- 2026-10-06 · uncommitted · uiux(games): 좁은 보드의 공·로봇 가독성
-- 2026-10-06 · uncommitted · uiux(games): 320px 동일 폭 확인

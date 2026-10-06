@@ -20,6 +20,7 @@ from fastapi import Depends, Header, Request
 
 from core_api_web.api.errors import ApiError
 from core_common.config import ConfigError, patch_local_config
+from core_common.protocol.peer_pairing import SCREEN_CODE_ISSUER
 from typing import Protocol
 
 # --- 라우터용 도메인 타입 (결합도 평가 2026-09-19 §7-5) ----------------------
@@ -240,6 +241,8 @@ def _configured_records(config: dict) -> list[dict[str, Any]]:
     for item in entries:
         if not isinstance(item, dict):
             continue
+        if str(item.get("id") or "") == SCREEN_CODE_ISSUER:
+            continue  # D-483: reserved for screen-code relationships; never a token issuer.
         digest = str(item.get("sha256") or "").strip().lower()
         if digest:
             records.append(_record(
