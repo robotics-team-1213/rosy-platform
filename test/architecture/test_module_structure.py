@@ -485,11 +485,12 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        14_235,
-        "accept: re-judged 2026-10-06 at 14235 for D-476 lane bridge (feat/d476-lane-bridge; "
-        "independent re-review due before landing): main already sat at 14083 = 13933+150; "
-        "152 above it are lane_bridge102, model+33 (bridge_* config), lane_return+4 "
-        "(rebase_retrace extracted), arbitration+9, wiring+3, manager+1. The bridge reuses the "
+        14_258,
+        "accept: independently re-judged 2026-10-06 at 14258 for D-476 lane bridge "
+        "(feat/d476-lane-bridge, review ACCEPT: one cohesive line_follow feature under the D-468 "
+        "lock/generation; no file over threshold; X1): main already sat at 14083 = 13933+150; "
+        "175 above it are lane_bridge114, model+33 (bridge_* config), lane_return+4 "
+        "(rebase_retrace extracted), arbitration+19, wiring+3, manager+2. The bridge reuses the "
         "D-468 checkpoint/trail and D-422 sweep under the same manager lock/generation and CORE "
         "final publisher; no new package, store, publisher or deploy unit. Every file threshold "
         "and package+150 remain. "

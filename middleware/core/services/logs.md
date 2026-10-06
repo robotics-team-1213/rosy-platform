@@ -567,3 +567,10 @@
 - gate 변화: SOURCE 호스트 시험만. 결정 7의 재생·시뮬(모델·사이트 PC)·장치 단계 전에는 켜지 않는다.
 - 결정: D-476 (Proposed)
 - 교훈: 없음
+
+## 2026-10-06 · uncommitted · fix(lane): D-476 independent review fixes
+- 변경: 열린 stuck에서는 bridge하지 않고, 손실 시계가 거꾸로 가면 끝낸다. D-468 역추적 경로는 bridge가 끝나는 틱에 한 번만 다시 만든다(장애물·stuck 같은 이른 반환 포함). bridge 중에도 `apply_if_current`가 제출 재검사를 한다. `_init_bridge` 중복 호출 제거, 모드 변경 시 경로 힌트 초기화. API Reference의 `RECOVERING` 설명에 D-468·D-476 사용을 적었다.
+- 증거: `test_lane_bridge.py` 41 PASS(새 실패-먼저 시험 4: stuck, 한 번 rebase, 힌트 초기화, 역행 시계는 직접 호출 시험으로 확인). services 912 PASS, gateway 2168 PASS·17 skip, architecture/harness 219 PASS·1 skip, known_failures 셋 다 0 new. 크기 판정 14258, 독립 재판정 ACCEPT.
+- gate 변화: 없음. SOURCE 호스트 시험만.
+- 결정: D-476 (Proposed)
+- 교훈: 없음
