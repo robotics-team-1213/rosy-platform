@@ -149,6 +149,10 @@ def test_draft_preserves_original_size_ignore_and_verified_resume(tmp_path, monk
     assert receipt["frames"][0]["source_video_sha256"] == row["source_video_sha256"]
     assert receipt["frames"][0]["mask_sha256"] == digest(mask_path)
     assert receipt["frames"][0]["transform"] == "nearest_original_size"
+    indexed = json.loads((out / "verified-inputs.jsonl").read_text().splitlines()[0])
+    assert indexed["mask"] == {"indexed_png": "drafts/000000.png", "sha256": digest(mask_path),
+                               "classes_sha256": digest(Path(config["classes"]))}
+    assert (out / "classes.yaml").read_bytes() == Path(config["classes"]).read_bytes()
     assert len(calls) == 1
     assert mod.main(["draft", "--config", str(cfg), "--out", str(out)]) == 0
     assert len(calls) == 1

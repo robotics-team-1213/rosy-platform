@@ -227,6 +227,26 @@ def run_draft(config, out, min_confidence=0.6):
                                          "input": inputs, "gpu": gpu, "frames": frames}, sort_keys=True,
                                         indent=2, allow_nan=False) + "\n", encoding="utf-8")
         os.replace(temporary, target)
+        classes_copy = out / "classes.yaml"
+        classes_raw = Path(config["classes"]).read_bytes()
+        if classes_copy.exists() and classes_copy.read_bytes() != classes_raw:
+            raise JobError("job classes copy changed")
+        if not classes_copy.exists():
+            temporary = classes_copy.with_suffix(".yaml.tmp")
+            temporary.write_bytes(classes_raw)
+            os.replace(temporary, classes_copy)
+        indexed = out / "verified-inputs.jsonl"
+        temporary = indexed.with_suffix(".jsonl.tmp")
+        with temporary.open("w", encoding="utf-8") as stream:
+            for row, frame in zip(rows, frames):
+                entry = dict(row, image=str(edge_review.bound(catalog.parent, row["image"])),
+                             mask={"indexed_png": f"drafts/{frame['catalog_index']:06d}.png",
+                                   "sha256": frame["mask_sha256"],
+                                   "classes_sha256": proof["classes_sha256"]})
+                stream.write(json.dumps(entry, sort_keys=True, allow_nan=False) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, indexed)
     return len(frames)
 
 

@@ -54,7 +54,8 @@ def import_frames(store, body):
     if not classes_path:
         draft = next((row.get('mask') for row in rows if row.get('mask')), None)
         if draft:
-            classes_path = str(Path(draft['zip']).parent / 'classes.yaml')
+            classes_path = (str(Path(draft['zip']).parent / 'classes.yaml') if 'zip' in draft
+                            else str(catalog.parent / 'classes.yaml'))
     binding = review_masks.classes(store)
     class_raw = bounded(classes_path, 1024 * 1024) if classes_path else None
     if class_raw:
@@ -81,16 +82,28 @@ def import_frames(store, body):
         mask, labelmap_sha = None, None
         if row.get('mask'):
             ref = row['mask']
-            with zipfile.ZipFile(ref['zip']) as archive:
-                entry = archive.getinfo(ref['entry'])
-                if entry.file_size > 32 * 1024 * 1024:
-                    raise ValueError('bounded draft mask required')
-                draft = archive.read(entry)
+            if not isinstance(ref, dict) or not re.fullmatch('[0-9a-f]{64}', ref.get('sha256', '')):
+                raise ValueError('draft mask digest required')
+            if set(ref) == {'indexed_png', 'sha256', 'classes_sha256'}:
+                if ref['classes_sha256'] != binding['sha256']:
+                    raise ValueError('indexed draft classes hash differs')
+                draft = bounded(edge_review.bound(catalog.parent, ref['indexed_png']))
                 if review_masks.sha(draft) != ref['sha256']:
                     raise ValueError('draft mask hash differs')
-                labelmap_raw = archive.read('labelmap.txt')
-                labelmap_sha = review_masks.sha(labelmap_raw)
-                mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
+                mask = review_masks.from_indexed(draft, width, height, binding)
+            elif set(ref) == {'zip', 'entry', 'sha256'}:
+                with zipfile.ZipFile(ref['zip']) as archive:
+                    entry = archive.getinfo(ref['entry'])
+                    if entry.file_size > 32 * 1024 * 1024:
+                        raise ValueError('bounded draft mask required')
+                    draft = archive.read(entry)
+                    if review_masks.sha(draft) != ref['sha256']:
+                        raise ValueError('draft mask hash differs')
+                    labelmap_raw = archive.read('labelmap.txt')
+                    labelmap_sha = review_masks.sha(labelmap_raw)
+                    mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
+            else:
+                raise ValueError('draft mask reference must be indexed PNG or color ZIP')
         normalized = {key: row.get(key) for key in
                       ('source_session', 'capture_group', 'source_video_sha256', 'video_frame',
                        'video_time_s', 'timestamp_basis', 'collection', 'dataset_memberships_snapshot')}

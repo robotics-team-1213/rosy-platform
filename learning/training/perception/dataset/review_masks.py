@@ -117,6 +117,19 @@ def from_color(raw, width, height, labelmap_raw, binding):
     return encode(result)
 
 
+def from_indexed(raw, width, height, binding):
+    """Keep 255 unlabelled; reject RGB, 16-bit and undeclared class indices."""
+    if not raw.startswith(b'\x89PNG\r\n\x1a\n'):
+        raise ValueError('indexed draft must be PNG')
+    image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_UNCHANGED)
+    if image is None or image.shape != (height, width) or image.dtype != np.uint8:
+        raise ValueError('indexed draft must be original-size 8-bit grayscale PNG')
+    allowed = {item['index'] for item in binding['classes']} | {255}
+    if not set(np.unique(image)).issubset(allowed):
+        raise ValueError('indexed draft contains unknown class index')
+    return encode(image)
+
+
 def flood_region_photo(photo_bgr, seed, tolerance):
     """4-connected region around `seed` within encoded Lab distance `tolerance`.
 
