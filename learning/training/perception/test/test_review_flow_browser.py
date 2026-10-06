@@ -339,6 +339,32 @@ def test_review_waiting_workspace_hides_stale_editing(
     expect(page.locator(prepare)).to_be_enabled()
 
 
+@pytest.mark.parametrize('route,status,content', [
+    ('/', '#empty-review p', '#review-content'),
+    ('/pixels', '#pixel-status', '#pixel-content'),
+])
+def test_review_delayed_workspace_shows_wait_age(browser_workspace, route, status, content):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': 390, 'height': 844})
+    pending = []
+    page.route('**/api/workspace', lambda request: pending.append(request))
+    with page.expect_request('**/api/workspace'):
+        page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
+    expect(page.locator(status)).to_contain_text('서버 응답 대기 3초', timeout=5000)
+    expect(page.locator(content)).to_be_hidden()
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-{"objects" if route == "/" else "pixels"}-delayed-390.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+    pending.pop().continue_()
+    expect(page.locator(content)).to_be_visible()
+    if route == '/pixels':
+        expect(page.locator(status)).not_to_contain_text('서버 응답 대기')
+    else:
+        expect(page.locator('#empty-review')).to_be_hidden()
+
+
 @pytest.mark.parametrize('route,api,actions,status,retry', [
     ('/learning', 'learning', ('#new-task', '#connect'), '#learning-status', '#refresh'),
     ('/catalog', 'catalog', ('#import', '#cad'), '#catalog-load', '#catalog-retry'),

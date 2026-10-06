@@ -166,6 +166,8 @@ Pilot 390×844에서 회전 조작을 첫 화면에 올리려고 아래 조작 �
 
 이 320px 전용 배치가 쓰는 22rem 경계는 `shared/web/surfaces.yaml`의 Pilot breakpoint에 사유와 함께 선언했다. 반응형 계약 **9 passed**, `known_failures.py` **0 NEW**다. 화면 동작을 추가로 바꾼 것은 아니다.
 
+객체·픽셀 검수의 작업영역 응답을 390px에서 3초 넘게 보류하면 대기 시간이 초 단위로 보이고 편집은 계속 막힌다. 응답 후에는 최신 검수 화면으로 돌아온다. 브라우저 **2 passed**, `known_failures.py` **0 NEW**이며 원본은 X: `captures/learning-delayed/learning-{objects,pixels}-delayed-390.png`다. 이는 **서버 응답 대기 시간**의 LOCAL 근거다. D-153의 값별 `delayed` 근거와 나이, 다른 선언 폭·경로, 실제 검수자 작업은 별도로 남는다.
+
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |
