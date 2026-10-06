@@ -25,7 +25,8 @@
          Empty keeps the path unchanged. -->
     <arg name="extra_resource_path" default=""/>
     <!-- true: bridge the model IMU and IR floor rays and publish ir_sensor/range
-         (params/rosy_bridge_sim_sensors.yaml, scripts/sim_ir_floor.py). -->
+         (params/rosy_bridge_sim_sensors.yaml, scripts/sim_ir_floor.py). Single robot only:
+         the bridge topics are unnamespaced, like params/rosy_bridge.yaml. -->
     <arg name="sim_sensors" default="false"/>
 
     <set_env name="GZ_SIM_RESOURCE_PATH" value="$(find-pkg-share description)/../:/$(find-pkg-share gz_sim)/models:/$(env HOME)/.gazebo/models$(var extra_resource_path)"/>

@@ -1121,3 +1121,9 @@
 - 변경: `is_simulation_scan`이 공용 Gazebo 모델 모양(640 빔, `range_max` 12, `<ns>rplidar_link`)도 받는다(opt-in 뒤에만). `SafetyNode`의 `accept_simulation_scans`(기본 false, `use_sim_time` 필수)가 `enable_simulation_scans`를 부른다. `containment_payload`는 GAZEBO 지면에서만 `uncertainty_m = 2 × max_range / fx`를 낸다. NOMINAL·CALIBRATED는 `None` 그대로다.
 - 증거: `test_scan_acceptance.py`, `test_lane_containment_payload.py` 추가 시험 PASS.
 - gate 변화: 없음. D-468이 장치에서 쓰는 투영 불확실도는 여전히 미측정이다.
+
+## 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)
+
+- 변경: GAZEBO 지면 투영 불확실도의 2 px를 `GAZEBO_DETECTOR_LATERAL_PX`로 이름 붙였다. 측정이 아닌 휴리스틱이다. 동작은 같다.
+- 증거: `test_lane_containment_payload.py` 6 PASS.
+- gate 변화: 없음.
