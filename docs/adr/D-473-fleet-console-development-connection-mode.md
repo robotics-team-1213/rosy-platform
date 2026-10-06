@@ -15,7 +15,7 @@ D-471은 같은 망 전면 무인증을 기각하고 무코드 접속은 D-432 �
 1. **켜는 조건은 두 개를 함께 명시한 경우뿐이다.** 환경 변수 `ROSY_DEPLOYMENT=development`와 Fleet CLI `--connection-mode development`가 모두 있어야 한다. 하나라도 없으면 지금의 `paired` 동작이다. 인증 실패나 설정 누락이 개발 모드로 강등하지 않는다(D-432 4항).
 2. **조회와 발급 두 경로를 둔다.**
    - `GET /api/fleet/auth/connection` → `{"mode": "development" | "paired"}`. 인증 없이 읽는다.
-   - `POST /api/fleet/auth/development-session` → 개발 모드일 때만 1시간 운용자 세션 토큰을 한 번 돌려준다. 요청 주소는 loopback·RFC1918·link-local이어야 하고, `Host`/`Origin`은 콘솔 자신의 authority여야 한다. 주소당 분당 6회로 제한하고 살아 있는 세션은 8개까지다. 넘으면 가장 오래된 것을 지운다.
+   - `POST /api/fleet/auth/development-session` → 개발 모드일 때만 1시간 운용자 세션 토큰을 한 번 돌려준다. 요청 주소는 loopback·RFC1918·link-local 또는 Tailscale(100.64.0.0/10, 사용자 계정 로그인이 필요한 tailnet — 2026-10-06 사용자 결정)이어야 하고, `Host`/`Origin`은 콘솔 자신의 authority여야 한다. 주소당 분당 6회로 제한하고 살아 있는 세션은 8개까지다. 넘으면 가장 오래된 것을 지운다.
 3. **세션은 이름 있는 운용자다.** principal ID는 `development-<8자 hex>`, 역할은 `operator`다. `require_named_operator`를 통과하므로 미션 하달도 된다. 모든 발급과 POST는 기존 API 감사 기록에 그 principal로 남는다. 세션은 메모리에만 두고 Fleet 재시작 시 사라진다.
 4. **콘솔 화면은 자동으로 받는다.** 콘솔은 저장된 토큰이 없거나 401을 받으면 `connection`을 조회하고, `development`면 세션을 받아 `sessionStorage`에 넣는다. 화면 상단에 "개발 연결 모드" 표시를 항상 띄운다. `paired`면 지금처럼 토큰 입력 칸을 보인다.
 5. **로봇 쪽 자격은 바꾸지 않는다.** Fleet이 로봇 CORE에 쓰는 토큰은 기존 등록(D-361 LCD 코드, `robots.yaml`)을 그대로 쓴다. 비상 정지·안전 정지 경로의 인증도 그대로다.
