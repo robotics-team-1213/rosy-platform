@@ -8,8 +8,8 @@ An isolated Android 35 emulator rendered the updated empty discovery screen at 4
 
 | Capture | SHA-256 |
 |---|---|
-| `pilot-400dp-final.png` | `e361494faecf731df9620ba997c07dd7bb324226b57cbaad1a2462edf4bdec15` |
-| `pilot-600dp-final.png` | `0f42f222448d759900f121fab152fe7954c10813cd41d2a19d649d58c82614fe` |
-| `pilot-1000dp-final.png` | `308ca158bd7826ec3db0816e5eb1b4f8983a7c6b7a3ac54d72084d71767b8806` |
+| `pilot-400dp-final.png` | SHA-256 `e361494faecf731df9620ba997c07dd7bb324226b57cbaad1a2462edf4bdec15` |
+| `pilot-600dp-final.png` | SHA-256 `0f42f222448d759900f121fab152fe7954c10813cd41d2a19d649d58c82614fe` |
+| `pilot-1000dp-final.png` | SHA-256 `308ca158bd7826ec3db0816e5eb1b4f8983a7c6b7a3ac54d72084d71767b8806` |
 
 This is **LOCAL synthetic empty-state G2 evidence only**. The Lenovo tablet still has the older installed APK; real candidate discovery, pairing, connection outcomes, operator G3, and the remaining declared Pilot states are **HOLD**.
