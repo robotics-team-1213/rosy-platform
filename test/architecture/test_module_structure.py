@@ -80,6 +80,19 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/server/web/styles.css": (
+        809,
+        "split: the Fleet console stylesheet now combines connection, roster, camera and "
+        "responsive page rules. Move page-specific rules into separately loaded assets under "
+        "docs/plans/2026-10-04-ui-release-and-live-refinement.md with installed-resource parity "
+        "checks. The 600-line ceiling and growth allowance remain unchanged",
+    ),
+    "ui/face/emotion/info_screen.py": (
+        602,
+        "accept: the face display renderer keeps boot, drive, stop and notice cards with the "
+        "same font and panel conversion helpers. Re-judge if another card family grows it; "
+        "the 600-line ceiling and growth allowance remain unchanged",
+    ),
     "web/components.css": (
         814,
         "accept: shared token-based component styles remain one web_common responsibility; "
@@ -109,7 +122,7 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        36_889,
+        37_134,
         "split: re-judged at 36645 on 2026-10-06 after integrated map camera display, "
         "lamp identity routing, and transport evidence added 201 lines; the camera binding "
         "moved from console.js into its map view to keep the web file below 800 lines. "
@@ -288,7 +301,7 @@ SIZE_VERDICTS = {
         "adds 5 and console wiring adds 2, while shared app/console composition removes 39. These "
         "are existing focused safety owners, not a duplicate command path. Independently counted "
         "both parents and the union; the B2 server grouping remains open and +150 is unchanged. "
-        "Re-judged 2026-10-06 at 36889 after D-473 added the development-session connection gate to the Fleet CLI and the console auto-session bootstrap (244 lines above 36645, all in cli.py and console.js, see their verdicts). No new command or motion owner; the B2 server/UI split and the +150 allowance stay unchanged",
+        "Re-judged 2026-10-06 at 36889 after D-473 added the development-session connection gate to the Fleet CLI and the console auto-session bootstrap (244 lines above 36645, all in cli.py and console.js, see their verdicts). No new command or motion owner; the B2 server/UI split and the +150 allowance stay unchanged. Re-judged at 37134 after the Fleet console style and site connection work joined the same package; the existing split plan and +150 allowance remain unchanged",
     ),
     "fleet/fleet/cli.py": (
         608,
