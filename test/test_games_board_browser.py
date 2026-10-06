@@ -67,10 +67,10 @@ def test_match_board_renders_published_play_state():
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
             page.wait_for_function(
-                "document.getElementById('phase')?.dataset.phase === 'play'"
+                "() => document.getElementById('phase')?.dataset.phase === 'play'"
             )
             page.wait_for_function(
-                "document.getElementById('home-score')?.textContent === '2'"
+                "() => document.getElementById('home-score')?.textContent === '2'"
             )
             assert page.locator("#phase").inner_text() == "경기 진행"
             assert page.locator("#away-score").inner_text() == "1"
@@ -148,7 +148,7 @@ def test_legacy_overlay_without_time_evidence_does_not_claim_fresh():
             browser, page, errors = open_page(playwright, 1280, 800)
             page.route("**/overlay.json", lambda route: route.fulfill(json=legacy))
             page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_function("document.getElementById('connection')?.dataset.evidence === 'unavailable'")
+            page.wait_for_function("() => document.getElementById('connection')?.dataset.evidence === 'unavailable'")
             assert "시각 정보 없음" in page.locator("#connection").inner_text()
             assert "시각 정보 없음" in page.locator("#match-announcement").inner_text()
             assert "호스트 연결됨" not in page.locator("#connection").inner_text()
@@ -234,7 +234,7 @@ def test_match_board_shows_lost_hold_state(width, height, reason, label):
             browser, page, errors = open_page(playwright, width, height)
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function(
-                "document.getElementById('phase')?.dataset.phase === 'hold'"
+                "() => document.getElementById('phase')?.dataset.phase === 'hold'"
             )
             assert page.locator("#lost").is_visible()
             assert page.locator("#phase").inner_text() == "경기 보류"
@@ -277,7 +277,7 @@ def test_match_board_initial_state_before_any_publish(width, height):
             browser, page, errors = open_page(playwright, width, height)
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function(
-                "document.getElementById('phase')?.textContent === '대기'"
+                "() => document.getElementById('phase')?.textContent === '대기'"
             )
             assert page.locator("#home-score").inner_text() == "—"
             assert page.locator("#connection").inner_text() == "경기 데이터 대기 중"
@@ -311,7 +311,7 @@ def test_missing_camera_frame_does_not_render_broken_image_placeholder():
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
             page.wait_for_function(
-                "document.getElementById('phase')?.dataset.phase === 'play'"
+                "() => document.getElementById('phase')?.dataset.phase === 'play'"
             )
             assert page.locator("#frame").is_hidden()
             assert page.locator("#frame").evaluate("el => getComputedStyle(el).display") == "none"
@@ -346,7 +346,7 @@ def test_halt_row_stays_inside_the_declared_viewport():
         with sync_playwright() as playwright:
             browser, page, errors = _launch_board_page(playwright, url)
             page.wait_for_function(
-                "document.getElementById('phase')?.dataset.phase === 'play'"
+                "() => document.getElementById('phase')?.dataset.phase === 'play'"
             )
             page.wait_for_timeout(400)
             fit = page.evaluate(GAMES_FIT_PROBE)
@@ -515,7 +515,7 @@ def test_stop_failure_is_visible_and_can_be_retried(width, height):
         with sync_playwright() as playwright:
             browser, page, errors = open_page(playwright, width, height)
             page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
+            page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             calls = []
 
             def serve_stop(route):
@@ -527,7 +527,7 @@ def test_stop_failure_is_visible_and_can_be_retried(width, height):
 
             page.route("**/stop", serve_stop)
             page.locator("#halt").click()
-            page.wait_for_function("document.getElementById('halt-status')?.dataset.state === 'error'")
+            page.wait_for_function("() => document.getElementById('halt-status')?.dataset.state === 'error'")
             assert "다시" in page.locator("#halt-status").inner_text()
             assert page.locator("#halt-status").get_attribute("role") == "status"
             assert page.locator("#halt").get_attribute("aria-disabled") == "false"

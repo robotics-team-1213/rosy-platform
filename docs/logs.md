@@ -6647,3 +6647,9 @@ osy-d395-s1d\`.
 - 변경: D-153 명명 G1과 반응형 선언을 로컬 `main` `42f9a617f`에서 다시 실행하고 회차 평가에 결과를 고정했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-g1-current/g1.txt`; 90 passed, Starlette/anyio deprecation warning 1, `known_failures.py` 0 NEW.
 - gate 변화: 해당 커밋의 LOCAL G1 기계 계약 근거를 갱신했다. 선언 상태·폭 G2와 사용자 G3, 실물 readback은 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(games): 현재 보드 상태·폭 재검증
+
+- 변경: 현재 보드 320px HOLD에서 유실 이유가 피치보다 먼저 보이는 순서를 회차 카드에 명시하고, 브라우저 시험의 CSP에 걸리는 원시 `wait_for_function` 식 9곳을 함수 식으로 고쳤다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-games-current/`; 전체 브라우저 28 passed/1 failed 뒤 실패 셀 1 passed, `known_failures.py` 0 NEW. 전체 재실행 통과 주장 없음.
+- gate 변화: 현 트리의 LOCAL 게임 보드 상태·폭 근거 갱신. 실제 경기·정지 readback과 사용자 G3는 HOLD.
