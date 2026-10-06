@@ -112,7 +112,7 @@ function paint() {
     const [x0,y0,x1,y1] = bounds;
     // Unclassified boxes block approval (D-469): keep them visibly distinct on the canvas.
     const rgb = classColors[box.label];
-    ctx.strokeStyle = box.label == null ? cssColor('--status-warn') : rgb ? `rgb(${rgb.join(',')})` : cssColor('--series-primary');
+    ctx.strokeStyle = box.label == null ? cssColor('--status-warn') : rgb ? `#${rgb.map(v=>v.toString(16).padStart(2,'0')).join('')}` : cssColor('--series-primary');
     ctx.strokeRect(x0,y0,x1-x0,y1-y0);
     ctx.fillText(String(i+1),x0+3,Math.max(14,y0-3));
     if (i === selected) {
