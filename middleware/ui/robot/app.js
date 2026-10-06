@@ -510,7 +510,7 @@ pageScope.listen(elements["dev-connect"], "click", async () => {
   invalidateAuth();
   const lifetime = authLifetime;
   setText("dev-message", "개발 연결 확인 중…");
-  setEnabled("dev-connect", false, "개발 연결 확인 중…");
+  setEnabled("dev-connect", false, "개발 연결 확인 중");
   let identity = null;
   try {
     identity = await developmentSession({signal: AbortSignal.any([lifetime.signal, pageScope.signal])});

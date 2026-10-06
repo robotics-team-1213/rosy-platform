@@ -689,7 +689,9 @@ def scan_disabled(scripts):
             if text[max(0, match.start() - 9):match.start()].endswith("function "):
                 continue
             args = _call_args(text, match.end())
-            if len(args) < 3 and args[1:2] != [" true"]:
+            enabled = len(args) > 1 and ((match.group(1) == "setOff" and args[1].strip() == "false")
+                                         or (match.group(1) == "setEnabled" and args[1].strip() == "true"))
+            if len(args) < 3 and not enabled:
                 number = text.count("\n", 0, match.start()) + 1
                 snippet = lines[number - 1].strip()
                 key = next((k for k in DISABLED_WITHOUT_REASON
@@ -722,6 +724,12 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     assert not widened, (
         "한 조각이 선언과 다른 수의 자리를 덮는다 — 새 같은 줄에는 더 긴 조각으로 제 항목을 준다: "
         f"{widened}")
+
+
+def test_disabled_scan_distinguishes_explicit_enable_from_disable():
+    assert scan_disabled([("example.js", "setOff(button, false);")])[0] == []
+    assert scan_disabled([("example.js", "setEnabled(button, true);")])[0] == []
+    assert scan_disabled([("example.js", "setOff(button, true);")])[0] == ["example.js:1 setOff without reason"]
 
 
 def test_a_copied_disabled_line_needs_its_own_entry():

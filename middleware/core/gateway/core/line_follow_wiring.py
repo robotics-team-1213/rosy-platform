@@ -107,6 +107,10 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "bridge_distance_scale", defaults.bridge_distance_scale)),
         bridge_time_margin_s=float(raw.get(
             "bridge_time_margin_s", defaults.bridge_time_margin_s)),
+        lane_return_body_margin_m=float(raw.get(
+            "lane_return_body_margin_m", defaults.lane_return_body_margin_m)),
+        lane_return_checkpoint_fraction=float(raw.get(
+            "lane_return_checkpoint_fraction", defaults.lane_return_checkpoint_fraction)),
     )
 
 
@@ -137,11 +141,17 @@ def bind_stuck_recovery(line_follow, *, safety, calibration, fleet_agent, vision
     )
 
 
-def bind_lane_return_motion(line_follow, sensor_adapter) -> None:
-    """D-468: recheck live floor policy and measured body sweep for every candidate."""
+def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> None:
+    """D-468: recheck live floor policy and measured body sweep for every candidate.
+
+    `now` is the line clock. policy_clock: the worker policy's own clock when the line
+    clock differs (use_sim_time: sim seconds vs the monotonic policy window, the clock
+    SafetyManager also asks it on). None = the line clock is that clock (Device).
+    """
     def allowed(now, linear, angular) -> bool:
         try:
-            return (sensor_adapter.return_sensor_allowed(now, linear, angular) is True
+            sensor_now = now if policy_clock is None else policy_clock()
+            return (sensor_adapter.return_sensor_allowed(sensor_now, linear, angular) is True
                     and line_follow.return_body_clear(now, linear, angular) is True)
         except Exception:  # noqa: BLE001 - missing runtime evidence denies motion
             return False
