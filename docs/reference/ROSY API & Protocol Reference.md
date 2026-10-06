@@ -258,6 +258,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/power/wake` | Operator | PWR-004 (원격 웨이크 — 정보 화면 표시) |
 | POST | `/api/v1/power/mode` | Operator | PWR-001 (payload: `{mode: ACTIVE\|IDLE\|STANDBY}`) |
 
+`GET /sensors`·`GET /sensors/{type}` 의 숫자 값 가운데 유한하지 않은 값(`inf`·`-inf`·NaN)은 JSON 에 없으므로 `null` 로 나간다. LiDAR `ranges` 의 반환 없는 빔(+inf)과 NaN 이 `null` 이며, 값이 있는 빔과 구분된다(`robot_body.scan_view` 와 같이 반환 없음 = 알 수 없는 구간). 필드 이름·형식은 그대로이고 CORE 내부 표본은 inf 를 유지한다.
+
 `GET /power/health` 응답은 공유 `core_common.protocol.power_health.PowerHealthResponse` 계약이다. `power`는 기존 `PowerStatus`, `health`는 진단 요약이며 조회가 idle timer나 wake를 변경하지 않는다.
 
 | 영역 | 필드와 해석 |
@@ -2353,6 +2355,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.107 | 2026-10-06 | Fix (버전 번호 변경 없음) (fix/sensors-nonfinite-json): `GET /api/v1/sensors`·`/sensors/{type}` 가 LiDAR `ranges` 의 inf/NaN 때문에 500 이던 것을 비유한 값 `null` 로 직렬화. 필드 추가·이름 변경 없음 |
 | v1.107 | 2026-10-06 | Additive (D-472): CORE 후면 LED 단기 식별 요청과 Fleet 단일 로봇 전달 경로. Rosy Cam 프레임 표시만 연결하며 자동 신원·주행 권한은 열지 않음 |
 | v1.106 | 2026-10-05 | Additive (D-468): CAMERA_LINE 관측에 원본 시각과 같은 optional containment 경계 증거, geometry/ground source/uncertainty를 추가. 명령·자동 복구 활성화·envelope 1.0은 변경 없음 |
 | v1.102 | 2026-10-05 | Additive (D-368, feat/d368-driver-mjpeg-stream): 운전자 전용 MJPEG 스트림 `GET /api/v1/vision/front/stream`(operator, `multipart/x-mixed-replace; boundary=frame`, `?overlay=`). 조종 소유권은 수락 teleop 토큰(D-460 — 임대 없음). 운전자 아님 409 `CAMERA_STREAM_NOT_DRIVER`, 이미 열림 409 `CAMERA_STREAM_BUSY`, 새 수락 teleop가 열린 스트림을 끝낸다. 관전자·관제는 기존 0.4 s 폴링 유지. envelope 1.0 유지. v1.100(D-463)·v1.101(D-456)을 main이 먼저 써 v1.102로 재번호 |
