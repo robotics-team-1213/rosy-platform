@@ -11,7 +11,7 @@ from core_common.config import patch_local_config as patch_locked
 from core_common.config_transaction import transaction
 
 
-from core_common.protocol.peer_pairing import RepositoryDenied, Relationship
+from core_common.protocol.peer_pairing import RepositoryDenied, Relationship, SCREEN_CODE_ISSUER, screen_code_dated
 
 
 class OverlayRepository:
@@ -74,7 +74,7 @@ class OverlayRepository:
         except (ValueError, TypeError) as exc:
             raise RepositoryDenied("invalid relationship record") from exc
 
-    def update(self, mutate, action, actor_id=None, grant_id=None):
+    def update(self, mutate, action, actor_id=None, grant_id=None, actor=None):
         with deps.TOKEN_WRITE_LOCK, transaction(self.path):
             document = self._document()
             auth = document.setdefault("auth", {})
@@ -83,22 +83,38 @@ class OverlayRepository:
                 raise RepositoryDenied("invalid relationship store")
             tokens = [r for r in deps.auth_entries(document) if not deps.is_expired(r, self.clock())]
             result = mutate(state["grants"], tokens, document)
+            pruned = []
+            if len(state["grants"]) > 128:
+                # D-483 M2: routine 168 h re-approval must not fill the cap. Only dead rows go:
+                # expired or revoked, with no live child session, never the row being changed.
+                live = {r["id"] for r in tokens}
+                pruned = [k for k, g in state["grants"].items() if k != grant_id
+                          and (g.get("revoked") or (g.get("expires_at") is not None
+                               and datetime.fromisoformat(g["expires_at"]) <= self.clock()))
+                          and not live & set(g.get("session_ids", []))]
+                for key in pruned:
+                    del state["grants"][key]
             if len(state["grants"]) > 128:
                 raise RepositoryDenied("relationship capacity reached")
             try:
                 if any(not isinstance(v, dict) or k != v.get("id") for k, v in state["grants"].items()):
                     raise RepositoryDenied("invalid relationship identity")
-                state["grants"] = {k: Relationship(**v).model_dump() for k, v in state["grants"].items()}
+                state["grants"] = {k: Relationship(**v).stored() for k, v in state["grants"].items()}
             except (ValueError, TypeError) as exc:
                 raise RepositoryDenied("invalid relationship record") from exc
             stored = deps.stored_token_entries(tokens)
             grant = state["grants"].get(grant_id, {})
-            actor = deps.principal_ref(self._owner(document, actor_id)) if actor_id else "receiver:key-proof"
-            state["audit"] = (state.get("audit", []) + [{"at": self.clock().isoformat(), "actor": actor,
+            if actor is None:
+                actor = deps.principal_ref(self._owner(document, actor_id)) if actor_id else "receiver:key-proof"
+            removed = [{"at": self.clock().isoformat(), "actor": "receiver:capacity", "action": "relationship_pruned",
+                        "relationship_id": key, "generation": None, "relationship_count": len(state["grants"])}
+                       for key in pruned]
+            state["audit"] = (state.get("audit", []) + removed + [{"at": self.clock().isoformat(), "actor": actor,
                               "action": action, "relationship_id": grant_id, "generation": grant.get("generation"),
                               "relationship_count": len(state["grants"])}])[-256:]
-            # Relationships are retained on expiry/revoke; no deep-merge deletion.
-            patch_locked({"auth": {"tokens": stored, "peer_pairing": state}}, self.path)
+            # Relationships are retained on expiry/revoke; only a capacity prune removes rows.
+            patch_locked({"auth": {"tokens": stored, "peer_pairing": state}}, self.path,
+                         replace=("auth", "peer_pairing", "grants") if pruned else ())
             self.svc.config["auth"] = dict(auth, tokens=stored, peer_pairing=state)
             return result
 
@@ -128,6 +144,22 @@ class OverlayRepository:
             return copy.deepcopy(relationship)
         return self.update(change, "owner_approved", token_id, relationship["id"])
 
+    def approve_screen_code(self, relationship, request_deadline):
+        """D-483 5: the robot-screen code approval; bounded, never persistent, no issuer token."""
+        def change(grants, tokens, document):
+            if self.clock() >= request_deadline:
+                raise RepositoryDenied('request expired before approval')
+            if relationship["id"] in grants:
+                old = grants[relationship['id']]
+                bound = ('receiver_id', 'receiver_key_sha256', 'client_id', 'client_public_key', 'role',
+                         'label', 'issuer_id', 'issuer_digest', 'issuer_source', 'persist_requested', 'persistent')
+                if old['revoked'] or any(old.get(key) != relationship.get(key) for key in bound):
+                    raise RepositoryDenied('stored approval differs')
+                return copy.deepcopy(old)
+            grants[relationship["id"]] = copy.deepcopy(relationship)
+            return copy.deepcopy(relationship)
+        return self.update(change, "screen_code_approved", grant_id=relationship["id"], actor=SCREEN_CODE_ISSUER)
+
     def issue(self, grant_id, challenge_id, receiver_fingerprint, expected_grant):
         def change(grants, tokens, document):
             grant = grants.get(grant_id)
@@ -137,9 +169,14 @@ class OverlayRepository:
                       "client_id", "receiver_id", "persistent", "issuer_digest", "issuer_source")
             if any(grant.get(key) != expected_grant.get(key) for key in fields):
                 raise RepositoryDenied("relationship changed during proof")
-            issuer = self._owner(document, grant["issuer_id"])
-            if issuer["digest"] != grant["issuer_digest"] or issuer["source"] != grant["issuer_source"]:
-                raise RepositoryDenied("issuer identity changed")
+            if grant["issuer_source"] == SCREEN_CODE_ISSUER:
+                if not screen_code_dated(grant, self.clock()):
+                    raise RepositoryDenied("screen-code approval dated in the future")
+                issuer = {"id": SCREEN_CODE_ISSUER}  # D-483 5: bounded by the relationship's own expiry only.
+            else:
+                issuer = self._owner(document, grant["issuer_id"])
+                if issuer["digest"] != grant["issuer_digest"] or issuer["source"] != grant["issuer_source"]:
+                    raise RepositoryDenied("issuer identity changed")
             if grant["persistent"] and (not deps.is_durable_admin(issuer) or issuer["source"] not in {"card", "manual"}):
                 raise RepositoryDenied("persistent issuer authority changed")
             if ((grant["expires_at"] is not None and datetime.fromisoformat(grant["expires_at"]) <= self.clock())

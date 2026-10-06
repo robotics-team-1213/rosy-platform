@@ -331,6 +331,7 @@ async def front_evidence(request: Request):
 # Content-Length 보다 짧음)|"slow"(첫 조각 뒤 release 까지 멈춤)|"conflict"(목록과 달리 409),
 # foreign: 다른 기기가 시작한 녹화, big: 256 MB 를 넘는 녹화본. polls 는 GET /active 횟수.
 # starting: 시작이 먼저 "starting"(기록기가 아직 첫 파일을 열지 않음)이 되고, ready: true 로 recording.
+# cap: true 면 녹화기가 10분 상한(max_duration)으로 스스로 멈춘다.
 RECORDING_ID = "20261002T101500Z_rosy_dev"
 _IDLE_RECORDER = {"schema": "rosy.pilot.recording.status/1", "state": "idle", "id": None, "elapsed_s": 0.0,
                   "bytes": 0, "max_duration_s": 600, "quota_free_bytes": 10**9, "last_stop_reason": "",
@@ -384,6 +385,8 @@ async def recordings_script(request: Request):
     if body.get("foreign"):
         RECORDINGS.update(owned=False, active={**_IDLE_RECORDER, "state": "recording",
                                                "id": "20261002T103000Z_rosy_dev", "elapsed_s": 3.0, "bytes": 4096})
+    if body.get("cap"):  # 녹화기가 10분 상한에서 스스로 멈췄다
+        RECORDINGS.update(owned=False, active={**_IDLE_RECORDER, "last_stop_reason": "max_duration"})
     if body.get("ready") and RECORDINGS["active"]["state"] == "starting":
         RECORDINGS["active"] = {**_IDLE_RECORDER, **_RECORDING_LIVE}
     return {key: RECORDINGS[key] for key in _RECORDING_DEFAULTS}

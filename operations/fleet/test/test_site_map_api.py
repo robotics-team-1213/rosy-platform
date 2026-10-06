@@ -266,6 +266,9 @@ def test_console_serves_the_site_layer_and_draws_sightings_apart_from_core_pose(
     assert 'from "./site-layer.js"' in map_view
     assert '"/api/fleet/site-map"' in map_view and '"/api/fleet/sightings"' in map_view
     assert "mapView.refreshSightings()" in shell
+    roster = client.get("/console/assets/roster.js").text
+    assert "view.call = { robot_id: robot.robot_id, until: Date.now() + 6000 }" in roster
+    assert "호출 ${view.call.robot_id}" in map_view
     assert 'id="legend-sighting"' in page
     assert "<script>" not in page  # CSP: script-src 'self' only
 

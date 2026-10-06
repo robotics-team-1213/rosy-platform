@@ -34,9 +34,10 @@ GLYPH_TOKEN = {
     "robot": "--robot-1",
 }
 #: D-377 2항 table: display name, English name and short name are all `Rosy <Word>`.
+#: D-487 renames the site surface to Rosy Fleet; its registry id stays `console`.
 NAMES = {
     "cam": ("Rosy Cam", "Rosy Cam", "Rosy Cam"),
-    "console": ("Rosy Console", "Rosy Console", "Rosy Console"),
+    "console": ("Rosy Fleet", "Rosy Fleet", "Rosy Fleet"),
     "robot": ("Rosy Robot", "Rosy Robot", "Rosy Robot"),
     "pilot": ("Rosy Pilot", "Rosy Pilot", "Rosy Pilot"),
 }

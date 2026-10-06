@@ -1221,12 +1221,12 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#map-tag')?.textContent.includes('paint-test')")
-        assert page.locator("#map-camera").is_visible()
+        # D-487: the calibrated canvas carries the frame; no second copy under the map.
+        assert page.locator("#map-camera").count() == 0
         assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
                              "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
                              "return p[0] > 150 && p[1] < 100 && p[2] < 100; }")
         frame_age["ms"] = "4000"
-        page.wait_for_function("() => document.querySelector('#map-camera').hidden", timeout=7000)
         page.wait_for_function("() => !document.querySelector('#map-tag')?.textContent.includes('paint-test')",
                                timeout=7000)
         assert not errors
@@ -1878,11 +1878,12 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         assert "rosy_03" in page.locator("#roster article").inner_text()
         save_temp_screenshot(page, f"fleet_console_mobile_default_{width}.png")
         actions = page.locator("#roster article .robot-actions")
-        action_widths = actions.locator("ui-button").evaluate_all(
-            "buttons => buttons.map(button => button.getBoundingClientRect().width)")
+        action_widths, actions_width = actions.locator("ui-button").evaluate_all(
+            "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
+            "buttons[0].parentElement.getBoundingClientRect().width]")
         assert len(action_widths) == 3 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
         if width == 320:
-            assert abs(action_widths[2] - actions.bounding_box()["width"]) <= 1, action_widths
+            assert abs(action_widths[2] - actions_width) <= 1, action_widths
         else:
             assert abs(action_widths[2] - action_widths[0]) <= 1, action_widths
         page.locator("#roster-toggle").click()
@@ -2883,7 +2884,7 @@ def test_login_unlocks_operator_controls_before_a_slow_state_gather(console_url)
         page.wait_for_function(
             "() => document.querySelector('#user-role')?.textContent.includes('운영자')", timeout=3000)
         page.wait_for_timeout(500)
-        assert "토큰 필요" not in page.inner_text("#online-pill")
+        assert "접속 전" not in page.inner_text("#online-pill")
         assert page.locator("#token-save").is_enabled()
         assert not errors
         browser.close()
@@ -3184,7 +3185,7 @@ def test_paired_console_keeps_the_token_field_and_never_asks_for_a_session(conso
         browser, page, errors = open_page(p, 1920, 1080)
         page.route("**/api/**", serve_api)
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.getElementById('online-pill').textContent === '토큰 필요'",
+        page.wait_for_function("() => document.getElementById('online-pill').textContent === '접속 전'",
                                timeout=8000)
 
         assert page.is_hidden("#development-badge")

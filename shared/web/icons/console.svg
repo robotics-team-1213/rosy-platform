@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
-  <title>Rosy Console</title>
+  <title>Rosy Fleet</title>
   <!-- D-370 3항: 108 grid, safe zone = centre circle of diameter 66. Glyph token paper, dot brand-rose. -->
   <path id="background" d="M24,0H84A24,24 0 0,1 108,24V84A24,24 0 0,1 84,108H24A24,24 0 0,1 0,84V24A24,24 0 0,1 24,0Z" fill="#101214"/>
   <g id="glyph">
