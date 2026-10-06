@@ -16,11 +16,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from pathlib import Path
-
-import yaml
-
-from fleet.meet.place import default_graph, painted_track
 
 STEP_M = 0.20
 OFF_M = 0.08
@@ -45,52 +40,26 @@ class LaneStep:
     at_m: float = 0.0
 
 
-_LINKS: dict[str, tuple[str, str]] | None = None
+def route_lines(edge_ids: list[str] | tuple[str, ...], painted):
+    """Stored polylines in order from the active site map's ``Painted`` (D-484).
 
-
-def segment_links(path: Path | None = None) -> dict[str, tuple[str, str]]:
-    global _LINKS
-    if path is None and _LINKS is not None:
-        return _LINKS
-    graph_path = default_graph() if path is None else Path(path)
-    graph = yaml.safe_load(graph_path.read_text(encoding="utf-8"))
-    segments = graph.get("segments") if isinstance(graph, dict) else None
-    if not isinstance(segments, dict):
-        raise ValueError(f"{graph_path} has no segments")
-    links: dict[str, tuple[str, str]] = {}
-    for name, segment in segments.items():
-        if not isinstance(segment, dict):
-            continue
-        src, dst = segment.get("from"), segment.get("to")
-        if isinstance(src, str) and isinstance(dst, str):
-            links[str(name)] = (src, dst)
-    if path is None:
-        _LINKS = links
-    return links
-
-
-def route_lines(edge_ids: list[str] | tuple[str, ...]):
-    """Stored polylines in order. Unknown or broken joins raise ``LaneRouteError``."""
+    Unknown or broken joins raise ``LaneRouteError``.
+    """
     if not edge_ids:
         raise LaneRouteError("ROUTE_EMPTY")
     if len(edge_ids) > MAX_EDGES:
         raise LaneRouteError("ROUTE_TOO_LONG")
-    painted = painted_track()
-    links = segment_links()
     lines = []
     previous: str | None = None
     for edge_id in edge_ids:
-        link = links.get(edge_id)
-        if link is None:
-            raise LaneRouteError("ROUTE_UNKNOWN_EDGE")
-        src, dst = link
-        if previous is not None and previous != src:
-            raise LaneRouteError("ROUTE_DISCONTINUOUS")
         try:
-            lines.append(painted.line(edge_id))
+            line = painted.line(edge_id)
         except KeyError as exc:
             raise LaneRouteError("ROUTE_UNKNOWN_EDGE") from exc
-        previous = dst
+        if previous is not None and previous != line.start:
+            raise LaneRouteError("ROUTE_DISCONTINUOUS")
+        lines.append(line)
+        previous = line.end
     return tuple(lines)
 
 

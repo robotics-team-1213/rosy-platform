@@ -133,7 +133,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
                cell_app_service_id: str | None = None,
-               development_sessions=None) -> FastAPI:
+               development_sessions=None,
+               site_maps=None, routing_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     if development_sessions is not None and task_service is None:
@@ -508,9 +509,20 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  require_operator=require_operator, require_named_operator=require_named_operator,
                                  read_guard=read_guard, operator_guard=operator_guard,
                                  drive_cancel=drive_cancel)
-    install_lane_route_routes(app, console=console, task_service=task_service,
-                              require_operator=require_operator,
-                              operator_guard=operator_guard)
+    # D-484: the site map store (in memory without one) and the D-486 trip planner.
+    from fleet.routing.cost import RoutingConfig
+    from fleet.server.site_map_routes import install_site_map_routes
+    from fleet.server.site_map_store import SiteMapStore
+    from fleet.server.trip_routes import install_trip_routes
+    site_maps = site_maps if site_maps is not None else SiteMapStore()
+    route_active = install_lane_route_routes(app, console=console, task_service=task_service,
+                                             site_maps=site_maps, require_operator=require_operator,
+                                             operator_guard=operator_guard)
+    install_site_map_routes(app, site_maps=site_maps, route_active=route_active, read_guard=read_guard,
+                            require_operator=require_operator, require_named_operator=require_named_operator)
+    install_trip_routes(app, console=console, site_maps=site_maps,
+                        routing_config=routing_config or RoutingConfig(),
+                        require_named_operator=require_named_operator)
 
     proposal_create = proposal_resolve = None
     if mission_service is not None:

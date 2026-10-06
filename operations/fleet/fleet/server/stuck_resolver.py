@@ -334,6 +334,8 @@ class StuckResolver:
         if me is None:
             return None
         painted = painted_track()
+        if painted is None:  # no active site map (D-484): R1/R2/R3 only
+            return None
         rid = str(row["robot_id"])
         placed: dict[str, object] = {}
         robots: list[Robot] = []

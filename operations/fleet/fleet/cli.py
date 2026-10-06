@@ -103,6 +103,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                               "view; without MAP_ID it applies to every map. Display only")
     console.add_argument("--site-lane-paint", action="append", default=None, metavar="[MAP_ID=]PATH",
                          help="lane paint STL (Vision's --map-paint file) drawn by the same view")
+    console.add_argument("--site-map-import", default=None, type=Path, metavar="LANE_GRAPH",
+                         help="D-484: lane_graph.yaml imported as the first active site map when "
+                              "the store has none (stored in --tasks-db, else memory)")
+    console.add_argument("--site-config", default=None, type=Path,
+                         help="site YAML; its fleet.routing section sets the D-486 planner costs")
     console.add_argument("--no-localization-service", dest="localization_service",
                          action="store_false", default=True,
                          help="D-395: do not run the Fleet localization service (on by default)")
@@ -498,6 +503,7 @@ def run_console(args: argparse.Namespace) -> None:
     for map_id in unmatched_map_ids(site_lanes, sighting_service.sources if sighting_service is not None else ()):
         print(f"warning: --site-lane-graph/--site-lane-paint map id {map_id!r} matches no sighting "
               "source; that lane entry is served to no camera", file=sys.stderr, flush=True)
+    site_maps, routing_config = _build_site_map(args, tasks_db)
     vision_preview_secret_env = getattr(args, "vision_preview_secret_env", None)
     vision_preview_secret = (os.environ.get(vision_preview_secret_env)
                              if vision_preview_secret_env else None)
@@ -548,7 +554,8 @@ def run_console(args: argparse.Namespace) -> None:
                      localization_service=localization_service,
                      stuck_resolver_clients=stuck_resolver_clients,
                      central_registry=central_registry,
-                     development_sessions=development_sessions)
+                     development_sessions=development_sessions,
+                     site_maps=site_maps, routing_config=routing_config)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",
@@ -556,6 +563,29 @@ def run_console(args: argparse.Namespace) -> None:
     tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
                    if tls_cert is not None else {})
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
+
+
+def _build_site_map(args, tasks_db):
+    """D-484/D-486: site map store (+ first import) and the planner's ``fleet.routing`` costs."""
+    import yaml
+
+    from fleet.routing.cost import RoutingConfig
+    from fleet.server.site_map_store import SiteMapStore
+    from fleet.site_map import from_lane_graph
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        routing = ((site_config.get("fleet") or {}).get("routing") if isinstance(site_config, dict) else None)
+        routing_config = RoutingConfig.from_mapping(routing)
+        site_maps = SiteMapStore(tasks_db)
+        source = getattr(args, "site_map_import", None)
+        if source is not None:
+            site_maps.import_if_empty(from_lane_graph(source), source=Path(source).name)
+    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"site map / routing config: {exc}")
+    return site_maps, routing_config
 
 
 def _relax_retired_sighting_targets(sources, *, known: set, retired: set):

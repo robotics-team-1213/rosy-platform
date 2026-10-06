@@ -1,6 +1,6 @@
 """260919 차선 위에 자세를 올리고, 주문 하나를 회전·직진 한 구간으로 바꾼다.
 
-폴리라인은 생성된 차선 그래프에서 읽는다. 방과 문은 D-451 의 자리다.
+폴리라인은 활성 현장 지도(D-484 `rosy.site_map/1`)에서 읽는다. 방과 문은 D-451 의 자리다.
 선에서 0.08 m 보다 멀면 그 선 위가 아니다. (0, 0) 은 고리에서 약 0.084 m 라
 여기에 올라가지 않는다. 헤딩이 접선과 60° 안이면 그 방향이고, 아니면
 신뢰하지 않는다.
@@ -10,9 +10,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from pathlib import Path
-
-import yaml
 
 from fleet.meet.scene import Action, Door, Edge, Order, Pin, Robot, Room, Scene
 
@@ -28,16 +25,10 @@ _ROOMS = (
     ("west_spot", (-1.0, 0.0), 0.27, "west", (-1.2696, 0.0)),
     ("east_room", (0.65, 0.30), 0.32, "east", (0.327, 0.301)),
 )
-_EDGES = ("west", "east", "ring_e", "ring_n", "ring_w", "ring_s")
 
 
 def _wrap(angle: float) -> float:
     return (angle + math.pi) % (2.0 * math.pi) - math.pi
-
-
-def default_graph() -> Path:
-    root = Path(__file__).resolve().parents[4]
-    return root / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 
 
 @dataclass(frozen=True)
@@ -60,6 +51,8 @@ class _Line:
     oneway: bool
     points: tuple[tuple[float, float], ...]
     knots: tuple[float, ...]
+    start: str = ""
+    end: str = ""
 
     @property
     def length_m(self) -> float:
@@ -121,44 +114,39 @@ class Painted:
         )
 
 
-def _polyline(name: str, segment: dict) -> _Line:
-    raw = segment.get("points")
-    if not isinstance(raw, list) or len(raw) < 2:
-        raise ValueError(f"segments.{name} needs points")
-    points = tuple((float(point[0]), float(point[1])) for point in raw)
-    knots = [0.0]
-    for start, end in zip(points, points[1:]):
-        knots.append(knots[-1] + math.hypot(end[0] - start[0], end[1] - start[1]))
-    directions = segment.get("directions") or []
-    oneway = "reverse" not in directions
-    return _Line(name, oneway, points, tuple(knots))
-
-
-def load_painted(path: Path | None = None) -> Painted:
-    graph_path = default_graph() if path is None else Path(path)
-    graph = yaml.safe_load(graph_path.read_text(encoding="utf-8"))
-    segments = graph.get("segments") if isinstance(graph, dict) else None
-    if not isinstance(segments, dict):
-        raise ValueError(f"{graph_path} has no segments")
-    lines = tuple(_polyline(name, segments[name]) for name in _EDGES)
+def painted_from(site_map) -> Painted:
+    """Lines from a ``fleet.site_map.SiteMap``. A D-451 room is kept only when its edge exists."""
+    lines = []
+    for edge in site_map.edges:
+        points = tuple((float(x), float(y)) for x, y in edge.polyline)
+        knots = [0.0]
+        for start, end in zip(points, points[1:]):
+            knots.append(knots[-1] + math.hypot(end[0] - start[0], end[1] - start[1]))
+        lines.append(_Line(edge.id, edge.direction == "one_way", points, tuple(knots), edge.from_, edge.to))
     doors: list[Door] = []
     rooms: list[Room] = []
     for room_id, hold, clearance, edge_id, door_xy in _ROOMS:
-        line = next(item for item in lines if item.id == edge_id)
+        line = next((item for item in lines if item.id == edge_id), None)
+        if line is None:
+            continue
         _dist, s_m, _tangent = line.project(door_xy[0], door_xy[1])
         rooms.append(Room(room_id, hold, clearance))
         doors.append(Door(edge_id, s_m, room_id))
-    return Painted(lines, tuple(rooms), tuple(doors))
+    return Painted(tuple(lines), tuple(rooms), tuple(doors))
 
 
-_CACHED: Painted | None = None
+_ACTIVE: Painted | None = None
 
 
-def painted_track() -> Painted:
-    global _CACHED
-    if _CACHED is None:
-        _CACHED = load_painted()
-    return _CACHED
+def use_painted(painted: Painted | None) -> None:
+    """The site map store sets this on start-up and on every activation."""
+    global _ACTIVE
+    _ACTIVE = painted
+
+
+def painted_track() -> Painted | None:
+    """The active site map's lines, or None while no site map is active."""
+    return _ACTIVE
 
 
 def _heading(yaw: float, tangent: float) -> tuple[int, bool]:

@@ -1,0 +1,135 @@
+"""D-484 ``rosy.site_map/1``: the site map Fleet owns — addresses (places) and directed lanes (edges).
+
+Pure: pydantic and PyYAML only, no network, DB, or clock. The store and routes live in
+``fleet.server.site_map_store`` / ``site_map_routes``; the planner reads this through
+``fleet.routing.graph`` (D-486).
+
+``from_lane_graph`` turns a generated ``lane_graph.yaml`` (map frame, metres) into the first
+map of a site. The file path is site configuration (``--site-map-import``), never a repo path.
+"""
+
+from __future__ import annotations
+
+import math
+from pathlib import Path
+from typing import Literal, Optional
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+SCHEMA = "rosy.site_map/1"
+#: A polyline end may sit this far from its place (generated graphs end exactly on the node).
+ENDPOINT_TOL_M = 0.05
+MAX_PLACES = 500
+MAX_EDGES = 1000
+MAX_POINTS = 20_000
+#: lane_graph.yaml lane half-width is 92.5 mm (docs/validation map-v2-fleet keep run).
+IMPORT_WIDTH_M = 0.185
+#: Import default only; the operator edits it per edge in the console.
+IMPORT_SPEED_CAP_MPS = 0.2
+
+Id = Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")
+Finite = Field(allow_inf_nan=False)
+
+
+class SitePlace(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Id
+    name: str = Field(min_length=1, max_length=64)
+    x: float = Finite
+    y: float = Finite
+    yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
+    kind: Literal["park", "charge", "stop", "junction", "turnaround"] = "junction"
+
+
+class SiteEdge(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    id: str = Id
+    from_: str = Field(alias="from", pattern=r"^[A-Za-z0-9_.-]{1,32}$")
+    to: str = Id
+    polyline: list[tuple[float, float]] = Field(min_length=2, max_length=MAX_POINTS)
+    direction: Literal["one_way", "two_way"] = "one_way"
+    width_m: float = Field(gt=0.0, le=10.0, allow_inf_nan=False)
+    speed_cap_mps: float = Field(gt=0.0, le=5.0, allow_inf_nan=False)
+    drive_mode: Literal["lane", "free"] = "lane"
+    robot_kinds: Optional[list[str]] = None
+
+    @model_validator(mode="after")
+    def _finite(self) -> "SiteEdge":
+        if any(not math.isfinite(v) for point in self.polyline for v in point):
+            raise ValueError(f"edge {self.id} polyline must be finite")
+        if sum(math.dist(a, b) for a, b in zip(self.polyline, self.polyline[1:])) <= 0.0:
+            raise ValueError(f"edge {self.id} polyline has zero length")
+        return self
+
+
+class TurnBan(BaseModel):
+    """D-485 3: no turn from edge ``from_edge`` into edge ``to_edge`` at place ``at``."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    at: str = Id
+    from_edge: str = Id
+    to_edge: str = Id
+
+
+class SiteMap(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    schema_id: Literal["rosy.site_map/1"] = Field(default=SCHEMA, alias="schema")
+    map_id: str = Field(default="site", pattern=r"^[A-Za-z0-9_.-]{1,64}$")
+    places: list[SitePlace] = Field(max_length=MAX_PLACES)
+    edges: list[SiteEdge] = Field(max_length=MAX_EDGES)
+    turn_bans: list[TurnBan] = Field(default_factory=list, max_length=MAX_EDGES)
+
+    @model_validator(mode="after")
+    def _references(self) -> "SiteMap":
+        places = {place.id: place for place in self.places}
+        if len(places) != len(self.places):
+            raise ValueError("place ids must be unique")
+        edges = {edge.id: edge for edge in self.edges}
+        if len(edges) != len(self.edges):
+            raise ValueError("edge ids must be unique")
+        if sum(len(edge.polyline) for edge in self.edges) > MAX_POINTS:
+            raise ValueError(f"site map holds more than {MAX_POINTS} points")
+        for edge in self.edges:
+            for end, point in ((edge.from_, edge.polyline[0]), (edge.to, edge.polyline[-1])):
+                place = places.get(end)
+                if place is None:
+                    raise ValueError(f"edge {edge.id} names unknown place {end}")
+                if math.dist(point, (place.x, place.y)) > ENDPOINT_TOL_M:
+                    raise ValueError(f"edge {edge.id} polyline does not end at place {end}")
+        for ban in self.turn_bans:
+            into, out = edges.get(ban.from_edge), edges.get(ban.to_edge)
+            if ban.at not in places or into is None or out is None:
+                raise ValueError("turn ban names an unknown place or edge")
+            if ban.at not in (into.from_, into.to) or ban.at not in (out.from_, out.to):
+                raise ValueError(f"turn ban edges do not meet at {ban.at}")
+        return self
+
+    def body(self) -> dict:
+        return self.model_dump(by_alias=True, mode="json")
+
+
+def from_lane_graph(path: Path | str, *, map_id: str = "site") -> SiteMap:
+    """Nodes become junction places; segments become lane edges (``reverse`` → two_way).
+
+    The parking spur and roundabout outline are not graph edges in this file and are
+    left out: an address without an edge would be unreachable.
+    """
+    graph = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), dict) \
+            or not isinstance(graph.get("segments"), dict):
+        raise ValueError(f"{path} needs nodes and segments")
+    places = [SitePlace(id=str(name), name=str(name), x=float(xy[0]), y=float(xy[1]))
+              for name, xy in graph["nodes"].items()]
+    edges = []
+    for name, segment in graph["segments"].items():
+        edges.append(SiteEdge(
+            id=str(name), from_=str(segment["from"]), to=str(segment["to"]),
+            polyline=[(float(p[0]), float(p[1])) for p in segment["points"]],
+            direction="two_way" if "reverse" in (segment.get("directions") or []) else "one_way",
+            width_m=IMPORT_WIDTH_M, speed_cap_mps=IMPORT_SPEED_CAP_MPS, drive_mode="lane"))
+    return SiteMap(map_id=map_id, places=places, edges=edges)
