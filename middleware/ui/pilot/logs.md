@@ -584,3 +584,16 @@
 - 변경: 기존 전화 주행 브라우저 시험에 좌/우 제자리 회전 버튼의 렌더 폭 차이 ≤1px 검사를 추가했다.
 - 증거: 현재 트리의 320×568·390×844 회전 버튼 시험 2 passed, 카메라·조작 배치와 회전 안내 7 passed, 각각 `known_failures.py` 0 NEW. 320px 원본은 X: `captures/pilot-current-320/`이다.
 - gate 변화: Pilot 320px LOCAL 폭 근거 추가. 선언 상태 전체·운전자 G3·실물 장치 readback은 HOLD다.
+## 2026-10-06 · uncommitted · feat(pilot): D-483 수신 승인 대기에 로봇 화면 승인 코드 입력
+
+- 변경: "수신 장치 승인 대기" 대화상자에 "로봇 화면의 승인 코드" 입력칸(6자, 대문자, 같은 알파벳)과 "승인 코드 확인" 버튼을 둔다. `PeerClient.confirm`이 `/requests/{id}/confirm`에 `X-Request-Secret`과 함께 보내고, 결과는 기존 상태 폴링이 받아 그대로 이어간다. 틀리면 남은 시도 횟수를 보이고 대화상자를 유지하며, 404(옛 CORE)면 입력칸을 "이 로봇은 콘솔 승인만 지원합니다"로 바꾼다. 콘솔 승인 경로는 그대로다.
+- 증거: JVM 신규 3건(screenCodeConfirmApprovesThroughTheStatusPoll, wrongScreenCodeReportsRemainingAttemptsAndKeepsWaiting, olderCoreWithoutConfirmRouteIsConsoleOnly) 포함 92 passed, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
+
+## 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
+
+- 변경: LCD가 요청 여러 개를 보일 수 있어 입력칸 안내를 "로봇 화면에서 <표시 번호> 옆의 승인 코드"로 바꿨다. `confirm`의 400은 `detail.remaining_attempts`가 있을 때만 틀린 코드로 보고, 없으면 `PeerRefused(400)`로 다룬다.
+- 증거: JVM 신규 badRequestWithoutRemainingAttemptsIsARefusalNotAWrongCode 포함 PeerClientTest 통과, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
