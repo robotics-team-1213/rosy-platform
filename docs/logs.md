@@ -6616,3 +6616,9 @@ osy-d395-s1d\`.
 - 변경: Fleet Cell의 미리보기 전·실패 상태에서 빈 팔레트 선택과 20rem 평면도를 감추고, 실제 배치가 계산됐을 때만 표시한다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/fleet-cell-empty-layout-fix/`와 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`. 변경 전 320px 1 failed, 변경 뒤 320/390/1440px 관련 브라우저 4 passed, 공용 UI·토큰 계약 62 passed, 각 `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 작업 순서 개선. 실제 운영자 G3와 현장 장치 readback은 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): LED 행동 추가 뒤 전화 폭 재검증
+
+- 변경: Fleet 로스터의 기존 두 행동 가정 시험을 현재 세 행동과 320px 별도 전폭 행·390px 세 동등 폭 규칙에 맞췄다. 제품 스타일은 변경하지 않았다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-current\` 현재 트리 캡처 4장과 `fleet-mobile{,-updated}.txt`. 변경 전 320/390px 두 실패, 수정 뒤 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 합성 Fleet 화면의 현재 행동 집합·좁은 폭 근거를 갱신했다. 사이트 설치 빌드와 관제자 G3는 HOLD.
