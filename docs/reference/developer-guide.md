@@ -1,8 +1,8 @@
 # ROSY 개발 가이드 — 구조·빌드·시뮬·테스트·배포
 
-**대상:** 코드를 빌드하고 시험하고 로봇·현장에 올리는 사람
-**갱신:** 2026-10-05 (README에서 옮김)
-처음 합류했다면 [팀 가이드](team-guide.md)부터 본다. 계약은 [README 「핵심 계약」](../../README.md#핵심-계약)과 SRS·ADR이 우선한다.
+- **대상:** 코드를 빌드하고 시험하고 로봇·현장에 올리는 사람
+- **갱신:** 2026-10-05 (README에서 옮김)
+- 처음 합류했다면 [팀 가이드](team-guide.md)부터 본다. 계약은 [README 「핵심 계약」](../../README.md#핵심-계약)과 SRS·ADR이 우선한다.
 
 ## 구조
 
@@ -51,6 +51,11 @@ bash tools/run_fleet_sim.sh
 ## 테스트와 CI
 
 테스트는 세 단계다 ([D-436](../adr/D-436-change-scoped-test-tiers.md)).
+
+```mermaid
+flowchart LR
+    a["affected<br/>작업 중 · 로컬<br/>바꾼 범위만"] --> q["quick<br/>push 직전 · pre-push 훅<br/>약 3분"] --> f["full<br/>GitHub CI<br/>main · PR · 야간 · 릴리스"]
+```
 
 | 단계 | 언제 | 명령 |
 |---|---|---|
