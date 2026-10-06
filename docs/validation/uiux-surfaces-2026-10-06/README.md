@@ -268,6 +268,8 @@ D-153이 이름 붙인 G1 시험 중 팔레트·토큰(스타일가이드 포함
 
 Cell 작업 버튼의 비활성 사유 추가 후 현재 트리에서 D-153 명명 G1 계약은 **90 passed**, `known_failures.py` **0 NEW**였다(X: `logs/g1-current-after-widths.txt`). 전체 공유 UI 시험은 첫 실행에서 Cell의 `disabled` 쓰기와 사유 쓰기 사이가 정적 검사 범위를 벗어나 **1 failed, 230 passed, 25 skipped**였다(X: `logs/shared-ui-current-after-widths.txt`). 사유 계산을 먼저 하고 `disabled`와 `reason`을 함께 갱신한 뒤 해당 검사 **1 passed**, 전체 공유 UI **231 passed, 25 skipped**, Cell 작업 상태·간지 접근의 1440/390/320px 브라우저 **6 passed**이며 두 최종 실행의 `known_failures.py`는 **0 NEW**다(X: `logs/shared-ui-after-cell-guard.txt`, `logs/cell-after-shared-guard.txt`). 이는 LOCAL 계약·합성 상태 근거다. 전체 선언 상태·폭 G2, 실제 사이트 UI/장치 readback, 운영자 G3는 HOLD다.
 
+2026-10-07 로컬 `main` `42f9a617f`에서 D-153 명명 G1의 팔레트·토큰/스타일가이드·Fleet 문법·CORE 증거와 반응형 선언 검사를 다시 실행해 **90 passed, 1 warning**, `known_failures.py` **0 NEW**였다. 로그는 `X:\DevTemp\projects\rosy-platform\2026-10-07-g1-current\g1.txt`다. 경고는 Starlette의 테스트 클라이언트에서 나온 anyio 별칭 deprecation이다. 이 결과는 해당 커밋의 LOCAL 기계 계약에 한정되며, 후속 `main` 변경·G2·G3·실물 판정을 자동으로 보증하지 않는다.
+
 게임 보드 브라우저 전체는 현재 **19 passed**, 게임 모듈은 **113 passed**였다. 최초 1280/390px와 첫 연결 오류에서 피치 안의 명시적 대기·오류 문구를 확인했고, 정지 실패 뒤 재시도 시험의 관찰은 CSP에 걸리는 스크립트 대기 대신 DOM locator를 쓴다. 이 화면들은 관측 frame 없는 fixture이며 실제 카메라와 로봇 상태를 나타내지 않는다.
 
 정지 요청 실패·재시도 흐름은 1280×800, 390×844, 320×568에서 다시 확인했다. 세 뷰포트 모두 실패 이유와 재시도 안내, 정지 버튼이 화면 폭 안에 있고 가로 넘침 없이 표시되며 키보드 재시도 후에도 버튼에 초점이 남는다. 집중 브라우저 시험 **3 passed**, `known_failures.py` **0 NEW**; 캡처 `X:\DevTemp\games_board_stop_retry_{1280x800,390x844,320x568}.png`, 로그 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\logs\games-stop-width-rerun.txt`. 첫 실행의 데스크톱 Chromium 시작 제한 시간 초과는 재실행에서 재현되지 않았다. 이 증거는 PreviewServer fixture의 LOCAL 범위다.

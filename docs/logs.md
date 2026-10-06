@@ -6641,3 +6641,9 @@ osy-d395-s1d\`.
 - 변경: 학습 작업 목록을 읽는 동안 빈 결과 설명을 숨기고 하나의 경과 시간 상태만 보이게 했다. 실패·빈 결과는 응답 후 각자 표시한다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay-clean/learning-learning-{delayed,unavailable}-390.png`, 브라우저 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 정보 위계 개선. 실제 검수자 G3와 제품 전체 G2는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux: 현재 main G1 재검증
+
+- 변경: D-153 명명 G1과 반응형 선언을 로컬 `main` `42f9a617f`에서 다시 실행하고 회차 평가에 결과를 고정했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-g1-current/g1.txt`; 90 passed, Starlette/anyio deprecation warning 1, `known_failures.py` 0 NEW.
+- gate 변화: 해당 커밋의 LOCAL G1 기계 계약 근거를 갱신했다. 선언 상태·폭 G2와 사용자 G3, 실물 readback은 HOLD.
