@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(fleet): Cell 비활성 작업의 현재 상태 사유
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 작업 상태 문구와 compact 머리 높이
 - 2026-10-06 · uncommitted · uiux(fleet): 대형 HOLD 재개 차단과 동일 폭 행동
 - 2026-10-06 · uncommitted · uiux(fleet): 대형 상태 조회 끊김과 복구의 세 폭
 - 2026-10-06 · uncommitted · uiux(fleet): 수신 후 끊김의 세 폭과 상태 표지
-- 2026-10-06 · uncommitted · uiux(fleet): 느린 첫 상태 응답의 세 폭

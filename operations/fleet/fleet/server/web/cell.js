@@ -59,6 +59,7 @@ let job = null;
 let jobGeneration = null;
 let layoutData = null;
 const commands = ['recipe-save', 'cell-save', 'compile', 'propose', 'admit', 'reconcile', 'resume', 'cancel'];
+const jobActionLabels = {admit: '실행 승인', reconcile: '실제 상태를 대조', resume: '재승인', cancel: '취소'};
 function invalidate() {
   previewRefs = null; layoutData = null;
   $('summary').setAttribute('state', 'unavailable');
@@ -98,13 +99,20 @@ function refreshControls() {
   }
   for (const id of commands) {
     const sheetBlocked = id === 'resume' && job?.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS');
-    const needsJob = ['admit', 'reconcile', 'resume', 'cancel'].includes(id);
+    const needsJob = id in jobActionLabels;
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
       (id === 'admit' ? job.status === 'PROPOSED' : id === 'cancel' ? ['READY', 'ACTION_SUCCEEDED', 'HOLD'].includes(job.status) && job.reason !== 'CANCELLED_BY_OPERATOR' : job.status === 'HOLD' && job.reason !== 'CANCELLED_BY_OPERATOR'));
     const allowed = role === 'operator' && !busy && jobAllowed && !sheetBlocked && (id !== 'propose' || previewRefs !== null);
     $(id).disabled = !allowed;
-    if (!allowed) $(id).setAttribute('reason', busy ? '요청 처리 중' : role !== 'operator' ? '운영자 접속 필요' :
-      sheetBlocked ? '작업자 간지 삽입 확인 대기' : '저장 후 미리보기 필요');
+    if (!allowed) {
+      let reason = '저장 후 미리보기 필요';
+      if (needsJob && !jobAllowed) reason = job?.mission_id === $('mission-id').value
+        ? `현재 작업 상태에서는 ${jobActionLabels[id]}할 수 없습니다` : '작업 상태를 먼저 확인하세요';
+      if (sheetBlocked) reason = '작업자 간지 삽입 확인 대기';
+      if (role !== 'operator') reason = '운영자 접속 필요';
+      if (busy) reason = '요청 처리 중';
+      $(id).setAttribute('reason', reason);
+    }
     else $(id).removeAttribute('reason');
   }
 }

@@ -2067,3 +2067,9 @@
 - 변경: Cell 제안·진행·취소·간지 접근 보류를 운영자 문구로 표시하고 원래 코드는 접힌 진행 원장에 남겼다. 토큰 접속을 붙박이 머리 아래로 내려 390/320px 머리를 177px에서 88px로 줄였으며 계정 상태와 비상 정지는 머리에 유지했다.
 - 증거: 상태 원문 노출과 20% 머리 한도 검사가 수정 전 실패한 뒤 Cell 브라우저 33 passed, Cell API 8 passed, 공유 UI 계약 89 passed, 각 `known_failures.py` 0 NEW. 1440/390/320px 간지 보류 화면 캡처와 로그는 X:/DevTemp/projects/rosy-platform/2026-10-06--032913--uiux-quality--199bc9/ 아래에 있다.
 - gate 보류: 합성 Fleet 응답의 LOCAL G2 부분 근거다. 사이트 PC Tailscale peer는 online이나 SSH 정책 거부, 8443 접속 실패, 현재 PC는 다른 LAN이라 현장 mDNS·Fleet 컨테이너 NSS·실제 장치 readback·운영자 G3는 미확인이다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 비활성 작업의 현재 상태 사유
+
+- 변경: 제안된 작업의 재승인과 보류 작업의 실행 승인에 저장·미리보기 안내가 보이던 공통 사유를 작업 상태 안내로 바꿨다. 버튼 허용 조건과 API 요청은 유지한다.
+- 증거: 1440/390/320px의 두 흐름에서 기존 6 failed → 수정 뒤 6 passed, Cell 전체 33 passed, `known_failures.py` 0 NEW, JS 구문 검사 통과. X:/DevTemp/projects/rosy-platform/2026-10-06--032913--uiux-quality--199bc9/logs/fleet-cell-action-reason-{red,green,full}.txt.
+- gate 보류: 합성 상태의 LOCAL G2 부분 근거. 현장 UI·장치 readback과 작업자 G3는 미확인이다.

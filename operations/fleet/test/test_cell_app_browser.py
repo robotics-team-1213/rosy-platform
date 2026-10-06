@@ -358,6 +358,7 @@ def test_reviewed_generation_conflict_and_cancel_are_explicit(browser_site, widt
     assert "PROPOSED" not in page.locator("#proposal").inner_text()
     page.locator("#read-job").click()
     expect(page.locator("#job-summary")).to_contain_text("제안됨")
+    expect(page.locator("#resume")).to_have_attribute("reason", "현재 작업 상태에서는 재승인할 수 없습니다")
     expect(page.locator("#notice")).to_contain_text("확인한 정지 세대")
     reviewed = tasks.store.dispatch_control()["generation"]
     stopped = tasks.store.trip_stop_latch(actor_id="operator-1")
@@ -498,6 +499,7 @@ def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(brow
     expect(page.locator("#sheet-progress")).to_contain_text("삽입 확인 대기")
     expect(page.locator("#resume")).to_have_attribute("disabled", "")
     expect(page.locator("#resume")).to_have_attribute("reason", "작업자 간지 삽입 확인 대기")
+    expect(page.locator("#admit")).to_have_attribute("reason", "현재 작업 상태에서는 실행 승인할 수 없습니다")
     expect(page.locator("#sheet-progress")).to_contain_text("아직 진행할 수 없습니다")
     stop = page.locator("#estop").bounding_box()
     assert stop and stop["y"] + stop["height"] <= height
