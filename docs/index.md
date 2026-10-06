@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-06 · uncommitted · uiux(site): 배포 콘솔의 미인증 화면과 카메라 프레임
-- 2026-10-06 · uncommitted · feat(fleet): D-473 관제 콘솔 개발 연결 모드
-- 2026-10-06 · uncommitted · docs(adr): 콘솔 개발 연결 모드와 주의점 구역 허가
-- 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
-- 2026-10-06 · uncommitted · D-472 호스트 구현
+- 2026-10-07 · uncommitted · uiux(games): CSP 수정 후 전체 재실행과 시간 결측 전화 폭
+- 2026-10-07 · uncommitted · uiux(games): 현재 보드 상태·폭 재검증
+- 2026-10-07 · uncommitted · uiux: 현재 main G1 재검증
+- 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
+- 2026-10-07 · uncommitted · uiux(learning): 작업·자료 등록의 응답 대기 시간

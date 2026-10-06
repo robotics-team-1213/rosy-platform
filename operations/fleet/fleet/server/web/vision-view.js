@@ -3,6 +3,8 @@ const DEFAULT_RECTIFICATION = Object.freeze({
   fx: 1, fy: 1, cx: 0.5, cy: 0.5, k1: 0, k2: 0, p1: 0, p2: 0, k3: 0,
   corners: [[0, 0], [1, 0], [1, 1], [0, 1]], output_aspect: 0,
 });
+// D-484: 자동 보정 — 코너는 Vision의 필드 경계 캘리브레이션이 정한다. 렌즈 왜곡값은 없이 보낸다.
+const AUTO_RECTIFICATION = Object.freeze({ mode: "auto" });
 
 // 프레임 나이가 이보다 크면 받았어도 "지연"으로 표시한다(폴링 1.5 s 의 두 배).
 export const FRAME_LATE_MS = 3000;
@@ -10,6 +12,7 @@ export const FRAME_LATE_MS = 3000;
 // 프레임 응답 → 배지. 배지는 화면에 보이는 영상의 실제 상태만 말한다(2026-09-30 태블릿 점검:
 // 영상이 보이는데 "인증 대기"로 남던 결함). DOM 없는 순수 함수라 node 로 시험한다.
 // { ok, status, frameState, ageMs, rectified } → { state, label, kind, detail }
+// rectified 는 false | true | "auto"(D-484 필드 경계 자동 보정)다.
 export function frameBadge({ ok, status, frameState, ageMs, rectified }) {
   if (ok) {
     const age = Number(ageMs);
@@ -17,8 +20,13 @@ export function frameBadge({ ok, status, frameState, ageMs, rectified }) {
       return { state: "stale", label: "영상 지연", kind: "warn",
         detail: `최신 프레임이 ${Math.round(age / 100) / 10} s 전 것입니다.` };
     }
-    return { state: "live", label: rectified ? "화면 보정 미리보기" : "원본 최신 프레임",
-      kind: "good", detail: "" };
+    if (frameState === "field-unavailable") {
+      return { state: "live", label: "자동 보정 대기", kind: "neutral",
+        detail: "필드 경계를 아직 잡지 못해 원본을 보여 줍니다." };
+    }
+    const live = rectified === "auto" ? "자동 보정 미리보기"
+      : rectified ? "화면 보정 미리보기" : "원본 최신 프레임";
+    return { state: "live", label: live, kind: "good", detail: "" };
   }
   if (status === 401 || status === 403) {
     return { state: "unauthorized", label: "영상 권한 없음", kind: "warn",
@@ -244,12 +252,15 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
     const editing = mode === "raw";
     frame.dataset.editing = String(editing);
     el("vision-edit-corners").setAttribute("aria-pressed", String(editing));
-    el("vision-preview-adjusted").setAttribute("aria-pressed", String(!editing));
+    el("vision-preview-adjusted").setAttribute("aria-pressed", String(mode === "adjusted"));
+    const autoButton = el("vision-preview-auto");
+    if (autoButton) autoButton.setAttribute("aria-pressed", String(mode === "auto"));
     cornerHint.hidden = !editing;
     cornerOverlay.toggleAttribute("hidden", !editing);
     lease = null;
     leaseExpiresAt = 0;
     if (editing) adjustmentState.textContent = "원본에서 영역을 조정 중입니다. 끝나면 보정 결과를 확인하세요.";
+    if (mode === "auto") adjustmentState.textContent = "필드 경계 캘리브레이션이 잡은 모서리로 자동 보정합니다. 감지가 없으면 원본을 보여 줍니다.";
     refreshFrame();
   }
 
@@ -323,7 +334,8 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             source_id: source,
-            rectification: viewMode === "raw" ? DEFAULT_RECTIFICATION : readProfile(),
+            rectification: viewMode === "raw" ? DEFAULT_RECTIFICATION
+              : viewMode === "auto" ? AUTO_RECTIFICATION : readProfile(),
           }),
         });
         life.check();
@@ -347,9 +359,11 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
         loadProfile(source);
         lease = null;
       }
-      const rectified = response.headers.get("X-Frame-Rectified") === "true";
+      const rectifiedHeader = response.headers.get("X-Frame-Rectified");
+      const rectified = rectifiedHeader === "true" || rectifiedHeader === "auto";
       const badge = frameBadge({
-        ok: response.ok, status: response.status, rectified,
+        ok: response.ok, status: response.status,
+        rectified: rectifiedHeader === "auto" ? "auto" : rectified,
         frameState: response.headers.get("X-Frame-State"),
         ageMs: response.headers.get("X-Frame-Age-Ms"),
       });
@@ -420,6 +434,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   scope.listen(window, "resize", updateCornerOverlay);
   scope.listen(el("vision-edit-corners"), "click", () => selectViewMode("raw"));
   scope.listen(el("vision-preview-adjusted"), "click", () => selectViewMode("adjusted"));
+  scope.listen(el("vision-preview-auto"), "click", () => selectViewMode("auto"));
   for (const handle of cornerHandles) {
     scope.listen(handle, "pointerdown", (event) => {
       if (viewMode !== "raw" || !event.isPrimary) return;

@@ -17,6 +17,8 @@ class PeerKeyChanged : IOException("receiver identity changed")
 class PeerCanceled : IOException("receiver request canceled")
 class PeerApprovalExpired : IOException("approval usage expired; local record retained")
 class PeerApprovalTimeout : IOException("receiver approval timed out")
+/** D-483: the robot-screen approval code did not match; [remaining] attempts are left (0 = rejected). */
+class PeerCodeWrong(val remaining: Int) : IOException("approval code did not match")
 data class PeerPending(val code: String, val receiverId: String, val expiresAt: Instant)
 
 /** One selected endpoint, one cancelable approval/renewal; never retries a positive session POST. */
@@ -162,6 +164,28 @@ class PeerClient internal constructor(private val candidate: Candidate, private 
             clients.forEach { it.connectionPool.evictAll(); it.dispatcher.executorService.shutdown() }
         }
     }
+    /**
+     * D-483: send the approval code the receiver's LCD shows for the pending request.
+     * The status poll in [connect] then sees the approval (or a console approval that won first).
+     * 404 is an older CORE without the route ([PeerRefused]); a wrong code is [PeerCodeWrong].
+     */
+    fun confirm(code: String) {
+        require(APPROVAL_CODE.matches(code)) { "approval code format" }
+        val (id, secret) = synchronized(lock) { checkAlive(); (requestId ?: throw PeerCanceled()) to (requestSecret ?: throw PeerCanceled()) }
+        val request = Request.Builder().url(origin + path("/requests/$id/confirm")).header("Cache-Control", "no-store")
+            .header("X-Request-Secret", secret).post(oneShot(JSONObject().put("approval_code", code))).build()
+        client.newBuilder().callTimeout(10, TimeUnit.SECONDS).build().newCall(request).execute().use { response ->
+            if (response.code == 400) {
+                val remaining = runCatching {
+                    val body = response.body?.byteStream()?.let { MainActivity.readLimited(it, 4096).toString(Charsets.UTF_8) }
+                    JSONObject(body ?: "{}").getJSONObject("detail").getInt("remaining_attempts").takeIf { it in 0..5 }
+                }.getOrNull()
+                // D-483 L3: only the receiver's wrong-code answer carries the count; any other 400 is a refusal.
+                throw if (remaining != null) PeerCodeWrong(remaining) else PeerRefused(400)
+            }
+            if (!response.isSuccessful) throw PeerRefused(response.code)
+        }
+    }
     private fun signed(context: String, fields: JSONObject) = JSONObject().put("fields", fields).put("signature", signer.sign(context, fields))
     private fun waitPoll() {
         if (pause != null) pause.invoke(2000) else synchronized(lock) { if (!closed) lock.wait(2000) }
@@ -207,4 +231,8 @@ class PeerClient internal constructor(private val candidate: Candidate, private 
         return (raw as Number).toLong().also { require(it >= 0) }
     }
     private fun expiry(row: JSONObject, key: String) = OffsetDateTime.parse(string(row, key, 64)).toInstant()
+    companion object {
+        /** D-483: six characters of the receiver's code alphabet, upper case. */
+        val APPROVAL_CODE = Regex("[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}")
+    }
 }

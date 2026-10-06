@@ -90,6 +90,6 @@
 
 - 2026-10-07 · uncommitted · D-488 M1 검토 반영과 ADR 번호 이동 (D-484/485/486 → D-488/489/490)
 - 2026-10-07 · 463ae393a · D-488 M1 현장 지도·주소·경로 계획 (D-489/D-490)
-- 2026-10-06 · uncommitted · D-473 관제 콘솔 개발 연결 모드
-- 2026-10-06 · uncommitted · LED 식별 요청과 실영상 현장지도
-- 2026-10-06 · uncommitted · uiux(fleet): Cell 비활성 사유 공용 계약 복구
+- 2026-10-07 · 93c606cbb · D-487 관제 화면 Rosy Fleet·버드아이 우선
+- 2026-10-07 · uncommitted · Cell 빈 미리보기 평면도 숨김
+- 2026-10-06 · uncommitted · feat(fleet): D-484 field_boundary sighting 수용

@@ -563,3 +563,37 @@
 - 변경: Operator 전용 `POST /api/v1/host/lamp/identify`가 blue/amber만 받아 기존 호스트 하드웨어 요청 큐로 전달한다. 응답은 영상 확인 대기 상태다.
 - 증거: API 입력·쿨다운 호스트 테스트 통과. 장치 적용과 실제 점멸은 미확인.
 - gate 변화: SOURCE/LOCAL만 확인. DEVICE/FIELD 상태는 그대로 둔다.
+
+
+## 2026-10-06 · uncommitted · chore(core_api_web): 계약 문서 버전 v1.109 동기
+
+- 변경: FastAPI docstring/설명의 라이브 계약 버전을 v1.109로 갱신(D-484 additive 행). 동작 변화 없음.
+- 증거: `test_protocol_version_alignment.py`가 문서 헤더·변경 이력·설명 일치를 검증.
+- gate 변화: 없음.
+## 2026-10-06 · uncommitted · feat(api): D-483 로봇 화면 승인 코드로 피어 요청 승인
+
+- 변경: D-456 요청마다 6자 승인 코드를 만들고 hash만 비교한다. `POST /api/v1/auth/peer-pairing/requests/{id}/confirm`(인증 없음, `X-Request-Secret`, `{approval_code}`)이 맞으면 같은 요청을 승인한다. 5회 틀리면 rejected, 출처별 30회/분 한도 공유, 요청 역할이 operator를 넘으면 403. 화면 코드 관계는 `screen-code` 출처·168 h·persistent=false이고 `_grant`·`issue`·세션 정책이 발급자 token 대신 관계 자체의 만료·폐기·수신 키만 본다. 기다리는 가장 최근 요청을 `/run/rosy-peer-display/approval.json`(0640, tmp+rename)으로 rosy-face에 넘기고 끝나면 지운다. 쓰기 실패는 한 번만 기록하고 요청 흐름은 그대로다. 계약 v1.109.
+- 증거: `test_peer_pairing.py` 신규 `ScreenCodeApproval` 10건(응답·pending·로그에 코드 없음, 5회 거절, 비밀 없이 승인 불가, 콘솔·코드 경합 단일 승인, 종료 상태별 파일 삭제, 168 h·challenge/session, 403, 속도 한도) 포함 api_web·foundation 867 passed. 장치 배포는 하지 않았다.
+- gate 변화: SOURCE/LOCAL만. DEVICE(9dfk LCD 코드·태블릿 입력)는 서명 릴리스 뒤 별도.
+- 결정: D-483
+
+## 2026-10-07 · uncommitted · fix(api): D-483 보안 검토 반영(M1·M2·L1·L2·L4·L6)
+
+- 변경: 대기 한도 16개는 살아 있는 pending만 세고 출처별 동시 대기를 2개로 묶었다. hand-over 파일은 살아 있는 요청을 최신순 최대 3개 `{"requests": [...]}`로 싣는다(새 요청이 먼저 온 코드를 가리지 않음). 관계 128개 상한에서 만료·폐기되었고 살아 있는 세션이 없는 관계를 지우고 `relationship_pruned` 감사 행을 남긴다(overlay의 grants를 통째로 바꿔 디스크에서도 지워진다, `patch_local_config(replace=...)`). CORE 시작 때 남은 approval.json을 지운다. 화면 코드 관계는 `approved_at`을 갖고 모델이 168 h 상한을 강제한다. 토큰 id `screen-code`는 읽지 않는다.
+- 증거: `test_peer_pairing.py` 38 passed(신규: 3개 동시 표시·출처별/전체 한도·시작 시 삭제·폐기 뒤 세션 거부(HTTP·소켓)·모델 거부 10종·예약 id·상한 정리와 디스크 반영, 속도 한도 시험은 코드 값과 무관). 장치 배포는 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
+
+## 2026-10-07 · uncommitted · fix(api): D-483 재검토 반영(R1~R5)
+
+- 변경: 관계 행을 저장할 때 값이 없는 `approved_at`은 쓰지 않아 소유자 승인 행이 D-483 이전 릴리스 모델(Strict, extra 금지)로도 읽힌다(R1, ADR에 롤백 시 screen-code 행 정리 기록). 살아 있는 대기 요청은 LCD 목록과 같은 3개까지, 출처별 2개(R2). `approved_at`이 60초 넘게 미래인 screen-code 행은 `_grant`·`repo.issue`·세션 정책에서 거부(R3). approval.json에 label을 넣지 않는다(R4). 요청 취소도 출처별 속도 한도에 세고, 보관 행이 가득 차면 승인되지 않은 끝난 요청만 먼저 비운다(R5).
+- 증거: `test_peer_pairing.py` 42 passed(신규: 이전 릴리스 모델로 저장 행 검증, 미래 approved_at 거부, 취소 속도 한도, 승인 결과 보관, 상한 정리에서 살아 있는 세션을 가진 만료 행과 살아 있는 행이 남음). 장치 배포는 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
+
+## 2026-10-07 · uncommitted · fix(api): D-483 N1 전체 틀린 코드 예산
+
+- 변경: 끝난 요청이 대기 한도에 세지 않아 출처를 바꿔 가며 코드를 맞혀 볼 수 있었다. 모든 출처를 합친 틀린 승인 코드를 10분에 20회까지만 받고, 넘으면 창이 지날 때까지 `confirm`은 맞는 코드에도 429(콘솔에서 승인하라는 안내)를 돌려준다. 콘솔 승인은 영향이 없다.
+- 증거: `test_peer_pairing.py` 43 passed(신규: 출처 4곳 × 틀림 5회 뒤 맞는 코드도 429, 콘솔 승인은 됨, 10분 뒤 다시 열림). 장치 배포는 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483

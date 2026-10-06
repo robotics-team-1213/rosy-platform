@@ -46,8 +46,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · 93c606cbb · D-487 관제 표면 표시 이름 Rosy Fleet
 - 2026-10-06 · uncommitted · uiux(web-common): readout 임시 빈 상태 규칙 제거
 - 2026-10-06 · uncommitted · uiux(web-common): readout 빈 상태 전폭
 - 2026-10-06 · uncommitted · uiux(pinky-review): 자료 등록 폼의 칸 폭 선언
 - 2026-10-06 · uncommitted · uiux(web-common): 현재 트리 G1 계약 정합성
-- 2026-10-06 · uncommitted · uiux(pilot): 320px 전용 폭 선언

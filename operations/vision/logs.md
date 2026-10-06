@@ -292,3 +292,10 @@
 - 변경: signal observer 테스트는 private exact-file 로더로 자신의 실제 소스를 읽는다. 다른 테스트가 generic observer를 먼저 읽어도 관측 타입을 섞지 않는다. 프로덕션 standalone CLI 및 카메라/명령 경로 변경 없음.
 - 증거: 실제 Gazebo observer가 generic observer를 차지한 fresh-process에서 기존 모듈과 검색 경로 보존, ObserverConfig/make_source 타입 동일성 확인. T2/T5/T3/Vision 양방향 각 105 PASS.
 - gate 변화: 없음. SOURCE/LOCAL 테스트 수선만. 실제 카메라·ROS·기기 수용 주장 없음.
+
+
+## 2026-10-06 · uncommitted · feat(vision): D-484 필드 경계 자동 캘리브레이션
+
+- 변경: 소스 설정 `calibration_source: field_boundary`가 코너 ArUco 마커 대신 D-360 흰 경계 사각형으로 측정 캘리브레이션을 유지한다. 신규 `field_calib.py`(no_field→orientation_pending→calibrated⇄stale 상태 머신, 급변 재획득, 상실 시 orientation 초기화)가 주기(기본 1 Hz) 감지를 받아 호모그래피를 만들고, orientation은 D-375 페인트 정합(map_worker 프로세스, 단일 flight)의 map_to_image로 맵 코너↔감지 코너 최근접 대응(거리 게이트+순환 일대일)으로만 확정한다. worker가 로봇 ArUco 마커를 매 프레임 투영하고 미리보기가 worker 수용 사각형으로 자동 보정(rectification mode "auto", `X-Frame-Rectified: auto`, `X-Field-Calib`, 감지 없으면 원본+`X-Frame-State: field-unavailable`)한다. 폰 앱·전선 불변.
+- 증거: `test_field_calib.py`(신규 13본: 상태 전이·게이트·회전 판정), worker/project/config/preview 시험 확장, contracts/foundation·operations/fleet 스위트 통과. 호스트 통과는 장치·현장이 아니다: 실제 폰 프레임에서 orientation 확정·재획득·장시간 안정성은 DEVICE/FIELD 게이트 별도.
+- gate 변화: 없음. SOURCE/LOCAL 테스트 통계만 갱신. D-318 수동 보정·D-360/D-375 제안 엔드포인트는 그대로 동작.

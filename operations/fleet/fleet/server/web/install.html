@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101214">
-  <title>Rosy Console — 설치·보정</title>
+  <title>Rosy Fleet — 설치·보정</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
@@ -19,7 +19,7 @@
   <a class="skip-link" href="#install-main">본문으로 건너뛰기</a>
   <ui-shell grammar="procedure">
   <ui-topbar>
-    <ui-brand><b>Rosy Console</b><small id="fleet-name">설치·보정</small></ui-brand>
+    <ui-brand><b>Rosy Fleet</b><small id="fleet-name">설치·보정</small></ui-brand>
     <div class="spacer"></div>
     <!-- D-359 §6.4 — 좁은 창에서 접속·역할·테마는 이 토글 뒤로 접힌다. 넓은 창에서는 토글이 숨고 줄에 선다. -->
     <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" title="설정" data-action-icon="settings"><span class="sr-only">설정</span></ui-button>
@@ -42,7 +42,7 @@
   <ui-status id="estop-feedback" hidden></ui-status>
 
   <main id="install-main" tabindex="-1">
-    <h1 class="sr-only">Rosy Console — 설치·보정</h1>
+    <h1 class="sr-only">Rosy Fleet — 설치·보정</h1>
     <!-- D-410 — 설치 화면. 운용(감시·목표·정지)은 /console에 있다. -->
     <section class="panel install-nav" aria-labelledby="install-nav-heading">
       <h2 id="install-nav-heading">설치·보정 화면</h2>
@@ -236,6 +236,7 @@
           <div id="vision-corner-modes" class="vision-corner-modes" role="group" aria-label="영역 조정 화면" hidden>
             <ui-button kind="segment" id="vision-edit-corners" type="button" aria-pressed="false">원본에서 영역 조정</ui-button>
             <ui-button kind="segment" id="vision-preview-adjusted" type="button" aria-pressed="true">보정 결과 미리보기</ui-button>
+            <ui-button kind="segment" id="vision-preview-auto" type="button" aria-pressed="false">자동 보정 (필드)</ui-button>
           </div>
           <p id="vision-corner-hint" class="hint" hidden>네 모서리를 드래그하세요. 키보드는 모서리에 초점을 두고 방향키로 이동합니다.</p>
           <div class="adjustment-columns">

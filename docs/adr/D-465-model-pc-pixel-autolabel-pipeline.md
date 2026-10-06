@@ -29,6 +29,14 @@ D-379의 `dataset/autolabel.py`는 LiDAR 벽과 주행 궤적 바닥을, `datase
 
 기존 라벨·검수·builder·store를 재사용하고 부족한 자동 초안 실행 연결만 후속 구현한다. 사람은 처음부터 전부 그리는 대신 후보와 충돌을 확인하지만 실제 시간 절감은 측정 전이다. 모델 선택/설치, 실행 UI/worker 연결, 오류·중단 복구·원본 좌표 roundtrip 검증, 모델 PC GPU 파일럿, 독립 마스크 평가를 각각 후속 작업으로 둔다. 로컬 문서 lint/계약 테스트는 구조 기록의 증거이며 GPU 실행·라벨 품질·학습·DEVICE/FIELD 수용의 증거가 아니다. 기존 모델 운용 HOLD나 승격 권한을 변경하지 않는다.
 
+### Addendum 2026-10-07 — SAM 3와 VLM 점으로 drivable 초안
+
+**맥락.** 모델 PC 파일럿(세션 `20261006T091340Z_rosy_26`, 642프레임)에서 VLM(Qwen3-VL 8B) 점 → SAM 분할을 시험했다. VLM 차선 점은 가장자리 환각이 많아 SAM 3 텍스트 프롬프트 차선보다 나빴다. VLM 도로 점 + SAM은 「카펫」을 분할할 뿐 도로와 도로 밖을 구분하지 못했다.
+
+**결정.** §2의 SAM 2 계열에 SAM 3.0(텍스트·점 프롬프트, tracker 전파)을 더한다. lane_line·wall 초안은 SAM 3 텍스트 프롬프트로 만든다. drivable 초안은 로봇 바로 앞 카펫(발판) seed와 밝기·차선 gate를 통과한 VLM 점으로 tracker를 K프레임마다 다시 시작하고, 흰 선을 넘지 않고 발판과 연결된 카펫 성분만 drivable로 둔다. 선 너머 카펫은 기존 base 값을 유지하며 사람이 판단한다. VLM 점은 학습 초안에만 쓰고 고정 평가 정답(D-475 §7)에는 쓰지 않는다. 초안은 receipt에 영상·점·base·체크포인트 hash와 source commit을 남기고, 승인 없이 `review_ingest`로만 들어간다. 도구: `dataset/road_draft.py`, `qwen_points.py`, `sam3_road_draft.py`.
+
+**검증 상태.** 파일럿 수치(연속 프레임 IoU 중앙값 0.998, 0.5 미만 전환 5/641, 0.43 s/frame, peak 7.5 GB)는 초안 안정성 증거이며 라벨 정확도 증거가 아니다. 정확도는 사람 검수 수정량과 독립 평가 마스크(§8)로 잰다.
+
 **Related:** D-356, D-373, D-379, D-427, D-429, D-430, D-431, D-434, D-446, D-449, D-458, D-462, D-464.
 
 **External references:** [NVIDIA RTX 5080 specifications](https://www.nvidia.com/en-us/geforce/graphics-cards/50-series/rtx-5080/), [SAM 2 official implementation](https://github.com/facebookresearch/sam2), [OpenRouter structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs). 외부 자료는 후보 선정 근거이며 대상 장비의 동작 확인 증거가 아니다.

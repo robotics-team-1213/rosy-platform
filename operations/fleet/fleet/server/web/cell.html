@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rosy Console · Cell</title>
+  <title>Rosy Fleet · Cell</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
@@ -15,7 +15,7 @@
 <body>
 <ui-shell grammar="procedure">
   <ui-topbar>
-    <ui-brand href="/console" aria-label="Rosy Console 홈"><b>Rosy Console</b><small>Cell · 팔레타이징 작업 준비</small></ui-brand>
+    <ui-brand href="/console" aria-label="Rosy Fleet 홈"><b>Rosy Fleet</b><small>Cell · 팔레타이징 작업 준비</small></ui-brand>
     <span data-spacer></span>
     <ui-tag id="session">접속 전</ui-tag>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
@@ -55,8 +55,10 @@
       <ui-head><ui-text id="preview-heading" scale="label">3 · 적재 계획 확인</ui-text><ui-button id="compile" kind="primary">미리보기</ui-button></ui-head>
       <ui-status id="summary" state="unavailable">저장한 레시피와 셀을 기준으로 계획을 계산합니다.</ui-status>
       <details><summary>계산된 계획 상세</summary><pre id="preview" aria-label="컴파일된 적재 계획"></pre></details>
-      <label for="layout-layer">팔레트 · 층 선택</label><select class="ui-field" id="layout-layer" aria-label="팔레트와 층"></select>
-      <svg id="layout" viewBox="0 0 800 320" role="img" aria-label="적재 위치 평면도 · base 좌표"></svg>
+      <div id="layout-preview" hidden>
+        <label for="layout-layer">팔레트 · 층 선택</label><select class="ui-field" id="layout-layer" aria-label="팔레트와 층"></select>
+        <svg id="layout" viewBox="0 0 800 320" role="img" aria-label="적재 위치 평면도 · base 좌표"></svg>
+      </div>
     </ui-section>
     <ui-section aria-labelledby="proposal-heading">
       <ui-head><ui-text id="proposal-heading" scale="label">4 · 작업 제안</ui-text></ui-head>

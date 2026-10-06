@@ -6575,8 +6575,87 @@ osy-d395-s1d\`.
 - 증거: 관련 호스트 pytest(`operations/fleet/test/test_development_session.py`, `test_cli.py`, 버전 고정 시험, `test/test_site_development_connection.py`)와 콘솔 브라우저 시험. 관제 PC에서 다른 PC 브라우저로 접속하는 FIELD 확인은 아직 하지 않았다.
 - gate 변화: SOURCE/LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
 
+
+## 2026-10-06 · uncommitted · docs: D-484 ADR과 실행 계획, API Ref v1.109
+
+- 변경: ADR D-484(필드 경계 자동 캘리브레이션)와 로그 행, 실행 계획 문서 추가. adr_gaps에 D-483(브랜치 `feat/pilot-lcd-approval-code` 소유) 등록. API Ref v1.109: sighting payload 선택 필드·미리보기 mode auto·site-map source 노출·헤더 값 문서화.
+- 증거: `rosy_harness.py lint` 0 error(ADR 행·본문 일치, 갭 선언). app.py 버전 표기 v1.109 동기 갱신(정렬 시험 대상).
+- gate 변화: 없음.
 ## 2026-10-06 · uncommitted · uiux(site): 배포 콘솔의 미인증 화면과 카메라 프레임
 
 - 변경: 기존 사이트 PC의 배포 `/console`을 읽기 전용으로 세 폭에서 렌더하고, 토큰이 없는 화면의 잠긴 조작과 관제 카메라 프레임 증가를 UI/UX 회차에 기록했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/site-deployed-unauth/`와 `logs/site-mdns-live/site-console-{unauth-320-snapshot,frame-a,frame-b}.txt`. `ceiling_north` sequence 26364→26390, 320/390/1920px 캡처, 배포 컨테이너 태그 재확인.
 - gate 변화: 옛 배포 빌드의 SITE 미인증 상태·카메라 프레임 부분 근거 추가. 현재 `main` 설치, 인증된 Fleet·로봇 상태, 실제 사용자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(learning): 병합된 검수 폭과 사진 목록 재확인
+
+- 변경: `main`에 병합된 객체·픽셀 검수 화면의 1440/800/390/320px와 전화 사진 한 줄 목록을 다시 렌더했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-main-merged/` 8장과 `logs/merge-20261006/learning-main-visual.txt`. 브라우저 9 passed, `known_failures.py` 0 NEW; 320px 두 화면은 원본 크기로 확인했다.
+- gate 변화: 병합된 현재 트리의 LOCAL G2 폭 근거 추가. 실제 검수자 G3와 제품 전체 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(learning): class 파일 미연결 시 편집 도구 잠금
+
+- 변경: 픽셀 검수의 점/브러시 전환 버튼이 class 파일 없이도 활성화되던 마지막 상태 덮어쓰기를 고쳤다. G3 운영자 독회는 요청자가 맡기로 했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/pixel-disabled-fix/learning-pixels-320.png`와 `logs/merge-20261006/pixel-disabled-fix.txt`. 수정 전 집중 브라우저 1 failed, 수정 후 10 passed, `known_failures.py` 0 NEW.
+- gate 변화: 미연결 상태의 잘못된 조작 표시를 LOCAL에서 바로잡았다. 실제 운영자 결과와 현장 설치는 HOLD.
+
+## 2026-10-06 · uncommitted · docs(uiux): 실제 사용자 G3 독회 기록지
+
+- 변경: 요청자가 실제 사이트·장치에서 수행할 표면별 작업, D-153 여덟 항목, 빌드·값 출처·캡처 기록 칸을 회차 평가에 연결했다.
+- 근거: [실제 사용자 독회 기록지](validation/uiux-surfaces-2026-10-06/operator-walkthrough.md)는 아직 모두 미실시다. 기존 사이트 배포와 현재 후보가 다르면 옛 배포 피드백으로만 분류한다. 문서 계약 **127 passed, 1 skipped**, `known_failures.py` **0 NEW** (X: `logs/merge-20261006/operator-worksheet-docs.txt`); harness lint 0 errors.
+- gate 변화: 판정 변화 없음. G2 선언 셀·G3 사용자 결과·적용 실물 readback이 채워질 때까지 제품 전체 HOLD.
+
+## 2026-10-06 · uncommitted · docs(uiux): G3 항목별 결과 칸
+
+- 변경: 사용자 독회 기록지에 표면마다 복사할 8항 판정·근거 블록을 더해 실제 관찰을 채울 자리를 명확히 했다.
+- 근거: [기록 블록](validation/uiux-surfaces-2026-10-06/operator-walkthrough.md#표면별-결과-기록-블록)은 전부 HOLD/미실시로 시작한다.
+- gate 변화: 판정 변화 없음. 사용자 관찰·현재 빌드·실물 readback은 미확인.
+
+## 2026-10-07 · uncommitted · uiux(learning): 320px 서비스 장애 복구 확인
+
+- 변경: 학습 검수 네 경로의 503→재시도 브라우저 검사에 320px을 더하고 좁은 폭의 재시도 버튼 너비를 확인했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-unavailable-current/` 320/390px 8장과 `logs/merge-20261006/learning-unavailable-{current,320}.txt`. 각 폭 브라우저 4 passed, `known_failures.py` 0 NEW; 네 320px 화면 원본을 육안 확인했다.
+- gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.
+- gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): Cell 빈 평면도 공백 제거
+
+- 변경: Fleet Cell의 미리보기 전·실패 상태에서 빈 팔레트 선택과 20rem 평면도를 감추고, 실제 배치가 계산됐을 때만 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/fleet-cell-empty-layout-fix/`와 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`. 변경 전 320px 1 failed, 변경 뒤 320/390/1440px 관련 브라우저 4 passed, 공용 UI·토큰 계약 62 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 작업 순서 개선. 실제 운영자 G3와 현장 장치 readback은 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): LED 행동 추가 뒤 전화 폭 재검증
+
+- 변경: Fleet 로스터의 기존 두 행동 가정 시험을 현재 세 행동과 320px 별도 전폭 행·390px 세 동등 폭 규칙에 맞췄다. 제품 스타일은 변경하지 않았다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-current\` 현재 트리 캡처 4장과 `fleet-mobile{,-updated}.txt`. 변경 전 320/390px 두 실패, 수정 뒤 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 합성 Fleet 화면의 현재 행동 집합·좁은 폭 근거를 갱신했다. 사이트 설치 빌드와 관제자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(learning): 작업·자료 등록의 응답 대기 시간
+
+- 변경: 학습 작업 목록·자료 등록도 서버 응답이 3초 넘게 보류되면 경과 초를 표시한다. 응답 전 쓰기 행동은 계속 막고 회복 뒤 다시 연다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay/learning-{learning,catalog}-delayed-{1440,800,390}.png`. 브라우저 5 passed/1 timer timeout 뒤 해당 셀 1 passed, `known_failures.py` 0 NEW, JS 구문·diff 검사 통과.
+- gate 변화: 네 학습 경로의 느린 응답 LOCAL 부분 근거가 늘었다. 값별 신선도와 실제 검수자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
+
+- 변경: 학습 작업 목록을 읽는 동안 빈 결과 설명을 숨기고 하나의 경과 시간 상태만 보이게 했다. 실패·빈 결과는 응답 후 각자 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay-clean/learning-learning-{delayed,unavailable}-390.png`, 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 정보 위계 개선. 실제 검수자 G3와 제품 전체 G2는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux: 현재 main G1 재검증
+
+- 변경: D-153 명명 G1과 반응형 선언을 로컬 `main` `42f9a617f`에서 다시 실행하고 회차 평가에 결과를 고정했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-g1-current/g1.txt`; 90 passed, Starlette/anyio deprecation warning 1, `known_failures.py` 0 NEW.
+- gate 변화: 해당 커밋의 LOCAL G1 기계 계약 근거를 갱신했다. 선언 상태·폭 G2와 사용자 G3, 실물 readback은 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(games): 현재 보드 상태·폭 재검증
+
+- 변경: 현재 보드 320px HOLD에서 유실 이유가 피치보다 먼저 보이는 순서를 회차 카드에 명시하고, 브라우저 시험의 CSP에 걸리는 원시 `wait_for_function` 식 9곳을 함수 식으로 고쳤다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-games-current/`; 전체 브라우저 28 passed/1 failed 뒤 실패 셀 1 passed, `known_failures.py` 0 NEW. 전체 재실행 통과 주장 없음.
+- gate 변화: 현 트리의 LOCAL 게임 보드 상태·폭 근거 갱신. 실제 경기·정지 readback과 사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(games): CSP 수정 후 전체 재실행과 시간 결측 전화 폭
+
+- 변경: 게임 보드의 시간 근거 없는 이전 형식 응답을 1280·390·320px에 확장해 전화의 동등 패널 폭·넘침·정지 가용성을 검사했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-games-csp-final/run.txt`에서 수정 뒤 전체 29 passed, `2026-10-07-games-unavailable/`에서 확장 3 passed와 캡처 3장, 각 `known_failures.py` 0 NEW. 확장 후 전체 31셀은 재실행하지 않았다.
+- gate 변화: 시간 근거 결측의 LOCAL 전화 폭 두 셀을 추가했다. 실제 경기·장치·G3는 HOLD.

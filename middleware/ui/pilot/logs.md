@@ -490,6 +490,13 @@
 - 증거: JVM 신규 2건 - mintedSessionIsStoredAndReusedUntilNaturalExpiry(재연결이 challenge·session POST 0회, Bearer 확인 2회), storedSessionPastExpiryIsDiscardedAndFreshMintReplacesIt - 전체 89 passed. 실기 8kcn: 연결 발급 1개 → 로봇 목록 복귀 → 재연결에도 발급 수 1 그대로(재사용 확인, 2026-10-06).
 - gate 변화: SOURCE/LOCAL 및 실기 관찰. FIELD는 별도.
 
+## 2026-10-06 · 65692ce69 · fix(pilot): 만료된 승인에서 재승인 요청 경로를 연다
+
+- 원인(실기 9dfk): 저장된 승인의 사용 기한이 끝나면 PeerClient가 네트워크 없이 PeerApprovalExpired를 던지고, 화면은 "수신 장치에서 재승인을 확인하세요"라고 안내했다. 앱이 새 요청을 보내지 않으므로 수신 쪽에 확인할 것이 없어 막다른 길이었다.
+- 변경: 만료가 나면 "다시 승인 요청" 대화상자를 띄운다. 사용자가 누르면 이 태블릿의 만료 기록만 지우고(기존 "이 앱의 연결 기록 지우기"와 같은 경로) 로봇이 다시 보이는 즉시 자동 재선택해 새 요청을 보낸다. 사용자 동작 없이 요청을 보내지 않는 기존 규칙(만료 = 네트워크 0회 JVM 시험)은 그대로다.
+- 증거: JVM 89 passed. 태블릿 실기(2026-10-06 9dfk): 대화상자 표시 → 승인 요청 → 수신 승인 대기 화면(새 요청) 확인.
+- gate 변화: SOURCE/LOCAL 및 실기 관찰.
+
 ## 2026-10-06 · uncommitted · uiux(pilot): 영상 없는 연습 화면의 조작 창 너비 통일
 
 - 변경: Gazebo 팔 연습에서 영상이 없으면 빈 영상 칸 대신 조작부를 먼저 전폭으로 보이고 팔·그리퍼 창을 같은 폭으로 맞췄다. 영상이 있으면 기존 영상·조작부 병렬 배치를 유지한다.
@@ -584,3 +591,16 @@
 - 변경: 기존 전화 주행 브라우저 시험에 좌/우 제자리 회전 버튼의 렌더 폭 차이 ≤1px 검사를 추가했다.
 - 증거: 현재 트리의 320×568·390×844 회전 버튼 시험 2 passed, 카메라·조작 배치와 회전 안내 7 passed, 각각 `known_failures.py` 0 NEW. 320px 원본은 X: `captures/pilot-current-320/`이다.
 - gate 변화: Pilot 320px LOCAL 폭 근거 추가. 선언 상태 전체·운전자 G3·실물 장치 readback은 HOLD다.
+## 2026-10-06 · uncommitted · feat(pilot): D-483 수신 승인 대기에 로봇 화면 승인 코드 입력
+
+- 변경: "수신 장치 승인 대기" 대화상자에 "로봇 화면의 승인 코드" 입력칸(6자, 대문자, 같은 알파벳)과 "승인 코드 확인" 버튼을 둔다. `PeerClient.confirm`이 `/requests/{id}/confirm`에 `X-Request-Secret`과 함께 보내고, 결과는 기존 상태 폴링이 받아 그대로 이어간다. 틀리면 남은 시도 횟수를 보이고 대화상자를 유지하며, 404(옛 CORE)면 입력칸을 "이 로봇은 콘솔 승인만 지원합니다"로 바꾼다. 콘솔 승인 경로는 그대로다.
+- 증거: JVM 신규 3건(screenCodeConfirmApprovesThroughTheStatusPoll, wrongScreenCodeReportsRemainingAttemptsAndKeepsWaiting, olderCoreWithoutConfirmRouteIsConsoleOnly) 포함 92 passed, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
+
+## 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
+
+- 변경: LCD가 요청 여러 개를 보일 수 있어 입력칸 안내를 "로봇 화면에서 <표시 번호> 옆의 승인 코드"로 바꿨다. `confirm`의 400은 `detail.remaining_attempts`가 있을 때만 틀린 코드로 보고, 없으면 `PeerRefused(400)`로 다룬다.
+- 증거: JVM 신규 badRequestWithoutRemainingAttemptsIsARefusalNotAWrongCode 포함 PeerClientTest 통과, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
