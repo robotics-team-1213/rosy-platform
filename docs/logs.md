@@ -6533,3 +6533,9 @@ osy-d395-s1d\`.
 - 변경: 외부 PC의 `.local` 실패와 사이트 PC 자체의 실제 발견·브리지·Fleet UID 조회를 구분해 UI/UX 회차에 기록했다. 비공개 PC·로봇 주소는 공개 기록에서 뺐다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `logs/site-mdns-live/` 원본. 사이트 Avahi에 로봇 둘, 사용자 bridge의 최근 2건 전달(Fleet POST 200), Fleet UID의 `.local`·내부 이름 조회 성공, 사이트 CA 검증 HTTPS health/console 200. 호스트 자체 locator는 여러 로컬 인터페이스 주소로 인한 ambiguous 오류. 사이트 이미지 `e64815c51`와 작업 브랜치 사이 Fleet 웹 자산 12개 경로가 다르다.
 - gate 변화: SITE mDNS·서비스 도달의 부분 근거 추가. 인증된 Fleet 화면, 브랜치 설치, 현장 사용자 G3와 로봇·카메라 readback은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): compact 픽셀 사진 이동 사유 가독성
+
+- 변경: 픽셀 검수의 이전·다음 버튼을 390/320px에서 각각 작업 칸 전폭으로 쌓아 긴 비활성 이유의 좁은 줄바꿈을 풀었다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-pixel-nav-fullwidth/`와 `logs/learning-pixel-nav-{red,green,decision-regression,responsive}.txt`. 수정 전 2 failed, 뒤 레이아웃 8 passed·픽셀 결정 4 passed·반응형 계약 9 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: 학습 도구의 LOCAL 너비·가독성 부분 근거 추가. 검수자 G3와 제품 전체 G2/G3는 HOLD.

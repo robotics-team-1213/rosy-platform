@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pinky-review): compact 픽셀 사진 이동 사유 가독성
 - 2026-10-06 · uncommitted · uiux(site): 기존 PC의 mDNS 경로 재확인
 - 2026-10-06 · uncommitted · uiux(games): 전화 연결 복구 너비와 현재 상태
 - 2026-10-06 · uncommitted · uiux: 현재 트리 공유 UI 계약 복구
 - 2026-10-06 · uncommitted · uiux(games): 전화 복구 상태 동등 폭
-- 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭

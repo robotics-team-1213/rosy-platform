@@ -97,9 +97,10 @@ def test_review_editor_peer_widths(browser_workspace, route, left, right, width)
             previous = page.locator('#pixel-prev').bounding_box()
             following = page.locator('#pixel-next').bounding_box()
             reload = page.locator('#pixel-reload').bounding_box()
-            assert abs(previous['width'] - following['width']) <= 1
-            assert previous['y'] == following['y']
-            assert abs(reload['width'] - page.locator('.ui-workspace-bar').first.bounding_box()['width']) <= 1
+            bar = page.locator('.ui-workspace-bar').first.bounding_box()
+            for action in (previous, following, reload):
+                assert abs(action['x'] - bar['x']) <= 1 and abs(action['width'] - bar['width']) <= 1
+            assert previous['y'] + previous['height'] <= following['y']
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path
         target = Path(output) / f'learning-{route.strip("/") or "objects"}-{width}.png'

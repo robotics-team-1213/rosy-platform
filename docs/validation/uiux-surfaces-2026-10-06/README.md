@@ -163,7 +163,9 @@ G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나�
 
 24rem 이상 편집 칸의 작업 버튼도 기존 24rem 컨테이너 경계에서 두 개의 동등 폭 열로 정렬했다. 800px 픽셀 화면에서 내용 길이에 따라 제각각 감기던 버튼 폭이 같아졌고, 1440/800/390/320px의 두 편집 경로 **8 passed**, 800px 연결 끊김·권한 거부·응답 보류·저장 충돌 등 **16 passed**, 각 `known_failures.py` **0 NEW**다. 원본은 X: `captures/learning-actions-equal/`에 둔다. 캡처의 픽셀 영상은 합성 fixture이며 실제 검수 결과·G3 수용은 남는다.
 
-픽셀 검수의 사진 이동은 390px에서 이전 249px·다음 86px로 달라져 긴 비활성 이유가 이동 칸을 밀었다. 현재는 사진·상태 선택을 각 전폭으로 놓고 이전·다음을 173px씩, 최신 내용 불러오기를 358px로 놓는다. 320px도 같은 구조이며 가로 넘침이 없다. 객체·픽셀 1440/800/390/320px와 반응형 계약 **17 passed**, `known_failures.py` **0 NEW**다. 최종 캡처 `learning-nav-final/learning-pixels-{390,320}.png`는 같은 X: `captures/`에 둔다. 실제 검수자 작업 독회는 남는다.
+픽셀 검수의 사진 이동은 390px에서 이전 249px·다음 86px로 달라져 긴 비활성 이유가 이동 칸을 밀었다. 그 회차에는 사진·상태 선택을 각 전폭으로 놓고 이전·다음을 173px씩, 최신 내용 불러오기를 358px로 놓았다. 320px도 같은 구조였고 가로 넘침은 없었다. 객체·픽셀 1440/800/390/320px와 반응형 계약 **17 passed**, `known_failures.py` **0 NEW**다. 당시 캡처 `learning-nav-final/learning-pixels-{390,320}.png`는 같은 X: `captures/`에 있다. 실제 검수자 작업 독회는 남는다.
+
+현재 트리에서 그 두 반폭 버튼의 **비활성 이유가 320px에서 좁은 칸 안에 여러 줄로 압축**되는 것을 실제 캡처로 확인했다. compact에서는 이전·다음·다시 불러오기를 각각 작업 칸의 같은 전폭으로 쌓았다. 390/320px 너비 단언은 수정 전 **2 failed**, 수정 뒤 객체·픽셀 네 폭 **8 passed**, 픽셀 결정·자료 준비 네 폭 **4 passed**, 반응형 계약 **9 passed**였고 각 성공 실행의 `known_failures.py`는 **0 NEW**다. 현재 전체 화면 원본은 X: `captures/learning-pixel-nav-fullwidth/learning-{objects,pixels}-{1440,800,390,320}.png`, 실행 기록은 `logs/learning-pixel-nav-{red,green,decision-regression,responsive}.txt`다. 이는 합성 검수 자료의 LOCAL 가독성 근거이며 실제 검수자 G3는 HOLD다.
 
 객체 검수의 빈 필터 상태를 1440·800·390px에서 추가 재생했다. 처음에는 `.workspace`의 자동 여백 때문에 데스크톱 내용이 좁은 열에 모이고 작은 화면의 작업 목록이 머리 아래로 밀렸다. 현재는 작업 영역이 가용 폭을 채우고 머리 바로 아래에서 시작한다. 세 폭 모두 가로 넘침 없이 「전체 사진 보기」로 검수 화면에 복귀한다. 현재 트리의 객체 브라우저 **13 passed**, `known_failures.py` **0 NEW**이며 캡처 원본 `learning-objects-empty-{1440,800,390}.png`는 X: `2026-10-06--032913--uiux-quality--199bc9/captures/`에 둔다. 이는 빈 상태의 LOCAL G2 부분 근거다.
 
