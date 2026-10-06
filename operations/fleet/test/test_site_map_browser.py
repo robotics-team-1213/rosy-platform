@@ -52,6 +52,8 @@ def test_view_edit_activate_and_preview_a_trip(page_site):
     from playwright.sync_api import expect
 
     page, store, robot = page_site
+    expect(page).to_have_title("Rosy Fleet · 현장 지도")
+    expect(page.locator("ui-brand")).to_contain_text("Rosy Fleet")
     page.locator("#credential input").fill("operator-token")
     page.locator("#connect").click()
     expect(page.locator("#session")).to_contain_text("bob")
@@ -87,3 +89,24 @@ def test_view_edit_activate_and_preview_a_trip(page_site):
     expect(page.locator("#trip-point")).to_contain_text("찍은 좌표 x")
     page.locator("#trip-plan").click()
     expect(page.locator("#trip-summary")).to_contain_text("차로 폭 두 배 안에 차로가 없습니다")
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_site_map_fits_declared_widths(page_site, width, height):
+    page, _, _ = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    from playwright.sync_api import expect
+
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    sizes = page.evaluate("""() => ({
+      overflow: document.documentElement.scrollWidth - innerWidth,
+      map: document.querySelector('#site-map-svg').getBoundingClientRect().width,
+      edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().width,
+      trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().width,
+      stop: document.querySelector('#estop').getBoundingClientRect().right
+    })""")
+    assert sizes["overflow"] <= 0, sizes
+    assert abs(sizes["edit"] - sizes["trip"]) <= 1, sizes
+    assert sizes["stop"] <= width, sizes

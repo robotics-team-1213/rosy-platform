@@ -1492,6 +1492,40 @@ def test_console_fits_the_declared_viewport(console_url):
     assert fit["rosterPanel"]["height"] <= 0.75 * fit["vh"], fit
 
 
+@pytest.mark.parametrize("scenario", ["delayed", "disconnected", "viewer"])
+def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scenario):
+    from playwright.sync_api import sync_playwright
+
+    api = {
+        "/api/fleet/state": UNREACHABLE_SNAPSHOT if scenario == "disconnected" else SNAPSHOT,
+        "/api/fleet/map": MAP_GRID,
+        "/api/fleet/formation": DELAYED_FORMATION if scenario == "delayed" else FORMATION,
+    }
+    if scenario == "viewer":
+        api["/api/fleet/session"] = {"principal_id": "test-viewer", "role": "viewer"}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, api)
+        page.goto(console_url, wait_until="networkidle")
+        fit = page.evaluate(FLEET_FIT_PROBE)
+        assert fit["docOverflow"] <= 0, fit
+        assert abs(fit["primary"]["width"] - fit["secondary"]["width"]) <= 1, fit
+        assert fit["stop"]["bottom"] <= fit["vh"]
+        if scenario == "delayed":
+            assert "지연" in page.inner_text("#roster")
+            assert page.locator("#roster").evaluate("e => e.scrollHeight > e.clientHeight")
+        elif scenario == "disconnected":
+            assert "닿지 않음" in page.inner_text("#roster")
+            assert page.locator(".queues-panel").is_visible()
+            assert fit["mapCanvas"]["height"] <= 0.3 * fit["vh"]
+        else:
+            assert page.locator("#formation-role-lock").is_visible()
+            assert page.locator(".formation ui-button[reason]").count() == 0
+            assert page.locator("#estop").get_attribute("reason") == "운용자 권한이 필요합니다"
+        assert not errors
+        save_temp_screenshot(page, f"fleet_desktop_{scenario}.png")
+        browser.close()
+
+
 def test_fleet_control_groups_are_semantic_subheadings(console_url):
     from playwright.sync_api import sync_playwright
 

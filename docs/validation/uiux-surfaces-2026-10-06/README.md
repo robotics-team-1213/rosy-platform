@@ -363,16 +363,22 @@ G3 여덟 항목은 세 표면 모두 **미완료**다. 아래는 이번 회차�
 
 현재 `Rosy Fleet` 운용 화면을 1920×1080에서 다시 재생했다. 첫 검사에서 문서가 43px 넘쳐 작업 영역 하단이 잘렸다. 8줄 로그 높이는 D-415 계약이므로 유지하고, 데스크톱 관제 칸의 중복 여백과 대형 readout 기본 margin을 줄였다. 수정 후 문서 하단은 1079px로 뷰포트 안이며, 지도·등록 로봇 칸은 각각 928px, 대형·신호 패널과 로그도 보인다. 1920px 맞춤·카메라 상태와 compact 폭의 선별 브라우저 **8 passed**, 접속 전 안내→연결 **1 passed**, 서버·팔레트 계약 **60 passed**, 웹 모듈 **137 passed**, 각 Python 실행의 `known_failures.py` **0 NEW**. 현재 원본과 실행 기록은 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-d487\`의 `fleet_console_fit.png`, `connection-desktop.png`, `browser-fixed2.txt`, `connection.txt`, `contracts.txt`, `node-files.txt`다. 최신 `main` 병합 뒤 roster의 재렌더와 박스 계측이 경합한 320px 시험을 원자적으로 읽도록 고쳤고, 선별 브라우저 **8 passed**, 계약 **60 passed**, 웹 모듈 **137 passed**, `known_failures.py` **0 NEW**로 다시 확인했다(`post-merge-browser-final.txt`, `post-merge-contracts.txt`, `post-merge-node.txt`). 이 결과는 API fixture 기반 LOCAL G2 부분 근거다. 실제 사이트 이미지의 후보 SHA, 카메라 화면, 로봇 readback과 요청자가 수행할 G3 독회 결과는 아직 확인되지 않아 제품 전체 **HOLD**를 유지한다.
 
-같은 코드 후보에서 Fleet 브라우저 파일 전체를 다시 실행해 **103 passed**, `known_failures.py` **0 NEW**였고 75장의 현재 캡처가 생성됐다. 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-full\run.txt`와 같은 폴더의 PNG다. 빈 목록·조회 지연/끊김/복구·팔로워 지연·대형 HOLD·안전 결측/정지·카메라·불가역 확인 등의 회귀가 포함된다. 다만 이 파일은 D-153의 각 상태 × 선언 폭을 모두 캡처하지 않는다. 특히 안전 결측/정지 이미지는 전화 폭별 매트릭스가 아니므로 Fleet G2는 **HOLD**다.
+같은 코드 후보에서 Fleet 브라우저 파일 전체를 다시 실행해 **103 passed**, `known_failures.py` **0 NEW**였고 75장의 현재 캡처가 생성됐다. 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-full\run.txt`와 같은 폴더의 PNG다. 빈 목록·조회 지연/끊김/복구·팔로워 지연·대형 HOLD·안전 결측/정지·카메라·불가역 확인 등의 회귀가 포함된다. 다만 이 파일만으로는 D-153의 각 상태 × 선언 폭을 모두 캡처하지 않는다. 특히 안전 결측/정지 이미지는 전화 폭별 매트릭스가 아니다.
+
+그 빈 셀을 확인하려고 fresh·delayed·disconnected·안전 결측·빈 목록·첫 응답 대기·서버 오류·SAFE_STOP 표시·viewer 권한의 **9상태 × 1920×1080/390×844/320×568 = 27셀**을 현재 화면에서 다시 찍었다. 첫 캡처에서는 데스크톱의 delayed **154px**, disconnected **105px**, viewer **48px** 세로 넘침이 발견됐다. 여러 예외 로봇은 목록 내부에서 스크롤하고, 예외 큐가 나타나면 지도 높이를 줄이며, viewer 권한 안내는 대형 머리의 한 줄로 모았다. 권한 때문에 막힌 비상 정지에서는 기존 보조 문구 대신 권한 이유가 보인다. 수정 뒤 **27/27셀**에서 페이지 오류 0·가로 넘침 0·지도/목록 패널 폭 차이 ≤1px·첫 화면 비상 정지·예상 상태 문구를 확인했고, 데스크톱 문서 세로 넘침은 모두 0이다. 안전 결측·정지·오프라인·viewer의 목표 행동은 비활성이다. 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-g2\`의 `capture.json`, `capture-final.txt`, `validate.txt`, 27장 PNG다. 첫 응답 대기는 fixture가 응답을 보류한 LOCAL 화면이며 실물 첫 기동이 아니다. 새 데스크톱 회귀는 보정을 제거한 시험에서 **3 failed**, 복원 뒤 **4 passed**였고 권한 중복 안내 Node 시험도 변경 제거 시 **1 failed**, 복원 뒤 웹 모듈 **137 passed**였다. 전체 Fleet 브라우저 **106 passed**, 서버·팔레트 **60 passed**, D-153 G1 **90 passed**, 성공한 Python 실행의 `known_failures.py` **0 NEW**다. 전체 브라우저 원본은 같은 X: 폴더의 `browser-full.txt`다. 이 행렬은 합성 API 응답의 LOCAL 근거이며 실제 사이트 카메라·로봇 상태, 남은 세부 상태 전이와 운영자 G3는 **HOLD**다.
 
 ## 제품 범위와 판정 경계
+
+### D-488 Fleet 현장 지도 추가 평가 (2026-10-07)
+
+`/console/site-map`은 Fleet의 새 활성 절차 화면이다. D-487의 표시 이름 계약에 맞춰 탭 제목·머리 워드마크·홈 접근성 이름을 `Rosy Fleet`으로 바로잡았다. 기존 happy-path 브라우저 검사는 변경 전 이름 검사에서 1 failed였고 수정 후 **4 passed**, `known_failures.py` **0 NEW**였다. 1440×1000·390×844·320×568에서 접속 후 가로 넘침 0, 초안 편집/경로 미리보기 칸 폭 차이 ≤1px, 비상 정지의 화면 내 위치를 확인했다. 접속 전·접속 후·경로 미리보기 9장과 계측은 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-g2\site-map-*.png`, `site-map-capture.py`, `site-map-green.txt`에 있다. 320px 지도 글씨는 축소되어 실사용 판독이 아직 검증되지 않았다. 초안 저장·활성화 확인, 오류·지연·권한·연결 끊김의 선언 폭별 G2와 사용자 G3는 **HOLD**다. 이 캡처는 합성 서버의 LOCAL 근거이고 실제 사이트 설치·장치 readback이 아니다.
 
 현재 `shared/web/surfaces.yaml`의 표면을 제품 UI/UX 목표와 대조하면 다음과 같다. **부분 근거는 GO가 아니다.** 신규 표면의 선언 상태·뷰포트 카드는 D-153 재평가 트리거로 채워야 한다.
 
 | 등록 표면 | 이번 회차의 범위 | 다음 판정 증거 |
 |---|---|---|
 | `robot` | `/dashboard`·`/console`·`/setup`·`/device` 중 운용·작업 준비 LOCAL 부분 근거 | 역할·상태 G2 잔여 셀, 작업 완료 G3, 실물 readback |
-| `console` | Fleet LOCAL 부분 근거 | 선언 상태 G2 잔여 셀, 사이트 PC·카메라 readback, G3 |
+| `console` | Fleet 운용 화면과 새 `/console/site-map`의 LOCAL 부분 근거 | 현장 지도의 작은 글씨 판독, 선언 상태 G2 잔여 셀, 사이트 PC·카메라 readback, G3 |
 | `game-board` | LOCAL 부분 근거 | 모든 상태 G2, 실제 경기 관측, G3 |
 | `pilot` | 현재 트리의 주행 4폭·팔·대상 오류 LOCAL 부분 근거 | 선언 상태 전체 G2, 전화 회전 조작 발견 가능성·운전자 G3; [DEVICE 기능 확인](../pilot-device-user-confirmed-2026-10-05/README.md)은 별도 |
 | `robot-face` | 웨이크·주행 카드 호스트 PIL 이미지와 [G3 부분 독회](#로봇-얼굴-g3-독회--local-진행-중) | 실제 설치 LCD 사진·거리/각도/조도 판독, 카드 전이·G3 |

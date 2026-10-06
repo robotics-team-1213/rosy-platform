@@ -109,18 +109,20 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        38_948,
-        "split: re-judged at 38948 on 2026-10-07 after D-488/489/490 site-map address and route planning "
-        "added 1766 production/web lines since 37182: a site-map editor and store, pure routing graph/cost/planner/snap/trip "
-        "modules, and server route endpoints. Fleet retains admission and dispatch ownership. The B2 server/UI split "
-        "remains unscheduled; the next re-judge needs a dated split plan. The +150 allowance is unchanged. "
+        38_952,
+        "split: independently re-judged at 38952 on 2026-10-07. Since 37182 the package grew 1770 "
+        "production and web lines in the existing site-map owners: site-map.js +238, site_map_store.py +198, "
+        "routing/graph.py +168, site-map-model.js +153, site_map.py +151, routing/trip.py +149, "
+        "routing/planner.py +140, trip_routes.py +113, site_map_routes.py +92, routing/cost.py +82, "
+        "site-map.html +78, routing/snap.py +61, site-map.css +43. Tests are exempt. No new owner. "
+        "The first web/server seam is docs/plans/2026-10-07-fleet-site-map-web-server-seam.md "
+        "(owner fleet): site-map page assets stay the web owner, and the site-map routes, store, and "
+        "routing package stay the server owner. The split is not done here. +150 allowance unchanged. "
         "Previously independently re-judged at 37182 on 2026-10-07 after the 2026-10-06 Fleet UI/UX series (Cell actions, "
         "states, failures and E-stop card in cell.js/css/html +167; console/install/formation feedback +69) "
         "and D-484 field_boundary sighting sources (sightings, sightings_config, vision-view +43) added 293 "
         "lines. Each change sits in its existing page or server owner; no new owner appeared. "
-        "The B2 server/UI split has no plan document and is unscheduled (D-362 queue item 3). Before the "
-        "next fleet re-judge, a dated plan under docs/plans/ naming owner fleet and the first web/server seam "
-        "must exist and be linked here. +150 allowance unchanged. "
+        "+150 allowance unchanged. "
         "Previously re-judged at 36645 on 2026-10-06 after integrated map camera display, "
         "lamp identity routing, and transport evidence added 201 lines; the camera binding "
         "moved from console.js into its map view to keep the web file below 800 lines. "
