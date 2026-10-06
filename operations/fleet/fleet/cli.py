@@ -138,6 +138,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--central", action="store_true", help=(
         "mount the central Fleet registry (D-454 step 1): /api/v1/fleet/robots reads the "
         "site roster as the source of truth; requires an enrollment store"))
+    console.add_argument("--connection-mode", choices=("paired", "development"), default="paired",
+                         help=("D-473: development gives same-LAN browsers a 1 h operator session "
+                               "without a token; also needs ROSY_DEPLOYMENT=development"))
     return parser.parse_args(argv)
 
 
@@ -367,6 +370,20 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("--tasks-db is required with --mission-api")
     if mission_api and site_users is None:
         sys.exit("--users-file is required with --mission-api for named operator authorization")
+    development_sessions = None
+    if args.connection_mode == "development":
+        # D-473 1: both settings or nothing; a missing one keeps paired, never the other way round.
+        if os.environ.get("ROSY_DEPLOYMENT", "").strip() != "development":
+            print("warning: --connection-mode development ignored: ROSY_DEPLOYMENT is not development",
+                  file=sys.stderr)
+        elif tasks_db is None:
+            sys.exit("--tasks-db is required with --connection-mode development for the session audit")
+        else:
+            from fleet.server.development_session import DevelopmentSessions
+
+            development_sessions = DevelopmentSessions()
+            print("warning: development connection mode: same-LAN browsers get 1 h operator sessions",
+                  file=sys.stderr)
     if args.host not in LOOPBACK_HOSTS and not (console_token or site_users):
         sys.exit("--token or --users-file 없이 루프백 밖으로 열 수 없다")
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
@@ -530,7 +547,8 @@ def run_console(args: argparse.Namespace) -> None:
                      pairing=pairing_service, pairing_sync_token=pairing_sync_token,
                      localization_service=localization_service,
                      stuck_resolver_clients=stuck_resolver_clients,
-                     central_registry=central_registry)
+                     central_registry=central_registry,
+                     development_sessions=development_sessions)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",
