@@ -10,7 +10,7 @@
 
 ### Decision
 
-1. **클래스셋은 불변 record다.** 정체성은 task와 순서 있는 class names의 sha256이다. display, color, hotkey는 표시 정보이고 sha에 들어가지 않는다. 수정 API는 없다. 클래스셋을 바꾸면 새 sha의 새 클래스셋이다.
+1. **클래스셋은 불변 record다.** 정체성은 task와 순서 있는 class names의 sha256이다. display, color, hotkey는 표시 정보이고 sha에 들어가지 않는다. 이 task+names 정체성은 객체 클래스셋에 적용한다. 픽셀 클래스셋은 기존 D-462의 `classes.yaml` 원본 sha 바인딩을 그대로 쓴다. 수정 API는 없다. 클래스셋을 바꾸면 새 sha의 새 클래스셋이다.
 2. **작업 공간(`--state`) 하나는 객체 클래스셋 하나와 픽셀 클래스셋 하나(기존 review_masks binding, D-462)를 가진다.** 다른 모델의 클래스셋은 다른 `--state` 작업 공간에서 검수한다. 기존 작업 공간은 D-423 v1 6클래스로 소급한다. 사진×클래스셋 row는 지금 만들지 않는다.
 3. **객체 클래스셋 입력은 Ultralytics `data.yaml`의 `names`(dict 또는 list)와 선택 `display`/`colors`다.** 첫 실행에 `--object-classes`로 준다. 앱은 `.pt`를 열지 않는다(pickle 실행 위험, Ultralytics AGPL-3.0). 모델 PC 도구가 `YOLO(path).names`를 `data.yaml`로 내보낸다.
 4. **범위는 검수, 승인, 학습 export뿐이다.** 로봇의 `object_det` manifest의 D-423 6클래스 계약(`manifest.py:179`)과 D-373 닫힌 lane role 목록은 바꾸지 않는다. 그 변경은 별도 ADR이다.

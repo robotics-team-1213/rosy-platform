@@ -25,6 +25,8 @@ def _record(names, task, source, display=None, colors=None):
     colors = {} if colors is None else colors
     if not isinstance(display, dict) or not isinstance(colors, dict):
         raise ValueError('display and colors must be mappings')
+    if not all(isinstance(v, str) and v for v in display.values()):
+        raise ValueError('display names must be non-empty strings')
     for c in colors.values():
         if not (isinstance(c, list) and len(c) == 3
                 and all(type(v) is int and 0 <= v <= 255 for v in c)):
@@ -37,10 +39,13 @@ def _record(names, task, source, display=None, colors=None):
 
 
 def from_data_yaml(raw, task):
-    doc = yaml.safe_load(raw)
+    try:
+        doc = yaml.safe_load(raw)
+    except yaml.YAMLError as exc:
+        raise ValueError(f'data.yaml is not valid YAML: {exc}') from exc
     names = doc.get('names') if isinstance(doc, dict) else None
     if isinstance(names, dict):
-        if sorted(names) != list(range(len(names))):
+        if not all(type(k) is int for k in names) or sorted(names) != list(range(len(names))):
             raise ValueError('names indices must be dense 0..N-1')
         names = [names[i] for i in range(len(names))]
     if not isinstance(names, list):
@@ -60,6 +65,11 @@ def object_set(store):
 
 
 def bind_object_set(store, record):
+    if record.get('task') != 'detect':
+        raise ValueError('object class set must be a detect set')
+    names = [c['name'] for c in record['classes']]
+    if _record(names, record['task'], record['source'])['sha256'] != record['sha256']:
+        raise ValueError('class set sha256 does not match its names')
     with store.connect() as db:
         db.execute('BEGIN IMMEDIATE')
         row = db.execute("SELECT value FROM metadata WHERE key='object_class_set'").fetchone()

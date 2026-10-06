@@ -172,6 +172,8 @@ def legacy_object_set():
 
 ### Task 2: 작업 공간 binding
 
+> 구현 메모: 규칙은 "프레임이 하나라도 있으면 거절"이다(계획의 라벨 있는 프레임 기준보다 엄격). Task 4는 `ReviewStore.__init__`에서 프레임 삽입 전에 바인딩해야 한다. 지금 시험의 `DELETE FROM frames`는 Task 4의 실제 첫 시작 경로로 대체한다.
+
 **Files:**
 - Modify: `learning/training/perception/dataset/class_sets.py`
 - Test: `learning/training/perception/test/test_class_sets.py`
