@@ -42,6 +42,9 @@ CONSOLE_ASSETS = {
     "roster.js": "application/javascript",
     "enrollment.js": "application/javascript",
     "signals.js": "application/javascript",
+    "site-map.css": "text/css",
+    "site-map.js": "application/javascript",
+    "site-map-model.js": "application/javascript",
     "site-layer.js": "application/javascript",
     "tracking-layer.js": "application/javascript",
     "tracking-view.js": "application/javascript",
@@ -78,6 +81,14 @@ def install_static_routes(app: FastAPI) -> None:
     def cell_page():
         return FileResponse(
             WEB_ROOT / "cell.html", media_type="text/html",
+            headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
+        )
+
+    # D-484 — 현장 지도(주소·차로) 보기·초안 편집·경로 미리보기.
+    @app.get("/console/site-map", include_in_schema=False)
+    def site_map_page():
+        return FileResponse(
+            WEB_ROOT / "site-map.html", media_type="text/html",
             headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
         )
 

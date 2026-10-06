@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rosy Console · 현장 지도</title>
+  <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
+  <link rel="stylesheet" href="/common/tokens.css">
+  <script src="/common/theme.js"></script>
+  <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/console/assets/site-map.css">
+  <script type="module" src="/common/ui.js"></script>
+  <script type="module" src="/console/assets/site-map.js"></script>
+</head>
+<body>
+<ui-shell grammar="procedure">
+  <ui-topbar>
+    <ui-brand href="/console" aria-label="Rosy Console 홈"><b>Rosy Console</b><small>현장 지도 · 주소와 길</small></ui-brand>
+    <span data-spacer></span>
+    <ui-tag id="session">접속 전</ui-tag>
+    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
+  </ui-topbar>
+  <div class="site-access">
+    <ui-field id="credential" type="password" placeholder="운영자 토큰" aria-label="관제 운영자 토큰"></ui-field>
+    <ui-button id="connect" kind="primary">접속</ui-button>
+  </div>
+  <ui-status id="estop-feedback" hidden></ui-status>
+  <main>
+    <ui-text id="notice" role="status" aria-live="polite">접속하면 활성 지도와 초안을 읽습니다. 경로 미리보기는 로봇을 움직이지 않습니다.</ui-text>
+    <ui-section aria-labelledby="map-heading">
+      <ui-head>
+        <ui-text id="map-heading" scale="label">지도</ui-text>
+        <label class="inline">보기 <select class="ui-field" id="map-source" aria-label="보는 지도">
+          <option value="active">활성 지도</option><option value="draft">초안</option>
+        </select></label>
+      </ui-head>
+      <ui-status id="map-status" state="empty">지도 없음</ui-status>
+      <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
+      <ui-text>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
+    </ui-section>
+    <div class="columns">
+      <ui-section aria-labelledby="edit-heading">
+        <ui-head><ui-text id="edit-heading" scale="label">초안 편집</ui-text></ui-head>
+        <ui-text id="selection">선택 없음</ui-text>
+        <div id="place-form" class="form" hidden>
+          <label>주소 이름<input class="ui-field" id="place-name" maxlength="64"></label>
+          <label>장소 종류<select class="ui-field" id="place-kind"></select></label>
+        </div>
+        <div id="edge-form" class="form" hidden>
+          <label>통행 방향<select class="ui-field" id="edge-direction">
+            <option value="one_way">일방</option><option value="two_way">양방</option></select></label>
+          <label>주행 방식<select class="ui-field" id="edge-mode">
+            <option value="lane">차선 따라가기</option><option value="free">지도 좌표 추종</option></select></label>
+          <label>속도 상한 (m/s)<input class="ui-field" id="edge-speed" type="number" min="0.01" max="5" step="0.01"></label>
+        </div>
+        <div class="actions">
+          <ui-button id="apply-edit" kind="quiet" disabled>초안에 반영</ui-button>
+          <ui-button id="save-draft" kind="primary" disabled>초안 저장</ui-button>
+          <ui-button id="activate" kind="irreversible" disabled>초안 활성화</ui-button>
+        </div>
+        <ui-status id="draft-status" state="empty">저장된 초안 없음</ui-status>
+      </ui-section>
+      <ui-section aria-labelledby="trip-heading">
+        <ui-head><ui-text id="trip-heading" scale="label">경로 미리보기</ui-text></ui-head>
+        <label>로봇<select class="ui-field" id="trip-robot"></select></label>
+        <label>목적지 주소<select class="ui-field" id="trip-place"></select></label>
+        <label class="check"><input type="checkbox" id="trip-pick"> 지도에서 좌표 찍기</label>
+        <ui-text id="trip-point">찍은 좌표 없음</ui-text>
+        <div class="actions"><ui-button id="trip-plan" kind="primary" disabled>경로 계산</ui-button></div>
+        <ui-status id="trip-summary" state="empty">계산 전 · 실행은 하지 않습니다</ui-status>
+        <ol id="trip-actions" aria-label="교차로 동작"></ol>
+      </ui-section>
+    </div>
+    <div class="actions"><a class="console-return" href="/console">관제 화면으로 돌아가기</a></div>
+  </main>
+</ui-shell>
+</body>
+</html>
