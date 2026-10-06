@@ -777,10 +777,10 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 }
 /* 태블릿 가로: 왼쪽 작업 공간(영상·readback), 오른쪽 조작부 — 컨트롤러처럼 한 화면에 */
 @media (width >= 64rem) {
-  body[data-pilot-screen="arm"] .pilot-main { max-width: 84rem; }
-  [data-screen="arm"] { max-width: 84rem; }
+  body[data-pilot-screen="arm"] .pilot-main { max-width: 120rem; }
+  [data-screen="arm"] { max-width: 120rem; }
   .arm-console {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas: "view controls" "view actions" "record record";
     align-items: start;
   }

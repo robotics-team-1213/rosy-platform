@@ -6481,3 +6481,8 @@ osy-d395-s1d\`.
 - 변경: `/learning`·`/catalog`에서 응답 전 입력·등록을 막고, 403 뒤 오래된 결과를 내려 접근 이유·다시 확인을 표시했다. 등록 거부의 이유는 누른 자리에서 읽게 했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 1440/800/390px 보류·거부 캡처. 집중 브라우저 8 passed, 두 경로 배치 회귀 6 passed, 각 `known_failures.py` 0 NEW. 원본은 X: `captures/learning-pages-load/`.
 - gate 변화: `pinky-review` LOCAL G2 일부 추가. 남은 선언 상태·실제 검수자 G3와 제품 전체는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(pilot): 팔 영상·조작 동등 폭
+
+- 변경: Pilot 팔의 영상 작업 공간과 조작 칸을 넓은 화면에서 1:1로 배치했다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 4개 집중 브라우저, 2000×1200 너비 차이 ≤1px, X: `captures/pilot-arm-equal/`.
+- gate 변화: LOCAL 폭 근거 추가. 실제 영상·태블릿과 제품 전체 G2/G3는 HOLD.

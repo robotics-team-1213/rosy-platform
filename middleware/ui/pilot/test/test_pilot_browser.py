@@ -230,6 +230,11 @@ def test_omx_recording_retry_outcome_stale_camera_and_disposal(tablet_page):
     view = page.locator(".arm-view").bounding_box()
     controls = page.locator(".arm-controls").bounding_box()
     assert controls["x"] >= view["x"] + view["width"]
+    assert abs(controls["width"] - view["width"]) <= 1, (view, controls)
+    if os.environ.get("ROSY_SHOT_DIR"):
+        shots = Path(os.environ["ROSY_SHOT_DIR"])
+        shots.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(shots / "pilot-arm-camera-controls-2000x1200.png"), full_page=True)
     page.fill("[data-sim-task]", "관절 이동 시연")
     page.click("[data-sim-record-start]")
     page.wait_for_function("document.querySelector('[data-sim-record-status]').textContent.includes('기록 시작 실패')")

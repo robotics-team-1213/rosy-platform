@@ -561,3 +561,8 @@
 - 변경: 짧은 전화와 넓은 화면 사이를 전환할 때 열린 도구 판과 모델·차선 세부 내용을 닫아, 설정이 다른 자리로 옮겨진 뒤 빈 판이 남지 않게 했다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320→390→320 반응형 브라우저 1 passed, `known_failures.py` 0 NEW.
 - gate 변화: Pilot LOCAL G2 전환 부분 근거 추가. 실제 전화 회전·운전자 G3와 제품 전체는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(pilot): 팔 영상·조작 칸 동등 폭
+
+- 변경: 영상이 있는 팔 화면의 작업 공간과 조작 칸을 1:1로 맞추고 넓은 화면에서 조작 카드가 나란히 설 공간을 확보했다.
+- 증거: [UI/UX 점검](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 2000×1200 영상 fixture 두 칸 너비 차이 ≤1px, 2000×1200·1200×2000·390×844 집중 브라우저 4 passed, `known_failures.py` 0 NEW. 캡처는 X: `captures/pilot-arm-equal/`.
+- gate 변화: Pilot LOCAL G2 폭 근거 추가. 실제 영상·태블릿 조작과 G3 및 제품 전체는 HOLD.
