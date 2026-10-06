@@ -25,7 +25,9 @@ from typing import Sequence
 
 from core_common.protocol.discovery_txt import HOSTNAME
 from rosy_vision import protocol
+from rosy_vision.field_calib import FieldCalibrator
 from rosy_vision.ingest import STATUS_INTERVAL_S, IngestServer
+from rosy_vision import map_worker
 from rosy_vision.map_register import load_map_paint
 from rosy_vision.pairing_sync import PairedCredentials, PairingSync
 from rosy_vision.publish import SightingPublishError, SightingPublisher
@@ -295,6 +297,26 @@ async def _run_vision(args: argparse.Namespace) -> int:
     ingest, sync_settings = _vision_ingest(args, configs)
     workers = []
     trackers = []
+    # D-484: field_boundary sources calibrate from the boundary quad; orientation
+    # comes from the lane paint, so the map paint is required and one extra
+    # low-priority worker process serves the registration requests.
+    field_configs = [config for config in configs
+                     if config.camera.calibration_source == "field_boundary"]
+    paint_executor = None
+    paint_registrar = None
+    if field_configs:
+        if not args.map_paint:
+            raise ValueError("--map-paint is required for a field_boundary source "
+                             "(D-484: the orientation comes from the lane paint)")
+        paint_executor = map_worker.start(load_map_paint(args.map_paint))
+        registration_loop = asyncio.get_running_loop()
+
+        async def _register(jpeg: bytes):
+            return await registration_loop.run_in_executor(
+                paint_executor, map_worker.register, jpeg)
+
+        paint_registrar = _register
+
     async with AsyncExitStack() as stack:
         for config in configs:
             publisher = await stack.enter_async_context(
@@ -306,18 +328,24 @@ async def _run_vision(args: argparse.Namespace) -> int:
                     TrackClient(config.fleet_base_url, config.sighting_token))
                 tracker = TrackWorker(camera=config.camera, ingest=ingest, client=client)
                 trackers.append(tracker)
+            calibrator = None
+            if config.camera.calibration_source == "field_boundary":
+                calibrator = FieldCalibrator(config.camera.corner_world_m)
             workers.append(VisionWorker(
                 source_id=config.camera.source_id,
                 ingest=ingest,
                 camera=config.camera,
                 publisher=publisher,
                 tracker=tracker,
+                calibrator=calibrator,
+                paint_registrar=paint_registrar if calibrator is not None else None,
             ))
         ws_server = await ingest.start(args.host, args.port,
                                        ssl_context=_server_ssl_context(args.tls_cert, args.tls_key))
         print(f"vision pipeline listening on {args.host}:{args.port}{protocol.WS_PATH} "
               f"for {len(workers)} configured sources"
-              f"{' with markerless tracking' if trackers else ''}", flush=True)
+              f"{' with markerless tracking' if trackers else ''}"
+              f"{' with field-boundary calibration' if field_configs else ''}", flush=True)
         sync = None
         if sync_settings is not None:
             loop = asyncio.get_running_loop()
@@ -351,6 +379,8 @@ async def _run_vision(args: argparse.Namespace) -> int:
             ws_server.close()
             await ws_server.wait_closed()
             ingest.close_map_worker()
+            if paint_executor is not None:
+                paint_executor.shutdown(wait=False, cancel_futures=True)
     return 0
 
 

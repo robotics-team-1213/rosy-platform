@@ -6575,6 +6575,12 @@ osy-d395-s1d\`.
 - 증거: 관련 호스트 pytest(`operations/fleet/test/test_development_session.py`, `test_cli.py`, 버전 고정 시험, `test/test_site_development_connection.py`)와 콘솔 브라우저 시험. 관제 PC에서 다른 PC 브라우저로 접속하는 FIELD 확인은 아직 하지 않았다.
 - gate 변화: SOURCE/LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
 
+
+## 2026-10-06 · uncommitted · docs: D-484 ADR과 실행 계획, API Ref v1.109
+
+- 변경: ADR D-484(필드 경계 자동 캘리브레이션)와 로그 행, 실행 계획 문서 추가. adr_gaps에 D-483(브랜치 `feat/pilot-lcd-approval-code` 소유) 등록. API Ref v1.109: sighting payload 선택 필드·미리보기 mode auto·site-map source 노출·헤더 값 문서화.
+- 증거: `rosy_harness.py lint` 0 error(ADR 행·본문 일치, 갭 선언). app.py 버전 표기 v1.109 동기 갱신(정렬 시험 대상).
+- gate 변화: 없음.
 ## 2026-10-06 · uncommitted · uiux(site): 배포 콘솔의 미인증 화면과 카메라 프레임
 
 - 변경: 기존 사이트 PC의 배포 `/console`을 읽기 전용으로 세 폭에서 렌더하고, 토큰이 없는 화면의 잠긴 조작과 관제 카메라 프레임 증가를 UI/UX 회차에 기록했다.
@@ -6610,3 +6616,28 @@ osy-d395-s1d\`.
 - 변경: 학습 검수 네 경로의 503→재시도 브라우저 검사에 320px을 더하고 좁은 폭의 재시도 버튼 너비를 확인했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-unavailable-current/` 320/390px 8장과 `logs/merge-20261006/learning-unavailable-{current,320}.txt`. 각 폭 브라우저 4 passed, `known_failures.py` 0 NEW; 네 320px 화면 원본을 육안 확인했다.
 - gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.
+- gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): Cell 빈 평면도 공백 제거
+
+- 변경: Fleet Cell의 미리보기 전·실패 상태에서 빈 팔레트 선택과 20rem 평면도를 감추고, 실제 배치가 계산됐을 때만 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/fleet-cell-empty-layout-fix/`와 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`. 변경 전 320px 1 failed, 변경 뒤 320/390/1440px 관련 브라우저 4 passed, 공용 UI·토큰 계약 62 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 작업 순서 개선. 실제 운영자 G3와 현장 장치 readback은 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): LED 행동 추가 뒤 전화 폭 재검증
+
+- 변경: Fleet 로스터의 기존 두 행동 가정 시험을 현재 세 행동과 320px 별도 전폭 행·390px 세 동등 폭 규칙에 맞췄다. 제품 스타일은 변경하지 않았다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-current\` 현재 트리 캡처 4장과 `fleet-mobile{,-updated}.txt`. 변경 전 320/390px 두 실패, 수정 뒤 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 합성 Fleet 화면의 현재 행동 집합·좁은 폭 근거를 갱신했다. 사이트 설치 빌드와 관제자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(learning): 작업·자료 등록의 응답 대기 시간
+
+- 변경: 학습 작업 목록·자료 등록도 서버 응답이 3초 넘게 보류되면 경과 초를 표시한다. 응답 전 쓰기 행동은 계속 막고 회복 뒤 다시 연다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay/learning-{learning,catalog}-delayed-{1440,800,390}.png`. 브라우저 5 passed/1 timer timeout 뒤 해당 셀 1 passed, `known_failures.py` 0 NEW, JS 구문·diff 검사 통과.
+- gate 변화: 네 학습 경로의 느린 응답 LOCAL 부분 근거가 늘었다. 값별 신선도와 실제 검수자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
+
+- 변경: 학습 작업 목록을 읽는 동안 빈 결과 설명을 숨기고 하나의 경과 시간 상태만 보이게 했다. 실패·빈 결과는 응답 후 각자 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay-clean/learning-learning-{delayed,unavailable}-390.png`, 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 정보 위계 개선. 실제 검수자 G3와 제품 전체 G2는 HOLD.

@@ -11,6 +11,14 @@ test("a fresh frame reads live, never an auth-waiting label", () => {
   assert.notEqual(raw.label, "인증 대기");
 });
 
+test("an auto-rectified frame names the field calibration (D-484)", () => {
+  const auto = frameBadge({ ok: true, status: 200, ageMs: "80", rectified: "auto" });
+  assert.deepEqual([auto.state, auto.label, auto.kind], ["live", "자동 보정 미리보기", "good"]);
+  const waiting = frameBadge({ ok: true, status: 200, ageMs: "80", rectified: false,
+    frameState: "field-unavailable" });
+  assert.deepEqual([waiting.state, waiting.label], ["live", "자동 보정 대기"]);
+});
+
 test("an old frame that still arrives reads late, not live", () => {
   const late = frameBadge({ ok: true, status: 200, ageMs: String(FRAME_LATE_MS + 1) });
   assert.deepEqual([late.state, late.kind], ["stale", "warn"]);

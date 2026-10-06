@@ -14,10 +14,12 @@ from rosy_vision.project import CameraMap
 
 _REQUIRED = {
     "source_id", "token_env", "fleet_base_url", "robot_ids",
-    "map_id", "calibration_revision", "processor_revision", "corner_marker_ids",
+    "map_id", "calibration_revision", "processor_revision",
     "corner_world_m", "robot_markers",
 }
-_ALLOWED = _REQUIRED | {"heading_edge", "phone_token_env", "credential"}
+_ALLOWED = _REQUIRED | {"heading_edge", "phone_token_env", "credential",
+                        "corner_marker_ids", "calibration_source"}
+CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
 CREDENTIAL_KINDS = ("static", "paired")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
@@ -93,16 +95,30 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
         if not isinstance(corners, list) or len(corners) != 4:
             raise ValueError(f"sources[{index}].corner_world_m must contain four x/y pairs")
         world_points = tuple(tuple(float(value) for value in point) for point in corners)
+        calibration_source = row.get("calibration_source", "corner_markers")
+        if calibration_source not in CALIBRATION_SOURCES:
+            raise ValueError(f"sources[{index}].calibration_source must be "
+                             f"{' or '.join(CALIBRATION_SOURCES)}")
+        if calibration_source == "field_boundary" and "corner_marker_ids" in row:
+            raise ValueError(f"sources[{index}] is field_boundary and must not set corner_marker_ids")
+        if calibration_source == "corner_markers" and "corner_marker_ids" not in row:
+            raise ValueError(f"sources[{index}] needs corner_marker_ids for corner_markers")
+        if calibration_source == "corner_markers":
+            marker_ids = row["corner_marker_ids"]
+            if (not isinstance(marker_ids, list) or len(marker_ids) != 4
+                    or any(type(marker_id) is not int or marker_id < 0 for marker_id in marker_ids)):
+                raise ValueError(f"sources[{index}].corner_marker_ids must contain four integer ids")
         heading_edge = tuple(row.get("heading_edge", (0, 1)))
         camera = CameraMap(
             source_id=row["source_id"],
             map_id=row["map_id"],
             calibration_revision=row["calibration_revision"],
             processor_revision=row["processor_revision"],
-            corner_marker_ids=tuple(row["corner_marker_ids"]),
+            corner_marker_ids=tuple(row["corner_marker_ids"]) if "corner_marker_ids" in row else None,
             corner_world_m=world_points,
             robot_markers=dict(robot_markers),
             heading_edge=heading_edge,
+            calibration_source=calibration_source,
         )
         if camera.source_id in source_ids:
             raise ValueError("vision source ids must be unique")

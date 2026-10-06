@@ -97,3 +97,24 @@ def test_static_without_phone_token_and_paired_with_one_refuse_start(tmp_path):
         load_vision_sources(_write(tmp_path / "c.yaml", [_source(credential="paired")]), environ=ENV)
     with pytest.raises(ValueError, match="static or paired"):
         load_vision_sources(_write(tmp_path / "c.yaml", [_source(credential="qr")]), environ=ENV)
+
+
+def test_field_boundary_source_drops_corner_markers(tmp_path):
+    row = _source(calibration_source="field_boundary")
+    del row["corner_marker_ids"]
+    config = load_vision_sources(_write(tmp_path / "c.yaml", [row]), environ=ENV)[0]
+    assert config.camera.calibration_source == "field_boundary"
+    assert config.camera.corner_marker_ids is None
+
+
+def test_field_boundary_refuses_corner_marker_ids_and_default_needs_them(tmp_path):
+    both = _source(calibration_source="field_boundary")
+    with pytest.raises(ValueError, match="must not set corner_marker_ids"):
+        load_vision_sources(_write(tmp_path / "c.yaml", [both]), environ=ENV)
+    missing = _source()
+    del missing["corner_marker_ids"]
+    with pytest.raises(ValueError, match="corner_marker_ids"):
+        load_vision_sources(_write(tmp_path / "c.yaml", [missing]), environ=ENV)
+    unknown = _source(calibration_source="paint_magic")
+    with pytest.raises(ValueError, match="calibration_source"):
+        load_vision_sources(_write(tmp_path / "c.yaml", [unknown]), environ=ENV)

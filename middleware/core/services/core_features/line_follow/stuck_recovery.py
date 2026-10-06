@@ -177,6 +177,7 @@ class StuckRecovery:
         self._angular = 0.0
         self._yield_m = 0.0
         self._last_answer: Optional[str] = None
+        self._operator_required = False
 
     @property
     def stuck_id(self) -> Optional[str]:
@@ -224,8 +225,12 @@ class StuckRecovery:
         if self._id is None:
             if inp.cause is None or inp.calibration_active:
                 return
-            self._open(inp)
-        self._console_only("local_candidates_exhausted", inp.now)
+            self._open(inp, ask=False)
+        self._operator_required = True  # D-468: no second autonomous back-off
+        if self._phase == WAITING_CONSOLE:
+            return  # already escalated: called every tick, ask once per stuck opening
+        self._console_only("attempts_exhausted" if self._attempts >= self._config.recovery_max_attempts
+                           else "local_candidates_exhausted", inp.now)
 
     # ---- console ----------------------------------------------------------------
     def answer(self, now: float, stuck_id: str, decision: str, by: str,
@@ -266,6 +271,8 @@ class StuckRecovery:
     def _answer_refusal(self, decision: str, now: float, yield_m: Optional[float] = None,
                         yield_turn_rad: Optional[float] = None) -> Optional[str]:
         last = self._last_or(now)
+        if self._operator_required and decision == "BACK_AND_RETRY":  # YIELD stays: operator-owned
+            return "lane_return_fleet_required"
         if decision == "YIELD":
             # A lost reply may be resent; an active segment must never restart its timer.
             if self._phase in (TURNING, CRAWLING):
@@ -457,7 +464,7 @@ class StuckRecovery:
         return self._local(inp, "retry")
 
     # ---- events -----------------------------------------------------------------
-    def _open(self, inp: StuckInput) -> None:
+    def _open(self, inp: StuckInput, ask: bool = True) -> None:
         self._clear()
         self._id = self._new_id()
         self._cause = inp.cause
@@ -481,6 +488,8 @@ class StuckRecovery:
                   "rear_state": inp.rear_state, "last_lane": inp.last_lane, "preview_seq": inp.preview_seq,
                   "restuck_of": self._restuck_of, "attempts": self._attempts},
         )
+        if not ask:
+            return
         if self._attempts >= self._config.recovery_max_attempts:
             self._console_only("attempts_exhausted", inp.now)
             return

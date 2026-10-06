@@ -163,6 +163,8 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
 def test_cell_panels_and_compact_actions_use_uniform_width(browser_site, width, height):
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
+    assert page.locator("#layout-preview").count() == 1
+    assert page.locator("#layout-preview").is_hidden()
     panels = [panel.bounding_box() for panel in page.locator(".documents > ui-section").all()]
     assert len(panels) == 2 and abs(panels[0]["width"] - panels[1]["width"]) <= 1
     if width < 480:
@@ -301,12 +303,14 @@ def test_cell_preview_unavailable_clears_old_result_and_recovers(browser_site, w
     page.set_viewport_size({"width": width, "height": height})
     _prepare(page)
     expect(page.locator("#summary")).to_contain_text("18회 전송")
+    expect(page.locator("#layout-preview")).to_be_visible()
     page.route("**/api/fleet/cell-app/compile",
                lambda route: route.fulfill(status=503, body="unavailable"))
     page.locator("#compile").click()
     summary = page.locator("#summary")
     expect(summary).to_contain_text("미리보기 결과 확인 불가")
     expect(summary).to_contain_text("다시 확인")
+    expect(page.locator("#layout-preview")).to_be_hidden()
     panel = page.locator("main > ui-section").first.bounding_box()
     status_box = summary.bounding_box()
     assert abs(panel["x"] - status_box["x"]) <= 1
@@ -319,6 +323,7 @@ def test_cell_preview_unavailable_clears_old_result_and_recovers(browser_site, w
     page.unroute("**/api/fleet/cell-app/compile")
     page.locator("#compile").click()
     expect(summary).to_contain_text("18회 전송")
+    expect(page.locator("#layout-preview")).to_be_visible()
 
 
 def test_delayed_compile_cannot_restore_preview_for_changed_document(browser_site):
