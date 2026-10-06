@@ -48,10 +48,12 @@ def page_site(tmp_path):
         listener.close()
 
 
-def test_view_edit_activate_and_preview_a_trip(page_site):
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     from playwright.sync_api import expect
 
     page, store, robot = page_site
+    page.set_viewport_size({"width": width, "height": height})
     expect(page).to_have_title("Rosy Fleet · 현장 지도")
     expect(page.locator("ui-brand")).to_contain_text("Rosy Fleet")
     page.locator("#credential input").fill("operator-token")
@@ -85,10 +87,14 @@ def test_view_edit_activate_and_preview_a_trip(page_site):
     assert next(e for e in active.edges if e.id == "ring_n").direction == "two_way"
 
     page.locator("#trip-pick").check()
-    page.locator("#site-map-svg").click(position={"x": 5, "y": 5})
+    page.locator(".map-viewport").evaluate("element => element.scrollLeft = 0")
+    page.locator(".map-viewport").click(position={"x": 5, "y": 5})
     expect(page.locator("#trip-point")).to_contain_text("찍은 좌표 x")
     page.locator("#trip-plan").click()
-    expect(page.locator("#trip-summary")).to_contain_text("차로 폭 두 배 안에 차로가 없습니다")
+    if width >= 1024:
+        expect(page.locator("#trip-summary")).to_contain_text("차로 폭 두 배 안에 차로가 없습니다")
+    else:
+        expect(page.locator("#trip-summary")).to_contain_text("실행하지 않음")
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -103,10 +109,16 @@ def test_site_map_fits_declared_widths(page_site, width, height):
     sizes = page.evaluate("""() => ({
       overflow: document.documentElement.scrollWidth - innerWidth,
       map: document.querySelector('#site-map-svg').getBoundingClientRect().width,
+      label: document.querySelector('#site-map-svg .label').getBoundingClientRect().height,
+      mapWindow: document.querySelector('.map-viewport').clientWidth,
+      mapContent: document.querySelector('.map-viewport').scrollWidth,
       edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().width,
       trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().width,
       stop: document.querySelector('#estop').getBoundingClientRect().right
     })""")
     assert sizes["overflow"] <= 0, sizes
+    assert sizes["label"] >= 12, sizes
+    if width < 1024:
+        assert sizes["mapWindow"] <= width and sizes["mapContent"] > sizes["mapWindow"], sizes
     assert abs(sizes["edit"] - sizes["trip"]) <= 1, sizes
     assert sizes["stop"] <= width, sizes

@@ -373,12 +373,14 @@ G3 여덟 항목은 세 표면 모두 **미완료**다. 아래는 이번 회차�
 
 `/console/site-map`은 Fleet의 새 활성 절차 화면이다. D-487의 표시 이름 계약에 맞춰 탭 제목·머리 워드마크·홈 접근성 이름을 `Rosy Fleet`으로 바로잡았다. 기존 happy-path 브라우저 검사는 변경 전 이름 검사에서 1 failed였고 수정 후 **4 passed**, `known_failures.py` **0 NEW**였다. 1440×1000·390×844·320×568에서 접속 후 가로 넘침 0, 초안 편집/경로 미리보기 칸 폭 차이 ≤1px, 비상 정지의 화면 내 위치를 확인했다. 접속 전·접속 후·경로 미리보기 9장과 계측은 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-g2\site-map-*.png`, `site-map-capture.py`, `site-map-green.txt`에 있다. 320px 지도 글씨는 축소되어 실사용 판독이 아직 검증되지 않았다. 초안 저장·활성화 확인, 오류·지연·권한·연결 끊김의 선언 폭별 G2와 사용자 G3는 **HOLD**다. 이 캡처는 합성 서버의 LOCAL 근거이고 실제 사이트 설치·장치 readback이 아니다.
 
+후속 320px 판독 수정에서 지도 SVG를 좁은 화면의 내부 가로 스크롤에 두고 밀기 안내를 지도 위에 표시했다. 같은 `#site-map-svg .label`의 화면 높이는 변경 전 390px **6px**·320px **5px**, 변경 후 둘 다 **14px**이며 1440px도 **14px**이다. 세 폭 모두 문서 가로 넘침 0, 비상 정지는 화면 너비 안이고, 장소·차로 편집→활성화→경로 미리보기의 브라우저 **6 passed**, `known_failures.py` **0 NEW**다. X: `2026-10-07--051846--site-map-legibility--f6d38f/evidence/site-map-*.png` 9장과 `logs/{capture-final,full-mobile-verified}.txt`가 LOCAL 원본이다. 320px에서 지도 전체는 한 번에 보이지 않으므로 실제 사용자의 밀기·라벨 판독 G3와 사이트 화면은 여전히 **HOLD**다.
+
 현재 `shared/web/surfaces.yaml`의 표면을 제품 UI/UX 목표와 대조하면 다음과 같다. **부분 근거는 GO가 아니다.** 신규 표면의 선언 상태·뷰포트 카드는 D-153 재평가 트리거로 채워야 한다.
 
 | 등록 표면 | 이번 회차의 범위 | 다음 판정 증거 |
 |---|---|---|
 | `robot` | `/dashboard`·`/console`·`/setup`·`/device` 중 운용·작업 준비 LOCAL 부분 근거 | 역할·상태 G2 잔여 셀, 작업 완료 G3, 실물 readback |
-| `console` | Fleet 운용 화면과 새 `/console/site-map`의 LOCAL 부분 근거 | 현장 지도의 작은 글씨 판독, 선언 상태 G2 잔여 셀, 사이트 PC·카메라 readback, G3 |
+| `console` | Fleet 운용 화면과 새 `/console/site-map`의 LOCAL 부분 근거 | 현장 지도 좌우 이동·실사용 판독, 선언 상태 G2 잔여 셀, 사이트 PC·카메라 readback, G3 |
 | `game-board` | LOCAL 부분 근거 | 모든 상태 G2, 실제 경기 관측, G3 |
 | `pilot` | 현재 트리의 주행 4폭·팔·대상 오류 LOCAL 부분 근거 | 선언 상태 전체 G2, 전화 회전 조작 발견 가능성·운전자 G3; [DEVICE 기능 확인](../pilot-device-user-confirmed-2026-10-05/README.md)은 별도 |
 | `robot-face` | 웨이크·주행 카드 호스트 PIL 이미지와 [G3 부분 독회](#로봇-얼굴-g3-독회--local-진행-중) | 실제 설치 LCD 사진·거리/각도/조도 판독, 카드 전이·G3 |
