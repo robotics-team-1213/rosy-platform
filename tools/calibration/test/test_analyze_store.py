@@ -75,7 +75,7 @@ def test_a_kept_base_height_keeps_no_height_band(monkeypatch):
 def test_only_fitted_heights_are_averaged_and_banded(monkeypatch):
     # The best run kept the base height; two others fitted it. The height is the fitted
     # runs' mean and its band the widest fitted run's (or their ci95), never None.
-    runs = [_base(_cam_run(11.2, -1.5, 0.06343, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": 0.0125}, 900)),
+    runs = [_base(_cam_run(12.9, -1.5, 0.06343, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": 0.0125}, 900)),
             _cam_run(11.3, -1.5, 0.0600, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": 0.002}),
             _cam_run(11.1, -1.5, 0.0602, {"pitch_deg": 0.2, "roll_deg": 0.2, "height_m": 0.003})]
     cam = _combine(runs, monkeypatch)["camera"]
@@ -84,6 +84,9 @@ def test_only_fitted_heights_are_averaged_and_banded(monkeypatch):
     ci95 = cam["across_runs"]["height_m"]["ci95"]
     assert cam["across_runs"]["height_m"]["n"] == 2
     assert cam["uncertainty"]["height_m"] == pytest.approx(max(0.003, ci95))
+    # Pitch and roll too: the base-height run fitted them at the wrong height.
+    assert math.degrees(cam["pitch_rad"]) == pytest.approx(11.2, abs=1e-3)  # candidate rounds to 1e-5 rad
+    assert cam["across_runs"]["pitch_rad"]["n"] == 2
 
 
 def test_store_records_the_fit_step_and_the_pc_fit_uses_pc_steps(tmp_path):
@@ -96,3 +99,10 @@ def test_store_records_the_fit_step_and_the_pc_fit_uses_pc_steps(tmp_path):
     ids = AS.store_candidates(CalibrationStore(tmp_path), "rosy-x", cand)
     rec = CalibrationStore(tmp_path).load("rosy-x", "camera_profile", ids["camera_profile"])
     assert rec["intervals"]["fit_step"] == AS.CE.PC_FINE_STEPS
+
+
+def test_t95_is_the_student_t_table_to_30_dof():
+    from student_t import t95
+    assert t95(1) == 12.706 and t95(4) == 2.776 and t95(15) == 2.131 and t95(30) == 2.042
+    assert t95(31) == 1.96 and t95(0) == math.inf
+    assert AS.t95 is t95
