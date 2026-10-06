@@ -371,7 +371,7 @@ def run_console(args: argparse.Namespace) -> None:
     if mission_api and site_users is None:
         sys.exit("--users-file is required with --mission-api for named operator authorization")
     development_sessions = None
-    if args.connection_mode == "development":
+    if getattr(args, "connection_mode", "paired") == "development":
         # D-473 1: both settings or nothing; a missing one keeps paired, never the other way round.
         if os.environ.get("ROSY_DEPLOYMENT", "").strip() != "development":
             print("warning: --connection-mode development ignored: ROSY_DEPLOYMENT is not development",
