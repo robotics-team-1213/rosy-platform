@@ -44,12 +44,12 @@ class BoundedPeer(unittest.TestCase):
     def sign(self, context, body):
         return base64.b64encode(self.key.sign(transcript(context, body), ec.ECDSA(hashes.SHA256()))).decode()
 
-    def request(self, nonce="a" * 64):
+    def request(self, nonce="a" * 64, source="fixture-lan-peer"):
         info = self.receiver.identity()
         fields = {"receiver_id": info["receiver_id"], "receiver_key_sha256": info["receiver_key_sha256"],
                   "client_id": "tablet-a", "label": "Tablet", "client_public_key": self.pub,
                   "role": "operator", "nonce": nonce}
-        return self.receiver.request(fields, self.sign("request", fields), "fixture-lan-peer")
+        return self.receiver.request(fields, self.sign("request", fields), source)
 
     def grant(self):
         request = self.request()
@@ -131,10 +131,10 @@ class BoundedPeer(unittest.TestCase):
         self.receiver.cancel(first["request_id"], first["request_secret"])
         with self.assertRaises(Refused):
             self.receiver.decide(self.owner_id, first["request_id"], "approve", 0)
-        for n in range(15):
-            self.request(f"{n+1:064x}")
+        for n in range(16):  # D-483 M1: the cancelled request no longer holds a slot
+            self.request(f"{n+1:064x}", f"fixture-lan-{n}")
         with self.assertRaises(Refused):
-            self.request("f" * 64)
+            self.request("f" * 64, "fixture-lan-x")
         # Fresh instance clears pending; existing grant must retain exact receiver identity.
         self.receiver = PeerReceiver("rosy_01", Path(self.tmp.name) / "identity.pem", self.repo, clock=lambda: self.now)
         _, grant = self.grant()
@@ -412,8 +412,12 @@ class ScreenCodeApproval(unittest.TestCase):
                                      clock=lambda: self.now, display_dir=str(self.display))
         self.file = self.display / "approval.json"
 
-    def code(self):
-        return json.loads(self.file.read_text(encoding="utf-8"))["approval_code"]
+    def shown(self):
+        return json.loads(self.file.read_text(encoding="utf-8"))["requests"]
+
+    def code(self, display_code=None):
+        rows = self.shown()
+        return next(r["approval_code"] for r in rows if display_code in (None, r["display_code"]))
 
     def wrong(self, code):
         alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
@@ -429,7 +433,7 @@ class ScreenCodeApproval(unittest.TestCase):
         with self.assertLogs("core_api_web.api.peer_pairing", "DEBUG") as logs:
             logging.getLogger("core_api_web.api.peer_pairing").debug("fixture marker")
             request = self.request()
-            shown = json.loads(self.file.read_text(encoding="utf-8"))
+            shown, = self.shown()
             code = shown["approval_code"]
             self.assertEqual({"display_code", "approval_code", "label", "expires_at"}, set(shown))
             self.assertEqual((request["display_code"], "Tablet"), (shown["display_code"], shown["label"]))
@@ -518,13 +522,39 @@ class ScreenCodeApproval(unittest.TestCase):
             with self.subTest(name=name):
                 outcome(name)
 
-    def test_newest_pending_request_is_shown(self):
-        first = self.request("1" * 64)
-        self.now += timedelta(seconds=1)
-        second = self.request("2" * 64)
-        self.assertEqual(second["display_code"], json.loads(self.file.read_text())["display_code"])
-        self.receiver.cancel(second["request_id"], second["request_secret"])
-        self.assertEqual(first["display_code"], json.loads(self.file.read_text())["display_code"])
+    def test_a_newer_request_never_hides_an_older_one(self):
+        made = []
+        for n, source in enumerate(("lan-a", "lan-b", "lan-c", "lan-d")):
+            made.append(self.request(f"{n+1:064x}", source))
+            self.now += timedelta(seconds=1)
+        shown = [r["display_code"] for r in self.shown()]
+        self.assertEqual([r["display_code"] for r in reversed(made[1:])], shown)  # three, newest first
+        self.receiver.cancel(made[3]["request_id"], made[3]["request_secret"])
+        self.assertEqual([r["display_code"] for r in reversed(made[:3])], [r["display_code"] for r in self.shown()])
+        # Each requester's own code sits next to its own display code.
+        first = made[0]
+        self.receiver.confirm(first["request_id"], first["request_secret"], self.code(first["display_code"]), "lan-a")
+
+    def test_pending_limits_count_live_requests_per_source_and_overall(self):
+        self.request("1" * 64)
+        self.request("2" * 64)
+        with self.assertRaises(Refused):
+            self.request("3" * 64)  # a third live request from the same source
+        for n in range(14):
+            self.request(f"{n + 16:064x}", f"lan-{n}")
+        with self.assertRaises(Refused):
+            self.request("f" * 64, "lan-x")  # sixteen live overall
+        # Terminal rows do not count: cancelling frees a slot at once.
+        for row_id, row in list(self.receiver._pending.items())[:2]:
+            row["state"] = "cancelled"
+        self.request("e" * 64, "lan-x")
+        self.request("d" * 64)
+
+    def test_startup_removes_a_leftover_hand_over(self):
+        self.file.write_text('{"requests": []}', encoding="utf-8")
+        PeerReceiver("rosy_01", Path(self.tmp.name) / "identity.pem", self.repo,
+                     clock=lambda: self.now, display_dir=str(self.display))
+        self.assertFalse(self.file.exists())
 
     def test_unwritable_display_never_breaks_the_request(self):
         self.receiver = PeerReceiver("rosy_01", Path(self.tmp.name) / "identity.pem", self.repo,
@@ -536,12 +566,79 @@ class ScreenCodeApproval(unittest.TestCase):
         self.assertEqual(1, len(logs.output))
         self.assertEqual("pending", request["state"])
 
-    def request(self, nonce="a" * 64):
+    def request(self, nonce="a" * 64, source="fixture-lan-peer"):
         info = self.receiver.identity()
         self.last_fields = {"receiver_id": info["receiver_id"], "receiver_key_sha256": info["receiver_key_sha256"],
                             "client_id": "tablet-a", "label": "Tablet", "client_public_key": self.pub,
                             "role": "operator", "nonce": nonce}
-        return self.receiver.request(self.last_fields, self.sign("request", self.last_fields), "fixture-lan-peer")
+        return self.receiver.request(self.last_fields, self.sign("request", self.last_fields), source)
+
+    def screen_grant(self):
+        request = self.request()
+        decision = self.receiver.confirm(request["request_id"], request["request_secret"], self.code(), "fixture")
+        return decision["relationship_id"]
+
+    def test_revoking_a_screen_code_relationship_ends_its_session(self):
+        grant = self.screen_grant()
+        fields = self.receiver.challenge(grant)["fields"]
+        issued = self.receiver.session(grant, fields, self.sign("session-request", fields))
+        self.assertTrue(deps.token_alive(self.svc.config, issued["id"]))
+        self.receiver.revoke(self.owner_id, grant)
+        self.assertFalse(deps.token_alive(self.svc.config, issued["id"]))  # live-socket recheck
+        with self.assertRaises(ApiError) as result:  # HTTP
+            deps.authenticate(self.svc.config, "Bearer " + issued["token"], None)
+        self.assertEqual(401, result.exception.http_status)
+        with self.assertRaises(Refused):
+            self.receiver.challenge(grant)
+
+    def test_relationship_model_rejects_malformed_screen_code_rows(self):
+        from core_common.protocol.peer_pairing import Relationship
+        grant = self.screen_grant()
+        good = self.repo.grants()[grant]
+        Relationship(**good)
+        approved = datetime.fromisoformat(good["approved_at"])
+        for change in ({"persistent": True, "expires_at": None}, {"expires_at": None},
+                       {"issuer_digest": "0" * 64}, {"issuer_id": self.owner_id}, {"approved_by": "owner"},
+                       {"issuer_source": "manual"}, {"persist_requested": True}, {"approved_at": None},
+                       {"expires_at": (approved + timedelta(hours=168, seconds=1)).isoformat()},
+                       {"expires_at": approved.isoformat()}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                Relationship(**dict(good, **change))
+
+    def test_screen_code_token_id_is_reserved(self):
+        record = dict(deps.stored_token_entries([deps.new_token_record("fixture-reserved-secret", "administrator")])[0],
+                      id="screen-code")
+        config = {"auth": {"tokens": [record]}}
+        self.assertEqual([], deps.auth_entries(config))
+
+    def test_dead_relationships_are_pruned_at_capacity_with_an_audit_row(self):
+        from core_common.protocol.peer_pairing import Relationship
+        grant = self.screen_grant()
+        template = self.repo.grants()[grant]
+        expired = (self.now - timedelta(hours=1)).isoformat()
+        def fill(grants, tokens, document):
+            for n in range(127):
+                key = f"{n:032d}"
+                grants[key] = dict(template, id=key, approved_at=(self.now - timedelta(hours=2)).isoformat(),
+                                   expires_at=expired, session_ids=[])
+        self.repo.update(fill, "fixture_fill")
+        self.assertEqual(128, len(self.repo.grants()))
+        self.now += timedelta(seconds=1)
+        self.screen_grant_from("b" * 64)
+        grants = self.repo.grants()
+        self.assertLessEqual(len(grants), 128)
+        self.assertNotIn("0" * 32, grants)
+        actions = [row["action"] for row in self.svc.config["auth"]["peer_pairing"]["audit"]]
+        self.assertIn("relationship_pruned", actions)
+        import yaml
+        on_disk = yaml.safe_load(self.path.read_text(encoding="utf8"))["auth"]["peer_pairing"]["grants"]
+        self.assertEqual(set(grants), set(on_disk))  # the prune reaches the overlay, not only memory
+        Relationship(**grants[next(iter(grants))])
+
+    def screen_grant_from(self, nonce):
+        request = self.request(nonce)
+        return self.receiver.confirm(request["request_id"], request["request_secret"],
+                                     self.code(request["display_code"]), "fixture")["relationship_id"]
 
     def test_screen_code_relationship_is_bounded_and_serves_challenge_and_session(self):
         request = self.request()
@@ -575,9 +672,10 @@ class ScreenCodeApproval(unittest.TestCase):
     def test_confirm_shares_the_source_rate_limit(self):
         request = self.request()  # the request itself counts against "fixture-lan-peer"
         code = self.code()
-        for _ in range(29):
+        for _ in range(29):  # wrong codes, then a rejected request: refused but not rate limited
             with self.assertRaises(Refused) as refused:
-                self.receiver.confirm(request["request_id"], request["request_secret"], "222222", "fixture-lan-peer")
+                self.receiver.confirm(request["request_id"], request["request_secret"], self.wrong(code),
+                                      "fixture-lan-peer")
             self.assertNotIsInstance(refused.exception, RateLimited)
         with self.assertRaises(RateLimited):
             self.receiver.confirm(request["request_id"], request["request_secret"], code, "fixture-lan-peer")

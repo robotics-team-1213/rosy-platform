@@ -16,8 +16,14 @@ from core_common.protocol.peer_pairing import (APPROVAL_CODE_ALPHABET, APPROVAL_
 _log = logging.getLogger(__name__)
 #: D-483 4: wrong approval codes per request before it is rejected.
 APPROVAL_CODE_ATTEMPTS = 5
-#: D-483 3: the hand-over file rosy-face reads (newest pending request only).
+#: D-483 3: the hand-over file rosy-face reads (live pending requests, newest first).
 DISPLAY_FILE = "approval.json"
+DISPLAY_REQUESTS = 3
+#: D-483 4: live pending requests overall and per source; terminal rows do not count.
+PENDING_LIMIT, SOURCE_PENDING_LIMIT = 16, 2
+#: Rows kept for status reads (pending + terminal); the oldest terminal rows go first.
+ROW_LIMIT = 256
+_UNSYNCED = object()
 
 
 class Refused(ValueError):
@@ -48,7 +54,7 @@ class PeerReceiver:
         self.receiver_id, self.repo, self.clock = receiver_id, repository, clock
         # D-483 3: None (tests, hosts without an LCD hand-over) writes no display file.
         self._display_dir = display_dir
-        self._display_shown = None
+        self._display_shown = _UNSYNCED  # L1: the first sync always writes or removes the file
         self._display_warned = False
         self._anchor = anchor or (lambda: {})
         self._lock = threading.RLock()
@@ -57,6 +63,7 @@ class PeerReceiver:
         self._pending = {}
         self._rates = {}
         self._challenges = {}
+        self._sync_display()  # A file a previous CORE left behind names no live request.
 
     def identity(self):
         return {"receiver_id": self.receiver_id, "receiver_public_key": self._identity.public_key,
@@ -71,15 +78,17 @@ class PeerReceiver:
         self._sync_display()
 
     def _sync_display(self):
-        """D-483 3: approval.json holds the newest pending request, or is absent. Called under the lock."""
+        """D-483 3: approval.json lists up to three live pending requests (newest first), or is absent.
+
+        A newer request never hides an older one, so each requester finds the code next to its own
+        display code. Called under the lock (or from __init__).
+        """
         if self._display_dir is None:
             return
-        now = self.clock()
-        live = [row for row in self._pending.values() if row["state"] == "pending" and now < row["expires"]]
-        newest = max(live, key=lambda row: row["created"], default=None)
-        shown = None if newest is None else {
-            "display_code": newest["display_code"], "approval_code": newest["approval_code"],
-            "label": newest["fields"]["label"], "expires_at": newest["expires"].isoformat()}
+        live = sorted(self._live(), key=lambda row: row["created"], reverse=True)[:DISPLAY_REQUESTS]
+        shown = {"requests": [{"display_code": row["display_code"], "approval_code": row["approval_code"],
+                               "label": row["fields"]["label"], "expires_at": row["expires"].isoformat()}
+                              for row in live]} if live else None
         if shown == self._display_shown:
             return
         target = os.path.join(self._display_dir, DISPLAY_FILE)
@@ -103,6 +112,11 @@ class PeerReceiver:
                 self._display_warned = True
                 _log.warning("peer approval display hand-over unavailable (%s)", type(exc).__name__)
 
+    def _live(self, source=None):
+        now = self.clock()
+        return [row for row in self._pending.values() if row["state"] == "pending" and now < row["expires"]
+                and (source is None or row["source"] == source)]
+
     def _admit_source(self, source):
         if len(self._rates.get(source, [])) >= 30 or (source not in self._rates and len(self._rates) >= 128):
             raise RateLimited("source rate limit reached")
@@ -124,8 +138,16 @@ class PeerReceiver:
             raise Refused("request proof rejected") from exc
         with self._lock:
             self._prune()
-            if len(self._pending) >= 16:
+            if len(self._live()) >= PENDING_LIMIT:
                 raise Refused("request limit reached")
+            if len(self._live(source)) >= SOURCE_PENDING_LIMIT:
+                raise Refused("source pending limit reached")
+            if len(self._pending) >= ROW_LIMIT:
+                ended = sorted((k for k, v in self._pending.items() if v["state"] != "pending"),
+                               key=lambda k: self._pending[k]["created"])
+                if not ended:
+                    raise Refused("request limit reached")
+                del self._pending[ended[0]]
             if any(v["fields"]["client_public_key"] == fields["client_public_key"] and
                    v["fields"]["nonce"] == fields["nonce"] for v in self._pending.values()):
                 raise Refused("request replay")
@@ -133,7 +155,7 @@ class PeerReceiver:
             request_id, secret = secrets.token_urlsafe(24), secrets.token_urlsafe(32)
             row = {"fields": fields, "secret_hash": hashlib.sha256(secret.encode()).digest(),
                    "revision": 0, "state": "pending", "expires": now+timedelta(seconds=300),
-                   "keep_until": now+timedelta(seconds=600), "created": now,
+                   "keep_until": now+timedelta(seconds=600), "created": now, "source": source,
                    "display_code": ''.join(secrets.choice('23456789ABCDEFGHJKMNPQRSTUVWXYZ') for _ in range(4))}
             # D-483 2: the plaintext stays in this row for the LCD hand-over only; checks use the hash.
             row["approval_code"] = ''.join(secrets.choice(APPROVAL_CODE_ALPHABET) for _ in range(APPROVAL_CODE_LENGTH))
@@ -267,7 +289,7 @@ class PeerReceiver:
                             "persist_requested": False, "persistent": False,
                             "issuer_id": SCREEN_CODE_ISSUER, "issuer_source": SCREEN_CODE_ISSUER,
                             "issuer_digest": self._identity.fingerprint, "approved_by": SCREEN_CODE_ISSUER,
-                            "revoked": False, "used_challenges": [],
+                            "revoked": False, "used_challenges": [], "approved_at": self.clock().isoformat(),
                             "expires_at": (self.clock()+timedelta(hours=168)).isoformat()}
             try:
                 persisted = self.repo.approve_screen_code(relationship, row["expires"])

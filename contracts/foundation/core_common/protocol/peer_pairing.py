@@ -1,5 +1,5 @@
 """Candidate typed wire input; request consent is not a control grant."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -38,6 +38,8 @@ APPROVAL_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
 APPROVAL_CODE_LENGTH = 6
 #: D-483: the issuer marker of a relationship approved by the robot-screen code.
 SCREEN_CODE_ISSUER = "screen-code"
+#: D-483 5: a screen-code approval never outlives this.
+SCREEN_CODE_LIFETIME = timedelta(hours=168)
 
 
 class ApprovalCodeConfirm(Strict):
@@ -133,6 +135,8 @@ class Relationship(Strict):
     expires_at: str | None = Field(max_length=64)
     used_challenges: list[str] = Field(max_length=64)
     session_ids: list[str] = Field(default_factory=list, max_length=8)
+    #: D-483 L2: when a screen-code approval was made; bounds its lifetime. None on owner approvals.
+    approved_at: str | None = Field(default=None, max_length=64)
 
     @model_validator(mode='after')
     def persistent_authority_shape(self):
@@ -143,11 +147,14 @@ class Relationship(Strict):
         # D-483 5: a screen-code approval is always bounded and names no token issuer.
         screen = SCREEN_CODE_ISSUER in (self.issuer_source, self.issuer_id, self.approved_by)
         if screen and not (self.issuer_source == self.issuer_id == self.approved_by == SCREEN_CODE_ISSUER
-                           and self.issuer_digest == self.receiver_key_sha256 and self.expires_at is not None):
+                           and self.issuer_digest == self.receiver_key_sha256 and self.expires_at is not None
+                           and self.approved_at is not None and not self.persist_requested
+                           and timedelta(0) < datetime.fromisoformat(self.expires_at)
+                           - datetime.fromisoformat(self.approved_at) <= SCREEN_CODE_LIFETIME):
             raise ValueError('screen-code approval shape mismatch')
         return self
 
-    @field_validator("expires_at")
+    @field_validator("expires_at", "approved_at")
     @classmethod
     def aware_expiry(cls, value):
         if value is not None and datetime.fromisoformat(value).utcoffset() is None:

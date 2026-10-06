@@ -83,6 +83,17 @@ class OverlayRepository:
                 raise RepositoryDenied("invalid relationship store")
             tokens = [r for r in deps.auth_entries(document) if not deps.is_expired(r, self.clock())]
             result = mutate(state["grants"], tokens, document)
+            pruned = []
+            if len(state["grants"]) > 128:
+                # D-483 M2: routine 168 h re-approval must not fill the cap. Only dead rows go:
+                # expired or revoked, with no live child session, never the row being changed.
+                live = {r["id"] for r in tokens}
+                pruned = [k for k, g in state["grants"].items() if k != grant_id
+                          and (g.get("revoked") or (g.get("expires_at") is not None
+                               and datetime.fromisoformat(g["expires_at"]) <= self.clock()))
+                          and not live & set(g.get("session_ids", []))]
+                for key in pruned:
+                    del state["grants"][key]
             if len(state["grants"]) > 128:
                 raise RepositoryDenied("relationship capacity reached")
             try:
@@ -95,11 +106,15 @@ class OverlayRepository:
             grant = state["grants"].get(grant_id, {})
             if actor is None:
                 actor = deps.principal_ref(self._owner(document, actor_id)) if actor_id else "receiver:key-proof"
-            state["audit"] = (state.get("audit", []) + [{"at": self.clock().isoformat(), "actor": actor,
+            removed = [{"at": self.clock().isoformat(), "actor": "receiver:capacity", "action": "relationship_pruned",
+                        "relationship_id": key, "generation": None, "relationship_count": len(state["grants"])}
+                       for key in pruned]
+            state["audit"] = (state.get("audit", []) + removed + [{"at": self.clock().isoformat(), "actor": actor,
                               "action": action, "relationship_id": grant_id, "generation": grant.get("generation"),
                               "relationship_count": len(state["grants"])}])[-256:]
-            # Relationships are retained on expiry/revoke; no deep-merge deletion.
-            patch_locked({"auth": {"tokens": stored, "peer_pairing": state}}, self.path)
+            # Relationships are retained on expiry/revoke; only a capacity prune removes rows.
+            patch_locked({"auth": {"tokens": stored, "peer_pairing": state}}, self.path,
+                         replace=("auth", "peer_pairing", "grants") if pruned else ())
             self.svc.config["auth"] = dict(auth, tokens=stored, peer_pairing=state)
             return result
 
