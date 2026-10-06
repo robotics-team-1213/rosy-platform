@@ -328,6 +328,7 @@ def test_review_waiting_workspace_hides_stale_editing(
     expect(page.locator(empty)).to_be_visible()
     expect(page.locator(content)).to_be_hidden()
     expect(page.locator(prepare)).to_be_disabled()
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     assert pending
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path
