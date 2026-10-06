@@ -719,8 +719,10 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1133,
-        "accept: re-judged at 1133 on 2026-10-06 for D-483: the pair-request approval-code card "
+        1140,
+        "accept: re-judged at 1140 on 2026-10-07. An accepted fleet identify plays two "
+        "1400 Hz beeps from this same buzzer owner and leaves the health sound in place. "
+        "Re-judged at 1133 on 2026-10-06 for D-483: the pair-request approval-code card "
         "is one more status row of the same LCD owner; its strict reader and priority live in "
         "core_common.face_screen, rosy-face only passes the file and draws the notice. "
         "Re-judged at 1119 on 2026-10-06: bounded LED identity pulse joins the "
