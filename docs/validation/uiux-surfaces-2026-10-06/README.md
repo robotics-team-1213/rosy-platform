@@ -87,7 +87,9 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 작업 취소는 기존에 첫 클릭으로 요청을 보냈다. 지금은 작업 ID와 「실행 중인 장치를 정지하지 않습니다」 경고를 확인창에 표시한다. 1440×1000·390×844·320×568에서 취소 버튼을 누르고 확인창을 캡처했다(X: `captures/fleet-cell/fleet-cell-cancel-confirm-{1440x1000,390x844,320x568}.png`). 확인창의 취소는 POST 0, 비상 정지는 확인창을 닫고 즉시 누를 수 있으며, 「작업 취소」 확인 뒤에는 취소 POST 1이다. 320px에서는 로그인 뒤 긴 세션 이름이 비상 정지와 제품 이름·접속 버튼을 밀어 겹치던 문제도 머리의 좁은 폭 격자로 고쳤다. 세 폭 브라우저 **3 passed**, Cell 브라우저 전체 **15 passed**, Fleet 계약 **21 passed**, 현재 트리 G1 **90 passed**, 각 성공 실행의 `known_failures.py` **0 NEW**다. Cell의 새 공용 확인 모듈을 수입 허용 목록에 반영하기 전에는 계약 1건이 실패했고, 반영 뒤 재실행에서 통과했다. 원본은 X: `logs/fleet-cell-cancel-{3widths-final,full-final,contracts-final}.txt`, `logs/g1-after-cell-cancel.txt`다. 이 경로는 로컬 Cell API와 합성 Fleet 응답의 UI 근거이며 실제 장치 정지는 검증하지 않았다.
 
-G2는 문서 없음·첫 기동, 증거 `fresh/delayed/disconnected/unavailable`, 권한 거부·저장/컴파일 실패, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
+저장된 문서 목록의 접속 전·조회 중·빈 목록·조회 실패·다시 접속·문서 존재 상태를 로컬 브라우저에서 재생했다. 1440×1000·390×844·320×568의 빈 목록은 다음 작성 단계를 표시하고 가로 넘침이 없었다. 320px에서 목록 API 503은 실패와 재시도를 알리며, 복구 후 문서 두 개가 보인다. 자격 증명을 바꾸면 이전 접속의 목록을 즉시 숨긴다. 해당 브라우저 **5 passed**, Cell 전체 **19 passed**, Cell API **8 passed**, 공용 UI 계약 **231 passed, 25 skipped**, 각 성공 실행의 `known_failures.py` **0 NEW**다. 원본은 X: `captures/fleet-cell/fleet-cell-empty-{1440x1000,390x844,320x568}.png`, `fleet-cell-list-error-320x568.png`, 실행 기록은 `logs/fleet-cell-list-{focus,full,api,shared}.txt`다. 합성 서버 응답에 대한 LOCAL G2 부분 근거다.
+
+G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나머지 경로, 권한 거부·저장/컴파일 실패, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
 
 ### Fleet G3 독회 — LOCAL 진행 중
 

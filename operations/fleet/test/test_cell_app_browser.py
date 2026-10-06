@@ -138,6 +138,52 @@ def test_cell_emergency_stop_uses_console_session_and_reports_uncertainty(browse
     assert all(request.headers.get("authorization") == "Bearer operator-secret" for request in sent)
 
 
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_saved_documents_explains_first_and_empty_states(browser_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
+    status = page.locator("#saved-status")
+    expect(status).to_contain_text("접속하면 저장된 문서를 확인할 수 있습니다")
+    page.locator("#credential input").fill("operator-secret")
+    page.locator("#connect").click()
+    expect(status).to_contain_text("저장된 문서가 없습니다")
+    expect(status).to_contain_text("레시피와 셀 문서를 작성하고 저장하세요")
+    assert page.locator("#saved").is_hidden()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        status.scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / f"fleet-cell-empty-{width}x{height}.png"))
+
+
+def test_cell_saved_documents_failure_retry_and_credential_change(browser_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": 320, "height": 568})
+    page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(status=503, body="unavailable"))
+    page.locator("#credential input").fill("operator-secret")
+    page.locator("#connect").click()
+    status = page.locator("#saved-status")
+    expect(status).to_have_attribute("state", "error")
+    expect(status).to_contain_text("접속 상태를 확인하고 다시 시도하세요")
+    assert page.locator("#saved").is_hidden()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        status.scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / "fleet-cell-list-error-320x568.png"))
+    page.unroute("**/api/fleet/cell-app/documents")
+    page.locator("#connect").click()
+    expect(status).to_have_attribute("state", "empty")
+    _prepare(page)
+    expect(page.locator("#saved li")).to_have_count(2)
+    expect(status).to_be_hidden()
+    page.locator("#credential input").fill("different-token")
+    expect(status).to_have_attribute("state", "unavailable")
+    assert page.locator("#saved").is_hidden()
+
+
 def test_delayed_compile_cannot_restore_preview_for_changed_document(browser_site):
     from playwright.sync_api import expect
 
@@ -371,6 +417,7 @@ def test_saved_structured_controls_stay_locked_until_list_read_finishes(browser_
 
     def delayed_list(route):
         response = route.fetch()
+        assert page.locator("#saved-status").get_attribute("state") == "pending"
         locked.append(page.evaluate("""() => {
             const fields = [...document.querySelectorAll('#recipe-structure input, #recipe-structure select')];
             const before = document.getElementById('recipe-document').value;
@@ -385,3 +432,5 @@ def test_saved_structured_controls_stay_locked_until_list_read_finishes(browser_
     page.locator("#recipe-save").click()
     expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
     assert locked == [True]
+    expect(page.locator("#saved li")).to_have_count(2)
+    expect(page.locator("#saved-status")).to_be_hidden()

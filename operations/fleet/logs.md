@@ -2013,3 +2013,9 @@
 - 변경: Cell 작업 취소 전에 작업 ID·장치 정지 아님을 명시하는 공용 확인창을 열고, 취소·정지·계정 변경 시에는 작업 취소 요청을 보내지 않는다. 좁은 화면의 비상 정지를 머리 첫 줄에 두고 로그인 뒤 긴 세션 이름이 제품 이름·접속 버튼을 밀지 않게 폭을 제한했다.
 - 증거: 1440/390/320px 확인·취소 POST 0·정지 가용성·확인 POST 1 브라우저 3 passed, Cell 브라우저 전체 15 passed, Fleet 계약 21 passed, G1 90 passed, 각 성공 실행 `known_failures.py` 0 NEW. 공용 확인 모듈을 Cell 수입 허용 목록에 추가하기 전 Fleet 계약 1건이 실패했고 수정 후 통과했다. 원본 X: `captures/fleet-cell/fleet-cell-cancel-confirm-{1440x1000,390x844,320x568}.png`, 실행 `logs/fleet-cell-cancel-{3widths-final,full-final,contracts-final}.txt`, `logs/g1-after-cell-cancel.txt`.
 - gate 변화: Cell 불가역 확인 G2의 LOCAL 폭 근거 추가. 나머지 선언 상태, 실제 장치·운영자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 저장 문서 목록 상태
+
+- 변경: 접속 전·조회 중·빈 목록·조회 실패에 상태와 다음 단계를 표시하고, 자격 증명 변경 시 이전 목록을 숨긴다.
+- 증거: 1440/390/320px 빈 목록과 320px 실패·복구 브라우저 5 passed, Cell 전체 19 passed, Cell API 8 passed, 공용 UI 계약 231 passed/25 skipped, 각 성공 실행 `known_failures.py` 0 NEW. X: `captures/fleet-cell/fleet-cell-empty-{1440x1000,390x844,320x568}.png`, `fleet-cell-list-error-320x568.png`, `logs/fleet-cell-list-{focus,full,api,shared}.txt`.
+- gate 변화: 저장 문서 목록의 LOCAL G2 부분 근거 추가. 선언 상태 전체·실제 장치·운영자 G3는 HOLD다.

@@ -89,10 +89,27 @@ function references() {
   return result;
 }
 async function list() {
-  const result = await api('/api/fleet/cell-app/documents');
-  $('saved').replaceChildren(...result.documents.map(item => {
+  const saved = $('saved'), status = $('saved-status');
+  saved.hidden = true;
+  status.hidden = false;
+  status.setAttribute('state', 'pending');
+  status.textContent = '저장된 문서를 확인하는 중입니다.';
+  let result;
+  try { result = await api('/api/fleet/cell-app/documents'); }
+  catch (error) {
+    status.setAttribute('state', 'error');
+    status.textContent = '저장된 문서를 확인하지 못했습니다. 접속 상태를 확인하고 다시 시도하세요.';
+    throw error;
+  }
+  saved.replaceChildren(...result.documents.map(item => {
     const li = document.createElement('li'); li.textContent = `${item.kind} · ${item.id} · ${item.updated_at}`; return li;
   }));
+  saved.hidden = result.documents.length === 0;
+  status.hidden = result.documents.length > 0;
+  if (!status.hidden) {
+    status.setAttribute('state', 'empty');
+    status.textContent = '저장된 문서가 없습니다. 위에서 레시피와 셀 문서를 작성하고 저장하세요.';
+  }
 }
 function loaded(kind, revision) {
   const text = JSON.stringify(revision.document, null, 2);
@@ -207,7 +224,13 @@ for (const kind of ['recipe', 'cell']) {
     loaded(kind, revision); await list(); $('notice').textContent = '문서 저장 완료 · 실행 가능 여부는 미리보기에서 확인하세요.';
   }));
 }
-$('credential').addEventListener('input', () => { editEpoch++; role = null; job = null; jobGeneration = null; invalidate(); });
+$('credential').addEventListener('input', () => {
+  editEpoch++; role = null; job = null; jobGeneration = null; invalidate();
+  $('saved').hidden = true;
+  $('saved-status').hidden = false;
+  $('saved-status').setAttribute('state', 'unavailable');
+  $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
+});
 $('connect').addEventListener('click', () => action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
   $('session').textContent = `${session.principal_id} · ${role}`;
