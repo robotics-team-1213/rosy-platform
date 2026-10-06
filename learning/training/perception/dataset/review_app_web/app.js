@@ -3,7 +3,8 @@ import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 const font = (size, family) => canvasFont(size, family);
 
 const $ = id => document.getElementById(id);
-const names = {'':'클래스 선택 필요',robot:'로봇', obstacle_box:'장애물 상자', cone:'콘', traffic_light:'신호등', sign:'표지판', person_feet:'사람 발'};
+// Filled from the workspace's bound class set (D-485), in class index order.
+let names = {'':'클래스 선택 필요'}, classOptions = [['','클래스 선택 필요']], classColors = {};
 const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'초록', off:'꺼짐'};
 const statuses = {approved:'승인', excluded:'제외', pending:'검수 대기'};
 const serverReasons = {'known object class required':'모든 박스에 클래스를 지정하세요.','box outside original image':'박스가 원본 사진 범위를 벗어났습니다.','unknown signal state':'신호 상태가 올바르지 않습니다.','boxes must be a list':'박스 목록이 올바르지 않습니다.','unknown review action':'지원하지 않는 동작입니다.'};
@@ -110,7 +111,8 @@ function paint() {
     const bounds = gesture?.index === i ? gesture.preview : box.bbox_xyxy;
     const [x0,y0,x1,y1] = bounds;
     // Unclassified boxes block approval (D-469): keep them visibly distinct on the canvas.
-    ctx.strokeStyle = box.label == null ? cssColor('--status-warn') : cssColor('--series-primary');
+    const rgb = classColors[box.label];
+    ctx.strokeStyle = box.label == null ? cssColor('--status-warn') : rgb ? `rgb(${rgb.join(',')})` : cssColor('--series-primary');
     ctx.strokeRect(x0,y0,x1-x0,y1-y0);
     ctx.fillText(String(i+1),x0+3,Math.max(14,y0-3));
     if (i === selected) {
@@ -156,7 +158,7 @@ async function select(index) {
 function selectField(label, options, value, changed) {
   const wrapper = document.createElement('label'); wrapper.append(document.createTextNode(label));
   const select = document.createElement('select'); select.className = 'ui-field';
-  for (const [id,text] of Object.entries(options)) {const option=document.createElement('option'); option.value=id; option.textContent=text; select.append(option);}
+  for (const [id,text] of options) {const option=document.createElement('option'); option.value=id; option.textContent=text; select.append(option);}
   select.value=value ?? ''; select.onchange=() => changed(select.value); wrapper.append(select); return wrapper;
 }
 function renderBoxes() {
@@ -169,8 +171,8 @@ function renderBoxes() {
     const number=document.createElement('span'); number.className='box-number'; number.textContent=`#${i+1}`; top.append(number);
     const pick=document.createElement('ui-button'); pick.setAttribute('kind','toggle'); pick.setAttribute('aria-pressed',String(selected===i)); pick.textContent=`박스 ${i+1} 선택`;
     pick.onclick=()=> {selected=i; drawing=false; $('draw').setAttribute('aria-pressed','false'); renderBoxes(); paint();}; top.append(pick);
-    top.append(selectField(`박스 ${i+1} 클래스`,names,box.label,value => edit(boxes=> {boxes[i].label=value || null; if(value==='traffic_light') boxes[i].signal_state ??= 'unknown';})));
-    if (box.label === 'traffic_light') top.append(selectField(`박스 ${i+1} 신호`,states,box.signal_state || 'unknown',value=>edit(boxes=>boxes[i].signal_state=value)));
+    top.append(selectField(`박스 ${i+1} 클래스`,classOptions,box.label,value => edit(boxes=> {boxes[i].label=value || null; if(value==='traffic_light') boxes[i].signal_state ??= 'unknown';})));
+    if (box.label === 'traffic_light') top.append(selectField(`박스 ${i+1} 신호`,Object.entries(states),box.signal_state || 'unknown',value=>edit(boxes=>boxes[i].signal_state=value)));
     const remove=document.createElement('ui-button'); remove.setAttribute('kind','quiet'); remove.textContent=`박스 ${i+1} 삭제`; remove.onclick=()=> {selected=null;edit(boxes=>boxes.splice(i,1));}; top.insertBefore(remove,top.querySelector('label')); row.append(top);
     const coordinates=document.createElement('div'); coordinates.className='coordinates';
     ['x0','y0','x1','y1'].forEach((name,j) => {
@@ -276,6 +278,11 @@ $('canvas').onpointerup=event=> {
 };
 $('canvas').onpointercancel=event=> {if(gesture?.pointerId===event.pointerId) cancelGesture();};
 $('canvas').onlostpointercapture=event=> {if(gesture?.pointerId===event.pointerId) cancelGesture();};
+const TEXT_ENTRY='input:not([type=checkbox]):not([type=radio]), textarea, select';
+function shortcut(event) {
+  const digit=/^(?:Digit|Numpad)([1-9])$/.exec(event.code||'');
+  return digit ? digit[1] : {KeyA:'a',KeyX:'x'}[event.code] || (/^[1-9ax]$/i.test(event.key) ? event.key.toLowerCase() : null);
+}
 document.addEventListener('keydown',event=> {
   if(event.key==='Escape' && gesture) {event.preventDefault();cancelGesture();}
   if(event.key==='Delete' && document.activeElement===$('canvas') && selected!==null && canDrag() && !gesture) {
@@ -286,6 +293,17 @@ document.addEventListener('keydown',event=> {
     const button=$(event.key==='ArrowLeft'?'prev-frame':'next-frame');
     if(button && !button.disabled) {event.preventDefault(); button.click();}
   }
+  // Number keys set the selected box's class, A approves, X excludes (D-485). Approval
+  // stays explicit (D-461): A only clicks an enabled 승인, never ticks 사진 전체 확인.
+  // Physical keys (event.code) so a Korean IME layout still works; checkboxes keep working.
+  if(event.target?.matches?.(TEXT_ENTRY) || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || busy || gesture) return;
+  const key=shortcut(event);
+  const cls=workspace?.object_class_set.classes.find(c=>c.hotkey===key);
+  const field=cls && selected!==null ? $('boxes').children[selected]?.querySelector('select') : null;
+  if(field && !field.disabled) {event.preventDefault(); if(field.value!==cls.name) {field.value=cls.name; field.onchange();}}
+  // X only excludes a pending photo; approved or excluded photos change by mouse only.
+  const decision=key==='a' ? 'approve' : key==='x' && frame?.status==='pending' ? 'exclude' : null;
+  if(decision && !$(decision).disabled) {event.preventDefault(); $(decision).click();}
 });
 function frameHeading() {
   $('status').setAttribute('status',frame.status==='pending'?'warn':'neutral');
@@ -327,6 +345,10 @@ async function load(index) {
   const started=performance.now();
   const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(loading&&seconds>=3)$('empty-review').querySelector('p').textContent=`서버 응답 대기 ${seconds}초 · 현재 사진과 결정 내용을 확인하고 있습니다.`;},1000);
   try {workspace=await request('/api/workspace'); loading=false; loadFailed=false; conflicted=false; forbidden=false; error();$('show-all').hidden=false;
+    const classes=workspace.object_class_set.classes;
+    // An ordered list, not object keys: integer-like names would jump ahead of the others.
+    classOptions=[['','클래스 선택 필요'],...classes.map(c=>[c.name,c.display])]; names=Object.fromEntries(classOptions);
+    classColors=Object.fromEntries(classes.filter(c=>c.color).map(c=>[c.name,c.color]));
     if(workspace.exports.length) receipt(workspace.exports[0]);
     if (!workspace.frames.length) {applyFilter();return;}
     const params=new URLSearchParams(location.search);

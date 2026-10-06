@@ -9,9 +9,11 @@ import argparse
 import base64
 import hashlib
 import json
+import sys
 from pathlib import Path
 
-CLASSES = ('robot', 'obstacle_box', 'cone', 'traffic_light', 'sign', 'person_feet')
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from object_boxes import OBJECT_CLASSES as CLASSES  # noqa: E402
 
 
 def _rows(path):

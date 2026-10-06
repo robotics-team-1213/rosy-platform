@@ -6689,3 +6689,9 @@ osy-d395-s1d\`.
 - 변경: D-153 Fleet 상태 9개×선언 폭 3개의 현재 캡처에서 찾은 데스크톱 넘침 3건을 목록 내부 스크롤·예외 지도 높이·viewer 권한 안내 배치로 고쳤다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-fleet-g2/`; 27/27셀 계측, 데스크톱 변이 3 failed→복원 4 passed, 권한 Node 변이 1 failed→전체 137 passed, Fleet 브라우저 106 passed, G1 90 passed, Fleet 계약 60 passed, Python `known_failures.py` 0 NEW.
 - gate 변화: Fleet LOCAL G2 부분 근거 강화. 실물/사이트·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · feat(review): D-485 검수 앱 클래스셋
+
+- 변경: 검수 앱이 `--object-classes <data.yaml>`로 모델별 객체 클래스를 받고(기본은 D-423 6개), 픽셀 `classes.yaml`은 선택 `display`를 받는다. 화면은 서버 클래스셋을 쓰고 숫자키 클래스·A 승인·X 제외 단축키를 키 코드로 매핑한다. `classes/lane_lr5.yaml`(차선 모델 5클래스)과 모델 PC용 `model/export_class_names.py`를 추가했다. 클래스셋 sha는 `review-contract.json`에만 있고 `/api/decisions`에는 넣지 않았다.
+- 증거: `learning/training/perception/test/` 호스트 pytest와 브라우저 시험, `test/known_failures.py` 비교, harness lint. 결과 수치는 브랜치 착지 때 확인한다.
+- gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.

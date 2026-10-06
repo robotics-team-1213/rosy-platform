@@ -84,6 +84,19 @@ def test_yolo_lines_use_the_contract_class_order_and_skip_unlabelled():
     assert OB.to_yolo_lines(boxes, (320, 240)) == [f"{OBJECT_CLASSES.index('cone')} 0.050000 0.050000 0.100000 0.100000"]
 
 
+def test_yolo_lines_use_the_given_class_order():
+    boxes = [{'label': 'person', 'bbox_xyxy': [0, 0, 10, 10]}]
+    assert OB.to_yolo_lines(boxes, (20, 20), classes=('car', 'person'))[0].startswith('1 ')
+    assert OB.to_yolo_lines(boxes, (20, 20)) == []      # default stays D-423 v1
+
+
+def test_merge_review_accepts_only_the_given_classes():
+    human = [{'bbox_xyxy': [0, 0, 5, 5], 'label': 'car'}]
+    assert OB.merge_review([], human, classes=('car',))[0]['label'] == 'car'
+    with pytest.raises(ValueError, match='class'):
+        OB.merge_review([], human)
+
+
 def test_cli_merges_a_labels_jsonl_with_human_rows(tmp_path):
     labels = tmp_path / "labels.jsonl"
     labels.write_text(json.dumps({"index": 0, "objects": [
