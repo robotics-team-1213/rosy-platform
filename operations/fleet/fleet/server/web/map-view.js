@@ -288,7 +288,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
 
   function sightingLabel(s) {
     const age = s.state === "delayed" ? ` · ${(s.age_ms / 1000).toFixed(1)}초 전` : "";
-    return `${s.robot_id} · 카메라${age}`;
+    const name = activeCall(s.robot_id) ? `호출 ${s.robot_id}` : s.robot_id;
+    return `${name} · 카메라${age}`;
   }
 
   // 카메라 관측 1건: 점선 고리 + 방향 선. toPoint 는 map m → 현재 ctx 좌표, size 는 같은 단위.
@@ -494,7 +495,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     return `카메라 관측 ${fresh}/${view.sightings.length}대`;
   }
 
+  function activeCall(robotId) {
+    return Boolean(view.call && view.call.robot_id === robotId && Date.now() < view.call.until);
+  }
+
   function draw() {
+    if (view.call && Date.now() >= view.call.until) view.call = null;
+    const callLabel = view.call ? ` · 호출 ${view.call.robot_id}` : "";
     const grid = view.map;
     placedChips = []; pendingChips = []; markerBoxes = [];
     window.__mapChips = placedChips;
@@ -506,9 +513,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         el("map-tag").textContent =
           `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`
           + (cameraMapCalibration(cameraFrame, calibrations, view.siteMap)
-            ? ` · Rosy Cam 실영상 · ${cameraMapCalibration(cameraFrame, calibrations, view.siteMap).calibration_revision}` : "");
+            ? ` · Rosy Cam 실영상 · ${cameraMapCalibration(cameraFrame, calibrations, view.siteMap).calibration_revision}` : "")
+          + callLabel;
         el("map-canvas").setAttribute("aria-label",
-          `천장 카메라 사이트 지도 — ${describeSightings()}. 이 지도에서는 목표를 지정할 수 없습니다.`);
+          `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 이 지도에서는 목표를 지정할 수 없습니다.`);
       }
       return;
     }
@@ -517,12 +525,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     paintGrid(grid);
     drawStartPointMarks(ctx, (x,y)=>{const p=cellOf(grid,x,y);return {x:p.cx,y:p.cy};}, view.startPoints, [grid.map_id], css('--series-secondary'), .6);
     if (view.stateUnavailable) {
-      el("map-tag").textContent = "로봇 위치 확인 불가";
-      canvas.setAttribute("aria-label", "로봇 위치 확인 불가 — Fleet 상태 연결을 확인하세요");
+      el("map-tag").textContent = `로봇 위치 확인 불가${callLabel}`;
+      canvas.setAttribute("aria-label", `로봇 위치 확인 불가${callLabel} — Fleet 상태 연결을 확인하세요`);
       return;
     }
-    el("map-tag").textContent = `${grid.width}×${grid.height} · ${grid.map_id || "map"}`;
-    canvas.setAttribute("aria-label", "지도에서 로봇 목표 위치 선택");
+    el("map-tag").textContent = `${grid.width}×${grid.height} · ${grid.map_id || "map"}${callLabel}`;
+    canvas.setAttribute("aria-label", view.call
+      ? `지도에서 로봇 목표 위치 선택. 호출 ${view.call.robot_id}`
+      : "지도에서 로봇 목표 위치 선택");
     // 격자 픽셀 위에 그리므로 선 굵기도 격자 칸 단위다. 0.6칸이면 3 cm 남짓이다.
     ctx.lineWidth = 0.6;
     view.robots.forEach((robot, index) => {
@@ -544,7 +554,18 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.fillStyle = color;
       ctx.globalAlpha = robot.online ? 1 : 0.35;
       ctx.fill();
+      if (activeCall(robot.robot_id)) {
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 1.7, 0, Math.PI * 2);
+        ctx.lineWidth = 0.35;
+        ctx.strokeStyle = css("--status-warn");
+        ctx.stroke();
+      }
       ctx.restore();
+      if (activeCall(robot.robot_id)) {
+        drawChip(ctx, grid, cx, cy - size * 2.2, `호출 ${robot.robot_id}`, "warn");
+      }
       const [a, b] = [-size, size].map((d) => ctx.getTransform().transformPoint({ x: cx + d, y: cy + d }));
       markerBoxes.push({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y, robot: robot.robot_id });
 

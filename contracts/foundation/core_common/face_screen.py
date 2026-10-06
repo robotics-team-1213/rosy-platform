@@ -27,6 +27,7 @@ from datetime import datetime
 import json
 import math
 import os
+import re
 import stat
 from typing import Any, Mapping, Optional
 
@@ -100,6 +101,13 @@ def _flag(value: Any) -> Optional[bool]:
     return value if isinstance(value, bool) else None
 
 
+def _robot_id(value: Any) -> Optional[str]:
+    """A fleet robot id the LCD can show, or None. Anything else is not a name."""
+    if isinstance(value, str) and _ROBOT_ID.fullmatch(value):
+        return value
+    return None
+
+
 def _number(value: Any) -> Optional[float]:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         return None
@@ -168,6 +176,7 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "written_ts": written.timestamp(),
         "camera_quality": quality,
         "camera_quality_until": quality_until,
+        "robot_id": _robot_id(data.get("robot_id")),
         "robot_mode": robot_state.valid_robot_mode(data.get("robot_mode")),
         "nav_state": robot_state.valid_nav_state(data.get("nav_state")),
         "estop": _flag(data.get("estop")),
@@ -238,6 +247,11 @@ BACKLIGHT = {"active": 100, "idle": 30, "standby": 0}
 CALIBRATING_STRIP = "CALIBRATING - keep clear"
 CORE_MISSING_LINE = "CORE not responding"
 STOP_RELEASE = "Release: dashboard > E-stop reset"
+#: ASCII: the LCD font has no Hangul. The mode face stays D-385; this line says the situation.
+SITUATION_LINE = {"IDLE": "Waiting", "MANUAL": "Manual", "NAVIGATION": "Going", "DOCKING": "Docking"}
+BLOCKED_LINE = "Blocked"
+#: Same shape as core_common.identity.ROBOT_ID_PATTERN. Kept here so this module stays stdlib-only.
+_ROBOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
 def _stopped_cause(core: Mapping[str, Any]) -> str:
@@ -260,7 +274,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     its key is readable; ``login``: ``"code"`` (an unused one-time code),
     ``"burned"`` or None; ``core``: ``validate_face_inputs`` output, None when
     missing or stale; ``update``: ``{"release": ...}`` while an update or an
-    activation runs; ``test``: ``"buzzer"``/``"lamp"`` while a D-247 test plays;
+    activation runs; ``test``: ``"buzzer"``/``"lamp"`` while a D-247 test plays,
+    or ``"identify_blue"``/``"identify_amber"`` during a fleet call;
     ``drive_since``: when the current operating mode began (monotonic).
 
     The answer: ``kind`` (one of KINDS), ``row`` (the table row id), ``face``,
@@ -309,6 +324,16 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         strip = CALIBRATING_STRIP
         tone = "info"
 
+    # A fleet identify call names this robot. It does not replace a caution,
+    # a bench test, or a calibration strip, and it does not change the mode face.
+    called = isinstance(test, str) and test.startswith("identify_")
+    call_line = None
+    if called and strip is None:
+        robot_id = _robot_id(core.get("robot_id"))
+        call_line = f"CALL {robot_id}" if robot_id else "CALL"
+        strip = call_line
+        tone = "info"
+
     mode = core.get("robot_mode")
     wake = core.get("wake")
     power = core.get("power_mode") or "active"
@@ -318,8 +343,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
             and mode in ("IDLE", "MANUAL") and not core.get("battery_charging")
             and (percent is None or percent >= 20)):
         return {**answer, "kind": LIGHT, "row": "light", "backlight": 100}
-    # Row 18: standby sleeps the panel unless a wake card or a caution must be seen.
-    if power == "standby" and wake is None and tone != "caution":
+    # Row 18: standby sleeps the panel unless a wake card, a caution, or a call must be seen.
+    if power == "standby" and wake is None and tone != "caution" and call_line is None:
         return {**answer, "kind": SLEEP, "row": "standby", "backlight": BACKLIGHT["standby"], "awake": False}
 
     face = core.get("face") if core.get("face") in FACES else DEFAULT_FACE
@@ -335,5 +360,12 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         percent = core.get("battery_percent")
         strip = f"Charging {percent:.0f}%" if percent is not None else "Charging"
         tone = "info"
+    elif strip is None and mode == "NAVIGATION" and core.get("nav_state") in robot_state.NAV_STUCK:
+        strip = BLOCKED_LINE
+        tone = "info"
+    elif strip is None and mode in SITUATION_LINE:
+        strip = SITUATION_LINE[mode]
+        tone = "info"
+    backlight = 100 if overlay is not None or call_line is not None else BACKLIGHT.get(power, 100)
     return {**answer, "kind": FACE, "row": row, "face": face, "overlay": overlay, "strip": strip,
-            "strip_tone": tone, "backlight": BACKLIGHT.get(power, 100) if overlay is None else 100}
+            "strip_tone": tone, "backlight": backlight}

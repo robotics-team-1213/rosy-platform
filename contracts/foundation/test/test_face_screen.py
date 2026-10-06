@@ -205,6 +205,52 @@ def test_charging_at_rest_is_a_strip():
     assert answer["strip"] == "Charging 63%" and answer["strip_tone"] == "info"
 
 
+@pytest.mark.parametrize("mode,nav,line", [
+    ("IDLE", "IDLE", "Waiting"),
+    ("MANUAL", "IDLE", "Manual"),
+    ("NAVIGATION", "NAVIGATING", "Going"),
+    ("NAVIGATION", "BLOCKED", "Blocked"),
+    ("NAVIGATION", "FAILED", "Blocked"),
+    ("DOCKING", "IDLE", "Docking"),
+])
+def test_the_situation_line_names_the_mode_under_the_face(mode, nav, line):
+    answer = fs.screen_for(**READY, core=core(robot_mode=mode, nav_state=nav, face="happy"))
+
+    assert answer["kind"] == fs.FACE
+    assert answer["strip"] == line and answer["strip_tone"] == "info"
+    assert answer["face"] == "happy"
+
+
+def test_a_fleet_call_names_the_robot_and_wakes_a_sleeping_panel():
+    answer = fs.screen_for(**READY, core=core(power_mode="standby", robot_id="rosy_26"),
+                           test="identify_blue")
+
+    assert answer["kind"] == fs.FACE and answer["awake"] and answer["backlight"] == 100
+    assert answer["strip"] == "CALL rosy_26" and answer["face"] == "basic"
+
+
+def test_a_fleet_call_without_a_readable_id_still_says_call():
+    answer = fs.screen_for(**READY, core=core(robot_id="Rosy 26"), test="identify_amber")
+
+    assert answer["strip"] == "CALL" and answer["face"] == "basic"
+
+
+def test_caution_and_calibration_keep_their_strip_during_a_call():
+    caution = fs.screen_for(**READY, core=core(caution=["dock_failed"], robot_id="rosy_26"),
+                            test="identify_blue")
+    calibrating = fs.screen_for(**READY, core=core(activity_kind="CALIBRATING", robot_id="rosy_26"),
+                                test="identify_blue")
+
+    assert caution["strip"] == fs.CAUTION_TEXT["dock_failed"]
+    assert calibrating["strip"] == fs.CALIBRATING_STRIP
+
+
+def test_the_lcd_robot_id_pattern_matches_identity():
+    from core_common.identity import ROBOT_ID_PATTERN
+
+    assert fs._ROBOT_ID.pattern == ROBOT_ID_PATTERN.pattern
+
+
 def test_idle_power_dims_the_face():
     assert fs.screen_for(**READY, core=core(power_mode="idle"))["backlight"] == fs.BACKLIGHT["idle"]
 
@@ -351,4 +397,4 @@ def test_module_is_standard_library_only():
     imported |= {node.module.split(".")[0] for node in ast.walk(tree)
                  if isinstance(node, ast.ImportFrom) and node.module}
 
-    assert imported <= {"__future__", "datetime", "json", "math", "os", "stat", "typing", "core_common"}
+    assert imported <= {"__future__", "datetime", "json", "math", "os", "re", "stat", "typing", "core_common"}
