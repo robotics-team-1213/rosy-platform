@@ -6635,3 +6635,9 @@ osy-d395-s1d\`.
 - 변경: 학습 작업 목록·자료 등록도 서버 응답이 3초 넘게 보류되면 경과 초를 표시한다. 응답 전 쓰기 행동은 계속 막고 회복 뒤 다시 연다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay/learning-{learning,catalog}-delayed-{1440,800,390}.png`. 브라우저 5 passed/1 timer timeout 뒤 해당 셀 1 passed, `known_failures.py` 0 NEW, JS 구문·diff 검사 통과.
 - gate 변화: 네 학습 경로의 느린 응답 LOCAL 부분 근거가 늘었다. 값별 신선도와 실제 검수자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
+
+- 변경: 학습 작업 목록을 읽는 동안 빈 결과 설명을 숨기고 하나의 경과 시간 상태만 보이게 했다. 실패·빈 결과는 응답 후 각자 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-learning-delay-clean/learning-learning-{delayed,unavailable}-390.png`, 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 정보 위계 개선. 실제 검수자 G3와 제품 전체 G2는 HOLD.

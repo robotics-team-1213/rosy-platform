@@ -241,6 +241,8 @@ Pilot 390×844에서 회전 조작을 첫 화면에 올리려고 아래 조작 �
 
 학습 작업 목록과 자료 등록의 첫 응답도 3초 이상 기다리면 초 단위 대기 시간을 표시하고, 응답 전에는 작업 연결·자료 등록을 막는다. 응답 후 작업 행동이 다시 열리고 대기 상태는 사라진다. 1440/800/390px 여섯 합성 응답 셀 중 첫 재실행은 **5 passed, 1 failed**였다. 1440px 자료 등록 타이머가 동시 시험 부하에서 5초 안에 진행되지 않아 시간 단언이 실패했고, 시간 허용을 늘린 해당 셀 재실행은 **1 passed**, `known_failures.py` **0 NEW**였다. 첫 실행의 자료 등록 세 셀은 숨긴 상태 노드에 남은 이전 문구까지 검사한 시험 오류였고, 보이는 상태의 숨김을 검사하도록 고쳤다. 최종 여섯 화면 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-07-learning-delay\learning-{learning,catalog}-delayed-{1440,800,390}.png`다. 이는 LOCAL 서버 응답 대기 근거이며, 값별 신선도·실제 검수자 작업과 G3는 HOLD다.
 
+390px 학습 작업 목록의 느린 응답 화면은 상태 줄과 빈 결과 칸에 같은 대기를 두 번 보여 줬다. 응답 전에는 빈 결과 칸을 숨기고 상태 줄만 남기며, 503 오류에서는 결과를 확인할 수 없다는 빈 상태와 재시도가 돌아온다. 느린 응답·503 회복 브라우저 **2 passed**, `known_failures.py` **0 NEW**; 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-07-learning-delay-clean\learning-learning-{delayed,unavailable}-390.png`다. 현재 응답의 LOCAL 화면 근거이며 검수자 G3는 남는다.
+
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |
