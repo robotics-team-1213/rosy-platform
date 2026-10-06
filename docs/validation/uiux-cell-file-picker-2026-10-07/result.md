@@ -6,13 +6,13 @@ At 1440×1000, 390×844, and 320×568, both picker tracks match their document-n
 
 Raw captures and logs are under `X:/DevTemp/projects/rosy-platform/2026-10-07--cell-file-picker/`. SHA-256:
 
-| File | Hash |
+| File | SHA-256 |
 |---|---|
-| `shots/fleet-cell-widths-1440x1000.png` | `c1a6b4b0c3ed99b6abf34b5fbc3398005662d427e2e6d5bf633fbcff42faddb8` |
-| `shots/fleet-cell-widths-390x844.png` | `cac5a69559378918dc19785f58a92b77c2424d048c2987d6de1a1fde108d5ea3` |
-| `shots/fleet-cell-widths-320x568.png` | `d797adbb1ca0ef586d285867622e4cdc5aae577be67752ea110f1565e2f3543e` |
-| `shots/fleet-cell-file-selected-320x568.png` | `52dce718aa43faa79ee10a2fdbc346a4865d605c0bdf0f950c82418b6228d8f7` |
-| `logs/browser-full-final.txt` | `c34b32df134211cb37dd8e9991e473aaae36121322e2a8073c3f9d778780d96d` |
-| `logs/g1-full.txt` | `737eb5b30dbb7fcf8dbbd1061d9bf9cf01125447fef0bd60bea56a555c195ff2` |
+| `shots/fleet-cell-widths-1440x1000.png` | SHA-256 `c1a6b4b0c3ed99b6abf34b5fbc3398005662d427e2e6d5bf633fbcff42faddb8` |
+| `shots/fleet-cell-widths-390x844.png` | SHA-256 `cac5a69559378918dc19785f58a92b77c2424d048c2987d6de1a1fde108d5ea3` |
+| `shots/fleet-cell-widths-320x568.png` | SHA-256 `d797adbb1ca0ef586d285867622e4cdc5aae577be67752ea110f1565e2f3543e` |
+| `shots/fleet-cell-file-selected-320x568.png` | SHA-256 `52dce718aa43faa79ee10a2fdbc346a4865d605c0bdf0f950c82418b6228d8f7` |
+| `logs/browser-full-final.txt` | SHA-256 `c34b32df134211cb37dd8e9991e473aaae36121322e2a8073c3f9d778780d96d` |
+| `logs/g1-full.txt` | SHA-256 `737eb5b30dbb7fcf8dbbd1061d9bf9cf01125447fef0bd60bea56a555c195ff2` |
 
 This is **LOCAL G2 and vocabulary evidence for the file-import state only**. Real site installation, actual cell document/operator work, remaining declared states, and G3 remain **HOLD**.
