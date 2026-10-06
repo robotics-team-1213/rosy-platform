@@ -1344,6 +1344,29 @@ def test_leaving_drive_stops_the_robot_recording_this_device_started(tablet_page
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_robot_recording_continues_past_the_ten_minute_cap_until_stopped(tablet_page):
+    """한 파일은 10분 상한을 지키고, 끄지 않은 녹화는 다음 구간으로 잇는다. 끈 뒤에는 잇지 않는다."""
+    base_url, page, errors = tablet_page
+    _enter_recording_drive(page, base_url)
+    toggle = "[data-robot-record]"
+    _click_tool(page, toggle)
+    page.wait_for_function(ROBOT_RECORD_STOP)
+    _recordings(page, base_url, cap=True)
+    assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "start"])
+    page.wait_for_function(ROBOT_RECORD_STOP)
+    page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('2번째')")
+    page.wait_for_timeout(6000)                            # 안내가 지나간 뒤에도 구간 번호는 남는다
+    assert "2번째 구간" in page.inner_text("[data-drive-fact=recording]")
+    _click_tool(page, toggle)
+    page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'idle'")
+    _recordings(page, base_url, cap=True)                  # 끈 뒤의 상한 표시는 다시 켜지 않는다
+    page.wait_for_timeout(2500)
+    assert _recordings(page, base_url)["log"] == ["start", "start", "stop"]
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_another_devices_recording_is_neither_stopped_nor_stoppable_here(tablet_page):
     base_url, page, errors = tablet_page
     _recordings(page, base_url, reset=True, foreign=True)

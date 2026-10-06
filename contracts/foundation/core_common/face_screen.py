@@ -27,6 +27,7 @@ from datetime import datetime
 import json
 import math
 import os
+import re
 import stat
 from typing import Any, Mapping, Optional
 
@@ -100,6 +101,13 @@ def _flag(value: Any) -> Optional[bool]:
     return value if isinstance(value, bool) else None
 
 
+def _robot_id(value: Any) -> Optional[str]:
+    """A fleet robot id the LCD can show, or None. Anything else is not a name."""
+    if isinstance(value, str) and _ROBOT_ID.fullmatch(value):
+        return value
+    return None
+
+
 def _number(value: Any) -> Optional[float]:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         return None
@@ -168,6 +176,7 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "written_ts": written.timestamp(),
         "camera_quality": quality,
         "camera_quality_until": quality_until,
+        "robot_id": _robot_id(data.get("robot_id")),
         "robot_mode": robot_state.valid_robot_mode(data.get("robot_mode")),
         "nav_state": robot_state.valid_nav_state(data.get("nav_state")),
         "estop": _flag(data.get("estop")),
@@ -192,6 +201,53 @@ def read_face_inputs(path: str, now: datetime, owner_uid: Optional[int] = None) 
     CORE is less trusted than the display (D-260 M1), so the reader never follows
     what CORE could point it at and never reads more than the bound.
     """
+    data = _read_bounded_json(path, MAX_FACE_INPUTS_BYTES, owner_uid)
+    return None if data is None else validate_face_inputs(data, now)
+
+
+# --- the peer-request approval code (D-483) ------------------------------------------
+
+#: CORE writes it while a D-456 peer request waits; rosy-core:rosy-display 2750, file 0640.
+PEER_APPROVAL_FILE = "/run/rosy-peer-display/approval.json"
+MAX_PEER_APPROVAL_BYTES = 2048
+#: CORE lists at most this many live requests, newest first (D-483 M1).
+MAX_PEER_REQUESTS = 3
+_CODE_ALPHABET = frozenset("23456789ABCDEFGHJKMNPQRSTUVWXYZ")
+
+
+def _code(value: Any, length: int) -> Optional[str]:
+    if isinstance(value, str) and len(value) == length and set(value) <= _CODE_ALPHABET:
+        return value
+    return None
+
+
+def read_peer_approval(path: str, now: datetime, owner_uid: Optional[int] = None) -> Optional[dict]:
+    """``{"requests": [{"display_code", "approval_code"}, ...]}`` of the live pending requests
+    (at most three, in CORE's newest-first order), or None (absent, malformed, all expired).
+
+    Read as strictly as ``read_face_inputs``; a malformed or expired entry is dropped alone.
+    The approval code is a credential: callers draw it and never log it.
+    """
+    data = _read_bounded_json(path, MAX_PEER_APPROVAL_BYTES, owner_uid)
+    rows = data.get("requests") if isinstance(data, Mapping) else None
+    if not isinstance(rows, list) or len(rows) > MAX_PEER_REQUESTS:
+        return None
+    shown = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        display, approval = _code(row.get("display_code"), 4), _code(row.get("approval_code"), 6)
+        try:
+            expires = datetime.fromisoformat(str(row.get("expires_at")))
+        except ValueError:
+            continue
+        if display is not None and approval is not None and expires.tzinfo is not None and expires > now:
+            shown.append({"display_code": display, "approval_code": approval})
+    return {"requests": shown} if shown else None
+
+
+def _read_bounded_json(path: str, limit: int, owner_uid: Optional[int]) -> Any:
+    """JSON of a regular, unlinked file of at most ``limit`` bytes owned by ``owner_uid``; else None."""
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
     try:
         descriptor = os.open(path, flags)
@@ -199,22 +255,21 @@ def read_face_inputs(path: str, now: datetime, owner_uid: Optional[int] = None) 
         return None
     try:
         info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_FACE_INPUTS_BYTES:
+        if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
             return None
         if owner_uid is not None and info.st_uid != owner_uid:
             return None
-        raw = os.read(descriptor, MAX_FACE_INPUTS_BYTES + 1)
+        raw = os.read(descriptor, limit + 1)
     except OSError:
         return None
     finally:
         os.close(descriptor)
-    if len(raw) > MAX_FACE_INPUTS_BYTES:
+    if len(raw) > limit:
         return None
     try:
-        data = json.loads(raw.decode("utf-8"))
+        return json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
         return None
-    return validate_face_inputs(data, now)
 
 
 # --- the situation table ----------------------------------------------------------
@@ -232,12 +287,19 @@ KINDS = (SHUTDOWN, STATUS, UPDATE, STOPPED, FACE, SLEEP, LIGHT)
 ROWS = {
     "shutdown": 1, "failed": 2, "update": 3, "stopped": 4, "ap": 5, "booting": 6,
     "core_missing": 7, "login": 8, "standby": 18, "face": 17,
+    # D-483: a waiting peer request's approval code, just above the login card.
+    "peer_request": 8,
 }
 #: The backlight per CORE power mode (emotion_server's PWR-003 parameters).
 BACKLIGHT = {"active": 100, "idle": 30, "standby": 0}
 CALIBRATING_STRIP = "CALIBRATING - keep clear"
 CORE_MISSING_LINE = "CORE not responding"
 STOP_RELEASE = "Release: dashboard > E-stop reset"
+#: ASCII: the LCD font has no Hangul. The mode face stays D-385; this line says the situation.
+SITUATION_LINE = {"IDLE": "Waiting", "MANUAL": "Manual", "NAVIGATION": "Going", "DOCKING": "Docking"}
+BLOCKED_LINE = "Blocked"
+#: Same shape as core_common.identity.ROBOT_ID_PATTERN. Kept here so this module stays stdlib-only.
+_ROBOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
 def _stopped_cause(core: Mapping[str, Any]) -> str:
@@ -252,7 +314,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
                core: Optional[Mapping[str, Any]] = None, update: Optional[Mapping[str, Any]] = None,
                test: Optional[str] = None, shutting_down: bool = False,
                drive_since: Optional[float] = None, now: float = 0.0,
-               light_assist: bool = False) -> dict:
+               light_assist: bool = False, peer: Optional[Mapping[str, Any]] = None) -> dict:
     """The one answer for the LCD (D-433 decision 2). Higher rows win.
 
     ``stage``: boot-status stage; ``state``: ``robot_state.evaluate``'s state;
@@ -260,8 +322,10 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     its key is readable; ``login``: ``"code"`` (an unused one-time code),
     ``"burned"`` or None; ``core``: ``validate_face_inputs`` output, None when
     missing or stale; ``update``: ``{"release": ...}`` while an update or an
-    activation runs; ``test``: ``"buzzer"``/``"lamp"`` while a D-247 test plays;
-    ``drive_since``: when the current operating mode began (monotonic).
+    activation runs; ``test``: ``"buzzer"``/``"lamp"`` while a D-247 test plays,
+    or ``"identify_blue"``/``"identify_amber"`` during a fleet call;
+    ``drive_since``: when the current operating mode began (monotonic);
+    ``peer``: ``read_peer_approval``'s answer while a D-456 request waits (D-483).
 
     The answer: ``kind`` (one of KINDS), ``row`` (the table row id), ``face``,
     ``overlay`` (``{"kind": "drive"|"wake", "payload": {...}}``), ``strip`` and
@@ -291,6 +355,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         return status("booting")
     if core is None:
         return status("core_missing", line=CORE_MISSING_LINE)
+    if peer is not None:  # D-483: below failure/e-stop/AP/boot, above the login card and the face.
+        return status("peer_request", peer=dict(peer))
     if login == "code":
         return status("login")
 
@@ -309,6 +375,16 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         strip = CALIBRATING_STRIP
         tone = "info"
 
+    # A fleet identify call names this robot. It does not replace a caution,
+    # a bench test, or a calibration strip, and it does not change the mode face.
+    called = isinstance(test, str) and test.startswith("identify_")
+    call_line = None
+    if called and strip is None:
+        robot_id = _robot_id(core.get("robot_id"))
+        call_line = f"CALL {robot_id}" if robot_id else "CALL"
+        strip = call_line
+        tone = "info"
+
     mode = core.get("robot_mode")
     wake = core.get("wake")
     power = core.get("power_mode") or "active"
@@ -318,8 +394,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
             and mode in ("IDLE", "MANUAL") and not core.get("battery_charging")
             and (percent is None or percent >= 20)):
         return {**answer, "kind": LIGHT, "row": "light", "backlight": 100}
-    # Row 18: standby sleeps the panel unless a wake card or a caution must be seen.
-    if power == "standby" and wake is None and tone != "caution":
+    # Row 18: standby sleeps the panel unless a wake card, a caution, or a call must be seen.
+    if power == "standby" and wake is None and tone != "caution" and call_line is None:
         return {**answer, "kind": SLEEP, "row": "standby", "backlight": BACKLIGHT["standby"], "awake": False}
 
     face = core.get("face") if core.get("face") in FACES else DEFAULT_FACE
@@ -335,5 +411,12 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         percent = core.get("battery_percent")
         strip = f"Charging {percent:.0f}%" if percent is not None else "Charging"
         tone = "info"
+    elif strip is None and mode == "NAVIGATION" and core.get("nav_state") in robot_state.NAV_STUCK:
+        strip = BLOCKED_LINE
+        tone = "info"
+    elif strip is None and mode in SITUATION_LINE:
+        strip = SITUATION_LINE[mode]
+        tone = "info"
+    backlight = 100 if overlay is not None or call_line is not None else BACKLIGHT.get(power, 100)
     return {**answer, "kind": FACE, "row": row, "face": face, "overlay": overlay, "strip": strip,
-            "strip_tone": tone, "backlight": BACKLIGHT.get(power, 100) if overlay is None else 100}
+            "strip_tone": tone, "backlight": backlight}

@@ -74,6 +74,9 @@ LockPersonality=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 # Maps are written by slam_toolbox in rosy-navigation; CORE only reads them back.
 ReadWritePaths=/run/rosy
+# D-483: the peer-request approval code hand-over to rosy-face (tmpfiles creates it;
+# optional so a payload update before the next boot still starts CORE).
+ReadWritePaths=-/run/rosy-peer-display
 # D-411: Pilot recordings are written by rosy-camera; CORE only lists and streams them.
 ReadOnlyPaths=/var/lib/rosy/pilot-recordings
 

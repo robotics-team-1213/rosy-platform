@@ -23,6 +23,9 @@ Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot
 | `autolabel.py` | D-379 automatic labels for a session or video: LiDAR walls, driven floor |
 | `labels.py` | Per-frame label sources, most trusted first (LiDAR first); pure numpy/cv2, no I/O |
 | `geometry.py` | Nominal camera, LiDAR mount and planar poses used by the labels |
+| `road_draft.py` | Robot-anchored drivable drafts (D-465 addendum 2026-10-07): Qwen `point_2d` parsing, point gate, footprint seed, carpet component the robot stands on bounded by lines, compose over a base map; pure numpy/cv2 |
+| `qwen_points.py` | Every K-th video frame → local Ollama Qwen3-VL road points (`keypoints.jsonl`); training drafts only |
+| `sam3_road_draft.py` | Model PC only (`~/rosy-ml/sam3-venv`): SAM 3 text lanes + SAM 3.0 tracker road → pending indexed drafts + `verified-inputs.jsonl` for `review_ingest` |
 
 ## For AI Agents
 

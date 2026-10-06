@@ -96,6 +96,7 @@ def test_vision_lease_accepts_only_bounded_preview_rectification():
                      [FakeRobot("rosy_01")]),
         vision_lease_secret="v" * 32, vision_sources=("ceiling-north",)))
     profile = {
+        "mode": "manual",
         "fx": 1.2, "fy": 1.2, "cx": 0.5, "cy": 0.5,
         "k1": -0.18, "k2": 0.03, "p1": 0.0, "p2": 0.0, "k3": 0.0,
         "corners": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]],
@@ -108,11 +109,17 @@ def test_vision_lease_accepts_only_bounded_preview_rectification():
     rejected = client.post("/api/fleet/vision/lease", json={
         "source_id": "ceiling-north", "rectification": {"k1": 999},
     })
+    auto = client.post("/api/fleet/vision/lease", json={
+        "source_id": "ceiling-north", "rectification": {"mode": "auto"},
+    })
 
     assert issued.status_code == 200
     assert VisionLeaseSigner("v" * 32).verify(
         issued.json()["lease"], source_id="ceiling-north")["rectification"] == profile
     assert rejected.status_code == 422
+    assert auto.status_code == 200
+    assert VisionLeaseSigner("v" * 32).verify(
+        auto.json()["lease"], source_id="ceiling-north")["rectification"]["mode"] == "auto"
 
 
 def test_vision_lease_endpoint_fails_closed_when_preview_is_not_configured():
@@ -503,7 +510,8 @@ def test_console_page_and_its_assets_are_served():
     client = _client(FakeRobot("rosy_01"))
     page = client.get("/console")
     assert page.status_code == 200
-    assert "Rosy Console" in page.text
+    assert "Rosy Fleet" in page.text  # D-487
+    assert "Rosy Console" not in page.text
     assert "ROSY FLEET" not in page.text
     assert "SITE CONSOLE" not in page.text
     script = (Path(__file__).resolve().parents[1] / "fleet" / "server" / "web" / "console.js").read_text(encoding="utf-8")

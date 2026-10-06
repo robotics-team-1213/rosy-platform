@@ -755,7 +755,7 @@ ui-brand a:hover small { text-decoration: underline; text-underline-offset: 0.2e
 ui-brand a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
 /* 워드마크는 한 줄이다. 표면이 이름 칸에 `container-type: inline-size`를 주면 칸 폭에 맞게
-   줄어든다(상한 title). 14cqi는 "Rosy Console"이 그 칸 안에 들어가는 계수다.
+   줄어든다(상한 title). 14cqi는 가장 긴 표면 이름이 그 칸 안에 들어가는 계수다.
    컨테이너가 없으면 cqi는 작은 뷰포트 폭을 따르므로 넓은 창에서는 늘 title이다. */
 ui-brand b {
   color: var(--brand-rose);

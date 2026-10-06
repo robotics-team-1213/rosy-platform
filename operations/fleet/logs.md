@@ -2091,3 +2091,27 @@
 - 변경: `fleet/server/development_session.py`(세션 저장소·LAN 주소·Host/Origin·분당 6회·상한 8·1시간 만료·발급 감사), `site_auth.build_authorize`의 개발 세션 우선 확인, `require_named_operator`의 `development-*` 허용, `--connection-mode`와 `ROSY_DEPLOYMENT` 이중 조건, 콘솔 자동 발급·배지.
 - 증거: 위 호스트 pytest와 브라우저 시험. 사이트 Caddy 뒤 `X-Forwarded-For`·`Host` 전달은 실사이트 확인이 필요하다.
 - gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+
+## 2026-10-06 · uncommitted · feat(fleet): D-484 field_boundary sighting 수용
+
+- 변경: `site-cameras.yaml` 검증과 `SightingService`가 `calibration_source: field_boundary`(코너 마커 없음, `corner_world_m` 필수)를 받고, payload의 `calibration_source`까지 일치 검사한다(불일치 409 CALIBRATION_MISMATCH). `GET /api/fleet/site-map` source에 `calibration_source`를 노출하고 field 소스는 `corner_marker_ids: null`이다. 설치 화면 영상 패널에 "자동 보정 (필드)" 보기 모드(리스 rectification `mode:"auto"`, 배지 "자동 보정 미리보기"/"자동 보정 대기")를 추가했다. 관제(/console) 화면은 기존대로 원본만(D-410).
+- 증거: `test_sightings_api.py`·`test_site_map_api.py` 확장(field 수용·양방향 불일치·설정 검증·site_map 노출), node 웹 시험 통과(`vision-badge.test.mjs` auto 케이스 포함).
+- gate 변화: 없음. sighting은 표시 전용(D-257 5항)·정책 증거 아님을 유지.
+## 2026-10-07 · uncommitted · Cell 빈 미리보기 평면도 숨김
+
+- 변경: 배치가 계산되기 전 또는 미리보기 결과가 무효가 된 동안 팔레트 선택과 빈 20rem 평면도를 함께 숨긴다. 배치가 있는 성공 결과에서만 다시 보인다.
+- 증거: 320px 초기·503/복구와 390px 초기·1440px 503/복구 Chromium **4 passed**, 공용 UI·토큰 계약 **62 passed**, 각 `known_failures.py` 0 NEW, JS 구문 검사 통과. UI/UX 회차 X: `captures/fleet-cell-empty-layout-fix/`와 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`.
+- gate 변화: LOCAL 화면 근거 추가. 현장 배치·운영자 G3는 HOLD.
+
+## 2026-10-07 · 93c606cbb · D-487 관제 화면 Rosy Fleet·버드아이 우선
+
+- 변경: 관제·설치·Cell 문서의 표시 이름 `Rosy Console` → `Rosy Fleet`. 지도 아래 천장 카메라 사본(`#map-camera`) 제거 — 원본은 카메라 칸에 한 번, 보정 맞춤은 캔버스가 그린다. 지도가 없고 카메라가 살아 있으면 지도 칸이 한 줄로 줄고 카메라가 주 화면(110rem 이상 전체 폭). 접속 전 발행 띠를 접고 연결 표시는 `접속 전`(중립). `[data-role-lock]` 묶음 안 버튼은 사유를 되풀이하지 않고 묶음 안내 한 줄을 쓴다. id `console`·경로 `/console`·저장소 키는 그대로.
+- 증거: 아래 브랜치 시험 기록(`X:/DevTemp/fleet-name/`). DEVICE/FIELD 확인 없음.
+- gate 변화: LOCAL 화면 정리. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-07 · uncommitted · D-487 이후 Fleet 데스크톱 높이 보정
+
+- 변경: 1920×1080에서 관제 문서의 43px 세로 넘침을 확인하고 데스크톱 관제 칸 간격·안쪽 여백과 대형 readout의 기본 margin을 줄였다. D-415의 8줄 로그는 유지했다.
+- 증거: `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-d487\`의 `browser-fixed2.txt` **8 passed**, `connection.txt` **1 passed**, `contracts.txt` **60 passed**, `node-files.txt` **137 passed**, 각 Python 실행의 `known_failures.py` 0 NEW, `fleet_console_fit.png`에서 하단까지 표시.
+- gate 변화: LOCAL G2 부분 근거. 사이트 PC·카메라·로봇과 운영자 G3는 HOLD.

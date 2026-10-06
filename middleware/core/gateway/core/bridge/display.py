@@ -180,6 +180,7 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
     return {
         "schema": 1,
         "written_at": written_at,
+        "robot_id": snapshot.robot_id,
         "robot_mode": mode,
         "nav_state": snapshot.navigation.value,
         "estop": snapshot.safety.estop,

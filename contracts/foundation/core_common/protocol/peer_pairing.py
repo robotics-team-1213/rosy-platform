@@ -1,5 +1,5 @@
 """Candidate typed wire input; request consent is not a control grant."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -31,6 +31,29 @@ class ReceiverDecision(Strict):
     action: Literal["approve", "reject"]
     revision: int = Field(ge=0)
     persist_requested: bool = False
+
+
+#: D-483: the robot-screen approval code alphabet and length.
+APPROVAL_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+APPROVAL_CODE_LENGTH = 6
+#: D-483: the issuer marker of a relationship approved by the robot-screen code.
+SCREEN_CODE_ISSUER = "screen-code"
+#: D-483 5: a screen-code approval never outlives this.
+SCREEN_CODE_LIFETIME = timedelta(hours=168)
+#: D-483 R3: clock skew tolerated before a screen-code approval dated in the future is refused.
+SCREEN_CODE_SKEW = timedelta(seconds=60)
+
+
+def screen_code_dated(grant, now) -> bool:
+    """False for a screen-code row whose approved_at lies in the future (a forged or skewed row)."""
+    if grant.get("issuer_source") != SCREEN_CODE_ISSUER:
+        return True
+    approved = grant.get("approved_at")
+    return approved is not None and datetime.fromisoformat(approved) <= now + SCREEN_CODE_SKEW
+
+
+class ApprovalCodeConfirm(Strict):
+    approval_code: str = Field(pattern=r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$")
 
 
 class ChallengeFields(Strict):
@@ -114,7 +137,7 @@ class Relationship(Strict):
     generation: int = Field(ge=0)
     revoked: bool
     issuer_id: str = Field(min_length=1, max_length=128)
-    issuer_source: Literal["card", "manual", "pair-physical", "pair-admin"]
+    issuer_source: Literal["card", "manual", "pair-physical", "pair-admin", "screen-code"]
     issuer_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     approved_by: str = Field(min_length=1, max_length=128)
     persistent: bool
@@ -122,6 +145,8 @@ class Relationship(Strict):
     expires_at: str | None = Field(max_length=64)
     used_challenges: list[str] = Field(max_length=64)
     session_ids: list[str] = Field(default_factory=list, max_length=8)
+    #: D-483 L2: when a screen-code approval was made; bounds its lifetime. None on owner approvals.
+    approved_at: str | None = Field(default=None, max_length=64)
 
     @model_validator(mode='after')
     def persistent_authority_shape(self):
@@ -129,9 +154,25 @@ class Relationship(Strict):
             raise ValueError('relationship lifetime shape mismatch')
         if self.persistent and (not self.persist_requested or self.issuer_source not in {'card', 'manual'}):
             raise ValueError('persistent issuer provenance required')
+        # D-483 5: a screen-code approval is always bounded and names no token issuer.
+        screen = SCREEN_CODE_ISSUER in (self.issuer_source, self.issuer_id, self.approved_by)
+        if screen and not (self.issuer_source == self.issuer_id == self.approved_by == SCREEN_CODE_ISSUER
+                           and self.issuer_digest == self.receiver_key_sha256 and self.expires_at is not None
+                           and self.approved_at is not None and not self.persist_requested
+                           and timedelta(0) < datetime.fromisoformat(self.expires_at)
+                           - datetime.fromisoformat(self.approved_at) <= SCREEN_CODE_LIFETIME):
+            raise ValueError('screen-code approval shape mismatch')
         return self
 
-    @field_validator("expires_at")
+    def stored(self) -> dict:
+        """The row as written to the overlay. A key added after D-456 is left out while unset,
+        so an owner row stays readable by a release before D-483 (its Strict model forbids extras)."""
+        row = self.model_dump()
+        if row["approved_at"] is None:
+            del row["approved_at"]
+        return row
+
+    @field_validator("expires_at", "approved_at")
     @classmethod
     def aware_expiry(cls, value):
         if value is not None and datetime.fromisoformat(value).utcoffset() is None:
