@@ -193,7 +193,7 @@ main {
 /* 현장과 개입 영역을 나눈다. 로봇 목록은 오른쪽에서 독립적으로 스크롤한다.
    두 열은 wide 단에서만이다 — 그 아래는 한 열이다(62rem 겹침에서 생기던 암시적 열을 없앤다). */
 @media (width >= 64rem) {
-  main { padding-bottom: var(--space-4); }
+  main { padding-bottom: var(--space-2); }
   /* 지도와 개입 칸은 같은 폭이다. 카메라는 지도 아래에 쌓고,
      지도 칸이 충분히 넓은 110rem 이상에서만 옆에 둔다. */
   .console-primary > .panel[aria-labelledby="map-heading"] {
@@ -410,7 +410,7 @@ main {
 
 .robot-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 /* 버튼 글자는 낱자로 끊지 않는다. 좁으면 버튼째 다음 줄로 내린다. */
-.robot-actions ui-button { flex: 1 1 auto; white-space: nowrap; word-break: keep-all; }
+.robot-actions ui-button { flex: 1 1 0; white-space: nowrap; word-break: keep-all; }
 /* D-359 US-007 — 대형 버튼 넷은 사유를 달면 한 줄에 같은 폭으로 들지 않는다. 내용 폭에서 시작해
    남는 폭을 나누고, 모자라면 다음 줄로 접는다(390px에서 사유가 어절마다 꺾였다). */
 .formation-actions ui-button { white-space: normal; }

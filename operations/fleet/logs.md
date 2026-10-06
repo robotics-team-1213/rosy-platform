@@ -1996,3 +1996,8 @@
 - 변경: 운용·설치 비상 정지 응답과 운용 준비 순서·접속 안내의 좌우 여백을 본문 패널과 같게 했다.
 - 증거: 1920/390/320px 운용·설치 좌우 끝 브라우저 6 passed, 팔레트·토큰 52 passed, 각 `known_failures.py` 0 NEW. 원본은 X: UI/UX 회차의 `captures/fleet-width/`.
 - gate 변화: Fleet LOCAL 폭 근거 추가. 전체 G2/G3와 현장 사용자 독회는 HOLD다.
+## 2026-10-06 · uncommitted · uiux(fleet): 로봇 카드 행동 폭과 데스크톱 높이
+
+- 변경: 로봇 카드의 동등한 목표 지정·취소 버튼을 같은 폭으로 배치하고, 1920px 본문 하단 5px 넘침을 제거했다.
+- 증거: [UI/UX 평가](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320/390px 폭 단언과 1920px 높이 검사 등 Fleet 브라우저 6 passed, `known_failures.py` 0 NEW. 전화 원본은 X: `fleet_console_mobile_default_{320,390}.png`.
+- gate 변화: Fleet LOCAL 폭·높이 근거를 추가했다. 전체 G2/G3와 현장 사용자 독회는 HOLD.

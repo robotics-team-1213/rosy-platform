@@ -6501,3 +6501,8 @@ osy-d395-s1d\`.
 - 변경: 객체 검수의 390/320px 사진 이동 버튼을 동등한 전폭으로 쌓았다. 객체·픽셀 제외→재검수→승인→자료 준비를 합성 원본에서 재생하고 결과 캡처를 남겼다.
 - 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 객체 4폭·픽셀 3폭 브라우저 7 passed, `known_failures.py` 0 NEW. 각 결정 상태 원본 X: `captures/learning-decision-result/`.
 - gate 변화: `pinky-review` LOCAL G2 결정·결과 부분 근거 추가. 실제 검수자·자료 등록·학습 수용과 제품 전체 G2/G3는 HOLD.
+## 2026-10-06 · uncommitted · uiux(fleet): 동등한 카드 행동 폭
+
+- 변경: Fleet 로봇 카드의 동등한 행동 버튼을 같은 폭으로 맞추고, 1920px 본문 하단 5px 넘침을 제거했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 320/390px 버튼 폭과 1920px 높이 검사 포함 브라우저 6 passed, `known_failures.py` 0 NEW. 원본은 X: `fleet_console_mobile_default_{320,390}.png`.
+- gate 변화: Fleet LOCAL 부분 근거를 추가했다. 제품 전체 G2/G3와 실제 현장 수용은 HOLD.
