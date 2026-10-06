@@ -13,6 +13,7 @@ from review_app import ReviewStore, Conflict  # noqa: E402
 import review_evidence  # noqa: E402
 import review_ingest  # noqa: E402
 import review_masks  # noqa: E402
+import review_eval_bootstrap  # noqa: E402
 from test_mcap_proof import _fixture  # noqa: E402
 from mcap_proof import prove_frames  # noqa: E402
 from test_review_cycle import CLASSES  # noqa: E402
@@ -106,3 +107,16 @@ def test_eval_workspace_can_approve_pixels_but_cannot_export_training(tmp_path):
     assert review_evidence.validate_authority(review_evidence.decisions(store))
     with pytest.raises(ValueError, match="cannot export training"):
         store.prepare()
+
+
+def test_eval_bootstrap_reserves_before_import_and_replays_without_new_frames(tmp_path):
+    catalog, classes = _catalog(tmp_path)
+    digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+    kwargs = {'catalog_sha256': digest(catalog), 'classes_sha256': digest(classes)}
+    root, state = tmp_path / 'store', tmp_path / 'eval-state'
+    result = review_eval_bootstrap.start(root, state, catalog, classes, **kwargs)
+    assert result['frames'] == result['added'] == 1
+    from store import Store
+    assert Store(root).eval_reservations() == {'session': 'heldout-group'}
+    assert review_eval_bootstrap.start(root, state, catalog, classes, **kwargs)['added'] == 0
+    assert ReviewStore(state).get(0)['status'] == 'pending'
