@@ -41,9 +41,15 @@ HEIGHT_RANGE_M = (0.03, 0.10)
 ROLL_RANGE_DEG = (-4.0, 4.0)
 COARSE_PITCH_STEP_DEG = 0.5
 COARSE_HEIGHT_STEP_M = 0.005
+# The fine steps below are the robot's startup step (calibration_camera runs the whole grid
+# on the Pi). The offline PC fit (tools/calibration/analyze_session.py) passes PC_FINE_STEPS:
+# roll and height four and 2.5 times finer, about 20 times the grid. Pitch stays 0.1 deg:
+# real track fits band it at 0.6 deg (D-47 table), so a finer pitch step resolves nothing.
 FINE_PITCH_STEP_DEG = 0.1
 FINE_HEIGHT_STEP_M = 0.0025
 FINE_ROLL_STEP_DEG = 0.5
+FINE_STEPS = {'pitch_deg': FINE_PITCH_STEP_DEG, 'roll_deg': FINE_ROLL_STEP_DEG, 'height_m': FINE_HEIGHT_STEP_M}
+PC_FINE_STEPS = {'pitch_deg': 0.1, 'roll_deg': 0.1, 'height_m': 0.001}
 # Parameter values whose best score stays within this share of the peak are
 # "as good": their span is the reported uncertainty.
 SCORE_BAND = 0.10
@@ -187,12 +193,17 @@ def _profile(table, index):
     return values, [best[v] for v in values]
 
 
-def fit_camera_extrinsic(base: CameraPose, samples, wall_height_m=WALL_HEIGHT_M, fit_height=True):
+def fit_camera_extrinsic(base: CameraPose, samples, wall_height_m=WALL_HEIGHT_M, fit_height=True, steps=None):
     """Pitch, roll and (if observable) lens height that align LiDAR walls with image edges.
 
     Returns a dict: pitch_rad, roll_rad, height_m, height_source ('fit' or
     'base'), score, score_at_base, wall_points, uncertainty (half band widths)
-    and recommended; or {'error': ...} when no wall return is in view."""
+    and recommended; or {'error': ...} when no wall return is in view.
+
+    steps: the fine grid steps {pitch_deg, roll_deg, height_m}, default FINE_STEPS (the
+    robot's); the result's fit_step states them, and a band is resolved to one step. The
+    fine height window stays inside HEIGHT_RANGE_M, so an optimum on its edge reads at_bound."""
+    steps = dict(FINE_STEPS if steps is None else steps)
     score_at_base, n_base = wall_edge_score(base, samples, wall_height_m)
 
     def coarse(heights):
@@ -215,11 +226,12 @@ def fit_camera_extrinsic(base: CameraPose, samples, wall_height_m=WALL_HEIGHT_M,
         at_base = coarse([base.height_m])
         p0, h0 = max(at_base, key=lambda k: at_base[k][0]) if at_base else (p0, base.height_m)
     fine = {}
-    fine_heights = (_grid(h0 - 2 * COARSE_HEIGHT_STEP_M, h0 + 2 * COARSE_HEIGHT_STEP_M, FINE_HEIGHT_STEP_M)
+    fine_heights = (_grid(max(h0 - 2 * COARSE_HEIGHT_STEP_M, HEIGHT_RANGE_M[0]),
+                          min(h0 + 2 * COARSE_HEIGHT_STEP_M, HEIGHT_RANGE_M[1]), steps['height_m'])
                     if height_observable else np.array([h0]))
     for h in fine_heights:
-        for p in _grid(p0 - 1.0, p0 + 1.0, FINE_PITCH_STEP_DEG):
-            for r in _grid(*ROLL_RANGE_DEG, FINE_ROLL_STEP_DEG):
+        for p in _grid(p0 - 1.0, p0 + 1.0, steps['pitch_deg']):
+            for r in _grid(*ROLL_RANGE_DEG, steps['roll_deg']):
                 fine[(float(p), float(h), float(r))] = wall_edge_score(
                     base.replace(pitch_rad=math.radians(p), height_m=float(h), roll_rad=math.radians(r)),
                     samples, wall_height_m)
@@ -228,6 +240,13 @@ def fit_camera_extrinsic(base: CameraPose, samples, wall_height_m=WALL_HEIGHT_M,
     peak, n = fine[best]
     p_lo, p_hi = _band(*_profile(fine, 0), peak)
     r_lo, r_hi = _band(*_profile(fine, 2), peak)
+    if height_observable:
+        # The fine table resolves height to its step; where its band reaches the fine
+        # window the coarse band's extent is kept too.
+        f_lo, f_hi = _band(*_profile(fine, 1), peak)
+        if f_lo is not None:
+            h_lo, h_hi = ((f_lo, f_hi) if fine_heights[0] < f_lo and f_hi < fine_heights[-1]
+                          else (min(f_lo, h_lo), max(f_hi, h_hi)))
     # An optimum on the edge of a search window is not an optimum: the scene
     # (walls of unknown height, lane tape) fooled the score.
     at_bound = (min(abs(best[0] - PITCH_RANGE_DEG[0]), abs(best[0] - PITCH_RANGE_DEG[1])) < 1e-6
@@ -243,6 +262,7 @@ def fit_camera_extrinsic(base: CameraPose, samples, wall_height_m=WALL_HEIGHT_M,
         'wall_points': n,
         'uncertainty': {'pitch_deg': round((p_hi - p_lo) / 2, 2), 'roll_deg': round((r_hi - r_lo) / 2, 2),
                         'height_m': round((h_hi - h_lo) / 2, 4) if h_lo is not None else None},
+        'fit_step': steps,
         'recommended': bool(recommended),
         'at_bound': bool(at_bound),
         'why': ('fit beats the base profile' if recommended else
@@ -296,7 +316,8 @@ def candidate_profile(base_profile, fit, *, revision, source, yaw=None):
                roll_rad=round(float(fit['roll_rad']), 5))
     out.update(revision=str(revision), source=str(source), score=fit['score'],
                score_at_base=fit['score_at_base'], wall_points=fit['wall_points'],
-               uncertainty=fit['uncertainty'], height_source=fit['height_source'],
+               uncertainty=fit['uncertainty'], fit_step=fit.get('fit_step', FINE_STEPS),
+               height_source=fit['height_source'],
                recommended=fit['recommended'], why=fit['why'],
                base={'pitch_rad': float(base_profile['pitch_rad']), 'height_m': float(base_profile['height_m'])})
     if yaw is not None:
