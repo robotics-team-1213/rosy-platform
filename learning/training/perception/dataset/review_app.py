@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import mimetypes
 import secrets
@@ -225,7 +226,23 @@ class ReviewStore:
             return [json.loads(r[0]) for r in db.execute('SELECT receipt FROM exports ORDER BY rowid DESC LIMIT 10')]
 
 
-def make_server(store, port=8767):
+# D-476: loopback, RFC1918, link-local and Tailscale only; never wildcard or public.
+BIND_NETWORKS = [ipaddress.ip_network(n) for n in (
+    '127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16', '100.64.0.0/10')]
+
+
+def check_bind_host(host):
+    try:
+        address = ipaddress.IPv4Address(host)
+    except ValueError:
+        raise ValueError(f'--host must be a literal IPv4 address, got {host!r}') from None
+    if not any(address in net for net in BIND_NETWORKS):
+        raise ValueError(f'--host {host} is not loopback, private, link-local or Tailscale 100.64.0.0/10')
+    return host
+
+
+def make_server(store, port=8767, host='127.0.0.1'):
+    check_bind_host(host)
     token = secrets.token_urlsafe(32)
     learning = Workspace(store.db)
 
@@ -245,7 +262,8 @@ def make_server(store, port=8767):
             self.wfile.write(data)
 
         def allowed_host(self):
-            return self.headers.get('Host') in (f'127.0.0.1:{self.server.server_port}', f'localhost:{self.server.server_port}')
+            port = self.server.server_port
+            return self.headers.get('Host') in (f'127.0.0.1:{port}', f'localhost:{port}', f'{host}:{port}')
 
         def do_GET(self):
             if not self.allowed_host():
@@ -325,7 +343,8 @@ def make_server(store, port=8767):
             if not self.allowed_host() or self.headers.get('X-Pinky-Token') != token:
                 return deny()
             origin = self.headers.get('Origin')
-            if origin and origin not in (f'http://127.0.0.1:{self.server.server_port}', f'http://localhost:{self.server.server_port}'):
+            port = self.server.server_port
+            if origin and origin not in (f'http://127.0.0.1:{port}', f'http://localhost:{port}', f'http://{host}:{port}'):
                 return deny()
             try:
                 length = int(self.headers.get('Content-Length', '0'))
@@ -365,7 +384,7 @@ def make_server(store, port=8767):
             except (ValueError, KeyError, OSError) as exc:
                 self.send({'error': str(exc)}, 400)
 
-    return ThreadingHTTPServer(('127.0.0.1', port), Handler)
+    return ThreadingHTTPServer((host, port), Handler)
 
 
 def main():
@@ -375,6 +394,7 @@ def main():
     parser.add_argument('--human', type=Path)
     parser.add_argument('--images', type=Path)
     parser.add_argument('--port', type=int, default=8767)
+    parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-476)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--cad-catalog', type=Path, help='verified CAD reference catalog shown in app')
     args = parser.parse_args()
@@ -383,8 +403,8 @@ def main():
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
             if path:
                 db.execute('INSERT OR REPLACE INTO metadata VALUES (?,?)', (key, str(path.resolve())))
-    server = make_server(store, args.port)
-    print(f'Pinky review: http://127.0.0.1:{server.server_port}', flush=True)
+    server = make_server(store, args.port, args.host)
+    print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
