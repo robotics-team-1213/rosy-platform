@@ -87,6 +87,10 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 설치 화면의 카메라 연결 승인 제목 아래에 건너뛴 `h5` 수준도 `h3`/`h4`로 정리했다. 글자 크기와 간격은 기존 토큰 값을 유지한다. 이는 문서 구조 수정이며 화면 사용성·현장 수용 판정은 위 상태 근거와 별개다.
 
+### 실제 사이트 PC mDNS 점검 — UI 수용과 별개
+
+앞선 외부 PC 점검은 다른 LAN에서 `.local`을 찾지 못했고 당시 SSH·8443 연결도 거절되어 현장 서비스를 판단할 수 없었다. **2026-10-06 21:22 KST**에 승인된 기존 사이트 PC로 Tailscale SSH가 열려 읽기 전용으로 다시 확인했다. 호스트 Avahi에는 사이트 Fleet·관제 카메라 광고와 두 로봇의 `_rosy._tcp` 광고가 있었고, 사용자의 mDNS bridge timer는 활성 상태에서 최근 두 장치 스캔을 Fleet에 전달했다. Fleet 컨테이너의 실제 서비스 UID(10001)로 두 로봇 `.local` 이름과 내부 `fleet`·`vision`·`proxy` 이름이 풀렸다. LAN 주소를 명시한 사이트 CA 검증 HTTPS `/healthz`와 `/console`은 각각 200이었다. 원본은 X: `logs/site-mdns-live/`에 둔다. 호스트 자체에서 실행한 Fleet mDNS locator는 같은 광고를 Docker·loopback·Wi-Fi 여러 주소로 받아 `ambiguous Fleet host advertisement`로 거절했다. 이는 호스트 자체 조회의 실패이며 로봇 LAN 클라이언트의 발견 실패로 판정하지 않는다. Fleet의 인증된 discovery 화면·등록 상태, 현재 작업 브랜치의 사이트 설치, 사용자 조작 G3, 로봇·카메라 실물 상태 readback은 여전히 **미확인**이다.
+
 ### Fleet Cell 작업 G2/G3 — LOCAL 부분 근거
 
 `shared/web/surfaces.yaml`의 활성 `console`은 사이트 관제·설치와 함께 `/console/cell`의 문서 준비·작업 제안도 소유한다. 이 회차의 Cell 질문은 **운영자가 레시피·셀 문서를 준비하고 미리보기·제안·승인·HOLD·취소의 상태와 사이트 정지 경계를 구분할 수 있는가**다. 선언 뷰포트는 1440×1000, 390×844, 320×568이다. 이전 점검에서는 이 경로가 카드에서 빠져 있었다.
@@ -106,8 +110,6 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 작업 제안·승인·취소와 간지 접근 보류의 API 상태를 운영자 문구로 표시하고, 원래 상태 코드는 접힌 진행 원장 상세에 남겼다. 1440×1000·390×844·320×568에서 간지 접근 보류 이유, 재승인 차단, 가로 넘침 없음과 정지 버튼의 첫 화면 노출을 확인했다. 390/320px의 Cell 붙박이 머리는 토큰 접속을 본문 위 별도 줄로 내려 88px로 줄여 D-359의 창 높이 20% 한도를 통과했다(수정 전 177px, 두 전화 폭에서 실패). 전체 Cell 브라우저 **33 passed**, Cell API **8 passed**, 공유 UI 계약 **89 passed**, 각 `known_failures.py` **0 NEW**, JS 구문 검사 통과. 원본은 X: `logs/fleet-cell-{vocabulary-red,header-red,browser-full,api-current,shared-current}.txt`, `captures/fleet-cell-vocabulary/fleet-cell-held-sheet-{1440x1000,390x844,320x568}.png`다. 이 결과는 합성 Fleet 응답의 LOCAL G2 부분 근거다.
 
 작업 제안 단계의 「재승인」과 간지 접근 보류 단계의 「실행 승인」에 기존에는 둘 다 「저장 후 미리보기 필요」라는 잘못된 비활성 사유가 보였다. 상태를 읽지 않았을 때는 먼저 작업 상태 확인을, 읽은 작업의 단계가 맞지 않을 때는 해당 조작이 불가능함을 알려 준다. 세 폭의 두 흐름에서 먼저 **6 failed**, 수정 뒤 **6 passed**를 확인했고 Cell 브라우저 전체 **33 passed**, `known_failures.py` **0 NEW**, JS 구문 검사 통과다. 원본은 X: `logs/fleet-cell-action-reason-{red,green,full}.txt`. 버튼의 허용 조건이나 요청은 바꾸지 않았다.
-
-기존 사이트의 관제 PC는 비공개 인벤토리의 LG `robttt@100.82.51.8`로 식별했고 Tailscale peer는 online이었다. 현재 Windows 클라이언트는 다른 LAN(192.168.133.x)에 있고 `_rosy-fleet._tcp.local`·`_rosy-overhead._tcp.local` DNS 조회는 없었다. 사이트 SSH는 tailnet 정책이 거부했고 8443 TCP 연결도 실패했다. 따라서 현장 Avahi 광고, Fleet 컨테이너 실제 UID의 NSS `.local` 조회, 현장 UI·장치 readback은 **미확인**이다. mDNS 발견 실패를 현장 서비스 장애로 판정하지 않는다.
 
 G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나머지 경로, 권한 거부와 저장/컴파일 실패의 나머지 경로, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
 

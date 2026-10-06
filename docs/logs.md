@@ -6527,3 +6527,9 @@ osy-d395-s1d\`.
 - 변경: 게임 보드의 320/390px 첫 실패→수신→끊김 브라우저 시나리오를 실제 재연결까지 연장했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/game-recovery/` 여섯 장과 `logs/game-recovery-{green-before-mutation,mutation-red,final}.txt`; 최종 2 passed, `known_failures.py` 0 NEW. fresh 문구 분기 변이에서 2 failed, 복원 후 2 passed.
 - gate 변화: LOCAL 상태 전이·폭 근거 추가. 제품 전체 G2/G3와 현장 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(site): 기존 PC의 mDNS 경로 재확인
+
+- 변경: 외부 PC의 `.local` 실패와 사이트 PC 자체의 실제 발견·브리지·Fleet UID 조회를 구분해 UI/UX 회차에 기록했다. 비공개 PC·로봇 주소는 공개 기록에서 뺐다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `logs/site-mdns-live/` 원본. 사이트 Avahi에 로봇 둘, 사용자 bridge의 최근 2건 전달, Fleet UID의 `.local`·내부 이름 조회 성공, 사이트 CA 검증 HTTPS health/console 200. 호스트 자체 locator는 여러 로컬 인터페이스 주소로 인한 ambiguous 오류.
+- gate 변화: SITE mDNS·서비스 도달의 부분 근거 추가. 인증된 Fleet 화면, 브랜치 설치, 현장 사용자 G3와 로봇·카메라 readback은 HOLD.
