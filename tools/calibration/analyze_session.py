@@ -41,6 +41,8 @@ from core_common.calibration_store import CalibrationStore  # noqa: E402
 from geometry import Lidar, PoseSeries, robot_lidar_yaw_deg  # noqa: E402
 from control.sensing import odometry_fit as OF  # noqa: E402
 from control.sensing.perception import camera_extrinsic as CE  # noqa: E402
+sys.path.insert(0, str(HERE))
+from student_t import t95  # noqa: E402
 
 PROFILE_PATH = REPO / "middleware" / "apps" / "device" / "pinky" / "profile" / "config" / "camera_nominal.yaml"
 BRINGUP_PARAMS = REPO / "middleware" / "apps" / "device" / "pinky" / "bringup" / "config" / "rosy_params.yaml"
@@ -55,13 +57,6 @@ CAMERA_EVERY_S = 2.0
 # 3 minutes per 24-frame run on a laptop (163-173 s vs 18 s, 8kcn 133221Z, 2026-10-07).
 # The robot's startup step (calibration_camera) keeps the robot grid.
 CAMERA_FIT_STEPS = CE.PC_FINE_STEPS
-# Student t, two-sided 95 %, by degrees of freedom.
-T95 = {1: 12.71, 2: 4.30, 3: 3.18, 4: 2.78, 5: 2.57, 6: 2.45, 7: 2.36, 8: 2.31, 9: 2.26, 10: 2.23}
-
-
-def t95(dof):
-    return T95.get(dof, 1.96) if dof > 0 else math.inf
-
 
 def load_profile(path=PROFILE_PATH):
     return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
@@ -300,10 +295,11 @@ def combine(device, runs, yaw_cfg_deg, profile):
     # Only runs whose camera fit passed its own gates (margin, wall points, not on a bound).
     cams = [r["camera"] for r in runs if "camera" in r and "error" not in r["camera"]
             and r["camera"].get("recommended")]
-    # Height: only the runs that fitted it (a kept base height is not a measurement).
+    # When any run fitted the height, only those runs count: a kept base height is not a
+    # measurement, and that run fitted its pitch and roll at the wrong height.
     fitted = [c for c in cams if c.get("height_source") == "fit"]
-    cam = {k: _stats([math.degrees(c[k]) if k.endswith("_rad") else c[k]
-                      for c in (fitted or cams if k == "height_m" else cams)])
+    used = fitted or cams
+    cam = {k: _stats([math.degrees(c[k]) if k.endswith("_rad") else c[k] for c in used])
            for k in ("pitch_rad", "roll_rad", "height_m")} if cams else None
     candidate = {
         "schema": "rosy.calibration.candidate/1",
@@ -323,11 +319,11 @@ def combine(device, runs, yaw_cfg_deg, profile):
                                    "camera": [c.get("yaw_check") for c in cams]},
     }
     if cams:
-        best = max(cams, key=lambda c: c["wall_points"])
+        best = max(used, key=lambda c: c["wall_points"])
         mean_fit = dict(best, pitch_rad=math.radians(cam["pitch_rad"]["mean"]),
                         roll_rad=math.radians(cam["roll_rad"]["mean"]), height_m=cam["height_m"]["mean"],
                         height_source="fit" if fitted else "base",
-                        uncertainty=camera_interval(cams, cam))
+                        uncertainty=camera_interval(used, cam))
         candidate["camera"] = CE.candidate_profile(
             profile, mean_fit, revision=f"camera-extrinsic-{device}-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}",
             source="tools/calibration/analyze_session.py: " + ", ".join(r["session"] for r in runs))

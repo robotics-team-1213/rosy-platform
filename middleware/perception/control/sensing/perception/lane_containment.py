@@ -16,7 +16,7 @@ import math
 
 import numpy as np
 
-from .camera_extrinsic import FINE_STEPS
+from .camera_extrinsic import FINE_STEPS, PC_FINE_STEPS
 
 #: Lateral error of the lane edge detector in image pixels on the Gazebo camera (547b2d509).
 #: Real grounds take theirs from the profile key detector_lateral_px.
@@ -45,8 +45,9 @@ def geometry_error(profile, intervals, *, overridden=()):
     steps (one without fit_step predates them and ran the robot grid, FINE_STEPS), and a
     continuous fit (camera_board/1) states zero steps. Its bands are only the scatter of its
     views, blind to error they share (distortion, intrinsics, print scale, elevation), so a
-    zero-step record must also state intervals["systematic"] {pitch_deg, roll_deg, height_m}
-    from an independent truth check; it is added to each band. A band that is not positive,
+    record with any step finer than the PC grid (PC_FINE_STEPS) must also state
+    intervals["systematic"] {pitch_deg, roll_deg, height_m} from an independent truth check.
+    A stated systematic is added to each band, whatever the steps. A band that is not positive,
     or a fit_step or systematic that is not three non-negative reals, is refused. The ground ignores roll, so a
     record's fitted roll is error too. An operator override of pitch or height states no
     error: None.
@@ -69,12 +70,13 @@ def geometry_error(profile, intervals, *, overridden=()):
     if not all(_real(v) and v >= 0 for v in step):
         return None
     pitch_step, roll_step, height_step = step
-    shared = (0., 0., 0.)
-    if not any(step):
-        shared = intervals.get("systematic")
-        shared = [shared.get(k) for k in ("pitch_deg", "roll_deg", "height_m")] if isinstance(shared, dict) else [None]
-        if not all(_real(v) and v >= 0 for v in shared):
-            return None
+    keys = ("pitch_deg", "roll_deg", "height_m")
+    shared = intervals.get("systematic")
+    if shared is None and not any(s < PC_FINE_STEPS[k] for s, k in zip(step, keys)):
+        shared = dict.fromkeys(keys, 0.)
+    shared = [shared.get(k) for k in keys] if isinstance(shared, dict) else [None]
+    if not all(_real(v) and v >= 0 for v in shared):
+        return None
     pitch_shared, roll_shared, height_shared = shared
     pitch, roll_band, roll, height = band.get("pitch_deg"), band.get("roll_deg"), profile.get("roll_rad"), band.get("height_m")
     if not all(_real(v) for v in (pitch, roll_band, roll)) or min(pitch, roll_band) <= 0:
