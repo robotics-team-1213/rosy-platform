@@ -10,6 +10,7 @@ Ollama must listen on loopback (rosy-ollama unit on the model PC, D-465).
 import argparse
 import base64
 import hashlib
+import http.client
 import json
 import sys
 import time
@@ -72,7 +73,7 @@ def main(argv=None):
                            "model": args.model, "prompt_id": PROMPT_ID}
                     try:
                         row["drivable"] = parse_points(ask(frame, args.url, args.model), frame.shape[1], frame.shape[0])
-                    except (OSError, ValueError, KeyError, TypeError) as e:   # URLError/timeouts are OSError
+                    except (OSError, http.client.HTTPException, ValueError, KeyError, TypeError) as e:  # URLError/timeouts are OSError
                         row["drivable"], row["error"] = [], f"{type(e).__name__}: {e}"[:200]
                         errors += 1
                     row["seconds"] = round(time.time() - t, 1)

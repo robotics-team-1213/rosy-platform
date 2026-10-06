@@ -61,7 +61,7 @@ def select_rows(rows, video_sha, n):
         f = row.get("video_frame")
         if row.get("source_video_sha256") != video_sha:
             skipped.append({"row": i, "reason": "other video"})
-        elif not isinstance(f, int) or not 0 <= f < n:
+        elif type(f) is not int or not 0 <= f < n:
             skipped.append({"row": i, "reason": f"video_frame {f!r} outside 0..{n - 1}"})
         else:
             kept.append((i, row))
@@ -121,7 +121,7 @@ def track_carpet(tracker, frames, rgb, lane, keypoints, every, torch):
         if not pos:
             continue
         seg = segment_dir(frames, k, every, n)
-        state = tracker.init_state(video_path=str(seg), offload_video_to_cpu=True)
+        state = tracker.init_state(video_path=str(seg), offload_video_to_cpu=True, async_loading_frames=False)
         tracker.add_new_points_or_box(
             inference_state=state, frame_idx=0, obj_id=1,
             points=torch.tensor([[x / w, y / h] for x, y in pos], dtype=torch.float32),
@@ -164,6 +164,13 @@ def main(argv=None):
         sys.exit(f"no base row belongs to {args.video} ({len(skipped)} skipped)")
     need = set(range(0, n, args.every)) | {row["video_frame"] for _, row in kept}
     rgb = {i: cv2.cvtColor(cv2.imread(str(frames / f"{i:05d}.jpg")), cv2.COLOR_BGR2RGB) for i in need}
+    bases = {}
+    for i, row in kept:     # check base masks before any SAM work
+        b = cv2.imread(str(args.base.parent / row["mask"]["indexed_png"]), cv2.IMREAD_UNCHANGED)
+        if b is None or b.shape != rgb[row["video_frame"]].shape[:2]:
+            shutil.rmtree(args.out)
+            sys.exit(f"base mask for row {i} missing or not frame-sized: {row['mask']['indexed_png']}")
+        bases[i] = b
     proc = Sam3Processor(build_sam3_image_model(checkpoint_path=str(args.checkpoint), load_from_HF=False))
     lane = lane_masks(proc, frames, n, need, torch, Image)
     video_model = build_sam3_video_model(checkpoint_path=str(args.checkpoint), load_from_HF=False)
@@ -175,9 +182,7 @@ def main(argv=None):
     out_rows, stats = [], []
     for i, row in kept:
         f = row["video_frame"]
-        base = cv2.imread(str(args.base.parent / row["mask"]["indexed_png"]), cv2.IMREAD_UNCHANGED)
-        if base is None or base.shape != carpet[f].shape:
-            sys.exit(f"base mask for row {i} missing or not {carpet[f].shape}: {row['mask']['indexed_png']}")
+        base = bases[i]
         road, unsure = rd.robot_road(rd.close_mask(carpet[f]) & ~rd.yellow_mask(rgb[f]), lane[f])
         cm = rd.compose(base, road, rd.yellow_mask(rgb[f]))
         name = f"drafts/{i:06d}.png"
@@ -192,7 +197,7 @@ def main(argv=None):
     shutil.rmtree(frames)
     commit = subprocess.run(["git", "-C", str(Path(__file__).parent), "rev-parse", "HEAD"],
                             capture_output=True, text=True).stdout.strip()
-    receipt = {"collection": COLLECTION, "source_commit": commit, "video_sha256": sha(args.video),
+    receipt = {"collection": COLLECTION, "source_commit": commit, "video_sha256": video_sha,
                "keypoints_sha256": sha(args.keypoints), "base_sha256": sha(args.base),
                "checkpoint_sha256": sha(args.checkpoint), "every": args.every, "lane_prompt": LANE_PROMPT,
                "frames": n, "skipped_rows": skipped, "seconds": round(time.time() - t0, 1),

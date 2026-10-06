@@ -37,7 +37,8 @@ class FakeTracker:
     def __init__(self):
         self.segments, self.calls = [], []
 
-    def init_state(self, video_path, offload_video_to_cpu):
+    def init_state(self, video_path, offload_video_to_cpu, async_loading_frames):
+        assert async_loading_frames is False     # the segment folder is deleted right after
         frames = sorted(p.name for p in Path(video_path).iterdir())
         self.segments.append(frames)
         return {"len": len(frames), "id": len(self.segments)}
