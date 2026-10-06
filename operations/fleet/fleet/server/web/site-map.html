@@ -35,7 +35,10 @@
         </select></label>
       </ui-head>
       <ui-status id="map-status" state="empty">지도 없음</ui-status>
-      <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
+      <ui-text class="map-scroll-hint">좁은 화면에서는 지도를 좌우로 밀어 확인하세요.</ui-text>
+      <div class="map-viewport" role="region" aria-label="현장 지도 가로 이동" tabindex="0">
+        <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
+      </div>
       <ui-text>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
     </ui-section>
     <div class="columns">
