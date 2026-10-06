@@ -32,9 +32,7 @@ private/tailscale-auth-key.txt    # gitignored. 양식은 sd/tailscale-auth-key.
 
 ## 3. 로봇 가입 — 개발 기기 1대부터 (D-477 7항)
 
-**새 카드를 구울 때:** 카드 준비 단계에서 join 키를 번들로 전달한다
-(`tailscale_auth_key`, 선택 `tailscale_tags`). 첫 부팅이 `/etc/rosy/tailscale-join.json`(0600)을 쓰고
-`rosy-tailscale-join.service`가 키를 한 번 소진한다. 키가 없으면 이 단계 전체가 건너뛰어진다(LAN 전용 로봇).
+**새 카드를 구울 때:** 번들·검증·첫 부팅 경로는 갖춰져 있다(번들 `tailscale` 섹션, stdin `tailscale_auth_key`, 첫 부팅의 `/etc/rosy/tailscale-join.json`). 아직 `prepare-rosy-sd.ps1`·`write-card.ps1`에 키 파일 플래그가 없다(후속 커밋). 그 전에는 아래 수동 경로로 가입한다. 키가 없으면 이 단계 전체가 건너뛰어진다(LAN 전용 로봇).
 
 **이미 돌아가는 로봇에 수동으로:** 이미 키 등록으로 SSH가 되는 운영자가 join 파일을 쓰고 유닛을 시작한다.
 
