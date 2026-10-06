@@ -6610,3 +6610,9 @@ osy-d395-s1d\`.
 - 변경: 학습 검수 네 경로의 503→재시도 브라우저 검사에 320px을 더하고 좁은 폭의 재시도 버튼 너비를 확인했다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-unavailable-current/` 320/390px 8장과 `logs/merge-20261006/learning-unavailable-{current,320}.txt`. 각 폭 브라우저 4 passed, `known_failures.py` 0 NEW; 네 320px 화면 원본을 육안 확인했다.
 - gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): Cell 빈 평면도 공백 제거
+
+- 변경: Fleet Cell의 미리보기 전·실패 상태에서 빈 팔레트 선택과 20rem 평면도를 감추고, 실제 배치가 계산됐을 때만 표시한다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/fleet-cell-empty-layout-fix/`와 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`. 변경 전 320px 1 failed, 변경 뒤 320/390/1440px 관련 브라우저 4 passed, 공용 UI·토큰 계약 62 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 작업 순서 개선. 실제 운영자 G3와 현장 장치 readback은 HOLD.

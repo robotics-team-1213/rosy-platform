@@ -2091,3 +2091,9 @@
 - 변경: `fleet/server/development_session.py`(세션 저장소·LAN 주소·Host/Origin·분당 6회·상한 8·1시간 만료·발급 감사), `site_auth.build_authorize`의 개발 세션 우선 확인, `require_named_operator`의 `development-*` 허용, `--connection-mode`와 `ROSY_DEPLOYMENT` 이중 조건, 콘솔 자동 발급·배지.
 - 증거: 위 호스트 pytest와 브라우저 시험. 사이트 Caddy 뒤 `X-Forwarded-For`·`Host` 전달은 실사이트 확인이 필요하다.
 - gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-07 · uncommitted · Cell 빈 미리보기 평면도 숨김
+
+- 변경: 배치가 계산되기 전 또는 미리보기 결과가 무효가 된 동안 팔레트 선택과 빈 20rem 평면도를 함께 숨긴다. 배치가 있는 성공 결과에서만 다시 보인다.
+- 증거: 320px 초기·503/복구와 390px 초기·1440px 503/복구 Chromium **4 passed**, 공용 UI·토큰 계약 **62 passed**, 각 `known_failures.py` 0 NEW, JS 구문 검사 통과. UI/UX 회차 X: `captures/fleet-cell-empty-layout-fix/`와 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`.
+- gate 변화: LOCAL 화면 근거 추가. 현장 배치·운영자 G3는 HOLD.
