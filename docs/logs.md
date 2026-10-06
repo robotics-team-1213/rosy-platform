@@ -6683,3 +6683,9 @@ osy-d395-s1d\`.
 - 변경: `3a6c5d43e` 코드 후보의 Fleet 브라우저 파일 전체를 재실행하고 75개 현재 PNG의 범위를 회차 평가에 기록했다.
 - 증거: X: `2026-10-07-fleet-full/run.txt`; **103 passed**, `known_failures.py` 0 NEW.
 - gate 변화: 현재 후보 LOCAL 상태 근거 강화. D-153의 상태 × 폭 전체 캡처, 사이트 설치·장치 readback·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): 예외 상태 27셀 현재 화면 재촬영
+
+- 변경: D-153 Fleet 상태 9개×선언 폭 3개의 현재 캡처에서 찾은 데스크톱 넘침 3건을 목록 내부 스크롤·예외 지도 높이·viewer 권한 안내 배치로 고쳤다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `2026-10-07-fleet-g2/`; 27/27셀 계측, 데스크톱 변이 3 failed→복원 4 passed, 권한 Node 변이 1 failed→전체 137 passed, Fleet 브라우저 106 passed, G1 90 passed, Fleet 계약 60 passed, Python `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 부분 근거 강화. 실물/사이트·사용자 G3는 HOLD.

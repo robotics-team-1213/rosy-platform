@@ -34,6 +34,7 @@ export function applyRoleToControls(role, controls) {
         continue;
       }
       if (note) {
+        if (control.localName === "ui-button") control.removeAttribute("reason");
         note.hidden = false;
         describe(control, note.id, true);
       }

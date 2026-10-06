@@ -194,7 +194,7 @@ main {
 /* 현장과 개입 영역을 나눈다. 로봇 목록은 오른쪽에서 독립적으로 스크롤한다.
    두 열은 wide 단에서만이다 — 그 아래는 한 열이다(62rem 겹침에서 생기던 암시적 열을 없앤다). */
 @media (width >= 64rem) {
-  main { padding-bottom: var(--space-2); }
+  main { padding-bottom: var(--space-1); }
   /* 지도와 개입 칸은 같은 폭이다. 카메라는 지도 아래에 쌓고,
      지도 칸이 충분히 넓은 110rem 이상에서만 옆에 둔다. */
   .console-primary > .panel[aria-labelledby="map-heading"] {
@@ -205,9 +205,11 @@ main {
   /* 2026-10-02 회차 계측 — 큐가 채워지는 순간 지도 아래 칸은 '예외가 먼저'(D-201)를
      위반한다(1920에서 큐 상단 963px). 예외 큐는 첫 행, 지도는 그 아래. */
   .queues-panel { grid-column: 1; grid-row: 1; }
+  .queues-panel:not([hidden]) { max-height: min(20dvh, 12rem); overflow-y: auto; }
+  .console-primary:has(> .queues-panel:not([hidden])) .map-stage #map-canvas { height: min(28dvh, 20rem); }
   .console-primary { grid-column: 1; }
   .console-secondary { grid-column: 2; }
-  #roster { min-height: 0; max-height: min(60dvh, 40rem); overflow-y: auto; }
+  #roster { min-height: 0; max-height: min(11.25rem, 60dvh); overflow-y: auto; }
   .ops-block { grid-column: 1 / -1; gap: var(--space-2); }
   .ops-block > h2, .ops-block .install-link { margin: 0; }
   .ops-block > .log-panel { grid-column: 1; grid-row: 3 / span 2; }
@@ -521,6 +523,7 @@ main {
 }
 .estop span { white-space: nowrap; }
 .estop small { flex-basis: 100%; text-align: center; }
+#estop[disabled][reason] > small:not([data-reason]) { display: none; }
 
 /* D-417 — 카메라 컴팩트 모드: 소스 없거나 연결 불가면 한 줄로 접는다. */
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .vision-controls,

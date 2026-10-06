@@ -2115,3 +2115,9 @@
 - 변경: 1920×1080에서 관제 문서의 43px 세로 넘침을 확인하고 데스크톱 관제 칸 간격·안쪽 여백과 대형 readout의 기본 margin을 줄였다. D-415의 8줄 로그는 유지했다.
 - 증거: `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-d487\`의 `browser-fixed2.txt` **8 passed**, `connection.txt` **1 passed**, `contracts.txt` **60 passed**, `node-files.txt` **137 passed**, 각 Python 실행의 `known_failures.py` 0 NEW, `fleet_console_fit.png`에서 하단까지 표시.
 - gate 변화: LOCAL G2 부분 근거. 사이트 PC·카메라·로봇과 운영자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · Fleet D-153 27셀 재촬영과 예외 상태 데스크톱 맞춤
+
+- 변경: desktop 목록은 한 예외 카드 높이에서 내부 스크롤하고, 예외 큐가 뜰 때 지도와 큐를 뷰포트에 맞췄다. viewer의 중복 버튼 사유를 그룹 안내 한 줄로 정리하고 비상 정지 권한 이유가 보이게 했다.
+- 증거: X: `projects/rosy-platform/2026-10-07-fleet-g2/`의 9상태×3폭 `capture.json`·27장 PNG·`validate.txt` 27/27셀. 변경 전 delayed 154px, disconnected 105px, viewer 48px 데스크톱 넘침; 보정 제거 브라우저 3 failed/복원 4 passed, 권한 Node 변이 1 failed/전체 웹 모듈 137 passed, 전체 Fleet 브라우저 106 passed, G1 90 passed, 서버·팔레트 60 passed, Python `known_failures.py` 0 NEW.
+- gate 변화: 현재 후보 LOCAL G2 상태·폭 근거 추가. 사이트/장치 readback과 운영자 G3는 HOLD.

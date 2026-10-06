@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · Fleet D-153 27셀 재촬영과 예외 상태 데스크톱 맞춤
 - 2026-10-07 · uncommitted · D-487 이후 Fleet 데스크톱 높이 보정
 - 2026-10-07 · 93c606cbb · D-487 관제 화면 Rosy Fleet·버드아이 우선
 - 2026-10-07 · uncommitted · Cell 빈 미리보기 평면도 숨김
 - 2026-10-06 · uncommitted · feat(fleet): D-484 field_boundary sighting 수용
-- 2026-10-06 · uncommitted · D-473 관제 콘솔 개발 연결 모드
