@@ -1133,3 +1133,11 @@
 - 변경: GAZEBO 지면 투영 불확실도의 2 px를 `GAZEBO_DETECTOR_LATERAL_PX`로 이름 붙였다. 측정이 아닌 휴리스틱이다. 동작은 같다.
 - 증거: `test_lane_containment_payload.py` 6 PASS.
 - gate 변화: 없음.
+
+## 2026-10-07 · b53e1fe19 · fix(perception): camera fit grid steps, fine height band, record fit_step
+- 변경: `camera_extrinsic.fit_camera_extrinsic(steps=)`가 미세 격자 간격을 받아 결과에 `fit_step`으로 적는다. 기본은 로봇 격자(`FINE_STEPS` 0.1° / 0.5° / 2.5 mm), PC 오프라인 적합(`tools/calibration/analyze_session.py`)만 `PC_FINE_STEPS`(0.1° / 0.1° / 1 mm, 실행당 약 170 s, 로봇 격자 18 s). `lane_containment.geometry_error`의 하한은 기록의 `intervals.fit_step`(없으면 로봇 격자)
+- 로봇 경로 출력도 바뀐다(리뷰 지적): (1) 높이를 적합할 때 높이 band를 5 mm 거친 표가 아니라 미세 표에서 잰다. band가 미세 창 끝에 닿으면 거친 band 범위를 함께 쓴다. 그래서 로봇 기록의 높이 band가 5 mm 단위에서 2.5 mm 단위로 좁아질 수 있다. 하한(로봇 격자 2.5 mm)은 그대로 적용된다. (2) 미세 높이 창을 `HEIGHT_RANGE_M` 안으로 자른다. 범위 아래 최적값(8kcn 133221Z에서 0.025 m가 recommended였다)은 이제 at_bound, not recommended. (3) `calibration_camera`가 기록 intervals에 `fit_step`을 함께 저장한다. 로봇이 PC 격자를 돌리지는 않는다(`test_camera_extrinsic.py` StepTest가 고정)
+- 증거: `test_camera_extrinsic.py` FitStepTest(뾰족한 점수 대역으로 간격·창 자르기·band), `test_lane_containment_payload.py` fit_step 하한, `test_analyze_store.py`. 8kcn 세션 5개 PC 재적합: 피치 12.52 ± 2.43°, 롤 −0.96 ± 1.24°, 높이 0.0627 ± 0.0236 m(95 %, n=5) → 후보 기록 `20261006T18485199375_0c367ced2231`(PC 미러, 미승인), 투영 불확실도 0.12–0.30 m 지지에서 약 88 mm
+- gate 변화: 없음. SOURCE만
+- 결정: D-468, D-47 addendum. G-15(D-480)
+- 교훈: 벽-모서리 점수는 높이 방향으로 들쭉날쭉하다. 한 실행의 점수 band가 아니라 실행 간 ci95가 실제 오차를 보여 준다

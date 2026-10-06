@@ -53,6 +53,8 @@ WHEEL_TOLERANCE = 0.10
 DIR_MODE = 0o2775
 FILE_MODE = 0o664
 PROFILE_POSITIVE_KEYS = ("width", "height", "fx", "cx", "cy", "max_range_m")
+# Lateral lane-edge detector error a camera_profile may state (D-468 projection uncertainty).
+DETECTOR_LATERAL_PX_MAX = 5.0
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
 
@@ -340,7 +342,7 @@ def check_values(kind, values, *, nominal=None):
     nominal["lidar_forward_deg"] (the hand value). wheel_odometry: radius and
     separation finite reals within WHEEL_TOLERANCE of nominal (default the
     URDF nominal). camera_profile: pitch_rad and height_m finite reals in a
-    physical range."""
+    physical range; detector_lateral_px, when present, in (0, DETECTOR_LATERAL_PX_MAX]."""
     if not isinstance(values, dict):
         return "values are not a mapping"
     nominal = nominal or {}
@@ -372,6 +374,10 @@ def check_values(kind, values, *, nominal=None):
         for key in PROFILE_POSITIVE_KEYS:
             if key in values and not (_real(values[key]) and values[key] > 0):
                 return f"{key} must be a finite positive number"
+        if "detector_lateral_px" in values:
+            px = values["detector_lateral_px"]
+            if not (_real(px) and 0 < px <= DETECTOR_LATERAL_PX_MAX):
+                return f"detector_lateral_px must be in (0, {DETECTOR_LATERAL_PX_MAX}] px"
         return None
     return f"unknown kind {kind!r}"
 

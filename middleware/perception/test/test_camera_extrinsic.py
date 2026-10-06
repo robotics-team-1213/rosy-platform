@@ -173,6 +173,54 @@ class FitTest(unittest.TestCase):
         json.dumps(cand, allow_nan=False)
 
 
+
+def peaked_score(pitch_deg, roll_deg, height_m):
+    """A wall_edge_score stand-in with one sharp peak (score per unit off it is steep)."""
+    def score(cam, samples, wall_height_m=ce.WALL_HEIGHT_M):
+        off = (abs(math.degrees(cam.pitch_rad) - pitch_deg) + abs(math.degrees(cam.roll_rad) - roll_deg)
+               + 1000.0 * abs(cam.height_m - height_m))
+        return 100.0 - 20.0 * off, 500
+    return score
+
+
+class FitStepTest(unittest.TestCase):
+    """The fine grid steps (S1 2026-10-07): robot steps by default, PC steps when passed."""
+
+    def fit(self, peak, **kw):
+        original = ce.wall_edge_score
+        ce.wall_edge_score = peaked_score(*peak)
+        try:
+            return ce.fit_camera_extrinsic(ce.CameraPose.from_profile(PROFILE), [(np.zeros((1, 2)), None)], **kw)
+        finally:
+            ce.wall_edge_score = original
+
+    def test_default_fit_states_the_robot_steps(self):
+        fit = self.fit((11.2, -1.3, 0.0612))
+        self.assertEqual(fit['fit_step'], ce.FINE_STEPS)
+        self.assertEqual(ce.FINE_STEPS, {'pitch_deg': 0.1, 'roll_deg': 0.5, 'height_m': 0.0025})
+        self.assertAlmostEqual(math.degrees(fit['roll_rad']), -1.5, places=6)
+
+    def test_pc_steps_resolve_roll_and_height_to_their_step(self):
+        fit = self.fit((11.2, -1.3, 0.0612), steps=ce.PC_FINE_STEPS)
+        self.assertEqual(fit['fit_step'], {'pitch_deg': 0.1, 'roll_deg': 0.1, 'height_m': 0.001})
+        self.assertAlmostEqual(math.degrees(fit['roll_rad']), -1.3, places=6)
+        self.assertAlmostEqual(fit['height_m'], 0.061, places=6)
+        self.assertEqual(fit['height_source'], 'fit')
+        # The height band comes from the fine table, not the 5 mm coarse grid.
+        self.assertLess(fit['uncertainty']['height_m'], ce.COARSE_HEIGHT_STEP_M)
+
+    def test_fine_height_window_stays_in_the_search_range(self):
+        # An optimum below the range must read as on the bound, not as a 25 mm lens.
+        fit = self.fit((9.3, 0.5, 0.026), steps=ce.PC_FINE_STEPS)
+        self.assertGreaterEqual(fit['height_m'], ce.HEIGHT_RANGE_M[0])
+        self.assertTrue(fit['at_bound'])
+        self.assertFalse(fit['recommended'])
+
+    def test_candidate_carries_the_fit_step(self):
+        fit = self.fit((11.2, -1.3, 0.0612), steps=ce.PC_FINE_STEPS)
+        self.assertEqual(ce.candidate_profile(PROFILE, fit, revision='r', source='t')['fit_step'],
+                         ce.PC_FINE_STEPS)
+
 class Node(CalibrationCamera):
     """The node edges the mixin needs, recorded."""
 
@@ -262,6 +310,9 @@ class StepTest(unittest.TestCase):
             records = store.records(default_robot(), 'camera_profile')
             self.assertEqual([r['id'] for r in records], [report['store_record']])
             self.assertEqual(records[0]['status'], 'candidate')
+            # The robot runs the robot grid, never the PC one, and the record says so.
+            self.assertEqual(saved['fit_step'], ce.FINE_STEPS)
+            self.assertEqual(records[0]['intervals']['fit_step'], ce.FINE_STEPS)
             self.assertIsNone(store.current(default_robot(), 'camera_profile'))
             shutil.rmtree(node.params['calibration_store_root'])
 
