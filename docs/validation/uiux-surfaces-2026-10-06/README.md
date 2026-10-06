@@ -91,6 +91,8 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 앞선 외부 PC 점검은 다른 LAN에서 `.local`을 찾지 못했고 당시 SSH·8443 연결도 거절되어 현장 서비스를 판단할 수 없었다. **2026-10-06 21:22 KST**에 승인된 기존 사이트 PC로 Tailscale SSH가 열려 읽기 전용으로 다시 확인했다. 호스트 Avahi에는 사이트 Fleet·관제 카메라 광고와 두 로봇의 `_rosy._tcp` 광고가 있었고, 사용자의 mDNS bridge timer는 활성 상태에서 최근 두 장치 스캔을 Fleet에 전달했다. Fleet 컨테이너의 실제 서비스 UID(10001)로 두 로봇 `.local` 이름과 내부 `fleet`·`vision`·`proxy` 이름이 풀렸다. LAN 주소를 명시한 사이트 CA 검증 HTTPS `/healthz`와 `/console`은 각각 200이었다. 원본은 X: `logs/site-mdns-live/`에 둔다. 호스트 자체에서 실행한 Fleet mDNS locator는 같은 광고를 Docker·loopback·Wi-Fi 여러 주소로 받아 `ambiguous Fleet host advertisement`로 거절했다. 이는 호스트 자체 조회의 실패이며 로봇 LAN 클라이언트의 발견 실패로 판정하지 않는다. Fleet의 인증된 discovery 화면·등록 상태, 현재 작업 브랜치의 사이트 설치, 사용자 조작 G3, 로봇·카메라 실물 상태 readback은 여전히 **미확인**이다.
 
+브리지의 「전달」 로그는 `mdns-bridge.py`가 Fleet 스캔 POST의 HTTP 200을 받은 뒤에만 출력하므로 서버의 **수신 승인** 근거다. 인증된 discovery GET·화면의 표시 결과까지 증명하지는 않는다. 사이트의 Fleet·Vision·proxy 이미지 태그는 `e64815c5137e91aee261cee9569cd592e74afed0`이고 이 작업 브랜치와 다르며, Fleet 웹 자산 12개 경로가 두 소스 사이에서 다르다(X: `logs/site-mdns-live/site-containers.txt`, `site-vs-branch-fleet-web.txt`). 따라서 사이트의 HTTPS 200은 이 브랜치 UI의 현장 렌더나 G3 수용 근거가 아니다.
+
 ### Fleet Cell 작업 G2/G3 — LOCAL 부분 근거
 
 `shared/web/surfaces.yaml`의 활성 `console`은 사이트 관제·설치와 함께 `/console/cell`의 문서 준비·작업 제안도 소유한다. 이 회차의 Cell 질문은 **운영자가 레시피·셀 문서를 준비하고 미리보기·제안·승인·HOLD·취소의 상태와 사이트 정지 경계를 구분할 수 있는가**다. 선언 뷰포트는 1440×1000, 390×844, 320×568이다. 이전 점검에서는 이 경로가 카드에서 빠져 있었다.
