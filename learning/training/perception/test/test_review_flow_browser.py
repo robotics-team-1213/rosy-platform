@@ -148,6 +148,23 @@ def test_review_editor_peer_widths(browser_workspace, route, left, right, width)
         page.screenshot(path=str(target), full_page=True)
 
 
+@pytest.mark.parametrize('width', [390, 320])
+def test_object_filter_uses_photo_strip_width_on_phone(browser_workspace, width):
+    from pathlib import Path
+
+    page, _, _ = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/', wait_until='networkidle')
+    filter_box = page.locator('.photo-sidebar > label').bounding_box()
+    strip = page.locator('#frames').bounding_box()
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        page.screenshot(path=str(Path(output) / f'learning-filter-{width}.png'), full_page=True)
+    assert filter_box and strip
+    assert abs(filter_box['x'] - strip['x']) <= 1
+    assert abs(filter_box['width'] - strip['width']) <= 1, (filter_box, strip)
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+
+
 @pytest.mark.parametrize('width', [1440, 800, 390])
 def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
     page, _, expect = browser_workspace
