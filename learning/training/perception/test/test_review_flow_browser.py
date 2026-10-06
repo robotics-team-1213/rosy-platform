@@ -524,7 +524,7 @@ def test_learning_list_and_catalog_wait_denial_and_retry(
     ('/learning', 'learning', '#learning-status', '#refresh', '#connect'),
     ('/catalog', 'catalog', '#catalog-load', '#catalog-retry', '#import'),
 ])
-@pytest.mark.parametrize('width', [1440, 800, 390])
+@pytest.mark.parametrize('width', [1440, 800, 390, 320])
 def test_review_service_unavailable_is_distinct_from_connection_failure(
     browser_workspace, route, api, status, retry, recovered, width
 ):
@@ -540,7 +540,7 @@ def test_review_service_unavailable_is_distinct_from_connection_failure(
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     if route == '/learning':
         expect(page.locator('#learning-error')).to_be_hidden()
-    if route in ('/', '/catalog') and width == 390:
+    if route in ('/', '/catalog') and width <= 390:
         assert page.locator(retry).bounding_box()['width'] >= width * .8
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path

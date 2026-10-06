@@ -6604,3 +6604,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 독회 기록지에 표면마다 복사할 8항 판정·근거 블록을 더해 실제 관찰을 채울 자리를 명확히 했다.
 - 근거: [기록 블록](validation/uiux-surfaces-2026-10-06/operator-walkthrough.md#표면별-결과-기록-블록)은 전부 HOLD/미실시로 시작한다.
 - gate 변화: 판정 변화 없음. 사용자 관찰·현재 빌드·실물 readback은 미확인.
+
+## 2026-10-07 · uncommitted · uiux(learning): 320px 서비스 장애 복구 확인
+
+- 변경: 학습 검수 네 경로의 503→재시도 브라우저 검사에 320px을 더하고 좁은 폭의 재시도 버튼 너비를 확인했다.
+- 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-unavailable-current/` 320/390px 8장과 `logs/merge-20261006/learning-unavailable-{current,320}.txt`. 각 폭 브라우저 4 passed, `known_failures.py` 0 NEW; 네 320px 화면 원본을 육안 확인했다.
+- gate 변화: 추가 320px 합성 장애·복구 LOCAL 근거. 실제 서비스 장애와 검수자 G3는 HOLD.
