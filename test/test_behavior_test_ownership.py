@@ -33,6 +33,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # D-468 gateway contract: original odometry time/frame must reach the real
     # line-follow manager unchanged; pure manager behavior stays in services/test.
     "middleware/core/gateway/test/test_lane_return_odometry.py",
+    # CORE's return sensor adapter binds the control policy deadline and the
+    # line-follow provider; the pure scan tests live in services/test.
+    "middleware/core/gateway/test/test_lane_return_sensors.py",
     "middleware/core/gateway/test/test_line_follow_body_stop.py",
     "middleware/core/gateway/test/test_line_follow_ir_guard.py",
     "middleware/core/gateway/test/test_line_follow_obstacle.py",
