@@ -2121,3 +2121,9 @@
 - 증거: 아래 전체 Fleet 시험과 `known_failures.py`(X:/DevTemp/fleet-map-route/run.txt), 계획기 29 passed(교과서 Dijkstra 대조 2×200 그래프), 지도·trip API 28 passed, Chromium 지도 화면과 공유 UI 계약 43 passed, 계약 문서 시험 94 passed.
 - gate 변화: 없음. SOURCE/LOCAL 근거만 보강했다. D-487·main D-483/D-484와의 병합은 아직이다.
 
+## 2026-10-07 · uncommitted · D-488 M1 재검토 반영 (N1·L1–L3)
+
+- 변경: 차로 접선을 장소에 맞추기 전 그려진 폴리라인의 0.05 m로 읽는다(N1). max(0.15 m, 폭) 창은 map_v2_fleet 회전 교차로 이어짐을 모두 +42° 좌회전으로 읽었다. 지금은 이어짐 직진, 진입·진출 우회전이며 골든 시험이 이를 고정한다. 지도 저장소가 사이트 `fleet.routing` 설정으로 후속 표를 미리 만든다(L1). 계획기의 예상하지 못한 실패는 같은 본문의 500 `TRIP_PLAN_FAILED`다(L2). 스키마에 맞지 않는 초안은 422 `SITE_MAP_INVALID`와 필드 오류이고 콘솔이 보인다(L3). D-489·D-490 부록과 API Ref 행을 맞췄다. main 병합(D-483·D-484·D-487, API Ref v1.110) 뒤 이 가지의 행은 v1.111이고, D-485·D-486은 `adr_gaps`에 번호 이동으로 적었다.
+- 증거: 전체 Fleet 시험·계약 문서 시험과 `known_failures.py`(X:/DevTemp/fleet-map-route/run.txt, run_docs.txt), 하네스 lint 0 errors.
+- gate 변화: 없음. SOURCE/LOCAL 근거만 보강했다.
+
