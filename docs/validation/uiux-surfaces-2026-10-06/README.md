@@ -238,6 +238,8 @@ Pairing의 인증서 확인·실패 복구 조작은 각 상태의 두 반폭 �
 
 320px/글자 200% 인증서 확인에서 4자리 지문 묶음 `3456`이 중간에서 갈라져 콘솔 값과 대조하기 어려웠다. 표시할 때 하이픈 뒤에만 줄바꿈 기회를 주고 원본 지문·접근성 읽기 값은 유지했다. 현재 APK를 격리 AVD에 설치해 320×640에서는 `ABCD-EF12-` / `3456-7890`, 390×844/글자 130%에서는 한 줄임을 화면으로 확인했다. 최종 원본은 X: `captures/cam-fingerprint-wrap/fingerprint-320x640-font200-groups.png`와 `fingerprint-390x844-font130-final.png`; 처음 390px 캡처는 시작 화면이라 근거에서 제외한다. Cam JVM **366 passed**와 debug APK 빌드 성공은 X: `logs/cam-fingerprint-wrap-gradle.txt`에 있다. 실제 사이트 콘솔 값 대조와 설치자 G3는 여전히 HOLD다.
 
+기존 `pair-fingerprint-320x640-font20-final.png`은 화면이 어둡게 캡처되어 지문 판독 근거에서 제외한다. 320px 지문 판독에는 위의 새 `fingerprint-320x640-font200-groups.png`를 쓴다.
+
 ### Pilot Shell 네이티브 G2 — 태블릿 너비 부분 근거
 
 현재 브랜치의 Pilot Android debug APK를 격리된 Android 35 에뮬레이터에 설치했다. 밀도 320dpi에서 2000×1200(1000dp), 1200×800(600dp), 800×600(400dp) 가로 화면을 확인했다. 원본 캡처는 위 Cam 회차와 같은 X: `captures` 폴더의 `pilot-shell-*density320*.png`에 둔다.
