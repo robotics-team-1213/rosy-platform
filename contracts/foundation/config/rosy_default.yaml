@@ -181,9 +181,12 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   bridge_distance_scale: 1.08      # D-384 odometry inflation
   bridge_time_margin_s: 0.5        # D-384 rev 1 §1
   # D-468 containment (needs recovery_local_enabled; implementation note 2026-10-06). The lane
-  # boundaries are already eroded by the measured projection uncertainty and the body is the URDF
-  # footprint, so 0 means every corner is inside under the worst-case projection error. The rule
-  # also subtracts the lateral travel at the live speed over the 0.3 s evidence age bound.
+  # boundaries are eroded by the producer's uncertainty_m and the body is the URDF footprint, so
+  # 0 means every corner is inside only if uncertainty_m bounds every lateral error. Jitter and
+  # footprint tolerance outside it belong in lane_return_body_margin_m; revisit its default 0 from
+  # measured 2-sigma boundary jitter once real producers send uncertainty_m. Entry also subtracts
+  # the lateral travel at the live linear limit (conservative, also in verify) over the 0.3 s
+  # evidence age bound; a contained tracking robot departs only when margin + uncertainty < 0.
   lane_return_body_margin_m: 0.0       # extra body clearance on top of that, [0, 0.05]
   lane_return_checkpoint_fraction: 0.5 # normal checkpoint: margin >= this x geometric lateral play
 

@@ -166,9 +166,12 @@ class LineFollowConfig:
     bridge_slow_scale: float = 0.5
     bridge_distance_scale: float = 1.08
     bridge_time_margin_s: float = 0.5
-    # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the measured
-    # projection uncertainty, so 0 already means every URDF footprint corner is inside. This is
-    # body clearance on top of that. A normal checkpoint uses at most (1 - fraction) of the play.
+    # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the producer's
+    # uncertainty_m. 0 means every URDF footprint corner is inside only if uncertainty_m bounds
+    # every lateral error; jitter and footprint tolerance not in it go in this body margin. The
+    # default 0 is to be revisited from measured 2-sigma boundary jitter once real producers send
+    # uncertainty_m. Entry also subtracts drift at the live linear limit over 0.3 s; a tracking
+    # robot leaves only when margin + u < 0. A normal checkpoint uses at most (1 - fraction) of the play.
     lane_return_body_margin_m: float = 0.0
     lane_return_checkpoint_fraction: float = 0.5
 

@@ -33,14 +33,14 @@ def rig(**config):
     return clock, manager
 
 
-def frame(r, t, y=0., uncertainty=.0043):
+def frame(r, t, y=0., uncertainty=.0043, yaw=0.):
     clock, manager = r
     clock[0] = t
     manager.observe_return_pose(stamp_ns=round(t*1e9), source_now_ns=round(t*1e9),
-                                frame='odom', x=0., y=y, yaw=0., received_at=t)
+                                frame='odom', x=0., y=y, yaw=yaw, received_at=t)
     containment = LaneContainmentEvidence.model_validate(dict(
         stamp=t, geometry_id='track-260919', ground_source='CALIBRATED', uncertainty_m=uncertainty,
-        boundaries=[dict(side=side, slope=0., intercept_m=edge-y, observed_x_min_m=0.,
+        boundaries=[dict(side=side, slope=-math.tan(yaw), intercept_m=(edge-y)/math.cos(yaw), observed_x_min_m=0.,
                          observed_x_max_m=.4) for side, edge in (('left', LANE_EDGE), ('right', -LANE_EDGE))]))
     manager.observe(LineObservation(LineFollowMode.CAMERA_LINE, t, True, 0., .9, containment=containment),
                     received_at=t, source_now=t)
@@ -53,6 +53,34 @@ def test_centred_pinky_in_narrow_lane_is_contained_and_checkpointed():
         assert frame(r, t).linear > 0
     assert not r[1].status().reason.startswith('lane_return')
     assert r[1]._return_controller.checkpoint is not None
+
+
+def test_contained_tracking_holds_through_heading_and_offset_jitter():
+    # +/-1 deg and +/-1 mm: the eroded margin goes negative (about -0.6 mm at 1 deg) but
+    # every corner stays geometrically inside, so following must not flap.
+    r = rig()
+    for t in (1., 1.05, 1.1):
+        assert frame(r, t).linear > 0
+    deg = math.radians(1)
+    for step in range(1, 21):
+        sign = 1 if step % 2 else -1
+        assert frame(r, 1.1+step*.05, y=sign*.001, yaw=sign*deg).linear > 0
+    assert not r[1].status().reason.startswith('lane_return')
+
+
+def test_contained_tracking_departs_when_a_corner_crosses_the_estimated_line():
+    r = rig()
+    for t in (1., 1.05, 1.1):
+        assert frame(r, t).linear > 0
+    assert frame(r, 1.15, y=.004).linear > 0    # 1 mm geometric margin, eroded negative
+    action = frame(r, 1.2, y=.006)               # corner 1 mm over the estimated line
+    assert action.linear == action.angular == 0
+    assert r[1].status().reason == 'lane_return_containment_unconfirmed'
+
+
+def test_jittered_first_frame_does_not_enter_containment():
+    r = rig()
+    assert frame(r, 1., yaw=math.radians(1)).linear == 0   # entry needs the eroded margin
 
 
 def test_body_corner_outside_narrow_lane_is_not_contained():
