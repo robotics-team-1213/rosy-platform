@@ -301,7 +301,7 @@
 ## 최근 기록
 
 - 2026-10-07 · uncommitted · feat(review): D-485 검수 앱 클래스셋
-- 2026-10-06 · uncommitted · feat(fleet): D-473 관제 콘솔 개발 연결 모드
-- 2026-10-06 · uncommitted · docs(adr): 콘솔 개발 연결 모드와 주의점 구역 허가
-- 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
-- 2026-10-06 · uncommitted · D-472 호스트 구현
+- 2026-10-07 · uncommitted · uiux(fleet): D-487 브라우저 전체 재실행
+- 2026-10-07 · uncommitted · uiux: D-153 G1 현 후보 재확인
+- 2026-10-07 · uncommitted · uiux(fleet): 병합 뒤 roster 계측 경합 제거
+- 2026-10-07 · uncommitted · uiux(fleet): D-487 이후 관제 높이 재확인

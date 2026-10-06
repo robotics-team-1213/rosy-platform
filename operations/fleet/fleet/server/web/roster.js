@@ -3,7 +3,7 @@
 
 // D-359 §5.2 — 카드의 짧은 값은 공용 <ui-tag>다. 주행(nav)·도착(ok)은 색이 아니라
 // ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
-import { MODE_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+import { MODE_LABEL, NAVIGATION_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
 import { addressReason } from "./address-drift.js";
 import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./localization-badge.js";
@@ -54,10 +54,12 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   function navTag(state) {
     const nav = state && state.navigation;
     if (!nav) return { text: "—", cls: "" };
-    if (nav === "NAVIGATING") return { text: nav, cls: "nav" };
-    if (nav === "ARRIVED") return { text: nav, cls: "ok" };
-    if (nav === "FAILED") return { text: nav, cls: "crit" };
-    return { text: nav, cls: "" };
+    if (nav === "NAVIGATING") {
+      return { text: state.safety?.estop === false ? "목표 활성" : "목표 남음", cls: "nav" };
+    }
+    if (nav === "ARRIVED") return { text: enumLabel(NAVIGATION_LABEL, nav), cls: "ok" };
+    if (nav === "FAILED") return { text: enumLabel(NAVIGATION_LABEL, nav), cls: "crit" };
+    return { text: enumLabel(NAVIGATION_LABEL, nav), cls: "" };
   }
 
   // 대기에는 세 가지 이유가 있고, 운영자가 할 일이 저마다 다르다. "대기 중" 한 마디로
@@ -343,7 +345,10 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/identify`, {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ color }),
         });
-        log(`${robot.robot_id} ${color === "blue" ? "파랑" : "주황"} LED 점멸 요청 · 현장 영상 확인 필요`, "info");
+        // The robot face says CALL <id> for the same window. The map chip names who was called.
+        view.call = { robot_id: robot.robot_id, until: Date.now() + 6000 };
+        render();
+        log(`${robot.robot_id} 호출 · ${color === "blue" ? "파랑" : "주황"} LED · 얼굴에 이름 표시`, "info");
       } catch (error) { log(`${robot.robot_id} LED 시험 거부 · ${error.message}`, "bad"); }
     }));
     actions.append(aim, cancel, identify);

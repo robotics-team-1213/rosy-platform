@@ -46,10 +46,12 @@ class PilotViews(private val context: Context) {
             addState(intArrayOf(android.R.attr.state_pressed), fill(PilotColors.pressed))
             addState(intArrayOf(), fill(PilotColors.disabled))
         }
-        addView(ImageView(context).apply { setImageResource(R.drawable.ic_robot); imageTintList = android.content.res.ColorStateList.valueOf(PilotColors.muted); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(28), dp(28)).apply { marginEnd = dp(20) })
+        if (context.resources.configuration.screenWidthDp >= 480) {
+            addView(ImageView(context).apply { setImageResource(R.drawable.ic_robot); imageTintList = android.content.res.ColorStateList.valueOf(PilotColors.muted); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(28), dp(28)).apply { marginEnd = dp(20) })
+        }
         val title = candidate.name.ifBlank { candidate.robotId.ifBlank { "Rosy" } }
         val copy = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        copy.addView(label(title, 22f).apply { typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) })
+        copy.addView(label(title, 22f).apply { typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL); breakStrategy = android.text.Layout.BREAK_STRATEGY_BALANCED })
         copy.addView(label(if (!enabled) "연결 보류 · 목록을 다시 찾거나 태블릿 상태를 확인하세요" else candidate.robotId.ifBlank { "로봇 · 같은 Wi-Fi" }, 14f, true))
         addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
         addView(label(if (enabled) "연결" else "보류", 16f).apply { setPadding(dp(16), 0, 0, 0) })

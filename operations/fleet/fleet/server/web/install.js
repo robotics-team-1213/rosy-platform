@@ -39,6 +39,12 @@ const auth = {
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다.
   locked: false,
 };
+function stopNotice(message = "", state = "warning") {
+  const notice = el("estop-feedback");
+  notice.textContent = message;
+  notice.hidden = !message;
+  notice.setAttribute("state", state);
+}
 
 function authHeaders() {
   return auth.token ? { "Authorization": `Bearer ${auth.token}` } : {};
@@ -63,6 +69,7 @@ function setTopbarOpen(open) {
 }
 
 function markLocked() {
+  stopNotice();
   auth.locked = true;
   setTopbarOpen(true);
   auth.role = null;
@@ -70,8 +77,9 @@ function markLocked() {
   el("user-role").textContent = "인증 필요";
   el("user-role").setAttribute("status", "crit");
   const pill = el("online-pill");
-  pill.textContent = "토큰 필요";
-  pill.setAttribute("status", "crit");
+  pill.textContent = "접속 전";
+  pill.setAttribute("status", "neutral");
+  pill.dataset.locked = "true"; // 해제 때 문구가 아니라 이 표시로 잠금 pill을 알아본다
   el("console-token").setAttribute("aria-invalid", "true");
   applyRole();
 }
@@ -187,6 +195,7 @@ function tickClock() {
 
 el("console-token").value = auth.token;
 function saveToken() {
+  stopNotice();
   pageScope.invalidate();
   peerPicker.reset();
   auth.token = el("console-token").value.trim();
@@ -212,12 +221,22 @@ pageScope.listen(el("console-token"), "keydown", (event) => {
 pageScope.listen(el("estop"), "click", async () => {
   const life = pageScope.capture();
   life.check();
+  stopNotice("비상 정지 요청 중…", "pending");
   try {
     const result = await call("/api/fleet/estop", { method: "POST" });
     life.check();
-    log(`정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`, "bad");
+    const summary = result.total > 0
+      ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
+      : "정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.";
+    stopNotice(summary, result.total > 0 && result.stopped === result.total ? "warning" : "error");
+    log(summary, "bad");
+    (result.robots || []).filter((r) => !r.stopped)
+      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
   } catch (err) {
     if (err.name === "AbortError") return;
+    stopNotice(err.status >= 500 || !err.status
+      ? "비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요."
+      : `비상 정지 요청 거절 — ${err.message}`, "error");
     log(`전체 정지 실패 — ${err.message}`, "bad");
   }
 });
@@ -300,7 +319,8 @@ async function refreshAuthorization() {
     el("user-role").title = el("user-role").textContent;
     el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
     const pill = el("online-pill");
-    if (pill.textContent === "토큰 필요") {
+    if (pill.dataset.locked === "true") {
+      delete pill.dataset.locked;
       pill.textContent = "설치 준비 중";
       pill.setAttribute("status", "neutral");
     }

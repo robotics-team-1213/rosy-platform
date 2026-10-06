@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · feat(vision): D-484 필드 경계 자동 캘리브레이션
 - 2026-10-05 · uncommitted · fix(test): signal observer exact-source collection
 - 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
 - 2026-10-01 · uncommitted · fix(pairing): Vision 자격 동기화는 https와 사이트 CA 고정이 필수
 - 2026-10-01 · uncommitted · chore(vision): D-341 저장소 가드 정리 — 역할 경계·크기 판정·비밀 스캔
-- 2026-10-01 · uncommitted · test(vision): D-341 합성 종단 시험 — 요청부터 회수 4401까지

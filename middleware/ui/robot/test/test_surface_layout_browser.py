@@ -78,6 +78,19 @@ def test_mobile_topbar_wraps_without_overlapping_brand_navigation_or_stop():
     assert result["estop"]["right"] <= 390
 
 
+def test_mobile_console_puts_controls_before_long_sensor_and_map_panels():
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = _page(browser, 390, 844)
+        positions = page.evaluate("""() => Object.fromEntries(
+          ['act', 'sense', 'observe'].map(slot => [slot,
+            document.querySelector(`[data-slot=${slot}]`).getBoundingClientRect().top])
+        )""")
+        browser.close()
+
+    assert positions["act"] < positions["sense"] < positions["observe"]
+
+
 def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -100,8 +113,8 @@ def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport
         }""")
         result = page.evaluate("""() => {
           const rect = (selector) => {
-            const {x, y, right, bottom} = document.querySelector(selector).getBoundingClientRect();
-            return {x, y, right, bottom};
+            const {x, y, right, bottom, width} = document.querySelector(selector).getBoundingClientRect();
+            return {x, y, right, bottom, width};
           };
           return {
             documentHeight: document.documentElement.scrollHeight,
@@ -122,6 +135,9 @@ def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport
     assert result["sense"]["bottom"] <= 768
     assert result["sense"]["right"] <= result["observe"]["x"]
     assert result["observe"]["right"] <= result["act"]["x"]
+    assert max(result[slot]["width"] for slot in ("sense", "observe", "act")) - min(
+        result[slot]["width"] for slot in ("sense", "observe", "act")
+    ) <= 1
     assert result["act"]["bottom"] <= 768
     assert result["activeBottom"] <= result["act"]["bottom"]
     assert result["estop"]["bottom"] <= result["topbar"]["bottom"]

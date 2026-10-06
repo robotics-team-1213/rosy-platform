@@ -7,6 +7,7 @@ Restart with the same --state only. Local HTTP contract: docs/review-app.md.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import ipaddress
 import json
@@ -37,7 +38,8 @@ class Conflict(ValueError):
 
 
 class ReviewStore:
-    def __init__(self, state, source=None, human=None, images=None, object_classes=None):
+    def __init__(self, state, source=None, human=None, images=None, object_classes=None, *,
+                 empty_eval=False):
         self.state = Path(state).resolve()
         self.state.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
@@ -53,10 +55,23 @@ class ReviewStore:
                 CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT);''')
             initialized = db.execute("SELECT value FROM metadata WHERE key='initialized'").fetchone()
             if initialized:
+                if empty_eval:
+                    raise ValueError('existing workspace: reopen with --state only')
                 if any(x is not None for x in (source, human, images)):
                     raise ValueError('existing workspace: restart with --state only; imports never overwrite reviews')
                 if object_classes is not None and object_classes.get('sha256') != class_sets.object_set(self)['sha256']:
                     raise ValueError('workspace object classes differ; do not reinterpret labels')
+                review_masks.configure(self)
+                review_evidence.configure(self)
+                return
+            if empty_eval:
+                if any(x is not None for x in (source, human, images)):
+                    raise ValueError('empty evaluation workspace has no training inputs')
+                if object_classes is not None:
+                    class_sets.bind_object_set(self, object_classes, db)
+                db.execute("INSERT INTO metadata VALUES ('initialized','true')")
+                db.execute("INSERT INTO metadata VALUES ('workspace_kind','evaluation')")
+                db.commit()
                 review_masks.configure(self)
                 review_evidence.configure(self)
                 return
@@ -201,6 +216,10 @@ class ReviewStore:
         return self.get(index)
 
     def prepare(self):
+        with self.connect() as db:
+            kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
+        if kind and kind[0] == 'evaluation':
+            raise ValueError('evaluation workspace cannot export training reviews')
         with self.lock:
             captured = review_evidence.snapshot(self)
             frames = captured['frames']
@@ -269,7 +288,7 @@ def make_server(store, port=8767, host='127.0.0.1'):
             if etag:
                 self.send_header('ETag', etag)
             self.send_header('X-Content-Type-Options', 'nosniff')
-            self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+            self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'")
             self.end_headers()
             self.wfile.write(data)
 
@@ -381,6 +400,11 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     if not path:
                         raise ValueError('CAD 검증 자료 경로가 필요합니다.')
                     return self.send(review_evidence.register_map(store, path))
+                if path.startswith('/api/mask-preview/'):
+                    png, count, tolerance = review_masks.preview(
+                        store, int(path.rsplit('/', 1)[1]), body, Conflict)
+                    return self.send({'mask_png': base64.b64encode(png).decode('ascii'),
+                                      'selected_pixels': count, 'tolerance': tolerance})
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.update(store, int(path.rsplit('/', 1)[1]), body, Conflict))
                 if path == '/api/learning/register':
@@ -407,6 +431,8 @@ def main():
     parser.add_argument('--source', type=Path)
     parser.add_argument('--human', type=Path)
     parser.add_argument('--images', type=Path)
+    parser.add_argument('--empty-eval', action='store_true',
+                        help='initialize a separate empty evaluation workspace once')
     parser.add_argument('--port', type=int, default=8767)
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
@@ -420,7 +446,8 @@ def main():
             object_classes = class_sets.from_data_yaml(args.object_classes.read_bytes(), 'detect')
         except (OSError, ValueError) as exc:
             parser.error(f'--object-classes: {exc}')
-    store = ReviewStore(args.state, args.source, args.human, args.images, object_classes)
+    store = ReviewStore(args.state, args.source, args.human, args.images, object_classes,
+                        empty_eval=args.empty_eval)
     with store.connect() as db:
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
             if path:

@@ -40,6 +40,9 @@ surfaces:
     themes: [dark, light]
     surface: dev
     medium: web
+    container_breakpoints:
+      - {value: 22rem, reason: 자료 등록 폼의 좁은 칸에서 입력과 행동을 전폭으로 쌓는다.}
+      - {value: 24rem, reason: 390px 전화의 검수 칸은 358px라 공용 22rem 경계 밖이다. 검수 조작을 칸 너비로 읽고 누르게 한다.}
     breakpoints:
       - {value: 90rem, reason: 사진 목록·캔버스·라벨 inspector의 세 칸을 좁은 데스크톱에서 압축한다 (D-461).}
     ports:
@@ -77,9 +80,9 @@ surfaces:
 
   - id: console
     api_owners: [Fleet]
-    app_name: Rosy Console
-    app_name_en: Rosy Console
-    short_name: Rosy Console
+    app_name: Rosy Fleet
+    app_name_en: Rosy Fleet
+    short_name: Rosy Fleet
     icon: shared/web/icons/console.svg
     path: operations/fleet/fleet/server/web
     themes: [dark, light]
@@ -96,7 +99,7 @@ surfaces:
       - value: 90rem
         reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220–1300px)이 1440px 미만에 한 줄로 들지 않는다 — 비상 정지가 둘째 줄로 밀리거나 테마 이름표가 접히지 않게 그 아래에서 머리를 접는다
       - value: 110rem
-        reason: 지도 칸은 main 폭의 43%라 그 안을 둘로 나누면 관제 카메라가 좁아진다(1440px에서 약 240px) — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
+        reason: 지도와 개입 칸을 같은 폭으로 두어도 좁은 화면에서는 지도·관제 카메라가 작아진다 — 지도 칸이 충분히 넓은 이 폭 이상에서만 카메라를 지도 옆에 둔다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/fleet-normal-1920x1080.png
 
   - id: game-board
@@ -170,6 +173,8 @@ surfaces:
     breakpoints:
       - value: 48rem
         reason: 태블릿 세로·휴대폰에서 스틱·페달·HUD 글자를 줄이는 주행 조작부 폭(D-363) — 세 단 값으로 옮기면 64rem 아래 태블릿 가로에서도 조작부가 작아진다
+      - value: 22rem
+        reason: 320px 휴대폰에서 머리 이름 겹침과 제자리 회전 버튼 잘림을 막고 짧은 화면의 카메라·조작부 공간을 지키는 폭 — 390px에는 이 압축 배치를 적용하지 않는다
     raw_colours:
       - file: styles.css
         block: "[data-drive-stage]"

@@ -73,6 +73,16 @@ def test_first_start_binds_the_given_set_then_is_write_once(tmp_path):
         class_sets.bind_object_set(store, class_sets.legacy_object_set())
 
 
+def test_empty_eval_workspace_binds_the_given_set(tmp_path):
+    other = class_sets.from_data_yaml(b'names: [car, traffic_light]\n', 'detect')
+    store = ReviewStore(tmp_path / 'state', object_classes=other, empty_eval=True)
+    assert class_sets.object_set(store)['sha256'] == other['sha256']
+    assert store.object_classes() == ('car', 'traffic_light')
+    reopened = ReviewStore(tmp_path / 'state', object_classes=other)
+    assert class_sets.object_set(reopened)['sha256'] == other['sha256']
+    with pytest.raises(ValueError, match='do not reinterpret'):
+        ReviewStore(tmp_path / 'state', object_classes=class_sets.legacy_object_set())
+
 def test_invalid_task_hotkey_limit_and_task_in_identity():
     with pytest.raises(ValueError):
         class_sets._record(['a'], 'segment', {})

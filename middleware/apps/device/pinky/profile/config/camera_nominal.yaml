@@ -19,3 +19,13 @@ pitch_rad: 0.139626        # 8.0 deg down (URDF nominal); horizon row = cy - fx*
 height_m: 0.06343          # URDF nominal lens height above the floor
 x_offset_m: 0.03317        # URDF nominal lens offset ahead of base_link
 max_range_m: 0.6
+# D-468 projection uncertainty of this URDF nominal (lane containment uncertainty_m): the
+# widest measured deviation from it including the fits' own bands, D-47 calibration table /
+# D-379 track fits. An accepted camera_profile record replaces the first three with its bands.
+pitch_uncertainty_rad: 0.066323  # 3.8 deg: nominal 8.0 vs 11.8 fitted (session 20260930T133221Z)
+height_uncertainty_m: 0.01093    # nominal 0.06343 vs 0.0575 -0.005 band (8kcn track fit)
+roll_uncertainty_rad: 0.047124   # 2.7 deg: nominal 0 vs room-wall -0.8 -1.9 band (8kcn: -1.5)
+# Lateral error of the lane edge detector in image pixels. NOT validated on this 320x240
+# camera (2 px is the Gazebo figure); 3 px is a conservative assumption, above the robust
+# sd 2.6 px of the 1707 lane vanishing points this profile's horizon came from.
+detector_lateral_px: 3.0

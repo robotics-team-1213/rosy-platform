@@ -377,7 +377,7 @@ def check_values(kind, values, *, nominal=None):
 
 
 def resolve(kind, fallback, *, fallback_source, robot=None, root=None, store=None, nominal=None,
-            override=None):
+            override=None, with_intervals=False):
     """(values, source) for a runtime consumer: URDF nominal < accepted record < operator override.
 
     fallback is the static (URDF nominal) values; the current accepted record
@@ -387,19 +387,21 @@ def resolve(kind, fallback, *, fallback_source, robot=None, root=None, store=Non
     static file, plus the overridden keys. Any store failure, and an accepted
     record whose values fail check_values, falls back to the static values and
     says why. An override whose result fails check_values (the same
-    plausibility a record must pass) is refused with a warning."""
+    plausibility a record must pass) is refused with a warning. ``with_intervals`` adds a third
+    value: the used record's intervals, or None when the static values stand."""
     override = {k: v for k, v in (override or {}).items() if v is not None}
-    values, source = _resolve_record(kind, fallback, fallback_source=fallback_source, robot=robot,
-                                     root=root, store=store, nominal=nominal)
+    values, source, intervals = _resolve_record(kind, fallback, fallback_source=fallback_source,
+                                                robot=robot, root=root, store=store, nominal=nominal)
     if override:
         merged = {**values, **override}
         why = check_values(kind, merged, nominal=nominal)
         if why:
             _LOG.warning("operator override %s for %s refused: %s", sorted(override), kind, why)
-            return values, source + f"; operator override {', '.join(sorted(override))} refused: {why}"
-        values = merged
-        source += f"; operator override {', '.join(sorted(override))}"
-    return values, source
+            source += f"; operator override {', '.join(sorted(override))} refused: {why}"
+        else:
+            values = merged
+            source += f"; operator override {', '.join(sorted(override))}"
+    return (values, source, intervals) if with_intervals else (values, source)
 
 
 def _resolve_record(kind, fallback, *, fallback_source, robot, root, store, nominal):
@@ -408,13 +410,13 @@ def _resolve_record(kind, fallback, *, fallback_source, robot, root, store, nomi
         rec = store.current(robot or default_robot(), kind)
     except Exception as exc:  # noqa: BLE001 - runtime must start on the static values
         _LOG.warning("calibration store unreadable for %s: %s", kind, exc)
-        return dict(fallback), f"{fallback_source} (calibration store unreadable: {exc})"
+        return dict(fallback), f"{fallback_source} (calibration store unreadable: {exc})", None
     if rec is None:
-        return dict(fallback), f"{fallback_source} (no accepted {kind} record)"
+        return dict(fallback), f"{fallback_source} (no accepted {kind} record)", None
     why = check_values(kind, rec["values"], nominal=nominal)
     if why:
         _LOG.warning("accepted %s record %s rejected at runtime: %s", kind, rec["id"], why)
-        return dict(fallback), f"{fallback_source} (accepted record {rec['id']} rejected: {why})"
+        return dict(fallback), f"{fallback_source} (accepted record {rec['id']} rejected: {why})", None
     values = {**fallback, **rec["values"]}
     return values, (f"calibration record {rec['id']} sha256 {rec['sha256'][:12]}"
-                    f"{' (pinned)' if rec.get('pinned') else ''}")
+                    f"{' (pinned)' if rec.get('pinned') else ''}"), rec.get("intervals") or {}

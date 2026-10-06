@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private var opening = false
     private var lastError: String? = null
     private var lastSelectedCandidate: Candidate? = null
+    private var reselect: Candidate? = null
     private val screenSleep = PendingScreenSleep()
     private val sleeping get() = screenSleep.active
     private var pendingApprovedSleep = false
@@ -71,19 +72,30 @@ class MainActivity : Activity() {
         setContentView(root)
         shownCandidates = null
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        val compact = resources.configuration.screenWidthDp < 720
         val columns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(columns, LinearLayout.LayoutParams(-1, -1))
-        val identity = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(32), views.dp(40), views.dp(32), views.dp(24)) }
-        columns.addView(identity, LinearLayout.LayoutParams(views.dp(260), -1))
-        identity.addView(label("ROSY", 22f).apply { setTextColor(PilotColors.rose) })
-        identity.addView(label("Pilot", 32f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
-        identity.addView(views.label("로봇을 선택하고\n직접 조종하세요.", 16f, true).apply { setPadding(0, views.dp(24), 0, 0) })
-        identity.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
-        healthText = views.label("태블릿 상태 확인 중", 14f, true); identity.addView(healthText)
+        healthText = views.label("태블릿 상태 확인 중", 14f, true)
         lastHealth?.let { renderHealth(it) }
-        identity.addView(button("기기·연결") { deviceDetails() })
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(24), views.dp(40), views.dp(40), views.dp(24)) }
-        columns.addView(list, LinearLayout.LayoutParams(0, -1, 1f))
+        val deviceButton = button("기기·연결") { deviceDetails() }
+        if (!compact) {
+            val identity = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(views.dp(32), views.dp(40), views.dp(32), views.dp(24)) }
+            columns.addView(identity, LinearLayout.LayoutParams(views.dp(260), -1))
+            identity.addView(label("ROSY", 22f).apply { setTextColor(PilotColors.rose) })
+            identity.addView(label("Pilot", 32f).apply { setTypeface(typeface, android.graphics.Typeface.BOLD) })
+            identity.addView(views.label("로봇을 선택하고\n직접 조종하세요.", 16f, true).apply { setPadding(0, views.dp(24), 0, 0) })
+            identity.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
+            identity.addView(healthText)
+            identity.addView(deviceButton)
+        }
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(
+                views.dp(if (compact) 16 else 24), views.dp(if (compact) 16 else 40),
+                views.dp(if (compact) 16 else 40), views.dp(if (compact) 16 else 24),
+            )
+        }
+        columns.addView(list, if (compact) LinearLayout.LayoutParams(-1, -1) else LinearLayout.LayoutParams(0, -1, 1f))
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
         header.addView(label("로봇 선택", 28f).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
@@ -91,6 +103,10 @@ class MainActivity : Activity() {
         status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", 16f, true).apply { setPadding(0, views.dp(16), 0, views.dp(28)) }; list.addView(status)
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         list.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        if (compact) {
+            list.addView(healthText)
+            list.addView(deviceButton, LinearLayout.LayoutParams(-1, -2))
+        }
     }
     private fun startDiscovery() {
         if (!foreground || opening || sleeping || cooling.coolingRequired || discovery != null) return
@@ -106,6 +122,7 @@ class MainActivity : Activity() {
         }
         if (web != null || opening) return
         val records = candidates.records()
+        reselect?.let { wanted -> records.firstOrNull { it.host == wanted.host && it.port == wanted.port }?.let { reselect = null; select(it); return } }
         status.text = lastError ?: if (cooling.coolingRequired) "태블릿 발열이 내려갈 때까지 조종 연결을 닫았습니다." else if (records.isEmpty()) discovery?.status ?: "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
         if (shownCandidates == records && shownCooling == cooling.coolingRequired) return
         shownCandidates = records; shownCooling = cooling.coolingRequired; robots.removeAllViews()
@@ -118,8 +135,8 @@ class MainActivity : Activity() {
     }
     private fun select(incoming: Candidate) {
         if (opening || sleeping || cooling.coolingRequired || web != null) return
-        lastError = null
-        val addresses = runCatching { candidates.addresses(incoming.host, incoming.port) }.getOrNull() ?: return
+        lastError = null; reselect = null
+        val addresses =runCatching { candidates.addresses(incoming.host, incoming.port) }.getOrNull() ?: return
         val candidate = incoming.copy(addresses = addresses)
         lastSelectedCandidate = candidate
         opening = true
@@ -145,8 +162,10 @@ class MainActivity : Activity() {
                     else if (offer.mode == "development") join(candidate, offer, store, version, null)
                     else pairingCode(candidate, offer, store, version, remembered.status)
                 }
-            } catch (error: Exception) { failed(version, when {
-                error is PeerApprovalExpired -> "승인 기록은 유지되지만 사용 기한이 끝났습니다. 수신 장치에서 재승인을 확인하세요."
+            } catch (error: Exception) {
+                if (error is PeerApprovalExpired) main.post { if (version == attempt && foreground) reapprove(candidate) }
+                failed(version, when {
+                error is PeerApprovalExpired -> "승인 사용 기한이 끝났습니다. 다시 승인을 요청하세요."
                 error is PeerApprovalTimeout -> "수신 승인을 기다리는 시간이 끝났습니다. 로봇을 다시 선택해 요청하세요."
                 error is PeerKeyChanged -> "기억한 수신 장치의 키와 다릅니다. 승인 기록을 유지하고 연결을 차단했습니다."
                 error is PeerRefused -> "승인 기록은 지우지 않았습니다. 수신 장치에서 승인·발급자 상태를 확인한 뒤 다시 선택하세요."
@@ -291,6 +310,17 @@ class MainActivity : Activity() {
             .setMessage("${candidate.name}\n${candidate.host}\n\n조종 연결을 닫고 이 태블릿에 저장된 로그인과 승인 연결 기록만 지웁니다. 수신 장치의 승인이나 다른 앱의 연결은 해제하지 않습니다.")
             .setNegativeButton("취소", null).setPositiveButton("지우기") { _, _ ->
                 endSession(forget = candidate) { lastSelectedCandidate = null; opening = false; startDiscovery() }; opening = true
+            }.create()
+        pairingDialog!!.show()
+    }
+    // D-456 4: an expired grant needs a separate receiver approval. Connect never sends one on its own;
+    // the user asks here, which drops only this tablet's expired record and starts a fresh request.
+    private fun reapprove(candidate: Candidate) {
+        pairingDialog?.dismiss()
+        pairingDialog = AlertDialog.Builder(this).setTitle("다시 승인 요청")
+            .setMessage("${candidate.name}\n\n이 태블릿의 승인 사용 기한이 끝났습니다. 새 승인을 요청하면 로봇 화면에 코드가 뜹니다. 로봇에서 승인하세요.")
+            .setNegativeButton("취소", null).setPositiveButton("승인 요청") { _, _ ->
+                endSession(forget = candidate) { reselect = candidate; opening = false; startDiscovery() }; opening = true
             }.create()
         pairingDialog!!.show()
     }

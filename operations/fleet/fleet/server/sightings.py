@@ -31,12 +31,15 @@ class SightingSource:
     robot_ids: tuple[str, ...]
     map_id: str
     calibration_revision: str
-    corner_marker_ids: tuple[int, int, int, int]
+    # D-484: None for a field_boundary source (no printed corner markers).
+    corner_marker_ids: tuple[int, int, int, int] | None
     # Display geometry only (the surveyed rectangle in the map frame); never motion input.
     corner_world_m: tuple[tuple[float, float], ...] | None = None
     robot_markers: tuple[tuple[str, int], ...] = ()
     # D-341 6: how the phone feeding this source authenticates to Vision (static | paired).
     credential: str = "static"
+    # D-484: where the worker measures the image-to-map calibration from.
+    calibration_source: str = "corner_markers"
 
 
 class SightingService:
@@ -79,7 +82,16 @@ class SightingService:
                     or not isinstance(source.calibration_revision, str)
                     or not source.calibration_revision.strip()):
                 raise ValueError("sighting map and calibration revision are required")
-            if (len(set(source.corner_marker_ids)) != 4
+            if source.calibration_source not in ("corner_markers", "field_boundary"):
+                raise ValueError("sighting calibration source must be corner_markers or field_boundary")
+            if source.calibration_source == "field_boundary":
+                if source.corner_marker_ids is not None:
+                    raise ValueError(f"sighting source {source.source_id!r} is field_boundary "
+                                     "and must not carry corner marker ids")
+                if source.corner_world_m is None:
+                    raise ValueError(f"sighting source {source.source_id!r} is field_boundary "
+                                     "and needs the surveyed corner_world_m rectangle")
+            elif (len(set(source.corner_marker_ids)) != 4
                     or any(type(v) is not int or v < 0 for v in source.corner_marker_ids)):
                 raise ValueError("sighting source needs four distinct non-negative corner ids")
             tokens.add(source.token)
@@ -112,8 +124,10 @@ class SightingService:
             raise SightingError(403, "SIGHTING_TARGET_FORBIDDEN", "source cannot report this robot")
         if payload.map_id != source.map_id:
             raise SightingError(409, "MAP_MISMATCH", "sighting map does not match source configuration")
+        payload_source = payload.calibration_source or "corner_markers"
         if (payload.calibration_revision != source.calibration_revision
-                or payload.corner_marker_ids != source.corner_marker_ids):
+                or payload.corner_marker_ids != source.corner_marker_ids
+                or payload_source != source.calibration_source):
             raise SightingError(409, "CALIBRATION_MISMATCH",
                                 "sighting calibration does not match source configuration")
 
@@ -164,7 +178,9 @@ class SightingService:
             entry["sources"].append({
                 "source_id": source.source_id,
                 "calibration_revision": source.calibration_revision,
-                "corner_marker_ids": list(source.corner_marker_ids),
+                "calibration_source": source.calibration_source,
+                "corner_marker_ids": (None if source.corner_marker_ids is None
+                                      else list(source.corner_marker_ids)),
                 "robot_ids": list(source.robot_ids),
                 "robot_markers": dict(source.robot_markers),
             })

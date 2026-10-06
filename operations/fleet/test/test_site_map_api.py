@@ -65,6 +65,7 @@ def test_site_map_returns_the_configured_rectangle_without_secrets():
         "sources": [{
             "source_id": "ceiling-east",
             "calibration_revision": "cal-v3",
+            "calibration_source": "corner_markers",
             "corner_marker_ids": [30, 31, 32, 33],
             "robot_ids": ["rosy-pinky-8kcn"],
             "robot_markers": {"rosy-pinky-8kcn": 40},
@@ -72,6 +73,16 @@ def test_site_map_returns_the_configured_rectangle_without_secrets():
     }]
     assert SOURCE_TOKEN not in response.text
     assert "token" not in response.text
+
+
+def test_site_map_lists_a_field_boundary_source_without_corner_ids():
+    field = _source(corner_marker_ids=None, calibration_source="field_boundary")
+    client = _client([field])
+
+    maps = client.get("/api/fleet/site-map", headers=_auth()).json()["maps"]
+
+    assert maps[0]["sources"][0]["calibration_source"] == "field_boundary"
+    assert maps[0]["sources"][0]["corner_marker_ids"] is None
 
 
 def test_site_map_is_404_without_sighting_config_or_geometry():
@@ -204,6 +215,33 @@ def test_loader_accepts_sources_on_one_map_with_the_same_rectangle(tmp_path):
     assert [source.source_id for source in sources] == ["ceiling_north", "ceiling_south"]
 
 
+def test_loader_accepts_a_field_boundary_source_without_corner_markers(tmp_path):
+    row = _row(calibration_source="field_boundary")
+    del row["corner_marker_ids"]
+    source = load_sighting_sources(_write(tmp_path / "c.yaml", row), environ=ENV)[0]
+
+    assert source.calibration_source == "field_boundary"
+    assert source.corner_marker_ids is None
+    assert source.corner_world_m == RECT
+
+
+def test_loader_rejects_misdeclared_field_boundary_sources(tmp_path):
+    both = _row(calibration_source="field_boundary")
+    with pytest.raises(ValueError, match="must not set corner_marker_ids"):
+        load_sighting_sources(_write(tmp_path / "c.yaml", both), environ=ENV)
+    no_rectangle = _row(calibration_source="field_boundary")
+    del no_rectangle["corner_marker_ids"], no_rectangle["corner_world_m"]
+    with pytest.raises(ValueError, match="needs corner_world_m"):
+        load_sighting_sources(_write(tmp_path / "c.yaml", no_rectangle), environ=ENV)
+    missing_ids = _row()
+    del missing_ids["corner_marker_ids"]
+    with pytest.raises(ValueError, match="corner_marker_ids"):
+        load_sighting_sources(_write(tmp_path / "c.yaml", missing_ids), environ=ENV)
+    with pytest.raises(ValueError, match="calibration_source"):
+        load_sighting_sources(_write(tmp_path / "c.yaml", _row(calibration_source="magic")),
+                              environ=ENV)
+
+
 def test_hyphenated_site_robot_ids_pass_sighting_validation():
     from core_common.protocol.sightings import SiteSightingPayload
 
@@ -228,6 +266,9 @@ def test_console_serves_the_site_layer_and_draws_sightings_apart_from_core_pose(
     assert 'from "./site-layer.js"' in map_view
     assert '"/api/fleet/site-map"' in map_view and '"/api/fleet/sightings"' in map_view
     assert "mapView.refreshSightings()" in shell
+    roster = client.get("/console/assets/roster.js").text
+    assert "view.call = { robot_id: robot.robot_id, until: Date.now() + 6000 }" in roster
+    assert "호출 ${view.call.robot_id}" in map_view
     assert 'id="legend-sighting"' in page
     assert "<script>" not in page  # CSP: script-src 'self' only
 

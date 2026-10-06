@@ -137,4 +137,3 @@ RPM 상한을 독립적으로 검사하고 엔코더 32비트 롤오버를 안�
 Phase 0 리네임·멀티로봇 리팩토링 → **Phase 1 core** → Phase 2 웹 대시보드 →
 Phase 3 2대 검증 → Phase 4 fleet → Phase 5 Formation → Phase 6 확장.
 상세: [`docs/plans/2026-09-13-rosy-os-device-validation-implementation-plan.md`](../plans/2026-09-13-rosy-os-device-validation-implementation-plan.md)
-

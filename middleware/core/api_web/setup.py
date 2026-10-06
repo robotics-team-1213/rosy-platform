@@ -11,7 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools', 'cryptography==49.0.0'],
+    install_requires=['setuptools', 'cryptography==50.0.0'],
     zip_safe=True,
     maintainer='Dev',
     maintainer_email='dev@rosy.com',

@@ -18,6 +18,8 @@ CLIS = [
     "learning/training/perception/dataset/extract.py",
     "learning/training/perception/dataset/object_boxes.py",
     "learning/training/perception/dataset/prelabel.py",
+    "learning/training/perception/dataset/qwen_points.py",
+    "learning/training/perception/dataset/sam3_road_draft.py",
     "learning/training/perception/model/convert.py",
     "learning/training/perception/model/deliver.py",
     "learning/training/perception/model/export_class_names.py",

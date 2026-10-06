@@ -52,8 +52,8 @@
 
 ## 최근 기록
 
-- 2026-10-04 · uncommitted · test(web): CSP 아래 경기 보드 조건 검증 복구
-- 2026-10-04 · uncommitted · fix(ui): 경기 보드 관측 상태와 마커 상세
-- 2026-09-30 · 79787e7a · D-371 US-010 경기 정지에 data-always-live
-- 2026-09-30 · ce709e4d · D-359 US-009 경기 보드 문구
-- 2026-09-30 · aeb31356 · D-359 US-005 경기 보드 세 단
+- 2026-10-07 · uncommitted · test(games): 시간 결측의 선언 전화 폭
+- 2026-10-07 · uncommitted · test(games): CSP 안전 대기 식
+- 2026-10-06 · uncommitted · uiux(games): compact 정지 조작 전폭
+- 2026-10-06 · uncommitted · uiux(games): HOLD 이유의 평문과 전화 폭
+- 2026-10-06 · uncommitted · uiux(games): 좁은 복구 화면의 동등 폭

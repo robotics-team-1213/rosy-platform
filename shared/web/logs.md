@@ -647,3 +647,37 @@
 - 변경: 확인창 스크림 구멍은 data-clip을 typed attr()가 읽는다. 캔버스 색 탐침은 채택 스타일시트 규칙 하나로 토큰과 color-mix를 푼다.
 - 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium에서 구멍은 정지 버튼을 맞추고 바깥은 스크림을 맞춘다. 팔레트 브라우저 시험 통과. 장치 수용은 없다.
 - gate 변화: 없음.
+## 2026-10-06 · uncommitted · uiux(pilot): 320px 전용 폭 선언
+
+- 변경: Pilot의 기존 22rem 미만 머리·제자리 회전·짧은 화면 배치를 `surfaces.yaml`의 선언된 breakpoint로 기록했다. 렌더링 규칙은 바꾸지 않았다.
+- 증거: `shared/web/test/test_responsive_tiers.py` 9 passed, `known_failures.py` 0 NEW.
+- gate 변화: 현재 브랜치의 반응형 계약 실패를 제거했다. Pilot 실제 운전자 G3와 장치 수용은 HOLD.
+## 2026-10-06 · uncommitted · uiux(web-common): 현재 트리 G1 계약 정합성
+
+- 변경: Fleet compact 머리의 현재 격자를 정적 계약에 반영하고, 비활성 사유 검사기가 `setOff(false)`·`setEnabled(true)`를 활성화로 읽도록 고쳤다. D-329 `matrix.json` 검사는 유지하고 다른 형식의 역할 기록 이름을 분리했다.
+- 증거: `shared/web/test` 231 passed, 25 skipped, `known_failures.py` 0 NEW. 수정 전 3건 실패, 수정 후 관련 4 passed 및 전체 재실행 녹색.
+- gate 변화: 현재 트리의 공유 UI 코드 계약을 녹색으로 회복했다. 표면별 G2/G3와 장치·현장 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(pinky-review): 자료 등록 폼의 칸 폭 선언
+
+- 변경: `pinky-review`의 22rem 칸 경계를 등록했다. 320px 자료 등록 폼은 입력·행동을 전폭으로 쌓고, 390px은 같은 너비로 나란히 둔다. 320px 대기 사진 카드는 목록의 전폭을 쓴다.
+- 증거: 실제 로컬 서버의 합성 검증 폴더 등록→새 대기 검수 이동 브라우저 2 passed, 반응형 계약 9 passed, `known_failures.py` 각 0 NEW.
+- gate 변화: 없음. 합성 자료의 LOCAL 경로이며 실제 검수자·학습 수용은 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(web-common): readout 빈 상태 전폭
+
+- 변경: 공용 `ui-readout`의 `ui-empty`를 격자 전체 폭에 걸쳐 대기·오류 문구가 첫 라벨 열에 갇히지 않게 했다. 라벨·값의 두 열 배치는 유지한다(D-286).
+- 증거: 로봇 상태 패널의 390px 대기·오류 실제 폭 차이 ≤1px 브라우저 1 passed, 공용 반응형 9 passed, 조작 계약 27 passed; 각 `known_failures.py` 0 NEW. 캡처는 X: `captures/robot-overview-panel/`이다.
+- gate 변화: 공용 배치의 LOCAL 부분 근거 추가. 소비 표면별 G2/G3는 별도다.
+
+## 2026-10-06 · uncommitted · uiux(web-common): readout 임시 빈 상태 규칙 제거
+
+- 변경: 로봇 상태 메시지를 정의 목록 밖의 `ui-status`로 옮긴 뒤, 더는 쓰이지 않는 `ui-readout > ui-empty` 전폭 규칙을 제거했다. D-286 라벨·값 배치는 그대로다.
+- 증거: 로봇 상태 전환 브라우저 1 passed, 역할 셸과 공용 계약 51 passed, `known_failures.py` 0 NEW.
+- gate 변화: 공용 의미 구조의 LOCAL 보정. 소비 표면별 G2/G3는 별도다.
+
+## 2026-10-07 · 93c606cbb · D-487 관제 표면 표시 이름 Rosy Fleet
+
+- 변경: `surfaces.yaml` `console` 항목의 `app_name`·`app_name_en`·`short_name`과 `icons/console.svg` `<title>`을 `Rosy Fleet`으로. id·아이콘 파일 이름은 그대로. 워드마크 cqi 주석에서 옛 이름을 뺐다.
+- 증거: `shared/web/test/` 통과(브랜치 시험 기록).
+- gate 변화: 이름만. 소비 표면별 G2/G3는 별도다.
