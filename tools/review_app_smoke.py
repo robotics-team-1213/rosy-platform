@@ -97,6 +97,8 @@ def main() -> int:
     if args.state:
         if not (args.state / 'reviews.sqlite3').is_file():
             sys.exit(f'{args.state} has no reviews.sqlite3; first run needs --source/--human/--images')
+        if args.out.resolve().is_relative_to(args.state.resolve()):
+            sys.exit('--out must be outside --state, or the copy would contain itself')
         args.out.mkdir(parents=True, exist_ok=True)
         copy = Path(tempfile.mkdtemp(prefix='state-', dir=args.out)) / 'state'
         shutil.copytree(args.state, copy)
@@ -117,6 +119,8 @@ def main() -> int:
                 server.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 server.kill()
+                server.wait()
+            shutil.rmtree(copy.parent, ignore_errors=True)  # a real state copy is ~100 MB
     if not counts['frames']:
         problems.append('workspace has no photos')
     for problem in problems:
