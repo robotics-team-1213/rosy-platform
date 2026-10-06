@@ -37,16 +37,19 @@ function setTextIfChanged(element, value) {
 
 function setFieldEvidence(evidence) {
   const stale = hasMatch && evidence !== "fresh";
-  const message = evidence === "delayed"
+  const waiting = !hasMatch;
+  const message = waiting
+    ? evidence === "disconnected" ? "호스트 연결 오류 · 경기장 정보 없음" : "경기장 정보 대기 중"
+    : evidence === "delayed"
     ? "지연 · 마지막 수신 위치 · 현재 위치 아님"
     : evidence === "disconnected"
       ? "연결 오류 · 마지막 수신 위치 · 현재 위치 아님"
       : "데이터 대기 · 마지막 수신 위치 · 현재 위치 아님";
-  fieldEvidence.hidden = !stale;
-  if (stale) {
+  fieldEvidence.hidden = !(stale || waiting);
+  if (stale || waiting) {
     setTextIfChanged(fieldEvidence, message);
     canvas.setAttribute("aria-describedby", "field-evidence");
-    pitchWrap.dataset.evidence = evidence;
+    pitchWrap.dataset.evidence = waiting && evidence !== "disconnected" ? "waiting" : evidence;
     frame.dataset.evidence = evidence;
   } else {
     canvas.removeAttribute("aria-describedby");
@@ -75,6 +78,7 @@ function draw(payload) {
   const field = payload.field || { length_m: 2, width_m: 1.4, goal_width_m: 0.35 };
   const w = canvas.width;
   const h = canvas.height;
+  const displayScale = Math.max(1, w / Math.max(canvas.clientWidth, 1));
   ctx.fillStyle = tone("--pitch");
   ctx.fillRect(0, 0, w, h);
   const pad = 36;
@@ -112,15 +116,15 @@ function draw(payload) {
   const homeId = field.home_id;
   Object.entries(robots).forEach(([id, pose]) => {
     ctx.fillStyle = tone(id === homeId ? "--home" : "--away");
-    wedge(X(pose.x), Y(pose.y), pose.yaw, 11);
+    wedge(X(pose.x), Y(pose.y), pose.yaw, Math.max(11, 7 * displayScale));
     ctx.fillStyle = tone("--pitch-ink");
-    ctx.font = window.RosyPalette.canvasFont(12, "body");
-    ctx.fillText(id, X(pose.x) + 8, Y(pose.y) - 8);
+    ctx.font = window.RosyPalette.canvasFont(12 * displayScale, "body");
+    ctx.fillText(id, X(pose.x) + 8 * displayScale, Y(pose.y) - 8 * displayScale);
   });
   if (payload.ball) {
     ctx.fillStyle = tone("--ball");
     ctx.beginPath();
-    ctx.arc(X(payload.ball.x), Y(payload.ball.y), 7, 0, Math.PI * 2);
+    ctx.arc(X(payload.ball.x), Y(payload.ball.y), Math.max(7, 5 * displayScale), 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -200,7 +204,8 @@ async function tick() {
     const lost = payload.lost_ball || (payload.lost_robots || []).length;
     const lostElement = document.getElementById("lost");
     lostElement.hidden = !lost;
-    lostElement.textContent = payload.reason || (payload.lost_ball ? "공을 잃음" : "로봇을 잃음");
+    lostElement.textContent = payload.lost_ball || payload.reason === "lost_ball"
+      ? "공을 잃음" : "로봇을 잃음";
     const matchSummary = `${phaseLabel} · ${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}${evidenceAnnouncement ? ` · ${evidenceAnnouncement}` : ""}`;
     setTextIfChanged(announcement, matchSummary);
     draw(payload);

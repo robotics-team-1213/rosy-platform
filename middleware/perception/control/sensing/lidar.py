@@ -30,13 +30,21 @@ def enable_simulation_scans(enabled: bool = True) -> None:
 
 
 def is_simulation_scan(msg) -> bool:
-    """GPU lidar shape used by the isolated Pinky Gazebo rigs."""
+    """GPU lidar shapes of the Pinky Gazebo models.
+
+    720 beams on a pinky/ frame: the isolated rigs. 640 beams, range_max 12 m on
+    <ns>rplidar_link: the shared model (description rosy_gz.urdf.xacro gpu_lidar).
+    The C1 reports range_max 40 m, so it never matches the second shape.
+    """
     try:
         n = len(getattr(msg, 'ranges', ()) or ())
         frame = str(getattr(getattr(msg, 'header', None), 'frame_id', '') or '')
+        rmax = float(getattr(msg, 'range_max', 0.0))
     except Exception:
         return False
-    return n == 720 and frame.startswith('pinky/')
+    if n == 720 and frame.startswith('pinky/'):
+        return True
+    return n == 640 and rmax == 12.0 and frame.rsplit('/', 1)[-1] == 'rplidar_link'
 
 
 def is_robot_scan(msg) -> bool:

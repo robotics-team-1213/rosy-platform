@@ -39,13 +39,14 @@
     <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
+  <ui-status id="estop-feedback" hidden></ui-status>
 
   <main id="install-main" tabindex="-1">
     <h1 class="sr-only">Rosy Console — 설치·보정</h1>
     <!-- D-410 — 설치 화면. 운용(감시·목표·정지)은 /console에 있다. -->
     <section class="panel install-nav" aria-labelledby="install-nav-heading">
       <h2 id="install-nav-heading">설치·보정 화면</h2>
-      <p class="hint">기기 등록·카메라 연결 승인·경기장/맵 보정을 합니다. 로봇 감시·목표 지정·전체 정지는
+      <p class="hint">기기 등록·카메라 연결 승인·경기장/맵 보정을 합니다. 로봇 감시·목표 지정·전체 주행 취소는
         <a href="/console">운용 화면</a>에 있습니다.</p>
     </section>
 
@@ -105,12 +106,12 @@
               <h2 id="camera-link-heading">카메라 연결 승인</h2>
             </div>
             <section id="camera-peer-panel" aria-labelledby="camera-peer-title" hidden>
-              <h5 id="camera-peer-title">이 장비에서 카메라 연결 승인</h5>
+              <h3 id="camera-peer-title">이 장비에서 카메라 연결 승인</h3>
               <p class="hint">같은 LAN에서 이 장비를 선택한 카메라 요청입니다. 폰 화면과 확인 문자가 같은지 보고 승인하세요. 연결을 기억하면 장시간 꺼져 있어도 다시 승인할 필요가 없습니다.</p>
               <p id="camera-peer-fingerprint" class="hint camera-id"></p>
               <p id="camera-peer-status" class="hint" role="status" aria-live="polite"></p>
               <ul id="camera-peer-requests" class="enrolled-list camera-list" aria-label="카메라 연결 승인 요청"></ul>
-              <h5>기억한 카메라 연결</h5>
+              <h4>기억한 카메라 연결</h4>
               <ul id="camera-peer-relationships" class="enrolled-list camera-list" aria-label="기억한 카메라 연결"></ul>
             </section>
             <p class="hint">기존 앱 연결: 폰 화면의 숫자 6자리를 입력해 승인합니다.</p>
@@ -131,9 +132,9 @@
                 <p id="camera-confirm-clock"></p>
                 <ui-button id="camera-confirm-close" kind="quiet" type="button">닫기</ui-button>
               </section>
-              <h5 id="camera-requests-heading">대기 중인 요청</h5>
+              <h3 id="camera-requests-heading">대기 중인 요청</h3>
               <ul id="camera-requests" class="enrolled-list camera-list" aria-labelledby="camera-requests-heading"></ul>
-              <h5 id="camera-credentials-heading">연결된 카메라</h5>
+              <h3 id="camera-credentials-heading">연결된 카메라</h3>
               <ul id="camera-credentials" class="enrolled-list camera-list" aria-labelledby="camera-credentials-heading"></ul>
               <dialog id="camera-approve-dialog" aria-labelledby="camera-approve-title">
                 <p id="camera-approve-title">카메라 <b id="camera-approve-target"></b> 연결 승인</p>
@@ -235,6 +236,7 @@
           <div id="vision-corner-modes" class="vision-corner-modes" role="group" aria-label="영역 조정 화면" hidden>
             <ui-button kind="segment" id="vision-edit-corners" type="button" aria-pressed="false">원본에서 영역 조정</ui-button>
             <ui-button kind="segment" id="vision-preview-adjusted" type="button" aria-pressed="true">보정 결과 미리보기</ui-button>
+            <ui-button kind="segment" id="vision-preview-auto" type="button" aria-pressed="false">자동 보정 (필드)</ui-button>
           </div>
           <p id="vision-corner-hint" class="hint" hidden>네 모서리를 드래그하세요. 키보드는 모서리에 초점을 두고 방향키로 이동합니다.</p>
           <div class="adjustment-columns">

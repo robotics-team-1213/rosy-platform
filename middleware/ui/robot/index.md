@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-06 · uncommitted · feat(dashboard): 개발 모드 로봇은 코드 없는 입장, 관리자는 임시 SSH 비밀번호를 화면에서 확인
-- 2026-10-05 · uncommitted · uiux: meter and map cursor stay in the stylesheet
-- 2026-10-05 · uncommitted · uiux: drop the compatibility link from the default entry
-- 2026-10-05 · uncommitted · fix(dashboard): 차선 추종 시작 조건을 구동 준비에 맞춤
-- 2026-10-05 · uncommitted · fix(ui): Wi-Fi 라벨 변수의 비밀값 검사 오인 해소
+- 2026-10-06 · uncommitted · uiux(robot): 상태 메시지 의미 구조 수정
+- 2026-10-06 · uncommitted · uiux(robot): 첫 상태 수신 전 안내
+- 2026-10-06 · uncommitted · uiux(robot): 개발 연결 대기 이유와 G2 기록 이름
+- 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
+- 2026-10-06 · uncommitted · uiux(robot): 320px 역할 셸 동일 폭

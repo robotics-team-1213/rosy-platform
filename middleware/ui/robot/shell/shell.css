@@ -74,6 +74,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .surface-slot[data-slot
   gap: var(--space-4);
 }
 body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
+  container-type: inline-size;
   padding: var(--space-4);
   border: 1px solid var(--surface-line);
   border-radius: var(--radius-panel);
@@ -85,7 +86,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
    프레임만 풀어 페이지가 스크롤한다 — US-008 전에는 두 규칙이 한 조건에 묶여 열까지 접혔다. */
 @media (width >= 64rem) {
   body[data-surface="console"] .surface-main {
-    grid-template-columns: minmax(15rem, 0.9fr) minmax(0, 1.35fr) minmax(20rem, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-areas:
       "status status status"
       "banner banner banner"
@@ -217,6 +218,14 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
    화면 전환은 cluster이지 사이드바가 아니다. 붙박이 머리는 창 높이의 20% 이하다.
    알림은 글이 있을 때만 셋째 줄에 나온다(비상 정지 결과). */
 @media (width < 64rem) {
+  body[data-surface="console"] .surface-main {
+    grid-template-areas: "status" "banner" "act" "sense" "observe";
+  }
+  body[data-surface="console"] #surface-status { grid-area: status; }
+  body[data-surface="console"] .surface-slot[data-slot="banner"] { grid-area: banner; }
+  body[data-surface="console"] .surface-slot[data-slot="act"] { grid-area: act; }
+  body[data-surface="console"] .surface-slot[data-slot="sense"] { grid-area: sense; }
+  body[data-surface="console"] .surface-slot[data-slot="observe"] { grid-area: observe; }
   ui-topbar {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;

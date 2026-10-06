@@ -7,6 +7,16 @@ export const FORMATION_STATE_LABEL = {
   IDLE: "대기", ARMING: "무장 중", RUNNING: "진행 중", HOLDING: "유지 중", STOPPED: "해제됨",
 };
 const stateLabel = (state) => FORMATION_STATE_LABEL[state] || state || "—";
+const FORMATION_CAUSE_LABEL = {
+  "nav.stuck": "주행 정체", "nav.failed": "주행 실패", "nav.blocked": "주행 경로 막힘",
+  "swarm.aborted": "대형 추종 중단", "safety.estop": "비상 정지", stopped: "대형 해제",
+};
+function formatFormationCause([code, robot]) {
+  const label = FORMATION_CAUSE_LABEL[code]
+    || (code.startsWith("arming_failed:") ? "대형 준비 실패"
+      : code.startsWith("relay_failed:") ? "대형 통신 실패" : "대형 상태 확인 필요");
+  return robot ? `${robot} · ${label}` : label;
+}
 import { formationReason } from "./motion-readiness.js";
 
 export function createFormation({ scope, el, view, log, call, render }) {
@@ -80,7 +90,9 @@ export function createFormation({ scope, el, view, log, call, render }) {
     setOff("formation-start", status.active, "이미 대형 중");
     setOff("formation-reform", !status.active, "열린 대형 없음");
     // 재개는 HOLDING(유지 중)에서만 뜻이 있다. RUNNING에서 눌러 봐야 세션이 조용히 무시한다.
-    setOff("formation-resume", status.state !== "HOLDING", "대형 유지 중일 때만");
+    const pending = status.pending_triggers || [];
+    setOff("formation-resume", status.state !== "HOLDING" || pending.length > 0,
+      pending.length ? "추가 사건 확인 후 대형을 재구성하세요" : "대형 유지 중일 때만");
     setOff("formation-stop", !status.active, "열린 대형 없음");
     // 대형이 열려 있는 동안에는 멤버를 바꿀 수 없다 — 해제하고 다시 연다.
     el("formation-members").querySelectorAll("input").forEach((i) => { i.disabled = status.active; });
@@ -115,9 +127,9 @@ export function createFormation({ scope, el, view, log, call, render }) {
       const errs = Object.entries(relay.follower_last_error || {}).filter(([, e]) => e);
       if (errs.length) items.push(["오류", errs.map(([id, e]) => `${id}: ${e}`).join(", ")]);
     }
-    if (status.reason) items.push(["이유", status.reason.join(" / ")]);
-    if (status.pending_triggers && status.pending_triggers.length) {
-      items.push(["재개 차단", status.pending_triggers.map((t) => t.join(":")).join(", ")]);
+    if (status.reason) items.push(["이유", formatFormationCause(status.reason)]);
+    if (pending.length) {
+      items.push(["재개 차단", pending.map(formatFormationCause).join(", ")]);
     }
     const dl = document.createElement("dl");
     dl.className = "diag-readout";
@@ -152,7 +164,7 @@ export function createFormation({ scope, el, view, log, call, render }) {
       state.textContent = "확인 불가";
       state.removeAttribute("title");
       state.setAttribute("status", "warn");
-      el("formation-detail").textContent = `대형 상태를 읽지 못했습니다 · 새 상태를 기다리는 중 — ${err.message}`;
+      el("formation-detail").textContent = "대형 상태를 읽지 못했습니다 · 새 상태를 기다리는 중. Fleet 연결을 확인하세요.";
       for (const id of ["formation-start", "formation-reform", "formation-resume"]) {
         setOff(id, true, "상태 확인 불가");
       }

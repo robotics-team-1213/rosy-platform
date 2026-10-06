@@ -691,8 +691,11 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1119,
-        "accept: re-judged at 1119 on 2026-10-06: bounded LED identity pulse joins the "
+        1133,
+        "accept: re-judged at 1133 on 2026-10-06 for D-483: the pair-request approval-code card "
+        "is one more status row of the same LCD owner; its strict reader and priority live in "
+        "core_common.face_screen, rosy-face only passes the file and draws the notice. "
+        "Re-judged at 1119 on 2026-10-06: bounded LED identity pulse joins the "
         "existing face lamp owner, gated by live IDLE and alarm state; the zero-growth "
         "allowance remains. The one owner of LCD, buzzer and lamp (D-433, was rosy-boot-display.py) — one poll "
         "and one frame tick; the situation table lives in core_common.face_screen; covered by "
@@ -742,7 +745,7 @@ SIZE_VERDICTS = {
         "canary watch are one short sequential flow; split the canary watch out if it grows further",
     ),
     "deploy/robot/pinky_pro/native/sync-image-layer.py": (
-        1020,
+        1023,
         "split: D-388 image-layer sync — the allowlist/plan, the backup-record history (records, "
         "cleanup, crash reconcile) and the apply/pending transaction are separate seams; move the "
         "record history into a sibling module in deploy/robot/pinky_pro/native once the 2026-10-02 bench "
@@ -750,7 +753,9 @@ SIZE_VERDICTS = {
         "covered by test/test_image_layer_sync.py. Re-judged 2026-10-03 at 1018: main reached 1000 "
         "(state-directory bootstrap) without a re-judgement, D-433 adds 18 (retired units); verdict unchanged. "
         "Re-judged 2026-10-04 at 1020: two lane-only Host unit allowlist entries, no new sync logic; "
-        "record-history split remains required after device exercise.",
+        "record-history split remains required after device exercise. "
+        "Re-judged 2026-10-06 at 1023: D-477 adds one condition-gated join unit to UNITS and "
+        "ENABLED_UNITS, no new sync logic; verdict unchanged.",
     ),
     "deploy/robot/pinky_pro/native/rosy-hw-probe.py": (
         641,

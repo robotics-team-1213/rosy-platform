@@ -50,6 +50,7 @@ ALLOWED = {
     },
     "cell.js": {
         "/common/fleet-client.js",
+        "/common/ui.js",
         "/console/assets/cell-document-editor.js",
     },
 }

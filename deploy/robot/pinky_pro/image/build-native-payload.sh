@@ -239,6 +239,8 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-access.path" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-access-boot.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-password-expire.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-password-expire.timer" "$OVERLAY/etc/systemd/system/"
+# D-477: the one-shot tailnet join, condition-gated on /etc/rosy/tailscale-join.json.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-tailscale-join.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"
 mkdir -p "$OVERLAY/etc/systemd/journald.conf.d"
 cp "$NATIVE_RUNTIME_SOURCE/journald-60-rosy.conf" "$OVERLAY/etc/systemd/journald.conf.d/60-rosy.conf"

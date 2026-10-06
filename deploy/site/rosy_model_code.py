@@ -27,7 +27,8 @@ from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 
 PREFIX = "learning/training/perception/"
 CAMERA_PROFILE = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
-CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/", CAMERA_PROFILE)
+CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/",
+                 "shared/web/", CAMERA_PROFILE)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + ("tools/perception/", "src/runtime/sensing/control/",
                                     "src/contracts/foundation/core_common/")
@@ -296,7 +297,8 @@ class Updater:
         # These actual entrypoints eagerly import the committed control/core_common
         # closure. Isolated mode prevents ambient PYTHONPATH/user-site fallback;
         # --help exits before training, robot access or model delivery.
-        for script in ("rosy_ml.py", "model/watch.py", "model/intake.py", "model/convert.py", "dataset/build.py"):
+        for script in ("rosy_ml.py", "model/watch.py", "model/intake.py", "model/convert.py",
+                       "dataset/build.py", "dataset/review_app.py"):
             subprocess.run(bootstrap_command(self.python, source, Path(source) / PREFIX / script, ["--help"]),
                            cwd=source, capture_output=True, check=True, timeout=60)
         code = PATH_SETUP + ";import export_ncnn,export_ncnn_lane,autolabel,control,core_common"
