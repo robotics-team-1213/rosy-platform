@@ -67,3 +67,15 @@ def test_no_device_config_carries_the_simulation_flag():
     hits = [p for root in roots for p in root.rglob("*.yaml")
             if "simulation_sensors" in p.read_text(encoding="utf-8", errors="ignore")]
     assert hits == []
+
+
+def test_gazebo_lidar_covers_one_turn_without_a_repeated_beam():
+    # D-468 return_scan_view needs (angle_max - angle_min + increment) == 2 pi, like the C1.
+    gz = (DESCRIPTION / "rosy_gz.urdf.xacro").read_text(encoding="utf-8")
+    block = gz[gz.index("<sensor name='gpu_lidar'"):]
+    samples = int(re.search(r"<samples>(\d+)</samples>", block).group(1))
+    expr = {k: re.search(rf"<{k}>\$\{{(.+?)\}}</{k}>", block).group(1) for k in ("min_angle", "max_angle")}
+    lo, hi = (eval(expr[k], {"pi": math.pi}) for k in ("min_angle", "max_angle"))  # noqa: S307
+    inc = (hi - lo) / (samples - 1)
+    assert samples == 640
+    assert abs((hi - lo + inc) - 2.0 * math.pi) < inc * 0.1

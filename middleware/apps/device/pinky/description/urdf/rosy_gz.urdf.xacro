@@ -97,8 +97,11 @@
                         <horizontal>
                             <samples>640</samples>
                             <!-- <resolution>1</resolution> -->
+                            <!-- 640 beams over one turn without repeating the start beam,
+                                 as the C1 reports (increment 2 pi / 640). The D-468 scan view
+                                 rejects a scan whose span overlaps itself. -->
                             <min_angle>${-pi}</min_angle>
-                            <max_angle>${pi}</max_angle>
+                            <max_angle>${pi - 2*pi/640}</max_angle>
                         </horizontal>
                         <vertical>
                             <samples>1</samples>
