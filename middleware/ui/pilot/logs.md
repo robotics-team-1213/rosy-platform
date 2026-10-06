@@ -578,3 +578,9 @@
 - 변경: 480dp 미만의 후보 행에서 장식용 로봇 아이콘을 생략해 이름에 가용 폭을 돌렸다. 연결·보류와 화살표, 동일한 행 폭·접근성 이름은 유지한다.
 - 증거: 격리 Android 35 AVD 800×600/밀도 320dpi/글자 130%에서 첫 행 이름이 한 줄이고 두 후보 이름이 첫 화면에 보인다. 첫 행 높이는 284px→220px, 두 행의 UI bounds 폭은 각각 736px이다. 보류 이유는 스크롤 뒤 읽는다. 1200×800에서는 기존 아이콘과 두 행 배치를 유지한다. X: `captures/pilot-candidate-compact/`, Gradle JVM 89 passed 및 debug APK 빌드 성공.
 - gate 변화: Pilot Shell LOCAL G2의 작은 가로 태블릿 판독 근거 추가. 실제 후보·Lenovo 태블릿·운전자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 버튼 동등 폭 검증
+
+- 변경: 기존 전화 주행 브라우저 시험에 좌/우 제자리 회전 버튼의 렌더 폭 차이 ≤1px 검사를 추가했다.
+- 증거: 현재 트리의 320×568·390×844 회전 버튼 시험 2 passed, 카메라·조작 배치와 회전 안내 7 passed, 각각 `known_failures.py` 0 NEW. 320px 원본은 X: `captures/pilot-current-320/`이다.
+- gate 변화: Pilot 320px LOCAL 폭 근거 추가. 선언 상태 전체·운전자 G3·실물 장치 readback은 HOLD다.

@@ -980,6 +980,7 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
     pivot_widths = page.evaluate("""() => [...document.querySelectorAll('[data-drive-pivots] ui-button')]
       .map(button => [button.clientWidth, button.scrollWidth])""")
     assert all(scroll <= client + 1 for client, scroll in pivot_widths), pivot_widths
+    assert abs(pivot_widths[0][0] - pivot_widths[1][0]) <= 1, pivot_widths
     page.locator('[data-drive-pivot="right"]').scroll_into_view_if_needed()
     right = page.locator('[data-drive-pivot="right"]').bounding_box()
     assert right and right["y"] >= page.locator("ui-topbar").bounding_box()["height"]

@@ -34,6 +34,8 @@
 
 운용자 작업 준비의 [웨이포인트 저장 390×844](captures/operator-setup-waypoint-saved-390x844.png)은 현재 FastAPI의 `POST /api/v1/waypoints`가 201을 돌려주고, 다음 목록 조회가 저장된 이름과 좌표를 화면에 표시한 LOCAL 작업 경로다. 브라우저 1 passed, `known_failures.py` 0 NEW였다. 이 테스트 인스턴스의 저장이며 실물 로봇의 위치 정확도는 검증하지 않는다.
 
+Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했다. 첫 화면의 비상 정지·카메라·전진/후진·스틱, 조작 칸을 내린 뒤의 좌/우 제자리 회전을 X: `captures/pilot-current-320/pilot-drive-{current,turn-controls}-320x568.png`에 남겼다. 390×844에서도 회전 버튼 두 개의 렌더 폭 차이 ≤1px이며, 320×568에서도 같은 조건을 직접 검사했다. 카메라 비율·조작 겹침·전화 회전 안내 브라우저 **7 passed**, 추가 동등 폭 검사 **2 passed**, 각 `known_failures.py` **0 NEW**다. 이는 fixture 기반 LOCAL 배치 근거다. 회전 조작의 실제 발견 가능성, 선언 상태 전체, 운전자 G3와 장치 readback은 HOLD다.
+
 ### 로봇 운용 G3 독회 — LOCAL 진행 중
 
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |
