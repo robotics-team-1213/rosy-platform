@@ -375,6 +375,10 @@ G3 여덟 항목은 세 표면 모두 **미완료**다. 아래는 이번 회차�
 
 후속 320px 판독 수정에서 지도 SVG를 좁은 화면의 내부 가로 스크롤에 두고 밀기 안내를 지도 위에 표시했다. 같은 `#site-map-svg .label`의 화면 높이는 변경 전 390px **6px**·320px **5px**, 변경 후 둘 다 **14px**이며 1440px도 **14px**이다. 세 폭 모두 문서 가로 넘침 0, 비상 정지는 화면 너비 안이고, 장소·차로 편집→활성화→경로 미리보기의 브라우저 **6 passed**, `known_failures.py` **0 NEW**다. X: `2026-10-07--051846--site-map-legibility--f6d38f/evidence/site-map-*.png` 9장과 `logs/{capture-final,full-mobile-verified}.txt`가 LOCAL 원본이다. 320px에서 지도 전체는 한 번에 보이지 않으므로 실제 사용자의 밀기·라벨 판독 G3와 사이트 화면은 여전히 **HOLD**다.
 
+후속 G2에서는 viewer·지도 서버 오류·조회 보류·연결 끊김을 1440×1000·390×844·320×568에서 찍었다(X: `2026-10-07--052905--site-map-states--1eaaac/evidence/site-map-*.png` **12장**, `logs/capture-final.txt`). 변경 전 viewer에게 서버가 거절할 편집·경로 계산·비상 정지가 활성으로 보였고, 숨김 속성의 편집 폼도 CSS 격자에 가려지지 않았다. 지금은 역할 사유가 붙은 비활성 조작, 실제 폼 숨김, 실패한 재접속의 옛 지도 제거, 보류 경과 초·조회 실패·연결 끊김의 별도 문구가 나온다. 지도가 없을 때 빈 캔버스와 범례를 접었다. 운영자 신원 확인 뒤 지도 조회가 지연돼도 비상 정지는 활성이다. **12/12셀**에서 문서 가로 넘침 0·비상 정지의 화면 내 위치를 확인했고 관련 Python **79 passed**, Fleet 웹 모듈 **144 passed**, `known_failures.py` **0 NEW**였다(`logs/related-final.txt`, `logs/node-all-final.txt`). 이는 합성 서버 LOCAL 부분 근거다. 실제 사이트 설치, 비인가·초안 충돌·빈 지도·로봇 상태의 나머지 선언 셀, 사용자 G3는 **HOLD**다.
+
+같은 회차의 G1 현재 재실행은 **89 passed, 1 failed**였다. `pinky-review`의 객체·픽셀 앱 JS에 원시 `rgb(`가 두 곳 남아 D-153 토큰 계약이 실패했고, 이 실패는 깨끗한 로컬 `main`에서도 재현됐다(`logs/g1.txt`, `logs/g1-main-baseline.txt`). Fleet 변경의 신규 실패로 분류하지 않지만 제품 전체 G1은 이 코드에서 **HOLD**다.
+
 현재 `shared/web/surfaces.yaml`의 표면을 제품 UI/UX 목표와 대조하면 다음과 같다. **부분 근거는 GO가 아니다.** 신규 표면의 선언 상태·뷰포트 카드는 D-153 재평가 트리거로 채워야 한다.
 
 | 등록 표면 | 이번 회차의 범위 | 다음 판정 증거 |

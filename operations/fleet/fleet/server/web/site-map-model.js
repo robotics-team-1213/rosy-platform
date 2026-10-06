@@ -28,6 +28,11 @@ export const SITE_MAP_ERROR_LABEL = {
 };
 
 export function siteMapErrorText(error) {
+  if (error.status === 401) return '관제 토큰을 확인하고 다시 접속하세요';
+  if (error.status === 403) return '운영자 권한이 필요합니다 · 계정을 확인하세요';
+  if (error.status >= 500) return '관제 서버 응답을 확인할 수 없습니다 · 잠시 뒤 다시 접속하세요';
+  if (!error.status && /Failed to fetch|NetworkError|ERR_/.test(error.message || ''))
+    return '관제 연결이 끊겼습니다 · 네트워크를 확인하고 다시 접속하세요';
   const base = SITE_MAP_ERROR_LABEL[error.code] || error.message || String(error);
   const fields = (error.detail?.errors || []).map(item => `${(item.loc || []).join('.')}: ${item.msg}`);
   return fields.length ? `${base} — ${fields.join(' · ')}` : base;

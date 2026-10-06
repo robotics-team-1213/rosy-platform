@@ -13,7 +13,7 @@ const W = 800, H = 480;
 
 $('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
-const state = {active: null, draft: null, working: null, dirty: false, selected: null, plan: null, point: null};
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, point: null};
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
@@ -25,6 +25,7 @@ function gate(id, reason) {  // '' enables; otherwise the button says why it is 
 function notice(text) { $('notice').textContent = text; }
 function status(id, text, kind) { $(id).textContent = text; $(id).setAttribute('state', kind); }
 function shown() { return $('map-source').value === 'draft' ? state.working : state.active?.map; }
+function operatorReason() { return state.role === 'operator' ? '' : state.role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다'; }
 
 function el(name, attrs, parent) {
   const node = document.createElementNS(SVG, name);
@@ -37,11 +38,17 @@ function render() {
   const svg = $('site-map-svg');
   svg.replaceChildren();
   const map = shown();
-  status('map-status', $('map-source').value === 'draft'
-    ? (state.working ? `초안${state.dirty ? ' · 저장 안 됨' : ''}` : '초안 없음')
-    : (state.active ? `활성 지도 v${state.active.version} · ${state.active.activated_by}` : '활성 지도 없음'),
-  map ? 'ready' : 'empty');
-  if (!map) return;
+  const hasMap = Boolean(map) && state.loadState === 'ready';
+  for (const id of ['map-scroll-hint', 'map-viewport', 'map-legend']) $(id).hidden = !hasMap;
+  const pending = state.loadState === 'pending';
+  const failed = state.loadState === 'error';
+  status('map-status', pending ? '지도 조회 중' : failed ? '지도 조회 실패 · 다시 접속하세요'
+    : state.loadState === 'idle' ? '관제 접속 필요'
+    : $('map-source').value === 'draft'
+      ? (state.working ? `초안${state.dirty ? ' · 저장 안 됨' : ''}` : '초안 없음')
+      : (state.active ? `활성 지도 v${state.active.version} · ${state.active.activated_by}` : '활성 지도 없음'),
+  pending ? 'pending' : failed ? 'error' : map ? 'ready' : 'empty');
+  if (!hasMap) return;
   const view = fitView(map, W, H);
   state.view = view;
   const line = points => points.map(([x, y]) => view.toPx(x, y).join(',')).join(' ');
@@ -76,9 +83,10 @@ function select(selection) {
   const map = state.working;
   const place = selection?.place && map?.places.find(item => item.id === selection.place);
   const edge = selection?.edge && map?.edges.find(item => item.id === selection.edge);
-  $('place-form').hidden = !place;
-  $('edge-form').hidden = !edge;
-  gate('apply-edit', place || edge ? '' : '초안 보기에서 장소나 차로를 고르세요');
+  const reason = operatorReason();
+  $('place-form').hidden = !place || Boolean(reason);
+  $('edge-form').hidden = !edge || Boolean(reason);
+  gate('apply-edit', reason || (place || edge ? '' : '초안 보기에서 장소나 차로를 고르세요'));
   if (place) {
     $('selection').textContent = `장소 ${place.id}`;
     $('place-name').value = place.name;
@@ -95,27 +103,38 @@ function select(selection) {
 }
 
 function syncButtons() {
-  gate('save-draft', !state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다'));
-  gate('activate', !state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : ''));
-  status('draft-status', state.draft?.revision
-    ? `저장된 초안 · ${state.draft.saved_by}${state.dirty ? ' · 고친 내용 저장 필요' : ''}`
-    : (state.dirty ? '저장 안 된 초안' : '저장된 초안 없음'), state.draft?.revision ? 'ready' : 'empty');
-  gate('trip-plan', !state.active ? '활성 지도가 없습니다' : !$('trip-robot').value ? '로봇을 고르세요'
-    : ($('trip-pick').checked ? state.point : $('trip-place').value) ? '' : '목적지를 고르세요');
+  const reason = operatorReason();
+  gate('save-draft', reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
+  gate('activate', reason || (!state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : '')));
+  status('draft-status', state.loadState === 'pending' ? '초안 조회 중'
+    : state.loadState === 'error' ? '초안 확인 불가 · 다시 접속하세요'
+    : state.loadState === 'idle' ? '관제 접속 필요'
+    : state.draft?.revision
+      ? `저장된 초안 · ${state.draft.saved_by}${state.dirty ? ' · 고친 내용 저장 필요' : ''}`
+      : (state.dirty ? '저장 안 된 초안' : '저장된 초안 없음'),
+  state.loadState === 'pending' ? 'pending' : state.loadState === 'error' ? 'error'
+    : state.draft?.revision ? 'ready' : 'empty');
+  gate('trip-plan', reason || (!state.active ? '활성 지도가 없습니다' : !$('trip-robot').value ? '로봇을 고르세요'
+    : ($('trip-pick').checked ? state.point : $('trip-place').value) ? '' : '목적지를 고르세요'));
+  $('trip-pick').disabled = Boolean(reason);
+  gate('estop', reason);
 }
 
 async function load() {
-  try { state.active = await request('/api/fleet/site-map/active'); } catch (error) {
+  let active = null;
+  try { active = await request('/api/fleet/site-map/active'); } catch (error) {
     if (error.status !== 404) throw error;
-    state.active = null;
   }
-  state.draft = await request('/api/fleet/site-map/draft');
-  state.working = state.draft.map ? state.draft.map
-    : (state.active ? JSON.parse(JSON.stringify(state.active.map)) : null);
+  const draft = await request('/api/fleet/site-map/draft');
+  const robots = (await request('/api/fleet/state')).robots || [];
+  state.active = active;
+  state.draft = draft;
+  state.working = draft.map ? draft.map
+    : (active ? JSON.parse(JSON.stringify(active.map)) : null);
   state.dirty = false;
+  state.loadState = 'ready';
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map(place => new Option(`${place.name} (${place.id})`, place.id)));
-  const robots = (await request('/api/fleet/state')).robots || [];
   $('trip-robot').replaceChildren(...robots.map(robot => new Option(robot.robot_id, robot.robot_id)));
   select(null);
   syncButtons();
@@ -126,13 +145,40 @@ async function guarded(work) {
   syncButtons();
 }
 
-$('connect').addEventListener('click', () => guarded(async () => {
-  sessionStorage.setItem('rosy-console-token', $('credential').value);
-  const session = await request('/api/fleet/session');
-  $('session').textContent = `${session.principal_id} · ${session.role}`;
-  await load();
-  notice('지도를 읽었습니다.');
-}));
+$('connect').addEventListener('click', async () => {
+  $('connect').disabled = true;
+  const started = Date.now();
+  const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
+  state.role = null;
+  state.loadState = 'pending';
+  state.active = state.draft = state.working = state.selected = state.plan = state.point = null;
+  state.dirty = false;
+  $('session').textContent = '접속 전';
+  $('trip-place').replaceChildren();
+  $('trip-robot').replaceChildren();
+  $('trip-actions').replaceChildren();
+  status('trip-summary', '계산 전 · 실행은 하지 않습니다', 'empty');
+  select(null);
+  syncButtons();
+  notice('접속 중 · 0초 경과');
+  try {
+    const session = await request('/api/fleet/session');
+    sessionStorage.setItem('rosy-console-token', $('credential').value);
+    state.role = session.role;
+    $('session').textContent = `${session.principal_id} · ${session.role}`;
+    syncButtons();
+    await load();
+    notice('지도를 읽었습니다.');
+  } catch (error) {
+    state.loadState = error.status === 401 ? 'idle' : 'error';
+    render();
+    syncButtons();
+    notice(siteMapErrorText(error));
+  } finally {
+    clearInterval(ticker);
+    $('connect').disabled = false;
+  }
+});
 
 $('map-source').addEventListener('change', () => render());
 
