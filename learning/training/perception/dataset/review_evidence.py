@@ -43,6 +43,11 @@ def configure(store):
 
 
 def identity(row, legacy=None):
+    if row.get('source_kind') == 'mcap':
+        frame = row['mcap']['frame']
+        bag = next(b for b in row['mcap']['bags'] if b['name'] == frame['bag'])
+        return (f'mcap:{bag["sha256"]}:{frame["topic"]}:{frame["log_ns"]}:'
+                f'{frame["channel_id"]}:{frame["message_ordinal"]}')
     digest = row.get('source_video_sha256')
     index = row.get('video_frame')
     if isinstance(digest, str) and len(digest) == 64 and type(index) is int and index >= 0:

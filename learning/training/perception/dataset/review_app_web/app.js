@@ -116,7 +116,9 @@ async function select(index) {
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
   frameHeading();saveView();
-  $('source-info').textContent = `${frame.source.width} × ${frame.source.height} · ${frame.source.video || '원본 사진'} · frame ${frame.source.video_frame ?? index}`;
+  $('source-info').textContent = frame.source.source_kind === 'mcap'
+    ? `${frame.source.width} × ${frame.source.height} · MCAP ${frame.source.source_session} · ${frame.source.mcap.frame.bag} · log ${frame.source.mcap.frame.log_ns} · 원본 픽셀 검증`
+    : `${frame.source.width} × ${frame.source.height} · ${frame.source.video || '원본 사진'} · frame ${frame.source.video_frame ?? index}`;
   $('candidate-source').textContent = `원본 초안 출처: ${frame.source.annotation_source || '원본 라벨 자료'} · 초안은 정답 승인이 아닙니다.`;
   $('image-message').hidden = false; $('image-message').textContent = '사진을 불러오는 중';
   $('canvas').width = frame.source.width; $('canvas').height = frame.source.height;

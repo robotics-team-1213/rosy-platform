@@ -36,7 +36,7 @@ class Conflict(ValueError):
 
 
 class ReviewStore:
-    def __init__(self, state, source=None, human=None, images=None):
+    def __init__(self, state, source=None, human=None, images=None, *, empty_eval=False):
         self.state = Path(state).resolve()
         self.state.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
@@ -52,8 +52,19 @@ class ReviewStore:
                 CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT);''')
             initialized = db.execute("SELECT value FROM metadata WHERE key='initialized'").fetchone()
             if initialized:
+                if empty_eval:
+                    raise ValueError('existing workspace: reopen with --state only')
                 if any(x is not None for x in (source, human, images)):
                     raise ValueError('existing workspace: restart with --state only; imports never overwrite reviews')
+                review_masks.configure(self)
+                review_evidence.configure(self)
+                return
+            if empty_eval:
+                if any(x is not None for x in (source, human, images)):
+                    raise ValueError('empty evaluation workspace has no training inputs')
+                db.execute("INSERT INTO metadata VALUES ('initialized','true')")
+                db.execute("INSERT INTO metadata VALUES ('workspace_kind','evaluation')")
+                db.commit()
                 review_masks.configure(self)
                 review_evidence.configure(self)
                 return
@@ -393,12 +404,15 @@ def main():
     parser.add_argument('--source', type=Path)
     parser.add_argument('--human', type=Path)
     parser.add_argument('--images', type=Path)
+    parser.add_argument('--empty-eval', action='store_true',
+                        help='initialize a separate empty evaluation workspace once')
     parser.add_argument('--port', type=int, default=8767)
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--cad-catalog', type=Path, help='verified CAD reference catalog shown in app')
     args = parser.parse_args()
-    store = ReviewStore(args.state, args.source, args.human, args.images)
+    store = ReviewStore(args.state, args.source, args.human, args.images,
+                        empty_eval=args.empty_eval)
     with store.connect() as db:
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
             if path:
