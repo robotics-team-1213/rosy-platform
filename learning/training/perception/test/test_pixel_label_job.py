@@ -24,6 +24,52 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def test_prepare_sources_binds_png_to_exact_decoded_video_frame(tmp_path):
+    cv2, np = pytest.importorskip("cv2"), pytest.importorskip("numpy")
+    video = tmp_path / "teleop_robot_20261006T010000Z.mp4"
+    writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"mp4v"), 5, (32, 24))
+    assert writer.isOpened()
+    for value in (30, 120, 210):
+        writer.write(np.full((24, 32, 3), value, dtype=np.uint8))
+    writer.release()
+    spec = {"sources": [{"video": str(video), "sha256": digest(video),
+                          "capture_group": "robot-day", "frames": [0, 2]}]}
+    out = tmp_path / "prepared"
+
+    assert job_module().prepare_sources(spec, out) == 2
+    rows = [json.loads(line) for line in (out / "verified-inputs.jsonl").read_text().splitlines()]
+    assert [row["video_frame"] for row in rows] == [0, 2]
+    assert {row["source_session"] for row in rows} == {"20261006T010000Z_robot"}
+    assert {row["capture_group"] for row in rows} == {"robot-day"}
+    copied = out / rows[0]["source_video"]
+    assert digest(copied) == digest(video) == rows[0]["source_video_sha256"]
+    cap = cv2.VideoCapture(str(copied))
+    decoded = []
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        decoded.append(frame)
+    cap.release()
+    for row in rows:
+        image = out / row["image"]
+        assert digest(image) == row["image_sha256"]
+        assert np.array_equal(cv2.imdecode(np.frombuffer(image.read_bytes(), np.uint8), cv2.IMREAD_COLOR),
+                              decoded[row["video_frame"]])
+    assert (out / "classes.yaml").is_file()
+    assert not list(out.rglob("READY"))
+
+
+def test_prepare_sources_rejects_changed_video_before_publishing(tmp_path):
+    video = tmp_path / "teleop_robot_20261006T010000Z.mp4"
+    video.write_bytes(b"changed")
+    out = tmp_path / "prepared"
+    with pytest.raises(ValueError, match="video hash"):
+        job_module().prepare_sources({"sources": [{"video": str(video), "sha256": "0" * 64,
+                                       "capture_group": "robot-day", "frames": [0]}]}, out)
+    assert not out.exists()
+
+
 def inputs(tmp_path):
     cv2, np = pytest.importorskip("cv2"), pytest.importorskip("numpy")
     frame = tmp_path / "frame.png"
@@ -71,6 +117,7 @@ def test_doctor_records_gpu_and_refuses_wrong_active_code(tmp_path, monkeypatch)
                                                  "memory_total_mib": 16000,
                                                  "memory_free_mib": 12000,
                                                  "driver": "test", "torch_cuda": True}, raising=False)
+    monkeypatch.setattr(module, "probe_onnx_cuda", lambda _path: {"verdict": "pass"})
     out = tmp_path / "private-receipt"
     assert module.main(["doctor", "--config", str(cfg), "--out", str(out)]) == 0
     receipt = json.loads((out / "doctor.json").read_text())
@@ -81,6 +128,23 @@ def test_doctor_records_gpu_and_refuses_wrong_active_code(tmp_path, monkeypatch)
                                   "environment_sha256": "b" * 64}))
     assert module.main(["doctor", "--config", str(cfg), "--out", str(tmp_path / "denied")]) == 1
     assert not (tmp_path / "denied").exists()
+
+
+def test_doctor_holds_when_onnx_cuda_cannot_open(tmp_path, monkeypatch):
+    config, _, _ = inputs(tmp_path)
+    active = tmp_path / "model-code-state.json"
+    active.write_text(json.dumps({"source_commit": "a" * 40,
+                                  "environment_sha256": "b" * 64}))
+    config["model_code_state"] = str(active)
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps(config))
+    module = job_module()
+    monkeypatch.setattr(module, "probe_gpu", lambda: {"verdict": "pass"})
+    monkeypatch.setattr(module.prelabel, "_open_model", lambda *_args, **_kwargs:
+                        (_ for _ in ()).throw(RuntimeError("required ONNX provider unavailable")))
+    out = tmp_path / "doctor"
+    assert module.main(["doctor", "--config", str(cfg), "--out", str(out)]) == 1
+    assert json.loads((out / "doctor.json").read_text())["gpu"]["verdict"] == "hold"
 
 
 @pytest.mark.parametrize("changed", ["image", "video", "classes", "invalid_classes",

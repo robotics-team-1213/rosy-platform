@@ -1,5 +1,6 @@
 """Verify fixed inputs and create pending pixel drafts on the model PC.
 
+    pixel_label_job.py prepare --sources sources.json --out new-source-dir
     pixel_label_job.py doctor --config config.json --out private-dir
     pixel_label_job.py draft --config config.json --out new-or-resumable-job-dir
 
@@ -14,8 +15,10 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import cv2
@@ -29,6 +32,7 @@ for directory in (HERE, TRAINING):
 
 import build  # noqa: E402
 import edge_review  # noqa: E402
+import labels  # noqa: E402
 import prelabel  # noqa: E402
 import review_ingest  # noqa: E402
 import train_job  # noqa: E402
@@ -51,6 +55,87 @@ def _file(ref, name):
     if not path.is_file() or sha(path) != expected:
         raise ValueError(f"{name} missing or changed")
     return path
+
+
+def prepare_sources(spec, out):
+    """Snapshot source videos and exact decoded PNGs; leave every pixel unapproved."""
+    sources = spec.get("sources") if isinstance(spec, dict) else None
+    if not isinstance(sources, list) or not sources:
+        raise ValueError("source videos required")
+    out = Path(out)
+    if out.exists():
+        raise ValueError("output already exists")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    seen, count = set(), 0
+    with tempfile.TemporaryDirectory(prefix=f".{out.name}-", dir=out.parent) as temporary:
+        stage = Path(temporary)
+        (stage / "videos").mkdir()
+        (stage / "images").mkdir()
+        rows = []
+        for item in sources:
+            if not isinstance(item, dict) or not isinstance(item.get("video"), str):
+                raise ValueError("video path required")
+            source = Path(item["video"])
+            if not source.is_absolute() or source.is_symlink() or not source.is_file():
+                raise ValueError("absolute regular video required")
+            session = edge_review.session(source.name)
+            if source.name in seen:
+                raise ValueError("duplicate source video")
+            seen.add(source.name)
+            expected = _digest(item.get("sha256"), "video hash")
+            group = item.get("capture_group")
+            if not isinstance(group, str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", group):
+                raise ValueError("safe capture group required")
+            frames = item.get("frames")
+            if (not isinstance(frames, list) or not frames or
+                    any(type(index) is not int or index < 0 for index in frames) or
+                    frames != sorted(set(frames))):
+                raise ValueError("sorted unique nonnegative frame indices required")
+            count += len(frames)
+            if count > 2000:
+                raise ValueError("at most 2000 source frames")
+            if sha(source) != expected:
+                raise ValueError("video hash differs")
+            video = stage / "videos" / source.name
+            shutil.copyfile(source, video)
+            if sha(source) != expected or sha(video) != expected:
+                raise ValueError("video hash changed during snapshot")
+            cap = cv2.VideoCapture(str(video))
+            if not cap.isOpened():
+                raise ValueError("video cannot be decoded")
+            try:
+                wanted = iter(frames)
+                next_index = next(wanted)
+                index = 0
+                while next_index is not None:
+                    ok, pixels = cap.read()
+                    if not ok:
+                        raise ValueError("video frame index exceeds decoded video")
+                    if index == next_index:
+                        height, width = pixels.shape[:2]
+                        if not 1 <= width <= 4096 or not 1 <= height <= 4096:
+                            raise ValueError("bounded image dimensions required")
+                        ok, encoded = cv2.imencode(".png", pixels)
+                        if not ok:
+                            raise ValueError("PNG encoding failed")
+                        image = stage / "images" / f"{session}__{index:06d}.png"
+                        image.write_bytes(encoded.tobytes())
+                        rows.append({"source_session": session, "capture_group": group,
+                                     "source_video": f"videos/{source.name}",
+                                     "source_video_sha256": expected, "video_frame": index,
+                                     "image": f"images/{image.name}", "image_sha256": sha(image),
+                                     "width": width, "height": height})
+                        next_index = next(wanted, None)
+                    index += 1
+            finally:
+                cap.release()
+        import yaml
+        (stage / "classes.yaml").write_text(
+            yaml.safe_dump({"classes": labels.CLASSES}, sort_keys=False), encoding="utf-8")
+        (stage / "verified-inputs.jsonl").write_text(
+            "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows), encoding="utf-8")
+        stage.rename(out)
+    return len(rows)
 
 
 def verify_inputs(config):
@@ -142,6 +227,21 @@ def probe_gpu():
                 "torch_cuda": True, "torch_device": torch.cuda.get_device_name(0)}
     except (OSError, subprocess.SubprocessError, ValueError, ImportError, RuntimeError) as exc:
         return {"verdict": "hold", "reason": type(exc).__name__}
+
+
+def probe_onnx_cuda(checkpoint):
+    """Exercise the exact ONNX CUDA path used by draft, including one inference."""
+    try:
+        checkpoint = Path(checkpoint).resolve()
+        model, session = prelabel._open_model(checkpoint.parent, providers=["CUDAExecutionProvider"])
+        if model.manifest.onnx_file().resolve() != checkpoint:
+            raise ValueError("model manifest checkpoint differs")
+        logits = session.run(np.zeros(model.manifest.input.shape, dtype=np.float32))
+        if not np.isfinite(logits).all():
+            raise ValueError("ONNX CUDA logits are not finite")
+        return {"verdict": "pass"}
+    except Exception as exc:
+        return {"verdict": "hold", "reason": f"ONNX CUDA {type(exc).__name__}"}
 
 
 def draft_mask(logits, classes, size, min_confidence):
@@ -253,6 +353,9 @@ def run_draft(config, out, min_confidence=0.6):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    prepare = sub.add_parser("prepare")
+    prepare.add_argument("--sources", type=Path, required=True)
+    prepare.add_argument("--out", type=Path, required=True)
     doctor = sub.add_parser("doctor")
     doctor.add_argument("--config", type=Path, required=True)
     doctor.add_argument("--out", type=Path, required=True)
@@ -261,6 +364,14 @@ def main(argv=None):
     draft.add_argument("--out", type=Path, required=True)
     draft.add_argument("--min-confidence", type=float, default=0.6)
     args = parser.parse_args(argv)
+    if args.command == "prepare":
+        try:
+            count = prepare_sources(json.loads(args.sources.read_text(encoding="utf-8")), args.out)
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+            print(f"HOLD: {exc}", file=sys.stderr)
+            return 1
+        print(f"prepared: {count} unapproved source frames")
+        return 0
     if args.command == "draft":
         try:
             count = run_draft(json.loads(args.config.read_text(encoding="utf-8")), args.out,
@@ -279,6 +390,11 @@ def main(argv=None):
         print(f"HOLD: {exc}", file=sys.stderr)
         return 1
     gpu = probe_gpu()
+    if gpu["verdict"] == "pass":
+        onnx = probe_onnx_cuda(config["checkpoint"]["path"])
+        gpu["onnx_cuda"] = onnx["verdict"] == "pass"
+        if onnx["verdict"] != "pass":
+            gpu.update(onnx)
     args.out.mkdir(parents=True, exist_ok=True)
     target = args.out / "doctor.json"
     temporary = target.with_suffix(".json.tmp")
@@ -289,7 +405,7 @@ def main(argv=None):
         stream.flush()
         os.fsync(stream.fileno())
     os.replace(temporary, target)
-    print("doctor PASS" if gpu["verdict"] == "pass" else "doctor HOLD: GPU unknown")
+    print("doctor PASS" if gpu["verdict"] == "pass" else f"doctor HOLD: {gpu['reason']}")
     return 0 if gpu["verdict"] == "pass" else 1
 
 
