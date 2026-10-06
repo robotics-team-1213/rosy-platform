@@ -46,3 +46,14 @@
 ### Addendum
 
 (추가만 한다. 이 결정을 고칠 때는 아래에 날짜와 함께 덧붙인다.)
+
+**2026-10-06 (같은 날 추가, 결정 1의 트리거 보강):** 처음 트리거는 `visibility_reason`이 `overexposed`/`low_light`일 때만 걸었다. 실제 사고는 그 기준 아래였다. rosy_26의 길 띠(rows 35-95 %, cols 10-90 %)는 247 초과 포화가 47-71 %, 중앙값 225-253이었고, `visibility_reason`은 이를 `usable`로 본다(`overexposed`는 95 % 초과). 그런데 차선 모델은 바닥을 벽으로 읽었다. 그래서 `RelockWatch`의 "나쁨"을 다음 중 하나로 넓힌다. 같은 dwell(3 s)과 최소 간격(30 s)을 그대로 쓴다.
+- `visibility_reason`이 `overexposed` 또는 `low_light` (기존).
+- 길 띠의 포화 비율(>247)이 `camera_relock_clip_fraction`(기본 0.30) 이상.
+- 길 띠 중앙값이 `camera_relock_bright_median`(기본 235) 이상.
+
+`visibility_reason`과 CAMERA_LINE의 95 % 유효 기준은 바꾸지 않는다. 길 띠 통계는 `camera_visibility.road_clip_stats`가 같은 행/열 범위에서 읽는다. 파라미터는 `config/camera.yaml`과 노드 기본값(`RELOCK_CLIP_FRACTION`, `RELOCK_BRIGHT_MEDIAN`)에 있다.
+
+사고 수치(2026-10-06, rosy_26/9dfk): 01:30 UTC 어두운 곳에서 시작해 exposure=66640us gain=8.000으로 잠김 -> 실내광에서 길 띠 포화 47-71 %, 중앙값 225-253 -> `systemctl restart rosy-camera` 뒤 exposure=54258us gain=2.000으로 다시 잠김 -> 포화 0 %, 중앙값 103-140.
+
+DEVICE(미완): 0.30과 235는 이 한 건의 구간(47-71 %, 225-253 대 0 %, 103-140)에서 정했다. 정상 밝은 장면(흰 선이 많은 길, 밝은 바닥)에서 오탐 재잠금이 없는지 실기 프레임으로 확인해야 한다. 소스 요약의 "Consequences" 중 95 % 미만 포화가 대상이 아니라는 문장은 이 보강으로 대체된다.

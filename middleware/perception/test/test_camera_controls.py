@@ -181,3 +181,49 @@ def test_underexposed_or_unknown_reasons_never_relock():
 
 def test_zero_dwell_disables_the_relock():
     assert feed(watch(dwell=0.0), 'overexposed', 0.0, 60.0) == []
+
+
+def band_frame(clipped, base=100):
+    """320x240 frame whose road band (rows 35-95 %, cols 10-90 %) is `clipped` fraction white."""
+    import numpy as np
+    frame = np.full((240, 320, 3), base, np.uint8)
+    road = frame[84:228, 32:288]
+    road[:int(round(road.shape[0] * clipped))] = 255
+    return frame
+
+
+def stats_feed(w, frame, start, stop, step=0.125):
+    from control.sensing.perception.camera_visibility import road_clip_stats, visibility_reason
+    clip, med = road_clip_stats(frame)
+    reason = visibility_reason(frame)
+    fired, t = [], start
+    while t < stop:
+        if w.update(reason, t, clip, med):
+            fired.append(t)
+        t += step
+    return fired
+
+
+def test_half_clipped_band_is_usable_to_visibility_yet_relocks_once():
+    from control.sensing.perception.camera_visibility import visibility_reason
+    frame = band_frame(0.5)
+    assert visibility_reason(frame) == 'usable'     # the 95 % bar is unchanged
+    assert stats_feed(watch(), frame, 100.0, 120.0) == [103.0]
+
+
+def test_ten_percent_clipped_band_does_not_relock():
+    assert stats_feed(watch(), band_frame(0.10), 100.0, 200.0) == []
+
+
+def test_one_60_percent_frame_among_normal_frames_does_not_relock():
+    from control.sensing.perception.camera_visibility import road_clip_stats, visibility_reason
+    w = watch()
+    bad, ok = band_frame(0.6), band_frame(0.0)
+    assert not w.update(visibility_reason(bad), 100.0, *road_clip_stats(bad))
+    assert stats_feed(w, ok, 100.125, 200.0) == []
+
+
+def test_bright_median_alone_relocks():
+    w = watch()
+    assert not w.update('usable', 100.0, 0.0, 240.0)
+    assert w.update('usable', 103.0, 0.0, 240.0)

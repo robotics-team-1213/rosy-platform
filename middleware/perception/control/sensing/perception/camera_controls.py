@@ -119,6 +119,9 @@ def lock_action(enabled, now, deadline, attempts, max_attempts=LOCK_MAX_ATTEMPTS
 
 
 RELOCK_REASONS = ('overexposed', 'low_light')
+# Defaults for the clipping trigger (config/camera.yaml carries the same values).
+RELOCK_CLIP_FRACTION = 0.30
+RELOCK_BRIGHT_MEDIAN = 235.0
 
 
 class RelockWatch:
@@ -133,17 +136,26 @@ class RelockWatch:
     The node has no motion signal; CORE already holds the robot while the
     quality is low_light/overexposed, so the settle blackout costs nothing extra.
     dwell_s <= 0 disables the watch.
+
+    The visibility verdict alone misses the real incident: it calls the road
+    overexposed only above 95 % clipped, but rosy_26 broke the lane model at
+    47-71 % (median 225-253). So a frame is also bad when the road band's clipped
+    fraction reaches clip_fraction or its median reaches bright_median.
     """
 
-    def __init__(self, dwell_s, min_interval_s):
+    def __init__(self, dwell_s, min_interval_s, clip_fraction=RELOCK_CLIP_FRACTION,
+                 bright_median=RELOCK_BRIGHT_MEDIAN):
         self._dwell = float(dwell_s)
         self._interval = float(min_interval_s)
+        self._clip = float(clip_fraction)
+        self._median = float(bright_median)
         self._since = None
         self._last = None
 
-    def update(self, reason, now):
+    def update(self, reason, now, clip=0.0, median=0.0):
         """True when the caller should re-run settle -> lock now."""
-        if self._dwell <= 0 or reason not in RELOCK_REASONS:
+        bad = reason in RELOCK_REASONS or clip >= self._clip or median >= self._median
+        if self._dwell <= 0 or not bad:
             self._since = None
             return False
         if self._since is None:

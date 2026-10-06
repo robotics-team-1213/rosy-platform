@@ -30,12 +30,12 @@ from . import executor_choice
 from .camera_region_range import RegionRangeMixin
 from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
-    RelockWatch, lock_action, lock_controls, lock_summary, static_controls)
+    RELOCK_BRIGHT_MEDIAN, RELOCK_CLIP_FRACTION, RelockWatch, lock_action, lock_controls, lock_summary, static_controls)
 from .sensing.perception.camera_evidence import observation_payload
 from .sensing.perception.camera_ground import ground_plane
 from .sensing.perception.camera_homography import CalibrationThresholds, load_homography_profile
 from .sensing.perception.camera_policy import CameraPolicy
-from .sensing.perception.camera_visibility import visibility_reason
+from .sensing.perception.camera_visibility import road_clip_stats, visibility_reason
 from .sensing.perception.camera_worker import CameraFrame, CameraPreprocessProfile, CameraPreprocessWorker
 from .sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
 from .sensing.perception.v4l2_controls import (
@@ -114,6 +114,8 @@ class CameraDetectNode(RegionRangeMixin, Node):
         # The lock is not for life: see RelockWatch. 0 dwell = never re-lock.
         self.declare_parameter('camera_relock_dwell_s', 3.0)
         self.declare_parameter('camera_relock_min_interval_s', 30.0)
+        self.declare_parameter('camera_relock_clip_fraction', RELOCK_CLIP_FRACTION)
+        self.declare_parameter('camera_relock_bright_median', RELOCK_BRIGHT_MEDIAN)
         # Ground-plane calibration. No invented defaults: these zeros are refused
         # by ground_plane(), so an uncalibrated robot keeps reporting regions as
         # unranged instead of publishing distances nobody measured. See
@@ -190,7 +192,9 @@ class CameraDetectNode(RegionRangeMixin, Node):
         self._lock_attempts = 0
         self._relock_watch = RelockWatch(
             float(self.get_parameter('camera_relock_dwell_s').value),
-            float(self.get_parameter('camera_relock_min_interval_s').value))
+            float(self.get_parameter('camera_relock_min_interval_s').value),
+            float(self.get_parameter('camera_relock_clip_fraction').value),
+            float(self.get_parameter('camera_relock_bright_median').value))
         self._cam = None
         self._worker = CameraPreprocessWorker(
             CameraPreprocessProfile(
@@ -439,9 +443,11 @@ class CameraDetectNode(RegionRangeMixin, Node):
         if not self._line_controls_stable():
             return  # settling, or never frozen: nothing here to re-lock
         reason = visibility_reason(bgr)
-        if not self._relock_watch.update(reason, time.monotonic()):
+        clip, median = road_clip_stats(bgr)
+        if not self._relock_watch.update(reason, time.monotonic(), clip, median):
             return
-        self.get_logger().warn(f'camera exposure {reason} under lock {self._locked}; re-locking')
+        self.get_logger().warn(f'camera exposure {reason} clip={clip:.2f} median={median:.0f} '
+                               f'under lock {self._locked}; re-locking')
         self._locked = None
         self._lock_attempts = 0
         if hasattr(self._cam, 'unfreeze_controls'):
