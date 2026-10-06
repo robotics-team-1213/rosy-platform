@@ -484,7 +484,8 @@ def test_match_state_is_announced_only_when_it_changes():
         server.close()
 
 
-def test_stop_failure_is_visible_and_can_be_retried():
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
+def test_stop_failure_is_visible_and_can_be_retried(width, height):
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
@@ -494,7 +495,8 @@ def test_stop_failure_is_visible_and_can_be_retried():
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+            browser, page, errors = open_page(playwright, width, height)
+            page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("document.getElementById('phase')?.dataset.phase === 'play'")
             calls = []
 
@@ -511,8 +513,17 @@ def test_stop_failure_is_visible_and_can_be_retried():
             assert "다시" in page.locator("#halt-status").inner_text()
             assert page.locator("#halt-status").get_attribute("role") == "status"
             assert page.locator("#halt").get_attribute("aria-disabled") == "false"
-            assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
-            save_temp_screenshot(page, "games_board_stop_retry.png")
+            layout = page.evaluate("""() => ({
+              overflow: document.documentElement.scrollWidth - innerWidth,
+              stop: document.querySelector('#halt').getBoundingClientRect().toJSON(),
+              status: document.querySelector('#halt-status').getBoundingClientRect().toJSON(),
+            })""")
+            assert layout["overflow"] <= 0, layout
+            assert layout["stop"]["right"] <= width and layout["stop"]["bottom"] <= height, layout
+            assert layout["status"]["right"] <= width and layout["status"]["bottom"] <= height, layout
+            if width == 1280:
+                assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
+            save_temp_screenshot(page, f"games_board_stop_retry_{width}x{height}.png")
             page.locator("#halt").focus()
             page.keyboard.press("Space")
             page.locator('#halt-status[data-state="sent"]').wait_for()

@@ -183,6 +183,8 @@ D-153이 이름 붙인 G1 시험 중 팔레트·토큰(스타일가이드 포함
 
 게임 보드 브라우저 전체는 현재 **19 passed**, 게임 모듈은 **113 passed**였다. 최초 1280/390px와 첫 연결 오류에서 피치 안의 명시적 대기·오류 문구를 확인했고, 정지 실패 뒤 재시도 시험의 관찰은 CSP에 걸리는 스크립트 대기 대신 DOM locator를 쓴다. 이 화면들은 관측 frame 없는 fixture이며 실제 카메라와 로봇 상태를 나타내지 않는다.
 
+정지 요청 실패·재시도 흐름은 1280×800, 390×844, 320×568에서 다시 확인했다. 세 뷰포트 모두 실패 이유와 재시도 안내, 정지 버튼이 화면 폭 안에 있고 가로 넘침 없이 표시되며 키보드 재시도 후에도 버튼에 초점이 남는다. 집중 브라우저 시험 **3 passed**, `known_failures.py` **0 NEW**; 캡처 `X:\DevTemp\games_board_stop_retry_{1280x800,390x844,320x568}.png`, 로그 `X:\DevTemp\projects\rosy-platform\2026-10-06--032913--uiux-quality--199bc9\logs\games-stop-width-rerun.txt`. 첫 실행의 데스크톱 Chromium 시작 제한 시간 초과는 재실행에서 재현되지 않았다. 이 증거는 PreviewServer fixture의 LOCAL 범위다.
+
 얼굴 PIL 렌더러는 이전 실행에서 **169 passed**, 기존 정보 카드 캡처 1 passed, `rosy-face` 호스트 시험 **153 passed / 1 skipped**였다. 모두 `known_failures.py` 0 NEW였다. 기존 네 정보 카드 이미지는 렌더러 직접 호출이며 `rosy-face`의 설치·입력·실물 LCD 출력을 통과한 사진이 아니다. D-433은 현재 **Proposed**이므로 실행 경로의 최종 결정·수용으로 읽지 않는다.
 
 ### 로봇 얼굴 G3 독회 — LOCAL 진행 중
