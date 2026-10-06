@@ -11,7 +11,7 @@ np = pytest.importorskip("numpy")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dataset"))
 from mcap_proof import prove_frames  # noqa: E402
-from test_dataset_extract import IMAGE_DEF  # noqa: E402
+from test_dataset_extract import COMPRESSED_DEF, IMAGE_DEF  # noqa: E402
 from mcap_ros2.writer import Writer  # noqa: E402
 
 
@@ -79,3 +79,24 @@ def test_proof_refuses_metadata_order_hash_drift_and_compact(tmp_path):
     session.rename(compact)
     with pytest.raises(ValueError, match="equivalence proof"):
         prove_frames(compact, [row], tmp_path)
+
+
+def test_compressed_png_proof_records_decoder_and_camera_stamp(tmp_path):
+    session = tmp_path / "compressed"
+    bag = session / "bag"
+    bag.mkdir(parents=True)
+    image = tmp_path / "compressed.png"
+    assert cv2.imwrite(str(image), np.full((4, 6, 3), 77, np.uint8))
+    with (bag / "bag_0.mcap").open("wb") as stream:
+        writer = Writer(stream)
+        definition = writer.register_msgdef("sensor_msgs/msg/CompressedImage", COMPRESSED_DEF)
+        writer.write_message("/robot/camera/front/compressed", definition, {
+            "header": {"stamp": {"sec": 2, "nanosec": 321}, "frame_id": "camera"},
+            "format": "png", "data": list(image.read_bytes())}, 2_000_000_500, 2_000_000_500)
+        writer.finish()
+    (bag / "metadata.yaml").write_text("rosbag2_bagfile_information:\n"
+                                        "  relative_file_paths: [bag_0.mcap]\n")
+    proof = prove_frames(session, [{"topic": "/robot/camera/front/compressed",
+                                    "log_ns": 2_000_000_500, "image": image}], tmp_path)
+    assert proof["frames"][0]["header_stamp_ns"] == 2_000_000_321
+    assert {"mcap", "mcap_ros2", "opencv"} == set(proof["decoder"])
