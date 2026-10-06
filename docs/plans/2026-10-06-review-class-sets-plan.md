@@ -46,7 +46,7 @@
 | Modify `dataset/review_evidence.py` | export contract에 `object_class_set_sha256` (`decisions`에는 넣지 않음, Task 4 Step 4) |
 | Modify `dataset/review_app_web/app.js` | `names` 맵 삭제, 서버 클래스셋으로 select·제목 구성, 숫자키 |
 | Modify `dataset/review_app_web/pixels.js` | `names`·`classToken` 삭제, classes.yaml의 `display`·`color` 사용, 숫자키 |
-| Create `tools/perception/export_class_names.py` | 모델 PC 전용: `.pt` → `data.yaml` |
+| Create `learning/training/perception/model/export_class_names.py` | 모델 PC 전용: `.pt` → `data.yaml` |
 | Create `learning/training/perception/classes/lane_lr5.yaml` | 차선 모델 5클래스 classes.yaml |
 | Create `docs/adr/D-<n>-review-class-sets.md` + ADR Log 행 | 결정 1–4 |
 | Modify `learning/training/perception/docs/review-app.md`, `.claude/skills/rosy-pinky-review/SKILL.md` | 운영 절차 |
@@ -314,14 +314,14 @@ def test_class_select_lists_the_workspace_class_set(browser_workspace):
 ### Task 7: 모델 클래스 가져오기와 차선 5클래스
 
 **Files:**
-- Create: `tools/perception/export_class_names.py` (모델 PC 전용)
+- Create: `learning/training/perception/model/export_class_names.py` (모델 PC 전용)
 - Create: `learning/training/perception/classes/lane_lr5.yaml`
 - Test: `test/test_class_sets.py` (lane_lr5.yaml이 `review_masks.bind_classes`를 통과)
 
 ```python
 """Model PC only: write a review data.yaml from an Ultralytics .pt (the app never unpickles models).
 
-    python tools/perception/export_class_names.py best.pt --out data.yaml
+    python learning/training/perception/model/export_class_names.py best.pt --out data.yaml
 """
 import argparse
 from pathlib import Path
