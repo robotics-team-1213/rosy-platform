@@ -6677,3 +6677,9 @@ osy-d395-s1d\`.
 - 변경: Fleet D-487 보정이 포함된 `e9c507c2c` 코드 후보의 G1 결과를 UI/UX 회차 평가에 갱신했다.
 - 증거: X: `2026-10-07-g1-current/g1-e9c507c2c.txt`; 팔레트·토큰/스타일가이드·Fleet 문법·CORE 증거·반응형 선언 **90 passed**, `known_failures.py` 0 NEW.
 - gate 변화: 현 후보 G1 기계 계약 LOCAL 통과. 전체 G2/G3와 실물 readback은 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): D-487 브라우저 전체 재실행
+
+- 변경: `3a6c5d43e` 코드 후보의 Fleet 브라우저 파일 전체를 재실행하고 75개 현재 PNG의 범위를 회차 평가에 기록했다.
+- 증거: X: `2026-10-07-fleet-full/run.txt`; **103 passed**, `known_failures.py` 0 NEW.
+- gate 변화: 현재 후보 LOCAL 상태 근거 강화. D-153의 상태 × 폭 전체 캡처, 사이트 설치·장치 readback·사용자 G3는 HOLD.

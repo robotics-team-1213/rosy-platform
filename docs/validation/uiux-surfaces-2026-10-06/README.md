@@ -363,6 +363,8 @@ G3 여덟 항목은 세 표면 모두 **미완료**다. 아래는 이번 회차�
 
 현재 `Rosy Fleet` 운용 화면을 1920×1080에서 다시 재생했다. 첫 검사에서 문서가 43px 넘쳐 작업 영역 하단이 잘렸다. 8줄 로그 높이는 D-415 계약이므로 유지하고, 데스크톱 관제 칸의 중복 여백과 대형 readout 기본 margin을 줄였다. 수정 후 문서 하단은 1079px로 뷰포트 안이며, 지도·등록 로봇 칸은 각각 928px, 대형·신호 패널과 로그도 보인다. 1920px 맞춤·카메라 상태와 compact 폭의 선별 브라우저 **8 passed**, 접속 전 안내→연결 **1 passed**, 서버·팔레트 계약 **60 passed**, 웹 모듈 **137 passed**, 각 Python 실행의 `known_failures.py` **0 NEW**. 현재 원본과 실행 기록은 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-d487\`의 `fleet_console_fit.png`, `connection-desktop.png`, `browser-fixed2.txt`, `connection.txt`, `contracts.txt`, `node-files.txt`다. 최신 `main` 병합 뒤 roster의 재렌더와 박스 계측이 경합한 320px 시험을 원자적으로 읽도록 고쳤고, 선별 브라우저 **8 passed**, 계약 **60 passed**, 웹 모듈 **137 passed**, `known_failures.py` **0 NEW**로 다시 확인했다(`post-merge-browser-final.txt`, `post-merge-contracts.txt`, `post-merge-node.txt`). 이 결과는 API fixture 기반 LOCAL G2 부분 근거다. 실제 사이트 이미지의 후보 SHA, 카메라 화면, 로봇 readback과 요청자가 수행할 G3 독회 결과는 아직 확인되지 않아 제품 전체 **HOLD**를 유지한다.
 
+같은 코드 후보에서 Fleet 브라우저 파일 전체를 다시 실행해 **103 passed**, `known_failures.py` **0 NEW**였고 75장의 현재 캡처가 생성됐다. 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-full\run.txt`와 같은 폴더의 PNG다. 빈 목록·조회 지연/끊김/복구·팔로워 지연·대형 HOLD·안전 결측/정지·카메라·불가역 확인 등의 회귀가 포함된다. 다만 이 파일은 D-153의 각 상태 × 선언 폭을 모두 캡처하지 않는다. 특히 안전 결측/정지 이미지는 전화 폭별 매트릭스가 아니므로 Fleet G2는 **HOLD**다.
+
 ## 제품 범위와 판정 경계
 
 현재 `shared/web/surfaces.yaml`의 표면을 제품 UI/UX 목표와 대조하면 다음과 같다. **부분 근거는 GO가 아니다.** 신규 표면의 선언 상태·뷰포트 카드는 D-153 재평가 트리거로 채워야 한다.
