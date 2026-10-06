@@ -17,6 +17,11 @@ const state = {active: null, draft: null, working: null, dirty: false, selected:
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
+function gate(id, reason) {  // '' enables; otherwise the button says why it is off
+  $(id).disabled = Boolean(reason);
+  if (reason) $(id).setAttribute('reason', reason);
+  else $(id).removeAttribute('reason');
+}
 function notice(text) { $('notice').textContent = text; }
 function status(id, text, kind) { $(id).textContent = text; $(id).setAttribute('state', kind); }
 function shown() { return $('map-source').value === 'draft' ? state.working : state.active?.map; }
@@ -73,7 +78,7 @@ function select(selection) {
   const edge = selection?.edge && map?.edges.find(item => item.id === selection.edge);
   $('place-form').hidden = !place;
   $('edge-form').hidden = !edge;
-  $('apply-edit').disabled = !(place || edge);
+  gate('apply-edit', place || edge ? '' : '초안 보기에서 장소나 차로를 고르세요');
   if (place) {
     $('selection').textContent = `장소 ${place.id}`;
     $('place-name').value = place.name;
@@ -90,13 +95,13 @@ function select(selection) {
 }
 
 function syncButtons() {
-  $('save-draft').disabled = !state.working || !state.dirty;
-  $('activate').disabled = !state.draft?.revision || state.dirty;
+  gate('save-draft', !state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다'));
+  gate('activate', !state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : ''));
   status('draft-status', state.draft?.revision
     ? `저장된 초안 · ${state.draft.saved_by}${state.dirty ? ' · 고친 내용 저장 필요' : ''}`
     : (state.dirty ? '저장 안 된 초안' : '저장된 초안 없음'), state.draft?.revision ? 'ready' : 'empty');
-  $('trip-plan').disabled = !state.active || !$('trip-robot').value
-    || !($('trip-pick').checked ? state.point : $('trip-place').value);
+  gate('trip-plan', !state.active ? '활성 지도가 없습니다' : !$('trip-robot').value ? '로봇을 고르세요'
+    : ($('trip-pick').checked ? state.point : $('trip-place').value) ? '' : '목적지를 고르세요');
 }
 
 async function load() {

@@ -6,7 +6,6 @@ ui-section { display: grid; gap: var(--space-3); }
 .form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 label { display: grid; gap: var(--space-2); }
 label.inline { display: inline-flex; align-items: center; gap: var(--space-2); }
-label.check { display: flex; align-items: center; gap: var(--space-2); min-height: var(--target-secondary); }
 input, select { box-sizing: border-box; width: 100%; background: var(--field-bg); color: var(--ink); border: 1px solid var(--field-line); border-radius: var(--radius-control); padding: var(--space-2); font: inherit; }
 input[type="checkbox"] { width: auto; }
 input:focus-visible, select:focus-visible, a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
@@ -22,7 +21,7 @@ a { color: var(--ink); }
 #site-map-svg .place { fill: var(--surface-raised); stroke: var(--ink); stroke-width: 2px; cursor: pointer; }
 #site-map-svg .place.selected { stroke: var(--series-primary); stroke-width: 4px; }
 #site-map-svg .label { fill: var(--ink); font: var(--text-micro) var(--mono); pointer-events: none; }
-#site-map-svg .plan { fill: none; stroke: var(--series-goal); stroke-width: 6px; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; pointer-events: none; }
+#site-map-svg .plan { fill: none; stroke: var(--series-goal); stroke-width: 6px; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 #site-map-svg .target { fill: var(--series-goal); pointer-events: none; }
 #trip-actions { margin: 0; padding-inline-start: var(--space-5); }
 .estop { min-width: var(--target-irreversible); min-height: var(--target-irreversible); width: auto; height: auto; display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; }
@@ -30,7 +29,7 @@ a { color: var(--ink); }
 .estop span { white-space: nowrap; }
 .estop small { flex-basis: 100%; text-align: center; }
 #estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
-@media (width < 48rem) {
+@media (width < 64rem) {
   .columns, .form { grid-template-columns: 1fr; }
   #site-map-svg { height: 20rem; }
 }
