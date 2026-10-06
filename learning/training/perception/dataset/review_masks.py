@@ -27,7 +27,10 @@ def configure(store):
             path TEXT, sha256 TEXT, complete INTEGER DEFAULT 0, background INTEGER DEFAULT 0);
             CREATE TABLE IF NOT EXISTS pixel_events (
             id INTEGER PRIMARY KEY, ts TEXT DEFAULT CURRENT_TIMESTAMP,
-            frame INTEGER, version INTEGER, action TEXT, review TEXT);''')
+            frame INTEGER, version INTEGER, action TEXT, review TEXT);
+            CREATE TABLE IF NOT EXISTS pixel_drafts (
+            frame INTEGER NOT NULL, sha256 TEXT NOT NULL, path TEXT NOT NULL,
+            catalog_sha256 TEXT NOT NULL, PRIMARY KEY(frame, sha256));''')
         if 'approval' not in {r['name'] for r in db.execute('PRAGMA table_info(masks)')}:
             db.execute('ALTER TABLE masks ADD COLUMN approval TEXT')
 
@@ -78,10 +81,14 @@ def get(store, index):
     frame = store.get(index)
     with store.connect() as db:
         row = db.execute('SELECT * FROM masks WHERE frame=?', (index,)).fetchone()
+        drafts = [dict(value) for value in db.execute(
+            'SELECT sha256,catalog_sha256 FROM pixel_drafts WHERE frame=? ORDER BY rowid DESC', (index,))
+                  if row is None or value['sha256'] != row['sha256']]
     result = dict(row) if row else {'frame': index, 'version': 0, 'status': 'pending',
                                    'path': None, 'sha256': None, 'complete': 0, 'background': 0}
     result.update(width=frame['source']['width'], height=frame['source']['height'], classes=classes(store))
     result['approval'] = json.loads(result['approval']) if result.get('approval') else None
+    result['draft_candidates'] = drafts
     return result
 
 
@@ -218,12 +225,21 @@ def update(store, index, body, conflict):
             last = db.execute('SELECT action, review FROM pixel_events WHERE frame=? ORDER BY id DESC LIMIT 1', (index,)).fetchone()
             target = None
             if last and review['status'] == 'pending' and json.loads(last[1]).get('saved_version') == review['version']:
-                want = review['version'] if last[0] in ('paint', 'fill', 'flood') else json.loads(last[1]).get('restored_version')
-                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','flood')", (index, want)).fetchone()
+                want = review['version'] if last[0] in ('paint', 'fill', 'flood', 'apply_draft') else json.loads(last[1]).get('restored_version')
+                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','flood','apply_draft')", (index, want)).fetchone()
             if not target:
                 raise ValueError('되돌릴 픽셀 수정이 없습니다.')
             prior = json.loads(target[0])
             image = pixels(store, dict(review, path=prior['path'], sha256=prior['sha256']))
+        elif action == 'apply_draft':
+            digest = body.get('draft_sha256')
+            if not isinstance(digest, str):
+                raise ValueError('draft SHA required')
+            candidate = db.execute('SELECT path,sha256 FROM pixel_drafts WHERE frame=? AND sha256=?',
+                                   (index, digest)).fetchone()
+            if not candidate:
+                raise ValueError('selected draft is unavailable')
+            image = pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256']))
         elif action == 'approve':
             if body.get('complete_frame_review') is not True or body.get('background_reviewed') is not True:
                 raise ValueError('사진 전체와 기본 배경을 각각 확인하세요.')

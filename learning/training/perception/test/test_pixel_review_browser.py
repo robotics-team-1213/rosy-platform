@@ -2,6 +2,7 @@
 import os
 
 import pytest
+import numpy as np
 
 from test_review_flow_browser import browser_workspace
 from test_review_cycle import CLASSES
@@ -16,6 +17,26 @@ def open_pixels(page, store, expect, index=0):
     base = page.url.split('?')[0].rstrip('/')
     page.goto(base + f'/pixels?frame={index}', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
+
+
+def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    source = store.get(0)['source']
+    path, digest = review_masks.freeze(store, review_masks.encode(
+        np.full((source['height'], source['width']), 1, np.uint8)))
+    with store.connect() as db:
+        db.execute('INSERT INTO pixel_drafts VALUES (?,?,?,?)', (0, digest, path, 'c' * 64))
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    button = page.locator('#pixel-apply-candidate')
+    expect(button).to_be_visible()
+    expect(button).to_be_enabled()
+    page.once('dialog', lambda dialog: dialog.accept())
+    button.click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    current = review_masks.get(store, 0)
+    assert current['status'] == 'pending' and current['approval'] is None
+    assert np.all(review_masks.pixels(store, current) == 1)
 
 
 @pytest.mark.parametrize('mode', ['manual', 'auto'])

@@ -129,7 +129,7 @@ def import_frames(store, body):
         for source, data, suffix, mask in checked:
             source['image'] = freeze_image(store, data, suffix)
             frozen.append((source, review_masks.freeze(store, mask) if mask else None))
-        added, duplicates, aliases, draft_added, legacy_linked = [], 0, 0, 0, 0
+        added, duplicates, aliases, draft_added, legacy_linked, queued = [], 0, 0, 0, 0, 0
         with store.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             next_id = db.execute('SELECT COALESCE(MAX(id),-1)+1 FROM frames').fetchone()[0]
@@ -169,6 +169,11 @@ def import_frames(store, body):
                         raise ValueError('same source frame has conflicting dimensions')
                     if (existing.get('capture_group'), existing.get('source_session')) != (source['capture_group'], source['source_session']):
                         raise ValueError('same source frame has conflicting session identity')
+                    if mask is not None:
+                        current = db.execute('SELECT sha256 FROM masks WHERE frame=?', (index,)).fetchone()
+                        if not current or current['sha256'] != mask[1]:
+                            queued += db.execute('INSERT OR IGNORE INTO pixel_drafts VALUES (?,?,?,?)',
+                                                 (index, mask[1], mask[0], source['import_catalog_sha256'])).rowcount
                     duplicates += 1
                 else:
                     index = next_id
@@ -195,9 +200,10 @@ def import_frames(store, body):
                     db.execute('INSERT INTO masks(frame,version,status,path,sha256) VALUES (?,1,?,?,?)',
                                (index, 'pending', *mask))
                     draft_added += 1
-            if added or aliases or legacy_linked:
+            if added or aliases or legacy_linked or queued:
                 db.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='generation'")
     return {'added': len(added), 'indices': added, 'duplicate_representations': duplicates,
             'new_representations': aliases, 'pixel_reviews_pending': draft_added,
+            'draft_candidates_queued': queued,
             'legacy_primary_bindings': legacy_linked,
             'catalog_sha256': review_masks.sha(raw), 'original_video_verified': False}

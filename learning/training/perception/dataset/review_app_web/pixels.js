@@ -6,6 +6,11 @@ const serverReasons={'known mask index required':'등록된 픽셀 클래스만 
 function readableError(message){return serverReasons[message]||message;}
 let workspace,frame,review,original,maskImage,busy=false,ready=false,conflicted=false,serial=0,stroke=null,draft=[],flood=false;
 function error(value=''){$('pixel-error').textContent=value;$('pixel-error').hidden=!value;}
+let candidateKey='';
+function candidateOptions(){const rows=ready?review?.draft_candidates||[]:[],key=`${frame?.index}:${rows.map(row=>row.sha256).join(',')}`,select=$('pixel-candidates');
+ if(key!==candidateKey){candidateKey=key;select.replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.sha256;option.textContent=`${row.sha256.slice(0,12)} · ${row.catalog_sha256.slice(0,8)}`;select.append(option);}}
+ $('pixel-candidate-tools').hidden=!rows.length;select.disabled=busy||!ready||conflicted||draft.length>0;
+ $('pixel-apply-candidate').disabled=select.disabled||!rows.length||frame?.status==='excluded'||review?.status==='excluded';}
 function visible(){return workspace?.frames.filter(row=>$('pixel-filter').value==='all'||row.pixel_status===$('pixel-filter').value)||[];}
 function url(){const link=new URL(location.href);if(frame)link.searchParams.set('frame',frame.index);else link.searchParams.delete('frame');if($('pixel-filter').value==='all')link.searchParams.delete('filter');else link.searchParams.set('filter',$('pixel-filter').value);history.replaceState(null,'',link);}
 function enable(){const dirty=draft.length>0,locked=busy||!ready||conflicted||!!stroke,excluded=frame?.status==='excluded'||review?.status==='excluded',editable=!locked&&!excluded&&!!review?.classes;
@@ -21,6 +26,7 @@ function enable(){const dirty=draft.length>0,locked=busy||!ready||conflicted||!!
  for(const id of ['pixel-frame','pixel-filter'])$(id).disabled=busy||!!stroke||dirty;
  $('pixel-reload').disabled=busy||!!stroke||dirty;$('pixel-reload').reason=busy||stroke||dirty?'현재 저장·편집을 마친 뒤 다시 불러오세요.':'';
  $('pixel-export').disabled=busy||!!stroke||dirty||conflicted;$('pixel-export').reason=busy||stroke||dirty||conflicted?'저장을 마치고 최신 내용을 확인하세요.':'';
+ candidateOptions();
 }
 async function request(path,body){const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':workspace.token},body:JSON.stringify(body)}:{});const value=await response.json();if(!response.ok){if(response.status===409)conflicted=true;throw new Error(readableError(value.error));}return value;}
 function options(){const rows=visible();$('pixel-frame').replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.index;option.textContent=`사진 ${row.index+1} · ${states[row.pixel_status]}`;$('pixel-frame').append(option);}if(frame)$('pixel-frame').value=frame.index;$('pixel-empty').hidden=!!rows.length;$('pixel-content').hidden=!rows.length;}
@@ -70,6 +76,7 @@ $('pixel-flood').onclick=()=>{flood=!flood;$('pixel-flood').setAttribute('aria-p
 $('pixel-save').onclick=()=>commit(draft.map(({label,radius,points})=>({action:'paint',label,radius,points})));$('pixel-discard').onclick=()=>{draft=[];paint();enable();};
 addEventListener('beforeunload',event=>{if(draft.length||stroke)event.preventDefault();});
 $('pixel-approve').onclick=()=>mutate('approve',{complete_frame_review:$('pixel-complete').checked,background_reviewed:$('pixel-background').checked});$('pixel-exclude').onclick=()=>mutate('exclude');$('pixel-reopen').onclick=()=>mutate('reopen');
+$('pixel-apply-candidate').onclick=()=>{if(confirm('새 초안을 적용하면 현재 마스크가 대체되고 픽셀 승인이 해제됩니다. 계속할까요?'))mutate('apply_draft',{draft_sha256:$('pixel-candidates').value});};
 for(const id of ['pixel-complete','pixel-background'])$(id).onchange=enable;$('pixel-opacity').oninput=paint;
 function point(event){const box=$('pixel-canvas').getBoundingClientRect();return [Math.max(0,Math.min(frame.source.width-1,Math.floor((event.clientX-box.left)*frame.source.width/box.width))),Math.max(0,Math.min(frame.source.height-1,Math.floor((event.clientY-box.top)*frame.source.height/box.height)))];}
 function suggestTolerance(x,y){const r=4,x0=Math.max(0,x-r),y0=Math.max(0,y-r),w=Math.min(original.naturalWidth,x+r+1)-x0,h=Math.min(original.naturalHeight,y+r+1)-y0;const scratch=document.createElement('canvas');scratch.width=w;scratch.height=h;const ctx=scratch.getContext('2d',{willReadFrequently:true});ctx.drawImage(original,x0,y0,w,h,0,0,w,h);const data=ctx.getImageData(0,0,w,h).data,n=w*h,mean=[0,0,0];for(let i=0;i<data.length;i+=4){mean[0]+=data[i];mean[1]+=data[i+1];mean[2]+=data[i+2];}mean[0]/=n;mean[1]/=n;mean[2]/=n;let peak=0;for(let i=0;i<data.length;i+=4){peak=Math.max(peak,Math.abs(data[i]-mean[0]),Math.abs(data[i+1]-mean[1]),Math.abs(data[i+2]-mean[2]));}return Math.max(4,Math.min(48,Math.round(peak*1.5)+4));}

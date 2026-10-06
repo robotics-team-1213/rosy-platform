@@ -32,12 +32,26 @@ def test_indexed_draft_import_keeps_255_and_pending_status(tmp_path):
     assert store.get(2)['review']['review_status'] == 'pending_human'
     # A regenerated draft cannot overwrite a person's current pixel revision.
     current = review_masks.update(store, 2, {'version': 1, 'action': 'fill', 'label': 0}, ValueError)
+    approved = review_masks.update(store, 2, {'version': current['version'], 'action': 'approve',
+                                                'complete_frame_review': True,
+                                                'background_reviewed': True}, ValueError)
     draft.write_bytes(cv2.imencode('.png', np.full((24, 32), 1, np.uint8))[1].tobytes())
     rows[0]['mask']['sha256'] = hashlib.sha256(draft.read_bytes()).hexdigest()
     (folder / 'verified-inputs.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
     assert review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})['added'] == 0
-    assert review_masks.get(store, 2)['version'] == current['version']
+    assert review_masks.get(store, 2)['version'] == approved['version']
     assert np.all(review_masks.pixels(store, review_masks.get(store, 2)) == 0)
+    candidate = review_masks.get(store, 2)['draft_candidates'][0]['sha256']
+    with pytest.raises(ValueError):
+        review_masks.update(store, 2, {'version': approved['version'] - 1,
+                                        'action': 'apply_draft', 'draft_sha256': candidate}, ValueError)
+    applied = review_masks.update(store, 2, {'version': approved['version'],
+                                              'action': 'apply_draft', 'draft_sha256': candidate}, ValueError)
+    assert applied['status'] == 'pending' and applied['approval'] is None
+    assert np.all(review_masks.pixels(store, applied) == 1)
+    assert applied['draft_candidates'] == []
+    undone = review_masks.update(store, 2, {'version': applied['version'], 'action': 'undo'}, ValueError)
+    assert undone['status'] == 'pending' and np.all(review_masks.pixels(store, undone) == 0)
 
 
 @pytest.mark.parametrize('kind', ['rgb', '16bit', 'unknown', 'escape', 'hash', 'jpeg', 'classes'])
