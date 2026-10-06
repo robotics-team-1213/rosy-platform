@@ -6,6 +6,7 @@ candidate, including downstream transformations. Its absence is not permission.
 from dataclasses import replace
 import math
 
+from core_features.line_follow.lane_bridge import LaneBridgeMixin
 from core_features.line_follow.lane_return import Footprint, ReturnController, ReturnInput
 from core_features.line_follow.model import LineFollowMode
 
@@ -14,7 +15,7 @@ _LOCAL_REASONS = {'following','lane_departure','line_not_visible','observation_s
     'lane_recovery','invalid_observation'}
 
 
-class LaneReturnDecisionMixin:
+class LaneReturnDecisionMixin(LaneBridgeMixin):
     def bind_return_motion(self, provider):
         """Internal qualified sensor/swept-space probe (now, linear, angular) -> strict bool.
 
@@ -55,6 +56,16 @@ class LaneReturnDecisionMixin:
         return self._return_probe(now,decision.linear,decision.angular)
 
     def _apply_lane_return(self, now, decision):
+        # D-476: a bridge continues only if this tick bridges again; any return path that
+        # does not (obstacle, stuck, mode) hands it back to D-468 once.
+        bridge_state,self._bridge=self._bridge,None
+        self._bridge_open=isinstance(bridge_state,dict)
+        try:
+            return self._lane_return_step(now,decision,bridge_state)
+        finally:
+            self._hand_back_bridge()
+
+    def _lane_return_step(self, now, decision, bridge_state):
         c=self._config
         if self._mode is not LineFollowMode.CAMERA_LINE or not c.recovery_local_enabled:
             return None
@@ -87,14 +98,22 @@ class LaneReturnDecisionMixin:
         floor=self._return_probe(now,0.,0.)
         speed=min(.03,max(0.,linear))
         turn=min(.15,max(0.,angular))
+        bridge=self._bridge_step(now,bridge_state,view,authority,max(0.,linear),decision)
+        if bridge is None:
+            self._hand_back_bridge()  # before D-468 plans its retrace this tick
         action=self._return_controller.tick(ReturnInput(now=now,pose=view.pose,
             corridor=view.corridor,corridor_at=view.received_at,
             corridor_stamp_ns=view.source_stamp_ns,epoch=view.epoch,
-            clearance_at=now if floor else None,floor_safe=floor,authorized=authority,
+            clearance_at=now if floor else None,floor_safe=floor,authorized=authority and bridge is None,
             front_clear=self._return_probe(now,speed,0.),
             rear_clear=self._return_probe(now,-speed,0.),
             turn_clear=self._return_probe(now,0.,turn) and self._return_probe(now,0.,-turn),
             linear_limit=max(0.,linear),angular_limit=max(0.,angular)))
+        if bridge is not None:
+            return bridge  # D-468 only measured this tick; the bridge owns the twist.
+        if (c.bridge_enabled and action.phase=='tracking' and self._status.state=='TRACKING'
+                and self._return_controller.checkpoint is not None):
+            self._bridge='armed'
         if action.phase=='tracking' and not action.recovered:
             return decision
         if action.recovered:

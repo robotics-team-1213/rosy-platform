@@ -19,7 +19,7 @@ gates:
     state: N/A
   FIELD:
     state: N/A
-adrs: [D-61, D-147, D-168, D-182, D-184, D-228, D-411]
+adrs: [D-61, D-147, D-168, D-182, D-184, D-228, D-411, D-476]
 plans:
   - docs/plans/2026-09-15-module-harness-design.md
   - docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md

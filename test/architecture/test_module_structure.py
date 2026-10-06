@@ -485,8 +485,16 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        13_933,
-        "accept: independently re-judged 2026-10-05 at 13933 for D-468 manager arbitration: "
+        14_258,
+        "accept: independently re-judged 2026-10-06 at 14258 for D-476 lane bridge "
+        "(feat/d476-lane-bridge, review ACCEPT: one cohesive line_follow feature under the D-468 "
+        "lock/generation; no file over threshold; X1): main already sat at 14083 = 13933+150; "
+        "175 above it are lane_bridge114, model+33 (bridge_* config), lane_return+4 "
+        "(rebase_retrace extracted), arbitration+19, wiring+3, manager+2. The bridge reuses the "
+        "D-468 checkpoint/trail and D-422 sweep under the same manager lock/generation and CORE "
+        "final publisher; no new package, store, publisher or deploy unit. Every file threshold "
+        "and package+150 remain. "
+        "Previously independently re-judged 2026-10-05 at 13933 for D-468 manager arbitration: "
         "216 above13717 are policy+37, approach51, arbitration112, wiring+9, manager+5 and stuck+2. "
         "Existing line_follow leaves separate pure policy, measured approach, evidence and "
         "arbitration under one manager lock/generation and CORE final publisher. No extra "

@@ -55,6 +55,9 @@
 - 상태 노출: `GET /api/v1/line-follow`에 BRIDGE 상태를 새 state로 둘지, 기존 HOLD 사유로 둘지.
 - 고침 표시: D-468과 D-384 본문에 "D-476이 고침" 줄을 둘지. 이 저장소는 고치는 쪽 ADR의 Status에 적는 관례(D-438)라 지금은 두지 않았다.
 - `LOST` 시계: bridge와 D-468 역추적이 같은 3 s 손실 시계 안에 다 들어가는지, D-468이 이미 잠금을 늦추는지 구현 시 확인한다.
+- **해결 (프로젝트 소유자 결정, 2026-10-06): 이중 bridge.** 결정 6을 그대로 둔다. bridge가 켜진 동안 D-384의 perception 쪽 COAST·`visible = true` 경로는 쓰지 않고, D-384 출력은 목표·힌트·비교 증거로만 쓴다. 이 질문은 닫혔다.
+- **해결 (구현 확인, 2026-10-06): `LOST` 시계.** bridge는 `_loss_started_at`을 읽기만 한다. 잠금은 bridge가 있든 없든 첫 손실 틱에서 `lost_after_s` 뒤에 걸린다. D-468은 잠금을 늦추지 않는다. 대신 `reselection_required`가 D-468의 로컬 사유라서 역추적·재탐색은 `LOST` 잠금 뒤에도 자기 상한(이탈 뒤 12 s, checkpoint 뒤 5 s 역추적)으로 계속되고, 확인된 복귀(`corridor_verified`)가 `_release_stuck`으로 잠금을 푼다. 곧 D-468은 3 s 안에 다 들어갈 필요가 없다. 시험: `test_lane_bridge.py::test_lost_latches_on_the_same_clock_with_or_without_bridge_and_d468_continues`.
+- **해결 (구현, 2026-10-06): 상태 노출.** 새 state나 필드를 두지 않는다. bridge 중에는 기존 `RECOVERING`(D-407·D-468이 이미 쓰는 값)에 사유 `lane_bridge`, 막힘은 `HOLD`에 `lane_bridge_blocked`·`lane_bridge_motion_unconfirmed`다.
 
 ### Consequences
 
@@ -66,3 +69,18 @@
 
 - ROS-free 단위 시험: 진입 조건별 거부(영상 품질·장애물·침범·checkpoint 없음), 거리·시간 상한 정지, D-422 막힘 시 정지, 교차로 힌트 없음 HOLD, 재획득 → FOLLOW, 미재획득 → D-468 인계, `bridge_enabled = false`에서 기존 동작과 비트 동일.
 - 재생 비교와 시뮬·장치는 결정 7의 순서를 따른다. 호스트 pytest 통과는 장치·현장 수용이 아니다.
+
+## 구현 메모 (2026-10-06, CORE 쪽, feat/d476-lane-bridge)
+
+Status 는 Proposed 그대로다. 기본 꺼짐(`line_follow.bridge_enabled: false`)이고 결정 7의 재생·시뮬·장치 단계는 하지 않았다. 호스트 pytest 통과는 장치·현장 수용이 아니다.
+
+- 코드: `middleware/core/services/core_features/line_follow/lane_bridge.py`(mixin, 목표 기하). D-468 중재(`lane_return_decision.py`) 안에서 같은 잠금·generation·evidence_revision으로 돈다. `body_stop.py`·`clearance.py`(safety)는 고치지 않고 부르기만 한다.
+- 진입: 직전 틱이 D-468 `tracking`이고 checkpoint가 있는 `TRACKING`이었고, 이번 사유가 `line_not_visible`·`observation_stale`·`no_observation`일 때만. 영상 품질, `obstacle_ahead`, IR 가드(`clear`가 아니면), `lane_departure`, 열린 stuck, `low_confidence`, `invalid_observation`에서는 들어가지 않는다. 한 손실에서 한 번 끝나면 다시 `TRACKING`을 거쳐야 재진입한다. D-468(`recovery_local_enabled`, containment 증거)과 path 모드 URDF 몸(`body_stop_known`, scan 점)이 없으면 bridge도 없다.
+- 목표: checkpoint 차로 중심선을 odom에서 직선으로 늘리고, 로봇 투영점 + `bridge_lookahead_m`을 pure pursuit로 좇는다. 각속도가 live 상한을 넘으면 같은 호로 속도를 줄인다(D-344 §13).
+- 상한: 실측 odom 경로 길이 × `bridge_distance_scale`(1.08)가 `bridge_coast_m`(0.10) 미만이면 `min(cruise_speed, 수동 선속도 한도)`, `bridge_slow_m`(0.25) 미만이면 × `bridge_slow_scale`(0.5), 그 뒤 끝. 시간은 `lost_after_s − bridge_time_margin_s`(2.5 s)에서 끝.
+- 안전: bridge 호를 관리자 의도(`_intended`)로 두어 D-422 몸 쓸기(LiDAR + 기억 점 + 초음파 + 사각 하한)가 그 호를 잰다. bridge는 그 틱에 몸 간격이 재출발 간격 이하이면 멈추고, D-468 동작 증명(바닥 + 몸 쓸기)도 통과해야 한다. 제출 때(`apply_if_current`) D-468 `_return_submission_valid`가 bridge 중에도 늘 다시 검사한다(운전자 hold, 보정, 영상 품질, 자세 신선함, live 선속도·각속도 한도, 동작 증명). 열린 stuck에서는 bridge하지 않고, 손실 시계가 거꾸로 가면(`now < _loss_started_at`) 끝낸다. D-468 역추적 경로는 bridge가 끝나는 틱에 한 번만 다시 만든다.
+- 끝: 재획득은 D-468 결정 5 검증(세 프레임, 같은 차로)을 거쳐 `TRACKING`으로 돌아간다. 상한에 닿거나 막히면 그 틱에 멈추고 D-468로 넘긴다. 넘길 때 D-468 역추적 경로를 bridge 이동을 포함한 실측 trail로 다시 만든다(`ReturnController.rebase_retrace`).
+- 교차로 힌트: `LineFollowManager.set_bridge_route_hint(None|'left'|'straight'|'right')`, 기본 None. CORE에는 교차로 기하가 없어 None·`straight`만 직선으로 잇고 `left`·`right`는 bridge하지 않는다. 이 입력을 채우는 배선(D-384 `route_hint`, 임무 다음 간선 방향)은 없다. 공개 API·필드는 새로 두지 않았다.
+- D-384: `road_state_node`는 `mode='shadow'`로 고정이고 제어 경로가 읽지 않으며, `core_features/road_behaviour`는 자기 시험 말고 import하는 곳이 없다. 지금 이중 bridge 경로는 없다.
+- 남은 것: 값 조정, 힌트 배선, 연속 bridge 사이 최소 재추종 거리(지금은 `TRACKING` 한 틱으로 다시 무장), D-468 역추적은 checkpoint 뒤 5 s 안에서만 움직이므로(역추적 속도 0.03 m/s), 긴 bridge 뒤에는 역추적이 중간에 끝나고 재탐색으로 넘어간다.
+- Context의 "생산 연결은 미병합 `feat/lane-return-motion`"은 지금 main과 다르다. `bind_lane_return_motion`이 이미 `middleware/core/gateway/core/node.py`에서 묶인다. 이 구현은 그 연결을 그대로 쓴다.

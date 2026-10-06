@@ -98,6 +98,15 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "obstacle_ultrasonic_half_angle_deg", defaults.obstacle_ultrasonic_half_angle_deg)),
         obstacle_ultrasonic_stale_s=float(raw.get(
             "obstacle_ultrasonic_stale_s", defaults.obstacle_ultrasonic_stale_s)),
+        bridge_enabled=_flag(raw, "bridge_enabled", defaults.bridge_enabled),
+        bridge_lookahead_m=float(raw.get("bridge_lookahead_m", defaults.bridge_lookahead_m)),
+        bridge_coast_m=float(raw.get("bridge_coast_m", defaults.bridge_coast_m)),
+        bridge_slow_m=float(raw.get("bridge_slow_m", defaults.bridge_slow_m)),
+        bridge_slow_scale=float(raw.get("bridge_slow_scale", defaults.bridge_slow_scale)),
+        bridge_distance_scale=float(raw.get(
+            "bridge_distance_scale", defaults.bridge_distance_scale)),
+        bridge_time_margin_s=float(raw.get(
+            "bridge_time_margin_s", defaults.bridge_time_margin_s)),
     )
 
 

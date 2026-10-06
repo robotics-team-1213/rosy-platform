@@ -653,7 +653,7 @@ v1.70 추가 경로(모두 Bearer 인증):
   `/mode` IDLE 을 보낸다.
 
 `line_follow` 는 v1.10 additive 다. `state` 는 `OFF | WAITING | TRACKING |
-HOLD | LOST | RECOVERING`(v1.74, D-407 후진 중에만) 이며 `LOST` 는 모드를 `OFF` 로 바꾼 뒤 다시 선택하기 전까지
+HOLD | LOST | RECOVERING`(v1.74; D-407 후진, D-468 로컬 차선 복귀 `lane_return_*`, D-476 예상 도로 bridge `lane_bridge` 이동 중에만) 이며 `LOST` 는 모드를 `OFF` 로 바꾼 뒤 다시 선택하기 전까지
 해제되지 않는다. 선택되지 않은 소스, 신뢰도 미달, 원본 센서 시각 기준 stale,
 형식 오류는 모두 선속도·각속도 0으로 fail-closed 된다. `linear` 는 이 모드의
 별도 상한 0.10 m/s를 넘지 않는다(D-143).

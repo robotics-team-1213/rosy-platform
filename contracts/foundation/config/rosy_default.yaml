@@ -167,6 +167,19 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   recovery_console_grace_s: 3.0    # a FleetAgent reconnect this short still counts as linked
   recovery_restuck_m: 0.30
   recovery_rear_lateral_margin_m: 0.02   # rear band = body_half_width_m (URDF) + this
+  # D-476 expected-road bridge (Proposed; off until replay -> model/site-PC sim -> device pass).
+  # A short camera lane loss right after contained following drives the D-468 checkpoint lane's
+  # straight extension (needs recovery_local_enabled, path-mode URDF body). Measured odom travel
+  # x bridge_distance_scale: full speed (min cruise, manual limit) below bridge_coast_m, x
+  # bridge_slow_scale below bridge_slow_m, then stop and hand over to D-468. Always done by
+  # lost_after_s - bridge_time_margin_s; the LOST clock is never reset or extended.
+  bridge_enabled: false
+  bridge_lookahead_m: 0.10         # pure-pursuit point ahead on the extended centre line
+  bridge_coast_m: 0.10             # D-384 COAST
+  bridge_slow_m: 0.25              # D-384 SLOW
+  bridge_slow_scale: 0.5
+  bridge_distance_scale: 1.08      # D-384 odometry inflation
+  bridge_time_margin_s: 0.5        # D-384 rev 1 §1
 
 localization_mission:              # D-395 P2-7 check manoeuvres; D-424 near checks
   # With the URDF body (line_follow.body_* in the robot package) a turn needs every
