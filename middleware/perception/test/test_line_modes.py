@@ -60,6 +60,37 @@ def test_ir_background_is_not_invented_as_a_line():
     assert detect_ir_line((550, 560, 540), calibration()) is None
 
 
+def test_ir_two_bands_over_a_dark_centre_are_not_one_line():
+    # 260919 crosswalk stripes run along the lane 40 mm apart: on a centred
+    # drive left and right sit on stripes, the centre on the floor between.
+    # Their centroid (error 0) would read as a line under the centre sensor,
+    # which the D-344 §12 guard treats as a lane crossing.
+    assert detect_ir_line((2900, 550, 2850), calibration()) is None
+    assert detect_ir_line((2400, 1200, 2500), calibration()) is None
+    # Polarity-agnostic: the rule runs on normalised strengths.
+    reversed_profile = calibration(black=(3000.0, 3000.0, 3000.0),
+                                   white=(500.0, 500.0, 500.0))
+    assert detect_ir_line((600, 2900, 650), reversed_profile) is None
+
+
+def test_ir_two_band_rule_edges_follow_the_detector_thresholds():
+    # Normalised (s - 500) / 2500: 1875 -> 0.55 (min_white), 1500 -> 0.40.
+    assert detect_ir_line((1875, 1500, 1875), calibration()) is None
+    # One outer side under min_white is a single band, not two.
+    weak = detect_ir_line((3000, 500, 1850), calibration())
+    assert weak is not None and weak.error < 0.0
+    # Centre not darker than the dimmer outer side by min_contrast: one band
+    # fading to the right (normalised 1.0, 0.84, 0.70), still a line.
+    wide = detect_ir_line((3000, 2600, 2250), calibration())
+    assert wide is not None and -0.3 < wide.error < 0.0
+
+
+def test_ir_one_band_across_two_sensors_is_still_a_line():
+    # A 25-28 mm boundary line can cover the centre and one side at once.
+    left_centre = detect_ir_line((2900, 2800, 550), calibration())
+    assert left_centre is not None and left_centre.error < -0.3
+
+
 def test_camera_threshold_and_roi_are_tunable_with_bounded_inputs():
     dim = camera_frame(value=165)
     assert detect_lane_error(dim) is None
