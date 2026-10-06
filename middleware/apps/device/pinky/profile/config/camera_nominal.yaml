@@ -19,3 +19,9 @@ pitch_rad: 0.139626        # 8.0 deg down (URDF nominal); horizon row = cy - fx*
 height_m: 0.06343          # URDF nominal lens height above the floor
 x_offset_m: 0.03317        # URDF nominal lens offset ahead of base_link
 max_range_m: 0.6
+# D-468 projection uncertainty of this URDF nominal (lane containment uncertainty_m): the
+# largest measured deviation from it, D-47 calibration table / D-379 track fits. An accepted
+# camera_profile record replaces these with its own score bands.
+pitch_uncertainty_rad: 0.066323  # 3.8 deg: nominal 8.0 vs 11.8 fitted (session 20260930T133221Z)
+height_uncertainty_m: 0.00593    # nominal 0.06343 vs 0.0575 fitted (8kcn track); other fits 0.0575-0.065
+roll_uncertainty_rad: 0.026180   # 1.5 deg: nominal 0 vs -1.5 fitted (8kcn track)
