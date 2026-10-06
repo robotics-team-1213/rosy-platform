@@ -1,4 +1,5 @@
 import {createFleetClient} from '/common/fleet-client.js';
+import {confirmIrreversible} from '/common/ui.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 
 const $ = id => document.getElementById(id);
@@ -298,19 +299,30 @@ $('new-proposal').addEventListener('click', () => {
   $('notice').textContent = '새 요청 키를 준비했습니다. 앞선 요청의 결과가 불명확하면 먼저 작업 ID로 상태를 확인하세요.';
 });
 for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
-  $(command).addEventListener('click', () => action(async () => {
-    if (!job || job.mission_id !== $('mission-id').value) throw new Error('작업 상태를 먼저 확인하세요.');
-    if (command === 'resume' && job.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS')) {
-      throw new Error('작업자 간지 삽입 확인 대기 · 일반 재승인으로 진행할 수 없습니다.');
+  $(command).addEventListener('click', async () => {
+    if (command === 'cancel') {
+      if (busy || role !== 'operator' || !job || job.mission_id !== $('mission-id').value) return;
+      const id = job.mission_id, epoch = editEpoch;
+      const allowed = await confirmIrreversible({
+        message: `작업 "${id}"을 취소할까요? 작업 취소는 실행 중인 장치를 정지하지 않습니다. 실제 장치 상태를 확인하세요.`,
+        action: '작업 취소', opener: $(command),
+      });
+      if (!allowed || busy || epoch !== editEpoch || role !== 'operator' || job?.mission_id !== id) return;
     }
-    const id = encodeURIComponent(job.mission_id);
-    let body = {};
-    if (command === 'admit' || command === 'resume') {
-      if (jobGeneration === null) throw new Error('정지 세대를 확인하려면 작업 상태를 다시 읽으세요.');
-      body = {expected_generation: jobGeneration};
-    }
-    const path = command === 'admit' ? `/api/fleet/missions/${id}/admit` : `/api/fleet/cell-jobs/${id}/${command}`;
-    await post(path, body); await readJob();
-  }));
+    await action(async () => {
+      if (!job || job.mission_id !== $('mission-id').value) throw new Error('작업 상태를 먼저 확인하세요.');
+      if (command === 'resume' && job.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS')) {
+        throw new Error('작업자 간지 삽입 확인 대기 · 일반 재승인으로 진행할 수 없습니다.');
+      }
+      const id = encodeURIComponent(job.mission_id);
+      let body = {};
+      if (command === 'admit' || command === 'resume') {
+        if (jobGeneration === null) throw new Error('정지 세대를 확인하려면 작업 상태를 다시 읽으세요.');
+        body = {expected_generation: jobGeneration};
+      }
+      const path = command === 'admit' ? `/api/fleet/missions/${id}/admit` : `/api/fleet/cell-jobs/${id}/${command}`;
+      await post(path, body); await readJob();
+    });
+  });
 }
 refreshControls();

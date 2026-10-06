@@ -94,6 +94,10 @@ def test_cell_page_keeps_emergency_stop_in_first_view(browser_site, width, heigh
     expect(stop).to_be_visible()
     box = stop.bounding_box()
     assert box["y"] + box["height"] <= height
+    if width < 480:
+        brand = page.locator("ui-topbar ui-brand b").bounding_box()
+        assert brand["x"] + brand["width"] <= box["x"] + 1, (brand, box)
+        assert page.locator("ui-topbar ui-brand b").evaluate("node => node.scrollWidth <= node.clientWidth")
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
 
 
@@ -155,10 +159,12 @@ def test_delayed_compile_cannot_restore_preview_for_changed_document(browser_sit
     assert page.locator("#layout rect").count() == 0
 
 
-def test_reviewed_generation_conflict_and_cancel_are_explicit(browser_site):
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_reviewed_generation_conflict_and_cancel_are_explicit(browser_site, width, height):
     from playwright.sync_api import expect
 
     page, tasks, origin = browser_site
+    page.set_viewport_size({"width": width, "height": height})
     _prepare(page)
     expect(page.locator("#layout rect")).to_have_count(4)
     expect(page.locator("#layout-layer option")).to_have_count(4)
@@ -182,10 +188,38 @@ def test_reviewed_generation_conflict_and_cancel_are_explicit(browser_site):
     expect(page.locator("#notice")).to_contain_text("확인한 정지 세대")
     page.locator("#admit").click()
     expect(page.locator("#notice")).to_contain_text("작업 READY")
+    cancelled = []
+    page.on("request", lambda request: cancelled.append(request)
+            if request.url.endswith("/cancel") else None)
     page.locator("#cancel").click()
+    dialog = page.locator("dialog.ui-confirm")
+    expect(dialog).to_be_visible()
+    expect(dialog).to_contain_text("실행 중인 장치를 정지하지 않습니다")
+    assert page.locator("#estop").is_visible()
+    title = page.locator("ui-topbar ui-brand b").bounding_box()
+    stop = page.locator("#estop").bounding_box()
+    assert title["x"] + title["width"] <= stop["x"] + 1, (title, stop)
+    assert page.locator("#estop").evaluate("node => node.scrollWidth <= node.clientWidth")
+    if width < 480:
+        connect = page.locator("#connect").bounding_box()
+        session = page.locator("#session").bounding_box()
+        assert connect["x"] + connect["width"] <= session["x"] + 1, (connect, session)
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"fleet-cell-cancel-confirm-{width}x{height}.png"))
+    dialog.locator("ui-button[kind='quiet']").click()
+    expect(dialog).to_have_count(0)
+    assert cancelled == []
+    page.route("**/api/fleet/estop", lambda route: route.fulfill(json={"total": 0, "stopped": 0, "robots": []}))
+    page.locator("#cancel").click()
+    expect(dialog).to_be_visible()
+    page.locator("#estop").click()
+    expect(dialog).to_have_count(0)
+    assert cancelled == []
+    page.locator("#cancel").click()
+    dialog.locator("ui-button[kind='irreversible']").click()
     expect(page.locator("#notice")).to_contain_text("CANCELLED_BY_OPERATOR")
+    assert len(cancelled) == 1
     assert page.locator("#resume").get_attribute("disabled") is not None
-    page.set_viewport_size({"width": 390, "height": 844})
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
 
 

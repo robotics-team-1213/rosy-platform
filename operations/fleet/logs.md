@@ -2007,3 +2007,9 @@
 - 변경: 활성 `/console/cell`에 첫 화면 비상 정지와 별도 결과 상태를 두고, 기존 관제 세션 토큰을 입력 칸에 이어 받는다. 긴 Cell 작업 요청 중에도 비상 정지는 비활성화하지 않는다. UI/UX 회차에 빠져 있던 Cell 질문·선언 폭·G2/G3 잔여 항목을 추가했다.
 - 증거: 1440/390/320px 첫 화면 브라우저 3 passed, 320px 부분 응답·503 미확인·본문 동등 폭 1 passed, Cell 브라우저 전체 13 passed, Fleet 계약 21 passed, G1 명명 계약 90 passed, JS 구문 검사 통과; 성공 실행마다 `known_failures.py` 0 NEW. X: `captures/fleet-cell/`, `logs/fleet-cell-{estop-green,estop-width,browser-full,contracts}.txt`, `logs/g1-after-fleet-cell.txt`.
 - gate 변화: Cell LOCAL 첫 화면과 정지 결과의 부분 근거. 선언 상태 전체 G2·실제 셀/로봇 readback·운영자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 작업 취소 확인과 320px 머리
+
+- 변경: Cell 작업 취소 전에 작업 ID·장치 정지 아님을 명시하는 공용 확인창을 열고, 취소·정지·계정 변경 시에는 작업 취소 요청을 보내지 않는다. 좁은 화면의 비상 정지를 머리 첫 줄에 두고 로그인 뒤 긴 세션 이름이 제품 이름·접속 버튼을 밀지 않게 폭을 제한했다.
+- 증거: 1440/390/320px 확인·취소 POST 0·정지 가용성·확인 POST 1 브라우저 3 passed, Cell 브라우저 전체 15 passed, Fleet 계약 21 passed, G1 90 passed, 각 성공 실행 `known_failures.py` 0 NEW. 공용 확인 모듈을 Cell 수입 허용 목록에 추가하기 전 Fleet 계약 1건이 실패했고 수정 후 통과했다. 원본 X: `captures/fleet-cell/fleet-cell-cancel-confirm-{1440x1000,390x844,320x568}.png`, 실행 `logs/fleet-cell-cancel-{3widths-final,full-final,contracts-final}.txt`, `logs/g1-after-cell-cancel.txt`.
+- gate 변화: Cell 불가역 확인 G2의 LOCAL 폭 근거 추가. 나머지 선언 상태, 실제 장치·운영자 G3는 HOLD다.

@@ -85,7 +85,9 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 현재 트리의 첫 화면은 X: `captures/fleet-cell/fleet-cell-initial-{1440x1000,390x844,320x568}.png`에 있다. 처음에는 세 폭 모두 비상 정지가 없었고 집중 브라우저 3건이 실패했다(X: `logs/fleet-cell-estop-red.txt`). 지금은 세 폭 모두 첫 화면에 즉시 요청 버튼이 있고, 320px에서 부분 응답 `1/3`과 물리 정지 미확인·503 결과 미확인을 서로 다른 상태로 보인다(X: `captures/fleet-cell/fleet-cell-estop-{partial,unknown}-320x568.png`). 기존 Console 세션 토큰을 이어 받아 요청하며, 결과 상태 칸은 본문 패널과 같은 폭이다. Cell 브라우저 전체 **13 passed**, 상태 칸 폭 집중 **1 passed**, 각 성공 실행의 `known_failures.py` **0 NEW**다. Chromium이 임시 포트 6566을 차단한 첫 상호작용 실행은 앱 진입 전 오류였고, 새 포트에서 같은 검사가 통과했다.
 
-G2는 문서 없음·첫 기동, 증거 `fresh/delayed/disconnected/unavailable`, 권한 거부·저장/컴파일 실패, SAFE_STOP/HOLD, 작업 취소 확인의 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
+작업 취소는 기존에 첫 클릭으로 요청을 보냈다. 지금은 작업 ID와 「실행 중인 장치를 정지하지 않습니다」 경고를 확인창에 표시한다. 1440×1000·390×844·320×568에서 취소 버튼을 누르고 확인창을 캡처했다(X: `captures/fleet-cell/fleet-cell-cancel-confirm-{1440x1000,390x844,320x568}.png`). 확인창의 취소는 POST 0, 비상 정지는 확인창을 닫고 즉시 누를 수 있으며, 「작업 취소」 확인 뒤에는 취소 POST 1이다. 320px에서는 로그인 뒤 긴 세션 이름이 비상 정지와 제품 이름·접속 버튼을 밀어 겹치던 문제도 머리의 좁은 폭 격자로 고쳤다. 세 폭 브라우저 **3 passed**, Cell 브라우저 전체 **15 passed**, Fleet 계약 **21 passed**, 현재 트리 G1 **90 passed**, 각 성공 실행의 `known_failures.py` **0 NEW**다. Cell의 새 공용 확인 모듈을 수입 허용 목록에 반영하기 전에는 계약 1건이 실패했고, 반영 뒤 재실행에서 통과했다. 원본은 X: `logs/fleet-cell-cancel-{3widths-final,full-final,contracts-final}.txt`, `logs/g1-after-cell-cancel.txt`다. 이 경로는 로컬 Cell API와 합성 Fleet 응답의 UI 근거이며 실제 장치 정지는 검증하지 않았다.
+
+G2는 문서 없음·첫 기동, 증거 `fresh/delayed/disconnected/unavailable`, 권한 거부·저장/컴파일 실패, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
 
 ### Fleet G3 독회 — LOCAL 진행 중
 
