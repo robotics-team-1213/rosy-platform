@@ -81,6 +81,59 @@ def _prepare(page):
     expect(page.locator("#summary")).to_contain_text("18회 전송")
 
 
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_page_keeps_emergency_stop_in_first_view(browser_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        Path(output).mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(Path(output) / f"fleet-cell-initial-{width}x{height}.png"))
+    stop = page.locator("#estop")
+    expect(stop).to_be_visible()
+    box = stop.bounding_box()
+    assert box["y"] + box["height"] <= height
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+
+
+def test_cell_emergency_stop_uses_console_session_and_reports_uncertainty(browser_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.evaluate("sessionStorage.setItem('rosy-console-token', 'operator-secret')")
+    page.reload()
+    page.set_viewport_size({"width": 320, "height": 568})
+    assert page.locator("#credential input").input_value() == "operator-secret"
+    replies = {"status": 200}
+    sent = []
+
+    def stop(route):
+        sent.append(route.request)
+        if replies["status"] == 200:
+            route.fulfill(json={"total": 3, "stopped": 1, "robots": []})
+        else:
+            route.fulfill(status=503, json={"detail": {"code": "UNAVAILABLE"}})
+
+    page.route("**/api/fleet/estop", stop)
+    page.locator("#estop").click()
+    expect(page.locator("#estop-feedback")).to_contain_text("정지 요청 응답: 1/3 · 물리 정지 미확인")
+    assert page.locator("#estop-feedback").get_attribute("state") == "error"
+    feedback = page.locator("#estop-feedback").bounding_box()
+    content = page.locator("main > ui-section").first.bounding_box()
+    assert abs(feedback["x"] - content["x"]) <= 1
+    assert abs(feedback["width"] - content["width"]) <= 1
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / "fleet-cell-estop-partial-320x568.png"))
+    replies["status"] = 503
+    page.locator("#estop").click()
+    expect(page.locator("#estop-feedback")).to_contain_text("비상 정지 결과 확인 불가")
+    if output:
+        page.screenshot(path=str(Path(output) / "fleet-cell-estop-unknown-320x568.png"))
+    assert len(sent) == 2
+    assert all(request.headers.get("authorization") == "Bearer operator-secret" for request in sent)
+
+
 def test_delayed_compile_cannot_restore_preview_for_changed_document(browser_site):
     from playwright.sync_api import expect
 

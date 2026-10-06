@@ -17,5 +17,10 @@ a { color: var(--ink); }
 #layout { width: 100%; height: 20rem; color: var(--ink); }
 #layout rect { fill: var(--surface-raised); stroke: var(--series-primary); stroke-width: 2px; }
 #layout text { fill: var(--ink); font: var(--text-micro) var(--mono); }
+.estop { min-width: var(--target-irreversible); min-height: var(--target-irreversible); width: auto; height: auto; display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; }
+.estop .ui-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); flex: none; }
+.estop span { white-space: nowrap; }
+.estop small { flex-basis: 100%; text-align: center; }
+#estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
 @media (width < 30rem) { .documents, .scope { grid-template-columns: 1fr; } ui-topbar { flex-wrap: wrap; } }
 @media (30rem <= width < 64rem) { .documents { grid-template-columns: 1fr; } }

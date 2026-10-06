@@ -20,7 +20,9 @@
     <ui-field id="credential" type="password" placeholder="운영자 토큰" aria-label="관제 운영자 토큰"></ui-field>
     <ui-button id="connect" kind="primary">접속</ui-button>
     <ui-tag id="session">접속 전</ui-tag>
+    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
+  <ui-status id="estop-feedback" hidden></ui-status>
   <main>
     <ui-text id="notice" role="status" aria-live="polite">운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.</ui-text>
     <div class="documents">

@@ -2,7 +2,28 @@ import {createFleetClient} from '/common/fleet-client.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 
 const $ = id => document.getElementById(id);
+$('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
+function stopNotice(message, state) {
+  const notice = $('estop-feedback');
+  notice.textContent = message;
+  notice.setAttribute('state', state);
+  notice.hidden = false;
+}
+$('estop').addEventListener('click', async () => {
+  stopNotice('비상 정지 요청 중…', 'pending');
+  try {
+    const result = await request('/api/fleet/estop', {method: 'POST'});
+    const summary = result.total > 0
+      ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
+      : '정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.';
+    stopNotice(summary, result.total > 0 && result.stopped === result.total ? 'warning' : 'error');
+  } catch (error) {
+    stopNotice(error.status >= 500 || !error.status
+      ? '비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요.'
+      : `비상 정지 요청 거절 — ${error.message}`, 'error');
+  }
+});
 let editEpoch = 0;
 async function api(path, options) {
   const epoch = editEpoch;

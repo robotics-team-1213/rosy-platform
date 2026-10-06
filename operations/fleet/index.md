@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(fleet): Cell 작업 화면의 비상 정지와 평가 카드
 - 2026-10-06 · uncommitted · uiux(fleet): 로봇 카드 행동 폭과 데스크톱 높이
 - 2026-10-06 · uncommitted · uiux(fleet): 머리 아래 블록과 본문 폭 정렬
 - 2026-10-06 · uncommitted · uiux(fleet): 비상 정지 응답 첫 화면
 - 2026-10-06 · uncommitted · uiux(fleet): 전체 주행 취소 결과를 행동 옆에 표시
-- 2026-10-06 · uncommitted · uiux(fleet): 팔로워 지연 모바일 독회
