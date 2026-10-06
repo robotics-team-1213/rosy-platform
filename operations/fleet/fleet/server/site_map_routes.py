@@ -71,9 +71,11 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
                                   principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         try:
             body = DraftRequest.model_validate_json(await _bounded_body(request))
-        except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors(include_url=False, include_context=False,
-                                                                   include_input=False)) from exc
+        except ValidationError as exc:  # field errors without the submitted values
+            errors = [{"loc": [str(part) for part in item["loc"]], "msg": item["msg"]}
+                      for item in exc.errors(include_url=False, include_context=False, include_input=False)[:20]]
+            raise HTTPException(status_code=422, detail={"code": "SITE_MAP_INVALID",
+                                                         "detail": {"errors": errors}}) from exc
         try:
             return site_maps.save_draft(body.map, expected_revision=body.expected_revision,
                                         principal_id=principal.principal_id)

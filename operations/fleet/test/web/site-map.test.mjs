@@ -57,3 +57,10 @@ test('actions read the address names and stale plans are refused', async () => {
   assert.equal(planIsCurrent(plan, {version: 3}), false);
   assert.match(siteMapErrorText({code: 'SITE_MAP_ROUTE_ACTIVE'}), /진행 중/);
 });
+
+test('invalid draft errors list the fields', async () => {
+  const {siteMapErrorText} = await import('../../fleet/server/web/site-map-model.js');
+  const text = siteMapErrorText({code: 'SITE_MAP_INVALID',
+    detail: {errors: [{loc: ['map', 'edges', '0', 'width_m'], msg: 'Input should be greater than 0'}]}});
+  assert.match(text, /맞지 않는 값.*map\.edges\.0\.width_m: Input should be greater than 0/);
+});

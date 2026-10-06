@@ -135,7 +135,8 @@ def test_site_map_api_reads_edits_and_activates_with_audit(tmp_path):
     saved = client.put("/api/fleet/site-map/draft", json={"map": _line()}, headers=OPERATOR)
     assert saved.status_code == 200 and saved.json()["saved_by"] == "bob"
     bad = client.put("/api/fleet/site-map/draft", json={"map": _line(width_m=0)}, headers=OPERATOR)
-    assert bad.status_code == 422
+    assert bad.status_code == 422 and bad.json()["detail"]["code"] == "SITE_MAP_INVALID"
+    assert ["map", "edges", "0", "width_m"] in [e["loc"] for e in bad.json()["detail"]["detail"]["errors"]]
     stale = client.post("/api/fleet/site-map/activate", json={"expected_revision": "nope"}, headers=OPERATOR)
     assert stale.status_code == 409 and stale.json()["detail"]["code"] == "SITE_MAP_DRAFT_CHANGED"
     done = client.post("/api/fleet/site-map/activate", json={"expected_revision": saved.json()["revision"]},
