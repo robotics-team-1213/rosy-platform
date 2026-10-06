@@ -59,6 +59,11 @@ EXEMPT: dict[str, str] = {
         "validated fresh bound heartbeat reuse, monotonic age and stale/offline REST fallback; "
         "dispatch/traffic and CORE command ownership unchanged. See docs/validation/"
         "ui-release-integration-2026-10-04/README.md.",
+    "a075a0bba2bec616c12dc2c99a6987c3764ae055":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-06: only drops memory points within "
+        "1e-6 m of range_min (float rounding, below LiDAR resolution); D-422 blind-gap lower "
+        "bound still applies, no-echo never clears, memory only shortens gaps; repro test "
+        "fails pre-fix, C1/0.12 post latch tests pass (56/56, 463 filtered).",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
