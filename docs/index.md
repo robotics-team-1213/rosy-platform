@@ -302,9 +302,6 @@
 
 - 2026-10-06 · uncommitted · D-472 호스트 구현
 - 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
-- 2026-10-05 · uncommitted · feat(release): main CI to guarded robot CD
-- 2026-10-05 · uncommitted · docs(team): onboarding guide, PR template, CODEOWNERS, author guard
-- 2026-10-05 · uncommitted · fix(docs): D-468 API 변경 이력 행 보완
-- 2026-10-05 · uncommitted · feat(lane): synchronize real pose and containment evidence
 - 2026-10-05 · uncommitted · docs(readme): short README, developer guide, verified team guide
 - 2026-10-05 · uncommitted · fix(docs): C6 선택 센서 공급자 연결 판정
+- 2026-10-05 · uncommitted · feat(release): main CI to guarded robot CD
