@@ -52,7 +52,7 @@ def test_parse_points_scales_0_1000_and_dedupes():
 
 
 def test_parse_points_survives_truncated_json_and_caps():
-    raw = '```json\n[' + ', '.join(f'{{"point_2d": [{10 * i}, 900]}}' for i in range(40)) + ', {"point_2d": [99'
+    raw = "`" * 3 + 'json\n[' + ', '.join(f'{{"point_2d": [{10 * i}, 900]}}' for i in range(40)) + ', {"point_2d": [99'
     pts = rd.parse_points(raw, 320, 240, cap=5)
     assert len(pts) == 5 and pts[0] == [0, 216]
 
