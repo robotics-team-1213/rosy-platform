@@ -67,8 +67,13 @@ class LaneReturnDecisionMixin:
             self._return_controller=ReturnController(Footprint(
                 c.body_front_x_m,c.body_rear_x_m,c.body_half_width_m))
         # Existing console decisions have precedence once escalation has opened.
-        if self._recovery.stuck_id is not None and self._return_controller.phase!='fleet':
-            return None
+        if self._recovery.stuck_id is not None:
+            # An accepted console YIELD owns the normal CORE recovery decision path until
+            # its turn/crawl/held phases finish. Fleet-required lane return must not
+            # overwrite a separately authorized operator action with its autonomous HOLD.
+            if (self._return_controller.phase!='fleet'
+                    or self._recovery.phase in ('TURNING','CRAWLING','YIELDED')):
+                return None
         reason=(self._status.reason or '').removeprefix('camera_')
         if (self._status.state!='TRACKING' and reason not in _LOCAL_REASONS) or (obs and obs.quality_reason):
             return decision
@@ -98,9 +103,8 @@ class LaneReturnDecisionMixin:
         if action.fleet_required:
             # Reuse the existing stuck-id/event/API, without a second autonomous
             # back-off after the D-468 candidates have already been exhausted.
-            inp=replace(self._stuck_input(now),cause='lane_lost',lane_visible=False,
-                        geometry_known=False,rear_state='unknown',linear_ceiling=0.)
-            self._recovery.step(inp)
+            inp=replace(self._stuck_input(now),cause='lane_lost',lane_visible=False)
+            self._recovery.require_operator(inp)
             held=self._stop_decision('HOLD','lane_return_fleet_required')
             self._status=self._status.model_copy(update={'stuck':self._stuck_status(now)})
             return held

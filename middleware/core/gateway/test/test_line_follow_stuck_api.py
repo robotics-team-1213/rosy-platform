@@ -148,11 +148,17 @@ def test_scan_bridge_feeds_self_masked_body_points():
         config = _line_follow_config({"lidar_forward_deg": 180.0, "lidar_self_mask": [
             {"from_deg": 170, "to_deg": 180, "max_range_m": 0.2}]})
         body = None
+        return_scan = "unset"
         clearance = "unset"
         wants_body_points = True
 
         def observe_body_points(self, points, *, range_min, received_at):
             self.body = (points, range_min)
+
+        wants_return_scan = True
+
+        def observe_return_scan(self, view, *, source_age_s, source_stamp_ns, received_at):
+            self.return_scan = (view, source_age_s, source_stamp_ns)
 
         def observe_clearance(self, distance, received_at=None):
             self.clearance = distance
@@ -167,11 +173,14 @@ def test_scan_bridge_feeds_self_masked_body_points():
     ranges[180] = 0.25                   # scan 0 deg = robot rear
     ranges[175] = 0.18                   # scan -5 deg = robot +175 deg, inside the self-mask
     sample = {"ranges": ranges, "angle_min": -3.14159265, "angle_max": 3.14159265 * (n - 2) / n,
-              "range_min": 0.15, "range_max": 12.0}
+              "angle_increment": 2 * 3.14159265 / n,
+              "range_min": 0.15, "range_max": 12.0, "frame_id": "laser",
+              "source_stamp_ns": 1_000_000_000, "source_now_ns": 1_000_000_000}
     services = Services()
     observation.front_clearance(services, sample, received_at=1.0)
     points, range_min = services.line_follow.body
     assert range_min == 0.15 and len(points) == 2
+    assert services.line_follow.return_scan == (None, None, None)  # missing body geometry denies D-468
     assert min(x for x, _ in points) == pytest.approx(-0.25, abs=1e-3)
     assert services.line_follow.clearance == pytest.approx(0.30, abs=1e-3)
 

@@ -909,6 +909,16 @@
 - 증거: 신규 query와 기존 adapter/구조 검사 105 PASS, 0 NEW. 독립 SOURCE/크기 검토도 105 PASS, 0 NEW.
 - gate 변화: 센서 판정 seam만. CORE swept path·바닥 경로 검증 전에는 실제 복귀 이동 공급자로 연결하지 않는다.
 
+## 2026-10-05 · uncommitted · feat(bridge): bind D-468 motion evidence into CORE
+- Change: CORE now binds local lane-return candidates to the live enforced floor/sensor verdict and the manager's fresh full-circle LiDAR swept-body check. Unknown provider failures deny the candidate.
+- Evidence: gateway/scan/bridge integration checks 151 PASS, 0 NEW; host source only. No ROS-SIM, device, release, or field result.
+- Gate: source wiring present; deployment and physical recovery remain pending.
+
+## 2026-10-05 · uncommitted · fix(bridge): document D-468 scan provenance seams
+- Change: update the C6 seam triage for the policy capability probe and LaserScan angular/source-time fields; keep non-recovery scan mocks explicit about not requesting D-468 scans.
+- Evidence: affected gateway checks 43 PASS, 0 NEW. A broader gateway run had 2163 PASS, 17 SKIP, and two failures in these expectation/triage checks before the fixes; the full suite was not rerun afterward.
+- Gate: source and host tests only; no runtime/device/field result.
+
 ## 2026-10-05 · uncommitted · fix(bridge): C6 센서 공급자 선택 기능 판정 기록
 
 - 변경: `local_return_allowed`의 동적 조회를 D-468/C6 예외 목록에 명시하고, 구 공급자에 메서드가 없을 때 복귀 후보를 거부하는 검사를 추가했다.

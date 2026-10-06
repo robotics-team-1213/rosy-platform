@@ -76,15 +76,20 @@ def odom_sample(msg: Any) -> dict[str, float]:
 
 
 def lidar_sample(msg: Any, received_at: float) -> dict[str, Any]:
+    stamp = getattr(msg.header, "stamp", None)
+    stamp_ns = (int(stamp.sec) * 1_000_000_000 + int(stamp.nanosec)
+                if stamp is not None else 0)
     return {
         "frame_id": msg.header.frame_id,
         "range_min": msg.range_min,
         "range_max": msg.range_max,
         "angle_min": msg.angle_min,
         "angle_max": msg.angle_max,
+        "angle_increment": getattr(msg, "angle_increment", None),
         "num_ranges": len(msg.ranges),
         "ranges": list(msg.ranges),
         "received_at": received_at,
+        "source_stamp_ns": stamp_ns,
     }
 
 

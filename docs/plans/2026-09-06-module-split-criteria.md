@@ -1,4 +1,4 @@
-# Module split criteria — when a `rosy_core` module becomes a package
+﻿# Module split criteria — when a `rosy_core` module becomes a package
 
 **Scope:** Python subpackages inside `src/rosy_core/rosy_core/`. Nothing here is about ROS packages.
 **Sibling:** [2026-09-03-runtime-maintainability-rules.md](2026-09-03-runtime-maintainability-rules.md) owns launch files, ROS packages and deploy overlays. Its non-goal *"Do not add a new ROS package"* means exactly that — ROS packages, not Python subpackages. These two documents do not overlap.

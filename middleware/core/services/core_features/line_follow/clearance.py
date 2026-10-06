@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 from typing import Any, Iterator, Mapping, Optional, Sequence
+from core_common.robot_body import RobotBody, ScanView
 
 from core_common.robot_body import inside_body as _inside_body
 from core_common.robot_body import masked as _masked
@@ -125,6 +126,56 @@ def scan_points(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
     return tuple((distance * math.cos(offset), distance * math.sin(offset))
                  for offset, distance in _returns(sample, forward_deg, self_mask)
                  if distance <= max_range)
+
+
+def return_scan_view(sample: Mapping[str, Any], *, body: RobotBody,
+                     source_now_ns: int, clearance_horizon_m: float,
+                     self_mask: SelfMask = ()) -> Optional[tuple[ScanView, float, int]]:
+    """D-468: complete, source-fresh scan in base coordinates plus its source age.
+
+    No-return and malformed beams remain unknown. They are never promoted to free-space
+    endpoints; the canonical body policy decides whether those unknown bands block a sweep.
+    """
+    try:
+        ranges = sample["ranges"]
+        count = len(ranges)
+        frame_id = sample["frame_id"]
+        angle_min = float(sample["angle_min"])
+        angle_max = float(sample["angle_max"])
+        increment = float(sample["angle_increment"])
+        low, high = float(sample["range_min"]), float(sample["range_max"])
+        horizon = float(clearance_horizon_m)
+        source_stamp_ns = sample["source_stamp_ns"]
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    scalars = (angle_min, angle_max, increment, low, high, horizon)
+    if (not isinstance(frame_id, str) or not frame_id.strip()
+            or not all(math.isfinite(v) for v in scalars) or not 180 <= count
+            or increment <= 0.0 or increment > math.radians(1.0)
+            or low <= 0.0 or high <= low or horizon <= 0.0
+            or high < horizon + 0.01 or self_mask
+            or type(source_stamp_ns) is not int or source_stamp_ns < 0
+            or type(source_now_ns) is not int or source_now_ns < source_stamp_ns):
+        return None
+    age = (source_now_ns - source_stamp_ns) / 1e9
+    if age > 0.25:
+        return None
+    tolerance = increment * 0.1
+    if (abs(angle_max - (angle_min + increment * (count - 1))) > tolerance
+            or abs((angle_max - angle_min + increment) - 2.0 * math.pi) > tolerance):
+        return None
+    for raw in ranges:
+        if isinstance(raw, bool):
+            return None
+        try:
+            distance = float(raw)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if math.isnan(distance) or distance == -math.inf or (math.isfinite(distance) and
+                (distance < low or distance > high)):
+            return None
+    view = body.scan_view(sample, self_mask=self_mask, max_range=high)
+    return view, age, source_stamp_ns
 
 
 def body_clearances(points: Sequence[Point], *, lidar_x_m: float, rear_x_m: float,
