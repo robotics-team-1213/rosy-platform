@@ -194,6 +194,9 @@ main 14.4 %·keep v2 14.0 %, 깊은 벽 위 8.5 %·3.8 %·3.5 %. 데이터셋 `d
      "matched_classes", "unmatched", "lane_marking_iou", "nonfinite_frames", "disjoint", "champion",
      "champion_comparison"}`(겹칠 때 `training_dataset`, `shared_sessions`). 모델 매니페스트의 `metrics.val_iou` 는
      비교용으로 `trainer_val_iou` 에 옮겨 적고 게이트에는 쓰지 않는다.
+   - `eval.source_groups` 는 평가에 사용한 프레임의 `sources` 조합별 프레임·유효 픽셀 수와 각 일치 클래스의
+     정답 픽셀·예측 픽셀·IoU 를 진단용으로 적는다. 출처가 없는 기존 세트는 빈 조합으로 묶는다.
+     게이트의 전체 IoU·mIoU·챔피언 비교는 바꾸지 않는다.
 6. **처음 값.** `eval_set`, `min_eval_miou`, `min_lane_marking_iou` 는 기준 모델 하나를 평가 세트로 잰 뒤에 정한다.
    그때까지 `null` 이다.
    `max_eval_miou_drop` 0.01 은 챔피언이 생긴 뒤에만 작동한다.
