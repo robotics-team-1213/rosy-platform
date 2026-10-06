@@ -38,18 +38,22 @@ def search(graph: Graph, start: tuple[str, float], goal: Goal, config: RoutingCo
            use_heuristic: bool = True) -> tuple[float, list[Segment]] | None:
     """Cheapest ``(cost_s, segments)`` or None. ``use_heuristic=False`` is plain Dijkstra."""
     extra = extra_cost or {}
-    vmax = max(speed(arc) for arc in graph.arcs.values())
+    arcs = graph.arcs
+    rate = {arc_id: 1.0 / speed(arc) for arc_id, arc in arcs.items()}
+    vmax = 1.0 / min(rate.values())
+    # Per search: the full cost of each usable arc and the bound of each place.
+    full = {arc_id: arc.length_m * rate[arc_id] + extra.get(arc.edge_id, 0.0)
+            for arc_id, arc in arcs.items() if allowed(arc)}
+    bound = {place: (heuristic(graph.place_xy(place), goal.xy, vmax) if use_heuristic else 0.0)
+             for place in graph.places}
 
     def leg(arc: Arc, s_from: float, s_to: float) -> float:
-        return (s_to - s_from) / speed(arc) + extra.get(arc.edge_id, 0.0)
+        return (s_to - s_from) * rate[arc.id] + extra.get(arc.edge_id, 0.0)
 
-    def h(state: str) -> float:
-        if not use_heuristic or state == GOAL:
-            return 0.0
-        return heuristic(graph.place_xy(arc_of[state].end_place), goal.xy, vmax)
-
-    first = graph.arcs[start[0]]
-    arc_of: dict[str, Arc] = {START: first}
+    successors = graph.successors(config, lambda arc, nxt, kind: transition_cost(
+        turn_deg(arc.end_tangent, nxt.start_tangent), kind, config))
+    first = arcs[start[0]]
+    end_of: dict[str, Arc] = {START: first}
     best: dict[str, float] = {}
     came: dict[str, tuple[str | None, Segment | None]] = {}
     heap: list[tuple[float, float, str]] = []
@@ -58,7 +62,8 @@ def search(graph: Graph, start: tuple[str, float], goal: Goal, config: RoutingCo
         if g < best.get(state, math.inf):
             best[state] = g
             came[state] = (parent, segment)
-            heapq.heappush(heap, (g + h(state), -g, state))
+            h = 0.0 if state == GOAL else bound[end_of[state].end_place]
+            heapq.heappush(heap, (g + h, -g, state))
 
     if start[0] in goal.on_arcs and goal.on_arcs[start[0]] >= start[1]:
         s_goal = goal.on_arcs[start[0]]
@@ -73,23 +78,20 @@ def search(graph: Graph, start: tuple[str, float], goal: Goal, config: RoutingCo
         g = -neg_g
         if state == GOAL:
             return g, _segments(came)
-        arc = arc_of[state]
+        arc = end_of[state]
         place = arc.end_place
         if goal.place == place and (goal.arrive_ok is None or goal.arrive_ok(arc)):
             relax(GOAL, g, state, None)
-        kind = getattr(graph.places[place], "kind", "junction")
-        for nxt_id in graph.out_of.get(place, ()):
-            nxt = graph.arcs[nxt_id]
-            if not allowed(nxt) or (place, arc.edge_id, nxt.edge_id) in graph.bans:
+        for nxt_id, step in successors[arc.id]:
+            cost = full.get(nxt_id)
+            if cost is None or nxt_id in done:
                 continue
-            step = transition_cost(turn_deg(arc.end_tangent, nxt.start_tangent), kind, config)
-            if step is None:
-                continue
+            nxt = arcs[nxt_id]
             if nxt_id in goal.on_arcs:
                 s_goal = goal.on_arcs[nxt_id]
                 relax(GOAL, g + step + leg(nxt, 0.0, s_goal), state, (nxt_id, 0.0, s_goal))
-            arc_of[nxt_id] = nxt
-            relax(nxt_id, g + step + leg(nxt, 0.0, nxt.length_m), state, (nxt_id, 0.0, nxt.length_m))
+            end_of[nxt_id] = nxt
+            relax(nxt_id, g + step + cost, state, (nxt_id, 0.0, nxt.length_m))
     return None
 
 

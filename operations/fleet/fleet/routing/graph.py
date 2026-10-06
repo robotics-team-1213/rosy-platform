@@ -9,7 +9,7 @@ straight line between places never exceeds a lane length — the A* bound needs 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 
 #: Tangents are read over this much polyline, so a 1 cm wiggle at a node is not a turn.
@@ -92,6 +92,31 @@ class Graph:
     out_of: dict[str, tuple[str, ...]]
     places: dict[str, object]
     bans: frozenset[tuple[str, str, str]]
+    #: Successor lists per routing config, built on first use (D-486 6: once per map version).
+    _successors: dict = field(default_factory=dict, compare=False, repr=False)
+
+    def successors(self, config, transition) -> dict[str, tuple[tuple[str, float], ...]]:
+        """``{arc id: ((next arc id, transition cost s), ...)}`` without banned or refused turns.
+
+        ``transition(arc, next arc, place kind)`` is ``cost.transition`` for ``config``.
+        """
+        found = self._successors.get(config)
+        if found is None:
+            found = {}
+            for arc in self.arcs.values():
+                place = arc.end_place
+                kind = getattr(self.places[place], "kind", "junction")
+                steps = []
+                for nxt_id in self.out_of.get(place, ()):
+                    nxt = self.arcs[nxt_id]
+                    if (place, arc.edge_id, nxt.edge_id) in self.bans:
+                        continue
+                    step = transition(arc, nxt, kind)
+                    if step is not None:
+                        steps.append((nxt_id, step))
+                found[arc.id] = tuple(steps)
+            self._successors[config] = found
+        return found
 
     def place_xy(self, place_id: str) -> Point:
         place = self.places[place_id]
