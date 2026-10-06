@@ -236,6 +236,8 @@ Pairing의 인증서 확인·실패 복구 조작은 각 상태의 두 반폭 �
 
 이후 debug 전용 합성 상태 화면을 격리 AVD에서 열어 Pairing 요청·인증서 확인·거부와 Peer 승인 대기·인증서 확인·연결 실패를 **320×640/글자 200%와 390×844/글자 130%**에 표시했다. 원본은 X: `captures/cam-pairing-preview/{pair-requested,pair-fingerprint,pair-rejected,peer-pending,peer-certificate,peer-failed}-{320x640-font20,390x844-font13}-final.png`이고, 320px은 같은 폴더의 `*-actions-final.png`에서 스크롤 뒤 행동을 확인한다. 첫 390px 자동 캡처 일부는 Android 시작 화면이어서 버리고, UI가 안정된 뒤 `-final`을 다시 찍었다. Pairing 확인·실패의 두 버튼은 같은 전폭이며, Peer 인증서 확인·중단도 같은 전폭이다. Peer 화면의 스크롤 내용이 320px에서 상태 표시줄 아래로 들어가던 문제는 LAN·Peer 화면의 안전 영역 적용 후 재캡처했다(`peer-certificate-320x640-font20-safearea.png`). Debug APK 빌드와 release manifest 처리가 성공했고 합성 화면 Activity는 release manifest에 없다. 이는 **LOCAL 합성 상태 렌더**다. 실제 수신기 발견·승인·거부·스트림, 실물 폰 설치자 작업, 나머지 선언 상태는 여전히 G2/G3 HOLD다.
 
+320px/글자 200% 인증서 확인에서 4자리 지문 묶음 `3456`이 중간에서 갈라져 콘솔 값과 대조하기 어려웠다. 표시할 때 하이픈 뒤에만 줄바꿈 기회를 주고 원본 지문·접근성 읽기 값은 유지했다. 현재 APK를 격리 AVD에 설치해 320×640에서는 `ABCD-EF12-` / `3456-7890`, 390×844/글자 130%에서는 한 줄임을 화면으로 확인했다. 최종 원본은 X: `captures/cam-fingerprint-wrap/fingerprint-320x640-font200-groups.png`와 `fingerprint-390x844-font130-final.png`; 처음 390px 캡처는 시작 화면이라 근거에서 제외한다. Cam JVM **366 passed**와 debug APK 빌드 성공은 X: `logs/cam-fingerprint-wrap-gradle.txt`에 있다. 실제 사이트 콘솔 값 대조와 설치자 G3는 여전히 HOLD다.
+
 ### Pilot Shell 네이티브 G2 — 태블릿 너비 부분 근거
 
 현재 브랜치의 Pilot Android debug APK를 격리된 Android 35 에뮬레이터에 설치했다. 밀도 320dpi에서 2000×1200(1000dp), 1200×800(600dp), 800×600(400dp) 가로 화면을 확인했다. 원본 캡처는 위 Cam 회차와 같은 X: `captures` 폴더의 `pilot-shell-*density320*.png`에 둔다.

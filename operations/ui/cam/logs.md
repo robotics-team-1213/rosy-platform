@@ -259,3 +259,9 @@
 - 변경: debug 전용 합성 상태 Activity로 Pairing 요청·인증서 확인·거부와 Peer 대기·인증서 확인·실패를 표시한다. LAN·Peer 스크롤의 상태 표시줄 침범을 `safeDrawingPadding`으로 고쳤다.
 - 증거: 격리 Android 35 AVD 320×640/글자 200%와 390×844/글자 130%의 여섯 상태별 캡처를 X: `captures/cam-pairing-preview/`에 보존했다. 320px 인증서 화면은 끝까지 스크롤해 같은 폭의 두 결정을 확인했다. `:app:assembleDebug`와 `:app:processReleaseMainManifest` 성공; preview Activity는 release manifest에 없다.
 - gate 변화: 합성 상태의 LOCAL G2 부분 근거. 실제 수신기 연결·승인/거부·송출, 실물 폰과 설치자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(cam): 좁은 폰의 인증서 지문 묶음
+
+- 변경: 320px/글자 200%에서 4자리 지문 묶음이 중간에 갈라지지 않도록 묶음 사이에만 줄바꿈 기회를 넣었다. 접근성 읽기 값과 페어링 원본 지문은 그대로 둔다.
+- 증거: `:app:testDebugUnitTest` 366 passed, `:app:assembleDebug` 성공. 격리 Android 35 AVD에서 320×640/글자 200% 지문이 `ABCD-EF12-` / `3456-7890`으로 나뉘고 390×844/글자 130%에서는 한 줄임을 확인했다. X: `captures/cam-fingerprint-wrap/fingerprint-{320x640-font200-groups,390x844-font130-final}.png`.
+- gate 변화: Cam 인증서 확인 LOCAL G2 가독성 근거 추가. 실제 설치자의 콘솔 대조·실물 폰과 G3는 HOLD다.

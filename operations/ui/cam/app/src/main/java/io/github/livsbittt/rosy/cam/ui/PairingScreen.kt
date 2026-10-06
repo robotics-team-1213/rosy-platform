@@ -139,10 +139,11 @@ fun PairingScreen(
                     Text(stringResource(R.string.pairing_fp_intro), style = MaterialTheme.typography.bodyLarge)
                     Text(stringResource(R.string.pairing_fp_label), style = MaterialTheme.typography.labelLarge)
                     Text(
-                        state.fingerprint,
+                        state.fingerprint.replace("-", "-\u200B"),
                         style = MaterialTheme.typography.headlineMedium,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics { contentDescription = state.fingerprint },
                     )
                     Text(
                         stringResource(R.string.pairing_credential, state.credentialId),
