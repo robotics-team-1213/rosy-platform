@@ -202,6 +202,11 @@ def test_append_only_logs_accept_lowercase_english_gate_without_omitting_it():
     assert harness.validate_log(legacy.replace("- gate:", "- unrelated:"))
 
 
+def test_append_only_logs_accept_committed_hold_gate_label():
+    legacy = GOOD_LOG.replace("- gate 변화:", "- gate 보류:")
+    assert harness.validate_log(legacy) == []
+
+
 def test_append_only_logs_accept_static_review_as_legacy_evidence_label():
     legacy = GOOD_LOG.replace("- 증거:", "- 정적 확인:")
     assert harness.validate_log(legacy) == []

@@ -380,6 +380,9 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05, *,
     instead: one session is enough, every frame is split "eval", and frames with no
     TRUSTED_SOURCES source are left out. exclude_eval: eval set version folders; a
     label folder whose session is in one of them is refused (D-379 d3 disjointness)."""
+    from store import Store
+    reservations = Store(store).eval_reservations() if not eval_set else {}
+    reserved_groups = set(reservations.values())
     disjoint, held_out = [], {}
     for folder in exclude_eval:
         ref, sessions = read_eval_set(folder)
@@ -400,6 +403,11 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05, *,
         raise BuildError("no label folders")
     seen = {}
     for d, meta in metas:
+        if not eval_set and (meta["session"] in reservations
+                             or meta.get("capture_group") in reserved_groups):
+            raise BuildError(f"{d}: reserved eval source cannot enter training")
+        if not eval_set and reservations and not meta.get("capture_group"):
+            raise BuildError(f"{d}: reserved eval capture group cannot be excluded: source group unknown")
         if meta["session"] in seen:
             raise BuildError(f"session {meta['session']!r} is in both {seen[meta['session']]} and {d}: "
                              "one label folder per session")
@@ -471,7 +479,8 @@ def build_auto_dataset(label_dirs, store, name, min_labelled: float = 0.05, *,
                     (tmp / rel[kind]).parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(src, tmp / rel[kind])
                 entries.append({**rel, "session": session, "split": splits[session],
-                                "sources": rec.get("sources", []), "version": rec.get("version")})
+                                "sources": rec.get("sources", []), "version": rec.get("version"),
+                                **({"capture_group": meta["capture_group"]} if meta.get("capture_group") else {})})
         if eval_set and not entries:
             raise BuildError("eval set: no frame left after the filters (see the label records' sources)")
         manifest = {"schema": SCHEMA, "classes": classes, "frames": entries,

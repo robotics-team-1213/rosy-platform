@@ -178,6 +178,20 @@ python tools/ssh/rosy_ssh_share.py list --robot <robot-ip> [--name <팀이름>]
 - 만료(`--days`)가 지나면 sshd가 그 키를 스스로 거절한다. 그래도 끝난 팀은 바로 `revoke`한다.
 - 묶음이나 passphrase가 샌 것 같으면 기다리지 말고 `revoke`한 뒤 새 묶음을 만든다.
 
+## 4. 현장 LAN 밖에서 — 테일넷 (D-477)
+
+로봇과 관제 PC가 팀 테일넷(Tailscale)에 있으면 현장 LAN 밖에서도 세 갈이 그대로 작동한다.
+망 구성 절차와 원칙은 [tailnet 원격 접속 안내](tailnet-remote-access.md)에 있다.
+
+- tailnet은 **전송 계층**일 뿐이다. SSH 로그인은 여전히 이 문서의 1·3 갈(키)뿐이고,
+  Tailscale SSH(대리 로그인)는 쓰지 않는다. 로그인 권한 체계는 D-418 그대로다.
+- 등록 도구는 로봇의 MagicDNS 이름(`rosy-pinky-xxxx.<tailnet>.ts.net`)이나 tailnet 주소를
+  `<robot>` 인자로 받는다. host key 고정(`known_hosts_rosy`)과 만료·회수는 주소와 무관하게 작동한다.
+- 임시 비밀번호(2 갈)는 **현장 LAN 사설 대역에서만** 받는다. tailnet 대역(100.64.0.0/10)에서는
+  켜지 않는다(D-477 4항). 현장 밖에서 급하면 팀 키(3 갈)로 접속한다.
+- 관제 콘솔(브라우저)은 site 방화벽이 `tailscale0`을 허용 목록에 두면 tailnet에서 열린다.
+  콘솔 계정·역할(D-276)은 그대로다.
+
 ## 보안 메모 (ADR D-418 Risks)
 
 - **R1. 임시 비밀번호가 켜진 동안의 유출과 무차별 대입.** 사설 대역, `MaxAuthTries 3`, 최대 60분,

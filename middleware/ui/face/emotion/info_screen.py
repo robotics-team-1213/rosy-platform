@@ -284,8 +284,12 @@ def render_drive(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.I
                                radius=6, fill=color)
     if raw_percent is not None:
         suffix = "%" + (" ⚡" if payload.get("charging") else "")
-        draw.text((width - 16, bar_y - 24), f"{percent:.0f}{suffix}",
-                  font=_font(16), fill=color, anchor="rs")
+        label, font = f"{percent:.0f}{suffix}", _font(16)
+        if color == _CRIT:
+            label_width = draw.textbbox((0, 0), label, font=font)[2]
+            _draw_alarm(draw, (width - 16 - label_width, bar_y - 24), label, font)
+        else:
+            draw.text((width - 16, bar_y - 24), label, font=font, fill=color, anchor="rs")
 
     return image
 
