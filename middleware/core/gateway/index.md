@@ -74,7 +74,7 @@
 ## 최근 기록
 
 - 2026-10-05 · uncommitted · fix(bridge): C6 센서 공급자 선택 기능 판정 기록
+- 2026-10-05 · uncommitted · fix(bridge): document D-468 scan provenance seams
+- 2026-10-05 · uncommitted · feat(bridge): bind D-468 motion evidence into CORE
 - 2026-10-05 · uncommitted · feat(bridge): query leased current floor evidence for return
 - 2026-10-05 · uncommitted · fix(bridge): D-468 구조 검사 정렬
-- 2026-10-05 · uncommitted · feat(bridge): preserve odom source identity for lane return
-- 2026-10-05 · uncommitted · feat(bridge): validate optional lane containment

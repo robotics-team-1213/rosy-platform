@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import contextlib
+import math
 from typing import Iterator
 
 from core_api_web.api.deps import AuthContext, require_role, CoreServicesLike
@@ -19,6 +20,26 @@ from core_common.protocol.schemas import RobotMode
 viewer = require_role("viewer")
 operator = require_role("operator")
 admin = require_role("administrator")
+
+
+# Stop evidence (D-411 addendum 17). Pinky odometry is 4096 pulse/rev, r 0.028 m, b 0.0971 m,
+# published at 30 Hz (bringup.py), so a parked robot's velocity flips between 0 and one encoder
+# tick per period. Still means "at most two ticks per period": below that is quantisation noise.
+_TICK_M = 2 * math.pi * 0.028 / 4096
+_ODOM_HZ = 30.0
+STILL_LINEAR_MPS = 0.005
+STILL_ANGULAR_RPS = 2 * _TICK_M / 0.0971 * _ODOM_HZ  # ~0.0265 rad/s; a 0.05 rad/s turn is moving
+
+
+def robot_still(svc: CoreServicesLike) -> bool:
+    """E-Stop, or fresh velocity within the tick-noise floor. Shared by recordings and traffic."""
+    if svc.safety.estop:
+        return True
+    snapshot = svc.state.snapshot()
+    evidence = snapshot.evidence.get("velocity")
+    return bool(evidence and evidence.evidence.value == "fresh"
+                and abs(float(snapshot.velocity.linear)) <= STILL_LINEAR_MPS
+                and abs(float(snapshot.velocity.angular)) <= STILL_ANGULAR_RPS)
 
 
 def require_kept(svc: CoreServicesLike, flag: str) -> None:

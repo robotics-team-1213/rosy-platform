@@ -369,7 +369,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
                     or decision.mode is not self._mode
                     or self._mode is LineFollowMode.OFF):
                 return False
-            if (self._return_controller is not None and self._return_controller.phase != 'tracking'
+            if (self._return_controller is not None
+                    and (self._return_controller.phase != 'tracking' or isinstance(self._bridge, dict))
                     and (decision.linear or decision.angular)
                     and not self._return_submission_valid(self._clock(),decision)):
                 return False
@@ -388,6 +389,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
                 if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
                         and self._observation.quality_reason in ('low_light', 'overexposed')):
                     self._recovery_reset('camera_' + self._observation.quality_reason, current)
+                    self._end_bridge()  # D-476: invalid vision ends a bridge for good
                     return decision  # LOST must also bypass recovery's autonomous back-off.
                 local = self._apply_lane_return(current, decision)
                 return local if local is not None else self._apply_recovery(current, decision)

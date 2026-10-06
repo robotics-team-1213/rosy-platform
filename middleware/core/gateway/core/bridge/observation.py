@@ -24,6 +24,7 @@ from core_features.command.manager import Twist as CoreTwist
 from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
+from core_features.line_follow.clearance import return_scan_view as _return_scan_view
 from core_features.vision import accept_preview
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 
@@ -155,13 +156,31 @@ def front_clearance(services, sample, *, received_at: float) -> None:
                               config.obstacle_path_horizon_m + config.obstacle_corridor_half_width_m),
                 self_mask=config.lidar_self_mask)
             line.observe_body_points(points, range_min=_range_min(sample), received_at=received_at)
+        if line.wants_return_scan:
+            from core_common.robot_body import RobotBody
+            try:
+                body = RobotBody(front_x_m=config.body_front_x_m,
+                    rear_x_m=config.body_rear_x_m, half_width_m=config.body_half_width_m,
+                    rotation_radius_m=config.body_rotation_radius_m,
+                    lidar_x_m=config.body_lidar_x_m, lidar_forward_deg=config.lidar_forward_deg,
+                    margin_m=config.obstacle_body_margin_m)
+                evidence = _return_scan_view(sample, body=body,
+                    source_now_ns=sample.get("source_now_ns"),
+                    clearance_horizon_m=max(.15, config.obstacle_path_horizon_m),
+                    self_mask=config.lidar_self_mask)
+            except (TypeError, ValueError, OverflowError):
+                evidence = None
+            line.observe_return_scan(None if evidence is None else evidence[0],
+                source_age_s=None if evidence is None else evidence[1],
+                source_stamp_ns=None if evidence is None else evidence[2],
+                received_at=received_at)
         if path:
             line.observe_scan_points(points, received_at=received_at)
             return
         distance = _front_clearance(
             sample, forward_deg=config.lidar_forward_deg,
             half_angle_deg=config.obstacle_half_angle_deg, self_mask=config.lidar_self_mask)
-    except (KeyError, TypeError, ValueError):
+    except (AttributeError, KeyError, TypeError, ValueError):
         return
     line.observe_clearance(distance, received_at=received_at)
 
