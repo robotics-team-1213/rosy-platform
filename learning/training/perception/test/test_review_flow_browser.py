@@ -316,7 +316,10 @@ def test_review_waiting_workspace_hides_stale_editing(
     page.route('**/api/workspace', lambda request: pending.append(request))
     with page.expect_request('**/api/workspace'):
         page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='domcontentloaded')
-    expect(page.locator(empty)).to_be_visible()
+    if route == '/pixels':
+        expect(page.locator(empty)).to_be_hidden()
+    else:
+        expect(page.locator(empty)).to_be_visible()
     expect(page.locator(content)).to_be_hidden()
     expect(page.locator(empty if route == '/' else '#pixel-status')).to_contain_text(pending_text)
     expect(page.locator(prepare)).to_be_disabled()
@@ -325,7 +328,10 @@ def test_review_waiting_workspace_hides_stale_editing(
     expect(page.locator(content)).to_be_visible()
     expect(page.locator(prepare)).to_be_enabled()
     page.locator(reload).click()
-    expect(page.locator(empty)).to_be_visible()
+    if route == '/pixels':
+        expect(page.locator(empty)).to_be_hidden()
+    else:
+        expect(page.locator(empty)).to_be_visible()
     expect(page.locator(content)).to_be_hidden()
     expect(page.locator(prepare)).to_be_disabled()
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
@@ -431,6 +437,8 @@ def test_review_service_unavailable_is_distinct_from_connection_failure(
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     expect(page.locator(status)).to_contain_text('사용할 수 없습니다')
     expect(page.locator(retry)).to_be_visible()
+    if route == '/pixels':
+        expect(page.locator('#pixel-empty h3')).to_be_visible()
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     if route == '/learning':
         expect(page.locator('#learning-error')).to_be_hidden()
