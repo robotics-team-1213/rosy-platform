@@ -6433,3 +6433,9 @@ osy-d395-s1d\`.
 - 변경: Fleet 연결 끊김 상태를 1920/390/320px에서 재생하고 예외 카드 우선순위·비상 정지 가시성·가로 넘침을 확인했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
 - gate 변화: Fleet LOCAL G2 일부 추가. 실제 장치·사이트·운영자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 팔로워 지연 모바일 독회
+
+- 변경: Fleet 지연 팔로워를 1920/390/320px에서 확인하고 경고 카드 우선순위·비상 정지 가시성·가로 넘침을 계약에 남겼다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 일부 추가. 실제 장치·사이트·운영자 G3와 제품 전체는 HOLD다.

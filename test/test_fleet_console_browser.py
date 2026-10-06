@@ -684,7 +684,8 @@ UNREACHABLE_SNAPSHOT = {
 }
 
 
-def test_delayed_follower_stream_is_named_in_the_roster(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_delayed_follower_stream_is_named_in_the_roster(console_url, width, height):
     """FOR-003 — 바닥 Hz 아래 팔로워는 '지연'으로, 단절 팔로워는 '끊김'으로 갈린다."""
     from playwright.sync_api import sync_playwright
 
@@ -695,6 +696,7 @@ def test_delayed_follower_stream_is_named_in_the_roster(console_url):
     }
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
@@ -702,8 +704,12 @@ def test_delayed_follower_stream_is_named_in_the_roster(console_url):
         roster = page.inner_text("#roster")
         assert "지연" in roster, "1.2 Hz 팔로워에 지연 태그가 없다"
         assert "끊김" in roster
+        assert "rosy_02" in page.locator("#roster article").first.inner_text()
+        stop = page.locator("#estop").bounding_box()
+        assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert not errors
-        save_temp_screenshot(page, "fleet_console_delayed.png")
+        save_temp_screenshot(page, "fleet_console_delayed.png" if width == 1920 else f"fleet_console_delayed_{width}.png")
         browser.close()
 
 
