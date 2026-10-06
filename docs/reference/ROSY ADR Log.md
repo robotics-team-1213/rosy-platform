@@ -476,3 +476,4 @@
 | D-478 | Pinky 검수 웹앱은 명시한 신뢰 망 주소(loopback·사설·Tailscale)에만 선택적으로 바인딩한다(`--host`, 무인증, D-459 확장) | Accepted (2026-10-06, 사용자 결정; 구현은 `--host` 옵션; 착지·배포 승인 아님) |
 | D-479 | 카메라 AE/AWB 잠금은 한 번이 아니라, 잠긴 노출이 길 위를 못 쓰게 만들면 다시 건다 | Proposed (2026-10-06; rosy_26 실기 결함 — 어두운 곳에서 잠긴 노출이 밝은 곳에서 길 띠를 포화시킴; 코드·호스트 pytest까지, DEVICE 별도) |
 | D-482 | Payload 빌드는 이미지가 쓴 ROS 날짜 스냅샷에 고정한다 | Accepted (2026-10-06; payload ROS ABI 불일치 211/314 — 워크플로가 라이브 packages.ros.org에서 설치; 락의 snapshots.ros.org/jazzy/2026-09-11로 고정) |
+| D-484 | 천장 카메라 측정 캘리브레이션에 코너 마커 없는 필드 경계 자동 캘리브레이션 추가: D-360 사각형·D-375 페인트 정합을 orientation 획득으로 승격, 로봇 마커·전선·정책 증거 불변, 미리보기 자동 보정 | Proposed (2026-10-06; 구현 브랜치 feat/vision-field-auto-calib; sighting은 표시 전용 유지, tracking(D-457)·지도 표시(D-472)는 후속) |
