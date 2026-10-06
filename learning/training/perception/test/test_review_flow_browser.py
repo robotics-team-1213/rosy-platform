@@ -37,6 +37,26 @@ def browser_workspace(tmp_path):
             thread.join(timeout=5)
 
 
+def test_pixel_points_preview_before_explicit_apply(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
+    expect(page.locator('#pixel-flood')).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#pixel-class')).to_have_value(
+        str(next(row['index'] for row in review_masks.classes(store)['classes']
+                 if row['name'] == 'lane_line')))
+    canvas = page.locator('#pixel-canvas')
+    expect(canvas).to_be_visible()
+    canvas.click(position={'x': 8, 'y': 8})
+    expect(page.locator('#pixel-draft')).to_contain_text('1점 선택')
+    expect(page.locator('#pixel-draft')).to_contain_text('픽셀 미리보기')
+    assert review_masks.get(store, 0)['version'] == 0
+    canvas.click(position={'x': 16, 'y': 8})
+    expect(page.locator('#pixel-draft')).to_contain_text('2점 선택')
+    page.locator('#pixel-sample-apply').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    assert review_masks.get(store, 0)['version'] == 1
 @pytest.mark.parametrize('width', [390, 320])
 def test_catalog_import_reaches_pending_review_on_phone(browser_workspace, tmp_path, width):
     page, store, expect = browser_workspace
