@@ -9,10 +9,13 @@ class LaneReturnMixin(LaneReturnDecisionMixin):
         self._return_evidence = LaneReturnEvidence()
         self._return_controller = None
         self._return_motion = None
+        self._init_bridge()  # D-476 (lane_bridge.py)
+        self._init_bridge()  # D-476 (lane_bridge.py)
 
     def _reset_lane_return(self):
         self._return_evidence.reset()
         self._return_controller = None
+        self._bridge = None
 
     def observe_return_pose(self, **sample):
         with self._lock:
