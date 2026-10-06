@@ -116,7 +116,7 @@ function syncButtons() {
     : state.draft?.revision ? 'ready' : 'empty');
   gate('trip-plan', reason || (!state.active ? '활성 지도가 없습니다' : !$('trip-robot').options.length ? '등록된 로봇이 없습니다 · 관리자에게 로봇 등록을 요청하세요' : !$('trip-robot').value ? '로봇을 고르세요'
     : ($('trip-pick').checked ? state.point : $('trip-place').value) ? '' : '목적지를 고르세요'));
-  $('trip-pick').disabled = Boolean(reason);
+  gate('trip-pick', reason);
   gate('estop', reason);
 }
 
@@ -147,7 +147,7 @@ async function guarded(work) {
 }
 
 $('connect').addEventListener('click', async () => {
-  $('connect').disabled = true;
+  gate('connect', '접속 중');
   const started = Date.now();
   const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
   state.role = null;
@@ -178,7 +178,7 @@ $('connect').addEventListener('click', async () => {
     notice(siteMapErrorText(error));
   } finally {
     clearInterval(ticker);
-    $('connect').disabled = false;
+    gate('connect', '');
   }
 });
 
