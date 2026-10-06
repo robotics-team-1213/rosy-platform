@@ -9,7 +9,7 @@
 - **최신 안전 의존 기능은 시뮬에서 설 수 없다.** D-476 Gazebo 검증(`docs/validation/d476-gazebo-model-pc-2026-10-06/result.md`, branch `docs/d476-gazebo-model-pc`) 결과 2: enforce를 켜도 sim scan 거부, IR·IMU 없음, line clock(sim 초, `middleware/core/gateway/core/bridge/traffic_gate.py:10-18`)과 정책 snapshot(monotonic) 불일치가 막는다. 결과 1: 장치와 같은 `control.sensor_adapter` 꺼짐에서는 D-468 바닥 증명이 늘 false라 D-468/D-476 동작 증명이 서지 않는다.
 - **그리기 어려운 차이를 시뮬 튜닝으로 쫓았다.** 흰 벽, 카펫, 반사, 도색 마모는 Gazebo에 없다(카메라 센서에 노이즈·노출 설정이 없다, `rosy_gz.urdf.xacro:125-151`). 실물 녹화 재생(D-378, D-379, `learning/training/perception/road_replay.py`)이 이미 이 차이를 잰다.
 - **런타임 예외는 자리가 없다.** Wi-Fi 끊김·지연, 바퀴 미끄러짐, 센서 끊김, 배터리 처짐은 시뮬 충실도로 닫히지 않는다. 저장소에 고장 주입 도구가 없다.
-- **노트북은 Gazebo를 돌리지 않는다.** D-395 S2(개정 10)와 D-400 G-sim(D-430 표: "호스트 부하로 미결")은 노트북 부하로 끝내지 못했다. 시뮬 호스트는 모델 PC·관제 PC다(D-434). D-476 검증은 모델 PC에서 RTF 0.99–1.02로 돌았다.
+- **노트북은 Gazebo를 돌리지 않는다.** D-395 S2(개정 10)와 D-400 G-sim(D-430 표: "호스트 부하로 미결")은 노트북 부하로 끝내지 못했다. 시뮬 호스트는 사용자 규칙(2026-10-06, "가제보는 우리 로컬pc에서 하지마")에 따라 모델 PC 또는 관제 PC다. 모델 PC가 시뮬레이션을 맡는 것은 D-434(제목, 결정 3 Isaac Sim)다. D-434 결정 2는 관제 PC에 사이트 스택만 두는데, 이 사용자 규칙이 Gazebo 실행에 한해 관제 PC를 더한다. D-476 검증은 모델 PC에서 RTF 0.99–1.02로 돌았다.
 
 ### Decision
 
@@ -37,10 +37,10 @@
 7. **레지스트리는 harness YAML 하나다.** `tools/harness/sim2real_gaps.yaml`(`harness.yaml`의 `sim2real_gaps`). `python tools/harness/rosy_harness.py lint`가 검사한다.
    - 필수 필드: `id`(`G-NN`, 유일), `gap`, `evidence`(목록), `tier`(목록, `M` `R` `D` `infra`에서 중복 없이. 첫 값이 지금 자리, 뒤 값이 옮겨 갈 자리), `owner`, `status`(`OPEN` `IN-PROGRESS` `CLOSED` `HOLD`), `next`.
    - `evidence` 한 항목은 ADR id(Log에 있어야 함), 저장소 경로(선택 `:33`, `:26-33`, `:33,108`. 파일이 있고 인용 줄이 파일 길이 안이어야 함), 또는 브랜치 전용 `{path, branch}`(그 브랜치에 파일이 있어야 함. 브랜치를 못 찾으면 경고만 하고, 착지하면 일반 경로로 바꾼다).
-   - `CLOSED` 행은 `validated_by`(같은 경로 규칙)가 있어야 한다.
+   - `CLOSED` 행은 `validated_by`(같은 경로 규칙)가 있어야 한다. `validated_by`는 엄격하다: 브랜치를 못 찾으면 경고가 아니라 오류다. 저장소 밖 경로(절대 경로, `..`), 1보다 작은 줄, 거꾸로 된 범위, 디렉터리에 붙인 줄 번호는 오류다. 형식이 틀린 YAML은 lint ERROR로 보고되고 도구가 멈추지 않는다.
    - `generate`가 사람이 읽을 표 `docs/reference/sim2real-gaps.md`를 만든다. 표는 손으로 고치지 않는다.
    - 검증 실행(`docs/validation/*`)은 다룬 행 id를 적고 같은 커밋에서 그 행의 상태를 고친다.
-8. **자리.** 시뮬 모델·월드·시뮬 센서는 `integrations/simulation`에, 재생은 `learning/training/perception`에, 런타임 감지·폴백은 `middleware`의 소유 모듈에 둔다(D-427). 시뮬·재생은 모델 PC나 관제 PC에서만 돌린다. 고장 주입 중 로봇이 움직이는 시험은 사용자 승인 뒤에만 한다.
+8. **자리.** 시뮬 모델·월드·시뮬 센서는 `integrations/simulation`에, 재생은 `learning/training/perception`에, 런타임 감지·폴백은 `middleware`의 소유 모듈에 둔다(D-427). 시뮬·재생은 모델 PC나 관제 PC에서만 돌린다(사용자 규칙 2026-10-06. 관제 PC는 Gazebo 실행에 한해 D-434 결정 2를 넓힌다). 고장 주입 중 로봇이 움직이는 시험은 사용자 승인 뒤에만 한다.
 9. **병렬.** 레지스트리 한 행이 한 브랜치·한 주제다(D-372). 서로 다른 행은 동시에 진행한다.
 
 ### 기존 결정과 관계
@@ -52,7 +52,7 @@
 | D-397 | 보정 해석 순서를 시뮬 월드까지 넓힘(결정 2), 기본 8kcn |
 | D-400 | 시뮬에서는 명시 플래그로 enforce 시험·합격 허용(결정 4). 장치 enforce는 계획 3 그대로 |
 | D-182 | 시뮬 플래그 출처를 그대로 씀(결정 3) |
-| D-322 / D-434 | Isaac Sim은 D-322 통과 전까지 이 구조 밖. 호스트는 모델 PC·관제 PC |
+| D-322 / D-434 | Isaac Sim은 D-322 통과 전까지 이 구조 밖. 모델 PC 역할은 D-434 그대로. Gazebo 실행 호스트에 관제 PC를 더하는 것은 사용자 규칙(2026-10-06)이 D-434 결정 2를 넓힌 것이다 |
 | D-426 | 이상적 model-pose odom은 시뮬 전제로 유지. 실물 odom 오차는 `odom_wheel`로 별도 실행 |
 | D-427 | 층 이동 없음 |
 | D-476 / D-468 | ROS-SIM 단계는 결정 3·4로 가능 |

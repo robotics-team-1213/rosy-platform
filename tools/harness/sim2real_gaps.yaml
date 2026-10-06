@@ -114,11 +114,11 @@ gaps:
     evidence:
       - D-395
       - D-434
+      - {path: docs/validation/d476-gazebo-model-pc-2026-10-06/result.md, branch: docs/d476-gazebo-model-pc}
     tier: [infra]
     owner: infra
-    status: CLOSED
-    validated_by: {path: docs/validation/d476-gazebo-model-pc-2026-10-06/result.md, branch: docs/d476-gazebo-model-pc}
-    next: sim runs only on the model PC or site PC; RTF < 0.9 is INCONCLUSIVE
+    status: IN-PROGRESS
+    next: sim runs only on the model PC or site PC (user rule 2026-10-06; site PC widens D-434 for Gazebo); RTF < 0.9 is INCONCLUSIVE; close when the d476 validation (docs/d476-gazebo-model-pc) lands
 
   - id: G-11
     gap: Wi-Fi drop and latency, Fleet link loss; the repo has no fault injector
