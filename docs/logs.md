@@ -6598,3 +6598,9 @@ osy-d395-s1d\`.
 - 변경: 요청자가 실제 사이트·장치에서 수행할 표면별 작업, D-153 여덟 항목, 빌드·값 출처·캡처 기록 칸을 회차 평가에 연결했다.
 - 근거: [실제 사용자 독회 기록지](validation/uiux-surfaces-2026-10-06/operator-walkthrough.md)는 아직 모두 미실시다. 기존 사이트 배포와 현재 후보가 다르면 옛 배포 피드백으로만 분류한다. 문서 계약 **127 passed, 1 skipped**, `known_failures.py` **0 NEW** (X: `logs/merge-20261006/operator-worksheet-docs.txt`); harness lint 0 errors.
 - gate 변화: 판정 변화 없음. G2 선언 셀·G3 사용자 결과·적용 실물 readback이 채워질 때까지 제품 전체 HOLD.
+
+## 2026-10-06 · uncommitted · docs(uiux): G3 항목별 결과 칸
+
+- 변경: 사용자 독회 기록지에 표면마다 복사할 8항 판정·근거 블록을 더해 실제 관찰을 채울 자리를 명확히 했다.
+- 근거: [기록 블록](validation/uiux-surfaces-2026-10-06/operator-walkthrough.md#표면별-결과-기록-블록)은 전부 HOLD/미실시로 시작한다.
+- gate 변화: 판정 변화 없음. 사용자 관찰·현재 빌드·실물 readback은 미확인.
