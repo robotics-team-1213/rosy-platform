@@ -170,7 +170,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   }
   function scheduleStreamRetry(ms = 3000) {
     if (!streamAlive) return;
-    retryCancel?.();
+    clearTimeout(retryCancel);
     retryCancel = setTimeout(tryStream, ms);
   }
   const stream = createDriverStream({
@@ -675,7 +675,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     modeHeld = false;
     clearTimeout(whoamiTimer);
     streamAlive = false;
-    retryCancel?.();
+    clearTimeout(retryCancel);
     stream.stop();
     vision.stop();
     models.stop();

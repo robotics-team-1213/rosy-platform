@@ -488,3 +488,10 @@
 - 변경: 사용자 결정(2026-10-06)으로 발급받은 피어 세션(만료 상한 1시간)을 PeerRelationshipVault 에 슬롯 하나로 암호화 저장하고, 재연결 때 새 발급(challenge·session POST) 없이 whoami·system/info 확인만으로 그대로 재사용한다. 만료 임박(60초 미만)·401·형식 불일치면 저장분을 지우고 기존 발급 경로로 내려간다. 승인 기억 삭제(기기·연결)는 저장 세션도 함께 지운다. 세션 수명은 서버 계약(최대 1시간) 그대로 — 저장 수명을 늘리는 것이 아니라 발급 낭비를 없앤 것. 종료 시 반납(같은 날 초안)은 재사용과 충돌해 폐기했다.
 - 증거: JVM 신규 2건 - mintedSessionIsStoredAndReusedUntilNaturalExpiry(재연결이 challenge·session POST 0회, Bearer 확인 2회), storedSessionPastExpiryIsDiscardedAndFreshMintReplacesIt - 전체 89 passed. 실기 8kcn: 연결 발급 1개 → 로봇 목록 복귀 → 재연결에도 발급 수 1 그대로(재사용 확인, 2026-10-06).
 - gate 변화: SOURCE/LOCAL 및 실기 관찰. FIELD는 별도.
+
+## 2026-10-06 · fix/pilot-recording-continue · fix(pilot): 10분 상한 뒤 로봇 녹화를 이어 간다
+
+- 원인(실기 9dfk, 무선 adb·WebView CDP): 운전자 보고 "로봇 녹화가 저절로 꺼짐". 로봇 manifest 두 회 모두 정확히 600 s 에서 `stop_reason: max_duration`(D-411 결정 3 의 1회 10분). 화면은 지난 녹화 칩만 바꾸고 녹화는 끝났다.
+- 변경: `recording.js` `continueRecording(wanted, active)` — 이 기기가 켜고 끄지 않은 녹화가 `max_duration` 으로 쉬면 곧바로 다음 녹화본을 시작하고 칩에 "N번째 녹화로 이어 갑니다"를 보인다. 남의 정지·쿼터·디스크·오류·조종 종료 뒤에는 잇지 않는다. 같은 커밋에서 `drive.js` 의 스트림 재시도 타이머(`retryCancel`)를 함수로 부르던 결함을 `clearTimeout` 으로 고쳤다 — 재시도가 한 번이라도 걸린 뒤 화면을 나가면 `teardown` 이 예외로 중간에 멈추고, 두 번째 재시도부터 스트림이 다시 붙지 않았다. D-411 구현 부록 19. `sw.js` 캐시 키 갱신.
+- 증거: Node 순수 시험(continueRecording 7경우), 브라우저 시험 신규 `test_robot_recording_continues_past_the_ten_minute_cap_until_stopped`(가짜 CORE `cap`) 포함 녹화 브라우저 11 passed. 전체 결과는 커밋 메시지.
+- gate 변화: SOURCE/LOCAL. 실기 10분 경계 관찰은 태블릿 재설치 뒤.
