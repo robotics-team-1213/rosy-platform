@@ -360,3 +360,15 @@ def test_pixel_undo_walks_back_every_edit(tmp_path):
     assert np.all(review_masks.pixels(store, review) == 255)
     with pytest.raises(ValueError, match='되돌릴'):
         review_masks.update(store, 0, {'version':review['version'], 'action':'undo'}, Conflict)
+
+
+def test_pixel_display_names_are_kept_but_never_change_the_class_signature(tmp_path):
+    for name in 'abc':
+        (tmp_path / name).mkdir()
+    plain = review_masks.bind_classes(open_store(tmp_path / 'a'), CLASSES)
+    named = CLASSES.replace(b'name: lane_line,', 'name: lane_line, display: 차선,'.encode())
+    bound = review_masks.bind_classes(open_store(tmp_path / 'b'), named)
+    assert bound['classes'][1]['display'] == '차선' and 'display' not in bound['classes'][0]
+    assert bound['classes_signature'] == plain['classes_signature']
+    with pytest.raises(ValueError, match='display'):
+        review_masks.bind_classes(open_store(tmp_path / 'c'), CLASSES.replace(b'name: wall,', b'name: wall, display: 3,'))

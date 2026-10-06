@@ -2,19 +2,21 @@
 import os
 import threading
 
+from contextlib import contextmanager
+
 import pytest
 
-from test_review_app import open_store
-from review_app import make_server
+import class_sets
+from test_review_app import fixture_inputs, open_store
+from review_app import ReviewStore, make_server
 
 pytestmark = pytest.mark.skipif(os.getenv('ROSY_RUN_BROWSER_TESTS') != '1',
                                 reason='requires explicit local Chromium browser run')
 
 
-@pytest.fixture
-def browser_workspace(tmp_path):
+@contextmanager
+def serve(store):
     playwright = pytest.importorskip('playwright.sync_api')
-    store = open_store(tmp_path)
     server = make_server(store, 0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -33,6 +35,20 @@ def browser_workspace(tmp_path):
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+
+
+@pytest.fixture
+def browser_workspace(tmp_path):
+    with serve(open_store(tmp_path)) as value:
+        yield value
+
+
+@pytest.fixture
+def custom_class_workspace(tmp_path):
+    source, human, images = fixture_inputs(tmp_path)
+    record = class_sets.from_data_yaml('names: [car, traffic_light]\ndisplay: {car: 자동차}\n'.encode(), 'detect')
+    with serve(ReviewStore(tmp_path / 'state', source, human, images, record)) as value:
+        yield value
 
 
 def test_arrow_keys_move_between_photos(browser_workspace):
@@ -171,3 +187,19 @@ def test_stale_undo_never_overwrites_other_tab(browser_workspace):
     page.locator('#reload').click()
     expect(page.get_by_label('박스 1 x0',exact=True)).to_have_value('2')
     expect(page.locator('#undo')).to_have_attribute('disabled', '')
+
+
+def test_class_select_lists_the_workspace_class_set(browser_workspace):
+    page, store, expect = browser_workspace
+    options = page.locator('#boxes .box-top select').first.locator('option')
+    expect(options).to_have_text(['클래스 선택 필요', '로봇', '장애물 상자', '콘', '신호등', '표지판', '사람 발'])
+
+
+def test_custom_class_set_names_and_saves(custom_class_workspace):
+    page, store, expect = custom_class_workspace
+    select = page.locator('#boxes .box-top select').first
+    expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', 'traffic_light'])
+    select.select_option('car')
+    expect(page.locator('#save-status')).to_contain_text('v2')
+    expect(page.locator('#boxes summary').first).to_contain_text('자동차')
+    assert store.get(0)['review']['boxes'][0]['label'] == 'car'

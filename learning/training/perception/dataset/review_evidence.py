@@ -71,7 +71,7 @@ def snapshot(store):
             representations.setdefault(r['frame'], []).append(json.loads(r['provenance']))
     binding = json.loads(meta['pixel_classes']) if meta.get('pixel_classes') else None
     if binding:
-        binding['classes_signature'] = sha(json.dumps(binding['classes'], sort_keys=True).encode())
+        binding['classes_signature'] = review_masks.signature(binding['classes'])
     workspace = meta['workspace_id']
     rows = []
     for frame in frames:

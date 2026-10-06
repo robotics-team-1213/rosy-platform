@@ -5,6 +5,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import yaml
 
 import build
 
@@ -41,13 +42,24 @@ def classes(store):
     return json.loads(row[0]) if row else None
 
 
+def signature(values):
+    """Class identity for approvals; display names are presentation only (D-485)."""
+    plain = [{k: v for k, v in c.items() if k != 'display'} for c in values]
+    return sha(json.dumps(plain, sort_keys=True).encode())
+
+
 def bind_classes(store, raw):
     values = build.load_classes(Path('classes.yaml'), source_bytes=raw)
+    for value, entry in zip(values, yaml.safe_load(raw)['classes']):
+        if 'display' in entry:
+            if not isinstance(entry['display'], str) or not entry['display']:
+                raise ValueError('pixel class display must be a non-empty string')
+            value['display'] = entry['display']
     indices = [c['index'] for c in values]
     if len(set(indices)) != len(indices) or any(not 0 <= index < 255 for index in indices):
         raise ValueError('unique pixel class indices in 0..254 required')
     binding = {'classes': values, 'sha256': sha(raw), 'ignore_index': 255,
-               'classes_signature': sha(json.dumps(values, sort_keys=True).encode())}
+               'classes_signature': signature(values)}
     folder = store.state / 'pixel'
     folder.mkdir(exist_ok=True)
     path = folder / (binding['sha256'] + '.yaml')

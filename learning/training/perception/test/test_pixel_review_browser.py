@@ -167,3 +167,15 @@ def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace):
     page.locator('#pixel-frame').select_option('1')
     expect(page.locator('#pixel-status')).to_contain_text('객체 제외')
     expect(page.locator('#pixel-fill')).to_have_attribute('disabled', '')
+
+
+def test_pixel_screen_shows_classes_yaml_display_names(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES.replace(
+        b'name: lane_line,', 'name: lane_line, display: 왼쪽 차선,'.encode()))
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#pixel-status')).to_contain_text('v0')
+    expect(page.locator('#pixel-legend')).to_contain_text('왼쪽 차선')
+    expect(page.locator('#pixel-class option').nth(1)).to_have_text('왼쪽 차선')
+    expect(page.locator('#pixel-class option').first).to_have_text('floor')
+

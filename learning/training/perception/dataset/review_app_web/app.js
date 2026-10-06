@@ -3,7 +3,8 @@ import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 const font = (size, family) => canvasFont(size, family);
 
 const $ = id => document.getElementById(id);
-const names = {'':'클래스 선택 필요',robot:'로봇', obstacle_box:'장애물 상자', cone:'콘', traffic_light:'신호등', sign:'표지판', person_feet:'사람 발'};
+// Filled from the workspace's bound class set (D-485), in class index order.
+let names = {'':'클래스 선택 필요'}, classColors = {};
 const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'초록', off:'꺼짐'};
 const statuses = {approved:'승인', excluded:'제외', pending:'검수 대기'};
 const serverReasons = {'known object class required':'모든 박스에 클래스를 지정하세요.','box outside original image':'박스가 원본 사진 범위를 벗어났습니다.','unknown signal state':'신호 상태가 올바르지 않습니다.','boxes must be a list':'박스 목록이 올바르지 않습니다.','unknown review action':'지원하지 않는 동작입니다.'};
@@ -105,7 +106,8 @@ function paint() {
     const bounds = gesture?.index === i ? gesture.preview : box.bbox_xyxy;
     const [x0,y0,x1,y1] = bounds;
     // Unclassified boxes block approval (D-469): keep them visibly distinct on the canvas.
-    ctx.strokeStyle = box.label == null ? cssColor('--status-warn') : cssColor('--series-primary');
+    const rgb = classColors[box.label];
+    ctx.strokeStyle = box.label == null ? cssColor('--status-warn') : rgb ? `rgb(${rgb.join(',')})` : cssColor('--series-primary');
     ctx.strokeRect(x0,y0,x1-x0,y1-y0);
     ctx.fillText(String(i+1),x0+3,Math.max(14,y0-3));
     if (i === selected) {
@@ -317,6 +319,9 @@ $('prepare').onclick=async()=> {
 };
 async function load(index) {
   try {workspace=await request('/api/workspace'); conflicted=false; error();
+    const classes=workspace.object_class_set.classes;
+    names=Object.fromEntries([['','클래스 선택 필요'],...classes.map(c=>[c.name,c.display])]);
+    classColors=Object.fromEntries(classes.filter(c=>c.color).map(c=>[c.name,c.color]));
     if(workspace.exports.length) receipt(workspace.exports[0]);
     if (!workspace.frames.length) throw new Error('등록된 사진이 없습니다');
     const params=new URLSearchParams(location.search);
