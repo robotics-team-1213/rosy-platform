@@ -7,9 +7,10 @@ nothing here widens a robot's local-recovery settings.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Optional, Union
+from typing import Callable, Iterable, Mapping, Optional, Union
 
 #: CORE codes that mean "this answer was judged and refused": try the next candidate.
 REFUSED = "STUCK_DECISION_REFUSED"
@@ -149,8 +150,11 @@ class _YieldPlan:
 
 
 class StuckResolver:
-    def __init__(self, config: ResolverConfig) -> None:
+    def __init__(self, config: ResolverConfig, *, painted: Optional[Callable[[], object]] = None) -> None:
+        """``painted()`` is the active site map's ``Painted`` (D-488) or None: no meet rules."""
         self.config = config
+        self._painted = painted or (lambda: None)
+        self._warned_no_map = False
         self._chains: dict[str, _Chain] = {}
         self._claims: set[tuple[str, str]] = set()
         self._pins: dict[str, str] = {}
@@ -327,13 +331,19 @@ class StuckResolver:
     def _meet(self, row, rows):
         """room_hold for poses on the painted track. None keeps R1/R2/R3."""
         from fleet.meet import decide
-        from fleet.meet.place import painted_track, project, yield_move
+        from fleet.meet.place import project, yield_move
         from fleet.meet.scene import Action, Order, Pin, Robot
 
         me = _map_pose(row)
         if me is None:
             return None
-        painted = painted_track()
+        painted = self._painted()
+        if painted is None:  # no active site map (D-488): R1/R2/R3 only
+            if not self._warned_no_map:
+                self._warned_no_map = True
+                logging.getLogger(__name__).warning("stuck resolver: no active site map; meet rules off")
+            return None
+        self._warned_no_map = False
         rid = str(row["robot_id"])
         placed: dict[str, object] = {}
         robots: list[Robot] = []

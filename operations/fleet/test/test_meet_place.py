@@ -4,7 +4,8 @@ import math
 
 import pytest
 
-from fleet.meet.place import painted_track, pose_on, project, steer_toward, yield_move
+from fleet.meet.place import pose_on, project, steer_toward, yield_move
+from site_map_fixture import painted_track
 from fleet.meet.scene import Action, Order
 
 
