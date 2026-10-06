@@ -95,6 +95,29 @@ def test_evaluate_frame_cap(tmp_path):
     assert ev["frames"] == 2
 
 
+def test_evaluate_reports_label_support_by_frame_sources(tmp_path):
+    folder = _eval_set(tmp_path, classes=(("floor", "background"), ("lane", "lane_marking"),
+                                         ("extra", "drivable")), n=2)
+    manifest_path = folder / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["frames"][0]["sources"] = ["lidar"]
+    manifest["frames"][1]["sources"] = ["lidar", "trajectory"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    second_mask = folder / manifest["frames"][1]["mask"]
+    mask = cv2.imread(str(second_mask), cv2.IMREAD_UNCHANGED)
+    mask[2, 2] = 2
+    assert cv2.imwrite(str(second_mask), mask)
+
+    ev = intake.evaluate(_model(_pred()), folder, 400)
+    groups = {tuple(group["sources"]): group for group in ev["source_groups"]}
+    assert ev["frames"] == 2 and ev["iou"]["extra"] == 0.0 and ev["miou"] == 0.5
+    assert groups[("lidar",)]["classes"]["extra"] == {
+        "truth_pixels": 0, "pred_pixels": 0, "iou": None}
+    assert groups[("lidar", "trajectory")]["classes"]["extra"] == {
+        "truth_pixels": 1, "pred_pixels": 0, "iou": 0.0}
+    assert all(group["frames"] == 1 and group["valid_pixels"] == 24 for group in groups.values())
+
+
 def _run(tmp_path, monkeypatch, model, gate_extra, folder_name="m", store=None):
     folder = tmp_path / folder_name
     folder.mkdir(exist_ok=True)

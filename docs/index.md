@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-06 · uncommitted · uiux(pinky-review): compact 픽셀 사진 이동 사유 가독성
-- 2026-10-06 · uncommitted · uiux(site): 기존 PC의 mDNS 경로 재확인
-- 2026-10-06 · uncommitted · uiux(games): 전화 연결 복구 너비와 현재 상태
-- 2026-10-06 · uncommitted · uiux: 현재 트리 공유 UI 계약 복구
-- 2026-10-06 · uncommitted · uiux(games): 전화 복구 상태 동등 폭
+- 2026-10-06 · uncommitted · feat(fleet): D-473 관제 콘솔 개발 연결 모드
+- 2026-10-06 · uncommitted · docs(adr): 콘솔 개발 연결 모드와 주의점 구역 허가
+- 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
+- 2026-10-06 · uncommitted · D-472 호스트 구현
+- 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계

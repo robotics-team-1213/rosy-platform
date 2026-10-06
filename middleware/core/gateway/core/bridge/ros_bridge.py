@@ -531,6 +531,7 @@ class RosBridge:
 
     def _on_scan(self, msg: LaserScan) -> None:
         sample = translate.lidar_sample(msg, time.time())
+        sample["source_now_ns"] = self._node.get_clock().now().nanoseconds
         self._svc.state.set_sensor("lidar", sample)
         observation.front_clearance(self._svc, sample, received_at=self._line_clock())
 

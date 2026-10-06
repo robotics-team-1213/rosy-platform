@@ -2,6 +2,7 @@
 import os
 
 import pytest
+import numpy as np
 
 from test_review_flow_browser import browser_workspace
 from test_review_cycle import CLASSES
@@ -16,6 +17,26 @@ def open_pixels(page, store, expect, index=0):
     base = page.url.split('?')[0].rstrip('/')
     page.goto(base + f'/pixels?frame={index}', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
+
+
+def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    source = store.get(0)['source']
+    path, digest = review_masks.freeze(store, review_masks.encode(
+        np.full((source['height'], source['width']), 1, np.uint8)))
+    with store.connect() as db:
+        db.execute('INSERT INTO pixel_drafts VALUES (?,?,?,?)', (0, digest, path, 'c' * 64))
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    button = page.locator('#pixel-apply-candidate')
+    expect(button).to_be_visible()
+    expect(button).to_be_enabled()
+    page.once('dialog', lambda dialog: dialog.accept())
+    button.click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    current = review_masks.get(store, 0)
+    assert current['status'] == 'pending' and current['approval'] is None
+    assert np.all(review_masks.pixels(store, current) == 1)
 
 
 @pytest.mark.parametrize('mode', ['manual', 'auto'])
@@ -85,10 +106,13 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
         field_widths = page.evaluate("""() => ({
           available: document.querySelector('.pixel-layout > section').getBoundingClientRect().width,
           labels: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar > label')]
+            .filter(node => node.getClientRects().length)
             .map(node => node.getBoundingClientRect().width),
           fields: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar .ui-field')]
+            .filter(node => node.getClientRects().length)
             .map(node => node.getBoundingClientRect().width),
         })""")
+        assert len(field_widths['labels']) >= 5 and len(field_widths['fields']) >= 5
         assert all(abs(value - field_widths['available']) <= 1
                    for value in field_widths['labels'] + field_widths['fields']), field_widths
     if width == 320:
@@ -121,6 +145,30 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     expect(page.locator('#pixel-export-result')).to_contain_text('픽셀 승인 1장 준비')
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     shot('decision-result')
+
+def test_pixel_decision_advances_to_next_editable_pending(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('#pixel-fill').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    page.locator('#pixel-complete').check(); page.locator('#pixel-background').check()
+    page.locator('#pixel-approve').click()
+    # Photo 2 is object-excluded, so its pixels cannot be edited: stay on photo 1.
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
+    expect(page.locator('#pixel-title')).to_contain_text('사진 1')
+    store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
+    page.reload(wait_until='networkidle')
+    page.locator('#pixel-reopen').click()
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
+    page.locator('#pixel-filter').select_option('pending')
+    page.locator('#pixel-class').select_option('4')
+    page.locator('#pixel-exclude').click()
+    expect(page.locator('#pixel-title')).to_contain_text('사진 2')
+    # The paint class carries over so the next stroke is not silently the first class.
+    expect(page.locator('#pixel-class')).to_have_value('4')
+    expect(page.locator('#pixel-filter')).to_have_value('pending')
+    assert review_masks.get(store, 0)['status'] == 'excluded'
 
 
 def test_brush_cancellation_coordinates_and_undo(browser_workspace):

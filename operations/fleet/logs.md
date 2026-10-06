@@ -2079,3 +2079,15 @@
 - 변경: 작업 버튼 사유를 계산한 뒤 비활성 상태와 바로 이어 갱신한다. 기존 작업 상태·권한·간지 접근 사유와 허용 조건은 유지한다.
 - 증거: 공용 비활성 사유 검사 1 failed → 1 passed; 공유 UI 전체 231 passed/25 skipped, Cell 세 폭의 작업 상태·간지 접근 브라우저 6 passed, `known_failures.py` 0 NEW. X: `logs/shared-ui-current-after-widths.txt`, `logs/shared-ui-after-cell-guard.txt`, `logs/cell-after-shared-guard.txt`.
 - gate 보류: LOCAL 계약·합성 상태 근거. 현장 UI·장치 readback과 작업자 G3는 미확인이다.
+
+## 2026-10-06 · uncommitted · LED 식별 요청과 실영상 현장지도
+
+- 변경: Fleet의 로봇별 단기 LED 요청을 CORE로 전달하고, 승인된 source/map/lens 보정이 맞는 최신 Rosy Cam 원본 프레임만 현장지도 배경으로 사용한다. 식별 응답은 영상 확인 대기이며 robot ID를 자동 확정하지 않는다.
+- 증거: 관련 호스트 pytest 274 passed/3 skipped, 웹 Node 135 passed. DEVICE/FIELD 점멸·영상 대조는 아직 확인되지 않았다.
+- gate 변화: SOURCE/LOCAL 코드 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
+
+## 2026-10-06 · uncommitted · D-473 관제 콘솔 개발 연결 모드
+
+- 변경: `fleet/server/development_session.py`(세션 저장소·LAN 주소·Host/Origin·분당 6회·상한 8·1시간 만료·발급 감사), `site_auth.build_authorize`의 개발 세션 우선 확인, `require_named_operator`의 `development-*` 허용, `--connection-mode`와 `ROSY_DEPLOYMENT` 이중 조건, 콘솔 자동 발급·배지.
+- 증거: 위 호스트 pytest와 브라우저 시험. 사이트 Caddy 뒤 `X-Forwarded-For`·`Host` 전달은 실사이트 확인이 필요하다.
+- gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.

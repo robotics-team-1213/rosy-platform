@@ -27,7 +27,19 @@ python learning/training/perception/dataset/review_app.py --state X:/DevTemp/pin
 
 `승인 자료 준비`는 서버에서 기존 `review_return.receive_review`를 호출한다. 수동 다운로드/JSONL 이동 없이 `<state>/exports/<id>`에 원본 크기별 YOLO 객체 라벨, 동결된 source/human 입력, hash manifest와 COMPLETE가 기록된다. 앱 안의 전달 정보에서 경로·승인 장수·제외 index·frame version·HOLD를 확인할 수 있다. 학습 세션은 이 export를 읽어 검증하고 session mapping, session-disjoint 분할, 고정 평가 세트 전체 `build.py --exclude-eval`을 확인한다. export는 학습 dataset 수용·학습 실행·모델 활성화가 아니다.
 
-운영 workspace에서 승인된 원본을 자동 테스트 승인으로 덮어쓰지 않는다. 브라우저 시나리오는 별도 `--state`에서 실행한다. 기본 loopback Host와 쓰기 token/origin 검사는 외부 사이트 요청을 거부하지만 인증된 검수자 신원을 증명하지 않는다. 원격 접근과 서비스 배포는 지원 범위 밖이다. SQLite·동결 원본·exports를 포함한 state 디렉터리가 재시작 정본이다.
+운영 workspace에서 승인된 원본을 자동 테스트 승인으로 덮어쓰지 않는다. 브라우저 시나리오는 별도 `--state`에서 실행한다. 기본 loopback Host와 쓰기 token/origin 검사는 외부 사이트 요청을 거부하지만 인증된 검수자 신원을 증명하지 않는다. 서비스 배포는 지원 범위 밖이다. 원격 접근은 아래 `--host`로만 연다. SQLite·동결 원본·exports를 포함한 state 디렉터리가 재시작 정본이다.
+
+### 신뢰 망에서 직접 열기 (D-478)
+
+기본은 loopback이다. 검수자가 SSH 터널 없이 모델 PC의 앱을 Tailscale로 열어야 할 때만 `--host`로 그 주소를 지정한다.
+
+```powershell
+python learning/training/perception/dataset/review_app.py --state X:/DevTemp/pinky-review-state --port 8768 --host 100.98.162.71
+```
+
+검수자는 `http://100.98.162.71:8768/pixels`를 연다. 받는 값은 loopback·사설(RFC1918)·link-local·Tailscale(100.64.0.0/10) 리터럴 IPv4뿐이다. `0.0.0.0`, 공인 주소, 호스트 이름은 시작 때 거부된다. HTTP만 쓰며 tailnet 구간은 이미 암호화된다.
+
+위험: 사용자 인증이 없다. 그 주소에 닿는 누구나 사진을 보고 수정하고 승인할 수 있고, 검수자 신원은 증명되지 않는다. 신뢰한 tailnet/LAN에서 필요한 동안만 켠다. 쓰기 token과 Host/Origin 검사는 그대로다.
 
 테스트:
 
@@ -64,6 +76,8 @@ Perception 단계 job, Pinky 원본 검증·행동 비교, OMX ACT, 영역 검�
 
 - `/learning`에서 이름·종류를 검색하고 `확인 필요` 필터로 실패·변경·누락 결과를 찾는다. 검색과 필터는 URL에 유지되어 새로고침 후 복원된다.
 - `작업 결과 연결`을 열면 입력으로 이동한다. 결과 파일·진행 단계·연결 해제는 각 작업의 상세 내용을 펼쳐 확인한다. 결과 선언은 학습 수용이나 정책 승격이 아니다.
+- 승인 또는 제외로 사진을 마치면 다음 검수 대기 사진이 바로 열린다. `검수 대기` 필터는 유지되고, 수정 상태 줄에 방금 결정한 사진 번호가 남는다. 대기 사진이 없으면 그 사진에 머물며 `검수 대기 사진을 모두 처리했습니다`를 표시한다. 픽셀 검수도 같으며, 객체 제외로 픽셀을 편집할 수 없는 사진은 건너뛰고 고른 칠하기 클래스는 유지한다. `승인`·`제외` 필터에서 점검하며 결정하면 넘어가지 않고 그 사진을 전체 보기로 남긴다. 전체 확인 체크는 사진마다 다시 해야 한다.
+- 폭이 좁은 화면(64rem 미만)에서는 사진 목록이 가로로 넘기는 한 줄이 되어 편집기가 첫 화면에 보이고, 열린 사진이 줄 안에 보이도록 이동한다.
 - 사진 검수에서는 thumbnail, 이전/다음, 다음 검수 대기를 이용한다. `/?filter=pending`으로 대기 사진에 바로 진입할 수 있고 선택 사진은 `frame` URL로 복원된다.
 - 객체 검수와 픽셀 검수 모두 캔버스에 포커스가 있을 때 ←·→로 이전·다음 사진을 이동한다. 숫자 입력 칸 안에서는 값 조절로 남고 이동하지 않는다. 저장 중·충돌·초안이 남은 상태에서는 이동하지 않는다.
 - 픽셀 검수 브러시는 커서를 따라다니는 원형 미리보기로 현재 반지름을 보여준다. 「비슷한 색 채우기」가 켜져 있거나 편집할 수 없는 사진에서는 숨긴다. 검수 화면 이름은 객체 검수·픽셀 검수로 통일했다.

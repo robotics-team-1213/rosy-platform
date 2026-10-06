@@ -155,10 +155,22 @@ class LineFollowConfig:
     obstacle_resume_hysteresis_m: float = 0.03
     obstacle_ultrasonic_half_angle_deg: float = 15.0
     obstacle_ultrasonic_stale_s: float = 0.3
+    # D-476 expected-road bridge: on a short lane loss right after contained following, drive
+    # the D-468 checkpoint lane's extension slowly. Distance ladder from D-384 (measured odom
+    # travel x bridge_distance_scale: full speed below coast, x slow_scale below slow, then
+    # stop) and done by lost_after_s - bridge_time_margin_s. Off until replay/sim/device pass.
+    bridge_enabled: bool = False
+    bridge_lookahead_m: float = 0.10
+    bridge_coast_m: float = 0.10
+    bridge_slow_m: float = 0.25
+    bridge_slow_scale: float = 0.5
+    bridge_distance_scale: float = 1.08
+    bridge_time_margin_s: float = 0.5
 
     def __post_init__(self) -> None:
         self._check_recovery()
         self._check_body_stop()
+        self._check_bridge()
         values = (self.cruise_speed, self.max_linear, self.steering_gain,
                   self.max_angular, self.min_confidence,
                   self.stale_after_s, self.lost_after_s)
@@ -246,6 +258,27 @@ class LineFollowConfig:
             raise ValueError("body_rear_x_m must be behind base_footprint (-0.5, 0)")
         if self.body_rotation_radius_m is not None and not 0.0 < self.body_rotation_radius_m <= 0.5:
             raise ValueError("body_rotation_radius_m must be in (0, 0.5]")
+
+    def _check_bridge(self) -> None:
+        if type(self.bridge_enabled) is not bool:
+            raise ValueError("bridge_enabled must be a boolean")
+        values = (self.bridge_lookahead_m, self.bridge_coast_m, self.bridge_slow_m,
+                  self.bridge_slow_scale, self.bridge_distance_scale, self.bridge_time_margin_s)
+        if not all(_finite(value) for value in values):
+            raise ValueError("line-follow bridge config must be finite")
+        if not 0.0 < self.bridge_lookahead_m <= 0.5:
+            raise ValueError("bridge_lookahead_m must be in (0, 0.5]")
+        if not 0.0 < self.bridge_coast_m <= self.bridge_slow_m <= 0.5:
+            raise ValueError("bridge distances must satisfy 0 < bridge_coast_m <= bridge_slow_m <= 0.5")
+        if not 0.0 < self.bridge_slow_scale <= 1.0:
+            raise ValueError("bridge_slow_scale must be in (0, 1]")
+        if not 1.0 <= self.bridge_distance_scale <= 2.0:
+            raise ValueError("bridge_distance_scale must be in [1, 2]")
+        if not 0.0 < self.bridge_time_margin_s <= 2.0:
+            raise ValueError("bridge_time_margin_s must be in (0, 2]")
+        if self.bridge_enabled and not self.bridge_time_margin_s < self.lost_after_s:
+            # Only an enabled bridge needs time inside the LOST clock; an off one changes nothing.
+            raise ValueError("bridge_enabled needs bridge_time_margin_s below lost_after_s")
 
     def _check_body_stop(self) -> None:
         for name in ("obstacle_stop_m", "obstacle_resume_m"):

@@ -6,6 +6,7 @@ candidate, including downstream transformations. Its absence is not permission.
 from dataclasses import replace
 import math
 
+from core_features.line_follow.lane_bridge import LaneBridgeMixin
 from core_features.line_follow.lane_return import Footprint, ReturnController, ReturnInput
 from core_features.line_follow.model import LineFollowMode
 
@@ -14,7 +15,7 @@ _LOCAL_REASONS = {'following','lane_departure','line_not_visible','observation_s
     'lane_recovery','invalid_observation'}
 
 
-class LaneReturnDecisionMixin:
+class LaneReturnDecisionMixin(LaneBridgeMixin):
     def bind_return_motion(self, provider):
         """Internal qualified sensor/swept-space probe (now, linear, angular) -> strict bool.
 
@@ -55,6 +56,16 @@ class LaneReturnDecisionMixin:
         return self._return_probe(now,decision.linear,decision.angular)
 
     def _apply_lane_return(self, now, decision):
+        # D-476: a bridge continues only if this tick bridges again; any return path that
+        # does not (obstacle, stuck, mode) hands it back to D-468 once.
+        bridge_state,self._bridge=self._bridge,None
+        self._bridge_open=isinstance(bridge_state,dict)
+        try:
+            return self._lane_return_step(now,decision,bridge_state)
+        finally:
+            self._hand_back_bridge()
+
+    def _lane_return_step(self, now, decision, bridge_state):
         c=self._config
         if self._mode is not LineFollowMode.CAMERA_LINE or not c.recovery_local_enabled:
             return None
@@ -67,8 +78,13 @@ class LaneReturnDecisionMixin:
             self._return_controller=ReturnController(Footprint(
                 c.body_front_x_m,c.body_rear_x_m,c.body_half_width_m))
         # Existing console decisions have precedence once escalation has opened.
-        if self._recovery.stuck_id is not None and self._return_controller.phase!='fleet':
-            return None
+        if self._recovery.stuck_id is not None:
+            # An accepted console YIELD owns the normal CORE recovery decision path until
+            # its turn/crawl/held phases finish. Fleet-required lane return must not
+            # overwrite a separately authorized operator action with its autonomous HOLD.
+            if (self._return_controller.phase!='fleet'
+                    or self._recovery.phase in ('TURNING','CRAWLING','YIELDED')):
+                return None
         reason=(self._status.reason or '').removeprefix('camera_')
         if (self._status.state!='TRACKING' and reason not in _LOCAL_REASONS) or (obs and obs.quality_reason):
             return decision
@@ -82,14 +98,22 @@ class LaneReturnDecisionMixin:
         floor=self._return_probe(now,0.,0.)
         speed=min(.03,max(0.,linear))
         turn=min(.15,max(0.,angular))
+        bridge=self._bridge_step(now,bridge_state,view,authority,max(0.,linear),decision)
+        if bridge is None:
+            self._hand_back_bridge()  # before D-468 plans its retrace this tick
         action=self._return_controller.tick(ReturnInput(now=now,pose=view.pose,
             corridor=view.corridor,corridor_at=view.received_at,
             corridor_stamp_ns=view.source_stamp_ns,epoch=view.epoch,
-            clearance_at=now if floor else None,floor_safe=floor,authorized=authority,
+            clearance_at=now if floor else None,floor_safe=floor,authorized=authority and bridge is None,
             front_clear=self._return_probe(now,speed,0.),
             rear_clear=self._return_probe(now,-speed,0.),
             turn_clear=self._return_probe(now,0.,turn) and self._return_probe(now,0.,-turn),
             linear_limit=max(0.,linear),angular_limit=max(0.,angular)))
+        if bridge is not None:
+            return bridge  # D-468 only measured this tick; the bridge owns the twist.
+        if (c.bridge_enabled and action.phase=='tracking' and self._status.state=='TRACKING'
+                and self._return_controller.checkpoint is not None):
+            self._bridge='armed'
         if action.phase=='tracking' and not action.recovered:
             return decision
         if action.recovered:
@@ -98,9 +122,8 @@ class LaneReturnDecisionMixin:
         if action.fleet_required:
             # Reuse the existing stuck-id/event/API, without a second autonomous
             # back-off after the D-468 candidates have already been exhausted.
-            inp=replace(self._stuck_input(now),cause='lane_lost',lane_visible=False,
-                        geometry_known=False,rear_state='unknown',linear_ceiling=0.)
-            self._recovery.step(inp)
+            inp=replace(self._stuck_input(now),cause='lane_lost',lane_visible=False)
+            self._recovery.require_operator(inp)
             held=self._stop_decision('HOLD','lane_return_fleet_required')
             self._status=self._status.model_copy(update={'stuck':self._stuck_status(now)})
             return held

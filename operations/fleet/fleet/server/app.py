@@ -67,6 +67,7 @@ from fleet.server.site_auth import (
     parse_site_principals,
 )
 from fleet.server.static_routes import install_static_routes
+from fleet.server.development_session import install_development_routes
 from fleet.hub.server import fan_out_events as _fan_out_events
 from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest 재수출: test_task_contract_docs 참조
     GoalRequest,
@@ -131,9 +132,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                central_registry=None, tracking=None,
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
-               cell_app_service_id: str | None = None) -> FastAPI:
+               cell_app_service_id: str | None = None,
+               development_sessions=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
+    if development_sessions is not None and task_service is None:
+        # D-473 3: every development session issue and POST is in the durable API audit.
+        raise ValueError("development connection mode requires the durable API audit (task_service)")
     mission_configured = mission_service is not None or proposal_store is not None
     if (mission_service is None) != (proposal_store is None):
         raise ValueError("Mission API requires both MissionService and ProposalStore")
@@ -415,9 +420,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             vision_lease_secret=vision_lease_secret, robot_credential_key=robot_credential_key,
             console=console, sightings=sightings, policy_evidence=policy_evidence,
             principals=principals)
-    authorize = build_authorize(console_token, principals, task_service)
+    authorize = build_authorize(console_token, principals, task_service, development=development_sessions)
     require_viewer, require_operator, require_named_operator, require_proposer = build_role_guards(
         authorize, principals)
+    # D-473: `--lan-camera-proxy` already means "Fleet sits behind the site Caddy", whose
+    # X-Forwarded-For carries the browser address the development session checks.
+    install_development_routes(app, sessions=development_sessions, task_service=task_service,
+                               trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
 
     def require_camera_viewer(request: Request) -> SitePrincipal:

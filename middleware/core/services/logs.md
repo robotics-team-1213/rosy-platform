@@ -550,3 +550,27 @@
 - 변경: 실제 매니저가 typed containment·실측 자세 ledger를 복구 정책에 연결하고 일반 추종보다 먼저 판단한다. 같은 generation/evidence_revision과 최종 CORE 경로를 사용하며, 제출 순간의 권한·자세 신선함·이동 공간 판정을 다시 검사한다.
 - 증거: 매니저 폐루프에서 접근·세 영상 검증·정상 추종 재개를 시험했다. 독립 리뷰에서 재현한 운전자 권한 만료, 순수 회전 중 live linear ceiling 철회, Fleet RESUME 뒤 stuck 재생성을 각각 회귀 시험으로 수정했다.
 - gate 변화: 명령 제안 연결의 호스트 증거만. 실제 바닥·swept path 공급자는 아직 런타임에 연결하지 않았고 장치 배포·주행은 수행하지 않았다.
+
+## 2026-10-05 · uncommitted · feat(lane): require complete scan and swept-body clearance for D-468
+- Change: validate complete fine-resolution 360-degree scan coverage and valid ranges; self-masked, stale, partial, or malformed evidence denies return. Sweep the candidate against body geometry, blind range, braking margin, and downstream linear scaling.
+- Evidence: lane manager/stuck recovery checks 89 PASS, 0 NEW; gateway and architecture checks recorded in the bridge log. Host source only.
+- Gate: source provider available; physical floor extent and device/field behavior remain unverified.
+
+## 2026-10-05 · uncommitted · fix(lane): retain scan provenance and operator fallback authority
+- Change: preserve LiDAR source stamps, reject replayed/non-increasing scans, keep no-return rays unknown, and expand the full body sweep for worst-case motion since scan acquisition. Local exhaustion holds for operator input with actual geometry evidence; accepted operator YIELD retains CORE arbitration through its active phases.
+- Evidence: services suite 871 PASS, 0 NEW; D-468 focused manager/scan/API checks 53 PASS, 0 NEW. Full gateway suite is running with contract source paths configured.
+- Gate: host-only source evidence; signed deployment, device readback, and field recovery remain unverified.
+
+## 2026-10-06 · uncommitted · feat(lane): D-476 expected-road bridge in CORE, default off
+- 변경: `line_follow/lane_bridge.py` 추가. 짧은 차선 손실(`line_not_visible`·`observation_stale`·`no_observation`)이 검증된 차로 내부 추종 바로 뒤에 오면 D-468 checkpoint 차로의 직선 연장을 odom에서 천천히 따른다. 실측 이동 × 1.08로 D-384 0.10/0.25 m 사다리, `lost_after_s − 0.5 s`에서 끝. bridge 호를 D-422 의도로 두고 몸 간격과 D-468 동작 증명을 통과해야 한다. 끝나면 bridge 이동을 포함한 trail로 D-468 역추적 경로를 다시 만든다(`ReturnController.rebase_retrace`, 동작 같음). 손실 시계는 건드리지 않는다. `line_follow.bridge_*` 파라미터, 기본 `bridge_enabled: false`. safety 파일(`body_stop.py`·`clearance.py`)은 바꾸지 않았다.
+- 증거: `test_lane_bridge.py` 24 PASS(꺼짐 = 오늘 동작, 진입 거부 6종, 거리·시간 상한, 장애물·bridge 호 쓸기, 재획득, D-468 인계, LOST 시계 동일). services 전체 895 PASS, gateway 전체 2168 PASS·17 skip, known_failures 둘 다 0 new. 패키지 크기 guard는 main이 이미 13933+150 끝(14083)이라 14235로 다시 판정했다(`test/architecture/test_module_structure.py` SIZE_VERDICTS, 착지 전 독립 재검토 필요).
+- gate 변화: SOURCE 호스트 시험만. 결정 7의 재생·시뮬(모델·사이트 PC)·장치 단계 전에는 켜지 않는다.
+- 결정: D-476 (Proposed)
+- 교훈: 없음
+
+## 2026-10-06 · uncommitted · fix(lane): D-476 independent review fixes
+- 변경: 열린 stuck에서는 bridge하지 않고, 손실 시계가 거꾸로 가면 끝낸다. D-468 역추적 경로는 bridge가 끝나는 틱에 한 번만 다시 만든다(장애물·stuck 같은 이른 반환 포함). bridge 중에도 `apply_if_current`가 제출 재검사를 한다. `_init_bridge` 중복 호출 제거, 모드 변경 시 경로 힌트 초기화. API Reference의 `RECOVERING` 설명에 D-468·D-476 사용을 적었다.
+- 증거: `test_lane_bridge.py` 41 PASS(새 실패-먼저 시험 4: stuck, 한 번 rebase, 힌트 초기화, 역행 시계는 직접 호출 시험으로 확인). services 912 PASS, gateway 2168 PASS·17 skip, architecture/harness 219 PASS·1 skip, known_failures 셋 다 0 new. 크기 판정 14258, 독립 재판정 ACCEPT.
+- gate 변화: 없음. SOURCE 호스트 시험만.
+- 결정: D-476 (Proposed)
+- 교훈: 없음

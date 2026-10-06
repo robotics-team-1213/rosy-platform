@@ -16,7 +16,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, StrictBool
 
 from core_api_web.api.errors import ApiError
-from core_api_web.api.v1.common import admin, viewer
+from core_api_web.api.v1.common import admin, operator, viewer
+from core_common.protocol.schemas import LampIdentifyRequest
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 
 
@@ -363,6 +364,33 @@ class HardwareTestRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     device: Literal["buzzer", "lamp"]
+
+
+@hardware_router.post("/lamp/identify")
+def host_lamp_identify(
+    body: LampIdentifyRequest,
+    auth: AuthContext = Depends(operator),
+    svc: CoreServicesLike = Depends(get_services),
+):
+    """Ask the sole face owner for a short visual challenge; no motion or identity claim."""
+    request_path, _result, _confirm = _test_paths(svc)
+    request_id = secrets.token_hex(8)
+    payload = json.dumps({"action": f"identify_{body.color}", "request_id": request_id,
+                          "by": auth.token_id,
+                          "requested_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+                         sort_keys=True) + "\n"
+    with _test_lock:
+        now = time.monotonic()
+        last = _last_test.get(request_path)
+        if last is not None and now - last < HW_TEST_COOLDOWN_S:
+            raise ApiError("HW_TEST_COOLDOWN", 429, "방금 램프를 사용했습니다. 잠시 뒤에 다시 시도하세요.")
+        try:
+            _write_private(request_path, payload, 0o640, "hw-test.request")
+        except OSError as exc:
+            raise ApiError("HW_TEST_UNAVAILABLE", 503, "램프 식별 요청을 전달하지 못했습니다") from exc
+        _last_test[request_path] = now
+    return {"accepted": True, "request_id": request_id, "color": body.color,
+            "state": "pending_visual_confirmation"}
 
 
 class HardwareConfirmRequest(BaseModel):

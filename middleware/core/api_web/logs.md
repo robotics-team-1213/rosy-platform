@@ -557,3 +557,9 @@
 - 변경: 앱 설명의 API 계약 버전을 문서의 v1.106과 맞췄다.
 - 증거: 계약 버전 정렬 검사 통과. 장치 배포는 하지 않았다.
 - gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · 식별 LED CORE 요청
+
+- 변경: Operator 전용 `POST /api/v1/host/lamp/identify`가 blue/amber만 받아 기존 호스트 하드웨어 요청 큐로 전달한다. 응답은 영상 확인 대기 상태다.
+- 증거: API 입력·쿨다운 호스트 테스트 통과. 장치 적용과 실제 점멸은 미확인.
+- gate 변화: SOURCE/LOCAL만 확인. DEVICE/FIELD 상태는 그대로 둔다.

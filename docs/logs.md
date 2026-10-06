@@ -6164,6 +6164,12 @@ osy-d395-s1d\`.
 - 증거: C6 목록 동일성 및 센서 연결 검사. 장치 수용은 별도다.
 - gate 변화: 없음.
 
+## 2026-10-05 · uncommitted · docs(readme): short README, developer guide, verified team guide
+
+- 변경: README를 소개·시작 위치 표·문서 지도·「같이 하는 깃」·「핵심 계약」으로 줄이고 구조·빌드·테스트·관제 배치·Pi 런타임·로드맵을 `docs/reference/developer-guide.md`로 옮겼다(옛 `src/` 트리는 현재 폴더 표로 교체). 팀 가이드를 첫날 명령·이슈에서 머지까지·막혔을 때 표로 다시 썼다. 루트 허용 목록 밖이던 `CONTRIBUTING.md`를 `.github/`로 옮겼다.
+- 증거: Windows 새 클론 + Python 3.12 venv에서 가이드 §1 명령 리허설, 문서 링크 검사 0 깨짐, README·문서 배치·harness·pre-push 계약 시험.
+- gate 변화: 없음.
+
 ## 2026-10-06 · uncommitted · uiux(docs): ROSY 디자인 목표와 현재 LOCAL 판정 경계
 
 - 변경: 현대성·사용성·정돈·구조·통일성을 상태·다음 행동·표면 문법·너비·증거 어휘로 관찰 가능한 목표에 묶었다. D-153 회차 카드에 로봇/Fleet 데스크톱·전화 캡처와 남은 G2/G3 범위를 기록했다.
@@ -6539,3 +6545,32 @@ osy-d395-s1d\`.
 - 변경: 픽셀 검수의 이전·다음 버튼을 390/320px에서 각각 작업 칸 전폭으로 쌓아 긴 비활성 이유의 좁은 줄바꿈을 풀었다.
 - 증거: [UI/UX 평가](validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/learning-pixel-nav-fullwidth/`와 `logs/learning-pixel-nav-{red,green,decision-regression,responsive}.txt`. 수정 전 2 failed, 뒤 레이아웃 8 passed·픽셀 결정 4 passed·반응형 계약 9 passed, 각 `known_failures.py` 0 NEW.
 - gate 변화: 학습 도구의 LOCAL 너비·가독성 부분 근거 추가. 검수자 G3와 제품 전체 G2/G3는 HOLD.
+## 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
+
+- 변경: D-472와 ADR Log에 실제 Vision 프레임 기반 현장지도, 단독 소유 LED 점멸 신원 대조, 안전 선점·만료·주행 분리 결정을 기록했다.
+- 증거: 현장 두 로봇의 `rosy-face`와 램프 런타임 조회. 식별 점멸 API와 실제 영상 대조는 아직 없다.
+- gate 변화: 없음. 문서 제안이며 DEVICE/FIELD 수용이 아니다.
+
+## 2026-10-06 · uncommitted · D-472 호스트 구현
+
+- 변경: Fleet→CORE→호스트→rosy-face의 단기 LED 식별 요청과 Rosy Cam 최신 원본 프레임의 현장지도 표시를 구현했다. 색/영상만으로 robot ID나 주행 좌표를 확정하지 않는다.
+- 증거: 호스트 pytest 274 passed/3 skipped, 웹 Node 135 passed. 장치 설치·현장 영상 식별은 미확인.
+- gate 변화: SOURCE/LOCAL 코드 검증. DEVICE/FIELD 수용은 아니다.
+
+## 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
+
+- 변경: README 「같이 하는 깃」(실험실 PC 경로 포함)을 `docs/reference/shared-checkout.md`로 옮기고 README에 배지·시스템 구성 다이어그램·구성 표·시작하기 표·분류별 문서 지도를 넣었다. 팀 가이드(첫날·작업 흐름·공유 범위)와 개발 가이드(시험 단계)에 mermaid 다이어그램. 참조 갱신: 루트 AGENTS, rosy-land-on-main 스킬, `test_readme_agent_start.py`.
+- 증거: affected 단계, 문서 링크 검사.
+- gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · docs(adr): 콘솔 개발 연결 모드와 주의점 구역 허가
+
+- 변경: D-473(관제 콘솔 개발 연결 모드 — 두 설정을 함께 둘 때만 같은 망 PC에 1시간 운용자 세션)과 D-474(주의점 단선에서 멈추고 Fleet 구역 허가 후 진입, 출구 이중선으로 점유 해제)를 ADR Log와 함께 기록했다.
+- 증거: 2026-10-06 실기 점검(콘솔 토큰이 시험을 막음, 9dfk만 연결, 주의점·로타리 점유 미구현).
+- gate 변화: 없음. 문서 결정이며 구현·SIM·DEVICE 수용이 아니다.
+
+## 2026-10-06 · uncommitted · feat(fleet): D-473 관제 콘솔 개발 연결 모드
+
+- 변경: Fleet `GET /api/fleet/auth/connection`·`POST /api/fleet/auth/development-session`(API Reference v1.108). `ROSY_DEPLOYMENT=development`와 `--connection-mode development`가 함께 있을 때만 같은 망(loopback·RFC1918·link-local·Tailscale) 브라우저에 1시간 메모리 운용자 세션(`development-<8hex>`, 이름 있는 운용자, 감사 기록)을 준다. 콘솔은 첫 401에서 자동 발급하고 "개발 연결 모드" 배지를 띄운다. site.env 두 키(기본 비움), README 절 추가.
+- 증거: 관련 호스트 pytest(`operations/fleet/test/test_development_session.py`, `test_cli.py`, 버전 고정 시험, `test/test_site_development_connection.py`)와 콘솔 브라우저 시험. 관제 PC에서 다른 PC 브라우저로 접속하는 FIELD 확인은 아직 하지 않았다.
+- gate 변화: SOURCE/LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.

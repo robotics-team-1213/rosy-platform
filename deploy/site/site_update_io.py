@@ -153,13 +153,13 @@ class Http:
         self.opener = urllib.request.build_opener(
             _HttpsOnly, urllib.request.HTTPSHandler(context=ssl.create_default_context()))
 
-    def _open(self, url: str):
+    def _open(self, url: str, *, timeout: int | None = None):
         if not url.startswith("https://"):
             raise Transient(f"refusing a non-https URL: {url}")
         request = urllib.request.Request(url, headers={
             "Accept": "application/vnd.github+json", "User-Agent": "rosy-site-autoupdate"})
         try:
-            return self.opener.open(request, timeout=self.timeout)
+            return self.opener.open(request, timeout=self.timeout if timeout is None else timeout)
         except (OSError, urllib.error.URLError) as error:
             raise Transient(f"GET {url} failed: {error}") from None
 
@@ -179,7 +179,7 @@ class Http:
         digest = hashlib.sha256()
         received = 0
         try:
-            with self._open(url) as response, destination.open("wb") as stream:
+            with self._open(url, timeout=max(self.timeout, 300)) as response, destination.open("wb") as stream:
                 expected = getattr(response, 'headers', {}).get('Content-Length')
                 for chunk in iter(lambda: response.read(1024 * 1024), b""):
                     received += len(chunk)
@@ -210,7 +210,8 @@ class Http:
             opener = urllib.request.build_opener(_NoCredentialRedirect,
                 urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=ca_file)))
             request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token})
-            with opener.open(request, timeout=5) as response:
+            # Fleet state can wait for an offline robot probe before returning the online roster.
+            with opener.open(request, timeout=15) as response:
                 data = response.read(_SMALL_LIMIT + 1)
             if len(data) > _SMALL_LIMIT:
                 raise Transient('functional response exceeds size limit')

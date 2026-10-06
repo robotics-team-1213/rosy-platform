@@ -72,6 +72,10 @@ ALLOWED = Counter({
     ("bridge/ros_bridge.py", "getattr", "msg", '"goal_state"'): 1,
     ("bridge/ros_bridge.py", "getattr", "goal", '"id"'): 1,
     ("bridge/ros_bridge.py", "getattr", "goal", '"label"'): 1,
+    # Accepted (D-468): preserve public LaserScan angular resolution and source stamp;
+    # missing source time becomes zero and therefore cannot pass the freshness gate.
+    ("bridge/translate.py", "getattr", "msg", '"angle_increment"'): 1,
+    ("bridge/translate.py", "getattr", "msg.header", '"stamp"'): 1,
 })
 
 

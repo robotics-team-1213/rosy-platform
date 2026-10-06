@@ -2571,3 +2571,9 @@
 - 변경: 사이트 기본 Compose와 페어링 오버레이가 같은 --lan-camera-proxy 실행 인수를 갖게 해 페어링 모드에서도 사설망 카메라 보기 경계를 유지한다.
 - 증거: test_site_pairing_deploy.py 13 PASS. 현장 이미지 설치와 카메라 영상 확인은 아직 별도다.
 - gate 변화: LOCAL 검증만 추가.
+
+## 2026-10-06 · uncommitted · feat(deploy): D-477 테일넷 조인 — 유닛·이미지 deb·개인화·site 안내
+
+- 변경: `rosy-tailscale-join.service`(+헬퍼)가 프로비전된 일회용 auth key를 소진해 로봇을 팀 테일넷에 태그로 가입시킨다. 이미지에 고정(sha256) tailscale deb와 의존성(iptables, iproute2)·tailscaled 활성화를 추가했다. 개인화 번들에 선택 `tailscale` 섹션이 들어가고 첫 부팅이 `/etc/rosy/tailscale-join.json`(0600)을 쓴다. site 방화벽·README·SSH 안내·테일넷 운영 런북(`docs/deployment/tailnet-remote-access.md`)에 `tailscale0` 경로를 문서화했다.
+- 증거: test_rosy_tailscale_join.py·test_image_customization_contract.py·test_sd_personalization.py·test_first_boot_provisioning.py 신규 포함 1411+ passed(affected --run, known_failures 0 new). 잠금 목록·스크럽·영수증 지문 변이로 빨강 확인. tailscale 1.102.5 arm64 deb는 실제 다운로드 해시로 검증(85315e74…). 장치(TWIN·DEVICE) 검증은 별도.
+- gate 변화: 없음.

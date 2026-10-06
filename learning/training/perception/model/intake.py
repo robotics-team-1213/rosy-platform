@@ -327,8 +327,9 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
     to the set's ignore_index are left out. Classes are matched by name; a class on
     one side only is listed under "unmatched" and left out. "miou" (the gated number)
     is the mean over matched classes whose union is > 0 and whose eval-set role is not
-    "background" ("miou_classes"); "miou_all" includes background. Frames with
-    non-finite logits are skipped and counted (the replay gate already fails NaN
+    "background" ("miou_classes"); "miou_all" includes background. "source_groups"
+    shows the same counts by each frame's declared label sources without changing
+    the gate score. Frames with non-finite logits are skipped and counted (the replay gate already fails NaN
     models). An eval set without frames is a setup error (EvalSetError)."""
     eval_dir = Path(eval_dir)
     manifest = _read_eval_set(eval_dir)
@@ -349,13 +350,14 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
                                   for n in matched if model_roles[n] != set_roles[n]},
               "unmatched": {"model_only": sorted(set(model_names) - set(set_classes)),
                             "eval_only": sorted(set(set_classes) - set(model_names))},
-              "lane_marking_iou": {}}
+              "lane_marking_iou": {}, "source_groups": []}
     if not matched:
         return result
     ignore = manifest.get("ignore_index", DEFAULT_IGNORE_INDEX)
     frames = frames[::even_stride(len(frames), max_frames)][:max_frames]
     inter = dict.fromkeys(matched, 0)
     union = dict.fromkeys(matched, 0)
+    groups = {}  # per class: intersection, union, truth pixels, predicted pixels
     for f in frames:
         bgr = cv2.imread(str(eval_dir / f["image"]), cv2.IMREAD_COLOR)
         mask = cv2.imread(str(eval_dir / f["mask"]), cv2.IMREAD_UNCHANGED)
@@ -369,12 +371,33 @@ def evaluate(model, eval_dir, max_frames: int) -> dict:
         if mask.shape != pred.shape:
             mask = cv2.resize(mask, (pred.shape[1], pred.shape[0]), interpolation=cv2.INTER_NEAREST)
         valid = mask != ignore
+        raw_sources = f.get("sources")
+        sources = (tuple(sorted(set(raw_sources)))
+                   if isinstance(raw_sources, list) and all(isinstance(s, str) for s in raw_sources)
+                   else ())
+        group = groups.setdefault(sources, {"frames": 0, "valid_pixels": 0,
+                                            "counts": {name: [0, 0, 0, 0] for name in matched}})
+        group["frames"] += 1
+        group["valid_pixels"] += int(valid.sum())
         for name in matched:
             p = (pred == model_names[name]) & valid
             g = (mask == set_classes[name]) & valid
-            inter[name] += int((p & g).sum())
-            union[name] += int((p | g).sum())
+            hit, area = int((p & g).sum()), int((p | g).sum())
+            inter[name] += hit
+            union[name] += area
+            counts = group["counts"][name]
+            counts[0] += hit
+            counts[1] += area
+            counts[2] += int(g.sum())
+            counts[3] += int(p.sum())
         result["frames"] += 1
+    result["source_groups"] = [
+        {"sources": list(sources), "frames": group["frames"],
+         "valid_pixels": group["valid_pixels"],
+         "classes": {name: {"truth_pixels": counts[2], "pred_pixels": counts[3],
+                            "iou": counts[0] / counts[1] if counts[1] else None}
+                     for name, counts in group["counts"].items()}}
+        for sources, group in sorted(groups.items())]
     result["iou"] = {n: inter[n] / union[n] for n in matched if union[n] > 0}
     if result["iou"]:
         result["miou_all"] = float(np.mean(list(result["iou"].values())))

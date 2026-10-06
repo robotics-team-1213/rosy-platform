@@ -1294,6 +1294,12 @@ class SshHostKeys(BaseModel):
     host_keys: list[str]
 
 
+class LampIdentifyRequest(BaseModel):
+    """A short, display-only LED challenge; the face owner may refuse it."""
+    model_config = ConfigDict(extra="forbid")
+    color: Literal["blue", "amber"]
+
+
 class SshPasswordRequest(BaseModel):
     """POST /host/ssh/password. 분 단위, 1..60."""
 

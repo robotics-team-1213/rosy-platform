@@ -197,6 +197,14 @@ class ReturnController:
         self._path.clear()
         self._approach = CorridorApproach()
 
+    def rebase_retrace(self):
+        """Retrace path = measured trail since the checkpoint (D-476: incl. bridged travel)."""
+        if self.checkpoint:
+            anchor = self.checkpoint[0]
+            self._path = [s for s in self.trail.samples if s.received_at >= anchor.received_at]
+            if not self._path or self._path[0] != anchor:
+                self._path = []
+
     def _hold(self, reason):
         return ReturnAction(self.phase, reason)
 
@@ -269,11 +277,7 @@ class ReturnController:
             self.phase, self._opened = "departure_stop", inp.now
             self._count = 0
             self._last_evidence = None
-            if self.checkpoint:
-                anchor = self.checkpoint[0]
-                self._path = [s for s in self.trail.samples if s.received_at >= anchor.received_at]
-                if not self._path or self._path[0] != anchor:
-                    self._path = []
+            self.rebase_retrace()
             return self._hold("containment_unconfirmed")
         # Perception continues on every tick; no movement if authority or data is absent.
         if not inp.authorized:

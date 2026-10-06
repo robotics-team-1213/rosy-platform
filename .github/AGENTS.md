@@ -11,6 +11,7 @@ GitHub Actions for colcon build, lint, pytest, and `core` boot smoke on ROS 2 Ja
 
 | File | Description |
 |------|-------------|
+| `CONTRIBUTING.md` | Contributor summary; points at `docs/reference/team-guide.md` (kept here because the repo root allows only listed files) |
 | `pull_request_template.md` | PR checklist: branch type, contract read, known_failures, no secrets, Safety-Review, ADR |
 | `CODEOWNERS` | Review requests go to the repo owner until module owners are assigned |
 

@@ -165,7 +165,7 @@ LAMP_TEST_S = 10.0
 # the outcome goes to this unit's own runtime directory, which rosy-hw-test reads.
 TEST_REQUEST = "run/rosy-boot/display-test.request"
 TEST_RESULT = "run/rosy-display/display-test.json"
-TEST_ACTIONS = ("buzzer", "lamp")
+TEST_ACTIONS = ("buzzer", "lamp", "identify_blue", "identify_amber")
 TEST_REQUEST_MAX_AGE_S = 30.0
 MAX_TEST_REQUEST_BYTES = 512
 TEST_REQUEST_ID = re.compile(r"[0-9a-f]{16,64}")
@@ -439,6 +439,42 @@ class Lamp:
             return "failed", f"lamp_pattern test 종료 {code}"
         return "done", "빨강→초록→파랑 1 s씩 · 8 LED · GPIO19 · 꺼짐 (부팅 표시가 켬)"
 
+    def identify(self, color: str, unsafe: Callable[[], bool]) -> tuple[str, str]:
+        """Temporary blue/amber pulse, then restore the state pattern."""
+        resume, self.pattern = self.pattern, None
+        self.stop()
+        if not self.available():
+            self.show(resume)
+            return "unavailable", "램프를 사용할 수 없음"
+        process = None
+        try:
+            process = self._spawn([str(self._root / LAMP_HELPER), f"identify_{color}"])
+            deadline = time.monotonic() + LAMP_TEST_S
+            while process.poll() is None:
+                if unsafe():
+                    process.terminate()
+                    try:
+                        process.wait(timeout=LAMP_STOP_S)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=LAMP_STOP_S)
+                    self.show(None)
+                    return "failed", "안전·운행 상태가 바뀌어 식별 점멸 중단"
+                if time.monotonic() >= deadline:
+                    process.kill()
+                    process.wait(timeout=LAMP_STOP_S)
+                    self.show(None)
+                    return "failed", "식별 점멸 시간 초과"
+                time.sleep(0.05)
+            code = process.returncode
+        except OSError as exc:
+            code = type(exc).__name__
+        if unsafe():
+            self.show(None)
+            return "failed", "안전·운행 상태가 바뀌어 식별 점멸 중단"
+        self.show(resume)
+        return ("done", f"{color} 식별 점멸 완료") if code == 0 else ("failed", f"식별 점멸 종료 {code}")
+
 
 def _spawn_helper(command: list[str]):
     return subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -671,6 +707,13 @@ class FaceDisplay:
         request = read_test_request(self.root / TEST_REQUEST, self._wall())
         if request is None or request["request_id"] == self._tested:
             return None
+        def unsafe_identity() -> bool:
+            core = self._core()
+            return (core is None or core.get("estop") is not False or core.get("robot_mode") != "IDLE"
+                    or core.get("nav_state") != "IDLE" or bool(core.get("caution")))
+        if request["action"].startswith("identify_") and (
+                self._lamp is None or self._lamp.pattern != "ready" or unsafe_identity()):
+            return None
         if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution"):
             return None
         if self.screen and (self.screen["kind"] in ("stopped", "update", "shutdown")
@@ -683,6 +726,8 @@ class FaceDisplay:
         self._testing, self._testing_until = request["action"], self._clock() + LAMP_TEST_S
         if request["action"] == "buzzer":
             state, detail = self._buzzer.test()
+        elif self._lamp is not None and request["action"].startswith("identify_"):
+            state, detail = self._lamp.identify(request["action"].removeprefix("identify_"), unsafe_identity)
         elif self._lamp is not None:
             state, detail = self._lamp.test()
         else:
