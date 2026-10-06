@@ -38,3 +38,20 @@
 이동 근거 공급자는 원본 센서의 유효 기간·교정 출처·바닥과 실제 후보 swept path를 확인해야 한다. `(0, 0)`에 대한 참도 바닥 증거의 신선함을 요구한다. 미연결 공급자, 예외, 참이 아닌 응답은 이동 허가가 아니다. 현재 소스 연결과 실제 공급자의 런타임 연결·장치 수용을 구분한다. 공개 모드·명령·stuck 필드는 추가하지 않는다.
 
 현재 이탈 위치에 정상 경로 기록이 없으면 바로 '원래 자리로 돌아가기'를 보장하지 않는다. 그 경우에도 현재 센서로 후보 탐색을 수행한다. 차선이 보이는 이탈과 차로가 없는 상태를 구별하는 추가 계약·검증이 필요하다. Accepted는 구현/설치/실주행 통과를 의미하지 않는다. 실행 순서와 남은 증거는 `docs/plans/2026-10-05-lane-return.md`에 기록한다.
+
+### Implementation note: 차로 안 판정 여유 (2026-10-06)
+
+Decision 2의 "차체 footprint와 경계의 부호 있는 여유 및 예측 여유"를 구현에서 고정 상수 없이 정한다. 상태와 결정 항목은 바꾸지 않는다.
+
+**원인.** 첫 구현은 추종 단계의 차로 안 판정에 여유 0.015 m, checkpoint에 0.025 m를 상수로 썼다. 그런데 `lane_return_evidence`는 경계를 이미 측정된 투영 불확실도만큼 안쪽으로 깎은 뒤 여유를 잰다. 상수는 불확실도를 두 번 뺐다. 260919 트랙(Pinky 폭 0.113 m, 차로 중심에서 한쪽 여유 약 5 mm, sim 불확실도 4.3 mm)에서는 첫 프레임에 이탈이 열렸고 D-476 bridge는 무장될 수 없었다(`docs/validation/d476-gazebo-model-pc-2026-10-06/result.md` 2차 실행, 브랜치 `feat/sim-sensor-fidelity`).
+
+**규칙** (`core_features/line_follow/lane_return.py`):
+
+1. 차로 안: `여유 − v·|sin θ|·0.3 s ≥ line_follow.lane_return_body_margin_m`(기본 0).
+   - 여유는 URDF footprint 네 모서리(`body_front_x_m`, `body_rear_x_m`, `body_half_width_m`)에서 불확실도만큼 깎은 두 경계까지 잰 부호 있는 최소 수직거리다. 0 이상이면 투영 오차가 최악이어도 네 모서리가 모두 차로 안에 있다.
+   - `v·|sin θ|·0.3 s`는 예측 여유다. live 선속도 상한 `v`, 차로에 대한 진행각 `θ`, 근거 유효 시간 상한 0.3 s(이 모듈의 기존 신선도 상한)로 다음 근거가 오기 전 경계 쪽으로 갈 수 있는 거리다.
+   - `lane_return_body_margin_m`은 그 위에 더 두는 몸 여유다. 범위는 [0, 0.05]다.
+   - 불확실도가 기하 여유보다 크면 깎인 여유가 음수가 되어 차로 안이 아니다. 불확실도가 없거나 상한(0.015 m)을 넘으면 지금처럼 근거 자체가 없다.
+2. 정상 checkpoint: 위 판정에 더해 `기하 여유 ≥ lane_return_checkpoint_fraction × 기하 좌우 유격`(기본 0.5). 기하 값은 깎기 전 값이다(`Corridor.free_half + uncertainty_m`). 차로 폭이 허락하는 좌우 유격의 가운데 절반 안에 있어야 한다는 뜻이다. 넓은 차로와 좁은 차로에 같은 비율로 적용되고, 경계에 붙은 복구 직후 자세가 정상 checkpoint가 되지 않게 하는 원래 의도를 유지한다. 범위는 [0, 1]이다. checkpoint는 안전 판정이 아니다. 역추적 뒤에도 새 근거로 다시 검증한다.
+
+**확인.** `recovery_local_enabled: false`(장치 기본)이면 이 controller를 만들지 않으므로 동작이 같다. 시험: `middleware/core/services/test/test_lane_return_margin.py`. 대상은 좁은 차로 중심 Pinky의 차로 안 판정과 checkpoint, 몸 모서리 3 mm 밖, 불확실도 > 기하 여유, 진행각 예측 여유, 치우친 자세의 checkpoint 거부, OFF 불변, 파라미터 범위다. 호스트 pytest는 sim·장치 수용이 아니다. 260919 sim 재실행은 별도다.
