@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pilot): 화면 폭 전환 도구 상태
 - 2026-10-06 · uncommitted · uiux(games): 축소 피치 표식 가독성
 - 2026-10-06 · uncommitted · uiux(pilot): 짧은 전화 도구 판 정리
 - 2026-10-06 · uncommitted · uiux(robot): 320px 운용 칸 동일 폭
 - 2026-10-06 · uncommitted · uiux(pilot): 320×568 영상 공간 복구
-- 2026-10-06 · uncommitted · uiux(pilot): 320px 회전 버튼 전폭

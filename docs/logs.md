@@ -6415,3 +6415,9 @@ osy-d395-s1d\`.
 - 변경: 좁은 경기 보드에서 공·로봇·이름의 화면상 크기를 유지하고 진행 상태의 세 패널 동일 폭을 확인했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320px X: 전후 캡처, 브라우저 3 passed, `known_failures.py` 0 NEW.
 - gate 변화: Game Board LOCAL G2 일부 추가. 실제 노트북 경기·운영자 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 화면 폭 전환 도구 상태
+
+- 변경: Pilot 도구 판을 연 채 전화 폭에서 넓은 폭으로 바꾸면 판·세부 내용을 닫고 설정을 현재 폭의 자리로 옮긴다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 320→390→320 브라우저 1 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 부분 근거 추가. 실기 전화·운전자 G3와 제품 전체는 HOLD다.

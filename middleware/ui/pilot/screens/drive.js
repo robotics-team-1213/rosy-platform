@@ -603,6 +603,9 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   const compactHud = window.matchMedia("(width < 22rem) and (height < 40rem)");
   const lanePanel = element.hud.querySelectorAll("details.pilot-models")[1];
   function placeCompactTools() {
+    hideTools();
+    modelPanel.open = false;
+    lanePanel.open = false;
     if (compactHud.matches) {
       tools.insertBefore(modelPanel, toolsActions);
       tools.insertBefore(lanePanel, toolsActions);

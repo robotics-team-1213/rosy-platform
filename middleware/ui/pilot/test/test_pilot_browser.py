@@ -1004,12 +1004,21 @@ def test_short_phone_hud_uses_existing_tools_panel(tablet_page):
     if output := os.environ.get("ROSY_SHOT_DIR"):
         Path(output).mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(Path(output) / "pilot-tools-320x568.png"))
-    panel.get_by_text("닫기", exact=True).scroll_into_view_if_needed()
-    panel.get_by_text("닫기", exact=True).click()
+    panel.locator("details.pilot-models summary").first.click()
+    assert panel.locator("details.pilot-models").first.get_attribute("open") is not None
     page.set_viewport_size({"width": 390, "height": 844})
     page.wait_for_function("document.querySelectorAll('[data-drive-hud] details.pilot-models').length === 2")
+    assert panel.is_hidden()
+    assert page.locator("[data-drive-tools]").get_attribute("aria-expanded") == "false"
     assert page.locator("[data-drive-hud] [data-drive-fit]").count() == 1
     assert page.locator("[data-drive-hud] [data-drive-fill]").count() == 1
+    assert page.locator("[data-drive-hud] details.pilot-models[open]").count() == 0
+    page.set_viewport_size({"width": 320, "height": 568})
+    page.wait_for_function("document.querySelectorAll('[data-drive-tools-panel] details.pilot-models').length === 2")
+    page.locator("[data-drive-tools]").click()
+    panel.get_by_text("닫기", exact=True).scroll_into_view_if_needed()
+    panel.get_by_text("닫기", exact=True).click()
+    assert panel.is_hidden()
     assert errors == [], errors
 
 

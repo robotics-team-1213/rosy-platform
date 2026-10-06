@@ -555,3 +555,9 @@
 - 변경: 320×568에서 모델·차선 인식·영상 맞춤/채우기를 기존 도구 판으로 옮겨 HUD 스크롤을 없앴다. 폭이 넓어지면 원래 HUD 자리로 돌아간다. 비상 정지·정지·상태와 기본 주행은 첫 화면에 남긴다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320px 본화면·도구 판 X: 캡처, 5폭 영상·2폭 모드·반응형 도구·기존 녹화 도구 브라우저 9 passed, `known_failures.py` 0 NEW.
 - gate 변화: Pilot LOCAL G2 일부 추가. 실기 운전자의 도구 발견·조작 G3와 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot): 폭 전환 중 도구 판 닫힘
+
+- 변경: 짧은 전화와 넓은 화면 사이를 전환할 때 열린 도구 판과 모델·차선 세부 내용을 닫아, 설정이 다른 자리로 옮겨진 뒤 빈 판이 남지 않게 했다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320→390→320 반응형 브라우저 1 passed, `known_failures.py` 0 NEW.
+- gate 변화: Pilot LOCAL G2 전환 부분 근거 추가. 실제 전화 회전·운전자 G3와 제품 전체는 HOLD다.

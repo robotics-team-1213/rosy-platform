@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(pilot): 폭 전환 중 도구 판 닫힘
 - 2026-10-06 · uncommitted · uiux(pilot): 짧은 전화 HUD 단일 경로
 - 2026-10-06 · uncommitted · uiux(pilot): 320×568 카메라·조작 균형
 - 2026-10-06 · uncommitted · uiux(pilot): 320px 회전 버튼 너비
 - 2026-10-06 · uncommitted · uiux(pilot): 320px 주행 머리 겹침
-- 2026-10-06 · uncommitted · uiux(pilot): 자동 모드의 회전 안내 제거
