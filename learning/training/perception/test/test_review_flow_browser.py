@@ -202,6 +202,24 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
         page.screenshot(path=str(target))
 
 
+@pytest.mark.parametrize('route,action', [('/', '#prepare'), ('/pixels', '#pixel-export')])
+@pytest.mark.parametrize('width,height', [(390, 844), (320, 568)])
+def test_review_preparation_action_uses_compact_panel_width(browser_workspace, route, action, width, height):
+    page, _, _ = browser_workspace
+    page.set_viewport_size({'width': width, 'height': height})
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    panel = page.locator('.preparation').bounding_box()
+    button = page.locator(action).bounding_box()
+    assert abs(panel['x'] - button['x']) <= 1 and abs(panel['width'] - button['width']) <= 1, (panel, button)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-prepare-{"objects" if route == "/" else "pixels"}-{width}x{height}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.locator(action).scroll_into_view_if_needed()
+        page.screenshot(path=str(target))
+
+
 @pytest.mark.parametrize('width', [1440, 800, 390])
 def test_empty_pixel_review_can_recover_at_declared_widths(browser_workspace, width):
     page, _, expect = browser_workspace
