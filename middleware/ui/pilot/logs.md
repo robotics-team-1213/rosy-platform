@@ -591,15 +591,16 @@
 - gate 변화: SOURCE/LOCAL만.
 - 결정: D-483
 
-## 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
-
-- 변경: LCD가 요청 여러 개를 보일 수 있어 입력칸 안내를 "로봇 화면에서 <표시 번호> 옆의 승인 코드"로 바꿨다. `confirm`의 400은 `detail.remaining_attempts`가 있을 때만 틀린 코드로 보고, 없으면 `PeerRefused(400)`로 다룬다.
-- 증거: JVM 신규 badRequestWithoutRemainingAttemptsIsARefusalNotAWrongCode 포함 PeerClientTest 통과, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
-- gate 변화: SOURCE/LOCAL만.
-- 결정: D-483
 ## 2026-10-06 · uncommitted · fix(pilot): 10분 상한 뒤 로봇 녹화를 이어 간다
 
 - 원인(실기 9dfk, 무선 adb·WebView CDP): 운전자 보고 "로봇 녹화가 저절로 꺼짐". 로봇 manifest 두 회 모두 정확히 600 s 에서 `stop_reason: max_duration`(D-411 결정 3 의 1회 10분). 화면은 지난 녹화 칩만 바꾸고 녹화는 끝났다.
 - 변경: `recording.js` `continueRecording(wanted, active)` — 이 기기가 켜고 끄지 않은 녹화가 `max_duration` 으로 쉬면 곧바로 다음 녹화본을 시작하고 칩에 "N번째 녹화로 이어 갑니다"를 보인다. 남의 정지·쿼터·디스크·오류·조종 종료 뒤에는 잇지 않는다. `drive.js` 의 스트림 재시도 타이머를 함수로 부르던 결함도 찾았으나 main 에서 같은 결함이 따로 고쳐져(`retryTimer`) 병합 때 main 쪽을 썼다. D-411 구현 부록 19. `sw.js` 캐시 키 갱신.
 - 증거: Node 순수 시험(continueRecording 7경우), 브라우저 시험 신규 `test_robot_recording_continues_past_the_ten_minute_cap_until_stopped`(가짜 CORE `cap`) 포함 녹화 브라우저 11 passed. 전체 결과는 커밋 메시지.
 - gate 변화: SOURCE/LOCAL. 실기 10분 경계 관찰은 태블릿 재설치 뒤.
+
+## 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
+
+- 변경: LCD가 요청 여러 개를 보일 수 있어 입력칸 안내를 "로봇 화면에서 <표시 번호> 옆의 승인 코드"로 바꿨다. `confirm`의 400은 `detail.remaining_attempts`가 있을 때만 틀린 코드로 보고, 없으면 `PeerRefused(400)`로 다룬다.
+- 증거: JVM 신규 badRequestWithoutRemainingAttemptsIsARefusalNotAWrongCode 포함 PeerClientTest 통과, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
+- gate 변화: SOURCE/LOCAL만.
+- 결정: D-483
