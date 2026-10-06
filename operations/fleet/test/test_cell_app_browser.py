@@ -354,8 +354,10 @@ def test_reviewed_generation_conflict_and_cancel_are_explicit(browser_site, widt
     page.locator("#workcell").fill("omx_sim")
     page.locator("#instance").fill("omx_sim_01")
     page.locator("#propose").click()
-    expect(page.locator("#proposal")).to_contain_text("PROPOSED")
+    expect(page.locator("#proposal")).to_contain_text("승인 대기")
+    assert "PROPOSED" not in page.locator("#proposal").inner_text()
     page.locator("#read-job").click()
+    expect(page.locator("#job-summary")).to_contain_text("제안됨")
     expect(page.locator("#notice")).to_contain_text("확인한 정지 세대")
     reviewed = tasks.store.dispatch_control()["generation"]
     stopped = tasks.store.trip_stop_latch(actor_id="operator-1")
@@ -370,7 +372,7 @@ def test_reviewed_generation_conflict_and_cancel_are_explicit(browser_site, widt
     page.locator("#read-job").click()
     expect(page.locator("#notice")).to_contain_text("확인한 정지 세대")
     page.locator("#admit").click()
-    expect(page.locator("#notice")).to_contain_text("작업 READY")
+    expect(page.locator("#notice")).to_contain_text("작업 실행 대기")
     cancelled = []
     page.on("request", lambda request: cancelled.append(request)
             if request.url.endswith("/cancel") else None)
@@ -386,7 +388,8 @@ def test_reviewed_generation_conflict_and_cancel_are_explicit(browser_site, widt
     if width < 480:
         connect = page.locator("#connect").bounding_box()
         session = page.locator("#session").bounding_box()
-        assert connect["x"] + connect["width"] <= session["x"] + 1, (connect, session)
+        assert connect["x"] + connect["width"] <= width, connect
+        assert session["x"] + session["width"] <= stop["x"] + 1, session
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"fleet-cell-cancel-confirm-{width}x{height}.png"))
     dialog.locator("ui-button[kind='quiet']").click()
@@ -400,7 +403,8 @@ def test_reviewed_generation_conflict_and_cancel_are_explicit(browser_site, widt
     assert cancelled == []
     page.locator("#cancel").click()
     dialog.locator("ui-button[kind='irreversible']").click()
-    expect(page.locator("#notice")).to_contain_text("CANCELLED_BY_OPERATOR")
+    expect(page.locator("#notice")).to_contain_text("운영자가 취소함")
+    assert "CANCELLED_BY_OPERATOR" not in page.locator("#job-summary").inner_text()
     assert len(cancelled) == 1
     assert page.locator("#resume").get_attribute("disabled") is not None
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -414,7 +418,7 @@ def test_failed_job_read_clears_actionable_snapshot(browser_site):
     page.locator("#workcell").fill("omx_sim")
     page.locator("#instance").fill("omx_sim_01")
     page.locator("#propose").click()
-    expect(page.locator("#proposal")).to_contain_text("PROPOSED")
+    expect(page.locator("#proposal")).to_contain_text("승인 대기")
     page.locator("#read-job").click()
     expect(page.locator("#notice")).to_contain_text("확인한 정지 세대")
     page.route("**/api/fleet/cell-jobs/*", lambda route: route.fulfill(
@@ -466,10 +470,12 @@ def test_manual_sheet_choice_preserves_thickness_and_requires_operator_barrier(b
                 if step["kind"] == "operator_sheet"]) == 2
 
 
-def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(browser_site):
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(browser_site, width, height):
     from playwright.sync_api import expect
 
     page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
     page.locator("#credential input").fill("operator-secret")
     page.locator("#connect").click()
     expect(page.locator("#session")).to_contain_text("operator-1")
@@ -482,14 +488,26 @@ def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(brow
     page.route("**/api/fleet/cell-jobs/sheet-held", lambda route: route.fulfill(json={"job": job}))
     page.locator("#mission-id").fill("sheet-held")
     page.locator("#read-job").click()
+    expect(page.locator("#job-summary")).to_contain_text("작업 보류")
+    expect(page.locator("#job-summary")).to_contain_text("간지")
+    assert "OPERATOR_SHEET_ACCESS_UNAVAILABLE" not in page.locator("#job-summary").inner_text()
+    assert "HOLD" not in page.locator("#step-progress").inner_text()
+    expect(page.locator("#job-state")).to_contain_text("OPERATOR_SHEET_ACCESS_UNAVAILABLE")
     expect(page.locator("#sheet-progress")).to_contain_text("A · 2층")
     expect(page.locator("#sheet-progress")).to_contain_text("2 mm")
     expect(page.locator("#sheet-progress")).to_contain_text("삽입 확인 대기")
     expect(page.locator("#resume")).to_have_attribute("disabled", "")
     expect(page.locator("#resume")).to_have_attribute("reason", "작업자 간지 삽입 확인 대기")
     expect(page.locator("#sheet-progress")).to_contain_text("아직 진행할 수 없습니다")
-    page.set_viewport_size({"width": 390, "height": 844})
+    stop = page.locator("#estop").bounding_box()
+    assert stop and stop["y"] + stop["height"] <= height
+    if width < 480:
+        header = page.locator("ui-topbar").bounding_box()
+        assert header and header["height"] <= height * 0.2, header
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.locator("#job-summary").scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / f"fleet-cell-held-sheet-{width}x{height}.png"))
 
 
 def test_structured_drafts_compile_box_only_and_survive_reload(browser_site):

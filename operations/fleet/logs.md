@@ -2061,3 +2061,9 @@
 - 변경: 추가 안전 사건이 남은 HOLD 상태에서 재개를 비활성화하고 재구성 안내를 표시한다. 대형 이유·재개 차단 사건을 관제자 평문으로 바꿨다. 390/320px에서는 네 대형 버튼을 두 열의 동일 폭으로 정렬했다.
 - 증거: HOLD와 대형 조회 끊김 브라우저 7 passed, 반응형·토큰·팔레트 계약 61 passed, 각 `known_failures.py` 0 NEW, JS 구문 검사 통과. 재개 오활성 및 320px 버튼 불균등은 수정 전 적색. X: `captures/fleet-formation-hold/fleet_formation_hold_{blocked,ready}_{1920,390,320}.png`, `logs/fleet-formation-hold-{red,width-red,final,contracts}.txt`.
 - gate 변화: Fleet HOLD의 LOCAL G2 행동·폭·어휘 부분 근거 추가. 실제 사이트 PC/로봇과 관제자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(fleet): Cell 작업 상태 문구와 compact 머리 높이
+
+- 변경: Cell 제안·진행·취소·간지 접근 보류를 운영자 문구로 표시하고 원래 코드는 접힌 진행 원장에 남겼다. 토큰 접속을 붙박이 머리 아래로 내려 390/320px 머리를 177px에서 88px로 줄였으며 계정 상태와 비상 정지는 머리에 유지했다.
+- 증거: 상태 원문 노출과 20% 머리 한도 검사가 수정 전 실패한 뒤 Cell 브라우저 33 passed, Cell API 8 passed, 공유 UI 계약 89 passed, 각 `known_failures.py` 0 NEW. 1440/390/320px 간지 보류 화면 캡처와 로그는 X:/DevTemp/projects/rosy-platform/2026-10-06--032913--uiux-quality--199bc9/ 아래에 있다.
+- gate 보류: 합성 Fleet 응답의 LOCAL G2 부분 근거다. 사이트 PC Tailscale peer는 online이나 SSH 정책 거부, 8443 접속 실패, 현재 PC는 다른 LAN이라 현장 mDNS·Fleet 컨테이너 NSS·실제 장치 readback·운영자 G3는 미확인이다.

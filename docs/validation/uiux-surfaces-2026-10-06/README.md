@@ -103,6 +103,10 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 저장한 레시피를 수정하면 이전 「저장된 버전」 대신 저장 전 초안임을 표시한다. 저장 409 충돌은 작성 내용 복사→최신 문서 불러오기→내용 재적용→저장 순서를 알리고, 컴파일 503은 이전 미리보기 결과를 내리고 결과 미확인·재확인을 표시한다. 두 상태를 1440×1000·390×844·320×568에서 재생하고 로컬 상태 칸이 각 패널 폭을 채우며 제안이 막히는지 확인했다. 320px 저장 503도 결과 미확인으로 구분했다. Cell 전체 **31 passed**, Cell API **8 passed**, 공용 UI 계약 **231 passed, 25 skipped**를 확인한 뒤, 문서가 아직 저장되지 않아 미리보기를 시작할 수 없는 세 폭을 별도 문구로 **3 passed** 재검사했다. JS 구문 검사 통과, 각 성공 실행의 `known_failures.py` **0 NEW**다. 원본은 X: `captures/fleet-cell/fleet-cell-{save-conflict,preview-unavailable}-{1440x1000,390x844,320x568}.png`, `fleet-cell-save-unavailable-320x568.png`; 실행 기록은 `logs/fleet-cell-{write-final-focus,save-unavailable,write-full,write-api,write-shared,preview-precondition}.txt`다. 합성 응답의 LOCAL G2 부분 근거이며 실제 충돌·장치 실행을 검증하지 않는다.
 
+작업 제안·승인·취소와 간지 접근 보류의 API 상태를 운영자 문구로 표시하고, 원래 상태 코드는 접힌 진행 원장 상세에 남겼다. 1440×1000·390×844·320×568에서 간지 접근 보류 이유, 재승인 차단, 가로 넘침 없음과 정지 버튼의 첫 화면 노출을 확인했다. 390/320px의 Cell 붙박이 머리는 토큰 접속을 본문 위 별도 줄로 내려 88px로 줄여 D-359의 창 높이 20% 한도를 통과했다(수정 전 177px, 두 전화 폭에서 실패). 전체 Cell 브라우저 **33 passed**, Cell API **8 passed**, 공유 UI 계약 **89 passed**, 각 `known_failures.py` **0 NEW**, JS 구문 검사 통과. 원본은 X: `logs/fleet-cell-{vocabulary-red,header-red,browser-full,api-current,shared-current}.txt`, `captures/fleet-cell-vocabulary/fleet-cell-held-sheet-{1440x1000,390x844,320x568}.png`다. 이 결과는 합성 Fleet 응답의 LOCAL G2 부분 근거다.
+
+기존 사이트의 관제 PC는 비공개 인벤토리의 LG `robttt@100.82.51.8`로 식별했고 Tailscale peer는 online이었다. 현재 Windows 클라이언트는 다른 LAN(192.168.133.x)에 있고 `_rosy-fleet._tcp.local`·`_rosy-overhead._tcp.local` DNS 조회는 없었다. 사이트 SSH는 tailnet 정책이 거부했고 8443 TCP 연결도 실패했다. 따라서 현장 Avahi 광고, Fleet 컨테이너 실제 UID의 NSS `.local` 조회, 현장 UI·장치 readback은 **미확인**이다. mDNS 발견 실패를 현장 서비스 장애로 판정하지 않는다.
+
 G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나머지 경로, 권한 거부와 저장/컴파일 실패의 나머지 경로, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
 
 ### Fleet G3 독회 — LOCAL 진행 중

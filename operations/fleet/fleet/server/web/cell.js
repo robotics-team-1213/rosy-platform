@@ -3,6 +3,25 @@ import {confirmIrreversible} from '/common/ui.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 
 const $ = id => document.getElementById(id);
+const JOB_STATUS_LABEL = {
+  PROPOSED: '제안됨 · 승인 대기', READY: '실행 대기', RUNNING: '실행 중',
+  ACTION_SUCCEEDED: '장치 동작 완료 · 목표 확인 대기', GOAL_CONFIRMED: '목표 확인 완료',
+  HOLD: '작업 보류', WAITING: '시작 대기',
+};
+const JOB_REASON_LABEL = {
+  CANCELLED_BY_OPERATOR: '운영자가 취소함',
+  OPERATOR_SHEET_ACCESS_UNAVAILABLE: '작업자 간지 접근 확인 필요',
+  SITE_AUTHORITY_CHANGED: '사이트 제어 권한 변경 · 재확인 필요',
+  FLEET_FENCE_CHANGED_BEFORE_SUBMISSION: '전송 전 정지 세대 변경',
+  FLEET_CLAIM_MISSING_BEFORE_SUBMISSION: '전송 전 장치 예약 확인 불가',
+  site_stop: '사이트 정지 · 실제 장치 상태 확인 필요',
+};
+function jobStatusLabel(status, reason) {
+  return reason === 'CANCELLED_BY_OPERATOR' ? '작업 취소됨' : JOB_STATUS_LABEL[status] || '상태 확인 필요';
+}
+function jobReasonLabel(reason) {
+  return !reason ? '' : JOB_REASON_LABEL[reason] || '사유 확인 필요 · 진행 원장 상세를 확인하세요';
+}
 $('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
 function stopNotice(message, state) {
@@ -312,7 +331,7 @@ $('propose').addEventListener('click', () => action(async () => {
   if (JSON.stringify(references()) !== JSON.stringify(previewRefs)) throw new Error('문서가 바뀌었습니다. 미리보기를 다시 확인하세요.');
   const result = await post('/api/fleet/cell-app/proposals', {...previewRefs,
     request_key: $('request-key').value, workcell_id: $('workcell').value, instance_id: $('instance').value});
-  $('proposal').textContent = `제안 ${result.proposal.proposal_id}\n상태 ${result.mission?.status || result.proposal.state}\n운영자 별도 승인 대기`;
+  $('proposal').textContent = `제안 ${result.proposal.proposal_id}\n상태 ${jobStatusLabel(result.mission?.status || result.proposal.state)}\n운영자 별도 승인 대기`;
   $('mission-id').value = result.proposal.proposal_id;
   job = null;
   $('notice').textContent = '제안 완료 · 관제에서 별도 승인 후 진행 상태를 확인하세요.';
@@ -353,11 +372,11 @@ async function readJob() {
   const control = await api('/api/fleet/dispatch-control');
   jobGeneration = control.generation;
   job = result.job; $('job-state').textContent = JSON.stringify(job, null, 2);
-  $('job-summary').textContent = `${job.status} · ${job.steps.length}단계 중 ${job.current_step_index + 1}단계 · ${job.reason || '확인한 상태'}`;
+  $('job-summary').textContent = `${jobStatusLabel(job.status, job.reason)} · ${job.steps.length}단계 중 ${job.current_step_index + 1}단계${job.reason ? ' · ' + jobReasonLabel(job.reason) : ''}`;
   $('step-progress').replaceChildren(...job.steps.map(step => {
     const li = document.createElement('li');
     const inputs = step.step.inputs;
-    li.textContent = `${step.step_index + 1} · ${inputs.pallet_id} · ${inputs.layer_index + 1}층 · ${inputs.item} · ${step.status}${step.reason ? ' · ' + step.reason : ''}`;
+    li.textContent = `${step.step_index + 1} · ${inputs.pallet_id} · ${inputs.layer_index + 1}층 · ${inputs.item} · ${jobStatusLabel(step.status, step.reason)}${step.reason ? ' · ' + jobReasonLabel(step.reason) : ''}`;
     return li;
   }));
   $('sheet-progress').replaceChildren(...(job.operator_checkpoints ?? []).map(row => {
@@ -367,7 +386,7 @@ async function readJob() {
     li.textContent = `${row.pallet_id} · ${row.layer_index + 1}층 · ${row.thickness_m * 1000} mm · ${instruction}`;
     return li;
   }));
-  $('notice').textContent = `작업 ${job.status} · ${job.reason || ''} · 확인한 정지 세대 ${jobGeneration}`;
+  $('notice').textContent = `작업 ${jobStatusLabel(job.status, job.reason)}${job.reason ? ' · ' + jobReasonLabel(job.reason) : ''} · 확인한 정지 세대 ${jobGeneration}`;
 }
 $('mission-id').addEventListener('input', () => { editEpoch++; job = null; jobGeneration = null; refreshControls(); });
 $('read-job').addEventListener('click', () => action(readJob));
