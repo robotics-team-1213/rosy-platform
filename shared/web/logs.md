@@ -676,7 +676,7 @@
 - 증거: 로봇 상태 전환 브라우저 1 passed, 역할 셸과 공용 계약 51 passed, `known_failures.py` 0 NEW.
 - gate 변화: 공용 의미 구조의 LOCAL 보정. 소비 표면별 G2/G3는 별도다.
 
-## 2026-10-07 · uiux/fleet-name-birdseye · D-487 관제 표면 표시 이름 Rosy Fleet
+## 2026-10-07 · 93c606cbb · D-487 관제 표면 표시 이름 Rosy Fleet
 
 - 변경: `surfaces.yaml` `console` 항목의 `app_name`·`app_name_en`·`short_name`과 `icons/console.svg` `<title>`을 `Rosy Fleet`으로. id·아이콘 파일 이름은 그대로. 워드마크 cqi 주석에서 옛 이름을 뺐다.
 - 증거: `shared/web/test/` 통과(브랜치 시험 기록).

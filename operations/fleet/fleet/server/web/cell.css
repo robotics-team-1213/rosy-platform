@@ -16,6 +16,7 @@ input:focus-visible, textarea:focus-visible, a:focus-visible { outline: var(--fo
 pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
 a { color: var(--ink); }
 .console-return { box-sizing: border-box; min-height: var(--target-secondary); display: inline-flex; align-items: center; padding: var(--space-3); }
+#layout-preview:not([hidden]) { display: grid; gap: var(--space-3); }
 #layout { width: 100%; height: 20rem; color: var(--ink); }
 #layout rect { fill: var(--surface-raised); stroke: var(--series-primary); stroke-width: 2px; }
 #layout text { fill: var(--ink); font: var(--text-micro) var(--mono); }

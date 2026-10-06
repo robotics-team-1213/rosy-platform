@@ -563,3 +563,10 @@
 - 변경: Operator 전용 `POST /api/v1/host/lamp/identify`가 blue/amber만 받아 기존 호스트 하드웨어 요청 큐로 전달한다. 응답은 영상 확인 대기 상태다.
 - 증거: API 입력·쿨다운 호스트 테스트 통과. 장치 적용과 실제 점멸은 미확인.
 - gate 변화: SOURCE/LOCAL만 확인. DEVICE/FIELD 상태는 그대로 둔다.
+
+
+## 2026-10-06 · uncommitted · chore(core_api_web): 계약 문서 버전 v1.109 동기
+
+- 변경: FastAPI docstring/설명의 라이브 계약 버전을 v1.109로 갱신(D-484 additive 행). 동작 변화 없음.
+- 증거: `test_protocol_version_alignment.py`가 문서 헤더·변경 이력·설명 일치를 검증.
+- gate 변화: 없음.

@@ -55,8 +55,10 @@
       <ui-head><ui-text id="preview-heading" scale="label">3 · 적재 계획 확인</ui-text><ui-button id="compile" kind="primary">미리보기</ui-button></ui-head>
       <ui-status id="summary" state="unavailable">저장한 레시피와 셀을 기준으로 계획을 계산합니다.</ui-status>
       <details><summary>계산된 계획 상세</summary><pre id="preview" aria-label="컴파일된 적재 계획"></pre></details>
-      <label for="layout-layer">팔레트 · 층 선택</label><select class="ui-field" id="layout-layer" aria-label="팔레트와 층"></select>
-      <svg id="layout" viewBox="0 0 800 320" role="img" aria-label="적재 위치 평면도 · base 좌표"></svg>
+      <div id="layout-preview" hidden>
+        <label for="layout-layer">팔레트 · 층 선택</label><select class="ui-field" id="layout-layer" aria-label="팔레트와 층"></select>
+        <svg id="layout" viewBox="0 0 800 320" role="img" aria-label="적재 위치 평면도 · base 좌표"></svg>
+      </div>
     </ui-section>
     <ui-section aria-labelledby="proposal-heading">
       <ui-head><ui-text id="proposal-heading" scale="label">4 · 작업 제안</ui-text></ui-head>

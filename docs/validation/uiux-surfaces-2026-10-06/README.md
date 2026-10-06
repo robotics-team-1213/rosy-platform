@@ -4,7 +4,7 @@
 
 제품 전체 수용 기준은 사용자 확인에 따라 **활성 표면 모두의 G1, 선언한 G2 상태·폭 전부, G3 실제 사용자 검토와 해당 실물 장치 readback**이다. 일부 화면의 너비 보정이나 LOCAL 시험 통과로 이 판정을 올리지 않는다.
 
-G3 실제 운영자 독회는 요청자가 수행하기로 했다. 결과·관찰·재현 폭은 아직 받지 않았으므로 G3 판정은 HOLD다. 픽셀 검수의 class 파일 미연결 상태에서는 점/브러시 전환을 막고 연결 이유를 표시한다. 1440/800/390/320px 브라우저 회귀와 점 미리보기·브러시 조작 **10 passed**, `known_failures.py` **0 NEW**; 수정 후 320px 원본은 X: `captures/pixel-disabled-fix/learning-pixels-320.png`, 실행 기록은 `logs/merge-20261006/pixel-disabled-fix.txt`다.
+G3 실제 운영자 독회는 요청자가 수행하기로 했다. [실제 사용자 독회 기록지](operator-walkthrough.md)에 표면별 작업·여덟 판정 항목과 실물 근거 자리를 마련했다. 결과·관찰·재현 폭은 아직 받지 않았으므로 G3 판정은 HOLD다. 픽셀 검수의 class 파일 미연결 상태에서는 점/브러시 전환을 막고 연결 이유를 표시한다. 1440/800/390/320px 브라우저 회귀와 점 미리보기·브러시 조작 **10 passed**, `known_failures.py` **0 NEW**; 수정 후 320px 원본은 X: `captures/pixel-disabled-fix/learning-pixels-320.png`, 실행 기록은 `logs/merge-20261006/pixel-disabled-fix.txt`다.
 
 ## 이번 회차의 질문과 근거
 
@@ -87,6 +87,8 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 로봇 카드의 동등한 「목표 지정」·「취소」 버튼이 글자 길이와 관계없이 같은 폭을 쓰도록 했다. 320/390px에서 두 버튼의 렌더된 폭 차이 ≤1px, 가로 넘침 0을 단언했다. 1920px 전체 높이 검사에서 남아 있던 5px 세로 넘침은 본문 하단 여백을 줄여 해소했다. Fleet 브라우저 **6 passed**, `known_failures.py` **0 NEW**다. 전화 원본은 같은 X: 회차의 `fleet_console_mobile_default_{320,390}.png`다. 공유 `main`의 동일 높이 검사는 15px 넘침으로 실패했으므로, 이 결과는 브랜치의 LOCAL 개선이며 현장 판정은 아니다.
 
+현재 트리의 우선 예외 카드에는 「LED로 찾기」가 추가되어 과거 두 버튼만 세던 시험이 320/390px에서 각각 실패했다. 화면을 확인하니 320px은 동등한 목표·취소가 117px씩, 별도 LED 행동이 242px 전폭이고, 390px은 세 행동이 약 99px씩 같은 폭이다. 시험을 현재 행동 집합과 행별 폭 규칙에 맞춰 다시 실행해 **2 passed**, `known_failures.py` **0 NEW**이며 전체 목록을 펼친 뒤에도 가로 넘침·머리 겹침은 0이다. 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-07-fleet-current\fleet_console_mobile_default_{320,390}.png`와 같은 폴더의 `fleet_console_mobile_{320,390}.png`; 실행 기록도 같은 폴더의 `fleet-mobile{,-updated}.txt`다. 이는 LOCAL 합성 로봇 응답의 레이아웃 근거이며 현장 관제자의 작업 독회는 남는다.
+
 설치 화면의 카메라 연결 승인 제목 아래에 건너뛴 `h5` 수준도 `h3`/`h4`로 정리했다. 글자 크기와 간격은 기존 토큰 값을 유지한다. 이는 문서 구조 수정이며 화면 사용성·현장 수용 판정은 위 상태 근거와 별개다.
 
 ### 실제 사이트 PC mDNS 점검 — UI 수용과 별개
@@ -110,6 +112,8 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 이미 접속한 Cell에서 세션 재확인이 401·403으로 거부될 때, 이전 계정·저장 문서 목록·저장 버전·미리보기 요약·작업 상태를 내려 현재 근거로 오인하지 않게 했다. 운영자 작성 초안은 남기되 저장·제안은 막고, 320px 첫 화면에 권한 확인과 재접속 안내를 표시한다. 거부 전 상태를 가진 로컬 브라우저 2셀을 재생했고 가로 넘침 0이다. Cell 브라우저 전체 **21 passed**, Cell API **8 passed**, 공용 UI 계약 **231 passed, 25 skipped**, 마지막 접속 안내 변경의 집중 재검사 **3 passed**, JS 구문 검사 통과, 각 성공 실행의 `known_failures.py` **0 NEW**다. 원본은 X: `captures/fleet-cell/fleet-cell-auth-{401,403}-320x568.png`, 실행 기록은 `logs/fleet-cell-auth-{focus-final,full,api,shared,final-focus}.txt`다. 이는 권한 거부 전환의 LOCAL G2 부분 근거이며 실제 계정 만료·권한 변경 검증은 남는다.
 
 동등한 레시피·셀 문서 창은 1440×1000에서 같은 폭으로 나란히 놓이고 390×844·320×568에서 같은 가용 폭으로 쌓인다. compact의 문서·미리보기·제안·승인·복귀 행동도 각 행동 칸의 전폭을 쓴다. 기존에는 390/320px의 「불러오기」가 82px에 머물러 272px 칸을 채우지 못했고, 「미리보기」도 제목 옆의 좁은 버튼이었다. 먼저 Cell 전체 **24 passed**, 공용 UI 계약 **231 passed, 25 skipped**를 확인했다. 미리보기 폭을 마지막으로 맞춘 뒤 세 폭 기하 검사 **3 passed**, 미리보기·취소 상호작용 **4 passed**, 각 성공 실행의 `known_failures.py` **0 NEW**다. 전체 페이지 원본은 X: `captures/fleet-cell/fleet-cell-widths-{1440x1000,390x844,320x568}.png`, 실행 기록은 `logs/fleet-cell-{uniform-full,uniform-shared,uniform-widths-final,uniform-interaction}.txt`다. 긴 전화 화면에서 실제 작업 흐름을 찾는 G3 검토는 남는다.
+
+현재 320px 첫 화면의 미리보기 전 단계에는 비어 있는 팔레트 선택과 20rem 높이의 빈 평면도가 남아 작업 제안까지 긴 공백을 만들었다. 컴파일된 배치가 있을 때만 선택·평면도를 보이고, 문서 변경·미리보기 실패 때는 함께 숨긴다. 변경 전 320px 브라우저 **1 failed**, 변경 뒤 320px 초기·실패/복구 **2 passed**, 390px 초기·1440px 실패/복구 **2 passed**, 공용 UI·토큰 계약 **62 passed**, 각 `known_failures.py` **0 NEW**, JS 구문 검사 통과다. 원본은 X: `captures/fleet-cell-empty-layout-fix/fleet-cell-widths-{320x568,390x844}.png`, 실행 기록은 `logs/merge-20261006/fleet-cell-empty-layout-{fix,other-widths,g1}.txt`다. 실제 작업자의 단계 발견과 장치 배치는 G3/현장 HOLD다.
 
 저장한 레시피를 수정하면 이전 「저장된 버전」 대신 저장 전 초안임을 표시한다. 저장 409 충돌은 작성 내용 복사→최신 문서 불러오기→내용 재적용→저장 순서를 알리고, 컴파일 503은 이전 미리보기 결과를 내리고 결과 미확인·재확인을 표시한다. 두 상태를 1440×1000·390×844·320×568에서 재생하고 로컬 상태 칸이 각 패널 폭을 채우며 제안이 막히는지 확인했다. 320px 저장 503도 결과 미확인으로 구분했다. Cell 전체 **31 passed**, Cell API **8 passed**, 공용 UI 계약 **231 passed, 25 skipped**를 확인한 뒤, 문서가 아직 저장되지 않아 미리보기를 시작할 수 없는 세 폭을 별도 문구로 **3 passed** 재검사했다. JS 구문 검사 통과, 각 성공 실행의 `known_failures.py` **0 NEW**다. 원본은 X: `captures/fleet-cell/fleet-cell-{save-conflict,preview-unavailable}-{1440x1000,390x844,320x568}.png`, `fleet-cell-save-unavailable-320x568.png`; 실행 기록은 `logs/fleet-cell-{write-final-focus,save-unavailable,write-full,write-api,write-shared,preview-precondition}.txt`다. 합성 응답의 LOCAL G2 부분 근거이며 실제 충돌·장치 실행을 검증하지 않는다.
 
@@ -187,6 +191,8 @@ G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나�
 
 네 경로의 작업영역 API가 HTML 본문의 503을 돌려주는 경우를 1440/800/390px에서 재생했다. 응답 상태를 JSON 파싱 전에 확인해 연결 끊김·권한 거부와 다른 「서비스를 사용할 수 없습니다」 및 복구 후 재시도를 표시하고, 편집·등록 입력은 막는다. 390px 객체 검수와 자료 등록의 다시 확인 버튼은 가용 폭을 채운다. 학습 작업은 같은 실패 문구를 두 번 표시하지 않는다. 503 12셀과 기존 연결 끊김·권한 경로를 묶은 브라우저 **24 passed**, 마지막 390px 503·빈 필터 **5 passed**, 각 `known_failures.py` **0 NEW**다. 원본은 X: `captures/learning-unavailable/learning-{objects,pixels,learning,catalog}-unavailable-{1440,800,390}.png`에 있다. 이는 LOCAL 가짜 응답 근거이며 실제 서버 장애와 검수자 G3는 남는다.
 
+현재 트리에서 같은 네 경로의 503→재시도를 390px과 추가 320px에 다시 재생했다. 각각 브라우저 **4 passed**, `known_failures.py` **0 NEW**이며 네 화면 모두 가로 넘침 0, 오류와 다시 확인 행동이 보였다. 객체·자료 등록의 좁은 폭 재시도도 가용 폭의 80% 이상을 채운다. 원본은 X: `captures/learning-unavailable-current/learning-{objects,pixels,learning,catalog}-unavailable-{390,320}.png`, 실행 기록은 `logs/merge-20261006/learning-unavailable-{current,320}.txt`다. 합성 503의 LOCAL 근거이며 실제 장애와 검수자 G3는 미확인이다.
+
 픽셀 검수의 결과 없는 필터에서도 이전 사진 제목·상태와 빈 사진 선택기가 남아 있던 것을 발견했다. 현재는 「픽셀 승인 0장 · 필터 결과가 없습니다」를 표시하고 사진 선택·이전/다음 이동을 숨긴다. 「전체 보기」로 원래 검수 화면에 복귀한다. 1440·800·390px 빈 상태 **3 passed**, 관련 픽셀 브라우저 **11 passed**(이동 버튼 숨김 전), 최종 빈 상태 재검사 **3 passed**, 각 실행의 `known_failures.py` **0 NEW**다. 최종 캡처 `learning-pixels-empty-{1440,800,390}.png`는 같은 X: `captures/`에 둔다. 이는 합성 자료의 LOCAL G2 일부와 G3 정직 항목의 부분 근거이며 실제 검수자 작업 수용은 남는다.
 
 등록된 사진이 0장인 최초 사용 상태는 필터 결과 없음과 분리했다. 객체 검수는 로딩 화면 대신 「등록된 사진이 없습니다」와 「자료 등록 열기」를 보이며, 픽셀 검수도 빈 필터와 이전/다음 이동을 숨기고 같은 다음 단계로 간다. 390px에서 두 경로를 재생하고 자료 등록으로 실제 이동했다. 현재 트리의 객체·픽셀 회귀 브라우저 **24 passed**, `known_failures.py` **0 NEW**다. 최종 캡처 `learning-{objects,pixels}-first-use-390.png`는 같은 X: `captures/`에 둔다. 이는 합성 저장소를 비운 LOCAL 최초 사용 근거이며 실제 자료 등록·승인 작업의 G3는 남는다.
@@ -233,6 +239,10 @@ Pilot 390×844에서 회전 조작을 첫 화면에 올리려고 아래 조작 �
 
 객체·픽셀 검수의 작업영역 응답을 390px에서 3초 넘게 보류하면 대기 시간이 초 단위로 보이고 편집은 계속 막힌다. 응답 후에는 최신 검수 화면으로 돌아온다. 브라우저 **2 passed**, `known_failures.py` **0 NEW**이며 원본은 X: `captures/learning-delayed/learning-{objects,pixels}-delayed-390.png`다. 이는 **서버 응답 대기 시간**의 LOCAL 근거다. D-153의 값별 `delayed` 근거와 나이, 다른 선언 폭·경로, 실제 검수자 작업은 별도로 남는다.
 
+학습 작업 목록과 자료 등록의 첫 응답도 3초 이상 기다리면 초 단위 대기 시간을 표시하고, 응답 전에는 작업 연결·자료 등록을 막는다. 응답 후 작업 행동이 다시 열리고 대기 상태는 사라진다. 1440/800/390px 여섯 합성 응답 셀 중 첫 재실행은 **5 passed, 1 failed**였다. 1440px 자료 등록 타이머가 동시 시험 부하에서 5초 안에 진행되지 않아 시간 단언이 실패했고, 시간 허용을 늘린 해당 셀 재실행은 **1 passed**, `known_failures.py` **0 NEW**였다. 첫 실행의 자료 등록 세 셀은 숨긴 상태 노드에 남은 이전 문구까지 검사한 시험 오류였고, 보이는 상태의 숨김을 검사하도록 고쳤다. 최종 여섯 화면 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-07-learning-delay\learning-{learning,catalog}-delayed-{1440,800,390}.png`다. 이는 LOCAL 서버 응답 대기 근거이며, 값별 신선도·실제 검수자 작업과 G3는 HOLD다.
+
+390px 학습 작업 목록의 느린 응답 화면은 상태 줄과 빈 결과 칸에 같은 대기를 두 번 보여 줬다. 응답 전에는 빈 결과 칸을 숨기고 상태 줄만 남기며, 503 오류에서는 결과를 확인할 수 없다는 빈 상태와 재시도가 돌아온다. 느린 응답·503 회복 브라우저 **2 passed**, `known_failures.py` **0 NEW**; 원본은 `X:\DevTemp\projects\rosy-platform\2026-10-07-learning-delay-clean\learning-learning-{delayed,unavailable}-390.png`다. 현재 응답의 LOCAL 화면 근거이며 검수자 G3는 남는다.
+
 ### 장비·작업 준비 G3 독회 — LOCAL 진행 중
 
 | D-153 항목 | 현재 근거 | 남은 판정 범위 |
@@ -257,6 +267,8 @@ D-153이 이름 붙인 G1 시험 중 팔레트·토큰(스타일가이드 포함
 이번 브랜치의 전체 `shared/web/test` 재실행은 처음에 세 계약 실패를 드러냈다. 역할 화면의 단순 기록을 D-329 형식의 `matrix.json`과 구분해 `role-state-records.json`으로 이름 붙이고, Fleet compact 머리의 현재 격자 계약을 갱신했으며, 명시적인 활성화 호출을 비활성 사유 누락으로 읽던 검사기를 고쳤다. 개발 연결 버튼은 요청 중·재시도 대기의 비활성 이유를 제공한다. 수정 후 공유 UI 계약 **231 passed, 25 skipped**, 개발 연결의 기본·호환 경로 브라우저 **2 passed**, 각 `known_failures.py` **0 NEW**다. 이유 속성을 제거하면 호환 경로 시험이 실패하고 복원 후 통과했다. 원본 실행 기록은 X: `logs/g1-current-fixed.txt`와 `logs/dev-entry-post-mutation.txt`다. 25건의 skip과 표면별 G2/G3 미완료를 UI/UX GO로 해석하지 않는다.
 
 Cell 작업 버튼의 비활성 사유 추가 후 현재 트리에서 D-153 명명 G1 계약은 **90 passed**, `known_failures.py` **0 NEW**였다(X: `logs/g1-current-after-widths.txt`). 전체 공유 UI 시험은 첫 실행에서 Cell의 `disabled` 쓰기와 사유 쓰기 사이가 정적 검사 범위를 벗어나 **1 failed, 230 passed, 25 skipped**였다(X: `logs/shared-ui-current-after-widths.txt`). 사유 계산을 먼저 하고 `disabled`와 `reason`을 함께 갱신한 뒤 해당 검사 **1 passed**, 전체 공유 UI **231 passed, 25 skipped**, Cell 작업 상태·간지 접근의 1440/390/320px 브라우저 **6 passed**이며 두 최종 실행의 `known_failures.py`는 **0 NEW**다(X: `logs/shared-ui-after-cell-guard.txt`, `logs/cell-after-shared-guard.txt`). 이는 LOCAL 계약·합성 상태 근거다. 전체 선언 상태·폭 G2, 실제 사이트 UI/장치 readback, 운영자 G3는 HOLD다.
+
+2026-10-07 로컬 `main` `42f9a617f`에서 D-153 명명 G1의 팔레트·토큰/스타일가이드·Fleet 문법·CORE 증거와 반응형 선언 검사를 다시 실행해 **90 passed, 1 warning**, `known_failures.py` **0 NEW**였다. 로그는 `X:\DevTemp\projects\rosy-platform\2026-10-07-g1-current\g1.txt`다. 경고는 Starlette의 테스트 클라이언트에서 나온 anyio 별칭 deprecation이다. 이 결과는 해당 커밋의 LOCAL 기계 계약에 한정되며, 후속 `main` 변경·G2·G3·실물 판정을 자동으로 보증하지 않는다.
 
 게임 보드 브라우저 전체는 현재 **19 passed**, 게임 모듈은 **113 passed**였다. 최초 1280/390px와 첫 연결 오류에서 피치 안의 명시적 대기·오류 문구를 확인했고, 정지 실패 뒤 재시도 시험의 관찰은 CSP에 걸리는 스크립트 대기 대신 DOM locator를 쓴다. 이 화면들은 관측 frame 없는 fixture이며 실제 카메라와 로봇 상태를 나타내지 않는다.
 
@@ -324,7 +336,7 @@ Pairing의 인증서 확인·실패 복구 조작은 각 상태의 두 반폭 �
 
 | 표면과 먼저 답할 질문 | 선언 뷰포트 | G2에서 채울 상태와 현재 근거 |
 |---|---|---|
-| `pinky-review`: 검수자는 원본과 라벨을 대조하고 승인·제외·내보내기를 정확히 끝낼 수 있는가? | 웹 1440·800·390px, 객체·픽셀 검수·작업 목록·자료 등록 | 두 편집 창의 폭은 [객체 캡처](captures/learning-width/learning-objects-1440.png)·[픽셀 캡처](captures/learning-width/learning-pixels-1440.png) 등에서 부분 확인. 390px에서는 각 편집 칸의 작업 버튼이 전폭이고 800px에서는 동등 폭 열이다(X: 캡처). 네 경로의 503 사용 불가를 세 폭에서, 작업 목록·자료 등록의 응답 보류·권한 거부·재시도와 객체·픽셀 편집의 응답 보류·연결 끊김·저장 충돌·권한 거부 및 합성 승인·제외·자료 준비 결과를 1440·800·390px에서 부분 확인했다. 각 경로의 실제 지연, 자료 등록 완료와 실제 검수·학습 수용을 채운다. 로봇 SAFE_STOP은 이 개발 도구의 조작 상태가 아니다. |
+| `pinky-review`: 검수자는 원본과 라벨을 대조하고 승인·제외·내보내기를 정확히 끝낼 수 있는가? | 웹 1440·800·390px, 객체·픽셀 검수·작업 목록·자료 등록 | 두 편집 창의 폭은 [객체 캡처](captures/learning-width/learning-objects-1440.png)·[픽셀 캡처](captures/learning-width/learning-pixels-1440.png) 등에서 부분 확인. 390px에서는 각 편집 칸의 작업 버튼이 전폭이고 800px에서는 동등 폭 열이다(X: 캡처). 네 경로의 503 사용 불가를 세 폭에서, 작업 목록·자료 등록의 응답 보류·3초 이상 대기 시간·권한 거부·재시도와 객체·픽셀 편집의 응답 보류·연결 끊김·저장 충돌·권한 거부 및 합성 승인·제외·자료 준비 결과를 부분 확인했다. 값별 신선도, 자료 등록 완료와 실제 검수·학습 수용을 채운다. 로봇 SAFE_STOP은 이 개발 도구의 조작 상태가 아니다. |
 | `pilot-shell`: 운전자는 올바른 로봇을 찾아 연결 상태를 확인할 수 있는가? | 네이티브 가로 1000·600·400dp, 400·600dp 글자 130% | 빈 발견·기기 상태와 합성 후보·보류 행을 위 에뮬레이터 캡처로 부분 확인. 각 폭의 실제 최초 기동·발견 중·지연·연결 끊김·사용 불가, 실제 후보·선택·승인·거부·연결 실패·재접속을 채운다. SAFE_STOP·주행 명령은 연결 로비가 아닌 Pilot PWA에서 평가한다. |
 | `cam`: 설치자는 카메라를 올바른 수신기에 연결하고 송출 상태를 확인할 수 있는가? | 네이티브 세로 320×640·390×844, 글자 130%·200% | LAN 빈 목록·설정·가짜 연결의 송출 대기와 Pairing/Peer 합성 상태 6종을 에뮬레이터에서 부분 확인. 실제 최초 기동·탐색 중·지연·연결 끊김·사용 불가, 실제 Pairing·Peer 승인/거부, 권한/입력 오류, 송출 시작·중지·실패를 채운다. SAFE_STOP·로봇 명령은 Cam의 소유 범위 밖이다. |
 

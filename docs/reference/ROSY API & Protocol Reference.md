@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.108
+**Version:** v1.109
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -933,7 +933,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `nav.line_driver_released` | info | 로봇 | `{mode}` — D-344 §8 운전자 확인(`hold_s`)이 끊겨 CORE 가 line-follow 를 스스로 내림 (v1.63) |
 | `nav.line_obstacle_hold` | warning | 로봇 | `{mode, clearance_m, held_s}` — D-344 §11 앞 물체 정지(`obstacle_ahead`)가 `line_follow.obstacle_escalate_s` 넘게 이어짐, 정지 한 번에 한 번 (feat/device-prep, v1.64). 몸 기준 정지(D-422)면 `body_gap_m`·`stop_gap_m`·`clearance_source` 도 온다 (v1.84) |
 | `nav.line_stuck_opened` | warning | 로봇 | `{stuck_id, cause, front_clearance_m, rear_clearance_m, rear_state, turn_clearance_m, rear_blind_m, last_lane, preview_seq, restuck_of, attempts}` — D-407 §1 막힘 열림: `cause` 는 `obstacle_ahead`(앞물체 정지가 `obstacle_escalate_s` 이상) 또는 `lane_lost`. 여유는 로봇별 self-mask 적용, 앞은 LiDAR 기준 경로 띠, 뒤는 URDF 몸 뒤끝 기준, 회전은 회전 반경 밖; `rear_blind_m` 은 LiDAR `range_min` 때문에 안 보이는 뒤 거리. 같은 막힘에 한 번 (v1.74) |
-| `nav.line_stuck_asked` | info | 로봇 | `{stuck_id, cause, console_linked, local_fallback_s, attempts, reason, decisions}` — D-407 §2·§3 관제 판단 요청(FleetAgent 가 중계). `local_fallback_s` 가 null 이면 로컬 복구로 넘어가지 않고 관제 답만 기다린다(`reason`: `opened`·`console_wait`·`local_disabled`·`local_refused`·`local_aborted`·`attempts_exhausted`) (v1.74) |
+| `nav.line_stuck_asked` | info | 로봇 | `{stuck_id, cause, console_linked, local_fallback_s, attempts, reason, decisions}` — D-407 §2·§3 관제 판단 요청(FleetAgent 가 중계). `local_fallback_s` 가 null 이면 로컬 복구로 넘어가지 않고 관제 답만 기다린다(`reason`: `opened`·`console_wait`·`local_disabled`·`local_refused`·`local_aborted`·`attempts_exhausted`·`local_candidates_exhausted`). 늦게 연결한 관제는 반복 이벤트가 아니라 로봇 status 의 열린 stuck 으로 찾는다 (v1.74) |
 | `nav.line_stuck_answered` | info | 로봇 | `{stuck_id, decision, by, principal_ref, accepted, reason, rear_blind_m, trail_m, trail_yaw_deg, trail_age_s}` — D-407 §2 관제 답. `by` 는 역할, `principal_ref` 는 답한 토큰의 이름 — 설정된 id 가 있으면 그 id, 없으면 `anon-` + CORE 프로세스마다 새로 만드는 키로 낸 HMAC 앞 12자(해시 앞자리를 그대로 내면 후보 토큰으로 확인할 수 있어서다; 이 값은 CORE 한 번 실행 동안만 같다). 비밀이 아니다. v1.80 에서 `token_id` 에서 이름을 바꿈: Fleet 감사 저장소가 자격 증명 이름으로 거부했다. `BACK_AND_RETRY` 거부면 판정한 scan 의 `rear_blind_m`·`trail_m`·`trail_yaw_deg`·`trail_age_s`, 아니면 null. 거부된 답(`stuck_id_mismatch`, 거부 사유)도 남는다 (v1.74) |
 | `nav.line_stuck_local_attempt` | warning | 로봇 | `{stuck_id, attempt, trigger, back_m, speed_mps, rear_clearance_m, rear_blind_m, trail_m, trail_age_s}` — D-407 §4 로컬 후진 시작. `rear_blind_m` 은 LiDAR `range_min` 과 몸 뒤끝을 넘는 self-mask 창이 가리는 뒤 깊이, `trail_m` 은 방금 앞으로 지나온 거리(사용자 결정 2026-10-02: 사각 띠는 그 안에서만 들어간다)(`trigger`: `ask_timeout`·`no_console`·`retry`·`console`) (v1.74) |
 | `nav.line_stuck_local_result` | info | 로봇 | `{stuck_id, attempt, result, reason, lane_visible, front_clear, rear_clearance_m, rear_blind_m, trail_m, trail_yaw_deg, trail_age_s}` — D-407 §4 결과: `recovered`·`still_stuck`·`refused`(시작 전)·`aborted`(후진 중 뒤 여유·scan stale·관제 WAIT) (v1.74) |
@@ -1279,7 +1279,7 @@ Compose/Caddy 구성이 담당한다. 로컬 합성 카메라의 Docker end-to-e
 |---|---|---|---|
 | POST | `/api/fleet/sightings` | source 전용 Bearer token | vision worker가 `SiteSightingPayload`를 제출. 토큰 설정이 허용한 source/robot/map/calibration만 수용 |
 | GET | `/api/fleet/sightings` | console Bearer token | 로봇별 최신 sighting, server-derived source, capture/receive age 및 1 s lease stale 상태 |
-| GET | `/api/fleet/site-map` | console Bearer token 또는 viewer 이상 | 설정된 `corner_world_m` 사각형을 `map_id`별로 묶어 반환(`frame: map`, m 단위 `polygon_m`·`bounds_m`, source별 `source_id`·`calibration_revision`·`corner_marker_ids`·`robot_ids`·`robot_markers`). 토큰은 싣지 않는다. 설정·기하가 없으면 404 `NO_SITE_MAP`. 표시 전용 |
+| GET | `/api/fleet/site-map` | console Bearer token 또는 viewer 이상 | 설정된 `corner_world_m` 사각형을 `map_id`별로 묶어 반환(`frame: map`, m 단위 `polygon_m`·`bounds_m`, source별 `source_id`·`calibration_revision`·`calibration_source`·`corner_marker_ids`(D-484 `field_boundary` 소스는 `null`)·`robot_ids`·`robot_markers`). 토큰은 싣지 않는다. 설정·기하가 없으면 404 `NO_SITE_MAP`. 표시 전용 |
 
 `POST` body `SiteSightingPayload`:
 
@@ -1301,6 +1301,29 @@ Compose/Caddy 구성이 담당한다. 로컬 합성 카메라의 Docker end-to-e
 
 `quality`가 `null`이면 측정하지 않은 상태다. 화면 표시에만 사용하며 D-268 정책 증거로 승격하지 않는다.
 
+D-484(v1.109)부터 `corner_marker_ids`는 선택 필드가 되고, 대신 `calibration_source`가
+추가된다. 값은 `corner_markers`(기본, 코너 ArUco 마커 측정) 또는 `field_boundary`
+(흰 경계 사각형+페인트 정합 orientation 캘리브레이션)다. `field_boundary` sighting은
+`corner_marker_ids` 없이 `calibration_source: "field_boundary"`만 싣고, 서버 설정의
+`calibration_source`까지 일치해야 한다. 과거 페이로드(마커 id만)는 그대로 유효하다.
+
+```json
+{
+  "robot_id": "rosy_01",
+  "x": 1.25,
+  "y": -0.5,
+  "yaw": 0.2,
+  "captured_at": 1790000000.25,
+  "seq": 42,
+  "map_id": "lane-map:sha256:abc",
+  "calibration_revision": "ceiling-1-v2",
+  "processor_revision": "aruco-map-v1",
+  "quality": null,
+  "corner_marker_ids": null,
+  "calibration_source": "field_boundary"
+}
+```
+
 `captured_at`은 UTC Unix seconds다. 서버가 `source_id`와 `received_at`을 붙인다. client가
 `source_id`, image/JPEG/URL 또는 policy 필드를 추가하면 422다. map/calibration/코너 설정
 불일치, 1 s 초과 stale/future/out-of-order 입력은 409, 허가되지 않은 robot은 403이다.
@@ -1320,7 +1343,7 @@ credential. No browser or Fleet process connects to ROS/DDS.
 |---|---|---|---|
 | GET | `/api/fleet/vision/sources` | Site console Bearer token, or tokenless through the site Caddy proxy from a private LAN address | Configured preview source IDs |
 | POST | `/api/fleet/vision/lease` | Viewer Bearer token, or tokenless through the site Caddy proxy from a private LAN address | 60 s source-scoped lease and direct Vision frame path |
-| GET | `/api/vision/sources/{source_id}/frame` | Vision preview lease Bearer token | One latest fresh JPEG; `Cache-Control: no-store`; `X-Frame-Seq`, `X-Frame-Age-Ms`, `X-Frame-Captured-At`, `X-Frame-Width`, `X-Frame-Height`, `X-Frame-Rotation-Deg`, and `X-Frame-Rectified` describe that exact frame |
+| GET | `/api/vision/sources/{source_id}/frame` | Vision preview lease Bearer token | One latest fresh JPEG; `Cache-Control: no-store`; `X-Frame-Seq`, `X-Frame-Age-Ms`, `X-Frame-Captured-At`, `X-Frame-Width`, `X-Frame-Height`, `X-Frame-Rotation-Deg`, and `X-Frame-Rectified` (`true` manual, `auto` D-484 field calibration, `false` raw) describe that exact frame; `mode: "auto"` requests additionally report `X-Field-Calib` (calibration state) and, while no accepted quad exists, answer the raw JPEG with `X-Frame-State: field-unavailable` |
 | GET | `/api/vision/sources/{source_id}/field-proposal` | Vision preview lease Bearer token | D-360 field-corner proposal JSON for operator review (`proposal` null when no full field is visible); own 1/s bucket per lease subject; detection runs at most once per source per second, off the event loop (readers in between get the last result, 429 while the first run is busy); `no-store`, same freshness 404s, 422 on undecodable frame. Display only, never applied to sightings |
 
 The tokenless camera exception applies only to the two Fleet preview endpoints above. Caddy determines the immediate peer's private address and overwrites a private proxy header for those paths; it strips client-supplied copies on all other Fleet paths. Fleet and Vision are not published outside the site backend network. The issued lease is still required at Vision, source scoped, and expires after 60 seconds. Robot state, commands, enrollment, and other Fleet APIs still require their existing credentials.
@@ -1350,6 +1373,12 @@ dimensions are capped at 1920×1080. The Vision service keeps its raw latest JPE
 for ArUco/sighting processing. OpenCV correction is applied only to the returned
 preview copy. Existing source/principal limit of 5 frame reads per second still
 applies. Invalid settings return 422; missing or stale images remain unavailable.
+
+D-484(v1.109)부터 `rectification`에 `mode: "manual" | "auto"`가 추가됐다(기본
+`manual`, 과거 리스는 그대로 유효). `auto`면 이 문서의 `corners`·왜곡 계수는 무시되고,
+Vision worker가 수용한 필드 경계 사각형으로 평면 보정한다(렌즈 왜곡값도 함께 안 쓴다).
+수용된 사각형이 없으면 원본 JPEG와 `X-Frame-State: field-unavailable`을 돌려준다.
+자동 보정은 미리보기 전용이며 원본 프레임·sighting 경로를 바꾸지 않는다.
 
 Fleet stores operator drafts per source in the current browser only. Until the
 camera intrinsics and floor plane have been measured and reviewed, this view is a
@@ -2357,6 +2386,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.109 | 2026-10-06 | Additive (D-484): 천장 카메라 측정 캘리브레이션에 필드 경계 자동 캘리브레이션 추가. `SiteSightingPayload.corner_marker_ids` 선택화·`calibration_source` 추가, 미리보기 리스 `rectification.mode: "auto"`와 `X-Frame-Rectified: auto`·`X-Field-Calib`·`X-Frame-State: field-unavailable`, site-map source에 `calibration_source`. 로봇 마커·전선·정책 증거 의미 불변 |
 | v1.108 | 2026-10-06 | Additive (D-473): Fleet `GET /api/fleet/auth/connection` and `POST /api/fleet/auth/development-session`. Development connection mode (both `ROSY_DEPLOYMENT=development` and `--connection-mode development`) gives same-LAN (or tailnet) console browsers a 1 h in-memory named operator session; paired mode unchanged. Robot API and envelope 1.0 unchanged |
 | v1.107 | 2026-10-06 | Fix (버전 번호 변경 없음) (fix/sensors-nonfinite-json): `GET /api/v1/sensors`·`/sensors/{type}` 가 LiDAR `ranges` 의 inf/NaN 때문에 500 이던 것을 비유한 값 `null` 로 직렬화. 필드 추가·이름 변경 없음 |
 | v1.107 | 2026-10-06 | Additive (D-472): CORE 후면 LED 단기 식별 요청과 Fleet 단일 로봇 전달 경로. Rosy Cam 프레임 표시만 연결하며 자동 신원·주행 권한은 열지 않음 |

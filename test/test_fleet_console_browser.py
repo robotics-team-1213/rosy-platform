@@ -1877,9 +1877,14 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         assert page.locator("#roster article").count() == 1
         assert "rosy_03" in page.locator("#roster article").inner_text()
         save_temp_screenshot(page, f"fleet_console_mobile_default_{width}.png")
-        action_widths = page.locator("#roster article .robot-actions ui-button").evaluate_all(
+        actions = page.locator("#roster article .robot-actions")
+        action_widths = actions.locator("ui-button").evaluate_all(
             "buttons => buttons.map(button => button.getBoundingClientRect().width)")
-        assert len(action_widths) == 2 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
+        assert len(action_widths) == 3 and abs(action_widths[0] - action_widths[1]) <= 1, action_widths
+        if width == 320:
+            assert abs(action_widths[2] - actions.bounding_box()["width"]) <= 1, action_widths
+        else:
+            assert abs(action_widths[2] - action_widths[0]) <= 1, action_widths
         page.locator("#roster-toggle").click()
         page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")

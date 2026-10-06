@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-06 · uncommitted · uiux(learning): class 파일 미연결 시 편집 도구 잠금
-- 2026-10-06 · uncommitted · uiux(learning): 병합된 검수 폭과 사진 목록 재확인
-- 2026-10-06 · uncommitted · uiux(site): 배포 콘솔의 미인증 화면과 카메라 프레임
-- 2026-10-06 · uncommitted · feat(fleet): D-473 관제 콘솔 개발 연결 모드
-- 2026-10-06 · uncommitted · docs(adr): 콘솔 개발 연결 모드와 주의점 구역 허가
+- 2026-10-07 · uncommitted · uiux: 현재 main G1 재검증
+- 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
+- 2026-10-07 · uncommitted · uiux(learning): 작업·자료 등록의 응답 대기 시간
+- 2026-10-07 · uncommitted · uiux(fleet): LED 행동 추가 뒤 전화 폭 재검증
+- 2026-10-07 · uncommitted · uiux(fleet): Cell 빈 평면도 공백 제거

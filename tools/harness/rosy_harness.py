@@ -27,6 +27,9 @@ from urllib.parse import quote
 
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), also when loaded by path
+import sim2real  # noqa: E402
+
 CONFIG = Path("tools") / "harness" / "harness.yaml"
 GATES = ("SOURCE", "LOCAL", "ROS-SIM", "ARTIFACT", "DEVICE", "FIELD")
 STATES = ("GO", "HOLD", "PARKED", "N/A")
@@ -571,6 +574,8 @@ def generated_targets(repo: Path) -> dict[Path, str]:
         repo / m["path"] / "index.md": render_module_index(repo, m, adr, adr_path) for m in config["modules"]
     }
     targets[repo / config["status"]] = render_status(repo, config)
+    if config.get("sim2real_gaps"):
+        targets[repo / config["sim2real_table"]] = sim2real.render(sim2real.read(repo / config["sim2real_gaps"]))
     return targets
 
 
@@ -723,6 +728,11 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
     adr_text = (repo / config["adr_log"]).read_text(encoding="utf-8")
     adr = parse_adr_log(adr_text, repo / "docs" / "adr")
     errors += [f"ADR log: {e}" for e in validate_adr_log(adr, config.get("adr_gaps") or {})]
+    if config.get("sim2real_gaps"):
+        registry, problem = sim2real.load(repo / config["sim2real_gaps"])
+        gap_errors, gap_warnings = ([problem], []) if problem else sim2real.validate(registry, repo, set(adr.index))
+        errors += [f"sim2real: {e}" for e in gap_errors]
+        warnings += [f"sim2real: {w}" for w in gap_warnings]
     governed = [(config["adr_log"], adr_text)]
     for module in config["modules"]:
         for name in ("progress.md", "logs.md"):

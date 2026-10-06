@@ -194,6 +194,16 @@ def test_core_node_owns_adapter_before_bridge_and_closes_it_with_executor():
     assert "self.control_adapter.close()" in shutdown_source
 
 
+def test_core_node_takes_simulation_sensors_and_the_policy_clock_from_use_sim_time():
+    """Gazebo: the sim flag and the D-468 policy clock key off use_sim_time, never a guess."""
+    source = (Path(__file__).parents[1] / "core" / "node.py").read_text(encoding="utf-8")
+
+    assert 'use_sim_time = self.get_parameter("use_sim_time").value is True' in source
+    assert "simulation_sensors(sensor_cfg, use_sim_time=use_sim_time)" in source
+    assert "simulation=simulation)" in source
+    assert "policy_clock=time.monotonic if use_sim_time else None)" in source
+
+
 def test_core_node_no_longer_fills_the_retired_calibration_block():
     """D-400: build_control_adapter ignores `calibration`, so node.py has nothing to bind to."""
     source = (Path(__file__).parents[1] / "core" / "node.py").read_text(encoding="utf-8")

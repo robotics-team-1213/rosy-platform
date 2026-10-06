@@ -1115,3 +1115,21 @@
 - 변경: lane_keep.py가 626줄로 600줄 파일 예산을 넘어(사이드 플립 수정 +27줄) lane_keep_junction.py로 교차로 HOLD 규칙(_junction, _across_path, 네 상수)를 옮겼다. 동작은 같고 호출부가 편측 판정 거리를 인자로 넘긴다. 패키지 판정 기록을 44646으로 재판정했다.
 - 증거: architecture 33 PASS(예산 포함), 차선 관련 278 PASS/11 SKIP, known_failures 0 NEW. lane_keep.py는 573줄.
 - gate 변화: 없음. 분리는 순수 이동이며 장치·현장 수용 상태는 그대로다.
+
+## 2026-10-06 · uncommitted · feat(sim): sim LiDAR 모양, accept_simulation_scans, GAZEBO 투영 불확실도
+
+- 변경: `is_simulation_scan`이 공용 Gazebo 모델 모양(640 빔, `range_max` 12, `<ns>rplidar_link`)도 받는다(opt-in 뒤에만). `SafetyNode`의 `accept_simulation_scans`(기본 false, `use_sim_time` 필수)가 `enable_simulation_scans`를 부른다. `containment_payload`는 GAZEBO 지면에서만 `uncertainty_m = 2 × max_range / fx`를 낸다. NOMINAL·CALIBRATED는 `None` 그대로다.
+- 증거: `test_scan_acceptance.py`, `test_lane_containment_payload.py` 추가 시험 PASS.
+- gate 변화: 없음. D-468이 장치에서 쓰는 투영 불확실도는 여전히 미측정이다.
+
+## 2026-10-06 · c257fac01 · fix(perception): D-468 lane containment projection uncertainty
+- 변경: `sensing/perception/lane_containment.py`가 NOMINAL ground의 `uncertainty_m`을 기하 오차 한계(승인된 camera_profile 기록의 band, 없으면 `camera_nominal.yaml`의 보수적 한계와 `detector_lateral_px`)로 계산. 한계 모서리·roll 7단계·검출 픽셀 ±를 정확히 투영하고 수신측 0.3 m 외삽 범위까지 덮으며 2 % 표본 여유를 둔다. 한계가 없으면 None. `calibration_store.resolve(with_intervals=True)`, `line_observer_node`가 오차를 넘긴다. 라벨은 NOMINAL 그대로(CALIBRATED를 만들지 않음, D-344 driver hold 유지)
+- 증거: `test_lane_containment_payload.py` 독립 진값(roll 21단계, 끝점별 ±px) 통과, b1b20a6ee에서는 실패. 재검토 격자 max(true−stated) 음수
+- gate 변화: 없음. SOURCE만. 8kcn 기록 값 약 26–37 mm, URDF 공칭 약 75–100 mm로 15 mm 문턱 초과 → 장치에서는 여전히 excessive로 보류
+- 결정: D-468, D-185 CPU 예산: 경계 1개당 노트북 약 0.25 ms(벡터화, 252 조합), Pi 추정 약 1.2 ms, 경계 2개·8 fps면 코어의 약 2 %
+- 교훈: 오차가 roll에 단조가 아니라 모서리만 보면 최악이 내부에 숨는다. 시험의 진값은 코드의 표본과 달라야 한다
+## 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)
+
+- 변경: GAZEBO 지면 투영 불확실도의 2 px를 `GAZEBO_DETECTOR_LATERAL_PX`로 이름 붙였다. 측정이 아닌 휴리스틱이다. 동작은 같다.
+- 증거: `test_lane_containment_payload.py` 6 PASS.
+- gate 변화: 없음.

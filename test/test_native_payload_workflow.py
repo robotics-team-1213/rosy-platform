@@ -96,7 +96,7 @@ def test_ros_is_installed_from_the_image_locks_snapshot():
     url = lock["ros"]["apt_snapshot_url"]
     text = _run_text()
 
-    assert url.startswith("https://snapshots.ros.org/jazzy/") and url.endswith("/ubuntu")
+    assert url.startswith("http://snapshots.ros.org/jazzy/") and url.endswith("/ubuntu")
     assert "['ros']['apt_snapshot_url']" in text
     assert "ros2.sources" in text
     assert "snapshots.ros.org/jazzy/20" not in WORKFLOW.read_text(encoding="utf-8")
