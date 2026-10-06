@@ -284,6 +284,12 @@ h1 {
   ui-shell[grammar="focal"] ui-topbar { padding-block: var(--space-2); }
   ui-topbar ui-brand small { display: none; }
 }
+/* 전화 화면의 HOLD에서는 유실 이유를 피치보다 먼저 놓는다. */
+@media (width < 30rem) {
+  .match-layout:has(#lost:not([hidden])) .field-details { order: -1; }
+  .field-details:has(#lost:not([hidden])) h2 { order: -2; }
+  .field-details #lost:not([hidden]) { order: -1; }
+}
 .field-details details { margin-block: var(--space-3); }
 .field-details summary { cursor: pointer; color: var(--pitch-ink); }
 #stair1 { overflow-wrap: anywhere; }

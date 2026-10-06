@@ -204,7 +204,8 @@ async function tick() {
     const lost = payload.lost_ball || (payload.lost_robots || []).length;
     const lostElement = document.getElementById("lost");
     lostElement.hidden = !lost;
-    lostElement.textContent = payload.reason || (payload.lost_ball ? "공을 잃음" : "로봇을 잃음");
+    lostElement.textContent = payload.lost_ball || payload.reason === "lost_ball"
+      ? "공을 잃음" : "로봇을 잃음";
     const matchSummary = `${phaseLabel} · ${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}${evidenceAnnouncement ? ` · ${evidenceAnnouncement}` : ""}`;
     setTextIfChanged(announcement, matchSummary);
     draw(payload);

@@ -335,3 +335,9 @@
 - 변경: 첫 연결 실패와 경기 수신 후 연결 끊김을 320/390px에서 재생하고, 점수·피치·관측의 동등 폭, 연결 문구, 첫 화면 정지를 브라우저 계약에 추가했다. 제품 렌더링은 바꾸지 않았다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: `captures/game-recovery-mobile/` 원본 4장. 패널 폭 축소 변이에서 320px 검사 실패, 복구 후 브라우저 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: 게임 보드 LOCAL G2 상태·폭 근거를 추가했다. 실제 경기·정지 readback과 사용자 G3는 HOLD.
+
+## 2026-10-06 · uncommitted · uiux(games): HOLD 이유의 평문과 전화 폭
+
+- 변경: 실제 referee의 `lost_ball`·`lost_robots`를 경기 보드에서 한국어로 표시한다. 전화 폭 HOLD에서는 유실 이유를 피치보다 먼저 두어 320px 고정 정지 행 위에서 읽게 한다.
+- 증거: 두 사유·세 폭 브라우저 6 passed, 전체 보드 브라우저 29 passed, 게임 모듈 113 passed, 반응형·토큰 계약 44 passed, 각 성공 실행 `known_failures.py` 0 NEW. 320px 이유 가림·원시 코드 노출은 수정 전 적색, 관측 칸 4px 축소 변이에서 동등 폭 검사 적색. X: `captures/game-hold-width/games_board_{lost_ball,lost_robots}_{1280x800,390x844,320x568}.png`, `logs/game-hold-{reason-red,code-red,width-mutation,final,style-final,browser-full-final,module-final}.txt`.
+- gate 변화: 경기 보드 HOLD의 LOCAL G2 폭·어휘 부분 근거 추가. 실제 경기·정지 readback과 게임 호스트 사용자 G3는 HOLD.

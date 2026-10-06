@@ -193,21 +193,21 @@ def test_first_overlay_failure_has_no_last_match_claim():
         server.close()
 
 
-def _lost_payload() -> dict:
+def _lost_payload(reason="lost_ball") -> dict:
     field = Field(length_m=2.0, width_m=1.4)
     observation = Observation(
         t=0.0,
-        ball=None,
+        ball=None if reason == "lost_ball" else Pose2D(0.1, -0.2, 0.0),
         robots={"rosy_01": Pose2D(-0.4, 0.0, 0.0)},
-        lost_ball=True,
-        lost_robots=frozenset(),
+        lost_ball=reason == "lost_ball",
+        lost_robots=frozenset({"rosy_02"}) if reason == "lost_robots" else frozenset(),
         home_goal=None,
         away_goal=None,
     )
     state = MatchState(
         phase=Phase.HOLD,
         score={"rosy_01": 2, "rosy_02": 1},
-        reason="공을 잃음 · HOLD",
+        reason=reason,
     )
     return overlay_payload(field, observation, state, markers=())
 
@@ -218,28 +218,46 @@ def _launch_board_page(playwright, url):
     return browser, page, errors
 
 
-def test_match_board_shows_lost_hold_state():
-    """D-103 유실 HOLD — 공을 잃으면 이유와 함께 HOLD가 보드에 보인다."""
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
+@pytest.mark.parametrize("reason,label", [("lost_ball", "공을 잃음"), ("lost_robots", "로봇을 잃음")])
+def test_match_board_shows_lost_hold_state(width, height, reason, label):
+    """D-103 유실 HOLD — 공이나 로봇을 잃으면 이유가 보드에 보인다."""
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
     board = PreviewBoard(clock=lambda: 100.0)
-    board.publish(_lost_payload(), jpeg=None)
+    board.publish(_lost_payload(reason), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
         with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+            browser, page, errors = open_page(playwright, width, height)
+            page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function(
                 "document.getElementById('phase')?.dataset.phase === 'hold'"
             )
             assert page.locator("#lost").is_visible()
             assert page.locator("#phase").inner_text() == "경기 보류"
-            assert "공을 잃음" in page.locator("#lost").inner_text()
+            assert label in page.locator("#lost").inner_text()
+            assert reason not in page.locator("#lost").inner_text()
             assert page.locator("#markers li.on").count() == 0
-            assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
+            if width <= 390:
+                layout = page.evaluate("""() => ({
+                  overflow: document.documentElement.scrollWidth - innerWidth,
+                  panels: ['.score', '.pitch-wrap', '.field-details']
+                    .map(selector => document.querySelector(selector).getBoundingClientRect().toJSON()),
+                  stop: document.querySelector('#halt').getBoundingClientRect().toJSON(),
+                })""")
+                assert layout["overflow"] <= 0, layout
+                assert max(box["x"] for box in layout["panels"]) - min(box["x"] for box in layout["panels"]) <= 1, layout
+                assert max(box["width"] for box in layout["panels"]) - min(box["width"] for box in layout["panels"]) <= 1, layout
+                assert layout["stop"]["bottom"] <= height and layout["stop"]["right"] <= width, layout
+                if height <= 568:
+                    assert page.locator("#lost").bounding_box()["y"] + page.locator("#lost").bounding_box()["height"] <= page.locator(".halt-row").bounding_box()["y"]
+            else:
+                assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
             assert not errors, f"페이지 오류: {errors}"
-            save_temp_screenshot(page, "games_board_lost.png")
+            save_temp_screenshot(page, f"games_board_{reason}_{width}x{height}.png")
             browser.close()
     finally:
         server.close()
