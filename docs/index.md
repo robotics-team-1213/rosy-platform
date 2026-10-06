@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(robot): 320px 운용 칸 동일 폭
 - 2026-10-06 · uncommitted · uiux(pilot): 320×568 영상 공간 복구
 - 2026-10-06 · uncommitted · uiux(pilot): 320px 회전 버튼 전폭
 - 2026-10-06 · uncommitted · uiux(pilot): 320px 머리 겹침 해소
 - 2026-10-06 · uncommitted · uiux(games): 320px 패널 동일 폭
-- 2026-10-06 · uncommitted · uiux(pilot): 자동 모드 안내 정합성

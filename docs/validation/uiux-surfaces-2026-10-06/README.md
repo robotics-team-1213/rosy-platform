@@ -16,6 +16,8 @@
 
 로봇·Fleet 캡처는 FastAPI/Playwright fixture, 게임 캡처는 실제 PreviewServer와 fixture payload를 쓴 LOCAL 증거다. Fleet 전화의 `fleet_console_mobile_{width}.png`는 시험이 **전체 로봇 보기**를 누른 뒤 찍는 캡처여서 기본 예외 목록의 근거로 쓰지 않는다. 기본 목록은 위 `fleet-console-320x844.png`와 해당 브라우저 단언으로 확인했다.
 
+로봇 역할 셸의 `/console`·`/setup`·`/device`를 320×568과 390×844에서 다시 띄웠다. `/console`에서는 조작→감지→관측이 한 열로 쌓이고 세 칸의 시작점·폭이 같으며, 두 폭 모두 첫 화면과 하단 스크롤에서 비상 정지가 보인다. 문서 가로 넘침과 페이지 오류는 0, 브라우저 **2 passed**, `known_failures.py` **0 NEW**다. 320px 첫 화면 원본은 X: `captures/robot-console-320-width/robot-console-320x568.png`에 있다. 이는 정상 fixture의 LOCAL 배치 근거이며 실제 CORE 상태와 작업 완료·G3는 미검증이다.
+
 작업 준비·장비 캡처는 같은 FastAPI fixture에서 생성했다. 첫 시도는 고급 네트워크 작업의 닫힌 disclosure 안에 있는 버튼을 바로 찾으려다 시험이 멈췄다. shipped UI대로 disclosure를 열어 비활성 버튼과 이유를 확인했다. 모바일 패널의 실제 내용 폭을 공용 폼의 container query가 읽도록 수정한 뒤 다시 실행해 **60셀 1 passed**, 반응형·셸 브라우저 **18 passed**, 별도 작업 패널 **6장**, `known_failures.py` **0 NEW**를 얻었다. 첫 실패를 제품 결함으로 분류하지 않는다.
 
 첫 기동은 manifest와 CORE 첫 상태 응답을 보류한 별도 fixture다. **6셀 1 passed**, 60셀 재실행 **1 passed**, 각각 `known_failures.py` **0 NEW**였다. 비상 정지의 테스트 판정은 숨겨진 요소의 0폭 좌표가 통과하지 않도록 렌더된 폭을 확인한다. [관리자 장비 390×844](captures/roles-first-boot/administrator-device-first-boot-390x844.png)를 원본 크기로 확인했다.

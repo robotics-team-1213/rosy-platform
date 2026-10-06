@@ -1046,3 +1046,9 @@
 - 변경: HTTP 오류의 영문 전용 상세를 운용자용 한국어 상태·다음 확인으로 바꾸고, 한국어 서버 사유는 유지한다. 차선 추종 시험 fixture에 실제 구동 준비 필드를 넣고 닫힌 고급 네트워크 작업은 UI로 열어 검증한다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 모드·수동·차선/도킹·지도 근거 1366/390px 캡처와 4개 매트릭스를 보존했다. 해당 브라우저 4 passed, 장비 disclosure 2 passed, 운용자 어휘 18 passed, `known_failures.py` 0 NEW.
 - gate 변화: 운용 G3 부분 근거. 실제 로봇 readback·사용자 독회와 전체 G2/G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(robot): 320px 역할 셸 동일 폭
+
+- 변경: 실제 CORE 앱 응답의 `/console` 320/390px에서 조작·감지·관측 칸이 같은 폭으로 쌓이는지 브라우저 계약에 추가했다.
+- 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 320px 캡처, `/console`·`/setup`·`/device` 2폭 브라우저 2 passed, `known_failures.py` 0 NEW.
+- gate 변화: 로봇 역할 셸 LOCAL G2 배치 부분 근거 추가. 실제 CORE/장치 readback과 전체 G2/G3는 HOLD다.
