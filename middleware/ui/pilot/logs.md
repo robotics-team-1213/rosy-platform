@@ -572,3 +572,9 @@
 - 변경: debug 전용 합성 후보·보류 행으로 기존 `PilotViews.robot`을 표시했다. 실제 로비의 한 열 경계를 600dp에서 720dp로 올리고 후보 이름에 Android 균형 줄바꿈을 적용했다.
 - 증거: 격리 Android 35 AVD 1000/600/400dp 후보 화면과 600dp 실제 빈 로비, 400dp 보류 행 스크롤 캡처를 X: `captures/pilot-candidate-preview/`에 보존했다. 600dp 두 후보 행은 같은 1136px 폭, 400dp 두 행은 같은 736px 폭이다. 현재 debug APK 빌드 성공; preview Activity는 release manifest에 없다.
 - gate 변화: Pilot Shell LOCAL G2의 합성 후보·폭 부분 근거. 실제 로봇 발견·승인/거부·재접속, Lenovo 태블릿과 사용자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(pilot-shell): 400dp 후보 이름 판독
+
+- 변경: 480dp 미만의 후보 행에서 장식용 로봇 아이콘을 생략해 이름에 가용 폭을 돌렸다. 연결·보류와 화살표, 동일한 행 폭·접근성 이름은 유지한다.
+- 증거: 격리 Android 35 AVD 800×600/밀도 320dpi/글자 130%에서 첫 행 이름이 한 줄이고 두 후보 이름이 첫 화면에 보인다. 첫 행 높이는 284px→220px, 두 행의 UI bounds 폭은 각각 736px이다. 보류 이유는 스크롤 뒤 읽는다. 1200×800에서는 기존 아이콘과 두 행 배치를 유지한다. X: `captures/pilot-candidate-compact/`, Gradle JVM 89 passed 및 debug APK 빌드 성공.
+- gate 변화: Pilot Shell LOCAL G2의 작은 가로 태블릿 판독 근거 추가. 실제 후보·Lenovo 태블릿·운전자 G3는 HOLD다.

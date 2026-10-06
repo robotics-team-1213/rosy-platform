@@ -46,7 +46,9 @@ class PilotViews(private val context: Context) {
             addState(intArrayOf(android.R.attr.state_pressed), fill(PilotColors.pressed))
             addState(intArrayOf(), fill(PilotColors.disabled))
         }
-        addView(ImageView(context).apply { setImageResource(R.drawable.ic_robot); imageTintList = android.content.res.ColorStateList.valueOf(PilotColors.muted); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(28), dp(28)).apply { marginEnd = dp(20) })
+        if (context.resources.configuration.screenWidthDp >= 480) {
+            addView(ImageView(context).apply { setImageResource(R.drawable.ic_robot); imageTintList = android.content.res.ColorStateList.valueOf(PilotColors.muted); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(28), dp(28)).apply { marginEnd = dp(20) })
+        }
         val title = candidate.name.ifBlank { candidate.robotId.ifBlank { "Rosy" } }
         val copy = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         copy.addView(label(title, 22f).apply { typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL); breakStrategy = android.text.Layout.BREAK_STRATEGY_BALANCED })

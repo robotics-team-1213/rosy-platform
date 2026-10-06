@@ -253,6 +253,8 @@ Pairing의 인증서 확인·실패 복구 조작은 각 상태의 두 반폭 �
 
 기존 빈 목록 JVM `testDebugUnitTest` **89 passed**와 이번 현재 트리 `assembleDebug` 성공을 구분한다. 변경된 실제 빈 로비도 1200×800/글자 130%에서 다시 표시해 다시 찾기·상태·기기 연결이 한 화면 안에 있음을 확인했다. 합성 후보 전후·최종 캡처와 UI 계층은 X: `captures/pilot-candidate-preview/pilot-candidates-{800x600-font13,1200x800-font13,2000x1200-font10}{,-final}.{png,xml}`과 `pilot-candidates-800x600-font13-held-bottom.png`, 실제 빈 로비는 `pilot-empty-1200x800-font13-final.png`다. Debug 전용 화면은 release manifest에 없고 `android.permission.DUMP`를 요구한다. 이는 **LOCAL G2 부분 근거**이며 실제 Lenovo 태블릿, 로봇 연결, 운전자 G3는 미검증이다.
 
+800×600/밀도 320dpi/글자 130% 합성 후보 목록은 두 행이 같은 736px 폭이지만, 기존 첫 행의 장식 아이콘이 이름을 두 줄로 밀어 첫 화면에서 두 번째 후보를 가렸다. 480dp 미만에서는 그 아이콘만 생략했다. 현재 APK의 첫 행 UI bounds는 `[32,207][768,427]`로 기존 `[32,207][768,491]`보다 64px 낮고, 두 후보 이름이 첫 화면에 보인다. 스크롤 뒤 보류 이유·조작은 그대로 읽히며, 1200×800에는 기존 아이콘이 남는다. 안정된 화면·UI 계층은 X: `captures/pilot-candidate-compact/candidates-800x600-font130.{png,xml}`, `candidates-800x600-font130-held.png`, `candidates-1200x800-font130-final.png`이다. 첫 1200px 자동 캡처는 검은 전환 화면이라 제외한다. Pilot JVM **89 passed**와 debug APK 빌드 성공은 X: `logs/pilot-candidate-compact-gradle.txt`에 있다. 합성 후보 LOCAL G2이며 실제 발견·선택과 운전자 G3는 HOLD다.
+
 ### 추가 활성 표면 평가 카드 — G2/G3 HOLD
 
 이 세 카드는 D-153의 새 표면 재평가 기준을 적용한다. 각 폭에서 표시되는 **동등한 창·조작은 같은 가용 폭**을 쓰고, 작은 화면에서는 잘림 없이 한 열로 읽고 실행할 수 있어야 한다. 아래 캡처는 일부 상태의 LOCAL 근거이며 선언 상태 전체의 G2 통과를 뜻하지 않는다.
