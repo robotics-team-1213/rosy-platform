@@ -113,6 +113,22 @@ def test_record_bands_are_floored_at_one_fit_search_step():
     assert roll == pytest.approx(math.radians(1.5+ce.FINE_ROLL_STEP_DEG))
 
 
+
+def test_a_record_that_states_its_fit_step_is_floored_at_that_step():
+    from control.sensing.perception import camera_extrinsic as ce
+    tiny = {"pitch_deg": .01, "roll_deg": .01, "height_m": .0001}
+    pitch, height, roll, _px = geometry_error(RECORD, {"uncertainty": tiny, "fit_step": ce.PC_FINE_STEPS})
+    assert pitch == pytest.approx(math.radians(.1))
+    assert height == pytest.approx(.001)
+    assert roll == pytest.approx(math.radians(1.5+.1))
+    # A continuous fit (camera_board/1: solvePnP, no grid) states zero steps: its bands stand.
+    zero = {"pitch_deg": 0., "roll_deg": 0., "height_m": 0.}
+    pitch, height, roll, _px = geometry_error(RECORD, {"uncertainty": tiny, "fit_step": zero})
+    assert pitch == pytest.approx(math.radians(.01)) and height == pytest.approx(.0001)
+    assert roll == pytest.approx(math.radians(1.5+.01))
+    for bad in ({"pitch_deg": -.1, "roll_deg": .1, "height_m": .001}, {"pitch_deg": .1}, "0.1", None):
+        assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": bad}) is None
+
 def test_receiver_extrapolation_is_mirrored():
     text = (REPO / "middleware" / "core" / "services" / "core_features" / "line_follow" /
             "lane_return_evidence.py").read_text(encoding="utf-8")

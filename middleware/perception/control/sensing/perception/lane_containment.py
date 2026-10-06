@@ -16,7 +16,7 @@ import math
 
 import numpy as np
 
-from .camera_extrinsic import FINE_HEIGHT_STEP_M, FINE_PITCH_STEP_DEG, FINE_ROLL_STEP_DEG
+from .camera_extrinsic import FINE_STEPS
 
 #: Lateral error of the lane edge detector in image pixels on the Gazebo camera (547b2d509).
 #: Real grounds take theirs from the profile key detector_lateral_px.
@@ -40,10 +40,13 @@ def geometry_error(profile, intervals, *, overridden=()):
     """(pitch_rad, height_m, roll_rad, detector_px) error bounds of the ground from ``profile``, or None.
 
     ``intervals`` are the accepted camera_profile record's (None = no record, the URDF
-    nominal file stands). A record's bands are fit-score half-widths rounded by the fit;
-    each is floored at one fine search step of the fit (camera_extrinsic), and a band that
-    is not positive is refused. The ground ignores roll, so a record's fitted roll is error
-    too. An operator override of pitch or height states no error: None.
+    nominal file stands). A record's bands are fit half-widths; each is floored at one
+    grid step of the fit, intervals["fit_step"]: a camera_extrinsic grid fit states its
+    steps (one without fit_step predates them and ran the robot grid, FINE_STEPS), and a
+    continuous fit (camera_board/1) states zero steps. A band that is not positive, or a
+    fit_step that is not three non-negative reals, is refused. The ground ignores roll, so a
+    record's fitted roll is error too. An operator override of pitch or height states no
+    error: None.
     """
     if {"pitch_rad", "height_m"} & set(overridden):
         return None
@@ -56,8 +59,13 @@ def geometry_error(profile, intervals, *, overridden=()):
             return None
         return (*(float(b) for b in bounds), float(px))
     band = intervals.get("uncertainty") if isinstance(intervals, dict) else None
-    if not isinstance(band, dict):
+    step = intervals.get("fit_step", FINE_STEPS) if isinstance(intervals, dict) else None
+    if not isinstance(band, dict) or not isinstance(step, dict):
         return None
+    step = [step.get(k) for k in ("pitch_deg", "roll_deg", "height_m")]
+    if not all(_real(v) and v >= 0 for v in step):
+        return None
+    pitch_step, roll_step, height_step = step
     pitch, roll_band, roll, height = band.get("pitch_deg"), band.get("roll_deg"), profile.get("roll_rad"), band.get("height_m")
     if not all(_real(v) for v in (pitch, roll_band, roll)) or min(pitch, roll_band) <= 0:
         return None
@@ -69,9 +77,9 @@ def geometry_error(profile, intervals, *, overridden=()):
     elif not (_real(height) and height > 0):
         return None
     else:
-        height = max(height, FINE_HEIGHT_STEP_M)
-    return (math.radians(max(pitch, FINE_PITCH_STEP_DEG)), float(height),
-            abs(roll)+math.radians(max(roll_band, FINE_ROLL_STEP_DEG)), float(px))
+        height = max(height, height_step)
+    return (math.radians(max(pitch, pitch_step)), float(height),
+            abs(roll)+math.radians(max(roll_band, roll_step)), float(px))
 
 
 def _ray(h, pitch, x, y):
