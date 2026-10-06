@@ -370,9 +370,13 @@ def test_wall_expiry_revokes_queued_goal_while_owner_clock_is_paused(tmp_path):
 
 
 def test_delayed_old_seat_cleanup_does_not_cancel_new_seat_goal(tmp_path):
+    from dataclasses import replace
+    import time
     from test_pilot_sim_runtime import Arm, jog
     from omx_adapter.pilot_sim_runtime import PilotSimRuntime
     arm = Arm()
+    # This test exercises seat cleanup, not the 0.5 s joint-state freshness gate.
+    arm.owner.config = replace(arm.owner.config, max_joint_state_age_s=60.0)
     arm.owner.run_admission_policy = lambda operation: operation(arm.owner.state)
     admission = ControlSeatAdmission(arm.owner, ActionStore(tmp_path / "cleanup.sqlite3"),
                                      monotonic=lambda: 10.0)
@@ -380,8 +384,9 @@ def test_delayed_old_seat_cleanup_does_not_cancel_new_seat_goal(tmp_path):
     admission.acquire("a", "seat-a", ttl_s=10)
     admission.release("a", "seat-a")
     admission.acquire("b", "seat-b", ttl_s=10)
+    arm.latest_joint_state = replace(arm.latest_joint_state, received_at=time.monotonic())
     runtime = PilotSimRuntime(arm)
-    runtime.snapshot()
+    assert runtime.snapshot()["ready"] is True
     result = runtime.submit(jog().model_copy(update={"seat_id": "seat-b"}))
     assert result["state"] == "LOCAL_ACCEPTED", result
     runtime.cancel_active(seat_id="seat-a")

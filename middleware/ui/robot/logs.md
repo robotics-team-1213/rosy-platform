@@ -998,3 +998,9 @@
 - 변경: 게이지 폭은 data-meter 속성이고, 목표를 둘 수 있는 지도 캔버스는 data-goal-cursor로 십자 커서를 낸다.
 - 증거: 호스트 계약 178 passed, 72 skipped, known_failures 0 new. Chromium에서 40% 게이지가 80px이다. 브라우저·장치 수용은 없다.
 - gate 변화: 없음.
+
+## 2026-10-06 · uncommitted · feat(dashboard): 개발 모드 로봇은 코드 없는 입장, 관리자는 임시 SSH 비밀번호를 화면에서 확인
+
+- 변경: 개발 연결 모드(D-432) 로봇을 열면 로그인 서랍에 코드 없이 1시간 운전자 세션을 받는 '개발 연결로 계속'을 보여준다(프로덕션 paired 모드로선 누르는 경로가 없다). 대시보드 보안 패널에 임시 SSH 비밀번호 구역을 추가해 administrator가 분(1~60)을 정해 발급·표시·회수한다(응답 No-Store, 모듈이 저장하지 않음). 엔트리 경로는 dashboard-entry.js, 호환 경로는 app.js가 같은 두 기능을 보여준다.
+- 증거: 브라우저 신규 시험 test_development_entry_logs_in_without_a_code — 코드 폼 병행 표시, 한 번의 POST로 세션, 목적지 영역 전환. test_dashboard_browser 전체 79 passed 1 known. react중 노 --check 3 파일 통과.
+- gate 변화: SOURCE/LOCAL. 실기(8kcn, 모드 학장 driver) 검증은 별도.

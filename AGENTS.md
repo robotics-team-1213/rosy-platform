@@ -11,7 +11,7 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 | File | Description |
 |------|-------------|
-| `README.md` | Repo overview, shared-checkout start rules (`같이 하는 깃`), colcon/sim launch, Pi 5 runtime, phase roadmap |
+| `README.md` | GitHub landing: system diagram, who-starts-where table, document map, core contracts, short robot-run section. Shared-checkout start order lives in `docs/reference/shared-checkout.md`; build/sim/test/Pi runtime in `docs/reference/developer-guide.md` |
 | `LICENSE` | Apache License 2.0 |
 | `env.sh` | Dev env: source ROS 2 Jazzy then workspace `install/setup.bash` |
 | `CONCEPTS.md` | Shared domain vocabulary — entities, named processes, status concepts with project-specific meaning |
@@ -51,14 +51,14 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 소스 이전(D-427·D-429·D-430) 뒤에도 모든 세션이 지킨다. 이전 경로 `legacy`와 잔여 검사에는 한 release 유예를 둔다.
 
 1. **우선순위:** main CI 초록불 > 안전(D-430 공백) > 기능. 충돌하면 앞이 이긴다.
-2. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다. 스테이징·착지·푸시·ADR 번호·기존 실패 비교의 전문은 아래 「같이 하는 깃」이다. `README.md`의 같은 제목 절은 같은 착수 순서를 적는다. 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다.
+2. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다. 스테이징·착지·푸시·ADR 번호·기존 실패 비교의 전문은 아래 「같이 하는 깃」이다. `docs/reference/shared-checkout.md`의 같은 제목 절은 같은 착수 순서를 적는다. 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다.
 3. **구조를 바꾸는 ADR은 D-427·D-429·D-430과의 관계를 표로 적는다.** ADR 없이 새 최상위 폴더를 만들지 않는다.
 4. **push 전 순서:** `git fetch` → `origin/main` 위로 rebase → `python tools/harness/rosy_harness.py generate`(생성 문서가 바뀌면 커밋) → pre-push 검사(`tools/hooks/pre-push` 목록). force-push 하지 않는다.
 5. **safety 태그 경로**(매니페스트 `concern: safety`, `safety_modules`, `safety_anchors`)를 바꾸거나 옮기는 커밋은 `Safety-Review:` trailer와 독립 리뷰가 필요하다(D-430 §5, CI가 검사).
 
 ### 같이 하는 깃
 
-여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다. 이 절이 에이전트가 따라 하는 전문이다. `README.md`의 「같이 하는 깃」은 같은 착수 순서를 적고, `.claude/skills/rosy-land-on-main/SKILL.md`는 같은 명령을 카드로 반복한다. 문구를 바꿀 때는 이 절과 README의 그 절을 한 커밋에서 같이 고친다. 실험실 PC 우산 `F:\Dev\Control\Robot\Rosy\Agents.md`도 같은 절차를 적는다. 브랜치 이름과 남의 미커밋을 지우지 않는 이유는 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다. 배경은 `docs/solutions/workflow-issues/adr-numbers-collide-between-concurrent-sessions-2026-09-25.md`다.
+여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다. 이 절이 에이전트가 따라 하는 전문이다. `docs/reference/shared-checkout.md`의 「같이 하는 깃」은 같은 착수 순서를 적고, `.claude/skills/rosy-land-on-main/SKILL.md`는 같은 명령을 카드로 반복한다. 문구를 바꿀 때는 이 절과 `docs/reference/shared-checkout.md`의 그 절을 한 커밋에서 같이 고친다. 실험실 PC 우산 `F:\Dev\Control\Robot\Rosy\Agents.md`도 같은 절차를 적는다. 브랜치 이름과 남의 미커밋을 지우지 않는 이유는 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다. 배경은 `docs/solutions/workflow-issues/adr-numbers-collide-between-concurrent-sessions-2026-09-25.md`다.
 
 제품 파일을 고치기 전에 1번과 2번이 끝나 있어야 한다. 끝난 기준은 `git worktree list`에 자신의 `.worktrees/<짧은이름>`이 있고, 그 디렉터리의 브랜치가 `main`이 아닌 것이다.
 

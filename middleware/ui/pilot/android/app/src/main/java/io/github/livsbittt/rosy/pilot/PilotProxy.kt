@@ -19,15 +19,18 @@ import java.util.concurrent.TimeUnit
 
 /** Private loopback origin relays the existing PWA. TLS always checks the scoped DNS identity. */
 class PilotProxy(private val connection: PilotConnection, private val assets: BundledAssets? = null,
-    private val failure: (String) -> Unit) : NanoWSD("127.0.0.1", 0) {
-    constructor(profile: PilotProfile, target: RobotTarget, candidates: CandidateStore, failure: (String) -> Unit) :
-        this(ScopedProfileConnection(profile, target, candidates), null, failure)
+    private val failure: (String) -> Unit, private val recovery: () -> Unit = {}) : NanoWSD("127.0.0.1", 0) {
+    constructor(profile: PilotProfile, target: RobotTarget, candidates: CandidateStore, failure: (String) -> Unit,
+        recovery: () -> Unit = {}) :
+        this(ScopedProfileConnection(profile, target, candidates), null, failure, recovery)
     private val target = connection.target
     private val scheme = if (connection.secure) "https" else "http"
     val capability = ByteArray(32).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
     val origin get() = "http://127.0.0.1:$listeningPort"
     private val client = connection.client()
     @Volatile private var identityVerified = false
+    /** 한 번 실패를 알렸으면 다음 성공 응답에서 회복을 알린다 — 오류 문구가 회복 뒤에도 남지 않게. */
+    @Volatile private var failureReported = false
     private val sockets = ConcurrentHashMap.newKeySet<Relay>()
     private val clients = ConcurrentHashMap.newKeySet<NanoHTTPD.ClientHandler>()
     private val executor = ThreadPoolExecutor(0, 12, 30, TimeUnit.SECONDS, SynchronousQueue<Runnable>())
@@ -81,6 +84,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
             val response = client.newCall(request).execute()
             var streaming = false
             try {
+                if (failureReported) { failureReported = false; recovery() }
                 if ((response.code == 401 && session.headers["authorization"] == "Bearer ${target.credential}") ||
                     (response.isSuccessful && session.uri == "/api/v1/auth/logout")) connection.invalidateCredential()
                 if (response.isRedirect) return reply(502, "text/plain", "Redirect refused".toByteArray())
@@ -119,6 +123,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 }
             } finally { if (!streaming) response.close() }
         } catch (_: Exception) {
+            failureReported = true
             failure("TLS 또는 연결을 확인하세요")
             return reply(502, "text/plain", "Trusted connection unavailable".toByteArray())
         }
@@ -191,6 +196,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                     runCatching { send(bytes.toByteArray()) }.onFailure { disconnect() }
                 }
                 override fun onFailure(socket: okhttp3.WebSocket, error: Throwable, response: okhttp3.Response?) {
+                    failureReported = true
                     failure("TLS 또는 연결을 확인하세요"); disconnect()
                 }
                 override fun onClosed(socket: okhttp3.WebSocket, code: Int, reason: String) { disconnect() }

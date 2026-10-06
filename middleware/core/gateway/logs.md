@@ -918,3 +918,9 @@
 - Change: update the C6 seam triage for the policy capability probe and LaserScan angular/source-time fields; keep non-recovery scan mocks explicit about not requesting D-468 scans.
 - Evidence: affected gateway checks 43 PASS, 0 NEW. A broader gateway run had 2163 PASS, 17 SKIP, and two failures in these expectation/triage checks before the fixes; the full suite was not rerun afterward.
 - Gate: source and host tests only; no runtime/device/field result.
+
+## 2026-10-05 · uncommitted · fix(bridge): C6 센서 공급자 선택 기능 판정 기록
+
+- 변경: `local_return_allowed`의 동적 조회를 D-468/C6 예외 목록에 명시하고, 구 공급자에 메서드가 없을 때 복귀 후보를 거부하는 검사를 추가했다.
+- 증거: C6 구조 검사와 차선 복귀 센서 검사. 최종 명령 권한 변경 없음.
+- gate 변화: 없음.

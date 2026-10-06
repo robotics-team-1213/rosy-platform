@@ -164,7 +164,8 @@ def test_restart_recovers_pending_before_observing_new_candidates(tmp_path, keys
 
 
 @pytest.mark.parametrize("name,link", [("../escape", False), ("learning/training/perception/x", True),
-                                      ("private/key", False), ("learning/training/perception/data/key", False)])
+                                      ("private/key", False), ("learning/training/perception/data/key", False),
+                                      ("middleware/apps/device/pinky/profile/config/camera_nominal.yaml.extra", False)])
 def test_archive_rejects_traversal_links_and_non_code_payload(tmp_path, name, link):
     m = module()
     p = tmp_path / "bad.tar"
@@ -219,12 +220,13 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     (code / "model").mkdir(parents=True)
     (code / "model/watch.py").write_text("print('committed')\n")
     (code / "rosy_ml.py").write_text("print('committed')\n")
-    for name in ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"]:
+    profile = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
+    for name in ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py", profile]:
         dep = repo / name
         dep.parent.mkdir(parents=True)
         dep.write_text("PINNED = True\n")
     git("add", "learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
-        "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py")
+        "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py", profile)
     git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
     sha = git("rev-parse", "HEAD")
     (code / "rosy_ml.py").write_text("print('dirty')\n")
@@ -236,6 +238,7 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     assert not (tmp_path / "result/learning/training/perception/secret").exists()
     assert (tmp_path / "result/middleware/perception/control/__init__.py").read_text() == "PINNED = True\n"
     assert (tmp_path / "result/contracts/foundation/core_common/__init__.py").read_text() == "PINNED = True\n"
+    assert (tmp_path / "result" / profile).read_text() == "PINNED = True\n"
 
 
 def test_uncommitted_perception_edits_are_kept(tmp_path):
@@ -322,6 +325,22 @@ def test_unrelated_sandboxed_process_does_not_block_updates(tmp_path, monkeypatc
         return original(path, *a, **kw)
     monkeypatch.setattr(Path, "resolve", resolve)
     assert m.legacy_busy([str(tmp_path)], proc=proc) is None
+
+
+def test_review_ui_does_not_block_code_update_but_training_does(tmp_path, monkeypatch):
+    m = module()
+    proc = tmp_path / "proc"
+    entry = proc / "999999"
+    entry.mkdir(parents=True)
+    (entry / "comm").write_text("python", encoding="utf-8")
+    (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/dataset/review_app.py\x00")
+    monkeypatch.setattr(m.os, "getuid", lambda: entry.stat().st_uid, raising=False)
+    original = Path.resolve
+    monkeypatch.setattr(Path, "resolve", lambda path, *a, **kw:
+                        tmp_path if path == entry / "cwd" else original(path, *a, **kw))
+    assert m.legacy_busy([str(tmp_path)], proc=proc) is None
+    (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/training/train_job.py\x00")
+    assert m.legacy_busy([str(tmp_path)], proc=proc) == "legacy work pid 999999"
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Linux job receipt and flock")

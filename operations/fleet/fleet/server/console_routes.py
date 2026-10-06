@@ -52,6 +52,11 @@ class LineStuckClaimRequest(BaseModel):
     stuck_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
+class IdentifyLampRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    color: Literal["blue", "amber"]
+
+
 def transport_failure(exc: BaseException) -> tuple[str, str]:
     """A connect failure never reached CORE; anything later may have been applied."""
     if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, ConnectionRefusedError)):
@@ -144,6 +149,31 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             raise HTTPException(status_code=404, detail={"code": "NO_MAP",
                                                          "message": "no robot served a map"})
         return grid
+
+    # D-472: one robot at a time; CORE and rosy-face retain the final safety decision.
+    identify_lock = asyncio.Lock()
+    identify_until = 0.0
+
+    @app.post("/api/fleet/robots/{robot_id}/identify", dependencies=operator_guard, tags=["fleet"])
+    async def identify_robot(robot_id: str, body: IdentifyLampRequest) -> dict:
+        nonlocal identify_until
+        client = console.clients().get(robot_id)
+        if client is None:
+            raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
+        async with identify_lock:
+            if time.monotonic() < identify_until:
+                raise HTTPException(status_code=409, detail={"code": "IDENTIFY_BUSY",
+                                                             "message": "다른 로봇의 LED 확인이 끝날 때까지 기다리세요"})
+            try:
+                result = await client.identify_lamp(body.color)
+            except (RobotApiError, OSError, httpx.HTTPError) as exc:
+                raise http_error(exc) from exc
+            if result.get("accepted") is not True:
+                raise HTTPException(status_code=502, detail={"code": "IDENTIFY_NOT_ACCEPTED",
+                                                             "message": "로봇이 램프 시험을 수락하지 않았습니다"})
+            identify_until = time.monotonic() + 6.0
+            return {"robot_id": robot_id, "request_id": result.get("request_id"),
+                    "state": "pending_visual_confirmation"}
 
     @app.get("/api/fleet/line-stuck", dependencies=read_guard, tags=["line-stuck"])
     async def line_stuck_pending() -> dict:

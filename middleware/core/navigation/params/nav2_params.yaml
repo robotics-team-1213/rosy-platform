@@ -159,7 +159,9 @@ controller_server:
     general_goal_checker:
       plugin: "nav2_controller::SimpleGoalChecker"
       stateful: true
-      xy_goal_tolerance: 0.25                    # [m] 목표 지점 반경 0.25m 안에 들어오면 도착 인정
+      # 차선 다음 점은 0.20 m, 최소 주시는 0.30 m 다. 당근이 이 공 안이면 RPP 는
+      # 직진하지 않고 목표 각으로만 돈다. 그 회전에 옆 신호등과 벽이 정지로 읽힌다.
+      xy_goal_tolerance: 0.10                    # [m] 목표 지점 반경 0.10 m 안에 들어오면 도착 인정
       yaw_goal_tolerance: 0.25                   # [rad] 목표 각도 오차 약 14도 이내면 올바르게 본 것으로 인정
 
     # ==========================================================

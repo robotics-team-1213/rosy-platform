@@ -46,6 +46,17 @@ def test_factory_sim_inflation_is_wider_than_hardware_default():
     assert factory > 0.15
 
 
+def test_goal_ball_is_shorter_than_the_lane_step_and_the_lookahead():
+    """A carrot inside xy_goal_tolerance makes RPP rotate in place and never drive."""
+    data = yaml.safe_load(NAV2.read_text(encoding="utf-8"))
+    controller = data["controller_server"]["ros__parameters"]
+    tolerance = controller["general_goal_checker"]["xy_goal_tolerance"]
+    lookahead = controller["FollowPath"]["min_lookahead_dist"]
+    assert tolerance == 0.10
+    assert tolerance < lookahead
+    assert tolerance < 0.20
+
+
 def test_global_planner_is_smac_and_rejects_unknown():
     """긴 통로에서 NavFn 역추적이 실패한다. 미지 공간은 지름길이 아니다."""
     data = yaml.safe_load(NAV2.read_text(encoding="utf-8"))

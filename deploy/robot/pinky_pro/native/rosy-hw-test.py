@@ -78,7 +78,7 @@ HANDOFF_POLL_S = 0.2
 HANDOFF_STATES = ("done", "unavailable", "failed")
 MAX_HANDOFF_BYTES = 1024
 MAX_DETAIL = 200
-ACTIONS = ("buzzer", "lamp")
+ACTIONS = ("buzzer", "lamp", "identify_blue", "identify_amber")
 REQUEST_KEYS = {"action", "request_id", "requested_at", "by"}
 MAX_REQUEST_BYTES = 1024
 MAX_BY = 128
@@ -336,6 +336,13 @@ def run_lamp(system: System, request_id: str) -> tuple[str, str]:
     return DONE, "빨강→초록→파랑 1 s씩 · 8 LED · GPIO19 · 꺼짐"
 
 
+def run_identify(system: System, request_id: str, action: str) -> tuple[str, str]:
+    """Identity light is never driven behind rosy-face's safety/state owner."""
+    if not lamp_owned(_read_text(system.path(DISPLAY_ENV))) or not _display_takes_it(system):
+        return UNAVAILABLE, "rosy-face가 램프를 소유하지 않음 — 식별 점멸 거절"
+    return system.handoff(action, request_id)
+
+
 def group_id(name: str) -> Optional[int]:
     try:
         import grp
@@ -389,7 +396,12 @@ def main(argv: Optional[list[str]] = None, *, system: Optional[System] = None,
         print(json.dumps({"hw_test": "already_done", "action": request["action"]}), flush=True)
         return 0
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    state, detail = (run_buzzer if request["action"] == "buzzer" else run_lamp)(system, request["request_id"])
+    if request["action"] == "buzzer":
+        state, detail = run_buzzer(system, request["request_id"])
+    elif request["action"] == "lamp":
+        state, detail = run_lamp(system, request["request_id"])
+    else:
+        state, detail = run_identify(system, request["request_id"], request["action"])
     result = {"schema": SCHEMA, "request_id": request["request_id"], "action": request["action"],
               "state": state, "detail": detail, "started_at": started,
               "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}

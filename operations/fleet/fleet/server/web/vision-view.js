@@ -89,7 +89,7 @@ const absentPanel = () => ({
   setAttribute: () => {},
 });
 
-export function createVisionView({ scope, el, call, auth, isActive = () => true }) {
+export function createVisionView({ scope, el, call, isActive = () => true, rawOnly = false }) {
   const select = el("vision-source");
   const frame = el("vision-frame");
   const stage = el("vision-image-stage");
@@ -113,7 +113,7 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
   let previewLifetime = new AbortController();
   let lastSourcesAt = 0;
   let refreshTimer = null;
-  let viewMode = "adjusted";
+  let viewMode = rawOnly ? "raw" : "adjusted";
   let draggingPointerId = null;
   // D-360: 검토 중인 경기장 제안(정규 좌표 네 점). 수락 전에는 조정값에 들어가지 않는다.
   let proposalCorners = null;
@@ -271,13 +271,8 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
   async function refreshSources() {
     const life = scope.capture();
     life.check();
-    // 다른 요청이 진행 중이면 그대로 둔다. 예전에는 여기서 "인증 대기"를 그려
-    // 보이던 영상을 지우고 인증과 무관한 배지를 남겼다.
+    // 다른 요청이 진행 중이면 보이던 영상을 그대로 둔다.
     if (busy) return;
-    if (auth.locked || !auth.token) {
-      showState("인증 대기", "neutral", NO_SOURCE);
-      return;
-    }
     const work = {kind: "sources"}; busy = work;
     try {
       const result = await call("/api/fleet/vision/sources");
@@ -301,6 +296,7 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
       }
     } catch (error) {
       if (error.name === "AbortError") return;
+      lastSourcesAt = Date.now();
       showState("영상 연결 불가", "warn", error.message);
     } finally {
       if (life.current() && busy === work) busy = false;
@@ -313,13 +309,6 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
     const preview = previewLifetime;
     const current = () => life.current() && preview === previewLifetime && !preview.signal.aborted && isActive();
     if (busy || !isActive()) return;
-    if (auth.locked || !auth.token) {
-      // D-415 — 인증 안 됐으면 로그인 안내로 바로 연결한다.
-      showState("인증 대기", "neutral", NO_SOURCE);
-      const hint = el("vision-meta");
-      if (hint) hint.textContent = "관제 토큰을 입력하면 카메라 영상이 나타납니다.";
-      return;
-    }
     if (Date.now() - lastSourcesAt > 30000) await refreshSources();
     life.check();
     if (!current()) return;
@@ -387,11 +376,13 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
       if (!current() || source !== select.value) return;
       updateCornerOverlay();
       frame.dataset.state = "online";
-      frame.dataset.editing = String(viewMode === "raw");
-      cornerOverlay.toggleAttribute("hidden", viewMode !== "raw");
+      frame.dataset.editing = String(viewMode === "raw" && !rawOnly);
+      cornerOverlay.toggleAttribute("hidden", viewMode !== "raw" || rawOnly);
       el("vision-meta").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour12: false })} · ${source} · sequence ${response.headers.get("X-Frame-Seq") || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
       const seq = response.headers.get("X-Frame-Seq");
-      for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl });
+      const frameAge = response.headers.get("X-Frame-Age-Ms");
+      for (const listener of frameListeners) listener({ image, rectified, source, seq, url: nextUrl,
+        lens: currentLensInfo, ageMs: frameAge === null ? NaN : Number(frameAge), state: badge.state });
     } catch (error) {
       if (error.name === "AbortError" || !current()) return;
       lease = null;
@@ -512,7 +503,7 @@ export function createVisionView({ scope, el, call, auth, isActive = () => true 
     const life = scope.capture();
     life.check();
     const source = select.value;
-    if (!source || auth.locked || !auth.token) throw new Error("카메라를 먼저 선택하세요.");
+    if (!source) throw new Error("카메라를 먼저 선택하세요.");
     if (!lease || Date.now() >= leaseExpiresAt) {
       const issued = await call("/api/fleet/vision/lease", {
         method: "POST",

@@ -97,3 +97,33 @@ def test_flood_one_pixel_barrier_blocks_region():
     photo[2, :] = (0, 0, 255)
     region = review_masks.flood_region_photo(photo, [0, 0], 10)
     assert region[:2].all() and not region[2:].any()
+
+
+def test_flood_refused_on_excluded_frame_and_demotes_approval(tmp_path):
+    pytest.importorskip('cv2'), pytest.importorskip('numpy')
+    store = bound_store(tmp_path)
+    with pytest.raises(ValueError, match='재검수'):
+        review_masks.update(store, 1, {'version': 0, 'action': 'flood',
+                                       'label': 2, 'seed': [0, 0], 'tolerance': 16},
+                            Conflict)
+    filled = review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0},
+                                 Conflict)
+    approved = review_masks.update(store, 0, {'version': filled['version'], 'action': 'approve',
+                                              'complete_frame_review': True,
+                                              'background_reviewed': True}, Conflict)
+    assert approved['status'] == 'approved'
+    demoted = review_masks.update(store, 0, {'version': approved['version'], 'action': 'flood',
+                                             'label': 2, 'seed': [0, 0], 'tolerance': 100},
+                                  Conflict)
+    assert demoted['status'] == 'pending'
+    assert np.all(review_masks.pixels(store, demoted) == 2)
+
+
+def test_flood_rejects_photo_dimension_mismatch(tmp_path):
+    from types import SimpleNamespace
+    cv2 = pytest.importorskip('cv2')
+    image = tmp_path / 'wide.png'
+    assert cv2.imwrite(str(image), np.zeros((4, 8, 3), dtype=np.uint8))
+    store = SimpleNamespace(image=lambda index: image)
+    with pytest.raises(ValueError, match='dimensions differ'):
+        review_masks.flood_region(store, 0, {'width': 8, 'height': 8}, [0, 0], 16)

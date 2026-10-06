@@ -1,8 +1,13 @@
 """D-411 A: pull finished Pilot recordings over CORE HTTP (no SSH), verify every byte against
 the robot's sha256 manifest, convert with bag_to_video and check frame/action pairing.
 
-Usage: fetch_http.py http://<robot>:8080 [--token-file FILE] [--dest data/perception/raw]
+Usage: fetch_http.py <base> [--token-file FILE] [--dest data/perception/raw]
                      [--video-out data/teleop/learning] [--codec hevc|h264] [--only ID]
+                     [--ca-file DEVICE-CA.pem]
+
+`rosy_ml fetch` fills <base> from the robot's `_rosy._tcp` advertisement
+(`https://<tls_host>:<port>` when it says tls=required, with --ca-file).
+http:// stays for a bench that already has a URL.
 
 Only while CORE says the robot is stopped (D-136 §6, API Ref §5.10): the listing names the
 blocker and the tool exits 4. The archive needs an Operator token (harvest's viewer token is
@@ -28,6 +33,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import sys
 import tarfile
 import urllib.error
@@ -72,6 +78,14 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_NoRedirect)
 
 
+def build_opener(ca_file=None):
+    """HTTP opener. A device CA pins HTTPS to that robot and still refuses redirects."""
+    if not ca_file:
+        return _OPENER
+    context = ssl.create_default_context(cafile=str(ca_file))
+    return urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=context))
+
+
 def _id_ok(value) -> bool:
     return isinstance(value, str) and RECORDING_ID.fullmatch(value) is not None \
         and not value.endswith("_")
@@ -110,9 +124,9 @@ def _http_error(what: str, exc: urllib.error.HTTPError) -> FetchError:
     return FetchError(f"{what}: HTTP {exc.code} {code}".rstrip())
 
 
-def list_recordings(base: str, token: str, timeout: float) -> dict:
+def list_recordings(base: str, token: str, timeout: float, opener=None) -> dict:
     try:
-        with _OPENER.open(_request(base, "/api/v1/recordings", token), timeout=timeout) as resp:
+        with (opener or _OPENER).open(_request(base, "/api/v1/recordings", token), timeout=timeout) as resp:
             listing = json.loads(resp.read())
     except urllib.error.HTTPError as exc:
         raise _http_error("listing", exc) from exc
@@ -123,10 +137,11 @@ def list_recordings(base: str, token: str, timeout: float) -> dict:
     return listing
 
 
-def download(base: str, token: str, recording_id: str, part: Path, timeout: float) -> None:
+def download(base: str, token: str, recording_id: str, part: Path, timeout: float,
+             opener=None) -> None:
     path = f"/api/v1/recordings/{urllib.parse.quote(recording_id, safe='')}/archive"
     try:
-        resp = _OPENER.open(_request(base, path, token), timeout=timeout)
+        resp = (opener or _OPENER).open(_request(base, path, token), timeout=timeout)
     except urllib.error.HTTPError as exc:
         raise _http_error(recording_id, exc) from exc
     except OSError as exc:
@@ -246,7 +261,7 @@ def _fetch_one(args, token: str, dest: Path, recording_id: str, convert) -> int:
     _remove(part)         # an earlier run's leftovers: never extract into an old tree
     _remove(staging)
     try:
-        download(args.base, token, recording_id, part, args.timeout)
+        download(args.base, token, recording_id, part, args.timeout, getattr(args, "opener", None))
         manifest = verify(safe_extract(part, staging, recording_id), recording_id)
         os.replace(staging / recording_id, final)     # the last step: final exists only verified
     except (NotIdle, TokenRefused):
@@ -280,12 +295,13 @@ def _fetch_one(args, token: str, dest: Path, recording_id: str, convert) -> int:
 def main(argv=None, *, convert=default_convert) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("base", help="CORE base URL, e.g. http://rosy-01.local:8080")
+    ap.add_argument("base", help="CORE base URL from the robot's _rosy._tcp advertisement")
     ap.add_argument("--token-file", help=f"Operator token file (env {TOKEN_ENV})")
     ap.add_argument("--dest", default=DEFAULT_DEST)
     ap.add_argument("--video-out", help="bag_to_video --out (default data/teleop/learning)")
     ap.add_argument("--codec", choices=("hevc", "h264"), default="hevc")
     ap.add_argument("--only", metavar="ID")
+    ap.add_argument("--ca-file", help="device CA for an https base (the URL name must match the certificate)")
     ap.add_argument("--timeout", type=float, default=600.0, help="per download socket timeout (s)")
     ap.add_argument("--list-timeout", type=float, default=LIST_TIMEOUT_S)
     args = ap.parse_args(argv)
@@ -295,11 +311,22 @@ def main(argv=None, *, convert=default_convert) -> int:
     if not token:
         print(f"refused: needs an Operator token in --token-file or {TOKEN_ENV}", file=sys.stderr)
         return 2
+    https = args.base.startswith("https://")
+    if https and not args.ca_file:
+        print("refused: https needs --ca-file (the robot device CA)", file=sys.stderr)
+        return 2
+    if args.ca_file and not https:
+        print("refused: --ca-file applies only to an https base", file=sys.stderr)
+        return 2
+    if args.ca_file and not Path(args.ca_file).is_file():
+        print(f"refused: cannot read device CA {args.ca_file}", file=sys.stderr)
+        return 2
+    args.opener = build_opener(args.ca_file)
     if args.video_out is None:
         import bag_to_video
         args.video_out = str(bag_to_video.DEFAULT_OUT)
     try:
-        listing = list_recordings(args.base, token, args.list_timeout)
+        listing = list_recordings(args.base, token, args.list_timeout, args.opener)
     except TokenRefused as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return EXIT_TOKEN

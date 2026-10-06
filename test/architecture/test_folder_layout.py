@@ -120,7 +120,8 @@ def test_module_gate_markdown_stays_on_the_module():
 
 
 def test_current_docs_do_not_point_at_retired_paths():
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    # Build/sim commands moved from README to the developer guide on 2026-10-05.
+    readme = (ROOT / "docs" / "reference" / "developer-guide.md").read_text(encoding="utf-8")
     archive = (ROOT / "reference" / "AGENTS.md").read_text(encoding="utf-8")
     archive_src = (ROOT / "reference" / "src" / "AGENTS.md").read_text(encoding="utf-8")
     assert "tools/run_fleet_sim.sh" in readme

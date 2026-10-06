@@ -6157,3 +6157,32 @@ osy-d395-s1d\`.
 - 변경: 고정 로컬 signer가 main push CI, native unsigned build, ABI, 서명, 기존 카나리 발행을 연결한다. 개인키는 로컬에 둔다. 로봇의 MANUAL/hold/보정/claim을 해제하지 않는다.
 - 검증: 거부/재개 시험과 기존 prepare/publish/native workflow 시험. 장치 installed SHA·updater committed·내비게이션 현장 수용은 별도다.
 - gate 변화: 구현 검증 중. DEVICE/FIELD 완료로 기록하지 않는다.
+
+## 2026-10-05 · uncommitted · fix(docs): C6 선택 센서 공급자 연결 판정
+
+- 변경: 차선 복귀 정책의 선택 메서드 조회가 구 공급자에서 실패 닫힘으로 동작하는 이유와 소유 경계를 분리 기준 문서에 기록했다.
+- 증거: C6 목록 동일성 및 센서 연결 검사. 장치 수용은 별도다.
+- gate 변화: 없음.
+
+## 2026-10-05 · uncommitted · docs(readme): short README, developer guide, verified team guide
+
+- 변경: README를 소개·시작 위치 표·문서 지도·「같이 하는 깃」·「핵심 계약」으로 줄이고 구조·빌드·테스트·관제 배치·Pi 런타임·로드맵을 `docs/reference/developer-guide.md`로 옮겼다(옛 `src/` 트리는 현재 폴더 표로 교체). 팀 가이드를 첫날 명령·이슈에서 머지까지·막혔을 때 표로 다시 썼다. 루트 허용 목록 밖이던 `CONTRIBUTING.md`를 `.github/`로 옮겼다.
+- 증거: Windows 새 클론 + Python 3.12 venv에서 가이드 §1 명령 리허설, 문서 링크 검사 0 깨짐, README·문서 배치·harness·pre-push 계약 시험.
+- gate 변화: 없음.
+## 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
+
+- 변경: D-472와 ADR Log에 실제 Vision 프레임 기반 현장지도, 단독 소유 LED 점멸 신원 대조, 안전 선점·만료·주행 분리 결정을 기록했다.
+- 증거: 현장 두 로봇의 `rosy-face`와 램프 런타임 조회. 식별 점멸 API와 실제 영상 대조는 아직 없다.
+- gate 변화: 없음. 문서 제안이며 DEVICE/FIELD 수용이 아니다.
+
+## 2026-10-06 · uncommitted · D-472 호스트 구현
+
+- 변경: Fleet→CORE→호스트→rosy-face의 단기 LED 식별 요청과 Rosy Cam 최신 원본 프레임의 현장지도 표시를 구현했다. 색/영상만으로 robot ID나 주행 좌표를 확정하지 않는다.
+- 증거: 호스트 pytest 274 passed/3 skipped, 웹 Node 135 passed. 장치 설치·현장 영상 식별은 미확인.
+- gate 변화: SOURCE/LOCAL 코드 검증. DEVICE/FIELD 수용은 아니다.
+
+## 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
+
+- 변경: README 「같이 하는 깃」(실험실 PC 경로 포함)을 `docs/reference/shared-checkout.md`로 옮기고 README에 배지·시스템 구성 다이어그램·구성 표·시작하기 표·분류별 문서 지도를 넣었다. 팀 가이드(첫날·작업 흐름·공유 범위)와 개발 가이드(시험 단계)에 mermaid 다이어그램. 참조 갱신: 루트 AGENTS, rosy-land-on-main 스킬, `test_readme_agent_start.py`.
+- 증거: affected 단계, 문서 링크 검사.
+- gate 변화: 없음.

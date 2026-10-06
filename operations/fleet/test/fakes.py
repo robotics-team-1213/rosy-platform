@@ -208,6 +208,10 @@ class FakeRobot:
         self._record("estop")
         return {"estop": True}
 
+    async def identify_lamp(self, color: str) -> dict:
+        self._record("identify_lamp", color)
+        return {"accepted": True, "request_id": "fake-led-test"}
+
     async def localization_candidates(self):
         self._record("localization_candidates")
         return self.candidates

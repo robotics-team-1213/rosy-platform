@@ -1107,3 +1107,11 @@
 - 변경: sensor-only 생산자가 신선하고 유효한 IR 관측과 cliff=false를 구분한다. 현재 바닥 증거는 LiDAR·IMU·IR 중 가장 먼저 만료되는 원본 유효 기간을 사용한다. 기존 cliff 검출·주행 제한은 보존한다.
 - 증거: 포화·누락·잘못된 원시 IR, hazard, 후보 변경, IR-only 설정에서 만료 IMU가 허용되던 사례를 시험했다. perception 47 PASS, 독립 통합/크기 검토 105 PASS, 모두 0 NEW.
 - gate 변화: 현재 센서 관측의 SOURCE 증거만. 미래 swept floor·실제 이동 공급자 연결·배포·장치 주행은 미완료다.
+## 2026-10-06 · uncommitted · fix(perception): flip a keep boundary's stale side after persistent contradiction
+- 변경: lane_keep이 경계의 추적 측면을 유지하는 규칙에 프레임 상한(SIDE_FLIP_FRAMES=4)을 두었다. 반대쪽 lateral이 AMBIGUOUS_LATERAL_M를 넘겨 상한 프레임째 이어지면 지면 기준 측면으로 되돌린다. 20261005T134540Z(9dfk) 329-367프레임에서 로봇이 왼쪽 줄 위를 따라가며 'left' 측면이 유지되어 편측 목표가 오른쪽 테이프 너머(-0.148m)에 놓이고 error가 +1.0으로 고정됐던 것을 344프레임부터 복귀시킨다. 학습 페인트는 무관(당시 threshold 소스)했다.
+- 증거: 차선 관련 278 PASS/11 SKIP, known_failures 0 NEW. 같은 녹화의 보정 기하 재생에서 포화 프레임 1289에서 1054로, 344프레임 error +1.000에서 +0.022로, 350-372프레임은 both 짝짓기·차선 복귀 조향으로 바뀌었다. 새 경계 시험 2개(영구 반대 측면 플립, 순간 횡단 보존)를 test_lane_keep.py에 추가했다.
+- gate 변화: 없음. 호스트 재생은 장치·ARM64 이미지·현장 수용을 대신하지 않는다.
+## 2026-10-06 · uncommitted · refactor(perception): split the junction HOLD policy out of lane_keep
+- 변경: lane_keep.py가 626줄로 600줄 파일 예산을 넘어(사이드 플립 수정 +27줄) lane_keep_junction.py로 교차로 HOLD 규칙(_junction, _across_path, 네 상수)를 옮겼다. 동작은 같고 호출부가 편측 판정 거리를 인자로 넘긴다. 패키지 판정 기록을 44646으로 재판정했다.
+- 증거: architecture 33 PASS(예산 포함), 차선 관련 278 PASS/11 SKIP, known_failures 0 NEW. lane_keep.py는 573줄.
+- gate 변화: 없음. 분리는 순수 이동이며 장치·현장 수용 상태는 그대로다.

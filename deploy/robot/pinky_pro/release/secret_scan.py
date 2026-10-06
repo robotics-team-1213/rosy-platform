@@ -574,6 +574,7 @@ def scan_text(path: str, text: str, *,
                     and _is_placeholder(value.rstrip(')]},:')))
                 or _TYPE_EXPRESSION.match(value)
                 or _CODE_REFERENCE.match(value.rstrip(",}"))
+                or ("(" not in value and _CODE_REFERENCE.match(value.rstrip("),}")))
                 or (not (match.group('quoted') or match.group('squoted'))
                     and _NUMERIC_CODE_CALL.fullmatch(value))
                 or (_is_unclosed_fragment(value)

@@ -4,6 +4,10 @@ import hashlib
 import http.server
 import io
 import json
+import os
+import shutil
+import ssl
+import subprocess
 import tarfile
 import threading
 
@@ -245,6 +249,115 @@ def test_pair_counts():
             {"side": {"cmd_vel": None, "teleop/intent": None}}]
     assert fetch_http.pair_counts(rows) == {"frames": 4, "with_cmd_vel": 3, "with_intent": 2, "paired": 2,
                                             "paired_accepted": 1}
+
+
+def _openssl():
+    found = shutil.which("openssl")
+    if found:
+        return found
+    candidate = r"C:\Program Files\Git\usr\bin\openssl.exe"
+    if os.path.isfile(candidate):
+        return candidate
+    pytest.skip("openssl is not installed")
+
+
+def _openssl_run(argv, cwd):
+    result = subprocess.run([_openssl(), *argv], cwd=cwd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise AssertionError(result.stderr or result.stdout)
+
+
+def _device_material(tmp_path):
+    """(device CA, leaf cert, leaf key, a different CA). The leaf is named 127.0.0.1.
+
+    Python 3.14 refuses a CA that has no keyUsage, so both certs carry the extensions
+    OpenSSL 3 expects. Git openssl's `x509 -req` has no `-addext`; the ext files carry them.
+    """
+    work = tmp_path / "certs"
+    work.mkdir()
+    (work / "ca.cnf").write_text(
+        "[req]\ndistinguished_name=dn\nx509_extensions=v3_ca\nprompt=no\n"
+        "[dn]\nCN=rosy-test-ca\n"
+        "[v3_ca]\nbasicConstraints=critical,CA:TRUE\n"
+        "keyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\n",
+        encoding="ascii")
+    _openssl_run(["req", "-x509", "-newkey", "rsa:2048", "-keyout", "ca.key", "-out", "ca.pem",
+                  "-days", "2", "-nodes", "-config", "ca.cnf"], work)
+    _openssl_run(["req", "-newkey", "rsa:2048", "-keyout", "leaf.key", "-out", "leaf.csr",
+                  "-nodes", "-subj", "/CN=127.0.0.1"], work)
+    (work / "leaf.cnf").write_text(
+        "[v3_leaf]\nbasicConstraints=CA:FALSE\n"
+        "keyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n"
+        "subjectAltName=IP:127.0.0.1\nsubjectKeyIdentifier=hash\n"
+        "authorityKeyIdentifier=keyid,issuer\n",
+        encoding="ascii")
+    _openssl_run(["x509", "-req", "-in", "leaf.csr", "-CA", "ca.pem", "-CAkey", "ca.key",
+                  "-CAcreateserial", "-out", "leaf.pem", "-days", "2",
+                  "-extfile", "leaf.cnf", "-extensions", "v3_leaf"], work)
+    (work / "other.cnf").write_text(
+        "[req]\ndistinguished_name=dn\nx509_extensions=v3_ca\nprompt=no\n"
+        "[dn]\nCN=other-ca\n"
+        "[v3_ca]\nbasicConstraints=critical,CA:TRUE\n"
+        "keyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\n",
+        encoding="ascii")
+    _openssl_run(["req", "-x509", "-newkey", "rsa:2048", "-keyout", "other.key", "-out", "other.pem",
+                  "-days", "2", "-nodes", "-config", "other.cnf"], work)
+    return work / "ca.pem", work / "leaf.pem", work / "leaf.key", work / "other.pem"
+
+
+def _https_server(cert, key, archive):
+    state = {"listing": {"items": [{"id": RID, "status": "complete"}], "download_allowed": True,
+                         "download_blocker": None}, "archive": archive, "auth": [], "paths": []}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            state["auth"].append(self.headers.get("Authorization"))
+            state["paths"].append(self.path)
+            body = json.dumps(state["listing"]).encode() if self.path == "/api/v1/recordings" else state["archive"]
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_):
+            pass
+
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(certfile=str(cert), keyfile=str(key))
+    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd, state
+
+
+def test_https_without_the_device_ca_is_refused(tmp_path, monkeypatch):
+    monkeypatch.delenv(fetch_http.TOKEN_ENV, raising=False)
+    token = tmp_path / "token"
+    token.write_text("op-token\n", encoding="utf-8")
+    assert fetch_http.main(["https://rosy.local:8080", "--token-file", str(token)]) == 2
+    assert fetch_http.main(["http://127.0.0.1:9", "--token-file", str(token),
+                            "--ca-file", str(token)]) == 2
+    assert fetch_http.main(["https://rosy.local:8080", "--token-file", str(token),
+                            "--ca-file", str(tmp_path / "missing.pem")]) == 2
+
+
+def test_https_fetch_accepts_only_the_device_ca(tmp_path):
+    ca, leaf, leaf_key, other = _device_material(tmp_path)
+    httpd, state = _https_server(leaf, leaf_key, _recording())
+    base = f"https://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        assert _main(base, tmp_path, _paired_convert, "--ca-file", str(ca)) == 0
+        assert (tmp_path / "raw" / RID / "bag" / "bag_0.mcap").read_bytes() == b"m" * 300
+        assert state["auth"][0] == "Bearer op-token"
+        refused = fetch_http.main([base, "--token-file", str(tmp_path / "token"),
+                                   "--dest", str(tmp_path / "wrong"),
+                                   "--video-out", str(tmp_path / "video-wrong"),
+                                   "--ca-file", str(other)], convert=_paired_convert)
+        assert refused == 1
+        assert not (tmp_path / "wrong" / RID).exists()
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
 
 
 def test_manifest_schema_matches_the_robot_contract():

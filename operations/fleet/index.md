@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · LED 식별 요청과 실영상 현장지도
+- 2026-10-06 · uncommitted · feat(fleet): 내부망 카메라 미리보기
 - 2026-10-05 · uncommitted · fix(fleet): D-468 계약 문서 버전 검사 정렬
 - 2026-10-05 · uncommitted · fix(fleet): 기능 표시의 안전 경계 의존성 복구
 - 2026-10-05 · uncommitted · fix(fleet): 기능 표시 도우미를 기존 표시 모듈로 이동
-- 2026-10-05 · uncommitted · fix(fleet): 기능 표시 조회의 상태 응답 대기 제한
-- 2026-10-05 · uncommitted · fix(fleet): 목표·대형 지원 기능 확인

@@ -278,6 +278,9 @@ main {
 .map-head .spacer { flex: 1; }
 
 .map-stage { position: relative; }
+.map-camera { margin: var(--space-3) 0 0; }
+.map-camera img { display: block; width: 100%; max-height: 30rem; object-fit: contain; background: var(--ground-deep); }
+.map-camera figcaption { margin-top: var(--space-2); color: var(--ink-quiet); }
 .map-stage[data-map-state="unavailable"] #map-canvas { height: min(30dvh, 18rem); }
 .map-empty {
   position: absolute;

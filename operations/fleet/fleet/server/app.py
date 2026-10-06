@@ -18,13 +18,14 @@ from __future__ import annotations
 import asyncio
 import hmac
 import logging
+import sqlite3
 from contextlib import asynccontextmanager
 from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from typing import Mapping, Optional
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
@@ -112,6 +113,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                approved_peer_directory_file: Optional[Path] = None,
                vision_lease_secret: Optional[str] = None,
                vision_sources: tuple[str, ...] = (),
+               lan_camera_proxy: bool = False,
                omx_instances: Optional[Mapping[str, str]] = None,
                omx_socket_root: Path | str = "/run/rosy/omx",
                omx_stop_transport=None,
@@ -417,6 +419,26 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     require_viewer, require_operator, require_named_operator, require_proposer = build_role_guards(
         authorize, principals)
     read_guard = [Depends(require_viewer)]
+
+    def require_camera_viewer(request: Request) -> SitePrincipal:
+        # Enable only behind the site proxy; its other routes strip client copies.
+        if (lan_camera_proxy and request.headers.get("X-Rosy-Lan-Camera") == "1"
+                and not request.headers.get("Authorization")):
+            principal = SitePrincipal("lan-camera", "viewer")
+            request.state.site_principal = principal
+            if task_service is not None and request.method == "POST":
+                try:
+                    request.state.site_api_audit_id = task_service.store.begin_api_audit(
+                        principal_id=principal.principal_id, role=principal.role,
+                        method=request.method, path=request.url.path,
+                    )
+                except (OSError, sqlite3.Error, ValueError):
+                    raise HTTPException(status_code=503, detail={
+                        "code": "AUDIT_STORAGE_UNAVAILABLE",
+                        "message": "site command audit is unavailable",
+                    }) from None
+            return principal
+        return authorize(request, request.headers.get("Authorization"))
     operator_guard = [Depends(require_operator)]
 
     from fleet.server.peer_routes import install_peer_catalogue
@@ -510,15 +532,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           cancel_pending=partial(
                               cancel_pending_task_queue, task_service, console))
 
-    @app.get("/api/fleet/vision/sources", dependencies=read_guard, tags=["vision-preview"])
-    def vision_preview_sources() -> dict:
+    @app.get("/api/fleet/vision/sources", tags=["vision-preview"])
+    def vision_preview_sources(_principal: SitePrincipal = Depends(require_camera_viewer)) -> dict:
         if vision_signer is None:
             raise HTTPException(status_code=503, detail={"code": "VISION_PREVIEW_DISABLED"})
         return {"sources": list(vision_sources)}
 
-    @app.post("/api/fleet/vision/lease", dependencies=read_guard, tags=["vision-preview"])
+    @app.post("/api/fleet/vision/lease", tags=["vision-preview"])
     def vision_preview_lease(body: VisionLeaseRequest,
-                             principal: SitePrincipal = Depends(require_viewer)) -> dict:
+                             principal: SitePrincipal = Depends(require_camera_viewer)) -> dict:
         if vision_signer is None:
             raise HTTPException(status_code=503, detail={"code": "VISION_PREVIEW_DISABLED"})
         if body.source_id not in vision_sources:
