@@ -163,6 +163,45 @@ def test_catalog_compact_forms_use_the_same_full_width(browser_workspace, width)
         page.screenshot(path=str(target), full_page=True)
 
 
+@pytest.mark.parametrize('width', [390, 320])
+def test_learning_compact_actions_and_connection_form_use_full_width(browser_workspace, width):
+    page, _, _ = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    main = page.locator('.workspace-heading').bounding_box()
+    for selector in ('#new-task', '#refresh'):
+        box = page.locator(selector).bounding_box()
+        assert abs(box['x'] - main['x']) <= 1 and abs(box['width'] - main['width']) <= 1, (selector, box, main)
+    page.locator('#connection-panel summary').click()
+    form = page.locator('#register').bounding_box()
+    for selector in ('#kind', '#name', '#path', '#connect'):
+        box = page.locator(selector).bounding_box()
+        assert abs(box['x'] - form['x']) <= 1 and abs(box['width'] - form['width']) <= 1, (selector, box, form)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-work-form-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+
+
+@pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels'])
+@pytest.mark.parametrize('width,height', [(390, 844), (320, 568)])
+def test_learning_compact_header_stays_within_first_view_budget(browser_workspace, route, width, height):
+    page, _, _ = browser_workspace
+    page.set_viewport_size({'width': width, 'height': height})
+    page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
+    topbar = page.locator('ui-topbar').bounding_box()
+    assert topbar['height'] <= height * 0.2, (route, topbar, height)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        name = route.strip('/') or 'objects'
+        target = Path(output) / f'learning-header-{name}-{width}x{height}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+
+
 @pytest.mark.parametrize('width', [1440, 800, 390])
 def test_empty_pixel_review_can_recover_at_declared_widths(browser_workspace, width):
     page, _, expect = browser_workspace
