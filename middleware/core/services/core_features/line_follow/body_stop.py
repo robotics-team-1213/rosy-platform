@@ -31,6 +31,12 @@ TWIST_HOLD_S = 0.5
 #: (0.10 m/s x 0.1 s) plus an in-place sweep of the body edge, with room to spare.
 NEAR_BAND_M = 0.05
 MEMORY_MAX_POINTS = 400
+#: A return at exactly range_min is visible; moving it to the base frame (+lidar_x) and back
+#: (-lidar_x) can round it a hair below (Gazebo 2026-10-06), and standing still never ages
+#: it out. Only a
+#: point clearly inside range_min (by more than this, far below any LiDAR resolution) went
+#: invisible, which is what D-422 remembers.
+RANGE_MIN_TOLERANCE_M = 1e-6
 
 
 class BodyStopMixin:
@@ -141,7 +147,7 @@ class BodyStopMixin:
             if self._odometer - seen > c.obstacle_path_horizon_m:
                 continue
             bx, by = self._to_base(ox, oy)
-            if math.hypot(bx - lidar_x, by) < range_min:
+            if math.hypot(bx - lidar_x, by) < range_min - RANGE_MIN_TOLERANCE_M:
                 keep.append((ox, oy, seen))
         self._near_memory = tuple(keep[-MEMORY_MAX_POINTS:])
         x0, y0, heading = self._odom

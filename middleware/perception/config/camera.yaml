@@ -33,6 +33,15 @@
     # a 1.3x gain step on one unchanged frame flipped blocked False -> True.
     camera_lock_enabled: true
     camera_settle_seconds: 2.5
+    # The lock is not for life: if the frozen exposure leaves the road overexposed
+    # or low_light for this long, re-run settle -> lock (at most once per
+    # interval). 0 turns the re-lock off.
+    camera_relock_dwell_s: 3.0
+    camera_relock_min_interval_s: 30.0
+    # "Bad" also means the road band is clipped (>247) at this fraction or the
+    # band median reaches this level, well below the 95 % CAMERA_LINE bar.
+    camera_relock_clip_fraction: 0.30
+    camera_relock_bright_median: 235.0
     # Ground-plane calibration. All six must be measured before any distance is
     # reported; a zero here refuses the whole plane and regions stay unranged
     # (distance_m: null). A partly-correct calibration is worse than none.

@@ -622,3 +622,48 @@ def test_console_localization_switches(tmp_path, monkeypatch):
                                     "--localization-lane-rules", str(rules)]))
     service = captured["app"].state.localization_service
     assert service.overhead_cue is True and service._squares == ((0.5, 0.5),)
+
+
+@pytest.mark.parametrize(("deployment", "mode", "expected"), [
+    ("", "paired", "paired"),
+    ("development", "paired", "paired"),
+    ("", "development", "paired"),
+    ("development", "development", "development"),
+])
+def test_console_development_mode_needs_both_the_flag_and_the_deployment(
+        tmp_path, monkeypatch, deployment, mode, expected):
+    # D-473 1: a missing or mismatched setting never falls back to development mode.
+    monkeypatch.setenv("ROSY_DEPLOYMENT", deployment)
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    args = cli.parse_args(["console", "--robots", str(_write(tmp_path)),
+                           "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+                           "--token", "operator-test", "--connection-mode", mode])
+
+    cli.run_console(args)
+
+    client = TestClient(captured["app"], client=("192.168.1.50", 50000),
+                        base_url="http://192.168.1.10:8090")
+    assert client.get("/api/fleet/auth/connection").json() == {"mode": expected}
+    issued = client.post("/api/fleet/auth/development-session")
+    assert issued.status_code == (201 if expected == "development" else 403)
+
+
+def test_console_connection_mode_defaults_to_paired(tmp_path):
+    args = cli.parse_args(["console", "--robots", str(_write(tmp_path))])
+
+    assert args.connection_mode == "paired"
+
+
+def test_console_refuses_an_unknown_connection_mode(tmp_path):
+    with pytest.raises(SystemExit):
+        cli.parse_args(["console", "--robots", str(_write(tmp_path)), "--connection-mode", "open"])
+
+
+def test_console_development_mode_requires_the_task_database(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "development")
+    args = cli.parse_args(["console", "--robots", str(_write(tmp_path)),
+                           "--connection-mode", "development"])
+
+    with pytest.raises(SystemExit, match="--tasks-db is required with --connection-mode development"):
+        cli.run_console(args)
