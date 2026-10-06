@@ -6427,3 +6427,9 @@ osy-d395-s1d\`.
 - 변경: 최근 Pilot·게임·로봇 화면 변경을 포함한 제품 코드 `d04f764c4`에서 D-153 지정 팔레트·토큰·스타일가이드·문법·CORE 증거 시험을 다시 실행해 회차 근거를 갱신했다.
 - 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 실행 기록. 시각 계약 74 passed, CORE 증거 7 passed, 각 `known_failures.py` 0 NEW.
 - gate 변화: G1 LOCAL 재확인만. 선언 상태·뷰포트 G2와 실제 사용자 G3, 제품 전체는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 연결 끊김 모바일 독회
+
+- 변경: Fleet 연결 끊김 상태를 1920/390/320px에서 재생하고 예외 카드 우선순위·비상 정지 가시성·가로 넘침을 확인했다.
+- 증거: [UI/UX 회차](validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 일부 추가. 실제 장치·사이트·운영자 G3와 제품 전체는 HOLD다.

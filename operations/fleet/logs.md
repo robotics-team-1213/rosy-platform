@@ -1966,3 +1966,9 @@
 - 변경: 탐색 상태가 NAVIGATING으로 남아도 안전 상태가 결측이거나 E-stop이면 주행 중이라고 표현하지 않고 목표가 남았음을 알린다. 기존 공용 탐색 상태 번역을 재사용한다.
 - 증거: 안전 결측·정지와 목표 확인 브라우저 3 passed, Fleet 서버·팔레트 60 passed, 웹 Node 134 passed, `known_failures.py` 0 NEW. [G3 독회](../../docs/validation/uiux-surfaces-2026-10-06/README.md)는 LOCAL 부분 근거다.
 - gate 변화: Fleet G3·SITE/FIELD HOLD 유지.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 연결 끊김 모바일 독회
+
+- 변경: 로봇 연결 끊김 fixture를 1920/390/320px에서 재생해 첫 카드의 오류 우선순위, 오래된 상태 배제, 비상 정지 가시성, 가로 넘침 부재를 확인했다.
+- 증거: [UI/UX 회차](../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 모바일 캡처; 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: Fleet LOCAL G2 부분 근거 추가. 실제 사이트 PC/로봇 readback과 G3 독회는 HOLD다.

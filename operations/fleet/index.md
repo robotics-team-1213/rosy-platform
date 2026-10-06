@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(fleet): 연결 끊김 모바일 독회
 - 2026-10-06 · uncommitted · uiux(fleet): 정지 중 목표 상태 문구와 G3 근거
 - 2026-10-06 · uncommitted · uiux(fleet): 빈 목록·서버 실패의 모바일 폭과 연결 끊김 증거
 - 2026-10-06 · uncommitted · uiux(fleet): 기본 예외 목록 증거와 지도 바탕
 - 2026-10-06 · uncommitted · uiux(fleet): 동등한 창 너비 통일
-- 2026-10-06 · uncommitted · feat(fleet): 내부망 카메라 미리보기

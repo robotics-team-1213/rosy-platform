@@ -707,7 +707,8 @@ def test_delayed_follower_stream_is_named_in_the_roster(console_url):
         browser.close()
 
 
-def test_unreachable_robot_is_never_drawn_healthy(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_unreachable_robot_is_never_drawn_healthy(console_url, width, height):
     """concept 16 §5 — 연락 두절은 자기 상태다. '닿지 않음'과 이유가 보여야 한다."""
     from playwright.sync_api import sync_playwright
 
@@ -718,6 +719,7 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url):
     }
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => document.getElementById('online-pill')?.textContent === '2/3 연결'"
@@ -727,11 +729,16 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url):
         assert "오프라인" in roster
         assert "OFFLINE" not in roster
         offline = page.locator("#roster .robot.offline")
+        assert "rosy_03" in page.locator("#roster article").first.inner_text()
         assert "NAVIGATING" not in offline.inner_text()
         assert "0.45" not in offline.inner_text()
         assert page.locator("#roster .robot.offline ui-tag[status=crit]", has_text="오프라인").first.get_attribute("title") == "OFFLINE"
+        offline.scroll_into_view_if_needed()
+        stop = page.locator("#estop").bounding_box()
+        assert stop and stop["width"] > 0 and stop["y"] >= 0 and stop["y"] + stop["height"] <= height
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert not errors
-        save_temp_screenshot(page, "fleet_console_unreachable.png")
+        save_temp_screenshot(page, "fleet_console_unreachable.png" if width == 1920 else f"fleet_console_unreachable_{width}.png")
         browser.close()
 
 
