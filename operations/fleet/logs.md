@@ -2139,3 +2139,9 @@
 - 변경: 차로 접선을 장소에 맞추기 전 그려진 폴리라인의 0.05 m로 읽는다(N1). max(0.15 m, 폭) 창은 map_v2_fleet 회전 교차로 이어짐을 모두 +42° 좌회전으로 읽었다. 지금은 이어짐 직진, 진입·진출 우회전이며 골든 시험이 이를 고정한다. 지도 저장소가 사이트 `fleet.routing` 설정으로 후속 표를 미리 만든다(L1). 계획기의 예상하지 못한 실패는 같은 본문의 500 `TRIP_PLAN_FAILED`다(L2). 스키마에 맞지 않는 초안은 422 `SITE_MAP_INVALID`와 필드 오류이고 콘솔이 보인다(L3). D-489·D-490 부록과 API Ref 행을 맞췄다. main 병합(D-483·D-484·D-487, API Ref v1.110) 뒤 이 가지의 행은 v1.111이고, D-485·D-486은 `adr_gaps`에 번호 이동으로 적었다.
 - 증거: 전체 Fleet 시험·계약 문서 시험과 `known_failures.py`(X:/DevTemp/fleet-map-route/run.txt, run_docs.txt), 하네스 lint 0 errors.
 - gate 변화: 없음. SOURCE/LOCAL 근거만 보강했다.
+
+## 2026-10-07 · uncommitted · D-488 현장 지도 표시 이름·선언 폭 확인
+
+- 변경: 새 `/console/site-map`의 탭·머리·홈 접근성 이름을 D-487의 `Rosy Fleet`으로 맞췄다. 1440/390/320px에서 초안 편집과 경로 미리보기 칸의 같은 폭, 가로 넘침 없음, 비상 정지 위치를 확인한다.
+- 증거: `X:/DevTemp/projects/rosy-platform/2026-10-07-fleet-g2/site-map-green.txt` 4 passed, `known_failures.py` 0 NEW; 같은 폴더 `site-map-*.png` 9장. 이름 검사 수정 전 1 failed.
+- gate 변화: 합성 서버의 LOCAL G2 부분 근거만 추가. 작은 지도 글씨의 운영자 판독, 예외 상태, 사이트 설치·G3는 HOLD.
