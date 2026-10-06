@@ -47,11 +47,12 @@ Decision 2의 "차체 footprint와 경계의 부호 있는 여유 및 예측 여
 
 **규칙** (`core_features/line_follow/lane_return.py`):
 
-1. 차로 안: `여유 − v·|sin θ|·0.3 s ≥ line_follow.lane_return_body_margin_m`(기본 0).
-   - 여유는 URDF footprint 네 모서리(`body_front_x_m`, `body_rear_x_m`, `body_half_width_m`)에서 불확실도만큼 깎은 두 경계까지 잰 부호 있는 최소 수직거리다. 0 이상이면 투영 오차가 최악이어도 네 모서리가 모두 차로 안에 있다.
-   - `v·|sin θ|·0.3 s`는 예측 여유다. live 선속도 상한 `v`, 차로에 대한 진행각 `θ`, 근거 유효 시간 상한 0.3 s(이 모듈의 기존 신선도 상한)로 다음 근거가 오기 전 경계 쪽으로 갈 수 있는 거리다.
-   - `lane_return_body_margin_m`은 그 위에 더 두는 몸 여유다. 범위는 [0, 0.05]다.
+1. 차로 안 진입: `여유 − v·|sin θ|·0.3 s ≥ line_follow.lane_return_body_margin_m`(기본 0).
+   - 여유는 URDF footprint 네 모서리(`body_front_x_m`, `body_rear_x_m`, `body_half_width_m`)에서 불확실도만큼 깎은 두 경계까지 잰 부호 있는 최소 수직거리다. `uncertainty_m`은 생산자가 보내는 경계별 전체 횡오차 한계다(투영·보정·검출, `LaneContainmentEvidence` 문서). 그 한계가 모든 횡오차를 덮을 때에만, 여유 0 이상이 네 모서리가 모두 차로 안에 있다는 뜻이 된다.
+   - `v·|sin θ|·0.3 s`는 예측 여유다. `v`는 실제 속도가 아니라 live 선속도 상한이다. 그래서 보수적이고, 로봇이 서 있는 verify 단계에도 같은 식을 쓴다. `θ`는 차로에 대한 진행각, 0.3 s는 이 모듈의 기존 근거 신선도 상한이다. 다음 근거가 오기 전 경계 쪽으로 갈 수 있는 거리다.
+   - `lane_return_body_margin_m`은 `uncertainty_m`에 없는 오차(프레임 간 경계 흔들림, footprint 공차)를 덮는 몸 여유다. 범위는 [0, 0.05]다. 기본 0은 임시값이다. 실제 생산자가 `uncertainty_m`을 보내기 시작하면(브랜치 `fix/lane-projection-uncertainty`) 측정된 경계 흔들림의 2σ로 다시 정한다.
+   - 이탈(이력): 추종 중 이미 차로 안으로 판정된 로봇은 기하 여유(`여유 + uncertainty_m`)가 음수일 때만 이탈을 연다. 그때는 몸이 추정 경계를 실제로 넘었다. 이력 폭은 불확실도 자체여서 새 상수가 없다. 260919 트랙에서는 깎인 여유가 진행각 0°에서 0.70 mm, 0.5°에서 0.04 mm, 1°에서 −0.62 mm다. 이력이 없으면 프레임마다 이탈·HOLD·verify를 오간다.
    - 불확실도가 기하 여유보다 크면 깎인 여유가 음수가 되어 차로 안이 아니다. 불확실도가 없거나 상한(0.015 m)을 넘으면 지금처럼 근거 자체가 없다.
-2. 정상 checkpoint: 위 판정에 더해 `기하 여유 ≥ lane_return_checkpoint_fraction × 기하 좌우 유격`(기본 0.5). 기하 값은 깎기 전 값이다(`Corridor.free_half + uncertainty_m`). 차로 폭이 허락하는 좌우 유격의 가운데 절반 안에 있어야 한다는 뜻이다. 넓은 차로와 좁은 차로에 같은 비율로 적용되고, 경계에 붙은 복구 직후 자세가 정상 checkpoint가 되지 않게 하는 원래 의도를 유지한다. 범위는 [0, 1]이다. checkpoint는 안전 판정이 아니다. 역추적 뒤에도 새 근거로 다시 검증한다.
+2. 정상 checkpoint: 진입 판정에 더해 `기하 여유 ≥ lane_return_checkpoint_fraction × 기하 좌우 유격`(기본 0.5). 기하 값은 깎기 전 값이다(`Corridor.free_half + uncertainty_m`). 차로 폭이 허락하는 좌우 유격의 가운데 절반 안에 있어야 한다는 뜻이다. 넓은 차로와 좁은 차로에 같은 비율로 적용되고, 경계에 붙은 복구 직후 자세가 정상 checkpoint가 되지 않게 하는 원래 의도를 유지한다. 범위는 [0, 1]이다. checkpoint는 안전 판정이 아니다. 역추적 뒤에도 새 근거로 다시 검증한다.
 
-**확인.** `recovery_local_enabled: false`(장치 기본)이면 이 controller를 만들지 않으므로 동작이 같다. 시험: `middleware/core/services/test/test_lane_return_margin.py`. 대상은 좁은 차로 중심 Pinky의 차로 안 판정과 checkpoint, 몸 모서리 3 mm 밖, 불확실도 > 기하 여유, 진행각 예측 여유, 치우친 자세의 checkpoint 거부, OFF 불변, 파라미터 범위다. 호스트 pytest는 sim·장치 수용이 아니다. 260919 sim 재실행은 별도다.
+**확인.** `recovery_local_enabled: false`(장치 기본)이면 이 controller를 만들지 않으므로 동작이 같다. 시험: `middleware/core/services/test/test_lane_return_margin.py`. 대상은 좁은 차로 중심 Pinky의 차로 안 판정과 checkpoint, ±1°·±1 mm 흔들림에서 추종 유지, 모서리가 추정 경계를 넘으면 이탈, 몸 모서리 3 mm 밖, 불확실도 > 기하 여유, 진행각 예측 여유, 치우친 자세의 checkpoint 거부, OFF 불변, 파라미터 범위다. 호스트 pytest는 sim·장치 수용이 아니다. 260919 sim 재실행은 별도다.
