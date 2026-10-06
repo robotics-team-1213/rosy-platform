@@ -188,8 +188,12 @@ def seal_export(store, out, receipt, captured):
     cad = captured['cad']
     if cad:
         (out / 'cad-reference.json').write_bytes(encoded(cad))
+    import class_sets  # lazy: verify_current consumers stay free of the dataset exporter
+    # Outside `authority` on purpose: adding it there would change decision_sha256 of
+    # every existing workspace at an unchanged generation (consumers treat that as a conflict).
     contract = {'schema': 'rosy.pinky-review-export/2', 'export_id': receipt['export_id'],
                 'authority': authority, 'pixel_approved_frames': len(masks),
+                'object_class_set_sha256': class_sets.object_set(store)['sha256'],
                 'current_decisions_required': True,
                 'latest_decisions_endpoint': '/api/decisions',
                 'training_dataset_qualified': False, 'pixel_projection_verified': False,

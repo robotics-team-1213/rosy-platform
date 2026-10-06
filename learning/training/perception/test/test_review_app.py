@@ -4,6 +4,7 @@ import json
 import pytest
 
 from test_review_return import fixture_inputs
+import class_sets
 from review_app import ReviewStore, Conflict
 
 
@@ -125,6 +126,9 @@ def test_http_blocks_foreign_hosts_and_tokenless_writes(tmp_path):
     url = f'http://127.0.0.1:{server.server_port}'
     try:
         workspace = json.load(urllib.request.urlopen(url + '/api/workspace'))
+        legacy = class_sets.legacy_object_set()
+        assert workspace['object_class_set'] == legacy
+        assert workspace['classes'] == [c['name'] for c in legacy['classes']]
         assert len(json.load(urllib.request.urlopen(url + '/api/learning'))['workflows']) == 8
         with urllib.request.urlopen(url + '/learning') as response:
             assert response.headers.get_content_type() == 'text/html'
@@ -211,3 +215,48 @@ def test_unsafe_bind_host_fails_at_startup(tmp_path, host):
     from review_app import make_server
     with pytest.raises(ValueError):
         make_server(open_store(tmp_path), 0, host)
+
+
+CAR_LIGHT = b'names: [car, traffic_light]\n'
+
+
+def test_workspace_with_a_new_class_set_saves_and_exports_its_labels(tmp_path):
+    source, human, images = fixture_inputs(tmp_path)
+    record = class_sets.from_data_yaml(CAR_LIGHT, 'detect')
+    store = ReviewStore(tmp_path / 'state', source, human, images, object_classes=record)
+    frame = store.get(0)
+    boxes = [dict(frame['review']['boxes'][0], label='car')]
+    saved = store.update(0, {'version': frame['version'], 'action': 'save', 'boxes': boxes})
+    with pytest.raises(ValueError, match='known object class'):
+        store.update(0, {'version': saved['version'], 'action': 'save',
+                         'boxes': [dict(boxes[0], label='cone')]})
+    assert class_sets.object_set(store)['sha256'] == record['sha256']
+    store.update(0, {'version': saved['version'], 'action': 'approve', 'complete_frame_review': True})
+    receipt = store.prepare()
+    out = store.state / 'exports' / receipt['export_id']
+    assert receipt['classes'] == ['car', 'traffic_light']
+    assert (out / 'groups/32x24/000000.txt').read_text().startswith('0 ')    # car is index 0 here
+    assert (out / 'groups/64x48/000001.txt').read_text().startswith('1 ')    # traffic_light is 1, not 3
+    contract = json.loads((out / 'review-contract.json').read_bytes())
+    assert contract['object_class_set_sha256'] == record['sha256']
+    # Decision authority stays byte-compatible: the class set is not part of decision_sha256.
+    assert 'object_class_set_sha256' not in contract['authority']
+
+
+def test_first_start_refuses_labels_outside_the_class_set_and_binds_nothing(tmp_path):
+    source, human, images = fixture_inputs(tmp_path)
+    record = class_sets.from_data_yaml(b'names: [car, robot]\n', 'detect')
+    with pytest.raises(ValueError, match='object class'):
+        ReviewStore(tmp_path / 'state', source, human, images, object_classes=record)
+    store = ReviewStore(tmp_path / 'state', source, human, images)   # a failed start locks nothing
+    assert class_sets.object_set(store)['sha256'] == class_sets.legacy_object_set()['sha256']
+
+
+def test_restart_keeps_the_bound_set_and_refuses_another(tmp_path):
+    source, human, images = fixture_inputs(tmp_path)
+    record = class_sets.from_data_yaml(CAR_LIGHT, 'detect')
+    ReviewStore(tmp_path / 'state', source, human, images, object_classes=record)
+    assert class_sets.object_set(ReviewStore(tmp_path / 'state'))['sha256'] == record['sha256']
+    ReviewStore(tmp_path / 'state', object_classes=record)
+    with pytest.raises(ValueError, match='object classes differ'):
+        ReviewStore(tmp_path / 'state', object_classes=class_sets.legacy_object_set())
