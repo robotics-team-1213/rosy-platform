@@ -121,11 +121,17 @@ def test_a_record_that_states_its_fit_step_is_floored_at_that_step():
     assert pitch == pytest.approx(math.radians(.1))
     assert height == pytest.approx(.001)
     assert roll == pytest.approx(math.radians(1.5+.1))
-    # A continuous fit (camera_board/1: solvePnP, no grid) states zero steps: its bands stand.
+    # A continuous fit (camera_board/1: solvePnP, no grid) states zero steps. Its scatter bands
+    # cannot see shared systematic error, so it must state "systematic", added to each band.
     zero = {"pitch_deg": 0., "roll_deg": 0., "height_m": 0.}
-    pitch, height, roll, _px = geometry_error(RECORD, {"uncertainty": tiny, "fit_step": zero})
-    assert pitch == pytest.approx(math.radians(.01)) and height == pytest.approx(.0001)
-    assert roll == pytest.approx(math.radians(1.5+.01))
+    systematic = {"pitch_deg": .2, "roll_deg": .1, "height_m": .002}
+    assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": zero}) is None
+    pitch, height, roll, _px = geometry_error(RECORD, {"uncertainty": tiny, "fit_step": zero, "systematic": systematic})
+    assert pitch == pytest.approx(math.radians(.01+.2)) and height == pytest.approx(.0001+.002)
+    assert roll == pytest.approx(math.radians(1.5+.01+.1))
+    for bad in ({"pitch_deg": -.1, "roll_deg": .1, "height_m": .001}, {"pitch_deg": .1},
+                {"pitch_deg": float("nan"), "roll_deg": .1, "height_m": .001}, "0.1", None):
+        assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": zero, "systematic": bad}) is None
     for bad in ({"pitch_deg": -.1, "roll_deg": .1, "height_m": .001}, {"pitch_deg": .1}, "0.1", None):
         assert geometry_error(RECORD, {"uncertainty": tiny, "fit_step": bad}) is None
 
