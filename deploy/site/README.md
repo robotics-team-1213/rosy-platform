@@ -173,6 +173,36 @@ Editing `ROSY_SITE_LAN_IFACE` (or the port) without restarting
 `rosy-site-firewall.service` makes the next 5-minute check fail and closes
 the port the same way; always restart the firewall unit after such an edit.
 
+## Development connection mode (D-473)
+
+On a trusted development LAN the console can skip the site user token. Set
+both lines in the private `/etc/rosy/site/site.env` and restart the site stack:
+
+```
+ROSY_DEPLOYMENT=development
+ROSY_FLEET_CONNECTION_MODE=development
+```
+
+With both set, a browser on a loopback, RFC1918, link-local or Tailscale
+(100.64.0.0/10) address that opens `/console` through the site proxy receives
+a 1-hour operator session automatically. The top bar shows "개발 연결 모드"
+while the mode is on. Each session is a named principal `development-<8 hex>`.
+It may dispatch missions, and the session issue and every POST it makes are
+recorded in the API audit under that name. Sessions live in Fleet memory only,
+so a restart or the end of the hour issues a new one. At most 8 sessions are
+live at once (the oldest is dropped first), and one address may request 6
+sessions a minute.
+
+Anyone on the same LAN gets that operator session, so turn this on only on a
+network you trust. Leave either line empty (the `.env.example` default) and
+the console asks for a site user token as before. A missing or mistyped
+setting never falls back to development mode. Robot credentials
+(`robots.yaml`, console enrollment) and the stop paths do not change.
+
+Check from any LAN PC:
+`curl -sk https://<site-host>.local:$ROSY_SITE_HTTPS_PORT/api/fleet/auth/connection`
+prints `{"mode":"development"}`.
+
 ## Contract path
 
 ```text
