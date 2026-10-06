@@ -6486,3 +6486,8 @@ osy-d395-s1d\`.
 - 변경: Pilot 팔의 영상 작업 공간과 조작 칸을 넓은 화면에서 1:1로 배치했다.
 - 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md)의 4개 집중 브라우저, 2000×1200 너비 차이 ≤1px, X: `captures/pilot-arm-equal/`.
 - gate 변화: LOCAL 폭 근거 추가. 실제 영상·태블릿과 제품 전체 G2/G3는 HOLD.
+## 2026-10-06 · uncommitted · uiux(pinky-review): 편집 행동 동등 폭과 800px 상태 근거
+
+- 변경: 객체·픽셀 편집 칸의 작업 행동을 기존 24rem 컨테이너 경계 위에서 동등 폭 두 열로 배치했다. 800px의 연결 끊김·권한 거부·응답 보류·저장 충돌 상태를 캡처했다.
+- 증거: [UI/UX 점검](validation/uiux-surfaces-2026-10-06/README.md), 두 경로 × 1440/800/390/320px 폭 브라우저 8 passed와 800px 상태 브라우저 16 passed, `known_failures.py` 0 NEW. 원본 X: `captures/learning-actions-equal/`.
+- gate 변화: `pinky-review` LOCAL G2 부분 근거 추가. 실제 검수 작업 완료·G3와 제품 전체는 HOLD.

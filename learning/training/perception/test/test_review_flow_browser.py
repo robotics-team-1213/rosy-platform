@@ -46,12 +46,13 @@ def test_review_editor_peer_widths(browser_workspace, route, left, right, width)
     assert all(box and box['width'] > 0 for box in boxes)
     assert abs(boxes[0]['width'] - boxes[1]['width']) <= 1
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    for pane in (left, right):
+        actions = page.locator(f'{pane} ui-actions').first
+        buttons = actions.locator('ui-button').all()
+        if buttons:
+            widths = [button.bounding_box()['width'] for button in buttons]
+            assert max(widths) - min(widths) <= 1, widths
     if width <= 390:
-        for pane in (left, right):
-            actions = page.locator(f'{pane} ui-actions').first
-            action_width = actions.bounding_box()['width']
-            assert all(abs(button.bounding_box()['width'] - action_width) <= 1
-                       for button in actions.locator('ui-button').all())
         if route == '/pixels':
             previous = page.locator('#pixel-prev').bounding_box()
             following = page.locator('#pixel-next').bounding_box()
@@ -173,7 +174,7 @@ def test_object_review_first_use_leads_to_data_registration(browser_workspace):
 
 @pytest.mark.parametrize('route,empty,retry,content', [('/', '#empty-review', '#show-all', '#review-content'),
                                                        ('/pixels', '#pixel-empty', '#pixel-reload', '#pixel-content')])
-@pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('width', [1440, 800, 390])
 def test_workspace_disconnect_shows_reachable_retry(browser_workspace, route, empty, retry, content, width):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
@@ -218,7 +219,7 @@ def test_workspace_disconnect_hides_stale_review(browser_workspace, route, reloa
     ('/', '#reload', '#review-content', '#empty-review', '#prepare', '#export-result', '#error'),
     ('/pixels', '#pixel-reload', '#pixel-content', '#pixel-empty', '#pixel-export', '#pixel-export-result', '#pixel-error'),
 ])
-@pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('width', [1440, 800, 390])
 def test_review_permission_denial_blocks_work_until_reload(
     browser_workspace, route, reload, content, empty, prepare, result, error, width
 ):
@@ -265,7 +266,7 @@ def test_review_permission_denial_blocks_work_until_reload(
     ('/', '#reload', '#review-content', '#empty-review', '#prepare', '검수 내용을 확인하는 중'),
     ('/pixels', '#pixel-reload', '#pixel-content', '#pixel-empty', '#pixel-export', '검수 내용을 확인하는 중'),
 ])
-@pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('width', [1440, 800, 390])
 def test_review_waiting_workspace_hides_stale_editing(
     browser_workspace, route, reload, content, empty, prepare, pending_text, width
 ):
@@ -452,7 +453,7 @@ def test_undo_restores_boxes_without_restoring_approval(browser_workspace):
     expect(page.locator('#undo')).to_have_attribute('disabled', '')
 
 
-@pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('width', [1440, 800, 390])
 def test_stale_undo_never_overwrites_other_tab(browser_workspace, width):
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})

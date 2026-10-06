@@ -107,7 +107,7 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     assert review_masks.pixels(store, review_masks.get(store, 0))[12, 10] == 255
 
 
-@pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('width', [1440, 800, 390])
 def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace, width):
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
