@@ -38,7 +38,7 @@ from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_debug import next_publish_due, render_debug
-from .sensing.perception.lane_containment import containment_payload
+from .sensing.perception.lane_containment import containment_payload, geometry_error
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
 from .sensing.perception.route_hybrid import RouteHybridFollower
@@ -132,6 +132,7 @@ class LineObserverNode(Node):
         self._simulation_ground_key = None
         self._simulation_ground = None
         self._nominal_profile_cache = None
+        self._ground_error = None
         self._odom_pose = None
         self._odom_stamp = None
         self._odom_wz = None
@@ -255,10 +256,13 @@ class LineObserverNode(Node):
             # An operator-accepted camera_profile record wins over the file (D-47 addendum).
             override = {key: float(self.get_parameter(f'camera_{key}_override').value)
                         for key in ('pitch_rad', 'height_m')}
-            self._nominal_profile_cache, source = calibrated(
+            override = {k: v for k, v in override.items() if math.isfinite(v)}
+            self._nominal_profile_cache, source, intervals = calibrated(
                 'camera_profile', self._nominal_profile_cache, static_source=path or 'no profile file',
-                override={k: v for k, v in override.items() if math.isfinite(v)})
-            self.get_logger().info(f'camera profile from {source}')
+                override=override, with_intervals=True)
+            # D-468: the stated error of this geometry (record bands or nominal bounds), else None.
+            self._ground_error = geometry_error(self._nominal_profile_cache, intervals, overridden=override)
+            self.get_logger().info(f'camera profile from {source}; geometry error {self._ground_error}')
         return self._nominal_profile_cache
 
     def _camera_mode_uses_ground(self) -> bool:
@@ -514,7 +518,7 @@ class LineObserverNode(Node):
             containment = containment_payload(
                 self._lane_keeper.last, ground, stamp=source_stamp,
                 source=str(self.get_parameter('camera_ground_source').value).upper(),
-                camera_x=self._lane_keeper._x_offset)
+                camera_x=self._lane_keeper._x_offset, geometry_bounds=self._ground_error)
         self._publish('CAMERA_LINE', observation, stamp=source_stamp, containment=containment)
         self._publish_debug(msg, frame, observation)
 

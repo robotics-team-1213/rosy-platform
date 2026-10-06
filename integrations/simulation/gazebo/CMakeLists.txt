@@ -51,6 +51,7 @@ install(
     scripts/lane_live_view.py
     scripts/live_view_model.py
     scripts/live_view_demo.py
+    scripts/sim_ir_floor.py
     launch/map_v2_traversal.py
     launch/pinky_acceptance_policy.py
   DESTINATION lib/${PROJECT_NAME}

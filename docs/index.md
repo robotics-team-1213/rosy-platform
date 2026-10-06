@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-06 · uncommitted · feat(fleet): D-473 관제 콘솔 개발 연결 모드
-- 2026-10-06 · uncommitted · docs(adr): 콘솔 개발 연결 모드와 주의점 구역 허가
-- 2026-10-06 · uncommitted · docs(readme): GitHub landing without lab paths, diagrams
-- 2026-10-06 · uncommitted · D-472 호스트 구현
-- 2026-10-06 · uncommitted · docs(adr): Rosy Cam 지도와 후면 LED 식별 경계
+- 2026-10-07 · uncommitted · uiux: 현재 main G1 재검증
+- 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
+- 2026-10-07 · uncommitted · uiux(learning): 작업·자료 등록의 응답 대기 시간
+- 2026-10-07 · uncommitted · uiux(fleet): LED 행동 추가 뒤 전화 폭 재검증
+- 2026-10-07 · uncommitted · uiux(fleet): Cell 빈 평면도 공백 제거

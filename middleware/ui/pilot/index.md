@@ -36,6 +36,6 @@
 
 - 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
 - 2026-10-06 · uncommitted · feat(pilot): D-483 수신 승인 대기에 로봇 화면 승인 코드 입력
-- 2026-10-06 · uncommitted · feat(pilot): 피어 세션을 저장해 자연 만료까지 재사용한다
-- 2026-10-06 · uncommitted · fix(pilot): 운영자 화면에서도 연동 코드 보여주기 항목을 보인다
-- 2026-10-05 · uncommitted · fix(pilot): 일시 연결 실패 배너가 회복 뒤에도 남던 것
+- 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 버튼 동등 폭 검증
+- 2026-10-06 · uncommitted · uiux(pilot-shell): 400dp 후보 이름 판독
+- 2026-10-06 · uncommitted · uiux(pilot-shell): 후보 행과 600dp 목록 폭

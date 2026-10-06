@@ -34,4 +34,4 @@
 - 2026-10-07 · uncommitted · fix(api): D-483 재검토 반영(R1~R5)
 - 2026-10-07 · uncommitted · fix(api): D-483 보안 검토 반영(M1·M2·L1·L2·L4·L6)
 - 2026-10-06 · uncommitted · feat(api): D-483 로봇 화면 승인 코드로 피어 요청 승인
-- 2026-10-06 · uncommitted · 식별 LED CORE 요청
+- 2026-10-06 · uncommitted · chore(core_api_web): 계약 문서 버전 v1.109 동기

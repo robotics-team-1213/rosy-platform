@@ -95,6 +95,7 @@ h1 {
 .field-details {
   display: flex;
   flex-direction: column;
+  align-self: start;
   min-width: 0;
   padding: var(--space-4);
   border: 1px solid var(--score-gap);
@@ -151,7 +152,7 @@ h1 {
   max-width: calc(100% - 2 * var(--space-4));
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--status-warn);
+  border: 1px solid var(--mute);
   border-radius: var(--radius-button);
   background: var(--score-well);
   color: var(--pitch-ink);
@@ -160,6 +161,8 @@ h1 {
   pointer-events: none;
 }
 
+.pitch-wrap[data-evidence="delayed"] #field-evidence,
+.pitch-wrap[data-evidence="unavailable"] #field-evidence { border-color: var(--status-warn); }
 .pitch-wrap[data-evidence="disconnected"] #field-evidence { border-color: var(--status-crit); }
 
 @media (width < 30rem) {
@@ -280,6 +283,13 @@ h1 {
 @media (width < 30rem) {
   ui-shell[grammar="focal"] ui-topbar { padding-block: var(--space-2); }
   ui-topbar ui-brand small { display: none; }
+  #halt { width: 100%; }
+}
+/* 전화 화면의 HOLD에서는 유실 이유를 피치보다 먼저 놓는다. */
+@media (width < 30rem) {
+  .match-layout:has(#lost:not([hidden])) .field-details { order: -1; }
+  .field-details:has(#lost:not([hidden])) h2 { order: -2; }
+  .field-details #lost:not([hidden]) { order: -1; }
 }
 .field-details details { margin-block: var(--space-3); }
 .field-details summary { cursor: pointer; color: var(--pitch-ink); }

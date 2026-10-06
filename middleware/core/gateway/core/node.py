@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Optional
@@ -74,7 +75,7 @@ class RosyCoreNode(Node):
         from core.bridge.control_sensor_adapter import ControlSensorConfig, build_control_adapter
         from core.lidar_mount import resolve_lidar_forward_deg
         from core.line_follow_wiring import bind_lane_return_motion
-        from core.safety_params import resolve_safety_params
+        from core.safety_params import resolve_safety_params, simulation_sensors
         from core.safety_policy_status import safety_policy_block
         from core_common.config import local_overlay
         control_cfg = config.get("control", {}) or {}
@@ -94,6 +95,9 @@ class RosyCoreNode(Node):
         forward_deg, forward_source, forward_warn = resolve_lidar_forward_deg(
             config.get("line_follow", {}) or {}, hand_default=self.core.line_follow.config.lidar_forward_deg,
             operator_deg=operator_deg)
+        use_sim_time = self.get_parameter("use_sim_time").value is True
+        # Gazebo overlays only: refused without use_sim_time, so never inferred on the device.
+        simulation = simulation_sensors(sensor_cfg, use_sim_time=use_sim_time)
         params = None
         if configured_mode != "off":
             limits = self.core.safety.limits
@@ -102,7 +106,7 @@ class RosyCoreNode(Node):
                 caps=((limits.max_linear, limits.max_angular),
                       (limits.manual_linear, limits.manual_angular),
                       (limits.fleet_linear, limits.fleet_angular)),
-                overlay=sensor_cfg.get("parameters") or {})
+                overlay=sensor_cfg.get("parameters") or {}, simulation=simulation)
         namespace = self.get_namespace() if callable(getattr(self, "get_namespace", None)) else None
         self.control_adapter, notes = build_control_adapter(
             sensor_cfg, parameters=params.parameters if params else {}, namespace=namespace,
@@ -112,7 +116,10 @@ class RosyCoreNode(Node):
         self.core.control_adapter = self.control_adapter
         self.control_adapter.bind_safety(self.core.safety)
         self.core.line_follow.use_lidar_forward(forward_deg, forward_source)
-        bind_lane_return_motion(self.core.line_follow, self.control_adapter)
+        # Under use_sim_time the line clock is sim seconds (traffic_gate.line_clock); the policy
+        # window stays monotonic. On the device both are time.monotonic and nothing changes.
+        bind_lane_return_motion(self.core.line_follow, self.control_adapter,
+                                policy_clock=time.monotonic if use_sim_time else None)
         log = self.get_logger().warning if forward_warn else self.get_logger().info
         log(f"line_follow LiDAR forward {forward_deg:.2f} deg from {forward_source}")
         self.get_logger().info(f"safety policy mode {configured_mode} (effective "

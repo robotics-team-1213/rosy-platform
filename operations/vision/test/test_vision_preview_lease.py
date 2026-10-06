@@ -31,6 +31,7 @@ def test_vision_lease_secret_must_be_dedicated_and_adequate():
 
 def test_vision_lease_signs_and_verifies_bounded_rectification_settings():
     settings = {
+        "mode": "manual",
         "fx": 1.2, "fy": 1.2, "cx": 0.5, "cy": 0.5,
         "k1": -0.18, "k2": 0.03, "p1": 0.0, "p2": 0.0, "k3": 0.0,
         "corners": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]],
@@ -41,6 +42,19 @@ def test_vision_lease_signs_and_verifies_bounded_rectification_settings():
                          rectification=settings, now=100)
 
     assert signer.verify(token, source_id="ceiling-north", now=101)["rectification"] == settings
+
+
+def test_vision_lease_signs_the_auto_mode_and_defaults_manual():
+    signer = VisionLeaseSigner("x" * 32)
+    auto = signer.issue(principal_id="viewer-1", source_id="ceiling-north",
+                        rectification={"mode": "auto"}, now=100)
+    manual = signer.issue(principal_id="viewer-1", source_id="ceiling-north",
+                          rectification={"fx": 1.2}, now=100)
+
+    assert signer.verify(auto, source_id="ceiling-north",
+                         now=101)["rectification"]["mode"] == "auto"
+    assert signer.verify(manual, source_id="ceiling-north",
+                         now=101)["rectification"]["mode"] == "manual"
 
 
 def test_vision_lease_rejects_invalid_rectification_settings():

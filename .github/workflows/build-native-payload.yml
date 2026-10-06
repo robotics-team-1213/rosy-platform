@@ -67,7 +67,7 @@ jobs:
           sudo dpkg -i "$ros_source"
           # D-482: pin ROS to the image's dated snapshot (single source: inputs.lock.yaml).
           ros_snapshot_url="$(python3 -c "import yaml; print(yaml.safe_load(open('deploy/robot/pinky_pro/image/inputs.lock.yaml', encoding='utf-8-sig'))['ros']['apt_snapshot_url'])")"
-          [[ "$ros_snapshot_url" =~ ^https://snapshots\.ros\.org/jazzy/[0-9]{4}-[0-9]{2}-[0-9]{2}/ubuntu$ ]]
+          [[ "$ros_snapshot_url" =~ ^http://snapshots\.ros\.org/jazzy/[0-9]{4}-[0-9]{2}-[0-9]{2}/ubuntu$ ]]
           sudo sed -i "s#^URIs:.*#URIs: $ros_snapshot_url#" /etc/apt/sources.list.d/ros2.sources
           grep -qx "URIs: $ros_snapshot_url" /etc/apt/sources.list.d/ros2.sources
           sudo apt-get update -qq

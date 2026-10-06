@@ -99,6 +99,41 @@ def test_flood_one_pixel_barrier_blocks_region():
     assert region[:2].all() and not region[2:].any()
 
 
+def test_multiple_lane_samples_cover_shading_without_spilling_to_floor():
+    pytest.importorskip('cv2')
+    photo = np.full((8, 12, 3), 70, dtype=np.uint8)
+    photo[2:6, :6] = (205, 205, 205)
+    photo[2:6, 6:] = (235, 235, 235)
+    selected, tolerance = review_masks.sampled_region_photo(photo, [[2, 3], [9, 3]], 'auto')
+    assert 8 <= tolerance <= 40
+    assert selected[2:6].all()
+    assert not selected[:2].any() and not selected[6:].any()
+
+
+def test_sample_preview_does_not_save_and_apply_is_undoable(tmp_path):
+    store = bound_store(tmp_path)
+    body = {'version': 0, 'label': 2, 'seeds': [[0, 0], [10, 10]], 'tolerance': 'auto'}
+    png, count, tolerance = review_masks.preview(store, 0, body, Conflict)
+    assert png.startswith(b'\x89PNG') and count > 0 and 8 <= tolerance <= 40
+    assert review_masks.get(store, 0)['version'] == 0
+    saved = review_masks.update(store, 0, dict(body, action='sample', tolerance=tolerance), Conflict)
+    assert saved['version'] == 1 and saved['status'] == 'pending'
+    undone = review_masks.update(store, 0, {'version': 1, 'action': 'undo'}, Conflict)
+    assert np.all(review_masks.pixels(store, undone) == 255)
+
+
+def test_sample_rejects_unbounded_points_and_stale_version(tmp_path):
+    store = bound_store(tmp_path)
+    body = {'version': 0, 'label': 2, 'seeds': [[0, 0]] * 33, 'tolerance': 16}
+    with pytest.raises(ValueError, match='1..32'):
+        review_masks.preview(store, 0, body, Conflict)
+    with pytest.raises(Conflict):
+        review_masks.preview(store, 0, dict(body, version=1), Conflict)
+    with pytest.raises(ValueError, match='1..32'):
+        review_masks.update(store, 0, dict(body, action='sample'), Conflict)
+    assert review_masks.get(store, 0)['version'] == 0
+
+
 def test_flood_refused_on_excluded_frame_and_demotes_approval(tmp_path):
     pytest.importorskip('cv2'), pytest.importorskip('numpy')
     store = bound_store(tmp_path)
