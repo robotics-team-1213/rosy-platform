@@ -1228,6 +1228,8 @@ def test_robot_recording_continues_past_the_ten_minute_cap_until_stopped(tablet_
     assert _eventually(lambda: _recordings(page, base_url)["log"] == ["start", "start"])
     page.wait_for_function(ROBOT_RECORD_STOP)
     page.wait_for_function("document.querySelector('[data-drive-fact=recording]').textContent.includes('2번째')")
+    page.wait_for_timeout(6000)                            # 안내가 지나간 뒤에도 구간 번호는 남는다
+    assert "2번째 구간" in page.inner_text("[data-drive-fact=recording]")
     _click_tool(page, toggle)
     page.wait_for_function(f"document.querySelector('{toggle}').dataset.state === 'idle'")
     _recordings(page, base_url, cap=True)                  # 끈 뒤의 상한 표시는 다시 켜지 않는다

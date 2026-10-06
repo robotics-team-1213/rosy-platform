@@ -61,7 +61,8 @@ export function mountRobotRecording({toggle, detail, openButton, sheetHost, anch
     toggle.setAttribute("aria-label", view.ariaLabel);
     const actualMode = active?.preview_mode;
     const format = actualMode === "annotated" ? "원본 + 모델 표시본 · 결과는 확인용" : actualMode === "raw" ? "원본" : "저장 형식 확인 대기";
-    const text = notice || (view.recording ? `${view.detail} · ${format}` : view.detail);
+    const part = view.recording && segment > 1 ? ` · ${segment}번째 구간` : "";
+    const text = notice || (view.recording ? `${view.detail} · ${format}${part}` : view.detail);
     detail.textContent = text;
     detail.hidden = !text;
     detail.dataset.state = notice ? "refused" : (active?.state ?? "offline");
