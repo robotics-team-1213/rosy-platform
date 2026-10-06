@@ -101,13 +101,14 @@ def test_cell_page_keeps_emergency_stop_in_first_view(browser_site, width, heigh
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
 
 
-def test_cell_emergency_stop_uses_console_session_and_reports_uncertainty(browser_site):
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_emergency_stop_uses_console_session_and_reports_uncertainty(browser_site, width, height):
     from playwright.sync_api import expect
 
     page, _, _ = browser_site
     page.evaluate("sessionStorage.setItem('rosy-console-token', 'operator-secret')")
     page.reload()
-    page.set_viewport_size({"width": 320, "height": 568})
+    page.set_viewport_size({"width": width, "height": height})
     assert page.locator("#credential input").input_value() == "operator-secret"
     replies = {"status": 200}
     sent = []
@@ -127,13 +128,20 @@ def test_cell_emergency_stop_uses_console_session_and_reports_uncertainty(browse
     content = page.locator("main > ui-section").first.bounding_box()
     assert abs(feedback["x"] - content["x"]) <= 1
     assert abs(feedback["width"] - content["width"]) <= 1
+    assert feedback["y"] + feedback["height"] <= height
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
-        page.screenshot(path=str(Path(output) / "fleet-cell-estop-partial-320x568.png"))
+        page.screenshot(path=str(Path(output) / f"fleet-cell-estop-partial-{width}x{height}.png"))
     replies["status"] = 503
     page.locator("#estop").click()
     expect(page.locator("#estop-feedback")).to_contain_text("비상 정지 결과 확인 불가")
+    unknown = page.locator("#estop-feedback").bounding_box()
+    assert unknown and unknown["y"] + unknown["height"] <= height
+    assert abs(unknown["x"] - content["x"]) <= 1
+    assert abs(unknown["width"] - content["width"]) <= 1
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output:
-        page.screenshot(path=str(Path(output) / "fleet-cell-estop-unknown-320x568.png"))
+        page.screenshot(path=str(Path(output) / f"fleet-cell-estop-unknown-{width}x{height}.png"))
     assert len(sent) == 2
     assert all(request.headers.get("authorization") == "Bearer operator-secret" for request in sent)
 

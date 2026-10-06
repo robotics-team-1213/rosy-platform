@@ -2163,3 +2163,8 @@
 - Change: Equalized the three draft action widths and checked a rejected reconnect at 1440/390/320px. The browser slow-load check now holds its fixture request until the pending assertions complete.
 - Evidence: Three Chromium captures; full site-map browser 30 passed, D-153 G1 90 passed, site-map Node 7 passed, Python known failures 0 NEW. See `docs/validation/uiux-site-map-auth-width-2026-10-07/result.md`.
 - Gate: LOCAL G2 partial evidence only; current site/device and operator G3 remain HOLD.
+## 2026-10-07 · uncommitted · Cell emergency-stop feedback widths
+
+- Change: The existing Cell browser scenario now checks partial and unknown stop-result messages at 1440/390/320px for first-viewport visibility, equal content width, and no horizontal overflow.
+- Evidence: 3 focused Chromium tests passed with 0 NEW known failures; six captures and hashes in `docs/validation/uiux-cell-stop-widths-2026-10-07/result.md`.
+- Gate: LOCAL synthetic G2 partial evidence. Physical stop readback and operator G3 remain HOLD.

@@ -88,8 +88,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · Cell emergency-stop feedback widths
 - 2026-10-07 · uncommitted · Site-map rejected credential widths
 - 2026-10-07 · uncommitted · Cell 문서 파일 선택 어휘와 폭
 - 2026-10-07 · uncommitted · D-488 site-map G2 empty and conflict states
 - 2026-10-07 · uncommitted · D-488 현장 지도 표시 이름·선언 폭 확인
-- 2026-10-07 · uncommitted · D-488 M1 재검토 반영 (N1·L1–L3)
