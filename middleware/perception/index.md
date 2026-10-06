@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)
 - 2026-10-06 · uncommitted · feat(sim): sim LiDAR 모양, accept_simulation_scans, GAZEBO 투영 불확실도
 - 2026-10-06 · uncommitted · refactor(perception): split the junction HOLD policy out of lane_keep
 - 2026-10-06 · uncommitted · fix(perception): flip a keep boundary's stale side after persistent contradiction
 - 2026-10-05 · uncommitted · feat(safety): distinguish positive floor observation from no cliff
-- 2026-10-05 · uncommitted · feat(perception): emit image-bound selected lane geometry
