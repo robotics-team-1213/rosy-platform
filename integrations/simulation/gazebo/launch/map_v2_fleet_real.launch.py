@@ -61,6 +61,7 @@ def generate_launch_description():
             # model://control/... (lane mesh, carpet texture) needs the
             # control share on GZ_SIM_RESOURCE_PATH, as in the lap launch.
             "extra_resource_path": ":" + os.path.dirname(control_share),
+            "sim_sensors": LaunchConfiguration("sim_sensors"),
         }.items(),
     )
 
@@ -75,6 +76,9 @@ def generate_launch_description():
         DeclareLaunchArgument("camera_lane_mode", default_value="edge_left"),
         DeclareLaunchArgument("debug_overlay", default_value="false"),
         DeclareLaunchArgument("core_overlay", default_value=default_core_overlay),
+        # true: Gazebo IMU + IR floor rays on imu_raw / ir_sensor/range; pair it with a core
+        # overlay that appends config/sim_sensors_core.yaml.
+        DeclareLaunchArgument("sim_sensors", default_value="false"),
         DeclareLaunchArgument("route", default_value="[]"),
         DeclareLaunchArgument("route_start", default_value="[]"),
         simulation,
