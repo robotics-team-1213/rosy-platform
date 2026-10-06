@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -152,9 +151,9 @@ fun PairingScreen(
                     )
                     // No site-supplied free text before the fingerprint is confirmed: source_id is pattern-checked.
                     Text(stringResource(R.string.pairing_fp_source, state.sourceId), style = MaterialTheme.typography.bodyMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(enabled = !busy, onClick = { onAnswer(false) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.pairing_fp_mismatch)) }
-                        Button(enabled = !busy, onClick = { onAnswer(true) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.pairing_fp_match)) }
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(enabled = !busy, onClick = { onAnswer(false) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_fp_mismatch)) }
+                        Button(enabled = !busy, onClick = { onAnswer(true) }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_fp_match)) }
                     }
                 }
                 is PairingState.Paired -> {
@@ -171,9 +170,9 @@ fun PairingScreen(
                     PairingText.unsettledCredential(state)?.let { id ->
                         Text(stringResource(R.string.pairing_credential, id), fontFamily = FontFamily.Monospace)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(onClick = onClose, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.pairing_close)) }
-                        Button(onClick = onRetry, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.pairing_retry)) }
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_close)) }
+                        Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pairing_retry)) }
                     }
                 }
             }

@@ -228,6 +228,8 @@ Windows의 TCP 예약 범위 `5541–5640`이 에뮬레이터 기본 콘솔·ADB
 
 송출 대기 화면 보정도 같은 JVM **366 passed**와 APK 빌드 성공으로 확인했다. 전후 화면·UI 계층 원본 `cam-stream-{320x640-font200,390x844-font130}*.{png,xml}`은 위 X: `captures/`에 둔다. 이 가짜 연결에서는 카메라를 켜거나 프레임을 전송하지 않았다.
 
+Pairing의 인증서 확인·실패 복구 조작은 각 상태의 두 반폭 버튼을 본문 전폭으로 쌓았다. `:app:compileDebugKotlin` 성공을 확인했지만, 현재 ADB 장치와 Pairing 가능한 수신기가 없어 이 변경은 **SOURCE 근거**다. Pairing·Peer의 320×640/390×844 렌더와 실제 설치자 터치는 계속 G2/G3 HOLD다.
+
 ### Pilot Shell 네이티브 G2 — 태블릿 너비 부분 근거
 
 현재 브랜치의 Pilot Android debug APK를 격리된 Android 35 에뮬레이터에 설치했다. 밀도 320dpi에서 2000×1200(1000dp), 1200×800(600dp), 800×600(400dp) 가로 화면을 확인했다. 원본 캡처는 위 Cam 회차와 같은 X: `captures` 폴더의 `pilot-shell-*density320*.png`에 둔다.
