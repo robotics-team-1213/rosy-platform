@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -40,9 +42,20 @@ def robot_velocity(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
 sensors_router = APIRouter(prefix="/api/v1/sensors", tags=["sensors"])
 
 
+def _json_safe(value):
+    """inf/NaN are not JSON: a LaserScan no-return beam is +inf. Wire form is null (API ref 12)."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 @sensors_router.get("")
 def list_sensors(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    return {"sensors": svc.state.get_sensors()}
+    return {"sensors": _json_safe(svc.state.get_sensors())}
 
 
 @sensors_router.get("/{sensor_type}")
@@ -51,7 +64,7 @@ def sensor_detail(sensor_type: str, _: AuthContext = Depends(viewer),
     data = svc.state.get_sensor(sensor_type)
     if data is None:
         raise ApiError("NOT_FOUND", 404, f"sensor '{sensor_type}' has no data yet")
-    return data
+    return _json_safe(data)
 
 power_router = APIRouter(prefix="/api/v1/power", tags=["power"])
 
