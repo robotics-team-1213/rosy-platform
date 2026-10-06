@@ -54,6 +54,8 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 ### Fleet G2 상태 확인 — LOCAL 진행 중
 
+대형 진행 중에 상태 조회가 끊긴 뒤 복구되는 흐름을 1920×1080, 390×844, 320×568에서 재생했다. 끊긴 동안 마지막 리더·전송률·지도 대형 표시를 지우고 시작·재구성·재개를 막는다. 원시 `FORMATION_UNAVAILABLE` 코드 대신 Fleet 연결을 확인하라는 안내를 표시한다. 복구 뒤에는 진행 상태와 대형 표시가 돌아온다. 전화 폭에서는 지도·목록·작업 블록의 시작점과 폭 차이가 ≤1px이고, 비상 정지는 첫 화면에 있으며 가로 넘침은 없다. 대형 끊김·복구와 HOLD 브라우저 **4 passed**, `known_failures.py` **0 NEW**. 320px에서 목록을 4px 줄인 변이에는 폭 검사가 실패했고 복원 뒤 통과했다. 원본은 X: `captures/fleet-formation-mobile/fleet_formation_read_{lost,recovered}_{1920,390,320}.png`, 실행 기록은 `logs/fleet-formation-{code-red,width-mutation,final}.txt`다. 이는 fixture 기반 LOCAL G2 일부 근거이며 실제 사이트·운영자 G3는 HOLD다.
+
 | 상태 | 현재 캡처 | 확인 범위 |
 |---|---|---|
 | 빈 목록 | [1920px](captures/fleet-states/fleet_console_empty.png), [320px](captures/fleet-states/fleet_console_empty_320.png), [390px](captures/fleet-states/fleet_console_empty_390.png) | 등록할 로봇이 없다는 안내, 320/390px E-stop·패널 폭. |

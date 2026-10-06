@@ -85,8 +85,8 @@
 
 ## 최근 기록
 
+- 2026-10-06 · uncommitted · uiux(fleet): 대형 상태 조회 끊김과 복구의 세 폭
 - 2026-10-06 · uncommitted · uiux(fleet): 수신 후 끊김의 세 폭과 상태 표지
 - 2026-10-06 · uncommitted · uiux(fleet): 느린 첫 상태 응답의 세 폭
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 저장 충돌·미리보기 실패
 - 2026-10-06 · uncommitted · uiux(fleet): Cell 문서·행동 폭
-- 2026-10-06 · uncommitted · uiux(fleet): Cell 세션 거부 전환

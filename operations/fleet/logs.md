@@ -2049,3 +2049,9 @@
 - 변경: Fleet 관제의 수신 후 상태 상실·회복 시험을 1920/390/320px로 확장했다. 320px에서 잘리던 「Fleet 서버 없음」을 compact 시계의 보조 글자 크기로 읽히게 했다.
 - 증거: 세 폭 3 passed, 끊김/compact 머리 5 passed, 공유 시트 설치 화면 정지 3 passed, 반응형·팔레트·토큰 97 passed, 각 성공 실행 `known_failures.py` 0 NEW. 320px 표지 잘림은 수정 전 적색, 4px 목록 축소 변이에서 폭 단언 적색, 원복 후 320px 1 passed. X: `captures/fleet-loss-mobile/fleet_console_gather_{lost,recovered}_{1920,390,320}.png`, `logs/fleet-{gather-loss-three-widths,loss-pill-red,loss-pill-font,loss-current,loss-style-contracts,loss-width-mutation,loss-width-restored,loss-install-estop}.txt`.
 - gate 변화: 수신 후 끊김의 LOCAL G2 폭·정직 근거 추가. 선언 상태 전체·실제 사이트 PC/로봇·관제자 G3는 HOLD다.
+
+## 2026-10-06 · uncommitted · uiux(fleet): 대형 상태 조회 끊김과 복구의 세 폭
+
+- 변경: 대형 상태 조회 실패 시 원시 `FORMATION_UNAVAILABLE` 대신 Fleet 연결을 확인하라는 안내를 표시한다. 기존 대형 조회 끊김·복구 브라우저 검사를 1920/390/320px로 확장하고 전화 폭의 지도·목록·작업 블록 동일 폭, 첫 화면 비상 정지, 가로 넘침을 확인한다.
+- 증거: 대형 끊김·복구와 HOLD 브라우저 4 passed, `known_failures.py` 0 NEW, JS 구문 검사 통과. 원시 코드 노출에 대한 검사 실패 후 수정 통과, 4px 목록 축소 변이에서 폭 검사 실패 후 복원 통과. X: `captures/fleet-formation-mobile/fleet_formation_read_{lost,recovered}_{1920,390,320}.png`, `logs/fleet-formation-{code-red,width-mutation,final}.txt`.
+- gate 변화: Fleet 대형 조회 끊김의 LOCAL G2 부분 근거 추가. 전체 선언 상태·실제 사이트 PC/로봇·운영자 G3는 HOLD.

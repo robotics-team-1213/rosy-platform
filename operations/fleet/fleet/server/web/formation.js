@@ -152,7 +152,7 @@ export function createFormation({ scope, el, view, log, call, render }) {
       state.textContent = "확인 불가";
       state.removeAttribute("title");
       state.setAttribute("status", "warn");
-      el("formation-detail").textContent = `대형 상태를 읽지 못했습니다 · 새 상태를 기다리는 중 — ${err.message}`;
+      el("formation-detail").textContent = "대형 상태를 읽지 못했습니다 · 새 상태를 기다리는 중. Fleet 연결을 확인하세요.";
       for (const id of ["formation-start", "formation-reform", "formation-resume"]) {
         setOff(id, true, "상태 확인 불가");
       }

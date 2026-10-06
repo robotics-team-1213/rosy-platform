@@ -956,7 +956,8 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         browser.close()
 
 
-def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_url):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
+def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_url, width, height):
     """A failed poll must not present an old leader or relay rate as current."""
     from playwright.sync_api import sync_playwright
 
@@ -967,6 +968,7 @@ def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_ur
     }
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
+        page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '진행 중'")
         assert "9.8 Hz" in page.inner_text("#formation-detail")
@@ -977,16 +979,30 @@ def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_ur
                                timeout=7000)
         assert "9.8 Hz" not in page.inner_text("#formation-detail")
         assert "리더 rosy_01" not in page.inner_text("#formation-detail")
+        assert "FORMATION_UNAVAILABLE" not in page.inner_text("#formation-detail")
         assert page.evaluate("window.__swarmOverlay?.slots") == 0
         for control in ("formation-start", "formation-reform", "formation-resume"):
             assert page.locator(f"#{control}").is_disabled()
-        save_temp_screenshot(page, "fleet_formation_read_lost.png")
-
-        api["/api/fleet/formation"] = FORMATION
-        page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '진행 중'",
-                               timeout=7000)
-        assert "9.8 Hz" in page.inner_text("#formation-detail")
-        assert page.evaluate("window.__swarmOverlay?.slots") == 2
+        for state in ("lost", "recovered"):
+            if state == "recovered":
+                api["/api/fleet/formation"] = FORMATION
+                page.wait_for_function("() => document.querySelector('#formation-state')?.textContent === '진행 중'",
+                                       timeout=7000)
+                assert "9.8 Hz" in page.inner_text("#formation-detail")
+                assert page.evaluate("window.__swarmOverlay?.slots") == 2
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
+            if width < 480:
+                map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
+                roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
+                ops_panel = page.locator(".ops-block").bounding_box()
+                assert max(map_panel["width"], roster_panel["width"], ops_panel["width"]) - min(
+                    map_panel["width"], roster_panel["width"], ops_panel["width"]) <= 1
+                assert max(map_panel["x"], roster_panel["x"], ops_panel["x"]) - min(
+                    map_panel["x"], roster_panel["x"], ops_panel["x"]) <= 1
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            page.locator("#formation-state").scroll_into_view_if_needed()
+            save_temp_screenshot(page, f"fleet_formation_read_{state}_{width}.png")
         assert errors == []
         browser.close()
 
