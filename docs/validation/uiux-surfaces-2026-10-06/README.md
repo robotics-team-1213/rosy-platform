@@ -187,6 +187,8 @@ G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나�
 
 네 경로의 작업영역 API가 HTML 본문의 503을 돌려주는 경우를 1440/800/390px에서 재생했다. 응답 상태를 JSON 파싱 전에 확인해 연결 끊김·권한 거부와 다른 「서비스를 사용할 수 없습니다」 및 복구 후 재시도를 표시하고, 편집·등록 입력은 막는다. 390px 객체 검수와 자료 등록의 다시 확인 버튼은 가용 폭을 채운다. 학습 작업은 같은 실패 문구를 두 번 표시하지 않는다. 503 12셀과 기존 연결 끊김·권한 경로를 묶은 브라우저 **24 passed**, 마지막 390px 503·빈 필터 **5 passed**, 각 `known_failures.py` **0 NEW**다. 원본은 X: `captures/learning-unavailable/learning-{objects,pixels,learning,catalog}-unavailable-{1440,800,390}.png`에 있다. 이는 LOCAL 가짜 응답 근거이며 실제 서버 장애와 검수자 G3는 남는다.
 
+현재 트리에서 같은 네 경로의 503→재시도를 390px과 추가 320px에 다시 재생했다. 각각 브라우저 **4 passed**, `known_failures.py` **0 NEW**이며 네 화면 모두 가로 넘침 0, 오류와 다시 확인 행동이 보였다. 객체·자료 등록의 좁은 폭 재시도도 가용 폭의 80% 이상을 채운다. 원본은 X: `captures/learning-unavailable-current/learning-{objects,pixels,learning,catalog}-unavailable-{390,320}.png`, 실행 기록은 `logs/merge-20261006/learning-unavailable-{current,320}.txt`다. 합성 503의 LOCAL 근거이며 실제 장애와 검수자 G3는 미확인이다.
+
 픽셀 검수의 결과 없는 필터에서도 이전 사진 제목·상태와 빈 사진 선택기가 남아 있던 것을 발견했다. 현재는 「픽셀 승인 0장 · 필터 결과가 없습니다」를 표시하고 사진 선택·이전/다음 이동을 숨긴다. 「전체 보기」로 원래 검수 화면에 복귀한다. 1440·800·390px 빈 상태 **3 passed**, 관련 픽셀 브라우저 **11 passed**(이동 버튼 숨김 전), 최종 빈 상태 재검사 **3 passed**, 각 실행의 `known_failures.py` **0 NEW**다. 최종 캡처 `learning-pixels-empty-{1440,800,390}.png`는 같은 X: `captures/`에 둔다. 이는 합성 자료의 LOCAL G2 일부와 G3 정직 항목의 부분 근거이며 실제 검수자 작업 수용은 남는다.
 
 등록된 사진이 0장인 최초 사용 상태는 필터 결과 없음과 분리했다. 객체 검수는 로딩 화면 대신 「등록된 사진이 없습니다」와 「자료 등록 열기」를 보이며, 픽셀 검수도 빈 필터와 이전/다음 이동을 숨기고 같은 다음 단계로 간다. 390px에서 두 경로를 재생하고 자료 등록으로 실제 이동했다. 현재 트리의 객체·픽셀 회귀 브라우저 **24 passed**, `known_failures.py` **0 NEW**다. 최종 캡처 `learning-{objects,pixels}-first-use-390.png`는 같은 X: `captures/`에 둔다. 이는 합성 저장소를 비운 LOCAL 최초 사용 근거이며 실제 자료 등록·승인 작업의 G3는 남는다.
