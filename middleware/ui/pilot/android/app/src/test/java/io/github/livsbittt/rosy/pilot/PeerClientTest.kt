@@ -38,7 +38,7 @@ class PeerClientTest {
         val leaf = HeldCertificate.Builder().commonName("robot.local").addSubjectAlternativeName("robot.local").signedBy(ca).build()
         val server = MockWebServer()
         val requests = mutableListOf<RecordedRequest>()
-        var approved = true; var corrupt = ""; var statusHold: CountDownLatch? = null; var identityHold: CountDownLatch? = null
+        var approved = true; var corrupt = ""; var confirmStatus = 200;var statusHold: CountDownLatch? = null; var identityHold: CountDownLatch? = null
         val identityRead = CountDownLatch(1); val statusRead = CountDownLatch(1)
         var candidate: Candidate
         val store = CandidateStore()
@@ -72,6 +72,18 @@ class PeerClientTest {
                         assertEquals(mobile.publicKey, fields.getString("client_public_key"))
                         PeerProof.verify(mobile.publicKey, "request", fields, proof.getString("signature"))
                         return json(state("pending").put("request_secret", "S".repeat(43)))
+                    }
+                    if (relative == "/requests/" + "A".repeat(32) + "/confirm") {
+                        assertEquals("S".repeat(43), request.getHeader("X-Request-Secret"))
+                        assertNull(request.getHeader("Authorization"))
+                        assertEquals("ABC234", JSONObject(request.body.readUtf8()).getString("approval_code"))
+                        return when (confirmStatus) {
+                            200 -> { approved = true; json(state("approved")) }
+                            400 -> MockResponse().setResponseCode(400).setHeader("Content-Type", "application/json")
+                                .setBody(JSONObject().put("detail", JSONObject().put("message", "wrong approval code").put("remaining_attempts", 3)).toString())
+                            -400 -> MockResponse().setResponseCode(400).setBody("{\"detail\":\"invalid request\"}")
+                            else -> MockResponse().setResponseCode(confirmStatus)
+                        }
                     }
                     if (relative == "/requests/" + "A".repeat(32)) {
                         assertEquals("S".repeat(43), request.getHeader("X-Request-Secret"))
@@ -119,6 +131,47 @@ class PeerClientTest {
             PeerProof.fingerprint(mobile.publicKey), "A".repeat(32), "operator", 0, true, null)
         fun json(body: JSONObject) = MockResponse().setHeader("Content-Type", "application/json").setBody(body.toString())
         override fun close() { statusHold?.countDown(); identityHold?.countDown(); server.close() }
+    }
+    /** D-483: confirm once while pending, then let the poll finish (approved by the code or, failing that, the console). */
+    private fun confirmWhilePending(f: Fixture): Throwable? {
+        f.approved = false
+        var outcome: Throwable? = IllegalStateException("never pending")
+        val flow = f.flow()
+        var sent = false
+        val session = flow.connect({ if (!sent) { sent = true; outcome = runCatching { flow.confirm("ABC234") }.exceptionOrNull(); f.approved = true } }, { false })
+        assertNotNull(session)
+        return outcome
+    }
+    @Test fun screenCodeConfirmApprovesThroughTheStatusPoll() {
+        Fixture().use { f ->
+            assertNull(confirmWhilePending(f))
+            assertEquals(1, f.requests.count { it.path!!.endsWith("/confirm") && it.method == "POST" })
+            assertThrows(IllegalArgumentException::class.java) { f.flow().confirm("abc234") }
+        }
+    }
+    @Test fun wrongScreenCodeReportsRemainingAttemptsAndKeepsWaiting() {
+        Fixture().use { f ->
+            f.confirmStatus = 400
+            val outcome = confirmWhilePending(f)
+            assertTrue(outcome is PeerCodeWrong)
+            assertEquals(3, (outcome as PeerCodeWrong).remaining)
+        }
+    }
+    @Test fun badRequestWithoutRemainingAttemptsIsARefusalNotAWrongCode() {
+        Fixture().use { f ->
+            f.confirmStatus = -400
+            val outcome = confirmWhilePending(f)
+            assertTrue(outcome is PeerRefused)
+            assertEquals(400, (outcome as PeerRefused).status)
+        }
+    }
+    @Test fun olderCoreWithoutConfirmRouteIsConsoleOnly() {
+        Fixture().use { f ->
+            f.confirmStatus = 404
+            val outcome = confirmWhilePending(f)
+            assertTrue(outcome is PeerRefused)
+            assertEquals(404, (outcome as PeerRefused).status)
+        }
     }
     @Test fun mintedSessionIsStoredAndReusedUntilNaturalExpiry() {
         Fixture().use { f ->

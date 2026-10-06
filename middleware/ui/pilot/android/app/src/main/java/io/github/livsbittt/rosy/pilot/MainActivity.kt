@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private var opening = false
     private var lastError: String? = null
     private var lastSelectedCandidate: Candidate? = null
+    private var reselect: Candidate? = null
     private val screenSleep = PendingScreenSleep()
     private val sleeping get() = screenSleep.active
     private var pendingApprovedSleep = false
@@ -121,6 +122,7 @@ class MainActivity : Activity() {
         }
         if (web != null || opening) return
         val records = candidates.records()
+        reselect?.let { wanted -> records.firstOrNull { it.host == wanted.host && it.port == wanted.port }?.let { reselect = null; select(it); return } }
         status.text = lastError ?: if (cooling.coolingRequired) "태블릿 발열이 내려갈 때까지 조종 연결을 닫았습니다." else if (records.isEmpty()) discovery?.status ?: "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
         if (shownCandidates == records && shownCooling == cooling.coolingRequired) return
         shownCandidates = records; shownCooling = cooling.coolingRequired; robots.removeAllViews()
@@ -133,8 +135,8 @@ class MainActivity : Activity() {
     }
     private fun select(incoming: Candidate) {
         if (opening || sleeping || cooling.coolingRequired || web != null) return
-        lastError = null
-        val addresses = runCatching { candidates.addresses(incoming.host, incoming.port) }.getOrNull() ?: return
+        lastError = null; reselect = null
+        val addresses =runCatching { candidates.addresses(incoming.host, incoming.port) }.getOrNull() ?: return
         val candidate = incoming.copy(addresses = addresses)
         lastSelectedCandidate = candidate
         opening = true
@@ -160,8 +162,10 @@ class MainActivity : Activity() {
                     else if (offer.mode == "development") join(candidate, offer, store, version, null)
                     else pairingCode(candidate, offer, store, version, remembered.status)
                 }
-            } catch (error: Exception) { failed(version, when {
-                error is PeerApprovalExpired -> "승인 기록은 유지되지만 사용 기한이 끝났습니다. 수신 장치에서 재승인을 확인하세요."
+            } catch (error: Exception) {
+                if (error is PeerApprovalExpired) main.post { if (version == attempt && foreground) reapprove(candidate) }
+                failed(version, when {
+                error is PeerApprovalExpired -> "승인 사용 기한이 끝났습니다. 다시 승인을 요청하세요."
                 error is PeerApprovalTimeout -> "수신 승인을 기다리는 시간이 끝났습니다. 로봇을 다시 선택해 요청하세요."
                 error is PeerKeyChanged -> "기억한 수신 장치의 키와 다릅니다. 승인 기록을 유지하고 연결을 차단했습니다."
                 error is PeerRefused -> "승인 기록은 지우지 않았습니다. 수신 장치에서 승인·발급자 상태를 확인한 뒤 다시 선택하세요."
@@ -306,6 +310,17 @@ class MainActivity : Activity() {
             .setMessage("${candidate.name}\n${candidate.host}\n\n조종 연결을 닫고 이 태블릿에 저장된 로그인과 승인 연결 기록만 지웁니다. 수신 장치의 승인이나 다른 앱의 연결은 해제하지 않습니다.")
             .setNegativeButton("취소", null).setPositiveButton("지우기") { _, _ ->
                 endSession(forget = candidate) { lastSelectedCandidate = null; opening = false; startDiscovery() }; opening = true
+            }.create()
+        pairingDialog!!.show()
+    }
+    // D-456 4: an expired grant needs a separate receiver approval. Connect never sends one on its own;
+    // the user asks here, which drops only this tablet's expired record and starts a fresh request.
+    private fun reapprove(candidate: Candidate) {
+        pairingDialog?.dismiss()
+        pairingDialog = AlertDialog.Builder(this).setTitle("다시 승인 요청")
+            .setMessage("${candidate.name}\n\n이 태블릿의 승인 사용 기한이 끝났습니다. 새 승인을 요청하면 로봇 화면에 코드가 뜹니다. 로봇에서 승인하세요.")
+            .setNegativeButton("취소", null).setPositiveButton("승인 요청") { _, _ ->
+                endSession(forget = candidate) { reselect = candidate; opening = false; startDiscovery() }; opening = true
             }.create()
         pairingDialog!!.show()
     }

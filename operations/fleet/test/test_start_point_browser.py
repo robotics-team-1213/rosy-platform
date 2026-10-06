@@ -114,7 +114,7 @@ def test_connection_guide_replaces_loading_and_recovers(browser_site):
     expect(page.locator('#connection-guide')).to_be_visible()
     expect(page.locator('#roster')).to_contain_text('관제에 접속하면')
     expect(page.locator('#map-empty-title')).to_have_text('관제 접속 필요')
-    expect(page.locator('#dispatch-control-title')).to_have_text('관제 접속 필요')
+    expect(page.locator('#dispatch-control')).to_be_hidden()  # D-487: one lock banner
     expect(page.locator('#start-point-state')).to_contain_text('관제에 접속')
     expect(page.locator('#start-point-save')).to_be_disabled()
     capture_console(page, 'connection-desktop.png')
@@ -123,6 +123,7 @@ def test_connection_guide_replaces_loading_and_recovers(browser_site):
     page.locator('#console-token').fill('operator-secret')
     page.locator('#console-token').press('Enter')
     expect(page.locator('#connection-guide')).to_be_hidden()
+    expect(page.locator('#dispatch-control')).to_be_visible()
     expect(page.locator('#start-point-save')).to_be_enabled(timeout=15000)
     capture_console(page, 'connected-desktop.png')
     assert not [call for call in robot.calls if call[0] == 'navigation_goal']

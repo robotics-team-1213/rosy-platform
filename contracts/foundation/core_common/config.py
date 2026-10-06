@@ -237,11 +237,14 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
     return config
 
 
-def _patch_local_config_unlocked(patch: dict[str, Any], path: Optional[Path] = None) -> Path:
+def _patch_local_config_unlocked(patch: dict[str, Any], path: Optional[Path] = None,
+                                 replace: tuple[str, ...] = ()) -> Path:
     """Deep-merge `patch` into the local overlay file. Never writes package defaults.
 
     Only the overlay is updated, so unrelated keys (auth tokens, robot id) stay
     as they were. Used by runtime settings such as SAF-004 manual speed limits.
+    ``replace`` names one mapping path whose value the patch replaces whole
+    instead of merging, so keys absent from the patch are removed there.
     """
     target = Path(path) if path is not None else overlay_path()
     default = _find_default_config()
@@ -256,6 +259,11 @@ def _patch_local_config_unlocked(patch: dict[str, Any], path: Optional[Path] = N
         existing = loaded
 
     merged = _deep_merge(existing, patch)
+    if replace:
+        holder, value = merged, patch
+        for key in replace[:-1]:
+            holder, value = holder[key], value[key]
+        holder[replace[-1]] = value[replace[-1]]
     target.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=target.name + ".", suffix=".tmp", dir=target.parent)
     tmp = Path(temporary)
@@ -277,8 +285,9 @@ def _patch_local_config_unlocked(patch: dict[str, Any], path: Optional[Path] = N
     return target
 
 
-def patch_local_config(patch: dict[str, Any], path: Optional[Path] = None) -> Path:
+def patch_local_config(patch: dict[str, Any], path: Optional[Path] = None,
+                       replace: tuple[str, ...] = ()) -> Path:
     """Preserve unrelated overlay keys under the shared process/thread fence."""
     target = Path(path) if path is not None else overlay_path()
     with transaction(target):
-        return _patch_local_config_unlocked(patch, target)
+        return _patch_local_config_unlocked(patch, target, replace)

@@ -7,6 +7,8 @@ from .receiver_service import PeerReceiver
 from .tls_anchor import configured_tls_anchor
 
 _initialize = threading.Lock()
+#: D-483 3: tmpfiles creates it rosy-core:rosy-display 2750; rosy-face reads approval.json there.
+PEER_DISPLAY_DIR = '/run/rosy-peer-display'
 
 
 def get_receiver(request):
@@ -22,6 +24,7 @@ def get_receiver(request):
         repository = OverlayRepository(services, target)
         configured_tls_anchor(services.config)  # Fail closed before identity initialization.
         candidate = PeerReceiver(identity, target.parent / 'peer-identity.pem', repository,
-                                 anchor=lambda: configured_tls_anchor(services.config))
+                                 anchor=lambda: configured_tls_anchor(services.config),
+                                 display_dir=PEER_DISPLAY_DIR)
         request.app.state.peer_receiver = candidate
         return candidate
