@@ -160,7 +160,8 @@ class FitTest(unittest.TestCase):
         samples, _scan, _grad = samples_for(182.0)
         fit = ce.fit_camera_extrinsic(ce.CameraPose.from_profile(PROFILE), samples, fit_height=False)
         cand = ce.candidate_profile(PROFILE, fit, revision='r1', source='test')
-        for key in PROFILE:
+        # The nominal-only error bounds (D-468) stay out: a record states its own bands.
+        for key in set(PROFILE) - {'pitch_uncertainty_rad', 'height_uncertainty_m', 'roll_uncertainty_rad'}:
             self.assertIn(key, cand)
         for key in ('revision', 'source', 'score', 'uncertainty', 'roll_rad'):
             self.assertIn(key, cand)
