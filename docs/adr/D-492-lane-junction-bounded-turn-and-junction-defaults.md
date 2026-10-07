@@ -135,3 +135,19 @@
 - S5: 회전 중간에 끊고(예: 보정 lease 또는 장애물) 같은 지시를 다시 보낸다. 최종 방향이 진입 방향 + `turn_deg`의 ±5° 안이어야 한다.
 - S6: 회전이 끝난 뒤 같은 지시를 다시 보낸다. 409 `JUNCTION_ALREADY_DONE`이어야 하고 다음 교차로에서 회전하지 않아야 한다.
 - D6: 실기에서 odom 지연과 모터 응답 지연을 잰다. 그 값으로 `junction_turn_lead_s`를 정한다(기본 0.15 s). ±5°는 150 ms 모형에서만 증명됐으므로 D3에서 실제 오차를 기록한다.
+
+### 최종 안전 검토 반영 (2026-10-07)
+
+1. **N2 모드 재선택.** 교차로 정지 기록은 모드 변경 뒤에도 남는다. 남는 기록은 셋이다. 감지 시각, 진입 방향, 실행된 (`place_id`, `action`)이다.
+   - 같은 교차로에서 CAMERA_LINE을 다시 고르거나(OFF→CAMERA_LINE 포함) 같은 지시를 보내면 409 `JUNCTION_ALREADY_DONE`이다. 탐침 `probe_final.py`는 이전에 171.5°까지 돌았다.
+   - 같은 장소의 다른 회전 지시는 받는다. 그러나 재선택이 odom 궤적(D-468 PoseTrail epoch)을 새로 시작하므로 진입 방향과 비교할 수 없다. 그래서 회전 시작은 `aborted`(`odom`)이고 돌지 않는다.
+   - 진입 방향은 감지가 `lost_after_s` 넘게 없으면 끝난다. 실행 기록은 다른 `place_id` 지시가 받아질 때만 끝난다. 모드 변경으로는 끝나지 않는다. 앞 절 R1의 "모드 변경으로 풀린다"는 이렇게 고친다.
+   - 이것은 S6을 지키기 위한 것이다. 감지가 끊긴 시간으로 실행 기록을 풀면 늦게 온 같은 지시가 다음 교차로에서 다시 돈다.
+2. **L2 odom 재시작.** 교차로에서 기다리는 동안 odom이 재시작하거나 끊기면 그 교차로 정지의 회전 지시는 모두 `aborted`(`odom`)다. 모드를 바꿔도 같은 교차로를 계속 보고 있으면 풀리지 않는다(N2). 그 교차로는 `straight`·`stop` 지시나 Pilot 수동 조종으로 벗어난다. 벗어나 감지가 `lost_after_s` 넘게 없으면 다음 교차로는 정상이다.
+3. **L3 정지 판정 설정.** 정지 판정 속도를 설정값으로 올렸다. `line_follow.junction_still_linear`는 0.01 m/s이고 범위는 (0, 0.05]다. `junction_still_angular`는 0.05 rad/s이고 범위는 (0, 0.2]다.
+4. **L1.** HTTP 409 `JUNCTION_ALREADY_DONE` 시험을 더했다(`test_line_junction_api.py`).
+
+**수용 점검표 보강.**
+
+- S5 보강: `advancing` 중 중단 → CAMERA_LINE 재선택 → 같은 지시 재전송이 409 `JUNCTION_ALREADY_DONE`이어야 한다. 다른 방향 지시는 `aborted`(`odom`)이고 로봇은 돌지 않아야 한다.
+- D3 보강: 실제 odom에서 회전이 시간 초과(`timeout`·`not_still`) 없이 머무름까지 끝나는지 기록한다. 끝나지 않으면 `junction_still_linear`·`junction_still_angular`를 실측 잡음 위로 맞춘다.
