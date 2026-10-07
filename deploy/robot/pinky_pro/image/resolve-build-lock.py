@@ -37,7 +37,7 @@ def check_tailscale_deb(deb: Path, section: dict) -> None:
         result = subprocess.run(["dpkg-deb", flag, str(deb)], capture_output=True, text=True)
         if result.returncode != 0:
             raise SystemExit(f"dpkg-deb {flag} failed on tailscale deb: {result.stderr.strip()}")
-    if not any(line.endswith("/tailscaled") for line in result.stdout.splitlines()):
+    if "./usr/sbin/tailscaled" not in (line.split()[-1] for line in result.stdout.splitlines() if line.split()):
         raise SystemExit("tailscale deb does not contain the tailscaled binary")
 
 
