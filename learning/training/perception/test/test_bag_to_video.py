@@ -503,6 +503,23 @@ def test_sidecar_row_takes_the_camera_line_even_when_an_ir_line_is_logged_first(
     assert row["side"]["line/observation"]["n"] == "cam"
 
 
+def test_ir_range_attaches_the_latest_sample_and_ignores_a_bad_array():
+    assert b2v._side_name("/rosy_01/ir_sensor/range") == "ir_sensor/range"
+    assert b2v._side_name("/rosy_01/us_sensor/range") is None
+    good = type("Msg", (), {"data": [10, 20, 30]})()
+    assert b2v._side_payload("ir_sensor/range", "std_msgs/msg/UInt16MultiArray", good) == {
+        "left": 10, "centre": 20, "right": 30}
+    bad = type("Msg", (), {"data": [1, 2]})()
+    assert b2v._side_payload("ir_sensor/range", "std_msgs/msg/UInt16MultiArray", bad) is None
+    frames = [{"log_ns": 1_000_000_000, "stamp_ns": 1_000_000_000}]
+    side = {"ir_sensor/range": ([900_000_000, 1_100_000_000],
+                                [{"left": 10, "centre": 20, "right": 30},
+                                 {"left": 1, "centre": 1, "right": 1}])}
+    (row,) = list(b2v.sidecar_rows(frames, side, 0.5))
+    assert row["side"]["ir_sensor/range"] == {"left": 10, "centre": 20, "right": 30}
+    assert row["dt"]["ir_sensor/range"] == pytest.approx(-0.1)
+
+
 def test_teleop_intent_is_a_side_topic():
     assert b2v._side_name("/rosy_01/teleop/intent") == "teleop/intent"
     frames = [{"log_ns": 1_000_000_000, "stamp_ns": 1_000_000_000}]
