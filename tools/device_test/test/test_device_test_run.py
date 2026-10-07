@@ -1,6 +1,8 @@
 """D-512 device test runner on a fake robot (no network, no SSH, virtual clock)."""
+import hashlib
 import json
 import math
+import signal
 import sys
 from pathlib import Path
 
@@ -13,35 +15,43 @@ import run  # noqa: E402
 
 ROBOT = "rosy-pinky-test"
 PLAN = Path(__file__).resolve().parents[1] / "plans" / "d476_bridge_9dfk.yaml"
-ORIGINAL = b"robot:\n  name: Rosy 26\nline_follow:\n  bridge_enabled: false\n"
+ORIGINAL = b"robot:\n  name: Rosy 26\n# operator comment kept byte for byte\nline_follow:\n  bridge_enabled: false\n"
 
 
 class FakeCore:
     def __init__(self, robot):
-        self.robot, self.calls = robot, []
+        self.robot = robot
 
-    def call(self, method, path, body=None, raw=False, timeout=3.0):
+    def call(self, method, path, body=None, raw=False, timeout=3.0, attempts=2):
         r = self.robot
-        self.calls.append((method, path, body))
-        r.log.append(f"{method} {path.split('?')[0]}" + (f" {body.get('mode')}" if isinstance(body, dict)
-                                                          and "mode" in body else ""))
+        mode = body.get("mode") if isinstance(body, dict) else None
+        r.log.append(f"{method} {path.split('?')[0]}" + (f" {mode}" if mode else ""))
+        if r.on_call:
+            r.on_call(method, path, mode)
         key = (method, path.split("?")[0])
         if key == ("GET", "/system/info"):
             return 200, {"robot_id": "rosy_26", "robot_name": "Rosy 26"}
         if key == ("GET", "/robot/state"):
-            return 200, {"online": True, "mode": "IDLE", "battery": {"percent": 80},
-                         "safety": {"estop": False}, "pose": {"x": r.x, "y": 0.0, "yaw": 0.0}}
+            pose = None if r.pose_none else {"x": r.x, "y": 0.0, "yaw": 0.0}
+            return 200, {"online": True, "mode": "IDLE", "battery": {"percent": 80}, "safety": {"estop": False},
+                         "pose": pose, "localization": r.localization}
         if key == ("GET", "/line-follow"):
             if r.lf_mode == "OFF":
                 return 200, {"mode": "OFF", "state": "IDLE", "reason": "off", "linear": 0.0}
-            r.x += 0.008
-            reason = r.reasons.pop(0) if r.reasons else "following"
+            reason = r.reasons.pop(0) if r.reasons else r.default_reason
+            moving = reason not in ("blocked_unexplained",)
+            r.x += 0.008 if moving else 0.0
             state = "RECOVERING" if reason == "lane_bridge" else "TRACKING"
-            return 200, {"mode": "CAMERA_LINE", "state": state, "reason": reason, "linear": 0.08, "angular": 0.0}
+            return 200, {"mode": "CAMERA_LINE", "state": state, "reason": reason,
+                         "linear": 0.08 if moving else 0.0, "angular": 0.0}
         if key == ("PUT", "/line-follow/mode"):
-            r.lf_mode = body["mode"]
-            return 200, {"mode": body["mode"]}
-        if key in (("POST", "/line-follow/hold"), ("POST", "/mode")):
+            status = r.start_status if mode == "CAMERA_LINE" else r.off_status
+            if status == 200:
+                r.lf_mode = mode
+            return status, {"mode": mode} if status == 200 else {"code": "NOT_LOCALIZED"}
+        if key == ("POST", "/mode"):
+            return r.idle_status, {}
+        if key == ("POST", "/line-follow/hold"):
             return 200, {}
         if key == ("GET", "/vision/front/status"):
             return 200, {"sequence": 1}
@@ -71,10 +81,15 @@ class FakeCore:
 
 
 class FakeRobot:
-    def __init__(self, overlay=ORIGINAL, precheck="ok", corrupt=False, reasons=(), events=()):
-        self.t, self.x, self.lf_mode, self.rec = 1000.0, 0.0, "OFF", False
-        self.overlay, self.precheck, self.corrupt = overlay, precheck, corrupt
+    def __init__(self, overlay=ORIGINAL, precheck="ok", reasons=(), events=(), **kw):
+        self.t, self.x, self.lf_mode, self.rec, self.pid, self.hold = 1000.0, 0.0, "OFF", False, 100, False
+        self.overlay, self.tmp, self.precheck = overlay, None, precheck
         self.reasons, self.events, self.log = list(reasons), list(events), []
+        self.default_reason, self.pose_none, self.localization = "following", False, None
+        self.off_status = self.idle_status = self.start_status = 200
+        self.release_rc, self.corrupt_tee, self.mangle_after_mv, self.fail_restore = 0, False, False, False
+        self.core_env, self.core_errors, self.on_call = "HOME=/var/lib/rosy/core", "0", None
+        self.__dict__.update(kw)
         self.core = FakeCore(self)
 
     def now(self):
@@ -87,76 +102,113 @@ class FakeRobot:
         return b"\xff\xd8overhead\xff\xd9"
 
     def ssh(self, cmd, stdin=b""):
-        self.log.append("ssh " + cmd.split(" ")[0] + " " + " ".join(cmd.split(" ")[1:3]))
+        self.log.append("ssh " + cmd[:60])
         if cmd == "hostname":
-            return 0, ROBOT + "\n"
+            return 0, (ROBOT + "\n").encode()
         if cmd == "systemctl is-active rosy-core":
-            return 0, "active\n"
-        if cmd.endswith("precheck"):
-            return 0, self.precheck + "\n"
-        if "rosy_auto_update.py hold" in cmd or cmd.endswith("release-hold") or "cp -a" in cmd \
-                or "systemctl restart" in cmd:
-            return 0, "{}"
-        if cmd.startswith("if sudo -n test -e"):
-            return (3, "") if self.overlay is None else (0, self.overlay.decode())
-        if cmd.startswith("sudo -n install -d"):
-            assert yaml.safe_load(stdin.decode("utf-8")) is not None
-            self.overlay = stdin.replace(b"bridge_enabled: true", b"bridge_enabled: false") if self.corrupt else stdin
-            return 0, ""
+            return 0, b"active\n"
+        if cmd.endswith(" precheck"):
+            out = f"hold by {run.HOLDER}: topic" if self.hold and self.precheck == "ok" else self.precheck
+            return 0, out.encode()
+        if " hold --holder" in cmd:
+            self.hold = True
+            return 0, b"{}"
+        if cmd.endswith("release-hold"):
+            if self.release_rc == 0:
+                self.hold = False
+            return self.release_rc, b"busy" if self.release_rc else b"{}"
+        if cmd.startswith("pid=$(systemctl show"):
+            return 0, f"pid={self.pid}\nactive=active\n{self.core_env}\nerrors={self.core_errors}\n".encode()
+        if cmd == "sudo -n systemctl restart rosy-core":
+            self.pid += 1
+            return 0, b""
+        if "sudo -n cat" in cmd:
+            return (3, b"") if self.overlay is None else (0, self.overlay)
+        if "cp -a" in cmd:
+            return 0, b""
+        if "sudo -n tee" in cmd:
+            if self.fail_restore and stdin == ORIGINAL:
+                return 1, b""
+            self.tmp = stdin.replace(b"true", b"false") if self.corrupt_tee else stdin
+            parsed = json.dumps(yaml.safe_load(self.tmp.decode("utf-8")), sort_keys=True)
+            return 0, f"{hashlib.sha256(self.tmp).hexdigest()}\n{parsed}\n".encode()
+        if "mv -f" in cmd:
+            self.overlay = self.tmp.replace(b"bridge_enabled: true", b"bridge_enabled: false") \
+                if self.mangle_after_mv else self.tmp
+            self.tmp = None
+            return 0, b""
         if cmd.startswith("sudo -n rm -f"):
-            self.overlay = None
-            return 0, ""
+            if cmd.endswith(".device-test.tmp"):
+                self.tmp = None
+            else:
+                self.overlay = None
+            return 0, b""
         raise AssertionError(f"unexpected ssh {cmd}")
 
 
 def verdict(tmp_path, robot, **over):
+    ev = tmp_path / "pre"
+    ev.mkdir(exist_ok=True)
+    frames = {}
+    for name in ("before_overhead.jpg", "before_front.jpg"):
+        (ev / name).write_bytes(b"\xff\xd8" + name.encode())
+        frames[name] = run.sha(ev / name)
     v = {"captured_at": robot.t, "pose_at_capture": {"x": 0.0, "y": 0.0}, "robot_at_start": True,
          "robot_seen_is_target": True, "path_clear": True, "cable_seen": True,
-         "cable_in_path_or_wheels": False, "note": "cable behind the robot", **over}
-    p = tmp_path / "verdict.json"
+         "cable_in_path_or_wheels": False, "note": "cable behind the robot", "judged_by": "agent rosy-test",
+         "frames": frames, **over}
+    p = ev / "camera_verdict.json"
     p.write_text(json.dumps(v), encoding="utf-8")
     return p
 
 
-def plan_file(tmp_path, **stop):
+def plan_file(tmp_path, overlay=None, **stop):
     plan = yaml.safe_load(PLAN.read_text(encoding="utf-8"))
     plan["stop"].update({"duration_s": 3, **stop})
+    if overlay is not None:
+        plan["overlay"] = overlay
     p = tmp_path / "plan.yaml"
     p.write_text(yaml.safe_dump(plan), encoding="utf-8")
     return p
 
 
-def go(tmp_path, robot, *extra, verdict_path=None, plan=None):
-    argv = ["--robot", ROBOT, "--plan", str(plan or plan_file(tmp_path)), "--peer-check-ok", "ListAgents: none",
+def go(tmp_path, robot, *extra, verdict_path=None, plan=None, peer="ListAgents: none"):
+    argv = ["--robot", ROBOT, "--plan", str(plan or plan_file(tmp_path)), "--peer-check-ok", peer,
             "--evidence-dir", str(tmp_path / "ev"), "--summary-dir", str(tmp_path / "docs"), *extra]
     if "--preflight-only" not in extra and "--dry-run" not in extra:
         argv += ["--camera-verdict", str(verdict_path or verdict(tmp_path, robot))]
     code = run.main(argv, robot=robot)
-    summary = json.loads((tmp_path / "docs" / "summary.json").read_text(encoding="utf-8")) \
-        if (tmp_path / "docs" / "summary.json").exists() else None
-    return code, summary
+    path = tmp_path / "docs" / "summary.json"
+    return code, json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
 def phases(summary):
     return [p["phase"] for p in summary["phases"]]
 
 
+def marker(tmp_path):
+    return (tmp_path / "ev" / run.MARKER).exists()
+
+
+def assert_restored(robot, tmp_path):
+    assert robot.overlay == ORIGINAL and robot.tmp is None and not robot.hold
+    assert robot.lf_mode == "OFF" and not robot.rec and not marker(tmp_path)
+
+
 def test_happy_path_phase_order_evidence_and_byte_exact_revert(tmp_path):
     robot = FakeRobot(reasons=["following"] * 5 + ["lane_bridge"] * 3)
     code, s = go(tmp_path, robot)
     assert code == 0, s["outcome"]
-    assert phases(s)[:10] == ["peers", "identity", "health", "camera:before", "verdict", "hold", "overlay",
-                              "record", "start", "stream"]
-    assert phases(s)[10:] == ["cleanup:line-follow OFF", "cleanup:IDLE", "cleanup:recording stop",
-                              "cleanup:overlay revert", "cleanup:hold release", "camera:after",
-                              "cleanup:after frames"]
-    assert robot.overlay == ORIGINAL and robot.lf_mode == "OFF" and not robot.rec
+    assert phases(s) == ["peers", "identity", "health", "camera:start", "verdict", "hold", "overlay", "localized",
+                         "record", "start", "stream", "cleanup:line-follow OFF", "cleanup:IDLE",
+                         "cleanup:recording stop", "cleanup:overlay revert", "cleanup:hold release", "camera:after"]
+    assert_restored(robot, tmp_path)
+    assert robot.pid == 102                                          # restarted for apply and for restore
     assert s["observed"]["reasons"]["lane_bridge"] == 3 and s["missing_expected"] == []
-    for name in ("status.jsonl", "events.jsonl", "before_overhead.jpg", "before_front.jpg", "after_overhead.jpg",
+    for name in ("status.jsonl", "events.jsonl", "start_overhead.jpg", "start_front.jpg", "after_overhead.jpg",
                  "overlay_before.yaml"):
         assert s["evidence"][name].startswith("sha256:")
-    rows = (tmp_path / "ev" / "status.jsonl").read_text(encoding="utf-8").splitlines()
-    assert len(rows) >= 29                                           # 10 Hz over 3 s
+    assert len((tmp_path / "ev" / "status.jsonl").read_text(encoding="utf-8").splitlines()) >= 29   # 10 Hz, 3 s
     assert (tmp_path / "docs" / "README.md").exists()
     assert s["phases"][4]["accepted_risk"].startswith("cable near the robot")
 
@@ -165,49 +217,182 @@ def test_abort_mid_stream_still_turns_off_reverts_and_releases(tmp_path):
     robot = FakeRobot(reasons=["following", "obstacle_ahead"])
     code, s = go(tmp_path, robot)
     assert code == 2 and "obstacle_ahead" in s["outcome"]
-    assert {"cleanup:line-follow OFF", "cleanup:IDLE", "cleanup:overlay revert",
-            "cleanup:hold release"} <= set(phases(s))
-    assert robot.overlay == ORIGINAL and robot.lf_mode == "OFF" and not robot.rec
+    assert_restored(robot, tmp_path)
 
 
 def test_abort_event_and_missing_file_overlay_is_removed_again(tmp_path):
     robot = FakeRobot(overlay=None, events=[{"seq": 10, "type": "safety.estop", "data": {}}])
     code, s = go(tmp_path, robot)
     assert code == 2 and "safety.estop" in s["outcome"]
-    assert robot.overlay is None                                     # there was no file: removed again
+    assert robot.overlay is None and not robot.hold and not marker(tmp_path)
 
 
 def test_overlay_readback_mismatch_aborts_before_motion_and_reverts(tmp_path):
-    robot = FakeRobot(corrupt=True)
+    robot = FakeRobot(mangle_after_mv=True)
     code, s = go(tmp_path, robot)
     assert code == 2 and "readback mismatch" in s["outcome"]
     assert "PUT /line-follow/mode CAMERA_LINE" not in robot.log and "POST /recordings" not in robot.log
-    assert robot.overlay == ORIGINAL and "cleanup:overlay revert" in phases(s)
+    assert robot.overlay == ORIGINAL and not robot.hold
 
 
-def test_peer_hold_aborts_without_touching_the_robot(tmp_path):
-    robot = FakeRobot(precheck="hold by rosy-c5: G4 seal (until 2026-10-08T12:00:00Z)")
+def test_temp_file_that_does_not_validate_never_replaces_the_overlay(tmp_path):
+    robot = FakeRobot(corrupt_tee=True)
     code, s = go(tmp_path, robot)
-    assert code == 2 and "peer conflict" in s["outcome"]
-    assert not any(e.startswith(("POST /mode", "PUT", "ssh sudo -n install")) for e in robot.log)
-    assert robot.overlay == ORIGINAL
+    assert code == 2 and "did not validate" in s["outcome"]
+    assert robot.overlay == ORIGINAL and robot.tmp is None
+
+
+@pytest.mark.parametrize("env, errors, why", [("ROSY_CONFIG=/tmp/other.yaml", "0", "CORE reads /tmp/other.yaml"),
+                                              ("HOME=/var/lib/rosy/core", "2", "not steady")])
+def test_core_effective_config_mismatch_aborts_and_restores(tmp_path, env, errors, why):
+    robot = FakeRobot(core_env=env, core_errors=errors)
+    code, s = go(tmp_path, robot)
+    assert code == 2 and why in s["outcome"]
+    assert "PUT /line-follow/mode CAMERA_LINE" not in robot.log
+
+
+@pytest.mark.parametrize("precheck, why", [("hold by rosy-c5: G4 seal (until 2026-10-08T12:00:00Z)", "peer conflict"),
+                                           ("hold.json unreadable (bad); release it with release-hold", "unclear hold"),
+                                           ("claim held by fleet (seal)", "peer conflict")])
+def test_peer_or_unclear_hold_aborts_without_touching_the_robot(tmp_path, precheck, why):
+    robot = FakeRobot(precheck=precheck)
+    code, s = go(tmp_path, robot)
+    assert code == 2 and why in s["outcome"]
+    assert not any(e.startswith(("POST /mode", "PUT", "ssh (sudo")) or " hold --holder" in e for e in robot.log)
+    assert robot.overlay == ORIGINAL and not marker(tmp_path)
+
+
+def test_own_stale_hold_points_to_restore(tmp_path):
+    code, s = go(tmp_path, FakeRobot(precheck=f"hold by {run.HOLDER}: x (until z)"))
+    assert code == 2 and "--restore" in s["outcome"]
 
 
 @pytest.mark.parametrize("over, why", [({"cable_in_path_or_wheels": True}, "cable in the planned path"),
                                        ({"path_clear": False}, "path_clear"),
                                        ({"pose_at_capture": {"x": 0.3, "y": 0.0}}, "moved since"),
+                                       ({"pose_at_capture": None}, "pose unknown"),
                                        ({"captured_at": 0}, "old"),
-                                       ({"robot_at_start": None}, "true/false")])
+                                       ({"robot_at_start": None}, "true/false"),
+                                       ({"judged_by": ""}, "judged_by"),
+                                       ({"frames": {"before_front.jpg": "sha256:00"}}, "overhead"),
+                                       ({"frames": {"before_overhead.jpg": "sha256:00", "before_front.jpg": "x"}},
+                                        "changed since")])
 def test_camera_verdict_gates_before_any_change(tmp_path, over, why):
     robot = FakeRobot()
     code, s = go(tmp_path, robot, verdict_path=verdict(tmp_path, robot, **over))
-    assert code == 2 and why in s["outcome"]
+    assert code == 2 and why in s["outcome"], s["outcome"]
     assert not any("rosy_auto_update.py" in e or e.startswith(("POST /mode", "PUT")) for e in robot.log)
 
 
-def test_missing_expected_reason_exits_1(tmp_path):
-    code, s = go(tmp_path, FakeRobot())
-    assert code == 1 and s["missing_expected"] == ["states:RECOVERING", "reasons:lane_bridge"]
+def test_current_pose_unknown_fails_closed(tmp_path):
+    robot = FakeRobot(pose_none=True)
+    code, s = go(tmp_path, robot)
+    assert code == 2 and "pose unknown" in s["outcome"]
+
+
+def test_pose_lost_while_driving_aborts_under_a_distance_cap(tmp_path):
+    robot = FakeRobot()
+    robot.on_call = lambda m, p, mode: setattr(robot, "pose_none", robot.lf_mode == "CAMERA_LINE")
+    code, s = go(tmp_path, robot)
+    assert code == 2 and "distance cap cannot be enforced" in s["outcome"]
+    assert_restored(robot, tmp_path)
+
+
+def test_unexplained_stop_is_an_abort_not_a_pass(tmp_path):
+    robot = FakeRobot(default_reason="blocked_unexplained")
+    code, s = go(tmp_path, robot, plan=plan_file(tmp_path, duration_s=20, still_s=2))
+    assert code == 2 and "suspected contact" in s["outcome"]
+    assert_restored(robot, tmp_path)
+
+
+def test_listed_still_reason_ends_the_run(tmp_path):
+    robot = FakeRobot(default_reason="blocked_unexplained", reasons=["lane_bridge"])
+    code, s = go(tmp_path, robot, plan=plan_file(tmp_path, duration_s=20, still_s=2,
+                                                 ok_still_reasons=["blocked_unexplained"]))
+    assert code == 0 and s["outcome"] == "completed (still)"
+
+
+def test_not_localized_aborts_before_any_change(tmp_path):
+    robot = FakeRobot(localization={"state": "CANDIDATES", "pose_frame": "map"})
+    code, s = go(tmp_path, robot)
+    assert code == 2 and "not localized" in s["outcome"]
+    assert not any(" hold --holder" in e for e in robot.log)
+
+
+def test_start_refused_409_aborts_and_restores(tmp_path):
+    robot = FakeRobot(start_status=409)
+    code, s = go(tmp_path, robot)
+    assert code == 2 and "CAMERA_LINE refused 409" in s["outcome"]
+    assert_restored(robot, tmp_path)
+
+
+def test_sigterm_mid_stream_runs_cleanup_and_clears_the_marker(tmp_path):
+    robot = FakeRobot()
+    seen = {"marker_during_run": False, "ticks": 0}
+
+    def term(method, path, mode):
+        if robot.lf_mode == "CAMERA_LINE" and path == "/line-follow":
+            seen["ticks"] += 1
+        if seen["ticks"] == 5:
+            seen["marker_during_run"] = marker(tmp_path)
+            robot.on_call = None
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+    robot.on_call = term
+    code, s = go(tmp_path, robot)
+    assert code == 2 and "SIGTERM" in s["outcome"]
+    assert seen["marker_during_run"]
+    assert_restored(robot, tmp_path)
+
+
+def test_ctrl_c_during_cleanup_does_not_skip_later_steps(tmp_path):
+    robot = FakeRobot(reasons=["following", "obstacle_ahead"])
+    handlers = []
+
+    def interrupt(method, path, mode):
+        if method == "POST" and path == "/mode":
+            handlers.append((signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)))
+            raise KeyboardInterrupt
+    robot.on_call = interrupt
+    code, s = go(tmp_path, robot)
+    assert handlers == [(signal.SIG_IGN, signal.SIG_IGN)]            # signals ignored during cleanup
+    assert code == 2 and "CLEANUP FAILED" in s["outcome"]
+    assert {"cleanup:recording stop", "cleanup:overlay revert", "cleanup:hold release"} <= set(phases(s))
+    assert robot.overlay == ORIGINAL and not robot.hold
+    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+
+
+@pytest.mark.parametrize("field", ["off_status", "idle_status"])
+def test_non_200_off_or_idle_is_a_cleanup_failure(tmp_path, field):
+    robot = FakeRobot(**{field: 503})
+    code, s = go(tmp_path, robot)
+    assert code == 2 and "CLEANUP FAILED" in s["outcome"] and any("HTTP 503" in e for e in s["errors"])
+
+
+def test_release_hold_busy_is_a_cleanup_failure(tmp_path):
+    robot = FakeRobot(release_rc=4)
+    code, s = go(tmp_path, robot)
+    assert code == 2 and any("release-hold rc 4" in e for e in s["errors"]) and marker(tmp_path)
+
+
+def test_failed_restore_keeps_hold_and_marker_then_restore_mode_finishes(tmp_path):
+    robot = FakeRobot(fail_restore=True)
+    code, s = go(tmp_path, robot)
+    assert code == 2 and robot.hold and marker(tmp_path)
+    assert robot.overlay != ORIGINAL and "cleanup:hold release" not in phases(s)
+    assert any("hold KEPT" in e for e in s["errors"])
+    robot.fail_restore = False
+    code = run.main(["--robot", ROBOT, "--restore", str(tmp_path / "ev"), "--summary-dir", str(tmp_path / "r")],
+                    robot=robot)
+    assert code == 0
+    assert robot.overlay == ORIGINAL and not robot.hold and not marker(tmp_path)
+
+
+def test_summary_text_is_sanitized_but_digests_stay(tmp_path):
+    peer = "ListAgents none; robot at 192.168.1.201, https://site:8443/x, Bearer abc, tok aB3dEfGhIjKlMnOpQrStUvWx12"
+    code, s = go(tmp_path, FakeRobot(reasons=["lane_bridge"]), peer=peer)
+    text = (tmp_path / "docs" / "summary.json").read_text(encoding="utf-8")
+    assert "192.168" not in text and "https://" not in text and "aB3dEfGh" not in text and "Bearer abc" not in text
+    assert all(len(v) == 71 for v in s["evidence"].values())          # "sha256:" + 64 hex untouched
 
 
 def test_preflight_only_writes_frames_and_template_and_changes_nothing(tmp_path):
@@ -215,7 +400,8 @@ def test_preflight_only_writes_frames_and_template_and_changes_nothing(tmp_path)
     code, s = go(tmp_path, robot, "--preflight-only")
     assert code == 0 and s["outcome"] == "preflight"
     template = json.loads((tmp_path / "ev" / "camera_verdict.json").read_text(encoding="utf-8"))
-    assert template["robot_at_start"] is None and template["pose_at_capture"]["x"] == 0.0
+    assert template["robot_at_start"] is None and template["judged_by"] == ""
+    assert set(template["frames"]) >= {"before_overhead.jpg", "before_front.jpg"}
     assert all(e.startswith(("GET", "ssh hostname", "ssh systemctl is-active")) for e in robot.log), robot.log
 
 
@@ -228,10 +414,20 @@ def test_dry_run_makes_no_calls(tmp_path, capsys):
     assert "bridge_enabled" in capsys.readouterr().out
 
 
-def test_plan_refuses_speed_above_cap(tmp_path):
-    plan = yaml.safe_load(PLAN.read_text(encoding="utf-8"))
-    plan["overlay"]["line_follow"]["cruise_speed"] = 0.2
-    p = tmp_path / "fast.yaml"
-    p.write_text(yaml.safe_dump(plan), encoding="utf-8")
-    with pytest.raises(SystemExit, match="cruise_speed"):
+@pytest.mark.parametrize("key, value, why", [("cruise_speed", 0.2, "outside"),
+                                             ("ir_guard_enabled", False, "only turn the IR guard on"),
+                                             ("obstacle_stop_m", 0.05, "safety function"),
+                                             ("obstacle_mode", "sector", "safety function"),
+                                             ("teleop_timeout_ms", 900, "safety function"),
+                                             ("min_confidence", 0.1, "not an allowed test key")])
+def test_plan_overlay_allowlist(tmp_path, key, value, why):
+    p = plan_file(tmp_path, overlay={"line_follow": {"bridge_enabled": True, key: value}})
+    with pytest.raises(SystemExit, match=why):
         run.load_plan(p)
+
+
+def test_plan_allows_test_keys(tmp_path):
+    p = plan_file(tmp_path, overlay={"line_follow": {"bridge_enabled": True, "ir_guard_enabled": True,
+                                                     "recovery_local_enabled": False, "cruise_speed": 0.06,
+                                                     "site_floor_map_id": "track260919"}})
+    assert run.load_plan(p)["overlay"]["line_follow"]["cruise_speed"] == 0.06

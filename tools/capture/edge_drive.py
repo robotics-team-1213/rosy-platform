@@ -50,7 +50,7 @@ SOI, EOI = b"\xff\xd8", b"\xff\xd9"
 
 class Core:
     """One kept-alive HTTPS connection (a loaded Pi times out repeated TLS handshakes);
-    reconnect once on a broken one. A network failure is (0, None), never an exception."""
+    reconnect once on a broken one (attempts=1: no retry, for a time-boxed loop). A network failure is (0, None), never an exception."""
 
     def __init__(self, host, token, port, context):
         self.host, self.token, self.port, self.context = host, token, port, context
@@ -59,9 +59,9 @@ class Core:
     def _headers(self):
         return {"Authorization": "Bearer " + self.token, "Content-Type": "application/json"}
 
-    def call(self, method, path, body=None, raw=False, timeout=3.0):
+    def call(self, method, path, body=None, raw=False, timeout=3.0, attempts=2):
         data = None if body is None else json.dumps(body).encode()
-        for _ in range(2):
+        for _ in range(attempts):
             try:
                 if self.conn is None:
                     self.conn = http.client.HTTPSConnection(self.host, self.port, timeout=timeout,

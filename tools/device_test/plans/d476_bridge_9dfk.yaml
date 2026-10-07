@@ -21,6 +21,9 @@ stop:
   duration_s: 120      # about two laps of the 260919 track at cruise 0.08 m/s
   max_distance_m: 8.0
   still_s: 5
+  # Standing still longer than still_s ends the run only with one of these reasons; any other
+  # (or none) is an abort as suspected contact (D-512 decision 5). Empty: every stop aborts.
+  ok_still_reasons: []
   # A CORE stop reason here is an abort (outcome aborted, exit 2), not a pass.
   abort_on_reasons: [obstacle_ahead, obstacle_sensor_stale, lane_departure, lane_guard_stale,
                      lane_bridge_blocked, lane_bridge_motion_unconfirmed, driver_released,
