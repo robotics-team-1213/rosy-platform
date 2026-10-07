@@ -59,16 +59,21 @@ same commit. Never add a line to hide a failure your branch introduced.
 
 ## ADR numbers
 
-Re-check **right before writing** — peers take numbers minutes apart:
+Reserve **right before writing** — peers take numbers minutes apart (D-508):
 
-1. `ls docs/adr` on main **and** the working tree (a peer's untracked file), plus
-   `git for-each-ref refs/heads` branches (`git ls-tree -r --name-only <branch> docs/adr`).
-2. `| D-nnn |` rows in `docs/reference/ROSY ADR Log.md` (a row can exist before its file).
-3. `adr_gaps` in `tools/harness/harness.yaml` (reserved or skipped numbers).
+```bash
+python tools/harness/adr_reserve.py next "<topic>"   # prints D-nnn; use it
+python tools/harness/adr_reserve.py list               # current refs/adr reservations
+python tools/harness/adr_reserve.py release D-nnn      # give back an unused number
+```
 
-Take the next free number. Commit the ADR file **and** its Log row together (the Log is
-UTF-8 with BOM and **CRLF** — keep both), then `python tools/harness/rosy_harness.py lint`.
-A number lost to a collision goes into `adr_gaps` with the reason.
+The tool scans `docs/adr`, Log rows and gaps on every branch and worktree plus
+`refs/adr/D-*`, then creates `refs/adr/D-nnn` create-only; only one session can win a
+number. Commit the ADR file **and** its Log row together (the Log is UTF-8 with BOM and
+**CRLF** — keep both), then `python tools/harness/rosy_harness.py lint`. A number lost to a
+collision goes into `tools/harness/adr_gaps.txt` as one `D-nnn reason` line.
+The Log, `logs.md` and `adr_gaps.txt` merge with `merge=union`; regenerate `index.md`
+conflicts with `python tools/harness/rosy_harness.py generate`.
 
 ## Landing
 
