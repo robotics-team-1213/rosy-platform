@@ -145,6 +145,18 @@ def advisory(view, lin, secs, body=PINKY_PRO):
         f"in-place turn not clear: {why}" if kind else None)
 
 
+def front_frame(core):
+    """The current overlaid front JPEG (GET /vision/front/frame), None when not available."""
+    _, st = core.call("GET", "/vision/front/status")
+    seq = st.get("sequence") if isinstance(st, dict) else None
+    for _ in range(6):  # the frame advances every ~0.1 s; a 409 names the current sequence
+        s, img = core.call("GET", f"/vision/front/frame?sequence={seq}", raw=True)
+        if s != 409:
+            return img if s == 200 else None
+        seq = img.decode(errors="ignore").split("sequence ")[-1].split('"')[0]
+    return None
+
+
 # --- commands ------------------------------------------------------------------------------
 
 def cmd_nudge(core, args):
@@ -187,16 +199,9 @@ def cmd_nudge(core, args):
                 time.sleep(0.5)
             print("mode IDLE", code)
     time.sleep(0.8)
-    _, st = core.call("GET", "/vision/front/status")
-    seq = st.get("sequence") if isinstance(st, dict) else None
-    s, img = 0, None
-    for _ in range(6):  # the frame advances every ~0.1 s; a 409 names the current sequence
-        s, img = core.call("GET", f"/vision/front/frame?sequence={seq}", raw=True)
-        if s != 409:
-            break
-        seq = img.decode(errors="ignore").split("sequence ")[-1].split('"')[0]
+    img = front_frame(core)
     out = Path(args.out)
-    if s == 200:
+    if img:
         out.write_bytes(img)
     raw = core.raw_frame(timeout=3.0)   # needs this token to be the driver (last accepted teleop)
     if raw:
@@ -205,7 +210,7 @@ def cmd_nudge(core, args):
     else:
         print("raw frame unavailable")
     _, state = core.call("GET", "/robot/state")
-    print("moved", moved, "frame", s, "pose", state.get("pose") if isinstance(state, dict) else None)
+    print("moved", moved, "frame", bool(img), "pose", state.get("pose") if isinstance(state, dict) else None)
 
 
 def _recording_state(core):

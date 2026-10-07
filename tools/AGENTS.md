@@ -34,6 +34,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 | `sim/` | Local sim probes, `sim_verify.sh`, and host simulations that compose several packages (`simulate_line_follow.py`, `simulate_semantic_road.py`). Not a second product tree (see `sim/AGENTS.md`) |
 | `perception_prototype/` | Unreviewed camera-estimation and real-video replay prototypes (D-205). Replaced by the reviewed P2 replay tool (see `perception_prototype/AGENTS.md`). The D-356 learned-loop tooling is in `learning/training/perception/` (D-427 wave 1) |
 | `capture/` | Supervised edge-capture drives over the CORE API (`edge_drive.py`: nudge with an advisory D-424 body check, CAMERA_LINE capture drive, recording start/stop, exposure watch); see `capture/AGENTS.md` |
+| `device_test/` | D-512 agent-run device test: `run.py --robot <name> --plan plans/<plan>.yaml` (`--preflight-only`, then `--camera-verdict`), temporary CORE overlay with readback and byte-exact restore, D-379 recording, 10 Hz status/events JSONL, `summary.json` with `sha256:` digests (see `device_test/AGENTS.md`) |
 | `calibration/` | D-47 addendum 2026-10-01: `run_calibration.py` (protocol v1, one command, `--dry-run`/`--offline`), `analyze_session.py` (wheel/LiDAR-yaw/camera fits from recordings), `store_cli.py` (list/accept/reject/pin), `test/` (see `calibration/AGENTS.md`) |
 
 ## For AI Agents

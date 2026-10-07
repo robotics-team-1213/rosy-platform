@@ -1,0 +1,33 @@
+# D-476 rev 2 bridge device test on rosy-pinky-9dfk (D-512 decision 7: user decision 2026-10-08
+# runs the device step before replay/sim; this run's recording becomes D-476 stage-1 replay material).
+# Robot addresses, tokens and the site URL never go here: they are command-line or env values.
+topic: d476-bridge-9dfk
+
+# Temporary robot-local CORE overlay, merged into /var/lib/rosy/core/.rosy/rosy.yaml, CORE
+# restarted, read back; restored byte for byte in finally. D-476 rev 1 floor basis: an enabled
+# bridge needs ir_guard_enabled and (enforce or the site declaration). After D-507 lands, replace
+# bridge_site_no_dropoffs with site_floor_map_id (CORE refuses the old key then).
+overlay:
+  line_follow:
+    bridge_enabled: true
+    ir_guard_enabled: true
+    bridge_site_no_dropoffs: true
+
+min_battery_percent: 40
+verdict_max_age_s: 300
+hold_s: 1.0            # line-follow driver-hold session; the tool posts /line-follow/hold every 0.1 s
+
+stop:
+  duration_s: 120      # about two laps of the 260919 track at cruise 0.08 m/s
+  max_distance_m: 8.0
+  still_s: 5
+  # A CORE stop reason here is an abort (outcome aborted, exit 2), not a pass.
+  abort_on_reasons: [obstacle_ahead, obstacle_sensor_stale, lane_departure, lane_guard_stale,
+                     lane_bridge_blocked, lane_bridge_motion_unconfirmed, driver_released,
+                     limit_level_too_low, angular_limit_zero]
+  abort_on_events: ["safety.*"]
+
+# Seen at least once, or the run exits 1 (completed, missing expected).
+expect:
+  states: [RECOVERING]
+  reasons: [lane_bridge]
