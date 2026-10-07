@@ -2175,3 +2175,10 @@
 - Change: Expanded the 401/403 stale-session browser scenario across 1440/390/320px; checked equal document widths, first-viewport notice and stop, and no horizontal overflow.
 - Evidence: 6 Chromium cases passed, 0 NEW known failures; six capture hashes in docs/validation/uiux-cell-auth-widths-2026-10-07/result.md.
 - Gate: LOCAL synthetic G2 partial evidence; real site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · feat(fleet): D-491 5 서버 trip 루프 (브랜치 feat/d491-fleet-trip-loop)
+- 변경: 계획 본문을 `plan_id`로 저장(D-490 보존 그대로), 새 `fleet/server/trip_runner.py`(시작 검사·상태기계·0.5 s 루프·다음 장소 재계획 대기), `POST /api/fleet/trips/{plan_id}/start`·`/{id}/cancel`·`/{id}/confirm-replan`·`GET /api/fleet/trips`·`/{id}`, 활성화 가드를 "진행 중 trip"으로 교체(`/route`는 그대로), `HttpRobotClient.line_follow_junction`, 콘솔 지도 화면 운행 칸, API Ref v1.112. D-492 3항(`turn_deg`, `junction_turn` 능력, CORE `aborted`/`unresolved`/긴 `waiting` → `stopped(junction)`)과 지도 자세 검토 반영(시작 시 anchor 2 s 이내, tick마다 상태 갱신)을 포함한다
+- 증거: `python -m pytest operations/fleet/test -q` 2310 passed, 93 skipped, known_failures 0 new(2026-10-07 Windows, D-492 반영 커밋 기준); 마지막 커밋 뒤 관련 묶음 132 passed, 0 new; `node --test operations/fleet/test/web/*.mjs` 145 passed; `ROSY_BROWSER_TESTS=1` 현장 지도 브라우저 33 passed(D-492 이전 UI, 이후 UI 변경은 문구 한 줄)
+- gate 변화: 없음. SOURCE/LOCAL만. 능력(1항)·지도 자세(3항)·교차로 API(4항) 제공자는 형제 브랜치가 착지한 뒤 `create_app(trip_caps=…, map_pose=…)`로 연결한다. 기본 연결은 `TRIP_ROBOT_CAPS_UNKNOWN`으로 시작을 거절한다. Gazebo·실차 미실행
+- 결정: D-491 Proposed, D-492 Proposed
+- 교훈: 짧은 차로(0.37 m)는 arm 거리 0.6 m보다 짧다. 차선 로봇은 장소를 지난 뒤에만 다음 장소 지시를 보내야 CORE가 가진 하나뿐인 지시를 덮어쓰지 않는다
