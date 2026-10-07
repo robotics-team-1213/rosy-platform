@@ -2355,3 +2355,42 @@
 - gate 변화: 없음. 서버 판정은 표시 경로만 바꾼다
 - 결정: 해당 없음(D-457 추적 보정의 표시 전용 보강, D-375 제안 엔드포인트 재사용)
 - 교훈: 로봇이 카메라에 안 보이는 현장에서 교정 낡음의 유일한 독립 증거는 바닥 페인트 맞춤 제안이다. 프레임 모서리가 아니라 트랙 모서리로 재야 한다 — 기울어진 카메라의 프레임 가장자리는 지평선 근처에서 소리 없이 수십 미터 튄다
+## 2026-10-07 · uncommitted · feat(fleet): 직사각형 카메라 평면 지도와 클릭 좌표 확인
+- 변경: 기존 표시 보정·preview lease·평면 변환을 재사용해 현장 지도에 직사각형 카메라 영상과 미터 좌표를 표시한다. 같은 지도 ID·렌즈·영상 크기·신선도를 확인하고, 카메라 변경 시 이전 영상을 비운다. 좌표 확인과 운행 선택은 분리하며 확인 중 경로 계산·시작·재개를 잠근다. 새 API·패키지는 없음
+- 증거: node 153 passed; 관련 Python 148 passed·26 skipped; Chromium 관련 5 passed, 최종 좌표 확인 회귀 1 passed; known_failures 0 NEW. 저장된 현장 영상으로 실제 화면 1440·390·320 px에서 직사각형 지도·좌표 확인, 가로 넘침 없음. 독립 소스 검토 PASS
+- gate 변화: 없음. SOURCE/LOCAL 증거만; 새 화면 배포·실시간 장치 영상·물리 주행 수용은 미확인. 좌표 클릭은 지도 저장·활성화·로봇 목표 전송을 하지 않는다
+- 결정: D-497 7항
+- 교훈: 영상 다시 불러오기 전에 좌표 확인 상태를 비워야 운행 선택으로 클릭이 흘러가지 않는다
+
+## 2026-10-07 · uncommitted · feat(fleet): 막힘 에피소드 기록
+- 변경: `LineStuckBoard.observe`의 전이(열림·`cleared`·`replaced`·`left_roster`)를 `--tasks-db` 파일의 새 테이블 `fleet_line_stuck_episodes`에 남긴다. 시작할 때 열린 행은 `fleet_restart`로 닫고, 같은 `stuck_id`가 다시 보이면 처음 `opened_at`을 둔 채 다시 연다. 열 때 `local_enabled`·`trip_busy`(트립 실행기 `robot_busy`)·`peer_ahead`(resolver R1과 같은 모듈 함수로 꺼냄, 자세 없으면 NULL)·MapPose를 담고, 닫을 때 답 기록에서 `resolved_by`/`last_answer_tier`/`escalation_code`를 정한다. `GET /api/fleet/line-stuck/episodes`(viewer+), API Ref v1.120
+- 증거: 계획 검증 묶음 192 passed, `test/known_failures.py` 0 new. `test_server_app`·`test_boundaries`·`test_cli`·`test_teach` 107 passed·1 failed(`test_cli.py::test_cell_job_stack_tolerance_injects_the_palletizing_compiler`, `rosy.execution` import 실패, 깨끗한 main에서도 실패)
+- gate 변화: 없음. SOURCE 호스트 시험만. 현장 배포 전
+- 결정: 자율 사슬 계획 1단계(D-407/D-438 범위 안, 새 ADR 없음)
+- 교훈: 결과를 모르는 답(`accepted` NULL)을 "스스로 풀림"과 나누려면 `<tier>_unconfirmed`를 따로 둬야 한다
+
+## 2026-10-07 · uncommitted · docs(api): 막힘 에피소드 경로 번호를 v1.121 로
+- 변경: main 에 D-502(fix/core-battery-health)가 v1.120 을 먼저 써서, 이 브랜치의 `GET /api/fleet/line-stuck/episodes` 변경 이력과 문서 머리 버전을 v1.121 로 옮겼다. 위 항목의 v1.120 은 v1.121 로 읽는다.
+- 증거: main 병합 뒤 관련 묶음 289 passed, `test/known_failures.py` 0 new.
+- gate 변화: 없음. 문서 번호만
+- 결정: main 이 먼저 쓴 번호를 두고 다음 번호를 쓴다
+- 교훈: API 번호는 착지 직전에 main 머리를 다시 본다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-493 예외 큐가 오래된 상태를 표시
+- 변경: `/api/fleet/state` 행에 `state_age_s`(관찰 시각→응답 시각, 오프라인 null)와 최상위 `gathered_at`(SharedGather 수집 시각, 표시 전용). 큐는 `state_age_s` + 브라우저 수신 후 경과가 5 s를 넘으면 warn "상태 오래됨"과 막힘 crit 문구에 나이를 붙인다(`state-age.js`, `roster.js`).
+- 증거: fleet pytest 54 passed(known_failures 0 new), `node --test test/web/*.mjs` 160 passed(실제 `attentionItems`를 `/common` 로더로 실행).
+- gate 변화: 없음. 현장 배포는 사용자 승인 대기
+- 결정: D-493 단일 규칙 유지. API Reference 버전 올림은 착지 때 보류 중(1단계가 v1.120을 쓰므로 1단계 착지 뒤 v1.121)
+- 교훈: 문자열 단언만으로는 "출력 불변"을 못 지킨다 — 실제 함수를 노드에서 돌리는 로더를 둔다
+
+## 2026-10-07 · uncommitted · docs(api): 예외 큐 신선도 필드를 v1.122 로
+- 변경: main 에 막힘 에피소드(v1.121)가 먼저 착지해 `state_age_s`·`gathered_at` 변경 이력을 v1.122 로 적고 문서 머리 버전과 고정 시험을 옮겼다.
+- 증거: main 병합 뒤 관련 묶음과 node 시험, `test/known_failures.py`.
+- gate 변화: 없음. 문서 번호만
+- 결정: 앞 브랜치가 쓴 번호 다음을 쓴다
+- 교훈: 같은 날 여러 브랜치가 API 번호를 다툴 때는 착지 순서대로 다시 매긴다
+
+## 2026-10-07 · uncommitted · fix(fleet): 개발 콘솔 모든 화면 직접 접속
+- 변경: 개발 모드에서 `/console/install`, `/console/site-map`, `/console/cell` 직접 진입 시 Fleet 개발 세션을 자동 발급·재사용하고 토큰 입력 칸을 숨긴다. `/console`도 개발 모드에서는 토큰 입력 칸을 숨긴다. 일반 모드의 토큰 접속은 유지한다.
+- 증거: 새 Chromium 직접 진입 시험 4 passed, 개발 인증 pytest 60 passed, 웹 Node 시험 160 passed. 넓은 pytest의 Cell 컴파일러 import 실패 1건은 깨끗한 main에서도 동일하게 재현했다.
+- gate 변화: SOURCE/LOCAL만 확인. 사이트 배포·실기 수용은 별도다.

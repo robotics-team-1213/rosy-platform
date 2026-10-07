@@ -75,6 +75,12 @@ OPS_SUFFIXES = {".py", ".sh"}
 OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception tooling (D-427 wave 1)
              "operations/site_devices")  # site device firmware (D-427 wave 3b)
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
+#: P6 subpackages counted as their own size unit (path relative to the colcon root): their lines
+#: leave the package total and the unit always carries a verdict with the package +150 allowance.
+#: docs/plans/2026-10-07-line-follow-recovery-subpackage.md
+#: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
+#: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
+SIZE_UNITS = ("core/services/core_features/line_follow/recovery",)
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -109,8 +115,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        41_764,
-        "split: independently re-judged at 41764 on 2026-10-07 (code-reviewer agent; judged at 41719 before "
+        42_184,
+        "split: re-judged at 42184 on 2026-10-07: D-407 episode recording and routes, D-493 "
+        "stale-state age, D-501 shared console tabs, camera map inspection and development console "
+        "entry remain with their existing Fleet server and web owners. Keep the site-map web/server "
+        "split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and the +150 allowance. "
+        "Previously independently re-judged at 41764 on 2026-10-07 (code-reviewer agent; judged at 41719 before "
         "the review fixes). Since 41014 the package grew 750 lines: main's own +112 (within the allowance) "
         "and the D-494 6 teach slice +638 — fleet/routing/teach.py 129 (pure point keeping, RDP, end "
         "candidates, edge append), server/teach_service.py 216, server/teach_routes.py 91, "
@@ -503,8 +513,10 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1198,
-        "accept: independently re-judged at 1198 on 2026-10-05: CAP-001 presentation cache "
+        1202,
+        "accept: re-judged at 1202 on 2026-10-07: D-493 records each gathered state observation "
+        "time in this owner's robot row for the stale-state display; keep zero growth allowance. "
+        "Previously independently re-judged at 1198 on 2026-10-05: CAP-001 presentation cache "
         "and live dispatch fences add 39 lines beside this owner's mutable roster and goal "
         "bookkeeping; transport still owns capability interpretation. Client replacement and "
         "formation races are host-tested. Retain zero growth allowance; see "
@@ -584,9 +596,25 @@ SIZE_VERDICTS = {
         709,
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
+    "core/services/core_features/line_follow/recovery": (
+        2_320,
+        "accept: Independently re-judged 2026-10-07. Own size unit per "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md (moved "
+        "2026-10-07 by git mv, imports only): D-407 stuck recovery/wiring, D-468 lane_return*, D-476 "
+        "lane_bridge and D-494/D-495/D-498 junction as LineFollowManager mixins under the single manager "
+        "lock and generation; no own lock, thread, store or publisher, CORE CommandManager stays the final "
+        "cmd_vel publisher. Every file below 600. Baseline is the line count at the move; the +150 "
+        "allowance applies; re-judge on the next +150",
+    ),
     "core_features": (
-        14_934,
-        "accept: Independently re-judged 2026-10-07 (code-reviewer agent, read-only): ACCEPT with condition at 14934. "
+        12_772,
+        "accept: Independently re-judged 2026-10-07 at 12772 after the condition of the 14934 verdict was met: "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md moved line_follow lane recovery "
+        "(2320 lines) into its own size unit core/services/core_features/line_follow/recovery with its own "
+        "verdict. The move, not new code, brings core_features back under its allowance (main had reached "
+        "15091 > 14934+150). Remaining line_follow (manager, model, body_stop, clearance, crosswalk_zone) "
+        "keeps the policy, the D-422 safety path and the manager that binds the mixins. "
+        "Previously independently re-judged 2026-10-07 (code-reviewer agent, read-only): ACCEPT with condition at 14934. "
         "The growth is one line_follow junction mixin (junction.py 443, under the 600 file limit) plus "
         "manager/model/wiring hooks under the same manager lock, generation and CORE final publisher; "
         "no new owner, store, publisher or deploy unit. Condition: "
@@ -808,8 +836,10 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1140,
-        "accept: re-judged at 1140 on 2026-10-07. An accepted fleet identify plays two "
+        1148,
+        "accept: re-judged at 1148 on 2026-10-07: the existing display owner draws safety cues "
+        "before the blocking buzzer and still announces when LCD rendering fails; zero growth allowance. "
+        "Previously re-judged at 1140 on 2026-10-07. An accepted fleet identify plays two "
         "1400 Hz beeps from this same buzzer owner and leaves the health sound in place. "
         "Re-judged at 1133 on 2026-10-06 for D-483: the pair-request approval-code card "
         "is one more status row of the same LCD owner; its strict reader and priority live in "
@@ -1230,15 +1260,20 @@ def _is_prod_outside_src(path: Path) -> bool:
 
 
 def _over_budget() -> dict:
-    over = {}
+    over = dict.fromkeys(SIZE_UNITS, 0)
     for name in PACKAGES:
         total = 0
         for path in _files(name, CODE_SUFFIXES | {".sh"} | WEB_SUFFIXES):
             count = _lines(path)
-            total += count
+            rel = _rel(path).as_posix()
+            unit = next((u for u in SIZE_UNITS if rel.startswith(u + "/")), None)
+            if unit:
+                over[unit] += count
+            else:
+                total += count
             budget = FILE_BUDGET_WEB if path.suffix in WEB_SUFFIXES else FILE_BUDGET
             if count > budget:
-                over[_rel(path).as_posix()] = count
+                over[rel] = count
         if total > PACKAGE_BUDGET:
             over[name] = total
     for root_name in OPS_ROOTS:
@@ -1262,9 +1297,25 @@ def test_over_budget_code_has_a_recorded_verdict():
     )
 
 
+def test_size_units_are_real_subpackages_with_a_split_plan():
+    """P6: each SIZE_UNITS entry is a counted Python subpackage whose verdict cites its split plan."""
+    over = _over_budget()
+    bad = []
+    for unit in SIZE_UNITS:
+        dirs = [root / unit for root in COLCON_ROOTS if (root / unit / "__init__.py").is_file()]
+        if not dirs:
+            bad.append(f"{unit}: no Python subpackage (__init__.py) under a colcon root")
+        if over[unit] <= 0:
+            bad.append(f"{unit}: counts no lines")
+        plans = re.findall(r"docs/plans/\S+?\.md", SIZE_VERDICTS.get(unit, (0, ""))[1])
+        if not any((ROOT / plan).is_file() for plan in plans):
+            bad.append(f"{unit}: verdict cites no existing docs/plans split plan")
+    assert bad == [], bad
+
+
 def _allowance(key: str, at_verdict: int, now: int) -> int:
     """D-362: a file above HARD_TIER gets zero growth allowance (packages keep 150)."""
-    if key not in PACKAGES and max(at_verdict, now) > HARD_TIER:
+    if key not in PACKAGES and key not in SIZE_UNITS and max(at_verdict, now) > HARD_TIER:
         return 0
     return REGROWTH_ALLOWANCE
 

@@ -1,0 +1,23 @@
+{
+ "scenario": "explore",
+ "stops": [],
+ "gt_path_m": 0.0,
+ "final": {
+  "state": "HOLD",
+  "reason": "lane_return_space_or_floor_unconfirmed",
+  "junction": {
+   "pending_action": null,
+   "place_id": null,
+   "state": "idle",
+   "seq": 0,
+   "turn_deg": null,
+   "reason": null
+  },
+  "gt": [
+   -1.26955,
+   0.24254999999999974,
+   -1.5708000000000022
+  ]
+ },
+ "capability_at_end": true
+}

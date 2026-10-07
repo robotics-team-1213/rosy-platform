@@ -8,7 +8,7 @@ import math
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 
-from core_api_web.api.v1.common import admin, require_calibration_owner, viewer
+from core_api_web.api.v1.common import admin, battery_health, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import Mode
@@ -52,6 +52,7 @@ def _safety_payload(svc: CoreServicesLike) -> dict:
     battery = svc.safety.battery_policy
     deep = getattr(getattr(svc.battery, "_cfg", None), "deep_percent", 5.0)
     fleet_loss = svc.fleet_loss
+    health = battery_health(svc)
     return {
         "estop": svc.safety.estop,
         "source": svc.safety.estop_source,
@@ -71,6 +72,9 @@ def _safety_payload(svc: CoreServicesLike) -> dict:
             "critical_percent": battery.critical_percent,
             "deep_percent": deep,
             "critical_policy": battery.critical_action,
+            # v1.120: what the policy is judging now. A latched battery stop with
+            # evidence "fresh" and level "ok" is the operator's cue to release.
+            **{key: health[key] for key in ("evidence", "sample_age_s", "level", "percent")},
         },
     }
 

@@ -11,8 +11,8 @@ import math
 import pytest
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
-from core_features.line_follow.lane_return_evidence import LaneReturnEvidence
-from core_features.line_follow.lane_return import Boundary, Corridor, Footprint, Pose, ReturnController, ReturnInput
+from core_features.line_follow.recovery.lane_return_evidence import LaneReturnEvidence
+from core_features.line_follow.recovery.lane_return import Boundary, Corridor, Footprint, Pose, ReturnController, ReturnInput
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowMode, LineObservation
 from core_common.robot_body import PINKY_PRO_GEOMETRY

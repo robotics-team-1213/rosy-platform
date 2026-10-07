@@ -1,13 +1,17 @@
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
 // and preview a D-490 trip plan. Only the D-494 운행 buttons start or cancel a trip.
 import {createFleetClient} from '/common/fleet-client.js';
+import {developmentToken} from '/console/assets/development-auth.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
   planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripErrorText, tripStartReason,
-  tripStatusText,
+  tripStatusText, rectangularView,
 } from '/console/assets/site-map-model.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
+import {warpImage} from '/console/assets/field-view.js';
+import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
+import {parseLensHeader} from '/console/assets/vision-view.js';
 
 const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
@@ -17,6 +21,8 @@ $('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
 const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, running: null};
 const TRIP_POLL_MS = 1000;
+let plane = null, planeEpoch = 0;
+let calibrations = [];
 const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
   places: () => shown()?.places || [], render: () => render(),
   reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
@@ -55,8 +61,14 @@ function render() {
       : (state.active ? `활성 지도 v${state.active.version} · ${state.active.activated_by}` : '활성 지도 없음'),
   pending ? 'pending' : failed ? 'error' : map ? 'ready' : 'empty');
   if (!hasMap) return;
-  const view = fitView(map, W, H);
+  const background = plane?.mapId === map.map_id ? plane : null;
+  svg.classList.toggle('has-plane', Boolean(background));
+  const view = background?.view || fitView(map, W, H);
   state.view = view;
+  if (background) {
+    el('image', {...background.field, href: background.url, preserveAspectRatio: 'none'}, svg);
+    el('rect', {...background.field, class: 'plane-border'}, svg);
+  }
   const line = points => points.map(([x, y]) => view.toPx(x, y).join(',')).join(' ');
   for (const edge of map.edges) {
     const path = el('polyline', {points: line(edge.polyline), 'data-edge': edge.id,
@@ -81,6 +93,10 @@ function render() {
   }
   if (state.point && $('map-source').value === 'active') {
     const [px, py] = view.toPx(state.point.x, state.point.y);
+    el('circle', {cx: px, cy: py, r: 6, class: 'target'}, svg);
+  }
+  if (background?.point) {
+    const [px, py] = view.toPx(background.point.x, background.point.y);
     el('circle', {cx: px, cy: py, r: 6, class: 'target'}, svg);
   }
 }
@@ -111,6 +127,9 @@ function select(selection) {
 
 function syncButtons() {
   const reason = operatorReason();
+  gate('plane-load', !state.role ? '관제 접속이 필요합니다' : !$('plane-source').value ? '이 지도에 맞는 카메라 보정이 없습니다' : '');
+  gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
+  gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
   gate('import-camera-map', reason || (!$('camera-map-file').files.length ? '카메라 지도 JSON 파일을 고르세요' : ''));
   gate('save-draft', reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
   gate('activate', reason || (!state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : '')));
@@ -129,13 +148,14 @@ function syncButtons() {
     : !tripRobot.value ? '로봇을 고르세요'
     : tripRobot.selectedOptions[0]?.dataset.online !== 'true' ? '선택한 로봇의 연결을 확인하세요' : '';
   const target = $('trip-pick').checked ? state.point : $('trip-place').value;
-  gate('trip-plan', reason || (!state.active ? '활성 지도가 없습니다' : robotReason || (target ? '' : '목적지를 고르세요')));
+  const inspecting = $('plane-pick').checked ? '평면 지도 좌표 확인을 먼저 마치세요' : '';
+  gate('trip-plan', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason || (target ? '' : '목적지를 고르세요')));
   gate('trip-pick', reason);
   gate('estop', reason);
-  gate('trip-start', tripStartReason({role: state.role, plan: state.plan, active: state.active, running: state.running}));
+  gate('trip-start', inspecting || tripStartReason({role: state.role, plan: state.plan, active: state.active, running: state.running}));
   gate('trip-cancel', tripCancelReason({role: state.role, running: state.running}));
   $('trip-confirm').hidden = !state.running?.hold;
-  gate('trip-confirm', reason || (state.running?.hold?.plan ? '' : '다시 계산한 경로가 없습니다 · 운행을 취소하세요'));
+  gate('trip-confirm', inspecting || reason || (state.running?.hold?.plan ? '' : '다시 계산한 경로가 없습니다 · 운행을 취소하세요'));
   teach.sync();
 }
 
@@ -174,6 +194,9 @@ async function load() {
     : (active ? JSON.parse(JSON.stringify(active.map)) : null);
   state.dirty = false;
   state.loadState = 'ready';
+  try { calibrations = (await request('/api/fleet/calibrations')).calibrations || []; }
+  catch { calibrations = []; }
+  updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map(place => new Option(`${place.name} (${place.id})`, place.id)));
   $('trip-robot').replaceChildren(...robots.map(robot => {
@@ -198,6 +221,9 @@ async function guarded(work) {
 }
 
 $('connect').addEventListener('click', async () => {
+  planeEpoch += 1; plane = null; calibrations = [];
+  $('plane-pick').checked = false;
+  $('plane-source').replaceChildren();
   gate('connect', '접속 중');
   const started = Date.now();
   const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
@@ -240,7 +266,71 @@ $('connect').addEventListener('click', async () => {
   }
 });
 
-$('map-source').addEventListener('change', () => render());
+function clearPlane() {
+  planeEpoch += 1;
+  plane = null;
+  $('plane-pick').checked = false;
+  $('plane-point').textContent = '확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.';
+  $('plane-status').textContent = '카메라 평면 영상과 좌표 확인은 표시 전용입니다.';
+}
+function updatePlaneSources() {
+  clearPlane();
+  $('plane-source').replaceChildren(...calibrations.filter(c => c.map_id === shown()?.map_id)
+    .map(c => new Option(c.source_id, c.source_id)));
+}
+$('map-source').addEventListener('change', () => { updatePlaneSources(); render(); syncButtons(); });
+$('plane-clear').addEventListener('click', () => { updatePlaneSources(); render(); syncButtons(); });
+$('plane-source').addEventListener('change', () => { clearPlane(); render(); syncButtons(); });
+$('plane-pick').addEventListener('change', () => {
+  if ($('plane-pick').checked) $('trip-pick').checked = false;
+  clearPlan(); syncButtons();
+});
+$('plane-load').addEventListener('click', async () => {
+  clearPlane();
+  const epoch = ++planeEpoch;
+  const record = calibrations.find(c => c.source_id === $('plane-source').value && c.map_id === shown()?.map_id);
+  plane = null;
+  render();
+  syncButtons();
+  $('plane-status').textContent = '평면 영상 불러오는 중';
+  gate('plane-load', '불러오는 중');
+  let url;
+  try {
+    const {view, field} = rectangularView(record, shown()?.map_id, W, H);
+    const lease = await request('/api/fleet/vision/lease', {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source_id: record.source_id})});
+    const path = new URL(lease.frame_path, location.origin);
+    if (path.origin !== location.origin || path.username || path.password) throw new Error('영상 주소를 확인하세요.');
+    const response = await fetch(path, {headers: {Authorization: `Bearer ${lease.lease}`},
+      credentials: 'omit', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(10000)});
+    const age = response.headers.get('X-Frame-Age-Ms');
+    if (!response.ok || age === null || !Number.isFinite(Number(age)) || Number(age) < 0 || Number(age) > 3000
+      || response.headers.get('X-Frame-Rectified') !== 'false') throw new Error('신선한 원본 영상을 확인할 수 없습니다.');
+    const lens = parseLensHeader(response.headers.get('X-Source-Lens'));
+    if (!lensesMatch(record.lens, lens))
+      throw new Error('카메라 렌즈와 보정이 다릅니다.');
+    const blob = await response.blob();
+    if (blob.size > 8 * 1024 * 1024) throw new Error('영상 크기가 너무 큽니다.');
+    url = URL.createObjectURL(blob);
+    const image = new Image(); image.src = url; await image.decode();
+    if (image.naturalWidth !== record.image?.width || image.naturalHeight !== record.image?.height)
+      throw new Error('영상 크기와 보정이 다릅니다.');
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(field.width); canvas.height = Math.ceil(field.height);
+    const h = multiply3(record.map_to_image, fieldToMap(record.track_bounds_m,
+      {x: 0, y: 0, width: canvas.width, height: canvas.height}));
+    warpImage(canvas.getContext('2d'), image, h, canvas.width, canvas.height, document.createElement('canvas'));
+    if (epoch !== planeEpoch) return;
+    plane = {mapId: record.map_id, view, field, bounds: record.track_bounds_m, url: canvas.toDataURL('image/png')};
+    $('plane-status').textContent = `불러온 평면 영상 · ${record.source_id} · ${new Date().toLocaleTimeString()} · 표시 전용`;
+    render();
+  } catch (error) {
+    if (epoch === planeEpoch) $('plane-status').textContent = `평면 영상 확인 실패 · ${siteMapErrorText(error)}`;
+  } finally {
+    if (url) URL.revokeObjectURL(url);
+    if (epoch === planeEpoch) syncButtons();
+  }
+});
 
 function clearPlan() {
   state.planEpoch += 1;
@@ -252,6 +342,17 @@ function clearPlan() {
 }
 
 $('site-map-svg').addEventListener('click', event => {
+  if ($('plane-pick').checked) {
+    if (plane?.mapId !== shown()?.map_id) return;
+    const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(event.currentTarget.getScreenCTM().inverse());
+    const [x, y] = plane.view.toMap(at.x, at.y);
+    const b = plane.bounds;
+    if (x < b.min_x || x > b.max_x || y < b.min_y || y > b.max_y) return;
+    plane.point = {x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000};
+    $('plane-point').textContent = `확인한 좌표 x ${plane.point.x} m, y ${plane.point.y} m · 표시 전용`;
+    render();
+    return;
+  }
   if ($('trip-pick').checked && $('map-source').value === 'active' && state.view) {
     const svg = event.currentTarget;
     const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
@@ -405,3 +506,7 @@ $('estop').addEventListener('click', async () => {
     feedback.setAttribute('state', 'error');
   }
 });
+
+developmentToken($('credential').value).then(token => {
+  if (token) { $('credential').value = token; $('credential').parentElement.hidden = true; $('connect').click(); }
+}).catch(() => {});

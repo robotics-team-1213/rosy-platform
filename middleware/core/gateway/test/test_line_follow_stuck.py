@@ -5,7 +5,7 @@ import pytest
 from core.bridge import traffic_gate
 from core_features.line_follow.manager import (
     LineFollowConfig, LineFollowManager, LineFollowMode, LineObservation)
-from core_features.line_follow.stuck_recovery import AnswerRefused
+from core_features.line_follow.recovery.stuck_recovery import AnswerRefused
 from core_features.traffic_policy import TrafficPolicyManager
 
 GEOMETRY = dict(body_lidar_x_m=-0.017, body_rear_x_m=-0.076, body_rotation_radius_m=0.08257)
@@ -68,6 +68,15 @@ def test_obstacle_escalation_opens_one_stuck_with_body_clearances():
     status = m.status()
     assert status.stuck.phase == "ASKING" and status.stuck.stuck_id == opened[0]["stuck_id"]
     assert len(events.named("nav.line_obstacle_hold")) == 1
+
+
+@pytest.mark.parametrize("linked", [True, False])
+def test_local_recovery_disabled_asks_once_with_local_disabled(linked):
+    m, events = _manager(linked=linked, recovery_local_enabled=False)
+    _blocked_until_stuck(m)
+    asked = events.named("nav.line_stuck_asked")
+    assert [(a["reason"], a["local_fallback_s"]) for a in asked] == [("local_disabled", None)]
+    assert m.status().stuck.phase == "WAITING_CONSOLE"
 
 
 def test_unbound_inputs_fail_closed_and_never_open_a_stuck():

@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-25 | Updated: 2026-09-25 -->
+<!-- Generated: 2026-09-25 | Updated: 2026-10-07 -->
 
 # line_follow
 
@@ -15,15 +15,17 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 | `clearance.py` | ROS-free LiDAR geometry: front sector minimum, swept-corridor path clearance, D-407 body clearances, D-422 swept-body gap, rotation gap, ultrasonic cone points |
 | `body_stop.py` | D-422 manager mixin: body gap along the intended path, derived/override stop gaps, LiDAR blind floor, ultrasonic echo freshness |
 | `model.py` | Modes, observations, config (incl. D-407 `recovery_*`, URDF `body_*`), decisions |
-| `stuck_recovery.py` | D-407 ROS-free stuck state machine: ask console, answers by stuck id, local back-off, re-judge |
-| `stuck_wiring.py` | Manager mixin feeding the machine; the back-off is the manager's own decision (D-2) |
-| `lane_return*.py` | D-468 local lane return: evidence ledger, checkpoint/retrace/search controller, arbitration inside the manager lock |
-| `lane_bridge.py` | D-476 expected-road bridge (default off): armed by confident following (rev 1, no D-468 containment), slow drive along the followed lane's straight extension on a short loss, swept by D-422 (plus the D-468 floor proof when enforce), then hand-over to D-468 or today's HOLD/LOST |
-| `junction.py` | D-494 decision 4 / D-495 junction instruction gate and bounded turn: one pending instruction, keeps or zeroes the tick's decision (waiting, unresolved, stop after measured odom); the D-495 turn is its only own twist |
+| `recovery/stuck_recovery.py` | D-407 ROS-free stuck state machine: ask console, answers by stuck id, local back-off, re-judge |
+| `recovery/stuck_wiring.py` | Manager mixin feeding the machine; the back-off is the manager's own decision (D-2) |
+| `recovery/lane_return*.py` | D-468 local lane return: evidence ledger, checkpoint/retrace/search controller, arbitration inside the manager lock |
+| `recovery/lane_bridge.py` | D-476 expected-road bridge (default off): armed by confident following (rev 1, no D-468 containment), slow drive along the followed lane's straight extension on a short loss, swept by D-422 (plus the D-468 floor proof when enforce), then hand-over to D-468 or today's HOLD/LOST |
+| `recovery/junction.py` | D-494 decision 4 / D-495 junction instruction gate and bounded turn: one pending instruction, keeps or zeroes the tick's decision (waiting, unresolved, stop after measured odom); the D-495 turn is its only own twist |
 
 ## Subdirectories
 
-None.
+| Directory | Purpose |
+|-----------|---------|
+| `recovery/` | Lane recovery mixins of `LineFollowManager` (D-407 stuck, D-468 return, D-476 bridge, D-495 junction); same manager lock and generation, no own lock, thread, store or publisher |
 
 ## For AI Agents
 

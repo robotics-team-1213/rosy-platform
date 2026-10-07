@@ -11,14 +11,15 @@ from typing import Callable, Optional
 from core_common.protocol.schemas import LineFollowStatus
 from core_features.line_follow.body_stop import BodyStopMixin
 from core_features.line_follow.clearance import Point, path_clearance
-from core_features.line_follow.junction import JunctionMixin
-from core_features.line_follow.stuck_wiring import StuckRecoveryMixin
-from core_features.line_follow.lane_return_wiring import LaneReturnMixin
+from core_features.line_follow.recovery.junction import JunctionMixin
+from core_features.line_follow.recovery.stuck_wiring import StuckRecoveryMixin
+from core_features.line_follow.recovery.lane_return_wiring import LaneReturnMixin
 from core_features.line_follow.model import (  # noqa: F401 — re-exported
     LineFollowConfig,
     LineFollowDecision,
     LineFollowMode,
     LineObservation,
+    SOURCE_FUTURE_TOLERANCE_S,
     _finite,
 )
 from core_features.decision.contract import DecisionRequest
@@ -157,7 +158,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             if not _finite(source_now):
                 raise ValueError("source_now must be finite")
             source_age = float(source_now) - observation.stamp
-            if source_age < -0.1:
+            if source_age < -SOURCE_FUTURE_TOLERANCE_S:
                 raise ValueError("observation timestamp is in the future")
             effective_received_at -= max(0.0, source_age)
         with self._lock:

@@ -2,8 +2,8 @@
 import pytest
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
-from core_features.line_follow.lane_return import Footprint
-from core_features.line_follow.lane_return_evidence import LaneReturnEvidence
+from core_features.line_follow.recovery.lane_return import Footprint
+from core_features.line_follow.recovery.lane_return_evidence import LaneReturnEvidence
 
 
 BODY = Footprint(.08, -.08, .06)
@@ -33,6 +33,26 @@ def test_image_pose_is_interpolated_on_source_clock_then_transformed_to_latest_p
     assert view.pose.x == pytest.approx(.01)
     assert view.source_stamp_ns == 100050000000
     assert view.corridor.margin(BODY) == pytest.approx(.035)
+
+
+def test_odom_stamp_slightly_ahead_of_core_clock_is_kept_as_fresh():
+    """D-495 SIM finding 2: 1 ms of clock skew must not reset the trail or bump the epoch."""
+    feed = LaneReturnEvidence()
+    sample(feed, 100., now=10.)
+    epoch = feed.epoch
+    assert feed.observe_pose(stamp_ns=100_101_000_000, source_now_ns=100_100_000_000,
+                             frame="odom", x=.01, y=0., yaw=0., received_at=10.1)
+    assert len(feed.trail.samples) == 2 and feed.epoch == epoch
+    assert feed.trail.samples[-1].received_at == 10.1
+
+
+def test_odom_stamp_far_ahead_is_dropped_without_reset():
+    feed = LaneReturnEvidence()
+    sample(feed, 100., now=10.)
+    epoch = feed.epoch
+    assert not feed.observe_pose(stamp_ns=100_300_000_000, source_now_ns=100_100_000_000,
+                                 frame="odom", x=.01, y=0., yaw=0., received_at=10.1)
+    assert len(feed.trail.samples) == 1 and feed.epoch == epoch
 
 
 def test_receive_time_cannot_make_replayed_image_fresh():

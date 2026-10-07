@@ -148,6 +148,7 @@ const view = {
   dispatchControl: null,
   stateUnavailable: false,
   stateLoaded: false,
+  receivedAtMs: null,  // D-493: 마지막 state 응답을 받은 브라우저 시각
   addresses: {},  // robot_id -> GET /api/fleet/discovery/addresses 행(고정 주소 판정)
 };
 // A chooser deep link only reveals/focuses an existing card; it never arms a goal.
@@ -336,6 +337,7 @@ async function refreshState() {
     const snapshot = await call("/api/fleet/state");
     life.check();
     view.robots = snapshot.robots;
+    view.receivedAtMs = Date.now();  // D-493: 큐 신선도는 받은 뒤 흐른 시간을 더한다
     if (requestedRobotFocus && view.robots.some(robot => robot.robot_id === requestedRobotFocus)) view.showAllRobots = true;
     view.stateUnavailable = false;
     view.stateLoaded = true;
@@ -825,6 +827,8 @@ async function connectionMode() {
   try {
     const info = await fleetClient("/api/fleet/auth/connection");
     el("development-badge").hidden = info?.mode !== "development";
+    el("console-token").hidden = info?.mode === "development";
+    el("token-save").hidden = info?.mode === "development";
     return info?.mode === "development";
   } catch (_err) {
     return false;
