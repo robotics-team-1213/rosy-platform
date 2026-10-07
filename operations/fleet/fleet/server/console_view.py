@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import math
+from dataclasses import dataclass
 from typing import Optional
 
 from fleet.swarm.transport import RobotApiError
@@ -23,7 +25,7 @@ class CapabilityDisplay:
         if task is not None:
             task.cancel()
 
-    async def shown(self, robot_id):
+    async def shown(self, robot_id, wait_s=0.05):
         cached = self.cache.get(robot_id)
         if cached is not None and self.clock() - cached[0] < 5.0:
             return copy.deepcopy(cached[1])
@@ -34,7 +36,7 @@ class CapabilityDisplay:
         if task is None:
             task = asyncio.create_task(self._refresh(robot_id, client))
             self.pending[robot_id] = task
-        await asyncio.wait({task}, timeout=0.05)
+        await asyncio.wait({task}, timeout=wait_s)
         cached = self.cache.get(robot_id)
         if self.clients.get(robot_id) is not client or cached is None:
             return None
@@ -58,6 +60,37 @@ class CapabilityDisplay:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+
+@dataclass(frozen=True)
+class TripCaps:
+    """D-494 1: what a robot allows a Fleet trip (its rosy.controls/1 base_velocity)."""
+
+    kind: str
+    modes: frozenset
+    max_speed: float
+    #: D-495: the robot can turn at a junction on its own (bounded turn); absent means no.
+    junction_turn: bool = False
+
+
+def trip_caps(capabilities) -> Optional[TripCaps]:
+    """The base's trip fields, or None for an older image or a malformed descriptor.
+
+    Read field by field: a consumer ignores fields and drive modes it does not know
+    (rosy.controls/1), so an unknown mode is dropped, not a reason to distrust the rest.
+    """
+    controls = capabilities.get("controls") if isinstance(capabilities, dict) else None
+    items = controls.get("items") if isinstance(controls, dict) else None
+    for item in items if isinstance(items, list) else ():
+        if not isinstance(item, dict) or item.get("kind") != "base_velocity":
+            continue
+        kind, modes, speed = item.get("robot_kind"), item.get("drive_modes"), item.get("trip_max_linear")
+        if (isinstance(kind, str) and kind and isinstance(modes, list)
+                and isinstance(speed, (int, float)) and not isinstance(speed, bool)
+                and math.isfinite(speed) and speed >= 0):
+            known = frozenset(mode for mode in modes if mode in ("lane", "free"))
+            return TripCaps(kind, known, float(speed), item.get("junction_turn") is True)
+    return None
 
 
 _INTERNAL_MISSION_KEYS = ("route", "settled_ticks")

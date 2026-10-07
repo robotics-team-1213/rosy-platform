@@ -134,7 +134,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
-               site_maps=None, routing_config=None) -> FastAPI:
+               site_maps=None, routing_config=None, map_pose_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     if development_sessions is not None and task_service is None:
@@ -473,10 +473,37 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.camera_peer = install_camera_peer(app, pairing=pairing,
         current_users=lambda:site_users or {}, require_named_operator=require_named_operator)
 
+    # D-494 3: trip-only map pose from accepted sightings and robot odom_pose.
+    from fleet.localization.map_pose import MapPoseConfig
+    from fleet.server.map_pose_service import MapPoseService, install_map_pose_routes
+
+    async def _gather_state(robot_id: str):
+        return (await console._gather_state(robot_id))[0]
+
+    async def _rest_state(robot_id: str):
+        return await console._client(robot_id).state()
+
+    map_pose_config = map_pose_config or MapPoseConfig()
+    if sightings is not None and map_pose_config.sighting_lease_s > sightings.lease_s:
+        raise ValueError("fleet.map_pose.sighting_lease_s must not exceed the sighting ingest lease")
+
+    def _active_map_id():
+        active = site_maps.active()
+        return active[1].map_id if active is not None else None
+
+    map_pose = MapPoseService(lambda: console.robot_ids, config=map_pose_config,
+                              map_id=_active_map_id,
+                              source_map_ids=[source.map_id for source in
+                                              (sightings.sources if sightings is not None else ())],
+                              gather=_gather_state, gather_rest=_rest_state)
+    map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
+    console.set_state_sink(map_pose.observe_state)
+    app.state.map_pose = map_pose
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
                           principals=principals, require_viewer=require_viewer,
-                          read_guard=read_guard)
+                          read_guard=read_guard, map_pose=map_pose)
+    install_map_pose_routes(app, service=map_pose, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,
                            require_viewer=require_viewer, read_guard=read_guard,

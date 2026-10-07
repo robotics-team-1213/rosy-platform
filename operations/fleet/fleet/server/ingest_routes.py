@@ -128,7 +128,8 @@ def install_discovery_routes(app, *, console, hub, discovery, discovery_token,
 
 
 def install_ingest_routes(app, *, console, console_token, hub, sightings,
-                          policy_evidence, principals, require_viewer, read_guard) -> None:
+                          policy_evidence, principals, require_viewer, read_guard,
+                          map_pose=None) -> None:
     if sightings is not None and sightings.enabled:
         if console_token is not None and sightings.uses_token(console_token):
             raise ValueError("sighting source credentials must differ from the console token")
@@ -146,10 +147,13 @@ def install_ingest_routes(app, *, console, console_token, hub, sightings,
         async def submit_sighting(body: SiteSightingPayload,
                                   authorization: Optional[str] = Header(default=None)) -> dict:
             try:
-                return sightings.accept(authorization, body)
+                row = sightings.accept(authorization, body)
             except SightingError as exc:
                 raise HTTPException(status_code=exc.status_code,
                                     detail={"code": exc.code, "message": str(exc)}) from exc
+            if map_pose is not None:   # D-494 3: only an accepted sighting anchors the map pose
+                map_pose.observe_sighting(row)
+            return row
 
         @app.get("/api/fleet/sightings", dependencies=read_guard, tags=["sightings"])
         async def sighting_readback() -> dict:

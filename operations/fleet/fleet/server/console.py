@@ -33,7 +33,7 @@ from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, traffic
 from fleet.server.console_view import (
-    CapabilityDisplay, _error_of, _formation_stream_evidence, _shown,
+    CapabilityDisplay, TripCaps, _error_of, trip_caps, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
 )
 from fleet.swarm.session import (
@@ -120,6 +120,9 @@ class FleetConsole:
         self._loc_null_since: dict[str, Optional[float]] = {}
         #: robot_id -> the localization service's view (needs_human), set by app.py.
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
+        #: D-494 3: every state read also feeds the trip-only map pose (its `odom_pose`).
+        self._state_sink: Optional[Callable[[str, dict], None]] = None
+        self._sink_failed: set[str] = set()      # logged once per robot
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
@@ -219,6 +222,9 @@ class FleetConsole:
     def set_localization_view(self, view: Optional[Callable[[str], Optional[dict]]]) -> None:
         self._localization_view = view
 
+    def set_state_sink(self, sink: Optional[Callable[[str, dict], None]]) -> None:
+        self._state_sink = sink
+
     def _client(self, robot_id: str) -> RobotClient:
         client = self._clients.get(robot_id)
         if client is None:
@@ -229,6 +235,10 @@ class FleetConsole:
 
     async def _shown_capabilities(self, robot_id: str) -> Optional[dict]:
         return await self._capability_display.shown(robot_id)
+
+    async def caps_for(self, robot_id: str) -> Optional[TripCaps]:
+        """D-494 1: trip caps from the capability cache; None for an older image or no answer."""
+        return trip_caps(await self._capability_display.shown(robot_id, wait_s=2.0))
 
     async def _gather_state(self, robot_id: str) -> tuple[dict, str]:
         """D-447: 이미 열린 소켓이 먼저다. hub heartbeat(1 Hz, PRT-003)가 신선하면
@@ -609,6 +619,13 @@ class FleetConsole:
             if state:
                 robot_id = row["robot_id"]
                 self._seen[robot_id] = state
+                if self._state_sink is not None:
+                    try:
+                        self._state_sink(robot_id, state)
+                    except Exception:   # a bad snapshot must not break the gather
+                        if robot_id not in self._sink_failed:
+                            self._sink_failed.add(robot_id)
+                            logger.exception("map pose: snapshot of %s not usable", robot_id)
                 if state.get("localization") is not None:
                     self._loc_null_since[robot_id] = None
                 elif robot_id in self._loc_null_since:

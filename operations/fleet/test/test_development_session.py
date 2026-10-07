@@ -264,7 +264,7 @@ def test_development_mode_requires_the_durable_api_audit():
 def test_api_reference_documents_the_development_session_routes():
     reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
 
-    assert "**Version:** v1.111" in reference
+    assert "**Version:** v1.113" in reference
     assert "| GET | `/api/fleet/auth/connection` |" in reference
     assert "| POST | `/api/fleet/auth/development-session` |" in reference
     assert "| v1.108 | 2026-10-06 | Additive (D-473)" in reference

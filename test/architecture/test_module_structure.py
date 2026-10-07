@@ -373,7 +373,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_321,
+        1_322,
+        "accept: re-judged at 1322 on 2026-10-07 for D-494 2: one optional StateSnapshot.odom_pose "
+        "field; the OdomPose model lives in protocol/localization.py and joins the existing import "
+        "line. No envelope version change or runtime owner. Zero-growth allowance remains. "
         "accept: re-judged at 1321 on 2026-10-06: six lines add the bounded display-only "
         "LampIdentifyRequest to the existing public schema owner; no new protocol version or "
         "runtime owner. Zero-growth allowance remains. D-457 re-judged at 1315 after "

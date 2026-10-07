@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(map): 260919 횡단보도 구간을 lane_graph.yaml에 (D-491 §3)
 - 2026-10-07 · uncommitted · docs(adr): 횡단보도 구간 ADR 번호는 D-491
 - 2026-10-07 · uncommitted · fix(perception): IR 좌우 두 띠는 선 하나가 아니다(횡단보도 중앙 위상만)
 - 2026-10-07 · b53e1fe19 · fix(perception): camera fit grid steps, fine height band, record fit_step
 - 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)
-- 2026-10-06 · c257fac01 · fix(perception): D-468 lane containment projection uncertainty
