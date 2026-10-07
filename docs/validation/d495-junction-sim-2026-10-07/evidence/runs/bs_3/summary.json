@@ -1,0 +1,96 @@
+{
+ "scenario": "trip",
+ "plan": [
+  "straight"
+ ],
+ "prearm": true,
+ "late_s": 0.5,
+ "junctions": [
+  {
+   "i": 0,
+   "item": "straight",
+   "result": "LOST",
+   "sight_gt": [
+    -0.73,
+    -0.441,
+    0.14
+   ],
+   "keep_at_sight": "junction_fork",
+   "stop": {
+    "travel_after_sight_m": 0.0,
+    "sight_to_still_sim_s": 0.327,
+    "paint_ahead_of_front_m": 0.132,
+    "state_at_still": "executing"
+   },
+   "at_done": {
+    "gt": [
+     -0.73,
+     -0.441,
+     0.14
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "j": "executing",
+    "jr": null,
+    "lane_offset_m": 0.064,
+    "heading_vs_lane_deg": -48.5
+   },
+   "seq": [
+    {
+     "j": "armed",
+     "jr": null,
+     "state": "HOLD",
+     "reason": "camera_line_not_visible",
+     "sim_t": 677.811
+    },
+    {
+     "j": "executing",
+     "jr": null,
+     "state": "HOLD",
+     "reason": "camera_line_not_visible",
+     "sim_t": 677.92
+    },
+    {
+     "j": "executing",
+     "jr": null,
+     "state": "LOST",
+     "reason": "camera_reselection_required",
+     "sim_t": 680.28
+    }
+   ],
+   "sent": [
+    {
+     "i": 0,
+     "item": "straight",
+     "code": 200,
+     "resp": null,
+     "refresh": 3
+    }
+   ]
+  }
+ ],
+ "gt_path_m": 1.2169,
+ "final": {
+  "t": 52.704,
+  "sim_t": 680.28,
+  "gt": [
+   -0.7304750666041118,
+   -0.4409551551199398,
+   0.13987737406976045
+  ],
+  "odom": [
+   -0.7304750666041118,
+   -0.4409551551199398,
+   0.13987737406976045,
+   0.0,
+   0.0
+  ],
+  "state": "LOST",
+  "reason": "camera_reselection_required",
+  "keep": "junction_fork",
+  "body_gap_m": null,
+  "j": "executing",
+  "jr": null
+ },
+ "capability_at_end": true
+}
