@@ -1,4 +1,4 @@
-"""D-473 개발 연결 모드 — 같은 망 브라우저에 1시간 운용자 세션을 메모리에만 준다.
+"""D-473 개발 연결 모드 — 같은 망 브라우저에 1시간 운영자 세션을 메모리에만 준다.
 
 D-432 CORE `POST /api/v1/auth/development-session` 의 Fleet 짝이다. 켜는 조건
 (`ROSY_DEPLOYMENT=development` + `--connection-mode development`)은 `cli.run_console` 이 본다.
