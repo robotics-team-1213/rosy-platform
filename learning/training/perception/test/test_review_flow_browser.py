@@ -6,6 +6,7 @@ import threading
 from contextlib import contextmanager
 
 import pytest
+from browser_harness import browser_tests_enabled, free_port
 
 import class_sets
 from test_review_app import fixture_inputs, open_store
@@ -13,14 +14,15 @@ from test_review_cycle import CLASSES, catalog
 from review_app import ReviewStore, make_server
 import review_masks
 
-pytestmark = pytest.mark.skipif(os.getenv('ROSY_RUN_BROWSER_TESTS') != '1',
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='requires explicit local Chromium browser run')
 
 
 @contextmanager
 def serve(store):
     playwright = pytest.importorskip('playwright.sync_api')
-    server = make_server(store, 0)
+    # make_server takes only a port number, so this one keeps free_port().
+    server = make_server(store, free_port())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     with playwright.sync_playwright() as p:

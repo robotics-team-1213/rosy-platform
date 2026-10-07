@@ -3,6 +3,9 @@
 
 # state
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 CORE-001 immutable snapshots (~10 Hz). Thread-safe; API and WS read `snapshot()`.

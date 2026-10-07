@@ -3,6 +3,9 @@
 
 # params
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Nav2 and slam_toolbox YAML. Velocity smoother output must be remappable to `nav_cmd_vel` (D-2).

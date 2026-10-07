@@ -1,14 +1,14 @@
 """tools/review_app_smoke.py serves a state, screenshots every screen and reports clean."""
-import os
 from pathlib import Path
 import subprocess
 import sys
 
 import pytest
+from browser_harness import browser_tests_enabled
 
 from test_review_app import open_store
 
-pytestmark = pytest.mark.skipif(os.getenv('ROSY_RUN_BROWSER_TESTS') != '1',
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='requires explicit local Chromium browser run')
 TOOL = Path(__file__).resolve().parents[4] / 'tools/review_app_smoke.py'
 

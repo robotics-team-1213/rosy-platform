@@ -144,7 +144,6 @@ jobs:
         run: |
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt playwright
           python3 -m playwright install --with-deps chromium
-          echo "ROSY_BROWSER_TESTS=1" >> "$GITHUB_ENV"
 
       - name: Install Pinky raw verification tools
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
@@ -230,11 +229,21 @@ jobs:
           import subprocess
           import sys
 
-          status = 0
+          # 브라우저 옵트인은 Fleet 시험에만 준다(Chromium 은 Fleet 조건에서만 설치된다).
+          # 같이 묶인 다른 묶음의 브라우저 시험까지 켜지지 않게 Fleet 경로는 따로 돈다.
+          runs = []
           for paths in json.loads(os.environ["ROSY_INVOCATIONS"]):
+              fleet = [p for p in paths if p.startswith("operations/fleet/test")]
+              rest = [p for p in paths if p not in fleet]
+              runs += [(rest, {}), (fleet, {"ROSY_RUN_BROWSER_TESTS": "1"})]
+          status = 0
+          for paths, extra in runs:
+              if not paths:
+                  continue
               print("::group::pytest " + " ".join(paths), flush=True)
               code = subprocess.run([sys.executable, "-m", "pytest", *paths, "-v",
-                                     "--continue-on-collection-errors"]).returncode
+                                     "--continue-on-collection-errors"],
+                                    env={**os.environ, **extra}).returncode
               print("::endgroup::", flush=True)
               if code not in (0, 5):
                   print(f"::error::pytest {' '.join(paths)} exited {code}", flush=True)
