@@ -1234,3 +1234,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만
 - 결정: D-468 구현 메모(G-16) 보강
 - 교훈: 맞춤을 고치면 안전 근거만이 아니라 조향 축도 바뀐다. 실물 녹화 재생으로 추종 변화를 같이 잰다
+
+## 2026-10-08 · 05462b7d9 · fix(perception): 남서 굽이를 굽이로 읽는다 (D-507 B9)
+- 변경: `lane_keep_junction._continues`(끝-시작 간격 ≤ `MAX_GAP_M`)로 이어진 칠 조각은 fork 두 가지가 아니다. 새 `lane_keep_bend`: 모서리 모양 선(경로를 가로지르고, 가까운 끝이 한쪽에 분명, 먼 끝이 기우는 쪽 차로 밖, 그쪽에 경로 교차점을 넘는 평행선 없음) 중 45°보다 가파르고 직각에서 `CORNER_SQUARE_RAD`보다 먼 선은 닫힌 쪽 경계의 굽이다. 굽이 중심선이 경로와 만나는 점이 `CORNER_LOOKAHEAD_M` 안이면 그 반경에서 추종(`bend_<side>`, 오차 상한 `CORNER_MAX_ERROR`), 밖이면 직진(`bend_ahead`). 가파른 선은 외삽 오프셋이 아니라 보이는 칠의 가까운 끝으로 편을 정하고, 앞 조각에 이어진 조각은 그 편을 받는다. `_runs_past`·`_pursuit_point`는 옮겨 `lane_keep.py` 600줄 유지. 카메라·차로 폭·이득은 그대로
+- 증거: `test_lane_keep_bend.py` 10건(B8 고정 자료 7클립: fork·flipping·corner 0, 굽이 추종, spoke `junction_transverse` 유지, 목표 참 중심선 안쪽 반폭 이내·90 % 23.5 mm 이내). perception 2747 passed. 모델 PC SIM `docs/validation/lane-keep-bend-sim-2026-10-08`: 굽이에 닿은 11/11 통과, x −0.95…−0.78 중앙 +0.014…+0.016 m, `corner_*`·`junction_fork`·`flipping` 0
+- gate 변화: 없음. SOURCE 호스트 시험 + ROS-SIM. 장치·현장 아님
+- 결정: D-507 B9
+- 교훈: 가파른 선의 SIDE_X_M 외삽 오프셋은 편을 정하지 못한다. 보이는 칠로 정한다

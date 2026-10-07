@@ -704,8 +704,12 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        45_104,
+        45_344,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
+        "(re-judged 2026-10-08 at 45344 after the D-507 B9 bend rule: lane_keep_bend.py (88, new; bends, "
+        "with the corner open-side check and the pursuit point moved out so lane_keep.py stays at 600), "
+        "lane_keep_junction.py +17 (end-to-start continuity), lane_keep_pairs.py +10 (pursuit point). "
+        "ROS-free keeper pieces inside sensing/perception that move with it — verdict unchanged); "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
         "+133, with reviews), the camera AE/AWB re-lock (camera_controls/camera_visibility/v4l2_controls +77; "
         "lock mixin camera_lock.py split out of camera_detect_node) and the D-468 sim-sensor flag (+15). The "
