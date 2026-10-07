@@ -1,8 +1,8 @@
 """D-468 line manager's synchronized evidence seam; motion arbitration follows separately."""
 from core_features.line_follow.crosswalk_zone import CrosswalkZones
-from core_features.line_follow.lane_return import Footprint
-from core_features.line_follow.lane_return_evidence import LaneReturnEvidence
-from core_features.line_follow.lane_return_decision import LaneReturnDecisionMixin
+from core_features.line_follow.recovery.lane_return import Footprint
+from core_features.line_follow.recovery.lane_return_evidence import LaneReturnEvidence
+from core_features.line_follow.recovery.lane_return_decision import LaneReturnDecisionMixin
 
 
 class LaneReturnMixin(LaneReturnDecisionMixin):

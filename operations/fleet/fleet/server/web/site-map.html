@@ -9,6 +9,7 @@
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/console/assets/site-map.css">
+  <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/site-map.js"></script>
 </head>
@@ -20,6 +21,13 @@
     <ui-tag id="session">접속 전</ui-tag>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop" disabled reason="관제 접속이 필요합니다"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
+  <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
+  <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
+    <a href="/console">관제</a>
+    <a href="/console/install">설치·보정</a>
+    <a href="/console/site-map" aria-current="page">현장 지도</a>
+    <a href="/console/cell">Cell</a>
+  </nav>
   <div class="site-access">
     <ui-field id="credential" type="password" placeholder="관제 토큰" aria-label="관제 토큰"></ui-field>
     <ui-button id="connect" kind="primary">접속</ui-button>
@@ -122,7 +130,6 @@
         <div class="actions"><ui-button id="teach-place" kind="quiet" disabled reason="관제 접속이 필요합니다">여기에 주소 만들기</ui-button></div>
       </div>
     </ui-section>
-    <div class="actions"><a class="console-return" href="/console">관제 화면으로 돌아가기</a></div>
   </main>
 </ui-shell>
 </body>

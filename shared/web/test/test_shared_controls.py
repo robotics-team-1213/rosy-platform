@@ -716,7 +716,7 @@ def test_every_disabled_control_states_its_reason_or_is_listed():
     for page_name in ("index.html", "install.html"):
         page = (fleet / page_name).read_text(encoding="utf-8")
         assert page.count("data-role-lock") == page.count('class="role-lock-note"') >= 1
-        assert page.count("운용자 권한이 필요합니다</ui-status>") == page.count('class="role-lock-note"')
+        assert page.count("운영자 권한이 필요합니다</ui-status>")  # D-501 wording == page.count('class="role-lock-note"')
     stale = sorted(set(DISABLED_WITHOUT_REASON) - set(used))
     assert not missing, "사유 없는 비활성:\n" + "\n".join(missing)
     assert not stale, f"목록에 남은 옛 항목: {stale}"

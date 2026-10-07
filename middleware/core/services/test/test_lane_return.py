@@ -3,7 +3,7 @@ import math
 
 import pytest
 
-from core_features.line_follow.lane_return import (
+from core_features.line_follow.recovery.lane_return import (
     Boundary, Corridor, Footprint, Pose, PoseTrail, ReturnController, ReturnInput,
 )
 

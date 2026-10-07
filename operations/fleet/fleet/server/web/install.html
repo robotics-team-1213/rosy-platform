@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/task-chooser.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
+  <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/install.js"></script>
 
@@ -39,17 +40,18 @@
     <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
+  <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
+  <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
+    <a href="/console">관제</a>
+    <a href="/console/install" aria-current="page">설치·보정</a>
+    <a href="/console/site-map">현장 지도</a>
+    <a href="/console/cell">Cell</a>
+  </nav>
   <ui-status id="estop-feedback" hidden></ui-status>
 
   <main id="install-main" tabindex="-1">
     <h1 class="sr-only">Rosy Fleet — 설치·보정</h1>
     <!-- D-410 — 설치 화면. 운용(감시·목표·정지)은 /console에 있다. -->
-    <section class="panel install-nav" aria-labelledby="install-nav-heading">
-      <h2 id="install-nav-heading">설치·보정 화면</h2>
-      <p class="hint">기기 등록·카메라 연결 승인·경기장/맵 보정을 합니다. 로봇 감시·목표 지정·전체 주행 취소는
-        <a href="/console">운용 화면</a>에 있습니다.</p>
-    </section>
-
     <div class="install-tasks">
       <nav id="install-chooser" aria-label="설치 작업"></nav>
       <div class="install-workspace">
@@ -99,7 +101,7 @@
               </dialog>
             </div>
           </section>
-          <!-- D-341 3–5·11: 콘솔은 6자리 코드를 모른다. 운용자가 폰 화면의 코드를 입력하고,
+          <!-- D-341 3–5·11: 콘솔은 6자리 코드를 모른다. 운영자가 폰 화면의 코드를 입력하고,
                설치자가 폰과 이 화면의 사이트 지문·자격 ID를 맞춰 본다. -->
           <section id="camera-link" class="panel install-task camera-link" aria-labelledby="camera-link-heading" data-role-lock>
             <div class="robot-head">
@@ -116,9 +118,9 @@
             </section>
             <p class="hint">기존 앱 연결: 폰 화면의 숫자 6자리를 입력해 승인합니다.</p>
             <p id="camera-link-unavailable" class="hint" role="status" hidden>이 Fleet에는 카메라 연결 승인이 설정되지 않았습니다.</p>
-            <ui-status id="camera-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
+            <ui-status id="camera-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
             <div id="camera-link-controls" hidden>
-              <p id="camera-identity-note" class="hint" hidden>이름 있는 운용자 계정으로만 카메라 연결을 승인·거절·폐기할 수 있습니다 — 공용 관제 토큰으로는 할 수 없습니다(site-users.yaml).</p>
+              <p id="camera-identity-note" class="hint" hidden>이름 있는 운영자 계정으로만 카메라 연결을 승인·거절·폐기할 수 있습니다 — 공용 관제 토큰으로는 할 수 없습니다(site-users.yaml).</p>
               <p class="hint">이 사이트의 지문 <code id="camera-site-fingerprint" class="camera-id">—</code></p>
               <p id="camera-queue-health" class="hint" hidden></p>
               <div id="camera-result" class="enroll-result" aria-live="polite"></div>
@@ -231,7 +233,7 @@
         </details>
         <details id="vision-adjustments" class="vision-adjustments" data-role-lock>
           <summary>왜곡 및 사각 보정</summary>
-          <ui-status id="vision-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
+          <ui-status id="vision-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
           <p class="hint">화면 미리보기만 보정합니다. 원본과 로봇 위치 인식은 그대로 유지됩니다. 현장 실측 전에는 보정된 위치 증거로 사용할 수 없습니다.</p>
           <div id="vision-corner-modes" class="vision-corner-modes" role="group" aria-label="영역 조정 화면" hidden>
             <ui-button kind="segment" id="vision-edit-corners" type="button" aria-pressed="false">원본에서 영역 조정</ui-button>

@@ -7,7 +7,7 @@ import collections
 import pytest
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
-from core_features.line_follow.junction import JunctionRefused
+from core_features.line_follow.recovery.junction import JunctionRefused
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowMode, LineObservation
 
@@ -386,7 +386,27 @@ def test_no_fresh_odom_at_the_junction_aborts_before_turning():
     rig.send('left', turn_deg=90.)
     rig.now += .3
     decision, status = rig.step(junction=True, pose=False)
+    assert (status.junction.state, status.reason, decision.linear, decision.angular) == (
+        'armed', 'junction_stopping', 0., 0.)                 # waits up to POSE_MAX_AGE_S
+    waited_from = rig.now
+    while status.junction.state == 'armed':
+        decision, status = rig.step(junction=True, pose=False)
     assert (status.junction.state, status.junction.reason, decision.angular) == ('aborted', 'odom', 0.)
+    assert .3 < rig.now - waited_from <= .35
+
+
+def test_turn_armed_right_after_mode_select_waits_for_the_first_odom_sample():
+    """D-495 SIM finding 3: PUT CAMERA_LINE empties the pose trail; a turn armed at a junction
+    already in view must wait for the first odom sample, not abort 'odom'."""
+    rig = Rig()                                               # set_mode: no odom sample yet
+    assert rig.send('right', turn_deg=-90.) == (True, 1, 'armed')
+    decision, status = rig.step(junction=True, seen=False, pose=False)
+    assert (status.junction.state, status.state, status.reason) == ('armed', 'HOLD', 'junction_stopping')
+    assert (decision.linear, decision.angular) == (0., 0.)
+    decision, status = rig.step(junction=True, seen=False)    # first odom sample
+    assert status.junction.state == 'turning' and status.reason == 'junction_stopping'
+    decision, status = rig.turn_until('turning', seen=False)
+    assert status.junction.state == 'advancing' and abs(_yaw_error_deg(rig.yaw, -90.)) <= 5.
 
 
 def test_mode_change_and_estop_abort_and_the_next_session_starts_clean():

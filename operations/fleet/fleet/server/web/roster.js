@@ -12,7 +12,7 @@ import { staleAgeS } from "./state-age.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
-// console_view._error_of 는 닿지 못한 예외를 클래스 이름(code)으로 싣는다. 운용자 말은
+// console_view._error_of 는 닿지 못한 예외를 클래스 이름(code)으로 싣는다. 운영자 말은
 // 한국어 평문이다 — 아는 코드만 옮기고 모르는 값은 받은 그대로 보인다(2026-10-02 회차).
 const REACH_LABEL = Object.freeze({
   ConnectError: "접속 실패",
@@ -333,7 +333,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       fallback.textContent = lineFollow.mode === "IR_LINE" ? "IR 추적 중지" : "IR 추적 선택";
       blockWith(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
         : !robot.online ? "로봇 오프라인"
-          : !isOperator() ? "운용자 권한이 필요합니다" : "");
+          : !isOperator() ? "운영자 권한이 필요합니다" : "");
       fallback.addEventListener("click", scope.guard(async () => {
         const life = scope.capture();
         life.check();
@@ -364,7 +364,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     identify.setAttribute("kind", "quiet");
     identify.type = "button";
     identify.textContent = "LED로 찾기";
-    blockWith(identify, !isOperator() ? "운용자 권한이 필요합니다"
+    blockWith(identify, !isOperator() ? "운영자 권한이 필요합니다"
       : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
         : estop !== false ? "안전 상태 확인이 필요합니다" : "");
     identify.addEventListener("click", scope.guard(async () => {

@@ -679,6 +679,11 @@
 - gate 변화: 없음. SIM 증거만이고 SIM 수용 항목 S1·S2·S6은 미통과다.
 - 결정: D-495, D-498 (Proposed). 결함 후보: `lane_return_evidence.py:52` 음수 odom 나이 리셋, `junction.py:318-320` CAMERA_LINE 선택 직후 회전 `aborted odom`, `unresolved`가 실행 기록에 안 남음(`junction.py:347-352`, `363-366`, `397-400`), 로봇 기본값 `recovery_local_enabled: true` + enforce 없음이면 출발 불가(`lane_return.py:326-327`).
 - 교훈: 없음
+## 2026-10-07 · uncommitted · fix(line_follow): 모드 선택 직후 교차로 회전은 첫 odom을 기다린다
+- 변경: `junction.py` `_start_turn`에서 신선한 odom이 없으면 바로 `aborted odom`으로 끝내지 않고 `armed`로 남아 `junction_stopping` HOLD(명령 0)를 내며 첫 거부 시각부터 기다린다. `POSE_MAX_AGE_S`(0.3 s)를 넘도록 odom이 없으면 전과 같이 `odom`으로 중단한다.
+- 증거: `test_line_junction.py::test_turn_armed_right_after_mode_select_waits_for_the_first_odom_sample` 먼저 실패 후 통과, `test_no_fresh_odom_at_the_junction_aborts_before_turning`은 0.3 s 대기 뒤 중단으로 바뀜.
+- gate 변화: 없음. 호스트 시험만. SIM(`s2_sw_r110_a0`, `s9_scan_turn` 재현) 미실행.
+- 결정: D-495 SIM 결과 결함 3 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
 ## 2026-10-07 · uncommitted · fix(line_follow): 회전 뒤 unresolved도 그 교차로 실행 완료로 기록한다
 - 변경: `junction.py` `_maneuver`의 `unresolved` 전이 세 곳(재획득 중 D-407 stuck, 재획득 시간 한도, `REACQUIRE_M` 이동)을 `_unresolved(j, decision)` 하나로 모으고, 상태가 아직 `reacquiring`일 때 `_mark_done(j)`를 먼저 부른다. 진입 방향은 이미 지워져 있으므로 같은 `place_id` 재전송은 두 번째 회전을 쌓지 않고 409 `JUNCTION_ALREADY_DONE`이 된다. 다른 `place_id`가 기록을 지운다.
 - 증거: `test_line_junction.py::test_unresolved_after_the_turn_counts_as_done`(세 경로) 먼저 실패 후 통과.

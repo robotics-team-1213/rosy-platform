@@ -1,5 +1,5 @@
 // D-360 경기장 제안 검토·보정 경기장 뷰·설정 불일치 안내·레이어 토글.
-// 제안은 운용자가 수락해야 D-318 브라우저 초안이 된다. 어떤 값도 사이트 설정·sighting·주행에 쓰지 않는다.
+// 제안은 운영자가 수락해야 D-318 브라우저 초안이 된다. 어떤 값도 사이트 설정·sighting·주행에 쓰지 않는다.
 
 import {
   LAYER_KEYS, LAYER_STORAGE_KEY, FIELD_SIZE_PREFIX, parseLayers, normalizeProposal, quadAspect,
@@ -153,7 +153,7 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
     const active = activeCorners();
     updateMismatch(active);
     const frame = lastFrame;
-    // D-375 대체 경로: 경기장 모서리가 없고 운용자가 지도 맞춤을 수락했으면 지도 사각형을 그 homography 로 편다.
+    // D-375 대체 경로: 경기장 모서리가 없고 운영자가 지도 맞춤을 수락했으면 지도 사각형을 그 homography 로 편다.
     const byMap = !active && frame && !frame.rectified ? view.mapFieldFallback?.(frame) ?? null : null;
     const show = view.layers.rectified && frame && frame.source === visionView.currentSource()
       && (frame.rectified || active || byMap);

@@ -325,7 +325,13 @@ class JunctionMixin:
         """D-495 (a): the junction is seen; stand still, then turn from the measured yaw."""
         pose = self._fresh_pose(now)
         if pose is None:
+            # D-495 SIM finding 3: a mode select empties the trail; stay armed and stopped
+            # until the first odom sample, at most POSE_MAX_AGE_S, then abort as before.
+            waited_from = j.setdefault('odom_wait_at', now)
+            if now-waited_from <= POSE_MAX_AGE_S:
+                return self._junction_hold('junction_stopping', decision)
             return self._abort(j, 'odom', decision)
+        j.pop('odom_wait_at', None)
         # Review M8: the instruction may clear LOST only if the junction sighting (the keeper's
         # junction HOLD) started the loss clock; a lane lost before the junction stays LOST.
         first = self._junction_first_seen
