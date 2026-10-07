@@ -38,7 +38,7 @@ from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_debug import next_publish_due, render_debug
-from .sensing.perception.lane_containment import containment_payload, geometry_error
+from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
 from .sensing.perception.route_hybrid import RouteHybridFollower
@@ -92,6 +92,8 @@ class LineObserverNode(Node):
         self.declare_parameter('learned_paint_reuse_max_wz', 0.15)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
+        # D-468 containment: half the painted line width (keep mode fits the paint centre).
+        self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
         # 'between' only: bottom band start (keeps white walls out) and the
         # lane width as a frame fraction until both boundaries are seen.
@@ -519,7 +521,8 @@ class LineObserverNode(Node):
             containment = containment_payload(
                 self._lane_keeper.last, ground, stamp=source_stamp,
                 source=str(self.get_parameter('camera_ground_source').value).upper(),
-                camera_x=self._lane_keeper._x_offset, geometry_bounds=self._ground_error)
+                camera_x=self._lane_keeper._x_offset, geometry_bounds=self._ground_error,
+                paint_half_width_m=float(self.get_parameter('lane_paint_half_width_m').value))
         self._publish('CAMERA_LINE', observation, stamp=source_stamp, containment=containment)
         self._publish_debug(msg, frame, observation)
 

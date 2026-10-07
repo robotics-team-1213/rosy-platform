@@ -25,6 +25,9 @@
     # without one.
     camera_lane_mode: line
     lane_half_width_m: 0.0925
+    # Half the painted line width: D-468 containment boundaries are the paint's inner
+    # edge. 260919 STL tape 25 mm (STL nominal, unmeasured; a mat measurement replaces it).
+    lane_paint_half_width_m: 0.0125
     camera_roi_bottom_fraction: 1.0
     camera_ground_source: PINKY
     allow_simulation_ground: false

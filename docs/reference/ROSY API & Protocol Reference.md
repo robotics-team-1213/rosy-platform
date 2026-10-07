@@ -24,6 +24,8 @@
 `boundaries`(0~2개)를 보낸다. 각 경계는 `side`(left/right), `slope`,
 `intercept_m`, 실제 관측 구간 `observed_x_min_m`/`observed_x_max_m`를 갖는다.
 좌표는 base footprint 기준 x 전방/y 좌측, 직선 y=slope*x+intercept_m이다.
+경계는 칠한 선의 중심이 아니라 차로 쪽(안쪽) 가장자리, 곧 달릴 수 있는 끝이다(생산자가
+칠 폭의 절반 `lane_paint_half_width_m`만큼 안쪽으로 옮긴다).
 CALIBRATED는 실제 승인된 calibration이 있을 때만 사용한다. unknown uncertainty는
 null이며 임의의 안전 여유로 대체하지 않는다. 누락/단일 경계로 전체 차체 containment를
 증명할 수 없고 관측 구간 밖으로 무제한 외삽하지 않는다. 명령 필드는 없다.

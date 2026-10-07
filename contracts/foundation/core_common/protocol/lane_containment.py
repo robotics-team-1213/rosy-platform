@@ -20,7 +20,8 @@ class LaneBoundaryEvidence(BaseModel):
 
 
 class LaneContainmentEvidence(BaseModel):
-    """uncertainty_m must bound the total lateral error of each boundary in the body frame at
+    """Each boundary is the drivable (inner) edge of its painted line, not the paint centre.
+    uncertainty_m must bound the total lateral error of each boundary in the body frame at
     the image stamp (projection, calibration, detection); D-468 erodes the corridor by it."""
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
     stamp: float = Field(ge=0)

@@ -1,4 +1,5 @@
 """D-468 producer reports observed support and unknown geometry uncertainty."""
+import importlib.util
 import itertools
 import math
 import re
@@ -9,7 +10,7 @@ import pytest
 import yaml
 from control.sensing.perception.camera_ground import GroundPlane
 from control.sensing.perception.lane_containment import (
-    RECEIVER_EXTRAPOLATION_M, containment_payload, geometry_error, projection_uncertainty_m)
+    PAINT_HALF_WIDTH_M, RECEIVER_EXTRAPOLATION_M, containment_payload, geometry_error, projection_uncertainty_m)
 
 
 def ground():
@@ -24,7 +25,68 @@ def test_payload_preserves_original_image_and_measured_support():
     assert raw["stamp"] == 1.25
     assert raw["uncertainty_m"] is None
     assert raw["boundaries"][0]["observed_x_min_m"] == .2
-    assert raw["boundaries"][0]["intercept_m"] == pytest.approx(.08)
+    # The detector fits the paint centre; the payload carries the paint's inner edge.
+    assert raw["boundaries"][0]["intercept_m"] == pytest.approx(.08-PAINT_HALF_WIDTH_M*math.hypot(1, .1))
+
+
+def test_boundaries_are_the_paint_inner_edge_moved_inward_by_half_the_paint():
+    keeper = {"boundaries": [dict(selected=True, side=side, ends_m=[[.1, y], [.3, y]])
+                             for side, y in (("left", .0925), ("right", -.0925))]}
+    edges = {b["side"]: b for b in containment_payload(keeper, ground(), stamp=1., source="GAZEBO",
+                                                        camera_x=.033)["boundaries"]}
+    assert edges["left"]["intercept_m"] == pytest.approx(.080)
+    assert edges["right"]["intercept_m"] == pytest.approx(-.080)
+    wide = containment_payload(keeper, ground(), stamp=1., source="GAZEBO", camera_x=.033,
+                               paint_half_width_m=.02)["boundaries"]
+    assert [b["intercept_m"] for b in wide] == pytest.approx([.0725, -.0725])
+
+
+def test_paint_shift_does_not_change_the_projection_uncertainty():
+    keeper = {"boundaries": [dict(selected=True, side="left", ends_m=[[.1, .0925], [.3, .0925]])]}
+    u = [containment_payload(keeper, ground(), stamp=1., source="GAZEBO", camera_x=.033,
+                             paint_half_width_m=p)["uncertainty_m"] for p in (0., PAINT_HALF_WIDTH_M)]
+    assert u[0] == u[1]
+
+
+def test_paint_edges_that_cross_send_no_corridor():
+    # Two paint lines closer than one paint width leave no drivable edge pair: send none
+    # (an empty corridor), never a crossed pair the contract would reject.
+    keeper = {"boundaries": [dict(selected=True, side=side, ends_m=[[.1, y], [.3, y]])
+                             for side, y in (("left", .01), ("right", -.01))]}
+    assert containment_payload(keeper, ground(), stamp=1., source="GAZEBO", camera_x=.033)["boundaries"] == []
+
+
+def _paint_runs_mm(x_m):
+    """Paint intervals (mm, along y) of the 260919 STL on the floor line x = x_m."""
+    bundle = Path(__file__).resolve().parents[1] / "map" / "map_v2_fleet"
+    spec = importlib.util.spec_from_file_location("stl_scene", bundle / "scripts" / "stl_scene.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    runs = []
+    for tri in mod.load_scene(bundle / "260919 MAP FILE.STL").lines:
+        ys = [a[1]+(x_m-a[0])/(b[0]-a[0])*(b[1]-a[1]) for a, b in itertools.combinations(tri, 2)
+              if (a[0]-x_m)*(b[0]-x_m) <= 0 and a[0] != b[0]]
+        if len(ys) >= 2:
+            runs.append([min(ys), max(ys)])
+    merged = []
+    for lo, hi in sorted(runs):
+        if merged and lo <= merged[-1][1]+1e-6:
+            merged[-1][1] = max(merged[-1][1], hi)
+        else:
+            merged.append([lo, hi])
+    return [(round(lo*1000, 1), round(hi*1000, 1)) for lo, hi in merged]
+
+
+def test_paint_half_width_and_lane_half_width_are_the_260919_stl_straights():
+    # STL nominal, unmeasured: the south straight's two lane lines (x 0.5..0.9 m).
+    for x in (.5, .7, .9):
+        (lo1, hi1), (lo2, hi2) = [r for r in _paint_runs_mm(x) if -620 < r[0] < -350]  # inside the 5 mm border line at -630
+        assert hi1-lo1 == hi2-lo2 == pytest.approx(2*PAINT_HALF_WIDTH_M*1000)
+        assert (lo2+hi2)/2-(lo1+hi1)/2 == pytest.approx(2*.0925*1000)
+    config = yaml.safe_load((REPO / "middleware" / "perception" / "config" / "line_follow.yaml").read_text(encoding="utf-8"))
+    params = config["/**/line_observer_node"]["ros__parameters"]
+    assert params["lane_half_width_m"] == .0925
+    assert params["lane_paint_half_width_m"] == PAINT_HALF_WIDTH_M
 
 
 def test_geometry_change_invalidates_identity_and_unselected_edges_are_ignored():
