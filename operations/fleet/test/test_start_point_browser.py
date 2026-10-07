@@ -140,7 +140,7 @@ def test_missing_calibration_shows_next_action_on_mobile(browser_site):
     page.reload()
     page.locator('#start-point-tools > summary').click()
     expect(page.locator('#start-point-state')).to_contain_text('보정을 먼저 적용', timeout=15000)
-    expect(page.locator('#console-workflow')).to_be_visible()
+    expect(page.locator('#console-workflow')).to_have_count(0)  # D-493: no setup bar on the operate page
     expect(page.locator('#start-point-save')).to_be_disabled()
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
     capture_console(page, 'calibration-mobile.png')

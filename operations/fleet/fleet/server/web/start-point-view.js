@@ -75,6 +75,7 @@ export function createStartPointView({scope, el, view, call, auth, onChanged}) {
     if (view.map && view.map.map_id!==record().map_id) {message.textContent='현재 지도와 보정 지도가 다릅니다. 같은 지도를 확인한 뒤 선택하세요.';return;}
     if (picking) {stopPicking(); return;}
     picking=true; view.selected=null; view.cursor=null; canvas.classList.remove('idle'); canvas.tabIndex=0;
+    el("map-stage").dataset.view = "map"; el("birdseye-toggle").setAttribute("aria-pressed", "false"); // D-493: a start pick needs the map
     pick.textContent='위치 선택 취소'; message.textContent='시작 위치를 지도에서 선택하세요. 방향은 아래에서 입력하세요.'; canvas.focus();
   });
   scope.listen(canvas,'click',event=>{

@@ -440,7 +440,7 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
             map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
             roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
-            assert abs(map_panel["width"] - roster_panel["width"]) <= 1
+            assert abs(map_panel["width"] / roster_panel["width"] - (1.5 if width >= 1024 else 1)) <= 0.03  # D-493: map 3 : rail 2 from 64rem
             if width < 480:
                 assert abs(map_panel["x"] - roster_panel["x"]) <= 1
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -488,7 +488,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
             map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
             roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
-            assert abs(map_panel["width"] - roster_panel["width"]) <= 1
+            assert abs(map_panel["width"] / roster_panel["width"] - (1.5 if width >= 1024 else 1)) <= 0.03  # D-493: map 3 : rail 2 from 64rem
             if width < 480:
                 assert abs(map_panel["x"] - roster_panel["x"]) <= 1
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -535,9 +535,7 @@ def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url, page_fil
         assert abs(box["x"] - edges[0]) < 1
         assert abs(box["x"] + box["width"] - edges[1]) < 1
         if page_file == "index.html":
-            workflow = page.locator("#console-workflow").bounding_box()
-            assert workflow and abs(workflow["x"] - edges[0]) < 1
-            assert abs(workflow["x"] + workflow["width"] - edges[1]) < 1
+            assert page.locator("#console-workflow").count() == 0  # D-488
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         save_temp_screenshot(page, f"fleet_estop_result_{page_file[:-5]}_{width}.png")
         assert any(path == "/api/fleet/estop" for _method, path in posts), posts
@@ -1410,6 +1408,25 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         save_temp_screenshot(page, "fleet_console_queues.png")
         browser.close()
 
+    normal = {
+        "fleet": {"name": "site", "online": 3, "total": 3},
+        "robots": [_robot(f"rosy_0{i}", {"x": 0.4 * i, "y": 1.0, "yaw": 0.0}) for i in (1, 2, 3)],
+        "ts": 0.0,
+    }
+    with sync_playwright() as p:
+        browser, page, _errors = _open_console(p, {
+            "/api/fleet/state": normal,
+            "/api/fleet/map": MAP_GRID,
+            "/api/fleet/formation": {"active": False, "state": "IDLE"},
+        })
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#roster article, #roster-toggle').length > 0")
+        # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
+        assert page.locator(".queues-panel").is_hidden()
+        browser.close()
+
+    # D-493: SNAPSHOT is not a normal roster — rosy_03's card carries a red relay tag and a traffic wait.
+    # The queue says so with the card's own rule (2026-10-07: the queue used to stay hidden here).
     with sync_playwright() as p:
         browser, page, _errors = _open_console(p, {
             "/api/fleet/state": SNAPSHOT,
@@ -1420,8 +1437,9 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
-        # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
-        assert page.locator(".queues-panel").is_hidden()
+        assert page.locator(".queues-panel").is_visible()
+        assert "릴레이 끊김" in page.inner_text("#critical-list")
+        assert "rosy_03" in page.inner_text("#critical-head")
         browser.close()
 
 
@@ -1477,7 +1495,7 @@ def test_console_fits_the_declared_viewport(console_url):
         f"문서가 {fit['docOverflow']}px 스크롤된다 — 예외 문법은 한눈에 다"
         " 보인다(D-201): " + str(fit)
     )
-    assert abs(fit["primary"]["width"] - fit["secondary"]["width"]) <= 1, fit
+    assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 1.5) <= 0.03, fit  # D-493: map 3 : rail 2
     for name in ("signals", "formation", "rosterPanel"):
         box = fit[name]
         assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
@@ -1508,7 +1526,7 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
         page.goto(console_url, wait_until="networkidle")
         fit = page.evaluate(FLEET_FIT_PROBE)
         assert fit["docOverflow"] <= 0, fit
-        assert abs(fit["primary"]["width"] - fit["secondary"]["width"]) <= 1, fit
+        assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 1.5) <= 0.03, fit  # D-493: map 3 : rail 2
         assert fit["stop"]["bottom"] <= fit["vh"]
         if scenario == "delayed":
             assert "지연" in page.inner_text("#roster")
@@ -1516,7 +1534,8 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
         elif scenario == "disconnected":
             assert "닿지 않음" in page.inner_text("#roster")
             assert page.locator(".queues-panel").is_visible()
-            assert fit["mapCanvas"]["height"] <= 0.3 * fit["vh"]
+            # D-493: the queue lives in the rail, so the map stays the main view.
+            assert fit["mapCanvas"]["height"] >= 0.5 * fit["vh"]
         else:
             assert page.locator("#formation-role-lock").is_visible()
             assert page.locator(".formation ui-button[reason]").count() == 0
@@ -1541,13 +1560,15 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
         headings = [
-            "기기 연결",
             "대형",
             "신호등",
         ]
         for name in headings:
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
-        assert page.locator('.device-link a[href="/console/install"]').count() == 1
+        # D-493: the topbar holds the only link to each other document.
+        for href in ("/console/install", "/console/site-map", "/console/cell"):
+            assert page.locator(f'a[href="{href}"]').count() == 1, href
+        assert page.locator('.install-link, .device-link').count() == 0
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.get_by_role("tab", name="로봇 등록", exact=True).click()
         assert page.get_by_role("heading", name="로봇 등록", exact=True).count() == 1
@@ -2363,7 +2384,7 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
     from playwright.sync_api import sync_playwright
 
     probe = """() => Object.fromEntries(['.queues-panel', '#roster', '#map-stage', '.vision-preview', '.formation',
-        '#log', '.device-link']
+        '#log']
       .map((sel) => [sel, Math.round(document.querySelector(sel).getBoundingClientRect().top + window.scrollY)]))"""
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
@@ -2372,7 +2393,7 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         top = page.evaluate(probe)
         assert (top["#roster"] < top["#map-stage"] < top[".vision-preview"] < top[".formation"]
-                < top["#log"] < top[".device-link"]), top
+                < top["#log"]), top
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         page.evaluate("""() => {
           window.retainedPanels = ['.queues-panel', '[aria-labelledby=roster-heading]',
@@ -2386,11 +2407,10 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         assert page.evaluate("() => ['.queues-panel', '[aria-labelledby=roster-heading]', '[aria-labelledby=map-heading]', '.ops-block'].every((sel, i) => document.querySelector(sel) === window.retainedPanels[i])")
         wide = page.evaluate(probe)
         # D-439: primary map/roster remain side by side; secondary tasks follow both in DOM and layout.
-        left = page.evaluate("""() => Object.fromEntries(['#map-stage', '#roster', '.formation', '.device-link']
+        left = page.evaluate("""() => Object.fromEntries(['#map-stage', '#roster', '.formation']
           .map((sel) => [sel, document.querySelector(sel).getBoundingClientRect().left]))""")
         assert left["#map-stage"] < left["#roster"], left
         assert wide[".formation"] > max(wide["#roster"], wide["#map-stage"]), wide
-        assert wide["#log"] < wide[".device-link"], wide
         assert page.evaluate("document.querySelector('[aria-labelledby=map-heading]').compareDocumentPosition(document.querySelector('.ops-block')) & Node.DOCUMENT_POSITION_FOLLOWING")
         assert wide["#roster"] < wide["#map-stage"] + 200, wide
         page.set_viewport_size({"width": width, "height": height})
@@ -2749,7 +2769,7 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
             const box = document.querySelector('#roster').getBoundingClientRect();
             return r.top >= box.top - 1 && r.bottom <= box.bottom + 1; }""")
         assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
-        assert page.locator('.device-link a[href="/console/install"]').is_visible()
+        assert page.locator('.topbar-links a[href="/console/install"]').is_visible()
         page.evaluate("document.querySelector('#roster').scrollTop = 0")
         _shot(page, "roster-renumbered-1920.png")
         assert not page.locator("text=(전체)").count()

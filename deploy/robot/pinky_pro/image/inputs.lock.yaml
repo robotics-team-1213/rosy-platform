@@ -103,13 +103,16 @@ ros:
   apt_key_fingerprint: embedded-in-sha256-pinned-ros2-apt-source-package
   # D-482: payload builds install ROS from this dated snapshot so the build matches the image's ros-jazzy set.
   apt_snapshot_url: http://snapshots.ros.org/jazzy/2026-09-11/ubuntu
+  # D-482 addendum: snapshots.ros.org signs with its own key (ROS 2 docs "Snapshot repository").
+  apt_snapshot_key_fingerprint: 4B63CF8FDE49746E98FA01DDAD19BAB3CBF125EA
   verified: false
 
 # D-477: the team tailnet. One upstream arm64 deb carries tailscaled (the
 # daemon unit the image enables) and the CLI rosy-tailscale-join.py drives.
 # Its hard dependency (iptables) installs from the locked Ubuntu suites in
-# the same customizer run; verified stays false until a native arm64 build
-# has downloaded, checksum-checked and unpacked it.
+# the same customizer run; verified stays false here and resolve-build-lock.py
+# flips it only after the native arm64 host has downloaded the deb, matched
+# size and sha256, and listed tailscaled with dpkg-deb.
 tailscale:
   version: "1.102.5"
   url: https://pkgs.tailscale.com/stable/ubuntu/pool/tailscale_1.102.5_arm64.deb

@@ -114,8 +114,13 @@ function syncButtons() {
       : (state.dirty ? '저장 안 된 초안' : '저장된 초안 없음'),
   state.loadState === 'pending' ? 'pending' : state.loadState === 'error' ? 'error'
     : state.draft?.revision ? 'ready' : 'empty');
-  gate('trip-plan', reason || (!state.active ? '활성 지도가 없습니다' : !$('trip-robot').options.length ? '등록된 로봇이 없습니다 · 관리자에게 로봇 등록을 요청하세요' : !$('trip-robot').value ? '로봇을 고르세요'
-    : ($('trip-pick').checked ? state.point : $('trip-place').value) ? '' : '목적지를 고르세요'));
+  const tripRobot = $('trip-robot');
+  const robotReason = !tripRobot.options.length ? '등록된 로봇이 없습니다 · 관리자에게 로봇 등록을 요청하세요'
+    : ![...tripRobot.options].some(option => option.dataset.online === 'true') ? '연결된 로봇이 없습니다 · 로봇 연결을 확인하세요'
+    : !tripRobot.value ? '로봇을 고르세요'
+    : tripRobot.selectedOptions[0]?.dataset.online !== 'true' ? '선택한 로봇의 연결을 확인하세요' : '';
+  const target = $('trip-pick').checked ? state.point : $('trip-place').value;
+  gate('trip-plan', reason || (!state.active ? '활성 지도가 없습니다' : robotReason || (target ? '' : '목적지를 고르세요')));
   gate('trip-pick', reason);
   gate('estop', reason);
 }
@@ -135,8 +140,13 @@ async function load() {
   state.loadState = 'ready';
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map(place => new Option(`${place.name} (${place.id})`, place.id)));
-  $('trip-robot').replaceChildren(...robots.map(robot => new Option(robot.robot_id, robot.robot_id)));
+  $('trip-robot').replaceChildren(...robots.map(robot => {
+    const option = new Option(robot.online ? robot.robot_id : `${robot.robot_id} · 연결 끊김`, robot.robot_id);
+    option.dataset.online = robot.online ? 'true' : 'false';
+    return option;
+  }));
   if (!robots.length) status('trip-summary', '경로 미리보기 불가 · 등록된 로봇이 없습니다. 관리자에게 로봇 등록을 요청하세요.', 'empty');
+  else if (!robots.some(robot => robot.online)) status('trip-summary', '경로 미리보기 불가 · 연결된 로봇이 없습니다. 로봇 연결을 확인하세요.', 'empty');
   select(null);
   syncButtons();
 }

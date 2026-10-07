@@ -1,4 +1,6 @@
-## D-491 관제 trip 실행(D-488 M2)의 계약 — 로봇 능력 필드, 시각 있는 odom 자세, Rosy Cam 주 지도 자세, 교차로 동작 API, 서버 trip 루프, 주행 가르치기
+## D-494 관제 trip 실행(D-488 M2)의 계약 — 로봇 능력 필드, 시각 있는 odom 자세, Rosy Cam 주 지도 자세, 교차로 동작 API, 서버 trip 루프, 주행 가르치기
+
+**번호:** 처음 D-491로 적었으나 main에 다른 D-491(IR 가드 횡단보도)이 먼저 착지해 2026-10-07 착지 전에 D-494로 옮겼다.
 
 **Status:** Proposed (2026-10-07, 사용자 지시 "M2 처리해"). [D-488](D-488-fleet-site-map-address-routes.md) 7항 M2의 구현 계약이다. 실차 이동·G4/G5·DEVICE 수용을 뜻하지 않는다.
 
@@ -81,6 +83,15 @@
 - DEVICE: 9dfk(마커·Rosy Cam 맞춤 뒤, 사용자 승인)
 
 CORE 변경 두 가지(1·2항, 4항)는 서명 릴리스가 있어야 로봇에 닿는다.
+
+### 구현 부록 (2026-10-07)
+
+1·2항 구현(`feat/d491-robot-trip-contracts`)과 독립 검토에서 정한 것이다. 결정 본문은 바꾸지 않는다.
+
+1. **`odom_pose.stamp`는 CORE가 odom 메시지를 받은 시각이다.** ROS 헤더 시각이 아니다(sim에서는 sim time이라 UTC가 아니다). 값은 UTC epoch 초(실수)로 sighting `captured_at`과 같은 형식이다. 유한하지 않은 odom 표본은 버리고 이전 값을 둔다.
+2. **`robot_kind`는 `robot.model`이 로봇 패키지 이름(`[a-z][a-z0-9_]*`, 64자 이하)일 때만 싣는다.** 아니면 빼고 로그를 한 번 남긴다. 그런 로봇은 능력 미상(`TRIP_ROBOT_CAPS_UNKNOWN`)으로 읽힌다.
+3. **`trip_max_linear`**는 safety `max_linear`·`fleet_linear`와 line-follow `max_linear` 중 최솟값이다. Fleet은 0 m/s를 "갈 수 있는 간선 없음"(`TRIP_NO_ROUTE`)으로 계획한다. Fleet은 모르는 `drive_modes` 값을 버리고 아는 값만 쓴다.
+4. **`junction_turn`**(D-492)은 line-follow 매니저의 `supports_junction_turn` 훅이 참일 때만 true다.
 
 ### 구현 부록 (2026-10-07) — 3항 map pose
 

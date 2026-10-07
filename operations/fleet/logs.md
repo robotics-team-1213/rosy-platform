@@ -2176,6 +2176,61 @@
 - Evidence: 6 Chromium cases passed, 0 NEW known failures; six capture hashes in docs/validation/uiux-cell-auth-widths-2026-10-07/result.md.
 - Gate: LOCAL synthetic G2 partial evidence; real site/device and operator G3 remain HOLD.
 
+## 2026-10-07 · uncommitted · Site-map offline robot choice
+
+- Change: Keep disconnected robots visible in the trip picker and block preview until a connected robot is selected.
+- Evidence: 34 site-map Chromium, 90 D-153 G1, 7 Node passed; Python known failures 0 NEW. See docs/validation/uiux-site-map-offline-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; deployed site candidate and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell failed job read status
+
+- Change: A failed job/dispatch-generation read clears the pending summary and gives a retry instruction while approval remains blocked.
+- Evidence: 3 declared-width Chromium cases and 6 related cases passed; D-153 G1 90 passed, Python known failures 0 NEW. See docs/validation/uiux-cell-job-read-2026-10-07/result.md.
+- Gate: LOCAL synthetic G2 partial evidence; site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell job snapshot invalidation
+
+- Change: Clear old job summary, ledger, steps, and generation together when the job ID, session, proposal, or read validity changes.
+- Evidence: 12 selected Chromium cases and D-153 G1 90 passed, Python known failures 0 NEW; optional full Cell run incomplete. See docs/validation/uiux-cell-job-switch-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; real site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell saved-document readability
+
+- Change: Show Korean document kind and ID separately from locally formatted modification time; keep long IDs within narrow screens.
+- Evidence: Three declared-width Chromium and 74 relevant G1 cases passed after one failing 320px case, `known_failures.py` 0 NEW. See docs/validation/uiux-cell-saved-list-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell saved-list error widths
+
+- Change: Replay the existing saved-list failure and recovery flow at all three declared Cell widths.
+- Evidence: Six LOCAL G2 captures, three Chromium cases passed, Python known failures 0 NEW. See docs/validation/uiux-cell-list-errors-2026-10-07/result.md.
+- Gate: Other G2 cells, real site/device, and operator G3 remain HOLD.
+
+## 2026-10-07 · b111ccb9c · D-493 관제 화면 지도 우선 배치
+
+- 변경: `/console` 3 : 2 배치(왼쪽 지도, 오른쪽 열 예외 큐·등록 로봇·카메라 썸네일·대형·신호·기록), `roster.js` `attentionItems`로 큐와 카드 주의 규칙 통일(릴레이 끊김·비상 정지·목표 실패·교통 대기·양보가 큐에 오른다), 천장 카메라는 한 곳에만(지도 없음·크게 보기면 `#map-birdseye`), 설치 순서 막대·"…에서 합니다" 문장·기기 연결 칸 제거, 다른 문서 링크는 머리 접힘 칸에 하나씩, 발행 띠는 로봇 목록 머리(`data-state`), 전체 주행 취소 `quiet`.
+- 증거: Fleet 단위 2284 passed, 웹 Node 144 passed, 공용·아키텍처 통과, Fleet 브라우저 142 passed(실패 3은 단독 재실행 6 passed, MemoryError·로드 타임아웃), 1920×1080 접속 전·운용·지도 없음 문서 높이 1080.
+- gate 변화: LOCAL 화면 구조. SITE/FIELD 상태는 그대로 둔다.
+## 2026-10-07 · uncommitted · feat(fleet): D-494 1 로봇 trip 능력으로 계획을 묶는다
+
+- 변경: `console_view.TripCaps(kind, modes, max_speed)`와 `trip_caps(capabilities)`(모르는 필드는 무시, 세 필드가 모두 맞을 때만 값). `FleetConsole.caps_for(robot_id)`는 capability 캐시(최대 2 s 대기)에서 읽는다. `POST /trip`은 능력이 있으면 `PlanRequest`의 `robot_kind`·`drive_modes`·`max_speed_mps`를 채운다. 0 m/s 로봇은 간선을 쓰지 못해 `TRIP_NO_ROUTE`다. 능력이 없는 옛 로봇은 지금처럼 미리보기를 계획한다. 실행(`/start`)은 여전히 501이다. 계약 문서 버전 고정 시험을 v1.112로 올렸다.
+- 증거: `test_trip_caps.py` 2 PASS, `test_site_map_trip.py` 통과. fleet 스위트 2284 passed·90 skip, 1 NEW는 4개 스위트 병행 부하에서 난 `test_discovery_transport.py` 시간 초과(이 변경이 건드리지 않은 파일)로 단독 재실행 19 passed·known_failures 0 new.
+- gate 변화: 없음. SOURCE 호스트 시험만.
+- 결정: D-494 (Proposed)
+
+## 2026-10-07 · uncommitted · feat(fleet): D-495 TripCaps.junction_turn
+
+- 변경: `TripCaps`에 `junction_turn: bool = False`를 더했다. 능력의 값이 정확히 `true`일 때만 참이다. 계획에는 쓰지 않고 trip 실행(D-494 5, 다른 가지)이 읽는다.
+- 증거: `test_trip_caps.py` 2 PASS.
+- gate 변화: 없음.
+- 결정: D-495 (Proposed)
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 검토 — 모르는 drive_modes 값은 버린다
+
+- 변경: `trip_caps`는 모르는 주행 방식을 버리고 아는 값만 쓴다. 전에는 모르는 값 하나가 능력 전체를 None으로 만들었다.
+- 증거: `test_trip_caps.py` 2 PASS.
+- gate 변화: 없음.
+- 결정: D-494 (Proposed)
 ## 2026-10-07 · uncommitted · feat(fleet): D-494 3 trip 전용 지도 자세(map pose)
 
 - 변경: `fleet/localization/map_pose.py`(순수, 표준 라이브러리만)가 로봇마다 받아들인 Rosy Cam sighting을 그 시각의 `odom_pose`(0.25 s 안 가장 가까운 표본, 둘이 감싸면 보간)와 짝지어 앵커로 두고, 그 뒤 odom 강체 증분으로 잇는다. `LOCALIZED`/`DEGRADED`(odom 1.5 m 초과, 예측과 0.15 m·20° 넘게 어긋남 → 다시 앵커, 연속 2회 일치로 회복)/`UNKNOWN`(앵커 없음, odom 3 s 초과). 설정은 사이트 YAML `fleet.map_pose`.
