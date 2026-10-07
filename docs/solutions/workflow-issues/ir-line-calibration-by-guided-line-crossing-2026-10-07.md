@@ -45,6 +45,14 @@ The map-predicted crossing lagged the IR by about 2 cm. Treat LiDAR-wall pose ag
 
 The real crosswalk also read differently from the STL model: a centred crossing showed C+R white, not the alternating phases. So IR expectations derived from the map need a real pass before anyone relies on them.
 
+The method repeated on the second robot the same day. 8kcn was driven from the site PC rather than the laptop (D-508). It crossed the inner lane line at 30 deg on the first try: R → R+C → C → L+C → L. All checks passed: spans 1557–2030, read-back left −1.00, centre +0.06, right +1.00.
+
+Three findings from that run:
+
+- **Single-sensor tape readings are not the darkest readings.** A sensor alone on the tape read higher (right about 850) than the same sensor read when its neighbour was also on the tape (about 370). 9dfk did the same. This is probably light leaking between neighbouring sensors. The runbook takes each channel's tape value from single-sensor windows, which matches how the tape usually sits under the sensors in operation, so keep those windows.
+- **Reject wall estimates outside the arena.** Through a gap in the wall the rear beams reached 3.2 m. Averaged with the front wall, that moved x by 0.8 m. Drop any per-wall estimate that falls beyond the opposite inner face, and take the wall as the farthest cluster of at least 15 points, not a percentile.
+- **Use the paint itself as the x reference.** The overhead image and LiDAR disagreed by 7 cm in x. Stepping forward until the IR first saw the crosswalk bars put the bar edge within 1 cm of the STL position. That confirmed the LiDAR x and showed the overhead was off. Crosswalk bars only pulled the raw IR to about 1700, against about 300 on the line tape, so don't use a tape threshold to detect bars.
+
 ## When to Apply
 
 When remote IR calibration is needed on a mapped track. Keep the hand procedure when someone is on site; it needs no driving.

@@ -209,6 +209,13 @@ class BirdsEye:
     def sample(self, bright: np.ndarray) -> np.ndarray:
         return (bright[self._pixel_row, self._pixel_col] & self.observable).astype(np.uint8)
 
+    def seen(self, xy: np.ndarray) -> np.ndarray:
+        """bool per floor point (N x 2, base_link): on an observable cell of this grid."""
+        i = np.floor((xy[:, 0] - BEV_X_MIN_M) / BEV_CELL_M).astype(np.intp)
+        j = np.floor((BEV_Y_HALF_M - xy[:, 1]) / BEV_CELL_M).astype(np.intp)
+        inside = (i >= 0) & (i < self.rows) & (j >= 0) & (j < self.cols)
+        return inside & self.observable[np.where(inside, i, 0), np.where(inside, j, 0)]
+
     def cell(self, x: float, y: float) -> tuple[int, int]:
         return (int(math.floor((x - BEV_X_MIN_M) / BEV_CELL_M)),
                 int(math.floor((BEV_Y_HALF_M - y) / BEV_CELL_M)))
