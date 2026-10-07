@@ -12,11 +12,13 @@ max(background', drivable) == bg, so lane pixels never change (an exact tie
 between bg and a lane class with s > 0 goes to the lane class instead of drivable). Rows above
 ignore_top are forced to background, as the delivered v11 ROI wrapper does.
 
-    python drivable_head.py --lane v11.torchscript.pt --dataset <dataset/1 folder> \
-        --out <model folder> [--ignore-top 110] [--epochs 20]
+    python drivable_head.py --lane v11.torchscript.pt --lane-manifest model_manifest.json \
+        --dataset <store>/datasets/<name>/<content_sha> --out <model folder> --ignore-top 110
 
 The dataset needs exactly one class with role "drivable"; its other classes only
-count as "not drivable", and its ignore_index pixels are left out.
+count as "not drivable", and its ignore_index pixels are left out. Val IoU is
+scored where the lane model says background (the only pixels the head can
+change); the IoU over all labelled pixels is reported beside it.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ import argparse
 import copy
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import torch
@@ -142,27 +145,35 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
             opt.step()
             total, count = total + loss.item() * len(x), count + len(x)
         model.eval()
-        inter = union = 0
+        counts = {"all": [0, 0], "lane_background": [0, 0]}
         with torch.no_grad():
             for x, y in val_dl:
                 x, y = x.to(device), y.to(device)
                 target, keep = drivable_target(y, index, ignore, model.ignore_top)
-                pred = model(x).argmax(1) == drivable_channel
-                truth = target.bool()
-                inter += int((pred & truth & keep).sum())
-                union += int(((pred | truth) & keep).sum())
-        iou = inter / union if union else None
-        row = {"epoch": epoch, "train_loss": total / max(count, 1), "val_drivable_iou": iou}
+                answer = model(x).argmax(1)
+                pred, truth = answer == drivable_channel, target.bool()
+                # The head only splits the lane model's background; paint or crosswalk
+                # labelled drivable can never come out drivable, so score both ways.
+                lane_bg = (answer == 0) | pred
+                for name, scope in (("all", keep), ("lane_background", keep & lane_bg)):
+                    counts[name][0] += int((pred & truth & scope).sum())
+                    counts[name][1] += int(((pred | truth) & scope).sum())
+        ious = {k: (i / u if u else None) for k, (i, u) in counts.items()}
+        iou = ious["lane_background"]
+        row = {"epoch": epoch, "train_loss": total / max(count, 1), "val_drivable_iou": iou,
+               "val_drivable_iou_all": ious["all"]}
         history.append(row)
         if iou is not None and (best is None or iou > best["val_drivable_iou"]):
             best, best_state = row, copy.deepcopy(model.drivable.state_dict())
         if log:
+            fmt = lambda v: "-" if v is None else f"{v:.3f}"  # noqa: E731
             log(f"epoch {epoch}/{epochs} loss {row['train_loss']:.4f} "
-                f"drivable={'-' if iou is None else f'{iou:.3f}'}")
+                f"drivable={fmt(iou)} (all labelled pixels {fmt(ious['all'])})")
     if best_state is not None:
         model.drivable.load_state_dict(best_state)
     return {"history": history, "best_epoch": best["epoch"] if best else None,
-            "val_drivable_iou": best["val_drivable_iou"] if best else None}
+            "val_drivable_iou": best["val_drivable_iou"] if best else None,
+            "val_drivable_iou_all": best["val_drivable_iou_all"] if best else None}
 
 
 def _sha256(path) -> str:
@@ -175,9 +186,11 @@ def main(argv=None) -> int:
     p.add_argument("--lane", required=True, help="frozen lane model, TorchScript")
     p.add_argument("--lane-manifest", required=True,
                    help="the lane model's model_manifest.json (its classes and input are kept)")
-    p.add_argument("--dataset", required=True, help="rosy.perception.dataset/1 folder with a drivable class")
+    p.add_argument("--dataset", required=True,
+                   help="store dataset version folder datasets/<name>/<content_sha> with a drivable class")
     p.add_argument("--out", required=True)
-    p.add_argument("--ignore-top", type=int, default=0)
+    p.add_argument("--ignore-top", type=int, required=True,
+                   help="rows forced to background, as the delivered lane model (v11: 110; 0 for none)")
     p.add_argument("--epochs", type=int, default=20)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--batch-size", type=int, default=16)
@@ -189,6 +202,12 @@ def main(argv=None) -> int:
 
     torch.manual_seed(args.seed)
     lane_doc = json.loads(Path(args.lane_manifest).read_text(encoding="utf-8"))
+    if lane_doc["input"]["shape"] != [1, 3, HEIGHT, WIDTH]:
+        raise SystemExit(f"lane model input {lane_doc['input']['shape']}, need [1, 3, {HEIGHT}, {WIDTH}]")
+    camera_profile = lane_doc["camera_profile_revision"]
+    dataset = Path(args.dataset).resolve()
+    if not re.fullmatch(r"[0-9a-f]{64}", dataset.name):
+        raise SystemExit(f"{dataset}: not a store dataset version folder <name>/<content_sha>")
     lane_classes = [(c["name"], c["role"]) for c in lane_doc["output"]["classes"]]
     lane, _ = load_frozen_lane(args.lane, classes=lane_classes)
     pre = {k: lane_doc["input"][k] for k in ("color", "scale", "mean", "std")}
@@ -201,18 +220,18 @@ def main(argv=None) -> int:
         raise SystemExit("no val drivable IoU: the val split has no labelled drivable/non-drivable pixels")
     out = Path(args.out)
     model = model.cpu().eval()
-    dataset = Path(args.dataset).resolve()  # store layout: datasets/<name>/<content_sha>
     doc = export_cell.export(
         model, out, classes=lane_classes + [("drivable", "drivable")],
         dataset_repo=dataset.parent.name, dataset_revision=dataset.name,
-        camera_profile_revision=lane_doc.get("camera_profile_revision", "unknown"),
-        trainer=f"drivable_head (frozen {lane_doc['model_revision']})",
+        camera_profile_revision=camera_profile,
+        trainer=f"drivable_head (frozen {lane_doc['model_revision']}, ignore_top {args.ignore_top})",
         val_iou={"drivable": result["val_drivable_iou"]}, **pre)
     (out / "drivable_head_run.json").write_text(json.dumps({
         "lane_model_revision": lane_doc["model_revision"], "lane_sha256": _sha256(args.lane),
         "ignore_top": args.ignore_top, "seed": args.seed, "epochs": args.epochs, "lr": args.lr,
         **result}, indent=2) + "\n", encoding="utf-8")
-    print(f"OK {doc['model_revision']} drivable IoU {result['val_drivable_iou']:.3f} -> {out}")
+    print(f"OK {doc['model_revision']} drivable IoU {result['val_drivable_iou']:.3f} "
+          f"(all labelled pixels {result['val_drivable_iou_all']:.3f}) -> {out}")
     return 0
 
 

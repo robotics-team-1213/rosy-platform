@@ -137,6 +137,7 @@ def test_training_moves_only_the_head_and_learns(tmp_path):
     after = lane.state_dict()
     assert all(torch.equal(before[k], after[k]) for k in before)  # weights and BN stats
     assert result["val_drivable_iou"] > 0.5
+    assert result["val_drivable_iou_all"] is not None
 
 
 def test_dataset_without_one_drivable_class_is_refused(tmp_path):
