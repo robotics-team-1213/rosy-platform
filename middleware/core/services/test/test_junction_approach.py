@@ -37,7 +37,7 @@ def drive_to(rig, x, **kwargs):
 def test_window_takes_only_a_sighting_near_the_expected_cross_line(ahead, inside):
     rig = Rig()
     rig.step()
-    assert send(rig, pivot_past_line_m=.1, **WINDOW) == (True, 1, 'armed')  # cross line at x .4
+    assert send(rig, map_id='site', pivot_past_line_m=.1, **WINDOW) == (True, 1, 'armed')  # line at x .4
     drive_to(rig, .2)
     decision, status = sight(rig, ahead=ahead, seen=False)                 # measured .2 + ahead
     if inside:
@@ -112,6 +112,19 @@ def test_old_client_without_fields_turns_at_any_sighting_from_the_stop_point():
     status = _until(rig, lambda s: s.junction.state != 'turning', ahead=1.5)
     assert status.junction.state == 'advancing' and status.junction.pivot_basis == 'stop_point'
     assert rig.x == pytest.approx(.2, abs=1e-6)  # no approach
+
+
+@pytest.mark.parametrize('action', ['left', 'straight'])
+def test_map_junction_without_a_window_holds_an_early_sighting(action):
+    rig = Rig()
+    rig.step()
+    assert send(rig, action=action, map_id='site', pivot_past_line_m=.1) == (True, 1, 'armed')
+    drive_to(rig, .2)
+    decision, status = sight(rig, ahead=.1, seen=False)
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert (status.state, status.reason, status.junction.state) == (
+        'HOLD', 'junction_unexpected', 'unexpected')
+    assert rig.m._junction['state'] == 'armed' and status.junction.pending_action == action
 
 
 def test_window_needs_fresh_odom_when_it_arrives():

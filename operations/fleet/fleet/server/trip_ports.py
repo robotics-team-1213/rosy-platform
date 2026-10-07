@@ -210,10 +210,9 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
             return fields
         if window is not None:
             fields["pivot_past_line_m"] = -past
-        # else no pivot (CORE's stop_point): without a window CORE takes any sighting, so a wrong
-        # line with a negative pivot would turn short unchecked.
+        # No negative pivot without a window: map-backed CORE holds any unplaced sighting.
     if window is None:
-        return fields  # no window: CORE keeps today's behaviour for this place
+        return fields  # no window: map-backed CORE holds a junction sighting here
     expect_in, lateral = window
     speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
     if age is None or reckoned is None or live.pose_read_at is None:

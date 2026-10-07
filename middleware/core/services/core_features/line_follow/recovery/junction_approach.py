@@ -98,10 +98,10 @@ class JunctionApproachMixin:
             self._return_evidence.epoch, pose.frame) else None
 
     def _in_window(self, j, now):
-        """D-507 3: no window means today's behaviour; an unmeasurable sighting is outside."""
+        """D-507 3: legacy no-window sightings pass; map-backed ones need a window."""
         w, a = j.get('window'), self._anchor_now(now)
         if w is None:
-            return True
+            return j.get('map_id') is None
         if a is None or a['key'] != w['key']:
             return False
         pivot = 0. if a['reason'] == 'junction_fork' else (j.get('pivot') or 0.)

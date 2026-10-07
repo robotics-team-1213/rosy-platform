@@ -2517,3 +2517,9 @@
 - 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
 - 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · docs(fleet): 지도 교차로 창 누락 시 CORE HOLD 설명
+- 변경: `trip_ports.py`의 창 누락 주석을 D-507 3항 보충 계약에 맞췄다. Fleet은 여전히 창이 없는 지도 지시를 보낼 수 있지만, 새 CORE는 가로선 감지에서 `junction_unexpected`로 멈추고 Fleet은 trip을 끝낸다. 기존 장치 CORE에는 이 변경이 적용되지 않는다.
+- 증거: `test_trip_d507.py`와 CORE 교차로·API·계약 시험 194건 통과. 실제 Fleet→CORE 폐루프 SIM은 미실행.
+- gate 변화: 없음. SIM·DEVICE는 열림.
+- 결정: D-507 3항 보충.

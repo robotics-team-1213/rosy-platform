@@ -773,3 +773,9 @@
 - 증거: `test_lane_return_manager.py` 1 s 장애물 HOLD(odom 계속, 정지) 뒤 tracking 유지·search 없음, 0.6 s odom 공백과 0.2 m 자세 점프는 여전히 이탈. 변이(`_feed_return_trail` 호출 제거) 시 회귀 시험 실패 확인 뒤 복원. lane_return/bridge/junction/motion_admit/stuck/road + gateway line_follow 819 passed, `known_failures` 0 new.
 - gate 변화: SOURCE. SIM·장치는 열림.
 - 결정: D-468, D-507 7 (규칙 그대로)
+
+## 2026-10-08 · uncommitted · fix(line_follow): 지도 교차로의 기대 창이 없으면 감지로 회전하지 않음
+- 변경: `junction_approach._in_window`에서 `map_id`가 있고 `expect_in_m`·`expect_tol_m` 창이 없는 `straight`·회전 지시는 가로선 감지를 `junction_unexpected`로 HOLD하고 지시를 보존한다. 지도 없는 옛 지시와 `stop`은 그대로다. D-507 3항과 API reference에 보충했다.
+- 증거: 변경 전 map-backed left/straight 회귀 2건 실패(각각 조기 회전·실행), 변경 후 CORE 교차로·API·Fleet·계약 시험 194건 통과, `known_failures` 신규 0. B9 게이트 켬 SIM의 조기 회전 2/6 유형을 소스에서 차단한 것이며 SIM 재실행·굽이 통과·실물 수용은 열림.
+- gate 변화: SOURCE만. SIM·DEVICE·FIELD는 열림.
+- 결정: D-507 3항 보충.
