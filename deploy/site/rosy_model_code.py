@@ -29,6 +29,10 @@ PREFIX = "learning/training/perception/"
 CAMERA_PROFILE = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
 CAMERA_MAP_FILES = tuple("operations/vision/rosy_vision/" + name
                          for name in ("__init__.py", "lane_map.py", "map_register.py"))
+#: D-497: job names whose entry point is a signed file outside PREFIX. Exact name only;
+#: every other name resolves under PREFIX.
+JOB_ENTRY_POINTS = {"camera_lane_map.py": "operations/vision/rosy_vision/lane_map.py"}
+CAMERA_MAP_ENTRY = JOB_ENTRY_POINTS["camera_lane_map.py"]
 CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/",
                  "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
@@ -248,7 +252,7 @@ def unpack(archive, dest):
     for required in (PREFIX + "model/watch.py", PREFIX + "rosy_ml.py",
                      "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
         if not (dest / required).is_file(): raise ValueError("missing model-code entry point or dependency")
-    if (dest / PREFIX / "camera_lane_map.py").is_file():
+    if (dest / CAMERA_MAP_ENTRY).is_file():
         if not all((dest / name).is_file() for name in CAMERA_MAP_FILES):
             raise ValueError("missing camera-map dependency")
 
@@ -304,10 +308,11 @@ class Updater:
         # --help exits before training, robot access or model delivery.
         scripts = ("rosy_ml.py", "model/watch.py", "model/intake.py", "model/convert.py",
                    "dataset/build.py", "dataset/review_app.py")
-        if (Path(source) / PREFIX / "camera_lane_map.py").is_file():
-            scripts += ("camera_lane_map.py",)
-        for script in scripts:
-            subprocess.run(bootstrap_command(self.python, source, Path(source) / PREFIX / script, ["--help"]),
+        entries = [Path(source) / PREFIX / script for script in scripts]
+        if (Path(source) / CAMERA_MAP_ENTRY).is_file():
+            entries.append(Path(source) / CAMERA_MAP_ENTRY)
+        for entry in entries:
+            subprocess.run(bootstrap_command(self.python, source, entry, ["--help"]),
                            cwd=source, capture_output=True, check=True, timeout=60)
         code = PATH_SETUP + ";import export_ncnn,export_ncnn_lane,autolabel,control,core_common"
         subprocess.run([self.python, "-I", "-B", "-c", code, str(source)],
@@ -429,7 +434,7 @@ def build(repo, commit, sequence, env_hash, output, key_id, private_key, public_
     with tempfile.TemporaryDirectory(dir=output.parent, prefix="build-") as directory:
         stage = Path(directory)
         map_job = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
-                                           PREFIX + "camera_lane_map.py"]).strip()
+                                           CAMERA_MAP_ENTRY]).strip()
         paths = CODE_PREFIXES if map_job else tuple(p for p in CODE_PREFIXES if p not in CAMERA_MAP_FILES)
         subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", "--output", str(stage / "code.tar"), commit, *paths], check=True)
         # Enforce the same source-only policy before signing. Worktree/ignored
@@ -459,6 +464,24 @@ def load_config(path):
     return v
 
 
+def job_entry(source, script):
+    """(entry file, conflict base, conflict name, mapped path or None) for a job name.
+
+    A JOB_ENTRY_POINTS name resolves to exactly its one signed file; any other name
+    only under PREFIX. '../', absolute and symlinked escapes raise ValueError."""
+    source = Path(source).resolve(strict=True)
+    mapped = JOB_ENTRY_POINTS.get(script) if isinstance(script, str) else None
+    if mapped is not None:
+        file = (source / mapped).resolve(strict=True)
+        if file.relative_to(source) != Path(mapped):
+            raise ValueError("job entry point is not its mapped file")
+        return file, source, mapped, mapped
+    perception = source / PREFIX
+    file = (perception / script).resolve(strict=True)
+    file.relative_to(perception)
+    return file, perception, script, None
+
+
 def execute(config, script, args):
     root = Path(config["root"])
     # Serialize GPU jobs as well as code switches (D-434: no concurrent Isaac
@@ -470,18 +493,19 @@ def execute(config, script, args):
         if state.get("pending"): raise ValueError("interrupted update needs recovery first")
         source = (root / "current").resolve(strict=True)
         source.relative_to((root / "releases").resolve())
-        perception = source / PREFIX
-        file = (perception / script).resolve(strict=True)
-        file.relative_to(perception)
+        file, base, name, mapped = job_entry(source, script)
         if file.suffix != ".py": raise ValueError("job entry point must be a Python script")
-        conflict = checkout_script_conflict(perception, Path(config["work_dir"]) / PREFIX, script)
+        local = Path(config["work_dir"]) / (PREFIX if mapped is None else "")
+        conflict = checkout_script_conflict(base, local, name)
         if conflict: raise ValueError(conflict)
         env_hash = Updater(root, config["key_id"], config["public_key"], config["python"]).probe_environment()
         if env_hash != state.get("environment_sha256"):
             raise ValueError("job environment differs from the activated candidate")
         receipt = root / "jobs" / f"{time.time_ns()}-{os.getpid()}.json"
         job = {"source_commit": state["source_commit"], "environment_sha256": env_hash,
-               "script": str(file.relative_to(perception)), "arguments_sha256": fingerprint(args), "started": time.time()}
+               "script": str(file.relative_to(base)) if mapped is None else script,
+               "arguments_sha256": fingerprint(args), "started": time.time()}
+        if mapped is not None: job["entry"] = mapped
         atomic_json(receipt, job)
         result = subprocess.run(bootstrap_command(config["python"], source, file, args), cwd=config["work_dir"],
                                 pass_fds=(lock_fd,))
