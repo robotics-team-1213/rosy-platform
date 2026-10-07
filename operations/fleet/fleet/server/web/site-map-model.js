@@ -22,6 +22,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_MAP_CHANGED: '계산 뒤 활성 지도가 바뀌었습니다 · 다시 계산하세요',
   TRIP_ROBOT_CAPS_UNKNOWN: '로봇이 주행 능력(종류·주행 방식)을 알리지 않습니다 · 새 이미지가 필요합니다',
   TRIP_MODE_UNSUPPORTED: '이 로봇의 주행 방식으로 갈 수 없는 차로가 경로에 있습니다',
+  TRIP_SITE_FLOOR_MISMATCH: '로봇의 현장 바닥 선언이 활성 지도와 다릅니다 · 로봇 설정을 확인하세요',
   TRIP_LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행(카메라 또는 IR)이 켜져 있지 않습니다 · 켠 뒤 다시 출발하세요',
   TRIP_BUSY: '다른 운행이 진행 중입니다 · 현장에서 한 번에 한 대만 운행합니다',
   TRIP_ALREADY_STARTED: '이미 출발시킨 경로입니다',
@@ -38,6 +39,8 @@ const TRIP_POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 정
 export const TRIP_REASON_LABEL = {
   pose: '위치를 믿을 수 없어 멈췄습니다',
   junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
+  JUNCTION_ODOM_STALE: '로봇 odom이 낡아 교차로 지시를 다음 주기에 다시 보냅니다',
+  junction_unexpected: '지도에 없는 자리에서 교차로를 봐 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
   stall: '경로를 따라 나아가지 않아 멈췄습니다 · 현장을 확인하세요',
   TRIP_LOOP_ERROR: '관제 운행 처리에 오류가 나 멈췄습니다 · 로봇 정지를 확인하고 관리자에게 알리세요',
   restart: '관제 서버가 다시 시작돼 멈췄습니다 · 자동으로 다시 출발하지 않습니다',
@@ -229,6 +232,14 @@ export function tripStatusText(trip, map) {
     parts.push(`${trip.detail.stall_s}초 넘게 ${TRIP_REASON_LABEL.stall}`);
   } else if (trip.reason) {
     parts.push(TRIP_REASON_LABEL[trip.reason] || trip.reason);
+  }
+  if (trip.detail?.junction_retry) parts.push(TRIP_REASON_LABEL[trip.detail.junction_retry] || trip.detail.junction_retry);
+  if (trip.detail?.junction_fields_dropped) parts.push('활성 지도가 바뀌어 교차로 기대 값을 보내지 않았습니다');
+  if (trip.reason === 'junction_unexpected') {  // D-507 3: where it stopped and why CORE held
+    const {x, y} = trip.pose || {};
+    if (Number.isFinite(x) && Number.isFinite(y)) parts.push(`지도 자세 (${x.toFixed(2)}, ${y.toFixed(2)})`);
+    const why = trip.detail?.junction_reason || trip.detail?.line_reason;
+    if (why) parts.push(`사유 ${why}`);
   }
   return parts.join(' · ');
 }

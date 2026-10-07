@@ -103,6 +103,10 @@ class TripCaps:
     max_speed: float
     #: D-495: the robot can turn at a junction on its own (bounded turn); absent means no.
     junction_turn: bool = False
+    #: D-507 9: the map the robot's site floor declaration covers; None when absent (older CORE) or null.
+    site_floor_map_id: Optional[str] = None
+    #: D-507 2: CORE takes the junction expectation fields (map_id, expect_in_m, ...); absent means no.
+    junction_pivot: bool = False
 
 
 def trip_caps(capabilities) -> Optional[TripCaps]:
@@ -121,7 +125,10 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                 and isinstance(speed, (int, float)) and not isinstance(speed, bool)
                 and math.isfinite(speed) and speed >= 0):
             known = frozenset(mode for mode in modes if mode in ("lane", "free"))
-            return TripCaps(kind, known, float(speed), item.get("junction_turn") is True)
+            floor = item.get("site_floor_map_id")
+            return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
+                            site_floor_map_id=floor if isinstance(floor, str) else None,
+                            junction_pivot=item.get("junction_pivot") is True)
     return None
 
 

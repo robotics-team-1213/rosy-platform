@@ -8,14 +8,20 @@ closure, the ``MapPoseService`` and ``HttpLaneJunction`` (through the console's 
 from __future__ import annotations
 
 import json
+import logging
 import math
+import time
 from dataclasses import dataclass, fields
 from typing import Any, Awaitable, Callable, Mapping, Optional, Protocol
 
 from fleet.hub.hub import HubError
 from fleet.localization.map_pose import MapPose
 from fleet.server.console_view import TripCaps
+from fleet.routing.cost import LEFT, RIGHT, STRAIGHT, wrap
 from fleet.routing.execute import arc_id, ends_at_place
+from fleet.site_map import ENDPOINT_TOL_M
+
+_LOG = logging.getLogger(__name__)
 
 #: Trip states that are still going.
 OPEN = ("started", "running")
@@ -37,7 +43,7 @@ class MapPosePort(Protocol):
 class LaneJunctionPort(Protocol):
     async def send_junction(self, robot_id: str, action: str, place_id: str, stop_after_m: Optional[float],
                             expires_s: float, turn_deg: Optional[float] = None,
-                            advance_m: Optional[float] = None) -> dict: ...
+                            advance_m: Optional[float] = None, expect: Optional[dict] = None) -> dict: ...
 
     async def junction_state(self, robot_id: str) -> Optional[dict]:
         """The snapshot's ``line_follow.junction`` ({pending_action, place_id, state, seq}) or None."""
@@ -63,14 +69,16 @@ class HttpLaneJunction:
 
     async def send_junction(self, robot_id: str, action: str, place_id: str, stop_after_m: Optional[float],
                             expires_s: float, turn_deg: Optional[float] = None,
-                            advance_m: Optional[float] = None) -> dict:
+                            advance_m: Optional[float] = None, expect: Optional[dict] = None) -> dict:
         return await self._client(robot_id).line_follow_junction(
             action, place_id, stop_after_m=stop_after_m, expires_s=expires_s, turn_deg=turn_deg,
-            advance_m=advance_m)
+            advance_m=advance_m, expect=expect)
 
     async def junction_state(self, robot_id: str) -> Optional[dict]:
-        junction = ((await self._client(robot_id).state()).get("line_follow") or {}).get("junction")
-        return junction if isinstance(junction, dict) else None
+        line = (await self._client(robot_id).state()).get("line_follow") or {}
+        junction = line.get("junction")
+        # D-507 3: the line-follow reason beside it, shown when the trip stops at an unexpected junction
+        return {**junction, "line_reason": line.get("reason")} if isinstance(junction, dict) else None
 
     async def hold(self, robot_id: str) -> dict:
         # ponytail: CORE POST /line-follow/hold extends a hold-to-run session (D-344 8, it keeps the
@@ -113,6 +121,8 @@ class TripConfig:
     stall_m: float = 0.05
     #: Every robot call of the loop gives up after this long (a stuck robot is an error).
     port_timeout_s: float = 1.5
+    #: D-507 2: the narrowest ``expect_tol_m`` sent (site calibration knob, at most 0.30).
+    expect_tol_min_m: float = 0.12
     #: Robots of trips open before a restart are stopped every this long, this many times at most.
     restart_retry_s: float = 10.0
     restart_attempts: int = 30
@@ -123,6 +133,8 @@ class TripConfig:
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
                     math.isfinite(value) and value > 0):
                 raise ValueError(f"fleet.trip.{item.name} must be a positive finite number")
+        if self.expect_tol_min_m > MAX_EXPECT_TOL_M:
+            raise ValueError(f"fleet.trip.expect_tol_min_m must be at most {MAX_EXPECT_TOL_M}")
 
     @classmethod
     def from_mapping(cls, raw: Optional[Mapping]) -> "TripConfig":
@@ -143,6 +155,87 @@ def pose_diagnostics(pose) -> dict:
     # the provider's types are its own; the trip row stores JSON (a dataclass becomes its str)
     keys = ("sightings_filtered_map_id", "odom_refused", "odom_refused_reason")
     return json.loads(json.dumps({key: getattr(pose, key, None) for key in keys}, default=str))
+
+
+#: D-507 2: CORE takes ``expect_in_m`` in (0, 2], ``expect_tol_m`` in (0, 0.30] and
+#: ``pivot_past_line_m`` in [0, 0.30] (the D-495 ``MAX_ADVANCE_M``).
+MAX_EXPECT_IN_M = 2.0
+MAX_EXPECT_TOL_M = 0.30
+MAX_PIVOT_PAST_LINE_M = 0.30
+#: Along-track odom drift per metre dead-reckoned since the last sighting (wheel slip on carpet).
+ODOM_DRIFT_PER_M = 0.05
+#: ponytail: a fixed allowance for the send's HTTP time and CORE taking the instruction after the
+#: send starts; measure it on the site network and make it site config if it is off.
+SEND_ALLOWANCE_S = 0.2
+_monotonic = time.monotonic  # the read-to-send clock (a test replaces it)
+#: D-507 2: CORE projects ``expect_in_m`` straight ahead, so no window past this lane bend.
+MAX_WINDOW_BEND_DEG = 15.0
+#: The lane heading is checked this often between the robot and the place.
+WINDOW_BEND_STEP_M = 0.02
+
+
+def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float, active,
+                    config: TripConfig) -> Optional[dict]:
+    """D-507 2 fields for a ``junction_pivot`` robot: ``map_id``, ``pivot_past_line_m`` (not for
+    ``stop``) and, where ``_straight_ahead`` allows, the window pair; none on another map version
+    (logged, ``detail.junction_fields_dropped``). ``arm_distance_m`` should be at least the
+    keeper's 0.45 m + pivot + tol so the instruction comes first; SIM checks the default 0.6.
+    """
+    view = live.view
+    caps, pose = view.get("caps") or {}, view.get("pose") or {}
+    if caps.get("junction_pivot") is not True:
+        return None
+    if active is None or active[0] != view["map_version"]:
+        if view["detail"].get("junction_fields_dropped") != "map_version":
+            _LOG.warning("trip %s: active map is not the plan's version %s; junction fields not sent",
+                         view.get("trip_id"), view["map_version"])
+        view["detail"]["junction_fields_dropped"] = "map_version"
+        return None
+    fields = {"map_id": active[1].map_id}
+    if action in (STRAIGHT, LEFT, RIGHT):  # the place is on the outgoing lane's centre line (D-490)
+        width = live.arc(index + 1).width_m
+        fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
+    window = _straight_ahead(live, index, remaining, pose)
+    if window is None or not 0.0 < window[0] <= MAX_EXPECT_IN_M:
+        return fields  # no window: CORE keeps today's behaviour for this place
+    expect_in, lateral = window
+    speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
+    if age is None or reckoned is None or live.pose_read_at is None:
+        tol = MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
+    else:
+        # ponytail: the map pose has no heading-direction error estimate, so it is odom drift over
+        # the distance dead-reckoned since the last sighting, plus how far the robot drives at its
+        # trip speed over the pose age, the measured read-to-send time and SEND_ALLOWANCE_S,
+        # floored by the site knob ``expect_tol_min_m``; replace with the provider's own covariance
+        # once MapPose reports one.
+        latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
+        tol = max(config.expect_tol_min_m, ODOM_DRIFT_PER_M * reckoned + speed * latency + ENDPOINT_TOL_M)
+        tol += lateral  # CORE's straight-ahead point is this far beside the lane on a bend
+    fields.update(expect_in_m=expect_in, expect_tol_m=round(min(tol, MAX_EXPECT_TOL_M), 3))
+    return fields
+
+
+def _straight_ahead(live: "LiveTrip", index: int, remaining: float,
+                    pose: dict) -> Optional[tuple[float, float]]:
+    """``(place distance along the robot's heading, largest lane distance beside that ray)``, or None.
+
+    CORE projects ``expect_in_m`` straight ahead, so a lane turning more than
+    ``MAX_WINDOW_BEND_DEG`` before the place (the 260919 ring) gets no window (a path-following
+    window is later work); a smaller bend widens it by the lane's distance beside the ray.
+    """
+    if pose.get("x") is None or pose.get("y") is None or pose.get("yaw") is None:
+        return None
+    arc, s_to = live.arc(index), live.segments[index]["s_to"]
+    heading = arc.point_at(s_to - remaining)[2]
+    cos, sin = math.cos(pose["yaw"]), math.sin(pose["yaw"])
+    steps, lateral = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M)), 0.0
+    for k in range(steps + 1):
+        x, y, yaw = arc.point_at(s_to - remaining * (1 - k / steps))
+        if abs(math.degrees(wrap(yaw - heading))) > MAX_WINDOW_BEND_DEG:
+            return None
+        lateral = max(lateral, abs(-(x - pose["x"]) * sin + (y - pose["y"]) * cos))
+    x, y, _yaw = arc.point_at(s_to)
+    return round((x - pose["x"]) * cos + (y - pose["y"]) * sin, 3), lateral
 
 
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
@@ -173,8 +266,37 @@ class LiveTrip:
         self.replan_pending = False
         self.waiting_since: Optional[float] = None
         self.junction: dict = {}
+        #: ``time.monotonic()`` when the trip's map pose was last read (D-507 2 send latency).
+        self.pose_read_at: Optional[float] = None
         self.best_progress = -math.inf
         self.progress_at: Optional[float] = None
+
+    def junction_end(self, now: float, remaining: Optional[float], config: TripConfig) -> Optional[tuple]:
+        """``(reason, detail)`` when CORE's junction state ends the trip, else None.
+
+        D-495 ``junction``: ``aborted``/``unresolved`` after our first instruction, or ``waiting``
+        for ``junction_wait_s``. D-507 3 ``junction_unexpected``, at once: on a lane segment
+        (``remaining`` m to its place) CORE is ``unexpected``, or ``waiting`` with the place
+        beyond ``arm_distance_m`` (no instruction of ours is due there). The trip view keeps the
+        map pose; ``line_reason`` is CORE's line-follow reason beside the junction state.
+        """
+        junction = self.junction
+        state = junction.get("state")
+        self.waiting_since = (self.waiting_since or now) if state == "waiting" else None
+        detail = {"junction_state": state, "junction_place": junction.get("place_id"),
+                  "junction_reason": junction.get("reason")}
+        if remaining is not None and (state == "unexpected" or (
+                state == "waiting" and remaining > config.arm_distance_m)):
+            return "junction_unexpected", {**detail, "line_reason": junction.get("line_reason")}
+        ours = self.first_seq is not None and (junction.get("seq") or 0) >= self.first_seq
+        if (state in ("aborted", "unresolved") and ours) or (
+                state == "waiting" and now - self.waiting_since >= config.junction_wait_s):
+            return "junction", detail
+        return None
+
+    def see(self, pose) -> None:
+        """Keep the map pose just read and when it was read."""
+        self.view["pose"], self.pose_read_at = pose_view(pose), _monotonic()
 
     @property
     def segments(self) -> list:
