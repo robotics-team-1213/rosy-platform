@@ -2405,6 +2405,25 @@
 - 증거: `test_site_map_api.py` 27 passed, 웹 Node 시험 170 passed.
 - gate 변화: SOURCE/LOCAL만. 현장 설정 반영은 새 Fleet·Vision 배포 뒤에 한다(옛 버전은 이 키를 거절한다).
 
+
+## 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시
+
+- 변경: Fleet이 CORE Viewer power/health를 등록된 Operator 토큰으로 읽고 최대 5초 캐시한다. 로봇 행은 공유 PowerHealthResponse와 관측 나이를 선택 필드로 제공하며, 관제는 배터리·충전 근거의 신선도와 다음 조치를 표시한다. E-Stop·네트워크·영상 설정 경로는 변경하지 않았다.
+- 증거: 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. 현장 장치 검증은 별도.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-509 power health at state response
+
+- Change: Read CORE power/health only while rendering /api/fleet/state, preserving D-447 hub gather calls. Invalidate display cache when a robot client changes.
+- Evidence: Related Fleet and contract tests 99 PASS; Node 170 PASS. Device check remains separate.
+- Gate change: None.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up
+
+- 변경: Power health readback lives in /api/fleet/state presentation; D-447 gather remains unchanged.
+- 증거: Fleet and contract focus tests passed; Node 170 passed; hardware remains unverified.
+- gate 변화: None.
+
 ## 2026-10-08 · uncommitted · fix(fleet): D-513 7 회전 후속
 - 변경: 실영상 위 시작점 클릭을 회전·보정 역변환으로 지도 좌표로 바꾼다. 실영상 위 x/y 축을 지도 방향으로 그린다. 레일 썸네일을 편집 중이 아닐 때 돌린다. 현장 지도 화면을 관제 실영상과 같은 방향의 90° 단위로 돌린다(평면 사진 포함). 돌린 조감도는 보일 때만 다시 만든다.
 - 증거: 웹 Node 시험 174 passed.
