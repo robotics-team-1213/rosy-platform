@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · fix(perception): G-16 독립 검토 반영
+- 2026-10-07 · uncommitted · fix(perception): G-16 keep 경계 기울기와 그 오차
 - 2026-10-07 · uncommitted · feat(recording): Pilot 바닥 IR 녹화 번호는 D-506
 - 2026-10-07 · uncommitted · feat(recording): Pilot 녹화에 바닥 IR 원시값 (D-504)
 - 2026-10-07 · uncommitted · fix(perception): D-468 containment 경계를 칠 안쪽 가장자리로
-- 2026-10-07 · uncommitted · fix(perception): 횡단보도 띠는 로봇 차로 폭 안에서만 센다 (D-491 리뷰)
-- 2026-10-07 · uncommitted · feat(perception): 차로와 나란한 횡단보도 줄무늬 구간 (D-491 §4)

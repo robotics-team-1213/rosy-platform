@@ -394,7 +394,9 @@ def test_every_module_log_is_valid(config):
 
 
 def test_repository_adr_log_is_contiguous_and_indexed(config, adr_log):
-    assert harness.validate_adr_log(adr_log, gaps=config.get("adr_gaps") or {}) == []
+    gaps, gap_errors = harness.load_adr_gaps(ROOT, config)
+    assert gap_errors == []
+    assert harness.validate_adr_log(adr_log, gaps) == []
 
 
 def test_generated_records_are_current():
@@ -661,3 +663,185 @@ def test_logs_only_reconcile_exact_native_policy_callback_record(mutation):
     assert harness.is_append_only(baseline, corrected) is (mutation == "exact")
     assert harness.validate_log(new) == []
     assert any("malformed heading" in error for error in harness.validate_log(old))
+
+
+# --- D-510: union merge for append-only records, adr_gaps.txt, refs/adr --------
+
+import subprocess  # noqa: E402
+
+import adr_reserve  # noqa: E402
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
+                          text=True, encoding="utf-8").stdout
+
+
+def _repo(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    _git(path, "init", "-q", "-b", "main")
+    _git(path, "config", "user.email", "t@example.invalid")
+    _git(path, "config", "user.name", "t")
+    _git(path, "config", "core.autocrlf", "true")
+    return path
+
+
+def test_adr_gaps_file_dedupes_union_duplicates_and_rejects_malformed_lines():
+    gaps, errors = harness.parse_adr_gaps(
+        "﻿# comment\r\nD-7 first reason\r\nD-3\tother\r\n\r\nD-7 first reason\r\nD-7 later copy\r\nD-x bad\r\nD-9\r\n")
+    assert gaps == {"D-7": "first reason", "D-3": "other"}
+    assert errors == ["line 7: expected 'D-nnn reason', got 'D-x bad'",
+                      "line 8: expected 'D-nnn reason', got 'D-9'"]
+
+
+def test_repository_gaps_live_in_the_union_file(config):
+    assert "adr_gaps" not in config
+    gaps, errors = harness.load_adr_gaps(ROOT, config)
+    assert errors == [] and gaps
+
+
+def test_reserved_ref_is_a_warning_never_a_gap():
+    adr = harness.parse_adr_log(GOOD_ADR)  # D-3 absent
+    assert harness.validate_adr_log(adr, {}) == ["D-3: missing and not declared in adr_gaps"]
+    assert harness.reservation_warnings(adr, {}, {"D-4"}) == []  # landed: the ref is irrelevant
+    assert harness.reservation_warnings(adr, {"D-9": "skipped"}, {"D-9"}) == []
+    # D-9 is above the branch's highest (D-4), so CI would not miss it: no warning.
+    assert harness.reservation_warnings(adr, {}, {"D-3", "D-9"}) == [
+        "D-3 reserved locally (refs/adr) but not on this branch — land its ADR or add a gap line"
+        " to tools/harness/adr_gaps.txt before push"]
+
+
+def test_only_one_record_per_line_files_use_the_union_merge_driver():
+    union = ["docs/reference/ROSY ADR Log.md", "tools/harness/adr_gaps.txt"]
+    plain = ["docs/logs.md", "operations/fleet/logs.md"]
+    out = _git(ROOT, "check-attr", "merge", "--", *union, *plain)
+    assert out.splitlines() == ([f"{p}: merge: union" for p in union]
+                                + [f"{p}: merge: unspecified" for p in plain])
+
+
+def _two_appends(repo: Path, rel: str, base: str, one, two) -> subprocess.CompletedProcess:
+    """Branches one and two append to ``rel`` (or ``("replace", text)``) from main; merge one into two."""
+    path = repo / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(base.encode())
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    for branch, text in (("one", one), ("two", two)):
+        _git(repo, "checkout", "-qb", branch, "main")
+        path.write_bytes(text[1].encode() if isinstance(text, tuple) else path.read_bytes() + text.encode())
+        _git(repo, "commit", "-qam", branch)
+    return subprocess.run(["git", "-C", str(repo), "merge", "-q", "--no-edit", "one"],
+                          capture_output=True, text=True, encoding="utf-8")
+
+
+def _entry(title: str) -> str:
+    return (f"\r\n## 2026-10-07 · uncommitted · {title}\r\n\r\n- 변경: {title}\r\n- 증거: t\r\n"
+            "- gate 변화: 없음\r\n- 결정: 없음\r\n- 교훈: 없음\r\n")
+
+
+def _repo_with_attributes(path: Path, extra: str = "") -> Path:
+    repo = _repo(path)
+    (repo / ".gitattributes").write_bytes((ROOT / ".gitattributes").read_bytes() + extra.encode())
+    return repo
+
+
+def test_two_logs_md_entries_appended_on_two_branches_still_conflict(tmp_path):
+    base = "# logs\r\n" + _entry("base")
+    repo = _repo_with_attributes(tmp_path / "plain")
+    result = _two_appends(repo, "docs/logs.md", base, _entry("one"), _entry("two"))
+    assert result.returncode != 0 and "CONFLICT" in result.stdout + result.stderr
+
+    # Why logs.md is not union: union collapses the identical trailing lines of both entries.
+    repo = _repo_with_attributes(tmp_path / "union", "docs/logs.md merge=union\n")
+    assert _two_appends(repo, "docs/logs.md", base, _entry("one"), _entry("two")).returncode == 0
+    merged = (repo / "docs/logs.md").read_bytes().decode()
+    assert merged.count("- 교훈: 없음") < 3
+
+
+def test_union_merge_keeps_both_appended_rows_with_bom_and_crlf(tmp_path):
+    repo = _repo_with_attributes(tmp_path / "u")
+    rel = "docs/reference/ROSY ADR Log.md"
+    log = repo / rel
+    result = _two_appends(repo, rel, "﻿# Log\r\n\r\n| ID | Title | Status |\r\n| D-1 | a | Accepted |\r\n",
+                          "| D-2 | b | Accepted |\r\n", "| D-3 | c | Accepted |\r\n")
+    assert result.returncode == 0, result.stdout + result.stderr  # on two: both appended at the same spot
+    data = log.read_bytes()
+    assert data.startswith(b"\xef\xbb\xbf# Log\r\n")
+    assert b"\n" not in data.replace(b"\r\n", b"")
+    assert data.endswith(b"| D-3 | c | Accepted |\r\n| D-2 | b | Accepted |\r\n")
+    adr = harness.parse_adr_log(data.decode("utf-8"))
+    assert sorted(adr.index) == ["D-1", "D-2", "D-3"] and adr.index_duplicates == ()
+
+
+def test_union_of_a_status_edit_and_an_append_leaves_a_duplicate_row_that_lint_reports(tmp_path):
+    repo = _repo_with_attributes(tmp_path / "edit")
+    rel = "docs/reference/ROSY ADR Log.md"
+    head = "﻿# Log\r\n\r\n| ID | Title | Status |\r\n|---|---|---|\r\n"
+    base = head + "| D-1 | a | Proposed |\r\n"
+    result = _two_appends(repo, rel, base, ("replace", head + "| D-1 | a | Accepted |\r\n"),
+                          "| D-2 | b | Accepted |\r\n")
+    assert result.returncode == 0, result.stdout + result.stderr  # union never stops
+    adr = harness.parse_adr_log((repo / rel).read_text(encoding="utf-8"))
+    assert "D-1: duplicate index row" in harness.validate_adr_log(adr, {})
+
+
+def test_adr_reserve_claims_above_every_source_and_skips_taken_refs(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path / "r")
+    (repo / "docs" / "adr").mkdir(parents=True)
+    (repo / "docs" / "adr" / "D-4-x.md").write_text("x\n", encoding="utf-8")
+    (repo / "docs" / "reference").mkdir()
+    (repo / "docs" / "reference" / "ROSY ADR Log.md").write_text("| D-5 | a | b |\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    for branch, name in (("other", "D-6-y.md"), ("stray", "D-500-typo.md")):
+        _git(repo, "checkout", "-qb", branch, "main")
+        (repo / "docs" / "adr" / name).write_text("y\n", encoding="utf-8")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-qm", branch)
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "update-ref", "refs/remotes/origin/other", "other")
+    _git(repo, "branch", "-qD", "other")  # D-6 now exists only on a remote-tracking ref
+    (repo / "tools" / "harness").mkdir(parents=True)
+    (repo / "tools" / "harness" / "adr_gaps.txt").write_text("D-7 untracked gap\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+
+    seen: dict = {}  # a diff hunk header "@@ ..." must not be taken for the source ref
+    adr_reserve._from_history(seen, adr_reserve.ADDED_LINE, "--no-merges", "-p", "-U0", "--", adr_reserve.LOG)
+    assert seen[5].split(": ", 1)[0] in {"main", "stray", "origin/other"} and "| D-5" in seen[5]
+
+    assert adr_reserve.main(["next", "first topic"]) == 0
+    out = capsys.readouterr()
+    assert out.out.strip() == "D-8"
+    assert "ignoring D-500 (more than 20 above main's D-5) from stray: docs/adr/D-500-typo.md" in out.err
+    assert "highest in use: D-7 from " in out.err and "adr_gaps.txt" in out.err
+    assert adr_reserve.main(["next", "second topic"]) == 0
+    assert capsys.readouterr().out.strip() == "D-9"
+
+    # A peer claimed D-10 after our scan: create-only update-ref fails, the tool moves on.
+    _git(repo, "update-ref", "refs/adr/D-10", "HEAD")
+    monkeypatch.setattr(adr_reserve, "used_numbers", lambda: {9: "test"})
+    assert adr_reserve.main(["next", "raced"]) == 0
+    assert capsys.readouterr().out.strip() == "D-11"
+
+    adr_reserve.main(["list"])
+    listing = capsys.readouterr().out
+    assert "D-8\t" in listing and "first topic" in listing
+    assert adr_reserve.main(["release", "D-8"]) == 1  # not proven to be ours
+    assert "reserved for 'first topic'" in capsys.readouterr().err
+    assert adr_reserve.main(["release", "D-8", "--reason", "first topic"]) == 0
+    assert capsys.readouterr().out.strip() == "released D-8 (first topic)"
+    assert adr_reserve.main(["release", "D-9", "--force"]) == 0
+    assert harness.reserved_adrs(repo) == {"D-10", "D-11"}
+    assert adr_reserve.main(["release", "D-8", "--force"]) == 1
+
+
+def test_adr_reserve_stops_when_update_ref_fails_for_another_reason(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path / "f")
+    (repo / "a").write_text("a\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    _git(repo, "update-ref", "refs/adr/D-1/x", "HEAD")  # refs/adr/D-1 cannot exist beside D-1/x
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(adr_reserve, "used_numbers", lambda: {})
+    assert adr_reserve.main(["next", "t"]) == 1
+    assert "git update-ref refs/adr/D-1 failed" in capsys.readouterr().err

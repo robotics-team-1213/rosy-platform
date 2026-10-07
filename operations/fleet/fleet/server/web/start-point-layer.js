@@ -15,8 +15,11 @@ export function pointerPose(view, rect, canvas, clientX, clientY) {
   }
   const b=siteBounds(view.siteMap);
   if (!b) return null;
+  // Live camera picture (D-513 7): undo the drawn turn and calibration, in bitmap pixels.
   const t=fitTransform(b, rect.width, rect.height, 32);
-  const point={x:(clientX-rect.left-t.ox)/t.scale, y:(t.oy-clientY+rect.top)/t.scale};
+  const point=view.cameraPick ? view.cameraPick(px/w*canvas.width, py/h*canvas.height)
+    : {x:(clientX-rect.left-t.ox)/t.scale, y:(t.oy-clientY+rect.top)/t.scale};
+  if (!point) return null;
   const track=siteBounds(view.siteMap,0);
   return point.x>=track.min_x && point.x<=track.max_x && point.y>=track.min_y && point.y<=track.max_y ? point : null;
 }

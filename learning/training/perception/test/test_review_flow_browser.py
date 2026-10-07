@@ -6,6 +6,7 @@ import threading
 from contextlib import contextmanager
 
 import pytest
+from browser_harness import browser_tests_enabled, free_port
 
 import class_sets
 from test_review_app import fixture_inputs, open_store
@@ -13,14 +14,15 @@ from test_review_cycle import CLASSES, catalog
 from review_app import ReviewStore, make_server
 import review_masks
 
-pytestmark = pytest.mark.skipif(os.getenv('ROSY_RUN_BROWSER_TESTS') != '1',
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='requires explicit local Chromium browser run')
 
 
 @contextmanager
 def serve(store):
     playwright = pytest.importorskip('playwright.sync_api')
-    server = make_server(store, 0)
+    # make_server takes only a port number, so this one keeps free_port().
+    server = make_server(store, free_port())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     with playwright.sync_playwright() as p:
@@ -275,6 +277,66 @@ def test_learning_report_age_advances_and_refreshes(browser_workspace, tmp_path,
         page.screenshot(path=str(target), full_page=True)
     page.locator('#refresh').click()
     expect(age).to_contain_text('방금 확인')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width):
+    page, _, expect = browser_workspace
+    report = tmp_path / 'learning-result'
+    report.mkdir()
+    (report / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    expect(page.locator('.workspace-heading h2')).to_have_text('연결한 학습 결과')
+    page.locator('#new-task').click()
+    page.locator('#name').fill('검수할 결과')
+    page.locator('#path').fill(str(report))
+    page.locator('#connect').click()
+    expect(page.locator('#updated')).to_contain_text('1개 작업')
+    page.locator('#search').fill('없는 작업')
+    expect(page.locator('#updated')).to_contain_text('1개 중 0개 표시')
+    expect(page.locator('#empty-title')).to_have_text('조건에 맞는 작업이 없습니다')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        page.evaluate('window.scrollTo(0, 0)')
+        page.screenshot(path=str(Path(output) / f'learning-results-filter-{width}.png'), full_page=True)
+    page.locator('#reset-filters').click()
+    expect(page.locator('#updated')).to_contain_text('1개 작업')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace, width):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0] + '?frame=1', wait_until='networkidle')
+    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    expect(page.locator('a[href="/pixels?frame=1"]')).to_have_count(2)
+    page.locator('.workspace-tabs a[href^="/pixels"]').click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
+    page.locator('#pixel-class').select_option('0')
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('#pixel-fill').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    page.locator('#pixel-complete').check()
+    page.locator('#pixel-background').check()
+    page.locator('#pixel-approve').click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
+    expect(page.locator('#pixel-decision')).to_contain_text('사진 2 픽셀 승인 · 다음 검수 대기 사진 1')
+    assert not page.locator('#pixel-decision').is_hidden()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        page.evaluate('window.scrollTo(0, 0)')
+        page.screenshot(path=str(Path(output) / f'learning-pixel-decision-{width}.png'), full_page=True)
+    page.locator('.workspace-tabs a[href="/learning"]').click()
+    expect(page.locator('#review-counts')).to_contain_text('검수 대기 1장')
+    expect(page.locator('#pixel-counts')).to_contain_text('승인 1장 · 검수 대기 1장')
+    page.locator('a[href="/pixels?filter=pending"]').click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
 
 
 @pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels'])
@@ -601,6 +663,7 @@ def test_learning_list_and_catalog_wait_denial_and_retry(
         expect(page.locator(action)).to_be_disabled()
     if route == '/learning':
         expect(page.locator('#review-counts')).to_contain_text('확인 불가')
+        expect(page.locator('#pixel-counts')).to_contain_text('확인 불가')
         expect(page.locator('#search')).to_be_disabled()
     else:
         expect(page.locator('#catalog-path')).to_be_disabled()
@@ -615,6 +678,8 @@ def test_learning_list_and_catalog_wait_denial_and_retry(
     for action in actions:
         expect(page.locator(action)).to_be_enabled()
     expect(page.locator('#search' if route == '/learning' else '#catalog-path')).to_be_enabled()
+    if route == '/learning':
+        expect(page.locator('#pixel-counts')).to_contain_text('검수 대기')
 
 
 @pytest.mark.parametrize('route,api,status,retry,recovered', [

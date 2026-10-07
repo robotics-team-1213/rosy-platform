@@ -25,6 +25,7 @@ from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
 from core_features.line_follow.clearance import return_scan_view as _return_scan_view
+from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_features.vision import accept_preview
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 
@@ -95,16 +96,21 @@ def keep_junction(services, raw: str, *, source_now: float, received_at: float) 
 
     A sighting HOLDs line-follow and also starts an armed D-495 bounded turn, so it gates
     motion, not only stops: the frame must reach CORE within stale_after_s (0.3 s) of its camera
-    stamp or it is dropped here. corner_turning feeds supports_junction_turn."""
+    stamp or it is dropped here. corner_turning feeds supports_junction_turn. D-507 5: the
+    optional junction_ahead_m (base_footprint x, m) places the sighting's cross line; the marker
+    junction_ahead_v (on every frame) gates the junction_pivot capability."""
     try:
         data = json.loads(raw)
         reason, stamp, corner = data.get("reason"), data.get("stamp"), data.get("corner_turning")
+        ahead, ahead_v = data.get("junction_ahead_m"), data.get("junction_ahead_v")
     except (AttributeError, TypeError, ValueError):
         return
     if (type(stamp) in (int, float) and math.isfinite(stamp)
             and 0.0 <= source_now - stamp <= services.line_follow.config.stale_after_s):
         services.line_follow.observe_junction(reason, received_at - (source_now - stamp),
-                                              corner_turning=corner is True)
+                                              corner_turning=corner is True,
+                                              ahead_m=ahead if type(ahead) in (int, float) else None,
+                                              ahead_v=ahead_v if type(ahead_v) is int else None)
 
 
 def road_observation(services, raw: str, *, source_now: float,
@@ -224,13 +230,13 @@ def camera_preview(services, msg, *, warn: Warn, raw: bool = False, source_now: 
         )
         source_age = None if source_now is None else source_now - stamp
         fresh_source = (source_age is not None and math.isfinite(source_age) and math.isfinite(stamp)
-                        and stamp >= 0 and 0 <= source_age <= 2.)
+                        and stamp >= 0 and -SOURCE_FUTURE_TOLERANCE_S <= source_age <= 2.)
         if not fresh_source:
             metadata.pop('quality', None)
             if raw:
                 raise ValueError('raw preview source image is stale or clock is unavailable')
         else:
-            metadata['source_age_s'] = source_age
+            metadata['source_age_s'] = max(0.0, source_age)  # D-507 8: skew counts as now
         store_frame = services.vision.publish_raw if raw else services.vision.publish
         store_frame(
             bytes(msg.data),

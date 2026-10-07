@@ -3,6 +3,9 @@
 
 # site
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Ubuntu site-host stack: Caddy TLS proxy, Fleet console and task SQLite, and Vision (camera frame reception and ArUco projection), plus the host services around them (mDNS advertising, firewall, model watch) and the signed site-candidate tooling. It is the current site control server; it does not replace the ROS 2/Pi product runtime, Fleet does not join DDS, and CORE keeps final motion and stop authority.

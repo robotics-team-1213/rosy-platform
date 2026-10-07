@@ -61,11 +61,10 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
                 or abs(decision.angular)>self._angular_cap()):
             return False
         if isinstance(self._bridge,dict):
-            if not self._bridge_body_clear(now):
-                return False
-            if not self._floor_proof_required():
-                return True
-        return self._return_probe(now,decision.linear,decision.angular)
+            return (self._bridge_body_clear(now)
+                    and self.motion_admitted(now,decision.linear,decision.angular,'bridge'))
+        kind='retrace' if self._return_controller.phase=='retrace' else 'return'
+        return self.motion_admitted(now,decision.linear,decision.angular,kind)
 
     def _apply_lane_return(self, now, decision):
         # D-476: a bridge continues only if this tick bridges again; any return path that
@@ -129,7 +128,7 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
             return decision
         view=self.return_evidence(now=now)
         linear,angular,authority=self._return_limits()
-        floor=self._return_probe(now,0.,0.)
+        floor=self.motion_admitted(now,0.,0.,'return')  # D-507 6
         speed=min(.03,max(0.,linear))
         turn=min(.15,max(0.,angular))
         bridge=self._bridge_step(now,bridge_state,view,authority,linear,decision)
@@ -139,9 +138,10 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
             corridor=view.corridor,corridor_at=view.received_at,
             corridor_stamp_ns=view.source_stamp_ns,epoch=view.epoch,
             clearance_at=now if floor else None,floor_safe=floor,authorized=authority and bridge is None,
-            front_clear=self._return_probe(now,speed,0.),
-            rear_clear=self._return_probe(now,-speed,0.),
-            turn_clear=self._return_probe(now,0.,turn) and self._return_probe(now,0.,-turn),
+            front_clear=self.motion_admitted(now,speed,0.,'return'),
+            rear_clear=self.motion_admitted(now,-speed,0.,'retrace'),
+            turn_clear=(self.motion_admitted(now,0.,turn,'return')
+                        and self.motion_admitted(now,0.,-turn,'return')),
             linear_limit=linear,angular_limit=angular))
         if bridge is not None:
             return bridge  # D-468 only measured this tick; the bridge owns the twist.
@@ -161,7 +161,9 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
             held=self._stop_decision('HOLD','lane_return_fleet_required')
             self._status=self._status.model_copy(update={'stuck':self._stuck_status(now)})
             return held
-        if (action.linear or action.angular) and not self._return_probe(now,action.linear,action.angular):
+        kind='retrace' if action.phase=='retrace' else 'return'
+        if (action.linear or action.angular) and not self.motion_admitted(
+                now,action.linear,action.angular,kind):
             return self._stop_decision('HOLD','lane_return_motion_unconfirmed')
         self._status=self._status.model_copy(update={
             'state':'RECOVERING' if action.linear or action.angular else 'HOLD',

@@ -1,7 +1,10 @@
-<!-- Parent: ../../../../../src/products/omx/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-14 | Updated: 2026-09-14 -->
 
 # omx_adapter
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 

@@ -63,3 +63,38 @@ Decision 2의 "차체 footprint와 경계의 부호 있는 여유 및 예측 여
 - 남은 것: Gazebo 5 mm 값의 원인(STL 기하로는 안쪽 가장자리 기준 23.45 mm, 중심 기준 35.95 mm라 둘 다 맞지 않는다). 모델 PC에서 원인을 찾는다(`tools/harness/sim2real_gaps.yaml` G-16). Gazebo 검출기가 칠 안쪽 깊이 선을 맞추고 있었다면 이번 이동으로 sim 유격이 음수가 될 수 있다. 그 경우는 차로 안이 아님으로 끝나 안전 쪽이다. 그래도 모델 PC에서 시나리오 C를 다시 돌리기 전에는 sim containment를 증거로 쓰지 않는다. 매트 테이프 실측.
 
 **개정 (2026-10-07, [D-495](D-495-lane-junction-bounded-turn-and-junction-defaults.md) 결정 개정 2항):** `recovery_local_enabled` 로봇 기본값은 `true`다(`rosy_default.yaml`). 모델 PC SIM 한 바퀴와 실기 차선 한 바퀴를 통과한 페이로드만 robots에 간다. 되돌리기는 CORE 설정 겹의 `line_follow.recovery_local_enabled: false`다.
+
+### Implementation note: 경계 기울기 오차 (G-16, 2026-10-07, `fix/g16-lane-slope-error`)
+
+결정 항목과 상태는 바꾸지 않는다. 생산자(perception keep)의 경계 맞춤과 `uncertainty_m`만 고친다.
+
+**원인** ([`d476-gazebo-rev1-2026-10-07`](../validation/d476-gazebo-rev1-2026-10-07/result.md) G-16). 카메라는 몸 앞 약 0.18 m부터 칠을 보고, 수신기는 경계를 몸 뒤끝까지 0.25–0.3 m 외삽한다. 그래서 기울기 오차가 여유를 정한다. 기울기는 두 곳에서 기울었다. (1) 59.2° 화면의 옆 모서리가 x 약 0.23 m 안쪽에서 테이프 바깥쪽을 잘라 가까운 끝 셀이 안쪽으로 치우친다. (2) 횡단보도 blob 제거 띠(`FLANK_OUTER_M` 0.08 m)가 옆 차선의 안쪽 절반을 지운다. 보고한 불확실도는 이 맞춤 기울기 오차를 담지 않았다.
+
+**고침** (`lane_keep_lines._paint_fit`, `lane_keep.py`, `lane_containment.py`):
+
+1. 선의 최종 축은 테이프 띠(축 ± 칠 반폭 + 맞춤 셀 하나. 칠 반폭은 노드의 읽기 전용 `lane_paint_half_width_m` 하나를 keeper와 containment가 같이 쓴다. `PAINT_HALF_WIDTH_M`은 `lane_keep_lines`에 있고 `lane_containment`이 다시 내보낸다) 안의 칠을 **원래 점 전체**에서 다시 읽어 맞춘다. 앞서 지운 blob 띠가 차선 한쪽을 깎았어도 그 칠이 돌아온다. blob 판정과 제거, 선 검출 순서는 그대로다.
+2. 그중 **양쪽 가장자리가 모두 보이는 단면**만 쓴다(`BirdsEye.seen`, 화면 밖 셀 제외). D-491 횡단보도 구간(`crosswalk_extent`의 x 범위)의 행은 맞춤에서 뺀다. 그 막대가 차선 띠 옆에 붙어 있기 때문이다. D-491 판정과 그 출력은 바꾸지 않는다. 두 번 반복해 띠가 고친 축을 따라간다. 관측 지지 구간(`ends_m`)은 검출된 칠 전체 그대로다. 온전한 단면이 모자라면 축은 찾은 조각의 것 그대로 두고 오차를 말하지 않는다(잘린 칠로 다시 맞추면 조향 축만 움직인다).
+3. 맞춤 기울기 표준오차 `slope_sd`와 맞춤 중심에서 선의 표준오차 `offset_sd`(단면 중심을 x에 회귀, 잔차는 격자 양자화 `행 간격/√12` 이상, `offset_sd` = 잔차/√행 수)를 경계마다 싣는다. 보이는 온전한 단면이 `MIN_LINE_CELLS`·`MIN_LINE_LENGTH_M`보다 적으면 둘 다 `None`이다.
+4. `uncertainty_m` = 투영 불확실도 + 경계별 최대 `SLOPE_SIGMAS`×(`slope_sd`×(지지 길이 + `RECEIVER_EXTRAPOLATION_M`) + `offset_sd`). `RECEIVER_EXTRAPOLATION_M`이 수신기 `MAX_EXTRAPOLATION_M`과 같은지 시험한다. `SLOPE_SIGMAS`는 2σ×√2다. 먼 쪽에서는 이미지 한 행이 1 cm까지 퍼져 5 mm 맞춤 행 둘이 한 픽셀 행을 읽으므로 독립 표본 수를 두 배로 셀 수 있다. 지렛대는 맞춤 중심(지지 구간 안)에서 수신기가 쓰는 가장 먼 x까지의 거리를 넘는다. 선택된 경계에 `slope_sd`나 `offset_sd`가 없거나 유한한 0 이상이 아니면 `uncertainty_m`은 `None`이다(수신기 거절). 과소 보고하지 않는다.
+
+**G-16 프레임 재생** (`middleware/perception/test/test_lane_slope_g16.py`, 저장된 Gazebo 프레임 2장, ROS 없음):
+
+| 자리 | STL 여유 | 고치기 전 여유 / u | 고친 뒤 여유 / u | 깎인 여유 |
+|---|---|---|---|---|
+| C 출발 | 23.4 mm | −7.5 / 8.9 mm | 21.5 / 23.9 mm | −2.4 mm (u > 상한 15 mm라 수신기는 근거 과다로 거절) |
+| 같은 차로 북쪽 | 23.4 mm | 10.4 / 7.6 mm | 22.0 / 14.3 mm | 7.7 mm |
+
+오른쪽 기울기는 C에서 −6.1° → −0.76°, 북쪽 −2.2° → −0.44°다. 시험은 STL 여유와 3 mm 안, 남은 차이가 `uncertainty_m` 안임을 요구한다. 합성 BEV 시험은 화면 잘림(0.48–1.25° → 0.0°)과 횡단보도 침식(시드 6개 최대 7.6° → 0.0°, 허용 0.1°)을 재현한다.
+
+**추종 동작도 바뀐다.** 맞춤 축은 경계 기록과 keep 목표에 그대로 쓰이므로 이것은 실제 추종기의 동작 변화다.
+- Gazebo 프레임의 경계 진행각: C 왼쪽 1.9° → 0.0°, 오른쪽 −5.8° → −0.8°. 북쪽 0.9° → 0.3°, −2.1° → −0.6°. keep 목표는 1 mm 이하로 움직인다.
+- 실물 녹화 재생(`data/teleop/learning`, NOMINAL 지면, `keep_corner`, 4 fps, `tools/lane_replay.py` 지표, 고치기 전 → 뒤):
+  - 9dfk 20261005T134540Z(1832 프레임): none 0.395 → 0.342, on_paint 0.028 → 0.025, on_line 0.073 → 0.075, jump 0.009 → 0.008. 목표 이동 중앙 1.0 mm, p95 8.2 mm. 전략이 바뀐 프레임 122/1884.
+  - 8kcn 20260930T124745Z(1129 프레임): none 0.180 → 0.149, on_paint 0.087 → 0.089, on_line 0.230 → 0.255, jump 0.004 → 0.004. 목표 이동 중앙 2.0 mm, p95 12.2 mm. 전략이 바뀐 프레임 69/1129.
+  - 9dfk 20261001T131825Z(4825 프레임, 서 있는 로봇): 목표 이동 중앙 20 mm. 받침대에 가려진 0.08 m 칠 조각 하나를 맞춘 장면이다(진행각 25° → 16°). 어느 쪽도 차선이 아니어서 판정 근거가 아니다.
+  - 정리: 보이는 프레임이 늘었고 칠 위 목표 비율은 비슷하다. 8kcn의 on_line은 2.5 %p 늘었다. 개선이라고 단정하지 않는다. 실주행 비교가 필요하다.
+- 비용(노트북, 9dfk 20261005T134540Z 3767 프레임): `_paint_fit` 1.3 ms/호출, 프레임당 2.2 ms. keep 갱신 전체 17.7 ms의 약 12 %다. Pi 5 추정(측정 안 함): numpy 3–5배 느리면 프레임당 7–11 ms, 8 fps 카메라 주기 125 ms의 6–9 %.
+
+**남은 위험.** 잔차에 보이지 않는 계통 편향은 `slope_sd`가 덮지 않는다. BEV 격자 aliasing, 거리에 따라 달라지는 테이프 겉보기 폭, NOMINAL 지면의 기하 오차(투영 항이 따로 맡는다), 물체에 가려진 칠(받침대 장면처럼 짧은 조각)이 그렇다.
+
+**남은 것.** C 출발은 이제 거짓 이탈 대신 불확실도 과다로 거절된다. 안전 쪽이지만 그 자리에서 containment가 차로 안을 증명하지는 못한다(지지 구간 0.1 m, 줄어든 기울기 근거). 모델 PC 시나리오 C 재실행이 남았다. `crosswalk_extent`가 놓친 횡단보도 옆에서는 막대가 띠에 섞일 수 있고, 그때 남는 기울기는 `slope_sd`가 덮는 만큼만 덮인다. keep 외 모드와 `extract_lines`를 `usable` 없이 부르는 곳은 동작이 같다. 호스트 pytest는 sim·장치 수용이 아니다.

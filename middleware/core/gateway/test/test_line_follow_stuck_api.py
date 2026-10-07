@@ -187,7 +187,7 @@ def test_d476_bridge_is_off_by_default_and_yaml_matches_the_model():
     config = _line_follow_config(merged["line_follow"])
     defaults = LineFollowConfig()
     keys = [k for k in _yaml(DEFAULT)["line_follow"] if k.startswith("bridge_")]
-    assert len(keys) == 12  # D-476 rev 1: bridge_arm_* (4) and bridge_site_no_dropoffs
+    assert len(keys) == 13  # D-476 rev 1: bridge_arm_* (4); rev 2: arc (2); D-507 9 moved the site key
     assert all(getattr(config, k) == getattr(defaults, k) for k in keys)
     assert config.bridge_enabled is False
     with pytest.raises(ValueError, match="bridge_enabled must be true or false"):

@@ -576,6 +576,12 @@ roots:
     wave: none
     note: Supervised edge-capture drives over the CORE API (D-379 recording, advisory D-424 body check); operator PC only.
     concern: other
+  - path: tools/device_test
+    part: tools
+    d427_target: tools/device_test
+    wave: none
+    note: D-512 agent-run device test (camera preflight, temporary CORE overlay with readback and restore, recording, status/events JSONL); operator PC only.
+    concern: other
   - path: tools/device_twin
     part: tools
     d427_target: tools/device_twin
@@ -700,6 +706,7 @@ safety_anchors:
   - {symbol: core_api_web.api.v1.safety.safety_release}
   - {symbol: core_api_web.api.v1.safety.safety_limits}
   - {symbol: core_common.robot_body.RobotBody}
+  - {symbol: core_common.robot_body.PINKY_PRO, public: true}
   - {symbol: omx_adapter.command_owner.ArmCommandOwner}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
   - {symbol: omx_adapter.action_api.LocalStopApi.dispatch}

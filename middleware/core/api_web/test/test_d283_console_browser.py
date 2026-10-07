@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import os
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
+from browser_harness import browser_tests_enabled
 from playwright.sync_api import sync_playwright
 import yaml
 
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional real-CORE Chromium review",
 )
 

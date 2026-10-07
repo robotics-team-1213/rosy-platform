@@ -200,6 +200,18 @@ class LineJunctionRequest(BaseModel):
     # D-495: bounded turn for left (+) / right (-); without it left/right stay unresolved.
     turn_deg: Optional[float] = Field(default=None, ge=-150, le=150)
     advance_m: Optional[float] = Field(default=None, ge=0, le=0.30)
+    # D-507 2: the map's expectation, sent only to a robot announcing junction_pivot.
+    map_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
+    expect_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
+    expect_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
+    pivot_past_line_m: Optional[float] = Field(default=None, ge=0, le=0.30)
+
+
+def _expect(body: LineJunctionRequest):
+    """D-507 2: the optional fields as one dict, or None for an old client (behaviour unchanged)."""
+    fields = dict(map_id=body.map_id, expect_in_m=body.expect_in_m, expect_tol_m=body.expect_tol_m,
+                  pivot_past_line_m=body.pivot_past_line_m)
+    return fields if any(v is not None for v in fields.values()) else None
 
 
 @line_follow_router.post("/junction")
@@ -215,11 +227,17 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
         raise ApiError("VALIDATION_ERROR", 400, "turn_deg is left (+) or right (-) and not 0")
     if body.advance_m is not None and body.turn_deg is None:
         raise ApiError("VALIDATION_ERROR", 400, "advance_m belongs to a turn")
+    if (body.expect_in_m is None) != (body.expect_tol_m is None):
+        raise ApiError("VALIDATION_ERROR", 400, "expect_in_m and expect_tol_m come together")
+    if body.pivot_past_line_m is not None and (body.action == "stop" or (
+            body.action != "straight" and body.turn_deg is None)):
+        raise ApiError("VALIDATION_ERROR", 400, "pivot_past_line_m belongs to straight or a turn")
     require_manual_released(svc)
     require_calibration_owner(svc, auth, "line-follow junction")
     try:
         result = svc.line_follow.set_junction(body.action, body.place_id, body.expires_s,
-                                              body.stop_after_m, body.turn_deg, body.advance_m)
+                                              body.stop_after_m, body.turn_deg, body.advance_m,
+                                              expect=_expect(body))
     except JunctionRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
     svc.state.set_line_follow(svc.line_follow.status())
