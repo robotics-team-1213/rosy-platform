@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(fleet): D-472 독립 안전 검토 지적 반영
 - 2026-10-08 · uncommitted · feat(fleet): D-472 LED 신원 오케스트레이터와 확인 트랙
 - 2026-10-07 · uncommitted · fix(fleet): 개발 콘솔 모든 화면 직접 접속
 - 2026-10-07 · uncommitted · docs(api): 예외 큐 신선도 필드를 v1.122 로
 - 2026-10-07 · uncommitted · fix(fleet): D-493 예외 큐가 오래된 상태를 표시
-- 2026-10-07 · uncommitted · docs(api): 막힘 에피소드 경로 번호를 v1.121 로

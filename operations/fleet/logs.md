@@ -2394,3 +2394,8 @@
 - 증거: `test_led_identity.py`, `test_lamp_identify_route.py`, `test_boundaries.py`(지도 자세 중재·trip·명령 경로가 identity를 읽지 않음)
 - gate 변화: 없음. 현장 측정·DEVICE/FIELD 미확인
 - 결정: D-472 addendum 3·4·5항
+
+## 2026-10-08 · uncommitted · fix(fleet): D-472 독립 안전 검토 지적 반영
+- 변경: 두 확인 트랙이 같은 source에서 0.30 m 안으로 만나면 둘 다 UNKNOWN(overlap). 경계 시험이 상대 import와 `tracking.identity`·`app.state.identity` 속성 접근도 잡는다(공용 `_server_imports`)
+- 증거: 영향 시험 58 passed, known_failures 0 NEW. 두 시험 모두 수정 전 코드에서 실패함을 확인
+- gate 변화: 없음. D-430 독립 검토(critic) APPROVE

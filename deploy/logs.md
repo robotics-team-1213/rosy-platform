@@ -2604,3 +2604,8 @@
 - 증거: `test/test_rosy_face.py`·`test/test_hw_test.py` 호스트 시험(거절·중단·기한·요청 나이). 실제 LED·ARM64 배포 없음
 - gate 변화: 없음. DEVICE/FIELD 미확인, D-430 Safety-Review 미수령
 - 결정: D-472 addendum 5항
+
+## 2026-10-08 · uncommitted · fix(face): D-472 SIGKILL 뒤 wait 시간 초과 처리
+- 변경: 식별 점멸 helper가 SIGKILL 뒤에도 끝나지 않으면 한 번 기록하고 상태 패턴 갱신으로 넘어간다(예외로 face 루프를 끊지 않음)
+- 증거: `test_rosy_face.py` 등 267 passed, known_failures 0 NEW. 새 시험은 수정 전 코드에서 실패
+- gate 변화: 없음. D-430 독립 검토(critic) APPROVE, DEVICE/FIELD 미확인
