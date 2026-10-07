@@ -1,8 +1,9 @@
 """D-511 M0: lane-compliance monitor — observe and notify only, never a command to a robot.
 
 Every tick (2 Hz, D-511 2) each roster robot is judged from `MapPoseService.arbitrated_pose`
-against the active site graph. A robot whose odom moved within `max_odom_age_s` gets
+against the active site graph. A robot whose odom moved within `max_odom_age_s` (beyond the `moving_min_m` / `moving_min_deg` jitter deadband) gets
 `refresh(force_rest=True)` first, the trip loop's read; a still robot keeps its heartbeat odom.
+The console raises WARN/ACT only for `moving` robots (D-511 2: the watch is on moving robots).
 The latest result per robot is read by `GET /api/fleet/state` rows (`lane_compliance`) and
 `GET /api/fleet/robots/{id}/lane-compliance`.
 """
@@ -43,10 +44,12 @@ class LaneComplianceMonitor:
         for gone in set(self._trackers) - set(roster):
             self._trackers.pop(gone, None)
             self._latest.pop(gone, None)
-        movers = [robot_id for robot_id in roster if self._poses.moved(robot_id)]
-        # A failed read leaves the last odom, which goes UNKNOWN after max_odom_age_s.
-        await asyncio.gather(*(self._poses.refresh(r, force_rest=True) for r in movers),
-                             return_exceptions=True)
+        cfg = self.config
+        movers = [r for r in roster if self._poses.moved(r, cfg.moving_min_m, cfg.moving_min_deg)]
+        # A failed or slow read (cut at one period) leaves the last odom, which goes UNKNOWN
+        # after max_odom_age_s; one slow robot never holds up the others' judgement.
+        await asyncio.gather(*(asyncio.wait_for(self._poses.refresh(r, force_rest=True), PERIOD_S)
+                               for r in movers), return_exceptions=True)
         active = self._site_maps.active()
         graph = active[2] if active is not None else None
         for robot_id in roster:

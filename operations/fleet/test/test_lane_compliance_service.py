@@ -1,6 +1,8 @@
 """D-511 M0: lane-compliance monitor — refresh movers, judge everyone, read-only views."""
 
 import asyncio
+import math
+import time
 from hashlib import sha256
 
 from fastapi.testclient import TestClient
@@ -31,7 +33,8 @@ class Poses:
     def __init__(self, poses, moving=()):
         self.poses, self.moving, self.refreshed = poses, set(moving), []
 
-    def moved(self, robot_id):
+    def moved(self, robot_id, min_m, min_deg):
+        assert (min_m, min_deg) == (LaneComplianceConfig().moving_min_m, LaneComplianceConfig().moving_min_deg)
         return robot_id in self.moving
 
     async def refresh(self, robot_id, *, force_rest=False):
@@ -39,6 +42,8 @@ class Poses:
         self.refreshed.append(robot_id)
         if robot_id == "boom":
             raise OSError("unreachable")
+        if robot_id == "slow":
+            await asyncio.sleep(30)
 
     def arbitrated_pose(self, robot_id):
         return self.poses.get(robot_id)
@@ -71,6 +76,16 @@ def test_monitor_refreshes_only_movers_and_judges_every_robot():
     assert monitor.view("nope") is None
 
 
+def test_one_slow_robot_does_not_hold_up_the_tick():
+    poses = Poses({"slow": at(0.0), "fast": at(0.0)}, moving={"slow", "fast"})
+    monitor = LaneComplianceMonitor(lambda: ["slow", "fast"], poses=poses,
+                                    site_maps=Maps((1, None, GRAPH, None)))
+    started = time.monotonic()
+    asyncio.run(monitor.tick())
+    assert time.monotonic() - started < 2.0              # cut at PERIOD_S, not 30 s
+    assert monitor.view("slow")["level"] == OK and monitor.view("fast")["level"] == OK
+
+
 def test_monitor_without_active_map_is_unknown_and_forgets_robots_that_left():
     roster = ["r1"]
     monitor = LaneComplianceMonitor(lambda: roster, poses=Poses({"r1": at(0.0)}), site_maps=Maps(None))
@@ -81,15 +96,19 @@ def test_monitor_without_active_map_is_unknown_and_forgets_robots_that_left():
     assert monitor.view("r1") is None
 
 
-def test_tracker_moved_since_reads_path_or_turn():
+def test_tracker_moved_since_has_a_jitter_deadband():
+    band = (0.01, math.radians(2.0))
     tracker = MapPoseTracker("r1")
     tracker.add_odom(OdomSample(0.0, 0.0, 0.0, 100.0), 100.0)
-    assert not tracker.moved_since(99.0)                  # one sample is not motion
-    tracker.add_odom(OdomSample(0.0, 0.0, 0.0, 101.0), 101.0)
-    assert not tracker.moved_since(99.0)                  # standing still
-    tracker.add_odom(OdomSample(0.0, 0.0, 0.2, 102.0), 102.0)
-    assert tracker.moved_since(99.0) and tracker.moved_since(101.5)
-    assert not tracker.moved_since(102.5)                 # nothing newer than `since`
+    assert not tracker.moved_since(99.0, *band)           # one sample is not motion
+    for i, (x, yaw) in enumerate([(0.004, 0.01), (-0.003, -0.02), (0.005, 0.015)] * 3):
+        tracker.add_odom(OdomSample(x, 0.0, yaw, 100.2 + 0.2 * i), 100.2 + 0.2 * i)
+    assert not tracker.moved_since(99.0, *band)           # parked: encoder/IMU jitter only
+    tracker.add_odom(OdomSample(0.0, 0.0, 0.2, 102.0), 102.0)      # turned 11 deg
+    assert tracker.moved_since(99.0, *band) and tracker.moved_since(101.9, *band)
+    assert not tracker.moved_since(102.5, *band)          # nothing newer than `since`
+    tracker.add_odom(OdomSample(0.03, 0.0, 0.2, 102.2), 102.2)     # 3 cm forward
+    assert tracker.moved_since(102.1, *band)
 
 
 def test_lane_compliance_endpoint_and_state_row(tmp_path):

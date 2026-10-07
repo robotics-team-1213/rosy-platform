@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from dataclasses import asdict
 from typing import Awaitable, Callable, Iterable, Mapping, Optional
@@ -130,10 +131,11 @@ class MapPoseService:
         if not done.cancelled() and done.exception() is not None:
             logger.debug("map pose: state read for %s failed: %r", key[0], done.exception())
 
-    def moved(self, robot_id: str) -> bool:
-        """D-511 2: the robot's odom moved within the last `max_odom_age_s`."""
+    def moved(self, robot_id: str, min_m: float, min_deg: float) -> bool:
+        """D-511 2: the robot's odom moved beyond the deadband within the last `max_odom_age_s`."""
         tracker = self._tracker(robot_id)
-        return tracker is not None and tracker.moved_since(self._wall() - self.config.max_odom_age_s)
+        return tracker is not None and tracker.moved_since(
+            self._wall() - self.config.max_odom_age_s, min_m, math.radians(min_deg))
 
     def arbitrated_pose(self, robot_id: str) -> Optional[MapPose]:
         """The robot's map pose for trip execution and the D-511 lane-compliance monitor
