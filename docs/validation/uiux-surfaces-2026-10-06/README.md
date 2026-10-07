@@ -419,3 +419,5 @@ The follow-up browser harness allows the active preview port in Chromium; port 6
 2026-10-07 D-493 Fleet 목록 폭 후속: 320/390px에서 「전체 주행 취소」와 「전체 로봇 보기」가 같은 너비를 쓰고, 취소 결과는 두 행동과 겹치지 않게 전폭에 표시한다. [LOCAL 브라우저 근거](../uiux-fleet-roster-actions-2026-10-07/result.md)는 관련 9건·계약 83건 통과, `known_failures.py` **0 NEW**다. 13:46 KST 사이트 이미지 태그는 이 후보보다 이전 `76a586121`이며, 실제 설치·운영자 G3·나머지 상태 G2는 **HOLD**다.
 
 2026-10-07 D-493 Fleet 지도 판독 후속: 320px에서 지도 라벨이 큰 비트맵을 축소하며 흐려지던 문제를 표시 크기·화면 밀도에 맞는 래스터 크기로 바로잡았다. [LOCAL 27셀 상태×폭 재확인](../uiux-fleet-map-raster-2026-10-07/result.md)은 페이지 오류·가로 넘침 0, 데스크톱 3:2/전화 동등 패널 폭, 비상 정지 가시성과 상태별 차단을 확인했다. 이는 합성 데이터의 부분 G2 근거이며 실제 사이트 설치·장치 readback·운영자 G3·남은 G2는 **HOLD**다.
+
+2026-10-07 현장 지도 로봇 상태 분리 후속: 로봇 목록 503이 이미 읽은 지도를 지도 오류로 숨기지 않도록 하고, 401/403이면 남은 운영자 조작을 잠갔다. [세 폭 LOCAL 증거](../uiux-site-map-roster-state-2026-10-07/result.md)는 지도 보기·경로 미리보기 차단·비상 정지 가시성을 확인했다. 브라우저 전체 **38 passed**, `known_failures.py` **0 NEW**. 이는 사용 불가·거부 G2 부분 근거이며 실물·운영자 G3·나머지 G2는 **HOLD**다.

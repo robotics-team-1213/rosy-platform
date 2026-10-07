@@ -319,6 +319,40 @@ def test_no_robot_explains_why_trip_preview_is_unavailable(page_site, width, hei
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_robot_state_failure_keeps_loaded_map_and_names_missing_evidence(page_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    page.route("**/api/fleet/state", lambda route: route.fulfill(
+        status=503, content_type="application/json", body='{"detail":"state unavailable"}'))
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    expect(page.locator("#map-viewport")).to_be_visible()
+    expect(page.locator("#trip-summary")).to_contain_text("로봇 상태 확인 불가")
+    expect(page.locator("#trip-plan")).to_be_disabled()
+    expect(page.locator("#estop")).to_be_enabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-robot-state-error-{width}x{height}.png"), full_page=True)
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_robot_state_auth_failure_removes_operator_controls(page_site, status):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.route("**/api/fleet/state", lambda route: route.fulfill(
+        status=status, content_type="application/json", body='{"detail":"unauthorized"}'))
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("관제 접속 필요" if status == 401 else "지도 조회 실패")
+    expect(page.locator("#estop")).to_be_disabled()
+    expect(page.locator("#trip-plan")).to_be_disabled()
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, width, height):
     from playwright.sync_api import expect
     from fleet.site_map import SiteMap

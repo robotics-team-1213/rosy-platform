@@ -13,7 +13,7 @@ const W = 800, H = 480;
 
 $('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
-const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, point: null};
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, point: null, robotsError: false};
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
@@ -115,7 +115,8 @@ function syncButtons() {
   state.loadState === 'pending' ? 'pending' : state.loadState === 'error' ? 'error'
     : state.draft?.revision ? 'ready' : 'empty');
   const tripRobot = $('trip-robot');
-  const robotReason = !tripRobot.options.length ? '등록된 로봇이 없습니다 · 관리자에게 로봇 등록을 요청하세요'
+  const robotReason = state.robotsError ? '로봇 상태 확인 불가 · 다시 접속하세요'
+    : !tripRobot.options.length ? '등록된 로봇이 없습니다 · 관리자에게 로봇 등록을 요청하세요'
     : ![...tripRobot.options].some(option => option.dataset.online === 'true') ? '연결된 로봇이 없습니다 · 로봇 연결을 확인하세요'
     : !tripRobot.value ? '로봇을 고르세요'
     : tripRobot.selectedOptions[0]?.dataset.online !== 'true' ? '선택한 로봇의 연결을 확인하세요' : '';
@@ -131,7 +132,12 @@ async function load() {
     if (error.status !== 404) throw error;
   }
   const draft = await request('/api/fleet/site-map/draft');
-  const robots = (await request('/api/fleet/state')).robots || [];
+  let robots = [];
+  state.robotsError = false;
+  try { robots = (await request('/api/fleet/state')).robots || []; } catch (error) {
+    if (error.status === 401 || error.status === 403) throw error;
+    state.robotsError = true;
+  }
   state.active = active;
   state.draft = draft;
   state.working = draft.map ? draft.map
@@ -145,7 +151,8 @@ async function load() {
     option.dataset.online = robot.online ? 'true' : 'false';
     return option;
   }));
-  if (!robots.length) status('trip-summary', '경로 미리보기 불가 · 등록된 로봇이 없습니다. 관리자에게 로봇 등록을 요청하세요.', 'empty');
+  if (state.robotsError) status('trip-summary', '경로 미리보기 불가 · 로봇 상태 확인 불가. 다시 접속하세요.', 'error');
+  else if (!robots.length) status('trip-summary', '경로 미리보기 불가 · 등록된 로봇이 없습니다. 관리자에게 로봇 등록을 요청하세요.', 'empty');
   else if (!robots.some(robot => robot.online)) status('trip-summary', '경로 미리보기 불가 · 연결된 로봇이 없습니다. 로봇 연결을 확인하세요.', 'empty');
   select(null);
   syncButtons();
@@ -162,6 +169,7 @@ $('connect').addEventListener('click', async () => {
   const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
   state.role = null;
   state.loadState = 'pending';
+  state.robotsError = false;
   state.active = state.draft = state.working = state.selected = state.plan = state.point = null;
   state.dirty = false;
   $('session').textContent = '접속 전';
@@ -179,10 +187,15 @@ $('connect').addEventListener('click', async () => {
     $('session').textContent = `${session.principal_id} · ${session.role}`;
     syncButtons();
     await load();
-    notice(!state.active && !state.working ? '활성 지도와 초안이 없습니다. 관리자에게 현장 지도 가져오기를 요청하세요.'
+    notice(state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
+      : !state.active && !state.working ? '활성 지도와 초안이 없습니다. 관리자에게 현장 지도 가져오기를 요청하세요.'
       : !state.active ? '활성 지도는 없습니다. 초안을 확인하고 활성화하세요.' : '지도를 읽었습니다.');
   } catch (error) {
     state.loadState = error.status === 401 ? 'idle' : 'error';
+    if (error.status === 401 || error.status === 403) {
+      state.role = null;
+      $('session').textContent = '접속 전';
+    }
     render();
     syncButtons();
     notice(siteMapErrorText(error));
