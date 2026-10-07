@@ -46,3 +46,12 @@
   - 회전 중 근거 상실 → `aborted turn_basis_lost`
   - 잘못된 설정 조합 거절
   - 기본값에서 거짓
+
+### 구현 메모 (2026-10-07, feat/d498-junction-turn-site-basis)
+
+1. **위치.** `core_features/line_follow/junction.py`의 `_turn_basis`가 근거를 돌려준다. 값은 `enforce`, `site`, 근거 없음 셋이다. `supports_junction_turn`과 회전 매 틱의 거절 검사가 이 함수를 같이 쓴다. 근거가 `site`이면 D-468 동작 확인(`_return_probe`)은 요구하지 않는다. 대신 회전·전진 twist마다 기존 D-422 몸체 간격 검사가 돈다. 이 검사는 현장 근거가 몸체 기하와 신선한 스캔을 요구하므로 항상 실행된다.
+2. **IR 가드 판정.** 현장 근거는 판정이 신선하고 이탈(`centre`)이 아닐 때 성립한다. 낡음(`stale`)이나 이탈이면 성립하지 않는다. D-476 rev 1 bridge(`lane_bridge.py`)는 `clear`만 받는다. 회전에서는 `left`·`right`(옆 센서 밑의 차선)도 허용한다. 제자리 회전은 차선을 가로질러 돌기 때문이다. 결정 3항의 "IR 가드가 departure/낡음이면 중단"과 같다. 실기에서 교차로 가로선 위 회전이 `centre`를 자주 내면 D3에서 기록한다.
+3. **신선도.** 스캔은 `clearance_stale_s`(0.5 s) 안이어야 한다. IR은 `stale_after_s`(0.3 s) 안이어야 한다.
+4. **중단 사유.** 시작할 때의 근거를 기록한다. 현장 근거로 시작한 회전이 근거를 잃으면 사유는 `turn_basis_lost`다. enforce 근거로 시작했거나 근거 없이 시작하려 하면 지금처럼 `motion_unconfirmed`다.
+5. **크기.** `core_features`는 15033(main)에서 15050으로 늘었다. 판정 14934에 +150을 더한 15084 안이다.
+6. **API.** Reference v1.118이다. v1.117은 `fix/lane-play-stl-nominal`이 먼저 잡았다.
