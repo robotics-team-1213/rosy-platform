@@ -567,7 +567,7 @@ def run_console(args: argparse.Namespace) -> None:
 
 
 def _trip_config(args):
-    """D-491 5: the trip loop's ``fleet.trip`` section of ``--site-config`` (e.g. ``stall_s``)."""
+    """D-494 5: the trip loop's ``fleet.trip`` section of ``--site-config`` (e.g. ``stall_s``)."""
     import yaml
 
     from fleet.server.trip_runner import TripConfig

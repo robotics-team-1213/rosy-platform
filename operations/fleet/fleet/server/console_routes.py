@@ -191,7 +191,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         if client is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
         on_trip = console.trip_busy(robot_id)
-        if on_trip and body.decision in ("RESUME", "BACK_AND_RETRY", "YIELD"):  # D-491 5: motion
+        if on_trip and body.decision in ("RESUME", "BACK_AND_RETRY", "YIELD"):  # D-494 5: motion
             raise http_error(HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first"))
         try:
             return await _forward_stuck_decision(robot_id, body, request, principal, client)

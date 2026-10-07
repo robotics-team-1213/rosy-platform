@@ -119,7 +119,7 @@ SIZE_VERDICTS = {
         "console_view.py +14, console_routes.py +11, app.py +5, stuck_resolver_loop.py +2, console.py -6."
         " Inside the server owner of docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; no new "
         "owner. +150 allowance unchanged. "
-        "Previously independently re-judged at 40110 on 2026-10-07 (D-491 5 review: the reviewer judged "
+        "Previously independently re-judged at 40110 on 2026-10-07 (D-494 5 review: the reviewer judged "
         "the growth justified). Since 38952 the package grew 1158 production and web lines for the "
         "server trip loop: fleet/server/trip_runner.py 600 (start checks, state machine, CORE "
         "junction protocol, halts, 0.5 s loop), trip_ports.py 171 (ports, fleet.trip config), "

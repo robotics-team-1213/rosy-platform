@@ -1,4 +1,4 @@
-"""D-491 5 / D-492 3: what a stored plan asks of a robot at each place, and whether it can.
+"""D-494 5 / D-495 3: what a stored plan asks of a robot at each place, and whether it can.
 
 Pure like the rest of ``fleet.routing``: the trip loop (``server/trip_runner.py``) calls these
 with the active graph and the robot's capability fields.
@@ -14,12 +14,12 @@ from fleet.routing.graph import Graph
 from fleet.routing.snap import PlanError
 from fleet.routing.trip import PlanRequest, plan_trip
 
-#: D-492 1: CORE turns at most this much at a junction.
+#: D-495 1: CORE turns at most this much at a junction.
 MAX_TURN_DEG = 150.0
 
 
 def plan_body(plan) -> dict:
-    """The JSON plan shape ``/trip`` returns and the store keeps (D-490 5, D-491 5)."""
+    """The JSON plan shape ``/trip`` returns and the store keeps (D-490 5, D-494 5)."""
     return {
         "map_version": plan.map_version,
         "segments": [{"edge_id": e, "forward": f, "s_from": a, "s_to": b} for e, f, a, b in plan.segments],
@@ -47,7 +47,7 @@ def ends_at_place(graph: Graph, segment: dict) -> Optional[str]:
 def lane_action(graph: Graph, segments: list, index: int, config: RoutingConfig) -> str:
     """The junction action at the end of lane segment ``index``.
 
-    ``stop`` at the last place and where the trip leaves the lane (D-491 4 has no hand-over).
+    ``stop`` at the last place and where the trip leaves the lane (D-494 4 has no hand-over).
     """
     if index + 1 >= len(segments) or graph.arcs[arc_id(segments[index + 1])].drive_mode != "lane":
         return STOP
@@ -59,7 +59,7 @@ def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, jun
     """None when the robot can drive every segment; otherwise ``TRIP_MODE_UNSUPPORTED`` detail.
 
     Any lane segment needs ``junction_turn`` (CORE's junction gate runs only with live keep-mode
-    evidence, D-492): without it the robot neither stops at a junction nor takes a branch.
+    evidence, D-495): without it the robot neither stops at a junction nor takes a branch.
     """
     for i, segment in enumerate(segments):
         arc = graph.arcs.get(arc_id(segment))

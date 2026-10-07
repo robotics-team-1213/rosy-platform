@@ -187,7 +187,7 @@ def install_task_dispatch_routes(
         principal: SitePrincipal = Depends(require_operator),
     ) -> dict:
         try:
-            if console.trip_busy(robot_id):  # D-491 5: refused before a task is queued for it
+            if console.trip_busy(robot_id):  # D-494 5: refused before a task is queued for it
                 raise HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first")
             if task_service is not None:
                 if not idempotency_key:

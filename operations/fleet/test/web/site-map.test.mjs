@@ -68,7 +68,7 @@ test('invalid draft errors list the fields', async () => {
   assert.match(text, /맞지 않는 값.*map\.edges\.0\.width_m: Input should be greater than 0/);
 });
 
-test('D-491 trip panel text and button reasons', async () => {
+test('D-494 trip panel text and button reasons', async () => {
   const {tripStatusText, tripStartReason, tripCancelReason} = await import('../../fleet/server/web/site-map-model.js');
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
@@ -87,7 +87,7 @@ test('D-491 trip panel text and button reasons', async () => {
   assert.match(tripCancelReason({role: 'operator', running: null}), /없습니다/);
 });
 
-test('D-491 trip stop reasons name the configured stall time and loop errors', async () => {
+test('D-494 trip stop reasons name the configured stall time and loop errors', async () => {
   const {tripStatusText, PLACE_KIND_LABEL} = await import('../../fleet/server/web/site-map-model.js');
   const trip = {state: 'stopped', robot_id: 'r1', reason: 'stall', detail: {stall_s: 35}};
   assert.match(tripStatusText(trip, MAP), /35초 넘게 경로를 따라 나아가지 않아/);

@@ -29,7 +29,7 @@ class StuckResolverLoop:
                  clock: Callable[[], float] = time.monotonic) -> None:
         self._snapshot, self._board, self._resolver = snapshot, board, resolver
         self._clients, self._clock = clients, clock
-        #: D-491 5: a robot on a running trip gets no automatic answer (app.py sets it).
+        #: D-494 5: a robot on a running trip gets no automatic answer (app.py sets it).
         self.trip_busy: Callable[[str], bool] = lambda _robot_id: False
         self.wake = asyncio.Event()
 

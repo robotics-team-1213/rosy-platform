@@ -20,7 +20,7 @@ Static Fleet console UI (vanilla ES modules, no build step), served at `/console
 | `signals.js` | Traffic-signal cards |
 | `site-layer.js` | Ceiling-camera sightings layer (pure; display and cross-check only) |
 | `vision-view.js`, `field-view.js`, `field-layers.js` | Camera preview, field proposal/rectified view, layer toggles |
-| `site-map.html`, `site-map.js`, `site-map-model.js`, `site-map.css` | D-488 `/console/site-map`: 활성 지도·초안 보기, 장소·차로 초안 편집과 활성화, D-490 경로 미리보기, D-491 5 운행 칸(시작·취소·바뀐 경로 확인, 1 s 조회). 순수 계산은 `site-map-model.js` |
+| `site-map.html`, `site-map.js`, `site-map-model.js`, `site-map.css` | D-488 `/console/site-map`: 활성 지도·초안 보기, 장소·차로 초안 편집과 활성화, D-490 경로 미리보기, D-494 5 운행 칸(시작·취소·바뀐 경로 확인, 1 s 조회). 순수 계산은 `site-map-model.js` |
 | `map-fit.js`, `map-fit-view.js` | D-375 lane-paint map fit proposal (pure math / view) |
 | `enrollment.js`, `camera-pairing.js` | Robot enrollment (D-361) and camera pairing approval (D-341) panels |
 | `address-drift.js`, `localization-badge.js`, `poll-gate.js`, `authorization.js` | Pure helpers: address drift text, localization badge, 404 poll gate, role-lock reasons |

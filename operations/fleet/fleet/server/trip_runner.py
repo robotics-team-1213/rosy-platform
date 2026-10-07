@@ -1,9 +1,9 @@
-"""D-491 5: the server trip loop — one running trip on the site, stepped every 0.5 s.
+"""D-494 5: the server trip loop — one running trip on the site, stepped every 0.5 s.
 
-Each tick reads the robot's Fleet map pose (D-491 3) and, on a lane segment, CORE's junction
-state (D-491 4 / D-492) before anything is sent; lane places get CORE junction instructions,
+Each tick reads the robot's Fleet map pose (D-494 3) and, on a lane segment, CORE's junction
+state (D-494 4 / D-495) before anything is sent; lane places get CORE junction instructions,
 free segments the D-463 point ahead as a goal. Every end of a trip stops the robot (``_halt``).
-The protocol, the stop rules and why are in the D-491 implementation appendix (5항 trip 루프);
+The protocol, the stop rules and why are in the D-494 implementation appendix (5항 trip 루프);
 the robot-facing inputs are ports (``trip_ports``), the plan rules are pure
 (``fleet.routing.execute``), and ``trip_guard`` keeps other Fleet motion off a trip robot.
 """
@@ -32,11 +32,11 @@ _LOG = logging.getLogger(__name__)
 LOCALIZED = "LOCALIZED"
 #: CORE takes junction instructions only on CAMERA_LINE (IR_LINE: 409 JUNCTION_CAMERA_ONLY).
 LINE_MODES = ("CAMERA_LINE",)
-#: D-492 1: CORE is executing a junction manoeuvre; a new instruction would abort it.
+#: D-495 1: CORE is executing a junction manoeuvre; a new instruction would abort it.
 MANOEUVRE = ("turning", "advancing", "reacquiring")
 #: D-490 5: a plan may be started within this long on the same map version.
 PLAN_TTL_S = 30.0
-#: CORE takes ``stop_after_m`` in [0, 2] (D-491 4).
+#: CORE takes ``stop_after_m`` in [0, 2] (D-494 4).
 MAX_STOP_AFTER_M = 2.0
 _ROBOT_ERRORS = (RobotApiError, HubError, OSError, RuntimeError, ValueError, httpx.HTTPError)
 
@@ -50,7 +50,7 @@ class _GoalRefused(RuntimeError):
 
 
 class _JunctionAborted(RuntimeError):
-    """CORE answered our instruction by aborting its manoeuvre (D-492): never resent."""
+    """CORE answered our instruction by aborting its manoeuvre (D-495): never resent."""
 
 
 def _code(exc: BaseException) -> str:
@@ -79,7 +79,7 @@ class TripRunner:
         self._live: Optional[LiveTrip] = None
         self._lock = asyncio.Lock()
         self._refresh_warned_at = -math.inf
-        #: D-491 5: never resume after a restart; ``run`` stops each robot (retried until it takes).
+        #: D-494 5: never resume after a restart; ``run`` stops each robot (retried until it takes).
         self._restarted = store.trips(states=OPEN, limit=1000)
         for trip in self._restarted:
             trip.update(state="stopped", reason="restart", updated_at=clock())
@@ -383,7 +383,7 @@ class TripRunner:
             raise _GoalRefused(reply.get("reason") or "")
 
     def _junction_failed(self, live: LiveTrip) -> Optional[dict]:
-        """D-492: CORE ``aborted``/``unresolved`` after our first instruction, or a long ``waiting``."""
+        """D-495: CORE ``aborted``/``unresolved`` after our first instruction, or a long ``waiting``."""
         junction = live.junction
         state, now = junction.get("state"), self._clock()
         live.waiting_since = (live.waiting_since or now) if state == "waiting" else None
@@ -565,7 +565,7 @@ class TripRunner:
     async def _pose(self, robot_id: str) -> Optional[MapPose]:
         refresh = getattr(self._poses, "refresh", None)
         try:
-            if refresh is not None:  # one state/odom read per tick for the trip robot (D-491 3)
+            if refresh is not None:  # one state/odom read per tick for the trip robot (D-494 3)
                 await self._call(refresh(robot_id, force_rest=True))  # past the 1 Hz hub cache
         except Exception:  # an unread state leaves the pose to age into DEGRADED/UNKNOWN
             if self._clock() - self._refresh_warned_at >= 30.0:

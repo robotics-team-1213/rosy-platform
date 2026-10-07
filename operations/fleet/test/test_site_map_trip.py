@@ -153,7 +153,7 @@ def test_activation_needs_a_named_operator_and_a_route_step_no_longer_blocks_it(
     routed = client.post("/api/fleet/robots/rosy_60/route", json={"edges": ["ring_s"]},
                          headers={**OPERATOR, "Idempotency-Key": "r1"})
     assert routed.status_code == 200, routed.text
-    # D-491 5: the guard is a running trip (test_trip_runner), not a /route step in the last 30 s
+    # D-494 5: the guard is a running trip (test_trip_runner), not a /route step in the last 30 s
     done = client.post("/api/fleet/site-map/activate", json={"expected_revision": saved["revision"]},
                        headers=OPERATOR)
     assert done.status_code == 200

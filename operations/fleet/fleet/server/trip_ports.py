@@ -1,4 +1,4 @@
-"""D-491 1/3/4 ports of the trip loop (``trip_runner``), its site config and their default wiring.
+"""D-494 1/3/4 ports of the trip loop (``trip_runner``), its site config and their default wiring.
 
 ``TripCaps`` (robot capability fields), ``MapPose`` (the Fleet trip map pose) and the lane
 junction / line-follow calls are injected so their providers plug in when they land. The
@@ -22,18 +22,18 @@ OPEN = ("started", "running")
 
 @dataclass(frozen=True)
 class TripCaps:
-    """D-491 1 capability fields as Fleet reads them from the robot's capabilities."""
+    """D-494 1 capability fields as Fleet reads them from the robot's capabilities."""
 
     kind: Optional[str]
     modes: frozenset
     max_speed: Optional[float]
-    #: D-492 3: CORE runs the bounded junction turn (``turn_deg``); without it no lane left/right.
+    #: D-495 3: CORE runs the bounded junction turn (``turn_deg``); without it no lane left/right.
     junction_turn: bool = False
 
 
 @dataclass(frozen=True)
 class MapPose:
-    """D-491 3 ``map_pose`` output."""
+    """D-494 3 ``map_pose`` output."""
 
     x: float
     y: float
@@ -76,21 +76,21 @@ class LaneJunctionPort(Protocol):
 
 
 class NoTripCaps:
-    """Default until the D-491 1 provider lands: no robot has trip capabilities."""
+    """Default until the D-494 1 provider lands: no robot has trip capabilities."""
 
     def caps_for(self, robot_id: str) -> None:
         return None
 
 
 class NoMapPose:
-    """Default until the D-491 3 provider lands: no robot has a trip pose."""
+    """Default until the D-494 3 provider lands: no robot has a trip pose."""
 
     def arbitrated_pose(self, robot_id: str) -> None:
         return None
 
 
 class HttpLaneJunction:
-    """D-491 4 through the console's robot clients (``HttpRobotClient.line_follow_junction``)."""
+    """D-494 4 through the console's robot clients (``HttpRobotClient.line_follow_junction``)."""
 
     def __init__(self, clients: Callable[[], Mapping[str, Any]]) -> None:
         self._clients = clients
@@ -125,9 +125,9 @@ class HttpLaneJunction:
 @dataclass(frozen=True)
 class TripConfig:
     period_s: float = 0.5
-    #: D-491 5: the next place's action goes to CORE this far before the place.
+    #: D-494 5: the next place's action goes to CORE this far before the place.
     arm_distance_m: float = 0.6
-    #: CORE keeps one junction instruction at most 30 s (D-491 4); refreshed at half this.
+    #: CORE keeps one junction instruction at most 30 s (D-494 4); refreshed at half this.
     junction_expires_s: float = 15.0
     #: A lane robot this close to its last place (after the stop went out) has arrived.
     arrive_lane_m: float = 0.15
@@ -141,7 +141,7 @@ class TripConfig:
     advance_eps_m: float = 0.02
     #: A free goal is sent again only when its point moved this much.
     goal_resend_m: float = 0.05
-    #: D-492 1: CORE turns at most this much at a junction.
+    #: D-495 1: CORE turns at most this much at a junction.
     max_turn_deg: float = 150.0
     #: CORE ``waiting`` (at a junction without an instruction) this long stops the trip.
     junction_wait_s: float = 10.0

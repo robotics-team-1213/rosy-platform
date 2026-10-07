@@ -1,4 +1,4 @@
-"""D-491 5: the server trip loop against a fake CORE junction (D-491 4 / D-492) and fake ports."""
+"""D-494 5: the server trip loop against a fake CORE junction (D-494 4 / D-495) and fake ports."""
 
 from __future__ import annotations
 
@@ -362,7 +362,7 @@ def test_start_checks_the_map_version_again_after_its_robot_calls():
 @pytest.mark.parametrize(("site_map", "arc", "s", "to", "caps", "reason"), [
     ("lane", "ab:fwd", 0.1, (1.0, 0.5, None), LANE, "LANE_END_NOT_A_PLACE"),
     ("lane", "ab:fwd", 0.5, "C", TripCaps("pinky_pro", frozenset({"lane"}), 0.2), "JUNCTION_TURN_UNSUPPORTED"),
-    # keep-mode evidence is needed for any lane plan, a stop-only one included (D-492)
+    # keep-mode evidence is needed for any lane plan, a stop-only one included (D-495)
     ("lane", "bc:fwd", 0.5, "C", TripCaps("pinky_pro", frozenset({"lane"}), 0.2), "JUNCTION_TURN_UNSUPPORTED"),
 ])
 def test_plans_a_lane_robot_cannot_run_are_refused(site_map, arc, s, to, caps, reason):
@@ -374,7 +374,7 @@ def test_plans_a_lane_robot_cannot_run_are_refused(site_map, arc, s, to, caps, r
 
 
 def test_a_turn_sharper_than_the_bound_is_refused_for_lane_robots():
-    runner, store, ports = _setup(_free_map("lane"), max_turn_deg=80.0)  # 150 by default (D-492)
+    runner, store, ports = _setup(_free_map("lane"), max_turn_deg=80.0)  # 150 by default (D-495)
     _plan(store, ports, "ab:fwd", 0.5, "C")
     with pytest.raises(TripError) as err:
         run(runner.start("p1", "bob"))
@@ -988,7 +988,7 @@ def test_trip_api_start_status_cancel_need_a_named_operator_and_are_audited(tmp_
     assert client.get(f"/api/fleet/trips/{plan['plan_id']}", headers=VIEWER).json()["state"] == "running"
     assert client.get("/api/fleet/trips/nope", headers=VIEWER).json()["detail"]["code"] == "TRIP_UNKNOWN"
 
-    # D-491 5: the activation guard is "a running trip exists"
+    # D-494 5: the activation guard is "a running trip exists"
     saved = client.put("/api/fleet/site-map/draft", json={"map": store.active_view()["map"]}, headers=OPERATOR).json()
     refused = client.post("/api/fleet/site-map/activate", json={"expected_revision": saved["revision"]},
                           headers=OPERATOR)

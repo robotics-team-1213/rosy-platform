@@ -10,7 +10,7 @@ from fleet.swarm.transport import RobotApiError
 
 
 class TripAware:
-    """D-491 5: ``trip_busy(robot_id)`` is True while the trip loop drives that robot.
+    """D-494 5: ``trip_busy(robot_id)`` is True while the trip loop drives that robot.
 
     ``trip_guard.install_trip_guard`` replaces it on the console instance; a trip robot never
     yields (``_make_room`` finds it no bay) and is never a reassignment candidate. It also

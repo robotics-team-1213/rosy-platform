@@ -1,4 +1,4 @@
-"""D-491 5 / D-492 3: the pure executability rules of a stored plan (``fleet.routing.execute``)."""
+"""D-494 5 / D-495 3: the pure executability rules of a stored plan (``fleet.routing.execute``)."""
 
 from __future__ import annotations
 

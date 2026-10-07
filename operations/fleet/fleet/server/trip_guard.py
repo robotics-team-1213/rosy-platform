@@ -1,4 +1,4 @@
-"""D-491 5: a robot on a running trip takes motion only from the trip loop; every stop ends it.
+"""D-494 5: a robot on a running trip takes motion only from the trip loop; every stop ends it.
 
 Installed on the console by ``app.py`` so the safety-tagged ``console.py`` stays as it is: the
 motion and stop methods are replaced on the console instance (``console_view.TripAware``).

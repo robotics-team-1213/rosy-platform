@@ -40,7 +40,7 @@ class RouteRequest(BaseModel):
 
 def install_lane_route_routes(app, *, console, task_service, site_maps,
                               require_operator, operator_guard) -> None:
-    """D-491 5: map activation waits for a running trip, not for this route (no guard here)."""
+    """D-494 5: map activation waits for a running trip, not for this route (no guard here)."""
     # One process remembers how far each robot has followed each edge list.
     # A closed lap starts and ends on one point; without this the end is the start.
     followed: dict[tuple, float] = {}
@@ -53,7 +53,7 @@ def install_lane_route_routes(app, *, console, task_service, site_maps,
         principal: SitePrincipal = Depends(require_operator),
     ) -> dict:
         """D-463. Expand stored lane edges and send only the next short point."""
-        if console.trip_busy(robot_id):  # D-491 5: the trip loop owns this robot's motion
+        if console.trip_busy(robot_id):  # D-494 5: the trip loop owns this robot's motion
             raise HTTPException(status_code=409, detail={
                 "code": "TRIP_ROBOT_BUSY", "message": f"{robot_id} is on a running trip"})
         active = site_maps.active()

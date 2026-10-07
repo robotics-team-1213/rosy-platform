@@ -16,7 +16,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_POSE_UNTRUSTED: '로봇 위치가 LOCALIZED가 아닙니다',
   TRIP_PLAN_FAILED: '이 지도에서 경로 계산이 실패했습니다 · 관리자에게 알리세요',
   UNKNOWN_ROBOT: '등록되지 않은 로봇입니다',
-  // D-491 5 trip start / control
+  // D-494 5 trip start / control
   TRIP_PLAN_UNKNOWN: '저장된 경로가 없습니다 · 다시 계산하세요',
   TRIP_PLAN_EXPIRED: '계산한 지 30초가 지났습니다 · 다시 계산하세요',
   TRIP_MAP_CHANGED: '계산 뒤 활성 지도가 바뀌었습니다 · 다시 계산하세요',

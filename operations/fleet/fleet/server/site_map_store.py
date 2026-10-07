@@ -5,7 +5,7 @@ named operator (routes) and is refused while a lane route is running. Every acti
 every trip plan (D-490 8) is a row here beside the HTTP audit of the request. Draft saves
 and activations are rows in ``site_map_events``; plans keep the last ``PLAN_KEEP`` within
 ``PLAN_KEEP_S``; a plan row keeps the whole plan body so ``/trips/{plan_id}/start`` can run
-it (D-491 5). Trips (D-491 5) are rows in ``site_trips``. Activation refuses a map the
+it (D-494 5). Trips (D-494 5) are rows in ``site_trips``. Activation refuses a map the
 planner cannot use.
 """
 
@@ -209,7 +209,7 @@ class SiteMapStore:
         return [{"plan_id": r[0], "robot_id": r[1], "principal_id": r[2], "map_version": r[3],
                  "request": json.loads(r[4]), "result": json.loads(r[5]), "created_at": r[6]} for r in rows]
 
-    # ---- trips (D-491 5) ------------------------------------------------------------
+    # ---- trips (D-494 5) ------------------------------------------------------------
 
     def put_trip(self, trip: dict) -> None:
         """Insert or replace one trip row; ``trip`` is the JSON view the API returns."""

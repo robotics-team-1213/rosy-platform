@@ -320,7 +320,7 @@ def test_trip_start_is_gated_and_names_the_d491_refusal(page_site, width, height
     page.select_option("#trip-place", "NW")
     page.locator("#trip-plan").click()
     expect(page.locator("#trip-start")).to_be_enabled()
-    page.locator("#trip-start").click()  # default wiring: no D-491 1 capability provider yet
+    page.locator("#trip-start").click()  # default wiring: no D-494 1 capability provider yet
     expect(page.locator("#notice")).to_contain_text("주행 능력")
     assert not [call for call in robot.calls if call[0] == "navigation_goal"]
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")

@@ -2,7 +2,7 @@
 
 The robot's LOCALIZED map pose and the active site map go into the pure planner
 (``fleet.routing``). Every plan, refused or not, is a row in the site map store (D-490 8).
-D-491 5: ``POST /api/fleet/trips/{plan_id}/start`` runs a stored plan through the trip loop
+D-494 5: ``POST /api/fleet/trips/{plan_id}/start`` runs a stored plan through the trip loop
 (``trip_runner``); ``/cancel`` and ``/confirm-replan`` act on it and ``GET`` reads it. The
 plan request's ``execute: true`` stays 501: starting is always its own named-operator call.
 """
@@ -104,7 +104,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
             raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
         body = plan_body(plan)
-        # D-491 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.
+        # D-494 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s, "plan": body})
         return {"plan_id": plan_id, **body, "expires_at": time.time() + PLAN_TTL_S}
 

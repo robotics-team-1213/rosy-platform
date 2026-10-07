@@ -318,7 +318,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             resolver_task = asyncio.create_task(app.state.stuck_resolver.run())
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
-        trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-491 5
+        trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -526,7 +526,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_lane_route_routes(app, console=console, task_service=task_service,
                               site_maps=site_maps, require_operator=require_operator,
                               operator_guard=operator_guard)
-    # D-491 5: the ports default to "nothing known" until the D-491 1/3 providers land.
+    # D-494 5: the ports default to "nothing known" until the D-494 1/3 providers land.
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps or NoTripCaps(), poses=map_pose or NoMapPose(),
                              junction=lane_junction or HttpLaneJunction(console.clients),
@@ -535,7 +535,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
                              roster=lambda: console.robot_ids)
     install_trip_guard(console, trip_runner)
-    if getattr(app.state, "stuck_resolver", None) is not None:  # D-491 5: no automatic answer on a trip
+    if getattr(app.state, "stuck_resolver", None) is not None:  # D-494 5: no automatic answer on a trip
         app.state.stuck_resolver.trip_busy = trip_runner.robot_busy
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
@@ -613,7 +613,7 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
                 and row["state"].get("navigation") in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
                 and row["state"].get("mode") in {"IDLE", "NAVIGATION"}
                 and not row["state"].get("capabilities_degraded")
-                and not console.trip_busy(row["robot_id"])  # D-491 5: the trip loop drives it
+                and not console.trip_busy(row["robot_id"])  # D-494 5: the trip loop drives it
                 and row["state"].get("safety", {}).get("estop") is False
             }
             await task_service.dispatch_next(

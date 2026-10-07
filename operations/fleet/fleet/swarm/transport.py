@@ -288,7 +288,7 @@ class HttpRobotClient:
     async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
                                    expires_s: float, turn_deg: float | None = None,
                                    advance_m: float | None = None) -> dict:
-        """D-491 4 / D-492 1: the action at the next junction; an old CORE answers 404."""
+        """D-494 4 / D-495 1: the action at the next junction; an old CORE answers 404."""
         body: dict = {"action": action, "place_id": place_id, "expires_s": expires_s}
         for key, value in (("stop_after_m", stop_after_m), ("turn_deg", turn_deg), ("advance_m", advance_m)):
             if value is not None:

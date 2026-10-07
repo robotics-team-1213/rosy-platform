@@ -1,5 +1,5 @@
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
-// and preview a D-490 trip plan. Only the D-491 운행 buttons start or cancel a trip.
+// and preview a D-490 trip plan. Only the D-494 운행 buttons start or cancel a trip.
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {
