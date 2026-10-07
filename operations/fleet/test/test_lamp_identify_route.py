@@ -1,3 +1,4 @@
+import time
 from types import SimpleNamespace
 
 from fastapi import FastAPI
@@ -18,9 +19,12 @@ class Robot:
 class Console:
     def __init__(self, robot):
         self.robot = robot
+        # install_console_routes also builds the D-509 power-health display from these.
+        self._clients = {"rosy_26": robot}
+        self._clock = time.monotonic
 
     def clients(self):
-        return {"rosy_26": self.robot}
+        return dict(self._clients)
 
 
 def _client(robot, moving=True):
