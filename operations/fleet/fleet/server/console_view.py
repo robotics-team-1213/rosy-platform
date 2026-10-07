@@ -8,7 +8,12 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
+import httpx
+
 from fleet.swarm.transport import RobotApiError
+
+# D-499: plain HTTP against a TLS-only CORE. Do not add SSLError or ConnectError here.
+_PROTOCOL = (httpx.RemoteProtocolError,)
 
 
 class TripAware:
@@ -187,3 +192,20 @@ def _error_of(exc: BaseException) -> dict:
     if isinstance(exc, RobotApiError):
         return {"reachable": True, "code": exc.code, "message": str(exc)}
     return {"reachable": False, "code": type(exc).__name__, "message": str(exc) or type(exc).__name__}
+
+
+def classify_link(exc: BaseException | None, *, scheme: str,
+                  address_status: str | None) -> str | None:
+    """D-499 robot link class: a closed link word, or None when the row must omit `link`.
+    The browser reads the returned word and never an exception name."""
+    if exc is None:
+        return "up"
+    if address_status == "seen_at_other_address":
+        return "moved"
+    if isinstance(exc, RobotApiError):
+        if exc.status == 401:
+            return "tls-refused"
+        return None
+    if scheme.lower() == "http" and isinstance(exc, _PROTOCOL):
+        return "protocol"
+    return "unreachable"
