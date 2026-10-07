@@ -12,6 +12,7 @@ import { createVisionView } from "./vision-view.js";
 import { applyRoleToControls } from "./authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
 import { addressMap, movableRobots, renumberBanner } from "./address-drift.js";
+import { fleetRow, proxyRow, visionRow } from "./site-path.js";
 import { createPollGate } from "./poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
 import { confirmIrreversible } from "/common/ui.js";
@@ -320,7 +321,38 @@ function render() {
   refreshDiagnostics();
 }
 
+let pathSample = { proxy: null, fleet: null, vision: null };
 let statePollInFlight = false;
+
+function paintSitePath() {
+  const list = el("site-path-list");
+  list.replaceChildren(...[pathSample.proxy, pathSample.fleet, pathSample.vision].map((sample, index) => {
+    const row = [proxyRow, fleetRow, visionRow][index](sample);
+    const item = document.createElement("li");
+    const name = document.createElement("b");
+    name.textContent = row.name;
+    const word = document.createElement("ui-tag");
+    // ui-tag's nominal status is active. kind "good" is that word; "good" itself has no rule.
+    word.setAttribute("status", row.kind === "good" ? "active" : row.kind);
+    word.textContent = row.word;
+    item.append(name, word);
+    return item;
+  }));
+}
+
+async function refreshHealthz() {
+  const life = pageScope.capture();
+  try {
+    const response = await fetch("/healthz", { cache: "no-store", signal: life.signal });
+    const body = await response.json();
+    if (!life.current()) return;
+    pathSample.proxy = { finished: true, status: response.status, body };
+  } catch (err) {
+    if (err.name === "AbortError") return;
+    pathSample.proxy = { finished: false };
+  }
+  paintSitePath();
+}
 pageScope.onDispose(() => {
   statePollInFlight = false;
   view.selected = null;
@@ -332,9 +364,13 @@ async function refreshState() {
   life.check();
   if (auth.locked || statePollInFlight) return;
   statePollInFlight = true;
+  let fleetAnswered = false;
   try {
     const snapshot = await call("/api/fleet/state");
     life.check();
+    pathSample.fleet = { finished: true, status: 200 };
+    fleetAnswered = true;
+    paintSitePath();
     view.robots = snapshot.robots;
     if (requestedRobotFocus && view.robots.some(robot => robot.robot_id === requestedRobotFocus)) view.showAllRobots = true;
     view.stateUnavailable = false;
@@ -360,6 +396,12 @@ async function refreshState() {
     }
   } catch (err) {
     if (err.name === "AbortError") return;
+    if (!fleetAnswered) {
+      pathSample.fleet = typeof err.status === "number"
+        ? { finished: true, status: err.status }
+        : { finished: false };
+      paintSitePath();
+    }
     // D-248: 잠금 pill(토큰 필요)을 서버 없음으로 덮지 않는다 — 401의 이유를 남긴다.
     if (auth.locked) return;
     view.stateUnavailable = true;
@@ -777,7 +819,10 @@ function refreshDiagnostics() {
 const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
   isOperator: () => auth.role === "operator" && !auth.locked });
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
-const visionView = createVisionView({ scope: pageScope, el, call, rawOnly: true });
+const visionView = createVisionView({
+  scope: pageScope, el, call, rawOnly: true,
+  onSources: (sample) => { pathSample.vision = sample; paintSitePath(); },
+});
 mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
@@ -856,13 +901,16 @@ tickClock();
 pageScope.interval(tickClock, 1000);
 applyRoleToControls(null, operatorControls());
 render();
+paintSitePath();
 connectionMode();
+refreshState();
 refreshAuthorization();
 visionView.refreshSources();
 mapView.refresh();
 trackingView.refresh();
 pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 pageScope.interval(refreshState, STATE_MS);
+pageScope.interval(refreshHealthz, STATE_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
 pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
 pageScope.interval(refreshDiscovery, MAP_MS);

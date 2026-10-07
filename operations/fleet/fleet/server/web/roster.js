@@ -6,6 +6,7 @@
 import { MODE_LABEL, NAVIGATION_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
 import { addressReason } from "./address-drift.js";
+import { linkTag } from "./link-tag.js";
 import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./localization-badge.js";
 import { capabilityReason } from "./motion-readiness.js";
 
@@ -141,6 +142,12 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable && robot.online && state.mode) modeTag.title = state.mode;
     else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
     head.appendChild(modeTag);
+    const link = view.stateUnavailable ? null : linkTag(robot.link);
+    if (link) {
+      const linkNode = tag(link.word, link.kind);
+      linkNode.dataset.link = robot.link;
+      head.appendChild(linkNode);
+    }
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
     // 비켜서는 중인 로봇은 "주행 중"이 맞다 — 다만 제 미션을 가는 것이 아니라서 따로 적는다.
     head.appendChild(tag(
@@ -212,9 +219,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     // 한 원인은 한 번 말한다(D-359 §5.3) — 카드 상태 줄이 원인을 이미 말하면
     // 버튼 사유는 "위 사유"로 이 줄을 가리킨다.
-    const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error
+    const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error && !link
       ? `robot-why-${robot.robot_id}` : null;
-    if (!view.stateUnavailable && !robot.online && robot.error) {
+    if (!view.stateUnavailable && !robot.online && robot.error && !link) {
       const why = nodeWithText("p", "hint");
       why.textContent = robot.error.reachable
         ? `로봇이 거절: ${robot.error.code}`
@@ -232,6 +239,21 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       why.dataset.addressReason = view.addresses[robot.robot_id].status;
       why.textContent = address.text;
       node.appendChild(why);
+    }
+
+    if (link?.text) node.appendChild(nodeWithText("p", "hint", link.text));
+    if (link?.next) {
+      if (link.focus === "console-token") {
+        const next = document.createElement("button");
+        next.type = "button";
+        next.textContent = link.next;
+        next.addEventListener("click", scope.guard(() => {
+          document.getElementById("console-token")?.focus();
+        }));
+        node.appendChild(next);
+      } else {
+        node.appendChild(nodeWithText("p", "hint", link.next));
+      }
     }
 
     // D-416 — 오프라인 로봇의 마지막 응답 시각: "언제부터 안 됐지?"에 바로 답한다.

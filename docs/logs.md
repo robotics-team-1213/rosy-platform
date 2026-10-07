@@ -6738,3 +6738,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 호스트 시험은 장치 수용이 아니다.
 - 결정: D-499 Proposed 유지.
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(fleet): 관제에 사이트 경로와 로봇 링크를 표시(D-499)
+
+- 변경: 등록 로봇 칸의 목록 위에 관제 경로 세 줄을 두고, 로봇 카드는 link가 문제일 때만 한 단어를 붙인다. healthz와 기존 state·vision sources 조회만 쓴다. 새 모듈은 콘솔 자산 허용 목록에 있다. D-499는 Proposed다.
+- 증거: operations/fleet/test/web/site-path.test.mjs, link-tag.test.mjs, site-path-place.test.mjs, address-drift.test.mjs (node 20 pass). operations/fleet/test/test_document_imports.py, test_server_app.py::test_every_console_module_import_is_served (2 passed).
+- gate 변화: 없음. 호스트 시험은 장치 수용이 아니다.
+- 결정: D-499 Proposed 유지.
+- 교훈: 없음

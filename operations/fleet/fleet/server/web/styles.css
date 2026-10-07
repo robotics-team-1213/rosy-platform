@@ -37,7 +37,7 @@
 #discovery-retry { margin-top: var(--space-2); }
 .roster-block { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2) var(--space-3); }
 .roster-block > h2 { margin: 0; }
-.roster-block > #roster, .roster-block > .address-drift { grid-column: 1 / -1; }
+.roster-block > #roster, .roster-block > .address-drift, .roster-block > #site-path { grid-column: 1 / -1; }
 /* 알릴 발행 상태가 있으면 띠가 머리 아래 한 줄을 다 쓴다. 없으면 전체 주행 취소 버튼만 머리 줄에 선다. */
 .roster-block > .dispatch-control { grid-column: 1 / -1; grid-row: 2; }
 .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 2; grid-row: 1; }
@@ -741,6 +741,10 @@ main {
 .discovery-state.enrolled { color: var(--ink); }
 .enroll-alarm { color: var(--status-crit); font-weight: var(--weight-label); }
 .address-drift { display: grid; gap: var(--space-2); margin: var(--space-2) 0; }
+.site-path { display: grid; gap: var(--space-2); margin: var(--space-2) 0; }
+.site-path h3 { margin: 0; }
+.site-path ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.site-path li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
 .address-drift[hidden] { display: none; }
 .address-drift .enroll-alarm { margin: 0; }
 .enroll-move-check[hidden] { display: none; }

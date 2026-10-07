@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(fleet): 관제에 사이트 경로와 로봇 링크를 표시(D-499)
 - 2026-10-07 · uncommitted · feat(fleet): 관제 상태 행에 로봇 링크(D-499)
 - 2026-10-07 · uncommitted · docs(plan): 관제 사이트 경로와 로봇 링크 실행 계획(D-499)
 - 2026-10-07 · uncommitted · docs(adr): 관제 사이트 경로와 로봇 링크(D-499)
 - 2026-10-07 · uncommitted · fix(pilot): 열린 상태 소켓의 무응답 readback 표시
-- 2026-10-07 · uncommitted · uiux(pilot): 주행 HUD 증거 상태와 좁은 폭 가독성
