@@ -16,6 +16,7 @@ from core_common.protocol.schemas import (
     HealthState,
     LineFollowStatus,
     NavigationState,
+    OdomPose,
     Pose,
     PowerStatus,
     RobotActivity,
@@ -72,6 +73,7 @@ class StateManager:
         self._mode: RobotMode = RobotMode.IDLE
         self._navigation: NavigationState = NavigationState.IDLE
         self._pose = Pose()
+        self._odom_pose: Optional[OdomPose] = None
         self._velocity = Velocity()
         self._battery = Battery()
         self._battery_status = BatteryStatus()
@@ -132,6 +134,11 @@ class StateManager:
         with self._lock:
             self._pose = Pose(x=x, y=y, yaw=yaw)
             self._mark("pose")
+
+    def set_odom_pose(self, x: float, y: float, yaw: float) -> None:
+        """D-491 2: odom-frame pose, stamped with the wall clock at receipt."""
+        with self._lock:
+            self._odom_pose = OdomPose(x=x, y=y, yaw=yaw, stamp=self._clock())
 
     def set_velocity(self, linear: float, angular: float) -> None:
         with self._lock:
@@ -284,4 +291,5 @@ class StateManager:
                 activity=activity,
                 safety_policy=safety_policy,
                 localization=localization,
+                odom_pose=self._odom_pose,
             )

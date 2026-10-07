@@ -859,6 +859,19 @@ class Pose(BaseModel):
     yaw: float = 0.0
 
 
+class OdomPose(BaseModel):
+    """D-491 2: pose in the robot's odom frame and when CORE received it.
+
+    ``stamp`` is UTC epoch seconds (wall time, not robot monotonic), the same
+    form as a sighting's ``captured_at``, so Fleet can pair the two.
+    """
+
+    x: float
+    y: float
+    yaw: float
+    stamp: float
+
+
 class Velocity(BaseModel):
     linear: float = 0.0
     angular: float = 0.0
@@ -1179,6 +1192,8 @@ class StateSnapshot(BaseModel):
     #: v1.69 additive (D-395): state and pose frame; null from robots before D-395.
     localization: Optional[LocalizationStatus] = None
     safety_policy: Optional[SafetyPolicyStatus] = None  # D-400, v1.71 additive
+    #: v1.112 additive (D-491 2): odom-frame pose beside `pose`, null until odometry arrives.
+    odom_pose: Optional[OdomPose] = None
 
 
 class HeartbeatPayload(BaseModel):
