@@ -120,3 +120,7 @@ Laya와 Kev의 공식 서버가 같은 `POST /v1/systemone`을 받으므로 서�
 | 기록 | 입력 SHA-256 `c67ebce24dd11280d3ad3ee07d6d5c38c3d37c31ec721201aeaa98ebb415994e`, 결과 SHA-256 `7c150d05874d50e44eceaa7efeebe99e93e6384f58479ca89d25caaa21153423`; 원본은 `X:\DevTemp\rosy-decision-replay-20261008\`과 AI PC의 시험 폴더에 보관 |
 
 예시 `thing_source` 문자열은 형식 시험을 위해 만든 것이며 실제 검수된 영상 사실이 아니다. 이 두 건으로 정확도, 확률 보정, 정체 위험 혼동률을 추정하지 않는다. Kev는 아직 설치·실행하지 않았다. 다음 비교는 독립적으로 사람이 라벨링한 막힘 사건 세트를 마련한 뒤 같은 입력으로 실행한다. VLM은 [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md)의 별도 정체 V0 세트로 시험한다.
+
+## 8. 확정한 호스트와 판단 권한
+
+2026-10-08 사용자 결정으로 [D-516](../adr/D-516-offline-decision-model-replay-boundary.md)을 Accepted로 올렸다. **모델 PC**는 학습·평가·승격 증거와 고정 `ModelProfile` 후보를 만들고, **AI PC**는 승인된 버전의 추론만 한다. **관제 PC의 Fleet**은 AI PC가 돌려준 사실·후보를 검증해 규칙·admission·사람 확인을 적용하고, **로봇 CORE**가 실행 전 다시 확인한다. AI PC가 모델을 실행한다고 해서 Fleet의 판단 권한이 AI PC로 옮겨가지는 않는다. D-434의 기존 모델 PC·관제 PC 역할과 D-492의 막힘 VLM V0/V1 관문은 유지된다. 프로파일의 정확한 전송·인증·활성화 schema는 별도 구현 계약으로 남긴다.
