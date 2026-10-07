@@ -88,8 +88,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · uiux(fleet): Cell 문서 목록 마지막 수신 시각
 - 2026-10-07 · uncommitted · uiux(fleet): Cell 접속 역할 어휘
 - 2026-10-07 · uncommitted · Fleet roster action widths
 - 2026-10-07 · uncommitted · fix(fleet): D-494 3 map pose 재검토 반영
 - 2026-10-07 · uncommitted · fix(fleet): D-494 3 map pose 독립 검토 반영
-- 2026-10-07 · uncommitted · feat(fleet): D-494 3 trip 전용 지도 자세(map pose)

@@ -2263,3 +2263,9 @@
 - 변경: `/console/cell`의 원시 역할 코드를 Fleet 관제·설치 화면과 같은 한국어 역할 이름으로 표시한다. 권한 판정·API 요청은 변경하지 않는다.
 - 증거: 320px 브라우저 수정 전 1 failed, 수정 후 1 passed; Cell 전체 49 passed, G1 90 passed, `known_failures.py` 0 NEW; `docs/validation/uiux-cell-role-label-2026-10-07/result.md`.
 - gate 변화: 없음. LOCAL 화면 근거만 추가하고 사이트·장치·G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): Cell 문서 목록 마지막 수신 시각
+
+- 변경: 목록 성공 응답을 브라우저가 받은 시각을 문서 수정 시각과 분리해 표시한다. 조회 중·실패·계정 변경은 기존 목록을 숨긴다.
+- 증거: 선언 세 폭의 목록 성공·실패/복구 브라우저 6 passed, 조회 잠금 1 passed, Cell 전체 49 passed, G1 90 passed, `known_failures.py` 0 NEW. `docs/validation/uiux-cell-list-readtime-2026-10-07/result.md`.
+- gate 변화: 없음. 서버 판정 신선도·현장·장치·G3는 HOLD.
