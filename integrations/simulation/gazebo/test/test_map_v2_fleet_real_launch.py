@@ -59,3 +59,15 @@ def test_default_camera_args_keep_the_lap_bench_camera():
     sim = (ROOT.parent / "integrations" / "simulation" / "gazebo" / "launch" / "launch_sim.launch.xml").read_text(encoding="utf-8")
     assert '<arg name="camera_hfov" default="1.1519"/>' in sim
     assert '<arg name="cam_mount_z" default="0.0495"/>' in sim
+
+
+def test_acceptance_lap_runs_the_payload_corner_and_offset_values():
+    """D-492 SIM acceptance: the payload line_follow.yaml decides corner turning and the lens
+    offset; this launch must not pin them, and the payload matches this profile."""
+    c = _constants()
+    source = LAUNCH.read_text(encoding="utf-8")
+    assert '"lane_corner_turning":' not in source and '"camera_x_offset_m":' not in source
+    payload = yaml.safe_load((ROOT.parent / "middleware" / "perception" / "config" / "line_follow.yaml").read_text(encoding="utf-8"))
+    params = payload["/**/line_observer_node"]["ros__parameters"]
+    assert params["lane_corner_turning"] is True
+    assert abs(params["camera_x_offset_m"] - c["REAL_CAMERA_X_OFFSET_M"]) < 1e-6

@@ -122,7 +122,9 @@ def test_lane_corner_turning_is_on_by_robot_default_and_needs_odometry():
     # D-492: keep_debug carries the flag; it is how CORE learns junction_turn support.
     keep = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "corner_turning=bool(self.get_parameter('lane_corner_turning').value)" in keep
-    assert params["camera_x_offset_m"] == 0.0
+    nominal = yaml.safe_load((ROOT.parent / "apps/device/pinky/profile/config/camera_nominal.yaml")
+                             .read_text(encoding="utf-8"))
+    assert params["camera_x_offset_m"] == nominal["x_offset_m"]  # URDF nominal, not 0.0
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "Odometry, 'odom'" in source
     assert "LaneCornerTracker" in source
