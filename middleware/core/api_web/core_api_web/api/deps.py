@@ -33,6 +33,7 @@ from core_features.diagnostics.collector import worst
 from core_features.docking.database import DockError, DockInstance, DockType
 from core_features.line_follow import LineFollowMode
 from core_features.line_follow.stuck_recovery import AnswerRefused as LineStuckRefused
+from core_features.line_follow.junction import JunctionRefused
 from core_features.localization import MissionRefused
 from core_features.maps import valid_costmap_scope
 from core_features.navigation.manager import NavigationError
@@ -52,6 +53,7 @@ __all__ = [
     "DockType",
     "LineFollowMode",
     "LineStuckRefused",
+    "JunctionRefused",
     "MissionRefused",
     "valid_costmap_scope",
     "worst",

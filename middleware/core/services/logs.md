@@ -588,6 +588,61 @@
 - 증거: `test_state_odom_pose.py` 3 PASS, gateway `/robot/state` NaN 시험 PASS.
 - gate 변화: 없음.
 - 결정: D-494 (Proposed)
+## 2026-10-07 · uncommitted · feat(line_follow): D-494 교차로 지시 게이트
+- 변경: 새 `core_features/line_follow/junction.py`. 지시 하나를 보관하고 틱 결정을 그대로 두거나 0으로 만든다. 지시 없음·만료 + 교차로 감지는 `junction_waiting`, `left`·`right`는 분기 후보가 없어 곧바로 `junction_unresolved`, `stop`은 측정 odom으로 `stop_after_m` 뒤 `junction_stop`(odom 없으면 바로). `straight`는 D-476 route hint를 채운다. 모드 변경이 지시를 지운다
+- 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. 실기·SIM 미실행(Gazebo는 이 노트북에서 돌리지 않음)
+- 결정: D-494 (Proposed) 4항, 구현 부록 2026-10-07
+- 교훈: 오늘 인식은 CORE에 분기 후보를 주지 않는다. 좌·우 주행은 분기 계약 ADR이 먼저다
+
+## 2026-10-07 · uncommitted · feat(line_follow): D-495 교차로 제한 회전
+- 변경: `junction.py`에 `turn_deg`가 있는 좌·우 지시의 회전(odom yaw, ±5°)→전진(`advance_m`, 절반 속도)→차선 재획득(0.20 m·5 s) 동작을 더했다. odom 낡음·점프, 모드 변경·E-Stop·운전자 해제, D-422 근접, 동작 확인 실패, 한도 0, stuck, 시간 초과, 새 지시는 `aborted`와 0 명령이다. `turn_deg` 없는 좌·우는 그대로 `unresolved`
+- 증거: `test_line_junction.py` 44 PASS, `test_line_junction_api.py` 9 PASS. services·api_web·contracts/foundation·line-follow 문서·perception 배선 1968 PASS·18 skip, gateway 2188 PASS·17 skip, perception 2704 PASS·109 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
+- 결정: D-495 (Proposed), 구현 메모 2026-10-07
+- 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
+
+## 2026-10-07 · uncommitted · feat(line_follow): D-495 supports_junction_turn
+- 변경: `LineFollowManager.supports_junction_turn`: 최근 2 s 안의 신선한 `line/keep_debug` 프레임이 `corner_turning: true`를 실을 때만 참(keep 모드 + 교차로 감지 + 제한 회전). 능력 `junction_turn`의 근거
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep 1969 PASS·18 skip, gateway 2190 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows; 동시 실행 중 `test_site_rooms.py` 자식 프로세스 시간 시험 한 번 실패, 단독·재실행 통과)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
+- 결정: D-495 (Proposed) 결정 개정 2026-10-07
+- 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다
+
+## 2026-10-07 · uncommitted · fix(line_follow): D-495 독립 안전 검토 M1–M8·L1·L2
+- 변경: 정지 확인 0.2 s 뒤 회전, 지연 보정(`junction_turn_lead_s`)과 ±5° 0.3 s 머무름, 전진 한도 `advance_m`/속도+2 s, 연속 `junction_reacquire_frames` 재획득과 ±30° 방향, 보정 lease·미바인딩 동작 확인 중단, 같은 지시 무동작, CAMERA_LINE 전용, `stop`은 교차로에서도 HOLD, 교차로 전 손실은 `lane_lost_before_junction`
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 시험 2007 PASS·18 skip, gateway 2192 PASS·17 skip, 문서 시험 1 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows). 검토 탐침 `probe_lag.py`·`probe_junction.py` 재실행
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-495 수용 점검표
+- 결정: D-495 (Proposed) 독립 안전 검토 반영 2026-10-07
+- 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
+
+## 2026-10-07 · uncommitted · fix(line_follow): D-495 안전 재검토 N1·R1–R3
+- 변경: 한 교차로 정지의 진입 yaw를 기억해 모든 회전이 진입 yaw + turn_deg를 겨눈다. 실행된 지시의 반복은 `JUNCTION_ALREADY_DONE`. 머무름 완료에 odom 정지 확인. 정지 중 감지 끊김에도 첫 감지 유지
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 2013 PASS·18 skip, gateway 2192 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). 탐침 `probe_resend.py` 85.8°, `probe_lag2.py` 전 경우 ±5° 안
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM S1–S6·DEVICE D1–D6은 D-495 점검표
+- 결정: D-495 (Proposed) 안전 재검토 반영 2026-10-07
+- 교훈: 다시 보내는 지시는 현재 자세가 아니라 고정된 기준(진입 방향)을 겨눠야 오차가 쌓이지 않는다
+
+## 2026-10-07 · uncommitted · fix(line_follow): D-495 최종 안전 검토 N2·L1·L3
+- 변경: 교차로 정지 기록(감지·진입 방향·실행 기록)이 모드 변경 뒤에도 남는다. 진입 방향은 lost_after_s 무감지 뒤, 실행 기록은 다른 place_id 지시 때 끝난다. HTTP 409 JUNCTION_ALREADY_DONE 시험. 정지 판정 속도 설정값 `junction_still_linear`·`junction_still_angular`
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 2016 PASS·18 skip, gateway 2193 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). 탐침 `probe_final.py`: 재선택 뒤 같은 지시 409, 다른 방향은 돌지 않음
+- gate 변화: 없음. SOURCE 호스트 시험만
+- 결정: D-495 (Proposed) 최종 안전 검토 반영 2026-10-07
+- 교훈: 안전 기록은 세션(모드)이 아니라 물리적 상황(같은 교차로)에 묶어야 재선택으로 우회되지 않는다
+
+## 2026-10-07 · uncommitted · merge(main): D-495와 D-476 rev 1 병합
+- 변경: main(D-476 rev 1, D-494 1·2·3항, API v1.113)을 병합했다. `bridge_enabled` 로봇 기본값은 꺼짐을 유지한다(rev 1은 `ir_guard_enabled`와 바닥 근거가 없으면 CORE 시작을 거부함). `recovery_local_enabled`는 켜짐. API Ref 교차로 행은 v1.114. 크기 판정: schemas 1335, core_features 14934. 조건이던 분리 계획은 `docs/plans/2026-10-07-line-follow-recovery-subpackage.md`이고 독립 검토 대기
+- 증거: services·api_web·contracts/foundation·문서·perception 배선/lane_keep·Gazebo launch·test/architecture 2193 PASS·19 skip, gateway 2206 PASS·17 skip, Fleet 버전 고정 89 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음
+- 결정: D-494 4항, D-495 (Proposed) main 병합 메모
+- 교훈: 기본값을 켜는 결정은 병합 때 다른 브랜치가 더한 전제(IR guard·바닥 근거)와 다시 맞춰야 한다
+
+## 2026-10-07 · uncommitted · fix(line_follow): D-495 junction_turn 능력은 동작 확인이 가능할 때만
+- 변경: `supports_junction_turn`이 `bind_return_motion(proof_configured=...)`를 요구한다. 크기 판정 문구는 독립 재판정으로 바꾸었고 분리 계획에 junction.py 위치 이유를 더했다
+- 증거: services·api_web·contracts/foundation·문서·perception 배선/lane_keep·Gazebo launch·test/architecture 2196 PASS·19 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음
+- 결정: D-495 (Proposed) 착지 전 검토 반영
+- 교훈: 능력 보고는 그 동작을 실제로 허가할 증거와 같은 조건이어야 정직하다
 
 ## 2026-10-07 · uncommitted · feat(line_follow): IR 감시는 알려진 횡단보도 구간에서 쉰다 (D-491)
 

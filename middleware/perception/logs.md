@@ -1159,6 +1159,26 @@
 - 증거: `test_lane_graph.py` 추가 1건(두 구간, 변 길이), 기존 바이트 결정성 시험 PASS.
 - gate 변화: 없음. 지도 구간을 쓰는 소비자(CORE IR 가드)는 아직 없다. CAMERA_LINE 중 CORE에는 지도 자세가 없어 이 구간은 지도 주행(D-481)·시뮬 검증용이다.
 
+## 2026-10-07 · uncommitted · feat(config): D-495 lane_corner_turning 로봇 기본값 켜짐
+- 변경: `config/line_follow.yaml` `lane_corner_turning: true`. keep 모드 keeper의 교차로 HOLD가 기본으로 나온다(기본 `camera_lane_mode: line`에서는 효과 없음). 운영자 겹 허용 키가 아니어서 끄려면 페이로드 변경이 필요하다. 고정 시험과 주석 갱신
+- 증거: `test_line_junction.py` 44 PASS, `test_line_junction_api.py` 9 PASS. services·api_web·contracts/foundation·line-follow 문서·perception 배선 1968 PASS·18 skip, gateway 2188 PASS·17 skip, perception 2704 PASS·109 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
+- 결정: D-495 (Proposed), 구현 메모 2026-10-07
+- 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
+
+## 2026-10-07 · uncommitted · feat(observer): keep_debug에 corner_turning
+- 변경: `line_observer_node`의 keep_debug 묶음에 `corner_turning`(파라미터 `lane_corner_turning`)을 싣는다. CORE가 교차로 회전 지원을 판정하는 근거. 배선 시험 고정
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep 1969 PASS·18 skip, gateway 2190 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows; 동시 실행 중 `test_site_rooms.py` 자식 프로세스 시간 시험 한 번 실패, 단독·재실행 통과)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
+- 결정: D-495 (Proposed) 결정 개정 2026-10-07
+- 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다
+
+## 2026-10-07 · uncommitted · fix(config): D-495 검토 H1 camera_x_offset_m URDF 공칭
+- 변경: `line_follow.yaml` `camera_x_offset_m: 0.03317`(camera_nominal.yaml `x_offset_m`). REAL Gazebo launch는 이 값과 `lane_corner_turning`을 덮어쓰지 않는다(시험 고정)
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 시험 2007 PASS·18 skip, gateway 2192 PASS·17 skip, 문서 시험 1 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows). 검토 탐침 `probe_lag.py`·`probe_junction.py` 재실행
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-495 수용 점검표
+- 결정: D-495 (Proposed) 독립 안전 검토 반영 2026-10-07
+- 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
 ## 2026-10-07 · uncommitted · feat(perception): 차로와 나란한 횡단보도 줄무늬 구간 (D-491 §4)
 
 - 변경: `sensing/perception/crosswalk_stripes.py` 추가. keep 모드가 지면 격자에서 횡단보도 앞뒤 끝을 `last["crosswalk"]`에 두고, `containment_payload`가 `crosswalk {near_m, far_m}`로 싣는다. 판단은 CORE 몫이다.

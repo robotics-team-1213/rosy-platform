@@ -43,7 +43,7 @@ robot is in, never the tape. Per frame, no odometry:
                 further. Near the corner the open side is out of view, so the
                 side is latched (frame count, no pose) while a transverse line
                 stays ahead. Opt-in (corner_turning; the node's
-                lane_corner_turning, off on the device).
+                lane_corner_turning, on by robot default since D-495).
 
 Output keeps the lane contract: error > 0 means steer right (CORE:
 angular = -gain * error); error = -target_y / lane_half_width, clipped to

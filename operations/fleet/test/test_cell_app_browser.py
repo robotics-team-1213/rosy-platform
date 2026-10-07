@@ -66,7 +66,7 @@ def _prepare(page):
 
     page.locator("#credential input").fill("operator-secret")
     page.locator("#connect").click()
-    expect(page.locator("#session")).to_contain_text("operator-1")
+    expect(page.locator("#session")).to_have_text("operator-1 · 운영자")
     for kind in ("recipe", "cell"):
         path = ROOT / f"operations/processes/cell/examples/omx_sim/{kind}.yaml"
         document = yaml.safe_load(path.read_text(encoding="utf-8"))

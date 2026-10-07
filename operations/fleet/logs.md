@@ -2257,3 +2257,9 @@
 - Change: Equalize the two compact roster actions and put a cancel result and roster toggle on separate full-width rows.
 - Evidence: Nine Chromium layout and one failure-state case, six D-493, and 83 responsive/token/grammar cases passed, Python known failures 0 NEW. See docs/validation/uiux-fleet-roster-actions-2026-10-07/result.md.
 - Gate: LOCAL G2 partial evidence; current site candidate and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): Cell 접속 역할 어휘
+
+- 변경: `/console/cell`의 원시 역할 코드를 Fleet 관제·설치 화면과 같은 한국어 역할 이름으로 표시한다. 권한 판정·API 요청은 변경하지 않는다.
+- 증거: 320px 브라우저 수정 전 1 failed, 수정 후 1 passed; Cell 전체 49 passed, G1 90 passed, `known_failures.py` 0 NEW; `docs/validation/uiux-cell-role-label-2026-10-07/result.md`.
+- gate 변화: 없음. LOCAL 화면 근거만 추가하고 사이트·장치·G3는 HOLD.

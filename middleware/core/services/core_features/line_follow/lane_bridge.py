@@ -46,6 +46,7 @@ class LaneBridgeMixin:
         self._bridge_hint = None
         self._confident_frames = 0  # consecutive accepted confident camera frames
         self._floor_proof_live = None  # () -> bool: worker floor proof is live (enforce)
+        self._return_proof_configured = None  # () -> bool: the motion proof can admit at all
         # After a bridge: [odom travel while confidently tracking, (epoch, pose)]; None = none yet.
         self._rearm = None
 
