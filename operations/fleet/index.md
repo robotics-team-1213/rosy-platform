@@ -88,8 +88,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(fleet): D-491 3 trip 전용 지도 자세(map pose)
 - 2026-10-07 · uncommitted · Cell rejected-session widths
 - 2026-10-07 · uncommitted · Cell emergency-stop feedback widths
 - 2026-10-07 · uncommitted · Site-map rejected credential widths
 - 2026-10-07 · uncommitted · Cell 문서 파일 선택 어휘와 폭
-- 2026-10-07 · uncommitted · D-488 site-map G2 empty and conflict states

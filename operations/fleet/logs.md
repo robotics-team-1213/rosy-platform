@@ -2181,4 +2181,6 @@
 - 변경: `fleet/localization/map_pose.py`(순수, 표준 라이브러리만)가 로봇마다 받아들인 Rosy Cam sighting을 그 시각의 `odom_pose`(0.25 s 안 가장 가까운 표본, 둘이 감싸면 보간)와 짝지어 앵커로 두고, 그 뒤 odom 강체 증분으로 잇는다. `LOCALIZED`/`DEGRADED`(odom 1.5 m 초과, 예측과 0.15 m·20° 넘게 어긋남 → 다시 앵커, 연속 2회 일치로 회복)/`UNKNOWN`(앵커 없음, odom 3 s 초과). 설정은 사이트 YAML `fleet.map_pose`.
 - 연결: `server/map_pose_service.py`의 `MapPoseService`가 `/api/fleet/sightings`에서 받아들인 행과 콘솔이 읽는 모든 상태 스냅숏(hub heartbeat·REST)의 `odom_pose`를 먹는다. trip 루프용 `arbitrated_pose(robot_id)`와 읽기 전용 `GET /api/fleet/robots/{robot_id}/map-pose`(viewer 이상, API Ref v1.112)를 낸다.
 - 바꾸지 않은 것: `trusted_map_pose`·`/route`·교통정리·D-395. D-457 tracking은 입력이 아니다.
+- 증거: `test_map_pose.py`(28)·`test_map_pose_service.py`(7)·경계·계약 문서 테스트 통과, `known_failures` 새 실패 0(X:\DevTemp\d491-map-pose).
+- gate 변화: SOURCE만. SIM·DEVICE 수용은 그대로 열려 있다.
 - 열린 것: `odom_pose`는 `feat/d491-robot-trip-contracts`가 CORE와 `StateSnapshot`에 넣기 전까지 비어 있어(hub 경로는 pydantic이 모르는 필드를 버린다) 자세는 `UNKNOWN`이다. 실차·SIM 수용 없음.
