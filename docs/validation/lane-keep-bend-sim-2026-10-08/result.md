@@ -3,7 +3,7 @@
 증거 등급: **ROS-SIM (폐루프, 한 대) + 호스트 시험**. 장치·현장 수용이 아니다. Gazebo·ROS는 모델 PC(OMEN)에서만 돌렸고
 이 노트북에서는 돌리지 않았다. 실물 로봇은 건드리지 않았다.
 
-대상: `fix/keep-bend-not-fork` 05462b7d9 (keeper: `lane_keep_bend.py`, `lane_keep_junction.py` 연속성, `lane_keep.py`).
+대상: `fix/keep-bend-not-fork` 05462b7d9 (위 표·아래 「결과」), 검토 반영 뒤 e192ef089 (아래 「검토 반영 뒤 재실행」). keeper: `lane_keep_bend.py`, `lane_keep_junction.py` 연속성, `lane_keep.py`).
 B8(`docs/validation/lane-trip-perception-2026-10-07/result.md`)이 찾은 원인 — 약 63° 굽이를 읽는 규칙이 없음 — 을 고친 뒤 같은
 하네스로 다시 돌렸다.
 
@@ -60,11 +60,36 @@ keeper 흐름(pilot 예): x −0.95까지 `both`, 굽이 사선이 보이면 `be
 | bend_5 | 서쪽 길 (−1.27, 0.06) | 같은 CORE `obstacle_ahead` |
 | bend_15 | 서쪽 길 횡단보도 (−1.27, 0.15), yaw −92.6° | keeper `no_boundary` → LOST. 같은 프레임을 432445eed keeper로 재생해도 `no_boundary`: 기존 결함(횡단보도와 T자 입구) |
 
+## 검토 반영 뒤 재실행 (e192ef089)
+
+독립 검토(CHANGES REQUESTED) 반영: 닫힌 쪽에 근거 평행선이 사선의 가까운 끝을 넘어 이어지면 굽이가 아님(정지선·횡단보도·
+교차로 입구), 교차로 규칙을 굽이보다 먼저 판단, 65°를 넘는 굽이 선도 교차로 규칙에는 가로선으로 넘김(교차로는 닫힌 쪽으로
+실패), 가파른 선의 가까운 끝 편 정하기·편 상속·가까운 순서는 corner turning에서만. 같은 하네스로 굽이 진입 8회
+(`evidence/analysis_e192ef089.json`; 중간 커밋 d3f72e17c로 6회도 돌렸고 같은 모양이었다):
+
+| 항목 | 값 |
+|---|---|
+| 굽이에 닿음 | 5/8 (f_2, 3, 4, 5, 7). 나머지 3회는 CORE `obstacle_ahead`(`clearance_source: memory`): 아래 길 x −0.835, 서쪽 길, 굽이 안 (−0.745, −0.489) |
+| x −0.95…−0.78 오프셋 중앙 (run별, 8회 모두) | +0.0125…+0.0147 m, 최대 \|·\| 0.0199 m |
+| `corner_*` / `junction_fork` / `flipping` | 0 / 0 / 0 |
+| 첫 HOLD | 5회 모두 회전교차로 `junction_transverse` (x −0.716…−0.728) |
+| `left:60` | `done` 3, `aborted`(`near_stop`) 2 |
+
+남은 대가: B8 `premature_corner_left` 사건 프레임(yaw −3.5°에서 66°로 보인 바깥 사선 옆에 안쪽 경계가 바깥으로 꺾임)은 한 프레임
+`junction_transverse`로 선다. 한 프레임에서는 교차로 입구와 구별되지 않는다. 이번 SIM 8회에서는 굽이 앞에서 이 HOLD가 나오지
+않았다. 경로 문맥(B11 expect window)이 정할 몫이다.
+
+실물 프레임(라벨 세션 124745Z·133221Z 434장, NOMINAL 지면, 열린 고리) 재생: corner turning 끔은 main과 0프레임 다름.
+corner turning 켬(장치 payload 기본)은 e192ef089에서도 119프레임이 다르다(HOLD → 주행 29, 주행 → HOLD 0, `bend_*` 69, HOLD 0.237 → 0.171). 이
+트랙에는 63° 굽이가 없어 운영자 검토가 필요하다(아래 한계).
+
 ## 한계
 
 - 한 지도의 한 굽이(약 63°)다. 다른 각도의 굽이와 실물 260919 프레임으로는 확인하지 않았다.
 - B9은 굽이 읽기만 고쳤다. 교차로 회전(`near_stop` 7/11)과 D-422 기억 래치는 B11·B4다.
 - 호스트 SIM은 DEVICE가 아니다.
+- **착지 전 운영자 검토 필요**: 실물 프레임에서 corner turning 켬일 때 바뀐 프레임(특히 HOLD → 주행, `bend_*`)이 따라가도
+  되는 차로인지 사람이 확인하지 않았다. 굽이 규칙은 corner turning(장치 기본 켬)에서 실물에 닿는다.
 
 ## 재현
 
