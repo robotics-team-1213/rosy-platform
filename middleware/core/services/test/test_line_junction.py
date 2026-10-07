@@ -1,4 +1,4 @@
-"""D-491 decision 4 / D-492: the junction instruction gate and bounded turn in the real
+"""D-494 decision 4 / D-495: the junction instruction gate and bounded turn in the real
 line-follow manager (no ROS, no physical motion)."""
 import math
 
@@ -195,7 +195,7 @@ def test_only_junction_reasons_count_as_a_sighting():
     assert decision.linear > 0 and status.junction.state == 'idle'
 
 
-# --- D-492 bounded turn -------------------------------------------------------------------
+# --- D-495 bounded turn -------------------------------------------------------------------
 
 def _to_turning(rig, turn_deg=90., advance_m=None):
     rig.step()
@@ -564,7 +564,7 @@ def test_lane_still_out_of_view_past_lost_after_s_is_unresolved_not_aborted():
     assert (status.junction.state, decision.linear, decision.angular) == ('unresolved', 0., 0.)
 
 
-# --- D-492 re-review N1, R1-R3 ------------------------------------------------------------
+# --- D-495 re-review N1, R1-R3 ------------------------------------------------------------
 
 def test_resend_after_a_mid_turn_abort_aims_at_entry_heading_plus_turn():
     """Review N1: headings must not add up (90 deg was turning into 133.9 deg)."""

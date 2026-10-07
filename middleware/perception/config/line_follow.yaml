@@ -36,8 +36,8 @@
     gazebo_camera_max_range_m: 0.6
     # Corner turning needs odometry. In keep mode it also turns on the keeper's
     # junction HOLD (junction_transverse / junction_fork), which CORE uses to stop
-    # before a junction and to start a D-491/D-492 junction instruction. On by
-    # robot default since D-492 (2026-10-07); a payload carrying it is promoted
+    # before a junction and to start a D-494/D-495 junction instruction. On by
+    # robot default since D-495 (2026-10-07); a payload carrying it is promoted
     # only after the model-PC Gazebo map_v2_fleet_real lap and a real lane lap.
     # The same flag also turns on the lane-mode corner tracker and the edge_left
     # corner handoff (both odometry-bounded).

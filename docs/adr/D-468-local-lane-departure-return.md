@@ -57,4 +57,4 @@ Decision 2의 "차체 footprint와 경계의 부호 있는 여유 및 예측 여
 
 **확인.** `recovery_local_enabled: false`(장치 기본)이면 이 controller를 만들지 않으므로 동작이 같다. 시험: `middleware/core/services/test/test_lane_return_margin.py`. 대상은 좁은 차로 중심 Pinky의 차로 안 판정과 checkpoint, ±1°·±1 mm 흔들림에서 추종 유지, 모서리가 추정 경계를 넘으면 이탈, 몸 모서리 3 mm 밖, 불확실도 > 기하 여유, 진행각 예측 여유, 치우친 자세의 checkpoint 거부, OFF 불변, 파라미터 범위다. 호스트 pytest는 sim·장치 수용이 아니다. 260919 sim 재실행은 별도다.
 
-**개정 (2026-10-07, [D-492](D-492-lane-junction-bounded-turn-and-junction-defaults.md) 결정 개정 2항):** `recovery_local_enabled` 로봇 기본값은 `true`다(`rosy_default.yaml`). 모델 PC SIM 한 바퀴와 실기 차선 한 바퀴를 통과한 페이로드만 robots에 간다. 되돌리기는 CORE 설정 겹의 `line_follow.recovery_local_enabled: false`다.
+**개정 (2026-10-07, [D-495](D-495-lane-junction-bounded-turn-and-junction-defaults.md) 결정 개정 2항):** `recovery_local_enabled` 로봇 기본값은 `true`다(`rosy_default.yaml`). 모델 PC SIM 한 바퀴와 실기 차선 한 바퀴를 통과한 페이로드만 robots에 간다. 되돌리기는 CORE 설정 겹의 `line_follow.recovery_local_enabled: false`다.

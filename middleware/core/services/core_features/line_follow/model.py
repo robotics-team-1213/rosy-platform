@@ -118,7 +118,7 @@ class LineFollowConfig:
     ir_guard_turn: float = 0.5
     ir_guard_speed_scale: float = 0.5
     # D-407 막힘 복구. 관제에 묻고 recovery_ask_s 안에 답이 없으면(또는 관제 연결이 없으면)
-    # 로컬 후진·재판단. 모델 기본값은 꺼짐이고, 로봇 기본값(rosy_default.yaml)은 D-492부터 켜짐이다.
+    # 로컬 후진·재판단. 모델 기본값은 꺼짐이고, 로봇 기본값(rosy_default.yaml)은 D-495부터 켜짐이다.
     recovery_local_enabled: bool = False
     recovery_ask_s: float = 15.0
     recovery_back_m: float = 0.08
@@ -158,7 +158,7 @@ class LineFollowConfig:
     # D-476 expected-road bridge: on a short lane loss right after contained following, drive
     # the D-468 checkpoint lane's extension slowly. Distance ladder from D-384 (measured odom
     # travel x bridge_distance_scale: full speed below coast, x slow_scale below slow, then
-    # stop) and done by lost_after_s - bridge_time_margin_s. Model default off; robot default on (D-492).
+    # stop) and done by lost_after_s - bridge_time_margin_s. Model default off; robot default on (D-495).
     bridge_enabled: bool = False
     bridge_lookahead_m: float = 0.10
     bridge_coast_m: float = 0.10
@@ -166,7 +166,7 @@ class LineFollowConfig:
     bridge_slow_scale: float = 0.5
     bridge_distance_scale: float = 1.08
     bridge_time_margin_s: float = 0.5
-    # D-492 bounded junction turn (review M5/M6): consecutive fresh confident lane frames that
+    # D-495 bounded junction turn (review M5/M6): consecutive fresh confident lane frames that
     # count as reacquired, and the actuation/odom latency the turn stops early for.
     junction_reacquire_frames: int = 3
     junction_turn_lead_s: float = 0.15

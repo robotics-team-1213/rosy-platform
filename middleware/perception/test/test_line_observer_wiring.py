@@ -118,8 +118,8 @@ def test_lane_mode_uses_the_guarded_simulation_ground():
 def test_lane_corner_turning_is_on_by_robot_default_and_needs_odometry():
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     params = config["/**/line_observer_node"]["ros__parameters"]
-    assert params["lane_corner_turning"] is True  # D-492: junction HOLD on robots
-    # D-492: keep_debug carries the flag; it is how CORE learns junction_turn support.
+    assert params["lane_corner_turning"] is True  # D-495: junction HOLD on robots
+    # D-495: keep_debug carries the flag; it is how CORE learns junction_turn support.
     keep = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "corner_turning=bool(self.get_parameter('lane_corner_turning').value)" in keep
     nominal = yaml.safe_load((ROOT.parent / "apps/device/pinky/profile/config/camera_nominal.yaml")

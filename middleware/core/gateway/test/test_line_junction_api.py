@@ -1,4 +1,4 @@
-"""D-491 decision 4: POST /api/v1/line-follow/junction, its gate and the snapshot field."""
+"""D-494 decision 4: POST /api/v1/line-follow/junction, its gate and the snapshot field."""
 import json
 
 from core.bridge import observation
@@ -116,7 +116,7 @@ def test_stale_or_other_keep_debug_is_not_a_sighting(core_client):
 
 
 def test_turn_request_arms_and_reports_turn_deg(core_client):
-    """D-492: left/right with turn_deg arm a bounded turn; old requests stay unresolved."""
+    """D-495: left/right with turn_deg arm a bounded turn; old requests stay unresolved."""
     client, services, clock = _active(core_client)
     body = {**BODY, "action": "right", "turn_deg": -90, "advance_m": 0.2}
     assert client.post(URL, json=body, headers=OPERATOR).json() == {

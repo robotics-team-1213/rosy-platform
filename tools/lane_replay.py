@@ -75,7 +75,7 @@ def _nominal_ground():
 def _keep_detector(corner_turning=False):
     """'keep' 모드(LaneKeeper, D-364 §2)를 공칭 지면으로. 오도메트리 없이 매 프레임 판단하고,
     직전 목표로만 짧게 평활한다(실물 노드와 같은 설정). keep_corner 는 L 모서리 회전
-    (lane_corner_turning, D-492부터 실물 기본 켜짐)을 켠 것."""
+    (lane_corner_turning, D-495부터 실물 기본 켜짐)을 켠 것."""
     profile, ground = _nominal_ground()
     keeper = LaneKeeper(camera_x_offset_m=float(profile["x_offset_m"]), corner_turning=corner_turning)
 

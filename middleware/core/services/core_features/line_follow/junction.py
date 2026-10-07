@@ -1,8 +1,8 @@
-"""D-491 decision 4 / D-492: one pending junction instruction from Fleet, applied in CORE's tick.
+"""D-494 decision 4 / D-495: one pending junction instruction from Fleet, applied in CORE's tick.
 
-Perception gives CORE no branch candidates (D-491 implementation appendix 2026-10-07). The gate
+Perception gives CORE no branch candidates (D-494 implementation appendix 2026-10-07). The gate
 keeps or zeroes the tick's decision, with one bounded exception: a 'left'/'right' carrying
-`turn_deg` (D-492) waits for the robot to stand still at the junction, turns in place on odom
+`turn_deg` (D-495) waits for the robot to stand still at the junction, turns in place on odom
 yaw (early stop for latency, then settles inside 5 deg), advances `advance_m`, then hands back
 to lane following and must reacquire the lane within REACQUIRE_M. Any doubt aborts to a zero
 command. 'left'/'right' without `turn_deg` HOLD as 'unresolved'; 'straight' leaves the ordinary
@@ -25,7 +25,7 @@ MAX_EXPIRES_S = 30.
 MAX_STOP_AFTER_M = 2.
 #: Odom sample freshness for every distance and yaw used here (same bound as the D-476 bridge).
 POSE_MAX_AGE_S = .3
-#: D-492 decision 1 bounds.
+#: D-495 decision 1 bounds.
 MAX_TURN_DEG = 150.
 MAX_ADVANCE_M = .30
 DEFAULT_ADVANCE_M = .10
@@ -83,7 +83,7 @@ class JunctionMixin:
 
     @property
     def supports_junction_turn(self):
-        """D-492 capability: live keep-mode keeper evidence with lane_corner_turning on (the
+        """D-495 capability: live keep-mode keeper evidence with lane_corner_turning on (the
         junction HOLD that starts a turn) and the bounded turn in this manager. The observer's
         lane mode and flag are perception parameters; CORE learns them only from line/keep_debug
         (published in keep mode only, carrying corner_turning), so no fresh frame means False."""
@@ -235,7 +235,7 @@ class JunctionMixin:
         self._junction_entry = None
 
     def _junction_gate(self, now, decision):
-        """Keep or zero this tick's decision (locked); a D-492 maneuver supplies its own twist."""
+        """Keep or zero this tick's decision (locked); a D-495 maneuver supplies its own twist."""
         if self._mode.value == 'OFF':
             if self._junction is not None and self._junction['state'] in MANEUVER:
                 self._abort(self._junction, 'mode_change', decision)  # e.g. driver released
@@ -295,7 +295,7 @@ class JunctionMixin:
         return None
 
     def _start_turn(self, j, now, decision):
-        """D-492 (a): the junction is seen; stand still, then turn from the measured yaw."""
+        """D-495 (a): the junction is seen; stand still, then turn from the measured yaw."""
         pose = self._fresh_pose(now)
         if pose is None:
             return self._abort(j, 'odom', decision)
@@ -357,7 +357,7 @@ class JunctionMixin:
                         if type(ceiling) in (int, float) and math.isfinite(ceiling) else 0.)
             if trip_max <= 0:
                 return self._abort(j, 'linear_limit_zero', decision)
-            j['speed'] = .5*trip_max  # at most half the trip speed (D-492 1b)
+            j['speed'] = .5*trip_max  # at most half the trip speed (D-495 1b)
             self._next_phase(j, 'advancing', now, j['advance_m']/j['speed']+STEP_MARGIN_S)
             self._odom_travel(j, now)
         if j['state'] == 'advancing':

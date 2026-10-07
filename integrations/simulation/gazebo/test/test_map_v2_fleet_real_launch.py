@@ -62,7 +62,7 @@ def test_default_camera_args_keep_the_lap_bench_camera():
 
 
 def test_acceptance_lap_runs_the_payload_corner_and_offset_values():
-    """D-492 SIM acceptance: the payload line_follow.yaml decides corner turning and the lens
+    """D-495 SIM acceptance: the payload line_follow.yaml decides corner turning and the lens
     offset; this launch must not pin them, and the payload matches this profile."""
     c = _constants()
     source = LAUNCH.read_text(encoding="utf-8")

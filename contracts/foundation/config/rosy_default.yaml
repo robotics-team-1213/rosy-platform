@@ -142,12 +142,12 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   ir_guard_speed_scale: 0.5        # linear scale while steering away
   # D-407 lane stuck recovery: obstacle_ahead >= obstacle_escalate_s or LOST opens one stuck and
   # asks the console (POST /line-follow/stuck/decision). No answer in recovery_ask_s, or no
-  # console link -> local back-off (only when recovery_local_enabled; since D-492 that is the
+  # console link -> local back-off (only when recovery_local_enabled; since D-495 that is the
   # robot default, gated by its promotion rule, not a per-robot self-mask step). Rear
   # clearance is measured from the URDF body rear, so the
   # robot package must set body_lidar_x_m / body_rear_x_m (unset = never backs off).
-  # On by robot default since D-492 (2026-10-07): it also gates D-468 local lane return and the
-  # D-476 bridge. Same promotion rule as D-492 (model-PC Gazebo map_v2_fleet_real lap + a real
+  # On by robot default since D-495 (2026-10-07): it also gates D-468 local lane return and the
+  # D-476 bridge. Same promotion rule as D-495 (model-PC Gazebo map_v2_fleet_real lap + a real
   # lane lap before robots get it). Roll back per robot with line_follow.recovery_local_enabled:
   # false in ~/.rosy/rosy.yaml or ROSY_CONFIG (no code change).
   recovery_local_enabled: true
@@ -172,11 +172,11 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   recovery_console_grace_s: 3.0    # a FleetAgent reconnect this short still counts as linked
   recovery_restuck_m: 0.30
   recovery_rear_lateral_margin_m: 0.02   # rear band = body_half_width_m (URDF) + this
-  # D-476 expected-road bridge. On by robot default since D-492 (2026-10-07), which amends D-476's
+  # D-476 expected-road bridge. On by robot default since D-495 (2026-10-07), which amends D-476's
   # "off until replay -> sim -> device": a payload with it on is promoted to robots only after the
   # model-PC Gazebo map_v2_fleet_real lap and a real lane lap. Roll back per robot with
   # line_follow.bridge_enabled: false in ~/.rosy/rosy.yaml or ROSY_CONFIG (no code change).
-  # Runs inside D-468, so it also needs recovery_local_enabled (on above since D-492).
+  # Runs inside D-468, so it also needs recovery_local_enabled (on above since D-495).
   # A short camera lane loss right after contained following drives the D-468 checkpoint lane's
   # straight extension (needs recovery_local_enabled, path-mode URDF body). Measured odom travel
   # x bridge_distance_scale: full speed (min cruise, manual limit) below bridge_coast_m, x
@@ -189,7 +189,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   bridge_slow_scale: 0.5
   bridge_distance_scale: 1.08      # D-384 odometry inflation
   bridge_time_margin_s: 0.5        # D-384 rev 1 §1
-  # D-492 bounded junction turn: consecutive fresh lane frames (confidence >= min_confidence,
+  # D-495 bounded junction turn: consecutive fresh lane frames (confidence >= min_confidence,
   # heading within 30 deg of the turn when containment gives one) that count as reacquired,
   # and the actuation + odom latency the in-place turn stops early for (then settles in 5 deg).
   junction_reacquire_frames: 3

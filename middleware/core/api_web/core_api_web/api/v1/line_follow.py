@@ -191,13 +191,13 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
 
 
 class LineJunctionRequest(BaseModel):
-    """D-491 decision 4: what to do at the next junction (Fleet trip loop)."""
+    """D-494 decision 4: what to do at the next junction (Fleet trip loop)."""
 
     action: str = Field(pattern="^(straight|left|right|stop)$")
     place_id: str = Field(min_length=1, max_length=128)
     stop_after_m: Optional[float] = Field(default=None, ge=0, le=2.0)
     expires_s: float = Field(gt=0, le=30)
-    # D-492: bounded turn for left (+) / right (-); without it left/right stay unresolved.
+    # D-495: bounded turn for left (+) / right (-); without it left/right stay unresolved.
     turn_deg: Optional[float] = Field(default=None, ge=-150, le=150)
     advance_m: Optional[float] = Field(default=None, ge=0, le=0.30)
 
@@ -205,7 +205,7 @@ class LineJunctionRequest(BaseModel):
 @line_follow_router.post("/junction")
 def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(operator),
                       svc: CoreServicesLike = Depends(get_services)):
-    """D-491 decision 4 / D-492. Never changes mode; the turn maneuver runs in CORE's own tick.
+    """D-494 decision 4 / D-495. Never changes mode; the turn maneuver runs in CORE's own tick.
     "Seat" is the existing vocabulary (D-460): operator token, manual control released and the
     calibration lease, as the other motion endpoints. CAMERA_LINE only (IR has no junctions)."""
     if body.stop_after_m is not None and body.action != "stop":

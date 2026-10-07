@@ -107,7 +107,7 @@ def test_resume_refused_inside_stop_distance(core_client):
 
 
 def test_back_and_retry_refused_while_local_recovery_is_off(core_client):
-    # D-492 turned the robot default on; a robot rolled back to off still refuses.
+    # D-495 turned the robot default on; a robot rolled back to off still refuses.
     off = {"line_follow": {"recovery_local_enabled": False}}
     client, _, stuck_id = _stuck(lambda **kw: core_client(config_overrides=off, **kw))
     refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"},
@@ -144,7 +144,7 @@ def test_packaged_default_plus_pinky_plus_old_overlay_parses():
     merged = _deep_merge(_deep_merge(_yaml(DEFAULT), _yaml(PINKY)),
                          {"line_follow": {"obstacle_escalate_s": 4.0, "lidar_forward_deg": 181.0}})
     config = _line_follow_config(merged["line_follow"])
-    # D-492: on by robot default; the config-less model default stays off.
+    # D-495: on by robot default; the config-less model default stays off.
     assert config.recovery_local_enabled is True and config.recovery_ask_s == 15.0
     rolled_back = _deep_merge(merged, {"line_follow": {"recovery_local_enabled": False}})
     assert _line_follow_config(rolled_back["line_follow"]).recovery_local_enabled is False
@@ -156,7 +156,7 @@ def test_packaged_default_plus_pinky_plus_old_overlay_parses():
 
 
 def test_packaged_default_backs_off_on_a_body_geometry_robot():
-    """D-492 user decision (2026-10-07): recovery_local_enabled on by default includes the D-407
+    """D-495 user decision (2026-10-07): recovery_local_enabled on by default includes the D-407
     autonomous back-off on every robot with URDF body geometry (no separate self-mask gate)."""
     from core_features.line_follow.manager import LineFollowManager
 
@@ -189,7 +189,7 @@ def test_d476_bridge_is_on_by_robot_default_and_yaml_matches_the_model():
     keys = [k for k in _yaml(DEFAULT)["line_follow"] if k.startswith("bridge_")]
     assert len(keys) == 7
     assert all(getattr(config, k) == getattr(defaults, k) for k in keys if k != "bridge_enabled")
-    # D-492: robots default on; the config-less model default stays off.
+    # D-495: robots default on; the config-less model default stays off.
     assert config.bridge_enabled is True and defaults.bridge_enabled is False
     rolled_back = _deep_merge(merged, {"line_follow": {"bridge_enabled": False}})
     assert _line_follow_config(rolled_back["line_follow"]).bridge_enabled is False

@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(api): D-492 검토 L6 junction 수동 해제와 409 코드
-- 2026-10-07 · uncommitted · feat(api): D-492 junction turn_deg·advance_m
-- 2026-10-07 · uncommitted · feat(api): D-491 POST /api/v1/line-follow/junction
+- 2026-10-07 · uncommitted · fix(api): D-495 검토 L6 junction 수동 해제와 409 코드
+- 2026-10-07 · uncommitted · feat(api): D-495 junction turn_deg·advance_m
+- 2026-10-07 · uncommitted · feat(api): D-494 POST /api/v1/line-follow/junction
 - 2026-10-07 · uncommitted · fix(api): D-483 N1 전체 틀린 코드 예산
 - 2026-10-07 · uncommitted · fix(api): D-483 재검토 반영(R1~R5)

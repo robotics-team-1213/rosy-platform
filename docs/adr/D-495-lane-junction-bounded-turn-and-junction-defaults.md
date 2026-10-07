@@ -1,12 +1,14 @@
-## D-492 차선 로봇은 교차로에서 멈춘 뒤 Fleet이 지도에서 정한 각도만큼 제한된 회전 동작을 하고 새 가지에서 차선 추종을 다시 잡는다 — 교차로 감지와 bridge는 로봇 기본값으로 켠다
+## D-495 차선 로봇은 교차로에서 멈춘 뒤 Fleet이 지도에서 정한 각도만큼 제한된 회전 동작을 하고 새 가지에서 차선 추종을 다시 잡는다 — 교차로 감지와 bridge는 로봇 기본값으로 켠다
 
-**Status:** Proposed (2026-10-07, 사용자 결정 2건: "회전 동작 먼저, 분기 인식 출력은 후속" · "로봇 기본값을 켜기"). [D-491](D-491-fleet-trip-execution-m2-contracts.md) 4항과 그 구현 부록(2026-10-07)의 한계를 메운다. 실차 이동·릴리스 승격은 아래 수용 절차를 따른다.
+**번호:** 처음 D-492로 적었으나 다른 브랜치가 D-492를 쓰고 main에 D-491(IR 가드)이 먼저 착지해 2026-10-07 착지 전에 D-495로 옮겼다(M2 계약 D-491 → D-494).
 
-잇는 결정: [D-491](D-491-fleet-trip-execution-m2-contracts.md)(교차로 지시 API) · [D-476](D-476-lane-loss-expected-road-bridge.md)(예상 도로 bridge, 기본 꺼짐) · [D-468](D-468-local-lane-departure-return.md)(이탈 복귀) · [D-422](D-422-line-follow-body-referenced-obstacle-stop.md)(몸체 기준 근접 정지) · [D-489](D-489-fleet-route-planning-concept-and-algorithm.md)(교차로 동작 각도 θ) · [D-18](D-18-rosy-core.md)(CORE가 유일한 최종 `cmd_vel` 발행자)
+**Status:** Proposed (2026-10-07, 사용자 결정 2건: "회전 동작 먼저, 분기 인식 출력은 후속" · "로봇 기본값을 켜기"). [D-494](D-494-fleet-trip-execution-m2-contracts.md) 4항과 그 구현 부록(2026-10-07)의 한계를 메운다. 실차 이동·릴리스 승격은 아래 수용 절차를 따른다.
+
+잇는 결정: [D-494](D-494-fleet-trip-execution-m2-contracts.md)(교차로 지시 API) · [D-476](D-476-lane-loss-expected-road-bridge.md)(예상 도로 bridge, 기본 꺼짐) · [D-468](D-468-local-lane-departure-return.md)(이탈 복귀) · [D-422](D-422-line-follow-body-referenced-obstacle-stop.md)(몸체 기준 근접 정지) · [D-489](D-489-fleet-route-planning-concept-and-algorithm.md)(교차로 동작 각도 θ) · [D-18](D-18-rosy-core.md)(CORE가 유일한 최종 `cmd_vel` 발행자)
 
 ### Context
 
-1. D-491 구현 조사(2026-10-07)에서 확인한 것: CORE가 받는 차선 관측(`line/observation`)에는 분기 후보·방향이 없다. 교차로 신호는 keep 모드 keeper의 `junction_transverse`/`junction_fork`뿐이고, 이것도 `lane_corner_turning`이 켜졌을 때만 나온다. 로봇 기본값(`middleware/perception/config/line_follow.yaml`)은 꺼져 있다. 그래서 `left`/`right` 지시는 `junction_unresolved`로 멈추고, "지시가 없으면 교차로에서 멈춤"도 기본 설정의 로봇에서는 작동하지 않는다.
+1. D-494 구현 조사(2026-10-07)에서 확인한 것: CORE가 받는 차선 관측(`line/observation`)에는 분기 후보·방향이 없다. 교차로 신호는 keep 모드 keeper의 `junction_transverse`/`junction_fork`뿐이고, 이것도 `lane_corner_turning`이 켜졌을 때만 나온다. 로봇 기본값(`middleware/perception/config/line_follow.yaml`)은 꺼져 있다. 그래서 `left`/`right` 지시는 `junction_unresolved`로 멈추고, "지시가 없으면 교차로에서 멈춤"도 기본 설정의 로봇에서는 작동하지 않는다.
 2. 교차로를 `straight`로 지나가려면 D-476 bridge가 필요한데, 이것도 기본값이 꺼져 있다(`rosy_default.yaml` `bridge_enabled: false`). D-476은 "리플레이 → 모델 PC 시뮬레이션 → 장치를 통과할 때까지 꺼 둔다"고 정했다. `docs/validation/d476-gazebo-model-pc-2026-10-06/`이 시뮬레이션 증거다.
 3. Fleet은 지도에서 각 교차 장소의 들어오는 차로와 나가는 차로를 알고, 그 사이 각도 θ를 이미 계산한다(D-489 교차로 동작).
 
@@ -19,10 +21,10 @@
 
    동작마다 시간 한도(회전 `|θ|/ω_min + 2 s`, 전진·재획득 각 5 s)가 있다. 다음 경우 즉시 멈추고 상태를 `aborted`로 둔다: odom 낡음·점프, E-stop, 모드 변경, D-422 몸체 기준 근접 정지, 시간 초과, 새 지시. 이 동작은 모두 CORE 매니저의 명령 경로 안에서만 이루어지며 최종 `cmd_vel` 발행자는 CORE 하나다. `turn_deg`가 없는 `left`/`right`는 지금처럼 `junction_unresolved`다(옛 Fleet 호환). 상태 `line_follow.junction.state`에 `turning`·`advancing`·`reacquiring`·`aborted`를 더한다.
 2. **교차로 감지와 bridge를 로봇 기본값으로 켠다.** `line_follow.yaml` `lane_corner_turning: true`, `rosy_default.yaml` `bridge_enabled: true`.
-   - 효과: 모든 차선 주행에서 교차로 앞 정지(D-491 "지시 없으면 멈춤")와 짧은 차선 소실 bridge가 작동한다.
+   - 효과: 모든 차선 주행에서 교차로 앞 정지(D-494 "지시 없으면 멈춤")와 짧은 차선 소실 bridge가 작동한다.
    - D-476의 "꺼 둔다"를 이 ADR이 개정한다. 다만 **릴리스 수용 절차는 남긴다**: 이 기본값이 들어간 페이로드는 모델 PC Gazebo `map_v2_fleet_real`(교차로·bridge·회전 동작 포함 한 바퀴)과 실기 차선 한 바퀴를 통과해야 robots에 승격한다. 이 노트북에서는 Gazebo를 돌리지 않는다.
    - 되돌리기는 카드 설정(`/boot/firmware/rosy-config.yaml`) 또는 로봇 패키지 설정으로 두 값을 끈다. 코드 변경은 필요 없다.
-3. **Fleet trip 루프(D-491 5항)는 `lane` 간선의 좌·우 교차로에 `turn_deg`를 보낸다.** 직진은 `straight`, 마지막은 `stop`이다. 로봇 능력(D-491 1항)에 `junction_turn: true`가 없으면 좌·우가 있는 `lane` 계획의 실행을 열지 않는다(`TRIP_MODE_UNSUPPORTED`).
+3. **Fleet trip 루프(D-494 5항)는 `lane` 간선의 좌·우 교차로에 `turn_deg`를 보낸다.** 직진은 `straight`, 마지막은 `stop`이다. 로봇 능력(D-494 1항)에 `junction_turn: true`가 없으면 좌·우가 있는 `lane` 계획의 실행을 열지 않는다(`TRIP_MODE_UNSUPPORTED`).
 4. **분기 인식 출력은 후속 ADR이다.** 차선 인식이 `branches [{direction, heading_deg, confidence}]`를 내고, 회전 동작 대신 그 가지를 따라 꺾는 방식은 별도 ADR로 정한다. 그때 교차로 판정도 표시 토픽(`line/keep_debug`)이 아니라 `line/observation`으로 옮기는 것을 같이 정한다. 이 ADR의 회전 동작은 그 뒤에도 분기를 인식하지 못할 때의 대체 경로로 남는다.
 
 ### 범위 밖
@@ -82,7 +84,7 @@
 5. **M4 CAMERA_LINE 전용.**
    - 교차로 감지, `waiting`, 회전은 CAMERA_LINE에서만 일어난다. IR_LINE에서는 게이트가 결정을 바꾸지 않는다.
    - IR_LINE에서 오는 지시는 모두 409 `JUNCTION_CAMERA_ONLY`다. IR에는 교차로 감지가 없어서 `straight`·`stop`도 뜻을 갖지 못하기 때문이다.
-   - 이것은 D-491 4항과 구현 부록의 "CAMERA_LINE/IR_LINE에서 받는다"를 개정한다. OFF는 그대로 409 `LINE_FOLLOW_NOT_ACTIVE`다.
+   - 이것은 D-494 4항과 구현 부록의 "CAMERA_LINE/IR_LINE에서 받는다"를 개정한다. OFF는 그대로 409 `LINE_FOLLOW_NOT_ACTIVE`다.
 6. **M5 재획득.** 손을 넘긴 뒤 받은 신선한 프레임이 연속 `junction_reacquire_frames`장(기본 3) 있어야 재획득이다. 각 프레임은 visible이고 신뢰도가 `min_confidence` 이상이어야 한다. containment가 차선 방향을 주면 그 방향이 돌린 방향의 ±30° 안이어야 한다. 차선이 `lost_after_s`를 넘게 보이지 않아 D-407 stuck이 열리면 `unresolved`다(`aborted`가 아니다).
 7. **M6 지연 보정.** 회전은 `|오차| ≤ max(5°, |ω|·junction_turn_lead_s)`에서 멈춘다. `junction_turn_lead_s` 기본값은 0.15 s다. 그 뒤 ±5° 안에 0.3 s 머물러야 끝난다. 그동안 벗어나면 최저 각속도로 작게 고친다. 회전 시간 한도는 이 머무름까지 포함한다.
    - 시험: odom 지연 150 ms에 바퀴 1차 지연 0.15 s를 넣었을 때 90°, −150°, 30°에서 모두 ±5° 안이다.
@@ -91,12 +93,12 @@
 9. **M8 LOST 해제.**
    - 회전 시작은 손실 시계가 교차로 감지가 시작된 때(신선도 0.3 s 여유)보다 앞서 있으면 `aborted`(`lane_lost_before_junction`)다. 이때 LOST는 그대로 둔다.
    - 감지가 시작한 손실 시계만 지운다.
-   - 교차로에서 `lost_after_s`(기본 3 s)를 넘겨 기다리면 LOST가 걸리고 D-407 stuck이 열린다. 그 뒤 온 회전 지시는 `aborted`(`stuck`)다. **Fleet은 로봇이 교차로에 닿기 전에 지시를 무장해야 한다.** D-491 5항의 `arm_distance_m` 0.6 m가 그 장치다.
+   - 교차로에서 `lost_after_s`(기본 3 s)를 넘겨 기다리면 LOST가 걸리고 D-407 stuck이 열린다. 그 뒤 온 회전 지시는 `aborted`(`stuck`)다. **Fleet은 로봇이 교차로에 닿기 전에 지시를 무장해야 한다.** D-494 5항의 `arm_distance_m` 0.6 m가 그 장치다.
 10. **L1 정지 확인.** 교차로에서 멈춘 뒤 odom이 0.2 s 동안 `|v| < 0.01 m/s`, `|ω| < 0.05 rad/s`를 보여야 회전을 시작한다. 지연된 odom은 자기 마지막 0.2 s로 판단한다. 2 s 안에 서지 않으면 `aborted`(`not_still`)다. 이동 중 상태 사유는 `junction_stopping`이다.
 11. **L2 동작 확인.** D-468 동작 확인 함수가 묶여 있지 않으면 회전을 거절한다(`motion_unconfirmed`). 확인 함수의 부재는 허가가 아니다.
 12. **L3 지연 요구.** 교차로 감지는 이제 정지만이 아니라 회전 시작도 가른다. `line/keep_debug` 프레임은 카메라 시각에서 `stale_after_s`(0.3 s) 안에 CORE에 닿아야 한다. 늦은 프레임은 버린다. 실기 수용에서 keep_debug 지연을 잰다(아래 DEVICE 4).
 13. **L5 D-395 위치 미션.** D-395 위치 미션도 CAMERA_LINE 차선 추종을 쓰면 교차로 정지(`waiting`)를 받는다. 미션이 교차로 앞에서 멈추면 이것이 원인이다. 미션 쪽은 바꾸지 않았다.
-14. **L6 권한.** `POST /line-follow/junction`은 이제 다른 구동 경로처럼 수동 조종이 풀려 있어야 한다(`require_manual_released`, 409 `MODE_CONFLICT`). 따라서 D-491 구현 부록 10항의 "operator·보정 lease·수동 조종 해제" 문구가 코드와 맞는다. 낡은 `rosy_default.yaml`·`model.py` 주석도 고쳤다.
+14. **L6 권한.** `POST /line-follow/junction`은 이제 다른 구동 경로처럼 수동 조종이 풀려 있어야 한다(`require_manual_released`, 409 `MODE_CONFLICT`). 따라서 D-494 구현 부록 10항의 "operator·보정 lease·수동 조종 해제" 문구가 코드와 맞는다. 낡은 `rosy_default.yaml`·`model.py` 주석도 고쳤다.
 
 **수용 점검표.** 승격 전에 모두 통과해야 한다.
 

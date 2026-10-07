@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(config): D-492 검토 H1 camera_x_offset_m URDF 공칭
+- 2026-10-07 · uncommitted · fix(config): D-495 검토 H1 camera_x_offset_m URDF 공칭
 - 2026-10-07 · uncommitted · feat(observer): keep_debug에 corner_turning
-- 2026-10-07 · uncommitted · feat(config): D-492 lane_corner_turning 로봇 기본값 켜짐
+- 2026-10-07 · uncommitted · feat(config): D-495 lane_corner_turning 로봇 기본값 켜짐
 - 2026-10-07 · b53e1fe19 · fix(perception): camera fit grid steps, fine height band, record fit_step
 - 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)

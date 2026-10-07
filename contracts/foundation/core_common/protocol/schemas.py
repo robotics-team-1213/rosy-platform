@@ -1019,15 +1019,15 @@ class LineStuckStatus(BaseModel):
 
 
 class LineJunctionStatus(BaseModel):
-    """D-491 decision 4 / D-492: the one pending next-junction instruction and its progress."""
+    """D-494 decision 4 / D-495: the one pending next-junction instruction and its progress."""
 
     pending_action: Optional[str] = None  # straight | left | right | stop
     place_id: Optional[str] = None
     # idle | armed | executing | waiting | unresolved | turning | advancing | reacquiring | aborted
     state: str = "idle"
     seq: int = 0
-    turn_deg: Optional[float] = None      # D-492: signed bounded turn (left +)
-    reason: Optional[str] = None          # D-492: why a maneuver aborted
+    turn_deg: Optional[float] = None      # D-495: signed bounded turn (left +)
+    reason: Optional[str] = None          # D-495: why a maneuver aborted
 
 
 class LineFollowStatus(BaseModel):
@@ -1049,7 +1049,7 @@ class LineFollowStatus(BaseModel):
     stop_gap_m: Optional[float] = None
     clearance_source: Optional[str] = None
     stuck: Optional[LineStuckStatus] = None  # D-407: open stuck (None = not stuck)
-    junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-491 decision 4
+    junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-494 decision 4
 
 
 class TrafficPolicyStatus(BaseModel):

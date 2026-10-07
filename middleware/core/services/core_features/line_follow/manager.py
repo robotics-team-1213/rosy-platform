@@ -64,7 +64,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
         self._init_body_stop()  # D-422 (body_stop.py)
         self._init_recovery()  # D-407 (stuck_wiring.py)
         self._init_lane_return()  # D-468 source-time odometry and corridor evidence.
-        self._init_junction()  # D-491 decision 4 (junction.py)
+        self._init_junction()  # D-494 decision 4 (junction.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""

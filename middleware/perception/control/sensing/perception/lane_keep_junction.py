@@ -36,7 +36,7 @@ def _across_path(ends, half):
 def _junction(strategy, transverse, left, right, half, corner_turning, max_lateral_m):
     """Reason to HOLD at a junction, or None. Only with corner turning: there
     the corner reading can pull the robot out of the lane at a junction mouth.
-    Without it (the device default until D-492) both rules held 5-10 % more of the real
+    Without it (the device default until D-495) both rules held 5-10 % more of the real
     replay frames (pilot none 0.32 -> 0.36-0.43), so the plain keeper goes on
     along its lone boundary as the bench measures. Fork branches count only
     within `max_lateral_m` of the robot, the same plausibility bound the
