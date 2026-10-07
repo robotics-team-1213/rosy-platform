@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines,
-  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, quarterTurn, cameraScreenToMap, mapUpTurn,
+  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, quarterTurn, cameraScreenToMap, mapUpTurn, siteViewTurn,
 } from "../../fleet/server/web/site-layer.js";
 
 const row = (changes) => ({
@@ -117,3 +117,10 @@ test("D-513 7: the picture turns so map +y points up — no installation key", (
   assert.equal(mapUpTurn({ map_to_image: [100, 0, 200, 0, 100, 100, 0, 0, 1], track_bounds_m: bounds }), 180);
   assert.equal(mapUpTurn(undefined), 0);
 })
+
+test("D-513 7: the site map's view turn comes from the active map, else 0", () => {
+  assert.equal(siteViewTurn({ map: { view_turn_deg: 90 } }), 90);
+  assert.equal(siteViewTurn({ map: { view_turn_deg: 45 } }), 0);
+  assert.equal(siteViewTurn({ map: {} }), 0);
+  assert.equal(siteViewTurn(null), 0);
+});
