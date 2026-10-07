@@ -86,20 +86,24 @@ def test_failing_test_stops_before_ff(repos):
     assert git(main, "rev-parse", "HEAD") == before
 
 
-def test_main_moved_outside_scope_skips_retest(repos, monkeypatch):
+@pytest.mark.parametrize("peer_path, second_round", [
+    ("docs/other.md", []),               # records only: lint, no retest
+    ("lib/util.py", [["pkg/test"]]),     # code the tests may import: full rerun
+])
+def test_main_moved_retests_unless_records_only(repos, monkeypatch, peer_path, second_round):
     main, wt = repos
     commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
     real, calls = land.run_tests, []
 
     def run_tests(wt_, args, invocations, logdir, round_no):
         calls.append(invocations)
-        if round_no == 1:  # a peer lands an unrelated doc while our tests run
-            commit(main, {"docs/other.md": "peer\n"}, "peer doc")
+        if round_no == 1:  # a peer lands while our tests run
+            commit(main, {peer_path: "peer = 1\n"}, "peer")
         return real(wt_, args, invocations, logdir, round_no)
 
     monkeypatch.setattr(land, "run_tests", run_tests)
     assert land.main(["--tests", "auto"]) == 0
-    assert calls == [[["pkg/test"]], []]
+    assert calls == [[["pkg/test"]], second_round]
     assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
     assert (main / "pkg/a.py").read_text() == "x = 2\n"
 

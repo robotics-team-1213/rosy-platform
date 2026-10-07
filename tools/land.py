@@ -222,20 +222,11 @@ def select(wt: Path, base: str, python: str) -> list[list[str]]:
     return pack(wt, fallback_targets(wt, changed))
 
 
-def scopes(invocations: list[list[str]]) -> list[str]:
-    """Source+test roots the selected tests cover: the dir above each test/ dir."""
-    found = []
-    for path in (p for inv in invocations for p in inv):
-        own = _test_dir(path)
-        # ponytail: a root test/ file scopes only itself (guards read the whole repo);
-        # a main delta that breaks a root guard elsewhere is caught by lint/CI, not here.
-        scope = own.rsplit("/", 1)[0] if own and "/" in own else path
-        found.append(scope)
-    return found
-
-
-def touches(delta: list[str], scope_list: list[str]) -> bool:
-    return any(p == s or p.startswith(s.rstrip("/") + "/") for p in delta for s in scope_list)
+def record_only(path: str) -> bool:
+    """Non-code records: a main delta made only of these cannot change a test result."""
+    name = PurePosixPath(path).name
+    return (name in ("logs.md", "index.md", "progress.md") or path == "tools/harness/adr_gaps.txt"
+            or (path.startswith("docs/") and path.endswith(".md")))
 
 
 # --- running --------------------------------------------------------------------
@@ -321,7 +312,6 @@ def land(args) -> int:
     logdir = tmp_dir(branch)
     summary: list[str] = []
     tested_main: str | None = None
-    tested_scopes: list[str] = []
     start = out(wt, "rev-parse", "main")
 
     for round_no in range(1, args.max_rounds + 1):
@@ -344,15 +334,15 @@ def land(args) -> int:
             return 0
 
         delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
-        if tested_main and not touches(delta, tested_scopes):
-            summary.append(f"round {round_no}: main delta ({len(delta)} file(s)) outside tested scopes,"
-                           " lint only")
+        if tested_main and all(map(record_only, delta)):
+            summary.append(f"round {round_no}: main delta ({len(delta)} file(s)) is records only"
+                           " (docs/logs/index/progress), lint only")
             invocations = []
         elif args.tests == "none":
             summary.append(f"round {round_no}: tests skipped (--tests none)")
         summary += [f"round {round_no}: {s}" for s in run_tests(wt, args, invocations, logdir, round_no)]
         if invocations or tested_main is None:
-            tested_main, tested_scopes = main_sha, scopes(invocations)
+            tested_main = main_sha
 
         if out(wt, "rev-parse", "main") != main_sha:
             print("[land] main moved during the round; merging again")
