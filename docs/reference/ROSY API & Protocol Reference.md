@@ -1305,7 +1305,7 @@ Compose/Caddy 구성이 담당한다. 로컬 합성 카메라의 Docker end-to-e
 |---|---|---|---|
 | POST | `/api/fleet/sightings` | source 전용 Bearer token | vision worker가 `SiteSightingPayload`를 제출. 토큰 설정이 허용한 source/robot/map/calibration만 수용 |
 | GET | `/api/fleet/sightings` | console Bearer token | 로봇별 최신 sighting, server-derived source, capture/receive age 및 1 s lease stale 상태 |
-| GET | `/api/fleet/site-map` | console Bearer token 또는 viewer 이상 | 설정된 `corner_world_m` 사각형을 `map_id`별로 묶어 반환(`frame: map`, m 단위 `polygon_m`·`bounds_m`, source별 `source_id`·`calibration_revision`·`calibration_source`·`corner_marker_ids`(D-484 `field_boundary` 소스는 `null`)·`robot_ids`·`robot_markers`). 토큰은 싣지 않는다. 설정·기하가 없으면 404 `NO_SITE_MAP`. 표시 전용 |
+| GET | `/api/fleet/site-map` | console Bearer token 또는 viewer 이상 | 설정된 `corner_world_m` 사각형을 `map_id`별로 묶어 반환(`frame: map`, m 단위 `polygon_m`·`bounds_m`, source별 `source_id`·`calibration_revision`·`calibration_source`·`corner_marker_ids`(D-484 `field_boundary` 소스는 `null`)·`robot_ids`·`robot_markers`·`display_rotation_deg`(D-513 7, v1.124: 설치 YAML의 원본 영상 화면 회전, 시계 방향 0/90/180/270, 기본 0, 표시 전용 — 보정·관측 좌표는 원본 그대로)). 토큰은 싣지 않는다. 설정·기하가 없으면 404 `NO_SITE_MAP`. 표시 전용 |
 
 `POST` body `SiteSightingPayload`:
 
@@ -2453,7 +2453,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.124 | 2026-10-08 | D-513: site map place kind `start` (demo start slot with required `yaw`); activation refuses a start place a trip could not start from (`SITE_MAP_START_INVALID`). Teach `POST /place` accepts `kind: start`; a new place in `/teach/confirm` does not (it has no robot yaw). Robot API·envelope 1.0 변경 없음 |
+| v1.124 | 2026-10-08 | D-513: site map place kind `start` (demo start slot with required `yaw`); activation refuses a start place a trip could not start from (`SITE_MAP_START_INVALID`). Site-map source rows carry `display_rotation_deg` (D-513 7, console display only; Fleet and Vision accept the same optional key in `site-cameras.yaml`). Teach `POST /place` accepts `kind: start`; a new place in `/teach/confirm` does not (it has no robot yaw). Robot API·envelope 1.0 변경 없음 |
 | v1.123 | 2026-10-07 | Additive (D-499): Fleet `GET /api/fleet/state` 로봇 행 선택 필드 `link`(`up`·`unreachable`·`moved`·`tls-refused`·`protocol`). 401이 아닌 로봇 API 오류에는 필드가 없다. 표시 전용. CORE 경로·envelope 1.0·발행 루프의 online/state/goal 판정은 그대로다 |
 | v1.122 | 2026-10-07 | Additive (D-493, fix/d493-attention-stale-state): `GET /api/fleet/state` 로봇 행에 `state_age_s`(상태가 관찰된 뒤 지난 초. hub 나이와 SharedGather 캐시 나이 포함, 오프라인이면 `null`)와 최상위 `gathered_at`(마지막 실제 수집의 서버 UTC epoch 초, 표시용)을 더함. 콘솔 예외 큐는 `state_age_s` + 받은 뒤 지난 시간이 5초를 넘으면 "상태 오래됨" warn 을 붙인다. 기존 필드는 그대로다. |
 | v1.121 | 2026-10-07 | Additive (D-407 Fleet 쪽, feat/d407-stuck-episode-log): Site Fleet 새 경로 `GET /api/fleet/line-stuck/episodes`(viewer+) — 막힘 에피소드 기록(`fleet_line_stuck_episodes`, `--tasks-db` 파일). 보드 전이에서만 쓰고 로봇 요청은 늘지 않는다. Robot API·envelope 1.0 변경 없음 |
