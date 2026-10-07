@@ -183,13 +183,16 @@ class Probe:
         """forget: first end CORE's junction-stop memory. The entry heading of a junction stop
         survives OFF and a teleport (review N2) and ends only after lost_after_s in CAMERA_LINE
         without a sighting; a teleport back to the same junction would abort the next turn as
-        'odom' (L2). So: park in the dark inner block (no junction in view), CAMERA_LINE 4 s, OFF."""
+        'odom' (L2). So: park in the dark inner block (no junction in view), CAMERA_LINE 4 sim s, OFF."""
         self.mode('OFF')
         time.sleep(0.5)
         if forget:
             self._teleport(-0.95, 0.0, math.pi/2)
             self.mode('CAMERA_LINE')
-            time.sleep(4.0)
+            t_sim = self.get('sim_t') or 0.0
+            # lost_after_s (3 s) of SIM time without a sighting; the host may run below RTF 1
+            while (self.get('sim_t') or 0.0)-t_sim < 4.0:
+                time.sleep(0.2)
             self.action('forget', state=self.last().get('state'), reason=self.last().get('reason'),
                         junction=self.last().get('junction'))
             self.mode('OFF')

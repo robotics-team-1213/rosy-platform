@@ -13,7 +13,12 @@
 3. Fault injection relays: Gazebo scan/odom arrive on scan_gz/odom_gz (d495_bridge.yaml) and are
    republished unchanged on scan/odom. A std_msgs/String on d495/pause names what to withhold:
    any of 'ir', 'scan', 'odom' (comma separated); '' resumes everything.
+4. Odom ordering: an odom message goes out only once /clock has passed its stamp by ODOM_HOLD_S.
+   Gazebo can stamp odom ~1 ms ahead of the /clock sample CORE last saw, and CORE's D-468 pose
+   trail resets on any negative age (lane_return_evidence.py observe_pose), which aborts every
+   junction maneuver as 'odom'. On the device the stamp is always taken before CORE's now.
 """
+import collections
 import json
 import math
 import os
@@ -22,6 +27,7 @@ import threading
 
 TAPE_RAW, CARPET_RAW = 2600, 600
 PAINT_SPOT_M = 0.003
+ODOM_HOLD_S = 0.010
 IR_ROW = ((0.0295, 0.020), (0.0295, 0.0), (0.0295, -0.020))  # left, mid, right
 
 
@@ -32,6 +38,7 @@ def main():
     from control.sensing.perception.paint_localizer import PaintMap
     from geometry_msgs.msg import Pose2D
     from nav_msgs.msg import Odometry
+    from rosgraph_msgs.msg import Clock
     from rclpy.qos import qos_profile_sensor_data
     from sensor_msgs.msg import LaserScan
     from std_msgs.msg import String, UInt16MultiArray
@@ -46,11 +53,29 @@ def main():
         paused.clear(), paused.update(p for p in m.data.split(',') if p),
         node.get_logger().info(f'pause {sorted(paused)}')), 10)
 
-    for kind, src, dst, key in ((LaserScan, 'scan_gz', 'scan', 'scan'),
-                                (Odometry, 'odom_gz', 'odom', 'odom')):
-        pub = node.create_publisher(kind, dst, 10)
-        node.create_subscription(kind, src, lambda m, pub=pub, key=key: (
-            None if key in paused else pub.publish(m)), qos_profile_sensor_data)
+    scan_pub = node.create_publisher(LaserScan, 'scan', 10)
+    node.create_subscription(LaserScan, 'scan_gz', lambda m: (
+        None if 'scan' in paused else scan_pub.publish(m)), qos_profile_sensor_data)
+    odom_pub = node.create_publisher(Odometry, 'odom', 10)
+    held = collections.deque()
+    clock = [None]
+
+    def flush():
+        while held and clock[0] is not None and (
+                held[0].header.stamp.sec+held[0].header.stamp.nanosec*1e-9+ODOM_HOLD_S <= clock[0]):
+            odom_pub.publish(held.popleft())
+
+    def on_odom(m):
+        if 'odom' not in paused:
+            held.append(m)
+            flush()
+
+    def on_clock(m):
+        clock[0] = m.clock.sec+m.clock.nanosec*1e-9
+        flush()
+
+    node.create_subscription(Odometry, 'odom_gz', on_odom, qos_profile_sensor_data)
+    node.create_subscription(Clock, 'clock', on_clock, 10)
 
     gt_pub = node.create_publisher(Pose2D, 'd495/gt', 10)
     ir_pub = node.create_publisher(UInt16MultiArray, 'ir_sensor/range', qos_profile_sensor_data)
