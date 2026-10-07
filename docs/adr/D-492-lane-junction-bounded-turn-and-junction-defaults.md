@@ -57,3 +57,10 @@
 7. **bridge 전제.** D-476 bridge는 D-468 안에서만 돌고 `recovery_local_enabled`가 켜져야 한다. 이 값의 기본값은 꺼짐이다(`rosy_default.yaml`). 따라서 `bridge_enabled: true`만으로는 그 값을 켠 로봇에서만 bridge가 작동한다.
 8. **차선 모드.** `lane_corner_turning`의 교차로 HOLD는 keep 모드에서만 나온다. 기본 `camera_lane_mode`는 `line`이므로, 교차로 정지와 회전 시작은 keep 모드 로봇에서만 일어난다. `lane` 모드에서는 같은 값이 odom 기반 모서리 회전기를 켠다.
 9. **능력 필드.** `junction_turn: true`는 이 브랜치에 넣지 않았다. `feat/d491-robot-trip-contracts`가 같은 `controls.py`·`api/v1/system.py` 줄을 고치기 때문이다. 착지 순서를 정할 때 그 브랜치에서 더한다.
+
+### 결정 개정 (2026-10-07, 사용자 결정, 구현 메모 6·7·9항을 대신한다)
+
+1. **trip 로봇은 keep 모드로 달린다.** 교차로 감지(`lane_corner_turning`)는 keep 모드에서만 작동한다. 따라서 `lane` trip은 keep 모드 로봇에서만 연다. 9dfk는 배포할 때 운영자 겹에서 `camera_lane_mode: keep`으로 바꾼다. 배포 뒤 장치 확인(차선 한 바퀴, 교차로 정지 한 번)을 해야 trip을 연다.
+2. **`recovery_local_enabled` 로봇 기본값을 켠다**(`rosy_default.yaml`). 이 값은 D-468 로컬 차선 복귀, D-476 bridge, D-407 로컬 후진의 전제다. D-407 로컬 후진은 로봇 패키지의 URDF 몸 기하가 있을 때만 움직인다. 승격 규칙은 2항과 같다. 모델 PC Gazebo `map_v2_fleet_real` 한 바퀴와 실기 차선 한 바퀴를 통과한 페이로드만 robots에 간다. 이 결정은 D-407 결정의 "로컬 복구 기본 꺼짐"과 D-468 확인 문단의 "장치 기본 false"를 개정한다.
+3. **되돌리기.** `bridge_enabled`와 `recovery_local_enabled`는 CORE 설정 겹(`~/.rosy/rosy.yaml` 또는 `ROSY_CONFIG`, `line_follow.<키>: false`)으로 코드 변경 없이 끈다. `lane_corner_turning`은 운영자 겹과 카드 설정에 넣지 않는다(사용자 결정). 끄려면 페이로드 `line_follow.yaml`을 바꾸는 릴리스가 필요하다. 2항의 "카드 설정으로 끈다"는 이렇게 고친다.
+4. **능력 `junction_turn`의 뜻.** CORE `LineFollowManager.supports_junction_turn`이 참일 때만 `true`다. 참이 되려면 세 조건이 모두 맞아야 한다. 최근 2 s 안에 받은 신선한 `line/keep_debug` 프레임이 `corner_turning: true`를 실어야 한다. 이 토픽은 keep 모드에서만 나오므로 keep 모드라는 증거가 된다. 그리고 이 매니저에 제한 회전이 있어야 한다. 관측 노드의 lane mode와 flag는 인식 파라미터라서 CORE 설정에 없다. 그래서 이 근거로 판정하고, 프레임이 없으면(카메라 정지, `line` 모드, flag 꺼짐) `false`다. 필드는 `feat/d491-robot-trip-contracts`가 `getattr(svc.line_follow, "supports_junction_turn", False) is True`로 읽는다. Fleet은 `junction_turn`이 없거나 거짓인 로봇에서 좌·우가 있는 `lane` 계획을 `TRIP_MODE_UNSUPPORTED`로 거절한다(결정 3).
