@@ -108,6 +108,10 @@ test('D-494 trip stop reasons name the configured stall time and loop errors', a
   assert.match(tripStatusText(trip, MAP), /35초 넘게 경로를 따라 나아가지 않아/);
   assert.match(tripStatusText({...trip, reason: 'TRIP_LOOP_ERROR', detail: {}}, MAP), /관제 운행 처리에 오류/);
   assert.match(tripStatusText({...trip, reason: 'junction', detail: {}}, MAP), /차선 주행을 껐습니다/);
+  const unexpected = tripStatusText({...trip, reason: 'junction_unexpected', pose: {state: 'LOCALIZED', source: 'sighting', x: 1.234, y: -0.5},
+    detail: {junction_state: 'waiting', junction_reason: null, line_reason: 'junction_waiting'}}, MAP);
+  assert.match(unexpected, /지도에 없는 자리에서 교차로를 봐 멈췄습니다/);
+  assert.match(unexpected, /지도 자세 \(1\.23, -0\.50\) · 사유 junction_waiting/);
   assert.equal(PLACE_KIND_LABEL.stall, undefined);
 });
 

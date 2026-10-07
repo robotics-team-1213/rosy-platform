@@ -2388,3 +2388,10 @@
 - 변경: 개발 모드에서 `/console/install`, `/console/site-map`, `/console/cell` 직접 진입 시 Fleet 개발 세션을 자동 발급·재사용하고 토큰 입력 칸을 숨긴다. `/console`도 개발 모드에서는 토큰 입력 칸을 숨긴다. 일반 모드의 토큰 접속은 유지한다.
 - 증거: 새 Chromium 직접 진입 시험 4 passed, 개발 인증 pytest 60 passed, 웹 Node 시험 160 passed. 넓은 pytest의 Cell 컴파일러 import 실패 1건은 깨끗한 main에서도 동일하게 재현했다.
 - gate 변화: SOURCE/LOCAL만 확인. 사이트 배포·실기 수용은 별도다.
+
+## 2026-10-08 · feat/d507-fleet-trip-expect · feat(fleet): D-507 2·3·9 Fleet 쪽
+- 변경: `junction_pivot: true` 로봇에만 교차로 지시에 `map_id`·`expect_in_m`·`expect_tol_m`·`pivot_past_line_m`(좌·우만, 나가는 차로 폭/2, 상한 0.30)를 싣는다. `expect_in_m`이 (0, 2] 밖이면 `map_id`만. `expect_tol_m`은 지도 자세에 오차 추정이 없어 0.05×추측항법 거리 + trip 최고 속도×자세 나이 + `ENDPOINT_TOL_M`(상한 0.30)로 둔다. `site_floor_map_id`가 활성 지도와 다른 로봇의 `lane` trip은 422 `TRIP_SITE_FLOOR_MISMATCH`(키 없음·null은 검사 안 함). CORE `unexpected`, 또는 다음 장소가 `arm_distance_m`보다 먼 `waiting`은 10 s를 기다리지 않고 `stopped(junction_unexpected)`. API Ref v1.127.
+- 증거: `test_trip_d507.py` 16건, trip·caps·문서 시험, 웹 Node 시험, 변이 검사 2건(능력 문, `waiting` 거리 규칙), `test/known_failures.py`.
+- gate 변화: SOURCE만. SIM·DEVICE는 CORE 브랜치(`feat/d507-junction-approach`)와 함께.
+- 결정: 판정 규칙은 `LiveTrip.junction_end`로 옮겨 `trip_runner.py`를 600줄 아래로 둔다. 바닥 선언 키가 null이면 선언이 없는 것으로 보고 검사하지 않는다.
+- 교훈: `feat/trip-site-floor-check`가 같은 9항을 따로 구현했다. 착지 때 하나로 합친다.
