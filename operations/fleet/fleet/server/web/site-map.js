@@ -12,6 +12,7 @@ import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {warpImage} from '/console/assets/field-view.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
 import {parseLensHeader} from '/console/assets/vision-view.js';
+import {displayRotation, mapQuarterTurn} from '/console/assets/site-layer.js';
 
 const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
@@ -23,6 +24,14 @@ const state = {role: null, loadState: 'idle', active: null, draft: null, working
 const TRIP_POLL_MS = 1000;
 let plane = null, planeEpoch = 0;
 let calibrations = [];
+let siteCameras = null; // GET /api/fleet/site-map: per-source display_rotation_deg (D-513 7)
+// D-513 7: turn the map view the way the console's turned camera picture shows this map.
+function viewTurn(mapId) {
+  const record = calibrations.find(c => c.map_id === mapId && c.source_id === $('plane-source').value)
+    || calibrations.find(c => c.map_id === mapId);
+  // Without the camera rows the installed turn is unknown: keep the plain map frame, not a half turn.
+  return record && siteCameras ? mapQuarterTurn(record, displayRotation(siteCameras, record.source_id)) : 0;
+}
 const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
   places: () => shown()?.places || [], render: () => render(),
   reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
@@ -63,7 +72,7 @@ function render() {
   if (!hasMap) return;
   const background = plane?.mapId === map.map_id ? plane : null;
   svg.classList.toggle('has-plane', Boolean(background));
-  const view = background?.view || fitView(map, W, H);
+  const view = background?.view || fitView(map, W, H, 24, viewTurn(map.map_id));
   state.view = view;
   if (background) {
     el('image', {...background.field, href: background.url, preserveAspectRatio: 'none'}, svg);
@@ -77,7 +86,7 @@ function render() {
     for (const mark of arrowMarks(edge)) {
       const [px, py] = view.toPx(mark.x, mark.y);
       el('polygon', {class: 'arrow', points: '8,0 -6,-6 -6,6',
-        transform: `translate(${px} ${py}) rotate(${-mark.angle * 180 / Math.PI})`}, svg);
+        transform: `translate(${px} ${py}) rotate(${view.rotateDeg(mark.angle)})`}, svg);
     }
   }
   if ($('map-source').value === 'active' && planIsCurrent(state.plan, state.active)) {
@@ -91,7 +100,7 @@ function render() {
     el('title', {}, dot).textContent = `${place.name} (${PLACE_KIND_LABEL[place.kind] || place.kind})`;
     if (place.kind === 'start') {
       el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
-        transform: `translate(${px} ${py}) rotate(${-place.yaw * 180 / Math.PI})`}, svg);
+        transform: `translate(${px} ${py}) rotate(${view.rotateDeg(place.yaw)})`}, svg);
     }
     el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = place.name;
   }
@@ -200,6 +209,8 @@ async function load() {
   state.loadState = 'ready';
   try { calibrations = (await request('/api/fleet/calibrations')).calibrations || []; }
   catch { calibrations = []; }
+  try { siteCameras = await request('/api/fleet/site-map'); }
+  catch { siteCameras = null; }
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map(place => new Option(`${place.name} (${place.id})`, place.id)));
@@ -300,7 +311,7 @@ $('plane-load').addEventListener('click', async () => {
   gate('plane-load', '불러오는 중');
   let url;
   try {
-    const {view, field} = rectangularView(record, shown()?.map_id, W, H);
+    const {view, field} = rectangularView(record, shown()?.map_id, W, H, viewTurn(shown()?.map_id));
     const lease = await request('/api/fleet/vision/lease', {method: 'POST',
       headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source_id: record.source_id})});
     const path = new URL(lease.frame_path, location.origin);

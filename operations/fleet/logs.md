@@ -2423,3 +2423,8 @@
 - 변경: Power health readback lives in /api/fleet/state presentation; D-447 gather remains unchanged.
 - 증거: Fleet and contract focus tests passed; Node 170 passed; hardware remains unverified.
 - gate 변화: None.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-513 7 회전 후속
+- 변경: 실영상 위 시작점 클릭을 회전·보정 역변환으로 지도 좌표로 바꾼다. 실영상 위 x/y 축을 지도 방향으로 그린다. 레일 썸네일을 편집 중이 아닐 때 돌린다. 현장 지도 화면을 관제 실영상과 같은 방향의 90° 단위로 돌린다(평면 사진 포함). 돌린 조감도는 보일 때만 다시 만든다.
+- 증거: 웹 Node 시험 174 passed.
+- gate 변화: SOURCE/LOCAL만.

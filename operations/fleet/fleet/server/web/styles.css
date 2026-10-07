@@ -74,6 +74,12 @@ body {
 .vision-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .vision-frame img[hidden], .vision-image-stage[hidden], .vision-corner-overlay[hidden], .vision-corner-modes[hidden], #vision-corner-hint[hidden] { display: none; }
 .vision-image-stage { position: relative; width: 100%; line-height: 0; }
+/* D-513 7: 설치 회전만큼 썸네일을 돌린다. 모서리 편집은 원본 좌표라 돌리지 않는다. */
+.vision-frame:not([data-editing="true"]):is([data-turn="90"], [data-turn="270"]) { container-type: size; }
+.vision-frame:not([data-editing="true"]):is([data-turn="90"], [data-turn="270"]) .vision-image-stage { width: 100cqh; }
+.vision-frame:not([data-editing="true"])[data-turn="90"] .vision-image-stage { rotate: 90deg; }
+.vision-frame:not([data-editing="true"])[data-turn="180"] .vision-image-stage { rotate: 180deg; }
+.vision-frame:not([data-editing="true"])[data-turn="270"] .vision-image-stage { rotate: 270deg; }
 .vision-frame[data-editing="true"] { display: block; aspect-ratio: auto; overflow: hidden; }
 .vision-frame[data-editing="true"] .vision-image-stage { width: 100%; }
 .vision-frame[data-editing="true"] img { width: 100%; height: auto; object-fit: unset; }

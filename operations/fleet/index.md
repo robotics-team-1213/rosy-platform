@@ -89,8 +89,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(fleet): D-513 7 회전 후속
 - 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up
 - 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시
 - 2026-10-08 · uncommitted · feat(fleet): D-513 7 카메라 화면 회전
 - 2026-10-08 · uncommitted · feat(fleet): D-513 시연 출발 자리 `start` 장소
-- 2026-10-07 · uncommitted · fix(test): Fleet 브라우저 fixture가 Chromium 차단 포트를 피하고 정식 옵트인을 받는다
