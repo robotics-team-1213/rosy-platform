@@ -32,6 +32,8 @@ class FakeCore:
         if key == ("GET", "/system/info"):
             return 200, {"robot_id": "rosy_26", "robot_name": "Rosy 26"}
         if key == ("GET", "/robot/state"):
+            if r.state_fail and r.lf_mode == "CAMERA_LINE":
+                return 0, None
             pose = None if r.pose_none else {"x": r.x, "y": 0.0, "yaw": 0.0}
             return 200, {"online": True, "mode": "IDLE", "battery": {"percent": 80}, "safety": {"estop": False},
                          "pose": pose, "localization": r.localization}
@@ -64,6 +66,8 @@ class FakeCore:
             r.rec = True
             return 201, {"id": "rec1"}
         if key == ("GET", "/recordings/active"):
+            if r.rec_unreachable and not r.rec:
+                return 0, None
             return 200, {"active": {"state": "recording", "id": "rec1"} if r.rec else None}
         if key == ("POST", "/recordings/active/stop"):
             r.rec = False
@@ -89,6 +93,8 @@ class FakeRobot:
         self.off_status = self.idle_status = self.start_status = 200
         self.release_rc, self.corrupt_tee, self.mangle_after_mv, self.fail_restore = 0, False, False, False
         self.core_env, self.core_errors, self.on_call = "HOME=/var/lib/rosy/core", "0", None
+        self.state_fail = self.rec_unreachable = False
+        self.restart_rc = 0
         self.__dict__.update(kw)
         self.core = FakeCore(self)
 
@@ -102,7 +108,7 @@ class FakeRobot:
         return b"\xff\xd8overhead\xff\xd9"
 
     def ssh(self, cmd, stdin=b""):
-        self.log.append("ssh " + cmd[:60])
+        self.log.append("ssh " + cmd)
         if cmd == "hostname":
             return 0, (ROBOT + "\n").encode()
         if cmd == "systemctl is-active rosy-core":
@@ -120,6 +126,8 @@ class FakeRobot:
         if cmd.startswith("pid=$(systemctl show"):
             return 0, f"pid={self.pid}\nactive=active\n{self.core_env}\nerrors={self.core_errors}\n".encode()
         if cmd == "sudo -n systemctl restart rosy-core":
+            if self.restart_rc:
+                return self.restart_rc, b""
             self.pid += 1
             return 0, b""
         if "sudo -n cat" in cmd:
@@ -243,7 +251,8 @@ def test_temp_file_that_does_not_validate_never_replaces_the_overlay(tmp_path):
 
 
 @pytest.mark.parametrize("env, errors, why", [("ROSY_CONFIG=/tmp/other.yaml", "0", "CORE reads /tmp/other.yaml"),
-                                              ("HOME=/var/lib/rosy/core", "2", "not steady")])
+                                              ("HOME=/var/lib/rosy/core", "2", "config errors"),
+                                              ("HOME=/var/lib/rosy/core", "?", "could not be read")])
 def test_core_effective_config_mismatch_aborts_and_restores(tmp_path, env, errors, why):
     robot = FakeRobot(core_env=env, core_errors=errors)
     code, s = go(tmp_path, robot)
@@ -414,20 +423,128 @@ def test_dry_run_makes_no_calls(tmp_path, capsys):
     assert "bridge_enabled" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("key, value, why", [("cruise_speed", 0.2, "outside"),
-                                             ("ir_guard_enabled", False, "only turn the IR guard on"),
-                                             ("obstacle_stop_m", 0.05, "safety function"),
-                                             ("obstacle_mode", "sector", "safety function"),
-                                             ("teleop_timeout_ms", 900, "safety function"),
-                                             ("min_confidence", 0.1, "not an allowed test key")])
-def test_plan_overlay_allowlist(tmp_path, key, value, why):
+@pytest.mark.parametrize("key, value, why", [
+    ("cruise_speed", 0.2, "must be"), ("max_linear", True, "must be"),
+    ("ir_guard_enabled", False, "the guard may only be turned on"),
+    ("obstacle_stop_m", 0.05, "not an allowed"), ("obstacle_mode", "sector", "not an allowed"),
+    ("teleop_timeout_ms", 900, "not an allowed"), ("min_confidence", 0.1, "not an allowed"),
+    ("bridge_lookahead_m", 0.2, "not an allowed"),                 # no safer direction
+    ("bridge_arm_confidence", 0.3, "must be"),                     # looser than the default 0.5
+    ("bridge_arm_frames", 2, "must be"), ("bridge_arm_frames", 3.0, "must be"),
+    ("bridge_distance_scale", 1.0, "must be"), ("bridge_time_margin_s", 0.2, "must be"),
+    ("bridge_coast_m", 0.2, "must be"), ("bridge_enabled", "yes", "must be"),
+    ("junction_turn_site_accepted", True, "accepted_risks")])
+def test_plan_overlay_rules(tmp_path, key, value, why):
     p = plan_file(tmp_path, overlay={"line_follow": {"bridge_enabled": True, key: value}})
     with pytest.raises(SystemExit, match=why):
+        run.load_plan(p)
+
+
+def test_waiver_needs_a_named_dated_acceptance(tmp_path):
+    plan = yaml.safe_load(PLAN.read_text(encoding="utf-8"))
+    assert run.load_plan(PLAN)["accepted_risks"][0]["key"] == "line_follow.bridge_site_no_dropoffs"
+    for broken in ([], [{"key": "line_follow.bridge_site_no_dropoffs", "date": "2026-10-08", "reason": "x"}]):
+        plan["accepted_risks"] = broken
+        p = tmp_path / "w.yaml"
+        p.write_text(yaml.safe_dump(plan), encoding="utf-8")
+        with pytest.raises(SystemExit, match="accepted_risks"):
+            run.load_plan(p)
+
+
+def test_plan_overlay_path_is_fixed(tmp_path):
+    plan = yaml.safe_load(PLAN.read_text(encoding="utf-8"))
+    plan["overlay_path"] = "/var/lib/rosy/core/.rosy/rosy.yaml; rm -rf /"
+    p = tmp_path / "evil.yaml"
+    p.write_text(yaml.safe_dump(plan), encoding="utf-8")
+    with pytest.raises(SystemExit, match="overlay_path must be"):
         run.load_plan(p)
 
 
 def test_plan_allows_test_keys(tmp_path):
     p = plan_file(tmp_path, overlay={"line_follow": {"bridge_enabled": True, "ir_guard_enabled": True,
                                                      "recovery_local_enabled": False, "cruise_speed": 0.06,
-                                                     "site_floor_map_id": "track260919"}})
+                                                     "bridge_arm_confidence": 0.7, "bridge_distance_scale": 1.2}})
     assert run.load_plan(p)["overlay"]["line_follow"]["cruise_speed"] == 0.06
+
+
+def test_state_poll_failures_abort_within_half_a_second(tmp_path):
+    robot = FakeRobot(state_fail=True)
+    code, s = go(tmp_path, robot)
+    assert code == 2 and f"failed {run.STATE_FAILS_MAX} times" in s["outcome"]
+    assert run.STATE_FAILS_MAX * 0.1 <= 0.5
+    assert_restored(robot, tmp_path)
+
+
+def test_restart_failure_aborts_and_is_reported(tmp_path):
+    robot = FakeRobot(restart_rc=1)
+    code, s = go(tmp_path, robot)
+    assert code == 2 and "systemctl restart rosy-core failed" in s["outcome"]
+    assert "PUT /line-follow/mode CAMERA_LINE" not in robot.log
+
+
+def test_hold_taken_over_mid_run_is_not_released(tmp_path):
+    robot = FakeRobot()
+    robot.on_call = lambda m, p, mode: setattr(robot, "precheck", "hold by rosy-c5: seal (until z)") \
+        if mode == "CAMERA_LINE" else None
+    code, s = go(tmp_path, robot)
+    assert code == 2 and any("belongs to rosy-c5" in e for e in s["errors"])
+    assert robot.hold                                                   # not released by us
+
+
+def test_unreachable_recorder_is_a_cleanup_failure(tmp_path):
+    robot = FakeRobot(reasons=["lane_bridge"], rec_unreachable=True)
+    code, s = go(tmp_path, robot)
+    assert code == 2 and any("recorder state unknown" in e for e in s["errors"])
+
+
+def _died_mid_run(tmp_path):
+    """A run whose restore failed: overlay still the test one, hold ours, marker left."""
+    robot = FakeRobot(fail_restore=True)
+    go(tmp_path, robot)
+    robot.fail_restore = False
+    robot.log.clear()
+    assert marker(tmp_path) and robot.hold and robot.overlay != ORIGINAL
+    return robot
+
+
+def _restore(tmp_path, robot):
+    return run.main(["--robot", ROBOT, "--restore", str(tmp_path / "ev"), "--summary-dir", str(tmp_path / "r")],
+                    robot=robot)
+
+
+def _sent_nothing(robot):
+    return not any(e.startswith(("POST /mode", "PUT")) or "tee" in e or "restart" in e or "release-hold" in e
+                   for e in robot.log)
+
+
+@pytest.mark.parametrize("change, why", [
+    (lambda r: setattr(r, "precheck", "hold by rosy-c5: seal (until z)"), "held by someone else"),
+    (lambda r: setattr(r, "lf_mode", "CAMERA_LINE"), "someone is driving"),
+    (lambda r: setattr(r, "overlay", b"line_follow:\n  bridge_enabled: false\n# peer edit\n"), "overlay changed")])
+def test_restore_refuses_when_the_robot_is_no_longer_ours(tmp_path, change, why):
+    robot = _died_mid_run(tmp_path)
+    change(robot)
+    with pytest.raises(SystemExit, match=why):
+        _restore(tmp_path, robot)
+    assert _sent_nothing(robot) and marker(tmp_path)
+
+
+def test_restore_refuses_a_marker_with_another_overlay_path(tmp_path):
+    robot = _died_mid_run(tmp_path)
+    m = json.loads((tmp_path / "ev" / run.MARKER).read_text(encoding="utf-8"))
+    m["overlay_path"] = "/x; sudo -n rm -rf /"
+    (tmp_path / "ev" / run.MARKER).write_text(json.dumps(m), encoding="utf-8")
+    with pytest.raises(SystemExit, match="restore by hand"):
+        _restore(tmp_path, robot)
+    assert not robot.log                                                # not even an ssh read
+
+
+def test_summary_is_valid_json_sanitized_and_keeps_ids(tmp_path):
+    robot = FakeRobot(reasons=["lane_bridge"])
+    peer = 'ListAgents none; Bearer "abc", rec 20261008T120000Z-aB3dEfGhIjKlMn12, release 2026.10.07-051'
+    go(tmp_path, robot, peer=peer)
+    s = json.loads((tmp_path / "docs" / "summary.json").read_text(encoding="utf-8"))   # still valid JSON
+    assert "abc" not in s["peer_check"] and "20261008T120000Z-aB3dEfGhIjKlMn12" in s["peer_check"]
+    assert "2026.10.07-051" in s["peer_check"]
+    assert run.sanitize({"id": "20261008T120000Z-aB3dEfGhIjKlMnOpQr12", "n": 3, "l": ["10.0.0.1"]}) == \
+        {"id": "20261008T120000Z-aB3dEfGhIjKlMnOpQr12", "n": 3, "l": ["<ip>"]}

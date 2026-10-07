@@ -12,7 +12,7 @@ D-512: an agent session runs a supervised device test on a real Pinky by itself.
 | File | Description |
 |------|-------------|
 | `run.py` | `--preflight-only` (identity by SSH hostname, health/battery/D-395 localization, overhead Rosy Cam frame via the site Vision lease, robot front/raw frame, LiDAR scan + advisory RobotBody gap, `camera_verdict.json` template), then `--camera-verdict FILE` (fail-closed verdict: digests, `judged_by`, age, pose; D-412 update hold; `RESTORE_PENDING.json` before the first robot write; allowlisted overlay keys, atomic temp-file write validated on the robot, CORE restart shown to read that path without config errors; D-379 recording; CAMERA_LINE under a hold deadman; 10 Hz `status.jsonl` + `events.jsonl`; unlisted stop = abort). Cleanup ignores SIGINT/SIGTERM, runs every step, checks each result, keeps the hold and marker when the restore is not verified. `--restore DIR` finishes a dead run. `--dry-run` makes no call. Exit 0 pass, 1 completed but an expected state/reason/event not seen, 2 aborted or cleanup failed |
-| `plan_rules.py` | Plan loading: overlay `ALLOW`/`DENY`, speed cap, `hold_s` ≤ 1 s, stop rules; `sanitize()` for public summary text |
+| `plan_rules.py` | Plan loading: exact overlay `RULES` (value rules, bridge values only more conservative than defaults), `WAIVERS` that need an `accepted_risks` entry, fixed `OVERLAY_PATH`, `hold_s` ≤ 1 s; `check_verdict()`; `sanitize()` walks summary values (keeps `sha256:`, recording and release ids) |
 | `live_transport.py` | `Live`: CORE HTTPS (`edge_drive.Core`), key-only SSH returning raw bytes, site Vision lease frame |
 | `plans/d476_bridge_9dfk.yaml` | D-476 rev 2 bridge test on 9dfk (overlay `bridge_enabled`, `ir_guard_enabled`, `bridge_site_no_dropoffs`; 120 s / 8 m; expects `RECOVERING` + `lane_bridge`) |
 | `test/test_device_test_run.py` | Fake robot (no network, no SSH, virtual clock): phase order, abort/SIGTERM/Ctrl-C in cleanup → OFF/IDLE/revert/release, cleanup failures exit 2, failed restore keeps hold + marker and `--restore` finishes, temp-file/readback/effective-config aborts, peer and invalid holds, verdict gates, pose unknown, unexplained stop, NOT_LOCALIZED, overlay allowlist, sanitized summary, preflight and dry-run make no change |
@@ -28,7 +28,9 @@ D-512: an agent session runs a supervised device test on a real Pinky by itself.
 - Every change the tool makes must have its undo in `cleanup()`, and the undo must run when anything before it failed. Add a fake-robot test for each new change.
 - Before the update hold succeeds the robot may be a peer's: send nothing that moves or changes it.
 - CORE is the motion authority while the loop stalls (line-follow hold session ≤ 1 s, D-422, teleop watchdog). Keep loop calls at one attempt with a short timeout (`LOOP_CALL_S`).
-- New plan overlay keys go through `ALLOW`/`DENY` in `plan_rules.py`; never allow a key that turns a safety function off.
+- New plan overlay keys go into `RULES` (or `WAIVERS` with an `accepted_risks` entry) in `plan_rules.py` with a value rule; a bridge value may only move to the conservative side of its default; never allow a key that turns a safety function off.
+- `--restore` reads first and sends nothing unless the hold is ours or gone, line-follow is `OFF` and the overlay digest is the one this run wrote or the original.
+- Windows kills are TerminateProcess (no SIGTERM handler): the marker and `--restore` are the only protection then.
 
 ### Testing Requirements
 

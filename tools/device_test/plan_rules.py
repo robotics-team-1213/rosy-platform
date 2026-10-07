@@ -1,28 +1,122 @@
-"""D-512 plan loading: overlay allowlist, speed cap, stop rules; summary text sanitizing."""
+"""D-512 plan loading: exact overlay key rules, waivers, stop rules; summary sanitizing."""
 from __future__ import annotations
 
+import datetime as dt
+import hashlib
+import json
+import math
 import re
 from pathlib import Path
 
 import yaml
 
 MAX_LINEAR = 0.10            # m/s, rosy_default.yaml line_follow.max_linear (host default)
-OVERLAY_PATH = "/var/lib/rosy/core/.rosy/rosy.yaml"   # rosy-core.service HOME (D-189 D3)
-SAFE = re.compile(r"^[A-Za-z0-9_./-]+$")
-# D-512 decision 4: a plan may turn test features on, never a safety function off.
-DENY = re.compile(r"(obstacle|body_|teleop|watchdog|hold|sensor_adapter|safety|estop|limit|stop_)")
-ALLOW = re.compile(r"line_follow\.(bridge_[a-z_]+|ir_guard_enabled|recovery_local_enabled|cruise_speed|"
-                   r"max_linear|site_floor_map_id|junction_turn_site_accepted)")
-SPEED_KEYS = ("line_follow.cruise_speed", "line_follow.max_linear")
+OVERLAY_PATH = "/var/lib/rosy/core/.rosy/rosy.yaml"   # rosy-core.service HOME (D-189 D3); the only one
 
 
-def sanitize(text):
+def _num(lo, hi, lo_open=False, integer=False):
+    def ok(v):
+        if isinstance(v, bool) or not isinstance(v, int if integer else (int, float)):
+            return False
+        return (lo < v if lo_open else lo <= v) and v <= hi
+    return ok, f"{'integer' if integer else 'number'} in {'(' if lo_open else '['}{lo}, {hi}]"
+
+
+def _bool(v):
+    return isinstance(v, bool)
+
+
+# D-512 decision 4: exact keys, each with a value rule. Bridge values may only make the bridge
+# more conservative than rosy_default.yaml (and stay inside LineFollowConfig._check_bridge):
+# arm gates stricter, coast/slow distances and slow scale smaller, odometry inflation and the
+# LOST-clock margin larger. bridge_lookahead_m has no safer direction and is not allowed.
+RULES = {
+    "line_follow.bridge_enabled": (_bool, "bool"),
+    "line_follow.bridge_arm_confidence": _num(0.5, 1.0),
+    "line_follow.bridge_arm_frames": _num(3, 30, integer=True),
+    "line_follow.bridge_arm_max_error": _num(0, 0.1, lo_open=True),
+    "line_follow.bridge_arm_max_angular": _num(0, 0.08, lo_open=True),
+    "line_follow.bridge_arm_max_curvature": _num(0, 4.0, lo_open=True),
+    "line_follow.bridge_arm_curvature_tolerance": _num(0, 0.5, lo_open=True),
+    "line_follow.bridge_coast_m": _num(0, 0.10, lo_open=True),
+    "line_follow.bridge_slow_m": _num(0, 0.25, lo_open=True),
+    "line_follow.bridge_slow_scale": _num(0, 0.5, lo_open=True),
+    "line_follow.bridge_distance_scale": _num(1.08, 2.0),
+    "line_follow.bridge_time_margin_s": _num(0.5, 2.0),
+    "line_follow.ir_guard_enabled": (lambda v: v is True, "true (the guard may only be turned on)"),
+    "line_follow.recovery_local_enabled": (_bool, "bool"),
+    "line_follow.cruise_speed": _num(0, MAX_LINEAR, lo_open=True),
+    "line_follow.max_linear": _num(0, MAX_LINEAR, lo_open=True),
+}
+# Site declarations that waive a floor proof: allowed only with an accepted_risks entry.
+WAIVERS = {
+    "line_follow.bridge_site_no_dropoffs": (lambda v: v is True, "true"),
+    "line_follow.junction_turn_site_accepted": (lambda v: v is True, "true"),
+    "line_follow.site_floor_map_id": (lambda v: isinstance(v, str) and v != "site"
+                                      and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", v) is not None, "map id"),
+}
+
+
+def check_overlay(flat, accepted_risks=()):
+    accepted = {r.get("key"): r for r in accepted_risks or () if isinstance(r, dict)}
+    for key, value in flat.items():
+        if key in WAIVERS:
+            risk = accepted.get(key) or {}
+            if not (str(risk.get("accepted_by") or "").strip() and str(risk.get("reason") or "").strip()
+                    and isinstance(risk.get("date"), (str, dt.date))):
+                raise SystemExit(f"plan overlay {key}: a site waiver needs accepted_risks "
+                                 "{key, accepted_by, date, reason}")
+            rule = WAIVERS[key]
+        elif key in RULES:
+            rule = RULES[key]
+        else:
+            raise SystemExit(f"plan overlay {key}: not an allowed test key (RULES in plan_rules.py)")
+        if not rule[0](value):
+            raise SystemExit(f"plan overlay {key}={value!r}: must be {rule[1]}")
+
+
+def load_plan(path):
+    plan = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(plan, dict) or not re.fullmatch(r"[a-z0-9-]+", str(plan.get("topic", ""))):
+        raise SystemExit("plan needs topic: lower-case words joined by '-'")
+    plan.setdefault("overlay", {})
+    if plan.setdefault("overlay_path", OVERLAY_PATH) != OVERLAY_PATH:
+        raise SystemExit(f"overlay_path must be {OVERLAY_PATH}")
+    check_overlay(flatten(plan["overlay"]), plan.get("accepted_risks"))
+    stop = plan.setdefault("stop", {})
+    if not 0 < float(stop.get("duration_s", 0)) <= 600:
+        raise SystemExit("stop.duration_s must be in (0, 600]")
+    plan.setdefault("min_battery_percent", 40)
+    plan.setdefault("verdict_max_age_s", 300)
+    plan.setdefault("hold_s", 1.0)
+    if not 0 < float(plan["hold_s"]) <= 1.0:
+        raise SystemExit("hold_s must be in (0, 1] so CORE's deadman stops a stalled loop within 1 s")
+    return plan
+
+
+# Known ids pass unchanged: sha256 digests, recording ids (20261008T120000Z-...), release ids.
+KEEP = re.compile(r"sha256:[0-9a-f]{64}|\d{8}T\d{6}Z[-\w]*|\d{4}\.\d{2}\.\d{2}-\d{3}")
+
+
+def sanitize_text(text):
     """Free text bound for the public repo: no addresses, URLs, .local hosts or token-like strings."""
-    text = re.sub(r"https?://[^\s\"']+", "<url>", str(text))
+    if KEEP.fullmatch(text):
+        return text
+    text = re.sub(r"https?://[^\s\"']+", "<url>", text)
     text = re.sub(r"\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b", "<ip>", text)
     text = re.sub(r"\b[\w-]+\.local\b", "<host>.local", text)
-    text = re.sub(r"(?i)bearer\s+\S+", "Bearer <redacted>", text)
-    return re.sub(r"(?<!sha256:)\b(?=[\w-]*[A-Z])(?=[\w-]*[a-z])(?=[\w-]*\d)[\w-]{24,}\b", "<redacted>", text)
+    text = re.sub(r"(?i)bearer\s+[\"']?[^\s\"']+", "Bearer <redacted>", text)
+    return re.sub(r"\b(?=[\w-]*[A-Z])(?=[\w-]*[a-z])(?=[\w-]*\d)[\w-]{24,}\b",
+                  lambda m: m.group(0) if KEEP.fullmatch(m.group(0)) else "<redacted>", text)
+
+
+def sanitize(value):
+    """Walk a JSON-able structure and sanitize string values (keys and numbers stay)."""
+    if isinstance(value, dict):
+        return {k: sanitize(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [sanitize(v) for v in value]
+    return sanitize_text(value) if isinstance(value, str) else value
 
 
 def flatten(d, prefix=""):
@@ -42,33 +136,45 @@ def merge(base, over):
     return out
 
 
-def check_overlay(flat):
-    for key, value in flat.items():
-        if DENY.search(key):
-            raise SystemExit(f"plan overlay {key}: weakens or bypasses a safety function (D-512 decision 4)")
-        if not ALLOW.fullmatch(key):
-            raise SystemExit(f"plan overlay {key}: not an allowed test key (see ALLOW in run.py)")
-        if key == "line_follow.ir_guard_enabled" and value is not True:
-            raise SystemExit("plan overlay may only turn the IR guard on")
-        if key in SPEED_KEYS and not (isinstance(value, (int, float)) and 0 < value <= MAX_LINEAR):
-            raise SystemExit(f"{key} {value} outside (0, {MAX_LINEAR}] m/s")
+VERDICT_KEYS = ("robot_at_start", "robot_seen_is_target", "path_clear", "cable_seen",
+                "cable_in_path_or_wheels")
 
 
-def load_plan(path):
-    plan = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(plan, dict) or not re.fullmatch(r"[a-z0-9-]+", str(plan.get("topic", ""))):
-        raise SystemExit("plan needs topic: lower-case words joined by '-'")
-    plan.setdefault("overlay", {})
-    plan.setdefault("overlay_path", OVERLAY_PATH)
-    if not SAFE.match(plan["overlay_path"]):
-        raise SystemExit("overlay_path has characters a remote shell would interpret")
-    check_overlay(flatten(plan["overlay"]))
-    stop = plan.setdefault("stop", {})
-    if not 0 < float(stop.get("duration_s", 0)) <= 600:
-        raise SystemExit("stop.duration_s must be in (0, 600]")
-    plan.setdefault("min_battery_percent", 40)
-    plan.setdefault("verdict_max_age_s", 300)
-    plan.setdefault("hold_s", 1.0)
-    if not 0 < float(plan["hold_s"]) <= 1.0:
-        raise SystemExit("hold_s must be in (0, 1] so CORE's deadman stops a stalled loop within 1 s")
-    return plan
+def sha(path):
+    return "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def check_verdict(path, max_age_s, now, pose):
+    """The agent's visual verdict on the preflight frames (D-512 decision 3). Fails closed:
+    ValueError for anything not shown to be safe. Returns the verdict dict."""
+    path = Path(path)
+    try:
+        v = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError) as exc:
+        raise ValueError(f"camera verdict unreadable: {exc}") from exc
+    missing = [k for k in VERDICT_KEYS if not isinstance(v.get(k), bool)]
+    if missing:
+        raise ValueError(f"camera verdict: {missing} must be true/false")
+    if not str(v.get("judged_by") or "").strip():
+        raise ValueError("camera verdict: judged_by is empty")
+    frames = v.get("frames") or {}
+    if not any(n.endswith("_overhead.jpg") for n in frames) or not any(n.endswith("_front.jpg") for n in frames):
+        raise ValueError("camera verdict: needs an overhead and a front frame")
+    for name, digest in frames.items():
+        f = path.parent / Path(name).name
+        if not f.is_file() or sha(f) != digest:
+            raise ValueError(f"camera verdict: frame {name} missing or changed since it was judged")
+    age = now - float(v.get("captured_at") or 0)
+    if not 0 <= age <= max_age_s:
+        raise ValueError(f"camera verdict is {age:.0f} s old (max {max_age_s} s)")
+    was = v.get("pose_at_capture")
+    if not (isinstance(pose, dict) and isinstance(was, dict)):
+        raise ValueError("pose unknown: cannot show the robot has not moved since the judged frames")
+    if math.hypot(pose["x"] - was["x"], pose["y"] - was["y"]) > 0.05:
+        raise ValueError("robot moved since the judged frames; run --preflight-only again")
+    if v["cable_in_path_or_wheels"]:
+        raise ValueError("camera verdict: cable in the planned path or the wheels")
+    bad = [k for k in ("robot_at_start", "robot_seen_is_target", "path_clear") if not v[k]]
+    if bad:
+        raise ValueError(f"camera verdict: {bad} false")
+    return v

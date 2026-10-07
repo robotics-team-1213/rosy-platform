@@ -10,6 +10,8 @@ runs the test; --restore finishes the undo of a run that died (RESTORE_PENDING.j
 Order, abort rules and the undo contract: tools/device_test/AGENTS.md and ADR D-512.
 CORE is the motion authority when this loop stalls (line-follow hold session <= 1 s,
 D-422 body stop, teleop watchdog); loop calls make one short attempt each.
+The SIGTERM handler is best effort: on Windows a kill is TerminateProcess and runs no
+handler, so only RESTORE_PENDING.json and --restore protect the robot then.
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import signal
 import sys
 import time
@@ -33,16 +36,17 @@ import edge_drive  # noqa: E402  (Core, tls_context, rec_start/rec_stop, front_f
 from core_common.robot_body import PINKY_PRO  # noqa: E402  (edge_drive put contracts/foundation on sys.path)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from live_transport import Live  # noqa: E402
-from plan_rules import flatten, load_plan, merge, sanitize  # noqa: E402
+from plan_rules import (OVERLAY_PATH, VERDICT_KEYS, check_verdict, flatten, load_plan,  # noqa: E402
+                        merge, sanitize, sha)
 
 UPDATER = "sudo -n python3 /opt/rosy/native-runtime/rosy_auto_update.py"
 HOLDER = "agent-device-test"
 MARKER = "RESTORE_PENDING.json"
 PHASES = ("peers", "identity", "health", "camera", "verdict", "hold", "overlay", "localized",
           "record", "start", "stream")
-VERDICT_KEYS = ("robot_at_start", "robot_seen_is_target", "path_clear", "cable_seen",
-                "cable_in_path_or_wheels")
-LOOP_CALL_S = 0.25           # per loop call, one attempt: hold + status + events + state <= ~1 s
+LOOP_CALL_S = 0.25           # per loop call, one attempt: hold + status + state (+ events) <= ~1 s
+STATE_FAILS_MAX = 5          # consecutive failed /robot/state at 10 Hz = 0.5 s of unknown pose/estop
+HOLD_BY = re.compile(r"hold by (\S+?):")
 VALIDATE = ("sudo -n python3 -c 'import sys,yaml,hashlib,json; b=open(sys.argv[1],\"rb\").read(); "
             "print(hashlib.sha256(b).hexdigest()); print(json.dumps(yaml.safe_load(b.decode(\"utf-8\")), "
             "sort_keys=True))' ")
@@ -54,10 +58,6 @@ class Abort(RuntimeError):
 
 def log(*a):
     print(time.strftime("%H:%M:%S"), *a, flush=True)
-
-
-def sha(path):
-    return "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def _sigterm(_signum, _frame):
@@ -166,37 +166,10 @@ class Run:
         return saved
 
     def verdict(self, pose):
-        """The agent's visual verdict on the preflight frames (D-512 decision 3). Fails closed."""
-        path = Path(self.args.camera_verdict)
         try:
-            v = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError, TypeError) as exc:
-            raise Abort(f"camera verdict unreadable: {exc}") from exc
-        missing = [k for k in VERDICT_KEYS if not isinstance(v.get(k), bool)]
-        if missing:
-            raise Abort(f"camera verdict: {missing} must be true/false")
-        if not str(v.get("judged_by") or "").strip():
-            raise Abort("camera verdict: judged_by is empty")
-        frames = v.get("frames") or {}
-        if not any(n.endswith("_overhead.jpg") for n in frames) or not any(n.endswith("_front.jpg") for n in frames):
-            raise Abort("camera verdict: needs an overhead and a front frame")
-        for name, digest in frames.items():
-            f = path.parent / Path(name).name
-            if not f.is_file() or sha(f) != digest:
-                raise Abort(f"camera verdict: frame {name} missing or changed since it was judged")
-        age = self.r.now() - float(v.get("captured_at") or 0)
-        if not 0 <= age <= self.plan["verdict_max_age_s"]:
-            raise Abort(f"camera verdict is {age:.0f} s old (max {self.plan['verdict_max_age_s']} s)")
-        was = v.get("pose_at_capture")
-        if not (isinstance(pose, dict) and isinstance(was, dict)):
-            raise Abort("pose unknown: cannot show the robot has not moved since the judged frames")
-        if math.hypot(pose["x"] - was["x"], pose["y"] - was["y"]) > 0.05:
-            raise Abort("robot moved since the judged frames; run --preflight-only again")
-        if v["cable_in_path_or_wheels"]:
-            raise Abort("camera verdict: cable in the planned path or the wheels")
-        bad = [k for k in ("robot_at_start", "robot_seen_is_target", "path_clear") if not v[k]]
-        if bad:
-            raise Abort(f"camera verdict: {bad} false")
+            v = check_verdict(self.args.camera_verdict, self.plan["verdict_max_age_s"], self.r.now(), pose)
+        except ValueError as exc:
+            raise Abort(str(exc)) from exc
         self.phase("verdict", **{k: v[k] for k in VERDICT_KEYS}, note=v.get("note", ""),
                    judged_by=v["judged_by"],
                    accepted_risk="cable near the robot (user 2026-10-08)" if v["cable_seen"] else None)
@@ -250,8 +223,8 @@ class Run:
         _rc, out = self.sh("pid=$(systemctl show -p MainPID --value rosy-core); echo pid=$pid; "
                            "echo active=$(systemctl is-active rosy-core); "
                            "sudo -n cat /proc/$pid/environ 2>/dev/null | tr '\\0' '\\n' | grep -E '^(HOME|ROSY_CONFIG)='; "
-                           "echo errors=$(sudo -n journalctl -u rosy-core _PID=$pid --no-pager -o cat 2>/dev/null"
-                           " | grep -ciE 'ConfigError|ValueError|refus')")
+                           "j=$(sudo -n journalctl -u rosy-core _PID=$pid --no-pager -o cat) && echo errors=$(printf '%s\\n' "
+                           "\"$j\" | grep -ciE 'ConfigError|ValueError|refus') || echo 'errors=?'")
         return dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
 
     def restart_core(self):
@@ -259,7 +232,8 @@ class Run:
         CORE has no endpoint for effective line_follow config; the process env, its journal and
         a steady PID are the readback (D-512 decision 6)."""
         before = self.core_proc().get("pid")
-        self.sh("sudo -n systemctl restart rosy-core")
+        if self.sh("sudo -n systemctl restart rosy-core")[0] != 0:
+            raise Abort("systemctl restart rosy-core failed")
         t0 = self.r.now()
         while True:
             self.r.sleep(2.0)
@@ -270,6 +244,8 @@ class Run:
             if self.r.now() - t0 > 90:
                 raise Abort(f"CORE not ready 90 s after the overlay change (active={proc.get('active')}, "
                             f"config errors in its journal: {proc.get('errors')})")
+        if proc.get("errors") != "0":
+            raise Abort(f"CORE journal shows config errors or could not be read (errors={proc.get('errors')})")
         reads = proc.get("ROSY_CONFIG") or (proc.get("HOME", "") + "/.rosy/rosy.yaml")
         if reads != self.plan["overlay_path"]:
             raise Abort(f"CORE reads {reads}, not {self.plan['overlay_path']}")
@@ -294,7 +270,9 @@ class Run:
                     original_sha=sha(self.ev / "overlay_before.yaml"))
         self.original_overlay = before
         new = merge(yaml.safe_load(before.decode("utf-8")) or {}, self.plan["overlay"])
-        self.write_overlay(yaml.safe_dump(new, sort_keys=True, allow_unicode=True).encode("utf-8"))
+        data = yaml.safe_dump(new, sort_keys=True, allow_unicode=True).encode("utf-8")
+        self.marker(applied_sha="sha256:" + hashlib.sha256(data).hexdigest())
+        self.write_overlay(data)
         self.restart_core()
         back = flatten(yaml.safe_load(self.read_overlay().decode("utf-8")) or {})
         wrong = {k: back.get(k) for k, v in flatten(self.plan["overlay"]).items() if back.get(k) != v}
@@ -320,7 +298,7 @@ class Run:
         _, ev = self.r.core.call("GET", "/events?limit=1")
         since = ev.get("last_seq") if isinstance(ev, dict) else None
         t0 = last_ok = self.r.now()
-        last_pose, dist, still_since, tick, end = None, 0.0, None, 0, None
+        last_pose, dist, still_since, tick, end, state_fails = None, 0.0, None, 0, None, 0
         with open(self.ev / "status.jsonl", "a", encoding="utf-8") as sf, \
                 open(self.ev / "events.jsonl", "a", encoding="utf-8") as ef:
             while end is None:
@@ -343,16 +321,19 @@ class Run:
                         seen["events"][typ] = seen["events"].get(typ, 0) + 1
                         if any(fnmatch.fnmatch(typ, p) for p in abort_events):
                             raise Abort(f"event {typ}: {json.dumps(e.get('data'))[:200]}")
-                    _, st = self.call("GET", "/robot/state")
-                    st = st if isinstance(st, dict) else {}
-                    pose = st.get("pose") if isinstance(st.get("pose"), dict) else None
-                    if (st.get("safety") or {}).get("estop"):
-                        raise Abort("estop")
-                    if stop.get("max_distance_m") and pose is None and st:
-                        raise Abort("pose unknown: the distance cap cannot be enforced")
-                    if pose and last_pose:
-                        dist += math.hypot(pose["x"] - last_pose["x"], pose["y"] - last_pose["y"])
-                    last_pose = pose or last_pose
+                ss, st = self.call("GET", "/robot/state")
+                st = st if ss == 200 and isinstance(st, dict) else None
+                state_fails = 0 if st else state_fails + 1
+                if state_fails >= STATE_FAILS_MAX:
+                    raise Abort(f"/robot/state failed {state_fails} times in a row: pose and estop unknown")
+                pose = st.get("pose") if st and isinstance(st.get("pose"), dict) else None
+                if st and (st.get("safety") or {}).get("estop"):
+                    raise Abort("estop")
+                if st and stop.get("max_distance_m") and pose is None:
+                    raise Abort("pose unknown: the distance cap cannot be enforced")
+                if pose and last_pose:
+                    dist += math.hypot(pose["x"] - last_pose["x"], pose["y"] - last_pose["y"])
+                last_pose = pose or last_pose
                 if now - last_ok > 1.0:
                     raise Abort("CORE unreachable or hold refused for > 1 s")
                 if any(p in reason for p in abort_reasons):
@@ -384,7 +365,10 @@ class Run:
 
     def stop_recording(self):
         edge_drive.rec_stop(self.r.core)
-        state = edge_drive._recording_state(self.r.core).get("state")
+        s, b = self.r.core.call("GET", "/recordings/active")
+        if s != 200 or not isinstance(b, dict):
+            raise Abort(f"recorder state unknown (HTTP {s})")      # unreachable is not idle
+        state = (b.get("active") or {}).get("state")
         if state not in ("idle", None):
             raise Abort(f"recorder still {state}")
         return "stopped"
@@ -396,10 +380,19 @@ class Run:
         self.restart_core()
         return "restored byte for byte"
 
-    def release_hold(self):
+    def hold_owner(self):
+        """(holder or None, precheck text). A TOCTOU window remains between this read and
+        release-hold: the D-412 updater has no release-by-holder and that CLI is not ours."""
         _rc, out = self.sh(f"{UPDATER} precheck")
-        if "hold by " in out and f"hold by {HOLDER}" not in out:
-            raise Abort(f"the hold now belongs to someone else, left in place: {out.strip()}")
+        m = HOLD_BY.search(out)
+        return (m.group(1) if m else None), out
+
+    def release_hold(self):
+        owner, out = self.hold_owner()
+        if owner is None:
+            return "no hold left"
+        if owner != HOLDER:
+            raise Abort(f"the hold now belongs to {owner}, left in place: {out.strip()[:200]}")
         rc, out = self.sh(f"{UPDATER} release-hold")
         if rc != 0:
             raise Abort(f"release-hold rc {rc}: {out.strip()[:200]}")
@@ -500,7 +493,8 @@ class Run:
         out.mkdir(parents=True, exist_ok=True)
         self.summary["evidence_dir"] = str(self.ev)
         self.summary["evidence"] = {p.name: sha(p) for p in sorted(self.ev.iterdir()) if p.is_file()}
-        text = sanitize(json.dumps(self.summary, indent=2, ensure_ascii=False, default=str))
+        clean = sanitize(json.loads(json.dumps(self.summary, default=str)))   # values, not the JSON text
+        text = json.dumps(clean, indent=2, ensure_ascii=False)
         (out / "summary.json").write_text(text, encoding="utf-8")
         readme = out / "README.md"
         if not readme.exists():
@@ -520,14 +514,26 @@ def restore(robot, args):
     m = json.loads((ev / MARKER).read_text(encoding="utf-8"))
     if m["robot"] != args.robot:
         raise SystemExit(f"marker is for {m['robot']}, not {args.robot}")
-    run = Run(robot, {"topic": m["topic"], "overlay_path": m["overlay_path"], "overlay": {}}, args, ev)
+    if m.get("overlay_path") != OVERLAY_PATH:
+        raise SystemExit(f"marker overlay_path {m.get('overlay_path')!r} is not {OVERLAY_PATH}; restore by hand")
+    run = Run(robot, {"topic": m["topic"], "overlay_path": OVERLAY_PATH, "overlay": {}}, args, ev)
     run.identity()
-    run.held, run.started = bool(m.get("held")), True
+    # Read-only checks first: act only while the robot is still as this run left it.
+    owner, out = run.hold_owner()
+    if owner not in (None, HOLDER) or "claim held by" in out:
+        raise SystemExit(f"robot now held by someone else ({out.strip()[:200]}); nothing sent")
+    mode = run.get("/line-follow").get("mode")
+    if mode not in ("OFF", None):
+        raise SystemExit(f"line-follow is {mode}: someone is driving; nothing sent")
     if m.get("overlay_touched"):
         original = ev / "overlay_before.yaml"
         if sha(original) != m["original_sha"]:
             raise SystemExit("overlay_before.yaml does not match the marker digest; restore by hand")
+        now = "sha256:" + hashlib.sha256(run.read_overlay()).hexdigest()
+        if now not in (m.get("applied_sha"), m["original_sha"]):
+            raise SystemExit("the robot overlay changed since this run wrote it; nothing sent, restore by hand")
         run.original_overlay = original.read_bytes()
+    run.held = bool(m.get("held")) and owner == HOLDER
     run.cleanup()
     result = {"restored_at": robot.now(), "errors": run.summary["errors"], "phases": run.summary["phases"]}
     (ev / "restore_result.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")

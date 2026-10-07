@@ -13,6 +13,13 @@ overlay:
     ir_guard_enabled: true
     bridge_site_no_dropoffs: true
 
+# A site declaration that waives a floor proof needs a named, dated acceptance (D-512 decision 4).
+accepted_risks:
+  - key: line_follow.bridge_site_no_dropoffs
+    accepted_by: user livsbittt
+    date: 2026-10-08
+    reason: floor track, no drop-offs
+
 min_battery_percent: 40
 verdict_max_age_s: 300
 hold_s: 1.0            # line-follow driver-hold session; the tool posts /line-follow/hold every 0.1 s
