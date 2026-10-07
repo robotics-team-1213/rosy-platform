@@ -6791,3 +6791,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음(D-436 선택기 재사용)
 - 교훈: 2026-10-07 main이 하루 163번 움직여 손 착지가 한 브랜치에 네 번 돌았고, `tests ; git merge --ff-only` 사슬은 실패한 시험 뒤에도 착지할 수 있었다 — 착지는 실패에서 멈추는 한 도구로 한다.
+
+## 2026-10-07 · uncommitted · fix(tools): 착지 도구 리뷰 반영
+- 변경: `tools/land.py` 독립 리뷰 11건과 D-508 리뷰 1건. pytest 종료 코드 2–5에서 멈춤. main 차이가 기록 파일(docs `*.md`, `logs.md`, `index.md`, `progress.md`, `adr_gaps.txt`)뿐일 때만 재시험 생략. 자동 해소는 stage 1·2·3이 모두 있고 충돌 부분이 추가뿐일 때만 하며, `logs.md`는 줄 합집합 대신 양쪽 추가 블록을 통째로 잇는다(같은 꼬리 줄 `- 결정: 없음`이 접히지 않음). 해소 중 실패하면 `git merge --abort`. 시험한 sha로 `--ff-only` 하고 그 사이 브랜치가 움직이면 멈춤. main 체크아웃이 `refs/heads/main`인지 확인. harness가 있는데 `affected`가 실패하면 멈춤. FULL 승격은 요약에 CI 몫으로 적음. 자식 프로세스에 `PYTHONUTF8=1`. 앞 항목의 `logs.md` 합집합 설명은 이 항목이 대신한다.
+- 증거: `test/test_land.py` 21 passed(autocrlf true/false Log, 동료 미커밋 파일로 ff 거절 시 파일 보존 포함), `known_failures.py` 0 new, lint 0 error.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 줄 단위 합집합은 여러 줄 항목의 같은 줄을 하나로 접는다. 추가 전용 로그는 블록 단위로 잇는다.
