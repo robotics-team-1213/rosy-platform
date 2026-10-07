@@ -178,6 +178,14 @@ EXEMPT: dict[str, str] = {
         'resolution combines D-493 observation age with D-499 read-only link class in '
         'the same gathered row. The --cc diff adds neither a goal nor a stop path; '
         '40 focused Fleet tests passed with 0 new failures; no device acceptance.',
+    "756634d24d97582720802dfde7fd7c39d63543b3":  # git commit revision
+        "Independently reviewed (security-reviewer, read-only) on 2026-10-08: on the five "
+        "safety-tagged paths (core_features/safety, dock/firmware, dock/firmware/rosy_dock, "
+        "signal/firmware, signal/firmware/rosy_signal AGENTS.md) the commit only adds 'Parent "
+        "context'/'Updated' header lines and corrects the rosy_signal parent comment from "
+        "../../AGENTS.md to ../AGENTS.md; all parent targets exist on main. Markdown only; no "
+        "code, config, firmware or build/flash change; no safety rule, fail-safe, interlock or "
+        "auth text altered or made optional. Exemption approved by livsbittt.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
