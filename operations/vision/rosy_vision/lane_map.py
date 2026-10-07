@@ -44,7 +44,37 @@ def _thin(mask):
             return pixels[1:-1, 1:-1]
 
 
-def _graph(skeleton, origin, resolution, lane_width, map_id):
+def _centre_points(points, paint, origin, resolution, lane_width):
+    """Refine observed paths toward paired paint; retain junctions and missing evidence."""
+    if len(points) < 11:
+        return points
+    tangent = points[10:] - points[:-10]
+    length = np.linalg.norm(tangent, axis=1)
+    normal = np.column_stack((-tangent[:, 1], tangent[:, 0])) / np.maximum(length[:, None], 1e-9)
+    middle = points[5:-5]
+    distances = np.arange(resolution, lane_width * .8, resolution)
+    hits = []
+    for sign in (-1, 1):
+        probes = middle[:, None, :] + sign * normal[:, None, :] * distances[None, :, None]
+        x = np.rint((probes[:, :, 0] - origin[0]) / resolution).astype(int)
+        y = np.rint((origin[1] - probes[:, :, 1]) / resolution).astype(int)
+        inside = (x >= 0) & (x < paint.shape[1]) & (y >= 0) & (y < paint.shape[0])
+        observed = np.zeros(inside.shape, bool)
+        observed[inside] = paint[y[inside], x[inside]] != 0
+        hits.append(np.where(observed.any(axis=1), distances[observed.argmax(axis=1)], np.nan))
+    width = hits[0] + hits[1]
+    shift = (hits[1] - hits[0]) / 2
+    valid = (length > resolution) & (width >= lane_width * .7) & (width <= lane_width * 1.3) \
+        & (np.abs(shift) <= lane_width * .1)
+    # Single-pixel highlights must not turn a straight path into a zigzag.
+    shift = np.median(np.lib.stride_tricks.sliding_window_view(
+        np.pad(np.where(valid, shift, 0), 5, mode="edge"), 11), axis=1)
+    refined = points.copy()
+    refined[5:-5][valid] += normal[valid] * shift[valid, None]
+    return refined
+
+
+def _graph(skeleton, origin, resolution, lane_width, map_id, *, paint=None):
     pixels = set(zip(*np.nonzero(skeleton)))
 
     def neighbours(p):
@@ -130,11 +160,16 @@ def _graph(skeleton, origin, resolution, lane_width, map_id):
     def add_edge(path, first, last):
         points = np.array([xy(p) for p in path], np.float32)
         points[0], points[-1] = xy(positions[first]), xy(positions[last])
-        points = cv2.approxPolyDP(points, resolution * 1.5, False).reshape(-1, 2)
-        if sum(np.linalg.norm(np.diff(points, axis=0), axis=1)) <= max(0.10, lane_width):
+        coarse = cv2.approxPolyDP(points, resolution * 1.5, False).reshape(-1, 2)
+        if sum(np.linalg.norm(np.diff(coarse, axis=0), axis=1)) <= max(0.10, lane_width):
             return
         if np.linalg.norm(points[0] - points[-1]) <= 0.05:
             return
+        if paint is not None:
+            points = _centre_points(points, paint, origin, resolution, lane_width)
+            points = cv2.approxPolyDP(points, resolution, False).reshape(-1, 2)
+        else:
+            points = coarse
         edges.append({"id": f"lane_{len(edges)}", "from": f"p{first}", "to": f"p{last}",
                       "polyline": [[round(float(v), 4) for v in p] for p in points],
                       "direction": "two_way", "width_m": lane_width,
@@ -291,7 +326,12 @@ def generate_map(image, calibration, *, lane_width_m, map_id="camera"):
         _, regions = cv2.connectedComponents(corridor.astype(np.uint8), connectivity=8)
         nearest_seed = int(distance_to_seed.argmin())
         corridor &= regions == regions[cy[nearest_seed], cx[nearest_seed]]
-    draft = _graph(_thin(corridor), (lo[0], hi[1]), resolution, lane_width_m, map_id)
+    # Topology uses the noise-filtered preview; centring uses the original-resolution paint.
+    full_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    full_paint = ((full_hsv[:, :, 2] >= value_min) & (full_hsv[:, :, 1] <= 70)).astype(np.uint8) * 255
+    full_paint = cv2.warpPerspective(full_paint, raster @ homography, size, flags=cv2.INTER_NEAREST)
+    full_paint[paint_band == 0] = 0
+    draft = _graph(_thin(corridor), (lo[0], hi[1]), resolution, lane_width_m, map_id, paint=full_paint)
     evidence = {"generator": "camera-lanes/1", "calibration": calibration,
                 "lane_width_m": lane_width_m, "resolution_m": resolution,
                 "paint_pixels": int(np.count_nonzero(paint)), "proposal_only": True,
