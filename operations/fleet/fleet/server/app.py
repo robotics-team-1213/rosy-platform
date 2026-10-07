@@ -535,6 +535,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
                              roster=lambda: console.robot_ids)
     install_trip_guard(console, trip_runner)
+    if getattr(app.state, "stuck_resolver", None) is not None:  # D-491 5: no automatic answer on a trip
+        app.state.stuck_resolver.trip_busy = trip_runner.robot_busy
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps,

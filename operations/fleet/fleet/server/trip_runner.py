@@ -152,6 +152,7 @@ class TripRunner:
                              "junction_turn": caps.junction_turn}}
             live = LiveTrip(view, graph, row["request"])
             self._live = live
+            self._restarted = [t for t in self._restarted if t["robot_id"] != robot_id]  # this trip owns it
             if not plan["segments"]:  # D-489 부록 4: already there
                 view["state"] = "arrived"
             else:
@@ -206,10 +207,16 @@ class TripRunner:
 
     async def run(self) -> None:
         """Never returns while the app lives; every failure ends at most the one trip."""
+        restart = asyncio.create_task(self._restart_halts()) if self._restarted else None
+        try:
+            await self._loop()
+        finally:
+            if restart is not None:
+                restart.cancel()
+
+    async def _loop(self) -> None:
         while True:
             try:
-                if self._restarted:
-                    await self._halt_restarted()
                 await self.tick()
             except asyncio.CancelledError:
                 raise
@@ -504,13 +511,27 @@ class TripRunner:
             sent["error"] = errors[-1]
         return sent
 
+    async def _restart_halts(self) -> None:
+        """Outside the tick path: retry every ``restart_retry_s`` up to ``restart_attempts``."""
+        for _attempt in range(int(self.config.restart_attempts)):
+            await self._halt_restarted()
+            if not self._restarted:
+                return
+            await asyncio.sleep(self.config.restart_retry_s)
+        _LOG.warning("gave up stopping robots of trips open before the restart: %s",
+                     sorted({trip["robot_id"] for trip in self._restarted}))
+        self._restarted = []
+
     async def _halt_restarted(self) -> None:
-        """Stop each robot whose trip was open before the restart; retried every tick until the
-        robot takes it or leaves the roster."""
+        """Stop each robot whose trip was open before the restart, until the robot takes it or
+        leaves the roster; a robot on a new trip is that trip's to stop."""
         roster = set(self._roster()) if self._roster is not None else None
         pending = []
         for trip in self._restarted:
             if roster is not None and trip["robot_id"] not in roster:
+                continue
+            if self.robot_busy(trip["robot_id"]):
+                pending.append(trip)
                 continue
             try:
                 result = await self._halt_robot(trip["robot_id"], trip.get("drive_mode") == "lane",

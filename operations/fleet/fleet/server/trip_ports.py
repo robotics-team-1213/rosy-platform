@@ -153,6 +153,9 @@ class TripConfig:
     stall_m: float = 0.05
     #: Every robot call of the loop gives up after this long (a stuck robot is an error).
     port_timeout_s: float = 1.5
+    #: Robots of trips open before a restart are stopped every this long, this many times at most.
+    restart_retry_s: float = 10.0
+    restart_attempts: int = 30
 
     def __post_init__(self) -> None:
         for item in fields(self):

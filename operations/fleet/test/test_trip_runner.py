@@ -1308,3 +1308,126 @@ def test_an_instruction_that_aborts_a_manoeuvre_stops_the_trip():
     _ticks(runner, ports)
     view = runner.view("p1")
     assert (view["state"], view["reason"], view["detail"]["junction_state"]) == ("stopped", "junction", "aborted")
+
+
+# ---- safety review H1, M1-M3, L1, N2-N4 ---------------------------------------------------
+
+def _trip_app(tmp_path):
+    ports = Ports()
+    client, tasks, store, robot, console = _app(tmp_path, ports)
+    ports.now = time.time()
+    plan = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR).json()
+    assert client.post(f"/api/fleet/trips/{plan['plan_id']}/start", headers=OPERATOR).status_code == 200
+    return client, robot, console, plan["plan_id"], ports
+
+
+@pytest.mark.parametrize(("path", "call", "reason"), [
+    ("/api/fleet/robots/rosy_60/cancel", "navigation_cancel", "operator_cancel"),
+    ("/api/fleet/cancel-all", "navigation_cancel", "operator_cancel"),
+    ("/api/fleet/estop", "estop", "operator_estop"),
+])
+def test_every_operator_stop_reaches_the_robot_and_ends_the_trip(tmp_path, path, call, reason):
+    client, robot, _console, trip_id, ports = _trip_app(tmp_path)
+    response = client.post(path, headers=OPERATOR)
+    assert response.status_code == 200, response.text
+    assert [c for c in robot.calls if c[0] == call]
+    view = client.get(f"/api/fleet/trips/{trip_id}", headers=VIEWER).json()
+    assert (view["state"], view["reason"]) == ("canceled", reason)
+    assert ports.held == ["rosy_60"]  # the trip's own halt (lane) ran too
+    run(client.app.state.trip_runner.tick())
+    assert ports.sent == [("stop", "SE", 0.0)]  # nothing re-sent after the stop
+
+
+def test_create_app_wraps_every_console_motion_and_stop_method(tmp_path):
+    _client, _robot, console, _trip_id, _ports = _trip_app(tmp_path)
+    for name in ("goal", "formation_start", "formation_reform", "formation_resume", "line_follow_mode",
+                 "cancel", "estop_all"):
+        assert getattr(console, name).__name__ == f"guarded_{name}", name
+
+
+def test_line_follow_off_ends_the_trip_even_when_the_robot_call_fails():
+    console, runner, robots = _guarded("a", "b")
+    robots[1].line_follow_mode = None  # the robot call raises
+
+    async def failing(mode):
+        raise OSError("robot unreachable")
+
+    robots[1].line_follow_mode = failing
+    with pytest.raises(OSError):
+        run(console.line_follow_mode("b", "OFF"))
+    assert runner.canceled == [("b", "operator_line_follow_off")]
+
+
+def test_formation_reform_and_resume_refuse_a_trip_robot():
+    console, _runner, _robots = _guarded("a", "b")
+    console._formation_leader = "b"
+    console._formation_members = lambda: {"a"}
+    for call in (console.formation_reform("LINE"), console.formation_resume()):
+        with pytest.raises(HubError) as err:
+            run(call)
+        assert err.value.code == "TRIP_ROBOT_BUSY"
+
+
+def test_the_fleet_stuck_resolver_skips_a_trip_robot():
+    from fleet.server.stuck_resolver_loop import StuckResolverLoop
+
+    seen = []
+
+    class Resolver:
+        def step(self, now, rows):
+            seen.extend(row["robot_id"] for row in rows)
+            return []
+
+    async def snapshot():
+        return {"robots": [{"robot_id": "a"}, {"robot_id": "b"}]}
+
+    loop = StuckResolverLoop(snapshot, board=None, resolver=Resolver(), clients=dict)
+    loop.trip_busy = lambda robot_id: robot_id == "b"
+    run(loop.run_once())
+    assert seen == ["a"]
+
+
+@pytest.mark.parametrize(("decision", "status", "ends"), [
+    ("RESUME", 409, None), ("BACK_AND_RETRY", 409, None), ("WAIT", 200, None),
+    ("ABORT", 200, "operator_stuck_abort"), ("MANUAL", 200, "operator_stuck_manual")])
+def test_stuck_decisions_on_a_trip_robot(tmp_path, decision, status, ends):
+    client, robot, _console, trip_id, _ports = _trip_app(tmp_path)
+    response = client.post("/api/fleet/robots/rosy_60/line-stuck/decision",
+                           json={"stuck_id": "s1", "decision": decision}, headers=OPERATOR)
+    assert response.status_code == status, response.text
+    forwarded = ("line_stuck_decision", "s1", decision) in robot.calls
+    assert forwarded == (status == 200)
+    view = client.get(f"/api/fleet/trips/{trip_id}", headers=VIEWER).json()
+    assert (view["reason"] if ends else view["state"]) == (ends or "started")
+
+
+def test_a_fresh_console_goal_counts_as_engaged():
+    from fleet.server.trip_guard import engaged
+
+    console, _runner, _robots = _guarded("a", "b")
+    now = [100.0]
+    console._goals["a"] = {"x": 0, "y": 0, "yaw": 0}
+    console.trip_goal_sent_at["a"] = 99.0
+    assert engaged(console, "a", clock=lambda: now[0]) == "goal"
+    now[0] = 101.5
+    assert engaged(console, "a", clock=lambda: now[0]) is None
+
+
+def test_restart_halts_run_outside_the_tick_with_a_cap_and_yield_to_a_new_trip(tmp_path):
+    store = SiteMapStore(tmp_path / "fleet.sqlite3")
+    store.put_trip({"trip_id": "t1", "robot_id": "rosy_60", "state": "running", "drive_mode": "lane",
+                    "next_place": None, "detail": {}})
+    store.close()
+    runner, store, ports = _setup(path=tmp_path / "fleet.sqlite3", restart_retry_s=0.001, restart_attempts=3)
+
+    async def unreachable(robot_id):
+        raise OSError("robot unreachable")
+
+    ports.hold = unreachable
+    run(runner._restart_halts())
+    assert runner._restarted == []  # gave up after 3 tries
+    runner, store, ports = _setup(path=tmp_path / "fleet2.sqlite3")
+    runner._restarted = [{"trip_id": "old", "robot_id": "rosy_60", "drive_mode": "lane", "next_place": None}]
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    assert runner._restarted == []  # the new trip owns the robot now
