@@ -23,7 +23,8 @@ from fleet.routing.snap import PlanError
 from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
-from fleet.server.trip_runner import PLAN_TTL_S, TripError, plan_body
+from fleet.routing.execute import plan_body
+from fleet.server.trip_runner import PLAN_TTL_S, TripError
 from fleet.swarm.transport import RobotApiError
 
 PlaceRef = Annotated[str, Field(min_length=1, max_length=64)]

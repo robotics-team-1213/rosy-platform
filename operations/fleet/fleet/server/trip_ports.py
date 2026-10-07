@@ -1,4 +1,4 @@
-"""D-491 1/3/4 ports of the trip loop (``trip_runner``) and their default wiring.
+"""D-491 1/3/4 ports of the trip loop (``trip_runner``), its site config and their default wiring.
 
 ``TripCaps`` (robot capability fields), ``MapPose`` (the Fleet trip map pose) and the lane
 junction / line-follow calls are injected so their providers plug in when they land. The
@@ -8,7 +8,8 @@ the console's robot clients.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, fields
 from typing import Any, Awaitable, Callable, Mapping, Optional, Protocol
 
 from fleet.hub.hub import HubError
@@ -114,3 +115,57 @@ class HttpLaneJunction:
     async def line_follow_mode(self, robot_id: str) -> Optional[str]:
         mode = (await self._client(robot_id).line_follow()).get("mode")
         return mode if isinstance(mode, str) else None
+
+
+@dataclass(frozen=True)
+class TripConfig:
+    period_s: float = 0.5
+    #: D-491 5: the next place's action goes to CORE this far before the place.
+    arm_distance_m: float = 0.6
+    #: CORE keeps one junction instruction at most 30 s (D-491 4); refreshed at half this.
+    junction_expires_s: float = 15.0
+    #: A lane robot this close to its last place (after the stop went out) has arrived.
+    arrive_lane_m: float = 0.15
+    #: The D-463 ``DONE_M``: a free robot this close to the end has arrived.
+    arrive_free_m: float = 0.05
+    #: A free robot this close to a segment's end is on the next segment.
+    advance_free_m: float = 0.05
+    #: CORE idle (or a newer seq) this close to the place means the instruction was carried out.
+    pass_window_m: float = 0.3
+    #: The pose is on the next lane once it is this far along it (and closer to it).
+    advance_eps_m: float = 0.02
+    #: A free goal is sent again only when its point moved this much.
+    goal_resend_m: float = 0.05
+    #: D-492 1: CORE turns at most this much at a junction.
+    max_turn_deg: float = 150.0
+    #: CORE ``waiting`` (at a junction without an instruction) this long stops the trip.
+    junction_wait_s: float = 10.0
+    #: A trip starts only within this long after the pose's sighting anchor.
+    start_anchor_age_s: float = 2.0
+    #: No ``stall_m`` of progress along the plan for this long (outside a junction manoeuvre or a
+    #: replan hold) stops the trip (site config ``fleet.trip.stall_s``).
+    stall_s: float = 20.0
+    stall_m: float = 0.05
+    #: Every robot call of the loop gives up after this long (a stuck robot is an error).
+    port_timeout_s: float = 1.5
+
+    def __post_init__(self) -> None:
+        for item in fields(self):
+            value = getattr(self, item.name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
+                    math.isfinite(value) and value > 0):
+                raise ValueError(f"fleet.trip.{item.name} must be a positive finite number")
+
+    @classmethod
+    def from_mapping(cls, raw: Optional[Mapping]) -> "TripConfig":
+        raw = dict(raw or {})
+        unknown = set(raw) - {item.name for item in fields(cls)}
+        if unknown:
+            raise ValueError(f"fleet.trip has unknown keys: {sorted(unknown)}")
+        return cls(**raw)
+
+
+class TripError(Exception):
+    def __init__(self, status: int, code: str, detail: Optional[dict] = None) -> None:
+        super().__init__(code)
+        self.status, self.code, self.detail = status, code, detail or {}
