@@ -1602,7 +1602,7 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
         else:
             assert page.locator("#formation-role-lock").is_visible()
             assert page.locator(".formation ui-button[reason]").count() == 0
-            assert page.locator("#estop").get_attribute("reason") == "운용자 권한이 필요합니다"
+            assert page.locator("#estop").get_attribute("reason") == "운영자 권한이 필요합니다"
         assert not errors
         save_temp_screenshot(page, f"fleet_desktop_{scenario}.png")
         browser.close()
@@ -2745,7 +2745,7 @@ def test_camera_lists_without_actions_for_viewers_and_the_shared_token(console_u
         assert page.locator("#camera-requests ui-button, #camera-credentials ui-button").count() == 0
         if role == "viewer":
             assert page.locator("#camera-role-lock").is_visible()
-            assert page.locator("#camera-role-lock").inner_text() == "운용자 권한이 필요합니다"
+            assert page.locator("#camera-role-lock").inner_text() == "운영자 권한이 필요합니다"
             assert page.locator("#camera-identity-note").is_hidden()
         else:
             note = page.locator("#camera-identity-note")
@@ -2854,7 +2854,7 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
             const box = document.querySelector('#roster').getBoundingClientRect();
             return r.top >= box.top - 1 && r.bottom <= box.bottom + 1; }""")
         assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
-        assert page.locator('.topbar-links a[href="/console/install"]').is_visible()
+        assert page.locator('.doc-tabs a[href="/console/install"]').is_visible()
         page.evaluate("document.querySelector('#roster').scrollTop = 0")
         _shot(page, "roster-renumbered-1920.png")
         assert not page.locator("text=(전체)").count()
@@ -2981,7 +2981,7 @@ def test_viewer_sees_reasons_but_no_live_move_buttons(console_url):
         assert page.locator('#enrolled-list ui-button[data-action="move"]').count() == 0
         button = page.locator('#enroll-address-add')
         assert button.is_disabled()
-        assert button.get_attribute("reason") == "운용자 권한이 필요합니다"
+        assert button.get_attribute("reason") == "운영자 권한이 필요합니다"
         assert not errors
         browser.close()
 

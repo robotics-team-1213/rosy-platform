@@ -13,7 +13,6 @@ input:focus-visible, select:focus-visible, a:focus-visible { outline: var(--focu
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 a { color: var(--ink); }
-.console-return { box-sizing: border-box; min-height: var(--target-secondary); display: inline-flex; align-items: center; padding: var(--space-3); }
 .map-viewport { min-width: 0; max-width: 100%; }
 .map-viewport:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .map-scroll-hint { display: none; }

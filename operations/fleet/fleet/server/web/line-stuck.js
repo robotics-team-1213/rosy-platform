@@ -1,5 +1,5 @@
 // D-407 판단 요청 — 차선 추종이 막힌 로봇이 관제에 묻는다. 막힘은 CORE 가 열고 판단하며,
-// 화면은 서버(Fleet)가 모은 막힘(robot.line_stuck)을 보이고 운용자의 답 하나를 Fleet 에
+// 화면은 서버(Fleet)가 모은 막힘(robot.line_stuck)을 보이고 운영자의 답 하나를 Fleet 에
 // 넘길 뿐이다. 거부(늦은 답, 재개 거부 사유)는 CORE 의 말 그대로 옮긴다.
 // 상태 폴링은 1 s 마다 다시 그리므로, 바뀐 항목만 다시 만든다 — 확인 단계와 포커스가
 // 폴링에 지워지지 않게 한다. 색은 클래스로만 준다(CSP style-src 'self').
@@ -117,7 +117,7 @@ export function stuckFacts(stuck) {
 export function decisionButtons(stuck, { operator, busy = false }) {
   return DECISIONS.map((decision) => {
     let reason = "";
-    if (!operator) reason = "운용자 권한이 필요합니다";
+    if (!operator) reason = "운영자 권한이 필요합니다";
     else if (stuck.robot_online === false) reason = "로봇 연결이 끊겼습니다";
     else if (busy) reason = "답을 보내는 중";
     else if (decision === "BACK_AND_RETRY" && !stuck.local_enabled) {
@@ -156,7 +156,7 @@ export function refusalText(robotId, decision, err) {
     why = REFUSAL_REASON[reason] || "CORE가 거부했습니다";
   } else if (code === "EMERGENCY_ACTIVE") why = "비상정지 중입니다";
   else if (code === "CALIBRATION_ACTIVE") why = "보정 세션이 로봇을 쥐고 있습니다";
-  else if (err && err.status === 403) why = "운용자 권한이 필요합니다";
+  else if (err && err.status === 403) why = "운영자 권한이 필요합니다";
   else if (code === "ROBOT_UNREACHABLE") why = "로봇에 닿지 않아 답이 전해지지 않았습니다";
   else if (code === "STUCK_DECISION_OUTCOME_UNKNOWN") {
     why = "로봇이 응답하지 않았습니다. CORE가 이미 적용했을 수 있으니 막힘 상태를 다시 확인한 뒤 답하세요";

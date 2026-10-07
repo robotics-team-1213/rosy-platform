@@ -40,7 +40,7 @@ test("BACK_AND_RETRY is disabled when local recovery is off or attempts are spen
 
 test("a viewer, an unreachable robot or an answer in flight blocks every button", () => {
   for (const [stuck, options, pattern] of [
-    [STUCK, { operator: false }, /운용자 권한/],
+    [STUCK, { operator: false }, /운영자 권한/],
     [{ ...STUCK, robot_online: false }, { operator: true }, /연결이 끊겼습니다/],
     [STUCK, { operator: true, busy: true }, /보내는 중/],
   ]) {
@@ -98,7 +98,7 @@ test("CORE refusals keep their code and message verbatim", () => {
     code: "STUCK_DECISION_REFUSED", status: 409, message: "BACK_AND_RETRY refused: new_reason" });
   assert.match(unknown, /CORE가 거부했습니다 \(STUCK_DECISION_REFUSED: BACK_AND_RETRY refused: new_reason\)/);
   assert.match(refusalText("rosy_01", "ABORT", { status: 403, code: "FORBIDDEN", message: "operator role required" }),
-    /운용자 권한/);
+    /운영자 권한/);
 });
 
 test("transport failures say not delivered or outcome unknown, never refused", () => {
