@@ -12,7 +12,6 @@ from __future__ import annotations
 import math
 from typing import Optional, Union
 
-from fleet.routing.graph import pinned
 
 SPACING_M = 0.10
 MAX_BRIDGE_M = 0.5
@@ -103,17 +102,28 @@ def add_place(body: dict, name: str, kind: str, x: float, y: float, yaw: Optiona
     return place_id
 
 
+def _pinned(polyline: list[Point], start: Point, end: Point) -> list[Point]:
+    inner = list(polyline[1:-1])
+    while inner and math.dist(inner[0], start) <= SNAP_M:
+        inner.pop(0)
+    while inner and math.dist(inner[-1], end) <= SNAP_M:
+        inner.pop()
+    return [tuple(start), *inner, tuple(end)]
+
+
 def append_edge(base: dict, polyline: list[Point], *, start: Union[str, dict], end: Union[str, dict],
                 direction: str, drive_mode: str, speed_cap_mps: float, width_m: float) -> tuple[dict, str]:
     """A copy of ``base`` (a site map body) with the taught edge; ``start``/``end`` are a place id
-    or ``{name, kind}`` for a new place at that end. The polyline ends are pinned onto the places."""
+    or ``{name, kind}`` for a new place at that end. The polyline ends are pinned onto the places,
+    dropping the leading and trailing interior points within ``SNAP_M`` of them so a pinned end
+    does not bend the lane's end tangent."""
     body = {**base, "places": [dict(p) for p in base["places"]], "edges": list(base["edges"])}
     a = _place(body, start, polyline[0], "from")
     b = _place(body, end, polyline[-1], "to")
     xy = {p["id"]: (p["x"], p["y"]) for p in body["places"]}
     edge_id = _free_id("teach_e", {e["id"] for e in body["edges"]})
     body["edges"].append({"id": edge_id, "from": a, "to": b,
-                          "polyline": [list(p) for p in pinned(polyline, xy[a], xy[b])],
+                          "polyline": [list(p) for p in _pinned(polyline, xy[a], xy[b])],
                           "direction": direction, "drive_mode": drive_mode,
                           "speed_cap_mps": speed_cap_mps, "width_m": width_m})
     return body, edge_id

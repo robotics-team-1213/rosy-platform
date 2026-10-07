@@ -83,3 +83,12 @@ def test_append_edge_refuses_an_unknown_or_far_place(start, code):
         append_edge(BASE, [(0.0, 0.0), (1.0, 0.0)], start=start, end={"name": "x"}, direction="one_way",
                     drive_mode="lane", speed_cap_mps=0.2, width_m=0.2)
     assert err.value.code == code and err.value.detail["end"] == "from"
+
+
+def test_pinning_drops_interior_points_near_the_place_so_the_end_tangent_stays():
+    base = {"schema": "rosy.site_map/1", "places": [{"id": "P", "name": "p", "x": 0.14, "y": 0.0, "kind": "stop"}],
+            "edges": []}
+    body, edge_id = append_edge(base, [(0.0, 0.0), (0.1, 0.0), (0.1, 2.0)], start="P", end={"name": "끝"},
+                                direction="one_way", drive_mode="lane", speed_cap_mps=0.2, width_m=0.2)
+    assert body["edges"][0]["polyline"] == [[0.14, 0.0], [0.1, 2.0]]   # no hook back through (0.1, 0)
+    SiteMap.model_validate(body)
