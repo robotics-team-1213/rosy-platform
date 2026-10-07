@@ -570,8 +570,9 @@ main {
 @media (width < 90rem) {
   ui-topbar {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
-    grid-template-areas: "brand pill cell clock more estop";
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    /* D-488 — 다른 문서 링크(설치·보정·현장 지도·Cell)는 설정 뒤 접힘 칸에 있다. */
+    grid-template-areas: "brand pill clock more estop";
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
