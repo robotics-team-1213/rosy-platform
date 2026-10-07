@@ -98,6 +98,9 @@ class SiteMap(BaseModel):
     places: list[SitePlace] = Field(max_length=MAX_PLACES)
     edges: list[SiteEdge] = Field(max_length=MAX_EDGES)
     turn_bans: list[TurnBan] = Field(default_factory=list, max_length=MAX_EDGES)
+    #: D-513 7: clockwise screen turn of the plain (+y up) map view. Display only; the one
+    #: orientation every Fleet map and camera view follows.
+    view_turn_deg: Literal[0, 90, 180, 270] = 0
 
     @model_validator(mode="after")
     def _references(self) -> "SiteMap":

@@ -89,8 +89,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · feat(fleet): D-513 7 지도 화면 방향 `view_turn_deg`
 - 2026-10-08 · uncommitted · refactor(fleet): D-513 7 카메라 회전은 지도 방향에서
 - 2026-10-08 · uncommitted · fix(fleet): D-511 M0 리뷰 반영
 - 2026-10-08 · uncommitted · feat(fleet): D-511 M0 차로 준수 감시(관찰·알림만)
 - 2026-10-08 · uncommitted · fix(fleet): D-513 7 회전 후속
-- 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up

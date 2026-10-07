@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  arrowMarks, editEdge, editPlace, fitView, planPolylines, segmentPoints, tripErrorText, rectangularView,
+  arrowMarks, editEdge, editPlace, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
 } from '../../fleet/server/web/site-map-model.js';
 
 const MAP = {
@@ -140,4 +140,29 @@ test('the confirm form acts on the newest stopped recording, whatever the list o
   assert.equal(newestPending({pending: [fresh, old]}).teach_id, 'new');
   assert.equal(newestPending({pending: []}), null);
   assert.equal(newestPending(null), null);
+});
+
+test('D-513 7: a turned view keeps metres round-tripping and turns directions on screen', () => {
+  const view = fitView(MAP, 200, 300, 10, 90);
+  for (const [x, y] of [[0, 0], [2, 0], [1, 0.3]]) {
+    const back = view.toMap(...view.toPx(x, y));
+    assert.ok(Math.abs(back[0] - x) < 1e-9 && Math.abs(back[1] - y) < 1e-9);
+  }
+  const [ax, ay] = view.toPx(0, 0), [bx, by] = view.toPx(2, 0);
+  assert.ok(Math.abs(ax - bx) < 1e-9 && by > ay); // map +x points down after a 90° turn
+  assert.equal(view.rotateDeg(0), 90);
+  const record = {map_id: 'camera', map_to_image: [100, 0, 200, 0, -100, 100, 0, 0, 1],
+    track_bounds_m: {min_x: -1.405, max_x: 1.405, min_y: -0.63, max_y: 0.63}};
+  const {field} = rectangularView(record, 'camera', 480, 800, 90);
+  assert.match(field.transform, /^rotate\(90 /);
+  assert.ok(Math.abs(field.width / field.height - 2.81 / 1.26) < 1e-12);
+});
+
+test('D-513 7: the map keeps one view turn and refuses other angles', () => {
+  const turned = editViewTurn(MAP, '90');
+  assert.equal(turned.view_turn_deg, 90);
+  assert.equal(viewTurnOf(MAP), 0);
+  assert.equal(viewTurnOf(turned), 90);
+  assert.equal(MAP.view_turn_deg, undefined);
+  assert.throws(() => editViewTurn(MAP, 45), /0·90·180·270/);
 });

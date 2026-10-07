@@ -2446,3 +2446,8 @@
 - 변경: `site-cameras.yaml`의 `display_rotation_deg` 키를 지운다(푸시 전). 관제 실영상·크게 보기·썸네일은 그 카메라 보정에서 지도 +y가 위로 오는 90° 단위 회전(`mapUpTurn`)으로 돈다. 현장 지도 화면의 보기 회전도 지운다(원래 지도 좌표).
 - 증거: 웹 Node 시험 174 passed.
 - gate 변화: SOURCE/LOCAL만. 현장에서 벽이 아래로 보이는지(F3)는 별도.
+
+## 2026-10-08 · uncommitted · feat(fleet): D-513 7 지도 화면 방향 `view_turn_deg`
+- 변경: `rosy.site_map/1`에 `view_turn_deg`(0/90/180/270)를 둔다. 현장 지도 화면이 지도를 그만큼 돌려 그리고 "화면 방향" 선택으로 고친다. 관제 크게 보기·썸네일은 `mapUpTurn + view_turn_deg`로 돈다.
+- 증거: 웹 Node 시험 180 passed, 현장 지도 pytest 120 passed. 로컬 재현: `ceil.jpg` 페인트 정합(점수 0.85)에서 `mapUpTurn` 0, 90을 더하면 벽이 맨 아래.
+- gate 변화: SOURCE/LOCAL만. 현장 활성 지도에 90 저장(F3)은 별도.

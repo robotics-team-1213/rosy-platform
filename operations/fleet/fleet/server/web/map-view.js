@@ -8,7 +8,7 @@
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
-  streamEvidence, mapUpTurn, quarterTurn, cameraScreenToMap,
+  streamEvidence, mapUpTurn, quarterTurn, cameraScreenToMap, siteViewTurn,
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
@@ -667,6 +667,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
           calibrations = result.calibrations || [];
           calibrationsAt = Date.now();
         } catch (error) { if (error.name === "AbortError") return; calibrations = []; }
+        // D-513 7: 활성 현장 지도의 화면 방향. 지도가 없거나(404/409) 읽지 못하면 기본 방향.
+        try {
+          view.siteViewTurn = siteViewTurn(await call("/api/fleet/site-map/active", { signals: [life.signal] }));
+          life.check();
+        } catch (error) { if (error.name === "AbortError") return; view.siteViewTurn = 0; }
       }
     } catch (err) {
       if (err.name === "AbortError") return;
@@ -789,9 +794,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   // 실영상과 같은 조건으로 고른다: 지금 지도의 보정이고, 원본 프레임이면 크기도 같아야 한다.
   function frameTurn(frame) {
     const maps = (view.siteMap?.maps || []).map((map) => map.map_id);
-    return mapUpTurn(calibrations.find((row) => row.source_id === frame.source && maps.includes(row.map_id)
+    const record = calibrations.find((row) => row.source_id === frame.source && maps.includes(row.map_id)
       && (frame.rectified || (row.image?.width === frame.image?.naturalWidth
-        && row.image?.height === frame.image?.naturalHeight))));
+        && row.image?.height === frame.image?.naturalHeight)));
+    return record ? (mapUpTurn(record) + (view.siteViewTurn || 0)) % 360 : 0;
   }
   function turnedUrl(frame) {
     const image = frame.image;
