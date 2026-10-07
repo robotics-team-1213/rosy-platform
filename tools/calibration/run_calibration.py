@@ -35,6 +35,7 @@ since D-397; motion and camera say ~181-182 deg on 8kcn and 9dfk).
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import math
 import os
@@ -224,14 +225,50 @@ class Core:
             self.context = ssl.create_default_context(cafile=str(ca_file))
             self.context.check_hostname = False
         self.base, self.token = f"{'https' if ca_file else 'http'}://{host}:{port}", token
+        self.host, self.port, self._conn = host, port, None
+        self._conn_lock = threading.Lock()   # the Ctrl-C stop shares the robot thread's connection
 
     def call(self, method, path, body=None, timeout=2.0):
+        if self.context is not None:
+            with self._conn_lock:
+                return self._call_kept(method, path, body, timeout)
         req = urllib.request.Request(self.base + path, method=method,
                                      data=None if body is None else json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json",
                                               **({"Authorization": f"Bearer {self.token}"} if self.token else {})})
         with urllib.request.urlopen(req, timeout=timeout, context=self.context) as resp:
             text = resp.read().decode() or "null"
+            return resp.status, json.loads(text)
+
+    def _call_kept(self, method, path, body, timeout):
+        """HTTPS on one kept-alive connection: a TLS handshake per 10 Hz teleop overran the
+        0.4 s budget on Wi-Fi (9dfk, 2026-10-07). One reconnect on a dropped connection."""
+        data = None if body is None else json.dumps(body).encode()
+        headers = {"Content-Type": "application/json",
+                   **({"Authorization": f"Bearer {self.token}"} if self.token else {})}
+        for attempt in (0, 1):
+            if self._conn is None:
+                self._conn = http.client.HTTPSConnection(self.host, self.port, context=self.context,
+                                                         timeout=timeout)
+            self._conn.timeout = timeout
+            if self._conn.sock is not None:
+                self._conn.sock.settimeout(timeout)
+            try:
+                self._conn.request(method, path, body=data, headers=headers)
+                resp = self._conn.getresponse()
+                text = resp.read().decode() or "null"
+            except (http.client.HTTPException, ConnectionError) as exc:
+                self._conn.close()
+                self._conn = None
+                if attempt:
+                    raise urllib.error.URLError(exc) from exc
+                continue
+            except OSError:
+                self._conn.close()
+                self._conn = None
+                raise
+            if resp.status >= 400:
+                raise urllib.error.HTTPError(self.base + path, resp.status, text, resp.headers, None)
             return resp.status, json.loads(text)
 
     def pair(self, code, label="Rosy calibration (PC)"):
