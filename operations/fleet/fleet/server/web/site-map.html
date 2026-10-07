@@ -35,6 +35,14 @@
         </select></label>
       </ui-head>
       <ui-status id="map-status" state="empty">관제 접속 필요</ui-status>
+      <div class="actions">
+        <label>평면 영상 카메라<select class="ui-field" id="plane-source" aria-label="평면 영상 카메라"></select></label>
+        <ui-button id="plane-load" kind="quiet" disabled>직사각형 평면 영상 불러오기</ui-button>
+        <ui-button id="plane-clear" kind="quiet" disabled>영상 숨기기</ui-button>
+        <label class="ui-check"><input class="ui-field" id="plane-pick" type="checkbox" disabled> 평면 지도 좌표 확인</label>
+      </div>
+      <ui-text id="plane-status" role="status">카메라 평면 영상과 좌표 확인은 표시 전용입니다.</ui-text>
+      <ui-text id="plane-point" role="status">확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.</ui-text>
       <ui-text id="map-scroll-hint" class="map-scroll-hint" hidden>좁은 화면에서는 지도를 좌우로 밀어 확인하세요.</ui-text>
       <div id="map-viewport" class="map-viewport" role="region" aria-label="현장 지도 가로 이동" tabindex="0" hidden>
         <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
