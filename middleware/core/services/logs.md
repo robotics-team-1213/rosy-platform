@@ -588,3 +588,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
 - 결정: D-492 (Proposed), 구현 메모 2026-10-07
 - 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
+
+## 2026-10-07 · uncommitted · feat(line_follow): D-492 supports_junction_turn
+- 변경: `LineFollowManager.supports_junction_turn`: 최근 2 s 안의 신선한 `line/keep_debug` 프레임이 `corner_turning: true`를 실을 때만 참(keep 모드 + 교차로 감지 + 제한 회전). 능력 `junction_turn`의 근거
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep 1969 PASS·18 skip, gateway 2190 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows; 동시 실행 중 `test_site_rooms.py` 자식 프로세스 시간 시험 한 번 실패, 단독·재실행 통과)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
+- 결정: D-492 (Proposed) 결정 개정 2026-10-07
+- 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다

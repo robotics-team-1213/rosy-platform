@@ -73,8 +73,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(line_follow): D-492 recovery_local_enabled 기본 켜짐과 keep 증거
 - 2026-10-07 · uncommitted · test(line_follow): D-492 bridge 로봇 기본값 켜짐 고정
 - 2026-10-07 · uncommitted · feat(bridge): keep_debug 교차로 사유를 line-follow 정지 입력으로
 - 2026-10-06 · uncommitted · feat(sim): simulation_sensors 플래그와 D-468 정책 시계
 - 2026-10-05 · uncommitted · fix(bridge): C6 센서 공급자 선택 기능 판정 기록
-- 2026-10-05 · uncommitted · fix(bridge): document D-468 scan provenance seams

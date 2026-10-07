@@ -944,3 +944,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
 - 결정: D-492 (Proposed), 구현 메모 2026-10-07
 - 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
+
+## 2026-10-07 · uncommitted · feat(line_follow): D-492 recovery_local_enabled 기본 켜짐과 keep 증거
+- 변경: `keep_junction`이 `corner_turning`을 넘긴다. `rosy_default.yaml` `recovery_local_enabled: true`(D-492 개정). 고정 시험: 기본 켜짐, 겹으로 끄기, 끈 로봇의 `local_recovery_disabled`, 일반 기본의 `body_geometry_unset`
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep 1969 PASS·18 skip, gateway 2190 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows; 동시 실행 중 `test_site_rooms.py` 자식 프로세스 시간 시험 한 번 실패, 단독·재실행 통과)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
+- 결정: D-492 (Proposed) 결정 개정 2026-10-07
+- 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다
