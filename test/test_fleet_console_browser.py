@@ -440,7 +440,7 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
             map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
             roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
-            assert abs(map_panel["width"] - roster_panel["width"]) <= 1
+            assert abs(map_panel["width"] / roster_panel["width"] - (1.5 if width >= 1024 else 1)) <= 0.03  # D-488: map 3 : rail 2 from 64rem
             if width < 480:
                 assert abs(map_panel["x"] - roster_panel["x"]) <= 1
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -488,7 +488,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
             map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
             roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
-            assert abs(map_panel["width"] - roster_panel["width"]) <= 1
+            assert abs(map_panel["width"] / roster_panel["width"] - (1.5 if width >= 1024 else 1)) <= 0.03  # D-488: map 3 : rail 2 from 64rem
             if width < 480:
                 assert abs(map_panel["x"] - roster_panel["x"]) <= 1
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -1408,6 +1408,25 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         save_temp_screenshot(page, "fleet_console_queues.png")
         browser.close()
 
+    normal = {
+        "fleet": {"name": "site", "online": 3, "total": 3},
+        "robots": [_robot(f"rosy_0{i}", {"x": 0.4 * i, "y": 1.0, "yaw": 0.0}) for i in (1, 2, 3)],
+        "ts": 0.0,
+    }
+    with sync_playwright() as p:
+        browser, page, _errors = _open_console(p, {
+            "/api/fleet/state": normal,
+            "/api/fleet/map": MAP_GRID,
+            "/api/fleet/formation": {"active": False, "state": "IDLE"},
+        })
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#roster article, #roster-toggle').length > 0")
+        # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
+        assert page.locator(".queues-panel").is_hidden()
+        browser.close()
+
+    # D-488: SNAPSHOT is not a normal roster — rosy_03's card carries a red relay tag and a traffic wait.
+    # The queue says so with the card's own rule (2026-10-07: the queue used to stay hidden here).
     with sync_playwright() as p:
         browser, page, _errors = _open_console(p, {
             "/api/fleet/state": SNAPSHOT,
@@ -1418,8 +1437,9 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
-        # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
-        assert page.locator(".queues-panel").is_hidden()
+        assert page.locator(".queues-panel").is_visible()
+        assert "릴레이 끊김" in page.inner_text("#critical-list")
+        assert "rosy_03" in page.inner_text("#critical-head")
         browser.close()
 
 
@@ -1514,7 +1534,8 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
         elif scenario == "disconnected":
             assert "닿지 않음" in page.inner_text("#roster")
             assert page.locator(".queues-panel").is_visible()
-            assert fit["mapCanvas"]["height"] <= 0.3 * fit["vh"]
+            # D-488: the queue lives in the rail, so the map stays the main view.
+            assert fit["mapCanvas"]["height"] >= 0.5 * fit["vh"]
         else:
             assert page.locator("#formation-role-lock").is_visible()
             assert page.locator(".formation ui-button[reason]").count() == 0
