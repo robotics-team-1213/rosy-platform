@@ -168,3 +168,6 @@ main에 D-476 rev 1이 먼저 들어왔다(`1e8c44aa2`, `a67879335`). 그래서 
 4. **수용 점검표.**
    - S1의 "bridge 켜짐"은 위 전제를 갖춘 SIM 설정에서만 뜻이 있다. 모델 PC SIM은 `bridge_site_no_dropoffs: true`와 `ir_guard_enabled: true`(sim IR)를 겹으로 켜고 돈다.
    - S4는 bridge 없이 D-468·D-407 로컬 동작만으로도 따로 돈다.
+
+5. **직진 교차로와 bridge.** keeper는 교차로를 HOLD하며 차선을 "보이지 않음"으로 보낸다. 그래서 `straight` 지시로 교차로를 지나려면 D-476 bridge가 있어야 한다. bridge가 꺼져 있으면 로봇은 교차로에서 멈춘 채 `lost_after_s` 뒤 LOST다. 직진 교차로를 지나는 Fleet `lane` trip은 그 현장이 bridge를 켜야 한다. 켜려면 rev 1 전제가 함께 있어야 한다(`ir_guard_enabled`, 그리고 enforce 또는 `bridge_site_no_dropoffs`).
+6. **회전의 바닥 근거.** 회전·전진은 D-468 동작 확인을 거친다. 오늘 그 확인은 D-400 enforce 바닥 증명(LiDAR·IMU·IR 필수 worker)에서만 참이다. enforce가 아닌 로봇은 모든 회전이 `motion_unconfirmed`로 멈춘다. 그래서 능력 `junction_turn`도 거짓이다(`supports_junction_turn`이 `ControlSensorAdapter.return_proof_configured`를 요구한다). Fleet은 좌·우가 있는 `lane` trip을 거절한다. 회전에 bridge의 rev 1 근거(IR guard + D-422 + 현장 수용)를 주려면 별도 ADR 결정이 필요하다.
