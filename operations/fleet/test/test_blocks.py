@@ -1,6 +1,5 @@
 """D-517 M0: fixed-block traffic arithmetic — overlap never, no circular wait under the loop limit."""
 
-import json
 import math
 import random
 from pathlib import Path
@@ -181,7 +180,7 @@ def test_authority_never_shrinks_when_lookahead_drops_or_the_pose_jumps_back():
     for t, (look, d) in enumerate([(0.6, 0.6), (0.1, 0.6), (0.1, 0.55), (0.6, 0.55), (0.1, 0.62)]):
         a.lookahead_m, a.d = look, d
         ends.append(step(layout, [a, b], state, now=t * 0.5).authority_end["a"])
-    assert ends == sorted(ends) and ends[0] > 1.8
+    assert ends == sorted(ends) and ends[0] > 1.2
 
 
 def test_two_way_lane_lets_one_direction_in_and_holds_the_other():

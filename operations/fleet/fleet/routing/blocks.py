@@ -126,7 +126,8 @@ class Robot:
 
 @dataclass
 class TableState:
-    #: robot id -> span indices it holds (occupied or granted), per occurrence along its route
+    #: robot id -> span indices granted to it, per occurrence along its route. Only grants
+    #: extend a robot's own authority; occupancy (with its ±u pad) only blocks others.
     held: dict[str, set[int]] = field(default_factory=dict)
     route: dict[str, str] = field(default_factory=dict)
     #: robot id -> the last authority end issued on its route; it never goes down (D-517 4)
@@ -146,7 +147,7 @@ class TickResult:
     authority_end: dict[str, float]
     #: robot id -> every robot holding the unit it needs next (empty: not waiting on a robot)
     waiting_for: dict[str, tuple[str, ...]]
-    conflicts: tuple[str, ...]        # units with more occupants than capacity (must stay empty)
+    conflicts: tuple[str, ...]        # units granted to more robots than capacity (must stay empty)
 
 
 def _occupied(robot: Robot) -> set[int]:
@@ -183,9 +184,9 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
         if robot.d is not None:
             rear = robot.d - robot.body_length_m - robot.uncertainty_m
             held -= {i for i in held if robot.spans[i].d1 <= rear and i not in occupied[robot.id]}
-        held |= occupied[robot.id]
+    # Who blocks a unit: its grantees and anyone whose padded body touches it.
     holders: dict[str, set[str]] = {}
-    occupants: dict[str, set[str]] = {}
+    granted: dict[str, set[str]] = {}
     direction: dict[str, bool] = {}
     for robot_id, held in state.held.items():
         spans = spans_of.get(robot_id)
@@ -193,12 +194,13 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
             continue
         for i in held:
             unit = spans[i].unit
+            granted.setdefault(unit, set()).add(robot_id)
             holders.setdefault(unit, set()).add(robot_id)
             if layout.units[unit].two_way:
                 direction[unit] = spans[i].forward
         for i in occupied.get(robot_id, ()):
-            occupants.setdefault(spans[i].unit, set()).add(robot_id)
-    conflicts = tuple(sorted(u for u, rs in occupants.items() if len(rs) > layout.units[u].capacity))
+            holders.setdefault(spans[i].unit, set()).add(robot_id)
+    conflicts = tuple(sorted(u for u, rs in granted.items() if len(rs) > layout.units[u].capacity))
 
     def inside_zone(robot: Robot) -> bool:
         return any(layout.units[robot.spans[i].unit].zone for i in occupied[robot.id])
