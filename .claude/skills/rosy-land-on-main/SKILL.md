@@ -72,6 +72,11 @@ A number lost to a collision goes into `adr_gaps` with the reason.
 
 ## Landing
 
+착지 도구: from the topic worktree run `python tools/land.py --tests auto` (`--dry-run` first to see the plan).
+It loops merge main -> auto-resolve ADR Log/logs.md/index.md conflicts -> D-436 affected tests + lint
+-> `known_failures` -> `--ff-only`, stops on any NEW failure or other conflict, and never pushes.
+The manual steps below are what it does.
+
 ```dot
 digraph land {
   "merge main into branch, rerun tests" -> "new failures?";
