@@ -169,11 +169,12 @@ async function list() {
     return li;
   }));
   saved.hidden = result.documents.length === 0;
-  status.hidden = result.documents.length > 0;
-  if (!status.hidden) {
-    status.setAttribute('state', 'empty');
-    status.textContent = '저장된 문서가 없습니다. 위에서 레시피와 셀 문서를 작성하고 저장하세요.';
-  }
+  status.hidden = false;
+  status.setAttribute('state', result.documents.length ? 'ready' : 'empty');
+  const checkedAt = new Date().toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'});
+  status.textContent = result.documents.length
+    ? `문서 목록을 마지막으로 받은 시각: ${checkedAt}`
+    : `저장된 문서가 없습니다. 위에서 레시피와 셀 문서를 작성하고 저장하세요. 문서 목록을 마지막으로 받은 시각: ${checkedAt}`;
 }
 function loaded(kind, revision) {
   const text = JSON.stringify(revision.document, null, 2);
@@ -314,7 +315,10 @@ $('credential').addEventListener('input', () => {
 });
 $('connect').addEventListener('click', () => action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
-  $('session').textContent = `${session.principal_id} · ${role}`;
+  const roleName = role === 'operator' ? '운영자' :
+    role === 'viewer' ? '조회 전용' :
+      role === 'policy-admin' ? '정책 관리자' : '권한 없음';
+  $('session').textContent = `${session.principal_id} · ${roleName}`;
   await list(); $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
 }));
 $('compile').addEventListener('click', () => action(async () => {
