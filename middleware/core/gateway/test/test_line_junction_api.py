@@ -187,7 +187,7 @@ def _pose(services, clock):
 def test_d507_window_and_pivot_fields_validation(core_client):
     client, services, clock = _active(core_client)
     for bad in ({"expect_in_m": 0}, {"expect_in_m": 2.01}, {"expect_tol_m": 0},
-                {"expect_tol_m": 0.31}, {"pivot_past_line_m": -0.01}, {"pivot_past_line_m": 0.31},
+                {"expect_tol_m": 0.31}, {"pivot_past_line_m": -0.31}, {"pivot_past_line_m": 0.31},
                 {"map_id": "bad id"}, {"map_id": ""}, {"expect_tol_m": None},
                 {"expect_in_m": None}):
         body = {k: v for k, v in {**D507, **bad}.items() if v is not None}
@@ -203,6 +203,8 @@ def test_d507_window_and_pivot_fields_validation(core_client):
     straight = {**BODY, "place_id": "J2", "map_id": "site_a", "expect_in_m": 0.5, "expect_tol_m": 0.1,
                 "pivot_past_line_m": 0.1}  # D-507 review 5: straight uses it for the window only
     assert client.post(URL, json=straight, headers=OPERATOR).json()["state"] == "armed"
+    far_edge = {**D507, "place_id": "J3", "pivot_past_line_m": -0.30}  # 2026-10-08: signed
+    assert client.post(URL, json=far_edge, headers=OPERATOR).json()["state"] == "armed"
 
 
 def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):

@@ -124,7 +124,7 @@ def test_window_needs_fresh_odom_when_it_arrives():
 @pytest.mark.parametrize('expect', [dict(expect_in_m=.5), dict(expect_tol_m=.1),
                                     dict(expect_in_m=2.1, expect_tol_m=.1),
                                     dict(expect_in_m=.5, expect_tol_m=.31),
-                                    dict(pivot_past_line_m=.31)])
+                                    dict(pivot_past_line_m=.31), dict(pivot_past_line_m=-.31)])
 def test_invalid_window_fields_raise(expect):
     rig = Rig()
     rig.step()
@@ -163,6 +163,8 @@ def _approaching(rig, pivot=.1, reason='junction_transverse', step=None, **kwarg
 @pytest.mark.parametrize('pivot, reason, distance, basis', [
     (.1, 'junction_transverse', .3, 'map'),   # cross line .2 ahead + half lane width
     (.1, 'junction_fork', .2, 'map'),         # a fork turns at the measured branch end
+    (-.1, 'junction_transverse', .1, 'map'),  # 2026-10-08: the far edge, the place .1 before it
+    (-.25, 'junction_transverse', 0., 'map'),  # goal .15 is behind the robot at .2: turn here
     (None, 'junction_transverse', 0., 'stop_point')])  # no field: today's stop point
 def test_approach_distance(pivot, reason, distance, basis):
     rig = Rig()
@@ -258,6 +260,16 @@ def test_unexpected_clears_when_a_later_sighting_matches_while_still_seen(action
     for _ in range(3):
         assert sight(rig, ahead=.3, seen=False, move=True)[1].junction.state != 'unexpected'
     assert rig.m._junction['outside'] is False
+
+
+def test_a_negative_pivot_expects_the_line_past_the_place():
+    """2026-10-08: the far edge (roundabout entry, T) is .1 past the place at .5: line at .6."""
+    for ahead, state in ((.4, 'turning'), (.2, 'unexpected')):
+        rig = Rig()
+        rig.step()
+        send(rig, pivot_past_line_m=-.1, **WINDOW)
+        drive_to(rig, .2)
+        assert sight(rig, ahead=ahead, seen=False)[1].junction.state == state
 
 
 def test_straight_pivot_biases_only_the_window():
@@ -436,7 +448,8 @@ def test_a_side_line_a_metre_later_is_lane_departure():
 
 @pytest.mark.parametrize('pivot, lateral, inside', [
     (None, .10, True), (None, .125, False),      # D-491 corridor half-width .10 + error
-    (.05, .06, True), (.05, .08, False)])         # Fleet's lane half-width (pivot_past_line_m)
+    (.05, .06, True), (.05, .08, False),         # Fleet's lane half-width (pivot_past_line_m)
+    (-.05, .10, True), (-.05, .125, False)])     # a negative pivot is no width: the corridor
 def test_band_lateral_bound(pivot, lateral, inside):
     rig = site_rig(**IR_ROW)
     site_step(rig)
