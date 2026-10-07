@@ -570,6 +570,12 @@ roots:
     wave: none
     note: Offline per-robot calibration fit and store CLI (never run on a robot).
     concern: other
+  - path: tools/capture
+    part: tools
+    d427_target: tools/capture
+    wave: none
+    note: Supervised edge-capture drives over the CORE API (D-379 recording, advisory D-424 body check); operator PC only.
+    concern: other
   - path: tools/device_twin
     part: tools
     d427_target: tools/device_twin
