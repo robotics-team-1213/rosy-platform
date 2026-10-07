@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.124
+**Version:** v1.125
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1525,6 +1525,23 @@ API error other than HTTP 401. `up` is a successful gather and carries no
 console tag. The field is display-only. CORE paths, envelope 1.0, and the
 dispatch loop's online/state/goal read are unchanged. An older Fleet omits the field.
 
+Fleet `GET /api/fleet/state` robot rows also carry optional D-509 display fields
+`power_health` and `power_health_age_s`. `power_health` is the existing shared
+`core_common.protocol.power_health.PowerHealthResponse` (the authenticated
+Viewer `GET /api/v1/power/health` readback), or `null` if the robot is offline,
+the read fails, the body violates that schema, or the five-second Fleet cache
+expires before a refresh completes. `power_health_age_s` is the nonnegative
+Fleet monotonic-clock age in seconds, or `null` whenever `power_health` is null.
+The browser adds its own elapsed time after receiving the Fleet response and
+checks CORE `battery.sample_age_s` against `stale_after_s` before showing a
+current percentage, and separately checks `charging_evidence_age_s` against
+the CORE five-second confirmation window before showing confirmed charging.
+`battery_status.charging` is a
+policy latch, not current charging evidence. These fields are display-only:
+Fleet never uses them for motion admission, E-Stop release, or power policy.
+The response type is already a shared schema; no CORE endpoint or envelope
+field changes.
+
 When durable task storage is configured, the operator navigation route creates a
 persistent task before contacting CORE. The browser sends a fresh
 `Idempotency-Key`; repeating the same request with the same authenticated
@@ -2453,6 +2470,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.125 | 2026-10-08 | Additive (D-509): Fleet `GET /api/fleet/state` 선택 로봇 행 필드 `power_health`(기존 공유 `PowerHealthResponse` 또는 null), `power_health_age_s`(초 또는 null). Fleet Operator 토큰으로 CORE Viewer `GET /api/v1/power/health` 읽기, 최대 5초 표시 캐시. 오프라인·실패·스키마 오류·낡음은 확인 불가. CORE 경로·envelope 1.0·안전/명령 판정 불변 |
 | v1.124 | 2026-10-08 | D-513: site map place kind `start` (demo start slot with required `yaw`); activation refuses a start place a trip could not start from (`SITE_MAP_START_INVALID`). Site-map source rows carry `display_rotation_deg` (D-513 7, console display only; Fleet and Vision accept the same optional key in `site-cameras.yaml`). Teach `POST /place` accepts `kind: start`; a new place in `/teach/confirm` does not (it has no robot yaw). Robot API·envelope 1.0 변경 없음 |
 | v1.123 | 2026-10-07 | Additive (D-499): Fleet `GET /api/fleet/state` 로봇 행 선택 필드 `link`(`up`·`unreachable`·`moved`·`tls-refused`·`protocol`). 401이 아닌 로봇 API 오류에는 필드가 없다. 표시 전용. CORE 경로·envelope 1.0·발행 루프의 online/state/goal 판정은 그대로다 |
 | v1.122 | 2026-10-07 | Additive (D-493, fix/d493-attention-stale-state): `GET /api/fleet/state` 로봇 행에 `state_age_s`(상태가 관찰된 뒤 지난 초. hub 나이와 SharedGather 캐시 나이 포함, 오프라인이면 `null`)와 최상위 `gathered_at`(마지막 실제 수집의 서버 UTC epoch 초, 표시용)을 더함. 콘솔 예외 큐는 `state_age_s` + 받은 뒤 지난 시간이 5초를 넘으면 "상태 오래됨" warn 을 붙인다. 기존 필드는 그대로다. |

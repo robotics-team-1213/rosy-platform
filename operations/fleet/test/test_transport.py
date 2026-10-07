@@ -34,6 +34,19 @@ def test_it_satisfies_the_protocol():
     assert isinstance(_client(lambda r: httpx.Response(200, json={})), RobotClient)
 
 
+def test_power_health_uses_authenticated_read_only_route():
+    seen = {}
+
+    def handler(request):
+        seen.update(method=request.method, path=request.url.path,
+                    auth=request.headers.get("authorization"))
+        return httpx.Response(200, json={"battery": {"charging_state": "unconfirmed"}})
+
+    assert run(_client(handler).power_health())["battery"]["charging_state"] == "unconfirmed"
+    assert seen == {"method": "GET", "path": "/api/v1/power/health",
+                    "auth": "Bearer op-token"}
+
+
 def test_follow_posts_the_params_with_a_bearer_token():
     seen = {}
 

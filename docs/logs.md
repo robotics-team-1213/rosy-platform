@@ -6891,3 +6891,15 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: lint가 받는 항목 사이 삽입은 착지 도구도 받아야 한다. 두 규칙이 다르면 도구가 정상 이력을 막는다.
+
+## 2026-10-08 · uncommitted · D-509 관제 전원 근거
+
+- 변경: D-509를 CORE/Fleet/Vision/Host API 실체에 맞게 수정하고 실행 계획과 Fleet 선택 전원 근거 필드를 계약에 기록했다. 송신 enabled·D-350 Phase 1은 미증명으로 명시했다.
+- 증거: Fleet 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. DEVICE/FIELD 검증 전.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · docs(api): D-509 and D-513 contract union v1.125
+
+- 변경: Merged D-513 v1.124 and assigned the additive D-509 Fleet power health row to v1.125.
+- 증거: Version header, history, CORE docstring, and pinned contract tests aligned; merged tree verification pending.
+- gate 변화: None.
