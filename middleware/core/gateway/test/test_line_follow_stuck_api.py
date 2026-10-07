@@ -181,18 +181,15 @@ def test_packaged_default_backs_off_on_a_body_geometry_robot():
     assert back.linear < 0 and m.status().reason == "stuck_back_off"
 
 
-def test_d476_bridge_is_on_by_robot_default_and_yaml_matches_the_model():
+def test_d476_bridge_is_off_by_default_and_yaml_matches_the_model():
     from core_features.line_follow.model import LineFollowConfig
     merged = _deep_merge(_yaml(DEFAULT), _yaml(PINKY))
     config = _line_follow_config(merged["line_follow"])
     defaults = LineFollowConfig()
     keys = [k for k in _yaml(DEFAULT)["line_follow"] if k.startswith("bridge_")]
-    assert len(keys) == 7
-    assert all(getattr(config, k) == getattr(defaults, k) for k in keys if k != "bridge_enabled")
-    # D-495: robots default on; the config-less model default stays off.
-    assert config.bridge_enabled is True and defaults.bridge_enabled is False
-    rolled_back = _deep_merge(merged, {"line_follow": {"bridge_enabled": False}})
-    assert _line_follow_config(rolled_back["line_follow"]).bridge_enabled is False
+    assert len(keys) == 12  # D-476 rev 1: bridge_arm_* (4) and bridge_site_no_dropoffs
+    assert all(getattr(config, k) == getattr(defaults, k) for k in keys)
+    assert config.bridge_enabled is False
     with pytest.raises(ValueError, match="bridge_enabled must be true or false"):
         _line_follow_config({"bridge_enabled": "true"})
 

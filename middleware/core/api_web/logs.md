@@ -598,6 +598,26 @@
 - gate 변화: SOURCE/LOCAL만.
 - 결정: D-483
 
+## 2026-10-07 · uncommitted · feat(api): D-494 1 capabilities가 trip 능력 필드를 채운다
+
+- 변경: `GET /api/v1/system/capabilities`의 `base_velocity`에 `robot_kind`(`robot.model`, 없으면 `DEFAULT_ROBOT`)·`drive_modes`(line-follow 서비스가 있으면 `lane`, 보류 뒤 `navigation.goal_navigation`이 참이면 `free`)·`trip_max_linear`(safety `max_linear`·`fleet_linear`·line-follow `max_linear` 중 최솟값)를 싣는다. FastAPI 설명 문구를 계약 v1.112로 올렸다.
+- 증거: gateway `test_capabilities_controls.py` 새 시험 2개, api_web 스위트 통과.
+- gate 변화: 없음. SOURCE 호스트 시험만. 서명 릴리스 전에는 로봇에 닿지 않는다.
+- 결정: D-494 (Proposed)
+
+## 2026-10-07 · uncommitted · feat(api): D-495 capabilities의 junction_turn
+
+- 변경: `base_velocity.junction_turn`은 line-follow 매니저의 `supports_junction_turn` 훅이 `True`일 때만 true다. 회전 동작은 `feat/d491-core-junction-action` 가지에 있어, 이 가지는 훅이 없으면 false를 낸다(가지 사이 의존 없음).
+- 증거: gateway `test_capabilities_controls.py` 10 PASS(훅 없음 false, 훅 true, line-follow 없음 false).
+- gate 변화: 없음.
+- 결정: D-495 (Proposed)
+
+## 2026-10-07 · uncommitted · fix(api): D-494 검토 — 잘못된 robot.model이 capabilities를 500으로 만들지 않는다
+
+- 변경: `robot.model`이 로봇 패키지 이름(`ROBOT_NAME_PATTERN`, 64자 이하)이 아니면 `robot_kind`를 빼고 한 번만 경고한다. 전에는 "Pinky" 같은 값이 `GET /system/capabilities` 500이었다.
+- 증거: `test_capabilities_controls.py` "Pinky"·"pinky-pro"·65자·숫자 4건 PASS.
+- gate 변화: 없음.
+- 결정: D-494 (Proposed)
 ## 2026-10-07 · uncommitted · feat(api): D-494 POST /api/v1/line-follow/junction
 - 변경: operator + 보정 lease. CAMERA_LINE·IR_LINE이 아니면 409 `LINE_FOLLOW_NOT_ACTIVE`. 응답 `{accepted, junction_seq, state}`. API Ref v1.112, `app.py` 버전 문구 v1.112
 - 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)

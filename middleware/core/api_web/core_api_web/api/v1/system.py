@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import logging
 from dataclasses import asdict, is_dataclass
 from enum import Enum
 from typing import Any
@@ -30,17 +31,20 @@ from core_api_web.api.deps import (
     token_digest,
 )
 from core_api_web.api.errors import ApiError
-from core_common.config import ConfigError, patch_local_config
+from core_common.config import ROBOT_NAME_PATTERN, ConfigError, patch_local_config
 from core_common.domain.capabilities import (
     lifecycle_from,
     runtime_truth,
     withhold_hardware_flags,
 )
 from core_common.identity import validate_robot_id, validate_robot_name
+from core_common.profile import DEFAULT_ROBOT
 from core_common.protocol.controls import pinky_controls
 
 
 system_router = APIRouter(prefix="/api/v1/system", tags=["system"])
+_log = logging.getLogger(__name__)
+_bad_robot_kinds: set[str] = set()  # each unusable robot.model is logged once
 
 
 @system_router.get("/info")
@@ -211,11 +215,38 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # idle signal says a line can be followed now (observations arrive only after
     # the mode is on), so readiness stays with PUT /line-follow/mode and its status.
     # It drives the same base, so it is never announced without the drive control.
+    # D-494 1 (v1.112 additive): robot package, trip drive modes and trip speed for Fleet
+    # planning. `free` follows the live goal_navigation flag after withholding above.
+    # `junction_turn` (D-495): the line-follow manager declares `supports_junction_turn`;
+    # a manager without that hook cannot do the bounded junction turn.
+    limits = svc.safety.limits
+    trip_max_linear = min(limits.max_linear, limits.fleet_linear)
+    if svc.line_follow is not None:
+        trip_max_linear = min(trip_max_linear, svc.line_follow.config.max_linear)
+    drive_modes = tuple(mode for mode, on in (
+        ("lane", svc.line_follow is not None),
+        ("free", (data.get("navigation") or {}).get("goal_navigation") is True)) if on)
     data["controls"] = pinky_controls(provides=_drive_provides(svc, data),
-                                      max_linear=svc.safety.limits.manual_linear,
-                                      max_angular=svc.safety.limits.manual_angular,
-                                      autonomy=("line",) if svc.line_follow is not None else ())
+                                      max_linear=limits.manual_linear,
+                                      max_angular=limits.manual_angular,
+                                      autonomy=("line",) if svc.line_follow is not None else (),
+                                      robot_kind=_robot_kind(svc),
+                                      drive_modes=drive_modes,
+                                      trip_max_linear=max(0.0, trip_max_linear),
+                                      junction_turn=getattr(svc.line_follow, "supports_junction_turn",
+                                                            False) is True)
     return data
+
+
+def _robot_kind(svc: CoreServicesLike):
+    """D-494 1: robot.model as a wire robot_kind, or None (omitted) when it is not a package name."""
+    kind = str((svc.config.get("robot") or {}).get("model") or DEFAULT_ROBOT)
+    if len(kind) <= 64 and ROBOT_NAME_PATTERN.fullmatch(kind):
+        return kind
+    if kind not in _bad_robot_kinds:
+        _bad_robot_kinds.add(kind)
+        _log.warning("robot.model %r is not a robot package name; robot_kind omitted", kind[:80])
+    return None
 
 
 def _drive_provides(svc: CoreServicesLike, data: dict) -> set[str]:

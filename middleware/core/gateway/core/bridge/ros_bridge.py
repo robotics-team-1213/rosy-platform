@@ -331,6 +331,7 @@ class RosBridge:
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
+        self._svc.state.set_odom_pose(sample["x"], sample["y"], sample["yaw"])
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
         self._svc.loc_mission.observe_odom(sample["x"], sample["y"], sample["yaw"])

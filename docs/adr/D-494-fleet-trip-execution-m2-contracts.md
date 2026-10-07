@@ -1,4 +1,6 @@
-## D-491 관제 trip 실행(D-488 M2)의 계약 — 로봇 능력 필드, 시각 있는 odom 자세, Rosy Cam 주 지도 자세, 교차로 동작 API, 서버 trip 루프, 주행 가르치기
+## D-494 관제 trip 실행(D-488 M2)의 계약 — 로봇 능력 필드, 시각 있는 odom 자세, Rosy Cam 주 지도 자세, 교차로 동작 API, 서버 trip 루프, 주행 가르치기
+
+**번호:** 처음 D-491로 적었으나 main에 다른 D-491(IR 가드 횡단보도)이 먼저 착지해 2026-10-07 착지 전에 D-494로 옮겼다.
 
 **Status:** Proposed (2026-10-07, 사용자 지시 "M2 처리해"). [D-488](D-488-fleet-site-map-address-routes.md) 7항 M2의 구현 계약이다. 실차 이동·G4/G5·DEVICE 수용을 뜻하지 않는다.
 
@@ -84,6 +86,32 @@ CORE 변경 두 가지(1·2항, 4항)는 서명 릴리스가 있어야 로봇에
 
 ### 구현 부록 (2026-10-07)
 
+1·2항 구현(`feat/d491-robot-trip-contracts`)과 독립 검토에서 정한 것이다. 결정 본문은 바꾸지 않는다.
+
+1. **`odom_pose.stamp`는 CORE가 odom 메시지를 받은 시각이다.** ROS 헤더 시각이 아니다(sim에서는 sim time이라 UTC가 아니다). 값은 UTC epoch 초(실수)로 sighting `captured_at`과 같은 형식이다. 유한하지 않은 odom 표본은 버리고 이전 값을 둔다.
+2. **`robot_kind`는 `robot.model`이 로봇 패키지 이름(`[a-z][a-z0-9_]*`, 64자 이하)일 때만 싣는다.** 아니면 빼고 로그를 한 번 남긴다. 그런 로봇은 능력 미상(`TRIP_ROBOT_CAPS_UNKNOWN`)으로 읽힌다.
+3. **`trip_max_linear`**는 safety `max_linear`·`fleet_linear`와 line-follow `max_linear` 중 최솟값이다. Fleet은 0 m/s를 "갈 수 있는 간선 없음"(`TRIP_NO_ROUTE`)으로 계획한다. Fleet은 모르는 `drive_modes` 값을 버리고 아는 값만 쓴다.
+4. **`junction_turn`**(D-495)은 line-follow 매니저의 `supports_junction_turn` 훅이 참일 때만 true다.
+
+### 구현 부록 (2026-10-07) — 3항 map pose
+
+브랜치 `feat/d491-fleet-map-pose`. 3항을 `operations/fleet/fleet/localization/map_pose.py`(순수, 표준 라이브러리만)와 `server/map_pose_service.py`(`arbitrated_pose`, `GET /api/fleet/robots/{robot_id}/map-pose`, viewer 이상)로 구현했다. 독립 검토 두 차례(REQUEST CHANGES) 반영 뒤의 규칙이다. 설정은 사이트 YAML `fleet.map_pose`다.
+
+1. **시계와 sighting 신선도.** `odom_pose.stamp`는 UTC epoch 초(float)이고 `captured_at`과 같은 형식이다. CORE가 odom을 받을 때 벽시계로 찍는다(ISO 문자열도 읽는다). 로봇 시계와 사이트 시계의 차이는 0.1 s 이하여야 한다(chrony). 짝짓기는 `captured_at` 시각의 odom으로 하므로 전달 지연은 자세 정확도를 바꾸지 않는다. 그래서 lease는 1 s(`sighting_lease_s`)로 두고, D-488 3항·D-257 5항의 300 ms보다 길다. 이 값은 sighting 섭취 lease보다 클 수 없고, 크면 기동을 거절한다. odom `stamp`가 `now`보다 `max_odom_future_s`(0.5 s) 넘게 앞서면 버리고, 버린 수와 마지막 이유(`future`, `out_of_order`, `malformed`)를 출력 `odom_refused`·`odom_refused_reason`으로 보인다.
+2. **품질 통과.** `min_quality` 기본 0.5다. `quality`가 없는 sighting은 통과한다.
+3. **지도 프레임.** sighting의 `map_id`가 활성 현장 지도의 `map_id`와 같을 때만 받는다. 활성 지도가 없으면 모두 받는다. 걸러낸 수는 출력 `sightings_filtered_map_id`로 보인다. 활성 지도 `map_id`를 어떤 sighting 출처도 보고하지 않으면 기동 때와 그 지도가 활성화된 뒤 처음 읽을 때 경고 로그를 한 번 남긴다. 그래서 sighting 출처 설정의 `map_id`가 현장 지도 `map_id`와 같아야 한다. 앵커는 자기 `map_id`를 갖는다. 다른 `map_id`의 sighting이 오면 처음부터 다시 앵커하고, 앵커의 `map_id`가 활성 지도와 다르면 `DEGRADED`다.
+4. **짝짓기.** odom은 보통 카메라보다 늦게 도착한다(hub 스냅숏은 최대 약 1 s 낡음). 그래서 sighting은 `captured_at` 순서의 대기열(최대 32건, 넘치면 가장 오래된 것부터 버림)에서 그 시각 이후의 odom 표본이 올 때까지 기다린다. 새 sighting이 기다리는 sighting을 밀어내지 않는다. 표본이 오면 순서대로 처리한다. 감싸는 두 표본의 간격이 `max_interp_gap_s`(1.2 s) 안이면 보간한다(yaw는 ±π를 넘어 보간). 그렇지 않으면 0.25 s 안의 가장 가까운 표본을 쓰고, 없으면 버린다. `max_odom_age_s`(3 s)보다 오래 기다린 sighting은 버린다. odom이 재설정되면(7항) 그 전에 찍힌 대기 sighting도 버린다.
+5. **첫 앵커와 회복.** 첫 sighting은 `DEGRADED`로 앵커하고, 연속 2회 일치해야 `LOCALIZED`다. 회복도 같다. trip 시작에는 sighting 3건이 필요하다. 점프한 sighting은 0회로 세고 다시 앵커한다. 아래 6항의 한도를 넘긴 뒤 일치한 sighting은 1회로 센다. 횟수는 2에서 멈춘다.
+6. **DEGRADED 한도.** 다리 길이 `dead_reckon_m` > 1.5 m, 앵커 뒤 누적 회전 > `max_bridge_turn_deg`(270°, sighting 없이 계획된 U턴 한 번은 견딘다), 앵커 나이 `anchor_age_s` > `max_anchor_age_s`(10 s), 점프(0.15 m 또는 20°, 방향은 ±π를 감아서 잰다) 중 하나면 `DEGRADED`다.
+7. **odom 끊김과 재설정.** 다음 중 하나면 앵커를 버린다. 앞 표본과의 간격이 `max_odom_age_s`(3 s)를 넘을 때, odom이 낡아 `UNKNOWN`이 된 뒤 다시 올 때, 한 걸음이 `max_speed_mps`(1.0 m/s) × 간격 + 0.05 m보다 길 때, 방향 변화가 `max_turn_rate_dps`(360°/s) × 간격 + 0.1 rad보다 클 때다. 뒤의 둘은 CORE 재시작으로 odom이 0으로 돌아간 경우다. 다음 sighting으로 다시 앵커할 때까지 `UNKNOWN`이다.
+8. **odom 주기.** 길이와 회전은 받은 표본 사이의 직선 길이와 |Δyaw|를 더한 값이다. 그래서 실제보다 작게 잰 하한이고, odom을 드물게 읽으면 더 작아진다. trip 루프(5항)는 실행 중인 로봇의 odom을 `refresh(robot_id, force_rest=True)`로 2 Hz 이상 읽는다. 이 호출은 hub 캐시를 건너뛰고 REST 상태를 읽는다. 같은 로봇의 동시 읽기는 하나로 합친다.
+9. **hub 경로의 odom.** `StateSnapshot`에 `odom_pose`가 없는 동안 hub heartbeat는 그 필드를 버린다. 1·2항 브랜치(`feat/d491-robot-trip-contracts`)가 필드를 넣으면 hub 경로로도 들어온다. REST 스냅숏은 그대로 전달된다.
+10. **API Ref 버전.** 작성 시점에 v1.112를 썼다. 7항 착지 순서에 따라 착지 때 다음 빈 번호로 다시 매긴다.
+11. **읽기 엔드포인트.** 기본 `refresh`로 로봇 상태를 새로 읽는다(신선한 hub 스냅숏, 아니면 REST). 같은 로봇의 동시 읽기는 한 번으로 합치고, 마지막 odom이 0.2 s보다 새로우면 읽지 않는다. 읽기 실패는 기다리던 쪽이 취소돼도 회수해 기록한다. 로봇에 닿지 못하면(HTTP 오류 포함) 마지막 odom으로 답하고 3 s 뒤 `UNKNOWN`이 된다. `UNKNOWN`이면 `x`·`y`·`yaw`는 null이다. 모르는 로봇, 또는 읽는 사이 로스터에서 빠진 로봇은 404 `UNKNOWN_ROBOT`이다. 로스터에서 빠진 로봇의 상태는 버린다.
+
+`trusted_map_pose`·`/route`·교통정리·D-395는 바꾸지 않았다. D-457 tracking은 입력이 아니다. 콘솔이 읽은 스냅숏을 map pose에 넘기다 실패해도 스냅숏 수집은 계속되고, 로그는 로봇마다 한 번 남긴다.
+
+### 구현 부록 (2026-10-07) — 4항 교차로 동작
 4항(CORE 교차로 동작 API)을 `feat/d491-core-junction-action`에서 구현하기 전에 오늘의 인식이 무엇을 주는지 조사했다. 결정 본문은 바꾸지 않는다.
 
 **인식 조사 결과**

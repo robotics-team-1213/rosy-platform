@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import threading
 from typing import Callable, Optional
 
@@ -16,6 +17,7 @@ from core_common.protocol.schemas import (
     HealthState,
     LineFollowStatus,
     NavigationState,
+    OdomPose,
     Pose,
     PowerStatus,
     RobotActivity,
@@ -72,6 +74,8 @@ class StateManager:
         self._mode: RobotMode = RobotMode.IDLE
         self._navigation: NavigationState = NavigationState.IDLE
         self._pose = Pose()
+        self._odom_pose: Optional[OdomPose] = None
+        self._odom_rejected_logged = False
         self._velocity = Velocity()
         self._battery = Battery()
         self._battery_status = BatteryStatus()
@@ -132,6 +136,21 @@ class StateManager:
         with self._lock:
             self._pose = Pose(x=x, y=y, yaw=yaw)
             self._mark("pose")
+
+    def set_odom_pose(self, x: float, y: float, yaw: float) -> None:
+        """D-494 2: odom-frame pose, stamped with the wall clock at receipt.
+
+        A non-finite sample is dropped and the previous pose kept (logged once),
+        so one bad odom message never fails the state snapshot.
+        """
+        with self._lock:
+            stamp = self._clock()
+            if not all(math.isfinite(v) for v in (x, y, yaw, stamp)):
+                if not self._odom_rejected_logged:
+                    self._odom_rejected_logged = True
+                    log.warning("non-finite odom pose dropped (x=%r y=%r yaw=%r)", x, y, yaw)
+                return
+            self._odom_pose = OdomPose(x=x, y=y, yaw=yaw, stamp=stamp)
 
     def set_velocity(self, linear: float, angular: float) -> None:
         with self._lock:
@@ -284,4 +303,5 @@ class StateManager:
                 activity=activity,
                 safety_policy=safety_policy,
                 localization=localization,
+                odom_pose=self._odom_pose,
             )

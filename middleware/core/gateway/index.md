@@ -77,4 +77,4 @@
 - 2026-10-07 · uncommitted · feat(line_follow): D-495 recovery_local_enabled 기본 켜짐과 keep 증거
 - 2026-10-07 · uncommitted · test(line_follow): D-495 bridge 로봇 기본값 켜짐 고정
 - 2026-10-07 · uncommitted · feat(bridge): keep_debug 교차로 사유를 line-follow 정지 입력으로
-- 2026-10-06 · uncommitted · feat(sim): simulation_sensors 플래그와 D-468 정책 시계
+- 2026-10-07 · uncommitted · feat(bridge): D-494 2 odom 콜백이 odom_pose를 채운다

@@ -146,8 +146,8 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # robot default, gated by its promotion rule, not a per-robot self-mask step). Rear
   # clearance is measured from the URDF body rear, so the
   # robot package must set body_lidar_x_m / body_rear_x_m (unset = never backs off).
-  # On by robot default since D-495 (2026-10-07): it also gates D-468 local lane return and the
-  # D-476 bridge. Same promotion rule as D-495 (model-PC Gazebo map_v2_fleet_real lap + a real
+  # On by robot default since D-495 (2026-10-07): it also gates D-468 local lane return (the
+  # D-476 rev 1 bridge no longer needs it). Same promotion rule as D-495 (model-PC Gazebo map_v2_fleet_real lap + a real
   # lane lap before robots get it). Roll back per robot with line_follow.recovery_local_enabled:
   # false in ~/.rosy/rosy.yaml or ROSY_CONFIG (no code change).
   recovery_local_enabled: true
@@ -172,17 +172,29 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   recovery_console_grace_s: 3.0    # a FleetAgent reconnect this short still counts as linked
   recovery_restuck_m: 0.30
   recovery_rear_lateral_margin_m: 0.02   # rear band = body_half_width_m (URDF) + this
-  # D-476 expected-road bridge. On by robot default since D-495 (2026-10-07), which amends D-476's
-  # "off until replay -> sim -> device": a payload with it on is promoted to robots only after the
-  # model-PC Gazebo map_v2_fleet_real lap and a real lane lap. Roll back per robot with
-  # line_follow.bridge_enabled: false in ~/.rosy/rosy.yaml or ROSY_CONFIG (no code change).
-  # Runs inside D-468, so it also needs recovery_local_enabled (on above since D-495).
-  # A short camera lane loss right after contained following drives the D-468 checkpoint lane's
-  # straight extension (needs recovery_local_enabled, path-mode URDF body). Measured odom travel
-  # x bridge_distance_scale: full speed (min cruise, manual limit) below bridge_coast_m, x
-  # bridge_slow_scale below bridge_slow_m, then stop and hand over to D-468. Always done by
-  # lost_after_s - bridge_time_margin_s; the LOST clock is never reset or extended.
-  bridge_enabled: true
+  # D-476 expected-road bridge. D-495 decision 2 wants it on by robot default, but D-476 rev 1
+  # (main 2026-10-07) makes an enabled bridge need ir_guard_enabled (off above until IR
+  # calibration) and control.sensor_adapter enforce or bridge_site_no_dropoffs; CORE refuses
+  # to start otherwise. So the robot default stays off until those are decided per site
+  # (D-495 implementation note, merge 2026-10-07).
+  # A short camera lane loss right after confident following (rev 2026-10-07: no D-468
+  # containment, works with recovery_local_enabled false) drives the followed lane's straight
+  # extension in odom (path-mode URDF body). Swept by D-422 along the bridge arc; the D-468
+  # worker floor proof also gates it whenever control.sensor_adapter is enforce. Measured odom
+  # travel x bridge_distance_scale: full speed (min cruise, manual limit) below bridge_coast_m,
+  # x bridge_slow_scale below bridge_slow_m, then stop: D-468 takes over when enabled, else
+  # today's HOLD/LOST. Always done by lost_after_s - bridge_time_margin_s; the LOST clock is
+  # never reset or extended.
+  bridge_enabled: false
+  bridge_arm_confidence: 0.5       # arm only on frames this confident (>= min_confidence)
+  bridge_arm_frames: 3             # ... this many in a row, the tick TRACKING
+  bridge_arm_max_error: 0.1        # ... and straight: |error| (follower slows < 7 % there)
+  bridge_arm_max_angular: 0.08     # ... and |angular| (steering_gain x max_error); all four are
+                                   # plausibility gates until D-476 replay justifies them
+  # Site acceptance (D-476 rev 1): nothing in CORE sees a drop-off ahead. bridge_enabled also
+  # needs ir_guard_enabled, and either control.sensor_adapter enforce (live floor proof) or this
+  # true for a site with no drop-off or hole within bridge reach. CORE refuses to start otherwise.
+  bridge_site_no_dropoffs: false
   bridge_lookahead_m: 0.10         # pure-pursuit point ahead on the extended centre line
   bridge_coast_m: 0.10             # D-384 COAST
   bridge_slow_m: 0.25              # D-384 SLOW

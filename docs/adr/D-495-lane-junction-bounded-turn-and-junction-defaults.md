@@ -153,3 +153,18 @@
 
 - S5 보강: `advancing` 중 중단 → CAMERA_LINE 재선택 → 같은 지시 재전송이 409 `JUNCTION_ALREADY_DONE`이어야 한다. 다른 방향 지시는 `aborted`(`odom`)이고 로봇은 돌지 않아야 한다.
 - D3 보강: 실제 odom에서 회전이 시간 초과(`timeout`·`not_still`) 없이 머무름까지 끝나는지 기록한다. 끝나지 않으면 `junction_still_linear`·`junction_still_angular`를 실측 잡음 위로 맞춘다.
+
+### main 병합 메모 (2026-10-07, D-476 rev 1과의 관계)
+
+main에 D-476 rev 1이 먼저 들어왔다(`1e8c44aa2`, `a67879335`). 그래서 이 ADR 결정 2의 bridge 기본값을 이렇게 고친다.
+
+1. **`bridge_enabled`의 로봇 기본값은 꺼짐으로 둔다.** rev 1에서 켜진 bridge는 두 가지가 있어야 한다. 하나는 `ir_guard_enabled`다(IR 교정 전에는 꺼짐). 다른 하나는 `control.sensor_adapter` enforce이거나 `bridge_site_no_dropoffs: true`(현장 수용)다. 둘이 없으면 CORE가 시작을 거부한다(`check_bridge_floor_basis`, `LineFollowConfig` 검증). 이 둘을 기본값으로 켜는 것은 현장마다 정할 안전 결정이다. 그래서 병합에서 켜지 않았다. 켜려면 로봇이나 현장 설정 겹에서 세 값을 함께 켠다. 무엇을 켤지는 사용자 결정이다.
+2. **`recovery_local_enabled`는 그대로 켜짐이다.** rev 1의 bridge는 이제 D-468 containment 없이 확신 있는 추종에서 무장한다. 그래서 이 값은 bridge의 전제가 아니다. 이 값은 D-468 로컬 복귀와 D-407 로컬 후진만 켠다.
+3. **교차로와 bridge의 관계는 바뀌지 않는다.**
+   - 지시 없이 교차로가 감지되면 게이트가 bridge 결정까지 0으로 만든다(`junction_waiting`).
+   - `straight` 지시는 route hint `straight`로 bridge를 허용한다.
+   - `left`·`right`는 hint가 bridge를 막는다.
+   - 회전 동작은 시작할 때 무장된 bridge(`_bridge`)를 지운다. 동작 뒤에는 rev 1 규칙대로 확신 있는 직선 추종 `bridge_arm_frames`장으로 다시 무장한다.
+4. **수용 점검표.**
+   - S1의 "bridge 켜짐"은 위 전제를 갖춘 SIM 설정에서만 뜻이 있다. 모델 PC SIM은 `bridge_site_no_dropoffs: true`와 `ir_guard_enabled: true`(sim IR)를 겹으로 켜고 돈다.
+   - S4는 bridge 없이 D-468·D-407 로컬 동작만으로도 따로 돈다.

@@ -32,69 +32,31 @@
         <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false" title="밝게" data-action-icon="theme-light"><span class="sr-only">밝게</span></ui-button>
         <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템" data-action-icon="theme-system"><span class="sr-only">시스템</span></ui-button>
       </div>
-      <a class="topbar-cell-link" href="/console/cell">Cell 작업</a>
+      <!-- D-493 — 다른 문서로 가는 길은 머리의 이 링크 하나씩이다. 본문에는 "…에서 합니다" 문장을 두지 않는다. -->
+      <nav class="topbar-links" aria-label="다른 관제 문서">
+        <a class="topbar-link" href="/console/install">설치·보정</a>
+        <a class="topbar-link" href="/console/site-map">현장 지도 편집</a>
+        <a class="topbar-link" href="/console/cell">Cell 작업</a>
+      </nav>
     </div>
     <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
     <ui-tag id="development-badge" status="warn" hidden title="같은 망 PC 누구나 1시간 운용자 세션을 받는다 (D-473)">개발 연결 모드</ui-tag>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
-    <a class="topbar-cell-link" href="/console/cell">Cell 작업</a>
     <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
   <ui-status id="estop-feedback" hidden></ui-status>
 
-  <nav id="console-workflow" class="console-workflow" aria-label="관제 준비 순서">
-    <ol>
-      <li><a id="workflow-connect" href="#console-token"><span>1</span>관제 접속</a></li>
-      <li><a href="/console/install"><span>2</span>카메라·지도 보정</a></li>
-      <li><a href="#map-heading"><span>3</span>X/Y 좌표 확인</a></li>
-      <li><a id="workflow-start" href="#start-point-tools"><span>4</span>시작점 설정</a></li>
-    </ol>
-  </nav>
   <section id="connection-guide" class="connection-guide" aria-labelledby="connection-guide-title" hidden>
     <div><h2 id="connection-guide-title">관제 접속 필요</h2>
       <p id="connection-guide-detail">관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.</p></div>
     <a id="connection-guide-action" href="#console-token">관제 접속</a>
   </section>
 
-  <section id="dispatch-control" class="dispatch-control" role="status"
-           aria-live="polite" aria-labelledby="dispatch-control-title">
-    <div>
-      <strong id="dispatch-control-title">발행 상태 확인 중</strong>
-      <small id="dispatch-control-detail">대기 작업과 정지 세대를 읽고 있습니다.</small>
-      <p id="cancel-all-result" hidden></p>
-      <a id="cancel-all-details" href="#log" hidden>로봇별 결과 보기</a>
-    </div>
-    <ui-button id="dispatch-rearm" kind="primary" type="button" hidden>
-      대기 작업 재허가
-    </ui-button>
-    <!-- D-421 — 래치 없는 전체 주행 취소. 다시 움직이려면 새 목표만 보내면 된다. -->
-    <ui-button id="cancel-all" kind="primary" type="button">전체 주행 취소</ui-button>
-  </section>
 
   <main id="fleet-main" tabindex="-1">
     <h1 class="sr-only">Rosy Fleet — 사이트 관제</h1>
-    <!-- ADR-1000: Warning / Critical State Queues (MON-002) -->
     <div class="console-primary">
-    <section class="panel queues-panel" aria-labelledby="queues-heading">
-      <h2 id="queues-heading">주의 및 개입 요망</h2>
-      <div class="queues-container">
-        <div class="queue warning-queue">
-          <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
-          <ul id="warning-list" class="issue-list"></ul>
-        </div>
-        <div class="queue critical-queue">
-          <ui-triage id="critical-head" status="crit"><b>최우선 개입 요망</b><small></small></ui-triage>
-          <ul id="critical-list" class="issue-list"></ul>
-        </div>
-      </div>
-      <!-- D-407 판단 요청: 차선 추종이 막힌 로봇의 질문과 다섯 답. CORE가 판단하고 거부한다. -->
-      <section id="stuck-panel" class="stuck-panel" aria-labelledby="stuck-heading" hidden>
-        <h3 id="stuck-heading">판단 요청 <small id="stuck-count"></small></h3>
-        <p class="hint">차선 추종이 막힌 로봇이 다음 동작을 묻습니다. 답이 없으면 로봇은 정해진 시간 뒤 짧게 물러나 다시 보거나(로컬 복구가 켜진 로봇), 멈춘 채 답을 기다립니다.</p>
-        <ul id="stuck-list" class="stuck-list" aria-labelledby="stuck-heading"></ul>
-      </section>
-    </section>
 
     <section class="panel" aria-labelledby="map-heading">
       <div class="map-head">
@@ -114,6 +76,8 @@
           <strong id="map-empty-title">지도 대기</strong>
           <p id="map-empty-detail">Fleet에서 현장 지도를 확인하고 있습니다.</p>
         </div>
+        <!-- D-493 — 위에서 내려다본 천장 카메라. 지도가 없거나 "크게 보기"일 때 지도 칸을 채운다. 원본은 한 번에 한 곳에만 보인다. -->
+        <img id="map-birdseye" class="map-birdseye" alt="천장 카메라 최신 영상 — 위에서 본 현장" hidden>
       </div>
       <!-- 색은 클래스로만 준다. CSP 가 `style-src 'self'` 라 style 속성은 적용되지 않는다. -->
       <div class="legend" id="map-legend" hidden>
@@ -156,11 +120,66 @@
         <p class="hint" id="start-point-state" role="status">시작점 상태 확인 중</p>
       </section>
       </details>
-      <section class="vision-preview" aria-labelledby="vision-heading">
+      <details class="note">
+        <summary>관제 범위 안내</summary>
+        <p>이 화면은 Rosy Fleet 사이트 관제입니다. 위에서 내려다본 천장 카메라와 지도로 여러 로봇을 봅니다. 로봇 한 대의 전방 카메라·수동 조작·비상정지는 그 로봇의 Rosy Robot 화면에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>
+      </details>
+    </section>
+    </div>
+    <div class="console-secondary">
+      <!-- ADR-1000: Warning / Critical State Queues (MON-002). D-493 — 오른쪽 열 맨 위. -->
+      <section class="panel queues-panel" aria-labelledby="queues-heading">
+        <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>
+        <div class="queues-container">
+          <div class="queue warning-queue">
+            <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
+            <ul id="warning-list" class="issue-list"></ul>
+          </div>
+          <div class="queue critical-queue">
+            <ui-triage id="critical-head" status="crit"><b>최우선 개입 요망</b><small></small></ui-triage>
+            <ul id="critical-list" class="issue-list"></ul>
+          </div>
+        </div>
+        <!-- D-407 판단 요청: 차선 추종이 막힌 로봇의 질문과 다섯 답. CORE가 판단하고 거부한다. -->
+        <section id="stuck-panel" class="stuck-panel" aria-labelledby="stuck-heading" hidden>
+          <h3 id="stuck-heading">판단 요청 <small id="stuck-count"></small></h3>
+          <p class="hint">차선 추종이 막힌 로봇이 다음 동작을 묻습니다. 답이 없으면 로봇은 정해진 시간 뒤 짧게 물러나 다시 보거나(로컬 복구가 켜진 로봇), 멈춘 채 답을 기다립니다.</p>
+          <ul id="stuck-list" class="stuck-list" aria-labelledby="stuck-heading"></ul>
+        </section>
+      </section>
+      <section class="panel" aria-labelledby="roster-heading">
+        <div class="roster-block">
+          <h2 id="roster-heading">등록 로봇</h2>
+          <ui-button id="roster-toggle" kind="quiet" type="button" aria-expanded="false" aria-controls="roster">전체 로봇 보기</ui-button>
+          <!-- D-493 — 발행 상태와 전체 주행 취소는 모든 로봇에 대한 일이라 로봇 목록 머리에 선다. -->
+          <section id="dispatch-control" class="dispatch-control" role="status"
+                   aria-live="polite" aria-labelledby="dispatch-control-title">
+            <div>
+              <strong id="dispatch-control-title">발행 상태 확인 중</strong>
+              <small id="dispatch-control-detail">대기 작업과 정지 세대를 읽고 있습니다.</small>
+              <p id="cancel-all-result" hidden></p>
+              <a id="cancel-all-details" href="#log" hidden>로봇별 결과 보기</a>
+            </div>
+            <ui-button id="dispatch-rearm" kind="primary" type="button" hidden>
+              대기 작업 재허가
+            </ui-button>
+            <!-- D-421 — 래치 없는 전체 주행 취소. 다시 움직이려면 새 목표만 보내면 된다. -->
+            <ui-button id="cancel-all" kind="quiet" type="button">전체 주행 취소</ui-button>
+          </section>
+          <div id="address-drift" class="address-drift" hidden>
+            <p id="address-banner" class="enroll-alarm" role="alert" hidden></p>
+            <ul id="address-movable" class="address-movable" aria-label="새 주소로 옮길 수 있는 로봇"></ul>
+          </div>
+          <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
+        </div>
+      </section>
+      <section class="panel vision-preview" aria-labelledby="vision-heading">
         <div class="map-head">
           <h2 id="vision-heading">관제 카메라</h2>
           <span class="spacer"></span>
           <ui-tag id="vision-state" status="neutral">인증 대기</ui-tag>
+          <!-- D-493 — 썸네일을 지도 칸에 크게 본다. 지도가 없으면 저절로 크게 보인다. -->
+          <ui-button kind="quiet" id="birdseye-toggle" type="button" aria-pressed="false" aria-controls="map-stage" data-action-icon="expand">크게 보기</ui-button>
         </div>
         <div class="vision-controls">
           <label for="vision-source">카메라</label>
@@ -186,33 +205,6 @@
           <p id="vision-message" role="status">관제 사용자 인증 후 카메라를 선택하세요.</p>
         </div>
         <p class="hint" id="vision-meta">화면에 보이는 카메라의 최신 프레임입니다. 실제 시야 범위는 현장 설치에서 확인해야 합니다.</p>
-        <!-- D-360: 경기장 제안은 운용자가 수락해야 조정값이 된다. 관측·주행에는 쓰지 않는다.
-             D-375: 차선 페인트로 카메라→지도 맞춤을 제안받는다. 수락해도 이 브라우저의 표시 초안일 뿐이다.
-             D-406: 두 제안 도구는 설치·보정 묶음 안에 접힌다 — 운용 무대에는 영상만 남는다(D-201 좁힘). -->
-                <!-- D-410 — 보정·맞춤 도구도 설치 화면으로 갔다. -->
-        <p class="hint install-link">경기장 찾기·맵 맞춤·왜곡 보정은 <a href="/console/install">설치·보정 화면</a>에서 합니다.</p>
-        <p class="hint install-link">주소·차로 편집과 경로 미리보기는 <a href="/console/site-map">현장 지도 화면</a>에서 합니다.</p>
-
-      </section>
-
-
-      <details class="note">
-        <summary>관제 범위 안내</summary>
-        <p>이 화면은 Rosy Fleet 사이트 관제입니다. 위에서 내려다본 천장 카메라와 지도로 여러 로봇을 봅니다. 로봇 한 대의 전방 카메라·수동 조작·비상정지는 그 로봇의 Rosy Robot 화면에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>
-      </details>
-    </section>
-    </div>
-    <div class="console-secondary">
-      <section class="panel" aria-labelledby="roster-heading">
-        <div class="roster-block">
-          <h2 id="roster-heading">등록 로봇</h2>
-          <ui-button id="roster-toggle" kind="quiet" type="button" aria-expanded="false" aria-controls="roster">전체 로봇 보기</ui-button>
-          <div id="address-drift" class="address-drift" hidden>
-            <p id="address-banner" class="enroll-alarm" role="alert" hidden></p>
-            <ul id="address-movable" class="address-movable" aria-label="새 주소로 옮길 수 있는 로봇"></ul>
-          </div>
-          <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
-        </div>
       </section>
       <section class="panel ops-block" aria-labelledby="fleet-operations-heading">
         <h2 id="fleet-operations-heading">대형·신호·기록</h2>
@@ -281,14 +273,6 @@
             <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
           </div>
         </details>
-        <section class="discovery device-link" aria-labelledby="device-link-heading">
-          <h3 id="device-link-heading" class="sr-only">기기 연결</h3>
-          <!-- D-409 — 등록·승인은 설치 일이다. 운용 흐름에서는 접힌 서랍으로 간다
-               (알림 문장은 role=alert/aria-live로 여전히 소리 난다). -->
-                    <!-- D-410 — 등록·승인은 설치 화면으로 갔다. 운용 화면은 안내만 남긴다. -->
-          <p class="hint install-link">기기 등록·카메라 연결 승인은 <a href="/console/install">설치·보정 화면</a>에서 합니다.</p>
-
-        </section>
       </section>
     </div>
   </main>
