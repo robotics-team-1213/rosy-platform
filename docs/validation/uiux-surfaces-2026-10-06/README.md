@@ -451,3 +451,7 @@ The follow-up browser harness allows the active preview port in Chromium; port 6
 ## 2026-10-07 현장 mDNS·이미지 재확인
 
 [읽기 전용 현장 기록](../uiux-site-readback-2026-10-07/result.md#2026-10-07-1557-kst-재확인): Fleet·Vision·proxy 이미지 태그는 `5eb726c13`으로 현재 로컬 후보 `899d7a1a5`보다 이전이다. 두 로봇의 IPv4 `_rosy._tcp` 광고와 Fleet 컨테이너 UID 10001 이름 해석은 확인됐다. 이는 발견·이미지 계층 근거이며 설치된 현장 UI 화면, 제어 건강, 현재 후보의 장치 readback 또는 G3 수용은 아니다. **제품 전체 HOLD**.
+
+## 2026-10-07 16:41 KST 사이트 G3 준비 재확인
+
+[현재 읽기 전용 기록](../uiux-site-g3-readiness-2026-10-07/result.md): Fleet·Vision·proxy의 `5eb726c13…` 이미지 태그는 로컬 후보 `43a823ac5…`의 조상이다. 로봇 mDNS 광고 2개와 Fleet 서비스 UID 10001의 이름 해석 2건은 확인했다. 현재 후보의 설치 화면·로봇/카메라 readback과 [실제 운영자 독회](operator-walkthrough.md)는 아직 없다. **제품 전체 HOLD**.

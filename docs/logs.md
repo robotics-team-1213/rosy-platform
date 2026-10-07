@@ -6715,3 +6715,9 @@ osy-d395-s1d\`.
 - 변경: 상태 소켓이 열린 채 조용해지고 REST 상태 조회도 실패할 때 이전 숫자와 모드를 숨기고 상태 수신 중단을 표시한다. readback이 돌아오면 회복한다.
 - 증거: [LOCAL 결과](validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 집중 브라우저 1 failed, 수정 후 관련 11 passed, D-153 명명 G1 90 passed, 1 warning, 각 `known_failures.py` 0 NEW. 실행 기록은 `X:\DevTemp\pilot-silent-readback\`.
 - gate 변화: Pilot G2 일부 보강. 남은 선언 상태·폭, 사이트 설치·실물 readback, 운전자 G3와 제품 전체는 **HOLD**.
+
+## 2026-10-07 · uncommitted · docs(uiux): 사이트 G3 준비 버전 재확인
+
+- 변경: 기존 사이트 PC의 배포 태그와 두 로봇 mDNS 해석을 현재 로컬 후보와 다시 대조하고 운영자 독회 기록지에 날짜별 준비 상태를 남겼다.
+- 증거: [읽기 전용 결과](validation/uiux-site-g3-readiness-2026-10-07/result.md). 세 사이트 이미지 태그 `5eb726c13…`은 후보 `43a823ac5…`의 조상이고, Fleet UID 10001은 두 `.local` 이름을 해석했다. 원본은 X:의 해시된 요약이다. 문서·계약 시험 **127 passed, 1 skipped**, `known_failures.py` **0 NEW**, harness lint 0 errors.
+- gate 변화: 없음. 현재 후보 설치·실물 상태 readback·요청자 G3가 없어 제품 전체 **HOLD**.
