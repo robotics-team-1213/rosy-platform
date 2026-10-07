@@ -162,8 +162,28 @@ class LineStuckBoard:
         return row
 
 
+def _resolution(answers) -> tuple:
+    """(resolved_by, resolved_principal, last_answer_tier, escalation_code) from one stuck's
+    answers, oldest first. The last non-ESCALATE answer decides, as in ``view()``: accepted is
+    its tier, unknown outcome is ``<tier>_unconfirmed`` (never "solved by itself"), refused
+    falls back to the last accepted one. NULL = closed without an accepted answer."""
+    answered = [a for a in answers if a["decision"] != "ESCALATE"]
+    escalated = [a for a in answers if a["decision"] == "ESCALATE"]
+    code = escalated[-1]["escalated"] if escalated else None
+    if not answered:
+        return None, None, None, code
+    last = answered[-1]
+    if last["accepted"] is None:
+        return f"{last['tier'] or 'human'}_unconfirmed", last["principal_id"], last["tier"], code
+    accepted = [a for a in answered if a["accepted"] == 1]
+    if not accepted:
+        return None, None, last["tier"], code
+    return accepted[-1]["tier"], accepted[-1]["principal_id"], last["tier"], code
+
+
 class LineStuckAnswerLog:
-    """Durable answer record in the Fleet journal database (beside ``fleet_api_audit``)."""
+    """Durable answer record and stuck episodes in the Fleet journal database (beside
+    ``fleet_api_audit``). Episodes are written only on open and close transitions."""
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
@@ -183,6 +203,18 @@ class LineStuckAnswerLog:
                 if column not in have:
                     connection.execute(
                         f"ALTER TABLE fleet_line_stuck_answers ADD COLUMN {column} TEXT")
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS fleet_line_stuck_episodes (
+                       robot_id TEXT NOT NULL, stuck_id TEXT NOT NULL,
+                       source TEXT NOT NULL DEFAULT 'fleet_poll',
+                       cause TEXT, phase_at_open TEXT, local_enabled_at_open INTEGER,
+                       trip_busy_at_open INTEGER, peer_ahead_at_open INTEGER,
+                       opened_at TEXT NOT NULL, closed_at TEXT,
+                       held_s_max REAL, attempts_max INTEGER, close_reason TEXT,
+                       resolved_by TEXT, resolved_principal TEXT, last_answer_tier TEXT,
+                       escalation_code TEXT,
+                       pose_x REAL, pose_y REAL, pose_yaw REAL, pose_state TEXT, pose_age_s REAL,
+                       UNIQUE (robot_id, stuck_id))""")
 
     def append(self, row: dict) -> None:
         accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
@@ -200,6 +232,45 @@ class LineStuckAnswerLog:
         with closing(self._connect()) as connection:
             found = connection.execute(
                 "SELECT * FROM fleet_line_stuck_answers ORDER BY answer_id DESC LIMIT ?",
+                (limit,)).fetchall()
+        return [dict(row) for row in found]
+
+    def open_episode(self, row: dict) -> None:
+        """Open (or, after a Fleet restart, reopen) one episode. The first ``opened_at`` stays."""
+        columns = ", ".join(row)
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                f"""INSERT INTO fleet_line_stuck_episodes ({columns})
+                    VALUES ({", ".join("?" * len(row))})
+                    ON CONFLICT(robot_id, stuck_id) DO UPDATE SET
+                        closed_at = NULL, close_reason = NULL""", tuple(row.values()))
+
+    def close_episode(self, robot_id: str, stuck_id: str, *, closed_at: str, close_reason: str,
+                      held_s_max: Optional[float], attempts_max: Optional[int]) -> None:
+        with closing(self._connect()) as connection, connection:
+            answers = connection.execute(
+                """SELECT decision, accepted, tier, principal_id, escalated
+                   FROM fleet_line_stuck_answers WHERE robot_id = ? AND stuck_id = ?
+                   ORDER BY answer_id""", (robot_id, stuck_id)).fetchall()
+            connection.execute(
+                """UPDATE fleet_line_stuck_episodes SET closed_at = ?, close_reason = ?,
+                       held_s_max = ?, attempts_max = ?, resolved_by = ?, resolved_principal = ?,
+                       last_answer_tier = ?, escalation_code = ?
+                   WHERE robot_id = ? AND stuck_id = ?""",
+                (closed_at, close_reason, held_s_max, attempts_max, *_resolution(answers),
+                 robot_id, stuck_id))
+
+    def close_orphans(self, closed_at: str) -> None:
+        """Start-up: an episode still open was left by the previous Fleet process."""
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                """UPDATE fleet_line_stuck_episodes SET closed_at = ?, close_reason = 'fleet_restart'
+                   WHERE closed_at IS NULL""", (closed_at,))
+
+    def episodes(self, limit: int = 100) -> list[dict]:
+        with closing(self._connect()) as connection:
+            found = connection.execute(
+                "SELECT * FROM fleet_line_stuck_episodes ORDER BY rowid DESC LIMIT ?",
                 (limit,)).fetchall()
         return [dict(row) for row in found]
 
