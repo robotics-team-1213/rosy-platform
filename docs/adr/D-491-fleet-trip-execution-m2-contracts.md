@@ -84,17 +84,20 @@ CORE 변경 두 가지(1·2항, 4항)는 서명 릴리스가 있어야 로봇에
 
 ### 구현 부록 (2026-10-07) — 5항 trip 루프
 
-브랜치 `feat/d491-fleet-trip-loop`의 구현과 조정자 검토에서 정한 것이다. 결정 본문은 바꾸지 않는다. API Reference 행은 v1.112로 썼고, 착지 순서에 따라 다음 빈 번호로 옮긴다.
+브랜치 `feat/d491-fleet-trip-loop`의 구현과 두 번의 검토(조정자 검토, 독립 검토)에서 정한 것이다. 결정 본문은 바꾸지 않는다. API Reference 행은 v1.112로 썼고, 착지 순서에 따라 다음 빈 번호로 옮긴다. CORE 쪽 동작은 4항 구현(`feat/d491-core-junction-action`의 `line_follow/junction.py`)을 기준으로 한다.
 
 1. **trip id.** trip id는 `plan_id`다. 한 계획은 한 번만 출발한다(409 `TRIP_ALREADY_STARTED`). 상태 코드는 없는 계획·trip 404, `TRIP_BUSY`·`TRIP_ALREADY_STARTED`·`TRIP_NOT_RUNNING` 409, 나머지 시작 거절 422다. `/trip`의 `execute: true`는 계속 501이다. 출발은 언제나 이름 있는 운영자의 별도 호출이다.
-2. **차선 API로 갈 수 없는 계획.** 차로 중간에서 끝나는 `lane` trip(`LANE_END_NOT_A_PLACE`)과 `lane` U턴(`LANE_UTURN`)은 `TRIP_MODE_UNSUPPORTED`로 거절한다. D-492 3항에 따라 150°를 넘는 회전(`LANE_TURN_TOO_SHARP`)과 `junction_turn` 능력이 없는 로봇의 좌·우(`JUNCTION_TURN_UNSUPPORTED`)도 같은 코드다.
-3. **다음 장소 지시는 장소를 지난 뒤에 보낸다.** CORE는 지시를 하나만 보관하고, 고리 차로(0.37 m)는 arm 거리 0.6 m보다 짧다. 지나기 전에 다음 지시를 보내면 이번 장소의 지시를 덮어쓴다. 후속으로 CORE 교차로 `seq`를 보고 정한다.
-4. **차선 도착.** 마지막 장소의 `stop`을 보낸 뒤 그 장소 0.15 m 안이면 `arrived`다.
-5. **지시 만료.** 교차로 지시 `expires_s`는 15 s이고 그 절반마다 다시 보낸다.
-6. **차선→좌표 넘김.** 넘기는 장소에서 차선 로봇에 `stop`을 보낸다. 모드 전환 경로는 이 ADR에 없다.
-7. **재계획 계기.** 주입된 막힌 차로 집합(`blocked()`) 또는 지도 버전 변경이다. 막힌 차로를 내는 곳은 아직 없다. 활성화 가드가 진행 중 trip 동안 지도 변경을 막는다.
-8. **재계획 확인 뒤 재개.** 로봇은 그 장소에서 `stop`(좌표면 장소 목표)으로 서 있고, 확인 뒤 새 계획의 그 장소 동작을 보낸다. CORE가 새 지시로 hold를 푸는지는 4항 구현(D-492)이 정한다. 확인 전에 지도가 바뀌면 409 `TRIP_MAP_CHANGED`이고, 같은 장소에서 다시 계획한다.
-9. **취소와 위치 상실은 즉시 멈춘다(검토 A).** `lane`이면 교차로 `stop`을 보내고 곧바로 `PUT /api/v1/line-follow/mode {mode: OFF}`로 차선 주행을 끈다. `POST /api/v1/line-follow/hold`는 hold-to-run 세션을 늘리는 운전자 "진행" 신호(D-344 8항)라 멈춤으로 쓰지 않는다. `free`이면 취소는 목표 취소이고, 위치 상실은 지금처럼 목표 전송을 멈추고 로봇의 deadman에 맡긴다. 로봇이 받지 않으면 `detail.stop_sent: false`와 오류 코드를 남긴다.
-10. **멈춤 규칙(검토 B)과 시작 검사(검토 C).** 계획을 따라간 거리가 `fleet.trip.stall_s`(기본 20 s) 동안 0.05 m 이상 늘지 않으면 `stopped(stall)`로 두고 9항과 같이 멈춘다. CORE 교차로 상태가 `turning`·`advancing`·`reacquiring`인 동안과 재계획 확인 대기 중에는 세지 않는다. `lane` 간선이 있는 계획은 시작 때 로봇의 `GET /api/v1/line-follow` `mode`가 `CAMERA_LINE`·`IR_LINE`이 아니면 422 `TRIP_LINE_FOLLOW_NOT_ACTIVE`로 거절한다.
-11. **위치 판정 보강(3항 검토 반영).** 시작은 sighting 앵커가 2 s 이내일 때만 연다(`TRIP_POSE_UNTRUSTED`, `detail.anchor_age_s`). 루프는 tick마다 trip 로봇의 상태를 REST로 한 번 읽어(`refresh(force_rest=True)`) odom을 2 Hz로 채운다. 위치로 멈출 때 제공자의 `sightings_filtered_map_id`·`odom_refused`를 `detail`에 남긴다. CORE 교차로 `aborted`·`unresolved` 또는 10 s 넘는 `waiting`은 `stopped(junction)`이다.
-12. **크기 예산.** Fleet 패키지 크기 재판정(39797)은 구현자가 썼다. 착지 때 독립 재판정이 필요하다.
+2. **차선 로봇이 갈 수 없는 계획.** `TRIP_MODE_UNSUPPORTED`로 거절한다. 차로 중간에서 끝나는 `lane` trip(`LANE_END_NOT_A_PLACE`), `lane` U턴(`LANE_UTURN`), 150°를 넘는 회전(`LANE_TURN_TOO_SHARP`)이다. `lane` 간선이 하나라도 있으면 능력 `junction_turn: true`가 있어야 한다(`JUNCTION_TURN_UNSUPPORTED`). CORE의 교차로 판정은 keep 모드 증거가 살아 있을 때만 작동해서, 없으면 교차로에서 멈추지도 꺾지도 않는다(D-492). 실행 가능 규칙은 순수 모듈 `fleet/routing/execute.py`에 둔다.
+3. **CORE 교차로 상태를 먼저 읽는다.** `lane` 간선에서는 tick마다 보내기 전에 `line_follow.junction`을 읽는다. CORE는 지시를 하나만 보관하고, 회전 동작 중의 새 지시는 그 동작을 `aborted`로 만들고 받지 않는다. 그래서 CORE가 `executing`이거나 `turning`·`advancing`·`reacquiring`인 동안에는 보내지 않는다. 예외는 우리가 보낸 `stop`(재계획 대기)을 확인 뒤의 새 동작으로 바꿀 때다. `straight`와 회전은 CORE가 같은 seq·장소로 `armed`를 보일 때 만료(15 s)의 절반마다 다시 보낸다. 장소 앞에서 CORE가 `idle`·`waiting`이면(만료됨) 다시 보낸다. `stop`은 한 번만 보낸다.
+4. **멈춤 거리.** `stop`(마지막 장소, 차선→좌표 넘김, 재계획 대기)의 `stop_after_m`은 장소까지 남은 거리를 [0, 2] m로 자른 값이다. CORE는 이 거리를 교차로가 아니라 받은 때부터의 odom으로 잰다. 차선 도착은 마지막 `stop`을 보낸 뒤 장소 0.15 m 안이다.
+5. **다음 구간으로 넘어가는 때.** CORE가 그 장소의 지시를 끝냈다고 알릴 때(`idle` 또는 더 새 seq, 장소 0.3 m 안), 또는 자세가 다음 차로 위로 0.02 m 넘게 나아가고 지금 차로보다 다음 차로에 더 가까울 때다. 90°·90°를 넘는 회전과 0.37 m 고리 차로로 시험한다. 처음 구현의 "장소를 지난 투영"만으로는 제자리 회전과 짧은 차로에서 넘김을 놓치거나 CORE의 동작 중에 다음 지시를 보낼 수 있었다.
+6. **지시 만료.** 교차로 지시 `expires_s`는 15 s다.
+7. **차선→좌표 넘김.** 넘기는 장소에서 차선 로봇에 `stop`을 보낸다. 모드 전환 경로는 이 ADR에 없다.
+8. **재계획.** 계기는 주입된 막힌 차로 집합(`blocked()`) 또는 지도 버전 변경이다. 막힌 차로를 내는 곳은 아직 없다. 로봇은 그 장소에서 `stop`(좌표면 장소 목표)으로 서 있고, 확인 뒤 새 계획의 그 장소 동작이 보관된 `stop`을 바꾼다. 확인 전에 지도가 바뀌면 409 `TRIP_MAP_CHANGED`이고 같은 장소에서 다시 계획한다.
+9. **모든 끝에서 바로 멈춘다.** 취소, 위치 상실·차로 이탈, CORE `aborted`·`unresolved`·10 s 넘는 `waiting`(`stopped(junction)`), 멈춤 규칙, 로봇 오류(`failed`), 루프 오류(`failed(TRIP_LOOP_ERROR)`), 재시작 뒤의 열린 trip은 모두 로봇을 바로 멈춘다. `lane`이면 장소가 있을 때 교차로 `stop`(`stop_after_m` 0)을 보내고 `PUT /api/v1/line-follow/mode {mode: OFF}`로 차선 주행을 끈다. `POST /api/v1/line-follow/hold`는 hold-to-run 세션을 늘리는 운전자 "진행" 신호(D-344 8항)라 멈춤으로 쓰지 않는다. `free`이면 목표를 취소한다. 다만 위치를 잃은 `free` 로봇은 지금처럼 목표 전송만 멈추고 로봇의 deadman에 맡긴다. 멈춤의 각 단계는 어떤 예외에도 다음 단계를 시도하고, 결과를 `detail.stop_sent`와 `detail.error`로 남긴다.
+10. **취소는 기다리지 않는다.** 취소는 진행 중인 tick의 잠금을 기다리지 않고 바로 멈춘다. 그 tick이 이미 보내던 지시가 취소 뒤에 닿으면 그 tick이 다시 멈추고, 취소된 상태를 바꾸지 않는다. 루프의 로봇 호출은 하나에 1.5 s를 넘지 않는다.
+11. **멈춤 규칙과 시작 검사.** 계획을 따라간 거리가 `fleet.trip.stall_s`(기본 20 s) 동안 0.05 m 이상 늘지 않으면 `stopped(stall)`이다. CORE 교차로 동작 중과 재계획 확인 대기 중에는 세지 않는다. `lane` 간선이 있는 계획은 시작 때 `GET /api/v1/line-follow` `mode`가 `CAMERA_LINE`·`IR_LINE`이 아니면 422 `TRIP_LINE_FOLLOW_NOT_ACTIVE`다. 지도 버전은 로봇 호출이 끝난 뒤 trip을 열기 직전에 한 번 더 본다.
+12. **위치 판정.** 시작은 sighting 앵커가 2 s 이내로 알려졌을 때만 연다(없거나 낡으면 `TRIP_POSE_UNTRUSTED`). 루프는 tick마다 trip 로봇의 상태를 REST로 한 번 읽어(`refresh(force_rest=True)`) odom을 2 Hz로 채운다. 이 읽기 실패 경고는 30 s에 한 번만 남긴다. 위치로 멈출 때 제공자의 `sightings_filtered_map_id`·`odom_refused`를 `detail`에 남긴다.
+13. **루프는 죽지 않는다.** `run()`은 앱이 살아 있는 동안 돌아오지 않는다. tick 오류는 그 trip만 `failed(TRIP_LOOP_ERROR)`로 끝내고 로봇을 멈춘다. 저장소까지 실패하면 메모리의 trip만 닫는다.
+14. **trip 중 다른 이동 거절.** trip이 도는 동안 그 로봇에 대한 Fleet의 다른 이동 명령은 409 `TRIP_ROBOT_BUSY`다. `/goal`·`/route`·작업 배차(그 로봇을 배차 대상에서 뺀다)·`formation/start`이다. trip 루프만 `console.goal(..., trip=True)`로 보낸다.
+15. **크기 예산.** Fleet 패키지 크기는 40110 줄로 독립 재판정됐다(검토자가 증가를 타당하다고 판단). `trip_runner.py`는 600 줄 안이고, 포트·설정은 `trip_ports.py`, 실행 가능 규칙은 `fleet/routing/execute.py`다.
