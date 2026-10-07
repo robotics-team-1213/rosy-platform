@@ -2175,3 +2175,33 @@
 - Change: Expanded the 401/403 stale-session browser scenario across 1440/390/320px; checked equal document widths, first-viewport notice and stop, and no horizontal overflow.
 - Evidence: 6 Chromium cases passed, 0 NEW known failures; six capture hashes in docs/validation/uiux-cell-auth-widths-2026-10-07/result.md.
 - Gate: LOCAL synthetic G2 partial evidence; real site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Site-map offline robot choice
+
+- Change: Keep disconnected robots visible in the trip picker and block preview until a connected robot is selected.
+- Evidence: 34 site-map Chromium, 90 D-153 G1, 7 Node passed; Python known failures 0 NEW. See docs/validation/uiux-site-map-offline-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; deployed site candidate and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell failed job read status
+
+- Change: A failed job/dispatch-generation read clears the pending summary and gives a retry instruction while approval remains blocked.
+- Evidence: 3 declared-width Chromium cases and 6 related cases passed; D-153 G1 90 passed, Python known failures 0 NEW. See docs/validation/uiux-cell-job-read-2026-10-07/result.md.
+- Gate: LOCAL synthetic G2 partial evidence; site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell job snapshot invalidation
+
+- Change: Clear old job summary, ledger, steps, and generation together when the job ID, session, proposal, or read validity changes.
+- Evidence: 12 selected Chromium cases and D-153 G1 90 passed, Python known failures 0 NEW; optional full Cell run incomplete. See docs/validation/uiux-cell-job-switch-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; real site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell saved-document readability
+
+- Change: Show Korean document kind and ID separately from locally formatted modification time; keep long IDs within narrow screens.
+- Evidence: Three declared-width Chromium and 74 relevant G1 cases passed after one failing 320px case, `known_failures.py` 0 NEW. See docs/validation/uiux-cell-saved-list-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell saved-list error widths
+
+- Change: Replay the existing saved-list failure and recovery flow at all three declared Cell widths.
+- Evidence: Six LOCAL G2 captures, three Chromium cases passed, Python known failures 0 NEW. See docs/validation/uiux-cell-list-errors-2026-10-07/result.md.
+- Gate: Other G2 cells, real site/device, and operator G3 remain HOLD.

@@ -261,6 +261,45 @@ def test_empty_site_map_names_the_next_step(page_site, width, height):
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_offline_robot_cannot_be_offered_for_trip_preview(page_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    page.route("**/api/fleet/state", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body='{"robots":[{"robot_id":"rosy_60","online":false}]}'))
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    expect(page.locator("#trip-robot option")).to_have_text("rosy_60 · 연결 끊김")
+    expect(page.locator("#trip-robot")).to_have_value("rosy_60")
+    expect(page.locator("#trip-plan")).to_be_disabled()
+    expect(page.locator("#trip-plan")).to_have_attribute("reason", "연결된 로봇이 없습니다 · 로봇 연결을 확인하세요")
+    expect(page.locator("#trip-summary")).to_contain_text("연결된 로봇이 없습니다")
+    stop = page.locator("#estop").bounding_box()
+    assert stop and 0 <= stop["y"] < height
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-offline-{width}x{height}.png"), full_page=True)
+
+
+def test_connected_robot_can_be_selected_after_offline_robot(page_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.route("**/api/fleet/state", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body='{"robots":[{"robot_id":"rosy_99","online":false},{"robot_id":"rosy_60","online":true}]}'))
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#trip-plan")).to_be_disabled()
+    expect(page.locator("#trip-plan")).to_have_attribute("reason", "선택한 로봇의 연결을 확인하세요")
+    page.select_option("#trip-robot", "rosy_60")
+    expect(page.locator("#trip-plan")).to_be_enabled()
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_no_robot_explains_why_trip_preview_is_unavailable(page_site, width, height):
     from playwright.sync_api import expect
 

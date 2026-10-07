@@ -103,6 +103,8 @@ ros:
   apt_key_fingerprint: embedded-in-sha256-pinned-ros2-apt-source-package
   # D-482: payload builds install ROS from this dated snapshot so the build matches the image's ros-jazzy set.
   apt_snapshot_url: http://snapshots.ros.org/jazzy/2026-09-11/ubuntu
+  # D-482 addendum: snapshots.ros.org signs with its own key (ROS 2 docs "Snapshot repository").
+  apt_snapshot_key_fingerprint: 4B63CF8FDE49746E98FA01DDAD19BAB3CBF125EA
   verified: false
 
 # D-477: the team tailnet. One upstream arm64 deb carries tailscaled (the
