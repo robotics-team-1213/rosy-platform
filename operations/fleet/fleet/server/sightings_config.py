@@ -19,12 +19,10 @@ _REQUIRED = {
 _ALLOWED = _REQUIRED | {
     "phone_token_env", "fleet_base_url", "processor_revision",
     "corner_marker_ids", "corner_world_m", "robot_markers", "heading_edge", "credential",
-    "calibration_source", "display_rotation_deg",
+    "calibration_source",
 }
 CREDENTIAL_KINDS = ("static", "paired")
 CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
-#: D-513 7: clockwise screen turn of the raw camera picture; display only.
-DISPLAY_ROTATIONS = (0, 90, 180, 270)
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
 
@@ -97,9 +95,6 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             corner_world_m = tuple((float(x), float(y)) for x, y in corners)
             if len(set(corner_world_m)) != 4:
                 raise ValueError(f"sources[{index}].corner_world_m points must be distinct")
-        rotation = row.get("display_rotation_deg", 0)
-        if type(rotation) is not int or rotation not in DISPLAY_ROTATIONS:
-            raise ValueError(f"sources[{index}].display_rotation_deg must be 0, 90, 180 or 270")
         markers = row.get("robot_markers", {})
         if (not isinstance(markers, dict)
                 or any(not isinstance(robot_id, str) or not robot_id
@@ -124,7 +119,6 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             robot_markers=tuple(markers.items()),
             credential=credential,
             calibration_source=calibration_source,
-            display_rotation_deg=rotation,
         ))
     if len({source.source_id for source in sources}) != len(sources):
         raise ValueError("sighting source ids must be unique")
