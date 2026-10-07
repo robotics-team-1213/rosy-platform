@@ -730,3 +730,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만.
 - 결정: D-507 7 (2026-10-08 개정)
 - 교훈: 기존 인접 차로 시험은 0.20 m 점프를 써서 (3)이 (2)에 가려졌다 — 조건별 시험은 다른 조건이 못 열게 만든다.
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 7 검토 — unknown은 오늘 경로, 새 체크포인트는 기준을 되살린다
+- 변경: `lane_return_decision.py` — `containment_unknown`과 쉬는 D-468(추종 단계)의 비-로컬 틱은 결정을 돌려주지 않고 None을 돌려줘 `_apply_recovery`(D-407 막힘)가 그 틱을 가진다. D-407이 가진 동안에도 `lane_return_containment: unknown`을 보인다. `lane_return.py` — 체크포인트를 새로 잡으면(검증·추종 두 곳) 점프가 남긴 `_reference_invalid`를 지운다.
+- 증거: `test_unknown_containment_opens_d407_stuck_exactly_as_recovery_off`(복귀 켬·끔이 같은 시각 같은 막힘), `test_checkpoint_taken_after_a_jump_is_the_new_reference`·`..._first_taken_while_tracking_...`. 각 수정을 되돌리면 그 시험만 실패한다.
+- gate 변화: 없음. SOURCE 호스트 시험만.
+- 결정: D-507 7 (2026-10-08 개정)
+- 교훈: "복귀를 끈 것과 같다"는 결정을 돌려주지 않는 것(None)이다 — 결정을 돌려주면 그 뒤 경로(D-407)가 건너뛰어진다.

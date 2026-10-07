@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(line_follow): D-507 7 검토 — unknown은 오늘 경로, 새 체크포인트는 기준을 되살린다
 - 2026-10-08 · uncommitted · test(line_follow): D-507 7 개정 — 이탈 조건 (2)·(3) 직접 시험
 - 2026-10-08 · uncommitted · test(line_follow): D-507 10 D-422 기억 몸 밖 규칙의 safety 시험·검토·SIM
 - 2026-10-08 · uncommitted · feat(line_follow): D-507 6 motion_admitted, 9 site_floor_map_id
 - 2026-10-08 · uncommitted · fix(line_follow): LiDAR 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
-- 2026-10-07 · uncommitted · core_features(line_follow): D-468 departure only on positive evidence (D-507 7)
