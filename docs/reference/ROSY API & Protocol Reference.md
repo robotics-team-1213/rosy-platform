@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.119
+**Version:** v1.120
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -264,7 +264,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/api/v1/robot/battery` | Viewer | §12 |
 | GET | `/api/v1/robot/velocity` | Viewer | §12 |
 | GET | `/api/v1/sensors` | Viewer | §12 |
-| GET | `/api/v1/sensors/{lidar\|imu\|ultrasonic\|battery\|encoder\|motor}` | Viewer | §12 |
+| GET | `/api/v1/sensors/{lidar\|imu\|ultrasonic\|battery\|encoder\|motor}` | Viewer | §12. 표본이 없으면 404 `NOT_FOUND`. 예외로 `battery` 는 404 를 내지 않는다(D-502, v1.120): 200 `{voltage, received_at, source, evidence, sample_age_s, stale_after_s}`. `evidence` 는 `missing`\|`fresh`\|`stale`(`GET /power/health` 의 `battery` 와 같은 판정, 5 s), 표본이 없으면 `voltage`·`received_at`·`source` 는 `null`. 배터리 모니터가 없는 런타임은 `evidence: missing`, `stale_after_s: null`. 제품 그래프의 표본은 `battery/voltage` 에서 오며 `source: "battery/voltage"` 다(D-192 4). 벤치의 `batt_state` 표본은 기존 필드 `percentage`·`power_supply_status`·`location` 을 더 싣는다. 두 토픽이 함께 돌면 마지막으로 온 표본이 이기므로 이 세 필드는 나타났다 사라진다 — 소비자는 있을 때만 읽는다 |
 | GET | `/api/v1/power` | Viewer | PWR-001 (절전 모드·프레즌스·샘플링 주기) |
 | GET | `/api/v1/power/health` | Viewer | 전원 정책·절전 blockers·wake 제약·배터리 age/신선도/충전 확인·health 조회. 읽기 전용이며 깨우지 않음 |
 | POST | `/api/v1/power/wake` | Operator | PWR-004 (원격 웨이크 — 정보 화면 표시) |
@@ -347,8 +347,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/calibration/session/{id}/heartbeat` | Operator | owner 만. `ttl_s` 를 다시 채운 `{session}`. 다른 토큰 403 `FORBIDDEN`, 없거나 만료된 id 404 `NOT_FOUND`. `ttl_s` 안에 heartbeat 가 없으면 세션은 만료되고 `calibration.session_expired` 가 한 번 발행된다 |
 | DELETE | `/api/v1/calibration/session/{id}` | Operator | owner 또는 Admin(걸린 lease 강제 해제). 끝난 `{session}`. 그 밖의 토큰 403, 없는 id 404 |
 | POST | `/api/v1/safety/stop` | Viewer↑ | SAF-001 (누구나). 보정 세션 중에도 막지 않는다 |
-| POST | `/api/v1/safety/release` | Admin | SAF-001 |
-| GET | `/api/v1/safety/state` | Viewer | SAF-001. `fleet_loss_policy` 와 선택 필드 `fleet_link` (SAF-003, D-419, v1.86) `{configured, connected, lost, timeout_s, applied, correlation_id, disconnected_s, held_goal}` — `configured` 는 FleetAgent 가 돌고 있는가(승인된 `pairing_token` + 주소), `lost` 는 이번 단절에서 정책을 적용했는가, `applied` 는 실제로 한 것(`STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`·`NONE`), `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}`(재접속 이벤트 뒤 비움). 서비스가 없으면 `null` |
+| POST | `/api/v1/safety/release` | Admin | SAF-001. 어떤 경로의 래치든(API, control 정책, SAF-005 `battery_policy`·`battery_deep`) E-Stop 은 모드 EMERGENCY 와 함께 걸리므로 이 경로로 풀린다. EMERGENCY 가 아니면 409 `MODE_CONFLICT`. 배터리 래치는 전압이 회복되어도 스스로 풀리지 않는다. 해제는 배터리 정책을 끄지 않으며 Deep 이 이어지면 다음 표본에서 다시 래치한다. 어떤 출처의 E-Stop 이든 배터리 자동 복귀(도크 복귀·`RETURN_HOME`)를 배터리 단계가 OK 로 돌아올 때까지(복귀 히스테리시스 포함) 끄고, 해제는 래치 중 무장된 복귀를 지우며, 그 사이 Critical 통과는 다시 래치한다 — 해제 뒤 로봇은 새 명령 없이 움직이지 않는다(D-502, v1.120) |
+| GET | `/api/v1/safety/state` | Viewer | SAF-001. `battery` 는 정책 `{warning_percent, critical_percent, deep_percent, critical_policy}` 와 지금의 근거 `{evidence, sample_age_s, level, percent}`(D-502, v1.120 additive) — `evidence` 는 `missing`\|`fresh`\|`stale`, `level` 은 `ok`\|`warning`\|`critical`\|`deep`, 표본이 없으면 `sample_age_s`·`percent` 는 `null`. `source: battery_policy`\|`battery_deep` 래치를 풀기 전에 관리자는 `evidence: fresh` 와 `level` 을 본다. `fleet_loss_policy` 와 선택 필드 `fleet_link` (SAF-003, D-419, v1.86) `{configured, connected, lost, timeout_s, applied, correlation_id, disconnected_s, held_goal}` — `configured` 는 FleetAgent 가 돌고 있는가(승인된 `pairing_token` + 주소), `lost` 는 이번 단절에서 정책을 적용했는가, `applied` 는 실제로 한 것(`STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`·`NONE`), `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}`(재접속 이벤트 뒤 비움). 서비스가 없으면 `null` |
 | PUT | `/api/v1/safety/limits` | Admin | SAF-004 — `{manual_linear?, manual_angular?}` 는 프로필 최대값으로 clamp. SAF-005 배터리 임계값 `{battery_warning_percent?, battery_critical_percent?, battery_deep_percent?, battery_critical_policy?}` 과 `{fleet_loss_policy?}` 도 같은 경로로 받는다. 임계값은 `0 < deep < critical < warning <= 100` 을 만족해야 한다. `fleet_loss_policy` 는 `STOP`·`HOLD`·`RETURN_HOME`·`CONTINUE`(`CONTINUE_CURRENT_NAVIGATION` 은 `CONTINUE` 로 저장), 그 밖은 400. `RETURN_HOME` 을 받으면 응답에 선택 필드 `warning`(문자열) — 사이트 Fleet 이 죽으면 이 정책의 로봇이 Fleet 교통정리 없이 동시에 home 으로 간다 — 을 싣고 로그에 경고를 남긴다(거절하지 않음). 판정 시간 `safety.fleet_loss_timeout_s`(기본 5.0, 4–60 s, `1 + fleet.heartbeat_reply_timeout_s + 1` 이상)와 하트비트 답 시한 `fleet.heartbeat_reply_timeout_s`(기본 2.0, 0.5–10 s)는 설정 파일 전용이고, Fleet 링크가 설정된 로봇에서 어기면 CORE 가 기동하지 않는다(Fleet 없는 로봇은 경고 후 기본값) (D-419) |
 
 ## 5.6 이벤트·진단·관리
@@ -2440,6 +2440,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.120 | 2026-10-07 | Corrective + Additive (D-502, fix/core-battery-health): SAF-005 배터리 래치(`battery_policy`·`battery_deep`)도 모드 EMERGENCY 로 들어가 Admin `POST /safety/release` 로 풀린다(전에는 409 `not in EMERGENCY` 로 풀 수 없었다). `GET /sensors/battery` 는 404 대신 `evidence`·`sample_age_s`·`stale_after_s` 를 싣고, 표본은 제품 토픽 `battery/voltage` 에서 온다. `GET /safety/state` `battery` 에 `evidence`·`sample_age_s`·`level`·`percent`. Fleet envelope `protocol_version` 1.0 유지 |
 | v1.119 | 2026-10-07 | Additive (D-494 6, feat/d494-fleet-teach-drive): Fleet 주행 가르치기 `GET /api/fleet/teach`, `POST /api/fleet/teach/start`, `/stop`, `/confirm`, `/place`. 기록은 D-494 3 map pose만 읽고 로봇에 아무것도 보내지 않는다. 확정과 주소 만들기는 초안 PUT과 같은 규칙으로 초안에만 쓴다. Robot API·envelope 1.0 변경 없음 |
 | v1.118 | 2026-10-07 | Additive (D-498, feat/d498-junction-turn-site-basis): 교차로 회전의 운동 근거에 현장 근거를 더함 — 설정 `line_follow.junction_turn_site_accepted`(기본 false, `ir_guard_enabled` 없이 true 면 CORE 시작 거부), `junction_turn` 능력은 enforce 증명 또는 현장 근거가 있을 때만 참(읽을 때마다 재판단), 중단 사유 `turn_basis_lost`. envelope 1.0 유지 |
 | v1.117 | 2026-10-07 | Corrective/semantic (D-468): containment boundaries are the drivable inner edge of the paint (previously paint centre). 생산자가 칠 폭 절반(`lane_paint_half_width_m`, 260919 STL 공칭 12.5 mm)만큼 안쪽으로 옮기고 그 값을 `geometry_id`에 넣는다. 필드 모양·envelope 1.0 변경 없음 |

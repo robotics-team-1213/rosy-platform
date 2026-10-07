@@ -6754,6 +6754,14 @@ osy-d395-s1d\`.
 - 결정: 없음
 - 교훈: 카메라 재조준은 저장된 추적 보정과 조용히 어긋난다. 같은 날 착지된 낡은 교정 자동 경고(feat/cam-drift-warn, 커밋 `27081f83c`)가 다음 재조준부터 침묵 오정렬을 잡는다. 적용에 쓴 임시 계정 `camfit-temp`는 작업 직후 제거했다.
 
+## 2026-10-07 · db92172b5 · fix(core): 배터리 정지 해제 경로와 배터리 입력 근거 (D-502)
+
+- 변경: SAF-005 배터리 래치(`battery_policy`·`battery_deep`)가 모드를 EMERGENCY로 바꾸지 않아 관리자 해제가 409 `not in EMERGENCY`였다. E-Stop 리스너 하나가 모든 래치를 EMERGENCY로 옮기고, E-Stop은 대기 중인 배터리 도크 복귀를 지운다(OK까지 재무장 없음). `battery/voltage`가 `battery` 센서 표본이 되고 `GET /sensors/battery`는 404 대신 `evidence`(missing/fresh/stale)를, `GET /safety/state` `battery`는 `evidence`·`sample_age_s`·`level`·`percent`를 싣는다. API Ref v1.120, SRS SAF-005 문단.
+- 근거: 8kcn 2026-10-06 실기(6.20 V 저전압 뒤 충전 8.63 V에도 래치 유지, 해제 409), 9dfk 현재 main에서도 `/sensors/battery` 404. 호스트 pytest만이며 장치 수용은 아니다.
+- gate 변화: 없음.
+- 결정: D-502(자동 해제는 고르지 않음, 관리자 해제, Deep 재래치).
+- 교훈: 래치와 모드를 따로 쓰는 경로가 있으면 해제 계약이 깨진다. 래치 쪽 리스너 한 곳에서 모드를 맞춘다.
+
 ## 2026-10-07 · uncommitted · docs(solutions): 검증 문서의 빈백 git id가 push를 막는 오탐 — 교훈 기록
 - 변경: `docs/validation/uiux-current-width-device-2026-10-07/result.md`의 40자리 SHA에 `commit` 접두어를 붙여 시크릿 스캐너 high-entropy-token 오탐을 해제했다(관측 내용 불변, `db006d7cf`와 같은 표기 수정). 같은 날 같은 클래스가 두 번째라 재발 방지 문서 `docs/solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md`를 남겼다 — 회차 문서에 git id를 쓸 때 `commit` 접두어(16진수는 종류 표기), 착지 전 시크릿 시험 1회 실행.
 - 증거: `test_release_boundary_guards.py::test_no_secrets_in_tracked_files` 수정 전 1 failed(해당 문서 line 3 지목) → 수정 후 통과. 이 오탐이 58커밋 push를 pre-push 훅에서 두 차례 거부했다.

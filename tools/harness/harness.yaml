@@ -10,7 +10,6 @@ adr_gaps:
   D-499: "not present on main or any committed branch when D-504 was written"
   D-500: "ADR on branch (measured motion response), not yet on main"
   D-501: "ADR on branch (fleet document tabs), not yet on main"
-  D-502: "ADR on branch (battery E-stop evidence), not yet on main"
   D-503: "ADR on branch (autonomy facts queue), not yet on main"
   D-492: "ADR on a branch (VLM stuck judgment, D-438 tier), not yet on main; remove when it lands"
   D-486: "renumbered to D-489/D-490 on feat/fleet-map-address-route before landing"
