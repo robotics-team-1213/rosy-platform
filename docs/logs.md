@@ -6768,3 +6768,19 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 오탐 하나가 공유 push 게이트를 막아 모든 세션의 푸시를 지연시킨다 — 문서 착지 전 1분 시험이 push 훅 실패를 예방한다
+
+## 2026-10-07 · uncommitted · docs(adr): D-504 Pilot 녹화에 바닥 IR 원시값
+
+- 변경: D-504. Pilot 녹화 토픽에 `ir_sensor/range`(좌·중·우 ADC)를 더하고 API 참조 5.10 토픽 줄에 적었다. 초음파 `us_sensor/range`는 넣지 않는다. `line/keep_debug`는 이미 녹화되던 것을 그 줄에 맞췄다.
+- 증거: 구현 시험은 perception 기록. 문서 계약 시험은 이 항목을 쓴 뒤 실행.
+- gate 변화: 없음
+- 결정: D-504 Proposed
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(adr): Pilot 바닥 IR 녹화 번호는 D-506
+
+- 변경: 머지하면서 D-504는 얼굴 애니메이션 ADR이, D-505는 상태 전환 화면 ADR이 먼저 썼다. 바닥 IR 녹화 결정은 D-506이다. 초음파 `us_sensor/range`는 넣지 않는다.
+- 증거: 직전 D-504 항목은 그 커밋 당시 번호다. ADR 파일은 `docs/adr/D-506-pilot-recording-ir-range.md`.
+- gate 변화: 없음
+- 결정: D-506 Proposed
+- 교훈: 없음
