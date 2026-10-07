@@ -27,6 +27,7 @@ class Rig:
         self.now, self.x, self.y, self.yaw = 1., 0., 0., 0.
         self.v = self.w = 0.
         self.calibrating = False
+        self.odom_lead_ns = 0  # odom source stamp ahead of CORE's source clock
         self.m = LineFollowManager(Bus(), clock=lambda: self.now, config=LineFollowConfig(**config))
         self.m.bind_recovery(calibration_active=lambda: self.calibrating, linear_ceiling=lambda: .1)
         if proof:
@@ -43,7 +44,7 @@ class Rig:
         self.x += dx
         if pose:
             stamp = round(self.now * 1e9)
-            self.m.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame='odom',
+            self.m.observe_return_pose(stamp_ns=stamp+self.odom_lead_ns, source_now_ns=stamp, frame='odom',
                                        x=self.x, y=self.y, yaw=self.yaw, received_at=self.now)
         if points is not None:
             self.m.observe_scan_points(points, received_at=self.now)
@@ -245,6 +246,15 @@ def test_turn_advance_reacquire_completes(turn_deg):
     decision, status = rig.step(seen=True, move=True)
     assert status.junction.state == 'idle' and decision.linear > 0 and status.state == 'TRACKING'
     assert rig.m._bridge_hint is None
+
+
+def test_turn_completes_with_odom_stamps_1_ms_ahead_of_core_clock():
+    """D-495 SIM finding 2: a 1 ms future stamp wiped the trail every sample (aborted odom)."""
+    rig = Rig()
+    rig.odom_lead_ns = 1_000_000
+    _to_turning(rig, 90.)
+    decision, status = rig.turn_until('turning', seen=False)
+    assert status.junction.state == 'advancing' and abs(_yaw_error_deg(rig.yaw, 90.)) <= 5.
 
 
 def test_turn_waits_for_the_robot_to_stand_still():
