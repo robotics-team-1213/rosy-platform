@@ -510,19 +510,26 @@ class StuckResolver:
         self._pins = kept
 
     def _peer_ahead(self, row, rows) -> bool:
-        me = _pose_of(row)
-        if me is None:
-            return False
-        x0, y0, yaw = me
-        c, s = math.cos(yaw), math.sin(yaw)
-        for other in rows:
-            if other is row or not other.get("online", True):
-                continue
-            pose = _pose_of(other)
-            if pose is None:
-                continue
-            dx, dy = pose[0] - x0, pose[1] - y0
-            ahead, side = c * dx + s * dy, -s * dx + c * dy
-            if 0.0 < ahead <= self.config.peer_reach_m + self.config.peer_radius_m and abs(side) <= self.config.peer_band_half_width_m:
-                return True
-        return False
+        return bool(peer_ahead(row, rows, self.config))
+
+
+def peer_ahead(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) -> Optional[bool]:
+    """R1's judgement: an online peer inside the front band. None = this robot has no pose.
+
+    Shared with the Fleet stuck-episode log, so the recorded value is what R1 would see."""
+    me = _pose_of(row)
+    if me is None:
+        return None
+    x0, y0, yaw = me
+    c, s = math.cos(yaw), math.sin(yaw)
+    for other in rows:
+        if other is row or not other.get("online", True):
+            continue
+        pose = _pose_of(other)
+        if pose is None:
+            continue
+        dx, dy = pose[0] - x0, pose[1] - y0
+        ahead, side = c * dx + s * dy, -s * dx + c * dy
+        if 0.0 < ahead <= config.peer_reach_m + config.peer_radius_m and abs(side) <= config.peer_band_half_width_m:
+            return True
+    return False

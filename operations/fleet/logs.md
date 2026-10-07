@@ -2327,3 +2327,45 @@
 - gate 변화: 없음. LOCAL GO 유지 — 표시 경고만 만들었고 관측·목표·주행 경로는 그대로
 - 결정: 해당 없음(D-457 추적 보정의 표시 전용 보강)
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(fleet): D-494 6 주행 가르치기 — 기록·RDP·초안 확정·여기에 주소
+- 변경: 순수 `fleet/routing/teach.py`(점 남기기 `LOCALIZED` 또는 다리 ≤ 0.5 m·0.1 m 간격, 반복형 RDP 0.02 m, 끝 0.15 m 장소 후보, 초안 본문에 간선·새 장소 붙이기), `server/teach_service.py`·`teach_routes.py`(`GET /api/fleet/teach`, `POST /api/fleet/teach/start|stop|confirm|place`, 이름 있는 운영자, 현장 지도 이벤트), `SiteMapStore.record_event`, `app.py` 4줄 배선, 현장 지도 화면 "지도 가르치기" 칸(`web/site-map-teach.js`, 모델 도우미, 점선 표시). `console.py`는 고치지 않음
+- 증거: `operations/fleet/test` 2459 passed·124 skipped·1 failed(`test_routing` 표준 라이브러리 import 규칙: `copy` → 고친 뒤 `test_routing.py`·`test_routing_teach.py`·`test_teach.py` 45 passed), node `test/web/*.mjs` 151 passed, Chromium 스모크(1440·390, 기록→멈춤→확정→주소, 콘솔 오류 0, X:\DevTemp\d494-teach). `test/architecture`+문서+api_web 271 passed·1 failed = 크기 판정 `fleet: 41719 > 41014+150`(이 브랜치 +593, 재판정 대기). `test/known_failures.py` 그 외 0 new
+- gate 변화: 없음. SOURCE 호스트 시험만. 로봇에 아무것도 보내지 않는다. 현장 가르치기는 Rosy Cam 맞춤 뒤
+- 결정: D-494 6 (구현 부록 2026-10-07 — 6항 가르치기)
+- 교훈: `fleet/routing`은 표준 라이브러리 화이트리스트(`copy` 포함 안 됨)가 시험으로 걸려 있다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 6 독립 검토 반영 — LOCALIZED만 기록·최신 기록 확정·유휴 자동 멈춤·끝 고정
+- 변경: `DEGRADED`는 다리 길이와 상관없이 남기지 않음(재앵커 튐 제거). 확정 대기 목록은 최신 먼저, 콘솔은 가장 최근 기록(`newestPending`)을 확정. 10분 동안 새 점이 없거나 20000점이면 같은 멈춤 길로 스스로 멈춤(`system:teach_idle`, `reason idle|full`). 끝 고정 때 장소 0.15 m 안의 앞·뒤 중간 점을 뺌. 점 mm 반올림, 주소 yaw 감기, 멈춘 뒤 원점 비움, 첫 표본 오류 잡기, 바뀔 때만 지도 다시 그림, 초안 크기·오류 변환은 `site_map_routes`의 것을 함께 씀. 크기 판정 41764(독립 재판정, 추가분 +638)
+- 증거: `operations/fleet/test` 2464 passed·124 skipped, `test/architecture` 132 passed·1 skipped, node `site-map.test.mjs` 12 passed, Chromium 스모크(1440·390) 콘솔 오류 0, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만
+- 결정: D-494 6 구현 부록 1·5·6항 갱신
+- 교훈: 기록 규칙의 "또는"은 신뢰 상태 하나를 다리 길이로 대신하게 한다. 재앵커 순간의 DEGRADED 0 m 다리가 그대로 선에 들어갔다
+
+## 2026-10-07 · uncommitted · test(fleet): 추적 보정 적용의 렌즈 지문을 브라우저·라우트 시험으로 고정
+- 변경: "추적 보정 적용"의 렌즈 지문 배선은 c598918fc·0965acc94에서 이미 main에 다 들어 있었다(적용 시점 라이브 프레임 X-Source-Lens → `map-fit-view.js` applyButton의 `visionView.currentLensInfo()` → `map-fit.js` `calibrationRequest` lensBody → 서버 `CalibrationApproval.lens` → `build_record` 검증·개정 해시 포함; 프레임에 렌즈가 없을 때만 "렌즈 정보가 없어 렌즈 검사 없이 적용했습니다" 안내). 이 커밋은 그 배선을 증명하는 시험만 더한다. `test/test_fleet_console_browser.py` 신규 2건 — 설치 맞춤 패널에서 통과 제안과 렌즈 헤더 프레임으로 적용을 누르면 POST 본문에 `{kind, focal_mm, hfov_deg}`가 실리고 안내가 붙지 않는다 / 헤더 없는 프레임이면 `lens: null`로 저장되고 안내가 붙는다. `test_overhead_tracking_api.py` — 렌즈를 넣은 승인이 목록·Vision 설정 조회까지 그대로 남으며 렌즈 없는 승인과 개정이 다르고, 잘못된 렌즈 본문 3종(필드 누락·대문자 kind·여분 필드)이 422
+- 증거: 브라우저 신규 2 passed(ROSY_RUN_BROWSER_TESTS=1), 변이 증명 — applyButton의 lens 인자를 지우면 적색, 복원 녹색; `tracking.py` approve의 lens 전달을 지우면 라우트 시험 적색, 복원 녹색. `test_overhead_tracking_api.py` 11 passed, tracking 3종·서버 앱·콘솔 계약 targeted 103 passed, node map-fit 17·vision-lens-profile 7·camera-map 1 passed, known_failures 0 NEW
+- gate 변화: 없음. 제품 코드 변경 없음(시험만)
+- 결정: 해당 없음(D-457 1항 표시 전용 경로의 시험 보강)
+- 교훈: 소스 문자열 단언(`"calibrationRequest(" in fit_view`)은 배선이 빠져도 녹색으로 남는다 — 클릭해서 본문을 잡는 브라우저 시험이 배선의 증거다
+
+## 2026-10-07 · uncommitted · feat(fleet): 직사각형 카메라 평면 지도와 클릭 좌표 확인
+- 변경: 기존 표시 보정·preview lease·평면 변환을 재사용해 현장 지도에 직사각형 카메라 영상과 미터 좌표를 표시한다. 같은 지도 ID·렌즈·영상 크기·신선도를 확인하고, 카메라 변경 시 이전 영상을 비운다. 좌표 확인과 운행 선택은 분리하며 확인 중 경로 계산·시작·재개를 잠근다. 새 API·패키지는 없음
+- 증거: node 153 passed; 관련 Python 148 passed·26 skipped; Chromium 관련 5 passed, 최종 좌표 확인 회귀 1 passed; known_failures 0 NEW. 저장된 현장 영상으로 실제 화면 1440·390·320 px에서 직사각형 지도·좌표 확인, 가로 넘침 없음. 독립 소스 검토 PASS
+- gate 변화: 없음. SOURCE/LOCAL 증거만; 새 화면 배포·실시간 장치 영상·물리 주행 수용은 미확인. 좌표 클릭은 지도 저장·활성화·로봇 목표 전송을 하지 않는다
+- 결정: D-497 7항
+- 교훈: 영상 다시 불러오기 전에 좌표 확인 상태를 비워야 운행 선택으로 클릭이 흘러가지 않는다
+
+## 2026-10-07 · uncommitted · feat(fleet): 막힘 에피소드 기록
+- 변경: `LineStuckBoard.observe`의 전이(열림·`cleared`·`replaced`·`left_roster`)를 `--tasks-db` 파일의 새 테이블 `fleet_line_stuck_episodes`에 남긴다. 시작할 때 열린 행은 `fleet_restart`로 닫고, 같은 `stuck_id`가 다시 보이면 처음 `opened_at`을 둔 채 다시 연다. 열 때 `local_enabled`·`trip_busy`(트립 실행기 `robot_busy`)·`peer_ahead`(resolver R1과 같은 모듈 함수로 꺼냄, 자세 없으면 NULL)·MapPose를 담고, 닫을 때 답 기록에서 `resolved_by`/`last_answer_tier`/`escalation_code`를 정한다. `GET /api/fleet/line-stuck/episodes`(viewer+), API Ref v1.120
+- 증거: 계획 검증 묶음 192 passed, `test/known_failures.py` 0 new. `test_server_app`·`test_boundaries`·`test_cli`·`test_teach` 107 passed·1 failed(`test_cli.py::test_cell_job_stack_tolerance_injects_the_palletizing_compiler`, `rosy.execution` import 실패, 깨끗한 main에서도 실패)
+- gate 변화: 없음. SOURCE 호스트 시험만. 현장 배포 전
+- 결정: 자율 사슬 계획 1단계(D-407/D-438 범위 안, 새 ADR 없음)
+- 교훈: 결과를 모르는 답(`accepted` NULL)을 "스스로 풀림"과 나누려면 `<tier>_unconfirmed`를 따로 둬야 한다
+
+## 2026-10-07 · uncommitted · docs(api): 막힘 에피소드 경로 번호를 v1.121 로
+- 변경: main 에 D-502(fix/core-battery-health)가 v1.120 을 먼저 써서, 이 브랜치의 `GET /api/fleet/line-stuck/episodes` 변경 이력과 문서 머리 버전을 v1.121 로 옮겼다. 위 항목의 v1.120 은 v1.121 로 읽는다.
+- 증거: main 병합 뒤 관련 묶음 289 passed, `test/known_failures.py` 0 new.
+- gate 변화: 없음. 문서 번호만
+- 결정: main 이 먼저 쓴 번호를 두고 다음 번호를 쓴다
+- 교훈: API 번호는 착지 직전에 main 머리를 다시 본다

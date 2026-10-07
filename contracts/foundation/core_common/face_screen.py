@@ -297,7 +297,7 @@ CORE_MISSING_LINE = "CORE not responding"
 STOP_RELEASE = "Release: dashboard > E-stop reset"
 #: ASCII: the LCD font has no Hangul. The mode face stays D-385; this line says the situation.
 SITUATION_LINE = {"IDLE": "Waiting", "MANUAL": "Manual", "NAVIGATION": "Going", "DOCKING": "Docking"}
-BLOCKED_LINE = "Blocked"
+NAV_STOP_LINE = {"BLOCKED": "Route blocked", "FAILED": "Navigation failed"}
 #: Same shape as core_common.identity.ROBOT_ID_PATTERN. Kept here so this module stays stdlib-only.
 _ROBOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
@@ -412,7 +412,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         strip = f"Charging {percent:.0f}%" if percent is not None else "Charging"
         tone = "info"
     elif strip is None and mode == "NAVIGATION" and core.get("nav_state") in robot_state.NAV_STUCK:
-        strip = BLOCKED_LINE
+        strip = NAV_STOP_LINE[core["nav_state"]]
         tone = "info"
     elif strip is None and mode in SITUATION_LINE:
         strip = SITUATION_LINE[mode]

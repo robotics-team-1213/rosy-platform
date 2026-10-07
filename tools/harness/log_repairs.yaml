@@ -10,3 +10,5 @@
 "e2f80dbdfc41bdcff21a27d50ddd7ae909a32d02270c5db525808c6d9977883d": "d0cee132dfe7dc874ae52e59707f932d496f5b16c62975e8bf3733bacc891556"
 # First G2 encoding repair: a720a036e original, e4fe8107a correction.
 "a5eecc71690d74036c9e393a2a47262843dfd369b71fe0d6ff92c40a24730c49": "4c3461ed3910dfe42491970e5d0aa7b12a8d9bbb4b044ffc11dbc8e235d0178a"
+# db92172b5 D-502 heading: branch name in the hash slot -> commit hash; body unchanged.
+"d26462be1800f9a02bb83365b65ef6a12406016d14272d38f1cb21b3e8e8b98c": "a8406fbbd05fc883d02e2a527decef8314bf9eb851ab7a89934c40ef73fd0d7b"

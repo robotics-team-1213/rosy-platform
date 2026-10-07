@@ -143,14 +143,16 @@ function renderRecentList(root, onConnect) {
 function tokenForm() {
   const form = el("form", null, {"data-pilot-token-form": ""});
   const field = el("ui-field", null, {
-    placeholder: "로그인 코드(ABCD-EFGH) 또는 토큰", "aria-label": "로그인 코드 또는 운전 토큰",
+    placeholder: "ABCD-EFGH 또는 토큰", "aria-label": "로그인 코드 또는 운전 토큰",
     autocomplete: "off", name: "token",
     // 태블릿 실측: 안드로이드 키보드가 첫 글자를 대문자로 바꿔 유효한 토큰이 401 이 됐다.
     autocapitalize: "off", autocorrect: "off", spellcheck: "false", inputmode: "text",
   });
   const submit = el("ui-button", "연결", {type: "button"});
   submit.setAttribute("kind", "primary");
-  form.append(field, submit);
+  const label = el("label", "로그인 코드 또는 운전 토큰", {class: "ui-field-label"});
+  label.append(field);
+  form.append(label, submit);
   return {form, field, submit};
 }
 

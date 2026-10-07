@@ -32,7 +32,6 @@ from std_msgs.msg import Bool, Float32, String
 from std_srvs.srv import Empty, SetBool
 
 from core.bridge import (
-    battery_policy,
     display,
     docking_mode,
     goal_tracker,
@@ -338,7 +337,7 @@ class RosBridge:
 
     def _on_battery(self, msg: Float32) -> None:
         self._voltage_topic_seen = True
-        battery_policy.apply_voltage(self._svc, float(msg.data))
+        observation.battery_voltage(self._svc, float(msg.data), received_at=time.time())
 
     def _on_lane_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())
