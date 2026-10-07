@@ -65,6 +65,7 @@ from collections import deque
 import numpy as np
 
 from .lane import LaneObservation
+from .crosswalk_stripes import crosswalk_extent
 from .lane_bev import BirdsEye
 from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tests
     CORE_HALF_M,
@@ -297,6 +298,7 @@ class LaneKeeper:
             self.last["reason"] = "washed"
             self._forget()
             return None
+        self.last["crosswalk"] = crosswalk_extent(grid, view.x[:, 0])  # D-491 §4
         coarse = grid[::FIT_STRIDE, ::FIT_STRIDE]
         cells = np.flatnonzero(coarse.ravel())
         points = np.stack([view.x[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells],
