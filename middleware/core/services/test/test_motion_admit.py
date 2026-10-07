@@ -73,6 +73,7 @@ def test_centre_ok_admits_centre_only_for_approach_and_advance(kind):
     assert site.admit(.02, 0., kind) is (kind in ('return', 'retrace'))
     site.feed(ir='left')
     assert site.admit(.02, 0., kind, centre_ok=True) is (kind != 'bridge')  # not widened
+    assert Site(ir='stale').admit(.02, 0., kind, centre_ok=True) is False  # never stale
 
 
 @pytest.mark.parametrize('kind', KINDS)
