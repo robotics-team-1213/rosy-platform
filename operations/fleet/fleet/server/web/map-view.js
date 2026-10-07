@@ -403,7 +403,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const height = cameraOn ? turn.height : rect.height > 0 ? rect.height : fallback.height;
     const dpr = cameraOn ? 1 : window.devicePixelRatio || 1;
     // 실영상 위 클릭(시작점 선택)은 그린 것과 같은 회전·보정을 거꾸로 거친다.
-    view.cameraPick = cameraOn ? (x, y) => cameraScreenToMap(calibration.map_to_image, turn, x, y) : null;
+    const pickRef = { x: (bounds.min_x + bounds.max_x) / 2, y: (bounds.min_y + bounds.max_y) / 2 };
+    view.cameraPick = cameraOn ? (x, y) => cameraScreenToMap(calibration.map_to_image, turn, x, y, pickRef) : null;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     const ctx = canvas.getContext("2d");
@@ -812,6 +813,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     let lastFrame = null;
     const shown = () => stage.dataset.view === "camera" || ["auth", "unavailable", "loading"].includes(stage.dataset.mapState);
     const showFrame = () => setLive(lastFrame && (shown() ? turnedUrl(lastFrame) : lastFrame.url));
+    // 지도 상태가 바뀌어 조감도가 드러나면 다음 프레임을 기다리지 않고 돌린 그림으로 바꾼다.
+    scope.subscribe(() => {
+      const observer = new MutationObserver(showFrame);
+      observer.observe(stage, { attributes: true, attributeFilter: ["data-map-state"] });
+      return () => observer.disconnect();
+    });
     scope.listen(toggle, "click", () => {
       const large = stage.dataset.view !== "camera";
       stage.dataset.view = large ? "camera" : "map";

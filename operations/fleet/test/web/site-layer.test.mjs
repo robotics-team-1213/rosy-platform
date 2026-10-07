@@ -105,10 +105,15 @@ test("D-513 7: a click on the turned picture maps back through the turn and cali
     const back = turn.unpoint(...Object.values(turn.point(30, 40)));
     assert.deepEqual(back, { x: 30, y: 40 });
     const shown = turn.point(100 * 0.5 + 200, -100 * -0.25 + 100);
-    const map = cameraScreenToMap(h, turn, shown.x, shown.y);
+    const map = cameraScreenToMap(h, turn, shown.x, shown.y, { x: 0, y: 0 });
     assert.ok(Math.abs(map.x - 0.5) < 1e-9 && Math.abs(map.y + 0.25) < 1e-9, `rot ${rot}`);
   }
-  assert.equal(cameraScreenToMap([0, 0, 0, 0, 0, 0, 0, 0, 0], quarterTurn(0, 1, 1), 0, 0), null);
+  assert.equal(cameraScreenToMap([0, 0, 0, 0, 0, 0, 0, 0, 0], quarterTurn(0, 1, 1), 0, 0, { x: 0, y: 0 }), null);
+  // A tilted camera: image rows above the horizon have no floor point.
+  const tilted = [100, 0, 0, 0, 100, 0, 0, 1, 1]; // w = y + 1: the floor is y > -1
+  const flat = quarterTurn(0, 400, 400);
+  assert.ok(cameraScreenToMap(tilted, flat, 0, 50, { x: 0, y: 0 }));
+  assert.equal(cameraScreenToMap(tilted, flat, 0, 150, { x: 0, y: 0 }), null); // beyond the horizon row 100
 });
 
 test("D-513 7: the map view turn follows where map +x points on the turned picture", () => {

@@ -29,7 +29,8 @@ let siteCameras = null; // GET /api/fleet/site-map: per-source display_rotation_
 function viewTurn(mapId) {
   const record = calibrations.find(c => c.map_id === mapId && c.source_id === $('plane-source').value)
     || calibrations.find(c => c.map_id === mapId);
-  return record ? mapQuarterTurn(record, displayRotation(siteCameras, record.source_id)) : 0;
+  // Without the camera rows the installed turn is unknown: keep the plain map frame, not a half turn.
+  return record && siteCameras ? mapQuarterTurn(record, displayRotation(siteCameras, record.source_id)) : 0;
 }
 const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
   places: () => shown()?.places || [], render: () => render(),

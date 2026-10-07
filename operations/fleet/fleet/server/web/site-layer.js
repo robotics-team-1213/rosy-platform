@@ -134,11 +134,15 @@ export function quarterTurn(rot, w, h) {
 }
 
 // 돌린 카메라 화면의 점 → 지도 m. map_to_image 를 뒤집어 쓴다. 지평선 뒤면 null.
-export function cameraScreenToMap(mapToImage, turn, x, y) {
-  const inverse = Array.isArray(mapToImage) && mapToImage.length === 9 ? invert3(mapToImage) : null;
-  if (!inverse) return null;
+// 역행렬의 부호는 지도 위 기준점 ``ref``(트랙 중심)가 앞쪽(w > 0)이 되게 한 번 맞춘다 —
+// 부호를 점마다 바꾸면 지평선 뒤 픽셀이 거울 위치의 바닥 점으로 돌아온다.
+export function cameraScreenToMap(mapToImage, turn, x, y, ref) {
+  let inverse = Array.isArray(mapToImage) && mapToImage.length === 9 ? invert3(mapToImage) : null;
+  const seen = inverse && ref ? projectHomography(mapToImage, ref.x, ref.y) : null;
+  if (!seen) return null;
+  if (inverse[6] * seen[0] + inverse[7] * seen[1] + inverse[8] < 0) inverse = inverse.map((v) => -v);
   const raw = turn.unpoint(x, y);
-  const p = projectHomography(inverse, raw.x, raw.y) || projectHomography(inverse.map((v) => -v), raw.x, raw.y);
+  const p = projectHomography(inverse, raw.x, raw.y);
   return p ? { x: p[0], y: p[1] } : null;
 }
 
