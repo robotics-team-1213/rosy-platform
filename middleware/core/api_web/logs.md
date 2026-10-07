@@ -645,3 +645,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. 현장 설정·SIM·DEVICE는 D-498 순서
 - 결정: D-498 (Proposed)
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(api): D-494 6 v1.119
+- 변경: Fleet 주행 가르치기 행(`/api/fleet/teach*`)과 이력 행, `core_api_web/api/app.py` 계약 버전 두 문자열, 버전 고정 시험 다섯 곳
+- 증거: `test/architecture`·`test/test_line_follow_contract_docs.py`·`middleware/core/api_web` 271 passed·14 skipped(크기 판정 1건은 Fleet 패키지), Fleet 버전 고정 시험 포함 `operations/fleet/test` 통과
+- gate 변화: 없음. Robot API·envelope 1.0 변경 없음
+- 결정: D-494 6
+- 교훈: 없음

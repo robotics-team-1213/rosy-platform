@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 전화 폭
-- 2026-10-07 · uncommitted · uiux(pilot): 비상 카메라 전화 폭
-- 2026-10-07 · uncommitted · fix(pilot): 열린 소켓의 무응답 상태 숨김
-- 2026-10-07 · uncommitted · uiux(pilot): 상태 소켓 상실 중 주행 차단
-- 2026-10-07 · uncommitted · 주행 HUD 상태 용어
+- 2026-10-07 · uncommitted · uiux(pilot): 휴대폰 HUD 행동 폭 정렬
+- 2026-10-07 · uncommitted · fix(pilot): APK 번들 시험에 팔 화면 자산 고정
+- 2026-10-07 · uncommitted · uiux(pilot): 카메라 면적 병합 후 검증
+- 2026-10-07 · uncommitted · uiux(pilot): 320px 카메라 면적 회복
+- 2026-10-07 · uncommitted · uiux(pilot): 조작 응답 시간 출처 표시
