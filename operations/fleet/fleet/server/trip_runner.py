@@ -24,7 +24,7 @@ from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import arc_id, lane_action, replan_hold, theta, unsupported
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
-                                     OPEN, LiveTrip, TripError, pose_diagnostics, pose_view)
+                                     OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view)
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -119,6 +119,8 @@ class TripRunner:
             if self._clock() - row["created_at"] > PLAN_TTL_S:
                 raise TripError(422, "TRIP_PLAN_EXPIRED", {"ttl_s": PLAN_TTL_S})
             graph = self._graph_for(plan["map_version"])
+            map_id = self._store.active()[1].map_id
+            lane = any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in plan["segments"])
             caps = await self._call(self._caps(robot_id), "TRIP_ROBOT_CAPS_UNKNOWN")
             if caps is None:
                 raise TripError(422, "TRIP_ROBOT_CAPS_UNKNOWN")
@@ -127,12 +129,15 @@ class TripRunner:
                                   max_turn_deg=self.config.max_turn_deg)
             if refused is not None:
                 raise TripError(422, "TRIP_MODE_UNSUPPORTED", refused)
+            floor = caps.site_floor_map_id  # D-507 9: absent (older CORE) or null declares no floor
+            if lane and floor is not None and floor != map_id:
+                raise TripError(422, "TRIP_SITE_FLOOR_MISMATCH", {"site_floor_map_id": floor, "map_id": map_id})
             if self.running() is not None:
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self.running()["trip_id"]})
             engaged = self._engaged(robot_id)
             if engaged is not None:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
-            if any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in plan["segments"]):
+            if lane:
                 mode = await self._call(self._junction.line_follow_mode(robot_id), "TRIP_LINE_FOLLOW_NOT_ACTIVE")
                 if mode not in LINE_MODES:
                     raise TripError(422, "TRIP_LINE_FOLLOW_NOT_ACTIVE", {"mode": mode})
@@ -149,7 +154,7 @@ class TripRunner:
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
                     "caps": {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
-                             "junction_turn": caps.junction_turn}}
+                             "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot}}
             live = LiveTrip(view, graph, row["request"])
             self._live = live
             self._restarted = [t for t in self._restarted if t["robot_id"] != robot_id]  # this trip owns it
@@ -244,7 +249,7 @@ class TripRunner:
             pose = await self._pose(robot_id)
             if not live.open:
                 return
-            live.view["pose"] = pose_view(pose)
+            live.see(pose)
             if pose is None or pose.state != LOCALIZED:
                 await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None,
                                                            **pose_diagnostics(pose)}, halt_free=False)
@@ -256,13 +261,17 @@ class TripRunner:
                     if sent is not None and live.junction.get("seq") == sent["seq"] and \
                             live.junction.get("state") in (*MANOEUVRE, "executing"):
                         sent["carried"] = True  # CORE took it on: never sent again
+                else:  # a free segment: no stale lane ``waiting`` may end it
+                    live.junction = {}
                 if not live.open:
                     return
-                failed = self._junction_failed(live)
-                if failed is not None:
-                    await self._stop(live, "stopped", "junction", failed)
-                    return
                 index, s, off = self._locate(live, pose)
+                remaining = live.segments[index]["s_to"] - s
+                lane = live.arc(index).drive_mode == "lane"
+                failed = live.junction_end(self._clock(), remaining if lane else None, self.config)
+                if failed is not None:
+                    await self._stop(live, "stopped", *failed)
+                    return
                 if off is not None:
                     await self._stop(live, "stopped", "pose", {"off_lane_m": round(off, 3),
                                                                **pose_diagnostics(pose)}, halt_free=False)
@@ -273,9 +282,7 @@ class TripRunner:
                     live.view["segment_index"] = index
                     live.last_goal = None
                 self._describe(live)
-                remaining = live.segments[index]["s_to"] - s
                 last = index == len(live.segments) - 1
-                lane = live.arc(index).drive_mode == "lane"
                 if not last and not live.replan_pending and self._needs_replan(live, index):
                     live.replan_pending = True
                 if (live.replan_pending and live.view["hold"] is None and not last
@@ -342,16 +349,21 @@ class TripRunner:
                 return
         stop_after = min(max(remaining, 0.0), MAX_STOP_AFTER_M) if action == STOP else None
         turn = round(theta(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
+        expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
         if not live.open:
             return
         try:
             reply = await self._call(self._junction.send_junction(
                 live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s,
-                turn_deg=turn)) or {}
+                turn_deg=turn, expect=expect)) or {}
         except RobotApiError as exc:
+            if exc.code == "JUNCTION_ODOM_STALE":  # D-507 2: no fresh odom at receipt; next tick sends again
+                live.view["detail"]["junction_retry"] = exc.code
+                return
             if exc.code != "JUNCTION_ALREADY_DONE":
                 raise
             reply = {"already_done": True}  # CORE R1: this place's action already ran
+        live.view["detail"].pop("junction_retry", None)
         await self._after_send(live)
         if reply.get("accepted") is False:  # CORE aborted a manoeuvre instead: an operator decides
             raise _JunctionAborted(reply.get("junction_seq"))
@@ -381,18 +393,6 @@ class TripRunner:
         await self._after_send(live)
         if reply.get("accepted") is False or reply.get("queued"):
             raise _GoalRefused(reply.get("reason") or "")
-
-    def _junction_failed(self, live: LiveTrip) -> Optional[dict]:
-        """D-495: CORE ``aborted``/``unresolved`` after our first instruction, or a long ``waiting``."""
-        junction = live.junction
-        state, now = junction.get("state"), self._clock()
-        live.waiting_since = (live.waiting_since or now) if state == "waiting" else None
-        ours = live.first_seq is not None and (junction.get("seq") or 0) >= live.first_seq
-        if (state in ("aborted", "unresolved") and ours) or (
-                state == "waiting" and now - live.waiting_since >= self.config.junction_wait_s):
-            return {"junction_state": state, "junction_place": junction.get("place_id"),
-                    "junction_reason": junction.get("reason")}
-        return None
 
     def _locate(self, live: LiveTrip, pose: MapPose) -> tuple[int, float, Optional[float]]:
         """``(segment index, s on it, off-lane distance or None)``; moves past finished segments."""
