@@ -588,9 +588,25 @@ SIZE_VERDICTS = {
         709,
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
+    "core/services/core_features/line_follow/recovery": (
+        2_320,
+        "accept: Independently re-judged 2026-10-07. Own size unit per "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md (moved "
+        "2026-10-07 by git mv, imports only): D-407 stuck recovery/wiring, D-468 lane_return*, D-476 "
+        "lane_bridge and D-494/D-495/D-498 junction as LineFollowManager mixins under the single manager "
+        "lock and generation; no own lock, thread, store or publisher, CORE CommandManager stays the final "
+        "cmd_vel publisher. Every file below 600. Baseline is the line count at the move; the +150 "
+        "allowance applies; re-judge on the next +150",
+    ),
     "core_features": (
-        14_934,
-        "accept: Independently re-judged 2026-10-07 (code-reviewer agent, read-only): ACCEPT with condition at 14934. "
+        12_772,
+        "accept: Independently re-judged 2026-10-07 at 12772 after the condition of the 14934 verdict was met: "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md moved line_follow lane recovery "
+        "(2320 lines) into its own size unit core/services/core_features/line_follow/recovery with its own "
+        "verdict. The move, not new code, brings core_features back under its allowance (main had reached "
+        "15091 > 14934+150). Remaining line_follow (manager, model, body_stop, clearance, crosswalk_zone) "
+        "keeps the policy, the D-422 safety path and the manager that binds the mixins. "
+        "Previously independently re-judged 2026-10-07 (code-reviewer agent, read-only): ACCEPT with condition at 14934. "
         "The growth is one line_follow junction mixin (junction.py 443, under the 600 file limit) plus "
         "manager/model/wiring hooks under the same manager lock, generation and CORE final publisher; "
         "no new owner, store, publisher or deploy unit. Condition: "
