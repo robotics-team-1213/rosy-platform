@@ -542,6 +542,7 @@ def test_ir_line_has_no_junction_gate_and_refuses_instructions():
 
 def test_supports_junction_turn_needs_fresh_keep_evidence_with_corner_turning():
     rig = Rig()
+    rig.m.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: True)
     assert rig.m.supports_junction_turn is False            # no keep_debug at all (line mode)
     rig.m.observe_junction('no_boundary', rig.now, corner_turning=True)
     assert rig.m.supports_junction_turn is True             # keep mode + lane_corner_turning
@@ -704,3 +705,18 @@ def test_still_thresholds_are_config():
     for _ in range(6):                     # creeping 0.06 m/s is above the 0.02 threshold
         decision, status = rig.step(seen=False, dx=.003)
     assert decision.angular == 0. and status.reason == 'junction_stopping'
+
+
+@pytest.mark.parametrize('proof', ['unbound', 'not_configured', 'raises'])
+def test_supports_junction_turn_needs_a_motion_proof_that_can_admit(proof):
+    """Final review 1: without the D-400 enforce floor proof every turn would abort
+    motion_unconfirmed, so the capability must be False."""
+    rig = Rig(proof=False)
+    if proof == 'not_configured':
+        rig.m.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: False)
+    elif proof == 'raises':
+        rig.m.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: 1 / 0)
+    rig.m.observe_junction('no_boundary', rig.now, corner_turning=True)
+    assert rig.m.supports_junction_turn is False
+    rig.m.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: True)
+    assert rig.m.supports_junction_turn is True

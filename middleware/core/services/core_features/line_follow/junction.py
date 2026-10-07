@@ -84,12 +84,20 @@ class JunctionMixin:
     @property
     def supports_junction_turn(self):
         """D-495 capability: live keep-mode keeper evidence with lane_corner_turning on (the
-        junction HOLD that starts a turn) and the bounded turn in this manager. The observer's
-        lane mode and flag are perception parameters; CORE learns them only from line/keep_debug
-        (published in keep mode only, carrying corner_turning), so no fresh frame means False."""
+        junction HOLD that starts a turn) and a motion proof that can admit the turn at all.
+        The observer's lane mode and flag are perception parameters; CORE learns them only from
+        line/keep_debug (published in keep mode only, carrying corner_turning), so no fresh frame
+        means False. The proof today is the D-400 enforce floor proof (LiDAR, IMU, IR); without
+        it every turn would abort motion_unconfirmed, so the capability is False."""
         with self._lock:
             at = self._keep_corner_at
-            return at is not None and 0 <= self._clock()-at <= KEEP_EVIDENCE_S
+            if at is None or not 0 <= self._clock()-at <= KEEP_EVIDENCE_S:
+                return False
+            ready = self._return_proof_configured
+            try:
+                return self._return_motion is not None and ready is not None and ready() is True
+            except Exception:  # noqa: BLE001 - an unreadable proof reports no turn
+                return False
 
     def _reset_junction(self):
         """A line-follow session owns its instruction. A maneuver cut by a mode change (incl.

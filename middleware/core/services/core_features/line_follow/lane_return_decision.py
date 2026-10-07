@@ -16,19 +16,23 @@ _LOCAL_REASONS = {'following','lane_departure','line_not_visible','observation_s
 
 
 class LaneReturnDecisionMixin(LaneBridgeMixin):
-    def bind_return_motion(self, provider, *, floor_proof_live=None):
+    def bind_return_motion(self, provider, *, floor_proof_live=None, proof_configured=None):
         """Internal qualified sensor/swept-space probe (now, linear, angular) -> strict bool.
 
         Even a (0,0) probe requires floor validity and fresh sensor provenance.
         A true value establishes neither control authority nor camera calibration.
         floor_proof_live () -> bool: False only when the worker floor proof cannot exist
         (sensor adapter not enforce); D-476 then rests on its own basis. None = always live.
+        proof_configured () -> bool: the provider can say yes at all (D-495 junction_turn
+        capability); None = unknown, which reports no junction turn.
         """
-        if not callable(provider) or (floor_proof_live is not None and not callable(floor_proof_live)):
+        if not callable(provider) or any(f is not None and not callable(f)
+                                         for f in (floor_proof_live, proof_configured)):
             raise ValueError('return motion proof must be callable')
         with self._lock:
             self._return_motion=provider
             self._floor_proof_live=floor_proof_live
+            self._return_proof_configured=proof_configured
             self._evidence_revision += 1
 
     def _return_probe(self, now, linear, angular):

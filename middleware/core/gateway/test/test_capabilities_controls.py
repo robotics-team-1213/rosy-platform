@@ -87,6 +87,8 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert base["junction_turn"] is False              # no live keep-mode evidence yet
     lf = svc.line_follow  # D-495: a fresh keep_debug frame with corner_turning on
     lf.observe_junction("no_boundary", lf._clock(), corner_turning=True)
+    assert _controls(client)["items"][0]["junction_turn"] is False  # no enforce floor proof
+    lf.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: True)
     assert _controls(client)["items"][0]["junction_turn"] is True
     navigation = svc.capability._data.setdefault("navigation", {})
     navigation["goal_navigation"] = False

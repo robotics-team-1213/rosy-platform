@@ -129,6 +129,7 @@ def test_turn_request_arms_and_reports_turn_deg(core_client):
 def test_keep_debug_corner_turning_is_the_junction_turn_evidence(core_client):
     _, services, clock = _active(core_client)
     assert services.line_follow.supports_junction_turn is False
+    services.line_follow.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: True)
     for corner, expected in ((True, True), (False, False), ("yes", False)):
         raw = json.dumps({"reason": "no_boundary", "stamp": 100.0, "corner_turning": corner})
         observation.keep_junction(services, raw, source_now=100.1, received_at=clock["t"])
