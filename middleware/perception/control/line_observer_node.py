@@ -52,6 +52,11 @@ _READ_ONLY = ParameterDescriptor(read_only=True)
 KEEP_MAX_FRAME_GAP_S = 0.5
 
 
+#: A spin in place: |wz| over half D-495's 0.3 rad/s turn floor, |vx| under CORE's 0.01 m/s still bound.
+def _spinning_in_place(twist):
+    return twist is not None and abs(twist[1]) > 0.15 and abs(twist[0]) < 0.01
+
+
 class LineObserverNode(Node):
     def __init__(self):
         super().__init__('line_observer_node')
@@ -138,7 +143,7 @@ class LineObserverNode(Node):
         self._paint_half_width_m = paint_half_width(self.get_parameter('lane_paint_half_width_m').value)
         self._odom_pose = None
         self._odom_stamp = None
-        self._odom_wz = None
+        self._odom_twist = None
         self._corner_tracker = LaneCornerTracker(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
         self._edge_follower = LaneEdgeFollower(
@@ -200,7 +205,7 @@ class LineObserverNode(Node):
         self.create_subscription(
             String, 'camera/controls', self._on_camera_controls, controls_qos)
         mode = str(self.get_parameter('camera_lane_mode').value)
-        if mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
+        if mode in ('lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab'):
             self.create_subscription(
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
         if self._ir_calibration is None:
@@ -381,10 +386,8 @@ class LineObserverNode(Node):
             return None, 'threshold'
         if source == 'learned' and self._paint_worker is not None:
             every_n = int(self.get_parameter('learned_paint_every_n').value)
-            wz = self._odom_wz
-            fresh = (stamp is not None and self._odom_stamp is not None
-                     and abs(stamp - self._odom_stamp) <= KEEP_MAX_FRAME_GAP_S)
-            if not fresh or wz is None or abs(wz) > float(self.get_parameter('learned_paint_reuse_max_wz').value):
+            wz = pose_if_fresh(self._odom_twist and self._odom_twist[1], self._odom_stamp, stamp)
+            if wz is None or abs(wz) > float(self.get_parameter('learned_paint_reuse_max_wz').value):
                 every_n = 1
             mask = self._paint_worker.mask_for(
                 frame, every_n, stamp, clean=lambda m: clean_learned_mask(m, ground.horizon_row))
@@ -443,11 +446,12 @@ class LineObserverNode(Node):
             elif mode == 'keep':
                 # A camera gap (or the first keep frame of this node) starts
                 # the keeper afresh: sides and steering remembered from before
-                # the gap may belong to another place.
+                # the gap may belong to another place. So does a spin in place (D-507: its swept view latched the flip hold).
                 image_stamp = (float(msg.header.stamp.sec)
                                + float(msg.header.stamp.nanosec) * 1e-9)
                 if (self._keep_last_stamp is None
-                        or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S):
+                        or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
+                        or _spinning_in_place(pose_if_fresh(self._odom_twist, self._odom_stamp, image_stamp))):
                     self._lane_keeper.reset()
                     if self._paint_worker is not None:
                         self._paint_worker.reset()
@@ -577,7 +581,7 @@ class LineObserverNode(Node):
         self._odom_pose = (float(pose.position.x), float(pose.position.y), yaw)
         # The header stamp, not arrival time: edge_left compares it with the
         # image stamp, so dead or delayed odometry is no pose.
-        self._odom_wz = float(msg.twist.twist.angular.z)
+        self._odom_twist = (float(msg.twist.twist.linear.x), float(msg.twist.twist.angular.z))
         self._odom_stamp = (float(msg.header.stamp.sec)
                             + float(msg.header.stamp.nanosec) * 1e-9)
 
