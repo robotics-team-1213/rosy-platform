@@ -176,17 +176,10 @@ WINDOW_BEND_STEP_M = 0.02
 
 def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float, active,
                     config: TripConfig) -> Optional[dict]:
-    """D-507 2: the optional junction fields, only for a robot whose caps report ``junction_pivot``.
-
-    ``map_id`` (the active map the plan runs on) always; the expectation (``expect_in_m``,
-    ``expect_tol_m``, ``pivot_past_line_m``) only while the place is (0, 2] m along the lane,
-    otherwise CORE keeps today's behaviour for it. A plan whose map version is no longer the
-    active one sends none of them (logged, ``detail.junction_fields_dropped``); the replan
-    rule then holds the trip at the place.
-
-    CORE's keeper sees a junction ``JUNCTION_AHEAD_M`` (0.45 m) ahead, so ``arm_distance_m``
-    should be at least 0.45 + ``pivot_past_line_m`` + ``expect_tol_m`` for the instruction to
-    arrive before the detection; the default 0.6 is checked in SIM, not here.
+    """D-507 2 fields for a ``junction_pivot`` robot: ``map_id``, ``pivot_past_line_m`` (not for
+    ``stop``) and, where ``_straight_ahead`` allows, the window pair; none on another map version
+    (logged, ``detail.junction_fields_dropped``). ``arm_distance_m`` should be at least the
+    keeper's 0.45 m + pivot + tol so the instruction comes first; SIM checks the default 0.6.
     """
     view = live.view
     caps, pose = view.get("caps") or {}, view.get("pose") or {}
@@ -224,13 +217,11 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
 
 def _straight_ahead(live: "LiveTrip", index: int, remaining: float,
                     pose: dict) -> Optional[tuple[float, float]]:
-    """``(the place's distance along the robot's heading, the lane's largest distance beside that
-    heading ray up to the place)``, or None where CORE's window would be wrong.
+    """``(place distance along the robot's heading, largest lane distance beside that ray)``, or None.
 
-    CORE puts the expected point ``expect_in_m`` straight ahead of its pose at receipt, so a
-    lane that turns more than ``MAX_WINDOW_BEND_DEG`` between the robot and the place (the
-    260919 ring, the east/west bends) gets no window; a window along the path is later work.
-    A smaller bend widens the window by how far the lane runs beside the ray.
+    CORE projects ``expect_in_m`` straight ahead, so a lane turning more than
+    ``MAX_WINDOW_BEND_DEG`` before the place (the 260919 ring) gets no window (a path-following
+    window is later work); a smaller bend widens it by the lane's distance beside the ray.
     """
     if pose.get("x") is None or pose.get("y") is None or pose.get("yaw") is None:
         return None
