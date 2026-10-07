@@ -146,16 +146,17 @@ def test_site_map_api_reads_edits_and_activates_with_audit(tmp_path):
     assert ("/api/fleet/site-map/activate", "RESULT", 200) in audit
 
 
-def test_activation_needs_a_named_operator_and_waits_for_a_running_route(tmp_path):
+def test_activation_needs_a_named_operator_and_a_route_step_no_longer_blocks_it(tmp_path):
     client, _tasks, store, robot = _app(tmp_path)
     robot._state = _on_ring_s(store)
     saved = client.put("/api/fleet/site-map/draft", json={"map": _line()}, headers=OPERATOR).json()
     routed = client.post("/api/fleet/robots/rosy_60/route", json={"edges": ["ring_s"]},
                          headers={**OPERATOR, "Idempotency-Key": "r1"})
     assert routed.status_code == 200, routed.text
-    refused = client.post("/api/fleet/site-map/activate", json={"expected_revision": saved["revision"]},
-                          headers=OPERATOR)
-    assert refused.status_code == 409 and refused.json()["detail"]["code"] == "SITE_MAP_ROUTE_ACTIVE"
+    # D-491 5: the guard is a running trip (test_trip_runner), not a /route step in the last 30 s
+    done = client.post("/api/fleet/site-map/activate", json={"expected_revision": saved["revision"]},
+                       headers=OPERATOR)
+    assert done.status_code == 200
 
     anonymous = TestClient(create_app(FleetConsole([RobotEndpoint("rosy_60", "http://x", "t")],
                                                    [FakeRobot("rosy_60")]),
@@ -223,7 +224,7 @@ def test_trip_start_pose_and_map_refusals_and_execution_is_not_open(tmp_path):
     assert client.post("/api/fleet/robots/nobody/trip", json={"to": "NW"}, headers=OPERATOR).status_code == 404
     assert client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW", "execute": True},
                        headers=OPERATOR).status_code == 501
-    assert client.post("/api/fleet/trips/abc/start", headers=OPERATOR).status_code == 501
+    assert client.post("/api/fleet/trips/abc/start", headers=OPERATOR).status_code == 404
     (tmp_path / "empty").mkdir()
     empty, _t, _s, _r = _app(tmp_path / "empty", imported=False)
     assert empty.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"},
@@ -268,8 +269,8 @@ def test_site_map_errors_use_the_trip_error_shape(tmp_path):
     assert missing == {"code": "SITE_MAP_NOT_ACTIVE", "detail": {}}
     stale = client.post("/api/fleet/site-map/activate", json={"expected_revision": "x"}, headers=OPERATOR)
     assert set(stale.json()["detail"]) == {"code", "detail"}
-    assert client.post("/api/fleet/trips/abc/start", headers=OPERATOR).json()["detail"]["code"] == \
-        "TRIP_EXECUTION_NOT_AVAILABLE"
+    assert client.post("/api/fleet/trips/abc/start", headers=OPERATOR).json()["detail"] == \
+        {"code": "TRIP_PLAN_UNKNOWN", "detail": {}}
 
 
 def test_activation_refuses_a_map_the_planner_cannot_use(tmp_path, monkeypatch):
