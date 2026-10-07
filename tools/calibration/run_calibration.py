@@ -282,7 +282,10 @@ class Core:
             return None
 
     def teleop(self, linear, angular):
-        self.call("POST", "/api/v1/teleop", {"linear": linear, "angular": angular}, timeout=0.4)
+        # 1.0 s, not 0.4 s: with the bench recorder running a Pi answers late now and then
+        # (9dfk aborted twice, 2026-10-07). A late command is still safe: the robot's 300 ms
+        # teleop watchdog stops the wheels first.
+        self.call("POST", "/api/v1/teleop", {"linear": linear, "angular": angular}, timeout=1.0)
 
     def stop(self):
         for _ in range(3):
