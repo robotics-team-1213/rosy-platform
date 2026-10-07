@@ -718,6 +718,11 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
         assert "1/3 · 물리 정지 미확인" in summary.inner_text()
         result_box = summary.bounding_box()
         assert result_box and result_box["y"] >= 0 and result_box["y"] + result_box["height"] <= height
+        if width < 1024:
+            dispatch = page.locator("#dispatch-control").bounding_box()
+            all_robots = page.locator("#roster-toggle").bounding_box()
+            assert dispatch and all_robots and all_robots["y"] >= dispatch["y"] + dispatch["height"]
+            assert abs(dispatch["width"] - all_robots["width"]) <= 1
         page.get_by_text("rosy_02 주행 취소 응답 없음 — 대형 추종 ConnectError · 내비게이션 ConnectError · 차선 추종 ConnectError").wait_for()
         page.get_by_text("rosy_03 주행 취소 실패 — 주소 미확인 — 차선 추종 끄기 미전송").wait_for()
         page.get_by_text("대기 작업 2개 취소 · 로봇 취소 확인 대기 작업 1개").wait_for()
@@ -1932,6 +1937,9 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         assert page.locator("#roster article").count() == 1
         assert "rosy_03" in page.locator("#roster article").inner_text()
         save_temp_screenshot(page, f"fleet_console_mobile_default_{width}.png")
+        cancel = page.locator("#cancel-all").bounding_box()
+        all_robots = page.locator("#roster-toggle").bounding_box()
+        assert cancel and all_robots and abs(cancel["width"] - all_robots["width"]) <= 1, (cancel, all_robots)
         actions = page.locator("#roster article .robot-actions")
         action_widths, actions_width = actions.locator("ui-button").evaluate_all(
             "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
