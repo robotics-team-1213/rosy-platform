@@ -310,6 +310,7 @@ class ReturnController:
                     self._last_evidence = source_stamp
                 if self._count >= 3 and entered and self._normal(lane) and abs(lane.heading) <= .12:
                     self.checkpoint = (p, lane)
+                    self._reference_invalid = False  # D-507 7: the new checkpoint is the reference
                     self._candidate = None
                 return ReturnAction(self.phase, "contained")
             self._count = 0
@@ -349,6 +350,7 @@ class ReturnController:
                 self.phase = "tracking"
                 if self._normal(lane):
                     self.checkpoint = (p, lane)
+                    self._reference_invalid = False  # D-507 7: the new checkpoint is the reference
                 self._opened = self._search_start = self._search_pose = None
                 self._search_attempt = 0
                 self._candidate = None

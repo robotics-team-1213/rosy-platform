@@ -122,10 +122,16 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
             # overwrite a separately authorized operator action with its autonomous HOLD.
             if (self._return_controller.phase!='fleet'
                     or self._recovery.phase in ('TURNING','CRAWLING','YIELDED')):
+                if self._return_controller.phase=='tracking':  # D-507 7: D-468 idle
+                    self._status=self._status.model_copy(update={'lane_return_containment':'unknown'})
                 return None
         reason=(self._status.reason or '').removeprefix('camera_')
         if (self._status.state!='TRACKING' and reason not in _LOCAL_REASONS) or (obs and obs.quality_reason):
-            return decision
+            if self._return_controller.phase!='tracking':
+                return decision
+            # D-507 7: an idle D-468 leaves the tick to today's path, recovery included.
+            self._status=self._status.model_copy(update={'lane_return_containment':'unknown'})
+            return None
         view=self.return_evidence(now=now)
         linear,angular,authority=self._return_limits()
         floor=self.motion_admitted(now,0.,0.,'return')  # D-507 6
@@ -147,9 +153,11 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
             return bridge  # D-468 only measured this tick; the bridge owns the twist.
         if action.phase=='tracking' and not action.recovered:
             # D-507 7: unknown = today's following, shown so the operator sees D-468 is idle.
+            unknown=action.reason=='containment_unknown'
             self._status=self._status.model_copy(update={'lane_return_containment':
-                'unknown' if action.reason=='containment_unknown' else 'contained'})
-            return decision
+                'unknown' if unknown else 'contained'})
+            # Unknown = as recovery off: None lets today's path (incl. D-407 stuck) own the tick.
+            return None if unknown else decision
         if action.recovered:
             self._release_stuck(now)
             return self._stop_decision('HOLD','lane_return_corridor_verified')

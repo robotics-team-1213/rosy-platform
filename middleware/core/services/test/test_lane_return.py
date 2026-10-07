@@ -223,3 +223,69 @@ def test_unknown_frames_between_contained_frames_do_not_make_a_checkpoint():
     assert ctl.checkpoint is None
     ctl.tick(inp(1.5))
     assert ctl.checkpoint is not None
+
+# D-507 7 revision (2026-10-08 user decision): (2) a pose discontinuity or epoch change while
+# following, or (3) a proven-inside lane that is not the checkpointed one, also opens it.
+# Each case below is built so that only that one trigger can fire.
+def _checkpointed():
+    ctl = ReturnController(BODY)
+    for t in (1, 1.1, 1.2): ctl.tick(inp(t))
+    assert ctl.checkpoint is not None and ctl.phase == "tracking"
+    return ctl
+
+
+def test_pose_jump_while_following_opens_departure_without_lane_evidence():
+    ctl = _checkpointed()
+    action = ctl.tick(inp(1.3, pose=pose(1.3, 2), corridor=None))
+    # Departure opened this tick; with no checkpoint path left the same tick goes to search.
+    assert ctl._opened == 1.3 and (action.phase, action.reason) == ("search", "sensor_search")
+
+
+def test_epoch_change_while_following_opens_departure_without_lane_evidence():
+    from dataclasses import replace
+    ctl = _checkpointed()
+    action = ctl.tick(replace(inp(1.3, corridor=None), epoch=1))
+    assert ctl._opened == 1.3 and (action.phase, action.reason) == ("search", "sensor_search")
+
+
+def test_continuous_drift_into_a_lane_that_is_not_the_checkpointed_one_opens_departure():
+    ctl = _checkpointed()
+    # Continuous odom (no jump), a centered ready lane, body well inside (margin .04):
+    # only "inside but not the checkpointed corridor" (> .015 m off) can open it.
+    action = ctl.tick(inp(1.3, pose=pose(1.3, 0, .016)))
+    assert (action.phase, action.reason) == ("departure_stop", "containment_unconfirmed")
+
+def test_checkpoint_taken_after_a_jump_is_the_new_reference():
+    # Review finding 2: a jump before any checkpoint must not leave the reference invalid
+    # forever, or the re-verified lane would read as "not the checkpointed one" (3).
+    ctl = ReturnController(BODY)
+    assert ctl.tick(inp(1)).reason == "contained"
+    assert ctl.tick(inp(1.1, pose=pose(1.1, 2))).phase != "tracking"
+    action = None
+    for t in (1.2, 1.3, 1.4, 1.5):
+        action = ctl.tick(inp(t, pose=pose(t, 2)))
+        if action.recovered:
+            break
+    assert action.recovered and ctl.checkpoint is not None
+    for t in (1.6, 1.7):
+        action = ctl.tick(inp(t, pose=pose(t, 2)))
+        assert (action.phase, action.reason) == ("tracking", "contained")
+
+def test_checkpoint_first_taken_while_tracking_after_a_jump_is_the_new_reference():
+    # Same as above, but verification sees an off-centre lane (contained, not "normal"), so
+    # the first checkpoint after the jump is taken in tracking, not at verification.
+    off = Corridor(Boundary(0, .07), Boundary(0, -.13), "camera-a")
+    ctl = ReturnController(BODY)
+    ctl.tick(inp(1))
+    ctl.tick(inp(1.1, pose=pose(1.1, 2)))
+    action = None
+    for t in (1.2, 1.3, 1.4, 1.5):
+        action = ctl.tick(inp(t, pose=pose(t, 2), corridor=off))
+        if action.recovered:
+            break
+    assert action.recovered and ctl.checkpoint is None
+    for t in (1.6, 1.7, 1.8):
+        ctl.tick(inp(t, pose=pose(t, 2)))
+    assert ctl.checkpoint is not None
+    action = ctl.tick(inp(1.9, pose=pose(1.9, 2)))
+    assert (action.phase, action.reason) == ("tracking", "contained")

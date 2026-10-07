@@ -45,7 +45,7 @@ class Rig:
             self.m.observe_scan_points(self.points, received_at=self.now)
 
     def step(self, seen=True, *, confidence=.9, quality=None, move=True, slip=None,
-             dt=DT, pose=True, frame='odom', ir='none', error=0., scan=True):
+             dt=DT, pose=True, frame='odom', ir='none', error=0., scan=True, edges=(.1, -.1)):
         """seen: True lane, False invisible frame, None no camera frame at all.
         ir: None no IR sample, else the IR line error (or 'none' for an invisible IR line)."""
         self.now = round(self.now+dt, 6)
@@ -62,7 +62,7 @@ class Rig:
             edges = [dict(side=side, slope=-math.tan(self.yaw),
                           intercept_m=(edge-self.y)/math.cos(self.yaw),
                           observed_x_min_m=0., observed_x_max_m=.4)
-                     for side, edge in (('left', .1), ('right', -.1))]
+                     for side, edge in zip(('left', 'right'), edges)]
             containment = LaneContainmentEvidence.model_validate(dict(
                 stamp=self.now, geometry_id='rig-a', ground_source='CALIBRATED',
                 uncertainty_m=self.uncertainty, boundaries=edges))
@@ -938,3 +938,18 @@ def test_recent_junction_sighting_refuses_a_curved_bridge(age, bridges):
     r.m._junction_seen_at = r.now+DT-age  # seen `age` before the bridge tick
     d = r.step(seen=False)
     assert (r.reason == 'lane_bridge' and d.linear > 0) is bridges
+
+
+def test_unknown_containment_opens_d407_stuck_exactly_as_recovery_off():
+    # D-507 7: an unseen lane is no departure evidence, so with D-468 on the tick belongs to
+    # today's path, D-407 stuck included -- the same episode at the same time as recovery off.
+    opened = {}
+    for local in (False, True):
+        r = Rig(recovery_local_enabled=local, bridge_enabled=False)
+        r.follow()
+        start = r.now
+        while r.m.status().stuck is None and r.now-start < 30:
+            r.step(seen=False)
+        assert r.m.status().stuck is not None, local
+        opened[local] = (round(r.now-start, 6), r.m.status().stuck.phase)
+    assert opened[True] == opened[False]
