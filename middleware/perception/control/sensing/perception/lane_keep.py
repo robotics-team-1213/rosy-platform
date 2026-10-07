@@ -366,7 +366,7 @@ class LaneKeeper:
                                                     reason="steep_crossing" if paint_crosses else "steep_far"))
                 continue
             near_y = float(min(ends, key=lambda p: p[0])[1])  # D-507 B9: a steep line is sided by its seen paint
-            at = near_y if bend_expected and abs(heading) > STEEP_MIN_ANGLE_RAD and abs(near_y) >= AMBIGUOUS_LATERAL_M else lateral
+            at = near_y if bend_expected and abs(heading) > STEEP_MIN_ANGLE_RAD and abs(near_y) >= half / 2.0 else lateral
             reference = 0.0
             if abs(at) < AMBIGUOUS_LATERAL_M and previous is not None:
                 reference = previous[1]
@@ -385,10 +385,10 @@ class LaneKeeper:
                 side, tracked = parent["side"], None
             elif tracked is not None:
                 tracked_side, carried = tracked
-                beyond = ((at > AMBIGUOUS_LATERAL_M and tracked_side == "right")
-                          or (at < -AMBIGUOUS_LATERAL_M and tracked_side == "left"))
+                beyond = ((lateral > AMBIGUOUS_LATERAL_M and tracked_side == "right")
+                          or (lateral < -AMBIGUOUS_LATERAL_M and tracked_side == "left"))
                 wrong_side = carried + 1 if beyond else 0
-                if abs(at) < SIDE_FLIP_M and wrong_side < SIDE_FLIP_FRAMES:
+                if abs(lateral) < SIDE_FLIP_M and wrong_side < SIDE_FLIP_FRAMES:
                     side = tracked_side
             inward = (np.array([direction[1], -direction[0]]) if side == "left"
                       else np.array([-direction[1], direction[0]]))
@@ -433,7 +433,7 @@ class LaneKeeper:
             target = None
         self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"],
                           r.get("_wrong_side", 0))
-                         for r in left + right + conflicts + bends]
+                         for r in left + right + conflicts]
         for record in left + right:
             if target is None or strategy.startswith(('corner', 'bend')):
                 record['selected'] = False

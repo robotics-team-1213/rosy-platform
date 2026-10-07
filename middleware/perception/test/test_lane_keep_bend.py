@@ -253,6 +253,10 @@ def test_real_frames_the_review_rejected_hold_even_with_a_bend_expected():
     got = _real_decisions(True)
     assert [(k, got[k][:2]) for k in MUST_HOLD if got[k][3] is not None] == []
     assert [k for k in MAIN_DECISIONS if MAIN_DECISIONS[k][3] is None and got[k][3] is not None] == []
+    # Re-review: a bend line's frames (248-249) must not delay the side flip of the 46 deg line whose
+    # near end sits on the path (250-254) -- that drove full left at the left band.
+    assert [(k, got[k][:3]) for k in (f"20260930T133221Z/{i:06d}.jpg" for i in range(250, 255))
+            if got[k][2] is not None and got[k][2] < -0.5] == []
 
 
 @pytest.mark.parametrize("bend_expected", [False, True])
