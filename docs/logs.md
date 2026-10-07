@@ -6840,3 +6840,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-508 Accepted 본문 개정(브랜치 안, 미착지)
 - 교훈: union 드라이버는 같은 줄을 합치므로 여러 줄 기록 파일에는 맞지 않는다. 로컬 상태로 lint를 통과시키면 CI와 결과가 갈린다.
+
+## 2026-10-07 · uncommitted · docs(adr): union 머지·번호 선점 ADR은 D-510 (D-508에서 이동)
+
+- 변경: 이 브랜치의 앞 두 항목이 D-508이라 부른 결정은 D-510이다. 브랜치가 D-508을 `refs/adr`로 선점해 두었지만, 동료 세션이 도구 없이 main에 다른 D-508(제어 고리)과 D-509를 넣었다. `adr_reserve.py next`가 D-510을 찍었고 ADR 파일·Log 행·규칙 문구·코드 주석을 옮겼다. 옛 선점은 `release D-508 --force`로 풀었다. `git merge main` 뒤 ADR Log는 union으로 충돌 없이 합쳐졌다(행 순서만 D-510, D-508, D-509). main이 지운 D-499 gap을 `adr_gaps.txt`에서도 지웠다. `adr_reserve.py` 역사 파서는 출처 줄을 NUL로 구분하고(diff `@@` 줄을 출처로 읽던 결함), lint 경고는 브랜치 최대 번호보다 작은 선점에만 낸다. D-346 Status에 4항 개정 표시를 더했다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 123 passed, `known_failures.py` 0 new. 옛 파서로 바꾸면 출처 시험이 `'@ -0,0 +1 @@'`로 실패한다. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음
+- 결정: D-510 Accepted (2026-10-07, 사용자 결정), 본문은 D-508로 쓴 것과 같다
+- 교훈: 도구가 있어도 쓰지 않는 세션이 있으면 번호는 겹친다. 이 충돌 자체가 D-510의 근거다.
