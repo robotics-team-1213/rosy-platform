@@ -394,7 +394,9 @@ def test_every_module_log_is_valid(config):
 
 
 def test_repository_adr_log_is_contiguous_and_indexed(config, adr_log):
-    assert harness.validate_adr_log(adr_log, gaps=config.get("adr_gaps") or {}) == []
+    gaps, gap_errors = harness.load_adr_gaps(ROOT, config)
+    assert gap_errors == []
+    assert harness.validate_adr_log(adr_log, gaps, harness.reserved_adrs(ROOT)) == []
 
 
 def test_generated_records_are_current():

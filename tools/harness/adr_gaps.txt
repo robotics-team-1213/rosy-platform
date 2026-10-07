@@ -1,0 +1,20 @@
+# D-508: ADR numbers absent from the ADR Log on purpose, one per line: D-nnn reason.
+# Append only (merge=union). Remove a line once the ADR lands. Duplicates are harmless.
+D-29 unused; the vision accelerator shield design only proposed the number
+D-35 reserved for the swarm formation HOLD decision pending the sim bench
+D-204 reserved by docs/plans/2026-09-24-role-surfaces-panel-composition-design.md; the ADR is written on branch feat/role-surfaces-s1 and merges separately; remove once it lands
+D-223 skipped: the surface keyboard-vocabulary ADR moved to D-224 during a concurrent-session numbering collision (2026-09-25)
+D-234 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
+D-235 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
+D-236 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
+D-237 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
+D-238 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
+D-239 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
+D-240 unused; the design-system rollout plan renumbered to D-245 and D-248-D-253 (2026-09-25), so this reservation went stale
+D-244 unused after a same-day numbering collision; the runtime note is D-246 and the E-Stop pilot is D-245
+D-324 unused; the Pinky artifact-selection ADR was first written as D-324 and renumbered to D-325 to avoid a same-day collision (commit 45f9470b, 2026-09-29). Remove if another session lands an ADR as D-324
+D-428 ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on main; remove when it lands
+D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body
+D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
+D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
+D-499 not present on main or any committed branch when D-504 was written
