@@ -247,3 +247,34 @@ def test_site_map_page_serves_the_teach_panel_under_the_csp(tmp_path):
     for element in ("teach-robot", "teach-start", "teach-stop", "teach-confirm", "teach-place"):
         assert f'id="{element}"' in page.text
     assert "style=" not in page.text and "innerHTML" not in script.text
+
+
+def test_idle_or_full_recordings_stop_themselves_through_the_stop_path(monkeypatch):
+    service, poses, store, clock = _service()
+
+    async def idle():
+        await service.start("rosy_60", "bob")
+        await _drive(service, poses, [(0.5, 0.0)])
+        clock.now += teach_service.PENDING_S
+        assert not await service.idle_check()            # exactly 10 min: still recording
+        clock.now += 1
+        poses.at(0.5, 0.05)                              # too close to keep: no new point
+        await service.sample()
+        assert await service.idle_check()
+
+    run(idle())
+    stopped = store.events()[0]
+    assert (stopped["action"], stopped["principal_id"], stopped["detail"]["reason"]) == (
+        "teach_stopped", "system:teach_idle", "idle")
+    assert service.view()["recording"] is None and len(service.view()["pending"]) == 1
+
+    monkeypatch.setattr(teach_service, "MAX_POINTS", 2)
+
+    async def full():
+        poses.at(0.0, 0.0)
+        await service.start("rosy_60", "bob")
+        await _drive(service, poses, [(0.5, 0.0)])
+        assert await service.idle_check()
+
+    run(full())
+    assert store.events()[0]["detail"]["reason"] == "full" and len(service.view()["pending"]) == 2

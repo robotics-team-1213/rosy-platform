@@ -27,7 +27,10 @@ from fleet.site_map import IMPORT_WIDTH_M, MAX_POINTS, MIN_EDGE_M, SiteMap
 
 #: The trip loop's odom cadence (D-494 3 부록 8): one REST read per sample.
 SAMPLE_S = 0.5
+#: A recording that kept no point this long is stopped (``IDLE_PRINCIPAL``); a stopped one that
+#: is not confirmed this long after its stop is discarded.
 PENDING_S = 600.0
+IDLE_PRINCIPAL = "system:teach_idle"
 #: Same bound as the draft PUT body (``site_map_routes.MAX_DRAFT_BYTES``).
 MAX_DRAFT_BYTES = 2 * 1024 * 1024
 
@@ -49,6 +52,7 @@ class Session:
     points: list = field(default_factory=list)
     stopped_at: Optional[float] = None
     result: Optional[dict] = None
+    last_kept_at: float = 0.0
 
 
 class TeachService:
@@ -86,11 +90,28 @@ class TeachService:
         point = teach.keep(session.points, await self._pose(session.robot_id))
         if point is not None and session is self._recording:
             session.points.append(point)
+            session.last_kept_at = self._clock()
+
+    async def idle_check(self) -> bool:
+        """Stop a recording that kept no point for ``PENDING_S`` or is full; True when stopped."""
+        session = self._recording
+        if session is None:
+            return False
+        full = len(session.points) >= MAX_POINTS
+        if not full and self._clock() - session.last_kept_at <= PENDING_S:
+            return False
+        try:
+            await self.stop(IDLE_PRINCIPAL, reason="full" if full else "idle")
+        except TeachError:  # too short: dropped, as an operator stop would
+            pass
+        return True
 
     async def _run(self) -> None:
         while self._recording is not None:
             try:
                 await self.sample()
+                if await self.idle_check():
+                    return
             except Exception:
                 _LOG.exception("teach: sample failed")
             await asyncio.sleep(SAMPLE_S)
@@ -103,23 +124,24 @@ class TeachService:
         if self._recording is not None:  # another start won while we read the pose
             raise TeachError(409, "TEACH_BUSY", {"teach_id": self._recording.teach_id})
         session = self._recording = Session(uuid.uuid4().hex, robot_id, principal_id, self._clock())
+        session.last_kept_at = session.started_at
         self._store.record_event("teach_started", principal_id, {"teach_id": session.teach_id, "robot_id": robot_id})
         await self.sample()
         self._task = asyncio.ensure_future(self._run())
         return self.view()
 
-    async def stop(self, principal_id: str) -> dict:
+    async def stop(self, principal_id: str, *, reason: str = "operator") -> dict:
         session = self._recording
         if session is None:
             raise TeachError(409, "TEACH_NOT_RECORDING")
         self._recording = None
-        if self._task is not None:
+        if self._task is not None and self._task is not asyncio.current_task():
             self._task.cancel()
-            self._task = None
+        self._task = None
         session.stopped_at = self._clock()
         line = teach.simplify(session.points)
         detail = {"teach_id": session.teach_id, "robot_id": session.robot_id,
-                  "points": len(session.points), "kept": len(line)}
+                  "points": len(session.points), "kept": len(line), "reason": reason}
         self._store.record_event("teach_stopped", principal_id, detail)
         if len(line) < 2 or polyline_length(line) <= MIN_EDGE_M:
             raise TeachError(422, "TEACH_TOO_SHORT", {**detail, "min_m": MIN_EDGE_M})
