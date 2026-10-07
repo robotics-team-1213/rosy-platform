@@ -265,6 +265,25 @@ def test_pixel_number_keys_pick_class_and_x_excludes(browser_workspace):
     assert review_masks.get(store, 0)['status'] == 'excluded'
 
 
+def test_pixel_shortcuts_confirm_both_checks_and_move_without_approving(browser_workspace):
+    page, store, expect = browser_workspace
+    row = store.get(1)
+    store.update(1, {'version': row['version'], 'action': 'reopen'})
+    open_pixels(page, store, expect)
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('c')
+    page.keyboard.press('b')
+    expect(page.locator('#pixel-complete')).to_be_checked()
+    expect(page.locator('#pixel-background')).to_be_checked()
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    page.keyboard.press('a')
+    expect(page.locator('#pixel-error')).to_contain_text('미검수 픽셀이 남아 있습니다')
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    page.keyboard.press('n')
+    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
+    assert review_masks.get(store, 0)['status'] == 'pending'
+
+
 def test_pixel_legend_shows_default_korean_names(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)

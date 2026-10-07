@@ -96,6 +96,7 @@ adrs:
 - D-488
 - D-489
 - D-490
+- D-472
 - D-497
 plans:
 - docs/plans/2026-10-04-d442-omx-preempt-recovery.md

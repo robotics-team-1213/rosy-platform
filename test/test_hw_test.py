@@ -108,7 +108,7 @@ def _root(tmp_path: Path, *, env: str | None = None, lamp_node=True, channel: st
 
 
 def _request(root: Path, action="buzzer", request_id="00112233445566778899aabb", *, age_s=1.0, **override):
-    at = (datetime.now(timezone.utc) - timedelta(seconds=age_s)).isoformat(timespec="seconds")
+    at = (datetime.now(timezone.utc) - timedelta(seconds=age_s)).isoformat(timespec="milliseconds")
     document = {"action": action, "request_id": request_id, "requested_at": at, "by": "admin-1", **override}
     (root / hw.REQUEST).write_text(json.dumps(document), encoding="utf-8")
 
@@ -130,6 +130,14 @@ def test_identity_request_only_hands_off_to_the_face_owner(tmp_path, action):
     owner = FakeSystem(root, display="active")
     assert _run(root, owner)["state"] == "done"
     assert owner.handoffs[0][0] == action and owner.lamps == []
+
+def test_an_identity_request_older_than_its_short_age_starts_nothing(tmp_path):
+    # D-472 4: Fleet's 6 s window would be over before the blink; a bench test keeps 60 s.
+    root = _root(tmp_path, env="ROSY_LAMP_ENABLED=true")
+    _request(root, "identify_blue", age_s=hw.IDENTIFY_MAX_AGE_S + 0.5)
+    owner = FakeSystem(root, display="active")
+    assert _run(root, owner) is None and owner.handoffs == []
+    assert hw.IDENTIFY_MAX_AGE_S <= 1.5
 
 
 # --- the request ------------------------------------------------------------------

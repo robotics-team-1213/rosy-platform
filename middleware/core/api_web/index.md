@@ -14,6 +14,7 @@
 | D-168 | ROS 패키지 구조 기준 — 인정 조건, 필수 구성, 도메인 방향표를 시험으로 고정한다 |
 | D-283 | 운용 콘솔은 고정 3영역을 유지하고 조작 그룹을 선택한다 |
 | D-411 | Pilot 로봇측 학습 녹화(카메라 유닛 소유, CORE는 시작·정지 요청, `teleop/intent` 원 입력·주체 기록, 1회 10분)와 정지 중에만 허용하는 HTTP 수신(목록·tar·sha256 manifest, `rosy_ml fetch --http`); 기기가 알리는 조작부 서술자 `rosy.controls/1`(base_velocity·joint_jog·gripper, 드라이버는 전송·위젯은 kind별, 팔 조이스틱은 이전 목표 종료 후 순차 제한 목표); OMX 그리퍼 전용 절대 목표·쥠 readback(시뮬레이션만, D-390 유지) |
+| D-472 | Rosy Cam 현장 영상을 지도에 표시하고 후면 LED 점멸로 로봇 신원을 대조한다 |
 
 ## 계획·결과 문서
 
@@ -30,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · feat(api): D-472 식별 색 설정과 v1.129/v1.130
 - 2026-10-08 · uncommitted · docs(api): merged contract v1.125
 - 2026-10-08 · uncommitted · docs(api): D-509 v1.124 follow-up
 - 2026-10-07 · uncommitted · docs(api): D-494 6 v1.119
 - 2026-10-07 · uncommitted · docs(api): D-498 v1.118
-- 2026-10-07 · uncommitted · fix(api): D-495 검토 L6 junction 수동 해제와 409 코드
