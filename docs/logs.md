@@ -6984,3 +6984,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-518
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · refactor(fleet): Cell 문서를 web/cell로 옮긴다
+
+- 변경: D-518의 Cell 폴더 이동. cell.html, cell.css, cell.js, cell-document-editor.js를 server/web/cell로 옮겼다. 페이지는 /console/cell이고 공개 URL /console/assets/<파일이름>은 유지한다. allowlist가 실제 경로를 가리키고 /console/assets/cell/cell.js는 404다.
+- 증거: document imports, doc tabs, server app, node unit tests, surface icons, dialog contract. 58 passed, 1 warning. node hook으로 /console/assets/cell-document-editor.js를 읽었다. known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run-cell.txt.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 없음

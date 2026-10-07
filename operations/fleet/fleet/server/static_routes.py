@@ -17,9 +17,9 @@ from fastapi.responses import FileResponse, RedirectResponse
 WEB_ROOT = Path(__file__).resolve().parent / "web"
 
 CONSOLE_ASSETS = {
-    "cell.js": ("cell.js", "application/javascript"),
-    "cell-document-editor.js": ("cell-document-editor.js", "application/javascript"),
-    "cell.css": ("cell.css", "text/css"),
+    "cell.js": ("cell/cell.js", "application/javascript"),
+    "cell-document-editor.js": ("cell/cell-document-editor.js", "application/javascript"),
+    "cell.css": ("cell/cell.css", "text/css"),
     "doc-tabs.css": ("shared/doc-tabs.css", "text/css"),
     "styles.css": ("shared/styles.css", "text/css"),
     "console.js": ("console.js", "application/javascript"),
@@ -89,7 +89,7 @@ def install_static_routes(app: FastAPI) -> None:
     @app.get("/console/cell", include_in_schema=False)
     def cell_page():
         return FileResponse(
-            WEB_ROOT / "cell.html", media_type="text/html",
+            WEB_ROOT / "cell" / "cell.html", media_type="text/html",
             headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP},
         )
 

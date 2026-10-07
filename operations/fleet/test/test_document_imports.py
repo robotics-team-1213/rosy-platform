@@ -74,11 +74,16 @@ def _local(spec):
     return None
 
 
+def _path(name):
+    for folder in ("shared", "cell"):
+        path = WEB / folder / name
+        if path.is_file():
+            return path
+    return WEB / name
+
+
 def _imports(name):
-    path = WEB / "shared" / name
-    if not path.is_file():
-        path = WEB / name
-    text = path.read_text(encoding="utf-8")
+    text = _path(name).read_text(encoding="utf-8")
     found = set()
     for spec in _FROM.findall(text):
         local = _local(spec)
@@ -102,7 +107,7 @@ def _reached(entry):
 
 def test_each_console_document_reaches_only_its_modules():
     for entry, owned in OWN.items():
-        text = (WEB / entry).read_text(encoding="utf-8")
+        text = _path(entry).read_text(encoding="utf-8")
         assert not _DYNAMIC.search(text), f"{entry} uses a dynamic import"
         extra = _reached(entry) - owned - SHARED
         assert not extra, f"{entry} reaches another document: {sorted(extra)}"

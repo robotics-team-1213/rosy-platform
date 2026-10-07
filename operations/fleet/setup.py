@@ -9,6 +9,7 @@ setup(
     package_data={package_name: [
         'server/web/*.html', 'server/web/*.css', 'server/web/*.js',
         'server/web/shared/*.css', 'server/web/shared/*.js',
+        'server/web/cell/*.html', 'server/web/cell/*.css', 'server/web/cell/*.js',
     ]},
     include_package_data=True,
     data_files=[
