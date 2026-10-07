@@ -35,3 +35,9 @@ deploy/site/rosy-model-watch text eol=lf
 
 # Vendored OMX assets are pinned by sha256 in manifest.json; never convert line endings.
 learning/envs/isaac/assets/** -text
+
+# D-508: append-only records take both sides on merge (git built-in union driver).
+# Union can duplicate or reorder lines; the harness lint dedupes gaps and ignores row order.
+"docs/reference/ROSY ADR Log.md" merge=union
+**/logs.md merge=union
+tools/harness/adr_gaps.txt merge=union
