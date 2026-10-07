@@ -33,6 +33,7 @@ import math
 import os
 import ssl
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -83,6 +84,10 @@ class Core:
                     self.conn.close()
                 self.conn = None
         return 0, None
+
+    def clone(self):
+        """A second client on its own connection (one HTTPSConnection is not thread-safe)."""
+        return Core(self.host, self.token, self.port, self.context)
 
     def raw_frame(self, timeout=5.0):
         """First JPEG of the driver MJPEG stream (no overlay); None when not available."""
@@ -243,8 +248,27 @@ def cmd_rec(core, args):
     rec_start(core) if args.action == "start" else rec_stop(core)
 
 
+class HoldLoop(threading.Thread):
+    """Line-follow hold every PERIOD s on its own connection, so a slow status read on a
+    loaded Pi never stretches the gap past CORE's 1 s deadman. A daemon: if the tool dies,
+    the holds stop and CORE releases line-follow by itself."""
+
+    PERIOD = 0.3
+
+    def __init__(self, core):
+        super().__init__(daemon=True)
+        self.core, self.status, self.done = core, 200, threading.Event()
+
+    def run(self):
+        while not self.done.is_set():
+            self.status, _ = self.core.call("POST", "/line-follow/hold", timeout=0.8)
+            if self.status != 200:
+                return
+            self.done.wait(self.PERIOD)
+
+
 def cmd_drive(core, args):
-    started = False
+    started, holds = False, None
     try:
         rec_start(core)
         s, b = core.call("PUT", "/line-follow/mode", {"mode": "CAMERA_LINE", "hold_s": 1.0})
@@ -252,10 +276,12 @@ def cmd_drive(core, args):
         if s != 200:
             raise SystemExit("line-follow refused")
         started = True
+        holds = HoldLoop(core.clone())
+        holds.start()
         t0, still_since = time.time(), None
         while time.time() - t0 < args.max_s:
-            hs, _ = core.call("POST", "/line-follow/hold", timeout=0.8)
             _, lf = core.call("GET", "/line-follow", timeout=0.8)
+            hs = holds.status
             lf = lf if isinstance(lf, dict) else {}
             lin, ang = lf.get("linear") or 0.0, lf.get("angular") or 0.0
             reason = str(lf.get("reason"))
@@ -276,6 +302,9 @@ def cmd_drive(core, args):
                 still_since = None
             time.sleep(0.3)
     finally:
+        if holds is not None:
+            holds.done.set()
+            holds.join(timeout=2.0)
         if started:
             log("line-follow OFF", core.call("PUT", "/line-follow/mode", {"mode": "OFF"})[0])
         rec_stop(core)

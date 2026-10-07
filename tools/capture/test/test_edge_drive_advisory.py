@@ -2,6 +2,7 @@
 
 No robot: synthetic GET /api/v1/sensors/lidar samples."""
 import math
+import time
 import sys
 from pathlib import Path
 
@@ -88,3 +89,34 @@ def test_nudge_moves_even_when_the_advisory_warns(monkeypatch, tmp_path, capsys)
     stop = calls.index(("POST", "/teleop", {"linear": 0.0, "angular": 0.0}))
     assert calls[stop + 1] == ("POST", "/mode", {"mode": "IDLE"})
     assert (tmp_path / "f.jpg").read_bytes() == b"jpg"
+
+
+
+def test_drive_holds_inside_the_deadman_when_status_reads_are_slow(monkeypatch):
+    """Status reads take 0.4 s (loaded Pi): holds still arrive well inside the 1 s deadman,
+    and line-follow is switched OFF at the end."""
+    import threading
+    lock, holds, calls = threading.Lock(), [], []
+
+    class SlowCore:
+        def clone(self):
+            return self
+
+        def call(self, method, path, body=None, raw=False, timeout=3.0):
+            with lock:
+                calls.append((method, path, body))
+                if path == "/line-follow/hold":
+                    holds.append(time.monotonic())
+            if path == "/line-follow":
+                time.sleep(0.4)
+                return 200, {"state": "TRACKING", "reason": "tracking", "linear": 0.035, "angular": 0.0}
+            if path == "/line-follow/mode":
+                return 200, {"mode": body["mode"], "state": "WAITING", "reason": "no_observation"}
+            return 200, {}
+
+    monkeypatch.setattr(edge_drive, "rec_start", lambda core: None)
+    monkeypatch.setattr(edge_drive, "rec_stop", lambda core: None)
+    edge_drive.cmd_drive(SlowCore(), edge_drive.argparse.Namespace(max_s=1.5))
+    gaps = [b - a for a, b in zip(holds, holds[1:])]
+    assert len(holds) >= 4 and max(gaps) < 0.6
+    assert calls[-1] == ("PUT", "/line-follow/mode", {"mode": "OFF"})
