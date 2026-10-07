@@ -39,10 +39,11 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    끝난 기준은 바꾸려는 경로의 모듈 `AGENTS.md` 또는 해당 ADR을 연 것이다.
 4. **ADR 번호는 파일을 만들기 직전에 도구로 선점한다.** 다른 세션이 몇 분 사이에
    같은 번호를 가져간다. `python tools/harness/adr_reserve.py next "<주제>"`를
-   돌리고 찍힌 번호를 쓴다. 도구가 `refs/adr/D-nnn`을 만들고, 같은 ref는 한
-   세션만 만들 수 있다(D-508). ADR 파일과 Log 행은 한 커밋이다. 못 쓰게 된
-   번호는 이유와 함께 `tools/harness/adr_gaps.txt`에 한 줄로 넣는다. 자세한
-   내용은 `AGENTS.md`의 「같이 하는 깃」 4번에 적혀 있다.
+   돌리고 찍힌 번호를 쓴다. 도구가 로컬 ref `refs/adr/D-nnn`을 만들고, 같은 ref는
+   한 세션만 만들 수 있다(D-508). 그 ADR이 브랜치와 같이 착지하지 않거나 충돌로
+   못 쓰게 되면 `tools/harness/adr_gaps.txt`에 `D-nnn 이유` 한 줄을 넣는다.
+   ADR 파일과 Log 행은 한 커밋이다. 자세한 내용은 `AGENTS.md`의 「같이 하는 깃」
+   4번에 적혀 있다.
 5. **테스트는 기존 실패와 비교한다.** 워크트리에서 관련 pytest 결과를 저장소
    밖의 `run.txt`에 남기고 `python test/known_failures.py`에 그 파일을 넘긴다.
    실험실 PC의 경로는 `X:\DevTemp\<이름>\run.txt`다. exit 1의 `NEW`는 그

@@ -6792,3 +6792,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-508 Accepted (2026-10-07, 사용자 결정)
 - 교훈: 이어 쓰기만 하는 파일의 충돌은 내장 union 드라이버로 없앨 수 있다. 번호 경합은 조회를 늘려서가 아니라 원자적 ref 생성으로 막는다.
+
+## 2026-10-07 · uncommitted · fix(harness): D-508 리뷰 반영 — logs.md는 union에서 빼고 선점 ref는 경고만
+
+- 변경: 독립 리뷰를 반영했다. union은 한 줄이 한 기록인 ADR Log와 `adr_gaps.txt`에만 둔다. union은 두 쪽이 똑같이 더한 끝줄(`- 결정: 없음` 등)을 하나로 합쳐 `logs.md` 항목을 깎으므로 `logs.md`는 계속 충돌하게 둔다. 직전 항목의 "모든 `logs.md`" union 설명은 이 항목이 바로잡는다. lint는 로컬 `refs/adr` 선점을 gap으로 보지 않고 경고만 한다(CI에는 그 ref가 없다). `adr_reserve.py`는 ref가 실제로 있을 때만 다음 번호로 넘어가고, `--remotes`도 보고, 가장 큰 번호의 출처를 찍고, main 최대보다 20 넘게 큰 번호는 경고하고 무시하며, `release`는 `--reason` 일치나 `--force`를 요구한다. D-508 본문이 D-346 4항 개정과 "중복 행이 생기면 새 상태의 행을 남긴다"를 적는다. 4단계 문구에 착지하지 않는 선점 번호를 push 전에 `adr_gaps.txt`에 넣는 규칙을 더했다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 123 passed, `known_failures.py` 0 new. 임시 저장소 시험: `logs.md` 두 항목 추가는 충돌하고, union으로 바꾸면 끝줄이 사라진다. Log 두 행은 충돌 없이 남고, Status 수정+행 추가는 lint 중복 행 오류가 된다. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음
+- 결정: D-508 Accepted 본문 개정(브랜치 안, 미착지)
+- 교훈: union 드라이버는 같은 줄을 합치므로 여러 줄 기록 파일에는 맞지 않는다. 로컬 상태로 lint를 통과시키면 CI와 결과가 갈린다.
