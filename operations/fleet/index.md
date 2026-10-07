@@ -88,8 +88,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · Cell saved-list error widths
+- 2026-10-07 · uncommitted · Cell saved-document readability
 - 2026-10-07 · uncommitted · Cell job snapshot invalidation
 - 2026-10-07 · uncommitted · Cell failed job read status
 - 2026-10-07 · uncommitted · Site-map offline robot choice
-- 2026-10-07 · uncommitted · Cell rejected-session widths
-- 2026-10-07 · uncommitted · Cell emergency-stop feedback widths
