@@ -3,6 +3,9 @@
 
 # scripts
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Host-side swarm bench (`swarm_bench.py`, no `rclpy`) and `seed_initialpose.py` (rclpy node for D-115). `world_to_map.py` is ROS-free.

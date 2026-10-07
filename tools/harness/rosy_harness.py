@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-
 import sim2real  # noqa: E402
 
 CONFIG = Path("tools") / "harness" / "harness.yaml"
+ADR_GAPS = Path("tools") / "harness" / "adr_gaps.txt"  # D-510, merge=union
 GATES = ("SOURCE", "LOCAL", "ROS-SIM", "ARTIFACT", "DEVICE", "FIELD")
 STATES = ("GO", "HOLD", "PARKED", "N/A")
 REQUIRED_PROGRESS = ("module", "owner", "last_verified", "gates")
@@ -404,6 +405,53 @@ def parse_adr_log(text: str, adr_dir: Path | None = None) -> AdrLog:
                   index_duplicates=tuple(index_duplicates))
 
 
+def parse_adr_gaps(text: str) -> tuple[dict[str, str], list[str]]:
+    """``D-nnn reason`` per line; union merges may repeat or reorder lines (D-510)."""
+    gaps: dict[str, str] = {}
+    errors: list[str] = []
+    for number, line in enumerate(_normalize(text).split("\n"), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        adr_id, reason = (line.split(None, 1) + [""])[:2]
+        if not ADR_ID.match(adr_id) or not reason:
+            errors.append(f"line {number}: expected 'D-nnn reason', got {line!r}")
+            continue
+        gaps.setdefault(adr_id, reason)
+    return gaps, errors
+
+
+def reserved_adrs(repo: Path) -> set[str]:
+    """Numbers claimed with tools/harness/adr_reserve.py (refs/adr/D-nnn, D-510). Local only."""
+    out = _git(repo, "for-each-ref", "--format=%(refname:lstrip=2)", "refs/adr") or ""
+    return {name for name in out.split() if ADR_ID.match(name)}
+
+
+def load_adr_gaps(repo: Path, config: dict) -> tuple[dict[str, str], list[str]]:
+    # ponytail: harness.yaml adr_gaps still read for in-flight branches; drop once none add there.
+    gaps = dict(config.get("adr_gaps") or {})
+    errors: list[str] = []
+    path = repo / ADR_GAPS
+    if path.is_file():
+        parsed, errors = parse_adr_gaps(path.read_text(encoding="utf-8"))
+        for adr_id, reason in parsed.items():
+            gaps.setdefault(adr_id, reason)
+    return gaps, errors
+
+
+def reservation_warnings(adr: AdrLog, gaps: dict[str, str], reserved: set[str]) -> list[str]:
+    """refs/adr are local: CI and other clones lack them, so they never excuse a gap (D-510).
+
+    Only a number below the branch's highest ADR would fail CI as a missing gap.
+    """
+    present = set(adr.index) | set(adr.bodies)
+    highest = max((_adr_number(i) for i in present), default=0)
+    return [f"{adr_id} reserved locally (refs/adr) but not on this branch"
+            " — land its ADR or add a gap line to tools/harness/adr_gaps.txt before push"
+            for adr_id in sorted(reserved - present - set(gaps), key=_adr_number)
+            if _adr_number(adr_id) < highest]
+
+
 def validate_adr_log(adr: AdrLog, gaps: dict[str, str]) -> list[str]:
     errors = [f"{adr_id}: duplicate body section" for adr_id in adr.duplicates]
     errors += [f"{adr_id}: duplicate index row" for adr_id in adr.index_duplicates]
@@ -729,7 +777,10 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
 
     adr_text = (repo / config["adr_log"]).read_text(encoding="utf-8")
     adr = parse_adr_log(adr_text, repo / "docs" / "adr")
-    errors += [f"ADR log: {e}" for e in validate_adr_log(adr, config.get("adr_gaps") or {})]
+    gaps, gap_errors = load_adr_gaps(repo, config)
+    errors += [f"{ADR_GAPS.as_posix()}: {e}" for e in gap_errors]
+    errors += [f"ADR log: {e}" for e in validate_adr_log(adr, gaps)]
+    warnings += [f"ADR log: {w}" for w in reservation_warnings(adr, gaps, reserved_adrs(repo))]
     if config.get("sim2real_gaps"):
         registry, problem = sim2real.load(repo / config["sim2real_gaps"])
         gap_errors, gap_warnings = ([problem], []) if problem else sim2real.validate(registry, repo, set(adr.index))

@@ -3,6 +3,9 @@
 
 # .github
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 GitHub Actions for colcon build, lint, pytest, and `core` boot smoke on ROS 2 Jazzy.

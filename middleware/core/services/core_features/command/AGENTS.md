@@ -3,6 +3,9 @@
 
 # command
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 CORE-002 / §8.1 command arbitration. ROS-free. CommandManager is the only logical `cmd_vel` source; bridge publishes whatever `select_output()` returns.

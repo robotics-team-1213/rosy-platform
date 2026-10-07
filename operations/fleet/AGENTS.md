@@ -1,7 +1,10 @@
-<!-- Parent: ../../src/site/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-09 | Updated: 2026-09-17 -->
 
 # fleet
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 

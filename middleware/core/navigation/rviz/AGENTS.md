@@ -3,6 +3,9 @@
 
 # rviz
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 RViz layouts for mapping and Nav2.

@@ -3,6 +3,9 @@
 
 # test
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Host-side pytest for deploy/robot/pinky_pro/release/motor/network contracts. These tests do **not** need a ROS overlay; CI runs `python3 -m pytest test/ -v` separately from the `src/runtime/*/test` suites. `conftest.py` inserts `deploy/robot/pinky_pro/release` onto `sys.path` so modules shipped as scripts remain importable.
