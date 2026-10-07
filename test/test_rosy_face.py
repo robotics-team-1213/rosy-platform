@@ -1484,7 +1484,7 @@ def test_a_handed_over_lamp_test_pauses_the_state_pattern_and_resumes_it(tmp_pat
     assert _answer(tmp_path)["detail"].endswith("(부팅 표시가 켬)")
 
 
-def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_idle(tmp_path):
+def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_state(tmp_path):
     module = _display()
     _lamp_tree(tmp_path)
     _status(tmp_path, "CORE_READY")
@@ -1499,8 +1499,82 @@ def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_idle(tmp_path):
     assert lamp.pattern == "ready"
     _hand_over(tmp_path, "identify_amber", request_id="1122334455667788")
     safe["estop"] = True
-    assert display.handle_test() is None
+    assert display.handle_test() == "failed"
+    assert "거절" in _answer(tmp_path)["detail"]
     assert spawn.patterns == ["ready", "identify_blue", "ready"]
+
+
+def test_identity_pulse_runs_on_a_moving_robot_and_restores_its_drive_pattern(tmp_path):
+    # D-472 addendum 5: Fleet asks moving robots; the blink stands in for the drive pattern.
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", robot_mode="NAVIGATION", nav_state="ACTIVE")
+    spawn = FakeSpawn(code=0)
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    assert lamp.pattern == "navigating"
+    display._core = lambda: {"estop": False, "robot_mode": "NAVIGATION", "nav_state": "ACTIVE", "caution": []}
+    _hand_over(tmp_path, "identify_amber")
+    assert display.handle_test() == "done"
+    assert spawn.patterns == ["navigating", "identify_amber", "navigating"]
+
+
+@pytest.mark.parametrize("status, core", [
+    ({"robot_mode": "EMERGENCY"}, {"estop": False, "robot_mode": "EMERGENCY", "caution": []}),
+    ({"robot_mode": "IDLE"}, {"estop": False, "robot_mode": "IDLE", "caution": ["battery_low"]}),
+    ({"robot_mode": "NAVIGATION", "nav_state": "BLOCKED"},
+     {"estop": False, "robot_mode": "NAVIGATION", "caution": []}),
+    ({"robot_mode": "IDLE"}, None),  # no fresh CORE hand-over
+])
+def test_identity_pulse_is_refused_while_a_safety_display_holds(tmp_path, status, core):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", **status)
+    spawn = FakeSpawn(code=0)
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    display._core = lambda: core
+    _hand_over(tmp_path, "identify_blue")
+    assert display.handle_test() == "failed"
+    assert "identify_blue" not in spawn.patterns
+
+
+def test_identity_pulse_is_cut_short_when_caution_starts_mid_blink(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+    spawn = FakeSpawn()  # the helper keeps running until stopped
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    reads = []
+
+    def core():
+        reads.append(1)
+        return {"estop": False, "robot_mode": "IDLE", "caution": [] if len(reads) < 3 else ["battery_low"]}
+    display._core = core
+    _hand_over(tmp_path, "identify_blue")
+    assert display.handle_test() == "failed"
+    assert spawn.processes[1].terminated == 1
+    assert lamp.pattern is None  # the next step() shows the caution pattern, not the old ready
+
+
+def test_identity_pulse_has_a_hard_deadline_and_a_short_request_age(tmp_path, monkeypatch):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+    spawn = FakeSpawn()  # a helper that never ends on its own
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    display._core = lambda: {"estop": False, "robot_mode": "IDLE", "caution": []}
+    assert module.IDENTIFY_MAX_S <= 4.0 and module.IDENTIFY_REQUEST_MAX_AGE_S <= 1.0
+    _hand_over(tmp_path, "identify_blue", at=1_000_000.0 - 1.5)  # older than the identify age
+    assert display.handle_test() is None
+    assert module.read_test_request(tmp_path / module.TEST_REQUEST, 1_000_000.0) is None
+    _hand_over(tmp_path, "lamp", at=1_000_000.0 - 1.5)  # a bench test keeps its 30 s age
+    assert module.read_test_request(tmp_path / module.TEST_REQUEST, 1_000_000.0) is not None
+    monkeypatch.setattr(module, "IDENTIFY_MAX_S", 0.05)
+    state, detail = lamp.identify("blue", lambda: False)
+    assert state == "failed" and "시간 초과" in detail
 
 
 def test_an_accepted_fleet_call_chirps_once_and_a_refused_call_stays_quiet(tmp_path):
@@ -1532,16 +1606,14 @@ def test_an_accepted_fleet_call_chirps_once_and_a_refused_call_stays_quiet(tmp_p
 
     _hand_over(tmp_path, "identify_amber", request_id="1122334455667788")
     safe["estop"] = True
-    assert display.handle_test() is None
+    assert display.handle_test() == "failed"  # refused at once: no chirp, no blink
+    assert _answer(tmp_path)["state"] == "failed"
     safe["estop"] = False
-    safe["robot_mode"] = "MANUAL"
-    lamp.pattern = "manual"
-    assert display.handle_test() is None
-    safe["robot_mode"] = "IDLE"
-    lamp.pattern = "ready"
     display.screen = {"kind": "stopped", "row": "stopped", "strip_tone": None}
+    _hand_over(tmp_path, "identify_amber", request_id="2233445566778899")
     assert display.handle_test() is None
     assert len(_starts(gpio)) == 3
+    assert spawn.patterns == ["ready", "identify_blue", "ready"]
 
 
 def test_identity_pulse_stops_without_restoring_old_pattern_when_safety_changes(tmp_path):

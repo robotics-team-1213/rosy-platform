@@ -174,6 +174,14 @@ TEST_REQUEST = "run/rosy-boot/display-test.request"
 TEST_RESULT = "run/rosy-display/display-test.json"
 TEST_ACTIONS = ("buzzer", "lamp", "identify_blue", "identify_amber")
 TEST_REQUEST_MAX_AGE_S = 30.0
+#: D-472 4: Fleet's identity window is <= 6 s from its request. rosy-hw-test passes an identify
+#: on within 1.5 s, this program must take the hand-over within IDENTIFY_REQUEST_MAX_AGE_S
+#: (two polls) and ends the 3 s blink by IDENTIFY_MAX_S whatever the helper does.
+IDENTIFY_REQUEST_MAX_AGE_S = 1.0
+IDENTIFY_MAX_S = 3.5
+#: D-472 addendum 5: a blink may stand in for these normal patterns, moving or not. Booting,
+#: failed, emergency, caution and blocked (D-381) always win: refused, or cut short.
+IDENTIFY_OVER = frozenset({"ready", "manual", "navigating", "docking", "illumination"})
 MAX_TEST_REQUEST_BYTES = 512
 TEST_REQUEST_ID = re.compile(r"[0-9a-f]{16,64}")
 
@@ -456,7 +464,7 @@ class Lamp:
         process = None
         try:
             process = self._spawn([str(self._root / LAMP_HELPER), f"identify_{color}"])
-            deadline = time.monotonic() + LAMP_TEST_S
+            deadline = time.monotonic() + IDENTIFY_MAX_S
             while process.poll() is None:
                 if unsafe():
                     process.terminate()
@@ -517,7 +525,8 @@ def read_test_request(path: Path, now: float) -> dict | None:
     requested = data["requested_at"]
     if isinstance(requested, bool) or not isinstance(requested, (int, float)):
         return None
-    if not -5.0 <= now - float(requested) <= TEST_REQUEST_MAX_AGE_S:
+    limit = IDENTIFY_REQUEST_MAX_AGE_S if data["action"].startswith("identify_") else TEST_REQUEST_MAX_AGE_S
+    if not -5.0 <= now - float(requested) <= limit:
         return None
     return data
 
@@ -715,12 +724,23 @@ class FaceDisplay:
         if request is None or request["request_id"] == self._tested:
             return None
         def unsafe_identity() -> bool:
+            # D-472 5: e-stop, fault, caution or no CORE hand-over: the safety display wins.
+            # The pattern is recomputed from the files (the lamp's own is None mid-blink).
             core = self._core()
-            return (core is None or core.get("estop") is not False or core.get("robot_mode") != "IDLE"
-                    or core.get("nav_state") != "IDLE" or bool(core.get("caution")))
+            if core is None or core.get("estop") is not False or core.get("caution"):
+                return True
+            view = read_view(self.root, self._battery_value)
+            return self.lamp_pattern_for(view, self.robot_state_of(view)) not in IDENTIFY_OVER
         if request["action"].startswith("identify_") and (
-                self._lamp is None or self._lamp.pattern != "ready" or unsafe_identity()):
-            return None
+                self._lamp is None or self._lamp.pattern not in IDENTIFY_OVER or unsafe_identity()):
+            # Answered at once, so rosy-hw-test does not wait out its hand-over timeout.
+            self._tested = request["request_id"]
+            state = "unavailable" if self._lamp is None else "failed"
+            write_test_result(self.root / TEST_RESULT, json.dumps(
+                {"schema": 1, "request_id": request["request_id"], "action": request["action"],
+                 "state": state, "detail": "안전·상태 표시가 우선 — 식별 점멸 거절"},
+                ensure_ascii=False, sort_keys=True) + "\n")
+            return state
         if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution"):
             return None
         if self.screen and (self.screen["kind"] in ("stopped", "update", "shutdown")

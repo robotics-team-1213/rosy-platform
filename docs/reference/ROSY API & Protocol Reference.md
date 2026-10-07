@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.123
+**Version:** v1.129
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -393,7 +393,7 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
 | GET | `/api/v1/host/status-summary` | Viewer | D-260 5 (v1.25) — 운용 화면 요약줄. 부팅 표시와 같은 규칙표(`core_common.robot_state`)를 `/run/rosy-boot/boot-status.json`(엄격히 읽음; 없으면 CORE가 응답 중이므로 `CORE_READY`로 보고 `boot.available:false`), `GET /host/hardware`와 같은 덮기를 거친 장치 행, 배터리(채널이 fresh일 때만)와 SAF-005 경고 임계, runtime mode에 적용한다. `{state ∈ booting·failed·caution·ready_held·ready, label(부팅 중·실패·주의·준비됨 — 못 움직임·준비됨), reason, state_line, motion_reason, runtime_mode, boot:{available, stage}, devices:{available, stale, ok, total, problems:[{id, label, state, product}]}, battery:{percent, voltage, warning_percent, low}, temperature_c, todos:[{id, text, device?}]}`. 우선순위 실패 > 주의 > 준비됨 — 못 움직임 > 준비됨, CORE_READY 전은 부팅 중. 할 일은 급한 순서 |
 | POST | `/api/v1/host/hardware/refresh` | Admin | D-247 — `/run/rosy/hw-probe.request`를 써서 `rosy-hw-probe.path`가 probe를 다시 돌리게 한다. 10초 안의 재요청은 `{accepted:false}`. 요청 파일을 못 쓰면 503 `HW_PROBE_UNAVAILABLE` |
 | POST | `/api/v1/host/hardware/test` | Admin | D-247 6 (v1.23, payload: `{device: "buzzer"\|"lamp"}`, 다른 키 거부) — `/run/rosy/hw-test.request` `{action, request_id, requested_at, by}`를 써서 root `rosy-hw-test`가 부저를 150 ms×3 울리거나 램프를 빨강·초록·파랑 1 s씩 켜게 한다. subprocess 없음. 200 `{accepted:true, request_id, device, detail}`. 10초 안 재요청은 429 `HW_TEST_COOLDOWN`, 요청 파일을 못 쓰면 503 `HW_TEST_UNAVAILABLE`. 결과는 `GET /host/hardware`의 `test` |
-| POST | `/api/v1/host/lamp/identify` | Operator | D-472, `{color:"blue"\|"amber"}`. CORE는 식별 요청만 기록하고 `rosy-face`가 IDLE·E-Stop 해제·주의 없음일 때 단독으로 1 s 켬→1 s 끔→1 s 켬을 구동한다. 200 `{accepted:true, request_id, color, state:"pending_visual_confirmation"}`는 영상상 식별 성공을 뜻하지 않는다. 기존 `HW_TEST_COOLDOWN`/`HW_TEST_UNAVAILABLE` 거절을 공유한다. |
+| POST | `/api/v1/host/lamp/identify` | Operator | D-472 (v1.129), `{color?:"blue"\|"amber"}`. `color`를 빼면 이 로봇의 설정 색 (CORE 설정 `lamp_identify.color`, 없으면 D-472 4항 기본 `rosy_26` blue·`rosy_60` amber(주황)); 둘 다 없으면 409 `IDENTIFY_COLOR_UNSET`. CORE는 식별 요청만 기록하고(`requested_at` ms) 후면 램프는 `rosy-face`만 구동한다: 1 s 켬→1 s 끔→1 s 켬, 3.5 s에 강제 종료. 요청부터 끝까지 6 s 이내: `rosy-hw-test`는 1.5 s, `rosy-face`는 1 s보다 오래된 식별 요청을 버린다. 정상 패턴(ready·manual·navigating·docking·illumination) 위에서만 켠다 — 움직이는 로봇 포함(addendum 5항). E-Stop·EMERGENCY·고장·주의·booting·blocked 또는 CORE 인계가 없으면 즉시 `failed`로 거절하고, 점멸 중 그렇게 되면 끊고 상태 패턴으로 돌아간다. 바퀴·모드·E-Stop·localization은 바꾸지 않는다. 200 `{accepted:true, request_id, color, state:"pending_visual_confirmation"}`는 영상상 식별 성공을 뜻하지 않는다. 결과는 `GET /host/hardware`의 `test`. 기존 `HW_TEST_COOLDOWN`/`HW_TEST_UNAVAILABLE` 거절을 공유한다. |
 | POST | `/api/v1/host/hardware/confirm` | Admin | D-247 6 (v1.23, payload: `{device: "buzzer"\|"lamp", observed: bool}`, 엄격한 bool) — 사람의 답을 `{observed, by(토큰 id), label, at}`로 CORE 상태 디렉터리 `~/.rosy/hw-confirmations.json`(0600, 원자적 교체)에 기록한다. `rosy-hw-test`의 마지막 결과가 같은 장치·`state:"done"`·5분 안에 끝난 것이어야 하며, 아니면 409 `HW_CONFIRM_NO_TEST`. 기록에는 그 시험의 `request_id`가 함께 남는다(파일에만, 응답·카드에는 싣지 않음). 장치마다 마지막 답 하나. 200 `{recorded:true, device, observed, by, label, at}`. 쓰지 못하면 503 `HW_CONFIRM_UNAVAILABLE` |
 
 ---
@@ -2453,6 +2453,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.129 | 2026-10-08 | Additive (D-472 addendum, feat/d472-led-identity): CORE `POST /host/lamp/identify`의 `color` 생략 시 로봇 설정 색, 움직이는 로봇에서도 정상 패턴 위 점멸, 안전 표시 중 즉시 거절, 요청~종료 6 s 상한. 신원 확정·주행 권한은 열지 않음. v1.124~v1.128은 다른 브랜치(D-511 M0 v1.128) 몫 |
 | v1.123 | 2026-10-07 | Additive (D-499): Fleet `GET /api/fleet/state` 로봇 행 선택 필드 `link`(`up`·`unreachable`·`moved`·`tls-refused`·`protocol`). 401이 아닌 로봇 API 오류에는 필드가 없다. 표시 전용. CORE 경로·envelope 1.0·발행 루프의 online/state/goal 판정은 그대로다 |
 | v1.122 | 2026-10-07 | Additive (D-493, fix/d493-attention-stale-state): `GET /api/fleet/state` 로봇 행에 `state_age_s`(상태가 관찰된 뒤 지난 초. hub 나이와 SharedGather 캐시 나이 포함, 오프라인이면 `null`)와 최상위 `gathered_at`(마지막 실제 수집의 서버 UTC epoch 초, 표시용)을 더함. 콘솔 예외 큐는 `state_age_s` + 받은 뒤 지난 시간이 5초를 넘으면 "상태 오래됨" warn 을 붙인다. 기존 필드는 그대로다. |
 | v1.121 | 2026-10-07 | Additive (D-407 Fleet 쪽, feat/d407-stuck-episode-log): Site Fleet 새 경로 `GET /api/fleet/line-stuck/episodes`(viewer+) — 막힘 에피소드 기록(`fleet_line_stuck_episodes`, `--tasks-db` 파일). 보드 전이에서만 쓰고 로봇 요청은 늘지 않는다. Robot API·envelope 1.0 변경 없음 |
