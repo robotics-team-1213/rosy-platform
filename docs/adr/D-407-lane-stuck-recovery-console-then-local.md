@@ -88,4 +88,4 @@ Status 는 Proposed 그대로다. CORE 쪽만 구현했고 Fleet 콘솔 화면(�
 
 D-438(Accepted 2026-10-03)이 §2 의 "관제 운영자 권한 이상이 답한다"를 Fleet 판단기(규칙 → 비전 모델 → 사람, CORE `stuck_resolver` 역할)로, Fleet 쪽 구현 메모의 영상 해석을 "판단 한 번에 미리보기 한 장, 저장·중계 없음"으로 고친다. 다섯 답과 CORE 재검사는 그대로다.
 
-**개정 (2026-10-07, [D-492](D-492-lane-junction-bounded-turn-and-junction-defaults.md) 결정 개정 2항):** `recovery_local_enabled` 로봇 기본값은 `true`다(`rosy_default.yaml`). 모델 PC SIM 한 바퀴와 실기 차선 한 바퀴를 통과한 페이로드만 robots에 간다. 되돌리기는 CORE 설정 겹의 `line_follow.recovery_local_enabled: false`다.
+**개정 (2026-10-07, [D-492](D-492-lane-junction-bounded-turn-and-junction-defaults.md) 결정 개정 2항):** `recovery_local_enabled` 로봇 기본값은 `true`다(`rosy_default.yaml`). 모델 PC SIM 한 바퀴와 실기 차선 한 바퀴를 통과한 페이로드만 robots에 간다. 되돌리기는 CORE 설정 겹의 `line_follow.recovery_local_enabled: false`다. 사용자 결정(2026-10-07)에 따라 이 기본값은 이 ADR의 자율 로컬 후진도 켠다. 대상은 URDF 몸 기하가 있는 모든 로봇이다. 결정 3항과 설정 문단의 "기본 꺼짐, self-mask 측정 뒤 로봇별로 켬" 조건은 D-492의 승격 규칙으로 바뀐다(D-492 결정 개정 5항).

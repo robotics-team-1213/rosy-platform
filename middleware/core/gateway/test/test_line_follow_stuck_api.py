@@ -155,6 +155,32 @@ def test_packaged_default_plus_pinky_plus_old_overlay_parses():
     assert not generic.body_geometry_known                   # never backs off without URDF
 
 
+def test_packaged_default_backs_off_on_a_body_geometry_robot():
+    """D-492 user decision (2026-10-07): recovery_local_enabled on by default includes the D-407
+    autonomous back-off on every robot with URDF body geometry (no separate self-mask gate)."""
+    from core_features.line_follow.manager import LineFollowManager
+
+    class Events:
+        def publish(self, *args, **kwargs): pass
+
+    config = _line_follow_config(_deep_merge(_yaml(DEFAULT), _yaml(PINKY))["line_follow"])
+    assert config.recovery_local_enabled and config.body_geometry_known
+    m = LineFollowManager(Events(), config=config, clock=lambda: 0.0)
+    m.bind_recovery(console_linked=lambda: False, calibration_active=lambda: False,
+                    linear_ceiling=lambda: 0.15, preview_seq=lambda: 1)
+    m.set_mode(LineFollowMode.CAMERA_LINE)
+    rear = config.body_lidar_x_m - config.body_rear_x_m + 0.30   # 0.30 m clear behind the body
+    t, back = 0.0, None
+    while t < 7.0 and (back is None or back.linear >= 0):
+        m.observe_clearance(0.15, received_at=t)
+        m.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=t)
+        m.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=t, visible=True,
+                                  error=0.0, confidence=0.9), received_at=t, source_now=t)
+        back = m.tick(t + 0.01)
+        t = round(t + 0.1, 6)
+    assert back.linear < 0 and m.status().reason == "stuck_back_off"
+
+
 def test_d476_bridge_is_on_by_robot_default_and_yaml_matches_the_model():
     from core_features.line_follow.model import LineFollowConfig
     merged = _deep_merge(_yaml(DEFAULT), _yaml(PINKY))
