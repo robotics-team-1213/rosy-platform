@@ -431,3 +431,5 @@ The follow-up browser harness allows the active preview port in Chromium; port 6
 2026-10-07 Cell 문서 목록: [마지막 수신 시각 LOCAL 화면](../uiux-cell-list-readtime-2026-10-07/result.md)은 문서 수정 시각과 목록 HTTP 응답을 받은 시각을 분리한다. 1440/390/320px의 목록 성공·실패·복구 **6 passed**, 조회 잠금 **1 passed**, Cell 전체 브라우저 **49 passed**, G1 **90 passed**, `known_failures.py` **0 NEW**다. 브라우저 시각이므로 서버가 판정한 `fresh`/`delayed` 증거는 아니며 Cell 전체 G2·실물·G3는 **HOLD**다.
 
 2026-10-07 Pilot 연결 로비: [320/390px 빈 목록·실패 LOCAL 화면](../uiux-pilot-lobby-width-2026-10-07/result.md)에서 `다시 찾기`·`연결`이 코드 입력 칸과 같은 폭이다. 로비·태블릿 브라우저 **7 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. Pilot 전체 선언 상태·실물 태블릿/로봇·운전자 G3는 **HOLD**다.
+
+2026-10-07 Robot 운용 열: [현재 후보 18셀 LOCAL 계측](../uiux-robot-column-width-2026-10-07/result.md)에서 1280px 감지·지도·조작 가시 패널 폭 차이를 15.01→0.01px로 줄였다. 320/390px 네 패널은 각 폭에서 같고 가로 넘침·페이지 오류 0이다. 역할 셸 브라우저 **9 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. 합성 CORE의 지도 404·호스트 503을 캡처 도구가 보고하므로 정상 상태 G2 수용으로 읽지 않는다. 선언 상태 전체·실물 readback·운영자 G3는 **HOLD**다.

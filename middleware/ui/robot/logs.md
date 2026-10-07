@@ -1074,3 +1074,9 @@
 - 변경: 대기·오류 메시지를 `<dl>` 밖의 `ui-status`로 옮기고, 수신된 라벨·값이 있을 때만 `<dl>`을 보인다. 오류 때 오래된 보정 칩도 제거한다.
 - 증거: 390px 대기·오류 캡처 X: `captures/robot-overview-semantic/`; 전환·폭·`role=status` 브라우저 1 passed, 역할 셸과 공용 계약 51 passed, `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 의미 구조와 폭 근거 보정. 실제 CORE·장치 readback 및 G3는 HOLD다.
+
+## 2026-10-07 · uncommitted · uiux(robot): 운용 세 열의 가시 패널 너비 일치
+
+- 변경: wide 고정 프레임에서 감지·지도·조작 세 열에 같은 스크롤바 자리를 예약한다. 콘솔 셸 시험이 실제 패널 폭을 검사한다.
+- 증거: `docs/validation/uiux-robot-column-width-2026-10-07/result.md`; 1280px 네 패널 폭 차이 15.01→0.01px, 역할 셸 브라우저 9 passed, G1 90 passed, 각 known_failures 0 NEW.
+- gate 변화: LOCAL 동등 폭 G2 부분 근거. 전체 상태·실물·운영자 G3는 HOLD.
