@@ -984,7 +984,7 @@ def test_a_robot_on_a_trip_refuses_other_fleet_motion(tmp_path):
 def test_formation_refuses_a_robot_on_a_trip():
     robots = [FakeRobot("a"), FakeRobot("b")]
     console = FleetConsole([RobotEndpoint(r.robot_id, "http://x", "t") for r in robots], robots)
-    console.set_trip_busy(lambda robot_id: robot_id == "b")
+    console.trip_busy = lambda robot_id: robot_id == "b"
     with pytest.raises(HubError) as err:
         run(console.formation_start("a"))
     assert err.value.code == "TRIP_ROBOT_BUSY"

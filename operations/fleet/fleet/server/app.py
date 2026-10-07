@@ -531,7 +531,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              junction=lane_junction or HttpLaneJunction(console.clients),
                              goal=partial(console.goal, trip=True), cancel_goal=console.cancel,
                              config=trip_config or TripConfig())
-    console.set_trip_busy(trip_runner.robot_busy)
+    console.trip_busy = trip_runner.robot_busy
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps,
