@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.129
+**Version:** v1.130
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1456,11 +1456,13 @@ Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사�
 | Method | Path | Credential | 내용 |
 |---|---|---|---|
 | POST | `/api/fleet/detections` | source Bearer | `OverheadDetectionsPayload` 제출. source/map/revision·1 s lease 검사 |
-| GET | `/api/fleet/detections/config` | source Bearer | 해당 source의 승인 calibration 또는 null, relearn_seq |
+| GET | `/api/fleet/detections/config` | source Bearer | 해당 source의 승인 calibration 또는 null, relearn_seq. v1.130(D-472): `identity_challenge` `{request_id, color, not_before, not_after}`(Fleet 벽시계, 창 ≤ 6 s) 또는 null — 이 source가 보는 로봇에 열린 LED 확인 요청 |
+| POST | `/api/fleet/detections/identity` | source Bearer | D-472 (v1.130). 한 `identity_challenge`에 대한 Vision 판정: `{source_id, map_id, request_id, processor_revision, state:"matched"\|"ambiguous", reason?:"none"\|"multiple"\|"frames_missing"\|"stale"\|"calibration_changed", x?, y?, captured_at?, calibration_revision?, evidence}`. 숫자만, 영상 바이트 없음(D-136). 다른 키 422. `matched`는 창 안 `captured_at`, source의 현재 map·보정 revision, 최신 탐지에서 0.25 m 안의 이어지는 익명 blob이 있고 0.30 m 안에 다른 blob이 없을 때만 확인 트랙이 된다. 열린 요청이 아니면 409 `IDENTIFY_NOT_PENDING`, 묻지 않은 source 409 `IDENTIFY_SOURCE_MISMATCH`. 응답 `{robot_id, state:"CONFIRMED"\|"UNKNOWN", reason?}` |
 | GET | `/api/fleet/tracking` | viewer 이상 | sources 상태·fps, robots 대조, unknown 위치 |
+| GET | `/api/fleet/tracking/identity` | viewer 이상 | D-472 (v1.130), 읽기 전용. `{ts, use:"observation-only", pending:{robot_id, request_id, color, sources, not_before, not_after}\|null, robots:[{robot_id, state:"CONFIRMED"\|"UNKNOWN", reason, x, y, yaw:null, age_s, source_id, map_id, calibration_revision, confirmed_at, use, last}], config:{window_s, identity_ttl_s, overlap_m, auto_request}}`. 확인 트랙은 트랙 손실(`track_lost_s` 1 s)·0.30 m 겹침·map/보정 revision 변경·`identity_ttl_s` 경과 중 하나로 UNKNOWN이 된다(addendum 4). D-511 차로 준수 입력과 콘솔 표시 전용이며 `map-pose` 중재·trip·initialpose·경로·명령에 쓰지 않는다(addendum 3) |
 | POST | `/api/fleet/tracking/relearn` | operator | `{source_id}`의 배경 재학습 번호 증가 |
 | GET | `/api/fleet/calibrations` | viewer 이상 | 승인 기록 목록과 `use: display-only` |
-| POST | `/api/fleet/robots/{robot_id}/identify` | operator | D-472, `{color:"blue"\|"amber"}`. 해당 등록 로봇의 CORE 식별 요청을 전달한다. 한 번에 한 대, 6 s 중복 요청 409 `IDENTIFY_BUSY`. 응답 `{robot_id, request_id, state:"pending_visual_confirmation"}`는 카메라 신원 확정이 아니다. |
+| POST | `/api/fleet/robots/{robot_id}/identify` | operator | D-472, v1.130: 본문 생략 또는 `{color?:"blue"\|"amber"}`(생략 = 로봇 설정 색). 신원 미확인이고 움직이는(상태 velocity ≥ 0.02 m/s 또는 0.1 rad/s) 등록 로봇 한 대에만 CORE `POST /host/lamp/identify`를 전달하고 그 로봇을 보는 Vision source에 6 s 창을 연다. 한 번에 한 대: 창+2 s 동안 409 `IDENTIFY_BUSY`, 확인된 로봇 409 `IDENTIFY_ALREADY_CONFIRMED`, 멈춘 로봇 409 `IDENTIFY_NOT_MOVING`, 로봇 거절 502 `IDENTIFY_NOT_ACCEPTED`. 응답 `{robot_id, request_id, color, not_after, sources, state:"pending_visual_confirmation"}`는 카메라 신원 확정이 아니다. 사이트 YAML `identity.auto_request: true`면 Fleet이 같은 규칙으로 스스로 요청한다(기본 false) |
 | POST | `/api/fleet/calibrations` | operator | source_id/map_id, map_to_image(9), image(width,height), track_bounds_m, fit_score, lens 또는 null, frame_seq 또는 null을 승인·영속 기록 |
 | DELETE | `/api/fleet/calibrations/{source_id}` | operator | 승인 기록 철회·감사 |
 | GET | `/api/fleet/start-points` | viewer 이상 | `{start_points, persistent}`. 저장한 무마커 시작 위치·방향, `use: reference-only`; 주행·로봇 위치 증거가 아니다 |
@@ -2453,6 +2455,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.130 | 2026-10-08 | Additive (D-472 addendum, feat/d472-led-identity): Fleet LED 신원 — `identity_challenge`(detections config), Vision 판정 `POST /api/fleet/detections/identity`, 읽기 전용 `GET /api/fleet/tracking/identity`, `/robots/{id}/identify` 색 생략·움직이는 로봇 한정. 확인 트랙은 D-511 입력·표시 전용, 지도 자세 중재·trip·initialpose·명령에 쓰지 않음 |
 | v1.129 | 2026-10-08 | Additive (D-472 addendum, feat/d472-led-identity): CORE `POST /host/lamp/identify`의 `color` 생략 시 로봇 설정 색, 움직이는 로봇에서도 정상 패턴 위 점멸, 안전 표시 중 즉시 거절, 요청~종료 6 s 상한. 신원 확정·주행 권한은 열지 않음. v1.124~v1.128은 다른 브랜치(D-511 M0 v1.128) 몫 |
 | v1.123 | 2026-10-07 | Additive (D-499): Fleet `GET /api/fleet/state` 로봇 행 선택 필드 `link`(`up`·`unreachable`·`moved`·`tls-refused`·`protocol`). 401이 아닌 로봇 API 오류에는 필드가 없다. 표시 전용. CORE 경로·envelope 1.0·발행 루프의 online/state/goal 판정은 그대로다 |
 | v1.122 | 2026-10-07 | Additive (D-493, fix/d493-attention-stale-state): `GET /api/fleet/state` 로봇 행에 `state_age_s`(상태가 관찰된 뒤 지난 초. hub 나이와 SharedGather 캐시 나이 포함, 오프라인이면 `null`)와 최상위 `gathered_at`(마지막 실제 수집의 서버 UTC epoch 초, 표시용)을 더함. 콘솔 예외 큐는 `state_age_s` + 받은 뒤 지난 시간이 5초를 넘으면 "상태 오래됨" warn 을 붙인다. 기존 필드는 그대로다. |

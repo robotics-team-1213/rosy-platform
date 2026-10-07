@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
 from fleet.server.http_errors import http_error
+from fleet.server.identity import IdentityError, IdentityService
 from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_lanes import site_lanes_payload
@@ -54,7 +55,7 @@ class LineStuckClaimRequest(BaseModel):
 
 class IdentifyLampRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    color: Literal["blue", "amber"]
+    color: Optional[Literal["blue", "amber"]] = None  # None: the robot's configured colour
 
 
 def transport_failure(exc: BaseException) -> tuple[str, str]:
@@ -98,7 +99,8 @@ class SharedGather:
 
 def install_console_routes(app, *, console, sightings, require_viewer,
                            read_guard, operator_guard, require_operator,
-                           site_lanes=None, answer_log_path=None, tracking=None) -> None:
+                           site_lanes=None, answer_log_path=None, tracking=None,
+                           identity=None) -> None:
     # D-407: open lane stucks, read from each gather. CORE's stuck block is the truth.
     board = app.state.line_stuck = LineStuckBoard(
         log=LineStuckAnswerLog(answer_log_path) if answer_log_path is not None else None)
@@ -163,30 +165,20 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                                                          "message": "no robot served a map"})
         return grid
 
-    # D-472: one robot at a time; CORE and rosy-face retain the final safety decision.
-    identify_lock = asyncio.Lock()
-    identify_until = 0.0
+    # D-472: one robot at a time (IdentityService); CORE and rosy-face keep the final safety decision.
+    if identity is None:
+        identity = IdentityService(console.clients, tracking=tracking)
+    app.state.identity = identity
 
     @app.post("/api/fleet/robots/{robot_id}/identify", dependencies=operator_guard, tags=["fleet"])
-    async def identify_robot(robot_id: str, body: IdentifyLampRequest) -> dict:
-        nonlocal identify_until
-        client = console.clients().get(robot_id)
-        if client is None:
-            raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
-        async with identify_lock:
-            if time.monotonic() < identify_until:
-                raise HTTPException(status_code=409, detail={"code": "IDENTIFY_BUSY",
-                                                             "message": "다른 로봇의 LED 확인이 끝날 때까지 기다리세요"})
-            try:
-                result = await client.identify_lamp(body.color)
-            except (RobotApiError, OSError, httpx.HTTPError) as exc:
-                raise http_error(exc) from exc
-            if result.get("accepted") is not True:
-                raise HTTPException(status_code=502, detail={"code": "IDENTIFY_NOT_ACCEPTED",
-                                                             "message": "로봇이 램프 시험을 수락하지 않았습니다"})
-            identify_until = time.monotonic() + 6.0
-            return {"robot_id": robot_id, "request_id": result.get("request_id"),
-                    "state": "pending_visual_confirmation"}
+    async def identify_robot(robot_id: str, body: Optional[IdentifyLampRequest] = None) -> dict:
+        try:
+            return await identity.request(robot_id, None if body is None else body.color)
+        except IdentityError as exc:
+            raise HTTPException(status_code=exc.status_code,
+                                detail={"code": exc.code, "message": str(exc)}) from exc
+        except (RobotApiError, OSError, httpx.HTTPError) as exc:
+            raise http_error(exc) from exc
 
     @app.get("/api/fleet/line-stuck", dependencies=read_guard, tags=["line-stuck"])
     async def line_stuck_pending() -> dict:

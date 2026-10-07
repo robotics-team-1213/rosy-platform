@@ -135,7 +135,7 @@ class RobotClient(Protocol):
                                   yield_turn_rad: float | None = None) -> dict: ...
 
     async def estop(self) -> dict: ...
-    async def identify_lamp(self, color: str) -> dict: ...
+    async def identify_lamp(self, color: Optional[str] = None) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
     async def localization_decision(self, decision: LocalizationDecision) -> dict: ...
@@ -309,10 +309,11 @@ class HttpRobotClient:
     async def estop(self) -> dict:
         return await self._post("/api/v1/safety/stop")
 
-    async def identify_lamp(self, color: str) -> dict:
-        if color not in {"blue", "amber"}:
+    async def identify_lamp(self, color: Optional[str] = None) -> dict:
+        """D-472: None asks for the robot's configured colour; the answer names the one used."""
+        if color not in {None, "blue", "amber"}:
             raise ValueError("unsupported identification color")
-        return await self._post("/api/v1/host/lamp/identify", {"color": color})
+        return await self._post("/api/v1/host/lamp/identify", {} if color is None else {"color": color})
 
     # --- D-395 localization (contract §2) -------------------------------------------
 

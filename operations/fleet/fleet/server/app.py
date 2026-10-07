@@ -135,7 +135,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
                site_maps=None, routing_config=None, map_pose_config=None,
-               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None) -> FastAPI:
+               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None,
+               identity_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     if development_sessions is not None and task_service is None:
@@ -299,6 +300,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.routing.cost import RoutingConfig
         site_maps = SiteMapStore(routing_config=routing_config or RoutingConfig())
 
+    # D-472: LED identity binding; observation only (never map pose, trips or commands).
+    from fleet.server.identity import IdentityConfig, IdentityService
+    identity = IdentityService(console.clients, tracking=tracking,
+                               config=identity_config or IdentityConfig())
+    if tracking is not None:
+        tracking.identity = identity
+
     @asynccontextmanager
     async def lifespan(app):
         dispatcher = None
@@ -319,6 +327,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
         trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
+        identity_task = asyncio.create_task(identity.run()) if identity.config.auto_request else None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -346,7 +355,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task, trip_task):
+                               signal_task, resolver_task, trip_task, identity_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -519,7 +528,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            operator_guard=operator_guard, site_lanes=site_lanes,
                            require_operator=require_operator,
                            answer_log_path=task_service.store.path if task_service else None,
-                           tracking=tracking)
+                           tracking=tracking, identity=identity)
     if tracking is not None and tracking.enabled:
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,

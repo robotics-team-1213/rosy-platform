@@ -446,12 +446,15 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("--sightings-db requires --sightings-config")
     sighting_service = None
     tracking_service = None
+    identity_config = None
     vision_sources = ()
     if sightings_config is not None:
         from fleet.server.sighting_store import SightingStore
         from fleet.server.sightings_config import load_sighting_sources
 
         sources = load_sighting_sources(sightings_config)
+        from fleet.server.sightings_config import load_identity_config
+        identity_config = load_identity_config(sightings_config)  # D-472, optional identity: block
         if enrollment_store is not None:
             sources = _relax_retired_sighting_targets(
                 sources, known={*console.robot_ids, *(
@@ -558,7 +561,8 @@ def run_console(args: argparse.Namespace) -> None:
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
-                     map_pose_config=map_pose_config, trip_config=_trip_config(args))
+                     map_pose_config=map_pose_config, trip_config=_trip_config(args),
+                     identity_config=identity_config)
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",

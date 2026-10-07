@@ -140,3 +140,26 @@ def test_traffic_bays_missions_and_localization_never_read_overhead_tracking():
         offenders += [f"{rel} imports {name}"
                       for name in _tracking_imports(path.read_text(encoding="utf-8"))]
     assert offenders == []
+
+
+#: D-472 addendum 3: a LED-confirmed track feeds D-511 lane compliance and the console only.
+#: Map pose arbitration, trips, initialpose, routes, bays, formations and commands never read it.
+IDENTITY_IMPORTERS = {"server/app.py", "server/console_routes.py", "server/identity.py",
+                      "server/tracking_routes.py", "server/sightings_config.py",
+                      "localization/lane_compliance.py"}
+
+
+def test_only_the_wiring_and_lane_compliance_read_the_led_identity_binding():
+    offenders = []
+    for path in _py_files(FLEET_PKG):
+        rel = path.relative_to(FLEET_PKG).as_posix()
+        if rel in IDENTITY_IMPORTERS:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            names = ([a.name for a in node.names] if isinstance(node, ast.Import)
+                     else [f"{node.module}.{a.name}" for a in node.names] if isinstance(node, ast.ImportFrom)
+                     else [])
+            offenders += [f"{rel} imports {n}" for n in names if "identity" in n.split(".")
+                          and ("fleet.server" in n or n.startswith(("server.", ".", "None.")))]
+    assert offenders == []
+
