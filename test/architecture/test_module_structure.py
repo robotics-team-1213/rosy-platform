@@ -75,6 +75,10 @@ OPS_SUFFIXES = {".py", ".sh"}
 OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception tooling (D-427 wave 1)
              "operations/site_devices")  # site device firmware (D-427 wave 3b)
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
+#: P6 subpackages counted as their own size unit (path relative to the colcon root): their lines
+#: leave the package total and the unit always carries a verdict with the package +150 allowance.
+#: docs/plans/2026-10-07-line-follow-recovery-subpackage.md
+SIZE_UNITS = ("core/services/core_features/line_follow/recovery",)
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -1230,15 +1234,20 @@ def _is_prod_outside_src(path: Path) -> bool:
 
 
 def _over_budget() -> dict:
-    over = {}
+    over = dict.fromkeys(SIZE_UNITS, 0)
     for name in PACKAGES:
         total = 0
         for path in _files(name, CODE_SUFFIXES | {".sh"} | WEB_SUFFIXES):
             count = _lines(path)
-            total += count
+            rel = _rel(path).as_posix()
+            unit = next((u for u in SIZE_UNITS if rel.startswith(u + "/")), None)
+            if unit:
+                over[unit] += count
+            else:
+                total += count
             budget = FILE_BUDGET_WEB if path.suffix in WEB_SUFFIXES else FILE_BUDGET
             if count > budget:
-                over[_rel(path).as_posix()] = count
+                over[rel] = count
         if total > PACKAGE_BUDGET:
             over[name] = total
     for root_name in OPS_ROOTS:
@@ -1264,7 +1273,7 @@ def test_over_budget_code_has_a_recorded_verdict():
 
 def _allowance(key: str, at_verdict: int, now: int) -> int:
     """D-362: a file above HARD_TIER gets zero growth allowance (packages keep 150)."""
-    if key not in PACKAGES and max(at_verdict, now) > HARD_TIER:
+    if key not in PACKAGES and key not in SIZE_UNITS and max(at_verdict, now) > HARD_TIER:
         return 0
     return REGROWTH_ALLOWANCE
 
