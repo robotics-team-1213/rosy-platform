@@ -5,6 +5,7 @@ import threading
 import json
 
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 from browser_harness import browser_tests_enabled, free_port
@@ -1420,3 +1421,21 @@ def test_class_options_keep_class_index_order(custom_class_workspace):
     page, store, expect = custom_class_workspace
     expect(page.locator('#boxes .box-top select').first.locator('option')).to_have_text(
         ['클래스 선택 필요', '10', 'car', '신호등'])
+
+
+LANE_LR5 = Path(__file__).resolve().parents[1] / 'classes' / 'lane_lr5.yaml'
+
+
+def test_catalog_class_file_field_binds_lane_classes(browser_workspace, tmp_path):
+    page, store, expect = browser_workspace
+    folder, classes, _ = catalog(tmp_path)
+    classes.unlink()   # no classes.yaml beside the catalog: the typed path is the only source
+    base = page.url.split('?')[0].rstrip('/')
+    page.goto(base + '/catalog', wait_until='networkidle')
+    expect(page.locator('#catalog-classes')).to_have_value('')
+    page.locator('#catalog-path').fill(str(folder))
+    page.locator('#catalog-classes').fill(str(LANE_LR5))
+    page.locator('#import').click()
+    expect(page.locator('#result')).to_contain_text('새 사진 1장')
+    page.goto(base + '/pixels?frame=2', wait_until='networkidle')
+    expect(page.locator('#pixel-legend')).to_contain_text('왼쪽 차선')

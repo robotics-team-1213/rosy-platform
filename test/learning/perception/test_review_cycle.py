@@ -438,3 +438,28 @@ def test_pixel_classes_with_display_round_trip_through_export_verification(tmp_p
     receipt = store.prepare()
     doc = review_evidence.verify_current(receipt['path'], review_evidence.decisions(store))
     assert doc['pixel_approved_frames'] == 1
+
+
+def test_draft_free_catalog_binds_the_classes_yaml_beside_it(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, _ = catalog(tmp_path)
+    lane = (Path(__file__).resolve().parents[1] / 'classes' / 'lane_lr5.yaml').read_bytes()
+    classes.write_bytes(lane)
+    assert review_masks.classes(store) is None
+    assert review_ingest.import_frames(store, {'path': str(folder)})['added'] == 1
+    assert review_masks.classes(store)['sha256'] == hashlib.sha256(lane).hexdigest()
+    # Once bound, a different file beside a later catalog is not picked up silently.
+    classes.write_bytes(CLASSES)
+    assert review_ingest.import_frames(store, {'path': str(folder)})['added'] == 0
+    assert review_masks.classes(store)['sha256'] == hashlib.sha256(lane).hexdigest()
+
+
+def test_missing_classes_file_is_a_clean_refusal(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, _ = catalog(tmp_path)
+    with pytest.raises(ValueError, match='classes file') as refused:
+        review_ingest.import_frames(store, {'path': str(folder), 'classes': str(tmp_path / 'nope.yaml')})
+    assert 'WinError' not in str(refused.value) and 'Errno' not in str(refused.value)
+    classes.unlink()
+    with pytest.raises(ValueError, match='verified classes.yaml required'):
+        review_ingest.import_frames(store, {'path': str(folder)})

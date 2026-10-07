@@ -57,8 +57,13 @@ def import_frames(store, body):
         if draft:
             classes_path = (str(Path(draft['zip']).parent / 'classes.yaml') if 'zip' in draft
                             else str(catalog.parent / 'classes.yaml'))
+        elif not review_masks.classes(store) and (catalog.parent / 'classes.yaml').is_file():
+            classes_path = str(catalog.parent / 'classes.yaml')   # first binding of a draft-free catalog
     binding = review_masks.classes(store)
-    class_raw = bounded(classes_path, 1024 * 1024) if classes_path else None
+    try:
+        class_raw = bounded(classes_path, 1024 * 1024) if classes_path else None
+    except OSError as exc:
+        raise ValueError(f'pixel classes file not readable: {classes_path}') from exc
     if class_raw:
         values = build.load_classes(Path(classes_path), source_bytes=class_raw)
         binding = {'classes': values, 'sha256': review_masks.sha(class_raw), 'ignore_index': 255}
