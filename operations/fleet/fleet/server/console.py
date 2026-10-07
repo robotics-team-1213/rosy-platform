@@ -33,7 +33,7 @@ from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, traffic
 from fleet.server.console_view import (
-    CapabilityDisplay, _error_of, _formation_stream_evidence, _shown,
+    CapabilityDisplay, TripCaps, _error_of, trip_caps, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
 )
 from fleet.swarm.session import (
@@ -229,6 +229,10 @@ class FleetConsole:
 
     async def _shown_capabilities(self, robot_id: str) -> Optional[dict]:
         return await self._capability_display.shown(robot_id)
+
+    async def caps_for(self, robot_id: str) -> Optional[TripCaps]:
+        """D-491 1: trip caps from the capability cache; None for an older image or no answer."""
+        return trip_caps(await self._capability_display.shown(robot_id, wait_s=2.0))
 
     async def _gather_state(self, robot_id: str) -> tuple[dict, str]:
         """D-447: 이미 열린 소켓이 먼저다. hub heartbeat(1 Hz, PRT-003)가 신선하면
