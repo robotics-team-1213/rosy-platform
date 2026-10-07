@@ -13,7 +13,7 @@ const W = 800, H = 480;
 
 $('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
-const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, point: null, robotsError: false};
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false};
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
@@ -127,6 +127,7 @@ function syncButtons() {
 }
 
 async function load() {
+  state.planEpoch += 1;
   let active = null;
   try { active = await request('/api/fleet/site-map/active'); } catch (error) {
     if (error.status !== 404) throw error;
@@ -147,7 +148,10 @@ async function load() {
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map(place => new Option(`${place.name} (${place.id})`, place.id)));
   $('trip-robot').replaceChildren(...robots.map(robot => {
-    const option = new Option(robot.online ? robot.robot_id : `${robot.robot_id} · 연결 끊김`, robot.robot_id);
+    const safety = robot.state?.safety?.estop;
+    const stateLabel = !robot.online ? '연결 끊김' : safety === true ? '비상 정지'
+      : safety === false ? '' : '정지 상태 미확인';
+    const option = new Option(stateLabel ? `${robot.robot_id} · ${stateLabel}` : robot.robot_id, robot.robot_id);
     option.dataset.online = robot.online ? 'true' : 'false';
     return option;
   }));
@@ -169,6 +173,7 @@ $('connect').addEventListener('click', async () => {
   const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
   state.role = null;
   state.loadState = 'pending';
+  state.planEpoch += 1;
   state.robotsError = false;
   state.active = state.draft = state.working = state.selected = state.plan = state.point = null;
   state.dirty = false;
@@ -207,6 +212,15 @@ $('connect').addEventListener('click', async () => {
 
 $('map-source').addEventListener('change', () => render());
 
+function clearPlan() {
+  state.planEpoch += 1;
+  state.plan = null;
+  status('trip-summary', '계산 전 · 실행은 하지 않습니다', 'empty');
+  $('trip-actions').replaceChildren();
+  render();
+  syncButtons();
+}
+
 $('site-map-svg').addEventListener('click', event => {
   if ($('trip-pick').checked && $('map-source').value === 'active' && state.view) {
     const svg = event.currentTarget;
@@ -214,8 +228,7 @@ $('site-map-svg').addEventListener('click', event => {
     const [x, y] = state.view.toMap(at.x, at.y);
     state.point = {x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000};
     $('trip-point').textContent = `찍은 좌표 x ${state.point.x} m, y ${state.point.y} m`;
-    render();
-    syncButtons();
+    clearPlan();
     return;
   }
   const target = event.target.closest('[data-place], [data-edge]');
@@ -226,11 +239,10 @@ $('site-map-svg').addEventListener('click', event => {
 $('trip-pick').addEventListener('change', () => {
   $('site-map-svg').classList.toggle('picking', $('trip-pick').checked);
   if ($('trip-pick').checked) $('map-source').value = 'active';  // trips plan on the active map
-  render();
-  syncButtons();
+  clearPlan();
 });
-$('trip-place').addEventListener('change', syncButtons);
-$('trip-robot').addEventListener('change', syncButtons);
+$('trip-place').addEventListener('change', clearPlan);
+$('trip-robot').addEventListener('change', clearPlan);
 
 $('apply-edit').addEventListener('click', () => guarded(async () => {
   const sel = state.selected;
@@ -266,12 +278,16 @@ $('activate').addEventListener('click', () => guarded(async () => {
 }));
 
 $('trip-plan').addEventListener('click', () => guarded(async () => {
+  const epoch = ++state.planEpoch;
   const to = $('trip-pick').checked ? state.point : $('trip-place').value;
   state.plan = null;
   try {
-    state.plan = await request(`/api/fleet/robots/${encodeURIComponent($('trip-robot').value)}/trip`, {
+    const plan = await request(`/api/fleet/robots/${encodeURIComponent($('trip-robot').value)}/trip`, {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({to})});
+    if (epoch !== state.planEpoch) return;
+    state.plan = plan;
   } catch (error) {
+    if (epoch !== state.planEpoch) return;
     status('trip-summary', error.code ? tripErrorText(error.code, error.detail) : error.message, 'error');
     $('trip-actions').replaceChildren();
     render();
