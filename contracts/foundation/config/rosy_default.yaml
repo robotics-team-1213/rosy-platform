@@ -167,13 +167,17 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   recovery_console_grace_s: 3.0    # a FleetAgent reconnect this short still counts as linked
   recovery_restuck_m: 0.30
   recovery_rear_lateral_margin_m: 0.02   # rear band = body_half_width_m (URDF) + this
-  # D-476 expected-road bridge (Proposed; off until replay -> model/site-PC sim -> device pass).
+  # D-476 expected-road bridge. On by robot default since D-492 (2026-10-07), which amends D-476's
+  # "off until replay -> sim -> device": a payload with it on is promoted to robots only after the
+  # model-PC Gazebo map_v2_fleet_real lap and a real lane lap. Roll back per robot with
+  # line_follow.bridge_enabled: false in ~/.rosy/rosy.yaml or ROSY_CONFIG (no code change).
+  # Still needs recovery_local_enabled (off above), so it bridges only where that is on.
   # A short camera lane loss right after contained following drives the D-468 checkpoint lane's
   # straight extension (needs recovery_local_enabled, path-mode URDF body). Measured odom travel
   # x bridge_distance_scale: full speed (min cruise, manual limit) below bridge_coast_m, x
   # bridge_slow_scale below bridge_slow_m, then stop and hand over to D-468. Always done by
   # lost_after_s - bridge_time_margin_s; the LOST clock is never reset or extended.
-  bridge_enabled: false
+  bridge_enabled: true
   bridge_lookahead_m: 0.10         # pure-pursuit point ahead on the extended centre line
   bridge_coast_m: 0.10             # D-384 COAST
   bridge_slow_m: 0.25              # D-384 SLOW

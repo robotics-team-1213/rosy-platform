@@ -115,10 +115,10 @@ def test_lane_mode_uses_the_guarded_simulation_ground():
     assert "'camera_lane_mode'" in source
 
 
-def test_lane_corner_turning_is_off_by_default_and_needs_odometry():
+def test_lane_corner_turning_is_on_by_robot_default_and_needs_odometry():
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     params = config["/**/line_observer_node"]["ros__parameters"]
-    assert params["lane_corner_turning"] is False
+    assert params["lane_corner_turning"] is True  # D-492: junction HOLD on robots
     assert params["camera_x_offset_m"] == 0.0
     source = (ROOT / "control/line_observer_node.py").read_text(encoding="utf-8")
     assert "Odometry, 'odom'" in source

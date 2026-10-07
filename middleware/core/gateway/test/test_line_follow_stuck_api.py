@@ -143,15 +143,18 @@ def test_packaged_default_plus_pinky_plus_old_overlay_parses():
     assert not generic.body_geometry_known                   # never backs off without URDF
 
 
-def test_d476_bridge_is_off_by_default_and_yaml_matches_the_model():
+def test_d476_bridge_is_on_by_robot_default_and_yaml_matches_the_model():
     from core_features.line_follow.model import LineFollowConfig
     merged = _deep_merge(_yaml(DEFAULT), _yaml(PINKY))
     config = _line_follow_config(merged["line_follow"])
     defaults = LineFollowConfig()
     keys = [k for k in _yaml(DEFAULT)["line_follow"] if k.startswith("bridge_")]
     assert len(keys) == 7
-    assert all(getattr(config, k) == getattr(defaults, k) for k in keys)
-    assert config.bridge_enabled is False
+    assert all(getattr(config, k) == getattr(defaults, k) for k in keys if k != "bridge_enabled")
+    # D-492: robots default on; the config-less model default stays off.
+    assert config.bridge_enabled is True and defaults.bridge_enabled is False
+    rolled_back = _deep_merge(merged, {"line_follow": {"bridge_enabled": False}})
+    assert _line_follow_config(rolled_back["line_follow"]).bridge_enabled is False
     with pytest.raises(ValueError, match="bridge_enabled must be true or false"):
         _line_follow_config({"bridge_enabled": "true"})
 
