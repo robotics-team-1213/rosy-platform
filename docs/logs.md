@@ -6733,3 +6733,9 @@ osy-d395-s1d\`.
 - 변경: 좁은 화면의 녹화본 시트가 조작부 뒤에 가려진 문제와 하단 행동 너비를 고쳤다.
 - 근거: [LOCAL 결과](validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 네 폭 관련 브라우저 7 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
 - gate 변화: Pilot G2 부분 근거. 실제 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · docs(uiux): Pilot 전체 브라우저 회귀 기록
+
+- 변경: Pilot 108개 브라우저 시험의 현재 LOCAL 회귀 결과와 실행 중 공유 main의 사이트 문서 단일 변경을 분리해 기록했다.
+- 근거: [회귀 기록](validation/uiux-pilot-full-browser-2026-10-07/result.md). 108 passed, known_failures 0 NEW, 로그 SHA256 기록.
+- gate 변화: Pilot 브라우저 경로 근거 보강. 미캡처 G2·실물 readback·요청자 G3와 제품 전체는 HOLD.
