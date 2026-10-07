@@ -6730,3 +6730,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: D-499 Proposed 유지.
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(fleet): 관제 상태 행에 로봇 링크(D-499)
+
+- 변경: `GET /api/fleet/state` 로봇 행에 선택 필드 `link`. 값은 up, unreachable, moved, tls-refused, protocol. 401이 아닌 로봇 API 오류에는 필드가 없다. 주소 상태는 기존 address_reasons 한 번이다. D-499는 Proposed다.
+- 증거: operations/fleet/test/test_link_class.py, test_link_on_snapshot.py, test_link_address_source.py, test/test_line_follow_contract_docs.py.
+- gate 변화: 없음. 호스트 시험은 장치 수용이 아니다.
+- 결정: D-499 Proposed 유지.
+- 교훈: 없음

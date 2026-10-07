@@ -26,6 +26,7 @@ import logging
 import math
 import time
 from typing import Any, Callable, Optional, Sequence
+from urllib.parse import urlsplit
 
 from core_common.succession import next_leader
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
@@ -36,6 +37,7 @@ from fleet.server.console_view import (
     CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
 )
+from fleet.server.link_class import classify_link
 from fleet.swarm.session import (
     FormationSession,
     FormationSpec,
@@ -122,6 +124,7 @@ class FleetConsole(TripAware):
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
         #: D-494 3: every state read also feeds the trip-only map pose (its `odom_pose`).
         self._state_sink: Optional[Callable[[str, dict], None]] = None
+        self._link_address_status = None
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
@@ -224,6 +227,13 @@ class FleetConsole(TripAware):
     def set_state_sink(self, sink: Optional[Callable[[str, dict], None]]) -> None:
         self._state_sink = sink
 
+    def set_link_address_status(self, provider) -> None:
+        """robot_id -> address status from the latest scan. None skips the lookup.
+
+        The provider must not contact a robot. snapshot calls it once.
+        """
+        self._link_address_status = provider
+
     def _client(self, robot_id: str) -> RobotClient:
         client = self._clients.get(robot_id)
         if client is None:
@@ -254,6 +264,13 @@ class FleetConsole(TripAware):
             *(self._gather_state(rid) for rid in order),
             return_exceptions=True,
         )
+        statuses = {}
+        provider = self._link_address_status
+        if provider is not None:
+            try:
+                statuses = provider() or {}
+            except Exception:
+                statuses = {}
         robots = []
         for robot_id, result in zip(order, results):
             goal = self._goals.get(robot_id)
@@ -267,6 +284,12 @@ class FleetConsole(TripAware):
                 robots.append({"robot_id": robot_id, "online": True, "goal": goal,
                                "queued": _shown(queued), "error": None,
                                "state": state, "gather_source": source})
+            row = robots[-1]
+            scheme = urlsplit(self._registered_endpoints.get(robot_id, "")).scheme
+            exc = result if isinstance(result, BaseException) else None
+            link = classify_link(exc, scheme=scheme, address_status=statuses.get(robot_id))
+            if link is not None:
+                row["link"] = link
         self._remember(robots)
         shown = await asyncio.gather(*(self._shown_capabilities(r["robot_id"])
                                        for r in robots if r["online"]))

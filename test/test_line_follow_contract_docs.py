@@ -12,7 +12,7 @@ def test_api_reference_documents_line_follow_endpoints_and_snapshot():
     # Version pin moves with every doc MINOR bump (PRT-006). Keep it at the
     # header version so a silent version freeze fails here.
     header = [line for line in reference.splitlines() if line.startswith("**Version:**")]
-    assert header and "v1.118" in header[0], (
+    assert header and "v1.119" in header[0], (
         "API Ref header version moved — update this pin in the same change")
     assert "`/api/v1/line-follow`" in reference
     assert "`/api/v1/line-follow/mode`" in reference
@@ -20,3 +20,11 @@ def test_api_reference_documents_line_follow_endpoints_and_snapshot():
     assert '"line_follow": {' in reference
     assert "IR_LINE" in reference
     assert "CAMERA_LINE" in reference
+
+
+def test_fleet_state_robot_row_documents_link():
+    reference = (ROOT / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
+    assert "D-499" in reference
+    for word in ("up", "unreachable", "moved", "tls-refused", "protocol"):
+        assert word in reference
+    assert "GET /api/fleet/state" in reference

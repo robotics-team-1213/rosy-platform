@@ -1,8 +1,8 @@
-﻿# ROSY API & Protocol Reference
+# ROSY API & Protocol Reference
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.118
+**Version:** v1.119
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1513,6 +1513,12 @@ leader `swarm.lead` and each follower `swarm.follow` before opening relay stream
 Missing/false flags are refused as `NOT_SUPPORTED`; transport errors remain errors.
 CORE still performs its own authorization, localization, and safety checks.
 
+Fleet `GET /api/fleet/state` robot rows also expose optional `link` (D-499):
+`up`, `unreachable`, `moved`, `tls-refused`, or `protocol`. Absent on a robot
+API error other than HTTP 401. `up` is a successful gather and carries no
+console tag. The field is display-only. CORE paths, envelope 1.0, and the
+dispatch loop's online/state/goal read are unchanged. An older Fleet omits the field.
+
 When durable task storage is configured, the operator navigation route creates a
 persistent task before contacting CORE. The browser sends a fresh
 `Idempotency-Key`; repeating the same request with the same authenticated
@@ -2439,6 +2445,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.119 | 2026-10-07 | Additive (D-499): Fleet `GET /api/fleet/state` 로봇 행 선택 필드 `link`(`up`·`unreachable`·`moved`·`tls-refused`·`protocol`). 401이 아닌 로봇 API 오류에는 필드가 없다. 표시 전용. CORE 경로·envelope 1.0·발행 루프의 online/state/goal 판정은 그대로다 |
 | v1.118 | 2026-10-07 | Additive (D-498, feat/d498-junction-turn-site-basis): 교차로 회전의 운동 근거에 현장 근거를 더함 — 설정 `line_follow.junction_turn_site_accepted`(기본 false, `ir_guard_enabled` 없이 true 면 CORE 시작 거부), `junction_turn` 능력은 enforce 증명 또는 현장 근거가 있을 때만 참(읽을 때마다 재판단), 중단 사유 `turn_basis_lost`. envelope 1.0 유지 |
 | v1.117 | 2026-10-07 | Corrective/semantic (D-468): containment boundaries are the drivable inner edge of the paint (previously paint centre). 생산자가 칠 폭 절반(`lane_paint_half_width_m`, 260919 STL 공칭 12.5 mm)만큼 안쪽으로 옮기고 그 값을 `geometry_id`에 넣는다. 필드 모양·envelope 1.0 변경 없음 |
 | v1.116 | 2026-10-07 | Additive (D-494 5, D-495 3): Fleet trip loop `POST /api/fleet/trips/{plan_id}/start` (opens the v1.111 501 reservation), `POST /api/fleet/trips/{trip_id}/cancel`, `POST /api/fleet/trips/{trip_id}/confirm-replan`, `GET /api/fleet/trips`, `GET /api/fleet/trips/{trip_id}`; map activation now waits for a running trip instead of a recent `/route` step. While a trip runs, `/goal`, `/route`, task dispatch, `formation/start|reform|resume`, moving line-stuck decisions and line-follow modes other than `OFF` for that robot answer 409 `TRIP_ROBOT_BUSY`; every operator stop (cancel, cancel-all, E-stop, `OFF`, stuck `ABORT`/`MANUAL`) reaches the robot and cancels the trip. Uses robot `POST /api/v1/line-follow/junction` (D-494 4) and the D-494 1/3 capability and map pose inputs. Robot API and envelope 1.0 unchanged |
