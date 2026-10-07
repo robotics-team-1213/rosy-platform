@@ -24,7 +24,8 @@ Revision = Optional[Annotated[str, Field(min_length=1, max_length=64)]]
 class NewPlace(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=64)
-    kind: PlaceKind = "junction"
+    # an edge end has no robot yaw, so it cannot be a D-513 start place
+    kind: Literal["park", "charge", "stop", "junction", "turnaround"] = "junction"
 
 
 class StartRequest(BaseModel):
@@ -46,6 +47,7 @@ class ConfirmRequest(BaseModel):
 
 class PlaceRequest(NewPlace):
     robot_id: str = Field(min_length=1, max_length=96)
+    kind: PlaceKind = "junction"
     expected_revision: Revision = None
 
 
