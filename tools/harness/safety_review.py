@@ -203,6 +203,15 @@ EXEMPT: dict[str, str] = {
         "inside the body (creep into contact, in-place turn) keeps holding; inside_body(strict=) "
         "in core_common.robot_body keeps a point exactly on the outline (conservative). Creep "
         "and turn hold tests pass.",
+    "b4f96a974df15956b41086587c5003bb0bdc9794":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: import-only; console.py takes the pure "
+        "D-499 classify_link (link word for status rows, not on the estop_all path) from the frozen "
+        "console_view edge, where the function is now defined (link_class.py removed). No new "
+        "safety->decision module; estop_all and dispatch unchanged. Exemption approved by livsbittt.",
+    "d69299d04b9b47fc6c2390963d32ab3f50b48e68":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: adds NOMINAL_BODY = PINKY_PRO alias and its "
+        "public safety anchor; second name for an already public object, no new capability; "
+        "robot_body.py stays in the literal backlog. Exemption approved by livsbittt.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
