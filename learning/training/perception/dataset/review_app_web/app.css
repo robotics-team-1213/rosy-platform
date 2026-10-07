@@ -47,6 +47,8 @@ summary { cursor: pointer; }
 .coordinates input { width: 100%; min-width: 0; }
 .box-number { display: none; }
 .review-actions { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--surface-line); }
+.shortcut-hint { color: var(--ink-quiet); font-size: var(--text-label); line-height: var(--leading-copy); }
+.shortcut-hint kbd { display: inline-block; min-width: 1.5em; margin-inline: var(--space-2) var(--space-1); padding: 0 var(--space-1); border: 1px solid var(--surface-line); border-radius: var(--radius-control); color: var(--ink); font-family: var(--mono); text-align: center; }
 .complete-check { display: flex; align-items: flex-start; gap: var(--space-2); line-height: var(--leading-copy); margin-bottom: var(--space-4); }
 .complete-check input { flex-shrink: 0; }
 #save-status { font-size: var(--text-label); }
@@ -68,6 +70,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
 .learning-form > p { width: 100%; font-size: var(--text-label); }
 .review-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding-block: var(--space-4); border-bottom: 1px solid var(--surface-line); }
 .review-summary p { color: var(--ink-quiet); margin-bottom: 0; }
+.review-summary > .quiet { font-size: var(--text-label); }
+#review-stage-summary { margin-block: 0 var(--space-2); font-variant-numeric: tabular-nums; }
 .workspace-link { font-size: var(--text-label); }
 .work-filters { align-items: end; padding-block: var(--space-2); }
 .search-field { flex: 1; min-width: min(100%, 16rem); }
