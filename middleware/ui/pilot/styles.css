@@ -28,6 +28,7 @@ ui-button, a { -webkit-tap-highlight-color: transparent; }
   display: grid;
   gap: var(--space-4);
   align-content: start;
+  width: 100%;
   max-width: 48rem;
   margin-inline: auto;
   padding: var(--space-5);
@@ -48,7 +49,7 @@ form[data-pilot-token-form] {
   max-width: 30rem;
 }
 
-form[data-pilot-token-form] ui-field { flex: 1 1 14rem; }
+form[data-pilot-token-form] label { flex: 1 1 14rem; min-width: 0; }
 
 @media (width < 30rem) {
   [data-lobby-retry], form[data-pilot-token-form] ui-button { width: 100%; }

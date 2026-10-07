@@ -111,6 +111,25 @@ export function fitView(map, width, height, pad = 24) {
   };
 }
 
+// Rectified photographs are display evidence; their clicks never create trip targets.
+export function rectangularView(record, mapId, width, height) {
+  const b = record?.track_bounds_m;
+  const h = record?.map_to_image;
+  if (record?.map_id !== mapId || !b || !Array.isArray(h) || h.length !== 9
+    || !h.every(Number.isFinite) || !Object.values(b).every(Number.isFinite)
+    || !(b.max_x > b.min_x && b.max_y > b.min_y)) throw new Error('지도와 카메라 보정을 확인하세요.');
+  const determinant = h[0] * (h[4] * h[8] - h[5] * h[7])
+    - h[1] * (h[3] * h[8] - h[5] * h[6]) + h[2] * (h[3] * h[7] - h[4] * h[6]);
+  if (Math.abs(determinant) < 1e-12 || ![b.min_x, b.max_x].every(x =>
+    [b.min_y, b.max_y].every(y => h[6] * x + h[7] * y + h[8] > 1e-9)))
+    throw new Error('카메라 보정의 평면 범위를 확인하세요.');
+  const places = [{x: b.min_x, y: b.min_y}, {x: b.max_x, y: b.max_y}];
+  const view = fitView({places, edges: []}, width, height);
+  const [x, y] = view.toPx(b.min_x, b.max_y);
+  return {view, field: {x, y, width: (b.max_x - b.min_x) * view.scale,
+    height: (b.max_y - b.min_y) * view.scale}};
+}
+
 function lengths(points) {
   const knots = [0];
   for (let i = 1; i < points.length; i += 1) {

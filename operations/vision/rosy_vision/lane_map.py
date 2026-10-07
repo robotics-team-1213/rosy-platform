@@ -44,7 +44,37 @@ def _thin(mask):
             return pixels[1:-1, 1:-1]
 
 
-def _graph(skeleton, origin, resolution, lane_width, map_id):
+def _centre_points(points, paint, origin, resolution, lane_width):
+    """Refine observed paths toward paired paint; retain junctions and missing evidence."""
+    if len(points) < 11:
+        return points
+    tangent = points[10:] - points[:-10]
+    length = np.linalg.norm(tangent, axis=1)
+    normal = np.column_stack((-tangent[:, 1], tangent[:, 0])) / np.maximum(length[:, None], 1e-9)
+    middle = points[5:-5]
+    distances = np.arange(resolution, lane_width * .8, resolution)
+    hits = []
+    for sign in (-1, 1):
+        probes = middle[:, None, :] + sign * normal[:, None, :] * distances[None, :, None]
+        x = np.rint((probes[:, :, 0] - origin[0]) / resolution).astype(int)
+        y = np.rint((origin[1] - probes[:, :, 1]) / resolution).astype(int)
+        inside = (x >= 0) & (x < paint.shape[1]) & (y >= 0) & (y < paint.shape[0])
+        observed = np.zeros(inside.shape, bool)
+        observed[inside] = paint[y[inside], x[inside]] != 0
+        hits.append(np.where(observed.any(axis=1), distances[observed.argmax(axis=1)], np.nan))
+    width = hits[0] + hits[1]
+    shift = (hits[1] - hits[0]) / 2
+    valid = (length > resolution) & (width >= lane_width * .7) & (width <= lane_width * 1.3) \
+        & (np.abs(shift) <= lane_width * .1)
+    # Single-pixel highlights must not turn a straight path into a zigzag.
+    shift = np.median(np.lib.stride_tricks.sliding_window_view(
+        np.pad(np.where(valid, shift, 0), 5, mode="edge"), 11), axis=1)
+    refined = points.copy()
+    refined[5:-5][valid] += normal[valid] * shift[valid, None]
+    return refined
+
+
+def _graph(skeleton, origin, resolution, lane_width, map_id, *, paint=None):
     pixels = set(zip(*np.nonzero(skeleton)))
 
     def neighbours(p):
@@ -130,11 +160,16 @@ def _graph(skeleton, origin, resolution, lane_width, map_id):
     def add_edge(path, first, last):
         points = np.array([xy(p) for p in path], np.float32)
         points[0], points[-1] = xy(positions[first]), xy(positions[last])
-        points = cv2.approxPolyDP(points, resolution * 1.5, False).reshape(-1, 2)
-        if sum(np.linalg.norm(np.diff(points, axis=0), axis=1)) <= max(0.10, lane_width):
+        coarse = cv2.approxPolyDP(points, resolution * 1.5, False).reshape(-1, 2)
+        if sum(np.linalg.norm(np.diff(coarse, axis=0), axis=1)) <= max(0.10, lane_width):
             return
         if np.linalg.norm(points[0] - points[-1]) <= 0.05:
             return
+        if paint is not None:
+            points = _centre_points(points, paint, origin, resolution, lane_width)
+            points = cv2.approxPolyDP(points, resolution, False).reshape(-1, 2)
+        else:
+            points = coarse
         edges.append({"id": f"lane_{len(edges)}", "from": f"p{first}", "to": f"p{last}",
                       "polyline": [[round(float(v), 4) for v in p] for p in points],
                       "direction": "two_way", "width_m": lane_width,
@@ -212,6 +247,9 @@ def generate_map(image, calibration, *, lane_width_m, map_id="camera"):
         if not np.isfinite(limits).all() or np.any(limits[:2] >= limits[2:]):
             raise ValueError("invalid measured map bounds")
         lo, hi = np.maximum(lo, limits[:2]), np.minimum(hi, limits[2:])
+    requested_lo, requested_hi = lo.copy(), hi.copy()
+    # Observe borders outside the output ROI; an ROI edge is not a camera edge.
+    lo, hi = lo - lane_width_m, hi + lane_width_m
     extent = hi - lo
     if not np.isfinite(extent).all() or min(extent) < 0.1 or max(extent) > 20:
         raise ValueError("calibrated view must span 0.1 to 20 m")
@@ -227,7 +265,14 @@ def generate_map(image, calibration, *, lane_width_m, map_id="camera"):
     small = cv2.resize(image, (round(width * scale), round(height * scale)), interpolation=cv2.INTER_AREA)
     sx, sy = small.shape[1] / width, small.shape[0] / height
     to_small = np.array([[sx, 0, (sx - 1) / 2], [0, sy, (sy - 1) / 2], [0, 0, 1]])
-    paint = cv2.warpPerspective(_line_mask(small), raster @ homography @ np.linalg.inv(to_small),
+    # The map registrar drops broad white areas; a road can border a broad white wall.
+    hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+    value_min = calibration.get("white_value_min", 180)
+    if type(value_min) is not int or not 80 <= value_min <= 255:
+        raise ValueError("white_value_min must be an integer between 80 and 255")
+    broad = ((hsv[:, :, 2] >= value_min) & (hsv[:, :, 1] <= 70)).astype(np.uint8) * 255
+    broad = cv2.morphologyEx(broad, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+    paint = cv2.warpPerspective(_line_mask(small) | broad, raster @ homography @ np.linalg.inv(to_small),
                                 size, flags=cv2.INTER_NEAREST)
     # Speckled carpet, robot highlights and short crosswalk bars are not lane borders.
     count, components, stats, _ = cv2.connectedComponentsWithStats(paint, connectivity=8)
@@ -261,10 +306,32 @@ def generate_map(image, calibration, *, lane_width_m, map_id="camera"):
             opposite[inside] |= paint_band[oy[inside], ox[inside]] != 0
     corridor = visible & opposite & (distance * resolution >= lane_width_m * 0.35) \
         & (distance * resolution <= lane_width_m * 0.8)
+    corridor &= (xs * resolution + lo[0] >= requested_lo[0]) \
+        & (xs * resolution + lo[0] <= requested_hi[0]) \
+        & (hi[1] - ys * resolution >= requested_lo[1]) \
+        & (hi[1] - ys * resolution <= requested_hi[1])
     # Never let the edge of the camera coverage masquerade as a road boundary.
     observed_clearance = cv2.distanceTransform(np.pad(visible.astype(np.uint8), 1), cv2.DIST_L2, 5)[1:-1, 1:-1]
     corridor &= observed_clearance * resolution > lane_width_m / 2
-    draft = _graph(_thin(corridor), (lo[0], hi[1]), resolution, lane_width_m, map_id)
+    seed = calibration.get("road_seed_m")
+    if seed is not None:
+        seed = np.asarray(seed, dtype=np.float64)
+        if seed.shape != (2,) or not np.isfinite(seed).all() \
+                or np.any(seed < requested_lo) or np.any(seed > requested_hi):
+            raise ValueError("road_seed_m must be an observed road point within map bounds")
+        cy, cx = np.nonzero(corridor)
+        distance_to_seed = np.hypot(cx * resolution + lo[0] - seed[0], hi[1] - cy * resolution - seed[1])
+        if not len(cx) or distance_to_seed.min() > lane_width_m / 2:
+            raise ValueError("road_seed_m is not inside an observed paired road")
+        _, regions = cv2.connectedComponents(corridor.astype(np.uint8), connectivity=8)
+        nearest_seed = int(distance_to_seed.argmin())
+        corridor &= regions == regions[cy[nearest_seed], cx[nearest_seed]]
+    # Topology uses the noise-filtered preview; centring uses the original-resolution paint.
+    full_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    full_paint = ((full_hsv[:, :, 2] >= value_min) & (full_hsv[:, :, 1] <= 70)).astype(np.uint8) * 255
+    full_paint = cv2.warpPerspective(full_paint, raster @ homography, size, flags=cv2.INTER_NEAREST)
+    full_paint[paint_band == 0] = 0
+    draft = _graph(_thin(corridor), (lo[0], hi[1]), resolution, lane_width_m, map_id, paint=full_paint)
     evidence = {"generator": "camera-lanes/1", "calibration": calibration,
                 "lane_width_m": lane_width_m, "resolution_m": resolution,
                 "paint_pixels": int(np.count_nonzero(paint)), "proposal_only": True,
