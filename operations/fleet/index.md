@@ -89,11 +89,6 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(fleet): camera-map integration contract pins
-- 2026-10-07 · uncommitted · uiux(fleet): Cell 문서 목록 마지막 수신 시각
-- 2026-10-07 · 556dd1954 · feat(fleet): 카메라 차선 지도 초안 가져오기
-- 2026-10-07 · uncommitted · uiux(fleet): Cell 접속 역할 어휘
-- 2026-10-07 · uncommitted · Fleet roster action widths
 - 2026-10-07 · uncommitted · fix(fleet): D-494 5 trip 안전 검토 반영 — 모든 멈춤이 trip을 끝낸다
 - 2026-10-07 · uncommitted · fix(fleet): D-494 5 trip 루프 재검토 반영 R1–R8
 - 2026-10-07 · uncommitted · fix(fleet): D-494 5 trip 루프 독립 검토 반영 — CORE 교차로 상태 기반 전송·넘김, 모든 끝에서 정지
