@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · docs(core): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
 - 2026-10-08 · uncommitted · fix(line_follow): D-507 6 가로선 띠는 테이프 중심 ± 폭/2 (검토)
 - 2026-10-08 · uncommitted · fix(line_follow): D-507 2·4 pivot_past_line_m 부호 있음 [−0.30, 0.30]
 - 2026-10-08 · uncommitted · test(line_follow): D-507 10 D-422 기억 몸 밖 규칙의 safety 시험·검토·SIM
 - 2026-10-08 · uncommitted · feat(line_follow): D-507 6 motion_admitted, 9 site_floor_map_id
-- 2026-10-08 · uncommitted · fix(line_follow): LiDAR 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)

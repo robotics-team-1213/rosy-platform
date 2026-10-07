@@ -2512,3 +2512,8 @@
 - 증거: `test_trip_d507.py` free 차로, 0.30 경계(0.6→0.3, 0.604→None), SW 로봇 yaw 64° 대 차로 53.8°, 창 없는 두 경우. 변이(창 없이 음수 pivot) 2건 실패 확인 뒤 복원.
 - gate 변화: SOURCE.
 - 결정: D-507 2 개정 검토
+
+## 2026-10-08 · uncommitted · docs(fleet): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.

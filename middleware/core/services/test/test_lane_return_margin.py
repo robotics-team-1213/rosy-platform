@@ -88,8 +88,11 @@ def test_contained_tracking_departs_when_a_corner_crosses_the_estimated_line():
 
 
 def test_jittered_first_frame_does_not_enter_containment():
+    # Entry needs the eroded margin; geometrically inside is unknown, not a departure (D-507 7).
     r = rig()
-    assert frame(r, 1., yaw=math.radians(1)).linear == 0   # entry needs the eroded margin
+    assert frame(r, 1., yaw=math.radians(1)).linear > 0
+    assert r[1].status().lane_return_containment == 'unknown'
+    assert r[1]._return_controller.checkpoint is None
 
 
 def test_body_corner_outside_very_narrow_lane_is_not_contained():
@@ -102,14 +105,16 @@ def test_body_corner_outside_very_narrow_lane_is_not_contained():
 def test_uncertainty_larger_than_raw_margin_is_not_contained():
     r = rig()
     action = frame(r, 1., uncertainty=.006)   # 5 mm geometric margin, 6 mm projection error
-    assert action.linear == action.angular == 0
-    assert r[1].status().reason == 'lane_return_containment_unconfirmed'
+    assert action.linear > 0   # unproven, not departed (D-507 7)
+    assert r[1].status().lane_return_containment == 'unknown'
 
 
 def test_required_body_clearance_parameter_is_applied():
     r = rig(lane_return_body_margin_m=.002)   # eroded centred margin is only .00075
-    assert frame(r, 1.).linear == 0
-    assert r[1].status().reason == 'lane_return_containment_unconfirmed'
+    for t in (1., 1.05, 1.1, 1.15):
+        assert frame(r, t).linear > 0
+    assert r[1].status().lane_return_containment == 'unknown'
+    assert r[1]._return_controller.checkpoint is None
 
 
 def test_off_keeps_legacy_following_even_when_body_is_outside():
@@ -134,8 +139,8 @@ def test_heading_into_the_boundary_spends_margin_before_the_next_frame():
     s, body = math.tan(.1), Footprint(.08, -.08, .06)
     lane = Corridor(Boundary(s, .10-.0314), Boundary(s, -.10-.0314), 'rig-a')
     assert 0 < lane.margin(body) < .04*math.sin(.1)*.3
-    assert tick(ReturnController(body), 1., lane).phase == 'departure_stop'
-    assert tick(ReturnController(body), 1., lane, linear_limit=0.).phase == 'tracking'
+    assert tick(ReturnController(body), 1., lane).reason == 'containment_unknown'
+    assert tick(ReturnController(body), 1., lane, linear_limit=0.).reason == 'contained'
 
 
 def test_off_centre_contained_pose_is_not_a_normal_checkpoint():
@@ -174,8 +179,9 @@ def test_uncertainty_at_least_the_260919_play_is_not_contained(uncertainty):
     lane = Corridor(Boundary(0, TRACK_260919_EDGE-uncertainty), Boundary(0, -TRACK_260919_EDGE+uncertainty),
                     'track-260919', uncertainty)
     ctl = ReturnController(BODY)
-    assert tick(ctl, 1., lane).phase == 'departure_stop'
+    assert tick(ctl, 1., lane).reason == 'containment_unknown'   # D-507 7: not a departure
     assert ctl.checkpoint is None
-    # Through the receiver it never gets that far: above MAX_UNCERTAINTY_M there is no corridor.
+    # Through the receiver: above MAX_UNCERTAINTY_M there is no corridor, so following goes on.
     r = rig()
-    assert frame(r, 1., uncertainty=uncertainty, edge=TRACK_260919_EDGE).linear == 0
+    assert frame(r, 1., uncertainty=uncertainty, edge=TRACK_260919_EDGE).linear > 0
+    assert r[1].status().lane_return_containment == 'unknown'

@@ -17,7 +17,7 @@ def rig(probe=lambda now,v,w: True, **config):
     bus=Bus()
     manager=LineFollowManager(bus,clock=lambda:clock[0],config=LineFollowConfig(
         body_front_x_m=.08,body_rear_x_m=-.08,body_half_width_m=.06,
-        cruise_speed=.04,max_linear=.04,recovery_local_enabled=True,**config))
+        cruise_speed=.04,max_linear=.04,**{"recovery_local_enabled":True,**config}))
     manager.bind_recovery(calibration_active=lambda:False,linear_ceiling=lambda:.04)
     manager.bind_return_motion(probe)
     manager.set_mode(LineFollowMode.CAMERA_LINE)
@@ -115,10 +115,28 @@ def test_replayed_scan_stamp_cannot_refresh_receipt_age():
     assert not manager.return_body_clear(9.1,.03,0.)
 
 
-def test_unknown_projection_cannot_resume_normal_following():
-    r=rig(lambda now,v,w:False)
-    action=frame(r,1.,uncertainty=None)
-    assert action.linear==action.angular==0
+def test_unknown_projection_follows_like_recovery_off_without_d468_motion():
+    # D-507 7: recovery_local_enabled on (robot default) with uncertainty unknown is not a
+    # departure. Following matches recovery off; D-468 neither stops nor moves the robot.
+    on,off=rig(lambda now,v,w:False),rig(lambda now,v,w:False,recovery_local_enabled=False)
+    for t in (1.,1.05,1.1):
+        a,b=frame(on,t,y=.01,uncertainty=None),frame(off,t,y=.01,uncertainty=None)
+        assert (a.linear,a.angular)==(b.linear,b.angular) and a.linear>0
+    status=on[2].status()
+    assert status.state=='TRACKING' and status.lane_return_containment=='unknown'
+    assert on[2]._return_controller.checkpoint is None
+    assert off[2].status().lane_return_containment is None
+
+
+def test_missing_body_geometry_follows_like_recovery_off():
+    clock=[1.]
+    manager=LineFollowManager(Bus(),clock=lambda:clock[0],config=LineFollowConfig(
+        cruise_speed=.04,max_linear=.04,recovery_local_enabled=True))
+    manager.bind_recovery(calibration_active=lambda:False,linear_ceiling=lambda:.04)
+    manager.bind_return_motion(lambda now,v,w:True)
+    manager.set_mode(LineFollowMode.CAMERA_LINE)
+    assert frame((clock,None,manager),1.).linear>0
+    assert manager.status().lane_return_containment=='unknown'
 
 
 def test_nominal_without_driver_and_expired_driver_stay_zero():

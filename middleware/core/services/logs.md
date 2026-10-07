@@ -696,6 +696,13 @@
 - 결정: D-495 SIM 결과 결함 2 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
 - 교훈: 없음
 
+## 2026-10-07 · uncommitted · core_features(line_follow): D-468 departure only on positive evidence (D-507 7)
+- 변경: `recovery/lane_return.py` 추종 단계는 신선한 `ready` corridor 에서 `margin + uncertainty_m < 0`(또는 증명된 차로 안이지만 체크포인트 차로가 아님)일 때만 이탈을 연다. 그 밖은 `ReturnAction('tracking','containment_unknown')`. `recovery/lane_return_decision.py` 는 그 틱을 오늘의 추종 결정으로 넘기고 상태 `lane_return_containment` 을 채운다. 몸 기하 없음도 recovery off 와 같다(`lane_return_body_unknown` HOLD 제거). 포즈 불연속·epoch 변화는 그대로 이탈을 연다.
+- 증거: `python -m pytest middleware/core/gateway/test middleware/core/services/test contracts -q` → `X:/DevTemp/d507-impl/b6/run.txt`, known_failures 비교.
+- gate 변화: SOURCE. 선 잃음(근거 없음)은 이제 D-468 복귀가 아니라 손실 시계 → LOST 다. bridge 소진 뒤 역추적도 양의 증거가 있을 때만.
+- 결정: D-507 7
+- 교훈: 기존 시험 여럿이 `corridor=None` 을 이탈 신호로 썼다 — 이탈 시험은 몸이 경계를 넘은 corridor 로 쓴다.
+
 ## 2026-10-08 · uncommitted · fix(line_follow): LiDAR 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
 - 변경: `clearance.return_scan_view`가 1 ns라도 앞선 스캔을 버리던 것을 `SOURCE_FUTURE_TOLERANCE_S`(0.1 s) 안이면 나이 0으로 받고, 넘으면 버린다. odom(`lane_return_evidence.observe_pose`)과 선 관측(`manager.observe`)은 이미 같은 상수를 쓴다.
 - 증거: `test_lane_return_scan.py`(1 ms·0.1 s 앞 받음, 0.1 s+1 ns 앞 버림), `test_lane_return_evidence.py`(허용치 밖 표본을 버려도 다음 표본이 trail을 잇는다, 실제 불연속은 끊는다). 변이 확인 4건.
@@ -716,6 +723,7 @@
 - gate 변화: D-507 10 SOURCE·SIM. DEVICE(D9 근거리)는 열림.
 - 결정: D-507 10, D-422
 - 교훈: trailer 없이 main에 들어간 safety 커밋은 amend 할 수 없어 독립 검토를 EXEMPT로 남긴다. 착지 전에 `safety_review.py`를 돌린다.
+- 교훈: 없음
 
 ## 2026-10-08 · uncommitted · fix(line_follow): D-507 2·4 pivot_past_line_m 부호 있음 [−0.30, 0.30]
 - 변경: `junction_approach.check_expect`가 음수 pivot을 받는다(측정 가로선이 장소 너머, 회전교차로 입구·T자의 먼 쪽 경계). 기대 창 점은 그대로 `expect_in_m − pivot`, 접근 목표 = 측정 선 + pivot. 목표가 로봇 자리이거나 뒤면 접근 0, 제자리 회전, 후진 없음(기존 `max(0, distance)`). 직진 띠 옆 반폭은 양수 pivot일 때만 그 값, 아니면 D-491 0.10 m.
@@ -728,3 +736,8 @@
 - 증거: `test_junction_approach.py` 띠 경계(.3776/.3774, .4224/.4226)와 범위·odom 오차 경계(x .3214/.3816) 다시 계산.
 - gate 변화: SOURCE.
 - 결정: D-507 6, 2 개정 검토
+
+## 2026-10-08 · uncommitted · docs(core): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.
