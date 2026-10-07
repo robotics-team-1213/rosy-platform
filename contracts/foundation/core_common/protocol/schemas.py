@@ -1179,7 +1179,7 @@ class StateSnapshot(BaseModel):
     #: v1.69 additive (D-395): state and pose frame; null from robots before D-395.
     localization: Optional[LocalizationStatus] = None
     safety_policy: Optional[SafetyPolicyStatus] = None  # D-400, v1.71 additive
-    odom_pose: Optional[OdomPose] = None  # D-491 2, v1.112 additive; null until odometry
+    odom_pose: Optional[OdomPose] = None  # D-494 2, v1.112 additive; null until odometry
 
 
 class HeartbeatPayload(BaseModel):

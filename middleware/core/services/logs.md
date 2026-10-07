@@ -575,16 +575,16 @@
 - 결정: D-476 (Proposed)
 - 교훈: 없음
 
-## 2026-10-07 · uncommitted · feat(state): D-491 2 상태 스냅샷의 odom_pose
+## 2026-10-07 · uncommitted · feat(state): D-494 2 상태 스냅샷의 odom_pose
 
 - 변경: `StateManager.set_odom_pose(x, y, yaw)`가 받은 순간의 벽시계(UTC epoch 초)를 `stamp`로 붙여 보관하고, `snapshot()`이 `odom_pose`로 싣는다. odom이 한 번도 오지 않으면 `null`이다. map 자세가 `pose`를 가져도 같이 싣는다.
 - 증거: `test_state_odom_pose.py` 2 PASS(null→값, 하트비트 왕복, 옛 스냅숏 파싱). services 941 passed, known_failures 0 new.
 - gate 변화: 없음.
-- 결정: D-491 (Proposed)
+- 결정: D-494 (Proposed)
 
-## 2026-10-07 · uncommitted · fix(state): D-491 검토 — 유한하지 않은 odom 표본을 버린다
+## 2026-10-07 · uncommitted · fix(state): D-494 검토 — 유한하지 않은 odom 표본을 버린다
 
 - 변경: `OdomPose`를 frozen·유한 값만으로 바꾸고, `set_odom_pose`는 NaN/inf 표본을 버리고 이전 값을 두며 한 번만 경고한다. NaN 하나가 `/state`를 500으로 만들지 않는다.
 - 증거: `test_state_odom_pose.py` 3 PASS, gateway `/robot/state` NaN 시험 PASS.
 - gate 변화: 없음.
-- 결정: D-491 (Proposed)
+- 결정: D-494 (Proposed)

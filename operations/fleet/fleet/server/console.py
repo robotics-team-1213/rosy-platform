@@ -231,7 +231,7 @@ class FleetConsole:
         return await self._capability_display.shown(robot_id)
 
     async def caps_for(self, robot_id: str) -> Optional[TripCaps]:
-        """D-491 1: trip caps from the capability cache; None for an older image or no answer."""
+        """D-494 1: trip caps from the capability cache; None for an older image or no answer."""
         return trip_caps(await self._capability_display.shown(robot_id, wait_s=2.0))
 
     async def _gather_state(self, robot_id: str) -> tuple[dict, str]:

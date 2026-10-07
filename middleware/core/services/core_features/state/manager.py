@@ -138,7 +138,7 @@ class StateManager:
             self._mark("pose")
 
     def set_odom_pose(self, x: float, y: float, yaw: float) -> None:
-        """D-491 2: odom-frame pose, stamped with the wall clock at receipt.
+        """D-494 2: odom-frame pose, stamped with the wall clock at receipt.
 
         A non-finite sample is dropped and the previous pose kept (logged once),
         so one bad odom message never fails the state snapshot.

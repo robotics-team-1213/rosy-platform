@@ -84,7 +84,7 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     limits = svc.safety.limits
     assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear,
                                           svc.line_follow.config.max_linear)
-    assert base["junction_turn"] is False              # manager without the D-492 hook
+    assert base["junction_turn"] is False              # manager without the D-495 hook
     svc.line_follow.supports_junction_turn = True
     assert _controls(client)["items"][0]["junction_turn"] is True
     navigation = svc.capability._data.setdefault("navigation", {})

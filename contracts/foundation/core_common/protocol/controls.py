@@ -38,11 +38,11 @@ class BaseVelocityControl(_Wire):
     start/status API decides that. Pinky's ``pivot`` and
     ``fine`` are profile constants of that base, not runtime evidence.
 
-    D-491 1 (optional within /1): ``robot_kind`` is the robot package name,
+    D-494 1 (optional within /1): ``robot_kind`` is the robot package name,
     ``drive_modes`` the trip drive modes it offers (``lane`` with the line-follow
     service, ``free`` with goal navigation) and ``trip_max_linear`` (m/s) the
     fastest speed it allows a Fleet trip. A device without them is an older image.
-    ``junction_turn`` (D-492) is true when its line-follow can do the bounded junction turn.
+    ``junction_turn`` (D-495) is true when its line-follow can do the bounded junction turn.
     """
 
     id: str = Field(pattern=_ID)
@@ -148,7 +148,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
     """Pinky's controls from its adapter manifest's `provides` (D-411 §8).
 
     `autonomy` is what the caller provides (not live readiness); pivot/fine are Pinky profile constants.
-    The D-491 trip fields are left out of the wire when None (``exclude_none``).
+    The D-494 trip fields are left out of the wire when None (``exclude_none``).
     """
     items = []
     if "drive" in provides:

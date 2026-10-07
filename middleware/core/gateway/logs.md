@@ -931,9 +931,9 @@
 - 증거: `test_safety_params.py`, `test_lane_return_sensors.py`, `test_control_sensor_adapter.py` 추가 시험 PASS. 모델 PC sim에서 정책 창 monotonic·`floor_observed True` 확인.
 - gate 변화: 없음.
 
-## 2026-10-07 · uncommitted · feat(bridge): D-491 2 odom 콜백이 odom_pose를 채운다
+## 2026-10-07 · uncommitted · feat(bridge): D-494 2 odom 콜백이 odom_pose를 채운다
 
 - 변경: `ros_bridge._on_odom`이 odom 메시지마다 `state.set_odom_pose`를 부른다. `pose` 소유 규칙(`odom_owns_pose`)은 그대로다. 시각은 ROS 헤더가 아니라 CORE 수신 벽시계다(sim time이어도 UTC로 남는다).
-- 증거: 호스트는 `ros_bridge.py`를 import하지 않는다. 상태 쪽 시험은 services `test_state_odom_pose.py`. `test_capabilities_controls.py`에 D-491 1 시험 2개 추가. gateway 2181 passed·17 skip, known_failures 0 new.
+- 증거: 호스트는 `ros_bridge.py`를 import하지 않는다. 상태 쪽 시험은 services `test_state_odom_pose.py`. `test_capabilities_controls.py`에 D-494 1 시험 2개 추가. gateway 2181 passed·17 skip, known_failures 0 new.
 - gate 변화: 없음. ROS-SIM·DEVICE 미확인.
-- 결정: D-491 (Proposed)
+- 결정: D-494 (Proposed)

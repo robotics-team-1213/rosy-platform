@@ -169,7 +169,7 @@ class LocalizationDecision(BaseModel):
 
 
 class OdomPose(BaseModel):
-    """D-491 2: pose in the robot's odom frame and when CORE received it.
+    """D-494 2: pose in the robot's odom frame and when CORE received it.
 
     ``stamp`` is UTC epoch seconds (wall time, not robot monotonic), the same
     form as a sighting's ``captured_at``, so Fleet can pair the two.

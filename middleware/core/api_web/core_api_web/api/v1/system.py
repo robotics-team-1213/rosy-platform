@@ -215,9 +215,9 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # idle signal says a line can be followed now (observations arrive only after
     # the mode is on), so readiness stays with PUT /line-follow/mode and its status.
     # It drives the same base, so it is never announced without the drive control.
-    # D-491 1 (v1.112 additive): robot package, trip drive modes and trip speed for Fleet
+    # D-494 1 (v1.112 additive): robot package, trip drive modes and trip speed for Fleet
     # planning. `free` follows the live goal_navigation flag after withholding above.
-    # `junction_turn` (D-492): the line-follow manager declares `supports_junction_turn`;
+    # `junction_turn` (D-495): the line-follow manager declares `supports_junction_turn`;
     # a manager without that hook cannot do the bounded junction turn.
     limits = svc.safety.limits
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
@@ -239,7 +239,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
 
 
 def _robot_kind(svc: CoreServicesLike):
-    """D-491 1: robot.model as a wire robot_kind, or None (omitted) when it is not a package name."""
+    """D-494 1: robot.model as a wire robot_kind, or None (omitted) when it is not a package name."""
     kind = str((svc.config.get("robot") or {}).get("model") or DEFAULT_ROBOT)
     if len(kind) <= 64 and ROBOT_NAME_PATTERN.fullmatch(kind):
         return kind

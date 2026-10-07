@@ -64,12 +64,12 @@ class CapabilityDisplay:
 
 @dataclass(frozen=True)
 class TripCaps:
-    """D-491 1: what a robot allows a Fleet trip (its rosy.controls/1 base_velocity)."""
+    """D-494 1: what a robot allows a Fleet trip (its rosy.controls/1 base_velocity)."""
 
     kind: str
     modes: frozenset
     max_speed: float
-    #: D-492: the robot can turn at a junction on its own (bounded turn); absent means no.
+    #: D-495: the robot can turn at a junction on its own (bounded turn); absent means no.
     junction_turn: bool = False
 
 

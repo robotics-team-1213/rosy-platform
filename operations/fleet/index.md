@@ -88,8 +88,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(fleet): D-491 검토 — 모르는 drive_modes 값은 버린다
-- 2026-10-07 · uncommitted · feat(fleet): D-492 TripCaps.junction_turn
-- 2026-10-07 · uncommitted · feat(fleet): D-491 1 로봇 trip 능력으로 계획을 묶는다
+- 2026-10-07 · uncommitted · fix(fleet): D-494 검토 — 모르는 drive_modes 값은 버린다
+- 2026-10-07 · uncommitted · feat(fleet): D-495 TripCaps.junction_turn
+- 2026-10-07 · uncommitted · feat(fleet): D-494 1 로봇 trip 능력으로 계획을 묶는다
 - 2026-10-07 · uncommitted · Cell rejected-session widths
 - 2026-10-07 · uncommitted · Cell emergency-stop feedback widths

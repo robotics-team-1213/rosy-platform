@@ -478,16 +478,16 @@
 - 증거: contracts/foundation 스위트 + vision/fleet 소비처 시험 통과. API Ref v1.109 행과 같은 변경.
 - gate 변화: 없음. envelope 1.0 불변, additive 규율(PRT-006) 준수.
 
-## 2026-10-07 · uncommitted · feat(protocol): D-491 1·2 trip 능력 필드와 odom_pose
+## 2026-10-07 · uncommitted · feat(protocol): D-494 1·2 trip 능력 필드와 odom_pose
 
 - 변경: `rosy.controls/1` `BaseVelocityControl`에 선택 필드 `robot_kind`(로봇 패키지 이름)·`drive_modes`(`lane`/`free`)·`trip_max_linear`(m/s, ≥0)를 더했다. `pinky_controls`는 None 값을 와이어에서 뺀다. `StateSnapshot`에 선택 필드 `odom_pose {x, y, yaw, stamp}`(모델 `OdomPose`는 `protocol/localization.py`, `schemas.py`는 필드 한 줄로 크기 판정 1322 재판정. stamp는 UTC epoch 초 — sighting `captured_at`과 같은 형식)를 더했다. 기존 필드는 그대로다.
 - 증거: `test_controls_contract.py`(새 시험: 옛 서술자 파싱, 범위 밖 값 거절), contracts/foundation 스위트 통과. API Ref v1.112 행과 같은 변경.
 - gate 변화: 없음. envelope 1.0 불변, additive(PRT-006).
-- 결정: D-491 (Proposed)
+- 결정: D-494 (Proposed)
 
-## 2026-10-07 · uncommitted · feat(protocol): D-492 junction_turn 능력 필드
+## 2026-10-07 · uncommitted · feat(protocol): D-495 junction_turn 능력 필드
 
-- 변경: `BaseVelocityControl`에 선택 필드 `junction_turn: bool`을 더했다. CORE line-follow가 D-492 교차로 제한 회전을 지원할 때 true다. 없으면 지원하지 않는 것으로 읽는다.
+- 변경: `BaseVelocityControl`에 선택 필드 `junction_turn: bool`을 더했다. CORE line-follow가 D-495 교차로 제한 회전을 지원할 때 true다. 없으면 지원하지 않는 것으로 읽는다.
 - 증거: `test_controls_contract.py` 9 PASS(생략 시 와이어에 없음, true 왕복, 잘못된 값 거절).
 - gate 변화: 없음. API Ref v1.112 행에 포함.
-- 결정: D-491, D-492 (Proposed)
+- 결정: D-494, D-495 (Proposed)

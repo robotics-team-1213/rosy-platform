@@ -374,7 +374,7 @@ SIZE_VERDICTS = {
     ),
     "foundation/core_common/protocol/schemas.py": (
         1_322,
-        "accept: re-judged at 1322 on 2026-10-07 for D-491 2: one optional StateSnapshot.odom_pose "
+        "accept: re-judged at 1322 on 2026-10-07 for D-494 2: one optional StateSnapshot.odom_pose "
         "field; the OdomPose model lives in protocol/localization.py and joins the existing import "
         "line. No envelope version change or runtime owner. Zero-growth allowance remains. "
         "accept: re-judged at 1321 on 2026-10-06: six lines add the bounded display-only "

@@ -2176,23 +2176,23 @@
 - Evidence: 6 Chromium cases passed, 0 NEW known failures; six capture hashes in docs/validation/uiux-cell-auth-widths-2026-10-07/result.md.
 - Gate: LOCAL synthetic G2 partial evidence; real site/device and operator G3 remain HOLD.
 
-## 2026-10-07 · uncommitted · feat(fleet): D-491 1 로봇 trip 능력으로 계획을 묶는다
+## 2026-10-07 · uncommitted · feat(fleet): D-494 1 로봇 trip 능력으로 계획을 묶는다
 
 - 변경: `console_view.TripCaps(kind, modes, max_speed)`와 `trip_caps(capabilities)`(모르는 필드는 무시, 세 필드가 모두 맞을 때만 값). `FleetConsole.caps_for(robot_id)`는 capability 캐시(최대 2 s 대기)에서 읽는다. `POST /trip`은 능력이 있으면 `PlanRequest`의 `robot_kind`·`drive_modes`·`max_speed_mps`를 채운다. 0 m/s 로봇은 간선을 쓰지 못해 `TRIP_NO_ROUTE`다. 능력이 없는 옛 로봇은 지금처럼 미리보기를 계획한다. 실행(`/start`)은 여전히 501이다. 계약 문서 버전 고정 시험을 v1.112로 올렸다.
 - 증거: `test_trip_caps.py` 2 PASS, `test_site_map_trip.py` 통과. fleet 스위트 2284 passed·90 skip, 1 NEW는 4개 스위트 병행 부하에서 난 `test_discovery_transport.py` 시간 초과(이 변경이 건드리지 않은 파일)로 단독 재실행 19 passed·known_failures 0 new.
 - gate 변화: 없음. SOURCE 호스트 시험만.
-- 결정: D-491 (Proposed)
+- 결정: D-494 (Proposed)
 
-## 2026-10-07 · uncommitted · feat(fleet): D-492 TripCaps.junction_turn
+## 2026-10-07 · uncommitted · feat(fleet): D-495 TripCaps.junction_turn
 
-- 변경: `TripCaps`에 `junction_turn: bool = False`를 더했다. 능력의 값이 정확히 `true`일 때만 참이다. 계획에는 쓰지 않고 trip 실행(D-491 5, 다른 가지)이 읽는다.
+- 변경: `TripCaps`에 `junction_turn: bool = False`를 더했다. 능력의 값이 정확히 `true`일 때만 참이다. 계획에는 쓰지 않고 trip 실행(D-494 5, 다른 가지)이 읽는다.
 - 증거: `test_trip_caps.py` 2 PASS.
 - gate 변화: 없음.
-- 결정: D-492 (Proposed)
+- 결정: D-495 (Proposed)
 
-## 2026-10-07 · uncommitted · fix(fleet): D-491 검토 — 모르는 drive_modes 값은 버린다
+## 2026-10-07 · uncommitted · fix(fleet): D-494 검토 — 모르는 drive_modes 값은 버린다
 
 - 변경: `trip_caps`는 모르는 주행 방식을 버리고 아는 값만 쓴다. 전에는 모르는 값 하나가 능력 전체를 None으로 만들었다.
 - 증거: `test_trip_caps.py` 2 PASS.
 - gate 변화: 없음.
-- 결정: D-491 (Proposed)
+- 결정: D-494 (Proposed)

@@ -1,4 +1,4 @@
-"""D-491 2: the state snapshot carries a stamped odom-frame pose beside `pose`."""
+"""D-494 2: the state snapshot carries a stamped odom-frame pose beside `pose`."""
 
 import math
 

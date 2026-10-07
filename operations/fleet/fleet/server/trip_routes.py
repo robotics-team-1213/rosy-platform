@@ -84,7 +84,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
             record({"error": "TRIP_POSE_UNTRUSTED"})
             raise _refuse("TRIP_POSE_UNTRUSTED")
         goal = body.to if isinstance(body.to, str) else (body.to.x, body.to.y, body.to.yaw)
-        # D-491 1: the robot's trip caps bound the plan. An older image has none; its preview
+        # D-494 1: the robot's trip caps bound the plan. An older image has none; its preview
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
         # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
         caps = await console.caps_for(robot_id)
