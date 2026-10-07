@@ -316,7 +316,7 @@ def test_field_view_review_fixes_are_served():
     # registered 90rem breakpoint the token, role and theme fold behind the 설정 toggle,
     # so the token input never covers the wordmark and the stop keeps its own column.
     assert "@media (width < 90rem)" in styles and '"brand pill clock more estop"' in styles
-    # D-488: the Cell link sits once in the folding topbar group with the other document links.
+    # D-493: the Cell link sits once in the folding topbar group with the other document links.
     assert '<a class="topbar-link" href="/console/cell">' in page
     assert "#estop { grid-area: estop; }" in styles
     assert 'href="/console/cell"' in page
