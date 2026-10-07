@@ -603,8 +603,15 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core/services/core_features/line_follow/recovery": (
-        2_320,
-        "accept: Independently re-judged 2026-10-07. Own size unit per "
+        2_537,
+        "accept: Independently re-judged 2026-10-08 at 2537 (architect agent, read-only) after main's "
+        "D-476 rev 2 arc bridge and D-507 items 3-4 (junction_approach JunctionApproachMixin: expected "
+        "window and approach to the pivot, mixed into JunctionMixin, math only). Same rules: "
+        "LineFollowManager mixins under the single manager lock and generation; no own lock, thread, "
+        "store or publisher; the approach twist goes out as the manager tick decision through "
+        "_maneuver_twist, CORE CommandManager stays the final cmd_vel publisher (D-18). Every file "
+        "below 600. The +150 allowance applies; re-judge on the next +150. "
+        "Previously independently re-judged 2026-10-07 at 2320. Own size unit per "
         "docs/plans/2026-10-07-line-follow-recovery-subpackage.md (moved "
         "2026-10-07 by git mv, imports only): D-407 stuck recovery/wiring, D-468 lane_return*, D-476 "
         "lane_bridge and D-494/D-495/D-498 junction as LineFollowManager mixins under the single manager "

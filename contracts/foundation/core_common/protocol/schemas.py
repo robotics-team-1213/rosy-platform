@@ -1023,13 +1023,11 @@ class LineJunctionStatus(BaseModel):
 
     pending_action: Optional[str] = None  # straight | left | right | stop
     place_id: Optional[str] = None
-    # idle | armed | executing | waiting | unexpected | unresolved | approaching | turning | advancing
-    # | reacquiring | aborted
-    state: str = "idle"
+    state: str = "idle"  # API ref line_follow.junction.state list (D-507: approaching, unexpected)
     seq: int = 0
     turn_deg: Optional[float] = None      # D-495: signed bounded turn (left +)
     reason: Optional[str] = None          # D-495: why a maneuver aborted
-    pivot_basis: Optional[str] = None     # D-507 4: map (approached) | stop_point
+    pivot_basis: Optional[str] = None     # D-507 4: map | stop_point
 
 
 class LineFollowStatus(BaseModel):
