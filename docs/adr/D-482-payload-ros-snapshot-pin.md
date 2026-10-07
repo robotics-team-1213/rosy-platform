@@ -28,7 +28,7 @@
 
 - 사용자 결정. Decision 2의 "서명은 기존 ROS 키링으로 apt가 검증한다"를 대체한다.
 - 빌드 37555602481(릴리스 2026.10.07-048)이 `NO_PUBKEY AD19BAB3CBF125EA`, "The repository ... noble InRelease is not signed."로 멈췄다. `snapshots.ros.org`는 `ros2-apt-source`가 넣는 키가 아닌 별도 키로 서명한다.
-- 키: `4B63CF8FDE49746E98FA01DDAD19BAB3CBF125EA`(RSA 3072, uid "ROS Snapshot builder <rosbuild@ros.org>", 만료 2027-06-01). 출처는 ROS 2 문서 "Snapshot repository"(`ros2/ros2_documentation` `source/Get-Started/Installation/Snapshot-Repository.rst`, 커밋 617ded65b)다. 문서는 같은 keyserver URL과 지문 `4B63 CF8F DE49 746E 98FA 01DD AD19 BAB3 CBF1 25EA` 확인, `Signed-By:` 별도 키링을 적는다. 2026-10-07에 keyserver에서 받은 키로 `jazzy/2026-09-11/ubuntu/dists/noble/InRelease`를 `gpgv`로 검증해 Good signature를 확인했다.
+- 키 지문(fingerprint): `4B63CF8FDE49746E98FA01DDAD19BAB3CBF125EA`(RSA 3072, uid "ROS Snapshot builder <rosbuild@ros.org>", 만료 2027-06-01). 출처는 ROS 2 문서 "Snapshot repository"(`ros2/ros2_documentation` `source/Get-Started/Installation/Snapshot-Repository.rst`, 커밋 617ded65b)다. 문서는 같은 keyserver URL과 지문 `4B63 CF8F DE49 746E 98FA 01DD AD19 BAB3 CBF1 25EA` 확인, `Signed-By:` 별도 키링을 적는다. 2026-10-07에 keyserver에서 받은 키로 `jazzy/2026-09-11/ubuntu/dists/noble/InRelease`를 `gpgv`로 검증해 Good signature를 확인했다.
 - 락 `ros.apt_snapshot_key_fingerprint`가 지문의 유일한 출처다.
 - 워크플로는 `https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x<지문>`에서 HTTPS로 키를 받아 `gpg --dearmor`로 `/etc/apt/keyrings/ros-snapshots-archive-keyring.gpg`에 둔다. `gpg --show-keys --with-colons`의 주 키 지문이 락 값과 정확히 같지 않으면 job을 실패시킨다.
 - 신뢰 범위는 스냅샷 stanza(`/etc/apt/sources.list.d/ros2-snapshots.sources`)의 `Signed-By:` 하나다. 라이브 `ros2.sources`는 지운다. apt-key, `trusted.gpg.d`, `trusted=yes`, allow-insecure는 쓰지 않고 apt 서명 검증은 켜 둔다. `test/test_native_payload_workflow.py`가 이것을 고정한다.
