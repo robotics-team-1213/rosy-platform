@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from control.sensing.perception.lane_bev import ODOM_MAX_SKEW_S, pose_if_fresh
 from control.sensing.perception.lane_keep import LaneKeeper
 from test_lane_keep import GROUND, HALF, X_OFFSET, _render
 
@@ -19,11 +20,12 @@ SWEEP = [_render([(0.035, 0.0)]), _render([(-0.035, 0.0)])] * 2
 RING = _render([(HALF, 0.0)])
 
 
-def _drive(twist):
-    """The node's keep frame: a spin in place restarts the keeper, then it reads the frame."""
-    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
-    for frame in SWEEP:
-        if spinning(twist):
+def _drive(twist, keeper=None, skew_s=0.0):
+    """The node's keep frame: a spin in place on fresh odom restarts the keeper, then it reads the frame."""
+    keeper = keeper or LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
+    for i, frame in enumerate(SWEEP):
+        image_stamp = 100.0 + 0.1 * i
+        if spinning(pose_if_fresh(twist, image_stamp - skew_s, image_stamp)):
             keeper.reset()
         keeper.update(frame, GROUND, lane_half_width_m=HALF)
     return keeper
@@ -53,7 +55,23 @@ def test_a_hold_latched_before_odometry_shows_the_spin_is_released_by_it():
 
 def test_keep_mode_subscribes_odometry_and_a_fresh_spin_restarts_the_keeper():
     assert "mode in ('lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab')" in NODE
-    assert "self._odom_twist = (float(msg.twist.twist.linear.x), self._odom_wz)" in NODE
+    assert "self._odom_twist = (float(msg.twist.twist.linear.x), float(msg.twist.twist.angular.z))" in NODE
     keep = NODE.split("elif mode == 'keep':", 1)[1].split("self._lane_keeper.update(", 1)[0]
     gate = keep.split("if (self._keep_last_stamp is None", 1)[1].split("self._lane_keeper.reset()", 1)[0]
     assert "or _spinning_in_place(pose_if_fresh(self._odom_twist, self._odom_stamp, image_stamp))):" in gate
+
+
+def test_trade_a_weave_while_standing_still_and_turning_is_not_held_until_the_robot_moves():
+    """Accepted trade (D-507 SIM r2): a low-confidence weave in place (vx ~ 0, |wz| > 0.15) restarts the
+    keeper every frame, so the flipping hold does not build there; once vx > 0.01 the hold arms again."""
+    keeper = _drive((0.0, 0.5))
+    assert keeper.last.get("reason") != "flipping"
+    _drive((0.02, 0.5), keeper)
+    assert keeper.last["reason"] == "flipping"
+
+
+def test_a_stale_spin_twist_restarts_nothing():
+    # Odometry older than ODOM_MAX_SKEW_S is no motion evidence (pose_if_fresh, as the node gate uses it).
+    keeper = _drive((0.0, 0.7), skew_s=ODOM_MAX_SKEW_S + 0.05)
+    assert keeper.last["reason"] == "flipping"
+    assert _drive((0.0, 0.7), skew_s=ODOM_MAX_SKEW_S - 0.05).last.get("reason") != "flipping"
