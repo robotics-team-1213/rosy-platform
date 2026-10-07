@@ -43,6 +43,8 @@ class Ports:
         self.blocked: frozenset = frozenset()
         self.now = 1000.0
         self.refreshes = 0
+        self.held: list[str] = []
+        self.mode = "CAMERA_LINE"
 
     def caps_for(self, robot_id):
         return self.caps.get(robot_id)
@@ -56,6 +58,13 @@ class Ports:
 
     async def junction_state(self, robot_id):
         return self.junction
+
+    async def hold(self, robot_id):
+        self.held.append(robot_id)
+        return {"mode": "OFF"}
+
+    async def line_follow_mode(self, robot_id):
+        return self.mode
 
     async def send_junction(self, robot_id, action, place_id, stop_after_m, expires_s, turn_deg=None,
                             advance_m=None):
@@ -558,3 +567,143 @@ def test_a_pose_stop_surfaces_the_provider_diagnostics():
     run(runner.tick())
     detail = runner.view("p1")["detail"]
     assert detail["sightings_filtered_map_id"] == 2 and detail["odom_refused"] == {"reason": "gap"}
+
+
+# ---- review changes A–C (2026-10-07) ---------------------------------------------------------
+
+def test_lane_cancel_stops_now_with_a_junction_stop_and_a_hold():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    view = run(runner.cancel("p1", "bob"))
+    assert ports.sent[-1] == ("stop", "SE", 0.0) and ports.held == ["rosy_60"] and view["detail"]["stop_sent"]
+
+
+def test_a_hold_the_robot_refuses_is_reported_not_hidden():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+
+    async def refuse(robot_id):
+        raise RobotApiError(robot_id, 409, "DOCKING_ACTIVE", "busy")
+
+    ports.hold = refuse
+    view = run(runner.cancel("p1", "bob"))
+    assert view["state"] == "canceled" and view["detail"]["stop_sent"] is False
+    assert view["detail"]["error"] == "DOCKING_ACTIVE"
+
+
+def test_pose_loss_on_a_lane_holds_the_robot_at_once():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    ports.pose = None
+    run(runner.tick())
+    view = runner.view("p1")
+    assert view["reason"] == "pose" and ports.held == ["rosy_60"] and view["detail"]["stop_sent"]
+
+
+def test_no_progress_for_stall_s_stops_and_holds_the_robot():
+    runner, store, ports = _setup()
+    arc = store.active()[2].arcs["east:fwd"]
+    _plan(store, ports, "east:fwd", 0.5, "SE")
+    run(runner.start("p1", "bob"))
+    run(runner.tick())
+    ports.now += 15
+    ports.at(arc, 0.56)  # +0.06 m resets the timer
+    run(runner.tick())
+    ports.now += 19.9
+    ports.at(arc, 0.58)  # +0.02 m is not progress
+    run(runner.tick())
+    assert runner.running() is not None
+    ports.now += 0.2
+    run(runner.tick())
+    view = runner.view("p1")
+    assert (view["state"], view["reason"]) == ("stopped", "stall") and ports.held == ["rosy_60"]
+
+
+@pytest.mark.parametrize("junction", ["turning", "advancing", "reacquiring"])
+def test_a_junction_manoeuvre_is_not_a_stall(junction):
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    run(runner.tick())  # armed: the junction state is read
+    ports.junction = {"state": junction, "place_id": "SE"}
+    for _ in range(3):
+        ports.now += 15
+        run(runner.tick())
+    assert runner.running() is not None
+
+
+def test_a_replan_hold_is_not_a_stall():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    ports.blocked = frozenset({"ring_e"})
+    run(runner.tick())
+    for _ in range(3):
+        ports.now += 15
+        run(runner.tick())
+    assert runner.running()["hold"] is not None
+
+
+def test_free_stall_cancels_the_goal():
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    run(runner.tick())
+    ports.now += 20
+    run(runner.tick())
+    assert runner.view("p1")["reason"] == "stall" and ports.canceled == ["rosy_60"] and ports.held == []
+
+
+@pytest.mark.parametrize("mode", ["OFF", None])
+def test_a_lane_plan_needs_line_follow_on(mode):
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    ports.mode = mode
+    with pytest.raises(TripError) as err:
+        run(runner.start("p1", "bob"))
+    assert err.value.code == "TRIP_LINE_FOLLOW_NOT_ACTIVE" and err.value.detail["mode"] == mode
+    ports.mode = "IR_LINE"
+    assert run(runner.start("p1", "bob"))["state"] == "started"
+
+
+def test_a_free_plan_does_not_read_line_follow():
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    ports.mode = "OFF"
+    assert run(runner.start("p1", "bob"))["state"] == "started"
+
+
+def test_trip_config_reads_fleet_trip_and_refuses_bad_values(tmp_path):
+    from fleet import cli
+    from fleet.server.trip_runner import TripConfig
+
+    config = tmp_path / "site.yaml"
+    config.write_text("fleet:\n  trip:\n    stall_s: 35\n", encoding="utf-8")
+    assert cli._trip_config(cli.parse_args(["console", "--site-config", str(config)])).stall_s == 35
+    assert TripConfig.from_mapping(None).stall_s == 20.0
+    for bad in ({"stall_s": 0}, {"stall_s": True}, {"nope": 1}):
+        with pytest.raises(ValueError):
+            TripConfig.from_mapping(bad)
+
+
+def test_http_line_follow_port_reads_the_mode_and_holds_with_mode_off():
+    from fleet.server.trip_runner import HttpLaneJunction
+
+    class Client:
+        modes: list = []
+
+        async def line_follow(self):
+            return {"mode": "CAMERA_LINE"}
+
+        async def line_follow_mode(self, mode):
+            self.modes.append(mode)
+            return {"mode": mode}
+
+    client = Client()
+    port = HttpLaneJunction(lambda: {"r": client})
+    assert run(port.line_follow_mode("r")) == "CAMERA_LINE"
+    run(port.hold("r"))
+    assert client.modes == ["OFF"]

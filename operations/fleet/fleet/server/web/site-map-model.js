@@ -2,6 +2,7 @@
 
 export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'turnaround'];
 export const PLACE_KIND_LABEL = {
+  stall: '20초 넘게 경로를 따라 나아가지 않아 멈췄습니다 · 현장을 확인하세요',
   junction: '교차', park: '주차', charge: '충전', stop: '정차', turnaround: '회차',
 };
 export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
@@ -22,6 +23,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_MAP_CHANGED: '계산 뒤 활성 지도가 바뀌었습니다 · 다시 계산하세요',
   TRIP_ROBOT_CAPS_UNKNOWN: '로봇이 주행 능력(종류·주행 방식)을 알리지 않습니다 · 새 이미지가 필요합니다',
   TRIP_MODE_UNSUPPORTED: '이 로봇의 주행 방식으로 갈 수 없는 차로가 경로에 있습니다',
+  TRIP_LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행(카메라 또는 IR)이 켜져 있지 않습니다 · 켠 뒤 다시 출발하세요',
   TRIP_BUSY: '다른 운행이 진행 중입니다 · 현장에서 한 번에 한 대만 운행합니다',
   TRIP_ALREADY_STARTED: '이미 출발시킨 경로입니다',
   TRIP_NOT_RUNNING: '진행 중인 운행이 아닙니다',

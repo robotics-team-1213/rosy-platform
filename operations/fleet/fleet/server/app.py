@@ -135,7 +135,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
                site_maps=None, routing_config=None,
-               trip_caps=None, map_pose=None, lane_junction=None) -> FastAPI:
+               trip_caps=None, map_pose=None, lane_junction=None, trip_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     if development_sessions is not None and task_service is None:
@@ -520,7 +520,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.routing.cost import RoutingConfig
     from fleet.server.site_map_routes import install_site_map_routes
     from fleet.server.trip_routes import install_trip_routes
-    from fleet.server.trip_runner import HttpLaneJunction, NoMapPose, NoTripCaps, TripRunner
+    from fleet.server.trip_runner import HttpLaneJunction, NoMapPose, NoTripCaps, TripConfig, TripRunner
     install_lane_route_routes(app, console=console, task_service=task_service,
                               site_maps=site_maps, require_operator=require_operator,
                               operator_guard=operator_guard)
@@ -528,7 +528,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps or NoTripCaps(), poses=map_pose or NoMapPose(),
                              junction=lane_junction or HttpLaneJunction(console.clients),
-                             goal=console.goal, cancel_goal=console.cancel)
+                             goal=console.goal, cancel_goal=console.cancel,
+                             config=trip_config or TripConfig())
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps,
