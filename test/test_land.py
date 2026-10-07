@@ -1,0 +1,129 @@
+"""tools/land.py against throwaway git repos: a main checkout plus one topic worktree."""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+
+import land  # noqa: E402
+
+LOG = "docs/reference/ROSY ADR Log.md"
+BOM = b"\xef\xbb\xbf"
+
+
+def git(cwd: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True,
+                          text=True).stdout.strip()
+
+
+def commit(cwd: Path, files: dict[str, bytes | str], message: str) -> None:
+    for name, data in files.items():
+        path = cwd / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data if isinstance(data, bytes) else data.encode())
+    git(cwd, "add", "--", *files)
+    git(cwd, "commit", "-q", "-m", message)
+
+
+@pytest.fixture
+def repos(tmp_path, monkeypatch):
+    main = tmp_path / "main"
+    main.mkdir()
+    git(main, "init", "-q", "-b", "main")
+    for key, value in (("user.name", "t"), ("user.email", "t@t"), ("core.autocrlf", "false")):
+        git(main, "config", key, value)
+    rows = b"".join(b"| D-%d | t%d | Accepted |\r\n" % (n, n) for n in (1, 2))
+    commit(main, {
+        LOG: BOM + b"# ROSY ADR Log\r\n\r\n| ID | t | s |\r\n|---|---|---|\r\n" + rows,
+        "test/known_failures.py": (ROOT / "test/known_failures.py").read_bytes(),
+        "test/known_failures.txt": "",
+        "pkg/a.py": "x = 1\n",
+        "pkg/test/test_a.py": "def test_a():\n    assert True\n",
+    }, "init")
+    wt = tmp_path / "wt"
+    git(main, "worktree", "add", "-q", str(wt), "-b", "feat/x", "main")
+    monkeypatch.chdir(wt)
+    monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
+    return main, wt
+
+
+def test_log_conflict_keeps_both_rows_sorted_with_bom_crlf(repos):
+    main, wt = repos
+    base = (main / LOG).read_bytes()
+    commit(wt, {LOG: base + b"| D-4 | branch | Proposed |\r\n"}, "branch row")
+    commit(main, {LOG: base + b"| D-3 | peer | Proposed |\r\n"}, "peer row")
+    assert land.main(["--tests", "none"]) == 0
+    data = (main / LOG).read_bytes()
+    assert data.startswith(BOM)
+    assert b"\n" not in data.replace(b"\r\n", b"")
+    assert [line.split(b" | ")[0] for line in data.splitlines() if line.startswith(b"| D-")] == [
+        b"| D-1", b"| D-2", b"| D-3", b"| D-4"]
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
+def test_non_auto_conflict_aborts_merge(repos):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    commit(main, {"pkg/a.py": "x = 3\n"}, "peer")
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "none"]) == 1
+    assert not (Path(git(wt, "rev-parse", "--git-dir")) / "MERGE_HEAD").exists()
+    assert git(wt, "status", "--porcelain") == ""
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_failing_test_stops_before_ff(repos):
+    main, wt = repos
+    commit(wt, {"pkg/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red")
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_main_moved_outside_scope_skips_retest(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    real, calls = land.run_tests, []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        calls.append(invocations)
+        if round_no == 1:  # a peer lands an unrelated doc while our tests run
+            commit(main, {"docs/other.md": "peer\n"}, "peer doc")
+        return real(wt_, args, invocations, logdir, round_no)
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [[["pkg/test"]], []]
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+    assert (main / "pkg/a.py").read_text() == "x = 2\n"
+
+
+def test_dirty_worktree_refused(repos):
+    main, wt = repos
+    (wt / "pkg/a.py").write_text("dirty\n")
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "none"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_dry_run_changes_nothing(repos, capsys):
+    main, wt = repos
+    base = (main / LOG).read_bytes()
+    commit(wt, {LOG: base + b"| D-4 | branch | Proposed |\r\n"}, "branch row")
+    commit(main, {LOG: base + b"| D-3 | peer | Proposed |\r\n"}, "peer row")
+    head, before = git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD")
+    assert land.main(["--dry-run"]) == 0
+    assert LOG in capsys.readouterr().out
+    assert (git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD")) == (head, before)
+
+
+def test_shared_main_checkout_refused(repos, monkeypatch):
+    main, _ = repos
+    monkeypatch.chdir(main)
+    assert land.main(["--tests", "none"]) == 1
