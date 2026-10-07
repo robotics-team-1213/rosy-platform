@@ -3,6 +3,9 @@
 
 # harness
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 The D-61 module harness: a registry of modules, each of which keeps `progress.md` (gate states with evidence) and `logs.md` (append-only change log), and a generator/linter that turns them into per-module `index.md` and the root `STATUS.md`. Design: `docs/plans/2026-09-15-module-harness-design.md`. ROS-free; standard library plus PyYAML.

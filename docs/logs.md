@@ -6817,6 +6817,14 @@ osy-d395-s1d\`.
 - 결정: D-506 Proposed
 - 교훈: 없음
 
+## 2026-10-07 · uncommitted · fix(push): Windows 검사 경로와 공유 main 게이트 복구
+
+- 변경: Windows에서 Git Bash와 커밋된 LF hook blob을 사용하도록 교훈을 기록하고, 검증 문서의 해시 종류 표기, API 버전, Fleet 크기 판정, 독립 안전 검토 기록을 바로잡았다.
+- 증거: Windows Git Bash로 pre-push를 실행해 원래의 3개 fast gate 실패와 3개 안전 경고를 확인했다. 수정 후 선택 검사 7 passed, Fleet 검토 검사 40 passed, 양쪽 `known_failures.py` 모두 0 NEW. 전체 gate와 원격 CI는 별도 확인.
+- gate 변화: 없음.
+- 결정: D-430 안전 검토 예외는 해당 세 커밋의 소스 diff와 host 테스트 범위에 한정한다.
+- 교훈: 기본 `bash`가 WSL이면 Windows 파일의 CRLF와 `/mnt/f` 성능 때문에 pre-push 결과를 잘못 읽을 수 있다. Git Bash와 커밋 blob으로 같은 검사를 실행한다.
+
 ## 2026-10-07 · uncommitted · docs(adr): Console 충전·health·설정 경계 D-509
 
 - 변경: Fleet 관제는 기존 CORE 배터리·충전·진단 근거를 출처와 나이와 함께 보여 주고 다음 조치를 안내한다. 안전 해제와 Wi-Fi 적용은 로봇 관리자 경로, 영상 설정은 카메라 소유 경로에 둔다.
@@ -6824,6 +6832,20 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-509 Proposed
 - 교훈: 충전 래치는 신선한 충전 확인의 대용이 아니다.
+
+## 2026-10-07 · uncommitted · feat(tools): 착지 도구 tools/land.py
+- 변경: `python tools/land.py --tests auto`가 워크트리에서 main 머지 → 자동 해소(ADR Log 행 합집합+D-번호 정렬·BOM/CRLF 유지, `logs.md` 합집합, `adr_gaps.txt` 합집합, 생성 `index.md`·`STATUS.md`는 theirs 후 generate) → D-436 `affected` 선택 + lint → `test/known_failures.py` → `--ff-only`를 main이 멈출 때까지(기본 5회) 되풀이한다. 그 밖의 충돌은 `git merge --abort` 후 경로를 알리고, NEW 실패·lint 실패·ff 거절에서 멈춘다. main이 움직였어도 그 차이가 시험한 범위 밖이면 lint만 다시 돌린다. 푸시·stash·reset·clean은 하지 않는다. `--dry-run`, `--node`, `--browser` 지원. AGENTS.md·shared-checkout.md 6항과 `rosy-land-on-main` 스킬에 기본 방법으로 적었다.
+- 증거: `test/test_land.py` 7 passed(임시 저장소: Log 충돌 해소, 비자동 충돌 중단, 실패 시험에서 ff 안 함, 범위 밖 main 이동은 재시험 생략, 더러운 워크트리 거부, dry-run 무변경, main 체크아웃 거부). 실제 저장소 `--dry-run`이 affected 선택을 출력.
+- gate 변화: 없음
+- 결정: 없음(D-436 선택기 재사용)
+- 교훈: 2026-10-07 main이 하루 163번 움직여 손 착지가 한 브랜치에 네 번 돌았고, `tests ; git merge --ff-only` 사슬은 실패한 시험 뒤에도 착지할 수 있었다 — 착지는 실패에서 멈추는 한 도구로 한다.
+
+## 2026-10-07 · uncommitted · fix(tools): 착지 도구 리뷰 반영
+- 변경: `tools/land.py` 독립 리뷰 11건과 D-508 리뷰 1건. pytest 종료 코드 2–5에서 멈춤. main 차이가 기록 파일(docs `*.md`, `logs.md`, `index.md`, `progress.md`, `adr_gaps.txt`)뿐일 때만 재시험 생략. 자동 해소는 stage 1·2·3이 모두 있고 충돌 부분이 추가뿐일 때만 하며, `logs.md`는 줄 합집합 대신 양쪽 추가 블록을 통째로 잇는다(같은 꼬리 줄 `- 결정: 없음`이 접히지 않음). 해소 중 실패하면 `git merge --abort`. 시험한 sha로 `--ff-only` 하고 그 사이 브랜치가 움직이면 멈춤. main 체크아웃이 `refs/heads/main`인지 확인. harness가 있는데 `affected`가 실패하면 멈춤. FULL 승격은 요약에 CI 몫으로 적음. 자식 프로세스에 `PYTHONUTF8=1`. 앞 항목의 `logs.md` 합집합 설명은 이 항목이 대신한다.
+- 증거: `test/test_land.py` 21 passed(autocrlf true/false Log, 동료 미커밋 파일로 ff 거절 시 파일 보존 포함), `known_failures.py` 0 new, lint 0 error.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 줄 단위 합집합은 여러 줄 항목의 같은 줄을 하나로 접는다. 추가 전용 로그는 블록 단위로 잇는다.
 
 ## 2026-10-07 · uncommitted · feat(harness): D-508 union 머지와 ADR 번호 선점 도구
 
@@ -6848,3 +6870,4 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-510 Accepted (2026-10-07, 사용자 결정), 본문은 D-508로 쓴 것과 같다
 - 교훈: 도구가 있어도 쓰지 않는 세션이 있으면 번호는 겹친다. 이 충돌 자체가 D-510의 근거다.
+

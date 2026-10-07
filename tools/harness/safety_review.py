@@ -161,6 +161,23 @@ EXEMPT: dict[str, str] = {
         'method, and the dispatch loop still skips trip robots. No stop, E-stop, admission, '
         'traffic, auth or trust path changed; Fleet 2446 host tests pass, 0 new; no device '
         'acceptance.',
+    "20d423a1a604197291eb83422a0683cac153de89":  # git commit revision
+        'Independently reviewed by Codex /root on 2026-10-07: D-499 only adds a display '
+        'link word to snapshot rows from the existing gather exception and cached address '
+        'status. The provider is called once and its failure falls back to an empty map; '
+        'no extra robot request, goal, stop, admission, or motion path was changed. '
+        '40 focused Fleet tests passed with 0 new failures; no device acceptance.',
+    "71e68b8c9f3b68337d2e6634475151eb6b01d37c":  # git commit revision
+        'Independently reviewed by Codex /root on 2026-10-07: D-493 stores a monotonic '
+        'observation time beside the gathered state, then copies the response row to '
+        'display state_age_s and gathered_at. The internal stamp is removed before the '
+        'response; no goal, stop, admission, or motion path was changed. '
+        '40 focused Fleet tests passed with 0 new failures; no device acceptance.',
+    "153daa0e9537cafe2b6ba031bb422d6fccf2b7fd":  # git commit revision
+        'Independently reviewed by Codex /root on 2026-10-07: the console.py conflict '
+        'resolution combines D-493 observation age with D-499 read-only link class in '
+        'the same gathered row. The --cc diff adds neither a goal nor a stop path; '
+        '40 focused Fleet tests passed with 0 new failures; no device acceptance.',
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)

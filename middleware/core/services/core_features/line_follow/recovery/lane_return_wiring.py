@@ -44,6 +44,8 @@ class LaneReturnMixin(LaneReturnDecisionMixin):
         if accepted:  # D-476 arming streak: consecutive accepted confident frames
             confident = observation.visible and observation.confidence >= self._config.bridge_arm_confidence
             self._confident_frames = self._confident_frames+1 if confident else 0
+            if self._confident_frames == 1:  # a new streak: rev 2 arc window starts over
+                self._arm_ticks, self._straight_from = [], 0
         return accepted
 
     def _crosswalk_rest(self, now, guard):

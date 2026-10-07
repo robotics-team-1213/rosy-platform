@@ -3,6 +3,9 @@
 
 # launch
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Real-robot bringup launch with namespace plumbing (P0-4).

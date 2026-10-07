@@ -3,6 +3,9 @@
 
 # test
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 pytest for core policy, API, dashboard, and protocol. Most tests import Python modules directly and do not spin rclpy.

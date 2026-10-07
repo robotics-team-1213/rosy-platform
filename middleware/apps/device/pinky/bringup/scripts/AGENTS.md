@@ -3,6 +3,9 @@
 
 # scripts
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Per-robot environment isolation for physical devices. Repo-root `env.sh` is for development; this script is for on-robot domain/namespace.

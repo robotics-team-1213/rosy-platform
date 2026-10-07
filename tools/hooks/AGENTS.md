@@ -3,6 +3,9 @@
 
 # hooks
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 The D-346 pre-push fast gate (under 2 minutes). Git does not version hooks, so each clone installs it explicitly. It catches the class that landed red on 2026-09-29: ADR body gaps, io closure, version pins, size verdicts.

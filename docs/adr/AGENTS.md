@@ -3,6 +3,9 @@
 
 # adr
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 One Markdown file per Architecture Decision Record (about 400 files, `D-1` to roughly `D-409`). Each file holds the body of one decision; the index table (ID, title, Status) lives in `docs/reference/ROSY ADR Log.md`. Records preserve why a decision was made, not how the code looks now.

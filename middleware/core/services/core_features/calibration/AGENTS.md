@@ -3,6 +3,9 @@
 
 # calibration
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 D-321 addendum: the attended calibration session lease. One session per robot, renewed by heartbeat within `ttl_s`. While alive, the state snapshot carries `activity: CALIBRATING` and the API fences drive/mode writes from other tokens (`CALIBRATION_ACTIVE`). Policy only: no ROS, no mode transitions, no `cmd_vel` (D-2).

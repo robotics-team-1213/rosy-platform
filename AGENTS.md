@@ -3,6 +3,9 @@
 
 # ROSY
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardware Pinky Pro). This repository is the robot-side workspace: CORE (middleware/core/gateway) is the external API gateway, supported by shared contracts, events, services, web API, hardware bringup, Nav2/SLAM, Gazebo, Raspberry Pi deploy/robot/pinky_pro/release tooling, and charging-dock ESP32 firmware. middleware/perception contains the absorbed Control package; its legacy final publisher must not run beside CORE. operations/fleet owns the Fleet console and dispatch services. Current source parts are learning, operations, middleware, contracts, integrations, and shared web, as recorded in tools/harness/platform_parts.yaml. Folder role does not establish writer authority, host placement, or image closure (D-315). License: Apache-2.0.
@@ -27,15 +30,15 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 
 | Directory | Purpose |
 |-----------|---------|
-| `contracts/` | Shared ROS-free skill/motion shapes, foundation and ROS IDL; wheel folders carry `COLCON_IGNORE` |
-| `middleware/` | CORE, device apps, perception, skills, execution, drivers and robot UI |
-| `integrations/` | Robot, simulation, model and fieldbus adapters; placement and import boundaries follow the ownership manifest |
-| `shared/` | Shared web components and operator copy; contracts remain in `contracts/` |
+| `contracts/` | Shared ROS-free skill/motion shapes, foundation and ROS IDL; wheel folders carry `COLCON_IGNORE` (see `contracts/AGENTS.md`) |
+| `middleware/` | CORE, device apps, perception, skills, execution, drivers and robot UI (see `middleware/AGENTS.md`) |
+| `integrations/` | Robot, simulation, model and fieldbus adapters; placement and import boundaries follow the ownership manifest (see `integrations/AGENTS.md`) |
+| `shared/` | Shared web components and operator copy; contracts remain in `contracts/` (see `shared/AGENTS.md`) |
 | `docs/` | Governance docs: spec, live API contract, ADR, plans (see `docs/AGENTS.md`) |
 | `deploy/` | Image build, signed release, Pi runtime (see `deploy/AGENTS.md`) |
 | `tools/` | Developer commands. Not installed on the robot (see `tools/AGENTS.md`) |
-| `learning/` | D-427 learning part: `training/perception/` (D-356 learned-loop tooling), `envs/isaac/` (ROS package `isaac_sim`, a `colcon_roots` entry), `curation/omx/` (LeRobot export); see each `AGENTS.md`. Only `isaac_sim` reaches a device (native payload, D-427 Q8) |
-| `operations/` | D-427 operations part (a `colcon_roots` entry): `world/` (wheel `rosy-world`), `processes/palletizing/` (wheel `rosy-palletizing`, harness module `palletizing`), `execution/` (wheel `rosy-execution`: `rosy.execution.api`, `rosy.execution.site`), `apps/fleet/` (wheel `rosy-app-gateway`, import `rosy_gateway`, console script `rosy-site-gateway`). Wave 3b: ROS packages `apps/games/` (`games`), `vision/` (`rosy_vision`, with the read-only `vision/signal_observer/`), `processes/cell/` (`rosy_cell`); `ui/cam/` (Rosy Cam Android app, `COLCON_IGNORE`); `site_devices/` (dock and signal firmware, see its `AGENTS.md`). Wheel folders carry `COLCON_IGNORE`; see `tools/harness/platform_parts.yaml` |
+| `learning/` | D-427 learning part: `training/perception/` (D-356 learned-loop tooling), `envs/isaac/` (ROS package `isaac_sim`, a `colcon_roots` entry), `curation/omx/` (LeRobot export); see `learning/AGENTS.md` and each child `AGENTS.md`. Only `isaac_sim` reaches a device (native payload, D-427 Q8) |
+| `operations/` | D-427 operations part (a `colcon_roots` entry): `world/` (wheel `rosy-world`), `processes/palletizing/` (wheel `rosy-palletizing`, harness module `palletizing`), `execution/` (wheel `rosy-execution`: `rosy.execution.api`, `rosy.execution.site`), `apps/fleet/` (wheel `rosy-app-gateway`, import `rosy_gateway`, console script `rosy-site-gateway`). Wave 3b: ROS packages `apps/games/` (`games`), `vision/` (`rosy_vision`, with the read-only `vision/signal_observer/`), `processes/cell/` (`rosy_cell`); `ui/cam/` (Rosy Cam Android app, `COLCON_IGNORE`); `site_devices/` (dock and signal firmware, see its `AGENTS.md`). Wheel folders carry `COLCON_IGNORE`; see `tools/harness/platform_parts.yaml` and `operations/AGENTS.md` |
 | `data/` | Local teleop checks and drive recordings. Session files stay untracked |
 | `operations/site_devices/` | Dock and signal site devices: firmware outside colcon, device contracts (see `operations/site_devices/AGENTS.md`, D-427 wave 3b) |
 | `test/` | Host pytest for deploy/robot/pinky_pro/release/motor contracts (see `test/AGENTS.md`) |
@@ -74,7 +77,7 @@ python test/known_failures.py X:/DevTemp/<name>/run.txt
 ```
 
    exit 1의 `NEW`는 깨끗한 `main` 워크트리에서 달리 확인되기 전에는 그 브랜치의 실패다. 고친 실패의 줄은 같은 커밋에서 `test/known_failures.txt`에서 뺀다. 그 브랜치가 만든 실패를 그 파일에 넣지 않는다. 호스트 pytest 통과는 장치, ARM64 이미지, 현장 수용을 대신하지 않는다.
-6. **착지와 푸시는 사용자가 말한 뒤에만 한다.** 착지는 두 단계다. (1) 워크트리에서 `git merge main`을 하고 관련 테스트를 다시 돌린 다음 `known_failures`와 비교한다. `NEW`가 있으면 브랜치에서 고치고 이 단계를 반복한다. (2) `main` 체크아웃에서 `git merge --ff-only <브랜치>`를 한다. 그 사이에 main에 새 커밋이 있으면 (1)부터 다시 한다. 착지는 `--ff-only`만 한다. `--ff-only`가 동료의 미커밋 파일을 덮어써서 거절되면 그 파일을 그대로 두고 거절 문구를 알린다. stash, checkout, 삭제로 치운 뒤 다시 시도하지 않는다. 푸시는 사용자가 푸시를 말한 뒤에만 한다. 순서는 위의 D-427 4항이다. `git fetch` 하고 `origin/main` 위로 rebase 한 뒤 `python tools/harness/rosy_harness.py generate`를 하고, 생성 문서가 바뀌면 그 변경을 커밋하고, pre-push 검사(`tools/hooks/pre-push` 목록)를 통과한 다음에 push 한다. force-push는 하지 않는다. 로컬 `main`이 `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
+6. **착지와 푸시는 사용자가 말한 뒤에만 한다.** 기본 방법은 워크트리에서 `python tools/land.py --tests auto`다. 이 도구는 아래 두 단계를 main이 멈출 때까지 되풀이하고, 테스트나 lint가 실패하면 착지하지 않으며, 푸시하지 않는다. 착지는 두 단계다. (1) 워크트리에서 `git merge main`을 하고 관련 테스트를 다시 돌린 다음 `known_failures`와 비교한다. `NEW`가 있으면 브랜치에서 고치고 이 단계를 반복한다. (2) `main` 체크아웃에서 `git merge --ff-only <브랜치>`를 한다. 그 사이에 main에 새 커밋이 있으면 (1)부터 다시 한다. 착지는 `--ff-only`만 한다. `--ff-only`가 동료의 미커밋 파일을 덮어써서 거절되면 그 파일을 그대로 두고 거절 문구를 알린다. stash, checkout, 삭제로 치운 뒤 다시 시도하지 않는다. 푸시는 사용자가 푸시를 말한 뒤에만 한다. 순서는 위의 D-427 4항이다. `git fetch` 하고 `origin/main` 위로 rebase 한 뒤 `python tools/harness/rosy_harness.py generate`를 하고, 생성 문서가 바뀌면 그 변경을 커밋하고, pre-push 검사(`tools/hooks/pre-push` 목록)를 통과한 다음에 push 한다. force-push는 하지 않는다. 로컬 `main`이 `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
 
 멈추는 신호는 다음이다. `git add -A`로 다른 파일까지 넣으려 할 때, `test/known_failures.py` 없이 실패를 기존 실패로 부를 때, 조금 전에 비어 보였던 ADR 번호를 다시 보지 않고 쓸 때, 동료의 변경을 stash 했다가 머지 뒤에 되돌리려 할 때, amend가 새 커밋보다 빠르다고 여길 때.
 

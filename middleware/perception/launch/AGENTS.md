@@ -3,6 +3,9 @@
 
 # launch/ (bringup order matters)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 Launch files for the full stack. Bringup order is load-bearing: bringup+ADC first, then safety (+1.5 s) → wander (+3 s) → lcd/web/watch (+3.5 s), all respawn=True.
 
