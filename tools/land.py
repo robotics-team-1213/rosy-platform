@@ -7,7 +7,8 @@ Run from a topic worktree (never the shared main checkout)::
 
 Each round merges the current local ``main`` into the branch, auto-resolves the
 append-only/generated conflicts (ADR Log, logs.md, adr_gaps.txt, index.md,
-STATUS.md), runs the selected tests, compares them with
+STATUS.md; ``tools/harness/adr_gaps.txt`` arrives with the ADR-reservation
+branch and the rule is inert until then), runs the selected tests, compares them with
 ``test/known_failures.py``, and fast-forwards main only if main is still the
 commit that was tested. A failing step stops the tool: landing is never chained
 after a failure. Any other conflict aborts the merge and lists the paths.
@@ -28,6 +29,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
+ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
 ADR_ROW = re.compile(rb"^\| D-(\d+) \|")
 GENERATED = {"STATUS.md", "docs/reference/sim2real-gaps.md"}
 HARNESS = "tools/harness/rosy_harness.py"
@@ -64,7 +66,7 @@ def resolver(path: str) -> str | None:
         return "adr-log"
     if name == "logs.md":
         return "append"
-    if path == "tools/harness/adr_gaps.txt":
+    if path == ADR_GAPS:
         return "union-dedupe"
     # progress.md is hand-written lint input (gates), not generated: a human resolves it.
     if name == "index.md" or path in GENERATED:
@@ -232,7 +234,10 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
         git(wt, "commit", "--no-edit")
     except (Stop, OSError, subprocess.CalledProcessError) as exc:
         git(wt, "merge", "--abort", check=False)
-        raise Stop(f"auto-resolve of {sorted(resolved)} failed, merge aborted:\n{exc}") from exc
+        # `merge --abort` leaves files generate created; list them, never delete them.
+        left = lines(wt, "ls-files", "--others", "--exclude-standard")
+        raise Stop(f"auto-resolve of {sorted(resolved)} failed, merge aborted:\n{exc}"
+                   + (f"\nuntracked files left in the worktree (not deleted): {left}" if left else "")) from exc
     print(f"[merge] auto-resolved {sorted(resolved)}")
     return sorted(resolved)
 
@@ -289,23 +294,26 @@ def select(wt: Path, base: str, python: str) -> tuple[list[list[str]], str | Non
         if result.returncode != 0:
             raise Stop(f"affected selector failed (exit {result.returncode}); not guessing tests:\n"
                        f"{result.stdout}{result.stderr}".rstrip())
-        sel = json.loads(result.stdout)
-        if sel["mode"] == "full":
-            # D-436 4: the full tier runs on GitHub runners, as `affected --run` does.
-            note = ("selector escalated to FULL (" + "; ".join(sel["escalations"][:3]) + "): ran the"
-                    " guards and mapped suites only; the FULL tier is still owed to CI")
-            print(f"[tests] {note}")
-            return sel["local_invocations"], note
-        return sel["invocations"], None
+        try:
+            sel = json.loads(result.stdout)
+            if sel["mode"] == "full":
+                # D-436 4: the full tier runs on GitHub runners, as `affected --run` does.
+                note = ("selector escalated to FULL (" + "; ".join(sel["escalations"][:3]) + "): ran the"
+                        " guards and mapped suites only; the FULL tier is still owed to CI")
+                print(f"[tests] {note}")
+                return sel["local_invocations"], note
+            return sel["invocations"], None
+        except (ValueError, KeyError, TypeError) as exc:
+            raise Stop(f"affected selector printed unusable JSON ({exc!r}); not guessing tests") from exc
     changed = lines(wt, "diff", "--name-only", f"{base}...HEAD")
     return pack(wt, fallback_targets(wt, changed)), None
 
 
 def record_only(path: str) -> bool:
-    """Non-code records: a main delta made only of these cannot change a test result."""
+    """Records no module test reads. Root test/ guards do read docs, so they rerun anyway."""
     name = PurePosixPath(path).name
-    return (name in ("logs.md", "index.md", "progress.md") or path == "tools/harness/adr_gaps.txt"
-            or (path.startswith("docs/") and path.endswith(".md")))
+    return (name in ("logs.md", "index.md", "progress.md") or path in (ADR_LOG, ADR_GAPS)
+            or path.startswith("docs/adr/"))
 
 
 # --- running --------------------------------------------------------------------
@@ -424,9 +432,11 @@ def land(args) -> int:
 
         delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
         if tested_main and all(map(record_only, delta)):
+            # Only module-scoped suites may skip; root test/ guards read the records themselves.
+            invocations = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"]
+                                             for inv in invocations) if kept]
             summary.append(f"round {round_no}: main delta ({len(delta)} file(s)) is records only"
-                           " (docs/logs/index/progress), lint only")
-            invocations = []
+                           " (logs/index/progress/ADR), module suites skipped, root test/ rerun")
         elif args.tests == "none":
             summary.append(f"round {round_no}: tests skipped (--tests none)")
         summary += [f"round {round_no}: {s}" for s in run_tests(wt, args, invocations, logdir, round_no)]

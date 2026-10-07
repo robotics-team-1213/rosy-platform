@@ -88,7 +88,7 @@ def test_failing_test_stops_before_ff(repos):
 
 
 @pytest.mark.parametrize("peer_path, second_round", [
-    ("docs/other.md", []),               # records only: lint, no retest
+    ("docs/adr/D-9.md", []),             # records only: module suite skipped
     ("lib/util.py", [["pkg/test"]]),     # code the tests may import: full rerun
 ])
 def test_main_moved_retests_unless_records_only(repos, monkeypatch, peer_path, second_round):
@@ -269,3 +269,40 @@ def test_harness_selector(repos, capsys, affected, code):
         assert git(main, "rev-parse", "HEAD") == before
     else:
         assert "FULL tier is still owed to CI" in captured.out.split("== landed")[1]
+
+
+GUARD = ("from pathlib import Path\n\n\n"
+         "def test_docs_follow_rules():\n"
+         "    for doc in [*Path('docs').glob('*.md'), *Path('docs/adr').glob('*.md')]:\n"
+         "        assert doc.read_text().startswith('# '), doc\n")
+
+
+@pytest.mark.parametrize("peer_path, second_round", [
+    ("docs/readme.md", [["pkg/test", "test/test_guard.py"]]),  # a doc a guard reads: full rerun
+    ("docs/adr/D-9.md", [["test/test_guard.py"]]),             # records only: root guard still reruns
+])
+def test_peer_doc_edit_that_breaks_a_root_guard_is_not_landed(repos, monkeypatch, peer_path, second_round):
+    main, wt = repos
+    commit(main, {"test/test_guard.py": GUARD, "docs/readme.md": "# ok\n"}, "guard")
+    git(wt, "merge", "-q", "main")
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    real, calls = land.run_tests, []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        calls.append(invocations)
+        if round_no == 1:  # the peer's doc breaks the guard while our tests run
+            commit(main, {peer_path: "no heading\n"}, "peer doc")
+        return real(wt_, args, invocations, logdir, round_no)
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "pkg/test test/test_guard.py"]) == 1
+    assert calls == [[["pkg/test", "test/test_guard.py"]], second_round]
+    assert git(main, "log", "-1", "--format=%s") == "peer doc"  # only the peer's commit on main
+
+
+def test_unusable_selector_json_stops(repos, capsys):
+    main, wt = repos
+    stub = "import sys\nif sys.argv[1] == 'affected':\n    print('{\"mode\": \"affected\"}')\n"
+    commit(wt, {"tools/harness/affected_tests.py": "", "tools/harness/rosy_harness.py": stub}, "harness")
+    assert land.main(["--tests", "auto"]) == 1
+    assert "unusable JSON" in capsys.readouterr().err
