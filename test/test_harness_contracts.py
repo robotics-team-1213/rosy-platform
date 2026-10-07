@@ -718,8 +718,8 @@ def test_only_one_record_per_line_files_use_the_union_merge_driver():
                                 + [f"{p}: merge: unspecified" for p in plain])
 
 
-def _two_appends(repo: Path, rel: str, base: str, one: str, two: str) -> subprocess.CompletedProcess:
-    """Branches one and two append to ``rel`` from main; merge one into two."""
+def _two_appends(repo: Path, rel: str, base: str, one, two) -> subprocess.CompletedProcess:
+    """Branches one and two append to ``rel`` (or ``("replace", text)``) from main; merge one into two."""
     path = repo / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(base.encode())
@@ -727,7 +727,7 @@ def _two_appends(repo: Path, rel: str, base: str, one: str, two: str) -> subproc
     _git(repo, "commit", "-qm", "base")
     for branch, text in (("one", one), ("two", two)):
         _git(repo, "checkout", "-qb", branch, "main")
-        path.write_bytes(text.encode() if text.startswith(base) else path.read_bytes() + text.encode())
+        path.write_bytes(text[1].encode() if isinstance(text, tuple) else path.read_bytes() + text.encode())
         _git(repo, "commit", "-qam", branch)
     return subprocess.run(["git", "-C", str(repo), "merge", "-q", "--no-edit", "one"],
                           capture_output=True, text=True, encoding="utf-8")
@@ -770,6 +770,18 @@ def test_union_merge_keeps_both_appended_rows_with_bom_and_crlf(tmp_path):
     assert data.endswith(b"| D-3 | c | Accepted |\r\n| D-2 | b | Accepted |\r\n")
     adr = harness.parse_adr_log(data.decode("utf-8"))
     assert sorted(adr.index) == ["D-1", "D-2", "D-3"] and adr.index_duplicates == ()
+
+
+def test_union_of_a_status_edit_and_an_append_leaves_a_duplicate_row_that_lint_reports(tmp_path):
+    repo = _repo_with_attributes(tmp_path / "edit")
+    rel = "docs/reference/ROSY ADR Log.md"
+    head = "﻿# Log\r\n\r\n| ID | Title | Status |\r\n|---|---|---|\r\n"
+    base = head + "| D-1 | a | Proposed |\r\n"
+    result = _two_appends(repo, rel, base, ("replace", head + "| D-1 | a | Accepted |\r\n"),
+                          "| D-2 | b | Accepted |\r\n")
+    assert result.returncode == 0, result.stdout + result.stderr  # union never stops
+    adr = harness.parse_adr_log((repo / rel).read_text(encoding="utf-8"))
+    assert "D-1: duplicate index row" in harness.validate_adr_log(adr, {})
 
 
 def test_adr_reserve_claims_above_every_source_and_skips_taken_refs(tmp_path, monkeypatch, capsys):
