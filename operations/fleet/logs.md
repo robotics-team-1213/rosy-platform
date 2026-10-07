@@ -2196,3 +2196,10 @@
 - gate 변화: 없음. SOURCE/LOCAL만
 - 결정: D-491 Proposed(구현 부록 갱신)
 - 교훈: 가짜 포트가 실제 CORE 상태기계를 흉내 내지 않으면, 지시 덮어쓰기·동작 중 재전송 같은 결함이 시험을 통과한다. 짝 브랜치의 구현 파일을 읽어 가짜를 만든다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-491 5 trip 루프 재검토 반영 R1–R8
+- 변경: 콘솔이 보내지 않은 좌표 목표는 trip 실패(`TRIP_GOAL_REFUSED`), 좌표 trip이 끝날 때마다 콘솔 대기열 정리, 콘솔 목표·대기열·양보·대형 중인 로봇은 시작 거절(R1). 교차로 지시는 `CAMERA_LINE`에서만(R2). `trip_guard.py`가 콘솔 인스턴스의 목표·대형·line-follow를 감싸고, `OFF`는 trip 취소(`operator_line_follow_off`), trip 로봇은 비켜서기·재배정 대상이 아니며 줄 막힘 결정은 409(R3, `console.py` 줄 수 그대로). 가짜 CORE에 M3·M4·M7·L6·R1, 수행된 지시 재전송 없음, `JUNCTION_ALREADY_DONE`은 수행됨, CORE가 붙잡은 우리 `stop`도 도착(R4). 보낸 뒤 열림 재확인(R5), 차선 도착은 받아들여진 `stop` 필요(R6), 재계획 확인 때 지시 기록 초기화(R7), 재시작 정지는 받을 때까지 재시도(R8). D-491 구현 부록·API Ref 갱신
+- 증거: 보고서에 `operations/fleet/test` 전체·계약 문서·모듈 구조와 known_failures를 남긴다. `test_trip_runner.py` 66건 통과
+- gate 변화: 없음. SOURCE/LOCAL만. 실제로 서는 거리는 모델 PC SIM에서 잰다
+- 결정: D-491 Proposed(구현 부록 갱신)
+- 교훈: 안전 파일의 줄 예산이 0이면 감싸기(인스턴스 메서드 교체)와 기존 줄 안 조건으로 같은 가드를 줄 수 있다
