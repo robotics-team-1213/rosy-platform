@@ -11,7 +11,8 @@ import pytest
 
 from fleet.routing.cost import STOP
 from fleet.server.console_view import TripCaps, trip_caps
-from fleet.server.trip_ports import HttpLaneJunction, TripConfig, TripError
+from fleet.routing.graph import build_graph
+from fleet.server.trip_ports import HttpLaneJunction, TripConfig, TripError, line_past
 from fleet.site_map import SiteMap
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import HttpRobotClient, RobotApiError
@@ -59,15 +60,15 @@ def test_fields_go_only_to_a_junction_pivot_robot():
     ports = _sent_at(_free_map("lane"), PIVOT, 0.5)
     assert ports.sent[0][0] == "left"
     # a sighting 0.1 s old at 0.2 m/s: 0.2 x (0.1 + ~0 measured + 0.2 allowance) + 0.05 = 0.11 -> floor 0.12
-    assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1,  # outgoing lane 0.2 m wide
+    # the corner's outer line is the far edge of the 0.2 m outgoing lane, 0.1 m past B
+    assert ports.expects == [{"map_id": "site", "pivot_past_line_m": -0.1,
                               "expect_in_m": 0.5, "expect_tol_m": 0.12}]
 
 
-def test_straight_carries_the_expectation_and_the_window_pivot():
+def test_straight_through_has_no_line_so_half_width_and_no_window():
     ports = _sent_at(_straight_map(), PIVOT, 0.6)
     assert ports.sent[0][0] == "straight"
-    assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1, "expect_in_m": 0.4,
-                              "expect_tol_m": 0.12}]
+    assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1}]
 
 
 def test_the_last_stop_carries_the_expectation_without_a_pivot():
@@ -117,7 +118,7 @@ def test_pivot_is_capped_at_0_30():
 
 def test_a_place_outside_the_expectation_range_sends_no_window():
     ports = _sent_at(_free_map("lane"), PIVOT, 1.0)   # on the place: expect_in_m 0 is out of (0, 2]
-    assert ports.sent[0][0] == "left" and ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1}]
+    assert ports.sent[0][0] == "left" and ports.expects == [{"map_id": "site", "pivot_past_line_m": -0.1}]
 
 
 def test_a_heading_off_the_lane_sends_the_distance_along_the_heading():
@@ -139,11 +140,53 @@ def test_a_ring_arc_sends_no_window():
     assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1}]
 
 
+# 2026-10-08 D-507 SIM findings 1-2 (docs/validation/d507-lane-trip-sim-2026-10-08): the SIM
+# place pose (-0.655, -0.432, 64 deg) before the 260919 SW spoke. The ring's outer line is broken
+# at the spoke mouth, so the keeper measured the inner line, 0.402 m ahead; SW is 0.296 m ahead.
+SW_POSE = {"x": -0.655, "y": -0.432, "yaw": math.radians(64)}
+
+
+def _sw_spoke_sends(pose=SW_POSE, back=0.3, to="SE"):
+    runner, store, ports = _setup(caps=PIVOT)  # the 260919 lane graph
+    arc = _arc(store, "west:rev")
+    _plan(store, ports, "west:rev", arc.length_m - 0.5, to)
+    run(runner.start("p1", "bob"))
+    ports.at(arc, arc.length_m - back)
+    if pose:
+        ports.pose = dataclasses.replace(ports.pose, **pose)
+    _ticks(runner, ports)
+    return ports
+
+
+def test_260919_sw_spoke_pivots_on_the_place_before_the_far_line():
+    ports = _sw_spoke_sends()
+    sent = ports.expects[0]
+    assert ports.sent[0][0] in ("left", "right") and sent["expect_in_m"] == pytest.approx(0.296, abs=0.002)
+    assert sent["pivot_past_line_m"] == pytest.approx(-0.10, abs=0.01)    # place 0.296, line 0.402
+    expected_line = sent["expect_in_m"] - sent["pivot_past_line_m"]       # CORE's window point
+    assert expected_line == pytest.approx(0.402, abs=0.01)
+    assert abs(expected_line - 0.402) < sent["expect_tol_m"]              # SIM measured: inside
+
+
+def test_260919_sw_spoke_without_a_window_uses_the_lane_heading():
+    ports = _sw_spoke_sends(pose=None, back=0.0)          # on the place: expect_in_m 0, no window
+    sent = ports.expects[0]
+    assert "expect_in_m" not in sent and -0.13 <= sent["pivot_past_line_m"] <= -0.09
+
+
+def test_line_past_is_the_edge_of_the_lanes_union():
+    graph = build_graph(_free_map("lane"))
+    assert line_past(graph, 1.0, 0.0, 0.0) == pytest.approx(0.1, abs=0.001)   # the corner's outer line
+    assert line_past(graph, 0.5, 0.0, 0.0) is None                            # 0.6 m on: past 0.30
+    assert line_past(graph, 0.5, 0.5, 0.0) is None                            # off the lanes
+    assert line_past(build_graph(_straight_map()), 1.0, 0.0, 0.0) is None     # straight through
+
+
 def _bent_map(bend_deg, straight=0.7, bent=0.3):
-    """A ``straight`` run, then ``bent`` m turned by ``bend_deg`` into B, then on in that direction to C."""
+    """A ``straight`` run, then ``bent`` m turned by ``bend_deg`` into B, then a left corner to C."""
     c, s = math.cos(math.radians(bend_deg)), math.sin(math.radians(bend_deg))
     b = (round(straight + bent * c, 4), round(bent * s, 4))
-    end = (round(b[0] + c, 4), round(b[1] + s, 4))
+    end = (round(b[0] - s, 4), round(b[1] + c, 4))
     return _map(("A", 0, 0), ("B", *b), ("C", *end),
                 edges=[("ab", "A", "B", [[0, 0], [straight, 0], list(b)], "lane"),
                        ("bc", "B", "C", [list(b), list(end)], "lane")])
@@ -153,7 +196,7 @@ def test_a_bend_widens_the_window_by_how_far_the_lane_runs_beside_the_heading():
     lateral = 0.5 * math.sin(math.radians(10))                  # 0.087 m at B
     tol = _sent_at(_bent_map(10.0, straight=0.5, bent=0.5), PIVOT, 0.45).expects[0]["expect_tol_m"]
     assert tol >= 0.12 + lateral - 0.001 and tol == pytest.approx(0.12 + lateral, abs=0.002)
-    assert _sent_at(_straight_map(), PIVOT, 0.6).expects[0]["expect_tol_m"] == 0.12   # a straight lane adds 0
+    assert _sent_at(_free_map("lane"), PIVOT, 0.5).expects[0]["expect_tol_m"] == 0.12   # a straight lane adds 0
 
 
 def test_a_bend_of_15_degrees_keeps_the_window_and_more_drops_it():
