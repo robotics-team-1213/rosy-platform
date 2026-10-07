@@ -69,7 +69,7 @@
 ## 최근 기록
 
 - 2026-10-07 · uncommitted · fix(perception): D-468 containment 경계를 칠 안쪽 가장자리로
+- 2026-10-07 · uncommitted · fix(perception): deterministic crosswalk corners
 - 2026-10-07 · uncommitted · fix(config): D-495 검토 H1 camera_x_offset_m URDF 공칭
 - 2026-10-07 · uncommitted · feat(observer): keep_debug에 corner_turning
 - 2026-10-07 · uncommitted · feat(config): D-495 lane_corner_turning 로봇 기본값 켜짐
-- 2026-10-07 · uncommitted · feat(map): 260919 횡단보도 구간을 lane_graph.yaml에 (D-491 §3)

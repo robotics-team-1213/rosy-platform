@@ -27,6 +27,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_initial_pose.py",
     "middleware/core/gateway/test/test_line_follow.py",
     "middleware/core/gateway/test/test_line_follow_api.py",
+    # D-494 HTTP-to-CORE seam; pure junction decisions stay in services/test.
+    "middleware/core/gateway/test/test_line_junction_api.py",
     # CORE HTTP-to-Host seam and atomic mode/calibration admission integration;
     # the pure mask, observer and Host configuration tests stay with their owners.
     "middleware/core/gateway/test/test_lane_perception_api.py",

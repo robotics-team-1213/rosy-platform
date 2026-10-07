@@ -1180,6 +1180,12 @@
 - 결정: D-495 (Proposed) 독립 안전 검토 반영 2026-10-07
 - 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
 
+## 2026-10-07 · uncommitted · fix(perception): deterministic crosswalk corners
+
+- 변경: D-491 rectangle vertices use CCW order from the smallest rounded corner across OpenCV versions. Coordinates and road geometry unchanged. D-494 gateway seam test added to the ownership registry.
+- 증거: CI 37579564087 reproduced the ownership and corner-order failures; 12 affected checks pass including reversed/rotated corner outputs; known_failures 0 NEW.
+- gate 변화: SOURCE only; no device or field acceptance.
+
 ## 2026-10-07 · uncommitted · fix(perception): D-468 containment 경계를 칠 안쪽 가장자리로
 - 변경: `containment_payload`가 keep 검출기의 칠 중심선을 칠 폭 절반(`lane_paint_half_width_m`, 기본 `PAINT_HALF_WIDTH_M` 0.0125, 260919 STL 테이프 25 mm, STL 공칭·미측정)만큼 차로 쪽으로 옮겨 보낸다. 불확실도는 칠 선분 그대로로 계산. 두 경계가 엇갈리면 경계 없음. `line_follow.yaml`·노드 파라미터 추가, STL 대조 시험
 - 증거: perception 2712 PASS·109 skip, services+test/test_sim2real_gaps.py+test/architecture 1230 PASS·1 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). generate·lint 0 error

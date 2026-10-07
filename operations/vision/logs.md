@@ -299,3 +299,9 @@
 - 변경: 소스 설정 `calibration_source: field_boundary`가 코너 ArUco 마커 대신 D-360 흰 경계 사각형으로 측정 캘리브레이션을 유지한다. 신규 `field_calib.py`(no_field→orientation_pending→calibrated⇄stale 상태 머신, 급변 재획득, 상실 시 orientation 초기화)가 주기(기본 1 Hz) 감지를 받아 호모그래피를 만들고, orientation은 D-375 페인트 정합(map_worker 프로세스, 단일 flight)의 map_to_image로 맵 코너↔감지 코너 최근접 대응(거리 게이트+순환 일대일)으로만 확정한다. worker가 로봇 ArUco 마커를 매 프레임 투영하고 미리보기가 worker 수용 사각형으로 자동 보정(rectification mode "auto", `X-Frame-Rectified: auto`, `X-Field-Calib`, 감지 없으면 원본+`X-Frame-State: field-unavailable`)한다. 폰 앱·전선 불변.
 - 증거: `test_field_calib.py`(신규 13본: 상태 전이·게이트·회전 판정), worker/project/config/preview 시험 확장, contracts/foundation·operations/fleet 스위트 통과. 호스트 통과는 장치·현장이 아니다: 실제 폰 프레임에서 orientation 확정·재획득·장시간 안정성은 DEVICE/FIELD 게이트 별도.
 - gate 변화: 없음. SOURCE/LOCAL 테스트 통계만 갱신. D-318 수동 보정·D-360/D-375 제안 엔드포인트는 그대로 동작.
+
+## 2026-10-07 · 556dd1954 · feat(vision): 카메라 차선 지도 초안 생성
+
+- 변경: D-497: 현장 카메라 원본과 확인된 metric 보정·차로 폭으로 rosy.site_map/1 초안을 생성하는 rosy-lane-map. 직접 HTTPS preview lease 읽기·신선도·원본 검사, 흰 페인트 중심선·교차점·원형 경로, 근거 JSON, 덮어쓰기 거절. 초안만 생성, 활성화·주행 없음.
+- 증거: 81 affected geometry/store/browser checks passed (latest loop regression rechecked), 0 NEW. Direct source-command test on the actual site host read a fresh raw S21 frame over pinned HTTPS and generated a 12-place/10-lane draft. That draft imported in local Chromium at 1440/390 px without activating or moving a robot. Source command was ephemeral; permanent deployment and field geometry acceptance are unproven. Independent review found an attached-loop loss; fixed and independently rechecked.
+- gate 변화: 없음. SOURCE/LOCAL 근거 추가; 장치 상시 배포·현장 지도 정확도 수용은 별도다.

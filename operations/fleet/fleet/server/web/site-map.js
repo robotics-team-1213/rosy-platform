@@ -104,6 +104,7 @@ function select(selection) {
 
 function syncButtons() {
   const reason = operatorReason();
+  gate('import-camera-map', reason || (!$('camera-map-file').files.length ? '카메라 지도 JSON 파일을 고르세요' : ''));
   gate('save-draft', reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
   gate('activate', reason || (!state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : '')));
   status('draft-status', state.loadState === 'pending' ? '초안 조회 중'
@@ -243,6 +244,29 @@ $('trip-pick').addEventListener('change', () => {
 });
 $('trip-place').addEventListener('change', clearPlan);
 $('trip-robot').addEventListener('change', clearPlan);
+
+$('camera-map-file').addEventListener('change', syncButtons);
+$('import-camera-map').addEventListener('click', () => guarded(async () => {
+  if (operatorReason()) return;
+  const file = $('camera-map-file').files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024 - 1024) throw new Error('지도 초안 파일은 2 MiB보다 작아야 합니다.');
+  const map = JSON.parse(await file.text());
+  if (map?.schema !== 'rosy.site_map/1') throw new Error('rosy.site_map/1 지도 초안 파일이 필요합니다.');
+  const revision = state.draft?.revision || null;
+  if (state.dirty || revision) {
+    const allowed = await confirmIrreversible({message: '기존 초안을 카메라 지도 초안으로 바꿀까요? 활성 지도는 바뀌지 않습니다.',
+      action: '카메라 초안 가져오기', opener: $('import-camera-map')});
+    if (!allowed) return;
+  }
+  // The existing bounded, named-operator endpoint validates every coordinate and reference.
+  await request('/api/fleet/site-map/draft', {method: 'PUT', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({map, expected_revision: revision})});
+  await load();
+  $('map-source').value = 'draft';
+  clearPlan();
+  notice('카메라 지도 초안을 가져왔습니다. 차로 연결·통행 방향을 검토한 뒤 활성화하세요.');
+}));
 
 $('apply-edit').addEventListener('click', () => guarded(async () => {
   const sel = state.selected;
