@@ -9,7 +9,6 @@ draft. Standard library only; ``fleet.server.teach_service`` owns the clock and 
 
 from __future__ import annotations
 
-import copy
 import math
 from typing import Optional, Union
 
@@ -108,7 +107,7 @@ def append_edge(base: dict, polyline: list[Point], *, start: Union[str, dict], e
                 direction: str, drive_mode: str, speed_cap_mps: float, width_m: float) -> tuple[dict, str]:
     """A copy of ``base`` (a site map body) with the taught edge; ``start``/``end`` are a place id
     or ``{name, kind}`` for a new place at that end. The polyline ends are pinned onto the places."""
-    body = copy.deepcopy(base)
+    body = {**base, "places": [dict(p) for p in base["places"]], "edges": list(base["edges"])}
     a = _place(body, start, polyline[0], "from")
     b = _place(body, end, polyline[-1], "to")
     xy = {p["id"]: (p["x"], p["y"]) for p in body["places"]}

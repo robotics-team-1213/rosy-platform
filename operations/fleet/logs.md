@@ -2321,3 +2321,10 @@
 - gate 변화: 없음. LOCAL GO 유지 — 표시 경고만 만들었고 관측·목표·주행 경로는 그대로
 - 결정: 해당 없음(D-457 추적 보정의 표시 전용 보강)
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(fleet): D-494 6 주행 가르치기 — 기록·RDP·초안 확정·여기에 주소
+- 변경: 순수 `fleet/routing/teach.py`(점 남기기 `LOCALIZED` 또는 다리 ≤ 0.5 m·0.1 m 간격, 반복형 RDP 0.02 m, 끝 0.15 m 장소 후보, 초안 본문에 간선·새 장소 붙이기), `server/teach_service.py`·`teach_routes.py`(`GET /api/fleet/teach`, `POST /api/fleet/teach/start|stop|confirm|place`, 이름 있는 운영자, 현장 지도 이벤트), `SiteMapStore.record_event`, `app.py` 4줄 배선, 현장 지도 화면 "지도 가르치기" 칸(`web/site-map-teach.js`, 모델 도우미, 점선 표시). `console.py`는 고치지 않음
+- 증거: `operations/fleet/test` 2459 passed·124 skipped·1 failed(`test_routing` 표준 라이브러리 import 규칙: `copy` → 고친 뒤 `test_routing.py`·`test_routing_teach.py`·`test_teach.py` 45 passed), node `test/web/*.mjs` 151 passed, Chromium 스모크(1440·390, 기록→멈춤→확정→주소, 콘솔 오류 0, X:\DevTemp\d494-teach). `test/architecture`+문서+api_web 271 passed·1 failed = 크기 판정 `fleet: 41719 > 41014+150`(이 브랜치 +593, 재판정 대기). `test/known_failures.py` 그 외 0 new
+- gate 변화: 없음. SOURCE 호스트 시험만. 로봇에 아무것도 보내지 않는다. 현장 가르치기는 Rosy Cam 맞춤 뒤
+- 결정: D-494 6 (구현 부록 2026-10-07 — 6항 가르치기)
+- 교훈: `fleet/routing`은 표준 라이브러리 화이트리스트(`copy` 포함 안 됨)가 시험으로 걸려 있다
