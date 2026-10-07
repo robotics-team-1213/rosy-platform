@@ -19,7 +19,7 @@ WEB = ROOT / "middleware" / "ui" / "robot"
 #: boot before the first assertion.
 WEB_COMMON = ROOT / "shared" / "web"
 
-from browser_harness import open_page  # noqa: E402
+from browser_harness import browser_tests_enabled, open_page  # noqa: E402
 
 #: F-09 — 정상 상태의 따뜻한 색 예산 스캔(D-82: 따뜻한 것이 보이면 언제나
 #: 무언가 잘못된 것이다). 캔버스 fillStyle 정규화로 토큰·계산색을 같은 형식으로
@@ -44,7 +44,7 @@ WARM_SCAN = """() => {
 }"""
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 

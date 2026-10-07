@@ -3,17 +3,17 @@
 import os
 import json
 import re
-import socket
 import threading
 import time
 from pathlib import Path
 
 import pytest
 import uvicorn
+from browser_harness import browser_tests_enabled, safe_listener
 
 from test_site_map_trip import _app, _on_ring_s
 
-pytestmark = pytest.mark.skipif(os.environ.get("ROSY_BROWSER_TESTS") != "1",
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason="opt-in real Chromium browser scenario")
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -112,8 +112,7 @@ def page_site(tmp_path):
     client, tasks, store, robot = _app(tmp_path)
     robot._state = _on_ring_s(store)
     client.app.state.web_common = ROOT / "shared" / "web"
-    listener = socket.socket()
-    listener.bind(("127.0.0.1", 0))
+    listener = safe_listener()
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
     server = uvicorn.Server(uvicorn.Config(client.app, log_level="error", timeout_graceful_shutdown=3))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)

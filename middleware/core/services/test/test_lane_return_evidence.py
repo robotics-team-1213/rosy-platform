@@ -35,6 +35,26 @@ def test_image_pose_is_interpolated_on_source_clock_then_transformed_to_latest_p
     assert view.corridor.margin(BODY) == pytest.approx(.035)
 
 
+def test_odom_stamp_slightly_ahead_of_core_clock_is_kept_as_fresh():
+    """D-495 SIM finding 2: 1 ms of clock skew must not reset the trail or bump the epoch."""
+    feed = LaneReturnEvidence()
+    sample(feed, 100., now=10.)
+    epoch = feed.epoch
+    assert feed.observe_pose(stamp_ns=100_101_000_000, source_now_ns=100_100_000_000,
+                             frame="odom", x=.01, y=0., yaw=0., received_at=10.1)
+    assert len(feed.trail.samples) == 2 and feed.epoch == epoch
+    assert feed.trail.samples[-1].received_at == 10.1
+
+
+def test_odom_stamp_far_ahead_is_dropped_without_reset():
+    feed = LaneReturnEvidence()
+    sample(feed, 100., now=10.)
+    epoch = feed.epoch
+    assert not feed.observe_pose(stamp_ns=100_300_000_000, source_now_ns=100_100_000_000,
+                                 frame="odom", x=.01, y=0., yaw=0., received_at=10.1)
+    assert len(feed.trail.samples) == 1 and feed.epoch == epoch
+
+
 def test_receive_time_cannot_make_replayed_image_fresh():
     feed = LaneReturnEvidence()
     sample(feed, 100., now=10.)
@@ -81,3 +101,23 @@ def test_boundary_extrapolation_is_bounded():
         boundary["observed_x_max_m"] = 1.
     feed.observe_lane(LaneContainmentEvidence.model_validate(raw), received_at=10.05)
     assert feed.snapshot(now=10.1, body=BODY).reason == "boundary_support_insufficient"
+
+
+def test_future_sample_beyond_the_tolerance_is_dropped_and_the_trail_continues():
+    # D-507 8: the dropped sample leaves no gap; the next in-time sample still continues.
+    feed = LaneReturnEvidence()
+    sample(feed, 100., now=10.)
+    epoch = feed.epoch
+    assert not feed.observe_pose(stamp_ns=100_250_000_000, source_now_ns=100_050_000_000,
+                                 frame="odom", x=.005, y=0., yaw=0., received_at=10.05)
+    assert sample(feed, 100.1, now=10.1)
+    assert len(feed.trail.samples) == 2 and feed.epoch == epoch
+
+
+def test_real_discontinuity_still_breaks_the_trail():
+    feed = LaneReturnEvidence()
+    sample(feed, 100., now=10.)
+    epoch = feed.epoch
+    assert not feed.observe_pose(stamp_ns=100_100_000_000, source_now_ns=100_100_000_000,
+                                 frame="odom", x=.5, y=0., yaw=0., received_at=10.1)
+    assert len(feed.trail.samples) == 1 and feed.epoch == epoch+1

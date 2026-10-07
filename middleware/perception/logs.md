@@ -1204,3 +1204,33 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
 - 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
 - 교훈: 검출기가 맞추는 선(칠 중심)과 계약이 뜻하는 선(달릴 수 있는 끝)을 이름으로 구분한다
+
+## 2026-10-07 · uncommitted · feat(recording): Pilot 녹화에 바닥 IR 원시값 (D-504)
+
+- 변경: `PILOT_TOPICS`에 `ir_sensor/range`만 추가. `ir_range_sample`은 좌·중·우 세 칸(0–4095)만 받는다. `bag_to_video`·`extract`·Pinky `raw_messages`가 프레임 로그 시각 이전의 최신 표본을 붙인다. `us_sensor/range`와 D-356 `SIDE_TOPICS`는 그대로다.
+- 증거: `test_pilot_recorder.py`와 `test_module_separation.py` 46 passed. `test_bag_to_video.py` IR·intent·keep 5 passed. `test_raw_derivation.py` 11 passed (2026-10-07 Windows).
+- gate 변화: 없음. 호스트 시험만. 로봇 가방을 열어 확인하지 않음.
+- 결정: D-504 Proposed
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(recording): Pilot 바닥 IR 녹화 번호는 D-506
+
+- 변경: 위 항목의 구현은 그대로다. 번호만 D-506이다. D-504는 얼굴 애니메이션이, D-505는 상태 전환 화면이 먼저 썼다.
+- 증거: 시험 수는 위 항목과 같다.
+- gate 변화: 없음
+- 결정: D-506 Proposed
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · fix(perception): G-16 keep 경계 기울기와 그 오차
+- 변경: `lane_keep_lines._paint_fit`가 선의 최종 축을 원래 점 전체의 테이프 띠(칠 반폭 + 맞춤 셀)에서, 양쪽 가장자리가 보이는(`BirdsEye.seen`) 단면만, D-491 횡단보도 행을 빼고 맞춘다(화면 잘림·blob 띠 침식 제거). 경계마다 `slope_sd`를 싣고 `containment_payload`가 `uncertainty_m`에 2√2σ × (지지 + 0.3 m)를 더한다. `slope_sd`가 없으면 `uncertainty_m` None
+- 증거: `test_lane_slope_g16.py` 9건(합성 잘림·횡단보도, 불확실도, G-16 프레임 재생: 여유 21.5 / 22.0 mm vs STL 23.4, u 22.9 / 13.7 mm). perception·services containment·test/architecture는 `test/known_failures.py` 대조
+- gate 변화: 없음. SOURCE 호스트 시험만. 모델 PC 시나리오 C 재실행 남음
+- 결정: D-468 구현 메모(G-16)
+- 교훈: 외삽하는 경계는 위치 오차보다 기울기 오차를 먼저 본다. 잘린 칠은 위치는 맞아도 기울기를 기울인다
+
+## 2026-10-07 · uncommitted · fix(perception): G-16 독립 검토 반영
+- 변경: 온전한 칠이 모자라면 찾은 조각의 축을 그대로 둔다(잘린 띠로 다시 맞추지 않음). 칠 반폭은 `lane_keep_lines.PAINT_HALF_WIDTH_M` 하나이고 노드가 `lane_paint_half_width_m`을 `LaneKeeper`에도 넘긴다(노드 604줄 그대로). `uncertainty_m`에 맞춤 중심 오차 항(`offset_sd`)을 더한다
+- 증거: `test_lane_slope_g16.py` 12건(되돌림, 중심 항, 수신기 외삽 상수 일치, 칠 반폭 하나). G-16 프레임 u 23.9 / 14.3 mm(여유 그대로). 실물 녹화 재생과 `_paint_fit` 비용은 D-468 구현 메모(G-16)
+- gate 변화: 없음. SOURCE 호스트 시험만
+- 결정: D-468 구현 메모(G-16) 보강
+- 교훈: 맞춤을 고치면 안전 근거만이 아니라 조향 축도 바뀐다. 실물 녹화 재생으로 추종 변화를 같이 잰다

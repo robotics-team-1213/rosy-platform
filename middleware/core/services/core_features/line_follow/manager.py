@@ -19,6 +19,7 @@ from core_features.line_follow.model import (  # noqa: F401 — re-exported
     LineFollowDecision,
     LineFollowMode,
     LineObservation,
+    SOURCE_FUTURE_TOLERANCE_S,
     _finite,
 )
 from core_features.decision.contract import DecisionRequest
@@ -157,7 +158,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             if not _finite(source_now):
                 raise ValueError("source_now must be finite")
             source_age = float(source_now) - observation.stamp
-            if source_age < -0.1:
+            if source_age < -SOURCE_FUTURE_TOLERANCE_S:
                 raise ValueError("observation timestamp is in the future")
             effective_received_at -= max(0.0, source_age)
         with self._lock:

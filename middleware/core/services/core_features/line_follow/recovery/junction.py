@@ -244,6 +244,14 @@ class JunctionMixin:
         self._bridge_hint = None
         return self._junction_hold('junction_aborted', decision)
 
+    def _unresolved(self, j, decision):
+        """Reacquisition failed after the turn (D-495 SIM finding 4): done like an abort, since
+        the entry heading is already cleared and a resend would stack a second turn."""
+        self._mark_done(j)  # still 'reacquiring' here, so R1 records it
+        j['state'] = 'unresolved'
+        self._bridge_hint = None
+        return self._junction_hold('junction_unresolved', decision)
+
     def _junction_done(self):
         if self._junction is not None:
             self._mark_done(self._junction)
@@ -353,9 +361,7 @@ class JunctionMixin:
         if refusal == 'stuck' and j['state'] == 'reacquiring':
             # The lane stayed out of view past lost_after_s: D-407 asks the console. That is a
             # failed reacquisition, not a broken maneuver.
-            j['state'] = 'unresolved'
-            self._bridge_hint = None
-            return self._junction_hold('junction_unresolved', decision)
+            return self._unresolved(j, decision)
         if refusal == 'motion_unconfirmed' and j.get('basis') == 'site':
             refusal = 'turn_basis_lost'  # D-498 decision 3
         if refusal is not None:
@@ -367,9 +373,7 @@ class JunctionMixin:
             return self._abort(j, reason or 'hold', decision)
         if now-j['phase_at'] > j['limit']:
             if j['state'] == 'reacquiring':
-                j['state'] = 'unresolved'
-                self._bridge_hint = None
-                return self._junction_hold('junction_unresolved', decision)
+                return self._unresolved(j, decision)
             return self._abort(j, 'not_still' if j.get('sub') == 'stopping' else 'timeout', decision)
         if j['state'] != 'turning' and not self._odom_travel(j, now):
             return self._abort(j, 'odom', decision)
@@ -401,9 +405,7 @@ class JunctionMixin:
             self._junction_done()
             return decision
         if j['travel'] >= REACQUIRE_M:
-            j['state'] = 'unresolved'
-            self._bridge_hint = None
-            return self._junction_hold('junction_unresolved', decision)
+            return self._unresolved(j, decision)
         return decision
 
     def _turn_step(self, j, now, pose):

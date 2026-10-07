@@ -8,7 +8,7 @@
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
-  streamEvidence,
+  streamEvidence, displayRotation, quarterTurn,
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
@@ -307,8 +307,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    // 캔버스 y 가 아래로 자라므로 sin 은 뒤집는다.
-    ctx.lineTo(cx + Math.cos(s.yaw) * size * 1.4, cy - Math.sin(s.yaw) * size * 1.4);
+    // 방향도 같은 toPoint 로 그린다 — 카메라 영상(호모그래피·D-513 7 회전)에서도 지도 방향이 맞다.
+    const ahead = toPoint(s.x + 0.1 * Math.cos(s.yaw), s.y + 0.1 * Math.sin(s.yaw));
+    const span = Math.hypot(ahead.x - cx, ahead.y - cy) || 1;
+    ctx.lineTo(cx + (ahead.x - cx) / span * size * 1.4, cy + (ahead.y - cy) / span * size * 1.4);
     ctx.stroke();
     ctx.restore();
     drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "delayed" ? "warn" : undefined);
@@ -394,8 +396,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
     const rect = canvas.getBoundingClientRect();
     const fallback = canvasSizeFor(bounds, 800);
-    const width = cameraOn ? cameraFrame.image.naturalWidth : rect.width > 0 ? rect.width : fallback.width;
-    const height = cameraOn ? cameraFrame.image.naturalHeight : rect.height > 0 ? rect.height : fallback.height;
+    // D-513 7: 실영상은 설치 회전만큼 돌려 그리고, 지도 점도 같은 회전을 거친다.
+    const turn = cameraOn ? quarterTurn(displayRotation(view.siteMap, calibration.source_id),
+      cameraFrame.image.naturalWidth, cameraFrame.image.naturalHeight) : null;
+    const width = cameraOn ? turn.width : rect.width > 0 ? rect.width : fallback.width;
+    const height = cameraOn ? turn.height : rect.height > 0 ? rect.height : fallback.height;
     const dpr = cameraOn ? 1 : window.devicePixelRatio || 1;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
@@ -403,9 +408,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.scale(dpr, dpr);
     const t = fitTransform(bounds, width, height, 32);
     const toPx = cameraOn
-      ? (x, y) => { const p = projectCamera(calibration.map_to_image, x, y); return { x: p?.[0] ?? NaN, y: p?.[1] ?? NaN }; }
+      ? (x, y) => { const p = projectCamera(calibration.map_to_image, x, y); return p ? turn.point(p[0], p[1]) : { x: NaN, y: NaN }; }
       : (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
-    if (cameraOn) ctx.drawImage(cameraFrame.image, 0, 0, width, height);
+    if (cameraOn) {
+      ctx.save();
+      ctx.transform(...turn.matrix);
+      ctx.drawImage(cameraFrame.image, 0, 0, cameraFrame.image.naturalWidth, cameraFrame.image.naturalHeight);
+      ctx.restore();
+    }
     else {
       ctx.fillStyle = css("--ground-deep");
       ctx.fillRect(0, 0, width, height);
@@ -763,6 +773,19 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     cameraFrame = frame?.state === "live" ? frame : null;
     if (!view.map && view.siteMap) draw();
   }
+  // D-513 7: 크게 보기도 설치 회전만큼 돌린다. 회전이 없으면 받은 URL 그대로다.
+  function turnedUrl(frame) {
+    const image = frame.image;
+    const rot = displayRotation(view.siteMap, frame.source);
+    if (!rot || !image?.naturalWidth) return frame.url;
+    const turn = quarterTurn(rot, image.naturalWidth, image.naturalHeight);
+    const canvas = document.createElement("canvas");
+    canvas.width = turn.width; canvas.height = turn.height;
+    const ctx = canvas.getContext("2d");
+    ctx.transform(...turn.matrix);
+    ctx.drawImage(image, 0, 0);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  }
   function bindCamera(visionView) {
     // The calibrated map draws the same authenticated Vision frame; Fleet does not relay image bytes.
     // D-493: the raw frame shows in one place at a time — the rail thumbnail, or the map stage
@@ -787,7 +810,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         setCameraFrame(null); setLive(null); return;
       }
       setCameraFrame(frame);
-      setLive(frame.url);
+      setLive(turnedUrl(frame));
       cancelMapCameraExpiry = scope.timeout(() => { setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
     })));
   }

@@ -3,6 +3,9 @@
 
 # planning/ (map → goals)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 Occupancy-grid planning: map check → point to go, best route, coverage. Pure logic (no ROS) shared by `goal_node` and the offline sim `tools/explore_sim.py`. GoalBrain is the explore→coverage FSM.
 

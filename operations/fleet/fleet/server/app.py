@@ -53,7 +53,7 @@ from fleet.server.console_routes import install_console_routes
 from fleet.server.background_workers import proposal_expiry_loop as _proposal_expiry_loop
 from fleet.server.background_workers import goal_evidence_expiry_loop
 from fleet.server.signal_routes import install_signal_routes
-from fleet.server.ingest_routes import install_discovery_routes, install_ingest_routes
+from fleet.server.ingest_routes import address_reasons, install_discovery_routes, install_ingest_routes
 from fleet.server.intent_routes import install_intent_routes
 from fleet.server.mission_routes import install_mission_routes
 from fleet.server.site_auth import (
@@ -343,6 +343,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         try:
             yield
         finally:
+            power_display = getattr(app.state, "power_health_display", None)
+            if power_display is not None:
+                await power_display.aclose()
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
@@ -466,6 +469,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  discovery_token=discovery_token, enrollment=enrollment,
                                  principals=principals, require_viewer=require_viewer,
                                  read_guard=read_guard, catalogue=catalogue)
+
+        def _link_addresses():
+            reasons = address_reasons(console=console, hub=hub, discovery=discovery,
+                                     enrollment=enrollment)
+            return {entry["robot_id"]: entry["status"] for entry in reasons["robots"]}
+
+        console.set_link_address_status(_link_addresses)
 
     from fleet.server.central_registry_routes import install_registry_routes
     install_registry_routes(app, registry=central_registry, enrollment=enrollment, pairing=pairing,

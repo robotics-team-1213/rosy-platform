@@ -684,4 +684,21 @@
 - 증거: `test_line_junction.py::test_turn_armed_right_after_mode_select_waits_for_the_first_odom_sample` 먼저 실패 후 통과, `test_no_fresh_odom_at_the_junction_aborts_before_turning`은 0.3 s 대기 뒤 중단으로 바뀜.
 - gate 변화: 없음. 호스트 시험만. SIM(`s2_sw_r110_a0`, `s9_scan_turn` 재현) 미실행.
 - 결정: D-495 SIM 결과 결함 3 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
+## 2026-10-07 · uncommitted · fix(line_follow): 회전 뒤 unresolved도 그 교차로 실행 완료로 기록한다
+- 변경: `junction.py` `_maneuver`의 `unresolved` 전이 세 곳(재획득 중 D-407 stuck, 재획득 시간 한도, `REACQUIRE_M` 이동)을 `_unresolved(j, decision)` 하나로 모으고, 상태가 아직 `reacquiring`일 때 `_mark_done(j)`를 먼저 부른다. 진입 방향은 이미 지워져 있으므로 같은 `place_id` 재전송은 두 번째 회전을 쌓지 않고 409 `JUNCTION_ALREADY_DONE`이 된다. 다른 `place_id`가 기록을 지운다.
+- 증거: `test_line_junction.py::test_unresolved_after_the_turn_counts_as_done`(세 경로) 먼저 실패 후 통과.
+- gate 변화: 없음. 호스트 시험만. SIM S6(`s6_unresolved_resend`) 미실행.
+- 결정: D-495 SIM 결과 결함 4 (`docs/validation/d495-junction-sim-2026-10-07/result.md`), 리뷰 R1
+## 2026-10-07 · uncommitted · fix(line_follow): odom 원천 시각이 CORE 시계보다 조금 앞서도 자세 기록을 지우지 않는다
+- 변경: `model.py`에 `SOURCE_FUTURE_TOLERANCE_S = 0.1`(기존 `manager.observe` 값)을 두고 `manager.observe`와 `lane_return_evidence.observe_pose`가 같이 쓴다. odom 나이가 `[-0.1, 0)`이면 0으로 보고, `-0.1`보다 앞서면 그 샘플만 버린다(trail·epoch 유지). 0.3 s 초과 리셋은 그대로다.
+- 증거: `test_lane_return_evidence.py`(1 ms 앞 유지, 0.2 s 앞 버림·epoch 불변), `test_line_junction.py::test_turn_completes_with_odom_stamps_1_ms_ahead_of_core_clock` 먼저 실패 후 통과.
+- gate 변화: 없음. 호스트 시험만. SIM(D-495 harness, odom 지연 제거) 미실행.
+- 결정: D-495 SIM 결과 결함 2 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(line_follow): LiDAR 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
+- 변경: `clearance.return_scan_view`가 1 ns라도 앞선 스캔을 버리던 것을 `SOURCE_FUTURE_TOLERANCE_S`(0.1 s) 안이면 나이 0으로 받고, 넘으면 버린다. odom(`lane_return_evidence.observe_pose`)과 선 관측(`manager.observe`)은 이미 같은 상수를 쓴다.
+- 증거: `test_lane_return_scan.py`(1 ms·0.1 s 앞 받음, 0.1 s+1 ns 앞 버림), `test_lane_return_evidence.py`(허용치 밖 표본을 버려도 다음 표본이 trail을 잇는다, 실제 불연속은 끊는다). 변이 확인 4건.
+- gate 변화: 없음. 호스트 시험만.
+- 결정: D-507 8
 - 교훈: 없음

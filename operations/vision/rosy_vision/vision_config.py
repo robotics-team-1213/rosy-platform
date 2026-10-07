@@ -18,7 +18,8 @@ _REQUIRED = {
     "corner_world_m", "robot_markers",
 }
 _ALLOWED = _REQUIRED | {"heading_edge", "phone_token_env", "credential",
-                        "corner_marker_ids", "calibration_source"}
+                        "corner_marker_ids", "calibration_source",
+                        "display_rotation_deg"}  # D-513 7: Fleet console display only
 CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
 CREDENTIAL_KINDS = ("static", "paired")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")

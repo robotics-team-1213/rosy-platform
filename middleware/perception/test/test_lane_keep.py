@@ -1,4 +1,5 @@
 """D-364 §2: 'keep' lane keeper on synthetic floors rendered through the NOMINAL ground."""
+import json
 import math
 from pathlib import Path
 
@@ -706,3 +707,56 @@ def test_node_resets_the_keeper_after_a_camera_gap():
     text = (PKG / "control" / "line_observer_node.py").read_text(encoding="utf-8")
     keep = text.split("elif mode == 'keep':", 1)[1].split("elif mode in", 1)[0]
     assert "KEEP_MAX_FRAME_GAP_S" in keep and "self._lane_keeper.reset()" in keep
+
+
+def test_junction_transverse_reports_the_line_distance_in_base_footprint_x():
+    # D-507 §5: the stop line is painted at base_link x = 0.30 (the render grid
+    # is base_link, X_OFFSET puts the camera ahead of it): the key is that x.
+    slope = np.tan(np.radians(25.0))
+    keeper = _corner_keeper()
+    keeper.update(_render([(HALF - slope * 0.22, slope)], transverse_x=0.30), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["reason"] == "junction_transverse"
+    assert keeper.last["junction_ahead_m"] == pytest.approx(0.30, abs=0.03)
+    assert json.loads(json.dumps(keeper.last, default=float))["junction_ahead_m"] == keeper.last["junction_ahead_m"]
+
+
+def test_junction_fork_reports_the_diverging_branch_near_end():
+    slope = np.tan(np.radians(45.0))
+    keeper = _corner_keeper()
+    keeper.update(_render([(HALF, 0.0), (0.05 - slope * 0.22, slope)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["reason"] == "junction_fork"
+    branch = max(keeper.last["boundaries"], key=lambda b: b["heading_deg"])
+    assert keeper.last["junction_ahead_m"] == pytest.approx(min(p[0] for p in branch["ends_m"]), abs=1e-3)
+    assert 0.0 < keeper.last["junction_ahead_m"] < 0.6
+
+
+def test_no_junction_reason_carries_no_junction_ahead_key():
+    keeper = _corner_keeper()
+    keeper.update(_render(), GROUND, lane_half_width_m=HALF)  # nothing seen: no_boundary
+    assert keeper.last["reason"] == "no_boundary" and "junction_ahead_m" not in keeper.last
+    plain = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0)
+    slope = np.tan(np.radians(25.0))
+    plain.update(_render([(HALF - slope * 0.22, slope)], transverse_x=0.30), GROUND, lane_half_width_m=HALF)
+    assert "junction_ahead_m" not in plain.last
+
+
+def test_every_frame_carries_the_junction_ahead_marker():
+    # D-507 §5: CORE reads junction_ahead_v to know this build reports junction_ahead_m.
+    keeper = _corner_keeper()
+    keeper.update(_render(), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["junction_ahead_v"] == 1 and "junction_ahead_m" not in keeper.last
+    slope = np.tan(np.radians(25.0))
+    keeper.update(_render([(HALF - slope * 0.22, slope)], transverse_x=0.30), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["junction_ahead_v"] == 1 and "junction_ahead_m" in keeper.last
+    assert _keep(_render([(0.0, 0.0)]))[1]["junction_ahead_v"] == 1
+
+
+def test_right_only_fork_reports_the_diverging_branch_near_end():
+    # Mirror of the left fork: outward flips, so the branch pick must flip with it.
+    slope = np.tan(np.radians(-45.0))
+    keeper = _corner_keeper()
+    keeper.update(_render([(-HALF, 0.0), (-0.05 - slope * 0.22, slope)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.last["reason"] == "junction_fork"
+    branch = min(keeper.last["boundaries"], key=lambda b: b["heading_deg"])
+    assert keeper.last["junction_ahead_m"] == pytest.approx(min(p[0] for p in branch["ends_m"]), abs=1e-3)
+    assert 0.0 < keeper.last["junction_ahead_m"] < 0.6

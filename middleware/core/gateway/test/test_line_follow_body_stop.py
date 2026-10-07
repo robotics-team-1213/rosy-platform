@@ -307,12 +307,8 @@ def test_a_return_at_exactly_range_min_while_stationary_is_not_remembered():
     assert (status.state, status.clearance_source) == ("TRACKING", None)   # wall past horizon
 
 
-@pytest.mark.parametrize("range_min, post", [
-    (C1_RANGE_MIN, (0.05, 0.02)),                     # C1: LiDAR range 0.070 -> 0.051 -> 0.034
-    (0.12, (0.12, 0.03)),                             # 0.12 overlay: 0.140 -> 0.121 -> 0.102
-])
-def test_a_post_that_slipped_under_range_min_holds_while_stationary(range_min, post):
-    """The fix must keep D-422: a real post that went under range_min on approach stays."""
+def _approach_then_stand(range_min, post):
+    """Drive 0.04 m at a post (LiDAR frame at the start) until it is under range_min, stand."""
     m = _manager()
     t, travelled = T, 0.0
     for _ in range(2):
@@ -327,24 +323,112 @@ def test_a_post_that_slipped_under_range_min_holds_while_stationary(range_min, p
     m.note_wheels(0.0, 0.0, owned=True, now=t)
     for index in range(40):
         _, status = _step(m, [], t=t + 0.1 * index, range_min=range_min)
+    return status
+
+
+def test_a_post_that_slipped_under_range_min_outside_the_body_holds_while_stationary():
+    """The fix must keep D-422: a real post that went under range_min on approach stays.
+    0.12 overlay: LiDAR range 0.140 -> 0.121 -> 0.102, base x 0.081 (outside the front)."""
+    status = _approach_then_stand(0.12, (0.12, 0.03))
     assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+
+
+def test_standing_pinky_forgets_a_vanished_point_inside_the_body_outline():
+    """D-507 10: Pinky C1 range_min 0.05 < 0.0565 (LiDAR to the nearest body edge), so a point
+    can only vanish inside the outline (noise or contact): no memory latch, no body_gap 0.
+    C1: LiDAR range 0.070 -> 0.051 -> 0.034, base x 0.017 (inside the front 0.042)."""
+    status = _approach_then_stand(C1_RANGE_MIN, (0.05, 0.02))
+    assert status.state == "TRACKING"
+    assert status.reason != "obstacle_ahead" and status.clearance_source != "memory"
+
+
+def _remember_one(lidar_point, range_min):
+    """One scan with a return already under range_min, then 40 empty scans standing still."""
+    m = _manager()
+    _step(m, [lidar_point], range_min=range_min)
+    for index in range(40):
+        _, status = _step(m, [], t=T + 0.1 * (index + 1), range_min=range_min)
+    return status
 
 
 def test_a_point_just_past_the_tolerance_inside_range_min_is_remembered():
-    """Boundary: 2e-6 m inside range_min is inside (tolerance 1e-6 m), so it is remembered."""
-    m = _manager()
-    _step(m, [(C1_RANGE_MIN - 2e-6, 0.0)], range_min=C1_RANGE_MIN)
-    for index in range(40):
-        _, status = _step(m, [], t=T + 0.1 * (index + 1), range_min=C1_RANGE_MIN)
+    """Boundary: 2e-6 m inside range_min is inside (tolerance 1e-6 m), so it is remembered.
+    0.12 overlay: the point (base x 0.103) is outside the body outline."""
+    status = _remember_one((0.12 - 2e-6, 0.0), 0.12)
     assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
 
 
-def test_range_min_ring_then_turn_in_place_holds_from_memory_fail_closed():
-    """CURRENT behaviour, fail-closed availability gap (not a body_stop defect to fix here):
-    an in-place turn moves a range_min ring about the base origin, not the LiDAR, so part of
-    it lands mm inside range_min and is remembered; standing still never ages it. Real only
-    with a sim sensor whose range_min is inside the body (sim 0.05 vs device 0.12): sim2real
-    registry G-07. Flip this assertion when the sim sensor matches the device."""
+def test_a_vanished_point_just_outside_the_body_outline_is_remembered_and_stops():
+    """D-507 10: 1 mm past the body front, under range_min 0.12: memory keeps it."""
+    front, lidar_x = PINKY["body_front_x_m"], PINKY["body_lidar_x_m"]
+    status = _remember_one((front + 0.001 - lidar_x, 0.0), 0.12)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert status.body_gap_m == pytest.approx(0.001, abs=1e-4)
+
+
+def test_a_vanished_point_exactly_on_the_body_outline_is_remembered_conservative():
+    """D-507 10 boundary choice: on the outline is not inside, so it is kept (and stops)."""
+    half, lidar_x = PINKY["body_half_width_m"], PINKY["body_lidar_x_m"]
+    point = (0.0 - lidar_x, half)                                        # base (0, half width)
+    assert point[0] + lidar_x == 0.0                                     # exactly on the side
+    status = _remember_one(point, 0.12)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert status.body_gap_m == 0.0
+
+
+def _enter_then_move(base_point, wheels, *, range_min=0.12):
+    """A return under range_min enters memory outside the body (two standing scans), then
+    the wheels run each twist in `wheels` for 0.5 s, then the robot stands (10 scans)."""
+    lidar_x = PINKY["body_lidar_x_m"]
+    m, t = _manager(), T
+    _step(m, [(base_point[0] - lidar_x, base_point[1])], t=t, range_min=range_min)
+    t += 0.1
+    _step(m, [], t=t, range_min=range_min)                              # remembered now
+    for linear, angular in wheels:
+        m.note_wheels(linear, angular, owned=True, now=t)
+        t += 0.5
+        _step(m, [], t=t, range_min=range_min)
+    m.note_wheels(0.0, 0.0, owned=True, now=t)
+    for index in range(10):
+        _, status = _step(m, [], t=t + 0.1 * (index + 1), range_min=range_min)
+    return status
+
+
+def test_a_remembered_point_that_odometry_creeps_inside_the_body_keeps_holding():
+    """D-507 10 review HIGH: the outline check is made once, when a point enters memory.
+    Base x 0.083 enters outside; 0.06 m of creep puts it at 0.023, inside: contact, hold."""
+    status = _enter_then_move((0.083, 0.0), [(0.04, 0.0)] * 3)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert status.body_gap_m == 0.0
+
+
+def test_a_remembered_point_an_in_place_turn_rotates_into_the_body_keeps_holding():
+    """Base (0.05, 0) is outside the rectangle, inside the rotation radius; a 1 rad turn
+    brings it to x 0.027, inside the rectangle. It stays held."""
+    status = _enter_then_move((0.05, 0.0), [(0.0, 1.0)] * 2)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+
+
+def test_a_lidar_whose_range_min_reaches_past_the_body_remembers_as_before():
+    """D-507 10: synthetic body (front 0.10, rear -0.10, half 0.08, R 0.13, LiDAR at the base)
+    and range_min 0.25. A post that vanishes outside the body still stops from memory."""
+    geometry = dict(body_lidar_x_m=0.0, body_rear_x_m=-0.10, body_rotation_radius_m=0.13,
+                    body_half_width_m=0.08, body_front_x_m=0.10, body_ultrasonic_x_m=None)
+    m = _manager(**geometry)
+    post, t = (0.26, 0.03), T
+    _step(m, [post], t=t, range_min=0.25)                               # LiDAR range 0.262
+    m.note_wheels(0.04, 0.0, owned=True, now=t)
+    t += 0.5                                                             # 0.02 m on: range 0.242
+    _, status = _step(m, [], t=t, range_min=0.25)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert status.body_gap_m == pytest.approx(0.26 - 0.02 - 0.10, abs=2e-3)
+    assert _step(_manager(**geometry), [], t=t, range_min=0.25)[1].state == "TRACKING"
+
+
+def test_range_min_ring_then_turn_in_place_does_not_latch_memory():
+    """D-507 10 flipped the old fail-closed latch (sim2real G-07): an in-place turn moves a
+    range_min ring about the base origin, not the LiDAR, so part of it lands mm inside
+    range_min; with range_min 0.05 all of it is inside the body outline, so it is dropped."""
     m = _manager()
     _step(m, _ring(C1_RANGE_MIN), range_min=C1_RANGE_MIN)
     m.note_wheels(0.0, 0.5, owned=True, now=T)
@@ -353,7 +437,7 @@ def test_range_min_ring_then_turn_in_place_holds_from_memory_fail_closed():
     clear = _wall(0.87)
     for index in range(40):
         _, status = _step(m, clear, t=T + 0.3 + 0.1 * index, range_min=C1_RANGE_MIN)
-    assert (status.state, status.clearance_source) == ("HOLD", "memory")
+    assert (status.state, status.clearance_source) == ("TRACKING", None)
 
 
 def test_pinky_range_min_straight_stop_is_at_the_blind_edge():
