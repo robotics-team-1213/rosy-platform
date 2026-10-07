@@ -110,8 +110,9 @@ ros:
 # D-477: the team tailnet. One upstream arm64 deb carries tailscaled (the
 # daemon unit the image enables) and the CLI rosy-tailscale-join.py drives.
 # Its hard dependency (iptables) installs from the locked Ubuntu suites in
-# the same customizer run; verified stays false until a native arm64 build
-# has downloaded, checksum-checked and unpacked it.
+# the same customizer run; verified stays false here and resolve-build-lock.py
+# flips it only after the native arm64 host has downloaded the deb, matched
+# size and sha256, and listed tailscaled with dpkg-deb.
 tailscale:
   version: "1.102.5"
   url: https://pkgs.tailscale.com/stable/ubuntu/pool/tailscale_1.102.5_arm64.deb
