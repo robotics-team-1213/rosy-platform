@@ -59,10 +59,11 @@ def _note(numbers: dict[int, str], number: int, source: str) -> None:
 
 
 def _from_history(numbers: dict[int, str], pattern: re.Pattern, *args: str) -> None:
-    # --source labels each commit with the ref that reached it ("@<ref>" lines).
+    # --source labels each commit with the ref that reached it; a NUL prefix keeps
+    # that line apart from diff and file lines, which never contain NUL.
     source = "?"
-    for line in git("log", "--branches", "--remotes", "--source", "--format=@%S", *args).stdout.splitlines():
-        if line.startswith("@"):
+    for line in git("log", "--branches", "--remotes", "--source", "--format=%x00%S", *args).stdout.splitlines():
+        if line.startswith("\0"):
             source = line[1:]
         elif match := pattern.search(line):
             _note(numbers, int(match.group(1)), f"{source}: {line.lstrip('+')[:60]}")

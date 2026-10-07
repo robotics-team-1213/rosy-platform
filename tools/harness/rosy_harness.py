@@ -440,11 +440,16 @@ def load_adr_gaps(repo: Path, config: dict) -> tuple[dict[str, str], list[str]]:
 
 
 def reservation_warnings(adr: AdrLog, gaps: dict[str, str], reserved: set[str]) -> list[str]:
-    """refs/adr are local: CI and other clones lack them, so they never excuse a gap (D-510)."""
+    """refs/adr are local: CI and other clones lack them, so they never excuse a gap (D-510).
+
+    Only a number below the branch's highest ADR would fail CI as a missing gap.
+    """
     present = set(adr.index) | set(adr.bodies)
+    highest = max((_adr_number(i) for i in present), default=0)
     return [f"{adr_id} reserved locally (refs/adr) but not on this branch"
             " — land its ADR or add a gap line to tools/harness/adr_gaps.txt before push"
-            for adr_id in sorted(reserved - present - set(gaps), key=_adr_number)]
+            for adr_id in sorted(reserved - present - set(gaps), key=_adr_number)
+            if _adr_number(adr_id) < highest]
 
 
 def validate_adr_log(adr: AdrLog, gaps: dict[str, str]) -> list[str]:

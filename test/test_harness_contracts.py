@@ -705,9 +705,10 @@ def test_reserved_ref_is_a_warning_never_a_gap():
     assert harness.validate_adr_log(adr, {}) == ["D-3: missing and not declared in adr_gaps"]
     assert harness.reservation_warnings(adr, {}, {"D-4"}) == []  # landed: the ref is irrelevant
     assert harness.reservation_warnings(adr, {"D-9": "skipped"}, {"D-9"}) == []
+    # D-9 is above the branch's highest (D-4), so CI would not miss it: no warning.
     assert harness.reservation_warnings(adr, {}, {"D-3", "D-9"}) == [
-        f"{i} reserved locally (refs/adr) but not on this branch — land its ADR or add a gap line"
-        " to tools/harness/adr_gaps.txt before push" for i in ("D-3", "D-9")]
+        "D-3 reserved locally (refs/adr) but not on this branch — land its ADR or add a gap line"
+        " to tools/harness/adr_gaps.txt before push"]
 
 
 def test_only_one_record_per_line_files_use_the_union_merge_driver():
@@ -803,6 +804,10 @@ def test_adr_reserve_claims_above_every_source_and_skips_taken_refs(tmp_path, mo
     (repo / "tools" / "harness").mkdir(parents=True)
     (repo / "tools" / "harness" / "adr_gaps.txt").write_text("D-7 untracked gap\n", encoding="utf-8")
     monkeypatch.chdir(repo)
+
+    seen: dict = {}  # a diff hunk header "@@ ..." must not be taken for the source ref
+    adr_reserve._from_history(seen, adr_reserve.ADDED_LINE, "--no-merges", "-p", "-U0", "--", adr_reserve.LOG)
+    assert seen[5].split(": ", 1)[0] in {"main", "stray", "origin/other"} and "| D-5" in seen[5]
 
     assert adr_reserve.main(["next", "first topic"]) == 0
     out = capsys.readouterr()
