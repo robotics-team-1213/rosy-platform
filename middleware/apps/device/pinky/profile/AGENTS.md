@@ -1,7 +1,10 @@
-<!-- Parent: ../../../../../src/products/pinky_pro/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-24 | Updated: 2026-09-24 -->
 
 # pinky_pro
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 

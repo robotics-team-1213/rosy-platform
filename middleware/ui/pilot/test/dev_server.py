@@ -358,13 +358,13 @@ async def front_evidence(request: Request):
 # Content-Length 보다 짧음)|"slow"(첫 조각 뒤 release 까지 멈춤)|"conflict"(목록과 달리 409),
 # foreign: 다른 기기가 시작한 녹화, big: 256 MB 를 넘는 녹화본. polls 는 GET /active 횟수.
 # starting: 시작이 먼저 "starting"(기록기가 아직 첫 파일을 열지 않음)이 되고, ready: true 로 recording.
-# cap: true 면 녹화기가 10분 상한(max_duration)으로 스스로 멈춘다.
+# cap: true 면 녹화기가 10분 상한(max_duration)으로 스스로 멈춘다. many: true 면 녹화본이 12개다.
 RECORDING_ID = "20261002T101500Z_rosy_dev"
 _IDLE_RECORDER = {"schema": "rosy.pilot.recording.status/1", "state": "idle", "id": None, "elapsed_s": 0.0,
                   "bytes": 0, "max_duration_s": 600, "quota_free_bytes": 10**9, "last_stop_reason": "",
                   "boot_id": "dev", "seq": 0}
 _RECORDING_DEFAULTS = {"blocker": None, "role": "operator", "archive": "ok", "big": False, "release": False,
-                       "starting": False}
+                       "starting": False, "many": False}
 _RECORDING_LIVE = {"state": "recording", "id": "20261002T102000Z_rosy_dev", "elapsed_s": 1.0, "bytes": 2048}
 RECORDINGS = {"active": dict(_IDLE_RECORDER), "owned": False, "log": [], "polls": 0, **_RECORDING_DEFAULTS}
 _RECORDING_ITEM = {"id": RECORDING_ID, "started_at": "2026-10-02T10:15:00Z", "ended_at": "2026-10-02T10:16:05Z",
@@ -427,7 +427,8 @@ def recordings_list(request: Request):
     active = RECORDINGS["active"]
     blocker = "RECORDING_BUSY" if active["state"] != "idle" else RECORDINGS["blocker"]
     item ={**_RECORDING_ITEM, "bytes": 3 * 10**8} if RECORDINGS["big"] else _RECORDING_ITEM
-    return {"active": active, "items": [item], "download_allowed": blocker is None,
+    items = [item] + [{**item, "id": f"20261001T10{n:02d}00Z_rosy_dev"} for n in range(11)]         if RECORDINGS["many"] else [item]
+    return {"active": active, "items": items, "download_allowed": blocker is None,
             "download_blocker": blocker}
 
 

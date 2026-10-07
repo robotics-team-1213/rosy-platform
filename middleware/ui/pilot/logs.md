@@ -740,3 +740,17 @@
 - 증거: 변경 전 현장 `/pilot`은 rosy_26(paired)·rosy_60(development) 모두 옆 로봇과 코드 칸만 보였다. 브라우저 시험 `connection_offer`·`development_connection` 3 passed, 인접 로비·게이트 12 passed. 고친 화면을 두 로봇의 실제 connection에 붙여 확인했다. rosy_26은 화면 코드 안내, rosy_60은 개발 연결로 운영자 게이트까지 들어가고 그 세션은 logout 204. 로봇이 서빙하는 파일은 아직 이 변경 전이다.
 - gate 변화: 접속 화면 LOCAL 보강. 로봇에 이 파일을 올리기 전에는 현장 화면이 바뀌지 않는다. DEVICE 주행 수용은 그대로다.
 - 결정: D-432, D-471. 웹 Pilot이 안드로이드 셸·로봇 콘솔과 같은 개발 연결만 연다. 새 API는 없다.
+
+## 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트가 공용 ui-actions 를 칠하지 않게
+- 변경: `styles.css` 22rem 미만 규칙 — `[data-recordings-sheet] ui-actions` 의 sticky+`background` 를 지우고, 시트를 flex 열로 두어 `[data-recordings-list]` 만 스크롤한다. 하단 행동은 늘 보이고 표면이 공용 부품의 면을 칠하지 않는다(D-194/D-359).
+- 증거: `shared/web/test/test_shared_controls.py` 27 passed(`test_surfaces_do_not_repaint_shared_controls` 이 브랜치 수정 전 FAILED → 수정 뒤 passed, `X:/DevTemp/browser-infra/css_before.txt`·`css_after.txt`). `ROSY_RUN_BROWSER_TESTS=1` `test_pilot_browser.py::test_robot_recording_toggle_and_sheet` 4 viewport(2000x1200·1200x2000·390x844·320x568) 4 passed(`pilot_sheet.txt`), known_failures 0 new.
+- gate 변화: 없음. 실기 태블릿·폰 화면은 미확인.
+- 결정: D-411, D-359.
+- 교훈: sticky 행동 줄은 뒤가 비쳐 면을 칠해야 한다 — 공용 부품을 칠하지 말고 스크롤 영역을 목록으로 옮긴다.
+
+## 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트 overflow-y auto, 녹화본 12개 시험
+- 변경: 22rem 미만 시트를 `overflow-y: hidden` 대신 `auto`로 둔다(목록 밖 내용이 넘쳐도 잘리지 않게). dev_server `/__test__/recordings` 에 `many`(녹화본 12개)를 더하고 320x568 시험이 목록만 스크롤하고 닫기·다시 불러오기가 스크롤 없이 보이며 마지막 행에 닿는지 본다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1` `test_narrow_recordings_sheet_scrolls_many_rows_and_keeps_actions_visible` 1 passed(`X:/DevTemp/browser-infra/pilot_sheet3.txt`), `test_robot_recording_toggle_and_sheet` 4 viewport 4 passed(`pilot_sheet2.txt`), known_failures 0 new.
+- gate 변화: 없음. 실기 화면은 미확인.
+- 결정: D-411.
+- 교훈: 없음

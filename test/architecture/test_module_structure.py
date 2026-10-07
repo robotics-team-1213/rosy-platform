@@ -115,8 +115,11 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        42_184,
-        "split: re-judged at 42184 on 2026-10-07: D-407 episode recording and routes, D-493 "
+        42_376,
+        "split: re-judged at 42376 on 2026-10-07: D-499 link status uses the existing "
+        "Fleet gather and display owner; D-493 stale-age rows use that same snapshot. The "
+        "site-map web/server split plan and +150 allowance remain unchanged. "
+        "Previously re-judged at 42184 on 2026-10-07: D-407 episode recording and routes, D-493 "
         "stale-state age, D-501 shared console tabs, camera map inspection and development console "
         "entry remain with their existing Fleet server and web owners. Keep the site-map web/server "
         "split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and the +150 allowance. "
@@ -513,8 +516,11 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1202,
-        "accept: re-judged at 1202 on 2026-10-07: D-493 records each gathered state observation "
+        1225,
+        "accept: re-judged at 1225 on 2026-10-07: D-499 adds a read-only link class "
+        "to each gathered robot row using the existing address-status snapshot; provider "
+        "failure falls back to an empty status map. No goal, stop, or admission path changed. "
+        "The zero growth allowance remains. Previously re-judged at 1202: D-493 records each gathered state observation "
         "time in this owner's robot row for the stale-state display; keep zero growth allowance. "
         "Previously independently re-judged at 1198 on 2026-10-05: CAP-001 presentation cache "
         "and live dispatch fences add 39 lines beside this owner's mutable roster and goal "

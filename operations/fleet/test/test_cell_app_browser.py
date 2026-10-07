@@ -1,23 +1,23 @@
 """Opt-in real browser regressions; no robot or OMX transport is connected.
 
-Run with ROSY_BROWSER_TESTS=1 and installed Playwright Chromium.
+Run with ROSY_RUN_BROWSER_TESTS=1 and installed Playwright Chromium.
 """
 
 import json
 import os
 from pathlib import Path
-import socket
 import threading
 import time
 
 import pytest
 import uvicorn
+from browser_harness import browser_tests_enabled, safe_listener
 import yaml
 
 from test_cell_job_api import _setup
 from fleet.server.cell_compiler import PalletizingCellJobCompiler
 
-pytestmark = pytest.mark.skipif(os.environ.get("ROSY_BROWSER_TESTS") != "1",
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason="opt-in real Chromium browser scenario")
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -29,8 +29,7 @@ def browser_site(tmp_path):
     client, tasks, _ = _setup(
         tmp_path, compiler=PalletizingCellJobCompiler(tol_m=0.001),
         cell_app_service_id="cell-service", web_common=ROOT / "shared/web", start_task_dispatcher=False)
-    listener = socket.socket()
-    listener.bind(("127.0.0.1", 0))
+    listener = safe_listener()
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
     server = uvicorn.Server(uvicorn.Config(
         client.app, log_level="error", timeout_graceful_shutdown=3,
