@@ -311,7 +311,7 @@ class DockingManager:
 
     def on_estop(self) -> None:
         """D-502: an e-stop drops a pending battery return. Re-arming waits for
-        `safety.battery_return_suppressed` to clear (a reading above warning)."""
+        `safety.battery_return_suppressed` to clear (battery level OK again)."""
         self._return_pending = False
 
     def _return_suppressed(self) -> bool:

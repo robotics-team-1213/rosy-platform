@@ -342,6 +342,51 @@ def test_an_estop_drops_the_armed_battery_return_and_release_does_not_resume_it(
     assert services.modes.mode is not Mode.DOCKING
 
 
+def _volts_for(curve, percent):
+    lo, hi = 5.0, 9.0
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if curve.percent(mid) < percent else (lo, mid)
+    return hi
+
+
+def test_release_inside_the_warning_hysteresis_does_not_start_the_dock_return(core_client):
+    """D-502 (review 3 repro): a reading just above warning but inside the
+    monitor's exit hysteresis must not re-enable the return, and a return armed
+    while latched is dropped by the release itself."""
+    from core.bridge.battery_policy import apply_voltage
+    from core_common.protocol.schemas import BatteryLevel
+    client, svc = core_client(config_overrides=sim_overrides())
+    svc.docking.executor = RecordingExecutor(svc)
+    svc.state.set_pose(-1.2696, 0.0, math.pi / 2)
+    if svc.localization is not None:
+        svc.localization.autonomy_allowed = lambda: True
+    svc.battery._cfg.filter_tau_s = 0.0
+    curve = svc.battery._cfg.curve
+    client.post("/api/v1/safety/stop", headers=OPERATOR)
+    for _ in range(5):
+        apply_voltage(svc, _volts_for(curve, 18.0))
+    assert svc.battery.level is BatteryLevel.WARNING
+    for _ in range(3):
+        apply_voltage(svc, _volts_for(curve, 21.5))
+    assert svc.safety.battery_return_suppressed
+    assert client.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    svc.docking.tick()
+    assert svc.docking.state is DockState.UNDOCKED
+    assert svc.modes.mode is not Mode.DOCKING
+
+
+def test_release_drops_a_return_armed_while_latched(core_client):
+    """Whatever armed it, EMERGENCY -> IDLE leaves no pending return."""
+    client, svc, _ = manual_robot(core_client)
+    client.post("/api/v1/safety/stop", headers=OPERATOR)
+    svc.docking._return_pending = True          # armed by any path while latched
+    assert client.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    assert not svc.docking.return_pending
+    svc.docking.tick()
+    assert svc.docking.state is DockState.UNDOCKED
+
+
 # --- M1: every dock type takes DOCKING; a default dock stages through Nav2 ----
 
 

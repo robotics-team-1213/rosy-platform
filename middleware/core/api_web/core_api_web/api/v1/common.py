@@ -17,10 +17,20 @@ from core_api_web.api.deps import Mode, NavigationError
 from core_common.domain.capabilities import runtime_truth
 from core_common.domain.tasks import TaskKind
 from core_common.protocol.schemas import RobotMode
+from core_features.power.battery import STALE_AFTER_S
 
 viewer = require_role("viewer")
 operator = require_role("operator")
 admin = require_role("administrator")
+
+
+def battery_health(svc) -> dict:
+    """`BatteryMonitor.health()`, or "missing" where no monitor is wired (D-502)."""
+    health = getattr(getattr(svc, "battery", None), "health", None)
+    if health is None:
+        return {"evidence": "missing", "sample_age_s": None, "stale_after_s": STALE_AFTER_S,
+                "level": None, "percent": None}
+    return health()
 
 
 # Stop evidence (D-411 addendum 17/18). A parked robot's velocity flips between 0 and one encoder

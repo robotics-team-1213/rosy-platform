@@ -7,12 +7,11 @@ import math
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from core_api_web.api.v1.common import operator, require_calibration_owner, viewer
+from core_api_web.api.v1.common import battery_health, operator, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_common.protocol.schemas import PowerMode
 from core_common.protocol.power_health import PowerHealthResponse
-from core_features.power.battery import STALE_AFTER_S
 
 
 robot_router = APIRouter(prefix="/api/v1/robot", tags=["robot"])
@@ -42,14 +41,6 @@ def robot_velocity(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
 
 sensors_router = APIRouter(prefix="/api/v1/sensors", tags=["sensors"])
 
-
-def battery_health(svc) -> dict:
-    """`BatteryMonitor.health()`, or "missing" where no monitor is wired (D-502)."""
-    health = getattr(getattr(svc, "battery", None), "health", None)
-    if health is None:
-        return {"evidence": "missing", "sample_age_s": None, "stale_after_s": STALE_AFTER_S,
-                "level": None, "percent": None}
-    return health()
 
 
 def _json_safe(value):

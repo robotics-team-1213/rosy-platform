@@ -50,6 +50,7 @@ def build(recorder, *, percent=55.0, level=BatteryLevel.OK, action=None,
     safety = SimpleNamespace(
         trigger_estop=lambda reason: log.append(("safety.trigger_estop", reason)),
         on_battery_percent=lambda p: (log.append(("safety.on_battery_percent", p)) or action),
+        battery_policy=SimpleNamespace(warning_percent=20.0),
     )
     docking = SimpleNamespace(
         on_battery_level=lambda lv: log.append(("docking.on_battery_level", lv)),
