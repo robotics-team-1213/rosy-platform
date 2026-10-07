@@ -109,7 +109,18 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        40_348,
+        41_014,
+        "split: independently re-judged at 41014 on 2026-10-07 (security-reviewer agent). Two components "
+        "already judged on different bases, now combined after merging main. (1) main's D-494 M2 "
+        "contracts 1-3, judged at 39679 (localization/map_pose.py, server/map_pose_service.py, "
+        "console_view.py TripCaps, the app.py trip-caps closure). (2) The branch"s D-494 5 trip loop, "
+        "judged at 40348 on the 38952 base (+1396): fleet/server/trip_runner.py (at its 600 cap; the next"
+        " change splits it), trip_ports.py, trip_guard.py (TRIP_ROBOT_BUSY guard; every operator stop "
+        "ends the trip after the stop is sent), routing/execute.py, trip_routes.py, the site-map trip "
+        "panel. Replacing duplicate types with main's MapPose/TripCaps took trip_ports.py down 36 lines, "
+        "so the total (41014) is below the sum of the parts (41039). Inside the server owner of "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and the site-map web owner; no new "
+        "owner. +150 allowance unchanged. "
         "split: independently re-judged at 40348 on 2026-10-07 (D-494 5 safety re-review: the "
         "security-reviewer agent judged the growth justified). Since 40110 the package grew 238 lines, "
         "all review-driven: fleet/server/trip_guard.py +117 (every operator stop — cancel, cancel-all, "

@@ -140,6 +140,27 @@ EXEMPT: dict[str, str] = {
         "are unwrapped and unchanged; the trip runner's own cancel_goal is the pre-guard bound method (no"
         " recursion). 6773eb6b0 then wraps cancel and estop_all so every operator stop also ends the trip"
         " after the stop is sent (re-reviewed 2026-10-07). 287 host tests pass; no device acceptance.",
+    "11db3176dd7f0163723b186ad8f987bf968297e0":  # git commit revision
+        'Independent security-reviewer agent, 2026-10-07: task_dispatch_routes.py change is one '
+        'comment renumber (D-491 5 -> D-494 5) on the existing TRIP_ROBOT_BUSY refusal in '
+        '/goal; no executable line changed; no stop, admission, dispatch, goal, traffic, auth '
+        'or trust path changed; 287 fleet host tests pass on the branch (trip_runner, '
+        'server_console, site_map_trip, cancel_all, lane_route, line_stuck_api, '
+        'stuck_resolver_loop, dispatch_admission, dispatch_stop_latch, server_formation, '
+        'server_traffic); no device acceptance.',
+    "6a4dc56c583dceddd1e3dbefc6c203f9be94ba48":  # git commit revision
+        'Independent security-reviewer agent, 2026-10-07: merge of main (via bf3175039) into '
+        'feat/d491-fleet-trip-loop. The --cc diff for console.py and task_dispatch_routes.py is '
+        'empty, so there are no conflict-resolution edits. console.py against the first parent '
+        "adds only main's own +10 lines (D-494 3 state sink with its try/except, already "
+        'reviewed on main as a86afa7f7, f42bcc865 and bdbbd4001). Against main, console.py '
+        "differs only by the branch's four reviewed one-line edits (TripAware import and base "
+        'class, no yield bay and no reassignment for a trip robot), and task_dispatch_routes.py '
+        'only by the reviewed /goal TRIP_ROBOT_BUSY refusal. trip_guard is still installed '
+        "after the real-provider wiring, the runner's cancel_goal is still the pre-wrap bound "
+        'method, and the dispatch loop still skips trip robots. No stop, E-stop, admission, '
+        'traffic, auth or trust path changed; Fleet 2446 host tests pass, 0 new; no device '
+        'acceptance.',
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
