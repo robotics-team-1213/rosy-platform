@@ -17,7 +17,9 @@ create:
    The work folder is removed. The passphrase is in no file of the bundle.
 
 revoke deletes `team:<name>` on each robot; list prints the managed keys. Login tokens are logged out in
-`finally` and never printed. Standard library plus the OpenSSH client tools; Windows, macOS and Linux.
+`finally` and never printed. CORE serves HTTPS: --ca-file or --insecure as in rosy_ssh_enroll.py; with
+--via-operator-key and neither, each robot's served certificate is read over the same ssh and pinned.
+Standard library plus the OpenSSH client tools; Windows, macOS and Linux.
 Shares the API client with rosy_ssh_enroll.py. Contract: docs/plans/2026-10-02-d418-robot-ssh-access.md.
 """
 
@@ -58,6 +60,8 @@ MIN_PASSPHRASE = 12
 PAIR_LABEL = "ssh-share"
 LOGIN_CODE_COMMAND = "sudo -n rosy-login-code --role administrator --minutes 5"
 LOGIN_CODE = re.compile(r"Login code ([A-Z0-9]{4}-[A-Z0-9]{4})")
+SERVED_CERT_COMMAND = "echo | openssl s_client -connect 127.0.0.1:{port} 2>/dev/null | openssl x509"
+CERTIFICATE = re.compile(r"-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\s]+-----END CERTIFICATE-----")
 # Assembled so no PEM header literal sits in tracked source (secret_scan private-key rule).
 OPENSSH_BEGIN = "-----BEGIN " + "OPENSSH PRIVATE KEY-----"
 OPENSSH_END = "-----END " + "OPENSSH PRIVATE KEY-----"
@@ -99,22 +103,34 @@ class Deps:
         self.get_code, self.ask_lock, self.keygen, self.client_for = get_code, ask_lock, keygen, client_for
 
 
-def operator_code(robot: str, key: Path, ssh) -> str:
-    """Issue a short administrator login code on the robot over ssh with the operator key; never printed."""
+def operator_ssh(robot: str, key: Path, ssh, command: str) -> str:
     known = []
     if os.environ.get("LOCALAPPDATA"):
         known = ["-o", "UserKnownHostsFile=" + (Path(os.environ["LOCALAPPDATA"]) / "Rosy" / "known_hosts").as_posix()]
     argv = ["ssh", "-i", str(key), "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
             "-o", "PasswordAuthentication=no", "-o", "KbdInteractiveAuthentication=no",
             "-o", "StrictHostKeyChecking=accept-new", *known, "-o", "ConnectTimeout=10",
-            f"rosy@{robot}", LOGIN_CODE_COMMAND]
+            f"rosy@{robot}", command]
     code, out, err = ssh(argv)
     if code != 0:
         raise SshAccessError(f"{robot}: ssh with the operator key failed (exit {code}): {err.strip()[:300]}")
-    match = LOGIN_CODE.search(out)
+    return out
+
+
+def operator_code(robot: str, key: Path, ssh) -> str:
+    """Issue a short administrator login code on the robot over ssh with the operator key; never printed."""
+    match = LOGIN_CODE.search(operator_ssh(robot, key, ssh, LOGIN_CODE_COMMAND))
     if match is None:
         raise SshAccessError(f"{robot}: rosy-login-code printed no login code")
     return match.group(1)
+
+
+def served_certificate(robot: str, key: Path, port: int, ssh) -> str:
+    """The HTTPS certificate CORE serves, read on the robot over the host-key-checked operator ssh."""
+    match = CERTIFICATE.search(operator_ssh(robot, key, ssh, SERVED_CERT_COMMAND.format(port=port)))
+    if match is None:
+        raise SshAccessError(f"{robot}: could not read the CORE HTTPS certificate over ssh")
+    return match.group(0)
 
 
 @contextlib.contextmanager
@@ -421,7 +437,7 @@ def managed_label(value: str) -> str:
 OPERATOR_DEFAULT = "<operator default>"
 
 
-def operator_key(value: Path | str) -> Path:
+def operator_key(value: str) -> Path:
     if value != OPERATOR_DEFAULT:
         return Path(value)
     base = os.environ.get("LOCALAPPDATA")
@@ -437,7 +453,9 @@ def _parser() -> argparse.ArgumentParser:
     common.add_argument("--robot", action="append", required=True, type=enroll.robot_address,
                         help="robot IP address; repeat for more robots")
     common.add_argument("--api-port", type=enroll.api_port, default=enroll.DEFAULT_API_PORT)
-    common.add_argument("--via-operator-key", nargs="?", type=Path, const=OPERATOR_DEFAULT, default=None,
+    enroll.add_tls_arguments(common)
+    # No type=Path: argparse would run the const through it too, and the default would never match.
+    common.add_argument("--via-operator-key", nargs="?", const=OPERATOR_DEFAULT, default=None,
                         metavar="KEY", help="read each robot's login code over ssh with the operator key "
                                             "(default %%LOCALAPPDATA%%\\Rosy\\ssh\\rosy-operator-ed25519)")
     make = sub.add_parser("create", parents=[common], help="make a team key, register it, build the bundle")
@@ -467,9 +485,19 @@ def main(argv: list[str] | None = None, *, ask_code=None, ask_lock=None, keygen=
             return operator_code(robot, operator_key(args.via_operator_key), ssh or enroll.run_tool)
         return ask_code(enroll.CODE_PROMPT.format(robot=robot)).strip()
 
+    def https_client(robot: str):
+        if args.ca_file or args.insecure or args.via_operator_key is None:
+            context = enroll.tls_context(args.ca_file, insecure=args.insecure)
+        else:
+            pem = served_certificate(robot, operator_key(args.via_operator_key), args.api_port, ssh or enroll.run_tool)
+            context = enroll.tls_context(ca_pem=pem)
+        return enroll.CoreClient(f"https://{robot}:{args.api_port}", context=context)
+
     deps = Deps(get_code=get_code, ask_lock=ask_lock or getpass.getpass, keygen=keygen or enroll.run_tool,
-                client_for=client_for or (lambda robot: enroll.CoreClient(f"http://{robot}:{args.api_port}")))
+                client_for=client_for or https_client)
     try:
+        if client_for is None and args.via_operator_key is None:
+            enroll.tls_context(args.ca_file, insecure=args.insecure)  # refuse a missing --ca-file before anything
         return {"create": create, "revoke": revoke, "list": list_keys}[args.command](args, deps)
     except SshAccessError as error:
         print(f"rosy_ssh_share: {error}", file=sys.stderr)

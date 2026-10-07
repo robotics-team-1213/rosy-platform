@@ -13,8 +13,10 @@
 5. alias: a managed `Host <hostname>` block in `~/.ssh/config` (replaced in place on a re-run).
 6. logout: the token is logged out in `finally`. It is never printed or written anywhere.
 
-The API is plain HTTP on the robot's LAN (--api-port, default 8080), like the dashboard. Standard library
-plus the OpenSSH client tools; runs on Windows, macOS and Linux. Contract:
+The API is HTTPS on the robot's LAN (--api-port, default 8080). Each robot serves its own certificate named
+rosy-pinky-<id>.local; --ca-file pins it (the robot's served certificate or its CA, PEM) and --insecure skips
+the check on a trusted bench LAN. The robot is reached by address, so the name is not checked. Standard
+library plus the OpenSSH client tools; runs on Windows, macOS and Linux. Contract:
 docs/plans/2026-10-02-d418-robot-ssh-access.md.
 """
 
@@ -32,6 +34,7 @@ from pathlib import Path, PurePath
 import platform
 import re
 import shutil
+import ssl
 import struct
 import subprocess
 import sys
@@ -78,14 +81,36 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def tls_context(ca_file: str | None = None, ca_pem: str | None = None, insecure: bool = False) -> ssl.SSLContext:
+    """Trust only the given PEM (the robot's served certificate or its CA). PARTIAL_CHAIN lets the served
+    leaf itself be the anchor. The name is not checked: tools reach the robot by address and the anchor
+    is per robot. insecure only from an explicit --insecure (as tools/capture/edge_drive.py)."""
+    if insecure:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        return context
+    if not ca_file and not ca_pem:
+        raise SshAccessError("CORE serves HTTPS: pass --ca-file <robot certificate or CA PEM>, "
+                             "or --insecure on a trusted LAN")
+    try:
+        context = ssl.create_default_context(cafile=ca_file, cadata=ca_pem)
+    except (OSError, ValueError) as error:
+        raise SshAccessError(f"cannot load the TLS anchor {ca_file or '(served certificate)'}: {error}") from None
+    context.check_hostname = False
+    context.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+    return context
+
+
 class CoreClient:
-    """JSON over plain HTTP to one robot's CORE. Proxies from the environment are ignored (LAN only);
+    """JSON over HTTPS to one robot's CORE. Proxies from the environment are ignored (LAN only);
     redirects are not followed."""
 
-    def __init__(self, base_url: str, timeout: float = DEFAULT_TIMEOUT_S):
+    def __init__(self, base_url: str, timeout: float = DEFAULT_TIMEOUT_S, context: ssl.SSLContext | None = None):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
-        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}),
+                                                   urllib.request.HTTPSHandler(context=context), _NoRedirect())
 
     def call(self, method: str, path: str, body: dict | None = None, token: str | None = None) -> tuple[int, object]:
         data = None if body is None else json.dumps(body).encode("utf-8")
@@ -500,6 +525,15 @@ def api_port(value: str) -> int:
     return port
 
 
+def add_tls_arguments(parser: argparse.ArgumentParser) -> None:
+    tls = parser.add_mutually_exclusive_group()
+    tls.add_argument("--ca-file", help="PEM the robot's HTTPS certificate must chain to: its served certificate or "
+                                       "its CA (on the robot: echo | openssl s_client -connect 127.0.0.1:8080 "
+                                       "| openssl x509)")
+    tls.add_argument("--insecure", action="store_true",
+                     help="do not verify the robot's HTTPS certificate (trusted bench LAN only)")
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("robot", type=robot_address, help="robot IP address (or host name)")
@@ -508,7 +542,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--key", type=Path, help="private key path (default ~/.ssh/rosy_dev_<name>)")
     parser.add_argument("--known-hosts", type=Path, help="default ~/.ssh/known_hosts_rosy")
     parser.add_argument("--ssh-config", type=Path, help="default ~/.ssh/config")
-    parser.add_argument("--api-port", type=api_port, default=DEFAULT_API_PORT, help="CORE HTTP port (default 8080)")
+    parser.add_argument("--api-port", type=api_port, default=DEFAULT_API_PORT, help="CORE HTTPS port (default 8080)")
+    add_tls_arguments(parser)
     parser.add_argument("--replace", action="store_true",
                         help="the alias already points at another address; point it at this one")
     parser.add_argument("--accept-new-host-keys", action="store_true",
@@ -544,8 +579,8 @@ def enroll(args, *, ask_code: Ask, ask_lock: Ask, keygen: Runner, client: CoreCl
             raise SshAccessError(
                 f"{hostname} now presents other host keys than {known_hosts}:\n"
                 f"  old: {_fingerprints(old_keys)}\n  new: {_fingerprints(host_keys)}\n"
-                "This is expected only after the card was re-flashed. These keys came over plain HTTP, so they are "
-                "only as trustworthy as this LAN. Compare them on the robot's screen or console "
+                "This is expected only after the card was re-flashed. These keys came from the CORE API, so they are "
+                "only as trustworthy as its TLS check (--insecure: this LAN). Compare them on the robot's screen or console "
                 "(ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub), then run again with --accept-new-host-keys")
         block = host_block(hostname, args.robot, key, known_hosts)
         config_text = plan_ssh_config(config, hostname, block, args.robot, replace=args.replace)
@@ -572,8 +607,9 @@ def main(argv: list[str] | None = None, *, ask_code: Ask | None = None, ask_lock
          keygen: Runner | None = None, client_for: Callable[[str], CoreClient] | None = None,
          ssh: Runner | None = None) -> int:
     args = _parser().parse_args(argv)
-    client = (client_for or (lambda robot: CoreClient(f"http://{robot}:{args.api_port}")))(args.robot)
     try:
+        client = (client_for or (lambda robot: CoreClient(
+            f"https://{robot}:{args.api_port}", context=tls_context(args.ca_file, insecure=args.insecure))))(args.robot)
         return enroll(args, ask_code=ask_code or getpass.getpass, ask_lock=ask_lock or getpass.getpass,
                       keygen=keygen or run_tool, client=client, ssh=ssh or run_tool)
     except SshAccessError as error:

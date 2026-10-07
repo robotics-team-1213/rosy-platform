@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import ssl
 import struct
 import threading
 import time
@@ -68,7 +69,8 @@ def fingerprint(public_key: str) -> str:
 
 class FakeCore:
     def __init__(self, *, codes: dict[str, str] | None = None, hostname: str = "rosy-pinky-test1",
-                 host_keys: list[str] | None = None, redirect: str | None = None, delay_keys: float = 0.0):
+                 host_keys: list[str] | None = None, redirect: str | None = None, delay_keys: float = 0.0,
+                 tls: tuple[Path, Path] | None = None):
         self.redirect = redirect                # every request answered 302 to this base URL
         self.delay_keys = delay_keys            # POST /keys sleeps this long (applied before answering)
         self.codes = dict(codes or {})          # code -> role, one use
@@ -83,11 +85,21 @@ class FakeCore:
         self.requests: list[tuple[str, str, dict | None]] = []
         self.max_keys = 32
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
+        self.scheme = "http"
+        if tls is not None:  # (cert, key): HTTPS like the real CORE on 8080
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(*tls)
+            self._server.socket = context.wrap_socket(self._server.socket, server_side=True)
+            self.scheme = "https"
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 
     @property
     def base_url(self) -> str:
-        return f"http://127.0.0.1:{self._server.server_address[1]}"
+        return f"{self.scheme}://127.0.0.1:{self._server.server_address[1]}"
+
+    @property
+    def port(self) -> int:
+        return self._server.server_address[1]
 
     def __enter__(self) -> "FakeCore":
         self._thread.start()
@@ -204,3 +216,27 @@ def _bearer(headers) -> str | None:
 
 def _error(code: str, message: str) -> dict:
     return {"error": {"code": code, "message": message, "detail": {}}}
+
+
+def robot_certificate(folder: Path, name: str) -> tuple[Path, Path]:
+    """A self-signed leaf like a robot's CORE certificate (CN/SAN <name>, not a CA): (cert.pem, key.pem)."""
+    import datetime as dt
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    subject = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, name)])
+    now = dt.datetime.now(dt.timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(key.public_key())
+            .serial_number(x509.random_serial_number()).not_valid_before(now - dt.timedelta(minutes=5))
+            .not_valid_after(now + dt.timedelta(days=1))
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName(name)]), critical=False)
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .sign(key, hashes.SHA256()))
+    folder.mkdir(parents=True, exist_ok=True)
+    cert_path, key_path = folder / f"{name}.pem", folder / f"{name}.key"
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_path.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                           serialization.NoEncryption()))
+    return cert_path, key_path
