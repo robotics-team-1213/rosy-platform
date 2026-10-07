@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · fix(line_follow): D-495 junction_turn 능력은 동작 확인이 가능할 때만
 - 2026-10-07 · uncommitted · merge(main): D-495와 D-476 rev 1 병합
 - 2026-10-07 · uncommitted · fix(line_follow): D-495 최종 안전 검토 N2·L1·L3
 - 2026-10-07 · uncommitted · fix(line_follow): D-495 안전 재검토 N1·R1–R3
 - 2026-10-07 · uncommitted · fix(line_follow): D-495 독립 안전 검토 M1–M8·L1·L2
-- 2026-10-07 · uncommitted · feat(line_follow): D-495 supports_junction_turn

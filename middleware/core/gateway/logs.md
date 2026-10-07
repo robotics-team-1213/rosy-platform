@@ -964,3 +964,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-495 수용 점검표
 - 결정: D-495 (Proposed) 독립 안전 검토 반영 2026-10-07
 - 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
+
+## 2026-10-07 · uncommitted · fix(bridge): ControlSensorAdapter.return_proof_configured
+- 변경: `return_sensor_allowed`의 상시 조건(enforce, LiDAR·IMU·IR 필수, 바닥 정책)을 메서드로 뽑았다. `bind_lane_return_motion`이 그것을 junction_turn 능력의 근거로 넘긴다(getattr 없이, C6)
+- 증거: services·api_web·contracts/foundation·문서·perception 배선/lane_keep·Gazebo launch·test/architecture 2196 PASS·19 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음
+- 결정: D-495 (Proposed) 착지 전 검토 반영
+- 교훈: 능력 보고는 그 동작을 실제로 허가할 증거와 같은 조건이어야 정직하다

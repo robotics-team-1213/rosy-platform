@@ -636,3 +636,10 @@
 - gate 변화: 없음
 - 결정: D-494 4항, D-495 (Proposed) main 병합 메모
 - 교훈: 기본값을 켜는 결정은 병합 때 다른 브랜치가 더한 전제(IR guard·바닥 근거)와 다시 맞춰야 한다
+
+## 2026-10-07 · uncommitted · fix(line_follow): D-495 junction_turn 능력은 동작 확인이 가능할 때만
+- 변경: `supports_junction_turn`이 `bind_return_motion(proof_configured=...)`를 요구한다. 크기 판정 문구는 독립 재판정으로 바꾸었고 분리 계획에 junction.py 위치 이유를 더했다
+- 증거: services·api_web·contracts/foundation·문서·perception 배선/lane_keep·Gazebo launch·test/architecture 2196 PASS·19 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음
+- 결정: D-495 (Proposed) 착지 전 검토 반영
+- 교훈: 능력 보고는 그 동작을 실제로 허가할 증거와 같은 조건이어야 정직하다
