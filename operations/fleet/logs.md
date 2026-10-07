@@ -2193,3 +2193,9 @@
 - Change: Clear old job summary, ledger, steps, and generation together when the job ID, session, proposal, or read validity changes.
 - Evidence: 12 selected Chromium cases and D-153 G1 90 passed, Python known failures 0 NEW; optional full Cell run incomplete. See docs/validation/uiux-cell-job-switch-2026-10-07/result.md.
 - Gate: LOCAL G2 partial evidence; real site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell saved-document readability
+
+- Change: Show Korean document kind and ID separately from locally formatted modification time; keep long IDs within narrow screens.
+- Evidence: Three declared-width Chromium and 74 relevant G1 cases passed after one failing 320px case, `known_failures.py` 0 NEW. See docs/validation/uiux-cell-saved-list-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; site/device and operator G3 remain HOLD.

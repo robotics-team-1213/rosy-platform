@@ -121,6 +121,8 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 작업 제안 단계의 「재승인」과 간지 접근 보류 단계의 「실행 승인」에 기존에는 둘 다 「저장 후 미리보기 필요」라는 잘못된 비활성 사유가 보였다. 상태를 읽지 않았을 때는 먼저 작업 상태 확인을, 읽은 작업의 단계가 맞지 않을 때는 해당 조작이 불가능함을 알려 준다. 세 폭의 두 흐름에서 먼저 **6 failed**, 수정 뒤 **6 passed**를 확인했고 Cell 브라우저 전체 **33 passed**, `known_failures.py` **0 NEW**, JS 구문 검사 통과다. 원본은 X: `logs/fleet-cell-action-reason-{red,green,full}.txt`. 버튼의 허용 조건이나 요청은 바꾸지 않았다.
 
+저장된 문서 목록의 원시 종류·ISO 시각을 한국어 종류·ID와 현지 수정 시각 두 줄로 정리했다. 1440×1000·390×844·320×568 브라우저 **3 passed**, `known_failures.py` **0 NEW**이며 320px 가로 넘침이 없다. [이번 LOCAL 근거](../uiux-cell-saved-list-2026-10-07/result.md)는 목록 한 상태의 가독성에 한정한다.
+
 G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나머지 경로, 권한 거부와 저장/컴파일 실패의 나머지 경로, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
 
 ### Fleet G3 독회 — LOCAL 진행 중

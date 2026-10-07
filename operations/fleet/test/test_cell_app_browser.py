@@ -168,6 +168,29 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_saved_documents_show_readable_kind_and_local_time(browser_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
+    _prepare(page)
+    for kind in ("recipe", "cell"):
+        page.locator(f"#{kind}-save").click()
+        expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
+    rows = page.locator("#saved li")
+    expect(rows).to_have_count(2)
+    expect(rows.nth(0).locator("strong")).to_contain_text("셀 문서 · cell-demo")
+    expect(rows.nth(1).locator("strong")).to_contain_text("레시피 · recipe-demo")
+    for row in rows.all():
+        expect(row.locator("time")).to_contain_text("수정")
+        assert "T" in row.locator("time").get_attribute("datetime")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        rows.first.scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / f"fleet-cell-saved-list-{width}x{height}.png"))
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_cell_panels_and_compact_actions_use_uniform_width(browser_site, width, height):
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
