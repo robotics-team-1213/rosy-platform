@@ -7,7 +7,7 @@ import sys
 
 RELEASE = re.compile(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}")
 TOP = re.compile(r"(?:cryptography|cffi|pycparser|_cffi_backend[.][A-Za-z0-9_.-]+[.]so|"
-                 r"(?:cryptography-49[.]0[.]0|cffi-2[.]1[.]1|pycparser-3[.]0)[.]dist-info)")
+                 r"(?:cryptography-50[.]0[.]0|cffi-2[.]1[.]1|pycparser-3[.]0)[.]dist-info)")
 
 
 def activate_core_auxiliary(entry_file, *, releases_root=Path('/opt/rosy/releases')):

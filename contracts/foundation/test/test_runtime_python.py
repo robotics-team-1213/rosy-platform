@@ -65,3 +65,14 @@ class AuxiliaryLoader(unittest.TestCase):
             original_stat=Path.lstat
             with patch.object(Path,'lstat',lambda p:SimpleNamespace(st_uid=1001,st_mode=original_stat(p).st_mode)):
                 with self.assertRaises(RuntimeError):activate_core_auxiliary(self.entry,releases_root=self.root)
+
+
+def test_allowlist_matches_the_shipped_receiver_crypto_pins():
+    # 2026.10.07-050 shipped cryptography 50 while CORE only allowed 49 dist-info and crash-looped.
+    import re
+    from core_common.runtime_python import TOP
+    req = Path(__file__).resolve().parents[3] / 'deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt'
+    pins = re.findall(r'^([a-z0-9_-]+)==(\S+)', req.read_text(encoding='utf-8'), re.M)
+    assert {name for name, _ in pins} == {'cffi', 'cryptography', 'pycparser'}
+    for name, version in pins:
+        assert TOP.fullmatch(f'{name}-{version}.dist-info'), f'{name} {version} not allowed by runtime_python.TOP'
