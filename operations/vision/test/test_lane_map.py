@@ -8,6 +8,21 @@ import pytest
 from rosy_vision.lane_map import _graph, generate_map, main
 
 
+def test_high_resolution_slanted_straight_lane_keeps_observed_centre():
+    image = np.zeros((720, 1280, 3), np.uint8)
+    cv2.line(image, (100, 201), (1180, 231), (255, 255, 255), 9)
+    cv2.line(image, (100, 271), (1180, 301), (255, 255, 255), 9)
+    calibration = {"image_size": [1280, 720], "image_to_map":
+                   [[.003, 0, -1.92], [0, -.003, 1.08], [0, 0, 1]]}
+    draft, _ = generate_map(image, calibration, lane_width_m=.21)
+    assert len(draft["edges"]) == 1
+    points = np.array(draft["edges"][0]["polyline"])
+    points = points[np.argsort(points[:, 0])]
+    x = np.linspace(-1.2, 1.2, 60)
+    expected = 1.08 - (236 + (x / .003 + 640 - 100) * 30 / 1080) * .003
+    assert np.max(np.abs(np.interp(x, points[:, 0], points[:, 1]) - expected)) < .004
+
+
 def test_broad_border_outside_roi_keeps_road_loop_without_island_lanes():
     image = np.zeros((600, 600, 3), np.uint8)
     cv2.rectangle(image, (20, 20), (580, 580), (255, 255, 255), 40)

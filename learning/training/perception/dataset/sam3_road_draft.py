@@ -30,7 +30,9 @@ COLLECTION = "sam3-road/1"
 
 
 def sha(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    # Streamed: the receipt hashes the 3.4 GB checkpoint while SAM is still loaded.
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 def extract_frames(video, folder):
