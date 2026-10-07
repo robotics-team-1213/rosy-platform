@@ -623,3 +623,9 @@
 - 변경: 320/390px에서 로봇 목록 재검색·로그인 연결 버튼을 코드 입력 칸의 가용 폭에 맞췄다.
 - 증거: `docs/validation/uiux-pilot-lobby-width-2026-10-07/result.md`; 로비·태블릿 브라우저 7 passed, G1 90 passed, 각 known_failures 0 NEW.
 - gate 변화: LOCAL 전화 빈 목록·실패 폭 G2 부분 근거. 전체 상태·실물·운전자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 접속 거부의 운용자 문구
+
+- 변경: 조회 전용·구동 꺼짐 게이트에서 원시 `BLOCK`, `viewer`, CORE 사유 코드를 운용자 말로 표시하고 중복·오해 가능한 기술 행을 줄였다. 판정·요청 경로는 그대로다.
+- 증거: `docs/validation/uiux-pilot-gate-denied-2026-10-07/result.md`; 거부 2상태×4폭, 브라우저 11 passed, 드라이버 8 passed, G1 90 passed, 각 known_failures 0 NEW.
+- gate 변화: LOCAL 거부 상태 G2 부분 근거. 다른 상태·실물·운전자 G3는 HOLD.

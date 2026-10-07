@@ -452,6 +452,69 @@ def test_bad_token_is_refused_with_guidance(tablet_page):
     assert errors == [], errors
 
 
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_viewer_gate_denial_uses_operator_words_at_declared_widths(base_url, width, height):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": width, "height": height})
+        errors = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.route("**/api/v1/auth/whoami",
+                   lambda route: route.fulfill(json={"role": "viewer"}))
+        try:
+            page.goto(f"{base_url}/pilot")
+            page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+            page.click("form[data-pilot-token-form] ui-button")
+            readout = page.locator("[data-gate-readout]")
+            readout.wait_for(state="visible")
+            if os.environ.get("ROSY_SHOT_DIR"):
+                shot_dir = Path(os.environ["ROSY_SHOT_DIR"])
+                shot_dir.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shot_dir / f"pilot-viewer-denied-{width}x{height}.png"))
+            text = page.locator("[data-screen=connect]").inner_text()
+            assert "차단됨" in text and "조회 전용" in text
+            assert "viewer" not in text and "BLOCK" not in text
+            assert "운전 권한이 없습니다" in text
+            assert page.locator("[data-drive-enter]").count() == 0
+            assert page.locator("ui-topbar [data-estop]").is_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_drive_withheld_gate_names_the_no_motion_reason(base_url, width, height):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": width, "height": height})
+        errors = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.route("**/api/v1/system/capabilities", lambda route: route.fulfill(json={
+            "teleop": False, "withheld": {"reasons": {"teleop": "drive_disabled:no_motion"}},
+            "runtime": {"drive": False}}))
+        try:
+            page.goto(f"{base_url}/pilot")
+            page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+            page.click("form[data-pilot-token-form] ui-button")
+            page.get_by_text("수동 운전이 보류되었습니다 — 구동 꺼짐 (무동작)").wait_for()
+            if os.environ.get("ROSY_SHOT_DIR"):
+                shot_dir = Path(os.environ["ROSY_SHOT_DIR"])
+                shot_dir.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shot_dir / f"pilot-drive-withheld-{width}x{height}.png"))
+            text = page.locator("[data-screen=connect]").inner_text()
+            assert "drive_disabled" not in text and "BLOCK" not in text
+            assert "차단됨" in text and "운영자" in text
+            assert page.locator("[data-drive-enter]").count() == 0
+            assert page.locator("ui-topbar [data-estop]").is_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_lobby_lists_neighbours_and_points_to_their_origin(tablet_page):
