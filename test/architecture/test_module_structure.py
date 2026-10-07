@@ -125,8 +125,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        43_217,
-        "split: re-judged at 43217 on 2026-10-08 (independent re-judge, critic agent): D-507 junction "
+        43_623,
+        "split: re-judged at 43623 on 2026-10-08: main's 43217 verdict plus D-472 + Addendum 2026-10-08 "
+        "LED identity (server/identity.py orchestrator and binding store, tracking/console route wiring), "
+        "independently judged to stay with the existing Fleet server owner as its own module (critic agent, "
+        "2026-10-08); no new owner, the site-map web/server split plan and +150 allowance remain unchanged. "
+        "Previously re-judged at 43217 on 2026-10-08 (independent re-judge, critic agent): D-507 junction "
         "expectation and site floor binding (server/trip_ports.py, trip_runner.py) stay with the routing/trip "
         "server owner, and the D-513 7 / D-515 camera turn and top-down warp (web/map-view.js, camera-warp.js) "
         "get the camera-backdrop seam now named in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. "
@@ -866,8 +870,12 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1148,
-        "accept: re-judged at 1148 on 2026-10-07: the existing display owner draws safety cues "
+        1177,
+        "accept: re-judged at 1177 on 2026-10-08 for D-472 4/5: the identity blink's SIGKILL reap, "
+        "hard 3.5 s cut and immediate refusal answer stay with the one process that spawns "
+        "lamp_pattern; IDENTIFY_OVER and the identify age constants may later move to "
+        "core_common.face_screen; zero growth allowance remains. "
+        "Previously re-judged at 1148 on 2026-10-07: the existing display owner draws safety cues "
         "before the blocking buzzer and still announces when LCD rendering fails; zero growth allowance. "
         "Previously re-judged at 1140 on 2026-10-07. An accepted fleet identify plays two "
         "1400 Hz beeps from this same buzzer owner and leaves the health sound in place. "
