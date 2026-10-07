@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.121
+**Version:** v1.122
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1503,6 +1503,12 @@ SQLite `audit_id`는 재시작 뒤에도 유지되는 페이지 커서다. `--ev
 
 # 10.8 Site Fleet task submission, role authorization, and readback (D-276 Accepted)
 
+Fleet `GET /api/fleet/state` (D-493) rows also carry `state_age_s`: seconds from when
+that robot's state was observed (hub heartbeat time, or the REST read) to the moment
+the response was built, so shared-gather cache age is included; `null` for an offline
+row, absent on an older Fleet. The top level carries `gathered_at` (server UTC epoch
+seconds, display only; clients must not subtract it from their own clock). The console
+exception queue adds its receive-time age to `state_age_s` and warns above 5 s.
 Fleet `GET /api/fleet/state` robot rows also expose optional `capabilities`: the
 authenticated CORE CAP-001 object, or `null` when it cannot be read. Presentation
 may reuse this value for up to 5 seconds; an absent field denotes an older Fleet.
@@ -2441,6 +2447,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.122 | 2026-10-07 | Additive (D-493, fix/d493-attention-stale-state): `GET /api/fleet/state` 로봇 행에 `state_age_s`(상태가 관찰된 뒤 지난 초. hub 나이와 SharedGather 캐시 나이 포함, 오프라인이면 `null`)와 최상위 `gathered_at`(마지막 실제 수집의 서버 UTC epoch 초, 표시용)을 더함. 콘솔 예외 큐는 `state_age_s` + 받은 뒤 지난 시간이 5초를 넘으면 "상태 오래됨" warn 을 붙인다. 기존 필드는 그대로다. |
 | v1.121 | 2026-10-07 | Additive (D-407 Fleet 쪽, feat/d407-stuck-episode-log): Site Fleet 새 경로 `GET /api/fleet/line-stuck/episodes`(viewer+) — 막힘 에피소드 기록(`fleet_line_stuck_episodes`, `--tasks-db` 파일). 보드 전이에서만 쓰고 로봇 요청은 늘지 않는다. Robot API·envelope 1.0 변경 없음 |
 | v1.120 | 2026-10-07 | Corrective + Additive (D-502, fix/core-battery-health): SAF-005 배터리 래치(`battery_policy`·`battery_deep`)도 모드 EMERGENCY 로 들어가 Admin `POST /safety/release` 로 풀린다(전에는 409 `not in EMERGENCY` 로 풀 수 없었다). `GET /sensors/battery` 는 404 대신 `evidence`·`sample_age_s`·`stale_after_s` 를 싣고, 표본은 제품 토픽 `battery/voltage` 에서 온다. `GET /safety/state` `battery` 에 `evidence`·`sample_age_s`·`level`·`percent`. Fleet envelope `protocol_version` 1.0 유지 |
 | v1.119 | 2026-10-07 | Additive (D-494 6, feat/d494-fleet-teach-drive): Fleet 주행 가르치기 `GET /api/fleet/teach`, `POST /api/fleet/teach/start`, `/stop`, `/confirm`, `/place`. 기록은 D-494 3 map pose만 읽고 로봇에 아무것도 보내지 않는다. 확정과 주소 만들기는 초안 PUT과 같은 규칙으로 초안에만 쓴다. Robot API·envelope 1.0 변경 없음 |

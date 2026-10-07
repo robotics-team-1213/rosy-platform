@@ -80,6 +80,7 @@ class SharedGather:
         self._lock = asyncio.Lock()
         self._snapshot: Optional[dict] = None
         self._at = 0.0
+        self.gathered_at = 0.0  # D-493: server UTC epoch s of the last real gather (display only)
 
     async def __call__(self) -> dict:
         async with self._lock:
@@ -91,6 +92,7 @@ class SharedGather:
                 self._board.observe(snapshot["robots"], self._console.hub.registry.events_since)
                 await asyncio.to_thread(self._board.flush)   # episode SQLite off the loop
                 self._snapshot, self._at = snapshot, self._clock()
+                self.gathered_at = time.time()
             return self._snapshot
 
 
@@ -109,8 +111,15 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     async def gathered() -> dict:
         snapshot = await gather()
         # Per response, on copies: the cached snapshot is shared with the resolver.
-        return {**snapshot, "robots": [{**row, "line_stuck": board.view(row["robot_id"])}
-                                       for row in snapshot["robots"]]}
+        # D-493: state_age_s = observed -> now (cache age and hub age included).
+        now = console._clock()
+        rows = []
+        for row in snapshot["robots"]:
+            row = {**row, "line_stuck": board.view(row["robot_id"])}
+            observed = row.pop("_state_mono", None)
+            row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
+            rows.append(row)
+        return {**snapshot, "robots": rows, "gathered_at": gather.gathered_at}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:

@@ -89,8 +89,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · docs(api): 예외 큐 신선도 필드를 v1.122 로
+- 2026-10-07 · uncommitted · fix(fleet): D-493 예외 큐가 오래된 상태를 표시
 - 2026-10-07 · uncommitted · docs(api): 막힘 에피소드 경로 번호를 v1.121 로
 - 2026-10-07 · uncommitted · feat(fleet): 막힘 에피소드 기록
 - 2026-10-07 · uncommitted · feat(fleet): 직사각형 카메라 평면 지도와 클릭 좌표 확인
-- 2026-10-07 · uncommitted · test(fleet): 추적 보정 적용의 렌즈 지문을 브라우저·라우트 시험으로 고정
-- 2026-10-07 · uncommitted · fix(fleet): D-494 6 독립 검토 반영 — LOCALIZED만 기록·최신 기록 확정·유휴 자동 멈춤·끝 고정

@@ -2369,3 +2369,17 @@
 - gate 변화: 없음. 문서 번호만
 - 결정: main 이 먼저 쓴 번호를 두고 다음 번호를 쓴다
 - 교훈: API 번호는 착지 직전에 main 머리를 다시 본다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-493 예외 큐가 오래된 상태를 표시
+- 변경: `/api/fleet/state` 행에 `state_age_s`(관찰 시각→응답 시각, 오프라인 null)와 최상위 `gathered_at`(SharedGather 수집 시각, 표시 전용). 큐는 `state_age_s` + 브라우저 수신 후 경과가 5 s를 넘으면 warn "상태 오래됨"과 막힘 crit 문구에 나이를 붙인다(`state-age.js`, `roster.js`).
+- 증거: fleet pytest 54 passed(known_failures 0 new), `node --test test/web/*.mjs` 160 passed(실제 `attentionItems`를 `/common` 로더로 실행).
+- gate 변화: 없음. 현장 배포는 사용자 승인 대기
+- 결정: D-493 단일 규칙 유지. API Reference 버전 올림은 착지 때 보류 중(1단계가 v1.120을 쓰므로 1단계 착지 뒤 v1.121)
+- 교훈: 문자열 단언만으로는 "출력 불변"을 못 지킨다 — 실제 함수를 노드에서 돌리는 로더를 둔다
+
+## 2026-10-07 · uncommitted · docs(api): 예외 큐 신선도 필드를 v1.122 로
+- 변경: main 에 막힘 에피소드(v1.121)가 먼저 착지해 `state_age_s`·`gathered_at` 변경 이력을 v1.122 로 적고 문서 머리 버전과 고정 시험을 옮겼다.
+- 증거: main 병합 뒤 관련 묶음과 node 시험, `test/known_failures.py`.
+- gate 변화: 없음. 문서 번호만
+- 결정: 앞 브랜치가 쓴 번호 다음을 쓴다
+- 교훈: 같은 날 여러 브랜치가 API 번호를 다툴 때는 착지 순서대로 다시 매긴다
