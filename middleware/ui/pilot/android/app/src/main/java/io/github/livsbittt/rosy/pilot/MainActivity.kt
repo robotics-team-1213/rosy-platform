@@ -164,7 +164,7 @@ class MainActivity : Activity() {
                 }
             } catch (error: Exception) {
                 if (error is PeerApprovalExpired) main.post { if (version == attempt && foreground) reapprove(candidate) }
-                failed(version, when {
+                failed(version, candidate, when {
                 error is PeerApprovalExpired -> "승인 사용 기한이 끝났습니다. 다시 승인을 요청하세요."
                 error is PeerApprovalTimeout -> "수신 승인을 기다리는 시간이 끝났습니다. 로봇을 다시 선택해 요청하세요."
                 error is PeerKeyChanged -> "기억한 수신 장치의 키와 다릅니다. 승인 기록을 유지하고 연결을 차단했습니다."
@@ -254,7 +254,7 @@ class MainActivity : Activity() {
             } catch (error: Exception) {
                 // Exception messages and HTTP bodies can contain credentials; log class and locations only.
                 android.util.Log.e("RosyPilot", "Join failed: ${error.javaClass.simpleName}\n" + error.stackTrace.take(8).joinToString("\n"))
-                relay?.stop(); failed(version, when {
+                relay?.stop(); failed(version, candidate, when {
                     error is PairingRejected && error.status == 401 -> "로그인 코드가 유효하지 않습니다. 로봇에서 새 코드를 발급한 뒤 다시 연결하세요."
                     error is PairingRejected && error.status == 429 -> "연결 요청이 많습니다. 잠시 뒤 다시 선택하세요."
                     error is javax.net.ssl.SSLException -> "로봇의 HTTPS 인증을 확인할 수 없습니다. 설치 담당자에게 확인하세요."
@@ -264,9 +264,11 @@ class MainActivity : Activity() {
             }
         }
     }
-    private fun failed(version: Long, message: String) { main.post {
+    private fun failed(version: Long, candidate: Candidate, message: String) { main.post {
         if (version != attempt || !foreground) return@post
-        opening = false; lastError = message; refresh(); status.text = message
+        opening = false
+        lastError = "${candidate.name.ifBlank { "선택한 로봇" }} · $message"
+        refresh(); status.text = lastError
     } }
     private fun endSession(forget: Candidate? = null, afterClosed: (() -> Unit)? = null) {
         // Resource-owning completion callbacks must run their stale-attempt cleanup.
