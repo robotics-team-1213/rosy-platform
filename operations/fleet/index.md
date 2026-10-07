@@ -53,6 +53,7 @@
 | D-488 | 관제(Fleet)가 현장 지도의 주소·방향 있는 길로 경로를 잡아 로봇을 보낸다 — 위치는 Rosy Cam이 주, 지도는 주행으로 가르치고 콘솔에서 확정한다 |
 | D-489 | 관제 경로 계획은 방향 있는 차로 그래프에서 "차로 단위 상태"로 시간 비용 A*를 푼다 — 전역 경로는 Fleet, 국소 추종은 로봇, 다중 로봇 교통은 별도 층 |
 | D-490 | 관제 경로 계획기 구현 — `fleet/routing` 순수 모듈, 표준 라이브러리 A*, 설정·오류 코드·API·시험 기준 |
+| D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
 
 ## 계획·결과 문서
 
@@ -88,8 +89,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · Cell failed job read status
-- 2026-10-07 · uncommitted · Site-map offline robot choice
-- 2026-10-07 · uncommitted · Cell rejected-session widths
-- 2026-10-07 · uncommitted · Cell emergency-stop feedback widths
-- 2026-10-07 · uncommitted · Site-map rejected credential widths
+- 2026-10-07 · uncommitted · test(fleet): 추적 보정 적용의 렌즈 지문을 브라우저·라우트 시험으로 고정
+- 2026-10-07 · uncommitted · fix(fleet): D-494 6 독립 검토 반영 — LOCALIZED만 기록·최신 기록 확정·유휴 자동 멈춤·끝 고정
+- 2026-10-07 · uncommitted · feat(fleet): D-494 6 주행 가르치기 — 기록·RDP·초안 확정·여기에 주소
+- 2026-10-07 · uncommitted · feat(fleet): 조감도 낡은 카메라 교정 감지 — 실영상 대신 미터 눈금과 경고
+- 2026-10-07 · uncommitted · fix(fleet): 운행 위치 상태를 한국어로 표시

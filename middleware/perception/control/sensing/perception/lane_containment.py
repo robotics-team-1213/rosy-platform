@@ -1,5 +1,8 @@
 """D-468 image-bound selected boundary geometry with its stated projection uncertainty.
 
+Boundaries are the drivable (inner) edge of the painted lines: the keeper's fitted paint
+centre moved half the paint width (PAINT_HALF_WIDTH_M) toward the lane.
+
 uncertainty_m bounds the lateral error of a selected boundary over every x the receiver
 uses it at. It comes only from stated error bounds: a camera_profile record's score bands
 (D-47), or for the URDF nominal profile the conservative bounds camera_nominal.yaml
@@ -18,6 +21,12 @@ import numpy as np
 
 from .camera_extrinsic import FINE_STEPS, PC_FINE_STEPS
 
+#: Half the painted line width. The keeper fits the paint centre; the payload sends the
+#: paint's inner (drivable) edge, so each boundary moves this far toward the lane. 260919
+#: STL straights: tape 25.0 mm, centres 185 mm apart (lane_half_width_m 0.0925), the map
+#: bundle's own lane_graph.py clearance basis. STL nominal, unmeasured: a tape measurement
+#: of the physical mat replaces it. Tested against the STL; node parameter lane_paint_half_width_m.
+PAINT_HALF_WIDTH_M = 0.0125
 #: Lateral error of the lane edge detector in image pixels on the Gazebo camera (547b2d509).
 #: Real grounds take theirs from the profile key detector_lateral_px.
 GAZEBO_DETECTOR_LATERAL_PX = 2.0
@@ -150,11 +159,21 @@ def projection_uncertainty_m(ground, error, segments):
     return min(worst*(1+SAMPLING_MARGIN), 1.0)
 
 
-def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bounds=None):
+def paint_half_width(value):
+    """``value`` as a float; a negative (edges moved outward, past the paint) or non-finite one is refused."""
+    if not (_real(value) and value >= 0):
+        raise ValueError("lane_paint_half_width_m must be a finite number >= 0")
+    return float(value)
+
+
+def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bounds=None,
+                        paint_half_width_m=PAINT_HALF_WIDTH_M):
+    paint_half_width_m = paint_half_width(paint_half_width_m)
     if ground is None or source not in ("NOMINAL", "CALIBRATED", "GAZEBO"):
         return None
     geometry = [source, camera_x, ground.height_m, ground.pitch_rad,
-                ground.focal_px, ground.principal_x, ground.principal_y, ground.max_range_m]
+                ground.focal_px, ground.principal_x, ground.principal_y, ground.max_range_m,
+                paint_half_width_m]
     identity = hashlib.sha256(json.dumps(geometry, allow_nan=False).encode()).hexdigest()
     boundaries = []
     for edge in keeper.get("boundaries", []):
@@ -180,5 +199,16 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bou
         segments = [tuple((x-camera_x, b["slope"]*x+b["intercept_m"])
                           for x in (b["observed_x_min_m"], b["observed_x_max_m"])) for b in boundaries]
         uncertainty = projection_uncertainty_m(ground, error, segments)
-    return dict(stamp=float(stamp), geometry_id=identity, ground_source=source,
-                uncertainty_m=uncertainty, boundaries=boundaries)
+    # The imaged paint segments above set the uncertainty; the corridor edge is the paint's
+    # inner side: half the paint width inward, perpendicular to the line.
+    for b in boundaries:
+        b["intercept_m"] -= (1 if b["side"] == "left" else -1)*paint_half_width_m*math.hypot(1, b["slope"])
+    edges = {b["side"]: b["intercept_m"] for b in boundaries}
+    if len(edges) == 2 and edges["left"] <= edges["right"]:
+        boundaries = []
+    payload = dict(stamp=float(stamp), geometry_id=identity, ground_source=source,
+                   uncertainty_m=uncertainty, boundaries=boundaries)
+    if keeper.get("crosswalk") is not None:  # D-491 §4: CORE decides whether it may rest the IR guard
+        near, far = keeper["crosswalk"]
+        payload["crosswalk"] = dict(near_m=float(near), far_m=float(far))
+    return payload

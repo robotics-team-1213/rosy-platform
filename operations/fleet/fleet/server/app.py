@@ -134,7 +134,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
-               site_maps=None, routing_config=None) -> FastAPI:
+               site_maps=None, routing_config=None, map_pose_config=None,
+               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     if development_sessions is not None and task_service is None:
@@ -317,6 +318,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             resolver_task = asyncio.create_task(app.state.stuck_resolver.run())
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
+        trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -344,7 +346,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task):
+                               signal_task, resolver_task, trip_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -473,10 +475,37 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.camera_peer = install_camera_peer(app, pairing=pairing,
         current_users=lambda:site_users or {}, require_named_operator=require_named_operator)
 
+    # D-494 3: trip-only map pose from accepted sightings and robot odom_pose.
+    from fleet.localization.map_pose import MapPoseConfig
+    from fleet.server.map_pose_service import MapPoseService, install_map_pose_routes
+
+    async def _gather_state(robot_id: str):
+        return (await console._gather_state(robot_id))[0]
+
+    async def _rest_state(robot_id: str):
+        return await console._client(robot_id).state()
+
+    map_pose_config = map_pose_config or MapPoseConfig()
+    if sightings is not None and map_pose_config.sighting_lease_s > sightings.lease_s:
+        raise ValueError("fleet.map_pose.sighting_lease_s must not exceed the sighting ingest lease")
+
+    def _active_map_id():
+        active = site_maps.active()
+        return active[1].map_id if active is not None else None
+
+    map_pose = MapPoseService(lambda: console.robot_ids, config=map_pose_config,
+                              map_id=_active_map_id,
+                              source_map_ids=[source.map_id for source in
+                                              (sightings.sources if sightings is not None else ())],
+                              gather=_gather_state, gather_rest=_rest_state)
+    map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
+    console.set_state_sink(map_pose.observe_state)
+    app.state.map_pose = map_pose
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
                           principals=principals, require_viewer=require_viewer,
-                          read_guard=read_guard)
+                          read_guard=read_guard, map_pose=map_pose)
+    install_map_pose_routes(app, service=map_pose, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,
                            require_viewer=require_viewer, read_guard=read_guard,
@@ -517,15 +546,40 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-488: the site map store (in memory without one) and the D-490 trip planner.
     from fleet.routing.cost import RoutingConfig
     from fleet.server.site_map_routes import install_site_map_routes
+    from fleet.server.console_view import trip_caps
     from fleet.server.trip_routes import install_trip_routes
-    route_active = install_lane_route_routes(app, console=console, task_service=task_service,
-                                             site_maps=site_maps, require_operator=require_operator,
-                                             operator_guard=operator_guard)
-    install_site_map_routes(app, site_maps=site_maps, route_active=route_active, read_guard=read_guard,
-                            require_named_operator=require_named_operator)
-    install_trip_routes(app, console=console, site_maps=site_maps,
+    from fleet.server.trip_ports import HttpLaneJunction
+    from fleet.server.trip_guard import engaged, install_trip_guard, release_queue
+    from fleet.server.trip_runner import TripConfig, TripRunner
+    install_lane_route_routes(app, console=console, task_service=task_service,
+                              site_maps=site_maps, require_operator=require_operator,
+                              operator_guard=operator_guard)
+
+    async def _trip_caps(robot_id: str):
+        """D-494 1: trip caps from the capability cache; None for an older image or no answer."""
+        return trip_caps(await console._capability_display.shown(robot_id, wait_s=2.0))
+
+    # D-494 5: the planner's caps closure, the trip map pose service, CORE's junction API.
+    trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
+                             caps=trip_caps_port or _trip_caps, poses=map_pose_port or map_pose,
+                             junction=lane_junction or HttpLaneJunction(console.clients),
+                             goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
+                             cancel_goal=console.cancel, config=trip_config or TripConfig(),
+                             engaged=partial(engaged, console), release_queue=partial(release_queue, console),
+                             roster=lambda: console.robot_ids)
+    install_trip_guard(console, trip_runner)
+    if getattr(app.state, "stuck_resolver", None) is not None:  # D-494 5: no automatic answer on a trip
+        app.state.stuck_resolver.trip_busy = trip_runner.robot_busy
+    install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
+                            read_guard=read_guard, require_named_operator=require_named_operator)
+    from fleet.server.teach_routes import TeachService, install_teach_routes  # D-494 6
+    install_teach_routes(app, service=TeachService(poses=map_pose_port or map_pose, site_maps=site_maps,
+                                                   roster=lambda: console.robot_ids),
+                         read_guard=read_guard, require_named_operator=require_named_operator)
+    install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,
-                        require_named_operator=require_named_operator)
+                        require_named_operator=require_named_operator, runner=trip_runner,
+                        read_guard=read_guard)
 
     proposal_create = proposal_resolve = None
     if mission_service is not None:
@@ -596,6 +650,7 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
                 and row["state"].get("navigation") in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
                 and row["state"].get("mode") in {"IDLE", "NAVIGATION"}
                 and not row["state"].get("capabilities_degraded")
+                and not console.trip_busy(row["robot_id"])  # D-494 5: the trip loop drives it
                 and row["state"].get("safety", {}).get("estop") is False
             }
             await task_service.dispatch_next(

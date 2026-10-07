@@ -68,8 +68,35 @@ jobs:
           # D-482: pin ROS to the image's dated snapshot (single source: inputs.lock.yaml).
           ros_snapshot_url="$(python3 -c "import yaml; print(yaml.safe_load(open('deploy/robot/pinky_pro/image/inputs.lock.yaml', encoding='utf-8-sig'))['ros']['apt_snapshot_url'])")"
           [[ "$ros_snapshot_url" =~ ^http://snapshots\.ros\.org/jazzy/[0-9]{4}-[0-9]{2}-[0-9]{2}/ubuntu$ ]]
-          sudo sed -i "s#^URIs:.*#URIs: $ros_snapshot_url#" /etc/apt/sources.list.d/ros2.sources
-          grep -qx "URIs: $ros_snapshot_url" /etc/apt/sources.list.d/ros2.sources
+          # D-482 addendum: the snapshot repo is signed by its own key, not the
+          # ros2-apt-source key. Fetch it by full fingerprint, keep it in its own
+          # keyring and trust it for the snapshot source only (Signed-By).
+          ros_snapshot_key_fpr="$(python3 -c "import yaml; print(yaml.safe_load(open('deploy/robot/pinky_pro/image/inputs.lock.yaml', encoding='utf-8-sig'))['ros']['apt_snapshot_key_fingerprint'])")"
+          [[ "$ros_snapshot_key_fpr" =~ ^[0-9A-F]{40}$ ]]
+          ros_snapshot_keyring=/etc/apt/keyrings/ros-snapshots-archive-keyring.gpg
+          curl --fail --location --proto '=https' --proto-redir '=https' \
+            --output /tmp/ros-snapshots-key.asc \
+            "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${ros_snapshot_key_fpr}"
+          sudo install -d -m 0755 /etc/apt/keyrings
+          gpg --dearmor < /tmp/ros-snapshots-key.asc | sudo tee "$ros_snapshot_keyring" > /dev/null
+          sudo chmod 0644 "$ros_snapshot_keyring"
+          ros_snapshot_key_got="$(gpg --show-keys --with-colons "$ros_snapshot_keyring" \
+            | awk -F: '$1 == "pub" { want = 1; next } want && $1 == "fpr" { print $10; want = 0 }')"
+          if [[ "$ros_snapshot_key_got" != "$ros_snapshot_key_fpr" ]]; then
+            echo "::error::ROS snapshot key fingerprint mismatch: got '${ros_snapshot_key_got}', want ${ros_snapshot_key_fpr}"
+            exit 1
+          fi
+          # Replace the live packages.ros.org stanza with the snapshot stanza.
+          sudo rm -f /etc/apt/sources.list.d/ros2.sources
+          printf 'Types: deb\nURIs: %s\nSuites: %s\nComponents: main\nSigned-By: %s\n' \
+            "$ros_snapshot_url" "$(. /etc/os-release && echo "$VERSION_CODENAME")" "$ros_snapshot_keyring" \
+            | sudo tee /etc/apt/sources.list.d/ros2-snapshots.sources > /dev/null
+          grep -qx "URIs: $ros_snapshot_url" /etc/apt/sources.list.d/ros2-snapshots.sources
+          grep -qx "Signed-By: $ros_snapshot_keyring" /etc/apt/sources.list.d/ros2-snapshots.sources
+          if grep -rqs 'packages\.ros\.org' /etc/apt/sources.list /etc/apt/sources.list.d/; then
+            echo "::error::a live packages.ros.org source is still configured"
+            exit 1
+          fi
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             python3-colcon-common-extensions python3-rosdep \

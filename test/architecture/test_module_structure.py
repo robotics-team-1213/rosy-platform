@@ -109,8 +109,62 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        38_952,
-        "split: independently re-judged at 38952 on 2026-10-07. Since 37182 the package grew 1770 "
+        41_764,
+        "split: independently re-judged at 41764 on 2026-10-07 (code-reviewer agent; judged at 41719 before "
+        "the review fixes). Since 41014 the package grew 750 lines: main's own +112 (within the allowance) "
+        "and the D-494 6 teach slice +638 — fleet/routing/teach.py 129 (pure point keeping, RDP, end "
+        "candidates, edge append), server/teach_service.py 216, server/teach_routes.py 91, "
+        "web/site-map-teach.js 119, site-map-model.js +35, site-map.html +27, site-map.js +7, app.py +4, "
+        "site_map_store.py +4 (record_event), site_map_routes.py +4 net (shared invalid_errors), "
+        "static_routes.py +1, site-map.css +1. Inside the server owner of "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and the site-map web owner; no new owner. "
+        "+150 allowance unchanged. "
+        "split: independently re-judged at 41014 on 2026-10-07 (security-reviewer agent). Two components "
+        "already judged on different bases, now combined after merging main. (1) main's D-494 M2 "
+        "contracts 1-3, judged at 39679 (localization/map_pose.py, server/map_pose_service.py, "
+        "console_view.py TripCaps, the app.py trip-caps closure). (2) The branch's D-494 5 trip loop, "
+        "judged at 40348 on the 38952 base (+1396): fleet/server/trip_runner.py (at its 600 cap; the next"
+        " change splits it), trip_ports.py, trip_guard.py (TRIP_ROBOT_BUSY guard; every operator stop "
+        "ends the trip after the stop is sent), routing/execute.py, trip_routes.py, the site-map trip "
+        "panel. Replacing duplicate types with main's MapPose/TripCaps took trip_ports.py down 36 lines, "
+        "so the total (41014) is below the sum of the parts (41039). Inside the server owner of "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and the site-map web owner; no new "
+        "owner. +150 allowance unchanged. "
+        "split: independently re-judged at 40348 on 2026-10-07 (D-494 5 safety re-review: the "
+        "security-reviewer agent judged the growth justified). Since 40110 the package grew 238 lines, "
+        "all review-driven: fleet/server/trip_guard.py +117 (every operator stop — cancel, cancel-all, "
+        "estop, line-follow OFF, stuck ABORT/MANUAL — ends the trip after the stop is sent; "
+        "TRIP_ROBOT_BUSY on goal/formation/stuck motion), trip_ports.py +61 and routing/execute.py +35 "
+        "(moved out so trip_runner.py stays at 599 of its 600 cap; its next change splits it), "
+        "console_view.py +14, console_routes.py +11, app.py +5, stuck_resolver_loop.py +2, console.py -6."
+        " Inside the server owner of docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; no new "
+        "owner. +150 allowance unchanged. "
+        "Previously independently re-judged at 40110 on 2026-10-07 (D-494 5 review: the reviewer judged "
+        "the growth justified). Since 38952 the package grew 1158 production and web lines for the "
+        "server trip loop: fleet/server/trip_runner.py 600 (start checks, state machine, CORE "
+        "junction protocol, halts, 0.5 s loop), trip_ports.py 171 (ports, fleet.trip config), "
+        "routing/execute.py 82 (pure executability rules), trip_routes.py +32 net, site_map_store.py "
+        "+35, app.py, cli.py, transport.py, the TRIP_ROBOT_BUSY guard (console.py +6 inside its 1198 "
+        "verdict, task_dispatch_routes.py, lane_route_routes.py), and the site-map trip panel "
+        "(site-map.js, site-map-model.js, site-map.html). The loop is new server files beside the "
+        "routing package, inside the server owner of "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; the panel stays in the site-map web "
+        "owner. No new owner. +150 allowance unchanged. "
+        "Main: independently re-judged at 39679 on 2026-10-07 (security-reviewer agent). Since 38952 the"
+        " package grew 727 production and web lines. D-494 M2 contracts +634: localization/map_pose.py "
+        "+377 (pure map-pose tracker beside trust.py and arbiter.py in fleet/localization), "
+        "server/map_pose_service.py +154 (trip-only service beside localization_service.py), "
+        "console_view.py +33 (TripCaps), app.py +32 (incl. the trip-caps closure moved out of "
+        "console.py), cli.py +18, console.py +10, trip_routes.py +6, ingest_routes.py +4. Site-map, Cell "
+        "and D-493 map-first web +93 net: site-map.js +58, cell.js +17, map-view.js +15, console.js +13, "
+        "site-map.css +9, cell.css +7, site-map-model.js +5, site-map.html +3, start-point-view.js +1, "
+        "less index.html -16, styles.css -12, roster.js -5, connection-view.js -2. Tests are exempt. No "
+        "new owner: the map pose sits in the existing localization owner, trip caps in the capability "
+        "display. The first web/server seam stays docs/plans/2026-10-07-fleet-site-map-web-server-seam.md"
+        " (owner fleet), and map_pose_service.py joins the B2 server-subpackage obligation beside "
+        "localization_service.py. The split is not done here. +150 allowance unchanged. Previously "
+        "independently re-judged at 38952 on 2026-10-07. "
+        "Since 37182 the package grew 1770 "
         "production and web lines in the existing site-map owners: site-map.js +238, site_map_store.py +198, "
         "routing/graph.py +168, site-map-model.js +153, site_map.py +151, routing/trip.py +149, "
         "routing/planner.py +140, trip_routes.py +113, site_map_routes.py +92, routing/cost.py +82, "
@@ -373,7 +427,14 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_321,
+        1_335,
+        "accept: independently re-judged at 1335 on 2026-10-07 (code-reviewer agent, read-only) for "
+        "D-494 4 / D-495: one LineJunctionStatus model and a defaulted LineFollowStatus.junction field "
+        "(always present, state idle) beside LineStuckStatus; additive, no envelope version change or "
+        "runtime owner. Zero-growth allowance remains. "
+        "accept: re-judged at 1322 on 2026-10-07 for D-494 2: one optional StateSnapshot.odom_pose "
+        "field; the OdomPose model lives in protocol/localization.py and joins the existing import "
+        "line. No envelope version change or runtime owner. Zero-growth allowance remains. "
         "accept: re-judged at 1321 on 2026-10-06: six lines add the bounded display-only "
         "LampIdentifyRequest to the existing public schema owner; no new protocol version or "
         "runtime owner. Zero-growth allowance remains. D-457 re-judged at 1315 after "
@@ -524,8 +585,19 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        14_258,
-        "accept: independently re-judged 2026-10-06 at 14258 for D-476 lane bridge "
+        14_934,
+        "accept: Independently re-judged 2026-10-07 (code-reviewer agent, read-only): ACCEPT with condition at 14934. "
+        "The growth is one line_follow junction mixin (junction.py 443, under the 600 file limit) plus "
+        "manager/model/wiring hooks under the same manager lock, generation and CORE final publisher; "
+        "no new owner, store, publisher or deploy unit. Condition: "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md lands as its own branch; the next "
+        "core_features re-judge before that move is on main is REJECT. "
+        "accept: with condition: re-judged 2026-10-07 at 14449 for D-476 rev 1 (main 14328 + "
+        "branch 121). Condition: before the next core_features re-judge, a dated plan in "
+        "docs/plans/ splits line_follow lane recovery (lane_return*, lane_bridge, stuck_*) into "
+        "its own core_features subpackage with its own size verdict, keeping the single manager "
+        "lock/generation; a re-judge without that plan is REJECT. "
+        "Previously independently re-judged 2026-10-06 at 14258 for D-476 lane bridge "
         "(feat/d476-lane-bridge, review ACCEPT: one cohesive line_follow feature under the D-468 "
         "lock/generation; no file over threshold; X1): main already sat at 14083 = 13933+150; "
         "175 above it are lane_bridge114, model+33 (bridge_* config), lane_return+4 "
@@ -598,7 +670,7 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        44_926,
+        45_104,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
         "+133, with reviews), the camera AE/AWB re-lock (camera_controls/camera_visibility/v4l2_controls +77; "
@@ -682,7 +754,18 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-06 at 44646 for the keep side-flip fix (SIDE_FLIP_FRAMES bounded "
         "side tracking in lane_keep.py) with the junction HOLD policy split out to "
         "lane_keep_junction.py to stay under the file budget — same subjects inside "
-        "sensing/perception, they move with the P1a split; verdict unchanged.",
+        "sensing/perception, they move with the P1a split; verdict unchanged. "
+        "re-judged 2026-10-07 at 45104: main's D-491 crosswalk extent +148 (unrecorded) and D-468 paint "
+        "inner edge (lane_containment.py, line_observer_node.py); tests excluded from the count. Condition: "
+        "the next control re-judge needs a dated P1a step in docs/plans/ (sensing/perception move); "
+        "without it, REJECT.",
+    ),
+    "perception/control/line_observer_node.py": (
+        604,
+        "accept: with condition: one ROS adapter for the line observer; detection/keep/containment/paint "
+        "logic is ROS-free in sensing/perception. Judged 2026-10-07 at 604 for the D-468 paint inner edge "
+        "(read-only lane_paint_half_width_m, startup refusal). Condition: the node's next change moves "
+        "logic out first; a re-judge above 604 is REJECT. (independently re-judged 2026-10-07)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "perception/web/diagnostic.html": (

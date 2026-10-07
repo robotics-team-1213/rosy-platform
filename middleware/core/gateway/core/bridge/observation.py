@@ -90,6 +90,23 @@ def line_observation(services, raw: str, *, source_now: float,
         })
 
 
+def keep_junction(services, raw: str, *, source_now: float, received_at: float) -> None:
+    """D-494 decision 4 / D-495: the keeper's junction HOLD reason and corner_turning flag.
+
+    A sighting HOLDs line-follow and also starts an armed D-495 bounded turn, so it gates
+    motion, not only stops: the frame must reach CORE within stale_after_s (0.3 s) of its camera
+    stamp or it is dropped here. corner_turning feeds supports_junction_turn."""
+    try:
+        data = json.loads(raw)
+        reason, stamp, corner = data.get("reason"), data.get("stamp"), data.get("corner_turning")
+    except (AttributeError, TypeError, ValueError):
+        return
+    if (type(stamp) in (int, float) and math.isfinite(stamp)
+            and 0.0 <= source_now - stamp <= services.line_follow.config.stale_after_s):
+        services.line_follow.observe_junction(reason, received_at - (source_now - stamp),
+                                              corner_turning=corner is True)
+
+
 def road_observation(services, raw: str, *, source_now: float,
                      received_at: float) -> None:
     """Decode road evidence; invalid data invalidates an enforced lease."""

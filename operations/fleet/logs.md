@@ -2187,3 +2187,164 @@
 - Change: A failed job/dispatch-generation read clears the pending summary and gives a retry instruction while approval remains blocked.
 - Evidence: 3 declared-width Chromium cases and 6 related cases passed; D-153 G1 90 passed, Python known failures 0 NEW. See docs/validation/uiux-cell-job-read-2026-10-07/result.md.
 - Gate: LOCAL synthetic G2 partial evidence; site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell job snapshot invalidation
+
+- Change: Clear old job summary, ledger, steps, and generation together when the job ID, session, proposal, or read validity changes.
+- Evidence: 12 selected Chromium cases and D-153 G1 90 passed, Python known failures 0 NEW; optional full Cell run incomplete. See docs/validation/uiux-cell-job-switch-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; real site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell saved-document readability
+
+- Change: Show Korean document kind and ID separately from locally formatted modification time; keep long IDs within narrow screens.
+- Evidence: Three declared-width Chromium and 74 relevant G1 cases passed after one failing 320px case, `known_failures.py` 0 NEW. See docs/validation/uiux-cell-saved-list-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell saved-list error widths
+
+- Change: Replay the existing saved-list failure and recovery flow at all three declared Cell widths.
+- Evidence: Six LOCAL G2 captures, three Chromium cases passed, Python known failures 0 NEW. See docs/validation/uiux-cell-list-errors-2026-10-07/result.md.
+- Gate: Other G2 cells, real site/device, and operator G3 remain HOLD.
+
+## 2026-10-07 · b111ccb9c · D-493 관제 화면 지도 우선 배치
+
+- 변경: `/console` 3 : 2 배치(왼쪽 지도, 오른쪽 열 예외 큐·등록 로봇·카메라 썸네일·대형·신호·기록), `roster.js` `attentionItems`로 큐와 카드 주의 규칙 통일(릴레이 끊김·비상 정지·목표 실패·교통 대기·양보가 큐에 오른다), 천장 카메라는 한 곳에만(지도 없음·크게 보기면 `#map-birdseye`), 설치 순서 막대·"…에서 합니다" 문장·기기 연결 칸 제거, 다른 문서 링크는 머리 접힘 칸에 하나씩, 발행 띠는 로봇 목록 머리(`data-state`), 전체 주행 취소 `quiet`.
+- 증거: Fleet 단위 2284 passed, 웹 Node 144 passed, 공용·아키텍처 통과, Fleet 브라우저 142 passed(실패 3은 단독 재실행 6 passed, MemoryError·로드 타임아웃), 1920×1080 접속 전·운용·지도 없음 문서 높이 1080.
+- gate 변화: LOCAL 화면 구조. SITE/FIELD 상태는 그대로 둔다.
+## 2026-10-07 · uncommitted · feat(fleet): D-494 1 로봇 trip 능력으로 계획을 묶는다
+
+- 변경: `console_view.TripCaps(kind, modes, max_speed)`와 `trip_caps(capabilities)`(모르는 필드는 무시, 세 필드가 모두 맞을 때만 값). `FleetConsole.caps_for(robot_id)`는 capability 캐시(최대 2 s 대기)에서 읽는다. `POST /trip`은 능력이 있으면 `PlanRequest`의 `robot_kind`·`drive_modes`·`max_speed_mps`를 채운다. 0 m/s 로봇은 간선을 쓰지 못해 `TRIP_NO_ROUTE`다. 능력이 없는 옛 로봇은 지금처럼 미리보기를 계획한다. 실행(`/start`)은 여전히 501이다. 계약 문서 버전 고정 시험을 v1.112로 올렸다.
+- 증거: `test_trip_caps.py` 2 PASS, `test_site_map_trip.py` 통과. fleet 스위트 2284 passed·90 skip, 1 NEW는 4개 스위트 병행 부하에서 난 `test_discovery_transport.py` 시간 초과(이 변경이 건드리지 않은 파일)로 단독 재실행 19 passed·known_failures 0 new.
+- gate 변화: 없음. SOURCE 호스트 시험만.
+- 결정: D-494 (Proposed)
+
+## 2026-10-07 · uncommitted · feat(fleet): D-495 TripCaps.junction_turn
+
+- 변경: `TripCaps`에 `junction_turn: bool = False`를 더했다. 능력의 값이 정확히 `true`일 때만 참이다. 계획에는 쓰지 않고 trip 실행(D-494 5, 다른 가지)이 읽는다.
+- 증거: `test_trip_caps.py` 2 PASS.
+- gate 변화: 없음.
+- 결정: D-495 (Proposed)
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 검토 — 모르는 drive_modes 값은 버린다
+
+- 변경: `trip_caps`는 모르는 주행 방식을 버리고 아는 값만 쓴다. 전에는 모르는 값 하나가 능력 전체를 None으로 만들었다.
+- 증거: `test_trip_caps.py` 2 PASS.
+- gate 변화: 없음.
+- 결정: D-494 (Proposed)
+## 2026-10-07 · uncommitted · feat(fleet): D-494 3 trip 전용 지도 자세(map pose)
+
+- 변경: `fleet/localization/map_pose.py`(순수, 표준 라이브러리만)가 로봇마다 받아들인 Rosy Cam sighting을 그 시각의 `odom_pose`(0.25 s 안 가장 가까운 표본, 둘이 감싸면 보간)와 짝지어 앵커로 두고, 그 뒤 odom 강체 증분으로 잇는다. `LOCALIZED`/`DEGRADED`(odom 1.5 m 초과, 예측과 0.15 m·20° 넘게 어긋남 → 다시 앵커, 연속 2회 일치로 회복)/`UNKNOWN`(앵커 없음, odom 3 s 초과). 설정은 사이트 YAML `fleet.map_pose`.
+- 연결: `server/map_pose_service.py`의 `MapPoseService`가 `/api/fleet/sightings`에서 받아들인 행과 콘솔이 읽는 모든 상태 스냅숏(hub heartbeat·REST)의 `odom_pose`를 먹는다. trip 루프용 `arbitrated_pose(robot_id)`와 읽기 전용 `GET /api/fleet/robots/{robot_id}/map-pose`(viewer 이상, API Ref v1.112)를 낸다.
+- 바꾸지 않은 것: `trusted_map_pose`·`/route`·교통정리·D-395. D-457 tracking은 입력이 아니다.
+- 증거: `test_map_pose.py`(28)·`test_map_pose_service.py`(7)·경계·계약 문서 테스트 통과, `known_failures` 새 실패 0(X:\DevTemp\d491-map-pose).
+- gate 변화: SOURCE만. SIM·DEVICE 수용은 그대로 열려 있다.
+- 열린 것: `odom_pose`는 `feat/d491-robot-trip-contracts`가 CORE와 `StateSnapshot`에 넣기 전까지 비어 있어(hub 경로는 pydantic이 모르는 필드를 버린다) 자세는 `UNKNOWN`이다. 실차·SIM 수용 없음.
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 3 map pose 독립 검토 반영
+
+- 변경: `odom_pose.stamp`를 UTC epoch 초(float, `captured_at`과 같은 형식)로 읽는다(ISO 문자열도 읽음, trip-contracts 브랜치와 맞춤). odom 끊김(3 s 초과)·낡은 뒤 재개·불가능한 걸음(1 m/s 초과, CORE 재시작의 odom 0)이면 앵커를 버리고 `UNKNOWN`. odom 미래 허용 `max_odom_future_s` 0.5 s와 거절 수·이유 출력. 누적 회전 180°·앵커 나이 10 s 한도, `map_id` 고정과 활성 지도 프레임 필터, 감싸는 표본이 올 수 있는 동안 sighting 대기. 엔드포인트는 httpx 오류에도 마지막 자세로 답하고, 동시 읽기를 합치며, 0.2 s 안이면 다시 읽지 않는다. 로스터에서 빠진 로봇의 추적기는 버린다. 콘솔 sink 실패는 로봇마다 한 번 기록하고 수집을 멈추지 않는다.
+- 증거: `test_map_pose.py`(41)·`test_map_pose_service.py`(14), 검토 probe 사례를 테스트로 옮김. Fleet 전체·계약 문서 테스트와 `known_failures` 새 실패 0(X:\DevTemp\d491-map-pose).
+- gate 변화: SOURCE만. trip 루프는 odom을 2 Hz 이상 읽어야 한다(D-494 부록). SIM·DEVICE 수용은 그대로 열려 있다.
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 3 map pose 재검토 반영
+
+- 변경: odom이 카메라보다 늦게 오면(hub 스냅숏 최대 약 1 s) 새 sighting이 기다리던 sighting을 밀어내 앵커가 영영 생기지 않던 문제를 고쳤다. sighting은 `captured_at` 순서 대기열(32건)에서 그 시각 이후 odom을 기다렸다가 순서대로 짝짓는다. 활성 지도와 다른 `map_id` sighting 수(`sightings_filtered_map_id`)와 출처가 없는 활성 지도 경고, 다른 프레임 앵커는 `DEGRADED`. trip 루프용 `refresh(force_rest=True)`(hub 캐시 건너뜀). odom 방향 변화율 360°/s 초과도 재설정, `max_bridge_turn_deg` 기본 270. 공유 읽기의 예외는 회수해 기록한다.
+- 증거: 재검토 probe2 사례(odom 0.3 s·0.5 s 늦음, 1 Hz heartbeat를 0.5 s 폴링, 위상 0.4)를 회귀 테스트로 옮겨 모두 `LOCALIZED`. Fleet 전체·계약 문서 테스트와 `known_failures` 새 실패 0(X:\DevTemp\d491-map-pose).
+- gate 변화: SOURCE만. trip 루프는 `force_rest`로 2 Hz 이상 읽는다(D-494 부록). SIM·DEVICE 수용은 그대로 열려 있다.
+
+## 2026-10-07 · uncommitted · Fleet roster action widths
+
+- Change: Equalize the two compact roster actions and put a cancel result and roster toggle on separate full-width rows.
+- Evidence: Nine Chromium layout and one failure-state case, six D-493, and 83 responsive/token/grammar cases passed, Python known failures 0 NEW. See docs/validation/uiux-fleet-roster-actions-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; current site candidate and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · uiux(fleet): Cell 접속 역할 어휘
+
+- 변경: `/console/cell`의 원시 역할 코드를 Fleet 관제·설치 화면과 같은 한국어 역할 이름으로 표시한다. 권한 판정·API 요청은 변경하지 않는다.
+- 증거: 320px 브라우저 수정 전 1 failed, 수정 후 1 passed; Cell 전체 49 passed, G1 90 passed, `known_failures.py` 0 NEW; `docs/validation/uiux-cell-role-label-2026-10-07/result.md`.
+- gate 변화: 없음. LOCAL 화면 근거만 추가하고 사이트·장치·G3는 HOLD.
+## 2026-10-07 · 556dd1954 · feat(fleet): 카메라 차선 지도 초안 가져오기
+
+- 변경: D-497: 현장 지도에서 카메라 생성 JSON 초안 가져오기. 기존 이름 있는 운영자·스키마·revision·크기 검사를 재사용. 기존 초안 교체 확인, 활성 지도 유지.
+- 증거: 81 affected geometry/store/browser checks passed (latest loop regression rechecked), 0 NEW. Direct source-command test on the actual site host read a fresh raw S21 frame over pinned HTTPS and generated a 12-place/10-lane draft. That draft imported in local Chromium at 1440/390 px without activating or moving a robot. Source command was ephemeral; permanent deployment and field geometry acceptance are unproven. Independent review found an attached-loop loss; fixed and independently rechecked.
+- gate 변화: 없음. SOURCE/LOCAL 근거 추가; 장치 상시 배포·현장 지도 정확도 수용은 별도다.
+
+## 2026-10-07 · uncommitted · uiux(fleet): Cell 문서 목록 마지막 수신 시각
+
+- 변경: 목록 성공 응답을 브라우저가 받은 시각을 문서 수정 시각과 분리해 표시한다. 조회 중·실패·계정 변경은 기존 목록을 숨긴다.
+- 증거: 선언 세 폭의 목록 성공·실패/복구 브라우저 6 passed, 조회 잠금 1 passed, Cell 전체 49 passed, G1 90 passed, `known_failures.py` 0 NEW. `docs/validation/uiux-cell-list-readtime-2026-10-07/result.md`.
+- gate 변화: 없음. 서버 판정 신선도·현장·장치·G3는 HOLD.
+
+## 2026-10-07 · uncommitted · fix(fleet): camera-map integration contract pins
+
+- 변경: D-497 command registration and existing-draft confirmation are explicitly pinned in their existing contract tests. Existing aliases and confirmation ownership remain asserted.
+- 증거: 18 CLI/dialog checks passed after fixing the two NEW findings from pre-push; the remaining candidate checks continue.
+- gate 변화: SOURCE only; deployment and installed readback pending.
+## 2026-10-07 · uncommitted · feat(fleet): D-494 5 서버 trip 루프 (브랜치 feat/d491-fleet-trip-loop)
+- 변경: 계획 본문을 `plan_id`로 저장(D-490 보존 그대로), 새 `fleet/server/trip_runner.py`(시작 검사·상태기계·0.5 s 루프·다음 장소 재계획 대기), `POST /api/fleet/trips/{plan_id}/start`·`/{id}/cancel`·`/{id}/confirm-replan`·`GET /api/fleet/trips`·`/{id}`, 활성화 가드를 "진행 중 trip"으로 교체(`/route`는 그대로), `HttpRobotClient.line_follow_junction`, 콘솔 지도 화면 운행 칸, API Ref v1.112. D-495 3항(`turn_deg`, `junction_turn` 능력, CORE `aborted`/`unresolved`/긴 `waiting` → `stopped(junction)`)과 지도 자세 검토 반영(시작 시 anchor 2 s 이내, tick마다 상태 갱신)을 포함한다
+- 증거: `python -m pytest operations/fleet/test -q` 2310 passed, 93 skipped, known_failures 0 new(2026-10-07 Windows, D-495 반영 커밋 기준); 마지막 커밋 뒤 관련 묶음 132 passed, 0 new; `node --test operations/fleet/test/web/*.mjs` 145 passed; `ROSY_BROWSER_TESTS=1` 현장 지도 브라우저 33 passed(D-495 이전 UI, 이후 UI 변경은 문구 한 줄)
+- gate 변화: 없음. SOURCE/LOCAL만. 능력(1항)·지도 자세(3항)·교차로 API(4항) 제공자는 형제 브랜치가 착지한 뒤 `create_app(trip_caps=…, map_pose=…)`로 연결한다. 기본 연결은 `TRIP_ROBOT_CAPS_UNKNOWN`으로 시작을 거절한다. Gazebo·실차 미실행
+- 결정: D-494 Proposed, D-495 Proposed
+- 교훈: 짧은 차로(0.37 m)는 arm 거리 0.6 m보다 짧다. 차선 로봇은 장소를 지난 뒤에만 다음 장소 지시를 보내야 CORE가 가진 하나뿐인 지시를 덮어쓰지 않는다
+
+## 2026-10-07 · uncommitted · feat(fleet): D-494 5 trip 루프 검토 반영 — 즉시 멈춤·멈춤 규칙·차선 시작 검사
+- 변경: 취소와 차선 위치 상실은 교차로 `stop` 뒤 `PUT /line-follow/mode OFF`로 바로 멈춘다(`POST /line-follow/hold`는 hold-to-run 연장이라 쓰지 않음). `fleet.trip.stall_s`(기본 20 s) 동안 0.05 m 미만 진행이면 `stopped(stall)`(교차로 동작 중·재계획 대기 제외). `lane` 계획은 line-follow `CAMERA_LINE`/`IR_LINE`이 아니면 `TRIP_LINE_FOLLOW_NOT_ACTIVE`. 포트를 `trip_ports.py`로 분리. D-494 구현 부록(5항 trip 루프)
+- 증거: `operations/fleet/test` 전체와 known_failures는 이 항목 아래 실행 결과를 보고서에 남긴다. 집중 묶음(`test_trip_runner.py` 43건 포함) 통과, harness lint 0 오류
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-494 Proposed(구현 부록 추가)
+- 교훈: CORE의 같은 이름 API(`/line-follow/hold`)가 반대 뜻(계속 가기)일 수 있다. 멈춤 경로는 엔드포인트 본문을 읽고 고른다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 5 trip 루프 독립 검토 반영 — CORE 교차로 상태 기반 전송·넘김, 모든 끝에서 정지
+- 변경: 시험의 가짜 교차로 포트를 CORE `junction.py`대로(받은 뒤 odom 거리로 서는 `stop`, 동작 중 새 지시는 동작을 abort하고 거절, seq·상태). `stop_after_m`=남은 거리(0–2 m), `stop` 재전송 없음, CORE `executing`·동작 중에는 전송 없음, CORE 완료 또는 다음 차로 투영으로 넘김, 모든 실패·멈춤에서 정지(교차로 stop + line-follow OFF / 목표 취소), 루프가 저장소 실패에도 살아 있음, 취소는 tick 잠금을 기다리지 않음, 로봇 호출 1.5 s 제한, `lane` 계획은 `junction_turn` 필요, 시작 직전 지도 버전 재확인, `anchor_age_s` 없으면 거절, 재시작 때 열린 trip 로봇 정지, refresh 경고 30 s 제한, trip 중 `/goal`·`/route`·배차·대형은 409 `TRIP_ROBOT_BUSY`. 실행 가능 규칙을 `fleet/routing/execute.py`로. 콘솔 멈춤 사유 문구(설정된 `stall_s`, `TRIP_LOOP_ERROR`)와 취소 확인 문구. D-494 구현 부록 갱신
+- 증거: 아래 실행의 `operations/fleet/test` 전체와 known_failures는 보고서에 남긴다. `test_trip_runner.py` 51건, `test_routing_execute.py` 10건, site-map node 9건, 구조·안전 분리·대화창 계약 시험 통과, harness lint 0 오류
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-494 Proposed(구현 부록 갱신)
+- 교훈: 가짜 포트가 실제 CORE 상태기계를 흉내 내지 않으면, 지시 덮어쓰기·동작 중 재전송 같은 결함이 시험을 통과한다. 짝 브랜치의 구현 파일을 읽어 가짜를 만든다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 5 trip 루프 재검토 반영 R1–R8
+- 변경: 콘솔이 보내지 않은 좌표 목표는 trip 실패(`TRIP_GOAL_REFUSED`), 좌표 trip이 끝날 때마다 콘솔 대기열 정리, 콘솔 목표·대기열·양보·대형 중인 로봇은 시작 거절(R1). 교차로 지시는 `CAMERA_LINE`에서만(R2). `trip_guard.py`가 콘솔 인스턴스의 목표·대형·line-follow를 감싸고, `OFF`는 trip 취소(`operator_line_follow_off`), trip 로봇은 비켜서기·재배정 대상이 아니며 줄 막힘 결정은 409(R3, `console.py` 줄 수 그대로). 가짜 CORE에 M3·M4·M7·L6·R1, 수행된 지시 재전송 없음, `JUNCTION_ALREADY_DONE`은 수행됨, CORE가 붙잡은 우리 `stop`도 도착(R4). 보낸 뒤 열림 재확인(R5), 차선 도착은 받아들여진 `stop` 필요(R6), 재계획 확인 때 지시 기록 초기화(R7), 재시작 정지는 받을 때까지 재시도(R8). D-494 구현 부록·API Ref 갱신
+- 증거: 보고서에 `operations/fleet/test` 전체·계약 문서·모듈 구조와 known_failures를 남긴다. `test_trip_runner.py` 66건 통과
+- gate 변화: 없음. SOURCE/LOCAL만. 실제로 서는 거리는 모델 PC SIM에서 잰다
+- 결정: D-494 Proposed(구현 부록 갱신)
+- 교훈: 안전 파일의 줄 예산이 0이면 감싸기(인스턴스 메서드 교체)와 기존 줄 안 조건으로 같은 가드를 줄 수 있다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 5 trip 안전 검토 반영 — 모든 멈춤이 trip을 끝낸다
+- 변경: 로봇별 취소·전체 취소·intent 취소·Fleet 비상 정지·`line-follow OFF`(로봇 호출이 실패해도)·줄 막힘 `ABORT`/`MANUAL`은 로봇에 먼저 가고 trip을 `canceled`로 끝낸다(H1·M1·M3). 움직이는 줄 막힘 결정과 대형 재구성·재개는 거절, Fleet 자동 해결기는 trip 로봇을 건너뛴다(M2·N3·N4). 보낸 지 2 s 안의 콘솔 목표도 진행 중으로 본다(L1). 재시작 정지는 tick 밖에서 10 s마다 최대 30회(N2). D-494 구현 부록·API Ref 갱신
+- 증거: 보고서에 `operations/fleet/test` 전체·구조 시험·known_failures를 남긴다. `test_trip_runner.py` 82건 통과
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-494 Proposed(구현 부록 갱신)
+- 교훈: 로봇을 몰고 있는 루프가 있으면 그 로봇에 닿는 모든 멈춤 경로가 루프도 끝내야 한다. 하나라도 빠지면 다음 tick이 멈춘 로봇을 다시 움직인다
+
+## 2026-10-07 · uncommitted · fix(fleet): 운행 위치 상태를 한국어로 표시
+- 변경: D-494 운행 패널의 LOCALIZED·DEGRADED·UNKNOWN을 위치 확정·위치 정확도 저하·위치 확인 불가로 표시. 미지 상태 원문과 API 본문은 보존
+- 증거: CI 37593064818의 operator-copy 실패 재현 뒤 Python 표기 검사 18건과 Node 지도 표시 검사 9건 통과. 독립 검토와 Node 재실행 통과
+- gate 변화: SOURCE/LOCAL. 서명·관제 적용은 새 커밋 CI 통과 뒤 확인
+- 교훈: 순수 표시 함수 시험도 운영자 표기 검사를 함께 돌린다
+
+## 2026-10-07 · uncommitted · feat(fleet): 조감도 낡은 카메라 교정 감지 — 실영상 대신 미터 눈금과 경고
+- 변경: 카메라를 재조준하면 D-457 추적 보정이 어긋나 조감도가 잘려 돌아간 지도를 정확해 보이게 그렸다. 이제 정지 로봇(직전 폴링 자세 이동 ≤ 0.05 m)의 추적 차이(`offset_m`)가 3폴링 연속 0.4 m를 넘으면 교정이 낡은 것으로 판정해(`tracking-layer.js` `trackingDriftSample`·`calibrationDriftVerdict`, 순수) 실영상 배경을 내리고 미터 눈금 뷰로 돌아간 뒤 "카메라 교정 어긋남 — 맞춤 재수락 필요" 경고를 캔버스와 `#map-tag`·aria-label에 보인다. 표본은 `tracking-view.js show()`가 실제 폴링 응답마다 한 번만 쌓고, 수명 만료 `show(null)`은 연속을 끊지 않는다. 마커 관측(measured)·움직이는 로봇은 세지 않는다
+- 증거: node `tracking-layer.test.mjs` 12 passed(신규 3건: 정지 로봇만 표본·연속 판정·자세 기억), 콘솔 브라우저 신규 `test_stale_camera_calibration_drops_the_frame_and_warns` + 기존 카메라 배경 회귀 2 passed(ROSY_RUN_BROWSER_TESTS=1). 변이 증명: `view.trackingDrift = null`으로 무력화하면 신규 시험 TimeoutError로 빨개진다
+- gate 변화: 없음. LOCAL GO 유지 — 표시 경고만 만들었고 관측·목표·주행 경로는 그대로
+- 결정: 해당 없음(D-457 추적 보정의 표시 전용 보강)
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(fleet): D-494 6 주행 가르치기 — 기록·RDP·초안 확정·여기에 주소
+- 변경: 순수 `fleet/routing/teach.py`(점 남기기 `LOCALIZED` 또는 다리 ≤ 0.5 m·0.1 m 간격, 반복형 RDP 0.02 m, 끝 0.15 m 장소 후보, 초안 본문에 간선·새 장소 붙이기), `server/teach_service.py`·`teach_routes.py`(`GET /api/fleet/teach`, `POST /api/fleet/teach/start|stop|confirm|place`, 이름 있는 운영자, 현장 지도 이벤트), `SiteMapStore.record_event`, `app.py` 4줄 배선, 현장 지도 화면 "지도 가르치기" 칸(`web/site-map-teach.js`, 모델 도우미, 점선 표시). `console.py`는 고치지 않음
+- 증거: `operations/fleet/test` 2459 passed·124 skipped·1 failed(`test_routing` 표준 라이브러리 import 규칙: `copy` → 고친 뒤 `test_routing.py`·`test_routing_teach.py`·`test_teach.py` 45 passed), node `test/web/*.mjs` 151 passed, Chromium 스모크(1440·390, 기록→멈춤→확정→주소, 콘솔 오류 0, X:\DevTemp\d494-teach). `test/architecture`+문서+api_web 271 passed·1 failed = 크기 판정 `fleet: 41719 > 41014+150`(이 브랜치 +593, 재판정 대기). `test/known_failures.py` 그 외 0 new
+- gate 변화: 없음. SOURCE 호스트 시험만. 로봇에 아무것도 보내지 않는다. 현장 가르치기는 Rosy Cam 맞춤 뒤
+- 결정: D-494 6 (구현 부록 2026-10-07 — 6항 가르치기)
+- 교훈: `fleet/routing`은 표준 라이브러리 화이트리스트(`copy` 포함 안 됨)가 시험으로 걸려 있다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 6 독립 검토 반영 — LOCALIZED만 기록·최신 기록 확정·유휴 자동 멈춤·끝 고정
+- 변경: `DEGRADED`는 다리 길이와 상관없이 남기지 않음(재앵커 튐 제거). 확정 대기 목록은 최신 먼저, 콘솔은 가장 최근 기록(`newestPending`)을 확정. 10분 동안 새 점이 없거나 20000점이면 같은 멈춤 길로 스스로 멈춤(`system:teach_idle`, `reason idle|full`). 끝 고정 때 장소 0.15 m 안의 앞·뒤 중간 점을 뺌. 점 mm 반올림, 주소 yaw 감기, 멈춘 뒤 원점 비움, 첫 표본 오류 잡기, 바뀔 때만 지도 다시 그림, 초안 크기·오류 변환은 `site_map_routes`의 것을 함께 씀. 크기 판정 41764(독립 재판정, 추가분 +638)
+- 증거: `operations/fleet/test` 2464 passed·124 skipped, `test/architecture` 132 passed·1 skipped, node `site-map.test.mjs` 12 passed, Chromium 스모크(1440·390) 콘솔 오류 0, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만
+- 결정: D-494 6 구현 부록 1·5·6항 갱신
+- 교훈: 기록 규칙의 "또는"은 신뢰 상태 하나를 다리 길이로 대신하게 한다. 재앵커 순간의 DEGRADED 0 m 다리가 그대로 선에 들어갔다
+
+## 2026-10-07 · uncommitted · test(fleet): 추적 보정 적용의 렌즈 지문을 브라우저·라우트 시험으로 고정
+- 변경: "추적 보정 적용"의 렌즈 지문 배선은 c598918fc·0965acc94에서 이미 main에 다 들어 있었다(적용 시점 라이브 프레임 X-Source-Lens → `map-fit-view.js` applyButton의 `visionView.currentLensInfo()` → `map-fit.js` `calibrationRequest` lensBody → 서버 `CalibrationApproval.lens` → `build_record` 검증·개정 해시 포함; 프레임에 렌즈가 없을 때만 "렌즈 정보가 없어 렌즈 검사 없이 적용했습니다" 안내). 이 커밋은 그 배선을 증명하는 시험만 더한다. `test/test_fleet_console_browser.py` 신규 2건 — 설치 맞춤 패널에서 통과 제안과 렌즈 헤더 프레임으로 적용을 누르면 POST 본문에 `{kind, focal_mm, hfov_deg}`가 실리고 안내가 붙지 않는다 / 헤더 없는 프레임이면 `lens: null`로 저장되고 안내가 붙는다. `test_overhead_tracking_api.py` — 렌즈를 넣은 승인이 목록·Vision 설정 조회까지 그대로 남으며 렌즈 없는 승인과 개정이 다르고, 잘못된 렌즈 본문 3종(필드 누락·대문자 kind·여분 필드)이 422
+- 증거: 브라우저 신규 2 passed(ROSY_RUN_BROWSER_TESTS=1), 변이 증명 — applyButton의 lens 인자를 지우면 적색, 복원 녹색; `tracking.py` approve의 lens 전달을 지우면 라우트 시험 적색, 복원 녹색. `test_overhead_tracking_api.py` 11 passed, tracking 3종·서버 앱·콘솔 계약 targeted 103 passed, node map-fit 17·vision-lens-profile 7·camera-map 1 passed, known_failures 0 NEW
+- gate 변화: 없음. 제품 코드 변경 없음(시험만)
+- 결정: 해당 없음(D-457 1항 표시 전용 경로의 시험 보강)
+- 교훈: 소스 문자열 단언(`"calibrationRequest(" in fit_view`)은 배선이 빠져도 녹색으로 남는다 — 클릭해서 본문을 잡는 브라우저 시험이 배선의 증거다

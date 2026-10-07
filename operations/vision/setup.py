@@ -23,6 +23,7 @@ setup(
     entry_points={
         "console_scripts": [
             "rosy-vision=rosy_vision.cli:main",
+            "rosy-lane-map=rosy_vision.lane_map:main",
             # D-377 3: old names kept for one site candidate release; both removed in stage 5.
             "site_vision=rosy_vision.cli:main",
             "overhead=rosy_vision.cli:main",

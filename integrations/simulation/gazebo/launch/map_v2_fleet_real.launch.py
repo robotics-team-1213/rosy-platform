@@ -109,8 +109,9 @@ def generate_launch_description():
                 "gazebo_camera_pitch_rad": math.radians(REAL_TILT_DEG),
                 "gazebo_camera_hfov_rad": REAL_HFOV_RAD,
                 "gazebo_camera_max_range_m": 0.6,
-                "lane_corner_turning": True,
-                "camera_x_offset_m": REAL_CAMERA_X_OFFSET_M,
+                # lane_corner_turning and camera_x_offset_m come from the payload
+                # line_follow.yaml (D-495 SIM acceptance runs the payload values; the
+                # test pins that they equal this profile).
             }],
         ),
         Node(

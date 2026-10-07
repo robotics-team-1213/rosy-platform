@@ -4,6 +4,20 @@
 
 제품 전체 수용 기준은 사용자 확인에 따라 **활성 표면 모두의 G1, 선언한 G2 상태·폭 전부, G3 실제 사용자 검토와 해당 실물 장치 readback**이다. 일부 화면의 너비 보정이나 LOCAL 시험 통과로 이 판정을 올리지 않는다.
 
+2026-10-07 Pilot 전체 브라우저 재검사에서 320×568 카메라 표시 면적 **16.3%**가 기존 20% 바닥에 못 미쳐 115 passed, 1 failed였다. [LOCAL 320px 카메라 면적 보정](../uiux-pilot-camera-area-2026-10-07/result.md)은 좁은 HUD 간격을 줄인 뒤 카메라 배치 다섯 폭 **5 passed**, G1 **90 passed**, 각각 성공 실행 `known_failures.py` **0 NEW**로 확인했다. 병합 후 전체 재실행은 114 passed·2 timeout failed였고, 그 응급 카메라 네 폭만 재실행하면 4 passed였다. 전체 무오류 회귀·나머지 G2·실물·G3는 **HOLD**다.
+
+2026-10-07 Pilot Gazebo 팔 화면의 [320px 머리·동등 창 LOCAL 확인](../uiux-pilot-arm-header-2026-10-07/result.md)에서 실제 앱과 같은 시뮬레이션 헤더를 재현하고, 오래된 「대기」·「직접 조종」 문구를 팔 화면에서 숨겼다. 네 폭 팔·그리퍼 배치 관련 브라우저 6 passed, G1 90 passed, 각각 0 NEW. 실제 장치·남은 G2·요청자 G3는 **HOLD**다.
+
+2026-10-07 Pilot [전체 브라우저 회귀](../uiux-pilot-full-browser-2026-10-07/result.md)는 현재 동일한 Pilot 코드에서 108 passed, `known_failures.py` 0 NEW였다. 실행 중 공유 `main`은 사이트 문서 한 파일만 변경됐다. 이는 LOCAL 경로 회귀 근거이며 미캡처 G2 셀·실물 장치·사용자 G3는 여전히 **HOLD**다.
+
+2026-10-07 Pilot 녹화본 시트가 390/320px에서 조작부 뒤에 가려지는 결함을 [LOCAL 재현·수정](../uiux-pilot-recording-sheet-2026-10-07/result.md)했다. 네 폭에서 파일 행, 동등 행동 폭, 첫 화면의 닫기·비상 정지, 받기·취소 흐름을 확인했다. 관련 브라우저 7 passed, G1 90 passed, 각각 0 NEW. 실제 로봇 녹화·태블릿, 남은 G2, 사용자 G3는 **HOLD**다.
+
+2026-10-07 Pilot 비상 게이트와 읽기 전용 카메라를 선언 폭 네 개에서 [LOCAL로 확인](../uiux-pilot-emergency-width-2026-10-07/result.md)했다. 320/390px 카메라 상단의 안내·행동 겹침을 고쳐 홈·비상 정지를 같은 너비로 배치했다. 관련 브라우저 12 passed, G1 90 passed, 각각 0 NEW. 다른 Pilot G2 셀, 실제 정지 readback과 사용자 G3는 남아 **HOLD**다.
+
+2026-10-07 Pilot 주행 HUD의 속도·배터리 `fresh/delayed/disconnected/unavailable` × 선언 폭 4개를 로컬 브라우저에서 다시 확인했다. [상태별 결과와 원본 캡처 위치](../uiux-pilot-telemetry-2026-10-07/result.md)를 기록했다. 이는 Pilot G2의 부분 근거이며 제품 전체 판정은 **HOLD**다.
+
+상태 소켓이 열린 채 조용해지고 REST 조회가 실패하거나 멈춘 경우의 오래된 속도·배터리를 숨겼다. [수신 중단·회복 LOCAL 전이](../uiux-pilot-silent-readback-2026-10-07/result.md)는 선언 폭 네 개에서 8 passed, 0 NEW로 확인했다. 상태가 끊겨도 표시될 수 있는 조작 요청 응답 시간은 출처를 명시했다(네 폭 8 passed, 0 NEW). 다른 Pilot G2 셀과 실물 연결·운전자 G3는 남아 **HOLD**다.
+
 G3 실제 운영자 독회는 요청자가 수행하기로 했다. [실제 사용자 독회 기록지](operator-walkthrough.md)에 표면별 작업·여덟 판정 항목과 실물 근거 자리를 마련했다. 결과·관찰·재현 폭은 아직 받지 않았으므로 G3 판정은 HOLD다. 픽셀 검수의 class 파일 미연결 상태에서는 점/브러시 전환을 막고 연결 이유를 표시한다. 1440/800/390/320px 브라우저 회귀와 점 미리보기·브러시 조작 **10 passed**, `known_failures.py` **0 NEW**; 수정 후 320px 원본은 X: `captures/pixel-disabled-fix/learning-pixels-320.png`, 실행 기록은 `logs/merge-20261006/pixel-disabled-fix.txt`다.
 
 ## 이번 회차의 질문과 근거
@@ -107,7 +121,7 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 
 작업 취소는 기존에 첫 클릭으로 요청을 보냈다. 지금은 작업 ID와 「실행 중인 장치를 정지하지 않습니다」 경고를 확인창에 표시한다. 1440×1000·390×844·320×568에서 취소 버튼을 누르고 확인창을 캡처했다(X: `captures/fleet-cell/fleet-cell-cancel-confirm-{1440x1000,390x844,320x568}.png`). 확인창의 취소는 POST 0, 비상 정지는 확인창을 닫고 즉시 누를 수 있으며, 「작업 취소」 확인 뒤에는 취소 POST 1이다. 320px에서는 로그인 뒤 긴 세션 이름이 비상 정지와 제품 이름·접속 버튼을 밀어 겹치던 문제도 머리의 좁은 폭 격자로 고쳤다. 세 폭 브라우저 **3 passed**, Cell 브라우저 전체 **15 passed**, Fleet 계약 **21 passed**, 현재 트리 G1 **90 passed**, 각 성공 실행의 `known_failures.py` **0 NEW**다. Cell의 새 공용 확인 모듈을 수입 허용 목록에 반영하기 전에는 계약 1건이 실패했고, 반영 뒤 재실행에서 통과했다. 원본은 X: `logs/fleet-cell-cancel-{3widths-final,full-final,contracts-final}.txt`, `logs/g1-after-cell-cancel.txt`다. 이 경로는 로컬 Cell API와 합성 Fleet 응답의 UI 근거이며 실제 장치 정지는 검증하지 않았다.
 
-저장된 문서 목록의 접속 전·조회 중·빈 목록·조회 실패·다시 접속·문서 존재 상태를 로컬 브라우저에서 재생했다. 1440×1000·390×844·320×568의 빈 목록은 다음 작성 단계를 표시하고 가로 넘침이 없었다. 320px에서 목록 API 503은 실패와 재시도를 알리며, 복구 후 문서 두 개가 보인다. 자격 증명을 바꾸면 이전 접속의 목록을 즉시 숨긴다. 해당 브라우저 **5 passed**, Cell 전체 **19 passed**, Cell API **8 passed**, 공용 UI 계약 **231 passed, 25 skipped**, 각 성공 실행의 `known_failures.py` **0 NEW**다. 원본은 X: `captures/fleet-cell/fleet-cell-empty-{1440x1000,390x844,320x568}.png`, `fleet-cell-list-error-320x568.png`, 실행 기록은 `logs/fleet-cell-list-{focus,full,api,shared}.txt`다. 합성 서버 응답에 대한 LOCAL G2 부분 근거다.
+저장된 문서 목록의 접속 전·조회 중·빈 목록·조회 실패·다시 접속·문서 존재 상태를 로컬 브라우저에서 재생했다. 1440×1000·390×844·320×568의 빈 목록은 다음 작성 단계를 표시하고 가로 넘침이 없었다. 320px에서 목록 API 503은 실패와 재시도를 알리며, 복구 후 문서 두 개가 보인다. 자격 증명을 바꾸면 이전 접속의 목록을 즉시 숨긴다. 해당 브라우저 **5 passed**, Cell 전체 **19 passed**, Cell API **8 passed**, 공용 UI 계약 **231 passed, 25 skipped**, 각 성공 실행의 `known_failures.py` **0 NEW**다. 원본은 X: `captures/fleet-cell/fleet-cell-empty-{1440x1000,390x844,320x568}.png`, `fleet-cell-list-error-320x568.png`, 실행 기록은 `logs/fleet-cell-list-{focus,full,api,shared}.txt`다. 이후 [현재 트리의 세 폭 실패·복구 재확인](../uiux-cell-list-errors-2026-10-07/result.md)에서 각 폭의 오류와 복구 **6셀**, 브라우저 **3 passed**, `known_failures.py` **0 NEW**를 얻었다. 모두 합성 서버 응답에 대한 LOCAL G2 부분 근거다.
 
 이미 접속한 Cell에서 세션 재확인이 401·403으로 거부될 때, 이전 계정·저장 문서 목록·저장 버전·미리보기 요약·작업 상태를 내려 현재 근거로 오인하지 않게 했다. 운영자 작성 초안은 남기되 저장·제안은 막고, 320px 첫 화면에 권한 확인과 재접속 안내를 표시한다. 거부 전 상태를 가진 로컬 브라우저 2셀을 재생했고 가로 넘침 0이다. Cell 브라우저 전체 **21 passed**, Cell API **8 passed**, 공용 UI 계약 **231 passed, 25 skipped**, 마지막 접속 안내 변경의 집중 재검사 **3 passed**, JS 구문 검사 통과, 각 성공 실행의 `known_failures.py` **0 NEW**다. 원본은 X: `captures/fleet-cell/fleet-cell-auth-{401,403}-320x568.png`, 실행 기록은 `logs/fleet-cell-auth-{focus-final,full,api,shared,final-focus}.txt`다. 이는 권한 거부 전환의 LOCAL G2 부분 근거이며 실제 계정 만료·권한 변경 검증은 남는다.
 
@@ -120,6 +134,8 @@ Pilot 주행의 선언된 320×568 폭도 현재 트리에서 다시 렌더했�
 작업 제안·승인·취소와 간지 접근 보류의 API 상태를 운영자 문구로 표시하고, 원래 상태 코드는 접힌 진행 원장 상세에 남겼다. 1440×1000·390×844·320×568에서 간지 접근 보류 이유, 재승인 차단, 가로 넘침 없음과 정지 버튼의 첫 화면 노출을 확인했다. 390/320px의 Cell 붙박이 머리는 토큰 접속을 본문 위 별도 줄로 내려 88px로 줄여 D-359의 창 높이 20% 한도를 통과했다(수정 전 177px, 두 전화 폭에서 실패). 전체 Cell 브라우저 **33 passed**, Cell API **8 passed**, 공유 UI 계약 **89 passed**, 각 `known_failures.py` **0 NEW**, JS 구문 검사 통과. 원본은 X: `logs/fleet-cell-{vocabulary-red,header-red,browser-full,api-current,shared-current}.txt`, `captures/fleet-cell-vocabulary/fleet-cell-held-sheet-{1440x1000,390x844,320x568}.png`다. 이 결과는 합성 Fleet 응답의 LOCAL G2 부분 근거다.
 
 작업 제안 단계의 「재승인」과 간지 접근 보류 단계의 「실행 승인」에 기존에는 둘 다 「저장 후 미리보기 필요」라는 잘못된 비활성 사유가 보였다. 상태를 읽지 않았을 때는 먼저 작업 상태 확인을, 읽은 작업의 단계가 맞지 않을 때는 해당 조작이 불가능함을 알려 준다. 세 폭의 두 흐름에서 먼저 **6 failed**, 수정 뒤 **6 passed**를 확인했고 Cell 브라우저 전체 **33 passed**, `known_failures.py` **0 NEW**, JS 구문 검사 통과다. 원본은 X: `logs/fleet-cell-action-reason-{red,green,full}.txt`. 버튼의 허용 조건이나 요청은 바꾸지 않았다.
+
+저장된 문서 목록의 원시 종류·ISO 시각을 한국어 종류·ID와 현지 수정 시각 두 줄로 정리했다. 1440×1000·390×844·320×568 브라우저 **3 passed**, `known_failures.py` **0 NEW**이며 320px 가로 넘침이 없다. [이번 LOCAL 근거](../uiux-cell-saved-list-2026-10-07/result.md)는 목록 한 상태의 가독성에 한정한다.
 
 G2는 실제 첫 기동, 증거 `fresh/delayed/disconnected/unavailable`의 나머지 경로, 권한 거부와 저장/컴파일 실패의 나머지 경로, SAFE_STOP/HOLD의 나머지 선언 폭별 캡처가 남았다. G3 여덟 항목의 실제 운영자 작업 독회와 셀 장치·물리 정지 readback도 없다. 이 Cell 카드와 Fleet 전체는 **HOLD**다. Cell 화면의 정지 API 응답은 물리 정지 증거가 아니다.
 
@@ -413,3 +429,39 @@ D-153의 여섯 카드 중 운용자 콘솔·장비 런타임·Fleet·게임 보
 The follow-up browser harness allows the active preview port in Chromium; port 6000 reproduced the former navigation failure and now opens. On the integrated documentation branch, the expanded game-board suite passed 32/32 with 0 NEW known failures (X:/DevTemp/projects/rosy-platform/2026-10-07--games-g2-refresh/logs/docs-post-merge.txt). This is test and LOCAL browser evidence, with the same FIELD and G3 holds.
 
 2026-10-07 학습 작업 결과 신선도 (uiux/learning-report-age): `/learning`의 각 작업 카드가 성공적으로 읽은 결과 파일의 경과 시간을 표시하고, 시간이 지나면 분 단위로 갱신하며 「최신 결과 확인」 뒤 방금 확인으로 돌아간다. 완료 결과에 실패·거절만 안내하던 Perception 작업 문구도 보고서 상태와 단계 근거 확인으로 고쳤다. 1440/800/390/320px의 실제 로컬 등록→2분 경과→다시 확인 브라우저 **4 passed**, 수정 전 전체 검수 브라우저 **117 passed**, G1 관련 계약 **81 passed**, 각 `known_failures.py` **0 NEW**다. 320/390px 작업 카드는 검색 입력과 같은 가용 폭이고 가로 넘침은 0이다. 원본은 `X:/DevTemp/projects/rosy-platform/2026-10-07--learning-report-age/evidence/`와 `logs/{final-focused,review-browser,g1}.txt`다. 이 표시는 웹이 마지막으로 보고서를 읽은 나이이며 원본 파일 생성 시각이나 학습 완료 검증은 아니다. 다른 값별 신선도, 실제 검수자 G3와 제품 전체 수용은 **HOLD**다.
+
+2026-10-07 D-493 Fleet 목록 폭 후속: 320/390px에서 「전체 주행 취소」와 「전체 로봇 보기」가 같은 너비를 쓰고, 취소 결과는 두 행동과 겹치지 않게 전폭에 표시한다. [LOCAL 브라우저 근거](../uiux-fleet-roster-actions-2026-10-07/result.md)는 관련 9건·계약 83건 통과, `known_failures.py` **0 NEW**다. 13:46 KST 사이트 이미지 태그는 이 후보보다 이전 `76a586121`이며, 실제 설치·운영자 G3·나머지 상태 G2는 **HOLD**다.
+
+2026-10-07 D-493 Fleet 지도 판독 후속: 320px에서 지도 라벨이 큰 비트맵을 축소하며 흐려지던 문제를 표시 크기·화면 밀도에 맞는 래스터 크기로 바로잡았다. [LOCAL 27셀 상태×폭 재확인](../uiux-fleet-map-raster-2026-10-07/result.md)은 페이지 오류·가로 넘침 0, 데스크톱 3:2/전화 동등 패널 폭, 비상 정지 가시성과 상태별 차단을 확인했다. 이는 합성 데이터의 부분 G2 근거이며 실제 사이트 설치·장치 readback·운영자 G3·남은 G2는 **HOLD**다.
+
+2026-10-07 현장 지도 로봇 상태 분리 후속: 로봇 목록 503이 이미 읽은 지도를 지도 오류로 숨기지 않도록 하고, 401/403이면 남은 운영자 조작을 잠갔다. [세 폭 LOCAL 증거](../uiux-site-map-roster-state-2026-10-07/result.md)는 지도 보기·경로 미리보기 차단·비상 정지 가시성을 확인했다. 브라우저 전체 **38 passed**, `known_failures.py` **0 NEW**. 이는 사용 불가·거부 G2 부분 근거이며 실물·운영자 G3·나머지 G2는 **HOLD**다.
+
+2026-10-07 현장 지도 현재 후보 G2 후속: [상태×1440/390/320px LOCAL 캡처 48장](../uiux-site-map-plan-evidence-2026-10-07/result.md)에 최초 브라우저 기동·정상·응답 지연·연결 끊김·사용 불가·빈 목록·거부·SAFE_STOP/정지 미확인·활성화 확인창을 채웠다. 목적지·로봇·좌표를 바꾸면 이전 경로 그림과 결과를 지우며, 늦게 도착한 이전 요청 결과도 버린다. 로봇 선택에는 정지 근거를 표시한다. 최종 코드 브라우저 **50 passed**, 캡처 재생 **15 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**. `/console/site-map`의 D-153 최소 LOCAL 브라우저 행렬은 채웠지만 실물 첫 기동·사이트 설치와 readback·320px 실제 사용자 판독·G3가 없어 `console` 표면과 제품은 **HOLD**다.
+
+2026-10-07 게임 보드 현재 후보: [선언 폭 1280×800/390×800/320×568의 7상태 LOCAL 행렬](../uiux-game-board-matrix-2026-10-07/result.md)을 실제 PreviewServer와 Chromium에서 재생했다. 최초·첫 오류·fresh·delayed·disconnected·unavailable·정지 요청 접수의 21개 화면에서 전화 점수/필드/관측 폭 차이는 1px 이하, 가로 넘침 0, 정지는 첫 화면 안이다. 행렬 브라우저 **3 passed**, 보드 전체 브라우저 **37 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**. HTTP 정지 요청 접수는 실제 SAFE_STOP 확인이 아니며 실물 경기·카메라·정지와 운영자 G3가 없어 게임 표면과 제품은 **HOLD**다.
+
+2026-10-07 Cell 접속 역할: [320px 현재 후보 화면](../uiux-cell-role-label-2026-10-07/result.md)은 원시 `operator` 대신 Fleet 공통의 「운영자」를 표시한다. 수정 전 브라우저 **1 failed**, 수정 후 **1 passed**, Cell 전체 브라우저 **49 passed**, G1 **90 passed**, `known_failures.py` **0 NEW**다. 역할 판정과 요청은 그대로이며 Cell 전체 G2·사이트 계정·장치·G3가 남아 제품은 **HOLD**다.
+
+2026-10-07 Cell 문서 목록: [마지막 수신 시각 LOCAL 화면](../uiux-cell-list-readtime-2026-10-07/result.md)은 문서 수정 시각과 목록 HTTP 응답을 받은 시각을 분리한다. 1440/390/320px의 목록 성공·실패·복구 **6 passed**, 조회 잠금 **1 passed**, Cell 전체 브라우저 **49 passed**, G1 **90 passed**, `known_failures.py` **0 NEW**다. 브라우저 시각이므로 서버가 판정한 `fresh`/`delayed` 증거는 아니며 Cell 전체 G2·실물·G3는 **HOLD**다.
+
+2026-10-07 Pilot 연결 로비: [320/390px 빈 목록·실패 LOCAL 화면](../uiux-pilot-lobby-width-2026-10-07/result.md)에서 `다시 찾기`·`연결`이 코드 입력 칸과 같은 폭이다. 로비·태블릿 브라우저 **7 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. Pilot 전체 선언 상태·실물 태블릿/로봇·운전자 G3는 **HOLD**다.
+
+2026-10-07 Robot 운용 열: [현재 후보 18셀 LOCAL 계측](../uiux-robot-column-width-2026-10-07/result.md)에서 1280px 감지·지도·조작 가시 패널 폭 차이를 15.01→0.01px로 줄였다. 320/390px 네 패널은 각 폭에서 같고 가로 넘침·페이지 오류 0이다. 역할 셸 브라우저 **9 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. 합성 CORE의 지도 404·호스트 503을 캡처 도구가 보고하므로 정상 상태 G2 수용으로 읽지 않는다. 선언 상태 전체·실물 readback·운영자 G3는 **HOLD**다.
+
+2026-10-07 Pilot 접속 거부: [조회 전용·구동 꺼짐 2상태×2000/1200/390/320px LOCAL 화면](../uiux-pilot-gate-denied-2026-10-07/result.md)에서 원시 `BLOCK`·`viewer`·구동 코드 대신 차단 상태·권한·이유가 운용자 말로 나온다. 비상 정지 가시, 주행 시작 없음, 가로 넘침·페이지 오류 0. 브라우저 **11 passed**, 드라이버 **8 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. Pilot 전체 G2·실물·G3는 **HOLD**다.
+
+## 2026-10-07 Pilot 주행 HUD 상태 용어
+
+[LOCAL 결과](../uiux-pilot-drive-status-2026-10-07/result.md): OPEN·MANUAL 원시 코드 대신 상태 수신·수동을 표시한다. 2000×1200, 1200×2000, 390×844, 320×568의 정상 연결 화면 4건과 G1 90건 통과, 각각 known_failures.py 0 NEW. 재연결 등 전체 G2, 현장 설치본, 사용자 G3는 HOLD.
+
+## 2026-10-07 Pilot 재연결 중 주행 차단
+
+[LOCAL 결과](../uiux-pilot-reconnect-2026-10-07/result.md): 상태 소켓 상실 후 새 인증 상태 프레임 전까지 주행 명령을 차단하고 0을 보낸다. 상태 재연결 중은 2000×1200, 1200×2000, 390×844, 320×568에서 비상 정지와 함께 보인다. 세션·브라우저 23 passed, G1 90 passed, 각각 known_failures 0 NEW. 전체 G2, 설치본 readback, 사용자 G3는 HOLD.
+
+## 2026-10-07 현장 mDNS·이미지 재확인
+
+[읽기 전용 현장 기록](../uiux-site-readback-2026-10-07/result.md#2026-10-07-1557-kst-재확인): Fleet·Vision·proxy 이미지 태그는 `5eb726c13`으로 현재 로컬 후보 `899d7a1a5`보다 이전이다. 두 로봇의 IPv4 `_rosy._tcp` 광고와 Fleet 컨테이너 UID 10001 이름 해석은 확인됐다. 이는 발견·이미지 계층 근거이며 설치된 현장 UI 화면, 제어 건강, 현재 후보의 장치 readback 또는 G3 수용은 아니다. **제품 전체 HOLD**.
+
+## 2026-10-07 16:41 KST 사이트 G3 준비 재확인
+
+[현재 읽기 전용 기록](../uiux-site-g3-readiness-2026-10-07/result.md): Fleet·Vision·proxy의 `5eb726c13…` 이미지 태그는 로컬 후보 `43a823ac5…`의 조상이다. 로봇 mDNS 광고 2개와 Fleet 서비스 UID 10001의 이름 해석 2건은 확인했다. 현재 후보의 설치 화면·로봇/카메라 readback과 [실제 운영자 독회](operator-walkthrough.md)는 아직 없다. **제품 전체 HOLD**.

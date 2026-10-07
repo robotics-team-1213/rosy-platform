@@ -33,7 +33,7 @@ from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, traffic
 from fleet.server.console_view import (
-    CapabilityDisplay, _error_of, _formation_stream_evidence, _shown,
+    CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
 )
 from fleet.swarm.session import (
@@ -52,7 +52,7 @@ logger = logging.getLogger("fleet.console")
 MAP_TTL_S = 10.0
 
 
-class FleetConsole:
+class FleetConsole(TripAware):
     """robots.yaml 한 장에 적힌 N대를 하나의 관제 표면으로 묶는다."""
 
     def __init__(
@@ -120,6 +120,8 @@ class FleetConsole:
         self._loc_null_since: dict[str, Optional[float]] = {}
         #: robot_id -> the localization service's view (needs_human), set by app.py.
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
+        #: D-494 3: every state read also feeds the trip-only map pose (its `odom_pose`).
+        self._state_sink: Optional[Callable[[str, dict], None]] = None
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
@@ -218,6 +220,9 @@ class FleetConsole:
 
     def set_localization_view(self, view: Optional[Callable[[str], Optional[dict]]]) -> None:
         self._localization_view = view
+
+    def set_state_sink(self, sink: Optional[Callable[[str, dict], None]]) -> None:
+        self._state_sink = sink
 
     def _client(self, robot_id: str) -> RobotClient:
         client = self._clients.get(robot_id)
@@ -550,7 +555,7 @@ class FleetConsole:
             pose = self._pose_of(robot_id)
             # 거리장 계산은 순수 계산이고 맵이 커지면 몇백 ms 가 된다(40x40 m, 20 m 경로에서
             # 0.38 s). 이벤트 루프에서 돌리면 그동안 다른 로봇의 폴링까지 같이 멈춘다.
-            bay = None if pose is None else await asyncio.to_thread(
+            bay = None if pose is None or self.trip_busy(robot_id) else await asyncio.to_thread(
                 bays.best_bay, grid, route, pose, keep_out_m=self._yield_keep_out_m)
             if bay is None:
                 no_space.append(robot_id)
@@ -609,6 +614,11 @@ class FleetConsole:
             if state:
                 robot_id = row["robot_id"]
                 self._seen[robot_id] = state
+                if self._state_sink is not None:
+                    try:
+                        self._state_sink(robot_id, state)
+                    except Exception:   # never let the sink skip the trust update below
+                        logger.debug("state sink failed for %s", robot_id, exc_info=True)
                 if state.get("localization") is not None:
                     self._loc_null_since[robot_id] = None
                 elif robot_id in self._loc_null_since:
@@ -729,7 +739,7 @@ class FleetConsole:
                         for alt_row in robots:
                             alt_id = alt_row["robot_id"]
                             alt_state = alt_row.get("state") or {}
-                            busy = alt_id in self._goals or alt_id in self._queued
+                            busy = alt_id in self._goals or alt_id in self._queued or self.trip_busy(alt_id)
                             if (alt_id != robot_id and alt_row.get("online")
                                     and not alt_state.get("capabilities_degraded")
                                     and not busy):

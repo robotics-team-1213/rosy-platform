@@ -46,7 +46,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const { width, height } = grid;
     // Occupancy cells stay pixelated, while map labels need enough backing pixels
     // to remain legible when a small grid is stretched across the console.
-    const scale = Math.min(10, Math.max(1, Math.floor(1600 / Math.max(width, height))));
+    const displaySize = Math.min(canvas.clientWidth || 1600, canvas.clientHeight || 1600) * (window.devicePixelRatio || 1);
+    const scale = Math.min(10, Math.max(1, Math.round(displaySize / Math.max(width, height))));
     canvas.width = width * scale;
     canvas.height = height * scale;
     const ctx = canvas.getContext("2d");
@@ -384,23 +385,45 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     if (!bounds) return;
     const canvas = el("map-canvas");
     const calibration = cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
+    // 교정 낡음(카메라 재조준): 정지 로봇의 관측 차이가 계속 클 때(tracking-view). 낡은 교정으로
+    // 실영상 위에 지도를 얹으면 잘려 돌아간 지도를 정확해 보이게 그린다 — 영상과 지도를 함께
+    // 내리고 미터 뷰로 돌아간다. 맞춤 패널에서 다시 검토·수락하면 돌아온다.
+    const drift = calibration && view.trackingDrift ? view.trackingDrift : null;
+    const cameraOn = calibration && !drift;
     // 비트맵을 화면에 보이는 박스 크기(× DPR)에 맞춘다 — 글자와 선이 CSS px 로 읽히게.
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
     const rect = canvas.getBoundingClientRect();
     const fallback = canvasSizeFor(bounds, 800);
-    const width = calibration ? cameraFrame.image.naturalWidth : rect.width > 0 ? rect.width : fallback.width;
-    const height = calibration ? cameraFrame.image.naturalHeight : rect.height > 0 ? rect.height : fallback.height;
-    const dpr = calibration ? 1 : window.devicePixelRatio || 1;
+    const width = cameraOn ? cameraFrame.image.naturalWidth : rect.width > 0 ? rect.width : fallback.width;
+    const height = cameraOn ? cameraFrame.image.naturalHeight : rect.height > 0 ? rect.height : fallback.height;
+    const dpr = cameraOn ? 1 : window.devicePixelRatio || 1;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
     const t = fitTransform(bounds, width, height, 32);
-    const toPx = calibration
+    const toPx = cameraOn
       ? (x, y) => { const p = projectCamera(calibration.map_to_image, x, y); return { x: p?.[0] ?? NaN, y: p?.[1] ?? NaN }; }
       : (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
-    if (calibration) ctx.drawImage(cameraFrame.image, 0, 0, width, height);
-    else { ctx.fillStyle = css("--ground-deep"); ctx.fillRect(0, 0, width, height); }
+    if (cameraOn) ctx.drawImage(cameraFrame.image, 0, 0, width, height);
+    else {
+      ctx.fillStyle = css("--ground-deep");
+      ctx.fillRect(0, 0, width, height);
+      if (drift) {
+        const text = `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}).`
+          + " 카메라 맞춤을 다시 검토·수락하세요.";
+        ctx.save();
+        ctx.font = font(13);
+        const boxWidth = ctx.measureText(text).width + 24;
+        ctx.fillStyle = css("--scrim");
+        ctx.fillRect(Math.max(4, (width - boxWidth) / 2), 8, boxWidth, 28);
+        ctx.fillStyle = css("--status-warn");
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(text, width / 2, 14);
+        ctx.restore();
+      }
+    }
     const labelFont = font(12);
 
     // 0.5 m 격자
@@ -513,10 +536,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         el("map-tag").textContent =
           `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`
           + (cameraMapCalibration(cameraFrame, calibrations, view.siteMap)
-            ? ` · Rosy Cam 실영상 · ${cameraMapCalibration(cameraFrame, calibrations, view.siteMap).calibration_revision}` : "")
+            ? (view.trackingDrift
+              ? " · 카메라 교정 어긋남 — 맞춤 재수락 필요"
+              : ` · Rosy Cam 실영상 · ${cameraMapCalibration(cameraFrame, calibrations, view.siteMap).calibration_revision}`) : "")
           + callLabel;
         el("map-canvas").setAttribute("aria-label",
-          `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 이 지도에서는 목표를 지정할 수 없습니다.`);
+          `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 이 지도에서는 목표를 지정할 수 없습니다.`
+          + (view.trackingDrift ? " 카메라 교정이 어긋나 실영상 대신 미터 눈금으로 보여 줍니다." : ""));
       }
       return;
     }
@@ -739,15 +765,30 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   }
   function bindCamera(visionView) {
     // The calibrated map draws the same authenticated Vision frame; Fleet does not relay image bytes.
-    // The raw frame is shown once, in the camera panel — never a second copy under the map.
+    // D-493: the raw frame shows in one place at a time — the rail thumbnail, or the map stage
+    // (#map-birdseye) when there is no map or the operator asks for the large view. CSS picks the place.
+    const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
+    const setLive = (url) => {
+      birdseye.hidden = !url;
+      if (url) birdseye.src = url;
+      toggle.disabled = !url;
+      if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
+    };
+    setLive(null);
+    scope.listen(toggle, "click", () => {
+      const large = stage.dataset.view !== "camera";
+      stage.dataset.view = large ? "camera" : "map";
+      toggle.setAttribute("aria-pressed", String(large));
+    });
     let cancelMapCameraExpiry = () => {};
     scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
       cancelMapCameraExpiry();
       if (frame.state !== "live" || !Number.isFinite(frame.ageMs) || frame.ageMs < 0 || frame.ageMs > 3000) {
-        setCameraFrame(null); return;
+        setCameraFrame(null); setLive(null); return;
       }
       setCameraFrame(frame);
-      cancelMapCameraExpiry = scope.timeout(() => setCameraFrame(null), Math.max(0, 3000 - frame.ageMs));
+      setLive(frame.url);
+      cancelMapCameraExpiry = scope.timeout(() => { setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
     })));
   }
   return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence, setCameraFrame, bindCamera };

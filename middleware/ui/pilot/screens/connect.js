@@ -4,6 +4,7 @@
 // 토큰을 localStorage 에 평문으로 남겼다.
 
 const RECENT_KEY = "rosy.pilot.recent";
+const ROLE_LABEL = {operator: "운영자", administrator: "관리자", viewer: "조회 전용"};
 
 function getRecent() {
   let list = [];
@@ -142,14 +143,16 @@ function renderRecentList(root, onConnect) {
 function tokenForm() {
   const form = el("form", null, {"data-pilot-token-form": ""});
   const field = el("ui-field", null, {
-    placeholder: "로그인 코드(ABCD-EFGH) 또는 토큰", "aria-label": "로그인 코드 또는 운전 토큰",
+    placeholder: "ABCD-EFGH 또는 토큰", "aria-label": "로그인 코드 또는 운전 토큰",
     autocomplete: "off", name: "token",
     // 태블릿 실측: 안드로이드 키보드가 첫 글자를 대문자로 바꿔 유효한 토큰이 401 이 됐다.
     autocapitalize: "off", autocorrect: "off", spellcheck: "false", inputmode: "text",
   });
   const submit = el("ui-button", "연결", {type: "button"});
   submit.setAttribute("kind", "primary");
-  form.append(field, submit);
+  const label = el("label", "로그인 코드 또는 운전 토큰", {class: "ui-field-label"});
+  label.append(field);
+  form.append(label, submit);
   return {form, field, submit};
 }
 
@@ -304,9 +307,7 @@ async function check(root, onReady, onEnter) {
   if (!verdict.allowed) {
     setTag("차단");
     notice("진입이 차단되었습니다");
-    const pairs = [["게이트", "BLOCK"], ["운전 역할", me.body?.role ?? "—"],
-                   ["수동 운전", caps.body?.teleop === true ? "보류" : "보류됨"],
-                   ["구동", caps.body?.runtime?.drive === true ? "켜짐" : "꺼짐"]];
+    const pairs = [["조종", "차단됨"], ["사용 권한", ROLE_LABEL[me.body?.role] ?? "확인 필요"]];
     const statuses = verdict.reasons.map((r) => el("ui-status", gate.describeReason(r), {role: "status"}));
     const actions = el("ui-actions");
     const retry = el("ui-button", "다시 시도", {type: "button"});
@@ -343,8 +344,7 @@ async function check(root, onReady, onEnter) {
   actionIcon(camera, "fit");
   camera.addEventListener("click", () => showCamera(root, () => check(root, onReady, onEnter)));
   const actions = el("ui-actions"); actions.append(camera, enter);
-  const roleLabel = {operator: "운영자", administrator: "관리자", viewer: "조회 전용"};
-  const summary = readoutPair([["로봇 연결", "확인됨"], ["사용 권한", roleLabel[me.body?.role] ?? "확인 필요"]]);
+  const summary = readoutPair([["로봇 연결", "확인됨"], ["사용 권한", ROLE_LABEL[me.body?.role] ?? "확인 필요"]]);
   summary.dataset.gateState = emergency ? "BLOCK" : "READY";
   root.replaceChildren(
     el("ui-head", "로봇에 연결됐습니다", {id: "pilot-gate-heading"}),

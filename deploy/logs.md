@@ -2577,3 +2577,11 @@
 - 변경: `rosy-tailscale-join.service`(+헬퍼)가 프로비전된 일회용 auth key를 소진해 로봇을 팀 테일넷에 태그로 가입시킨다. 이미지에 고정(sha256) tailscale deb와 의존성(iptables, iproute2)·tailscaled 활성화를 추가했다. 개인화 번들에 선택 `tailscale` 섹션이 들어가고 첫 부팅이 `/etc/rosy/tailscale-join.json`(0600)을 쓴다. site 방화벽·README·SSH 안내·테일넷 운영 런북(`docs/deployment/tailnet-remote-access.md`)에 `tailscale0` 경로를 문서화했다.
 - 증거: test_rosy_tailscale_join.py·test_image_customization_contract.py·test_sd_personalization.py·test_first_boot_provisioning.py 신규 포함 1411+ passed(affected --run, known_failures 0 new). 잠금 목록·스크럽·영수증 지문 변이로 빨강 확인. tailscale 1.102.5 arm64 deb는 실제 다운로드 해시로 검증(85315e74…). 장치(TWIN·DEVICE) 검증은 별도.
 - gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · feat(site): site-users.yaml 원자적 관리 CLI와 재시작 게이트
+
+- 변경: `deploy/site/site_users.py` 추가 — `list`/`add --principal --role --token-stdin`/`remove`/`validate`. 토큰은 표준입력으로만 받아 sha256 다이제스트만 저장하고 argv·로그에 남지 않는다. add·remove는 임시 파일+`os.replace` 원자적 쓰기 뒤 쓴 bytes를 다시 파싱·형태 검증(Fleet `load_site_users`와 같은 규칙: users 단일 키, principal_id/role/token_sha256 정확히, 64자 소문자 hex, 중복 금지, 빈 목록 금지)하며 실패 시 원본을 그대로 둔다. 마지막 사용자 제거·중복 principal·토큰 재사용을 거부하고, root 실행 때 `root:10001` 0440을 직접 적용, 아니면 `chown 0:10001 … && chmod 440 …` 안내를 출력한다. `validate`은 내용에 더해 권한 비트(타인 접근·그룹 쓰기 금지)와 소유 그룹을 검사해 config-reload 감시 컨테이너의 재시작 전 게이트로 쓰게 했다. 감시 컨테이너(/reload.py) 원본은 저장소에 없어 현장 전용으로 확인 — README 「Prepare an Ubuntu host」에 CLI 사용법과 2026-10-07 root:101 오소유 크래시 루프 사고의 운영 주의(수동 복원 금지, 재시작 전 validate 게이트)를 문서화했다. `deploy/site/AGENTS.md` Key Files·시험 목록에 반영.
+- 증거: test/test_site_users_cli.py 신규 27 passed — 추가→list→제거 왕복(Fleet 실제 로더로 적재 확인), 잘못된 role 화이트리스트 거부, 빈·공백 토큰 거부, 손상 YAML·잘못된 형태 거부 시 원본 불변·임시 파일 잔존 없음, 중복 principal·다이제스트 재사용 거부, 마지막 사용자 제거 거부, dry-run 무변경, 소유권 안내 출력, validate 게이트(내용+권한+그룹). 변이 증명: role 화이트리스트(CLI·FILE 양층)·digest 정규식·마지막 사용자 거부를 각각 깨뜨려 빨강 확인 후 원복. site 일괄 pytest 407 passed 2 skipped(test_site_users_cli 포함 14 파일 + test_document_placement), known_failures 0 new.
+- gate 변화: 없음. 현장 감시 컨테이너에 validate 게이트 적용 여부는 별도 확인 사항.
+- 결정: 없음 (D-276 파일 계약 유지, CLI role은 사람 세 역할로 제한 — service 행은 Cell 흐름 소유)
+- 교훈: 원자적 쓰기는 내용 무결성만 지킨다. 오소유(root:101) 사고는 쓰기 후 소유권 적용·검사가 없으면 그대로 재시작 루프로 이어진다 — 재시작 감시자는 "바뀌었으니 재시작"이 아니라 "검증 통과했으니 재시작"이어야 한다.

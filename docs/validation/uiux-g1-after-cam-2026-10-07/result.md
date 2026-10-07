@@ -1,6 +1,6 @@
 # ROSY UI/UX G1 current-tree check — 2026-10-07
 
-Local `main` candidate: `8f16858b73b57e0f013103c1e33691858823b31f`.
+Local `main` candidate: commit `8f16858b73b57e0f013103c1e33691858823b31f`.
 
 Ran D-153's available machine checks after the Cam pairing change:
 

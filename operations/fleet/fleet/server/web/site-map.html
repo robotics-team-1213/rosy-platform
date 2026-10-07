@@ -44,6 +44,9 @@
     <div class="columns">
       <ui-section aria-labelledby="edit-heading">
         <ui-head><ui-text id="edit-heading" scale="label">초안 편집</ui-text></ui-head>
+        <label>카메라에서 생성한 지도 초안<input class="ui-field" id="camera-map-file" type="file" accept="application/json,.json"></label>
+        <ui-button id="import-camera-map" kind="quiet" disabled>카메라 지도 초안 가져오기</ui-button>
+        <ui-text>가져온 차로의 연결·통행 방향을 검토하세요. 활성 지도는 초안 활성화 전까지 바뀌지 않습니다.</ui-text>
         <ui-text id="selection">선택 없음</ui-text>
         <div id="place-form" class="form" hidden>
           <label>주소 이름<input class="ui-field" id="place-name" maxlength="64"></label>
@@ -74,6 +77,43 @@
         <ol id="trip-actions" aria-label="교차로 동작"></ol>
       </ui-section>
     </div>
+    <ui-section aria-labelledby="run-heading">
+      <ui-head><ui-text id="run-heading" scale="label">운행</ui-text></ui-head>
+      <ui-text>계산한 경로를 30초 안에 출발시킵니다. 현장에서 한 번에 한 대만 운행합니다. 위치를 믿을 수 없으면 지시를 멈춥니다.</ui-text>
+      <ui-status id="trip-run" state="empty">관제 접속 필요</ui-status>
+      <div class="actions">
+        <ui-button id="trip-start" kind="primary" disabled reason="관제 접속이 필요합니다">운행 시작</ui-button>
+        <ui-button id="trip-confirm" kind="quiet" hidden>바뀐 경로로 계속</ui-button>
+        <ui-button id="trip-cancel" kind="irreversible" disabled reason="관제 접속이 필요합니다">운행 취소</ui-button>
+      </div>
+    </ui-section>
+    <ui-section aria-labelledby="teach-heading">
+      <ui-head><ui-text id="teach-heading" scale="label">지도 가르치기</ui-text></ui-head>
+      <ui-text>운전자가 Pilot으로 로봇을 모는 동안 지도 위치를 기록합니다. 가르치기는 로봇을 움직이지 않습니다. 확정하면 초안에만 들어가고, 활성화는 따로 합니다.</ui-text>
+      <label>로봇<select class="ui-field" id="teach-robot"></select></label>
+      <div class="actions">
+        <ui-button id="teach-start" kind="primary" disabled reason="관제 접속이 필요합니다">기록 시작</ui-button>
+        <ui-button id="teach-stop" kind="quiet" disabled reason="관제 접속이 필요합니다">기록 멈춤</ui-button>
+      </div>
+      <ui-status id="teach-status" state="empty">관제 접속 필요</ui-status>
+      <div id="teach-form" class="form" hidden>
+        <label>시작 장소<select class="ui-field" id="teach-from"></select></label>
+        <label>시작이 새 주소면 이름<input class="ui-field" id="teach-from-name" maxlength="64"></label>
+        <label>끝 장소<select class="ui-field" id="teach-to"></select></label>
+        <label>끝이 새 주소면 이름<input class="ui-field" id="teach-to-name" maxlength="64"></label>
+        <label>통행 방향<select class="ui-field" id="teach-direction">
+          <option value="one_way">일방</option><option value="two_way">양방</option></select></label>
+        <label>주행 방식<select class="ui-field" id="teach-mode">
+          <option value="lane">차선 따라가기</option><option value="free">지도 좌표 추종</option></select></label>
+        <label>속도 상한 (m/s)<input class="ui-field" id="teach-speed" type="number" min="0.01" max="5" step="0.01" value="0.2"></label>
+        <div class="actions"><ui-button id="teach-confirm" kind="primary" disabled>초안에 차로 확정</ui-button></div>
+      </div>
+      <div class="form">
+        <label>새 주소 이름<input class="ui-field" id="teach-place-name" maxlength="64"></label>
+        <label>장소 종류<select class="ui-field" id="teach-place-kind"></select></label>
+        <div class="actions"><ui-button id="teach-place" kind="quiet" disabled reason="관제 접속이 필요합니다">여기에 주소 만들기</ui-button></div>
+      </div>
+    </ui-section>
     <div class="actions"><a class="console-return" href="/console">관제 화면으로 돌아가기</a></div>
   </main>
 </ui-shell>

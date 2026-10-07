@@ -43,7 +43,7 @@ robot is in, never the tape. Per frame, no odometry:
                 further. Near the corner the open side is out of view, so the
                 side is latched (frame count, no pose) while a transverse line
                 stays ahead. Opt-in (corner_turning; the node's
-                lane_corner_turning, off on the device).
+                lane_corner_turning, on by robot default since D-495).
 
 Output keeps the lane contract: error > 0 means steer right (CORE:
 angular = -gain * error); error = -target_y / lane_half_width, clipped to
@@ -65,6 +65,7 @@ from collections import deque
 import numpy as np
 
 from .lane import LaneObservation
+from .crosswalk_stripes import crosswalk_extent
 from .lane_bev import BirdsEye
 from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tests
     CORE_HALF_M,
@@ -297,6 +298,7 @@ class LaneKeeper:
             self.last["reason"] = "washed"
             self._forget()
             return None
+        self.last["crosswalk"] = crosswalk_extent(grid, view.x[:, 0], view.y[0, :])  # D-491 §4
         coarse = grid[::FIT_STRIDE, ::FIT_STRIDE]
         cells = np.flatnonzero(coarse.ravel())
         points = np.stack([view.x[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells],

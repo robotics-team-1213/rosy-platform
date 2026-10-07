@@ -832,3 +832,69 @@ def test_visibility_observations_are_not_operational_approval():
             browser.close()
     finally:
         server.close()
+
+
+@pytest.mark.parametrize("width,height", [(1280, 800), (390, 800), (320, 568)])
+def test_board_evidence_matrix_on_declared_widths(width, height):
+    """D-153 LOCAL cells; accepted stop requests are not physical SAFE_STOP readback."""
+    from playwright.sync_api import sync_playwright
+
+    now = [100.0]
+    board = PreviewBoard(clock=lambda: now[0])
+    server = PreviewServer(board, port=0)
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, width, height, url=url)
+            page.goto(url, wait_until="domcontentloaded")
+
+            def capture(state):
+                boxes = page.evaluate("""() => ({
+                  overflow: document.documentElement.scrollWidth - innerWidth,
+                  scrollY,
+                  panels: ['.score', '.pitch-wrap', '.field-details']
+                    .map(s => document.querySelector(s).getBoundingClientRect().toJSON()),
+                  stop: document.querySelector('#halt').getBoundingClientRect().toJSON(),
+                })""")
+                assert boxes["overflow"] <= 0, (state, boxes)
+                if state == "fresh":
+                    assert boxes["scrollY"] == 0, (state, boxes)
+                assert boxes["stop"]["bottom"] <= height and boxes["stop"]["right"] <= width, (state, boxes)
+                if width <= 390:
+                    assert max(b["width"] for b in boxes["panels"]) - min(b["width"] for b in boxes["panels"]) <= 1, (state, boxes)
+                    assert max(b["x"] for b in boxes["panels"]) - min(b["x"] for b in boxes["panels"]) <= 1, (state, boxes)
+                save_temp_screenshot(page, f"games_matrix_{state}_{width}x{height}.png")
+
+            page.wait_for_function("() => document.querySelector('#home-score')?.textContent === '—'")
+            capture("first_boot")
+            page.route("**/overlay.json", lambda route: route.fulfill(status=503))
+            page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'disconnected'")
+            assert page.locator("#home-score").inner_text() == "—"
+            capture("first_error")
+            page.unroute("**/overlay.json")
+            board.publish(_play_payload(), jpeg=None)
+            page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'fresh'")
+            capture("fresh")
+            now[0] += 3.0
+            page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'delayed'")
+            assert "3.0초 전" in page.locator("#connection").inner_text()
+            capture("delayed")
+            page.route("**/overlay.json", lambda route: route.fulfill(status=503))
+            page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'disconnected'")
+            capture("disconnected")
+            page.unroute("**/overlay.json")
+            legacy = board.snapshot()[0]
+            for key in ("generated_at", "age_s", "stale_after_s", "evidence"):
+                legacy.pop(key, None)
+            page.route("**/overlay.json", lambda route: route.fulfill(json=legacy))
+            page.wait_for_function("() => document.querySelector('#connection')?.dataset.evidence === 'unavailable'")
+            capture("unavailable")
+            page.route("**/stop", lambda route: route.fulfill(status=200, json={"ok": True}))
+            page.locator("#halt").click()
+            page.locator('#halt-status[data-state="sent"]').wait_for()
+            assert "실제 정지 확인 중" in page.locator("#halt-status").inner_text()
+            capture("stop_requested")
+            assert not errors, errors
+            browser.close()
+    finally:
+        server.close()

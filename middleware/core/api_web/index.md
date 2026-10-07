@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(api): D-483 N1 전체 틀린 코드 예산
-- 2026-10-07 · uncommitted · fix(api): D-483 재검토 반영(R1~R5)
-- 2026-10-07 · uncommitted · fix(api): D-483 보안 검토 반영(M1·M2·L1·L2·L4·L6)
-- 2026-10-06 · uncommitted · feat(api): D-483 로봇 화면 승인 코드로 피어 요청 승인
-- 2026-10-06 · uncommitted · chore(core_api_web): 계약 문서 버전 v1.109 동기
+- 2026-10-07 · uncommitted · docs(api): D-494 6 v1.119
+- 2026-10-07 · uncommitted · docs(api): D-498 v1.118
+- 2026-10-07 · uncommitted · fix(api): D-495 검토 L6 junction 수동 해제와 409 코드
+- 2026-10-07 · uncommitted · feat(api): D-495 junction turn_deg·advance_m
+- 2026-10-07 · uncommitted · feat(api): D-494 POST /api/v1/line-follow/junction

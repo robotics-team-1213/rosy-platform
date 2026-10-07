@@ -617,3 +617,105 @@
 - 변경: 연결 로비의 빈 목록 안내를 짧게 써 400dp·글자 130%에서 마지막 음절만 다음 줄로 밀리지 않게 했다. 발견·연결 로직은 그대로다.
 - 증거: 격리 Android 35 에뮬레이터 400/600/1000dp 캡처와 JVM 93 passed. 원본·해시는 `docs/validation/uiux-pilot-empty-copy-2026-10-07/result.md`에 있다.
 - gate 변화: LOCAL 빈 목록 G2 셀만 보강. 실물 태블릿 후보 설치·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 연결 로비 전화 폭
+
+- 변경: 320/390px에서 로봇 목록 재검색·로그인 연결 버튼을 코드 입력 칸의 가용 폭에 맞췄다.
+- 증거: `docs/validation/uiux-pilot-lobby-width-2026-10-07/result.md`; 로비·태블릿 브라우저 7 passed, G1 90 passed, 각 known_failures 0 NEW.
+- gate 변화: LOCAL 전화 빈 목록·실패 폭 G2 부분 근거. 전체 상태·실물·운전자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 접속 거부의 운용자 문구
+
+- 변경: 조회 전용·구동 꺼짐 게이트에서 원시 `BLOCK`, `viewer`, CORE 사유 코드를 운용자 말로 표시하고 중복·오해 가능한 기술 행을 줄였다. 판정·요청 경로는 그대로다.
+- 증거: `docs/validation/uiux-pilot-gate-denied-2026-10-07/result.md`; 거부 2상태×4폭, 브라우저 11 passed, 드라이버 8 passed, G1 90 passed, 각 known_failures 0 NEW.
+- gate 변화: LOCAL 거부 상태 G2 부분 근거. 다른 상태·실물·운전자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · 주행 HUD 상태 용어
+
+- 변경: 링크 상태와 운전 모드를 운용자 용어로 표시하고 내부 코드는 진단용 속성에 보존.
+- 증거: docs/validation/uiux-pilot-drive-status-2026-10-07/result.md; Chromium 4개 폭 4 passed, G1 90 passed, 각 known_failures.py 0 NEW.
+- gate 변화: LOCAL 일부 G2 보강. 나머지 상태·현장 장치·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 상태 소켓 상실 중 주행 차단
+
+- 변경: 소켓 상실 때 대기 명령을 비우고 이동을 0으로 덮으며, 인증된 새 상태 프레임 전까지 주행 명령을 막는다. 권한 거부·인증 재확인에도 적용.
+- 증거: docs/validation/uiux-pilot-reconnect-2026-10-07/result.md; 세션·브라우저 23 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: LOCAL 재연결 G2 일부 보강. 현장 장치·전체 상태×폭·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · fix(pilot): 열린 소켓의 무응답 상태 숨김
+
+- 변경: 상태 소켓이 열린 채 프레임을 멈추고 REST 상태 조회도 실패하면 마지막 속도·배터리·모드를 숨기고 「상태 수신 없음」을 표시한다. 다음 readback에서 회복한다.
+- 증거: [LOCAL 전이](../../../docs/validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 1 failed, 수정 후 관련 브라우저 11 passed, `known_failures.py` 0 NEW. G1 결과는 회차 기록에 둔다.
+- gate 변화: Pilot 320px G2 전이 일부 보강. 실제 태블릿·로봇 및 전체 G2/G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 비상 카메라 전화 폭
+
+- 변경: 읽기 전용 카메라 상단에서 안내와 홈·비상 정지를 분리하고 전화 폭의 두 행동을 같은 너비로 맞췄다.
+- 근거: [LOCAL 8셀](../../../docs/validation/uiux-pilot-emergency-width-2026-10-07/result.md). 관련 브라우저 12 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실물 정지 readback, 나머지 선언 셀, 사용자 G3와 제품 전체는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 전화 폭
+
+- 변경: 시트를 stage 밖 주행 root에 붙여 조작부 뒤 가림을 없앴다. 동등한 하단 행동을 같은 폭으로 하고 320px에서는 전폭으로 쌓아 녹화본 행·닫기를 첫 화면에 둔다.
+- 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 가림 재현 2 failed, 수정 뒤 관련 브라우저 7 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실제 태블릿·로봇 녹화 readback, 다른 상태와 사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 머리 상태 정직성
+
+- 변경: 실제 앱과 같이 Gazebo 팔 시험 fixture의 Home·비상 정지를 숨겼고, 팔 화면에서는 오래된 접속 대기·직접 조종 부제를 숨겨 본문의 시뮬레이션 전용·조작 가능 상태와 충돌하지 않게 했다.
+- 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-arm-header-2026-10-07/result.md). 수정 전 320px 1 failed, 수정 후 집중 브라우저 6 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실물 태블릿·팔 장치 readback, 다른 상태·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 로비의 기기·연결 버튼에 아이콘을 붙이고 왼쪽에 맞춘다
+
+- 변경: 네이티브 Pilot 로비 왼쪽 열의 「기기·연결」 버튼이 아이콘 대응표에 없어(옛 이름 "태블릿"만 있음) 글자만 보였고, 세로 레이아웃 기본 폭(가득 참)이라 글자가 가운데로 밀려 테두리 없는 글자처럼 보였다. 아이콘 대응에 "기기·연결"을 더하고(ic_tablet), 버튼을 내용 폭·왼쪽 정렬로 둔다.
+- 증거: Android JVM 93 passed. Lenovo 태블릿(무선 adb)에 설치해 로비 화면에서 아이콘과 정렬 확인(2026-10-07).
+- gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 수신 중단·회복 네 폭 LOCAL 확인
+- 변경: 상태 소켓 무응답과 REST 503/무응답의 기존 브라우저 검사를 Pilot 선언 폭 네 개로 확장.
+- 증거: 브라우저 8 passed, `known_failures.py` 0 NEW; 원본은 `X:/DevTemp/pilot-silent-widths/`.
+- gate 변화: Pilot G2 부분 근거 확대, 제품 전체 HOLD.
+- 결정: D-153.
+- 교훈: 좁은 폭만 통과해도 태블릿·가로 화면의 수신 중단 상태는 검증되지 않는다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 조작 응답 시간 출처 표시
+- 변경: 주행 HUD의 무표제 ms 값과 시한 초과에 `조작 응답`을 붙여 상태 수신 신선도와 구분.
+- 증거: 수신 중단 네 폭×두 실패 브라우저 8 passed, G1 관련 계약 35 passed, 각각 `known_failures.py` 0 NEW. 원본은 `X:/DevTemp/pilot-latency-label/`.
+- gate 변화: Pilot G2 정직성 부분 근거, 제품 전체 HOLD.
+- 결정: D-153, D-280.
+- 교훈: 요청 왕복 시간은 로봇 동작 완료나 상태 수신 시간의 근거가 아니다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 320px 카메라 면적 회복
+- 변경: 320×568 아래 배치에서 HUD 세로 간격과 여백을 줄여 카메라에 높이를 돌려줌.
+- 증거: 전체 Pilot 재검사 115 passed·1 failed(카메라 16.3%); 수정 뒤 카메라 배치 다섯 폭 5 passed, D-153 G1 90 passed, 성공 실행 `known_failures.py` 0 NEW. 원본은 `X:/DevTemp/pilot-camera-320/`.
+- gate 변화: Pilot G2 부분 보강. 전체 회귀·실물·G3는 HOLD.
+- 결정: D-153, D-363.
+- 교훈: 가로 넘침과 영상 비겹침만으로 전화 폭의 카메라 판독 면적을 보장하지 못한다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 카메라 면적 병합 후 검증
+- 변경: 병합 후 전체 재실행과 응급 카메라 집중 재실행 결과를 회차 기록에 추가.
+- 증거: 전체 브라우저 114 passed·2 timeout failed; 실패한 응급 카메라 네 폭 집중 재실행 4 passed, `known_failures.py` 0 NEW. `X:/DevTemp/pilot-camera-320/postmerge-full.txt`, `emergency-retry.txt`.
+- gate 변화: 320px 면적 결함은 집중 검사에서 해결. 전체 무오류 회귀·실물·G3는 HOLD.
+
+## 2026-10-07 · uncommitted · fix(pilot): APK 번들 시험에 팔 화면 자산 고정
+
+- 변경: `BundledAssetsTest.canonicalUiAndImportsAreBundled` 번들 목록에 팔 화면 여섯 자산(`pilot/screens/arm.js`, `pilot/screens/compose.js`, `pilot/widgets/gripper.js`, `pilot/arm-stick.js`, `pilot/controls.js`, `pilot/drivers/omx_sim.js`)을 추가했다. 앱 코드와 번들 규칙(`bundleScreens` glob)은 그대로다.
+- 증거: Android JVM `:app:testDebugUnitTest` 전체 93 passed(0 failed, 0 errors, 0 skipped) — `BundledAssetsTest` 3 passed 포함. 로그는 `X:/DevTemp/pilot-bundle/`에 있다.
+- gate 변화: 없음(SOURCE 번들 시험 보강).
+- 결정: D-411.
+- 교훈: 번들 포함은 glob이 자동으로 해 줘도 "들어 있다"의 증거는 시험 목록이 별도로 자란다 — 새 화면 자산을 올릴 때 목록을 같이 올린다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 휴대폰 HUD 행동 폭 정렬
+
+- 변경: 390px 주행 HUD의 영상 보기/도구·종료 행동을 두 칸씩 정렬하고, 320px의 도구·종료도 같은 가용 폭으로 맞췄다.
+- 증거: 수정 전 3 passed·2 failed, 수정 후 관련 브라우저 17 passed, 공용 계약 92 passed, 성공 실행 `known_failures.py` 0 NEW. 원본은 `X:/DevTemp/pilot-hud-actions/`와 `docs/validation/uiux-pilot-hud-action-width-2026-10-07/result.md`.
+- gate 변화: Pilot LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
+- 결정: D-153, D-280, DESIGN.md 동등 창·조작 폭 규칙.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 접속 로비 태블릿 폭과 입력 라벨
+
+- 변경: 로비 내용의 48rem 트랙을 태블릿에서 채우고, 코드·토큰 입력의 보이는 라벨과 짧은 힌트를 붙였다. 전화 입력·행동의 동등 전폭을 유지했다.
+- 증거: 수정 전 태블릿 두 셀 2 failed, 수정 후 빈 발견·오류 × 네 폭 4 passed(8캡처), 인접 로비 9 passed, 계약 96 passed, 성공 실행 `known_failures.py` 0 NEW. `X:/DevTemp/pilot-lobby-matrix/`, `docs/validation/uiux-pilot-lobby-matrix-2026-10-07/result.md`.
+- gate 변화: Pilot 접속 로비 LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
+- 결정: D-153, D-280, DESIGN.md 동등 폭·읽힘 규칙.

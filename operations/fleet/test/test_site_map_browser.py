@@ -1,6 +1,7 @@
 """D-488 M1 site map page in real Chromium (opt-in, ROSY_BROWSER_TESTS=1). No robot moves."""
 
 import os
+import json
 import re
 import socket
 import threading
@@ -15,6 +16,38 @@ from test_site_map_trip import _app, _on_ring_s
 pytestmark = pytest.mark.skipif(os.environ.get("ROSY_BROWSER_TESTS") != "1",
                                 reason="opt-in real Chromium browser scenario")
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_import_camera_map_draft_never_activates(page_site):
+    from playwright.sync_api import expect
+    from test_site_map_trip import _line
+
+    page, store, robot = page_site
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#session")).to_contain_text("bob")
+    previous = store.active_view()
+    camera_fixture = os.environ.get("ROSY_CAMERA_MAP_FIXTURE")
+    draft = json.loads(Path(camera_fixture).read_text(encoding="utf-8")) if camera_fixture \
+        else {"schema": "rosy.site_map/1", **_line()}
+    page.locator("#camera-map-file").set_input_files({
+        "name": "camera-draft.json", "mimeType": "application/json",
+        "buffer": json.dumps(draft).encode()})
+    page.locator("#import-camera-map").click()
+    expect(page.locator("#notice")).to_contain_text("카메라 지도 초안")
+    expect(page.locator("#site-map-svg [data-edge]")).to_have_count(len(draft["edges"]))
+    assert store.active_view() == previous
+    assert store.draft_view()["map"]["edges"]
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        for width, height in ((1440, 1000), (390, 844)):
+            page.set_viewport_size({"width": width, "height": height})
+            page.screenshot(path=str(Path(output) / f"camera-map-import-{width}x{height}.png"), full_page=True)
+    page.locator("#camera-map-file").set_input_files({
+        "name": "invalid.json", "mimeType": "application/json", "buffer": b'{"schema":"wrong"}'})
+    page.locator("#import-camera-map").click()
+    expect(page.locator("#notice")).to_contain_text("rosy.site_map/1")
+    assert store.active_view() == previous
 
 
 @pytest.fixture
@@ -64,6 +97,8 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#site-map-svg [data-place]")).to_have_count(4)
     expect(page.locator("#site-map-svg .arrow")).to_have_count(8)  # 4 one-way + 2 two-way edges
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-fresh-{width}x{height}.png"), full_page=True)
 
     page.select_option("#trip-place", "NW")
     page.locator("#trip-plan").click()
@@ -71,6 +106,8 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     expect(page.locator("#site-map-svg .plan")).to_have_count(3)
     expect(page.locator("#trip-actions li").last).to_contain_text("정지")
     assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-preview-{width}x{height}.png"), full_page=True)
 
     page.locator('#site-map-svg [data-place="NW"]').click()
     page.locator("#place-name").fill("A동 입구")
@@ -82,6 +119,8 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     page.locator("#save-draft").click()
     expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
     page.locator("#activate").click()
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-confirm-{width}x{height}.png"), full_page=True)
     page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
     expect(page.locator("#notice")).to_contain_text("활성 지도 v2")
     active = store.active()[1]
@@ -127,6 +166,81 @@ def test_site_map_fits_declared_widths(page_site, width, height):
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_first_boot_explains_access_before_any_map_evidence(page_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    expect(page.locator("#map-status")).to_contain_text("관제 접속 필요")
+    expect(page.locator("#map-viewport")).to_be_hidden()
+    expect(page.locator("#trip-plan")).to_be_disabled()
+    expect(page.locator("#estop")).to_be_disabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-first-boot-{width}x{height}.png"), full_page=True)
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+@pytest.mark.parametrize("safety,label", [(True, "비상 정지"), (None, "정지 상태 미확인")])
+def test_robot_safety_is_named_during_plan_only_preview(page_site, width, height, safety, label):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    page.route("**/api/fleet/state", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body='{"robots":[{"robot_id":"rosy_60","online":true,"state":{"safety":'
+             + ('{"estop":true}' if safety else 'null') + '}}]}'))
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    expect(page.locator("#trip-robot option")).to_contain_text(label)
+    expect(page.locator("#trip-summary")).to_contain_text("실행은 하지 않습니다")
+    expect(page.locator("#estop")).to_be_enabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-safety-{'stopped' if safety else 'unknown'}-{width}x{height}.png"), full_page=True)
+
+
+def test_changing_trip_target_clears_old_plan_evidence(page_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    page.select_option("#trip-place", "NW")
+    page.locator("#trip-plan").click()
+    expect(page.locator("#trip-summary")).to_contain_text("3개 차로")
+    expect(page.locator("#site-map-svg .plan")).to_have_count(3)
+    page.select_option("#trip-place", "SE")
+    expect(page.locator("#trip-summary")).to_contain_text("계산 전")
+    expect(page.locator("#site-map-svg .plan")).to_have_count(0)
+    expect(page.locator("#trip-actions li")).to_have_count(0)
+
+
+def test_late_trip_response_cannot_restore_old_target(page_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    pending = []
+    page.route("**/api/fleet/robots/rosy_60/trip", lambda route: pending.append(route))
+    page.select_option("#trip-place", "NW")
+    page.locator("#trip-plan").click()
+    page.wait_for_timeout(200)
+    assert pending
+    page.select_option("#trip-place", "SE")
+    with page.expect_response("**/api/fleet/robots/rosy_60/trip"):
+        pending[0].continue_()
+    expect(page.locator("#trip-summary")).to_contain_text("계산 전")
+    expect(page.locator("#site-map-svg .plan")).to_have_count(0)
+    expect(page.locator("#trip-actions li")).to_have_count(0)
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_viewer_cannot_be_offered_operator_actions(page_site, width, height):
     from playwright.sync_api import expect
 
@@ -138,11 +252,14 @@ def test_viewer_cannot_be_offered_operator_actions(page_site, width, height):
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#map-viewport")).to_be_visible()
     page.locator('#site-map-svg [data-place="NW"]').click()
-    for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan", "#estop"):
+    for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan", "#estop", "#trip-start",
+                     "#trip-cancel"):
         expect(page.locator(selector)).to_be_disabled()
         expect(page.locator(selector)).to_have_attribute("reason", "운영자 권한이 필요합니다")
     expect(page.locator("#place-form")).to_be_hidden()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth && document.querySelector('#estop').getBoundingClientRect().right <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-viewer-{width}x{height}.png"), full_page=True)
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -191,6 +308,8 @@ def test_site_map_server_error_has_recovery_and_no_stale_controls(page_site, wid
     expect(page.locator("#trip-plan")).to_be_disabled()
     expect(page.locator("#apply-edit")).to_be_disabled()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth && document.querySelector('#estop').getBoundingClientRect().right <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-map-error-{width}x{height}.png"), full_page=True)
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -209,6 +328,8 @@ def test_slow_site_map_load_shows_elapsed_wait(page_site, width, height):
     expect(page.locator("#connect")).to_be_disabled()
     expect(page.locator("#estop")).to_be_enabled()
     assert pending
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-delayed-{width}x{height}.png"), full_page=True)
     pending[0].continue_()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1", timeout=8000)
     expect(page.locator("#connect")).to_be_enabled()
@@ -234,6 +355,8 @@ def test_pending_map_read_then_disconnect(page_site, width, height):
     pending[0].abort()
     expect(page.locator("#notice")).to_contain_text("연결이 끊겼습니다")
     expect(page.locator("#map-status")).to_contain_text("지도 조회 실패")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-disconnected-{width}x{height}.png"), full_page=True)
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -319,6 +442,40 @@ def test_no_robot_explains_why_trip_preview_is_unavailable(page_site, width, hei
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_robot_state_failure_keeps_loaded_map_and_names_missing_evidence(page_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    page.route("**/api/fleet/state", lambda route: route.fulfill(
+        status=503, content_type="application/json", body='{"detail":"state unavailable"}'))
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    expect(page.locator("#map-viewport")).to_be_visible()
+    expect(page.locator("#trip-summary")).to_contain_text("로봇 상태 확인 불가")
+    expect(page.locator("#trip-plan")).to_be_disabled()
+    expect(page.locator("#estop")).to_be_enabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-robot-state-error-{width}x{height}.png"), full_page=True)
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_robot_state_auth_failure_removes_operator_controls(page_site, status):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.route("**/api/fleet/state", lambda route: route.fulfill(
+        status=status, content_type="application/json", body='{"detail":"unauthorized"}'))
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("관제 접속 필요" if status == 401 else "지도 조회 실패")
+    expect(page.locator("#estop")).to_be_disabled()
+    expect(page.locator("#trip-plan")).to_be_disabled()
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, width, height):
     from playwright.sync_api import expect
     from fleet.site_map import SiteMap
@@ -341,3 +498,24 @@ def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, wi
         page.screenshot(path=str(Path(output) / f"site-map-conflict-{width}x{height}.png"), full_page=True)
     page.locator("#connect").click()
     expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_trip_start_is_gated_and_names_the_d491_refusal(page_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, robot = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    expect(page.locator("#trip-start")).to_have_attribute("reason", "먼저 경로를 계산하세요")
+    expect(page.locator("#trip-cancel")).to_have_attribute("reason", "진행 중인 운행이 없습니다")
+    expect(page.locator("#trip-run")).to_contain_text("진행 중인 운행 없음")
+    page.select_option("#trip-place", "NW")
+    page.locator("#trip-plan").click()
+    expect(page.locator("#trip-start")).to_be_enabled()
+    page.locator("#trip-start").click()  # default wiring: no D-494 1 capability provider yet
+    expect(page.locator("#notice")).to_contain_text("주행 능력")
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")

@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · docs(adr): 횡단보도 구간 ADR 번호는 D-491
-- 2026-10-07 · uncommitted · fix(perception): IR 좌우 두 띠는 선 하나가 아니다(횡단보도 중앙 위상만)
-- 2026-10-07 · b53e1fe19 · fix(perception): camera fit grid steps, fine height band, record fit_step
-- 2026-10-06 · uncommitted · refactor(perception): GAZEBO_DETECTOR_LATERAL_PX 이름 (리뷰)
-- 2026-10-06 · c257fac01 · fix(perception): D-468 lane containment projection uncertainty
+- 2026-10-07 · uncommitted · fix(perception): D-468 containment 경계를 칠 안쪽 가장자리로
+- 2026-10-07 · uncommitted · fix(perception): 횡단보도 띠는 로봇 차로 폭 안에서만 센다 (D-491 리뷰)
+- 2026-10-07 · uncommitted · feat(perception): 차로와 나란한 횡단보도 줄무늬 구간 (D-491 §4)
+- 2026-10-07 · uncommitted · fix(perception): deterministic crosswalk corners
+- 2026-10-07 · uncommitted · fix(config): D-495 검토 H1 camera_x_offset_m URDF 공칭

@@ -331,6 +331,7 @@ class RosBridge:
             # map 프레임 pose 가 없을 때만 odom 이 보고 pose 를 쓴다 (규칙은 odometry.py).
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"])
         self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
+        self._svc.state.set_odom_pose(sample["x"], sample["y"], sample["yaw"])
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
         self._svc.loc_mission.observe_odom(sample["x"], sample["y"], sample["yaw"])
@@ -346,6 +347,9 @@ class RosBridge:
         self._svc.vision.lane_perception.accept(
             msg.data, now=time.monotonic(),
             source_now=self._node.get_clock().now().nanoseconds / 1e9)
+        observation.keep_junction(  # D-494/D-495: junction sighting (holds; starts a turn)
+            self._svc, msg.data, source_now=self._node.get_clock().now().nanoseconds * 1e-9,
+            received_at=self._line_clock())
 
     def _on_object_det_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/object_det/status", msg.data,

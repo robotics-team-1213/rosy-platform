@@ -440,7 +440,7 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
             map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
             roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
-            assert abs(map_panel["width"] - roster_panel["width"]) <= 1
+            assert abs(map_panel["width"] / roster_panel["width"] - (1.5 if width >= 1024 else 1)) <= 0.03  # D-493: map 3 : rail 2 from 64rem
             if width < 480:
                 assert abs(map_panel["x"] - roster_panel["x"]) <= 1
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -488,7 +488,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
             map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
             roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
-            assert abs(map_panel["width"] - roster_panel["width"]) <= 1
+            assert abs(map_panel["width"] / roster_panel["width"] - (1.5 if width >= 1024 else 1)) <= 0.03  # D-493: map 3 : rail 2 from 64rem
             if width < 480:
                 assert abs(map_panel["x"] - roster_panel["x"]) <= 1
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -535,9 +535,7 @@ def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url, page_fil
         assert abs(box["x"] - edges[0]) < 1
         assert abs(box["x"] + box["width"] - edges[1]) < 1
         if page_file == "index.html":
-            workflow = page.locator("#console-workflow").bounding_box()
-            assert workflow and abs(workflow["x"] - edges[0]) < 1
-            assert abs(workflow["x"] + workflow["width"] - edges[1]) < 1
+            assert page.locator("#console-workflow").count() == 0  # D-488
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         save_temp_screenshot(page, f"fleet_estop_result_{page_file[:-5]}_{width}.png")
         assert any(path == "/api/fleet/estop" for _method, path in posts), posts
@@ -720,6 +718,11 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
         assert "1/3 · 물리 정지 미확인" in summary.inner_text()
         result_box = summary.bounding_box()
         assert result_box and result_box["y"] >= 0 and result_box["y"] + result_box["height"] <= height
+        if width < 1024:
+            dispatch = page.locator("#dispatch-control").bounding_box()
+            all_robots = page.locator("#roster-toggle").bounding_box()
+            assert dispatch and all_robots and all_robots["y"] >= dispatch["y"] + dispatch["height"]
+            assert abs(dispatch["width"] - all_robots["width"]) <= 1
         page.get_by_text("rosy_02 주행 취소 응답 없음 — 대형 추종 ConnectError · 내비게이션 ConnectError · 차선 추종 ConnectError").wait_for()
         page.get_by_text("rosy_03 주행 취소 실패 — 주소 미확인 — 차선 추종 끄기 미전송").wait_for()
         page.get_by_text("대기 작업 2개 취소 · 로봇 취소 확인 대기 작업 1개").wait_for()
@@ -1233,6 +1236,173 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
         browser.close()
 
 
+def test_stale_camera_calibration_drops_the_frame_and_warns(console_url):
+    from playwright.sync_api import sync_playwright
+
+    # 카메라를 재조준한 뒤의 조감도: 정지 로봇의 추적 차이(offset_m)가 3폴링 연속 한계를
+    # 넘으면 낡은 교정으로 실영상을 얹지 않고 미터 눈금으로 돌아간다(map-view drawSiteView).
+    api = {
+        "/api/fleet/state": EMPTY_SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/site-map": {"maps": [{"map_id": "map_v2_fleet",
+                                      "polygon_m": [[0, 0], [1, 0], [1, 1], [0, 1]],
+                                      "bounds_m": {"min_x": 0, "min_y": 0,
+                                                   "max_x": 1, "max_y": 1}}]},
+        "/api/fleet/calibrations": {"calibrations": [{
+            "source_id": "ceiling_north", "map_id": "map_v2_fleet",
+            "calibration_revision": "paint-test", "image": {"width": 1280, "height": 720},
+            "lens": {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1},
+            "map_to_image": [1000, 0, 100, 0, 600, 50, 0, 0, 1]}]},
+        "/api/fleet/vision/sources": {"sources": ["ceiling_north"]},
+        "/api/fleet/vision/lease": {"source_id": "ceiling_north", "lease": "test-lease",
+                                     "frame_path": "/api/vision/sources/ceiling_north/frame", "expires_in_s": 60},
+        "/api/fleet/tracking": {"lease_s": 1, "sources": [
+            {"source_id": "ceiling_north", "map_id": "map_v2_fleet", "status": "OK",
+             "calibration_revision": "paint-test", "age_ms": 120, "fps": 3,
+             "last_error": None, "relearn_seq": 0}],
+            "robots": [{"robot_id": "rosy_01", "status": "MATCHED", "source_id": "ceiling_north",
+                        "offset_m": 0.8, "camera": {"x": 0.2, "y": 0.2, "footprint_m": 0.18, "score": 0.9},
+                        "pose": {"x": 0.8, "y": 0.8}, "pose_frame_verified": True}],
+            "unknown": []},
+    }
+    with sync_playwright() as sync_playwright_p:
+        browser, page, errors = _open_console(
+            sync_playwright_p, api,
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+
+        def serve_frame(route):
+            route.fulfill(status=200, content_type="image/svg+xml",
+                          body='<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">'
+                               '<rect width="1280" height="720" fill="#bf2030"/></svg>',
+                          headers={"X-Frame-Rectified": "false", "X-Frame-Seq": "42",
+                                   "X-Frame-Age-Ms": "20",
+                                   "X-Source-Lens": "kind=wide;focal_mm=2.2;hfov_deg=104.1"})
+
+        page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남')",
+            timeout=20000)
+        assert not page.evaluate("() => document.querySelector('#map-tag')?.textContent.includes('Rosy Cam 실영상')")
+        # 낡은 교정이므로 실영상(빨강)을 캔버스에 얹지 않았다 — 미터 눈금 바탕이다.
+        assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
+                             "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
+                             "return p[0] < 100 && p[1] < 100; }")
+        assert page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')"
+                             ".includes('미터 눈금')")
+        assert not errors
+        browser.close()
+
+
+# --- D-457 1: "추적 보정 적용"은 적용 시점 라이브 프레임의 렌즈를 본문에 찍는다 ----
+
+LENS_WIDE_HEADER = "kind=wide;focal_mm=2.2;hfov_deg=104.1"
+FIT_FRAME_BODY = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">'
+                  '<rect width="1280" height="720" fill="#bf2030"/></svg>')
+FIT_SITE_LANES = {
+    "maps": [{
+        "map_id": "map_v2_fleet", "source_ids": ["ceiling_north"],
+        "lane_graph_sha256": "lane-sha", "paint_sha256": "paint-sha",
+        "bounds_m": {"min_x": 0.0, "min_y": 0.0, "max_x": 6.4, "max_y": 3.6},
+        "polylines": [{"points": [[0.3, 0.4], [6.1, 0.4]]}, {"points": [[0.3, 3.2], [6.1, 3.2]]}],
+        "paint_triangles": [[0.3, 0.4, 6.1, 0.4, 3.2, 2.8]],
+    }],
+}
+# 1280×720 프레임 전체가 6.4×3.6 m 트랙에 닿는 통과 제안(가로 세로 배율 모두 0.005 m/px).
+FIT_MAP_PROPOSAL = {
+    "accepted": True,
+    "image": {"width": 1280, "height": 720},
+    "frame_seq": 42,
+    "proposal": {"image_to_map": [[0.005, 0.0, 0.0], [0.0, -0.005, 3.6], [0.0, 0.0, 1.0]],
+                 "score": 0.92, "precision": 0.88, "coverage": 0.9},
+}
+
+
+def _apply_flow_api():
+    return {
+        "/api/fleet/state": EMPTY_SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/site-lanes": FIT_SITE_LANES,
+        "/api/fleet/calibrations": {"calibrations": []},
+        "/api/fleet/vision/sources": {"sources": ["ceiling_north"]},
+        "/api/fleet/vision/lease": {"source_id": "ceiling_north", "lease": "test-lease",
+                                    "frame_path": "/api/vision/sources/ceiling_north/frame",
+                                    "expires_in_s": 60},
+    }
+
+
+def _run_map_fit_apply(page, console_url, lens_header):
+    """맞춤 패널을 열어 제안을 받고 '추적 보정 적용'을 누른다; POST 본문 목록을 돌려준다."""
+    applied = []
+
+    def serve_vision(route):
+        if urlparse(route.request.url).path.endswith("/map-proposal"):
+            route.fulfill(status=200, json=FIT_MAP_PROPOSAL)
+            return
+        headers = {"X-Frame-Rectified": "false", "X-Frame-Seq": "42", "X-Frame-Age-Ms": "20"}
+        if lens_header:
+            headers["X-Source-Lens"] = lens_header
+        route.fulfill(status=200, content_type="image/svg+xml", body=FIT_FRAME_BODY,
+                      headers=headers)
+
+    def capture_apply(route):
+        if route.request.method == "POST":
+            applied.append(route.request.post_data_json)
+            route.fulfill(status=200, json={"source_id": "ceiling_north",
+                                            "calibration_revision": "paint-lenstest",
+                                            "use": "display-only"})
+            return
+        route.fulfill(status=200, json={"calibrations": [], "use": "display-only"})
+
+    page.route("**/api/vision/**", serve_vision)
+    page.route("**/api/fleet/calibrations", capture_apply)
+    page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+    page.get_by_role("tab", name="카메라 설치·보정", exact=True).click()
+    page.wait_for_function("() => document.querySelector('#vision-meta')?.textContent.includes('sequence 42')")
+    page.locator("#map-fit-detect").click()
+    page.wait_for_function("!document.querySelector('#map-fit-apply')?.hidden")
+    page.locator("#map-fit-apply").click()
+    page.wait_for_function(
+        "() => document.querySelector('#map-fit-state')?.textContent.includes('paint-lenstest 적용')")
+    return applied
+
+
+def test_applying_tracking_calibration_stamps_the_live_frame_lens(console_url):
+    """라이브 프레임이 렌즈를 알리면 적용 본문에 그 렌즈가 실려 저장된다(X-Source-Lens)."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(
+            playwright, _apply_flow_api(),
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+        applied = _run_map_fit_apply(page, console_url, LENS_WIDE_HEADER)
+        assert len(applied) == 1, applied
+        assert applied[0]["source_id"] == "ceiling_north"
+        assert applied[0]["map_id"] == "map_v2_fleet"
+        assert applied[0]["lens"] == {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1}
+        # 렌즈가 찍혔으니 '렌즈 검사 없이 적용' 안내는 붙지 않는다.
+        assert "렌즈 정보가 없어" not in page.locator("#map-fit-state").inner_text()
+        save_temp_screenshot(page, "fleet_map_fit_apply_lens.png")
+        assert not errors
+        browser.close()
+
+
+def test_applying_tracking_calibration_without_a_frame_lens_says_so(console_url):
+    """프레임에 렌즈 정보가 없을 때만 lens 없이 저장하고 그 안내를 유지한다."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(
+            playwright, _apply_flow_api(),
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+        applied = _run_map_fit_apply(page, console_url, None)
+        assert len(applied) == 1, applied
+        assert applied[0]["lens"] is None
+        assert "렌즈 정보가 없어 렌즈 검사 없이 적용했습니다" in page.locator("#map-fit-state").inner_text()
+        assert not errors
+        browser.close()
+
+
 # --- D-224: 예외 문법의 키보드 어휘 — ↑/↓ 순회 · Enter 목표 · Escape 해소 ----
 
 def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
@@ -1410,6 +1580,25 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         save_temp_screenshot(page, "fleet_console_queues.png")
         browser.close()
 
+    normal = {
+        "fleet": {"name": "site", "online": 3, "total": 3},
+        "robots": [_robot(f"rosy_0{i}", {"x": 0.4 * i, "y": 1.0, "yaw": 0.0}) for i in (1, 2, 3)],
+        "ts": 0.0,
+    }
+    with sync_playwright() as p:
+        browser, page, _errors = _open_console(p, {
+            "/api/fleet/state": normal,
+            "/api/fleet/map": MAP_GRID,
+            "/api/fleet/formation": {"active": False, "state": "IDLE"},
+        })
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => document.querySelectorAll('#roster article, #roster-toggle').length > 0")
+        # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
+        assert page.locator(".queues-panel").is_hidden()
+        browser.close()
+
+    # D-493: SNAPSHOT is not a normal roster — rosy_03's card carries a red relay tag and a traffic wait.
+    # The queue says so with the card's own rule (2026-10-07: the queue used to stay hidden here).
     with sync_playwright() as p:
         browser, page, _errors = _open_console(p, {
             "/api/fleet/state": SNAPSHOT,
@@ -1420,8 +1609,9 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
-        # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
-        assert page.locator(".queues-panel").is_hidden()
+        assert page.locator(".queues-panel").is_visible()
+        assert "릴레이 끊김" in page.inner_text("#critical-list")
+        assert "rosy_03" in page.inner_text("#critical-head")
         browser.close()
 
 
@@ -1477,7 +1667,7 @@ def test_console_fits_the_declared_viewport(console_url):
         f"문서가 {fit['docOverflow']}px 스크롤된다 — 예외 문법은 한눈에 다"
         " 보인다(D-201): " + str(fit)
     )
-    assert abs(fit["primary"]["width"] - fit["secondary"]["width"]) <= 1, fit
+    assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 1.5) <= 0.03, fit  # D-493: map 3 : rail 2
     for name in ("signals", "formation", "rosterPanel"):
         box = fit[name]
         assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
@@ -1508,7 +1698,7 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
         page.goto(console_url, wait_until="networkidle")
         fit = page.evaluate(FLEET_FIT_PROBE)
         assert fit["docOverflow"] <= 0, fit
-        assert abs(fit["primary"]["width"] - fit["secondary"]["width"]) <= 1, fit
+        assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 1.5) <= 0.03, fit  # D-493: map 3 : rail 2
         assert fit["stop"]["bottom"] <= fit["vh"]
         if scenario == "delayed":
             assert "지연" in page.inner_text("#roster")
@@ -1516,7 +1706,8 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
         elif scenario == "disconnected":
             assert "닿지 않음" in page.inner_text("#roster")
             assert page.locator(".queues-panel").is_visible()
-            assert fit["mapCanvas"]["height"] <= 0.3 * fit["vh"]
+            # D-493: the queue lives in the rail, so the map stays the main view.
+            assert fit["mapCanvas"]["height"] >= 0.5 * fit["vh"]
         else:
             assert page.locator("#formation-role-lock").is_visible()
             assert page.locator(".formation ui-button[reason]").count() == 0
@@ -1541,13 +1732,15 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
         headings = [
-            "기기 연결",
             "대형",
             "신호등",
         ]
         for name in headings:
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
-        assert page.locator('.device-link a[href="/console/install"]').count() == 1
+        # D-493: the topbar holds the only link to each other document.
+        for href in ("/console/install", "/console/site-map", "/console/cell"):
+            assert page.locator(f'a[href="{href}"]').count() == 1, href
+        assert page.locator('.install-link, .device-link').count() == 0
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.get_by_role("tab", name="로봇 등록", exact=True).click()
         assert page.get_by_role("heading", name="로봇 등록", exact=True).count() == 1
@@ -1911,6 +2104,9 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         assert page.locator("#roster article").count() == 1
         assert "rosy_03" in page.locator("#roster article").inner_text()
         save_temp_screenshot(page, f"fleet_console_mobile_default_{width}.png")
+        cancel = page.locator("#cancel-all").bounding_box()
+        all_robots = page.locator("#roster-toggle").bounding_box()
+        assert cancel and all_robots and abs(cancel["width"] - all_robots["width"]) <= 1, (cancel, all_robots)
         actions = page.locator("#roster article .robot-actions")
         action_widths, actions_width = actions.locator("ui-button").evaluate_all(
             "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
@@ -2282,6 +2478,25 @@ def test_map_label_chips_never_cover_each_other(console_url, width, height):
     assert hits == [], hits
 
 
+def test_phone_map_raster_stays_close_to_display_size(console_url):
+    """Downsampling a 400px map into a 236px phone box makes labels unreadable."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.set_viewport_size({"width": 320, "height": 568})
+        page.goto(console_url, wait_until="networkidle")
+        ratio = page.evaluate("""() => {
+          const canvas = document.getElementById('map-canvas');
+          const box = canvas.getBoundingClientRect();
+          return Math.max(canvas.width / box.width, canvas.height / box.height);
+        }""")
+        assert not errors
+        browser.close()
+
+    assert ratio <= 1.2, ratio
+
+
 @pytest.mark.parametrize("width,height", [(320, 568), (390, 844), (1366, 768)])
 def test_wordmark_stays_on_one_line(console_url, width, height):
     """D-359 US-008 capture: at 320px "ROSY FLEET" broke into two lines (brand column 83px,
@@ -2363,7 +2578,7 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
     from playwright.sync_api import sync_playwright
 
     probe = """() => Object.fromEntries(['.queues-panel', '#roster', '#map-stage', '.vision-preview', '.formation',
-        '#log', '.device-link']
+        '#log']
       .map((sel) => [sel, Math.round(document.querySelector(sel).getBoundingClientRect().top + window.scrollY)]))"""
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
@@ -2372,7 +2587,7 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         top = page.evaluate(probe)
         assert (top["#roster"] < top["#map-stage"] < top[".vision-preview"] < top[".formation"]
-                < top["#log"] < top[".device-link"]), top
+                < top["#log"]), top
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         page.evaluate("""() => {
           window.retainedPanels = ['.queues-panel', '[aria-labelledby=roster-heading]',
@@ -2386,11 +2601,10 @@ def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(co
         assert page.evaluate("() => ['.queues-panel', '[aria-labelledby=roster-heading]', '[aria-labelledby=map-heading]', '.ops-block'].every((sel, i) => document.querySelector(sel) === window.retainedPanels[i])")
         wide = page.evaluate(probe)
         # D-439: primary map/roster remain side by side; secondary tasks follow both in DOM and layout.
-        left = page.evaluate("""() => Object.fromEntries(['#map-stage', '#roster', '.formation', '.device-link']
+        left = page.evaluate("""() => Object.fromEntries(['#map-stage', '#roster', '.formation']
           .map((sel) => [sel, document.querySelector(sel).getBoundingClientRect().left]))""")
         assert left["#map-stage"] < left["#roster"], left
         assert wide[".formation"] > max(wide["#roster"], wide["#map-stage"]), wide
-        assert wide["#log"] < wide[".device-link"], wide
         assert page.evaluate("document.querySelector('[aria-labelledby=map-heading]').compareDocumentPosition(document.querySelector('.ops-block')) & Node.DOCUMENT_POSITION_FOLLOWING")
         assert wide["#roster"] < wide["#map-stage"] + 200, wide
         page.set_viewport_size({"width": width, "height": height})
@@ -2749,7 +2963,7 @@ def test_offline_robots_say_why_and_each_move_asks_for_the_screen_code(console_u
             const box = document.querySelector('#roster').getBoundingClientRect();
             return r.top >= box.top - 1 && r.bottom <= box.bottom + 1; }""")
         assert page.locator('#roster ui-button[data-move-robot-id]').count() == 0
-        assert page.locator('.device-link a[href="/console/install"]').is_visible()
+        assert page.locator('.topbar-links a[href="/console/install"]').is_visible()
         page.evaluate("document.querySelector('#roster').scrollTop = 0")
         _shot(page, "roster-renumbered-1920.png")
         assert not page.locator("text=(전체)").count()

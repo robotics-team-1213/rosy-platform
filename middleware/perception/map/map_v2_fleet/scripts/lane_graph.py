@@ -57,24 +57,29 @@ def load_scene():
     return mod.load_scene(_source_path())
 
 
+def paint_masks(scene):
+    """Raster origin (x0, y1) and the boundary-line and crosswalk-bar masks."""
+    x0, y1 = -scene.size_x / 2.0, scene.size_y / 2.0
+    w = int(math.ceil(scene.size_x / RASTER_M)) + 1
+    h = int(math.ceil(scene.size_y / RASTER_M)) + 1
+    paint = np.zeros((h, w), np.uint8)
+    for tri in scene.lines:
+        pts = np.array([[(v[0] - x0) / RASTER_M, (y1 - v[1]) / RASTER_M] for v in tri])
+        cv2.fillPoly(paint, [np.rint(pts * 16).astype(np.int32)], 255, shift=4)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(paint, connectivity=8)
+    keep = np.zeros(count, bool)
+    for k in range(1, count):
+        extent = max(stats[k, cv2.CC_STAT_WIDTH], stats[k, cv2.CC_STAT_HEIGHT]) * RASTER_M
+        keep[k] = extent >= LINE_MIN_EXTENT_M
+    lines = keep[labels]
+    return x0, y1, lines, (paint > 0) & ~lines
+
+
 class LineField:
     """Distance (m) from a floor point to the nearest boundary-line paint."""
 
     def __init__(self, scene):
-        self.x0, self.y1 = -scene.size_x / 2.0, scene.size_y / 2.0
-        w = int(math.ceil(scene.size_x / RASTER_M)) + 1
-        h = int(math.ceil(scene.size_y / RASTER_M)) + 1
-        paint = np.zeros((h, w), np.uint8)
-        for tri in scene.lines:
-            pts = np.array([[(v[0] - self.x0) / RASTER_M, (self.y1 - v[1]) / RASTER_M]
-                            for v in tri])
-            cv2.fillPoly(paint, [np.rint(pts * 16).astype(np.int32)], 255, shift=4)
-        count, labels, stats, _ = cv2.connectedComponentsWithStats(paint, connectivity=8)
-        keep = np.zeros(count, bool)
-        for k in range(1, count):
-            extent = max(stats[k, cv2.CC_STAT_WIDTH], stats[k, cv2.CC_STAT_HEIGHT]) * RASTER_M
-            keep[k] = extent >= LINE_MIN_EXTENT_M
-        lines = keep[labels]
+        self.x0, self.y1, lines, _ = paint_masks(scene)
         self.distance = cv2.distanceTransform(
             (~lines).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE) * RASTER_M
 
@@ -84,6 +89,26 @@ class LineField:
         if not (0 <= row < self.distance.shape[0] and 0 <= col < self.distance.shape[1]):
             return 0.0
         return float(self.distance[row, col])
+
+
+def crosswalks(scene):
+    """D-491 §3: one rectangle per crosswalk, around its bars (raster ±RASTER_M)."""
+    x0, y1, _, bars = paint_masks(scene)
+    # Bars of one crosswalk are 15 mm apart; 20 mm of dilation joins them.
+    joined = cv2.dilate(bars.astype(np.uint8), np.ones((11, 11), np.uint8))
+    count, labels = cv2.connectedComponents(joined, connectivity=8)
+    zones = []
+    for k in range(1, count):
+        rows, cols = np.nonzero(bars & (labels == k))
+        pts = np.stack([x0 + cols * RASTER_M, y1 - rows * RASTER_M], axis=1).astype(np.float32)
+        polygon = np.array(_round(cv2.boxPoints(cv2.minAreaRect(pts))))
+        # OpenCV versions choose different starting corners. Emit CCW from
+        # the lexicographically smallest rounded corner on every platform.
+        centre = polygon.mean(axis=0)
+        polygon = polygon[np.argsort(np.arctan2(polygon[:, 1] - centre[1], polygon[:, 0] - centre[0]))]
+        first = min(range(len(polygon)), key=lambda i: tuple(polygon[i]))
+        zones.append({"polygon": np.roll(polygon, -first, axis=0).tolist()})
+    return sorted(zones, key=lambda z: np.mean(z["polygon"], axis=0).tolist())
 
 
 def densify(points, spacing):
@@ -198,6 +223,7 @@ def build(rules_path=RULES):
         "roundabout": {"centre": _round([centre])[0], "radius": round(radius, DECIMALS),
                        "direction": "ccw"},
         "nodes": {k: _round([v])[0] for k, v in sorted(nodes.items())},
+        "crosswalks": crosswalks(scene),
         "segments": {},
         "parking": {"road": park["road"], "spot": [round(float(v), DECIMALS) for v in park["spot"]],
                     "points": _round(spur), "length_m": round(_length(spur), DECIMALS)},

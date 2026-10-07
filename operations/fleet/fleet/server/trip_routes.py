@@ -2,8 +2,9 @@
 
 The robot's LOCALIZED map pose and the active site map go into the pure planner
 (``fleet.routing``). Every plan, refused or not, is a row in the site map store (D-490 8).
-Execution (``execute: true`` and ``POST /api/fleet/trips/{plan_id}/start``) opens with D-488
-M2; until then both answer 501.
+D-494 5: ``POST /api/fleet/trips/{plan_id}/start`` runs a stored plan through the trip loop
+(``trip_runner``); ``/cancel`` and ``/confirm-replan`` act on it and ``GET`` reads it. The
+plan request's ``execute: true`` stays 501: starting is always its own named-operator call.
 """
 
 from __future__ import annotations
@@ -22,11 +23,11 @@ from fleet.routing.snap import PlanError
 from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
+from fleet.routing.execute import plan_body
+from fleet.server.trip_runner import PLAN_TTL_S, TripError
 from fleet.swarm.transport import RobotApiError
 
 PlaceRef = Annotated[str, Field(min_length=1, max_length=64)]
-#: D-490 5: a plan may be started within this long on the same map version.
-PLAN_TTL_S = 30.0
 _LOG = logging.getLogger(__name__)
 
 
@@ -51,8 +52,11 @@ def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTP
     return HTTPException(status_code=status, detail={"code": code, "detail": detail or {}})
 
 
-def install_trip_routes(app, *, console, site_maps, routing_config, require_named_operator) -> None:
-    not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE", {"message": "trip execution opens with D-488 M2"}, 501)
+def install_trip_routes(app, *, console, site_maps, routing_config, require_named_operator, caps_for, runner,
+                        read_guard) -> None:
+    app.state.trip_runner = runner
+    not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE",
+                       {"message": "start the plan with POST /api/fleet/trips/{plan_id}/start"}, 501)
     failed_versions: set = set()  # an unexpected planner failure is logged once per map version
 
     @app.post("/api/fleet/robots/{robot_id}/trip", tags=["fleet"])
@@ -84,10 +88,16 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
             record({"error": "TRIP_POSE_UNTRUSTED"})
             raise _refuse("TRIP_POSE_UNTRUSTED")
         goal = body.to if isinstance(body.to, str) else (body.to.x, body.to.y, body.to.yaw)
-        # ponytail: robot kind / drive modes / max speed are not in the robot contract yet;
-        # unknown kind keeps kind-restricted edges out, every drive mode is allowed for a preview.
+        # D-494 1: the robot's trip caps bound the plan. An older image has none; its preview
+        # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
+        # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
+        caps = await caps_for(robot_id)
+        bounds = {} if caps is None else {
+            "robot_kind": caps.kind, "drive_modes": caps.modes if caps.max_speed > 0 else frozenset(),
+            "max_speed_mps": caps.max_speed or None}
         request = PlanRequest(map_version=active[0], start_pose=(pose[0], pose[1], pose[2]), goal=goal,
-                              via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap)
+                              via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap,
+                              **bounds)
         try:
             plan = plan_trip(active[2], request, routing_config)
         except PlanError as exc:
@@ -99,15 +109,43 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
                 _LOG.exception("trip planner failed on site map v%s", active[0])
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
             raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
-        record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s})
-        return {
-            "plan_id": plan_id, "map_version": plan.map_version,
-            "segments": [{"edge_id": e, "forward": f, "s_from": a, "s_to": b} for e, f, a, b in plan.segments],
-            "places": list(plan.places),
-            "actions": [{"place_id": p, "action": a, "theta_deg": t} for p, a, t in plan.actions],
-            "length_m": plan.length_m, "eta_s": plan.eta_s, "expires_at": time.time() + PLAN_TTL_S,
-        }
+        body = plan_body(plan)
+        # D-494 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.
+        record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s, "plan": body})
+        return {"plan_id": plan_id, **body, "expires_at": time.time() + PLAN_TTL_S}
+
+    def trip_error(exc: TripError) -> HTTPException:
+        return _refuse(exc.code, exc.detail, exc.status)
 
     @app.post("/api/fleet/trips/{plan_id}/start", tags=["fleet"])
-    async def fleet_trip_start(plan_id: str, _principal: SitePrincipal = Depends(require_named_operator)):
-        raise not_open
+    async def fleet_trip_start(plan_id: str, principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        try:
+            return await runner.start(plan_id, principal.principal_id)
+        except TripError as exc:
+            raise trip_error(exc) from exc
+
+    @app.post("/api/fleet/trips/{trip_id}/cancel", tags=["fleet"])
+    async def fleet_trip_cancel(trip_id: str, principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        try:
+            return await runner.cancel(trip_id, principal.principal_id)
+        except TripError as exc:
+            raise trip_error(exc) from exc
+
+    @app.post("/api/fleet/trips/{trip_id}/confirm-replan", tags=["fleet"])
+    async def fleet_trip_confirm_replan(trip_id: str,
+                                        principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        try:
+            return await runner.confirm_replan(trip_id, principal.principal_id)
+        except TripError as exc:
+            raise trip_error(exc) from exc
+
+    @app.get("/api/fleet/trips", dependencies=read_guard, tags=["fleet"])
+    def fleet_trips() -> dict:
+        return {"running": runner.running(), "trips": runner.recent()}
+
+    @app.get("/api/fleet/trips/{trip_id}", dependencies=read_guard, tags=["fleet"])
+    def fleet_trip_view(trip_id: str) -> dict:
+        view = runner.view(trip_id)
+        if view is None:
+            raise _refuse("TRIP_UNKNOWN", status=404)
+        return view

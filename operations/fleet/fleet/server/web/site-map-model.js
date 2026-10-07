@@ -16,6 +16,34 @@ export const TRIP_ERROR_LABEL = {
   TRIP_POSE_UNTRUSTED: '로봇 위치가 LOCALIZED가 아닙니다',
   TRIP_PLAN_FAILED: '이 지도에서 경로 계산이 실패했습니다 · 관리자에게 알리세요',
   UNKNOWN_ROBOT: '등록되지 않은 로봇입니다',
+  // D-494 5 trip start / control
+  TRIP_PLAN_UNKNOWN: '저장된 경로가 없습니다 · 다시 계산하세요',
+  TRIP_PLAN_EXPIRED: '계산한 지 30초가 지났습니다 · 다시 계산하세요',
+  TRIP_MAP_CHANGED: '계산 뒤 활성 지도가 바뀌었습니다 · 다시 계산하세요',
+  TRIP_ROBOT_CAPS_UNKNOWN: '로봇이 주행 능력(종류·주행 방식)을 알리지 않습니다 · 새 이미지가 필요합니다',
+  TRIP_MODE_UNSUPPORTED: '이 로봇의 주행 방식으로 갈 수 없는 차로가 경로에 있습니다',
+  TRIP_LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행(카메라 또는 IR)이 켜져 있지 않습니다 · 켠 뒤 다시 출발하세요',
+  TRIP_BUSY: '다른 운행이 진행 중입니다 · 현장에서 한 번에 한 대만 운행합니다',
+  TRIP_ALREADY_STARTED: '이미 출발시킨 경로입니다',
+  TRIP_NOT_RUNNING: '진행 중인 운행이 아닙니다',
+  TRIP_UNKNOWN: '없는 운행입니다',
+  TRIP_NO_REPLAN: '확인할 바뀐 경로가 없습니다',
+  TRIP_REPLAN_FAILED: '다시 계산한 경로가 없습니다 · 운행을 취소하세요',
+  TRIP_EXECUTION_NOT_AVAILABLE: '출발은 운행 시작 버튼으로 따로 합니다',
+};
+export const TRIP_STATE_LABEL = {
+  started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨',
+};
+const TRIP_POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 정확도 저하', UNKNOWN: '위치 확인 불가'};
+export const TRIP_REASON_LABEL = {
+  pose: '위치를 믿을 수 없어 멈췄습니다',
+  junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
+  stall: '경로를 따라 나아가지 않아 멈췄습니다 · 현장을 확인하세요',
+  TRIP_LOOP_ERROR: '관제 운행 처리에 오류가 나 멈췄습니다 · 로봇 정지를 확인하고 관리자에게 알리세요',
+  restart: '관제 서버가 다시 시작돼 멈췄습니다 · 자동으로 다시 출발하지 않습니다',
+  TRIP_ROBOT_JUNCTION_UNSUPPORTED: '로봇 CORE가 교차로 지시를 모릅니다 · 새 이미지가 필요합니다',
+  TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
+  LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행이 켜져 있지 않습니다',
 };
 export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
@@ -25,6 +53,15 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
   SITE_MAP_INVALID: '지도에 맞지 않는 값이 있습니다',
+  // D-494 6 teach
+  TEACH_BUSY: '다른 로봇을 기록하는 중입니다 · 한 번에 한 대만 가르칩니다',
+  TEACH_NOT_RECORDING: '기록 중이 아닙니다',
+  TEACH_POSE_UNTRUSTED: '로봇 지도 위치가 LOCALIZED가 아닙니다 · Rosy Cam이 로봇을 보는 곳에서 다시 하세요',
+  TEACH_TOO_SHORT: '기록한 길이 0.1 m보다 짧아 버렸습니다',
+  TEACH_UNKNOWN: '확정할 기록이 없습니다 · 10분이 지났거나 이미 확정했습니다',
+  TEACH_UNKNOWN_PLACE: '없는 장소입니다',
+  TEACH_PLACE_TOO_FAR: '고른 장소가 기록 끝에서 0.15 m보다 멉니다',
+  UNKNOWN_ROBOT: '등록되지 않은 로봇입니다',
 };
 
 export function siteMapErrorText(error) {
@@ -155,4 +192,62 @@ export function editEdge(map, id, {direction, drive_mode: driveMode, speed_cap_m
     edge.speed_cap_mps = value;
   }
   return next;
+}
+
+/** One line for the trip panel: state, current lane, next place and action, pose source. */
+export function tripStatusText(trip, map) {
+  if (!trip) return '진행 중인 운행 없음';
+  const names = new Map((map?.places || []).map(place => [place.id, place.name]));
+  const parts = [`${TRIP_STATE_LABEL[trip.state] || trip.state} · ${trip.robot_id}`];
+  if (trip.current_edge) parts.push(`차로 ${trip.current_edge}`);
+  if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
+  if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
+  if (trip.hold) parts.push('바뀐 경로 확인 대기 · 장소에서 서 있음');
+  if (trip.reason === 'stall' && Number.isFinite(trip.detail?.stall_s)) {
+    parts.push(`${trip.detail.stall_s}초 넘게 ${TRIP_REASON_LABEL.stall}`);
+  } else if (trip.reason) {
+    parts.push(TRIP_REASON_LABEL[trip.reason] || trip.reason);
+  }
+  return parts.join(' · ');
+}
+
+/** '' when the plan may start now; otherwise why the start button is off. */
+export function tripStartReason({role, plan, active, running, now = Date.now() / 1000}) {
+  if (role !== 'operator') return role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
+  if (running) return '다른 운행이 진행 중입니다';
+  if (!plan) return '먼저 경로를 계산하세요';
+  if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
+  if (plan.expires_at && now > plan.expires_at) return '계산한 지 30초가 지났습니다 · 다시 계산하세요';
+  return '';
+}
+
+export function tripCancelReason({role, running}) {
+  if (role !== 'operator') return role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
+  return running ? '' : '진행 중인 운행이 없습니다';
+}
+
+/** One line for the teach panel from `GET /api/fleet/teach`. */
+export function teachStatusText(view) {
+  const live = view?.recording;
+  if (live) return `기록 중 · ${live.robot_id} · ${live.points.length}점 · ${live.started_by}`;
+  if (view?.pending?.length) return `확정 대기 ${view.pending.length}건 · 멈춘 뒤 10분 안에 확정하세요`;
+  return '기록 없음';
+}
+
+/** `POST /api/fleet/teach/confirm` body; an empty place id means a new address named `name`. */
+export function teachConfirmBody({teachId, from, fromName, to, toName, direction, driveMode, speed, revision}) {
+  const end = (id, name, label) => {
+    if (id) return id;
+    if (!String(name || '').trim() || String(name).length > 64) throw new Error(`${label} 새 주소 이름은 1–64자입니다`);
+    return {name: String(name).trim(), kind: 'junction'};
+  };
+  const value = Number(speed);
+  if (!Number.isFinite(value) || value <= 0 || value > 5) throw new Error('속도 상한은 0–5 m/s입니다');
+  return {teach_id: teachId, from: end(from, fromName, '시작'), to: end(to, toName, '끝'), direction,
+    drive_mode: driveMode, speed_cap_mps: value, expected_revision: revision || null};
+}
+
+/** The recording the confirm form acts on: the newest stopped one (latest `expires_at`). */
+export function newestPending(view) {
+  return (view?.pending || []).reduce((best, item) => (!best || item.expires_at > best.expires_at ? item : best), null);
 }

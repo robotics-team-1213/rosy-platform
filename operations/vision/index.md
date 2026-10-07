@@ -16,6 +16,7 @@
 | D-374 | 앱의 폴더·패키지·식별자·표시 이름은 역할 이름 하나에서 나온다 — 역할 id(kebab)·snake·compact·표시 네 표기; 와이어 계약 이름(mDNS 종류, `rosy-overhead/1`, `/api/fleet`·`/api/vision`, `rosyov://`, 웹 경로, 설정·저장소 키, compose 서비스)은 바꾸지 않는다 |
 | D-375 | 천장 카메라→지도 보정도 제안일 뿐이다 — Vision이 알려진 차선 페인트를 영상에 맞춰 homography·coverage·가려진 쪽을 제안하고, 운용자가 확인하기 전에는 어디에도 쓰지 않는다 |
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
+| D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 |
 
 ## 계획·결과 문서
 
@@ -34,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · fix(vision): camera-map integration contract pins
+- 2026-10-07 · 556dd1954 · feat(vision): 카메라 차선 지도 초안 생성
 - 2026-10-06 · uncommitted · feat(vision): D-484 필드 경계 자동 캘리브레이션
 - 2026-10-05 · uncommitted · fix(test): signal observer exact-source collection
 - 2026-10-04 · uncommitted · fix(site): D-457 마커 우선·무마커 폴백
-- 2026-10-01 · uncommitted · fix(pairing): Vision 자격 동기화는 https와 사이트 CA 고정이 필수
-- 2026-10-01 · uncommitted · chore(vision): D-341 저장소 가드 정리 — 역할 경계·크기 판정·비밀 스캔

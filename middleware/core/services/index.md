@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-06 · uncommitted · fix(lane): D-476 independent review fixes
-- 2026-10-06 · uncommitted · feat(lane): D-476 expected-road bridge in CORE, default off
-- 2026-10-05 · uncommitted · fix(lane): retain scan provenance and operator fallback authority
-- 2026-10-05 · uncommitted · feat(lane): require complete scan and swept-body clearance for D-468
-- 2026-10-05 · uncommitted · feat(lane): arbitrate measured return before ordinary following
+- 2026-10-07 · uncommitted · feat(line_follow): D-498 교차로 회전의 현장 근거
+- 2026-10-07 · uncommitted · test(line_follow): 260919 유격을 STL·URDF에서
+- 2026-10-07 · uncommitted · fix(line_follow): 횡단보도 휴식은 회전·차로 이탈·거리 상한에서 끝난다 (D-491 리뷰)
+- 2026-10-07 · uncommitted · feat(line_follow): IR 감시는 알려진 횡단보도 구간에서 쉰다 (D-491)
+- 2026-10-07 · uncommitted · fix(line_follow): D-495 junction_turn 능력은 동작 확인이 가능할 때만

@@ -66,6 +66,10 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         ir_guard_edge_error=float(raw.get("ir_guard_edge_error", defaults.ir_guard_edge_error)),
         ir_guard_turn=float(raw.get("ir_guard_turn", defaults.ir_guard_turn)),
         ir_guard_speed_scale=float(raw.get("ir_guard_speed_scale", defaults.ir_guard_speed_scale)),
+        ir_row_x_m=_optional_float(raw.get("ir_row_x_m")),
+        crosswalk_zone_max_m=float(raw.get("crosswalk_zone_max_m", defaults.crosswalk_zone_max_m)),
+        crosswalk_odom_error_fraction=float(raw.get(
+            "crosswalk_odom_error_fraction", defaults.crosswalk_odom_error_fraction)),
         recovery_local_enabled=_flag(raw, "recovery_local_enabled", defaults.recovery_local_enabled),
         recovery_ask_s=float(raw.get("recovery_ask_s", defaults.recovery_ask_s)),
         recovery_back_m=float(raw.get("recovery_back_m", defaults.recovery_back_m)),
@@ -107,6 +111,20 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "bridge_distance_scale", defaults.bridge_distance_scale)),
         bridge_time_margin_s=float(raw.get(
             "bridge_time_margin_s", defaults.bridge_time_margin_s)),
+        bridge_arm_confidence=float(raw.get(
+            "bridge_arm_confidence", defaults.bridge_arm_confidence)),
+        bridge_arm_frames=_whole(raw, "bridge_arm_frames", defaults.bridge_arm_frames),
+        bridge_arm_max_error=float(raw.get("bridge_arm_max_error", defaults.bridge_arm_max_error)),
+        bridge_arm_max_angular=float(raw.get(
+            "bridge_arm_max_angular", defaults.bridge_arm_max_angular)),
+        bridge_site_no_dropoffs=_flag(raw, "bridge_site_no_dropoffs", defaults.bridge_site_no_dropoffs),
+        junction_reacquire_frames=_whole(raw, "junction_reacquire_frames",
+                                         defaults.junction_reacquire_frames),
+        junction_turn_lead_s=float(raw.get("junction_turn_lead_s", defaults.junction_turn_lead_s)),
+        junction_still_linear=float(raw.get("junction_still_linear", defaults.junction_still_linear)),
+        junction_still_angular=float(raw.get("junction_still_angular", defaults.junction_still_angular)),
+        junction_turn_site_accepted=_flag(raw, "junction_turn_site_accepted",
+                                          defaults.junction_turn_site_accepted),
         lane_return_body_margin_m=float(raw.get(
             "lane_return_body_margin_m", defaults.lane_return_body_margin_m)),
         lane_return_checkpoint_fraction=float(raw.get(
@@ -141,12 +159,22 @@ def bind_stuck_recovery(line_follow, *, safety, calibration, fleet_agent, vision
     )
 
 
+def check_bridge_floor_basis(config: LineFollowConfig, sensor_mode: str) -> None:
+    """D-476 rev 1, at CORE start: an enabled bridge needs the live floor proof (effective
+    control.sensor_adapter mode enforce) or the site acceptance bridge_site_no_dropoffs."""
+    if config.bridge_enabled and not config.bridge_site_no_dropoffs and sensor_mode != "enforce":
+        raise ValueError("line_follow.bridge_enabled needs control.sensor_adapter mode enforce "
+                         "or line_follow.bridge_site_no_dropoffs: true (site acceptance, D-476)")
+
+
 def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> None:
     """D-468: recheck live floor policy and measured body sweep for every candidate.
 
     `now` is the line clock. policy_clock: the worker policy's own clock when the line
     clock differs (use_sim_time: sim seconds vs the monotonic policy window, the clock
     SafetyManager also asks it on). None = the line clock is that clock (Device).
+    The worker floor proof exists only in enforce (D-400 plan 3); D-476 asks whether it is
+    live so a bridge needs it then and rests on its own basis otherwise. D-468 always needs it.
     """
     def allowed(now, linear, angular) -> bool:
         try:
@@ -156,4 +184,6 @@ def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> N
         except Exception:  # noqa: BLE001 - missing runtime evidence denies motion
             return False
 
-    line_follow.bind_return_motion(allowed)
+    line_follow.bind_return_motion(
+        allowed, floor_proof_live=lambda: sensor_adapter.config.mode == "enforce",
+        proof_configured=lambda: sensor_adapter.return_proof_configured() is True)

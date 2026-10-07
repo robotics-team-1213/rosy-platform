@@ -6695,3 +6695,61 @@ osy-d395-s1d\`.
 - 변경: 검수 앱이 `--object-classes <data.yaml>`로 모델별 객체 클래스를 받고(기본은 D-423 6개), 픽셀 `classes.yaml`은 선택 `display`를 받는다. 화면은 서버 클래스셋을 쓰고 숫자키 클래스·A 승인·X 제외 단축키를 키 코드로 매핑한다. `classes/lane_lr5.yaml`(차선 모델 5클래스)과 모델 PC용 `model/export_class_names.py`를 추가했다. 클래스셋 sha는 `review-contract.json`에만 있고 `/api/decisions`에는 넣지 않았다.
 - 증거: `learning/training/perception/test/` 호스트 pytest와 브라우저 시험, `test/known_failures.py` 비교, harness lint. 결과 수치는 브랜치 착지 때 확인한다.
 - gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.
+
+## 2026-10-07 · uncommitted · docs(adr): OMX 실물 팔 활성화 조건 설계(D-496)
+
+- 변경: [D-496](adr/D-496-omx-hardware-arm-control-acceptance.md) Proposed — 실물 OMX-F 부재 상태에서 OMX-AI 스펙 기반으로 실물 팔 조종 수용 조건을 고정한다. 실측 프로필(`rosy.omx-hardware-profile.v1`) 없이는 `omx.disabled.yaml` 활성화를 금지하고, 시뮬 셀 프로필·Gazebo jaw 보정의 실물 전용을 금지하며, 수용 사다리를 BENCH→DEVICE로 둔다. 짝 설계 문서 [2026-10-07-omx-hardware-arm-enablement-design.md](plans/2026-10-07-omx-hardware-arm-enablement-design.md)가 측정 체크리스트(B0–B8)와 하드웨어 프로필 스키마, Pilot 실물 드라이버 등록 지점을 소유한다. 런타임·API·Pilot 코드 변경은 없다.
+- 증거: 근거 스펙은 2026-09-12 하드웨어 조사·`deploy/robot/omx/stack.lock.yaml`(ROBOTIS 5.1.2 rev `0a4af6a9…`)·`sim/cell_profile.yaml` 주석·`omx.disabled.yaml`·워크스테이션 런타임 계획(2026-09-26)에서 읽었다. Pilot SIM 팔 지원은 같은 날 main에서 재확인(팔 순수 시험 33 passed, Playwright omx/arm 14 passed, Android 유닛 시험+APK 번들 7자산 확인).
+- gate 변화: 없음. 문서·제안만 바뀐다. `omx` 프로필·어댑터·Pilot 게이트는 그대로.
+- 결정: D-496 Proposed. D-390 §5(실물 범위 밖)는 유지되고, 이 결정은 여는 조건만 정의한다.
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · uiux(pilot): 주행 HUD 증거 상태와 좁은 폭 가독성
+
+- 변경: 속도·회전율을 수신 전 0으로 표시하던 HUD를 서버의 속도·배터리 증거 판정에 연결했다. 지연 수치에는 수신 나이를 붙이고 연결 끊김·결측에서는 수치를 숨긴다. 320px에서 상태 문구가 단어 중간에 잘리지 않도록 HUD 항목을 통째로 줄바꿈한다.
+- 증거: [LOCAL 결과](validation/uiux-pilot-telemetry-2026-10-07/result.md). 합성 상태 4개×폭 4개와 수신 전 상태의 브라우저 **5 passed**. D-153 명명 G1 재실행 **90 passed, 1 warning**, clean exit 0, `known_failures.py` **0 NEW**. 첫 G1 실행은 요약 뒤 종료되지 않아 중단했고, 재실행으로 확인했다. 캡처와 G1 원본은 `X:\DevTemp\pilot-telemetry-evidence\`에 둔다.
+- gate 변화: Pilot G2 일부만 채웠다. 나머지 선언 상태·폭, 실제 설치본/로봇 readback, 운전자 G3 및 제품 전체 판정은 **HOLD**.
+
+## 2026-10-07 · uncommitted · fix(pilot): 열린 상태 소켓의 무응답 readback 표시
+
+- 변경: 상태 소켓이 열린 채 조용해지고 REST 상태 조회도 실패할 때 이전 숫자와 모드를 숨기고 상태 수신 중단을 표시한다. readback이 돌아오면 회복한다.
+- 증거: [LOCAL 결과](validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 집중 브라우저 1 failed, 수정 후 관련 11 passed, D-153 명명 G1 90 passed, 1 warning, 각 `known_failures.py` 0 NEW. 실행 기록은 `X:\DevTemp\pilot-silent-readback\`.
+- gate 변화: Pilot G2 일부 보강. 남은 선언 상태·폭, 사이트 설치·실물 readback, 운전자 G3와 제품 전체는 **HOLD**.
+
+## 2026-10-07 · uncommitted · docs(uiux): 사이트 G3 준비 버전 재확인
+
+- 변경: 기존 사이트 PC의 배포 태그와 두 로봇 mDNS 해석을 현재 로컬 후보와 다시 대조하고 운영자 독회 기록지에 날짜별 준비 상태를 남겼다.
+- 증거: [읽기 전용 결과](validation/uiux-site-g3-readiness-2026-10-07/result.md). 세 사이트 이미지 태그 `5eb726c13…`은 후보 `43a823ac5…`의 조상이고, Fleet UID 10001은 두 `.local` 이름을 해석했다. 원본은 X:의 해시된 요약이다. 문서·계약 시험 **127 passed, 1 skipped**, `known_failures.py` **0 NEW**, harness lint 0 errors.
+- gate 변화: 없음. 현재 후보 설치·실물 상태 readback·요청자 G3가 없어 제품 전체 **HOLD**.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 비상 화면 폭
+
+- 변경: 320/390px 읽기 전용 카메라 상단의 겹침을 고치고 홈·비상 정지 행동 너비를 통일했다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-emergency-width-2026-10-07/result.md), 게이트·카메라 4폭×2화면. 관련 브라우저 12 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실제 사이트 설치본·정지 readback과 사용자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 가림과 폭
+
+- 변경: 좁은 화면의 녹화본 시트가 조작부 뒤에 가려진 문제와 하단 행동 너비를 고쳤다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 네 폭 관련 브라우저 7 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실제 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · docs(uiux): Pilot 전체 브라우저 회귀 기록
+
+- 변경: Pilot 108개 브라우저 시험의 현재 LOCAL 회귀 결과와 실행 중 공유 main의 사이트 문서 단일 변경을 분리해 기록했다.
+- 근거: [회귀 기록](validation/uiux-pilot-full-browser-2026-10-07/result.md). 108 passed, known_failures 0 NEW, 로그 SHA256 기록.
+- gate 변화: Pilot 브라우저 경로 근거 보강. 미캡처 G2·실물 readback·요청자 G3와 제품 전체는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 320px 상태·폭
+
+- 변경: 시뮬레이션 팔 헤더의 오래된 게이트·직접 조종 문구를 제거하고 320px 팔·그리퍼 동등 폭을 현재 화면에서 확인했다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-arm-header-2026-10-07/result.md). 관련 브라우저 6 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실물 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · docs(validation): 관제 콘솔 카메라 교정 재수락 회차 증거 기록
+
+- 변경: 천장 Rosy Cam 재조준 뒤 관제 콘솔 조감도가 저장된 추적 보정(paint-daccc3e53522)과 어긋나던 것을 2026-10-07 `/console/install` 맞춤 패널로 다시 맞춘 회차를 `docs/validation/site-camera-refit-2026-10-07/`(result.md + 스크린샷 3장)로 남겼다.
+- 증거: [회차 결과](validation/site-camera-refit-2026-10-07/result.md). 새 교정 `paint-f81a872f5cd8`이 Fleet DB `tracking_calibrations`에 활성으로 저장됐고 Fleet 재시작 2회를 넘겨 유지됨을 확인(`tracking_calibration_audit` 승인 이력). 문서 계약 시험 103 passed, 1 skipped, `known_failures.py` 0 NEW, harness lint 0 errors.
+- gate 변화: 없음. 검증 기록 추가만. 로봇 관측 0/0대에서 경로 감지가 불가한 점과 적용 교정에 렌즈 지문이 없어 렌즈 교체 가드가 약한 점은 후속 과제로 남는다.
+- 결정: 없음
+- 교훈: 카메라 재조준은 저장된 추적 보정과 조용히 어긋난다. 같은 날 착지된 낡은 교정 자동 경고(feat/cam-drift-warn, 커밋 `27081f83c`)가 다음 재조준부터 침묵 오정렬을 잡는다. 적용에 쓴 임시 계정 `camfit-temp`는 작업 직후 제거했다.
