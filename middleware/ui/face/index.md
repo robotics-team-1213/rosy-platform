@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · uiux(face): D-504 LCD 표정 가장자리 보정
 - 2026-10-07 · uncommitted · uiux(face): D-504 표정 실루엣과 재생
 - 2026-10-06 · uncommitted · uiux(face): 주행 카드 저배터리 대비와 G3 부분 독회
 - 2026-10-04 · uncommitted · feat: 흰 조명 카드 렌더러 분리
 - 2026-10-04 · uncommitted · feat: 저조도 흰 화면 보조 조명
-- 2026-10-03 · f23221421 · feat(face): D-433 rosy-face가 LCD를 쓰는 렌더러

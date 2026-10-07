@@ -32,3 +32,10 @@ def test_faces_are_visible_and_distinct_at_a_glance():
     for left, right in combinations(OPERATING, 2):
         difference = sum(a != b for a, b in zip(masks[left], masks[right])) / len(masks[left])
         assert difference >= 0.06, f"{left} and {right} differ by only {difference:.1%}"
+
+
+def test_panel_edges_have_intermediate_colours():
+    for name in FACES:
+        with Image.open(ASSETS / f"{name}.gif") as gif:
+            colours = {rgb for _count, rgb in gif.convert("RGB").getcolors(320 * 240)}
+        assert len(colours) > 2, f"{name} has hard pixel edges"

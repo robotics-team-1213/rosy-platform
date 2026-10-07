@@ -7,6 +7,7 @@ from PIL import Image, ImageDraw
 
 
 SIZE = (320, 240)
+SCALE = 3
 PINK = "#ee4fcb"
 BLACK = "#000000"
 NAMES = ("hello", "basic", "angry", "bored", "fun", "happy", "interest", "sad")
@@ -14,31 +15,44 @@ NAMES = ("hello", "basic", "angry", "bored", "fun", "happy", "interest", "sad")
 
 def frame(name: str, phase: int) -> Image.Image:
     """One face; small motion keeps the silhouette stable at walking distance."""
-    image = Image.new("RGB", SIZE, BLACK)
+    image = Image.new("RGB", (SIZE[0] * SCALE, SIZE[1] * SCALE), BLACK)
     draw = ImageDraw.Draw(image)
     motion = sin(2 * pi * phase / 20)
     bob = round(2 * motion)
     flex = round(4 * motion)
     sway = round(4 * cos(2 * pi * phase / 20))
 
+    def box(coords):
+        return tuple(round(value * SCALE) for value in coords)
+
+    def ellipse(coords):
+        draw.ellipse(box(coords), fill=PINK)
+
+    def polygon(points):
+        draw.polygon([(round(x * SCALE), round(y * SCALE)) for x, y in points], fill=PINK)
+
+    def round_rect(coords, radius):
+        draw.rounded_rectangle(box(coords), radius=radius * SCALE, fill=PINK)
+
     def eye(x, y=105, wide=31, high=35):
-        draw.ellipse((x - wide, y - high + bob, x + wide, y + high + bob), fill=PINK)
+        ellipse((x - wide, y - high + bob, x + wide, y + high + bob))
 
     def stroke(points, width=13):
-        draw.line([(x, y + bob) for x, y in points], fill=PINK, width=width, joint="curve")
+        draw.line([(round(x * SCALE), round((y + bob) * SCALE)) for x, y in points],
+                  fill=PINK, width=width * SCALE, joint="curve")
 
     if name in ("basic", "hello"):
         eye(97, high=35 + flex)
         eye(223, high=35 + flex)
         if name == "basic":
-            draw.ellipse((151 + sway, 170 + bob - flex, 169 + sway, 188 + bob + flex), fill=PINK)
+            ellipse((151 + sway, 170 + bob - flex, 169 + sway, 188 + bob + flex))
         else:
             stroke([(116 + sway, 168), (136 + sway, 181), (160 + sway, 186 + flex),
                     (184 + sway, 181), (204 + sway, 168)], 14)
             stroke([(270, 66), (282, 53), (292, 67)], 8)
     elif name == "interest":
-        draw.polygon([(43, 111 + bob), (95, 59 + bob - flex), (151, 111 + bob),
-                      (95, 163 + bob + flex)], fill=PINK)
+        polygon([(43, 111 + bob), (95, 59 + bob - flex), (151, 111 + bob),
+                 (95, 163 + bob + flex)])
         eye(224, y=112, wide=11, high=35 + flex)
         stroke([(199, 58), (222, 48 - flex), (247, 58)], 9)
         stroke([(139 + sway, 175), (160 + sway, 180), (181 + sway, 175)], 11)
@@ -50,11 +64,11 @@ def frame(name: str, phase: int) -> Image.Image:
     elif name == "fun":
         eye(95, y=103, wide=29, high=33)
         stroke([(186, 111), (216, 102 + flex), (249, 111)], 17)
-        stroke([(95 + sway, 159), (123 + sway, 184), (160 + sway, 195 + flex),
-                (197 + sway, 184), (225 + sway, 159)], 20)
+        stroke([(85 + sway, 157), (118 + sway, 188), (160 + sway, 202 + flex),
+                (202 + sway, 188), (235 + sway, 157)], 20)
     elif name == "bored":
-        draw.rounded_rectangle((61, 103 + bob, 133, 122 + bob + flex), radius=9, fill=PINK)
-        draw.rounded_rectangle((187, 103 + bob, 259, 122 + bob + flex), radius=9, fill=PINK)
+        round_rect((61, 103 + bob, 133, 122 + bob + flex), radius=9)
+        round_rect((187, 103 + bob, 259, 122 + bob + flex), radius=9)
         stroke([(138 + sway, 177), (182 + sway, 177)], 11)
     elif name == "sad":
         eye(97, y=113, wide=25, high=29)
@@ -66,12 +80,12 @@ def frame(name: str, phase: int) -> Image.Image:
     elif name == "angry":
         stroke([(62, 73), (131, 99)], 17)
         stroke([(189, 99), (258, 73)], 17)
-        draw.ellipse((73, 106 + bob, 128, 143 + bob), fill=PINK)
-        draw.ellipse((192, 106 + bob, 247, 143 + bob), fill=PINK)
+        ellipse((73, 106 + bob, 128, 143 + bob))
+        ellipse((192, 106 + bob, 247, 143 + bob))
         stroke([(122 + sway, 188), (160 + sway, 174), (198 + sway, 188)], 14)
     else:
         raise ValueError(name)
-    return image
+    return image.resize(SIZE, Image.Resampling.LANCZOS)
 
 
 def main() -> None:
