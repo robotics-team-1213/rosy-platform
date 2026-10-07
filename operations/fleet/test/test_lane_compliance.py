@@ -85,10 +85,39 @@ def test_warn_and_act_need_persist_n_consecutive_samples():
     assert tracker.judge(near, STRAIGHT).level == WARN          # warn count kept running
 
 
+CROSS = _graph([("ab", "A", "B", [[0, 0], [2, 0]], "one_way"), ("cd", "C", "D", [[1, -1], [1, 1]], "one_way")],
+               [("A", 0, 0), ("B", 2, 0), ("C", 1, -1), ("D", 1, 1)])
+
+
+def test_a_robot_parked_off_the_graph_is_unknown_not_act():
+    tracker = LaneComplianceTracker(LaneComplianceConfig(persist_n=1))
+    bay = tracker.judge(pose(1.0, 0.5), STRAIGHT)          # 0.5 m off a 0.3 m lane: a bay
+    assert bay.level == UNKNOWN and bay.edge_id is None
+    assert sample(pose(1.0, 0.25), STRAIGHT).edge_id == "ab"          # within width_m: judged
+    assert sample(pose(1.0, 0.25), STRAIGHT, config=LaneComplianceConfig(max_lateral_m=0.2)).edge_id is None
+
+
+def test_past_a_dead_end_is_unknown():
+    assert sample(pose(2.05, 0.0), STRAIGHT).edge_id is None          # foot clamped to the end
+    assert sample(pose(-0.05, 0.02), STRAIGHT).edge_id is None
+    assert sample(pose(1.99, 0.02), STRAIGHT).edge_id == "ab"
+
+
+def test_junction_picks_the_lane_along_the_heading():
+    near_cross = pose(0.98, 0.06, yaw=0.0)                  # 2 cm from cd, 6 cm from ab, heading east
+    lane = sample(near_cross, CROSS)
+    assert lane.edge_id == "ab" and lane.offset_m == pytest.approx(0.06)
+    north = sample(pose(0.98, 0.06, yaw=math.pi / 2), CROSS)
+    assert north.edge_id == "cd" and north.offset_m == pytest.approx(0.02)   # left of a northbound lane
+    assert sample(pose(1.5, 0.0, yaw=math.pi / 2), CROSS).edge_id is None   # across a lane
+    assert sample(pose(1.0, 0.0, yaw=math.pi), STRAIGHT).edge_id is None    # backing on a one-way lane
+
+
 def test_config_from_mapping_refuses_bad_values():
     assert LaneComplianceConfig.from_mapping(None) == LaneComplianceConfig()
     assert LaneComplianceConfig.from_mapping({"persist_n": 5}).persist_n == 5
     for bad in ({"persist_n": 0}, {"persist_n": 1.5}, {"warn_margin_m": -0.1},
-                {"act_timeout_s": 0}, {"warn_margin_m": float("nan")}, {"typo": 1}):
+                {"act_timeout_s": 0}, {"warn_margin_m": float("nan")}, {"typo": 1},
+                {"max_lateral_m": 0}, {"heading_gate_deg": 90}, {"moving_min_m": -1}):
         with pytest.raises(ValueError):
             LaneComplianceConfig.from_mapping(bad)

@@ -1,15 +1,20 @@
 """D-511 2: one lane-compliance judgement from the Fleet map pose and the active site graph. Pure.
 
-The pose is projected onto the nearest arc (``fleet.routing.graph.Arc.project``); on a two-way
-edge the arc whose tangent agrees with the robot heading is used. The lateral offset is signed
-against that arc's tangent (left +). The body margin is
+The pose is projected onto every arc (``fleet.routing.graph.Arc.project``). An arc counts only when
+the foot point lies strictly inside it (past either end the offset sign is arbitrary), within
+``max_lateral_m`` (default: the arc's own ``width_m``), and with its tangent within
+``heading_gate_deg`` of the robot heading. Of those the nearest is used, so on a two-way edge and
+at a junction the arc along the direction of travel wins. The lateral offset is signed against
+that arc's tangent (left +). The body margin is
 ``width_m / 2 - (|offset| + body_half_width_m)``: the gap between the body side and the lane edge,
-negative once the body crosses it. The body half width is the URDF nominal from
+negative once the body crosses it. ``MapPose.yaw`` is ``base_footprint`` forward, so a robot
+backing along a one-way lane has no arc and reads UNKNOWN. The body half width is the URDF nominal from
 ``core_common.robot_body`` (D-424), never a local number.
 
 Levels: OK; WARN after ``persist_n`` consecutive samples with ``margin < warn_margin_m``; ACT after
-``persist_n`` consecutive samples with ``margin < 0``; UNKNOWN when the pose is not LOCALIZED or
-there is no lane to project onto (no active map). UNKNOWN is not a departure (D-82 Law 0) and
+``persist_n`` consecutive samples with ``margin < 0``; UNKNOWN when the pose is not LOCALIZED, no
+site map is active, or no arc passes the three tests above (a bay or yard off the graph, past a
+dead end, across a lane). UNKNOWN is not a departure (D-82 Law 0) and
 restarts both counts. M0 only observes: nothing here sends anything to a robot.
 """
 
@@ -37,9 +42,17 @@ class LaneComplianceConfig:
     persist_n: int = 3
     #: How long ACT may last before the M1/M2 stop rule; M0 reports it only.
     act_timeout_s: float = 3.0
+    #: A pose further than this from an arc centreline is not on that lane (m); None = its width_m.
+    max_lateral_m: Optional[float] = None
+    #: An arc counts only when its tangent is within this of the robot heading (deg).
+    heading_gate_deg: float = 45.0
+    #: Monitor deadband: odom within this distance / turn over max_odom_age_s is "still" (jitter).
+    moving_min_m: float = 0.01
+    moving_min_deg: float = 2.0
 
     def __post_init__(self) -> None:
-        for name in ("warn_margin_m", "act_timeout_s"):
+        for name in ("warn_margin_m", "act_timeout_s", "heading_gate_deg", "moving_min_m",
+                     "moving_min_deg") + (("max_lateral_m",) if self.max_lateral_m is not None else ()):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                 raise ValueError(f"fleet.lane_compliance.{name} must be a finite number")
@@ -47,6 +60,12 @@ class LaneComplianceConfig:
             raise ValueError("fleet.lane_compliance.warn_margin_m must be within [0, 1]")
         if not 0.0 < self.act_timeout_s <= 60.0:
             raise ValueError("fleet.lane_compliance.act_timeout_s must be within (0, 60]")
+        if self.max_lateral_m is not None and not 0.0 < self.max_lateral_m <= 10.0:
+            raise ValueError("fleet.lane_compliance.max_lateral_m must be within (0, 10]")
+        if not 0.0 < self.heading_gate_deg < 90.0:
+            raise ValueError("fleet.lane_compliance.heading_gate_deg must be within (0, 90)")
+        if not (0.0 <= self.moving_min_m <= 1.0 and 0.0 <= self.moving_min_deg <= 90.0):
+            raise ValueError("fleet.lane_compliance.moving_min_m/deg must be within [0, 1] m / [0, 90] deg")
         if isinstance(self.persist_n, bool) or not isinstance(self.persist_n, int) or not 1 <= self.persist_n <= 100:
             raise ValueError("fleet.lane_compliance.persist_n must be an integer within [1, 100]")
 
@@ -90,19 +109,29 @@ def _wrap(angle: float) -> float:
     return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
 
-def sample(pose, graph, body_half_width_m: float = BODY_HALF_WIDTH_M) -> LaneSample:
+#: Numerical tolerance for "the foot point is the arc's end", not a tuning value.
+END_EPS_M = 1e-6
+
+
+def sample(pose, graph, body_half_width_m: float = BODY_HALF_WIDTH_M,
+           config: LaneComplianceConfig = LaneComplianceConfig()) -> LaneSample:
     """``pose`` is a ``MapPose``; ``graph`` a ``fleet.routing.graph.Graph`` or None."""
     state = getattr(pose, "state", "UNKNOWN") if pose is not None else "UNKNOWN"
     arcs = list(graph.arcs.values()) if graph is not None else []
-    if state != "LOCALIZED" or not arcs:
+    if state != "LOCALIZED" or not arcs or pose.yaw is None:
         return LaneSample(state)
     x, y, yaw = pose.x, pose.y, pose.yaw
-    projected = {arc.id: arc.project(x, y) for arc in arcs}
-    nearest = min(arcs, key=lambda arc: projected[arc.id][0])
-    same_edge = [arc for arc in arcs if arc.edge_id == nearest.edge_id]
-    arc = (nearest if yaw is None else
-           min(same_edge, key=lambda a: abs(_wrap(projected[a.id][2] - yaw))))
-    dist, s, tangent = projected[arc.id]
+    gate = math.radians(config.heading_gate_deg)
+    best = None
+    for arc in arcs:
+        dist, s, tangent = arc.project(x, y)
+        limit = arc.width_m if config.max_lateral_m is None else config.max_lateral_m
+        if (END_EPS_M < s < arc.length_m - END_EPS_M and dist <= limit
+                and abs(_wrap(tangent - yaw)) <= gate and (best is None or dist < best[1])):
+            best = (arc, dist, s, tangent)
+    if best is None:
+        return LaneSample(state)
+    arc, dist, s, tangent = best
     px, py, _ = arc.point_at(s)
     left = math.cos(tangent) * (y - py) - math.sin(tangent) * (x - px)
     offset = math.copysign(dist, left)
@@ -132,4 +161,4 @@ class LaneComplianceTracker:
                               lane.margin_m, lane.width_m, self.body_half_width_m, self._warn, self._act)
 
     def judge(self, pose, graph) -> LaneCompliance:
-        return self.update(sample(pose, graph, self.body_half_width_m))
+        return self.update(sample(pose, graph, self.body_half_width_m, self.config))
