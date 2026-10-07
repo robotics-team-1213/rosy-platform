@@ -661,7 +661,7 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        44_926,
+        45_104,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
         "+133, with reviews), the camera AE/AWB re-lock (camera_controls/camera_visibility/v4l2_controls +77; "
@@ -745,7 +745,18 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-06 at 44646 for the keep side-flip fix (SIDE_FLIP_FRAMES bounded "
         "side tracking in lane_keep.py) with the junction HOLD policy split out to "
         "lane_keep_junction.py to stay under the file budget — same subjects inside "
-        "sensing/perception, they move with the P1a split; verdict unchanged.",
+        "sensing/perception, they move with the P1a split; verdict unchanged. "
+        "re-judged 2026-10-07 at 45104: main's D-491 crosswalk extent +148 (unrecorded) and D-468 paint "
+        "inner edge (lane_containment.py, line_observer_node.py); tests excluded from the count. Condition: "
+        "the next control re-judge needs a dated P1a step in docs/plans/ (sensing/perception move); "
+        "without it, REJECT.",
+    ),
+    "perception/control/line_observer_node.py": (
+        604,
+        "accept: with condition: one ROS adapter for the line observer; detection/keep/containment/paint "
+        "logic is ROS-free in sensing/perception. Judged 2026-10-07 at 604 for the D-468 paint inner edge "
+        "(read-only lane_paint_half_width_m, startup refusal). Condition: the node's next change moves "
+        "logic out first; a re-judge above 604 is REJECT. (independently re-judged 2026-10-07)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "perception/web/diagnostic.html": (
