@@ -112,7 +112,8 @@ SIZE_VERDICTS = {
         39_797,
         "split: re-judged at 39797 on 2026-10-07 by the D-491 5 trip loop author (independent "
         "confirmation pending at landing). The 845 new lines are the server trip loop "
-        "fleet/server/trip_runner.py +585 (ports, start checks, state machine, 0.5 s loop) and its "
+        "fleet/server/trip_runner.py +585 (start checks, state machine, 0.5 s loop; its ports later moved to "
+        "trip_ports.py so the loop file stays under 600 lines) and its "
         "routes/store/wiring (trip_routes.py +31 net, site_map_store.py +35, app.py +9, transport.py +13), "
         "plus the site-map trip panel (site-map.js +51, site-map-model.js +52, site-map.html +10). "
         "The trip loop is a new server file beside the routing package, inside the server owner of "

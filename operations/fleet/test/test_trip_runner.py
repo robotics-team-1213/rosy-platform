@@ -17,7 +17,8 @@ from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
-from fleet.server.trip_runner import MapPose, TripCaps, TripError, TripRunner, plan_body
+from fleet.server.trip_ports import MapPose, TripCaps
+from fleet.server.trip_runner import TripError, TripRunner, plan_body
 from fleet.site_map import SiteMap, from_lane_graph
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotApiError
@@ -403,7 +404,7 @@ def test_default_wiring_refuses_start_until_the_providers_land(tmp_path):
 
 
 def test_the_http_junction_port_posts_the_d491_body():
-    from fleet.server.trip_runner import HttpLaneJunction
+    from fleet.server.trip_ports import HttpLaneJunction
 
     class Client:
         async def line_follow_junction(self, action, place_id, *, stop_after_m, expires_s, turn_deg, advance_m):
@@ -690,7 +691,7 @@ def test_trip_config_reads_fleet_trip_and_refuses_bad_values(tmp_path):
 
 
 def test_http_line_follow_port_reads_the_mode_and_holds_with_mode_off():
-    from fleet.server.trip_runner import HttpLaneJunction
+    from fleet.server.trip_ports import HttpLaneJunction
 
     class Client:
         modes: list = []

@@ -14,7 +14,7 @@ junction on its own (no instruction), a free robot is left to its deadman. Repla
 the changed route. Trip rows live in the site map store; a Fleet restart turns a trip that
 was still going into ``stopped`` (reason ``restart``) and never starts it again.
 
-The three robot-facing inputs are ports so the CORE capability fields (branch a), the
+The three robot-facing inputs are ports (``trip_ports``) so the CORE capability fields (branch a), the
 junction API (branch b) and the Rosy Cam map pose (branch c) plug in when they land; until
 then the default wiring returns None and ``start`` refuses with the D-491 codes.
 """
@@ -28,7 +28,7 @@ import logging
 import math
 import time
 from dataclasses import dataclass, fields
-from typing import Any, Awaitable, Callable, Mapping, Optional, Protocol
+from typing import Awaitable, Callable, Mapping, Optional
 
 import httpx
 
@@ -37,6 +37,7 @@ from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP, UTURN, classify, turn_deg
 from fleet.routing.snap import PlanError
 from fleet.routing.trip import PlanRequest, plan_trip
+from fleet.server.trip_ports import LaneJunctionPort, MapPose, MapPosePort, TripCaps, TripCapsPort
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -49,108 +50,6 @@ OPEN = ("started", "running")
 TERMINAL = ("arrived", "stopped", "failed", "canceled")
 #: D-490 5: a plan may be started within this long on the same map version.
 PLAN_TTL_S = 30.0
-
-
-@dataclass(frozen=True)
-class TripCaps:
-    """D-491 1 capability fields as Fleet reads them from the robot's capabilities."""
-
-    kind: Optional[str]
-    modes: frozenset
-    max_speed: Optional[float]
-    #: D-492 3: CORE runs the bounded junction turn (``turn_deg``); without it no lane left/right.
-    junction_turn: bool = False
-
-
-@dataclass(frozen=True)
-class MapPose:
-    """D-491 3 ``map_pose`` output."""
-
-    x: float
-    y: float
-    yaw: float
-    state: str
-    source: str
-    dead_reckon_m: float
-    age_s: float
-    #: Seconds since the sighting anchor; a trip starts only on a fresh one (``start_anchor_age_s``).
-    anchor_age_s: Optional[float] = None
-    #: Provider diagnostics, shown when a trip stops for its pose.
-    sightings_filtered_map_id: Optional[object] = None
-    odom_refused: Optional[object] = None
-
-
-class TripCapsPort(Protocol):
-    def caps_for(self, robot_id: str) -> "Optional[TripCaps] | Awaitable[Optional[TripCaps]]": ...
-
-
-class MapPosePort(Protocol):
-    def arbitrated_pose(self, robot_id: str) -> "Optional[MapPose] | Awaitable[Optional[MapPose]]": ...
-
-    async def refresh(self, robot_id: str, force_rest: bool = True) -> None:
-        """Optional: read the robot's state/odom now. The loop calls it once per tick (2 Hz)."""
-
-
-class LaneJunctionPort(Protocol):
-    async def send_junction(self, robot_id: str, action: str, place_id: str, stop_after_m: Optional[float],
-                            expires_s: float, turn_deg: Optional[float] = None,
-                            advance_m: Optional[float] = None) -> dict: ...
-
-    async def junction_state(self, robot_id: str) -> Optional[dict]:
-        """The snapshot's ``line_follow.junction`` ({pending_action, place_id, state, seq}) or None."""
-
-    async def hold(self, robot_id: str) -> dict:
-        """Stop line following now (not at the next junction)."""
-
-    async def line_follow_mode(self, robot_id: str) -> Optional[str]:
-        """The robot's selected line-follow mode (``GET /api/v1/line-follow`` ``mode``)."""
-
-
-class NoTripCaps:
-    """Default until the D-491 1 provider lands: no robot has trip capabilities."""
-
-    def caps_for(self, robot_id: str) -> None:
-        return None
-
-
-class NoMapPose:
-    """Default until the D-491 3 provider lands: no robot has a trip pose."""
-
-    def arbitrated_pose(self, robot_id: str) -> None:
-        return None
-
-
-class HttpLaneJunction:
-    """D-491 4 through the console's robot clients (``HttpRobotClient.line_follow_junction``)."""
-
-    def __init__(self, clients: Callable[[], Mapping[str, Any]]) -> None:
-        self._clients = clients
-
-    def _client(self, robot_id: str):
-        client = self._clients().get(robot_id)
-        if client is None:
-            raise HubError("UNKNOWN_ROBOT", robot_id)
-        return client
-
-    async def send_junction(self, robot_id: str, action: str, place_id: str, stop_after_m: Optional[float],
-                            expires_s: float, turn_deg: Optional[float] = None,
-                            advance_m: Optional[float] = None) -> dict:
-        return await self._client(robot_id).line_follow_junction(
-            action, place_id, stop_after_m=stop_after_m, expires_s=expires_s, turn_deg=turn_deg,
-            advance_m=advance_m)
-
-    async def junction_state(self, robot_id: str) -> Optional[dict]:
-        junction = ((await self._client(robot_id).state()).get("line_follow") or {}).get("junction")
-        return junction if isinstance(junction, dict) else None
-
-    async def hold(self, robot_id: str) -> dict:
-        # ponytail: CORE POST /line-follow/hold extends a hold-to-run session (D-344 8, it keeps the
-        # robot going), so the immediate stop is mode OFF, the existing Fleet-allowed selection.
-        return await self._client(robot_id).line_follow_mode("OFF")
-
-    async def line_follow_mode(self, robot_id: str) -> Optional[str]:
-        mode = (await self._client(robot_id).line_follow()).get("mode")
-        return mode if isinstance(mode, str) else None
 
 
 @dataclass(frozen=True)

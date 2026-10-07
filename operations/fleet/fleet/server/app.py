@@ -520,7 +520,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.routing.cost import RoutingConfig
     from fleet.server.site_map_routes import install_site_map_routes
     from fleet.server.trip_routes import install_trip_routes
-    from fleet.server.trip_runner import HttpLaneJunction, NoMapPose, NoTripCaps, TripConfig, TripRunner
+    from fleet.server.trip_ports import HttpLaneJunction, NoMapPose, NoTripCaps
+    from fleet.server.trip_runner import TripConfig, TripRunner
     install_lane_route_routes(app, console=console, task_service=task_service,
                               site_maps=site_maps, require_operator=require_operator,
                               operator_guard=operator_guard)
