@@ -2598,3 +2598,9 @@
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: provenance는 JSONL이 아니라 하나의 JSON 문서다 — 줄 단위 추가가 아니라 records 배열 안에 넣어야 하며, 무작정 append는 "Extra data"로 스캐너 자체를 죽인다. 하루에 같은 오탐 클래스가 세 번(log_repairs 미등록 포함) 나왔다 — 회차 문서·수선 표를 쓰는 세션은 착지 전 시크릿 시험 1회(`docs/solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md`)를 돌려야 한다
+
+## 2026-10-08 · uncommitted · feat(face): D-472 식별 점멸 — 움직이는 로봇, 안전 거절, 6 s 상한
+- 변경: `rosy-face`가 식별 점멸을 정상 패턴(ready·manual·navigating·docking·illumination) 위에서만 켠다. E-Stop·EMERGENCY·고장·주의·booting·blocked·CORE 인계 없음이면 결과 파일에 `failed`를 바로 쓰고 거절하며, 점멸 중 그렇게 되면 끊는다. 인계 요청은 1 s, 점멸은 3.5 s에 끝낸다. `rosy-hw-test`는 1.5 s보다 오래된 식별 요청을 버린다. 요청부터 끝까지 6 s 이내
+- 증거: `test/test_rosy_face.py`·`test/test_hw_test.py` 호스트 시험(거절·중단·기한·요청 나이). 실제 LED·ARM64 배포 없음
+- gate 변화: 없음. DEVICE/FIELD 미확인, D-430 Safety-Review 미수령
+- 결정: D-472 addendum 5항

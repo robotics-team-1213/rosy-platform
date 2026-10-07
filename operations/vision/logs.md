@@ -325,3 +325,9 @@
 - 관제 확인: 실제 Fleet를 SSH 경유 Chromium으로 열어 초안의 153개 경로 점과 SVG 좌표를 비교했다. 최대 차이 0.000032 px, 1440·390 px에서 가로 넘침 없음. 활성 주행 지도는 유지했다. 직사각형 영상 중첩 화면은 별도 로컬 화면 검증이며 새 UI 배포 증거는 아니다
 - 결정: D-497 2항 구현 보강
 - 교훈: 유효한 도로 영역의 세선화 결과가 실제 양쪽 페인트의 중심과 일치하는 것은 아니다
+
+## 2026-10-08 · uncommitted · feat(vision): D-472 LED 점멸 검출과 Fleet 판정
+- 변경: 순수 검출기 `track/led_identity.py`(blob 둘레 고리의 HSV 색 비율, 프레임 간 blob 연결, 켬/끔/켬 시간). 한 사슬만 맞고 창 전체 프레임·신선도·revision 하나일 때만 `matched`, 아니면 `ambiguous`(none·multiple·frames_missing·stale·calibration_changed)와 근거 숫자. 추적 워커가 Fleet `identity_challenge` 창 동안 고리를 재고 창이 끝나면 판정 하나를 `POST /api/fleet/detections/identity`로 보낸다(숫자만, 영상 없음)
+- 증거: 합성 프레임 시험(일치, 두 blob, 가림, 프레임 누락, 다른 색, 설정 임계) 6건과 워커 1건. 임계값은 잠정, ceiling_north 실측 전
+- gate 변화: 없음. FIELD 실측(LED 가시성·색 분리·시각 오차) 미실시
+- 결정: D-472 addendum 6항 측정 먼저
