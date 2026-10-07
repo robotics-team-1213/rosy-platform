@@ -231,3 +231,14 @@ def test_teach_api_needs_a_named_operator_and_is_audited(tmp_path):
     for path in ("start", "stop", "confirm", "place"):
         assert (f"/api/fleet/teach/{path}", "RESULT", 200) in audit
     assert {"teach_started", "teach_stopped", "teach_confirmed", "teach_place"} <= {e["action"] for e in store.events()}
+
+
+def test_site_map_page_serves_the_teach_panel_under_the_csp(tmp_path):
+    client, _tasks, _store, _poses = _app(tmp_path)
+    page = client.get("/console/site-map")
+    script = client.get("/console/assets/site-map-teach.js")
+    assert page.status_code == 200 and script.status_code == 200
+    assert "script-src 'self'" in page.headers["content-security-policy"]
+    for element in ("teach-robot", "teach-start", "teach-stop", "teach-confirm", "teach-place"):
+        assert f'id="{element}"' in page.text
+    assert "style=" not in page.text and "innerHTML" not in script.text
