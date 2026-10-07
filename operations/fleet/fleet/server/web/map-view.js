@@ -46,7 +46,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const { width, height } = grid;
     // Occupancy cells stay pixelated, while map labels need enough backing pixels
     // to remain legible when a small grid is stretched across the console.
-    const scale = Math.min(10, Math.max(1, Math.floor(1600 / Math.max(width, height))));
+    const displaySize = Math.min(canvas.clientWidth || 1600, canvas.clientHeight || 1600) * (window.devicePixelRatio || 1);
+    const scale = Math.min(10, Math.max(1, Math.round(displaySize / Math.max(width, height))));
     canvas.width = width * scale;
     canvas.height = height * scale;
     const ctx = canvas.getContext("2d");

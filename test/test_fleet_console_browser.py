@@ -2311,6 +2311,25 @@ def test_map_label_chips_never_cover_each_other(console_url, width, height):
     assert hits == [], hits
 
 
+def test_phone_map_raster_stays_close_to_display_size(console_url):
+    """Downsampling a 400px map into a 236px phone box makes labels unreadable."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.set_viewport_size({"width": 320, "height": 568})
+        page.goto(console_url, wait_until="networkidle")
+        ratio = page.evaluate("""() => {
+          const canvas = document.getElementById('map-canvas');
+          const box = canvas.getBoundingClientRect();
+          return Math.max(canvas.width / box.width, canvas.height / box.height);
+        }""")
+        assert not errors
+        browser.close()
+
+    assert ratio <= 1.2, ratio
+
+
 @pytest.mark.parametrize("width,height", [(320, 568), (390, 844), (1366, 768)])
 def test_wordmark_stays_on_one_line(console_url, width, height):
     """D-359 US-008 capture: at 320px "ROSY FLEET" broke into two lines (brand column 83px,
