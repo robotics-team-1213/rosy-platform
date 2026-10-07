@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from fleet.routing.blocks import (
-    BlockRules, Layout, Robot, Span, TableState, Unit, build_layout, loop_capacity, step, wait_cycle)
+    BlockRules, Layout, Robot, Span, TableState, Unit, build_layout, loop_capacity, release_robot, step,
+    wait_cycle)
 from fleet.routing.graph import build_graph
 from fleet.site_map import SiteMap, from_lane_graph
 
@@ -101,6 +102,7 @@ def _run(layout, cycle, n, *, ticks, seed, unknown_rate=0.0, stall_rate=0.0, u=0
             true_d[robot.id] = spans[0].d1 - 0.02
     state = TableState()
     conflicts, progress, shrinks = [], {r.id: 0.0 for r in robots}, []
+    shared_at_start = None  # packed starts share blocks physically; only clearing them is allowed
     for tick in range(ticks):
         for r in robots:
             r.lookahead_m = rng.choice((0.1, 0.3, 0.6))
@@ -127,7 +129,15 @@ def _run(layout, cycle, n, *, ticks, seed, unknown_rate=0.0, stall_rate=0.0, u=0
         for r in robots:
             for unit in _true_units(r.spans, true_d[r.id], body):
                 seen.setdefault(unit, []).append(r.id)
-                assert len(seen[unit]) <= layout.units[unit].capacity, f"tick {tick}: {seen[unit]} on {unit}"
+        over = {u for u, rs in seen.items() if len(rs) > layout.units[u].capacity}
+        if shared_at_start is None:
+            shared_at_start = over if packed else set()
+        shared_at_start &= over
+        assert over <= shared_at_start, f"tick {tick}: {[(u, seen[u]) for u in over - shared_at_start]}"
+        if packed:  # same route: a follower's front never reaches the leader's rear
+            order = sorted(robots, key=lambda r: -true_d[r.id])
+            for ahead, behind in zip(order, order[1:]):
+                assert true_d[behind.id] <= true_d[ahead.id] - body + 1e-9, f"tick {tick}: contact"
     return conflicts, progress, shrinks
 
 
@@ -247,7 +257,8 @@ def test_a_robot_waiting_at_a_merge_gets_in_within_the_wait_bound():
         now = tick * 0.5
         # worst case: every tick a fresh robot inside the ring asks for the same merge block
         leaving = Robot(f"x{tick}", (Span("ring", 0, 0.65), Span("merge", 0.65, 1.3)), 0.6, 0.3, 0.05, 0.12)
-        state.held = {"enter": state.held.get("enter", {})}
+        if tick:  # the previous competitor left the lanes; Fleet drops it on evidence
+            release_robot(state, f"x{tick - 1}")
         result = step(layout, [leaving, entering], state, now=now, merge_max_wait_s=20.0)
         if result.authority_end["enter"] > 0.65:
             admitted_at = now
