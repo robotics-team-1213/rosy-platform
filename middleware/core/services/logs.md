@@ -655,3 +655,9 @@
 - 변경: 독립 리뷰가 회전 뒤에도 구간이 끝나지 않아 IR 감시가 다른 도로에서 계속 쉬는 것을 재현했다(fail-open). 구간은 진행각 0.3 rad 초과, IR 줄이 영상 진행선에서 0.10 m + 여유 밖, 먼 끝 통과, epoch 변경에서 버린다. 한 번 쉬는 거리는 odom 실측으로 상한이 있고, 그 뒤 IR이 한 번 clear를 읽어야 다시 쉰다. 구간 판정은 감시가 켜진 매 틱에 돈다(자세 조회가 늦어 구간을 잃지 않게).
 - 증거: `test_ir_guard_crosswalk.py` 17건. 회전·차로 이탈 시험은 각 검사를 끄면 실패함을 확인했다(MAX_TURN_RAD, CORRIDOR_HALF_M 변이). NOMINAL 거부는 구간 단위로, odom 끊김은 구간이 고정된 뒤로 시험을 고쳤다(리뷰: 로직 없이도 통과하던 두 시험).
 - gate 변화: 없음. 결정 1의 D-468 문구를 ADR 구현 메모에서 정정했다(장치 기본에서 D-468 꺼짐).
+
+## 2026-10-07 · uncommitted · feat(line_follow): NOMINAL 지면 횡단보도 구간과 앞뒤 거리 여유 (D-491 개정)
+
+- 변경: `CrosswalkZones.observe`가 지면 표시를 보지 않고 `uncertainty_m`(≤ 0.015 m)만 요구한다(D-468과 같다). 여유에 `crosswalk_range_error_fraction`(기본 0.05) × 먼 끝 거리를 더하고, 쉬는 거리 상한도 같은 비율만큼 늘린다.
+- 증거: `test_ir_guard_crosswalk.py` 20건(NOMINAL + 운전자 확인에서 쉼, 불확실도 없음/초과는 구간 없음, 거리 여유가 끝을 넓힘). 실기 9dfk 측정은 D-491 개정 절.
+- gate 변화: 없음. 장치 반영은 릴리스 뒤.

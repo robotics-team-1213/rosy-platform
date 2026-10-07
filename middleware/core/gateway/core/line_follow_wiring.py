@@ -70,6 +70,8 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         crosswalk_zone_max_m=float(raw.get("crosswalk_zone_max_m", defaults.crosswalk_zone_max_m)),
         crosswalk_odom_error_fraction=float(raw.get(
             "crosswalk_odom_error_fraction", defaults.crosswalk_odom_error_fraction)),
+        crosswalk_range_error_fraction=float(raw.get(
+            "crosswalk_range_error_fraction", defaults.crosswalk_range_error_fraction)),
         recovery_local_enabled=_flag(raw, "recovery_local_enabled", defaults.recovery_local_enabled),
         recovery_ask_s=float(raw.get("recovery_ask_s", defaults.recovery_ask_s)),
         recovery_back_m=float(raw.get("recovery_back_m", defaults.recovery_back_m)),
