@@ -2349,7 +2349,7 @@
 - 결정: 해당 없음(D-457 1항 표시 전용 경로의 시험 보강)
 - 교훈: 소스 문자열 단언(`"calibrationRequest(" in fit_view`)은 배선이 빠져도 녹색으로 남는다 — 클릭해서 본문을 잡는 브라우저 시험이 배선의 증거다
 
-## 2026-10-07 · feat/d407-stuck-episode-log · feat(fleet): 막힘 에피소드 기록
+## 2026-10-07 · uncommitted · feat(fleet): 막힘 에피소드 기록
 - 변경: `LineStuckBoard.observe`의 전이(열림·`cleared`·`replaced`·`left_roster`)를 `--tasks-db` 파일의 새 테이블 `fleet_line_stuck_episodes`에 남긴다. 시작할 때 열린 행은 `fleet_restart`로 닫고, 같은 `stuck_id`가 다시 보이면 처음 `opened_at`을 둔 채 다시 연다. 열 때 `local_enabled`·`trip_busy`(트립 실행기 `robot_busy`)·`peer_ahead`(resolver R1과 같은 모듈 함수로 꺼냄, 자세 없으면 NULL)·MapPose를 담고, 닫을 때 답 기록에서 `resolved_by`/`last_answer_tier`/`escalation_code`를 정한다. `GET /api/fleet/line-stuck/episodes`(viewer+), API Ref v1.120
 - 증거: 계획 검증 묶음 192 passed, `test/known_failures.py` 0 new. `test_server_app`·`test_boundaries`·`test_cli`·`test_teach` 107 passed·1 failed(`test_cli.py::test_cell_job_stack_tolerance_injects_the_palletizing_compiler`, `rosy.execution` import 실패, 깨끗한 main에서도 실패)
 - gate 변화: 없음. SOURCE 호스트 시험만. 현장 배포 전
