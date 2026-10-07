@@ -73,6 +73,10 @@ class _Client:
     async def fetch_config(self):
         return self.configs.pop(0)
 
+    async def publish_identity(self, body):
+        self.identity = getattr(self, "identity", []) + [body]
+        return {"accepted": True}
+
 
 class _Ingest:
     def __init__(self, lens=None, frame=None):
@@ -415,3 +419,20 @@ def test_a_tracker_error_is_logged_and_does_not_mask_the_sighting_error(caplog):
         assert len(asyncio.run(vision(None).process_latest())) == 1
     assert caplog.text.count("error_type=ValueError") == 2
     assert "tracker broke" not in caplog.text
+
+
+def test_an_identity_challenge_is_answered_once_after_its_window_with_numbers_only(make_worker):
+    # D-472: grey frames, no blink -> ambiguous "none"; one verdict per request id, no image.
+    challenge = {"request_id": "req-1", "color": "blue", "not_before": 100.0, "not_after": 104.0}
+    worker, client = make_worker(configs=[{**CONFIG, "identity_challenge": challenge}])
+    asyncio.run(worker.refresh_config())
+    for i in range(16):
+        asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
+    assert len(worker._identity_samples) == 0  # the verdict cleared them
+    (body,) = client.identity
+    assert (body["request_id"], body["state"], body["reason"]) == ("req-1", "ambiguous", "none")
+    assert body["evidence"]["frames"] == 14 and body["source_id"] == "ceiling_north"
+    assert not any(isinstance(v, (bytes, bytearray)) for v in body.values())
+    asyncio.run(worker.process(_frame(seq=17, captured_at=105.0), {}))
+    assert len(client.identity) == 1
+
