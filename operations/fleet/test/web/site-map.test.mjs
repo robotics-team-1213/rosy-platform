@@ -67,3 +67,22 @@ test('invalid draft errors list the fields', async () => {
     detail: {errors: [{loc: ['map', 'edges', '0', 'width_m'], msg: 'Input should be greater than 0'}]}});
   assert.match(text, /맞지 않는 값.*map\.edges\.0\.width_m: Input should be greater than 0/);
 });
+
+test('D-491 trip panel text and button reasons', async () => {
+  const {tripStatusText, tripStartReason, tripCancelReason} = await import('../../fleet/server/web/site-map-model.js');
+  assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
+  const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
+    pose: {state: 'LOCALIZED', source: 'bridged'}, hold: null, reason: null};
+  assert.equal(tripStatusText(trip, MAP), '운행 중 · r1 · 차로 ab · 다음 B 정지 · 자세 LOCALIZED · odom 다리');
+  assert.match(tripStatusText({...trip, state: 'stopped', reason: 'restart'}, MAP), /자동으로 다시 출발하지 않습니다/);
+  const plan = {map_version: 1, expires_at: 100};
+  const active = {version: 1};
+  assert.equal(tripStartReason({role: 'operator', plan, active, running: null, now: 99}), '');
+  assert.match(tripStartReason({role: 'operator', plan, active, running: null, now: 101}), /30초/);
+  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /진행 중/);
+  assert.match(tripStartReason({role: 'operator', plan, active: {version: 2}, running: null, now: 99}), /지도가 바뀌었습니다/);
+  assert.match(tripStartReason({role: 'viewer', plan, active, running: null, now: 99}), /운영자/);
+  assert.match(tripStartReason({role: 'operator', plan: null, active, running: null}), /경로를 계산/);
+  assert.equal(tripCancelReason({role: 'operator', running: trip}), '');
+  assert.match(tripCancelReason({role: 'operator', running: null}), /없습니다/);
+});

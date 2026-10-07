@@ -1,10 +1,11 @@
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
-// and preview a D-490 trip plan. Nothing here moves a robot.
+// and preview a D-490 trip plan. Only the D-491 운행 buttons start or cancel a trip.
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
-  planIsCurrent, planPolylines, siteMapErrorText, tripErrorText,
+  planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripErrorText, tripStartReason,
+  tripStatusText,
 } from '/console/assets/site-map-model.js';
 
 const $ = id => document.getElementById(id);
@@ -13,7 +14,8 @@ const W = 800, H = 480;
 
 $('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
-const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, point: null};
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, point: null, running: null};
+const TRIP_POLL_MS = 1000;
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
@@ -118,7 +120,27 @@ function syncButtons() {
     : ($('trip-pick').checked ? state.point : $('trip-place').value) ? '' : '목적지를 고르세요'));
   gate('trip-pick', reason);
   gate('estop', reason);
+  gate('trip-start', tripStartReason({role: state.role, plan: state.plan, active: state.active, running: state.running}));
+  gate('trip-cancel', tripCancelReason({role: state.role, running: state.running}));
+  $('trip-confirm').hidden = !state.running?.hold;
+  gate('trip-confirm', reason || (state.running?.hold?.plan ? '' : '다시 계산한 경로가 없습니다 · 운행을 취소하세요'));
 }
+
+async function pollTrips() {
+  if (state.loadState === 'ready') {
+    try {
+      const {running, trips} = await request('/api/fleet/trips');
+      state.running = running;
+      const shown = running || trips[0] || null;
+      status('trip-run', tripStatusText(shown, state.active?.map), running ? 'pending' : shown?.state === 'arrived' ? 'ready' : shown ? 'error' : 'empty');
+    } catch (error) {
+      status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(error)}`, 'error');
+    }
+    syncButtons();
+  }
+  setTimeout(pollTrips, TRIP_POLL_MS);
+}
+pollTrips();
 
 async function load() {
   let active = null;
@@ -152,7 +174,7 @@ $('connect').addEventListener('click', async () => {
   const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
   state.role = null;
   state.loadState = 'pending';
-  state.active = state.draft = state.working = state.selected = state.plan = state.point = null;
+  state.active = state.draft = state.working = state.selected = state.plan = state.point = state.running = null;
   state.dirty = false;
   $('session').textContent = '접속 전';
   $('trip-place').replaceChildren();
@@ -262,7 +284,7 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
     return;
   }
   status('trip-summary', `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s`
-    + ` · 지도 v${plan.map_version} · 실행하지 않음`, 'ready');
+    + ` · 지도 v${plan.map_version} · 실행하지 않음 · 운행 시작으로 출발`, 'ready');
   $('trip-actions').replaceChildren(...actionRows(plan, state.active.map).map(text => {
     const row = document.createElement('li');
     row.textContent = text;
@@ -271,6 +293,35 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
   $('map-source').value = 'active';
   render();
 }));
+
+async function tripAction(path, done) {
+  try {
+    const trip = await request(path, {method: 'POST'});
+    state.running = ['started', 'running'].includes(trip.state) ? trip : null;
+    status('trip-run', tripStatusText(trip, state.active?.map), state.running ? 'pending' : 'ready');
+    notice(done);
+  } catch (error) {  // the poll rewrites #trip-run each second; the refusal stays in the notice
+    notice(`운행 거절 · ${error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error)}`);
+  }
+  syncButtons();
+}
+
+$('trip-start').addEventListener('click', () => {
+  const plan = state.plan;
+  if (plan) tripAction(`/api/fleet/trips/${encodeURIComponent(plan.plan_id)}/start`, '운행을 시작했습니다.');
+});
+$('trip-confirm').addEventListener('click', () => {
+  if (state.running) tripAction(`/api/fleet/trips/${encodeURIComponent(state.running.trip_id)}/confirm-replan`, '바뀐 경로로 계속합니다.');
+});
+$('trip-cancel').addEventListener('click', async () => {
+  const trip = state.running;
+  if (!trip) return;
+  const allowed = await confirmIrreversible({
+    message: '운행을 취소할까요? 차선 주행이면 다음 교차로에서 멈추고, 좌표 주행이면 목표를 취소합니다.',
+    action: '운행 취소', opener: $('trip-cancel'),
+  });
+  if (allowed) tripAction(`/api/fleet/trips/${encodeURIComponent(trip.trip_id)}/cancel`, '운행을 취소했습니다.');
+});
 
 $('estop').addEventListener('click', async () => {
   const feedback = $('estop-feedback');
