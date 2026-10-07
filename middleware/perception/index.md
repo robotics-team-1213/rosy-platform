@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(control): keep 제자리 회전 reset 검토 반영 — odom twist 하나, 신선도 판정 하나
 - 2026-10-08 · a411c2801 · fix(control): 제자리 회전 뒤 keep flipping hold가 풀리지 않던 것
 - 2026-10-08 · uncommitted · fix(perception): keep_debug 조립이 ground 이름표와 충돌해 매 프레임 죽던 것
 - 2026-10-08 · uncommitted · feat(perception): keep 판단에 쓰인 지면 투영값 기록
 - 2026-10-07 · uncommitted · fix(perception): G-16 독립 검토 반영
-- 2026-10-07 · uncommitted · fix(perception): G-16 keep 경계 기울기와 그 오차
