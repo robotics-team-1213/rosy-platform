@@ -739,15 +739,30 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   }
   function bindCamera(visionView) {
     // The calibrated map draws the same authenticated Vision frame; Fleet does not relay image bytes.
-    // The raw frame is shown once, in the camera panel — never a second copy under the map.
+    // D-488: the raw frame shows in one place at a time — the rail thumbnail, or the map stage
+    // (#map-birdseye) when there is no map or the operator asks for the large view. CSS picks the place.
+    const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
+    const setLive = (url) => {
+      birdseye.hidden = !url;
+      if (url) birdseye.src = url;
+      toggle.disabled = !url;
+      if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
+    };
+    setLive(null);
+    scope.listen(toggle, "click", () => {
+      const large = stage.dataset.view !== "camera";
+      stage.dataset.view = large ? "camera" : "map";
+      toggle.setAttribute("aria-pressed", String(large));
+    });
     let cancelMapCameraExpiry = () => {};
     scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
       cancelMapCameraExpiry();
       if (frame.state !== "live" || !Number.isFinite(frame.ageMs) || frame.ageMs < 0 || frame.ageMs > 3000) {
-        setCameraFrame(null); return;
+        setCameraFrame(null); setLive(null); return;
       }
       setCameraFrame(frame);
-      cancelMapCameraExpiry = scope.timeout(() => setCameraFrame(null), Math.max(0, 3000 - frame.ageMs));
+      setLive(frame.url);
+      cancelMapCameraExpiry = scope.timeout(() => { setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
     })));
   }
   return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence, setCameraFrame, bindCamera };

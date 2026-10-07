@@ -42,14 +42,37 @@ function blockWith(button, reason) {
 
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator,
   moveAddress = null, moveAddressBlocked = () => "", confirmedAction }) {
-  function needsAttention(robot) {
+  // D-488 — 예외 큐와 로봇 카드의 "주의" 보기는 이 한 규칙을 쓴다. 카드에 빨간 표지가 붙은
+  // 로봇이 큐에 없으면 "예외가 먼저"(D-201)가 거짓말이 된다(2026-10-07 회차: 릴레이 끊김).
+  function attentionItems(robot) {
     const state = robot.state;
-    const evidence = streamEvidence(view.formation, robot.robot_id);
-    return view.stateUnavailable || !robot.online || !state || state.safety?.estop !== false
-      || state.hitl_requested === true || Boolean(state.capabilities_degraded?.length)
-      || state.navigation === "FAILED" || Boolean(robot.queued) || Boolean(robot.yielding)
-      || (evidence !== null && evidence.cls !== "") || localizationUrgent(robot.localization)
-      || Boolean(robot.line_stuck);
+    // 2026-10-02 관제 회차 — 로봇 전원이 닿지 않아도 큐는 비어 있었다. 가장 흔한 예외부터 말한다.
+    if (!robot.online) return [{ severity: "warn", text: `: ${EVIDENCE_LABEL.disconnected}` }];
+    if (!state) return [{ severity: "warn", text: ": 상태 확인 불가" }];
+    const items = [];
+    // D-407: 막힌 로봇이 답을 기다린다. 답하는 자리는 큐 아래 판단 요청이다.
+    if (robot.line_stuck) items.push({ severity: "crit", text: ": 판단 요청 — 차선 추종이 막혔습니다" });
+    if (localizationUrgent(robot.localization)) {
+      // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.
+      items.push({ severity: "crit", text: ": 위치 확인 필요 — 로봇 위치를 직접 지정하세요" });
+    } else if (state.hitl_requested === true) {
+      // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는 능력이다 — 못 하는
+      // 조작을 모의 버튼으로 걸면 경보가 거짓말을 한다(D-218, F-20). 진짜 개입은 로봇 화면에서.
+      items.push({ severity: "crit", text: ": 개입 필요 — 로봇 화면에서 확인" });
+    } else if (state.capabilities_degraded?.length) {
+      items.push({ severity: "warn", text: `: 성능 저하 [${state.capabilities_degraded.join(", ")}]` });
+    }
+    const relay = streamEvidence(view.formation, robot.robot_id);
+    if (relay && relay.cls) items.push({ severity: relay.cls === "crit" ? "crit" : "warn", text: `: ${relay.text}` });
+    if (state.safety?.estop === true) items.push({ severity: "warn", text: ": 비상 정지 걸림 — 관리자가 해제해야 움직입니다" });
+    else if (state.safety?.estop !== false) items.push({ severity: "warn", text: ": 정지 상태 미확인" });
+    if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패" });
+    if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
+    if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
+    return items;
+  }
+  function needsAttention(robot) {
+    return view.stateUnavailable || attentionItems(robot).length > 0;
   }
   function navTag(state) {
     const nav = state && state.navigation;
@@ -379,7 +402,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   function setTriageHead(id, label, list) {
     const head = el(id);
     if (!head) return;
-    const names = [...list.querySelectorAll("li b")].map((b) => b.textContent);
+    const names = [...new Set([...list.querySelectorAll("li b")].map((b) => b.textContent))];
     head.querySelector("b").textContent = `${label} ${names.length}`;
     head.querySelector("small").textContent = names.join(" · ");
   }
@@ -403,44 +426,14 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     };
 
     for (const r of view.stateUnavailable ? [] : view.robots) {
-      // 2026-10-02 관제 회차 — 로봇 전원이 닿지 않아도 이 큐는 비어 있었다.
-      // "예외가 먼저" 문법이 가장 흔한 예외(연결 끊김)에 침묵하면 신뢰가 사라진다.
-      if (!r.online) {
-        warnList.appendChild(queueItem(r.robot_id, `: ${EVIDENCE_LABEL.disconnected}`));
-        warningCount++;
-        continue;
-      }
-      if (!r.state) {
-        warnList.appendChild(queueItem(r.robot_id, ": 상태 확인 불가"));
-        warningCount++;
-        continue;
-      }
-      if (r.line_stuck) {
-        // D-407: 막힌 로봇이 답을 기다린다. 답하는 자리는 이 패널 아래 판단 요청이다.
-        critList.appendChild(queueItem(r.robot_id, ": 판단 요청 — 차선 추종이 막혔습니다"));
-        criticalCount++;
-      }
-      if (localizationUrgent(r.localization)) {
-        // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.
-        critList.appendChild(queueItem(r.robot_id, ": 위치 확인 필요 — 로봇 위치를 직접 지정하세요"));
-        criticalCount++;
-      } else if (r.state.hitl_requested) {
-        // 개입 요청은 이름으로 알린다(Law 0). 원격 조종은 이 서버에 없는
-        // 능력이다 — 못 하는 조작을 모의 버튼으로 걸어 두면 경보가 거짓말을
-        // 한다(D-218, F-20). 진짜 개입은 그 로봇의 대시보드에서 일어난다.
-        const li = document.createElement("li");
-        const name = document.createElement("b");
-        name.textContent = r.robot_id;
-        li.append(name, document.createTextNode(": 개입 필요 — 로봇 화면에서 확인"));
-        critList.appendChild(li);
-        criticalCount++;
-      } else if (r.state.capabilities_degraded && r.state.capabilities_degraded.length > 0) {
-        const li = document.createElement("li");
-        const name = document.createElement("b");
-        name.textContent = r.robot_id;
-        li.append(name, document.createTextNode(`: 성능 저하 [${r.state.capabilities_degraded.join(", ")}]`));
-        warnList.appendChild(li);
-        warningCount++;
+      for (const item of attentionItems(r)) {
+        if (item.severity === "crit") {
+          critList.appendChild(queueItem(r.robot_id, item.text));
+          criticalCount++;
+        } else {
+          warnList.appendChild(queueItem(r.robot_id, item.text));
+          warningCount++;
+        }
       }
     }
     setTriageHead("warning-head", "주의 요망", warnList);

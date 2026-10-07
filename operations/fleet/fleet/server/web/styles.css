@@ -1,24 +1,20 @@
 * { box-sizing: border-box; }
 
-.console-workflow, .connection-guide { margin: var(--space-3) var(--space-5); }
-.console-workflow ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); padding: 0; margin: 0; list-style: none; }
-.console-workflow a { display: flex; align-items: center; gap: var(--space-2); min-height: var(--target-secondary); padding: var(--space-2); color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line-14); }
-.console-workflow span { color: var(--ink-quiet); font-family: var(--mono); }
+.connection-guide { margin: var(--space-3) var(--space-5); }
 .connection-guide { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--line-14); border-radius: var(--radius-panel); background: var(--surface-flat); }
 .connection-guide[hidden] { display: none; }
 .connection-guide > div { flex: 1 1 16rem; min-width: 0; }
 .connection-guide h2 { margin: 0 0 var(--space-2); font-size: var(--text-title); }
 .connection-guide p { margin: 0; color: var(--ink-quiet); }
 .connection-guide a { display: inline-flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-button); color: var(--ink); }
-.console-workflow a:focus-visible, .connection-guide a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.connection-guide a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 #estop-feedback { margin: var(--space-2) var(--space-5) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
 .start-point-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-3) 0; }
 .start-point-fields label { display: grid; gap: var(--space-2); min-width: 0; }
 .start-point-fields .ui-field { width: 100%; min-width: 0; }
 .start-point-camera { grid-column: 1 / -1; }
 @media (width < 64rem) {
-  .console-workflow ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .console-workflow, .connection-guide, #estop-feedback { margin-inline: var(--space-3); }
+  .connection-guide, #estop-feedback { margin-inline: var(--space-3); }
 }
 
 /* Fleet task owners remain mounted; visibility is navigation-owned. */
@@ -39,8 +35,13 @@
 .peer-owner-link { min-height: var(--target-secondary); display: inline-flex; align-items: center; padding: var(--space-3); }
 #camera-calibration .vision-preview { margin-top: var(--space-3); }
 #discovery-retry { margin-top: var(--space-2); }
-.roster-block { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
+.roster-block { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2) var(--space-3); }
+.roster-block > h2 { margin: 0; }
 .roster-block > #roster, .roster-block > .address-drift { grid-column: 1 / -1; }
+/* 알릴 발행 상태가 있으면 띠가 머리 아래 한 줄을 다 쓴다. 없으면 전체 주행 취소 버튼만 머리 줄에 선다. */
+.roster-block > .dispatch-control { grid-column: 1 / -1; grid-row: 2; }
+.roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 2; grid-row: 1; }
+.roster-block > #roster-toggle { grid-column: 3; grid-row: 1; }
 .console-primary, .console-secondary { min-width: 0; display: grid; gap: var(--space-4); }
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .ops-block > h2, .ops-block > .discovery, .ops-block > .console-diagnostics, .ops-block > .log-panel { grid-column: 1 / -1; margin: 0; }
@@ -48,6 +49,8 @@
 @media (width >= 64rem) {
   .install-tasks { grid-template-columns: var(--sidebar-track) minmax(0, 1fr); }
   #install-chooser { position: sticky; top: var(--space-4); }
+}
+@media (width >= 110rem) {
   .ops-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -62,7 +65,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-.vision-preview { margin-top: var(--space-4); }
 /* D-406 — 설치·보정 도구는 접힌 묶음으로 운용 무대 뒤로 간다. */
 .install-tools { margin-top: var(--space-3); }
 .vision-controls { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
@@ -158,7 +160,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  margin: var(--space-1) var(--space-5) 0;
+  margin: 0;
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--line-14);
   border-radius: var(--radius-control);
@@ -178,6 +180,9 @@ body {
 /* D-421 — 재허가와 전체 주행 취소는 글 뒤에서 오른쪽에 붙어 선다(한 열 단에서는 글 아래). */
 .dispatch-control > div { margin-right: auto; }
 .dispatch-control[hidden] { display: none; }
+/* D-488 — 발행 제어가 없는 Fleet·확인 중에는 알릴 상태가 없다. 띠는 전체 주행 취소 버튼 한 줄로 준다. */
+.dispatch-control:is(:not([data-state]), [data-state="absent"]) { justify-content: flex-end; padding: 0; border: 0; background: none; }
+.dispatch-control:is(:not([data-state]), [data-state="absent"]) :is(#dispatch-control-title, #dispatch-control-detail) { display: none; }
 
 /* ui-button의 display 규칙보다 hidden 속성이 우선해야 빈 목록에서 토글이 사라진다. */
 #roster-toggle[hidden] { display: none; }
@@ -194,73 +199,31 @@ main {
 /* 현장과 개입 영역을 나눈다. 로봇 목록은 오른쪽에서 독립적으로 스크롤한다.
    두 열은 wide 단에서만이다 — 그 아래는 한 열이다(62rem 겹침에서 생기던 암시적 열을 없앤다). */
 @media (width >= 64rem) {
-  main { padding-bottom: var(--space-1); }
-  /* 지도와 개입 칸은 같은 폭이다. 카메라는 지도 아래에 쌓고,
-     지도 칸이 충분히 넓은 110rem 이상에서만 옆에 둔다. */
-  .console-primary > .panel[aria-labelledby="map-heading"] {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .map-stage #map-canvas { height: min(42dvh, 30rem); }
-  /* 2026-10-02 회차 계측 — 큐가 채워지는 순간 지도 아래 칸은 '예외가 먼저'(D-201)를
-     위반한다(1920에서 큐 상단 963px). 예외 큐는 첫 행, 지도는 그 아래. */
-  .queues-panel { grid-column: 1; grid-row: 1; }
-  .queues-panel:not([hidden]) { max-height: min(20dvh, 12rem); overflow-y: auto; }
-  .console-primary:has(> .queues-panel:not([hidden])) .map-stage #map-canvas { height: min(28dvh, 20rem); }
+  /* D-488 — 지도가 주인공이다: 왼쪽 3, 오른쪽 열 2. 오른쪽 열은 발행·예외·로봇·카메라·대형·기록을 쌓는다.
+     지도는 첫 화면 높이를 채운다(D-201: 1920×1080에서 문서가 스크롤되지 않는다). */
+  main { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); padding-bottom: var(--space-1); }
   .console-primary { grid-column: 1; }
   .console-secondary { grid-column: 2; }
-  #roster { min-height: 0; max-height: min(11.25rem, 60dvh); overflow-y: auto; }
-  .ops-block { grid-column: 1 / -1; gap: var(--space-2); }
-  .ops-block > h2, .ops-block .install-link { margin: 0; }
-  .ops-block > .log-panel { grid-column: 1; grid-row: 3 / span 2; }
-  .ops-block > .console-diagnostics { grid-column: 2; grid-row: 3; }
-  .ops-block > .discovery { grid-column: 2; grid-row: 4; }
-
+  .map-stage #map-canvas, .map-birdseye { height: max(20rem, calc(100dvh - 17rem)); }
+  /* 접속 안내 띠가 보이는 동안은 그 높이만큼 지도가 줄어 첫 화면에 머문다. */
+  body:has(#connection-guide:not([hidden])) :is(.map-stage #map-canvas, .map-birdseye) { height: max(20rem, calc(100dvh - 24rem)); }
+  .queues-panel:not([hidden]) { max-height: min(20dvh, 12rem); overflow-y: auto; }
+  #roster { min-height: 0; max-height: min(16rem, 30dvh); overflow-y: auto; }
+  .ops-block { gap: var(--space-2); }
+  .ops-block > h2 { margin: 0; }
+  .ops-block .log { min-height: calc(var(--text-micro) * var(--leading-copy) * 3); max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
+  /* 오른쪽 열의 카메라는 썸네일이다. 크게 보려면 지도 칸으로 보낸다(#birdseye-toggle). */
+  .console-secondary .vision-frame { max-height: 11rem; }
+}
+@media (width >= 110rem) {
+  .ops-block > .log-panel { grid-column: 1; }
+  .ops-block > .console-diagnostics { grid-column: 2; }
 }
 
 
 @media (width >= 110rem) {
-  .console-primary > .panel[aria-labelledby="map-heading"] {
-    display: grid;
-    /* 현장 지도와 연결된 카메라는 같은 폭을 쓴다. 카메라가 대기 중이면 지도만 한 열을 쓴다. */
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--space-4);
-    align-items: start;
-  }
-  /* D-417 디자인 — 카메라가 컴팩트(39px)면 칼럼을 반납하고 지도가 전체 폭을 쓴다. */
-  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="waiting"]),
-  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="warn"]) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="waiting"]) > .vision-preview,
-  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .vision-preview .vision-frame[data-state="warn"]) > .vision-preview {
-    grid-column: 1;
-    grid-row: auto;
-  }
-  .console-primary > .panel[aria-labelledby="map-heading"] > .map-head { grid-column: 1 / -1; }
-  .console-primary > .panel[aria-labelledby="map-heading"] > .map-stage { grid-column: 1; grid-row: 2; }
-  .console-primary > .panel[aria-labelledby="map-heading"] > .vision-preview {
-    grid-column: 2;
-    grid-row: 2 / span 3;
-    margin-top: 0;
-  }
-  .console-primary > .panel[aria-labelledby="map-heading"] > .legend { grid-column: 1; }
-  .console-primary > .panel[aria-labelledby="map-heading"] > #hint { grid-column: 1; }
-  .console-primary > .panel[aria-labelledby="map-heading"] > .note { grid-column: 1 / -1; }
-  .console-primary > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .console-primary > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) > .map-stage {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .console-primary > .panel[aria-labelledby="map-heading"]:has(#vision-adjustments[open]) > .vision-preview {
-    grid-column: 1;
-    grid-row: 3;
-  }
-  /* D-201: 원본과 보정 경기장을 위아래로 쌓으면 1920×1080에서 문서가 스크롤된다.
-     카메라 칸 안에서 둘을 나란히 둔다(보정 조정을 열면 위 규칙이 한 칸으로 되돌린다). */
-  .console-primary > .panel[aria-labelledby="map-heading"]:not(:has(#vision-adjustments[open])) > .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) {
+  /* 설치 화면: 원본과 보정 경기장을 카메라 칸 안에서 나란히 둔다(D-201). */
+  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: var(--space-3);
@@ -269,19 +232,6 @@ main {
   .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > * { grid-column: 1 / -1; }
   .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > #vision-frame { grid-column: 1; grid-row: 3; }
   .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > #field-rectified { grid-column: 2; grid-row: 3; margin-top: 0; }
-  /* 버드아이 우선 — 지도가 없고 천장 카메라가 살아 있으면 카메라가 전체 폭을 쓰고,
-     한 줄로 줄어든 지도 상태는 그 아래에 선다. 지도가 오면 위 두 칸 배치로 돌아간다. */
-  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"])):has(> .vision-preview .vision-frame[data-state="online"]) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"])):has(> .vision-preview .vision-frame[data-state="online"]) > .vision-preview {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .console-primary > .panel[aria-labelledby="map-heading"]:has(> .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"])):has(> .vision-preview .vision-frame[data-state="online"]) > .map-stage {
-    grid-column: 1;
-    grid-row: 3;
-  }
 }
 
 .panel {
@@ -304,19 +254,26 @@ main {
 .map-head .spacer { flex: 1; }
 
 .map-stage { position: relative; }
-/* 버드아이 우선 — 지도가 없을 때(접속 전·지도 없음·대기) 천장 카메라가 살아 있으면
-   빈 지도 칸은 한 줄 상태로 줄고, 위에서 내려다본 카메라가 주 화면이 된다. */
-.panel:has(> .vision-preview .vision-frame[data-state="online"]) > .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]) > #map-canvas { display: none; }
-.panel:has(> .vision-preview .vision-frame[data-state="online"]) > .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]) > .map-empty {
-  position: static;
+/* D-488 버드아이 — 천장 카메라 원본은 한 번에 한 곳에만 보인다. 지도가 없을 때(접속 전·지도 없음·대기)나
+   운용자가 "크게 보기"를 누르면 지도 칸이 영상을 보이고, 오른쪽 열 썸네일은 접힌다. 빈 지도 안내는 영상 위 한 줄이다. */
+.map-birdseye { display: none; width: 100%; object-fit: contain; background: var(--ground-deep); border-radius: var(--radius-button); }
+.map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]) > .map-birdseye:not([hidden]) { display: block; }
+.map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]):has(> .map-birdseye:not([hidden])) > #map-canvas { display: none; }
+.map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]):has(> .map-birdseye:not([hidden])) > .map-empty {
+  inset: var(--space-2) auto auto var(--space-2);
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: flex-start;
-  text-align: start;
+  max-width: calc(100% - var(--space-4));
   padding: var(--space-2) var(--space-3);
+  text-align: start;
+  background: var(--surface-raised);
 }
-.panel:has(> .vision-preview .vision-frame[data-state="online"]) > .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]) .map-empty-icon { display: none; }
-.panel:has(> .vision-preview .vision-frame[data-state="online"]) > .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"]) .map-empty p { max-width: none; }
+.map-stage:has(> .map-birdseye:not([hidden])) .map-empty-icon { display: none; }
+.map-stage:has(> .map-birdseye:not([hidden])) .map-empty p { max-width: none; }
+#fleet-main:has(.map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]) > .map-birdseye:not([hidden])) .vision-preview > .vision-frame { display: none; }
+/* 지도가 없으면 영상은 이미 크게 보인다 — 바꿀 것이 없는 버튼은 두지 않는다. */
+#fleet-main:has(.map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"])) #birdseye-toggle { display: none; }
 .map-stage[data-map-state="unavailable"] #map-canvas { height: min(30dvh, 18rem); }
 .map-empty {
   position: absolute;
@@ -480,7 +437,10 @@ main {
 /* D-415 — 로그 뷰어: 펼침 패널, 기본 8줄, 지우기 버튼. */
 .log-panel { margin-top: var(--space-3); }
 .log-panel > summary { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-label); color: var(--ink-quiet); cursor: pointer; margin-bottom: var(--space-2); }
-.log-toolbar { display: flex; justify-content: flex-end; margin-bottom: var(--space-1); }
+/* D-488 — 지우기는 기록 머리 줄 오른쪽에 선다(따로 한 줄을 쓰지 않는다). */
+.log-panel { position: relative; }
+.log-toolbar { position: absolute; top: 0; right: 0; display: flex; }
+.log-panel:not([open]) .log-toolbar { display: none; }
 .log {
   display: flex;
   flex-direction: column;
@@ -573,14 +533,16 @@ main {
   .queues-panel { order: 0; }
   .panel[aria-labelledby="roster-heading"] { order: 1; }
   .panel[aria-labelledby="map-heading"] { order: 2; }
-  .ops-block { order: 3; }
+  .vision-preview { order: 3; }
+  .ops-block { order: 4; }
   /* 접힌 머리가 좁아지면 부제와 정지의 래치 부제를 숨긴다. 보이는 동사 비상 정지는 남는다. */
   ui-topbar ui-brand small { display: none; }
   #estop small { display: none; }
 }
 
-/* Cell 이동은 머리 cluster의 링크다. href와 격자 자리는 그대로 두고 조용한 버튼과 같은 면으로 둔다. */
-.topbar-cell-link {
+/* D-488 — 다른 문서로 가는 링크(설치·보정, 현장 지도 편집, Cell)는 머리의 접힘 칸 안에 하나씩이다. 조용한 버튼과 같은 면이다. */
+.topbar-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.topbar-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -594,9 +556,8 @@ main {
   text-decoration: none;
   white-space: nowrap;
 }
-.topbar-cell-link:hover { color: var(--ink); border-color: var(--ink); }
-.topbar-extra .topbar-cell-link { display: none; }
-.topbar-cell-link:focus-visible {
+.topbar-link:hover { color: var(--ink); border-color: var(--ink); }
+.topbar-link:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset-outer);
 }
@@ -619,7 +580,6 @@ main {
   ui-topbar .spacer { display: none; }
   /* 연결 표지는 줄이 모자라면 말줄임으로 줄어든다 — 이름과 비상 정지는 줄지 않는다. */
   #online-pill { grid-area: pill; justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  ui-topbar > a[href="/console/cell"] { grid-area: cell; }
   #clock { grid-area: clock; justify-self: end; }
   #topbar-more { display: inline-flex; grid-area: more; }
   #estop { grid-area: estop; }
@@ -640,7 +600,6 @@ main {
 
 @media (30rem <= width < 64rem) {
   main { gap: var(--space-3); padding: var(--space-3); }
-  .dispatch-control { margin: var(--space-2) var(--space-3) 0; }
 }
 
 /* compact: 두 줄 — 이름·설정 / 연결·시계, 비상 정지는 두 줄을 차지한다. 머리는 창 높이의 20% 이하다.
@@ -656,13 +615,11 @@ main {
   }
   ui-topbar ui-brand { container-type: inline-size; }
   #clock { font-size: var(--text-micro); }
-  ui-topbar > .topbar-cell-link { display: none; }
-  .topbar-extra .topbar-cell-link { display: inline-flex; }
   #estop { align-self: stretch; padding-inline: var(--space-2); gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
   .topbar-extra { grid-row: 3; }
   main { gap: var(--space-3); padding: var(--space-3); }
-  .dispatch-control { align-items: flex-start; flex-direction: column; margin: var(--space-2) var(--space-3) 0; padding: var(--space-3); }
+  .dispatch-control:not(:is(:not([data-state]), [data-state="absent"])) { align-items: flex-start; flex-direction: column; padding: var(--space-3); }
   .panel { padding: var(--space-3); }
   #map-canvas { height: min(74vw, 22rem); }
   .map-stage[data-map-state="unavailable"] #map-canvas { height: 11rem; }
@@ -839,3 +796,48 @@ main {
 .tracking-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .tracking-state[data-state="warn"] { color: var(--status-warn); }
 .sw.tracking { background: transparent; border: 2px solid var(--series-primary); border-radius: 50%; }
+
+/* D-488 — 오른쪽 열을 한 화면에 담는다(D-201). 카메라 칸: 썸네일 왼쪽, 고르기·기록 오른쪽.
+   대형 칸: 대형 왼쪽, 신호등·진단·기록 오른쪽. 지도 칸 아래: 범례와 배경 학습 한 줄, 접힌 도구 한 줄. */
+@media (width >= 64rem) {
+  .console-secondary .vision-preview {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "frame head" "frame controls" "frame meta";
+    align-content: start;
+    align-items: start;
+    column-gap: var(--space-3);
+  }
+  .console-secondary .vision-preview > .map-head { grid-area: head; margin-bottom: var(--space-2); }
+  .console-secondary .vision-preview > .vision-controls { grid-area: controls; margin: 0; }
+  .console-secondary .vision-preview > .vision-frame { grid-area: frame; height: 11rem; }
+  .console-secondary .vision-preview > #vision-meta { grid-area: meta; margin: var(--space-2) 0 0; }
+  .console-secondary .vision-preview:has(> .vision-frame:is([data-state="waiting"], [data-state="warn"])) { display: block; }
+  #fleet-main:has(.map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]) > .map-birdseye:not([hidden])) .console-secondary .vision-preview {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "head" "controls" "meta";
+  }
+  .panel[aria-labelledby="map-heading"] { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-4); }
+  .panel[aria-labelledby="map-heading"] > * { flex: 1 1 100%; }
+  .panel[aria-labelledby="map-heading"] > .legend { flex: 1 1 auto; margin-top: var(--space-2); }
+  .panel[aria-labelledby="map-heading"] > .tracking-bar { flex: 0 1 auto; margin-top: var(--space-2); }
+  .panel[aria-labelledby="map-heading"] > .note:not([open]) { flex: 0 0 auto; margin-top: var(--space-2); padding-block: 0; border-left: 0; }
+}
+@media (width >= 110rem) {
+  .ops-block { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .ops-block > h2 { grid-column: 1 / -1; }
+  .ops-block > .formation { grid-column: 1; grid-row: 2 / span 3; }
+  .ops-block > .signals { grid-column: 2; grid-row: 2; }
+  .ops-block > .console-diagnostics { grid-column: 2; grid-row: 3; }
+  .ops-block > .log-panel { grid-column: 2; grid-row: 4; margin: 0; }
+}
+
+.log-panel[open] > summary { display: flex; align-items: center; min-height: var(--target-secondary); margin-bottom: 0; }
+/* 한 열 단: 로봇 목록 머리는 제목 한 줄, 그 아래 전체 주행 취소·전체 보기 한 줄이다(제목이 글자 단위로 접히지 않게). */
+@media (width < 64rem) {
+  .roster-block { grid-template-columns: minmax(0, 1fr) auto; }
+  .roster-block > h2 { grid-column: 1 / -1; }
+  .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 1; grid-row: 2; justify-content: flex-start; }
+  .roster-block > #roster-toggle { grid-column: 2; grid-row: 2; }
+  .roster-block > .dispatch-control { grid-row: 3; }
+}

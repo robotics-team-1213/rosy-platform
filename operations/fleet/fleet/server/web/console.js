@@ -25,13 +25,17 @@ const pageScope = createPageScope();
 
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
-const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="roster-heading"]'),
-  document.querySelector('[aria-labelledby="map-heading"]'), document.querySelector('.ops-block')];
+// D-488 — 넓은 단: 왼쪽 열은 지도 하나, 오른쪽 열은 발행·예외·로봇·카메라·대형 순서다.
+// 한 열 단(D-359 US-009): 예외 → 로봇(발행 띠 포함) → 지도 → 카메라 → 대형·기록.
+const layoutPanels = [document.querySelector('.queues-panel'),
+  document.querySelector('[aria-labelledby="roster-heading"]'), document.querySelector('[aria-labelledby="map-heading"]'),
+  document.querySelector('.vision-preview'), document.querySelector('.ops-block')];
+const MAP_PANEL = 2;
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
   const focused = document.activeElement;
   layoutPanels.forEach((node, index) => {
-    const parent = layoutMedia.matches ? (index === 0 || index === 2 ? primary : secondary) : main;
+    const parent = layoutMedia.matches ? (index === MAP_PANEL ? primary : secondary) : main;
     const before = layoutMedia.matches ? null : primary;
     if (parent.moveBefore) parent.moveBefore(node, before);
     else parent.insertBefore(node, before);
@@ -186,6 +190,9 @@ async function refreshDispatchControl(life = pageScope.capture()) {
     life.check();
     dispatchGate.ok();
     view.dispatchControl = state;
+    // D-488 — 띠의 글은 알릴 상태가 있을 때만 보인다(styles.css가 data-state로 접는다).
+    el("dispatch-control").dataset.state = state.dispatch_enabled ? "enabled"
+      : state.reason === "PROCESS_RESTARTED" ? "restarted" : "latched";
     if (state.dispatch_enabled) {
       title.textContent = "발행 허용";
       detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개`;
@@ -205,7 +212,9 @@ async function refreshDispatchControl(life = pageScope.capture()) {
     if (err.name === "AbortError") return;
     if (auth.locked) return;
     view.dispatchControl = null;
-    if (dispatchGate.fail(err.status, err.code) === "absent") {
+    const absent = dispatchGate.fail(err.status, err.code) === "absent";
+    el("dispatch-control").dataset.state = absent ? "absent" : "error";
+    if (absent) {
       // 작업 대기열이 없는 Fleet — 발행 래치 자체가 없다. 오류가 아니다.
       title.textContent = "발행 제어 미설정";
       detail.textContent = "이 Fleet에는 작업 대기열이 설정되지 않았습니다.";
