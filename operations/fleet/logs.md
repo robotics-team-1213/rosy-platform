@@ -2394,3 +2394,10 @@
 - 변경: Fleet이 CORE Viewer power/health를 등록된 Operator 토큰으로 읽고 최대 5초 캐시한다. 로봇 행은 공유 PowerHealthResponse와 관측 나이를 선택 필드로 제공하며, 관제는 배터리·충전 근거의 신선도와 다음 조치를 표시한다. E-Stop·네트워크·영상 설정 경로는 변경하지 않았다.
 - 증거: 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. 현장 장치 검증은 별도.
 - gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · fix(test): Fleet 브라우저 fixture가 Chromium 차단 포트를 피하고 정식 옵트인을 받는다
+- 변경: `test_cell_app_browser.py`·`test_start_point_browser.py`·`test_site_map_browser.py`·`test_development_console_browser.py`가 `browser_harness.safe_listener()`로 포트를 잡고, 다섯 브라우저 파일이 `browser_tests_enabled()`로 판정한다. `conftest.py`가 `test/`를 `sys.path` 끝에 붙인다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1`만으로 `test_cell_page_keeps_emergency_stop_in_first_view` 3 passed, `test_markerless_map_pick_save_reload_and_recalibration` 1 passed(이전에는 건너뜀). `known_failures.py` 0 new.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음

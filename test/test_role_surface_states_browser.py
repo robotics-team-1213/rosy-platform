@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from browser_harness import open_page
+from browser_harness import browser_tests_enabled, open_page
+
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium")
 
 
 ROOT = Path(__file__).resolve().parents[1]

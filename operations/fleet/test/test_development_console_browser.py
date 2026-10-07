@@ -1,13 +1,12 @@
 """Direct entry to every Fleet console page in development mode, using real Chromium."""
 
-import os
-import socket
 import threading
 import time
 from pathlib import Path
 
 import pytest
 import uvicorn
+from browser_harness import browser_tests_enabled, safe_listener
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -18,7 +17,7 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 
 
-pytestmark = pytest.mark.skipif(os.environ.get("ROSY_BROWSER_TESTS") != "1", reason="opt-in Chromium scenario")
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chromium scenario")
 ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -37,8 +36,7 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
     app = create_app(console, console_token="registry-only", task_service=tasks,
                      development_sessions=DevelopmentSessions(), web_common=ROOT / "shared" / "web",
                      start_task_dispatcher=False)
-    listener = socket.socket()
-    listener.bind(("127.0.0.1", 0))
+    listener = safe_listener()
     origin = f"http://127.0.0.1:{listener.getsockname()[1]}"
     server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3))
     worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)

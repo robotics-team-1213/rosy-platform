@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · D-509 관제 전원 근거
-- 2026-10-07 · uncommitted · docs(adr): Console 충전·health·설정 경계 D-509
-- 2026-10-07 · uncommitted · fix(push): Windows 검사 경로와 공유 main 게이트 복구
-- 2026-10-07 · uncommitted · docs(adr): Pilot 바닥 IR 녹화 번호는 D-506
-- 2026-10-07 · uncommitted · docs(adr): D-504 Pilot 녹화에 바닥 IR 원시값
+- 2026-10-08 · uncommitted · fix(test): 브라우저 시험 기반 리뷰 반영
+- 2026-10-07 · uncommitted · fix(test): 브라우저 시험 기반 — 안전 포트, 옵트인 이름 하나, 범위 지도
+- 2026-10-07 · uncommitted · docs(adr): union 머지·번호 선점 ADR은 D-510 (D-508에서 이동)
+- 2026-10-07 · uncommitted · fix(harness): D-508 리뷰 반영 — logs.md는 union에서 빼고 선점 ref는 경고만
+- 2026-10-07 · uncommitted · feat(harness): D-508 union 머지와 ADR 번호 선점 도구
