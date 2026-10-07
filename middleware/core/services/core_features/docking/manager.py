@@ -309,6 +309,10 @@ class DockingManager:
         쥐고 있는 로봇을 배터리 정책이 빼앗지 않는다."""
         self._manual_active = bool(active)
 
+    def on_estop(self) -> None:
+        """D-502: e-stop or release drops a pending return; re-arming waits for safety."""
+        self._return_pending = False
+
     def on_battery_level(self, level: BatteryLevel) -> None:
         """SAF-005 단계 변화 → 자동 복귀 (DNC-006).
 
@@ -318,6 +322,8 @@ class DockingManager:
         """
         if level in (BatteryLevel.OK,):
             self._return_pending = False
+            return
+        if getattr(self._safety, "battery_return_suppressed", False):
             return
         if level not in (BatteryLevel.WARNING, BatteryLevel.CRITICAL,
                          BatteryLevel.DEEP):
