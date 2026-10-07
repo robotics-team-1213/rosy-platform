@@ -1,15 +1,15 @@
 """D-439 procedure navigation: retained drafts, guarded selection and live stop."""
-import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 
 import pytest
+from browser_harness import browser_tests_enabled, free_port
 from playwright.sync_api import sync_playwright, expect
 
 REPO = Path(__file__).resolve().parents[4]
 COMMON = REPO / 'shared/web'
-pytestmark = pytest.mark.skipif(os.environ.get('ROSY_RUN_BROWSER_TESTS') != '1', reason='optional Chromium')
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='optional Chromium')
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -70,7 +70,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 @pytest.fixture
 def page():
-    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    server = ThreadingHTTPServer(('127.0.0.1', free_port()), Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 
 import pytest
+from browser_harness import browser_tests_enabled, free_port
 from playwright.sync_api import sync_playwright
 
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ROOT.parents[2]
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 
@@ -28,7 +28,7 @@ class _Handler(SimpleHTTPRequestHandler):
 
 
 def test_role_surface_keyboard_can_skip_to_named_main_content():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -49,7 +49,7 @@ def test_role_surface_keyboard_can_skip_to_named_main_content():
 
 
 def test_auth_return_target_allows_only_registered_local_surfaces():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import json
-import os
 from urllib.parse import urlparse
 
 import pytest
 
-from browser_harness import open_page
+from browser_harness import browser_tests_enabled, open_page
 from test_fleet_console_browser import API, WEB, console_url  # noqa: F401
 from test_fleet_console_browser import _camera_api
 
-pytestmark = pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium acceptance")
 
 

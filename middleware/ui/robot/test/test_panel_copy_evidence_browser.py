@@ -12,11 +12,12 @@ from pathlib import Path
 from threading import Thread
 
 import pytest
+from browser_harness import browser_tests_enabled, free_port
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_COMMON = (ROOT.parents[2] / "shared") / "web"
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 
@@ -119,7 +120,7 @@ class _Handler(SimpleHTTPRequestHandler):
 def panel():
     from playwright.sync_api import sync_playwright
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
     Thread(target=server.serve_forever, daemon=True).start()
     with sync_playwright() as playwright:
         try:

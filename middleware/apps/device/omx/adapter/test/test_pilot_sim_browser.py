@@ -1,7 +1,6 @@
 """Rendered tablet path from pairing through bounded simulated jogs."""
 
 import contextlib
-import socket
 import threading
 import time
 import uuid
@@ -9,6 +8,7 @@ from pathlib import Path
 
 import pytest
 import uvicorn
+from browser_harness import free_port
 
 playwright = pytest.importorskip("playwright.sync_api")
 
@@ -124,9 +124,7 @@ class Runtime:
 def _paired_page(runtime):
     app = create_pilot_sim_app(runtime=runtime, pilot_root=ROOT / "middleware/ui/pilot",
                                common_root=ROOT / "shared/web", pairing_code="ABCD-EFGH")
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
+    port = free_port()
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()

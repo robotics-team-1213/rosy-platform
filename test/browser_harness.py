@@ -9,7 +9,42 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import socket
 from urllib.parse import urlsplit
+
+# Chromium net/base/port_util.cc kRestrictedPorts: page loads to these fail with
+# net::ERR_UNSAFE_PORT. Windows hosts whose dynamic port range starts at 1024
+# (`netsh int ipv4 show dynamicport tcp`) hand them out for port 0 (2049 seen 2026-10-07).
+CHROMIUM_RESTRICTED_PORTS = frozenset({
+    1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95,
+    101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161,
+    179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532, 540, 548, 554, 556, 563,
+    587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060,
+    5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080,
+})
+
+
+def browser_tests_enabled() -> bool:
+    """Opt-in for real-Chromium tests. `ROSY_RUN_BROWSER_TESTS=1` is canonical;
+    `ROSY_BROWSER_TESTS=1` (the older Fleet name) is accepted too."""
+    return "1" in (os.environ.get("ROSY_RUN_BROWSER_TESTS"), os.environ.get("ROSY_BROWSER_TESTS"))
+
+
+def safe_listener(host: str = "127.0.0.1") -> socket.socket:
+    """A socket bound to a free port Chromium will load (never a restricted one)."""
+    for _ in range(64):
+        listener = socket.socket()
+        listener.bind((host, 0))
+        if listener.getsockname()[1] not in CHROMIUM_RESTRICTED_PORTS:
+            return listener
+        listener.close()
+    raise RuntimeError("could not allocate a browser-safe local port")
+
+
+def free_port(host: str = "127.0.0.1") -> int:
+    """A browser-safe free port for servers that bind by number (closed before return)."""
+    with safe_listener(host) as listener:
+        return listener.getsockname()[1]
 
 
 def launch_options() -> dict:

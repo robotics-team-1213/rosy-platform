@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 
 import pytest
+from browser_harness import browser_tests_enabled, free_port
 from playwright.sync_api import expect, sync_playwright
 
 
 REPO = Path(__file__).resolve().parents[4]
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 
@@ -33,7 +33,7 @@ class _Handler(SimpleHTTPRequestHandler):
 
 
 def test_network_action_reports_rejection_and_success_beside_controls():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -125,7 +125,7 @@ def test_network_action_reports_rejection_and_success_beside_controls():
 
 
 def test_host_actions_stay_locked_during_request_and_status_poll():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -189,7 +189,7 @@ def test_host_actions_stay_locked_during_request_and_status_poll():
 
 
 def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actions():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
