@@ -125,6 +125,8 @@ class RobotClient(Protocol):
     ) -> dict: ...
 
     async def line_follow_mode(self, mode: str) -> dict: ...
+    async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
+                                   expires_s: float) -> dict: ...
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
@@ -276,6 +278,14 @@ class HttpRobotClient:
         return self._check(await self._http.put(
             "/api/v1/line-follow/mode", json={"mode": mode}, headers=self._headers()
         ))
+
+    async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
+                                   expires_s: float) -> dict:
+        """D-491 4: the action at the next junction; an old CORE answers 404."""
+        body: dict = {"action": action, "place_id": place_id, "expires_s": expires_s}
+        if stop_after_m is not None:
+            body["stop_after_m"] = stop_after_m
+        return await self._post("/api/v1/line-follow/junction", body)
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,

@@ -134,7 +134,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
-               site_maps=None, routing_config=None) -> FastAPI:
+               site_maps=None, routing_config=None,
+               trip_caps=None, map_pose=None, lane_junction=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     if development_sessions is not None and task_service is None:
@@ -317,6 +318,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             resolver_task = asyncio.create_task(app.state.stuck_resolver.run())
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
+        trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-491 5
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -344,7 +346,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task):
+                               signal_task, resolver_task, trip_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -518,14 +520,21 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.routing.cost import RoutingConfig
     from fleet.server.site_map_routes import install_site_map_routes
     from fleet.server.trip_routes import install_trip_routes
-    route_active = install_lane_route_routes(app, console=console, task_service=task_service,
-                                             site_maps=site_maps, require_operator=require_operator,
-                                             operator_guard=operator_guard)
-    install_site_map_routes(app, site_maps=site_maps, route_active=route_active, read_guard=read_guard,
-                            require_named_operator=require_named_operator)
+    from fleet.server.trip_runner import HttpLaneJunction, NoMapPose, NoTripCaps, TripRunner
+    install_lane_route_routes(app, console=console, task_service=task_service,
+                              site_maps=site_maps, require_operator=require_operator,
+                              operator_guard=operator_guard)
+    # D-491 5: the ports default to "nothing known" until the D-491 1/3 providers land.
+    trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
+                             caps=trip_caps or NoTripCaps(), poses=map_pose or NoMapPose(),
+                             junction=lane_junction or HttpLaneJunction(console.clients),
+                             goal=console.goal, cancel_goal=console.cancel)
+    install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
+                            read_guard=read_guard, require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps,
                         routing_config=routing_config or site_maps.routing_config,
-                        require_named_operator=require_named_operator)
+                        require_named_operator=require_named_operator, runner=trip_runner,
+                        read_guard=read_guard)
 
     proposal_create = proposal_resolve = None
     if mission_service is not None:
