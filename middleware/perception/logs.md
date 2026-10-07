@@ -1141,3 +1141,10 @@
 - gate 변화: 없음. SOURCE만
 - 결정: D-468, D-47 addendum. G-15(D-480)
 - 교훈: 벽-모서리 점수는 높이 방향으로 들쭉날쭉하다. 한 실행의 점수 band가 아니라 실행 간 ci95가 실제 오차를 보여 준다
+
+## 2026-10-07 · uncommitted · feat(config): D-492 lane_corner_turning 로봇 기본값 켜짐
+- 변경: `config/line_follow.yaml` `lane_corner_turning: true`. keep 모드 keeper의 교차로 HOLD가 기본으로 나온다(기본 `camera_lane_mode: line`에서는 효과 없음). 운영자 겹 허용 키가 아니어서 끄려면 페이로드 변경이 필요하다. 고정 시험과 주석 갱신
+- 증거: `test_line_junction.py` 44 PASS, `test_line_junction_api.py` 9 PASS. services·api_web·contracts/foundation·line-follow 문서·perception 배선 1968 PASS·18 skip, gateway 2188 PASS·17 skip, perception 2704 PASS·109 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
+- 결정: D-492 (Proposed), 구현 메모 2026-10-07
+- 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다

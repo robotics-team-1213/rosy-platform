@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(config): D-492 bridge 기본값과 LineJunctionStatus 확장
 - 2026-10-07 · uncommitted · feat(schemas): LineFollowStatus.junction
 - 2026-10-06 · uncommitted · feat(core_common): D-484 sighting/preview 스키마 additive
 - 2026-10-05 · uncommitted · refactor(protocol): keep containment in its leaf contract
 - 2026-10-05 · uncommitted · feat(protocol): D-468 image-bound lane containment
-- 2026-10-05 · uncommitted · fix(protocol): peer 관계 활성 세션 상한 8

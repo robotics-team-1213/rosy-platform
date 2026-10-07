@@ -581,3 +581,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. 실기·SIM 미실행(Gazebo는 이 노트북에서 돌리지 않음)
 - 결정: D-491 (Proposed) 4항, 구현 부록 2026-10-07
 - 교훈: 오늘 인식은 CORE에 분기 후보를 주지 않는다. 좌·우 주행은 분기 계약 ADR이 먼저다
+
+## 2026-10-07 · uncommitted · feat(line_follow): D-492 교차로 제한 회전
+- 변경: `junction.py`에 `turn_deg`가 있는 좌·우 지시의 회전(odom yaw, ±5°)→전진(`advance_m`, 절반 속도)→차선 재획득(0.20 m·5 s) 동작을 더했다. odom 낡음·점프, 모드 변경·E-Stop·운전자 해제, D-422 근접, 동작 확인 실패, 한도 0, stuck, 시간 초과, 새 지시는 `aborted`와 0 명령이다. `turn_deg` 없는 좌·우는 그대로 `unresolved`
+- 증거: `test_line_junction.py` 44 PASS, `test_line_junction_api.py` 9 PASS. services·api_web·contracts/foundation·line-follow 문서·perception 배선 1968 PASS·18 skip, gateway 2188 PASS·17 skip, perception 2704 PASS·109 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
+- 결정: D-492 (Proposed), 구현 메모 2026-10-07
+- 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
