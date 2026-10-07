@@ -429,7 +429,7 @@ def test_mode_change_clears_the_route_hint():
 
 def _narrow(**config):
     base = dict(probe=lambda now, v, w: False, floor=lambda: False, uncertainty=.05,
-                recovery_local_enabled=False, bridge_site_no_dropoffs=True)
+                recovery_local_enabled=False, site_floor_map_id='lab-a', obstacle_mode='path')
     base.update(config)
     return Rig(**base)
 
@@ -584,7 +584,7 @@ def test_narrow_bridge_reacquires_then_needs_a_new_confident_streak():
                                       bridge_arm_confidence=.3),
                                  dict(bridge_enabled=True),  # no IR guard: no lateral fence
                                  dict(bridge_arm_max_error=0.), dict(bridge_arm_max_angular=.8),
-                                 dict(bridge_site_no_dropoffs='true')])
+                                 dict(site_floor_map_id=True)])
 def test_bridge_arming_config_is_validated(bad):
     with pytest.raises(ValueError):
         LineFollowConfig(**bad)
@@ -594,12 +594,12 @@ def test_bridge_arming_config_is_validated(bad):
 
 def test_dropoff_acceptance_or_live_floor_proof_is_required():
     # Floor proof not live (adapter off) and no site acceptance: never bridges.
-    r = _narrow(bridge_site_no_dropoffs=False)
+    r = _narrow(site_floor_map_id=None)
     r.follow()
     for _ in range(4):
         assert r.step(seen=False).linear <= 0 and r.reason != 'lane_bridge'
     # Live floor proof that admits the motion: the site flag is not needed.
-    r = _narrow(bridge_site_no_dropoffs=False, floor=lambda: True, probe=lambda now, v, w: True)
+    r = _narrow(site_floor_map_id=None, floor=lambda: True, probe=lambda now, v, w: True)
     r.follow()
     assert r.step(seen=False).linear > 0 and r.reason == 'lane_bridge'
 

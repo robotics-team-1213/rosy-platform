@@ -2423,3 +2423,46 @@
 - 변경: Power health readback lives in /api/fleet/state presentation; D-447 gather remains unchanged.
 - 증거: Fleet and contract focus tests passed; Node 170 passed; hardware remains unverified.
 - gate 변화: None.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-513 7 회전 후속
+- 변경: 실영상 위 시작점 클릭을 회전·보정 역변환으로 지도 좌표로 바꾼다. 실영상 위 x/y 축을 지도 방향으로 그린다. 레일 썸네일을 편집 중이 아닐 때 돌린다. 현장 지도 화면을 관제 실영상과 같은 방향의 90° 단위로 돌린다(평면 사진 포함). 돌린 조감도는 보일 때만 다시 만든다.
+- 증거: 웹 Node 시험 174 passed.
+- gate 변화: SOURCE/LOCAL만.
+## 2026-10-08 · uncommitted · feat(fleet): D-511 M0 차로 준수 감시(관찰·알림만)
+- 변경: 순수 판정 `fleet/localization/lane_compliance.py`(부호 있는 가로 편차 왼쪽 +, 몸체 여유 `width_m/2 − (|d| + half width)`, `core_common.robot_body` PINKY_PRO 반폭, `persist_n` 연속 규칙, `fleet.lane_compliance` 잠정 기본값 0.02 m·3회·3.0 s). 2 Hz 감시 `server/lane_compliance_service.py` + `background_workers.lane_compliance_loop`: odom이 움직인 로봇만 `refresh(force_rest=True)`, 모든 로봇을 `arbitrated_pose`로 판정(D-511 §2가 D-494 §3을 넓힘). `GET /api/fleet/robots/{id}/lane-compliance`, `/api/fleet/state` 행 `lane_compliance`, 콘솔 예외 큐 WARN/ACT 항목. API Ref v1.128(v1.124–127은 열린 동료 브랜치)
+- 증거: `test_lane_compliance.py`·`test_lane_compliance_service.py` 신규, node `attention-stale.test.mjs` 8 passed, fleet 묶음 + `test/known_failures.py` (X:/DevTemp/d511-m0/run.txt)
+- gate 변화: 없음. SOURCE/LOCAL만. 지도 자세 LOCALIZED 연결(D-511 §5)·SIM·현장 임계값 측정은 열려 있다
+- 결정: D-511 M0. 로봇 명령 없음, trip·`/route`·meet 임계값 그대로(M1), CORE 신호 없음(M2)
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(fleet): D-511 M0 리뷰 반영
+- 변경: 그래프 밖(대기 칸)·막다른 호 끝 너머·차로를 가로지르는 자세는 ACT가 아니라 UNKNOWN(발이 호 안쪽, `max_lateral_m` 기본 호 `width_m`, `heading_gate_deg` 45°). 교차로는 진행 방향 호를 고른다. 움직임 판정에 떨림 데드밴드(`moving_min_m` 0.01, `moving_min_deg` 2), 로봇별 읽기는 0.5 s에서 끊는다. 콘솔은 움직이는 로봇만 알리고 여유가 음수면 "넘음"이라 쓴다. API Ref v1.128 행에 UNKNOWN 경우를 적었다
+- 증거: fleet 묶음 + `test/known_failures.py` (X:/DevTemp/d511-m0/run.txt), node `attention-stale.test.mjs` 10 passed
+- gate 변화: 없음
+- 결정: M0가 이미 움직이는 모든 로봇을 감시한다(ADR §6은 이것을 M1에 두었다). 녹화 주행(`edge_drive.py`)이 trip 밖에서 돌기 때문에 M0의 확인 목표에 필요하다
+- 교훈: 투영 거리만으로는 '차로 밖'과 '차로 아님'을 가를 수 없다. 발이 호 끝에 붙으면 부호도 의미가 없다
+
+## 2026-10-08 · uncommitted · refactor(fleet): D-513 7 카메라 회전은 지도 방향에서
+- 변경: `site-cameras.yaml`의 `display_rotation_deg` 키를 지운다(푸시 전). 관제 실영상·크게 보기·썸네일은 그 카메라 보정에서 지도 +y가 위로 오는 90° 단위 회전(`mapUpTurn`)으로 돈다. 현장 지도 화면의 보기 회전도 지운다(원래 지도 좌표).
+- 증거: 웹 Node 시험 174 passed.
+- gate 변화: SOURCE/LOCAL만. 현장에서 벽이 아래로 보이는지(F3)는 별도.
+## 2026-10-08 · dc9026930 · feat(fleet): D-507 2·3·9 Fleet 쪽
+- 변경: `junction_pivot: true` 로봇에만 교차로 지시에 `map_id`·`expect_in_m`·`expect_tol_m`·`pivot_past_line_m`(좌·우만, 나가는 차로 폭/2, 상한 0.30)를 싣는다. `expect_in_m`이 (0, 2] 밖이면 `map_id`만. `expect_tol_m`은 지도 자세에 오차 추정이 없어 0.05×추측항법 거리 + trip 최고 속도×자세 나이 + `ENDPOINT_TOL_M`(상한 0.30)로 둔다. `site_floor_map_id`가 활성 지도와 다른 로봇의 `lane` trip은 422 `TRIP_SITE_FLOOR_MISMATCH`(키 없음·null은 검사 안 함). CORE `unexpected`, 또는 다음 장소가 `arm_distance_m`보다 먼 `waiting`은 10 s를 기다리지 않고 `stopped(junction_unexpected)`. API Ref v1.127.
+- 증거: `test_trip_d507.py` 16건, trip·caps·문서 시험, 웹 Node 시험, 변이 검사 2건(능력 문, `waiting` 거리 규칙), `test/known_failures.py`.
+- gate 변화: SOURCE만. SIM·DEVICE는 CORE 브랜치(`feat/d507-junction-approach`)와 함께.
+- 결정: 판정 규칙은 `LiveTrip.junction_end`로 옮겨 `trip_runner.py`를 600줄 아래로 둔다. 바닥 선언 키가 null이면 선언이 없는 것으로 보고 검사하지 않는다.
+- 교훈: `feat/trip-site-floor-check`가 같은 9항을 따로 구현했다. 착지 때 하나로 합친다.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-507 Fleet 검토 2회 반영
+- 변경: `expect_tol_m`은 지도 자세 나이 + 자세를 읽고 보내기까지 잰 시간 + 0.2 s 여유(`SEND_ALLOWANCE_S`)에 trip 최고 속도를 곱한 값에 드리프트·`ENDPOINT_TOL_M`을 더하고, 아래는 `fleet.trip.expect_tol_min_m`(0.12), 위는 0.30, 자세 값이 없으면 0.30이다. `expect_in_m`은 로봇 진행 방향으로 투영한 장소 거리이고, 장소 앞에서 차로 방향이 15°보다 많이 바뀌면 기대 쌍을 보내지 않는다(`map_id`·`pivot_past_line_m`만). 직진에도 `pivot_past_line_m`. `JUNCTION_ODOM_STALE`은 다음 틱에 다시 보낸다. 좌표 구간에서는 차선 교차로 상태를 비운다. 지도 버전이 다르면 필드를 빼고 `detail.junction_fields_dropped`.
+- 증거: `test_trip_d507.py` 26건, 변이 검사(굽은 길 규칙, 잰 지연), fleet 묶음과 `test/known_failures.py`.
+- gate 변화: SOURCE만.
+- 결정: CORE 창은 곧게 내다보는 투영이라 굽은 접근에서는 창을 주지 않는다. 경로를 따르는 창은 뒤의 일(D-507 2항 문장).
+- 교훈: 최악 지연(호출 시한)을 오차에 넣으면 모든 창이 상한에 붙어 창이 쓸모없어진다. 잰 지연을 쓴다.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-507 굽은 길 옆 거리, main 병합
+- 변경: 15° 이하 굽이에서 차로가 로봇 진행 방향 반직선 옆으로 벗어나는 가장 큰 거리를 `expect_tol_m`에 더한다(상한 0.30 전). main 병합으로 API Ref 번호를 v1.127에서 v1.126으로 옮겼다(main이 v1.124·v1.125를 썼다).
+- 증거: `test_trip_d507.py` 27건, fleet 묶음과 `test/known_failures.py`, 크기 시험.
+- gate 변화: SOURCE만.
+- 결정: 15° 규칙은 그대로 둔다.
+- 교훈: 곧게 내다보는 창은 작은 굽이에서도 옆으로 비켜 선다. 허용 오차가 그 거리를 덮어야 한다.

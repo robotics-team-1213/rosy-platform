@@ -89,8 +89,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up
-- 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시
-- 2026-10-08 · uncommitted · feat(fleet): D-513 7 카메라 화면 회전
-- 2026-10-08 · uncommitted · feat(fleet): D-513 시연 출발 자리 `start` 장소
-- 2026-10-07 · uncommitted · fix(test): Fleet 브라우저 fixture가 Chromium 차단 포트를 피하고 정식 옵트인을 받는다
+- 2026-10-08 · uncommitted · fix(fleet): D-507 굽은 길 옆 거리, main 병합
+- 2026-10-08 · uncommitted · fix(fleet): D-507 Fleet 검토 2회 반영
+- 2026-10-08 · dc9026930 · feat(fleet): D-507 2·3·9 Fleet 쪽
+- 2026-10-08 · uncommitted · refactor(fleet): D-513 7 카메라 회전은 지도 방향에서
+- 2026-10-08 · uncommitted · fix(fleet): D-511 M0 리뷰 반영

@@ -46,6 +46,7 @@
    - `expect_tol_m`((0, 0.30]): Fleet이 장소 위치를 아는 오차(지도 자세의 진행 방향 오차 + 장소 고정 허용치 `ENDPOINT_TOL_M`). Fleet 설정·자세 진단에서 나온다.
    - `pivot_past_line_m`([0, 0.30], `left`/`right`만): 감지된 가로선에서 회전 축(장소 점)까지 거리. Fleet은 나가는 차로의 `width_m / 2`로 보낸다(장소는 나가는 차로 중심선 위에 있다, D-490). 상한 0.30은 D-495 `MAX_ADVANCE_M`과 같은 값이다.
    - 능력 `junction_pivot: true`(CORE가 위 필드를 받는다는 표시)가 없는 로봇에는 Fleet이 이 필드를 보내지 않는다.
+   - CORE의 기대 창은 받은 자리의 진행 방향으로 곧게 내다본 점이므로, 장소 앞에서 차로 방향이 15°보다 많이 바뀌면 Fleet은 `expect_in_m`·`expect_tol_m`을 보내지 않고(`map_id`·`pivot_past_line_m`만 보낸다), 경로를 따라가는 기대 창은 뒤의 일로 둔다.
 
 3. **기대 창과 굽이.** 지시를 받을 때 CORE는 받은 자리의 odom 자세와 진행 방향으로 기대 가로선 점(`expect_in_m − pivot_past_line_m`, 갈래면 `expect_in_m`)을 odom 좌표에 둔다. 감지마다 측정 가로선 점(감지 자세 + `junction_ahead_m`)과 기대 점의 거리가 `expect_tol_m` 안이면 이 지시의 교차로다.
    - 창 밖 감지(지도에 없는 굽이, 다른 교차로)는 지시를 쓰지 않는다. HOLD `junction_unexpected`이고 지시는 `armed`로 남는다. 그래서 장소 바로 앞의 굽이에서 회전 지시가 쓰이는 일이 없다.
@@ -66,6 +67,7 @@
    - (b) **site**: 다음을 모두 만족한다.
      - 9항의 선언이 있고, 동작을 연 지시가 `map_id`를 실었다면 같다.
      - `ir_guard_enabled`이고 IR 판정이 신선하고 교정돼 있다. 판정 허용 값은 동작마다 다르다. bridge는 `clear`만(D-476 rev 1 그대로), 접근·회전·전진은 `centre`가 아닐 때(D-498 그대로), D-468 복귀는 `centre`도 받는다(복귀는 선을 밟은 채 시작하고, 방향은 D-468 차로 기하가 정한다).
+       - (2026-10-08 사용자 결정) 접근과 `straight` 통과 중에는 카메라가 잰 가로선 띠 안에서만 `centre`를 받는다. 띠는 감지 자세 + `junction_ahead_m`에 odom으로 고정하고, 진입 방향으로 테이프 폭과 D-491의 거리·odom 오차 비율만큼만 넓힌다. 그 띠 밖에서는 어디서나 `centre`가 지금처럼 동작을 멈추고, 회전 중에는 띠를 쓰지 않는다.
      - `obstacle_mode: path`, URDF 몸 기하(`body_stop_known`), `clearance_stale_s` 안의 스캔이 있고, 그 twist의 D-422 몸체 sweep이 재출발 간격보다 크다.
    - (c) **site 근거의 후진.** 선속도가 0보다 작은 twist도 (b)로 허가한다. 초안은 이를 금지했으나 사용자가 허용을 골랐다. 조건은 (b) 전부에 더해 다음이다.
      - 후진은 D-468 역추적뿐이다. 다른 동작(bridge, 접근, 회전, 전진, 복귀 접근·정렬)은 site 근거로 뒤로 가지 않는다.

@@ -146,6 +146,7 @@ class Ports:
         self.core = FakeCore(self)
         self.sent: list[tuple] = []
         self.turns: list = []
+        self.expects: list = []  # D-507 2 fields per send (None: not sent)
         self.goals: list[tuple] = []
         self.canceled: list[str] = []
         self.held: list[str] = []
@@ -178,12 +179,13 @@ class Ports:
         return self.core.mode
 
     async def send_junction(self, robot_id, action, place_id, stop_after_m, expires_s, turn_deg=None,
-                            advance_m=None):
+                            advance_m=None, expect=None):
         if self.junction_error is not None:
             raise self.junction_error
         reply = self.core.send(action, place_id, stop_after_m, expires_s, turn_deg)
         self.sent.append((action, place_id, None if stop_after_m is None else round(stop_after_m, 3)))
         self.turns.append(turn_deg)
+        self.expects.append(expect)
         return reply
 
     async def goal(self, robot_id, x, y, yaw):
@@ -540,10 +542,16 @@ def test_an_abort_left_from_before_the_trip_is_not_the_trips():
 
 
 def test_core_waiting_at_a_junction_stops_the_trip_after_the_timeout():
+    """Within ``arm_distance_m`` of the place (D-507 3: beyond it ``waiting`` ends the trip at once)."""
     runner, store, ports = _setup()
     _plan(store, ports, "east:fwd", 0.5, "SE")
     run(runner.start("p1", "bob"))
-    ports.core.see_junction()  # a junction the plan does not expect, far from SE
+    east = _arc(store, "east:fwd")
+    ports.at(east, east.length_m - 0.5)
+    _ticks(runner, ports)
+    assert ports.sent[-1][0] == "stop"  # sent once, never again
+    ports.core.j = None
+    ports.core.see_junction()  # CORE waits at a junction 0.5 m before SE
     _ticks(runner, ports)
     _ticks(runner, ports, 1, dt=9.4)
     assert runner.running() is not None
@@ -909,7 +917,8 @@ def test_the_http_junction_port_uses_the_robot_client():
     class Client:
         modes: list = []
 
-        async def line_follow_junction(self, action, place_id, *, stop_after_m, expires_s, turn_deg, advance_m):
+        async def line_follow_junction(self, action, place_id, *, stop_after_m, expires_s, turn_deg, advance_m,
+                                       expect=None):
             return {"args": (action, place_id, stop_after_m, expires_s, turn_deg)}
 
         async def state(self):

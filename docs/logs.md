@@ -6885,6 +6885,22 @@ osy-d395-s1d\`.
 - 결정: D-436.
 - 교훈: 옵트인 이름을 합치면 CI 의 잡 전역 플래그가 묶인 다른 묶음까지 켠다 — 플래그는 실행 단위로 준다.
 
+## 2026-10-08 · uncommitted · docs(plan): 사이트 링크 수리 실행 계획
+
+- 변경: [실행 계획](plans/2026-10-08-site-link-repair.md). 현장 HTTP 폴링, 테일넷 8443, 꺼진 발견 광고는 기존 D-499 표시와 등록 TLS 런북, tailscale0 허용, 광고 유닛으로 고친다. 새 모니터와 스킴 자동 변경은 없다. D-499는 Proposed로 둔다. 이 기록은 현장 파일을 바꾸지 않는다.
+- 증거: 계획 문서만. 현장 진단은 실행 전이다.
+- gate 변화: 없음.
+- 결정: D-499 Proposed 유지. D-361, D-452, D-477 런북을 그대로 쓴다.
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · docs(plan): 링크 수리와 폴링 부하를 가른다
+
+- 변경: 같은 [실행 계획](plans/2026-10-08-site-link-repair.md). Task 4는 실패한 평문 연결을 멈추는 단계다. 반복 상태 조회가 줄었는지는 Task 8에서 기존 `gather_source`가 `hub`일 때만 본다. `rest`이면 D-361 7항은 별도 계획으로 남기고 이 계획에서 FleetAgent를 켜지 않는다.
+- 증거: 계획 문서만. 현장 진단은 실행 전이다.
+- gate 변화: 없음.
+- 결정: D-447의 열린 소켓 재사용을 확인 기준으로 쓴다. D-499는 Proposed로 둔다.
+- 교훈: 없음
+
 ## 2026-10-08 · uncommitted · fix(tools): 착지 도구가 logs.md 중간 삽입 충돌을 해소
 - 변경: `tools/land.py`의 `logs.md` 해소에 경우 하나를 더했다. 우리 쪽이 끝에 덧붙이기만 했고 main 쪽이 기준 줄을 지우거나 바꾸지 않고 끼워 넣기만 했으면(항목 사이에 동료 항목) main 쪽을 그대로 두고 그 뒤에 우리 블록을 잇는다. 우리 쪽이 끝 덧붙이기가 아니거나 main 쪽이 기준 줄을 지우거나 바꿨으면 지금처럼 사람에게 넘긴다.
 - 증거: D-510 착지 때 main이 마지막 항목 앞에 동료 항목을 넣고 우리가 끝에 덧붙인 충돌을 도구가 "a side changed existing lines"로 거절했다. `test/test_land.py` 29 passed(중간 삽입 + 끝 덧붙이기 해소, main 쪽 삭제는 사람에게), `known_failures.py` 0 new.
@@ -6903,3 +6919,15 @@ osy-d395-s1d\`.
 - 변경: Merged D-513 v1.124 and assigned the additive D-509 Fleet power health row to v1.125.
 - 증거: Version header, history, CORE docstring, and pinned contract tests aligned; merged tree verification pending.
 - gate 변화: None.
+
+## 2026-10-08 · uncommitted · docs(review): D-514 객체·픽셀 클래스 의미와 시나리오
+
+- 변경: 객체 종류와 통로 점유 판단을 분리하고, 기존 obstacle 의미 보존·새 작업 공간 전환·픽셀 255와 role ignore 구분 및 장면별 검수 행동을 D-514에 제안.
+- 증거: ADR lint 0 error, 23 기존 모듈 경고; 문서 계약 pytest 121 passed, known_failures 0 NEW. 모델 PC·실제 승인·학습·장치 검증은 별도.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · uiux(review): D-514 검수 화면과 실제 브라우저 흐름
+
+- 변경: 객체 사진 목록을 좁은 화면에서 가로 목록으로 정리하고 객체/픽셀 현재 클래스 안내·픽셀 255 승인 조건·준비 결과의 시점 표시를 추가했다. 잘못된 고정 클래스 안내를 제거했다.
+- 증거: 모델 PC /learning·객체·픽셀 화면 읽기 전용 확인(43장 대기, 승인 0). X:/DevTemp/review-taxonomy 복사 상태 브라우저에서 등록 1/중복 재등록 0, 객체 박스 추가·수정·삭제·승인 후 재접속, 미검수 255 픽셀 승인 거절, 전체 채움 후 픽셀 승인·결과 준비 확인. 390/1280 화면 캡처; 브라우저 집중 시험 2 passed, 검수 백엔드 63 passed·known_failures 0 NEW. 모델 PC 8772 미리보기의 공용 정적 파일 5개를 원본 백업 뒤 반영하고 해시·객체/픽셀 브라우저 화면을 재확인했다. 실제 검수 상태는 변경하지 않았다(43장 대기·승인0).
+- gate 변화: SOURCE/LOCAL 화면·복사 상태 검증 및 모델 PC 미리보기 적용. 실제 사람 승인·학습/장치 수용은 별도.

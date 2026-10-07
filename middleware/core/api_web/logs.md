@@ -653,8 +653,8 @@
 - 결정: D-494 6
 - 교훈: 없음
 
-## 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.126 (D-507 7)
-- 변경: `core_api_web/api/app.py` 첫 줄 계약 버전 v1.122 → v1.126(main 은 문서 v1.123 과 어긋나 `test_protocol_version_alignment` 실패 중이었다).
+## 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.130 (D-507 7)
+- 변경: `core_api_web/api/app.py` 첫 줄 계약 버전 v1.122 → v1.130(main 은 문서 v1.123 과 어긋나 `test_protocol_version_alignment` 실패 중이었다).
 - 증거: `python -m pytest middleware/core/gateway/test/test_protocol_version_alignment.py -q` 3 passed.
 - gate 변화: 없음.
 - 결정: D-507 7

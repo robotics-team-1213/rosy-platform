@@ -5,9 +5,10 @@
             short MANUAL teleop (|lin| <= 0.08 m/s, |ang| <= 0.6 rad/s, <= 4 s), then IDLE
             and save the front frame (OUT.jpg) and the raw driver frame (OUT_raw.jpg);
             SECS 0 only saves the frames
-      drive [--max-s 45]
+      drive [--max-s 45] [--rearm 3]
             start a recording, CAMERA_LINE under a 1 s hold deadman until a stop reason,
-            3 s without motion or --max-s, then line-follow OFF and stop the recording
+            3 s without motion or --max-s, then line-follow OFF and stop the recording;
+            a deadman release (link stall) re-arms up to --rearm times in the same recording
       rec start|stop
       cam-watch SECONDS EVERY OUT_DIR
             raw driver frame every EVERY s with road-band clipping in OUT_DIR/exposure.jsonl
@@ -33,6 +34,7 @@ import math
 import os
 import ssl
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -83,6 +85,10 @@ class Core:
                     self.conn.close()
                 self.conn = None
         return 0, None
+
+    def clone(self):
+        """A second client on its own connection (one HTTPSConnection is not thread-safe)."""
+        return Core(self.host, self.token, self.port, self.context)
 
     def raw_frame(self, timeout=5.0):
         """First JPEG of the driver MJPEG stream (no overlay); None when not available."""
@@ -248,25 +254,73 @@ def cmd_rec(core, args):
     rec_start(core) if args.action == "start" else rec_stop(core)
 
 
+class HoldLoop(threading.Thread):
+    """Line-follow hold every PERIOD s on its own connection, so a slow status read on a
+    loaded Pi never stretches the gap past CORE's 1 s deadman. A daemon: if the tool dies,
+    the holds stop and CORE releases line-follow by itself."""
+
+    PERIOD = 0.3
+
+    def __init__(self, core):
+        super().__init__(daemon=True)
+        self.core, self.status, self.done = core, 200, threading.Event()
+
+    def run(self):
+        while not self.done.is_set():
+            self.status, _ = self.core.call("POST", "/line-follow/hold", timeout=0.8)
+            if self.status != 200:
+                return
+            self.done.wait(self.PERIOD)
+
+
+def _arm(core):
+    """CAMERA_LINE under a fresh 1 s deadman, holds from their own thread; None if refused."""
+    s, b = core.call("PUT", "/line-follow/mode", {"mode": "CAMERA_LINE", "hold_s": 1.0})
+    log("line-follow mode", s, {k: b.get(k) for k in ("mode", "state", "reason")} if s == 200 else b)
+    if s != 200:
+        return None
+    holds = HoldLoop(core.clone())
+    holds.start()
+    return holds
+
+
+def _disarm(holds):
+    if holds is not None:
+        holds.done.set()
+        holds.join(timeout=2.0)
+
+
 def cmd_drive(core, args):
-    started = False
+    """A link stall longer than the 1 s deadman releases line-follow (driver_released); that
+    stop stands, and the drive re-arms at most --rearm times inside the same recording."""
+    started, holds, rearms = False, None, 0
     try:
         rec_start(core)
-        s, b = core.call("PUT", "/line-follow/mode", {"mode": "CAMERA_LINE", "hold_s": 1.0})
-        log("line-follow mode", s, {k: b.get(k) for k in ("mode", "state", "reason")} if s == 200 else b)
-        if s != 200:
+        holds = _arm(core)
+        if holds is None:
             raise SystemExit("line-follow refused")
         started = True
         t0, still_since = time.time(), None
         while time.time() - t0 < args.max_s:
-            hs, _ = core.call("POST", "/line-follow/hold", timeout=0.8)
             _, lf = core.call("GET", "/line-follow", timeout=0.8)
+            hs = holds.status
             lf = lf if isinstance(lf, dict) else {}
             lin, ang = lf.get("linear") or 0.0, lf.get("angular") or 0.0
             reason = str(lf.get("reason"))
             log(f"t={time.time() - t0:4.1f} hold={hs} state={lf.get('state')} reason={reason} v={lin:.3f} "
                 f"w={ang:.3f} conf={lf.get('confidence') or 0:.2f} gap={lf.get('body_gap_m')} stuck={bool(lf.get('stuck'))}")
-            if hs != 200:
+            released = hs != 200 or "driver_released" in reason
+            if released and rearms < getattr(args, "rearm", 0):
+                rearms += 1
+                _disarm(holds)
+                log(f"deadman released (link stall) -> re-arm {rearms}/{args.rearm}")
+                holds = _arm(core)
+                if holds is None:
+                    log("re-arm refused -> stop")
+                    break
+                still_since = None
+                continue
+            if released:
                 log("hold refused -> stop")
                 break
             if lf.get("stuck") or any(k in reason for k in STOP_REASONS):
@@ -281,6 +335,7 @@ def cmd_drive(core, args):
                 still_since = None
             time.sleep(0.3)
     finally:
+        _disarm(holds)
         if started:
             log("line-follow OFF", core.call("PUT", "/line-follow/mode", {"mode": "OFF"})[0])
         rec_stop(core)
@@ -340,6 +395,8 @@ def main(argv=None):
     p.set_defaults(fn=cmd_nudge)
     p = sub.add_parser("drive")
     p.add_argument("--max-s", type=float, default=45.0)
+    p.add_argument("--rearm", type=int, default=3,
+                   help="re-arm CAMERA_LINE this many times after a deadman release (link stall)")
     p.set_defaults(fn=cmd_drive)
     p = sub.add_parser("rec")
     p.add_argument("action", choices=("start", "stop"))
