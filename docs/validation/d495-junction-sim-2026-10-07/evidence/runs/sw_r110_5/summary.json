@@ -1,0 +1,120 @@
+{
+ "scenario": "trip",
+ "plan": [
+  "right:-110"
+ ],
+ "prearm": true,
+ "late_s": 0.5,
+ "junctions": [
+  {
+   "i": 0,
+   "item": "right:-110",
+   "result": "aborted",
+   "sight_gt": [
+    -0.655,
+    -0.432,
+    1.12
+   ],
+   "keep_at_sight": "junction_transverse",
+   "stop": {
+    "travel_after_sight_m": 0.0007,
+    "sight_to_still_sim_s": 4.414,
+    "paint_ahead_of_front_m": 0.04,
+    "state_at_still": "turning"
+   },
+   "turn": {
+    "entry_yaw_gt_deg": 64.17,
+    "final_yaw_gt_deg": -43.14,
+    "error_vs_target_gt_deg": 2.69,
+    "turned_gt_deg": -107.31,
+    "turned_odom_deg": -107.31,
+    "state_after": "advancing",
+    "reason_after": null,
+    "turn_s": 4.53
+   },
+   "at_done": {
+    "gt": [
+     -0.603,
+     -0.481,
+     -0.753
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "j": "aborted",
+    "jr": "near_stop",
+    "lane_offset_m": 0.067,
+    "heading_vs_lane_deg": 75.2
+   },
+   "seq": [
+    {
+     "j": "idle",
+     "jr": null,
+     "state": "OFF",
+     "reason": "mode_off",
+     "sim_t": 81.255
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_stopping",
+     "sim_t": 81.372
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_turning",
+     "sim_t": 81.579
+    },
+    {
+     "j": "advancing",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_advancing",
+     "sim_t": 85.905
+    },
+    {
+     "j": "aborted",
+     "jr": "near_stop",
+     "state": "HOLD",
+     "reason": "junction_aborted",
+     "sim_t": 87.362
+    }
+   ],
+   "sent": [
+    {
+     "i": 0,
+     "item": "right:-110",
+     "code": 200,
+     "resp": null,
+     "refresh": 0
+    }
+   ]
+  }
+ ],
+ "gt_path_m": 0.0728,
+ "final": {
+  "t": 17.196,
+  "sim_t": 87.362,
+  "gt": [
+   -0.60299984207799,
+   -0.48082227182203974,
+   -0.7529375524806219
+  ],
+  "odom": [
+   -0.60299984207799,
+   -0.48082227182203974,
+   -0.7529375524806219,
+   0.0,
+   0.0
+  ],
+  "state": "HOLD",
+  "reason": "junction_aborted",
+  "keep": "no_boundary",
+  "body_gap_m": 0.0276,
+  "j": "aborted",
+  "jr": "near_stop"
+ },
+ "capability_at_end": true
+}

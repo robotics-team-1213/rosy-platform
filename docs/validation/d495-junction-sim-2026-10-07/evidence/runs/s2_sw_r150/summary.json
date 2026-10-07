@@ -1,0 +1,127 @@
+{
+ "scenario": "trip",
+ "plan": [
+  "right:-150"
+ ],
+ "prearm": true,
+ "late_s": 0.5,
+ "junctions": [
+  {
+   "i": 0,
+   "item": "right:-150",
+   "result": "aborted",
+   "sight_gt": [
+    -0.655,
+    -0.432,
+    1.12
+   ],
+   "keep_at_sight": "junction_transverse",
+   "stop": {
+    "travel_after_sight_m": 0.0,
+    "sight_to_still_sim_s": 0.345,
+    "paint_ahead_of_front_m": 0.346,
+    "state_at_still": "turning"
+   },
+   "turn": {
+    "entry_yaw_gt_deg": 64.17,
+    "final_yaw_gt_deg": -83.08,
+    "error_vs_target_gt_deg": 2.75,
+    "turned_gt_deg": -147.25,
+    "turned_odom_deg": -147.25,
+    "state_after": "advancing",
+    "reason_after": null,
+    "turn_s": 5.78
+   },
+   "at_done": {
+    "gt": [
+     -0.649,
+     -0.478,
+     -1.45
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "j": "aborted",
+    "jr": "near_stop",
+    "lane_offset_m": 0.025,
+    "heading_vs_lane_deg": 36.3
+   },
+   "seq": [
+    {
+     "j": "idle",
+     "jr": null,
+     "state": "OFF",
+     "reason": "mode_off",
+     "sim_t": 202.424
+    },
+    {
+     "j": "armed",
+     "jr": null,
+     "state": "HOLD",
+     "reason": "junction_waiting",
+     "sim_t": 202.542
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_stopping",
+     "sim_t": 202.658
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_turning",
+     "sim_t": 202.769
+    },
+    {
+     "j": "advancing",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_advancing",
+     "sim_t": 208.439
+    },
+    {
+     "j": "aborted",
+     "jr": "near_stop",
+     "state": "HOLD",
+     "reason": "junction_aborted",
+     "sim_t": 209.468
+    }
+   ],
+   "sent": [
+    {
+     "i": 0,
+     "item": "right:-150",
+     "code": 200,
+     "resp": null,
+     "refresh": 0
+    }
+   ]
+  }
+ ],
+ "gt_path_m": 0.0477,
+ "final": {
+  "t": 18.107,
+  "sim_t": 209.468,
+  "gt": [
+   -0.649477634062772,
+   -0.4780262559019773,
+   -1.4499670238011682
+  ],
+  "odom": [
+   -0.649477634062772,
+   -0.4780262559019773,
+   -1.4499670238011682,
+   0.0,
+   0.0
+  ],
+  "state": "HOLD",
+  "reason": "junction_aborted",
+  "keep": "no_boundary",
+  "body_gap_m": 0.0499,
+  "j": "aborted",
+  "jr": "near_stop"
+ },
+ "capability_at_end": true
+}

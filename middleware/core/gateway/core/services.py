@@ -517,9 +517,20 @@ class CoreServices:
             state.set_mode(RobotMode(new.value))
         modes.change_listeners.append(mirror_mode)
         modes.change_listeners.append(leave_docking)
+        def drop_return_on_release(old: Mode, new: Mode) -> None:
+            # D-502: a release is not a command. A return armed while latched is dropped.
+            if old is Mode.EMERGENCY:
+                docking.on_estop()
+        modes.change_listeners.append(drop_return_on_release)
         def reflect_stop():
             state.set_estop(True)
+            # SAF-001: every latch is an EMERGENCY, whoever set it. battery_policy and
+            # battery_deep latched without it, and admin release refused ("not in EMERGENCY").
+            ok, reason = modes.transition(Mode.EMERGENCY)
+            if not ok:
+                logging.getLogger(__name__).warning("e-stop latched but EMERGENCY refused: %s", reason)
         safety.estop_listeners.append(reflect_stop)
+        safety.estop_listeners.append(docking.on_estop)
         safety.estop_listeners.append(swarm.on_estop)
         safety.estop_listeners.append(lambda: nav.cancel(source='safety_manager'))
         def stop_line_follow():

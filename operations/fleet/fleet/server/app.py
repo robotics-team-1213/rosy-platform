@@ -526,9 +526,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           require_operator=require_operator, auth_configured=bool(principals or console_token))
 
     if stuck_resolver_clients is not None:
+        resolver_core = StuckResolver(ResolverConfig(),
+                                      painted=lambda: (site_maps.active() or (None,) * 4)[3])
+        app.state.line_stuck.peer_config = resolver_core.config   # episodes judge peers as R1 does
         app.state.stuck_resolver = StuckResolverLoop(
-            app.state.fleet_gather, app.state.line_stuck,
-            StuckResolver(ResolverConfig(), painted=lambda: (site_maps.active() or (None,) * 4)[3]),
+            app.state.fleet_gather, app.state.line_stuck, resolver_core,
             clients=lambda: stuck_resolver_clients)
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
@@ -568,6 +570,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
                              roster=lambda: console.robot_ids)
     install_trip_guard(console, trip_runner)
+    app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
     if getattr(app.state, "stuck_resolver", None) is not None:  # D-494 5: no automatic answer on a trip
         app.state.stuck_resolver.trip_busy = trip_runner.robot_busy
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
