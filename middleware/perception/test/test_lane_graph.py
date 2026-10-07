@@ -114,3 +114,13 @@ def test_crosswalk_zones_cover_the_two_stl_crosswalks(graph):
         assert sides[0] == pytest.approx(0.120, abs=0.006)
         assert sides[-1] == pytest.approx(0.145, abs=0.006)
 
+
+def test_crosswalk_corner_order_is_independent_of_opencv(monkeypatch):
+    mod = _module()
+    scene = mod.load_scene()
+    expected = mod.crosswalks(scene)
+    original = mod.cv2.boxPoints
+    for shift in range(4):
+        monkeypatch.setattr(mod.cv2, "boxPoints", lambda rect: np.roll(original(rect)[::-1], shift, axis=0))
+        assert mod.crosswalks(scene) == expected
+
