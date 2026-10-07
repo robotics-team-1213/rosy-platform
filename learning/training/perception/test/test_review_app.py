@@ -17,6 +17,14 @@ def open_store(tmp_path):
     return ReviewStore(tmp_path / 'state', source, human, images)
 
 
+def test_empty_training_workspace_reopens_without_initial_labels(tmp_path):
+    store = ReviewStore(tmp_path / 'state', empty_training=True)
+    assert store.list_frames() == []
+    assert ReviewStore(store.state).list_frames() == []
+    with pytest.raises(ValueError, match='reopen'):
+        ReviewStore(store.state, empty_training=True)
+
+
 def test_restart_preserves_approval_exclusion_and_unknown(tmp_path):
     store = open_store(tmp_path)
     assert [r['status'] for r in store.list_frames()] == ['approved', 'excluded']

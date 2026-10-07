@@ -111,6 +111,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
     power_display = app.state.power_health_display = CapabilityDisplay(
         console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse)
+    lane = getattr(app.state, "lane_compliance", None)
 
     async def gathered() -> dict:
         snapshot = await gather()
@@ -120,6 +121,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         rows = []
         for row in snapshot["robots"]:
             row = {**row, "line_stuck": board.view(row["robot_id"])}
+            if lane is not None:   # D-511 M0: the monitor's latest result, read only
+                row["lane_compliance"] = lane.view(row["robot_id"])
             observed = row.pop("_state_mono", None)
             row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
             rows.append(row)

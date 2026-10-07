@@ -13,6 +13,7 @@ let workspace, frame, image, ready = false, busy = false, loading = true, confli
 let gesture = null, selected = null, coordinatePreview = null;
 let undo = null;
 function visibleFrames() {return workspace?.frames.filter(item=>$('filter').value==='all'||item.status===$('filter').value)||[];}
+function sourceCandidates() {return frame?.source?.objects || frame?.source?.boxes || [];}
 
 function error(message='') { $('error').textContent = message; $('error').hidden = !message; }
 function enable() {
@@ -25,7 +26,8 @@ function enable() {
   $('reopen').disabled = locked;
   $('draw').disabled = $('add').disabled = locked || frame?.status === 'excluded';
   $('delete-selected').disabled = locked || frame?.status === 'excluded' || selected===null;
-  $('candidates').disabled = locked || frame?.status === 'excluded';
+  $('candidates').disabled = locked || frame?.status === 'excluded' || !sourceCandidates().length;
+  $('candidates').reason = !sourceCandidates().length ? '이 사진에는 가져올 원본 객체 후보가 없습니다.' : '';
   $('undo').disabled = locked || !undo || frame?.status === 'excluded';
   $('undo').reason=locked?'사진 저장과 불러오기를 마친 뒤 사용하세요.':!undo?'이 사진에서 저장한 라벨 수정이 없습니다.':frame?.status==='excluded'?'제외 사진은 수정할 수 없습니다.':'';
   $('prepare').disabled = busy || loading || conflicted || forbidden || !!gesture || !workspace;
@@ -133,13 +135,18 @@ async function select(index) {
   cancelGesture(); selected=null; coordinatePreview=null; undo=null;
   $('empty-review').hidden=true;$('review-content').hidden=false;
   ready = false; frame = structuredClone(workspace.frames.find(f => f.index === index));
+  for (const link of document.querySelectorAll('a[href^="/pixels"]')) link.href = `/pixels?frame=${frame.index}`;
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
   frameHeading();saveView();
   $('source-info').textContent = frame.source.source_kind === 'mcap'
     ? `${frame.source.width} × ${frame.source.height} · MCAP ${frame.source.source_session} · ${frame.source.mcap.frame.bag} SHA ${frame.source.mcap.bags.find(b => b.name === frame.source.mcap.frame.bag).sha256} · ${frame.source.mcap.frame.topic} · log ${frame.source.mcap.frame.log_ns} · channel ${frame.source.mcap.frame.channel_id} · ordinal ${frame.source.mcap.frame.message_ordinal} · 가져올 때 원본 픽셀 검증`
     : `${frame.source.width} × ${frame.source.height} · ${frame.source.video || '원본 사진'} · frame ${frame.source.video_frame ?? index}`;
-  $('candidate-source').textContent = `원본 초안 출처: ${frame.source.annotation_source || '원본 라벨 자료'} · 초안은 정답 승인이 아닙니다.`;
+  const candidates=sourceCandidates();
+  $('candidate-source').textContent = candidates.length
+    ? `원본 객체 후보 ${candidates.length}개 · 출처: ${frame.source.annotation_source || '원본 라벨 자료'} · 사람이 모든 박스를 확인해야 합니다.`
+    : '원본 객체 후보가 없습니다. 자동 객체 탐지는 이 화면에서 실행하지 않습니다. 사진을 확인하고 필요한 박스를 직접 그리세요.';
+  if(frame.source.annotation_note) $('candidate-source').textContent += ` ${frame.source.annotation_note}.`;
   $('image-message').hidden = false; $('image-message').textContent = '사진을 불러오는 중';
   $('canvas').width = frame.source.width; $('canvas').height = frame.source.height;
   renderBoxes(); list(); paint(); enable();
@@ -163,6 +170,9 @@ function selectField(label, options, value, changed) {
 }
 function renderBoxes() {
   $('boxes').replaceChildren(); $('empty').hidden = !!frame.review.boxes.length;
+  $('empty').textContent = sourceCandidates().length
+    ? '현재 박스가 없습니다. 원본 초안을 가져오거나 사진을 확인한 뒤 필요한 박스를 그리세요.'
+    : '객체 초안이 없습니다. 사진 전체를 살펴보고 객체가 보이면 박스를 그리세요. 객체가 없을 때만 전체 확인 후 승인하세요.';
   frame.review.boxes.forEach((box,i) => {
     const row=document.createElement('details'); row.className='box-row';row.open=selected===i||(selected===null&&i===0);
     const heading=document.createElement('summary');heading.textContent=`박스 ${i+1} · ${names[box.label??'']||'클래스 선택 필요'}`;
@@ -308,7 +318,7 @@ document.addEventListener('keydown',event=> {
 function frameHeading() {
   $('status').setAttribute('status',frame.status==='pending'?'warn':'neutral');
   const visible=visibleFrames();
-  $('frame-progress').textContent=`${visible.findIndex(item=>item.index===frame.index)+1} / ${visible.length} · ${frame.source.width} × ${frame.source.height} · 박스 ${frame.review.boxes.length}개`;
+  $('frame-progress').textContent=`${visible.findIndex(item=>item.index===frame.index)+1} / ${visible.length} · ${frame.source.width} × ${frame.source.height} · 박스 ${frame.review.boxes.length}개${frame.source.annotation_note?' · '+frame.source.annotation_note:''}`;
 }
 function saveView() {
   const url=new URL(location.href);if(frame) url.searchParams.set('frame',frame.index);else url.searchParams.delete('frame');
@@ -349,6 +359,10 @@ async function load(index) {
     // An ordered list, not object keys: integer-like names would jump ahead of the others.
     classOptions=[['','클래스 선택 필요'],...classes.map(c=>[c.name,c.display])]; names=Object.fromEntries(classOptions);
     classColors=Object.fromEntries(classes.filter(c=>c.color).map(c=>[c.name,c.color]));
+    let guide=$('obstacle-guide');
+    if(!guide){guide=document.createElement('p');guide.id='obstacle-guide';guide.className='quiet';document.querySelector('.inspector-heading').append(guide);}
+    guide.hidden=!classes.some(c=>c.name==='obstacle');
+    guide.textContent='기타 장애물은 주행 경로를 실제로 막는 독립 물체에만 사용하세요. 벽·고정 기둥·바닥 표시·그림자·경로 밖 물체는 제외합니다. 애매하면 승인 전에 박스를 수정하거나 삭제하세요.';
     if(workspace.exports.length) receipt(workspace.exports[0]);
     if (!workspace.frames.length) {applyFilter();return;}
     const params=new URLSearchParams(location.search);

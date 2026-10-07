@@ -605,8 +605,17 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core/services/core_features/line_follow/recovery": (
-        2_491,
-        "accept: Independently re-judged 2026-10-08 at 2491 for D-507 6 (architect, read-only): "
+        # PENDING RE-JUDGE (combined D-507 6+2-5, re-judge required by reviewer): 2713 is the merged
+        # count after feat/d507-motion-admitted-site-floor (2491) and feat/d507-junction-approach
+        # (2537) both landed; it is over 2491 + 150, so an independent re-judge must replace this note.
+        2_713,
+        "accept: PENDING independent re-judge at the merged 2713 (combined D-507 6+2-5, re-judge "
+        "required by reviewer; recorded by the landing executor 2026-10-08, not a judgement). "
+        "Branch verdicts: junction-approach re-judged 2026-10-08 at 2537 (architect agent, "
+        "read-only): D-507 items 3-4 junction_approach JunctionApproachMixin (expected window and "
+        "approach to the pivot, mixed into JunctionMixin, math only), the approach twist goes out "
+        "through _maneuver_twist, CORE CommandManager stays the final cmd_vel publisher (D-18). "
+        "Independently re-judged 2026-10-08 at 2491 for D-507 6 (architect, read-only): "
         "recovery/motion_admit.py is the one motion_admitted admission (D-400 enforce basis or the "
         "site_floor_map_id site basis, plus the reverse D-422 body sweep the D-468 retrace needs), "
         "a LineFollowManager mixin under the single manager lock and generation with no own lock, "
