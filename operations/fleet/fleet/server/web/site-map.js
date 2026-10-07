@@ -9,7 +9,7 @@ import {
   tripStatusText, rectangularView, viewTurnOf, editViewTurn,
 } from '/console/assets/site-map-model.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
-import {warpImage} from '/console/assets/field-view.js';
+import {warpImage} from '/console/assets/field-warp.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
 import {parseLensHeader} from '/console/assets/vision-view.js';
 

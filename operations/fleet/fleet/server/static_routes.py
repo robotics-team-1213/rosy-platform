@@ -34,6 +34,7 @@ CONSOLE_ASSETS = {
     "camera-peer.js": "application/javascript",
     "field-layers.js": "application/javascript",
     "field-view.js": "application/javascript",
+    "field-warp.js": "application/javascript",
     "formation.js": "application/javascript",
     "motion-readiness.js": "application/javascript",
     "line-stuck.js": "application/javascript",

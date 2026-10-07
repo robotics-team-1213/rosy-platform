@@ -6960,3 +6960,11 @@ osy-d395-s1d\`.
 - 변경: 10/6 두 영상의 선형 명령 0과 오도메트리 위치 변화 0.5/1.2mm를 확인해 한쪽 선 기억의 전진 검증 후보에서 뺐다. 10/7의 전진 구간은 `keep_debug`가 없으므로 기존 재생에서 후보를 추출하고 사람의 같은 차로 쌍 확인을 선행하도록 계획을 고쳤다.
 - 증거: 세 독립 검토가 영상 사실, D-384 시간 추정, D-475 학습·평가 권한을 교차 비판했다. 10/7 두 sidecar의 선형 명령은 106/124, 71/83프레임에서 0이 아니고 x 변화 범위는 0.476/0.280m다. 신뢰할 양성 선 쌍은 아직 0건이며 새 장치 주행은 하지 않았다.
 - gate 변화: 없음. 10/6은 회전·벽·선 소실의 거절/정지 음성 사례로만 쓴다.
+
+## 2026-10-08 · uncommitted · docs(adr): 관제 웹의 위치는 문서 네 개다
+
+- 변경: D-518. 관제 웹은 operations/fleet/fleet/server/web에 두고 문서 넷(운용·설치·Cell·현장 지도)과 공유 읽기로 위치를 정했다. operations/ui/console 분리는 열지 않는다. 첫 구현은 네 엔트리의 import 울타리와 warpImage를 field-warp.js로 옮긴 것이다. site-map.js는 field-view.js를 가져오지 않는다. 하위 폴더 이동은 하지 않았다.
+- 증거: operations/fleet/test/test_document_imports.py, test_server_app.py::test_every_console_module_import_is_served, test_site_lanes_api.py — 19 passed, 1 warning. known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run.txt.
+- gate 변화: 없음
+- 결정: D-518 Accepted (2026-10-08, 사용자 선택: 문서 소유 + 하위 폴더)
+- 교훈: 패키지 폴더를 옮기면 서빙 주인만 같고 문서가 서로의 모듈을 가져오는 문제는 남는다. 울타리가 위치를 먼저 고정한다.
