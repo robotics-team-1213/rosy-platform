@@ -11,6 +11,7 @@ Review fixes (2026-10-02):
   cmd_vel publisher), so a curved path or an in-place turn still sees them (H2, M2). They
   expire after obstacle_path_horizon_m of body motion; any wheel output that is not line
   follow's own (teleop, docking, e-stop, another mode) forgets them (re-review HIGH 1).
+  Only points outside the URDF body outline are kept (D-507 item 10).
 - The sweep covers the arcs the traffic gate (linear scaled by s in [floor, 1], angular kept)
   and the safety clip can make of the intended twist (M1, re-review HIGH 2).
 """
@@ -147,7 +148,8 @@ class BodyStopMixin:
             if self._odometer - seen > c.obstacle_path_horizon_m:
                 continue
             bx, by = self._to_base(ox, oy)
-            if math.hypot(bx - lidar_x, by) < range_min - RANGE_MIN_TOLERANCE_M:
+            if (math.hypot(bx - lidar_x, by) < range_min - RANGE_MIN_TOLERANCE_M
+                    and not self._strictly_inside_body(bx, by)):
                 keep.append((ox, oy, seen))
         self._near_memory = tuple(keep[-MEMORY_MAX_POINTS:])
         x0, y0, heading = self._odom
@@ -160,6 +162,17 @@ class BodyStopMixin:
                 near.append((x0 + cos_h * bx - sin_h * by, y0 + sin_h * bx + cos_h * by,
                              self._odometer))
         self._near_prev = tuple(near)
+
+    def _strictly_inside_body(self, x: float, y: float) -> bool:
+        """D-507 10 (D-422 amendment): a remembered point strictly inside the URDF outline is
+        where the body already is -- noise or contact, not an object a stop can avoid -- so it
+        is dropped. A point on the outline stays (conservative). With a range_min inside the
+        body (Pinky C1 0.05 m vs 0.0565 m to the nearest edge) every vanished point is inside;
+        a range_min reaching past the body keeps every point outside, as before."""
+        c = self._config
+        r = c.body_rotation_radius_m
+        return (c.body_rear_x_m < x < c.body_front_x_m and abs(y) < c.body_half_width_m
+                and x * x + y * y < r * r)
 
     def _remembered_points(self) -> list:
         return [self._to_base(ox, oy) for ox, oy, _ in self._near_memory]
