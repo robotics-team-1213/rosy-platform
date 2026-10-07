@@ -2487,3 +2487,9 @@
 - 변경: 두 확인 트랙이 같은 source에서 0.30 m 안으로 만나면 둘 다 UNKNOWN(overlap). 경계 시험이 상대 import와 `tracking.identity`·`app.state.identity` 속성 접근도 잡는다(공용 `_server_imports`)
 - 증거: 영향 시험 58 passed, known_failures 0 NEW. 두 시험 모두 수정 전 코드에서 실패함을 확인
 - gate 변화: 없음. D-430 독립 검토(critic) APPROVE
+
+## 2026-10-08 · uncommitted · fix(trip): D-507 회전 축을 지도의 첫 칠한 선에서 (SIM 발견 1–2)
+- 변경: `trip_ports.line_past` — 칠한 선 = 차로 합집합 경계(차로마다 중심선 둘레 `width_m` 띠). 장소에서 진행 방향(창이 있으면 로봇 yaw, 없으면 장소의 차로 방향)으로 처음 벗어나는 거리. `junction_fields`가 `pivot_past_line_m = −그 거리`를 보낸다. 0.30 m 안에 선이 없으면 나가는 차로 폭/2, 창 없음. API Ref v1.133.
+- 증거: `test_trip_d507.py` 260919 SW spoke SIM 자세(−0.655, −0.432, 64°): pivot −0.105, 창 기대 선 0.401(SIM 측정 0.402), 창 없음 −0.096. L자 −0.1, 곧게 지나감 폭/2·창 없음. 부호 변이 4건 실패 확인 뒤 복원.
+- gate 변화: SOURCE. SIM 재실행은 열림.
+- 결정: D-507 2 개정(2026-10-08 사용자 결정)

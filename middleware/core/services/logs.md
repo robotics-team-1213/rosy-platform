@@ -716,3 +716,9 @@
 - gate 변화: D-507 10 SOURCE·SIM. DEVICE(D9 근거리)는 열림.
 - 결정: D-507 10, D-422
 - 교훈: trailer 없이 main에 들어간 safety 커밋은 amend 할 수 없어 독립 검토를 EXEMPT로 남긴다. 착지 전에 `safety_review.py`를 돌린다.
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 2·4 pivot_past_line_m 부호 있음 [−0.30, 0.30]
+- 변경: `junction_approach.check_expect`가 음수 pivot을 받는다(측정 가로선이 장소 너머, 회전교차로 입구·T자의 먼 쪽 경계). 기대 창 점은 그대로 `expect_in_m − pivot`, 접근 목표 = 측정 선 + pivot. 목표가 로봇 자리이거나 뒤면 접근 0, 제자리 회전, 후진 없음(기존 `max(0, distance)`). 직진 띠 옆 반폭은 양수 pivot일 때만 그 값, 아니면 D-491 0.10 m.
+- 증거: `test_junction_approach.py` 음수 pivot 접근 0.1 m, 목표 뒤 접근 0, 창 0.6 m, 띠 반폭, 범위 −0.31 거절. sign 변이(범위 0 하한 복원) 5건 실패 확인 뒤 복원.
+- gate 변화: SOURCE. SIM 재실행(SW spoke)은 열림.
+- 결정: D-507 2·4 개정(2026-10-08 사용자 결정)
