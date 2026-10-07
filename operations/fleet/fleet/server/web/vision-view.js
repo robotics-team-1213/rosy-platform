@@ -97,7 +97,7 @@ const absentPanel = () => ({
   setAttribute: () => {},
 });
 
-export function createVisionView({ scope, el, call, isActive = () => true, rawOnly = false }) {
+export function createVisionView({ scope, el, call, isActive = () => true, rawOnly = false, onSources = () => {} }) {
   const select = el("vision-source");
   const frame = el("vision-frame");
   const stage = el("vision-image-stage");
@@ -288,6 +288,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
     try {
       const result = await call("/api/fleet/vision/sources");
       life.check();
+      onSources({ finished: true, status: 200, names: result.sources });
       const selected = select.value;
       select.replaceChildren(...result.sources.map((source) => {
         const option = document.createElement("option");
@@ -307,6 +308,8 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
       }
     } catch (error) {
       if (error.name === "AbortError") return;
+      if (typeof error.status === "number") onSources({ finished: true, status: error.status, names: [] });
+      else onSources({ finished: false });
       lastSourcesAt = Date.now();
       showState("영상 연결 불가", "warn", error.message);
     } finally {
@@ -571,7 +574,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
     else updateCornerOverlay();
   }
 
-  // 운용자가 수락한 모서리만 D-318 브라우저 로컬 초안이 된다.
+  // 운영자가 수락한 모서리만 D-318 브라우저 로컬 초안이 된다.
   function acceptCorners(corners) {
     corners.forEach(([x, y], index) => setCorner(index, x, y));
     proposalCorners = null;

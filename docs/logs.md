@@ -6716,6 +6716,38 @@ osy-d395-s1d\`.
 - 증거: [LOCAL 결과](validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 집중 브라우저 1 failed, 수정 후 관련 11 passed, D-153 명명 G1 90 passed, 1 warning, 각 `known_failures.py` 0 NEW. 실행 기록은 `X:\DevTemp\pilot-silent-readback\`.
 - gate 변화: Pilot G2 일부 보강. 남은 선언 상태·폭, 사이트 설치·실물 readback, 운전자 G3와 제품 전체는 **HOLD**.
 
+## 2026-10-07 · uncommitted · docs(adr): 관제 사이트 경로와 로봇 링크(D-499)
+
+- 변경: [D-499](adr/D-499-console-site-path-and-robot-link.md) Proposed. 관제 등록 로봇 칸에 사이트 경로 블록을 두고, 로봇 카드의 링크 단어는 기존 gather와 주소 판정으로만 고른다. 값은 up, unreachable, moved, tls-refused, protocol. 새 앱·새 프로브·바이트 그래프·로봇 Wi-Fi 변경은 없다.
+- 증거: 번호는 기록 직전에 main·브랜치 docs/adr, ADR Log, adr_gaps를 대조해 D-499가 비어 있었다. 분류 근거는 console.py snapshot, console_view.py _error_of, transport.py RobotApiError, address-drift.js, static_routes.py /healthz.
+- gate 변화: 없음. 문서·제안만 바뀐다.
+- 결정: D-499 Proposed.
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(plan): 관제 사이트 경로와 로봇 링크 실행 계획(D-499)
+
+- 변경: [실행 계획](plans/2026-10-07-console-site-path-and-robot-link.md). D-499는 Proposed로 둔다. 화면과 API는 이 기록이 고치지 않는다.
+- 증거: 계획 파일만. 분류가 앉을 자리는 console.py snapshot, ingest_routes.address_reasons, console_routes.gathered, static_routes.py /healthz, vision-view.js refreshSources.
+- gate 변화: 없음.
+- 결정: D-499 Proposed 유지.
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(fleet): 관제 상태 행에 로봇 링크(D-499)
+
+- 변경: `GET /api/fleet/state` 로봇 행에 선택 필드 `link`. 값은 up, unreachable, moved, tls-refused, protocol. 401이 아닌 로봇 API 오류에는 필드가 없다. 주소 상태는 기존 address_reasons 한 번이다. D-499는 Proposed다.
+- 증거: operations/fleet/test/test_link_class.py, test_link_on_snapshot.py, test_link_address_source.py, test/test_line_follow_contract_docs.py.
+- gate 변화: 없음. 호스트 시험은 장치 수용이 아니다.
+- 결정: D-499 Proposed 유지.
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(fleet): 관제에 사이트 경로와 로봇 링크를 표시(D-499)
+
+- 변경: 등록 로봇 칸의 목록 위에 관제 경로 세 줄을 두고, 로봇 카드는 link가 문제일 때만 한 단어를 붙인다. healthz와 기존 state·vision sources 조회만 쓴다. 새 모듈은 콘솔 자산 허용 목록에 있다. D-499는 Proposed다.
+- 증거: operations/fleet/test/web/site-path.test.mjs, link-tag.test.mjs, site-path-place.test.mjs, address-drift.test.mjs (node 20 pass). operations/fleet/test/test_document_imports.py, test_server_app.py::test_every_console_module_import_is_served (2 passed).
+- gate 변화: 없음. 호스트 시험은 장치 수용이 아니다.
+- 결정: D-499 Proposed 유지.
+- 교훈: 없음
+
 ## 2026-10-07 · uncommitted · docs(uiux): 사이트 G3 준비 버전 재확인
 
 - 변경: 기존 사이트 PC의 배포 태그와 두 로봇 mDNS 해석을 현재 로컬 후보와 다시 대조하고 운영자 독회 기록지에 날짜별 준비 상태를 남겼다.
@@ -6768,3 +6800,19 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 오탐 하나가 공유 push 게이트를 막아 모든 세션의 푸시를 지연시킨다 — 문서 착지 전 1분 시험이 push 훅 실패를 예방한다
+
+## 2026-10-07 · uncommitted · docs(adr): D-504 Pilot 녹화에 바닥 IR 원시값
+
+- 변경: D-504. Pilot 녹화 토픽에 `ir_sensor/range`(좌·중·우 ADC)를 더하고 API 참조 5.10 토픽 줄에 적었다. 초음파 `us_sensor/range`는 넣지 않는다. `line/keep_debug`는 이미 녹화되던 것을 그 줄에 맞췄다.
+- 증거: 구현 시험은 perception 기록. 문서 계약 시험은 이 항목을 쓴 뒤 실행.
+- gate 변화: 없음
+- 결정: D-504 Proposed
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(adr): Pilot 바닥 IR 녹화 번호는 D-506
+
+- 변경: 머지하면서 D-504는 얼굴 애니메이션 ADR이, D-505는 상태 전환 화면 ADR이 먼저 썼다. 바닥 IR 녹화 결정은 D-506이다. 초음파 `us_sensor/range`는 넣지 않는다.
+- 증거: 직전 D-504 항목은 그 커밋 당시 번호다. ADR 파일은 `docs/adr/D-506-pilot-recording-ir-range.md`.
+- gate 변화: 없음
+- 결정: D-506 Proposed
+- 교훈: 없음

@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 from collections import deque
 from dataclasses import dataclass
-from core_features.line_follow.lane_return_approach import CorridorApproach
+from core_features.line_follow.recovery.lane_return_approach import CorridorApproach
 
 
 def _finite(*values):

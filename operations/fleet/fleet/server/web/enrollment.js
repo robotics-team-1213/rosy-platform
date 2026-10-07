@@ -159,7 +159,7 @@ export function discoveryActions(device, manage, blockedUntil, now) {
 }
 
 export const HELP = [
-  "운용자 동작: 로봇 전원 켜기 → 등록 → 로봇 화면의 8자 입력. SSH·파일 편집·재시작이 없습니다.",
+  "운영자 동작: 로봇 전원 켜기 → 등록 → 로봇 화면의 8자 입력. SSH·파일 편집·재시작이 없습니다.",
   "LCD가 있고 카드 login.boot_code가 기본(operator)인 로봇만 이렇게 됩니다. 그 밖에는 관리자 등록 코드나 SSH rosy-login-code가 코드의 출처입니다.",
   "새 화면 코드는 부팅마다 하나입니다: 첫 등록, 토큰 만료(현 이미지 7일), 코드를 소모한 실패 뒤마다 전원 재투입이나 관리자 코드가 필요합니다.",
 ];
@@ -392,7 +392,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     banner.textContent = alarms.map((a) => `${a.robot_id}: 주행 중 로봇의 주소가 바뀜 — 상태를 모름`).join(" · ");
     const addBlocked = !manage || Date.now() < state.blockedUntil;
     el("enroll-address-add").disabled = addBlocked;
-    if (addBlocked) el("enroll-address-add").setAttribute("reason", !manage ? "운용자 권한이 필요합니다" : "잠시 뒤 다시 시도");
+    if (addBlocked) el("enroll-address-add").setAttribute("reason", !manage ? "운영자 권한이 필요합니다" : "잠시 뒤 다시 시도");
     else el("enroll-address-add").removeAttribute("reason");
   }
 

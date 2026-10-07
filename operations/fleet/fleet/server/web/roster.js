@@ -6,13 +6,14 @@
 import { MODE_LABEL, NAVIGATION_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
 import { addressReason } from "./address-drift.js";
+import { linkTag } from "./link-tag.js";
 import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./localization-badge.js";
 import { capabilityReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
-// console_view._error_of 는 닿지 못한 예외를 클래스 이름(code)으로 싣는다. 운용자 말은
+// console_view._error_of 는 닿지 못한 예외를 클래스 이름(code)으로 싣는다. 운영자 말은
 // 한국어 평문이다 — 아는 코드만 옮기고 모르는 값은 받은 그대로 보인다(2026-10-02 회차).
 const REACH_LABEL = Object.freeze({
   ConnectError: "접속 실패",
@@ -145,6 +146,12 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable && robot.online && state.mode) modeTag.title = state.mode;
     else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
     head.appendChild(modeTag);
+    const link = view.stateUnavailable ? null : linkTag(robot.link);
+    if (link) {
+      const linkNode = tag(link.word, link.kind);
+      linkNode.dataset.link = robot.link;
+      head.appendChild(linkNode);
+    }
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
     // 비켜서는 중인 로봇은 "주행 중"이 맞다 — 다만 제 미션을 가는 것이 아니라서 따로 적는다.
     head.appendChild(tag(
@@ -216,9 +223,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     // 한 원인은 한 번 말한다(D-359 §5.3) — 카드 상태 줄이 원인을 이미 말하면
     // 버튼 사유는 "위 사유"로 이 줄을 가리킨다.
-    const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error
+    const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error && !link
       ? `robot-why-${robot.robot_id}` : null;
-    if (!view.stateUnavailable && !robot.online && robot.error) {
+    if (!view.stateUnavailable && !robot.online && robot.error && !link) {
       const why = nodeWithText("p", "hint");
       why.textContent = robot.error.reachable
         ? `로봇이 거절: ${robot.error.code}`
@@ -236,6 +243,21 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       why.dataset.addressReason = view.addresses[robot.robot_id].status;
       why.textContent = address.text;
       node.appendChild(why);
+    }
+
+    if (link?.text) node.appendChild(nodeWithText("p", "hint", link.text));
+    if (link?.next) {
+      if (link.focus === "console-token") {
+        const next = document.createElement("button");
+        next.type = "button";
+        next.textContent = link.next;
+        next.addEventListener("click", scope.guard(() => {
+          document.getElementById("console-token")?.focus();
+        }));
+        node.appendChild(next);
+      } else {
+        node.appendChild(nodeWithText("p", "hint", link.next));
+      }
     }
 
     // D-416 — 오프라인 로봇의 마지막 응답 시각: "언제부터 안 됐지?"에 바로 답한다.
@@ -333,7 +355,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       fallback.textContent = lineFollow.mode === "IR_LINE" ? "IR 추적 중지" : "IR 추적 선택";
       blockWith(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
         : !robot.online ? "로봇 오프라인"
-          : !isOperator() ? "운용자 권한이 필요합니다" : "");
+          : !isOperator() ? "운영자 권한이 필요합니다" : "");
       fallback.addEventListener("click", scope.guard(async () => {
         const life = scope.capture();
         life.check();
@@ -364,7 +386,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     identify.setAttribute("kind", "quiet");
     identify.type = "button";
     identify.textContent = "LED로 찾기";
-    blockWith(identify, !isOperator() ? "운용자 권한이 필요합니다"
+    blockWith(identify, !isOperator() ? "운영자 권한이 필요합니다"
       : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
         : estop !== false ? "안전 상태 확인이 필요합니다" : "");
     identify.addEventListener("click", scope.guard(async () => {

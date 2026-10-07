@@ -5,12 +5,38 @@ from pathlib import Path
 import re
 
 TOPICS = ('camera/front/compressed', 'camera/front', 'cmd_vel', 'odom', 'scan',
-          'line/observation', 'perception/learned/shadow', 'teleop/intent')
+          'line/observation', 'perception/learned/shadow', 'teleop/intent', 'ir_sensor/range')
 SCHEMAS = {'camera/front': 'sensor_msgs/msg/Image',
            'camera/front/compressed': 'sensor_msgs/msg/CompressedImage',
            'cmd_vel': 'geometry_msgs/msg/Twist', 'odom': 'nav_msgs/msg/Odometry',
            'scan': 'sensor_msgs/msg/LaserScan', 'line/observation': 'std_msgs/msg/String',
-           'perception/learned/shadow': 'std_msgs/msg/String', 'teleop/intent': 'std_msgs/msg/String'}
+           'perception/learned/shadow': 'std_msgs/msg/String', 'teleop/intent': 'std_msgs/msg/String',
+           'ir_sensor/range': 'std_msgs/msg/UInt16MultiArray'}
+# Same acceptance as control.recording.ir_range_sample. This module does not import it.
+_IR_CHANNELS = ('left', 'centre', 'right')
+_IR_ADC_MAX = 4095
+
+
+def ir_sample(data):
+    """{left, centre, right} raw ADC counts, or None. Ultrasonic is not this message."""
+    try:
+        values = list(data)
+    except TypeError:
+        return None
+    if len(values) != 3:
+        return None
+    sample = {}
+    for name, value in zip(_IR_CHANNELS, values):
+        if isinstance(value, (bool, float, str)):
+            return None
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return None
+        if number < 0 or number > _IR_ADC_MAX:
+            return None
+        sample[name] = number
+    return sample
 
 
 def topic_name(topic):
@@ -90,6 +116,11 @@ def load_tables(raw):
                     value = {'stamp_ns': stamp_ns(msg), 'ranges': np.asarray(msg.ranges, np.float16),
                              **{key: float(getattr(msg, key)) for key in (
                                  'angle_min', 'angle_max', 'angle_increment', 'range_min', 'range_max')}}
+                elif name == 'ir_sensor/range':
+                    value = ir_sample(msg.data)
+                    if value is None:
+                        skipped += 1
+                        continue
                 else:
                     value = json.loads(msg.data)
                 tables.setdefault(name, []).append((log, value))

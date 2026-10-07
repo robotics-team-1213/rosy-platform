@@ -1204,3 +1204,19 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
 - 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
 - 교훈: 검출기가 맞추는 선(칠 중심)과 계약이 뜻하는 선(달릴 수 있는 끝)을 이름으로 구분한다
+
+## 2026-10-07 · uncommitted · feat(recording): Pilot 녹화에 바닥 IR 원시값 (D-504)
+
+- 변경: `PILOT_TOPICS`에 `ir_sensor/range`만 추가. `ir_range_sample`은 좌·중·우 세 칸(0–4095)만 받는다. `bag_to_video`·`extract`·Pinky `raw_messages`가 프레임 로그 시각 이전의 최신 표본을 붙인다. `us_sensor/range`와 D-356 `SIDE_TOPICS`는 그대로다.
+- 증거: `test_pilot_recorder.py`와 `test_module_separation.py` 46 passed. `test_bag_to_video.py` IR·intent·keep 5 passed. `test_raw_derivation.py` 11 passed (2026-10-07 Windows).
+- gate 변화: 없음. 호스트 시험만. 로봇 가방을 열어 확인하지 않음.
+- 결정: D-504 Proposed
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(recording): Pilot 바닥 IR 녹화 번호는 D-506
+
+- 변경: 위 항목의 구현은 그대로다. 번호만 D-506이다. D-504는 얼굴 애니메이션이, D-505는 상태 전환 화면이 먼저 썼다.
+- 증거: 시험 수는 위 항목과 같다.
+- gate 변화: 없음
+- 결정: D-506 Proposed
+- 교훈: 없음
