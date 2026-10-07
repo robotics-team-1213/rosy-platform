@@ -26,8 +26,8 @@ ROOT = Path(__file__).resolve().parents[3]
 LANE_GRAPH = ROOT / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 OPERATOR = {"Authorization": "Bearer operator-token"}
 VIEWER = {"Authorization": "Bearer viewer-token"}
-LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2)
-BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2)
+LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True)
+BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True)
 
 
 class Ports:
@@ -38,6 +38,8 @@ class Ports:
         self.goals: list[tuple] = []
         self.canceled: list[str] = []
         self.junction_error = None
+        self.junction = None  # CORE line_follow.junction
+        self.turns: list = []
         self.blocked: frozenset = frozenset()
         self.now = 1000.0
 
@@ -47,7 +49,12 @@ class Ports:
     async def arbitrated_pose(self, robot_id):  # async on purpose: the runner takes either
         return self.pose
 
-    async def send_junction(self, robot_id, action, place_id, stop_after_m, expires_s):
+    async def junction_state(self, robot_id):
+        return self.junction
+
+    async def send_junction(self, robot_id, action, place_id, stop_after_m, expires_s, turn_deg=None,
+                            advance_m=None):
+        self.turns.append(turn_deg)
         if self.junction_error is not None:
             raise self.junction_error
         self.sent.append((action, place_id, stop_after_m))
@@ -384,11 +391,16 @@ def test_the_http_junction_port_posts_the_d491_body():
     from fleet.server.trip_runner import HttpLaneJunction
 
     class Client:
-        async def line_follow_junction(self, action, place_id, *, stop_after_m, expires_s):
-            return {"args": (action, place_id, stop_after_m, expires_s)}
+        async def line_follow_junction(self, action, place_id, *, stop_after_m, expires_s, turn_deg, advance_m):
+            return {"args": (action, place_id, stop_after_m, expires_s, turn_deg)}
+
+        async def state(self):
+            return {"line_follow": {"junction": {"state": "turning", "seq": 3}}}
 
     port = HttpLaneJunction(lambda: {"r": Client()})
-    assert run(port.send_junction("r", "left", "NE", None, 15.0)) == {"args": ("left", "NE", None, 15.0)}
+    assert run(port.send_junction("r", "left", "NE", None, 15.0, turn_deg=88.0)) == {
+        "args": ("left", "NE", None, 15.0, 88.0)}
+    assert run(port.junction_state("r"))["state"] == "turning"
     from fleet.hub.hub import HubError
 
     with pytest.raises(HubError) as err:
@@ -410,12 +422,12 @@ def test_http_robot_client_line_follow_junction_hits_the_core_path():
     async def go():
         async with httpx.AsyncClient(base_url="http://robot", transport=httpx.MockTransport(handler)) as http:
             client = HttpRobotClient(RobotEndpoint("one", "http://robot", "t"), http=http)
-            await client.line_follow_junction("stop", "SE", stop_after_m=0.0, expires_s=15.0)
+            await client.line_follow_junction("left", "SE", stop_after_m=None, expires_s=15.0, turn_deg=-91.5)
 
     with pytest.raises(RobotApiError) as err:
         run(go())
     assert err.value.status == 404 and seen["path"] == "/api/v1/line-follow/junction"
-    assert seen["body"] == {"action": "stop", "place_id": "SE", "stop_after_m": 0.0, "expires_s": 15.0}
+    assert seen["body"] == {"action": "left", "place_id": "SE", "expires_s": 15.0, "turn_deg": -91.5}
 
 
 def test_the_loop_steps_on_its_period():
@@ -447,3 +459,65 @@ def test_confirm_after_the_map_changed_plans_again_at_the_place():
     hold = runner.running()["hold"]
     assert hold["map_version"] == 2 and ports.sent[-1][0] == "stop"
     assert run(runner.confirm_replan("p1", "bob"))["map_version"] == 2
+
+
+# ---- D-492 bounded junction turn ------------------------------------------------------
+
+def test_lane_left_right_send_the_map_angle_and_need_the_junction_turn_capability():
+    runner, store, ports = _setup(_free_map("lane"))
+    plan = _plan(store, ports, "ab:fwd", 0.5, "C")
+    assert plan.actions[0][:2] == ("B", "left")
+    ports.caps = {"rosy_60": TripCaps("pinky_pro", frozenset({"lane"}), 0.2)}  # junction_turn False
+    with pytest.raises(TripError) as err:
+        run(runner.start("p1", "bob"))
+    assert err.value.code == "TRIP_MODE_UNSUPPORTED" and err.value.detail["reason"] == "JUNCTION_TURN_UNSUPPORTED"
+    ports.caps = {"rosy_60": LANE}
+    run(runner.start("p1", "bob"))
+    run(runner.tick())
+    assert ports.sent[-1] == ("left", "B", None) and ports.turns[-1] == pytest.approx(90.0, abs=0.1)
+    ports.at(store.active()[2].arcs["bc:fwd"], 0.5)
+    run(runner.tick())
+    assert ports.sent[-1] == ("stop", "C", 0.0) and ports.turns[-1] is None
+    straight = _setup()  # a stop-only lane plan needs no turn capability
+    _plan(straight[1], straight[2], "east:fwd", 3.6, "SE")
+    straight[2].caps = {"rosy_60": TripCaps("pinky_pro", frozenset({"lane"}), 0.2)}
+    run(straight[0].start("p1", "bob"))
+
+
+def test_a_turn_sharper_than_the_bound_is_refused_for_lane_robots():
+    import dataclasses
+
+    runner, store, ports = _setup(_free_map("lane"))
+    _plan(store, ports, "ab:fwd", 0.5, "C")
+    runner.config = dataclasses.replace(runner.config, max_turn_deg=80.0)  # 150 by default (D-492)
+    with pytest.raises(TripError) as err:
+        run(runner.start("p1", "bob"))
+    assert err.value.detail == {"edge_id": "ab", "reason": "LANE_TURN_TOO_SHARP", "turn_deg": 90.0}
+
+
+@pytest.mark.parametrize("state", ["aborted", "unresolved"])
+def test_core_junction_abort_or_unresolved_stops_the_trip(state):
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    ports.junction = {"state": "turning", "place_id": "SE"}
+    run(runner.tick())
+    assert runner.running() is not None
+    ports.junction = {"state": state, "place_id": "SE"}
+    run(runner.tick())
+    view = runner.view("p1")
+    assert (view["state"], view["reason"], view["detail"]["junction_state"]) == ("stopped", "junction", state)
+
+
+def test_core_waiting_at_a_junction_stops_the_trip_after_the_timeout():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    ports.junction = {"state": "waiting", "place_id": "SE"}
+    run(runner.tick())
+    ports.now += 9.9
+    run(runner.tick())
+    assert runner.running() is not None
+    ports.now += 0.2
+    run(runner.tick())
+    assert runner.view("p1")["reason"] == "junction"

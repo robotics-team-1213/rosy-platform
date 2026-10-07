@@ -35,6 +35,7 @@ export const TRIP_STATE_LABEL = {
 };
 export const TRIP_REASON_LABEL = {
   pose: '위치를 믿을 수 없어 멈췄습니다',
+  junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 현장을 확인하세요',
   restart: '관제 서버가 다시 시작돼 멈췄습니다 · 자동으로 다시 출발하지 않습니다',
   TRIP_ROBOT_JUNCTION_UNSUPPORTED: '로봇 CORE가 교차로 지시를 모릅니다 · 새 이미지가 필요합니다',
   TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',

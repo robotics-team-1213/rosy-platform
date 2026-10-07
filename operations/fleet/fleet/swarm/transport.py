@@ -126,7 +126,8 @@ class RobotClient(Protocol):
 
     async def line_follow_mode(self, mode: str) -> dict: ...
     async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
-                                   expires_s: float) -> dict: ...
+                                   expires_s: float, turn_deg: float | None = None,
+                                   advance_m: float | None = None) -> dict: ...
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
@@ -280,11 +281,13 @@ class HttpRobotClient:
         ))
 
     async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
-                                   expires_s: float) -> dict:
-        """D-491 4: the action at the next junction; an old CORE answers 404."""
+                                   expires_s: float, turn_deg: float | None = None,
+                                   advance_m: float | None = None) -> dict:
+        """D-491 4 / D-492 1: the action at the next junction; an old CORE answers 404."""
         body: dict = {"action": action, "place_id": place_id, "expires_s": expires_s}
-        if stop_after_m is not None:
-            body["stop_after_m"] = stop_after_m
+        for key, value in (("stop_after_m", stop_after_m), ("turn_deg", turn_deg), ("advance_m", advance_m)):
+            if value is not None:
+                body[key] = value
         return await self._post("/api/v1/line-follow/junction", body)
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,

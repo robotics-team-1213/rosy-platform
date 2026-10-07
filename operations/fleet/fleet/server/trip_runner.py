@@ -33,7 +33,7 @@ import httpx
 
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
-from fleet.routing.cost import STOP, UTURN, classify, turn_deg
+from fleet.routing.cost import LEFT, RIGHT, STOP, UTURN, classify, turn_deg
 from fleet.routing.snap import PlanError
 from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.swarm.transport import RobotApiError
@@ -54,6 +54,8 @@ class TripCaps:
     kind: Optional[str]
     modes: frozenset
     max_speed: Optional[float]
+    #: D-492 3: CORE runs the bounded junction turn (``turn_deg``); without it no lane left/right.
+    junction_turn: bool = False
 
 
 @dataclass(frozen=True)
@@ -79,7 +81,11 @@ class MapPosePort(Protocol):
 
 class LaneJunctionPort(Protocol):
     async def send_junction(self, robot_id: str, action: str, place_id: str, stop_after_m: Optional[float],
-                            expires_s: float) -> dict: ...
+                            expires_s: float, turn_deg: Optional[float] = None,
+                            advance_m: Optional[float] = None) -> dict: ...
+
+    async def junction_state(self, robot_id: str) -> Optional[dict]:
+        """The snapshot's ``line_follow.junction`` ({pending_action, place_id, state, seq}) or None."""
 
 
 class NoTripCaps:
@@ -102,12 +108,22 @@ class HttpLaneJunction:
     def __init__(self, clients: Callable[[], Mapping[str, Any]]) -> None:
         self._clients = clients
 
-    async def send_junction(self, robot_id: str, action: str, place_id: str, stop_after_m: Optional[float],
-                            expires_s: float) -> dict:
+    def _client(self, robot_id: str):
         client = self._clients().get(robot_id)
         if client is None:
             raise HubError("UNKNOWN_ROBOT", robot_id)
-        return await client.line_follow_junction(action, place_id, stop_after_m=stop_after_m, expires_s=expires_s)
+        return client
+
+    async def send_junction(self, robot_id: str, action: str, place_id: str, stop_after_m: Optional[float],
+                            expires_s: float, turn_deg: Optional[float] = None,
+                            advance_m: Optional[float] = None) -> dict:
+        return await self._client(robot_id).line_follow_junction(
+            action, place_id, stop_after_m=stop_after_m, expires_s=expires_s, turn_deg=turn_deg,
+            advance_m=advance_m)
+
+    async def junction_state(self, robot_id: str) -> Optional[dict]:
+        junction = ((await self._client(robot_id).state()).get("line_follow") or {}).get("junction")
+        return junction if isinstance(junction, dict) else None
 
 
 @dataclass(frozen=True)
@@ -127,6 +143,10 @@ class TripConfig:
     advance_free_m: float = 0.05
     #: A free goal is sent again only when its point moved this much.
     goal_resend_m: float = 0.05
+    #: D-492 1: CORE turns at most this much at a junction.
+    max_turn_deg: float = 150.0
+    #: CORE ``waiting`` (at a junction without an instruction) this long stops the trip.
+    junction_wait_s: float = 10.0
 
 
 class TripError(Exception):
@@ -153,6 +173,7 @@ class _Live:
         self.armed: Optional[tuple[int, str, float]] = None  # (segment index, action, sent at)
         self.last_goal: Optional[tuple[float, float]] = None
         self.replan_pending = False
+        self.waiting_since: Optional[float] = None
 
     @property
     def segments(self) -> list:
@@ -233,7 +254,8 @@ class TripRunner:
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": _pose_view(pose), "created_at": now, "updated_at": now,
-                    "caps": {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed}}
+                    "caps": {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
+                             "junction_turn": caps.junction_turn}}
             live = _Live(view, graph, row["request"])
             self._live = live
             if not plan["segments"]:  # D-489 부록 4: already there
@@ -329,6 +351,8 @@ class TripRunner:
             try:
                 if lane:
                     await self._step_lane(live, index, remaining)
+                    if await self._junction_failed(live):
+                        return
                 else:
                     await self._step_free(live, index, s)
             except RobotApiError as exc:
@@ -356,9 +380,25 @@ class TripRunner:
         if live.armed is not None and live.armed[:2] == (index, action) and \
                 now - live.armed[2] < self.config.junction_expires_s / 2:
             return
+        turn = round(self._theta(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
         await self._junction.send_junction(live.view["robot_id"], action, place, 0.0 if action == STOP else None,
-                                           self.config.junction_expires_s)
+                                           self.config.junction_expires_s, turn_deg=turn)
         live.armed = (index, action, now)
+
+    async def _junction_failed(self, live: _Live) -> bool:
+        """D-492: CORE ``aborted``/``unresolved``, or ``waiting`` too long, stops the trip."""
+        if live.armed is None:
+            return False
+        junction = await self._junction.junction_state(live.view["robot_id"]) or {}
+        state = junction.get("state")
+        now = self._clock()
+        live.waiting_since = (live.waiting_since or now) if state == "waiting" else None
+        if state in ("aborted", "unresolved") or (
+                state == "waiting" and now - live.waiting_since >= self.config.junction_wait_s):
+            self._finish(live, "stopped", "junction",
+                         {"junction_state": state, "junction_place": junction.get("place_id")})
+            return True
+        return False
 
     async def _step_free(self, live: _Live, index: int, s: float) -> None:
         segment = live.segments[index]
@@ -428,6 +468,13 @@ class TripRunner:
             live.view["hold"] = {"reason": "replan", "plan": None, "code": exc.code, "detail": exc.detail}
             return
         body = plan_body(plan)
+        unsupported = self._unsupported(active[2], body["segments"], TripCaps(
+            caps.get("kind"), frozenset(caps.get("modes") or ()), caps.get("max_speed"),
+            bool(caps.get("junction_turn"))))
+        if unsupported is not None:
+            live.view["hold"] = {"reason": "replan", "plan": None, "code": "TRIP_MODE_UNSUPPORTED",
+                                 "detail": unsupported}
+            return
         old = [(s["edge_id"], s["forward"], s["s_to"]) for s in live.segments[index:]]
         new = [(s["edge_id"], s["forward"], s["s_to"]) for s in body["segments"]]
         if old == new and plan.map_version == live.view["map_version"]:
@@ -437,6 +484,10 @@ class TripRunner:
                              "length_m": body["length_m"], "eta_s": body["eta_s"]}
 
     # ---- helpers ------------------------------------------------------------------------
+
+    def _theta(self, graph, segments: list, index: int) -> float:
+        return turn_deg(graph.arcs[_arc_id(segments[index])].end_tangent,
+                        graph.arcs[_arc_id(segments[index + 1])].start_tangent)
 
     def _unsupported(self, graph, segments: list, caps: TripCaps) -> Optional[dict]:
         for i, segment in enumerate(segments):
@@ -449,9 +500,16 @@ class TripRunner:
                 continue
             if i + 1 == len(segments) and not math.isclose(segment["s_to"], arc.length_m, abs_tol=1e-3):
                 return {"edge_id": segment["edge_id"], "reason": "LANE_END_NOT_A_PLACE"}
-            if i + 1 < len(segments) and classify(turn_deg(
-                    arc.end_tangent, graph.arcs[_arc_id(segments[i + 1])].start_tangent), self._routing) == UTURN:
+            if i + 1 == len(segments) or graph.arcs[_arc_id(segments[i + 1])].drive_mode != "lane":
+                continue  # the last place, or a hand-over: stop
+            theta = self._theta(graph, segments, i)
+            kind = classify(theta, self._routing)
+            if kind == UTURN:
                 return {"edge_id": segment["edge_id"], "reason": "LANE_UTURN"}
+            if kind in (LEFT, RIGHT) and abs(theta) > self.config.max_turn_deg:
+                return {"edge_id": segment["edge_id"], "reason": "LANE_TURN_TOO_SHARP", "turn_deg": round(theta, 1)}
+            if kind in (LEFT, RIGHT) and not caps.junction_turn:
+                return {"edge_id": segment["edge_id"], "reason": "JUNCTION_TURN_UNSUPPORTED"}
         return None
 
     async def _pose(self, robot_id: str) -> Optional[MapPose]:
