@@ -109,8 +109,39 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        39_679,
-        "split: independently re-judged at 39679 on 2026-10-07 (security-reviewer agent). Since 38952 the"
+        41_014,
+        "split: independently re-judged at 41014 on 2026-10-07 (security-reviewer agent). Two components "
+        "already judged on different bases, now combined after merging main. (1) main's D-494 M2 "
+        "contracts 1-3, judged at 39679 (localization/map_pose.py, server/map_pose_service.py, "
+        "console_view.py TripCaps, the app.py trip-caps closure). (2) The branch's D-494 5 trip loop, "
+        "judged at 40348 on the 38952 base (+1396): fleet/server/trip_runner.py (at its 600 cap; the next"
+        " change splits it), trip_ports.py, trip_guard.py (TRIP_ROBOT_BUSY guard; every operator stop "
+        "ends the trip after the stop is sent), routing/execute.py, trip_routes.py, the site-map trip "
+        "panel. Replacing duplicate types with main's MapPose/TripCaps took trip_ports.py down 36 lines, "
+        "so the total (41014) is below the sum of the parts (41039). Inside the server owner of "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and the site-map web owner; no new "
+        "owner. +150 allowance unchanged. "
+        "split: independently re-judged at 40348 on 2026-10-07 (D-494 5 safety re-review: the "
+        "security-reviewer agent judged the growth justified). Since 40110 the package grew 238 lines, "
+        "all review-driven: fleet/server/trip_guard.py +117 (every operator stop — cancel, cancel-all, "
+        "estop, line-follow OFF, stuck ABORT/MANUAL — ends the trip after the stop is sent; "
+        "TRIP_ROBOT_BUSY on goal/formation/stuck motion), trip_ports.py +61 and routing/execute.py +35 "
+        "(moved out so trip_runner.py stays at 599 of its 600 cap; its next change splits it), "
+        "console_view.py +14, console_routes.py +11, app.py +5, stuck_resolver_loop.py +2, console.py -6."
+        " Inside the server owner of docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; no new "
+        "owner. +150 allowance unchanged. "
+        "Previously independently re-judged at 40110 on 2026-10-07 (D-494 5 review: the reviewer judged "
+        "the growth justified). Since 38952 the package grew 1158 production and web lines for the "
+        "server trip loop: fleet/server/trip_runner.py 600 (start checks, state machine, CORE "
+        "junction protocol, halts, 0.5 s loop), trip_ports.py 171 (ports, fleet.trip config), "
+        "routing/execute.py 82 (pure executability rules), trip_routes.py +32 net, site_map_store.py "
+        "+35, app.py, cli.py, transport.py, the TRIP_ROBOT_BUSY guard (console.py +6 inside its 1198 "
+        "verdict, task_dispatch_routes.py, lane_route_routes.py), and the site-map trip panel "
+        "(site-map.js, site-map-model.js, site-map.html). The loop is new server files beside the "
+        "routing package, inside the server owner of "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; the panel stays in the site-map web "
+        "owner. No new owner. +150 allowance unchanged. "
+        "Main: independently re-judged at 39679 on 2026-10-07 (security-reviewer agent). Since 38952 the"
         " package grew 727 production and web lines. D-494 M2 contracts +634: localization/map_pose.py "
         "+377 (pure map-pose tracker beside trust.py and arbiter.py in fleet/localization), "
         "server/map_pose_service.py +154 (trip-only service beside localization_service.py), "
@@ -630,7 +661,7 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        44_926,
+        45_104,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
         "+133, with reviews), the camera AE/AWB re-lock (camera_controls/camera_visibility/v4l2_controls +77; "
@@ -714,7 +745,18 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-06 at 44646 for the keep side-flip fix (SIDE_FLIP_FRAMES bounded "
         "side tracking in lane_keep.py) with the junction HOLD policy split out to "
         "lane_keep_junction.py to stay under the file budget — same subjects inside "
-        "sensing/perception, they move with the P1a split; verdict unchanged.",
+        "sensing/perception, they move with the P1a split; verdict unchanged. "
+        "re-judged 2026-10-07 at 45104: main's D-491 crosswalk extent +148 (unrecorded) and D-468 paint "
+        "inner edge (lane_containment.py, line_observer_node.py); tests excluded from the count. Condition: "
+        "the next control re-judge needs a dated P1a step in docs/plans/ (sensing/perception move); "
+        "without it, REJECT.",
+    ),
+    "perception/control/line_observer_node.py": (
+        604,
+        "accept: with condition: one ROS adapter for the line observer; detection/keep/containment/paint "
+        "logic is ROS-free in sensing/perception. Judged 2026-10-07 at 604 for the D-468 paint inner edge "
+        "(read-only lane_paint_half_width_m, startup refusal). Condition: the node's next change moves "
+        "logic out first; a re-judge above 604 is REJECT. (independently re-judged 2026-10-07)",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "perception/web/diagnostic.html": (

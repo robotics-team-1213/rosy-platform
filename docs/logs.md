@@ -6703,3 +6703,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 문서·제안만 바뀐다. `omx` 프로필·어댑터·Pilot 게이트는 그대로.
 - 결정: D-496 Proposed. D-390 §5(실물 범위 밖)는 유지되고, 이 결정은 여는 조건만 정의한다.
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · uiux(pilot): 주행 HUD 증거 상태와 좁은 폭 가독성
+
+- 변경: 속도·회전율을 수신 전 0으로 표시하던 HUD를 서버의 속도·배터리 증거 판정에 연결했다. 지연 수치에는 수신 나이를 붙이고 연결 끊김·결측에서는 수치를 숨긴다. 320px에서 상태 문구가 단어 중간에 잘리지 않도록 HUD 항목을 통째로 줄바꿈한다.
+- 증거: [LOCAL 결과](validation/uiux-pilot-telemetry-2026-10-07/result.md). 합성 상태 4개×폭 4개와 수신 전 상태의 브라우저 **5 passed**. D-153 명명 G1 재실행 **90 passed, 1 warning**, clean exit 0, `known_failures.py` **0 NEW**. 첫 G1 실행은 요약 뒤 종료되지 않아 중단했고, 재실행으로 확인했다. 캡처와 G1 원본은 `X:\DevTemp\pilot-telemetry-evidence\`에 둔다.
+- gate 변화: Pilot G2 일부만 채웠다. 나머지 선언 상태·폭, 실제 설치본/로봇 readback, 운전자 G3 및 제품 전체 판정은 **HOLD**.

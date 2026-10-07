@@ -418,8 +418,8 @@ def test_mode_change_clears_the_route_hint():
 
 
 # ---- D-476 option A (2026-10-07): entry from the follower's own confident following ----------
-# Narrow 260919 track: ~5 mm play per side, 320x240 projection uncertainty 25-100 mm, so the
-# D-468 corridor (cap 15 mm) is never certified. Device defaults: recovery_local_enabled false,
+# Narrow 260919 track: 23.45 mm play per side (STL nominal, unmeasured), real 320x240 projection
+# uncertainty 26-134 mm (record/NOMINAL), so the D-468 corridor (cap 15 mm) is never certified. Device defaults: recovery_local_enabled false,
 # control.sensor_adapter off, so the worker floor proof is not live and always says no.
 
 def _narrow(**config):

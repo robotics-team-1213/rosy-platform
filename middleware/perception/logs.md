@@ -1185,3 +1185,22 @@
 - 변경: D-491 rectangle vertices use CCW order from the smallest rounded corner across OpenCV versions. Coordinates and road geometry unchanged. D-494 gateway seam test added to the ownership registry.
 - 증거: CI 37579564087 reproduced the ownership and corner-order failures; 12 affected checks pass including reversed/rotated corner outputs; known_failures 0 NEW.
 - gate 변화: SOURCE only; no device or field acceptance.
+## 2026-10-07 · uncommitted · feat(perception): 차로와 나란한 횡단보도 줄무늬 구간 (D-491 §4)
+
+- 변경: `sensing/perception/crosswalk_stripes.py` 추가. keep 모드가 지면 격자에서 횡단보도 앞뒤 끝을 `last["crosswalk"]`에 두고, `containment_payload`가 `crosswalk {near_m, far_m}`로 싣는다. 판단은 CORE 몫이다.
+- 증거: `test_crosswalk_stripes.py` 4건(앞뒤 끝, 20 mm 비킴·경계와 붙은 막대, 일반 차로·가로 사다리 아님, 띠 2개·얇은 조각 아님), `test_lane_containment_payload.py` 추가 1건.
+- gate 변화: 없음. 실제 카메라 영상에서 검출 확인은 아직이다.
+
+## 2026-10-07 · uncommitted · fix(perception): 횡단보도 띠는 로봇 차로 폭 안에서만 센다 (D-491 리뷰)
+
+- 변경: `crosswalk_extent(grid, x_rows, y_cols)`가 |y| ≤ 0.10 m 열만 본다(옆 차로 횡단보도 제외). 흰색이 띠 3개 폭보다 적은 행은 미리 건너뛴다(Pi CPU, D-185).
+- 증거: `test_crosswalk_stripes.py` 5건(옆 차로 추가).
+- gate 변화: 없음.
+
+
+## 2026-10-07 · uncommitted · fix(perception): D-468 containment 경계를 칠 안쪽 가장자리로
+- 변경: `containment_payload`가 keep 검출기의 칠 중심선을 칠 폭 절반(`lane_paint_half_width_m`, 기본 `PAINT_HALF_WIDTH_M` 0.0125, 260919 STL 테이프 25 mm, STL 공칭·미측정)만큼 차로 쪽으로 옮겨 보낸다. 불확실도는 칠 선분 그대로로 계산. 두 경계가 엇갈리면 경계 없음. `line_follow.yaml`·노드 파라미터 추가, STL 대조 시험
+- 증거: perception 2712 PASS·109 skip, services+test/test_sim2real_gaps.py+test/architecture 1230 PASS·1 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). generate·lint 0 error
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
+- 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
+- 교훈: 검출기가 맞추는 선(칠 중심)과 계약이 뜻하는 선(달릴 수 있는 끝)을 이름으로 구분한다

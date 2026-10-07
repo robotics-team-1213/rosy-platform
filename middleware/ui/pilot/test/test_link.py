@@ -218,6 +218,67 @@ def test_unexpected_socket_loss_zeroes_last_command():
     assert out == {"zeroed": True}
 
 
+def test_socket_loss_blocks_motion_until_a_new_authenticated_snapshot():
+    out = _run_js(_harness() + """
+    const h = makeSession();
+    h.session.open();
+    connect(h.sockets[0]);
+    await h.session.command({linear: 0.1, angular: 0});
+    h.posts.length = 0;
+    await h.session.command({linear: 0.2, angular: 0});
+    h.sockets[0].onclose?.({code: 1006});
+    await h.session.command({linear: 0.1, angular: 0});
+    fireTimers(h.timers);
+    await h.session.command({linear: 0.1, angular: 0});
+    const beforeSnapshot = h.posts.map(p => p.body.linear);
+    connect(h.sockets.at(-1));
+    await h.session.command({linear: 0.1, angular: 0});
+    fireTimers(h.timers);
+    console.log(JSON.stringify({beforeSnapshot, afterSnapshot: h.posts.at(-1).body.linear}));
+    """)
+    assert out == {"beforeSnapshot": [0], "afterSnapshot": 0.1}
+
+
+def test_permission_and_auth_closures_zero_motion_without_resending_it():
+    out = _run_js(_harness() + """
+    const cases = [];
+    for (const code of [4403, 4401]) {
+      const h = makeSession();
+      h.session.open();
+      connect(h.sockets[0]);
+      await h.session.command({linear: 0.1, angular: 0});
+      h.posts.length = 0;
+      h.sockets[0].onclose?.({code});
+      await h.session.command({linear: 0.1, angular: 0});
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+      cases.push({code, state: h.states.at(-1), posts: h.posts.map(p => p.body.linear)});
+    }
+    console.log(JSON.stringify(cases));
+    """)
+    assert out == [{"code": 4403, "state": "FORBIDDEN", "posts": [0]},
+                   {"code": 4401, "state": "RETRYING", "posts": [0]}]
+
+
+def test_resume_cannot_reopen_a_lost_socket_after_zero_conflict():
+    out = _run_js(_harness() + """
+    let status = 200;
+    const h = makeSession({postJson: (path, body) => {
+      h.posts.push({path, body});
+      return Promise.resolve({status, body: {detail: {code: 'MODE_CONFLICT'}}});
+    }});
+    h.session.open();
+    connect(h.sockets[0]);
+    await h.session.command({linear: 0.1, angular: 0});
+    status = 409;
+    h.sockets[0].onclose?.({code: 1006});
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    h.session.resume();
+    await h.session.command({linear: 0.1, angular: 0});
+    console.log(JSON.stringify({state: h.states.at(-1), posts: h.posts.map(p => p.body.linear)}));
+    """)
+    assert out == {"state": "IDLE", "posts": [0.1, 0]}
+
+
 def _timed_session():
     """시계·타이머·지연 응답을 손으로 돌리는 세션(송신 타이밍 시험용)."""
     return """
@@ -227,9 +288,10 @@ const posts = [];
 const inflight = [];
 const latencies = [];
 function make(opts = {}) {
-  return link.createDeviceSession({
+  let socket;
+  const session = link.createDeviceSession({
     token: 'T',
-    openSocket: () => ({send() {}, close() {}}),
+    openSocket: () => (socket = {send() {}, close() {}}),
     schedule: (fn, ms) => { const t = {fn, at: clock + ms, live: true}; timers.push(t); return () => { t.live = false; }; },
     now: () => clock,
     postJson: (path, body, options) => {
@@ -241,6 +303,9 @@ function make(opts = {}) {
     whoami: async () => ({}),
     onLatency: (ms, failed) => latencies.push({ms, failed}),
   });
+  session.open();
+  socket.onmessage({data: JSON.stringify({type: 'state'})});
+  return session;
 }
 async function advance(ms) {
   const end = clock + ms;

@@ -558,7 +558,7 @@ def run_console(args: argparse.Namespace) -> None:
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
-                     map_pose_config=map_pose_config)
+                     map_pose_config=map_pose_config, trip_config=_trip_config(args))
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",
@@ -566,6 +566,22 @@ def run_console(args: argparse.Namespace) -> None:
     tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
                    if tls_cert is not None else {})
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
+
+
+def _trip_config(args):
+    """D-494 5: the trip loop's ``fleet.trip`` section of ``--site-config`` (e.g. ``stall_s``)."""
+    import yaml
+
+    from fleet.server.trip_runner import TripConfig
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        trip = (site_config.get("fleet") or {}).get("trip") if isinstance(site_config, dict) else None
+        return TripConfig.from_mapping(trip)
+    except (OSError, ValueError, TypeError, yaml.YAMLError) as exc:
+        sys.exit(f"trip config: {exc}")
 
 
 def _build_site_map(args, tasks_db):

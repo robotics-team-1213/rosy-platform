@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
@@ -87,6 +88,14 @@ CAPABILITIES = {
 STATE = {"mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0}, "battery": {"percent": 84, "volts": 7.6},
          "activity": None}
 
+
+def state_frame():
+    stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return {"timestamp": stamp,
+            "evidence": {channel: {"received_at": stamp, "evidence": "fresh"}
+                         for channel in ("velocity", "battery")},
+            **STATE}
+
 #: 시뮬/개발용 canned 프레임 — 토큰 색 원 하나(실 카메라가 없는 자리 표시).
 _buf = __import__("io").BytesIO()
 _img = Image.new("RGB", (160, 120), (16, 18, 20))
@@ -100,8 +109,7 @@ FRAME_SEQ = 4
 def robot_state(request: Request):
     if _role(request) is None:
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
-    return {"mode": STATE["mode"], "velocity": STATE["velocity"], "battery": STATE["battery"],
-            "activity": STATE["activity"]}
+    return state_frame()
 
 
 @app.post("/__test__/activity")
@@ -488,7 +496,7 @@ async def ws_state(websocket: WebSocket):
     try:
         while True:
             STATE["mode"] = "MANUAL"
-            await websocket.send_json({"type": "state", **STATE})
+            await websocket.send_json({"type": "state", **state_frame()})
             await asyncio.sleep(0.1)
     except WebSocketDisconnect:
         return

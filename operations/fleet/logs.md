@@ -2280,3 +2280,37 @@
 - 변경: D-497 command registration and existing-draft confirmation are explicitly pinned in their existing contract tests. Existing aliases and confirmation ownership remain asserted.
 - 증거: 18 CLI/dialog checks passed after fixing the two NEW findings from pre-push; the remaining candidate checks continue.
 - gate 변화: SOURCE only; deployment and installed readback pending.
+## 2026-10-07 · uncommitted · feat(fleet): D-494 5 서버 trip 루프 (브랜치 feat/d491-fleet-trip-loop)
+- 변경: 계획 본문을 `plan_id`로 저장(D-490 보존 그대로), 새 `fleet/server/trip_runner.py`(시작 검사·상태기계·0.5 s 루프·다음 장소 재계획 대기), `POST /api/fleet/trips/{plan_id}/start`·`/{id}/cancel`·`/{id}/confirm-replan`·`GET /api/fleet/trips`·`/{id}`, 활성화 가드를 "진행 중 trip"으로 교체(`/route`는 그대로), `HttpRobotClient.line_follow_junction`, 콘솔 지도 화면 운행 칸, API Ref v1.112. D-495 3항(`turn_deg`, `junction_turn` 능력, CORE `aborted`/`unresolved`/긴 `waiting` → `stopped(junction)`)과 지도 자세 검토 반영(시작 시 anchor 2 s 이내, tick마다 상태 갱신)을 포함한다
+- 증거: `python -m pytest operations/fleet/test -q` 2310 passed, 93 skipped, known_failures 0 new(2026-10-07 Windows, D-495 반영 커밋 기준); 마지막 커밋 뒤 관련 묶음 132 passed, 0 new; `node --test operations/fleet/test/web/*.mjs` 145 passed; `ROSY_BROWSER_TESTS=1` 현장 지도 브라우저 33 passed(D-495 이전 UI, 이후 UI 변경은 문구 한 줄)
+- gate 변화: 없음. SOURCE/LOCAL만. 능력(1항)·지도 자세(3항)·교차로 API(4항) 제공자는 형제 브랜치가 착지한 뒤 `create_app(trip_caps=…, map_pose=…)`로 연결한다. 기본 연결은 `TRIP_ROBOT_CAPS_UNKNOWN`으로 시작을 거절한다. Gazebo·실차 미실행
+- 결정: D-494 Proposed, D-495 Proposed
+- 교훈: 짧은 차로(0.37 m)는 arm 거리 0.6 m보다 짧다. 차선 로봇은 장소를 지난 뒤에만 다음 장소 지시를 보내야 CORE가 가진 하나뿐인 지시를 덮어쓰지 않는다
+
+## 2026-10-07 · uncommitted · feat(fleet): D-494 5 trip 루프 검토 반영 — 즉시 멈춤·멈춤 규칙·차선 시작 검사
+- 변경: 취소와 차선 위치 상실은 교차로 `stop` 뒤 `PUT /line-follow/mode OFF`로 바로 멈춘다(`POST /line-follow/hold`는 hold-to-run 연장이라 쓰지 않음). `fleet.trip.stall_s`(기본 20 s) 동안 0.05 m 미만 진행이면 `stopped(stall)`(교차로 동작 중·재계획 대기 제외). `lane` 계획은 line-follow `CAMERA_LINE`/`IR_LINE`이 아니면 `TRIP_LINE_FOLLOW_NOT_ACTIVE`. 포트를 `trip_ports.py`로 분리. D-494 구현 부록(5항 trip 루프)
+- 증거: `operations/fleet/test` 전체와 known_failures는 이 항목 아래 실행 결과를 보고서에 남긴다. 집중 묶음(`test_trip_runner.py` 43건 포함) 통과, harness lint 0 오류
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-494 Proposed(구현 부록 추가)
+- 교훈: CORE의 같은 이름 API(`/line-follow/hold`)가 반대 뜻(계속 가기)일 수 있다. 멈춤 경로는 엔드포인트 본문을 읽고 고른다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 5 trip 루프 독립 검토 반영 — CORE 교차로 상태 기반 전송·넘김, 모든 끝에서 정지
+- 변경: 시험의 가짜 교차로 포트를 CORE `junction.py`대로(받은 뒤 odom 거리로 서는 `stop`, 동작 중 새 지시는 동작을 abort하고 거절, seq·상태). `stop_after_m`=남은 거리(0–2 m), `stop` 재전송 없음, CORE `executing`·동작 중에는 전송 없음, CORE 완료 또는 다음 차로 투영으로 넘김, 모든 실패·멈춤에서 정지(교차로 stop + line-follow OFF / 목표 취소), 루프가 저장소 실패에도 살아 있음, 취소는 tick 잠금을 기다리지 않음, 로봇 호출 1.5 s 제한, `lane` 계획은 `junction_turn` 필요, 시작 직전 지도 버전 재확인, `anchor_age_s` 없으면 거절, 재시작 때 열린 trip 로봇 정지, refresh 경고 30 s 제한, trip 중 `/goal`·`/route`·배차·대형은 409 `TRIP_ROBOT_BUSY`. 실행 가능 규칙을 `fleet/routing/execute.py`로. 콘솔 멈춤 사유 문구(설정된 `stall_s`, `TRIP_LOOP_ERROR`)와 취소 확인 문구. D-494 구현 부록 갱신
+- 증거: 아래 실행의 `operations/fleet/test` 전체와 known_failures는 보고서에 남긴다. `test_trip_runner.py` 51건, `test_routing_execute.py` 10건, site-map node 9건, 구조·안전 분리·대화창 계약 시험 통과, harness lint 0 오류
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-494 Proposed(구현 부록 갱신)
+- 교훈: 가짜 포트가 실제 CORE 상태기계를 흉내 내지 않으면, 지시 덮어쓰기·동작 중 재전송 같은 결함이 시험을 통과한다. 짝 브랜치의 구현 파일을 읽어 가짜를 만든다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 5 trip 루프 재검토 반영 R1–R8
+- 변경: 콘솔이 보내지 않은 좌표 목표는 trip 실패(`TRIP_GOAL_REFUSED`), 좌표 trip이 끝날 때마다 콘솔 대기열 정리, 콘솔 목표·대기열·양보·대형 중인 로봇은 시작 거절(R1). 교차로 지시는 `CAMERA_LINE`에서만(R2). `trip_guard.py`가 콘솔 인스턴스의 목표·대형·line-follow를 감싸고, `OFF`는 trip 취소(`operator_line_follow_off`), trip 로봇은 비켜서기·재배정 대상이 아니며 줄 막힘 결정은 409(R3, `console.py` 줄 수 그대로). 가짜 CORE에 M3·M4·M7·L6·R1, 수행된 지시 재전송 없음, `JUNCTION_ALREADY_DONE`은 수행됨, CORE가 붙잡은 우리 `stop`도 도착(R4). 보낸 뒤 열림 재확인(R5), 차선 도착은 받아들여진 `stop` 필요(R6), 재계획 확인 때 지시 기록 초기화(R7), 재시작 정지는 받을 때까지 재시도(R8). D-494 구현 부록·API Ref 갱신
+- 증거: 보고서에 `operations/fleet/test` 전체·계약 문서·모듈 구조와 known_failures를 남긴다. `test_trip_runner.py` 66건 통과
+- gate 변화: 없음. SOURCE/LOCAL만. 실제로 서는 거리는 모델 PC SIM에서 잰다
+- 결정: D-494 Proposed(구현 부록 갱신)
+- 교훈: 안전 파일의 줄 예산이 0이면 감싸기(인스턴스 메서드 교체)와 기존 줄 안 조건으로 같은 가드를 줄 수 있다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 5 trip 안전 검토 반영 — 모든 멈춤이 trip을 끝낸다
+- 변경: 로봇별 취소·전체 취소·intent 취소·Fleet 비상 정지·`line-follow OFF`(로봇 호출이 실패해도)·줄 막힘 `ABORT`/`MANUAL`은 로봇에 먼저 가고 trip을 `canceled`로 끝낸다(H1·M1·M3). 움직이는 줄 막힘 결정과 대형 재구성·재개는 거절, Fleet 자동 해결기는 trip 로봇을 건너뛴다(M2·N3·N4). 보낸 지 2 s 안의 콘솔 목표도 진행 중으로 본다(L1). 재시작 정지는 tick 밖에서 10 s마다 최대 30회(N2). D-494 구현 부록·API Ref 갱신
+- 증거: 보고서에 `operations/fleet/test` 전체·구조 시험·known_failures를 남긴다. `test_trip_runner.py` 82건 통과
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-494 Proposed(구현 부록 갱신)
+- 교훈: 로봇을 몰고 있는 루프가 있으면 그 로봇에 닿는 모든 멈춤 경로가 루프도 끝내야 한다. 하나라도 빠지면 다음 tick이 멈춘 로봇을 다시 움직인다

@@ -188,7 +188,7 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   backdrop-filter: blur(6px);
 }
 
-[data-drive-gauge] { display: flex; align-items: baseline; gap: var(--space-1); }
+[data-drive-gauge] { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1); }
 
 /* 실측 속도 — HUD 의 주인공 */
 [data-drive-hud] [data-drive-fact=speed] {
@@ -207,6 +207,7 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   font-variant-numeric: tabular-nums;
   min-width: 7ch;
   color: var(--nominal-quiet);
+  white-space: nowrap;
 }
 
 /* 지금 보내는 동작 — 제자리 회전은 눈에 띄게 */
@@ -224,7 +225,8 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
 
 [data-drive-hud] [data-drive-fact=cap] { font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
 
-[data-drive-facts] { display: flex; gap: var(--space-2); font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
+[data-drive-facts] { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
+[data-drive-facts] > span { white-space: nowrap; }
 [data-drive-fact=link][data-state=BLOCKED],
 [data-drive-fact=link][data-state=OFFLINE],
 [data-drive-fact=link][data-state=FORBIDDEN] { color: var(--status-crit); }

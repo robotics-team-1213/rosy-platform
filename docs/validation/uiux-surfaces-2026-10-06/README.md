@@ -4,6 +4,8 @@
 
 제품 전체 수용 기준은 사용자 확인에 따라 **활성 표면 모두의 G1, 선언한 G2 상태·폭 전부, G3 실제 사용자 검토와 해당 실물 장치 readback**이다. 일부 화면의 너비 보정이나 LOCAL 시험 통과로 이 판정을 올리지 않는다.
 
+2026-10-07 Pilot 주행 HUD의 속도·배터리 `fresh/delayed/disconnected/unavailable` × 선언 폭 4개를 로컬 브라우저에서 다시 확인했다. [상태별 결과와 원본 캡처 위치](../uiux-pilot-telemetry-2026-10-07/result.md)를 기록했다. 이는 Pilot G2의 부분 근거이며 제품 전체 판정은 **HOLD**다.
+
 G3 실제 운영자 독회는 요청자가 수행하기로 했다. [실제 사용자 독회 기록지](operator-walkthrough.md)에 표면별 작업·여덟 판정 항목과 실물 근거 자리를 마련했다. 결과·관찰·재현 폭은 아직 받지 않았으므로 G3 판정은 HOLD다. 픽셀 검수의 class 파일 미연결 상태에서는 점/브러시 전환을 막고 연결 이유를 표시한다. 1440/800/390/320px 브라우저 회귀와 점 미리보기·브러시 조작 **10 passed**, `known_failures.py` **0 NEW**; 수정 후 320px 원본은 X: `captures/pixel-disabled-fix/learning-pixels-320.png`, 실행 기록은 `logs/merge-20261006/pixel-disabled-fix.txt`다.
 
 ## 이번 회차의 질문과 근거
@@ -433,3 +435,17 @@ The follow-up browser harness allows the active preview port in Chromium; port 6
 2026-10-07 Pilot 연결 로비: [320/390px 빈 목록·실패 LOCAL 화면](../uiux-pilot-lobby-width-2026-10-07/result.md)에서 `다시 찾기`·`연결`이 코드 입력 칸과 같은 폭이다. 로비·태블릿 브라우저 **7 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. Pilot 전체 선언 상태·실물 태블릿/로봇·운전자 G3는 **HOLD**다.
 
 2026-10-07 Robot 운용 열: [현재 후보 18셀 LOCAL 계측](../uiux-robot-column-width-2026-10-07/result.md)에서 1280px 감지·지도·조작 가시 패널 폭 차이를 15.01→0.01px로 줄였다. 320/390px 네 패널은 각 폭에서 같고 가로 넘침·페이지 오류 0이다. 역할 셸 브라우저 **9 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. 합성 CORE의 지도 404·호스트 503을 캡처 도구가 보고하므로 정상 상태 G2 수용으로 읽지 않는다. 선언 상태 전체·실물 readback·운영자 G3는 **HOLD**다.
+
+2026-10-07 Pilot 접속 거부: [조회 전용·구동 꺼짐 2상태×2000/1200/390/320px LOCAL 화면](../uiux-pilot-gate-denied-2026-10-07/result.md)에서 원시 `BLOCK`·`viewer`·구동 코드 대신 차단 상태·권한·이유가 운용자 말로 나온다. 비상 정지 가시, 주행 시작 없음, 가로 넘침·페이지 오류 0. 브라우저 **11 passed**, 드라이버 **8 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. Pilot 전체 G2·실물·G3는 **HOLD**다.
+
+## 2026-10-07 Pilot 주행 HUD 상태 용어
+
+[LOCAL 결과](../uiux-pilot-drive-status-2026-10-07/result.md): OPEN·MANUAL 원시 코드 대신 상태 수신·수동을 표시한다. 2000×1200, 1200×2000, 390×844, 320×568의 정상 연결 화면 4건과 G1 90건 통과, 각각 known_failures.py 0 NEW. 재연결 등 전체 G2, 현장 설치본, 사용자 G3는 HOLD.
+
+## 2026-10-07 Pilot 재연결 중 주행 차단
+
+[LOCAL 결과](../uiux-pilot-reconnect-2026-10-07/result.md): 상태 소켓 상실 후 새 인증 상태 프레임 전까지 주행 명령을 차단하고 0을 보낸다. 상태 재연결 중은 2000×1200, 1200×2000, 390×844, 320×568에서 비상 정지와 함께 보인다. 세션·브라우저 23 passed, G1 90 passed, 각각 known_failures 0 NEW. 전체 G2, 설치본 readback, 사용자 G3는 HOLD.
+
+## 2026-10-07 현장 mDNS·이미지 재확인
+
+[읽기 전용 현장 기록](../uiux-site-readback-2026-10-07/result.md#2026-10-07-1557-kst-재확인): Fleet·Vision·proxy 이미지 태그는 `5eb726c13`으로 현재 로컬 후보 `899d7a1a5`보다 이전이다. 두 로봇의 IPv4 `_rosy._tcp` 광고와 Fleet 컨테이너 UID 10001 이름 해석은 확인됐다. 이는 발견·이미지 계층 근거이며 설치된 현장 UI 화면, 제어 건강, 현재 후보의 장치 readback 또는 G3 수용은 아니다. **제품 전체 HOLD**.

@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · test(line_follow): 260919 유격을 STL·URDF에서
+- 2026-10-07 · uncommitted · fix(line_follow): 횡단보도 휴식은 회전·차로 이탈·거리 상한에서 끝난다 (D-491 리뷰)
+- 2026-10-07 · uncommitted · feat(line_follow): IR 감시는 알려진 횡단보도 구간에서 쉰다 (D-491)
 - 2026-10-07 · uncommitted · fix(line_follow): D-495 junction_turn 능력은 동작 확인이 가능할 때만
 - 2026-10-07 · uncommitted · merge(main): D-495와 D-476 rev 1 병합
-- 2026-10-07 · uncommitted · fix(line_follow): D-495 최종 안전 검토 N2·L1·L3
-- 2026-10-07 · uncommitted · fix(line_follow): D-495 안전 재검토 N1·R1–R3
-- 2026-10-07 · uncommitted · fix(line_follow): D-495 독립 안전 검토 M1–M8·L1·L2

@@ -643,3 +643,22 @@
 - gate 변화: 없음
 - 결정: D-495 (Proposed) 착지 전 검토 반영
 - 교훈: 능력 보고는 그 동작을 실제로 허가할 증거와 같은 조건이어야 정직하다
+
+## 2026-10-07 · uncommitted · feat(line_follow): IR 감시는 알려진 횡단보도 구간에서 쉰다 (D-491)
+
+- 변경: `crosswalk_zone.py`(odom 고정 구간), `LaneReturnMixin._crosswalk_rest`, `manager.py`에서 IR 판정이 left/right/centre이고 구간 안이면 `crosswalk`(사유 `ir_guard_crosswalk`, 정지·비킴 없음). 설정 `ir_row_x_m`(로봇 패키지, URDF), `crosswalk_zone_max_m`, `crosswalk_odom_error_fraction`. 계약 `CrosswalkExtentEvidence`, API v1.114.
+- 증거: `test_ir_guard_crosswalk.py` 11건(구간 안 centre/left/right 계속, 구간 없음·NOMINAL·불확실도 없음·지나침·길이 상한·odom 끊김·IR 줄 없음은 `lane_departure`), 계약 시험 1건, URDF 일치 시험 1줄.
+- gate 변화: 없음. IR 감시 기본 꺼짐. SIM·DEVICE 수용 별도.
+
+## 2026-10-07 · uncommitted · fix(line_follow): 횡단보도 휴식은 회전·차로 이탈·거리 상한에서 끝난다 (D-491 리뷰)
+
+- 변경: 독립 리뷰가 회전 뒤에도 구간이 끝나지 않아 IR 감시가 다른 도로에서 계속 쉬는 것을 재현했다(fail-open). 구간은 진행각 0.3 rad 초과, IR 줄이 영상 진행선에서 0.10 m + 여유 밖, 먼 끝 통과, epoch 변경에서 버린다. 한 번 쉬는 거리는 odom 실측으로 상한이 있고, 그 뒤 IR이 한 번 clear를 읽어야 다시 쉰다. 구간 판정은 감시가 켜진 매 틱에 돈다(자세 조회가 늦어 구간을 잃지 않게).
+- 증거: `test_ir_guard_crosswalk.py` 17건. 회전·차로 이탈 시험은 각 검사를 끄면 실패함을 확인했다(MAX_TURN_RAD, CORRIDOR_HALF_M 변이). NOMINAL 거부는 구간 단위로, odom 끊김은 구간이 고정된 뒤로 시험을 고쳤다(리뷰: 로직 없이도 통과하던 두 시험).
+- gate 변화: 없음. 결정 1의 D-468 문구를 ADR 구현 메모에서 정정했다(장치 기본에서 D-468 꺼짐).
+
+## 2026-10-07 · uncommitted · test(line_follow): 260919 유격을 STL·URDF에서
+- 변경: `test_lane_return_margin.py`가 몸을 `PINKY_PRO_GEOMETRY`에서, 260919 안쪽 가장자리를 STL 직선(160 mm)에서 가져온다. 유격 23.45 mm, u 4.3 mm·15 mm에서 차로 안·checkpoint, u ≥ 유격이면 아님. 5 mm 경우는 `VERY_NARROW_EDGE` 스트레스 차로로 이름을 바꿈. 수신기 코드 변경 없음
+- 증거: perception 2712 PASS·109 skip, services+test/test_sim2real_gaps.py+test/architecture 1230 PASS·1 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). generate·lint 0 error
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
+- 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
+- 교훈: 시험 상수는 출처 있는 기하에서 끌어온다. 설명 없는 sim 값은 registry에 열어 둔다(G-16)

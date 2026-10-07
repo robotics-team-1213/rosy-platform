@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import json
 import socket
 import sys
 import threading
@@ -452,6 +453,69 @@ def test_bad_token_is_refused_with_guidance(tablet_page):
     assert errors == [], errors
 
 
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_viewer_gate_denial_uses_operator_words_at_declared_widths(base_url, width, height):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": width, "height": height})
+        errors = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.route("**/api/v1/auth/whoami",
+                   lambda route: route.fulfill(json={"role": "viewer"}))
+        try:
+            page.goto(f"{base_url}/pilot")
+            page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+            page.click("form[data-pilot-token-form] ui-button")
+            readout = page.locator("[data-gate-readout]")
+            readout.wait_for(state="visible")
+            if os.environ.get("ROSY_SHOT_DIR"):
+                shot_dir = Path(os.environ["ROSY_SHOT_DIR"])
+                shot_dir.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shot_dir / f"pilot-viewer-denied-{width}x{height}.png"))
+            text = page.locator("[data-screen=connect]").inner_text()
+            assert "차단됨" in text and "조회 전용" in text
+            assert "viewer" not in text and "BLOCK" not in text
+            assert "운전 권한이 없습니다" in text
+            assert page.locator("[data-drive-enter]").count() == 0
+            assert page.locator("ui-topbar [data-estop]").is_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_drive_withheld_gate_names_the_no_motion_reason(base_url, width, height):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": width, "height": height})
+        errors = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.route("**/api/v1/system/capabilities", lambda route: route.fulfill(json={
+            "teleop": False, "withheld": {"reasons": {"teleop": "drive_disabled:no_motion"}},
+            "runtime": {"drive": False}}))
+        try:
+            page.goto(f"{base_url}/pilot")
+            page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+            page.click("form[data-pilot-token-form] ui-button")
+            page.get_by_text("수동 운전이 보류되었습니다 — 구동 꺼짐 (무동작)").wait_for()
+            if os.environ.get("ROSY_SHOT_DIR"):
+                shot_dir = Path(os.environ["ROSY_SHOT_DIR"])
+                shot_dir.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shot_dir / f"pilot-drive-withheld-{width}x{height}.png"))
+            text = page.locator("[data-screen=connect]").inner_text()
+            assert "drive_disabled" not in text and "BLOCK" not in text
+            assert "차단됨" in text and "운영자" in text
+            assert page.locator("[data-drive-enter]").count() == 0
+            assert page.locator("ui-topbar [data-estop]").is_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_lobby_lists_neighbours_and_points_to_their_origin(tablet_page):
@@ -576,6 +640,132 @@ def _enter_drive(page, base_url):
     page.click("[data-drive-enter]")
     page.wait_for_selector("[data-drive-stick]")
     page.wait_for_function("document.querySelector('[data-drive-fact=cap]')?.textContent.includes('0.10')")
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_drive_hud_uses_operator_labels_at_each_width(base_url, viewport):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            _enter_drive(page, base_url)
+            link = page.locator("[data-drive-fact=link]")
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]').dataset.state === 'OPEN'")
+            assert link.inner_text() == "상태 수신"
+            assert page.locator("[data-drive-fact=mode]").inner_text() == "수동"
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert errors == []
+            if os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(os.environ["ROSY_SHOT_DIR"])
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-drive-status-{viewport[0]}x{viewport[1]}.png"))
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+def test_drive_hud_does_not_invent_zero_before_velocity_readback(base_url):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 320, "height": 568})
+            page.route("**/api/v1/robot/state", lambda route: route.fulfill(status=503, json={}))
+            page.route_web_socket("**/ws/state", lambda route: route.on_message(lambda raw: None))
+            _enter_drive(page, base_url)
+            assert page.locator("[data-drive-fact=speed]").inner_text() == "—"
+            assert page.locator("[data-drive-fact=turn]").inner_text() != "· 0°/s"
+            assert page.locator("[data-drive-fact=battery]").inner_text() == "—"
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("state", ["fresh", "delayed", "disconnected", "unavailable"])
+def test_drive_telemetry_evidence_at_declared_widths(base_url, state):
+    stamp = "2026-10-07T06:00:03Z"
+    observed = "2026-10-07T06:00:00Z" if state == "delayed" else stamp
+    frame = {"type": "state", "mode": "MANUAL", "timestamp": stamp,
+             "velocity": {"linear": 0.12, "angular": 0.1}, "battery": {"percent": 81},
+             "evidence": {channel: {"evidence": state, "received_at": observed}
+                          for channel in ("velocity", "battery")}}
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            for width, height in [(2000, 1200), (1200, 2000), (390, 844), (320, 568)]:
+                page = browser.new_page(viewport={"width": width, "height": height})
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                page.route("**/api/v1/robot/state", lambda route: route.fulfill(json=frame))
+
+                def status_socket(route):
+                    route.on_message(lambda raw: route.send(json.dumps(frame))
+                                     if json.loads(raw).get("type") == "auth" else None)
+
+                page.route_web_socket("**/ws/state", status_socket)
+                _enter_drive(page, base_url)
+                page.wait_for_function("document.querySelector('[data-drive-fact=link]').dataset.state === 'OPEN'")
+                speed = page.locator("[data-drive-fact=speed]")
+                turn = page.locator("[data-drive-fact=turn]").inner_text()
+                battery = page.locator("[data-drive-fact=battery]").inner_text()
+                assert speed.get_attribute("data-evidence") == state
+                if state == "fresh":
+                    assert speed.inner_text() == "0.12" and "6°/s" in turn and battery == "81%"
+                elif state == "delayed":
+                    assert speed.inner_text() == "0.12"
+                    assert "지연 · 3초 전" in turn and "지연 · 3초 전" in battery
+                else:
+                    label = "연결 끊김" if state == "disconnected" else "정보 없음"
+                    assert speed.inner_text() == "—"
+                    assert label in turn and label in battery
+                assert page.locator("ui-topbar [data-estop]").is_visible()
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                assert page.evaluate("document.querySelector('[data-drive-view]').getBoundingClientRect().height / innerHeight > 0.2")
+                assert errors == []
+                if os.environ.get("ROSY_SHOT_DIR"):
+                    shots = Path(os.environ["ROSY_SHOT_DIR"])
+                    shots.mkdir(parents=True, exist_ok=True)
+                    page.screenshot(path=str(shots / f"pilot-telemetry-{state}-{width}x{height}.png"))
+                page.close()
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_drive_reconnect_warning_stays_visible_at_each_width(base_url, viewport):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            sockets, errors = [], []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def status_socket(route):
+                sockets.append(route)
+                route.on_message(lambda raw: route.send(json.dumps({"type": "state", "mode": "MANUAL"}))
+                                 if json.loads(raw).get("type") == "auth" else None)
+
+            page.route_web_socket("**/ws/state", status_socket)
+            _enter_drive(page, base_url)
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]').dataset.state === 'OPEN'")
+            sockets[-1].close(code=1011)
+            link = page.locator("[data-drive-fact=link]")
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]').dataset.state === 'RETRYING'")
+            assert link.inner_text() == "상태 재연결 중"
+            assert link.is_visible()
+            assert page.locator("[data-estop]").is_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert errors == []
+            if os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(os.environ["ROSY_SHOT_DIR"])
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-reconnect-{viewport[0]}x{viewport[1]}.png"))
+        finally:
+            browser.close()
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
