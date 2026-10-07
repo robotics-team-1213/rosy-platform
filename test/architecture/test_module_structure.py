@@ -86,6 +86,16 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/server/web/map-view.js": (
+        903,
+        "split: judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
+        "and the D-515 top-down camera warp made map-view.js own two jobs, map drawing (grid, robots, "
+        "formation, mediation, metre site view) and the camera picture path. Move cameraMapCalibration, "
+        "drawCameraTopDown, warpOnto, setCameraFrame, frameTurn, turnedUrl and bindCamera to a new "
+        "web/camera-backdrop.js beside camera-warp.js; map-view keeps a draw hook and the toPx projection "
+        "it passes in. Recorded in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. Re-judge "
+        "after the move or if the file grows again",
+    ),
     "web/components.css": (
         814,
         "accept: shared token-based component styles remain one web_common responsibility; "
@@ -116,16 +126,15 @@ SIZE_VERDICTS = {
     ),
     "fleet": (
         43_623,
-        "split: re-judged at 43623 on 2026-10-08: growth since 43317 is main's own (D-507 trip ports "
-        "in server/trip_ports.py and trip_runner.py, D-513 site-map view turn in site_map.py and "
-        "site-map web, D-515 top-down camera in web/camera-warp.js and map-view.js), each in its "
-        "existing Fleet server or site-map web owner; D-472 adds one line; no new owner, the "
-        "site-map web/server split plan and +150 allowance remain unchanged. "
-        "Previously re-judged at 43317 on 2026-10-08: D-472 + Addendum 2026-10-08 LED identity "
-        "(server/identity.py orchestrator and binding store, tracking/console route wiring) stays "
-        "with the existing Fleet server owner as its own module; no new owner, the site-map "
-        "web/server split plan in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and +150 "
-        "allowance remain unchanged. "
+        "split: re-judged at 43623 on 2026-10-08: main's 43217 verdict plus D-472 + Addendum 2026-10-08 "
+        "LED identity (server/identity.py orchestrator and binding store, tracking/console route wiring), "
+        "independently judged to stay with the existing Fleet server owner as its own module (critic agent, "
+        "2026-10-08); no new owner, the site-map web/server split plan and +150 allowance remain unchanged. "
+        "Previously re-judged at 43217 on 2026-10-08 (independent re-judge, critic agent): D-507 junction "
+        "expectation and site floor binding (server/trip_ports.py, trip_runner.py) stay with the routing/trip "
+        "server owner, and the D-513 7 / D-515 camera turn and top-down warp (web/map-view.js, camera-warp.js) "
+        "get the camera-backdrop seam now named in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. "
+        "No new package owner; the +150 allowance is unchanged. "
         "Previously re-judged at 42945 on 2026-10-08: D-511 M0 lane compliance (fleet/localization/"
         "lane_compliance.py observe-only judgement, server/lane_compliance_service.py worker, "
         "cli/app/roster wiring) stays with the existing Fleet localization and server owners; no "

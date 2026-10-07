@@ -994,6 +994,30 @@ def test_number_keys_pick_classes_and_a_x_decide(browser_workspace):
     assert store.get(0)['status'] == 'excluded'
 
 
+def test_review_shortcuts_confirm_then_move_without_approving(browser_workspace):
+    page, store, expect = browser_workspace
+    for index in (0, 1):
+        row = store.get(index)
+        store.update(index, {'version': row['version'], 'action': 'reopen'})
+    page.reload(wait_until='networkidle')
+    expect(page.locator('#complete')).not_to_be_checked()
+    page.locator('#canvas').focus()
+    page.keyboard.press('c')
+    expect(page.locator('#complete')).to_be_checked()
+    assert store.get(0)['status'] == 'pending'
+    page.keyboard.press('n')
+    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    assert store.get(0)['status'] == 'pending'
+
+
+def test_learning_summary_separates_review_from_training(browser_workspace):
+    page, _, expect = browser_workspace
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    expect(page.locator('#review-stage-summary')).to_contain_text('등록 2장')
+    expect(page.locator('#training-data-state')).to_contain_text('픽셀 승인 0장')
+    expect(page.get_by_text('현재 검수 중인 사진의 학습 완료를 뜻하지 않습니다.')).to_be_visible()
+
+
 def test_number_key_in_a_number_field_stays_typing(browser_workspace):
     page, store, expect = browser_workspace
     field = page.get_by_label('박스 1 x0', exact=True)

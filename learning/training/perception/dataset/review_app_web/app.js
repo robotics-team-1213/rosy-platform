@@ -292,7 +292,7 @@ $('canvas').onlostpointercapture=event=> {if(gesture?.pointerId===event.pointerI
 const TEXT_ENTRY='input:not([type=checkbox]):not([type=radio]), textarea, select';
 function shortcut(event) {
   const digit=/^(?:Digit|Numpad)([1-9])$/.exec(event.code||'');
-  return digit ? digit[1] : {KeyA:'a',KeyX:'x'}[event.code] || (/^[1-9ax]$/i.test(event.key) ? event.key.toLowerCase() : null);
+  return digit ? digit[1] : {KeyA:'a',KeyC:'c',KeyN:'n',KeyX:'x'}[event.code] || (/^[1-9acnx]$/i.test(event.key) ? event.key.toLowerCase() : null);
 }
 document.addEventListener('keydown',event=> {
   if(event.key==='Escape' && gesture) {event.preventDefault();cancelGesture();}
@@ -307,8 +307,10 @@ document.addEventListener('keydown',event=> {
   // Number keys set the selected box's class, A approves, X excludes (D-485). Approval
   // stays explicit (D-461): A only clicks an enabled 승인, never ticks 사진 전체 확인.
   // Physical keys (event.code) so a Korean IME layout still works; checkboxes keep working.
-  if(event.target?.matches?.(TEXT_ENTRY) || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || busy || gesture) return;
+  if(event.target?.matches?.(TEXT_ENTRY) || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.repeat || busy || gesture) return;
   const key=shortcut(event);
+  if(key==='c' && !$('complete').disabled) {event.preventDefault();$('complete').click();return;}
+  if(key==='n' && !$('next-pending').disabled) {event.preventDefault();$('next-pending').click();return;}
   const cls=workspace?.object_class_set.classes.find(c=>c.hotkey===key);
   const field=cls && selected!==null ? $('boxes').children[selected]?.querySelector('select') : null;
   if(field && !field.disabled) {event.preventDefault(); if(field.value!==cls.name) {field.value=cls.name; field.onchange();}}
