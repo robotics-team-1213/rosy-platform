@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · docs(adr): D-518에 공유 읽기 이동을 기록한다
 - 2026-10-08 · uncommitted · refactor(fleet): 관제 공유 읽기를 web/shared로 옮긴다
 - 2026-10-08 · uncommitted · docs(adr): 관제 웹의 위치는 문서 네 개다
 - 2026-10-08 · uncommitted · docs(plan): 세션 간 검토로 10/6 양성 시험 가정 수정
 - 2026-10-08 · uncommitted · docs(plan): 10/6·10/7 영상 기반 drivable·차선 기억 조사
-- 2026-10-08 · uncommitted · fix(push): 2026-10-08 pre-push 검사 복구

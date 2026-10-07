@@ -1,6 +1,6 @@
 ## D-518 관제 웹의 위치는 문서 네 개와 공유 읽기다 — 패키지는 Fleet 서버 안에 둔다
 
-**Status:** Accepted (2026-10-08, 사용자 선택: 문서 소유 + 하위 폴더). 페이지 경로와 서빙 프로세스는 바꾸지 않는다. 이 문서의 첫 구현은 엔트리 import 울타리와 `warpImage`의 공유 읽기 이동이다. 하위 폴더 이동은 뒤에 문서마다 한다.
+**Status:** Accepted (2026-10-08, 사용자 선택: 문서 소유 + 하위 폴더). 페이지 경로와 서빙 프로세스는 바꾸지 않는다. 구현된 것은 네 엔트리 import 울타리, `warpImage`를 `field-warp.js`로 나눈 것, 공유 읽기 아홉 파일을 `web/shared/`로 옮긴 것이다. Cell, 현장 지도, 설치, 운용은 아직 `web/` 바로 아래에 있고, 문서마다 옮긴다.
 
 **부분 유지:** [D-410](D-410-console-operate-and-install-documents.md)의 운용·설치 두 문서, [D-450](D-450-palletizing-app-completion-goals.md) 보충의 `/console/cell`, [D-488](D-488-fleet-site-map-address-routes.md)의 `/console/site-map`, [D-487](D-487-site-console-displays-as-rosy-fleet-birdseye.md)의 표시 이름·id·경로. [D-427](D-427-platform-three-parts-middleware-operations-learning.md)이 미룬 `operations/ui/console` 분리는 열지 않는다.
 
@@ -16,7 +16,7 @@
 
 ### Context
 
-Rosy Fleet은 Fleet 프로세스 한 곳이 서빙하는 정적 웹이다. 사람이 여는 문서는 넷이다. `/console`(운용), `/console/install`(설치·보정), `/console/cell`, `/console/site-map`. 파일은 `server/web` 한 폴더에 모여 있고, import 울타리는 운용·설치·Cell 엔트리만 본다. `/console/site-map`의 `site-map.js`는 설치 문서의 `field-view.js`를 가져와 영상 펴기를 쓴다. `field-view.js`는 설치 제안 화면이다.
+Rosy Fleet은 Fleet 프로세스 한 곳이 서빙하는 정적 웹이다. 사람이 여는 문서는 넷이다. `/console`(운용), `/console/install`(설치·보정), `/console/cell`, `/console/site-map`. 결정 당시 파일은 `server/web` 한 폴더에 모여 있었고, import 울타리는 운용·설치·Cell 엔트리만 보았다. `/console/site-map`의 `site-map.js`는 설치 문서의 `field-view.js`를 가져와 영상 펴기를 썼다. `field-view.js`는 설치 제안 화면이다.
 
 패키지를 `operations/ui/console`로 옮기면 폴더 이름만 바뀐다. 서빙은 Fleet에 남고, 문서가 서로의 모듈을 가져오는 문제는 그대로다. D-427이 그 분리를 미룬 이유도 여기 있다.
 
@@ -37,7 +37,7 @@ Rosy Fleet은 Fleet 프로세스 한 곳이 서빙하는 정적 웹이다. 사�
 
 4. **울타리.** `operations/fleet/test/test_document_imports.py`가 네 엔트리에서 따라간 모듈을 검사한다. `/common/`은 공유 웹이다. 동적 `import()`는 엔트리에서 거절한다. 시험은 파일 단위다. 공유 파일에 다른 문서의 조작을 넣으면 그 파일을 가져오는 문서가 같이 깨진다.
 
-5. **하위 폴더.** 목표 자리는 `web/operate/`, `web/install/`, `web/cell/`, `web/site-map/`, `web/shared/`다. 한 번에 문서 하나만 옮긴다. 순서는 공유 읽기, Cell, 현장 지도, 설치, 운용이다. 그 커밋은 allowlist 경로, `setup.py`의 `package_data` 글롭, 그리고 폴더를 벗어나는 `./` import를 `/console/assets/<파일 이름>`으로 바꾼다. 같은 문서 안의 `./`는 유지해도 된다. 이 ADR의 첫 구현은 폴더를 옮기지 않는다.
+5. **하위 폴더.** 목표 자리는 `web/operate/`, `web/install/`, `web/cell/`, `web/site-map/`, `web/shared/`다. 한 번에 문서 하나만 옮긴다. 순서는 공유 읽기, Cell, 현장 지도, 설치, 운용이다. 그 커밋은 allowlist 경로, `setup.py`의 `package_data` 글롭, 그리고 폴더를 벗어나는 `./` import를 `/console/assets/<파일 이름>`으로 바꾼다. 같은 문서 안의 `./`는 유지해도 된다. 공유 읽기 아홉 파일은 `web/shared/`에 있다. Cell, 현장 지도, 설치, 운용은 `web/` 바로 아래에 있고, 이 순서로 문서마다 옮긴다.
 
 6. **하지 않는 것.** `operations/ui/console` 분리, 최상위 `ui/` 이전, 수동 운전 패널 제거, 표시 이름·id·저장소 키 변경, `map-view.js` 카메라 그림 분리는 이 결정의 조각이 아니다. 카메라 그림 분리는 `docs/plans/2026-10-07-fleet-site-map-web-server-seam.md`에 남아 있다.
 
@@ -45,7 +45,7 @@ Rosy Fleet은 Fleet 프로세스 한 곳이 서빙하는 정적 웹이다. 사�
 
 - 설치 제안 화면과 영상 펴기가 갈라진다. `map-fit-view.js`는 계속 `field-view.js`에서 `warpImage`를 받고, `field-view.js`가 `field-warp.js`를 다시 내보낸다.
 - Cell 엔트리가 이미 import하던 `development-auth.js`는 공유 읽기로 울타리에 들어온다. 새 권한이 아니다.
-- 하위 폴더로 옮기기 전에는 파일이 `web/` 바로 아래에 있다. 표의 소유가 위치다.
+- 공유 읽기의 디스크 위치와 남은 폴더 이동은 결정 5다. 공개 URL은 `/console/assets/<파일 이름>`이다.
 
 ### Validation
 
