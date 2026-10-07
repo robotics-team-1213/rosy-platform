@@ -664,3 +664,13 @@ def test_pixel_a_works_right_after_ticking_checks_and_x_only_on_pending(browser_
     page.keyboard.press('x')
     page.wait_for_timeout(300)
     assert review_masks.get(store, 0)['status'] == 'approved'
+
+
+def test_pixel_page_copy_is_class_set_neutral(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, (Path(__file__).resolve().parents[3] / 'learning' / 'curation' / 'perception' / 'classes' / 'lane_lr5.yaml').read_bytes())
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#pixel-status')).to_contain_text('v0')
+    expect(page.locator('#pixel-class option:checked')).to_have_text('클래스를 선택하세요')
+    for text in ('흰 차선', 'stop_line', 'crosswalk'):
+        assert text not in page.locator('#pixel-main').inner_text()
