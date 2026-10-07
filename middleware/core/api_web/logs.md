@@ -653,8 +653,8 @@
 - 결정: D-494 6
 - 교훈: 없음
 
-## 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.130 (D-507 7)
-- 변경: `core_api_web/api/app.py` 첫 줄 계약 버전 v1.122 → v1.130(main 은 문서 v1.123 과 어긋나 `test_protocol_version_alignment` 실패 중이었다).
+## 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.131 (D-507 7)
+- 변경: `core_api_web/api/app.py` 첫 줄 계약 버전 v1.122 → v1.131(main 은 문서 v1.123 과 어긋나 `test_protocol_version_alignment` 실패 중이었다).
 - 증거: `python -m pytest middleware/core/gateway/test/test_protocol_version_alignment.py -q` 3 passed.
 - gate 변화: 없음.
 - 결정: D-507 7
@@ -676,4 +676,10 @@
 
 - 변경: CORE app contract docstring follows API Reference v1.125 after D-513 merge.
 - 증거: Pinned version test included in merged tree verification.
+- gate 변화: None.
+
+## 2026-10-08 · uncommitted · feat(api): D-472 식별 색 설정과 v1.129/v1.130
+- 변경: `POST /host/lamp/identify`의 `color`를 생략하면 CORE 설정 `lamp_identify.color`, 없으면 D-472 4항 기본(`rosy_26` blue, `rosy_60` amber)을 쓴다. 둘 다 없으면 409 `IDENTIFY_COLOR_UNSET`. `requested_at`을 ms로 쓴다. 앱 설명의 계약 버전을 v1.130으로 맞췄다
+- 증거: `test_lamp_identify_api.py`, `test_protocol_version_alignment.py`
+- gate 변화: 없음. 장치 적용과 실제 점멸은 미확인
 - gate 변화: None.

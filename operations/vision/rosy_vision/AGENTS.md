@@ -20,6 +20,7 @@ Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest 
 | `project.py` | Marker observations to site map (uses the `games` homography) |
 | `publish.py` | Source-token-only Fleet sighting client |
 | `worker.py` | Latest-frame camera-to-Fleet pipeline, no queues |
+| `track/` | D-457 markerless blob tracking (`background_blob.py`, `worker.py`, `fleet_client.py`) and D-472 `led_identity.py` (pure on/off/on LED blink detector; the worker sends Fleet a numbers-only verdict per identity challenge) |
 | `vision_config.py` | Validated camera/map config; secrets resolved by env name |
 | `pairing_sync.py` | Paired camera credentials synced from Fleet (token hashes only, D-341) |
 | `rectify.py` | Display-only lens/plane rectification for preview (D-318) |
@@ -43,7 +44,7 @@ Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest 
 python -m pytest operations/vision/test -q
 ```
 
-Key tests: `test_protocol.py`, `test_ingest.py`, `test_vision_detect.py`, `test_vision_project.py`, `test_vision_worker.py`, `test_vision_publish.py`, `test_vision_config.py`, `test_pairing_sync.py`, `test_pairing_e2e.py`, `test_preview_rectification.py`, `test_field_detect.py`, `test_map_register.py`, `test_vision_cli.py`. Needs `websockets>=14`.
+Key tests: `test_protocol.py`, `test_ingest.py`, `test_vision_detect.py`, `test_vision_project.py`, `test_vision_worker.py`, `test_vision_publish.py`, `test_vision_config.py`, `test_pairing_sync.py`, `test_pairing_e2e.py`, `test_preview_rectification.py`, `test_field_detect.py`, `test_map_register.py`, `test_vision_cli.py`, `test_led_identity.py`. Needs `websockets>=14`.
 
 ### Common Patterns
 

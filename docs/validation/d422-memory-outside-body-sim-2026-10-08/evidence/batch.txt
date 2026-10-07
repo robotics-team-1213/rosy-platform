@@ -1,0 +1,26 @@
+bend_1 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B1_
+bend_2 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B2_
+bend_3 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B3_
+bend_4 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B4_
+bend_5 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B5_
+bend_6 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B6_
+bend_7 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B7_
+bend_8 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B8_
+bend_9 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B9_
+bend_10 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B10_
+bend_11 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B11_
+bend_12 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B12_
+bend_13 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B13_
+bend_14 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B14_
+bend_15 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 90 --tag B4B15_
+south_c1 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 60 --x -1.15 --y -0.509 --yaw 0 --tag B4S1_
+south_c2 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 60 --x -1.15 --y -0.509 --yaw 0 --tag B4S2_
+south_c3 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 60 --x -1.15 --y -0.509 --yaw 0 --tag B4S3_
+latch_b5 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 60 --x -1.271 --y 0.06 --yaw -1.554 --tag B4L5_
+latch_b3 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 60 --x -0.819 --y -0.499 --yaw -0.048 --tag B4L3_
+latch_b4 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 60 --x -0.75 --y -0.494 --yaw 0.364 --tag B4L4_
+latch_b6 $HOME/rosy_b4_ws/src/rosy-platform/docs/validation/d495-junction-sim-2026-10-07/evidence/d495_sim_probe.py trip --plan left:60 --duration 60 --x -0.899 --y -0.496 --yaw -0.039 --tag B4L6_
+box_ahead_1 $HOME/rosy_b4_ws/b4/b4_box.py --ahead 0.30 --duration 40
+box_ahead_2 $HOME/rosy_b4_ws/b4/b4_box.py --ahead 0.30 --duration 40
+box_drop_1 $HOME/rosy_b4_ws/b4/b4_box.py --drop 0.08 --drive-s 4 --duration 30
+box_drop_2 $HOME/rosy_b4_ws/b4/b4_box.py --drop 0.08 --drive-s 4 --duration 30

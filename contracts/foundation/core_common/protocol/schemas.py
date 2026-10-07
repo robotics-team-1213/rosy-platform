@@ -1312,9 +1312,9 @@ class SshHostKeys(BaseModel):
 
 
 class LampIdentifyRequest(BaseModel):
-    """A short, display-only LED challenge; the face owner may refuse it."""
+    """A short, display-only LED challenge (color None: the robot's own); the face owner may refuse it."""
     model_config = ConfigDict(extra="forbid")
-    color: Literal["blue", "amber"]
+    color: Optional[Literal["blue", "amber"]] = None
 
 
 class SshPasswordRequest(BaseModel):
