@@ -792,30 +792,51 @@ def test_adr_reserve_claims_above_every_source_and_skips_taken_refs(tmp_path, mo
     (repo / "docs" / "reference" / "ROSY ADR Log.md").write_text("| D-5 | a | b |\n", encoding="utf-8")
     _git(repo, "add", ".")
     _git(repo, "commit", "-qm", "base")
-    _git(repo, "checkout", "-qb", "other")
-    (repo / "docs" / "adr" / "D-6-y.md").write_text("y\n", encoding="utf-8")
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-qm", "other")
-    _git(repo, "checkout", "-q", "main")  # D-6 now exists only on branch "other"
+    for branch, name in (("other", "D-6-y.md"), ("stray", "D-500-typo.md")):
+        _git(repo, "checkout", "-qb", branch, "main")
+        (repo / "docs" / "adr" / name).write_text("y\n", encoding="utf-8")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-qm", branch)
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, "update-ref", "refs/remotes/origin/other", "other")
+    _git(repo, "branch", "-qD", "other")  # D-6 now exists only on a remote-tracking ref
     (repo / "tools" / "harness").mkdir(parents=True)
     (repo / "tools" / "harness" / "adr_gaps.txt").write_text("D-7 untracked gap\n", encoding="utf-8")
     monkeypatch.chdir(repo)
 
     assert adr_reserve.main(["next", "first topic"]) == 0
-    assert capsys.readouterr().out.strip() == "D-8"
+    out = capsys.readouterr()
+    assert out.out.strip() == "D-8"
+    assert "ignoring D-500 (more than 20 above main's D-5) from stray: docs/adr/D-500-typo.md" in out.err
+    assert "highest in use: D-7 from " in out.err and "adr_gaps.txt" in out.err
     assert adr_reserve.main(["next", "second topic"]) == 0
     assert capsys.readouterr().out.strip() == "D-9"
 
     # A peer claimed D-10 after our scan: create-only update-ref fails, the tool moves on.
     _git(repo, "update-ref", "refs/adr/D-10", "HEAD")
-    monkeypatch.setattr(adr_reserve, "used_numbers", lambda: {9})
+    monkeypatch.setattr(adr_reserve, "used_numbers", lambda: {9: "test"})
     assert adr_reserve.main(["next", "raced"]) == 0
     assert capsys.readouterr().out.strip() == "D-11"
 
     adr_reserve.main(["list"])
     listing = capsys.readouterr().out
     assert "D-8\t" in listing and "first topic" in listing
-    assert adr_reserve.main(["release", "D-8"]) == 0
-    assert "D-8" not in harness.reserved_adrs(repo)
-    assert harness.reserved_adrs(repo) == {"D-9", "D-10", "D-11"}
-    assert adr_reserve.main(["release", "D-8"]) == 1
+    assert adr_reserve.main(["release", "D-8"]) == 1  # not proven to be ours
+    assert "reserved for 'first topic'" in capsys.readouterr().err
+    assert adr_reserve.main(["release", "D-8", "--reason", "first topic"]) == 0
+    assert capsys.readouterr().out.strip() == "released D-8 (first topic)"
+    assert adr_reserve.main(["release", "D-9", "--force"]) == 0
+    assert harness.reserved_adrs(repo) == {"D-10", "D-11"}
+    assert adr_reserve.main(["release", "D-8", "--force"]) == 1
+
+
+def test_adr_reserve_stops_when_update_ref_fails_for_another_reason(tmp_path, monkeypatch, capsys):
+    repo = _repo(tmp_path / "f")
+    (repo / "a").write_text("a\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    _git(repo, "update-ref", "refs/adr/D-1/x", "HEAD")  # refs/adr/D-1 cannot exist beside D-1/x
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(adr_reserve, "used_numbers", lambda: {})
+    assert adr_reserve.main(["next", "t"]) == 1
+    assert "git update-ref refs/adr/D-1 failed" in capsys.readouterr().err
