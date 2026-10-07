@@ -78,50 +78,84 @@ def _spans(cycle, start_unit_index, laps):
     return tuple(spans)
 
 
-def _run(layout, cycle, n, *, ticks, seed, lookahead, unknown_rate=0.0, stall_rate=0.0):
+def _true_units(spans, front, body):
+    """Units the real body covers (no estimate padding)."""
+    return {s.unit for s in spans if s.d1 > front - body and s.d0 < front}
+
+
+def _run(layout, cycle, n, *, ticks, seed, unknown_rate=0.0, stall_rate=0.0, u=0.05, body=0.12):
+    """Robots report ``estimate = true ± u``; CORE drives to ``authority - estimate`` past the
+    true position (odom-anchored, D-517 4); UNKNOWN robots coast to their last authority."""
     rng = random.Random(seed)
-    h_unit = cycle[0][1]
     starts = [round(i * len(cycle) / n) for i in range(n)]
-    robots = []
+    robots, true_d, last_auth, prev = [], {}, {}, {}
     for i, start in enumerate(starts):
         spans = _spans(cycle, start, laps=ticks // 5 + 3)
-        robots.append(Robot(f"r{i:02d}", spans, spans[0].d1 - 0.02, lookahead, 0.05, min(0.12, h_unit / 4)))
-    true_d = {r.id: r.d for r in robots}
+        robot = Robot(f"r{i:02d}", spans, None, 0.3, u, body)
+        robots.append(robot)
+        true_d[robot.id] = spans[0].d1 - 0.02
     state = TableState()
-    worst_conflicts, progress = [], {r.id: 0.0 for r in robots}
+    conflicts, progress, shrinks = [], {r.id: 0.0 for r in robots}, []
     for tick in range(ticks):
         for r in robots:
-            r.d = None if rng.random() < unknown_rate else true_d[r.id]
+            r.lookahead_m = rng.choice((0.1, 0.3, 0.6))
+            r.d = None if rng.random() < unknown_rate else true_d[r.id] + rng.uniform(-u, u)
         result = step(layout, robots, state, now=tick * 0.5)
-        worst_conflicts.extend(result.conflicts)
-        assert wait_cycle(result.waiting_for) is None, f"tick {tick}: circular wait"
+        conflicts.extend(result.conflicts)
         for r in robots:
-            end = result.authority_end.get(r.id)
-            if end is None or rng.random() < stall_rate:
+            if r.id in result.authority_end:
+                if result.authority_end[r.id] < prev.get(r.id, -math.inf) - 1e-9:
+                    shrinks.append((tick, r.id))
+                prev[r.id] = result.authority_end[r.id]
+                # odom-anchored stop point: authority measured from this tick's estimate
+                last_auth[r.id] = (result.authority_end[r.id], r.d, true_d[r.id])
+        for r in robots:
+            if r.id not in last_auth or rng.random() < stall_rate:
                 continue
-            move = min(rng.uniform(0.0, 0.1), max(0.0, end - true_d[r.id]))
+            authority, est, true_then = last_auth[r.id]
+            stop_at = true_then + (authority - est)
+            move = min(rng.uniform(0.0, 0.1), max(0.0, stop_at - true_d[r.id]))
             true_d[r.id] += move
             progress[r.id] += move
-    return worst_conflicts, progress
+        # the physical check: no two real bodies on one capacity-1 unit
+        seen = {}
+        for r in robots:
+            for unit in _true_units(r.spans, true_d[r.id], body):
+                if layout.units[unit].capacity == 1:
+                    assert unit not in seen, f"tick {tick}: {seen[unit]} and {r.id} on {unit}"
+                    seen[unit] = r.id
+    return conflicts, progress, shrinks
 
 
 @pytest.mark.parametrize("n,blocks,seed", [(2, 12, 1), (3, 12, 2), (10, 40, 3), (30, 120, 4), (50, 200, 5)])
 def test_robots_up_to_the_loop_limit_never_share_a_block_and_keep_moving(n, blocks, seed):
     layout, cycle = _loop(blocks, 0.65, zone_at=(blocks // 3, 2))
-    h = 3
-    spans = _spans(cycle, 0, 1)
-    assert n <= loop_capacity(spans, layout, h)
-    conflicts, progress = _run(layout, cycle, n, ticks=400, seed=seed, lookahead=0.3)
-    assert conflicts == []
+    assert n <= loop_capacity(_spans(cycle, 0, 1), layout, 3)
+    conflicts, progress, shrinks = _run(layout, cycle, n, ticks=400, seed=seed)
+    assert conflicts == [] and shrinks == []
     assert min(progress.values()) > 2 * 0.65, "a robot starved under the loop limit"
 
 
 def test_unknown_poses_and_stalls_freeze_neighbours_but_never_overlap():
     layout, cycle = _loop(30, 0.65, zone_at=(10, 3))
-    conflicts, progress = _run(layout, cycle, 8, ticks=600, seed=9, lookahead=0.3,
-                               unknown_rate=0.15, stall_rate=0.2)
-    assert conflicts == []
+    conflicts, progress, shrinks = _run(layout, cycle, 8, ticks=600, seed=9, unknown_rate=0.15, stall_rate=0.2)
+    assert conflicts == [] and shrinks == []
     assert min(progress.values()) > 0.65
+
+
+def test_a_short_loop_with_lookahead_past_a_lap_keeps_its_holds_per_occurrence():
+    layout, cycle = _loop(3, 0.65)
+    spans = _spans(cycle, 0, 20)
+    robot = Robot("a", spans, 0.3, 3.0, 0.05, 0.12)
+    state = TableState()
+    last = -math.inf
+    for tick in range(200):
+        result = step(layout, [robot], state, now=tick * 0.5)
+        assert result.conflicts == ()
+        assert result.authority_end["a"] >= last
+        last = result.authority_end["a"]
+        robot.d = min(robot.d + 0.08, last)
+    assert robot.d > 10 * 0.65
 
 
 def test_a_robot_without_a_localized_pose_gets_no_new_authority_and_keeps_its_units():
@@ -137,13 +171,17 @@ def test_a_robot_without_a_localized_pose_gets_no_new_authority_and_keeps_its_un
     assert state.held["a"], "units held while UNKNOWN are not released (D-426 3)"
 
 
-def test_authority_never_shrinks_while_the_robot_is_short_of_it():
+def test_authority_never_shrinks_when_lookahead_drops_or_the_pose_jumps_back():
+    """Review case: lookahead 0.6 then 0.1 at the same d, then a 0.05 m backward pose jump."""
     layout, cycle = _loop(8, 0.65)
     a = Robot("a", _spans(cycle, 0, 3), 0.6, 0.6, 0.05, 0.12)
     b = Robot("b", _spans(cycle, 4, 3), 0.6, 0.6, 0.05, 0.12)
     state = TableState()
-    ends = [step(layout, [a, b], state, now=t * 0.5).authority_end["a"] for t in range(5)]
-    assert ends == sorted(ends)
+    ends = []
+    for t, (look, d) in enumerate([(0.6, 0.6), (0.1, 0.6), (0.1, 0.55), (0.6, 0.55), (0.1, 0.62)]):
+        a.lookahead_m, a.d = look, d
+        ends.append(step(layout, [a, b], state, now=t * 0.5).authority_end["a"])
+    assert ends == sorted(ends) and ends[0] > 1.8
 
 
 def test_two_way_lane_lets_one_direction_in_and_holds_the_other():
@@ -156,7 +194,7 @@ def test_two_way_lane_lets_one_direction_in_and_holds_the_other():
     granted = [r for r in ("east", "west") if result.authority_end[r] > 0.65]
     assert len(granted) == 1
     other = "west" if granted == ["east"] else "east"
-    assert result.waiting_for[other] == granted[0]
+    assert result.waiting_for[other] == (granted[0],)
 
 
 def test_a_robot_waiting_at_a_merge_gets_in_within_the_wait_bound():
@@ -179,5 +217,6 @@ def test_a_robot_waiting_at_a_merge_gets_in_within_the_wait_bound():
 
 
 def test_wait_cycle_is_found():
-    assert wait_cycle({"a": "b", "b": "c", "c": "a"}) == ("a", "b", "c")
-    assert wait_cycle({"a": "b", "b": None}) is None
+    assert wait_cycle({"a": ("b",), "b": ("c",), "c": ("a",)}) == ("a", "b", "c")
+    assert wait_cycle({"a": ("b",), "b": ()}) is None
+    assert wait_cycle({"a": ("x", "b"), "b": ("a",), "x": ()}) == ("a", "b")

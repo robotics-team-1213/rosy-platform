@@ -119,31 +119,39 @@ class Robot:
     lookahead_m: float                # authority must reach this far past the front (d_stop(v))
     uncertainty_m: float
     body_length_m: float
+    #: Holds are span occurrences of this route. A new route id (a new plan) starts from what
+    #: the body covers; Fleet sends one only while the robot stands (D-517 4: no shrink).
+    route_id: str = ""
 
 
 @dataclass
 class TableState:
-    #: robot id -> {unit id: span index} the robot holds (occupied or granted)
-    held: dict[str, dict[str, int]] = field(default_factory=dict)
+    #: robot id -> span indices it holds (occupied or granted), per occurrence along its route
+    held: dict[str, set[int]] = field(default_factory=dict)
+    route: dict[str, str] = field(default_factory=dict)
+    #: robot id -> the last authority end issued on its route; it never goes down (D-517 4)
+    authority: dict[str, float] = field(default_factory=dict)
     #: robot id -> tick its current unmet request started (for the merge wait bound)
     waiting_since: dict[str, float] = field(default_factory=dict)
     #: robot id -> last occupancy, kept while its pose is UNKNOWN (D-426 3)
-    last_occupied: dict[str, dict[str, int]] = field(default_factory=dict)
+    last_occupied: dict[str, set[int]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class TickResult:
     #: robot id -> route metres its front may reach: the last granted unit's end minus u, so a
-    #: front that is really u ahead of its estimate still stays inside its grants. A robot
-    #: without a localized pose gets no entry: no new authority, it stops on expiry (D-517 4).
+    #: front that is really u ahead of its estimate still stays inside its grants, and never
+    #: below an earlier value. A robot without a localized pose gets no entry: no new
+    #: authority, it stops on expiry (D-517 4).
     authority_end: dict[str, float]
-    waiting_for: dict[str, Optional[str]]  # robot id -> robot holding the unit it needs
+    #: robot id -> every robot holding the unit it needs next (empty: not waiting on a robot)
+    waiting_for: dict[str, tuple[str, ...]]
     conflicts: tuple[str, ...]        # units with more occupants than capacity (must stay empty)
 
 
-def _occupied(robot: Robot) -> dict[str, int]:
+def _occupied(robot: Robot) -> set[int]:
     rear, front = robot.d - robot.body_length_m - robot.uncertainty_m, robot.d + robot.uncertainty_m
-    return {s.unit: i for i, s in enumerate(robot.spans) if s.d1 > rear and s.d0 < front}
+    return {i for i, s in enumerate(robot.spans) if s.d1 > rear and s.d0 < front}
 
 
 def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float, *,
@@ -152,77 +160,94 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
 
     Order: robots that waited past ``merge_max_wait_s`` first, then robots already inside a
     zone, then by wait start, then id. Grants are contiguous from the front: a refused unit
-    stops the robot's lookahead there.
+    stops the robot there. Holds a robot already has count past its lookahead too, so the
+    authority covers every unit it was given. A robot that leaves the list keeps its holds
+    until Fleet drops it with evidence (``release_robot``).
     """
-    occupied: dict[str, dict[str, int]] = {}
+    for robot in robots:
+        if state.route.get(robot.id) != robot.route_id:
+            state.route[robot.id] = robot.route_id
+            for table in (state.held, state.authority, state.last_occupied):
+                table.pop(robot.id, None)
+    occupied: dict[str, set[int]] = {}
     for robot in robots:
         if robot.d is None:
-            occupied[robot.id] = dict(state.last_occupied.get(robot.id, {}))
+            occupied[robot.id] = set(state.last_occupied.get(robot.id, ()))
         else:
             occupied[robot.id] = _occupied(robot)
             state.last_occupied[robot.id] = occupied[robot.id]
+    spans_of = {robot.id: robot.spans for robot in robots}
     # Release what a localized robot is fully past; never release while UNKNOWN.
     for robot in robots:
-        held = state.held.setdefault(robot.id, {})
+        held = state.held.setdefault(robot.id, set())
         if robot.d is not None:
             rear = robot.d - robot.body_length_m - robot.uncertainty_m
-            for unit, index in list(held.items()):
-                if robot.spans[index].d1 <= rear and unit not in occupied[robot.id]:
-                    del held[unit]
-        held.update(occupied[robot.id])
+            held -= {i for i in held if robot.spans[i].d1 <= rear and i not in occupied[robot.id]}
+        held |= occupied[robot.id]
     holders: dict[str, set[str]] = {}
-    for robot_id, held in state.held.items():
-        for unit in held:
-            holders.setdefault(unit, set()).add(robot_id)
-    conflicts = tuple(sorted(u for u, rs in holders.items()
-                             if len([r for r in rs if u in occupied.get(r, {})]) > layout.units[u].capacity))
+    occupants: dict[str, set[str]] = {}
     direction: dict[str, bool] = {}
-    for robot in robots:
-        for unit, index in state.held[robot.id].items():
+    for robot_id, held in state.held.items():
+        spans = spans_of.get(robot_id)
+        if spans is None:
+            continue
+        for i in held:
+            unit = spans[i].unit
+            holders.setdefault(unit, set()).add(robot_id)
             if layout.units[unit].two_way:
-                direction[unit] = robot.spans[index].forward
+                direction[unit] = spans[i].forward
+        for i in occupied.get(robot_id, ()):
+            occupants.setdefault(spans[i].unit, set()).add(robot_id)
+    conflicts = tuple(sorted(u for u, rs in occupants.items() if len(rs) > layout.units[u].capacity))
 
     def inside_zone(robot: Robot) -> bool:
-        return any(layout.units[u].zone for u in occupied[robot.id])
+        return any(layout.units[robot.spans[i].unit].zone for i in occupied[robot.id])
 
     def key(robot: Robot):
         since = state.waiting_since.get(robot.id, now)
         return (now - since < merge_max_wait_s, not inside_zone(robot), since, robot.id)
 
     authority: dict[str, float] = {}
-    waiting_for: dict[str, Optional[str]] = {}
+    waiting_for: dict[str, tuple[str, ...]] = {}
     for robot in sorted(robots, key=key):
         held = state.held[robot.id]
+        waiting_for[robot.id] = ()
         if robot.d is None:  # no new grant without a localized pose; it stops on expiry
-            waiting_for[robot.id] = None
             continue
         want = robot.d + robot.uncertainty_m + robot.lookahead_m
-        end, blocker = robot.d, None
+        end, blockers = robot.d, ()
         for index, span in enumerate(robot.spans):
             if span.d1 <= robot.d:
                 continue
-            if span.unit not in held:
+            if index not in held:
+                if end >= want:
+                    break
                 unit = layout.units[span.unit]
                 others = holders.get(span.unit, set()) - {robot.id}
                 locked = unit.two_way and span.unit in direction and direction[span.unit] != span.forward
                 if len(others) >= unit.capacity or locked:
-                    blocker = min(others) if others else None
+                    blockers = tuple(sorted(others))
                     break
-                held[span.unit] = index
+                held.add(index)
                 holders.setdefault(span.unit, set()).add(robot.id)
                 if unit.two_way:
                     direction[span.unit] = span.forward
             end = span.d1
-            if end >= want:
-                break
-        authority[robot.id] = max(robot.d, end - robot.uncertainty_m)
-        reached = end >= want or end >= robot.spans[-1].d1
-        waiting_for[robot.id] = None if reached else blocker
-        if reached:
+        issued = max(robot.d, end - robot.uncertainty_m, state.authority.get(robot.id, -math.inf))
+        state.authority[robot.id] = issued
+        authority[robot.id] = issued
+        if end >= want or end >= robot.spans[-1].d1:
             state.waiting_since.pop(robot.id, None)
         else:
+            waiting_for[robot.id] = blockers
             state.waiting_since.setdefault(robot.id, now)
     return TickResult(authority, waiting_for, conflicts)
+
+
+def release_robot(state: TableState, robot_id: str) -> None:
+    """Drop every hold of a robot that evidence shows is off the lanes (operator, D-517 6)."""
+    for table in (state.held, state.route, state.authority, state.waiting_since, state.last_occupied):
+        table.pop(robot_id, None)
 
 
 def loop_capacity(spans: Sequence[Span], layout: Layout, held_per_robot: int) -> int:
@@ -232,17 +257,28 @@ def loop_capacity(spans: Sequence[Span], layout: Layout, held_per_robot: int) ->
     return max(0, (slots - 1) // max(1, held_per_robot))
 
 
-def wait_cycle(waiting_for: Mapping[str, Optional[str]]) -> Optional[tuple[str, ...]]:
-    """A cycle in "robot waits for robot", or None. Linear in the number of robots."""
-    done: set[str] = set()
+def wait_cycle(waiting_for: Mapping[str, Sequence[str]]) -> Optional[tuple[str, ...]]:
+    """A cycle in "robot waits for robot", or None. Linear in robots plus wait edges.
+
+    Waiting on any holder counts, so a cycle may be reported where one holder would leave on
+    its own; that escalates to the resolver (D-517 5), which is the safe side.
+    """
+    colour: dict[str, int] = {}
     for start in sorted(waiting_for):
-        path, seen = [], {}
-        node: Optional[str] = start
-        while node is not None and node not in done:
-            if node in seen:
-                return tuple(path[seen[node]:])
-            seen[node] = len(path)
-            path.append(node)
-            node = waiting_for.get(node)
-        done.update(path)
+        if colour.get(start):
+            continue
+        colour[start] = 1
+        path = [start]
+        stack = [iter(sorted(waiting_for.get(start, ())))]
+        while stack:
+            nxt = next(stack[-1], None)
+            if nxt is None:
+                colour[path.pop()] = 2
+                stack.pop()
+            elif colour.get(nxt) == 1:
+                return tuple(path[path.index(nxt):])
+            elif not colour.get(nxt):
+                colour[nxt] = 1
+                path.append(nxt)
+                stack.append(iter(sorted(waiting_for.get(nxt, ()))))
     return None
