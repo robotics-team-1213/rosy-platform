@@ -346,6 +346,16 @@ class LineFollowConfig:
         (angular = steering_gain x error), so a steady arc is steady in error and curvature."""
         return self.bridge_arm_curvature_tolerance*self.cruise_speed/self.steering_gain
 
+    @property
+    def bridge_arm_min_travel_m(self) -> float:
+        """D-476 rev 2: the odom travel an arc's arming window must span. The follower's error
+        scale in length is cruise_speed/steering_gain (one error unit commands curvature
+        steering_gain/cruise_speed), so over this travel a curvature mismatch of
+        bridge_arm_curvature_tolerance turns the body by bridge_arm_error_spread rad, the error
+        step the gate resolves. Shorter windows (a crawl, a few frames) cannot tell an arc from
+        a correction, and their odom turn cannot check the curvature."""
+        return self.bridge_arm_error_spread/self.bridge_arm_curvature_tolerance
+
     def _check_bridge(self) -> None:
         if type(self.bridge_enabled) is not bool:
             raise ValueError("bridge_enabled must be a boolean")

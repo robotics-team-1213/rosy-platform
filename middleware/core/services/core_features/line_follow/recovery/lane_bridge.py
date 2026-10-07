@@ -20,6 +20,13 @@ from core_features.line_follow.model import LineFollowMode
 #: Short breaks only (D-476 decision 3). Image quality, obstacle, departure, stuck never enter.
 BRIDGE_REASONS = frozenset({'line_not_visible', 'observation_stale', 'no_observation'})
 ROUTE_HINTS = (None, 'left', 'straight', 'right')
+#: Rev 2 arc: the lane-centre circle's curvature is kappa/(1 - kappa*center) (concentric with the
+#: body's circle, `center` to its left). 1 - kappa*center must be >= this, i.e. the lane turns at
+#: most twice as tight as the body drove (|kappa_c| <= 2|kappa|). A narrow lane bounds |center| by
+#: the per-side play (23.5 mm), so a followed lane has kappa*center <= 4.0 x 0.0235 ~ 0.09; a
+#: corridor centre half the body's turning radius inward is not the lane the body ran parallel
+#: to, and kappa*center -> 1 puts the lane on the turning centre (singular; sign flips past it).
+ARC_MIN_RADIUS_RATIO = .5
 
 
 def bridge_target(anchor, corridor, pose, lookahead, kappa=0.):
@@ -54,7 +61,8 @@ class LaneBridgeMixin:
         self._bridge_open = False  # a bridge ran last tick and has not yet been handed to D-468
         self._bridge_hint = None
         self._confident_frames = 0  # consecutive accepted confident camera frames
-        # Rev 2: this streak's ticks (frame count, error, curvature); the frame count after the
+        # Rev 2: this streak's ticks (frame count, error, curvature, (epoch, frame), pose, odom
+        # travel); the frame count after the
         # last tick outside the straight band (rev 1 restarted its count there). Cleared by a
         # new streak (lane_return_wiring.py).
         self._arm_ticks, self._straight_from = [], 0
@@ -87,24 +95,39 @@ class LaneBridgeMixin:
         if abs(st.error) > c.bridge_arm_max_error or abs(st.angular) > c.bridge_arm_max_angular:
             self._straight_from = n  # a curve or a correction: no straight extension (rev 1)
         kappa = st.angular/st.linear if st.linear > 0 else math.inf
-        self._arm_ticks = [t for t in self._arm_ticks if t[0] > n-c.bridge_arm_frames]
-        self._arm_ticks.append((n, st.error, kappa))
+        ticks, key = self._arm_ticks, (view.epoch, pose.frame)
+        if ticks and ticks[-1][3] != key:
+            ticks.clear()  # odom reset: travel and yaw no longer compare
+        s = ticks[-1][5] + math.hypot(pose.x-ticks[-1][4].x, pose.y-ticks[-1][4].y) if ticks else 0.
+        ticks.append((n, st.error, kappa, key, pose, s))
+        while len(ticks) > 1 and self._arc_window(ticks[1:]):
+            ticks.pop(0)  # keep the shortest recent window that still spans frames and travel
         if self._rearm is not None and self._rearm[0] < c.bridge_slow_m:
             return
         if n-self._straight_from >= c.bridge_arm_frames:
             kappa = 0.  # rev 1: straight extension
-        elif n >= c.bridge_arm_frames:
+        elif self._arc_window(ticks):
             # Rev 2: a steady arc (steady error and curvature: the body runs parallel to the
-            # lane, so its heading is the lane's tangent). Corrections change the error.
-            _, errors, kappas = zip(*self._arm_ticks)
+            # lane, so its heading is the lane's tangent). Corrections change the error. The
+            # odom turn per odom travel over the same ticks must agree with the commanded
+            # curvature: a steady command the wheels did not drive (slip, clipping) is no arc.
+            _, errors, kappas, _, poses, dist = zip(*ticks)
             kappa = sum(kappas)/len(kappas)
+            turn = math.remainder(poses[-1].yaw-poses[0].yaw, math.tau)
             if not (max(errors)-min(errors) <= c.bridge_arm_error_spread
                     and max(kappas)-min(kappas) <= c.bridge_arm_curvature_tolerance
-                    and abs(kappa) <= c.bridge_arm_max_curvature):
+                    and abs(kappa) <= c.bridge_arm_max_curvature
+                    and abs(turn/(dist[-1]-dist[0])-kappa) <= c.bridge_arm_curvature_tolerance):
                 return
         else:
             return
         self._bridge, self._bridge_kappa = (view.epoch, pose, view.corridor), kappa
+
+    def _arc_window(self, ticks):
+        """Rev 2: ticks span bridge_arm_frames distinct frames and bridge_arm_min_travel_m odom."""
+        c = self._config
+        return (len({t[0] for t in ticks}) >= c.bridge_arm_frames
+                and ticks[-1][5]-ticks[0][5] >= c.bridge_arm_min_travel_m)
 
     def _junction_pending(self, now):
         """A junction instruction other than 'straight', or a sighting within stale_after_s (D-494)."""
@@ -174,6 +197,7 @@ class LaneBridgeMixin:
                 or not (c.bridge_site_no_dropoffs or self._floor_proof_required())
                 or self._bridge_hint not in (None, 'straight') or guard != 'clear'
                 or (kappa and self._junction_pending(now))  # rev 2: no arc into a junction
+                or (kappa and 1-kappa*(corridor.center if corridor else 0.) < ARC_MIN_RADIUS_RATIO)
                 or pose is None or not 0 <= now-pose.received_at <= .3
                 or view.epoch != state['epoch'] or pose.frame != anchor.frame
                 or not c.body_stop_known or self._scan_points is None
