@@ -733,3 +733,10 @@
 - 증거: `X:/DevTemp/pilot-lobby-error/gradle.txt`의 Android debug APK 빌드·JVM 93 tests 성공, `test_shell_assets.py` 4 passed, `known_failures.py` 0 NEW. 현재 APK는 `X:/DevTemp/pilot-lobby-error/build/app/outputs/apk/debug/app-debug.apk`(SHA-256 `31c557905e9e5db2de6b63e6de94138f19b2c336e99da69a1703ddf715758cda`).
 - gate 변화: SOURCE·LOCAL 문구 보강. 설치된 Lenovo 화면·연결 성공/실패 실물 재현·사용자 G3는 미확인이라 Pilot UI/UX HOLD.
 - 결정: D-153 정직·어휘, D-280 중요한 것 먼저·복잡함 단순화.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 접속 화면이 이 로봇의 연결 방식을 먼저 보여 준다
+
+- 변경: Pilot 웹 접속 화면이 `GET /api/v1/auth/connection`으로 지금 열린 로봇 이름과 paired/development를 코드 입력보다 먼저 보여 준다. development는 「개발 연결로 계속」으로 기존 `POST /api/v1/auth/development-session`을 쓰고, paired는 로봇 화면 코드를 안내한다. 다른 로봇 목록은 그 아래에 둔다. 준비·차단 요약에 로봇 이름을 넣었다.
+- 증거: 변경 전 현장 `/pilot`은 rosy_26(paired)·rosy_60(development) 모두 옆 로봇과 코드 칸만 보였다. 브라우저 시험 `connection_offer`·`development_connection` 3 passed, 인접 로비·게이트 12 passed. 고친 화면을 두 로봇의 실제 connection에 붙여 확인했다. rosy_26은 화면 코드 안내, rosy_60은 개발 연결로 운영자 게이트까지 들어가고 그 세션은 logout 204. 로봇이 서빙하는 파일은 아직 이 변경 전이다.
+- gate 변화: 접속 화면 LOCAL 보강. 로봇에 이 파일을 올리기 전에는 현장 화면이 바뀌지 않는다. DEVICE 주행 수용은 그대로다.
+- 결정: D-432, D-471. 웹 Pilot이 안드로이드 셸·로봇 콘솔과 같은 개발 연결만 연다. 새 API는 없다.
