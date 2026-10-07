@@ -37,6 +37,7 @@ from core_common.domain.capabilities import (
     withhold_hardware_flags,
 )
 from core_common.identity import validate_robot_id, validate_robot_name
+from core_common.profile import DEFAULT_ROBOT
 from core_common.protocol.controls import pinky_controls
 
 
@@ -211,10 +212,23 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # idle signal says a line can be followed now (observations arrive only after
     # the mode is on), so readiness stays with PUT /line-follow/mode and its status.
     # It drives the same base, so it is never announced without the drive control.
+    # D-491 1 (v1.112 additive): robot package, trip drive modes and trip speed for Fleet
+    # planning. `free` follows the live goal_navigation flag after withholding above.
+    limits = svc.safety.limits
+    trip_max_linear = min(limits.max_linear, limits.fleet_linear)
+    if svc.line_follow is not None:
+        trip_max_linear = min(trip_max_linear, svc.line_follow.config.max_linear)
+    drive_modes = tuple(mode for mode, on in (
+        ("lane", svc.line_follow is not None),
+        ("free", (data.get("navigation") or {}).get("goal_navigation") is True)) if on)
     data["controls"] = pinky_controls(provides=_drive_provides(svc, data),
-                                      max_linear=svc.safety.limits.manual_linear,
-                                      max_angular=svc.safety.limits.manual_angular,
-                                      autonomy=("line",) if svc.line_follow is not None else ())
+                                      max_linear=limits.manual_linear,
+                                      max_angular=limits.manual_angular,
+                                      autonomy=("line",) if svc.line_follow is not None else (),
+                                      robot_kind=str((svc.config.get("robot") or {}).get("model")
+                                                     or DEFAULT_ROBOT),
+                                      drive_modes=drive_modes,
+                                      trip_max_linear=max(0.0, trip_max_linear))
     return data
 
 

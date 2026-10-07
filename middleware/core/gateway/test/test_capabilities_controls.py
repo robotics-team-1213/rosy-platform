@@ -71,3 +71,31 @@ def test_withheld_teleop_drops_the_drive_control(core_client):
     client, svc = _live_core(core_client)
     svc.capability._data["teleop"] = False
     assert _controls(client)["items"] == []
+
+
+def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
+    from core_common.profile import DEFAULT_ROBOT
+
+    client, svc = _live_core(core_client)
+    (base,) = _controls(client)["items"]
+    assert base["robot_kind"] == (svc.config.get("robot") or {}).get("model", DEFAULT_ROBOT)
+    limits = svc.safety.limits
+    assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear,
+                                          svc.line_follow.config.max_linear)
+    navigation = svc.capability._data.setdefault("navigation", {})
+    navigation["goal_navigation"] = False
+    assert _controls(client)["items"][0]["drive_modes"] == ["lane"]
+    svc.config.setdefault("robot", {})["model"] = "other_base"
+    svc.line_follow = None
+    (base,) = _controls(client)["items"]
+    assert base["robot_kind"] == "other_base" and base["drive_modes"] == []
+    assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear)
+
+
+def test_d491_free_mode_needs_live_goal_navigation(core_client, monkeypatch):
+    from core_api_web.api.v1 import system
+
+    client, svc = _live_core(core_client)
+    monkeypatch.setattr(system, "withhold_hardware_flags", lambda data, _reasons: data)
+    svc.capability._data.setdefault("navigation", {})["goal_navigation"] = True
+    assert _controls(client)["items"][0]["drive_modes"] == ["lane", "free"]

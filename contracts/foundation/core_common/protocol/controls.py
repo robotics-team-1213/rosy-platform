@@ -37,6 +37,11 @@ class BaseVelocityControl(_Wire):
     service). It is not evidence that the mode can start right now; the mode's own
     start/status API decides that. Pinky's ``pivot`` and
     ``fine`` are profile constants of that base, not runtime evidence.
+
+    D-491 1 (optional within /1): ``robot_kind`` is the robot package name,
+    ``drive_modes`` the trip drive modes it offers (``lane`` with the line-follow
+    service, ``free`` with goal navigation) and ``trip_max_linear`` (m/s) the
+    fastest speed it allows a Fleet trip. A device without them is an older image.
     """
 
     id: str = Field(pattern=_ID)
@@ -47,6 +52,9 @@ class BaseVelocityControl(_Wire):
     pivot: bool
     fine: bool
     autonomy: tuple[Literal["line"], ...] = ()
+    robot_kind: str | None = Field(None, pattern=r"^[a-z][a-z0-9_]*$", max_length=64)
+    drive_modes: tuple[Literal["lane", "free"], ...] | None = None
+    trip_max_linear: float | None = Field(None, ge=0, allow_inf_nan=False)
 
 
 class JointRange(_Wire):
@@ -132,14 +140,18 @@ class ControlsDescriptor(_Wire):
 
 
 def pinky_controls(*, provides, max_linear: float, max_angular: float,
-                   autonomy: tuple[Literal["line"], ...] = ()) -> dict:
+                   autonomy: tuple[Literal["line"], ...] = (), robot_kind: str | None = None,
+                   drive_modes: tuple[Literal["lane", "free"], ...] | None = None,
+                   trip_max_linear: float | None = None) -> dict:
     """Pinky's controls from its adapter manifest's `provides` (D-411 §8).
 
     `autonomy` is what the caller provides (not live readiness); pivot/fine are Pinky profile constants.
+    The D-491 trip fields are left out of the wire when None (``exclude_none``).
     """
     items = []
     if "drive" in provides:
         items.append(BaseVelocityControl(id="base", label="주행", max_linear=max_linear,
                                          max_angular=max_angular, pivot=True, fine=True,
-                                         autonomy=autonomy))
-    return ControlsDescriptor(items=tuple(items)).model_dump(by_alias=True, mode="json")
+                                         autonomy=autonomy, robot_kind=robot_kind,
+                                         drive_modes=drive_modes, trip_max_linear=trip_max_linear))
+    return ControlsDescriptor(items=tuple(items)).model_dump(by_alias=True, mode="json", exclude_none=True)
