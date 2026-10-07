@@ -3,9 +3,10 @@
 The pose is projected onto every arc (``fleet.routing.graph.Arc.project``). An arc counts only when
 the foot point lies strictly inside it (past either end the offset sign is arbitrary), within
 ``max_lateral_m`` (default: the arc's own ``width_m``), and with its tangent within
-``heading_gate_deg`` of the robot heading. A pose without a heading (``yaw`` None: a still
-D-472 LED track) skips the heading gate: the nearest arc wins, so the margin is right but on a
-two-way edge the offset sign may belong to the opposite arc. Of those the nearest is used, so on a two-way edge and
+``heading_gate_deg`` of the robot heading. A pose without a heading (``yaw`` None: a D-472 LED
+track before its first motion heading) skips the heading gate and takes the nearest arc: on a
+two-way edge the offset sign may belong to the opposite arc, and at a junction the nearest arc
+may be the crossing lane. Of those the nearest is used, so on a two-way edge and
 at a junction the arc along the direction of travel wins. The lateral offset is signed against
 that arc's tangent (left +). The body margin is
 ``width_m / 2 - (|offset| + body_half_width_m)``: the gap between the body side and the lane edge,
@@ -51,10 +52,13 @@ class LaneComplianceConfig:
     #: Monitor deadband: odom within this distance / turn over max_odom_age_s is "still" (jitter).
     moving_min_m: float = 0.01
     moving_min_deg: float = 2.0
+    #: A D-472 LED track must move this far before its direction is taken as the heading (m).
+    #: Sized above overhead blob jitter; provisional until measured on ceiling_north.
+    track_heading_min_m: float = 0.05
 
     def __post_init__(self) -> None:
         for name in ("warn_margin_m", "act_timeout_s", "heading_gate_deg", "moving_min_m",
-                     "moving_min_deg") + (("max_lateral_m",) if self.max_lateral_m is not None else ()):
+                     "moving_min_deg", "track_heading_min_m") + (("max_lateral_m",) if self.max_lateral_m is not None else ()):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                 raise ValueError(f"fleet.lane_compliance.{name} must be a finite number")
@@ -68,6 +72,8 @@ class LaneComplianceConfig:
             raise ValueError("fleet.lane_compliance.heading_gate_deg must be within (0, 90)")
         if not (0.0 <= self.moving_min_m <= 1.0 and 0.0 <= self.moving_min_deg <= 90.0):
             raise ValueError("fleet.lane_compliance.moving_min_m/deg must be within [0, 1] m / [0, 90] deg")
+        if not 0.0 < self.track_heading_min_m <= 1.0:
+            raise ValueError("fleet.lane_compliance.track_heading_min_m must be within (0, 1]")
         if isinstance(self.persist_n, bool) or not isinstance(self.persist_n, int) or not 1 <= self.persist_n <= 100:
             raise ValueError("fleet.lane_compliance.persist_n must be an integer within [1, 100]")
 

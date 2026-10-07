@@ -7,10 +7,13 @@ The console raises WARN/ACT only for `moving` robots (D-511 2: the watch is on m
 When the map pose is not LOCALIZED (a site without corner or robot markers) and an
 `identity` service is wired, the robot's D-472 LED-confirmed track is judged instead (addendum 3:
 lane compliance only; the track never reaches MapPoseService, trips, initialpose or commands). The
-track counts only when CONFIRMED, no older than the map pose's `sighting_lease_s` and on the active
-site map id. Its blob has no heading: the heading is the direction from the last track position
-that moved more than `moving_min_m`, else the arc is chosen without the heading gate
-(`heading_source` `pose` | `track_motion` | `none`, logged on every change). `pose_source` says
+track counts only when CONFIRMED, its age within [-MAX_SIGHTING_FUTURE_S, `sighting_lease_s`] like a
+map pose sighting, and on the active site map id. Its blob has no heading: while odom says moving
+and the track moved more than `track_heading_min_m`, the direction of that move is the heading and
+is kept while the track stays fresh (a skipped camera frame repeats the position); before the
+first such heading the arc is chosen without the heading gate (`heading_source` `pose` |
+`track_motion` | `none`, logged on every change). A change of `pose_source` restarts the
+WARN/ACT counts. `pose_source` says
 which input produced the sample (`map_pose` | `led_track`); `pose_state` stays the map pose state.
 The latest result per robot is read by `GET /api/fleet/state` rows (`lane_compliance`) and
 `GET /api/fleet/robots/{id}/lane-compliance`.
@@ -29,7 +32,7 @@ from fastapi import HTTPException
 
 from fleet.localization.lane_compliance import (UNKNOWN, LaneComplianceConfig,
                                                 LaneComplianceTracker)
-from fleet.localization.map_pose import LOCALIZED, MapPose
+from fleet.localization.map_pose import LOCALIZED, MAX_SIGHTING_FUTURE_S, MapPose
 
 #: D-511 2: the monitor reads poses at 2 Hz or faster, like the trip loop (D-494 appendix).
 PERIOD_S = 0.5
@@ -48,6 +51,7 @@ class LaneComplianceMonitor:
         self._identity = identity        # D-472 IdentityService: confirmed_track_pose only
         self._wall = wall
         self._track_from: dict[str, tuple[float, float]] = {}   # last track point beyond the deadband
+        self._track_yaw: dict[str, float] = {}                   # last motion heading of the track
         self._input: dict[str, tuple[str, str]] = {}            # (pose_source, heading_source), for logs
         self._trackers: dict[str, LaneComplianceTracker] = {}
         self._latest: dict[str, dict] = {}
@@ -61,6 +65,7 @@ class LaneComplianceMonitor:
             self._trackers.pop(gone, None)
             self._latest.pop(gone, None)
             self._track_from.pop(gone, None)
+            self._track_yaw.pop(gone, None)
             self._input.pop(gone, None)
         cfg = self.config
         movers = [r for r in roster if self._poses.moved(r, cfg.moving_min_m, cfg.moving_min_deg)]
@@ -71,13 +76,17 @@ class LaneComplianceMonitor:
         active = self._site_maps.active()
         graph = active[2] if active is not None else None
         for robot_id in roster:
-            tracker = self._trackers.setdefault(robot_id, LaneComplianceTracker(self.config))
             arbitrated = self._poses.arbitrated_pose(robot_id)
-            pose, source, heading = self._input_pose(robot_id, arbitrated)
-            if self._input.get(robot_id) != (source, heading):
+            pose, source, heading = self._input_pose(robot_id, arbitrated, robot_id in movers)
+            previous = self._input.get(robot_id)
+            if previous is None or previous[0] != source:   # another input: counts start over
+                self._trackers[robot_id] = LaneComplianceTracker(self.config)
+            tracker = self._trackers[robot_id]
+            if previous != (source, heading):
                 self._input[robot_id] = (source, heading)
                 logger.info("lane compliance %s: judged from %s, heading %s%s", robot_id, source, heading,
-                            " (still LED track: nearest arc, no heading gate)" if heading == "none" else "")
+                            " (LED track without a motion heading yet: nearest arc, no heading gate)"
+                            if heading == "none" else "")
             result = tracker.judge(pose, graph)
             self._latest[robot_id] = {**asdict(result), "pose_state": getattr(arbitrated, "state", UNKNOWN),
                                       "pose_source": source, "heading_source": heading,
@@ -85,29 +94,30 @@ class LaneComplianceMonitor:
                                       "map_version": active[0] if active is not None else None,
                                       "at": self._wall()}
 
-    def _input_pose(self, robot_id: str, arbitrated) -> tuple:
+    def _input_pose(self, robot_id: str, arbitrated, moving: bool) -> tuple:
         """(pose to judge, pose_source, heading_source): the map pose, else a fresh LED track."""
-        if self._identity is None or getattr(arbitrated, "state", None) == LOCALIZED:
+        track = None
+        if self._identity is not None and getattr(arbitrated, "state", None) != LOCALIZED:
+            track = self._identity.confirmed_track_pose(robot_id)
+        age = None if track is None else track.get("age_s")
+        if (track is None or track.get("state") != "CONFIRMED" or age is None
+                or not -MAX_SIGHTING_FUTURE_S <= age <= self._poses.config.sighting_lease_s
+                or self._poses.active_map_id() not in (None, track.get("map_id"))):
             self._track_from.pop(robot_id, None)
-            return arbitrated, "map_pose", "pose"
-        track = self._identity.confirmed_track_pose(robot_id)
-        active_map = self._poses.active_map_id()
-        if (track.get("state") != "CONFIRMED" or track.get("age_s") is None
-                or track["age_s"] > self._poses.config.sighting_lease_s
-                or (active_map is not None and track.get("map_id") != active_map)):
-            self._track_from.pop(robot_id, None)
+            self._track_yaw.pop(robot_id, None)
             return arbitrated, "map_pose", "pose"
         x, y, yaw, heading = track["x"], track["y"], track.get("yaw"), "pose"
         if yaw is None:
-            # The blob tracker has no heading: take the direction of travel once the track moved
-            # beyond the monitor's moving deadband; a still robot is judged without the heading gate.
+            # The blob tracker has no heading. Odom says moving and the blob moved beyond the
+            # camera-noise deadband: that direction is the heading, kept while the track is fresh
+            # (a skipped frame repeats the position). Before the first one: no heading gate.
             last = self._track_from.get(robot_id)
-            if last is None or math.hypot(x - last[0], y - last[1]) > self.config.moving_min_m:
+            if last is None or math.hypot(x - last[0], y - last[1]) > self.config.track_heading_min_m:
                 self._track_from[robot_id] = (x, y)
-            if last is not None and math.hypot(x - last[0], y - last[1]) > self.config.moving_min_m:
-                yaw, heading = math.atan2(y - last[1], x - last[0]), "track_motion"
-            else:
-                heading = "none"
+                if last is not None and moving:
+                    self._track_yaw[robot_id] = math.atan2(y - last[1], x - last[0])
+            yaw = self._track_yaw.get(robot_id)
+            heading = "none" if yaw is None else "track_motion"
         return (MapPose(x, y, yaw, LOCALIZED, "led_track", 0.0, track["age_s"], map_id=track.get("map_id")),
                 "led_track", heading)
 
