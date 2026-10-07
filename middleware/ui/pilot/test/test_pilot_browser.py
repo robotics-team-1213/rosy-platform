@@ -570,8 +570,8 @@ def test_lobby_failure_shows_retry_and_gate_survives(tablet_page):
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
-@pytest.mark.parametrize("width,height", [(320, 568), (390, 844)])
-def test_lobby_empty_and_failure_fit_phone_width(base_url, width, height):
+@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_lobby_empty_and_failure_fit_declared_widths(base_url, width, height):
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": width, "height": height})
@@ -596,11 +596,16 @@ def test_lobby_empty_and_failure_fit_phone_width(base_url, width, height):
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 assert page.locator("[data-lobby-retry]").is_visible()
                 assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
-                assert page.locator("ui-topbar [data-estop]").is_visible()
+                assert page.locator("form[data-pilot-token-form] label").is_visible()
+                estop = page.locator("ui-topbar [data-estop]").bounding_box()
+                assert estop and estop["y"] + estop["height"] <= height, (state, width, estop)
+                main_width = page.locator(".pilot-main").bounding_box()["width"]
+                assert main_width >= min(width, 768) - 1, (state, width, main_width)
                 widths = page.evaluate("""() => ['form[data-pilot-token-form] ui-field',
                     'form[data-pilot-token-form] ui-button', '[data-lobby-retry]']
                     .map(selector => document.querySelector(selector).getBoundingClientRect().width)""")
-                assert max(widths) - min(widths) <= 1, (state, width, widths)
+                if width < 480:
+                    assert max(widths) - min(widths) <= 1, (state, width, widths)
             assert errors == [], errors
         finally:
             browser.close()
@@ -996,6 +1001,14 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
                 shot_dir.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(shot_dir / f"pilot-drive-current-{viewport[0]}x{viewport[1]}.png"))
             if viewport[0] < 480:
+                action_boxes = page.evaluate("""() => {
+                  const actions = document.querySelector('[data-drive-hud] ui-actions');
+                  const track = actions.getBoundingClientRect();
+                  return {track: {left: track.left, right: track.right}, buttons: [...actions.children].map(button => {
+                    const box = button.getBoundingClientRect();
+                    return {left: box.left, right: box.right, top: box.top, width: box.width, height: box.height};
+                  })};
+                }""")
                 cue = page.locator("[data-drive-scroll-cue]").bounding_box()
                 stick = page.locator("[data-drive-stick]").bounding_box()
                 if viewport[0] == 320:
@@ -1022,6 +1035,15 @@ def test_camera_keeps_aspect_and_controls_never_cover_it(base_url, viewport):
     assert m["overlaps"] == 0, m
     assert m["videoArea"] > 0.2, f"영상이 너무 작다: {m}"
     if viewport[0] < 480:
+        buttons = action_boxes["buttons"]
+        assert len(buttons) == (2 if viewport[0] == 320 else 4), action_boxes
+        assert max(button["width"] for button in buttons) - min(button["width"] for button in buttons) <= 1, action_boxes
+        assert all(button["height"] >= 44 for button in buttons), action_boxes
+        assert abs(buttons[0]["left"] - action_boxes["track"]["left"]) <= 1, action_boxes
+        assert abs(buttons[-1]["right"] - action_boxes["track"]["right"]) <= 1, action_boxes
+        assert abs(buttons[0]["top"] - buttons[1]["top"]) <= 1, action_boxes
+        if len(buttons) == 4:
+            assert abs(buttons[2]["top"] - buttons[3]["top"]) <= 1, action_boxes
         assert all(box["bottom"] <= controls["viewport"] for box in controls["boxes"]
                    if "pedal" in box["selector"] or "stick" in box["selector"]), controls
         assert cue["y"] >= stick["y"] + stick["height"] and cue["y"] + cue["height"] <= viewport[1]
