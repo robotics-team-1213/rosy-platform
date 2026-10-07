@@ -145,11 +145,12 @@ def _digest(token: str) -> str:
 
 
 def install_development_routes(app, *, sessions: Optional[DevelopmentSessions], task_service,
-                               trust_forwarded: bool) -> None:
+                               trust_forwarded: bool, password_login: bool = False) -> None:
     @app.get("/api/fleet/auth/connection", tags=["fleet-auth"])
     def fleet_connection() -> JSONResponse:
-        return JSONResponse(headers=NO_STORE,
-                            content={"mode": "development" if sessions is not None else "paired"})
+        # D-519 6: `password_login` tells the console whether to offer 아이디·비밀번호 or the token.
+        return JSONResponse(headers=NO_STORE, content={
+            "mode": "development" if sessions is not None else "paired", "password_login": password_login})
 
     @app.post("/api/fleet/auth/development-session", status_code=201, tags=["fleet-auth"])
     def fleet_development_session(request: Request) -> JSONResponse:

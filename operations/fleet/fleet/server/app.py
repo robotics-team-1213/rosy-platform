@@ -446,7 +446,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-473: `--lan-camera-proxy` already means "Fleet sits behind the site Caddy", whose
     # X-Forwarded-For carries the browser address the development session checks.
     install_development_routes(app, sessions=development_sessions, task_service=task_service,
-                               trust_forwarded=lan_camera_proxy)
+                               trust_forwarded=lan_camera_proxy, password_login=password_sessions is not None)
     install_password_routes(app, sessions=password_sessions, authorize=authorize, task_service=task_service,
                             trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]

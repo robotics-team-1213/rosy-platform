@@ -150,7 +150,7 @@ def test_paired_console_reports_paired_and_refuses_sessions(tmp_path):
 
     response = client.get("/api/fleet/auth/connection")
     assert response.status_code == 200
-    assert response.json() == {"mode": "paired"}
+    assert response.json() == {"mode": "paired", "password_login": False}
     assert response.headers["cache-control"] == "no-store"
     refused = client.post(SESSION, headers=ORIGIN)
     assert refused.status_code == 403
@@ -161,7 +161,7 @@ def test_development_session_is_a_named_operator_and_is_audited(tmp_path):
     app, tasks = _app(tmp_path, sessions=DevelopmentSessions())
     client = _client(app)
 
-    assert client.get("/api/fleet/auth/connection").json() == {"mode": "development"}
+    assert client.get("/api/fleet/auth/connection").json() == {"mode": "development", "password_login": False}
     issued = client.post(SESSION, headers=ORIGIN)
     assert issued.status_code == 201
     assert issued.headers["cache-control"] == "no-store"

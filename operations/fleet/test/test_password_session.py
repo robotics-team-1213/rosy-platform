@@ -132,6 +132,7 @@ def test_login_sets_a_strict_http_only_cookie_and_session_reports_it(tmp_path):
     assert "max-age" not in cookie.lower()
     session = client.get("/api/fleet/auth/session").json()
     assert session["principal_id"] == "alice" and session["role"] == "operator"
+    assert client.get("/api/fleet/auth/connection").json() == {"mode": "paired", "password_login": True}
     assert session["via"] == "cookie" and session["expires_at"]
     rows = tasks.store.api_audit(limit=10)
     assert any(r["principal_id"] == "alice" and r["path"] == LOGIN and r["event_type"] == "INTENT" for r in rows)
@@ -185,6 +186,7 @@ def test_login_routes_are_absent_without_login_accounts(tmp_path):
     client = _client(_app(tmp_path, logins={})[0])
 
     assert _login(client).status_code == 404
+    assert client.get("/api/fleet/auth/connection").json()["password_login"] is False
     assert client.post("/api/fleet/auth/logout", headers=ORIGIN).status_code == 404
     assert client.get("/api/fleet/auth/session").status_code == 401
     bearer = client.get("/api/fleet/auth/session", headers={"Authorization": f"Bearer {TOKEN}"}).json()

@@ -27,6 +27,7 @@ Static Fleet console UI (vanilla ES modules, no build step), served at `/console
 | `map-fit.js`, `map-fit-view.js` | D-375 lane-paint map fit proposal (pure math / view) |
 | `enrollment.js`, `camera-pairing.js` | Robot enrollment (D-361) and camera pairing approval (D-341) panels |
 | `address-drift.js`, `state-age.js`, `localization-badge.js`, `poll-gate.js`, `authorization.js` | Pure helpers: address drift text, queue state staleness (D-493), localization badge, 404 poll gate, role-lock reasons |
+| `password-login.js`, `password-login.css` | D-519 아이디·비밀번호 로그인 칸 — 네 화면이 같이 쓴다. `password_login` 현장이면 잠김 때 칸을 보이고 "토큰으로 접속"(`#token-access`)을 접는다. 쿠키는 HttpOnly라 화면은 토큰이 없을 때 `Authorization`만 빼면 된다 |
 | `package.json` | `{"type": "module"}` so node can run the tests |
 
 ## For AI Agents

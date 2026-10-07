@@ -30,6 +30,8 @@ CONSOLE_ASSETS = {
     "state-age.js": "application/javascript",
     "authorization.js": "application/javascript",
     "development-auth.js": "application/javascript",
+    "password-login.js": "application/javascript",
+    "password-login.css": "text/css",
     "camera-pairing.js": "application/javascript",
     "camera-peer.js": "application/javascript",
     "field-layers.js": "application/javascript",

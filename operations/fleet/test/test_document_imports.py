@@ -29,6 +29,7 @@ ALLOWED = {
         "site-path.js",
         "poll-gate.js",
         "confirmed-action.js",
+        "password-login.js",
         "/common/fleet-client.js",
         "/common/ui.js",
         "/common/scope.js",
@@ -44,6 +45,8 @@ ALLOWED = {
         "poll-gate.js",
         "peer-picker.js",
         "address-drift.js",
+        "development-auth.js",
+        "password-login.js",
         "/common/fleet-client.js",
         "/common/scope.js",
         "/common/task-chooser.js",
@@ -53,6 +56,8 @@ ALLOWED = {
         "/common/fleet-client.js",
         "/common/ui.js",
         "/console/assets/cell-document-editor.js",
+        "/console/assets/development-auth.js",
+        "/console/assets/password-login.js",
     },
 }
 

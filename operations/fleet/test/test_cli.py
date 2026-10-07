@@ -644,7 +644,7 @@ def test_console_development_mode_needs_both_the_flag_and_the_deployment(
 
     client = TestClient(captured["app"], client=("192.168.1.50", 50000),
                         base_url="http://192.168.1.10:8090")
-    assert client.get("/api/fleet/auth/connection").json() == {"mode": expected}
+    assert client.get("/api/fleet/auth/connection").json() == {"mode": expected, "password_login": False}
     issued = client.post("/api/fleet/auth/development-session")
     assert issued.status_code == (201 if expected == "development" else 403)
 
