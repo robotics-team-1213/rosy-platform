@@ -9,6 +9,7 @@
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/console/assets/cell.css">
+  <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/cell.js"></script>
 </head>
@@ -20,6 +21,13 @@
     <ui-tag id="session">접속 전</ui-tag>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
+  <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
+  <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
+    <a href="/console">관제</a>
+    <a href="/console/install">설치·보정</a>
+    <a href="/console/site-map">현장 지도</a>
+    <a href="/console/cell" aria-current="page">Cell</a>
+  </nav>
   <div class="cell-access">
     <ui-field id="credential" type="password" placeholder="운영자 토큰" aria-label="관제 운영자 토큰"></ui-field>
     <ui-button id="connect" kind="primary">접속</ui-button>
@@ -76,7 +84,6 @@
       <label>제안 / 작업 ID<input class="ui-field" id="mission-id" autocomplete="off"></label>
       <ui-text>작업과 정지 세대를 다시 확인한 뒤 운영자가 승인합니다. 보류 사유가 해결됐는지 확인하고 복구하세요.</ui-text>
       <ui-text>작업 취소는 실행 중인 장치를 정지하지 않습니다. 실행 중인 작업이나 실제 상태가 확인되지 않은 작업은 취소할 수 없습니다.</ui-text>
-      <div class="actions"><a class="console-return" href="/console">관제 화면으로 돌아가기</a></div>
       <div class="actions"><ui-button id="read-job" kind="quiet">상태 확인</ui-button><ui-button id="admit" kind="primary" disabled>실행 승인</ui-button><ui-button id="reconcile" kind="quiet" disabled>실제 상태 대조</ui-button><ui-button id="resume" kind="primary" disabled>보류 작업 재승인</ui-button><ui-button id="cancel" kind="irreversible" disabled>작업 취소</ui-button></div>
       <ui-text id="job-summary">작업 ID로 상태를 확인하세요.</ui-text>
       <ul id="step-progress" aria-label="단계별 실행과 목표 확인"></ul>

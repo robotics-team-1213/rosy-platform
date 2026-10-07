@@ -7,7 +7,7 @@ import collections
 import pytest
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
-from core_features.line_follow.junction import JunctionRefused
+from core_features.line_follow.recovery.junction import JunctionRefused
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowMode, LineObservation
 

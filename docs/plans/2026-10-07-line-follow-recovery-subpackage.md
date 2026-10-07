@@ -1,7 +1,7 @@
 # line_follow 차선 복구 하위 패키지 분리 계획
 
 **날짜:** 2026-10-07
-**상태:** 제안
+**상태:** 완료 (2026-10-07, 브랜치 `refactor/line-follow-recovery-subpackage`. 이동 d37bc0883, 크기 판정 f50b33fb6는 독립 검토를 거쳤다)
 **이유:** `core_features` 크기 판정(14449, D-476 rev 1)에는 조건이 붙어 있다. 다음 재판정 전에 이 분리 계획이 있어야 한다. 브랜치 `feat/d491-core-junction-action`의 D-494 4항·D-495 교차로 동작(`line_follow/junction.py`)이 그 다음 재판정을 부른다.
 
 ## 무엇을 옮기나
@@ -28,8 +28,8 @@
 
 ## 크기 판정
 
-- `tools/harness`와 `test/architecture/test_module_structure.py`가 `core_features/line_follow/recovery`를 별도 단위로 셀 수 있게 한다. 그 단위에 자기 크기 판정을 준다. 판정 기준선은 옮긴 시점의 줄 수에 +150이다.
-- `core_features`의 판정은 옮긴 줄 수만큼 낮춘다.
+- `test/architecture/test_module_structure.py`의 `SIZE_UNITS`가 `core_features/line_follow/recovery`를 별도 단위로 센다. `tools/harness`는 크기를 세지 않으므로 고치지 않는다. 그 단위에 자기 크기 판정을 준다. 판정 기준선은 옮긴 시점의 줄 수에 +150이다.
+- `core_features`의 판정은 옮긴 줄 수만큼 낮춘다. 옮긴 뒤 `core_features`는 12772줄이고 `recovery`는 2320줄이다.
 
 ## 순서와 검증
 

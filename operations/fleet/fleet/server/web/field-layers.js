@@ -75,7 +75,7 @@ export function aspectMismatch(configured, detectedAspect, tolerance = ASPECT_TO
   return { state: relative > tolerance ? "mismatch" : "match", detected, expected, relative };
 }
 
-// 운용자 W×H 입력(m). 0.05–100 m 범위의 유한수만 받는다.
+// 운영자 W×H 입력(m). 0.05–100 m 범위의 유한수만 받는다.
 export function parseFieldSize(width, height) {
   const w = Number(width);
   const h = Number(height);

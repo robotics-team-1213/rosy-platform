@@ -6,8 +6,8 @@ candidate, including downstream transformations. Its absence is not permission.
 from dataclasses import replace
 import math
 
-from core_features.line_follow.lane_bridge import LaneBridgeMixin
-from core_features.line_follow.lane_return import Footprint, ReturnController, ReturnInput
+from core_features.line_follow.recovery.lane_bridge import LaneBridgeMixin
+from core_features.line_follow.recovery.lane_return import Footprint, ReturnController, ReturnInput
 from core_features.line_follow.model import LineFollowMode
 
 _LOCAL_REASONS = {'following','lane_departure','line_not_visible','observation_stale',

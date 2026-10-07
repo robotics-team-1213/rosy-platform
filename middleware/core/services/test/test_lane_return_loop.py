@@ -1,7 +1,7 @@
 """D-468 synthetic planar closed loop: outputs move measured pose, not elapsed distance."""
 import math
 
-from core_features.line_follow.lane_return import (
+from core_features.line_follow.recovery.lane_return import (
     Boundary, Corridor, Footprint, Pose, ReturnController, ReturnInput,
 )
 

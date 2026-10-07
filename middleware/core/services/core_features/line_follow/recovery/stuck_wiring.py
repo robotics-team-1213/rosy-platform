@@ -17,7 +17,7 @@ from core_common.robot_body import ScanView, RobotBody
 from core_features.line_follow.clearance import (Point, body_clearances, body_envelope_gap,
                                                  self_mask_rear_blind_m)
 from core_features.line_follow.model import LineFollowDecision, LineFollowMode
-from core_features.line_follow.stuck_recovery import ForwardTrail, StuckInput, StuckRecovery
+from core_features.line_follow.recovery.stuck_recovery import ForwardTrail, StuckInput, StuckRecovery
 
 #: Providers CORE binds at start (core/line_follow_wiring.py). Unbound or failing ones read as
 #: the fail-closed default: no console link, a calibration session, a zero linear limit.

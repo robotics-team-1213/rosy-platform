@@ -3,7 +3,7 @@ const previousState = new WeakMap();
 // D-359 §5.3 — 권한 잠금은 말없이 막지 않는다. 공용 버튼은 필요한 역할을
 // reason으로 보인다. 네이티브 입력은 사유를 그릴 자리가 없으므로, 입력을 담은
 // [data-role-lock] 묶음의 보이는 공용 안내(.role-lock-note)를 켜고 aria-describedby로 잇는다.
-export const OPERATOR_REASON = "운용자 권한이 필요합니다";
+export const OPERATOR_REASON = "운영자 권한이 필요합니다";
 
 function lockNote(control) {
   return control.closest?.("[data-role-lock]")?.querySelector(".role-lock-note") || null;
