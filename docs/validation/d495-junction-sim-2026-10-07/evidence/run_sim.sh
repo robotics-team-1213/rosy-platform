@@ -39,10 +39,14 @@ line_follow:
   bridge_enabled: $B
   bridge_site_no_dropoffs: true
 YAML
-pkill -f "d495_sim_aux.py"
-pkill -f "ros2 launch .*d495_real.launch.py"
-pkill -f "gz sim.*d495_fleet_real.world"   # never the peer D-476 run's map_v2_fleet_real.world
-sleep 2
+# Stop every process of an earlier run of this partition: a stopped launch leaves bridges and
+# nodes behind (2026-10-07: three parameter_bridges tripled every odom message, same stamp, which
+# breaks CORE's PoseTrail). Only processes whose environment carries GZ_PARTITION=$GZ_PARTITION.
+for p in $(pgrep -u "$(id -u)"); do
+  [ "$p" = "$$" ] && continue
+  tr '\000' '\n' < /proc/$p/environ 2>/dev/null | grep -qx "GZ_PARTITION=$GZ_PARTITION" && kill "$p" 2>/dev/null
+done
+sleep 4
 cp "$(ros2 pkg prefix control)/share/control/map/map_v2_fleet/worlds/map_v2_fleet_real.world" "$RUN/d495_fleet_real.world"
 ros2 launch "$HERE/d495_real.launch.py" core_overlay:="$RUN/core_overlay.yaml" world:="$RUN/d495_fleet_real.world" "$@" > "$RUN/launch.log" 2>&1 &
 LPID=$!
