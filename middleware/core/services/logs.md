@@ -662,3 +662,9 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
 - 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
 - 교훈: 시험 상수는 출처 있는 기하에서 끌어온다. 설명 없는 sim 값은 registry에 열어 둔다(G-16)
+## 2026-10-07 · uncommitted · feat(line_follow): D-498 교차로 회전의 현장 근거
+- 변경: `_turn_basis`: D-400 enforce 증명 또는 현장 근거(`junction_turn_site_accepted` + 신선한 IR 가드 판정(이탈 아님) + 신선한 스캔의 D-422 몸체 정지). `supports_junction_turn`은 읽을 때마다 재판단. 현장 근거로 시작한 회전이 근거를 잃으면 `turn_basis_lost`
+- 증거: `test_junction_turn_site_basis.py` 15 PASS, `test_line_junction.py` 73 PASS. services·api_web·contracts/foundation·문서·perception 배선/lane_keep·test/architecture·Fleet 버전 고정 2297 PASS·19 skip, gateway 2212 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). core_features 15050 (판정 14934+150=15084 안)
+- gate 변화: 없음. SOURCE 호스트 시험만. 현장 설정·SIM·DEVICE는 D-498 순서
+- 결정: D-498 (Proposed)
+- 교훈: 없음

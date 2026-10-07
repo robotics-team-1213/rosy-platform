@@ -638,3 +638,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-495 수용 점검표
 - 결정: D-495 (Proposed) 독립 안전 검토 반영 2026-10-07
 - 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
+
+## 2026-10-07 · uncommitted · docs(api): D-498 v1.118
+- 변경: `junction_turn` 능력 뜻, 중단 사유 `turn_basis_lost`, 설정 행. v1.117은 다른 브랜치가 먼저 잡음. 버전 고정 시험 갱신
+- 증거: `test_junction_turn_site_basis.py` 15 PASS, `test_line_junction.py` 73 PASS. services·api_web·contracts/foundation·문서·perception 배선/lane_keep·test/architecture·Fleet 버전 고정 2297 PASS·19 skip, gateway 2212 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). core_features 15050 (판정 14934+150=15084 안)
+- gate 변화: 없음. SOURCE 호스트 시험만. 현장 설정·SIM·DEVICE는 D-498 순서
+- 결정: D-498 (Proposed)
+- 교훈: 없음

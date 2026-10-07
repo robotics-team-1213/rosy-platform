@@ -524,3 +524,9 @@
 - 증거: perception 2712 PASS·109 skip, services+test/test_sim2real_gaps.py+test/architecture 1230 PASS·1 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). generate·lint 0 error
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
 - 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
+## 2026-10-07 · uncommitted · feat(config): D-498 junction_turn_site_accepted
+- 변경: 기본 false, `ir_guard_enabled` 없이 true면 CORE 시작 거부. 주석에 켜는 순서(IR 보정 → 현장 겹 → SIM → DEVICE)
+- 증거: `test_junction_turn_site_basis.py` 15 PASS, `test_line_junction.py` 73 PASS. services·api_web·contracts/foundation·문서·perception 배선/lane_keep·test/architecture·Fleet 버전 고정 2297 PASS·19 skip, gateway 2212 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). core_features 15050 (판정 14934+150=15084 안)
+- gate 변화: 없음. SOURCE 호스트 시험만. 현장 설정·SIM·DEVICE는 D-498 순서
+- 결정: D-498 (Proposed)
+- 교훈: 없음

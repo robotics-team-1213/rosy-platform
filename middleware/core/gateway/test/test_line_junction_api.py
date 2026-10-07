@@ -156,3 +156,23 @@ def test_repeat_of_a_finished_instruction_is_409_already_done(core_client):
     assert refused.status_code == 409 and refused.json()["error"]["code"] == "JUNCTION_ALREADY_DONE"
     assert client.post(URL, json={**body, "place_id": "J2"}, headers=OPERATOR).json()["accepted"] is True
 
+
+
+def test_packaged_default_keeps_the_d498_site_basis_off():
+    """D-498: no robot turns on the site basis from code; a bad overlay refuses to load."""
+    from pathlib import Path
+
+    import pytest
+    import yaml
+
+    from core.services import _line_follow_config
+    default = Path(__file__).resolve().parents[4] / "contracts" / "foundation" / "config" / "rosy_default.yaml"
+    raw = yaml.safe_load(default.read_text(encoding="utf-8"))["line_follow"]
+    assert raw["junction_turn_site_accepted"] is False
+    assert _line_follow_config(raw).junction_turn_site_accepted is False
+    with pytest.raises(ValueError, match="junction_turn_site_accepted"):
+        _line_follow_config({**raw, "junction_turn_site_accepted": True})   # IR guard still off
+    with pytest.raises(ValueError, match="true or false"):
+        _line_follow_config({**raw, "junction_turn_site_accepted": "yes"})
+    assert _line_follow_config({**raw, "junction_turn_site_accepted": True,
+                                "ir_guard_enabled": True}).junction_turn_site_accepted is True
