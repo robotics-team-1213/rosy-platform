@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.114
+**Version:** v1.115
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2429,6 +2429,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.115 | 2026-10-07 | Corrective/semantic (D-468): containment boundaries are the drivable inner edge of the paint (previously paint centre). 생산자가 칠 폭 절반(`lane_paint_half_width_m`, 260919 STL 공칭 12.5 mm)만큼 안쪽으로 옮기고 그 값을 `geometry_id`에 넣는다. 필드 모양·envelope 1.0 변경 없음 |
 | v1.114 | 2026-10-07 | Additive (D-494 4항, D-495, feat/d491-core-junction-action): CORE `POST /api/v1/line-follow/junction`(operator, 보정 lease)·에러 `LINE_FOLLOW_NOT_ACTIVE`·`JUNCTION_CAMERA_ONLY`·`JUNCTION_ALREADY_DONE`(409)·line-follow 상태와 스냅숏의 `junction`(`LineJunctionStatus`: `pending_action, place_id, state, seq`)·정지 사유 `junction_waiting`·`junction_unresolved`·`junction_stop`. 좌·우는 분기 인식 없이 D-495 제한 회전(`turn_deg`·`advance_m`, 상태 `turning`·`advancing`·`reacquiring`·`aborted`, `junction.turn_deg`·`junction.reason`, 사유 `junction_turning`·`junction_advancing`·`junction_reacquiring`·`junction_aborted`)으로만 간다. envelope 1.0 유지 |
 | v1.113 | 2026-10-07 | Additive (D-494 3): Fleet `GET /api/fleet/robots/{robot_id}/map-pose`, the trip-only map pose from Rosy Cam sightings and robot `odom_pose`; site config `fleet.map_pose`. `/route`, traffic and D-395 unchanged. Robot API and envelope 1.0 unchanged |
 | v1.112 | 2026-10-07 | Additive (D-494 1·2): `rosy.controls/1` `base_velocity` 선택 필드 `robot_kind`·`drive_modes`·`trip_max_linear`와 D-495 `junction_turn`; 상태 스냅샷 선택 필드 `odom_pose {x, y, yaw, stamp}`(UTC epoch 초); Fleet `/trip` 계획이 능력 필드가 있을 때 그 주행 방식·종류·속도를 따른다. 옛 로봇·소비자는 그대로 동작한다. envelope 1.0 유지 |
