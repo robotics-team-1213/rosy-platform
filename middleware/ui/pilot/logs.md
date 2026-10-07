@@ -733,3 +733,10 @@
 - 증거: `X:/DevTemp/pilot-lobby-error/gradle.txt`의 Android debug APK 빌드·JVM 93 tests 성공, `test_shell_assets.py` 4 passed, `known_failures.py` 0 NEW. 현재 APK는 `X:/DevTemp/pilot-lobby-error/build/app/outputs/apk/debug/app-debug.apk`(SHA-256 `31c557905e9e5db2de6b63e6de94138f19b2c336e99da69a1703ddf715758cda`).
 - gate 변화: SOURCE·LOCAL 문구 보강. 설치된 Lenovo 화면·연결 성공/실패 실물 재현·사용자 G3는 미확인이라 Pilot UI/UX HOLD.
 - 결정: D-153 정직·어휘, D-280 중요한 것 먼저·복잡함 단순화.
+
+## 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트가 공용 ui-actions 를 칠하지 않게
+- 변경: `styles.css` 22rem 미만 규칙 — `[data-recordings-sheet] ui-actions` 의 sticky+`background` 를 지우고, 시트를 flex 열로 두어 `[data-recordings-list]` 만 스크롤한다. 하단 행동은 늘 보이고 표면이 공용 부품의 면을 칠하지 않는다(D-194/D-359).
+- 증거: `shared/web/test/test_shared_controls.py` 27 passed(`test_surfaces_do_not_repaint_shared_controls` 이 브랜치 수정 전 FAILED → 수정 뒤 passed, `X:/DevTemp/browser-infra/css_before.txt`·`css_after.txt`). `ROSY_RUN_BROWSER_TESTS=1` `test_pilot_browser.py::test_robot_recording_toggle_and_sheet` 4 viewport(2000x1200·1200x2000·390x844·320x568) 4 passed(`pilot_sheet.txt`), known_failures 0 new.
+- gate 변화: 없음. 실기 태블릿·폰 화면은 미확인.
+- 결정: D-411, D-359.
+- 교훈: sticky 행동 줄은 뒤가 비쳐 면을 칠해야 한다 — 공용 부품을 칠하지 말고 스크롤 영역을 목록으로 옮긴다.
