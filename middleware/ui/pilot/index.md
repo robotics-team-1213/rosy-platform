@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · uiux(pilot): 상태 소켓 상실 중 주행 차단
 - 2026-10-07 · uncommitted · 주행 HUD 상태 용어
 - 2026-10-07 · uncommitted · uiux(pilot): 접속 거부의 운용자 문구
 - 2026-10-07 · uncommitted · uiux(pilot): 연결 로비 전화 폭
 - 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
-- 2026-10-06 · uncommitted · fix(pilot): 10분 상한 뒤 로봇 녹화를 이어 간다

@@ -439,3 +439,7 @@ The follow-up browser harness allows the active preview port in Chromium; port 6
 ## 2026-10-07 Pilot 주행 HUD 상태 용어
 
 [LOCAL 결과](../uiux-pilot-drive-status-2026-10-07/result.md): OPEN·MANUAL 원시 코드 대신 상태 수신·수동을 표시한다. 2000×1200, 1200×2000, 390×844, 320×568의 정상 연결 화면 4건과 G1 90건 통과, 각각 known_failures.py 0 NEW. 재연결 등 전체 G2, 현장 설치본, 사용자 G3는 HOLD.
+
+## 2026-10-07 Pilot 재연결 중 주행 차단
+
+[LOCAL 결과](../uiux-pilot-reconnect-2026-10-07/result.md): 상태 소켓 상실 후 새 인증 상태 프레임 전까지 주행 명령을 차단하고 0을 보낸다. 상태 재연결 중은 2000×1200, 1200×2000, 390×844, 320×568에서 비상 정지와 함께 보인다. 세션·브라우저 23 passed, G1 90 passed, 각각 known_failures 0 NEW. 전체 G2, 설치본 readback, 사용자 G3는 HOLD.

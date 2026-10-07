@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import json
 import socket
 import sys
 import threading
@@ -661,6 +662,40 @@ def test_drive_hud_uses_operator_labels_at_each_width(base_url, viewport):
                 shots = Path(os.environ["ROSY_SHOT_DIR"])
                 shots.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(shots / f"pilot-drive-status-{viewport[0]}x{viewport[1]}.png"))
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_drive_reconnect_warning_stays_visible_at_each_width(base_url, viewport):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            sockets, errors = [], []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def status_socket(route):
+                sockets.append(route)
+                route.on_message(lambda raw: route.send(json.dumps({"type": "state", "mode": "MANUAL"}))
+                                 if json.loads(raw).get("type") == "auth" else None)
+
+            page.route_web_socket("**/ws/state", status_socket)
+            _enter_drive(page, base_url)
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]').dataset.state === 'OPEN'")
+            sockets[-1].close(code=1011)
+            link = page.locator("[data-drive-fact=link]")
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]').dataset.state === 'RETRYING'")
+            assert link.inner_text() == "상태 재연결 중"
+            assert link.is_visible()
+            assert page.locator("[data-estop]").is_visible()
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert errors == []
+            if os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(os.environ["ROSY_SHOT_DIR"])
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-reconnect-{viewport[0]}x{viewport[1]}.png"))
         finally:
             browser.close()
 
