@@ -1,0 +1,143 @@
+{
+ "scenario": "fault",
+ "inject": "scan_turn",
+ "then": "none",
+ "plan": [
+  "right:-110/0.0"
+ ],
+ "injected": {
+  "sim_t": 588.881,
+  "gt": [
+   -0.6549999794208656,
+   -0.4319999720980728,
+   0.7267018182598523
+  ],
+  "state": "turning",
+  "turned_deg": 22.5
+ },
+ "cmd_before_inject": {
+  "sim_t": 588.863,
+  "lin": 0.0,
+  "ang": -0.6
+ },
+ "first_zero_cmd_after": {
+  "sim_t": 589.361,
+  "lin": 0.0,
+  "ang": 0.0
+ },
+ "zero_cmd_latency_s": 0.48,
+ "final_vs_entry_target_deg": 67.82,
+ "final_turned_from_entry_deg": -42.18,
+ "junctions": [
+  {
+   "i": 0,
+   "item": "right:-110/0.0",
+   "result": "aborted",
+   "sight_gt": [
+    -0.655,
+    -0.432,
+    1.12
+   ],
+   "keep_at_sight": "junction_transverse",
+   "stop": {
+    "travel_after_sight_m": 0.0,
+    "sight_to_still_sim_s": 0.327,
+    "paint_ahead_of_front_m": 0.346,
+    "state_at_still": "turning"
+   },
+   "turn": {
+    "entry_yaw_gt_deg": 64.17,
+    "final_yaw_gt_deg": 25.03,
+    "error_vs_target_gt_deg": 70.86,
+    "turned_gt_deg": -39.14,
+    "turned_odom_deg": -38.63,
+    "state_after": "aborted",
+    "reason_after": "turn_basis_lost",
+    "turn_s": 1.59
+   },
+   "at_done": {
+    "gt": [
+     -0.655,
+     -0.432,
+     0.437
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "j": "aborted",
+    "jr": "turn_basis_lost",
+    "lane_offset_m": 0.002,
+    "heading_vs_lane_deg": -38.9
+   },
+   "seq": [
+    {
+     "j": "idle",
+     "jr": null,
+     "state": "OFF",
+     "reason": "mode_off",
+     "sim_t": 587.634
+    },
+    {
+     "j": "armed",
+     "jr": null,
+     "state": "HOLD",
+     "reason": "junction_waiting",
+     "sim_t": 587.744
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_stopping",
+     "sim_t": 587.856
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_turning",
+     "sim_t": 587.961
+    },
+    {
+     "j": "aborted",
+     "jr": "turn_basis_lost",
+     "state": "HOLD",
+     "reason": "junction_aborted",
+     "sim_t": 589.444
+    }
+   ],
+   "sent": [
+    {
+     "i": 0,
+     "item": "right:-110/0.0",
+     "code": 200,
+     "resp": null,
+     "refresh": 0
+    }
+   ]
+  }
+ ],
+ "gt_path_m": 0.0002,
+ "final": {
+  "t": 14.617,
+  "sim_t": 591.395,
+  "gt": [
+   -0.6551813012173217,
+   -0.4320836048320703,
+   0.38376425411937903
+  ],
+  "odom": [
+   -0.6551813012173217,
+   -0.4320836048320703,
+   0.38376425411937903,
+   0.0,
+   0.0
+  ],
+  "state": "HOLD",
+  "reason": "junction_aborted",
+  "keep": null,
+  "body_gap_m": null,
+  "j": "aborted",
+  "jr": "turn_basis_lost"
+ },
+ "capability_at_end": true
+}

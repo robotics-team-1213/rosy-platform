@@ -44,7 +44,7 @@ YAML
 # breaks CORE's PoseTrail). Only processes whose environment carries GZ_PARTITION=$GZ_PARTITION.
 for p in $(pgrep -u "$(id -u)"); do
   [ "$p" = "$$" ] && continue
-  tr '\000' '\n' < /proc/$p/environ 2>/dev/null | grep -qx "GZ_PARTITION=$GZ_PARTITION" && kill "$p" 2>/dev/null
+  tr '\000' '\n' 2>/dev/null < /proc/$p/environ | grep -qx "GZ_PARTITION=$GZ_PARTITION" && kill "$p" 2>/dev/null
 done
 sleep 4
 cp "$(ros2 pkg prefix control)/share/control/map/map_v2_fleet/worlds/map_v2_fleet_real.world" "$RUN/d495_fleet_real.world"
