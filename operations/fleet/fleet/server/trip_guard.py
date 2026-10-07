@@ -18,10 +18,13 @@ Before a trip starts, ``engaged`` names any console motion the robot already has
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Optional
 
 from fleet.hub.hub import HubError
+
+_LOG = logging.getLogger(__name__)
 
 #: A console goal this recent counts as running even before the robot reports NAVIGATING.
 GOAL_FRESH_S = 2.0
@@ -42,6 +45,13 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
         busy = [robot_id for robot_id in dict.fromkeys(robot_ids) if runner.robot_busy(robot_id)]
         if busy:
             raise _busy(busy)
+
+    async def end_trip(robot_id, reason) -> None:
+        """After a stop: a trip store failure is logged, never in place of the stop's result."""
+        try:
+            await runner.cancel_robot(robot_id, reason)
+        except Exception:
+            _LOG.exception("could not end the trip of %s after %s", robot_id, reason)
 
     def formation_robots() -> list:
         return [*console._formation_members(), *([console._formation_leader] if console._formation_leader else [])]
@@ -73,13 +83,13 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
         try:
             return await line_follow_mode(robot_id, mode)  # the operator's stop goes first
         finally:
-            await runner.cancel_robot(robot_id, "operator_line_follow_off")
+            await end_trip(robot_id, "operator_line_follow_off")
 
     async def guarded_cancel(robot_id, *args, **kwargs):
         try:
             return await cancel(robot_id, *args, **kwargs)
         finally:
-            await runner.cancel_robot(robot_id, "operator_cancel")
+            await end_trip(robot_id, "operator_cancel")
 
     async def guarded_estop_all(*args, **kwargs):
         running = runner.running()
@@ -87,7 +97,7 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
             return await estop_all(*args, **kwargs)
         finally:
             if running is not None:
-                await runner.cancel_robot(running["robot_id"], "operator_estop")
+                await end_trip(running["robot_id"], "operator_estop")
 
     console.goal, console.cancel, console.estop_all = guarded_goal, guarded_cancel, guarded_estop_all
     console.formation_start, console.line_follow_mode = guarded_formation_start, guarded_line_follow_mode

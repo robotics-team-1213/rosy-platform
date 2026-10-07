@@ -1431,3 +1431,19 @@ def test_restart_halts_run_outside_the_tick_with_a_cap_and_yield_to_a_new_trip(t
     _plan(store, ports, "ring_s:fwd", 0.1, "NW")
     run(runner.start("p1", "bob"))
     assert runner._restarted == []  # the new trip owns the robot now
+
+
+def test_a_trip_store_failure_never_replaces_the_stop_result(tmp_path, caplog):
+    client, robot, _console, _trip_id, _ports = _trip_app(tmp_path)
+
+    async def broken(robot_id, reason):
+        raise RuntimeError("trip store unavailable")
+
+    client.app.state.trip_runner.cancel_robot = broken
+    with caplog.at_level(logging.ERROR):
+        estop = client.post("/api/fleet/estop", headers=OPERATOR)
+        cancel = client.post("/api/fleet/robots/rosy_60/cancel", headers=OPERATOR)
+        off = client.post("/api/fleet/robots/rosy_60/line-follow", json={"mode": "OFF"}, headers=OPERATOR)
+    assert estop.status_code == 200 and estop.json()["total"] == 1 and ("estop",) in robot.calls
+    assert cancel.status_code == 200 and off.status_code == 200
+    assert sum("could not end the trip" in r.message for r in caplog.records) == 3
