@@ -41,7 +41,7 @@ class Stop(Exception):
 
 def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
     result = subprocess.run(["git", "-c", "core.quotepath=off", "-C", str(cwd), *args],
-                            capture_output=True, text=True, encoding="utf-8", errors="replace")
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
     if check and result.returncode != 0:
         raise Stop(f"git {' '.join(args)} failed:\n{result.stdout}{result.stderr}".rstrip())
     return result
@@ -276,26 +276,29 @@ def pack(wt: Path, paths: list[str]) -> list[list[str]]:
     return [members for members, _ in groups]
 
 
-def select(wt: Path, base: str, python: str) -> list[list[str]]:
-    """pytest invocations for the branch delta (base...HEAD).
+def select(wt: Path, base: str, python: str) -> tuple[list[list[str]], str | None]:
+    """pytest invocations for the branch delta (base...HEAD), and a note owed to the summary.
 
     The D-436 selector (`rosy_harness.py affected`) when the harness is present —
     it adds the guard set and reverse dependents — otherwise the nearest test/ dir.
     """
     if (wt / "tools/harness/affected_tests.py").is_file():
+        # Strict UTF-8: the JSON must parse whole; PYTHONUTF8 makes the child write UTF-8.
         result = subprocess.run([python, HARNESS, "affected", "--base", base, "--json"], cwd=wt,
-                                capture_output=True, text=True, encoding="utf-8")
-        if result.returncode == 0:
-            sel = json.loads(result.stdout)
-            if sel["mode"] == "full":
-                # D-436 4: the full tier runs on GitHub runners, as `affected --run` does.
-                print("[tests] selector escalated to FULL (" + "; ".join(sel["escalations"][:3])
-                      + "); running the guards and mapped suites here, full tier is CI's")
-                return sel["local_invocations"]
-            return sel["invocations"]
-        print(f"[tests] affected selector failed, using nearest test/ dirs:\n{result.stderr.strip()}")
+                                capture_output=True, text=True, encoding="utf-8", env=ENV)
+        if result.returncode != 0:
+            raise Stop(f"affected selector failed (exit {result.returncode}); not guessing tests:\n"
+                       f"{result.stdout}{result.stderr}".rstrip())
+        sel = json.loads(result.stdout)
+        if sel["mode"] == "full":
+            # D-436 4: the full tier runs on GitHub runners, as `affected --run` does.
+            note = ("selector escalated to FULL (" + "; ".join(sel["escalations"][:3]) + "): ran the"
+                    " guards and mapped suites only; the FULL tier is still owed to CI")
+            print(f"[tests] {note}")
+            return sel["local_invocations"], note
+        return sel["invocations"], None
     changed = lines(wt, "diff", "--name-only", f"{base}...HEAD")
-    return pack(wt, fallback_targets(wt, changed))
+    return pack(wt, fallback_targets(wt, changed)), None
 
 
 def record_only(path: str) -> bool:
@@ -307,7 +310,7 @@ def record_only(path: str) -> bool:
 
 # --- running --------------------------------------------------------------------
 
-def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict | None = None,
+def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict = ENV,
          allow_fail: bool = False) -> tuple[int, str]:
     print(f"[{label}] {' '.join(command)}", flush=True)
     result = subprocess.run(command, cwd=wt, capture_output=True, text=True, encoding="utf-8",
@@ -327,7 +330,7 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     if (wt / HARNESS).is_file():
         step(wt, [python, HARNESS, "lint"], logdir / f"lint-{round_no}.txt", "lint")
         done.append("lint ok")
-    env = dict(os.environ)
+    env = dict(ENV)
     if args.browser:
         env.update(ROSY_RUN_BROWSER_TESTS="1", ROSY_BROWSER_TESTS="1")
     for i, inv in enumerate(invocations, 1):
@@ -339,7 +342,7 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
         if code not in (0, 1):
             raise Stop(f"pytest {' '.join(inv)} exited {code} (log {log}); not landing")
         check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
-                               capture_output=True, text=True, encoding="utf-8", errors="replace")
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
         print(check.stdout, end="")
         if check.returncode != 0:
             raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); not landing")
@@ -408,7 +411,9 @@ def land(args) -> int:
         if args.tests == "none":
             invocations: list[list[str]] = []
         elif args.tests == "auto":
-            invocations = select(wt, main_sha, python)
+            invocations, note = select(wt, main_sha, python)
+            if note and note not in summary:
+                summary.append(note)
         else:
             invocations = [shlex.split(args.tests)]
         if args.dry_run:

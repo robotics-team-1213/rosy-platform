@@ -246,3 +246,26 @@ def test_ff_refused_by_peer_dirty_file_leaves_it(repos, capsys):
     assert "would be overwritten" in capsys.readouterr().err
     assert (main / "pkg/a.py").read_bytes() == b"peer's uncommitted edit\n"
     assert git(main, "rev-parse", "HEAD") == before
+
+
+FULL = ('{"mode": "full", "escalations": ["tools/x: harness"], "invocations": [],'
+        ' "local_invocations": [["pkg/test"]]}')
+
+
+@pytest.mark.parametrize("affected, code", [
+    ("sys.exit(3)", 1),                    # harness present but selector broken: stop, no guessing
+    (f"print({FULL!r})", 0),               # FULL: land on the local subset, owe the rest to CI
+])
+def test_harness_selector(repos, capsys, affected, code):
+    main, wt = repos
+    stub = f"import sys\nif sys.argv[1] == 'affected':\n    {affected}\n"
+    commit(wt, {"tools/harness/affected_tests.py": "", "tools/harness/rosy_harness.py": stub,
+                "pkg/a.py": "x = 2\n"}, "branch with harness")
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == code
+    captured = capsys.readouterr()
+    if code:
+        assert "affected selector failed" in captured.err
+        assert git(main, "rev-parse", "HEAD") == before
+    else:
+        assert "FULL tier is still owed to CI" in captured.out.split("== landed")[1]
