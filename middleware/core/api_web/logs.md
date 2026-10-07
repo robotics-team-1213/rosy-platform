@@ -653,9 +653,27 @@
 - 결정: D-494 6
 - 교훈: 없음
 
-## 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.124 (D-507 7)
-- 변경: `core_api_web/api/app.py` 첫 줄 계약 버전 v1.122 → v1.124(main 은 문서 v1.123 과 어긋나 `test_protocol_version_alignment` 실패 중이었다).
+## 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.126 (D-507 7)
+- 변경: `core_api_web/api/app.py` 첫 줄 계약 버전 v1.122 → v1.126(main 은 문서 v1.123 과 어긋나 `test_protocol_version_alignment` 실패 중이었다).
 - 증거: `python -m pytest middleware/core/gateway/test/test_protocol_version_alignment.py -q` 3 passed.
 - gate 변화: 없음.
 - 결정: D-507 7
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · docs(api): v1.124 version pin
+
+- Change: Align CORE app contract version docstring with API Reference v1.124.
+- Evidence: Related contract and Fleet tests 99 PASS; device check remains separate.
+- Gate change: None.
+
+## 2026-10-08 · uncommitted · docs(api): D-509 v1.124 follow-up
+
+- 변경: CORE app contract version now matches API Reference v1.124.
+- 증거: Contract and Fleet focus tests passed; hardware remains unverified.
+- gate 변화: None.
+
+## 2026-10-08 · uncommitted · docs(api): merged contract v1.125
+
+- 변경: CORE app contract docstring follows API Reference v1.125 after D-513 merge.
+- 증거: Pinned version test included in merged tree verification.
+- gate 변화: None.

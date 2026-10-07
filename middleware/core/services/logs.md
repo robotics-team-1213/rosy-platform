@@ -702,3 +702,10 @@
 - gate 변화: SOURCE. 선 잃음(근거 없음)은 이제 D-468 복귀가 아니라 손실 시계 → LOST 다. bridge 소진 뒤 역추적도 양의 증거가 있을 때만.
 - 결정: D-507 7
 - 교훈: 기존 시험 여럿이 `corridor=None` 을 이탈 신호로 썼다 — 이탈 시험은 몸이 경계를 넘은 corridor 로 쓴다.
+
+## 2026-10-08 · uncommitted · fix(line_follow): LiDAR 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
+- 변경: `clearance.return_scan_view`가 1 ns라도 앞선 스캔을 버리던 것을 `SOURCE_FUTURE_TOLERANCE_S`(0.1 s) 안이면 나이 0으로 받고, 넘으면 버린다. odom(`lane_return_evidence.observe_pose`)과 선 관측(`manager.observe`)은 이미 같은 상수를 쓴다.
+- 증거: `test_lane_return_scan.py`(1 ms·0.1 s 앞 받음, 0.1 s+1 ns 앞 버림), `test_lane_return_evidence.py`(허용치 밖 표본을 버려도 다음 표본이 trail을 잇는다, 실제 불연속은 끊는다). 변이 확인 4건.
+- gate 변화: 없음. 호스트 시험만.
+- 결정: D-507 8
+- 교훈: 없음

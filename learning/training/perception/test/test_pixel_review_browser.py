@@ -2,13 +2,14 @@
 import os
 
 import pytest
+from browser_harness import browser_tests_enabled
 import numpy as np
 
 from test_review_flow_browser import browser_workspace
 from test_review_cycle import CLASSES
 import review_masks
 
-pytestmark = pytest.mark.skipif(os.getenv('ROSY_RUN_BROWSER_TESTS') != '1',
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='requires explicit local Chromium browser run')
 
 
