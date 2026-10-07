@@ -465,7 +465,11 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_335,
+        1_338,
+        "accept: independently re-judged at 1338 on 2026-10-08 (code-reviewer agent, read-only) for "
+        "D-507 7: one optional LineFollowStatus.lane_return_containment field beside stuck and "
+        "junction; no new model or import, no envelope version change or runtime owner. Zero-growth "
+        "allowance remains; the next model or more than a field or two re-asks the split question. "
         "accept: independently re-judged at 1335 on 2026-10-07 (code-reviewer agent, read-only) for "
         "D-494 4 / D-495: one LineJunctionStatus model and a defaulted LineFollowStatus.junction field "
         "(always present, state idle) beside LineStuckStatus; additive, no envelope version change or "
