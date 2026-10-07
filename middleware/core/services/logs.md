@@ -767,3 +767,9 @@
 - 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
 - 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-468 궤적은 HOLD 틱에도 odom을 받는다
+- 변경: `ReturnController.observe()`가 epoch 확인과 `PoseTrail` 추가를 맡고 `tick()`은 그것을 부른다. `manager.tick`이 매 틱(`obstacle_ahead` 같은 비국소 HOLD 포함) `_feed_return_trail`로 궤적만 먹인다. 이탈 판단은 여전히 국소 틱의 `tick()`에서만 돈다. 0.5 s 넘는 HOLD 뒤 첫 틱이 간격(D-507 7 규칙 (2))으로 보여 이탈과 `sensor_search`를 열던 결함이다. ADR 바뀜 없음.
+- 증거: `test_lane_return_manager.py` 1 s 장애물 HOLD(odom 계속, 정지) 뒤 tracking 유지·search 없음, 0.6 s odom 공백과 0.2 m 자세 점프는 여전히 이탈. 변이(`_feed_return_trail` 호출 제거) 시 회귀 시험 실패 확인 뒤 복원. lane_return/bridge/junction/motion_admit/stuck/road + gateway line_follow 819 passed, `known_failures` 0 new.
+- gate 변화: SOURCE. SIM·장치는 열림.
+- 결정: D-468, D-507 7 (규칙 그대로)
