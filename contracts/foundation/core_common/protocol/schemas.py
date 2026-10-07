@@ -1049,6 +1049,9 @@ class LineFollowStatus(BaseModel):
     stop_gap_m: Optional[float] = None
     clearance_source: Optional[str] = None
     stuck: Optional[LineStuckStatus] = None  # D-407: open stuck (None = not stuck)
+    # D-507 7: D-468 while following -- "contained" (proven) | "unknown" (D-468 idle,
+    # following as recovery off). None when D-468 is not tracking or not configured.
+    lane_return_containment: Optional[Literal['contained', 'unknown']] = None
     junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-494 decision 4
 
 
