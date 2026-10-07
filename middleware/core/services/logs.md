@@ -609,3 +609,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM S1–S6·DEVICE D1–D6은 D-492 점검표
 - 결정: D-492 (Proposed) 안전 재검토 반영 2026-10-07
 - 교훈: 다시 보내는 지시는 현재 자세가 아니라 고정된 기준(진입 방향)을 겨눠야 오차가 쌓이지 않는다
+
+## 2026-10-07 · uncommitted · fix(line_follow): D-492 최종 안전 검토 N2·L1·L3
+- 변경: 교차로 정지 기록(감지·진입 방향·실행 기록)이 모드 변경 뒤에도 남는다. 진입 방향은 lost_after_s 무감지 뒤, 실행 기록은 다른 place_id 지시 때 끝난다. HTTP 409 JUNCTION_ALREADY_DONE 시험. 정지 판정 속도 설정값 `junction_still_linear`·`junction_still_angular`
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 2016 PASS·18 skip, gateway 2193 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). 탐침 `probe_final.py`: 재선택 뒤 같은 지시 409, 다른 방향은 돌지 않음
+- gate 변화: 없음. SOURCE 호스트 시험만
+- 결정: D-492 (Proposed) 최종 안전 검토 반영 2026-10-07
+- 교훈: 안전 기록은 세션(모드)이 아니라 물리적 상황(같은 교차로)에 묶어야 재선택으로 우회되지 않는다
