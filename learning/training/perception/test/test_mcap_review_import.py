@@ -176,3 +176,34 @@ def test_eval_readiness_requires_current_approved_mask_and_reproved_mcap(tmp_pat
     bag.write_bytes(bag.read_bytes() + b'changed')
     with pytest.raises(ValueError, match='bag hash'):
         review_eval_bootstrap.ready(root, state, tmp_path)
+
+
+def test_human_eval_publication_is_immutable_and_keeps_reviewed_unknown(tmp_path):
+    catalog, classes = _catalog(tmp_path)
+    digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+    root, state = tmp_path / 'store', tmp_path / 'eval-state'
+    review_eval_bootstrap.start(root, state, catalog, classes,
+                                catalog_sha256=digest(catalog), classes_sha256=digest(classes))
+    with pytest.raises(ValueError, match='approved'):
+        review_eval_bootstrap.publish(root, state, 'heldout', tmp_path)
+    assert not (root / 'evalsets').exists()
+    review = ReviewStore(state)
+    painted = review_masks.update(review, 0, {'version': 1, 'action': 'fill', 'label': 0}, Conflict)
+    masked = review_masks.update(review, 0, {'version': painted['version'], 'action': 'paint',
+                                             'label': 255, 'radius': 1, 'points': [[2, 2]]}, Conflict)
+    review_masks.update(review, 0, {'version': masked['version'], 'action': 'approve',
+                                    'complete_frame_review': True, 'background_reviewed': True,
+                                    'unknown_pixels_reviewed': True}, Conflict)
+    result = review_eval_bootstrap.publish(root, state, 'heldout', tmp_path)
+    from dataset.build import read_eval_set
+    folder = Path(result['path'])
+    assert folder.parent.name == 'heldout-human'
+    assert read_eval_set(folder)[1] == {'session'}
+    manifest = json.loads((folder / 'manifest.json').read_text())
+    row = manifest['frames'][0]
+    assert row['sources'] == ['human_reviewed_eval'] and row['source_kind'] == 'mcap'
+    assert row['reviewed_unknown_count'] > 0
+    assert review_eval_bootstrap.publish(root, state, 'heldout', tmp_path)['path'] == str(folder)
+    (folder / row['mask']).write_bytes(b'changed')
+    with pytest.raises(ValueError, match='immutable'):
+        review_eval_bootstrap.publish(root, state, 'heldout', tmp_path)

@@ -1,8 +1,11 @@
-"""Reserve MCAP evaluation sources, then import pending frames into a separate Review workspace."""
+"""Reserve MCAP sources, import pending Review frames, and publish approved eval bytes."""
 import argparse
 import hashlib
 import json
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -13,7 +16,8 @@ import review_evidence
 import review_ingest
 import review_masks
 from mcap_proof import prove_frames
-from store import Store
+from store import (Store, content_sha, publication_directory, publication_group,
+                   safe_name, shared_publication_permissions)
 
 
 def start(store_root, state_dir, catalog, classes, *, catalog_sha256, classes_sha256):
@@ -125,6 +129,87 @@ def ready(store_root, state_dir, scratch):
             'decision_sha256': authority['decision_sha256']}
 
 
+def publish(store_root, state_dir, name, scratch):
+    """Publish only currently approved MCAP truth; this never admits training."""
+    if not safe_name(name) or not safe_name(name + '-human'):
+        raise ValueError('safe evaluation name required')
+    proof = ready(store_root, state_dir, scratch)
+    review = ReviewStore(state_dir)
+    captured = review_evidence.snapshot(review)
+    authority = captured['authority']
+    if authority['decision_sha256'] != proof['decision_sha256']:
+        raise ValueError('review authority changed after proof')
+    class_raw = (review.state / 'pixel' / (captured['classes']['sha256'] + '.yaml')).read_bytes()
+    from build import load_classes, read_eval_set
+    classes = load_classes(Path('classes.yaml'), source_bytes=class_raw)
+    store = Store(store_root)
+    parent = store.evalsets_dir / (name + '-human')
+    group = publication_group(parent)
+    publication_directory(parent)
+    stage = Path(tempfile.mkdtemp(prefix='.staging-', dir=parent))
+    try:
+        (stage / 'pixel-classes.yaml').write_bytes(class_raw)
+        (stage / 'authority.json').write_bytes(review_evidence.encoded(authority))
+        frames, sources = [], {}
+        for frame, row in zip(captured['frames'], authority['frames']):
+            source = frame['source']
+            session, index = source['source_session'], frame['index']
+            image = review.image(index)
+            image_raw = image.read_bytes()
+            mask = captured['masks'][index]
+            mask_path = (review.state / mask['path']).resolve()
+            if not mask_path.is_relative_to(review.state):
+                raise ValueError('mask outside evaluation workspace')
+            mask_raw = mask_path.read_bytes()
+            if hashlib.sha256(image_raw).hexdigest() != row['image_sha256'] or hashlib.sha256(mask_raw).hexdigest() != row['mask_sha256']:
+                raise ValueError('approved image or mask changed during capture')
+            key = f'{session}__{index:06d}'
+            image_name = f'images/{session}/{key}{image.suffix.lower()}'
+            mask_name = f'masks/{session}/{key}.png'
+            for relative, raw in ((image_name, image_raw), (mask_name, mask_raw)):
+                path = stage / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+            approval = row['pixel_approval']
+            frames.append({'image': image_name, 'mask': mask_name, 'session': session,
+                           'split': 'eval', 'sources': ['human_reviewed_eval'],
+                           'source_kind': 'mcap', 'capture_group': source['capture_group'],
+                           'frame': index, 'identity': row['identity'],
+                           'image_sha256': row['image_sha256'], 'mask_sha256': row['mask_sha256'],
+                           'mask_version': row['mask_version'],
+                           'approval_sha256': review_evidence.sha(review_evidence.encoded(approval)),
+                           'reviewed_unknown_count': approval.get('reviewed_unknown_count', 0),
+                           'mcap': source['mcap']})
+            sources[session] = {'session': session, 'capture_group': source['capture_group'],
+                                'source_kind': 'mcap', 'metadata_sha256': source['mcap']['metadata_sha256'],
+                                'bags': source['mcap']['bags']}
+        manifest = {'schema': 'rosy.perception.dataset/1', 'purpose': 'eval',
+                    'builder': 'review_eval_bootstrap.py --publish (D-475)',
+                    'classes': classes, 'ignore_index': 255, 'frames': frames,
+                    'sources': [sources[s] for s in sorted(sources)],
+                    'trusted_sources': ['human_reviewed_eval'],
+                    'authority_sha256': authority['decision_sha256'],
+                    'classes_sha256': captured['classes']['sha256']}
+        (stage / 'manifest.json').write_bytes(review_evidence.encoded(manifest))
+        digest = content_sha(stage)
+        dest = store.evalset_path(name + '-human', digest)
+        if ready(store_root, state_dir, scratch)['decision_sha256'] != authority['decision_sha256']:
+            raise ValueError('review authority changed before publication')
+        if dest.exists() or dest.is_symlink():
+            if dest.is_symlink() or content_sha(dest) != digest:
+                raise ValueError('immutable evaluation version differs')
+        else:
+            shared_publication_permissions(stage, group)
+            os.rename(stage, dest)
+        read_eval_set(dest)
+        return {'status': 'PUBLISHED_CONTENT_NOT_ADMITTED', 'path': str(dest),
+                'content_sha': digest, 'frames': len(frames),
+                'authority_sha256': authority['decision_sha256'], 'training_admission': False}
+    finally:
+        if stage.exists():
+            shutil.rmtree(stage)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('store', 'state'):
@@ -132,9 +217,17 @@ def main():
     for name in ('catalog', 'classes', 'catalog-sha256', 'classes-sha256'):
         parser.add_argument('--' + name)
     parser.add_argument('--ready', action='store_true')
+    parser.add_argument('--publish', action='store_true')
+    parser.add_argument('--name')
     parser.add_argument('--scratch', default='X:/DevTemp')
     args = parser.parse_args()
-    if args.ready:
+    if args.ready and args.publish:
+        parser.error('choose --ready or --publish')
+    if args.publish:
+        if not args.name:
+            parser.error('--publish requires --name')
+        result = publish(args.store, args.state, args.name, args.scratch)
+    elif args.ready:
         result = ready(args.store, args.state, args.scratch)
     else:
         if not all((args.catalog, args.classes, args.catalog_sha256, args.classes_sha256)):
