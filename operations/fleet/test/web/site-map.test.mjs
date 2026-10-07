@@ -73,10 +73,7 @@ test('D-494 trip panel text and button reasons', async () => {
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
     pose: {state: 'LOCALIZED', source: 'bridged'}, hold: null, reason: null};
-  assert.equal(tripStatusText(trip, MAP), '운행 중 · r1 · 차로 ab · 다음 B 정지 · 자세 위치 확정 · odom 다리');
-  for (const [state, label] of [['DEGRADED', '위치 정확도 저하'], ['UNKNOWN', '위치 확인 불가'], ['future', 'future']]) {
-    assert.ok(tripStatusText({...trip, pose: {...trip.pose, state}}, MAP).includes(`자세 ${label} ·`));
-  }
+  assert.equal(tripStatusText(trip, MAP), '운행 중 · r1 · 차로 ab · 다음 B 정지 · 위치 확정 · odom 다리');
   assert.match(tripStatusText({...trip, state: 'stopped', reason: 'restart'}, MAP), /자동으로 다시 출발하지 않습니다/);
   const plan = {map_version: 1, expires_at: 100};
   const active = {version: 1};

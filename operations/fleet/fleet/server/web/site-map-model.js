@@ -34,7 +34,8 @@ export const TRIP_ERROR_LABEL = {
 export const TRIP_STATE_LABEL = {
   started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨',
 };
-const TRIP_POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 정확도 저하', UNKNOWN: '위치 확인 불가'};
+// Map pose states (fleet/localization/map_pose.py), worded like trust.py STATE_LABELS.
+export const POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 의심', UNKNOWN: '위치 모름'};
 export const TRIP_REASON_LABEL = {
   pose: '위치를 믿을 수 없어 멈췄습니다',
   junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
@@ -192,7 +193,7 @@ export function tripStatusText(trip, map) {
   const parts = [`${TRIP_STATE_LABEL[trip.state] || trip.state} · ${trip.robot_id}`];
   if (trip.current_edge) parts.push(`차로 ${trip.current_edge}`);
   if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
-  if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
+  if (trip.pose) parts.push(`${POSE_STATE_LABEL[trip.pose.state] || '위치 상태 미보고'} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
   if (trip.hold) parts.push('바뀐 경로 확인 대기 · 장소에서 서 있음');
   if (trip.reason === 'stall' && Number.isFinite(trip.detail?.stall_s)) {
     parts.push(`${trip.detail.stall_s}초 넘게 ${TRIP_REASON_LABEL.stall}`);
