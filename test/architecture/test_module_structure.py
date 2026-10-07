@@ -704,10 +704,10 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        45_344,
+        45_346,
         f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
-        "(re-judged 2026-10-08 at 45344: 45229 at the merge base (+125 earlier growth inside the allowance, "
-        "not attributed here) plus +115 for the D-507 B9 bend rule: lane_keep_bend.py (new; bends, "
+        "(re-judged 2026-10-08 at 45346: 45229 at the merge base (+125 earlier growth inside the allowance, "
+        "not attributed here) plus +117 for the D-507 B9 bend rule: lane_keep_bend.py (new; bends, "
         "with the corner open-side check and the pursuit point moved out so lane_keep.py stays at 600), "
         "lane_keep_junction.py +17 (end-to-start continuity), lane_keep_pairs.py +10 (pursuit point). "
         "ROS-free keeper pieces inside sensing/perception that move with it — verdict unchanged); "
