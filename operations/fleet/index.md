@@ -89,8 +89,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · feat(fleet): D-513 시연 출발 자리 `start` 장소
 - 2026-10-07 · uncommitted · fix(fleet): 개발 콘솔 모든 화면 직접 접속
 - 2026-10-07 · uncommitted · docs(api): 예외 큐 신선도 필드를 v1.122 로
 - 2026-10-07 · uncommitted · fix(fleet): D-493 예외 큐가 오래된 상태를 표시
 - 2026-10-07 · uncommitted · docs(api): 막힘 에피소드 경로 번호를 v1.121 로
-- 2026-10-07 · uncommitted · feat(fleet): 막힘 에피소드 기록

@@ -1,8 +1,8 @@
 // D-488 site map page — pure helpers (no DOM) so node tests cover them.
 
-export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'turnaround'];
+export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'turnaround', 'start'];
 export const PLACE_KIND_LABEL = {
-  junction: '교차', park: '주차', charge: '충전', stop: '정차', turnaround: '회차',
+  junction: '교차', park: '주차', charge: '충전', stop: '정차', turnaround: '회차', start: '출발',
 };
 export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
 export const TRIP_ERROR_LABEL = {
@@ -51,6 +51,7 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 변경 내용을 기록한 뒤 다시 접속하세요.',
   SITE_MAP_ROUTE_ACTIVE: '차선 경로가 진행 중입니다 · 끝난 뒤 활성화하세요',
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
+  SITE_MAP_START_INVALID: '출발 자리가 차로 위에 없거나 차로 방향과 다르게 놓였습니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
   SITE_MAP_INVALID: '지도에 맞지 않는 값이 있습니다',
   // D-494 6 teach
@@ -188,6 +189,8 @@ export function editPlace(map, id, {name, kind}) {
   }
   if (kind !== undefined) {
     if (!PLACE_KINDS.includes(kind)) throw new Error('알 수 없는 장소 종류');
+    // D-513: the heading comes from a robot set down on the spot (teach "place"), never a guess
+    if (kind === 'start' && typeof place.yaw !== 'number') throw new Error('출발 자리는 방향이 필요합니다 · 로봇을 그 자리에 놓고 기록 모드에서 출발 장소로 남기세요');
     place.kind = kind;
   }
   return next;

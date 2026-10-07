@@ -2388,3 +2388,8 @@
 - 변경: 개발 모드에서 `/console/install`, `/console/site-map`, `/console/cell` 직접 진입 시 Fleet 개발 세션을 자동 발급·재사용하고 토큰 입력 칸을 숨긴다. `/console`도 개발 모드에서는 토큰 입력 칸을 숨긴다. 일반 모드의 토큰 접속은 유지한다.
 - 증거: 새 Chromium 직접 진입 시험 4 passed, 개발 인증 pytest 60 passed, 웹 Node 시험 160 passed. 넓은 pytest의 Cell 컴파일러 import 실패 1건은 깨끗한 main에서도 동일하게 재현했다.
 - gate 변화: SOURCE/LOCAL만 확인. 사이트 배포·실기 수용은 별도다.
+
+## 2026-10-08 · uncommitted · feat(fleet): D-513 시연 출발 자리 `start` 장소
+- 변경: 현장 지도 장소 종류 `start`(yaw 필수)를 더하고, 활성화·첫 가져오기에서 출발 붙이기로 검사해 `SITE_MAP_START_INVALID`로 거절한다. 기록 모드 `place`가 `start`를 받는다. 현장 지도 화면은 출발 자리와 방향 화살표를 그린다.
+- 증거: 관련 pytest 79 passed(브라우저 55 skipped), `site-map.test.mjs` 13 passed.
+- gate 변화: SOURCE/LOCAL만. 현장 해석 확인 F1, 지도 입력 F2는 별도.
