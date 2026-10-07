@@ -196,7 +196,7 @@ def test_d507_window_and_pivot_fields_validation(core_client):
                 {"expect_in_m": None}):
         body = {k: v for k, v in {**D507, **bad}.items() if v is not None}
         assert client.post(URL, json=body, headers=OPERATOR).status_code == 400, body
-    for pivot_without_turn in ({**BODY, "pivot_past_line_m": 0.1},
+    for pivot_without_turn in ({**BODY, "action": "stop", "pivot_past_line_m": 0.1},
                                {**BODY, "action": "left", "pivot_past_line_m": 0.1}):
         assert client.post(URL, json=pivot_without_turn, headers=OPERATOR).status_code == 400
     refused = client.post(URL, json=D507, headers=OPERATOR)  # no odom yet: cannot place it
@@ -204,7 +204,8 @@ def test_d507_window_and_pivot_fields_validation(core_client):
     _pose(services, clock)
     assert client.post(URL, json=D507, headers=OPERATOR).json() == {
         "accepted": True, "junction_seq": 1, "state": "armed"}
-    straight = {**BODY, "place_id": "J2", "map_id": "site_a", "expect_in_m": 0.5, "expect_tol_m": 0.1}
+    straight = {**BODY, "place_id": "J2", "map_id": "site_a", "expect_in_m": 0.5, "expect_tol_m": 0.1,
+                "pivot_past_line_m": 0.1}  # D-507 review 5: straight uses it for the window only
     assert client.post(URL, json=straight, headers=OPERATOR).json()["state"] == "armed"
 
 

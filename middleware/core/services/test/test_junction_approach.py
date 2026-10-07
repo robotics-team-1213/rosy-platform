@@ -1,8 +1,12 @@
 """D-507 items 3-4: the junction instruction's expected window and the approach to the pivot,
 in the real line-follow manager (no ROS, no physical motion)."""
+import math
+from types import SimpleNamespace
+
 import pytest
 
 from core_features.line_follow.recovery.junction import JunctionRefused
+from core_features.line_follow.recovery.junction_approach import cross_line_band
 from test_junction_turn_site_basis import SITE, site_step
 from test_line_junction import BODY, Rig
 
@@ -126,7 +130,9 @@ def test_invalid_window_fields_raise(expect):
     with pytest.raises(ValueError):
         send(rig, **expect)
     with pytest.raises(ValueError):
-        send(rig, action='straight', pivot_past_line_m=.1)
+        rig.m.set_junction('stop', 'J1', 10., expect=dict(pivot_past_line_m=.1))
+    with pytest.raises(ValueError):
+        rig.m.set_junction('left', 'J1', 10., expect=dict(pivot_past_line_m=.1))  # no turn_deg
 
 
 # --- item 4: approach to the pivot ------------------------------------------------------
@@ -235,3 +241,166 @@ def test_approach_aborts_on_a_new_instruction():
     _approaching(rig)
     assert send(rig, action='straight') == (False, 1, 'aborted')
     _assert_aborted(rig, rig.step(seen=False, move=True)[1], 'new_instruction')
+
+
+# --- review fixes (2026-10-08) ----------------------------------------------------------
+
+@pytest.mark.parametrize('action', ['straight', 'left'])
+def test_unexpected_clears_when_a_later_sighting_matches_while_still_seen(action):
+    rig = Rig()
+    rig.step()
+    send(rig, action=action, **WINDOW)
+    drive_to(rig, .2)
+    assert sight(rig, ahead=.05, seen=False)[1].junction.state == 'unexpected'
+    decision, status = sight(rig, ahead=.3, seen=False)                     # measured .5: inside
+    assert status.junction.state == ('executing' if action == 'straight' else 'turning')
+    for _ in range(3):
+        assert sight(rig, ahead=.3, seen=False, move=True)[1].junction.state != 'unexpected'
+    assert rig.m._junction['outside'] is False
+
+
+def test_straight_pivot_biases_only_the_window():
+    for ahead, state in ((.2, 'executing'), (.32, 'unexpected')):
+        rig = Rig()
+        rig.step()
+        assert send(rig, action='straight', pivot_past_line_m=.1, **WINDOW)[2] == 'armed'
+        drive_to(rig, .2)
+        decision, status = sight(rig, ahead=ahead)                     # expected line .5 - .1
+        assert status.junction.state == state
+    assert status.junction.pivot_basis is None
+
+
+def test_window_at_a_non_zero_yaw():
+    for ahead, state in ((0., 'turning'), (.15, 'unexpected')):
+        rig = Rig()
+        rig.yaw = math.pi/2
+        rig.step()
+        send(rig, pivot_past_line_m=.1, **WINDOW)            # cross line at y .4, x 0
+        while rig.y < .2:
+            rig.step(move=True)
+        ahead_m = .4-rig.y+ahead
+        assert sight(rig, ahead=ahead_m, seen=False)[1].junction.state == state
+
+
+def test_old_sighting_still_places_the_approach():
+    """Review 4: the latest odom-anchored sighting counts at any age (no stop_point fallback)."""
+    rig = Rig()
+    rig.step()
+    send(rig, pivot_past_line_m=.1)
+    drive_to(rig, .2)
+    assert sight(rig, ahead=.2, seen=False)[1].junction.state == 'turning'
+    for _ in range(10):                                     # creeping: not still, sighting ages
+        rig.step(seen=False, dx=.001)
+    assert rig.now-rig.m._junction_seen_at > rig.m.config.stale_after_s
+    status = _until(rig, lambda s: s.junction.state != 'turning', sighting=False)
+    assert (status.junction.state, status.junction.pivot_basis) == ('approaching', 'map')
+    status = _until(rig, lambda s: s.junction.state != 'approaching', sighting=False)
+    assert rig.x == pytest.approx(.5, abs=.006)                # .2 + .2 + .1 from the anchor
+
+
+def test_entry_yaw_steers_the_approach_and_its_goal():
+    rig = Rig()
+    rig.step()
+    send(rig, pivot_past_line_m=.1)
+    drive_to(rig, .2)
+    sight(rig, ahead=.2, seen=False)
+    rig.m._junction_entry = (.1, rig.m._junction_entry[1])   # entered at .1 rad, now at 0
+    status = _until(rig, lambda s: s.junction.state != 'turning', ahead=.2)
+    j = rig.m._junction
+    assert status.junction.state == 'approaching' and j['yaw'] == .1
+    assert j['goal'] == pytest.approx((.4+.1*math.cos(.1), .1*math.sin(.1)))
+    decision, status = rig.step(seen=False, move=True)
+    assert decision.angular == pytest.approx(2*(.1-rig.m._return_evidence.trail.samples[-1].yaw), abs=1e-9)
+
+
+def test_heading_hold_gain_and_angular_cap():
+    rig = Rig()
+    _approaching(rig)
+    j, cap = rig.m._junction, rig.m._angular_cap()
+    pose = lambda yaw: SimpleNamespace(x=rig.x, y=rig.y, yaw=yaw)
+    assert rig.m._approach_twist(j, pose(.1)) == (j['speed'], pytest.approx(-.2))
+    assert rig.m._approach_twist(j, pose(-1.2)) == (j['speed'], pytest.approx(cap))
+    assert rig.m._approach_twist(j, pose(1.2)) == (j['speed'], pytest.approx(-cap))
+
+
+def test_approach_aborts_on_an_odom_epoch_change():
+    rig = Rig()
+    _approaching(rig)
+    rig.m._return_evidence.epoch += 1
+    _assert_aborted(rig, rig.step(seen=False, move=True)[1], 'odom')
+
+
+# --- review 2: IR centre on the measured cross line (D-507 6, 2026-10-08) -------------------
+
+def test_cross_line_band_edges():
+    line = (.4, 0.)
+    assert cross_line_band((.3901, 0.), line, 0., .025, .01)
+    assert not cross_line_band((.3899, 0.), line, 0., .025, .01)
+    assert cross_line_band((.4349, 0.), line, 0., .025, .01)
+    assert not cross_line_band((.4351, 0.), line, 0., .025, .01)
+    assert cross_line_band((5., .41), (0., .4), math.pi/2, .025, 0.)     # along the yaw only
+    assert not cross_line_band((0., .39), (0., .4), math.pi/2, .025, 0.)
+
+
+IR_ROW = dict(SITE, ir_row_x_m=.05)
+
+
+def _band_straight(rig):
+    site_step(rig)
+    send(rig, action='straight')
+    while rig.x < .2 - 1e-9:
+        site_step(rig, dx=.01)
+    sight(rig, ahead=.2, step=site_step)                      # line .4, anchor .2, error .01+.05*travel
+    assert rig.m._cross_band['kind'] == 'straight'
+
+
+@pytest.mark.parametrize('x, inside', [(.33, False), (.335, True), (.394, True), (.397, False)])
+def test_band_edges_carry_range_and_odom_error(x, inside):
+    # lower edge: x + .05 = .39 - .05 (x - .2) -> x = .3333; upper: x + .05 = .435 + .05 (x - .2) -> .3947
+    rig = Rig(proof=False, **IR_ROW)
+    _band_straight(rig)
+    while rig.x < x - .01:
+        site_step(rig, dx=.01)
+    site_step(rig, dx=x-rig.x)
+    assert rig.m._centre_on_cross_line(rig.now) is inside
+
+
+def test_straight_crossing_follows_over_the_line_only_inside_the_band():
+    rig = Rig(proof=False, **IR_ROW)
+    _band_straight(rig)
+    decision, status = site_step(rig, ir='centre')            # IR row .25: before the band
+    assert (status.state, status.reason) == ('HOLD', 'lane_departure')
+    while rig.x < .35:
+        site_step(rig, dx=.01)
+    decision, status = site_step(rig, ir='centre')            # IR row on the measured line
+    assert decision.linear > 0 and status.reason == 'tracking'
+
+
+def test_band_dies_on_an_odom_epoch_change():
+    rig = Rig(proof=False, **IR_ROW)
+    _band_straight(rig)
+    while rig.x < .35:
+        site_step(rig, dx=.01)
+    assert rig.m._centre_on_cross_line(rig.now) is True
+    rig.m._return_evidence.epoch += 1
+    assert rig.m._centre_on_cross_line(rig.now) is False and rig.m._cross_band is None
+
+
+def test_approach_admits_centre_inside_the_band_and_aborts_outside():
+    rig = Rig(proof=False, **IR_ROW)
+    assert _approaching(rig, step=site_step).junction.state == 'approaching'
+    while rig.x < .36:                                         # IR row onto the line at .4
+        decision, status = site_step(rig, seen=False, move=True)
+    decision, status = site_step(rig, ir='centre', seen=False, move=True)
+    assert status.junction.state == 'approaching' and decision.linear > 0
+    rig = Rig(proof=False, **IR_ROW)
+    _approaching(rig, step=site_step)                          # IR row .25: outside the band
+    _assert_aborted(rig, site_step(rig, ir='centre', seen=False, move=True)[1], 'turn_basis_lost')
+
+
+def test_turning_never_takes_centre():
+    rig = Rig(proof=False, **IR_ROW)
+    _approaching(rig, step=site_step)
+    _until(rig, lambda s: s.junction.state != 'approaching', step=site_step, sighting=False)
+    assert rig.m._cross_band is None
+    _assert_aborted(rig, site_step(rig, ir='centre', seen=False, move=True)[1], 'turn_basis_lost')

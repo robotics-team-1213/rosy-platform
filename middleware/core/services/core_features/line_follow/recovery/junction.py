@@ -106,7 +106,8 @@ class JunctionMixin(JunctionApproachMixin):
         c, at = self._config, self._clearance_at
         if (c.junction_turn_site_accepted and c.ir_guard_enabled and c.body_stop_known
                 and self._scan_points is not None and at is not None
-                and 0 <= now-at <= c.clearance_stale_s and self._ir_guard(now) not in ('stale', 'centre')):
+                and 0 <= now-at <= c.clearance_stale_s and self._ir_guard(now) != 'stale'
+                and (self._ir_guard(now) != 'centre' or self._centre_on_cross_line(now))):
             return 'site'
         return None
 
@@ -139,6 +140,7 @@ class JunctionMixin(JunctionApproachMixin):
                 self._junction_seen_at = float(received_at)
                 self._junction_ahead = (float(ahead_m) if type(ahead_m) in (int, float)
                                         and 0 <= ahead_m <= MAX_AHEAD_M else None, reason)
+                self._junction_ahead_seen |= self._junction_ahead[0] is not None
             self._keep_corner_at = float(received_at) if corner_turning is True else None
 
     def set_junction(self, action, place_id, expires_s, stop_after_m=None, turn_deg=None,
@@ -185,6 +187,7 @@ class JunctionMixin(JunctionApproachMixin):
             if window is False:
                 raise JunctionRefused('JUNCTION_ODOM_STALE', 'no fresh odom to place the expected junction')
             self._junction_seq += 1
+            self._cross_band = None  # a past straight crossing's band ends with the next instruction
             state = ('armed' if action == 'straight' or turn_deg is not None
                      else 'executing' if action == 'stop' else 'unresolved')
             self._junction = dict(action=action, place_id=place_id, seq=self._junction_seq,
@@ -198,7 +201,7 @@ class JunctionMixin(JunctionApproachMixin):
 
     def _junction_status(self):
         j = self._junction or {}
-        state = 'unexpected' if j.get('outside') else j.get('state', 'idle')
+        state = 'unexpected' if j.get('outside') and j['state'] == 'armed' else j.get('state', 'idle')
         return LineJunctionStatus(pending_action=j.get('action'), place_id=j.get('place_id'),
                                   state=state, seq=self._junction_seq, turn_deg=j.get('turn_deg'),
                                   reason=j.get('reason'), pivot_basis=j.get('pivot_basis'))
@@ -268,7 +271,7 @@ class JunctionMixin(JunctionApproachMixin):
             self._mark_done(self._junction)
         self._junction = None
         self._bridge_hint = None
-        self._junction_seen_at = self._junction_first_seen = None  # not the next junction
+        self._junction_seen_at = self._junction_first_seen = self._junction_anchor = None  # not the next
         self._junction_entry = None
 
     def _junction_gate(self, now, decision):
@@ -285,6 +288,8 @@ class JunctionMixin(JunctionApproachMixin):
             pose = self._fresh_pose(now)
             if pose is not None:
                 self._junction_entry = (pose.yaw, (self._return_evidence.epoch, pose.frame))
+        if seen:
+            self._anchor_sighting()  # D-507 3-4
         j = self._junction
         if j is None:
             if not seen:
@@ -303,13 +308,15 @@ class JunctionMixin(JunctionApproachMixin):
             elif not seen:
                 j['outside'] = False
                 return decision
-            elif not self._in_window(j):
-                j['outside'] = True  # D-507 3: not this instruction's junction; it stays armed
-                return self._junction_hold('junction_unexpected', decision)
-            elif j['action'] == 'straight':
-                j['state'] = 'executing'
             else:
-                return self._start_turn(j, now, decision)
+                j['outside'] = not self._in_window(j, now)
+                if j['outside']:  # D-507 3: not this instruction's junction; it stays armed
+                    return self._junction_hold('junction_unexpected', decision)
+                if j['action'] != 'straight':
+                    return self._start_turn(j, now, decision)
+                j['state'] = 'executing'
+                entry = self._junction_entry
+                self._set_band('straight', None if entry is None else entry[0], now)
         if j['state'] == 'executing' and j['action'] == 'straight':
             if not seen:
                 self._junction_done()  # passed: the keeper no longer sees the junction
@@ -402,6 +409,7 @@ class JunctionMixin(JunctionApproachMixin):
             if twist is not None:
                 return self._maneuver_twist(j, now, *twist, decision, 'junction_approaching')
             j.update(state='turning', sub='stopping', phase_at=now, limit=STILL_LIMIT_S, w=0.)
+            self._cross_band = None  # not for the turn
         if j['state'] == 'turning':
             twist = self._turn_step(j, now, pose)
             if twist is not None:
@@ -418,7 +426,7 @@ class JunctionMixin(JunctionApproachMixin):
                 return self._maneuver_twist(j, now, j['speed'], 0., decision, 'junction_advancing')
             self._next_phase(j, 'reacquiring', now, STEP_TIME_S)
             self._odom_travel(j, now)
-            self._junction_seen_at = self._junction_first_seen = None
+            self._junction_seen_at = self._junction_first_seen = self._junction_anchor = None
             self._junction_entry = None  # the junction stop is over; the robot left it
             self._loss_started_at, self._lost_latched = None, False
             return self._junction_hold('junction_reacquiring', decision)  # follow from next frame

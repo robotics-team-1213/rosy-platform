@@ -33,13 +33,32 @@ def check_expect(expect, action, turn_deg):
     if (e_in is None) != (tol is None) or (e_in is not None and not (
             0 < e_in <= MAX_EXPECT_IN_M and 0 < tol <= MAX_EXPECT_TOL_M)):
         raise ValueError('expect_in_m (0, 2] and expect_tol_m (0, 0.30] come together')
-    if pivot is not None and (turn_deg is None or action not in ('left', 'right')
+    if pivot is not None and (action == 'stop' or (action != 'straight' and turn_deg is None)
                               or not 0 <= pivot <= MAX_PIVOT_PAST_LINE_M):
-        raise ValueError('pivot_past_line_m belongs to a left/right turn and must be in [0, 0.30]')
+        raise ValueError('pivot_past_line_m belongs to straight or a turn and must be in [0, 0.30]')
+
+
+#: ponytail: 260919 transverse tape width; must become a per-site calibration value.
+CROSS_LINE_TAPE_M = .025
+
+
+def cross_line_band(row, line, yaw, width, error):
+    """D-507 6 (2026-10-08): is the IR row inside [line - error, line + width + error] along yaw?
+    row and line are odom (x, y); line is the measured near edge of the cross line."""
+    s = (row[0]-line[0])*math.cos(yaw)+(row[1]-line[1])*math.sin(yaw)
+    return -error <= s <= width+error
 
 
 class JunctionApproachMixin:
     _junction_ahead = None  # (junction_ahead_m or None, reason) of the latest sighting
+    _junction_anchor = None  # the latest measured sighting, anchored in odom (any age)
+    _cross_band = None  # D-507 6: where IR 'centre' is the measured cross line
+    _junction_ahead_seen = False  # this run's perception sends junction_ahead_m
+
+    @property
+    def supports_junction_pivot(self):
+        """D-507 2 capability: a keep_debug sighting with junction_ahead_m arrived this run."""
+        return self._junction_ahead_seen
 
     def _expect_window(self, expect, now):
         """The odom placement of the expected window, None without the fields, False without
@@ -52,30 +71,58 @@ class JunctionApproachMixin:
         return dict(key=(self._return_evidence.epoch, pose.frame), pose=pose,
                     expect_in=expect['expect_in_m'], tol=expect['expect_tol_m'])
 
-    def _sighting(self):
-        """(odom pose at the latest sighting, junction_ahead_m, reason) or None."""
+    def _anchor_sighting(self):
+        """On a fresh sighting: anchor it at the odom pose of its camera time. A sighting without
+        junction_ahead_m clears the anchor (no measurement); no pose keeps the last one. Locked."""
         ahead, reason = self._junction_ahead or (None, None)
+        if ahead is None:
+            self._junction_anchor = None
+            return
         at = self._junction_seen_at
-        if ahead is None or at is None:
-            return None
-        samples = self._return_evidence.trail.samples
-        pose = min(samples, key=lambda p: abs(p.received_at-at), default=None)
-        if pose is None or abs(pose.received_at-at) > SIGHTING_POSE_S:
-            return None
-        return pose, ahead, reason
+        pose = min(self._return_evidence.trail.samples, key=lambda p: abs(p.received_at-at), default=None)
+        if pose is not None and abs(pose.received_at-at) <= SIGHTING_POSE_S:
+            self._junction_anchor = dict(key=(self._return_evidence.epoch, pose.frame), pose=pose,
+                                         ahead=ahead, reason=reason)
 
-    def _in_window(self, j):
+    def _anchor_now(self, now):
+        """The anchor if it is in the current odom frame, else None."""
+        a, pose = self._junction_anchor, self._fresh_pose(now)
+        return a if a is not None and pose is not None and a['key'] == (
+            self._return_evidence.epoch, pose.frame) else None
+
+    def _in_window(self, j, now):
         """D-507 3: no window means today's behaviour; an unmeasurable sighting is outside."""
-        w = j.get('window')
+        w, a = j.get('window'), self._anchor_now(now)
         if w is None:
             return True
-        sighting = self._sighting()
-        if sighting is None or (self._return_evidence.epoch, sighting[0].frame) != w['key']:
+        if a is None or a['key'] != w['key']:
             return False
-        pose, ahead, reason = sighting
-        pivot = 0. if reason == 'junction_fork' else (j.get('pivot') or 0.)
+        pivot = 0. if a['reason'] == 'junction_fork' else (j.get('pivot') or 0.)
         expected = _point(w['pose'], w['expect_in']-pivot, w['pose'].yaw)
-        return math.dist(_point(pose, ahead, pose.yaw), expected) <= w['tol']
+        return math.dist(_point(a['pose'], a['ahead'], a['pose'].yaw), expected) <= w['tol']
+
+    def _set_band(self, kind, yaw, now):
+        a = self._anchor_now(now)
+        self._cross_band = None if a is None else dict(
+            kind=kind, key=a['key'], yaw=a['pose'].yaw if yaw is None else yaw, ahead=a['ahead'],
+            start=(a['pose'].x, a['pose'].y),
+            line=_point(a['pose'], a['ahead'], a['pose'].yaw))
+
+    def _centre_on_cross_line(self, now):
+        """IR 'centre' is admitted only on the measured cross line: approaching, or a straight
+        crossing (outlives its instruction). The band dies on an odom epoch/frame change."""
+        b, j, c = self._cross_band, self._junction, self._config
+        if b is None or c.ir_row_x_m is None or (b['kind'] == 'approach' and (
+                j is None or j['state'] != 'approaching')):
+            return False
+        pose = self._fresh_pose(now)
+        if pose is None or (self._return_evidence.epoch, pose.frame) != b['key']:
+            self._cross_band = None if pose is not None else b
+            return False
+        error = (c.crosswalk_range_error_fraction*b['ahead']
+                 + c.crosswalk_odom_error_fraction*math.dist((pose.x, pose.y), b['start']))
+        return cross_line_band(_point(pose, c.ir_row_x_m, pose.yaw), b['line'], b['yaw'],
+                               CROSS_LINE_TAPE_M, error)
 
     def _half_trip_speed(self):
         """D-495 1b: half of min(line_follow.max_linear, manual linear limit), 0 if unknown."""
@@ -85,18 +132,15 @@ class JunctionApproachMixin:
 
     def _start_approach(self, j, now, pose):
         """D-507 4, once per stop: 'map' drives to the pivot, 'stop_point' turns here. Locked;
-        returns an abort reason or None."""
-        sighting = self._sighting()
-        fresh = (self._junction_seen_at is not None
-                 and 0 <= now-self._junction_seen_at <= self._config.stale_after_s)
-        if j.get('pivot') is None or not fresh or (self._junction_ahead or (None,))[0] is None:
+        returns an abort reason or None. The latest anchored sighting counts at any age."""
+        a = self._junction_anchor
+        if j.get('pivot') is None or a is None:
             j['pivot_basis'] = 'stop_point'  # no field or no measured line: today's behaviour
             return None
-        if sighting is None or (self._return_evidence.epoch, sighting[0].frame) != j['key']:
+        if a['key'] != j['key']:
             return 'odom'
         yaw = pose.yaw if self._junction_entry is None else self._junction_entry[0]
-        at, ahead, reason = sighting
-        goal = _point(at, ahead, yaw, 0. if reason == 'junction_fork' else j['pivot'])
+        goal = _point(a['pose'], a['ahead'], yaw, 0. if a['reason'] == 'junction_fork' else j['pivot'])
         distance = (goal[0]-pose.x)*math.cos(yaw)+(goal[1]-pose.y)*math.sin(yaw)
         j.update(pivot_basis='map', approach_m=max(0., distance))
         if distance <= ARRIVED_M:
@@ -106,6 +150,7 @@ class JunctionApproachMixin:
             return 'linear_limit_zero'
         self._next_phase(j, 'approaching', now, distance/speed+STEP_MARGIN_S)
         j.update(sub='approach', goal=goal, yaw=yaw, speed=speed)
+        self._set_band('approach', yaw, now)
         self._odom_travel(j, now)
         return None
 

@@ -229,8 +229,9 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
         raise ApiError("VALIDATION_ERROR", 400, "advance_m belongs to a turn")
     if (body.expect_in_m is None) != (body.expect_tol_m is None):
         raise ApiError("VALIDATION_ERROR", 400, "expect_in_m and expect_tol_m come together")
-    if body.pivot_past_line_m is not None and body.turn_deg is None:
-        raise ApiError("VALIDATION_ERROR", 400, "pivot_past_line_m belongs to a left/right turn")
+    if body.pivot_past_line_m is not None and (body.action == "stop" or (
+            body.action != "straight" and body.turn_deg is None)):
+        raise ApiError("VALIDATION_ERROR", 400, "pivot_past_line_m belongs to straight or a turn")
     require_manual_released(svc)
     require_calibration_owner(svc, auth, "line-follow junction")
     try:
