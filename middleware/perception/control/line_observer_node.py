@@ -461,6 +461,8 @@ class LineObserverNode(Node):
                                                     else None),
                               image_size=[frame.shape[1], frame.shape[0]],
                               camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
+                              # D-492: CORE reports junction_turn only from live keep evidence.
+                              corner_turning=bool(self.get_parameter('lane_corner_turning').value),
                               ground=self._ground_label(),
                               stamp=float(msg.header.stamp.sec)
                               + float(msg.header.stamp.nanosec) * 1e-9)

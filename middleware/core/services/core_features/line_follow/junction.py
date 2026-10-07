@@ -34,6 +34,8 @@ TURN_MIN_W = .3           # rad/s floor (or the cap, if lower); sets the turn ti
 TURN_TIME_MARGIN_S = 2.
 STEP_TIME_S = 5.          # advance and reacquire, each
 MANEUVER = ('turning', 'advancing', 'reacquiring')
+#: keep_debug arrives only in keep mode; this recent a frame with corner_turning proves both.
+KEEP_EVIDENCE_S = 2.
 #: Base reasons a maneuver may run over: the lane is (expectedly) out of view, or D-468/D-476
 #: bookkeeping. Anything else (driver release, limits, IR guard, sensor stale) aborts.
 _CONTINUE = frozenset({'tracking', 'line_not_visible', 'observation_stale', 'no_observation',
@@ -53,6 +55,17 @@ class JunctionMixin:
         self._junction_seq = 0
         self._junction = None  # None (idle) | dict: action, place_id, seq, state, ...
         self._junction_seen_at = None
+        self._keep_corner_at = None
+
+    @property
+    def supports_junction_turn(self):
+        """D-492 capability: live keep-mode keeper evidence with lane_corner_turning on (the
+        junction HOLD that starts a turn) and the bounded turn in this manager. The observer's
+        lane mode and flag are perception parameters; CORE learns them only from line/keep_debug
+        (published in keep mode only, carrying corner_turning), so no fresh frame means False."""
+        with self._lock:
+            at = self._keep_corner_at
+            return at is not None and 0 <= self._clock()-at <= KEEP_EVIDENCE_S
 
     def _reset_junction(self):
         """A line-follow session owns its instruction. A maneuver cut by a mode change (incl.
@@ -62,11 +75,15 @@ class JunctionMixin:
                           if j is not None and j['state'] in MANEUVER else None)
         self._junction_seen_at = None
 
-    def observe_junction(self, reason, received_at):
-        """Keeper reason from line/keep_debug; only junction reasons count as a sighting."""
-        if reason in JUNCTION_REASONS and math.isfinite(received_at):
-            with self._lock:
+    def observe_junction(self, reason, received_at, corner_turning=False):
+        """One fresh line/keep_debug frame: a junction reason is a sighting; corner_turning
+        is the keep-mode evidence behind supports_junction_turn."""
+        if not math.isfinite(received_at):
+            return
+        with self._lock:
+            if reason in JUNCTION_REASONS:
                 self._junction_seen_at = float(received_at)
+            self._keep_corner_at = float(received_at) if corner_turning is True else None
 
     def set_junction(self, action, place_id, expires_s, stop_after_m=None, turn_deg=None,
                      advance_m=None, now=None):

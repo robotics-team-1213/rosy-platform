@@ -341,3 +341,18 @@ def test_driver_release_mid_turn_aborts():
     decision, status = rig.step(seen=False)
     assert status.mode == 'OFF' and (decision.linear, decision.angular) == (0., 0.)
     assert (status.junction.state, status.junction.reason) == ('aborted', 'mode_change')
+
+
+def test_supports_junction_turn_needs_fresh_keep_evidence_with_corner_turning():
+    rig = Rig()
+    assert rig.m.supports_junction_turn is False            # no keep_debug at all (line mode)
+    rig.m.observe_junction('no_boundary', rig.now, corner_turning=True)
+    assert rig.m.supports_junction_turn is True             # keep mode + lane_corner_turning
+    rig.now += 2.5
+    assert rig.m.supports_junction_turn is False            # observer gone or mode switched
+    rig.m.observe_junction('no_boundary', rig.now, corner_turning=True)
+    rig.m.observe_junction('no_boundary', rig.now, corner_turning=False)
+    assert rig.m.supports_junction_turn is False            # keep mode, corner turning off
+    rig.m.set_mode(LineFollowMode.OFF)
+    rig.m.observe_junction('junction_fork', rig.now, corner_turning=True)
+    assert rig.m.supports_junction_turn is True             # independent of the line-follow session
