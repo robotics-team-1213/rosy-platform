@@ -204,7 +204,8 @@ class LineJunctionRequest(BaseModel):
     map_id: Optional[str] = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     expect_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
     expect_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
-    pivot_past_line_m: Optional[float] = Field(default=None, ge=0, le=0.30)
+    # signed (2026-10-08): negative when the measured cross line is past the place point.
+    pivot_past_line_m: Optional[float] = Field(default=None, ge=-0.30, le=0.30)
 
 
 def _expect(body: LineJunctionRequest):
