@@ -180,4 +180,4 @@ def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> N
 
     line_follow.bind_return_motion(
         allowed, floor_proof_live=lambda: sensor_adapter.config.mode == "enforce",
-        proof_configured=getattr(sensor_adapter, "return_proof_configured", None))
+        proof_configured=lambda: sensor_adapter.return_proof_configured() is True)
