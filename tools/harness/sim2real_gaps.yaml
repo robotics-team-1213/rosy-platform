@@ -159,7 +159,7 @@ gaps:
     next: rerun D-395 S2 on the model PC
 
   - id: G-15
-    gap: device lane projection uncertainty 17-37 mm vs D-468 cap 15 mm; GAZEBO ground 4.3 mm; 260919 lane play 5 mm < achievable uncertainty at 320x240
+    gap: device lane projection uncertainty 17-37 mm vs D-468 cap 15 mm; GAZEBO ground 4.3 mm; 260919 lane play 23.45 mm per side (STL nominal, unmeasured) < achievable device uncertainty at 320x240
     evidence:
       - middleware/perception/control/sensing/perception/lane_containment.py
       - middleware/core/services/core_features/line_follow/lane_return_evidence.py
@@ -170,3 +170,16 @@ gaps:
     owner: perception / calibration
     status: IN-PROGRESS
     next: S1 finer fit steps + ci95; S2 camera_board --store; S3 user places board + tape (robot static); S4 detector bias replay; S5 dynamic pitch drive (motion approval); S6 accept
+
+  - id: G-16
+    gap: Gazebo 260919 run measured ~5 mm D-468 margin per side for a centred Pinky (before 4.3 mm uncertainty); STL geometry gives 23.45 mm to the paint inner edge (35.95 mm to the paint centre the producer then sent); cause unexplained
+    evidence:
+      - docs/validation/d476-gazebo-model-pc-2026-10-06/result.md:202-216
+      - middleware/perception/control/sensing/perception/lane_containment.py
+      - middleware/core/services/test/test_lane_return_margin.py
+      - D-468
+      - D-476
+    tier: [M]
+    owner: gz_sim / perception
+    status: OPEN
+    next: root-cause on model PC (rerun scenario C with the inner-edge producer; log boundary intercepts vs the STL lines at the start pose)

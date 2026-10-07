@@ -643,3 +643,10 @@
 - gate 변화: 없음
 - 결정: D-495 (Proposed) 착지 전 검토 반영
 - 교훈: 능력 보고는 그 동작을 실제로 허가할 증거와 같은 조건이어야 정직하다
+
+## 2026-10-07 · uncommitted · test(line_follow): 260919 유격을 STL·URDF에서
+- 변경: `test_lane_return_margin.py`가 몸을 `PINKY_PRO_GEOMETRY`에서, 260919 안쪽 가장자리를 STL 직선(160 mm)에서 가져온다. 유격 23.45 mm, u 4.3 mm·15 mm에서 차로 안·checkpoint, u ≥ 유격이면 아님. 5 mm 경우는 `VERY_NARROW_EDGE` 스트레스 차로로 이름을 바꿈. 수신기 코드 변경 없음
+- 증거: perception 2712 PASS·109 skip, services+test/test_sim2real_gaps.py+test/architecture 1230 PASS·1 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). generate·lint 0 error
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
+- 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
+- 교훈: 시험 상수는 출처 있는 기하에서 끌어온다. 설명 없는 sim 값은 registry에 열어 둔다(G-16)
