@@ -519,6 +519,9 @@ class CoreServices:
         modes.change_listeners.append(leave_docking)
         def reflect_stop():
             state.set_estop(True)
+            # SAF-001: every latch is an EMERGENCY, whoever set it. battery_policy and
+            # battery_deep latched without it, and admin release refused ("not in EMERGENCY").
+            modes.transition(Mode.EMERGENCY)
         safety.estop_listeners.append(reflect_stop)
         safety.estop_listeners.append(swarm.on_estop)
         safety.estop_listeners.append(lambda: nav.cancel(source='safety_manager'))
