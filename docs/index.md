@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · docs(adr): OMX 실물 팔 활성화 조건 설계(D-496)
-- 2026-10-07 · uncommitted · feat(review): D-485 검수 앱 클래스셋
-- 2026-10-07 · uncommitted · uiux(fleet): 예외 상태 27셀 현재 화면 재촬영
-- 2026-10-07 · uncommitted · uiux(fleet): D-487 브라우저 전체 재실행
-- 2026-10-07 · uncommitted · uiux: D-153 G1 현 후보 재확인
+- 2026-10-07 · uncommitted · docs(solutions): 검증 문서의 빈백 git id가 push를 막는 오탐 — 교훈 기록
+- 2026-10-07 · uncommitted · docs(validation): 관제 콘솔 카메라 교정 재수락 회차 증거 기록
+- 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 320px 상태·폭
+- 2026-10-07 · uncommitted · docs(uiux): Pilot 전체 브라우저 회귀 기록
+- 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 가림과 폭

@@ -305,3 +305,23 @@
 - 변경: D-497: 현장 카메라 원본과 확인된 metric 보정·차로 폭으로 rosy.site_map/1 초안을 생성하는 rosy-lane-map. 직접 HTTPS preview lease 읽기·신선도·원본 검사, 흰 페인트 중심선·교차점·원형 경로, 근거 JSON, 덮어쓰기 거절. 초안만 생성, 활성화·주행 없음.
 - 증거: 81 affected geometry/store/browser checks passed (latest loop regression rechecked), 0 NEW. Direct source-command test on the actual site host read a fresh raw S21 frame over pinned HTTPS and generated a 12-place/10-lane draft. That draft imported in local Chromium at 1440/390 px without activating or moving a robot. Source command was ephemeral; permanent deployment and field geometry acceptance are unproven. Independent review found an attached-loop loss; fixed and independently rechecked.
 - gate 변화: 없음. SOURCE/LOCAL 근거 추가; 장치 상시 배포·현장 지도 정확도 수용은 별도다.
+
+## 2026-10-07 · uncommitted · fix(vision): camera-map integration contract pins
+
+- 변경: D-497 command registration and existing-draft confirmation are explicitly pinned in their existing contract tests. Existing aliases and confirmation ownership remain asserted.
+- 증거: 18 CLI/dialog checks passed after fixing the two NEW findings from pre-push; the remaining candidate checks continue.
+- gate 변화: SOURCE only; deployment and installed readback pending.
+
+## 2026-10-07 · uncommitted · fix(vision): 도로 경계와 흰색 무늬를 구분하고 ROI 가장자리 연결 유지
+
+- 변경: 넓은 흰색 테두리를 포함하고 출력 ROI 밖의 경계도 관측한다. 실제 도로 기준점으로 연결 영역을 선택한다. 흰 페인트의 전역 연결 여부로 막다른 도로를 제거하지 않는다. 최종 명령·활성화 경로는 유지한다.
+- 증거: 실제 저장 영상 수정본은 연결된 5 places/7 lanes로 왼쪽 연결을 유지하며 기존 비도로 p4–p11, p15–p16, p21–p22 선분이 제거됐다. 합성 넓은 경계·ROI·U 무늬와 기존 가림·원형·교차점 회귀를 검사한다. 배포·현장 수용은 별도다.
+- gate 변화: SOURCE/LOCAL 수정 근거만 추가. FIELD 수용은 미확인이다.
+
+## 2026-10-07 · uncommitted · fix(vision): 직선 차로를 원본 해상도 경계 중심에 맞춘다
+- 변경: 저해상도 검출·세선화·간선 간소화의 중심 오차를 원본 해상도 관측 경계로 보정한다. 기존 페인트 주변만 관측하고 보정량 중앙값으로 반사 잡음을 줄인다. 측정 폭 범위와 이동 상한을 확인하고, 지점·연결·가림 구간은 유지한다. 최종 간소화 허용 오차를 줄인다
+- 증거: 합성 고해상도 사선 직선 회귀 포함 관련 pytest 53 passed, known_failures 0 NEW; 최종 생성기 회귀 3 passed. 독립 검토 PASS. 저장된 현장 영상은 5 지점·7 차로 유지; 왼쪽 위 관측 중심 최대 오차 8.3→4.8 mm, 왼쪽 아래 4.0→1.8 mm. 실제 거리 정확도는 보정 수용 별도. Fleet 초안 revision 비교 교체·GET 일치·활성 지도 불변 확인
+- gate 변화: SOURCE/LOCAL 근거만 추가. 새 생성기 설치·물리 주행·보정 FIELD 수용은 미확인
+- 관제 확인: 실제 Fleet를 SSH 경유 Chromium으로 열어 초안의 153개 경로 점과 SVG 좌표를 비교했다. 최대 차이 0.000032 px, 1440·390 px에서 가로 넘침 없음. 활성 주행 지도는 유지했다. 직사각형 영상 중첩 화면은 별도 로컬 화면 검증이며 새 UI 배포 증거는 아니다
+- 결정: D-497 2항 구현 보강
+- 교훈: 유효한 도로 영역의 세선화 결과가 실제 양쪽 페인트의 중심과 일치하는 것은 아니다

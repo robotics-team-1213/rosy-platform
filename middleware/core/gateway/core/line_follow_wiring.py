@@ -125,6 +125,8 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         junction_turn_lead_s=float(raw.get("junction_turn_lead_s", defaults.junction_turn_lead_s)),
         junction_still_linear=float(raw.get("junction_still_linear", defaults.junction_still_linear)),
         junction_still_angular=float(raw.get("junction_still_angular", defaults.junction_still_angular)),
+        junction_turn_site_accepted=_flag(raw, "junction_turn_site_accepted",
+                                          defaults.junction_turn_site_accepted),
         lane_return_body_margin_m=float(raw.get(
             "lane_return_body_margin_m", defaults.lane_return_body_margin_m)),
         lane_return_checkpoint_fraction=float(raw.get(
