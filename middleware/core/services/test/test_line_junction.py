@@ -591,11 +591,12 @@ def test_repeat_after_completion_is_refused_until_another_place_or_mode_change()
     with pytest.raises(JunctionRefused) as refused:
         rig.send('left', turn_deg=45., advance_m=0.)
     assert refused.value.code == 'JUNCTION_ALREADY_DONE'
+    rig.m.set_mode(LineFollowMode.OFF)                                    # review N2: a mode
+    rig.m.set_mode(CAMERA)                                                # change keeps it
+    with pytest.raises(JunctionRefused):
+        rig.send('left', turn_deg=45., advance_m=0.)
     assert rig.m.set_junction('straight', 'J2', 10.)[0] is True          # next place clears it
     assert rig.send('left', turn_deg=45.)[0] is True
-    rig.m.set_mode(LineFollowMode.OFF)
-    rig.m.set_mode(CAMERA)
-    assert rig.m._junction_done_place is None
 
 
 def test_abort_after_the_turn_also_counts_as_done():
@@ -653,3 +654,53 @@ def test_sighting_gap_while_waiting_keeps_the_first_sighting():
     rig.send('left', turn_deg=90.)
     decision, status = rig.step(seen=False, junction=True)
     assert status.junction.state == 'turning'
+
+
+def test_reselect_after_an_abort_in_advancing_does_not_turn_again():
+    """Review N2: probe_final turned to 171.5 deg after a CAMERA_LINE re-select."""
+    rig = Rig()
+    _to_turning(rig, 90.)
+    rig.turn_until('turning', seen=False, junction=True)
+    assert rig.m.status().junction.state == 'advancing'
+    rig.calibrating = True
+    rig.step(seen=False, junction=True, move=True)
+    rig.calibrating = False
+    yaw = rig.yaw
+    rig.m.set_mode(CAMERA)                                    # operator re-selects
+    with pytest.raises(JunctionRefused) as refused:
+        rig.send('left', turn_deg=90.)
+    assert refused.value.code == 'JUNCTION_ALREADY_DONE'
+    assert rig.send('right', turn_deg=-90.)[0] is True        # another action at the same place
+    decision, status = rig.step(seen=False, junction=True, move=True)
+    # The re-select restarted the odom trail, so the entry heading cannot be compared: no turn.
+    assert (status.junction.state, status.junction.reason, decision.angular) == ('aborted', 'odom', 0.)
+    assert rig.yaw == yaw
+
+
+def test_entry_heading_ends_after_lost_after_s_without_a_sighting():
+    rig = Rig()
+    rig.step(junction=True)                                   # waiting, entry recorded
+    assert rig.m._junction_entry is not None
+    rig.m.set_mode(CAMERA)                                    # junction record reset, entry kept
+    rig.step(seen=False, junction=True)
+    assert rig.m._junction_entry is not None and rig.m.status().junction.state == 'waiting'
+    rig.m.set_mode(CAMERA)
+    rig.now += .4                                             # the last sighting is stale
+    for _ in range(40):                                       # 2.4 s: still inside lost_after_s
+        rig.step()
+    assert rig.m._junction_entry is not None
+    for _ in range(20):                                       # past lost_after_s (3 s)
+        rig.step()
+    assert rig.m._junction_entry is None
+
+
+def test_still_thresholds_are_config():
+    with pytest.raises(ValueError):
+        LineFollowConfig(junction_still_linear=0.)
+    with pytest.raises(ValueError):
+        LineFollowConfig(junction_still_angular=.5)
+    rig = Rig(junction_still_linear=.02, junction_still_angular=.2)
+    _to_turning(rig, 90.)
+    for _ in range(6):                     # creeping 0.06 m/s is above the 0.02 threshold
+        decision, status = rig.step(seen=False, dx=.003)
+    assert decision.angular == 0. and status.reason == 'junction_stopping'

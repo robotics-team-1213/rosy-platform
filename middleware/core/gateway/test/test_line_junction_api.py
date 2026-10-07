@@ -144,3 +144,14 @@ def test_refused_while_manual_control_is_active(core_client):
                        headers=OPERATOR).status_code == 200
     refused = client.post(URL, json=BODY, headers=OPERATOR)
     assert refused.status_code == 409 and refused.json()["error"]["code"] == "MODE_CONFLICT"
+
+
+def test_repeat_of_a_finished_instruction_is_409_already_done(core_client):
+    """Review L1 (final): the HTTP shape of JUNCTION_ALREADY_DONE."""
+    client, services, clock = _active(core_client)
+    services.line_follow._junction_done_place = ("J1", "left")   # a finished left at J1
+    body = {**BODY, "action": "left", "turn_deg": 90}
+    refused = client.post(URL, json=body, headers=OPERATOR)
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "JUNCTION_ALREADY_DONE"
+    assert client.post(URL, json={**body, "place_id": "J2"}, headers=OPERATOR).json()["accepted"] is True
+

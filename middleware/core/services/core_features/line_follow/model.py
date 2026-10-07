@@ -170,6 +170,9 @@ class LineFollowConfig:
     # count as reacquired, and the actuation/odom latency the turn stops early for.
     junction_reacquire_frames: int = 3
     junction_turn_lead_s: float = 0.15
+    # Review L3: odom speeds below which the robot counts as standing still (turn start/settle).
+    junction_still_linear: float = 0.01
+    junction_still_angular: float = 0.05
     # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the producer's
     # uncertainty_m. 0 means every URDF footprint corner is inside only if uncertainty_m bounds
     # every lateral error; jitter and footprint tolerance not in it go in this body margin. The
@@ -283,6 +286,10 @@ class LineFollowConfig:
             raise ValueError("junction_reacquire_frames must be a whole number in [1, 20]")
         if not _finite(self.junction_turn_lead_s) or not 0.0 <= self.junction_turn_lead_s <= 1.0:
             raise ValueError("junction_turn_lead_s must be in [0, 1]")
+        if not _finite(self.junction_still_linear) or not 0.0 < self.junction_still_linear <= 0.05:
+            raise ValueError("junction_still_linear must be in (0, 0.05] m/s")
+        if not _finite(self.junction_still_angular) or not 0.0 < self.junction_still_angular <= 0.2:
+            raise ValueError("junction_still_angular must be in (0, 0.2] rad/s")
 
     def _check_bridge(self) -> None:
         if type(self.bridge_enabled) is not bool:

@@ -37,7 +37,8 @@ TURN_MIN_W = .3           # rad/s floor (or the cap, if lower); sets the turn ti
 TURN_TIME_MARGIN_S = 2.
 SETTLE_S = .3             # inside the tolerance this long before the turn counts as done
 #: Review L1: the turn starts only after odom shows the robot standing still this long.
-STILL_S, STILL_LINEAR, STILL_ANGULAR, STILL_LIMIT_S = .2, .01, .05, 2.
+#: Speeds are config (junction_still_linear / junction_still_angular, review L3).
+STILL_S, STILL_LIMIT_S = .2, 2.
 STEP_TIME_S = 5.          # reacquire
 STEP_MARGIN_S = 2.        # advance: advance_m / speed + this
 MANEUVER = ('turning', 'advancing', 'reacquiring')
@@ -92,12 +93,14 @@ class JunctionMixin:
 
     def _reset_junction(self):
         """A line-follow session owns its instruction. A maneuver cut by a mode change (incl.
-        E-stop) stays visible as 'aborted' until the next mode change or instruction."""
+        E-stop) stays visible as 'aborted' until the next mode change or instruction.
+        Review N2: the junction stop itself outlives the mode change. The sighting, the entry
+        heading and the done (place_id, action) stay, so re-selecting CAMERA_LINE at the same
+        junction cannot re-run a turn. The entry heading ends after lost_after_s without a
+        sighting; the done record when another place_id is accepted."""
         j = self._junction
         self._junction = (dict(j, state='aborted', reason='mode_change')
                           if j is not None and j['state'] in MANEUVER else None)
-        self._junction_seen_at = self._junction_first_seen = None
-        self._junction_entry = self._junction_done_place = None
 
     def observe_junction(self, reason, received_at, corner_turning=False):
         """One fresh line/keep_debug frame: a junction reason is a sighting; corner_turning
@@ -177,7 +180,7 @@ class JunctionMixin:
         return pose if pose is not None and 0 <= now-pose.received_at <= POSE_MAX_AGE_S else None
 
     def _standing_still(self, now):
-        """Odom over its last STILL_S shows |v| < STILL_LINEAR and |w| < STILL_ANGULAR."""
+        """Odom over its last STILL_S shows |v| < junction_still_linear, |w| < junction_still_angular."""
         trail = self._return_evidence.trail.samples
         if not trail:
             return False
@@ -187,8 +190,8 @@ class JunctionMixin:
             return False
         for a, b in zip(samples, samples[1:]):
             dt = b.received_at-a.received_at
-            if (dt <= 0 or math.hypot(b.x-a.x, b.y-a.y)/dt >= STILL_LINEAR
-                    or abs(_wrap(b.yaw-a.yaw))/dt >= STILL_ANGULAR):
+            if (dt <= 0 or math.hypot(b.x-a.x, b.y-a.y)/dt >= self._config.junction_still_linear
+                    or abs(_wrap(b.yaw-a.yaw))/dt >= self._config.junction_still_angular):
                 return False
         return True
 
@@ -248,7 +251,9 @@ class JunctionMixin:
         j = self._junction
         if j is None:
             if not seen:
-                self._junction_entry = None  # no junction stop in progress
+                if (self._junction_seen_at is None
+                        or not 0 <= now-self._junction_seen_at <= self._config.lost_after_s):
+                    self._junction_entry = None  # review N2: the junction is left behind
                 return decision
             j = self._junction = dict(action=None, place_id=None, state='waiting')
         if j['state'] == 'armed':
