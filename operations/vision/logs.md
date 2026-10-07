@@ -311,3 +311,9 @@
 - 변경: D-497 command registration and existing-draft confirmation are explicitly pinned in their existing contract tests. Existing aliases and confirmation ownership remain asserted.
 - 증거: 18 CLI/dialog checks passed after fixing the two NEW findings from pre-push; the remaining candidate checks continue.
 - gate 변화: SOURCE only; deployment and installed readback pending.
+
+## 2026-10-07 · uncommitted · fix(vision): 도로 경계와 흰색 무늬를 구분하고 ROI 가장자리 연결 유지
+
+- 변경: 넓은 흰색 테두리를 포함하고 출력 ROI 밖의 경계도 관측한다. 실제 도로 기준점으로 연결 영역을 선택한다. 흰 페인트의 전역 연결 여부로 막다른 도로를 제거하지 않는다. 최종 명령·활성화 경로는 유지한다.
+- 증거: 실제 저장 영상 수정본은 연결된 5 places/7 lanes로 왼쪽 연결을 유지하며 기존 비도로 p4–p11, p15–p16, p21–p22 선분이 제거됐다. 합성 넓은 경계·ROI·U 무늬와 기존 가림·원형·교차점 회귀를 검사한다. 배포·현장 수용은 별도다.
+- gate 변화: SOURCE/LOCAL 수정 근거만 추가. FIELD 수용은 미확인이다.

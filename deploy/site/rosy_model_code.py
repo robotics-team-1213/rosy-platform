@@ -27,15 +27,17 @@ from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 
 PREFIX = "learning/training/perception/"
 CAMERA_PROFILE = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
+CAMERA_MAP_FILES = tuple("operations/vision/rosy_vision/" + name
+                         for name in ("__init__.py", "lane_map.py", "map_register.py"))
 CODE_PREFIXES = (PREFIX, "middleware/perception/control/", "contracts/foundation/core_common/",
-                 "shared/web/", CAMERA_PROFILE)
+                 "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + ("tools/perception/", "src/runtime/sensing/control/",
                                     "src/contracts/foundation/core_common/")
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
 IMPORT_PATHS = (PREFIX.rstrip("/"), PREFIX + "model", PREFIX + "dataset", PREFIX + "training",
-                "middleware/perception", "contracts/foundation",
+                "middleware/perception", "contracts/foundation", "operations/vision",
                 "src/runtime/sensing", "src/contracts/foundation")
 PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"
               f"sys.path[:0]=[str(root/p) for p in {IMPORT_PATHS!r}]")
@@ -246,6 +248,9 @@ def unpack(archive, dest):
     for required in (PREFIX + "model/watch.py", PREFIX + "rosy_ml.py",
                      "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
         if not (dest / required).is_file(): raise ValueError("missing model-code entry point or dependency")
+    if (dest / PREFIX / "camera_lane_map.py").is_file():
+        if not all((dest / name).is_file() for name in CAMERA_MAP_FILES):
+            raise ValueError("missing camera-map dependency")
 
 
 def replace_link(root, target):
@@ -297,8 +302,11 @@ class Updater:
         # These actual entrypoints eagerly import the committed control/core_common
         # closure. Isolated mode prevents ambient PYTHONPATH/user-site fallback;
         # --help exits before training, robot access or model delivery.
-        for script in ("rosy_ml.py", "model/watch.py", "model/intake.py", "model/convert.py",
-                       "dataset/build.py", "dataset/review_app.py"):
+        scripts = ("rosy_ml.py", "model/watch.py", "model/intake.py", "model/convert.py",
+                   "dataset/build.py", "dataset/review_app.py")
+        if (Path(source) / PREFIX / "camera_lane_map.py").is_file():
+            scripts += ("camera_lane_map.py",)
+        for script in scripts:
             subprocess.run(bootstrap_command(self.python, source, Path(source) / PREFIX / script, ["--help"]),
                            cwd=source, capture_output=True, check=True, timeout=60)
         code = PATH_SETUP + ";import export_ncnn,export_ncnn_lane,autolabel,control,core_common"
@@ -420,7 +428,10 @@ def build(repo, commit, sequence, env_hash, output, key_id, private_key, public_
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=output.parent, prefix="build-") as directory:
         stage = Path(directory)
-        subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", "--output", str(stage / "code.tar"), commit, *CODE_PREFIXES], check=True)
+        map_job = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
+                                           PREFIX + "camera_lane_map.py"]).strip()
+        paths = CODE_PREFIXES if map_job else tuple(p for p in CODE_PREFIXES if p not in CAMERA_MAP_FILES)
+        subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", "--output", str(stage / "code.tar"), commit, *paths], check=True)
         # Enforce the same source-only policy before signing. Worktree/ignored
         # files are never inputs; archive reads the committed Git object.
         unpack(stage / "code.tar", stage / "inspect")

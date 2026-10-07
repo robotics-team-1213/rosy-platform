@@ -64,7 +64,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("report", nargs="?", help="saved pytest output (default: stdin)")
     args = parser.parse_args(argv)
-    report = Path(args.report).read_text(encoding="utf-8", errors="replace") if args.report else sys.stdin.read()
+    if args.report:
+        data = Path(args.report).read_bytes()
+        report = data.decode(
+            "utf-16" if data.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig",
+            errors="replace",
+        )
+    else:
+        report = sys.stdin.read()
     new, seen, quiet = compare(report, load_known(LIST.read_text(encoding="utf-8")))
     for nodeid in seen:
         print(f"known     {nodeid}")

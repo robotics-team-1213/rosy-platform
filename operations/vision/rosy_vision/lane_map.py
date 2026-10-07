@@ -212,6 +212,9 @@ def generate_map(image, calibration, *, lane_width_m, map_id="camera"):
         if not np.isfinite(limits).all() or np.any(limits[:2] >= limits[2:]):
             raise ValueError("invalid measured map bounds")
         lo, hi = np.maximum(lo, limits[:2]), np.minimum(hi, limits[2:])
+    requested_lo, requested_hi = lo.copy(), hi.copy()
+    # Observe borders outside the output ROI; an ROI edge is not a camera edge.
+    lo, hi = lo - lane_width_m, hi + lane_width_m
     extent = hi - lo
     if not np.isfinite(extent).all() or min(extent) < 0.1 or max(extent) > 20:
         raise ValueError("calibrated view must span 0.1 to 20 m")
@@ -227,7 +230,14 @@ def generate_map(image, calibration, *, lane_width_m, map_id="camera"):
     small = cv2.resize(image, (round(width * scale), round(height * scale)), interpolation=cv2.INTER_AREA)
     sx, sy = small.shape[1] / width, small.shape[0] / height
     to_small = np.array([[sx, 0, (sx - 1) / 2], [0, sy, (sy - 1) / 2], [0, 0, 1]])
-    paint = cv2.warpPerspective(_line_mask(small), raster @ homography @ np.linalg.inv(to_small),
+    # The map registrar drops broad white areas; a road can border a broad white wall.
+    hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+    value_min = calibration.get("white_value_min", 180)
+    if type(value_min) is not int or not 80 <= value_min <= 255:
+        raise ValueError("white_value_min must be an integer between 80 and 255")
+    broad = ((hsv[:, :, 2] >= value_min) & (hsv[:, :, 1] <= 70)).astype(np.uint8) * 255
+    broad = cv2.morphologyEx(broad, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+    paint = cv2.warpPerspective(_line_mask(small) | broad, raster @ homography @ np.linalg.inv(to_small),
                                 size, flags=cv2.INTER_NEAREST)
     # Speckled carpet, robot highlights and short crosswalk bars are not lane borders.
     count, components, stats, _ = cv2.connectedComponentsWithStats(paint, connectivity=8)
@@ -261,9 +271,26 @@ def generate_map(image, calibration, *, lane_width_m, map_id="camera"):
             opposite[inside] |= paint_band[oy[inside], ox[inside]] != 0
     corridor = visible & opposite & (distance * resolution >= lane_width_m * 0.35) \
         & (distance * resolution <= lane_width_m * 0.8)
+    corridor &= (xs * resolution + lo[0] >= requested_lo[0]) \
+        & (xs * resolution + lo[0] <= requested_hi[0]) \
+        & (hi[1] - ys * resolution >= requested_lo[1]) \
+        & (hi[1] - ys * resolution <= requested_hi[1])
     # Never let the edge of the camera coverage masquerade as a road boundary.
     observed_clearance = cv2.distanceTransform(np.pad(visible.astype(np.uint8), 1), cv2.DIST_L2, 5)[1:-1, 1:-1]
     corridor &= observed_clearance * resolution > lane_width_m / 2
+    seed = calibration.get("road_seed_m")
+    if seed is not None:
+        seed = np.asarray(seed, dtype=np.float64)
+        if seed.shape != (2,) or not np.isfinite(seed).all() \
+                or np.any(seed < requested_lo) or np.any(seed > requested_hi):
+            raise ValueError("road_seed_m must be an observed road point within map bounds")
+        cy, cx = np.nonzero(corridor)
+        distance_to_seed = np.hypot(cx * resolution + lo[0] - seed[0], hi[1] - cy * resolution - seed[1])
+        if not len(cx) or distance_to_seed.min() > lane_width_m / 2:
+            raise ValueError("road_seed_m is not inside an observed paired road")
+        _, regions = cv2.connectedComponents(corridor.astype(np.uint8), connectivity=8)
+        nearest_seed = int(distance_to_seed.argmin())
+        corridor &= regions == regions[cy[nearest_seed], cx[nearest_seed]]
     draft = _graph(_thin(corridor), (lo[0], hi[1]), resolution, lane_width_m, map_id)
     evidence = {"generator": "camera-lanes/1", "calibration": calibration,
                 "lane_width_m": lane_width_m, "resolution_m": resolution,

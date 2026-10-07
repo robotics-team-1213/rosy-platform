@@ -17,6 +17,14 @@ D-412는 로봇 런타임, D-441은 관제 PC의 사이트 스택을 갱신한�
 7. Python·PyTorch·CUDA·드라이버·Isaac·OS 패키지를 자동 설치·업그레이드하지 않는다. 설치된 학습 환경 fingerprint를 후보와 대조한다. 환경 변경은 별도 가상환경에서 GPU·export·intake 검증 후 운영 전환하며 잠금 파일로 버전을 고정한다. Isaac 5.1과 학습 환경 분리, Isaac Lab HOLD는 D-434/D-427을 유지한다.
 8. 데이터셋·store·평가 자료·checkpoints·작업 결과·SSH 등록·비밀·모델 hold는 후보 밖에 보존한다. 기존 스크립트의 ROOT/data 기본값을 보존하기 위해 설치된 controller만 후보 ROOT/data를 등록된 work_dir/data에 연결한다. data는 archive에 포함하지 않고 외부 디렉터리의 내용·소유자·등록을 바꾸지 않는다. 작업 cwd도 외부 work_dir이다. Python isolated bootstrap에는 후보의 perception/model/dataset/training/sensing/foundation 경로만 추가한다. 모델 watch도 작업 실행기를 통해 같은 lock과 고정 source를 사용한다. 운영 watch 설정은 별도 파일로 유지하고 doctor 통과 후 timer를 활성화한다. 모델 전달은 D-373의 평가→shadow까지만이며 주행 모델 선택은 D-205 P3 절차를 유지한다.
 
+### D-497 지도 생성 작업 추가
+
+D-497 추가 범위(2026-10-07, 사용자 모델 PC 고려 요청): 서명 코드 묶음에 Vision의
+`__init__.py`, `lane_map.py`, `map_register.py` 세 파일과 isolated import 경로를 추가한다.
+perception의 `camera_lane_map.py`가 기존 잠금 실행기로 지도 초안만 생성한다. 다른 Vision
+서비스 파일은 포함하지 않으며 고정 controller는 후보 밖에서 별도 갱신한다. 기존 후보의
+복귀·생성과 GPU 환경은 유지한다. 모델 PC 설치·작업 실행 수용은 별도 증거로 확인한다.
+
 ### Alternatives
 
 - 사용 중인 checkout에 주기적 git pull/pip upgrade: 작업 도중 코드·환경이 달라지고 복귀와 재현이 불명확하여 기각한다.
