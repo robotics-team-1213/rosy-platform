@@ -149,7 +149,7 @@ def test_d476_bridge_is_off_by_default_and_yaml_matches_the_model():
     config = _line_follow_config(merged["line_follow"])
     defaults = LineFollowConfig()
     keys = [k for k in _yaml(DEFAULT)["line_follow"] if k.startswith("bridge_")]
-    assert len(keys) == 7
+    assert len(keys) == 9  # D-476 rev 1 adds bridge_arm_confidence, bridge_arm_frames
     assert all(getattr(config, k) == getattr(defaults, k) for k in keys)
     assert config.bridge_enabled is False
     with pytest.raises(ValueError, match="bridge_enabled must be true or false"):
