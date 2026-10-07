@@ -110,3 +110,22 @@ def test_bridge_is_told_whether_the_worker_floor_proof_is_live():
     for mode,live in (('enforce',True),('shadow',False),('off',False)):
         bind_lane_return_motion(line,adapter(mode))
         assert bound['floor_proof_live']() is live
+
+
+@pytest.mark.parametrize('enabled,site,mode,ok', [
+    (False, False, 'off', True),     # bridge off: nothing to prove
+    (True, False, 'enforce', True),  # live worker floor proof
+    (True, True, 'off', True),       # site acceptance: no drop-off within bridge reach
+    (True, False, 'off', False),
+    (True, False, 'shadow', False),
+])
+def test_core_start_refuses_a_blind_bridge(enabled, site, mode, ok):
+    from core.line_follow_wiring import check_bridge_floor_basis
+    from core_features.line_follow import LineFollowConfig
+    config=LineFollowConfig(bridge_enabled=enabled,ir_guard_enabled=enabled,
+                            bridge_site_no_dropoffs=site)
+    if ok:
+        check_bridge_floor_basis(config,mode)
+    else:
+        with pytest.raises(ValueError,match='bridge_site_no_dropoffs'):
+            check_bridge_floor_basis(config,mode)

@@ -179,6 +179,13 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   bridge_enabled: false
   bridge_arm_confidence: 0.5       # arm only on frames this confident (>= min_confidence)
   bridge_arm_frames: 3             # ... this many in a row, the tick TRACKING
+  bridge_arm_max_error: 0.1        # ... and straight: |error| (follower slows < 7 % there)
+  bridge_arm_max_angular: 0.08     # ... and |angular| (steering_gain x max_error); all four are
+                                   # plausibility gates until D-476 replay justifies them
+  # Site acceptance (D-476 rev 1): nothing in CORE sees a drop-off ahead. bridge_enabled also
+  # needs ir_guard_enabled, and either control.sensor_adapter enforce (live floor proof) or this
+  # true for a site with no drop-off or hole within bridge reach. CORE refuses to start otherwise.
+  bridge_site_no_dropoffs: false
   bridge_lookahead_m: 0.10         # pure-pursuit point ahead on the extended centre line
   bridge_coast_m: 0.10             # D-384 COAST
   bridge_slow_m: 0.25              # D-384 SLOW

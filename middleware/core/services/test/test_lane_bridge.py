@@ -23,7 +23,8 @@ class Rig:
     def __init__(self, probe=lambda now, v, w: True, floor=None, uncertainty=.001, **config):
         base = dict(body_front_x_m=.08, body_rear_x_m=-.08, body_half_width_m=.06,
                     body_lidar_x_m=0., body_rotation_radius_m=.1, cruise_speed=.04,
-                    max_linear=.04, recovery_local_enabled=True, bridge_enabled=True)
+                    max_linear=.04, recovery_local_enabled=True, bridge_enabled=True,
+                    ir_guard_enabled=True)  # D-476 rev 1: the bridge needs the IR guard
         base.update(config)
         self.now, self.x, self.y, self.yaw, self.points = 1., 0., 0., 0., ()
         self.uncertainty = uncertainty
@@ -34,19 +35,20 @@ class Rig:
         self.m.bind_return_motion(probe, floor_proof_live=floor)
         self.m.set_mode(CAMERA)
 
-    def _pose(self, pose=True, frame='odom'):
+    def _pose(self, pose=True, frame='odom', scan=True):
         stamp = round(self.now*1e9)
         if pose:
             self.m.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame=frame,
                                        x=self.x, y=self.y, yaw=self.yaw, received_at=self.now)
-        self.m.observe_scan_points(self.points, received_at=self.now)
+        if scan:
+            self.m.observe_scan_points(self.points, received_at=self.now)
 
     def step(self, seen=True, *, confidence=.9, quality=None, move=True, slip=None,
-             dt=DT, pose=True, frame='odom', ir=None):
+             dt=DT, pose=True, frame='odom', ir='none', error=0., scan=True):
         """seen: True lane, False invisible frame, None no camera frame at all.
         ir: None no IR sample, else the IR line error (or 'none' for an invisible IR line)."""
         self.now = round(self.now+dt, 6)
-        self._pose(pose, frame)
+        self._pose(pose, frame, scan)
         if ir is not None:
             visible = ir != 'none'
             self.m.observe(LineObservation(
@@ -63,7 +65,8 @@ class Rig:
             containment = LaneContainmentEvidence.model_validate(dict(
                 stamp=self.now, geometry_id='rig-a', ground_source='CALIBRATED',
                 uncertainty_m=self.uncertainty, boundaries=edges))
-            obs = LineObservation(CAMERA, self.now, True, 0., confidence, containment=containment)
+            obs = LineObservation(CAMERA, self.now, True, error, confidence,
+                                  containment=containment)
         else:
             obs = LineObservation(CAMERA, self.now, False, None, 0., quality_reason=quality)
         if obs is not None:
@@ -223,7 +226,7 @@ def test_reacquired_lane_is_verified_by_d468_then_follows_and_rearms():
         if r.m.status().state == 'TRACKING':
             break
     assert r.m.status().state == 'TRACKING' and d.linear > 0
-    r.follow(3)
+    r.follow(30, slip=.01)  # 0.30 m of camera-confirmed travel >= bridge_slow_m
     assert r.step(seen=False).linear > 0 and r.reason == 'lane_bridge'
 
 
@@ -421,7 +424,7 @@ def test_mode_change_clears_the_route_hint():
 
 def _narrow(**config):
     base = dict(probe=lambda now, v, w: False, floor=lambda: False, uncertainty=.05,
-                recovery_local_enabled=False)
+                recovery_local_enabled=False, bridge_site_no_dropoffs=True)
     base.update(config)
     return Rig(**base)
 
@@ -471,7 +474,7 @@ NOT_ARMED = {
 @pytest.mark.parametrize('case', sorted(NOT_ARMED))
 def test_narrow_bridge_refused_without_confident_following_or_its_guards(case):
     follow, loss = NOT_ARMED[case]
-    r = _narrow(ir_guard_enabled=case == 'ir_not_clear')
+    r = _narrow()
     if follow == 'weak':
         _weak_streak(r)
     else:
@@ -572,7 +575,181 @@ def test_narrow_bridge_reacquires_then_needs_a_new_confident_streak():
 
 @pytest.mark.parametrize('bad', [dict(bridge_arm_confidence=0.), dict(bridge_arm_confidence=1.1),
                                  dict(bridge_arm_frames=0), dict(bridge_arm_frames=2.),
-                                 dict(bridge_enabled=True, bridge_arm_confidence=.3)])
+                                 dict(bridge_enabled=True, ir_guard_enabled=True,
+                                      bridge_arm_confidence=.3),
+                                 dict(bridge_enabled=True),  # no IR guard: no lateral fence
+                                 dict(bridge_arm_max_error=0.), dict(bridge_arm_max_angular=.8),
+                                 dict(bridge_site_no_dropoffs='true')])
 def test_bridge_arming_config_is_validated(bad):
     with pytest.raises(ValueError):
         LineFollowConfig(**bad)
+
+
+# ---- review fixes 2026-10-07 ----------------------------------------------------------------
+
+def test_dropoff_acceptance_or_live_floor_proof_is_required():
+    # Floor proof not live (adapter off) and no site acceptance: never bridges.
+    r = _narrow(bridge_site_no_dropoffs=False)
+    r.follow()
+    for _ in range(4):
+        assert r.step(seen=False).linear <= 0 and r.reason != 'lane_bridge'
+    # Live floor proof that admits the motion: the site flag is not needed.
+    r = _narrow(bridge_site_no_dropoffs=False, floor=lambda: True, probe=lambda now, v, w: True)
+    r.follow()
+    assert r.step(seen=False).linear > 0 and r.reason == 'lane_bridge'
+
+
+@pytest.mark.parametrize('error', [.2, -.2, .15])
+def test_curve_or_correction_does_not_arm(error):
+    # A curving or yawed follow steers (|error| 0.15-0.2 -> |angular| 0.12-0.16): the body
+    # heading is not the lane's, so its straight extension would leave a narrow lane.
+    r = _narrow()
+    r.follow(error=error)
+    assert abs(r.m.status().angular) > r.m.config.bridge_arm_max_angular
+    assert r.m._bridge is None
+    assert r.step(seen=False).linear <= 0 and r.reason != 'lane_bridge'
+
+
+def test_straight_streak_after_a_correction_arms_again():
+    r = _narrow()
+    r.follow(error=.2)
+    r.follow(2)
+    assert r.m._bridge is None  # 2 straight frames since the correction
+    r.follow(1)
+    assert r.m._bridge is not None
+    assert r.step(seen=False).linear > 0 and r.reason == 'lane_bridge'
+
+
+def _bridge_then_reacquire(r):
+    r.follow()
+    assert r.step(seen=False).linear > 0 and r.reason == 'lane_bridge'
+    r.step(seen=False)
+
+
+def test_chained_loss_needs_camera_confirmed_travel_between_bridges():
+    r = _narrow()
+    _bridge_then_reacquire(r)
+    r.follow(24, slip=.01)  # 0.24 m of confident tracking < bridge_slow_m 0.25
+    assert r.m._bridge is None
+    assert r.step(seen=False).linear <= 0 and r.reason != 'lane_bridge'
+    r = _narrow()
+    _bridge_then_reacquire(r)
+    r.follow(26, slip=.01)
+    assert r.step(seen=False).linear > 0 and r.reason == 'lane_bridge'
+
+
+def test_travel_while_not_confidently_tracking_does_not_count():
+    r = _narrow()
+    _bridge_then_reacquire(r)
+    for _ in range(40):  # 0.40 m driven while following below bridge_arm_confidence
+        r.step(slip=.01, confidence=.4)
+    r.follow(3, slip=0.)
+    assert r.m._bridge is None
+
+
+def _bridging():
+    r = _narrow()
+    r.follow()
+    assert r.step(seen=False).linear > 0 and r.reason == 'lane_bridge'
+    return r
+
+
+def test_stuck_opening_mid_bridge_ends_it():
+    r = _bridging()
+    r.m._recovery._id = 'stuck-x'
+    for _ in range(3):
+        assert r.step(seen=False).linear <= 0 and r.reason != 'lane_bridge'
+
+
+def test_mode_change_mid_bridge_ends_it_for_good():
+    r = _bridging()
+    r.m.set_mode(CAMERA)
+    assert r.m._bridge is None
+    for _ in range(4):
+        assert r.step(seen=False).linear <= 0 and r.reason != 'lane_bridge'
+
+
+def test_scan_going_stale_mid_bridge_ends_it():
+    r = _bridging()
+    d = r.step(seen=False, scan=False)  # 0.1 s old scan: still bridging on it
+    assert r.reason == 'lane_bridge'
+    for _ in range(12):  # past clearance_stale_s 0.5 s
+        d = r.step(seen=False, scan=False)
+    assert d.linear <= 0 and r.reason != 'lane_bridge'
+
+
+def test_stale_scan_rejects_a_bridge_at_apply_time():
+    r = _bridging()
+    d = r.step(seen=False)
+    r.m._clearance_at -= r.m.config.clearance_stale_s + .01
+    assert not r.m.apply_if_current(d, lambda decision: pytest.fail('stale-scan bridge applied'))
+
+
+@pytest.mark.parametrize('change', ['frame', 'epoch'])
+def test_pose_frame_or_epoch_change_mid_bridge_ends_it(change):
+    r = _bridging()
+    if change == 'epoch':
+        r.m.invalidate_return_pose()
+    for _ in range(4):
+        d = r.step(seen=False, frame='map' if change == 'frame' else 'odom')
+        assert d.linear <= 0 and r.reason != 'lane_bridge'
+
+
+def _off_scenario(ir_guard):
+    """Fixed device-like OFF scenario (recovery_local_enabled and bridge_enabled false). Only
+    API present on main 7c0879274 too; its trace there is test_lane_bridge_off_golden.json."""
+    now, pose, out = [1.], [0., 0., 0.], []
+    m = LineFollowManager(Bus(), clock=lambda: now[0], config=LineFollowConfig(
+        body_front_x_m=.08, body_rear_x_m=-.08, body_half_width_m=.06, body_lidar_x_m=0.,
+        body_rotation_radius_m=.1, cruise_speed=.04, max_linear=.04,
+        recovery_local_enabled=False, bridge_enabled=False, ir_guard_enabled=ir_guard))
+    m.bind_recovery(calibration_active=lambda: False, linear_ceiling=lambda: .04)
+    m.bind_return_motion(lambda now, v, w: True)
+    m.set_mode(CAMERA)
+
+    def step(seen=True, error=0., confidence=.9, quality=None, points=(), frame=True):
+        now[0] = round(now[0]+.05, 6)
+        t, stamp = now[0], round(now[0]*1e9)
+        m.observe_return_pose(stamp_ns=stamp, source_now_ns=stamp, frame='odom',
+                              x=pose[0], y=pose[1], yaw=pose[2], received_at=t)
+        m.observe_scan_points(points, received_at=t)
+        m.observe(LineObservation(LineFollowMode.IR_LINE, t, False, None, 0., ir_calibrated=True,
+                                  calibration_revision='ir-rig'), received_at=t)
+        if frame:
+            if seen:
+                edges = [dict(side=s, slope=0., intercept_m=e-pose[1], observed_x_min_m=0.,
+                              observed_x_max_m=.4) for s, e in (('left', .1), ('right', -.1))]
+                c = LaneContainmentEvidence.model_validate(dict(
+                    stamp=t, geometry_id='g', ground_source='CALIBRATED', uncertainty_m=.05,
+                    boundaries=edges))
+                obs = LineObservation(CAMERA, t, True, error, confidence, containment=c)
+            else:
+                obs = LineObservation(CAMERA, t, False, None, 0., quality_reason=quality)
+            m.observe(obs, received_at=t, source_now=t)
+        d = m.tick(t)
+        s = m.status()
+        pose[0] += d.linear*.05*math.cos(pose[2])
+        pose[1] += d.linear*.05*math.sin(pose[2])
+        pose[2] += d.angular*.05
+        out.append([round(d.linear, 9), round(d.angular, 9), s.state, s.reason])
+
+    for _ in range(6): step()
+    for _ in range(10): step(seen=False)
+    for _ in range(5): step(error=.2)
+    for _ in range(3): step(points=((.10, 0.),))
+    for _ in range(5): step()
+    for _ in range(2): step(seen=False, quality='low_light')
+    for _ in range(4): step(confidence=.4)
+    for _ in range(4): step()
+    for _ in range(10): step(frame=False)
+    for _ in range(70): step(seen=False)
+    return out
+
+
+def test_off_decisions_match_main_tick_for_tick():
+    import json
+    from pathlib import Path
+    golden = json.loads((Path(__file__).with_name('test_lane_bridge_off_golden.json'))
+                        .read_text(encoding='utf-8'))
+    for key, ir_guard in (('ir_off', False), ('ir_on', True)):
+        assert _off_scenario(ir_guard) == golden[key]

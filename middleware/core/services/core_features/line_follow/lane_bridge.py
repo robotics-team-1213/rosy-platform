@@ -46,20 +46,34 @@ class LaneBridgeMixin:
         self._bridge_hint = None
         self._confident_frames = 0  # consecutive accepted confident camera frames
         self._floor_proof_live = None  # () -> bool: worker floor proof is live (enforce)
+        # After a bridge: [odom travel while confidently tracking, (epoch, pose)]; None = none yet.
+        self._rearm = None
 
     def _arm_bridge(self, now):
-        """End of a lane tick: arm from this tick's own confident following, else disarm. Locked."""
-        c = self._config
-        if isinstance(self._bridge, dict) or self._mode is not LineFollowMode.CAMERA_LINE:
+        """End of a lane tick: arm from this tick's own straight confident following. Locked."""
+        c, st = self._config, self._status
+        if (not c.bridge_enabled or isinstance(self._bridge, dict)
+                or self._mode is not LineFollowMode.CAMERA_LINE):
             return
-        if self._status.state != 'TRACKING' or self._status.reason != 'tracking':
+        view = self.return_evidence(now=now) if st.state == 'TRACKING' else None
+        pose = view and view.pose
+        if (st.reason != 'tracking' or pose is None or not 0 <= now-pose.received_at <= .3
+                or self._confident_frames == 0):
             self._confident_frames = 0  # following broke: a new streak is needed
+            if self._rearm is not None:
+                self._rearm[1] = None
             return
-        if not c.bridge_enabled or self._confident_frames < c.bridge_arm_frames:
+        if self._rearm is not None:  # chained bridges: the camera must confirm road between them
+            last = self._rearm[1]
+            if last is not None and last[0] == view.epoch and last[1].frame == pose.frame:
+                self._rearm[0] += math.hypot(pose.x-last[1].x, pose.y-last[1].y)
+            self._rearm[1] = (view.epoch, pose)
+        if abs(st.error) > c.bridge_arm_max_error or abs(st.angular) > c.bridge_arm_max_angular:
+            self._confident_frames = 0  # a curve or a correction: its heading is not the lane's
             return
-        view = self.return_evidence(now=now)
-        if view.pose is not None and 0 <= now-view.pose.received_at <= .3:
-            self._bridge = (view.epoch, view.pose, view.corridor)
+        if (self._confident_frames >= c.bridge_arm_frames
+                and (self._rearm is None or self._rearm[0] >= c.bridge_slow_m)):
+            self._bridge = (view.epoch, pose, view.corridor)
 
     def _floor_proof_required(self):
         """The worker floor proof gates the bridge unless it is known not to be live."""
@@ -90,10 +104,12 @@ class LaneBridgeMixin:
             self._bridge_hint = hint
 
     def _hand_back_bridge(self):
-        """Once, when a bridge stops: D-468 retraces over the measured trail incl. the bridge."""
-        if (self._bridge_open and not isinstance(self._bridge, dict)
-                and self._return_controller is not None):
-            self._return_controller.rebase_retrace()
+        """Once, when a bridge stops: D-468 retraces over the measured trail incl. the bridge,
+        and the next bridge waits for bridge_slow_m of camera-confirmed travel."""
+        if self._bridge_open and not isinstance(self._bridge, dict):
+            self._rearm = [0., None]
+            if self._return_controller is not None:
+                self._return_controller.rebase_retrace()
         self._bridge_open = False
 
     def _end_bridge(self):
@@ -118,6 +134,7 @@ class LaneBridgeMixin:
         pose = view.pose
         guard = self._ir_guard(now) if c.ir_guard_enabled else 'clear'
         if (not authority or self._recovery.stuck_id is not None
+                or not (c.bridge_site_no_dropoffs or self._floor_proof_required())
                 or self._bridge_hint not in (None, 'straight') or guard != 'clear'
                 or pose is None or not 0 <= now-pose.received_at <= .3
                 or view.epoch != state['epoch'] or pose.frame != anchor.frame

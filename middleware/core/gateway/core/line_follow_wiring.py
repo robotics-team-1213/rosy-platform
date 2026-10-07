@@ -110,6 +110,10 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         bridge_arm_confidence=float(raw.get(
             "bridge_arm_confidence", defaults.bridge_arm_confidence)),
         bridge_arm_frames=_whole(raw, "bridge_arm_frames", defaults.bridge_arm_frames),
+        bridge_arm_max_error=float(raw.get("bridge_arm_max_error", defaults.bridge_arm_max_error)),
+        bridge_arm_max_angular=float(raw.get(
+            "bridge_arm_max_angular", defaults.bridge_arm_max_angular)),
+        bridge_site_no_dropoffs=_flag(raw, "bridge_site_no_dropoffs", defaults.bridge_site_no_dropoffs),
         lane_return_body_margin_m=float(raw.get(
             "lane_return_body_margin_m", defaults.lane_return_body_margin_m)),
         lane_return_checkpoint_fraction=float(raw.get(
@@ -142,6 +146,14 @@ def bind_stuck_recovery(line_follow, *, safety, calibration, fleet_agent, vision
         linear_ceiling=lambda: float(safety.limits.manual_linear),
         preview_seq=lambda: vision.status().get("sequence"),
     )
+
+
+def check_bridge_floor_basis(config: LineFollowConfig, sensor_mode: str) -> None:
+    """D-476 rev 1, at CORE start: an enabled bridge needs the live floor proof (effective
+    control.sensor_adapter mode enforce) or the site acceptance bridge_site_no_dropoffs."""
+    if config.bridge_enabled and not config.bridge_site_no_dropoffs and sensor_mode != "enforce":
+        raise ValueError("line_follow.bridge_enabled needs control.sensor_adapter mode enforce "
+                         "or line_follow.bridge_site_no_dropoffs: true (site acceptance, D-476)")
 
 
 def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> None:

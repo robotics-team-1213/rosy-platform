@@ -17,6 +17,7 @@ class LaneReturnMixin(LaneReturnDecisionMixin):
         self._bridge = None
         self._bridge_hint = None  # a hint belongs to one line-follow session
         self._confident_frames = 0
+        self._rearm = None
 
     def observe_return_pose(self, **sample):
         with self._lock:
