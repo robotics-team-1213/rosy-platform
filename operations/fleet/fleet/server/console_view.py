@@ -26,10 +26,12 @@ class TripAware:
 
 
 class CapabilityDisplay:
-    """Keep capability readback bounded without changing dispatch admission."""
+    """Keep presentation readback bounded without changing dispatch admission."""
 
-    def __init__(self, clients, clock):
+    def __init__(self, clients, clock, *, read_method="capabilities", schema=None):
         self.clients, self.clock = clients, clock
+        self.read_method = read_method
+        self.schema = schema
         self.cache = {}
         self.pending = {}
 
@@ -56,10 +58,18 @@ class CapabilityDisplay:
             return None
         return copy.deepcopy(cached[1]) if self.clock() - cached[0] < 5.0 else None
 
+    def age(self, robot_id):
+        cached = self.cache.get(robot_id)
+        if cached is None or cached[1] is None or self.clock() - cached[0] >= 5.0:
+            return None
+        return round(max(0.0, self.clock() - cached[0]), 3)
+
     async def _refresh(self, robot_id, client):
         try:
             try:
-                caps = await client.capabilities()
+                caps = await getattr(client, self.read_method)()
+                if self.schema is not None:
+                    caps = self.schema.model_validate(caps).model_dump(mode="json")
             except Exception:
                 caps = None
             if self.clients.get(robot_id) is client:

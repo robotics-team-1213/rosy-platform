@@ -2388,3 +2388,9 @@
 - 변경: 개발 모드에서 `/console/install`, `/console/site-map`, `/console/cell` 직접 진입 시 Fleet 개발 세션을 자동 발급·재사용하고 토큰 입력 칸을 숨긴다. `/console`도 개발 모드에서는 토큰 입력 칸을 숨긴다. 일반 모드의 토큰 접속은 유지한다.
 - 증거: 새 Chromium 직접 진입 시험 4 passed, 개발 인증 pytest 60 passed, 웹 Node 시험 160 passed. 넓은 pytest의 Cell 컴파일러 import 실패 1건은 깨끗한 main에서도 동일하게 재현했다.
 - gate 변화: SOURCE/LOCAL만 확인. 사이트 배포·실기 수용은 별도다.
+
+## 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시
+
+- 변경: Fleet이 CORE Viewer power/health를 등록된 Operator 토큰으로 읽고 최대 5초 캐시한다. 로봇 행은 공유 PowerHealthResponse와 관측 나이를 선택 필드로 제공하며, 관제는 배터리·충전 근거의 신선도와 다음 조치를 표시한다. E-Stop·네트워크·영상 설정 경로는 변경하지 않았다.
+- 증거: 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. 현장 장치 검증은 별도.
+- gate 변화: 없음.

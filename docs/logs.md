@@ -6832,3 +6832,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-509 Proposed
 - 교훈: 충전 래치는 신선한 충전 확인의 대용이 아니다.
+
+## 2026-10-08 · uncommitted · D-509 관제 전원 근거
+
+- 변경: D-509를 CORE/Fleet/Vision/Host API 실체에 맞게 수정하고 실행 계획과 Fleet 선택 전원 근거 필드를 계약에 기록했다. 송신 enabled·D-350 Phase 1은 미증명으로 명시했다.
+- 증거: Fleet 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. DEVICE/FIELD 검증 전.
+- gate 변화: 없음.
