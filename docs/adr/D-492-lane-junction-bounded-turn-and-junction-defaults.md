@@ -43,3 +43,17 @@
   - SOURCE: 회전·전진·재획득 상태 전이, 각 중단 조건, 각도 오차 ±5°, `turn_deg` 없는 옛 요청, 기본값 변경과 되돌리기 설정, Fleet의 `turn_deg` 전송과 능력 거절
   - SIM(모델 PC): `map_v2_fleet_real` 좌·우·직진 교차로가 포함된 trip 한 바퀴
   - DEVICE: 9dfk 차선 한 바퀴와 교차로 회전 한 번(사용자 승인, 마커·Rosy Cam 맞춤 뒤)
+
+### 구현 메모 (2026-10-07, feat/d491-core-junction-action)
+
+결정 본문은 바꾸지 않는다. 구현에서 정한 것과 확인한 것이다.
+
+1. **회전 동작 위치.** `core_features/line_follow/junction.py`가 매니저 틱 안에서 결정의 twist만 바꾼다. 같은 generation·evidence revision으로 CommandManager에 간다. 최종 `cmd_vel` 발행자는 그대로 CORE다.
+2. **수치.** 회전 각속도는 `clip(2·|오차|, min(0.3, 한도), 한도)` rad/s이고, 한도는 수동 각속도 한도와 `max_angular` 중 작은 값이다. 시간 한도의 ω_min은 `min(0.3, 한도)`다. 전진 속도는 `0.5·min(line_follow.max_linear, 수동 선속도 한도)`이다. CORE 매니저는 Fleet용 `trip_max_linear`를 모르므로 이 값으로 trip 최고 속도의 절반 이하를 지킨다. `left`는 `turn_deg > 0`, `right`는 `< 0`이어야 한다. 아니면 400이다.
+3. **재획득.** 전진이 끝난 틱은 0을 내고, 다음 틱부터 기존 차선 추종이 움직인다. 그 뒤 받은 신선한 visible 프레임(신뢰도 `min_confidence` 이상) 하나로 끝난다. odom 0.20 m 또는 5 s 안에 못 잡으면 `unresolved`다. 끝나면 직전 교차로 감지 기록을 지운다. 그래야 방금 지난 교차로로 `waiting`에 다시 걸리지 않는다.
+4. **중단.** odom이 0.3 s보다 낡았거나 PoseTrail이 끊긴 경우, 모드 변경(E-Stop 포함), D-422 몸체 간격(회전·전진 twist 기준), D-468 동작 확인 실패, 각속도·선속도 한도 0, 열린 stuck, 시간 초과, 새 지시가 중단 이유다. 운전자 확인 만료·IR 이탈 감시처럼 차선 시야와 무관한 기존 HOLD 사유도 중단으로 친다. 모드 변경으로 생긴 `aborted`는 다음 모드 변경에서 지운다. 그 밖의 `aborted`는 다음 지시까지 HOLD다. 새 지시는 진행 중인 동작을 멈추고 자신은 받지 않는다(`accepted: false`).
+5. **동작 중 손실 시계.** keeper의 교차로 HOLD가 시작한 차선 손실 시계는 회전 시작과 전진 중에 지운다. 지시가 운영자의 재선택 역할을 한다. 그러지 않으면 회전 중 `LOST`가 잠긴다. D-468 복귀 제어기도 동작 중에 지워서, 끝난 뒤 옛 차로로 되돌아가지 않게 한다.
+6. **되돌리기 경로 확인.** 카드 설정 `/boot/firmware/rosy-config.yaml`(`rosy_config.py`)은 정해진 최상위 키만 받는다. 그래서 이 두 값을 끌 수 없다. `bridge_enabled`는 CORE 설정 겹(`~/.rosy/rosy.yaml` 또는 `ROSY_CONFIG`, `line_follow.bridge_enabled: false`)으로 코드 변경 없이 끈다. `lane_corner_turning`은 운영자 겹(`/etc/rosy/line_observer_overrides.yaml`)의 허용 키가 아니다. 그래서 지금은 페이로드의 `line_follow.yaml`을 바꾸는 릴리스로만 끌 수 있다. 결정 2의 "카드 설정으로 끈다"를 지키려면 허용 키를 넓히는 별도 변경이 필요하다.
+7. **bridge 전제.** D-476 bridge는 D-468 안에서만 돌고 `recovery_local_enabled`가 켜져야 한다. 이 값의 기본값은 꺼짐이다(`rosy_default.yaml`). 따라서 `bridge_enabled: true`만으로는 그 값을 켠 로봇에서만 bridge가 작동한다.
+8. **차선 모드.** `lane_corner_turning`의 교차로 HOLD는 keep 모드에서만 나온다. 기본 `camera_lane_mode`는 `line`이므로, 교차로 정지와 회전 시작은 keep 모드 로봇에서만 일어난다. `lane` 모드에서는 같은 값이 odom 기반 모서리 회전기를 켠다.
+9. **능력 필드.** `junction_turn: true`는 이 브랜치에 넣지 않았다. `feat/d491-robot-trip-contracts`가 같은 `controls.py`·`api/v1/system.py` 줄을 고치기 때문이다. 착지 순서를 정할 때 그 브랜치에서 더한다.
