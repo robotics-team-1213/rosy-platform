@@ -629,3 +629,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만
 - 결정: D-495 (Proposed) 최종 안전 검토 반영 2026-10-07
 - 교훈: 안전 기록은 세션(모드)이 아니라 물리적 상황(같은 교차로)에 묶어야 재선택으로 우회되지 않는다
+
+## 2026-10-07 · uncommitted · merge(main): D-495와 D-476 rev 1 병합
+- 변경: main(D-476 rev 1, D-494 1·2·3항, API v1.113)을 병합했다. `bridge_enabled` 로봇 기본값은 꺼짐을 유지한다(rev 1은 `ir_guard_enabled`와 바닥 근거가 없으면 CORE 시작을 거부함). `recovery_local_enabled`는 켜짐. API Ref 교차로 행은 v1.114. 크기 판정: schemas 1335, core_features 14934. 조건이던 분리 계획은 `docs/plans/2026-10-07-line-follow-recovery-subpackage.md`이고 독립 검토 대기
+- 증거: services·api_web·contracts/foundation·문서·perception 배선/lane_keep·Gazebo launch·test/architecture 2193 PASS·19 skip, gateway 2206 PASS·17 skip, Fleet 버전 고정 89 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음
+- 결정: D-494 4항, D-495 (Proposed) main 병합 메모
+- 교훈: 기본값을 켜는 결정은 병합 때 다른 브랜치가 더한 전제(IR guard·바닥 근거)와 다시 맞춰야 한다
