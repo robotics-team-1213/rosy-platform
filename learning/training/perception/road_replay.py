@@ -60,6 +60,9 @@ from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  #
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
 from control.sensing.perception.lane_bev import pose_if_fresh  # noqa: E402
 from road_replay_metrics import (  # noqa: E402, F401 — re-exported for tests and tools
+    _boundary_comparison,
+    boundary_candidate,
+    pair_seen_after,
     _coast_stats,
     _curve_residuals,
     _detector_metrics,
@@ -254,17 +257,6 @@ def _road_target(snap):
         return None
     y = -(snap["d"] + LOOKAHEAD_M * snap["phi"]) + snap["kappa"] * LOOKAHEAD_M ** 2 / 2
     return y, max(-1.0, min(1.0, -y / HALF))
-
-
-def boundary_candidate(observation, tier: str, confirmed_pair: bool):
-    """Offline hypothesis: ONE/MEMORY need an earlier detector-paired BOTH."""
-    if tier in ("ONE", "MEMORY") and not confirmed_pair:
-        return None
-    return observation
-
-
-def pair_seen_after(was_seen: bool, tier: str) -> bool:
-    return tier == "BOTH" or (was_seen and tier != "STOP")
 
 
 def _wall_accepts(snap, keeper, ground, mask):
@@ -524,21 +516,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         "keeper_sha256": keeper_digest.hexdigest(),
     }
     if compare_boundary:
-        candidate_outputs = [r["boundary_candidate"] for r in rows if r["boundary_candidate"] is not None]
-        metrics["boundary_comparison"] = {
-            "frames": n,
-            "fresh_odom_frames": fresh_odom_frames,
-            "tiers": {tier: sum(r["boundary_tier"] == tier for r in rows)
-                      for tier in ("BOTH", "ONE", "MEMORY", "STOP")},
-            "keep_none_boundary_output": sum(r["keep"] is None and r["boundary"] is not None
-                                             for r in rows),
-            "memory_before_both": memory_before_both,
-            "candidate_suppressed": sum(r["boundary"] is not None and
-                                        r["boundary_candidate"] is None for r in rows),
-            "candidate_on_paint_rate": (round(sum(c["on_paint"] for c in candidate_outputs) /
-                                              len(candidate_outputs), 3) if candidate_outputs else None),
-            "scope": "same threshold image and odometry, offline only; no learned paint or lane GT",
-        }
+        metrics["boundary_comparison"] = _boundary_comparison(rows, fresh_odom_frames,
+                                                              memory_before_both)
     metrics["determinism"] = {"scope": "estimator re-run over the cached keeper outputs in one run; "
                                         "compare keeper_sha256 across two runs for the full pipeline",
                                "estimator_sha256": baseline, "keeper_sha256": metrics["keeper_sha256"]}
