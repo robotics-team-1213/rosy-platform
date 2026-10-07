@@ -252,7 +252,8 @@ def test_viewer_cannot_be_offered_operator_actions(page_site, width, height):
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#map-viewport")).to_be_visible()
     page.locator('#site-map-svg [data-place="NW"]').click()
-    for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan", "#estop"):
+    for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan", "#estop", "#trip-start",
+                     "#trip-cancel"):
         expect(page.locator(selector)).to_be_disabled()
         expect(page.locator(selector)).to_have_attribute("reason", "운영자 권한이 필요합니다")
     expect(page.locator("#place-form")).to_be_hidden()
@@ -497,3 +498,24 @@ def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, wi
         page.screenshot(path=str(Path(output) / f"site-map-conflict-{width}x{height}.png"), full_page=True)
     page.locator("#connect").click()
     expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_trip_start_is_gated_and_names_the_d491_refusal(page_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, robot = page_site
+    page.set_viewport_size({"width": width, "height": height})
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    expect(page.locator("#trip-start")).to_have_attribute("reason", "먼저 경로를 계산하세요")
+    expect(page.locator("#trip-cancel")).to_have_attribute("reason", "진행 중인 운행이 없습니다")
+    expect(page.locator("#trip-run")).to_contain_text("진행 중인 운행 없음")
+    page.select_option("#trip-place", "NW")
+    page.locator("#trip-plan").click()
+    expect(page.locator("#trip-start")).to_be_enabled()
+    page.locator("#trip-start").click()  # default wiring: no D-494 1 capability provider yet
+    expect(page.locator("#notice")).to_contain_text("주행 능력")
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")

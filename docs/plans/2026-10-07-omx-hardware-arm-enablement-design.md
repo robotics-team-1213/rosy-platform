@@ -9,7 +9,7 @@ Pilot 앱에서 OMX 실물 팔을 조종하는 날까지의 경로를 조건으�
 
 ## 2. 확보된 스펙
 
-근거: 제조사 공식 문서 조사(2026-09-12), `deploy/robot/omx/stack.lock.yaml`(ROBOTIS `open_manipulator` 5.1.2, rev `0a4af6a923b8b7d80b8c20506d1839c54d2e993e`), 워크스테이션 런타임 계획(2026-09-26).
+근거: 제조사 공식 문서 조사(2026-09-12), `deploy/robot/omx/stack.lock.yaml`(ROBOTIS `open_manipulator` 5.1.2, SHA `0a4af6a923b8b7d80b8c20506d1839c54d2e993e`), 워크스테이션 런타임 계획(2026-09-26).
 
 | 항목 | 값 | 비고 |
 |---|---|---|

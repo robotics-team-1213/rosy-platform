@@ -44,3 +44,14 @@ def test_containment_must_match_source_image_not_receive_time():
     with pytest.raises(ValueError, match="image stamp"):
         LineObservation(LineFollowMode.CAMERA_LINE, 1., True, 0., .9, ground="NOMINAL",
                         containment=LaneContainmentEvidence.model_validate(raw))
+
+
+def test_crosswalk_extent_is_optional_and_ordered():
+    """D-491 §4: the camera's crosswalk extent, metres ahead of base_footprint."""
+    assert LaneContainmentEvidence.model_validate(evidence()).crosswalk is None
+    raw = evidence(); raw["crosswalk"] = dict(near_m=.12, far_m=.24)
+    assert LaneContainmentEvidence.model_validate(raw).crosswalk.far_m == .24
+    for bad in (dict(near_m=.24, far_m=.12), dict(near_m=-.1, far_m=.1),
+                dict(near_m=.1, far_m=.2, linear=.03)):
+        raw = evidence(); raw["crosswalk"] = bad
+        with pytest.raises(ValidationError): LaneContainmentEvidence.model_validate(raw)

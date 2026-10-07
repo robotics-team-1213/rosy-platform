@@ -125,6 +125,10 @@ class RobotClient(Protocol):
     ) -> dict: ...
 
     async def line_follow_mode(self, mode: str) -> dict: ...
+    async def line_follow(self) -> dict: ...
+    async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
+                                   expires_s: float, turn_deg: float | None = None,
+                                   advance_m: float | None = None) -> dict: ...
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
@@ -276,6 +280,20 @@ class HttpRobotClient:
         return self._check(await self._http.put(
             "/api/v1/line-follow/mode", json={"mode": mode}, headers=self._headers()
         ))
+
+    async def line_follow(self) -> dict:
+        """D-143 ``GET /api/v1/line-follow``: selected mode and status."""
+        return await self._get("/api/v1/line-follow")
+
+    async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
+                                   expires_s: float, turn_deg: float | None = None,
+                                   advance_m: float | None = None) -> dict:
+        """D-494 4 / D-495 1: the action at the next junction; an old CORE answers 404."""
+        body: dict = {"action": action, "place_id": place_id, "expires_s": expires_s}
+        for key, value in (("stop_after_m", stop_after_m), ("turn_deg", turn_deg), ("advance_m", advance_m)):
+            if value is not None:
+                body[key] = value
+        return await self._post("/api/v1/line-follow/junction", body)
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,

@@ -200,5 +200,9 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bou
     edges = {b["side"]: b["intercept_m"] for b in boundaries}
     if len(edges) == 2 and edges["left"] <= edges["right"]:
         boundaries = []
-    return dict(stamp=float(stamp), geometry_id=identity, ground_source=source,
-                uncertainty_m=uncertainty, boundaries=boundaries)
+    payload = dict(stamp=float(stamp), geometry_id=identity, ground_source=source,
+                   uncertainty_m=uncertainty, boundaries=boundaries)
+    if keeper.get("crosswalk") is not None:  # D-491 §4: CORE decides whether it may rest the IR guard
+        near, far = keeper["crosswalk"]
+        payload["crosswalk"] = dict(near_m=float(near), far_m=float(far))
+    return payload

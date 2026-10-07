@@ -19,6 +19,19 @@ class LaneBoundaryEvidence(BaseModel):
         return self
 
 
+class CrosswalkExtentEvidence(BaseModel):
+    """D-491 §4: a crosswalk's near and far edge, metres ahead of base_footprint at the image stamp."""
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    near_m: float = Field(ge=0, le=1)
+    far_m: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def extent_order(self):
+        if self.near_m >= self.far_m:
+            raise ValueError("nonempty crosswalk extent required")
+        return self
+
+
 class LaneContainmentEvidence(BaseModel):
     """Each boundary is the drivable (inner) edge of its painted line, not the paint centre.
     uncertainty_m must bound the total lateral error of each boundary in the body frame at
@@ -29,6 +42,7 @@ class LaneContainmentEvidence(BaseModel):
     ground_source: Literal["NOMINAL", "CALIBRATED", "GAZEBO"]
     uncertainty_m: float | None = Field(default=None, ge=0, le=1)
     boundaries: list[LaneBoundaryEvidence] = Field(max_length=2)
+    crosswalk: CrosswalkExtentEvidence | None = None
 
     @model_validator(mode="after")
     def unique_sides(self):

@@ -11,6 +11,20 @@ from typing import Optional
 from fleet.swarm.transport import RobotApiError
 
 
+class TripAware:
+    """D-494 5: ``trip_busy(robot_id)`` is True while the trip loop drives that robot.
+
+    ``trip_guard.install_trip_guard`` replaces it on the console instance; a trip robot never
+    yields (``_make_room`` finds it no bay) and is never a reassignment candidate. It also
+    wraps the console's motion and stop methods per instance (goal, formation_*,
+    line_follow_mode, cancel, estop_all): call them on the instance, not on the class.
+    """
+
+    @staticmethod
+    def trip_busy(robot_id: str) -> bool:
+        return False
+
+
 class CapabilityDisplay:
     """Keep capability readback bounded without changing dispatch admission."""
 

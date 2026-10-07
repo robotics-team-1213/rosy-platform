@@ -66,3 +66,11 @@
 
 - `middleware/perception/map/map_v2_fleet/scripts/lane_graph.py`가 `lane_graph.yaml`의 최상위 `crosswalks[].polygon`(map 좌표 네 꼭짓점, m)을 만든다. 열린 항목 "지도 구역 형식"은 이것으로 닫는다.
 - CORE 차선 추종은 odom 자세만 받는다(D-468 `PoseTrail`). 그래서 CAMERA_LINE 중에는 지도 구간을 쓸 수 없고, 소비자는 지도 주행(D-481)과 시뮬 정답이다. CAMERA_LINE의 구간은 결정 4(카메라)가 낸다.
+
+### 구현 메모 (2026-10-07, 결정 1·2·4·5·6 카메라 구간)
+
+- 메시지(API v1.114): `containment`의 optional `crosswalk {near_m, far_m}`(`CrosswalkExtentEvidence`). 결정 6의 상태 표시는 새 필드 없이 추종 사유 `ir_guard_crosswalk`로 닫는다.
+- perception: `crosswalk_stripes.crosswalk_extent`가 keep 모드 지면 격자 행마다 폭 12–40 mm·피치 30–50 mm 띠 3개 이상을 찾고, 가장 긴 행 묶음(20 mm 이상)의 앞뒤 끝을 낸다. 고전 CV로 시작했다(열린 항목 "검출 방식").
+- CORE: `crosswalk_zone.CrosswalkZones`가 구간을 D-468 `LaneReturnEvidence`의 영상 시각 자세에 고정한다. CALIBRATED/GAZEBO 지면과 `uncertainty_m` ≤ 0.015 m(D-468과 같은 상한)일 때만 만든다. 여유는 `uncertainty_m` + `crosswalk_odom_error_fraction`(0.05) × 영상 이후 이동 거리, 길이 상한 `crosswalk_zone_max_m`(0.20 m)이다. pose trail epoch가 바뀌거나, IR 줄이 먼 끝 + 여유를 지나거나, 진행각이 영상 때보다 0.3 rad 넘게 돌거나, IR 줄이 영상 때 진행선에서 차로 폭(0.10 m + 여유) 밖으로 나가면 버린다. 한 번 쉬는 거리는 실측 odom으로 `crosswalk_zone_max_m`×(1 + 2×비율) + 0.03 m를 넘지 못하고, 그 뒤에는 IR이 한 번 `clear`를 읽어야 다시 쉰다. 그래서 연속 검출로 쉬는 거리를 늘릴 수 없다. 검출기는 로봇 차로 폭(|y| ≤ 0.10 m)의 띠만 센다. IR 줄 x는 로봇 패키지 `ir_row_x_m`(URDF 0.0295 m)이고 없으면 쉬지 않는다.
+- 결정 1 정정: "그동안 차선 침범은 D-468 차체 침범 판정이 맡는다"는 `recovery_local_enabled`가 켜진 로봇에만 맞다. D-495 이후 기본은 켜짐이지만 로봇별로 끌 수 있고, 끈 로봇에서는 쉬는 동안 차선 안쪽 유지는 카메라 추종(구간을 낸 같은 카메라)뿐이며 D-422 몸 쓸기는 물체만 본다. 어느 경우든 쉬는 거리 상한이 그 공백을 제한한다.
+- 남은 것: 앞뒤 방향 투영 오차는 따로 재지 않았다(`uncertainty_m`은 횡오차 한계다). 여유가 모자라면 결과는 가짜 정지(fail-closed)다. 비율·상한 실측, 실제 카메라에서 검출 확인, SIM(모델 PC/사이트 PC), 장치 수용은 별도다.

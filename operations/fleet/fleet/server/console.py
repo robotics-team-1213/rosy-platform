@@ -33,7 +33,7 @@ from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, traffic
 from fleet.server.console_view import (
-    CapabilityDisplay, _error_of, _formation_stream_evidence, _shown,
+    CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
 )
 from fleet.swarm.session import (
@@ -52,7 +52,7 @@ logger = logging.getLogger("fleet.console")
 MAP_TTL_S = 10.0
 
 
-class FleetConsole:
+class FleetConsole(TripAware):
     """robots.yaml 한 장에 적힌 N대를 하나의 관제 표면으로 묶는다."""
 
     def __init__(
@@ -555,7 +555,7 @@ class FleetConsole:
             pose = self._pose_of(robot_id)
             # 거리장 계산은 순수 계산이고 맵이 커지면 몇백 ms 가 된다(40x40 m, 20 m 경로에서
             # 0.38 s). 이벤트 루프에서 돌리면 그동안 다른 로봇의 폴링까지 같이 멈춘다.
-            bay = None if pose is None else await asyncio.to_thread(
+            bay = None if pose is None or self.trip_busy(robot_id) else await asyncio.to_thread(
                 bays.best_bay, grid, route, pose, keep_out_m=self._yield_keep_out_m)
             if bay is None:
                 no_space.append(robot_id)
@@ -739,7 +739,7 @@ class FleetConsole:
                         for alt_row in robots:
                             alt_id = alt_row["robot_id"]
                             alt_state = alt_row.get("state") or {}
-                            busy = alt_id in self._goals or alt_id in self._queued
+                            busy = alt_id in self._goals or alt_id in self._queued or self.trip_busy(alt_id)
                             if (alt_id != robot_id and alt_row.get("online")
                                     and not alt_state.get("capabilities_degraded")
                                     and not busy):

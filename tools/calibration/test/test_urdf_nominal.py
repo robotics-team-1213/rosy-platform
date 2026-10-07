@@ -210,6 +210,7 @@ def test_line_follow_stuck_body_consumers():
     # D-422: the obstacle stop measures from the body front; the ultrasonic gap from its mount.
     assert line_follow["body_front_x_m"] == G["footprint"]["front_x_m"]
     assert line_follow["body_ultrasonic_x_m"] == G["ultrasonic"]["x_m"]
+    assert line_follow["ir_row_x_m"] == G["ir"]["mid"]["x_m"]  # D-491
     assert G["ultrasonic"]["x_m"] < G["footprint"]["front_x_m"] < G["footprint"]["rotation_radius_m"]
 
 

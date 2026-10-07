@@ -301,3 +301,12 @@ def test_node_paint_half_width_is_read_only_and_validated_at_startup():
     assert "self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)" in source
     startup = source.split("def __init__", 1)[1].split("\n    def ", 1)[0]
     assert "lane_paint_half_width_m must be a finite number >= 0" in startup
+
+
+def test_crosswalk_extent_rides_in_the_payload_and_passes_the_contract():
+    from core_common.protocol.lane_containment import LaneContainmentEvidence
+    raw = containment_payload({"crosswalk": (.15, .27)}, ground(), stamp=1., source="CALIBRATED", camera_x=.033)
+    assert raw["crosswalk"] == dict(near_m=.15, far_m=.27)
+    assert LaneContainmentEvidence.model_validate(raw).crosswalk.near_m == .15
+    assert "crosswalk" not in containment_payload({"crosswalk": None}, ground(), stamp=1., source="CALIBRATED",
+                                                  camera_x=.033)
