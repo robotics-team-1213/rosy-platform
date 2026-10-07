@@ -48,7 +48,9 @@ def safe_http_server(handler_cls, *, server_cls=ThreadingHTTPServer, host: str =
     server = server_cls(listener.getsockname(), handler_cls, bind_and_activate=False)
     server.socket.close()
     server.socket = listener
+    # What HTTPServer.server_bind() would have set (handlers read server_port).
     server.server_address = listener.getsockname()
+    server.server_name, server.server_port = host, server.server_address[1]
     server.server_activate()
     return server
 

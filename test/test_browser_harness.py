@@ -71,7 +71,7 @@ def test_safe_http_server_serves_on_the_bound_safe_socket():
     try:
         port = server.server_address[1]
         assert port not in browser_harness.CHROMIUM_RESTRICTED_PORTS
-        assert server.socket.getsockname()[1] == port
+        assert server.socket.getsockname()[1] == port == server.server_port
         with urlopen(f"http://127.0.0.1:{port}/", timeout=5) as reply:
             assert reply.read() == b"ok"
     finally:
