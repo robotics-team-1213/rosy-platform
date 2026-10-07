@@ -64,6 +64,15 @@ EXEMPT: dict[str, str] = {
         "1e-6 m of range_min (float rounding, below LiDAR resolution); D-422 blind-gap lower "
         "bound still applies, no-echo never clears, memory only shortens gaps; repro test "
         "fails pre-fix, C1/0.12 post latch tests pass (56/56, 463 filtered).",
+    "463ae393a27e0ef5c644d851f96de3078a2e939c":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-07: console.py change only widens "
+        "trusted_map_pose to (x, y, yaw-or-None); TRUSTED-verdict, finite x/y and remember-row "
+        "gates unchanged, non-finite/missing yaw is None not a pose. Lane-route caller indexes "
+        "pose[0:2] only (D-463 gate, idempotency, operator goal path untouched); new D-488/D-490 "
+        "/trip caller is plan-only (execute/start 501, named operator) and refuses a None yaw. "
+        "No stop, admission, dispatch or auth path touched; 136 host tests pass at the commit "
+        "(lane_route, site_map_api, stuck_resolver, server_console, overhead_tracking_service); "
+        "no device acceptance.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
