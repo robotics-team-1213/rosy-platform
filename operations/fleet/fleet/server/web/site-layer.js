@@ -108,15 +108,6 @@ export function streamEvidence(formation, robotId) {
   return { text: "릴레이 증거 없음", cls: "warn", evidence: "unavailable" };
 }
 
-// D-513 7: 설치에서 정한 원본 영상의 화면 회전(시계 방향 0/90/180/270). 표시 전용 — 보정·관측은 원본 좌표다.
-export function displayRotation(siteMap, sourceId) {
-  for (const map of siteMap?.maps || []) {
-    const row = (map.sources || []).find((src) => src.source_id === sourceId);
-    if (row) return [90, 180, 270].includes(row.display_rotation_deg) ? row.display_rotation_deg : 0;
-  }
-  return 0;
-}
-
 // w×h 원본을 시계 방향 rot 만큼 돌린 화면: 크기, 점 변환, ctx.transform 행렬 [a, b, c, d, e, f].
 export function quarterTurn(rot, w, h) {
   const m = rot === 90 ? [0, 1, -1, 0, h, 0] : rot === 180 ? [-1, 0, 0, -1, w, h]
@@ -146,16 +137,14 @@ export function cameraScreenToMap(mapToImage, turn, x, y, ref) {
   return p ? { x: p[0], y: p[1] } : null;
 }
 
-// D-513 7: 돌린 카메라 화면에서 지도 +x 가 가리키는 방향을 가장 가까운 quarter turn(시계 방향 도)으로.
-// 지도 화면(+x 오른쪽, +y 위)을 그만큼 돌리면 관제 실영상과 같은 방향으로 보인다.
-export function mapQuarterTurn(record, rot) {
-  const h = record?.map_to_image, b = record?.track_bounds_m, image = record?.image;
-  if (!Array.isArray(h) || h.length !== 9 || !b || !(image?.width > 0) || !(image?.height > 0)) return 0;
-  const turn = quarterTurn(rot, image.width, image.height);
+// D-513 7: 실영상은 지도 방향으로 보인다 — 지도 +y 가 화면 위로 오는 가장 가까운 quarter turn(시계 방향 도).
+// 방향의 근거는 지도 좌표계와 보정 하나뿐이다. 설치 키를 따로 두지 않는다. 보정이 없으면 0(원본 그대로).
+export function mapUpTurn(record) {
+  const h = record?.map_to_image, b = record?.track_bounds_m;
+  if (!Array.isArray(h) || h.length !== 9 || !b) return 0;
   const cx = (b.min_x + b.max_x) / 2, cy = (b.min_y + b.max_y) / 2;
-  const a = projectHomography(h, cx, cy), c = projectHomography(h, cx + 0.1, cy);
+  const a = projectHomography(h, cx, cy), c = projectHomography(h, cx, cy + 0.1);
   if (!a || !c) return 0;
-  const p = turn.point(a[0], a[1]), q = turn.point(c[0], c[1]);
-  const deg = Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI;
-  return ((Math.round(deg / 90) * 90) % 360 + 360) % 360;
+  const up = Math.atan2(c[1] - a[1], c[0] - a[0]) * 180 / Math.PI; // map +y on the raw picture, clockwise
+  return ((Math.round((-90 - up) / 90) * 90) % 360 + 360) % 360;
 }
