@@ -94,7 +94,7 @@ class FakeRobot:
         self.release_rc, self.corrupt_tee, self.mangle_after_mv, self.fail_restore = 0, False, False, False
         self.core_env, self.core_errors, self.on_call = "HOME=/var/lib/rosy/core", "0", None
         self.state_fail = self.rec_unreachable = False
-        self.restart_rc = 0
+        self.restart_rc = self.precheck_rc = 0
         self.__dict__.update(kw)
         self.core = FakeCore(self)
 
@@ -114,6 +114,8 @@ class FakeRobot:
         if cmd == "systemctl is-active rosy-core":
             return 0, b"active\n"
         if cmd.endswith(" precheck"):
+            if self.precheck_rc:
+                return self.precheck_rc, b"Traceback: boom"
             out = f"hold by {run.HOLDER}: topic" if self.hold and self.precheck == "ok" else self.precheck
             return 0, out.encode()
         if " hold --holder" in cmd:
@@ -260,9 +262,9 @@ def test_core_effective_config_mismatch_aborts_and_restores(tmp_path, env, error
     assert "PUT /line-follow/mode CAMERA_LINE" not in robot.log
 
 
-@pytest.mark.parametrize("precheck, why", [("hold by rosy-c5: G4 seal (until 2026-10-08T12:00:00Z)", "peer conflict"),
-                                           ("hold.json unreadable (bad); release it with release-hold", "unclear hold"),
-                                           ("claim held by fleet (seal)", "peer conflict")])
+@pytest.mark.parametrize("precheck, why", [("hold by rosy-c5: G4 seal (until 2026-10-08T12:00:00Z)", "foreign or unclear"),
+                                           ("hold.json unreadable (bad); release it with release-hold", "foreign or unclear"),
+                                           ("claim held by fleet (seal)", "foreign or unclear")])
 def test_peer_or_unclear_hold_aborts_without_touching_the_robot(tmp_path, precheck, why):
     robot = FakeRobot(precheck=precheck)
     code, s = go(tmp_path, robot)
@@ -433,6 +435,7 @@ def test_dry_run_makes_no_calls(tmp_path, capsys):
     ("bridge_arm_frames", 2, "must be"), ("bridge_arm_frames", 3.0, "must be"),
     ("bridge_distance_scale", 1.0, "must be"), ("bridge_time_margin_s", 0.2, "must be"),
     ("bridge_coast_m", 0.2, "must be"), ("bridge_enabled", "yes", "must be"),
+    ("bridge_slow_m", 0.2, "the default"), ("bridge_slow_m", 0.3, "the default"),
     ("junction_turn_site_accepted", True, "accepted_risks")])
 def test_plan_overlay_rules(tmp_path, key, value, why):
     p = plan_file(tmp_path, overlay={"line_follow": {"bridge_enabled": True, key: value}})
@@ -487,7 +490,7 @@ def test_hold_taken_over_mid_run_is_not_released(tmp_path):
     robot.on_call = lambda m, p, mode: setattr(robot, "precheck", "hold by rosy-c5: seal (until z)") \
         if mode == "CAMERA_LINE" else None
     code, s = go(tmp_path, robot)
-    assert code == 2 and any("belongs to rosy-c5" in e for e in s["errors"])
+    assert code == 2 and any("foreign or unclear" in e for e in s["errors"])
     assert robot.hold                                                   # not released by us
 
 
@@ -518,7 +521,12 @@ def _sent_nothing(robot):
 
 
 @pytest.mark.parametrize("change, why", [
-    (lambda r: setattr(r, "precheck", "hold by rosy-c5: seal (until z)"), "held by someone else"),
+    (lambda r: setattr(r, "precheck", "hold by rosy-c5: seal (until z)"), "foreign or unclear"),
+    (lambda r: setattr(r, "precheck", "hold by rosy pilot: test (until z)"), "foreign or unclear"),
+    (lambda r: setattr(r, "precheck", "hold.json unreadable (x); release it with release-hold"),
+     "foreign or unclear"),
+    (lambda r: setattr(r, "precheck", "claim held by fleet (seal)"), "foreign or unclear"),
+    (lambda r: setattr(r, "precheck_rc", 1), "precheck failed"),
     (lambda r: setattr(r, "lf_mode", "CAMERA_LINE"), "someone is driving"),
     (lambda r: setattr(r, "overlay", b"line_follow:\n  bridge_enabled: false\n# peer edit\n"), "overlay changed")])
 def test_restore_refuses_when_the_robot_is_no_longer_ours(tmp_path, change, why):
@@ -548,3 +556,39 @@ def test_summary_is_valid_json_sanitized_and_keeps_ids(tmp_path):
     assert "2026.10.07-051" in s["peer_check"]
     assert run.sanitize({"id": "20261008T120000Z-aB3dEfGhIjKlMnOpQr12", "n": 3, "l": ["10.0.0.1"]}) == \
         {"id": "20261008T120000Z-aB3dEfGhIjKlMnOpQr12", "n": 3, "l": ["<ip>"]}
+
+
+@pytest.mark.parametrize("precheck, rc", [("hold by rosy pilot: test (until z)", 0),
+                                          ("hold.json unreadable (x); release it with release-hold", 0),
+                                          ("", 1)])
+def test_unclear_hold_at_cleanup_is_not_called_ours_or_none(tmp_path, precheck, rc):
+    robot = FakeRobot()
+    robot.on_call = lambda m, p, mode: robot.__dict__.update(precheck=precheck, precheck_rc=rc) \
+        if mode == "CAMERA_LINE" else None
+    code, s = go(tmp_path, robot)
+    assert code == 2 and any(e.startswith("hold release") for e in s["errors"]) and marker(tmp_path)
+
+
+def test_coast_above_slow_is_refused(tmp_path, monkeypatch):
+    import plan_rules
+    with pytest.raises(SystemExit, match="must be"):
+        run.load_plan(plan_file(tmp_path, overlay={"line_follow": {"bridge_coast_m": 0.3}}))
+    monkeypatch.setitem(plan_rules.RULES, "line_follow.bridge_coast_m", (lambda v: True, "any"))
+    with pytest.raises(SystemExit, match="bridge_coast_m 0.3 > bridge_slow_m 0.25"):
+        plan_rules.check_overlay({"line_follow.bridge_coast_m": 0.3})
+
+
+@pytest.mark.parametrize("date", ["", "not-a-date", "2026-13-40", None])
+def test_waiver_date_must_be_iso(tmp_path, date):
+    plan = yaml.safe_load(PLAN.read_text(encoding="utf-8"))
+    plan["accepted_risks"][0]["date"] = date
+    p = tmp_path / "d.yaml"
+    p.write_text(yaml.safe_dump(plan), encoding="utf-8")
+    with pytest.raises(SystemExit, match="accepted_risks"):
+        run.load_plan(p)
+
+
+def test_observed_keys_are_sanitized_and_id_pattern_is_bounded():
+    assert run.sanitize({"reasons": {"seen 10.0.0.7": 1}}) == {"reasons": {"seen <ip>": 1}}
+    long_id = "20261008T120000Z-" + "aB3" * 30
+    assert run.sanitize(long_id) == "<redacted>"

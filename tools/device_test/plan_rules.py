@@ -28,7 +28,7 @@ def _bool(v):
 
 # D-512 decision 4: exact keys, each with a value rule. Bridge values may only make the bridge
 # more conservative than rosy_default.yaml (and stay inside LineFollowConfig._check_bridge):
-# arm gates stricter, coast/slow distances and slow scale smaller, odometry inflation and the
+# arm gates stricter, coast distance and slow scale smaller, odometry inflation and the
 # LOST-clock margin larger. bridge_lookahead_m has no safer direction and is not allowed.
 RULES = {
     "line_follow.bridge_enabled": (_bool, "bool"),
@@ -39,7 +39,8 @@ RULES = {
     "line_follow.bridge_arm_max_curvature": _num(0, 4.0, lo_open=True),
     "line_follow.bridge_arm_curvature_tolerance": _num(0, 0.5, lo_open=True),
     "line_follow.bridge_coast_m": _num(0, 0.10, lo_open=True),
-    "line_follow.bridge_slow_m": _num(0, 0.25, lo_open=True),
+    # Also the re-arm distance (lane_bridge.py): smaller is not stricter, so only the default.
+    "line_follow.bridge_slow_m": (lambda v: v == 0.25 and not isinstance(v, bool), "the default 0.25"),
     "line_follow.bridge_slow_scale": _num(0, 0.5, lo_open=True),
     "line_follow.bridge_distance_scale": _num(1.08, 2.0),
     "line_follow.bridge_time_margin_s": _num(0.5, 2.0),
@@ -57,13 +58,22 @@ WAIVERS = {
 }
 
 
+def _iso_date(v):
+    if isinstance(v, dt.date):
+        return True
+    try:
+        return bool(v) and dt.date.fromisoformat(str(v)) is not None
+    except ValueError:
+        return False
+
+
 def check_overlay(flat, accepted_risks=()):
     accepted = {r.get("key"): r for r in accepted_risks or () if isinstance(r, dict)}
     for key, value in flat.items():
         if key in WAIVERS:
             risk = accepted.get(key) or {}
             if not (str(risk.get("accepted_by") or "").strip() and str(risk.get("reason") or "").strip()
-                    and isinstance(risk.get("date"), (str, dt.date))):
+                    and _iso_date(risk.get("date"))):
                 raise SystemExit(f"plan overlay {key}: a site waiver needs accepted_risks "
                                  "{key, accepted_by, date, reason}")
             rule = WAIVERS[key]
@@ -73,6 +83,9 @@ def check_overlay(flat, accepted_risks=()):
             raise SystemExit(f"plan overlay {key}: not an allowed test key (RULES in plan_rules.py)")
         if not rule[0](value):
             raise SystemExit(f"plan overlay {key}={value!r}: must be {rule[1]}")
+    coast, slow = flat.get("line_follow.bridge_coast_m", 0.10), flat.get("line_follow.bridge_slow_m", 0.25)
+    if coast > slow:   # LineFollowConfig refuses coast > slow at CORE start
+        raise SystemExit(f"bridge_coast_m {coast} > bridge_slow_m {slow}")
 
 
 def load_plan(path):
@@ -95,7 +108,7 @@ def load_plan(path):
 
 
 # Known ids pass unchanged: sha256 digests, recording ids (20261008T120000Z-...), release ids.
-KEEP = re.compile(r"sha256:[0-9a-f]{64}|\d{8}T\d{6}Z[-\w]*|\d{4}\.\d{2}\.\d{2}-\d{3}")
+KEEP = re.compile(r"sha256:[0-9a-f]{64}|\d{8}T\d{6}Z[-\w]{1,64}|\d{4}\.\d{2}\.\d{2}-\d{3}")
 
 
 def sanitize_text(text):
@@ -111,9 +124,9 @@ def sanitize_text(text):
 
 
 def sanitize(value):
-    """Walk a JSON-able structure and sanitize string values (keys and numbers stay)."""
+    """Walk a JSON-able structure and sanitize string keys and values (numbers stay)."""
     if isinstance(value, dict):
-        return {k: sanitize(v) for k, v in value.items()}
+        return {sanitize_text(k) if isinstance(k, str) else k: sanitize(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [sanitize(v) for v in value]
     return sanitize_text(value) if isinstance(value, str) else value

@@ -22,7 +22,6 @@ import hashlib
 import json
 import math
 import os
-import re
 import signal
 import sys
 import time
@@ -46,7 +45,7 @@ PHASES = ("peers", "identity", "health", "camera", "verdict", "hold", "overlay",
           "record", "start", "stream")
 LOOP_CALL_S = 0.25           # per loop call, one attempt: hold + status + state (+ events) <= ~1 s
 STATE_FAILS_MAX = 5          # consecutive failed /robot/state at 10 Hz = 0.5 s of unknown pose/estop
-HOLD_BY = re.compile(r"hold by (\S+?):")
+PRECHECK_BUSY = 3            # rosy_auto_update.py PRECHECK_BUSY_EXIT: reasons were printed
 VALIDATE = ("sudo -n python3 -c 'import sys,yaml,hashlib,json; b=open(sys.argv[1],\"rb\").read(); "
             "print(hashlib.sha256(b).hexdigest()); print(json.dumps(yaml.safe_load(b.decode(\"utf-8\")), "
             "sort_keys=True))' ")
@@ -176,10 +175,8 @@ class Run:
 
     # -- changes (each undone in cleanup) --
     def hold(self):
-        _rc, out = self.sh(f"{UPDATER} precheck")
-        if any(k in out for k in ("hold by ", "claim held by", "hold.json")):
-            raise Abort(f"peer conflict or unclear hold on the robot: {out.strip()}"
-                        + (" (an earlier run of this tool? use --restore)" if HOLDER in out else ""))
+        if self.hold_state() == "ours":
+            raise Abort(f"hold by {HOLDER} already on the robot (an earlier run of this tool? use --restore)")
         self.marker(held=True)               # written before the first robot write
         self.held = True
         rc, out = self.sh(f"{UPDATER} hold --holder {HOLDER} --reason {self.plan['topic']} --hours 1")
@@ -380,19 +377,21 @@ class Run:
         self.restart_core()
         return "restored byte for byte"
 
-    def hold_owner(self):
-        """(holder or None, precheck text). A TOCTOU window remains between this read and
-        release-hold: the D-412 updater has no release-by-holder and that CLI is not ours."""
-        _rc, out = self.sh(f"{UPDATER} precheck")
-        m = HOLD_BY.search(out)
-        return (m.group(1) if m else None), out
+    def hold_state(self):
+        """"ours" only on exact "hold by agent-device-test:", else "none"; Abort on anything unclear.
+        TOCTOU before release-hold remains: the D-412 updater (not ours) has no release-by-holder."""
+        rc, out = self.sh(f"{UPDATER} precheck")
+        if rc not in (0, PRECHECK_BUSY):
+            raise Abort(f"precheck failed (rc {rc}): hold state unknown")
+        ours = f"hold by {HOLDER}:"
+        rest = out.replace(ours, "")
+        if any(k in rest for k in ("hold by ", "hold.json", "claim held by")):
+            raise Abort(f"foreign or unclear hold/claim on the robot: {out.strip()[:200]}")
+        return "ours" if ours in out else "none"
 
     def release_hold(self):
-        owner, out = self.hold_owner()
-        if owner is None:
+        if self.hold_state() == "none":
             return "no hold left"
-        if owner != HOLDER:
-            raise Abort(f"the hold now belongs to {owner}, left in place: {out.strip()[:200]}")
         rc, out = self.sh(f"{UPDATER} release-hold")
         if rc != 0:
             raise Abort(f"release-hold rc {rc}: {out.strip()[:200]}")
@@ -519,9 +518,10 @@ def restore(robot, args):
     run = Run(robot, {"topic": m["topic"], "overlay_path": OVERLAY_PATH, "overlay": {}}, args, ev)
     run.identity()
     # Read-only checks first: act only while the robot is still as this run left it.
-    owner, out = run.hold_owner()
-    if owner not in (None, HOLDER) or "claim held by" in out:
-        raise SystemExit(f"robot now held by someone else ({out.strip()[:200]}); nothing sent")
+    try:
+        hold = run.hold_state()
+    except Abort as exc:
+        raise SystemExit(f"{exc}; nothing sent") from exc
     mode = run.get("/line-follow").get("mode")
     if mode not in ("OFF", None):
         raise SystemExit(f"line-follow is {mode}: someone is driving; nothing sent")
@@ -533,7 +533,7 @@ def restore(robot, args):
         if now not in (m.get("applied_sha"), m["original_sha"]):
             raise SystemExit("the robot overlay changed since this run wrote it; nothing sent, restore by hand")
         run.original_overlay = original.read_bytes()
-    run.held = bool(m.get("held")) and owner == HOLDER
+    run.held = bool(m.get("held")) and hold == "ours"
     run.cleanup()
     result = {"restored_at": robot.now(), "errors": run.summary["errors"], "phases": run.summary["phases"]}
     (ev / "restore_result.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
