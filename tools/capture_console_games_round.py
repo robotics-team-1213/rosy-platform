@@ -57,23 +57,33 @@ def build_fleet_client(tmp: Path):
                                base_url=f"http://127.0.0.1:808{i}", token="t")
                  for i, r in enumerate(robots)]
     console = FleetConsole(endpoints, list(robots))
-    return TestClient(create_app(console, console_token=FLEET_TOKEN))
+    return TestClient(create_app(console, console_token=FLEET_TOKEN,
+                                 web_common=REPO / "shared/web"))
 
 
-def _route_from(client):
+def _is_fleet_asset(request):
+    url = urlsplit(request.url)
+    return url.hostname == "fleet.test" and url.path.startswith(("/common/", "/console/assets/"))
+
+
+def _route_from(client, asset_errors):
     def serve(route, _request):
-        target = urlsplit(route.request.url).path
+        url = urlsplit(route.request.url)
+        if url.hostname != "fleet.test":
+            route.continue_()
+            return
+        target = url.path + (f"?{url.query}" if url.query else "")
         headers = {}
         if target.startswith("/api/") or target.startswith("/console"):
             headers = {"Authorization": f"Bearer {FLEET_TOKEN}"}
-            response = client.get(target, headers=headers)
-            route.fulfill(status=response.status_code,
-                          headers={"content-type": response.headers.get(
-                              "content-type", "application/octet-stream"),
-                                   "cache-control": "no-store"},
-                          body=response.content)
-        else:
-            route.continue_()
+        response = client.request(route.request.method, target, headers=headers)
+        if _is_fleet_asset(route.request) and response.status_code >= 400:
+            asset_errors.append(f"{target}: HTTP {response.status_code}")
+        route.fulfill(status=response.status_code,
+                      headers={"content-type": response.headers.get(
+                          "content-type", "application/octet-stream"),
+                               "cache-control": "no-store"},
+                      body=response.content)
     return serve
 
 
@@ -92,13 +102,19 @@ def main() -> int:
     import tempfile
 
     errors: list[str] = []
+    asset_errors: list[str] = []
     rows = []
     with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
         client = build_fleet_client(Path(tmp))
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
         page.on("pageerror", lambda e: errors.append(str(e)))
-        page.route("**/*", _route_from(client))
+        def on_request_failed(request):
+            if _is_fleet_asset(request):
+                asset_errors.append(f"{urlsplit(request.url).path}: {request.failure}")
+
+        page.on("requestfailed", on_request_failed)
+        page.route("**/*", _route_from(client, asset_errors))
         page.goto("http://fleet.test/console", wait_until="load")
         page.wait_for_timeout(700)
         for width, height in FLEET_VIEWPORTS:
@@ -125,11 +141,12 @@ def main() -> int:
         page.close()
         browser.close()
 
-    report = {"rows": rows, "pageErrors": errors, "generated": time.strftime("%F %T")}
+    report = {"rows": rows, "pageErrors": errors, "assetErrors": asset_errors,
+              "generated": time.strftime("%F %T")}
     (args.out_dir / "report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"captured {len(rows)} cells into {args.out_dir}")
-    return 1 if errors else 0
+    return 1 if errors or asset_errors else 0
 
 
 if __name__ == "__main__":
