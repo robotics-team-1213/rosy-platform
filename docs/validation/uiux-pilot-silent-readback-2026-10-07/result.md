@@ -9,3 +9,5 @@
 이 캡처는 첫 화면의 비상 정지, 숫자 숨김, 경고 문구, 가로 넘침 없음을 보여 준다. 나머지 Pilot 선언 상태·폭, 실제 장치 readback, 운전자 G3 여덟 항목은 여전히 **HOLD**다.
 
 2026-10-07 추가 LOCAL 확인: 동일한 소켓 무응답·REST 503/무응답 전이를 Pilot 선언 폭 2000×1200, 1200×2000, 390×844, 320×568에서 다시 재생했다. 마지막 속도·배터리 숫자 숨김, 「상태 수신 없음」, 비상 정지 표시, 가로 넘침 없음, REST 회복을 모두 확인했다. 브라우저 **8 passed**, `known_failures.py` **0 NEW**. 원본은 `X:/DevTemp/pilot-silent-widths/shots/pilot-readback-{status,hang}-{2000x1200,1200x2000,390x844,320x568}.png`, 실행 기록은 같은 X: 폴더의 `browser.txt`다. 다른 Pilot G2 셀, 실물 장치와 G3는 **HOLD**다.
+
+착지 전 재실행 첫 회는 fixture가 Chromium 금지 포트 1723을 골라 페이지 로드 전에 **8 setup failed**였다(`preland-browser.txt`). 다시 실행한 동일 8셀은 **8 passed**, `known_failures.py` **0 NEW**였다(`preland-browser-retry.txt`). 금지 포트 회차는 UI 판정에 포함하지 않는다.
