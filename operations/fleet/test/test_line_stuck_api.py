@@ -317,10 +317,18 @@ def _online(robot_id="rosy_01", stuck=STUCK, pose=None) -> dict:
     return {"robot_id": robot_id, "online": True, "state": state}
 
 
+class _Board(LineStuckBoard):
+    """Observe then flush, as SharedGather does (the flush runs off the event loop there)."""
+
+    def observe(self, *args, **kwargs):
+        super().observe(*args, **kwargs)
+        self.flush()
+
+
 def _episode_board(tmp_path, **kwargs):
     log = LineStuckAnswerLog(tmp_path / "fleet.sqlite3")
     wall = FakeClock()
-    return LineStuckBoard(FakeClock(), log=log, wall=wall, **kwargs), log, wall
+    return _Board(FakeClock(), log=log, wall=wall, **kwargs), log, wall
 
 
 def test_an_episode_opens_tracks_the_max_and_closes_cleared(tmp_path):
@@ -364,7 +372,7 @@ def test_a_restart_closes_open_episodes_and_the_same_stuck_reopens_one_row(tmp_p
     opened_at = log.episodes()[0]["opened_at"]
 
     wall.advance(30.0)
-    again = LineStuckBoard(FakeClock(), log=LineStuckAnswerLog(log.path), wall=wall)
+    again = _Board(FakeClock(), log=LineStuckAnswerLog(log.path), wall=wall)
     [row] = log.episodes()
     assert row["close_reason"] == "fleet_restart" and row["closed_at"] is not None
 
@@ -379,6 +387,7 @@ def test_a_restart_closes_open_episodes_and_the_same_stuck_reopens_one_row(tmp_p
     ([("ESCALATE", None, "human", "no_resolver_token")], None, None, "no_resolver_token"),
     ([("RESUME", False, "human", None), ("WAIT", True, "rule", None)], "rule", "rule", None),
     ([("WAIT", None, "rule", None)], "rule_unconfirmed", "rule", None),
+    ([("ABORT", None, "human", None)], "human_unconfirmed", "human", None),
     ([("RESUME", False, "human", None)], None, "human", None),
 ])
 def test_resolved_by_comes_from_the_last_non_escalate_answer(tmp_path, answers, resolved_by,
@@ -412,6 +421,13 @@ def test_peer_ahead_at_open_uses_the_resolver_judgement(tmp_path, peer_pose, exp
     assert row["peer_ahead_at_open"] == expected
     assert row["peer_ahead_at_open"] == int(peer_ahead(me, [me, peer], ResolverConfig()))
     assert row["local_enabled_at_open"] == 1
+
+
+@pytest.mark.parametrize("local, stored", [(True, 1), (False, 0), (None, None)])
+def test_local_enabled_at_open_keeps_cores_value(tmp_path, local, stored):
+    board, log, _ = _episode_board(tmp_path)
+    board.observe([_online(stuck={**STUCK, "local_enabled": local})])
+    assert log.episodes()[0]["local_enabled_at_open"] == stored
 
 
 def test_no_own_pose_leaves_peer_ahead_unknown_and_trip_busy_is_recorded(tmp_path):
@@ -450,14 +466,14 @@ def test_episode_writes_equal_transitions_and_no_log_writes_nothing(tmp_path):
             calls.append("close")
             super().close_episode(*args, **kwargs)
 
-    board = LineStuckBoard(FakeClock(), log=CountingLog(tmp_path / "fleet.sqlite3"))
+    board = _Board(FakeClock(), log=CountingLog(tmp_path / "fleet.sqlite3"))
     for _ in range(5):
         board.observe([_online()])
     board.observe([_online(stuck=None)])
     board.observe([_online(stuck=None)])
     assert calls == ["open", "close"]
 
-    bare = LineStuckBoard(FakeClock())                   # no --tasks-db: memory only, as before
+    bare = _Board(FakeClock())                           # no --tasks-db: memory only, as before
     bare.observe([_online()])
     bare.observe([_online(stuck=None)])
     assert bare.episodes() == []
@@ -469,9 +485,50 @@ def test_an_old_database_without_the_episode_table_opens(tmp_path):
     with sqlite3.connect(path) as db:
         db.execute("CREATE TABLE unrelated (x INTEGER)")
     db.close()
-    board = LineStuckBoard(FakeClock(), log=LineStuckAnswerLog(path))
+    board = _Board(FakeClock(), log=LineStuckAnswerLog(path))
     board.observe([_online()])
     assert len(board.episodes()) == 1
+
+
+def test_episode_writes_wait_for_the_flush_and_then_are_durable_in_order(tmp_path):
+    log = LineStuckAnswerLog(tmp_path / "fleet.sqlite3")
+    board = LineStuckBoard(FakeClock(), log=log)
+    board.observe([_online()])
+    board.observe([_online(stuck={**STUCK, "stuck_id": "stuck-def"})])
+    board.observe([_online(stuck=None)])
+    assert log.episodes() == []                          # observe() itself never touches SQLite
+    board.flush()
+    by_id = {row["stuck_id"]: row for row in log.episodes()}
+    assert by_id["stuck-abc"]["close_reason"] == "replaced"
+    assert by_id["stuck-def"]["close_reason"] == "cleared"
+    board.flush()                                        # drained: nothing written twice
+    assert len(log.episodes()) == 2
+
+
+def test_the_shared_gather_flushes_episode_writes_in_a_worker_thread(tmp_path, monkeypatch):
+    import asyncio
+    import threading
+
+    from fleet.server import console_routes
+
+    log = LineStuckAnswerLog(tmp_path / "fleet.sqlite3")
+    board = LineStuckBoard(FakeClock(), log=log)
+    threads = []
+    original = board.flush
+    board.flush = lambda: (threads.append(threading.get_ident()), original())[1]
+
+    class Console:
+        class hub:
+            class registry:
+                events_since = staticmethod(lambda _rid, _seq: ())
+
+        async def snapshot(self):
+            return {"robots": [_online()]}
+
+    gather = console_routes.SharedGather(Console(), board)
+    asyncio.run(gather())
+    assert threads and threads[0] != threading.get_ident()
+    assert [row["stuck_id"] for row in log.episodes()] == ["stuck-abc"]
 
 
 def test_episode_list_route_is_read_guarded_and_lists_recent(tmp_path):

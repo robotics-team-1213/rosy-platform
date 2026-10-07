@@ -89,6 +89,7 @@ class SharedGather:
                 if self._tracking is not None:
                     self._tracking.observe_states(snapshot["robots"], now=gathered_at)
                 self._board.observe(snapshot["robots"], self._console.hub.registry.events_since)
+                await asyncio.to_thread(self._board.flush)   # episode SQLite off the loop
                 self._snapshot, self._at = snapshot, self._clock()
             return self._snapshot
 
@@ -187,7 +188,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                 "observed_age_s": board.observed_age_s()}
 
     @app.get("/api/fleet/line-stuck/episodes", dependencies=read_guard, tags=["line-stuck"])
-    async def line_stuck_episodes(limit: int = Query(100, ge=1, le=1000)) -> dict:
+    def line_stuck_episodes(limit: int = Query(100, ge=1, le=1000)) -> dict:
         # Durable episodes, newest first; empty without --tasks-db (nothing is recorded).
         return {"episodes": board.episodes(limit)}
 

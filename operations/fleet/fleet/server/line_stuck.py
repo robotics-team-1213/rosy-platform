@@ -29,7 +29,6 @@ _OPENED_KEYS = ("front_clearance_m", "rear_clearance_m", "rear_state", "turn_cle
                 "rear_blind_m", "preview_seq")
 
 _LOG = logging.getLogger(__name__)
-_PEER_CONFIG = ResolverConfig()   # the resolver's band; Fleet builds its resolver with defaults
 
 
 def _event_dict(event) -> dict:
@@ -52,8 +51,12 @@ class LineStuckBoard:
         # Episode context, injected by the app once the services exist (None = not known).
         self.trip_busy: Optional[Callable[[str], bool]] = None
         self.map_pose: Optional[Callable[[str], object]] = None
+        self.peer_config = ResolverConfig()   # the app sets the resolver's own when it runs
         self._peaks: dict[str, dict] = {}     # robot_id -> held_s / attempts maxima
-        self._durable(lambda: log.close_orphans(self._now_iso()))
+        # Episode writes queued by observe(), in order; flush() runs them (off the event loop).
+        self._pending: list[Callable[[], None]] = []
+        if log is not None:
+            self._durable(lambda: log.close_orphans(self._now_iso()))
 
     def note_resolver(self, robot_id: str, stuck_id: str, *, tier: str, rule: Optional[str],
                       decision: Optional[str], escalated: Optional[str]) -> None:
@@ -120,9 +123,16 @@ class LineStuckBoard:
     def _now_iso(self) -> str:
         return datetime.fromtimestamp(self._wall(), timezone.utc).isoformat(timespec="milliseconds")
 
-    def _durable(self, write: Callable[[], None]) -> None:
-        if self._log is None:
-            return
+    def flush(self) -> None:
+        """Run the queued episode writes in observe() order. Blocking SQLite: the shared
+        gather calls this through ``asyncio.to_thread`` under its lock, so writes for one
+        robot never reorder."""
+        pending, self._pending = self._pending, []
+        for write in pending:
+            self._durable(write)
+
+    @staticmethod
+    def _durable(write: Callable[[], None]) -> None:
         try:
             write()
         except (OSError, sqlite3.Error):
@@ -147,7 +157,7 @@ class LineStuckBoard:
             except Exception:  # noqa: BLE001 - context only; the episode is from state
                 _LOG.debug("map pose for stuck episode of %s failed", robot_id, exc_info=True)
         busy = self.trip_busy(robot_id) if self.trip_busy is not None else None
-        peer = peer_ahead(row, robots, _PEER_CONFIG)
+        peer = peer_ahead(row, robots, self.peer_config)
         local = stuck.get("local_enabled")
         record = {"robot_id": robot_id, "stuck_id": stuck["stuck_id"], "source": "fleet_poll",
                   "cause": stuck.get("cause"), "phase_at_open": stuck.get("phase"),
@@ -158,14 +168,16 @@ class LineStuckBoard:
         if pose is not None:
             record.update(pose_x=pose.x, pose_y=pose.y, pose_yaw=pose.yaw,
                           pose_state=pose.state, pose_age_s=pose.age_s)
-        self._durable(lambda: self._log.open_episode(record))
+        log = self._log
+        self._pending.append(lambda: log.open_episode(record))
 
     def _close_episode(self, robot_id: str, reason: str) -> None:
         peak = self._peaks.pop(robot_id, None)
-        if peak is None:
+        if peak is None or self._log is None:
             return
-        self._durable(lambda: self._log.close_episode(
-            robot_id, peak["stuck_id"], closed_at=self._now_iso(), close_reason=reason,
+        log, closed_at = self._log, self._now_iso()
+        self._pending.append(lambda: log.close_episode(
+            robot_id, peak["stuck_id"], closed_at=closed_at, close_reason=reason,
             held_s_max=peak["held_s_max"], attempts_max=peak["attempts_max"]))
 
     @staticmethod

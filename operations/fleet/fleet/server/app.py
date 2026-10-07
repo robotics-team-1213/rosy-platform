@@ -526,9 +526,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           require_operator=require_operator, auth_configured=bool(principals or console_token))
 
     if stuck_resolver_clients is not None:
+        resolver_core = StuckResolver(ResolverConfig(),
+                                      painted=lambda: (site_maps.active() or (None,) * 4)[3])
+        app.state.line_stuck.peer_config = resolver_core.config   # episodes judge peers as R1 does
         app.state.stuck_resolver = StuckResolverLoop(
-            app.state.fleet_gather, app.state.line_stuck,
-            StuckResolver(ResolverConfig(), painted=lambda: (site_maps.active() or (None,) * 4)[3]),
+            app.state.fleet_gather, app.state.line_stuck, resolver_core,
             clients=lambda: stuck_resolver_clients)
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
