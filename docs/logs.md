@@ -6871,6 +6871,20 @@ osy-d395-s1d\`.
 - 결정: D-510 Accepted (2026-10-07, 사용자 결정), 본문은 D-508로 쓴 것과 같다
 - 교훈: 도구가 있어도 쓰지 않는 세션이 있으면 번호는 겹친다. 이 충돌 자체가 D-510의 근거다.
 
+## 2026-10-07 · uncommitted · fix(test): 브라우저 시험 기반 — 안전 포트, 옵트인 이름 하나, 범위 지도
+- 변경: `test/browser_harness.py`에 Chromium 차단 포트 목록(`port_util.cc` kRestrictedPorts)·`safe_listener()`·`free_port()`·`browser_tests_enabled()`를 두고 Fleet·로봇 UI·Pilot·OMX pilot-sim·검수 앱 브라우저 fixture가 port 0 대신 쓴다. 옵트인은 `ROSY_RUN_BROWSER_TESTS=1`이 정식이고 `ROSY_BROWSER_TESTS=1`도 받는다(40개 파일). CI는 `$GITHUB_ENV` 대신 매트릭스 단계가 Fleet 경로 실행에만 `ROSY_RUN_BROWSER_TESTS=1`을 주고, 같이 묶인 다른 경로는 플래그 없이 따로 돈다. `test/browser_scope.py`가 바꾼 경로를 브라우저 시험 대상으로 바꾼다. Pilot 녹화본 시트 CSS를 고쳐 `test_surfaces_do_not_repaint_shared_controls`를 통과시켰다. main에서 이미 실패하는 2건을 `test/known_failures.txt`에 올렸다. 개발 가이드 「브라우저 시험」에 현장 PC·모델 PC 전체 실행 명령 형태를 적었다.
+- 증거: 이 노트북 동적 포트 범위가 1024부터다(`netsh int ipv4 show dynamicport tcp` → 1024, 13977개). `ROSY_RUN_BROWSER_TESTS=1`만 켜고(`ROSY_BROWSER_TESTS` 없음) cell 3 passed, Fleet 콘솔 1 passed, 시작점 1 passed, 로봇 traffic policy 1 passed, 검수 1 passed, Pilot 녹화 시트 4 passed. 단위·가드 묶음 261 passed, 실패 3건은 main 1aba6c3f5에서도 실패하는 import 규칙 1건과 이 커밋 전 pilot index 재생성 2건. 출력 `X:/DevTemp/browser-infra/*.txt`, `known_failures.py` 0 new.
+- gate 변화: CI 브라우저 범위는 그대로다(전과 같이 Fleet 브라우저 시험만 Chromium 으로 돈다). SOURCE/LOCAL은 위 대상 시험만 확인했고, 전체 브라우저 묶음은 이 노트북에서 돌리지 않았다(현장 PC·모델 PC 몫).
+- 결정: D-436(변경 범위 시험).
+- 교훈: 옵트인 환경 변수를 파일마다 직접 읽으면 이름이 갈라져 시험이 조용히 건너뛰어진다. 판정은 헬퍼 하나로 한다.
+
+## 2026-10-08 · uncommitted · fix(test): 브라우저 시험 기반 리뷰 반영
+- 변경: CI 매트릭스 단계가 Fleet 경로만 따로 `ROSY_RUN_BROWSER_TESTS=1`로 돌린다(`$GITHUB_ENV` 아님). `browser_scope.py`는 고를 시험이 없으면 exit 3, 문서 명령은 `t=$(...) && ... pytest $t`. `browser_harness.safe_http_server()`가 묶인 안전 소켓을 서버에 넣어 포트 경합을 없애고 로봇 UI·Pilot·OMX fixture가 쓴다. importorskip 만으로 돌던 브라우저 시험 5개를 옵트인 뒤로 옮겼다. known_failures 두 줄에 원인 커밋과 "remove when fixed"를 적었다. 게임 보드 `PreviewServer(port=0)`는 그대로다 — `open_page(url=...)`가 그 포트를 `--explicitly-allowed-ports`로 허용하고 `test_chromium_opens_preview_on_a_normally_blocked_port`가 6000에서 이를 증명한다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1`만으로 게임 보드 2 passed(차단 포트 6000 포함), OMX pilot-sim 3·peer approval·로봇 traffic policy·surface entry 2 passed(`review_browser.txt`의 server_port 누락 3건은 `safe_http_server` 수정 뒤 `review_browser2.txt` 3 passed), Pilot 좁은 시트 1 passed, 단위·CI 계약 91 passed. 파일 `X:/DevTemp/browser-infra/review_browser2.txt`·`review_unit.txt`·`pilot_sheet2.txt`·`pilot_sheet3.txt`, `known_failures.py` 0 new.
+- gate 변화: CI 브라우저 범위는 그대로(Fleet 브라우저 시험만). 전체 브라우저 묶음은 미실행.
+- 결정: D-436.
+- 교훈: 옵트인 이름을 합치면 CI 의 잡 전역 플래그가 묶인 다른 묶음까지 켠다 — 플래그는 실행 단위로 준다.
+
 ## 2026-10-08 · uncommitted · fix(tools): 착지 도구가 logs.md 중간 삽입 충돌을 해소
 - 변경: `tools/land.py`의 `logs.md` 해소에 경우 하나를 더했다. 우리 쪽이 끝에 덧붙이기만 했고 main 쪽이 기준 줄을 지우거나 바꾸지 않고 끼워 넣기만 했으면(항목 사이에 동료 항목) main 쪽을 그대로 두고 그 뒤에 우리 블록을 잇는다. 우리 쪽이 끝 덧붙이기가 아니거나 main 쪽이 기준 줄을 지우거나 바꿨으면 지금처럼 사람에게 넘긴다.
 - 증거: D-510 착지 때 main이 마지막 항목 앞에 동료 항목을 넣고 우리가 끝에 덧붙인 충돌을 도구가 "a side changed existing lines"로 거절했다. `test/test_land.py` 29 passed(중간 삽입 + 끝 덧붙이기 해소, main 쪽 삭제는 사람에게), `known_failures.py` 0 new.

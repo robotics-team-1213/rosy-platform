@@ -7,16 +7,17 @@ test drives) the same way the shell does, with the shared /common/ assets.
 from __future__ import annotations
 
 import os
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Thread
 
 import pytest
+from browser_harness import browser_tests_enabled, safe_http_server
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_COMMON = (ROOT.parents[2] / "shared") / "web"
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 
@@ -119,7 +120,7 @@ class _Handler(SimpleHTTPRequestHandler):
 def panel():
     from playwright.sync_api import sync_playwright
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = safe_http_server(_Handler)
     Thread(target=server.serve_forever, daemon=True).start()
     with sync_playwright() as playwright:
         try:

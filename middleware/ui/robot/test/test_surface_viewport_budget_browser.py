@@ -15,12 +15,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
+from browser_harness import browser_tests_enabled
 from playwright.sync_api import sync_playwright
 
 from test_role_g2_browser import TOKENS, _core_client, _response
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 for the LOCAL Chromium viewport budget",
 )
 
