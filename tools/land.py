@@ -127,10 +127,23 @@ def append_blocks(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
     """logs.md: base + ours' appended block + theirs' appended block, each kept whole.
 
     Line union would fold lines both entries share ("- 결정: 없음"). None unless
-    both sides only appended at the end.
+    both sides only appended at the end — or ours appended at the end and theirs
+    only inserted (a peer entry between entries): then theirs verbatim + our block.
     """
-    if not (ours.startswith(base) and theirs.startswith(base)):
+    if not ours.startswith(base):
         return None
+    if not theirs.startswith(base):
+        ops = difflib.SequenceMatcher(None, base.splitlines(keepends=True),
+                                      theirs.splitlines(keepends=True), autojunk=False).get_opcodes()
+        if any(op not in ("equal", "insert") for op, *_ in ops):
+            return None
+        mine = ours[len(base):]
+        if not mine:
+            return theirs
+        eol = b"\r\n" if b"\r\n" in ours + theirs else b"\n"
+        head = theirs if theirs.endswith(b"\n") else theirs + eol
+        gap = b"" if head.endswith(eol + eol) or mine.startswith((b"\n", b"\r\n")) else eol
+        return head + gap + mine
     mine, other = ours[len(base):], theirs[len(base):]
     if mine == other or not other:
         return ours
