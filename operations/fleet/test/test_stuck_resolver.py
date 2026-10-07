@@ -430,3 +430,16 @@ def test_rejoin_never_moves_or_resumes_from_a_lapsed_own_pose(where):
     me["localization"] = badge(me["state"])
     action = resolver.step(3.0, [me, peer])
     assert len(action) == 1 and action[0].decision == ("YIELD" if where == "room" else "RESUME")
+
+
+@pytest.mark.parametrize("peer_pose", [(0.20, 0.03, 3.14), (0.80, 0.0, 3.14), (-0.20, 0.0, 0.0),
+                                       (0.20, 0.30, 3.14), None])
+def test_the_shared_peer_ahead_matches_the_resolvers_r1(peer_pose):
+    from fleet.server.stuck_resolver import peer_ahead
+
+    me = _row("rosy_01", _stuck(local=False), pose=(0.0, 0.0, 0.0))
+    peer = _row("rosy_02", None, pose=peer_pose)
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    fired = r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
+    assert peer_ahead(me, [me, peer], ResolverConfig()) is fired
+    assert peer_ahead(_row("rosy_01", _stuck(), pose=None), [me, peer], ResolverConfig()) is None

@@ -281,9 +281,15 @@ class FleetConsole(TripAware):
                                "state": None, "gather_source": None})
             else:
                 state, source = result
+                hub_row = self._hub.registry.find(robot_id) if source == "hub" else None
+                # D-493: 이 상태가 관찰된 단조 시각. gathered()가 나이로 바꾸고 지운다.
+                observed = (hub_row.last_heartbeat_monotonic if hub_row is not None else None)
+                if observed is None:
+                    observed = self._clock()
                 robots.append({"robot_id": robot_id, "online": True, "goal": goal,
                                "queued": _shown(queued), "error": None,
-                               "state": state, "gather_source": source})
+                               "state": state, "gather_source": source,
+                               "_state_mono": observed})
             row = robots[-1]
             scheme = urlsplit(self._registered_endpoints.get(robot_id, "")).scheme
             exc = result if isinstance(result, BaseException) else None

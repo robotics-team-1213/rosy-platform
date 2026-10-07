@@ -493,5 +493,8 @@
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 | Proposed (2026-10-07; SOURCE/LOCAL implementation, field acceptance pending) |
 | D-498 | 교차로 제한 회전은 D-400 enforce가 아니어도 bridge와 같은 현장 근거(IR 가드 + 몸체 근접 정지 + 현장 수용 선언)로 허용한다 | Proposed (2026-10-07; 사용자 지시; 기본 꺼짐, junction_turn_site_accepted 새 설정, SIM/DEVICE 별도) |
 | D-499 | 관제는 사이트 경로와 로봇 링크를 이미 있는 조회의 결과로만 보여 준다 | Proposed (2026-10-07; 사용자 개념 확인, 구현 전) |
+| D-500 | 정지 성능은 로봇별로 실측해 보정 저장소에 두고, 정지 간격·좁은 공간 속도는 CORE 한 곳에서 그 기록으로 강제한다 | Proposed (2026-10-07; 독립 비평 15건·동료 세션 질문 반영; 사용자 결정: CORE 입구 강제, 99 %/95 % 상한, 짧은 덮어쓰기는 표시·L0·승격 금지, 재확인은 조건 변경 때만, 정지 감시·creep 포함; 9dfk 후진 벽 접촉 사고 계기; 문서만) |
 | D-502 | 배터리 정지는 SAF-001 E-Stop이다: EMERGENCY로 들어가고 관리자 해제로만 풀린다. 배터리 입력의 결측·낡음은 API에 드러낸다 | Accepted (2026-10-07; 사용자 지시; 자동 해제 미채택, 호스트 pytest만) |
+| D-503 | 자율 사슬은 다섯 층(Perception → World State → Autopilot Supervisor → Skill → Planner/Control) — 모델은 출처·나이 붙은 사실만(VLM = 정체, SAM/Qwen 점 = 오프라인 초안, judge = 검수 순서), 규칙이 고르고 CORE가 확인, 운용 판단 요청은 예외 큐 하나(로봇 화면 처리는 D-407대로); D-361 개정(등록 로봇 `stuck_resolver` 추가 자격 `robot_enrollment_credentials`), 막힘 에피소드 표, 데이터 먼저, VLM SQL 트리거 | Proposed (2026-10-07; 문서만; 구현·배포는 단계별 사용자 승인) |
 | D-504 | 로봇 얼굴 애니메이션은 작은 LCD에서 표정의 형태를 먼저 구별하게 한다 | Accepted (2026-10-07, 사용자 요청; SOURCE/LOCAL 구현, DEVICE/FIELD 별도) |
+| D-505 | 로봇 상태 전환에서 화면·램프를 먼저 갱신하고 소리로 알린다; 막힘과 내비게이션 실패를 LCD 문구로 구분한다 | Proposed (2026-10-07, SOURCE/LOCAL 구현; DEVICE/FIELD 별도) |

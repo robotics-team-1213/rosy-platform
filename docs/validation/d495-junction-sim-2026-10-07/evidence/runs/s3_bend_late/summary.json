@@ -1,0 +1,145 @@
+{
+ "scenario": "trip",
+ "plan": [
+  "left:60"
+ ],
+ "prearm": false,
+ "late_s": 3.5,
+ "junctions": [
+  {
+   "i": 0,
+   "item": "left:60",
+   "result": "unresolved",
+   "sight_gt": [
+    -0.759,
+    -0.454,
+    0.1
+   ],
+   "keep_at_sight": "junction_fork",
+   "stop": {
+    "travel_after_sight_m": 0.0001,
+    "sight_to_still_sim_s": 3.413,
+    "paint_ahead_of_front_m": 0.152,
+    "state_at_still": "armed"
+   },
+   "turn": {
+    "entry_yaw_gt_deg": 5.73,
+    "final_yaw_gt_deg": 61.65,
+    "error_vs_target_gt_deg": -4.08,
+    "turned_gt_deg": 55.92,
+    "turned_odom_deg": 56.33,
+    "state_after": "advancing",
+    "reason_after": null,
+    "turn_s": 3.48
+   },
+   "at_done": {
+    "gt": [
+     -0.706,
+     -0.362,
+     1.076
+    ],
+    "state": "LOST",
+    "reason": "camera_reselection_required",
+    "j": "unresolved",
+    "jr": null,
+    "lane_offset_m": 0.078,
+    "heading_vs_lane_deg": -2.3
+   },
+   "seq": [
+    {
+     "j": "waiting",
+     "jr": null,
+     "state": "HOLD",
+     "reason": "junction_waiting",
+     "sim_t": 882.736
+    },
+    {
+     "j": "armed",
+     "jr": null,
+     "state": "HOLD",
+     "reason": "junction_waiting",
+     "sim_t": 886.149
+    },
+    {
+     "j": "armed",
+     "jr": null,
+     "state": "TRACKING",
+     "reason": "tracking",
+     "sim_t": 886.265
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_stopping",
+     "sim_t": 886.48
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_turning",
+     "sim_t": 887.156
+    },
+    {
+     "j": "advancing",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_advancing",
+     "sim_t": 889.959
+    },
+    {
+     "j": "reacquiring",
+     "jr": null,
+     "state": "HOLD",
+     "reason": "camera_line_not_visible",
+     "sim_t": 892.106
+    },
+    {
+     "j": "unresolved",
+     "jr": null,
+     "state": "LOST",
+     "reason": "camera_reselection_required",
+     "sim_t": 895.134
+    }
+   ],
+   "sent": [
+    {
+     "i": 0,
+     "item": "left:60",
+     "code": 200,
+     "resp": {
+      "accepted": true,
+      "junction_seq": 29,
+      "state": "armed"
+     },
+     "refresh": null
+    }
+   ]
+  }
+ ],
+ "gt_path_m": 1.2952,
+ "final": {
+  "t": 60.453,
+  "sim_t": 895.134,
+  "gt": [
+   -0.7062893080713378,
+   -0.361669047810925,
+   1.0759304413350426
+  ],
+  "odom": [
+   -0.7062893080713378,
+   -0.361669047810925,
+   1.0759304413350426,
+   0.0,
+   0.0
+  ],
+  "state": "LOST",
+  "reason": "camera_reselection_required",
+  "keep": "flipping",
+  "body_gap_m": null,
+  "j": "unresolved",
+  "jr": null
+ },
+ "capability_at_end": true
+}

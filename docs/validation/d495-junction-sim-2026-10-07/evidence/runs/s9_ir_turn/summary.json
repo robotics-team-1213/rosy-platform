@@ -1,0 +1,130 @@
+{
+ "scenario": "fault",
+ "inject": "ir_turn",
+ "then": "none",
+ "plan": [
+  "right:-110/0.0"
+ ],
+ "injected": {
+  "sim_t": 360.331,
+  "gt": [
+   -0.6550000004655679,
+   -0.4320000047483058,
+   0.7586392095956453
+  ],
+  "state": "turning",
+  "turned_deg": 20.7
+ },
+ "cmd_before_inject": {
+  "sim_t": 360.321,
+  "lin": 0.0,
+  "ang": -0.6
+ },
+ "first_zero_cmd_after": {
+  "sim_t": 360.626,
+  "lin": 0.0,
+  "ang": 0.0
+ },
+ "zero_cmd_latency_s": 0.295,
+ "final_vs_entry_target_deg": 73.61,
+ "final_turned_from_entry_deg": -36.39,
+ "junctions": [
+  {
+   "i": 0,
+   "item": "right:-110/0.0",
+   "result": "aborted",
+   "sight_gt": [
+    -0.655,
+    -0.432,
+    1.12
+   ],
+   "keep_at_sight": "junction_transverse",
+   "turn": {
+    "entry_yaw_gt_deg": 64.17,
+    "final_yaw_gt_deg": 33.52,
+    "error_vs_target_gt_deg": 79.35,
+    "turned_gt_deg": -30.65,
+    "turned_odom_deg": -30.44,
+    "state_after": "aborted",
+    "reason_after": "turn_basis_lost",
+    "turn_s": 1.37
+   },
+   "at_done": {
+    "gt": [
+     -0.655,
+     -0.432,
+     0.585
+    ],
+    "state": "HOLD",
+    "reason": "junction_aborted",
+    "j": "aborted",
+    "jr": "turn_basis_lost",
+    "lane_offset_m": 0.002,
+    "heading_vs_lane_deg": -30.4
+   },
+   "seq": [
+    {
+     "j": "idle",
+     "jr": null,
+     "state": "OFF",
+     "reason": "mode_off",
+     "sim_t": 359.139
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_stopping",
+     "sim_t": 359.257
+    },
+    {
+     "j": "turning",
+     "jr": null,
+     "state": "RECOVERING",
+     "reason": "junction_turning",
+     "sim_t": 359.487
+    },
+    {
+     "j": "aborted",
+     "jr": "turn_basis_lost",
+     "state": "HOLD",
+     "reason": "junction_aborted",
+     "sim_t": 360.629
+    }
+   ],
+   "sent": [
+    {
+     "i": 0,
+     "item": "right:-110/0.0",
+     "code": 200,
+     "resp": null,
+     "refresh": 0
+    }
+   ]
+  }
+ ],
+ "gt_path_m": 0.0002,
+ "final": {
+  "t": 14.298,
+  "sim_t": 362.558,
+  "gt": [
+   -0.6551357738620871,
+   -0.43207996205311544,
+   0.48493302337043975
+  ],
+  "odom": [
+   -0.6551357738620871,
+   -0.43207996205311544,
+   0.48493302337043975,
+   0.0,
+   0.0
+  ],
+  "state": "HOLD",
+  "reason": "junction_aborted",
+  "keep": null,
+  "body_gap_m": null,
+  "j": "aborted",
+  "jr": "turn_basis_lost"
+ },
+ "capability_at_end": true
+}

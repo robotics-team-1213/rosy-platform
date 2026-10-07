@@ -68,6 +68,15 @@ def test_queue_and_roster_attention_share_one_rule():
     assert "for (const item of attentionItems(r))" in source
 
 
+def test_queue_flags_stale_state_from_the_server_age_plus_receive_time():
+    """D-493 — state_age_s 에 받은 뒤 흐른 시간을 더한다. 서버/브라우저 시계 차는 쓰지 않는다."""
+    roster = ROSTER.read_text(encoding="utf-8")
+    assert "staleAgeS(robot, view.receivedAtMs, Date.now())" in roster
+    assert "상태 오래됨 — ${staleS}초 전 값" in roster
+    assert "view.receivedAtMs = Date.now();" in CONSOLE.read_text(encoding="utf-8")
+    assert "gathered_at" not in roster
+
+
 def test_both_queues_exist_in_the_markup():
     index = INDEX.read_text(encoding="utf-8")
     assert 'id="warning-list"' in index
