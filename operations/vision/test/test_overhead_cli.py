@@ -106,7 +106,8 @@ def test_old_console_scripts_are_aliases_of_rosy_vision(monkeypatch):
         name, target = (part.strip() for part in spec.split("=", 1))
         scripts[name] = target
     assert captured["name"] == "rosy_vision"
-    assert scripts == {"rosy-vision": "rosy_vision.cli:main", "site_vision": "rosy_vision.cli:main",
+    assert scripts == {"rosy-vision": "rosy_vision.cli:main", "rosy-lane-map": "rosy_vision.lane_map:main",
+                       "site_vision": "rosy_vision.cli:main",
                        "overhead": "rosy_vision.cli:main"}
 
 

@@ -56,7 +56,8 @@ PINNED_CONFIRMS = {
     "operations/fleet/fleet/server/web/console.js": 3,
     "operations/fleet/fleet/server/web/enrollment.js": 1,
     "operations/fleet/fleet/server/web/roster.js": 1,
-    "operations/fleet/fleet/server/web/site-map.js": 1,
+    # Activation and replacement of an existing camera-map draft (D-497).
+    "operations/fleet/fleet/server/web/site-map.js": 2,
     "operations/fleet/fleet/server/web/tracking-view.js": 1,
 }
 CONFIRM_CALL = re.compile(

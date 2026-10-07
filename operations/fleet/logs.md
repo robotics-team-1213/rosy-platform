@@ -2274,3 +2274,9 @@
 - 변경: 목록 성공 응답을 브라우저가 받은 시각을 문서 수정 시각과 분리해 표시한다. 조회 중·실패·계정 변경은 기존 목록을 숨긴다.
 - 증거: 선언 세 폭의 목록 성공·실패/복구 브라우저 6 passed, 조회 잠금 1 passed, Cell 전체 49 passed, G1 90 passed, `known_failures.py` 0 NEW. `docs/validation/uiux-cell-list-readtime-2026-10-07/result.md`.
 - gate 변화: 없음. 서버 판정 신선도·현장·장치·G3는 HOLD.
+
+## 2026-10-07 · uncommitted · fix(fleet): camera-map integration contract pins
+
+- 변경: D-497 command registration and existing-draft confirmation are explicitly pinned in their existing contract tests. Existing aliases and confirmation ownership remain asserted.
+- 증거: 18 CLI/dialog checks passed after fixing the two NEW findings from pre-push; the remaining candidate checks continue.
+- gate 변화: SOURCE only; deployment and installed readback pending.
