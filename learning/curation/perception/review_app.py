@@ -583,7 +583,7 @@ def main():
     try:
         store = ReviewStore(args.state, args.source, args.human, args.images, object_classes,
                             empty_eval=args.empty_eval, empty_training=args.empty_training)
-    except (OSError, ValueError, KeyError) as exc:   # startup refusals are usage errors, not crashes
+    except (OSError, ValueError) as exc:   # startup refusals are usage errors, not crashes
         parser.error(str(exc))
     with store.connect() as db:
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:

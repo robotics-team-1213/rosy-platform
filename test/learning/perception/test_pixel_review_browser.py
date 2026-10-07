@@ -672,5 +672,6 @@ def test_pixel_page_copy_is_class_set_neutral(browser_workspace):
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
     expect(page.locator('#pixel-class option:checked')).to_have_text('클래스를 선택하세요')
+    hints = ' '.join(page.locator('#pixel-main p').all_text_contents())   # static copy, open or closed
     for text in ('흰 차선', 'stop_line', 'crosswalk'):
-        assert text not in page.locator('#pixel-main').inner_text()
+        assert text not in hints
