@@ -346,16 +346,17 @@ def test_approach_aborts_on_an_odom_epoch_change():
 # --- review 2: IR centre on the measured cross line (D-507 6, 2026-10-08) -------------------
 
 def test_cross_line_band_edges():
-    line = (.4, 0.)
-    assert cross_line_band((.3901, 0.), line, 0., .025, .01, .1)
-    assert not cross_line_band((.3899, 0.), line, 0., .025, .01, .1)
-    assert cross_line_band((.4349, 0.), line, 0., .025, .01, .1)
-    assert not cross_line_band((.4351, 0.), line, 0., .025, .01, .1)
+    line = (.4, 0.)                                                      # the tape centre
+    assert cross_line_band((.3776, 0.), line, 0., .025, .01, .1)         # .4 - .0125 - .01
+    assert not cross_line_band((.3774, 0.), line, 0., .025, .01, .1)
+    assert cross_line_band((.4224, 0.), line, 0., .025, .01, .1)         # .4 + .0125 + .01
+    assert not cross_line_band((.4226, 0.), line, 0., .025, .01, .1)
     assert cross_line_band((.41, .1099), line, 0., .025, .01, .1)       # lateral: half + error
     assert not cross_line_band((.41, -.1101), line, 0., .025, .01, .1)
     assert cross_line_band((.05, .41), (0., .4), math.pi/2, .025, 0., .1)  # at yaw pi/2
     assert not cross_line_band((.15, .41), (0., .4), math.pi/2, .025, 0., .1)
-    assert not cross_line_band((0., .39), (0., .4), math.pi/2, .025, 0., .1)
+    assert cross_line_band((0., .39), (0., .4), math.pi/2, .025, 0., .1)   # inside the tape half
+    assert not cross_line_band((0., .385), (0., .4), math.pi/2, .025, 0., .1)
 
 
 IR_ROW = dict(SITE, ir_row_x_m=.05)
@@ -370,9 +371,10 @@ def _band_straight(rig):
     assert rig.m._cross_band['kind'] == 'straight'
 
 
-@pytest.mark.parametrize('x, inside', [(.33, False), (.335, True), (.394, True), (.397, False)])
+@pytest.mark.parametrize('x, inside', [(.316, False), (.326, True), (.378, True), (.386, False)])
 def test_band_edges_carry_range_and_odom_error(x, inside):
-    # lower edge: x + .05 = .39 - .05 (x - .2) -> x = .3333; upper: x + .05 = .435 + .05 (x - .2) -> .3947
+    # tape centre .4 +/- .0125, error .01 + .05 (x - .2):
+    # lower edge: x + .05 = .3775 - .05 (x - .2) -> x = .3214; upper: x + .05 = .4225 + .05 (x - .2) -> .3816
     rig = site_rig(**IR_ROW)
     _band_straight(rig)
     while rig.x < x - .01:

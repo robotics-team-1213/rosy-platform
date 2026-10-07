@@ -204,11 +204,14 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
         # keeper's ray) with a window, else along the lane's heading at the place.
         x, y, heading = live.arc(index).point_at(live.segments[index]["s_to"])
         past = line_past(live.graph, x, y, heading if window is None else pose["yaw"])
-        if past is None:  # no line near the place: today's outgoing half-width, and no window
+        if past is None:  # no line near the place: the old near-edge half-width, and no window
             width = live.arc(index + 1).width_m
             fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
             return fields
-        fields["pivot_past_line_m"] = -past
+        if window is not None:
+            fields["pivot_past_line_m"] = -past
+        # else no pivot (CORE's stop_point): without a window CORE takes any sighting, so a wrong
+        # line with a negative pivot would turn short unchecked.
     if window is None:
         return fields  # no window: CORE keeps today's behaviour for this place
     expect_in, lateral = window
@@ -230,7 +233,8 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
 
 def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
     """How far along ``heading`` from ``(x, y)`` the first painted cross line is, or None when
-    ``(x, y)`` is off the lanes or the lanes run on past ``MAX_PIVOT_PAST_LINE_M``.
+    ``(x, y)`` is off the lanes or the lanes run on past ``MAX_PIVOT_PAST_LINE_M``. Only
+    ``lane`` arcs are painted (a ``free`` arc is no tape).
 
     D-507 2 (2026-10-08): the painted lines are the edge of the lanes' union, each lane a band of
     ``width_m`` around its centre line. A lane mouth breaks a line (the roundabout's outer line at
@@ -238,7 +242,8 @@ def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
     SW spoke: 0.404 m here against 0.402 m in SIM).
     """
     cos, sin = math.cos(heading), math.sin(heading)
-    near = [arc for arc in graph.arcs.values() if arc.project(x, y)[0] <= MAX_PIVOT_PAST_LINE_M + arc.width_m]
+    near = [arc for arc in graph.arcs.values()
+            if arc.drive_mode == "lane" and arc.project(x, y)[0] <= MAX_PIVOT_PAST_LINE_M + arc.width_m]
 
     def off(t: float) -> bool:
         return all(arc.project(x + t * cos, y + t * sin)[0] > arc.width_m / 2 for arc in near)
@@ -246,15 +251,14 @@ def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
     if off(0.0):
         return None
     t, step = 0.0, LINE_STEP_M
-    while not off(t + step):
+    while t <= MAX_PIVOT_PAST_LINE_M and not off(t + step):
         t += step
-        if t > MAX_PIVOT_PAST_LINE_M:
-            return None
     while step > 0.001:
         step /= 2
         if not off(t + step):
             t += step
-    return round(t + step, 3) if t + step <= MAX_PIVOT_PAST_LINE_M else None
+    past = round(t + step, 3)
+    return past if past <= MAX_PIVOT_PAST_LINE_M else None
 
 
 def _straight_ahead(live: "LiveTrip", index: int, remaining: float,

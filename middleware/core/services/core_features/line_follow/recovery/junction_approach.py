@@ -54,11 +54,11 @@ def band_coords(row, line, yaw):
 
 
 def cross_line_band(row, line, yaw, width, error, half_width):
-    """D-507 6 (2026-10-08): is the IR row inside [line - error, line + width + error] along yaw
-    and within half_width + error across it? row and line are odom (x, y); line is the measured
-    near edge of the cross line on the robot's track."""
+    """D-507 6 (2026-10-08): is the IR row inside [line - width/2 - error, line + width/2 + error]
+    along yaw and within half_width + error across it? row and line are odom (x, y); line is the
+    measured tape centre on the robot's track (keeper _across_path, Fleet's map edge)."""
     along, lateral = band_coords(row, line, yaw)
-    return -error <= along <= width+error and abs(lateral) <= half_width+error
+    return abs(along) <= width/2+error and abs(lateral) <= half_width+error
 
 
 class JunctionApproachMixin:
@@ -130,11 +130,11 @@ class JunctionApproachMixin:
             return False
         # The band's own window: from the anchor until the row leaves the far edge. Odom error
         # counts only over that travel, so it cannot grow without bound.
-        travel, window = math.dist((pose.x, pose.y), b['start']), b['ahead']+CROSS_LINE_TAPE_M
+        travel, window = math.dist((pose.x, pose.y), b['start']), b['ahead']+CROSS_LINE_TAPE_M/2
         error = (c.crosswalk_range_error_fraction*b['ahead']
                  + c.crosswalk_odom_error_fraction*min(travel, window))
         row = _point(pose, c.ir_row_x_m, pose.yaw)
-        if (band_coords(row, b['line'], b['yaw'])[0] > CROSS_LINE_TAPE_M+error
+        if (band_coords(row, b['line'], b['yaw'])[0] > CROSS_LINE_TAPE_M/2+error
                 or travel > window+error):
             self._cross_band = None  # past the line: the band is spent
             return False
