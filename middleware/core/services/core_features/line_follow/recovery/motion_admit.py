@@ -17,8 +17,7 @@ IR_ALLOWED = {'bridge': frozenset({'clear'}), 'approach': _OFF_LINE, 'turn': _OF
 
 class MotionAdmitMixin:
     def _enforce_basis(self):
-        """The D-400 proof is bound and its floor proof live (unreadable: live, fail closed),
-        unless it says it cannot admit at all; then the site basis may hold."""
+        """D-400 proof bound, floor proof live (unreadable: live) and able to admit at all."""
         if self._return_motion is None:
             return False
         try:
@@ -31,23 +30,25 @@ class MotionAdmitMixin:
         except Exception:  # noqa: BLE001 - an unreadable proof admits nothing
             return False
 
-    def _motion_basis(self, now, kind, map_id=None):
-        """'enforce', 'site' (its standing part holds for `kind`) or None."""
+    def _motion_basis(self, now, kind, map_id=None, centre_ok=False):
+        """'enforce', 'site' (standing part for `kind`; centre_ok: see motion_admitted) or None."""
         if self._enforce_basis():
             return 'enforce'
-        c, at = self._config, self._clearance_at
+        c, at, ir = self._config, self._clearance_at, self._ir_guard(now)
         site = (c.site_floor_map_id is not None and map_id in (None, c.site_floor_map_id)
-                and c.ir_guard_enabled and self._ir_guard(now) in IR_ALLOWED[kind]
+                and c.ir_guard_enabled and (ir in IR_ALLOWED[kind] or (
+                    centre_ok and ir == 'centre' and kind in ('approach', 'advance')))
                 and c.obstacle_mode == 'path' and c.body_stop_known and self._scan_points is not None
                 and at is not None and 0 <= now-at <= c.clearance_stale_s)
         return 'site' if site else None
 
-    def motion_admitted(self, now, linear, angular, kind, map_id=None):
-        """May this (linear, angular) of `kind` go out? map_id: the opening instruction's SiteMap."""
+    def motion_admitted(self, now, linear, angular, kind, map_id=None, centre_ok=False):
+        """May this (linear, angular) of `kind` go out? map_id: the opening instruction's SiteMap.
+        centre_ok: IR row inside the camera's cross-line band (user 2026-10-08), approach/advance."""
         if kind not in IR_ALLOWED:
             raise ValueError(f"unknown motion kind {kind!r}")
         with self._lock:
-            basis = self._motion_basis(now, kind, map_id)
+            basis = self._motion_basis(now, kind, map_id, centre_ok)
             if basis == 'enforce':
                 return self._return_probe(now, linear, angular)
             if basis is None or (linear < 0 and kind != 'retrace'):

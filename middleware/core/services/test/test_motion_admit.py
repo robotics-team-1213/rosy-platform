@@ -64,6 +64,18 @@ def test_site_basis_ir_verdict_matrix(kind, ir):
 
 
 @pytest.mark.parametrize('kind', KINDS)
+def test_centre_ok_admits_centre_only_for_approach_and_advance(kind):
+    """User decision 2026-10-08: IR 'centre' while the IR row is inside the measured cross-line
+    band (the caller passes centre_ok) admits approach and advance; bridge and turn ignore it."""
+    site = Site(ir='centre')
+    expected = kind in ('approach', 'advance', 'return', 'retrace')
+    assert site.admit(.02, 0., kind, centre_ok=True) is expected
+    assert site.admit(.02, 0., kind) is (kind in ('return', 'retrace'))
+    site.feed(ir='left')
+    assert site.admit(.02, 0., kind, centre_ok=True) is (kind != 'bridge')  # not widened
+
+
+@pytest.mark.parametrize('kind', KINDS)
 def test_no_declaration_is_no_site_basis(kind):
     assert Site(site_floor_map_id=None).admit(.02, 0., kind) is False
 
