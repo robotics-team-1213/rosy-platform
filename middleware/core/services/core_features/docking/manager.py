@@ -116,8 +116,6 @@ class DockingManager:
         self._error: Optional[str] = None
         self._manual_active = False
         self._return_pending = False
-        #: D-502: set by an e-stop; the battery return stays off until OK.
-        self._return_suppressed = False
 
         # 주차형 단계 상태
         self._tracker: Optional[DockPoseTracker] = None
@@ -312,11 +310,12 @@ class DockingManager:
         self._manual_active = bool(active)
 
     def on_estop(self) -> None:
-        """D-502: an e-stop drops the battery return and keeps it off until the
-        level is OK again. A release is not a command; only a new dock command
-        (or a fresh WARNING after recovery) drives the robot."""
+        """D-502: an e-stop drops a pending battery return. Re-arming waits for
+        `safety.battery_return_suppressed` to clear (a reading above warning)."""
         self._return_pending = False
-        self._return_suppressed = True
+
+    def _return_suppressed(self) -> bool:
+        return bool(getattr(self._safety, "battery_return_suppressed", False))
 
     def on_battery_level(self, level: BatteryLevel) -> None:
         """SAF-005 단계 변화 → 자동 복귀 (DNC-006).
@@ -327,9 +326,8 @@ class DockingManager:
         """
         if level in (BatteryLevel.OK,):
             self._return_pending = False
-            self._return_suppressed = False
-        if self._return_suppressed:
             return
+        if self._return_suppressed():
             return
         if level not in (BatteryLevel.WARNING, BatteryLevel.CRITICAL,
                          BatteryLevel.DEEP):
@@ -350,7 +348,8 @@ class DockingManager:
     def _try_pending_return(self) -> bool:
         if not self._return_pending:
             return False
-        if self._manual_active or getattr(self._safety, "estop", False):
+        if (self._manual_active or getattr(self._safety, "estop", False)
+                or self._return_suppressed()):
             return False
         if self._state is not DockState.UNDOCKED:
             return False

@@ -22,6 +22,8 @@ from core.bridge import docking_mode
 
 from test_docking_parking_wiring import OPERATOR, StillExecutor, sim_overrides
 
+ADMIN = {"Authorization": "Bearer rosy-dev-admin"}
+
 
 class DrivingExecutor(StillExecutor):
     """The bridge's DockingExecutor: drive/stop write the docking slot."""
@@ -322,6 +324,22 @@ def test_the_battery_return_waits_while_manual(core_client):
     services.docking.tick()
     assert services.docking.state is DockState.DOCKING
     assert services.modes.mode is Mode.DOCKING
+
+
+def test_an_estop_drops_the_armed_battery_return_and_release_does_not_resume_it(core_client):
+    """D-502 (review): services registers docking.on_estop. A return armed at
+    WARNING is dropped by any e-stop and a release does not start it."""
+    from core_common.protocol.schemas import BatteryLevel
+    client, services, executor = manual_robot(core_client)
+    services.docking.on_battery_level(BatteryLevel.WARNING)
+    assert services.docking.return_pending
+    client.post("/api/v1/safety/stop", headers=OPERATOR)
+    assert not services.docking.return_pending
+    assert client.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    services.docking.on_battery_level(BatteryLevel.WARNING)
+    services.docking.tick()
+    assert services.docking.state is DockState.UNDOCKED
+    assert services.modes.mode is not Mode.DOCKING
 
 
 # --- M1: every dock type takes DOCKING; a default dock stages through Nav2 ----

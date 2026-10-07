@@ -92,6 +92,9 @@ class BatteryCurve:
         return points[-1][1]      # 도달 불가 — 위 클램프가 이미 처리한다.
 
 
+#: Seconds after which a battery sample is no longer current evidence (one source, D-502).
+STALE_AFTER_S = 5.0
+
 # 낮아지는 순서. 단계 이동은 이 배열에서 한 칸씩만 일어난다.
 _LEVEL_ORDER: tuple[BatteryLevel, ...] = (
     BatteryLevel.OK,
@@ -323,11 +326,11 @@ class BatteryMonitor:
             age = None if self._last_sample_at is None else max(0.0, self._clock() - self._last_sample_at)
             charge_age = (None if self._charging_checked_at is None
                           else max(0.0, self._clock() - self._charging_checked_at))
-            confirmed = (self._charging and age is not None and age <= 5.0
-                         and charge_age is not None and charge_age <= 5.0)
+            confirmed = (self._charging and age is not None and age <= STALE_AFTER_S
+                         and charge_age is not None and charge_age <= STALE_AFTER_S)
             return {
-                "evidence": "missing" if age is None else "fresh" if age <= 5.0 else "stale",
-                "sample_age_s": age, "stale_after_s": 5.0,
+                "evidence": "missing" if age is None else "fresh" if age <= STALE_AFTER_S else "stale",
+                "sample_age_s": age, "stale_after_s": STALE_AFTER_S,
                 "level": self._level.value, "percent": self._percent_locked(),
                 "filtered_voltage": self._voltage,
                 "charging_state": "confirmed" if confirmed else "unconfirmed",

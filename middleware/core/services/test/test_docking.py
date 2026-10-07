@@ -1181,6 +1181,7 @@ class TestReturnToDock:
         manager.on_battery_level(BatteryLevel.WARNING)
         assert manager.return_pending is True
         manager._safety.estop = True
+        manager._safety.battery_return_suppressed = True   # SafetyManager.trigger_estop
         manager.on_estop()
         manager.set_manual_active(False)
         manager._safety.estop = False                 # admin release
@@ -1188,7 +1189,8 @@ class TestReturnToDock:
         clock.advance(0.5)
         manager.tick()
         assert manager.state is DockState.UNDOCKED and manager.return_pending is False
-        manager.on_battery_level(BatteryLevel.OK)     # recovery re-enables the policy
+        manager._safety.battery_return_suppressed = False  # a reading above warning
+        manager.on_battery_level(BatteryLevel.OK)
         manager.on_battery_level(BatteryLevel.WARNING)
         assert manager.state is DockState.DOCKING
 

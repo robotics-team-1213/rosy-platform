@@ -955,3 +955,37 @@ def test_battery_sensor_reports_missing_then_the_voltage_topic(client):
     safety = tc.get("/api/v1/safety/state", headers=VIEWER).json()["battery"]
     assert safety["evidence"] == "fresh" and safety["level"] == "ok"
     assert safety["percent"] is not None and safety["sample_age_s"] is not None
+
+
+def test_no_battery_return_home_after_release_latches_again_instead(client, monkeypatch):
+    """D-502 4 (review): after an admin release, a new warn->critical crossing must
+    not send the robot home on its own. It latches the e-stop again."""
+    from core.bridge.battery_policy import apply_voltage
+    from core_features.command.arbitration import Mode
+    tc, svc = client
+    svc.battery._cfg.filter_tau_s = 0.0       # each sample is the reading
+    apply_voltage(svc, 7.0)                   # ~8 %: critical, home not dispatchable
+    assert svc.safety.estop and svc.safety.estop_source == "battery_policy"
+    assert tc.post("/api/v1/safety/release", headers=ADMIN).status_code == 200
+    homes = []
+    monkeypatch.setattr(svc.nav, "home", lambda source: homes.append(source))
+    if svc.localization is not None:
+        monkeypatch.setattr(svc.localization, "autonomy_allowed", lambda: True)
+    apply_voltage(svc, 7.37)                  # ~15 %: back above critical
+    assert not svc.safety.estop
+    apply_voltage(svc, 7.0)                   # below critical again
+    assert homes == []
+    assert svc.safety.estop and svc.modes.mode is Mode.EMERGENCY
+    assert svc.modes.mode is not Mode.NAVIGATION
+
+
+def test_a_reading_above_warning_restores_the_battery_return(client, monkeypatch):
+    """The suppression ends where SAF-005 is calm again, not at release."""
+    from core.bridge.battery_policy import apply_voltage
+    tc, svc = client
+    svc.battery._cfg.filter_tau_s = 0.0
+    svc.safety.trigger_estop("api:test")
+    svc.modes.release_emergency(); svc.safety.release(by="test")
+    assert svc.safety.battery_return_suppressed
+    apply_voltage(svc, 8.3)                   # well above warning
+    assert not svc.safety.battery_return_suppressed

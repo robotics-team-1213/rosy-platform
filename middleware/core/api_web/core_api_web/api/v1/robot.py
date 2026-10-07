@@ -12,6 +12,7 @@ from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_common.protocol.schemas import PowerMode
 from core_common.protocol.power_health import PowerHealthResponse
+from core_features.power.battery import STALE_AFTER_S
 
 
 robot_router = APIRouter(prefix="/api/v1/robot", tags=["robot"])
@@ -46,7 +47,7 @@ def battery_health(svc) -> dict:
     """`BatteryMonitor.health()`, or "missing" where no monitor is wired (D-502)."""
     health = getattr(getattr(svc, "battery", None), "health", None)
     if health is None:
-        return {"evidence": "missing", "sample_age_s": None, "stale_after_s": 5.0,
+        return {"evidence": "missing", "sample_age_s": None, "stale_after_s": STALE_AFTER_S,
                 "level": None, "percent": None}
     return health()
 
