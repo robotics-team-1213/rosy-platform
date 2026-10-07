@@ -33,6 +33,9 @@ IMPORT_WIDTH_M = 0.185
 #: Import default only; the operator edits it per edge in the console.
 IMPORT_SPEED_CAP_MPS = 0.2
 
+#: ``start`` (D-513): a demo start slot. Its ``yaw`` is required and fixes the departure heading.
+PlaceKind = Literal["park", "charge", "stop", "junction", "turnaround", "start"]
+
 Id = Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")
 Finite = Field(allow_inf_nan=False)
 
@@ -45,7 +48,13 @@ class SitePlace(BaseModel):
     x: float = Finite
     y: float = Finite
     yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
-    kind: Literal["park", "charge", "stop", "junction", "turnaround"] = "junction"
+    kind: PlaceKind = "junction"
+
+    @model_validator(mode="after")
+    def _start_heading(self) -> "SitePlace":
+        if self.kind == "start" and self.yaw is None:
+            raise ValueError(f"start place {self.id} needs a yaw")
+        return self
 
 
 class SiteEdge(BaseModel):

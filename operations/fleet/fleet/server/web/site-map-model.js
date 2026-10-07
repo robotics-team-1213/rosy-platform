@@ -1,8 +1,8 @@
 // D-488 site map page — pure helpers (no DOM) so node tests cover them.
 
-export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'turnaround'];
+export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'turnaround', 'start'];
 export const PLACE_KIND_LABEL = {
-  junction: '교차', park: '주차', charge: '충전', stop: '정차', turnaround: '회차',
+  junction: '교차', park: '주차', charge: '충전', stop: '정차', turnaround: '회차', start: '출발',
 };
 export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
 export const TRIP_ERROR_LABEL = {
@@ -51,6 +51,7 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_DRAFT_CHANGED: '다른 운영자가 초안을 바꿨습니다. 현재 수정은 저장되지 않았습니다. 변경 내용을 기록한 뒤 다시 접속하세요.',
   SITE_MAP_ROUTE_ACTIVE: '차선 경로가 진행 중입니다 · 끝난 뒤 활성화하세요',
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
+  SITE_MAP_START_INVALID: '출발 자리가 차로 위에 없거나 차로 방향과 다르게 놓였습니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
   SITE_MAP_INVALID: '지도에 맞지 않는 값이 있습니다',
   // D-494 6 teach
@@ -93,11 +94,15 @@ export function tripErrorText(code, detail = {}) {
   return base + leg + (detail.unblock_would_help ? ' · 막은 차로를 풀면 길이 있습니다' : '');
 }
 
-/** Map metres <-> SVG pixels; map y goes up, SVG y goes down. */
-export function fitView(map, width, height, pad = 24) {
+/** Map metres <-> SVG pixels; map y goes up, SVG y goes down. ``turn`` (0/90/180/270) turns the
+ * whole view clockwise on screen (D-513 7) so the map reads the way the turned camera picture does. */
+export function fitView(map, width, height, pad = 24, turn = 0) {
+  const q = turn * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
+  const rot = (x, y) => [x * c + y * s, -x * s + y * c];
   const xs = [], ys = [];
-  for (const place of map.places) { xs.push(place.x); ys.push(place.y); }
-  for (const edge of map.edges) for (const [x, y] of edge.polyline) { xs.push(x); ys.push(y); }
+  const add = (x, y) => { const [rx, ry] = rot(x, y); xs.push(rx); ys.push(ry); };
+  for (const place of map.places) add(place.x, place.y);
+  for (const edge of map.edges) for (const [x, y] of edge.polyline) add(x, y);
   if (!xs.length) { xs.push(0); ys.push(0); }
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
   const scale = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1e-6),
@@ -105,14 +110,19 @@ export function fitView(map, width, height, pad = 24) {
   const ox = pad + ((width - 2 * pad) - (maxX - minX) * scale) / 2;
   const oy = pad + ((height - 2 * pad) - (maxY - minY) * scale) / 2;
   return {
-    scale,
-    toPx: (x, y) => [ox + (x - minX) * scale, oy + (maxY - y) * scale],
-    toMap: (px, py) => [minX + (px - ox) / scale, maxY - (py - oy) / scale],
+    scale, turn,
+    toPx: (x, y) => { const [rx, ry] = rot(x, y); return [ox + (rx - minX) * scale, oy + (maxY - ry) * scale]; },
+    toMap: (px, py) => {
+      const rx = minX + (px - ox) / scale, ry = maxY - (py - oy) / scale;
+      return [rx * c - ry * s, rx * s + ry * c];
+    },
+    /** SVG rotate() degrees for a map-frame direction ``angle`` (radians). */
+    rotateDeg: (angle) => -angle * 180 / Math.PI + turn,
   };
 }
 
 // Rectified photographs are display evidence; their clicks never create trip targets.
-export function rectangularView(record, mapId, width, height) {
+export function rectangularView(record, mapId, width, height, turn = 0) {
   const b = record?.track_bounds_m;
   const h = record?.map_to_image;
   if (record?.map_id !== mapId || !b || !Array.isArray(h) || h.length !== 9
@@ -124,10 +134,12 @@ export function rectangularView(record, mapId, width, height) {
     [b.min_y, b.max_y].every(y => h[6] * x + h[7] * y + h[8] > 1e-9)))
     throw new Error('카메라 보정의 평면 범위를 확인하세요.');
   const places = [{x: b.min_x, y: b.min_y}, {x: b.max_x, y: b.max_y}];
-  const view = fitView({places, edges: []}, width, height);
-  const [x, y] = view.toPx(b.min_x, b.max_y);
-  return {view, field: {x, y, width: (b.max_x - b.min_x) * view.scale,
-    height: (b.max_y - b.min_y) * view.scale}};
+  const view = fitView({places, edges: []}, width, height, 24, turn);
+  // The rectified picture is map-aligned: draw it unturned around its centre, then turn it.
+  const [cx, cy] = view.toPx((b.min_x + b.max_x) / 2, (b.min_y + b.max_y) / 2);
+  const fw = (b.max_x - b.min_x) * view.scale, fh = (b.max_y - b.min_y) * view.scale;
+  return {view, field: {x: cx - fw / 2, y: cy - fh / 2, width: fw, height: fh,
+    transform: `rotate(${turn} ${cx} ${cy})`}};
 }
 
 function lengths(points) {
@@ -188,6 +200,8 @@ export function editPlace(map, id, {name, kind}) {
   }
   if (kind !== undefined) {
     if (!PLACE_KINDS.includes(kind)) throw new Error('알 수 없는 장소 종류');
+    // D-513: the heading comes from a robot set down on the spot (teach "place"), never a guess
+    if (kind === 'start' && typeof place.yaw !== 'number') throw new Error('출발 자리는 방향이 필요합니다 · 로봇을 그 자리에 놓고 기록 모드에서 출발 장소로 남기세요');
     place.kind = kind;
   }
   return next;

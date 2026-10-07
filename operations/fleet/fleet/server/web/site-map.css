@@ -27,6 +27,8 @@ a { color: var(--ink); }
 #site-map-svg .edge.selected { stroke: var(--series-primary); stroke-width: 5px; }
 #site-map-svg .arrow { fill: var(--ink-quiet); pointer-events: none; }
 #site-map-svg .place { fill: var(--surface-raised); stroke: var(--ink); stroke-width: 2px; cursor: pointer; }
+#site-map-svg .place.start { fill: var(--series-secondary); }
+#site-map-svg .start-heading { fill: var(--series-secondary); stroke: var(--ink); stroke-width: 1px; pointer-events: none; }
 #site-map-svg .place.selected { stroke: var(--series-primary); stroke-width: 4px; }
 #site-map-svg .label { fill: var(--ink); font: var(--text-micro) var(--mono); pointer-events: none; }
 #site-map-svg .plan { fill: none; stroke: var(--series-goal); stroke-width: 6px; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }

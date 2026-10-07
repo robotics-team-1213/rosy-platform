@@ -695,3 +695,17 @@
 - gate 변화: 없음. 호스트 시험만. SIM(D-495 harness, odom 지연 제거) 미실행.
 - 결정: D-495 SIM 결과 결함 2 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(line_follow): LiDAR 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
+- 변경: `clearance.return_scan_view`가 1 ns라도 앞선 스캔을 버리던 것을 `SOURCE_FUTURE_TOLERANCE_S`(0.1 s) 안이면 나이 0으로 받고, 넘으면 버린다. odom(`lane_return_evidence.observe_pose`)과 선 관측(`manager.observe`)은 이미 같은 상수를 쓴다.
+- 증거: `test_lane_return_scan.py`(1 ms·0.1 s 앞 받음, 0.1 s+1 ns 앞 버림), `test_lane_return_evidence.py`(허용치 밖 표본을 버려도 다음 표본이 trail을 잇는다, 실제 불연속은 끊는다). 변이 확인 4건.
+- gate 변화: 없음. 호스트 시험만.
+- 결정: D-507 8
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · feat(line_follow): D-507 6 motion_admitted, 9 site_floor_map_id
+- 변경: `recovery/motion_admit.py` `motion_admitted(now, linear, angular, kind, map_id=None)` 하나로 D-476 bridge, D-468 복귀·역추적(`lane_return_decision.py`의 탐침·동작·제출 재확인), D-498 `_turn_basis`가 허가를 받는다. (a) enforce 증명이 살아 있으면 그것만(그대로), (b) 아니면 현장 근거: `site_floor_map_id`(지시의 `map_id`가 있으면 같아야 함), 동작별 IR 판정(bridge `clear`, 접근·회전·전진 `centre` 아님, 복귀·역추적 모두), path·URDF 몸·신선한 스캔·그 twist의 D-422 sweep > 재출발 간격. (c) 현장 근거 후진은 `retrace`만, 뒤 방향 sweep(360° 스캔 반전)이 재출발 간격 위이고 신선할 때만. 설정 `bridge_site_no_dropoffs`·`junction_turn_site_accepted` 삭제, `site_floor_map_id`로 대체(옛 키는 시작 거부).
+- 증거: `test_motion_admit.py`(IR 판정 행렬, 선언 null·map_id 불일치, sweep·낡은 스캔, 후진은 retrace만, 뒤 sweep 미달·낡음, 현장 근거 역추적 0.03 m/s·5 s 한도, enforce 그대로), gateway `test_site_floor_declaration.py`. IR 행렬·후진 규칙 변이 6건 모두 실패 확인 후 복원.
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-507 수용 절차.
+- 결정: D-507 6·9 (Accepted 2026-10-07)
+- 교훈: 없음

@@ -219,6 +219,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # planning. `free` follows the live goal_navigation flag after withholding above.
     # `junction_turn` (D-495): the line-follow manager declares `supports_junction_turn`;
     # a manager without that hook cannot do the bounded junction turn.
+    # `site_floor_map_id` (D-507 9): the line-follow site floor declaration from config.
     limits = svc.safety.limits
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
     if svc.line_follow is not None:
@@ -234,7 +235,9 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       drive_modes=drive_modes,
                                       trip_max_linear=max(0.0, trip_max_linear),
                                       junction_turn=getattr(svc.line_follow, "supports_junction_turn",
-                                                            False) is True)
+                                                            False) is True,
+                                      site_floor_map_id=(None if svc.line_follow is None else getattr(
+                                          svc.line_follow.config, "site_floor_map_id", None)))
     return data
 
 

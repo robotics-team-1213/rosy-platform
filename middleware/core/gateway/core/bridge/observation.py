@@ -25,6 +25,7 @@ from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
 from core_features.line_follow.clearance import return_scan_view as _return_scan_view
+from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_features.vision import accept_preview
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 
@@ -224,13 +225,13 @@ def camera_preview(services, msg, *, warn: Warn, raw: bool = False, source_now: 
         )
         source_age = None if source_now is None else source_now - stamp
         fresh_source = (source_age is not None and math.isfinite(source_age) and math.isfinite(stamp)
-                        and stamp >= 0 and 0 <= source_age <= 2.)
+                        and stamp >= 0 and -SOURCE_FUTURE_TOLERANCE_S <= source_age <= 2.)
         if not fresh_source:
             metadata.pop('quality', None)
             if raw:
                 raise ValueError('raw preview source image is stale or clock is unavailable')
         else:
-            metadata['source_age_s'] = source_age
+            metadata['source_age_s'] = max(0.0, source_age)  # D-507 8: skew counts as now
         store_frame = services.vision.publish_raw if raw else services.vision.publish
         store_frame(
             bytes(msg.data),

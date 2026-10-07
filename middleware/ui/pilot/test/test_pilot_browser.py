@@ -630,6 +630,75 @@ def test_lobby_retry_recovers_without_duplicate_scans(tablet_page):
 
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_connection_offer_names_this_robot_before_the_neighbour(tablet_page):
+    """The page you opened is this robot. The other robot stays a secondary choice."""
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/auth/connection", lambda route: route.fulfill(
+        json={"mode": "paired", "robot_id": "rosy_26", "transport": "https"}))
+    page.route("**/api/v1/site/rooms", lambda route: route.fulfill(json={"rooms": [
+        {"hostname": "rosy-pinky-8kcn.local", "address": "10.0.0.8", "port": 8080, "kind": "robot",
+         "url": "https://rosy-pinky-8kcn.local:8080/pilot/#join"}]}))
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-connection-title]").wait_for()
+    page.locator("[data-lobby-room='rosy-pinky-8kcn.local']").wait_for(state="visible")
+    offer = page.locator("[data-connection-offer]")
+    assert offer.get_attribute("data-connection-mode") == "paired"
+    assert offer.get_attribute("data-robot-id") == "rosy_26"
+    assert page.locator("[data-connection-title]").inner_text() == "rosy_26"
+    assert "로봇 화면에 뜬 로그인 코드" in offer.inner_text()
+    assert page.locator("[data-dev-connect]").count() == 0
+    text = page.locator("[data-screen=connect]").inner_text()
+    assert text.index("rosy_26") < text.index("rosy-pinky-8kcn.local")
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_development_connection_enters_without_a_screen_code(tablet_page):
+    """development mode offers a one-hour operator session. paired mode does not."""
+    base_url, page, errors = tablet_page
+    calls = []
+
+    def connection(route):
+        route.fulfill(json={"mode": "development", "robot_id": "rosy_60", "transport": "https"})
+
+    def session(route):
+        calls.append(route.request.post_data)
+        route.fulfill(status=201, json={
+            "id": "dev-session", "token": "devtoken", "role": "operator",
+            "label": "Pilot development session", "source": "pair-development", "expires_at": None,
+        })
+
+    page.route("**/api/v1/auth/connection", connection)
+    page.route("**/api/v1/auth/development-session", session)
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-dev-connect]").wait_for(state="visible")
+    assert "코드 없이" in page.locator("[data-connection-copy]").inner_text()
+    assert page.locator("form[data-pilot-token-form]").is_visible()
+    page.locator("[data-dev-connect]").click()
+    page.wait_for_selector("[data-drive-enter]")
+    assert calls == ["{}"]
+    assert "rosy_60" in page.locator("[data-screen=connect]").inner_text()
+    recent = page.evaluate("localStorage.getItem('rosy.pilot.recent') || ''")
+    assert "devtoken" not in recent
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_development_connection_refusal_keeps_the_code_form(tablet_page):
+    base_url, page, errors = tablet_page
+    page.route("**/api/v1/auth/connection", lambda route: route.fulfill(
+        json={"mode": "development", "robot_id": "rosy_60", "transport": "https"}))
+    page.route("**/api/v1/auth/development-session", lambda route: route.fulfill(
+        status=403, json={"error": {"code": "FORBIDDEN", "message": "this robot requires pairing"}}))
+    page.goto(f"{base_url}/pilot")
+    page.locator("[data-dev-connect]").click()
+    page.get_by_text("이 로봇은 개발 연결 모드가 아닙니다.", exact=False).wait_for()
+    assert page.locator("[data-dev-connect]").is_enabled()
+    assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 def test_lobby_rejects_unsafe_urls_and_suppresses_current_robot(tablet_page):
     from urllib.parse import urlsplit
     base_url, page, errors = tablet_page
