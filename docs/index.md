@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · docs(adr): Console 충전·health·설정 경계 D-509
-- 2026-10-07 · uncommitted · fix(push): Windows 검사 경로와 공유 main 게이트 복구
-- 2026-10-07 · uncommitted · docs(adr): Pilot 바닥 IR 녹화 번호는 D-506
-- 2026-10-07 · uncommitted · docs(adr): D-504 Pilot 녹화에 바닥 IR 원시값
-- 2026-10-07 · uncommitted · docs(solutions): 검증 문서의 빈백 git id가 push를 막는 오탐 — 교훈 기록
+- 2026-10-08 · uncommitted · docs(api): D-509 and D-513 contract union v1.125
+- 2026-10-08 · uncommitted · D-509 관제 전원 근거
+- 2026-10-08 · uncommitted · fix(tools): 착지 도구가 logs.md 중간 삽입 충돌을 해소
+- 2026-10-08 · uncommitted · docs(plan): 링크 수리와 폴링 부하를 가른다
+- 2026-10-08 · uncommitted · docs(plan): 사이트 링크 수리 실행 계획

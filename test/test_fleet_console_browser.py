@@ -17,9 +17,10 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
+from browser_harness import browser_tests_enabled
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 
@@ -215,6 +216,41 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
         assert toggle.get_attribute("aria-expanded") == "true"
         assert page.locator("#roster article").count() == 1
         assert page.locator("#roster article").get_attribute("data-robot-id") == "rosy_01"
+        assert not errors
+        browser.close()
+
+
+def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(console_url):
+    from playwright.sync_api import sync_playwright
+
+    robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
+    robot["power_health_age_s"] = 0.2
+    robot["power_health"] = {"battery": {
+        "evidence": "fresh", "sample_age_s": 0.2, "stale_after_s": 5,
+        "level": "ok", "percent": 63, "charging_state": "confirmed",
+        "charging_evidence_age_s": 0.2,
+    }}
+    api = {"/api/fleet/state": {"fleet": {"name": "site", "online": 1, "total": 1},
+                                 "robots": [robot], "ts": 0.0},
+           "/api/fleet/map": MAP_GRID,
+           "/api/fleet/formation": {"active": False, "state": "IDLE"}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.locator("#roster-toggle").click()
+        card = page.locator('#roster article[data-robot-id="rosy_01"]')
+        page.wait_for_function("() => document.querySelector('#roster [data-fact=battery] strong')?.textContent === '63%'")
+        assert "충전 확인" in card.locator('[data-fact="charging"]').inner_text()
+
+        robot["power_health_age_s"] = 6.0
+        page.wait_for_function("() => document.querySelector('#roster [data-fact=battery] strong')?.textContent === '확인 불가'")
+        assert "충전 확인" not in card.locator('[data-fact="charging"]').inner_text()
+
+        robot["power_health_age_s"] = 0.2
+        robot["state"]["safety"]["estop"] = True
+        page.wait_for_function("() => document.querySelector('#roster [data-fact=safety]')?.textContent.includes('비상 정지')")
+        assert "충전 확인" in card.locator('[data-fact="charging"]').inner_text()
+        assert "관리자:" in card.inner_text()
         assert not errors
         browser.close()
 

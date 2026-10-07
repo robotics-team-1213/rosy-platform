@@ -1,0 +1,13 @@
+task: detect
+# Review-only seventh class. D-423 robot object_det remains the fixed six-class contract.
+# Use obstacle for a distinct physical object occupying the travel corridor when no
+# specific class applies. Walls, lane markings, shadows and off-path structures are negatives.
+names: [robot, obstacle_box, cone, traffic_light, sign, person_feet, obstacle]
+display:
+  robot: 다른 로봇
+  obstacle_box: 장애물 상자
+  cone: 콘
+  traffic_light: 신호등
+  sign: 표지판
+  person_feet: 사람 발
+  obstacle: 기타 장애물 (검수용)

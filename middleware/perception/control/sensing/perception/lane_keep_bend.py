@@ -63,11 +63,13 @@ def as_transverse(bends, transverse_min):
             if abs(math.radians(r["heading_deg"])) > transverse_min]
 
 
-def bend_target(bends, half, radius, lookahead, target, strategy):
-    """(target, strategy) on the nearest bend's centre line at `radius`. While that
-    line meets the robot's path beyond `radius` the lane's own (target, strategy)
-    stands, or without one the `lookahead` straight on ('bend_ahead'). `bends`:
-    records with centre, direction and open side."""
+def bend_target(bends, half, radius, target, strategy):
+    """(target, strategy, room) with `room` how far ahead a target may lie (inf:
+    unbounded). On the nearest bend's centre line at `radius`; while that line
+    meets the robot's path beyond `radius`, the lane's own target held short of
+    the bend line (its crossing less a half-width: 'bend_ahead'), or (None,
+    None, inf) -- HOLD -- without a lane-side boundary or room. `bends`: records
+    with centre, direction, ends_m and open side."""
     best = None
     for record in bends:
         centre, direction = record["centre"], record["direction"]
@@ -78,11 +80,20 @@ def bend_target(bends, half, radius, lookahead, target, strategy):
         along = direction if (direction[1] > 0.0) == (record["open"] == "left") else -direction
         meet = float(origin[0] - origin[1] * along[0] / along[1])
         if best is None or meet < best[0]:
-            best = (meet, origin, along, record["open"])
-    meet, origin, along, side = best
+            best = (meet, origin, along, record["open"], _across_path(record["ends_m"], half))
+    meet, origin, along, side, cross = best
     if meet > radius:
-        return (target, strategy) if target is not None else (np.array([lookahead, 0.0]), "bend_ahead")
-    return _pursuit_point(origin, along, radius)[0], f"bend_{side}"
+        room = None if cross is None else cross - half
+        if target is None or room is None or room <= 0.0:
+            return None, None, math.inf
+        return stop_short(target, room), "bend_ahead", room
+    return _pursuit_point(origin, along, radius)[0], f"bend_{side}", math.inf
+
+
+def stop_short(target, room):
+    """`target` pulled back along its ray to no further than `room` ahead."""
+    target = np.asarray(target, float)
+    return target * min(1.0, room / float(target[0])) if target[0] > room else target
 
 
 def runs_past(boundaries, open_left, ahead, margin):

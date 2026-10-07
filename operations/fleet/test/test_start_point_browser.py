@@ -2,12 +2,12 @@
 import os
 import json
 from pathlib import Path
-import socket
 import threading
 import time
 
 import pytest
 import uvicorn
+from browser_harness import browser_tests_enabled, safe_listener
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -18,7 +18,7 @@ from fleet.server.tracking_calibration import TrackingCalibrationStore
 from fleet.swarm.robots import RobotEndpoint
 from test_overhead_tracking_api import APPROVAL
 
-pytestmark = pytest.mark.skipif(os.environ.get('ROSY_BROWSER_TESTS') != '1', reason='opt-in Chromium scenario')
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='opt-in Chromium scenario')
 ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -43,7 +43,7 @@ def browser_site(tmp_path):
     tracking.approve({**APPROVAL,'source_id':'north','map_id':'track'},approved_by='op')
     app=create_app(console,console_token='operator-secret',web_common=ROOT/'shared/web',
                    sightings=sightings,tracking=tracking,start_task_dispatcher=False)
-    listener=socket.socket();listener.bind(('127.0.0.1',0))
+    listener=safe_listener()
     origin=f'http://127.0.0.1:{listener.getsockname()[1]}'
     server=uvicorn.Server(uvicorn.Config(app,log_level='error',timeout_graceful_shutdown=3,timeout_keep_alive=1))
     worker=threading.Thread(target=server.run,kwargs={'sockets':[listener]},daemon=True);worker.start()

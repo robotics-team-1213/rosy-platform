@@ -325,3 +325,13 @@
 - 관제 확인: 실제 Fleet를 SSH 경유 Chromium으로 열어 초안의 153개 경로 점과 SVG 좌표를 비교했다. 최대 차이 0.000032 px, 1440·390 px에서 가로 넘침 없음. 활성 주행 지도는 유지했다. 직사각형 영상 중첩 화면은 별도 로컬 화면 검증이며 새 UI 배포 증거는 아니다
 - 결정: D-497 2항 구현 보강
 - 교훈: 유효한 도로 영역의 세선화 결과가 실제 양쪽 페인트의 중심과 일치하는 것은 아니다
+
+## 2026-10-08 · uncommitted · feat(vision): D-513 7 화면 회전 키 허용
+- 변경: `site-cameras.yaml` source의 `display_rotation_deg`를 허용 키에 넣는다. Vision은 값을 쓰지 않는다(Fleet 관제 표시 전용).
+- 증거: Vision 설정·예시 시험 통과.
+- gate 변화: SOURCE/LOCAL만.
+
+## 2026-10-08 · uncommitted · refactor(vision): D-513 7 화면 회전 키 제거
+- 변경: `display_rotation_deg` 허용을 되돌린다. 관제가 보정에서 회전을 계산하므로 설치 키가 필요 없다.
+- 증거: Vision 설정·예시 시험 통과.
+- gate 변화: SOURCE/LOCAL만.

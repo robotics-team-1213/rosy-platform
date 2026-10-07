@@ -2388,3 +2388,61 @@
 - 변경: 개발 모드에서 `/console/install`, `/console/site-map`, `/console/cell` 직접 진입 시 Fleet 개발 세션을 자동 발급·재사용하고 토큰 입력 칸을 숨긴다. `/console`도 개발 모드에서는 토큰 입력 칸을 숨긴다. 일반 모드의 토큰 접속은 유지한다.
 - 증거: 새 Chromium 직접 진입 시험 4 passed, 개발 인증 pytest 60 passed, 웹 Node 시험 160 passed. 넓은 pytest의 Cell 컴파일러 import 실패 1건은 깨끗한 main에서도 동일하게 재현했다.
 - gate 변화: SOURCE/LOCAL만 확인. 사이트 배포·실기 수용은 별도다.
+
+## 2026-10-07 · uncommitted · fix(test): Fleet 브라우저 fixture가 Chromium 차단 포트를 피하고 정식 옵트인을 받는다
+- 변경: `test_cell_app_browser.py`·`test_start_point_browser.py`·`test_site_map_browser.py`·`test_development_console_browser.py`가 `browser_harness.safe_listener()`로 포트를 잡고, 다섯 브라우저 파일이 `browser_tests_enabled()`로 판정한다. `conftest.py`가 `test/`를 `sys.path` 끝에 붙인다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1`만으로 `test_cell_page_keeps_emergency_stop_in_first_view` 3 passed, `test_markerless_map_pick_save_reload_and_recalibration` 1 passed(이전에는 건너뜀). `known_failures.py` 0 new.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
+## 2026-10-08 · uncommitted · feat(fleet): D-513 시연 출발 자리 `start` 장소
+- 변경: 현장 지도 장소 종류 `start`(yaw 필수)를 더하고, 활성화·첫 가져오기에서 출발 붙이기로 검사해 `SITE_MAP_START_INVALID`로 거절한다. 기록 모드 `place`가 `start`를 받는다. 현장 지도 화면은 출발 자리와 방향 화살표를 그린다.
+- 증거: 관련 pytest 79 passed(브라우저 55 skipped), `site-map.test.mjs` 13 passed.
+- gate 변화: SOURCE/LOCAL만. 현장 해석 확인 F1, 지도 입력 F2는 별도.
+
+## 2026-10-08 · uncommitted · feat(fleet): D-513 7 카메라 화면 회전
+- 변경: `site-cameras.yaml` source 선택 키 `display_rotation_deg`(0/90/180/270)를 읽어 site-map source 행으로 내린다. 메인 지도 실영상·크게 보기를 그만큼 돌려 그리고 지도 점도 같이 돌린다. 보정·관측 좌표는 원본 그대로다.
+- 증거: `test_site_map_api.py` 27 passed, 웹 Node 시험 170 passed.
+- gate 변화: SOURCE/LOCAL만. 현장 설정 반영은 새 Fleet·Vision 배포 뒤에 한다(옛 버전은 이 키를 거절한다).
+
+
+## 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시
+
+- 변경: Fleet이 CORE Viewer power/health를 등록된 Operator 토큰으로 읽고 최대 5초 캐시한다. 로봇 행은 공유 PowerHealthResponse와 관측 나이를 선택 필드로 제공하며, 관제는 배터리·충전 근거의 신선도와 다음 조치를 표시한다. E-Stop·네트워크·영상 설정 경로는 변경하지 않았다.
+- 증거: 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. 현장 장치 검증은 별도.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-509 power health at state response
+
+- Change: Read CORE power/health only while rendering /api/fleet/state, preserving D-447 hub gather calls. Invalidate display cache when a robot client changes.
+- Evidence: Related Fleet and contract tests 99 PASS; Node 170 PASS. Device check remains separate.
+- Gate change: None.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up
+
+- 변경: Power health readback lives in /api/fleet/state presentation; D-447 gather remains unchanged.
+- 증거: Fleet and contract focus tests passed; Node 170 passed; hardware remains unverified.
+- gate 변화: None.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-513 7 회전 후속
+- 변경: 실영상 위 시작점 클릭을 회전·보정 역변환으로 지도 좌표로 바꾼다. 실영상 위 x/y 축을 지도 방향으로 그린다. 레일 썸네일을 편집 중이 아닐 때 돌린다. 현장 지도 화면을 관제 실영상과 같은 방향의 90° 단위로 돌린다(평면 사진 포함). 돌린 조감도는 보일 때만 다시 만든다.
+- 증거: 웹 Node 시험 174 passed.
+- gate 변화: SOURCE/LOCAL만.
+## 2026-10-08 · uncommitted · feat(fleet): D-511 M0 차로 준수 감시(관찰·알림만)
+- 변경: 순수 판정 `fleet/localization/lane_compliance.py`(부호 있는 가로 편차 왼쪽 +, 몸체 여유 `width_m/2 − (|d| + half width)`, `core_common.robot_body` PINKY_PRO 반폭, `persist_n` 연속 규칙, `fleet.lane_compliance` 잠정 기본값 0.02 m·3회·3.0 s). 2 Hz 감시 `server/lane_compliance_service.py` + `background_workers.lane_compliance_loop`: odom이 움직인 로봇만 `refresh(force_rest=True)`, 모든 로봇을 `arbitrated_pose`로 판정(D-511 §2가 D-494 §3을 넓힘). `GET /api/fleet/robots/{id}/lane-compliance`, `/api/fleet/state` 행 `lane_compliance`, 콘솔 예외 큐 WARN/ACT 항목. API Ref v1.128(v1.124–127은 열린 동료 브랜치)
+- 증거: `test_lane_compliance.py`·`test_lane_compliance_service.py` 신규, node `attention-stale.test.mjs` 8 passed, fleet 묶음 + `test/known_failures.py` (X:/DevTemp/d511-m0/run.txt)
+- gate 변화: 없음. SOURCE/LOCAL만. 지도 자세 LOCALIZED 연결(D-511 §5)·SIM·현장 임계값 측정은 열려 있다
+- 결정: D-511 M0. 로봇 명령 없음, trip·`/route`·meet 임계값 그대로(M1), CORE 신호 없음(M2)
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(fleet): D-511 M0 리뷰 반영
+- 변경: 그래프 밖(대기 칸)·막다른 호 끝 너머·차로를 가로지르는 자세는 ACT가 아니라 UNKNOWN(발이 호 안쪽, `max_lateral_m` 기본 호 `width_m`, `heading_gate_deg` 45°). 교차로는 진행 방향 호를 고른다. 움직임 판정에 떨림 데드밴드(`moving_min_m` 0.01, `moving_min_deg` 2), 로봇별 읽기는 0.5 s에서 끊는다. 콘솔은 움직이는 로봇만 알리고 여유가 음수면 "넘음"이라 쓴다. API Ref v1.128 행에 UNKNOWN 경우를 적었다
+- 증거: fleet 묶음 + `test/known_failures.py` (X:/DevTemp/d511-m0/run.txt), node `attention-stale.test.mjs` 10 passed
+- gate 변화: 없음
+- 결정: M0가 이미 움직이는 모든 로봇을 감시한다(ADR §6은 이것을 M1에 두었다). 녹화 주행(`edge_drive.py`)이 trip 밖에서 돌기 때문에 M0의 확인 목표에 필요하다
+- 교훈: 투영 거리만으로는 '차로 밖'과 '차로 아님'을 가를 수 없다. 발이 호 끝에 붙으면 부호도 의미가 없다
+
+## 2026-10-08 · uncommitted · refactor(fleet): D-513 7 카메라 회전은 지도 방향에서
+- 변경: `site-cameras.yaml`의 `display_rotation_deg` 키를 지운다(푸시 전). 관제 실영상·크게 보기·썸네일은 그 카메라 보정에서 지도 +y가 위로 오는 90° 단위 회전(`mapUpTurn`)으로 돈다. 현장 지도 화면의 보기 회전도 지운다(원래 지도 좌표).
+- 증거: 웹 Node 시험 174 passed.
+- gate 변화: SOURCE/LOCAL만. 현장에서 벽이 아래로 보이는지(F3)는 별도.

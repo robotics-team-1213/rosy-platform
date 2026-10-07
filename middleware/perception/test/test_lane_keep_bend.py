@@ -3,10 +3,14 @@
 Replays the B8 SIM fixture clips (docs/validation/lane-trip-perception-2026-10-07, Gazebo camera
 frames with ground-truth poses) through the product keeper with the D-495 SIM keeper settings,
 each clip from LaneKeeper.reset(). Open loop: the poses are the old keeper's, so these pin the
-per-frame reading, not the closed-loop path (that is the model PC SIM).
+per-frame reading, not the closed-loop path (that is the model PC SIM). The bend rules run only
+with the keeper's bend_expected input (route context, default off); off, the keeper must decide
+exactly as main on the real label frames (B9 device review: 0 of 29 HOLD -> drive frames right).
 """
+import glob
 import json
 import math
+import os
 from pathlib import Path
 
 import numpy as np
@@ -16,7 +20,8 @@ from control.sensing.perception.camera_ground import simulation_ground_plane
 from control.sensing.perception.lane_keep import LaneKeeper
 from control.sensing.perception.lane_keep_junction import _continues, _junction
 from control.sensing.perception.lane_keep_lines import PAINT_HALF_WIDTH_M
-from test_lane_keep import GROUND, HALF as NOMINAL_HALF, X, Y, X_OFFSET, _render
+from test_lane_keep import GROUND, HALF as NOMINAL_HALF, PROFILE, X, Y, X_OFFSET, _render
+import test_lane_corner as corner_world
 
 REPO = Path(__file__).resolve().parents[3]
 FIXTURE = REPO / "docs" / "validation" / "lane-trip-perception-2026-10-07" / "fixtures" / "b8_keeper_clips.npz"
@@ -66,7 +71,7 @@ def clips():
         if m["clip"] not in out:
             out[m["clip"]] = (LaneKeeper(camera_x_offset_m=CAMERA_X, corner_turning=True), [])
         keeper, rows = out[m["clip"]]
-        keeper.update(frame, ground, lane_half_width_m=HALF)
+        keeper.update(frame, ground, lane_half_width_m=HALF, bend_expected=True)
         rows.append((dict(keeper.last), m))
     return {name: rows for name, (_, rows) in out.items()}
 
@@ -90,14 +95,30 @@ def test_the_bend_diagonal_is_not_an_l_corner(clips):
             if b["strategy"].startswith("corner")] == []
 
 
-def test_the_bend_is_followed_not_lost(clips):
-    for name in ("south_centre_lost", "bend_flipping", "bend_fork"):
+def test_the_bend_is_followed_from_its_entry(clips):
+    for name in ("bend_flipping", "bend_fork"):
         assert [m["gt"] for b, m in clips[name] if b["target_m"] is None] == [], name
+        assert any(b["strategy"] == "bend_left" for b, _ in clips[name]), name
+
+
+def test_before_the_bend_the_lane_side_boundary_is_needed_and_the_target_stops_short(clips):
+    # While the bend's centre line meets the path beyond CORNER_LOOKAHEAD_M the keeper keeps the
+    # lane's own target, no further ahead than the bend line's crossing less a half-width; with
+    # no lane-side boundary it holds (as main), never driving straight at the bend line.
+    for name in ("south_centre_lost", "premature_corner_left"):
+        for b, m in clips[name]:
+            bend = [c for c in b["candidates"] if c.get("reason") == "bend"]
+            if b["strategy"] == "bend_ahead":
+                (x0, y0), (x1, y1) = sorted(map(tuple, bend[0]["ends_m"]))
+                cross = x0 + (x1 - x0) * (0.0 - y0) / (y1 - y0)
+                assert b["target_m"][0] <= cross - HALF + 1e-3, (name, m["gt"])
+            if bend and not [c for c in b["candidates"] if c.get("rejected") is False and c.get("reason") is None]:
+                assert b["target_m"] is None and b["reason"] in ("no_boundary", "junction_transverse"), (name, m["gt"])
+    assert any(b["strategy"] == "bend_ahead" for b, _ in clips["south_centre_lost"])
     # At 66 deg (yaw -3.5) the outer diagonal beside the inner edge bending out is, in one frame,
-    # a junction mouth too: it fails closed for that frame only (route context decides, B11).
-    held = [b["reason"] for b, _ in clips["premature_corner_left"] if b["target_m"] is None]
-    assert held == ["junction_transverse"]
-    assert any(b["strategy"].startswith("bend") for b, _ in clips["south_centre_lost"])
+    # a junction mouth too: it fails closed (route context decides, B11).
+    assert [b["reason"] for b, _ in clips["premature_corner_left"] if b["target_m"] is None] == [
+        "junction_transverse", "no_boundary", "no_boundary"]
 
 
 def test_straight_lane_clips_are_unchanged(clips):
@@ -135,9 +156,10 @@ def test_end_to_start_continuity():
 
 def test_connected_pieces_are_not_fork_branches_but_split_branches_are():
     edge, arc = _line((0.156, -0.073), (0.283, 0.156)), _line((0.309, 0.128), (0.432, 0.109))
-    assert _junction("left_only", [], [edge, arc], [], HALF, True, 0.3) is None
+    assert _junction("left_only", [], [edge, arc], [], HALF, True, 0.3, continuity=True) == (None, None)
+    assert _junction("left_only", [], [edge, arc], [], HALF, True, 0.3)[0] == "junction_fork"  # gate off: as main
     a, b = _line((0.16, 0.09), (0.40, 0.09)), _line((0.16, 0.09), (0.33, 0.26))
-    assert _junction("left_only", [], [a, b], [], HALF, True, 0.3) == "junction_fork"
+    assert _junction("left_only", [], [a, b], [], HALF, True, 0.3, continuity=True)[0] == "junction_fork"
 
 
 def _diagonal(image, x0, slope, y_lo, y_hi):
@@ -148,7 +170,7 @@ def _diagonal(image, x0, slope, y_lo, y_hi):
 
 def _corner_keep(image):
     keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
-    keeper.update(image, GROUND, lane_half_width_m=NOMINAL_HALF)
+    keeper.update(image, GROUND, lane_half_width_m=NOMINAL_HALF, bend_expected=True)
     return keeper.last
 
 
@@ -180,3 +202,76 @@ def test_a_junction_mouth_whose_boundary_ends_before_the_line_still_holds(cut):
     image[band] = 195
     last = _corner_keep(_diagonal(image, 0.30, np.tan(np.radians(70.0)), -0.15, 0.25))
     assert last["reason"] == "junction_transverse"
+
+
+def test_the_plain_keeper_ignores_a_bend_without_the_route_expecting_one():
+    # The same lost-boundary SIM frames without bend_expected: no bend reading at all.
+    data = np.load(FIXTURE)
+    keeper = LaneKeeper(camera_x_offset_m=CAMERA_X, corner_turning=True)
+    for frame, m in zip(data["frames"], json.loads(str(data["meta"]))):
+        if m["clip"] == "south_centre_lost":
+            keeper.update(frame, _ground(), lane_half_width_m=HALF)
+            assert not keeper.last["strategy"].startswith("bend")
+            assert not [c for c in keeper.last["candidates"] if c.get("reason") == "bend"]
+
+
+#: Real label frames (gitignored data/perception, D-226; ROSY_PERCEPTION_LABELS overrides) and
+#: main's decision on each (fixtures/b9_real_label_frames_main.json, main 6945440e5).
+LABELS = Path(os.environ.get("ROSY_PERCEPTION_LABELS", REPO / "data" / "perception" / "labels"))
+MAIN_DECISIONS = json.loads((Path(__file__).parent / "fixtures" / "b9_real_label_frames_main.json")
+                            .read_text(encoding="utf-8"))["decisions"]
+#: B9 device review: frames that drove at the wall baseboard, the paint or across a junction hold.
+MUST_HOLD = ([f"20260930T124745Z/{i:06d}.jpg" for i in [*range(35, 40), *range(63, 68)]]
+             + [f"20260930T133221Z/{i:06d}.jpg" for i in [256, *range(267, 285)]])
+
+
+def _real_decisions(bend_expected):
+    cv2 = pytest.importorskip("cv2")
+    sessions = sorted(glob.glob(str(LABELS / "*" / "frames")))
+    if len(sessions) < 2:
+        pytest.skip(f"real label frames not present under {LABELS} (gitignored data, D-226)")
+    out = {}
+    for frames in sessions:
+        keeper = LaneKeeper(camera_x_offset_m=float(PROFILE["x_offset_m"]), corner_turning=True)
+        name = Path(frames).parent.name.split("_")[0]
+        for path in sorted(glob.glob(os.path.join(frames, "*.jpg"))):
+            keeper.update(cv2.resize(cv2.imread(path), (320, 240)), GROUND, lane_half_width_m=NOMINAL_HALF,
+                          bend_expected=bend_expected)
+            last = keeper.last
+            out[f"{name}/{Path(path).name}"] = [last["strategy"], last.get("reason"), last.get("error"),
+                                                last.get("target_m"), last.get("junction_ahead_m")]
+    return out
+
+
+def test_real_frames_without_a_bend_expected_decide_as_main():
+    got = _real_decisions(False)
+    assert len(got) == len(MAIN_DECISIONS) == 434
+    assert [k for k in MAIN_DECISIONS if got[k] != MAIN_DECISIONS[k]] == []
+
+
+def test_real_frames_the_review_rejected_hold_even_with_a_bend_expected():
+    got = _real_decisions(True)
+    assert [(k, got[k][:2]) for k in MUST_HOLD if got[k][3] is not None] == []
+    assert [k for k in MAIN_DECISIONS if MAIN_DECISIONS[k][3] is None and got[k][3] is not None] == []
+
+
+@pytest.mark.parametrize("bend_expected", [False, True])
+@pytest.mark.parametrize("side, yaw_deg", [(s, y) for s in ("LEFT", "RIGHT") for y in (-18, -12, 0, 12, 18)])
+def test_a_yawed_l_corner_is_turned_or_held_never_driven_across(side, yaw_deg, bend_expected):
+    # Closed loop (test_lane_corner world, CORE command law) from 0.30 m before the corner line:
+    # the keeper either completes the turn into the new lane or holds where it starts (yawed
+    # toward the open side the corner line is not read: fail closed), whether or not a bend is
+    # expected there. It never drives on across the paint.
+    sign = 1.0 if side == "LEFT" else -1.0
+    keeper = LaneKeeper(camera_x_offset_m=corner_world.CAM_X, corner_turning=True)
+    start = (corner_world.X_T - 0.30, 0.0, math.radians(yaw_deg))
+    pose, rects = start, corner_world.l_corner(side)
+    for _ in range(150):
+        obs = keeper.update(corner_world.render(pose, rects), corner_world.GROUND,
+                            lane_half_width_m=corner_world.H, bend_expected=bend_expected)
+        pose = corner_world._step(pose, obs)
+        assert pose[0] < corner_world.X_T, "drove past the corner line"
+    turned = (abs(pose[2] - sign * math.pi / 2) < math.radians(20) and sign * pose[1] > 0.15
+              and abs(pose[0] - (corner_world.X_T - corner_world.H)) < corner_world.H)
+    assert turned or pose == start
+    assert turned == (sign * yaw_deg <= 0)

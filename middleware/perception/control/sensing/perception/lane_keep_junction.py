@@ -49,8 +49,12 @@ def _across_path(ends, half):
     return ahead if 0.0 < ahead <= JUNCTION_AHEAD_M else None
 
 
-def _junction(strategy, transverse, left, right, half, corner_turning, max_lateral_m):
-    """Reason to HOLD at a junction, or None. Only with corner turning: there
+def _junction(strategy, transverse, left, right, half, corner_turning, max_lateral_m, continuity=False):
+    """(reason, ahead_m) to HOLD at a junction, (None, None) otherwise. ahead_m is
+    base_footprint x of the transverse line, or of the diverging branch's near
+    end (D-507 §5). base_footprint and base_link share x on Pinky:
+    base_link_fixed_joint is `origin xyz="0 0 0.028"` (z only, rosy.urdf.xacro).
+    Only with corner turning: there
     the corner reading can pull the robot out of the lane at a junction mouth.
     Without it (the device default until D-495) both rules held 5-10 % more of the real
     replay frames (pilot none 0.32 -> 0.36-0.43), so the plain keeper goes on
@@ -58,19 +62,22 @@ def _junction(strategy, transverse, left, right, half, corner_turning, max_later
     within `max_lateral_m` of the robot, the same plausibility bound the
     one-sided selection uses."""
     if not corner_turning or strategy not in ("left_only", "right_only"):
-        return None
+        return None, None
     side = left if strategy == "left_only" else right
     # The lone boundary bends away out of the lane (a mouth opening on its
     # side) while a line crosses the path ahead: which lane goes on is unknown.
     outward = 1.0 if strategy == "left_only" else -1.0
     diverging = any(outward * math.radians(r["heading_deg"]) > DIVERGE_MIN_RAD for r in side)
-    if diverging and any(not steep and _across_path(ends, half) is not None
-                         for _, _, ends, steep in transverse):
-        return "junction_transverse"
-    branches = [r for r in side
-                if abs(r["y_at_side_x_m"]) <= max_lateral_m and r["length_m"] >= FORK_MIN_LENGTH_M]
-    if any(abs(math.radians(a["heading_deg"] - b["heading_deg"])) > FORK_MIN_ANGLE_RAD
-           and not _continues(a, b) and not _continues(b, a)
-           for a, b in itertools.combinations(branches, 2)):
-        return "junction_fork"
-    return None
+    crossing = [a for _, _, ends, steep in transverse
+                if not steep and (a := _across_path(ends, half)) is not None]
+    if diverging and crossing:
+        return "junction_transverse", min(crossing)
+    branches = [r for r in side if abs(r["y_at_side_x_m"]) <= max_lateral_m
+                and r["length_m"] >= FORK_MIN_LENGTH_M]
+    split = [r for a, b in itertools.combinations(branches, 2)
+             if abs(math.radians(a["heading_deg"] - b["heading_deg"])) > FORK_MIN_ANGLE_RAD
+             and not (continuity and (_continues(a, b) or _continues(b, a))) for r in (a, b)]
+    if split:
+        branch = max(split, key=lambda r: outward * r["heading_deg"])
+        return "junction_fork", min(p[0] for p in branch["ends_m"])
+    return None, None

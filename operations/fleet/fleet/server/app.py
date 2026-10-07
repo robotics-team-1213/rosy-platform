@@ -52,6 +52,8 @@ from fleet.server.task_service import FleetTaskService
 from fleet.server.console_routes import install_console_routes
 from fleet.server.background_workers import proposal_expiry_loop as _proposal_expiry_loop
 from fleet.server.background_workers import goal_evidence_expiry_loop
+from fleet.server.background_workers import lane_compliance_loop
+from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
 from fleet.server.signal_routes import install_signal_routes
 from fleet.server.ingest_routes import address_reasons, install_discovery_routes, install_ingest_routes
 from fleet.server.intent_routes import install_intent_routes
@@ -135,7 +137,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
                site_maps=None, routing_config=None, map_pose_config=None,
-               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None) -> FastAPI:
+               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None,
+               lane_compliance_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     if development_sessions is not None and task_service is None:
@@ -319,6 +322,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
         trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
+        lane_task = asyncio.create_task(lane_compliance_loop(  # D-511 M0
+            app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -343,10 +348,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         try:
             yield
         finally:
+            power_display = getattr(app.state, "power_health_display", None)
+            if power_display is not None:
+                await power_display.aclose()
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task, trip_task):
+                               signal_task, resolver_task, trip_task, lane_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -513,6 +521,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           principals=principals, require_viewer=require_viewer,
                           read_guard=read_guard, map_pose=map_pose)
     install_map_pose_routes(app, service=map_pose, read_guard=read_guard)
+    # D-511 M0: lane compliance from the same map pose; observe and notify only.
+    from fleet.localization.lane_compliance import LaneComplianceConfig
+    from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_lane_compliance_routes
+    app.state.lane_compliance = LaneComplianceMonitor(
+        lambda: console.robot_ids, poses=map_pose, site_maps=site_maps,
+        config=lane_compliance_config or LaneComplianceConfig())
+    install_lane_compliance_routes(app, monitor=app.state.lane_compliance, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,
                            require_viewer=require_viewer, read_guard=read_guard,
