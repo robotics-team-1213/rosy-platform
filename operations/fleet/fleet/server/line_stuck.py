@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 from .sqlite_policy import configure_connection
+from .stuck_resolver import ResolverConfig, peer_ahead
 
 DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT")
 _STATUS_KEYS = ("stuck_id", "cause", "phase", "held_s", "attempts", "max_attempts",
@@ -38,13 +39,24 @@ class LineStuckBoard:
     """Open stucks per robot from the gathered state, plus who answered what."""
 
     def __init__(self, clock: Callable[[], float] = time.monotonic, history: int = 50,
-                 log: Optional["LineStuckAnswerLog"] = None) -> None:
+                 log: Optional["LineStuckAnswerLog"] = None,
+                 wall: Callable[[], float] = time.time) -> None:
         self._clock = clock
+        self._wall = wall
         self._open: dict[str, dict] = {}
         self._answers: deque = deque(maxlen=history)
         self._log = log
         self._observed_at: Optional[float] = None
         self._resolver: dict[tuple[str, str], dict] = {}
+        # Episode context, injected by the app once the services exist (None = not known).
+        self.trip_busy: Optional[Callable[[str], bool]] = None
+        self.map_pose: Optional[Callable[[str], object]] = None
+        self.peer_config = ResolverConfig()   # the app sets the resolver's own when it runs
+        self._peaks: dict[str, dict] = {}     # robot_id -> held_s / attempts maxima
+        # Episode writes queued by observe(), in order; flush() runs them (off the event loop).
+        self._pending: list[Callable[[], None]] = []
+        if log is not None:
+            self._durable(lambda: log.close_orphans(self._now_iso()))
 
     def note_resolver(self, robot_id: str, stuck_id: str, *, tier: str, rule: Optional[str],
                       decision: Optional[str], escalated: Optional[str]) -> None:
@@ -72,6 +84,7 @@ class LineStuckBoard:
         unreachable: the operator must still see it, and CORE refuses an answer it cannot take."""
         now = self._observed_at = self._clock()
         seen = set()
+        robots = list(robots)
         for row in robots:
             robot_id = row["robot_id"]
             seen.add(robot_id)
@@ -82,7 +95,8 @@ class LineStuckBoard:
                 continue
             stuck = (state.get("line_follow") or {}).get("stuck")
             if not isinstance(stuck, dict) or not stuck.get("stuck_id"):
-                self._open.pop(robot_id, None)
+                if self._open.pop(robot_id, None) is not None:
+                    self._close_episode(robot_id, "cleared")
                 self._drop_notes(robot_id)
                 continue
             previous = self._open.get(robot_id)
@@ -90,11 +104,81 @@ class LineStuckBoard:
                      "robot_online": True, "observed_at": now}
             if previous is not None and previous["stuck_id"] != entry["stuck_id"]:
                 self._drop_notes(robot_id, keep=entry["stuck_id"])   # replaced stuck
+                self._close_episode(robot_id, "replaced")
+            if previous is None or previous["stuck_id"] != entry["stuck_id"]:
+                self._open_episode(row, stuck, robots)
+            self._peak(robot_id, stuck)
             entry.update(self._opened(robot_id, entry["stuck_id"], previous, events_of))
             self._open[robot_id] = entry
         for robot_id in set(self._open) - seen:
             del self._open[robot_id]   # left the roster
             self._drop_notes(robot_id)
+            self._close_episode(robot_id, "left_roster")
+
+    # ---- episode log: one write per open / close transition, never per poll -------------
+
+    def episodes(self, limit: int = 100) -> list[dict]:
+        return self._log.episodes(limit) if self._log is not None else []
+
+    def _now_iso(self) -> str:
+        return datetime.fromtimestamp(self._wall(), timezone.utc).isoformat(timespec="milliseconds")
+
+    def flush(self) -> None:
+        """Run the queued episode writes in observe() order. Blocking SQLite: the shared
+        gather calls this through ``asyncio.to_thread`` under its lock, so writes for one
+        robot never reorder."""
+        pending, self._pending = self._pending, []
+        for write in pending:
+            self._durable(write)
+
+    @staticmethod
+    def _durable(write: Callable[[], None]) -> None:
+        try:
+            write()
+        except (OSError, sqlite3.Error):
+            _LOG.exception("line stuck episode was not durably recorded")
+
+    def _peak(self, robot_id: str, stuck: dict) -> None:
+        peak = self._peaks[robot_id]
+        for key, value in (("held_s_max", stuck.get("held_s")), ("attempts_max", stuck.get("attempts"))):
+            if isinstance(value, (int, float)) and (peak[key] is None or value > peak[key]):
+                peak[key] = value
+
+    def _open_episode(self, row: dict, stuck: dict, robots: list) -> None:
+        robot_id = row["robot_id"]
+        self._peaks[robot_id] = {"stuck_id": stuck["stuck_id"], "held_s_max": None,
+                                 "attempts_max": None}
+        if self._log is None:
+            return
+        pose = None
+        if self.map_pose is not None:
+            try:
+                pose = self.map_pose(robot_id)
+            except Exception:  # noqa: BLE001 - context only; the episode is from state
+                _LOG.debug("map pose for stuck episode of %s failed", robot_id, exc_info=True)
+        busy = self.trip_busy(robot_id) if self.trip_busy is not None else None
+        peer = peer_ahead(row, robots, self.peer_config)
+        local = stuck.get("local_enabled")
+        record = {"robot_id": robot_id, "stuck_id": stuck["stuck_id"], "source": "fleet_poll",
+                  "cause": stuck.get("cause"), "phase_at_open": stuck.get("phase"),
+                  "local_enabled_at_open": None if local is None else int(bool(local)),
+                  "trip_busy_at_open": None if busy is None else int(bool(busy)),
+                  "peer_ahead_at_open": None if peer is None else int(peer),
+                  "opened_at": self._now_iso()}
+        if pose is not None:
+            record.update(pose_x=pose.x, pose_y=pose.y, pose_yaw=pose.yaw,
+                          pose_state=pose.state, pose_age_s=pose.age_s)
+        log = self._log
+        self._pending.append(lambda: log.open_episode(record))
+
+    def _close_episode(self, robot_id: str, reason: str) -> None:
+        peak = self._peaks.pop(robot_id, None)
+        if peak is None or self._log is None:
+            return
+        log, closed_at = self._log, self._now_iso()
+        self._pending.append(lambda: log.close_episode(
+            robot_id, peak["stuck_id"], closed_at=closed_at, close_reason=reason,
+            held_s_max=peak["held_s_max"], attempts_max=peak["attempts_max"]))
 
     @staticmethod
     def _opened(robot_id: str, stuck_id: str, previous: Optional[dict], events_of) -> dict:
@@ -162,8 +246,28 @@ class LineStuckBoard:
         return row
 
 
+def _resolution(answers) -> tuple:
+    """(resolved_by, resolved_principal, last_answer_tier, escalation_code) from one stuck's
+    answers, oldest first. The last non-ESCALATE answer decides, as in ``view()``: accepted is
+    its tier, unknown outcome is ``<tier>_unconfirmed`` (never "solved by itself"), refused
+    falls back to the last accepted one. NULL = closed without an accepted answer."""
+    answered = [a for a in answers if a["decision"] != "ESCALATE"]
+    escalated = [a for a in answers if a["decision"] == "ESCALATE"]
+    code = escalated[-1]["escalated"] if escalated else None
+    if not answered:
+        return None, None, None, code
+    last = answered[-1]
+    if last["accepted"] is None:
+        return f"{last['tier'] or 'human'}_unconfirmed", last["principal_id"], last["tier"], code
+    accepted = [a for a in answered if a["accepted"] == 1]
+    if not accepted:
+        return None, None, last["tier"], code
+    return accepted[-1]["tier"], accepted[-1]["principal_id"], last["tier"], code
+
+
 class LineStuckAnswerLog:
-    """Durable answer record in the Fleet journal database (beside ``fleet_api_audit``)."""
+    """Durable answer record and stuck episodes in the Fleet journal database (beside
+    ``fleet_api_audit``). Episodes are written only on open and close transitions."""
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
@@ -183,6 +287,18 @@ class LineStuckAnswerLog:
                 if column not in have:
                     connection.execute(
                         f"ALTER TABLE fleet_line_stuck_answers ADD COLUMN {column} TEXT")
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS fleet_line_stuck_episodes (
+                       robot_id TEXT NOT NULL, stuck_id TEXT NOT NULL,
+                       source TEXT NOT NULL DEFAULT 'fleet_poll',
+                       cause TEXT, phase_at_open TEXT, local_enabled_at_open INTEGER,
+                       trip_busy_at_open INTEGER, peer_ahead_at_open INTEGER,
+                       opened_at TEXT NOT NULL, closed_at TEXT,
+                       held_s_max REAL, attempts_max INTEGER, close_reason TEXT,
+                       resolved_by TEXT, resolved_principal TEXT, last_answer_tier TEXT,
+                       escalation_code TEXT,
+                       pose_x REAL, pose_y REAL, pose_yaw REAL, pose_state TEXT, pose_age_s REAL,
+                       UNIQUE (robot_id, stuck_id))""")
 
     def append(self, row: dict) -> None:
         accepted = None if row["accepted"] is None else int(bool(row["accepted"]))
@@ -200,6 +316,45 @@ class LineStuckAnswerLog:
         with closing(self._connect()) as connection:
             found = connection.execute(
                 "SELECT * FROM fleet_line_stuck_answers ORDER BY answer_id DESC LIMIT ?",
+                (limit,)).fetchall()
+        return [dict(row) for row in found]
+
+    def open_episode(self, row: dict) -> None:
+        """Open (or, after a Fleet restart, reopen) one episode. The first ``opened_at`` stays."""
+        columns = ", ".join(row)
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                f"""INSERT INTO fleet_line_stuck_episodes ({columns})
+                    VALUES ({", ".join("?" * len(row))})
+                    ON CONFLICT(robot_id, stuck_id) DO UPDATE SET
+                        closed_at = NULL, close_reason = NULL""", tuple(row.values()))
+
+    def close_episode(self, robot_id: str, stuck_id: str, *, closed_at: str, close_reason: str,
+                      held_s_max: Optional[float], attempts_max: Optional[int]) -> None:
+        with closing(self._connect()) as connection, connection:
+            answers = connection.execute(
+                """SELECT decision, accepted, tier, principal_id, escalated
+                   FROM fleet_line_stuck_answers WHERE robot_id = ? AND stuck_id = ?
+                   ORDER BY answer_id""", (robot_id, stuck_id)).fetchall()
+            connection.execute(
+                """UPDATE fleet_line_stuck_episodes SET closed_at = ?, close_reason = ?,
+                       held_s_max = ?, attempts_max = ?, resolved_by = ?, resolved_principal = ?,
+                       last_answer_tier = ?, escalation_code = ?
+                   WHERE robot_id = ? AND stuck_id = ?""",
+                (closed_at, close_reason, held_s_max, attempts_max, *_resolution(answers),
+                 robot_id, stuck_id))
+
+    def close_orphans(self, closed_at: str) -> None:
+        """Start-up: an episode still open was left by the previous Fleet process."""
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                """UPDATE fleet_line_stuck_episodes SET closed_at = ?, close_reason = 'fleet_restart'
+                   WHERE closed_at IS NULL""", (closed_at,))
+
+    def episodes(self, limit: int = 100) -> list[dict]:
+        with closing(self._connect()) as connection:
+            found = connection.execute(
+                "SELECT * FROM fleet_line_stuck_episodes ORDER BY rowid DESC LIMIT ?",
                 (limit,)).fetchall()
         return [dict(row) for row in found]
 
