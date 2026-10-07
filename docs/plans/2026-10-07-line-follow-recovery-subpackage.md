@@ -15,6 +15,8 @@
 | `stuck_recovery.py`, `stuck_wiring.py` | `recovery/stuck_*.py` |
 | `junction.py` | `recovery/junction.py` |
 
+`junction.py`도 `recovery`에 둔다. 교차로 동작은 정상 추종 바깥의 한정된 동작이고, D-468 근거(PoseTrail, 동작 확인)와 D-407 stuck과 같은 매니저 결정 경로를 공유한다. 그래서 같은 하위 패키지가 맞다. 이름을 `actions`로 넓히지 않는다.
+
 다음은 그대로 둔다. `manager.py`, `model.py`, `body_stop.py`, `clearance.py`, `__init__.py`다. 이유는 둘이다. 추종 정책과 D-422 안전 경로(`concern: safety`, D-430)가 여기 있다. 그리고 모든 믹스인을 묶는 매니저가 여기 있다.
 
 ## 지키는 것

@@ -388,10 +388,10 @@ SIZE_VERDICTS = {
     ),
     "foundation/core_common/protocol/schemas.py": (
         1_335,
-        "accept: re-judged at 1335 on 2026-10-07 for D-494 4 / D-495: one LineJunctionStatus model "
-        "(pending_action, place_id, state, seq, turn_deg, reason) and the optional "
-        "LineFollowStatus.junction field beside the existing LineStuckStatus; additive, no envelope "
-        "version change or runtime owner. Zero-growth allowance remains. "
+        "accept: independently re-judged at 1335 on 2026-10-07 (code-reviewer agent, read-only) for "
+        "D-494 4 / D-495: one LineJunctionStatus model and a defaulted LineFollowStatus.junction field "
+        "(always present, state idle) beside LineStuckStatus; additive, no envelope version change or "
+        "runtime owner. Zero-growth allowance remains. "
         "accept: re-judged at 1322 on 2026-10-07 for D-494 2: one optional StateSnapshot.odom_pose "
         "field; the OdomPose model lives in protocol/localization.py and joins the existing import "
         "line. No envelope version change or runtime owner. Zero-growth allowance remains. "
@@ -546,14 +546,12 @@ SIZE_VERDICTS = {
     ),
     "core_features": (
         14_934,
-        "accept: with condition: re-judged 2026-10-07 at 14934 for D-494 4 / D-495 junction "
-        "instruction and bounded turn (line_follow/junction.py 443, manager/model/wiring hooks): one "
-        "line_follow mixin under the same manager lock/generation and CORE final publisher; no new "
-        "package, store, publisher or deploy unit; every file threshold and package+150 remain. "
-        "The prior condition is met by docs/plans/2026-10-07-line-follow-recovery-subpackage.md "
-        "(lane_return*, lane_bridge, stuck_*, junction move to line_follow/recovery with its own "
-        "verdict); the next core_features re-judge without that move landed is REJECT. "
-        "Pending independent review at landing. "
+        "accept: Independently re-judged 2026-10-07 (code-reviewer agent, read-only): ACCEPT with condition at 14934. "
+        "The growth is one line_follow junction mixin (junction.py 443, under the 600 file limit) plus "
+        "manager/model/wiring hooks under the same manager lock, generation and CORE final publisher; "
+        "no new owner, store, publisher or deploy unit. Condition: "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md lands as its own branch; the next "
+        "core_features re-judge before that move is on main is REJECT. "
         "accept: with condition: re-judged 2026-10-07 at 14449 for D-476 rev 1 (main 14328 + "
         "branch 121). Condition: before the next core_features re-judge, a dated plan in "
         "docs/plans/ splits line_follow lane recovery (lane_return*, lane_bridge, stuck_*) into "
