@@ -202,11 +202,12 @@ class Probe:
         self.action('set_pose', x=x, y=y, yaw=yaw, rep=rep)
         time.sleep(2.0)
 
-    def box(self, name, x, y, size=0.06):
-        sdf = (f"<sdf version='1.9'><model name='{name}'><static>true</static><pose>{x} {y} {size/2} 0 0 0</pose>"
-               f"<link name='l'><collision name='c'><geometry><box><size>{size} {size} {size}</size></box>"
-               f"</geometry></collision><visual name='v'><geometry><box><size>{size} {size} {size}</size>"
-               f"</box></geometry></visual></link></model></sdf>")
+    def box(self, name, x, y, size=0.06, height=0.25):
+        """A static box tall enough for the LiDAR plane (visual + collision)."""
+        geo = f"<geometry><box><size>{size} {size} {height}</size></box></geometry>"
+        sdf = (f"<sdf version='1.9'><model name='{name}'><static>true</static><pose>{x} {y} {height/2} 0 0 0</pose>"
+               f"<link name='l'><collision name='c'>{geo}</collision><visual name='v'>{geo}</visual></link>"
+               f"</model></sdf>")
         rep = gz('create', 'gz.msgs.EntityFactory', 'sdf: ' + json.dumps(sdf))
         return self.action('box', name=name, x=x, y=y, size=size, rep=rep)
 
@@ -324,7 +325,7 @@ def run_trip(p, plan, prearm=True, late=0.5, duration=180.0, tag='P', stop_on_fa
 
     first = None
     if prearm and plan:
-        first = {'i': 0, 'item': plan[0], 'code': send(0)}
+        first = {'i': 0, 'item': plan[0], 'code': send(0), 'mono': time.monotonic(), 'refresh': 0}
     end = time.monotonic()+duration
     while time.monotonic() < end:
         r = p.last()
@@ -360,7 +361,7 @@ def run_trip(p, plan, prearm=True, late=0.5, duration=180.0, tag='P', stop_on_fa
                 rec = None
                 if prearm and idx < len(plan):
                     send(idx, recs[-1])
-                    first = recs[-1]['sent'].pop()
+                    first = recs[-1]['sent'].pop() | {'mono': time.monotonic(), 'refresh': 0}
             elif js in ('aborted', 'unresolved') and 'result' not in rec:
                 rec['result'], rec['done'] = js, b
                 if stop_on_fail:
@@ -371,6 +372,11 @@ def run_trip(p, plan, prearm=True, late=0.5, duration=180.0, tag='P', stop_on_fa
             elif r.get('state') == 'LOST':
                 rec['result'], rec['done'] = 'LOST', b
                 break
+        elif (first is not None and not plan[idx].startswith('stop')
+              and (js == 'idle' or time.monotonic()-first['mono'] > 20)):
+            # expires_s is at most 30 s; like Fleet's arm distance, keep the next one live
+            send(idx)
+            first.update(mono=time.monotonic(), refresh=first['refresh']+1)
         elif r.get('state') == 'LOST':
             recs.append({'i': idx, 'result': 'LOST_between_junctions', 'done': brief(r)})
             break
@@ -426,7 +432,8 @@ def score(p, recs):
             m['dist_from_prev_sight_m'] = round(math.hypot(sight['gt'][0]-ps[0], sight['gt'][1]-ps[1]), 3)
         m['seq'] = [{'j': e['key'][0], 'jr': e['key'][1], 'state': e['key'][2], 'reason': e['key'][3],
                      'sim_t': e['sim_t']} for e in rec.get('seq', [])][:40]
-        m['sent'] = [{'i': s['i'], 'item': s['item'], 'code': s['code'], 'resp': s.get('resp')}
+        m['sent'] = [{'i': s['i'], 'item': s['item'], 'code': s['code'], 'resp': s.get('resp'),
+                      'refresh': s.get('refresh')}
                      for s in rec.get('sent', [])]
         out.append(m)
     return out
@@ -448,7 +455,122 @@ def trip(p, a):
             'final': brief(rows[-1]) if rows else None}
 
 
-SCENARIOS = {'trip': trip}
+def first_zero_cmd(p, sim_t):
+    """sim time of the first all-zero /cmd_vel at or after sim_t (from cmd.jsonl), and the one before."""
+    p.files['cmd'].flush()
+    prev, zero = None, None
+    for line in open(p.out/'cmd.jsonl'):
+        c = json.loads(line)
+        if c['sim_t'] is None or c['sim_t'] < sim_t:
+            prev = c
+            continue
+        if c['lin'] == 0 and c['ang'] == 0:
+            zero = c
+            break
+    return prev, zero
+
+
+def watch(p, seconds, until=('idle', 'aborted', 'unresolved')):
+    """Follow the junction state after a resend: (rows seen, last row)."""
+    seen, t_end = [], time.monotonic()+seconds
+    started = False
+    while time.monotonic() < t_end:
+        r = p.last()
+        js = (r.get('junction') or {}).get('state')
+        if not seen or (js, r.get('reason')) != (seen[-1]['j'], seen[-1]['reason']):
+            seen.append(brief(r))
+        started = started or js in ('turning', 'advancing', 'reacquiring', 'executing')
+        if started and js in until:
+            break
+        time.sleep(0.05)
+    return seen, p.last()
+
+
+def fault(p, a):
+    """One junction at the bend (--plan, one turn item) with a fault injected:
+    --inject box_turn | box_advance | odom_turn | odom_advance | ir_turn | scan_turn | none
+    --then none | resend | reselect | resend_done (after completion: same instruction again)."""
+    p.set_pose(a.x, a.y, a.yaw)
+    p.action('capability', junction_turn=p.capabilities())
+    t0 = p.t()
+    p.mode('CAMERA_LINE')
+    plan = [x for x in a.plan.split(',') if x]
+    act, kw = parse_item(plan[0])
+    info = {}
+
+    def hook(p, rec, r):
+        js = (r.get('junction') or {}).get('state')
+        if a.then == 'resend_done' and js == 'idle' and 'turn_end' in rec and 'resent' not in info:
+            code, resp = p.junction(act, f'{a.tag}0', **kw)  # S6: the same instruction once more
+            info['resent'] = {'code': code, 'resp': resp, 'at': brief(r)}
+        if 'inject' in info or a.inject == 'none':
+            return False
+        sight = rec['sight']['gt']
+        turned = abs(math.degrees(wrap(r['gt'][2]-sight[2]))) if r.get('gt') and sight else 0
+        phase = a.inject.split('_')[1]
+        if not ((phase == 'turn' and js == 'turning' and turned >= a.at_deg)
+                or (phase == 'advance' and js == 'advancing')):
+            return False
+        x, y, yaw = r['gt']
+        what = a.inject.split('_')[0]
+        if what == 'box':
+            if phase == 'turn':  # inside the in-place rotation sweep, beside the body
+                bx, by = x+0.115*math.cos(yaw+math.pi/2), y+0.115*math.sin(yaw+math.pi/2)
+            else:  # ahead on the advance path
+                bx, by = x+0.13*math.cos(yaw), y+0.13*math.sin(yaw)
+            row = p.box('d495_box', bx, by, size=0.03)
+        else:
+            row = p.pause({'odom': 'odom', 'ir': 'ir', 'scan': 'scan'}[what])
+        info['inject'] = {'sim_t': row['sim_t'], 'gt': r['gt'], 'state': js, 'turned_deg': round(turned, 1)}
+        return False
+
+    recs = run_trip(p, plan, prearm=True, duration=a.duration, tag=a.tag, hooks=hook)
+    res = {'scenario': 'fault', 'inject': a.inject, 'then': a.then, 'plan': plan, 'injected': info.get('inject')}
+    if info.get('inject'):
+        prev, zero = first_zero_cmd(p, info['inject']['sim_t'])
+        res['cmd_before_inject'], res['first_zero_cmd_after'] = prev, zero
+        if zero:
+            res['zero_cmd_latency_s'] = round(zero['sim_t']-info['inject']['sim_t'], 3)
+    time.sleep(1.0)
+    if a.inject.startswith('box'):
+        p.unbox('d495_box')
+    else:
+        p.pause('')
+    time.sleep(1.0)
+    entry = recs[0]['sight']['gt'] if recs and recs[0].get('sight') else None
+    if a.then == 'resend':
+        code, resp = p.junction(act, f'{a.tag}0', **kw)
+        seen, last = watch(p, 40)
+        res['resend'] = {'code': code, 'resp': resp, 'seq': seen[:30], 'last': brief(last)}
+    elif a.then == 'reselect':
+        p.mode('OFF')
+        time.sleep(0.5)
+        p.mode('CAMERA_LINE')
+        time.sleep(1.0)
+        code, resp = p.junction(act, f'{a.tag}0', **kw)
+        y0 = p.last().get('gt')
+        other = 'right' if act == 'left' else 'left'
+        code2, resp2 = p.junction(other, f'{a.tag}0', turn_deg=-kw['turn_deg'])
+        seen, last = watch(p, 10)
+        res['reselect'] = {'same_code': code, 'same_resp': resp, 'other_code': code2, 'other_resp': resp2,
+                           'seq': seen[:30], 'yaw_change_deg': round(math.degrees(wrap(
+                               last['gt'][2]-y0[2])), 2) if y0 and last.get('gt') else None}
+    elif a.then == 'resend_done':
+        nxt = recs[1] if len(recs) > 1 else None
+        res['resend_done'] = {**info.get('resent', {}), 'next_junction_result': nxt and nxt.get('result'),
+                              'next_junction_turned': bool(nxt and nxt.get('turn_start'))}
+    last = p.last()
+    if entry and last.get('gt') and 'turn_deg' in kw:
+        target = wrap(entry[2]+math.radians(kw['turn_deg']))
+        res['final_vs_entry_target_deg'] = round(math.degrees(wrap(last['gt'][2]-target)), 2)
+        res['final_turned_from_entry_deg'] = round(math.degrees(wrap(last['gt'][2]-entry[2])), 2)
+    with p.lock:
+        rows = [r for r in p.rows if r['t'] >= t0]
+    res.update(junctions=score(p, recs), gt_path_m=path_len(rows), final=brief(rows[-1]) if rows else None)
+    return res
+
+
+SCENARIOS = {'trip': trip, 'fault': fault}
 
 
 def main():
@@ -463,6 +585,9 @@ def main():
     ap.add_argument('--reactive', action='store_true')
     ap.add_argument('--late', type=float, default=0.5)
     ap.add_argument('--tag', default='P')
+    ap.add_argument('--inject', default='none')
+    ap.add_argument('--then', default='none')
+    ap.add_argument('--at-deg', type=float, default=20.0)
     ap.add_argument('--base', default='http://127.0.0.1:8097')
     ap.add_argument('--token', default='rosy-dev-operator')
     a = ap.parse_args()
