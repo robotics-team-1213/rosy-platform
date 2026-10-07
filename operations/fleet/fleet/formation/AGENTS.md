@@ -3,6 +3,9 @@
 
 # formation
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Pure FOR-001/002 functions: named formations → slot offsets, and a swappable slot assigner. No transport, no asyncio, no ROS. Output is numbers a follower can pass to `follow_goal`.

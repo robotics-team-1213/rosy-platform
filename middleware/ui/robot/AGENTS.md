@@ -1,7 +1,10 @@
-<!-- Parent: ../../../src/hmi/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-02 | Updated: 2026-09-25 -->
 
 # dashboard
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 

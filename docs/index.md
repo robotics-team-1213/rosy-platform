@@ -303,5 +303,5 @@
 - 2026-10-07 · uncommitted · fix(tools): 착지 도구 리뷰 반영
 - 2026-10-07 · uncommitted · feat(tools): 착지 도구 tools/land.py
 - 2026-10-07 · uncommitted · docs(adr): Console 충전·health·설정 경계 D-509
+- 2026-10-07 · uncommitted · fix(push): Windows 검사 경로와 공유 main 게이트 복구
 - 2026-10-07 · uncommitted · docs(adr): Pilot 바닥 IR 녹화 번호는 D-506
-- 2026-10-07 · uncommitted · docs(adr): D-504 Pilot 녹화에 바닥 IR 원시값
