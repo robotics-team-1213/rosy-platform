@@ -409,6 +409,80 @@ def test_a_remembered_point_an_in_place_turn_rotates_into_the_body_keeps_holding
     assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
 
 
+def test_packaged_pinky_stops_with_a_zero_command_on_the_tick_a_real_box_comes_near():
+    """D-507 10 must not loosen D-422: with the packaged Pinky layer (URDF body, C1 range_min)
+    a box on the path, outside the body and inside the stop gap, zeroes that very tick."""
+    pinky = _merged(PINKY_LAYER)
+    m = LineFollowManager(_Events(), config=pinky, clock=lambda: T)
+    m.set_mode(LineFollowMode.CAMERA_LINE)
+    lidar_to_front = pinky.body_front_x_m - pinky.body_lidar_x_m
+    far = [(lidar_to_front + 0.20, y) for y in (-0.02, 0.0, 0.02)]
+    decision, status = _step(m, far, range_min=C1_RANGE_MIN)
+    assert status.state == "TRACKING" and decision.linear > 0.0
+    near_gap = pinky.derived_stop_gap_m(min(pinky.cruise_speed, pinky.max_linear)) - 0.005
+    box = [(lidar_to_front + near_gap, y) for y in (-0.02, 0.0, 0.02)]
+    assert all(math.hypot(*p) > C1_RANGE_MIN for p in box)               # seen, not remembered
+    decision, status = _step(m, box, t=T + 0.1, range_min=C1_RANGE_MIN)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "lidar")
+    assert (decision.linear, decision.angular) == (0.0, 0.0)
+
+
+def test_a_remembered_box_outside_the_body_zeroes_the_next_tick():
+    """The box goes under range_min (0.12 overlay) outside the body: the next tick, with an
+    empty scan, is a zero command from memory."""
+    lidar_x = PINKY["body_lidar_x_m"]
+    m = _manager()
+    box = (PINKY["body_front_x_m"] + 0.03 - lidar_x, 0.0)                # LiDAR range 0.089
+    decision, _ = _step(m, [box], range_min=0.12)                        # in the band, seen
+    decision, status = _step(m, [], t=T + 0.1, range_min=0.12)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert (decision.linear, decision.angular) == (0.0, 0.0)
+
+
+def test_returns_inside_the_body_never_enter_memory_while_moving():
+    """B9 SIM bend_3..6 (2026-10-08): moving at C1 range_min, side-wall returns near range_min
+    shifted under it by odometry and latched HOLD memory, body_gap 0. They are inside the
+    outline, so memory stays empty on every scan, whatever the motion."""
+    m = _manager()
+    t = T
+    for k in range(30):
+        _step(m, _ring(C1_RANGE_MIN + 0.002), t=t, range_min=C1_RANGE_MIN)
+        m.note_wheels(0.04, 0.4 if k % 2 else -0.4, owned=True, now=t)
+        t += 0.1
+        with m._lock:
+            assert m._near_memory == (), k
+    m.note_wheels(0.0, 0.0, owned=True, now=t)
+    _, status = _step(m, _wall(0.87), t=t + 0.1, range_min=C1_RANGE_MIN)
+    assert (status.state, status.clearance_source) == ("TRACKING", None)
+
+
+def test_memory_outside_the_body_expires_only_after_the_horizon_of_wheel_motion():
+    """A remembered point beside the body (base (0, 0.06), outside half width 0.05655) stays
+    under range_min 0.12 while the robot turns in place about the base. Turning counts body
+    motion at the rotation radius: kept until obstacle_path_horizon_m, forgotten after."""
+    m = _manager()
+    lidar_x, radius = PINKY["body_lidar_x_m"], PINKY["body_rotation_radius_m"]
+    t = T
+    _step(m, [(0.0 - lidar_x, 0.06)], t=t, range_min=0.12)
+    _step(m, [], t=t + 0.1, range_min=0.12)
+    with m._lock:
+        assert len(m._near_memory) == 1
+    t += 0.1
+    turned = 0.0
+    while True:
+        m.note_wheels(0.0, 0.5, owned=True, now=t)
+        t += 0.2
+        turned += 0.1
+        _step(m, [], t=t, range_min=0.12)
+        with m._lock:
+            kept = len(m._near_memory)
+        if turned * radius <= 0.30 - 1e-3:
+            assert kept == 1, turned
+        elif turned * radius > 0.30 + 1e-3:
+            break
+    assert kept == 0
+
+
 def test_a_lidar_whose_range_min_reaches_past_the_body_remembers_as_before():
     """D-507 10: synthetic body (front 0.10, rear -0.10, half 0.08, R 0.13, LiDAR at the base)
     and range_min 0.25. A post that vanishes outside the body still stops from memory."""
