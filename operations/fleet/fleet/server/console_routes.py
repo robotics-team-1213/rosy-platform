@@ -14,7 +14,7 @@ from functools import partial
 from typing import Callable, Literal, Optional
 
 import httpx
-from fastapi import Depends, HTTPException, Request, Response
+from fastapi import Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
@@ -99,6 +99,9 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     # D-407: open lane stucks, read from each gather. CORE's stuck block is the truth.
     board = app.state.line_stuck = LineStuckBoard(
         log=LineStuckAnswerLog(answer_log_path) if answer_log_path is not None else None)
+    map_pose = getattr(app.state, "map_pose", None)
+    if map_pose is not None:   # episode open-time pose; the trip runner's trip_busy comes later
+        board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
 
@@ -182,6 +185,11 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         # `observed_age_s` says how old it is.
         return {"pending": board.pending(), "answers": board.answers(),
                 "observed_age_s": board.observed_age_s()}
+
+    @app.get("/api/fleet/line-stuck/episodes", dependencies=read_guard, tags=["line-stuck"])
+    async def line_stuck_episodes(limit: int = Query(100, ge=1, le=1000)) -> dict:
+        # Durable episodes, newest first; empty without --tasks-db (nothing is recorded).
+        return {"episodes": board.episodes(limit)}
 
     @app.post("/api/fleet/robots/{robot_id}/line-stuck/decision", dependencies=operator_guard,
               tags=["line-stuck"])
