@@ -387,6 +387,29 @@ def test_cookie_principal_passes_the_named_operator_gate(tmp_path):
     assert client.post("/api/fleet/named", headers=ORIGIN).status_code == 401
 
 
+def test_logout_during_an_in_flight_lookup_is_not_undone(tmp_path):
+    clock = Clock()
+    sessions = PasswordSessions(tmp_path / "s.sqlite3", _accounts(), clock=clock)
+    value = sessions.issue("alice", remember=False)
+    clock.now += 61  # stale cache -> DB path, like the review probe
+    original, fired = sessions._expiry, []
+
+    def racing(row, now):
+        if not fired:
+            fired.append(True)
+            sessions.revoke(value)  # logout lands between the snapshot and _remember
+        return original(row, now)
+
+    sessions._expiry = racing
+    assert sessions.principal(value) is None
+    sessions._expiry = original
+    assert fired
+    assert sessions.principal(value) is None
+    clock.now += 30
+    assert sessions.principal(value) is None
+    assert sessions.principal(value, allow_stale=True) is None
+
+
 def _locked_writer(path):
     """Hold a write transaction on the tasks DB from another connection (WAL: reads still work)."""
     holder = sqlite3.connect(path, timeout=0)

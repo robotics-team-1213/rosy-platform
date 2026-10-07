@@ -37,7 +37,7 @@ _MAX_TRACKED = 1024
 _AUTH_DB_TIMEOUT_S = 1.0  # an auth read never waits out a long writer
 _CACHE_S = 60.0  # a cookie validated this recently authenticates from memory
 _CACHE_MAX = 256
-_SCRYPT_WAIT_S = 5.0
+_SCRYPT_WAIT_S = 1.0
 #: Each scrypt holds about 33 MiB; at most two run at once.
 _SCRYPT_SLOTS = threading.BoundedSemaphore(2)
 
@@ -82,6 +82,8 @@ class PasswordSessions:
         self._limit_audited: dict[str, float] = {}
         # digest -> session row plus "validated_at": recent cookies authenticate without the DB.
         self._cache: OrderedDict[str, dict] = OrderedDict()
+        # digest -> revoked_at: a request already past its snapshot cannot re-cache a logged-out cookie.
+        self._revoked: dict[str, float] = {}
         # Unknown logins still pay one scrypt so the 401 does not reveal which accounts exist.
         self._dummy_hash = hash_password(secrets.token_urlsafe(16))
         with closing(self._connect(timeout=10)) as db, db:
@@ -173,16 +175,27 @@ class PasswordSessions:
         self._remember(_digest(value), row, now)
         return value
 
+    def _tombstoned(self, key: str) -> bool:
+        # Caller holds the lock. Tombstones outlive any cache entry that could have been in flight.
+        now = self._clock()
+        for stale in [k for k, at in self._revoked.items() if now - at >= _CACHE_S]:
+            del self._revoked[stale]
+        return key in self._revoked
+
     def _remember(self, key: str, row: Mapping, validated_at: float) -> None:
         with self._lock:
+            if self._tombstoned(key):
+                return
             self._cache[key] = {**row, "validated_at": validated_at}
             self._cache.move_to_end(key)
             while len(self._cache) > _CACHE_MAX:
                 self._cache.popitem(last=False)
 
-    def _forget(self, key: str) -> None:
+    def _forget(self, key: str, *, revoked: bool = False) -> None:
         with self._lock:
             self._cache.pop(key, None)
+            if revoked:
+                self._revoked[key] = self._clock()
 
     def _expiry(self, row: Mapping, now: float) -> Optional[float]:
         """The row's expiry if the account snapshot still matches and it has not lapsed."""
@@ -214,6 +227,8 @@ class PasswordSessions:
         now = self._clock()
         with self._lock:
             cached = dict(self._cache[key]) if key in self._cache else None
+            if self._tombstoned(key):
+                return None
         if cached is None or now - cached["validated_at"] >= _CACHE_S:
             try:
                 with closing(self._connect()) as db:
@@ -239,11 +254,14 @@ class PasswordSessions:
                 "UPDATE fleet_console_sessions SET last_used_at = ? WHERE session_sha256 = ?", (now, key)):
             cached["last_used_at"] = now
         self._remember(key, cached, cached["validated_at"])
+        with self._lock:
+            if self._tombstoned(key):
+                return None  # logged out while this request was in flight
         return SitePrincipal(cached["principal_id"], cached["role"]), _iso(self._expiry(cached, now))
 
     def revoke(self, value: str) -> None:
         key = _digest(value)
-        self._forget(key)
+        self._forget(key, revoked=True)
         try:
             with closing(self._connect()) as db, db:
                 db.execute("DELETE FROM fleet_console_sessions WHERE session_sha256 = ?", (key,))
