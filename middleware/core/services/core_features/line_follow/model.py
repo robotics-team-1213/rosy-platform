@@ -155,11 +155,17 @@ class LineFollowConfig:
     obstacle_resume_hysteresis_m: float = 0.03
     obstacle_ultrasonic_half_angle_deg: float = 15.0
     obstacle_ultrasonic_stale_s: float = 0.3
-    # D-476 expected-road bridge: on a short lane loss right after contained following, drive
-    # the D-468 checkpoint lane's extension slowly. Distance ladder from D-384 (measured odom
+    # D-476 expected-road bridge: on a short lane loss right after confident following, drive
+    # the followed lane's straight extension slowly. Distance ladder from D-384 (measured odom
     # travel x bridge_distance_scale: full speed below coast, x slow_scale below slow, then
     # stop) and done by lost_after_s - bridge_time_margin_s. Off until replay/sim/device pass.
     bridge_enabled: bool = False
+    # Arming (D-476 rev 2026-10-07): the last bridge_arm_frames camera frames all visible with
+    # confidence >= bridge_arm_confidence and the tick TRACKING. 0.5 sits above the 0.35 follow
+    # floor, so frames that steer at under a quarter of the confidence scale never arm; 3 frames
+    # is the D-468 reacquisition count and spans about one stale_after_s (0.3 s) at 7.7-10 Hz.
+    bridge_arm_confidence: float = 0.5
+    bridge_arm_frames: int = 3
     bridge_lookahead_m: float = 0.10
     bridge_coast_m: float = 0.10
     bridge_slow_m: float = 0.25
@@ -277,7 +283,8 @@ class LineFollowConfig:
         if type(self.bridge_enabled) is not bool:
             raise ValueError("bridge_enabled must be a boolean")
         values = (self.bridge_lookahead_m, self.bridge_coast_m, self.bridge_slow_m,
-                  self.bridge_slow_scale, self.bridge_distance_scale, self.bridge_time_margin_s)
+                  self.bridge_slow_scale, self.bridge_distance_scale, self.bridge_time_margin_s,
+                  self.bridge_arm_confidence)
         if not all(_finite(value) for value in values):
             raise ValueError("line-follow bridge config must be finite")
         if not 0.0 < self.bridge_lookahead_m <= 0.5:
@@ -290,6 +297,12 @@ class LineFollowConfig:
             raise ValueError("bridge_distance_scale must be in [1, 2]")
         if not 0.0 < self.bridge_time_margin_s <= 2.0:
             raise ValueError("bridge_time_margin_s must be in (0, 2]")
+        if not 0.0 < self.bridge_arm_confidence <= 1.0:
+            raise ValueError("bridge_arm_confidence must be in (0, 1]")
+        if type(self.bridge_arm_frames) is not int or not 1 <= self.bridge_arm_frames <= 30:
+            raise ValueError("bridge_arm_frames must be an integer in [1, 30]")
+        if self.bridge_enabled and self.bridge_arm_confidence < self.min_confidence:
+            raise ValueError("bridge_enabled needs bridge_arm_confidence >= min_confidence")
         if self.bridge_enabled and not self.bridge_time_margin_s < self.lost_after_s:
             # Only an enabled bridge needs time inside the LOST clock; an off one changes nothing.
             raise ValueError("bridge_enabled needs bridge_time_margin_s below lost_after_s")

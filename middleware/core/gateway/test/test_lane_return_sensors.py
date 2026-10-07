@@ -70,7 +70,7 @@ def test_absent_failing_or_nonboolean_provider_denies_return():
 def test_core_binds_each_return_candidate_to_both_live_proofs():
     seen=[]
     line=SimpleNamespace(return_body_clear=lambda *args:seen.append(('body',args)) or True,
-                         bind_return_motion=lambda provider:setattr(line,'provider',provider))
+                         bind_return_motion=lambda provider,**kw:setattr(line,'provider',provider))
     sensor=SimpleNamespace(return_sensor_allowed=lambda *args:seen.append(('sensor',args)) or True)
     bind_lane_return_motion(line,sensor)
     assert line.provider(1.1,.02,.1) is True
@@ -85,7 +85,7 @@ def test_sim_time_line_clock_asks_the_policy_on_its_own_monotonic_clock():
     # SafetyManager) is time.monotonic. The body sweep stays on the line clock.
     seen=[]
     line=SimpleNamespace(return_body_clear=lambda *args:seen.append(('body',args)) or True,
-                         bind_return_motion=lambda provider:setattr(line,'provider',provider))
+                         bind_return_motion=lambda provider,**kw:setattr(line,'provider',provider))
     sensor=SimpleNamespace(return_sensor_allowed=lambda *args:seen.append(('sensor',args)) or True)
     bind_lane_return_motion(line,sensor,policy_clock=lambda:500.25)
     assert line.provider(12.5,.02,.1) is True
@@ -95,8 +95,18 @@ def test_sim_time_line_clock_asks_the_policy_on_its_own_monotonic_clock():
 def test_sim_time_floor_proof_holds_against_a_real_policy_window():
     a=real_policy_adapter()  # window [1.0, 1.3] on the policy clock
     line=SimpleNamespace(return_body_clear=lambda *args:True,
-                         bind_return_motion=lambda provider:setattr(line,'provider',provider))
+                         bind_return_motion=lambda provider,**kw:setattr(line,'provider',provider))
     bind_lane_return_motion(line,a)
     assert line.provider(40.0,.02,.1) is False   # sim seconds outside the monotonic window
     bind_lane_return_motion(line,a,policy_clock=lambda:1.1)
     assert line.provider(40.0,.02,.1) is True
+
+
+def test_bridge_is_told_whether_the_worker_floor_proof_is_live():
+    # D-476 rev 2026-10-07: the proof exists only in enforce; off/shadow means "not live".
+    bound={}
+    line=SimpleNamespace(return_body_clear=lambda *args:True,
+                         bind_return_motion=lambda provider,**kw:bound.update(kw))
+    for mode,live in (('enforce',True),('shadow',False),('off',False)):
+        bind_lane_return_motion(line,adapter(mode))
+        assert bound['floor_proof_live']() is live

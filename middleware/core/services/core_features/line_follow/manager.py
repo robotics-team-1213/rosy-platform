@@ -219,6 +219,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
             self._received_at = float(now)
             self._invalid_observation = True
             self._return_evidence.invalidate_lane()
+            self._confident_frames = 0  # D-476: an invalid frame breaks the arming streak
             self._evidence_revision += 1
             if self._loss_started_at is None:
                 self._loss_started_at = float(now)
@@ -369,8 +370,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
                     or decision.mode is not self._mode
                     or self._mode is LineFollowMode.OFF):
                 return False
-            if (self._return_controller is not None
-                    and (self._return_controller.phase != 'tracking' or isinstance(self._bridge, dict))
+            if ((isinstance(self._bridge, dict) or (self._return_controller is not None
+                    and self._return_controller.phase != 'tracking'))
                     and (decision.linear or decision.angular)
                     and not self._return_submission_valid(self._clock(),decision)):
                 return False

@@ -107,6 +107,9 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "bridge_distance_scale", defaults.bridge_distance_scale)),
         bridge_time_margin_s=float(raw.get(
             "bridge_time_margin_s", defaults.bridge_time_margin_s)),
+        bridge_arm_confidence=float(raw.get(
+            "bridge_arm_confidence", defaults.bridge_arm_confidence)),
+        bridge_arm_frames=_whole(raw, "bridge_arm_frames", defaults.bridge_arm_frames),
         lane_return_body_margin_m=float(raw.get(
             "lane_return_body_margin_m", defaults.lane_return_body_margin_m)),
         lane_return_checkpoint_fraction=float(raw.get(
@@ -147,6 +150,8 @@ def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> N
     `now` is the line clock. policy_clock: the worker policy's own clock when the line
     clock differs (use_sim_time: sim seconds vs the monotonic policy window, the clock
     SafetyManager also asks it on). None = the line clock is that clock (Device).
+    The worker floor proof exists only in enforce (D-400 plan 3); D-476 asks whether it is
+    live so a bridge needs it then and rests on its own basis otherwise. D-468 always needs it.
     """
     def allowed(now, linear, angular) -> bool:
         try:
@@ -156,4 +161,5 @@ def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> N
         except Exception:  # noqa: BLE001 - missing runtime evidence denies motion
             return False
 
-    line_follow.bind_return_motion(allowed)
+    line_follow.bind_return_motion(
+        allowed, floor_proof_live=lambda: sensor_adapter.config.mode == "enforce")

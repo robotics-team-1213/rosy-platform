@@ -16,6 +16,7 @@ class LaneReturnMixin(LaneReturnDecisionMixin):
         self._return_controller = None
         self._bridge = None
         self._bridge_hint = None  # a hint belongs to one line-follow session
+        self._confident_frames = 0
 
     def observe_return_pose(self, **sample):
         with self._lock:
@@ -30,9 +31,13 @@ class LaneReturnMixin(LaneReturnDecisionMixin):
     def _observe_return_lane(self, observation, received_at):
         if observation.containment is None or not observation.visible or observation.quality_reason:
             self._return_evidence.invalidate_lane()
-            return True
+            accepted = True
         else:
-            return self._return_evidence.observe_lane(observation.containment, received_at=received_at)
+            accepted = self._return_evidence.observe_lane(observation.containment, received_at=received_at)
+        if accepted:  # D-476 arming streak: consecutive accepted confident frames
+            confident = observation.visible and observation.confidence >= self._config.bridge_arm_confidence
+            self._confident_frames = self._confident_frames+1 if confident else 0
+        return accepted
 
     def return_evidence(self, *, now=None):
         with self._lock:
