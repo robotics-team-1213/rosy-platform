@@ -2383,3 +2383,8 @@
 - gate 변화: 없음. 문서 번호만
 - 결정: 앞 브랜치가 쓴 번호 다음을 쓴다
 - 교훈: 같은 날 여러 브랜치가 API 번호를 다툴 때는 착지 순서대로 다시 매긴다
+
+## 2026-10-07 · uncommitted · fix(fleet): 개발 콘솔 모든 화면 직접 접속
+- 변경: 개발 모드에서 `/console/install`, `/console/site-map`, `/console/cell` 직접 진입 시 Fleet 개발 세션을 자동 발급·재사용하고 토큰 입력 칸을 숨긴다. `/console`도 개발 모드에서는 토큰 입력 칸을 숨긴다. 일반 모드의 토큰 접속은 유지한다.
+- 증거: 새 Chromium 직접 진입 시험 4 passed, 개발 인증 pytest 60 passed, 웹 Node 시험 160 passed. 넓은 pytest의 Cell 컴파일러 import 실패 1건은 깨끗한 main에서도 동일하게 재현했다.
+- gate 변화: SOURCE/LOCAL만 확인. 사이트 배포·실기 수용은 별도다.
