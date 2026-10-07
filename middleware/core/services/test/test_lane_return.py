@@ -223,3 +223,33 @@ def test_unknown_frames_between_contained_frames_do_not_make_a_checkpoint():
     assert ctl.checkpoint is None
     ctl.tick(inp(1.5))
     assert ctl.checkpoint is not None
+
+# D-507 7 revision (2026-10-08 user decision): (2) a pose discontinuity or epoch change while
+# following, or (3) a proven-inside lane that is not the checkpointed one, also opens it.
+# Each case below is built so that only that one trigger can fire.
+def _checkpointed():
+    ctl = ReturnController(BODY)
+    for t in (1, 1.1, 1.2): ctl.tick(inp(t))
+    assert ctl.checkpoint is not None and ctl.phase == "tracking"
+    return ctl
+
+
+def test_pose_jump_while_following_opens_departure_without_lane_evidence():
+    ctl = _checkpointed()
+    action = ctl.tick(inp(1.3, pose=pose(1.3, 2), corridor=None))
+    assert action.phase != "tracking"  # departure opened; recovery owns the tick
+
+
+def test_epoch_change_while_following_opens_departure_without_lane_evidence():
+    from dataclasses import replace
+    ctl = _checkpointed()
+    action = ctl.tick(replace(inp(1.3, corridor=None), epoch=1))
+    assert action.phase != "tracking"  # departure opened; recovery owns the tick
+
+
+def test_continuous_drift_into_a_lane_that_is_not_the_checkpointed_one_opens_departure():
+    ctl = _checkpointed()
+    # Continuous odom (no jump), a centered ready lane, body well inside (margin .04):
+    # only "inside but not the checkpointed corridor" (> .015 m off) can open it.
+    action = ctl.tick(inp(1.3, pose=pose(1.3, 0, .016)))
+    assert (action.phase, action.reason) == ("departure_stop", "containment_unconfirmed")

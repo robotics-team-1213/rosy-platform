@@ -723,3 +723,10 @@
 - gate 변화: D-507 10 SOURCE·SIM. DEVICE(D9 근거리)는 열림.
 - 결정: D-507 10, D-422
 - 교훈: trailer 없이 main에 들어간 safety 커밋은 amend 할 수 없어 독립 검토를 EXEMPT로 남긴다. 착지 전에 `safety_review.py`를 돌린다.
+
+## 2026-10-08 · uncommitted · test(line_follow): D-507 7 개정 — 이탈 조건 (2)·(3) 직접 시험
+- 변경: `test_lane_return.py`에 추종 중 odom 점프(차로 근거 없음), epoch 변경(차로 근거 없음), 연속 자세로 체크포인트가 아닌 차로 안에 듦(여유 0.04 m) 세 시험을 더했다. 각각 다른 조건이 열 수 없게 만들었다. main 머지에서 `test_motion_admit.py` 현장 근거 역추적 시험은 bridge 뒤 몸이 경계를 넘은 `ready` 프레임(1)으로 이탈을 연다(보이지 않는 차로는 더는 역추적하지 않는다). bridge Rig에 `edges=` 인자를 더했다.
+- 증거: 변이 3건(조건 (3) 제거, 점프 이탈 제거, epoch 이탈 제거)이 각각 새 시험 하나만 실패시키고 복원했다. lane_return·lane_bridge·junction·motion_admit 450 passed.
+- gate 변화: 없음. SOURCE 호스트 시험만.
+- 결정: D-507 7 (2026-10-08 개정)
+- 교훈: 기존 인접 차로 시험은 0.20 m 점프를 써서 (3)이 (2)에 가려졌다 — 조건별 시험은 다른 조건이 못 열게 만든다.
