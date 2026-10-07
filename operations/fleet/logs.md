@@ -2184,3 +2184,9 @@
 - 증거: `test_map_pose.py`(28)·`test_map_pose_service.py`(7)·경계·계약 문서 테스트 통과, `known_failures` 새 실패 0(X:\DevTemp\d491-map-pose).
 - gate 변화: SOURCE만. SIM·DEVICE 수용은 그대로 열려 있다.
 - 열린 것: `odom_pose`는 `feat/d491-robot-trip-contracts`가 CORE와 `StateSnapshot`에 넣기 전까지 비어 있어(hub 경로는 pydantic이 모르는 필드를 버린다) 자세는 `UNKNOWN`이다. 실차·SIM 수용 없음.
+
+## 2026-10-07 · uncommitted · fix(fleet): D-491 3 map pose 독립 검토 반영
+
+- 변경: `odom_pose.stamp`를 UTC epoch 초(float, `captured_at`과 같은 형식)로 읽는다(ISO 문자열도 읽음, trip-contracts 브랜치와 맞춤). odom 끊김(3 s 초과)·낡은 뒤 재개·불가능한 걸음(1 m/s 초과, CORE 재시작의 odom 0)이면 앵커를 버리고 `UNKNOWN`. odom 미래 허용 `max_odom_future_s` 0.5 s와 거절 수·이유 출력. 누적 회전 180°·앵커 나이 10 s 한도, `map_id` 고정과 활성 지도 프레임 필터, 감싸는 표본이 올 수 있는 동안 sighting 대기. 엔드포인트는 httpx 오류에도 마지막 자세로 답하고, 동시 읽기를 합치며, 0.2 s 안이면 다시 읽지 않는다. 로스터에서 빠진 로봇의 추적기는 버린다. 콘솔 sink 실패는 로봇마다 한 번 기록하고 수집을 멈추지 않는다.
+- 증거: `test_map_pose.py`(41)·`test_map_pose_service.py`(14), 검토 probe 사례를 테스트로 옮김. Fleet 전체·계약 문서 테스트와 `known_failures` 새 실패 0(X:\DevTemp\d491-map-pose).
+- gate 변화: SOURCE만. trip 루프는 odom을 2 Hz 이상 읽어야 한다(D-491 부록). SIM·DEVICE 수용은 그대로 열려 있다.
