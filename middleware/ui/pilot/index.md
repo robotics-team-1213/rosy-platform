@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트 overflow-y auto, 녹화본 12개 시험
 - 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트가 공용 ui-actions 를 칠하지 않게
 - 2026-10-07 · uncommitted · uiux(pilot): 연결 실패 대상을 로비에 표시
 - 2026-10-07 · uncommitted · test(pilot): 대상 확인 오류 네 폭 캡처
 - 2026-10-07 · uncommitted · uiux(pilot): 접속 로비 태블릿 폭과 입력 라벨
-- 2026-10-07 · uncommitted · uiux(pilot): 휴대폰 HUD 행동 폭 정렬

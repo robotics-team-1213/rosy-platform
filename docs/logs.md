@@ -6791,3 +6791,10 @@ osy-d395-s1d\`.
 - gate 변화: CI 브라우저 범위는 그대로다(전과 같이 Fleet 브라우저 시험만 Chromium 으로 돈다). SOURCE/LOCAL은 위 대상 시험만 확인했고, 전체 브라우저 묶음은 이 노트북에서 돌리지 않았다(현장 PC·모델 PC 몫).
 - 결정: D-436(변경 범위 시험).
 - 교훈: 옵트인 환경 변수를 파일마다 직접 읽으면 이름이 갈라져 시험이 조용히 건너뛰어진다. 판정은 헬퍼 하나로 한다.
+
+## 2026-10-08 · uncommitted · fix(test): 브라우저 시험 기반 리뷰 반영
+- 변경: CI 매트릭스 단계가 Fleet 경로만 따로 `ROSY_RUN_BROWSER_TESTS=1`로 돌린다(`$GITHUB_ENV` 아님). `browser_scope.py`는 고를 시험이 없으면 exit 3, 문서 명령은 `t=$(...) && ... pytest $t`. `browser_harness.safe_http_server()`가 묶인 안전 소켓을 서버에 넣어 포트 경합을 없애고 로봇 UI·Pilot·OMX fixture가 쓴다. importorskip 만으로 돌던 브라우저 시험 5개를 옵트인 뒤로 옮겼다. known_failures 두 줄에 원인 커밋과 "remove when fixed"를 적었다. 게임 보드 `PreviewServer(port=0)`는 그대로다 — `open_page(url=...)`가 그 포트를 `--explicitly-allowed-ports`로 허용하고 `test_chromium_opens_preview_on_a_normally_blocked_port`가 6000에서 이를 증명한다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1`만으로 게임 보드 2 passed(차단 포트 6000 포함), OMX pilot-sim 3·peer approval·로봇 traffic policy·surface entry 2 passed(`review_browser.txt`의 server_port 누락 3건은 `safe_http_server` 수정 뒤 `review_browser2.txt` 3 passed), Pilot 좁은 시트 1 passed, 단위·CI 계약 91 passed. 파일 `X:/DevTemp/browser-infra/review_browser2.txt`·`review_unit.txt`·`pilot_sheet2.txt`·`pilot_sheet3.txt`, `known_failures.py` 0 new.
+- gate 변화: CI 브라우저 범위는 그대로(Fleet 브라우저 시험만). 전체 브라우저 묶음은 미실행.
+- 결정: D-436.
+- 교훈: 옵트인 이름을 합치면 CI 의 잡 전역 플래그가 묶인 다른 묶음까지 켠다 — 플래그는 실행 단위로 준다.
