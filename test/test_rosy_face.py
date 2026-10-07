@@ -2161,3 +2161,35 @@ def test_face_frames_reduce_gif_frames_to_panel_bytes():
     panel = convert(Image.new("P", (1000, 750)))
 
     assert panel.shape == (320, 240, 2) and panel.nbytes == 320 * 240 * 2
+
+
+def test_an_identity_helper_that_survives_sigkill_is_logged_and_the_state_pattern_comes_back(tmp_path, monkeypatch):
+    # Review 2026-10-08: wait() after the hard kill may time out; never raise out of the face loop.
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+
+    class Stuck(FakeProcess):
+        def wait(self, timeout=None):
+            raise module.subprocess.TimeoutExpired("lamp_pattern", timeout)
+
+        def kill(self):
+            self.killed = True
+
+    class StuckSpawn(FakeSpawn):
+        def __call__(self, command):
+            if not command[-1].startswith("identify_"):
+                return super().__call__(command)
+            self.processes.append(Stuck(command))
+            return self.processes[-1]
+
+    spawn = StuckSpawn()
+    lines = []
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn, logs=lines)
+    display.step()
+    monkeypatch.setattr(module, "IDENTIFY_MAX_S", 0.05)
+    state, detail = lamp.identify("blue", lambda: False)
+    assert state == "failed" and "시간 초과" in detail
+    assert spawn.processes[-1].killed and lamp.pattern is None
+    assert any("SIGKILL" in line for line in lines)
+    assert lamp.show("ready") and spawn.patterns[-1] == "ready"  # next step() shows the state pattern

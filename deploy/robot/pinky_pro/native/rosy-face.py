@@ -471,13 +471,11 @@ class Lamp:
                     try:
                         process.wait(timeout=LAMP_STOP_S)
                     except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait(timeout=LAMP_STOP_S)
+                        self._reap_killed(process)
                     self.show(None)
                     return "failed", "안전·운행 상태가 바뀌어 식별 점멸 중단"
                 if time.monotonic() >= deadline:
-                    process.kill()
-                    process.wait(timeout=LAMP_STOP_S)
+                    self._reap_killed(process)
                     self.show(None)
                     return "failed", "식별 점멸 시간 초과"
                 time.sleep(0.05)
@@ -489,6 +487,17 @@ class Lamp:
             return "failed", "안전·운행 상태가 바뀌어 식별 점멸 중단"
         self.show(resume)
         return ("done", f"{color} 식별 점멸 완료") if code == 0 else ("failed", f"식별 점멸 종료 {code}")
+
+    def _reap_killed(self, process) -> None:
+        """SIGKILL; a helper that still does not exit is logged and left, never raised (review 2026-10-08).
+
+        The caller goes on to show(None) and the next step() shows the state pattern."""
+        process.kill()
+        try:
+            process.wait(timeout=LAMP_STOP_S)
+        except subprocess.TimeoutExpired:
+            self._log.once("lamp-identify-kill", "lamp_pattern identify did not exit after SIGKILL; "
+                                                 "going on to the state pattern")
 
 
 def _spawn_helper(command: list[str]):
