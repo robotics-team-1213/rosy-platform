@@ -120,3 +120,30 @@ def test_drive_holds_inside_the_deadman_when_status_reads_are_slow(monkeypatch):
     gaps = [b - a for a, b in zip(holds, holds[1:])]
     assert len(holds) >= 4 and max(gaps) < 0.6
     assert calls[-1] == ("PUT", "/line-follow/mode", {"mode": "OFF"})
+
+
+def test_drive_rearms_after_a_link_stall_release_then_gives_up(monkeypatch):
+    calls, state = [], {"released": 0}
+
+    class StallCore:
+        def clone(self):
+            return self
+
+        def call(self, method, path, body=None, raw=False, timeout=3.0):
+            calls.append((method, path, body))
+            if path == "/line-follow/hold":
+                return 409, None
+            if path == "/line-follow":
+                time.sleep(0.05)
+                return 200, {"state": "OFF", "reason": "driver_released", "linear": 0.0, "angular": 0.0}
+            if path == "/line-follow/mode":
+                return 200, {"mode": body["mode"], "state": "WAITING", "reason": "no_observation"}
+            return 200, {}
+
+    monkeypatch.setattr(edge_drive, "rec_start", lambda core: None)
+    monkeypatch.setattr(edge_drive, "rec_stop", lambda core: calls.append(("rec", "stop", None)))
+    monkeypatch.setattr(edge_drive.time, "sleep", lambda s: None)
+    edge_drive.cmd_drive(StallCore(), edge_drive.argparse.Namespace(max_s=5.0, rearm=2))
+    arms = [c for c in calls if c[1] == "/line-follow/mode" and c[2]["mode"] == "CAMERA_LINE"]
+    assert len(arms) == 3                     # first arm + 2 re-arms, then stop
+    assert calls[-2] == ("PUT", "/line-follow/mode", {"mode": "OFF"}) and calls[-1][0] == "rec"
