@@ -62,8 +62,8 @@ def test_first_anchor_needs_two_consistent_sightings():
 def test_bridge_composes_the_rigid_odom_delta_with_rotation():
     tr = localized()
     # odom: 1 m forward along odom x and a quarter turn left; the anchor faces map +y.
-    tr.add_odom(odom(0.5, x=1.0, yaw=math.pi / 2), T0 + 0.5)
-    pose = tr.pose(T0 + 0.6)
+    tr.add_odom(odom(1.5, x=1.0, yaw=math.pi / 2), T0 + 1.5)
+    pose = tr.pose(T0 + 1.6)
     assert (pose.state, pose.source) == (LOCALIZED, BRIDGED)
     assert close((pose.x, pose.y, pose.yaw), (1.0, 3.0, -math.pi), 1e-9) or \
         close((pose.x, pose.y, pose.yaw), (1.0, 3.0, math.pi), 1e-9)
@@ -78,9 +78,9 @@ def test_bridge_uses_the_anchor_odom_not_the_odom_origin():
         t = 0.1 * i
         tr.add_odom(odom(t, 5.0, 5.0, math.pi), T0 + t)
         tr.add_sighting(seen(t), T0 + t)
-    tr.add_odom(odom(0.5, 4.5, 5.0, math.pi), T0 + 0.5)    # 0.5 m forward in its own heading
-    pose = tr.pose(T0 + 0.5)
-    assert close((pose.x, pose.y), (1.0, 2.5))
+    tr.add_odom(odom(0.8, 4.5, 5.0, math.pi), T0 + 0.8)    # 0.5 m forward in its own heading
+    pose = tr.pose(T0 + 0.8)
+    assert close((pose.x, pose.y), (1.0, 2.5), 1e-6)
     assert pose.yaw == pytest.approx(math.pi / 2)
 
 
@@ -106,13 +106,26 @@ def test_sighting_without_odom_within_the_pair_window_is_dropped():
     assert close((pose.x, pose.y), ANCHOR[:2])  # not re-anchored to the unpaired sighting
 
 
-def test_nearest_odom_within_window_pairs_without_waiting():
+def test_nearest_odom_pairs_only_once_no_bracket_can_arrive():
     tr = localized()
     tr.add_odom(odom(1.0, x=0.2), T0 + 1.0)
     tr.add_sighting(seen(1.2, y=2.2), T0 + 1.2)      # 0.2 s after the newest odom
-    pose = tr.pose(T0 + 1.2)
+    assert tr.pose(T0 + 1.2).source == BRIDGED       # still waiting for a bracket
+    pose = tr.pose(T0 + 2.25)                        # 1.0 + max_interp_gap_s passed
     assert (pose.source, pose.state) == (SIGHTING, LOCALIZED)
     assert close((pose.x, pose.y), (1.0, 2.2))
+
+
+def test_sighting_near_an_earlier_sample_interpolates_once_the_bracket_arrives():
+    tr = localized()
+    tr.add_odom(odom(1.0, x=0.0), T0 + 1.0)
+    tr.add_sighting(seen(1.1, y=2.1), T0 + 1.1)      # 0.1 s after: nearest would say y=2.0 + 0
+    tr.add_odom(odom(1.5, x=0.5), T0 + 1.5)
+    # Interpolated odom at 1.1 is x=0.1 -> predicted (1, 2.1): consistent, anchored there.
+    pose = tr.pose(T0 + 1.5)
+    assert pose.state == LOCALIZED
+    assert close((pose.x, pose.y), (1.0, 2.5), 1e-6)
+    assert pose.dead_reckon_m == pytest.approx(0.4)
 
 
 def test_jump_degrades_reanchors_and_recovers_after_two_consistent():
@@ -187,9 +200,16 @@ def test_out_of_order_and_repeated_sightings_are_ignored():
 
 def test_future_timestamps_are_refused():
     tr = localized()
-    assert not tr.add_odom(odom(1.0, x=3.0), T0 + 0.5)
-    assert not tr.add_sighting(seen(1.0, x=3.0), T0 + 0.5)
-    assert tr.pose(T0 + 0.5).x == pytest.approx(ANCHOR[0])
+    assert not tr.add_odom(odom(1.0, x=0.1), T0 + 0.4)            # 0.6 s ahead > 0.5 s
+    assert not tr.add_sighting(seen(1.0, x=3.0), T0 + 0.9)          # 0.1 s ahead > 0.05 s
+    pose = tr.pose(T0 + 0.4)
+    assert pose.x == pytest.approx(ANCHOR[0])
+    assert (pose.odom_refused, pose.odom_refused_reason) == (1, "future")
+
+
+def test_odom_inside_the_skew_allowance_is_accepted():
+    tr = localized()
+    assert tr.add_odom(odom(0.7, x=0.1), T0 + 0.3)                 # robot clock 0.4 s ahead
 
 
 def test_stale_wrong_robot_and_low_quality_sightings_are_ignored():
@@ -249,3 +269,121 @@ def test_map_pose_is_stdlib_only_and_never_reads_tracking():
             names.add(node.module or "")
     assert names <= {"__future__", "math", "collections", "dataclasses", "datetime", "typing"}
     assert not any("tracking" in name for name in names)
+
+
+def _localized_at(odom_yaw, map_yaw):
+    tr = MapPoseTracker("r1")
+    for i in range(3):
+        t = 0.1 * i
+        tr.add_odom(odom(t, yaw=odom_yaw), T0 + t)
+        tr.add_sighting(seen(t, yaw=map_yaw), T0 + t)
+    return tr
+
+
+def test_yaw_interpolation_across_plus_minus_pi():
+    tr = _localized_at(math.pi - 0.1, 0.0)
+    tr.add_odom(odom(1.0, yaw=math.pi - 0.05), T0 + 1.0)
+    tr.add_sighting(seen(1.25, yaw=0.1), T0 + 1.3)
+    tr.add_odom(odom(1.5, yaw=-math.pi + 0.05), T0 + 1.5)      # crossed +-pi
+    pose = tr.pose(T0 + 1.5)
+    assert pose.state == LOCALIZED and pose.source == BRIDGED
+    assert pose.yaw == pytest.approx(0.15)
+
+
+def test_jump_check_wraps_heading():
+    tr = _localized_at(0.0, math.pi - 0.05)
+    tr.add_odom(odom(1.0), T0 + 1.0)
+    tr.add_sighting(seen(1.0, yaw=-math.pi + 0.05), T0 + 1.0)   # 0.1 rad off, not 2*pi - 0.1
+    assert tr.pose(T0 + 1.0).state == LOCALIZED
+
+
+def test_odom_reset_after_reboot_drops_the_anchor():
+    tr = localized()
+    tr.add_odom(odom(1.0, x=0.5), T0 + 1.0)
+    assert tr.pose(T0 + 1.0).state == LOCALIZED
+    tr.add_odom(odom(1.1, x=0.0), T0 + 1.1)                     # CORE restart: odom back at 0
+    pose = tr.pose(T0 + 1.1)
+    assert (pose.state, pose.x) == (UNKNOWN, None)
+    tr.add_odom(odom(1.2), T0 + 1.2)
+    assert tr.pose(T0 + 1.2).state == UNKNOWN                   # until a sighting re-anchors
+    tr.add_sighting(seen(1.2), T0 + 1.2)
+    assert tr.pose(T0 + 1.2).state == DEGRADED
+
+
+def test_odom_gap_and_resume_after_unknown_drop_the_anchor():
+    tr = localized()
+    assert tr.pose(T0 + 60).state == UNKNOWN
+    tr.add_odom(odom(60.0), T0 + 60)                            # same place, after a 60 s gap
+    assert tr.pose(T0 + 60).state == UNKNOWN
+    # Resumed late: the previous sample is still recent by stamp but went stale meanwhile.
+    tr = localized()
+    tr.add_odom(odom(2.0), T0 + 5.5)
+    assert tr.pose(T0 + 5.5).state == UNKNOWN
+
+
+def test_pending_sighting_is_dropped_when_it_goes_stale():
+    tr = MapPoseTracker("r1")
+    assert tr.add_sighting(seen(0.0), T0)                       # no odom at all yet
+    tr.pose(T0 + 3.5)                                           # older than max_odom_age_s
+    tr.add_odom(odom(0.0), T0 + 3.6)                            # would bracket it exactly
+    assert tr.pose(T0 + 3.6).state == UNKNOWN
+
+
+def test_odom_refusals_are_counted_with_the_last_reason():
+    tr = localized()
+    assert not tr.add_odom(odom(0.1, x=0.1), T0 + 0.3)
+    assert not tr.add_odom(odom(0.2), T0 + 0.3)                 # the same sample twice: not counted
+    pose = tr.pose(T0 + 0.3)
+    assert (pose.odom_refused, pose.odom_refused_reason) == (1, "out_of_order")
+
+
+def test_rotation_budget_degrades_a_spin_in_place():
+    tr = localized()
+    for i in range(1, 12):                                      # 11 x 20 deg = 220 deg
+        tr.add_odom(odom(0.2 + 0.1 * i, yaw=math.radians(20 * i)), T0 + 0.2 + 0.1 * i)
+    pose = tr.pose(T0 + 1.3)
+    assert pose.dead_reckon_m == 0.0 and pose.state == DEGRADED
+
+
+def test_anchor_age_degrades_without_new_sightings():
+    tr = localized()
+    for i in range(1, 25):
+        tr.add_odom(odom(0.2 + 0.5 * i), T0 + 0.2 + 0.5 * i)
+    pose = tr.pose(T0 + 9.9)
+    assert pose.state == LOCALIZED and pose.anchor_age_s == pytest.approx(9.7)
+    pose = tr.pose(T0 + 12.2)
+    assert pose.state == DEGRADED and pose.anchor_age_s == pytest.approx(12.0)
+
+
+def test_another_map_id_starts_a_new_anchor():
+    tr = MapPoseTracker("r1")
+    for i in range(3):
+        t = 0.1 * i
+        tr.add_odom(odom(t), T0 + t)
+        tr.add_sighting(Sighting("r1", 1.0, 2.0, 0.0, T0 + t, map_id="a"), T0 + t)
+    assert tr.pose(T0 + 0.2).map_id == "a"
+    tr.add_odom(odom(0.3), T0 + 0.3)
+    tr.add_sighting(Sighting("r1", 1.0, 2.0, 0.0, T0 + 0.3, map_id="b"), T0 + 0.3)
+    pose = tr.pose(T0 + 0.3)
+    assert (pose.map_id, pose.state) == ("b", DEGRADED)
+
+
+def test_jump_while_degraded_by_dead_reckoning_restarts_the_count():
+    tr = localized()
+    for i in range(1, 17):
+        tr.add_odom(odom(0.2 + 0.1 * i, x=0.1 * i), T0 + 0.2 + 0.1 * i)
+    tr.add_odom(odom(1.9, x=1.6), T0 + 1.9)
+    tr.add_sighting(seen(1.9, x=1.4, y=3.6), T0 + 1.9)          # 0.4 m off: jump
+    tr.add_odom(odom(2.0, x=1.6), T0 + 2.0)
+    tr.add_sighting(seen(2.0, x=1.4, y=3.6), T0 + 2.0)
+    assert tr.pose(T0 + 2.0).state == DEGRADED                  # one consistent after the jump
+    tr.add_odom(odom(2.1, x=1.6), T0 + 2.1)
+    tr.add_sighting(seen(2.1, x=1.4, y=3.6), T0 + 2.1)
+    assert tr.pose(T0 + 2.1).state == LOCALIZED
+
+
+def test_huge_numbers_are_malformed_not_a_crash():
+    assert odom_from_snapshot({"odom_pose": {"x": 10 ** 400, "y": 0, "yaw": 0,
+                                              "stamp": "2026-10-07T00:00:00Z"}}) is None
+    assert odom_from_snapshot({"odom_pose": {"x": 0, "y": 0, "yaw": 0, "stamp": "9999-99-99"}}) is None
+    assert odom_from_snapshot("not a mapping") is None
