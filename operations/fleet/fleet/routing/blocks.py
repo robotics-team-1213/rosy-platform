@@ -142,7 +142,7 @@ class TableState:
 class TickResult:
     #: robot id -> route metres its front may reach: the last granted unit's end minus u, so a
     #: front that is really u ahead of its estimate still stays inside its grants, and never
-    #: below an earlier value. A robot without a localized pose gets no entry: no new
+    #: below an earlier value. It may be behind the estimate: the robot stands. A robot without a localized pose gets no entry: no new
     #: authority, it stops on expiry (D-517 4).
     authority_end: dict[str, float]
     #: robot id -> every robot holding the unit it needs next (empty: not waiting on a robot)
@@ -235,7 +235,9 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
                 if unit.two_way:
                     direction[span.unit] = span.forward
             end = span.d1
-        issued = max(robot.d, end - robot.uncertainty_m, state.authority.get(robot.id, -math.inf))
+        # Grant-backed only: an estimate already past its grants never becomes authority (the
+        # robot then stands), and an earlier value stays because its grants are still held.
+        issued = max(end - robot.uncertainty_m, state.authority.get(robot.id, -math.inf))
         state.authority[robot.id] = issued
         authority[robot.id] = issued
         if end >= want or end >= robot.spans[-1].d1:
