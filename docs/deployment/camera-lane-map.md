@@ -10,6 +10,9 @@ Vision 패키지 환경에서 `python -m rosy_vision.lane_map`을 실행한다.
 - 현재 카메라·렌즈·원본 크기에 맞는 확인된 미터 좌표 보정 JSON:
   `image_size: [width, height]`, `image_to_map: [[...], [...], [...]]`.
   선택 `bounds_m: {min_x, max_x, min_y, max_y}`로 측정된 작업 영역을 제한한다.
+  선택 `white_value_min`(80–255 정수, 기본 180)은 넓은 흰 테두리 검출의 밝기 기준이다.
+  선택 `road_seed_m: [x, y]`에 실제 도로 위 미터 좌표를 지정하면 그 점과 연결된 관측 도로만
+  추출한다. 도로 밖 흰 무늬가 있는 현장에서 사용한다. 가림으로 끊긴 구간은 자동 연결하지 않는다.
 - 측정한 차로 폭(m). 현재 트랙 예시는 0.185 m이며 다른 현장은 직접 측정한다.
 
 승인된 Fleet 카메라 기록을 쓰려면 `image.width/height`를 `image_size`로 옮기고,
