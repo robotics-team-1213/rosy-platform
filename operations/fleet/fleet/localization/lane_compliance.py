@@ -3,7 +3,9 @@
 The pose is projected onto every arc (``fleet.routing.graph.Arc.project``). An arc counts only when
 the foot point lies strictly inside it (past either end the offset sign is arbitrary), within
 ``max_lateral_m`` (default: the arc's own ``width_m``), and with its tangent within
-``heading_gate_deg`` of the robot heading. Of those the nearest is used, so on a two-way edge and
+``heading_gate_deg`` of the robot heading. A pose without a heading (``yaw`` None: a still
+D-472 LED track) skips the heading gate: the nearest arc wins, so the margin is right but on a
+two-way edge the offset sign may belong to the opposite arc. Of those the nearest is used, so on a two-way edge and
 at a junction the arc along the direction of travel wins. The lateral offset is signed against
 that arc's tangent (left +). The body margin is
 ``width_m / 2 - (|offset| + body_half_width_m)``: the gap between the body side and the lane edge,
@@ -118,7 +120,7 @@ def sample(pose, graph, body_half_width_m: float = BODY_HALF_WIDTH_M,
     """``pose`` is a ``MapPose``; ``graph`` a ``fleet.routing.graph.Graph`` or None."""
     state = getattr(pose, "state", "UNKNOWN") if pose is not None else "UNKNOWN"
     arcs = list(graph.arcs.values()) if graph is not None else []
-    if state != "LOCALIZED" or not arcs or pose.yaw is None:
+    if state != "LOCALIZED" or not arcs:
         return LaneSample(state)
     x, y, yaw = pose.x, pose.y, pose.yaw
     gate = math.radians(config.heading_gate_deg)
@@ -127,7 +129,8 @@ def sample(pose, graph, body_half_width_m: float = BODY_HALF_WIDTH_M,
         dist, s, tangent = arc.project(x, y)
         limit = arc.width_m if config.max_lateral_m is None else config.max_lateral_m
         if (END_EPS_M < s < arc.length_m - END_EPS_M and dist <= limit
-                and abs(_wrap(tangent - yaw)) <= gate and (best is None or dist < best[1])):
+                and (yaw is None or abs(_wrap(tangent - yaw)) <= gate)
+                and (best is None or dist < best[1])):
             best = (arc, dist, s, tangent)
     if best is None:
         return LaneSample(state)
