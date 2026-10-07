@@ -96,6 +96,29 @@ export async function pairWithCode(code, label = "Rosy Pilot") {
   return {status: response.status, body};
 }
 
+// D-432 연결 방식. 인증 없음. 이 화면이 붙어 있는 로봇과 paired/development 만 돌려준다.
+// 실패·다른 모양은 null — 코드 입력은 그대로 둔다.
+const ROBOT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+export async function connectionOffer() {
+  try {
+    const result = await api("/api/v1/auth/connection");
+    const body = result.body ?? {};
+    if (!result.ok || (body.mode !== "paired" && body.mode !== "development")) return null;
+    if (typeof body.robot_id !== "string" || !ROBOT_ID.test(body.robot_id)) return null;
+    return {mode: body.mode, robotId: body.robot_id};
+  } catch {
+    return null;
+  }
+}
+
+// D-432 개발 연결. 로봇이 development 일 때만 CORE 가 201 로 1시간 운전자 세션을 준다.
+export async function developmentSession() {
+  const result = await postJson("/api/v1/auth/development-session", {});
+  if (result.status === 201 && typeof result.body?.token === "string") setToken(result.body.token);
+  return result;
+}
+
 // 등록 코드 발급(D-193 §5, 관리자만). 화면이 없는 상대 기기와 연동할 때
 // 이 태블릿에 코드를 크게 보여 주고 상대 기기에서 입력한다.
 // 입력 방향(상대 화면 코드 → 이 태블릿 입력)은 pairWithCode 가 맡는다.

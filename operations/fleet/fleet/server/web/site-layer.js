@@ -105,3 +105,23 @@ export function streamEvidence(formation, robotId) {
   }
   return { text: "릴레이 증거 없음", cls: "warn", evidence: "unavailable" };
 }
+
+// D-513 7: 설치에서 정한 원본 영상의 화면 회전(시계 방향 0/90/180/270). 표시 전용 — 보정·관측은 원본 좌표다.
+export function displayRotation(siteMap, sourceId) {
+  for (const map of siteMap?.maps || []) {
+    const row = (map.sources || []).find((src) => src.source_id === sourceId);
+    if (row) return [90, 180, 270].includes(row.display_rotation_deg) ? row.display_rotation_deg : 0;
+  }
+  return 0;
+}
+
+// w×h 원본을 시계 방향 rot 만큼 돌린 화면: 크기, 점 변환, ctx.transform 행렬 [a, b, c, d, e, f].
+export function quarterTurn(rot, w, h) {
+  const m = rot === 90 ? [0, 1, -1, 0, h, 0] : rot === 180 ? [-1, 0, 0, -1, w, h]
+    : rot === 270 ? [0, -1, 1, 0, 0, w] : [1, 0, 0, 1, 0, 0];
+  const side = rot === 90 || rot === 270;
+  return {
+    width: side ? h : w, height: side ? w : h, matrix: m,
+    point: (x, y) => ({ x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] }),
+  };
+}

@@ -45,6 +45,7 @@ CONSOLE_ASSETS = {
     "map-view.js": "application/javascript",
     "poll-gate.js": "application/javascript",
     "roster.js": "application/javascript",
+    "power-health-view.js": "application/javascript",
     "enrollment.js": "application/javascript",
     "signals.js": "application/javascript",
     "site-map.css": "text/css",

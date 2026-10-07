@@ -102,6 +102,8 @@ class FakeRobot:
         #: 설정돼 있으면 state()/swarm_state() 가 이것을 raise 한다. 실제
         #: `HttpRobotClient` 는 날것의 httpx 예외를 올린다 — 세션이 그것을 감싸는지 본다.
         self.state_error: Optional[BaseException] = None
+        self.power_health_value: Optional[dict] = None
+        self.power_health_error: Optional[BaseException] = None
         self.swarm_state_error: Optional[BaseException] = None
         self.pose_frames: asyncio.Queue = asyncio.Queue()
         self.event_frames: asyncio.Queue = asyncio.Queue()
@@ -145,6 +147,12 @@ class FakeRobot:
         if self.state_error is not None:
             raise self.state_error
         return dict(self._state)
+
+    async def power_health(self) -> dict:
+        self._record("power_health")
+        if self.power_health_error is not None:
+            raise self.power_health_error
+        return dict(self.power_health_value or {})
 
     async def map(self) -> dict:
         self._record("map")

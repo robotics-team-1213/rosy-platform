@@ -266,6 +266,25 @@ TELEOP_LOG: list[dict] = []
 PAIR_CODE = "TEST-CODE"
 
 
+# 이 화면이 붙어 있는 로봇. 시험은 page.route 로 덮는다. 기본은 코드가 필요한 paired.
+CONNECTION = {"mode": "paired", "robot_id": "rosy-dev", "transport": "http"}
+
+
+@app.get("/api/v1/auth/connection")
+def connection():
+    return {"mode": CONNECTION["mode"], "robot_id": CONNECTION["robot_id"], "transport": CONNECTION["transport"]}
+
+
+@app.post("/api/v1/auth/development-session", status_code=201)
+def development_session():
+    if CONNECTION["mode"] != "development":
+        return JSONResponse({"error": {"code": "FORBIDDEN", "message": "this robot requires pairing"}},
+                            status_code=403)
+    return JSONResponse({"id": "dev-session", "token": DEV_TOKEN, "role": "operator",
+                         "label": "Pilot development session", "source": "pair-development",
+                         "expires_at": None}, status_code=201)
+
+
 @app.post("/api/v1/auth/pair", status_code=201)
 async def pair(request: Request):
     body = await request.json()
