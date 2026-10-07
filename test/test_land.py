@@ -127,3 +127,12 @@ def test_shared_main_checkout_refused(repos, monkeypatch):
     main, _ = repos
     monkeypatch.chdir(main)
     assert land.main(["--tests", "none"]) == 1
+
+
+@pytest.mark.parametrize("target", ["pkg/a.py", "pkg/missing_test.py"])  # exit 5 (none collected), 4 (no path)
+def test_pytest_exit_without_failed_lines_stops(repos, target):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", target]) == 1
+    assert git(main, "rev-parse", "HEAD") == before

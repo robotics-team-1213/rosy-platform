@@ -240,16 +240,17 @@ def touches(delta: list[str], scope_list: list[str]) -> bool:
 
 # --- running --------------------------------------------------------------------
 
-def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict | None = None) -> str:
+def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict | None = None,
+         allow_fail: bool = False) -> tuple[int, str]:
     print(f"[{label}] {' '.join(command)}", flush=True)
     result = subprocess.run(command, cwd=wt, capture_output=True, text=True, encoding="utf-8",
                             errors="replace", env=env)
     text = result.stdout + result.stderr
     if log:
         log.write_text(text, encoding="utf-8")
-    if result.returncode != 0 and label != "pytest":
+    if result.returncode != 0 and not allow_fail:
         raise Stop(f"{label} failed (exit {result.returncode}):\n{text[-3000:]}")
-    return text
+    return result.returncode, text
 
 
 def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
@@ -264,7 +265,12 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
         env.update(ROSY_RUN_BROWSER_TESTS="1", ROSY_BROWSER_TESTS="1")
     for i, inv in enumerate(invocations, 1):
         log = logdir / f"run-{round_no}-{i}.txt"
-        step(wt, [python, "-m", "pytest", *inv, "-q", "-rfE", "-p", "no:cacheprovider"], log, "pytest", env)
+        code, _ = step(wt, [python, "-m", "pytest", *inv, "-q", "-rfE", "-p", "no:cacheprovider"], log,
+                       "pytest", env, allow_fail=True)
+        # 2/3/4 (interrupted, internal error, usage/path error) and 5 (nothing collected)
+        # print no FAILED lines, so known_failures would wave them through.
+        if code not in (0, 1):
+            raise Stop(f"pytest {' '.join(inv)} exited {code} (log {log}); not landing")
         check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
                                capture_output=True, text=True, encoding="utf-8", errors="replace")
         print(check.stdout, end="")
