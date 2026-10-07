@@ -115,7 +115,7 @@ CORE_USER = "rosy-core"
 PEER_APPROVAL = "run/rosy-peer-display/approval.json"
 #: The emotion GIFs the running release ships (share/emotion/emotion/<name>.gif).
 FACE_DIR = "opt/rosy/current/install/share/emotion/emotion"
-FACE_LOAD_SKIP = 2  # every second GIF frame, as emotion_server's load_frame_skip
+FACE_LOAD_SKIP = 1  # 320x240 authored frames match the 10 fps panel tick
 FACE_SIZE = (320, 240)
 #: D-433 row 3: the updater (root) writes two lines, step and release id, while it applies.
 UPDATE_DISPLAY = "run/rosy-boot/update-display.txt"

@@ -705,3 +705,24 @@
 - gate 변화: 없음(SOURCE 번들 시험 보강).
 - 결정: D-411.
 - 교훈: 번들 포함은 glob이 자동으로 해 줘도 "들어 있다"의 증거는 시험 목록이 별도로 자란다 — 새 화면 자산을 올릴 때 목록을 같이 올린다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 휴대폰 HUD 행동 폭 정렬
+
+- 변경: 390px 주행 HUD의 영상 보기/도구·종료 행동을 두 칸씩 정렬하고, 320px의 도구·종료도 같은 가용 폭으로 맞췄다.
+- 증거: 수정 전 3 passed·2 failed, 수정 후 관련 브라우저 17 passed, 공용 계약 92 passed, 성공 실행 `known_failures.py` 0 NEW. 원본은 `X:/DevTemp/pilot-hud-actions/`와 `docs/validation/uiux-pilot-hud-action-width-2026-10-07/result.md`.
+- gate 변화: Pilot LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
+- 결정: D-153, D-280, DESIGN.md 동등 창·조작 폭 규칙.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 접속 로비 태블릿 폭과 입력 라벨
+
+- 변경: 로비 내용의 48rem 트랙을 태블릿에서 채우고, 코드·토큰 입력의 보이는 라벨과 짧은 힌트를 붙였다. 전화 입력·행동의 동등 전폭을 유지했다.
+- 증거: 수정 전 태블릿 두 셀 2 failed, 수정 후 빈 발견·오류 × 네 폭 4 passed(8캡처), 인접 로비 9 passed, 계약 96 passed, 성공 실행 `known_failures.py` 0 NEW. `X:/DevTemp/pilot-lobby-matrix/`, `docs/validation/uiux-pilot-lobby-matrix-2026-10-07/result.md`.
+- gate 변화: Pilot 접속 로비 LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
+- 결정: D-153, D-280, DESIGN.md 동등 폭·읽힘 규칙.
+
+## 2026-10-07 · uncommitted · test(pilot): 대상 확인 오류 네 폭 캡처
+
+- 변경: 대상 조회 불가·잘못된 대상의 로컬 브라우저 시험을 Pilot 선언 네 폭으로 늘리고, 재시도·비상 정지의 첫 화면 경계와 조작 크기를 검사했다. 제품 런타임은 그대로다.
+- 증거: 8셀 캡처, 브라우저 4 passed, `known_failures.py` 0 NEW. `X:/DevTemp/pilot-target-matrix/`, `docs/validation/uiux-pilot-target-error-matrix-2026-10-07/result.md`.
+- gate 변화: Pilot LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
+- 결정: D-153.

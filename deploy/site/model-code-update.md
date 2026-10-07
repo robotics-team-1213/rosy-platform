@@ -67,6 +67,18 @@ model-watch도 같은 실행기와 lock을 사용한다. 평가 후 shadow까지
 
 The installed bootstrap also supports the previous signed release layout for rollback. New candidates contain only the current source layout.
 
+## 카메라 지도 생성 작업 (D-497)
+
+`exec camera_lane_map.py`는 같은 작업 잠금·서명 source·환경 지문을 사용해 지도 초안을 만든다.
+추가 payload는 `operations/vision/rosy_vision/__init__.py`, `lane_map.py`, `map_register.py` 세 파일뿐이다.
+다른 Vision 서비스 파일은 여전히 거절한다. 작업 진입점이 있는 새 후보는 이 세 의존성이 모두
+필요하며 활성화 전에 `--help` import를 검사한다. 기존 후보의 복귀에는 새 진입점을 요구하지 않는다.
+
+기존 설치된 controller는 확장 archive를 거절하므로, `install-model-code.sh`로 고정 controller를
+후보 밖에서 먼저 갱신한다. 기존 설정·전용 공개 키·Python·작업 디렉터리를 그대로 지정하고,
+등록 값을 새로 만들거나 키를 교체하지 않는다. 그 뒤 현재 환경 지문으로 서명한 모델 코드 후보를
+공급한다. 입력과 출력은 후보 밖에 두며 Fleet에는 초안 JSON만 가져온다.
+
 
 ## 작업 중인 코드 보호 범위
 

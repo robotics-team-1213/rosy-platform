@@ -331,6 +331,19 @@ def us_range(services, msg, *, received_at: float) -> None:
         services.line_follow.observe_ultrasonic(usable)
 
 
+def battery_voltage(services, voltage: float, *, received_at: float) -> None:
+    """`battery/voltage` (Float32), the product graph's only battery source (D-192 4).
+
+    It is also the `battery` sensor sample: `batt_state` is bench-only, and without
+    this `/sensors/battery` stayed 404 on every robot. Freshness comes from the
+    monitor (`BatteryMonitor.health`), so a non-finite sample is not recorded.
+    """
+    if math.isfinite(voltage):
+        services.state.set_sensor("battery", {
+            "voltage": float(voltage), "received_at": received_at, "source": "battery/voltage"})
+    battery_policy.apply_voltage(services, voltage)
+
+
 def batt_state(services, msg, *, received_at: float,
                voltage_topic_seen: bool) -> None:
     sample = translate.battery_sample(msg, received_at)

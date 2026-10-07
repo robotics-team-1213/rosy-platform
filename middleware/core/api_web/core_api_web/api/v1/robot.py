@@ -7,7 +7,7 @@ import math
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from core_api_web.api.v1.common import operator, require_calibration_owner, viewer
+from core_api_web.api.v1.common import battery_health, operator, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_common.protocol.schemas import PowerMode
@@ -42,6 +42,7 @@ def robot_velocity(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
 sensors_router = APIRouter(prefix="/api/v1/sensors", tags=["sensors"])
 
 
+
 def _json_safe(value):
     """inf/NaN are not JSON: a LaserScan no-return beam is +inf. Wire form is null (API ref 12)."""
     if isinstance(value, float):
@@ -62,6 +63,12 @@ def list_sensors(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
 def sensor_detail(sensor_type: str, _: AuthContext = Depends(viewer),
                   svc: CoreServicesLike = Depends(get_services)):
     data = svc.state.get_sensor(sensor_type)
+    if sensor_type == "battery":
+        # SAF-005 input: missing or stale is an answer, not a 404 (API ref 5.2, v1.120).
+        health = battery_health(svc)
+        data = {"voltage": None, "received_at": None, "source": None, **(data or {}),
+                "evidence": health["evidence"], "sample_age_s": health["sample_age_s"],
+                "stale_after_s": health["stale_after_s"]}
     if data is None:
         raise ApiError("NOT_FOUND", 404, f"sensor '{sensor_type}' has no data yet")
     return _json_safe(data)
