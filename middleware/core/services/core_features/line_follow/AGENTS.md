@@ -19,6 +19,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 | `stuck_wiring.py` | Manager mixin feeding the machine; the back-off is the manager's own decision (D-2) |
 | `lane_return*.py` | D-468 local lane return: evidence ledger, checkpoint/retrace/search controller, arbitration inside the manager lock |
 | `lane_bridge.py` | D-476 expected-road bridge (default off): slow drive along the D-468 checkpoint lane's extension on a short loss, swept by D-422, then hand-over to D-468 |
+| `junction.py` | D-491 decision 4 junction instruction gate: one pending instruction, keeps or zeroes the tick's decision (waiting, unresolved, stop after measured odom); never adds motion |
 
 ## Subdirectories
 
@@ -35,7 +36,7 @@ None.
 
 ### Testing Requirements
 
-`middleware/core/gateway/test/test_line_follow.py`, `test_line_follow_body_stop.py`, `test_line_follow_stuck.py`, `test_line_follow_stuck_api.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `test_lane_return*.py`, `test_lane_bridge.py`
+`middleware/core/gateway/test/test_line_follow.py`, `test_line_follow_body_stop.py`, `test_line_follow_stuck.py`, `test_line_follow_stuck_api.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `test_lane_return*.py`, `test_lane_bridge.py`, `test_line_junction.py`, `middleware/core/gateway/test/test_line_junction_api.py`
 
 ## Dependencies
 
