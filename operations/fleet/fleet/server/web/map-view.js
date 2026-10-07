@@ -307,8 +307,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    // 캔버스 y 가 아래로 자라므로 sin 은 뒤집는다.
-    ctx.lineTo(cx + Math.cos(s.yaw) * size * 1.4, cy - Math.sin(s.yaw) * size * 1.4);
+    // 방향도 같은 toPoint 로 그린다 — 카메라 영상(호모그래피·D-513 7 회전)에서도 지도 방향이 맞다.
+    const ahead = toPoint(s.x + 0.1 * Math.cos(s.yaw), s.y + 0.1 * Math.sin(s.yaw));
+    const span = Math.hypot(ahead.x - cx, ahead.y - cy) || 1;
+    ctx.lineTo(cx + (ahead.x - cx) / span * size * 1.4, cy + (ahead.y - cy) / span * size * 1.4);
     ctx.stroke();
     ctx.restore();
     drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "delayed" ? "warn" : undefined);
