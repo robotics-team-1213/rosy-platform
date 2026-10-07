@@ -166,3 +166,16 @@ class LocalizationDecision(BaseModel):
         if (self.source is DecisionSource.CANDIDATE) != (self.candidate_index is not None):
             raise ValueError("source 'candidate' goes with candidate_index; other sources carry a pose")
         return self
+
+
+class OdomPose(BaseModel):
+    """D-491 2: pose in the robot's odom frame and when CORE received it.
+
+    ``stamp`` is UTC epoch seconds (wall time, not robot monotonic), the same
+    form as a sighting's ``captured_at``, so Fleet can pair the two.
+    """
+
+    x: float
+    y: float
+    yaw: float
+    stamp: float

@@ -73,8 +73,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(bridge): D-491 2 odom 콜백이 odom_pose를 채운다
 - 2026-10-06 · uncommitted · feat(sim): simulation_sensors 플래그와 D-468 정책 시계
 - 2026-10-05 · uncommitted · fix(bridge): C6 센서 공급자 선택 기능 판정 기록
 - 2026-10-05 · uncommitted · fix(bridge): document D-468 scan provenance seams
 - 2026-10-05 · uncommitted · feat(bridge): bind D-468 motion evidence into CORE
-- 2026-10-05 · uncommitted · feat(bridge): query leased current floor evidence for return

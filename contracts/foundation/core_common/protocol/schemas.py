@@ -28,7 +28,7 @@ from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F40
 
 from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequest, SshPairRequest  # noqa: F401
 from core_common.protocol.access import ConnectionInfo, SiteRoomsSnapshot  # noqa: F401
-from core_common.protocol.localization import LocalizationStatus
+from core_common.protocol.localization import LocalizationStatus, OdomPose
 from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
 from core_common.protocol.cell_app import (  # noqa: F401
     CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest, CellOperatorCheckpoint)
@@ -859,19 +859,6 @@ class Pose(BaseModel):
     yaw: float = 0.0
 
 
-class OdomPose(BaseModel):
-    """D-491 2: pose in the robot's odom frame and when CORE received it.
-
-    ``stamp`` is UTC epoch seconds (wall time, not robot monotonic), the same
-    form as a sighting's ``captured_at``, so Fleet can pair the two.
-    """
-
-    x: float
-    y: float
-    yaw: float
-    stamp: float
-
-
 class Velocity(BaseModel):
     linear: float = 0.0
     angular: float = 0.0
@@ -1192,8 +1179,7 @@ class StateSnapshot(BaseModel):
     #: v1.69 additive (D-395): state and pose frame; null from robots before D-395.
     localization: Optional[LocalizationStatus] = None
     safety_policy: Optional[SafetyPolicyStatus] = None  # D-400, v1.71 additive
-    #: v1.112 additive (D-491 2): odom-frame pose beside `pose`, null until odometry arrives.
-    odom_pose: Optional[OdomPose] = None
+    odom_pose: Optional[OdomPose] = None  # D-491 2, v1.112 additive; null until odometry
 
 
 class HeartbeatPayload(BaseModel):

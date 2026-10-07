@@ -597,3 +597,10 @@
 - 증거: `test_peer_pairing.py` 43 passed(신규: 출처 4곳 × 틀림 5회 뒤 맞는 코드도 429, 콘솔 승인은 됨, 10분 뒤 다시 열림). 장치 배포는 하지 않았다.
 - gate 변화: SOURCE/LOCAL만.
 - 결정: D-483
+
+## 2026-10-07 · uncommitted · feat(api): D-491 1 capabilities가 trip 능력 필드를 채운다
+
+- 변경: `GET /api/v1/system/capabilities`의 `base_velocity`에 `robot_kind`(`robot.model`, 없으면 `DEFAULT_ROBOT`)·`drive_modes`(line-follow 서비스가 있으면 `lane`, 보류 뒤 `navigation.goal_navigation`이 참이면 `free`)·`trip_max_linear`(safety `max_linear`·`fleet_linear`·line-follow `max_linear` 중 최솟값)를 싣는다. FastAPI 설명 문구를 계약 v1.112로 올렸다.
+- 증거: gateway `test_capabilities_controls.py` 새 시험 2개, api_web 스위트 통과.
+- gate 변화: 없음. SOURCE 호스트 시험만. 서명 릴리스 전에는 로봇에 닿지 않는다.
+- 결정: D-491 (Proposed)
