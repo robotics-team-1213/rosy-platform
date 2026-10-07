@@ -460,6 +460,12 @@ CORE는 `${ROSY_DATA_PATH}/battery-shutdown-request.json`에 요청을 기록한
 `rosy-lowbatt-shutdown` 유닛이 신선도를 자체 검증한 뒤 수행한다. 회복 시 파일이
 삭제되므로 유예 중 충전을 시작하면 셧다운은 철회된다.
 
+**배터리 정지의 해제 (D-502).** Critical `STOP`, 보낼 수 없는 `RETURN_HOME`, Deep의
+모터 정지는 모두 SAF-001 E-Stop이다. 모드는 EMERGENCY가 되고, 해제는 SAF-001과 같이
+Administrator의 `POST /api/v1/safety/release`뿐이다. 전압이 회복되어도 스스로 풀리지
+않는다. 해제는 정책을 끄지 않으며 Deep이 이어지면 다시 정지한다. 배터리 입력의
+결측·낡음(`missing`/`stale`)은 `GET /safety/state`와 `GET /sensors/battery`에 드러난다.
+
 **저배터리 표시.** 경보 표시는 근접 정보창과 무관하게 동작해야 한다. Warning은
 상시 주황, Critical은 빨강 1 Hz 점멸, Deep은 빨강 2 Hz 점멸이며, 절전 모드
 (`STANDBY` 포함)에서도 유지된다 — 아무도 앞에 없는 상태가 이 표시가 필요한

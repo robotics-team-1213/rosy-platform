@@ -14,7 +14,7 @@ from functools import partial
 from typing import Callable, Literal, Optional
 
 import httpx
-from fastapi import Depends, HTTPException, Request, Response
+from fastapi import Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
@@ -80,6 +80,7 @@ class SharedGather:
         self._lock = asyncio.Lock()
         self._snapshot: Optional[dict] = None
         self._at = 0.0
+        self.gathered_at = 0.0  # D-493: server UTC epoch s of the last real gather (display only)
 
     async def __call__(self) -> dict:
         async with self._lock:
@@ -89,7 +90,9 @@ class SharedGather:
                 if self._tracking is not None:
                     self._tracking.observe_states(snapshot["robots"], now=gathered_at)
                 self._board.observe(snapshot["robots"], self._console.hub.registry.events_since)
+                await asyncio.to_thread(self._board.flush)   # episode SQLite off the loop
                 self._snapshot, self._at = snapshot, self._clock()
+                self.gathered_at = time.time()
             return self._snapshot
 
 
@@ -99,14 +102,24 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     # D-407: open lane stucks, read from each gather. CORE's stuck block is the truth.
     board = app.state.line_stuck = LineStuckBoard(
         log=LineStuckAnswerLog(answer_log_path) if answer_log_path is not None else None)
+    map_pose = getattr(app.state, "map_pose", None)
+    if map_pose is not None:   # episode open-time pose; the trip runner's trip_busy comes later
+        board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
 
     async def gathered() -> dict:
         snapshot = await gather()
         # Per response, on copies: the cached snapshot is shared with the resolver.
-        return {**snapshot, "robots": [{**row, "line_stuck": board.view(row["robot_id"])}
-                                       for row in snapshot["robots"]]}
+        # D-493: state_age_s = observed -> now (cache age and hub age included).
+        now = console._clock()
+        rows = []
+        for row in snapshot["robots"]:
+            row = {**row, "line_stuck": board.view(row["robot_id"])}
+            observed = row.pop("_state_mono", None)
+            row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
+            rows.append(row)
+        return {**snapshot, "robots": rows, "gathered_at": gather.gathered_at}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
@@ -182,6 +195,11 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         # `observed_age_s` says how old it is.
         return {"pending": board.pending(), "answers": board.answers(),
                 "observed_age_s": board.observed_age_s()}
+
+    @app.get("/api/fleet/line-stuck/episodes", dependencies=read_guard, tags=["line-stuck"])
+    def line_stuck_episodes(limit: int = Query(100, ge=1, le=1000)) -> dict:
+        # Durable episodes, newest first; empty without --tasks-db (nothing is recorded).
+        return {"episodes": board.episodes(limit)}
 
     @app.post("/api/fleet/robots/{robot_id}/line-stuck/decision", dependencies=operator_guard,
               tags=["line-stuck"])

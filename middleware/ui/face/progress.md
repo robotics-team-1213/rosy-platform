@@ -22,7 +22,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-57, D-153, D-306, D-433]
+adrs: [D-57, D-153, D-306, D-433, D-504]
 plans:
   - docs/plans/2026-09-12-rosy-os-module-evaluation-maintenance-design.md
   - docs/plans/2026-09-15-module-harness-design.md
@@ -30,6 +30,7 @@ plans:
 ---
 ## 지금 상태
 
+- D-504 브랜치 후보: 여덟 얼굴 GIF를 320×240·20프레임·100 ms로 만들고, 첫 프레임 공백과 운용 표정 실루엣 중복을 줄였다. 호스트 시험은 LOCAL 근거이며 실물 LCD 거리·각도·조도 판독은 미확인이다.
 - `set_emotion` 서비스(LCD GIF)와 PWR-003 info-card 렌더러(`info_screen.py`, ROS-free PIL)를 제공한다.
 - D-306 LCD 점검: 320×240 호스트 카드의 긴 동적 문자열은 기존 부팅 카드의 `_fit`으로 화면 안에 맞추고 말줄임을 표시한다. 부팅/AP QR/실패 캡처는 LOCAL 증거다. 실물 LCD의 거리·각도·조명 판독성은 미확인이라 DEVICE/BENCH GO가 아니다.
 - **F-01 해결 (2026-09-21, D-153 회차2):** 재편(9b77daa)이 선언만 `emotion.*`로 바꾸고 파일을 `rosy_emotion/`에 남겨둔 불일치를 닫았다 — 파이썬 파일을 `emotion/`으로 평탄화하고 `rosy_emotion.py`는 `emotion.py`로 환원했으며 마커 `resource/rosy_emotion`를 지웠다. SOURCE/LOCAL 재실행 22 passed로 GO 복원.

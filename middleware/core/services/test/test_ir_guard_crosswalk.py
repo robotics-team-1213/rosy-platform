@@ -14,12 +14,12 @@ class Bus:
         pass
 
 
-def rig(**config):
+def rig(hold_s=None, **config):
     clock = [1.0]
     values = dict(ir_guard_enabled=True, ir_calibration_revision=REV, ir_row_x_m=0.0295)
     values.update(config)
     manager = LineFollowManager(Bus(), clock=lambda: clock[0], config=LineFollowConfig(**values))
-    manager.set_mode(LineFollowMode.CAMERA_LINE)
+    manager.set_mode(LineFollowMode.CAMERA_LINE, hold_s=hold_s)
     return clock, manager
 
 
@@ -43,6 +43,7 @@ def step(r, t, x, *, y=0.0, yaw=0.0, ir_error=None, crosswalk=None, ground="CALI
     manager.observe(LineObservation(LineFollowMode.IR_LINE, t, ir_error is not None, ir_error,
                                     0.9 if ir_error is not None else 0.0, ir_calibrated=ir_calibrated,
                                     calibration_revision=REV if ir_calibrated else None), received_at=t, source_now=t)
+    manager.hold(t)            # a driver hold session (NOMINAL ground) stays alive; no-op otherwise
     return manager.tick(t)
 
 
@@ -70,9 +71,9 @@ def test_without_a_seen_crosswalk_the_centre_reading_still_stops():
     assert r[1].status().reason == "lane_departure"
 
 
-@pytest.mark.parametrize("ground,uncertainty", [("NOMINAL", 0.005), ("CALIBRATED", None),
-                                                ("CALIBRATED", 0.02)])
-def test_uncalibrated_or_unbounded_projection_admits_no_zone(ground, uncertainty):
+@pytest.mark.parametrize("ground,uncertainty", [("NOMINAL", None), ("CALIBRATED", None),
+                                                ("NOMINAL", 0.02)])
+def test_unbounded_projection_admits_no_zone(ground, uncertainty):
     zones = CrosswalkZones()
     zones.observe(LaneContainmentEvidence.model_validate(dict(
         stamp=1.0, geometry_id="g", ground_source=ground, uncertainty_m=uncertainty, boundaries=[],
@@ -177,3 +178,18 @@ def test_a_stale_ir_reading_does_not_re_arm_a_spent_rest():
         step(r, t, x, ir_error=0.0, crosswalk=(0.0, 0.25))
     step(r, t + 0.05, x + 0.01, ir_error=0.0, crosswalk=(0.0, 0.25), ir_calibrated=False)
     assert step(r, t + 0.1, x + 0.02, ir_error=0.0, crosswalk=(0.0, 0.25)).linear == 0
+
+
+def test_nominal_ground_with_bounded_uncertainty_rests_under_the_driver_hold():
+    """D-491 rev. 2026-10-07: device ground is always NOMINAL (record-backed or not); like D-468 a
+    zone needs only a bounded uncertainty, and NOMINAL camera driving still needs the driver hold."""
+    r = rig(hold_s=0.5)
+    assert drive_to(r, 0.15, ground="NOMINAL").linear > 0
+    assert r[1].status().reason == "ir_guard_crosswalk"
+
+
+def test_range_error_widens_the_zone_ends():
+    # IR row at 0.2895: past far 0.27 + 0.005 + 5 % of 0.26 m travelled (0.288) without the
+    # camera-range term, inside it with 5 % of the 0.27 m far edge (+0.0135).
+    assert drive_to(rig(crosswalk_range_error_fraction=0.0), 0.26).linear == 0
+    assert drive_to(rig(), 0.26).linear > 0
