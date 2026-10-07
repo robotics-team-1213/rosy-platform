@@ -615,6 +615,16 @@ export function actionIcon(button, name) {
     reverse: "M12 4v16M5 13l7 7 7-7",
     left: "M4 8h9a7 7 0 0 1 7 7v4M9 3L4 8l5 5",
     right: "M20 8h-9a7 7 0 0 0-7 7v4M15 3l5 5-5 5",
+    check: "M4 12l5 5L20 6",
+    plus: "M12 4v16M4 12h16",
+    trash: "M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v6M14 11v6",
+    undo: "M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2",
+    pencil: "M4 20l4-.8L20 7l-3-3L4.8 16zM15 6l3 3",
+    next: "M4 12h16m-7-7 7 7-7 7",
+    list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
+    box: "M4 4h16v16H4zM9 9h6v6H9z",
+    pixels: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+    folder: "M3 7V5h7l2 2h9v12H3z",
   };
   const spec = paths[name];
   if (!spec) throw new RangeError(`Unknown action icon: ${name}`);
