@@ -2203,3 +2203,10 @@
 - gate 변화: 없음. SOURCE/LOCAL만. 실제로 서는 거리는 모델 PC SIM에서 잰다
 - 결정: D-491 Proposed(구현 부록 갱신)
 - 교훈: 안전 파일의 줄 예산이 0이면 감싸기(인스턴스 메서드 교체)와 기존 줄 안 조건으로 같은 가드를 줄 수 있다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-491 5 trip 안전 검토 반영 — 모든 멈춤이 trip을 끝낸다
+- 변경: 로봇별 취소·전체 취소·intent 취소·Fleet 비상 정지·`line-follow OFF`(로봇 호출이 실패해도)·줄 막힘 `ABORT`/`MANUAL`은 로봇에 먼저 가고 trip을 `canceled`로 끝낸다(H1·M1·M3). 움직이는 줄 막힘 결정과 대형 재구성·재개는 거절, Fleet 자동 해결기는 trip 로봇을 건너뛴다(M2·N3·N4). 보낸 지 2 s 안의 콘솔 목표도 진행 중으로 본다(L1). 재시작 정지는 tick 밖에서 10 s마다 최대 30회(N2). D-491 구현 부록·API Ref 갱신
+- 증거: 보고서에 `operations/fleet/test` 전체·구조 시험·known_failures를 남긴다. `test_trip_runner.py` 82건 통과
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-491 Proposed(구현 부록 갱신)
+- 교훈: 로봇을 몰고 있는 루프가 있으면 그 로봇에 닿는 모든 멈춤 경로가 루프도 끝내야 한다. 하나라도 빠지면 다음 tick이 멈춘 로봇을 다시 움직인다
