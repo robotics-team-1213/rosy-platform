@@ -7,6 +7,7 @@ import {
   planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripErrorText, tripStartReason,
   tripStatusText,
 } from '/console/assets/site-map-model.js';
+import {createTeachPanel} from '/console/assets/site-map-teach.js';
 
 const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
@@ -16,6 +17,9 @@ $('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
 const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, running: null};
 const TRIP_POLL_MS = 1000;
+const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
+  places: () => shown()?.places || [], render: () => render(),
+  reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
@@ -67,6 +71,7 @@ function render() {
   if ($('map-source').value === 'active' && planIsCurrent(state.plan, state.active)) {
     for (const points of planPolylines(map, state.plan)) el('polyline', {class: 'plan', points: line(points)}, svg);
   }
+  for (const points of teach.lines()) el('polyline', {class: 'teach', points: line(points)}, svg);
   for (const place of map.places) {
     const [px, py] = view.toPx(place.x, place.y);
     const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id,
@@ -131,6 +136,7 @@ function syncButtons() {
   gate('trip-cancel', tripCancelReason({role: state.role, running: state.running}));
   $('trip-confirm').hidden = !state.running?.hold;
   gate('trip-confirm', reason || (state.running?.hold?.plan ? '' : '다시 계산한 경로가 없습니다 · 운행을 취소하세요'));
+  teach.sync();
 }
 
 async function pollTrips() {
@@ -178,6 +184,7 @@ async function load() {
     option.dataset.online = robot.online ? 'true' : 'false';
     return option;
   }));
+  teach.robots(robots);
   if (state.robotsError) status('trip-summary', '경로 미리보기 불가 · 로봇 상태 확인 불가. 다시 접속하세요.', 'error');
   else if (!robots.length) status('trip-summary', '경로 미리보기 불가 · 등록된 로봇이 없습니다. 관리자에게 로봇 등록을 요청하세요.', 'empty');
   else if (!robots.some(robot => robot.online)) status('trip-summary', '경로 미리보기 불가 · 연결된 로봇이 없습니다. 로봇 연결을 확인하세요.', 'empty');
