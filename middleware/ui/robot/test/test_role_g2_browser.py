@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
+from browser_harness import browser_tests_enabled
 import yaml
 from playwright.sync_api import sync_playwright
 
@@ -20,7 +21,7 @@ for package in ("middleware/core/api_web", "middleware/core/gateway", "middlewar
     sys.path.insert(0, str(ROOT / package))
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 for LOCAL Chromium G2 capture",
 )
 

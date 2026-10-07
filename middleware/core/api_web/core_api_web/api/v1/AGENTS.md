@@ -3,6 +3,9 @@
 
 # v1
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 REST routers under `/api/v1/*` (API Ref §5). One module per domain; `routes.py` only collects them.

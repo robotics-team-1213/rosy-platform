@@ -1,7 +1,10 @@
-<!-- Parent: ../../src/runtime/AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-06 | Updated: 2026-09-14 -->
 
 # control (absorbed into Rosy OS)
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 ROS 2 Jazzy package absorbed into the **Rosy OS** workspace for the Pinky Pro desk-maze robot (~11 cm; RPi, RPLidar C1, US-016, 3× IR cliff, BNO055 IMU, OV5647). It provides reusable sensing, camera/OpenCV, calibration, planning, safety-policy, and navigation-session behavior. During absorption its legacy node entry points remain available for parity tests, but `core` owns the final external API and motor command path in the target runtime.

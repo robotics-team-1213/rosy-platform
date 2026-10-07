@@ -3,6 +3,9 @@
 
 # test
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 ROS-free policy/contract tests plus opt-in ROS message/action integration tests. Must not open serial devices or claim physical OMX availability.

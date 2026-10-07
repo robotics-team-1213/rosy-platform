@@ -3,6 +3,9 @@
 
 # tools
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Commands a developer runs from the workspace. These are not installed on the robot and they are not a ROS package.
