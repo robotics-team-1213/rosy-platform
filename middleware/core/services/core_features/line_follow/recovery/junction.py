@@ -96,14 +96,14 @@ class JunctionMixin:
 
     def _turn_basis(self, now):
         """D-498: 'enforce' (D-400 floor proof), 'site' (fresh IR guard without departure, live
-        D-422 body stop on a fresh scan, junction_turn_site_accepted) or None."""
+        D-422 body stop on a fresh scan, site_floor_map_id) or None."""
         try:
             if self._return_motion is not None and self._return_proof_configured() is True:
                 return 'enforce'
         except Exception:  # noqa: BLE001 - an unbound or unreadable proof is no basis
             pass
         c, at = self._config, self._clearance_at
-        if (c.junction_turn_site_accepted and c.ir_guard_enabled and c.body_stop_known
+        if (c.site_floor_map_id is not None and c.ir_guard_enabled and c.body_stop_known
                 and self._scan_points is not None and at is not None
                 and 0 <= now-at <= c.clearance_stale_s and self._ir_guard(now) not in ('stale', 'centre')):
             return 'site'

@@ -194,7 +194,7 @@ class LaneBridgeMixin:
         pose = view.pose
         guard = self._ir_guard(now) if c.ir_guard_enabled else 'clear'
         if (not authority or self._recovery.stuck_id is not None
-                or not (c.bridge_site_no_dropoffs or self._floor_proof_required())
+                or not (c.site_floor_map_id is not None or self._floor_proof_required())
                 or self._bridge_hint not in (None, 'straight') or guard != 'clear'
                 or (kappa and self._junction_pending(now))  # rev 2: no arc into a junction
                 or (kappa and 1-kappa*(corridor.center if corridor else 0.) < ARC_MIN_RADIUS_RATIO)

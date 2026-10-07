@@ -158,8 +158,8 @@ def test_repeat_of_a_finished_instruction_is_409_already_done(core_client):
 
 
 
-def test_packaged_default_keeps_the_d498_site_basis_off():
-    """D-498: no robot turns on the site basis from code; a bad overlay refuses to load."""
+def test_packaged_default_has_no_site_floor_declaration():
+    """D-498 / D-507 9: no robot gets the site basis from code; a bad overlay refuses to load."""
     from pathlib import Path
 
     import pytest
@@ -168,11 +168,7 @@ def test_packaged_default_keeps_the_d498_site_basis_off():
     from core.services import _line_follow_config
     default = Path(__file__).resolve().parents[4] / "contracts" / "foundation" / "config" / "rosy_default.yaml"
     raw = yaml.safe_load(default.read_text(encoding="utf-8"))["line_follow"]
-    assert raw["junction_turn_site_accepted"] is False
-    assert _line_follow_config(raw).junction_turn_site_accepted is False
-    with pytest.raises(ValueError, match="junction_turn_site_accepted"):
-        _line_follow_config({**raw, "junction_turn_site_accepted": True})   # IR guard still off
-    with pytest.raises(ValueError, match="true or false"):
-        _line_follow_config({**raw, "junction_turn_site_accepted": "yes"})
-    assert _line_follow_config({**raw, "junction_turn_site_accepted": True,
-                                "ir_guard_enabled": True}).junction_turn_site_accepted is True
+    assert raw["site_floor_map_id"] is None
+    assert _line_follow_config(raw).site_floor_map_id is None
+    with pytest.raises(ValueError, match="site_floor_map_id"):
+        _line_follow_config({**raw, "site_floor_map_id": "lab-a"})   # IR guard still off
