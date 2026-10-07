@@ -429,3 +429,5 @@ The follow-up browser harness allows the active preview port in Chromium; port 6
 2026-10-07 Cell 접속 역할: [320px 현재 후보 화면](../uiux-cell-role-label-2026-10-07/result.md)은 원시 `operator` 대신 Fleet 공통의 「운영자」를 표시한다. 수정 전 브라우저 **1 failed**, 수정 후 **1 passed**, Cell 전체 브라우저 **49 passed**, G1 **90 passed**, `known_failures.py` **0 NEW**다. 역할 판정과 요청은 그대로이며 Cell 전체 G2·사이트 계정·장치·G3가 남아 제품은 **HOLD**다.
 
 2026-10-07 Cell 문서 목록: [마지막 수신 시각 LOCAL 화면](../uiux-cell-list-readtime-2026-10-07/result.md)은 문서 수정 시각과 목록 HTTP 응답을 받은 시각을 분리한다. 1440/390/320px의 목록 성공·실패·복구 **6 passed**, 조회 잠금 **1 passed**, Cell 전체 브라우저 **49 passed**, G1 **90 passed**, `known_failures.py` **0 NEW**다. 브라우저 시각이므로 서버가 판정한 `fresh`/`delayed` 증거는 아니며 Cell 전체 G2·실물·G3는 **HOLD**다.
+
+2026-10-07 Pilot 연결 로비: [320/390px 빈 목록·실패 LOCAL 화면](../uiux-pilot-lobby-width-2026-10-07/result.md)에서 `다시 찾기`·`연결`이 코드 입력 칸과 같은 폭이다. 로비·태블릿 브라우저 **7 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. Pilot 전체 선언 상태·실물 태블릿/로봇·운전자 G3는 **HOLD**다.

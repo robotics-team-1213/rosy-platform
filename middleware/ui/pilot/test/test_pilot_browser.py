@@ -487,6 +487,43 @@ def test_lobby_failure_shows_retry_and_gate_survives(tablet_page):
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("width,height", [(320, 568), (390, 844)])
+def test_lobby_empty_and_failure_fit_phone_width(base_url, width, height):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": width, "height": height})
+        errors = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        response = {"fail": False}
+        page.route("**/api/v1/site/rooms", lambda route: route.fulfill(
+            status=503, json={"code": "DISCOVERY_UNAVAILABLE"}) if response["fail"]
+            else route.fulfill(json={"rooms": []}))
+        try:
+            page.goto(f"{base_url}/pilot")
+            page.get_by_text("같은 LAN에서 발견한 다른 로봇이 없습니다").wait_for()
+            for state in ("empty", "failed"):
+                if state == "failed":
+                    response["fail"] = True
+                    page.locator("[data-lobby-retry]").click()
+                    page.get_by_text("로봇 목록을 가져오지 못했습니다.", exact=False).wait_for()
+                if os.environ.get("ROSY_SHOT_DIR"):
+                    shot_dir = Path(os.environ["ROSY_SHOT_DIR"])
+                    shot_dir.mkdir(parents=True, exist_ok=True)
+                    page.screenshot(path=str(shot_dir / f"pilot-lobby-{state}-{width}x{height}.png"))
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                assert page.locator("[data-lobby-retry]").is_visible()
+                assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
+                assert page.locator("ui-topbar [data-estop]").is_visible()
+                widths = page.evaluate("""() => ['form[data-pilot-token-form] ui-field',
+                    'form[data-pilot-token-form] ui-button', '[data-lobby-retry]']
+                    .map(selector => document.querySelector(selector).getBoundingClientRect().width)""")
+                assert max(widths) - min(widths) <= 1, (state, width, widths)
+            assert errors == [], errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
 def test_lobby_retry_recovers_without_duplicate_scans(tablet_page):
     base_url, page, errors = tablet_page
     calls = []
