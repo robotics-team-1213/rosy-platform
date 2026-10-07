@@ -23,6 +23,7 @@ from pydantic import ValidationError
 
 from fleet.routing import teach
 from fleet.routing.graph import polyline_length
+from fleet.server.site_map_routes import MAX_DRAFT_BYTES, invalid_errors
 from fleet.site_map import IMPORT_WIDTH_M, MAX_POINTS, MIN_EDGE_M, SiteMap
 
 #: The trip loop's odom cadence (D-494 3 부록 8): one REST read per sample.
@@ -31,8 +32,6 @@ SAMPLE_S = 0.5
 #: is not confirmed this long after its stop is discarded.
 PENDING_S = 600.0
 IDLE_PRINCIPAL = "system:teach_idle"
-#: Same bound as the draft PUT body (``site_map_routes.MAX_DRAFT_BYTES``).
-MAX_DRAFT_BYTES = 2 * 1024 * 1024
 
 _LOG = logging.getLogger(__name__)
 
@@ -122,11 +121,15 @@ class TeachService:
                                                  "robot_id": self._recording.robot_id})
         await self._localized(robot_id)
         if self._recording is not None:  # another start won while we read the pose
-            raise TeachError(409, "TEACH_BUSY", {"teach_id": self._recording.teach_id})
+            raise TeachError(409, "TEACH_BUSY", {"teach_id": self._recording.teach_id,
+                                                 "robot_id": self._recording.robot_id})
         session = self._recording = Session(uuid.uuid4().hex, robot_id, principal_id, self._clock())
         session.last_kept_at = session.started_at
         self._store.record_event("teach_started", principal_id, {"teach_id": session.teach_id, "robot_id": robot_id})
-        await self.sample()
+        try:  # a failed first read leaves the sampler to retry
+            await self.sample()
+        except Exception:
+            _LOG.exception("teach: first sample failed")
         self._task = asyncio.ensure_future(self._run())
         return self.view()
 
@@ -150,6 +153,7 @@ class TeachService:
                           "from_candidates": teach.candidates(places, line[0]),
                           "to_candidates": teach.candidates(places, line[-1]),
                           "expires_at": session.stopped_at + PENDING_S}
+        session.points = []        # the result keeps the simplified line
         self._prune()
         self._pending[session.teach_id] = session
         return session.result
@@ -171,9 +175,7 @@ class TeachService:
         try:
             site_map = SiteMap.model_validate(body)
         except ValidationError as exc:
-            raise TeachError(422, "SITE_MAP_INVALID", {"errors": [
-                {"loc": [str(part) for part in item["loc"]], "msg": item["msg"]}
-                for item in exc.errors(include_url=False, include_context=False, include_input=False)[:20]]}) from exc
+            raise TeachError(422, "SITE_MAP_INVALID", {"errors": invalid_errors(exc)}) from exc
         if len(json.dumps(site_map.body(), ensure_ascii=False).encode("utf-8")) > MAX_DRAFT_BYTES:
             raise TeachError(413, "SITE_MAP_TOO_LARGE", {"limit_bytes": MAX_DRAFT_BYTES})
         return self._store.save_draft(site_map, expected_revision=expected_revision, principal_id=principal_id)

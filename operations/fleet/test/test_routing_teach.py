@@ -92,3 +92,12 @@ def test_pinning_drops_interior_points_near_the_place_so_the_end_tangent_stays()
                                 direction="one_way", drive_mode="lane", speed_cap_mps=0.2, width_m=0.2)
     assert body["edges"][0]["polyline"] == [[0.14, 0.0], [0.1, 2.0]]   # no hook back through (0.1, 0)
     SiteMap.model_validate(body)
+
+
+def test_kept_points_are_rounded_to_mm_and_place_yaw_is_wrapped():
+    from fleet.routing.teach import add_place
+    import math
+    assert keep([], _pose(0.12345, -1.00049)) == (0.123, -1.0)
+    body = {"places": [], "edges": []}
+    add_place(body, "x", "stop", 0.0, 0.0, 3 * math.pi / 2)
+    assert body["places"][0]["yaw"] == pytest.approx(-math.pi / 2)

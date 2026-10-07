@@ -27,7 +27,7 @@ def keep(points: list[Point], pose) -> Optional[Point]:
         return None
     if pose.state != "LOCALIZED" or not pose.dead_reckon_m <= MAX_BRIDGE_M:  # DEGRADED is never kept
         return None
-    point = (float(pose.x), float(pose.y))
+    point = (round(float(pose.x), 3), round(float(pose.y), 3))
     if points and math.dist(points[-1], point) < SPACING_M:
         return None
     return point
@@ -97,7 +97,7 @@ def add_place(body: dict, name: str, kind: str, x: float, y: float, yaw: Optiona
     place_id = _free_id("teach_p", {p["id"] for p in body["places"]})
     place = {"id": place_id, "name": name, "x": round(x, 4), "y": round(y, 4), "kind": kind}
     if yaw is not None:
-        place["yaw"] = yaw
+        place["yaw"] = math.atan2(math.sin(yaw), math.cos(yaw))
     body["places"].append(place)
     return place_id
 
