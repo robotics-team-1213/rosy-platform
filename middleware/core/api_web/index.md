@@ -34,5 +34,5 @@
 - 2026-10-08 · uncommitted · feat(api): D-472 식별 색 설정과 v1.129/v1.130
 - 2026-10-08 · uncommitted · docs(api): merged contract v1.125
 - 2026-10-08 · uncommitted · docs(api): D-509 v1.124 follow-up
+- 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.133 (D-507 7)
 - 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.124 (D-507 7)
-- 2026-10-07 · uncommitted · docs(api): D-494 6 v1.119

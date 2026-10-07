@@ -183,12 +183,11 @@ def _retrace(**config):
     r = BridgeRig(probe=lambda now, v, w: False, floor=lambda: False, **config)
     r.m.observe_body_points((), range_min=.05, received_at=r.now)
     r.follow()
-    while r.step(seen=False, slip=.02).linear > 0 and r.reason == 'lane_bridge':
-        pass
-    # D-507 7: an unseen lane opens no departure; a ready frame with the body over the
-    # left edge (margin + u < 0) is the positive evidence that opens it.
-    r.step(seen=True, edges=(.05, -.15))
-    assert r.m._return_controller.phase != 'tracking'  # the evidence opened the departure
+    # D-507 7: an unseen lane opens no departure; drift until the body is over the boundary.
+    r.yaw = .1
+    while r.m._return_controller.phase == 'tracking':
+        r.step(seen=True, slip=.02)
+    assert r.reason == 'lane_return_containment_unconfirmed'
     checkpoint = r.m._return_controller.checkpoint[0].received_at
     out = []
     for _ in range(10):
