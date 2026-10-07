@@ -258,24 +258,24 @@ class ReturnController:
         rate = min(.15, inp.angular_limit)
         return ReturnAction(self.phase, "sensor_search", angular=rate*(1 if self._search_attempt == 0 else -1))
 
-    def tick(self, inp):
-        _finite(inp.now, inp.linear_limit, inp.angular_limit)
-        if type(inp.epoch) is not int or inp.epoch < 0:
+    def observe(self, now, pose, epoch):
+        """Feed the trail only. The caller runs this on every tick, holds included, so a
+        gap means odom really stopped, not that the controller was idle (D-507 7 rule (2))."""
+        _finite(now)
+        if type(epoch) is not int or epoch < 0:
             raise ValueError("valid pose continuity epoch required")
-        if self._epoch is not None and self._epoch != inp.epoch:
+        if self._epoch is not None and self._epoch != epoch:
             self._path.clear()
             self.trail.samples.clear()
             self._count = 0
             self._last_evidence = self._candidate = self._last_pose = None
             self._reference_invalid = self.checkpoint is not None
-            self.phase, self._opened = "departure_stop", inp.now
+            self.phase, self._opened = "departure_stop", now
             self._approach.finished = True
-        self._epoch = inp.epoch
-        if inp.linear_limit < 0 or inp.angular_limit < 0:
-            raise ValueError("nonnegative live limits required")
-        p = inp.pose
-        fresh_pose = p is not None and self._fresh(inp.now, p.received_at)
-        if fresh_pose and (self._last_pose is None or p.stamp_ns != self._last_pose.stamp_ns):
+        self._epoch = epoch
+        p = pose
+        if (p is not None and self._fresh(now, p.received_at)
+                and (self._last_pose is None or p.stamp_ns != self._last_pose.stamp_ns)):
             if not self.trail.add(p):
                 # Retain the frozen corridor identity for rejection, but invalidate
                 # every moving retrace candidate. A jump must not adopt a new lane.
@@ -284,8 +284,16 @@ class ReturnController:
                 self._reference_invalid = True
                 self._candidate = None
                 if self.phase == "tracking":
-                    self.phase, self._opened = "departure_stop", inp.now
+                    self.phase, self._opened = "departure_stop", now
             self._last_pose = p
+
+    def tick(self, inp):
+        _finite(inp.now, inp.linear_limit, inp.angular_limit)
+        self.observe(inp.now, inp.pose, inp.epoch)
+        if inp.linear_limit < 0 or inp.angular_limit < 0:
+            raise ValueError("nonnegative live limits required")
+        p = inp.pose
+        fresh_pose = p is not None and self._fresh(inp.now, p.received_at)
         source_stamp = inp.corridor_stamp_ns
         lane = (inp.corridor if self._fresh(inp.now, inp.corridor_at)
                 and type(source_stamp) is int and source_stamp >= 0 else None)

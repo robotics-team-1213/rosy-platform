@@ -276,3 +276,51 @@ def test_zero_live_translation_ceiling_also_revokes_precomputed_search_turn():
     assert action.linear==0 and action.angular!=0
     r[2].bind_recovery(linear_ceiling=lambda:0.)
     assert not r[2].apply_if_current(action,lambda d:pytest.fail('revoked search turn applied'))
+
+
+def _hold_then_clear(hold_s=1., pose_during_hold=True, jump_at=None):
+    """Follow, obstacle_ahead HOLD with the robot standing, then the obstacle clears.
+    Returns every (controller phase, status reason) seen from the hold onward."""
+    r=rig(body_lidar_x_m=0.,body_rotation_radius_m=.1)
+    manager=r[2]
+    seen=[]
+    t=1.
+    for _ in range(5):
+        manager.observe_scan_points((),received_at=t)
+        assert frame(r,t).linear>0
+        t=round(t+.05,6)
+    x=manager._return_controller.trail.samples[-1].x
+    for step in range(round(hold_s/.05)):
+        manager.observe_scan_points(((.10,0.),),received_at=t)
+        if pose_during_hold:
+            if jump_at==step: x+=.2
+            assert frame(r,t,x=x).linear==0
+        else:
+            r[0][0]=t
+            assert manager.tick(t).linear==0
+        seen.append((manager._return_controller.phase,manager.status().reason))
+        t=round(t+.05,6)
+    assert ('tracking','obstacle_ahead') in seen
+    for _ in range(20):
+        manager.observe_scan_points((),received_at=t)
+        frame(r,t,x=x)
+        seen.append((manager._return_controller.phase,manager.status().reason))
+        t=round(t+.05,6)
+    return seen
+
+
+def test_obstacle_hold_longer_than_the_gap_rule_keeps_tracking():
+    # Odom streams during a 1 s obstacle_ahead HOLD; the trail is fed, so no gap and no search.
+    seen=_hold_then_clear()
+    assert all(phase=='tracking' for phase,_ in seen), seen
+    assert not any('sensor_search' in (reason or '') for _,reason in seen)
+
+
+def test_real_odom_gap_during_a_hold_still_opens_departure():
+    seen=_hold_then_clear(hold_s=.6,pose_during_hold=False)
+    assert any(phase!='tracking' for phase,_ in seen), seen
+
+
+def test_pose_jump_during_a_hold_still_opens_departure():
+    seen=_hold_then_clear(jump_at=10)
+    assert any(phase!='tracking' for phase,_ in seen), seen
