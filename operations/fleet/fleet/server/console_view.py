@@ -8,6 +8,7 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
+from fleet.server.link_class import classify_link  # noqa: F401 - console.py reads it here (D-430 frozen edge)
 from fleet.swarm.transport import RobotApiError
 
 
