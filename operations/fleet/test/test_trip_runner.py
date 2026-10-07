@@ -42,12 +42,16 @@ class Ports:
         self.turns: list = []
         self.blocked: frozenset = frozenset()
         self.now = 1000.0
+        self.refreshes = 0
 
     def caps_for(self, robot_id):
         return self.caps.get(robot_id)
 
     async def arbitrated_pose(self, robot_id):  # async on purpose: the runner takes either
         return self.pose
+
+    async def refresh(self, robot_id):
+        self.refreshes += 1
 
     async def junction_state(self, robot_id):
         return self.junction
@@ -68,9 +72,9 @@ class Ports:
         self.canceled.append(robot_id)
         return {"canceled": True}
 
-    def at(self, arc, s, state="LOCALIZED", dy=0.0):
+    def at(self, arc, s, state="LOCALIZED", dy=0.0, anchor_age_s=0.1):
         x, y, yaw = arc.point_at(s)
-        self.pose = MapPose(x, y + dy, yaw, state, "sighting", 0.0, 0.1)
+        self.pose = MapPose(x, y + dy, yaw, state, "sighting", 0.0, 0.1, anchor_age_s)
 
 
 def _free_map(mode="free") -> SiteMap:
@@ -521,3 +525,21 @@ def test_core_waiting_at_a_junction_stops_the_trip_after_the_timeout():
     ports.now += 0.2
     run(runner.tick())
     assert runner.view("p1")["reason"] == "junction"
+
+
+def test_start_needs_a_fresh_anchor_and_each_tick_refreshes_the_robot_state():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    ports.at(store.active()[2].arcs["ring_s:fwd"], 0.1, anchor_age_s=2.5)
+    with pytest.raises(TripError) as err:
+        run(runner.start("p1", "bob"))
+    assert err.value.code == "TRIP_POSE_UNTRUSTED" and err.value.detail["anchor_age_s"] == 2.5
+    ports.at(store.active()[2].arcs["ring_s:fwd"], 0.1, anchor_age_s=1.9)
+    run(runner.start("p1", "bob"))
+    before = ports.refreshes
+    run(runner.tick())
+    run(runner.tick())
+    assert ports.refreshes == before + 2
+    ports.at(store.active()[2].arcs["ring_s:fwd"], 0.1, anchor_age_s=8.0)  # bridged: still running
+    run(runner.tick())
+    assert runner.running()["pose"]["anchor_age_s"] == 8.0

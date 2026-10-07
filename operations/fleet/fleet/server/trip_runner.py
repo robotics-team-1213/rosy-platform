@@ -69,6 +69,8 @@ class MapPose:
     source: str
     dead_reckon_m: float
     age_s: float
+    #: Seconds since the sighting anchor; a trip starts only on a fresh one (``start_anchor_age_s``).
+    anchor_age_s: Optional[float] = None
 
 
 class TripCapsPort(Protocol):
@@ -77,6 +79,9 @@ class TripCapsPort(Protocol):
 
 class MapPosePort(Protocol):
     def arbitrated_pose(self, robot_id: str) -> "Optional[MapPose] | Awaitable[Optional[MapPose]]": ...
+
+    async def refresh(self, robot_id: str) -> None:
+        """Optional: read the robot's state/odom now. The loop calls it once per tick (2 Hz)."""
 
 
 class LaneJunctionPort(Protocol):
@@ -147,6 +152,8 @@ class TripConfig:
     max_turn_deg: float = 150.0
     #: CORE ``waiting`` (at a junction without an instruction) this long stops the trip.
     junction_wait_s: float = 10.0
+    #: A trip starts only within this long after the pose's sighting anchor.
+    start_anchor_age_s: float = 2.0
 
 
 class TripError(Exception):
@@ -247,8 +254,11 @@ class TripRunner:
             if self.running() is not None:
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self.running()["trip_id"]})
             pose = await self._pose(robot_id)
-            if pose is None or pose.state != LOCALIZED:
-                raise TripError(422, "TRIP_POSE_UNTRUSTED", {"pose_state": pose.state if pose else None})
+            anchor_age = getattr(pose, "anchor_age_s", None)
+            if pose is None or pose.state != LOCALIZED or (
+                    anchor_age is not None and anchor_age > self.config.start_anchor_age_s):
+                raise TripError(422, "TRIP_POSE_UNTRUSTED", {"pose_state": pose.state if pose else None,
+                                                             "anchor_age_s": anchor_age})
             now = self._clock()
             view = {"trip_id": plan_id, "plan_id": plan_id, "robot_id": robot_id, "started_by": principal_id,
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
@@ -513,6 +523,12 @@ class TripRunner:
         return None
 
     async def _pose(self, robot_id: str) -> Optional[MapPose]:
+        refresh = getattr(self._poses, "refresh", None)
+        try:
+            if refresh is not None:  # one state/odom read per tick for the trip robot (D-491 3)
+                await _maybe(refresh(robot_id))
+        except Exception:  # an unread state leaves the pose to age into DEGRADED/UNKNOWN
+            _LOG.warning("state refresh for %s failed", robot_id, exc_info=True)
         try:
             return await _maybe(self._poses.arbitrated_pose(robot_id))
         except Exception:  # a pose that cannot be read is no pose
@@ -565,4 +581,5 @@ def _pose_view(pose: Optional[MapPose]) -> Optional[dict]:
     if pose is None:
         return None
     return {"x": round(pose.x, 3), "y": round(pose.y, 3), "yaw": round(pose.yaw, 3), "state": pose.state,
-            "source": pose.source, "dead_reckon_m": round(pose.dead_reckon_m, 3), "age_s": round(pose.age_s, 2)}
+            "source": pose.source, "dead_reckon_m": round(pose.dead_reckon_m, 3), "age_s": round(pose.age_s, 2),
+            "anchor_age_s": getattr(pose, "anchor_age_s", None)}
