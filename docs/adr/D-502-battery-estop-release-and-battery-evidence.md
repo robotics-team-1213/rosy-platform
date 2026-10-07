@@ -17,7 +17,8 @@
 2. **배터리 정지의 해제 경로는 SAF-001과 같다.** Administrator의 `POST /api/v1/safety/release`. 새 엔드포인트나 배터리 전용 해제는 만들지 않는다.
 3. **자동 해제는 하지 않는다(보수적 선택).** 전압이 회복되어도 래치는 그대로다. 근거: (a) 충전 중 전압은 실제 잔량보다 높게 읽힌다(로봇에 전류 센서가 없다, SAF-005). (b) 운동을 다시 허용하는 결정은 사람이 상태를 보고 내린다는 SAF-001의 원칙. 해제 판단을 돕기 위해 `GET /safety/state`의 `battery`에 지금의 근거를 싣는다(4항).
 4. **해제는 배터리 정책을 끄지 않는다.** 해제 뒤에도 같은 정책이 그대로 돈다. Deep 단계가 이어지면 다음 표본에서 다시 래치한다(`battery_deep`). Critical은 단계가 바뀔 때만 동작하므로(기존 SAF-005 규칙) 해제 직후 같은 Critical에서는 다시 래치하지 않는다. 그것은 관리자의 판단으로 본다.
-5. **배터리 입력의 결측·낡음은 API에 드러낸다(추가 필드, API Ref v1.119).**
+   **해제 뒤에는 새 명령 없이 움직이지 않는다.** E-Stop은 대기 중인 배터리 도크 복귀(DNC-006, WARNING에서 무장)를 지우고, 배터리가 OK로 돌아올 때까지 다시 무장하지 않는다(`DockingManager.on_estop`). 해제 직후 로봇을 움직이는 것은 운영자의 새 명령(도킹 명령 포함)뿐이다.
+5. **배터리 입력의 결측·낡음은 API에 드러낸다(추가 필드, API Ref v1.120).**
    - `battery/voltage`(Float32) 표본이 `battery` 센서 표본이 된다: `{voltage, received_at, source: "battery/voltage"}`. `batt_state`가 있는 벤치 구성은 그 표본이 덮어쓴다(기존 필드 유지).
    - `GET /api/v1/sensors/battery`는 404 대신 200과 `evidence`(`missing`/`fresh`/`stale`), `sample_age_s`, `stale_after_s`를 싣는다. 판정은 `GET /power/health`의 `battery`와 같은 `BatteryMonitor.health()`다. 표본이 없으면 `voltage`·`received_at`·`source`는 `null`이다(D-82 Law 0: 결측은 0이 아니다). 다른 센서의 404는 그대로다.
    - `GET /api/v1/safety/state`의 `battery`에 `evidence`, `sample_age_s`, `level`(`ok`/`warning`/`critical`/`deep`), `percent`를 더한다.

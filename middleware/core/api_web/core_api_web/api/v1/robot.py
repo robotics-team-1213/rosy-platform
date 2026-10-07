@@ -72,7 +72,7 @@ def sensor_detail(sensor_type: str, _: AuthContext = Depends(viewer),
                   svc: CoreServicesLike = Depends(get_services)):
     data = svc.state.get_sensor(sensor_type)
     if sensor_type == "battery":
-        # SAF-005 input: missing or stale is an answer, not a 404 (API ref 5.2, v1.119).
+        # SAF-005 input: missing or stale is an answer, not a 404 (API ref 5.2, v1.120).
         health = battery_health(svc)
         data = {"voltage": None, "received_at": None, "source": None, **(data or {}),
                 "evidence": health["evidence"], "sample_age_s": health["sample_age_s"],
