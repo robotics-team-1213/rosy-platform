@@ -160,7 +160,8 @@ def test_logs_md_appends_with_shared_trailing_lines_stay_whole(repos):
     commit(main, {"docs/logs.md": base + ENTRY.format(who="peer")}, "peer entry")
     assert land.main(["--tests", "none"]) == 0
     text = (main / "docs/logs.md").read_text(encoding="utf-8")
-    assert text == base + ENTRY.format(who="branch") + ENTRY.format(who="peer")
+    # main's entry landed first, so it stays first (lint wants log dates in order).
+    assert text == base + ENTRY.format(who="peer") + ENTRY.format(who="branch")
 
 
 def test_logs_md_edit_next_to_append_is_manual(repos):
@@ -306,3 +307,45 @@ def test_unusable_selector_json_stops(repos, capsys):
     commit(wt, {"tools/harness/affected_tests.py": "", "tools/harness/rosy_harness.py": stub}, "harness")
     assert land.main(["--tests", "auto"]) == 1
     assert "unusable JSON" in capsys.readouterr().err
+
+
+def test_logs_md_ours_end_append_with_their_mid_insert():
+    first, last = ENTRY.format(who="first"), ENTRY.format(who="last")
+    base = "# docs logs\n" + first + last
+    theirs = "# docs logs\n" + first + ENTRY.format(who="peer") + last  # peer entry before the last one
+    ours = base + ENTRY.format(who="branch")
+    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) == (
+        theirs + ENTRY.format(who="branch")).encode()
+
+
+def test_logs_md_their_mid_insert_lands_end_to_end(repos):
+    # git's own merge may or may not conflict on this shape (it did in the D-510
+    # landing); either way the landed log is theirs verbatim plus our entry.
+    main, wt = repos
+    first, last = ENTRY.format(who="first"), ENTRY.format(who="last")
+    base = "# docs logs\n" + first + last
+    theirs = "# docs logs\n" + first + ENTRY.format(who="peer") + last
+    commit(main, {"docs/logs.md": base}, "base log")
+    git(wt, "merge", "-q", "main")
+    commit(wt, {"docs/logs.md": base + ENTRY.format(who="branch")}, "branch entry")
+    commit(main, {"docs/logs.md": theirs}, "peer entry mid-file")
+    assert land.main(["--tests", "none"]) == 0
+    assert (main / "docs/logs.md").read_text(encoding="utf-8") == theirs + ENTRY.format(who="branch")
+
+
+@pytest.mark.parametrize("theirs, ours", [
+    ("a\nc\n", "a\nb\nc\nd\n"),          # theirs deleted a base line
+    ("a\nP\nb\nc\n", "a\nb\nX\nc\n"),     # ours is not an end-append
+])
+def test_logs_md_mid_insert_needs_a_human_otherwise(theirs, ours):
+    assert land.append_blocks(b"a\nb\nc\n", ours.encode(), theirs.encode()) is None
+
+
+def test_logs_md_their_deletion_next_to_append_is_manual(repos):
+    main, wt = repos
+    commit(main, {"docs/logs.md": "a\nb\n"}, "base log")
+    git(wt, "merge", "-q", "main")
+    commit(wt, {"docs/logs.md": "a\nb\nc\n"}, "branch append")
+    commit(main, {"docs/logs.md": "a\n"}, "peer deletes b")
+    assert land.main(["--tests", "none"]) == 1
+    assert no_merge_left(wt)
