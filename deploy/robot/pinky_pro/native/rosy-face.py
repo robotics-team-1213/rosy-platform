@@ -841,7 +841,6 @@ class FaceDisplay:
         screen = self.screen = self.screen_of(view, now)
         if screen and screen["kind"] == "light":
             pattern = "illumination"
-        self._announce(state, pattern, now)
         if self._lamp is not None:
             # D-380: a mode change switches the pattern without a sound; show() is
             # idempotent, so an unchanged pattern costs nothing.
@@ -851,29 +850,38 @@ class FaceDisplay:
             screen = self.screen = self.screen_of(view, now)
         self._power(screen)
         kind = screen["kind"] if screen else "status"
+        redrawn = False
         if kind == "face" and screen["overlay"] is None:
             # The face plays from tick(); a strip rides every frame.
             self.animating = (screen["face"], screen["strip"], screen["strip_tone"])
             self._drawn = None
-            return False
-        self.animating = None
-        if kind == "sleep":
-            self._drawn = "sleep"
-            return False
-        card = dict(view)
-        if screen is not None:
-            card["screen"] = screen
-            if screen.get("line"):
-                card["state_line"] = screen["line"]  # D-433 row 7: CORE not responding
-            if kind == "update":
-                card["frame"] = int(now) % 2
-        key = json.dumps(card, sort_keys=True)
-        if key == self._drawn or self.lcd is None:
-            return False
-        self.lcd.img_show(self._render(card))
-        self._drawn = key
-        self.draws += 1
-        return True
+        else:
+            self.animating = None
+            if kind == "sleep":
+                self._drawn = "sleep"
+            else:
+                card = dict(view)
+                if screen is not None:
+                    card["screen"] = screen
+                    if screen.get("line"):
+                        card["state_line"] = screen["line"]  # D-433 row 7: CORE not responding
+                    if kind == "update":
+                        card["frame"] = int(now) % 2
+                key = json.dumps(card, sort_keys=True)
+                if key != self._drawn and self.lcd is not None:
+                    try:
+                        self.lcd.img_show(self._render(card))
+                    except Exception:
+                        # A broken LCD must not swallow the entry alarm.
+                        self._announce(state, pattern, now)
+                        raise
+                    self._drawn = key
+                    self.draws += 1
+                    redrawn = True
+        # A synchronous buzzer pattern can last hundreds of milliseconds. Show
+        # the lamp and any status card first, especially on emergency entry.
+        self._announce(state, pattern, now)
+        return redrawn
 
     def _draw_shutdown(self, now: float) -> bool:
         view = read_view(self.root, self._battery_value)

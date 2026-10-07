@@ -493,3 +493,4 @@
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 | Proposed (2026-10-07; SOURCE/LOCAL implementation, field acceptance pending) |
 | D-498 | 교차로 제한 회전은 D-400 enforce가 아니어도 bridge와 같은 현장 근거(IR 가드 + 몸체 근접 정지 + 현장 수용 선언)로 허용한다 | Proposed (2026-10-07; 사용자 지시; 기본 꺼짐, junction_turn_site_accepted 새 설정, SIM/DEVICE 별도) |
 | D-504 | 로봇 얼굴 애니메이션은 작은 LCD에서 표정의 형태를 먼저 구별하게 한다 | Accepted (2026-10-07, 사용자 요청; SOURCE/LOCAL 구현, DEVICE/FIELD 별도) |
+| D-505 | 로봇 상태 전환에서 화면·램프를 먼저 갱신하고 소리로 알린다; 막힘과 내비게이션 실패를 LCD 문구로 구분한다 | Proposed (2026-10-07, SOURCE/LOCAL 구현; DEVICE/FIELD 별도) |
