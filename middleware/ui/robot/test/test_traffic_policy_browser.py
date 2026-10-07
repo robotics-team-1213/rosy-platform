@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import os
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Thread
 
 import pytest
+from browser_harness import browser_tests_enabled, safe_http_server
 from playwright.sync_api import expect, sync_playwright
 
 REPO = Path(__file__).resolve().parents[4]
-pytestmark = pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                               reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium")
 
 
@@ -30,7 +30,7 @@ class _Handler(SimpleHTTPRequestHandler):
 
 @pytest.fixture
 def panel():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

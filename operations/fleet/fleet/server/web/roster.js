@@ -10,6 +10,7 @@ import { linkTag } from "./link-tag.js";
 import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./localization-badge.js";
 import { capabilityReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
+import { powerHealthView } from "./power-health-view.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -52,6 +53,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!robot.online) return [{ severity: "warn", text: `: ${EVIDENCE_LABEL.disconnected}` }];
     if (!state) return [{ severity: "warn", text: ": 상태 확인 불가" }];
     const items = [];
+    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
+    if ("power_health" in robot && power.problem)
+      items.push({ severity: "warn", text: `: ${power.problem}` });
     // D-407: 막힌 로봇이 답을 기다린다. 답하는 자리는 큐 아래 판단 요청이다.
     const staleS = staleAgeS(robot, view.receivedAtMs, Date.now());
     const staleNote = staleS === null ? "" : ` (상태 ${staleS}초 전 값)`;
@@ -125,7 +129,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const pose = state.pose;
     const nav = navTag(state);
     const estop = state.safety?.estop;
-    const safetyLabel = !robot.online ? "—" : view.stateUnavailable ? EVIDENCE_LABEL.unavailable : estop === true ? "비상 정지"
+    const stateStale = staleAgeS(robot, view.receivedAtMs, Date.now()) !== null;
+    const safetyLabel = !robot.online ? "—" : view.stateUnavailable || stateStale ? EVIDENCE_LABEL.unavailable : estop === true ? "비상 정지"
       : estop === false ? "정상" : EVIDENCE_LABEL.unavailable;
     const goalSafetyReason = view.stateUnavailable
       ? "Fleet 상태를 확인할 수 없어 목표를 보낼 수 없습니다."
@@ -175,8 +180,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     node.appendChild(head);
 
     const facts = nodeWithText("div", "facts");
-    const battery = state.battery && typeof state.battery.percent === "number"
-      ? `${Math.round(state.battery.percent)}%` : "—";
+    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
+    const battery = power.battery;
     const rows = [
       ["pose", "위치", pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
       ["yaw", "방향", pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
@@ -206,6 +211,20 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       facts.appendChild(cellEl);
     });
     node.appendChild(facts);
+
+    if (!view.stateUnavailable) {
+      const when = typeof power.observedAgeS === "number" ? ` · 전원 근거 ${power.observedAgeS}초 전` : "";
+      const charging = nodeWithText("p", "hint", `충전: ${power.charging}${when}`);
+      charging.dataset.fact = "charging";
+      node.appendChild(charging);
+      if (power.problem) node.appendChild(nodeWithText("p", "hint", power.problem));
+      if (power.safetyRelease) node.appendChild(nodeWithText("p", "hint", power.safetyRelease));
+      const diagnostics = Object.entries(stateStale ? {} : state.diagnostics_summary || {})
+        .filter(([, status]) => status === "WARNING" || status === "ERROR" || status === "UNKNOWN")
+        .map(([name, status]) => `${name}: ${status}`);
+      if (diagnostics.length) node.appendChild(nodeWithText("p", "hint",
+        `진단: ${diagnostics.join(" · ")} — 로봇 진단 확인`));
+    }
 
     if (!view.stateUnavailable && robot.yielding) {
       // 운영자가 보내지 않은 좌표로 로봇이 움직인다. 이유를 적지 않으면 오작동으로 읽힌다.

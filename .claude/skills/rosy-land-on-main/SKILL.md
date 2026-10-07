@@ -59,18 +59,32 @@ same commit. Never add a line to hide a failure your branch introduced.
 
 ## ADR numbers
 
-Re-check **right before writing** — peers take numbers minutes apart:
+Reserve **right before writing** — peers take numbers minutes apart (D-510):
 
-1. `ls docs/adr` on main **and** the working tree (a peer's untracked file), plus
-   `git for-each-ref refs/heads` branches (`git ls-tree -r --name-only <branch> docs/adr`).
-2. `| D-nnn |` rows in `docs/reference/ROSY ADR Log.md` (a row can exist before its file).
-3. `adr_gaps` in `tools/harness/harness.yaml` (reserved or skipped numbers).
+```bash
+python tools/harness/adr_reserve.py next "<topic>"                    # prints D-nnn; use it
+python tools/harness/adr_reserve.py list                                # local refs/adr reservations
+python tools/harness/adr_reserve.py release D-nnn --reason "<topic>"   # give back an unused number
+```
 
-Take the next free number. Commit the ADR file **and** its Log row together (the Log is
-UTF-8 with BOM and **CRLF** — keep both), then `python tools/harness/rosy_harness.py lint`.
-A number lost to a collision goes into `adr_gaps` with the reason.
+The tool scans `docs/adr`, Log rows and gaps on every branch, remote-tracking ref and
+worktree plus `refs/adr/D-*`, then creates `refs/adr/D-nnn` create-only; only one session
+can win a number. The ref is local — CI never sees it, and lint only warns about it. If the
+ADR will not land with this branch, add `D-nnn reason` to `tools/harness/adr_gaps.txt`
+before push. Commit the ADR file **and** its Log row together (the Log is UTF-8 with BOM and
+**CRLF** — keep both), then `python tools/harness/rosy_harness.py lint`. A number lost to a
+collision also goes into `tools/harness/adr_gaps.txt`.
+The ADR Log and `adr_gaps.txt` merge with `merge=union`; if that leaves two rows for one
+number, keep the row with the newer Status. `logs.md` still conflicts: keep both entry
+blocks whole, one after the other. Regenerate `index.md` conflicts with
+`python tools/harness/rosy_harness.py generate`.
 
 ## Landing
+
+착지 도구: from the topic worktree run `python tools/land.py --tests auto` (`--dry-run` first to see the plan).
+It loops merge main -> auto-resolve ADR Log/logs.md/index.md conflicts -> D-436 affected tests + lint
+-> `known_failures` -> `--ff-only`, stops on any NEW failure or other conflict, and never pushes.
+The manual steps below are what it does.
 
 ```dot
 digraph land {

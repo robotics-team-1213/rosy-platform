@@ -6816,3 +6816,90 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-506 Proposed
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · fix(push): Windows 검사 경로와 공유 main 게이트 복구
+
+- 변경: Windows에서 Git Bash와 커밋된 LF hook blob을 사용하도록 교훈을 기록하고, 검증 문서의 해시 종류 표기, API 버전, Fleet 크기 판정, 독립 안전 검토 기록을 바로잡았다.
+- 증거: Windows Git Bash로 pre-push를 실행해 원래의 3개 fast gate 실패와 3개 안전 경고를 확인했다. 수정 후 선택 검사 7 passed, Fleet 검토 검사 40 passed, 양쪽 `known_failures.py` 모두 0 NEW. 전체 gate와 원격 CI는 별도 확인.
+- gate 변화: 없음.
+- 결정: D-430 안전 검토 예외는 해당 세 커밋의 소스 diff와 host 테스트 범위에 한정한다.
+- 교훈: 기본 `bash`가 WSL이면 Windows 파일의 CRLF와 `/mnt/f` 성능 때문에 pre-push 결과를 잘못 읽을 수 있다. Git Bash와 커밋 blob으로 같은 검사를 실행한다.
+
+## 2026-10-07 · uncommitted · docs(adr): Console 충전·health·설정 경계 D-509
+
+- 변경: Fleet 관제는 기존 CORE 배터리·충전·진단 근거를 출처와 나이와 함께 보여 주고 다음 조치를 안내한다. 안전 해제와 Wi-Fi 적용은 로봇 관리자 경로, 영상 설정은 카메라 소유 경로에 둔다.
+- 증거: harness lint 0 errors/23 기존 경고; 문서 계약 시험 112 passed/23 warnings, known_failures 0 NEW. SOURCE/LOCAL 문서 검증이며 DEVICE/FIELD 수용 아님.
+- gate 변화: 없음
+- 결정: D-509 Proposed
+- 교훈: 충전 래치는 신선한 충전 확인의 대용이 아니다.
+
+## 2026-10-07 · uncommitted · feat(tools): 착지 도구 tools/land.py
+- 변경: `python tools/land.py --tests auto`가 워크트리에서 main 머지 → 자동 해소(ADR Log 행 합집합+D-번호 정렬·BOM/CRLF 유지, `logs.md` 합집합, `adr_gaps.txt` 합집합, 생성 `index.md`·`STATUS.md`는 theirs 후 generate) → D-436 `affected` 선택 + lint → `test/known_failures.py` → `--ff-only`를 main이 멈출 때까지(기본 5회) 되풀이한다. 그 밖의 충돌은 `git merge --abort` 후 경로를 알리고, NEW 실패·lint 실패·ff 거절에서 멈춘다. main이 움직였어도 그 차이가 시험한 범위 밖이면 lint만 다시 돌린다. 푸시·stash·reset·clean은 하지 않는다. `--dry-run`, `--node`, `--browser` 지원. AGENTS.md·shared-checkout.md 6항과 `rosy-land-on-main` 스킬에 기본 방법으로 적었다.
+- 증거: `test/test_land.py` 7 passed(임시 저장소: Log 충돌 해소, 비자동 충돌 중단, 실패 시험에서 ff 안 함, 범위 밖 main 이동은 재시험 생략, 더러운 워크트리 거부, dry-run 무변경, main 체크아웃 거부). 실제 저장소 `--dry-run`이 affected 선택을 출력.
+- gate 변화: 없음
+- 결정: 없음(D-436 선택기 재사용)
+- 교훈: 2026-10-07 main이 하루 163번 움직여 손 착지가 한 브랜치에 네 번 돌았고, `tests ; git merge --ff-only` 사슬은 실패한 시험 뒤에도 착지할 수 있었다 — 착지는 실패에서 멈추는 한 도구로 한다.
+
+## 2026-10-07 · uncommitted · fix(tools): 착지 도구 리뷰 반영
+- 변경: `tools/land.py` 독립 리뷰 11건과 D-508 리뷰 1건. pytest 종료 코드 2–5에서 멈춤. main 차이가 기록 파일(docs `*.md`, `logs.md`, `index.md`, `progress.md`, `adr_gaps.txt`)뿐일 때만 재시험 생략. 자동 해소는 stage 1·2·3이 모두 있고 충돌 부분이 추가뿐일 때만 하며, `logs.md`는 줄 합집합 대신 양쪽 추가 블록을 통째로 잇는다(같은 꼬리 줄 `- 결정: 없음`이 접히지 않음). 해소 중 실패하면 `git merge --abort`. 시험한 sha로 `--ff-only` 하고 그 사이 브랜치가 움직이면 멈춤. main 체크아웃이 `refs/heads/main`인지 확인. harness가 있는데 `affected`가 실패하면 멈춤. FULL 승격은 요약에 CI 몫으로 적음. 자식 프로세스에 `PYTHONUTF8=1`. 앞 항목의 `logs.md` 합집합 설명은 이 항목이 대신한다.
+- 증거: `test/test_land.py` 21 passed(autocrlf true/false Log, 동료 미커밋 파일로 ff 거절 시 파일 보존 포함), `known_failures.py` 0 new, lint 0 error.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 줄 단위 합집합은 여러 줄 항목의 같은 줄을 하나로 접는다. 추가 전용 로그는 블록 단위로 잇는다.
+
+## 2026-10-07 · uncommitted · feat(harness): D-508 union 머지와 ADR 번호 선점 도구
+
+- 변경: `.gitattributes`에 `merge=union`(ADR Log, 모든 `logs.md`, `tools/harness/adr_gaps.txt`). `adr_gaps`를 `harness.yaml`에서 줄 파일 `tools/harness/adr_gaps.txt`로 옮겼다(18줄, lint는 번호로 중복 제거, 이행 기간에 yaml도 읽음). `tools/harness/adr_reserve.py next|list|release`가 `refs/adr/D-nnn`을 create-only로 만들어 번호를 선점한다. lint는 선점 ref 번호를 gap으로 본다. `AGENTS.md`·`shared-checkout.md`·`rosy-land-on-main`·`team-guide.md`·`docs/adr/AGENTS.md`의 4단계를 이 도구로 바꿨다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 120 passed, `known_failures.py` 0 new. 임시 저장소에서 BOM·CRLF Log에 두 브랜치가 행을 더해도 충돌 없이 두 행이 남는다. `rosy_harness.py lint` 0 errors. 실제 저장소 스캔은 브랜치 723개·워크트리 289개에서 약 4초.
+- gate 변화: 없음
+- 결정: D-508 Accepted (2026-10-07, 사용자 결정)
+- 교훈: 이어 쓰기만 하는 파일의 충돌은 내장 union 드라이버로 없앨 수 있다. 번호 경합은 조회를 늘려서가 아니라 원자적 ref 생성으로 막는다.
+
+## 2026-10-07 · uncommitted · fix(harness): D-508 리뷰 반영 — logs.md는 union에서 빼고 선점 ref는 경고만
+
+- 변경: 독립 리뷰를 반영했다. union은 한 줄이 한 기록인 ADR Log와 `adr_gaps.txt`에만 둔다. union은 두 쪽이 똑같이 더한 끝줄(`- 결정: 없음` 등)을 하나로 합쳐 `logs.md` 항목을 깎으므로 `logs.md`는 계속 충돌하게 둔다. 직전 항목의 "모든 `logs.md`" union 설명은 이 항목이 바로잡는다. lint는 로컬 `refs/adr` 선점을 gap으로 보지 않고 경고만 한다(CI에는 그 ref가 없다). `adr_reserve.py`는 ref가 실제로 있을 때만 다음 번호로 넘어가고, `--remotes`도 보고, 가장 큰 번호의 출처를 찍고, main 최대보다 20 넘게 큰 번호는 경고하고 무시하며, `release`는 `--reason` 일치나 `--force`를 요구한다. D-508 본문이 D-346 4항 개정과 "중복 행이 생기면 새 상태의 행을 남긴다"를 적는다. 4단계 문구에 착지하지 않는 선점 번호를 push 전에 `adr_gaps.txt`에 넣는 규칙을 더했다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 123 passed, `known_failures.py` 0 new. 임시 저장소 시험: `logs.md` 두 항목 추가는 충돌하고, union으로 바꾸면 끝줄이 사라진다. Log 두 행은 충돌 없이 남고, Status 수정+행 추가는 lint 중복 행 오류가 된다. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음
+- 결정: D-508 Accepted 본문 개정(브랜치 안, 미착지)
+- 교훈: union 드라이버는 같은 줄을 합치므로 여러 줄 기록 파일에는 맞지 않는다. 로컬 상태로 lint를 통과시키면 CI와 결과가 갈린다.
+
+## 2026-10-07 · uncommitted · docs(adr): union 머지·번호 선점 ADR은 D-510 (D-508에서 이동)
+
+- 변경: 이 브랜치의 앞 두 항목이 D-508이라 부른 결정은 D-510이다. 브랜치가 D-508을 `refs/adr`로 선점해 두었지만, 동료 세션이 도구 없이 main에 다른 D-508(제어 고리)과 D-509를 넣었다. `adr_reserve.py next`가 D-510을 찍었고 ADR 파일·Log 행·규칙 문구·코드 주석을 옮겼다. 옛 선점은 `release D-508 --force`로 풀었다. `git merge main` 뒤 ADR Log는 union으로 충돌 없이 합쳐졌다(행 순서만 D-510, D-508, D-509). main이 지운 D-499 gap을 `adr_gaps.txt`에서도 지웠다. `adr_reserve.py` 역사 파서는 출처 줄을 NUL로 구분하고(diff `@@` 줄을 출처로 읽던 결함), lint 경고는 브랜치 최대 번호보다 작은 선점에만 낸다. D-346 Status에 4항 개정 표시를 더했다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 123 passed, `known_failures.py` 0 new. 옛 파서로 바꾸면 출처 시험이 `'@ -0,0 +1 @@'`로 실패한다. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음
+- 결정: D-510 Accepted (2026-10-07, 사용자 결정), 본문은 D-508로 쓴 것과 같다
+- 교훈: 도구가 있어도 쓰지 않는 세션이 있으면 번호는 겹친다. 이 충돌 자체가 D-510의 근거다.
+
+## 2026-10-07 · uncommitted · fix(test): 브라우저 시험 기반 — 안전 포트, 옵트인 이름 하나, 범위 지도
+- 변경: `test/browser_harness.py`에 Chromium 차단 포트 목록(`port_util.cc` kRestrictedPorts)·`safe_listener()`·`free_port()`·`browser_tests_enabled()`를 두고 Fleet·로봇 UI·Pilot·OMX pilot-sim·검수 앱 브라우저 fixture가 port 0 대신 쓴다. 옵트인은 `ROSY_RUN_BROWSER_TESTS=1`이 정식이고 `ROSY_BROWSER_TESTS=1`도 받는다(40개 파일). CI는 `$GITHUB_ENV` 대신 매트릭스 단계가 Fleet 경로 실행에만 `ROSY_RUN_BROWSER_TESTS=1`을 주고, 같이 묶인 다른 경로는 플래그 없이 따로 돈다. `test/browser_scope.py`가 바꾼 경로를 브라우저 시험 대상으로 바꾼다. Pilot 녹화본 시트 CSS를 고쳐 `test_surfaces_do_not_repaint_shared_controls`를 통과시켰다. main에서 이미 실패하는 2건을 `test/known_failures.txt`에 올렸다. 개발 가이드 「브라우저 시험」에 현장 PC·모델 PC 전체 실행 명령 형태를 적었다.
+- 증거: 이 노트북 동적 포트 범위가 1024부터다(`netsh int ipv4 show dynamicport tcp` → 1024, 13977개). `ROSY_RUN_BROWSER_TESTS=1`만 켜고(`ROSY_BROWSER_TESTS` 없음) cell 3 passed, Fleet 콘솔 1 passed, 시작점 1 passed, 로봇 traffic policy 1 passed, 검수 1 passed, Pilot 녹화 시트 4 passed. 단위·가드 묶음 261 passed, 실패 3건은 main 1aba6c3f5에서도 실패하는 import 규칙 1건과 이 커밋 전 pilot index 재생성 2건. 출력 `X:/DevTemp/browser-infra/*.txt`, `known_failures.py` 0 new.
+- gate 변화: CI 브라우저 범위는 그대로다(전과 같이 Fleet 브라우저 시험만 Chromium 으로 돈다). SOURCE/LOCAL은 위 대상 시험만 확인했고, 전체 브라우저 묶음은 이 노트북에서 돌리지 않았다(현장 PC·모델 PC 몫).
+- 결정: D-436(변경 범위 시험).
+- 교훈: 옵트인 환경 변수를 파일마다 직접 읽으면 이름이 갈라져 시험이 조용히 건너뛰어진다. 판정은 헬퍼 하나로 한다.
+
+## 2026-10-08 · uncommitted · fix(test): 브라우저 시험 기반 리뷰 반영
+- 변경: CI 매트릭스 단계가 Fleet 경로만 따로 `ROSY_RUN_BROWSER_TESTS=1`로 돌린다(`$GITHUB_ENV` 아님). `browser_scope.py`는 고를 시험이 없으면 exit 3, 문서 명령은 `t=$(...) && ... pytest $t`. `browser_harness.safe_http_server()`가 묶인 안전 소켓을 서버에 넣어 포트 경합을 없애고 로봇 UI·Pilot·OMX fixture가 쓴다. importorskip 만으로 돌던 브라우저 시험 5개를 옵트인 뒤로 옮겼다. known_failures 두 줄에 원인 커밋과 "remove when fixed"를 적었다. 게임 보드 `PreviewServer(port=0)`는 그대로다 — `open_page(url=...)`가 그 포트를 `--explicitly-allowed-ports`로 허용하고 `test_chromium_opens_preview_on_a_normally_blocked_port`가 6000에서 이를 증명한다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1`만으로 게임 보드 2 passed(차단 포트 6000 포함), OMX pilot-sim 3·peer approval·로봇 traffic policy·surface entry 2 passed(`review_browser.txt`의 server_port 누락 3건은 `safe_http_server` 수정 뒤 `review_browser2.txt` 3 passed), Pilot 좁은 시트 1 passed, 단위·CI 계약 91 passed. 파일 `X:/DevTemp/browser-infra/review_browser2.txt`·`review_unit.txt`·`pilot_sheet2.txt`·`pilot_sheet3.txt`, `known_failures.py` 0 new.
+- gate 변화: CI 브라우저 범위는 그대로(Fleet 브라우저 시험만). 전체 브라우저 묶음은 미실행.
+- 결정: D-436.
+- 교훈: 옵트인 이름을 합치면 CI 의 잡 전역 플래그가 묶인 다른 묶음까지 켠다 — 플래그는 실행 단위로 준다.
+
+## 2026-10-08 · uncommitted · fix(tools): 착지 도구가 logs.md 중간 삽입 충돌을 해소
+- 변경: `tools/land.py`의 `logs.md` 해소에 경우 하나를 더했다. 우리 쪽이 끝에 덧붙이기만 했고 main 쪽이 기준 줄을 지우거나 바꾸지 않고 끼워 넣기만 했으면(항목 사이에 동료 항목) main 쪽을 그대로 두고 그 뒤에 우리 블록을 잇는다. 우리 쪽이 끝 덧붙이기가 아니거나 main 쪽이 기준 줄을 지우거나 바꿨으면 지금처럼 사람에게 넘긴다.
+- 증거: D-510 착지 때 main이 마지막 항목 앞에 동료 항목을 넣고 우리가 끝에 덧붙인 충돌을 도구가 "a side changed existing lines"로 거절했다. `test/test_land.py` 29 passed(중간 삽입 + 끝 덧붙이기 해소, main 쪽 삭제는 사람에게), `known_failures.py` 0 new.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: lint가 받는 항목 사이 삽입은 착지 도구도 받아야 한다. 두 규칙이 다르면 도구가 정상 이력을 막는다.
+
+## 2026-10-08 · uncommitted · D-509 관제 전원 근거
+
+- 변경: D-509를 CORE/Fleet/Vision/Host API 실체에 맞게 수정하고 실행 계획과 Fleet 선택 전원 근거 필드를 계약에 기록했다. 송신 enabled·D-350 Phase 1은 미증명으로 명시했다.
+- 증거: Fleet 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. DEVICE/FIELD 검증 전.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · docs(api): D-509 and D-513 contract union v1.125
+
+- 변경: Merged D-513 v1.124 and assigned the additive D-509 Fleet power health row to v1.125.
+- 증거: Version header, history, CORE docstring, and pinned contract tests aligned; merged tree verification pending.
+- gate 변화: None.

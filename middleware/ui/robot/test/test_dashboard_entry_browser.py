@@ -1,16 +1,16 @@
 """D-439 authentication entry uses real CORE assets without operational clients."""
 import importlib.util
 import json
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
+from browser_harness import browser_tests_enabled
 from playwright.sync_api import expect, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[4]
-pytestmark = pytest.mark.skipif(os.environ.get('ROSY_RUN_BROWSER_TESTS') != '1', reason='optional Chromium')
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='optional Chromium')
 
 
 @pytest.fixture

@@ -3,6 +3,9 @@
 
 # deploy
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Deployment and provisioning surfaces for ROSY device and site hosts. Pinky's

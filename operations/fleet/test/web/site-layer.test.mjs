@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines,
-  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence,
+  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, displayRotation, quarterTurn,
 } from "../../fleet/server/web/site-layer.js";
 
 const row = (changes) => ({
@@ -77,4 +77,23 @@ test("relay evidence pills say what is late, lost or unknown", () => {
     "릴레이 지연 · 송신 빈도 낮음");
   assert.deepEqual(streamEvidence(formation({ a: { state: "unavailable" } }), "a"),
     { text: "릴레이 증거 없음", cls: "warn", evidence: "unavailable" });
+});
+
+test("D-513 7: a 90° turn puts the picture's right edge at the bottom", () => {
+  const turn = quarterTurn(90, 1280, 720);
+  assert.deepEqual([turn.width, turn.height], [720, 1280]);
+  assert.deepEqual(turn.point(1280, 360), { x: 360, y: 1280 }); // right middle -> bottom middle
+  assert.deepEqual(turn.point(0, 0), { x: 720, y: 0 });          // top left -> top right
+  assert.deepEqual(quarterTurn(180, 10, 4).point(0, 0), { x: 10, y: 4 });
+  assert.deepEqual(quarterTurn(270, 10, 4).point(0, 0), { x: 0, y: 10 });
+  assert.deepEqual(quarterTurn(0, 10, 4).point(3, 2), { x: 3, y: 2 });
+});
+
+test("D-513 7: the rotation comes from the source row, anything else is 0", () => {
+  const siteMap = { maps: [{ sources: [{ source_id: "cam", display_rotation_deg: 90 },
+    { source_id: "odd", display_rotation_deg: 45 }] }] };
+  assert.equal(displayRotation(siteMap, "cam"), 90);
+  assert.equal(displayRotation(siteMap, "odd"), 0);
+  assert.equal(displayRotation(siteMap, "missing"), 0);
+  assert.equal(displayRotation(null, "cam"), 0);
 });

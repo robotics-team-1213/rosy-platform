@@ -1,7 +1,10 @@
-<!-- Parent: ../../../AGENTS.md -->
+<!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-10-03 | Updated: 2026-10-03 -->
 
 # omx curation
+
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
 
 ## Purpose
 

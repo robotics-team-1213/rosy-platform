@@ -3,6 +3,9 @@
 
 # rosy_cell
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 D-413 compatibility import facade for `operations/processes/palletizing`, whose implementation owns the following behavior. Do not restore process implementations here. Rosy Cell (D-399): parses `recipe.yaml` (`rosy_cell.recipe/1`) and `cell.yaml` (`rosy_cell.cell/2`), lays out pallet patterns, and compiles a hashed Job of `pick`/`place`/`pallet_done` Steps in the robot base frame. It plans no motion, solves no IK and judges no reachability; the device owner does (D-376, D-399).

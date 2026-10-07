@@ -695,3 +695,10 @@
 - gate 변화: 없음. 호스트 시험만. SIM(D-495 harness, odom 지연 제거) 미실행.
 - 결정: D-495 SIM 결과 결함 2 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(line_follow): LiDAR 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
+- 변경: `clearance.return_scan_view`가 1 ns라도 앞선 스캔을 버리던 것을 `SOURCE_FUTURE_TOLERANCE_S`(0.1 s) 안이면 나이 0으로 받고, 넘으면 버린다. odom(`lane_return_evidence.observe_pose`)과 선 관측(`manager.observe`)은 이미 같은 상수를 쓴다.
+- 증거: `test_lane_return_scan.py`(1 ms·0.1 s 앞 받음, 0.1 s+1 ns 앞 버림), `test_lane_return_evidence.py`(허용치 밖 표본을 버려도 다음 표본이 trail을 잇는다, 실제 불연속은 끊는다). 변이 확인 4건.
+- gate 변화: 없음. 호스트 시험만.
+- 결정: D-507 8
+- 교훈: 없음

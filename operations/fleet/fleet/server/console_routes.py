@@ -17,7 +17,9 @@ import httpx
 from fastapi import Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
+from core_common.protocol.power_health import PowerHealthResponse
 from fleet.hub.hub import HubError
+from fleet.server.console_view import CapabilityDisplay
 from fleet.server.http_errors import http_error
 from fleet.server.line_stuck import LineStuckAnswerLog, LineStuckBoard
 from fleet.server.site_auth import SitePrincipal
@@ -107,6 +109,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
+    power_display = app.state.power_health_display = CapabilityDisplay(
+        console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse)
 
     async def gathered() -> dict:
         snapshot = await gather()
@@ -119,6 +123,13 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             observed = row.pop("_state_mono", None)
             row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
             rows.append(row)
+        power = await asyncio.gather(*(power_display.shown(row["robot_id"])
+                                       for row in rows if row["online"]))
+        power_values = iter(power)
+        for row in rows:
+            row["power_health"] = next(power_values) if row["online"] else None
+            row["power_health_age_s"] = (power_display.age(row["robot_id"])
+                                         if row["power_health"] is not None else None)
         return {**snapshot, "robots": rows, "gathered_at": gather.gathered_at}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
