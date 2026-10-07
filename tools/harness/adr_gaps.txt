@@ -17,5 +17,3 @@ D-428 ADR written on branch feat/d428-web-face-sweep (8ce5cc237), not yet on mai
 D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; implementation integration does not establish the missing ADR body
 D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
-D-516 reserved for 모델 PC 오프라인 비교와 공급자 교체 경계; not on this branch; remove when it lands
-D-517 reserved for multi-robot lane traffic (per-robot trips, blocks, movement authority, escalation); not on this branch; remove when it lands
