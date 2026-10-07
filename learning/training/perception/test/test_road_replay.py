@@ -62,6 +62,64 @@ def synthetic(n=96, blank=(), yaw_rate=0.0):
         yaw += yaw_rate / FPS
 
 
+def _recorded_debug(t, *, pitch_rad=None):
+    return {"stamp": t, "image_size": [320, 240], "paint_source_used": "threshold",
+            "ground_projection": {
+                "height_m": GROUND.height_m,
+                "pitch_rad": GROUND.pitch_rad if pitch_rad is None else pitch_rad,
+                "focal_px": GROUND.focal_px, "principal_x": GROUND.principal_x,
+                "principal_y": GROUND.principal_y, "max_range_m": GROUND.max_range_m,
+                "camera_x_offset_m": X_OFFSET}}
+
+
+def test_recorded_ground_replay_uses_exact_projection_and_rejects_missing_or_changed_frames():
+    frames = list(synthetic(4))
+    for frame in frames:
+        frame.keep_debug = _recorded_debug(frame.t, pitch_rad=GROUND.pitch_rad + 0.01)
+    metrics, _ = rr.replay(iter(frames), dropouts=(), recorded_ground=True)
+    assert metrics["ground_provenance"] == "recorded_keep_debug"
+    assert metrics["ground_projection"] == frames[0].keep_debug["ground_projection"]
+    frames[2].keep_debug = None
+    with pytest.raises(SystemExit, match="missing line/keep_debug"):
+        rr.replay(iter(frames), dropouts=(), recorded_ground=True)
+    frames[2].keep_debug = _recorded_debug(frames[2].t, pitch_rad=GROUND.pitch_rad + 0.02)
+    with pytest.raises(SystemExit, match="ground projection changed"):
+        rr.replay(iter(frames), dropouts=(), recorded_ground=True)
+    frames[2].keep_debug = _recorded_debug(frames[2].t + 0.01, pitch_rad=GROUND.pitch_rad + 0.01)
+    with pytest.raises(SystemExit, match="image stamp mismatch"):
+        rr.replay(iter(frames), dropouts=(), recorded_ground=True)
+
+
+def test_recorded_ground_keeps_camera_offset_after_a_camera_gap(monkeypatch):
+    frames = list(synthetic(4))
+    frames[2].t += 1.0
+    frames[3].t += 1.0
+    offset = X_OFFSET + 0.02
+    for frame in frames:
+        frame.keep_debug = _recorded_debug(frame.t)
+        frame.keep_debug["ground_projection"]["camera_x_offset_m"] = offset
+    actual = rr.LaneBoundaryTracker
+    offsets = []
+
+    def build_boundary(*, camera_x_offset_m):
+        offsets.append(camera_x_offset_m)
+        return actual(camera_x_offset_m=camera_x_offset_m)
+
+    monkeypatch.setattr(rr, "LaneBoundaryTracker", build_boundary)
+    rr.replay(iter(frames), dropouts=(), compare_boundary=True, recorded_ground=True)
+    assert offsets[1:] == [offset, offset, offset]
+
+
+def test_recorded_ground_mcap_uses_the_existing_stamped_evidence_join(monkeypatch, tmp_path):
+    monkeypatch.setattr(rr.extract, "_mcap_files", lambda _: [tmp_path / "bag.mcap"])
+    monkeypatch.setattr(rr, "_mcap_odom", lambda _: ([], []))
+    debug = _recorded_debug(5.0)
+    monkeypatch.setattr(rr.extract, "_mcap_frames", lambda _: iter([
+        (5.0, LANE, {"line/keep_debug": debug}, "jpg", {})]))
+    frame = next(rr.mcap_frames(tmp_path, recorded_ground=True))
+    assert frame.keep_debug == debug and frame.bgr.shape == (240, 320, 3)
+
+
 def test_replay_reports_keep_and_road_metrics_and_gates():
     metrics, rows = rr.replay(synthetic())
     assert metrics["frames"] == 96 and len(rows) == 96
@@ -169,16 +227,23 @@ def test_video_with_sidecar_is_the_second_input_class(tmp_path):
     rows = []
     for i in range(6):
         writer.write(LANE)
-        rows.append({"index": i, "t": 5.0 + i / FPS,
+        t = 5.0 + i / FPS
+        debug = _recorded_debug(t)
+        debug["stamp_ns"] = round(t * 1e9)
+        rows.append({"index": i, "t": t, "stamp_ns": round(t * 1e9),
+                     "log_ns": round(t * 1e9) + 1_000_000,
+                     "dt": {"line/keep_debug": 0.01},
                      "side": {"odom": {"x": i * V / FPS, "y": 0.0, "yaw": 0.0},
                               SHADOW_TOPIC: {"visible": False},
-                              "line/observation": {"source": "CAMERA_LINE", "visible": True}}})
+                              "line/observation": {"source": "CAMERA_LINE", "visible": True},
+                              "line/keep_debug": debug}})
     writer.release()
     (tmp_path / "s.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     frames = list(rr.session_frames(video))
     assert len(frames) == 6
     assert frames[3].odom == pytest.approx((3 * V / FPS, 0.0, 0.0))
     assert frames[3].ir is None                  # a CAMERA_LINE sample is not IR
+    assert frames[3].keep_debug["ground_projection"]["pitch_rad"] == GROUND.pitch_rad
 
 
 def test_frame_only_video_is_refused(tmp_path):
