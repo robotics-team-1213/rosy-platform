@@ -492,3 +492,4 @@
 | D-496 | OMX 실물 팔 조종 수용 — 실측 프로필과 벤치 관문 없이는 활성화하지 않는다 | Proposed (2026-10-07, 실물 하드웨어 없음 — OMX-AI 스펙 기반 조건 설계) |
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 | Proposed (2026-10-07; SOURCE/LOCAL implementation, field acceptance pending) |
 | D-498 | 교차로 제한 회전은 D-400 enforce가 아니어도 bridge와 같은 현장 근거(IR 가드 + 몸체 근접 정지 + 현장 수용 선언)로 허용한다 | Proposed (2026-10-07; 사용자 지시; 기본 꺼짐, junction_turn_site_accepted 새 설정, SIM/DEVICE 별도) |
+| D-503 | 자율 사슬은 다섯 층(Perception → World State → Autopilot Supervisor → Skill → Planner/Control) — 모델은 출처·나이 붙은 사실만(VLM = 정체, SAM/Qwen 점 = 오프라인 초안, judge = 검수 순서), 규칙이 고르고 CORE가 확인, 사람은 예외 큐만; D-361 개정(등록 로봇 `stuck_resolver` 추가 자격 `robot_enrollment_credentials`), 막힘 에피소드 표, 데이터 먼저, VLM SQL 트리거 | Proposed (2026-10-07; 문서만; 구현·배포는 단계별 사용자 승인) |
