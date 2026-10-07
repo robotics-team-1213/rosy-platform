@@ -2,12 +2,14 @@
 
 Perception gives CORE no branch candidates (D-491 implementation appendix 2026-10-07). The gate
 keeps or zeroes the tick's decision, with one bounded exception: a 'left'/'right' carrying
-`turn_deg` (D-492) turns in place on odom yaw, advances `advance_m`, then hands back to lane
-following and must reacquire the lane within REACQUIRE_M. Any doubt aborts to a zero command.
-'left'/'right' without `turn_deg` HOLD as 'unresolved'; 'straight' leaves the ordinary path
-(keeper, D-476 bridge) alone; 'stop' HOLDs after `stop_after_m` of measured odom. A detected
-junction with no live instruction HOLDs as 'waiting'. Detection is the keep-mode keeper's own
-junction HOLD reason (line/keep_debug). Never changes mode; the twist goes out through the same
+`turn_deg` (D-492) waits for the robot to stand still at the junction, turns in place on odom
+yaw (early stop for latency, then settles inside 5 deg), advances `advance_m`, then hands back
+to lane following and must reacquire the lane within REACQUIRE_M. Any doubt aborts to a zero
+command. 'left'/'right' without `turn_deg` HOLD as 'unresolved'; 'straight' leaves the ordinary
+path (keeper, D-476 bridge) alone; 'stop' HOLDs after `stop_after_m` of measured odom or at the
+junction, whichever comes first. A detected junction with no live instruction HOLDs as
+'waiting'. Detection is the keep-mode keeper's own junction HOLD reason (line/keep_debug), so
+all of this is CAMERA_LINE only. Never changes mode; the twist goes out through the same
 decision the manager already returns to CommandManager (D-18).
 """
 from __future__ import annotations
@@ -28,11 +30,16 @@ MAX_TURN_DEG = 150.
 MAX_ADVANCE_M = .30
 DEFAULT_ADVANCE_M = .10
 REACQUIRE_M = .20
+REACQUIRE_HEADING_RAD = math.radians(30.)
 TURN_TOLERANCE_RAD = math.radians(5.)
 TURN_GAIN = 2.            # rad/s per rad of yaw error, clipped to [TURN_MIN_W, angular cap]
 TURN_MIN_W = .3           # rad/s floor (or the cap, if lower); sets the turn time limit
 TURN_TIME_MARGIN_S = 2.
-STEP_TIME_S = 5.          # advance and reacquire, each
+SETTLE_S = .3             # inside the tolerance this long before the turn counts as done
+#: Review L1: the turn starts only after odom shows the robot standing still this long.
+STILL_S, STILL_LINEAR, STILL_ANGULAR, STILL_LIMIT_S = .2, .01, .05, 2.
+STEP_TIME_S = 5.          # reacquire
+STEP_MARGIN_S = 2.        # advance: advance_m / speed + this
 MANEUVER = ('turning', 'advancing', 'reacquiring')
 #: keep_debug arrives only in keep mode; this recent a frame with corner_turning proves both.
 KEEP_EVIDENCE_S = 2.
@@ -50,11 +57,20 @@ def _wrap(angle):
     return math.atan2(math.sin(angle), math.cos(angle))
 
 
+class JunctionRefused(Exception):
+    """A junction instruction CORE does not take in the current line-follow mode (409)."""
+
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
 class JunctionMixin:
     def _init_junction(self):
         self._junction_seq = 0
         self._junction = None  # None (idle) | dict: action, place_id, seq, state, ...
         self._junction_seen_at = None
+        self._junction_first_seen = None  # start of the current run of sightings
         self._keep_corner_at = None
 
     @property
@@ -73,7 +89,7 @@ class JunctionMixin:
         j = self._junction
         self._junction = (dict(j, state='aborted', reason='mode_change')
                           if j is not None and j['state'] in MANEUVER else None)
-        self._junction_seen_at = None
+        self._junction_seen_at = self._junction_first_seen = None
 
     def observe_junction(self, reason, received_at, corner_turning=False):
         """One fresh line/keep_debug frame: a junction reason is a sighting; corner_turning
@@ -82,13 +98,17 @@ class JunctionMixin:
             return
         with self._lock:
             if reason in JUNCTION_REASONS:
+                last = self._junction_seen_at
+                if last is None or not 0 <= received_at-last <= self._config.stale_after_s:
+                    self._junction_first_seen = float(received_at)
                 self._junction_seen_at = float(received_at)
             self._keep_corner_at = float(received_at) if corner_turning is True else None
 
     def set_junction(self, action, place_id, expires_s, stop_after_m=None, turn_deg=None,
                      advance_m=None, now=None):
-        """Store the next-junction instruction: (accepted, seq, state), or None when line-follow
-        is not CAMERA/IR_LINE. During a maneuver the new instruction aborts it, unaccepted."""
+        """Store the next-junction instruction: (accepted, seq, state). Raises JunctionRefused
+        unless line-follow is CAMERA_LINE (IR_LINE has no junction detection). During a
+        maneuver the same instruction is a no-op; a different one aborts it, unaccepted."""
         if action not in JUNCTION_ACTIONS:
             raise ValueError('junction action must be straight, left, right or stop')
         if not (isinstance(expires_s, (int, float)) and 0 < expires_s <= MAX_EXPIRES_S):
@@ -101,11 +121,18 @@ class JunctionMixin:
             raise ValueError('turn_deg belongs to left (+) or right (-), 0 < |turn_deg| <= 150')
         if advance_m is not None and (turn_deg is None or not 0 <= advance_m <= MAX_ADVANCE_M):
             raise ValueError('advance_m belongs to a turn and must be in [0, 0.30]')
+        advance = DEFAULT_ADVANCE_M if advance_m is None else float(advance_m)
         with self._lock:
-            if self._mode.value not in ('CAMERA_LINE', 'IR_LINE'):
-                return None
+            if self._mode.value == 'IR_LINE':
+                raise JunctionRefused('JUNCTION_CAMERA_ONLY',
+                                      'junction instructions need CAMERA_LINE (IR has no junction detection)')
+            if self._mode.value != 'CAMERA_LINE':
+                raise JunctionRefused('LINE_FOLLOW_NOT_ACTIVE', 'line-follow must be CAMERA_LINE')
             j = self._junction
             if j is not None and j['state'] in MANEUVER:
+                if (j['action'], j['place_id'], j['turn_deg'], j['advance_m']) == (
+                        action, place_id, turn_deg, advance):
+                    return True, j['seq'], j['state']  # a resend of the running instruction
                 j.update(state='aborted', reason='new_instruction')
                 self._bridge_hint = None
                 return False, j['seq'], 'aborted'
@@ -116,8 +143,7 @@ class JunctionMixin:
             self._junction = dict(action=action, place_id=place_id, seq=self._junction_seq,
                                   state=state, expires_at=current+float(expires_s),
                                   stop_after_m=float(stop_after_m or 0.), travel=0.,
-                                  last=None, held=False, turn_deg=turn_deg,
-                                  advance_m=DEFAULT_ADVANCE_M if advance_m is None else float(advance_m))
+                                  last=None, held=False, turn_deg=turn_deg, advance_m=advance)
             self._bridge_hint = None if action == 'stop' else action  # D-476 route hint
             return True, self._junction_seq, state
 
@@ -131,6 +157,22 @@ class JunctionMixin:
         samples = self._return_evidence.trail.samples
         pose = samples[-1] if samples else None
         return pose if pose is not None and 0 <= now-pose.received_at <= POSE_MAX_AGE_S else None
+
+    def _standing_still(self, now):
+        """Odom over its last STILL_S shows |v| < STILL_LINEAR and |w| < STILL_ANGULAR."""
+        trail = self._return_evidence.trail.samples
+        if not trail:
+            return False
+        latest = trail[-1].received_at  # a lagging odom is judged over its own last STILL_S
+        samples = [p for p in trail if latest-p.received_at <= STILL_S+.06]
+        if len(samples) < 2 or samples[-1].received_at-samples[0].received_at < STILL_S-1e-6:
+            return False
+        for a, b in zip(samples, samples[1:]):
+            dt = b.received_at-a.received_at
+            if (dt <= 0 or math.hypot(b.x-a.x, b.y-a.y)/dt >= STILL_LINEAR
+                    or abs(_wrap(b.yaw-a.yaw))/dt >= STILL_ANGULAR):
+                return False
+        return True
 
     def _odom_travel(self, j, now):
         """Fresh odom travel since the last call into j['travel']; False if odom cannot prove it."""
@@ -159,7 +201,7 @@ class JunctionMixin:
     def _junction_done(self):
         self._junction = None
         self._bridge_hint = None
-        self._junction_seen_at = None  # the junction just left behind is not the next one
+        self._junction_seen_at = self._junction_first_seen = None  # not the next junction
 
     def _junction_gate(self, now, decision):
         """Keep or zero this tick's decision (locked); a D-492 maneuver supplies its own twist."""
@@ -167,6 +209,8 @@ class JunctionMixin:
             if self._junction is not None and self._junction['state'] in MANEUVER:
                 self._abort(self._junction, 'mode_change', decision)  # e.g. driver released
             return decision
+        if self._mode.value != 'CAMERA_LINE':
+            return decision  # review M4: no junction detection on IR_LINE
         seen = (self._junction_seen_at is not None
                 and 0 <= now-self._junction_seen_at <= self._config.stale_after_s)
         j = self._junction
@@ -194,36 +238,60 @@ class JunctionMixin:
         if j['state'] in MANEUVER:
             return self._maneuver(j, now, decision)
         if j['action'] == 'stop' and j['state'] == 'executing':
-            j['held'] = j['held'] or not self._odom_travel(j, now) or j['travel'] >= j['stop_after_m']
+            # Review M7: stop after the distance or at the junction, whichever comes first.
+            j['held'] = (j['held'] or seen or not self._odom_travel(j, now)
+                         or j['travel'] >= j['stop_after_m'])
             return self._junction_hold('junction_stop', decision) if j['held'] else decision
         return self._junction_hold(_HOLD_REASON[j['state']], decision)
 
+    def _maneuver_refusal(self, now):
+        """Why the bounded turn may not run this tick, or None (D-468/D-476 authority rules)."""
+        if self._provided('calibration_active') is not False:
+            return 'calibration_active'
+        if self._return_motion is None:
+            return 'motion_unconfirmed'  # review L2: an unbound motion check is a refusal
+        if self._recovery.stuck_id is not None:
+            return 'stuck'
+        if self._angular_cap() <= 0:
+            return 'angular_limit_zero'
+        return None
+
     def _start_turn(self, j, now, decision):
-        """D-492 (a): the junction is seen; turn from here on fresh odom yaw."""
-        pose, cap = self._fresh_pose(now), self._angular_cap()
+        """D-492 (a): the junction is seen; stand still, then turn from the measured yaw."""
+        pose = self._fresh_pose(now)
         if pose is None:
             return self._abort(j, 'odom', decision)
-        if cap <= 0:
-            return self._abort(j, 'angular_limit_zero', decision)
-        if self._recovery.stuck_id is not None:
-            return self._abort(j, 'stuck', decision)
-        turn = math.radians(j['turn_deg'])
-        j.update(state='turning', target=_wrap(pose.yaw+turn), key=(self._return_evidence.epoch, pose.frame),
-                 phase_at=now, limit=abs(turn)/min(cap, TURN_MIN_W)+TURN_TIME_MARGIN_S)
-        # The instruction is the operator's reselection: the keeper's junction HOLD started a
-        # loss clock that must not latch LOST under the maneuver (D-492, appendix).
+        # Review M8: the instruction may clear LOST only if the junction sighting (the keeper's
+        # junction HOLD) started the loss clock; a lane lost before the junction stays LOST.
+        first = self._junction_first_seen
+        if (self._loss_started_at is not None and first is not None
+                and self._loss_started_at < first-self._config.stale_after_s):
+            return self._abort(j, 'lane_lost_before_junction', decision)
+        refusal = self._maneuver_refusal(now)
+        if refusal is not None:
+            return self._abort(j, refusal, decision)
         self._loss_started_at, self._lost_latched = None, False
+        j.update(state='turning', sub='stopping', key=(self._return_evidence.epoch, pose.frame),
+                 phase_at=now, limit=STILL_LIMIT_S, w=0., settled_at=None)
         return self._maneuver(j, now, decision)
 
-    def _next_phase(self, j, state, now):
-        j.update(state=state, phase_at=now, limit=STEP_TIME_S, travel=0., last=None)
+    def _next_phase(self, j, state, now, limit):
+        j.update(state=state, phase_at=now, limit=limit, travel=0., last=None, frames=0,
+                 frame_at=None)
 
     def _maneuver(self, j, now, decision):
         pose = self._fresh_pose(now)
         if pose is None or (self._return_evidence.epoch, pose.frame) != j['key']:
             return self._abort(j, 'odom', decision)
-        if self._recovery.stuck_id is not None:
-            return self._abort(j, 'stuck', decision)
+        refusal = self._maneuver_refusal(now)
+        if refusal == 'stuck' and j['state'] == 'reacquiring':
+            # The lane stayed out of view past lost_after_s: D-407 asks the console. That is a
+            # failed reacquisition, not a broken maneuver.
+            j['state'] = 'unresolved'
+            self._bridge_hint = None
+            return self._junction_hold('junction_unresolved', decision)
+        if refusal is not None:
+            return self._abort(j, refusal, decision)
         own_body_check = self._config.body_stop_known and self._scan_points is not None
         reason = (self._status.reason or '').removeprefix('camera_')
         if not (reason in _CONTINUE or reason.startswith(('lane_return_', 'junction_'))
@@ -234,36 +302,33 @@ class JunctionMixin:
                 j['state'] = 'unresolved'
                 self._bridge_hint = None
                 return self._junction_hold('junction_unresolved', decision)
-            return self._abort(j, 'timeout', decision)
+            return self._abort(j, 'not_still' if j.get('sub') == 'stopping' else 'timeout', decision)
         if j['state'] != 'turning' and not self._odom_travel(j, now):
             return self._abort(j, 'odom', decision)
         if j['state'] == 'turning':
-            error = _wrap(j['target']-pose.yaw)
-            if abs(error) > TURN_TOLERANCE_RAD:
-                cap = self._angular_cap()
-                if cap <= 0:
-                    return self._abort(j, 'angular_limit_zero', decision)
-                w = math.copysign(min(cap, max(min(cap, TURN_MIN_W), TURN_GAIN*abs(error))), error)
-                return self._maneuver_twist(j, now, 0., w, decision, 'junction_turning')
-            self._next_phase(j, 'advancing', now)
+            twist = self._turn_step(j, now, pose)
+            if twist is not None:
+                return self._maneuver_twist(j, now, 0., twist, decision,
+                                            'junction_stopping' if j['sub'] == 'stopping'
+                                            else 'junction_turning')
+            ceiling = self._provided('linear_ceiling')
+            trip_max = (min(self._config.max_linear, float(ceiling))
+                        if type(ceiling) in (int, float) and math.isfinite(ceiling) else 0.)
+            if trip_max <= 0:
+                return self._abort(j, 'linear_limit_zero', decision)
+            j['speed'] = .5*trip_max  # at most half the trip speed (D-492 1b)
+            self._next_phase(j, 'advancing', now, j['advance_m']/j['speed']+STEP_MARGIN_S)
             self._odom_travel(j, now)
         if j['state'] == 'advancing':
             if j['travel'] < j['advance_m']:
-                ceiling = self._provided('linear_ceiling')
-                trip_max = (min(self._config.max_linear, float(ceiling))
-                            if type(ceiling) in (int, float) and math.isfinite(ceiling) else 0.)
-                if trip_max <= 0:
-                    return self._abort(j, 'linear_limit_zero', decision)
-                return self._maneuver_twist(j, now, .5*trip_max, 0., decision, 'junction_advancing')
-            self._next_phase(j, 'reacquiring', now)
+                return self._maneuver_twist(j, now, j['speed'], 0., decision, 'junction_advancing')
+            self._next_phase(j, 'reacquiring', now, STEP_TIME_S)
             self._odom_travel(j, now)
-            self._junction_seen_at = None
+            self._junction_seen_at = self._junction_first_seen = None
             self._loss_started_at, self._lost_latched = None, False
             return self._junction_hold('junction_reacquiring', decision)  # follow from next frame
-        # reacquiring: ordinary lane following drives; done on a fresh confident frame.
-        obs = self._observation
-        if (obs is not None and obs.visible and obs.confidence >= self._config.min_confidence
-                and self._received_at is not None and self._received_at >= j['phase_at']):
+        # reacquiring: ordinary lane following drives; done on N consecutive confident frames.
+        if self._reacquired(j, pose):
             self._junction_done()
             return decision
         if j['travel'] >= REACQUIRE_M:
@@ -272,14 +337,57 @@ class JunctionMixin:
             return self._junction_hold('junction_unresolved', decision)
         return decision
 
+    def _turn_step(self, j, now, pose):
+        """This tick's angular speed, or None once the turn has settled. Locked."""
+        tolerance = TURN_TOLERANCE_RAD
+        cap = self._angular_cap()
+        floor = min(cap, TURN_MIN_W)
+        if j['sub'] == 'stopping':
+            if not self._standing_still(now):
+                return 0.
+            turn = math.radians(j['turn_deg'])
+            j.update(sub='rotating', target=_wrap(pose.yaw+turn), phase_at=now,
+                     limit=abs(turn)/floor+TURN_TIME_MARGIN_S)
+        error = _wrap(j['target']-pose.yaw)
+        if j['sub'] == 'rotating':
+            # Review M6: stop early by what the commanded rate turns during the latency.
+            if abs(error) > max(tolerance, abs(j['w'])*self._config.junction_turn_lead_s):
+                j['w'] = math.copysign(min(cap, max(floor, TURN_GAIN*abs(error))), error)
+                return j['w']
+            j.update(sub='settling', w=0., settled_at=None)
+        # settling: inside the tolerance for SETTLE_S, small corrections at the floor rate.
+        if abs(error) > tolerance:
+            j['settled_at'] = None
+            j['w'] = math.copysign(floor, error)
+            return j['w']
+        if j['settled_at'] is None:
+            j['settled_at'] = now
+        j['w'] = 0.
+        return None if now-j['settled_at'] >= SETTLE_S else 0.
+
+    def _reacquired(self, j, pose):
+        """Review M5: N consecutive fresh frames (confidence >= min) received after the hand-
+        back, each within 30 deg of the turned heading when containment gives a lane heading."""
+        obs, at = self._observation, self._received_at
+        if obs is None or at is None or at < j['phase_at'] or at == j['frame_at']:
+            return False
+        j['frame_at'] = at
+        good = obs.visible and obs.confidence >= self._config.min_confidence
+        edges = obs.containment.boundaries if good and obs.containment is not None else ()
+        if edges:
+            lane = pose.yaw + sum(math.atan(b.slope) for b in edges)/len(edges)
+            good = abs(_wrap(lane-j['target'])) <= REACQUIRE_HEADING_RAD
+        j['frames'] = j['frames']+1 if good else 0
+        return j['frames'] >= self._config.junction_reacquire_frames
+
     def _maneuver_twist(self, j, now, linear, angular, decision, reason):
         """The maneuver's own twist, judged by D-422 along that twist and the D-468 motion proof."""
         self._intended = (linear, angular)
-        if self._config.body_stop_known and self._scan_points is not None:
+        if (linear or angular) and self._config.body_stop_known and self._scan_points is not None:
             gap, _, _, resume = self._body_clearance(now)
             if gap is not None and gap <= resume:
                 return self._abort(j, 'near_stop', decision)
-        if self._return_motion is not None and not self._return_probe(now, linear, angular):
+        if not self._return_probe(now, linear, angular):
             return self._abort(j, 'motion_unconfirmed', decision)
         # D-468 measured the old lane; it starts afresh after the maneuver, not toward it.
         self._return_controller, self._bridge = None, None

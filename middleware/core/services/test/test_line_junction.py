@@ -2,8 +2,12 @@
 line-follow manager (no ROS, no physical motion)."""
 import math
 
+import collections
+
 import pytest
 
+from core_common.protocol.lane_containment import LaneContainmentEvidence
+from core_features.line_follow.junction import JunctionRefused
 from core_features.line_follow.manager import LineFollowManager
 from core_features.line_follow.model import LineFollowConfig, LineFollowMode, LineObservation
 
@@ -19,14 +23,18 @@ class Bus:
 class Rig:
     """The robot integrates its own commanded twist into odom when `move` is on."""
 
-    def __init__(self, **config):
+    def __init__(self, proof=True, **config):
         self.now, self.x, self.y, self.yaw = 1., 0., 0., 0.
         self.v = self.w = 0.
+        self.calibrating = False
         self.m = LineFollowManager(Bus(), clock=lambda: self.now, config=LineFollowConfig(**config))
-        self.m.bind_recovery(calibration_active=lambda: False, linear_ceiling=lambda: .1)
+        self.m.bind_recovery(calibration_active=lambda: self.calibrating, linear_ceiling=lambda: .1)
+        if proof:
+            self.m.bind_return_motion(lambda now, v, w: True)
         self.m.set_mode(CAMERA)
 
-    def step(self, *, junction=False, pose=True, dx=0., seen=True, move=False, points=None):
+    def step(self, *, junction=False, pose=True, dx=0., seen=True, move=False, points=None,
+             slope=None):
         self.now = round(self.now + .05, 6)
         if move:
             self.yaw += self.w * .05
@@ -39,8 +47,13 @@ class Rig:
                                        x=self.x, y=self.y, yaw=self.yaw, received_at=self.now)
         if points is not None:
             self.m.observe_scan_points(points, received_at=self.now)
+        containment = None if slope is None else LaneContainmentEvidence(
+            stamp=self.now, geometry_id='rig', ground_source='GAZEBO', uncertainty_m=.005,
+            boundaries=[dict(side='left', slope=slope, intercept_m=.09, observed_x_min_m=0.,
+                             observed_x_max_m=.3)])
         self.m.observe(LineObservation(CAMERA, self.now, seen, 0. if seen else None,
-                                       .9 if seen else 0.), received_at=self.now)
+                                       .9 if seen else 0., containment=containment),
+                       received_at=self.now)
         if junction:
             self.m.observe_junction('junction_fork', self.now)
         decision = self.m.tick(self.now)
@@ -159,7 +172,9 @@ def test_refused_unless_camera_or_ir_line_and_cleared_by_mode_change():
     rig.send('left')
     rig.m.set_mode(LineFollowMode.OFF)
     assert rig.m.status().junction.state == 'idle'
-    assert rig.send('straight') is None
+    with pytest.raises(JunctionRefused) as refused:
+        rig.send('straight')
+    assert refused.value.code == 'LINE_FOLLOW_NOT_ACTIVE'
 
 
 @pytest.mark.parametrize('args', [
@@ -193,16 +208,31 @@ def _to_turning(rig, turn_deg=90., advance_m=None):
     return decision, status
 
 
+def _yaw_error_deg(yaw, turn_deg):
+    e = yaw - math.radians(turn_deg)
+    return math.degrees(math.atan2(math.sin(e), math.cos(e)))
+
+
+def _reacquire(rig, frames=3, **kwargs):
+    for _ in range(frames):
+        decision, status = rig.step(seen=True, move=True, **kwargs)
+    return decision, status
+
+
 @pytest.mark.parametrize('turn_deg', [90., -90., 150., -30.])
 def test_turn_advance_reacquire_completes(turn_deg):
     rig = Rig()
     decision, status = _to_turning(rig, turn_deg)
-    assert decision.linear == 0. and math.copysign(1, decision.angular) == math.copysign(1, turn_deg)
-    assert abs(decision.angular) <= .7 and (status.state, status.reason) == ('RECOVERING', 'junction_turning')
+    assert (decision.linear, decision.angular) == (0., 0.)          # standing still first (L1)
+    assert (status.state, status.reason) == ('RECOVERING', 'junction_stopping')
+    for _ in range(8):
+        decision, status = rig.step(seen=False, move=True)
+        if decision.angular:
+            break
+    assert math.copysign(1, decision.angular) == math.copysign(1, turn_deg)
+    assert abs(decision.angular) <= .7 and status.reason == 'junction_turning'
     decision, status = rig.turn_until('turning', seen=False)
-    error = math.degrees(math.atan2(math.sin(rig.yaw - math.radians(turn_deg)),
-                                    math.cos(rig.yaw - math.radians(turn_deg))))
-    assert abs(error) <= 5.
+    assert abs(_yaw_error_deg(rig.yaw, turn_deg)) <= 5.
     assert status.junction.state == 'advancing' and decision.angular == 0.
     assert 0 < decision.linear <= .05  # half of min(max_linear .10, manual ceiling .1)
     start = (rig.x, rig.y)
@@ -210,8 +240,89 @@ def test_turn_advance_reacquire_completes(turn_deg):
     assert status.junction.state == 'reacquiring' and decision.linear == 0.
     assert math.hypot(rig.x - start[0], rig.y - start[1]) == pytest.approx(.10, abs=.01)
     decision, status = rig.step(seen=True, move=True)
+    decision, status = rig.step(seen=True, move=True)
+    assert status.junction.state == 'reacquiring' and decision.linear > 0   # 2 of 3 frames
+    decision, status = rig.step(seen=True, move=True)
     assert status.junction.state == 'idle' and decision.linear > 0 and status.state == 'TRACKING'
     assert rig.m._bridge_hint is None
+
+
+def test_turn_waits_for_the_robot_to_stand_still():
+    rig = Rig()
+    _to_turning(rig, 90.)
+    for _ in range(10):
+        decision, status = rig.step(seen=False, dx=.005)   # still creeping 0.1 m/s
+        assert decision.angular == 0. and status.reason == 'junction_stopping'
+    for _ in range(40):
+        decision, status = rig.step(seen=False, dx=.005)
+    assert (status.junction.state, status.junction.reason) == ('aborted', 'not_still')
+
+
+def test_advance_of_the_full_030_m_completes():
+    rig = Rig()
+    _to_turning(rig, 90., advance_m=.30)
+    rig.turn_until('turning', seen=False)
+    start = (rig.x, rig.y)
+    decision, status = rig.turn_until('advancing', seen=False)
+    assert status.junction.state == 'reacquiring'
+    assert math.hypot(rig.x - start[0], rig.y - start[1]) == pytest.approx(.30, abs=.01)
+
+
+@pytest.mark.parametrize('turn_deg', [90., -150., 30.])
+def test_turn_settles_inside_5_deg_under_actuation_and_odom_lag(turn_deg):
+    """Review M6: 3 ticks (150 ms) of odom lag and a 0.15 s first-order wheel response."""
+    rig = Rig()
+    rig.send('left' if turn_deg > 0 else 'right', turn_deg=turn_deg)
+    history, w_actual, states, yaw_at_advance = collections.deque(maxlen=4), 0., [], None
+    for i in range(800):
+        rig.now = round(rig.now + .05, 6)
+        w_actual += (rig.w - w_actual) * (.05 / .15)
+        rig.yaw += w_actual * .05
+        rig.x += rig.v * math.cos(rig.yaw) * .05
+        rig.y += rig.v * math.sin(rig.yaw) * .05
+        history.append((rig.now, rig.x, rig.y, rig.yaw))
+        if len(history) < 4:
+            continue
+        t, x, y, yaw = history[0]
+        rig.m.observe_return_pose(stamp_ns=round(t * 1e9), source_now_ns=round(rig.now * 1e9),
+                                  frame='odom', x=x, y=y, yaw=yaw, received_at=rig.now)
+        rig.m.observe(LineObservation(CAMERA, rig.now, False, None, 0.), received_at=rig.now)
+        if i < 8:
+            rig.m.observe_junction('junction_fork', rig.now)
+        decision = rig.m.tick(rig.now)
+        rig.v, rig.w = decision.linear, decision.angular
+        state = rig.m.status().junction.state
+        if not states or states[-1] != state:
+            states.append(state)
+        if state == 'advancing' and yaw_at_advance is None:
+            yaw_at_advance = rig.yaw
+        if state in ('aborted', 'unresolved', 'reacquiring'):
+            break
+    assert states[:2] == ['turning', 'advancing'], (states, rig.m.status().junction.reason)
+    assert abs(_yaw_error_deg(yaw_at_advance, turn_deg)) <= 5.
+
+
+def test_reacquire_needs_consecutive_frames():
+    rig = Rig()
+    _to_turning(rig, 45., advance_m=0.)
+    rig.turn_until('turning', seen=False)
+    rig.step(seen=True, move=True)
+    rig.step(seen=True, move=True)
+    rig.step(seen=False, move=True)                          # the run breaks
+    _reacquire(rig, frames=2)
+    assert rig.m.status().junction.state == 'reacquiring'
+    _reacquire(rig, frames=1)
+    assert rig.m.status().junction.state == 'idle'
+
+
+def test_reacquire_rejects_a_lane_heading_off_the_turn():
+    rig = Rig()
+    _to_turning(rig, 45., advance_m=0.)
+    rig.turn_until('turning', seen=False)
+    _reacquire(rig, frames=3, slope=1.0)                     # lane 45 deg off the turned heading
+    assert rig.m.status().junction.state == 'reacquiring'
+    _reacquire(rig, frames=3, slope=.1)                      # lane along the turn
+    assert rig.m.status().junction.state == 'idle'
 
 
 def test_advance_zero_goes_straight_to_reacquiring():
@@ -243,6 +354,8 @@ def test_reacquire_times_out_when_the_robot_cannot_move():
 def test_turn_times_out():
     rig = Rig()
     _to_turning(rig, 90.)
+    for _ in range(8):
+        rig.step(seen=False, move=True)
     rig.m._junction['phase_at'] -= 10.
     decision, status = rig.step(seen=False, move=True)
     assert (status.junction.state, status.junction.reason, decision.angular) == ('aborted', 'timeout', 0.)
@@ -296,12 +409,41 @@ def test_new_instruction_aborts_the_maneuver_and_is_not_accepted():
     assert rig.send('straight') == (True, 2, 'armed')
 
 
+def test_identical_instruction_during_a_maneuver_is_a_no_op():
+    rig = Rig()
+    _to_turning(rig, 90.)
+    assert rig.send('left', turn_deg=90.) == (True, 1, 'turning')
+    assert rig.send('left', turn_deg=90., advance_m=.10) == (True, 1, 'turning')  # default spelled out
+    assert rig.m.status().junction.state == 'turning'
+    assert rig.send('left', turn_deg=80.) == (False, 1, 'aborted')
+
+
+def test_calibration_lease_mid_turn_aborts():
+    rig = Rig()
+    _to_turning(rig, 90.)
+    rig.calibrating = True
+    decision, status = rig.step(seen=False, move=True)
+    assert (status.junction.state, status.junction.reason, decision.angular) == (
+        'aborted', 'calibration_active', 0.)
+
+
+def test_unbound_motion_check_refuses_the_turn():
+    rig = Rig(proof=False)
+    rig.step()
+    rig.send('left', turn_deg=90.)
+    decision, status = rig.step(junction=True, seen=False)
+    assert (status.junction.state, status.junction.reason) == ('aborted', 'motion_unconfirmed')
+
+
 def test_d422_near_stop_aborts_the_turn():
     rig = Rig(**BODY)
     clear = [(1.5, 1.5)]
     rig.step(points=clear)
     rig.send('left', turn_deg=90.)
-    decision, status = rig.step(junction=True, seen=False, move=True, points=clear)
+    for _ in range(10):
+        decision, status = rig.step(junction=True, seen=False, move=True, points=clear)
+        if decision.angular:
+            break
     assert status.junction.state == 'turning' and decision.angular > 0
     decision, status = rig.step(seen=False, move=True, points=[(0., .105)])  # inside the swing
     assert (status.junction.state, status.junction.reason, decision.angular) == ('aborted', 'near_stop', 0.)
@@ -310,9 +452,8 @@ def test_d422_near_stop_aborts_the_turn():
 def test_motion_proof_refusal_aborts():
     rig = Rig()
     rig.m.bind_return_motion(lambda now, v, w: w == 0.)
-    rig.step()
-    rig.send('left', turn_deg=90.)
-    decision, status = rig.step(junction=True, seen=False)  # the first turning tick asks it
+    _to_turning(rig, 90.)  # standing still passes the (0, 0) proof
+    decision, status = rig.turn_until('turning', seen=False)
     assert decision.angular == 0.
     assert (status.junction.state, status.junction.reason) == ('aborted', 'motion_unconfirmed')
 
@@ -333,6 +474,38 @@ def test_turn_does_not_latch_lost_while_the_lane_is_out_of_view():
     assert status.state != 'LOST' and status.junction.state == 'advancing'
 
 
+def test_lane_lost_before_the_junction_is_not_cleared_by_the_turn():
+    """Review M8: a LOST that the junction sighting did not start stays LOST."""
+    rig = Rig(lost_after_s=1.)
+    rig.send('left', turn_deg=90., expires_s=30.)
+    for _ in range(40):
+        rig.step(seen=False)                                  # lane lost 2 s, no junction
+    decision, status = rig.step(seen=False, junction=True)
+    assert (status.junction.state, status.junction.reason) == ('aborted', 'lane_lost_before_junction')
+    assert rig.m._lost_latched and decision.angular == 0.
+
+
+def test_instruction_while_waiting_turns_and_clears_the_junction_loss_clock():
+    rig = Rig()
+    for _ in range(20):
+        decision, status = rig.step(seen=False, junction=True)  # the junction HOLD hides the lane
+    assert status.junction.state == 'waiting' and rig.m._loss_started_at is not None
+    rig.send('left', turn_deg=90.)
+    decision, status = rig.step(seen=False, junction=True)
+    assert status.junction.state == 'turning' and rig.m._loss_started_at is None
+
+
+def test_instruction_after_lost_after_s_at_the_junction_is_too_late():
+    """Fleet must arm before arrival: waiting past lost_after_s latches LOST and opens a D-407
+    stuck, and the turn does not override the open stuck."""
+    rig = Rig(lost_after_s=1.)
+    for _ in range(40):
+        rig.step(seen=False, junction=True)
+    rig.send('left', turn_deg=90.)
+    decision, status = rig.step(seen=False, junction=True)
+    assert (status.junction.state, status.junction.reason, decision.angular) == ('aborted', 'stuck', 0.)
+
+
 def test_driver_release_mid_turn_aborts():
     rig = Rig()
     rig.m.set_mode(CAMERA, hold_s=1.)
@@ -341,6 +514,30 @@ def test_driver_release_mid_turn_aborts():
     decision, status = rig.step(seen=False)
     assert status.mode == 'OFF' and (decision.linear, decision.angular) == (0., 0.)
     assert (status.junction.state, status.junction.reason) == ('aborted', 'mode_change')
+
+
+def test_stop_instruction_also_holds_at_a_seen_junction():
+    """Review M7: stop after the distance or at the junction, whichever comes first."""
+    rig = Rig()
+    rig.step()
+    rig.send('stop', stop_after_m=1.)
+    assert rig.step(move=True)[0].linear > 0
+    decision, status = rig.step(junction=True, move=True)
+    assert decision.linear == 0. and status.reason == 'junction_stop'
+
+
+def test_ir_line_has_no_junction_gate_and_refuses_instructions():
+    """Review M4: no junction detection on IR, so no waiting and no instruction (409)."""
+    rig = Rig()
+    rig.m.set_mode(LineFollowMode.IR_LINE)
+    rig.m.observe(LineObservation(LineFollowMode.IR_LINE, rig.now, True, 0., .9, ir_calibrated=True,
+                                  calibration_revision='r'), received_at=rig.now)
+    rig.m.observe_junction('junction_fork', rig.now)
+    rig.m.tick(rig.now)
+    assert rig.m.status().junction.state == 'idle'
+    with pytest.raises(JunctionRefused) as refused:
+        rig.send('left', turn_deg=90.)
+    assert refused.value.code == 'JUNCTION_CAMERA_ONLY'
 
 
 def test_supports_junction_turn_needs_fresh_keep_evidence_with_corner_turning():
@@ -356,3 +553,12 @@ def test_supports_junction_turn_needs_fresh_keep_evidence_with_corner_turning():
     rig.m.set_mode(LineFollowMode.OFF)
     rig.m.observe_junction('junction_fork', rig.now, corner_turning=True)
     assert rig.m.supports_junction_turn is True             # independent of the line-follow session
+
+
+def test_lane_still_out_of_view_past_lost_after_s_is_unresolved_not_aborted():
+    rig = Rig(lost_after_s=1.)
+    _to_turning(rig, 45., advance_m=0.)
+    rig.turn_until('turning', seen=False)
+    for _ in range(40):                       # 2 s without a lane while handed back
+        decision, status = rig.step(seen=False)
+    assert (status.junction.state, decision.linear, decision.angular) == ('unresolved', 0., 0.)

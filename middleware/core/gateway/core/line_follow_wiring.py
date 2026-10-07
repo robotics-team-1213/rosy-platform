@@ -107,6 +107,9 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "bridge_distance_scale", defaults.bridge_distance_scale)),
         bridge_time_margin_s=float(raw.get(
             "bridge_time_margin_s", defaults.bridge_time_margin_s)),
+        junction_reacquire_frames=_whole(raw, "junction_reacquire_frames",
+                                         defaults.junction_reacquire_frames),
+        junction_turn_lead_s=float(raw.get("junction_turn_lead_s", defaults.junction_turn_lead_s)),
         lane_return_body_margin_m=float(raw.get(
             "lane_return_body_margin_m", defaults.lane_return_body_margin_m)),
         lane_return_checkpoint_fraction=float(raw.get(

@@ -118,7 +118,7 @@ class LineFollowConfig:
     ir_guard_turn: float = 0.5
     ir_guard_speed_scale: float = 0.5
     # D-407 막힘 복구. 관제에 묻고 recovery_ask_s 안에 답이 없으면(또는 관제 연결이 없으면)
-    # 로컬 후진·재판단. 로컬 복구는 로봇별로 켠다(self-mask 측정 뒤).
+    # 로컬 후진·재판단. 모델 기본값은 꺼짐이고, 로봇 기본값(rosy_default.yaml)은 D-492부터 켜짐이다.
     recovery_local_enabled: bool = False
     recovery_ask_s: float = 15.0
     recovery_back_m: float = 0.08
@@ -158,7 +158,7 @@ class LineFollowConfig:
     # D-476 expected-road bridge: on a short lane loss right after contained following, drive
     # the D-468 checkpoint lane's extension slowly. Distance ladder from D-384 (measured odom
     # travel x bridge_distance_scale: full speed below coast, x slow_scale below slow, then
-    # stop) and done by lost_after_s - bridge_time_margin_s. Off until replay/sim/device pass.
+    # stop) and done by lost_after_s - bridge_time_margin_s. Model default off; robot default on (D-492).
     bridge_enabled: bool = False
     bridge_lookahead_m: float = 0.10
     bridge_coast_m: float = 0.10
@@ -166,6 +166,10 @@ class LineFollowConfig:
     bridge_slow_scale: float = 0.5
     bridge_distance_scale: float = 1.08
     bridge_time_margin_s: float = 0.5
+    # D-492 bounded junction turn (review M5/M6): consecutive fresh confident lane frames that
+    # count as reacquired, and the actuation/odom latency the turn stops early for.
+    junction_reacquire_frames: int = 3
+    junction_turn_lead_s: float = 0.15
     # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the producer's
     # uncertainty_m. 0 means every URDF footprint corner is inside only if uncertainty_m bounds
     # every lateral error; jitter and footprint tolerance not in it go in this body margin. The
@@ -179,6 +183,7 @@ class LineFollowConfig:
         self._check_recovery()
         self._check_body_stop()
         self._check_bridge()
+        self._check_junction()
         values = (self.cruise_speed, self.max_linear, self.steering_gain,
                   self.max_angular, self.min_confidence,
                   self.stale_after_s, self.lost_after_s)
@@ -272,6 +277,12 @@ class LineFollowConfig:
             raise ValueError("body_rear_x_m must be behind base_footprint (-0.5, 0)")
         if self.body_rotation_radius_m is not None and not 0.0 < self.body_rotation_radius_m <= 0.5:
             raise ValueError("body_rotation_radius_m must be in (0, 0.5]")
+
+    def _check_junction(self) -> None:
+        if type(self.junction_reacquire_frames) is not int or not 1 <= self.junction_reacquire_frames <= 20:
+            raise ValueError("junction_reacquire_frames must be a whole number in [1, 20]")
+        if not _finite(self.junction_turn_lead_s) or not 0.0 <= self.junction_turn_lead_s <= 1.0:
+            raise ValueError("junction_turn_lead_s must be in [0, 1]")
 
     def _check_bridge(self) -> None:
         if type(self.bridge_enabled) is not bool:

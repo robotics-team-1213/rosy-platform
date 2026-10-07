@@ -142,8 +142,9 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   ir_guard_speed_scale: 0.5        # linear scale while steering away
   # D-407 lane stuck recovery: obstacle_ahead >= obstacle_escalate_s or LOST opens one stuck and
   # asks the console (POST /line-follow/stuck/decision). No answer in recovery_ask_s, or no
-  # console link -> local back-off (only when recovery_local_enabled, per robot, after its
-  # lidar_self_mask is measured). Rear clearance is measured from the URDF body rear, so the
+  # console link -> local back-off (only when recovery_local_enabled; since D-492 that is the
+  # robot default, gated by its promotion rule, not a per-robot self-mask step). Rear
+  # clearance is measured from the URDF body rear, so the
   # robot package must set body_lidar_x_m / body_rear_x_m (unset = never backs off).
   # On by robot default since D-492 (2026-10-07): it also gates D-468 local lane return and the
   # D-476 bridge. Same promotion rule as D-492 (model-PC Gazebo map_v2_fleet_real lap + a real
@@ -188,6 +189,11 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   bridge_slow_scale: 0.5
   bridge_distance_scale: 1.08      # D-384 odometry inflation
   bridge_time_margin_s: 0.5        # D-384 rev 1 §1
+  # D-492 bounded junction turn: consecutive fresh lane frames (confidence >= min_confidence,
+  # heading within 30 deg of the turn when containment gives one) that count as reacquired,
+  # and the actuation + odom latency the in-place turn stops early for (then settles in 5 deg).
+  junction_reacquire_frames: 3
+  junction_turn_lead_s: 0.15
   # D-468 containment (needs recovery_local_enabled; implementation note 2026-10-06). The lane
   # boundaries are eroded by the producer's uncertainty_m and the body is the URDF footprint, so
   # 0 means every corner is inside only if uncertainty_m bounds every lateral error. Jitter and
