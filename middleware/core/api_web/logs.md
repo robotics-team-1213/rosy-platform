@@ -611,3 +611,10 @@
 - 증거: gateway `test_capabilities_controls.py` 10 PASS(훅 없음 false, 훅 true, line-follow 없음 false).
 - gate 변화: 없음.
 - 결정: D-492 (Proposed)
+
+## 2026-10-07 · uncommitted · fix(api): D-491 검토 — 잘못된 robot.model이 capabilities를 500으로 만들지 않는다
+
+- 변경: `robot.model`이 로봇 패키지 이름(`ROBOT_NAME_PATTERN`, 64자 이하)이 아니면 `robot_kind`를 빼고 한 번만 경고한다. 전에는 "Pinky" 같은 값이 `GET /system/capabilities` 500이었다.
+- 증거: `test_capabilities_controls.py` "Pinky"·"pinky-pro"·65자·숫자 4건 PASS.
+- gate 변화: 없음.
+- 결정: D-491 (Proposed)

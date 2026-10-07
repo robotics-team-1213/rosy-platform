@@ -2189,3 +2189,10 @@
 - 증거: `test_trip_caps.py` 2 PASS.
 - gate 변화: 없음.
 - 결정: D-492 (Proposed)
+
+## 2026-10-07 · uncommitted · fix(fleet): D-491 검토 — 모르는 drive_modes 값은 버린다
+
+- 변경: `trip_caps`는 모르는 주행 방식을 버리고 아는 값만 쓴다. 전에는 모르는 값 하나가 능력 전체를 None으로 만들었다.
+- 증거: `test_trip_caps.py` 2 PASS.
+- gate 변화: 없음.
+- 결정: D-491 (Proposed)

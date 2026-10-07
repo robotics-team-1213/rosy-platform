@@ -586,7 +586,7 @@ v1.70 추가 경로(모두 Bearer 인증):
 - `confidence`: 스캔/지도 적합도 0–1. `reason`: SUSPECT 사유(`pickup`, `fit_drop`, `inject_rejected`, `fleet_monitor`), 또는 `CANDIDATES` 에서 결정의 3 s 주입 검사가 도는 동안 `checking`(`core_common.protocol.localization.CHECKING`; Fleet 사다리는 멈추고 CORE 는 미션을 `busy` 로 거부한다, D-395 S1 재실행 R6). `needs_human`: 사다리 시간 초과. `request_id`: 진행 중인 후보 보고의 id.
 - `unmapped_objects`(v1.75, 선택, ≤16, 기본 `[]`): `LOCALIZED` 로봇의 LiDAR 가 전체 스캔에서 지도로 설명하지 못한 물체 `{x, y}`(base_link, 앞 x·왼쪽 y, m; 자기 차체 안쪽은 뺀다). `objects_stamp`(v1.74, 선택): 그 스캔의 로봇 시각 s. 시계가 동기되지 않으므로 Fleet 은 스캔을 구별하는 데만 쓰고 신선도는 처음 본 때부터 잰다. `LOCALIZED` 밖에서는 빈 목록이다(후보 물체는 `CandidateReport` 에 실린다). CORE 는 그대로 넘기되 `pose_frame` 이 `odom` 이거나 상태가 끊겨 `state_stale` 이면 둘 다 비운다. Fleet 감시(D-395 9항, 개정 4 5항 후속)가 닻 로봇의 보고 자세로 이 물체를 놓아 다른 `LOCALIZED` 로봇의 거울 잠금을 잡는 데 쓴다.
 
-`odom_pose` 는 v1.112 additive 다(D-491 2). `{x, y, yaw, stamp}` 는 로봇 odom 프레임의 자세와 CORE 가 그 odom 메시지를 받은 시각이다. `stamp` 는 UTC epoch 초(실수)로, sighting 의 `captured_at` 과 같은 형식이다(로봇 단조 시각이 아니다). `pose` 가 map 프레임이어도 같이 싣는다. odom 이 한 번도 오지 않은 로봇과 D-491 이전 로봇은 `null` 이다. odom 이 끊겨도 마지막 값이 남으므로 소비자는 `stamp` 로 신선도를 판단한다. 같은 값이 Fleet 하트비트(1 Hz)의 상태 스냅샷에도 실린다.
+`odom_pose` 는 v1.112 additive 다(D-491 2). `{x, y, yaw, stamp}` 는 로봇 odom 프레임의 자세와 CORE 가 그 odom 메시지를 받은 시각(ROS 헤더 시각이 아님)이다. 유한하지 않은 표본은 버리고 이전 값을 둔다. `stamp` 는 UTC epoch 초(실수)로, sighting 의 `captured_at` 과 같은 형식이다(로봇 단조 시각이 아니다). `pose` 가 map 프레임이어도 같이 싣는다. odom 이 한 번도 오지 않은 로봇과 D-491 이전 로봇은 `null` 이다. odom 이 끊겨도 마지막 값이 남으므로 소비자는 `stamp` 로 신선도를 판단한다. 같은 값이 Fleet 하트비트(1 Hz)의 상태 스냅샷에도 실린다.
 
 ```json
 "odom_pose": { "x": 1.204, "y": -0.311, "yaw": 1.57, "stamp": 1791374400.123 }
@@ -1112,7 +1112,7 @@ inventory 기술자의 `state`(available/constrained/… presentation 어휘)와
   line-follow 서비스를 가지면 `lane`, 같은 응답의 `navigation.goal_navigation` 이 참이면 `free`(보류 뒤 값)다. 둘 다 없으면
   `[]` 이다. `trip_max_linear`(m/s, ≥0)는 로봇이 trip 에 허용하는 최고 속도로, `safety` 의 `max_linear`·`fleet_linear` 와
   line-follow 가 있을 때 그 `max_linear` 중 가장 작은 값이다. `junction_turn`(bool, D-492)은 CORE line-follow 가 교차로의
-  제한된 회전 동작을 지원할 때 `true` 다(지원하지 않으면 `false`, 없으면 지원하지 않는 것으로 읽는다). 세 필드가 **없는** 로봇은 D-491 이전 이미지다. Fleet 은 그
+  제한된 회전 동작을 지원할 때 `true` 다(지원하지 않으면 `false`, 없으면 지원하지 않는 것으로 읽는다). D-491 세 필드 `robot_kind`·`drive_modes`·`trip_max_linear`가 **없는** 로봇은 D-491 이전 이미지다(`junction_turn`도 없다). `robot.model`이 로봇 패키지 이름(`[a-z][a-z0-9_]*`, 64자 이하)이 아니면 CORE는 `robot_kind`만 뺀다. Fleet 은 모르는 `drive_modes` 값을 무시한다. Fleet 은 그
   로봇의 계획 미리보기를 지금처럼 허용하고, trip 실행은 열지 않는다(`TRIP_ROBOT_CAPS_UNKNOWN`, D-491 5).
 - `joint_jog`: 요청 한 번은 관절 하나를 `max_step_rad` 이하로 옮긴다. `duration_s` 는 **클라이언트가 각 요청에 보낼 목표
   길이**다. 이전 목표가 끝난 뒤에만 다음 목표를 보낸다(D-390 §2).
