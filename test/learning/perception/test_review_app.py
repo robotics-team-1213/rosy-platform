@@ -407,3 +407,35 @@ def test_bad_object_classes_file_is_a_usage_error(tmp_path, monkeypatch, capsys,
     assert stop.value.code == 2
     err = capsys.readouterr().err
     assert '--object-classes' in err and 'Traceback' not in err
+
+
+def run_main(monkeypatch, capsys, *args):
+    import sys
+    import review_app
+    monkeypatch.setattr(sys, 'argv', ['review_app.py', *map(str, args)])
+    with pytest.raises(SystemExit) as stop:
+        review_app.main()
+    return stop.value.code, capsys.readouterr().err
+
+
+def test_startup_refusals_are_usage_errors_without_traceback(tmp_path, monkeypatch, capsys):
+    source, human, images = fixture_inputs(tmp_path)
+    state = tmp_path / 'state'
+    ReviewStore(state, source, human, images)
+    other = tmp_path / 'other.yaml'
+    other.write_bytes(CAR_LIGHT)
+    code, err = run_main(monkeypatch, capsys, '--state', state, '--object-classes', other)
+    assert code == 2 and 'object classes differ' in err and 'Traceback' not in err
+    code, err = run_main(monkeypatch, capsys, '--state', state, '--source', source,
+                         '--human', human, '--images', images)
+    assert code == 2 and 'existing workspace' in err and 'Traceback' not in err
+
+
+def test_first_start_unknown_label_names_the_class(tmp_path, monkeypatch, capsys):
+    source, human, images = fixture_inputs(tmp_path)
+    classes = tmp_path / 'data.yaml'
+    classes.write_bytes(b'names: [car, robot]\n')
+    code, err = run_main(monkeypatch, capsys, '--state', tmp_path / 'state', '--source', source,
+                         '--human', human, '--images', images, '--object-classes', classes)
+    assert code == 2 and 'Traceback' not in err
+    assert "'traffic_light'" in err and 'car' in err and 'robot' in err
