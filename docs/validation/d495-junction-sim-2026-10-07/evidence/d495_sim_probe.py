@@ -356,8 +356,10 @@ def run_trip(p, plan, prearm=True, late=0.5, duration=180.0, tag='P', stop_on_fa
                 time.sleep(late)
                 send(idx, rec)
             if js == 'waiting' and idx >= len(plan) and 'still' in rec:
-                rec['result'] = 'waiting_no_instruction'
-                break
+                # S3: keep watching past lost_after_s (3 s) to record what the hold becomes
+                if (r['sim_t'] or 0)-(rec['still']['sim_t'] or 0) > 6.0:
+                    rec['result'], rec['done'] = 'waiting_no_instruction', b
+                    break
             if js == 'idle' and prev_js in ('executing', 'reacquiring'):
                 rec['result'], rec['done'] = 'done', b
                 idx += 1
