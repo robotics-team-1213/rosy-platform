@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · feat(perception): keep 판단에 쓰인 지면 투영값 기록
 - 2026-10-07 · uncommitted · fix(perception): G-16 독립 검토 반영
 - 2026-10-07 · uncommitted · fix(perception): G-16 keep 경계 기울기와 그 오차
 - 2026-10-07 · uncommitted · feat(recording): Pilot 바닥 IR 녹화 번호는 D-506
 - 2026-10-07 · uncommitted · feat(recording): Pilot 녹화에 바닥 IR 원시값 (D-504)
-- 2026-10-07 · uncommitted · fix(perception): D-468 containment 경계를 칠 안쪽 가장자리로

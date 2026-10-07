@@ -37,7 +37,7 @@ from .sensing.perception.lane import (
 from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
-from .sensing.perception.lane_debug import next_publish_due, render_debug
+from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import (
     PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width)
 from .sensing.perception.paint_localizer import PaintMap
@@ -457,7 +457,9 @@ class LineObserverNode(Node):
                 observation = self._lane_keeper.update(
                     frame, ground, paint_mask=paint,
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
-                bundle = dict(self._lane_keeper.last, paint_source_used=paint_used,
+                bundle = keep_debug_payload(
+                              self._lane_keeper.last, ground, self._lane_keeper._x_offset,
+                              paint_source_used=paint_used,
                               paint_source_requested=str(self.get_parameter('paint_source').value),
                               paint_model_revision=(self._paint_worker.used_model_revision
                                                     if paint_used == 'learned' and self._paint_worker is not None
@@ -465,9 +467,7 @@ class LineObserverNode(Node):
                               image_size=[frame.shape[1], frame.shape[0]],
                               camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
                               corner_turning=bool(self.get_parameter('lane_corner_turning').value),
-                              ground=self._ground_label(),
-                              stamp=float(msg.header.stamp.sec)
-                              + float(msg.header.stamp.nanosec) * 1e-9)
+                              ground=self._ground_label(), stamp=image_stamp)
                 self._keep_debug_pub.publish(String(data=json.dumps(bundle, default=float)))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
                 ground = self._ground(frame.shape[1], frame.shape[0])
