@@ -613,6 +613,36 @@ def test_abort_after_the_turn_also_counts_as_done():
     assert refused.value.code == 'JUNCTION_ALREADY_DONE'
 
 
+def _unresolved_by_travel(rig):
+    for _ in range(11):
+        rig.step(seen=False, dx=.019)
+
+
+def _unresolved_by_timeout(rig):
+    rig.m._junction['phase_at'] -= 5.1
+    rig.step(seen=False)
+
+
+def _unresolved_by_stuck(rig):
+    for _ in range(40):
+        rig.step(seen=False)
+
+
+@pytest.mark.parametrize('fail', [_unresolved_by_travel, _unresolved_by_timeout, _unresolved_by_stuck])
+def test_unresolved_after_the_turn_counts_as_done(fail):
+    """D-495 SIM finding 4: the entry heading is gone after the turn, so a resend of the same
+    place must be 409, not a second turn stacked on the first."""
+    rig = Rig(lost_after_s=1.)
+    _to_turning(rig, 45., advance_m=0.)
+    rig.turn_until('turning', seen=False)
+    fail(rig)
+    assert rig.m.status().junction.state == 'unresolved'
+    with pytest.raises(JunctionRefused) as refused:
+        rig.send('left', turn_deg=45., advance_m=0.)
+    assert refused.value.code == 'JUNCTION_ALREADY_DONE'
+    assert rig.m.set_junction('straight', 'J2', 10.)[0] is True          # next place clears it
+
+
 def test_straight_passed_is_done_for_that_place():
     rig = Rig()
     rig.send('straight')
