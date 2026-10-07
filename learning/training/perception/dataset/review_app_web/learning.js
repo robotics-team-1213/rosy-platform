@@ -81,6 +81,7 @@ function render() {
   $('learning-status').textContent=`연결 ${workspace.items.length}개 · 확인 필요 ${attention}개 · 보고서 상태를 확인합니다.`;
   $('jobs').replaceChildren();$('jobs').hidden=!filtered.length;$('empty-jobs').hidden=!!filtered.length;
   const active=query||$('kind-filter').value!=='all'||$('state-filter').value!=='all';
+  $('updated').textContent=`${new Date(checkedAt).toLocaleString('ko-KR')} 확인 · ${active ? `${workspace.items.length}개 중 ${filtered.length}개 표시` : `${filtered.length}개 작업`}`;
   $('empty-title').textContent=active?'조건에 맞는 작업이 없습니다':'연결한 작업이 없습니다';
   $('empty-description').textContent=active?'검색어나 필터를 바꾸면 다른 작업을 볼 수 있습니다.':'위의 작업 결과 연결에서 기존 결과 폴더를 연결하세요.';
   $('reset-filters').hidden=!active;
@@ -129,7 +130,6 @@ async function load() {
     $('search').value=params.get('q')||'';
     for(const [id,key] of [['kind-filter','kind'],['state-filter','state']]) {$(id).value=params.get(key)||'all';if(!$(id).value) $(id).value='all';}
   }
-  $('updated').textContent=`${new Date().toLocaleString('ko-KR')} 확인 · ${workspace.items.length}개 작업`;
   render();
   } catch(error) {showUnavailable(error);throw error;} finally {clearInterval(timer);setBusy(false);}
 }

@@ -279,6 +279,32 @@ def test_learning_report_age_advances_and_refreshes(browser_workspace, tmp_path,
     expect(age).to_contain_text('방금 확인')
 
 
+@pytest.mark.parametrize('width', [1440, 390])
+def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width):
+    page, _, expect = browser_workspace
+    report = tmp_path / 'learning-result'
+    report.mkdir()
+    (report / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    expect(page.locator('.workspace-heading h2')).to_have_text('연결한 학습 결과')
+    page.locator('#new-task').click()
+    page.locator('#name').fill('검수할 결과')
+    page.locator('#path').fill(str(report))
+    page.locator('#connect').click()
+    expect(page.locator('#updated')).to_contain_text('1개 작업')
+    page.locator('#search').fill('없는 작업')
+    expect(page.locator('#updated')).to_contain_text('1개 중 0개 표시')
+    expect(page.locator('#empty-title')).to_have_text('조건에 맞는 작업이 없습니다')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        page.evaluate('window.scrollTo(0, 0)')
+        page.screenshot(path=str(Path(output) / f'learning-results-filter-{width}.png'), full_page=True)
+    page.locator('#reset-filters').click()
+    expect(page.locator('#updated')).to_contain_text('1개 작업')
+
+
 @pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels'])
 @pytest.mark.parametrize('width,height', [(390, 844), (320, 568)])
 def test_learning_compact_header_stays_within_first_view_budget(browser_workspace, route, width, height):
