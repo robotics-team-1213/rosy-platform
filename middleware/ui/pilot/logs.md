@@ -629,3 +629,9 @@
 - 변경: 조회 전용·구동 꺼짐 게이트에서 원시 `BLOCK`, `viewer`, CORE 사유 코드를 운용자 말로 표시하고 중복·오해 가능한 기술 행을 줄였다. 판정·요청 경로는 그대로다.
 - 증거: `docs/validation/uiux-pilot-gate-denied-2026-10-07/result.md`; 거부 2상태×4폭, 브라우저 11 passed, 드라이버 8 passed, G1 90 passed, 각 known_failures 0 NEW.
 - gate 변화: LOCAL 거부 상태 G2 부분 근거. 다른 상태·실물·운전자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · 주행 HUD 상태 용어
+
+- 변경: 링크 상태와 운전 모드를 운용자 용어로 표시하고 내부 코드는 진단용 속성에 보존.
+- 증거: docs/validation/uiux-pilot-drive-status-2026-10-07/result.md; Chromium 4개 폭 4 passed, G1 90 passed, 각 known_failures.py 0 NEW.
+- gate 변화: LOCAL 일부 G2 보강. 나머지 상태·현장 장치·사용자 G3는 HOLD.

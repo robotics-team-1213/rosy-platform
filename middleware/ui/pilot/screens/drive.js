@@ -22,12 +22,16 @@ import {readControls, profileFromBaseVelocity} from "../controls.js";
 import {calibrationView} from "../calibration.js";
 import {el, mountDriveView, buildStage, buildControls, actionIcon} from "./drive-view.js";
 import {classifyOperation, saveCameraFile} from "/common/evidence.js";
-import {MODE_LABEL} from "/common/core_ui_logic.js";
+import {MODE_LABEL, operatorModeLabel} from "/common/core_ui_logic.js";
 
 const LOOP_MS = 100;
 const STATE_POLL_MS = 500;
 const DEG = 180 / Math.PI;
 const PRESET_LABEL = {low: "저속", mid: "보통", high: "빠름"};
+const LINK_LABEL = {
+  CONNECTING: "상태 연결 중", OPEN: "상태 수신", RETRYING: "상태 재연결 중",
+  FORBIDDEN: "상태 접근 거부", OFFLINE: "상태 연결 끊김", BLOCKED: "조종 차단",
+};
 
 // `profile` comes from the device's base_velocity control (D-411 B); `unsupported` lists the
 // controls this screen cannot draw — shown, never fatal.
@@ -71,6 +75,11 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     calibration: "[data-drive-calibration]", calibrationTitle: "[data-drive-calibration-title]",
     calibrationReason: "[data-drive-calibration-reason]", activity: "[data-drive-fact=activity]",
   })) element[key] = root.querySelector(selector);
+
+  function showMode(mode) {
+    element.mode.textContent = operatorModeLabel(mode, "확인 필요");
+    element.mode.title = mode;
+  }
 
   // --- 보정 세션(D-321 부록): 누가 보정 중인지 보이고, 남의 보정이면 주행 조작을 잠근다 -----
   // 비상 정지(상단 막대)는 이 화면 밖에 있고 잠그지 않는다. 409 CALIBRATION_ACTIVE 가 최종 판정이다.
@@ -132,11 +141,15 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     },
     postJson,
     whoami,
-    onState: (state) => { element.state.textContent = state; element.state.dataset.state = state; },
+    onState: (state) => {
+      element.state.textContent = LINK_LABEL[state] ?? "상태 확인 필요";
+      element.state.dataset.state = state;
+      element.state.title = state;
+    },
     onSnapshot: (frame) => {
       const percent = frame?.battery?.percent;
       if (percent !== undefined && percent !== null) element.battery.textContent = `${Math.round(percent)}%`;
-      if (frame?.mode) element.mode.textContent = frame.mode;
+      if (frame?.mode) showMode(frame.mode);
       if (frame && "activity" in frame) renderActivity(frame.activity);
     },
     onConflict: (detail) => {
@@ -483,7 +496,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     if (!state || state.status !== 200) return;
     const percent = state.body?.battery?.percent;
     if (percent !== undefined && percent !== null) element.battery.textContent = `${Math.round(percent)}%`;
-    if (state.body?.mode) element.mode.textContent = state.body.mode;
+    if (state.body?.mode) showMode(state.body.mode);
     renderActivity(state.body?.activity);
     const velocity = state.body?.velocity;
     if (velocity) {

@@ -641,6 +641,30 @@ def _enter_drive(page, base_url):
     page.wait_for_function("document.querySelector('[data-drive-fact=cap]')?.textContent.includes('0.10')")
 
 
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_drive_hud_uses_operator_labels_at_each_width(base_url, viewport):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            _enter_drive(page, base_url)
+            link = page.locator("[data-drive-fact=link]")
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]').dataset.state === 'OPEN'")
+            assert link.inner_text() == "상태 수신"
+            assert page.locator("[data-drive-fact=mode]").inner_text() == "수동"
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert errors == []
+            if os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(os.environ["ROSY_SHOT_DIR"])
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-drive-status-{viewport[0]}x{viewport[1]}.png"))
+        finally:
+            browser.close()
+
+
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 def test_drive_screen_fullscreen_with_camera_and_controls(tablet_page):
