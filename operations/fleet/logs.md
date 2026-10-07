@@ -2433,3 +2433,9 @@
 - 변경: `site-cameras.yaml`의 `display_rotation_deg` 키를 지운다(푸시 전). 관제 실영상·크게 보기·썸네일은 그 카메라 보정에서 지도 +y가 위로 오는 90° 단위 회전(`mapUpTurn`)으로 돈다. 현장 지도 화면의 보기 회전도 지운다(원래 지도 좌표).
 - 증거: 웹 Node 시험 174 passed.
 - gate 변화: SOURCE/LOCAL만. 현장에서 벽이 아래로 보이는지(F3)는 별도.
+
+## 2026-10-08 · uncommitted · D-515 관제 지도 천장 카메라를 위에서 본 직사각형으로
+
+- 변경: `camera-warp.js`(사이트 사각형 576 삼각형 메시·아핀, 순수), `map-view.js` `drawSiteView` 실영상을 지도 미터 뷰 위에 편 그림으로 그림(돌린 원본 대신), `view.cameraPick` 제거(미터 뷰 역변환 사용), `static_routes.py` 자산 등록. 썸네일·크게 보기는 원본 회전 그대로.
+- 증거: `camera-warp.test.mjs` 3 passed(실제 보정 paint-f81a872f5cd8), 웹 Node 178 passed, 실프레임 1920 캡처에서 사이트 사각형이 차선과 맞고 원이 둥글다([실측](../../docs/validation/site-camera-topdown-2026-10-07/result.md)).
+- gate 변화: LOCAL 표시. SITE/FIELD 상태는 그대로 둔다.

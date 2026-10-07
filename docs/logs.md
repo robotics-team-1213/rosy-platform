@@ -6919,3 +6919,11 @@ osy-d395-s1d\`.
 - 변경: Merged D-513 v1.124 and assigned the additive D-509 Fleet power health row to v1.125.
 - 증거: Version header, history, CORE docstring, and pinned contract tests aligned; merged tree verification pending.
 - gate 변화: None.
+
+## 2026-10-08 · uncommitted · docs(adr): D-515 관제 지도 천장 카메라 직사각형
+
+- 변경: D-515 ADR과 Log 행, 2026-10-07 천장 카메라 직사각형 실측 기록, `tools/harness/adr_gaps.txt`에 D-514(다른 브랜치 예약) 줄.
+- 증거: harness lint 0 errors.
+- gate 변화: 없음.
+- 결정: D-515 (D-513 7항의 메인 지도 실영상 회전 대체)
+- 교훈: 없음
