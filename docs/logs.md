@@ -6919,3 +6919,9 @@ osy-d395-s1d\`.
 - 변경: Merged D-513 v1.124 and assigned the additive D-509 Fleet power health row to v1.125.
 - 증거: Version header, history, CORE docstring, and pinned contract tests aligned; merged tree verification pending.
 - gate 변화: None.
+
+## 2026-10-08 · uncommitted · docs(review): D-514 객체·픽셀 클래스 의미와 시나리오
+
+- 변경: 객체 종류와 통로 점유 판단을 분리하고, 기존 obstacle 의미 보존·새 작업 공간 전환·픽셀 255와 role ignore 구분 및 장면별 검수 행동을 D-514에 제안.
+- 증거: ADR lint 0 error, 23 기존 모듈 경고; 문서 계약 pytest 121 passed, known_failures 0 NEW. 모델 PC·실제 승인·학습·장치 검증은 별도.
+- gate 변화: 없음.
