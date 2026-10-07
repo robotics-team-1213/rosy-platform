@@ -3,6 +3,9 @@
 
 # fleet (Python package)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Python package root for the fleet seed: operator CLI plus `formation/` (pure geometry/assignment) and `swarm/` (transport, relay, session). No ROS imports. No Fleet server.

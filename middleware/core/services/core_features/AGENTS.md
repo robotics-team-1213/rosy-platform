@@ -3,6 +3,9 @@
 
 # core_features
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Python package of feature managers behind CORE's `CoreServices`, one subpackage per requirement family. Library tier: no process, no ROS imports. CORE (`middleware/core/gateway`) owns the single `/cmd_vel` output through `CommandManager.select_output()`. Features here propose, gate, or cap motion; none publishes the final command.

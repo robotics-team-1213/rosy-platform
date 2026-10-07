@@ -3,6 +3,9 @@
 
 # model
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 The model half of the D-356 learned-perception loop: export a trained model to ONNX, verify a returned model against the intake gate, and deliver it to a robot's shadow slot (with rollback). The delivered model runs shadow-only; activating it for driving is a separate decision.
