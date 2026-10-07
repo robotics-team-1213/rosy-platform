@@ -82,7 +82,7 @@ gaps:
     evidence:
       - middleware/apps/device/pinky/description/urdf/rosy_gz.urdf.xacro:98-119
       - middleware/core/services/core_features/line_follow/clearance.py:208
-      - middleware/core/services/core_features/line_follow/stuck_recovery.py:381
+      - middleware/core/services/core_features/line_follow/recovery/stuck_recovery.py:381
     tier: [M]
     owner: gz_sim
     status: OPEN
@@ -162,7 +162,7 @@ gaps:
     gap: device lane projection uncertainty 17-37 mm vs D-468 cap 15 mm; GAZEBO ground 4.3 mm; 260919 lane play 23.45 mm per side (STL nominal, unmeasured) < achievable device uncertainty at 320x240
     evidence:
       - middleware/perception/control/sensing/perception/lane_containment.py
-      - middleware/core/services/core_features/line_follow/lane_return_evidence.py
+      - middleware/core/services/core_features/line_follow/recovery/lane_return_evidence.py
       - middleware/perception/control/sensing/perception/camera_extrinsic.py
       - D-468
       - D-480
@@ -178,7 +178,7 @@ gaps:
       - docs/validation/d476-gazebo-model-pc-2026-10-06/result.md:202-216
       - middleware/perception/control/sensing/perception/lane_keep_lines.py
       - middleware/perception/control/sensing/perception/lane_containment.py
-      - middleware/core/services/core_features/line_follow/lane_return_evidence.py
+      - middleware/core/services/core_features/line_follow/recovery/lane_return_evidence.py
       - D-468
       - D-476
     tier: [M, R]

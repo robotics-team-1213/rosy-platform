@@ -45,7 +45,7 @@ Decision 2의 "차체 footprint와 경계의 부호 있는 여유 및 예측 여
 
 **원인.** 첫 구현은 추종 단계의 차로 안 판정에 여유 0.015 m, checkpoint에 0.025 m를 상수로 썼다. 그런데 `lane_return_evidence`는 경계를 이미 측정된 투영 불확실도만큼 안쪽으로 깎은 뒤 여유를 잰다. 상수는 불확실도를 두 번 뺐다. Gazebo 260919 실행(Pinky 폭 0.113 m, 그 실행에서 차로 중심 한쪽 여유 약 5 mm, sim 불확실도 4.3 mm)에서는 첫 프레임에 이탈이 열렸고 D-476 bridge는 무장될 수 없었다(`docs/validation/d476-gazebo-model-pc-2026-10-06/result.md` 2차 실행, 브랜치 `feat/sim-sensor-fidelity`).
 
-**규칙** (`core_features/line_follow/lane_return.py`):
+**규칙** (`core_features/line_follow/recovery/lane_return.py`):
 
 1. 차로 안 진입: `여유 − v·|sin θ|·0.3 s ≥ line_follow.lane_return_body_margin_m`(기본 0).
    - 여유는 URDF footprint 네 모서리(`body_front_x_m`, `body_rear_x_m`, `body_half_width_m`)에서 불확실도만큼 깎은 두 경계까지 잰 부호 있는 최소 수직거리다. `uncertainty_m`은 생산자가 보내는 경계별 전체 횡오차 한계다(투영·보정·검출, `LaneContainmentEvidence` 문서). 그 한계가 모든 횡오차를 덮을 때에만, 여유 0 이상이 네 모서리가 모두 차로 안에 있다는 뜻이 된다.

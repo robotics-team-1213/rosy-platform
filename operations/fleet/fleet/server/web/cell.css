@@ -23,7 +23,6 @@ input:focus-visible, textarea:focus-visible, a:focus-visible { outline: var(--fo
 .scope { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
 a { color: var(--ink); }
-.console-return { box-sizing: border-box; min-height: var(--target-secondary); display: inline-flex; align-items: center; padding: var(--space-3); }
 #layout-preview:not([hidden]) { display: grid; gap: var(--space-3); }
 #layout { width: 100%; height: 20rem; color: var(--ink); }
 #layout rect { fill: var(--surface-raised); stroke: var(--series-primary); stroke-width: 2px; }
@@ -49,3 +48,5 @@ a { color: var(--ink); }
   #estop small { display: none; }
 }
 @media (30rem <= width < 64rem) { .documents { grid-template-columns: 1fr; } }
+/* D-501 — 탭 줄을 이 문서의 가운데 90rem 본문과 같은 가장자리에 둔다. */
+.doc-tabs { max-width: 90rem; margin-inline: auto; padding-inline: var(--space-4); }

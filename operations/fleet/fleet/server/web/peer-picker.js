@@ -59,7 +59,7 @@ export function createPeerPicker({scope, el, call, isLocked, isActive, sources, 
         item.append(control);
       } else {
         const note = document.createElement('small'); note.className = 'peer-owner-note';
-        note.textContent = peer.approval !== 'approved' ? '운용자가 승인한 뒤 연결할 수 있습니다.'
+        note.textContent = peer.approval !== 'approved' ? '운영자가 승인한 뒤 연결할 수 있습니다.'
           : ['conflict', 'expired'].includes(peer.freshness) ? '장비 정보를 다시 확인하세요.'
             : '등록된 담당 화면이 없습니다.';
         item.append(note);

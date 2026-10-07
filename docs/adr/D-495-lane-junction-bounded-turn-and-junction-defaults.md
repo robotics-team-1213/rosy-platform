@@ -50,7 +50,7 @@
 
 결정 본문은 바꾸지 않는다. 구현에서 정한 것과 확인한 것이다.
 
-1. **회전 동작 위치.** `core_features/line_follow/junction.py`가 매니저 틱 안에서 결정의 twist만 바꾼다. 같은 generation·evidence revision으로 CommandManager에 간다. 최종 `cmd_vel` 발행자는 그대로 CORE다.
+1. **회전 동작 위치.** `core_features/line_follow/recovery/junction.py`가 매니저 틱 안에서 결정의 twist만 바꾼다. 같은 generation·evidence revision으로 CommandManager에 간다. 최종 `cmd_vel` 발행자는 그대로 CORE다.
 2. **수치.** 회전 각속도는 `clip(2·|오차|, min(0.3, 한도), 한도)` rad/s이고, 한도는 수동 각속도 한도와 `max_angular` 중 작은 값이다. 시간 한도의 ω_min은 `min(0.3, 한도)`다. 전진 속도는 `0.5·min(line_follow.max_linear, 수동 선속도 한도)`이다. CORE 매니저는 Fleet용 `trip_max_linear`를 모르므로 이 값으로 trip 최고 속도의 절반 이하를 지킨다. `left`는 `turn_deg > 0`, `right`는 `< 0`이어야 한다. 아니면 400이다.
 3. **재획득.** 전진이 끝난 틱은 0을 내고, 다음 틱부터 기존 차선 추종이 움직인다. 그 뒤 받은 신선한 visible 프레임(신뢰도 `min_confidence` 이상) 하나로 끝난다. odom 0.20 m 또는 5 s 안에 못 잡으면 `unresolved`다. 끝나면 직전 교차로 감지 기록을 지운다. 그래야 방금 지난 교차로로 `waiting`에 다시 걸리지 않는다.
 4. **중단.** odom이 0.3 s보다 낡았거나 PoseTrail이 끊긴 경우, 모드 변경(E-Stop 포함), D-422 몸체 간격(회전·전진 twist 기준), D-468 동작 확인 실패, 각속도·선속도 한도 0, 열린 stuck, 시간 초과, 새 지시가 중단 이유다. 운전자 확인 만료·IR 이탈 감시처럼 차선 시야와 무관한 기존 HOLD 사유도 중단으로 친다. 모드 변경으로 생긴 `aborted`는 다음 모드 변경에서 지운다. 그 밖의 `aborted`는 다음 지시까지 HOLD다. 새 지시는 진행 중인 동작을 멈추고 자신은 받지 않는다(`accepted: false`).
