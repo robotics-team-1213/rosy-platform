@@ -422,7 +422,7 @@ def parse_adr_gaps(text: str) -> tuple[dict[str, str], list[str]]:
 
 
 def reserved_adrs(repo: Path) -> set[str]:
-    """Numbers claimed with tools/harness/adr_reserve.py (refs/adr/D-nnn, D-508)."""
+    """Numbers claimed with tools/harness/adr_reserve.py (refs/adr/D-nnn, D-508). Local only."""
     out = _git(repo, "for-each-ref", "--format=%(refname:lstrip=2)", "refs/adr") or ""
     return {name for name in out.split() if ADR_ID.match(name)}
 
@@ -439,7 +439,15 @@ def load_adr_gaps(repo: Path, config: dict) -> tuple[dict[str, str], list[str]]:
     return gaps, errors
 
 
-def validate_adr_log(adr: AdrLog, gaps: dict[str, str], reserved: set[str] | frozenset[str] = frozenset()) -> list[str]:
+def reservation_warnings(adr: AdrLog, gaps: dict[str, str], reserved: set[str]) -> list[str]:
+    """refs/adr are local: CI and other clones lack them, so they never excuse a gap (D-508)."""
+    present = set(adr.index) | set(adr.bodies)
+    return [f"{adr_id} reserved locally (refs/adr) but not on this branch"
+            " — land its ADR or add a gap line to tools/harness/adr_gaps.txt before push"
+            for adr_id in sorted(reserved - present - set(gaps), key=_adr_number)]
+
+
+def validate_adr_log(adr: AdrLog, gaps: dict[str, str]) -> list[str]:
     errors = [f"{adr_id}: duplicate body section" for adr_id in adr.duplicates]
     errors += [f"{adr_id}: duplicate index row" for adr_id in adr.index_duplicates]
     for adr_id in sorted(set(adr.bodies) - set(adr.index), key=_adr_number):
@@ -451,7 +459,7 @@ def validate_adr_log(adr: AdrLog, gaps: dict[str, str], reserved: set[str] | fro
     highest = max((_adr_number(i) for i in present), default=0)
     for number in range(1, highest + 1):
         adr_id = f"D-{number}"
-        if adr_id not in present and adr_id not in gaps and adr_id not in reserved:
+        if adr_id not in present and adr_id not in gaps:
             errors.append(f"{adr_id}: missing and not declared in adr_gaps")
     for adr_id in sorted(gaps, key=_adr_number):
         if adr_id in present:
@@ -766,7 +774,8 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
     adr = parse_adr_log(adr_text, repo / "docs" / "adr")
     gaps, gap_errors = load_adr_gaps(repo, config)
     errors += [f"{ADR_GAPS.as_posix()}: {e}" for e in gap_errors]
-    errors += [f"ADR log: {e}" for e in validate_adr_log(adr, gaps, reserved_adrs(repo))]
+    errors += [f"ADR log: {e}" for e in validate_adr_log(adr, gaps)]
+    warnings += [f"ADR log: {w}" for w in reservation_warnings(adr, gaps, reserved_adrs(repo))]
     if config.get("sim2real_gaps"):
         registry, problem = sim2real.load(repo / config["sim2real_gaps"])
         gap_errors, gap_warnings = ([problem], []) if problem else sim2real.validate(registry, repo, set(adr.index))

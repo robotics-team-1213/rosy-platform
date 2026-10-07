@@ -396,7 +396,7 @@ def test_every_module_log_is_valid(config):
 def test_repository_adr_log_is_contiguous_and_indexed(config, adr_log):
     gaps, gap_errors = harness.load_adr_gaps(ROOT, config)
     assert gap_errors == []
-    assert harness.validate_adr_log(adr_log, gaps, harness.reserved_adrs(ROOT)) == []
+    assert harness.validate_adr_log(adr_log, gaps) == []
 
 
 def test_generated_records_are_current():
@@ -700,11 +700,14 @@ def test_repository_gaps_live_in_the_union_file(config):
     assert errors == [] and gaps
 
 
-def test_reserved_ref_counts_as_a_gap_but_not_as_a_stale_one():
+def test_reserved_ref_is_a_warning_never_a_gap():
     adr = harness.parse_adr_log(GOOD_ADR)  # D-3 absent
     assert harness.validate_adr_log(adr, {}) == ["D-3: missing and not declared in adr_gaps"]
-    assert harness.validate_adr_log(adr, {}, {"D-3"}) == []
-    assert harness.validate_adr_log(adr, {}, {"D-3", "D-4", "D-9"}) == []  # landed ref is irrelevant
+    assert harness.reservation_warnings(adr, {}, {"D-4"}) == []  # landed: the ref is irrelevant
+    assert harness.reservation_warnings(adr, {"D-9": "skipped"}, {"D-9"}) == []
+    assert harness.reservation_warnings(adr, {}, {"D-3", "D-9"}) == [
+        f"{i} reserved locally (refs/adr) but not on this branch — land its ADR or add a gap line"
+        " to tools/harness/adr_gaps.txt before push" for i in ("D-3", "D-9")]
 
 
 def test_only_one_record_per_line_files_use_the_union_merge_driver():
