@@ -544,13 +544,18 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-488: the site map store (in memory without one) and the D-490 trip planner.
     from fleet.routing.cost import RoutingConfig
     from fleet.server.site_map_routes import install_site_map_routes
+    from fleet.server.console_view import trip_caps
     from fleet.server.trip_routes import install_trip_routes
     route_active = install_lane_route_routes(app, console=console, task_service=task_service,
                                              site_maps=site_maps, require_operator=require_operator,
                                              operator_guard=operator_guard)
     install_site_map_routes(app, site_maps=site_maps, route_active=route_active, read_guard=read_guard,
                             require_named_operator=require_named_operator)
-    install_trip_routes(app, console=console, site_maps=site_maps,
+    async def _trip_caps(robot_id: str):
+        """D-494 1: trip caps from the capability cache; None for an older image or no answer."""
+        return trip_caps(await console._capability_display.shown(robot_id, wait_s=2.0))
+
+    install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,
                         require_named_operator=require_named_operator)
 

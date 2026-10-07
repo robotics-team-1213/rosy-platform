@@ -51,7 +51,7 @@ def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTP
     return HTTPException(status_code=status, detail={"code": code, "detail": detail or {}})
 
 
-def install_trip_routes(app, *, console, site_maps, routing_config, require_named_operator) -> None:
+def install_trip_routes(app, *, console, site_maps, routing_config, require_named_operator, caps_for) -> None:
     not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE", {"message": "trip execution opens with D-488 M2"}, 501)
     failed_versions: set = set()  # an unexpected planner failure is logged once per map version
 
@@ -87,7 +87,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
         # D-494 1: the robot's trip caps bound the plan. An older image has none; its preview
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
         # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
-        caps = await console.caps_for(robot_id)
+        caps = await caps_for(robot_id)
         bounds = {} if caps is None else {
             "robot_kind": caps.kind, "drive_modes": caps.modes if caps.max_speed > 0 else frozenset(),
             "max_speed_mps": caps.max_speed or None}
