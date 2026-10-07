@@ -114,6 +114,12 @@ def import_frames(store, body):
             raise ValueError('integer image dimensions required')
         data = bounded(row['image'])
         image(data, row['image_sha256'], width, height)
+        objects = row.get('objects', [])
+        if not isinstance(objects, list) or len(objects) > 100:
+            raise ValueError('at most 100 object draft boxes required')
+        for box in objects:
+            store.validate_boxes({'width': width, 'height': height}, [box],
+                                 classes=store.object_classes())
         mask, labelmap_sha = None, None
         if row.get('mask'):
             ref = row['mask']
@@ -142,6 +148,11 @@ def import_frames(store, body):
         normalized = {key: row.get(key) for key in
                       ('source_session', 'capture_group', 'source_video_sha256', 'video_frame',
                        'video_time_s', 'timestamp_basis', 'collection', 'dataset_memberships_snapshot')}
+        for key in ('annotation_source', 'annotation_note'):
+            if row.get(key):
+                if not isinstance(row[key], str) or len(row[key]) > 100:
+                    raise ValueError(f'bounded {key} required')
+                normalized[key] = row[key]
         normalized['source_session_declared'] = row['source_session']
         if row.get('source_kind') == 'mcap':
             normalized.update(source_kind='mcap', mcap=mcap)
@@ -151,7 +162,7 @@ def import_frames(store, body):
             except ValueError:
                 pass  # Preserve historical identities; never invent authenticated capture stamps.
         normalized.update(video=row.get('source_video'), width=width, height=height,
-                          image_sha256=row['image_sha256'], boxes=[],
+                          image_sha256=row['image_sha256'], objects=objects,
                           original_video_verified=False, map_revision=None, map_pose=None,
                           fixed_eval_overlap=row.get('fixed_eval_overlap') is True,
                           review_status='pending_human', complete_frame_review=False,

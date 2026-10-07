@@ -1,4 +1,5 @@
 import json
+import hashlib
 import pytest
 from learning_workspace import Workspace
 
@@ -74,3 +75,26 @@ def test_canonical_dataset_and_policy_artifact_filenames(tmp_path):
     for kind, file in [('raw', 'dataset-manifest.json'), ('policy', 'policy-artifact.json')]:
         item = workspace.register({'kind': kind, 'path': str(tmp_path), 'name': kind})
         assert any(row['name'] == file and row['status'] == 'unchanged' for row in item['reports'])
+
+
+def test_declared_jpg_opens_separately_and_refuses_changed_bytes(tmp_path):
+    image = tmp_path / 'overlay.jpg'
+    raw = b'\xff\xd8preview\xff\xd9'
+    image.write_bytes(raw)
+    digest = hashlib.sha256(raw).hexdigest()
+    (tmp_path / 'summary.json').write_text(json.dumps({
+        'status': 'candidate_evaluated', 'verdict': 'HOLD',
+        'metrics': [{'label': 'Independent mIoU', 'value': 0.9323}],
+        'images': [{'name': image.name, 'sha256': digest}],
+    }))
+    workspace = Workspace(tmp_path / 'workspace.sqlite3')
+    item = workspace.register({'kind': 'perception', 'name': 'candidate', 'path': str(tmp_path)})
+    report = next(row for row in item['reports'] if row['name'] == 'summary.json')
+    assert report['metrics'][0]['value'] == 0.9323
+    assert workspace.image(item['id'], image.name) == (raw, digest)
+    with pytest.raises(ValueError, match='not declared'):
+        workspace.image(item['id'], '../summary.json')
+    image.write_bytes(b'\xff\xd8changed\xff\xd9')
+    assert next(row for row in workspace.list()[0]['reports'] if row['name'] == 'summary.json')['status'] == 'invalid'
+    with pytest.raises(ValueError, match='not declared'):
+        workspace.image(item['id'], image.name)

@@ -73,6 +73,12 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
 .work-filters label { min-width: 0; }
 .work-filters input, .work-filters select { width: 100%; }
 .job-reason { color: var(--status-warn); font-size: var(--text-label); }
+.job-metrics { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-block: var(--space-3); }
+.job-metric { min-width: 9rem; padding-left: var(--space-3); border-left: 2px solid var(--series-primary); }
+.job-metric strong, .job-metric span { display: block; }
+.job-metric strong { font-size: var(--text-title); font-variant-numeric: tabular-nums; }
+.job-metric span { color: var(--ink-quiet); font-size: var(--text-label); }
+.job-images { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-block: var(--space-3); }
 #updated { font-size: var(--text-label); }
 #capabilities { padding-top: var(--space-4); }
 #capabilities p { max-width: 70ch; }
