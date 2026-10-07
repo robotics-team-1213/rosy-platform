@@ -232,3 +232,9 @@
 - 변경: 주행 카드의 위험 배터리 수치를 웨이크 카드와 같은 위험 채움·밝은 글자로 그린다. 수동·내비게이션/저배터리·정지 주행 카드 세 장을 현재 320×240 렌더러에서 캡처했다.
 - 증거: 정보·주행 카드·팔레트 호스트 시험 71 passed, `known_failures.py` 0 NEW. [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)에 G3 여덟 항목의 부분 근거와 남은 실물 판독 범위를 기록했다.
 - gate 변화: LOCAL 렌더 부분 근거. 실제 설치 LCD·카드 전이·거리/각도/조도·사람 G3는 HOLD다.
+
+## 2026-10-07 · uncommitted · uiux(face): D-504 표정 실루엣과 재생
+
+- 변경: 여덟 GIF를 320×240·20프레임·100 ms 자산으로 만들고 `rosy-face`와 벤치 어댑터가 매 프레임을 읽게 했다. 상황표·안전 카드·10/5 fps 출력은 유지한다.
+- 증거: 기존 `basic`·`fun` 첫 프레임의 32×24 실루엣 차이 0.3%; 변경 후 다섯 운용 표정의 모든 쌍 6% 이상. 자산과 `rosy-face` 관련 호스트 시험 362 passed, 3 skipped, `known_failures.py` 0 NEW. 실제 LCD 판독은 미검증.
+- gate 변화: 없음. SOURCE/LOCAL 후보, DEVICE/FIELD 수용 전.
