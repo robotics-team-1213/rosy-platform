@@ -1,4 +1,6 @@
 // 천장 카메라 사이트 층 (D-257). DOM 없는 순수 계산만 둔다 — map-view.js 가 그린다.
+import { invert3, project as projectHomography } from "./map-fit.js";
+
 // 대형 릴레이 증거(streamEvidence)도 같은 순수 계산이라 여기 있다(D-359 US-009).
 // 관측(sighting)은 표시·대조용이다. CORE TF pose 와 합치지 않고, 목표 좌표로 쓰지 않는다.
 
@@ -123,5 +125,33 @@ export function quarterTurn(rot, w, h) {
   return {
     width: side ? h : w, height: side ? w : h, matrix: m,
     point: (x, y) => ({ x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] }),
+    // 돌린 화면 점 → 원본 영상 점 (quarter turn 이라 det 은 ±1).
+    unpoint: (x, y) => {
+      const det = m[0] * m[3] - m[1] * m[2], dx = x - m[4], dy = y - m[5];
+      return { x: (m[3] * dx - m[2] * dy) / det, y: (-m[1] * dx + m[0] * dy) / det };
+    },
   };
+}
+
+// 돌린 카메라 화면의 점 → 지도 m. map_to_image 를 뒤집어 쓴다. 지평선 뒤면 null.
+export function cameraScreenToMap(mapToImage, turn, x, y) {
+  const inverse = Array.isArray(mapToImage) && mapToImage.length === 9 ? invert3(mapToImage) : null;
+  if (!inverse) return null;
+  const raw = turn.unpoint(x, y);
+  const p = projectHomography(inverse, raw.x, raw.y) || projectHomography(inverse.map((v) => -v), raw.x, raw.y);
+  return p ? { x: p[0], y: p[1] } : null;
+}
+
+// D-513 7: 돌린 카메라 화면에서 지도 +x 가 가리키는 방향을 가장 가까운 quarter turn(시계 방향 도)으로.
+// 지도 화면(+x 오른쪽, +y 위)을 그만큼 돌리면 관제 실영상과 같은 방향으로 보인다.
+export function mapQuarterTurn(record, rot) {
+  const h = record?.map_to_image, b = record?.track_bounds_m, image = record?.image;
+  if (!Array.isArray(h) || h.length !== 9 || !b || !(image?.width > 0) || !(image?.height > 0)) return 0;
+  const turn = quarterTurn(rot, image.width, image.height);
+  const cx = (b.min_x + b.max_x) / 2, cy = (b.min_y + b.max_y) / 2;
+  const a = projectHomography(h, cx, cy), c = projectHomography(h, cx + 0.1, cy);
+  if (!a || !c) return 0;
+  const p = turn.point(a[0], a[1]), q = turn.point(c[0], c[1]);
+  const deg = Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI;
+  return ((Math.round(deg / 90) * 90) % 360 + 360) % 360;
 }

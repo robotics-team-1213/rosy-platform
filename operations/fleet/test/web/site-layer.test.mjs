@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines,
-  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, displayRotation, quarterTurn,
+  SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, displayRotation, quarterTurn, cameraScreenToMap, mapQuarterTurn,
 } from "../../fleet/server/web/site-layer.js";
 
 const row = (changes) => ({
@@ -96,4 +96,26 @@ test("D-513 7: the rotation comes from the source row, anything else is 0", () =
   assert.equal(displayRotation(siteMap, "odd"), 0);
   assert.equal(displayRotation(siteMap, "missing"), 0);
   assert.equal(displayRotation(null, "cam"), 0);
+});
+
+test("D-513 7: a click on the turned picture maps back through the turn and calibration", () => {
+  const h = [100, 0, 200, 0, -100, 100, 0, 0, 1]; // map (x, y) -> image (100x+200, -100y+100)
+  for (const rot of [0, 90, 180, 270]) {
+    const turn = quarterTurn(rot, 400, 200);
+    const back = turn.unpoint(...Object.values(turn.point(30, 40)));
+    assert.deepEqual(back, { x: 30, y: 40 });
+    const shown = turn.point(100 * 0.5 + 200, -100 * -0.25 + 100);
+    const map = cameraScreenToMap(h, turn, shown.x, shown.y);
+    assert.ok(Math.abs(map.x - 0.5) < 1e-9 && Math.abs(map.y + 0.25) < 1e-9, `rot ${rot}`);
+  }
+  assert.equal(cameraScreenToMap([0, 0, 0, 0, 0, 0, 0, 0, 0], quarterTurn(0, 1, 1), 0, 0), null);
+});
+
+test("D-513 7: the map view turn follows where map +x points on the turned picture", () => {
+  const record = { map_to_image: [100, 0, 200, 0, -100, 100, 0, 0, 1],
+    image: { width: 400, height: 200 }, track_bounds_m: { min_x: -1, max_x: 1, min_y: -0.5, max_y: 0.5 } };
+  assert.equal(mapQuarterTurn(record, 0), 0);    // map +x is image right
+  assert.equal(mapQuarterTurn(record, 90), 90);  // image right is now screen down
+  assert.equal(mapQuarterTurn(record, 270), 270);
+  assert.equal(mapQuarterTurn({}, 90), 0);
 });
