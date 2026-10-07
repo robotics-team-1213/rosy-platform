@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · uiux(pilot): 로비의 기기·연결 버튼에 아이콘을 붙이고 왼쪽에 맞춘다
 - 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 머리 상태 정직성
 - 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 전화 폭
 - 2026-10-07 · uncommitted · uiux(pilot): 비상 카메라 전화 폭
 - 2026-10-07 · uncommitted · fix(pilot): 열린 소켓의 무응답 상태 숨김
-- 2026-10-07 · uncommitted · uiux(pilot): 상태 소켓 상실 중 주행 차단

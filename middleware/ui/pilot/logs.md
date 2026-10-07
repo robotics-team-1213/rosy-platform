@@ -665,3 +665,9 @@
 - 변경: 실제 앱과 같이 Gazebo 팔 시험 fixture의 Home·비상 정지를 숨겼고, 팔 화면에서는 오래된 접속 대기·직접 조종 부제를 숨겨 본문의 시뮬레이션 전용·조작 가능 상태와 충돌하지 않게 했다.
 - 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-arm-header-2026-10-07/result.md). 수정 전 320px 1 failed, 수정 후 집중 브라우저 6 passed, G1 90 passed, 각각 known_failures 0 NEW.
 - gate 변화: Pilot G2 부분 보강. 실물 태블릿·팔 장치 readback, 다른 상태·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 로비의 기기·연결 버튼에 아이콘을 붙이고 왼쪽에 맞춘다
+
+- 변경: 네이티브 Pilot 로비 왼쪽 열의 「기기·연결」 버튼이 아이콘 대응표에 없어(옛 이름 "태블릿"만 있음) 글자만 보였고, 세로 레이아웃 기본 폭(가득 참)이라 글자가 가운데로 밀려 테두리 없는 글자처럼 보였다. 아이콘 대응에 "기기·연결"을 더하고(ic_tablet), 버튼을 내용 폭·왼쪽 정렬로 둔다.
+- 증거: Android JVM 93 passed. Lenovo 태블릿(무선 adb)에 설치해 로비 화면에서 아이콘과 정렬 확인(2026-10-07).
+- gate 변화: 없음.
