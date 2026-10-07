@@ -95,6 +95,14 @@ class JunctionMixin(JunctionApproachMixin):
             return (at is not None and 0 <= self._clock()-at <= KEEP_EVIDENCE_S
                     and self._turn_basis(self._clock()) is not None)
 
+    @property
+    def supports_junction_pivot(self):
+        """D-507 2 capability: a keep_debug frame with junction_ahead_v >= 1 within
+        KEEP_EVIDENCE_S (the same window as corner_turning for junction_turn)."""
+        with self._lock:
+            at = self._junction_ahead_v_at
+            return at is not None and 0 <= self._clock()-at <= KEEP_EVIDENCE_S
+
     def _turn_basis(self, now):
         """D-498: 'enforce' (D-400 floor proof), 'site' (fresh IR guard without departure, live
         D-422 body stop on a fresh scan, junction_turn_site_accepted) or None."""
@@ -121,8 +129,9 @@ class JunctionMixin(JunctionApproachMixin):
         j = self._junction
         self._junction = (dict(j, state='aborted', reason='mode_change')
                           if j is not None and j['state'] in MANEUVER else None)
+        self._cross_band = None  # D-507 6: a mode change or stop ends any crossing
 
-    def observe_junction(self, reason, received_at, corner_turning=False, ahead_m=None):
+    def observe_junction(self, reason, received_at, corner_turning=False, ahead_m=None, ahead_v=None):
         """One fresh line/keep_debug frame: a junction reason is a sighting (D-507 5: with its
         junction_ahead_m, if any); corner_turning is the keep-mode evidence behind
         supports_junction_turn."""
@@ -140,8 +149,10 @@ class JunctionMixin(JunctionApproachMixin):
                 self._junction_seen_at = float(received_at)
                 self._junction_ahead = (float(ahead_m) if type(ahead_m) in (int, float)
                                         and 0 <= ahead_m <= MAX_AHEAD_M else None, reason)
-                self._junction_ahead_seen |= self._junction_ahead[0] is not None
             self._keep_corner_at = float(received_at) if corner_turning is True else None
+            # D-507 2: perception announces junction_ahead_m support on every keep_debug frame.
+            self._junction_ahead_v_at = (float(received_at) if type(ahead_v) is int and ahead_v >= 1
+                                         else None)
 
     def set_junction(self, action, place_id, expires_s, stop_after_m=None, turn_deg=None,
                      advance_m=None, now=None, expect=None):
@@ -316,7 +327,7 @@ class JunctionMixin(JunctionApproachMixin):
                     return self._start_turn(j, now, decision)
                 j['state'] = 'executing'
                 entry = self._junction_entry
-                self._set_band('straight', None if entry is None else entry[0], now)
+                self._set_band('straight', None if entry is None else entry[0], now, j.get('pivot'))
         if j['state'] == 'executing' and j['action'] == 'straight':
             if not seen:
                 self._junction_done()  # passed: the keeper no longer sees the junction

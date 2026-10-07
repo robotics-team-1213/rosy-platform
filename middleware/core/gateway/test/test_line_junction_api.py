@@ -218,3 +218,8 @@ def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):
         raw = json.dumps({"reason": "junction_fork", "stamp": clock["t"], "junction_ahead_m": bad})
         observation.keep_junction(services, raw, source_now=clock["t"], received_at=clock["t"])
         assert services.line_follow._junction_ahead == (None, "junction_fork")
+    assert services.line_follow.supports_junction_pivot is False         # no junction_ahead_v yet
+    for marker, on in ((1, True), (True, False), ("1", False), (0, False), (2, True)):
+        raw = json.dumps({"reason": "no_boundary", "stamp": clock["t"], "junction_ahead_v": marker})
+        observation.keep_junction(services, raw, source_now=clock["t"], received_at=clock["t"])
+        assert services.line_follow.supports_junction_pivot is on, marker

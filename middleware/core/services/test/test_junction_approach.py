@@ -8,6 +8,7 @@ import pytest
 from core_features.line_follow.recovery.junction import JunctionRefused
 from core_features.line_follow.recovery.junction_approach import cross_line_band
 from test_junction_turn_site_basis import SITE, site_step
+from core_features.line_follow.model import LineFollowMode
 from test_line_junction import BODY, Rig
 
 WINDOW = dict(expect_in_m=.5, expect_tol_m=.1)
@@ -334,12 +335,15 @@ def test_approach_aborts_on_an_odom_epoch_change():
 
 def test_cross_line_band_edges():
     line = (.4, 0.)
-    assert cross_line_band((.3901, 0.), line, 0., .025, .01)
-    assert not cross_line_band((.3899, 0.), line, 0., .025, .01)
-    assert cross_line_band((.4349, 0.), line, 0., .025, .01)
-    assert not cross_line_band((.4351, 0.), line, 0., .025, .01)
-    assert cross_line_band((5., .41), (0., .4), math.pi/2, .025, 0.)     # along the yaw only
-    assert not cross_line_band((0., .39), (0., .4), math.pi/2, .025, 0.)
+    assert cross_line_band((.3901, 0.), line, 0., .025, .01, .1)
+    assert not cross_line_band((.3899, 0.), line, 0., .025, .01, .1)
+    assert cross_line_band((.4349, 0.), line, 0., .025, .01, .1)
+    assert not cross_line_band((.4351, 0.), line, 0., .025, .01, .1)
+    assert cross_line_band((.41, .1099), line, 0., .025, .01, .1)       # lateral: half + error
+    assert not cross_line_band((.41, -.1101), line, 0., .025, .01, .1)
+    assert cross_line_band((.05, .41), (0., .4), math.pi/2, .025, 0., .1)  # at yaw pi/2
+    assert not cross_line_band((.15, .41), (0., .4), math.pi/2, .025, 0., .1)
+    assert not cross_line_band((0., .39), (0., .4), math.pi/2, .025, 0., .1)
 
 
 IR_ROW = dict(SITE, ir_row_x_m=.05)
@@ -404,3 +408,55 @@ def test_turning_never_takes_centre():
     _until(rig, lambda s: s.junction.state != 'approaching', step=site_step, sighting=False)
     assert rig.m._cross_band is None
     _assert_aborted(rig, site_step(rig, ir='centre', seen=False, move=True)[1], 'turn_basis_lost')
+
+
+# --- re-review 1: the straight band is bounded (2026-10-08) -------------------------------
+
+def _drive_site(rig, x):
+    while rig.x < x - 1e-9:
+        site_step(rig, dx=min(.01, x-rig.x))
+
+
+def test_straight_band_is_spent_once_the_row_passes_the_far_edge():
+    rig = Rig(proof=False, **IR_ROW)
+    _band_straight(rig)
+    _drive_site(rig, .35)
+    assert rig.m._centre_on_cross_line(rig.now) is True
+    _drive_site(rig, .40)                                      # row .45 > .425 + error
+    assert rig.m._centre_on_cross_line(rig.now) is False and rig.m._cross_band is None
+
+
+def test_a_side_line_a_metre_later_is_lane_departure():
+    rig = Rig(proof=False, **IR_ROW)
+    _band_straight(rig)
+    _drive_site(rig, 1.2)
+    decision, status = site_step(rig, ir='centre')
+    assert (status.state, status.reason) == ('HOLD', 'lane_departure') and decision.linear == 0.
+
+
+@pytest.mark.parametrize('pivot, lateral, inside', [
+    (None, .10, True), (None, .125, False),      # D-491 corridor half-width .10 + error
+    (.05, .06, True), (.05, .08, False)])         # Fleet's lane half-width (pivot_past_line_m)
+def test_band_lateral_bound(pivot, lateral, inside):
+    rig = Rig(proof=False, **IR_ROW)
+    site_step(rig)
+    expect = None if pivot is None else dict(pivot_past_line_m=pivot)
+    rig.m.set_junction('straight', 'J1', 10., expect=expect)
+    _drive_site(rig, .2)
+    sight(rig, ahead=.2, step=site_step)
+    _drive_site(rig, .35)
+    while rig.y < lateral - 1e-9:                             # sidestep under the band
+        rig.y = min(lateral, rig.y+.01)
+        site_step(rig)
+    assert rig.m._centre_on_cross_line(rig.now) is inside
+
+
+@pytest.mark.parametrize('how', ['stop', 'mode_change'])
+def test_band_cleared_by_stop_and_mode_change(how):
+    rig = Rig(proof=False, **IR_ROW)
+    _band_straight(rig)
+    if how == 'stop':
+        rig.m.stop('estop')
+    else:
+        rig.m.set_mode(LineFollowMode.IR_LINE)
+    assert rig.m._cross_band is None

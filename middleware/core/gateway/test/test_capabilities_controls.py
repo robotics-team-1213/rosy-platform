@@ -91,10 +91,12 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert _controls(client)["items"][0]["junction_turn"] is False  # no enforce floor proof
     lf.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: True)
     assert _controls(client)["items"][0]["junction_turn"] is True
-    lf.observe_junction("junction_transverse", lf._clock())          # perception without the field
+    lf.observe_junction("junction_transverse", lf._clock(), ahead_m=0.2)  # no marker
     assert _controls(client)["items"][0]["junction_pivot"] is False
-    lf.observe_junction("junction_transverse", lf._clock(), ahead_m=0.2)
+    lf.observe_junction("no_boundary", lf._clock(), ahead_v=1)       # fresh marker
     assert _controls(client)["items"][0]["junction_pivot"] is True
+    lf.observe_junction("no_boundary", lf._clock() - 3.0, ahead_v=1)  # older than 2 s
+    assert _controls(client)["items"][0]["junction_pivot"] is False
     navigation = svc.capability._data.setdefault("navigation", {})
     navigation["goal_navigation"] = False
     assert _controls(client)["items"][0]["drive_modes"] == ["lane"]

@@ -220,7 +220,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `junction_turn` (D-495): the line-follow manager declares `supports_junction_turn`;
     # a manager without that hook cannot do the bounded junction turn.
     # `junction_pivot` (D-507 2): CORE takes the window/pivot fields and this run's perception
-    # has sent keep_debug junction_ahead_m (supports_junction_pivot).
+    # announces keep_debug junction_ahead_v within 2 s (supports_junction_pivot).
     limits = svc.safety.limits
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
     if svc.line_follow is not None:
