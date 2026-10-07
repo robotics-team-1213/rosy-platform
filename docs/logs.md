@@ -6824,3 +6824,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: D-430 안전 검토 예외는 해당 세 커밋의 소스 diff와 host 테스트 범위에 한정한다.
 - 교훈: 기본 `bash`가 WSL이면 Windows 파일의 CRLF와 `/mnt/f` 성능 때문에 pre-push 결과를 잘못 읽을 수 있다. Git Bash와 커밋 blob으로 같은 검사를 실행한다.
+
+## 2026-10-07 · uncommitted · docs(adr): Console 충전·health·설정 경계 D-509
+
+- 변경: Fleet 관제는 기존 CORE 배터리·충전·진단 근거를 출처와 나이와 함께 보여 주고 다음 조치를 안내한다. 안전 해제와 Wi-Fi 적용은 로봇 관리자 경로, 영상 설정은 카메라 소유 경로에 둔다.
+- 증거: harness lint 0 errors/23 기존 경고; 문서 계약 시험 112 passed/23 warnings, known_failures 0 NEW. SOURCE/LOCAL 문서 검증이며 DEVICE/FIELD 수용 아님.
+- gate 변화: 없음
+- 결정: D-509 Proposed
+- 교훈: 충전 래치는 신선한 충전 확인의 대용이 아니다.
