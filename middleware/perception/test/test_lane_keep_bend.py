@@ -91,8 +91,12 @@ def test_the_bend_diagonal_is_not_an_l_corner(clips):
 
 
 def test_the_bend_is_followed_not_lost(clips):
-    for name in ("south_centre_lost", "premature_corner_left", "bend_flipping", "bend_fork"):
+    for name in ("south_centre_lost", "bend_flipping", "bend_fork"):
         assert [m["gt"] for b, m in clips[name] if b["target_m"] is None] == [], name
+    # At 66 deg (yaw -3.5) the outer diagonal beside the inner edge bending out is, in one frame,
+    # a junction mouth too: it fails closed for that frame only (route context decides, B11).
+    held = [b["reason"] for b, _ in clips["premature_corner_left"] if b["target_m"] is None]
+    assert held == ["junction_transverse"]
     assert any(b["strategy"].startswith("bend") for b, _ in clips["south_centre_lost"])
 
 
@@ -163,4 +167,16 @@ def test_a_junction_mouth_with_a_70_degree_line_across_still_holds():
     slope = np.tan(np.radians(25.0))
     image = _diagonal(_render([(NOMINAL_HALF - slope * 0.22, slope)]), 0.30, np.tan(np.radians(70.0)), -0.15, 0.25)
     last = _corner_keep(image)
+    assert last["reason"] == "junction_transverse"
+
+
+@pytest.mark.parametrize("cut", [0.30, 0.25, 0.22])
+def test_a_junction_mouth_whose_boundary_ends_before_the_line_still_holds(cut):
+    # The boundary bending out stops short of the 70 deg line across: the line could start a
+    # bend, but junction rules are judged first and see it as the transverse mark it also is.
+    slope = np.tan(np.radians(25.0))
+    image = _render([])
+    band = np.isfinite(X) & (X <= cut) & (np.abs(Y - (NOMINAL_HALF - slope * 0.22 + slope * X)) <= 0.015)
+    image[band] = 195
+    last = _corner_keep(_diagonal(image, 0.30, np.tan(np.radians(70.0)), -0.15, 0.25))
     assert last["reason"] == "junction_transverse"

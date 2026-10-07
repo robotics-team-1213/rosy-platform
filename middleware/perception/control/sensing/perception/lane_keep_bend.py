@@ -56,6 +56,13 @@ def bend_side(ends, heading, half, parallel, limits):
     return "left" if sign > 0.0 else "right"
 
 
+def as_transverse(bends, transverse_min):
+    """Bend lines past the transverse angle as junction-rule transverse entries: a bend
+    and a junction mouth look alike in one frame, and junctions fail closed."""
+    return [(r["centre"], r["direction"], r["ends_m"], False) for r in bends
+            if abs(math.radians(r["heading_deg"])) > transverse_min]
+
+
 def bend_target(bends, half, radius, lookahead, target, strategy):
     """(target, strategy) on the nearest bend's centre line at `radius`. While that
     line meets the robot's path beyond `radius` the lane's own (target, strategy)

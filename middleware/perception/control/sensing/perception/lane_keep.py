@@ -117,7 +117,7 @@ from .lane_keep_junction import (  # noqa: F401 — re-exported; patch constants
     _continues,
     _junction,
 )
-from .lane_keep_bend import bend_side, bend_target, nearest_first, parallel_spans, runs_past
+from .lane_keep_bend import as_transverse, bend_side, bend_target, nearest_first, parallel_spans, runs_past
 
 #: Lookahead from base_link where the lane centre is read.
 LOOKAHEAD_M = 0.25
@@ -424,7 +424,7 @@ class LaneKeeper:
             target, strategy = corner
         seen_left, seen_right = ([b for b in left + right + conflicts if b["side"] == s] for s in ("left", "right"))
         junction = (None if corner is not None
-                    else _junction(strategy, transverse, seen_left, seen_right, half,
+                    else _junction(strategy, transverse + as_transverse(bends, TRANSVERSE_MIN_ANGLE_RAD), seen_left, seen_right, half,
                                    self._corner_turning,
                                    ONE_MAX_DISTANCE_FRACTION * 2.0 * half))
         if corner is None and junction is None and strategy != "both" and bends:  # junctions judged on the lane first
