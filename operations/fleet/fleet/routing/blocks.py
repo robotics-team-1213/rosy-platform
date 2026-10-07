@@ -217,10 +217,14 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
         if robot.d is None:  # no new grant without a localized pose; it stops on expiry
             continue
         want = robot.d + robot.uncertainty_m + robot.lookahead_m
-        end, blockers = robot.d, ()
+        # Coverage starts where the unit under the front starts, not at the estimate: a robot
+        # whose own unit is not granted has no authority past that unit's start.
+        end, blockers = None, ()
         for index, span in enumerate(robot.spans):
             if span.d1 <= robot.d:
                 continue
+            if end is None:
+                end = span.d0
             if index not in held:
                 if end >= want:
                     break
@@ -237,6 +241,8 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
             end = span.d1
         # Grant-backed only: an estimate already past its grants never becomes authority (the
         # robot then stands), and an earlier value stays because its grants are still held.
+        if end is None:  # past the end of its route
+            end = robot.spans[-1].d1
         issued = max(end - robot.uncertainty_m, state.authority.get(robot.id, -math.inf))
         state.authority[robot.id] = issued
         authority[robot.id] = issued
