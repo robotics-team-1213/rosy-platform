@@ -34,13 +34,17 @@ def keys(tmp_path):
     return private, public
 
 
-def candidate(m, root, keys, seq=1, env="e" * 64, *, bad_source=False):
+def candidate(m, root, keys, seq=1, env="e" * 64, *, bad_source=False, extra_files=None):
     dest = root / "inbox" / str(seq)
     dest.mkdir(parents=True)
     with tarfile.open(dest / "code.tar", "w") as tar:
         for name in ("learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
                      "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
             data = b"broken python !" if bad_source else b"print('ok')\n"
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+        for name, data in (extra_files or {}).items():
             info = tarfile.TarInfo(name)
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
@@ -61,6 +65,31 @@ def updater(m, root, keys, **kwargs):
 
 def test_module_is_available():
     assert hasattr(module(), "Updater")
+
+
+def test_camera_map_dependencies_are_signed_and_imported_from_the_release(tmp_path, keys):
+    m = module()
+    repo = SCRIPT.parents[2]
+    files = {"operations/vision/rosy_vision/" + name:
+             (repo / "operations/vision/rosy_vision" / name).read_bytes()
+             for name in ("__init__.py", "lane_map.py", "map_register.py")}
+    files[m.PREFIX + "probe.py"] = b"import pathlib,rosy_vision; print(pathlib.Path(rosy_vision.__file__).resolve())\n"
+    folder = candidate(m, tmp_path, keys, extra_files=files)
+    assert updater(m, tmp_path, keys).read_candidate(folder)["source_commit"] == f"{1:040x}"
+    release = tmp_path / "release"
+    m.unpack(folder / "code.tar", release)
+    for name, data in files.items():
+        assert (release / name).read_bytes() == data
+    result = subprocess.run(m.bootstrap_command(sys.executable, release, release / m.PREFIX / "probe.py", []),
+                            capture_output=True, text=True, check=True)
+    assert Path(result.stdout.strip()) == (release / "operations/vision/rosy_vision/__init__.py").resolve()
+
+
+def test_camera_map_job_refuses_a_missing_dependency(tmp_path, keys):
+    m = module()
+    folder = candidate(m, tmp_path, keys, extra_files={m.PREFIX + "camera_lane_map.py": b"pass\n"})
+    with pytest.raises(ValueError, match="missing camera-map dependency"):
+        m.unpack(folder / "code.tar", tmp_path / "release")
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Linux symlink/flock updater")
@@ -165,7 +194,9 @@ def test_restart_recovers_pending_before_observing_new_candidates(tmp_path, keys
 
 @pytest.mark.parametrize("name,link", [("../escape", False), ("learning/training/perception/x", True),
                                       ("private/key", False), ("learning/training/perception/data/key", False),
-                                      ("middleware/apps/device/pinky/profile/config/camera_nominal.yaml.extra", False)])
+                                      ("middleware/apps/device/pinky/profile/config/camera_nominal.yaml.extra", False),
+                                      ("operations/vision/rosy_vision/cli.py", False),
+                                      ("operations/vision/rosy_vision/lane_map.py.extra", False)])
 def test_archive_rejects_traversal_links_and_non_code_payload(tmp_path, name, link):
     m = module()
     p = tmp_path / "bad.tar"
@@ -209,7 +240,8 @@ def test_job_refuses_a_changed_environment(tmp_path, keys, monkeypatch):
         m.execute(config, "rosy_ml.py", [])
 
 
-def test_build_only_uses_committed_source(tmp_path, keys):
+@pytest.mark.parametrize("camera_map", [False, True])
+def test_build_only_uses_committed_source(tmp_path, keys, camera_map):
     m = module()
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -221,18 +253,22 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     (code / "model/watch.py").write_text("print('committed')\n")
     (code / "rosy_ml.py").write_text("print('committed')\n")
     profile = "middleware/apps/device/pinky/profile/config/camera_nominal.yaml"
-    for name in ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py",
-                 "shared/web/shared-assets.json", profile]:
+    dependencies = ["middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py",
+                    "shared/web/shared-assets.json", profile]
+    if camera_map:
+        dependencies += [*m.CAMERA_MAP_FILES, m.PREFIX + "camera_lane_map.py"]
+    for name in dependencies:
         dep = repo / name
-        dep.parent.mkdir(parents=True)
+        dep.parent.mkdir(parents=True, exist_ok=True)
         dep.write_text("PINNED = True\n")
     git("add", "learning/training/perception/model/watch.py", "learning/training/perception/rosy_ml.py",
-        "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py",
-        "shared/web/shared-assets.json", profile)
+        *dependencies)
     git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
     sha = git("rev-parse", "HEAD")
     (code / "rosy_ml.py").write_text("print('dirty')\n")
     (code / "secret").write_text("never ship")
+    if camera_map:
+        (repo / m.CAMERA_MAP_FILES[1]).write_text("DIRTY = True\n")
     out = tmp_path / "candidate"
     m.build(repo, sha, 1, "e" * 64, out, "test", keys[0], keys[1])
     m.unpack(out / "code.tar", tmp_path / "result")
@@ -242,6 +278,11 @@ def test_build_only_uses_committed_source(tmp_path, keys):
     assert (tmp_path / "result/contracts/foundation/core_common/__init__.py").read_text() == "PINNED = True\n"
     assert (tmp_path / "result/shared/web/shared-assets.json").read_text() == "PINNED = True\n"
     assert (tmp_path / "result" / profile).read_text() == "PINNED = True\n"
+    for name in m.CAMERA_MAP_FILES:
+        if camera_map:
+            assert (tmp_path / "result" / name).read_text() == "PINNED = True\n"
+        else:
+            assert not (tmp_path / "result" / name).exists()
 
 
 def test_uncommitted_perception_edits_are_kept(tmp_path):

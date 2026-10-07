@@ -205,7 +205,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       showBlocked(`조종이 차단되었습니다 — ${detail?.message ?? detail?.code ?? "이유를 확인하세요"}`);
     },
     onLatency: (ms, failed) => {
-      element.latency.textContent = failed ? "시한 초과" : `${Math.round(ms)}ms`;
+      element.latency.textContent = failed ? "조작 응답 시한 초과" : `조작 응답 ${Math.round(ms)}ms`;
       element.latency.dataset.slow = String(failed || ms > 250);
     },
   });
@@ -685,7 +685,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   placeCompactTools();
   const robotRecording = mountRobotRecording({
     toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,
-    sheetHost: root.querySelector("[data-drive-stage]"), anchor: element.hud, save: saveCameraFile,
+    sheetHost: root, anchor: element.hud, save: saveCameraFile,
     returnFocus: toolsButton,
   });
   view.applyZoom();

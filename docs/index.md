@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · feat(fleet): 관제에 사이트 경로와 로봇 링크를 표시(D-499)
-- 2026-10-07 · uncommitted · feat(fleet): 관제 상태 행에 로봇 링크(D-499)
-- 2026-10-07 · uncommitted · docs(plan): 관제 사이트 경로와 로봇 링크 실행 계획(D-499)
-- 2026-10-07 · uncommitted · docs(adr): 관제 사이트 경로와 로봇 링크(D-499)
-- 2026-10-07 · uncommitted · fix(pilot): 열린 상태 소켓의 무응답 readback 표시
+- 2026-10-07 · uncommitted · docs(solutions): 검증 문서의 빈백 git id가 push를 막는 오탐 — 교훈 기록
+- 2026-10-07 · db92172b5 · fix(core): 배터리 정지 해제 경로와 배터리 입력 근거 (D-502)
+- 2026-10-07 · uncommitted · docs(validation): 관제 콘솔 카메라 교정 재수락 회차 증거 기록
+- 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 320px 상태·폭
+- 2026-10-07 · uncommitted · docs(uiux): Pilot 전체 브라우저 회귀 기록

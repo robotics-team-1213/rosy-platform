@@ -109,7 +109,16 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        41_014,
+        41_764,
+        "split: independently re-judged at 41764 on 2026-10-07 (code-reviewer agent; judged at 41719 before "
+        "the review fixes). Since 41014 the package grew 750 lines: main's own +112 (within the allowance) "
+        "and the D-494 6 teach slice +638 — fleet/routing/teach.py 129 (pure point keeping, RDP, end "
+        "candidates, edge append), server/teach_service.py 216, server/teach_routes.py 91, "
+        "web/site-map-teach.js 119, site-map-model.js +35, site-map.html +27, site-map.js +7, app.py +4, "
+        "site_map_store.py +4 (record_event), site_map_routes.py +4 net (shared invalid_errors), "
+        "static_routes.py +1, site-map.css +1. Inside the server owner of "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and the site-map web owner; no new owner. "
+        "+150 allowance unchanged. "
         "split: independently re-judged at 41014 on 2026-10-07 (security-reviewer agent). Two components "
         "already judged on different bases, now combined after merging main. (1) main's D-494 M2 "
         "contracts 1-3, judged at 39679 (localization/map_pose.py, server/map_pose_service.py, "

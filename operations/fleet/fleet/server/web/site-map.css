@@ -20,6 +20,8 @@ a { color: var(--ink); }
 .map-scroll-hint[hidden] { display: none; }
 #site-map-svg { width: 100%; height: 30rem; background: var(--surface-flat); border: 1px solid var(--line-14); border-radius: var(--radius-control); }
 #site-map-svg.picking { cursor: crosshair; }
+#site-map-svg .plane-border { fill: none; stroke: var(--ink-quiet); stroke-width: 1px; pointer-events: none; }
+#site-map-svg.has-plane .edge { stroke: var(--series-primary); }
 #site-map-svg .edge { fill: none; stroke: var(--ink-quiet); stroke-width: 3px; cursor: pointer; }
 #site-map-svg .edge.free { stroke-dasharray: 8 6; }
 #site-map-svg .edge.selected { stroke: var(--series-primary); stroke-width: 5px; }
@@ -29,6 +31,7 @@ a { color: var(--ink); }
 #site-map-svg .label { fill: var(--ink); font: var(--text-micro) var(--mono); pointer-events: none; }
 #site-map-svg .plan { fill: none; stroke: var(--series-goal); stroke-width: 6px; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 #site-map-svg .target { fill: var(--series-goal); pointer-events: none; }
+#site-map-svg .teach { fill: none; stroke: var(--series-secondary); stroke-width: 4px; stroke-dasharray: 2 4; stroke-linecap: round; pointer-events: none; }
 #trip-actions { margin: 0; padding-inline-start: var(--space-5); }
 .estop { min-width: var(--target-irreversible); min-height: var(--target-irreversible); width: auto; height: auto; display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; }
 .estop .ui-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); flex: none; }

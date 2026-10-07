@@ -47,6 +47,7 @@ CONSOLE_ASSETS = {
     "site-map.css": "text/css",
     "site-map.js": "application/javascript",
     "site-map-model.js": "application/javascript",
+    "site-map-teach.js": "application/javascript",
     "site-layer.js": "application/javascript",
     "tracking-layer.js": "application/javascript",
     "tracking-view.js": "application/javascript",

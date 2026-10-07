@@ -27,7 +27,7 @@ class PilotViews(private val context: Context) {
         setPadding(dp(16), dp(8), dp(16), dp(8))
         val ink = if (primary) PilotColors.background else PilotColors.foreground
         setTextColor(android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_enabled), intArrayOf()), intArrayOf(ink, PilotColors.muted)))
-        val icon = when (text) { "다시 찾기" -> R.drawable.ic_refresh; "로봇 목록" -> R.drawable.ic_back; "화면 끄기" -> R.drawable.ic_screen_off; "태블릿" -> R.drawable.ic_tablet; else -> null }
+        val icon = when (text) { "다시 찾기" -> R.drawable.ic_refresh; "로봇 목록" -> R.drawable.ic_back; "화면 끄기" -> R.drawable.ic_screen_off; "태블릿", "기기·연결" -> R.drawable.ic_tablet; else -> null }
         icon?.let { setCompoundDrawablesRelativeWithIntrinsicBounds(context.getDrawable(it)?.mutate()?.apply { setTint(ink) }, null, null, null) }
         compoundDrawablePadding = dp(8)
         background = StateListDrawable().apply {

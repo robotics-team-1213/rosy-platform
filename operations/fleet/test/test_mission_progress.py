@@ -509,7 +509,7 @@ def test_api_reference_pins_snapshot_cursor_retention_and_unknown_physical_state
         encoding="utf-8",
     )
 
-    assert "**Version:** v1.118" in reference
+    assert "**Version:** v1.121" in reference
     assert "## 10.14 Mission progress snapshots and event cursor" in reference
     assert "`/api/fleet/missions/{mission_id}/events?after_event_id=" in reference
     assert "MISSION_CURSOR_EXPIRED" in reference

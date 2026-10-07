@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import known_failures  # noqa: E402
@@ -40,16 +42,17 @@ def test_windows_separators_and_errors_are_read():
     assert (new, seen) == ([], ["src/a/test/test_x.py::test_old"])
 
 
-def test_main_exits_nonzero_only_for_a_new_failure(tmp_path, capsys, monkeypatch):
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-16"])
+def test_main_exits_nonzero_only_for_a_new_failure(tmp_path, capsys, monkeypatch, encoding):
     # 2026-10-02 — 장부가 비어도(전 녹색이 목표 상태) 이 시험은 합성 항목으로 돈다.
     synthetic = tmp_path / "known.txt"
     synthetic.write_text("test/test_synthetic.py::test_old  # synthetic\n", encoding="utf-8")
     monkeypatch.setattr(known_failures, "LIST", synthetic)
     listed = next(iter(known_failures.load_known(synthetic.read_text(encoding="utf-8"))))
     report = tmp_path / "run.txt"
-    report.write_text(f"FAILED {listed} - x\n", encoding="utf-8")
+    report.write_text(f"FAILED {listed} - x\n", encoding=encoding)
     assert known_failures.main([str(report)]) == 0
-    report.write_text("FAILED test/test_nobody.py::test_new - x\n", encoding="utf-8")
+    report.write_text("FAILED test/test_nobody.py::test_new - x\n", encoding=encoding)
     assert known_failures.main([str(report)]) == 1
     assert "NEW       test/test_nobody.py::test_new" in capsys.readouterr().out
 

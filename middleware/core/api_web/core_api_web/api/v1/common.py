@@ -23,6 +23,15 @@ operator = require_role("operator")
 admin = require_role("administrator")
 
 
+def battery_health(svc) -> dict:
+    """`BatteryMonitor.health()` (the one staleness limit), or "missing" without a monitor (D-502)."""
+    health = getattr(getattr(svc, "battery", None), "health", None)
+    if health is None:
+        return {"evidence": "missing", "sample_age_s": None, "stale_after_s": None,
+                "level": None, "percent": None}
+    return health()
+
+
 # Stop evidence (D-411 addendum 17/18). A parked robot's velocity flips between 0 and one encoder
 # tick per odometry period; "still" means at most two ticks per period. The geometry comes from the
 # robot package's ``odometry`` config section (URDF nominal, refined per robot), never from here.

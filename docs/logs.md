@@ -6715,6 +6715,7 @@ osy-d395-s1d\`.
 - 변경: 상태 소켓이 열린 채 조용해지고 REST 상태 조회도 실패할 때 이전 숫자와 모드를 숨기고 상태 수신 중단을 표시한다. readback이 돌아오면 회복한다.
 - 증거: [LOCAL 결과](validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 집중 브라우저 1 failed, 수정 후 관련 11 passed, D-153 명명 G1 90 passed, 1 warning, 각 `known_failures.py` 0 NEW. 실행 기록은 `X:\DevTemp\pilot-silent-readback\`.
 - gate 변화: Pilot G2 일부 보강. 남은 선언 상태·폭, 사이트 설치·실물 readback, 운전자 G3와 제품 전체는 **HOLD**.
+
 ## 2026-10-07 · uncommitted · docs(adr): 관제 사이트 경로와 로봇 링크(D-499)
 
 - 변경: [D-499](adr/D-499-console-site-path-and-robot-link.md) Proposed. 관제 등록 로봇 칸에 사이트 경로 블록을 두고, 로봇 카드의 링크 단어는 기존 gather와 주소 판정으로만 고른다. 값은 up, unreachable, moved, tls-refused, protocol. 새 앱·새 프로브·바이트 그래프·로봇 Wi-Fi 변경은 없다.
@@ -6746,3 +6747,56 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 호스트 시험은 장치 수용이 아니다.
 - 결정: D-499 Proposed 유지.
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(uiux): 사이트 G3 준비 버전 재확인
+
+- 변경: 기존 사이트 PC의 배포 태그와 두 로봇 mDNS 해석을 현재 로컬 후보와 다시 대조하고 운영자 독회 기록지에 날짜별 준비 상태를 남겼다.
+- 증거: [읽기 전용 결과](validation/uiux-site-g3-readiness-2026-10-07/result.md). 세 사이트 이미지 태그 `5eb726c13…`은 후보 `43a823ac5…`의 조상이고, Fleet UID 10001은 두 `.local` 이름을 해석했다. 원본은 X:의 해시된 요약이다. 문서·계약 시험 **127 passed, 1 skipped**, `known_failures.py` **0 NEW**, harness lint 0 errors.
+- gate 변화: 없음. 현재 후보 설치·실물 상태 readback·요청자 G3가 없어 제품 전체 **HOLD**.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 비상 화면 폭
+
+- 변경: 320/390px 읽기 전용 카메라 상단의 겹침을 고치고 홈·비상 정지 행동 너비를 통일했다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-emergency-width-2026-10-07/result.md), 게이트·카메라 4폭×2화면. 관련 브라우저 12 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실제 사이트 설치본·정지 readback과 사용자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 가림과 폭
+
+- 변경: 좁은 화면의 녹화본 시트가 조작부 뒤에 가려진 문제와 하단 행동 너비를 고쳤다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 네 폭 관련 브라우저 7 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실제 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · docs(uiux): Pilot 전체 브라우저 회귀 기록
+
+- 변경: Pilot 108개 브라우저 시험의 현재 LOCAL 회귀 결과와 실행 중 공유 main의 사이트 문서 단일 변경을 분리해 기록했다.
+- 근거: [회귀 기록](validation/uiux-pilot-full-browser-2026-10-07/result.md). 108 passed, known_failures 0 NEW, 로그 SHA256 기록.
+- gate 변화: Pilot 브라우저 경로 근거 보강. 미캡처 G2·실물 readback·요청자 G3와 제품 전체는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 320px 상태·폭
+
+- 변경: 시뮬레이션 팔 헤더의 오래된 게이트·직접 조종 문구를 제거하고 320px 팔·그리퍼 동등 폭을 현재 화면에서 확인했다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-arm-header-2026-10-07/result.md). 관련 브라우저 6 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실물 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · docs(validation): 관제 콘솔 카메라 교정 재수락 회차 증거 기록
+
+- 변경: 천장 Rosy Cam 재조준 뒤 관제 콘솔 조감도가 저장된 추적 보정(paint-daccc3e53522)과 어긋나던 것을 2026-10-07 `/console/install` 맞춤 패널로 다시 맞춘 회차를 `docs/validation/site-camera-refit-2026-10-07/`(result.md + 스크린샷 3장)로 남겼다.
+- 증거: [회차 결과](validation/site-camera-refit-2026-10-07/result.md). 새 교정 `paint-f81a872f5cd8`이 Fleet DB `tracking_calibrations`에 활성으로 저장됐고 Fleet 재시작 2회를 넘겨 유지됨을 확인(`tracking_calibration_audit` 승인 이력). 문서 계약 시험 103 passed, 1 skipped, `known_failures.py` 0 NEW, harness lint 0 errors.
+- gate 변화: 없음. 검증 기록 추가만. 로봇 관측 0/0대에서 경로 감지가 불가한 점과 적용 교정에 렌즈 지문이 없어 렌즈 교체 가드가 약한 점은 후속 과제로 남는다.
+- 결정: 없음
+- 교훈: 카메라 재조준은 저장된 추적 보정과 조용히 어긋난다. 같은 날 착지된 낡은 교정 자동 경고(feat/cam-drift-warn, 커밋 `27081f83c`)가 다음 재조준부터 침묵 오정렬을 잡는다. 적용에 쓴 임시 계정 `camfit-temp`는 작업 직후 제거했다.
+
+## 2026-10-07 · db92172b5 · fix(core): 배터리 정지 해제 경로와 배터리 입력 근거 (D-502)
+
+- 변경: SAF-005 배터리 래치(`battery_policy`·`battery_deep`)가 모드를 EMERGENCY로 바꾸지 않아 관리자 해제가 409 `not in EMERGENCY`였다. E-Stop 리스너 하나가 모든 래치를 EMERGENCY로 옮기고, E-Stop은 대기 중인 배터리 도크 복귀를 지운다(OK까지 재무장 없음). `battery/voltage`가 `battery` 센서 표본이 되고 `GET /sensors/battery`는 404 대신 `evidence`(missing/fresh/stale)를, `GET /safety/state` `battery`는 `evidence`·`sample_age_s`·`level`·`percent`를 싣는다. API Ref v1.120, SRS SAF-005 문단.
+- 근거: 8kcn 2026-10-06 실기(6.20 V 저전압 뒤 충전 8.63 V에도 래치 유지, 해제 409), 9dfk 현재 main에서도 `/sensors/battery` 404. 호스트 pytest만이며 장치 수용은 아니다.
+- gate 변화: 없음.
+- 결정: D-502(자동 해제는 고르지 않음, 관리자 해제, Deep 재래치).
+- 교훈: 래치와 모드를 따로 쓰는 경로가 있으면 해제 계약이 깨진다. 래치 쪽 리스너 한 곳에서 모드를 맞춘다.
+
+## 2026-10-07 · uncommitted · docs(solutions): 검증 문서의 빈백 git id가 push를 막는 오탐 — 교훈 기록
+- 변경: `docs/validation/uiux-current-width-device-2026-10-07/result.md`의 40자리 SHA에 `commit` 접두어를 붙여 시크릿 스캐너 high-entropy-token 오탐을 해제했다(관측 내용 불변, `db006d7cf`와 같은 표기 수정). 같은 날 같은 클래스가 두 번째라 재발 방지 문서 `docs/solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md`를 남겼다 — 회차 문서에 git id를 쓸 때 `commit` 접두어(16진수는 종류 표기), 착지 전 시크릿 시험 1회 실행.
+- 증거: `test_release_boundary_guards.py::test_no_secrets_in_tracked_files` 수정 전 1 failed(해당 문서 line 3 지목) → 수정 후 통과. 이 오탐이 58커밋 push를 pre-push 훅에서 두 차례 거부했다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 오탐 하나가 공유 push 게이트를 막아 모든 세션의 푸시를 지연시킨다 — 문서 착지 전 1분 시험이 push 훅 실패를 예방한다
