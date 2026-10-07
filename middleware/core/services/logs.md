@@ -722,3 +722,9 @@
 - 증거: `test_junction_approach.py` 음수 pivot 접근 0.1 m, 목표 뒤 접근 0, 창 0.6 m, 띠 반폭, 범위 −0.31 거절. sign 변이(범위 0 하한 복원) 5건 실패 확인 뒤 복원.
 - gate 변화: SOURCE. SIM 재실행(SW spoke)은 열림.
 - 결정: D-507 2·4 개정(2026-10-08 사용자 결정)
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 6 가로선 띠는 테이프 중심 ± 폭/2 (검토)
+- 변경: `cross_line_band`가 측정 선을 테이프 중심으로 보고 [선 − 테이프/2 − e, 선 + 테이프/2 + e]를 쓴다(keeper `_across_path`와 Fleet 지도 모형이 중심을 잰다). 띠가 끝나는 먼 끝도 + 테이프/2.
+- 증거: `test_junction_approach.py` 띠 경계(.3776/.3774, .4224/.4226)와 범위·odom 오차 경계(x .3214/.3816) 다시 계산.
+- gate 변화: SOURCE.
+- 결정: D-507 6, 2 개정 검토
