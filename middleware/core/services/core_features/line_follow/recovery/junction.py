@@ -18,6 +18,8 @@ import math
 from dataclasses import replace
 
 from core_common.protocol.schemas import LineJunctionStatus
+from core_features.line_follow.recovery.junction_approach import (
+    MAX_AHEAD_M, STEP_MARGIN_S, JunctionApproachMixin, check_expect)
 
 JUNCTION_ACTIONS = ('straight', 'left', 'right', 'stop')
 JUNCTION_REASONS = frozenset({'junction_transverse', 'junction_fork'})
@@ -40,8 +42,7 @@ SETTLE_S = .3             # inside the tolerance this long before the turn count
 #: Speeds are config (junction_still_linear / junction_still_angular, review L3).
 STILL_S, STILL_LIMIT_S = .2, 2.
 STEP_TIME_S = 5.          # reacquire
-STEP_MARGIN_S = 2.        # advance: advance_m / speed + this
-MANEUVER = ('turning', 'advancing', 'reacquiring')
+MANEUVER = ('approaching', 'turning', 'advancing', 'reacquiring')
 #: keep_debug arrives only in keep mode; this recent a frame with corner_turning proves both.
 KEEP_EVIDENCE_S = 2.
 #: Base reasons a maneuver may run over: the lane is (expectedly) out of view, or D-468/D-476
@@ -66,7 +67,7 @@ class JunctionRefused(Exception):
         self.code = code
 
 
-class JunctionMixin:
+class JunctionMixin(JunctionApproachMixin):
     def _init_junction(self):
         self._junction_seq = 0
         self._turn_basis_now = None  # D-498 basis of this tick's maneuver refusal check
@@ -120,9 +121,10 @@ class JunctionMixin:
         self._junction = (dict(j, state='aborted', reason='mode_change')
                           if j is not None and j['state'] in MANEUVER else None)
 
-    def observe_junction(self, reason, received_at, corner_turning=False):
-        """One fresh line/keep_debug frame: a junction reason is a sighting; corner_turning
-        is the keep-mode evidence behind supports_junction_turn."""
+    def observe_junction(self, reason, received_at, corner_turning=False, ahead_m=None):
+        """One fresh line/keep_debug frame: a junction reason is a sighting (D-507 5: with its
+        junction_ahead_m, if any); corner_turning is the keep-mode evidence behind
+        supports_junction_turn."""
         if not math.isfinite(received_at):
             return
         with self._lock:
@@ -135,10 +137,12 @@ class JunctionMixin:
                     # Review R3: a gap while stopped at the junction is the same junction.
                     self._junction_first_seen = float(received_at)
                 self._junction_seen_at = float(received_at)
+                self._junction_ahead = (float(ahead_m) if type(ahead_m) in (int, float)
+                                        and 0 <= ahead_m <= MAX_AHEAD_M else None, reason)
             self._keep_corner_at = float(received_at) if corner_turning is True else None
 
     def set_junction(self, action, place_id, expires_s, stop_after_m=None, turn_deg=None,
-                     advance_m=None, now=None):
+                     advance_m=None, now=None, expect=None):
         """Store the next-junction instruction: (accepted, seq, state). Raises JunctionRefused
         unless line-follow is CAMERA_LINE (IR_LINE has no junction detection). During a
         maneuver the same instruction is a no-op; a different one aborts it, unaccepted."""
@@ -154,6 +158,7 @@ class JunctionMixin:
             raise ValueError('turn_deg belongs to left (+) or right (-), 0 < |turn_deg| <= 150')
         if advance_m is not None and (turn_deg is None or not 0 <= advance_m <= MAX_ADVANCE_M):
             raise ValueError('advance_m belongs to a turn and must be in [0, 0.30]')
+        check_expect(expect, action, turn_deg)  # D-507 2; None is an old client
         advance = DEFAULT_ADVANCE_M if advance_m is None else float(advance_m)
         with self._lock:
             if self._mode.value == 'IR_LINE':
@@ -176,21 +181,27 @@ class JunctionMixin:
             if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
                 self._junction_done_place = None
             current = self._clock() if now is None else now
+            window = self._expect_window(expect, current)
+            if window is False:
+                raise JunctionRefused('JUNCTION_ODOM_STALE', 'no fresh odom to place the expected junction')
             self._junction_seq += 1
             state = ('armed' if action == 'straight' or turn_deg is not None
                      else 'executing' if action == 'stop' else 'unresolved')
             self._junction = dict(action=action, place_id=place_id, seq=self._junction_seq,
                                   state=state, expires_at=current+float(expires_s),
                                   stop_after_m=float(stop_after_m or 0.), travel=0.,
-                                  last=None, held=False, turn_deg=turn_deg, advance_m=advance)
+                                  last=None, held=False, turn_deg=turn_deg, advance_m=advance,
+                                  window=window, map_id=(expect or {}).get('map_id'),
+                                  pivot=(expect or {}).get('pivot_past_line_m'))
             self._bridge_hint = None if action == 'stop' else action  # D-476 route hint
             return True, self._junction_seq, state
 
     def _junction_status(self):
         j = self._junction or {}
+        state = 'unexpected' if j.get('outside') else j.get('state', 'idle')
         return LineJunctionStatus(pending_action=j.get('action'), place_id=j.get('place_id'),
-                                  state=j.get('state', 'idle'), seq=self._junction_seq,
-                                  turn_deg=j.get('turn_deg'), reason=j.get('reason'))
+                                  state=state, seq=self._junction_seq, turn_deg=j.get('turn_deg'),
+                                  reason=j.get('reason'), pivot_basis=j.get('pivot_basis'))
 
     def _fresh_pose(self, now):
         samples = self._return_evidence.trail.samples
@@ -290,7 +301,11 @@ class JunctionMixin:
                     return decision
                 j = self._junction = dict(action=None, place_id=None, state='waiting')
             elif not seen:
+                j['outside'] = False
                 return decision
+            elif not self._in_window(j):
+                j['outside'] = True  # D-507 3: not this instruction's junction; it stays armed
+                return self._junction_hold('junction_unexpected', decision)
             elif j['action'] == 'straight':
                 j['state'] = 'executing'
             else:
@@ -377,18 +392,25 @@ class JunctionMixin:
             return self._abort(j, 'not_still' if j.get('sub') == 'stopping' else 'timeout', decision)
         if j['state'] != 'turning' and not self._odom_travel(j, now):
             return self._abort(j, 'odom', decision)
+        if (j['state'] == 'turning' and j['sub'] == 'stopping' and 'pivot_basis' not in j
+                and self._standing_still(now)):
+            refusal = self._start_approach(j, now, pose)  # D-507 4
+            if refusal is not None:
+                return self._abort(j, refusal, decision)
+        if j['state'] == 'approaching':
+            twist = self._approach_twist(j, pose)
+            if twist is not None:
+                return self._maneuver_twist(j, now, *twist, decision, 'junction_approaching')
+            j.update(state='turning', sub='stopping', phase_at=now, limit=STILL_LIMIT_S, w=0.)
         if j['state'] == 'turning':
             twist = self._turn_step(j, now, pose)
             if twist is not None:
                 return self._maneuver_twist(j, now, 0., twist, decision,
                                             'junction_stopping' if j['sub'] == 'stopping'
                                             else 'junction_turning')
-            ceiling = self._provided('linear_ceiling')
-            trip_max = (min(self._config.max_linear, float(ceiling))
-                        if type(ceiling) in (int, float) and math.isfinite(ceiling) else 0.)
-            if trip_max <= 0:
+            j['speed'] = self._half_trip_speed()  # at most half the trip speed (D-495 1b)
+            if j['speed'] <= 0:
                 return self._abort(j, 'linear_limit_zero', decision)
-            j['speed'] = .5*trip_max  # at most half the trip speed (D-495 1b)
             self._next_phase(j, 'advancing', now, j['advance_m']/j['speed']+STEP_MARGIN_S)
             self._odom_travel(j, now)
         if j['state'] == 'advancing':

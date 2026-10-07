@@ -85,6 +85,7 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear,
                                           svc.line_follow.config.max_linear)
     assert base["junction_turn"] is False              # no live keep-mode evidence yet
+    assert base["junction_pivot"] is True              # D-507 2: takes the window/pivot fields
     lf = svc.line_follow  # D-495: a fresh keep_debug frame with corner_turning on
     lf.observe_junction("no_boundary", lf._clock(), corner_turning=True)
     assert _controls(client)["items"][0]["junction_turn"] is False  # no enforce floor proof
@@ -97,7 +98,7 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     svc.line_follow = None
     (base,) = _controls(client)["items"]
     assert base["robot_kind"] == "other_base" and base["drive_modes"] == []
-    assert base["junction_turn"] is False
+    assert base["junction_turn"] is False and base["junction_pivot"] is False
     assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear)
 
 
