@@ -333,9 +333,13 @@ def make_server(store, port=8767, host='127.0.0.1'):
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.get(store, int(path.rsplit('/', 1)[1])))
                 if path == '/api/learning':
+                    frames = store.list_frames()
+                    pixel_statuses = [review_masks.get(store, f['index'])['status'] for f in frames]
                     return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
-                                      'counts': {state: sum(f['status'] == state for f in store.list_frames())
-                                                 for state in ('approved', 'pending', 'excluded')}})
+                                      'counts': {state: sum(f['status'] == state for f in frames)
+                                                 for state in ('approved', 'pending', 'excluded')},
+                                      'pixel_counts': {state: pixel_statuses.count(state)
+                                                       for state in ('approved', 'pending', 'excluded')}})
                 if path.startswith('/api/images/'):
                     index = int(path.rsplit('/', 1)[1])
                     image = store.image(index)

@@ -5,13 +5,14 @@
 <link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/app.css">
 <script type="module" src="/learning.js"></script></head>
 <body><a class="skip-link" href="#learning-main">학습 작업으로 이동</a>
-<ui-shell grammar="procedure"><ui-topbar><ui-brand><b>ROSY</b></ui-brand><h1>학습 작업</h1>
+<ui-shell grammar="procedure"><ui-topbar role="banner"><ui-brand><b>ROSY</b></ui-brand><h1>학습 작업</h1>
 <nav class="workspace-tabs" aria-label="학습 화면"><a href="/learning" aria-current="page">작업 목록</a><a href="/">객체 검수</a><a href="/pixels">픽셀 검수</a><a href="/catalog">자료 등록</a></nav><span data-spacer></span>
 <label class="theme-label">화면 <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
 <main id="learning-main" class="learning-main" tabindex="-1">
 <div class="workspace-heading"><div><h2>연결한 학습 결과</h2><p>검수 상태와 학습 결과를 확인하고 다음 작업으로 이어가세요.</p></div><ui-button id="new-task" kind="primary" disabled>작업 결과 연결</ui-button></div>
 <ui-status id="learning-status" state="pending">작업을 불러오는 중입니다.</ui-status>
 <section class="review-summary" aria-labelledby="review-summary-title"><div><h3 id="review-summary-title">Pinky 객체 검수</h3><p id="review-counts">불러오는 중</p></div><a class="workspace-link" href="/?filter=pending">검수 대기 사진 열기</a></section>
+<section class="review-summary" aria-labelledby="pixel-summary-title"><div><h3 id="pixel-summary-title">Pinky 픽셀 검수</h3><p id="pixel-counts">불러오는 중</p></div><a class="workspace-link" href="/pixels?filter=pending">검수 대기 마스크 열기</a></section>
 <details id="connection-panel" class="learning-section"><summary>기존 결과 폴더 연결</summary>
 <p class="quiet">이미 실행한 작업의 결과를 연결합니다. 목록은 자동 저장되며 원본 파일을 수정하지 않습니다.</p>
 <form id="register" class="ui-form learning-form"><label class="ui-field-label">작업 종류 <select id="kind" class="ui-field" required></select></label>

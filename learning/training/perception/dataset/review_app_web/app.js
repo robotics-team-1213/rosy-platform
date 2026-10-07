@@ -133,6 +133,7 @@ async function select(index) {
   cancelGesture(); selected=null; coordinatePreview=null; undo=null;
   $('empty-review').hidden=true;$('review-content').hidden=false;
   ready = false; frame = structuredClone(workspace.frames.find(f => f.index === index));
+  for (const link of document.querySelectorAll('a[href^="/pixels"]')) link.href = `/pixels?frame=${frame.index}`;
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
   frameHeading();saveView();

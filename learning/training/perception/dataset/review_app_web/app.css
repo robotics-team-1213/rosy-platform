@@ -16,7 +16,7 @@ a { color: var(--ink); text-underline-offset: var(--space-1); }
 #frames ui-button { justify-content: flex-start; text-align: left; width: 100%; gap: var(--space-3); }
 .frame-thumb { width: 3rem; aspect-ratio: 4/3; object-fit: cover; border-radius: var(--radius-control); }
 .frame-label { display: grid; gap: var(--space-1); }
-.frame-badge { color: var(--ink-quiet); font-size: var(--text-micro); }
+.frame-badge { color: var(--ink); font-size: var(--text-micro); }
 .scope { border-top: 1px solid var(--surface-line); padding-top: var(--space-5); color: var(--ink-quiet); font-size: var(--text-label); }
 .scope h3 { font-size: var(--text-label); }
 main { padding: var(--space-6); min-width: 0; }

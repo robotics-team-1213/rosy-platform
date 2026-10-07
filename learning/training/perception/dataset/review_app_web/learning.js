@@ -39,7 +39,7 @@ async function request(path,body) {
   if(response.status>=500){const error=new Error('학습 작업 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
   const value=await response.json();if(!response.ok){const error=new Error(response.status===403?'이 작업대의 학습 작업 접근 권한이 거부되었습니다.':'요청 실패 · '+(value.error||'원인을 확인할 수 없습니다.'));error.status=response.status;if(response.status===403)showUnavailable(error);throw error;}return value;
 }
-function showUnavailable(error){workspace=undefined;checkedAt=0;$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 거부되었습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('review-counts').textContent='검수 상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
+function showUnavailable(error){workspace=undefined;checkedAt=0;$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 거부되었습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('review-counts').textContent='검수 상태 확인 불가';$('pixel-counts').textContent='검수 상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
 function updateReadAge(){
   if(!checkedAt)return;
   const minutes=Math.floor(Math.max(0,Date.now()-checkedAt)/60000);
@@ -115,11 +115,13 @@ function render() {
   updateReadAge();setBusy(busy);saveFilters();
 }
 async function load() {
-  workspace=undefined;setBusy(true);$('learning-status').setAttribute('state','pending');$('learning-status').textContent='작업 결과를 확인하는 중입니다.';$('review-counts').textContent='불러오는 중';$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=true;$('updated').textContent='';
+  workspace=undefined;setBusy(true);$('learning-status').setAttribute('state','pending');$('learning-status').textContent='작업 결과를 확인하는 중입니다.';$('review-counts').textContent='불러오는 중';$('pixel-counts').textContent='불러오는 중';$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=true;$('updated').textContent='';
   const started=performance.now();const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(seconds>=3)$('learning-status').textContent=`서버 응답 대기 ${seconds}초 · 현재 작업과 보고서 상태를 확인하고 있습니다.`;},1000);
   try {workspace=await request('/api/learning');checkedAt=Date.now();
   const {approved,pending,excluded}=workspace.counts;
   $('review-counts').textContent=`승인 ${approved}장 · 검수 대기 ${pending}장 · 제외 ${excluded}장`;
+  const pixels=workspace.pixel_counts;
+  $('pixel-counts').textContent=`승인 ${pixels.approved}장 · 검수 대기 ${pixels.pending}장 · 제외 ${pixels.excluded}장`;
   if(!$('kind').options.length) {
     for(const row of workspace.workflows) {
       text($('capabilities'),'h3',row.name);text($('capabilities'),'p',row.support);text($('capabilities'),'p',row.next);
