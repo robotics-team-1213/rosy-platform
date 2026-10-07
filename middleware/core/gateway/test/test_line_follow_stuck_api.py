@@ -107,10 +107,19 @@ def test_resume_refused_inside_stop_distance(core_client):
 
 
 def test_back_and_retry_refused_while_local_recovery_is_off(core_client):
-    client, _, stuck_id = _stuck(core_client)
+    # D-492 turned the robot default on; a robot rolled back to off still refuses.
+    off = {"line_follow": {"recovery_local_enabled": False}}
+    client, _, stuck_id = _stuck(lambda **kw: core_client(config_overrides=off, **kw))
     refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"},
                           headers=OPERATOR)
     assert refused.status_code == 409 and "local_recovery_disabled" in refused.text
+
+
+def test_back_and_retry_on_the_generic_default_still_needs_urdf_geometry(core_client):
+    client, _, stuck_id = _stuck(core_client)
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"},
+                          headers=OPERATOR)
+    assert refused.status_code == 409 and "body_geometry_unset" in refused.text
 
 
 @pytest.mark.parametrize("decision, mode", [("ABORT", Mode.IDLE), ("MANUAL", Mode.MANUAL)])
@@ -135,7 +144,10 @@ def test_packaged_default_plus_pinky_plus_old_overlay_parses():
     merged = _deep_merge(_deep_merge(_yaml(DEFAULT), _yaml(PINKY)),
                          {"line_follow": {"obstacle_escalate_s": 4.0, "lidar_forward_deg": 181.0}})
     config = _line_follow_config(merged["line_follow"])
-    assert config.recovery_local_enabled is False and config.recovery_ask_s == 15.0
+    # D-492: on by robot default; the config-less model default stays off.
+    assert config.recovery_local_enabled is True and config.recovery_ask_s == 15.0
+    rolled_back = _deep_merge(merged, {"line_follow": {"recovery_local_enabled": False}})
+    assert _line_follow_config(rolled_back["line_follow"]).recovery_local_enabled is False
     assert config.recovery_back_m == 0.08 and config.recovery_back_speed == 0.03
     assert config.recovery_rear_clear_m == 0.06 and config.recovery_max_attempts == 2
     assert config.body_geometry_known and config.body_rear_x_m == -0.076

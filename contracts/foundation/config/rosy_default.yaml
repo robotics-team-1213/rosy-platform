@@ -145,7 +145,11 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # console link -> local back-off (only when recovery_local_enabled, per robot, after its
   # lidar_self_mask is measured). Rear clearance is measured from the URDF body rear, so the
   # robot package must set body_lidar_x_m / body_rear_x_m (unset = never backs off).
-  recovery_local_enabled: false
+  # On by robot default since D-492 (2026-10-07): it also gates D-468 local lane return and the
+  # D-476 bridge. Same promotion rule as D-492 (model-PC Gazebo map_v2_fleet_real lap + a real
+  # lane lap before robots get it). Roll back per robot with line_follow.recovery_local_enabled:
+  # false in ~/.rosy/rosy.yaml or ROSY_CONFIG (no code change).
+  recovery_local_enabled: true
   recovery_ask_s: 15.0             # console answer window before the local fallback
   recovery_back_m: 0.08            # one back-off (<= 0.20)
   recovery_back_speed: 0.03        # m/s ceiling; actual = min(safety.manual_linear, this)
@@ -171,7 +175,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # "off until replay -> sim -> device": a payload with it on is promoted to robots only after the
   # model-PC Gazebo map_v2_fleet_real lap and a real lane lap. Roll back per robot with
   # line_follow.bridge_enabled: false in ~/.rosy/rosy.yaml or ROSY_CONFIG (no code change).
-  # Still needs recovery_local_enabled (off above), so it bridges only where that is on.
+  # Runs inside D-468, so it also needs recovery_local_enabled (on above since D-492).
   # A short camera lane loss right after contained following drives the D-468 checkpoint lane's
   # straight extension (needs recovery_local_enabled, path-mode URDF body). Measured odom travel
   # x bridge_distance_scale: full speed (min cruise, manual limit) below bridge_coast_m, x
