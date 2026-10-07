@@ -1,4 +1,5 @@
 import {createFleetClient} from '/common/fleet-client.js';
+import {developmentToken} from '/console/assets/development-auth.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 
@@ -453,3 +454,6 @@ for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
   });
 }
 refreshControls();
+developmentToken($('credential').value).then(token => {
+  if (token) { $('credential').value = token; $('credential').parentElement.hidden = true; $('connect').click(); }
+}).catch(() => {});
