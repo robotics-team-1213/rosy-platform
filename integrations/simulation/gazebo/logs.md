@@ -277,3 +277,9 @@
 - 변경: `sim_ir_floor.py` 바닥 없음 값 0 → 100(`hazard.py on_ir`은 0 < v < 4000만 유효로 받아 0은 절벽이 아니라 무효 IR이었다). 세 채널이 모두 들어오기 전에는 프레임을 내지 않는다. 채널 순서를 장치 `ir_adc_node.py`([ch2, ch1, ch0] = 좌·중·우)에 시험으로 고정했다. `sim_sensors`는 단일 로봇 전용임을 launch 주석에 적었다.
 - 증거: `test/test_sim_sensors.py` 9 PASS.
 - gate 변화: 없음.
+## 2026-10-07 · uncommitted · test(sim): D-495/D-498 교차로 회전 SIM 수용 (모델 PC)
+- 변경: 제품 코드 변경 없음. 기록 `docs/validation/d495-junction-sim-2026-10-07/`(result.md, evidence). 하네스는 sim 전용 launch 사본(IR 보정만 더함, 페이로드 `line_follow.yaml` 그대로), `d495_sim_aux.py`(참값 자세 `d495/gt`, 도색 raster로 만든 IR `ir_sensor/range`, scan/odom 멈춤 주입, odom을 `/clock`이 stamp를 지난 뒤 냄), HTTP 전용 탐침 `d495_sim_probe.py`(trip, fault).
+- 증거: 모델 PC `map_v2_fleet_real` keep 한 대, run 40개 요약. S3·S4·S8·S9 PASS, S5 부분, S1·S2 FAIL, S6 INCONCLUSIVE, S7 IR 중단 0회(점 IR 한계). 로봇 기본값(`recovery_local_enabled: true`, enforce 없음)에서는 차선 주행이 출발하지 않는다.
+- gate 변화: 없음. ROS-SIM 한 대, 장치·현장 수용 아님.
+- 결정: D-495 수용 점검표 S1–S6, D-498 S7–S9 (승격 전 남은 항목은 result.md 발견 1–9)
+- 교훈: 끝난 launch가 남긴 bridge가 odom을 같은 stamp로 겹쳐 내면 CORE PoseTrail이 끊긴다. sim 실행 스크립트는 자기 `GZ_PARTITION`의 프로세스를 모두 끝낸 뒤 띄운다. 같은 호스트의 다른 sim과는 도메인·포트·world 파일 이름까지 나눈다.

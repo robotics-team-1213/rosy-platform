@@ -726,3 +726,10 @@
 - 증거: 8셀 캡처, 브라우저 4 passed, `known_failures.py` 0 NEW. `X:/DevTemp/pilot-target-matrix/`, `docs/validation/uiux-pilot-target-error-matrix-2026-10-07/result.md`.
 - gate 변화: Pilot LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
 - 결정: D-153.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 연결 실패 대상을 로비에 표시
+
+- 변경: 네이티브 태블릿 로비에서 연결 실패 뒤 여러 로봇 카드가 남을 때, 안내 앞에 실패한 로봇 이름을 표시한다. 대상 이름이 비면 「선택한 로봇」을 쓴다. 다시 찾기·다른 로봇 선택·인증 및 주행 경로는 그대로다.
+- 증거: `X:/DevTemp/pilot-lobby-error/gradle.txt`의 Android debug APK 빌드·JVM 93 tests 성공, `test_shell_assets.py` 4 passed, `known_failures.py` 0 NEW. 현재 APK는 `X:/DevTemp/pilot-lobby-error/build/app/outputs/apk/debug/app-debug.apk`(SHA-256 `31c557905e9e5db2de6b63e6de94138f19b2c336e99da69a1703ddf715758cda`).
+- gate 변화: SOURCE·LOCAL 문구 보강. 설치된 Lenovo 화면·연결 성공/실패 실물 재현·사용자 G3는 미확인이라 Pilot UI/UX HOLD.
+- 결정: D-153 정직·어휘, D-280 중요한 것 먼저·복잡함 단순화.

@@ -493,6 +493,9 @@ class StuckRecovery:
         if self._attempts >= self._config.recovery_max_attempts:
             self._console_only("attempts_exhausted", inp.now)
             return
+        if not self._config.recovery_local_enabled:
+            self._console_only("local_disabled", inp.now)  # no ASKING: one ask, no local fallback
+            return
         self._phase = ASKING
         self._deadline = inp.now + self._config.recovery_ask_s
         self._asked(inp.console_linked, self._config.recovery_ask_s, "opened")

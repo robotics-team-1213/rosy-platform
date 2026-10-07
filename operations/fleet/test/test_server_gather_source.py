@@ -103,3 +103,55 @@ def test_hub_heartbeat_stamps_arrival_time():
     row = hub.registry.find("rosy_01")
     assert row is not None and row.snapshot is not None
     assert row.last_heartbeat_monotonic is not None  # D-447: 도착 스탬프
+
+
+# --- D-493: state_age_s -----------------------------------------------------------------
+
+def test_snapshot_marks_when_each_state_was_observed():
+    clock = FakeClock()
+    hub_robot, rest_robot, down = FakeRobot("rosy_01"), FakeRobot("rosy_02"), FakeRobot("rosy_03")
+    down.state_error = ConnectionError("no route")
+    console = _console(hub_robot, rest_robot, down, clock=clock)
+    row = console.hub.registry.record("rosy_01")
+    row.online, row.snapshot = True, StateSnapshot(robot_id="rosy_01")
+    row.last_heartbeat_monotonic = clock() - 2.0
+
+    rows = {r["robot_id"]: r for r in run(console.snapshot())["robots"]}
+
+    assert rows["rosy_01"]["_state_mono"] == clock() - 2.0   # heartbeat time, not gather time
+    assert rows["rosy_02"]["_state_mono"] == clock()          # REST: read just now
+    assert "_state_mono" not in rows["rosy_03"]
+
+
+def test_state_route_ages_a_cached_hub_row_and_hides_the_internal_stamp(tmp_path):
+    from test_line_stuck_api import VIEWER, _auth, _console as _stuck_console, _named_app
+
+    clock = FakeClock()
+    robot = FakeRobot("rosy_01")
+    console = _stuck_console(robot, clock=clock)
+    row = console.hub.registry.record("rosy_01")
+    row.online, row.snapshot = True, StateSnapshot(robot_id="rosy_01")
+    row.last_heartbeat_monotonic = clock() - 2.0
+    client, _ = _named_app(console, tmp_path)
+
+    first = client.get("/api/fleet/state", headers=_auth(VIEWER))
+    clock.advance(0.5)                                        # still inside SharedGather's 1 s
+    second = client.get("/api/fleet/state", headers=_auth(VIEWER))
+
+    assert first.json()["robots"][0]["state_age_s"] == 2.0
+    body = second.json()
+    assert body["robots"][0]["state_age_s"] == 2.5
+    assert body["gathered_at"] == first.json()["gathered_at"] > 0  # gather time, not response time
+    assert "_state_mono" not in first.text and "_state_mono" not in second.text
+
+
+def test_state_route_offline_robot_has_null_age(tmp_path):
+    from test_line_stuck_api import VIEWER, _auth, _console as _stuck_console, _named_app
+
+    robot = FakeRobot("rosy_01")
+    robot.state_error = ConnectionError("no route")
+    client, _ = _named_app(_stuck_console(robot), tmp_path)
+
+    one = client.get("/api/fleet/state", headers=_auth(VIEWER)).json()["robots"][0]
+
+    assert one["online"] is False and one["state_age_s"] is None

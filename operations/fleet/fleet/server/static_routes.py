@@ -27,6 +27,7 @@ CONSOLE_ASSETS = {
     "install.js": "application/javascript",
     "peer-picker.js": "application/javascript",
     "address-drift.js": "application/javascript",
+    "state-age.js": "application/javascript",
     "authorization.js": "application/javascript",
     "camera-pairing.js": "application/javascript",
     "camera-peer.js": "application/javascript",

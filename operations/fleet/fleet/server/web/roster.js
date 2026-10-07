@@ -8,6 +8,7 @@ import { actionIcon } from "/common/ui.js";
 import { addressReason } from "./address-drift.js";
 import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./localization-badge.js";
 import { capabilityReason } from "./motion-readiness.js";
+import { staleAgeS } from "./state-age.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -51,7 +52,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!state) return [{ severity: "warn", text: ": 상태 확인 불가" }];
     const items = [];
     // D-407: 막힌 로봇이 답을 기다린다. 답하는 자리는 큐 아래 판단 요청이다.
-    if (robot.line_stuck) items.push({ severity: "crit", text: ": 판단 요청 — 차선 추종이 막혔습니다" });
+    const staleS = staleAgeS(robot, view.receivedAtMs, Date.now());
+    const staleNote = staleS === null ? "" : ` (상태 ${staleS}초 전 값)`;
+    if (robot.line_stuck) items.push({ severity: "crit", text: `: 판단 요청 — 차선 추종이 막혔습니다${staleNote}` });
     if (localizationUrgent(robot.localization)) {
       // D-395 사다리 끝: Fleet이 스스로 위치를 못 잡았다. 사람만 풀 수 있다.
       items.push({ severity: "crit", text: ": 위치 확인 필요 — 로봇 위치를 직접 지정하세요" });
@@ -69,6 +72,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패" });
     if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
+    if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });
     return items;
   }
   function needsAttention(robot) {
@@ -449,5 +453,5 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     document.querySelector(".queues-panel").hidden = (warningCount + criticalCount) === 0;
   }
 
-  return { card, fillQueues, queuedReason, needsAttention };
+  return { card, fillQueues, queuedReason, needsAttention, attentionItems };
 }

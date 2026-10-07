@@ -241,6 +241,11 @@ def _app(tmp_path, resolver_robot, *, signal_console=None):
                                                             "role": "operator"}})
 
 
+def test_the_episode_log_judges_peers_with_the_running_resolvers_config(tmp_path):
+    app = _app(tmp_path, FakeRobot("rosy_01", state=_state()))
+    assert app.state.line_stuck.peer_config is app.state.stuck_resolver._resolver.config
+
+
 # TestClient is used without `with`: the lifespan task never starts, so run_once() is
 # the only thing that can answer.
 def test_claim_route_silences_the_resolver(tmp_path):
