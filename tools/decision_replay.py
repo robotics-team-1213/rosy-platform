@@ -19,6 +19,7 @@ def replay(data: Path, endpoint: str, model: str, timeout: float) -> dict:
     if timeout <= 0:
         raise ValueError("timeout must be positive")
 
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     rows = []
     seen = set()
     with data.open(encoding="utf-8") as stream:
@@ -46,7 +47,7 @@ def replay(data: Path, endpoint: str, model: str, timeout: float) -> dict:
             predicted = None
             error = None
             try:
-                with urllib.request.urlopen(req, timeout=timeout) as response:
+                with opener.open(req, timeout=timeout) as response:
                     answer = json.load(response)["answers"]["decision"]
                     predicted = answer["choice"]
                     if not isinstance(predicted, str) or predicted not in criteria:
