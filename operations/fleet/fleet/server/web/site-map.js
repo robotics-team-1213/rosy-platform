@@ -6,7 +6,7 @@ import {confirmIrreversible} from '/common/ui.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
   planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripErrorText, tripStartReason,
-  tripStatusText, rectangularView,
+  tripStatusText, rectangularView, viewTurnOf, editViewTurn,
 } from '/console/assets/site-map-model.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {warpImage} from '/console/assets/field-view.js';
@@ -63,7 +63,8 @@ function render() {
   if (!hasMap) return;
   const background = plane?.mapId === map.map_id ? plane : null;
   svg.classList.toggle('has-plane', Boolean(background));
-  const view = background?.view || fitView(map, W, H);
+  $('map-view-turn').value = String(viewTurnOf(map));
+  const view = background?.view || fitView(map, W, H, 24, viewTurnOf(map));
   state.view = view;
   if (background) {
     el('image', {...background.field, href: background.url, preserveAspectRatio: 'none'}, svg);
@@ -77,7 +78,7 @@ function render() {
     for (const mark of arrowMarks(edge)) {
       const [px, py] = view.toPx(mark.x, mark.y);
       el('polygon', {class: 'arrow', points: '8,0 -6,-6 -6,6',
-        transform: `translate(${px} ${py}) rotate(${-mark.angle * 180 / Math.PI})`}, svg);
+        transform: `translate(${px} ${py}) rotate(${view.rotateDeg(mark.angle)})`}, svg);
     }
   }
   if ($('map-source').value === 'active' && planIsCurrent(state.plan, state.active)) {
@@ -91,7 +92,7 @@ function render() {
     el('title', {}, dot).textContent = `${place.name} (${PLACE_KIND_LABEL[place.kind] || place.kind})`;
     if (place.kind === 'start') {
       el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
-        transform: `translate(${px} ${py}) rotate(${-place.yaw * 180 / Math.PI})`}, svg);
+        transform: `translate(${px} ${py}) rotate(${view.rotateDeg(place.yaw)})`}, svg);
     }
     el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = place.name;
   }
@@ -135,6 +136,7 @@ function syncButtons() {
   gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
   gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
   gate('import-camera-map', reason || (!$('camera-map-file').files.length ? '카메라 지도 JSON 파일을 고르세요' : ''));
+  gate('map-view-turn', reason || (!state.working ? '고칠 지도가 없습니다' : ''));
   gate('save-draft', reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
   gate('activate', reason || (!state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : '')));
   status('draft-status', state.loadState === 'pending' ? '초안 조회 중'
@@ -300,7 +302,7 @@ $('plane-load').addEventListener('click', async () => {
   gate('plane-load', '불러오는 중');
   let url;
   try {
-    const {view, field} = rectangularView(record, shown()?.map_id, W, H);
+    const {view, field} = rectangularView(record, shown()?.map_id, W, H, viewTurnOf(shown()));
     const lease = await request('/api/fleet/vision/lease', {method: 'POST',
       headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source_id: record.source_id})});
     const path = new URL(lease.frame_path, location.origin);
@@ -400,6 +402,16 @@ $('import-camera-map').addEventListener('click', () => guarded(async () => {
   $('map-source').value = 'draft';
   clearPlan();
   notice('카메라 지도 초안을 가져왔습니다. 차로 연결·통행 방향을 검토한 뒤 활성화하세요.');
+}));
+
+// D-513 7: one orientation for every Fleet map and camera view; saved and activated like any edit.
+$('map-view-turn').addEventListener('change', () => guarded(async () => {
+  state.working = editViewTurn(state.working, $('map-view-turn').value);
+  state.dirty = true;
+  $('map-source').value = 'draft';
+  clearPlane();
+  render(); syncButtons();
+  notice('화면 방향을 초안에 반영했습니다. 저장하고 활성화하면 관제 화면 전체가 이 방향을 씁니다.');
 }));
 
 $('apply-edit').addEventListener('click', () => guarded(async () => {

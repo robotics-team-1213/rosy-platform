@@ -2467,6 +2467,10 @@
 - 결정: 15° 규칙은 그대로 둔다.
 - 교훈: 곧게 내다보는 창은 작은 굽이에서도 옆으로 비켜 선다. 허용 오차가 그 거리를 덮어야 한다.
 
+## 2026-10-08 · uncommitted · feat(fleet): D-513 7 지도 화면 방향 `view_turn_deg`
+- 변경: `rosy.site_map/1`에 `view_turn_deg`(0/90/180/270)를 둔다. 현장 지도 화면이 지도를 그만큼 돌려 그리고 "화면 방향" 선택으로 고친다. 관제 크게 보기·썸네일은 `mapUpTurn + view_turn_deg`로 돈다.
+- 증거: 웹 Node 시험 180 passed, 현장 지도 pytest 120 passed. 로컬 재현: `ceil.jpg` 페인트 정합(점수 0.85)에서 `mapUpTurn` 0, 90을 더하면 벽이 맨 아래.
+- gate 변화: SOURCE/LOCAL만. 현장 활성 지도에 90 저장(F3)은 별도.
 ## 2026-10-08 · uncommitted · feat(fleet): D-472 LED 신원 오케스트레이터와 확인 트랙
 - 변경: `server/identity.py` `IdentityService` — 움직이는 미확인 로봇 한 대씩, 6 s 창, 로봇 설정 색으로 CORE 점멸 요청. Vision 판정으로 익명 트랙에 묶고 트랙 손실·0.30 m 겹침·map/보정 revision 변경·`identity_ttl_s`에 UNKNOWN. `confirmed_track_pose(robot_id)`가 D-511 입력. 읽기 전용 `GET /api/fleet/tracking/identity`, Vision 판정 `POST /api/fleet/detections/identity`, detections config `identity_challenge`. 사이트 YAML `identity:`(기본 `auto_request: false`). API Ref v1.130
 - 증거: `test_led_identity.py`, `test_lamp_identify_route.py`, `test_boundaries.py`(지도 자세 중재·trip·명령 경로가 identity를 읽지 않음)

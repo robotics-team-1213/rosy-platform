@@ -92,6 +92,6 @@
 
 - 2026-10-08 · uncommitted · fix(fleet): D-472 독립 안전 검토 지적 반영
 - 2026-10-08 · uncommitted · feat(fleet): D-472 LED 신원 오케스트레이터와 확인 트랙
+- 2026-10-08 · uncommitted · feat(fleet): D-513 7 지도 화면 방향 `view_turn_deg`
 - 2026-10-08 · uncommitted · fix(fleet): D-507 굽은 길 옆 거리, main 병합
 - 2026-10-08 · uncommitted · fix(fleet): D-507 Fleet 검토 2회 반영
-- 2026-10-08 · dc9026930 · feat(fleet): D-507 2·3·9 Fleet 쪽
