@@ -414,6 +414,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-519 1: a site-users file may hold only login accounts, leaving no token principals.
     principals = {} if site_logins and not site_users else parse_site_principals(site_users, console)
     password_sessions = PasswordSessions(task_service.store.path, site_logins) if site_logins else None
+    app.state.password_sessions = password_sessions
     if cell_goal_evidence_service is not None:
         from fleet.server.cell_goal_evidence_routes import (
             assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes)
@@ -553,7 +554,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                                               calibrations=tracking.calibrations),
                                    read_guard=read_guard, require_operator=require_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
-                          require_operator=require_operator, auth_configured=bool(principals or console_token))
+                          require_operator=require_operator,
+                          # D-519: login accounts are configured named operators too.
+                          auth_configured=bool(principals or console_token) or password_sessions is not None)
 
     if stuck_resolver_clients is not None:
         resolver_core = StuckResolver(ResolverConfig(),
