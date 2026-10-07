@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · fix(pilot): APK 번들 시험에 팔 화면 자산 고정
 - 2026-10-07 · uncommitted · uiux(pilot): 카메라 면적 병합 후 검증
 - 2026-10-07 · uncommitted · uiux(pilot): 320px 카메라 면적 회복
 - 2026-10-07 · uncommitted · uiux(pilot): 조작 응답 시간 출처 표시
 - 2026-10-07 · uncommitted · uiux(pilot): 수신 중단·회복 네 폭 LOCAL 확인
-- 2026-10-07 · uncommitted · uiux(pilot): 로비의 기기·연결 버튼에 아이콘을 붙이고 왼쪽에 맞춘다

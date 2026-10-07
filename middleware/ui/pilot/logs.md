@@ -697,3 +697,11 @@
 - 변경: 병합 후 전체 재실행과 응급 카메라 집중 재실행 결과를 회차 기록에 추가.
 - 증거: 전체 브라우저 114 passed·2 timeout failed; 실패한 응급 카메라 네 폭 집중 재실행 4 passed, `known_failures.py` 0 NEW. `X:/DevTemp/pilot-camera-320/postmerge-full.txt`, `emergency-retry.txt`.
 - gate 변화: 320px 면적 결함은 집중 검사에서 해결. 전체 무오류 회귀·실물·G3는 HOLD.
+
+## 2026-10-07 · uncommitted · fix(pilot): APK 번들 시험에 팔 화면 자산 고정
+
+- 변경: `BundledAssetsTest.canonicalUiAndImportsAreBundled` 번들 목록에 팔 화면 여섯 자산(`pilot/screens/arm.js`, `pilot/screens/compose.js`, `pilot/widgets/gripper.js`, `pilot/arm-stick.js`, `pilot/controls.js`, `pilot/drivers/omx_sim.js`)을 추가했다. 앱 코드와 번들 규칙(`bundleScreens` glob)은 그대로다.
+- 증거: Android JVM `:app:testDebugUnitTest` 전체 93 passed(0 failed, 0 errors, 0 skipped) — `BundledAssetsTest` 3 passed 포함. 로그는 `X:/DevTemp/pilot-bundle/`에 있다.
+- gate 변화: 없음(SOURCE 번들 시험 보강).
+- 결정: D-411.
+- 교훈: 번들 포함은 glob이 자동으로 해 줘도 "들어 있다"의 증거는 시험 목록이 별도로 자란다 — 새 화면 자산을 올릴 때 목록을 같이 올린다.

@@ -98,3 +98,31 @@ test('D-494 trip stop reasons name the configured stall time and loop errors', a
   assert.match(tripStatusText({...trip, reason: 'junction', detail: {}}, MAP), /차선 주행을 껐습니다/);
   assert.equal(PLACE_KIND_LABEL.stall, undefined);
 });
+
+test('teach status reads the recording, then what waits for confirm', async () => {
+  const {teachStatusText} = await import('../../fleet/server/web/site-map-model.js');
+  assert.equal(teachStatusText({recording: null, pending: []}), '기록 없음');
+  assert.equal(teachStatusText({recording: {robot_id: 'r1', points: [[0, 0], [1, 0]], started_by: 'bob'}, pending: []}),
+    '기록 중 · r1 · 2점 · bob');
+  assert.match(teachStatusText({recording: null, pending: [{}]}), /확정 대기 1건/);
+});
+
+test('teach confirm body: a place id, or a new address name; speed is bounded', async () => {
+  const {teachConfirmBody} = await import('../../fleet/server/web/site-map-model.js');
+  const args = {teachId: 't1', from: 'A', fromName: '', to: '', toName: ' 새 곳 ', direction: 'two_way',
+    driveMode: 'lane', speed: '0.2', revision: undefined};
+  assert.deepEqual(teachConfirmBody(args), {teach_id: 't1', from: 'A', to: {name: '새 곳', kind: 'junction'},
+    direction: 'two_way', drive_mode: 'lane', speed_cap_mps: 0.2, expected_revision: null});
+  assert.throws(() => teachConfirmBody({...args, toName: ''}), /끝 새 주소 이름/);
+  assert.throws(() => teachConfirmBody({...args, speed: '0'}), /속도 상한/);
+  assert.equal(teachConfirmBody({...args, revision: 'r9'}).expected_revision, 'r9');
+});
+
+test('the confirm form acts on the newest stopped recording, whatever the list order', async () => {
+  const {newestPending} = await import('../../fleet/server/web/site-map-model.js');
+  const old = {teach_id: 'old', expires_at: 100}, fresh = {teach_id: 'new', expires_at: 200};
+  assert.equal(newestPending({pending: [old, fresh]}).teach_id, 'new');
+  assert.equal(newestPending({pending: [fresh, old]}).teach_id, 'new');
+  assert.equal(newestPending({pending: []}), null);
+  assert.equal(newestPending(null), null);
+});

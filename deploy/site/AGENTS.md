@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-02 | Updated: 2026-10-03 -->
+<!-- Generated: 2026-10-02 | Updated: 2026-10-07 -->
 
 # site
 
@@ -22,7 +22,7 @@ Ubuntu site-host stack: Caddy TLS proxy, Fleet console and task SQLite, and Visi
 | `fetch_candidate.sh` | Site host, no sudo: download a CI-built signed prerelease, check `SHA256SUMS`, join parts, stage, print the D-301 verify/load commands |
 | `auto_sign_candidates.py`, `register_auto_sign_task.ps1` | Signing PC (D-441): sign unsigned `site-*` releases after main-branch provenance and ancestry checks; Windows scheduled task registration |
 | `rosy_site_autoupdate.py`, `rosy-site-autoupdate.service`, `rosy-site-autoupdate.timer` | Site host (D-441), installed beside the verifier: install the newest signed candidate, health gate, rollback |
-| `site_db.py`, `secret_exec.py` | Site DB maintenance and secret-injecting exec wrapper |
+| `site_db.py`, `site_users.py`, `secret_exec.py` | Site DB maintenance, atomic `site-users.yaml` maintenance (digest-only registry), secret-injecting exec wrapper |
 | `install-model-watch.sh`, `rosy-model-watch`, `rosy-model-watch.*`, `model-watch.yaml.example` | Model watch installer, stable entry-point wrapper (finds the watcher before or after the D-427 move), units and config template |
 | `rosy-site-stack.service` | systemd unit for the stack |
 | `*.example`, `*.template.txt` | Config and secret templates only (robots, users, cameras, tokens) |
@@ -44,7 +44,8 @@ python3 -m pytest test/test_site_preflight.py test/test_site_firewall.py \
   test/test_site_candidate.py test/test_site_candidate_signing.py test/test_site_candidate_verifier.py \
   test/test_site_candidate_workflow.py test/test_site_candidate_fetch.py \
   test/test_site_fleet_mdns.py test/test_site_mdns_bridge.py test/test_site_pairing_deploy.py \
-  test/test_site_task_queue_deploy.py test/test_site_map_fit_deploy.py test/test_site_db_maintenance.py -q
+  test/test_site_task_queue_deploy.py test/test_site_map_fit_deploy.py test/test_site_db_maintenance.py \
+  test/test_site_users_cli.py -q
 python3 -m pytest test/architecture/test_document_placement.py -q   # secret paths stay ignored, templates tracked
 ```
 
