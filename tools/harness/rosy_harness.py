@@ -70,6 +70,9 @@ ADR_BODY_HEADING = re.compile(r"^## (D-\d+):? (.+)$", re.MULTILINE)
 # in place would violate the same history gate, so it is excused by exact
 # name too. Same class of defect: a committed line that cannot be reformed.
 KNOWN_LEGACY_HEADINGS = frozenset({
+    # Committed D-509 merge-fix entries used English field labels; preserve the blocks.
+    "## 2026-10-08 \u00b7 uncommitted \u00b7 docs(api): v1.124 version pin",
+    "## 2026-10-08 \u00b7 uncommitted \u00b7 fix(fleet): D-509 power health at state response",
     # Already committed before the missing commit placeholder was detected.
     "## 2026-10-07 · uiux/pilot-empty-copy · Pilot 로봇 미발견 안내 줄바꿈",
     # Both committed D-441 bodies survive the 6333f89/518edcf80 merge.

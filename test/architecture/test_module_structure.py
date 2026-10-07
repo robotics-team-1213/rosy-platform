@@ -831,7 +831,7 @@ SIZE_VERDICTS = {
         "test/test_media_readback.py (X5)",
     ),
     "tools/harness/rosy_harness.py": (
-        894,
+        897,
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
     ),

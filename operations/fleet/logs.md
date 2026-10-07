@@ -2407,3 +2407,9 @@
 - Change: Read CORE power/health only while rendering /api/fleet/state, preserving D-447 hub gather calls. Invalidate display cache when a robot client changes.
 - Evidence: Related Fleet and contract tests 99 PASS; Node 170 PASS. Device check remains separate.
 - Gate change: None.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up
+
+- 변경: Power health readback lives in /api/fleet/state presentation; D-447 gather remains unchanged.
+- 증거: Fleet and contract focus tests passed; Node 170 passed; hardware remains unverified.
+- gate 변화: None.

@@ -89,7 +89,7 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(fleet): D-509 power health at state response
+- 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up
 - 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시
 - 2026-10-07 · uncommitted · fix(test): Fleet 브라우저 fixture가 Chromium 차단 포트를 피하고 정식 옵트인을 받는다
 - 2026-10-07 · uncommitted · fix(fleet): 개발 콘솔 모든 화면 직접 접속

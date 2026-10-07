@@ -658,3 +658,9 @@
 - Change: Align CORE app contract version docstring with API Reference v1.124.
 - Evidence: Related contract and Fleet tests 99 PASS; device check remains separate.
 - Gate change: None.
+
+## 2026-10-08 · uncommitted · docs(api): D-509 v1.124 follow-up
+
+- 변경: CORE app contract version now matches API Reference v1.124.
+- 증거: Contract and Fleet focus tests passed; hardware remains unverified.
+- gate 변화: None.
