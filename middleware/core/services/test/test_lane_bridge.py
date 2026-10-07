@@ -938,3 +938,18 @@ def test_recent_junction_sighting_refuses_a_curved_bridge(age, bridges):
     r.m._junction_seen_at = r.now+DT-age  # seen `age` before the bridge tick
     d = r.step(seen=False)
     assert (r.reason == 'lane_bridge' and d.linear > 0) is bridges
+
+
+def test_unknown_containment_opens_d407_stuck_exactly_as_recovery_off():
+    # D-507 7: an unseen lane is no departure evidence, so with D-468 on the tick belongs to
+    # today's path, D-407 stuck included -- the same episode at the same time as recovery off.
+    opened = {}
+    for local in (False, True):
+        r = Rig(recovery_local_enabled=local, bridge_enabled=False)
+        r.follow()
+        start = r.now
+        while r.m.status().stuck is None and r.now-start < 30:
+            r.step(seen=False)
+        assert r.m.status().stuck is not None, local
+        opened[local] = (round(r.now-start, 6), r.m.status().stuck.phase)
+    assert opened[True] == opened[False]
