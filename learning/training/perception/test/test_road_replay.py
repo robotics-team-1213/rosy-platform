@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "learning" / "training" / "perception"))
 
 import road_replay as rr  # noqa: E402
+import road_replay_inputs as replay_inputs  # noqa: E402
 from control.recording import SHADOW_TOPIC  # noqa: E402
 
 PROFILE, GROUND = rr.lane_replay._nominal_ground()
@@ -111,10 +112,10 @@ def test_recorded_ground_keeps_camera_offset_after_a_camera_gap(monkeypatch):
 
 
 def test_recorded_ground_mcap_uses_the_existing_stamped_evidence_join(monkeypatch, tmp_path):
-    monkeypatch.setattr(rr.extract, "_mcap_files", lambda _: [tmp_path / "bag.mcap"])
-    monkeypatch.setattr(rr, "_mcap_odom", lambda _: ([], []))
+    monkeypatch.setattr(replay_inputs.extract, "_mcap_files", lambda _: [tmp_path / "bag.mcap"])
+    monkeypatch.setattr(replay_inputs, "_mcap_odom", lambda _: ([], []))
     debug = _recorded_debug(5.0)
-    monkeypatch.setattr(rr.extract, "_mcap_frames", lambda _: iter([
+    monkeypatch.setattr(replay_inputs.extract, "_mcap_frames", lambda _: iter([
         (5.0, LANE, {"line/keep_debug": debug}, "jpg", {})]))
     frame = next(rr.mcap_frames(tmp_path, recorded_ground=True))
     assert frame.keep_debug == debug and frame.bgr.shape == (240, 320, 3)
