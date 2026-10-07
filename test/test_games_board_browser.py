@@ -8,14 +8,14 @@ D-153 회차2 — 게임 호스트 G2 캡처 수단. CORE `/dashboard` 자산을
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
 import pytest
+from browser_harness import browser_tests_enabled
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 

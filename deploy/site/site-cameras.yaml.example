@@ -21,6 +21,8 @@ sources:
     robot_markers:
       rosy_01: 7
     heading_edge: [1, 2]
+    # D-513 7: clockwise console turn of the raw picture (0/90/180/270), display only.
+    display_rotation_deg: 0
 
   # A second source needs its own sighting token wired in too: add a secret file and its
   # token_env (here ROSY_FLEET_CEILING_SOUTH_TOKEN) to ROSY_CREDENTIAL_PATHS of both the fleet

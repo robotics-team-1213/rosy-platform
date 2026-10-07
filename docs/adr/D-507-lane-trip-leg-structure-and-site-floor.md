@@ -91,7 +91,7 @@
    - **검증(CORE 시작 거부).** null이 아니면: `SiteMap.map_id` 형식(`^[A-Za-z0-9_.-]{1,64}$`)이고 기본값 `site`가 아니어야 한다. `ir_guard_enabled: true`, `obstacle_mode: path`, URDF 몸 기하가 모두 있어야 한다. `bridge_enabled: true`는 enforce 또는 이 선언이 있어야 한다(`check_bridge_floor_basis`가 이 키를 본다). 지운 두 키가 겹에 있으면 새 키 이름을 담은 오류로 시작을 거부한다. 조용히 무시하지 않고, 별칭으로 읽지도 않는다.
    - **지도 묶기.** CORE 능력에 `site_floor_map_id`를 보인다. Fleet은 이 값이 활성 지도의 `map_id`와 다른 로봇의 `lane` trip을 `TRIP_SITE_FLOOR_MISMATCH`로 열지 않는다. 지시마다 `map_id`를 실어 로봇 쪽에서도 다시 맞춘다(2항). Fleet 없이 운영자가 고른 CAMERA_LINE은 로봇 선언을 그대로 쓴다. 로봇이 현장을 떠나면 이 키를 지운다(D-498 D8 그대로).
 
-10. **D-422 기억은 몸 밖의 점만 둔다(D-422 개정).** `range_min` 아래로 사라진 점의 기억은 URDF 몸 윤곽 밖에 있는 점만 남긴다. 윤곽 안의 점은 이미 몸이 있는 자리라서 정지로 피할 수 있는 물체가 아니고, 잡음 또는 접촉이다. Pinky(LiDAR `range_min` 0.05 m, LiDAR에서 몸 끝까지 최소 0.0565 m)에서는 지금 기억되는 점이 모두 윤곽 안이다. 그래서 이 개정으로 서 있는 로봇의 `obstacle_ahead`(`clearance_source memory`, `body_gap 0`) 래치가 사라진다. `range_min`이 몸 밖까지 닿는 LiDAR에서는 기억이 지금처럼 동작한다. 이 항은 safety 모듈이라 Safety-Review를 받는다.
+10. **D-422 기억은 몸 밖의 점만 둔다(D-422 개정).** `range_min` 아래로 사라진 점의 기억은 URDF 몸 윤곽 밖에 있는 점만 남긴다. 윤곽 안의 점은 이미 몸이 있는 자리라서 정지로 피할 수 있는 물체가 아니고, 잡음 또는 접촉이다. 안팎 판정은 점이 기억에 들어갈 때 한 번만 한다. 이미 기억한 점은 뒤에 오도메트리가 몸 안에 두어도(접촉) 계속 막는다. Pinky(LiDAR `range_min` 0.05 m, LiDAR에서 몸 끝까지 최소 0.0565 m)에서는 지금 기억되는 점이 모두 윤곽 안이다. 그래서 이 개정으로 서 있는 로봇의 `obstacle_ahead`(`clearance_source memory`, `body_gap 0`) 래치가 사라진다. `range_min`이 몸 밖까지 닿는 LiDAR에서는 기억이 지금처럼 동작한다. 이 항은 safety 모듈이라 Safety-Review를 받는다.
 
 11. **IR 직각 교차.** 코드를 바꾸지 않는다. DEVICE D9에서 잰다. 결과가 나쁘면 9항 선언 문구만 다시 본다.
 

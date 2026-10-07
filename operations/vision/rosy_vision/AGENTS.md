@@ -3,6 +3,9 @@
 
 # rosy_vision
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest of Rosy Cam frames, CPU ArUco detection, projection to the site map, and publication of derived sightings to Fleet (D-257, D-261). ROS-free; no `cmd_vel`. Fleet receives sighting JSON only, never JPEG.

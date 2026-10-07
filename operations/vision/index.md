@@ -35,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · feat(vision): D-513 7 화면 회전 키 허용
 - 2026-10-07 · uncommitted · fix(vision): 직선 차로를 원본 해상도 경계 중심에 맞춘다
 - 2026-10-07 · uncommitted · fix(vision): 도로 경계와 흰색 무늬를 구분하고 ROI 가장자리 연결 유지
 - 2026-10-07 · uncommitted · fix(vision): camera-map integration contract pins
 - 2026-10-07 · 556dd1954 · feat(vision): 카메라 차선 지도 초안 생성
-- 2026-10-06 · uncommitted · feat(vision): D-484 필드 경계 자동 캘리브레이션

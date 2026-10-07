@@ -3,6 +3,9 @@
 
 # core (Python package)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Importable middleware kernel. `main.py` starts rclpy; `node.py` wires the process and starts the API thread; `services.py` builds `CoreServices` by assembling managers from `core_features`, schemas/profile/identity/capability from `core_common`, and the event bus / audit log from `core_events`. All ROS I/O is confined to `bridge/ros_bridge`.

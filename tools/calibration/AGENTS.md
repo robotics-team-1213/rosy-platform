@@ -3,6 +3,9 @@
 
 # calibration
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Developer-side half of the D-47 addendum (2026-10-01) calibration protocol: drive a robot through a fixed motion protocol, fit wheel, LiDAR-yaw and camera values from the recording, and manage per-robot accepted calibration records. Runs on the PC, not on the robot. The store implementation is `core_common/calibration_store.py` (`contracts/foundation`); the PC mirror is `data/calibration/` (gitignored).

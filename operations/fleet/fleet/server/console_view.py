@@ -26,24 +26,31 @@ class TripAware:
 
 
 class CapabilityDisplay:
-    """Keep capability readback bounded without changing dispatch admission."""
+    """Keep presentation readback bounded without changing dispatch admission."""
 
-    def __init__(self, clients, clock):
+    def __init__(self, clients, clock, *, read_method="capabilities", schema=None):
         self.clients, self.clock = clients, clock
+        self.read_method = read_method
+        self.schema = schema
         self.cache = {}
+        self.identities = {}
         self.pending = {}
 
     def invalidate(self, robot_id):
         self.cache.pop(robot_id, None)
+        self.identities.pop(robot_id, None)
         task = self.pending.pop(robot_id, None)
         if task is not None:
             task.cancel()
 
     async def shown(self, robot_id, wait_s=0.05):
+        client = self.clients.get(robot_id)
+        if self.identities.get(robot_id) is not client:
+            self.invalidate(robot_id)
+            self.identities[robot_id] = client
         cached = self.cache.get(robot_id)
         if cached is not None and self.clock() - cached[0] < 5.0:
             return copy.deepcopy(cached[1])
-        client = self.clients.get(robot_id)
         if client is None:
             return None
         task = self.pending.get(robot_id)
@@ -56,15 +63,26 @@ class CapabilityDisplay:
             return None
         return copy.deepcopy(cached[1]) if self.clock() - cached[0] < 5.0 else None
 
+    def age(self, robot_id):
+        if self.identities.get(robot_id) is not self.clients.get(robot_id):
+            return None
+        cached = self.cache.get(robot_id)
+        if cached is None or cached[1] is None or self.clock() - cached[0] >= 5.0:
+            return None
+        return round(max(0.0, self.clock() - cached[0]), 3)
+
     async def _refresh(self, robot_id, client):
         try:
             try:
-                caps = await client.capabilities()
+                caps = await getattr(client, self.read_method)()
+                if self.schema is not None:
+                    caps = self.schema.model_validate(caps).model_dump(mode="json")
             except Exception:
                 caps = None
             if self.clients.get(robot_id) is client:
                 shown = copy.deepcopy(caps) if isinstance(caps, dict) else None
                 self.cache[robot_id] = (self.clock(), shown)
+                self.identities[robot_id] = client
         finally:
             if self.pending.get(robot_id) is asyncio.current_task():
                 self.pending.pop(robot_id)

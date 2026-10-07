@@ -89,8 +89,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(fleet): D-507 굽은 길 옆 거리, main 병합
 - 2026-10-08 · uncommitted · fix(fleet): D-507 Fleet 검토 2회 반영
 - 2026-10-08 · dc9026930 · feat(fleet): D-507 2·3·9 Fleet 쪽
-- 2026-10-07 · uncommitted · fix(fleet): 개발 콘솔 모든 화면 직접 접속
-- 2026-10-07 · uncommitted · docs(api): 예외 큐 신선도 필드를 v1.122 로
-- 2026-10-07 · uncommitted · fix(fleet): D-493 예외 큐가 오래된 상태를 표시
+- 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up
+- 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시

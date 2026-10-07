@@ -53,6 +53,9 @@ test('edits copy the map and refuse bad values', () => {
     ['two_way', 'free', 0.3]);
   assert.throws(() => editEdge(MAP, 'ab', {speed_cap_mps: 0}));
   assert.throws(() => editPlace(MAP, 'A', {kind: 'garage'}));
+  assert.throws(() => editPlace(MAP, 'A', {kind: 'start'}), /방향이 필요/);
+  const faced = {...MAP, places: [{...MAP.places[0], yaw: 0}, MAP.places[1]]};
+  assert.equal(editPlace(faced, 'A', {kind: 'start'}).places[0].kind, 'start');
 });
 
 test('trip errors read in Korean with the leg and the unblock hint', () => {

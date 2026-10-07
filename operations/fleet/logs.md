@@ -2389,6 +2389,41 @@
 - 증거: 새 Chromium 직접 진입 시험 4 passed, 개발 인증 pytest 60 passed, 웹 Node 시험 160 passed. 넓은 pytest의 Cell 컴파일러 import 실패 1건은 깨끗한 main에서도 동일하게 재현했다.
 - gate 변화: SOURCE/LOCAL만 확인. 사이트 배포·실기 수용은 별도다.
 
+## 2026-10-07 · uncommitted · fix(test): Fleet 브라우저 fixture가 Chromium 차단 포트를 피하고 정식 옵트인을 받는다
+- 변경: `test_cell_app_browser.py`·`test_start_point_browser.py`·`test_site_map_browser.py`·`test_development_console_browser.py`가 `browser_harness.safe_listener()`로 포트를 잡고, 다섯 브라우저 파일이 `browser_tests_enabled()`로 판정한다. `conftest.py`가 `test/`를 `sys.path` 끝에 붙인다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1`만으로 `test_cell_page_keeps_emergency_stop_in_first_view` 3 passed, `test_markerless_map_pick_save_reload_and_recalibration` 1 passed(이전에는 건너뜀). `known_failures.py` 0 new.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
+## 2026-10-08 · uncommitted · feat(fleet): D-513 시연 출발 자리 `start` 장소
+- 변경: 현장 지도 장소 종류 `start`(yaw 필수)를 더하고, 활성화·첫 가져오기에서 출발 붙이기로 검사해 `SITE_MAP_START_INVALID`로 거절한다. 기록 모드 `place`가 `start`를 받는다. 현장 지도 화면은 출발 자리와 방향 화살표를 그린다.
+- 증거: 관련 pytest 79 passed(브라우저 55 skipped), `site-map.test.mjs` 13 passed.
+- gate 변화: SOURCE/LOCAL만. 현장 해석 확인 F1, 지도 입력 F2는 별도.
+
+## 2026-10-08 · uncommitted · feat(fleet): D-513 7 카메라 화면 회전
+- 변경: `site-cameras.yaml` source 선택 키 `display_rotation_deg`(0/90/180/270)를 읽어 site-map source 행으로 내린다. 메인 지도 실영상·크게 보기를 그만큼 돌려 그리고 지도 점도 같이 돌린다. 보정·관측 좌표는 원본 그대로다.
+- 증거: `test_site_map_api.py` 27 passed, 웹 Node 시험 170 passed.
+- gate 변화: SOURCE/LOCAL만. 현장 설정 반영은 새 Fleet·Vision 배포 뒤에 한다(옛 버전은 이 키를 거절한다).
+
+
+## 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시
+
+- 변경: Fleet이 CORE Viewer power/health를 등록된 Operator 토큰으로 읽고 최대 5초 캐시한다. 로봇 행은 공유 PowerHealthResponse와 관측 나이를 선택 필드로 제공하며, 관제는 배터리·충전 근거의 신선도와 다음 조치를 표시한다. E-Stop·네트워크·영상 설정 경로는 변경하지 않았다.
+- 증거: 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. 현장 장치 검증은 별도.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-509 power health at state response
+
+- Change: Read CORE power/health only while rendering /api/fleet/state, preserving D-447 hub gather calls. Invalidate display cache when a robot client changes.
+- Evidence: Related Fleet and contract tests 99 PASS; Node 170 PASS. Device check remains separate.
+- Gate change: None.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up
+
+- 변경: Power health readback lives in /api/fleet/state presentation; D-447 gather remains unchanged.
+- 증거: Fleet and contract focus tests passed; Node 170 passed; hardware remains unverified.
+- gate 변화: None.
+
 ## 2026-10-08 · dc9026930 · feat(fleet): D-507 2·3·9 Fleet 쪽
 - 변경: `junction_pivot: true` 로봇에만 교차로 지시에 `map_id`·`expect_in_m`·`expect_tol_m`·`pivot_past_line_m`(좌·우만, 나가는 차로 폭/2, 상한 0.30)를 싣는다. `expect_in_m`이 (0, 2] 밖이면 `map_id`만. `expect_tol_m`은 지도 자세에 오차 추정이 없어 0.05×추측항법 거리 + trip 최고 속도×자세 나이 + `ENDPOINT_TOL_M`(상한 0.30)로 둔다. `site_floor_map_id`가 활성 지도와 다른 로봇의 `lane` trip은 422 `TRIP_SITE_FLOOR_MISMATCH`(키 없음·null은 검사 안 함). CORE `unexpected`, 또는 다음 장소가 `arm_distance_m`보다 먼 `waiting`은 10 s를 기다리지 않고 `stopped(junction_unexpected)`. API Ref v1.127.
 - 증거: `test_trip_d507.py` 16건, trip·caps·문서 시험, 웹 Node 시험, 변이 검사 2건(능력 문, `waiting` 거리 규칙), `test/known_failures.py`.
@@ -2402,3 +2437,10 @@
 - gate 변화: SOURCE만.
 - 결정: CORE 창은 곧게 내다보는 투영이라 굽은 접근에서는 창을 주지 않는다. 경로를 따르는 창은 뒤의 일(D-507 2항 문장).
 - 교훈: 최악 지연(호출 시한)을 오차에 넣으면 모든 창이 상한에 붙어 창이 쓸모없어진다. 잰 지연을 쓴다.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-507 굽은 길 옆 거리, main 병합
+- 변경: 15° 이하 굽이에서 차로가 로봇 진행 방향 반직선 옆으로 벗어나는 가장 큰 거리를 `expect_tol_m`에 더한다(상한 0.30 전). main 병합으로 API Ref 번호를 v1.127에서 v1.126으로 옮겼다(main이 v1.124·v1.125를 썼다).
+- 증거: `test_trip_d507.py` 27건, fleet 묶음과 `test/known_failures.py`, 크기 시험.
+- gate 변화: SOURCE만.
+- 결정: 15° 규칙은 그대로 둔다.
+- 교훈: 곧게 내다보는 창은 작은 굽이에서도 옆으로 비켜 선다. 허용 오차가 그 거리를 덮어야 한다.
