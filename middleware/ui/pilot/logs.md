@@ -692,3 +692,8 @@
 - gate 변화: Pilot G2 부분 보강. 전체 회귀·실물·G3는 HOLD.
 - 결정: D-153, D-363.
 - 교훈: 가로 넘침과 영상 비겹침만으로 전화 폭의 카메라 판독 면적을 보장하지 못한다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 카메라 면적 병합 후 검증
+- 변경: 병합 후 전체 재실행과 응급 카메라 집중 재실행 결과를 회차 기록에 추가.
+- 증거: 전체 브라우저 114 passed·2 timeout failed; 실패한 응급 카메라 네 폭 집중 재실행 4 passed, `known_failures.py` 0 NEW. `X:/DevTemp/pilot-camera-320/postmerge-full.txt`, `emergency-retry.txt`.
+- gate 변화: 320px 면적 결함은 집중 검사에서 해결. 전체 무오류 회귀·실물·G3는 HOLD.
