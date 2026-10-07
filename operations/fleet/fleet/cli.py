@@ -85,6 +85,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="public approved TLS bindings for existing encrypted enrollments")
     console.add_argument("--vision-preview-secret-env", default=None,
                          help="dedicated Fleet-to-Vision preview lease signing secret")
+    console.add_argument("--vision-url", default=None,
+                         help="server-side Vision ingest origin (e.g. https://vision:8095) for the "
+                              "periodic calibration-drift watch; needs --vision-preview-secret-env")
+    console.add_argument("--calibration-drift-interval-s", type=float, default=60.0, metavar="SECONDS",
+                         help="cadence of the approved-vs-proposed calibration comparison per "
+                              "source (0 disables; default 60)")
     console.add_argument("--lan-camera-proxy", action="store_true",
                          help="trust the site Caddy proxy's LAN camera header for preview only")
     console.add_argument("--users-file", default=None, type=Path,
@@ -447,6 +453,12 @@ def run_console(args: argparse.Namespace) -> None:
     sighting_service = None
     tracking_service = None
     vision_sources = ()
+    vision_preview_secret_env = getattr(args, "vision_preview_secret_env", None)
+    vision_preview_secret = (os.environ.get(vision_preview_secret_env)
+                             if vision_preview_secret_env else None)
+    if vision_preview_secret_env and not vision_preview_secret:
+        sys.exit("vision preview secret environment variable is required")
+    calibration_drift_watch = None
     if sightings_config is not None:
         from fleet.server.sighting_store import SightingStore
         from fleet.server.sightings_config import load_sighting_sources
@@ -466,10 +478,35 @@ def run_console(args: argparse.Namespace) -> None:
         )
         from fleet.server.tracking import TrackingService
         from fleet.server.tracking_calibration import TrackingCalibrationStore
+        from fleet.server.tracking_drift import CalibrationDriftWatch, VisionMapProposalReader
 
         # D-457: approved tracking calibrations live beside the sightings (memory without a DB).
+        calibration_store = TrackingCalibrationStore(sightings_db)
+        drift_provider = None
+        vision_url = getattr(args, "vision_url", None)
+        drift_interval_s = getattr(args, "calibration_drift_interval_s", 60.0)
+        if vision_url and drift_interval_s:
+            # The watch reads Vision's existing D-375 map-proposal endpoint with a preview
+            # lease signed here; without the secret it could not talk to Vision at all.
+            if vision_preview_secret is None:
+                sys.exit("--vision-url requires --vision-preview-secret-env to sign Vision leases")
+            from core_common.protocol.vision_preview import VisionLeaseSigner
+
+            calibration_drift_watch = CalibrationDriftWatch(
+                sources=sources, calibrations=calibration_store,
+                fetch_proposal=VisionMapProposalReader(
+                    base_url=vision_url, signer=VisionLeaseSigner(vision_preview_secret)),
+                interval_s=drift_interval_s)
+            drift_provider = calibration_drift_watch.verdicts
+        elif vision_url:
+            print("warning: --calibration-drift-interval-s is 0; the calibration drift "
+                  "watch is disabled", file=sys.stderr, flush=True)
         tracking_service = TrackingService(
-            sighting_service.sources, calibrations=TrackingCalibrationStore(sightings_db))
+            sighting_service.sources, calibrations=calibration_store,
+            drift_provider=drift_provider)
+    if getattr(args, "vision_url", None) and tracking_service is None:
+        print("warning: --vision-url set but no --sightings-config; the calibration drift "
+              "watch is not started", file=sys.stderr, flush=True)
     # The outbound CORE Agent route is enabled only for robots with a separate
     # pairing credential. REST-only console configurations remain unchanged.
     hub = console.hub if pairing_configured else None
@@ -506,11 +543,6 @@ def run_console(args: argparse.Namespace) -> None:
               "source; that lane entry is served to no camera", file=sys.stderr, flush=True)
     site_maps, routing_config = _build_site_map(args, tasks_db)
     map_pose_config = _map_pose_config(args)
-    vision_preview_secret_env = getattr(args, "vision_preview_secret_env", None)
-    vision_preview_secret = (os.environ.get(vision_preview_secret_env)
-                             if vision_preview_secret_env else None)
-    if vision_preview_secret_env and not vision_preview_secret:
-        sys.exit("vision preview secret environment variable is required")
     pairing_service, pairing_sync_token = _build_pairing(
         args, tls_cert=tls_cert, tasks_db=tasks_db, sighting_service=sighting_service,
         site_name=console.fleet_name)
@@ -538,7 +570,8 @@ def run_console(args: argparse.Namespace) -> None:
 
         central_registry = CentralRegistry(roster, console=console, discovery=discovery)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
-                     hub=hub, sightings=sighting_service, tracking=tracking_service, task_service=task_service,
+                     hub=hub, sightings=sighting_service, tracking=tracking_service,
+                     calibration_drift_watch=calibration_drift_watch, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
                      cell_job_compiler=cell_job_compiler,
                      cell_app_service_id=getattr(args, "cell_app_service_id", None),

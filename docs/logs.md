@@ -6753,3 +6753,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 검증 기록 추가만. 로봇 관측 0/0대에서 경로 감지가 불가한 점과 적용 교정에 렌즈 지문이 없어 렌즈 교체 가드가 약한 점은 후속 과제로 남는다.
 - 결정: 없음
 - 교훈: 카메라 재조준은 저장된 추적 보정과 조용히 어긋난다. 같은 날 착지된 낡은 교정 자동 경고(feat/cam-drift-warn, 커밋 `27081f83c`)가 다음 재조준부터 침묵 오정렬을 잡는다. 적용에 쓴 임시 계정 `camfit-temp`는 작업 직후 제거했다.
+
+## 2026-10-07 · uncommitted · docs(api): 추적 교정 낡음 자동 검사 v1.120
+- 변경: API Ref §10.6.1 — `GET /api/fleet/tracking` 출처 행의 `calibration_drift`(판정 모양·한계 0.3 m/3°·건너뛰기·초기화 규칙·콘솔 우선순위) 문서화, 이력 v1.120. `core_api_web/api/app.py` 계약 버전 문자열 동반 갱신, 버전 고정 시험 6곳 v1.120
+- 증거: `test_protocol_version_alignment.py` 3 passed, 버전 고정 관련 5파일 93 passed, known_failures 0 NEW
+- gate 변화: 없음. Robot API·envelope 1.0 변경 없음
+- 결정: 해당 없음
+- 교훈: 없음

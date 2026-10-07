@@ -2585,3 +2585,10 @@
 - gate 변화: 없음. 현장 감시 컨테이너에 validate 게이트 적용 여부는 별도 확인 사항.
 - 결정: 없음 (D-276 파일 계약 유지, CLI role은 사람 세 역할로 제한 — service 행은 Cell 흐름 소유)
 - 교훈: 원자적 쓰기는 내용 무결성만 지킨다. 오소유(root:101) 사고는 쓰기 후 소유권 적용·검사가 없으면 그대로 재시작 루프로 이어진다 — 재시작 감시자는 "바뀌었으니 재시작"이 아니라 "검증 통과했으니 재시작"이어야 한다.
+
+## 2026-10-07 · uncommitted · feat(site): Fleet 컨테이너가 Vision 맞춤 제안을 읽어 교정 낡음 감시
+- 변경: `deploy/site/compose.yaml` fleet 서비스에 `--vision-url https://vision:$ROSY_VISION_PORT`(사이트 CA는 fleet 컨테이너의 기존 SSL_CERT_FILE, site leaf의 vision SAN 검증). 주기는 기본 60 s 켬(끄려면 `--calibration-drift-interval-s 0`)
+- 증거: `test/test_site_calibration_drift_deploy.py` 신규 2 passed(compose 핀·CLI 플래그 파싱). 변이 증명: compose의 vision-url 값을 바꾸면 적색, 복원 초록
+- gate 변화: 없음
+- 결정: 해당 없음
+- 교훈: 없음

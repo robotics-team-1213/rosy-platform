@@ -130,6 +130,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                central_registry=None, tracking=None,
+               calibration_drift_watch=None,
                omx_cell_grant_revisions: Optional[Mapping[str, Mapping[str, str]]] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
                cell_app_service_id: str | None = None,
@@ -285,6 +286,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 not isinstance(source, str) or not source for source in vision_sources):
             raise ValueError("vision preview sources must be unique non-empty ids")
 
+    # The drift watch's verdicts ride the tracking snapshot's source rows, so it is a
+    # misconfiguration to start one without the tracking service it is meant to inform.
+    if calibration_drift_watch is not None and tracking is None:
+        raise ValueError("calibration drift watch requires the tracking service")
+
     if localization_service is not None:
         # D-395 P2-6: the console badge reads the service's ladder (needs_human).
         console.set_localization_view(localization_service.view)
@@ -310,6 +316,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         mission_model_turn_worker_task = None
         localization_task = None
         signal_task = None
+        calibration_drift_task = None
         if console._signals is not None:
             signal_task = asyncio.create_task(console._signals.run())
         app.state.signal_supervision = signal_task
@@ -318,6 +325,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             resolver_task = asyncio.create_task(app.state.stuck_resolver.run())
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
+        if calibration_drift_watch is not None:
+            calibration_drift_task = asyncio.create_task(calibration_drift_watch.run())
         trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
@@ -346,13 +355,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task, trip_task):
+                               signal_task, resolver_task, trip_task, calibration_drift_task):
                 if background is not None:
                     background.cancel()
                     try:
                         await background
                     except asyncio.CancelledError:
                         pass
+            if calibration_drift_watch is not None:
+                await calibration_drift_watch.aclose()
             close_observation_source = getattr(post_action_observation_source, "aclose", None)
             if callable(close_observation_source):
                 await close_observation_source()

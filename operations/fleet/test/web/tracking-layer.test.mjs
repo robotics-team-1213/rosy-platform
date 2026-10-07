@@ -5,6 +5,7 @@ import {
   classifyTracking, trackingStatusLine, offsetLabel, OFFSET_WARN_M, TRACKING_STATUS_TEXT,
   preferMarkers, positionRows, displayLeaseMs, trackingDriftSample, calibrationDriftVerdict,
   rememberTrackingPoses, CALIBRATION_DRIFT_POLLS, CALIBRATION_DRIFT_M,
+  serverCalibrationDrift, effectiveDriftVerdict,
 } from "../../fleet/server/web/tracking-layer.js";
 
 const source = (changes = {}) => ({
@@ -145,4 +146,38 @@ test("pose memory keeps matched poses for the next poll's stillness check", () =
   ] });
   assert.deepEqual(Object.fromEntries(poses), { rosy_01: { x: 1, y: 2 } });
   assert.equal(rememberTrackingPoses(null).size, 0);
+});
+
+test("the server-side calibration check reads stale source rows and keeps the worst", () => {
+  const row = (source_id, calibration_drift) => ({ source_id, calibration_drift });
+  const sources = [
+    row("ceiling_a", { state: "ok", max_move_m: 0.1, rotation_deg: 0.5 }),
+    row("ceiling_b", { state: "stale", max_move_m: 0.55, rotation_deg: 1.4, checked_at: 7 }),
+    row("ceiling_c", null),
+    row("ceiling_d", { state: "stale", max_move_m: "bad" }),
+    row("ceiling_e", { state: "stale", max_move_m: 0.4, rotation_deg: "x" }),
+    { source_id: "ceiling_f" },
+  ];
+  assert.deepEqual(serverCalibrationDrift(sources),
+    { sourceId: "ceiling_b", maxMoveM: 0.55, rotationDeg: 1.4 });
+  assert.deepEqual(serverCalibrationDrift([row("ceiling_e", sources[4].calibration_drift)]),
+    { sourceId: "ceiling_e", maxMoveM: 0.4, rotationDeg: null });
+  assert.equal(serverCalibrationDrift([row("ceiling_a", sources[0].calibration_drift)]), null);
+  assert.equal(serverCalibrationDrift([]), null);
+  assert.equal(serverCalibrationDrift(undefined), null);
+});
+
+test("a live robot-sample verdict outranks the server check; no robots falls back to it", () => {
+  const robot = { robotId: "rosy_01", distanceM: 0.9 };
+  const staleServer = [{ source_id: "ceiling_north",
+    calibration_drift: { state: "stale", max_move_m: 0.55, rotation_deg: 9 } }];
+  assert.deepEqual(effectiveDriftVerdict(robot, staleServer),
+    { origin: "robots", robotId: "rosy_01", distanceM: 0.9 });
+  assert.deepEqual(effectiveDriftVerdict(null, staleServer),
+    { origin: "server", sourceId: "ceiling_north", distanceM: 0.55, rotationDeg: 9 });
+  // 서버 판정이 ok이거나 없으면 그림도 돌아간다.
+  assert.equal(effectiveDriftVerdict(null,
+    [{ source_id: "x", calibration_drift: { state: "ok", max_move_m: 0.1 } }]), null);
+  assert.equal(effectiveDriftVerdict(null, []), null);
+  assert.equal(effectiveDriftVerdict(null, undefined), null);
 });

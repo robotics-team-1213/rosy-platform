@@ -31,6 +31,10 @@ services:
       - ROSY_SITE_DISCOVERY_TOKEN
       - --vision-preview-secret-env
       - ROSY_VISION_PREVIEW_SECRET
+      # Calibration-drift watch: Fleet reads Vision's D-375 map proposal server-side
+      # (site CA via SSL_CERT_FILE, "vision" SAN on the site leaf) every 60 s.
+      - --vision-url
+      - https://vision:${ROSY_VISION_PORT:?set ROSY_VISION_PORT}
       - --lan-camera-proxy
       - --users-file
       - /run/rosy-config/site-users.yaml

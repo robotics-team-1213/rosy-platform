@@ -1294,6 +1294,125 @@ def test_stale_camera_calibration_drops_the_frame_and_warns(console_url):
         browser.close()
 
 
+def test_server_checked_calibration_drift_warns_without_any_robot(console_url):
+    from playwright.sync_api import sync_playwright
+
+    # 서버 자동 검사: 로봇 관측이 0/0대(robots 없음)여도 출처의 calibration_drift(stale)
+    # 하나로 실영상을 내리고 미터 눈금 + "(자동 검사)" 문구로 바뀐다(tracking-layer
+    # serverCalibrationDrift · effectiveDriftVerdict, map-view 서버 판정 분기).
+    # mutation-proven: effectiveDriftVerdict의 서버 폴백을 지우면 이 시험은 적색이다.
+    api = {
+        "/api/fleet/state": EMPTY_SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/site-map": {"maps": [{"map_id": "map_v2_fleet",
+                                      "polygon_m": [[0, 0], [1, 0], [1, 1], [0, 1]],
+                                      "bounds_m": {"min_x": 0, "min_y": 0,
+                                                   "max_x": 1, "max_y": 1}}]},
+        "/api/fleet/calibrations": {"calibrations": [{
+            "source_id": "ceiling_north", "map_id": "map_v2_fleet",
+            "calibration_revision": "paint-test", "image": {"width": 1280, "height": 720},
+            "lens": {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1},
+            "map_to_image": [1000, 0, 100, 0, 600, 50, 0, 0, 1]}]},
+        "/api/fleet/vision/sources": {"sources": ["ceiling_north"]},
+        "/api/fleet/vision/lease": {"source_id": "ceiling_north", "lease": "test-lease",
+                                     "frame_path": "/api/vision/sources/ceiling_north/frame", "expires_in_s": 60},
+        "/api/fleet/tracking": {"lease_s": 1, "sources": [
+            {"source_id": "ceiling_north", "map_id": "map_v2_fleet", "status": "OK",
+             "calibration_revision": "paint-test", "age_ms": 120, "fps": 3,
+             "last_error": None, "relearn_seq": 0,
+             "calibration_drift": {"state": "stale", "max_move_m": 0.55, "rotation_deg": 1.2,
+                                   "calibration_revision": "paint-test", "frame_seq": 900,
+                                   "checked_at": 1_790_000_000.0}}],
+            "robots": [], "unknown": []},
+    }
+    with sync_playwright() as sync_playwright_p:
+        browser, page, errors = _open_console(
+            sync_playwright_p, api,
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+
+        def serve_frame(route):
+            route.fulfill(status=200, content_type="image/svg+xml",
+                          body='<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">'
+                               '<rect width="1280" height="720" fill="#bf2030"/></svg>',
+                          headers={"X-Frame-Rectified": "false", "X-Frame-Seq": "42",
+                                   "X-Frame-Age-Ms": "20",
+                                   "X-Source-Lens": "kind=wide;focal_mm=2.2;hfov_deg=104.1"})
+
+        page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남(자동 검사)')",
+            timeout=20000)
+        tag = page.evaluate("() => document.querySelector('#map-tag')?.textContent")
+        assert "카메라 교정 어긋남(자동 검사) — 맞춤 재수락 필요" in tag
+        assert "Rosy Cam 실영상" not in tag
+        # 실영상(빨강)을 얹지 않았다 — 미터 눈금 바탕이다.
+        assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
+                             "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
+                             "return p[0] < 100 && p[1] < 100; }")
+        assert page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')"
+                             ".includes('자동 검사에서 어긋난')")
+        assert not errors
+        browser.close()
+
+
+def test_robot_sample_drift_outranks_the_server_check(console_url):
+    from playwright.sync_api import sync_playwright
+
+    # 로봇 표본 판정(정지 로봇 차이)이 살아 있으면 서버 자동 검사 문구를 쓰지 않는다.
+    # mutation-proven: effectiveDriftVerdict가 서버 판정을 먼저 보게 바꾸면 적색이다.
+    api = {
+        "/api/fleet/state": EMPTY_SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/site-map": {"maps": [{"map_id": "map_v2_fleet",
+                                      "polygon_m": [[0, 0], [1, 0], [1, 1], [0, 1]],
+                                      "bounds_m": {"min_x": 0, "min_y": 0,
+                                                   "max_x": 1, "max_y": 1}}]},
+        "/api/fleet/calibrations": {"calibrations": [{
+            "source_id": "ceiling_north", "map_id": "map_v2_fleet",
+            "calibration_revision": "paint-test", "image": {"width": 1280, "height": 720},
+            "lens": {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1},
+            "map_to_image": [1000, 0, 100, 0, 600, 50, 0, 0, 1]}]},
+        "/api/fleet/vision/sources": {"sources": ["ceiling_north"]},
+        "/api/fleet/vision/lease": {"source_id": "ceiling_north", "lease": "test-lease",
+                                     "frame_path": "/api/vision/sources/ceiling_north/frame", "expires_in_s": 60},
+        "/api/fleet/tracking": {"lease_s": 1, "sources": [
+            {"source_id": "ceiling_north", "map_id": "map_v2_fleet", "status": "OK",
+             "calibration_revision": "paint-test", "age_ms": 120, "fps": 3,
+             "last_error": None, "relearn_seq": 0,
+             "calibration_drift": {"state": "stale", "max_move_m": 0.55, "rotation_deg": 1.2,
+                                   "calibration_revision": "paint-test", "frame_seq": 900,
+                                   "checked_at": 1_790_000_000.0}}],
+            "robots": [{"robot_id": "rosy_01", "status": "MATCHED", "source_id": "ceiling_north",
+                        "offset_m": 0.8, "camera": {"x": 0.2, "y": 0.2, "footprint_m": 0.18, "score": 0.9},
+                        "pose": {"x": 0.8, "y": 0.8}, "pose_frame_verified": True}],
+            "unknown": []},
+    }
+    with sync_playwright() as sync_playwright_p:
+        browser, page, errors = _open_console(
+            sync_playwright_p, api,
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+
+        def serve_frame(route):
+            route.fulfill(status=200, content_type="image/svg+xml",
+                          body='<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">'
+                               '<rect width="1280" height="720" fill="#bf2030"/></svg>',
+                          headers={"X-Frame-Rectified": "false", "X-Frame-Seq": "42",
+                                   "X-Frame-Age-Ms": "20",
+                                   "X-Source-Lens": "kind=wide;focal_mm=2.2;hfov_deg=104.1"})
+
+        page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남 — 맞춤 재수락 필요')",
+            timeout=20000)
+        tag = page.evaluate("() => document.querySelector('#map-tag')?.textContent")
+        aria = page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')")
+        assert "자동 검사" not in tag and "자동 검사" not in aria  # 로봇 표본 판정이 이겼다
+        assert not errors
+        browser.close()
+
+
 # --- D-457 1: "추적 보정 적용"은 적용 시점 라이브 프레임의 렌즈를 본문에 찍는다 ----
 
 LENS_WIDE_HEADER = "kind=wide;focal_mm=2.2;hfov_deg=104.1"

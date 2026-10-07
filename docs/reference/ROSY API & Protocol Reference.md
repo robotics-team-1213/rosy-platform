@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.119
+**Version:** v1.120
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1457,7 +1457,7 @@ Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사�
 |---|---|---|---|
 | POST | `/api/fleet/detections` | source Bearer | `OverheadDetectionsPayload` 제출. source/map/revision·1 s lease 검사 |
 | GET | `/api/fleet/detections/config` | source Bearer | 해당 source의 승인 calibration 또는 null, relearn_seq |
-| GET | `/api/fleet/tracking` | viewer 이상 | sources 상태·fps, robots 대조, unknown 위치 |
+| GET | `/api/fleet/tracking` | viewer 이상 | sources 상태·fps(출처마다 `calibration_drift` — 서버가 승인 교정과 새 맞춤 제안을 주기 비교한 판정, 검사 전·무조건 null), robots 대조, unknown 위치 |
 | POST | `/api/fleet/tracking/relearn` | operator | `{source_id}`의 배경 재학습 번호 증가 |
 | GET | `/api/fleet/calibrations` | viewer 이상 | 승인 기록 목록과 `use: display-only` |
 | POST | `/api/fleet/robots/{robot_id}/identify` | operator | D-472, `{color:"blue"\|"amber"}`. 해당 등록 로봇의 CORE 식별 요청을 전달한다. 한 번에 한 대, 6 s 중복 요청 409 `IDENTIFY_BUSY`. 응답 `{robot_id, request_id, state:"pending_visual_confirmation"}`는 카메라 신원 확정이 아니다. |
@@ -1483,6 +1483,21 @@ robots 상태는 MARKER/MATCHED/NO_DETECTION/NO_POSE/CAMERA_UNAVAILABLE이고 ca
 마커 관측은 pose 없이도 표시하며 익명 이름은 odom으로 추측하지 않는다. 남은 검출은 unknown이다.
 token 오류 401, source 불일치 403, map/revision/future/stale/out-of-order 409, 잘못된 body 422.
 보정과 검출은 CORE pose 주입·자동 작업·주행 명령의 입력이 아니다.
+
+**교정 낡음 자동 검사.** Fleet이 `--vision-url`(Vision 수신 서버 origin)과
+`--vision-preview-secret-env`로 추적 보정 감시를 켜면, 승인된 교정(`tracking_calibrations`)이
+있는 출처마다 `--calibration-drift-interval-s`(기본 60 s, 0이면 끔)마다 Vision의
+`GET /api/vision/sources/{id}/map-proposal`을 콘솔용 preview lease로 한 번 읽어 승인
+`map_to_image`와 제안 `image_to_map`을 map 평면에서 비교한다. 판정 `calibration_drift`는
+`{state: "stale"|"ok", max_move_m, rotation_deg, calibration_revision, frame_seq, checked_at}`이며
+출처 상태 행에 실린다(검사 전·무조건 null). 정량화는 승인 `track_bounds_m` 네 모서리를 승인
+교정으로 화소로 보낸 뒤 제안 `image_to_map`으로 다시 map 미터로 보내 최대 이동 거리와
+선형부 상대 회전각을 재고, 최대 이동 0.3 m 초과 또는 회전 3° 초과면 stale이다. 수락(accepted)
+제안만 근거가 되고, 거부 제안·크기 바뀐 프레임·Vision 사용 중(429, 수동 맞춤 실행 중)은 그
+회차를 건너뛰어 마지막 판정을 유지한다. 새 승인·철회는 그 출처의 판정을 지운다. 표시 전용
+(D-457)이며 관측·목표·주행 경로에 쓰지 않는다. 콘솔 조감도는 로봇 표본 판정(정지 로봇 차이
+3폴링)이 살아 있으면 그것을 우선하고, 없으면(관측 0/0대 등) 서버 판정 stale로 실영상 대신
+미터 눈금과 "카메라 교정 어긋남(자동 검사)" 경고를 보여 준다.
 
 ## 10.7 Site Fleet CORE Agent event history (D-269 Proposed)
 
@@ -2440,6 +2455,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.120 | 2026-10-07 | Additive (feat/vision-calibration-drift-watch): Fleet 교정 낡음 자동 검사 — GET /api/fleet/tracking 출처 행에 `calibration_drift`(서버가 승인 교정과 D-375 맞춤 제안을 주기 비교한 판정, 없으면 null). 새 엔드포인트 없음. Robot API·envelope 1.0 변경 없음 |
 | v1.119 | 2026-10-07 | Additive (D-494 6, feat/d494-fleet-teach-drive): Fleet 주행 가르치기 `GET /api/fleet/teach`, `POST /api/fleet/teach/start`, `/stop`, `/confirm`, `/place`. 기록은 D-494 3 map pose만 읽고 로봇에 아무것도 보내지 않는다. 확정과 주소 만들기는 초안 PUT과 같은 규칙으로 초안에만 쓴다. Robot API·envelope 1.0 변경 없음 |
 | v1.118 | 2026-10-07 | Additive (D-498, feat/d498-junction-turn-site-basis): 교차로 회전의 운동 근거에 현장 근거를 더함 — 설정 `line_follow.junction_turn_site_accepted`(기본 false, `ir_guard_enabled` 없이 true 면 CORE 시작 거부), `junction_turn` 능력은 enforce 증명 또는 현장 근거가 있을 때만 참(읽을 때마다 재판단), 중단 사유 `turn_basis_lost`. envelope 1.0 유지 |
 | v1.117 | 2026-10-07 | Corrective/semantic (D-468): containment boundaries are the drivable inner edge of the paint (previously paint centre). 생산자가 칠 폭 절반(`lane_paint_half_width_m`, 260919 STL 공칭 12.5 mm)만큼 안쪽으로 옮기고 그 값을 `geometry_id`에 넣는다. 필드 모양·envelope 1.0 변경 없음 |

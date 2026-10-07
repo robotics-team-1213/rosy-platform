@@ -48,7 +48,11 @@ class _SourceState:
 class TrackingService:
     def __init__(self, sources: Sequence[SightingSource], *, calibrations: TrackingCalibrationStore,
                  clock: Callable[[], float] = time.time, lease_s: float = DETECTION_LEASE_S,
-                 state_fresh_s: float = STATE_FRESH_S, gate_m: float = GATE_M) -> None:
+                 state_fresh_s: float = STATE_FRESH_S, gate_m: float = GATE_M,
+                 drift_provider: Optional[Callable[[], Mapping[str, dict]]] = None) -> None:
+        # drift_provider (calibration-drift watch, tracking_drift.py): per-source server
+        # verdicts embedded in the snapshot's source rows. Display only; None keeps the
+        # rows without the field's value (calibration_drift stays null).
         for value in (lease_s, state_fresh_s, gate_m):
             if not math.isfinite(value) or value <= 0:
                 raise ValueError("tracking lease, state freshness and gate must be positive")
@@ -72,6 +76,7 @@ class TrackingService:
         self.lease_s = lease_s
         self.state_fresh_s = state_fresh_s
         self.gate_m = gate_m
+        self._drift_provider = drift_provider
         self._sources = {source.source_id: _SourceState() for source in self.sources}
         self._states: dict[str, tuple[dict, float]] = {}
 
@@ -193,6 +198,7 @@ class TrackingService:
 
     def snapshot(self) -> dict:
         now = self._clock()
+        drift = dict(self._drift_provider()) if self._drift_provider is not None else {}
         sources_out: list[dict] = []
         unknown: list[dict] = []
         tracks: dict[str, Track] = {}
@@ -212,6 +218,9 @@ class TrackingService:
                 "fps": round(len(state.arrivals) / FPS_WINDOW_S, 1),
                 "last_error": state.last_error,
                 "relearn_seq": state.relearn_seq,
+                # Server-side calibration-drift verdict (tracking_drift.py); null when the
+                # watch never produced one for this source. Display only.
+                "calibration_drift": drift.get(source.source_id),
             })
             seen = ([Seen(d.x, d.y, d.footprint_m, d.score) for d in payload.detections
                      if d.marker_id is None]

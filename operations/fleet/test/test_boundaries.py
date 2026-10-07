@@ -94,8 +94,9 @@ def test_localization_arbiter_modules_import_no_transport(module):
 
 #: D-457 5: overhead tracking is display only. Besides its own modules, only the app wiring,
 #: the console state route (which hands it robot states) and the CLI may name it.
+#: tracking_drift.py is one of its own modules (the server-side calibration-drift watch).
 TRACKING_IMPORTERS = {"server/app.py", "server/console_routes.py", "server/tracking.py",
-                      "server/tracking_routes.py", "cli.py"}
+                      "server/tracking_routes.py", "server/tracking_drift.py", "cli.py"}
 
 
 def _tracking_imports(source: str) -> list[str]:

@@ -652,3 +652,10 @@
 - gate 변화: 없음. Robot API·envelope 1.0 변경 없음
 - 결정: D-494 6
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(api): 교정 낡음 자동 검사 v1.120
+- 변경: `core_api_web/api/app.py` 계약 버전 두 문자열 v1.120(API Ref §10.6.1 Fleet 추적 출처 행 `calibration_drift` additive)
+- 증거: `middleware/core/gateway/test/test_protocol_version_alignment.py` 3 passed
+- gate 변화: 없음. Robot API·envelope 1.0 변경 없음
+- 결정: 해당 없음
+- 교훈: 없음
