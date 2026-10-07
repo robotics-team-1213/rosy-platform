@@ -437,6 +437,19 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
 }
 [data-recording-facts] { display: grid; gap: var(--space-1); min-width: 0; }
 [data-recording-status] { color: var(--status-warn); }
+[data-recordings-sheet] ui-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+[data-recordings-sheet] ui-actions ui-button { min-width: 0; width: 100%; }
+@media (width < 22rem) {
+  [data-recordings-sheet] { padding: var(--space-2); gap: var(--space-1); }
+  [data-recordings-sheet] > p { display: none; }
+  [data-recordings-sheet] ui-actions {
+    grid-template-columns: minmax(0, 1fr);
+    position: sticky;
+    bottom: 0;
+    padding-top: var(--space-1);
+    background: var(--ground-raise);
+  }
+}
 
 /* 조작 버튼·상단 버튼은 한 줄을 지킨다 — 쪼개진 "제자 리" 는 누를 곳을 흐린다 */
 [data-drive-left] ui-button,

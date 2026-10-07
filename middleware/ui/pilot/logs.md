@@ -654,4 +654,8 @@
 - 근거: [LOCAL 8셀](../../../docs/validation/uiux-pilot-emergency-width-2026-10-07/result.md). 관련 브라우저 12 passed, G1 90 passed, 각각 known_failures 0 NEW.
 - gate 변화: Pilot G2 부분 근거. 실물 정지 readback, 나머지 선언 셀, 사용자 G3와 제품 전체는 HOLD.
 
-\n
+## 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 전화 폭
+
+- 변경: 시트를 stage 밖 주행 root에 붙여 조작부 뒤 가림을 없앴다. 동등한 하단 행동을 같은 폭으로 하고 320px에서는 전폭으로 쌓아 녹화본 행·닫기를 첫 화면에 둔다.
+- 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 가림 재현 2 failed, 수정 뒤 관련 브라우저 7 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실제 태블릿·로봇 녹화 readback, 다른 상태와 사용자 G3는 HOLD.

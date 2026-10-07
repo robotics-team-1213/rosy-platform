@@ -1525,7 +1525,7 @@ def _enter_recording_drive(page, base_url, **scenario):
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844)])
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_robot_recording_toggle_and_sheet(base_url, viewport):
     """D-411 A: 로봇 녹화 토글(화면 녹화와 따로)과 녹화본 시트 — 받기는 CORE 의 차단 사유를 따른다."""
     with playwright_sync.sync_playwright() as playwright:
@@ -1544,12 +1544,37 @@ def test_robot_recording_toggle_and_sheet(base_url, viewport):
             assert "녹화 0:01 / 10:00" in page.inner_text("[data-drive-fact=recording]")
             assert _recordings(page, base_url)["log"] == ["start"]
             row = _open_sheet(page)
+            stop = page.locator("ui-topbar [data-estop]").bounding_box()
+            assert stop and 0 <= stop["y"] and stop["y"] + stop["height"] <= viewport[1], "시트가 열려도 비상 정지는 화면 안"
+            if output := os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(output)
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-recording-sheet-{viewport[0]}x{viewport[1]}.png"))
             assert page.evaluate("!!document.activeElement.closest('[data-recordings-sheet]')"), "열면 시트로 초점"
             box = page.evaluate("""(() => { const s = document.querySelector('[data-recordings-sheet]').getBoundingClientRect();
               const h = document.querySelector('[data-drive-hud]').getBoundingClientRect();
               return {top: s.top, bottom: s.bottom, left: s.left, right: s.right, hud: h.bottom, vh: innerHeight}; })()""")
             assert box["top"] >= box["hud"], f"시트가 HUD 를 덮는다 {box}"
             assert box["left"] >= 0 and box["right"] <= viewport[0] + 1 and box["bottom"] <= box["vh"] + 1, box
+            assert page.evaluate("""(() => {
+              const sheet = document.querySelector('[data-recordings-sheet]');
+              const box = sheet.getBoundingClientRect();
+              return document.elementFromPoint(box.left + box.width / 2, box.bottom - 20)
+                ?.closest('[data-recordings-sheet]') === sheet;
+            })()"""), "시트 하단이 조작부 뒤에 가려지지 않아야 한다"
+            close = page.locator("[data-recordings-close]")
+            close_box = close.bounding_box()
+            assert close_box and close_box["y"] >= 0 and close_box["y"] + close_box["height"] <= viewport[1], "닫기는 스크롤 없이 보여야 한다"
+            row_box = row.bounding_box()
+            refresh_box = page.locator("[data-recordings-refresh]").bounding_box()
+            assert row_box and refresh_box and row_box["y"] + row_box["height"] <= refresh_box["y"] + 1, "녹화본 행이 하단 행동에 가려지지 않아야 한다"
+            assert close.evaluate("""button => {
+              const box = button.getBoundingClientRect();
+              return document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+                ?.closest('[data-recordings-sheet]') === button.closest('[data-recordings-sheet]');
+            }"""), "시트 닫기가 조작부에 가려지지 않아야 한다"
+            refresh_width = refresh_box["width"]
+            assert abs(refresh_width - close.bounding_box()["width"]) <= 1, "같은 행의 시트 행동은 같은 너비"
             assert row.locator("[data-recording-fetch]").is_disabled()          # 녹화 중에는 받지 않는다
             assert "녹화 중에는" in page.inner_text("[data-recordings-notice]")
             assert page.get_attribute("[data-recordings-notice]", "aria-live") == "polite"

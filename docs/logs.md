@@ -6728,4 +6728,8 @@ osy-d395-s1d\`.
 - 근거: [LOCAL 결과](validation/uiux-pilot-emergency-width-2026-10-07/result.md), 게이트·카메라 4폭×2화면. 관련 브라우저 12 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
 - gate 변화: Pilot G2 부분 보강. 실제 사이트 설치본·정지 readback과 사용자 G3 전에는 제품 전체 HOLD.
 
-\n
+## 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 가림과 폭
+
+- 변경: 좁은 화면의 녹화본 시트가 조작부 뒤에 가려진 문제와 하단 행동 너비를 고쳤다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 네 폭 관련 브라우저 7 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실제 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.

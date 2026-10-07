@@ -685,7 +685,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   placeCompactTools();
   const robotRecording = mountRobotRecording({
     toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,
-    sheetHost: root.querySelector("[data-drive-stage]"), anchor: element.hud, save: saveCameraFile,
+    sheetHost: root, anchor: element.hud, save: saveCameraFile,
     returnFocus: toolsButton,
   });
   view.applyZoom();
