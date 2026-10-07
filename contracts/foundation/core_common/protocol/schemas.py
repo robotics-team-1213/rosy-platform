@@ -1019,12 +1019,15 @@ class LineStuckStatus(BaseModel):
 
 
 class LineJunctionStatus(BaseModel):
-    """D-491 decision 4: the one pending next-junction instruction and its progress."""
+    """D-491 decision 4 / D-492: the one pending next-junction instruction and its progress."""
 
     pending_action: Optional[str] = None  # straight | left | right | stop
     place_id: Optional[str] = None
-    state: str = "idle"                   # idle | armed | executing | waiting | unresolved
+    # idle | armed | executing | waiting | unresolved | turning | advancing | reacquiring | aborted
+    state: str = "idle"
     seq: int = 0
+    turn_deg: Optional[float] = None      # D-492: signed bounded turn (left +)
+    reason: Optional[str] = None          # D-492: why a maneuver aborted
 
 
 class LineFollowStatus(BaseModel):

@@ -52,7 +52,8 @@ def test_accepted_with_seq_and_visible_in_the_snapshot(core_client):
     assert _tick(services, clock).linear == 0.0
     snapshot = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]
     assert snapshot["junction"] == {"pending_action": "left", "place_id": "J2",
-                                    "state": "unresolved", "seq": 2}
+                                    "state": "unresolved", "seq": 2, "turn_deg": None,
+                                    "reason": None}
     assert (snapshot["state"], snapshot["reason"]) == ("HOLD", "junction_unresolved")
     assert client.get("/api/v1/line-follow", headers=VIEWER).json()["junction"]["seq"] == 2
     assert services.line_follow.mode is LineFollowMode.CAMERA_LINE  # no mode change
@@ -86,7 +87,12 @@ def test_validation(core_client):
     for body in ({**BODY, "action": "north"}, {**BODY, "expires_s": 31},
                  {**BODY, "expires_s": 0}, {k: v for k, v in BODY.items() if k != "expires_s"},
                  {**BODY, "place_id": ""}, {**BODY, "stop_after_m": 0.2},
-                 {**BODY, "action": "stop", "stop_after_m": 2.5}):
+                 {**BODY, "action": "stop", "stop_after_m": 2.5},
+                 {**BODY, "turn_deg": 10}, {**BODY, "action": "left", "turn_deg": -90},
+                 {**BODY, "action": "right", "turn_deg": 90}, {**BODY, "action": "left", "turn_deg": 0},
+                 {**BODY, "action": "left", "turn_deg": 151},
+                 {**BODY, "action": "left", "advance_m": 0.1},
+                 {**BODY, "action": "left", "turn_deg": 90, "advance_m": 0.31}):
         assert client.post(URL, json=body, headers=OPERATOR).status_code == 400, body
     ok = client.post(URL, json={**BODY, "action": "stop", "stop_after_m": 0.3}, headers=OPERATOR)
     assert ok.json()["state"] == "executing"
@@ -107,3 +113,14 @@ def test_stale_or_other_keep_debug_is_not_a_sighting(core_client):
                      ("not json", 100.1), ("[1]", 100.1)):
         observation.keep_junction(services, raw, source_now=now, received_at=clock["t"])
     assert _tick(services, clock).linear > 0
+
+
+def test_turn_request_arms_and_reports_turn_deg(core_client):
+    """D-492: left/right with turn_deg arm a bounded turn; old requests stay unresolved."""
+    client, services, clock = _active(core_client)
+    body = {**BODY, "action": "right", "turn_deg": -90, "advance_m": 0.2}
+    assert client.post(URL, json=body, headers=OPERATOR).json() == {
+        "accepted": True, "junction_seq": 1, "state": "armed"}
+    _tick(services, clock)
+    junction = client.get("/api/v1/robot/state", headers=VIEWER).json()["line_follow"]["junction"]
+    assert (junction["state"], junction["turn_deg"]) == ("armed", -90)

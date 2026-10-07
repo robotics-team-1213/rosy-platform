@@ -197,22 +197,30 @@ class LineJunctionRequest(BaseModel):
     place_id: str = Field(min_length=1, max_length=128)
     stop_after_m: Optional[float] = Field(default=None, ge=0, le=2.0)
     expires_s: float = Field(gt=0, le=30)
+    # D-492: bounded turn for left (+) / right (-); without it left/right stay unresolved.
+    turn_deg: Optional[float] = Field(default=None, ge=-150, le=150)
+    advance_m: Optional[float] = Field(default=None, ge=0, le=0.30)
 
 
 @line_follow_router.post("/junction")
 def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(operator),
                       svc: CoreServicesLike = Depends(get_services)):
-    """D-491 decision 4. Never changes mode; CORE only keeps or zeroes its own line command.
+    """D-491 decision 4 / D-492. Never changes mode; the turn maneuver runs in CORE's own tick.
     "Seat" is the existing vocabulary (D-460): operator token + calibration lease, as /hold."""
     if body.stop_after_m is not None and body.action != "stop":
         raise ApiError("VALIDATION_ERROR", 400, "stop_after_m belongs to stop")
+    if body.turn_deg is not None and (body.action not in ("left", "right") or body.turn_deg == 0
+                                      or (body.turn_deg > 0) != (body.action == "left")):
+        raise ApiError("VALIDATION_ERROR", 400, "turn_deg is left (+) or right (-) and not 0")
+    if body.advance_m is not None and body.turn_deg is None:
+        raise ApiError("VALIDATION_ERROR", 400, "advance_m belongs to a turn")
     require_calibration_owner(svc, auth, "line-follow junction")
     result = svc.line_follow.set_junction(body.action, body.place_id, body.expires_s,
-                                          body.stop_after_m)
+                                          body.stop_after_m, body.turn_deg, body.advance_m)
     if result is None:
         raise ApiError("LINE_FOLLOW_NOT_ACTIVE", 409, "line-follow must be CAMERA_LINE or IR_LINE")
     svc.state.set_line_follow(svc.line_follow.status())
-    return {"accepted": True, "junction_seq": result[0], "state": result[1]}
+    return {"accepted": result[0], "junction_seq": result[1], "state": result[2]}
 
 
 @line_follow_router.post("/stuck/decision")
