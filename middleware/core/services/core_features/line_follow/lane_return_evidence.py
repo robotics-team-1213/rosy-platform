@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
 from core_features.line_follow.lane_return import Boundary, Corridor, Pose, PoseTrail, _angle, _finite
+from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 
 
 @dataclass(frozen=True)
@@ -49,7 +50,10 @@ class LaneReturnEvidence:
             raise ValueError("original nanosecond timestamps required")
         _finite(received_at)
         age = (source_now_ns-stamp_ns)/1e9
-        if not 0 <= age <= .3:
+        if age < -SOURCE_FUTURE_TOLERANCE_S:
+            return False  # refuse the sample only; the trail and epoch stay
+        age = max(0., age)
+        if age > .3:
             self.reset()
             return False
         pose = Pose(received_at-age, stamp_ns, frame, x, y, yaw)

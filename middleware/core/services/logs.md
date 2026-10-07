@@ -679,3 +679,9 @@
 - gate 변화: 없음. SIM 증거만이고 SIM 수용 항목 S1·S2·S6은 미통과다.
 - 결정: D-495, D-498 (Proposed). 결함 후보: `lane_return_evidence.py:52` 음수 odom 나이 리셋, `junction.py:318-320` CAMERA_LINE 선택 직후 회전 `aborted odom`, `unresolved`가 실행 기록에 안 남음(`junction.py:347-352`, `363-366`, `397-400`), 로봇 기본값 `recovery_local_enabled: true` + enforce 없음이면 출발 불가(`lane_return.py:326-327`).
 - 교훈: 없음
+## 2026-10-07 · uncommitted · fix(line_follow): odom 원천 시각이 CORE 시계보다 조금 앞서도 자세 기록을 지우지 않는다
+- 변경: `model.py`에 `SOURCE_FUTURE_TOLERANCE_S = 0.1`(기존 `manager.observe` 값)을 두고 `manager.observe`와 `lane_return_evidence.observe_pose`가 같이 쓴다. odom 나이가 `[-0.1, 0)`이면 0으로 보고, `-0.1`보다 앞서면 그 샘플만 버린다(trail·epoch 유지). 0.3 s 초과 리셋은 그대로다.
+- 증거: `test_lane_return_evidence.py`(1 ms 앞 유지, 0.2 s 앞 버림·epoch 불변), `test_line_junction.py::test_turn_completes_with_odom_stamps_1_ms_ahead_of_core_clock` 먼저 실패 후 통과.
+- gate 변화: 없음. 호스트 시험만. SIM(D-495 harness, odom 지연 제거) 미실행.
+- 결정: D-495 SIM 결과 결함 2 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
+- 교훈: 없음
