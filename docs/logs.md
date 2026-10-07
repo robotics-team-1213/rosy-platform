@@ -6722,3 +6722,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 문서·제안만 바뀐다.
 - 결정: D-499 Proposed.
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(plan): 관제 사이트 경로와 로봇 링크 실행 계획(D-499)
+
+- 변경: [실행 계획](plans/2026-10-07-console-site-path-and-robot-link.md). D-499는 Proposed로 둔다. 화면과 API는 이 기록이 고치지 않는다.
+- 증거: 계획 파일만. 분류가 앉을 자리는 console.py snapshot, ingest_routes.address_reasons, console_routes.gathered, static_routes.py /healthz, vision-view.js refreshSources.
+- gate 변화: 없음.
+- 결정: D-499 Proposed 유지.
+- 교훈: 없음
