@@ -210,3 +210,11 @@ def test_two_bindings_that_meet_on_one_blob_both_return_to_unknown():
     for robot_id in ("rosy_60", "rosy_26"):
         pose = identity.confirmed_track_pose(robot_id)
         assert (pose["state"], pose["reason"]) == ("UNKNOWN", "overlap")
+
+
+def test_a_future_stamped_track_reports_its_negative_age():
+    """Review 2026-10-08: age_s is not clamped at 0, so D-511 can refuse a future stamp like map pose."""
+    clock, tracking, identity, _ = _setup()
+    _confirm(clock, tracking, identity)
+    clock.now -= 0.2                       # the site clock is behind the detection stamp
+    assert identity.confirmed_track_pose("rosy_60")["age_s"] == pytest.approx(-0.2)
