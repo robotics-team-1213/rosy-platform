@@ -109,6 +109,36 @@ def test_eval_workspace_can_approve_pixels_but_cannot_export_training(tmp_path):
         store.prepare()
 
 
+def test_eval_unknown_pixels_need_explicit_review_and_exact_count(tmp_path):
+    store = ReviewStore(tmp_path / "eval-state", empty_eval=True)
+    catalog, classes = _catalog(tmp_path)
+    review_ingest.import_frames(store, {"path": str(catalog), "classes": str(classes)})
+    with pytest.raises(ValueError, match="가림"):
+        review_masks.update(store, 0, {"version": 1, "action": "approve",
+                                       "complete_frame_review": True, "background_reviewed": True,
+                                       "unknown_pixels_reviewed": True}, Conflict)
+    painted = review_masks.update(store, 0, {"version": 1, "action": "fill", "label": 0}, Conflict)
+    masked = review_masks.update(store, 0, {"version": painted["version"], "action": "paint",
+                                             "label": 255, "radius": 1, "points": [[2, 2]]}, Conflict)
+    body = {"version": masked["version"], "action": "approve",
+            "complete_frame_review": True, "background_reviewed": True}
+    with pytest.raises(ValueError, match="가림"):
+        review_masks.update(store, 0, body, Conflict)
+    approved = review_masks.update(store, 0, {**body, "unknown_pixels_reviewed": True}, Conflict)
+    count = int((review_masks.pixels(store, approved) == 255).sum())
+    assert count > 0
+    assert approved["approval"]["reviewed_unknown_count"] == count
+    current = review_evidence.decisions(store)
+    assert review_evidence.validate_authority(current)
+    current["frames"][0]["pixel_approval"]["reviewed_unknown_count"] = True
+    current["decision_sha256"] = review_evidence.sha(review_evidence.encoded(
+        {key: value for key, value in current.items() if key != "decision_sha256"}))
+    with pytest.raises(ValueError, match="approval"):
+        review_evidence.validate_authority(current)
+    with pytest.raises(ValueError, match="cannot export training"):
+        store.prepare()
+
+
 def test_eval_bootstrap_reserves_before_import_and_replays_without_new_frames(tmp_path):
     catalog, classes = _catalog(tmp_path)
     digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
