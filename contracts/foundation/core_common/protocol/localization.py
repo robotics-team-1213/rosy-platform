@@ -175,7 +175,9 @@ class OdomPose(BaseModel):
     form as a sighting's ``captured_at``, so Fleet can pair the two.
     """
 
-    x: float
-    y: float
-    yaw: float
-    stamp: float
+    model_config = ConfigDict(frozen=True)
+
+    x: Finite
+    y: Finite
+    yaw: Finite
+    stamp: Finite

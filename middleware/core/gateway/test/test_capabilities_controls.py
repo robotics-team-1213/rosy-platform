@@ -113,3 +113,12 @@ def test_d491_unusable_robot_model_omits_robot_kind_not_a_500(core_client, model
     svc.config.setdefault("robot", {})["model"] = model
     (base,) = _controls(client)["items"]
     assert "robot_kind" not in base and "lane" in base["drive_modes"]
+
+
+def test_d491_nan_odom_does_not_fail_the_state_api(core_client):
+    client, svc = core_client()
+    svc.state.set_odom_pose(0.5, 0.25, 0.0)
+    svc.state.set_odom_pose(float("nan"), 0.0, 0.0)
+    response = client.get("/api/v1/robot/state", headers=VIEWER)
+    assert response.status_code == 200
+    assert response.json()["odom_pose"]["x"] == 0.5
