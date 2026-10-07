@@ -1308,16 +1308,8 @@ class SshHostKeys(BaseModel):
     host_keys: list[str]
 
 
-#: D-472 4: colours lamp_pattern can show for an identity blink (amber = the ADR's orange).
-LAMP_IDENTIFY_COLORS = ("blue", "amber")
-#: D-472 4 default per robot; a robot's CORE config ``lamp_identify.color`` overrides it.
-LAMP_IDENTIFY_DEFAULT_COLORS = {"rosy_26": "blue", "rosy_60": "amber"}
-
-
 class LampIdentifyRequest(BaseModel):
-    """A short, display-only LED challenge; the face owner may refuse it.
-
-    ``color`` None: the robot's configured colour (D-472 4)."""
+    """A short, display-only LED challenge (color None: the robot's own); the face owner may refuse it."""
     model_config = ConfigDict(extra="forbid")
     color: Optional[Literal["blue", "amber"]] = None
 

@@ -17,9 +17,7 @@ from pydantic import BaseModel, ConfigDict, StrictBool
 
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import admin, operator, viewer
-from core_common.protocol.schemas import (
-    LAMP_IDENTIFY_COLORS, LAMP_IDENTIFY_DEFAULT_COLORS, LampIdentifyRequest,
-)
+from core_common.protocol.schemas import LampIdentifyRequest
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 
 
@@ -397,6 +395,12 @@ def host_lamp_identify(
         _last_test[request_path] = now
     return {"accepted": True, "request_id": request_id, "color": color,
             "state": "pending_visual_confirmation"}
+
+
+#: D-472 4: colours lamp_pattern can show for an identity blink (amber = the ADR's orange).
+LAMP_IDENTIFY_COLORS = ("blue", "amber")
+#: D-472 4 default per robot (config, not wire schema); CORE config ``lamp_identify.color`` overrides it.
+LAMP_IDENTIFY_DEFAULT_COLORS = {"rosy_26": "blue", "rosy_60": "amber"}
 
 
 def _identify_color(svc: CoreServicesLike):

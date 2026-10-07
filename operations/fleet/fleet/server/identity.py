@@ -23,7 +23,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional
 
-from core_common.protocol.schemas import LAMP_IDENTIFY_COLORS
+LAMP_IDENTIFY_COLORS = ("blue", "amber")  # CORE LampIdentifyRequest.color values (D-472 4)
 
 
 class IdentityError(Exception):
