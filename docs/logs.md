@@ -6695,3 +6695,11 @@ osy-d395-s1d\`.
 - 변경: 검수 앱이 `--object-classes <data.yaml>`로 모델별 객체 클래스를 받고(기본은 D-423 6개), 픽셀 `classes.yaml`은 선택 `display`를 받는다. 화면은 서버 클래스셋을 쓰고 숫자키 클래스·A 승인·X 제외 단축키를 키 코드로 매핑한다. `classes/lane_lr5.yaml`(차선 모델 5클래스)과 모델 PC용 `model/export_class_names.py`를 추가했다. 클래스셋 sha는 `review-contract.json`에만 있고 `/api/decisions`에는 넣지 않았다.
 - 증거: `learning/training/perception/test/` 호스트 pytest와 브라우저 시험, `test/known_failures.py` 비교, harness lint. 결과 수치는 브랜치 착지 때 확인한다.
 - gate 변화: SOURCE/LOCAL 검증만. 장치·현장 상태는 그대로 둔다.
+
+## 2026-10-07 · uncommitted · docs(adr): OMX 실물 팔 활성화 조건 설계(D-496)
+
+- 변경: [D-496](adr/D-496-omx-hardware-arm-control-acceptance.md) Proposed — 실물 OMX-F 부재 상태에서 OMX-AI 스펙 기반으로 실물 팔 조종 수용 조건을 고정한다. 실측 프로필(`rosy.omx-hardware-profile.v1`) 없이는 `omx.disabled.yaml` 활성화를 금지하고, 시뮬 셀 프로필·Gazebo jaw 보정의 실물 전용을 금지하며, 수용 사다리를 BENCH→DEVICE로 둔다. 짝 설계 문서 [2026-10-07-omx-hardware-arm-enablement-design.md](plans/2026-10-07-omx-hardware-arm-enablement-design.md)가 측정 체크리스트(B0–B8)와 하드웨어 프로필 스키마, Pilot 실물 드라이버 등록 지점을 소유한다. 런타임·API·Pilot 코드 변경은 없다.
+- 증거: 근거 스펙은 2026-09-12 하드웨어 조사·`deploy/robot/omx/stack.lock.yaml`(ROBOTIS 5.1.2 rev `0a4af6a9…`)·`sim/cell_profile.yaml` 주석·`omx.disabled.yaml`·워크스테이션 런타임 계획(2026-09-26)에서 읽었다. Pilot SIM 팔 지원은 같은 날 main에서 재확인(팔 순수 시험 33 passed, Playwright omx/arm 14 passed, Android 유닛 시험+APK 번들 7자산 확인).
+- gate 변화: 없음. 문서·제안만 바뀐다. `omx` 프로필·어댑터·Pilot 게이트는 그대로.
+- 결정: D-496 Proposed. D-390 §5(실물 범위 밖)는 유지되고, 이 결정은 여는 조건만 정의한다.
+- 교훈: 없음
