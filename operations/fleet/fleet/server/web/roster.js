@@ -71,6 +71,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (state.safety?.estop === true) items.push({ severity: "warn", text: ": 비상 정지 걸림 — 관리자가 해제해야 움직입니다" });
     else if (state.safety?.estop !== false) items.push({ severity: "warn", text: ": 정지 상태 미확인" });
     if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패" });
+    // D-511 M0: Fleet이 Rosy Cam 지도 자세로 본 차로 여유. 알리기만 한다(보정·정지는 M1/M2).
+    const lane = robot.lane_compliance;
+    const laneCm = lane && typeof lane.margin_m === "number" ? Math.round(Math.abs(lane.margin_m) * 100) : null;
+    if (lane?.level === "ACT" && laneCm !== null) items.push({ severity: "crit", text: `: 차로 이탈 — 몸체가 가장자리를 ${laneCm} cm 넘음` });
+    else if (lane?.level === "WARN" && laneCm !== null) items.push({ severity: "warn", text: `: 차로 가장자리 접근 — 여유 ${laneCm} cm` });
     if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
     if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });

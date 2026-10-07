@@ -57,3 +57,12 @@ test("attentionItems: offline gives only the disconnect item, however old", () =
   assert.equal(items.length, 1);
   assert.equal(items[0].severity, "warn");
 });
+
+test("attentionItems: D-511 lane compliance WARN/ACT name the margin in cm; OK/UNKNOWN add nothing", () => {
+  view.receivedAtMs = Date.now() - 1000;
+  const lane = (level, margin_m) => full({ line_stuck: null, lane_compliance: { level, margin_m } });
+  assert.deepEqual(texts(attentionItems(lane("WARN", 0.012))), ["warn: 차로 가장자리 접근 — 여유 1 cm"]);
+  assert.deepEqual(texts(attentionItems(lane("ACT", -0.034))), ["crit: 차로 이탈 — 몸체가 가장자리를 3 cm 넘음"]);
+  assert.deepEqual(attentionItems(lane("OK", 0.05)), []);
+  assert.deepEqual(attentionItems(lane("UNKNOWN", null)), []);
+});
