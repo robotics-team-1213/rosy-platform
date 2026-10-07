@@ -739,7 +739,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   }
   function bindCamera(visionView) {
     // The calibrated map draws the same authenticated Vision frame; Fleet does not relay image bytes.
-    // D-488: the raw frame shows in one place at a time — the rail thumbnail, or the map stage
+    // D-493: the raw frame shows in one place at a time — the rail thumbnail, or the map stage
     // (#map-birdseye) when there is no map or the operator asks for the large view. CSS picks the place.
     const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
     const setLive = (url) => {

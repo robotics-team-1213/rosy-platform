@@ -440,7 +440,7 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
             map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
             roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
-            assert abs(map_panel["width"] / roster_panel["width"] - (1.5 if width >= 1024 else 1)) <= 0.03  # D-488: map 3 : rail 2 from 64rem
+            assert abs(map_panel["width"] / roster_panel["width"] - (1.5 if width >= 1024 else 1)) <= 0.03  # D-493: map 3 : rail 2 from 64rem
             if width < 480:
                 assert abs(map_panel["x"] - roster_panel["x"]) <= 1
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -488,7 +488,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
             assert stop and stop["width"] > 0 and stop["y"] + stop["height"] <= height
             map_panel = page.locator('section[aria-labelledby="map-heading"]').bounding_box()
             roster_panel = page.locator('section[aria-labelledby="roster-heading"]').bounding_box()
-            assert abs(map_panel["width"] / roster_panel["width"] - (1.5 if width >= 1024 else 1)) <= 0.03  # D-488: map 3 : rail 2 from 64rem
+            assert abs(map_panel["width"] / roster_panel["width"] - (1.5 if width >= 1024 else 1)) <= 0.03  # D-493: map 3 : rail 2 from 64rem
             if width < 480:
                 assert abs(map_panel["x"] - roster_panel["x"]) <= 1
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -1425,7 +1425,7 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         assert page.locator(".queues-panel").is_hidden()
         browser.close()
 
-    # D-488: SNAPSHOT is not a normal roster — rosy_03's card carries a red relay tag and a traffic wait.
+    # D-493: SNAPSHOT is not a normal roster — rosy_03's card carries a red relay tag and a traffic wait.
     # The queue says so with the card's own rule (2026-10-07: the queue used to stay hidden here).
     with sync_playwright() as p:
         browser, page, _errors = _open_console(p, {
@@ -1495,7 +1495,7 @@ def test_console_fits_the_declared_viewport(console_url):
         f"문서가 {fit['docOverflow']}px 스크롤된다 — 예외 문법은 한눈에 다"
         " 보인다(D-201): " + str(fit)
     )
-    assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 1.5) <= 0.03, fit  # D-488: map 3 : rail 2
+    assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 1.5) <= 0.03, fit  # D-493: map 3 : rail 2
     for name in ("signals", "formation", "rosterPanel"):
         box = fit[name]
         assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
@@ -1526,7 +1526,7 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
         page.goto(console_url, wait_until="networkidle")
         fit = page.evaluate(FLEET_FIT_PROBE)
         assert fit["docOverflow"] <= 0, fit
-        assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 1.5) <= 0.03, fit  # D-488: map 3 : rail 2
+        assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 1.5) <= 0.03, fit  # D-493: map 3 : rail 2
         assert fit["stop"]["bottom"] <= fit["vh"]
         if scenario == "delayed":
             assert "지연" in page.inner_text("#roster")
@@ -1534,7 +1534,7 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
         elif scenario == "disconnected":
             assert "닿지 않음" in page.inner_text("#roster")
             assert page.locator(".queues-panel").is_visible()
-            # D-488: the queue lives in the rail, so the map stays the main view.
+            # D-493: the queue lives in the rail, so the map stays the main view.
             assert fit["mapCanvas"]["height"] >= 0.5 * fit["vh"]
         else:
             assert page.locator("#formation-role-lock").is_visible()
@@ -1565,7 +1565,7 @@ def test_fleet_control_groups_are_semantic_subheadings(console_url):
         ]
         for name in headings:
             assert page.get_by_role("heading", name=name, exact=True).count() == 1
-        # D-488: the topbar holds the only link to each other document.
+        # D-493: the topbar holds the only link to each other document.
         for href in ("/console/install", "/console/site-map", "/console/cell"):
             assert page.locator(f'a[href="{href}"]').count() == 1, href
         assert page.locator('.install-link, .device-link').count() == 0

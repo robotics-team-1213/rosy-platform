@@ -41,10 +41,11 @@
 /* 알릴 발행 상태가 있으면 띠가 머리 아래 한 줄을 다 쓴다. 없으면 전체 주행 취소 버튼만 머리 줄에 선다. */
 .roster-block > .dispatch-control { grid-column: 1 / -1; grid-row: 2; }
 .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 2; grid-row: 1; }
+.roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; }
 .roster-block > #roster-toggle { grid-column: 3; grid-row: 1; }
 .console-primary, .console-secondary { min-width: 0; display: grid; gap: var(--space-4); }
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
-.ops-block > h2, .ops-block > .discovery, .ops-block > .console-diagnostics, .ops-block > .log-panel { grid-column: 1 / -1; margin: 0; }
+.ops-block > h2, .ops-block > .console-diagnostics, .ops-block > .log-panel { grid-column: 1 / -1; margin: 0; }
 .ops-block > .formation, .ops-block > .signals { margin: 0; }
 @media (width >= 64rem) {
   .install-tasks { grid-template-columns: var(--sidebar-track) minmax(0, 1fr); }
@@ -180,7 +181,7 @@ body {
 /* D-421 — 재허가와 전체 주행 취소는 글 뒤에서 오른쪽에 붙어 선다(한 열 단에서는 글 아래). */
 .dispatch-control > div { margin-right: auto; }
 .dispatch-control[hidden] { display: none; }
-/* D-488 — 발행 제어가 없는 Fleet·확인 중에는 알릴 상태가 없다. 띠는 전체 주행 취소 버튼 한 줄로 준다. */
+/* D-493 — 발행 제어가 없는 Fleet·확인 중에는 알릴 상태가 없다. 띠는 전체 주행 취소 버튼 한 줄로 준다. */
 .dispatch-control:is(:not([data-state]), [data-state="absent"]) { justify-content: flex-end; padding: 0; border: 0; background: none; }
 .dispatch-control:is(:not([data-state]), [data-state="absent"]) :is(#dispatch-control-title, #dispatch-control-detail) { display: none; }
 
@@ -199,7 +200,7 @@ main {
 /* 현장과 개입 영역을 나눈다. 로봇 목록은 오른쪽에서 독립적으로 스크롤한다.
    두 열은 wide 단에서만이다 — 그 아래는 한 열이다(62rem 겹침에서 생기던 암시적 열을 없앤다). */
 @media (width >= 64rem) {
-  /* D-488 — 지도가 주인공이다: 왼쪽 3, 오른쪽 열 2. 오른쪽 열은 발행·예외·로봇·카메라·대형·기록을 쌓는다.
+  /* D-493 — 지도가 주인공이다: 왼쪽 3, 오른쪽 열 2. 오른쪽 열은 발행·예외·로봇·카메라·대형·기록을 쌓는다.
      지도는 첫 화면 높이를 채운다(D-201: 1920×1080에서 문서가 스크롤되지 않는다). */
   main { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); padding-bottom: var(--space-1); }
   .console-primary { grid-column: 1; }
@@ -221,18 +222,6 @@ main {
 }
 
 
-@media (width >= 110rem) {
-  /* 설치 화면: 원본과 보정 경기장을 카메라 칸 안에서 나란히 둔다(D-201). */
-  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: var(--space-3);
-    align-items: start;
-  }
-  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > * { grid-column: 1 / -1; }
-  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > #vision-frame { grid-column: 1; grid-row: 3; }
-  .vision-preview:has(> #field-rectified:not([hidden])):has(> #vision-frame:not([hidden])) > #field-rectified { grid-column: 2; grid-row: 3; margin-top: 0; }
-}
 
 .panel {
   background: var(--panel-fill);
@@ -254,7 +243,7 @@ main {
 .map-head .spacer { flex: 1; }
 
 .map-stage { position: relative; }
-/* D-488 버드아이 — 천장 카메라 원본은 한 번에 한 곳에만 보인다. 지도가 없을 때(접속 전·지도 없음·대기)나
+/* D-493 버드아이 — 천장 카메라 원본은 한 번에 한 곳에만 보인다. 지도가 없을 때(접속 전·지도 없음·대기)나
    운용자가 "크게 보기"를 누르면 지도 칸이 영상을 보이고, 오른쪽 열 썸네일은 접힌다. 빈 지도 안내는 영상 위 한 줄이다. */
 .map-birdseye { display: none; width: 100%; object-fit: contain; background: var(--ground-deep); border-radius: var(--radius-button); }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]) > .map-birdseye:not([hidden]) { display: block; }
@@ -437,7 +426,7 @@ main {
 /* D-415 — 로그 뷰어: 펼침 패널, 기본 8줄, 지우기 버튼. */
 .log-panel { margin-top: var(--space-3); }
 .log-panel > summary { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-label); color: var(--ink-quiet); cursor: pointer; margin-bottom: var(--space-2); }
-/* D-488 — 지우기는 기록 머리 줄 오른쪽에 선다(따로 한 줄을 쓰지 않는다). */
+/* D-493 — 지우기는 기록 머리 줄 오른쪽에 선다(따로 한 줄을 쓰지 않는다). */
 .log-panel { position: relative; }
 .log-toolbar { position: absolute; top: 0; right: 0; display: flex; }
 .log-panel:not([open]) .log-toolbar { display: none; }
@@ -488,11 +477,9 @@ main {
 /* D-417 — 카메라 컴팩트 모드: 소스 없거나 연결 불가면 한 줄로 접는다. */
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .vision-controls,
 .vision-preview:has(> .vision-frame[data-state="waiting"]) .vision-frame,
-.vision-preview:has(> .vision-frame[data-state="waiting"]) .install-link,
 .vision-preview:has(> .vision-frame[data-state="waiting"]) > .hint,
 .vision-preview:has(> .vision-frame[data-state="warn"]) .vision-controls,
 .vision-preview:has(> .vision-frame[data-state="warn"]) .vision-frame,
-.vision-preview:has(> .vision-frame[data-state="warn"]) .install-link,
 .vision-preview:has(> .vision-frame[data-state="warn"]) > .hint { display: none; }
 .vision-preview:has(> .vision-frame[data-state="waiting"]),
 .vision-preview:has(> .vision-frame[data-state="warn"]) { min-height: 0; }
@@ -540,7 +527,7 @@ main {
   #estop small { display: none; }
 }
 
-/* D-488 — 다른 문서로 가는 링크(설치·보정, 현장 지도 편집, Cell)는 머리의 접힘 칸 안에 하나씩이다. 조용한 버튼과 같은 면이다. */
+/* D-493 — 다른 문서로 가는 링크(설치·보정, 현장 지도 편집, Cell)는 머리의 접힘 칸 안에 하나씩이다. 조용한 버튼과 같은 면이다. */
 .topbar-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .topbar-link {
   display: inline-flex;
@@ -571,7 +558,7 @@ main {
   ui-topbar {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto auto auto;
-    /* D-488 — 다른 문서 링크(설치·보정·현장 지도·Cell)는 설정 뒤 접힘 칸에 있다. */
+    /* D-493 — 다른 문서 링크(설치·보정·현장 지도·Cell)는 설정 뒤 접힘 칸에 있다. */
     grid-template-areas: "brand pill clock more estop";
     align-items: center;
     gap: var(--space-2);
@@ -744,7 +731,6 @@ main {
 .stuck-result[data-kind="bad"] { color: var(--ink-on-crit); background: var(--status-crit);
   padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); }
 
-.discovery { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--line-14); }
 .discovery-list { list-style: none; margin: var(--space-3) 0; padding: 0; display: grid; gap: var(--space-2); }
 .discovery-list li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
   padding: var(--space-2); background: var(--surface-raised); border-radius: var(--radius-control); }
@@ -753,7 +739,6 @@ main {
 .discovery-state.verified_online { color: var(--ink); }
 .discovery-state.conflict { color: var(--status-crit); }
 .discovery-state.enrolled { color: var(--ink); }
-.device-link h4 { margin: 0; }
 .enroll-alarm { color: var(--status-crit); font-weight: var(--weight-label); }
 .address-drift { display: grid; gap: var(--space-2); margin: var(--space-2) 0; }
 .address-drift[hidden] { display: none; }
@@ -798,7 +783,7 @@ main {
 .tracking-state[data-state="warn"] { color: var(--status-warn); }
 .sw.tracking { background: transparent; border: 2px solid var(--series-primary); border-radius: 50%; }
 
-/* D-488 — 오른쪽 열을 한 화면에 담는다(D-201). 카메라 칸: 썸네일 왼쪽, 고르기·기록 오른쪽.
+/* D-493 — 오른쪽 열을 한 화면에 담는다(D-201). 카메라 칸: 썸네일 왼쪽, 고르기·기록 오른쪽.
    대형 칸: 대형 왼쪽, 신호등·진단·기록 오른쪽. 지도 칸 아래: 범례와 배경 학습 한 줄, 접힌 도구 한 줄. */
 @media (width >= 64rem) {
   .console-secondary .vision-preview {

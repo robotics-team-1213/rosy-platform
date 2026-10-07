@@ -50,7 +50,7 @@ def test_empty_queues_disappear_by_attribute_not_style():
 
 
 def test_the_queues_panel_heads_the_rail():
-    """D-488 — 지도가 왼쪽 열 전체를 쓰고(3 : 2), 예외 큐는 오른쪽 열 맨 위다(D-201 예외가 먼저).
+    """D-493 — 지도가 왼쪽 열 전체를 쓰고(3 : 2), 예외 큐는 오른쪽 열 맨 위다(D-201 예외가 먼저).
     2026-10-02 회차의 교훈(큐가 지도 아래 963px)은 그대로다: 큐는 지도 밑으로 가지 않는다."""
     styles = (WEB / "styles.css").read_text(encoding="utf-8")
     shell = CONSOLE.read_text(encoding="utf-8")
@@ -61,7 +61,7 @@ def test_the_queues_panel_heads_the_rail():
 
 
 def test_queue_and_roster_attention_share_one_rule():
-    """D-488 — 카드에 빨간 표지(릴레이 끊김)가 붙은 로봇이 큐에 없던 회차(2026-10-07)의 회귀 방지."""
+    """D-493 — 카드에 빨간 표지(릴레이 끊김)가 붙은 로봇이 큐에 없던 회차(2026-10-07)의 회귀 방지."""
     source = ROSTER.read_text(encoding="utf-8")
     assert "function attentionItems(robot)" in source
     assert "return view.stateUnavailable || attentionItems(robot).length > 0;" in source

@@ -42,7 +42,7 @@ function blockWith(button, reason) {
 
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator,
   moveAddress = null, moveAddressBlocked = () => "", confirmedAction }) {
-  // D-488 — 예외 큐와 로봇 카드의 "주의" 보기는 이 한 규칙을 쓴다. 카드에 빨간 표지가 붙은
+  // D-493 — 예외 큐와 로봇 카드의 "주의" 보기는 이 한 규칙을 쓴다. 카드에 빨간 표지가 붙은
   // 로봇이 큐에 없으면 "예외가 먼저"(D-201)가 거짓말이 된다(2026-10-07 회차: 릴레이 끊김).
   function attentionItems(robot) {
     const state = robot.state;
@@ -276,6 +276,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         ? { col: Math.floor(view.map.width / 2), row: Math.floor(view.map.height / 2) }
         : null;
       const canvas = el("map-canvas");
+      // D-493: a goal pick needs the map, so the large camera view yields.
+      if (view.selected) { el("map-stage").dataset.view = "map"; el("birdseye-toggle").setAttribute("aria-pressed", "false"); }
       canvas.classList.toggle("idle", view.selected === null);
       canvas.tabIndex = view.selected ? 0 : -1;
       render();
