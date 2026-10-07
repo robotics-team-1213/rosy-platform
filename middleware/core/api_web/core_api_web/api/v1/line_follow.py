@@ -25,7 +25,7 @@ from core_api_web.api.v1.common import (
 from core_common.domain.tasks import TaskKind
 from core_common.protocol.schemas import DockState, LanePerceptionRequest, LanePerceptionStatus, RobotMode
 from core_api_web.api.deps import Mode
-from core_api_web.api.deps import LineFollowMode, LineStuckRefused
+from core_api_web.api.deps import JunctionRefused, LineFollowMode, LineStuckRefused
 
 
 line_follow_router = APIRouter(prefix="/api/v1/line-follow", tags=["line-follow"])
@@ -206,7 +206,8 @@ class LineJunctionRequest(BaseModel):
 def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(operator),
                       svc: CoreServicesLike = Depends(get_services)):
     """D-491 decision 4 / D-492. Never changes mode; the turn maneuver runs in CORE's own tick.
-    "Seat" is the existing vocabulary (D-460): operator token + calibration lease, as /hold."""
+    "Seat" is the existing vocabulary (D-460): operator token, manual control released and the
+    calibration lease, as the other motion endpoints. CAMERA_LINE only (IR has no junctions)."""
     if body.stop_after_m is not None and body.action != "stop":
         raise ApiError("VALIDATION_ERROR", 400, "stop_after_m belongs to stop")
     if body.turn_deg is not None and (body.action not in ("left", "right") or body.turn_deg == 0
@@ -214,11 +215,13 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
         raise ApiError("VALIDATION_ERROR", 400, "turn_deg is left (+) or right (-) and not 0")
     if body.advance_m is not None and body.turn_deg is None:
         raise ApiError("VALIDATION_ERROR", 400, "advance_m belongs to a turn")
+    require_manual_released(svc)
     require_calibration_owner(svc, auth, "line-follow junction")
-    result = svc.line_follow.set_junction(body.action, body.place_id, body.expires_s,
-                                          body.stop_after_m, body.turn_deg, body.advance_m)
-    if result is None:
-        raise ApiError("LINE_FOLLOW_NOT_ACTIVE", 409, "line-follow must be CAMERA_LINE or IR_LINE")
+    try:
+        result = svc.line_follow.set_junction(body.action, body.place_id, body.expires_s,
+                                              body.stop_after_m, body.turn_deg, body.advance_m)
+    except JunctionRefused as exc:
+        raise ApiError(exc.code, 409, str(exc)) from exc
     svc.state.set_line_follow(svc.line_follow.status())
     return {"accepted": result[0], "junction_seq": result[1], "state": result[2]}
 

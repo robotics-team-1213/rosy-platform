@@ -133,3 +133,14 @@ def test_keep_debug_corner_turning_is_the_junction_turn_evidence(core_client):
         raw = json.dumps({"reason": "no_boundary", "stamp": 100.0, "corner_turning": corner})
         observation.keep_junction(services, raw, source_now=100.1, received_at=clock["t"])
         assert services.line_follow.supports_junction_turn is expected
+
+
+def test_refused_while_manual_control_is_active(core_client):
+    """Review L6: the same manual-released rule as the other motion endpoints."""
+    client, services = core_client()
+    services.state.set_velocity(0.0, 0.0)
+    assert client.post("/api/v1/mode", json={"mode": "MANUAL"}, headers=OPERATOR).status_code == 200
+    assert client.post("/api/v1/teleop", json={"linear": 0.05, "angular": 0.0},
+                       headers=OPERATOR).status_code == 200
+    refused = client.post(URL, json=BODY, headers=OPERATOR)
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "MODE_CONFLICT"

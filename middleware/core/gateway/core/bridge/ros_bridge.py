@@ -346,7 +346,7 @@ class RosBridge:
         self._svc.vision.lane_perception.accept(
             msg.data, now=time.monotonic(),
             source_now=self._node.get_clock().now().nanoseconds / 1e9)
-        observation.keep_junction(  # D-491: keeper junction HOLD reason, stop input only
+        observation.keep_junction(  # D-491/D-492: junction sighting (holds; starts a turn)
             self._svc, msg.data, source_now=self._node.get_clock().now().nanoseconds * 1e-9,
             received_at=self._line_clock())
 
