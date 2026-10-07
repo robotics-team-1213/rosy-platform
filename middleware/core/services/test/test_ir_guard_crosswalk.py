@@ -167,3 +167,13 @@ def test_chained_detections_cannot_extend_the_rest_past_the_budget():
     assert not rests[-1] and r[1].status().reason == "lane_departure"
     step(r, t + 0.05, x + 0.01, crosswalk=(0.0, 0.25))          # IR clear once re-arms
     assert step(r, t + 0.1, x + 0.02, ir_error=0.0, crosswalk=(0.0, 0.25)).linear > 0
+
+
+def test_a_stale_ir_reading_does_not_re_arm_a_spent_rest():
+    r = rig()
+    t, x = 1.0, 0.0
+    for _ in range(60):
+        t, x = t + 0.05, x + 0.01
+        step(r, t, x, ir_error=0.0, crosswalk=(0.0, 0.25))
+    step(r, t + 0.05, x + 0.01, ir_error=0.0, crosswalk=(0.0, 0.25), ir_calibrated=False)
+    assert step(r, t + 0.1, x + 0.02, ir_error=0.0, crosswalk=(0.0, 0.25)).linear == 0

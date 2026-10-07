@@ -46,11 +46,11 @@ class LaneReturnMixin(LaneReturnDecisionMixin):
             self._confident_frames = self._confident_frames+1 if confident else 0
         return accepted
 
-    def _crosswalk_rest(self, now, firing):
+    def _crosswalk_rest(self, now, guard):
         """D-491: called every guarded tick; True when the firing IR guard may rest in a crosswalk."""
         c = self._config
         return c.ir_row_x_m is not None and self._crosswalks.holds(
-            self._return_evidence, now=now, firing=firing, ir_x=c.ir_row_x_m,
+            self._return_evidence, now=now, guard=guard, ir_x=c.ir_row_x_m,
             max_length=c.crosswalk_zone_max_m, odom_error_fraction=c.crosswalk_odom_error_fraction)
 
     def return_evidence(self, *, now=None):

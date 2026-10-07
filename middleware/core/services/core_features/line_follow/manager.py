@@ -435,7 +435,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin):
         guard = None
         if self._mode is LineFollowMode.CAMERA_LINE and self._config.ir_guard_enabled:
             guard = self._ir_guard(current)
-            if self._crosswalk_rest(current, guard in ("left", "right", "centre")):
+            if self._crosswalk_rest(current, guard):
                 guard = "crosswalk"  # D-491: known crosswalk under the IR row
         if self._clearance_at is not None:
             # 앞 물체 정지는 차선 상실이 아니다 — LOST 로 누적하지 않고 치워지면 곧바로 간다.
