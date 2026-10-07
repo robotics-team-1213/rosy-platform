@@ -12,6 +12,13 @@ import cv2
 import numpy as np
 
 
+#: Half the painted line width. The keeper fits the paint centre; the containment payload
+#: sends the paint's inner (drivable) edge, so each boundary moves this far toward the lane,
+#: and the G-16 fit band is this plus one fit cell. 260919 STL straights: tape 25.0 mm,
+#: centres 185 mm apart (lane_half_width_m 0.0925), the map bundle's own lane_graph.py
+#: clearance basis. STL nominal, unmeasured: a tape measurement of the physical mat replaces
+#: it. Tested against the STL; node parameter lane_paint_half_width_m.
+PAINT_HALF_WIDTH_M = 0.0125
 #: Tape is 2-4 cm: RANSAC inlier half-band and the flank band that must stay dark.
 CORE_HALF_M = 0.025
 FLANK_INNER_M = 0.035
@@ -106,6 +113,13 @@ def floor_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
     return mask
 
 
+def paint_half_width(value):
+    """``value`` as a float; a negative (edges moved outward, past the paint) or non-finite one is refused."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+        raise ValueError("lane_paint_half_width_m must be a finite number >= 0")
+    return float(value)
+
+
 def _median_filter_1d(values: np.ndarray, size: int) -> np.ndarray:
     pad = size // 2
     padded = np.pad(values.astype(np.float64), pad, mode="edge")
@@ -146,11 +160,12 @@ def _paint_fit(points, centre, direction, lo, hi, half_m, usable):
     ``usable`` (floor points -> bool): seen by the camera (near the robot the frame's side
     edges cut the outer part of the tape, and the inner rest leans the axis) and, as the
     caller decides, outside a crosswalk (whose bars beside the line would join the band).
-    Twice, so the band follows the corrected axis. Returns (centre, direction, slope_sd):
-    slope_sd is the standard error of dy/dx from the fit's residuals and along spread, or
-    None when the visible whole cross-sections are fewer than MIN_LINE_CELLS or shorter
-    than MIN_LINE_LENGTH_M (the axis then comes from every band cell, truncated ones
-    included, and states no slope error)."""
+    Twice, so the band follows the corrected axis. Returns (centre, direction, errors):
+    errors is (slope_sd, offset_sd), the standard errors of dy/dx and of the line at the
+    fit's centroid, from the fit's residuals; or None, with the given centre and direction
+    unchanged, when the visible whole cross-sections are fewer than MIN_LINE_CELLS or
+    shorter than MIN_LINE_LENGTH_M (a truncated fit would only move the steering axis)."""
+    given = centre, direction, None
     normal = np.array([-direction[1], direction[0]])
     ends = (centre + direction * lo, centre + direction * hi)
     for _ in range(2):
@@ -161,13 +176,11 @@ def _paint_fit(points, centre, direction, lo, hi, half_m, usable):
         foot = centre + np.outer((band - centre) @ direction, direction)
         seen = usable(foot + normal * half_m) & usable(foot - normal * half_m)
         whole = seen.sum() >= MIN_LINE_CELLS and np.ptp((band[seen] - centre) @ direction) >= MIN_LINE_LENGTH_M
-        fit = band[seen] if whole else band
-        if len(fit) < 3:
-            return centre, direction, None
+        if not whole:
+            return given
+        fit = band[seen]
         centre, direction = _fit_axis(fit)
         normal = np.array([-direction[1], direction[0]])
-    if not whole:
-        return centre, direction, None
     # Slope error from the cross-section centres (one per grid row x: the tape's own width
     # is not scatter), regressed on x: the standard error of dy/dx. The residual is floored
     # at the grid's quantization (one row step, uniform: step / sqrt(12)), so paint that
@@ -175,11 +188,12 @@ def _paint_fit(points, centre, direction, lo, hi, half_m, usable):
     rows, index = np.unique(fit[:, 0], return_inverse=True)
     mids = np.bincount(index, fit[:, 1]) / np.bincount(index)
     if len(rows) < 3:
-        return centre, direction, None
+        return given
     slope, offset = np.polyfit(rows, mids, 1)
     variance = max(float(np.sum((mids - slope * rows - offset) ** 2)) / (len(rows) - 2),
                    float(np.diff(rows).min()) ** 2 / 12.0)
-    return centre, direction, math.sqrt(variance / float(np.sum((rows - rows.mean()) ** 2)))
+    return centre, direction, (math.sqrt(variance / float(np.sum((rows - rows.mean()) ** 2))),
+                               math.sqrt(variance / len(rows)))
 
 
 def fit_cells(seen, crosswalk):
@@ -195,8 +209,8 @@ def extract_lines(points: np.ndarray, rng: np.random.Generator, *, usable=None, 
     """Thin straight paint lines in `points` (N x 2, metres). Returns
     (lines, blobs): each a dict with centre, direction, along range, cells.
     With ``usable`` (floor points -> bool, see _paint_fit) and ``paint_half_m``,
-    each line's final axis is the _paint_fit one and the line also carries its slope_sd
-    (G-16); without them the fit is the found piece's, as before."""
+    each line's final axis is the _paint_fit one and the line also carries its slope_sd and
+    offset_sd (G-16); without them the fit is the found piece's, as before."""
     lines, blobs = [], []
     remaining = points
     for _ in range(MAX_LINES):
@@ -246,11 +260,11 @@ def extract_lines(points: np.ndarray, rng: np.random.Generator, *, usable=None, 
         fitted_along = (remaining[piece] - fitted_centre) @ fitted_direction
         extra = {}
         if usable is not None:
-            fitted_centre, fitted_direction, slope_sd = _paint_fit(
+            fitted_centre, fitted_direction, errors = _paint_fit(
                 points, fitted_centre, fitted_direction, float(fitted_along.min()),
                 float(fitted_along.max()), paint_half_m, usable)
             fitted_along = (remaining[piece] - fitted_centre) @ fitted_direction
-            extra = {"slope_sd": slope_sd}
+            extra = dict(zip(("slope_sd", "offset_sd"), errors or (None, None)))
         entry = {"centre": fitted_centre, "direction": fitted_direction,
                  "along": (float(fitted_along.min()), float(fitted_along.max())),
                  "cells": int(piece.sum()),

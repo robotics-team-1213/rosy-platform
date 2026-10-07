@@ -21,13 +21,8 @@ import math
 import numpy as np
 
 from .camera_extrinsic import FINE_STEPS, PC_FINE_STEPS
+from .lane_keep_lines import PAINT_HALF_WIDTH_M, paint_half_width  # noqa: F401 -- one value with the keeper
 
-#: Half the painted line width. The keeper fits the paint centre; the payload sends the
-#: paint's inner (drivable) edge, so each boundary moves this far toward the lane. 260919
-#: STL straights: tape 25.0 mm, centres 185 mm apart (lane_half_width_m 0.0925), the map
-#: bundle's own lane_graph.py clearance basis. STL nominal, unmeasured: a tape measurement
-#: of the physical mat replaces it. Tested against the STL; node parameter lane_paint_half_width_m.
-PAINT_HALF_WIDTH_M = 0.0125
 #: Lateral error of the lane edge detector in image pixels on the Gazebo camera (547b2d509).
 #: Real grounds take theirs from the profile key detector_lateral_px.
 GAZEBO_DETECTOR_LATERAL_PX = 2.0
@@ -40,14 +35,15 @@ ROLL_LEVELS = 7
 #: Raise on the sampled worst for roll between levels: the 0.3 % gap above with 3 levels,
 #: times about seven for safety. Checked by the 21-level test truths.
 SAMPLING_MARGIN = 0.02
-#: G-16: the fit's own slope error, added to the projection error. A boundary's keeper
-#: slope_sd (standard error of dy/dx, lane_keep_lines._paint_fit) times SLOPE_SIGMAS, times
-#: the lever from the fit centroid (inside the support) to the farthest x the receiver uses,
-#: bounded by the support length + RECEIVER_EXTRAPOLATION_M. 2 sigma, times sqrt(2): the fit
+#: G-16: the fit's own error, added to the projection error: SLOPE_SIGMAS times (the keeper's
+#: slope_sd, standard error of dy/dx from lane_keep_lines._paint_fit, times the lever from the
+#: fit centroid (inside the support) to the farthest x the receiver uses, bounded by the
+#: support length + RECEIVER_EXTRAPOLATION_M; plus its offset_sd, the line's standard error
+#: at the centroid). 2 sigma, times sqrt(2): the fit
 #: rows are 5 mm apart and far out one image row spans up to 1 cm (lane_bev BEV_MAX_RANGE_M),
 #: so up to two rows read one pixel row and the standard error counts them as independent.
-#: A selected boundary without a slope_sd (only truncated paint, or a keeper that does not
-#: state it) leaves uncertainty_m None.
+#: A selected boundary without both (only truncated paint, or a keeper that does not state
+#: them) leaves uncertainty_m None.
 SLOPE_SIGMAS = 2.0*math.sqrt(2.0)
 
 
@@ -169,13 +165,6 @@ def projection_uncertainty_m(ground, error, segments):
     return min(worst*(1+SAMPLING_MARGIN), 1.0)
 
 
-def paint_half_width(value):
-    """``value`` as a float; a negative (edges moved outward, past the paint) or non-finite one is refused."""
-    if not (_real(value) and value >= 0):
-        raise ValueError("lane_paint_half_width_m must be a finite number >= 0")
-    return float(value)
-
-
 def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bounds=None,
                         paint_half_width_m=PAINT_HALF_WIDTH_M):
     paint_half_width_m = paint_half_width(paint_half_width_m)
@@ -200,10 +189,10 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bou
         boundaries.append(dict(side=edge["side"], slope=slope, intercept_m=intercept,
             observed_x_min_m=min(float(first[0]), float(last[0])),
             observed_x_max_m=max(float(first[0]), float(last[0]))))
-        slope_sd = edge.get("slope_sd")
+        sds = (edge.get("slope_sd"), edge.get("offset_sd"))
         lever = abs(dx)+RECEIVER_EXTRAPOLATION_M
-        slope_error = (max(slope_error, SLOPE_SIGMAS*float(slope_sd)*lever)
-                       if slope_error is not None and _real(slope_sd) and slope_sd >= 0 else None)
+        slope_error = (max(slope_error, SLOPE_SIGMAS*(float(sds[0])*lever+float(sds[1])))
+                       if slope_error is not None and all(_real(v) and v >= 0 for v in sds) else None)
     # GAZEBO (allow_simulation_ground only): exact sim geometry, only the detector's pixels.
     # NOMINAL/CALIBRATED without a stated geometry error stay None: the receiver must not
     # replace that null with a safe tolerance. Segments are taken from the lens (x - camera_x).

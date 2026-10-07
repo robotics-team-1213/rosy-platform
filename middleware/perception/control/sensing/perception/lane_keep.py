@@ -67,7 +67,6 @@ import numpy as np
 from .lane import LaneObservation
 from .crosswalk_stripes import crosswalk_extent
 from .lane_bev import BEV_CELL_M, BirdsEye
-from .lane_containment import PAINT_HALF_WIDTH_M
 from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tests
     CORE_HALF_M,
     FLANK_INNER_M,
@@ -95,7 +94,7 @@ from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tes
     _validate_positive,
     clean_learned_mask,
     denoise_white_mask,
-    extract_lines, fit_cells,
+    extract_lines, fit_cells, PAINT_HALF_WIDTH_M, paint_half_width,
     floor_white_mask,
 )
 from .lane_keep_pairs import (  # noqa: F401 — re-exported; patch constants on lane_keep_pairs
@@ -205,7 +204,7 @@ class LaneKeeper:
     def __init__(self, *, camera_x_offset_m: float = 0.0,
                  lookahead_m: float = LOOKAHEAD_M,
                  smoothing: float = 0.5, seed: int = 0,
-                 corner_turning: bool = False) -> None:
+                 corner_turning: bool = False, paint_half_width_m: float = PAINT_HALF_WIDTH_M) -> None:
         if (isinstance(camera_x_offset_m, bool)
                 or not isinstance(camera_x_offset_m, (int, float))
                 or not math.isfinite(camera_x_offset_m)):
@@ -219,6 +218,7 @@ class LaneKeeper:
         self._smoothing = float(smoothing)
         self._seed = int(seed)
         self._corner_turning = bool(corner_turning)
+        self._fit_half = paint_half_width(paint_half_width_m) + FIT_STRIDE * BEV_CELL_M  # G-16 fit band
         self._view = None
         self._view_key = None
         self._previous_target = None
@@ -308,7 +308,7 @@ class LaneKeeper:
         if len(points) > MAX_POINTS:
             points = points[rng.choice(len(points), MAX_POINTS, replace=False)]
         lines, blobs = extract_lines(points, rng, usable=fit_cells(view.seen, self.last["crosswalk"]),  # G-16
-                                     paint_half_m=PAINT_HALF_WIDTH_M + FIT_STRIDE * BEV_CELL_M) if len(points) else ([], [])
+                                     paint_half_m=self._fit_half) if len(points) else ([], [])
         self.last["blobs"] = len(blobs)
         previous = self._previous_target
         left, right, transverse = [], [], []
@@ -316,7 +316,7 @@ class LaneKeeper:
             centre, direction = line["centre"], line["direction"]
             heading = math.atan2(direction[1], direction[0])
             ends = [centre + direction * line["along"][0], centre + direction * line["along"][1]]
-            record = {"slope_sd": line["slope_sd"], "heading_deg": round(math.degrees(heading), 1),
+            record = {"slope_sd": line.get("slope_sd"), "offset_sd": line.get("offset_sd"), "heading_deg": round(math.degrees(heading), 1),
                       "length_m": round(line["along"][1] - line["along"][0], 3),
                       "ends_m": [[round(float(p[0]), 3), round(float(p[1]), 3)] for p in ends],
                       "ends_px": [self.to_pixel(ground, float(p[0]), float(p[1])) for p in ends]}

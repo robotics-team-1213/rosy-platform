@@ -7,6 +7,7 @@ line. The fit now uses whole visible cross-sections outside the crosswalk, and u
 carries the fit's slope error.
 """
 import math
+import re
 from pathlib import Path
 
 import cv2
@@ -89,8 +90,22 @@ def test_without_usable_the_fit_and_entries_are_as_before():
     assert all("slope_sd" not in e for e in lines)
 
 
-def keeper(slope_sd, length=.15, far=.33):
-    return {"boundaries": [dict(selected=True, side=side, slope_sd=slope_sd, ends_m=[[far-length, y], [far, y]])
+def test_too_little_whole_paint_keeps_the_found_axis_and_states_no_error():
+    # Nothing usable: no whole cross-section, so the steering axis must stay the found piece's.
+    points = np.stack([VIEW.x[::FIT_STRIDE, ::FIT_STRIDE][TAPES[::FIT_STRIDE, ::FIT_STRIDE] & VIEW.observable[::FIT_STRIDE, ::FIT_STRIDE]],
+                       VIEW.y[::FIT_STRIDE, ::FIT_STRIDE][TAPES[::FIT_STRIDE, ::FIT_STRIDE] & VIEW.observable[::FIT_STRIDE, ::FIT_STRIDE]]], axis=1)
+    plain, _ = extract_lines(points, np.random.default_rng(0))
+    blind, _ = extract_lines(points, np.random.default_rng(0), usable=lambda xy: np.zeros(len(xy), bool), paint_half_m=FIT_HALF)
+    assert len(plain) == len(blind) == 2
+    for a, b in zip(plain, blind):
+        assert np.array_equal(a["centre"], b["centre"]) and np.array_equal(a["direction"], b["direction"])
+        assert a["along"] == b["along"]
+        assert b["slope_sd"] is None and b["offset_sd"] is None
+
+
+def keeper(slope_sd, length=.15, far=.33, offset_sd=0.):
+    return {"boundaries": [dict(selected=True, side=side, slope_sd=slope_sd, offset_sd=offset_sd,
+                                ends_m=[[far-length, y], [far, y]])
                            for side, y in (("left", LANE_Y), ("right", -LANE_Y))]}
 
 
@@ -98,21 +113,43 @@ def uncertainty(k):
     return containment_payload(k, gazebo_ground(), stamp=1., source="GAZEBO", camera_x=CAMERA_X)["uncertainty_m"]
 
 
-def test_uncertainty_adds_the_slope_error_over_the_receiver_lever():
+def test_uncertainty_adds_the_fit_error_over_the_receiver_lever():
     projection = uncertainty(keeper(0.))
     assert uncertainty(keeper(.01)) == pytest.approx(projection+SLOPE_SIGMAS*.01*(.15+RECEIVER_EXTRAPOLATION_M))
+    assert uncertainty(keeper(.01, offset_sd=.002)) == pytest.approx(
+        projection+SLOPE_SIGMAS*(.01*(.15+RECEIVER_EXTRAPOLATION_M)+.002))
     # Larger slope error states more; the slope term grows with the lever (support + extrapolation).
     assert uncertainty(keeper(.02)) > uncertainty(keeper(.01)) > projection
     term = {length: uncertainty(keeper(.01, length, .43))-uncertainty(keeper(0., length, .43)) for length in (.15, .25)}
     assert term[.25] > term[.15]
 
 
-@pytest.mark.parametrize("slope_sd", [None, float("nan"), -1.])
-def test_a_boundary_without_a_stated_slope_error_leaves_uncertainty_unknown(slope_sd):
-    assert uncertainty(keeper(slope_sd)) is None
-    k = keeper(0.)
-    del k["boundaries"][0]["slope_sd"]
-    assert uncertainty(k) is None
+@pytest.mark.parametrize("bad", [None, float("nan"), -1.])
+def test_a_boundary_without_a_stated_fit_error_leaves_uncertainty_unknown(bad):
+    assert uncertainty(keeper(bad)) is None
+    assert uncertainty(keeper(0., offset_sd=bad)) is None
+    for key in ("slope_sd", "offset_sd"):
+        k = keeper(0.)
+        del k["boundaries"][0][key]
+        assert uncertainty(k) is None
+
+
+def test_receiver_extrapolation_is_the_d468_receivers():
+    # The slope lever must cover what core_features.line_follow.lane_return_evidence extrapolates.
+    source = (REPO / "middleware" / "core" / "services" / "core_features" / "line_follow" /
+              "lane_return_evidence.py").read_text(encoding="utf-8")
+    (value,) = re.findall(r"^\s+MAX_EXTRAPOLATION_M = ([0-9.]+)\s*$", source, flags=re.M)
+    assert float(value) == RECEIVER_EXTRAPOLATION_M
+
+
+def test_keeper_and_containment_share_one_paint_half_width():
+    from control.sensing.perception import lane_containment, lane_keep_lines
+    assert lane_containment.PAINT_HALF_WIDTH_M is lane_keep_lines.PAINT_HALF_WIDTH_M
+    node = (REPO / "middleware" / "perception" / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    # The node hands its validated read-only lane_paint_half_width_m to the keeper too.
+    assert "paint_half_width_m=self._paint_half_width_m)" in node.split("LaneKeeper(", 1)[1].split(")\n", 1)[0] + ")"
+    with pytest.raises(ValueError):
+        LaneKeeper(paint_half_width_m=-.001)
 
 
 def margin(boundaries):
