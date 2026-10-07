@@ -123,8 +123,8 @@ x −1.15…−0.97 TRACKING 틱 383 중 370이 |ω| ≤ 0.08(중앙 0.063, p90 
 
 ## B9·B9b에 넘기는 것
 
-- 고정 자료: `fixtures/b8_keeper_clips.npz` (89 프레임, 3,412,799 bytes, sha256
-  `35bc08e1a859a8d8033c0d31cddb5717cf497665d28309ead7724d222e6504bb`). `frames` uint8 (N, 240, 320, 3) BGR, `meta` JSON
+- 고정 자료: `fixtures/b8_keeper_clips.npz` (89 프레임, 3,412,799 bytes,
+  SHA-256 `35bc08e1a859a8d8033c0d31cddb5717cf497665d28309ead7724d222e6504bb`). `frames` uint8 (N, 240, 320, 3) BGR, `meta` JSON
   (clip, run, stamp, 참값 gt, event, live strategy/reason/error). 클립 7개를 `LaneKeeper.reset()`에서 위 keeper 설정
   (`evidence/b8_replay.py`의 `ground`)으로 재생하면 각 클립의 event 프레임이 live와 같은 전략·사유를 낸다.
 

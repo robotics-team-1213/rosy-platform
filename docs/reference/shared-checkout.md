@@ -37,11 +37,13 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    `AGENTS.md`의 Working In This Directory를 읽는다. 외부 API, 모드, 프로토콜
    필드는 그 문서가 가리키는 SRS, API reference, ADR에 있는 것만 쓴다. 읽기가
    끝난 기준은 바꾸려는 경로의 모듈 `AGENTS.md` 또는 해당 ADR을 연 것이다.
-4. **ADR 번호는 파일을 만들기 직전에 다시 고른다.** 다른 세션이 몇 분 사이에
-   같은 번호를 가져간다. `docs/adr`, ADR Log의 `| D-nnn |` 행,
-   `tools/harness/harness.yaml`의 `adr_gaps`, 다른 브랜치의 `docs/adr`를 보고
-   빈 번호의 다음을 쓴다. ADR 파일과 Log 행은 한 커밋이다. 조회 명령은
-   `AGENTS.md`의 「같이 하는 깃」 4번에 적혀 있다.
+4. **ADR 번호는 파일을 만들기 직전에 도구로 선점한다.** 다른 세션이 몇 분 사이에
+   같은 번호를 가져간다. `python tools/harness/adr_reserve.py next "<주제>"`를
+   돌리고 찍힌 번호를 쓴다. 도구가 로컬 ref `refs/adr/D-nnn`을 만들고, 같은 ref는
+   한 세션만 만들 수 있다(D-510). 그 ADR이 브랜치와 같이 착지하지 않거나 충돌로
+   못 쓰게 되면 `tools/harness/adr_gaps.txt`에 `D-nnn 이유` 한 줄을 넣는다.
+   ADR 파일과 Log 행은 한 커밋이다. 자세한 내용은 `AGENTS.md`의 「같이 하는 깃」
+   4번에 적혀 있다.
 5. **테스트는 기존 실패와 비교한다.** 워크트리에서 관련 pytest 결과를 저장소
    밖의 `run.txt`에 남기고 `python test/known_failures.py`에 그 파일을 넘긴다.
    실험실 PC의 경로는 `X:\DevTemp\<이름>\run.txt`다. exit 1의 `NEW`는 그

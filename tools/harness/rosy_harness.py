@@ -29,6 +29,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), also when loaded by path
 import sim2real  # noqa: E402
+from adr_gaps import (  # noqa: E402,F401
+    ADR_GAPS, ADR_ID, load_adr_gaps, parse_adr_gaps, reservation_warnings, reserved_adrs, validate_adr_log,
+)
 
 CONFIG = Path("tools") / "harness" / "harness.yaml"
 GATES = ("SOURCE", "LOCAL", "ROS-SIM", "ARTIFACT", "DEVICE", "FIELD")
@@ -47,7 +50,6 @@ UNCOMMITTED = "uncommitted"
 KNOWN_LOG_ENCODING_REPAIRS = yaml.safe_load(
     Path(__file__).with_name("log_repairs.yaml").read_text(encoding="utf-8"))
 
-ADR_ID = re.compile(r"^D-(\d+)$")
 COMMIT = re.compile(rf"^(?:[0-9a-f]{{7,40}}|{UNCOMMITTED})$")
 LOGICAL_MODULE = re.compile(r"^M\d{2}$")
 LOG_HEADING = re.compile(rf"^## (\d{{4}}-\d{{2}}-\d{{2}}) · ([0-9a-f]{{7,40}}|{UNCOMMITTED}) · (\S.*)$")
@@ -404,26 +406,6 @@ def parse_adr_log(text: str, adr_dir: Path | None = None) -> AdrLog:
                   index_duplicates=tuple(index_duplicates))
 
 
-def validate_adr_log(adr: AdrLog, gaps: dict[str, str]) -> list[str]:
-    errors = [f"{adr_id}: duplicate body section" for adr_id in adr.duplicates]
-    errors += [f"{adr_id}: duplicate index row" for adr_id in adr.index_duplicates]
-    for adr_id in sorted(set(adr.bodies) - set(adr.index), key=_adr_number):
-        errors.append(f"{adr_id}: body section missing from index")
-    for adr_id in sorted(set(adr.index) - set(adr.bodies), key=_adr_number):
-        errors.append(f"{adr_id}: index row has no body section")
-
-    present = set(adr.index) | set(adr.bodies)
-    highest = max((_adr_number(i) for i in present), default=0)
-    for number in range(1, highest + 1):
-        adr_id = f"D-{number}"
-        if adr_id not in present and adr_id not in gaps:
-            errors.append(f"{adr_id}: missing and not declared in adr_gaps")
-    for adr_id in sorted(gaps, key=_adr_number):
-        if adr_id in present:
-            errors.append(f"{adr_id}: declared gap now exists; remove it from adr_gaps")
-    return errors
-
-
 # --- rendering -------------------------------------------------------------
 
 
@@ -729,7 +711,10 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
 
     adr_text = (repo / config["adr_log"]).read_text(encoding="utf-8")
     adr = parse_adr_log(adr_text, repo / "docs" / "adr")
-    errors += [f"ADR log: {e}" for e in validate_adr_log(adr, config.get("adr_gaps") or {})]
+    gaps, gap_errors = load_adr_gaps(repo, config)
+    errors += [f"{ADR_GAPS.as_posix()}: {e}" for e in gap_errors]
+    errors += [f"ADR log: {e}" for e in validate_adr_log(adr, gaps)]
+    warnings += [f"ADR log: {w}" for w in reservation_warnings(adr, gaps, reserved_adrs(repo))]
     if config.get("sim2real_gaps"):
         registry, problem = sim2real.load(repo / config["sim2real_gaps"])
         gap_errors, gap_warnings = ([problem], []) if problem else sim2real.validate(registry, repo, set(adr.index))

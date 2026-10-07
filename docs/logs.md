@@ -6846,3 +6846,42 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 줄 단위 합집합은 여러 줄 항목의 같은 줄을 하나로 접는다. 추가 전용 로그는 블록 단위로 잇는다.
+
+## 2026-10-07 · uncommitted · feat(harness): D-508 union 머지와 ADR 번호 선점 도구
+
+- 변경: `.gitattributes`에 `merge=union`(ADR Log, 모든 `logs.md`, `tools/harness/adr_gaps.txt`). `adr_gaps`를 `harness.yaml`에서 줄 파일 `tools/harness/adr_gaps.txt`로 옮겼다(18줄, lint는 번호로 중복 제거, 이행 기간에 yaml도 읽음). `tools/harness/adr_reserve.py next|list|release`가 `refs/adr/D-nnn`을 create-only로 만들어 번호를 선점한다. lint는 선점 ref 번호를 gap으로 본다. `AGENTS.md`·`shared-checkout.md`·`rosy-land-on-main`·`team-guide.md`·`docs/adr/AGENTS.md`의 4단계를 이 도구로 바꿨다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 120 passed, `known_failures.py` 0 new. 임시 저장소에서 BOM·CRLF Log에 두 브랜치가 행을 더해도 충돌 없이 두 행이 남는다. `rosy_harness.py lint` 0 errors. 실제 저장소 스캔은 브랜치 723개·워크트리 289개에서 약 4초.
+- gate 변화: 없음
+- 결정: D-508 Accepted (2026-10-07, 사용자 결정)
+- 교훈: 이어 쓰기만 하는 파일의 충돌은 내장 union 드라이버로 없앨 수 있다. 번호 경합은 조회를 늘려서가 아니라 원자적 ref 생성으로 막는다.
+
+## 2026-10-07 · uncommitted · fix(harness): D-508 리뷰 반영 — logs.md는 union에서 빼고 선점 ref는 경고만
+
+- 변경: 독립 리뷰를 반영했다. union은 한 줄이 한 기록인 ADR Log와 `adr_gaps.txt`에만 둔다. union은 두 쪽이 똑같이 더한 끝줄(`- 결정: 없음` 등)을 하나로 합쳐 `logs.md` 항목을 깎으므로 `logs.md`는 계속 충돌하게 둔다. 직전 항목의 "모든 `logs.md`" union 설명은 이 항목이 바로잡는다. lint는 로컬 `refs/adr` 선점을 gap으로 보지 않고 경고만 한다(CI에는 그 ref가 없다). `adr_reserve.py`는 ref가 실제로 있을 때만 다음 번호로 넘어가고, `--remotes`도 보고, 가장 큰 번호의 출처를 찍고, main 최대보다 20 넘게 큰 번호는 경고하고 무시하며, `release`는 `--reason` 일치나 `--force`를 요구한다. D-508 본문이 D-346 4항 개정과 "중복 행이 생기면 새 상태의 행을 남긴다"를 적는다. 4단계 문구에 착지하지 않는 선점 번호를 push 전에 `adr_gaps.txt`에 넣는 규칙을 더했다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 123 passed, `known_failures.py` 0 new. 임시 저장소 시험: `logs.md` 두 항목 추가는 충돌하고, union으로 바꾸면 끝줄이 사라진다. Log 두 행은 충돌 없이 남고, Status 수정+행 추가는 lint 중복 행 오류가 된다. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음
+- 결정: D-508 Accepted 본문 개정(브랜치 안, 미착지)
+- 교훈: union 드라이버는 같은 줄을 합치므로 여러 줄 기록 파일에는 맞지 않는다. 로컬 상태로 lint를 통과시키면 CI와 결과가 갈린다.
+
+## 2026-10-07 · uncommitted · docs(adr): union 머지·번호 선점 ADR은 D-510 (D-508에서 이동)
+
+- 변경: 이 브랜치의 앞 두 항목이 D-508이라 부른 결정은 D-510이다. 브랜치가 D-508을 `refs/adr`로 선점해 두었지만, 동료 세션이 도구 없이 main에 다른 D-508(제어 고리)과 D-509를 넣었다. `adr_reserve.py next`가 D-510을 찍었고 ADR 파일·Log 행·규칙 문구·코드 주석을 옮겼다. 옛 선점은 `release D-508 --force`로 풀었다. `git merge main` 뒤 ADR Log는 union으로 충돌 없이 합쳐졌다(행 순서만 D-510, D-508, D-509). main이 지운 D-499 gap을 `adr_gaps.txt`에서도 지웠다. `adr_reserve.py` 역사 파서는 출처 줄을 NUL로 구분하고(diff `@@` 줄을 출처로 읽던 결함), lint 경고는 브랜치 최대 번호보다 작은 선점에만 낸다. D-346 Status에 4항 개정 표시를 더했다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 123 passed, `known_failures.py` 0 new. 옛 파서로 바꾸면 출처 시험이 `'@ -0,0 +1 @@'`로 실패한다. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음
+- 결정: D-510 Accepted (2026-10-07, 사용자 결정), 본문은 D-508로 쓴 것과 같다
+- 교훈: 도구가 있어도 쓰지 않는 세션이 있으면 번호는 겹친다. 이 충돌 자체가 D-510의 근거다.
+
+## 2026-10-07 · uncommitted · fix(test): 브라우저 시험 기반 — 안전 포트, 옵트인 이름 하나, 범위 지도
+- 변경: `test/browser_harness.py`에 Chromium 차단 포트 목록(`port_util.cc` kRestrictedPorts)·`safe_listener()`·`free_port()`·`browser_tests_enabled()`를 두고 Fleet·로봇 UI·Pilot·OMX pilot-sim·검수 앱 브라우저 fixture가 port 0 대신 쓴다. 옵트인은 `ROSY_RUN_BROWSER_TESTS=1`이 정식이고 `ROSY_BROWSER_TESTS=1`도 받는다(40개 파일). CI는 `$GITHUB_ENV` 대신 매트릭스 단계가 Fleet 경로 실행에만 `ROSY_RUN_BROWSER_TESTS=1`을 주고, 같이 묶인 다른 경로는 플래그 없이 따로 돈다. `test/browser_scope.py`가 바꾼 경로를 브라우저 시험 대상으로 바꾼다. Pilot 녹화본 시트 CSS를 고쳐 `test_surfaces_do_not_repaint_shared_controls`를 통과시켰다. main에서 이미 실패하는 2건을 `test/known_failures.txt`에 올렸다. 개발 가이드 「브라우저 시험」에 현장 PC·모델 PC 전체 실행 명령 형태를 적었다.
+- 증거: 이 노트북 동적 포트 범위가 1024부터다(`netsh int ipv4 show dynamicport tcp` → 1024, 13977개). `ROSY_RUN_BROWSER_TESTS=1`만 켜고(`ROSY_BROWSER_TESTS` 없음) cell 3 passed, Fleet 콘솔 1 passed, 시작점 1 passed, 로봇 traffic policy 1 passed, 검수 1 passed, Pilot 녹화 시트 4 passed. 단위·가드 묶음 261 passed, 실패 3건은 main 1aba6c3f5에서도 실패하는 import 규칙 1건과 이 커밋 전 pilot index 재생성 2건. 출력 `X:/DevTemp/browser-infra/*.txt`, `known_failures.py` 0 new.
+- gate 변화: CI 브라우저 범위는 그대로다(전과 같이 Fleet 브라우저 시험만 Chromium 으로 돈다). SOURCE/LOCAL은 위 대상 시험만 확인했고, 전체 브라우저 묶음은 이 노트북에서 돌리지 않았다(현장 PC·모델 PC 몫).
+- 결정: D-436(변경 범위 시험).
+- 교훈: 옵트인 환경 변수를 파일마다 직접 읽으면 이름이 갈라져 시험이 조용히 건너뛰어진다. 판정은 헬퍼 하나로 한다.
+
+## 2026-10-08 · uncommitted · fix(test): 브라우저 시험 기반 리뷰 반영
+- 변경: CI 매트릭스 단계가 Fleet 경로만 따로 `ROSY_RUN_BROWSER_TESTS=1`로 돌린다(`$GITHUB_ENV` 아님). `browser_scope.py`는 고를 시험이 없으면 exit 3, 문서 명령은 `t=$(...) && ... pytest $t`. `browser_harness.safe_http_server()`가 묶인 안전 소켓을 서버에 넣어 포트 경합을 없애고 로봇 UI·Pilot·OMX fixture가 쓴다. importorskip 만으로 돌던 브라우저 시험 5개를 옵트인 뒤로 옮겼다. known_failures 두 줄에 원인 커밋과 "remove when fixed"를 적었다. 게임 보드 `PreviewServer(port=0)`는 그대로다 — `open_page(url=...)`가 그 포트를 `--explicitly-allowed-ports`로 허용하고 `test_chromium_opens_preview_on_a_normally_blocked_port`가 6000에서 이를 증명한다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1`만으로 게임 보드 2 passed(차단 포트 6000 포함), OMX pilot-sim 3·peer approval·로봇 traffic policy·surface entry 2 passed(`review_browser.txt`의 server_port 누락 3건은 `safe_http_server` 수정 뒤 `review_browser2.txt` 3 passed), Pilot 좁은 시트 1 passed, 단위·CI 계약 91 passed. 파일 `X:/DevTemp/browser-infra/review_browser2.txt`·`review_unit.txt`·`pilot_sheet2.txt`·`pilot_sheet3.txt`, `known_failures.py` 0 new.
+- gate 변화: CI 브라우저 범위는 그대로(Fleet 브라우저 시험만). 전체 브라우저 묶음은 미실행.
+- 결정: D-436.
+- 교훈: 옵트인 이름을 합치면 CI 의 잡 전역 플래그가 묶인 다른 묶음까지 켠다 — 플래그는 실행 단위로 준다.
+

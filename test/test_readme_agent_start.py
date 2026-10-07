@@ -57,7 +57,8 @@ def test_agents_md_records_the_shared_checkout_commands():
     assert "git commit --only" in section
     assert "git apply --cached --unidiff-zero" in section
     assert "list.txt" in section
-    assert "git for-each-ref refs/heads" in section
+    assert "python tools/harness/adr_reserve.py next" in section
+    assert "tools/harness/adr_gaps.txt" in section
     assert "adr_gaps" in section
     assert "UTF-8 BOM" in section
     assert "CRLF" in section
