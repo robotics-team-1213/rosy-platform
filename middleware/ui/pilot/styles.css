@@ -231,6 +231,7 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
 [data-drive-fact=link][data-state=OFFLINE],
 [data-drive-fact=link][data-state=FORBIDDEN] { color: var(--status-crit); }
 [data-drive-fact=link][data-state=RETRYING] { color: var(--status-warn); }
+[data-drive-fact=link][data-readback=silent] { color: var(--status-warn); }
 [data-drive-fact=latency][data-slow=true] { color: var(--status-warn); }
 [data-drive-fact=activity] { color: var(--status-warn); }
 [data-drive-fact=activity][hidden] { display: none; }

@@ -6709,3 +6709,9 @@ osy-d395-s1d\`.
 - 변경: 속도·회전율을 수신 전 0으로 표시하던 HUD를 서버의 속도·배터리 증거 판정에 연결했다. 지연 수치에는 수신 나이를 붙이고 연결 끊김·결측에서는 수치를 숨긴다. 320px에서 상태 문구가 단어 중간에 잘리지 않도록 HUD 항목을 통째로 줄바꿈한다.
 - 증거: [LOCAL 결과](validation/uiux-pilot-telemetry-2026-10-07/result.md). 합성 상태 4개×폭 4개와 수신 전 상태의 브라우저 **5 passed**. D-153 명명 G1 재실행 **90 passed, 1 warning**, clean exit 0, `known_failures.py` **0 NEW**. 첫 G1 실행은 요약 뒤 종료되지 않아 중단했고, 재실행으로 확인했다. 캡처와 G1 원본은 `X:\DevTemp\pilot-telemetry-evidence\`에 둔다.
 - gate 변화: Pilot G2 일부만 채웠다. 나머지 선언 상태·폭, 실제 설치본/로봇 readback, 운전자 G3 및 제품 전체 판정은 **HOLD**.
+
+## 2026-10-07 · uncommitted · fix(pilot): 열린 상태 소켓의 무응답 readback 표시
+
+- 변경: 상태 소켓이 열린 채 조용해지고 REST 상태 조회도 실패할 때 이전 숫자와 모드를 숨기고 상태 수신 중단을 표시한다. readback이 돌아오면 회복한다.
+- 증거: [LOCAL 결과](validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 집중 브라우저 1 failed, 수정 후 관련 11 passed, D-153 명명 G1 90 passed, 1 warning, 각 `known_failures.py` 0 NEW. 실행 기록은 `X:\DevTemp\pilot-silent-readback\`.
+- gate 변화: Pilot G2 일부 보강. 남은 선언 상태·폭, 사이트 설치·실물 readback, 운전자 G3와 제품 전체는 **HOLD**.
