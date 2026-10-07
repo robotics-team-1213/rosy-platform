@@ -78,12 +78,19 @@ export function createDeviceSession({
     };
     socket.onclose = (event) => {
       if (closed) return;
+      socket = null;
+      clearPending();
+      if (lastWasMotion || motionFlights > 0) {
+        if (motionFlights > 0) zeroAfterFlight = true;
+        post({linear: 0, angular: 0});
+      }
       const code = event?.code ?? 0;
       if (code === 4403) {
         setState("FORBIDDEN");
         return;
       }
       if (code === 4401) {
+        setState("RETRYING");
         // 토큰이 회수·만료됐다. 재확인 없이 재접속하면 4401 이 반복된다.
         Promise.resolve()
           .then(() => whoami())
@@ -97,7 +104,6 @@ export function createDeviceSession({
 
   function retry() {
     if (closed) return;
-    if (lastWasMotion) post({linear: 0, angular: 0});   // 소켓 상실 시 벨트 0 발행
     setState("RETRYING");
     const delay = Math.min(MIN_BACKOFF_MS * 2 ** failures, MAX_BACKOFF_MS);
     failures += 1;
@@ -155,7 +161,7 @@ export function createDeviceSession({
 
   function flushPending() {
     pendingTimer = null;
-    if (blocked()) {
+    if (blocked() || state !== "OPEN") {
       pending = null;
       return;
     }
@@ -177,7 +183,7 @@ export function createDeviceSession({
       connect();
     },
     async command({linear = 0, angular = 0} = {}) {
-      if (blocked() || state === "FORBIDDEN" || closed) return null;
+      if (blocked() || state !== "OPEN" || closed) return null;
       const next = {linear, angular};
       if (isZero(next) && !lastWasMotion && zeroStreak >= IDLE_ZERO_REPEATS && flights === 0) {
         return null;           // 놓은 상태가 이미 전달됐다 — 유휴 중엔 보내지 않는다
