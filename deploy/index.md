@@ -71,8 +71,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(model): D-497 카메라 지도 작업을 서명된 모델 PC 실행기에 연결
 - 2026-10-06 · uncommitted · feat(deploy): D-477 테일넷 조인 — 유닛·이미지 deb·개인화·site 안내
 - 2026-10-06 · uncommitted · feat(site): 페어링 구성에도 LAN 카메라 보기 적용
 - 2026-10-06 · uncommitted · fix(release): 변수 참조를 비밀값으로 오인하지 않기
 - 2026-10-05 · uncommitted · fix(release): TLS 보정 확인 전 인증서 검증과 실패 시 배포 거절
-- 2026-10-05 · uncommitted · fix(release): 비공개 TLS 환경을 읽는 준비 상태 검사

@@ -45,3 +45,22 @@ rosy-lane-map --image "$env:DEV_SESSION/evidence/camera.jpg" `
 
 흰 경계·단일 차로 폭이 첫 버전의 적용 범위다. 가림을 임의로 메우지 않으므로 지도는 부분적으로
 끊길 수 있다. 차선 그래프는 Nav2 점유지도나 장애물 지도가 아니며 생성·가져오기는 로봇을 움직이지 않는다.
+
+## 모델 PC에서 생성
+
+모델 PC는 생성 작업을 맡고 관제 PC는 카메라 수신과 Fleet 초안 검토를 맡는다.
+기존 D-446 실행기로 같은 알고리즘을 실행하며 GPU 환경이나 학습 모델을 바꾸지 않는다.
+확장된 고정 controller를 후보 밖에 먼저 설치하고, 모델 코드 전용 키로 서명한 후보를
+공급한다. 사이트 후보 서명 키를 모델 코드 키로 재사용하지 않는다.
+자세한 절차는 [모델 코드 업데이트](../../deploy/site/model-code-update.md)를 따른다.
+
+```bash
+python3 -I "$HOME/.local/lib/rosy-model-code/rosy_model_code.py" \
+  --config "$HOME/.config/rosy/model-code.json" exec camera_lane_map.py \
+  --image /outside/candidate/camera.jpg --calibration /outside/candidate/calibration.json \
+  --lane-width-m 0.185 --map-id camera-observed --output /outside/candidate/camera-draft.json
+```
+
+원본·보정·출력은 후보 밖에 둔다. 직접 HTTPS 입력도 같은 CA·lease·나이 검사를 사용한다.
+생성 JSON을 Fleet 지도 화면에서 가져와 검토한다. 모델 PC가 꺼져 있거나 작업 중이면
+그 PC의 설치·실행을 완료했다고 기록하지 않는다. 관제의 CLI 경로도 유지한다.

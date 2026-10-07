@@ -25,6 +25,11 @@ D-488의 자동 지도 생성 범위 제외를 이 초안 생성 기능에 한�
 5. 직접 읽기는 HTTPS·기존 사이트 CA·환경 변수의 source-scoped preview lease를 쓴다.
    redirect, 3 s 초과/나이 불명, 보정된 미리보기는 거절한다. 토큰과 URL을 근거에 기록하지 않는다.
    기존 파일도 덮어쓰지 않는다. 무보정 영상은 초안을 만들 수 없다.
+6. 모델 PC는 D-446의 `exec camera_lane_map.py`로 같은 생성기를 실행한다. 서명 묶음에는
+   Vision의 `__init__.py`, `lane_map.py`, `map_register.py`만 추가한다. 작업 잠금·환경 지문·
+   고정 source 영수증은 기존 실행기가 소유한다. 관제는 초안 저장·검토·활성화를 맡는다.
+   모델 PC의 고정 controller는 후보 밖에서 별도로 갱신하며, 이전 후보 복귀를 유지한다.
+   GPU 환경과 모델 승격은 바꾸지 않는다. 모델 PC 설치·실행 수용은 별도로 확인한다.
 
 ### Consequences
 

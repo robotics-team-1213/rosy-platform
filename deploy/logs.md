@@ -2577,3 +2577,9 @@
 - 변경: `rosy-tailscale-join.service`(+헬퍼)가 프로비전된 일회용 auth key를 소진해 로봇을 팀 테일넷에 태그로 가입시킨다. 이미지에 고정(sha256) tailscale deb와 의존성(iptables, iproute2)·tailscaled 활성화를 추가했다. 개인화 번들에 선택 `tailscale` 섹션이 들어가고 첫 부팅이 `/etc/rosy/tailscale-join.json`(0600)을 쓴다. site 방화벽·README·SSH 안내·테일넷 운영 런북(`docs/deployment/tailnet-remote-access.md`)에 `tailscale0` 경로를 문서화했다.
 - 증거: test_rosy_tailscale_join.py·test_image_customization_contract.py·test_sd_personalization.py·test_first_boot_provisioning.py 신규 포함 1411+ passed(affected --run, known_failures 0 new). 잠금 목록·스크럽·영수증 지문 변이로 빨강 확인. tailscale 1.102.5 arm64 deb는 실제 다운로드 해시로 검증(85315e74…). 장치(TWIN·DEVICE) 검증은 별도.
 - gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · feat(model): D-497 카메라 지도 작업을 서명된 모델 PC 실행기에 연결
+
+- 변경: 기존 D-446 잠금·서명·환경 지문·실행 영수증을 유지하고, 카메라 지도 entrypoint와 필요한 Vision 파일 세 개만 후보에 포함한다. 이전 후보 생성과 복귀를 유지하며 고정 controller 선행 갱신과 전용 키 경계를 문서화했다.
+- 증거: 관련 pytest 54 passed, 26 skipped; known_failures NEW 0. Linux 격리 실행에서 실제 entrypoint --help import PASS. 관제 설치 ed006ce92cc4832619dc96d4d0e00f779b439ec9의 서명·이미지·서비스 상태와 실제 S21 지도 생성(12 places, 10 lanes), Fleet 초안 저장·조회 일치를 확인했다. 모델 PC는 연결되지 않아 설치·실행은 미확인이다.
+- gate 변화: 모델 PC SOURCE/LOCAL 증거 추가. 관제 카메라 지도 초안의 DEVICE 증거만 추가하며, 지도 FIELD 수용·활성화와 모델 PC DEVICE는 미확인이다. 기존 Pi 이미지 gate는 유지한다.
