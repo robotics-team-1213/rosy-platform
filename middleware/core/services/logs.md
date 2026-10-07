@@ -749,3 +749,20 @@
 - gate 변화: 없음. SOURCE 호스트 시험만.
 - 결정: D-507 7 (2026-10-08 개정)
 - 교훈: "복귀를 끈 것과 같다"는 결정을 돌려주지 않는 것(None)이다 — 결정을 돌려주면 그 뒤 경로(D-407)가 건너뛰어진다.
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 2·4 pivot_past_line_m 부호 있음 [−0.30, 0.30]
+- 변경: `junction_approach.check_expect`가 음수 pivot을 받는다(측정 가로선이 장소 너머, 회전교차로 입구·T자의 먼 쪽 경계). 기대 창 점은 그대로 `expect_in_m − pivot`, 접근 목표 = 측정 선 + pivot. 목표가 로봇 자리이거나 뒤면 접근 0, 제자리 회전, 후진 없음(기존 `max(0, distance)`). 직진 띠 옆 반폭은 양수 pivot일 때만 그 값, 아니면 D-491 0.10 m.
+- 증거: `test_junction_approach.py` 음수 pivot 접근 0.1 m, 목표 뒤 접근 0, 창 0.6 m, 띠 반폭, 범위 −0.31 거절. sign 변이(범위 0 하한 복원) 5건 실패 확인 뒤 복원.
+- gate 변화: SOURCE. SIM 재실행(SW spoke)은 열림.
+- 결정: D-507 2·4 개정(2026-10-08 사용자 결정)
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 6 가로선 띠는 테이프 중심 ± 폭/2 (검토)
+- 변경: `cross_line_band`가 측정 선을 테이프 중심으로 보고 [선 − 테이프/2 − e, 선 + 테이프/2 + e]를 쓴다(keeper `_across_path`와 Fleet 지도 모형이 중심을 잰다). 띠가 끝나는 먼 끝도 + 테이프/2.
+- 증거: `test_junction_approach.py` 띠 경계(.3776/.3774, .4224/.4226)와 범위·odom 오차 경계(x .3214/.3816) 다시 계산.
+- gate 변화: SOURCE.
+- 결정: D-507 6, 2 개정 검토
+
+## 2026-10-08 · uncommitted · docs(core): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.

@@ -690,3 +690,14 @@
 - 변경: `POST /host/lamp/identify`의 `color`를 생략하면 CORE 설정 `lamp_identify.color`, 없으면 D-472 4항 기본(`rosy_26` blue, `rosy_60` amber)을 쓴다. 둘 다 없으면 409 `IDENTIFY_COLOR_UNSET`. `requested_at`을 ms로 쓴다. 앱 설명의 계약 버전을 v1.130으로 맞췄다
 - 증거: `test_lamp_identify_api.py`, `test_protocol_version_alignment.py`
 - gate 변화: 없음. 장치 적용과 실제 점멸은 미확인
+
+## 2026-10-08 · uncommitted · fix(api): D-507 pivot_past_line_m [−0.30, 0.30]과 v1.133
+- 변경: `LineJunctionRequest.pivot_past_line_m` 범위를 ge=−0.30으로 넓혔다. 앱 설명의 계약 버전을 v1.133으로 맞췄다(v1.131·v1.132는 다른 브랜치).
+- 증거: `test_line_junction_api.py` −0.31 400, −0.30 200 `armed`.
+- gate 변화: SOURCE.
+- 결정: D-507 2 개정
+
+## 2026-10-08 · uncommitted · fix(api): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.

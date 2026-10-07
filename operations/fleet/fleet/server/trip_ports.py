@@ -158,7 +158,7 @@ def pose_diagnostics(pose) -> dict:
 
 
 #: D-507 2: CORE takes ``expect_in_m`` in (0, 2], ``expect_tol_m`` in (0, 0.30] and
-#: ``pivot_past_line_m`` in [0, 0.30] (the D-495 ``MAX_ADVANCE_M``).
+#: ``pivot_past_line_m`` in [-0.30, 0.30] (the D-495 ``MAX_ADVANCE_M``, signed since 2026-10-08).
 MAX_EXPECT_IN_M = 2.0
 MAX_EXPECT_TOL_M = 0.30
 MAX_PIVOT_PAST_LINE_M = 0.30
@@ -172,12 +172,16 @@ _monotonic = time.monotonic  # the read-to-send clock (a test replaces it)
 MAX_WINDOW_BEND_DEG = 15.0
 #: The lane heading is checked this often between the robot and the place.
 WINDOW_BEND_STEP_M = 0.02
+#: The cross line search steps this far, then halves the last step to 1 mm.
+LINE_STEP_M = 0.01
 
 
 def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float, active,
                     config: TripConfig) -> Optional[dict]:
     """D-507 2 fields for a ``junction_pivot`` robot: ``map_id``, ``pivot_past_line_m`` (not for
-    ``stop``) and, where ``_straight_ahead`` allows, the window pair; none on another map version
+    ``stop``; the place minus the first painted line ``line_past`` finds, or the outgoing
+    half-width and no window when it finds none) and, where ``_straight_ahead`` allows, the
+    window pair; none on another map version
     (logged, ``detail.junction_fields_dropped``). ``arm_distance_m`` should be at least the
     keeper's 0.45 m + pivot + tol so the instruction comes first; SIM checks the default 0.6.
     """
@@ -192,11 +196,23 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
         view["detail"]["junction_fields_dropped"] = "map_version"
         return None
     fields = {"map_id": active[1].map_id}
-    if action in (STRAIGHT, LEFT, RIGHT):  # the place is on the outgoing lane's centre line (D-490)
-        width = live.arc(index + 1).width_m
-        fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
     window = _straight_ahead(live, index, remaining, pose)
-    if window is None or not 0.0 < window[0] <= MAX_EXPECT_IN_M:
+    if window is not None and not 0.0 < window[0] <= MAX_EXPECT_IN_M:
+        window = None
+    if action in (STRAIGHT, LEFT, RIGHT):
+        # 2026-10-08: the first painted line past the place, along the robot's heading (the
+        # keeper's ray) with a window, else along the lane's heading at the place.
+        x, y, heading = live.arc(index).point_at(live.segments[index]["s_to"])
+        past = line_past(live.graph, x, y, heading if window is None else pose["yaw"])
+        if past is None:  # no line near the place: the old near-edge half-width, and no window
+            width = live.arc(index + 1).width_m
+            fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
+            return fields
+        if window is not None:
+            fields["pivot_past_line_m"] = -past
+        # else no pivot (CORE's stop_point): without a window CORE takes any sighting, so a wrong
+        # line with a negative pivot would turn short unchecked.
+    if window is None:
         return fields  # no window: CORE keeps today's behaviour for this place
     expect_in, lateral = window
     speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
@@ -213,6 +229,36 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
         tol += lateral  # CORE's straight-ahead point is this far beside the lane on a bend
     fields.update(expect_in_m=expect_in, expect_tol_m=round(min(tol, MAX_EXPECT_TOL_M), 3))
     return fields
+
+
+def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
+    """How far along ``heading`` from ``(x, y)`` the first painted cross line is, or None when
+    ``(x, y)`` is off the lanes or the lanes run on past ``MAX_PIVOT_PAST_LINE_M``. Only
+    ``lane`` arcs are painted (a ``free`` arc is no tape).
+
+    D-507 2 (2026-10-08): the painted lines are the edge of the lanes' union, each lane a band of
+    ``width_m`` around its centre line. A lane mouth breaks a line (the roundabout's outer line at
+    a spoke); an island keeps one (its inner line, the far edge the keeper measures at the 260919
+    SW spoke: 0.404 m here against 0.402 m in SIM).
+    """
+    cos, sin = math.cos(heading), math.sin(heading)
+    near = [arc for arc in graph.arcs.values()
+            if arc.drive_mode == "lane" and arc.project(x, y)[0] <= MAX_PIVOT_PAST_LINE_M + arc.width_m]
+
+    def off(t: float) -> bool:
+        return all(arc.project(x + t * cos, y + t * sin)[0] > arc.width_m / 2 for arc in near)
+
+    if off(0.0):
+        return None
+    t, step = 0.0, LINE_STEP_M
+    while t <= MAX_PIVOT_PAST_LINE_M and not off(t + step):
+        t += step
+    while step > 0.001:
+        step /= 2
+        if not off(t + step):
+            t += step
+    past = round(t + step, 3)
+    return past if past <= MAX_PIVOT_PAST_LINE_M else None
 
 
 def _straight_ahead(live: "LiveTrip", index: int, remaining: float,
