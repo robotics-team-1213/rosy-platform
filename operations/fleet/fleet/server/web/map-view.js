@@ -33,8 +33,8 @@ export function cameraMapCalibration(frame, calibrations, siteMap) {
 // 지도는 상태 폴링·관측·콜백으로 초당 여러 번 다시 그려진다. 펴는 일(576 번 그리기)은 새 프레임·
 // 보정·크기에서만 하고, 그 사이에는 화면 밖 캔버스에 둔 결과를 한 번에 옮긴다.
 let topDownCache = null;
-function drawCameraTopDown(ctx, image, calibration, bounds, toPx, width, height, dpr) {
-  const key = [calibration.calibration_revision, width, height, dpr,
+function drawCameraTopDown(ctx, image, calibration, bounds, toPx, width, height, dpr, rot = 0) {
+  const key = [calibration.calibration_revision, width, height, dpr, rot,
     bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y].join("|");
   if (!topDownCache || topDownCache.image !== image || topDownCache.key !== key) {
     const off = document.createElement("canvas");
@@ -444,16 +444,26 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const width = rect.width > 0 ? rect.width : fallback.width;
     const height = rect.height > 0 ? rect.height : fallback.height;
     const dpr = window.devicePixelRatio || 1;
-    view.cameraPick = null;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
-    const t = fitTransform(bounds, width, height, 32);
-    const toPx = (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
+    // D-515 + D-513 7: 사이트 지도의 화면 방향(view_turn_deg, 시계 방향 quarter turn)만큼 미터 뷰를
+    // 돌린다. 돌린 상자 크기에 맞춰 넣고, 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로
+    // 돌리므로 글자는 똑바로 선다. 클릭은 돌림을 먼저 풀고 미터 뷰를 거꾸로 푼다.
+    const rot = view.siteViewTurn || 0;
+    const side = rot === 90 || rot === 270;
+    const fw = side ? height : width, fh = side ? width : height;
+    const t = fitTransform(bounds, fw, fh, 32);
+    const turn = quarterTurn(rot, fw, fh);
+    const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
+    view.cameraPick = rot ? (bx, by) => {
+      const q = turn.unpoint(bx / dpr, by / dpr);
+      return { x: (q.x - t.ox) / t.scale, y: (t.oy - q.y) / t.scale };
+    } : null;
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
-    if (cameraOn) drawCameraTopDown(ctx, cameraFrame.image, calibration, bounds, toPx, width, height, dpr);
+    if (cameraOn) drawCameraTopDown(ctx, cameraFrame.image, calibration, bounds, toPx, width, height, dpr, rot);
     else {
       if (drift) {
         const text = `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}).`
