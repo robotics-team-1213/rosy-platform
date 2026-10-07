@@ -40,7 +40,8 @@ Host-side pytest for deploy/robot/pinky_pro/release/motor/network contracts. The
 | `known_failures.txt` | Pre-existing failures on main (node id + reason). Delete a line in the commit that fixes it; never add one to hide your own failure |
 | `known_failures.py` | `python test/known_failures.py run.txt` compares saved `pytest -rfE` output with the list; exit 1 = a new failure |
 | `test_known_failures.py` | The comparison and that every listed id names a real test |
-| `browser_harness.py` | Shared helpers for the optional Chromium regressions (launch/error-collection/confirm-stub/screenshot, D-153 capture tooling) |
+| `browser_harness.py` | Shared helpers for the optional Chromium regressions (launch/error-collection/confirm-stub/screenshot, D-153 capture tooling); `browser_tests_enabled()` opt-in, `safe_listener()`/`free_port()` never return a Chromium-restricted port |
+| `browser_scope.py` | `SCOPE` map from source path prefix to the browser tests that load those pages; `python test/browser_scope.py <paths>` prints pytest targets |
 | `test_robot_runtime.py` | compose/D-22/D-27/runtime-mode contracts |
 | `test_nav2_hardware_slice.py` | Hardware Nav2 launch, D-2/D-4, packaging |
 | `test_dashboard_browser.py` | Optional Chromium regression (teleop zero + field-settings saves + traffic stage/apply + camera lifecycle + irreversible mode-change confirm + D-153 G2 state-matrix captures); skipped unless `ROSY_RUN_BROWSER_TESTS=1` |
@@ -69,6 +70,9 @@ Ignore `__pycache__/`.
 - Changing SITE_STA / relay wording in one doc without the others fails `test_network_topology_contracts.py`.
 - In `test_dashboard_browser.py`, waiting on `window.__apiCalls` proves the click fired, not that the handler finished — the fetch stub records the call before it answers. Wait on the visible outcome (the message element) or the assertion races the promise.
 - Run it before shipping dashboard JS: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest test/test_dashboard_browser.py`. Opt-in tests that are never run are not coverage.
+- Browser opt-in: gate every real-Chromium test with `pytest.mark.skipif(not browser_tests_enabled(), ...)` from `browser_harness.py`. `ROSY_RUN_BROWSER_TESTS=1` is canonical; `ROSY_BROWSER_TESTS=1` still works. Do not read either variable directly — a second name silently skipped the Fleet start-point tests until 2026-10-07.
+- Local servers a page loads must bind through `safe_listener()` or `free_port()`, not port 0: this laptop's dynamic range starts at 1024 and port 0 handed out 2049 (`net::ERR_UNSAFE_PORT`). A new browser test that loads a new page family gets a `SCOPE` entry in `browser_scope.py`.
+- Full browser suites run on the site PC or model PC, not this laptop (34 min–2 h 26 min and MemoryError/`Page.goto` flakes here on 2026-10-07). Command pattern: `docs/reference/developer-guide.md` 「브라우저 시험」.
 - A new guard, gate or contract test is not believed until it has been **mutation-proven**: change the thing it guards, watch it go red, restore, watch it go green — and confirm the mutation actually landed before trusting the red. Assertions on source text are the easiest to write as tautologies, so mutate them harder, not less (`docs/solutions/workflow-issues/inability-to-check-recorded-as-clean-result.md`).
 
 ### Testing Requirements
@@ -76,6 +80,7 @@ Ignore `__pycache__/`.
 ```bash
 python3 -m pytest test/ -v
 python3 -m pytest test/test_motor_control.py test/test_host_agent.py -v
+t=$(python test/browser_scope.py <changed paths...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider
 ```
 
 ### Common Patterns

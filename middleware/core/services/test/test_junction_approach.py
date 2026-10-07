@@ -7,7 +7,7 @@ import pytest
 
 from core_features.line_follow.recovery.junction import JunctionRefused
 from core_features.line_follow.recovery.junction_approach import cross_line_band
-from test_junction_turn_site_basis import SITE, site_step
+from test_junction_turn_site_basis import SITE, site_rig, site_step
 from core_features.line_follow.model import LineFollowMode
 from test_line_junction import BODY, Rig
 
@@ -217,7 +217,7 @@ def test_approach_aborts_when_the_enforce_basis_is_lost():
 
 @pytest.mark.parametrize('ir', ['stale', 'centre'])
 def test_approach_on_the_site_basis_aborts_when_it_is_lost(ir):
-    rig = Rig(proof=False, **SITE)
+    rig = site_rig(**SITE)
     assert _approaching(rig, step=site_step).junction.state == 'approaching'
     rig.now += .3 if ir == 'stale' else 0.
     _assert_aborted(rig, site_step(rig, ir=ir, seen=False, move=True)[1], 'turn_basis_lost')
@@ -361,7 +361,7 @@ def _band_straight(rig):
 @pytest.mark.parametrize('x, inside', [(.33, False), (.335, True), (.394, True), (.397, False)])
 def test_band_edges_carry_range_and_odom_error(x, inside):
     # lower edge: x + .05 = .39 - .05 (x - .2) -> x = .3333; upper: x + .05 = .435 + .05 (x - .2) -> .3947
-    rig = Rig(proof=False, **IR_ROW)
+    rig = site_rig(**IR_ROW)
     _band_straight(rig)
     while rig.x < x - .01:
         site_step(rig, dx=.01)
@@ -370,7 +370,7 @@ def test_band_edges_carry_range_and_odom_error(x, inside):
 
 
 def test_straight_crossing_follows_over_the_line_only_inside_the_band():
-    rig = Rig(proof=False, **IR_ROW)
+    rig = site_rig(**IR_ROW)
     _band_straight(rig)
     decision, status = site_step(rig, ir='centre')            # IR row .25: before the band
     assert (status.state, status.reason) == ('HOLD', 'lane_departure')
@@ -381,7 +381,7 @@ def test_straight_crossing_follows_over_the_line_only_inside_the_band():
 
 
 def test_band_dies_on_an_odom_epoch_change():
-    rig = Rig(proof=False, **IR_ROW)
+    rig = site_rig(**IR_ROW)
     _band_straight(rig)
     while rig.x < .35:
         site_step(rig, dx=.01)
@@ -391,19 +391,19 @@ def test_band_dies_on_an_odom_epoch_change():
 
 
 def test_approach_admits_centre_inside_the_band_and_aborts_outside():
-    rig = Rig(proof=False, **IR_ROW)
+    rig = site_rig(**IR_ROW)
     assert _approaching(rig, step=site_step).junction.state == 'approaching'
     while rig.x < .36:                                         # IR row onto the line at .4
         decision, status = site_step(rig, seen=False, move=True)
     decision, status = site_step(rig, ir='centre', seen=False, move=True)
     assert status.junction.state == 'approaching' and decision.linear > 0
-    rig = Rig(proof=False, **IR_ROW)
+    rig = site_rig(**IR_ROW)
     _approaching(rig, step=site_step)                          # IR row .25: outside the band
     _assert_aborted(rig, site_step(rig, ir='centre', seen=False, move=True)[1], 'turn_basis_lost')
 
 
 def test_turning_never_takes_centre():
-    rig = Rig(proof=False, **IR_ROW)
+    rig = site_rig(**IR_ROW)
     _approaching(rig, step=site_step)
     _until(rig, lambda s: s.junction.state != 'approaching', step=site_step, sighting=False)
     assert rig.m._cross_band is None
@@ -418,7 +418,7 @@ def _drive_site(rig, x):
 
 
 def test_straight_band_is_spent_once_the_row_passes_the_far_edge():
-    rig = Rig(proof=False, **IR_ROW)
+    rig = site_rig(**IR_ROW)
     _band_straight(rig)
     _drive_site(rig, .35)
     assert rig.m._centre_on_cross_line(rig.now) is True
@@ -427,7 +427,7 @@ def test_straight_band_is_spent_once_the_row_passes_the_far_edge():
 
 
 def test_a_side_line_a_metre_later_is_lane_departure():
-    rig = Rig(proof=False, **IR_ROW)
+    rig = site_rig(**IR_ROW)
     _band_straight(rig)
     _drive_site(rig, 1.2)
     decision, status = site_step(rig, ir='centre')
@@ -438,7 +438,7 @@ def test_a_side_line_a_metre_later_is_lane_departure():
     (None, .10, True), (None, .125, False),      # D-491 corridor half-width .10 + error
     (.05, .06, True), (.05, .08, False)])         # Fleet's lane half-width (pivot_past_line_m)
 def test_band_lateral_bound(pivot, lateral, inside):
-    rig = Rig(proof=False, **IR_ROW)
+    rig = site_rig(**IR_ROW)
     site_step(rig)
     expect = None if pivot is None else dict(pivot_past_line_m=pivot)
     rig.m.set_junction('straight', 'J1', 10., expect=expect)
@@ -453,7 +453,7 @@ def test_band_lateral_bound(pivot, lateral, inside):
 
 @pytest.mark.parametrize('how', ['stop', 'mode_change'])
 def test_band_cleared_by_stop_and_mode_change(how):
-    rig = Rig(proof=False, **IR_ROW)
+    rig = site_rig(**IR_ROW)
     _band_straight(rig)
     if how == 'stop':
         rig.m.stop('estop')

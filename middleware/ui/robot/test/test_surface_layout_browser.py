@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import pytest
+from browser_harness import browser_tests_enabled
 from playwright.sync_api import sync_playwright
 
 
@@ -13,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB_COMMON = (ROOT.parents[2] / "shared") / "web"
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 

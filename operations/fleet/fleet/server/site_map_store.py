@@ -23,6 +23,7 @@ from typing import Callable, Optional
 from fleet.meet.place import Painted, painted_from
 from fleet.routing.cost import RoutingConfig
 from fleet.routing.graph import Graph, build_graph
+from fleet.routing.snap import PlanError, snap_start
 from fleet.routing.trip import prepare
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 from fleet.site_map import SiteMap
@@ -108,9 +109,18 @@ class SiteMapStore:
 
     def _plannable(self, site_map: SiteMap) -> None:
         try:
-            prepare(build_graph(site_map), self.routing_config)
+            graph = build_graph(site_map)
+            prepare(graph, self.routing_config)
         except (ValueError, ArithmeticError, RecursionError) as exc:
             raise SiteMapError(422, "SITE_MAP_UNPLANNABLE", f"the planner cannot use this map: {exc}") from exc
+        for place in site_map.places:  # D-513: a robot set down on a start place can start a trip
+            if place.kind != "start":
+                continue
+            try:
+                snap_start(graph, place.x, place.y, place.yaw, self.routing_config)
+            except PlanError as exc:
+                raise SiteMapError(422, "SITE_MAP_START_INVALID",
+                                   f"start place {place.id}: {exc.code}") from exc
 
     def _event(self, action: str, principal_id: str, detail: dict) -> None:
         self._db.execute("INSERT INTO site_map_events (action, principal_id, detail, at) VALUES (?, ?, ?, ?)",

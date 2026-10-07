@@ -104,20 +104,14 @@ class JunctionMixin(JunctionApproachMixin):
             return at is not None and 0 <= self._clock()-at <= KEEP_EVIDENCE_S
 
     def _turn_basis(self, now):
-        """D-498: 'enforce' (D-400 floor proof), 'site' (fresh IR guard without departure, live
-        D-422 body stop on a fresh scan, junction_turn_site_accepted) or None."""
-        try:
-            if self._return_motion is not None and self._return_proof_configured() is True:
-                return 'enforce'
-        except Exception:  # noqa: BLE001 - an unbound or unreadable proof is no basis
-            pass
-        c, at = self._config, self._clearance_at
-        if (c.junction_turn_site_accepted and c.ir_guard_enabled and c.body_stop_known
-                and self._scan_points is not None and at is not None
-                and 0 <= now-at <= c.clearance_stale_s and self._ir_guard(now) != 'stale'
-                and (self._ir_guard(now) != 'centre' or self._centre_on_cross_line(now))):
-            return 'site'
-        return None
+        """D-498 / D-507 6: 'enforce' (D-400 floor proof), 'site' (site_floor_map_id, fresh IR
+        guard without departure, path mode with the URDF body and a fresh scan) or None. The
+        twist's own D-422 sweep is _maneuver_twist's. While approaching (D-507 4) the kind is
+        'approach' and an IR centre inside the camera's cross-line band is allowed."""
+        j = self._junction
+        if j is not None and j.get('state') == 'approaching':
+            return self._motion_basis(now, 'approach', centre_ok=self._centre_on_cross_line(now))
+        return self._motion_basis(now, 'turn')
 
     def _reset_junction(self):
         """A line-follow session owns its instruction. A maneuver cut by a mode change (incl.

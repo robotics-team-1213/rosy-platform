@@ -971,3 +971,10 @@
 - gate 변화: 없음
 - 결정: D-495 (Proposed) 착지 전 검토 반영
 - 교훈: 능력 보고는 그 동작을 실제로 허가할 증거와 같은 조건이어야 정직하다
+
+## 2026-10-08 · uncommitted · fix(bridge): 카메라 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
+- 변경: `bridge/observation.camera_preview`가 CORE 시계보다 앞선 영상(음수 나이)을 낡은 것으로 보던 것을 `SOURCE_FUTURE_TOLERANCE_S`(0.1 s) 안이면 나이 0으로 받고, 넘으면 전처럼 품질을 버리고 raw를 거절한다.
+- 증거: `test_bridge_observation.py::test_camera_capture_stamp_ahead_of_core_clock_counts_as_now_within_the_tolerance`.
+- gate 변화: 없음. 호스트 시험만.
+- 결정: D-507 8
+- 교훈: 없음

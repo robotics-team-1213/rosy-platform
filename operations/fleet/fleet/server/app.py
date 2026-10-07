@@ -343,6 +343,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         try:
             yield
         finally:
+            power_display = getattr(app.state, "power_health_display", None)
+            if power_display is not None:
+                await power_display.aclose()
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,

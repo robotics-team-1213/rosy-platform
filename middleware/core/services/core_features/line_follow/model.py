@@ -21,6 +21,8 @@ SECTOR_RESUME_M = 0.28
 #: Source stamps up to this far ahead of CORE's source clock count as now (clock skew,
 #: D-495 SIM finding 2); further ahead the sample is refused. Line observations and odom poses.
 SOURCE_FUTURE_TOLERANCE_S = 0.1
+#: D-507 9: the site floor declaration names a Fleet SiteMap map_id.
+SITE_MAP_ID = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 
 
 class LineFollowMode(str, enum.Enum):
@@ -192,10 +194,6 @@ class LineFollowConfig:
     # spreads by at most bridge_arm_error_spread (derived below).
     bridge_arm_max_curvature: float = 4.0
     bridge_arm_curvature_tolerance: float = 0.5
-    # D-476 rev 1 site acceptance: nothing in CORE sees a drop-off ahead. Without the live
-    # enforce floor proof, an enabled bridge needs this true (the site has no drop-off or hole
-    # within bridge reach); the enforce floor proof replaces it later.
-    bridge_site_no_dropoffs: bool = False
     bridge_lookahead_m: float = 0.10
     bridge_coast_m: float = 0.10
     bridge_slow_m: float = 0.25
@@ -209,8 +207,11 @@ class LineFollowConfig:
     # Review L3: odom speeds below which the robot counts as standing still (turn start/settle).
     junction_still_linear: float = 0.01
     junction_still_angular: float = 0.05
-    # D-498: site declares no drop-off within turn reach (+0.30 m); with the IR guard and D-422.
-    junction_turn_site_accepted: bool = False
+    # D-507 9: the site floor declaration, one per map. The site lead walked every lane and
+    # junction of SiteMap map_id plus 0.30 m outside it (turn, advance, approach, bridge, return
+    # and the D-468 retrace's rear path) and found no drop-off, hole or step. It is the floor
+    # basis of motion_admitted's site basis (D-507 6 b/c); None = no declaration.
+    site_floor_map_id: Optional[str] = None
     # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the producer's
     # uncertainty_m. 0 means every URDF footprint corner is inside only if uncertainty_m bounds
     # every lateral error; jitter and footprint tolerance not in it go in this body margin. The
@@ -336,9 +337,15 @@ class LineFollowConfig:
             raise ValueError("junction_still_linear must be in (0, 0.05] m/s")
         if not _finite(self.junction_still_angular) or not 0.0 < self.junction_still_angular <= 0.2:
             raise ValueError("junction_still_angular must be in (0, 0.2] rad/s")
-        if type(self.junction_turn_site_accepted) is not bool or (
-                self.junction_turn_site_accepted and not self.ir_guard_enabled):
-            raise ValueError("junction_turn_site_accepted must be a boolean and needs ir_guard_enabled")
+        site = self.site_floor_map_id
+        if site is None:
+            return
+        if not isinstance(site, str) or not SITE_MAP_ID.fullmatch(site) or site == "site":
+            raise ValueError("site_floor_map_id must be a SiteMap map_id ([A-Za-z0-9_.-]{1,64}), "
+                             "not the default 'site'")
+        if not (self.ir_guard_enabled and self.obstacle_mode == "path" and self.body_stop_known):
+            raise ValueError("site_floor_map_id needs ir_guard_enabled, obstacle_mode path and "
+                             "the URDF body geometry (D-507 9)")
 
     @property
     def bridge_arm_error_spread(self) -> float:
@@ -386,8 +393,6 @@ class LineFollowConfig:
         if not 0.0 < self.bridge_arm_curvature_tolerance <= self.bridge_arm_max_curvature <= 10.0:
             raise ValueError("bridge arc config must satisfy 0 < bridge_arm_curvature_tolerance "
                              "<= bridge_arm_max_curvature <= 10")
-        if type(self.bridge_site_no_dropoffs) is not bool:
-            raise ValueError("bridge_site_no_dropoffs must be a boolean")
         if self.bridge_enabled and self.bridge_arm_confidence < self.min_confidence:
             raise ValueError("bridge_enabled needs bridge_arm_confidence >= min_confidence")
         if self.bridge_enabled and not self.ir_guard_enabled:
