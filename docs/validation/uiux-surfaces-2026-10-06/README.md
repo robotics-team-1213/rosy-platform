@@ -427,3 +427,9 @@ The follow-up browser harness allows the active preview port in Chromium; port 6
 2026-10-07 게임 보드 현재 후보: [선언 폭 1280×800/390×800/320×568의 7상태 LOCAL 행렬](../uiux-game-board-matrix-2026-10-07/result.md)을 실제 PreviewServer와 Chromium에서 재생했다. 최초·첫 오류·fresh·delayed·disconnected·unavailable·정지 요청 접수의 21개 화면에서 전화 점수/필드/관측 폭 차이는 1px 이하, 가로 넘침 0, 정지는 첫 화면 안이다. 행렬 브라우저 **3 passed**, 보드 전체 브라우저 **37 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**. HTTP 정지 요청 접수는 실제 SAFE_STOP 확인이 아니며 실물 경기·카메라·정지와 운영자 G3가 없어 게임 표면과 제품은 **HOLD**다.
 
 2026-10-07 Cell 접속 역할: [320px 현재 후보 화면](../uiux-cell-role-label-2026-10-07/result.md)은 원시 `operator` 대신 Fleet 공통의 「운영자」를 표시한다. 수정 전 브라우저 **1 failed**, 수정 후 **1 passed**, Cell 전체 브라우저 **49 passed**, G1 **90 passed**, `known_failures.py` **0 NEW**다. 역할 판정과 요청은 그대로이며 Cell 전체 G2·사이트 계정·장치·G3가 남아 제품은 **HOLD**다.
+
+2026-10-07 Cell 문서 목록: [마지막 수신 시각 LOCAL 화면](../uiux-cell-list-readtime-2026-10-07/result.md)은 문서 수정 시각과 목록 HTTP 응답을 받은 시각을 분리한다. 1440/390/320px의 목록 성공·실패·복구 **6 passed**, 조회 잠금 **1 passed**, Cell 전체 브라우저 **49 passed**, G1 **90 passed**, `known_failures.py` **0 NEW**다. 브라우저 시각이므로 서버가 판정한 `fresh`/`delayed` 증거는 아니며 Cell 전체 G2·실물·G3는 **HOLD**다.
+
+2026-10-07 Pilot 연결 로비: [320/390px 빈 목록·실패 LOCAL 화면](../uiux-pilot-lobby-width-2026-10-07/result.md)에서 `다시 찾기`·`연결`이 코드 입력 칸과 같은 폭이다. 로비·태블릿 브라우저 **7 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. Pilot 전체 선언 상태·실물 태블릿/로봇·운전자 G3는 **HOLD**다.
+
+2026-10-07 Robot 운용 열: [현재 후보 18셀 LOCAL 계측](../uiux-robot-column-width-2026-10-07/result.md)에서 1280px 감지·지도·조작 가시 패널 폭 차이를 15.01→0.01px로 줄였다. 320/390px 네 패널은 각 폭에서 같고 가로 넘침·페이지 오류 0이다. 역할 셸 브라우저 **9 passed**, G1 **90 passed**, 각 `known_failures.py` **0 NEW**다. 합성 CORE의 지도 404·호스트 503을 캡처 도구가 보고하므로 정상 상태 G2 수용으로 읽지 않는다. 선언 상태 전체·실물 readback·운영자 G3는 **HOLD**다.

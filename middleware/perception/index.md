@@ -70,6 +70,6 @@
 
 - 2026-10-07 · uncommitted · fix(perception): 횡단보도 띠는 로봇 차로 폭 안에서만 센다 (D-491 리뷰)
 - 2026-10-07 · uncommitted · feat(perception): 차로와 나란한 횡단보도 줄무늬 구간 (D-491 §4)
+- 2026-10-07 · uncommitted · fix(perception): deterministic crosswalk corners
 - 2026-10-07 · uncommitted · fix(config): D-495 검토 H1 camera_x_offset_m URDF 공칭
 - 2026-10-07 · uncommitted · feat(observer): keep_debug에 corner_turning
-- 2026-10-07 · uncommitted · feat(config): D-495 lane_corner_turning 로봇 기본값 켜짐
