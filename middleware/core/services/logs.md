@@ -668,3 +668,14 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. 현장 설정·SIM·DEVICE는 D-498 순서
 - 결정: D-498 (Proposed)
 - 교훈: 없음
+## 2026-10-07 · uncommitted · feat(line_follow): NOMINAL 지면 횡단보도 구간과 앞뒤 거리 여유 (D-491 개정)
+
+- 변경: `CrosswalkZones.observe`가 지면 표시를 보지 않고 `uncertainty_m`(≤ 0.015 m)만 요구한다(D-468과 같다). 여유에 `crosswalk_range_error_fraction`(기본 0.05) × 먼 끝 거리를 더하고, 쉬는 거리 상한도 같은 비율만큼 늘린다.
+- 증거: `test_ir_guard_crosswalk.py` 20건(NOMINAL + 운전자 확인에서 쉼, 불확실도 없음/초과는 구간 없음, 거리 여유가 끝을 넓힘). 실기 9dfk 측정은 D-491 개정 절.
+- gate 변화: 없음. 장치 반영은 릴리스 뒤.
+## 2026-10-07 · uncommitted · test(line_follow): D-495/D-498 교차로 회전 SIM 결과 기록
+- 변경: 코드 변경 없음. 모델 PC SIM 기록 `docs/validation/d495-junction-sim-2026-10-07/result.md`.
+- 증거: 현장 근거 회전 9건 오차 −4.08…+2.75°(모두 ±5° 안, 2–4° 덜 돎). 장애물·IR·스캔·odom 주입 7건 모두 다음 명령 주기(20 ms)에 0. 재획득 0/9, bridge 진입 0틱.
+- gate 변화: 없음. SIM 증거만이고 SIM 수용 항목 S1·S2·S6은 미통과다.
+- 결정: D-495, D-498 (Proposed). 결함 후보: `lane_return_evidence.py:52` 음수 odom 나이 리셋, `junction.py:318-320` CAMERA_LINE 선택 직후 회전 `aborted odom`, `unresolved`가 실행 기록에 안 남음(`junction.py:347-352`, `363-366`, `397-400`), 로봇 기본값 `recovery_local_enabled: true` + enforce 없음이면 출발 불가(`lane_return.py:326-327`).
+- 교훈: 없음
