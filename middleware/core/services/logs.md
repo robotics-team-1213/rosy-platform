@@ -595,3 +595,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
 - 결정: D-492 (Proposed) 결정 개정 2026-10-07
 - 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다
+
+## 2026-10-07 · uncommitted · fix(line_follow): D-492 독립 안전 검토 M1–M8·L1·L2
+- 변경: 정지 확인 0.2 s 뒤 회전, 지연 보정(`junction_turn_lead_s`)과 ±5° 0.3 s 머무름, 전진 한도 `advance_m`/속도+2 s, 연속 `junction_reacquire_frames` 재획득과 ±30° 방향, 보정 lease·미바인딩 동작 확인 중단, 같은 지시 무동작, CAMERA_LINE 전용, `stop`은 교차로에서도 HOLD, 교차로 전 손실은 `lane_lost_before_junction`
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 시험 2007 PASS·18 skip, gateway 2192 PASS·17 skip, 문서 시험 1 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows). 검토 탐침 `probe_lag.py`·`probe_junction.py` 재실행
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-492 수용 점검표
+- 결정: D-492 (Proposed) 독립 안전 검토 반영 2026-10-07
+- 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다

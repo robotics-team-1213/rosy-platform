@@ -611,3 +611,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
 - 결정: D-492 (Proposed), 구현 메모 2026-10-07
 - 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
+
+## 2026-10-07 · uncommitted · fix(api): D-492 검토 L6 junction 수동 해제와 409 코드
+- 변경: `require_manual_released`(409 `MODE_CONFLICT`), IR_LINE은 409 `JUNCTION_CAMERA_ONLY`, OFF는 `LINE_FOLLOW_NOT_ACTIVE`. API Ref 행·에러 표 갱신
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 시험 2007 PASS·18 skip, gateway 2192 PASS·17 skip, 문서 시험 1 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows). 검토 탐침 `probe_lag.py`·`probe_junction.py` 재실행
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-492 수용 점검표
+- 결정: D-492 (Proposed) 독립 안전 검토 반영 2026-10-07
+- 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다

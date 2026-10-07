@@ -498,3 +498,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
 - 결정: D-492 (Proposed) 결정 개정 2026-10-07
 - 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다
+
+## 2026-10-07 · uncommitted · fix(config): D-492 검토 설정과 주석
+- 변경: `junction_reacquire_frames: 3`, `junction_turn_lead_s: 0.15` 추가, D-407 로컬 후진 주석 갱신
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 시험 2007 PASS·18 skip, gateway 2192 PASS·17 skip, 문서 시험 1 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows). 검토 탐침 `probe_lag.py`·`probe_junction.py` 재실행
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-492 수용 점검표
+- 결정: D-492 (Proposed) 독립 안전 검토 반영 2026-10-07
+- 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
