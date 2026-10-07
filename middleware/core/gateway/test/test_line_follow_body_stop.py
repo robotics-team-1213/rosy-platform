@@ -469,7 +469,7 @@ def test_memory_outside_the_body_expires_only_after_the_horizon_of_wheel_motion(
         assert len(m._near_memory) == 1
     t += 0.1
     turned = 0.0
-    while True:
+    for _ in range(100):
         m.note_wheels(0.0, 0.5, owned=True, now=t)
         t += 0.2
         turned += 0.1
@@ -480,7 +480,40 @@ def test_memory_outside_the_body_expires_only_after_the_horizon_of_wheel_motion(
             assert kept == 1, turned
         elif turned * radius > 0.30 + 1e-3:
             break
+    else:
+        pytest.fail("the turn never passed the horizon")
     assert kept == 0
+
+
+def test_c1_blind_disc_lies_inside_the_packaged_pinky_body():
+    """D-507 10 rests on this: with the packaged URDF body every point the C1 cannot see
+    (closer than range_min to the LiDAR) is strictly inside the outline. A body or LiDAR
+    change that breaks it makes the memory matter again on Pinky; re-review D-507 10 then."""
+    from core_common.robot_body import inside_body
+
+    pinky = _merged(PINKY_LAYER)
+    outline = (pinky.body_front_x_m, pinky.body_rear_x_m, pinky.body_half_width_m,
+               pinky.body_rotation_radius_m)
+    for i in range(720):
+        a = 2 * math.pi * i / 720
+        x = pinky.body_lidar_x_m + C1_RANGE_MIN * math.cos(a)
+        y = C1_RANGE_MIN * math.sin(a)
+        assert inside_body(x, y, *outline, strict=True), (x, y)
+
+
+def test_a_point_that_enters_memory_inside_the_body_is_dropped_contact_accepted():
+    """D-507 10 residual (safety review MEDIUM): range_min 0.12 reaches past the body. A
+    return seen 0.062 m ahead of the front, then 0.07 m of travel in one scan gap (0.14 m/s,
+    0.5 s), lands inside the body on entry: contact, dropped by design, not remembered."""
+    lidar_x = PINKY["body_lidar_x_m"]
+    m = _manager()
+    point = (0.104 - lidar_x, 0.0)                                       # LiDAR range 0.121
+    _step(m, [point], range_min=0.12)
+    m.note_wheels(0.14, 0.0, owned=True, now=T)
+    _, status = _step(m, [], t=T + 0.5, range_min=0.12)                 # base x 0.034: inside
+    with m._lock:
+        assert m._near_memory == ()
+    assert status.clearance_source != "memory"
 
 
 def test_a_lidar_whose_range_min_reaches_past_the_body_remembers_as_before():
