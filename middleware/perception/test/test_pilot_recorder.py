@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from control import pilot_recording as pr
-from control.recording import finish_session, new_session
+from control.recording import finish_session, ir_range_sample, new_session
 from core_common.protocol.recording import (
     MANIFEST_NAME, RecorderStatus, RecordingManifest, recording_id_ok)
 
@@ -127,7 +127,16 @@ def test_bag_command_records_the_d411_topics_namespaced_and_dies_with_its_parent
     topics = cmd[cmd.index("--topics") + 1:]
     assert topics == ["/rosy_01/camera/front/compressed", "/rosy_01/cmd_vel", "/rosy_01/odom",
                       "/rosy_01/scan", "/rosy_01/line/observation", "/rosy_01/teleop/intent",
-                      "/rosy_01/line/keep_debug"]
+                      "/rosy_01/line/keep_debug", "/rosy_01/ir_sensor/range"]
+    assert "/rosy_01/us_sensor/range" not in topics
+
+
+def test_ir_range_sample_is_three_adc_counts_in_robot_order():
+    assert ir_range_sample([120, 800, 4095]) == {"left": 120, "centre": 800, "right": 4095}
+    assert ir_range_sample((0, 0, 0)) == {"left": 0, "centre": 0, "right": 0}
+    for bad in ([1, 2], [1, 2, 3, 4], [1, 2, 4096], [-1, 2, 3], [1.0, 2, 3],
+                [True, 2, 3], "120,800,400", None):
+        assert ir_range_sample(bad) is None
 
 
 def test_annotated_recording_preserves_raw_and_separates_model_evidence(tmp_path):
@@ -156,7 +165,10 @@ def test_lane_diagnostics_survive_recording_without_annotated_preview(tmp_path, 
     assert ok
     topics = rig.cmds[-1][rig.cmds[-1].index('--topics') + 1:]
     assert topics.count('/rosy_01/line/keep_debug') == 1
+    assert topics.count('/rosy_01/ir_sensor/range') == 1
+    assert '/rosy_01/us_sensor/range' not in topics
     assert 'line/keep_debug' in _meta(tmp_path / rid)['topics']
+    assert 'ir_sensor/range' in _meta(tmp_path / rid)['topics']
     if preview_mode == 'raw':
         assert '/rosy_01/camera/preview/compressed' not in topics
         assert _meta(tmp_path / rid)['annotation_origin'] == 'none'

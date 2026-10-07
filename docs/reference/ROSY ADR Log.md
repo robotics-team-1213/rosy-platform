@@ -500,4 +500,5 @@
 | D-503 | 자율 사슬은 다섯 층(Perception → World State → Autopilot Supervisor → Skill → Planner/Control) — 모델은 출처·나이 붙은 사실만(VLM = 정체, SAM/Qwen 점 = 오프라인 초안, judge = 검수 순서), 규칙이 고르고 CORE가 확인, 운용 판단 요청은 예외 큐 하나(로봇 화면 처리는 D-407대로); D-361 개정(등록 로봇 `stuck_resolver` 추가 자격 `robot_enrollment_credentials`), 막힘 에피소드 표, 데이터 먼저, VLM SQL 트리거 | Proposed (2026-10-07; 문서만; 구현·배포는 단계별 사용자 승인) |
 | D-504 | 로봇 얼굴 애니메이션은 작은 LCD에서 표정의 형태를 먼저 구별하게 한다 | Accepted (2026-10-07, 사용자 요청; SOURCE/LOCAL 구현, DEVICE/FIELD 별도) |
 | D-505 | 로봇 상태 전환에서 화면·램프를 먼저 갱신하고 소리로 알린다; 막힘과 내비게이션 실패를 LCD 문구로 구분한다 | Proposed (2026-10-07, SOURCE/LOCAL 구현; DEVICE/FIELD 별도) |
+| D-506 | Pilot 녹화는 바닥 IR 원시값(`ir_sensor/range`, 좌·중·우 ADC)을 라이다와 같은 증거로 남긴다. 초음파 `us_sensor/range`는 넣지 않는다 | Proposed (2026-10-07; 사용자 지시; D-411 A에 토픽 하나 추가, D-504는 얼굴 ADR, D-505는 상태 전환 화면이 먼저 씀) |
 | D-507 | 차선 trip의 한 구간은 CORE가 추종 → 접근 → 회전 축 → 회전 → 재획득 상태 기계로 실행하고 Fleet은 지도에서 그 구간의 기대만 준다; 현장 근거는 지도 하나에 묶인 바닥 선언 `site_floor_map_id` 하나로 합치고, D-468은 이탈의 양의 증거가 있을 때만 연다 | Accepted (2026-10-07, 사용자 결정: 7·9항 수락, 6항 변경 — 현장 근거로 D-468 역추적 후진 허용, 뒤쪽 바닥은 선언이 진다; 옛 현장 키는 시작 거부; 구현·SIM·DEVICE 별도) |
