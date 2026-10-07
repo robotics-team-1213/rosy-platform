@@ -43,6 +43,8 @@ class BaseVelocityControl(_Wire):
     service, ``free`` with goal navigation) and ``trip_max_linear`` (m/s) the
     fastest speed it allows a Fleet trip. A device without them is an older image.
     ``junction_turn`` (D-495) is true when its line-follow can do the bounded junction turn.
+    ``junction_pivot`` (D-507 2) is true when CORE takes the junction instruction's ``map_id``,
+    ``expect_in_m``, ``expect_tol_m`` and ``pivot_past_line_m``; Fleet sends them only then.
     ``site_floor_map_id`` (D-507 9) is the robot's site floor declaration, the SiteMap map_id
     whose floor was walked; absent = none. Fleet opens lane trips only on that active map.
     """
@@ -59,6 +61,7 @@ class BaseVelocityControl(_Wire):
     drive_modes: tuple[Literal["lane", "free"], ...] | None = None
     trip_max_linear: float | None = Field(None, ge=0, allow_inf_nan=False)
     junction_turn: bool | None = None
+    junction_pivot: bool | None = None
     site_floor_map_id: str | None = Field(None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
 
 
@@ -148,6 +151,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    autonomy: tuple[Literal["line"], ...] = (), robot_kind: str | None = None,
                    drive_modes: tuple[Literal["lane", "free"], ...] | None = None,
                    trip_max_linear: float | None = None, junction_turn: bool | None = None,
+                   junction_pivot: bool | None = None,
                    site_floor_map_id: str | None = None) -> dict:
     """Pinky's controls from its adapter manifest's `provides` (D-411 §8).
 
@@ -160,6 +164,6 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          max_angular=max_angular, pivot=True, fine=True,
                                          autonomy=autonomy, robot_kind=robot_kind,
                                          drive_modes=drive_modes, trip_max_linear=trip_max_linear,
-                                         junction_turn=junction_turn,
+                                         junction_turn=junction_turn, junction_pivot=junction_pivot,
                                          site_floor_map_id=site_floor_map_id))
     return ControlsDescriptor(items=tuple(items)).model_dump(by_alias=True, mode="json", exclude_none=True)

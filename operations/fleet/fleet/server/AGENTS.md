@@ -21,6 +21,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | `line_stuck.py` | D-407 `LineStuckBoard` — 로봇별 열린 차선 막힘(CORE `line_follow.stuck` + `nav.line_stuck_opened` 여유)과 넘긴 답 기록. 판단은 CORE 가 한다; 콘솔은 `web/line-stuck.js` |
 | `traffic.py` | 경로 충돌 판정(순수 기하). 전송도 asyncio 도 없다 |
 | `map_pose_service.py` | D-494 3 `MapPoseService` — 받아들인 sighting과 스냅숏 `odom_pose`로 trip 전용 지도 자세, `GET /api/fleet/robots/{id}/map-pose`. `/route`·교통정리는 읽지 않는다 |
+| `lane_compliance_service.py` | D-511 M0 `LaneComplianceMonitor` — 2 Hz로 움직인 로봇만 refresh 하고 모든 로봇의 차로 여유를 판정해 최신값을 `/api/fleet/state` 행 `lane_compliance`와 `GET /api/fleet/robots/{id}/lane-compliance`로 보여 준다. 로봇에 아무것도 보내지 않는다. 루프는 `background_workers.lane_compliance_loop` |
 | `teach_service.py`, `teach_routes.py` | D-494 6 주행 가르치기 — 한 대의 map pose를 0.5 s마다 기록하고, 멈추면 RDP 선과 끝 장소 후보를 돌려주며, 확정·주소 만들기는 초안에만 쓴다(`/api/fleet/teach*`). 로봇에 아무것도 보내지 않는다. 순수 규칙은 `fleet/routing/teach.py` |
 | (대형) | `swarm/session.py` 의 `FormationSession` 을 콘솔이 하나만 들고 연다 |
 | `app.py` | FastAPI 표면. `/api/fleet/*` 와 `/console` 정적 자산 allowlist |
