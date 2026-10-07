@@ -114,3 +114,12 @@ test('teach confirm body: a place id, or a new address name; speed is bounded', 
   assert.throws(() => teachConfirmBody({...args, speed: '0'}), /속도 상한/);
   assert.equal(teachConfirmBody({...args, revision: 'r9'}).expected_revision, 'r9');
 });
+
+test('the confirm form acts on the newest stopped recording, whatever the list order', async () => {
+  const {newestPending} = await import('../../fleet/server/web/site-map-model.js');
+  const old = {teach_id: 'old', expires_at: 100}, fresh = {teach_id: 'new', expires_at: 200};
+  assert.equal(newestPending({pending: [old, fresh]}).teach_id, 'new');
+  assert.equal(newestPending({pending: [fresh, old]}).teach_id, 'new');
+  assert.equal(newestPending({pending: []}), null);
+  assert.equal(newestPending(null), null);
+});

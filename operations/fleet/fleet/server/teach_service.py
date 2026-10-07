@@ -189,4 +189,4 @@ class TeachService:
         self._prune()
         live = self._recording
         return {"recording": None if live is None else {**asdict(live), "points": [list(p) for p in live.points]},
-                "pending": [s.result for s in self._pending.values()]}
+                "pending": [s.result for s in reversed(self._pending.values())]}  # newest first

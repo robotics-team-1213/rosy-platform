@@ -2,7 +2,7 @@
 // then confirm the simplified line as a draft lane, or add an address at the robot.
 // Nothing here moves a robot. The draft changes only through the Fleet teach API.
 import {
-  PLACE_KINDS, PLACE_KIND_LABEL, siteMapErrorText, teachConfirmBody, teachStatusText,
+  PLACE_KINDS, PLACE_KIND_LABEL, newestPending, siteMapErrorText, teachConfirmBody, teachStatusText,
 } from '/console/assets/site-map-model.js';
 
 const POLL_MS = 1000;
@@ -24,7 +24,7 @@ export function createTeachPanel(host) {
     const base = role === 'operator' ? '' : role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
     const robot = base || ($('teach-robot').value ? '' : '로봇을 고르세요');
     const recording = view?.recording;
-    const pending = view?.pending?.[0];
+    const pending = newestPending(view);
     const draftReason = host.dirty() ? '고친 초안을 먼저 저장하세요' : '';
     gate('teach-start', robot || (recording ? '기록 중입니다' : ''));
     gate('teach-stop', base || (recording ? '' : '기록 중이 아닙니다'));
@@ -43,9 +43,9 @@ export function createTeachPanel(host) {
     if (host.role()) {
       try {
         const next = await host.request('/api/fleet/teach');
-        const shownBefore = view?.pending?.[0]?.teach_id;
+        const shownBefore = newestPending(view)?.teach_id;
         view = next;
-        const pending = view.pending[0];
+        const pending = newestPending(view);
         if (pending && pending.teach_id !== shownBefore) {
           fillEnd('teach-from', pending.from_candidates);
           fillEnd('teach-to', pending.to_candidates);
@@ -82,7 +82,7 @@ export function createTeachPanel(host) {
     host.render();
   }, '기록을 멈췄습니다. 시작·끝 장소와 통행 방식을 정해 초안에 확정하세요.'));
   $('teach-confirm').addEventListener('click', () => act(async () => {
-    const pending = view?.pending?.[0];
+    const pending = newestPending(view);
     if (!pending) return;
     const out = await post('/api/fleet/teach/confirm', teachConfirmBody({
       teachId: pending.teach_id, from: $('teach-from').value, fromName: $('teach-from-name').value,
@@ -111,7 +111,7 @@ export function createTeachPanel(host) {
     /** Lines in map metres to draw over the map: the live recording, then the newest stopped one. */
     lines() {
       const live = view?.recording?.points;
-      return [live, view?.pending?.[0]?.polyline].filter(points => points && points.length > 1);
+      return [live, newestPending(view)?.polyline].filter(points => points && points.length > 1);
     },
   };
 }

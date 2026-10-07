@@ -143,7 +143,12 @@ def test_stop_without_confirm_is_dropped_after_10_minutes_and_short_runs_are_ref
 
     result = run(record([(1.0, 0.0)]))
     assert result["from_candidates"] == [] and service.view()["pending"] == [result]   # no map yet: new places
-    clock.now += teach_service.PENDING_S + 1
+    clock.now += 1
+    second = run(record([(1.0, 0.0)]))
+    assert [p["teach_id"] for p in service.view()["pending"]] == [second["teach_id"], result["teach_id"]]
+    clock.now += teach_service.PENDING_S - 0.5
+    assert [p["teach_id"] for p in service.view()["pending"]] == [second["teach_id"]]  # 10 min after its stop
+    clock.now += 1
     assert service.view()["pending"] == []
     with pytest.raises(TeachError) as err:
         service.confirm(result["teach_id"], start={"name": "a"}, end={"name": "b"}, direction="one_way",

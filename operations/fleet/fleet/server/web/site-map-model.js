@@ -245,3 +245,8 @@ export function teachConfirmBody({teachId, from, fromName, to, toName, direction
   return {teach_id: teachId, from: end(from, fromName, '시작'), to: end(to, toName, '끝'), direction,
     drive_mode: driveMode, speed_cap_mps: value, expected_revision: revision || null};
 }
+
+/** The recording the confirm form acts on: the newest stopped one (latest `expires_at`). */
+export function newestPending(view) {
+  return (view?.pending || []).reduce((best, item) => (!best || item.expires_at > best.expires_at ? item : best), null);
+}
