@@ -647,3 +647,11 @@
 - 변경: 상태 소켓이 열린 채 프레임을 멈추고 REST 상태 조회도 실패하면 마지막 속도·배터리·모드를 숨기고 「상태 수신 없음」을 표시한다. 다음 readback에서 회복한다.
 - 증거: [LOCAL 전이](../../../docs/validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 1 failed, 수정 후 관련 브라우저 11 passed, `known_failures.py` 0 NEW. G1 결과는 회차 기록에 둔다.
 - gate 변화: Pilot 320px G2 전이 일부 보강. 실제 태블릿·로봇 및 전체 G2/G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 비상 카메라 전화 폭
+
+- 변경: 읽기 전용 카메라 상단에서 안내와 홈·비상 정지를 분리하고 전화 폭의 두 행동을 같은 너비로 맞췄다.
+- 근거: [LOCAL 8셀](../../../docs/validation/uiux-pilot-emergency-width-2026-10-07/result.md). 관련 브라우저 12 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실물 정지 readback, 나머지 선언 셀, 사용자 G3와 제품 전체는 HOLD.
+
+\n

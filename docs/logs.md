@@ -6721,3 +6721,11 @@ osy-d395-s1d\`.
 - 변경: 기존 사이트 PC의 배포 태그와 두 로봇 mDNS 해석을 현재 로컬 후보와 다시 대조하고 운영자 독회 기록지에 날짜별 준비 상태를 남겼다.
 - 증거: [읽기 전용 결과](validation/uiux-site-g3-readiness-2026-10-07/result.md). 세 사이트 이미지 태그 `5eb726c13…`은 후보 `43a823ac5…`의 조상이고, Fleet UID 10001은 두 `.local` 이름을 해석했다. 원본은 X:의 해시된 요약이다. 문서·계약 시험 **127 passed, 1 skipped**, `known_failures.py` **0 NEW**, harness lint 0 errors.
 - gate 변화: 없음. 현재 후보 설치·실물 상태 readback·요청자 G3가 없어 제품 전체 **HOLD**.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 비상 화면 폭
+
+- 변경: 320/390px 읽기 전용 카메라 상단의 겹침을 고치고 홈·비상 정지 행동 너비를 통일했다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-emergency-width-2026-10-07/result.md), 게이트·카메라 4폭×2화면. 관련 브라우저 12 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실제 사이트 설치본·정지 readback과 사용자 G3 전에는 제품 전체 HOLD.
+
+\n

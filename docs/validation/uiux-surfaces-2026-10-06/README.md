@@ -4,6 +4,8 @@
 
 제품 전체 수용 기준은 사용자 확인에 따라 **활성 표면 모두의 G1, 선언한 G2 상태·폭 전부, G3 실제 사용자 검토와 해당 실물 장치 readback**이다. 일부 화면의 너비 보정이나 LOCAL 시험 통과로 이 판정을 올리지 않는다.
 
+2026-10-07 Pilot 비상 게이트와 읽기 전용 카메라를 선언 폭 네 개에서 [LOCAL로 확인](../uiux-pilot-emergency-width-2026-10-07/result.md)했다. 320/390px 카메라 상단의 안내·행동 겹침을 고쳐 홈·비상 정지를 같은 너비로 배치했다. 관련 브라우저 12 passed, G1 90 passed, 각각 0 NEW. 다른 Pilot G2 셀, 실제 정지 readback과 사용자 G3는 남아 **HOLD**다.
+
 2026-10-07 Pilot 주행 HUD의 속도·배터리 `fresh/delayed/disconnected/unavailable` × 선언 폭 4개를 로컬 브라우저에서 다시 확인했다. [상태별 결과와 원본 캡처 위치](../uiux-pilot-telemetry-2026-10-07/result.md)를 기록했다. 이는 Pilot G2의 부분 근거이며 제품 전체 판정은 **HOLD**다.
 
 상태 소켓이 열린 채 조용해지고 REST 조회가 실패하거나 멈춘 경우의 오래된 속도·배터리를 숨겼다. [320px 수신 중단·회복 LOCAL 전이](../uiux-pilot-silent-readback-2026-10-07/result.md)는 브라우저 11 passed와 현재 숫자 오인을 막는 근거다. 다른 폭의 이 전이와 실물 연결·운전자 G3는 남아 **HOLD**다.

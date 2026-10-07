@@ -362,8 +362,10 @@ def _gate_value(page) -> str:
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
-def test_camera_can_be_seen_in_emergency_without_engaging_motion(tablet_page):
+@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_camera_can_be_seen_in_emergency_without_engaging_motion(tablet_page, width, height):
     base_url, page, errors = tablet_page
+    page.set_viewport_size({"width": width, "height": height})
     previous = dev_server.STATE["mode"]
     dev_server.STATE["mode"] = "EMERGENCY"
     before = len(dev_server.MODE_LOG)
@@ -373,8 +375,25 @@ def test_camera_can_be_seen_in_emergency_without_engaging_motion(tablet_page):
         page.click("form[data-pilot-token-form] ui-button")
         page.wait_for_selector("[data-camera-preview]")
         assert page.locator("[data-drive-enter]").evaluate("e => e.disabled")
+        assert page.locator("ui-topbar [data-estop]").is_visible()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        if output := os.environ.get("ROSY_SHOT_DIR"):
+            shots = Path(output)
+            shots.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(shots / f"pilot-emergency-gate-{width}x{height}.png"))
         page.click("[data-camera-preview]")
         page.wait_for_function("document.querySelector('[data-readonly-camera] img')?.naturalWidth > 0")
+        assert page.locator("ui-topbar [data-estop]").is_visible()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        if width < 480:
+            notice = page.locator("#pilot-notice").bounding_box()
+            home = page.locator("ui-topbar [data-goto]").bounding_box()
+            stop = page.locator("ui-topbar [data-estop]").bounding_box()
+            assert home["y"] >= notice["y"] + notice["height"]
+            assert stop["y"] >= notice["y"] + notice["height"]
+            assert abs(home["width"] - stop["width"]) <= 1
+        if output := os.environ.get("ROSY_SHOT_DIR"):
+            page.screenshot(path=str(shots / f"pilot-emergency-camera-{width}x{height}.png"))
         assert dev_server.STATE["mode"] == "EMERGENCY"
         assert len(dev_server.MODE_LOG) == before
         page.click("[data-drive-fill]")
