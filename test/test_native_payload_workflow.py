@@ -101,3 +101,36 @@ def test_ros_is_installed_from_the_image_locks_snapshot():
     assert "ros2.sources" in text
     assert "snapshots.ros.org/jazzy/20" not in WORKFLOW.read_text(encoding="utf-8")
     assert text.index("apt_snapshot_url") < text.index("ros-jazzy-ros-base")
+
+
+def test_snapshot_signing_key_is_pinned_by_fingerprint_and_scoped():
+    """D-482 addendum: the snapshot key is fetched by full fingerprint, checked, and trusted for the snapshot source only."""
+    lock = yaml.safe_load(
+        (ROOT / "deploy/robot/pinky_pro/image/inputs.lock.yaml").read_text(encoding="utf-8-sig")
+    )
+    fpr = lock["ros"]["apt_snapshot_key_fingerprint"]
+    text = _run_text()
+    rendered = WORKFLOW.read_text(encoding="utf-8")
+    keyring = "/etc/apt/keyrings/ros-snapshots-archive-keyring.gpg"
+
+    # ROS 2 docs "Snapshot repository": 4B63 CF8F DE49 746E 98FA 01DD AD19 BAB3 CBF1 25EA.
+    assert fpr == "4B63CF8FDE49746E98FA01DDAD19BAB3CBF125EA"
+    assert "['ros']['apt_snapshot_key_fingerprint']" in text
+    assert fpr not in rendered  # single source: the lock
+    assert "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${ros_snapshot_key_fpr}" in text
+    assert "gpg --dearmor" in text and f"ros_snapshot_keyring={keyring}" in text
+    # The fetched key must be exactly the pinned fingerprint, or the job stops.
+    assert 'gpg --show-keys --with-colons "$ros_snapshot_keyring"' in text
+    assert '[[ "$ros_snapshot_key_got" != "$ros_snapshot_key_fpr" ]]' in text
+    check = text.index('"$ros_snapshot_key_got" != "$ros_snapshot_key_fpr"')
+    assert "exit 1" in text[check:check + 300]
+    # Scoped trust: Signed-By on the snapshot stanza, live stanza removed, no global trust.
+    assert "Signed-By: %s" in text
+    assert "sudo rm -f /etc/apt/sources.list.d/ros2.sources" in text
+    assert 'grep -qx "Signed-By: $ros_snapshot_keyring"' in text
+    assert "apt-key" not in rendered
+    assert "trusted.gpg.d" not in rendered
+    assert "trusted=yes" not in rendered.lower()
+    assert "allow-insecure" not in rendered.lower()
+    assert "allowunauthenticated" not in rendered.lower()
+    assert check < text.index("ros-jazzy-ros-base")
