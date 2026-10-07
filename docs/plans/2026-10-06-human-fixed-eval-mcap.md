@@ -58,13 +58,13 @@
 2. Extend the existing import and identity schema; preserve the current `video` branch and its prior decisions byte-for-byte. Route MCAP rows around video-only legacy linking. Require a separately configured Review state directory and a frozen class file for evaluation.
 3. Put the exact source identity and evidence status in the UI. Start with geometry-only hints; leave unsupported pixels at 255. Do not use learned-model output as an evaluation draft. Run focused Review tests and `known_failures.py`, then commit.
 
-**Human rule:** Full-frame and background review are required. The circular white stripe is `lane_line`; a center island is `floor` when visibly outside the road. Unclear or occluded pixels stay 255 until resolved; a mask with 255 cannot be approved for publication.
+**Human rule:** Full-frame and background review are required. The circular white stripe is `lane_line`; a center island is `floor` when visibly outside the road. Unclear or occluded pixels stay 255. In the evaluation workspace, a person may explicitly approve a mask with reviewed 255 pixels and an exact unknown count; an all-255 mask is refused. Evaluation metrics exclude those pixels.
 
 ## Task 5: Build a separate immutable human evaluation version
 
 **Files:** `dataset/build.py` or a narrow companion builder in `dataset/`, `training/review_eval_companion.py`, `training/review_dataset.py`, `test/test_d379_evalset.py`, `test/test_review_dataset.py`.
 
-1. Write a failing test for a fully approved indexed mask with pinned current Review authority, exact source image/mask bytes, class SHA, source proof, and no 255. Add refusal cases for pending/excluded/stale approval, class mismatch, missing source proof, and training/eval session overlap.
+1. Write a failing test for a fully approved indexed mask with pinned current Review authority, exact source image/mask bytes, class SHA, source proof, and exact reviewed-255 count. Add refusal cases for pending/excluded/stale approval, class mismatch, missing source proof, all-255 masks, and training/eval session overlap. Run `review_eval_bootstrap.py --ready --store <store> --state <evaluation-workspace> --scratch X:/DevTemp` first; its preflight checks approval, reservations, current class/mask/image bytes, and MCAP decoded pixels. It does not publish an eval version.
 2. Publish `<existing-name>-human/<content-sha>/` using the store's atomic content-addressed path. Record `human_reviewed_eval`, per-frame approval digest, revision, and `source_kind: mcap`; preserve all older eval versions.
 3. Extend the evaluation companion verifier to verify the new MCAP lineage independently. Keep historical D-379 companion semantics and a failing test for a new eval version without its MCAP companion. Re-run focused tests and `known_failures.py`, then commit.
 

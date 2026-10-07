@@ -150,3 +150,29 @@ def test_eval_bootstrap_reserves_before_import_and_replays_without_new_frames(tm
     assert Store(root).eval_reservations() == {'session': 'heldout-group'}
     assert review_eval_bootstrap.start(root, state, catalog, classes, **kwargs)['added'] == 0
     assert ReviewStore(state).get(0)['status'] == 'pending'
+
+
+def test_eval_readiness_requires_current_approved_mask_and_reproved_mcap(tmp_path):
+    catalog, classes = _catalog(tmp_path)
+    digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+    root, state = tmp_path / 'store', tmp_path / 'eval-state'
+    review_eval_bootstrap.start(root, state, catalog, classes,
+                                catalog_sha256=digest(catalog), classes_sha256=digest(classes))
+    with pytest.raises(ValueError, match='approved'):
+        review_eval_bootstrap.ready(root, state, tmp_path)
+    review = ReviewStore(state)
+    painted = review_masks.update(review, 0, {'version': 1, 'action': 'fill', 'label': 0}, Conflict)
+    review_masks.update(review, 0, {'version': painted['version'], 'action': 'approve',
+                                    'complete_frame_review': True, 'background_reviewed': True}, Conflict)
+    result = review_eval_bootstrap.ready(root, state, tmp_path)
+    assert result['frames'] == 1 and result['sessions'] == {'session': 'heldout-group'}
+    class_file = state / 'pixel' / (digest(classes) + '.yaml')
+    class_file.write_bytes(b'changed')
+    with pytest.raises(ValueError, match='class file changed'):
+        review_eval_bootstrap.ready(root, state, tmp_path)
+    class_file.write_bytes(classes.read_bytes())
+    source = review.get(0)['source']
+    bag = Path(source['mcap']['session_dir']) / 'bag' / 'bag_2.mcap'
+    bag.write_bytes(bag.read_bytes() + b'changed')
+    with pytest.raises(ValueError, match='bag hash'):
+        review_eval_bootstrap.ready(root, state, tmp_path)
