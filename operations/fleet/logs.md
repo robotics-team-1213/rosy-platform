@@ -2187,3 +2187,9 @@
 - Change: A failed job/dispatch-generation read clears the pending summary and gives a retry instruction while approval remains blocked.
 - Evidence: 3 declared-width Chromium cases and 6 related cases passed; D-153 G1 90 passed, Python known failures 0 NEW. See docs/validation/uiux-cell-job-read-2026-10-07/result.md.
 - Gate: LOCAL synthetic G2 partial evidence; site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell job snapshot invalidation
+
+- Change: Clear old job summary, ledger, steps, and generation together when the job ID, session, proposal, or read validity changes.
+- Evidence: 12 selected Chromium cases and D-153 G1 90 passed, Python known failures 0 NEW; optional full Cell run incomplete. See docs/validation/uiux-cell-job-switch-2026-10-07/result.md.
+- Gate: LOCAL G2 partial evidence; real site/device and operator G3 remain HOLD.

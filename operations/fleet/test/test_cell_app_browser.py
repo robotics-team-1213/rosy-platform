@@ -459,6 +459,30 @@ def test_failed_job_read_clears_actionable_snapshot(browser_site, width, height)
         page.screenshot(path=str(Path(output) / f"fleet-cell-job-read-error-{width}x{height}.png"))
 
 
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_changing_job_id_clears_previous_job_evidence(browser_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
+    _prepare(page)
+    page.locator("#workcell").fill("omx_sim")
+    page.locator("#instance").fill("omx_sim_01")
+    page.locator("#propose").click()
+    page.locator("#read-job").click()
+    expect(page.locator("#job-summary")).to_contain_text("제안됨")
+    assert page.locator("#step-progress li").count() > 0
+    page.locator("#mission-id").fill("another-job")
+    expect(page.locator("#job-summary")).to_have_text("작업 ID로 상태를 확인하세요.")
+    expect(page.locator("#job-state")).to_be_empty()
+    expect(page.locator("#step-progress li")).to_have_count(0)
+    expect(page.locator("#admit")).to_be_disabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.locator("#job-summary").scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / f"fleet-cell-job-switch-{width}x{height}.png"))
+
+
 def test_import_updates_existing_revision_and_guided_fields(browser_site):
     from playwright.sync_api import expect
 
