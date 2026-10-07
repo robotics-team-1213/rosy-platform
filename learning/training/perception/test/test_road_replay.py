@@ -57,7 +57,7 @@ def synthetic(n=96, blank=(), yaw_rate=0.0):
     x = yaw = 0.0
     for i in range(n):
         t = 100.0 + i / FPS
-        yield rr.Frame(t, BLANK if i in blank else LANE, (x, 0.0, yaw))
+        yield rr.Frame(t, BLANK if i in blank else LANE, (x, 0.0, yaw), odom_stamp=t)
         x += V / FPS
         yaw += yaw_rate / FPS
 
@@ -105,6 +105,38 @@ def test_a_real_gap_in_the_lines_degrades_and_recovers():
     assert levels[-1] == "TRACK"
     assert rows[45]["road"] is not None          # the road estimate keeps a target while coasting
     assert rows[45]["keep"] is None               # the keeper holds
+
+
+def test_boundary_comparison_uses_current_paint_and_odom_memory():
+    metrics, rows = rr.replay(synthetic(64, blank=range(36, 40)),
+                              dropouts=(), compare_boundary=True)
+    assert metrics["boundary_comparison"]["frames"] == 64
+    assert metrics["boundary_comparison"]["memory_before_both"] == 0
+    assert any(r["boundary_tier"] == "BOTH" for r in rows[:36])
+    assert rows[20]["boundary"]["on_paint"] is False
+    assert any(r["boundary_tier"] == "MEMORY" for r in rows[36:40])
+    assert rows[39]["keep"] is None
+    assert rows[39]["boundary"]["confidence"] < 1.0
+    assert rows[39]["boundary_candidate"] == rows[39]["boundary"]
+    assert rows[-1]["boundary_tier"] in ("BOTH", "ONE")
+
+
+def test_boundary_candidate_requires_confirmed_pair_before_one_side_or_memory():
+    observation = {"err": 0.1, "confidence": 0.6}
+    assert rr.boundary_candidate(observation, "ONE", False) is None
+    assert rr.boundary_candidate(observation, "MEMORY", False) is None
+    assert rr.boundary_candidate(observation, "BOTH", False) == observation
+    assert rr.boundary_candidate(observation, "MEMORY", True) == observation
+
+
+def test_boundary_comparison_requires_fresh_odom_and_resets_pair_on_stop():
+    frames = [rr.Frame(f.t, f.bgr, f.odom) for f in synthetic(8)]
+    metrics, rows = rr.replay(frames, dropouts=(), compare_boundary=True)
+    assert metrics["boundary_comparison"]["fresh_odom_frames"] == 0
+    assert all(r["boundary_tier"] == "STOP" and r["boundary_candidate"] is None for r in rows)
+    assert rr.pair_seen_after(True, "STOP") is False
+    assert rr.pair_seen_after(True, "MEMORY") is True
+    assert rr.pair_seen_after(False, "BOTH") is True
 
 
 def test_wall_false_accept_uses_d379_masks(tmp_path):
