@@ -31,10 +31,12 @@ _PARKING = (200, 180, 60)
 _RATE_TOLERANCE_S = 1e-3
 
 
-def keep_debug_payload(last, ground, camera_x_offset_m, **metadata):
-    """Bind one keeper decision to the ground projection it actually used."""
-    projection = None if ground is None else {
-        key: getattr(ground, key) for key in (
+def keep_debug_payload(last, projector, camera_x_offset_m, /, **metadata):
+    """Bind one keeper decision to the ground projection it actually used.
+
+    `projector` is positional-only: the node also passes a `ground` label in metadata."""
+    projection = None if projector is None else {
+        key: getattr(projector, key) for key in (
             'height_m', 'pitch_rad', 'focal_px', 'principal_x', 'principal_y', 'max_range_m')}
     if projection is not None:
         projection['camera_x_offset_m'] = camera_x_offset_m
