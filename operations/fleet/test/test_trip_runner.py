@@ -430,3 +430,20 @@ def test_the_loop_steps_on_its_period():
 
     run(briefly())
     assert runner.running()["state"] == "running" and math.isclose(runner.config.period_s, 0.5)
+
+
+def test_confirm_after_the_map_changed_plans_again_at_the_place():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    ports.blocked = frozenset({"ring_e"})
+    run(runner.tick())
+    assert runner.running()["hold"]["map_version"] == 1
+    draft = store.save_draft(SiteMap.model_validate(store.active_view()["map"]), expected_revision=None,
+                             principal_id="bob")
+    store.activate(expected_revision=draft["revision"], principal_id="bob", route_active=False)
+    assert _code(runner.confirm_replan("p1", "bob")) == "TRIP_MAP_CHANGED"
+    run(runner.tick())
+    hold = runner.running()["hold"]
+    assert hold["map_version"] == 2 and ports.sent[-1][0] == "stop"
+    assert run(runner.confirm_replan("p1", "bob"))["map_version"] == 2

@@ -270,9 +270,14 @@ class TripRunner:
                 raise TripError(409, "TRIP_NO_REPLAN")
             if hold.get("plan") is None:
                 raise TripError(409, "TRIP_REPLAN_FAILED", {"code": hold.get("code")})
+            active = self._store.active()
+            if active is None or active[0] != hold["map_version"]:  # plan again at this place
+                live.view["hold"], live.replan_pending = None, True
+                self._save(live)
+                raise TripError(409, "TRIP_MAP_CHANGED", {"map_version": active[0] if active else None})
             live.view["plan"] = hold["plan"]
             live.view["map_version"] = hold["map_version"]
-            live.graph = self._store.active()[2]
+            live.graph = active[2]
             live.view.update(segment_index=0, hold=None)
             live.view["detail"]["replan_confirmed_by"] = principal_id
             live.armed, live.last_goal, live.replan_pending = None, None, False
