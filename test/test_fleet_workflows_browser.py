@@ -5,10 +5,11 @@ import json
 from pathlib import Path
 
 import pytest
+from browser_harness import browser_tests_enabled
 
 from test_fleet_console_browser import API, _open_console as _open_base, console_url  # noqa: F401
 
-pytestmark = pytest.mark.skipif(os.environ.get('ROSY_RUN_BROWSER_TESTS') != '1',
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='optional Chromium regression')
 
 

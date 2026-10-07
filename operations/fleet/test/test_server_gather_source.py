@@ -6,9 +6,13 @@
 
 from fakes import FakeClock, FakeRobot, run
 from test_hub import _ep, _hello
+from fastapi.testclient import TestClient
 
+from core_features.power.battery import BatteryConfig, BatteryMonitor
+from core_features.power.manager import PowerConfig, PowerManager
 from core_common.protocol.schemas import Envelope, EnvelopeType, HeartbeatPayload, StateSnapshot
 from fleet.hub.hub import SiteHub
+from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.swarm.robots import RobotEndpoint
 
@@ -17,6 +21,57 @@ def _console(*robots: FakeRobot, clock=None) -> FleetConsole:
     endpoints = [RobotEndpoint(robot_id=r.robot_id, base_url=f"http://127.0.0.1:808{i}",
                                token="t") for i, r in enumerate(robots)]
     return FleetConsole(endpoints, list(robots), clock=clock or FakeClock())
+
+
+def _health(now):
+    battery = BatteryMonitor(BatteryConfig(), clock=now)
+    battery.on_voltage(7.6)
+    battery.set_charging(True)
+    power = PowerManager(PowerConfig())
+    return {"power": power.status().model_dump(mode="json"), "battery": battery.health(),
+            "policy": power.health(), "recommendation": "normal_idle_policy", "health": {}}
+
+
+def _state_rows(client):
+    response = client.get("/api/fleet/state", headers={"Authorization": "Bearer viewer"})
+    assert response.status_code == 200, response.text
+    return response.json()["robots"]
+
+
+def test_power_health_is_bounded_and_one_failure_does_not_hide_another_robot():
+    clock = FakeClock()
+    good, bad = FakeRobot("rosy_01"), FakeRobot("rosy_02")
+    good.power_health_value = _health(clock)
+    bad.power_health_error = ConnectionError("old robot")
+    console = _console(good, bad, clock=clock)
+    client = TestClient(create_app(console, console_token="viewer", start_task_dispatcher=False))
+    rows = _state_rows(client)
+    assert rows[0]["power_health"]["battery"]["charging_state"] == "confirmed"
+    assert rows[1]["power_health"] is None
+    _state_rows(client)
+    assert good.calls.count(("power_health",)) == 1
+    clock.advance(6)
+    _state_rows(client)
+    assert good.calls.count(("power_health",)) == 2
+    good.state_error = ConnectionError("offline")
+    client.app.state.fleet_gather.max_age_s = 0.0
+    assert _state_rows(client)[0]["power_health"] is None
+
+
+def test_power_health_rejects_malformed_body_and_replaced_robot_cache():
+    clock = FakeClock()
+    first = FakeRobot("rosy_01")
+    first.power_health_value = _health(clock)
+    console = _console(first, clock=clock)
+    client = TestClient(create_app(console, console_token="viewer", start_task_dispatcher=False))
+    assert _state_rows(client)[0]["power_health"] is not None
+    replacement = FakeRobot("rosy_01")
+    replacement.power_health_value = {"battery": {"charging_state": "confirmed"}}
+    console._replace_client(RobotEndpoint("rosy_01", "http://127.0.0.1:9090", "t"), replacement)
+    client.app.state.fleet_gather.max_age_s = 0.0
+    row = _state_rows(client)[0]
+    assert row["power_health"] is None and row["power_health_age_s"] is None
+    assert replacement.calls.count(("power_health",)) == 1
 
 
 def test_fresh_hub_snapshot_answers_and_rest_get_is_skipped():

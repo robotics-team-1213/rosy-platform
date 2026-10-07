@@ -3,6 +3,9 @@
 
 # solutions
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Durable learnings captured after review or bug-fix cycles (`ce-compound`). Each note has YAML frontmatter (`module`, `tags`, `problem_type`, `applies_when`) and lives in a category folder. Read these before repeating a design or verification pattern in a documented area.

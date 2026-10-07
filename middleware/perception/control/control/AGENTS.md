@@ -3,6 +3,9 @@
 
 # control/ (motion policy + mode label)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 Robot-frame geometry → motion policy. Pure logic, **no ROS imports** — the unit-test-covered decision layer shared by wander/safety. One concern per module.
 

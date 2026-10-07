@@ -2,6 +2,9 @@
 
 # SD personalization
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Windows-side, fail-closed preparation of one verified ROSY OS image for one

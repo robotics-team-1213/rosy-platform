@@ -3,6 +3,9 @@
 
 # rosylib
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Rosy-owned stand-in for the vendor's closed `pinkylib` (D-192). Installed by the `bringup` package as the top-level module `rosylib`, because Rosy code imports that name (`battery_publisher.py`, `led/led_server.py`).

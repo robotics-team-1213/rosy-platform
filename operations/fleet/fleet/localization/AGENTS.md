@@ -3,6 +3,9 @@
 
 # localization
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 D-395 Fleet localization arbiter. Scores each robot's pose candidates with bounded cues and decides only when one leads the next by a margin held for 2 s. Pure: no transport, no asyncio, no robot calls. The service loop that feeds it and sends decisions belongs to `server/` (Phase 2).

@@ -2,6 +2,9 @@
 <!-- Generated: 2026-09-17 | Updated: 2026-09-17 -->
 # server
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 관제 PC의 Fleet 서버 v1 — 사이트 오케스트레이터와 관제 UI 역할(site-fabric 설계 §2, 전환

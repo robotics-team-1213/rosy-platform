@@ -3,6 +3,9 @@
 
 # swarm
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 SWM-001~007 robot-side follow. ROS-free. Aims via NavigationManager moving-goal

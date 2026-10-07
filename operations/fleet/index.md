@@ -91,6 +91,6 @@
 
 - 2026-10-08 · uncommitted · fix(fleet): D-511 M0 리뷰 반영
 - 2026-10-08 · uncommitted · feat(fleet): D-511 M0 차로 준수 감시(관찰·알림만)
-- 2026-10-07 · uncommitted · fix(fleet): 개발 콘솔 모든 화면 직접 접속
-- 2026-10-07 · uncommitted · docs(api): 예외 큐 신선도 필드를 v1.122 로
-- 2026-10-07 · uncommitted · fix(fleet): D-493 예외 큐가 오래된 상태를 표시
+- 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up
+- 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시
+- 2026-10-08 · uncommitted · feat(fleet): D-513 7 카메라 화면 회전

@@ -3,6 +3,9 @@
 
 # tools
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Host-side utilities for the absorbed Control package: a static ROS-name audit, calibration YAML migration, and Gazebo desk-maze rigs. Not launch entry points and not the pytest suite.

@@ -3,6 +3,9 @@
 
 # capture
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Robot side of the edge-capture loop: short supervised drives over the CORE API that record a Pilot session for pixel drafts (D-379, D-465). Runs on the operator PC with the operator at the robot and Fleet watching. The data side is `learning/training/perception/dataset/edge_capture_session.py`; the whole run order is in `learning/training/perception/dataset/AGENTS.md` ("Edge-capture loop").
