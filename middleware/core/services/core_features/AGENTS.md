@@ -28,7 +28,7 @@ Python package of feature managers behind CORE's `CoreServices`, one subpackage 
 | `swarm/` | Formation follow (see `swarm/AGENTS.md`) |
 | `diagnostics/` | Diagnostics collector (see `diagnostics/AGENTS.md`) |
 | `calibration/` | Calibration session (see `calibration/AGENTS.md`) |
-| `line_follow/` | Line-follow manager, clearance, stuck recovery (see `line_follow/AGENTS.md`) |
+| `line_follow/` | Line-follow manager, clearance; lane recovery mixins in `line_follow/recovery/` (see `line_follow/AGENTS.md`) |
 | `fleet_agent/` | Fleet enrolment and discovery (see `fleet_agent/AGENTS.md`) |
 | `decision/` | Shared allowed-action judgment, D-228 (see `decision/AGENTS.md`) |
 | `localization/` | D-395 CORE side: `assist.py` relays localization state/candidates/decisions, `halt.py` stops autonomy when a robot leaves LOCALIZED, `mission.py` very slow check and homing manoeuvres written to the nav slot |

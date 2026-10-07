@@ -220,7 +220,7 @@ def test_a_stated_systematic_is_added_to_a_grid_fit_too():
 
 def test_receiver_extrapolation_is_mirrored():
     text = (REPO / "middleware" / "core" / "services" / "core_features" / "line_follow" /
-            "lane_return_evidence.py").read_text(encoding="utf-8")
+            "recovery" / "lane_return_evidence.py").read_text(encoding="utf-8")
     assert re.search(r"MAX_EXTRAPOLATION_M = ([0-9.]+)", text).group(1) in (".3", "0.3")
     assert RECEIVER_EXTRAPOLATION_M == .3
 

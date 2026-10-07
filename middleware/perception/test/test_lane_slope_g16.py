@@ -7,7 +7,6 @@ line. The fit now uses whole visible cross-sections outside the crosswalk, and u
 carries the fit's slope error.
 """
 import math
-import re
 from pathlib import Path
 
 import cv2
@@ -132,14 +131,6 @@ def test_a_boundary_without_a_stated_fit_error_leaves_uncertainty_unknown(bad):
         k = keeper(0.)
         del k["boundaries"][0][key]
         assert uncertainty(k) is None
-
-
-def test_receiver_extrapolation_is_the_d468_receivers():
-    # The slope lever must cover what core_features.line_follow.lane_return_evidence extrapolates.
-    source = (REPO / "middleware" / "core" / "services" / "core_features" / "line_follow" /
-              "lane_return_evidence.py").read_text(encoding="utf-8")
-    (value,) = re.findall(r"^\s+MAX_EXTRAPOLATION_M = ([0-9.]+)\s*$", source, flags=re.M)
-    assert float(value) == RECEIVER_EXTRAPOLATION_M
 
 
 def test_keeper_and_containment_share_one_paint_half_width():

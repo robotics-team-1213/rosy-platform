@@ -51,7 +51,7 @@ D-2(단일 cmd_vel), D-143(차선 추종), D-321 부록(보정 세션), D-342(�
 
 Status 는 Proposed 그대로다. CORE 쪽만 구현했고 Fleet 콘솔 화면(판단 요청 목록과 다섯 답)과 FleetAgent 의 답 중계는 다음 단계다. 막힘 사건은 다른 사건처럼 FleetAgent 사건 버퍼로 이미 올라간다.
 
-- 상태기계: `src/runtime/services/core_features/line_follow/stuck_recovery.py`(ROS 없음). 관리자 연결은 `stuck_wiring.py`(mixin), CORE 입력 묶기는 `src/runtime/gateway/core/line_follow_wiring.py`(관제 연결 = `FleetAgent.connected`, 보정 lease, `safety.manual_linear`, 미리보기 순서번호). 묶이지 않은 입력은 닫힌 쪽(연결 없음, 보정 중, 선속도 한도 0)으로 읽어 막힘을 열지 않는다.
+- 상태기계: `middleware/core/services/core_features/line_follow/recovery/stuck_recovery.py`(ROS 없음). 관리자 연결은 `stuck_wiring.py`(mixin), CORE 입력 묶기는 `src/runtime/gateway/core/line_follow_wiring.py`(관제 연결 = `FleetAgent.connected`, 보정 lease, `safety.manual_linear`, 미리보기 순서번호). 묶이지 않은 입력은 닫힌 쪽(연결 없음, 보정 중, 선속도 한도 0)으로 읽어 막힘을 열지 않는다.
 - 후진은 차선 추종 결정(`LineFollowDecision`, 음의 선속도)으로 나가 기존 line → traffic gate → CommandManager 경로를 탄다(D-2). 교통 정책이 ENFORCED 에서 HOLD 면 후진도 0 이다.
 - 답: `POST /api/v1/line-follow/stuck/decision {stuck_id, decision}`(Operator 이상, API Ref v1.72). 상태: `GET /api/v1/line-follow` 의 `stuck`. 사건 `nav.line_stuck_opened/asked/answered/local_attempt/local_result/closed`.
 - 설정: `line_follow.recovery_*`(기본 `recovery_local_enabled: false`), 몸 기하 `body_lidar_x_m`·`body_rear_x_m`·`body_rotation_radius_m` 는 로봇 패키지 `core.yaml` 에 URDF 공칭값(geometry.yaml, drift 시험)으로만 둔다. 없으면 후진하지 않는다.

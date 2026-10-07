@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 
-from core_features.line_follow.lane_return import _angle
+from core_features.line_follow.recovery.lane_return import _angle
 
 #: Same admission bounds as D-468 lane evidence (lane_return_evidence.LaneReturnEvidence).
 MAX_UNCERTAINTY_M = .015

@@ -27,7 +27,7 @@ from .lane_keep_lines import PAINT_HALF_WIDTH_M, paint_half_width  # noqa: F401 
 #: Real grounds take theirs from the profile key detector_lateral_px.
 GAZEBO_DETECTOR_LATERAL_PX = 2.0
 #: The receiver extrapolates a boundary this far past its observed support
-#: (core_features.line_follow.lane_return_evidence.LaneReturnEvidence.MAX_EXTRAPOLATION_M).
+#: (core_features.line_follow.recovery.lane_return_evidence.LaneReturnEvidence.MAX_EXTRAPOLATION_M).
 RECEIVER_EXTRAPOLATION_M = 0.3
 #: Roll levels sampled across +-its bound (odd, so 0 is one). The re-review's 41-201 level
 #: scan found the worst roll interior, at most 0.3 % above the corners-and-centre value.
