@@ -82,17 +82,23 @@ def _true_units(spans, front, body):
     return {s.unit for s in spans if s.d1 > front - body and s.d0 < front}
 
 
-def _run(layout, cycle, n, *, ticks, seed, unknown_rate=0.0, stall_rate=0.0, u=0.05, body=0.12):
+def _run(layout, cycle, n, *, ticks, seed, unknown_rate=0.0, stall_rate=0.0, u=0.05, body=0.12, packed=False):
     """Robots report ``estimate = true ± u``; CORE drives to ``authority - estimate`` past the
     true position (odom-anchored, D-517 4); UNKNOWN robots coast to their last authority."""
     rng = random.Random(seed)
-    starts = [round(i * len(cycle) / n) for i in range(n)]
     robots, true_d, last_auth, prev = [], {}, {}, {}
-    for i, start in enumerate(starts):
-        spans = _spans(cycle, start, laps=ticks // 5 + 3)
-        robot = Robot(f"r{i:02d}", spans, None, 0.3, u, body)
-        robots.append(robot)
-        true_d[robot.id] = spans[0].d1 - 0.02
+    if packed:  # queued nose to tail across one boundary, the review's startup case
+        spans = _spans(cycle, 0, laps=ticks // 5 + 3)
+        for i in range(n):
+            robot = Robot(f"r{i:02d}", spans, None, 0.3, u, body)
+            robots.append(robot)
+            true_d[robot.id] = spans[0].d1 + 0.11 - i * (body + 0.02)
+    else:
+        for i, start in enumerate(round(i * len(cycle) / n) for i in range(n)):
+            spans = _spans(cycle, start, laps=ticks // 5 + 3)
+            robot = Robot(f"r{i:02d}", spans, None, 0.3, u, body)
+            robots.append(robot)
+            true_d[robot.id] = spans[0].d1 - 0.02
     state = TableState()
     conflicts, progress, shrinks = [], {r.id: 0.0 for r in robots}, []
     for tick in range(ticks):
@@ -116,13 +122,12 @@ def _run(layout, cycle, n, *, ticks, seed, unknown_rate=0.0, stall_rate=0.0, u=0
             move = min(rng.uniform(0.0, 0.1), max(0.0, stop_at - true_d[r.id]))
             true_d[r.id] += move
             progress[r.id] += move
-        # the physical check: no two real bodies on one capacity-1 unit
+        # the physical check: real bodies on a unit never exceed its capacity
         seen = {}
         for r in robots:
             for unit in _true_units(r.spans, true_d[r.id], body):
-                if layout.units[unit].capacity == 1:
-                    assert unit not in seen, f"tick {tick}: {seen[unit]} and {r.id} on {unit}"
-                    seen[unit] = r.id
+                seen.setdefault(unit, []).append(r.id)
+                assert len(seen[unit]) <= layout.units[unit].capacity, f"tick {tick}: {seen[unit]} on {unit}"
     return conflicts, progress, shrinks
 
 
@@ -140,6 +145,42 @@ def test_unknown_poses_and_stalls_freeze_neighbours_but_never_overlap():
     conflicts, progress, shrinks = _run(layout, cycle, 8, ticks=600, seed=9, unknown_rate=0.15, stall_rate=0.2)
     assert conflicts == [] and shrinks == []
     assert min(progress.values()) > 0.65
+
+
+def test_robots_queued_nose_to_tail_untangle_front_first():
+    """Review trace: padding of each neighbour covers the other's unit; the front robot goes first."""
+    layout, cycle = _loop(20, 0.65)
+    conflicts, progress, shrinks = _run(layout, cycle, 3, ticks=300, seed=11, packed=True)
+    assert conflicts == [] and shrinks == []
+    assert min(progress.values()) > 0.65
+
+
+def test_zone_capacity_two_holds_two_real_bodies_at_most():
+    layout, cycle = _loop(30, 0.65, zone_at=(10, 4), zone_cap=2)
+    conflicts, progress, shrinks = _run(layout, cycle, 6, ticks=500, seed=12, unknown_rate=0.1, stall_rate=0.2)
+    assert conflicts == [] and shrinks == []
+
+
+def test_a_robot_missing_from_a_tick_keeps_blocking_its_units():
+    layout, cycle = _loop(8, 0.65)
+    a = Robot("a", _spans(cycle, 0, 3), 0.6, 0.6, 0.05, 0.12)
+    b = Robot("b", _spans(cycle, 3, 3), 0.6, 0.6, 0.05, 0.12)  # b's front unit is b3
+    state = TableState()
+    step(layout, [a, b], state, now=0.0)
+    a.lookahead_m = 5.0
+    lone = step(layout, [a], state, now=0.5)  # b missing this tick
+    assert lone.authority_end["a"] <= 3 * 0.65, "a was given b's unit while b was missing"
+
+
+def test_a_route_change_while_unknown_keeps_the_old_body_blocking():
+    layout, cycle = _loop(8, 0.65)
+    a = Robot("a", _spans(cycle, 3, 3), 0.6, 0.3, 0.05, 0.12, route_id="old")
+    c = Robot("c", _spans(cycle, 0, 3), 0.6, 5.0, 0.05, 0.12)
+    state = TableState()
+    step(layout, [a, c], state, now=0.0)
+    a.d, a.route_id = None, "new"
+    after = step(layout, [a, c], state, now=0.5)
+    assert after.authority_end["c"] <= 3 * 0.65, "c was given units under a's unlocalized body"
 
 
 def test_a_short_loop_with_lookahead_past_a_lap_keeps_its_holds_per_occurrence():
@@ -167,7 +208,7 @@ def test_a_robot_without_a_localized_pose_gets_no_new_authority_and_keeps_its_un
     robot.d = None
     later = step(layout, [robot], state, now=0.5)
     assert "a" not in later.authority_end
-    assert state.held["a"], "units held while UNKNOWN are not released (D-426 3)"
+    assert state.held["a"] and state.last_occupied["a"], "UNKNOWN keeps grants and body (D-426 3)"
 
 
 def test_authority_never_shrinks_when_lookahead_drops_or_the_pose_jumps_back():
