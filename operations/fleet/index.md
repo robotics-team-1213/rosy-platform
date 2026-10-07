@@ -91,5 +91,5 @@
 - 2026-10-07 · uncommitted · fix(fleet): D-494 검토 — 모르는 drive_modes 값은 버린다
 - 2026-10-07 · uncommitted · feat(fleet): D-495 TripCaps.junction_turn
 - 2026-10-07 · uncommitted · feat(fleet): D-494 1 로봇 trip 능력으로 계획을 묶는다
+- 2026-10-07 · b111ccb9c · D-493 관제 화면 지도 우선 배치
 - 2026-10-07 · uncommitted · Cell saved-list error widths
-- 2026-10-07 · uncommitted · Cell saved-document readability
