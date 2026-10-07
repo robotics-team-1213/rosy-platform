@@ -86,3 +86,12 @@ test('D-491 trip panel text and button reasons', async () => {
   assert.equal(tripCancelReason({role: 'operator', running: trip}), '');
   assert.match(tripCancelReason({role: 'operator', running: null}), /없습니다/);
 });
+
+test('D-491 trip stop reasons name the configured stall time and loop errors', async () => {
+  const {tripStatusText, PLACE_KIND_LABEL} = await import('../../fleet/server/web/site-map-model.js');
+  const trip = {state: 'stopped', robot_id: 'r1', reason: 'stall', detail: {stall_s: 35}};
+  assert.match(tripStatusText(trip, MAP), /35초 넘게 경로를 따라 나아가지 않아/);
+  assert.match(tripStatusText({...trip, reason: 'TRIP_LOOP_ERROR', detail: {}}, MAP), /관제 운행 처리에 오류/);
+  assert.match(tripStatusText({...trip, reason: 'junction', detail: {}}, MAP), /차선 주행을 껐습니다/);
+  assert.equal(PLACE_KIND_LABEL.stall, undefined);
+});

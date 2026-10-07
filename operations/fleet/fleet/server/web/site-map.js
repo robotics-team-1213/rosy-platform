@@ -317,7 +317,7 @@ $('trip-cancel').addEventListener('click', async () => {
   const trip = state.running;
   if (!trip) return;
   const allowed = await confirmIrreversible({
-    message: '운행을 취소할까요? 차선 주행이면 다음 교차로에서 멈추고, 좌표 주행이면 목표를 취소합니다.',
+    message: '운행을 취소할까요? 로봇은 바로 멈춥니다. 차선 주행이면 차선 주행을 끄고(OFF), 좌표 주행이면 목표를 취소합니다.',
     action: '운행 취소', opener: $('trip-cancel'),
   });
   if (allowed) tripAction(`/api/fleet/trips/${encodeURIComponent(trip.trip_id)}/cancel`, '운행을 취소했습니다.');

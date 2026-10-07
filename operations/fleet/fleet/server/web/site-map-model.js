@@ -2,7 +2,6 @@
 
 export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'turnaround'];
 export const PLACE_KIND_LABEL = {
-  stall: '20초 넘게 경로를 따라 나아가지 않아 멈췄습니다 · 현장을 확인하세요',
   junction: '교차', park: '주차', charge: '충전', stop: '정차', turnaround: '회차',
 };
 export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
@@ -37,7 +36,9 @@ export const TRIP_STATE_LABEL = {
 };
 export const TRIP_REASON_LABEL = {
   pose: '위치를 믿을 수 없어 멈췄습니다',
-  junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 현장을 확인하세요',
+  junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
+  stall: '경로를 따라 나아가지 않아 멈췄습니다 · 현장을 확인하세요',
+  TRIP_LOOP_ERROR: '관제 운행 처리에 오류가 나 멈췄습니다 · 로봇 정지를 확인하고 관리자에게 알리세요',
   restart: '관제 서버가 다시 시작돼 멈췄습니다 · 자동으로 다시 출발하지 않습니다',
   TRIP_ROBOT_JUNCTION_UNSUPPORTED: '로봇 CORE가 교차로 지시를 모릅니다 · 새 이미지가 필요합니다',
   TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
@@ -192,7 +193,11 @@ export function tripStatusText(trip, map) {
   if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
   if (trip.pose) parts.push(`자세 ${trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
   if (trip.hold) parts.push('바뀐 경로 확인 대기 · 장소에서 서 있음');
-  if (trip.reason) parts.push(TRIP_REASON_LABEL[trip.reason] || trip.reason);
+  if (trip.reason === 'stall' && Number.isFinite(trip.detail?.stall_s)) {
+    parts.push(`${trip.detail.stall_s}초 넘게 ${TRIP_REASON_LABEL.stall}`);
+  } else if (trip.reason) {
+    parts.push(TRIP_REASON_LABEL[trip.reason] || trip.reason);
+  }
   return parts.join(' · ');
 }
 
