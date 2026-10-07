@@ -570,8 +570,8 @@ def test_lobby_failure_shows_retry_and_gate_survives(tablet_page):
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
-@pytest.mark.parametrize("width,height", [(320, 568), (390, 844)])
-def test_lobby_empty_and_failure_fit_phone_width(base_url, width, height):
+@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_lobby_empty_and_failure_fit_declared_widths(base_url, width, height):
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": width, "height": height})
@@ -596,11 +596,16 @@ def test_lobby_empty_and_failure_fit_phone_width(base_url, width, height):
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 assert page.locator("[data-lobby-retry]").is_visible()
                 assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
-                assert page.locator("ui-topbar [data-estop]").is_visible()
+                assert page.locator("form[data-pilot-token-form] label").is_visible()
+                estop = page.locator("ui-topbar [data-estop]").bounding_box()
+                assert estop and estop["y"] + estop["height"] <= height, (state, width, estop)
+                main_width = page.locator(".pilot-main").bounding_box()["width"]
+                assert main_width >= min(width, 768) - 1, (state, width, main_width)
                 widths = page.evaluate("""() => ['form[data-pilot-token-form] ui-field',
                     'form[data-pilot-token-form] ui-button', '[data-lobby-retry]']
                     .map(selector => document.querySelector(selector).getBoundingClientRect().width)""")
-                assert max(widths) - min(widths) <= 1, (state, width, widths)
+                if width < 480:
+                    assert max(widths) - min(widths) <= 1, (state, width, widths)
             assert errors == [], errors
         finally:
             browser.close()
