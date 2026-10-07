@@ -365,6 +365,7 @@ def test_sigterm_mid_stream_runs_cleanup_and_clears_the_marker(tmp_path):
 def test_ctrl_c_during_cleanup_does_not_skip_later_steps(tmp_path):
     robot = FakeRobot(reasons=["following", "obstacle_ahead"])
     handlers = []
+    before = signal.getsignal(signal.SIGINT)   # another suite may have installed its own
 
     def interrupt(method, path, mode):
         if method == "POST" and path == "/mode":
@@ -376,7 +377,7 @@ def test_ctrl_c_during_cleanup_does_not_skip_later_steps(tmp_path):
     assert code == 2 and "CLEANUP FAILED" in s["outcome"]
     assert {"cleanup:recording stop", "cleanup:overlay revert", "cleanup:hold release"} <= set(phases(s))
     assert robot.overlay == ORIGINAL and not robot.hold
-    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+    assert signal.getsignal(signal.SIGINT) is before   # restored to what it was, not forced to default
 
 
 @pytest.mark.parametrize("field", ["off_status", "idle_status"])
