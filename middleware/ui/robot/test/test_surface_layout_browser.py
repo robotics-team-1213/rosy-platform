@@ -121,6 +121,8 @@ def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport
             bodyHeight: document.body.scrollHeight,
             sense: rect('[data-slot=sense]'), observe: rect('[data-slot=observe]'),
             act: rect('[data-slot=act]'), estop: rect('#shell-estop'), topbar: rect('ui-topbar'),
+            panelWidths: ['sense', 'observe', 'act'].map(slot =>
+              rect(`[data-slot=${slot}] ui-section`).width),
             senseScrollable: document.querySelector('[data-slot=sense]').scrollHeight
               > document.querySelector('[data-slot=sense]').clientHeight,
             activeBottom: document.querySelector('.action-group-panel').getBoundingClientRect().bottom,
@@ -138,6 +140,7 @@ def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport
     assert max(result[slot]["width"] for slot in ("sense", "observe", "act")) - min(
         result[slot]["width"] for slot in ("sense", "observe", "act")
     ) <= 1
+    assert max(result["panelWidths"]) - min(result["panelWidths"]) <= 1
     assert result["act"]["bottom"] <= 768
     assert result["activeBottom"] <= result["act"]["bottom"]
     assert result["estop"]["bottom"] <= result["topbar"]["bottom"]
