@@ -22,7 +22,7 @@ import {readControls, profileFromBaseVelocity} from "../controls.js";
 import {calibrationView} from "../calibration.js";
 import {el, mountDriveView, buildStage, buildControls, actionIcon} from "./drive-view.js";
 import {classifyOperation, saveCameraFile} from "/common/evidence.js";
-import {MODE_LABEL, operatorModeLabel} from "/common/core_ui_logic.js";
+import {HeadlessState, MODE_LABEL, evidenceAgeText, operatorModeLabel} from "/common/core_ui_logic.js";
 
 const LOOP_MS = 100;
 const STATE_POLL_MS = 500;
@@ -79,6 +79,43 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   function showMode(mode) {
     element.mode.textContent = operatorModeLabel(mode, "확인 필요");
     element.mode.title = mode;
+  }
+
+  function ageText(frame, channel) {
+    const observed = Date.parse(frame?.evidence?.[channel]?.received_at);
+    const reported = Date.parse(frame?.timestamp);
+    return Number.isFinite(observed) && Number.isFinite(reported) && reported >= observed
+      ? evidenceAgeText((reported - observed) / 1000) : " · 시각 없음";
+  }
+
+  function renderTelemetry(frame) {
+    const evidence = new HeadlessState(frame);
+    const velocity = frame?.velocity;
+    const usableVelocity = typeof velocity?.linear === "number" && Number.isFinite(velocity.linear)
+      && typeof velocity?.angular === "number" && Number.isFinite(velocity.angular);
+    const velocityState = !frame ? "disconnected"
+      : usableVelocity ? evidence.evidenceOf("velocity") : "unavailable";
+    element.speed.dataset.evidence = velocityState;
+    element.turn.dataset.evidence = velocityState;
+    if (velocityState === "fresh" || velocityState === "delayed") {
+      element.speed.textContent = Math.abs(velocity.linear).toFixed(2);
+      const turn = velocity.angular * DEG;
+      const direction = turn > 0.5 ? "↺" : turn < -0.5 ? "↻" : "·";
+      element.turn.textContent = `${direction} ${Math.abs(turn).toFixed(0)}°/s`
+        + (velocityState === "delayed" ? ` · 지연${ageText(frame, "velocity")}` : "");
+    } else {
+      element.speed.textContent = "—";
+      element.turn.textContent = velocityState === "disconnected" ? "· 속도 연결 끊김" : "· 속도 정보 없음";
+    }
+
+    const percent = frame?.battery?.percent;
+    const batteryState = !frame ? "disconnected"
+      : typeof percent === "number" && Number.isFinite(percent)
+        ? evidence.evidenceOf("battery") : "unavailable";
+    element.battery.dataset.evidence = batteryState;
+    element.battery.textContent = batteryState === "fresh" ? `${Math.round(percent)}%`
+      : batteryState === "delayed" ? `${Math.round(percent)}% · 지연${ageText(frame, "battery")}`
+      : batteryState === "disconnected" ? "배터리 연결 끊김" : "배터리 정보 없음";
   }
 
   // --- 보정 세션(D-321 부록): 누가 보정 중인지 보이고, 남의 보정이면 주행 조작을 잠근다 -----
@@ -145,10 +182,13 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       element.state.textContent = LINK_LABEL[state] ?? "상태 확인 필요";
       element.state.dataset.state = state;
       element.state.title = state;
+      if (["RETRYING", "OFFLINE", "FORBIDDEN"].includes(state)) {
+        renderTelemetry(null);
+        element.mode.textContent = "—";
+      }
     },
     onSnapshot: (frame) => {
-      const percent = frame?.battery?.percent;
-      if (percent !== undefined && percent !== null) element.battery.textContent = `${Math.round(percent)}%`;
+      renderTelemetry(frame);
       if (frame?.mode) showMode(frame.mode);
       if (frame && "activity" in frame) renderActivity(frame.activity);
     },
@@ -493,17 +533,13 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   // --- 로봇 상태 폴링: 실측 속도·회전율 ---------------------------------------
   const stateTimer = setInterval(async () => {
     const state = await apiGet("/api/v1/robot/state").catch(() => null);
-    if (!state || state.status !== 200) return;
-    const percent = state.body?.battery?.percent;
-    if (percent !== undefined && percent !== null) element.battery.textContent = `${Math.round(percent)}%`;
+    if (!state || state.status !== 200) {
+      if (["RETRYING", "OFFLINE", "FORBIDDEN"].includes(session.state())) renderTelemetry(null);
+      return;
+    }
+    renderTelemetry(state.body);
     if (state.body?.mode) showMode(state.body.mode);
     renderActivity(state.body?.activity);
-    const velocity = state.body?.velocity;
-    if (velocity) {
-      element.speed.textContent = Math.abs(Number(velocity.linear ?? 0)).toFixed(2);
-      const turn = Number(velocity.angular ?? 0) * DEG;
-      element.turn.textContent = `${turn > 0.5 ? "↺" : turn < -0.5 ? "↻" : "·"} ${Math.abs(turn).toFixed(0)}°/s`;
-    }
   }, STATE_POLL_MS);
 
   // --- HUD 액션 --------------------------------------------------------------

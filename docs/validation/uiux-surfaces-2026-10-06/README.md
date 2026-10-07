@@ -4,6 +4,8 @@
 
 제품 전체 수용 기준은 사용자 확인에 따라 **활성 표면 모두의 G1, 선언한 G2 상태·폭 전부, G3 실제 사용자 검토와 해당 실물 장치 readback**이다. 일부 화면의 너비 보정이나 LOCAL 시험 통과로 이 판정을 올리지 않는다.
 
+2026-10-07 Pilot 주행 HUD의 속도·배터리 `fresh/delayed/disconnected/unavailable` × 선언 폭 4개를 로컬 브라우저에서 다시 확인했다. [상태별 결과와 원본 캡처 위치](../uiux-pilot-telemetry-2026-10-07/result.md)를 기록했다. 이는 Pilot G2의 부분 근거이며 제품 전체 판정은 **HOLD**다.
+
 G3 실제 운영자 독회는 요청자가 수행하기로 했다. [실제 사용자 독회 기록지](operator-walkthrough.md)에 표면별 작업·여덟 판정 항목과 실물 근거 자리를 마련했다. 결과·관찰·재현 폭은 아직 받지 않았으므로 G3 판정은 HOLD다. 픽셀 검수의 class 파일 미연결 상태에서는 점/브러시 전환을 막고 연결 이유를 표시한다. 1440/800/390/320px 브라우저 회귀와 점 미리보기·브러시 조작 **10 passed**, `known_failures.py` **0 NEW**; 수정 후 320px 원본은 X: `captures/pixel-disabled-fix/learning-pixels-320.png`, 실행 기록은 `logs/merge-20261006/pixel-disabled-fix.txt`다.
 
 ## 이번 회차의 질문과 근거
