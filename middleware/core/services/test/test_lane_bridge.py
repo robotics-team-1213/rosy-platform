@@ -295,7 +295,9 @@ REFUSALS = {
     'stale_pose': ({}, {}, dict(pose=False, dt=.35), None),
     'frame_mismatch': ({}, {}, dict(frame='map'), None),
     'probe_false': (dict(probe=lambda now, v, w: False), {}, {}, 'lane_bridge_motion_unconfirmed'),
-    'probe_unbound': ({}, {}, dict(setup=_unbound), 'lane_bridge_motion_unconfirmed'),
+    # D-507 6: an unbound enforce proof is no basis (and no site declaration): the bridge
+    # never opens and D-468 owns (and holds) the tick.
+    'probe_unbound': ({}, {}, dict(setup=_unbound), 'lane_return_containment_unconfirmed'),
     'obstacle_on_loss_tick': ({}, {}, dict(points=((.10, 0.),)), 'obstacle_ahead'),
 }
 

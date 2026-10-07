@@ -6,9 +6,9 @@ same generation/evidence_revision and CommandManager path apply, with or without
 Armed by the follower's own confident following (rev 2026-10-07), not by D-468 containment:
 the anchor is the D-468 evidence ledger's odom pose at the last confident tick, plus its
 corridor when D-468 certified one. Safety stays in body_stop.py (D-422): the bridge arc becomes
-the manager's intent and its swept body gap must be clear. The D-468 worker floor proof must
-also admit the twist whenever it is live (sensor adapter enforce). The bridge never touches
-the loss clock.
+the manager's intent and its swept body gap must be clear. motion_admitted (D-507 6) must also
+admit the twist: the D-468 worker floor proof whenever it is live (sensor adapter enforce),
+else the site basis with IR 'clear'. The bridge never touches the loss clock.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ import math
 from dataclasses import replace
 
 from core_features.line_follow.model import LineFollowMode
+from core_features.line_follow.recovery.motion_admit import MotionAdmitMixin
 
 #: Short breaks only (D-476 decision 3). Image quality, obstacle, departure, stuck never enter.
 BRIDGE_REASONS = frozenset({'line_not_visible', 'observation_stale', 'no_observation'})
@@ -54,7 +55,7 @@ def bridge_target(anchor, corridor, pose, lookahead, kappa=0.):
     return cp*dx + sp*dy, -sp*dx + cp*dy
 
 
-class LaneBridgeMixin:
+class LaneBridgeMixin(MotionAdmitMixin):
     def _init_bridge(self):
         # None | (epoch, pose, corridor|None) armed by the last confident tick | dict (bridging)
         self._bridge = None
@@ -135,13 +136,6 @@ class LaneBridgeMixin:
         return ((j is not None and j.get('action') != 'straight')
                 or (seen is not None and 0 <= now-seen <= self._config.stale_after_s))
 
-    def _floor_proof_required(self):
-        """The worker floor proof gates the bridge unless it is known not to be live."""
-        try:
-            return self._floor_proof_live is None or self._floor_proof_live() is not False
-        except Exception:
-            return True
-
     def _bridge_body_clear(self, now):
         """D-422 swept body gap along the bridge arc (self._intended) on a fresh scan."""
         at = self._clearance_at
@@ -194,7 +188,7 @@ class LaneBridgeMixin:
         pose = view.pose
         guard = self._ir_guard(now) if c.ir_guard_enabled else 'clear'
         if (not authority or self._recovery.stuck_id is not None
-                or not (c.site_floor_map_id is not None or self._floor_proof_required())
+                or self._motion_basis(now, 'bridge') is None
                 or self._bridge_hint not in (None, 'straight') or guard != 'clear'
                 or (kappa and self._junction_pending(now))  # rev 2: no arc into a junction
                 or (kappa and 1-kappa*(corridor.center if corridor else 0.) < ARC_MIN_RADIUS_RATIO)
@@ -227,7 +221,7 @@ class LaneBridgeMixin:
         self._intended = (linear, angular)
         if not self._bridge_body_clear(now):
             return self._stop_decision('HOLD', 'lane_bridge_blocked')
-        if self._floor_proof_required() and not self._return_probe(now, linear, angular):
+        if not self.motion_admitted(now, linear, angular, 'bridge'):
             return self._stop_decision('HOLD', 'lane_bridge_motion_unconfirmed')
         self._bridge = state
         self._status = self._status.model_copy(update={

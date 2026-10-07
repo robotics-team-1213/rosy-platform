@@ -95,19 +95,10 @@ class JunctionMixin:
                     and self._turn_basis(self._clock()) is not None)
 
     def _turn_basis(self, now):
-        """D-498: 'enforce' (D-400 floor proof), 'site' (fresh IR guard without departure, live
-        D-422 body stop on a fresh scan, site_floor_map_id) or None."""
-        try:
-            if self._return_motion is not None and self._return_proof_configured() is True:
-                return 'enforce'
-        except Exception:  # noqa: BLE001 - an unbound or unreadable proof is no basis
-            pass
-        c, at = self._config, self._clearance_at
-        if (c.site_floor_map_id is not None and c.ir_guard_enabled and c.body_stop_known
-                and self._scan_points is not None and at is not None
-                and 0 <= now-at <= c.clearance_stale_s and self._ir_guard(now) not in ('stale', 'centre')):
-            return 'site'
-        return None
+        """D-498 / D-507 6: 'enforce' (D-400 floor proof), 'site' (site_floor_map_id, fresh IR
+        guard without departure, path mode with the URDF body and a fresh scan) or None. The
+        twist's own D-422 sweep is _maneuver_twist's."""
+        return self._motion_basis(now, 'turn')
 
     def _reset_junction(self):
         """A line-follow session owns its instruction. A maneuver cut by a mode change (incl.
