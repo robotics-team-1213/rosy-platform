@@ -602,3 +602,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-492 수용 점검표
 - 결정: D-492 (Proposed) 독립 안전 검토 반영 2026-10-07
 - 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
+
+## 2026-10-07 · uncommitted · fix(line_follow): D-492 안전 재검토 N1·R1–R3
+- 변경: 한 교차로 정지의 진입 yaw를 기억해 모든 회전이 진입 yaw + turn_deg를 겨눈다. 실행된 지시의 반복은 `JUNCTION_ALREADY_DONE`. 머무름 완료에 odom 정지 확인. 정지 중 감지 끊김에도 첫 감지 유지
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 2013 PASS·18 skip, gateway 2192 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). 탐침 `probe_resend.py` 85.8°, `probe_lag2.py` 전 경우 ±5° 안
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM S1–S6·DEVICE D1–D6은 D-492 점검표
+- 결정: D-492 (Proposed) 안전 재검토 반영 2026-10-07
+- 교훈: 다시 보내는 지시는 현재 자세가 아니라 고정된 기준(진입 방향)을 겨눠야 오차가 쌓이지 않는다

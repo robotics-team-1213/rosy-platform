@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · fix(line_follow): D-492 안전 재검토 N1·R1–R3
 - 2026-10-07 · uncommitted · fix(line_follow): D-492 독립 안전 검토 M1–M8·L1·L2
 - 2026-10-07 · uncommitted · feat(line_follow): D-492 supports_junction_turn
 - 2026-10-07 · uncommitted · feat(line_follow): D-492 교차로 제한 회전
 - 2026-10-07 · uncommitted · feat(line_follow): D-491 교차로 지시 게이트
-- 2026-10-06 · uncommitted · fix(lane): D-476 independent review fixes
