@@ -4,7 +4,9 @@ The active map is the highest activated version. Activation copies the draft, is
 named operator (routes) and is refused while a lane route is running. Every activation and
 every trip plan (D-490 8) is a row here beside the HTTP audit of the request. Draft saves
 and activations are rows in ``site_map_events``; plans keep the last ``PLAN_KEEP`` within
-``PLAN_KEEP_S``. Activation refuses a map the planner cannot use.
+``PLAN_KEEP_S``; a plan row keeps the whole plan body so ``/trips/{plan_id}/start`` can run
+it (D-491 5). Trips (D-491 5) are rows in ``site_trips``. Activation refuses a map the
+planner cannot use.
 """
 
 from __future__ import annotations
@@ -60,6 +62,9 @@ class SiteMapStore:
                     plan_id TEXT PRIMARY KEY, robot_id TEXT NOT NULL, principal_id TEXT NOT NULL,
                     map_version INTEGER, request TEXT NOT NULL, result TEXT NOT NULL,
                     created_at REAL NOT NULL);
+                CREATE TABLE IF NOT EXISTS site_trips (
+                    trip_id TEXT PRIMARY KEY, robot_id TEXT NOT NULL, body TEXT NOT NULL,
+                    state TEXT NOT NULL, updated_at REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS site_map_events (
                     event_id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL,
                     principal_id TEXT NOT NULL, detail TEXT NOT NULL, at REAL NOT NULL);
@@ -189,10 +194,40 @@ class SiteMapStore:
                 "(SELECT plan_id FROM site_trip_plans ORDER BY rowid DESC LIMIT ?)",
                 (self.clock() - PLAN_KEEP_S, PLAN_KEEP))
 
+    def plan(self, plan_id: str) -> Optional[dict]:
+        rows = [row for row in self._plan_rows("WHERE plan_id = ?", (plan_id,), 1)]
+        return rows[0] if rows else None
+
     def plans(self, limit: int = 50) -> list[dict]:
+        return self._plan_rows("", (), limit)
+
+    def _plan_rows(self, where: str, args: tuple, limit: int) -> list[dict]:
         with self._lock:
             rows = self._db.execute(
                 "SELECT plan_id, robot_id, principal_id, map_version, request, result, created_at "
-                "FROM site_trip_plans ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+                f"FROM site_trip_plans {where} ORDER BY created_at DESC LIMIT ?", (*args, limit)).fetchall()
         return [{"plan_id": r[0], "robot_id": r[1], "principal_id": r[2], "map_version": r[3],
                  "request": json.loads(r[4]), "result": json.loads(r[5]), "created_at": r[6]} for r in rows]
+
+    # ---- trips (D-491 5) ------------------------------------------------------------
+
+    def put_trip(self, trip: dict) -> None:
+        """Insert or replace one trip row; ``trip`` is the JSON view the API returns."""
+        with self._lock, self._db:
+            self._db.execute("INSERT OR REPLACE INTO site_trips VALUES (?, ?, ?, ?, ?)",
+                             (trip["trip_id"], trip["robot_id"], json.dumps(trip, sort_keys=True),
+                              trip["state"], self.clock()))
+            self._db.execute("DELETE FROM site_trips WHERE trip_id NOT IN "  # the D-490 plan bound
+                             "(SELECT trip_id FROM site_trips ORDER BY rowid DESC LIMIT ?)", (PLAN_KEEP,))
+
+    def trip(self, trip_id: str) -> Optional[dict]:
+        with self._lock:
+            row = self._db.execute("SELECT body FROM site_trips WHERE trip_id = ?", (trip_id,)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def trips(self, *, states: Optional[tuple[str, ...]] = None, limit: int = 20) -> list[dict]:
+        where = f"WHERE state IN ({','.join('?' * len(states))})" if states else ""
+        with self._lock:
+            rows = self._db.execute(f"SELECT body FROM site_trips {where} ORDER BY rowid DESC LIMIT ?",
+                                    (*(states or ()), limit)).fetchall()
+        return [json.loads(r[0]) for r in rows]

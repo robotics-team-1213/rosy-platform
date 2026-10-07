@@ -46,6 +46,16 @@ class TripRequest(BaseModel):
     execute: bool = False
 
 
+def plan_body(plan) -> dict:
+    return {
+        "map_version": plan.map_version,
+        "segments": [{"edge_id": e, "forward": f, "s_from": a, "s_to": b} for e, f, a, b in plan.segments],
+        "places": list(plan.places),
+        "actions": [{"place_id": p, "action": a, "theta_deg": t} for p, a, t in plan.actions],
+        "length_m": plan.length_m, "eta_s": plan.eta_s,
+    }
+
+
 def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTPException:
     """D-490 부록: every trip error is ``{"detail": {"code", "detail"}}``."""
     return HTTPException(status_code=status, detail={"code": code, "detail": detail or {}})
@@ -99,14 +109,10 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
                 _LOG.exception("trip planner failed on site map v%s", active[0])
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
             raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
-        record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s})
-        return {
-            "plan_id": plan_id, "map_version": plan.map_version,
-            "segments": [{"edge_id": e, "forward": f, "s_from": a, "s_to": b} for e, f, a, b in plan.segments],
-            "places": list(plan.places),
-            "actions": [{"place_id": p, "action": a, "theta_deg": t} for p, a, t in plan.actions],
-            "length_m": plan.length_m, "eta_s": plan.eta_s, "expires_at": time.time() + PLAN_TTL_S,
-        }
+        body = plan_body(plan)
+        # D-491 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.
+        record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s, "plan": body})
+        return {"plan_id": plan_id, **body, "expires_at": time.time() + PLAN_TTL_S}
 
     @app.post("/api/fleet/trips/{plan_id}/start", tags=["fleet"])
     async def fleet_trip_start(plan_id: str, _principal: SitePrincipal = Depends(require_named_operator)):
