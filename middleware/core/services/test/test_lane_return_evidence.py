@@ -2,8 +2,8 @@
 import pytest
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
-from core_features.line_follow.lane_return import Footprint
-from core_features.line_follow.lane_return_evidence import LaneReturnEvidence
+from core_features.line_follow.recovery.lane_return import Footprint
+from core_features.line_follow.recovery.lane_return_evidence import LaneReturnEvidence
 
 
 BODY = Footprint(.08, -.08, .06)
