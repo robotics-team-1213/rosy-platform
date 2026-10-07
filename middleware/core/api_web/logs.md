@@ -670,3 +670,8 @@
 - 변경: CORE app contract docstring follows API Reference v1.125 after D-513 merge.
 - 증거: Pinned version test included in merged tree verification.
 - gate 변화: None.
+
+## 2026-10-08 · uncommitted · feat(api): D-472 식별 색 설정과 v1.129/v1.130
+- 변경: `POST /host/lamp/identify`의 `color`를 생략하면 CORE 설정 `lamp_identify.color`, 없으면 D-472 4항 기본(`rosy_26` blue, `rosy_60` amber)을 쓴다. 둘 다 없으면 409 `IDENTIFY_COLOR_UNSET`. `requested_at`을 ms로 쓴다. 앱 설명의 계약 버전을 v1.130으로 맞췄다
+- 증거: `test_lamp_identify_api.py`, `test_protocol_version_alignment.py`
+- gate 변화: 없음. 장치 적용과 실제 점멸은 미확인
