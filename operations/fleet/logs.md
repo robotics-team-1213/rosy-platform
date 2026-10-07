@@ -2308,3 +2308,10 @@
 - gate 변화: 없음. SOURCE/LOCAL만
 - 결정: D-494 Proposed(구현 부록 갱신)
 - 교훈: 로봇을 몰고 있는 루프가 있으면 그 로봇에 닿는 모든 멈춤 경로가 루프도 끝내야 한다. 하나라도 빠지면 다음 tick이 멈춘 로봇을 다시 움직인다
+
+## 2026-10-07 · uncommitted · feat(fleet): 조감도 낡은 카메라 교정 감지 — 실영상 대신 미터 눈금과 경고
+- 변경: 카메라를 재조준하면 D-457 추적 보정이 어긋나 조감도가 잘려 돌아간 지도를 정확해 보이게 그렸다. 이제 정지 로봇(직전 폴링 자세 이동 ≤ 0.05 m)의 추적 차이(`offset_m`)가 3폴링 연속 0.4 m를 넘으면 교정이 낡은 것으로 판정해(`tracking-layer.js` `trackingDriftSample`·`calibrationDriftVerdict`, 순수) 실영상 배경을 내리고 미터 눈금 뷰로 돌아간 뒤 "카메라 교정 어긋남 — 맞춤 재수락 필요" 경고를 캔버스와 `#map-tag`·aria-label에 보인다. 표본은 `tracking-view.js show()`가 실제 폴링 응답마다 한 번만 쌓고, 수명 만료 `show(null)`은 연속을 끊지 않는다. 마커 관측(measured)·움직이는 로봇은 세지 않는다
+- 증거: node `tracking-layer.test.mjs` 12 passed(신규 3건: 정지 로봇만 표본·연속 판정·자세 기억), 콘솔 브라우저 신규 `test_stale_camera_calibration_drops_the_frame_and_warns` + 기존 카메라 배경 회귀 2 passed(ROSY_RUN_BROWSER_TESTS=1). 변이 증명: `view.trackingDrift = null`으로 무력화하면 신규 시험 TimeoutError로 빨개진다
+- gate 변화: 없음. LOCAL GO 유지 — 표시 경고만 만들었고 관측·목표·주행 경로는 그대로
+- 결정: 해당 없음(D-457 추적 보정의 표시 전용 보강)
+- 교훈: 없음
