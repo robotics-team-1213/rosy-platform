@@ -257,12 +257,12 @@ class TripRunner:
             try:
                 if live.arc(live.view["segment_index"]).drive_mode == "lane":
                     live.junction = await self._call(self._junction.junction_state(robot_id)) or {}
-                else:  # a free segment: no stale lane ``waiting`` may end it
-                    live.junction = {}
                     sent = live.sent
                     if sent is not None and live.junction.get("seq") == sent["seq"] and \
                             live.junction.get("state") in (*MANOEUVRE, "executing"):
                         sent["carried"] = True  # CORE took it on: never sent again
+                else:  # a free segment: no stale lane ``waiting`` may end it
+                    live.junction = {}
                 if not live.open:
                     return
                 index, s, off = self._locate(live, pose)
