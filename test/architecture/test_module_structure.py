@@ -86,6 +86,16 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/server/web/map-view.js": (
+        903,
+        "split: judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
+        "and the D-515 top-down camera warp made map-view.js own two jobs, map drawing (grid, robots, "
+        "formation, mediation, metre site view) and the camera picture path. Move cameraMapCalibration, "
+        "drawCameraTopDown, warpOnto, setCameraFrame, frameTurn, turnedUrl and bindCamera to a new "
+        "web/camera-backdrop.js beside camera-warp.js; map-view keeps a draw hook and the toPx projection "
+        "it passes in. Recorded in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. Re-judge "
+        "after the move or if the file grows again",
+    ),
     "web/components.css": (
         814,
         "accept: shared token-based component styles remain one web_common responsibility; "
@@ -115,8 +125,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        42_945,
-        "split: re-judged at 42945 on 2026-10-08: D-511 M0 lane compliance (fleet/localization/"
+        43_217,
+        "split: re-judged at 43217 on 2026-10-08 (independent re-judge, critic agent): D-507 junction "
+        "expectation and site floor binding (server/trip_ports.py, trip_runner.py) stay with the routing/trip "
+        "server owner, and the D-513 7 / D-515 camera turn and top-down warp (web/map-view.js, camera-warp.js) "
+        "get the camera-backdrop seam now named in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. "
+        "No new package owner; the +150 allowance is unchanged. "
+        "Previously re-judged at 42945 on 2026-10-08: D-511 M0 lane compliance (fleet/localization/"
         "lane_compliance.py observe-only judgement, server/lane_compliance_service.py worker, "
         "cli/app/roster wiring) stays with the existing Fleet localization and server owners; no "
         "new owner, the site-map web/server split plan and +150 allowance remain unchanged. "
