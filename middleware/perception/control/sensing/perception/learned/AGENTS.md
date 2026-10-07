@@ -3,6 +3,9 @@
 
 # learned
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Learned (ONNX) lane-perception backend, D-356 / D-373. ROS-free pre/post-processing and runtime plumbing behind a fixed contract: a model manifest in, lane evidence out, same shape as the rule-based `lane.py`. Rule-based stays the default (`perception.backend=rule`); this backend is shadow evidence plus an optional paint mask for the lane keeper. It never emits a twist or `cmd_vel`; only CORE publishes the final command.

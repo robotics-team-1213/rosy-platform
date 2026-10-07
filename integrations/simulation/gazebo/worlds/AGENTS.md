@@ -3,6 +3,9 @@
 
 # worlds
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Gazebo worlds for empty, factory, and map scenes.

@@ -77,6 +77,29 @@ python -m pytest test/test_harness_contracts.py test/architecture/test_module_st
 python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only·staleness
 ```
 
+### 브라우저 시험 (Chromium)
+
+실제 Chromium 시험은 옵트인이다. 정식 이름은 `ROSY_RUN_BROWSER_TESTS=1`이고, 예전 Fleet 이름 `ROSY_BROWSER_TESTS=1`도 받는다(`test/browser_harness.py`의 `browser_tests_enabled()`). 로컬 서버 포트는 `safe_listener()`/`free_port()`로 잡는다. Windows 동적 포트 범위가 1024부터면(`netsh int ipv4 show dynamicport tcp`) port 0이 Chromium 차단 포트(2049, 6000, 10080 등)를 주고 `net::ERR_UNSAFE_PORT`로 실패한다.
+
+작업 중에는 바꾼 경로에 걸린 브라우저 시험만 돌린다. 경로와 시험의 대응은 `test/browser_scope.py`의 `SCOPE`다.
+
+```bash
+t=$(python test/browser_scope.py <바꾼 경로...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider > X:/DevTemp/<이름>/browser.txt
+python test/known_failures.py X:/DevTemp/<이름>/browser.txt
+```
+
+전체 브라우저 묶음은 개발 노트북에서 돌리지 않는다. 2026-10-07 이 노트북에서 34분–2시간 26분이 걸렸고 MemoryError와 `Page.goto` 타임아웃 플레이크가 났다. Gazebo처럼 현장 PC(robttt)나 모델 PC(OMEN)의 그 PC 체크아웃에서 돌린다.
+
+```bash
+# 현장 PC 또는 모델 PC에서. <checkout>은 그 PC의 rosy-platform 클론 또는 worktree, <ref>는 시험할 브랜치나 커밋.
+cd <checkout> && git fetch && git checkout --detach <ref>
+python -m playwright install chromium   # 처음 한 번
+t=$(python test/browser_scope.py test/browser_harness.py) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider > <scratch>/browser.txt
+python test/known_failures.py <scratch>/browser.txt
+```
+
+`test/browser_harness.py`를 넘기면 모든 브라우저 시험이 골라진다. 고를 시험이 없으면 `browser_scope.py`가 exit 3으로 끝나 `&&` 뒤의 pytest가 돌지 않는다(빈 목록이 저장소 전체 pytest가 되지 않게). 일부만 필요하면 바꾼 경로를 넘긴다.
+
 CI(`.github/workflows/ci.yml`)는 `ros:jazzy-ros-base` 이미지에서 colcon 빌드, pytest, 부트 스모크(slam_toolbox 없이 기동), SaveMap 타입 가드를 돌린다. 호스트 pytest가 통과해도 장치·ARM64 이미지·현장 수용 증거를 대신하지 않는다.
 
 ## 관제 배치

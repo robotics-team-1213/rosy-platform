@@ -3,6 +3,9 @@
 
 # control/ (Python package)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 The package's Python code: executable ROS node wrappers at the top level and the pure-logic "subject" modules grouped into `control/`, `planning/`, `sensing/` subpackages plus `safety/` and `wander/` node packages. Data flow: sensor → geometry (`sensing/`) → policy (`control/`) → map goals (`planning/`).
 

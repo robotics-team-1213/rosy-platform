@@ -26,3 +26,7 @@ for path in (
     if entry not in sys.path:
         sys.path.insert(0, entry)
 
+# Browser tests here import test/browser_harness.py (opt-in flag, Chromium-safe ports).
+_HARNESS = str(Path(__file__).resolve().parents[3] / "test")
+if _HARNESS not in sys.path:
+    sys.path.append(_HARNESS)

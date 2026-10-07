@@ -6,3 +6,5 @@
 # Remove a line in the same commit that makes the test pass. Never add a line to hide
 # a failure your branch introduced. Verified failing on main 986a81ca (2026-09-26, CI run 213).
 # 2026-10-02: the D-260 and ui_registry entries were removed - both tests pass in CI runs 36906795766 onward (fixed by their owners in parallel work).
+shared/web/test/test_canvas_palette_contract.py::test_every_canvas_script_on_a_web_surface_is_under_the_contract  # operations/fleet/fleet/server/web/site-map.js draws on a canvas but is not under the canvas palette contract (site-map.js came with 171592e09/073ab1b3f); verified failing on main 1aba6c3f5 (2026-10-07, Windows); remove when fixed
+test/architecture/test_platform_parts.py::test_import_rules_only_shrink  # learning/training/perception/camera_lane_map.py imports rosy_vision.lane_map (new D-427 section 2 violation, added by e519c81aa); verified failing on main 1aba6c3f5 (2026-10-07, Windows); remove when fixed
