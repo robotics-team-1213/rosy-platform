@@ -91,6 +91,6 @@
 
 - 2026-10-08 · uncommitted · D-515 관제 지도 천장 카메라를 위에서 본 직사각형으로
 - 2026-10-08 · uncommitted · refactor(fleet): D-513 7 카메라 회전은 지도 방향에서
+- 2026-10-08 · uncommitted · fix(fleet): D-511 M0 리뷰 반영
+- 2026-10-08 · uncommitted · feat(fleet): D-511 M0 차로 준수 감시(관찰·알림만)
 - 2026-10-08 · uncommitted · fix(fleet): D-513 7 회전 후속
-- 2026-10-08 · uncommitted · fix(fleet): D-509 state response follow-up
-- 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시

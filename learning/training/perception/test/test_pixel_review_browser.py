@@ -149,6 +149,7 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     shot('approved')
     page.locator('#pixel-export').click()
     expect(page.locator('#pixel-export-result')).to_contain_text('픽셀 승인 1장 준비')
+    expect(page.locator('#pixel-class-help')).to_contain_text('미검수 255는 클래스가 아닙니다')
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     shot('decision-result')
 

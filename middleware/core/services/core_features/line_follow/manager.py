@@ -442,6 +442,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             guard = self._ir_guard(current)
             if self._crosswalk_rest(current, guard):
                 guard = "crosswalk"  # D-491: known crosswalk under the IR row
+            elif guard == "centre" and self._centre_on_cross_line(current):
+                guard = "cross_line"  # D-507 6: a straight crossing's measured cross line
         if self._clearance_at is not None:
             # 앞 물체 정지는 차선 상실이 아니다 — LOST 로 누적하지 않고 치워지면 곧바로 간다.
             if current - self._clearance_at > self._config.clearance_stale_s:
