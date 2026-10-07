@@ -318,7 +318,7 @@ class LaneKeeper:
         previous = self._previous_target
         left, right, transverse, bends = [], [], [], []
         parallel = parallel_spans(lines, SIDE_X_M, STEEP_MIN_ANGLE_RAD)
-        for line in nearest_first(lines):  # a piece continuing another is sided after it
+        for line in nearest_first(lines) if self._corner_turning else lines:  # a piece continuing another is sided after it
             centre, direction = line["centre"], line["direction"]
             heading = math.atan2(direction[1], direction[0])
             ends = [centre + direction * line["along"][0], centre + direction * line["along"][1]]
@@ -365,8 +365,8 @@ class LaneKeeper:
                 self.last["candidates"].append(dict(record, y_at_side_x_m=round(lateral, 3), rejected=True,
                                                     reason="steep_crossing" if paint_crosses else "steep_far"))
                 continue
-            # A steep line's SIDE_X_M offset is extrapolated: its seen paint's near end sides it (D-507 B9).
-            at = float(min(ends, key=lambda p: p[0])[1]) if abs(heading) > STEEP_MIN_ANGLE_RAD else lateral
+            at = (float(min(ends, key=lambda p: p[0])[1]) if self._corner_turning and abs(heading) > STEEP_MIN_ANGLE_RAD
+                  else lateral)  # D-507 B9: a steep line's offset is extrapolated, its seen paint's near end sides it
             reference = 0.0
             if abs(at) < AMBIGUOUS_LATERAL_M and previous is not None:
                 reference = previous[1]
@@ -380,7 +380,7 @@ class LaneKeeper:
             # lane (20261005T134540Z, frames 329-367).
             tracked = self._track(lateral, heading)
             wrong_side = 0
-            parent = next((p for p in left + right + bends if _continues(p, record)), None)
+            parent = next((p for p in left + right + bends if _continues(p, record)), None) if self._corner_turning else None
             if parent is not None:  # one painted line is one boundary (D-507 B9)
                 side, tracked = parent["side"], None
             elif tracked is not None:
@@ -422,13 +422,13 @@ class LaneKeeper:
             corner = self._corner(transverse, half, left + right + conflicts)
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
-        if corner is None and strategy != "both" and bends:
-            target, strategy = bend_target(bends, half, CORNER_LOOKAHEAD_M, self._lookahead, target, strategy)
         seen_left, seen_right = ([b for b in left + right + conflicts if b["side"] == s] for s in ("left", "right"))
         junction = (None if corner is not None
                     else _junction(strategy, transverse, seen_left, seen_right, half,
                                    self._corner_turning,
                                    ONE_MAX_DISTANCE_FRACTION * 2.0 * half))
+        if corner is None and junction is None and strategy != "both" and bends:  # junctions judged on the lane first
+            target, strategy = bend_target(bends, half, CORNER_LOOKAHEAD_M, self._lookahead, target, strategy)
         if junction is not None:
             target = None
         self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"],

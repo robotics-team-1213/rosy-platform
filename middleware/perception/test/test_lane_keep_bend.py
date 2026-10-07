@@ -15,6 +15,8 @@ import pytest
 from control.sensing.perception.camera_ground import simulation_ground_plane
 from control.sensing.perception.lane_keep import LaneKeeper
 from control.sensing.perception.lane_keep_junction import _continues, _junction
+from control.sensing.perception.lane_keep_lines import PAINT_HALF_WIDTH_M
+from test_lane_keep import GROUND, HALF as NOMINAL_HALF, X, Y, X_OFFSET, _render
 
 REPO = Path(__file__).resolve().parents[3]
 FIXTURE = REPO / "docs" / "validation" / "lane-trip-perception-2026-10-07" / "fixtures" / "b8_keeper_clips.npz"
@@ -27,8 +29,8 @@ CENTRE_Y, OUTER_CORNER, SPOKE = -0.511, (-0.62, -0.6035), math.radians(63.5)
 #: Pursuit targets vs the true centre line -- the south lane's (straight on, its pursuit point may
 #: lie past the vertex while the bend is further than the bend lookahead) or the spoke's: every
 #: one in the inner half of the lane, and 90 % within the body's lateral play in the lane (half
-#: width - pinky_pro URDF body half-width 0.0566 - paint half-width 0.0125 = 23.5 mm).
-TARGET_MAX_M, TARGET_P90_M = HALF / 2, HALF - 0.0566 - 0.0125
+#: width - pinky_pro URDF body half-width 0.0566 - paint half-width = 23.4 mm).
+TARGET_MAX_M, TARGET_P90_M = HALF / 2, HALF - 0.0566 - PAINT_HALF_WIDTH_M
 
 
 def _ground():
@@ -91,6 +93,7 @@ def test_the_bend_diagonal_is_not_an_l_corner(clips):
 def test_the_bend_is_followed_not_lost(clips):
     for name in ("south_centre_lost", "premature_corner_left", "bend_flipping", "bend_fork"):
         assert [m["gt"] for b, m in clips[name] if b["target_m"] is None] == [], name
+    assert any(b["strategy"].startswith("bend") for b, _ in clips["south_centre_lost"])
 
 
 def test_straight_lane_clips_are_unchanged(clips):
@@ -131,3 +134,33 @@ def test_connected_pieces_are_not_fork_branches_but_split_branches_are():
     assert _junction("left_only", [], [edge, arc], [], HALF, True, 0.3) is None
     a, b = _line((0.16, 0.09), (0.40, 0.09)), _line((0.16, 0.09), (0.33, 0.26))
     assert _junction("left_only", [], [a, b], [], HALF, True, 0.3) == "junction_fork"
+
+
+def _diagonal(image, x0, slope, y_lo, y_hi):
+    """Tape x = x0 + (y + 0.11) / slope for y_lo < y < y_hi onto a nominal _render image."""
+    image[np.isfinite(X) & (np.abs(X - (x0 + (Y + 0.11) / slope)) <= 0.015) & (Y > y_lo) & (Y < y_hi)] = 195
+    return image
+
+
+def _corner_keep(image):
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
+    keeper.update(image, GROUND, lane_half_width_m=NOMINAL_HALF)
+    return keeper.last
+
+
+@pytest.mark.parametrize("x0", [0.10, 0.15])
+def test_a_lane_spanning_mark_beside_a_lane_line_running_on_is_no_bend(x0):
+    # Real 124745Z frame 94: a square mark projected at ~60 deg across the lane, here reaching
+    # past the left edge, with the right lane line running on past it: a stop line, not a bend.
+    last = _corner_keep(_diagonal(_render([(-NOMINAL_HALF, 0.0)]), x0, 1.73, -0.11, 0.13))
+    assert not last["strategy"].startswith("bend")
+    assert not [c for c in last["candidates"] if c.get("reason") == "bend"]
+
+
+def test_a_junction_mouth_with_a_70_degree_line_across_still_holds():
+    # A lone left boundary bending out (+25 deg) and a 70 deg line across ahead: the lane goes on
+    # past the line on the open side, so it is no bend and the junction mouth still holds.
+    slope = np.tan(np.radians(25.0))
+    image = _diagonal(_render([(NOMINAL_HALF - slope * 0.22, slope)]), 0.30, np.tan(np.radians(70.0)), -0.15, 0.25)
+    last = _corner_keep(image)
+    assert last["reason"] == "junction_transverse"

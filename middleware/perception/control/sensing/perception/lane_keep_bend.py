@@ -41,7 +41,8 @@ def bend_side(ends, heading, half, parallel, limits):
     must reach; the near end's offset on the closed side, at least the ambiguous
     offset and at most this fraction of the lane width (a lone boundary further is
     not ours); the margin of a parallel line spanning the crossing on the open
-    side (the lane goes on there: no bend)."""
+    side, or running past the near end on the closed side (the lane goes on
+    there: a stop line, crosswalk or junction mouth, no bend)."""
     steep, most, open_m, near_min, lone_fraction, past_m = limits
     ahead = _across_path(ends, half)
     if ahead is None or not steep < abs(heading) <= most:
@@ -49,7 +50,8 @@ def bend_side(ends, heading, half, parallel, limits):
     near, far = sorted((float(p[0]), float(p[1])) for p in ends)
     sign = 1.0 if heading > 0.0 else -1.0
     if (sign * far[1] <= half + open_m or not near_min < -sign * near[1] <= lone_fraction * 2.0 * half
-            or any((y > 0.0) == (sign > 0.0) and start <= ahead <= reach + past_m for y, start, reach in parallel)):
+            or any((y > 0.0) == (sign > 0.0) and start <= ahead <= reach + past_m for y, start, reach in parallel)
+            or any((y > 0.0) != (sign > 0.0) and reach > near[0] + past_m for y, _, reach in parallel)):
         return None
     return "left" if sign > 0.0 else "right"
 
