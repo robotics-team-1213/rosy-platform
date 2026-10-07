@@ -562,3 +562,94 @@ def test_lane_still_out_of_view_past_lost_after_s_is_unresolved_not_aborted():
     for _ in range(40):                       # 2 s without a lane while handed back
         decision, status = rig.step(seen=False)
     assert (status.junction.state, decision.linear, decision.angular) == ('unresolved', 0., 0.)
+
+
+# --- D-492 re-review N1, R1-R3 ------------------------------------------------------------
+
+def test_resend_after_a_mid_turn_abort_aims_at_entry_heading_plus_turn():
+    """Review N1: headings must not add up (90 deg was turning into 133.9 deg)."""
+    rig = Rig()
+    _to_turning(rig, 90.)
+    while math.degrees(rig.yaw) < 45.:
+        rig.step(seen=False, junction=True, move=True)
+    rig.calibrating = True
+    assert rig.step(seen=False, junction=True, move=True)[1].junction.state == 'aborted'
+    rig.calibrating = False
+    assert rig.send('left', turn_deg=90.) == (True, 2, 'armed')   # aborted mid-turn: allowed
+    decision, status = rig.turn_until('armed', seen=False, junction=True)
+    decision, status = rig.turn_until('turning', seen=False, junction=True)
+    assert status.junction.state == 'advancing' and abs(_yaw_error_deg(rig.yaw, 90.)) <= 5.
+
+
+def test_repeat_after_completion_is_refused_until_another_place_or_mode_change():
+    """Review R1: a resend after the turn ran must not arm a second turn at the next junction."""
+    rig = Rig()
+    _to_turning(rig, 45., advance_m=0.)
+    rig.turn_until('turning', seen=False)
+    _reacquire(rig)
+    assert rig.m.status().junction.state == 'idle'
+    with pytest.raises(JunctionRefused) as refused:
+        rig.send('left', turn_deg=45., advance_m=0.)
+    assert refused.value.code == 'JUNCTION_ALREADY_DONE'
+    assert rig.m.set_junction('straight', 'J2', 10.)[0] is True          # next place clears it
+    assert rig.send('left', turn_deg=45.)[0] is True
+    rig.m.set_mode(LineFollowMode.OFF)
+    rig.m.set_mode(CAMERA)
+    assert rig.m._junction_done_place is None
+
+
+def test_abort_after_the_turn_also_counts_as_done():
+    rig = Rig()
+    _to_turning(rig, 45.)
+    rig.turn_until('turning', seen=False)
+    assert rig.m.status().junction.state == 'advancing'
+    rig.calibrating = True
+    rig.step(seen=False, move=True)
+    rig.calibrating = False
+    with pytest.raises(JunctionRefused) as refused:
+        rig.send('left', turn_deg=45.)
+    assert refused.value.code == 'JUNCTION_ALREADY_DONE'
+
+
+def test_straight_passed_is_done_for_that_place():
+    rig = Rig()
+    rig.send('straight')
+    rig.step(junction=True)
+    rig.now += 1.
+    rig.step()
+    with pytest.raises(JunctionRefused):
+        rig.send('straight')
+
+
+def test_settle_also_needs_odom_standing_still():
+    """Review R2: inside 5 deg for 0.3 s is not enough while odom still shows rotation."""
+    rig = Rig()
+    _to_turning(rig, 90.)
+    for _ in range(200):
+        rig.step(seen=False, move=True)
+        if rig.m._junction.get('sub') == 'settling' and rig.m._junction.get('settled_at'):
+            break
+    assert abs(_yaw_error_deg(rig.yaw, 90.)) <= 5.
+    for i in range(12):            # 0.6 s inside tolerance, odom wobbling +-0.08 rad/s
+        rig.yaw += .004 if i % 2 else -.004
+        decision, status = rig.step(seen=False)
+        assert status.junction.state == 'turning' and decision.angular == 0.
+    for _ in range(10):
+        decision, status = rig.step(seen=False)
+    assert status.junction.state == 'advancing'
+
+
+def test_sighting_gap_while_waiting_keeps_the_first_sighting():
+    """Review R3: a keeper gap > 0.3 s at the junction is the same junction stop."""
+    rig = Rig()
+    for _ in range(10):
+        rig.step()
+    for _ in range(20):
+        rig.step(seen=False, junction=True)
+    for _ in range(10):
+        rig.step(seen=False)
+    for _ in range(4):
+        rig.step(seen=False, junction=True)
+    rig.send('left', turn_deg=90.)
+    decision, status = rig.step(seen=False, junction=True)
+    assert status.junction.state == 'turning'

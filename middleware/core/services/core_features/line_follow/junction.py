@@ -71,6 +71,13 @@ class JunctionMixin:
         self._junction = None  # None (idle) | dict: action, place_id, seq, state, ...
         self._junction_seen_at = None
         self._junction_first_seen = None  # start of the current run of sightings
+        # Review N1: (yaw, odom key) where this junction stop began; every turn instruction
+        # during the same stop aims at entry yaw + turn_deg, so a resend after an abort does
+        # not add up headings. Ends when the junction is left behind or the mode changes.
+        self._junction_entry = None
+        # Review R1: (place_id, action) of the last instruction that ran to completion or was
+        # cut after the turn; a repeat is refused until another place_id or a mode change.
+        self._junction_done_place = None
         self._keep_corner_at = None
 
     @property
@@ -90,6 +97,7 @@ class JunctionMixin:
         self._junction = (dict(j, state='aborted', reason='mode_change')
                           if j is not None and j['state'] in MANEUVER else None)
         self._junction_seen_at = self._junction_first_seen = None
+        self._junction_entry = self._junction_done_place = None
 
     def observe_junction(self, reason, received_at, corner_turning=False):
         """One fresh line/keep_debug frame: a junction reason is a sighting; corner_turning
@@ -99,7 +107,11 @@ class JunctionMixin:
         with self._lock:
             if reason in JUNCTION_REASONS:
                 last = self._junction_seen_at
-                if last is None or not 0 <= received_at-last <= self._config.stale_after_s:
+                episode = (self._junction_entry is not None or (
+                    self._junction is not None and self._junction['state'] == 'waiting'))
+                if self._junction_first_seen is None or (
+                        not episode and not 0 <= received_at-last <= self._config.stale_after_s):
+                    # Review R3: a gap while stopped at the junction is the same junction.
                     self._junction_first_seen = float(received_at)
                 self._junction_seen_at = float(received_at)
             self._keep_corner_at = float(received_at) if corner_turning is True else None
@@ -128,14 +140,20 @@ class JunctionMixin:
                                       'junction instructions need CAMERA_LINE (IR has no junction detection)')
             if self._mode.value != 'CAMERA_LINE':
                 raise JunctionRefused('LINE_FOLLOW_NOT_ACTIVE', 'line-follow must be CAMERA_LINE')
+            if self._junction_done_place == (place_id, action):
+                raise JunctionRefused('JUNCTION_ALREADY_DONE',
+                                      f'{action} at {place_id} already ran; send the next place')
             j = self._junction
             if j is not None and j['state'] in MANEUVER:
                 if (j['action'], j['place_id'], j['turn_deg'], j['advance_m']) == (
                         action, place_id, turn_deg, advance):
                     return True, j['seq'], j['state']  # a resend of the running instruction
+                self._mark_done(j)
                 j.update(state='aborted', reason='new_instruction')
                 self._bridge_hint = None
                 return False, j['seq'], 'aborted'
+            if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
+                self._junction_done_place = None
             current = self._clock() if now is None else now
             self._junction_seq += 1
             state = ('armed' if action == 'straight' or turn_deg is not None
@@ -193,15 +211,25 @@ class JunctionMixin:
                 'state': 'HOLD', 'reason': reason, 'linear': 0., 'angular': 0.})
         return replace(decision, linear=0., angular=0.)
 
+    def _mark_done(self, j):
+        """Review R1: an instruction past its turn (or passed straight) is not run again."""
+        if j.get('place_id') is not None and (
+                j['state'] in ('advancing', 'reacquiring') or j['action'] == 'straight'):
+            self._junction_done_place = (j['place_id'], j['action'])
+
     def _abort(self, j, reason, decision):
+        self._mark_done(j)
         j.update(state='aborted', reason=reason)
         self._bridge_hint = None
         return self._junction_hold('junction_aborted', decision)
 
     def _junction_done(self):
+        if self._junction is not None:
+            self._mark_done(self._junction)
         self._junction = None
         self._bridge_hint = None
         self._junction_seen_at = self._junction_first_seen = None  # not the next junction
+        self._junction_entry = None
 
     def _junction_gate(self, now, decision):
         """Keep or zero this tick's decision (locked); a D-492 maneuver supplies its own twist."""
@@ -213,9 +241,14 @@ class JunctionMixin:
             return decision  # review M4: no junction detection on IR_LINE
         seen = (self._junction_seen_at is not None
                 and 0 <= now-self._junction_seen_at <= self._config.stale_after_s)
+        if seen and self._junction_entry is None:
+            pose = self._fresh_pose(now)
+            if pose is not None:
+                self._junction_entry = (pose.yaw, (self._return_evidence.epoch, pose.frame))
         j = self._junction
         if j is None:
             if not seen:
+                self._junction_entry = None  # no junction stop in progress
                 return decision
             j = self._junction = dict(action=None, place_id=None, state='waiting')
         if j['state'] == 'armed':
@@ -270,8 +303,11 @@ class JunctionMixin:
         refusal = self._maneuver_refusal(now)
         if refusal is not None:
             return self._abort(j, refusal, decision)
+        key = (self._return_evidence.epoch, pose.frame)
+        if self._junction_entry is not None and self._junction_entry[1] != key:
+            return self._abort(j, 'odom', decision)  # entry yaw no longer comparable
         self._loss_started_at, self._lost_latched = None, False
-        j.update(state='turning', sub='stopping', key=(self._return_evidence.epoch, pose.frame),
+        j.update(state='turning', sub='stopping', key=key,
                  phase_at=now, limit=STILL_LIMIT_S, w=0., settled_at=None)
         return self._maneuver(j, now, decision)
 
@@ -325,6 +361,7 @@ class JunctionMixin:
             self._next_phase(j, 'reacquiring', now, STEP_TIME_S)
             self._odom_travel(j, now)
             self._junction_seen_at = self._junction_first_seen = None
+            self._junction_entry = None  # the junction stop is over; the robot left it
             self._loss_started_at, self._lost_latched = None, False
             return self._junction_hold('junction_reacquiring', decision)  # follow from next frame
         # reacquiring: ordinary lane following drives; done on N consecutive confident frames.
@@ -345,9 +382,12 @@ class JunctionMixin:
         if j['sub'] == 'stopping':
             if not self._standing_still(now):
                 return 0.
-            turn = math.radians(j['turn_deg'])
-            j.update(sub='rotating', target=_wrap(pose.yaw+turn), phase_at=now,
-                     limit=abs(turn)/floor+TURN_TIME_MARGIN_S)
+            # Review N1: aim from the junction's entry heading, not wherever an earlier
+            # (aborted) attempt left the robot.
+            base = pose.yaw if self._junction_entry is None else self._junction_entry[0]
+            j['target'] = _wrap(base+math.radians(j['turn_deg']))
+            error = _wrap(j['target']-pose.yaw)
+            j.update(sub='rotating', phase_at=now, limit=abs(error)/floor+TURN_TIME_MARGIN_S)
         error = _wrap(j['target']-pose.yaw)
         if j['sub'] == 'rotating':
             # Review M6: stop early by what the commanded rate turns during the latency.
@@ -363,7 +403,8 @@ class JunctionMixin:
         if j['settled_at'] is None:
             j['settled_at'] = now
         j['w'] = 0.
-        return None if now-j['settled_at'] >= SETTLE_S else 0.
+        # Review R2: also standing still on odom, not only inside 5 deg of a lagging yaw.
+        return None if now-j['settled_at'] >= SETTLE_S and self._standing_still(now) else 0.
 
     def _reacquired(self, j, pose):
         """Review M5: N consecutive fresh frames (confidence >= min) received after the hand-
