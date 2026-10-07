@@ -374,6 +374,7 @@ def test_the_store_warms_the_planner_with_the_site_routing_config():
 def test_site_map_view_turn_is_a_quarter_turn_defaulting_to_zero():
     """D-513 7: one screen orientation per map, display only."""
     assert SiteMap.model_validate(_line()).view_turn_deg == 0
+    assert "view_turn_deg" not in SiteMap.model_validate(_line()).body()  # older Fleet can still read it
     assert SiteMap.model_validate({**_line(), "view_turn_deg": 90}).body()["view_turn_deg"] == 90
     for bad in (45, -90, "90"):
         with pytest.raises(ValueError):

@@ -671,7 +671,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         try {
           view.siteViewTurn = siteViewTurn(await call("/api/fleet/site-map/active", { signals: [life.signal] }));
           life.check();
-        } catch (error) { if (error.name === "AbortError") return; view.siteViewTurn = 0; }
+        } catch (error) {
+          if (error.name === "AbortError") return;
+          if (error.status === 404 || error.status === 409) view.siteViewTurn = 0; // no active map; else keep the last turn
+        }
       }
     } catch (err) {
       if (err.name === "AbortError") return;

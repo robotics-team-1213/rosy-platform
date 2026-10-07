@@ -138,7 +138,10 @@ class SiteMap(BaseModel):
         return self
 
     def body(self) -> dict:
-        return self.model_dump(by_alias=True, mode="json")
+        body = self.model_dump(by_alias=True, mode="json")
+        if body["view_turn_deg"] == 0:  # keep stored maps readable by a Fleet without the field
+            del body["view_turn_deg"]
+        return body
 
 
 def from_lane_graph(path: Path | str, *, map_id: str = "site") -> SiteMap:
