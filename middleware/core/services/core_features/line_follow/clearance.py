@@ -17,6 +17,7 @@ from __future__ import annotations
 import math
 from typing import Any, Iterator, Mapping, Optional, Sequence
 from core_common.robot_body import RobotBody, ScanView
+from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 
 from core_common.robot_body import inside_body as _inside_body
 from core_common.robot_body import masked as _masked
@@ -155,11 +156,12 @@ def return_scan_view(sample: Mapping[str, Any], *, body: RobotBody,
             or low <= 0.0 or high <= low or horizon <= 0.0
             or high < horizon + 0.01 or self_mask
             or type(source_stamp_ns) is not int or source_stamp_ns < 0
-            or type(source_now_ns) is not int or source_now_ns < source_stamp_ns):
+            or type(source_now_ns) is not int):
         return None
     age = (source_now_ns - source_stamp_ns) / 1e9
-    if age > 0.25:
+    if age > 0.25 or age < -SOURCE_FUTURE_TOLERANCE_S:
         return None
+    age = max(0.0, age)  # D-507 8: clock skew inside the tolerance counts as now
     tolerance = increment * 0.1
     if (abs(angle_max - (angle_min + increment * (count - 1))) > tolerance
             or abs((angle_max - angle_min + increment) - 2.0 * math.pi) > tolerance):
