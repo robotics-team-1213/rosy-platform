@@ -92,6 +92,6 @@
 
 - 2026-10-08 · uncommitted · fix(trip): D-507 pivot 검토 반영 — lane 차로만, 창 없으면 음수 pivot 없음
 - 2026-10-08 · uncommitted · fix(trip): D-507 회전 축을 지도의 첫 칠한 선에서 (SIM 발견 1–2)
+- 2026-10-08 · uncommitted · fix(fleet): D-511 LED 트랙 입력 리뷰 반영
+- 2026-10-08 · uncommitted · feat(fleet): D-511 감시가 LED 확인 트랙을 입력으로 쓴다
 - 2026-10-08 · uncommitted · fix(fleet): D-472 독립 안전 검토 지적 반영
-- 2026-10-08 · uncommitted · feat(fleet): D-472 LED 신원 오케스트레이터와 확인 트랙
-- 2026-10-08 · uncommitted · D-515 관제 지도 천장 카메라를 위에서 본 직사각형으로
