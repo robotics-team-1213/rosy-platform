@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from browser_harness import safe_listener
+from browser_harness import browser_tests_enabled, safe_listener
 
+pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium")
 playwright = pytest.importorskip("playwright.sync_api")
 
 from omx_adapter.pilot_sim_api import create_pilot_sim_app
