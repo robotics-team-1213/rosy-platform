@@ -4,6 +4,8 @@
 
 제품 전체 수용 기준은 사용자 확인에 따라 **활성 표면 모두의 G1, 선언한 G2 상태·폭 전부, G3 실제 사용자 검토와 해당 실물 장치 readback**이다. 일부 화면의 너비 보정이나 LOCAL 시험 통과로 이 판정을 올리지 않는다.
 
+2026-10-07 Pilot 전체 브라우저 재검사에서 320×568 카메라 표시 면적 **16.3%**가 기존 20% 바닥에 못 미쳐 115 passed, 1 failed였다. [LOCAL 320px 카메라 면적 보정](../uiux-pilot-camera-area-2026-10-07/result.md)은 좁은 HUD 간격을 줄인 뒤 카메라 배치 다섯 폭 **5 passed**, G1 **90 passed**, 각각 성공 실행 `known_failures.py` **0 NEW**로 확인했다. 전체 Pilot 재회귀·나머지 G2·실물·G3는 **HOLD**다.
+
 2026-10-07 Pilot Gazebo 팔 화면의 [320px 머리·동등 창 LOCAL 확인](../uiux-pilot-arm-header-2026-10-07/result.md)에서 실제 앱과 같은 시뮬레이션 헤더를 재현하고, 오래된 「대기」·「직접 조종」 문구를 팔 화면에서 숨겼다. 네 폭 팔·그리퍼 배치 관련 브라우저 6 passed, G1 90 passed, 각각 0 NEW. 실제 장치·남은 G2·요청자 G3는 **HOLD**다.
 
 2026-10-07 Pilot [전체 브라우저 회귀](../uiux-pilot-full-browser-2026-10-07/result.md)는 현재 동일한 Pilot 코드에서 108 passed, `known_failures.py` 0 NEW였다. 실행 중 공유 `main`은 사이트 문서 한 파일만 변경됐다. 이는 LOCAL 경로 회귀 근거이며 미캡처 G2 셀·실물 장치·사용자 G3는 여전히 **HOLD**다.
