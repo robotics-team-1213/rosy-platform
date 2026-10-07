@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · fix(line_follow): 횡단보도 휴식은 회전·차로 이탈·거리 상한에서 끝난다 (D-491 리뷰)
 - 2026-10-07 · uncommitted · feat(line_follow): IR 감시는 알려진 횡단보도 구간에서 쉰다 (D-491)
 - 2026-10-07 · uncommitted · fix(state): D-494 검토 — 유한하지 않은 odom 표본을 버린다
 - 2026-10-07 · uncommitted · feat(state): D-494 2 상태 스냅샷의 odom_pose
 - 2026-10-06 · uncommitted · fix(lane): D-476 independent review fixes
-- 2026-10-06 · uncommitted · feat(lane): D-476 expected-road bridge in CORE, default off

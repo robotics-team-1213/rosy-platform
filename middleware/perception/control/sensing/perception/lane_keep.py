@@ -298,7 +298,7 @@ class LaneKeeper:
             self.last["reason"] = "washed"
             self._forget()
             return None
-        self.last["crosswalk"] = crosswalk_extent(grid, view.x[:, 0])  # D-491 §4
+        self.last["crosswalk"] = crosswalk_extent(grid, view.x[:, 0], view.y[0, :])  # D-491 §4
         coarse = grid[::FIT_STRIDE, ::FIT_STRIDE]
         cells = np.flatnonzero(coarse.ravel())
         points = np.stack([view.x[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells],

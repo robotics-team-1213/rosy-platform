@@ -1164,3 +1164,9 @@
 - 변경: `sensing/perception/crosswalk_stripes.py` 추가. keep 모드가 지면 격자에서 횡단보도 앞뒤 끝을 `last["crosswalk"]`에 두고, `containment_payload`가 `crosswalk {near_m, far_m}`로 싣는다. 판단은 CORE 몫이다.
 - 증거: `test_crosswalk_stripes.py` 4건(앞뒤 끝, 20 mm 비킴·경계와 붙은 막대, 일반 차로·가로 사다리 아님, 띠 2개·얇은 조각 아님), `test_lane_containment_payload.py` 추가 1건.
 - gate 변화: 없음. 실제 카메라 영상에서 검출 확인은 아직이다.
+
+## 2026-10-07 · uncommitted · fix(perception): 횡단보도 띠는 로봇 차로 폭 안에서만 센다 (D-491 리뷰)
+
+- 변경: `crosswalk_extent(grid, x_rows, y_cols)`가 |y| ≤ 0.10 m 열만 본다(옆 차로 횡단보도 제외). 흰색이 띠 3개 폭보다 적은 행은 미리 건너뛴다(Pi CPU, D-185).
+- 증거: `test_crosswalk_stripes.py` 5건(옆 차로 추가).
+- gate 변화: 없음.
