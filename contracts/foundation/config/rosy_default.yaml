@@ -212,6 +212,12 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   junction_turn_lead_s: 0.15
   junction_still_linear: 0.01      # m/s; odom below this (and the angular one) for 0.2 s = standing still
   junction_still_angular: 0.05     # rad/s; checked before the turn and before it counts as settled
+  # D-498 site basis for the junction turn without D-400 enforce: the site lead declares no
+  # drop-off within turn reach (in-place turn + up to 0.30 m off the lane edge). It also needs
+  # ir_guard_enabled (CORE refuses to start otherwise) with a fresh guard verdict and the D-422
+  # body stop on a fresh scan. Enable order: IR calibration -> site overlay (~/.rosy/rosy.yaml)
+  # with ir_guard_enabled and this true -> model-PC SIM S1-S6 -> 9dfk keep-mode DEVICE D1-D6.
+  junction_turn_site_accepted: false
   # D-468 containment (needs recovery_local_enabled; implementation note 2026-10-06). The lane
   # boundaries are eroded by the producer's uncertainty_m and the body is the URDF footprint, so
   # 0 means every corner is inside only if uncertainty_m bounds every lateral error. Jitter and
