@@ -1,8 +1,8 @@
-﻿# ROSY API & Protocol Reference
+# ROSY API & Protocol Reference
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.122
+**Version:** v1.123
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1519,6 +1519,12 @@ leader `swarm.lead` and each follower `swarm.follow` before opening relay stream
 Missing/false flags are refused as `NOT_SUPPORTED`; transport errors remain errors.
 CORE still performs its own authorization, localization, and safety checks.
 
+Fleet `GET /api/fleet/state` robot rows also expose optional `link` (D-499):
+`up`, `unreachable`, `moved`, `tls-refused`, or `protocol`. Absent on a robot
+API error other than HTTP 401. `up` is a successful gather and carries no
+console tag. The field is display-only. CORE paths, envelope 1.0, and the
+dispatch loop's online/state/goal read are unchanged. An older Fleet omits the field.
+
 When durable task storage is configured, the operator navigation route creates a
 persistent task before contacting CORE. The browser sends a fresh
 `Idempotency-Key`; repeating the same request with the same authenticated
@@ -2447,6 +2453,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.123 | 2026-10-07 | Additive (D-499): Fleet `GET /api/fleet/state` 로봇 행 선택 필드 `link`(`up`·`unreachable`·`moved`·`tls-refused`·`protocol`). 401이 아닌 로봇 API 오류에는 필드가 없다. 표시 전용. CORE 경로·envelope 1.0·발행 루프의 online/state/goal 판정은 그대로다 |
 | v1.122 | 2026-10-07 | Additive (D-493, fix/d493-attention-stale-state): `GET /api/fleet/state` 로봇 행에 `state_age_s`(상태가 관찰된 뒤 지난 초. hub 나이와 SharedGather 캐시 나이 포함, 오프라인이면 `null`)와 최상위 `gathered_at`(마지막 실제 수집의 서버 UTC epoch 초, 표시용)을 더함. 콘솔 예외 큐는 `state_age_s` + 받은 뒤 지난 시간이 5초를 넘으면 "상태 오래됨" warn 을 붙인다. 기존 필드는 그대로다. |
 | v1.121 | 2026-10-07 | Additive (D-407 Fleet 쪽, feat/d407-stuck-episode-log): Site Fleet 새 경로 `GET /api/fleet/line-stuck/episodes`(viewer+) — 막힘 에피소드 기록(`fleet_line_stuck_episodes`, `--tasks-db` 파일). 보드 전이에서만 쓰고 로봇 요청은 늘지 않는다. Robot API·envelope 1.0 변경 없음 |
 | v1.120 | 2026-10-07 | Corrective + Additive (D-502, fix/core-battery-health): SAF-005 배터리 래치(`battery_policy`·`battery_deep`)도 모드 EMERGENCY 로 들어가 Admin `POST /safety/release` 로 풀린다(전에는 409 `not in EMERGENCY` 로 풀 수 없었다). `GET /sensors/battery` 는 404 대신 `evidence`·`sample_age_s`·`stale_after_s` 를 싣고, 표본은 제품 토픽 `battery/voltage` 에서 온다. `GET /safety/state` `battery` 에 `evidence`·`sample_age_s`·`level`·`percent`. Fleet envelope `protocol_version` 1.0 유지 |

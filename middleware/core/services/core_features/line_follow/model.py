@@ -18,6 +18,9 @@ from core_common.protocol.lane_containment import LaneContainmentEvidence
 #: Pre-D-422 LiDAR-origin defaults: sector mode and path mode without the URDF outline.
 SECTOR_STOP_M = 0.20
 SECTOR_RESUME_M = 0.28
+#: Source stamps up to this far ahead of CORE's source clock count as now (clock skew,
+#: D-495 SIM finding 2); further ahead the sample is refused. Line observations and odom poses.
+SOURCE_FUTURE_TOLERANCE_S = 0.1
 
 
 class LineFollowMode(str, enum.Enum):

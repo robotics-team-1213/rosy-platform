@@ -26,6 +26,7 @@ ALLOWED = {
         "vision-view.js",
         "authorization.js",
         "address-drift.js",
+        "site-path.js",
         "poll-gate.js",
         "confirmed-action.js",
         "/common/fleet-client.js",
