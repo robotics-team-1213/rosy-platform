@@ -707,25 +707,60 @@ def test_reserved_ref_counts_as_a_gap_but_not_as_a_stale_one():
     assert harness.validate_adr_log(adr, {}, {"D-3", "D-4", "D-9"}) == []  # landed ref is irrelevant
 
 
-def test_append_only_records_use_the_union_merge_driver():
-    paths = ["docs/reference/ROSY ADR Log.md", "docs/logs.md", "operations/fleet/logs.md",
-             "tools/harness/adr_gaps.txt"]
-    out = _git(ROOT, "check-attr", "merge", "--", *paths)
-    assert out.splitlines() == [f"{p}: merge: union" for p in paths]
+def test_only_one_record_per_line_files_use_the_union_merge_driver():
+    union = ["docs/reference/ROSY ADR Log.md", "tools/harness/adr_gaps.txt"]
+    plain = ["docs/logs.md", "operations/fleet/logs.md"]
+    out = _git(ROOT, "check-attr", "merge", "--", *union, *plain)
+    assert out.splitlines() == ([f"{p}: merge: union" for p in union]
+                                + [f"{p}: merge: unspecified" for p in plain])
+
+
+def _two_appends(repo: Path, rel: str, base: str, one: str, two: str) -> subprocess.CompletedProcess:
+    """Branches one and two append to ``rel`` from main; merge one into two."""
+    path = repo / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(base.encode())
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    for branch, text in (("one", one), ("two", two)):
+        _git(repo, "checkout", "-qb", branch, "main")
+        path.write_bytes(text.encode() if text.startswith(base) else path.read_bytes() + text.encode())
+        _git(repo, "commit", "-qam", branch)
+    return subprocess.run(["git", "-C", str(repo), "merge", "-q", "--no-edit", "one"],
+                          capture_output=True, text=True, encoding="utf-8")
+
+
+def _entry(title: str) -> str:
+    return (f"\r\n## 2026-10-07 · uncommitted · {title}\r\n\r\n- 변경: {title}\r\n- 증거: t\r\n"
+            "- gate 변화: 없음\r\n- 결정: 없음\r\n- 교훈: 없음\r\n")
+
+
+def _repo_with_attributes(path: Path, extra: str = "") -> Path:
+    repo = _repo(path)
+    (repo / ".gitattributes").write_bytes((ROOT / ".gitattributes").read_bytes() + extra.encode())
+    return repo
+
+
+def test_two_logs_md_entries_appended_on_two_branches_still_conflict(tmp_path):
+    base = "# logs\r\n" + _entry("base")
+    repo = _repo_with_attributes(tmp_path / "plain")
+    result = _two_appends(repo, "docs/logs.md", base, _entry("one"), _entry("two"))
+    assert result.returncode != 0 and "CONFLICT" in result.stdout + result.stderr
+
+    # Why logs.md is not union: union collapses the identical trailing lines of both entries.
+    repo = _repo_with_attributes(tmp_path / "union", "docs/logs.md merge=union\n")
+    assert _two_appends(repo, "docs/logs.md", base, _entry("one"), _entry("two")).returncode == 0
+    merged = (repo / "docs/logs.md").read_bytes().decode()
+    assert merged.count("- 교훈: 없음") < 3
 
 
 def test_union_merge_keeps_both_appended_rows_with_bom_and_crlf(tmp_path):
-    repo = _repo(tmp_path / "u")
-    (repo / ".gitattributes").write_text('"ROSY ADR Log.md" merge=union\n', encoding="utf-8")
-    log = repo / "ROSY ADR Log.md"
-    log.write_bytes("﻿# Log\r\n\r\n| ID | Title | Status |\r\n| D-1 | a | Accepted |\r\n".encode())
-    _git(repo, "add", ".")
-    _git(repo, "commit", "-qm", "base")
-    for branch, row in (("one", "| D-2 | b | Accepted |\r\n"), ("two", "| D-3 | c | Accepted |\r\n")):
-        _git(repo, "checkout", "-qb", branch, "main")
-        log.write_bytes(log.read_bytes() + row.encode())
-        _git(repo, "commit", "-qam", branch)
-    _git(repo, "merge", "-q", "--no-edit", "one")  # on two: both appended at the same spot
+    repo = _repo_with_attributes(tmp_path / "u")
+    rel = "docs/reference/ROSY ADR Log.md"
+    log = repo / rel
+    result = _two_appends(repo, rel, "﻿# Log\r\n\r\n| ID | Title | Status |\r\n| D-1 | a | Accepted |\r\n",
+                          "| D-2 | b | Accepted |\r\n", "| D-3 | c | Accepted |\r\n")
+    assert result.returncode == 0, result.stdout + result.stderr  # on two: both appended at the same spot
     data = log.read_bytes()
     assert data.startswith(b"\xef\xbb\xbf# Log\r\n")
     assert b"\n" not in data.replace(b"\r\n", b"")
