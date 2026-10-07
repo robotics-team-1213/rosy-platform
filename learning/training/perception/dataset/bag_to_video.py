@@ -23,6 +23,8 @@ stamp (when the image was captured) and the bag log time (when the recorder got 
       scan                        {"stamp_ns"}; the ranges are row i of .scan.npz
       line/keep_debug            selected boundaries, strategy, target and paint source
                                   (unreviewed diagnostics, never ground truth)
+      ir_sensor/range             {"left", "centre", "right"} raw floor-IR ADC counts
+                                  (0-4095). Not the ultrasonic range.
       line/observation,
       perception/learned/shadow   the decoded JSON payload plus "stamp_ns" (int ns, the
                                   payload's own "stamp", = its source image's header stamp)
@@ -57,7 +59,8 @@ import cv2
 import numpy as np
 
 import extract
-from control.recording import CAMERA_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC, SIDE_TOPICS
+from control.recording import (
+    CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
 
 SCHEMA = "rosy.teleop.video/1"
 ODOM_TOPIC = "odom"
@@ -107,8 +110,19 @@ def _stamp_ns(msg) -> int:
 
 
 def _side_name(topic: str):
-    return next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC, INTENT_TOPIC)
+    return next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC,
+                             INTENT_TOPIC, IR_RANGE_TOPIC)
                  if extract._topic_is(topic, n)), None)
+
+
+def _side_payload(name, schema, msg):
+    if name == "cmd_vel":
+        return _twist(msg)
+    if name == ODOM_TOPIC:
+        return _pose(msg)
+    if name == IR_RANGE_TOPIC:
+        return ir_range_sample(getattr(msg, "data", ()))
+    return extract._side_value(schema, msg)
 
 
 def _is_camera(topic: str) -> bool:
@@ -172,12 +186,9 @@ def first_pass(files):
                                   "range_min", "range_max")}
             continue
         if name != CAMERA_TOPIC:
-            if name == "cmd_vel":
-                value = _twist(msg)
-            elif name == ODOM_TOPIC:
-                value = _pose(msg)
-            else:
-                value = extract._side_value(schema, msg)
+            value = _side_payload(name, schema, msg)
+            if name == IR_RANGE_TOPIC and value is None:
+                continue  # not three ADC counts: do not invent a sample
             series = side.setdefault(name, ([], []))
             series[0].append(log_ns)
             series[1].append(value)
