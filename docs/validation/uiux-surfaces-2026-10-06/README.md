@@ -4,6 +4,8 @@
 
 제품 전체 수용 기준은 사용자 확인에 따라 **활성 표면 모두의 G1, 선언한 G2 상태·폭 전부, G3 실제 사용자 검토와 해당 실물 장치 readback**이다. 일부 화면의 너비 보정이나 LOCAL 시험 통과로 이 판정을 올리지 않는다.
 
+2026-10-07 Pilot Gazebo 팔 화면의 [320px 머리·동등 창 LOCAL 확인](../uiux-pilot-arm-header-2026-10-07/result.md)에서 실제 앱과 같은 시뮬레이션 헤더를 재현하고, 오래된 「대기」·「직접 조종」 문구를 팔 화면에서 숨겼다. 네 폭 팔·그리퍼 배치 관련 브라우저 6 passed, G1 90 passed, 각각 0 NEW. 실제 장치·남은 G2·요청자 G3는 **HOLD**다.
+
 2026-10-07 Pilot [전체 브라우저 회귀](../uiux-pilot-full-browser-2026-10-07/result.md)는 현재 동일한 Pilot 코드에서 108 passed, `known_failures.py` 0 NEW였다. 실행 중 공유 `main`은 사이트 문서 한 파일만 변경됐다. 이는 LOCAL 경로 회귀 근거이며 미캡처 G2 셀·실물 장치·사용자 G3는 여전히 **HOLD**다.
 
 2026-10-07 Pilot 녹화본 시트가 390/320px에서 조작부 뒤에 가려지는 결함을 [LOCAL 재현·수정](../uiux-pilot-recording-sheet-2026-10-07/result.md)했다. 네 폭에서 파일 행, 동등 행동 폭, 첫 화면의 닫기·비상 정지, 받기·취소 흐름을 확인했다. 관련 브라우저 7 passed, G1 90 passed, 각각 0 NEW. 실제 로봇 녹화·태블릿, 남은 G2, 사용자 G3는 **HOLD**다.

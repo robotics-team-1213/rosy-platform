@@ -659,3 +659,9 @@
 - 변경: 시트를 stage 밖 주행 root에 붙여 조작부 뒤 가림을 없앴다. 동등한 하단 행동을 같은 폭으로 하고 320px에서는 전폭으로 쌓아 녹화본 행·닫기를 첫 화면에 둔다.
 - 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 가림 재현 2 failed, 수정 뒤 관련 브라우저 7 passed, G1 90 passed, 각각 known_failures 0 NEW.
 - gate 변화: Pilot G2 부분 보강. 실제 태블릿·로봇 녹화 readback, 다른 상태와 사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 머리 상태 정직성
+
+- 변경: 실제 앱과 같이 Gazebo 팔 시험 fixture의 Home·비상 정지를 숨겼고, 팔 화면에서는 오래된 접속 대기·직접 조종 부제를 숨겨 본문의 시뮬레이션 전용·조작 가능 상태와 충돌하지 않게 했다.
+- 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-arm-header-2026-10-07/result.md). 수정 전 320px 1 failed, 수정 후 집중 브라우저 6 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실물 태블릿·팔 장치 readback, 다른 상태·사용자 G3는 HOLD.

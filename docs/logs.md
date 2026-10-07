@@ -6739,3 +6739,9 @@ osy-d395-s1d\`.
 - 변경: Pilot 108개 브라우저 시험의 현재 LOCAL 회귀 결과와 실행 중 공유 main의 사이트 문서 단일 변경을 분리해 기록했다.
 - 근거: [회귀 기록](validation/uiux-pilot-full-browser-2026-10-07/result.md). 108 passed, known_failures 0 NEW, 로그 SHA256 기록.
 - gate 변화: Pilot 브라우저 경로 근거 보강. 미캡처 G2·실물 readback·요청자 G3와 제품 전체는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 320px 상태·폭
+
+- 변경: 시뮬레이션 팔 헤더의 오래된 게이트·직접 조종 문구를 제거하고 320px 팔·그리퍼 동등 폭을 현재 화면에서 확인했다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-arm-header-2026-10-07/result.md). 관련 브라우저 6 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실물 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.

@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 320px 상태·폭
 - 2026-10-07 · uncommitted · docs(uiux): Pilot 전체 브라우저 회귀 기록
 - 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 가림과 폭
 - 2026-10-07 · uncommitted · uiux(pilot): 비상 화면 폭
 - 2026-10-07 · uncommitted · docs(uiux): 사이트 G3 준비 버전 재확인
-- 2026-10-07 · uncommitted · fix(pilot): 열린 상태 소켓의 무응답 readback 표시

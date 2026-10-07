@@ -1890,6 +1890,7 @@ _ARM_HARNESS = """async (opts) => {
   const root = document.querySelector('[data-screen="arm"]');
   document.body.dataset.pilotScreen = 'arm';
   document.querySelector('[data-screen="connect"]').hidden = true;
+  document.querySelectorAll('[data-estop], [data-goto]').forEach(button => { button.hidden = true; });
   root.hidden = false;
   sessionStorage.setItem(`rosy.pilot.omx-sim.${location.origin}`, 't');
   window.disposeArm = mountArm(root, target, driver);
@@ -1955,17 +1956,21 @@ def test_arm_axes_are_remappable_and_buttons_wait_for_the_goal(tablet_page):
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
-def test_arm_screen_fits_phone_width(base_url):
+@pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
+def test_arm_screen_fits_phone_width(base_url, width, height):
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            page = browser.new_page(viewport={"width": 390, "height": 844})
+            page = browser.new_page(viewport={"width": width, "height": height})
             errors: list[str] = []
             page.on("pageerror", lambda exc: errors.append(str(exc)))
             _mount_arm(page, base_url)
             overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
             assert overflow <= 0, f"가로 넘침 {overflow}px"
             assert page.locator("[data-arm-pad]").is_visible()
+            assert page.locator("[data-sim-status]").inner_text() == "조작 가능"
+            assert page.locator("ui-topbar [data-gate-state]").is_hidden()
+            assert page.locator("ui-topbar ui-brand small").is_hidden()
             assert errors == [], errors
         finally:
             browser.close()
@@ -2079,7 +2084,7 @@ def test_arm_gripper_presets_slider_and_badge(tablet_page):
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="ROSY_RUN_BROWSER_TESTS=1")
-@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844)])
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_arm_gripper_sits_in_the_right_hand_slot(base_url, viewport):
     shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
     with playwright_sync.sync_playwright() as playwright:
