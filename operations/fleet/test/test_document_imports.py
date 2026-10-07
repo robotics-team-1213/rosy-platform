@@ -35,6 +35,7 @@ ALLOWED = {
     },
     "install.js": {
         "authorization.js",
+        "development-auth.js",
         "enrollment.js",
         "camera-pairing.js",
         "camera-peer.js",
@@ -50,6 +51,7 @@ ALLOWED = {
         "/common/ui.js",
     },
     "cell.js": {
+        "/console/assets/development-auth.js",
         "/common/fleet-client.js",
         "/common/ui.js",
         "/console/assets/cell-document-editor.js",
