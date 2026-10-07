@@ -42,10 +42,10 @@ def test_boundaries_are_the_paint_inner_edge_moved_inward_by_half_the_paint():
 
 
 def test_paint_shift_does_not_change_the_projection_uncertainty():
-    keeper = {"boundaries": [dict(selected=True, side="left", ends_m=[[.1, .0925], [.3, .0925]])]}
+    keeper = {"boundaries": [dict(selected=True, side="left", slope_sd=0., ends_m=[[.1, .0925], [.3, .0925]])]}
     u = [containment_payload(keeper, ground(), stamp=1., source="GAZEBO", camera_x=.033,
                              paint_half_width_m=p)["uncertainty_m"] for p in (0., PAINT_HALF_WIDTH_M)]
-    assert u[0] == u[1]
+    assert u[0] == u[1] is not None
 
 
 def test_paint_edges_that_cross_send_no_corridor():
@@ -131,7 +131,7 @@ INTERVALS = {"uncertainty": BANDS}
 
 def keeper(far):
     # A fixed 0.1 m support moved out: a longer support would shorten the extrapolation lever.
-    return {"boundaries": [dict(selected=True, side="left", ends_m=[[far-.1, .0925], [far, .0925]])]}
+    return {"boundaries": [dict(selected=True, side="left", slope_sd=0., ends_m=[[far-.1, .0925], [far, .0925]])]}
 
 
 def plane(profile):

@@ -136,9 +136,59 @@ def _largest_piece(along: np.ndarray, max_gap: float) -> np.ndarray:
     return keep
 
 
-def extract_lines(points: np.ndarray, rng: np.random.Generator, *, _prefer_forward=False):
+def _paint_fit(points, centre, direction, lo, hi, half_m, usable):
+    """G-16: the final axis of a found line from its whole paint stroke.
+
+    Re-read from ALL ``points`` within ``half_m`` (paint half-width + one fit cell) of the
+    axis over its along span ``lo..hi``: a blob removed earlier (a crosswalk, whose
+    FLANK_OUTER_M drop band reaches over the lane line) must not erode one side of the tape
+    and tilt the axis. Then keep only cross-sections whose both edges (axis +- half_m) are
+    ``usable`` (floor points -> bool): seen by the camera (near the robot the frame's side
+    edges cut the outer part of the tape, and the inner rest leans the axis) and, as the
+    caller decides, outside a crosswalk (whose bars beside the line would join the band).
+    Twice, so the band follows the corrected axis. Returns (centre, direction, slope_sd):
+    slope_sd is the standard error of dy/dx from the fit's residuals and along spread, or
+    None when the visible whole cross-sections are fewer than MIN_LINE_CELLS or shorter
+    than MIN_LINE_LENGTH_M (the axis then comes from every band cell, truncated ones
+    included, and states no slope error)."""
+    normal = np.array([-direction[1], direction[0]])
+    ends = (centre + direction * lo, centre + direction * hi)
+    for _ in range(2):
+        rel = points - centre
+        along, across = rel @ direction, rel @ normal
+        lo, hi = sorted(float((end - centre) @ direction) for end in ends)
+        band = points[(np.abs(across) <= half_m) & (along >= lo) & (along <= hi)]
+        foot = centre + np.outer((band - centre) @ direction, direction)
+        seen = usable(foot + normal * half_m) & usable(foot - normal * half_m)
+        whole = seen.sum() >= MIN_LINE_CELLS and np.ptp((band[seen] - centre) @ direction) >= MIN_LINE_LENGTH_M
+        fit = band[seen] if whole else band
+        if len(fit) < 3:
+            return centre, direction, None
+        centre, direction = _fit_axis(fit)
+        normal = np.array([-direction[1], direction[0]])
+    if not whole:
+        return centre, direction, None
+    # Slope error from the cross-section centres (one per grid row x: the tape's own width
+    # is not scatter), regressed on x: the standard error of dy/dx. The residual is floored
+    # at the grid's quantization (one row step, uniform: step / sqrt(12)), so paint that
+    # lands exactly on the grid does not state zero.
+    rows, index = np.unique(fit[:, 0], return_inverse=True)
+    mids = np.bincount(index, fit[:, 1]) / np.bincount(index)
+    if len(rows) < 3:
+        return centre, direction, None
+    slope, offset = np.polyfit(rows, mids, 1)
+    variance = max(float(np.sum((mids - slope * rows - offset) ** 2)) / (len(rows) - 2),
+                   float(np.diff(rows).min()) ** 2 / 12.0)
+    return centre, direction, math.sqrt(variance / float(np.sum((rows - rows.mean()) ** 2)))
+
+
+def extract_lines(points: np.ndarray, rng: np.random.Generator, *, usable=None, paint_half_m=None,
+                  _prefer_forward=False):
     """Thin straight paint lines in `points` (N x 2, metres). Returns
-    (lines, blobs): each a dict with centre, direction, along range, cells."""
+    (lines, blobs): each a dict with centre, direction, along range, cells.
+    With ``usable`` (floor points -> bool, see _paint_fit) and ``paint_half_m``,
+    each line's final axis is the _paint_fit one and the line also carries its slope_sd
+    (G-16); without them the fit is the found piece's, as before."""
     lines, blobs = [], []
     remaining = points
     for _ in range(MAX_LINES):
@@ -186,10 +236,17 @@ def extract_lines(points: np.ndarray, rng: np.random.Generator, *, _prefer_forwa
         # Refit on the piece for the final axis.
         fitted_centre, fitted_direction = _fit_axis(remaining[piece])
         fitted_along = (remaining[piece] - fitted_centre) @ fitted_direction
+        extra = {}
+        if usable is not None:
+            fitted_centre, fitted_direction, slope_sd = _paint_fit(
+                points, fitted_centre, fitted_direction, float(fitted_along.min()),
+                float(fitted_along.max()), paint_half_m, usable)
+            fitted_along = (remaining[piece] - fitted_centre) @ fitted_direction
+            extra = {"slope_sd": slope_sd}
         entry = {"centre": fitted_centre, "direction": fitted_direction,
                  "along": (float(fitted_along.min()), float(fitted_along.max())),
                  "cells": int(piece.sum()),
-                 "flank_ratio": flank / max(1, core)}
+                 "flank_ratio": flank / max(1, core), **extra}
         if (min(flank_sides) > 0.5 * MAX_FLANK_RATIO * core
                 or flank > MAX_ONE_FLANK_RATIO * core):
             blobs.append(entry)
@@ -204,7 +261,8 @@ def extract_lines(points: np.ndarray, rng: np.random.Generator, *, _prefer_forwa
         # A crosswalk chord can swallow a real boundary during blob removal.
         # Retry the original paint once, favouring support along the heading;
         # keep every flank/length check and never replace an accepted line.
-        recovered, _ = extract_lines(points, rng, _prefer_forward=True)
+        recovered, _ = extract_lines(points, rng, usable=usable, paint_half_m=paint_half_m,
+                                     _prefer_forward=True)
         return recovered, blobs
     return lines, blobs
 
