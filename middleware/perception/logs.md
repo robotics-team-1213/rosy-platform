@@ -1185,3 +1185,14 @@
 - 변경: D-491 rectangle vertices use CCW order from the smallest rounded corner across OpenCV versions. Coordinates and road geometry unchanged. D-494 gateway seam test added to the ownership registry.
 - 증거: CI 37579564087 reproduced the ownership and corner-order failures; 12 affected checks pass including reversed/rotated corner outputs; known_failures 0 NEW.
 - gate 변화: SOURCE only; no device or field acceptance.
+## 2026-10-07 · uncommitted · feat(perception): 차로와 나란한 횡단보도 줄무늬 구간 (D-491 §4)
+
+- 변경: `sensing/perception/crosswalk_stripes.py` 추가. keep 모드가 지면 격자에서 횡단보도 앞뒤 끝을 `last["crosswalk"]`에 두고, `containment_payload`가 `crosswalk {near_m, far_m}`로 싣는다. 판단은 CORE 몫이다.
+- 증거: `test_crosswalk_stripes.py` 4건(앞뒤 끝, 20 mm 비킴·경계와 붙은 막대, 일반 차로·가로 사다리 아님, 띠 2개·얇은 조각 아님), `test_lane_containment_payload.py` 추가 1건.
+- gate 변화: 없음. 실제 카메라 영상에서 검출 확인은 아직이다.
+
+## 2026-10-07 · uncommitted · fix(perception): 횡단보도 띠는 로봇 차로 폭 안에서만 센다 (D-491 리뷰)
+
+- 변경: `crosswalk_extent(grid, x_rows, y_cols)`가 |y| ≤ 0.10 m 열만 본다(옆 차로 횡단보도 제외). 흰색이 띠 3개 폭보다 적은 행은 미리 건너뛴다(Pi CPU, D-185).
+- 증거: `test_crosswalk_stripes.py` 5건(옆 차로 추가).
+- gate 변화: 없음.

@@ -180,5 +180,9 @@ def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bou
         segments = [tuple((x-camera_x, b["slope"]*x+b["intercept_m"])
                           for x in (b["observed_x_min_m"], b["observed_x_max_m"])) for b in boundaries]
         uncertainty = projection_uncertainty_m(ground, error, segments)
-    return dict(stamp=float(stamp), geometry_id=identity, ground_source=source,
-                uncertainty_m=uncertainty, boundaries=boundaries)
+    payload = dict(stamp=float(stamp), geometry_id=identity, ground_source=source,
+                   uncertainty_m=uncertainty, boundaries=boundaries)
+    if keeper.get("crosswalk") is not None:  # D-491 §4: CORE decides whether it may rest the IR guard
+        near, far = keeper["crosswalk"]
+        payload["crosswalk"] = dict(near_m=float(near), far_m=float(far))
+    return payload

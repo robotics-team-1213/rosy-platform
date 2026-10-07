@@ -18,7 +18,7 @@ def http_error(exc: BaseException) -> HTTPException:
         # 409 는 "지금 상태에서는 안 된다"(이미 대형이 열려 있음, 팔로워가 대형에 묶임)이고,
         # 400 은 "요청이 틀렸다"(없는 대형 이름)다. 화면이 둘을 다르게 안내해야 한다.
         conflict = {"FORMATION_ACTIVE", "NO_FORMATION", "REFORM_REFUSED",
-                    "RESUME_REFUSED", "ARMING_FAILED", "NO_FOLLOWERS"}
+                    "RESUME_REFUSED", "ARMING_FAILED", "NO_FOLLOWERS", "TRIP_ROBOT_BUSY"}
         status = (404 if exc.code in ("UNKNOWN_ROBOT", "UNKNOWN_SIGNAL", "NO_SIGNALS")
                   else 409 if exc.code in conflict else 400)
         return HTTPException(status_code=status, detail={"code": exc.code, "message": str(exc)})

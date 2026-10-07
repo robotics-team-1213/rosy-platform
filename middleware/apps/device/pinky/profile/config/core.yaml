@@ -28,6 +28,9 @@ line_follow:
   # sensor sits at ultrasonic.x_m and faces forward.
   body_front_x_m: 0.04205
   body_ultrasonic_x_m: 0.0267
+  # D-491: the floor IR row (geometry.yaml ir.*.x_m, drift-tested). Without it the IR
+  # lane guard never rests in a crosswalk zone.
+  ir_row_x_m: 0.0295
   # Stop on the commanded path, not on every return in the ±20° sector.
   # A signal pole or wall more than the body half-width off that path does not
   # hold the lane. A return the body would meet on the path still stops.
