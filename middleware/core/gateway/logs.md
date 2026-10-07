@@ -937,3 +937,37 @@
 - 증거: 호스트는 `ros_bridge.py`를 import하지 않는다. 상태 쪽 시험은 services `test_state_odom_pose.py`. `test_capabilities_controls.py`에 D-494 1 시험 2개 추가. gateway 2181 passed·17 skip, known_failures 0 new.
 - gate 변화: 없음. ROS-SIM·DEVICE 미확인.
 - 결정: D-494 (Proposed)
+## 2026-10-07 · uncommitted · feat(bridge): keep_debug 교차로 사유를 line-follow 정지 입력으로
+- 변경: `bridge/observation.py` `keep_junction`이 `line/keep_debug`의 `reason`(`junction_transverse`·`junction_fork`)과 카메라 시각(`stale_after_s` 안)을 읽어 `observe_junction`에 넘긴다. 정지 입력으로만 쓴다. `ros_bridge.py`의 기존 구독에 한 줄 붙임
+- 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. 실기·SIM 미실행(Gazebo는 이 노트북에서 돌리지 않음)
+- 결정: D-494 (Proposed) 4항, 구현 부록 2026-10-07
+- 교훈: 오늘 인식은 CORE에 분기 후보를 주지 않는다. 좌·우 주행은 분기 계약 ADR이 먼저다
+
+## 2026-10-07 · uncommitted · test(line_follow): D-495 bridge 로봇 기본값 켜짐 고정
+- 변경: `rosy_default.yaml` `bridge_enabled: true`(D-495). 고정 시험이 켜짐과 CORE 설정 겹으로 끄기를 확인한다. bridge는 여전히 `recovery_local_enabled`(기본 꺼짐)가 필요하다
+- 증거: `test_line_junction.py` 44 PASS, `test_line_junction_api.py` 9 PASS. services·api_web·contracts/foundation·line-follow 문서·perception 배선 1968 PASS·18 skip, gateway 2188 PASS·17 skip, perception 2704 PASS·109 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
+- 결정: D-495 (Proposed), 구현 메모 2026-10-07
+- 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
+
+## 2026-10-07 · uncommitted · feat(line_follow): D-495 recovery_local_enabled 기본 켜짐과 keep 증거
+- 변경: `keep_junction`이 `corner_turning`을 넘긴다. `rosy_default.yaml` `recovery_local_enabled: true`(D-495 개정). 고정 시험: 기본 켜짐, 겹으로 끄기, 끈 로봇의 `local_recovery_disabled`, 일반 기본의 `body_geometry_unset`
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep 1969 PASS·18 skip, gateway 2190 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows; 동시 실행 중 `test_site_rooms.py` 자식 프로세스 시간 시험 한 번 실패, 단독·재실행 통과)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
+- 결정: D-495 (Proposed) 결정 개정 2026-10-07
+- 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다
+
+## 2026-10-07 · uncommitted · fix(bridge): D-495 검토 L3 keep_debug 문서
+- 변경: `keep_junction` docstring: 감지가 이제 회전 시작도 가르므로 0.3 s 지연 한도를 명시. `junction_reacquire_frames`·`junction_turn_lead_s` 설정 파싱
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 시험 2007 PASS·18 skip, gateway 2192 PASS·17 skip, 문서 시험 1 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows). 검토 탐침 `probe_lag.py`·`probe_junction.py` 재실행
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-495 수용 점검표
+- 결정: D-495 (Proposed) 독립 안전 검토 반영 2026-10-07
+- 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
+
+## 2026-10-07 · uncommitted · fix(bridge): ControlSensorAdapter.return_proof_configured
+- 변경: `return_sensor_allowed`의 상시 조건(enforce, LiDAR·IMU·IR 필수, 바닥 정책)을 메서드로 뽑았다. `bind_lane_return_motion`이 그것을 junction_turn 능력의 근거로 넘긴다(getattr 없이, C6)
+- 증거: services·api_web·contracts/foundation·문서·perception 배선/lane_keep·Gazebo launch·test/architecture 2196 PASS·19 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음
+- 결정: D-495 (Proposed) 착지 전 검토 반영
+- 교훈: 능력 보고는 그 동작을 실제로 허가할 증거와 같은 조건이어야 정직하다

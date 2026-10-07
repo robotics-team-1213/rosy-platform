@@ -34,10 +34,19 @@
     gazebo_camera_pitch_rad: 0.0
     gazebo_camera_hfov_rad: 0.0
     gazebo_camera_max_range_m: 0.6
-    # Lane mode corner turning needs odometry and is off unless a launch
-    # opts in with the camera's measured offset ahead of base_link.
-    lane_corner_turning: false
-    camera_x_offset_m: 0.0
+    # Corner turning needs odometry. In keep mode it also turns on the keeper's
+    # junction HOLD (junction_transverse / junction_fork), which CORE uses to stop
+    # before a junction and to start a D-494/D-495 junction instruction. On by
+    # robot default since D-495 (2026-10-07); a payload carrying it is promoted
+    # only after the model-PC Gazebo map_v2_fleet_real lap and a real lane lap.
+    # The same flag also turns on the lane-mode corner tracker and the edge_left
+    # corner handoff (both odometry-bounded).
+    lane_corner_turning: true
+    # Lens offset ahead of base_link: the URDF nominal of the Pinky Pro front camera,
+    # copied from middleware/apps/device/pinky/profile/config/camera_nominal.yaml
+    # x_offset_m (geometry.yaml camera.*, cam_tilt_deg 8; drift-tested). Corner and
+    # junction geometry is measured from base_link, so 0.0 put them 33 mm short.
+    camera_x_offset_m: 0.03317
     debug_overlay: false            # line/debug/compressed (observation only)
     debug_overlay_max_hz: 5.0
     debug_lane_graph: ""            # optional lane_graph.yaml for the map panel

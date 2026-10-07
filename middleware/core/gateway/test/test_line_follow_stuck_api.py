@@ -107,10 +107,19 @@ def test_resume_refused_inside_stop_distance(core_client):
 
 
 def test_back_and_retry_refused_while_local_recovery_is_off(core_client):
-    client, _, stuck_id = _stuck(core_client)
+    # D-495 turned the robot default on; a robot rolled back to off still refuses.
+    off = {"line_follow": {"recovery_local_enabled": False}}
+    client, _, stuck_id = _stuck(lambda **kw: core_client(config_overrides=off, **kw))
     refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"},
                           headers=OPERATOR)
     assert refused.status_code == 409 and "local_recovery_disabled" in refused.text
+
+
+def test_back_and_retry_on_the_generic_default_still_needs_urdf_geometry(core_client):
+    client, _, stuck_id = _stuck(core_client)
+    refused = client.post(URL, json={"stuck_id": stuck_id, "decision": "BACK_AND_RETRY"},
+                          headers=OPERATOR)
+    assert refused.status_code == 409 and "body_geometry_unset" in refused.text
 
 
 @pytest.mark.parametrize("decision, mode", [("ABORT", Mode.IDLE), ("MANUAL", Mode.MANUAL)])
@@ -135,12 +144,41 @@ def test_packaged_default_plus_pinky_plus_old_overlay_parses():
     merged = _deep_merge(_deep_merge(_yaml(DEFAULT), _yaml(PINKY)),
                          {"line_follow": {"obstacle_escalate_s": 4.0, "lidar_forward_deg": 181.0}})
     config = _line_follow_config(merged["line_follow"])
-    assert config.recovery_local_enabled is False and config.recovery_ask_s == 15.0
+    # D-495: on by robot default; the config-less model default stays off.
+    assert config.recovery_local_enabled is True and config.recovery_ask_s == 15.0
+    rolled_back = _deep_merge(merged, {"line_follow": {"recovery_local_enabled": False}})
+    assert _line_follow_config(rolled_back["line_follow"]).recovery_local_enabled is False
     assert config.recovery_back_m == 0.08 and config.recovery_back_speed == 0.03
     assert config.recovery_rear_clear_m == 0.06 and config.recovery_max_attempts == 2
     assert config.body_geometry_known and config.body_rear_x_m == -0.076
     generic = _line_follow_config(_yaml(DEFAULT)["line_follow"])
     assert not generic.body_geometry_known                   # never backs off without URDF
+
+
+def test_packaged_default_backs_off_on_a_body_geometry_robot():
+    """D-495 user decision (2026-10-07): recovery_local_enabled on by default includes the D-407
+    autonomous back-off on every robot with URDF body geometry (no separate self-mask gate)."""
+    from core_features.line_follow.manager import LineFollowManager
+
+    class Events:
+        def publish(self, *args, **kwargs): pass
+
+    config = _line_follow_config(_deep_merge(_yaml(DEFAULT), _yaml(PINKY))["line_follow"])
+    assert config.recovery_local_enabled and config.body_geometry_known
+    m = LineFollowManager(Events(), config=config, clock=lambda: 0.0)
+    m.bind_recovery(console_linked=lambda: False, calibration_active=lambda: False,
+                    linear_ceiling=lambda: 0.15, preview_seq=lambda: 1)
+    m.set_mode(LineFollowMode.CAMERA_LINE)
+    rear = config.body_lidar_x_m - config.body_rear_x_m + 0.30   # 0.30 m clear behind the body
+    t, back = 0.0, None
+    while t < 7.0 and (back is None or back.linear >= 0):
+        m.observe_clearance(0.15, received_at=t)
+        m.observe_body_points([(0.15, 0.0), (-rear, 0.0)], range_min=0.0, received_at=t)
+        m.observe(LineObservation(source=LineFollowMode.CAMERA_LINE, stamp=t, visible=True,
+                                  error=0.0, confidence=0.9), received_at=t, source_now=t)
+        back = m.tick(t + 0.01)
+        t = round(t + 0.1, 6)
+    assert back.linear < 0 and m.status().reason == "stuck_back_off"
 
 
 def test_d476_bridge_is_off_by_default_and_yaml_matches_the_model():

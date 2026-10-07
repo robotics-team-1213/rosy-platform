@@ -91,7 +91,7 @@ CORE 변경 두 가지(1·2항, 4항)는 서명 릴리스가 있어야 로봇에
 1. **`odom_pose.stamp`는 CORE가 odom 메시지를 받은 시각이다.** ROS 헤더 시각이 아니다(sim에서는 sim time이라 UTC가 아니다). 값은 UTC epoch 초(실수)로 sighting `captured_at`과 같은 형식이다. 유한하지 않은 odom 표본은 버리고 이전 값을 둔다.
 2. **`robot_kind`는 `robot.model`이 로봇 패키지 이름(`[a-z][a-z0-9_]*`, 64자 이하)일 때만 싣는다.** 아니면 빼고 로그를 한 번 남긴다. 그런 로봇은 능력 미상(`TRIP_ROBOT_CAPS_UNKNOWN`)으로 읽힌다.
 3. **`trip_max_linear`**는 safety `max_linear`·`fleet_linear`와 line-follow `max_linear` 중 최솟값이다. Fleet은 0 m/s를 "갈 수 있는 간선 없음"(`TRIP_NO_ROUTE`)으로 계획한다. Fleet은 모르는 `drive_modes` 값을 버리고 아는 값만 쓴다.
-4. **`junction_turn`**(D-492)은 line-follow 매니저의 `supports_junction_turn` 훅이 참일 때만 true다.
+4. **`junction_turn`**(D-495)은 line-follow 매니저의 `supports_junction_turn` 훅이 참일 때만 true다.
 
 ### 구현 부록 (2026-10-07) — 3항 map pose
 
@@ -110,3 +110,33 @@ CORE 변경 두 가지(1·2항, 4항)는 서명 릴리스가 있어야 로봇에
 11. **읽기 엔드포인트.** 기본 `refresh`로 로봇 상태를 새로 읽는다(신선한 hub 스냅숏, 아니면 REST). 같은 로봇의 동시 읽기는 한 번으로 합치고, 마지막 odom이 0.2 s보다 새로우면 읽지 않는다. 읽기 실패는 기다리던 쪽이 취소돼도 회수해 기록한다. 로봇에 닿지 못하면(HTTP 오류 포함) 마지막 odom으로 답하고 3 s 뒤 `UNKNOWN`이 된다. `UNKNOWN`이면 `x`·`y`·`yaw`는 null이다. 모르는 로봇, 또는 읽는 사이 로스터에서 빠진 로봇은 404 `UNKNOWN_ROBOT`이다. 로스터에서 빠진 로봇의 상태는 버린다.
 
 `trusted_map_pose`·`/route`·교통정리·D-395는 바꾸지 않았다. D-457 tracking은 입력이 아니다. 콘솔이 읽은 스냅숏을 map pose에 넘기다 실패해도 스냅숏 수집은 계속되고, 로그는 로봇마다 한 번 남긴다.
+
+### 구현 부록 (2026-10-07) — 4항 교차로 동작
+4항(CORE 교차로 동작 API)을 `feat/d491-core-junction-action`에서 구현하기 전에 오늘의 인식이 무엇을 주는지 조사했다. 결정 본문은 바꾸지 않는다.
+
+**인식 조사 결과**
+
+1. **CORE가 받는 차선 관측에는 분기 정보가 없다.** CORE line-follow의 입력 `line/observation`은 `{source, stamp, visible, error, confidence, ground?, quality?, containment?}`뿐이다(`middleware/perception/control/sensing/perception/lane.py` `line_observation_payload`, `middleware/core/gateway/core/bridge/observation.py`). 가지 후보, 가지 방향, 교차로 표시가 없다.
+2. **교차로 판정은 keep 모드 keeper 안에만 있다.** `lane_keep_junction.py`는 `lane_corner_turning`이 켜졌을 때만 두 가지를 HOLD로 판정한다. 하나는 교차로 입구 `junction_transverse`다. 따르는 경계가 차로 밖으로 15° 넘게 꺾이고 가로선이 앞 0.45 m(`JUNCTION_AHEAD_M`) 안에서 진로를 가로지를 때다. 다른 하나는 갈래 `junction_fork`다. 같은 쪽 경계 둘이 30° 넘게 벌어질 때다. 이 판정은 CORE에 `visible=false`로만 간다. 이유 문자열은 `line/keep_debug`의 `reason`에만 있고, CORE는 그 토픽을 표시 전용 `LanePerceptionStore`로 받는다. 실기 기본값은 `lane_corner_turning: false`이므로 이 판정이 나오지 않는다.
+3. **어느 가지가 왼쪽·직진·오른쪽인지는 아무도 내지 않는다.** `lane_topology.lane_hypotheses`의 `relation: left|right`는 나란한 옆 차로(표시용)이지 분기가 아니다. D-384 `road_state`의 가설과 `route_hint` 동점 깨기는 제어 경로가 읽지 않는 섀도다. `core_features.road_behaviour.choose_branch`는 `JunctionAhead.branches`를 받는 순수 함수지만 그 값을 채우는 생산 코드가 없다. sim의 `route_a`·`route_b`·`route_ab`는 launch 때 정한 lane_graph 경로와 odom으로 인식 노드 안에서 가지를 고르는 시제품이다. 읽기 전용 파라미터라 CORE가 실행 중에 바꿀 수 없고, 운영자 모드 목록(`OPERATOR_LANE_MODES`)에도 없다.
+4. **결론.** 오늘의 인식은 CORE에 분기 후보를 하나도 주지 않는다. "교차로를 봤다"는 신호는 corner turning을 켠 keep 모드에서 표시 토픽의 `reason`으로만 있다.
+
+**제어 설계(이 브랜치)**
+
+1. **교차로 감지.** `line/keep_debug`의 `reason`이 `junction_transverse` 또는 `junction_fork`이고 카메라 시각이 `stale_after_s` 안이면 감지로 본다. CORE는 이 값을 멈추는 쪽으로만 쓴다. 움직임의 근거로는 쓰지 않는다. IR_LINE, keep이 아닌 카메라 모드, corner turning이 꺼진 keep 모드에서는 감지하지 못한다.
+2. **교차로 앞 정지 거리.** 따로 설정을 두지 않는다. 감지가 곧 정지 근거이고, keeper가 감지하는 때는 가로선이 앞 0.45 m 안에 들어올 때다. CORE는 그 다음 틱(20 Hz)에 0을 낸다. keeper도 그 프레임부터 목표를 버리므로 기본 경로도 멈춘다.
+3. **`straight`.** 받으면 `armed`이고 D-476 bridge route hint를 `straight`로 둔다. 감지되면 `executing`이 되고 기존 주행(keeper, D-476 bridge)을 그대로 둔다. 감지가 사라지면 지시를 다 쓴 것으로 보고 `idle`로 돌아가며 hint를 지운다. keeper가 교차로에서 목표를 버리므로 실제로 지나가려면 D-476 bridge(기본 꺼짐)가 켜져 있어야 한다. 꺼져 있으면 기존 손실 규칙(`lost_after_s` 뒤 LOST)을 따른다.
+4. **`left`·`right`.** 가를 분기 후보가 없으므로 받는 즉시 `unresolved`로 두고 line-follow를 HOLD `junction_unresolved`로 멈춘다. 교차로까지 가지 않는다. corner turning이 꺼진 실기는 교차로를 보지 못하고 한쪽 경계를 따라 아무 가지로나 들어갈 수 있기 때문이다. 추측해서 꺾지 않는다. hint는 지시 방향으로 두며, D-476 bridge는 이 값에서 원래 움직이지 않는다.
+5. **`stop`.** 받으면 `executing`이다. odom 이동 거리(D-468 PoseTrail, 0.3 s 안에 신선한 표본)가 `stop_after_m`에 닿으면 HOLD `junction_stop`이다. odom이 없거나 낡았거나 끊기면 거리를 증명할 수 없으므로 바로 멈춘다. HOLD는 다음 지시나 모드 변경까지 이어진다. `stop_after_m`은 0~2.0 m이고 `stop`에만 쓴다. 다른 동작과 함께 오면 400이다.
+6. **지시 없음·만료.** 지시가 없거나 `armed` 지시가 만료된 채 교차로가 감지되면 `waiting`이고 HOLD `junction_waiting`이다. 감지가 깜빡여도 다음 지시나 모드 변경까지 풀지 않는다. 만료는 `armed` 지시에만 적용한다. 실행 중이거나 멈춘 지시는 만료로 풀리지 않는다.
+7. **`junction_unresolved`의 뜻.** 지시는 받았지만 CORE가 지시한 가지를 인식으로 가려낼 수 없어서 멈췄다는 뜻이다. 오늘은 `left`·`right`가 항상 이 상태다.
+8. **덮어쓰기와 수명.** 새 지시는 보관 중인 지시를 바꾸고 `junction_seq`를 하나 올린다. seq는 CORE 프로세스가 살아 있는 동안 계속 커진다. line-follow 모드가 바뀌면(OFF 포함) 지시와 감지 기록을 지운다.
+9. **상태 표시.** `line_follow.junction {pending_action, place_id, state, seq}`이다. 교차로 정지는 `line_follow.state=HOLD`이고, 사유는 `junction_waiting`·`junction_unresolved`·`junction_stop` 중 하나다. 이미 `LOST`·`OFF`인 상태는 덮지 않는다. 응답은 `{accepted, junction_seq, state}`이다. `state`는 4항에 더한 필드다.
+10. **seat.** D-460에 따라 CORE에는 seat 임대가 없다. 이 API의 "seat 보유자"는 `POST /api/v1/line-follow/hold`와 같은 기존 검사를 뜻한다. operator 토큰이어야 하고, 보정 lease(`require_calibration_owner`)를 넘어야 하며, 수동 조종이 풀려 있어야 한다.
+11. **CORE 경계.** 지시는 기존 결정을 0으로 만들거나 그대로 둘 뿐이다. 새 움직임을 만들지 않고 모드를 바꾸지 않는다. 최종 `cmd_vel` 발행자는 그대로 CORE CommandManager다.
+
+**한계**
+
+- 실기 기본값(corner turning 꺼짐)에서는 교차로를 감지하지 못한다. 따라서 "지시 없는 교차로에서 멈춤"이 작동하지 않는다. 5항 trip 루프의 `lane` 간선은 이 한계가 풀리기 전에는 그 기본 안전 동작에 기댈 수 없다.
+- 좌·우 회전 주행은 없다. 인식이 가지별 방향과 각도를 내는 계약(예 `branches [{direction, heading_deg, confidence}]`)을 새 ADR로 만들어야 한다. 그 전에는 4항의 "분기 후보 중 지시 방향과 가장 가까운 것"이 뜻을 갖지 못하며, Consequences의 SIM `lane` trip 완주는 좌·우 지시가 있는 경로에서 통과할 수 없다.
+- 감지 입력은 표시 토픽 `line/keep_debug`를 정지 쪽으로만 다시 쓴 것이다. 감지 계약을 `line/observation`으로 옮길지는 위 분기 계약 ADR에서 함께 정한다.

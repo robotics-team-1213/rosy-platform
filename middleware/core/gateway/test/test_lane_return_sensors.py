@@ -129,3 +129,27 @@ def test_core_start_refuses_a_blind_bridge(enabled, site, mode, ok):
     else:
         with pytest.raises(ValueError,match='bridge_site_no_dropoffs'):
             check_bridge_floor_basis(config,mode)
+
+
+@pytest.mark.parametrize('kwargs, configured', [
+    ({}, True), (dict(mode='shadow'), False), (dict(mode='off'), False),
+    (dict(required=('lidar', 'imu')), False)])
+def test_return_proof_configured_is_the_standing_part_of_the_floor_proof(kwargs, configured):
+    """D-495 junction_turn capability: true only where a turn could ever be admitted."""
+    a = adapter(**kwargs)
+    assert a.return_proof_configured() is configured
+    a._closed = True
+    assert a.return_proof_configured() is False
+
+
+def test_bound_motion_reports_junction_turn_only_with_an_enforce_floor_proof():
+    from core_features.line_follow.manager import LineFollowManager
+
+    class Events:
+        def publish(self, *args, **kwargs): pass
+
+    for mode, expected in (('enforce', True), ('shadow', False)):
+        lf = LineFollowManager(Events(), clock=lambda: 1.0)
+        bind_lane_return_motion(lf, adapter(mode=mode))
+        lf.observe_junction('no_boundary', 1.0, corner_turning=True)
+        assert lf.supports_junction_turn is expected

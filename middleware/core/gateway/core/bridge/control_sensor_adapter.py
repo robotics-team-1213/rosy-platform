@@ -320,14 +320,18 @@ class ControlSensorAdapter:
             safety.bind_control_policy(self.policy)
         return True
 
+    def return_proof_configured(self):
+        """The standing part of return_sensor_allowed: an open enforce worker requiring LiDAR,
+        IMU and IR with a floor policy. False means every D-468/D-495 probe will be refused."""
+        return (not self._closed and self.config.mode=='enforce'
+                and {'lidar','imu','ir'}.issubset(self.config.required)
+                and callable(getattr(self.policy,'local_return_allowed',None)))
+
     def return_sensor_allowed(self, now, linear, angular):
         """D-468 current sensor/floor evidence only; CORE must also prove swept space."""
-        if (self._closed or self.config.mode!='enforce'
-                or not {'lidar','imu','ir'}.issubset(self.config.required)):
+        if not self.return_proof_configured():
             return False
-        evaluate=getattr(self.policy,'local_return_allowed',None)
-        if not callable(evaluate):
-            return False
+        evaluate=self.policy.local_return_allowed
         try:
             return evaluate(linear,angular,now) is True
         except Exception:

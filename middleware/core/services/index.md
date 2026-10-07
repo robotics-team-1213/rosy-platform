@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(state): D-494 검토 — 유한하지 않은 odom 표본을 버린다
-- 2026-10-07 · uncommitted · feat(state): D-494 2 상태 스냅샷의 odom_pose
-- 2026-10-06 · uncommitted · fix(lane): D-476 independent review fixes
-- 2026-10-06 · uncommitted · feat(lane): D-476 expected-road bridge in CORE, default off
-- 2026-10-05 · uncommitted · fix(lane): retain scan provenance and operator fallback authority
+- 2026-10-07 · uncommitted · fix(line_follow): D-495 junction_turn 능력은 동작 확인이 가능할 때만
+- 2026-10-07 · uncommitted · merge(main): D-495와 D-476 rev 1 병합
+- 2026-10-07 · uncommitted · fix(line_follow): D-495 최종 안전 검토 N2·L1·L3
+- 2026-10-07 · uncommitted · fix(line_follow): D-495 안전 재검토 N1·R1–R3
+- 2026-10-07 · uncommitted · fix(line_follow): D-495 독립 안전 검토 M1–M8·L1·L2

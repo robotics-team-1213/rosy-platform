@@ -491,3 +491,30 @@
 - 증거: `test_controls_contract.py` 9 PASS(생략 시 와이어에 없음, true 왕복, 잘못된 값 거절).
 - gate 변화: 없음. API Ref v1.112 행에 포함.
 - 결정: D-494, D-495 (Proposed)
+## 2026-10-07 · uncommitted · feat(schemas): LineFollowStatus.junction
+- 변경: `LineJunctionStatus {pending_action, place_id, state, seq}`를 더하고 `LineFollowStatus.junction` 기본값 idle로 둔다(D-494 4항, additive)
+- 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. 실기·SIM 미실행(Gazebo는 이 노트북에서 돌리지 않음)
+- 결정: D-494 (Proposed) 4항, 구현 부록 2026-10-07
+- 교훈: 오늘 인식은 CORE에 분기 후보를 주지 않는다. 좌·우 주행은 분기 계약 ADR이 먼저다
+
+## 2026-10-07 · uncommitted · feat(config): D-495 bridge 기본값과 LineJunctionStatus 확장
+- 변경: `line_follow.bridge_enabled: true`와 주석(D-495·승격 규칙·되돌리기). `LineJunctionStatus`에 `turn_deg`·`reason`과 상태 `turning`·`advancing`·`reacquiring`·`aborted`
+- 증거: `test_line_junction.py` 44 PASS, `test_line_junction_api.py` 9 PASS. services·api_web·contracts/foundation·line-follow 문서·perception 배선 1968 PASS·18 skip, gateway 2188 PASS·17 skip, perception 2704 PASS·109 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
+- 결정: D-495 (Proposed), 구현 메모 2026-10-07
+- 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
+
+## 2026-10-07 · uncommitted · feat(config): D-495 recovery_local_enabled 로봇 기본값 켜짐
+- 변경: 주석에 D-495 승격 규칙과 되돌리기(`~/.rosy/rosy.yaml`·`ROSY_CONFIG`). D-468·D-407 ADR에 개정 메모
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep 1969 PASS·18 skip, gateway 2190 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows; 동시 실행 중 `test_site_rooms.py` 자식 프로세스 시간 시험 한 번 실패, 단독·재실행 통과)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
+- 결정: D-495 (Proposed) 결정 개정 2026-10-07
+- 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다
+
+## 2026-10-07 · uncommitted · fix(config): D-495 검토 설정과 주석
+- 변경: `junction_reacquire_frames: 3`, `junction_turn_lead_s: 0.15` 추가, D-407 로컬 후진 주석 갱신
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 시험 2007 PASS·18 skip, gateway 2192 PASS·17 skip, 문서 시험 1 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows). 검토 탐침 `probe_lag.py`·`probe_junction.py` 재실행
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-495 수용 점검표
+- 결정: D-495 (Proposed) 독립 안전 검토 반영 2026-10-07
+- 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다
