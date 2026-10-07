@@ -158,7 +158,8 @@ class LineFollowConfig:
     # D-476 expected-road bridge: on a short lane loss right after confident following, drive
     # the followed lane's straight extension slowly. Distance ladder from D-384 (measured odom
     # travel x bridge_distance_scale: full speed below coast, x slow_scale below slow, then
-    # stop) and done by lost_after_s - bridge_time_margin_s. Model default off; robot default on (D-495).
+    # stop) and done by lost_after_s - bridge_time_margin_s. Off by default, model and robot
+    # (D-476 rev 1: an enabled bridge needs ir_guard_enabled and a floor basis).
     bridge_enabled: bool = False
     # Arming (D-476 rev 2026-10-07): the last bridge_arm_frames camera frames all visible with
     # confidence >= bridge_arm_confidence and the tick TRACKING. 0.5 sits above the 0.35 follow
