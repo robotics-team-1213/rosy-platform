@@ -88,8 +88,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · Cell job snapshot invalidation
-- 2026-10-07 · uncommitted · Cell failed job read status
-- 2026-10-07 · uncommitted · Site-map offline robot choice
-- 2026-10-07 · uncommitted · Cell rejected-session widths
-- 2026-10-07 · uncommitted · Cell emergency-stop feedback widths
+- 2026-10-07 · uncommitted · Fleet roster action widths
+- 2026-10-07 · uncommitted · fix(fleet): D-494 3 map pose 재검토 반영
+- 2026-10-07 · uncommitted · fix(fleet): D-494 3 map pose 독립 검토 반영
+- 2026-10-07 · uncommitted · feat(fleet): D-494 3 trip 전용 지도 자세(map pose)
+- 2026-10-07 · uncommitted · fix(fleet): D-494 검토 — 모르는 drive_modes 값은 버린다

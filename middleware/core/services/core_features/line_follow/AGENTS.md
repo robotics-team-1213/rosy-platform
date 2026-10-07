@@ -18,7 +18,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 | `stuck_recovery.py` | D-407 ROS-free stuck state machine: ask console, answers by stuck id, local back-off, re-judge |
 | `stuck_wiring.py` | Manager mixin feeding the machine; the back-off is the manager's own decision (D-2) |
 | `lane_return*.py` | D-468 local lane return: evidence ledger, checkpoint/retrace/search controller, arbitration inside the manager lock |
-| `lane_bridge.py` | D-476 expected-road bridge (default off): slow drive along the D-468 checkpoint lane's extension on a short loss, swept by D-422, then hand-over to D-468 |
+| `lane_bridge.py` | D-476 expected-road bridge (default off): armed by confident following (rev 1, no D-468 containment), slow drive along the followed lane's straight extension on a short loss, swept by D-422 (plus the D-468 floor proof when enforce), then hand-over to D-468 or today's HOLD/LOST |
 
 ## Subdirectories
 

@@ -73,6 +73,48 @@ EXEMPT: dict[str, str] = {
         "No stop, admission, dispatch or auth path touched; 136 host tests pass at the commit "
         "(lane_route, site_map_api, stuck_resolver, server_console, overhead_tracking_service); "
         "no device acceptance.",
+    "a86afa7f7714ba583e0da1c0a3245c47e91430b4":  # git commit revision
+        'Independent security-reviewer agent, 2026-10-07: console.py only adds the D-494 3 '
+        'state sink (attribute, set_state_sink, one call in _remember after _seen) feeding '
+        'MapPoseService.observe_state, a pure trip-only odom recorder that never mutates the '
+        'snapshot and is not an input to trusted_map_pose. The unguarded call never reached '
+        'main alone: first main commit 246eac64f also carries the f42bcc865 try/except; no '
+        'stop, admission, dispatch, goal, traffic, auth or trust path changed; 60 host tests '
+        'pass (map_pose_service incl. raising sink, trip_caps, server_console, site_map_trip); '
+        'no device acceptance.',
+    "2b08f9629618c8fc34d181ca7a6fc1d8666ae91c":  # git commit revision
+        'Independent security-reviewer agent, 2026-10-07: console.py adds caps_for, a read of '
+        'the existing CapabilityDisplay cache (wait_s=2.0, bounded asyncio.wait on the shared '
+        'refresh task) mapped to TripCaps; only caller is the /trip plan route (named operator, '
+        'start still not_open), where caps only narrow the plan; no stop, admission, dispatch, '
+        'goal, traffic, auth or trust path changed; 60 host tests pass (map_pose_service incl. '
+        'raising sink, trip_caps, server_console, site_map_trip); no device acceptance.',
+    "f42bcc8651987f89224e611e7ddf6c638398e8f7":  # git commit revision
+        'Independent security-reviewer agent, 2026-10-07: console.py wraps the D-494 3 state '
+        'sink call in try/except with a once-per-robot log, so a bad snapshot can no longer '
+        'skip the _loc_null_since/_trusted updates or later rows in _remember; no stop, '
+        'admission, dispatch, goal, traffic, auth or trust path changed; 60 host tests pass '
+        '(map_pose_service incl. raising sink, trip_caps, server_console, site_map_trip); no '
+        'device acceptance.',
+    "e3053c5ba6dc69abe85c24fd975ba88536dc06d8":  # git commit revision
+        'Independent security-reviewer agent, 2026-10-07: console.py change is one docstring '
+        'renumber (D-491 1 -> D-494 1) on caps_for; no executable line changed; no stop, '
+        'admission, dispatch, goal, traffic, auth or trust path changed; 60 host tests pass '
+        '(map_pose_service incl. raising sink, trip_caps, server_console, site_map_trip); no '
+        'device acceptance.',
+    "bdbbd400128eab3ac5a9b3f756aaaf1074e43fa4":  # git commit revision
+        'Independent security-reviewer agent, 2026-10-07: console.py change is one comment '
+        'renumber (D-491 3 -> D-494 3) on _state_sink; no executable line changed; no stop, '
+        'admission, dispatch, goal, traffic, auth or trust path changed; 60 host tests pass '
+        '(map_pose_service incl. raising sink, trip_caps, server_console, site_map_trip); no '
+        'device acceptance.',
+    "611756f1e5d6fb5f5456dbb831c45d27baa7aa89":  # git commit revision
+        'Independent security-reviewer agent, 2026-10-07: merge of main into '
+        'feat/d491-fleet-map-pose; console.py is the plain union of the caps_for and guarded '
+        'state-sink sides with no resolution edits (empty --cc diff); no stop, admission, '
+        'dispatch, goal, traffic, auth or trust path changed; 60 host tests pass '
+        '(map_pose_service incl. raising sink, trip_caps, server_console, site_map_trip); no '
+        'device acceptance.',
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)

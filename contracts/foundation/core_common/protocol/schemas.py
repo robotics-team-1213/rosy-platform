@@ -28,7 +28,7 @@ from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F40
 
 from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequest, SshPairRequest  # noqa: F401
 from core_common.protocol.access import ConnectionInfo, SiteRoomsSnapshot  # noqa: F401
-from core_common.protocol.localization import LocalizationStatus
+from core_common.protocol.localization import LocalizationStatus, OdomPose
 from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
 from core_common.protocol.cell_app import (  # noqa: F401
     CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest, CellOperatorCheckpoint)
@@ -1179,6 +1179,7 @@ class StateSnapshot(BaseModel):
     #: v1.69 additive (D-395): state and pose frame; null from robots before D-395.
     localization: Optional[LocalizationStatus] = None
     safety_policy: Optional[SafetyPolicyStatus] = None  # D-400, v1.71 additive
+    odom_pose: Optional[OdomPose] = None  # D-494 2, v1.112 additive; null until odometry
 
 
 class HeartbeatPayload(BaseModel):

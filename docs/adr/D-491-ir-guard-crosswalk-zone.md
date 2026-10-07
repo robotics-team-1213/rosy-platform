@@ -1,6 +1,6 @@
 ## D-491 IR 차선 가드는 알려진 횡단보도 구간에서만 쉬고, 구간은 지도나 카메라가 정해 odom으로 잇는다
 
-**Status:** Proposed (2026-10-07, 사용자 결정 "부분 수정 커밋 + ADR 작성"; 문서만. 구현·SIM·DEVICE 수용 별도). D-344 §12의 IR 가드 판정에 "횡단보도 구간" 예외를 더한다. D-344 본문은 고치지 않고 그 §12 보강(2026-10-07)이 이 ADR을 가리킨다.
+**Status:** Accepted (2026-10-07, 사용자 결정 "좋아 확정". Proposed 같은 날 "부분 수정 커밋 + ADR 작성"). Accepted는 구현·설치·실주행 통과를 뜻하지 않는다. 구현·SIM·DEVICE 수용은 별도이고, 구현 전에는 횡단보도가 있는 지도에서 `ir_guard_enabled`를 켜지 않는다. D-344 §12의 IR 가드 판정에 "횡단보도 구간" 예외를 더한다. D-344 본문은 고치지 않고 그 §12 보강(2026-10-07)이 이 ADR을 가리킨다.
 
 ### Context
 
@@ -61,3 +61,8 @@
 1. SOURCE: `detect_ir_line` 위상별 시험(이미 있음). CORE 구간 판정: 구간 안 `centre`/`left`/`right` → `clear`, 구간 없음·낡음·odom 무효화 → 지금 판정, 길이 상한, `lane_guard_stale` 유지. 지도 생성기의 횡단보도 구역 결정성. 검출기: 나란한 줄무늬 검출, 사다리·경계선·NOMINAL에서 미검출.
 2. ROS-SIM(모델 PC 또는 사이트 PC, 이 노트북 아님): map_v2_fleet 260919에서 횡오프셋 0·20 mm로 두 횡단보도를 지날 때 가짜 HOLD 0건, 그리고 횡단보도 밖 이탈은 여전히 HOLD.
 3. DEVICE: IR 교정 뒤, 사용자 승인과 녹화로. 호스트 시험은 장치 수용이 아니다.
+
+### 구현 메모 (2026-10-07, 결정 3 지도 구간)
+
+- `middleware/perception/map/map_v2_fleet/scripts/lane_graph.py`가 `lane_graph.yaml`의 최상위 `crosswalks[].polygon`(map 좌표 네 꼭짓점, m)을 만든다. 열린 항목 "지도 구역 형식"은 이것으로 닫는다.
+- CORE 차선 추종은 odom 자세만 받는다(D-468 `PoseTrail`). 그래서 CAMERA_LINE 중에는 지도 구간을 쓸 수 없고, 소비자는 지도 주행(D-481)과 시뮬 정답이다. CAMERA_LINE의 구간은 결정 4(카메라)가 낸다.

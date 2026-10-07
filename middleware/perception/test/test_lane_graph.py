@@ -99,3 +99,18 @@ def test_generator_output_is_checked_in_and_deterministic(tmp_path):
     out = tmp_path / "lane_graph.yaml"
     mod.write(mod.build(), out)
     assert out.read_bytes() == (BUNDLE / "lane_graph.yaml").read_bytes()
+
+
+def test_crosswalk_zones_cover_the_two_stl_crosswalks(graph):
+    """D-491 §3: crosswalk zones come from the STL's short paint bars."""
+    zones = graph["crosswalks"]
+    centres = sorted(tuple(np.mean(z["polygon"], axis=0)) for z in zones)
+    assert len(zones) == 2
+    assert np.allclose(centres, [(-1.27, -0.145), (0.37, -0.51)], atol=0.02)
+    for zone in zones:
+        p = np.array(zone["polygon"])
+        sides = sorted(np.linalg.norm(p - np.roll(p, 1, axis=0), axis=1))
+        # Four 25 mm bars, 15 mm gaps (145 mm across), 120 mm long.
+        assert sides[0] == pytest.approx(0.120, abs=0.006)
+        assert sides[-1] == pytest.approx(0.145, abs=0.006)
+

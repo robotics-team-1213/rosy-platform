@@ -7,12 +7,9 @@ export function createConnectionView({scope, el}) {
   scope.listen(el("topbar-more"), "click", () => {
     setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
   });
-  for (const id of ["workflow-connect", "connection-guide-action"]) {
-    scope.listen(el(id), "click", event => {
-      event.preventDefault(); setTopbarOpen(true); el("console-token").focus();
-    });
-  }
-  scope.listen(el("workflow-start"), "click", () => { el("start-point-tools").open = true; });
+  scope.listen(el("connection-guide-action"), "click", event => {
+    event.preventDefault(); setTopbarOpen(true); el("console-token").focus();
+  });
 
   function show(reason, token) {
     el("connection-guide").hidden = false;
@@ -38,6 +35,7 @@ export function createConnectionView({scope, el}) {
     // 지난 세션의 발행 문구를 살아 있는 상태처럼 보이지 않는다. 다음 조회가 덮어쓴다.
     el("dispatch-control-title").textContent = "발행 상태 확인 중";
     el("dispatch-control-detail").textContent = "대기 작업과 정지 세대를 읽고 있습니다.";
+    delete el("dispatch-control").dataset.state;
     el("dispatch-control").hidden = false;
   }};
 }
