@@ -6784,3 +6784,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-506 Proposed
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(harness): D-508 union 머지와 ADR 번호 선점 도구
+
+- 변경: `.gitattributes`에 `merge=union`(ADR Log, 모든 `logs.md`, `tools/harness/adr_gaps.txt`). `adr_gaps`를 `harness.yaml`에서 줄 파일 `tools/harness/adr_gaps.txt`로 옮겼다(18줄, lint는 번호로 중복 제거, 이행 기간에 yaml도 읽음). `tools/harness/adr_reserve.py next|list|release`가 `refs/adr/D-nnn`을 create-only로 만들어 번호를 선점한다. lint는 선점 ref 번호를 gap으로 본다. `AGENTS.md`·`shared-checkout.md`·`rosy-land-on-main`·`team-guide.md`·`docs/adr/AGENTS.md`의 4단계를 이 도구로 바꿨다.
+- 증거: `test_harness_contracts.py`·`test_network_topology_contracts.py`·`test_readme_agent_start.py` 120 passed, `known_failures.py` 0 new. 임시 저장소에서 BOM·CRLF Log에 두 브랜치가 행을 더해도 충돌 없이 두 행이 남는다. `rosy_harness.py lint` 0 errors. 실제 저장소 스캔은 브랜치 723개·워크트리 289개에서 약 4초.
+- gate 변화: 없음
+- 결정: D-508 Accepted (2026-10-07, 사용자 결정)
+- 교훈: 이어 쓰기만 하는 파일의 충돌은 내장 union 드라이버로 없앨 수 있다. 번호 경합은 조회를 늘려서가 아니라 원자적 ref 생성으로 막는다.
