@@ -71,11 +71,16 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (state.safety?.estop === true) items.push({ severity: "warn", text: ": 비상 정지 걸림 — 관리자가 해제해야 움직입니다" });
     else if (state.safety?.estop !== false) items.push({ severity: "warn", text: ": 정지 상태 미확인" });
     if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패" });
-    // D-511 M0: Fleet이 Rosy Cam 지도 자세로 본 차로 여유. 알리기만 한다(보정·정지는 M1/M2).
+    // D-511 M0: Fleet이 Rosy Cam 지도 자세로 본 차로 여유. 움직이는 로봇만 알린다(D-511 §2).
+    // 알리기만 한다(보정·정지는 M1/M2). 여유가 음수면 몸체가 가장자리를 넘은 것이다.
     const lane = robot.lane_compliance;
-    const laneCm = lane && typeof lane.margin_m === "number" ? Math.round(Math.abs(lane.margin_m) * 100) : null;
-    if (lane?.level === "ACT" && laneCm !== null) items.push({ severity: "crit", text: `: 차로 이탈 — 몸체가 가장자리를 ${laneCm} cm 넘음` });
-    else if (lane?.level === "WARN" && laneCm !== null) items.push({ severity: "warn", text: `: 차로 가장자리 접근 — 여유 ${laneCm} cm` });
+    if (lane?.moving === true && typeof lane.margin_m === "number" && (lane.level === "WARN" || lane.level === "ACT")) {
+      const cm = Math.round(Math.abs(lane.margin_m) * 100);
+      const text = lane.margin_m < 0 ? `몸체가 가장자리를 ${cm} cm 넘음` : `여유 ${cm} cm`;
+      items.push(lane.level === "ACT"
+        ? { severity: "crit", text: `: 차로 이탈 — ${text}` }
+        : { severity: "warn", text: `: 차로 가장자리 접근 — ${text}` });
+    }
     if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
     if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });

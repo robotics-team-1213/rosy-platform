@@ -60,9 +60,22 @@ test("attentionItems: offline gives only the disconnect item, however old", () =
 
 test("attentionItems: D-511 lane compliance WARN/ACT name the margin in cm; OK/UNKNOWN add nothing", () => {
   view.receivedAtMs = Date.now() - 1000;
-  const lane = (level, margin_m) => full({ line_stuck: null, lane_compliance: { level, margin_m } });
+  const lane = (level, margin_m, moving = true) => full({ line_stuck: null, lane_compliance: { level, margin_m, moving } });
   assert.deepEqual(texts(attentionItems(lane("WARN", 0.012))), ["warn: 차로 가장자리 접근 — 여유 1 cm"]);
   assert.deepEqual(texts(attentionItems(lane("ACT", -0.034))), ["crit: 차로 이탈 — 몸체가 가장자리를 3 cm 넘음"]);
   assert.deepEqual(attentionItems(lane("OK", 0.05)), []);
   assert.deepEqual(attentionItems(lane("UNKNOWN", null)), []);
+});
+
+test("attentionItems: D-511 WARN with a negative margin says the body is over, not a margin", () => {
+  view.receivedAtMs = Date.now() - 1000;
+  const items = attentionItems(full({ line_stuck: null, lane_compliance: { level: "WARN", margin_m: -0.006, moving: true } }));
+  assert.deepEqual(texts(items), ["warn: 차로 가장자리 접근 — 몸체가 가장자리를 1 cm 넘음"]);
+});
+
+test("attentionItems: D-511 a still robot raises no lane item", () => {
+  view.receivedAtMs = Date.now() - 1000;
+  for (const moving of [false, undefined]) {
+    assert.deepEqual(attentionItems(full({ line_stuck: null, lane_compliance: { level: "ACT", margin_m: -0.05, moving } })), []);
+  }
 });
