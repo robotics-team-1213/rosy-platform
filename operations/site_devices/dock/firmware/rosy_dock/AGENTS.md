@@ -3,6 +3,9 @@
 
 # rosy_dock
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Single-file ESP32 sketch: load probe, contact enable, current/voltage sense, fault foldback, Wi-Fi STA from NVS, `GET /status`.

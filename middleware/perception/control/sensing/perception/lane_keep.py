@@ -277,7 +277,7 @@ class LaneKeeper:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
         self.last = {"strategy": "none", "boundaries": [], "transverse": [], "candidates": [], "blobs": 0,
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None,
-                     "lane_width_m": 2.0 * lane_half_width_m}
+                     "lane_width_m": 2.0 * lane_half_width_m, "junction_ahead_v": 1}
         if ground is None:
             self.last["reason"] = "no_ground"
             self._forget()
@@ -404,10 +404,10 @@ class LaneKeeper:
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
             target, strategy = corner
         seen_left, seen_right = ([b for b in left + right + conflicts if b["side"] == s] for s in ("left", "right"))
-        junction = (None if corner is not None
-                    else _junction(strategy, transverse, seen_left, seen_right, half,
-                                   self._corner_turning,
-                                   ONE_MAX_DISTANCE_FRACTION * 2.0 * half))
+        junction, ahead = ((None, None) if corner is not None
+                           else _junction(strategy, transverse, seen_left, seen_right, half,
+                                          self._corner_turning,
+                                          ONE_MAX_DISTANCE_FRACTION * 2.0 * half))
         if junction is not None:
             target = None
         self._tracked = [(r["y_at_side_x_m"], math.radians(r["heading_deg"]), r["side"],
@@ -422,7 +422,7 @@ class LaneKeeper:
             self.last["boundaries"].append(record)
             self.last["candidates"].append(dict(record, rejected=False, reason=None))
         if target is None:
-            self.last["reason"] = junction or "no_boundary"
+            self.last.update(reason=junction or "no_boundary", **({"junction_ahead_m": round(float(ahead), 3)} if junction else {}))
             # Nothing is pursued: the next frame sides its lines afresh (a
             # held robot sees the same frame again, and a side inherited
             # into a hold would otherwise hold it forever).

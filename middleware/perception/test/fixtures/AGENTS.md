@@ -3,6 +3,9 @@
 
 # fixtures
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Recorded lidar scans, maps, and localization snapshots used by the ROS-free Control pytest suite. Do not regenerate as a side effect of running tests.

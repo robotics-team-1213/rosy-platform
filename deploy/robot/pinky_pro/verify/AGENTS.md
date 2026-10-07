@@ -3,6 +3,9 @@
 
 # verify
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Checks after install. They read identity, health, motors, and power. They do not install the robot.
