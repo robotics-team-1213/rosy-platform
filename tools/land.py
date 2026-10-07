@@ -17,6 +17,7 @@ Never pushes, stashes, resets or cleans. Standard library only.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -30,6 +31,8 @@ ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_ROW = re.compile(rb"^\| D-(\d+) \|")
 GENERATED = {"STATUS.md", "docs/reference/sim2real-gaps.md"}
 HARNESS = "tools/harness/rosy_harness.py"
+# Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
+ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
 class Stop(Exception):
@@ -60,7 +63,7 @@ def resolver(path: str) -> str | None:
     if path == ADR_LOG:
         return "adr-log"
     if name == "logs.md":
-        return "union"
+        return "append"
     if path == "tools/harness/adr_gaps.txt":
         return "union-dedupe"
     # progress.md is hand-written lint input (gates), not generated: a human resolves it.
@@ -69,12 +72,21 @@ def resolver(path: str) -> str | None:
     return None
 
 
-def _stage(wt: Path, n: int, path: str) -> bytes:
+def _blob(wt: Path, oid: str, path: str) -> bytes:
     # --filters gives the working-tree form (CRLF under core.autocrlf), so the
-    # union below keeps the file's line endings and `git add` cleans it as usual.
-    result = subprocess.run(["git", "-C", str(wt), "cat-file", "--filters", f":{n}:{path}"],
-                            capture_output=True)
-    return result.stdout if result.returncode == 0 else b""
+    # result keeps the file's line endings and `git add` cleans it as usual.
+    return subprocess.run(["git", "-C", str(wt), "cat-file", "--filters", f"--path={path}", oid],
+                          capture_output=True, check=True, env=ENV).stdout
+
+
+def conflict_stages(text: str) -> dict[str, dict[int, str]]:
+    """`<mode> <oid> <stage>\\t<path>` lines (ls-files -u, merge-tree) -> {path: {stage: oid}}."""
+    found: dict[str, dict[int, str]] = {}
+    for line in text.splitlines():
+        match = re.match(r"^\d+ ([0-9a-f]+) ([123])\t(.+)$", line)
+        if match:
+            found.setdefault(match.group(3), {})[int(match.group(2))] = match.group(1)
+    return found
 
 
 def union(base: bytes, ours: bytes, theirs: bytes) -> bytes:
@@ -85,7 +97,48 @@ def union(base: bytes, ours: bytes, theirs: bytes) -> bytes:
             files.append(Path(tmp, name))
             files[-1].write_bytes(data)
         return subprocess.run(["git", "merge-file", "-p", "--union", *map(str, files)],
-                              capture_output=True).stdout
+                              capture_output=True, env=ENV).stdout
+
+
+def clashes_are_insertions(base: bytes, ours: bytes, theirs: bytes) -> bool:
+    """True when every change touching the other side's change only adds lines.
+
+    A side that rewrote or dropped a base line next to the other side's append
+    would come back from a line union with the old line resurrected.
+    """
+    b = base.splitlines(keepends=True)
+
+    def changes(side: bytes) -> list[tuple[str, int, int]]:
+        ops = difflib.SequenceMatcher(None, b, side.splitlines(keepends=True), autojunk=False).get_opcodes()
+        return [(op, i1, i2) for op, i1, i2, _, _ in ops if op != "equal"]
+
+    mine, other = changes(ours), changes(theirs)
+    for side, against in ((mine, other), (other, mine)):
+        for op, i1, i2 in side:
+            # Adjacent (touching) ranges conflict in git too, hence <= on both ends.
+            if op != "insert" and any(i1 <= j2 and j1 <= i2 for _, j1, j2 in against):
+                return False
+    return True
+
+
+def append_blocks(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
+    """logs.md: base + ours' appended block + theirs' appended block, each kept whole.
+
+    Line union would fold lines both entries share ("- 결정: 없음"). None unless
+    both sides only appended at the end.
+    """
+    if not (ours.startswith(base) and theirs.startswith(base)):
+        return None
+    mine, other = ours[len(base):], theirs[len(base):]
+    if mine == other or not other:
+        return ours
+    if not mine:
+        return theirs
+    eol = b"\r\n" if b"\r\n" in ours + theirs else b"\n"
+    if mine and not mine.endswith(b"\n"):
+        mine += eol
+    gap = b"" if mine.endswith(eol + eol) or other.startswith((b"\n", b"\r\n")) else eol
+    return base + mine + gap + other
 
 
 def sort_adr_rows(data: bytes) -> bytes:
@@ -110,55 +163,78 @@ def sort_adr_rows(data: bytes) -> bytes:
     return b"".join(result)
 
 
-def resolve(wt: Path, paths: list[str], python: str) -> None:
-    """Resolve auto-resolvable conflicted paths in place and stage them."""
-    generated = False
-    for path in paths:
+def plan(wt: Path, conflicts: dict[str, dict[int, str]]) -> tuple[dict[str, bytes], list[str]]:
+    """Resolved bytes per auto-resolvable path, and `path: why` for the rest. Touches nothing."""
+    resolved: dict[str, bytes] = {}
+    manual: list[str] = []
+    for path, stage in conflicts.items():
         kind = resolver(path)
+        if not kind:
+            manual.append(f"{path}: not in the auto-resolvable set")
+            continue
+        if set(stage) != {1, 2, 3}:
+            manual.append(f"{path}: modify/delete or add/add (stages {sorted(stage)})")
+            continue
+        base, ours, theirs = (_blob(wt, stage[n], path) for n in (1, 2, 3))
         if kind == "generated":
-            data = _stage(wt, 3, path)
-            generated = True
-        else:
-            data = union(_stage(wt, 1, path), _stage(wt, 2, path), _stage(wt, 3, path))
+            data: bytes | None = theirs
+        elif kind == "append":
+            data = append_blocks(base, ours, theirs)
+        elif clashes_are_insertions(base, ours, theirs):
+            data = union(base, ours, theirs)
             if kind == "adr-log":
                 data = sort_adr_rows(data)
-            elif kind == "union-dedupe":
+            else:
                 data = b"".join(dict.fromkeys(data.splitlines(keepends=True)))
-        (wt / path).write_bytes(data)
-        git(wt, "add", "--", path)
-    if generated and (wt / HARNESS).is_file():
-        step(wt, [python, HARNESS, "generate"], None, "generate")
-        # The worktree was clean before the merge, so every unstaged change is generate's.
-        changed = lines(wt, "diff", "--name-only")
-        if changed:
-            git(wt, "add", "--", *changed)
+        else:
+            data = None
+        if data is None:
+            manual.append(f"{path}: a side changed existing lines, not only appended")
+        else:
+            resolved[path] = data
+    return resolved, manual
 
 
 def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> list[str]:
     """Merge main_sha into HEAD; return the auto-resolved paths. Stop on anything else."""
     if dry_run:
-        tree = git(wt, "merge-tree", "--write-tree", "--name-only", "--no-messages", "HEAD", main_sha,
-                   check=False)
-        conflicted = [p for p in tree.stdout.splitlines()[1:] if p] if tree.returncode == 1 else []
-        manual = [p for p in conflicted if not resolver(p)]
+        tree = git(wt, "merge-tree", "--write-tree", "--no-messages", "HEAD", main_sha, check=False)
+        conflicts = conflict_stages(tree.stdout) if tree.returncode == 1 else {}
+        resolved, manual = plan(wt, conflicts)
         print(f"[plan] merge main {main_sha[:10]}: "
-              + (f"conflicts {conflicted}, needs a human: {manual}" if conflicted else "no conflicts"))
+              + (f"auto-resolve {sorted(resolved)}, needs a human: {manual}" if conflicts else "no conflicts"))
         if manual:
-            raise Stop(f"merge would conflict outside the auto-resolvable set: {manual}")
-        return conflicted
+            raise Stop("merge would conflict outside the auto-resolvable set:\n  " + "\n  ".join(manual))
+        return sorted(resolved)
     result = git(wt, "merge", "--no-edit", "-m", f"Merge branch 'main' into {branch}", main_sha, check=False)
     if result.returncode == 0:
         return []
-    conflicted = lines(wt, "diff", "--name-only", "--diff-filter=U")
-    manual = [p for p in conflicted if not resolver(p)]
-    if not conflicted or manual:
+    try:
+        conflicts = conflict_stages(out(wt, "ls-files", "-u"))
+        resolved, manual = plan(wt, conflicts)
+    except (Stop, OSError, subprocess.CalledProcessError) as exc:
+        git(wt, "merge", "--abort", check=False)
+        raise Stop(f"reading the conflict stages failed, merge aborted:\n{exc}") from exc
+    if not conflicts or manual:
         git(wt, "merge", "--abort", check=False)
         raise Stop("merge aborted; resolve by hand in the worktree:\n  "
                    + "\n  ".join(manual or [result.stdout + result.stderr]))
-    resolve(wt, conflicted, python)
-    git(wt, "commit", "--no-edit")
-    print(f"[merge] auto-resolved {conflicted}")
-    return conflicted
+    try:
+        for path, data in resolved.items():
+            (wt / path).write_bytes(data)
+            git(wt, "add", "--", path)
+        if any(resolver(p) == "generated" for p in resolved) and (wt / HARNESS).is_file():
+            step(wt, [python, HARNESS, "generate"], None, "generate")
+            # The worktree was clean before the merge, so every unstaged change is generate's.
+            changed = lines(wt, "diff", "--name-only")
+            if changed:
+                git(wt, "add", "--", *changed)
+        git(wt, "commit", "--no-edit")
+    except (Stop, OSError, subprocess.CalledProcessError) as exc:
+        git(wt, "merge", "--abort", check=False)
+        raise Stop(f"auto-resolve of {sorted(resolved)} failed, merge aborted:\n{exc}") from exc
+    print(f"[merge] auto-resolved {sorted(resolved)}")
+    return sorted(resolved)
 
 
 # --- test selection -------------------------------------------------------------

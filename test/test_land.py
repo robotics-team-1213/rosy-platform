@@ -32,11 +32,11 @@ def commit(cwd: Path, files: dict[str, bytes | str], message: str) -> None:
 
 
 @pytest.fixture
-def repos(tmp_path, monkeypatch):
+def repos(tmp_path, monkeypatch, request):
     main = tmp_path / "main"
     main.mkdir()
     git(main, "init", "-q", "-b", "main")
-    for key, value in (("user.name", "t"), ("user.email", "t@t"), ("core.autocrlf", "false")):
+    for key, value in (("user.name", "t"), ("user.email", "t@t"), ("core.autocrlf", getattr(request, "param", "false"))):
         git(main, "config", key, value)
     rows = b"".join(b"| D-%d | t%d | Accepted |\r\n" % (n, n) for n in (1, 2))
     commit(main, {
@@ -53,6 +53,7 @@ def repos(tmp_path, monkeypatch):
     return main, wt
 
 
+@pytest.mark.parametrize("repos", ["false", "true"], indirect=True)  # core.autocrlf
 def test_log_conflict_keeps_both_rows_sorted_with_bom_crlf(repos):
     main, wt = repos
     base = (main / LOG).read_bytes()
@@ -140,3 +141,72 @@ def test_pytest_exit_without_failed_lines_stops(repos, target):
     before = git(main, "rev-parse", "HEAD")
     assert land.main(["--tests", target]) == 1
     assert git(main, "rev-parse", "HEAD") == before
+
+
+def no_merge_left(wt: Path) -> bool:
+    gitdir = Path(git(wt, "rev-parse", "--absolute-git-dir"))
+    return not (gitdir / "MERGE_HEAD").exists() and git(wt, "status", "--porcelain") == ""
+
+
+ENTRY = "\n## 2026-10-07 · uncommitted · {who}\n- 변경: {who}\n- 증거: 없음\n- gate 변화: 없음\n- 결정: 없음\n- 교훈: 없음\n"
+
+
+def test_logs_md_appends_with_shared_trailing_lines_stay_whole(repos):
+    main, wt = repos
+    base = "# docs logs\n" + ENTRY.format(who="base")
+    commit(main, {"docs/logs.md": base}, "base log")
+    git(wt, "merge", "-q", "main")
+    commit(wt, {"docs/logs.md": base + ENTRY.format(who="branch")}, "branch entry")
+    commit(main, {"docs/logs.md": base + ENTRY.format(who="peer")}, "peer entry")
+    assert land.main(["--tests", "none"]) == 0
+    text = (main / "docs/logs.md").read_text(encoding="utf-8")
+    assert text == base + ENTRY.format(who="branch") + ENTRY.format(who="peer")
+
+
+def test_logs_md_edit_next_to_append_is_manual(repos):
+    main, wt = repos
+    commit(main, {"docs/logs.md": "a\nb\n"}, "base log")
+    git(wt, "merge", "-q", "main")
+    commit(wt, {"docs/logs.md": "a\nb\nc\n"}, "branch append")
+    commit(main, {"docs/logs.md": "a\nB\n"}, "peer rewrites b")
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "none"]) == 1
+    assert no_merge_left(wt)
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_adr_log_row_rewrite_next_to_append_is_manual(repos):
+    main, wt = repos
+    base = (main / LOG).read_bytes()
+    commit(wt, {LOG: base + b"| D-3 | branch | Proposed |\r\n"}, "branch row")
+    commit(main, {LOG: base.replace(b"| t2 | Accepted |", b"| t2 | Superseded |")}, "peer status")
+    assert land.main(["--tests", "none"]) == 1
+    assert no_merge_left(wt)
+
+
+def test_modify_delete_is_manual(repos):
+    main, wt = repos
+    commit(main, {"docs/logs.md": "a\n"}, "base log")
+    git(wt, "merge", "-q", "main")
+    git(wt, "rm", "-q", "docs/logs.md")
+    git(wt, "commit", "-q", "-m", "branch deletes log")
+    commit(main, {"docs/logs.md": "a\nb\n"}, "peer appends")
+    assert land.main(["--tests", "none"]) == 1
+    assert no_merge_left(wt)
+
+
+def test_failure_while_resolving_aborts_the_merge(repos, monkeypatch):
+    main, wt = repos
+    base = (main / LOG).read_bytes()
+    commit(wt, {LOG: base + b"| D-4 | branch | Proposed |\r\n"}, "branch row")
+    commit(main, {LOG: base + b"| D-3 | peer | Proposed |\r\n"}, "peer row")
+    real = land.git
+
+    def git_failing_commit(cwd, *args, check=True):
+        if args[:1] == ("commit",):
+            raise land.Stop("simulated commit hook failure")
+        return real(cwd, *args, check=check)
+
+    monkeypatch.setattr(land, "git", git_failing_commit)
+    assert land.main(["--tests", "none"]) == 1
+    assert no_merge_left(wt)
