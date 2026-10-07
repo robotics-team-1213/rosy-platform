@@ -786,8 +786,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   }
   // D-513 7: 크게 보기·썸네일도 이 카메라 보정의 지도 방향으로 돌린다. 펴 놓은 미리보기도
   // 모서리 순서를 지켜 펴므로 같은 회전이다. 보정이 없으면 0 — 받은 URL 그대로다.
+  // 실영상과 같은 조건으로 고른다: 지금 지도의 보정이고, 원본 프레임이면 크기도 같아야 한다.
   function frameTurn(frame) {
-    return mapUpTurn(calibrations.find((row) => row.source_id === frame.source));
+    const maps = (view.siteMap?.maps || []).map((map) => map.map_id);
+    return mapUpTurn(calibrations.find((row) => row.source_id === frame.source && maps.includes(row.map_id)
+      && (frame.rectified || (row.image?.width === frame.image?.naturalWidth
+        && row.image?.height === frame.image?.naturalHeight))));
   }
   function turnedUrl(frame) {
     const image = frame.image;
