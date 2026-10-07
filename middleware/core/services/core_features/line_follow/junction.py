@@ -147,6 +147,8 @@ class JunctionMixin:
     def _junction_gate(self, now, decision):
         """Keep or zero this tick's decision (locked); a D-492 maneuver supplies its own twist."""
         if self._mode.value == 'OFF':
+            if self._junction is not None and self._junction['state'] in MANEUVER:
+                self._abort(self._junction, 'mode_change', decision)  # e.g. driver released
             return decision
         seen = (self._junction_seen_at is not None
                 and 0 <= now-self._junction_seen_at <= self._config.stale_after_s)

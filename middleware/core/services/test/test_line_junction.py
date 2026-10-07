@@ -331,3 +331,13 @@ def test_turn_does_not_latch_lost_while_the_lane_is_out_of_view():
     _to_turning(rig, 150.)
     decision, status = rig.turn_until('turning', seen=False)
     assert status.state != 'LOST' and status.junction.state == 'advancing'
+
+
+def test_driver_release_mid_turn_aborts():
+    rig = Rig()
+    rig.m.set_mode(CAMERA, hold_s=1.)
+    _to_turning(rig, 90.)
+    rig.now += 1.1  # no POST /hold for longer than hold_s: CORE releases the driver
+    decision, status = rig.step(seen=False)
+    assert status.mode == 'OFF' and (decision.linear, decision.angular) == (0., 0.)
+    assert (status.junction.state, status.junction.reason) == ('aborted', 'mode_change')
