@@ -182,4 +182,4 @@ gaps:
     tier: [M]
     owner: gz_sim / perception
     status: OPEN
-    next: root-cause on model PC (rerun scenario C with the inner-edge producer; log boundary intercepts vs the STL lines at the start pose)
+    next: root-cause on model PC (rerun scenario C with the inner-edge producer; log boundary intercepts vs the STL lines at the start pose); if the Gazebo detector sits far inside the paint the inner-edge shift can make sim play negative (fails safe, not contained), so sim containment is not evidence until that rerun
