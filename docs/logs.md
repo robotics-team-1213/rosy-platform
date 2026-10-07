@@ -6715,3 +6715,10 @@ osy-d395-s1d\`.
 - 변경: 상태 소켓이 열린 채 조용해지고 REST 상태 조회도 실패할 때 이전 숫자와 모드를 숨기고 상태 수신 중단을 표시한다. readback이 돌아오면 회복한다.
 - 증거: [LOCAL 결과](validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 집중 브라우저 1 failed, 수정 후 관련 11 passed, D-153 명명 G1 90 passed, 1 warning, 각 `known_failures.py` 0 NEW. 실행 기록은 `X:\DevTemp\pilot-silent-readback\`.
 - gate 변화: Pilot G2 일부 보강. 남은 선언 상태·폭, 사이트 설치·실물 readback, 운전자 G3와 제품 전체는 **HOLD**.
+## 2026-10-07 · uncommitted · docs(adr): 관제 사이트 경로와 로봇 링크(D-499)
+
+- 변경: [D-499](adr/D-499-console-site-path-and-robot-link.md) Proposed. 관제 등록 로봇 칸에 사이트 경로 블록을 두고, 로봇 카드의 링크 단어는 기존 gather와 주소 판정으로만 고른다. 값은 up, unreachable, moved, tls-refused, protocol. 새 앱·새 프로브·바이트 그래프·로봇 Wi-Fi 변경은 없다.
+- 증거: 번호는 기록 직전에 main·브랜치 docs/adr, ADR Log, adr_gaps를 대조해 D-499가 비어 있었다. 분류 근거는 console.py snapshot, console_view.py _error_of, transport.py RobotApiError, address-drift.js, static_routes.py /healthz.
+- gate 변화: 없음. 문서·제안만 바뀐다.
+- 결정: D-499 Proposed.
+- 교훈: 없음

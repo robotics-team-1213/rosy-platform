@@ -492,3 +492,4 @@
 | D-496 | OMX 실물 팔 조종 수용 — 실측 프로필과 벤치 관문 없이는 활성화하지 않는다 | Proposed (2026-10-07, 실물 하드웨어 없음 — OMX-AI 스펙 기반 조건 설계) |
 | D-497 | 현장 카메라의 관측 차선으로 Fleet 지도 초안을 만든다 | Proposed (2026-10-07; SOURCE/LOCAL implementation, field acceptance pending) |
 | D-498 | 교차로 제한 회전은 D-400 enforce가 아니어도 bridge와 같은 현장 근거(IR 가드 + 몸체 근접 정지 + 현장 수용 선언)로 허용한다 | Proposed (2026-10-07; 사용자 지시; 기본 꺼짐, junction_turn_site_accepted 새 설정, SIM/DEVICE 별도) |
+| D-499 | 관제는 사이트 경로와 로봇 링크를 이미 있는 조회의 결과로만 보여 준다 | Proposed (2026-10-07; 사용자 개념 확인, 구현 전) |
