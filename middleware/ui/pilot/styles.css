@@ -892,6 +892,7 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
   .pilot-drive[data-drive-layout="below"] [data-drive-pivots] { grid-template-columns: minmax(0, 1fr); }
 }
 @media (width < 22rem) and (height < 40rem) {
+  .pilot-drive[data-drive-layout="below"] [data-drive-hud] { row-gap: var(--space-1); margin-block: 0; }
   .pilot-drive[data-drive-layout="below"] [data-drive-controls] { height: 10rem; }
   .pilot-drive[data-drive-layout="below"] [data-drive-pedals] { order: -1; flex: none; }
   .pilot-drive[data-drive-layout="below"] [data-drive-go] { order: -2; }

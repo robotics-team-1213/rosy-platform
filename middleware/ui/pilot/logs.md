@@ -686,6 +686,18 @@
 - 결정: D-153, D-280.
 - 교훈: 요청 왕복 시간은 로봇 동작 완료나 상태 수신 시간의 근거가 아니다.
 
+## 2026-10-07 · uncommitted · uiux(pilot): 320px 카메라 면적 회복
+- 변경: 320×568 아래 배치에서 HUD 세로 간격과 여백을 줄여 카메라에 높이를 돌려줌.
+- 증거: 전체 Pilot 재검사 115 passed·1 failed(카메라 16.3%); 수정 뒤 카메라 배치 다섯 폭 5 passed, D-153 G1 90 passed, 성공 실행 `known_failures.py` 0 NEW. 원본은 `X:/DevTemp/pilot-camera-320/`.
+- gate 변화: Pilot G2 부분 보강. 전체 회귀·실물·G3는 HOLD.
+- 결정: D-153, D-363.
+- 교훈: 가로 넘침과 영상 비겹침만으로 전화 폭의 카메라 판독 면적을 보장하지 못한다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 카메라 면적 병합 후 검증
+- 변경: 병합 후 전체 재실행과 응급 카메라 집중 재실행 결과를 회차 기록에 추가.
+- 증거: 전체 브라우저 114 passed·2 timeout failed; 실패한 응급 카메라 네 폭 집중 재실행 4 passed, `known_failures.py` 0 NEW. `X:/DevTemp/pilot-camera-320/postmerge-full.txt`, `emergency-retry.txt`.
+- gate 변화: 320px 면적 결함은 집중 검사에서 해결. 전체 무오류 회귀·실물·G3는 HOLD.
+
 ## 2026-10-07 · uncommitted · fix(pilot): APK 번들 시험에 팔 화면 자산 고정
 
 - 변경: `BundledAssetsTest.canonicalUiAndImportsAreBundled` 번들 목록에 팔 화면 여섯 자산(`pilot/screens/arm.js`, `pilot/screens/compose.js`, `pilot/widgets/gripper.js`, `pilot/arm-stick.js`, `pilot/controls.js`, `pilot/drivers/omx_sim.js`)을 추가했다. 앱 코드와 번들 규칙(`bundleScreens` glob)은 그대로다.
