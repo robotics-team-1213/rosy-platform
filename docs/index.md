@@ -305,5 +305,3 @@
 - 2026-10-08 · uncommitted · fix(tools): 착지 도구가 logs.md 중간 삽입 충돌을 해소
 - 2026-10-08 · uncommitted · docs(plan): 링크 수리와 폴링 부하를 가른다
 - 2026-10-08 · uncommitted · docs(plan): 사이트 링크 수리 실행 계획
-- 2026-10-08 · uncommitted · fix(test): 브라우저 시험 기반 리뷰 반영
-- 2026-10-07 · uncommitted · fix(test): 브라우저 시험 기반 — 안전 포트, 옵트인 이름 하나, 범위 지도
