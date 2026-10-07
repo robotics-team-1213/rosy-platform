@@ -146,7 +146,7 @@ gaps:
     tier: [R, M]
     owner: perception / core line_follow
     status: IN-PROGRESS
-    next: paint-gap world (D-476 scenario D)
+    next: 0.15 m paint-gap world run 2026-10-07 (docs/validation/d476-gazebo-rev1-2026-10-07, ROS-SIM) - sensor adapter off, the bridge pushed 2-3 cm past every gap-induced loss and reacquired TRACKING (5/5), OFF went LOST; enforce refused the one armed bridge (worker floor proof beside the wall). Open - 0.05/0.10 m gaps, a gap with a long straight after it (260919 straights are about 0.5 m), the keeper reading the gap plus the next corner as a D-495 junction
 
   - id: G-14
     gap: multi-robot load (4 robots) not yet run at real time
@@ -172,14 +172,16 @@ gaps:
     next: S1 finer fit steps + ci95; S2 camera_board --store; S3 user places board + tape (robot static); S4 detector bias replay; S5 dynamic pitch drive (motion approval); S6 accept
 
   - id: G-16
-    gap: Gazebo 260919 run measured ~5 mm D-468 margin per side for a centred Pinky (before 4.3 mm uncertainty); STL geometry gives 23.45 mm to the paint inner edge (35.95 mm to the paint centre the producer then sent); cause unexplained
+    gap: Gazebo 260919 D-468 margin for a centred Pinky is -7.5 mm (inner edge, before 8.9 mm uncertainty) at the scenario C start vs 23.4 mm in the STL; root-caused 2026-10-07 - not sim fidelity (camera pose, BEV scale and paint mask match the STL within 1-4 mm) but boundary slope error that the D-468 receiver extrapolates 0.25-0.3 m back to the body rear - the near paint is cut by the 59.2 deg frame edge below x 0.23 m and a crosswalk blob's 0.08 m removal band carves the inner side of the adjacent lane line (right line -6.1 deg, 31.5 mm inward at the rear); same fit on the device
     evidence:
+      - docs/validation/d476-gazebo-rev1-2026-10-07/result.md
       - docs/validation/d476-gazebo-model-pc-2026-10-06/result.md:202-216
+      - middleware/perception/control/sensing/perception/lane_keep_lines.py
       - middleware/perception/control/sensing/perception/lane_containment.py
-      - middleware/core/services/test/test_lane_return_margin.py
+      - middleware/core/services/core_features/line_follow/lane_return_evidence.py
       - D-468
       - D-476
-    tier: [M]
-    owner: gz_sim / perception
-    status: OPEN
-    next: root-cause on model PC (rerun scenario C with the inner-edge producer; log boundary intercepts vs the STL lines at the start pose); if the Gazebo detector sits far inside the paint the inner-edge shift can make sim play negative (fails safe, not contained), so sim containment is not evidence until that rerun
+    tier: [M, R]
+    owner: perception / core line_follow
+    status: IN-PROGRESS
+    next: product decision (perception, D-468 owners) - drop frame-edge-truncated and blob-carved cells from the boundary fit, or put fit slope error into uncertainty_m, or shorten the receiver extrapolation; until then sim (and device) containment does not prove the body inside the lane

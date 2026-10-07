@@ -2578,6 +2578,12 @@
 - 증거: test_rosy_tailscale_join.py·test_image_customization_contract.py·test_sd_personalization.py·test_first_boot_provisioning.py 신규 포함 1411+ passed(affected --run, known_failures 0 new). 잠금 목록·스크럽·영수증 지문 변이로 빨강 확인. tailscale 1.102.5 arm64 deb는 실제 다운로드 해시로 검증(85315e74…). 장치(TWIN·DEVICE) 검증은 별도.
 - gate 변화: 없음.
 
+## 2026-10-07 · uncommitted · feat(model): D-497 카메라 지도 작업을 서명된 모델 PC 실행기에 연결
+
+- 변경: 기존 D-446 잠금·서명·환경 지문·실행 영수증을 유지하고, 카메라 지도 entrypoint와 필요한 Vision 파일 세 개만 후보에 포함한다. 이전 후보 생성과 복귀를 유지하며 고정 controller 선행 갱신과 전용 키 경계를 문서화했다.
+- 증거: 관련 pytest 54 passed, 26 skipped; known_failures NEW 0. Linux 격리 실행에서 실제 entrypoint --help import PASS. 관제 설치 ed006ce92cc4832619dc96d4d0e00f779b439ec9의 서명·이미지·서비스 상태와 실제 S21 지도 생성(12 places, 10 lanes), Fleet 초안 저장·조회 일치를 확인했다. 모델 PC는 연결되지 않아 설치·실행은 미확인이다.
+- gate 변화: 모델 PC SOURCE/LOCAL 증거 추가. 관제 카메라 지도 초안의 DEVICE 증거만 추가하며, 지도 FIELD 수용·활성화와 모델 PC DEVICE는 미확인이다. 기존 Pi 이미지 gate는 유지한다.
+
 ## 2026-10-07 · uncommitted · feat(site): site-users.yaml 원자적 관리 CLI와 재시작 게이트
 
 - 변경: `deploy/site/site_users.py` 추가 — `list`/`add --principal --role --token-stdin`/`remove`/`validate`. 토큰은 표준입력으로만 받아 sha256 다이제스트만 저장하고 argv·로그에 남지 않는다. add·remove는 임시 파일+`os.replace` 원자적 쓰기 뒤 쓴 bytes를 다시 파싱·형태 검증(Fleet `load_site_users`와 같은 규칙: users 단일 키, principal_id/role/token_sha256 정확히, 64자 소문자 hex, 중복 금지, 빈 목록 금지)하며 실패 시 원본을 그대로 둔다. 마지막 사용자 제거·중복 principal·토큰 재사용을 거부하고, root 실행 때 `root:10001` 0440을 직접 적용, 아니면 `chown 0:10001 … && chmod 440 …` 안내를 출력한다. `validate`은 내용에 더해 권한 비트(타인 접근·그룹 쓰기 금지)와 소유 그룹을 검사해 config-reload 감시 컨테이너의 재시작 전 게이트로 쓰게 했다. 감시 컨테이너(/reload.py) 원본은 저장소에 없어 현장 전용으로 확인 — README 「Prepare an Ubuntu host」에 CLI 사용법과 2026-10-07 root:101 오소유 크래시 루프 사고의 운영 주의(수동 복원 금지, 재시작 전 validate 게이트)를 문서화했다. `deploy/site/AGENTS.md` Key Files·시험 목록에 반영.

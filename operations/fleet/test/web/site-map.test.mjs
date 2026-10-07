@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  arrowMarks, editEdge, editPlace, fitView, planPolylines, segmentPoints, tripErrorText,
+  arrowMarks, editEdge, editPlace, fitView, planPolylines, segmentPoints, tripErrorText, rectangularView,
 } from '../../fleet/server/web/site-map-model.js';
 
 const MAP = {
@@ -9,6 +9,18 @@ const MAP = {
   edges: [{id: 'ab', from: 'A', to: 'B', polyline: [[0, 0], [1, 0], [2, 0]], direction: 'one_way',
            width_m: 0.2, speed_cap_mps: 0.2, drive_mode: 'lane'}],
 };
+
+test('rectangular camera view preserves metric aspect and rejects mismatched or singular calibration', () => {
+  const record = {map_id: 'camera', map_to_image: [100, 0, 200, 0, -100, 100, 0, 0, 1],
+    track_bounds_m: {min_x: -1.405, max_x: 1.405, min_y: -0.63, max_y: 0.63}};
+  const {view, field} = rectangularView(record, 'camera', 800, 480);
+  assert.ok(Math.abs(field.width / field.height - 2.81 / 1.26) < 1e-12);
+  assert.deepEqual(view.toMap(field.x, field.y), [-1.405, 0.63]);
+  assert.deepEqual(view.toMap(...view.toPx(0, 0)), [0, 0]);
+  assert.throws(() => rectangularView(record, 'other', 800, 480));
+  assert.throws(() => rectangularView({...record, map_to_image: Array(9).fill(0)}, 'camera', 800, 480));
+  assert.throws(() => rectangularView({...record, map_to_image: [100, 0, 200, 0, -100, 100, 1, 0, 0]}, 'camera', 800, 480));
+});
 
 test('fitView flips y and round-trips map metres', () => {
   const view = fitView(MAP, 200, 100, 10);

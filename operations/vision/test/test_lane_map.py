@@ -8,6 +8,41 @@ import pytest
 from rosy_vision.lane_map import _graph, generate_map, main
 
 
+def test_high_resolution_slanted_straight_lane_keeps_observed_centre():
+    image = np.zeros((720, 1280, 3), np.uint8)
+    cv2.line(image, (100, 201), (1180, 231), (255, 255, 255), 9)
+    cv2.line(image, (100, 271), (1180, 301), (255, 255, 255), 9)
+    calibration = {"image_size": [1280, 720], "image_to_map":
+                   [[.003, 0, -1.92], [0, -.003, 1.08], [0, 0, 1]]}
+    draft, _ = generate_map(image, calibration, lane_width_m=.21)
+    assert len(draft["edges"]) == 1
+    points = np.array(draft["edges"][0]["polyline"])
+    points = points[np.argsort(points[:, 0])]
+    x = np.linspace(-1.2, 1.2, 60)
+    expected = 1.08 - (236 + (x / .003 + 640 - 100) * 30 / 1080) * .003
+    assert np.max(np.abs(np.interp(x, points[:, 0], points[:, 1]) - expected)) < .004
+
+
+def test_broad_border_outside_roi_keeps_road_loop_without_island_lanes():
+    image = np.zeros((600, 600, 3), np.uint8)
+    cv2.rectangle(image, (20, 20), (580, 580), (255, 255, 255), 40)
+    cv2.rectangle(image, (80, 80), (520, 520), (255, 255, 255), 4)
+    # An island's U-shaped marking is one boundary, not two road edges.
+    cv2.polylines(image, [np.array([[280, 340], [280, 260], [320, 260], [320, 340]])],
+                  False, (255, 255, 255), 4)
+    calibration = {"image_size": [600, 600], "image_to_map":
+                   [[0.005, 0, -1.5], [0, -0.005, 1.5], [0, 0, 1]],
+                   "bounds_m": {"min_x": -1.25, "max_x": 1.25, "min_y": -1.25, "max_y": 1.25},
+                   "road_seed_m": [0, 1.2]}
+    draft, _ = generate_map(image, calibration, lane_width_m=0.2)
+    assert len(draft["edges"]) == 3 and len(draft["places"]) == 3
+    assert all(sum(p["id"] in (e["from"], e["to"]) for e in draft["edges"]) == 2
+               for p in draft["places"])
+    assert all(max(abs(x), abs(y)) > 1.0 for e in draft["edges"] for x, y in e["polyline"])
+    with pytest.raises(ValueError, match="white_value_min"):
+        generate_map(image, {**calibration, "white_value_min": True}, lane_width_m=0.2)
+
+
 def test_camera_lane_map_and_rejection(tmp_path):
     image = np.zeros((240, 400, 3), np.uint8)
     cv2.line(image, (25, 90), (375, 90), (255, 255, 255), 5)
@@ -23,6 +58,10 @@ def test_camera_lane_map_and_rejection(tmp_path):
     assert np.ptp(points[:, 0]) > 1.5
     assert np.max(np.abs(points[:, 1] - 0.05)) < 0.02
     assert evidence["paint_pixels"] > 100
+    dead_end = image.copy()
+    cv2.line(dead_end, (25, 90), (25, 130), (255, 255, 255), 5)
+    closed, _ = generate_map(dead_end, calibration, lane_width_m=0.2)
+    assert len(closed["edges"]) == 1  # connected border paint must not erase a valid road
     from fleet.site_map import SiteMap
     SiteMap.model_validate(draft)
     occluded = image.copy()
@@ -30,6 +69,10 @@ def test_camera_lane_map_and_rejection(tmp_path):
     split, _ = generate_map(occluded, calibration, lane_width_m=0.2)
     SiteMap.model_validate(split)
     assert len(split["edges"]) == 2  # no invented link across the hidden lane
+    selected, _ = generate_map(occluded, {**calibration, "road_seed_m": [-0.7, 0.05]}, lane_width_m=0.2)
+    assert len(selected["edges"]) == 1
+    with pytest.raises(ValueError, match="road_seed_m"):
+        generate_map(occluded, {**calibration, "road_seed_m": [0, 0.5]}, lane_width_m=0.2)
     transform = cv2.getPerspectiveTransform(np.float32([[0, 0], [399, 0], [399, 239], [0, 239]]),
                                             np.float32([[60, 30], [340, 10], [390, 220], [5, 230]]))
     tilted = cv2.warpPerspective(image, transform, (400, 240))

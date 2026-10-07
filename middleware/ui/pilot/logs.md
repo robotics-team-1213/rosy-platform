@@ -719,3 +719,10 @@
 - 증거: 수정 전 태블릿 두 셀 2 failed, 수정 후 빈 발견·오류 × 네 폭 4 passed(8캡처), 인접 로비 9 passed, 계약 96 passed, 성공 실행 `known_failures.py` 0 NEW. `X:/DevTemp/pilot-lobby-matrix/`, `docs/validation/uiux-pilot-lobby-matrix-2026-10-07/result.md`.
 - gate 변화: Pilot 접속 로비 LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
 - 결정: D-153, D-280, DESIGN.md 동등 폭·읽힘 규칙.
+
+## 2026-10-07 · uncommitted · test(pilot): 대상 확인 오류 네 폭 캡처
+
+- 변경: 대상 조회 불가·잘못된 대상의 로컬 브라우저 시험을 Pilot 선언 네 폭으로 늘리고, 재시도·비상 정지의 첫 화면 경계와 조작 크기를 검사했다. 제품 런타임은 그대로다.
+- 증거: 8셀 캡처, 브라우저 4 passed, `known_failures.py` 0 NEW. `X:/DevTemp/pilot-target-matrix/`, `docs/validation/uiux-pilot-target-error-matrix-2026-10-07/result.md`.
+- gate 변화: Pilot LOCAL G2 부분 보강. 선언 상태 전체·실물·운전자 G3는 HOLD.
+- 결정: D-153.

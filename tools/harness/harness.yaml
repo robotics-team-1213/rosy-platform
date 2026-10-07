@@ -7,11 +7,12 @@ adr_log: docs/reference/ROSY ADR Log.md
 
 # IDs absent from the ADR log on purpose. Remove an entry once the ADR is written.
 adr_gaps:
-  D-499: "ADR on branch docs/site-link-monitor (baf8d8bb6), not yet on this branch; remove when it lands"
-  D-500: "ADR on branch docs/d500-motion-response-calibration, not yet on this branch; remove when it lands"
-  D-501: "ADR on branch uiux/fleet-doc-tabs (099baec0d), not yet on this branch; remove when it lands"
-  D-502: "ADR on branch fix/core-battery-health, not yet on this branch; remove when it lands"
-  D-503: "ADR on branch docs/autonomy-chain-adr (11c3d32d4), not yet on this branch; remove when it lands"
+  D-499: "not present on main or any committed branch when D-504 was written"
+  D-500: "ADR on branch (measured motion response), not yet on main"
+  D-501: "ADR on branch (fleet document tabs), not yet on main"
+  D-502: "ADR on branch (battery E-stop evidence), not yet on main"
+  D-503: "ADR on branch (autonomy facts queue), not yet on main"
+  D-505: "on newer main as robot cues before sound, absent from merge parent 6e59ec4ea; remove when that main is merged"
   D-492: "ADR on a branch (VLM stuck judgment, D-438 tier), not yet on main; remove when it lands"
   D-486: "renumbered to D-489/D-490 on feat/fleet-map-address-route before landing"
   D-448: "Unused: model-PC code update ADR was renumbered to D-446 during concurrent work"
