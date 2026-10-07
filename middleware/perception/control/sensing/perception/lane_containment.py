@@ -161,10 +161,13 @@ def projection_uncertainty_m(ground, error, segments):
 
 def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bounds=None,
                         paint_half_width_m=PAINT_HALF_WIDTH_M):
+    if not (_real(paint_half_width_m) and paint_half_width_m >= 0):
+        raise ValueError("paint_half_width_m must be a finite number >= 0")
     if ground is None or source not in ("NOMINAL", "CALIBRATED", "GAZEBO"):
         return None
     geometry = [source, camera_x, ground.height_m, ground.pitch_rad,
-                ground.focal_px, ground.principal_x, ground.principal_y, ground.max_range_m]
+                ground.focal_px, ground.principal_x, ground.principal_y, ground.max_range_m,
+                paint_half_width_m]
     identity = hashlib.sha256(json.dumps(geometry, allow_nan=False).encode()).hexdigest()
     boundaries = []
     for edge in keeper.get("boundaries", []):

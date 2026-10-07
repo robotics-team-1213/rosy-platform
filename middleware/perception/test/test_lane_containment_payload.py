@@ -280,3 +280,24 @@ def test_bound_covers_the_true_projection_error_for_a_record():
 def test_a_ray_that_may_clear_the_true_horizon_is_excessive_not_bounded():
     g = SimpleNamespace(height_m=.06, pitch_rad=.14, focal_px=281.6)
     assert projection_uncertainty_m(g, (.07, 0., 0., 2.), [((.5, .09), (1., .09))]) == 1.0
+
+
+@pytest.mark.parametrize("bad", [-.001, float("nan"), float("inf")])
+def test_a_negative_or_non_finite_paint_half_width_is_refused(bad):
+    # Negative would move the edges outward, past the paint: the one unsafe direction.
+    keeper = {"boundaries": [dict(selected=True, side="left", ends_m=[[.1, .0925], [.3, .0925]])]}
+    with pytest.raises(ValueError):
+        containment_payload(keeper, ground(), stamp=1., source="GAZEBO", camera_x=.033, paint_half_width_m=bad)
+
+
+def test_geometry_identity_changes_with_the_paint_half_width():
+    ids = {containment_payload({}, ground(), stamp=1., source="GAZEBO", camera_x=.033,
+                               paint_half_width_m=p)["geometry_id"] for p in (0., PAINT_HALF_WIDTH_M)}
+    assert len(ids) == 2
+
+
+def test_node_paint_half_width_is_read_only_and_validated_at_startup():
+    source = (REPO / "middleware" / "perception" / "control" / "line_observer_node.py").read_text(encoding="utf-8")
+    assert "self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)" in source
+    startup = source.split("def __init__", 1)[1].split("\n    def ", 1)[0]
+    assert "lane_paint_half_width_m must be a finite number >= 0" in startup

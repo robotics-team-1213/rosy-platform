@@ -93,7 +93,7 @@ class LineObserverNode(Node):
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         # D-468 containment: half the painted line width (keep mode fits the paint centre).
-        self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M)
+        self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
         # 'between' only: bottom band start (keeps white walls out) and the
         # lane width as a frame fraction until both boundaries are seen.
@@ -135,6 +135,10 @@ class LineObserverNode(Node):
         self._simulation_ground = None
         self._nominal_profile_cache = None
         self._ground_error = None
+        # Negative would move containment edges outward past the paint: refuse at startup.
+        self._paint_half_width_m = float(self.get_parameter('lane_paint_half_width_m').value)
+        if not (math.isfinite(self._paint_half_width_m) and self._paint_half_width_m >= 0.0):
+            raise ValueError('lane_paint_half_width_m must be a finite number >= 0')
         self._odom_pose = None
         self._odom_stamp = None
         self._odom_wz = None
@@ -522,7 +526,7 @@ class LineObserverNode(Node):
                 self._lane_keeper.last, ground, stamp=source_stamp,
                 source=str(self.get_parameter('camera_ground_source').value).upper(),
                 camera_x=self._lane_keeper._x_offset, geometry_bounds=self._ground_error,
-                paint_half_width_m=float(self.get_parameter('lane_paint_half_width_m').value))
+                paint_half_width_m=self._paint_half_width_m)
         self._publish('CAMERA_LINE', observation, stamp=source_stamp, containment=containment)
         self._publish_debug(msg, frame, observation)
 
