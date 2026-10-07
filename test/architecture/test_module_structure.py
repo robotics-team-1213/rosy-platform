@@ -109,8 +109,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        40_110,
-        "split: independently re-judged at 40110 on 2026-10-07 (D-491 5 review: the reviewer judged "
+        40_348,
+        "split: independently re-judged at 40348 on 2026-10-07 (D-494 5 safety re-review: the "
+        "security-reviewer agent judged the growth justified). Since 40110 the package grew 238 lines, "
+        "all review-driven: fleet/server/trip_guard.py +117 (every operator stop — cancel, cancel-all, "
+        "estop, line-follow OFF, stuck ABORT/MANUAL — ends the trip after the stop is sent; "
+        "TRIP_ROBOT_BUSY on goal/formation/stuck motion), trip_ports.py +61 and routing/execute.py +35 "
+        "(moved out so trip_runner.py stays at 599 of its 600 cap; its next change splits it), "
+        "console_view.py +14, console_routes.py +11, app.py +5, stuck_resolver_loop.py +2, console.py -6."
+        " Inside the server owner of docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; no new "
+        "owner. +150 allowance unchanged. "
+        "Previously independently re-judged at 40110 on 2026-10-07 (D-491 5 review: the reviewer judged "
         "the growth justified). Since 38952 the package grew 1158 production and web lines for the "
         "server trip loop: fleet/server/trip_runner.py 600 (start checks, state machine, CORE "
         "junction protocol, halts, 0.5 s loop), trip_ports.py 171 (ports, fleet.trip config), "
