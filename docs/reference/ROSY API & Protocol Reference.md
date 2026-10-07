@@ -1503,6 +1503,12 @@ SQLite `audit_id`는 재시작 뒤에도 유지되는 페이지 커서다. `--ev
 
 # 10.8 Site Fleet task submission, role authorization, and readback (D-276 Accepted)
 
+Fleet `GET /api/fleet/state` (D-493) rows also carry `state_age_s`: seconds from when
+that robot's state was observed (hub heartbeat time, or the REST read) to the moment
+the response was built, so shared-gather cache age is included; `null` for an offline
+row, absent on an older Fleet. The top level carries `gathered_at` (server UTC epoch
+seconds, display only; clients must not subtract it from their own clock). The console
+exception queue adds its receive-time age to `state_age_s` and warns above 5 s.
 Fleet `GET /api/fleet/state` robot rows also expose optional `capabilities`: the
 authenticated CORE CAP-001 object, or `null` when it cannot be read. Presentation
 may reuse this value for up to 5 seconds; an absent field denotes an older Fleet.

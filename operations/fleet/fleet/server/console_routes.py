@@ -105,8 +105,15 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     async def gathered() -> dict:
         snapshot = await gather()
         # Per response, on copies: the cached snapshot is shared with the resolver.
-        return {**snapshot, "robots": [{**row, "line_stuck": board.view(row["robot_id"])}
-                                       for row in snapshot["robots"]]}
+        # D-493: state_age_s = observed -> now (cache age and hub age included).
+        now = console._clock()
+        rows = []
+        for row in snapshot["robots"]:
+            row = {**row, "line_stuck": board.view(row["robot_id"])}
+            observed = row.pop("_state_mono", None)
+            row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
+            rows.append(row)
+        return {**snapshot, "robots": rows, "gathered_at": time.time()}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:
