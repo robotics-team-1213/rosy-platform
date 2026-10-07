@@ -753,3 +753,111 @@ def test_off_decisions_match_main_tick_for_tick():
                         .read_text(encoding='utf-8'))
     for key, ir_guard in (('ir_off', False), ('ir_on', True)):
         assert _off_scenario(ir_guard) == golden[key]
+
+
+# ---- D-476 rev 2: steady-curvature arcs ------------------------------------------------------
+# Roundabout-like follow: cruise 0.08, error -0.184 -> angular +0.147 (gazebo rev 1 B runs),
+# kappa = 0.147 / (0.08 x 0.88 x 0.846) ~ 2.47 1/m (radius ~0.40 m), below the 4.0 cap.
+ROUND_E = -.184
+
+
+def _arc(**config):
+    return _narrow(**{**dict(cruise_speed=.08, max_linear=.08), **config})
+
+
+def _kappa(r):
+    s = r.m.status()
+    return s.angular/s.linear
+
+
+def test_steady_curvature_arc_arms_and_bridges_along_the_arc():
+    r = _arc()
+    r.follow(error=ROUND_E)
+    kappa = _kappa(r)
+    assert 2. < kappa < r.m.config.bridge_arm_max_curvature
+    assert r.m._bridge is not None and r.m._bridge_kappa == pytest.approx(kappa)
+    d = r.step(seen=False)
+    assert r.reason == 'lane_bridge' and d.linear > 0
+    # Pure pursuit from on the lane circle commands that circle; D-422 sweeps this twist.
+    assert d.angular/d.linear == pytest.approx(kappa, rel=.05)
+    assert r.m._intended == (d.linear, d.angular)
+
+
+@pytest.mark.parametrize('errors, confidences', [
+    ((-.15, -.25)*3, (.9,)*6),            # error swings: a correction, not an arc
+    ((ROUND_E,)*6, (.9, .75)*3),          # steady error, speed changes: kappa spread 0.9
+    ((-.3,)*6, (.9,)*6),                  # steady but kappa 4.4 > bridge_arm_max_curvature
+    ((-.64, -.7, -.8, -.89, -.89), (.9,)*5),  # gazebo corner entry (rev 1 Cb runs)
+    ((-.7,)*6, (.9,)*6),                  # steady large correction: kappa far above the cap
+])
+def test_varying_or_too_tight_curvature_does_not_arm(errors, confidences):
+    r = _arc()
+    for e, conf in zip(errors, confidences):
+        r.step(error=e, confidence=conf)
+    assert r.m.status().state == 'TRACKING' and r.m._bridge is None
+    assert r.step(seen=False).linear <= 0 and r.reason != 'lane_bridge'
+
+
+def test_error_spread_tolerance_is_derived_from_the_follow_gains():
+    c = LineFollowConfig()
+    # The error spread that commands exactly the curvature tolerance at cruise speed.
+    assert c.bridge_arm_error_spread == pytest.approx(
+        c.bridge_arm_curvature_tolerance*c.cruise_speed/c.steering_gain)
+
+
+def test_arc_sweep_is_the_arc_not_the_straight_extension():
+    # Tick-level D-422 judges an in-place turn (clear); only the bridge twist is swept.
+    on_arc = _arc()
+    on_arc.follow(error=ROUND_E)
+    on_arc.m._intended = (0., .5)
+    on_arc.points = ((.12, .07),)   # inside the left-turning arc's band, outside the straight one
+    d = on_arc.step(seen=False)
+    assert d.linear == d.angular == 0 and on_arc.reason == 'lane_bridge_blocked'
+    off_arc = _arc()
+    off_arc.follow(error=ROUND_E)
+    off_arc.m._intended = (0., .5)
+    off_arc.points = ((.12, -.05),)  # on the straight extension, outside the arc's sweep
+    d = off_arc.step(seen=False)
+    assert off_arc.reason == 'lane_bridge' and d.linear > 0
+
+
+def test_worst_lateral_error_within_curvature_tolerance_is_bounded():
+    r = _arc()
+    r.follow(error=ROUND_E)
+    c, kappa = r.m.config, r.m._bridge_kappa
+    _, anchor, _ = r.m._bridge
+    path = []
+    while True:
+        r.step(seen=False)
+        if r.reason != 'lane_bridge':
+            break
+        path.append((r.x, r.y))
+    reach = c.bridge_slow_m/c.bridge_distance_scale
+    bound = c.bridge_arm_curvature_tolerance*reach**2/2   # 0.5 x 0.2315^2 / 2 = 13.4 mm
+    assert bound == pytest.approx(.0134, abs=2e-4)
+
+    def off(k, x, y):  # distance from the circle of curvature k through the anchor, its heading
+        rad = 1/k
+        cx, cy = anchor.x - rad*math.sin(anchor.yaw), anchor.y + rad*math.cos(anchor.yaw)
+        return abs(math.hypot(x-cx, y-cy) - abs(rad))
+    assert len(path) > 5
+    assert max(off(kappa, *p) for p in path) < .002          # the bridge drives its arc
+    for true_k in (kappa-c.bridge_arm_curvature_tolerance, kappa+c.bridge_arm_curvature_tolerance):
+        assert max(off(true_k, *p) for p in path) <= bound + .002
+
+
+def test_pending_junction_refuses_a_curved_bridge_not_a_straight_one():
+    for error, bridges in ((ROUND_E, False), (0., True)):
+        r = _arc()
+        r.follow(error=error)
+        r.m.set_junction('stop', 'p1', 10., stop_after_m=2.)  # pending, not held yet
+        d = r.step(seen=False)
+        assert (r.reason == 'lane_bridge' and d.linear > 0) is bridges, error
+
+
+@pytest.mark.parametrize('bad', [dict(bridge_arm_max_curvature=0.), dict(bridge_arm_max_curvature=11.),
+                                 dict(bridge_arm_curvature_tolerance=0.),
+                                 dict(bridge_arm_curvature_tolerance=5.)])
+def test_arc_config_is_validated(bad):
+    with pytest.raises(ValueError):
+        LineFollowConfig(**bad)
