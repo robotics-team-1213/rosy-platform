@@ -116,6 +116,10 @@ class SiteMapStore:
         self._db.execute("INSERT INTO site_map_events (action, principal_id, detail, at) VALUES (?, ?, ?, ?)",
                          (action, principal_id, json.dumps(detail, sort_keys=True), self.clock()))
 
+    def record_event(self, action: str, principal_id: str, detail: dict) -> None:
+        with self._lock, self._db:
+            self._event(action, principal_id, detail)
+
     def events(self, limit: int = 50) -> list[dict]:
         with self._lock:
             rows = self._db.execute("SELECT action, principal_id, detail, at FROM site_map_events "

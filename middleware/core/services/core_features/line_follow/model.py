@@ -196,6 +196,8 @@ class LineFollowConfig:
     # Review L3: odom speeds below which the robot counts as standing still (turn start/settle).
     junction_still_linear: float = 0.01
     junction_still_angular: float = 0.05
+    # D-498: site declares no drop-off within turn reach (+0.30 m); with the IR guard and D-422.
+    junction_turn_site_accepted: bool = False
     # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the producer's
     # uncertainty_m. 0 means every URDF footprint corner is inside only if uncertainty_m bounds
     # every lateral error; jitter and footprint tolerance not in it go in this body margin. The
@@ -319,6 +321,9 @@ class LineFollowConfig:
             raise ValueError("junction_still_linear must be in (0, 0.05] m/s")
         if not _finite(self.junction_still_angular) or not 0.0 < self.junction_still_angular <= 0.2:
             raise ValueError("junction_still_angular must be in (0, 0.2] rad/s")
+        if type(self.junction_turn_site_accepted) is not bool or (
+                self.junction_turn_site_accepted and not self.ir_guard_enabled):
+            raise ValueError("junction_turn_site_accepted must be a boolean and needs ir_guard_enabled")
 
     def _check_bridge(self) -> None:
         if type(self.bridge_enabled) is not bool:

@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · uiux(pilot): 상태 소켓 상실 중 주행 차단
-- 2026-10-07 · uncommitted · 주행 HUD 상태 용어
-- 2026-10-07 · uncommitted · uiux(pilot): 접속 거부의 운용자 문구
-- 2026-10-07 · uncommitted · uiux(pilot): 연결 로비 전화 폭
-- 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
+- 2026-10-07 · uncommitted · test(pilot): 대상 확인 오류 네 폭 캡처
+- 2026-10-07 · uncommitted · uiux(pilot): 접속 로비 태블릿 폭과 입력 라벨
+- 2026-10-07 · uncommitted · uiux(pilot): 휴대폰 HUD 행동 폭 정렬
+- 2026-10-07 · uncommitted · fix(pilot): APK 번들 시험에 팔 화면 자산 고정
+- 2026-10-07 · uncommitted · uiux(pilot): 카메라 면적 병합 후 검증

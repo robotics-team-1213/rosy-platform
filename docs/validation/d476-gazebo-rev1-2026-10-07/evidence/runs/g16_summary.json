@@ -1,0 +1,1184 @@
+{
+ "g16_C": {
+  "gt_pose": [
+   -1.26955,
+   0.24254999999999974,
+   -1.5708000000000022
+  ],
+  "stl_margin_inner_m": 0.0234,
+  "margin_raw_m": {
+   "n": 30,
+   "median": -0.0075,
+   "min": -0.0075,
+   "max": -0.0075
+  },
+  "uncertainty_m": 0.00885049959781103,
+  "frames_with_containment": 30,
+  "left_centre_err_inward_m": {
+   "n": 90,
+   "median": -0.0007,
+   "min": -0.0027,
+   "max": 0.0013
+  },
+  "right_centre_err_inward_m": {
+   "n": 90,
+   "median": -0.0043,
+   "min": -0.0123,
+   "max": 0.0037
+  },
+  "first_frame_sides": {
+   "left": {
+    "slope": 0.0274,
+    "observed_x": [
+     0.176,
+     0.322
+    ],
+    "at": [
+     {
+      "x": 0.176,
+      "fit_centre": 0.091,
+      "true_centre": 0.0923,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0013,
+      "payload_inner": 0.0785,
+      "true_inner": 0.08,
+      "inner_err_inward_m": 0.0015
+     },
+     {
+      "x": 0.249,
+      "fit_centre": 0.093,
+      "true_centre": 0.0923,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0007,
+      "payload_inner": 0.0805,
+      "true_inner": 0.08,
+      "inner_err_inward_m": -0.0005
+     },
+     {
+      "x": 0.322,
+      "fit_centre": 0.095,
+      "true_centre": 0.0923,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0027,
+      "payload_inner": 0.0825,
+      "true_inner": 0.08,
+      "inner_err_inward_m": -0.0025
+     },
+     {
+      "x": 0.042,
+      "fit_centre": 0.0873,
+      "true_centre": 0.0923,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0049,
+      "payload_inner": 0.0748,
+      "true_inner": 0.08,
+      "inner_err_inward_m": 0.0052
+     },
+     {
+      "x": -0.076,
+      "fit_centre": 0.0841,
+      "true_centre": 0.0923,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0082,
+      "payload_inner": 0.0716,
+      "true_inner": 0.08,
+      "inner_err_inward_m": 0.0084
+     }
+    ]
+   },
+   "right": {
+    "slope": -0.1067,
+    "observed_x": [
+     0.181,
+     0.331
+    ],
+    "at": [
+     {
+      "x": 0.181,
+      "fit_centre": -0.089,
+      "true_centre": -0.0927,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0037,
+      "payload_inner": -0.0764,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": 0.0041
+     },
+     {
+      "x": 0.256,
+      "fit_centre": -0.097,
+      "true_centre": -0.0927,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0043,
+      "payload_inner": -0.0844,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": -0.0039
+     },
+     {
+      "x": 0.331,
+      "fit_centre": -0.105,
+      "true_centre": -0.0927,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0123,
+      "payload_inner": -0.0924,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": -0.0119
+     },
+     {
+      "x": 0.042,
+      "fit_centre": -0.0742,
+      "true_centre": -0.0927,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0186,
+      "payload_inner": -0.0616,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": 0.0189
+     },
+     {
+      "x": -0.076,
+      "fit_centre": -0.0616,
+      "true_centre": -0.0927,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0312,
+      "payload_inner": -0.049,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": 0.0315
+     }
+    ]
+   }
+  },
+  "image_rows_frame0": [
+   {
+    "x": 0.15,
+    "row": 225,
+    "true_cols": [
+     [
+      455.1,
+      465.3
+     ],
+     [
+      342.0,
+      397.5
+     ],
+     [
+      -76.3,
+      -20.9
+     ]
+    ],
+    "mask_runs": []
+   },
+   {
+    "x": 0.2,
+    "row": 184,
+    "true_cols": [
+     [
+      371.2,
+      378.4
+     ],
+     [
+      290.3,
+      329.9
+     ],
+     [
+      -9.1,
+      30.6
+     ]
+    ],
+    "mask_runs": [
+     [
+      0,
+      28
+     ],
+     [
+      292,
+      319
+     ]
+    ]
+   },
+   {
+    "x": 0.25,
+    "row": 161,
+    "true_cols": [
+     [
+      324.4,
+      330.1
+     ],
+     [
+      261.4,
+      292.3
+     ],
+     [
+      28.4,
+      59.2
+     ]
+    ],
+    "mask_runs": [
+     [
+      25,
+      57
+     ],
+     [
+      263,
+      295
+     ]
+    ]
+   },
+   {
+    "x": 0.3,
+    "row": 146,
+    "true_cols": [
+     [
+      294.6,
+      299.2
+     ],
+     [
+      243.0,
+      268.3
+     ],
+     [
+      52.2,
+      77.5
+     ]
+    ],
+    "mask_runs": [
+     [
+      50,
+      76
+     ],
+     [
+      244,
+      270
+     ]
+    ]
+   },
+   {
+    "x": 0.4,
+    "row": 129,
+    "true_cols": [
+     [
+      258.8,
+      262.2
+     ],
+     [
+      220.9,
+      239.5
+     ],
+     [
+      196.3,
+      214.9
+     ],
+     [
+      166.1,
+      184.6
+     ],
+     [
+      135.8,
+      154.3
+     ],
+     [
+      105.5,
+      124.1
+     ],
+     [
+      80.9,
+      99.5
+     ]
+    ],
+    "mask_runs": [
+     [
+      78,
+      97
+     ],
+     [
+      104,
+      123
+     ],
+     [
+      135,
+      154
+     ],
+     [
+      166,
+      185
+     ],
+     [
+      197,
+      216
+     ],
+     [
+      222,
+      242
+     ]
+    ]
+   }
+  ]
+ },
+ "g16_C2": {
+  "gt_pose": [
+   -1.26955,
+   0.24254999999999974,
+   -1.570800000000044
+  ],
+  "stl_margin_inner_m": 0.0234,
+  "margin_raw_m": {
+   "n": 30,
+   "median": -0.0075,
+   "min": -0.0075,
+   "max": -0.0075
+  },
+  "uncertainty_m": 0.00885049959781103,
+  "frames_with_containment": 30,
+  "left_centre_err_inward_m": {
+   "n": 90,
+   "median": -0.0007,
+   "min": -0.0027,
+   "max": 0.0013
+  },
+  "right_centre_err_inward_m": {
+   "n": 90,
+   "median": -0.0043,
+   "min": -0.0123,
+   "max": 0.0037
+  },
+  "first_frame_sides": {
+   "left": {
+    "slope": 0.0274,
+    "observed_x": [
+     0.176,
+     0.322
+    ],
+    "at": [
+     {
+      "x": 0.176,
+      "fit_centre": 0.091,
+      "true_centre": 0.0923,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0013,
+      "payload_inner": 0.0785,
+      "true_inner": 0.08,
+      "inner_err_inward_m": 0.0015
+     },
+     {
+      "x": 0.249,
+      "fit_centre": 0.093,
+      "true_centre": 0.0923,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0007,
+      "payload_inner": 0.0805,
+      "true_inner": 0.08,
+      "inner_err_inward_m": -0.0005
+     },
+     {
+      "x": 0.322,
+      "fit_centre": 0.095,
+      "true_centre": 0.0923,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0027,
+      "payload_inner": 0.0825,
+      "true_inner": 0.08,
+      "inner_err_inward_m": -0.0025
+     },
+     {
+      "x": 0.042,
+      "fit_centre": 0.0873,
+      "true_centre": 0.0923,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0049,
+      "payload_inner": 0.0748,
+      "true_inner": 0.08,
+      "inner_err_inward_m": 0.0052
+     },
+     {
+      "x": -0.076,
+      "fit_centre": 0.0841,
+      "true_centre": 0.0923,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0082,
+      "payload_inner": 0.0716,
+      "true_inner": 0.08,
+      "inner_err_inward_m": 0.0084
+     }
+    ]
+   },
+   "right": {
+    "slope": -0.1067,
+    "observed_x": [
+     0.181,
+     0.331
+    ],
+    "at": [
+     {
+      "x": 0.181,
+      "fit_centre": -0.089,
+      "true_centre": -0.0927,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0037,
+      "payload_inner": -0.0764,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": 0.0041
+     },
+     {
+      "x": 0.256,
+      "fit_centre": -0.097,
+      "true_centre": -0.0927,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0043,
+      "payload_inner": -0.0844,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": -0.0039
+     },
+     {
+      "x": 0.331,
+      "fit_centre": -0.105,
+      "true_centre": -0.0927,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0123,
+      "payload_inner": -0.0924,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": -0.0119
+     },
+     {
+      "x": 0.042,
+      "fit_centre": -0.0742,
+      "true_centre": -0.0927,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0186,
+      "payload_inner": -0.0616,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": 0.0189
+     },
+     {
+      "x": -0.076,
+      "fit_centre": -0.0616,
+      "true_centre": -0.0927,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0312,
+      "payload_inner": -0.049,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": 0.0315
+     }
+    ]
+   }
+  },
+  "image_rows_frame0": [
+   {
+    "x": 0.15,
+    "row": 225,
+    "true_cols": [
+     [
+      455.1,
+      465.3
+     ],
+     [
+      342.0,
+      397.5
+     ],
+     [
+      -76.3,
+      -20.9
+     ]
+    ],
+    "mask_runs": []
+   },
+   {
+    "x": 0.2,
+    "row": 184,
+    "true_cols": [
+     [
+      371.2,
+      378.4
+     ],
+     [
+      290.3,
+      329.9
+     ],
+     [
+      -9.1,
+      30.6
+     ]
+    ],
+    "mask_runs": [
+     [
+      0,
+      28
+     ],
+     [
+      292,
+      319
+     ]
+    ]
+   },
+   {
+    "x": 0.25,
+    "row": 161,
+    "true_cols": [
+     [
+      324.4,
+      330.1
+     ],
+     [
+      261.4,
+      292.3
+     ],
+     [
+      28.4,
+      59.2
+     ]
+    ],
+    "mask_runs": [
+     [
+      25,
+      57
+     ],
+     [
+      263,
+      295
+     ]
+    ]
+   },
+   {
+    "x": 0.3,
+    "row": 146,
+    "true_cols": [
+     [
+      294.6,
+      299.2
+     ],
+     [
+      243.0,
+      268.3
+     ],
+     [
+      52.2,
+      77.5
+     ]
+    ],
+    "mask_runs": [
+     [
+      50,
+      76
+     ],
+     [
+      244,
+      270
+     ]
+    ]
+   },
+   {
+    "x": 0.4,
+    "row": 129,
+    "true_cols": [
+     [
+      258.8,
+      262.2
+     ],
+     [
+      220.9,
+      239.5
+     ],
+     [
+      196.3,
+      214.9
+     ],
+     [
+      166.1,
+      184.6
+     ],
+     [
+      135.8,
+      154.3
+     ],
+     [
+      105.5,
+      124.1
+     ],
+     [
+      80.9,
+      99.5
+     ]
+    ],
+    "mask_runs": [
+     [
+      78,
+      97
+     ],
+     [
+      104,
+      123
+     ],
+     [
+      135,
+      154
+     ],
+     [
+      166,
+      185
+     ],
+     [
+      197,
+      216
+     ],
+     [
+      222,
+      242
+     ]
+    ]
+   }
+  ]
+ },
+ "g16_north": {
+  "gt_pose": [
+   -1.2695499999999997,
+   2.9070081501151465e-18,
+   1.5708000000000022
+  ],
+  "stl_margin_inner_m": 0.0234,
+  "margin_raw_m": {
+   "n": 30,
+   "median": 0.0104,
+   "min": 0.0104,
+   "max": 0.0104
+  },
+  "uncertainty_m": 0.007631437626799119,
+  "frames_with_containment": 30,
+  "left_centre_err_inward_m": {
+   "n": 90,
+   "median": -0.0022,
+   "min": -0.0042,
+   "max": -0.0002
+  },
+  "right_centre_err_inward_m": {
+   "n": 60,
+   "median": 0.0007,
+   "min": -0.0018,
+   "max": 0.0032
+  },
+  "first_frame_sides": {
+   "left": {
+    "slope": 0.0157,
+    "observed_x": [
+     0.176,
+     0.431
+    ],
+    "at": [
+     {
+      "x": 0.176,
+      "fit_centre": 0.093,
+      "true_centre": 0.0928,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0002,
+      "payload_inner": 0.0805,
+      "true_inner": 0.0805,
+      "inner_err_inward_m": 0.0
+     },
+     {
+      "x": 0.303,
+      "fit_centre": 0.095,
+      "true_centre": 0.0928,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0022,
+      "payload_inner": 0.0825,
+      "true_inner": 0.0805,
+      "inner_err_inward_m": -0.002
+     },
+     {
+      "x": 0.431,
+      "fit_centre": 0.097,
+      "true_centre": 0.0928,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0042,
+      "payload_inner": 0.0845,
+      "true_inner": 0.0805,
+      "inner_err_inward_m": -0.004
+     },
+     {
+      "x": 0.042,
+      "fit_centre": 0.0909,
+      "true_centre": 0.0928,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0019,
+      "payload_inner": 0.0784,
+      "true_inner": 0.0805,
+      "inner_err_inward_m": 0.0021
+     },
+     {
+      "x": -0.076,
+      "fit_centre": 0.089,
+      "true_centre": 0.0928,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0037,
+      "payload_inner": 0.0765,
+      "true_inner": 0.0805,
+      "inner_err_inward_m": 0.004
+     }
+    ]
+   },
+   "right": {
+    "slope": -0.0383,
+    "observed_x": [
+     0.171,
+     0.432
+    ],
+    "at": [
+     {
+      "x": 0.171,
+      "fit_centre": -0.089,
+      "true_centre": -0.0922,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0032,
+      "payload_inner": -0.0765,
+      "true_inner": -0.08,
+      "inner_err_inward_m": 0.0035
+     },
+     {
+      "x": 0.301,
+      "fit_centre": -0.094,
+      "true_centre": -0.0922,
+      "true_width": 0.0245,
+      "centre_err_inward_m": -0.0018,
+      "payload_inner": -0.0815,
+      "true_inner": -0.08,
+      "inner_err_inward_m": -0.0015
+     },
+     {
+      "x": 0.432,
+      "true": null
+     },
+     {
+      "x": 0.042,
+      "fit_centre": -0.0841,
+      "true_centre": -0.0922,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0082,
+      "payload_inner": -0.0715,
+      "true_inner": -0.08,
+      "inner_err_inward_m": 0.0085
+     },
+     {
+      "x": -0.076,
+      "fit_centre": -0.0795,
+      "true_centre": -0.0922,
+      "true_width": 0.0245,
+      "centre_err_inward_m": 0.0127,
+      "payload_inner": -0.067,
+      "true_inner": -0.08,
+      "inner_err_inward_m": 0.013
+     }
+    ]
+   }
+  },
+  "image_rows_frame0": [
+   {
+    "x": 0.15,
+    "row": 225,
+    "true_cols": [
+     [
+      340.9,
+      396.3
+     ],
+     [
+      -77.5,
+      -22.0
+     ],
+     [
+      -145.3,
+      -135.1
+     ]
+    ],
+    "mask_runs": []
+   },
+   {
+    "x": 0.2,
+    "row": 184,
+    "true_cols": [
+     [
+      289.4,
+      329.1
+     ],
+     [
+      -9.9,
+      29.7
+     ],
+     [
+      -58.4,
+      -51.2
+     ]
+    ],
+    "mask_runs": [
+     [
+      0,
+      26
+     ],
+     [
+      291,
+      319
+     ]
+    ]
+   },
+   {
+    "x": 0.25,
+    "row": 161,
+    "true_cols": [
+     [
+      260.8,
+      291.6
+     ],
+     [
+      27.7,
+      58.6
+     ],
+     [
+      -10.1,
+      -4.4
+     ]
+    ],
+    "mask_runs": [
+     [
+      24,
+      56
+     ],
+     [
+      262,
+      294
+     ]
+    ]
+   },
+   {
+    "x": 0.3,
+    "row": 146,
+    "true_cols": [
+     [
+      242.5,
+      267.8
+     ],
+     [
+      51.7,
+      77.0
+     ],
+     [
+      20.8,
+      25.4
+     ]
+    ],
+    "mask_runs": [
+     [
+      49,
+      75
+     ],
+     [
+      243,
+      269
+     ]
+    ]
+   },
+   {
+    "x": 0.4,
+    "row": 129,
+    "true_cols": [
+     [
+      220.5,
+      239.1
+     ],
+     [
+      80.5,
+      99.1
+     ],
+     [
+      57.8,
+      61.2
+     ]
+    ],
+    "mask_runs": [
+     [
+      78,
+      96
+     ],
+     [
+      222,
+      241
+     ]
+    ]
+   }
+  ]
+ },
+ "g16_bottom": {
+  "gt_pose": [
+   0.4700000000000002,
+   -0.51,
+   -3.9469298611387183e-14
+  ],
+  "stl_margin_inner_m": -0.0491,
+  "margin_raw_m": {
+   "n": 30,
+   "median": 0.0095,
+   "min": 0.0095,
+   "max": 0.0095
+  },
+  "uncertainty_m": 0.0076314376267991755,
+  "frames_with_containment": 30,
+  "left_centre_err_inward_m": {
+   "n": 90,
+   "median": -0.0015,
+   "min": -0.0035,
+   "max": 0.0005
+  },
+  "right_centre_err_inward_m": {
+   "n": 90,
+   "median": -0.0035,
+   "min": -0.0095,
+   "max": 0.0025
+  },
+  "first_frame_sides": {
+   "left": {
+    "slope": 0.0157,
+    "observed_x": [
+     0.176,
+     0.431
+    ],
+    "at": [
+     {
+      "x": 0.176,
+      "fit_centre": 0.092,
+      "true_centre": 0.0925,
+      "true_width": 0.025,
+      "centre_err_inward_m": 0.0005,
+      "payload_inner": 0.0795,
+      "true_inner": 0.08,
+      "inner_err_inward_m": 0.0005
+     },
+     {
+      "x": 0.303,
+      "fit_centre": 0.094,
+      "true_centre": 0.0925,
+      "true_width": 0.025,
+      "centre_err_inward_m": -0.0015,
+      "payload_inner": 0.0815,
+      "true_inner": 0.08,
+      "inner_err_inward_m": -0.0015
+     },
+     {
+      "x": 0.431,
+      "fit_centre": 0.096,
+      "true_centre": 0.0925,
+      "true_width": 0.025,
+      "centre_err_inward_m": -0.0035,
+      "payload_inner": 0.0835,
+      "true_inner": 0.08,
+      "inner_err_inward_m": -0.0035
+     },
+     {
+      "x": 0.042,
+      "fit_centre": 0.0899,
+      "true_centre": 0.0925,
+      "true_width": 0.025,
+      "centre_err_inward_m": 0.0026,
+      "payload_inner": 0.0774,
+      "true_inner": 0.08,
+      "inner_err_inward_m": 0.0026
+     },
+     {
+      "x": -0.076,
+      "fit_centre": 0.088,
+      "true_centre": 0.0925,
+      "true_width": 0.025,
+      "centre_err_inward_m": 0.0045,
+      "payload_inner": 0.0755,
+      "true_inner": 0.08,
+      "inner_err_inward_m": 0.0045
+     }
+    ]
+   },
+   "right": {
+    "slope": -0.046,
+    "observed_x": [
+     0.171,
+     0.432
+    ],
+    "at": [
+     {
+      "x": 0.171,
+      "fit_centre": -0.09,
+      "true_centre": -0.0925,
+      "true_width": 0.024,
+      "centre_err_inward_m": 0.0025,
+      "payload_inner": -0.0775,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": 0.003
+     },
+     {
+      "x": 0.301,
+      "fit_centre": -0.096,
+      "true_centre": -0.0925,
+      "true_width": 0.024,
+      "centre_err_inward_m": -0.0035,
+      "payload_inner": -0.0835,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": -0.003
+     },
+     {
+      "x": 0.432,
+      "fit_centre": -0.102,
+      "true_centre": -0.0925,
+      "true_width": 0.024,
+      "centre_err_inward_m": -0.0095,
+      "payload_inner": -0.0895,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": -0.009
+     },
+     {
+      "x": 0.042,
+      "fit_centre": -0.0841,
+      "true_centre": -0.0925,
+      "true_width": 0.024,
+      "centre_err_inward_m": 0.0084,
+      "payload_inner": -0.0716,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": 0.0089
+     },
+     {
+      "x": -0.076,
+      "fit_centre": -0.0786,
+      "true_centre": -0.0925,
+      "true_width": 0.024,
+      "centre_err_inward_m": 0.0139,
+      "payload_inner": -0.0661,
+      "true_inner": -0.0805,
+      "inner_err_inward_m": 0.0144
+     }
+    ]
+   }
+  },
+  "image_rows_frame0": [
+   {
+    "x": 0.15,
+    "row": 225,
+    "true_cols": [
+     [
+      421.2,
+      431.4
+     ],
+     [
+      342.0,
+      396.3
+     ],
+     [
+      -77.5,
+      -20.9
+     ]
+    ],
+    "mask_runs": []
+   },
+   {
+    "x": 0.2,
+    "row": 184,
+    "true_cols": [
+     [
+      346.9,
+      354.2
+     ],
+     [
+      290.3,
+      329.1
+     ],
+     [
+      -9.9,
+      30.6
+     ]
+    ],
+    "mask_runs": [
+     [
+      0,
+      27
+     ],
+     [
+      292,
+      319
+     ]
+    ]
+   },
+   {
+    "x": 0.25,
+    "row": 161,
+    "true_cols": [
+     [
+      305.5,
+      311.2
+     ],
+     [
+      261.4,
+      291.6
+     ],
+     [
+      27.7,
+      59.2
+     ]
+    ],
+    "mask_runs": [
+     [
+      25,
+      56
+     ],
+     [
+      263,
+      295
+     ]
+    ]
+   },
+   {
+    "x": 0.3,
+    "row": 146,
+    "true_cols": [
+     [
+      279.1,
+      283.8
+     ],
+     [
+      243.0,
+      267.8
+     ],
+     [
+      51.7,
+      77.5
+     ]
+    ],
+    "mask_runs": [
+     [
+      50,
+      75
+     ],
+     [
+      244,
+      270
+     ]
+    ]
+   },
+   {
+    "x": 0.4,
+    "row": 129,
+    "true_cols": [
+     [
+      247.4,
+      250.8
+     ],
+     [
+      220.9,
+      239.1
+     ],
+     [
+      80.5,
+      99.5
+     ]
+    ],
+    "mask_runs": [
+     [
+      78,
+      97
+     ],
+     [
+      228,
+      241
+     ]
+    ]
+   }
+  ]
+ }
+}

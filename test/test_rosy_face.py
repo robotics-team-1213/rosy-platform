@@ -1688,9 +1688,9 @@ def test_face_owns_the_screen_with_a_fresh_handover(tmp_path):
     assert display.animating == ("basic", "Waiting", "info")
     for _ in range(5):
         assert display.tick() is True
-    # Lazily: three frames converted one per tick (skip 2 -> sources 0 and 2), then replayed.
+    # The panel-sized loop keeps every authored frame, then replays.
     # The situation strip rides each frame; the seek index stays the frame's second field.
-    assert [panel[0][1] for panel in lcd.panels] == [0, 2, 0, 2, 0]
+    assert [panel[0][1] for panel in lcd.panels] == [0, 1, 2, 0, 1]
     assert {panel[1] for panel in lcd.panels} == {"Waiting"}
     assert opened == ["basic"]
 

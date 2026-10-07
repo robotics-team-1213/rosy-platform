@@ -18,6 +18,61 @@ pytestmark = pytest.mark.skipif(os.environ.get("ROSY_BROWSER_TESTS") != "1",
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def test_rectangular_camera_coordinates_are_display_only(page_site):
+    import cv2
+    import numpy as np
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    writes = []
+    page.on("request", lambda request: writes.append(request.url) if request.method in {"POST", "PUT", "DELETE"} else None)
+    record = {"source_id": "camera-test", "map_id": store.active_view()["map"]["map_id"],
+              "map_to_image": [50, 0, 100, 0, -50, 100, 0, 0, 1],
+              "track_bounds_m": {"min_x": -1, "max_x": 3, "min_y": -1, "max_y": 1},
+              "image": {"width": 300, "height": 200}, "lens": None}
+    image = np.zeros((200, 300, 3), np.uint8)
+    image[:, :150] = [0, 255, 0]
+    encoded = cv2.imencode(".png", image)[1].tobytes()
+    other = {**record, "source_id": "camera-other"}
+    page.route("**/api/fleet/calibrations", lambda route: route.fulfill(json={"calibrations": [record, other]}))
+    page.route("**/api/fleet/vision/lease", lambda route: route.fulfill(json={"lease": "preview-test", "frame_path": "/test-camera-frame"}))
+    headers = {"X-Frame-Age-Ms": "10", "X-Frame-Rectified": "false"}
+    page.route("**/test-camera-frame", lambda route: route.fulfill(body=encoded, content_type="image/png", headers=headers))
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#session")).to_contain_text("bob")
+    page.locator("#plane-load").click()
+    expect(page.locator("#plane-status")).to_contain_text("불러온 평면 영상")
+    expect(page.locator("#site-map-svg image")).to_be_visible()
+    page.locator("#trip-pick").check()
+    page.locator("#plane-pick").check()
+    expect(page.locator("#trip-pick")).not_to_be_checked()
+    writes.clear()
+    point = page.locator("#site-map-svg").evaluate("svg => { const p = new DOMPoint(400, 240).matrixTransform(svg.getScreenCTM()); return {x: p.x, y: p.y}; }")
+    page.mouse.click(point["x"], point["y"])
+    expect(page.locator("#plane-point")).to_contain_text("확인한 좌표 x")
+    x, y = map(float, re.search(r"x ([\d.-]+) m, y ([\d.-]+) m", page.locator("#plane-point").inner_text()).groups())
+    # Native mouse events round screen pixels; one map pixel is about 5.3 mm here.
+    assert abs(x - 1) <= 0.006 and abs(y) <= 0.006
+    expect(page.locator("#trip-point")).to_contain_text("찍은 좌표 없음")
+    assert not writes
+    assert page.locator("#trip-start").evaluate("el => el.disabled")
+    page.locator("#plane-source").select_option("camera-other")
+    expect(page.locator("#site-map-svg image")).to_have_count(0)
+    expect(page.locator("#plane-point")).to_contain_text("확인한 좌표 없음")
+    assert page.locator("#plane-source").input_value() == "camera-other"
+    headers["X-Source-Lens"] = "kind=standard;focal_mm=5.4;hfov_deg=67.8"
+    page.locator("#plane-load").click()
+    expect(page.locator("#plane-status")).to_contain_text("렌즈와 보정이 다릅니다")
+    expect(page.locator("#site-map-svg image")).to_have_count(0)
+    expect(page.locator("#plane-pick")).not_to_be_checked()
+    expect(page.locator("#plane-pick")).to_be_disabled()
+    headers.pop("X-Source-Lens")
+    headers["X-Frame-Age-Ms"] = "4000"
+    page.locator("#plane-load").click()
+    expect(page.locator("#plane-status")).to_contain_text("신선한 원본 영상을 확인할 수 없습니다")
+
+
 def test_import_camera_map_draft_never_activates(page_site):
     from playwright.sync_api import expect
     from test_site_map_trip import _line

@@ -10,6 +10,7 @@ class BundledAssetsTest {
     private val directory = File(System.getProperty("rosy.pilot.assets"))
     @Test fun canonicalUiAndImportsAreBundled() {
         for (path in listOf("pilot/index.html", "pilot/app.js", "pilot/link.js", "pilot/screens/drive.js", "pilot/widgets/joint_jog.js",
+            "pilot/screens/arm.js", "pilot/screens/compose.js", "pilot/widgets/gripper.js", "pilot/arm-stick.js", "pilot/controls.js", "pilot/drivers/omx_sim.js",
             "common/ui.js", "common/theme.js", "common/tokens.css", "common/components.css", "common/icons/pilot.svg")) {
             assertTrue("missing APK asset $path", File(directory, path).isFile)
         }
