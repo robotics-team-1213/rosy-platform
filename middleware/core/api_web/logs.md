@@ -597,3 +597,10 @@
 - 증거: `test_peer_pairing.py` 43 passed(신규: 출처 4곳 × 틀림 5회 뒤 맞는 코드도 429, 콘솔 승인은 됨, 10분 뒤 다시 열림). 장치 배포는 하지 않았다.
 - gate 변화: SOURCE/LOCAL만.
 - 결정: D-483
+
+## 2026-10-07 · uncommitted · feat(api): D-491 POST /api/v1/line-follow/junction
+- 변경: operator + 보정 lease. CAMERA_LINE·IR_LINE이 아니면 409 `LINE_FOLLOW_NOT_ACTIVE`. 응답 `{accepted, junction_seq, state}`. API Ref v1.112, `app.py` 버전 문구 v1.112
+- 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. 실기·SIM 미실행(Gazebo는 이 노트북에서 돌리지 않음)
+- 결정: D-491 (Proposed) 4항, 구현 부록 2026-10-07
+- 교훈: 오늘 인식은 CORE에 분기 후보를 주지 않는다. 좌·우 주행은 분기 계약 ADR이 먼저다

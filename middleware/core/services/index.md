@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(line_follow): D-491 교차로 지시 게이트
 - 2026-10-06 · uncommitted · fix(lane): D-476 independent review fixes
 - 2026-10-06 · uncommitted · feat(lane): D-476 expected-road bridge in CORE, default off
 - 2026-10-05 · uncommitted · fix(lane): retain scan provenance and operator fallback authority
 - 2026-10-05 · uncommitted · feat(lane): require complete scan and swept-body clearance for D-468
-- 2026-10-05 · uncommitted · feat(lane): arbitrate measured return before ordinary following

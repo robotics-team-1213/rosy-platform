@@ -477,3 +477,10 @@
 - 변경: `SiteSightingPayload.corner_marker_ids`를 선택화하고 `calibration_source`("corner_markers"|"field_boundary", 마커 id와 상호 검증)를 추가. `PreviewRectification`에 `mode: "manual"|"auto"`(기본 manual, 과거 리스 호환) 추가 — auto는 코너를 Vision의 필드 캘리브레이션이 정한다. 기존 필드명·값은 불변.
 - 증거: contracts/foundation 스위트 + vision/fleet 소비처 시험 통과. API Ref v1.109 행과 같은 변경.
 - gate 변화: 없음. envelope 1.0 불변, additive 규율(PRT-006) 준수.
+
+## 2026-10-07 · uncommitted · feat(schemas): LineFollowStatus.junction
+- 변경: `LineJunctionStatus {pending_action, place_id, state, seq}`를 더하고 `LineFollowStatus.junction` 기본값 idle로 둔다(D-491 4항, additive)
+- 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. 실기·SIM 미실행(Gazebo는 이 노트북에서 돌리지 않음)
+- 결정: D-491 (Proposed) 4항, 구현 부록 2026-10-07
+- 교훈: 오늘 인식은 CORE에 분기 후보를 주지 않는다. 좌·우 주행은 분기 계약 ADR이 먼저다

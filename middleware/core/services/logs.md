@@ -574,3 +574,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만.
 - 결정: D-476 (Proposed)
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(line_follow): D-491 교차로 지시 게이트
+- 변경: 새 `core_features/line_follow/junction.py`. 지시 하나를 보관하고 틱 결정을 그대로 두거나 0으로 만든다. 지시 없음·만료 + 교차로 감지는 `junction_waiting`, `left`·`right`는 분기 후보가 없어 곧바로 `junction_unresolved`, `stop`은 측정 odom으로 `stop_after_m` 뒤 `junction_stop`(odom 없으면 바로). `straight`는 D-476 route hint를 채운다. 모드 변경이 지시를 지운다
+- 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. 실기·SIM 미실행(Gazebo는 이 노트북에서 돌리지 않음)
+- 결정: D-491 (Proposed) 4항, 구현 부록 2026-10-07
+- 교훈: 오늘 인식은 CORE에 분기 후보를 주지 않는다. 좌·우 주행은 분기 계약 ADR이 먼저다

@@ -930,3 +930,10 @@
 - 변경: `control.sensor_adapter.simulation_sensors`(bool, `use_sim_time` 없으면 시작 거부)가 `resolve_safety_params(simulation=True)`로 worker에 `accept_simulation_scans`·`imu_angular_velocity_unit rad_s`·`use_sim_time`을 넘긴다(overlay 허용 키 아님). `bind_lane_return_motion(policy_clock)`: `use_sim_time`이면 D-468 바닥 증명은 worker 정책을 `time.monotonic`으로 묻고 몸 sweep은 line clock에 둔다. 장치는 플래그 없음·`policy_clock None`으로 전과 같다.
 - 증거: `test_safety_params.py`, `test_lane_return_sensors.py`, `test_control_sensor_adapter.py` 추가 시험 PASS. 모델 PC sim에서 정책 창 monotonic·`floor_observed True` 확인.
 - gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · feat(bridge): keep_debug 교차로 사유를 line-follow 정지 입력으로
+- 변경: `bridge/observation.py` `keep_junction`이 `line/keep_debug`의 `reason`(`junction_transverse`·`junction_fork`)과 카메라 시각(`stale_after_s` 안)을 읽어 `observe_junction`에 넘긴다. 정지 입력으로만 쓴다. `ros_bridge.py`의 기존 구독에 한 줄 붙임
+- 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. 실기·SIM 미실행(Gazebo는 이 노트북에서 돌리지 않음)
+- 결정: D-491 (Proposed) 4항, 구현 부록 2026-10-07
+- 교훈: 오늘 인식은 CORE에 분기 후보를 주지 않는다. 좌·우 주행은 분기 계약 ADR이 먼저다
