@@ -50,7 +50,8 @@ class Ports:
     async def arbitrated_pose(self, robot_id):  # async on purpose: the runner takes either
         return self.pose
 
-    async def refresh(self, robot_id):
+    async def refresh(self, robot_id, force_rest=False):
+        assert force_rest  # the trip loop reads past the 1 Hz hub cache
         self.refreshes += 1
 
     async def junction_state(self, robot_id):
@@ -250,6 +251,7 @@ def test_pose_loss_stops_the_trip_and_sends_nothing_more(state):
     run(runner.tick())
     view = runner.view("p1")
     assert (view["state"], view["reason"], view["detail"]["pose_state"]) == ("stopped", "pose", state)
+    assert {"sightings_filtered_map_id", "odom_refused"} <= set(view["detail"])
     assert len(ports.goals) == 1 and ports.canceled == []  # left to the robot's deadman
 
 
@@ -543,3 +545,16 @@ def test_start_needs_a_fresh_anchor_and_each_tick_refreshes_the_robot_state():
     ports.at(store.active()[2].arcs["ring_s:fwd"], 0.1, anchor_age_s=8.0)  # bridged: still running
     run(runner.tick())
     assert runner.running()["pose"]["anchor_age_s"] == 8.0
+
+
+def test_a_pose_stop_surfaces_the_provider_diagnostics():
+    import dataclasses
+
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    ports.at(store.active()[2].arcs["ab:fwd"], 0.3, state="DEGRADED")
+    ports.pose = dataclasses.replace(ports.pose, sightings_filtered_map_id=2, odom_refused={"reason": "gap"})
+    run(runner.tick())
+    detail = runner.view("p1")["detail"]
+    assert detail["sightings_filtered_map_id"] == 2 and detail["odom_refused"] == {"reason": "gap"}

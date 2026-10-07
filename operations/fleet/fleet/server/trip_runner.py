@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import logging
 import math
 import time
@@ -71,6 +72,9 @@ class MapPose:
     age_s: float
     #: Seconds since the sighting anchor; a trip starts only on a fresh one (``start_anchor_age_s``).
     anchor_age_s: Optional[float] = None
+    #: Provider diagnostics, shown when a trip stops for its pose.
+    sightings_filtered_map_id: Optional[object] = None
+    odom_refused: Optional[object] = None
 
 
 class TripCapsPort(Protocol):
@@ -80,7 +84,7 @@ class TripCapsPort(Protocol):
 class MapPosePort(Protocol):
     def arbitrated_pose(self, robot_id: str) -> "Optional[MapPose] | Awaitable[Optional[MapPose]]": ...
 
-    async def refresh(self, robot_id: str) -> None:
+    async def refresh(self, robot_id: str, force_rest: bool = True) -> None:
         """Optional: read the robot's state/odom now. The loop calls it once per tick (2 Hz)."""
 
 
@@ -338,11 +342,12 @@ class TripRunner:
             pose = await self._pose(live.view["robot_id"])
             live.view["pose"] = _pose_view(pose)
             if pose is None or pose.state != LOCALIZED:
-                self._finish(live, "stopped", "pose", {"pose_state": pose.state if pose else None})
+                self._finish(live, "stopped", "pose", {"pose_state": pose.state if pose else None,
+                                                       **_pose_diagnostics(pose)})
                 return
             index, s, off = self._locate(live, pose)
             if off is not None:
-                self._finish(live, "stopped", "pose", {"off_lane_m": round(off, 3)})
+                self._finish(live, "stopped", "pose", {"off_lane_m": round(off, 3), **_pose_diagnostics(pose)})
                 return
             if live.view["state"] == "started":
                 live.view["state"] = "running"
@@ -526,7 +531,7 @@ class TripRunner:
         refresh = getattr(self._poses, "refresh", None)
         try:
             if refresh is not None:  # one state/odom read per tick for the trip robot (D-491 3)
-                await _maybe(refresh(robot_id))
+                await _maybe(refresh(robot_id, force_rest=True))  # past the 1 Hz hub cache
         except Exception:  # an unread state leaves the pose to age into DEGRADED/UNKNOWN
             _LOG.warning("state refresh for %s failed", robot_id, exc_info=True)
         try:
@@ -575,6 +580,12 @@ def plan_body(plan) -> dict:
         "actions": [{"place_id": p, "action": a, "theta_deg": t} for p, a, t in plan.actions],
         "length_m": plan.length_m, "eta_s": plan.eta_s,
     }
+
+
+def _pose_diagnostics(pose) -> dict:
+    # the provider's types are its own; the trip row stores JSON (a dataclass becomes its str)
+    return json.loads(json.dumps({key: getattr(pose, key, None)
+                                  for key in ("sightings_filtered_map_id", "odom_refused")}, default=str))
 
 
 def _pose_view(pose: Optional[MapPose]) -> Optional[dict]:
