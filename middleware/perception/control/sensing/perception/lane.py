@@ -107,6 +107,12 @@ def detect_ir_line(values, calibration: IRLineCalibration, *,
     contrast = peak - min(strengths)
     if peak < min_white or contrast < min_contrast:
         return None
+    # Bright left and right over a darker centre are two separate bands
+    # (260919 crosswalk stripes run along the lane), not one line. Their
+    # centroid is 0 and would read as a line under the centre sensor.
+    outer = min(strengths[0], strengths[2])
+    if outer >= min_white and outer - strengths[1] >= min_contrast:
+        return None
     total = sum(strengths)
     if total <= 0.0:
         return None

@@ -1,9 +1,8 @@
-"""D-494 1/3/4 ports of the trip loop (``trip_runner``), its site config and their default wiring.
+"""D-494 1/3/4 ports of the trip loop (``trip_runner``), its site config and runtime state.
 
-``TripCaps`` (robot capability fields), ``MapPose`` (the Fleet trip map pose) and the lane
-junction / line-follow calls are injected so their providers plug in when they land. The
-defaults answer "nothing known" (the trip start refuses) and the HTTP junction port goes through
-the console's robot clients.
+``TripCaps`` (``console_view``, from the robot's capabilities) and ``MapPose``
+(``fleet.localization.map_pose``) are the providers' own types; app.py injects the capability
+closure, the ``MapPoseService`` and ``HttpLaneJunction`` (through the console's robot clients).
 """
 
 from __future__ import annotations
@@ -14,49 +13,24 @@ from dataclasses import dataclass, fields
 from typing import Any, Awaitable, Callable, Mapping, Optional, Protocol
 
 from fleet.hub.hub import HubError
+from fleet.localization.map_pose import MapPose
+from fleet.server.console_view import TripCaps
 from fleet.routing.execute import arc_id, ends_at_place
 
 #: Trip states that are still going.
 OPEN = ("started", "running")
 
 
-@dataclass(frozen=True)
-class TripCaps:
-    """D-494 1 capability fields as Fleet reads them from the robot's capabilities."""
-
-    kind: Optional[str]
-    modes: frozenset
-    max_speed: Optional[float]
-    #: D-495 3: CORE runs the bounded junction turn (``turn_deg``); without it no lane left/right.
-    junction_turn: bool = False
-
-
-@dataclass(frozen=True)
-class MapPose:
-    """D-494 3 ``map_pose`` output."""
-
-    x: float
-    y: float
-    yaw: float
-    state: str
-    source: str
-    dead_reckon_m: float
-    age_s: float
-    #: Seconds since the sighting anchor; a trip starts only on a fresh one (``start_anchor_age_s``).
-    anchor_age_s: Optional[float] = None
-    #: Provider diagnostics, shown when a trip stops for its pose.
-    sightings_filtered_map_id: Optional[object] = None
-    odom_refused: Optional[object] = None
-
-
-class TripCapsPort(Protocol):
-    def caps_for(self, robot_id: str) -> "Optional[TripCaps] | Awaitable[Optional[TripCaps]]": ...
+#: D-494 1: ``caps(robot_id) -> TripCaps | None`` (sync or async), app.py's capability closure.
+TripCapsPort = Callable[[str], "Optional[TripCaps] | Awaitable[Optional[TripCaps]]"]
 
 
 class MapPosePort(Protocol):
+    """D-494 3: ``MapPoseService`` (``arbitrated_pose`` + ``refresh(force_rest=True)``)."""
+
     def arbitrated_pose(self, robot_id: str) -> "Optional[MapPose] | Awaitable[Optional[MapPose]]": ...
 
-    async def refresh(self, robot_id: str, force_rest: bool = True) -> None:
+    async def refresh(self, robot_id: str, *, force_rest: bool = False) -> None:
         """Optional: read the robot's state/odom now. The loop calls it once per tick (2 Hz)."""
 
 
@@ -73,20 +47,6 @@ class LaneJunctionPort(Protocol):
 
     async def line_follow_mode(self, robot_id: str) -> Optional[str]:
         """The robot's selected line-follow mode (``GET /api/v1/line-follow`` ``mode``)."""
-
-
-class NoTripCaps:
-    """Default until the D-494 1 provider lands: no robot has trip capabilities."""
-
-    def caps_for(self, robot_id: str) -> None:
-        return None
-
-
-class NoMapPose:
-    """Default until the D-494 3 provider lands: no robot has a trip pose."""
-
-    def arbitrated_pose(self, robot_id: str) -> None:
-        return None
 
 
 class HttpLaneJunction:
@@ -181,16 +141,20 @@ class TripError(Exception):
 
 def pose_diagnostics(pose) -> dict:
     # the provider's types are its own; the trip row stores JSON (a dataclass becomes its str)
-    return json.loads(json.dumps({key: getattr(pose, key, None)
-                                  for key in ("sightings_filtered_map_id", "odom_refused")}, default=str))
+    keys = ("sightings_filtered_map_id", "odom_refused", "odom_refused_reason")
+    return json.loads(json.dumps({key: getattr(pose, key, None) for key in keys}, default=str))
 
 
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
     if pose is None:
         return None
-    return {"x": round(pose.x, 3), "y": round(pose.y, 3), "yaw": round(pose.yaw, 3), "state": pose.state,
-            "source": pose.source, "dead_reckon_m": round(pose.dead_reckon_m, 3), "age_s": round(pose.age_s, 2),
-            "anchor_age_s": getattr(pose, "anchor_age_s", None)}
+
+    def rounded(value, digits):
+        return None if value is None else round(value, digits)
+
+    return {"x": rounded(pose.x, 3), "y": rounded(pose.y, 3), "yaw": rounded(pose.yaw, 3), "state": pose.state,
+            "source": pose.source, "dead_reckon_m": rounded(pose.dead_reckon_m, 3),
+            "age_s": rounded(pose.age_s, 2), "anchor_age_s": getattr(pose, "anchor_age_s", None)}
 
 
 class LiveTrip:

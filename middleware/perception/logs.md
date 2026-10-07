@@ -1141,3 +1141,41 @@
 - gate 변화: 없음. SOURCE만
 - 결정: D-468, D-47 addendum. G-15(D-480)
 - 교훈: 벽-모서리 점수는 높이 방향으로 들쭉날쭉하다. 한 실행의 점수 band가 아니라 실행 간 ci95가 실제 오차를 보여 준다
+## 2026-10-07 · uncommitted · fix(perception): IR 좌우 두 띠는 선 하나가 아니다(횡단보도 중앙 위상만)
+
+- 변경: `detect_ir_line`이 좌·우 채널이 모두 `min_white` 이상이고 가운데가 그보다 `min_contrast` 이상 어두우면 `None`(선 없음)을 낸다. 260919 지도의 횡단보도 두 곳은 줄무늬가 차로와 나란히 40 mm 간격이라, 중앙 주행에서 좌·우 IR이 약 12 cm 동안 줄무늬 위, 가운데 IR이 그 사이 바닥에 있다. 이전에는 무게중심 0·신뢰도 0.96이 나와 D-344 §12 IR 가드가 `centre`(`lane_departure` HOLD)로 읽었다. 25–28 mm 경계선 하나는 가운데+한쪽까지만 덮으므로 실제 이탈 신호는 그대로다. 관측 계약·CORE는 바꾸지 않았다. **남은 것:** 줄무늬는 폭 25 mm·피치 40 mm라 차로 중심에서 12.5–27.5 mm 비키면 가운데 IR만 줄무늬 위다. 이 위상은 경계선 하나가 가운데 밑에 있는 것과 IR로 구별되지 않아 가짜 `lane_departure`가 남는다. 횡단보도 구간은 별도 ADR(D-344 §12 보강 2026-10-07)에서 정한다.
+- 증거: `test_line_modes.py` 추가 3건(두 띠·역극성, 임계 경계, 한 띠 유지. 수정 전 실패 재현). 독립 리뷰가 위상 표를 0.5 mm 래스터로 확인. 횡단보도 위치·줄무늬 방향은 STL 도색 래스터로 확인(스크래치, 저장소 밖).
+- gate 변화: 없음. IR 가드는 기본 꺼짐이며 장치 IR 교정·실주행 확인은 별도다.
+
+## 2026-10-07 · uncommitted · docs(adr): 횡단보도 구간 ADR 번호는 D-491
+
+- 변경: 위 항목의 "별도 ADR"은 D-491(Proposed)이다. D-488은 main에서 다른 ADR이 먼저 썼다.
+- 증거: `rosy_harness.py lint` ADR 번호 검사.
+- gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · feat(map): 260919 횡단보도 구간을 lane_graph.yaml에 (D-491 §3)
+
+- 변경: `scripts/lane_graph.py`가 STL의 짧은 도색 성분(횡단보도 막대)을 20 mm 팽창으로 묶어 횡단보도마다 막대를 감싸는 사각형 하나를 `crosswalks[].polygon`(map 좌표, m)으로 낸다. 래스터 2 mm라 변은 ±2 mm다. 도색 래스터는 `paint_masks`로 `LineField`와 함께 쓴다. 두 구간: 중심 (−1.27, −0.146) 146×120 mm, (0.369, −0.510) 120×144 mm.
+- 증거: `test_lane_graph.py` 추가 1건(두 구간, 변 길이), 기존 바이트 결정성 시험 PASS.
+- gate 변화: 없음. 지도 구간을 쓰는 소비자(CORE IR 가드)는 아직 없다. CAMERA_LINE 중 CORE에는 지도 자세가 없어 이 구간은 지도 주행(D-481)·시뮬 검증용이다.
+
+## 2026-10-07 · uncommitted · feat(config): D-495 lane_corner_turning 로봇 기본값 켜짐
+- 변경: `config/line_follow.yaml` `lane_corner_turning: true`. keep 모드 keeper의 교차로 HOLD가 기본으로 나온다(기본 `camera_lane_mode: line`에서는 효과 없음). 운영자 겹 허용 키가 아니어서 끄려면 페이로드 변경이 필요하다. 고정 시험과 주석 갱신
+- 증거: `test_line_junction.py` 44 PASS, `test_line_junction_api.py` 9 PASS. services·api_web·contracts/foundation·line-follow 문서·perception 배선 1968 PASS·18 skip, gateway 2188 PASS·17 skip, perception 2704 PASS·109 skip, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM(모델 PC map_v2_fleet_real)·DEVICE 미실행
+- 결정: D-495 (Proposed), 구현 메모 2026-10-07
+- 교훈: 기본값을 켜는 ADR은 그 값의 전제(`recovery_local_enabled`, keep 모드)와 되돌리기 경로를 코드로 확인해야 한다
+
+## 2026-10-07 · uncommitted · feat(observer): keep_debug에 corner_turning
+- 변경: `line_observer_node`의 keep_debug 묶음에 `corner_turning`(파라미터 `lane_corner_turning`)을 싣는다. CORE가 교차로 회전 지원을 판정하는 근거. 배선 시험 고정
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep 1969 PASS·18 skip, gateway 2190 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows; 동시 실행 중 `test_site_rooms.py` 자식 프로세스 시간 시험 한 번 실패, 단독·재실행 통과)
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE 미실행
+- 결정: D-495 (Proposed) 결정 개정 2026-10-07
+- 교훈: 인식 파라미터는 CORE 설정이 아니다. 능력 판정은 살아 있는 증거로 한다
+
+## 2026-10-07 · uncommitted · fix(config): D-495 검토 H1 camera_x_offset_m URDF 공칭
+- 변경: `line_follow.yaml` `camera_x_offset_m: 0.03317`(camera_nominal.yaml `x_offset_m`). REAL Gazebo launch는 이 값과 `lane_corner_turning`을 덮어쓰지 않는다(시험 고정)
+- 증거: services·api_web·contracts/foundation·line-follow 문서·perception 배선/lane_keep·Gazebo launch 고정 시험 2007 PASS·18 skip, gateway 2192 PASS·17 skip, 문서 시험 1 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows). 검토 탐침 `probe_lag.py`·`probe_junction.py` 재실행
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-495 수용 점검표
+- 결정: D-495 (Proposed) 독립 안전 검토 반영 2026-10-07
+- 교훈: 지연이 있는 odom 위의 닫힌 고리는 지연 보정과 머무름 확인이 있어야 허용 오차를 지킨다

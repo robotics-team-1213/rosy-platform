@@ -49,14 +49,23 @@ def test_empty_queues_disappear_by_attribute_not_style():
     assert "parentElement.hidden" in source
 
 
-def test_the_queues_panel_is_pinned_to_the_left_column():
-    """배치는 grid 영역이 고정돼 있다(D-201 예외가 먼저). 2026-10-02 회차: 오프라인
-    로봇이 큐를 채우게 된 뒤 지도 아래 칸은 위반이었다(1920에서 큐 상단 963px).
-    큐는 첫 행, 지도는 둘째 행이다."""
+def test_the_queues_panel_heads_the_rail():
+    """D-493 — 지도가 왼쪽 열 전체를 쓰고(3 : 2), 예외 큐는 오른쪽 열 맨 위다(D-201 예외가 먼저).
+    2026-10-02 회차의 교훈(큐가 지도 아래 963px)은 그대로다: 큐는 지도 밑으로 가지 않는다."""
     styles = (WEB / "styles.css").read_text(encoding="utf-8")
-    assert ".queues-panel { grid-column: 1; grid-row: 1; }" in styles
+    shell = CONSOLE.read_text(encoding="utf-8")
+    assert "main { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);" in styles
     assert ".console-primary { grid-column: 1; }" in styles
-    assert '.console-primary > .panel[aria-labelledby="map-heading"] {\n    grid-column: 1;\n    grid-row: 2;' in styles
+    assert "const layoutPanels = [document.querySelector('.queues-panel')," in shell
+    assert "const MAP_PANEL = 2;" in shell
+
+
+def test_queue_and_roster_attention_share_one_rule():
+    """D-493 — 카드에 빨간 표지(릴레이 끊김)가 붙은 로봇이 큐에 없던 회차(2026-10-07)의 회귀 방지."""
+    source = ROSTER.read_text(encoding="utf-8")
+    assert "function attentionItems(robot)" in source
+    assert "return view.stateUnavailable || attentionItems(robot).length > 0;" in source
+    assert "for (const item of attentionItems(r))" in source
 
 
 def test_both_queues_exist_in_the_markup():

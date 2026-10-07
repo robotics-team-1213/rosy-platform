@@ -107,7 +107,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="D-488: lane_graph.yaml imported as the first active site map when "
                               "the store has none (stored in --tasks-db, else memory)")
     console.add_argument("--site-config", default=None, type=Path,
-                         help="site YAML; its fleet.routing section sets the D-490 planner costs")
+                         help="site YAML; its fleet.routing section sets the D-490 planner costs, "
+                              "fleet.map_pose the D-494 trip map pose limits")
     console.add_argument("--no-localization-service", dest="localization_service",
                          action="store_false", default=True,
                          help="D-395: do not run the Fleet localization service (on by default)")
@@ -504,6 +505,7 @@ def run_console(args: argparse.Namespace) -> None:
         print(f"warning: --site-lane-graph/--site-lane-paint map id {map_id!r} matches no sighting "
               "source; that lane entry is served to no camera", file=sys.stderr, flush=True)
     site_maps, routing_config = _build_site_map(args, tasks_db)
+    map_pose_config = _map_pose_config(args)
     vision_preview_secret_env = getattr(args, "vision_preview_secret_env", None)
     vision_preview_secret = (os.environ.get(vision_preview_secret_env)
                              if vision_preview_secret_env else None)
@@ -556,7 +558,7 @@ def run_console(args: argparse.Namespace) -> None:
                      central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
-                     trip_config=_trip_config(args))
+                     map_pose_config=map_pose_config, trip_config=_trip_config(args))
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",
@@ -609,6 +611,21 @@ def _build_site_map(args, tasks_db):
         print("warning: no active D-488 site map; /route and /trip are refused until one is "
               "imported (--site-map-import) or activated", file=sys.stderr, flush=True)
     return site_maps, routing_config
+
+
+def _map_pose_config(args):
+    """D-494 3: the site YAML's ``fleet.map_pose`` limits; defaults without a site config."""
+    import yaml
+
+    from fleet.localization.map_pose import MapPoseConfig
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        return MapPoseConfig.from_mapping((site_config.get("fleet") or {}).get("map_pose"))
+    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"map_pose config: {exc}")
 
 
 def _relax_retired_sighting_targets(sources, *, known: set, retired: set):

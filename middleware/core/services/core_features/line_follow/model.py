@@ -118,7 +118,7 @@ class LineFollowConfig:
     ir_guard_turn: float = 0.5
     ir_guard_speed_scale: float = 0.5
     # D-407 막힘 복구. 관제에 묻고 recovery_ask_s 안에 답이 없으면(또는 관제 연결이 없으면)
-    # 로컬 후진·재판단. 로컬 복구는 로봇별로 켠다(self-mask 측정 뒤).
+    # 로컬 후진·재판단. 모델 기본값은 꺼짐이고, 로봇 기본값(rosy_default.yaml)은 D-495부터 켜짐이다.
     recovery_local_enabled: bool = False
     recovery_ask_s: float = 15.0
     recovery_back_m: float = 0.08
@@ -155,17 +155,41 @@ class LineFollowConfig:
     obstacle_resume_hysteresis_m: float = 0.03
     obstacle_ultrasonic_half_angle_deg: float = 15.0
     obstacle_ultrasonic_stale_s: float = 0.3
-    # D-476 expected-road bridge: on a short lane loss right after contained following, drive
-    # the D-468 checkpoint lane's extension slowly. Distance ladder from D-384 (measured odom
+    # D-476 expected-road bridge: on a short lane loss right after confident following, drive
+    # the followed lane's straight extension slowly. Distance ladder from D-384 (measured odom
     # travel x bridge_distance_scale: full speed below coast, x slow_scale below slow, then
-    # stop) and done by lost_after_s - bridge_time_margin_s. Off until replay/sim/device pass.
+    # stop) and done by lost_after_s - bridge_time_margin_s. Off by default, model and robot
+    # (D-476 rev 1: an enabled bridge needs ir_guard_enabled and a floor basis).
     bridge_enabled: bool = False
+    # Arming (D-476 rev 2026-10-07): the last bridge_arm_frames camera frames all visible with
+    # confidence >= bridge_arm_confidence and the tick TRACKING. 0.5 sits above the 0.35 follow
+    # floor, so frames that steer at under a quarter of the confidence scale never arm; 3 frames
+    # is the D-468 reacquisition count and spans about one stale_after_s (0.3 s) at 7.7-10 Hz.
+    # Straight only: |error| <= bridge_arm_max_error (0.1: the follower's own curve_scale
+    # 1 - 0.65|e| slows < 7 %, i.e. it treats this as straight) and |angular| <=
+    # bridge_arm_max_angular (0.08 = steering_gain 0.8 x 0.1). All four are plausibility gates
+    # until D-476 step 1 replay justifies them; none is device evidence.
+    bridge_arm_confidence: float = 0.5
+    bridge_arm_frames: int = 3
+    bridge_arm_max_error: float = 0.1
+    bridge_arm_max_angular: float = 0.08
+    # D-476 rev 1 site acceptance: nothing in CORE sees a drop-off ahead. Without the live
+    # enforce floor proof, an enabled bridge needs this true (the site has no drop-off or hole
+    # within bridge reach); the enforce floor proof replaces it later.
+    bridge_site_no_dropoffs: bool = False
     bridge_lookahead_m: float = 0.10
     bridge_coast_m: float = 0.10
     bridge_slow_m: float = 0.25
     bridge_slow_scale: float = 0.5
     bridge_distance_scale: float = 1.08
     bridge_time_margin_s: float = 0.5
+    # D-495 bounded junction turn (review M5/M6): consecutive fresh confident lane frames that
+    # count as reacquired, and the actuation/odom latency the turn stops early for.
+    junction_reacquire_frames: int = 3
+    junction_turn_lead_s: float = 0.15
+    # Review L3: odom speeds below which the robot counts as standing still (turn start/settle).
+    junction_still_linear: float = 0.01
+    junction_still_angular: float = 0.05
     # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the producer's
     # uncertainty_m. 0 means every URDF footprint corner is inside only if uncertainty_m bounds
     # every lateral error; jitter and footprint tolerance not in it go in this body margin. The
@@ -179,6 +203,7 @@ class LineFollowConfig:
         self._check_recovery()
         self._check_body_stop()
         self._check_bridge()
+        self._check_junction()
         values = (self.cruise_speed, self.max_linear, self.steering_gain,
                   self.max_angular, self.min_confidence,
                   self.stale_after_s, self.lost_after_s)
@@ -273,11 +298,22 @@ class LineFollowConfig:
         if self.body_rotation_radius_m is not None and not 0.0 < self.body_rotation_radius_m <= 0.5:
             raise ValueError("body_rotation_radius_m must be in (0, 0.5]")
 
+    def _check_junction(self) -> None:
+        if type(self.junction_reacquire_frames) is not int or not 1 <= self.junction_reacquire_frames <= 20:
+            raise ValueError("junction_reacquire_frames must be a whole number in [1, 20]")
+        if not _finite(self.junction_turn_lead_s) or not 0.0 <= self.junction_turn_lead_s <= 1.0:
+            raise ValueError("junction_turn_lead_s must be in [0, 1]")
+        if not _finite(self.junction_still_linear) or not 0.0 < self.junction_still_linear <= 0.05:
+            raise ValueError("junction_still_linear must be in (0, 0.05] m/s")
+        if not _finite(self.junction_still_angular) or not 0.0 < self.junction_still_angular <= 0.2:
+            raise ValueError("junction_still_angular must be in (0, 0.2] rad/s")
+
     def _check_bridge(self) -> None:
         if type(self.bridge_enabled) is not bool:
             raise ValueError("bridge_enabled must be a boolean")
         values = (self.bridge_lookahead_m, self.bridge_coast_m, self.bridge_slow_m,
-                  self.bridge_slow_scale, self.bridge_distance_scale, self.bridge_time_margin_s)
+                  self.bridge_slow_scale, self.bridge_distance_scale, self.bridge_time_margin_s,
+                  self.bridge_arm_confidence, self.bridge_arm_max_error, self.bridge_arm_max_angular)
         if not all(_finite(value) for value in values):
             raise ValueError("line-follow bridge config must be finite")
         if not 0.0 < self.bridge_lookahead_m <= 0.5:
@@ -290,6 +326,21 @@ class LineFollowConfig:
             raise ValueError("bridge_distance_scale must be in [1, 2]")
         if not 0.0 < self.bridge_time_margin_s <= 2.0:
             raise ValueError("bridge_time_margin_s must be in (0, 2]")
+        if not 0.0 < self.bridge_arm_confidence <= 1.0:
+            raise ValueError("bridge_arm_confidence must be in (0, 1]")
+        if type(self.bridge_arm_frames) is not int or not 1 <= self.bridge_arm_frames <= 30:
+            raise ValueError("bridge_arm_frames must be an integer in [1, 30]")
+        if not (0.0 < self.bridge_arm_max_error <= 1.0
+                and 0.0 < self.bridge_arm_max_angular <= self.max_angular):
+            raise ValueError("bridge_arm_max_error must be in (0, 1] and bridge_arm_max_angular "
+                             "in (0, max_angular]")
+        if type(self.bridge_site_no_dropoffs) is not bool:
+            raise ValueError("bridge_site_no_dropoffs must be a boolean")
+        if self.bridge_enabled and self.bridge_arm_confidence < self.min_confidence:
+            raise ValueError("bridge_enabled needs bridge_arm_confidence >= min_confidence")
+        if self.bridge_enabled and not self.ir_guard_enabled:
+            # D-476 rev 1: the IR guard is the bridge's only lateral fence.
+            raise ValueError("bridge_enabled needs ir_guard_enabled")
         if self.bridge_enabled and not self.bridge_time_margin_s < self.lost_after_s:
             # Only an enabled bridge needs time inside the LOST clock; an off one changes nothing.
             raise ValueError("bridge_enabled needs bridge_time_margin_s below lost_after_s")

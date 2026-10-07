@@ -24,7 +24,9 @@ from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
-from fleet.server.trip_ports import HttpLaneJunction, MapPose, TripCaps, TripConfig
+from fleet.localization.map_pose import MapPose
+from fleet.server.console_view import TripCaps
+from fleet.server.trip_ports import HttpLaneJunction, TripConfig
 from fleet.server.trip_runner import TripError, TripRunner
 from fleet.site_map import SiteMap, from_lane_graph
 from fleet.swarm.robots import RobotEndpoint
@@ -222,7 +224,7 @@ def _setup(site_map=None, caps=LANE, path=None, **config):
     ports = Ports(caps)
     store = SiteMapStore(path, clock=lambda: ports.now)
     store.import_if_empty(site_map or from_lane_graph(LANE_GRAPH), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports, poses=ports,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for, poses=ports,
                         junction=ports, goal=ports.goal, cancel_goal=ports.cancel_goal,
                         blocked=lambda: ports.blocked, clock=lambda: ports.now, config=TripConfig(**config))
     return runner, store, ports
@@ -962,7 +964,7 @@ def _app(tmp_path, ports):
     users = {sha256(b"operator-token").hexdigest(): {"principal_id": "bob", "role": "operator"},
              sha256(b"viewer-token").hexdigest(): {"principal_id": "vic", "role": "viewer"}}
     app = create_app(console, task_service=tasks, site_users=users, site_maps=store,
-                     trip_caps=ports, map_pose=ports, lane_junction=ports)
+                     trip_caps_port=ports.caps_for, map_pose_port=ports, lane_junction=ports)
     x, y, yaw = store.active()[2].arcs["ring_s:fwd"].point_at(0.1)
     robot._state = {"robot_id": "rosy_60", "pose": {"x": x, "y": y, "yaw": yaw},
                     "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
@@ -1447,3 +1449,16 @@ def test_a_trip_store_failure_never_replaces_the_stop_result(tmp_path, caplog):
     assert estop.status_code == 200 and estop.json()["total"] == 1 and ("estop",) in robot.calls
     assert cancel.status_code == 200 and off.status_code == 200
     assert sum("could not end the trip" in r.message for r in caplog.records) == 3
+
+
+def test_create_app_wires_the_real_trip_providers(tmp_path):
+    from test_site_map_trip import _app as plain_app
+
+    from fleet.server.map_pose_service import MapPoseService
+    from fleet.server.trip_ports import HttpLaneJunction
+
+    client, _tasks, _store, _robot = plain_app(tmp_path)
+    runner = client.app.state.trip_runner
+    assert runner._caps.__name__ == "_trip_caps"  # the planner's capability closure (install_trip_routes)
+    assert isinstance(runner._poses, MapPoseService) and runner._poses is client.app.state.map_pose
+    assert isinstance(runner._junction, HttpLaneJunction)

@@ -14,7 +14,7 @@ const W = 800, H = 480;
 
 $('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
-const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, point: null, running: null};
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, running: null};
 const TRIP_POLL_MS = 1000;
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
@@ -116,8 +116,14 @@ function syncButtons() {
       : (state.dirty ? '저장 안 된 초안' : '저장된 초안 없음'),
   state.loadState === 'pending' ? 'pending' : state.loadState === 'error' ? 'error'
     : state.draft?.revision ? 'ready' : 'empty');
-  gate('trip-plan', reason || (!state.active ? '활성 지도가 없습니다' : !$('trip-robot').options.length ? '등록된 로봇이 없습니다 · 관리자에게 로봇 등록을 요청하세요' : !$('trip-robot').value ? '로봇을 고르세요'
-    : ($('trip-pick').checked ? state.point : $('trip-place').value) ? '' : '목적지를 고르세요'));
+  const tripRobot = $('trip-robot');
+  const robotReason = state.robotsError ? '로봇 상태 확인 불가 · 다시 접속하세요'
+    : !tripRobot.options.length ? '등록된 로봇이 없습니다 · 관리자에게 로봇 등록을 요청하세요'
+    : ![...tripRobot.options].some(option => option.dataset.online === 'true') ? '연결된 로봇이 없습니다 · 로봇 연결을 확인하세요'
+    : !tripRobot.value ? '로봇을 고르세요'
+    : tripRobot.selectedOptions[0]?.dataset.online !== 'true' ? '선택한 로봇의 연결을 확인하세요' : '';
+  const target = $('trip-pick').checked ? state.point : $('trip-place').value;
+  gate('trip-plan', reason || (!state.active ? '활성 지도가 없습니다' : robotReason || (target ? '' : '목적지를 고르세요')));
   gate('trip-pick', reason);
   gate('estop', reason);
   gate('trip-start', tripStartReason({role: state.role, plan: state.plan, active: state.active, running: state.running}));
@@ -143,12 +149,18 @@ async function pollTrips() {
 pollTrips();
 
 async function load() {
+  state.planEpoch += 1;
   let active = null;
   try { active = await request('/api/fleet/site-map/active'); } catch (error) {
     if (error.status !== 404) throw error;
   }
   const draft = await request('/api/fleet/site-map/draft');
-  const robots = (await request('/api/fleet/state')).robots || [];
+  let robots = [];
+  state.robotsError = false;
+  try { robots = (await request('/api/fleet/state')).robots || []; } catch (error) {
+    if (error.status === 401 || error.status === 403) throw error;
+    state.robotsError = true;
+  }
   state.active = active;
   state.draft = draft;
   state.working = draft.map ? draft.map
@@ -157,8 +169,17 @@ async function load() {
   state.loadState = 'ready';
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map(place => new Option(`${place.name} (${place.id})`, place.id)));
-  $('trip-robot').replaceChildren(...robots.map(robot => new Option(robot.robot_id, robot.robot_id)));
-  if (!robots.length) status('trip-summary', '경로 미리보기 불가 · 등록된 로봇이 없습니다. 관리자에게 로봇 등록을 요청하세요.', 'empty');
+  $('trip-robot').replaceChildren(...robots.map(robot => {
+    const safety = robot.state?.safety?.estop;
+    const stateLabel = !robot.online ? '연결 끊김' : safety === true ? '비상 정지'
+      : safety === false ? '' : '정지 상태 미확인';
+    const option = new Option(stateLabel ? `${robot.robot_id} · ${stateLabel}` : robot.robot_id, robot.robot_id);
+    option.dataset.online = robot.online ? 'true' : 'false';
+    return option;
+  }));
+  if (state.robotsError) status('trip-summary', '경로 미리보기 불가 · 로봇 상태 확인 불가. 다시 접속하세요.', 'error');
+  else if (!robots.length) status('trip-summary', '경로 미리보기 불가 · 등록된 로봇이 없습니다. 관리자에게 로봇 등록을 요청하세요.', 'empty');
+  else if (!robots.some(robot => robot.online)) status('trip-summary', '경로 미리보기 불가 · 연결된 로봇이 없습니다. 로봇 연결을 확인하세요.', 'empty');
   select(null);
   syncButtons();
 }
@@ -174,6 +195,8 @@ $('connect').addEventListener('click', async () => {
   const ticker = setInterval(() => notice(`접속 중 · ${Math.floor((Date.now() - started) / 1000)}초 경과`), 1000);
   state.role = null;
   state.loadState = 'pending';
+  state.planEpoch += 1;
+  state.robotsError = false;
   state.active = state.draft = state.working = state.selected = state.plan = state.point = state.running = null;
   state.dirty = false;
   $('session').textContent = '접속 전';
@@ -191,10 +214,15 @@ $('connect').addEventListener('click', async () => {
     $('session').textContent = `${session.principal_id} · ${session.role}`;
     syncButtons();
     await load();
-    notice(!state.active && !state.working ? '활성 지도와 초안이 없습니다. 관리자에게 현장 지도 가져오기를 요청하세요.'
+    notice(state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
+      : !state.active && !state.working ? '활성 지도와 초안이 없습니다. 관리자에게 현장 지도 가져오기를 요청하세요.'
       : !state.active ? '활성 지도는 없습니다. 초안을 확인하고 활성화하세요.' : '지도를 읽었습니다.');
   } catch (error) {
     state.loadState = error.status === 401 ? 'idle' : 'error';
+    if (error.status === 401 || error.status === 403) {
+      state.role = null;
+      $('session').textContent = '접속 전';
+    }
     render();
     syncButtons();
     notice(siteMapErrorText(error));
@@ -206,6 +234,15 @@ $('connect').addEventListener('click', async () => {
 
 $('map-source').addEventListener('change', () => render());
 
+function clearPlan() {
+  state.planEpoch += 1;
+  state.plan = null;
+  status('trip-summary', '계산 전 · 실행은 하지 않습니다', 'empty');
+  $('trip-actions').replaceChildren();
+  render();
+  syncButtons();
+}
+
 $('site-map-svg').addEventListener('click', event => {
   if ($('trip-pick').checked && $('map-source').value === 'active' && state.view) {
     const svg = event.currentTarget;
@@ -213,8 +250,7 @@ $('site-map-svg').addEventListener('click', event => {
     const [x, y] = state.view.toMap(at.x, at.y);
     state.point = {x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000};
     $('trip-point').textContent = `찍은 좌표 x ${state.point.x} m, y ${state.point.y} m`;
-    render();
-    syncButtons();
+    clearPlan();
     return;
   }
   const target = event.target.closest('[data-place], [data-edge]');
@@ -225,11 +261,10 @@ $('site-map-svg').addEventListener('click', event => {
 $('trip-pick').addEventListener('change', () => {
   $('site-map-svg').classList.toggle('picking', $('trip-pick').checked);
   if ($('trip-pick').checked) $('map-source').value = 'active';  // trips plan on the active map
-  render();
-  syncButtons();
+  clearPlan();
 });
-$('trip-place').addEventListener('change', syncButtons);
-$('trip-robot').addEventListener('change', syncButtons);
+$('trip-place').addEventListener('change', clearPlan);
+$('trip-robot').addEventListener('change', clearPlan);
 
 $('apply-edit').addEventListener('click', () => guarded(async () => {
   const sel = state.selected;
@@ -265,12 +300,16 @@ $('activate').addEventListener('click', () => guarded(async () => {
 }));
 
 $('trip-plan').addEventListener('click', () => guarded(async () => {
+  const epoch = ++state.planEpoch;
   const to = $('trip-pick').checked ? state.point : $('trip-place').value;
   state.plan = null;
   try {
-    state.plan = await request(`/api/fleet/robots/${encodeURIComponent($('trip-robot').value)}/trip`, {
+    const plan = await request(`/api/fleet/robots/${encodeURIComponent($('trip-robot').value)}/trip`, {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({to})});
+    if (epoch !== state.planEpoch) return;
+    state.plan = plan;
   } catch (error) {
+    if (epoch !== state.planEpoch) return;
     status('trip-summary', error.code ? tripErrorText(error.code, error.detail) : error.message, 'error');
     $('trip-actions').replaceChildren();
     render();

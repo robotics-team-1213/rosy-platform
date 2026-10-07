@@ -28,7 +28,7 @@ from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F40
 
 from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequest, SshPairRequest  # noqa: F401
 from core_common.protocol.access import ConnectionInfo, SiteRoomsSnapshot  # noqa: F401
-from core_common.protocol.localization import LocalizationStatus
+from core_common.protocol.localization import LocalizationStatus, OdomPose
 from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  # noqa: F401
 from core_common.protocol.cell_app import (  # noqa: F401
     CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest, CellOperatorCheckpoint)
@@ -1018,6 +1018,18 @@ class LineStuckStatus(BaseModel):
     decisions: list[str] = Field(default_factory=list)
 
 
+class LineJunctionStatus(BaseModel):
+    """D-494 decision 4 / D-495: the one pending next-junction instruction and its progress."""
+
+    pending_action: Optional[str] = None  # straight | left | right | stop
+    place_id: Optional[str] = None
+    # idle | armed | executing | waiting | unresolved | turning | advancing | reacquiring | aborted
+    state: str = "idle"
+    seq: int = 0
+    turn_deg: Optional[float] = None      # D-495: signed bounded turn (left +)
+    reason: Optional[str] = None          # D-495: why a maneuver aborted
+
+
 class LineFollowStatus(BaseModel):
     """Selected line source and the last fail-closed control decision (D-143)."""
 
@@ -1037,6 +1049,7 @@ class LineFollowStatus(BaseModel):
     stop_gap_m: Optional[float] = None
     clearance_source: Optional[str] = None
     stuck: Optional[LineStuckStatus] = None  # D-407: open stuck (None = not stuck)
+    junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-494 decision 4
 
 
 class TrafficPolicyStatus(BaseModel):
@@ -1179,6 +1192,7 @@ class StateSnapshot(BaseModel):
     #: v1.69 additive (D-395): state and pose frame; null from robots before D-395.
     localization: Optional[LocalizationStatus] = None
     safety_policy: Optional[SafetyPolicyStatus] = None  # D-400, v1.71 additive
+    odom_pose: Optional[OdomPose] = None  # D-494 2, v1.112 additive; null until odometry
 
 
 class HeartbeatPayload(BaseModel):

@@ -119,7 +119,7 @@ class TripRunner:
             if self._clock() - row["created_at"] > PLAN_TTL_S:
                 raise TripError(422, "TRIP_PLAN_EXPIRED", {"ttl_s": PLAN_TTL_S})
             graph = self._graph_for(plan["map_version"])
-            caps = await self._call(self._caps.caps_for(robot_id), "TRIP_ROBOT_CAPS_UNKNOWN")
+            caps = await self._call(self._caps(robot_id), "TRIP_ROBOT_CAPS_UNKNOWN")
             if caps is None:
                 raise TripError(422, "TRIP_ROBOT_CAPS_UNKNOWN")
             refused = unsupported(graph, plan["segments"], kind=caps.kind, modes=caps.modes,

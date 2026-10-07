@@ -16,16 +16,23 @@ _LOCAL_REASONS = {'following','lane_departure','line_not_visible','observation_s
 
 
 class LaneReturnDecisionMixin(LaneBridgeMixin):
-    def bind_return_motion(self, provider):
+    def bind_return_motion(self, provider, *, floor_proof_live=None, proof_configured=None):
         """Internal qualified sensor/swept-space probe (now, linear, angular) -> strict bool.
 
         Even a (0,0) probe requires floor validity and fresh sensor provenance.
         A true value establishes neither control authority nor camera calibration.
+        floor_proof_live () -> bool: False only when the worker floor proof cannot exist
+        (sensor adapter not enforce); D-476 then rests on its own basis. None = always live.
+        proof_configured () -> bool: the provider can say yes at all (D-495 junction_turn
+        capability); None = unknown, which reports no junction turn.
         """
-        if not callable(provider):
+        if not callable(provider) or any(f is not None and not callable(f)
+                                         for f in (floor_proof_live, proof_configured)):
             raise ValueError('return motion proof must be callable')
         with self._lock:
             self._return_motion=provider
+            self._floor_proof_live=floor_proof_live
+            self._return_proof_configured=proof_configured
             self._evidence_revision += 1
 
     def _return_probe(self, now, linear, angular):
@@ -53,26 +60,55 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
                 or abs(decision.linear)>min(self._config.max_linear,ceiling)
                 or abs(decision.angular)>self._angular_cap()):
             return False
+        if isinstance(self._bridge,dict):
+            if not self._bridge_body_clear(now):
+                return False
+            if not self._floor_proof_required():
+                return True
         return self._return_probe(now,decision.linear,decision.angular)
 
     def _apply_lane_return(self, now, decision):
         # D-476: a bridge continues only if this tick bridges again; any return path that
-        # does not (obstacle, stuck, mode) hands it back to D-468 once.
+        # does not (obstacle, stuck, mode) hands it back to D-468 once. An armed anchor lives
+        # one tick: only a tick that is itself confident following re-arms.
         bridge_state,self._bridge=self._bridge,None
         self._bridge_open=isinstance(bridge_state,dict)
         try:
             return self._lane_return_step(now,decision,bridge_state)
         finally:
             self._hand_back_bridge()
+            self._arm_bridge(now)
+
+    def _return_limits(self):
+        """(linear limit, angular cap, autonomous authority) for D-468 and D-476."""
+        c,obs=self._config,self._observation
+        ceiling=self._provided('linear_ceiling')
+        linear=(min(c.max_linear,float(ceiling)) if type(ceiling) in (int,float)
+                and math.isfinite(ceiling) else 0.)
+        angular=self._angular_cap()
+        authority=(self._provided('calibration_active') is False and linear>0 and angular>0
+            and (obs is None or obs.ground!='NOMINAL' or self._hold_s is not None))
+        return max(0.,linear),max(0.,angular),authority
+
+    def _bridge_alone(self, now, decision, state):
+        """D-476 without a D-468 controller (recovery_local_enabled false, or no containment):
+        bridge or None, and None falls through to today's HOLD/LOST path."""
+        if state is None:
+            return None
+        linear,_,authority=self._return_limits()
+        return self._bridge_step(now,state,self.return_evidence(now=now),authority,linear,decision)
 
     def _lane_return_step(self, now, decision, bridge_state):
         c=self._config
-        if self._mode is not LineFollowMode.CAMERA_LINE or not c.recovery_local_enabled:
+        if self._mode is not LineFollowMode.CAMERA_LINE:
             return None
+        if not c.recovery_local_enabled:
+            return self._bridge_alone(now,decision,bridge_state)
         obs=self._observation
         if self._return_controller is None:
             if obs is None or obs.containment is None:
-                return None  # Existing legacy observations retain their contract.
+                # Existing legacy observations retain their contract.
+                return self._bridge_alone(now,decision,bridge_state)
             if None in (c.body_front_x_m,c.body_rear_x_m,c.body_half_width_m):
                 return self._stop_decision('HOLD','lane_return_body_unknown')
             self._return_controller=ReturnController(Footprint(
@@ -90,16 +126,11 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
         if (self._status.state!='TRACKING' and reason not in _LOCAL_REASONS) or (obs and obs.quality_reason):
             return decision
         view=self.return_evidence(now=now)
-        ceiling=self._provided('linear_ceiling')
-        linear=(min(c.max_linear,float(ceiling)) if type(ceiling) in (int,float)
-                and math.isfinite(ceiling) else 0.)
-        angular=self._angular_cap()
-        authority=(self._provided('calibration_active') is False and linear>0 and angular>0
-            and (obs is None or obs.ground!='NOMINAL' or self._hold_s is not None))
+        linear,angular,authority=self._return_limits()
         floor=self._return_probe(now,0.,0.)
         speed=min(.03,max(0.,linear))
         turn=min(.15,max(0.,angular))
-        bridge=self._bridge_step(now,bridge_state,view,authority,max(0.,linear),decision)
+        bridge=self._bridge_step(now,bridge_state,view,authority,linear,decision)
         if bridge is None:
             self._hand_back_bridge()  # before D-468 plans its retrace this tick
         action=self._return_controller.tick(ReturnInput(now=now,pose=view.pose,
@@ -109,12 +140,9 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
             front_clear=self._return_probe(now,speed,0.),
             rear_clear=self._return_probe(now,-speed,0.),
             turn_clear=self._return_probe(now,0.,turn) and self._return_probe(now,0.,-turn),
-            linear_limit=max(0.,linear),angular_limit=max(0.,angular)))
+            linear_limit=linear,angular_limit=angular))
         if bridge is not None:
             return bridge  # D-468 only measured this tick; the bridge owns the twist.
-        if (c.bridge_enabled and action.phase=='tracking' and self._status.state=='TRACKING'
-                and self._return_controller.checkpoint is not None):
-            self._bridge='armed'
         if action.phase=='tracking' and not action.recovered:
             return decision
         if action.recovered:

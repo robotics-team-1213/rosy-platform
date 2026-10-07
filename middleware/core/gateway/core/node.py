@@ -74,7 +74,7 @@ class RosyCoreNode(Node):
 
         from core.bridge.control_sensor_adapter import ControlSensorConfig, build_control_adapter
         from core.lidar_mount import resolve_lidar_forward_deg
-        from core.line_follow_wiring import bind_lane_return_motion
+        from core.line_follow_wiring import bind_lane_return_motion, check_bridge_floor_basis
         from core.safety_params import resolve_safety_params, simulation_sensors
         from core.safety_policy_status import safety_policy_block
         from core_common.config import local_overlay
@@ -114,6 +114,7 @@ class RosyCoreNode(Node):
         for note in notes:
             self.get_logger().warning(note)
         self.core.control_adapter = self.control_adapter
+        check_bridge_floor_basis(self.core.line_follow.config, self.control_adapter.config.mode)
         self.control_adapter.bind_safety(self.core.safety)
         self.core.line_follow.use_lidar_forward(forward_deg, forward_source)
         # Under use_sim_time the line clock is sim seconds (traffic_gate.line_clock); the policy
