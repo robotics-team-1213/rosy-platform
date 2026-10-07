@@ -1241,3 +1241,9 @@
 - gate 변화: 없음. 호스트 SOURCE만 확인했고 보정 승인·장치 녹화·주행 수용은 남음
 - 결정: D-364 재생 요구와 2026-10-08 영상 조사 계획의 진단 증거
 - 교훈: nominal이라는 출처 이름만으로 당시 사용된 투영 숫자를 복원할 수 없다
+
+## 2026-10-08 · uncommitted · fix(perception): keep_debug 조립이 ground 이름표와 충돌해 매 프레임 죽던 것
+- 변경: `keep_debug_payload`의 지면 투영 인자를 위치 전용 `projector`로 바꿨다. 노드가 metadata로 넘기는 `ground=<이름표>`와 같은 이름이라 첫 카메라 프레임에서 `TypeError: got multiple values for argument 'ground'`로 line_observer가 죽고 keep_debug·junction 능력이 사라졌다(2d87d53b1, D-507 SIM 2회차에서 발견)
+- 증거: `test_lane_debug.py` 14건. 새 시험은 고치기 전 코드에서 실패
+- gate 변화: 없음
+- 교훈: 디버그 묶음 조립 함수는 노드가 실제로 넘기는 키워드로 시험한다

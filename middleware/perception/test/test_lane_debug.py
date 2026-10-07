@@ -28,6 +28,12 @@ def test_keep_debug_records_the_effective_ground_and_preserves_decision_fields()
     assert keep_debug_payload(last, None, CAM_X, **metadata)["ground_projection"] is None
 
 
+def test_keep_debug_takes_a_ground_label_beside_the_projection():
+    """line_observer_node passes ground=<label> in metadata (2026-10-08 crash on every frame)."""
+    payload = keep_debug_payload({}, GROUND, CAM_X, ground="nominal", stamp=1.0)
+    assert payload["ground"] == "nominal" and payload["ground_projection"]["height_m"] == GROUND.height_m
+
+
 def _frame_and_tracker():
     t = LaneBoundaryTracker(camera_x_offset_m=CAM_X)
     world = lane(STRAIGHT)
