@@ -240,9 +240,9 @@ function buildHud() {
   const hud = el("div", null, {"data-drive-hud": ""});
   const gauge = el("div", null, {"data-drive-gauge": ""});
   gauge.append(
-    el("span", "0.00", {"data-drive-fact": "speed"}),
+    el("span", "—", {"data-drive-fact": "speed"}),
     el("ui-text", "m/s", {scale: "unit"}),
-    el("span", "· 0°/s", {"data-drive-fact": "turn"}),
+    el("span", "· 속도 확인 중", {"data-drive-fact": "turn"}),
   );
   const motion = el("span", MODE_LABEL.IDLE, {"data-drive-motion": "", "data-kind": "idle"});
   const cap = el("span", "", {"data-drive-fact": "cap"});
