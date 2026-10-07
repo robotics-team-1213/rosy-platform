@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · fix(line_follow): 회전 뒤 unresolved도 그 교차로 실행 완료로 기록한다
+- 2026-10-07 · uncommitted · fix(line_follow): 모드 선택 직후 교차로 회전은 첫 odom을 기다린다
 - 2026-10-07 · uncommitted · test(line_follow): D-495/D-498 교차로 회전 SIM 결과 기록
 - 2026-10-07 · uncommitted · feat(line_follow): NOMINAL 지면 횡단보도 구간과 앞뒤 거리 여유 (D-491 개정)
 - 2026-10-07 · uncommitted · feat(line_follow): D-498 교차로 회전의 현장 근거
-- 2026-10-07 · uncommitted · test(line_follow): 260919 유격을 STL·URDF에서
-- 2026-10-07 · uncommitted · fix(line_follow): 횡단보도 휴식은 회전·차로 이탈·거리 상한에서 끝난다 (D-491 리뷰)

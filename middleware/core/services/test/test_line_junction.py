@@ -386,7 +386,27 @@ def test_no_fresh_odom_at_the_junction_aborts_before_turning():
     rig.send('left', turn_deg=90.)
     rig.now += .3
     decision, status = rig.step(junction=True, pose=False)
+    assert (status.junction.state, status.reason, decision.linear, decision.angular) == (
+        'armed', 'junction_stopping', 0., 0.)                 # waits up to POSE_MAX_AGE_S
+    waited_from = rig.now
+    while status.junction.state == 'armed':
+        decision, status = rig.step(junction=True, pose=False)
     assert (status.junction.state, status.junction.reason, decision.angular) == ('aborted', 'odom', 0.)
+    assert .3 < rig.now - waited_from <= .35
+
+
+def test_turn_armed_right_after_mode_select_waits_for_the_first_odom_sample():
+    """D-495 SIM finding 3: PUT CAMERA_LINE empties the pose trail; a turn armed at a junction
+    already in view must wait for the first odom sample, not abort 'odom'."""
+    rig = Rig()                                               # set_mode: no odom sample yet
+    assert rig.send('right', turn_deg=-90.) == (True, 1, 'armed')
+    decision, status = rig.step(junction=True, seen=False, pose=False)
+    assert (status.junction.state, status.state, status.reason) == ('armed', 'HOLD', 'junction_stopping')
+    assert (decision.linear, decision.angular) == (0., 0.)
+    decision, status = rig.step(junction=True, seen=False)    # first odom sample
+    assert status.junction.state == 'turning' and status.reason == 'junction_stopping'
+    decision, status = rig.turn_until('turning', seen=False)
+    assert status.junction.state == 'advancing' and abs(_yaw_error_deg(rig.yaw, -90.)) <= 5.
 
 
 def test_mode_change_and_estop_abort_and_the_next_session_starts_clean():
@@ -611,6 +631,36 @@ def test_abort_after_the_turn_also_counts_as_done():
     with pytest.raises(JunctionRefused) as refused:
         rig.send('left', turn_deg=45.)
     assert refused.value.code == 'JUNCTION_ALREADY_DONE'
+
+
+def _unresolved_by_travel(rig):
+    for _ in range(11):
+        rig.step(seen=False, dx=.019)
+
+
+def _unresolved_by_timeout(rig):
+    rig.m._junction['phase_at'] -= 5.1
+    rig.step(seen=False)
+
+
+def _unresolved_by_stuck(rig):
+    for _ in range(40):
+        rig.step(seen=False)
+
+
+@pytest.mark.parametrize('fail', [_unresolved_by_travel, _unresolved_by_timeout, _unresolved_by_stuck])
+def test_unresolved_after_the_turn_counts_as_done(fail):
+    """D-495 SIM finding 4: the entry heading is gone after the turn, so a resend of the same
+    place must be 409, not a second turn stacked on the first."""
+    rig = Rig(lost_after_s=1.)
+    _to_turning(rig, 45., advance_m=0.)
+    rig.turn_until('turning', seen=False)
+    fail(rig)
+    assert rig.m.status().junction.state == 'unresolved'
+    with pytest.raises(JunctionRefused) as refused:
+        rig.send('left', turn_deg=45., advance_m=0.)
+    assert refused.value.code == 'JUNCTION_ALREADY_DONE'
+    assert rig.m.set_junction('straight', 'J2', 10.)[0] is True          # next place clears it
 
 
 def test_straight_passed_is_done_for_that_place():
