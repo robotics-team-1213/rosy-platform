@@ -34,7 +34,6 @@ from .sensing.perception.lane import (
     detect_lane_error,
     line_observation_payload,
 )
-from .sensing.perception.keep_pivot import release_flip_on_pivot
 from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
@@ -51,6 +50,11 @@ from .sensing.perception.route_map import RouteMapFollower
 _READ_ONLY = ParameterDescriptor(read_only=True)
 #: 'keep' mode: a gap between camera frames longer than this resets the keeper.
 KEEP_MAX_FRAME_GAP_S = 0.5
+
+
+#: A spin in place: |wz| over half D-495's 0.3 rad/s turn floor, |vx| under CORE's 0.01 m/s still bound.
+def _spinning_in_place(twist):
+    return twist is not None and abs(twist[1]) > 0.15 and abs(twist[0]) < 0.01
 
 
 class LineObserverNode(Node):
@@ -444,16 +448,16 @@ class LineObserverNode(Node):
             elif mode == 'keep':
                 # A camera gap (or the first keep frame of this node) starts
                 # the keeper afresh: sides and steering remembered from before
-                # the gap may belong to another place.
+                # the gap may belong to another place. So does a spin in place (D-507: its swept view latched the flip hold).
                 image_stamp = (float(msg.header.stamp.sec)
                                + float(msg.header.stamp.nanosec) * 1e-9)
                 if (self._keep_last_stamp is None
-                        or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S):
+                        or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
+                        or _spinning_in_place(pose_if_fresh(self._odom_twist, self._odom_stamp, image_stamp))):
                     self._lane_keeper.reset()
                     if self._paint_worker is not None:
                         self._paint_worker.reset()
                 self._keep_last_stamp = image_stamp
-                release_flip_on_pivot(self._lane_keeper, pose_if_fresh(self._odom_twist, self._odom_stamp, image_stamp))
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
                 observation = self._lane_keeper.update(
