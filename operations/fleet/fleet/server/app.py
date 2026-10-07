@@ -521,6 +521,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.site_map_routes import install_site_map_routes
     from fleet.server.trip_routes import install_trip_routes
     from fleet.server.trip_ports import HttpLaneJunction, NoMapPose, NoTripCaps
+    from fleet.server.trip_guard import engaged, install_trip_guard, release_queue
     from fleet.server.trip_runner import TripConfig, TripRunner
     install_lane_route_routes(app, console=console, task_service=task_service,
                               site_maps=site_maps, require_operator=require_operator,
@@ -529,9 +530,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps or NoTripCaps(), poses=map_pose or NoMapPose(),
                              junction=lane_junction or HttpLaneJunction(console.clients),
-                             goal=partial(console.goal, trip=True), cancel_goal=console.cancel,
-                             config=trip_config or TripConfig())
-    console.trip_busy = trip_runner.robot_busy
+                             goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
+                             cancel_goal=console.cancel, config=trip_config or TripConfig(),
+                             engaged=partial(engaged, console), release_queue=partial(release_queue, console),
+                             roster=lambda: console.robot_ids)
+    install_trip_guard(console, trip_runner)
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps,

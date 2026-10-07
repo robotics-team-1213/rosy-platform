@@ -42,40 +42,64 @@ MANOEUVRE = ("turning", "advancing", "reacquiring")
 class FakeCore:
     """CORE ``line_follow/junction.py`` as Fleet sees it (feat/d491-core-junction-action).
 
-    One instruction; ``seq`` counts accepted ones. ``straight`` and a turn with ``turn_deg``
-    arm, ``stop`` executes at once and holds after ``stop_after_m`` of travel from receipt (not
-    at a junction), a turn without ``turn_deg`` is ``unresolved``. A new instruction during a
-    manoeuvre aborts it and is not accepted. An armed instruction expires to idle. The test
-    drives the robot side: ``see_junction``, ``phase``, ``done``.
+    One instruction; ``seq`` counts accepted ones. Only CAMERA_LINE takes one (IR_LINE 409
+    JUNCTION_CAMERA_ONLY, M4), and only with manual control released (409 MODE_CONFLICT, L6).
+    ``straight`` and a turn with ``turn_deg`` arm, ``stop`` executes at once and holds after
+    ``stop_after_m`` of travel from receipt or at a sighted junction, whichever first (M7); a
+    turn without ``turn_deg`` is ``unresolved``. During a manoeuvre the identical instruction is
+    a no-op (M3) and a different one aborts it unaccepted. A place whose action ran (straight
+    through, or a turn past its turning phase) refuses the same action again (409
+    JUNCTION_ALREADY_DONE, R1). An armed instruction expires to idle. The test drives the robot
+    side: ``see_junction``, ``phase``, ``done``.
     """
 
     def __init__(self, ports) -> None:
         self.ports = ports
         self.mode = "CAMERA_LINE"
+        self.manual_released = True
         self.seq = 0
         self.j: dict | None = None
+        self.done_place: tuple | None = None
 
     def _xy(self):
         pose = self.ports.pose
         return (pose.x, pose.y) if pose is not None else (0.0, 0.0)
 
     def send(self, action, place_id, stop_after_m, expires_s, turn_deg):
-        if self.mode not in ("CAMERA_LINE", "IR_LINE"):
+        if not self.manual_released:
+            raise RobotApiError("rosy_60", 409, "MODE_CONFLICT", "manual control is held")
+        if self.mode == "IR_LINE":
+            raise RobotApiError("rosy_60", 409, "JUNCTION_CAMERA_ONLY", "IR has no junction detection")
+        if self.mode != "CAMERA_LINE":
             raise RobotApiError("rosy_60", 409, "LINE_FOLLOW_NOT_ACTIVE", "line follow is off")
         if not 0 < expires_s <= 30 or (stop_after_m is not None and (action != "stop" or not 0 <= stop_after_m <= 2)) \
                 or (turn_deg is not None and (action not in ("left", "right") or not 0 < abs(turn_deg) <= 150
                                               or (turn_deg > 0) != (action == "left"))):
             raise RobotApiError("rosy_60", 400, "VALIDATION_ERROR", "bad junction instruction")
-        if self.j is not None and self.j["state"] in MANOEUVRE:
-            self.j.update(state="aborted", reason="new_instruction")
-            return {"accepted": False, "junction_seq": self.j["seq"]}
+        if self.done_place == (place_id, action):
+            raise RobotApiError("rosy_60", 409, "JUNCTION_ALREADY_DONE", f"{action} at {place_id} already ran")
+        j = self.j
+        if j is not None and j["state"] in MANOEUVRE:
+            if (j["action"], j["place_id"], j.get("turn_deg")) == (action, place_id, turn_deg):
+                return {"accepted": True, "junction_seq": j["seq"], "state": j["state"]}  # M3 no-op
+            self._mark_done()
+            j.update(state="aborted", reason="new_instruction")
+            return {"accepted": False, "junction_seq": j["seq"], "state": "aborted"}
+        if self.done_place is not None and self.done_place[0] != place_id:
+            self.done_place = None
         self.seq += 1
         state = ("armed" if action == "straight" or turn_deg is not None
                  else "executing" if action == "stop" else "unresolved")
         self.j = {"action": action, "place_id": place_id, "seq": self.seq, "state": state, "reason": None,
                   "expires_at": self.ports.now + expires_s, "stop_after_m": stop_after_m or 0.0,
-                  "from": self._xy(), "held": False}
-        return {"accepted": True, "junction_seq": self.seq}
+                  "from": self._xy(), "held": False, "turn_deg": turn_deg}
+        return {"accepted": True, "junction_seq": self.seq, "state": state}
+
+    def _mark_done(self):
+        j = self.j
+        if j is not None and j.get("place_id") is not None and (
+                j["state"] in ("advancing", "reacquiring") or j["action"] == "straight"):
+            self.done_place = (j["place_id"], j["action"])
 
     def status(self):
         j = self.j
@@ -94,16 +118,20 @@ class FakeCore:
             self.j = {"action": None, "place_id": None, "seq": self.seq, "state": "waiting", "reason": None}
         elif j["state"] == "armed":
             j["state"] = "executing" if j["action"] == "straight" else "turning"
+        elif j["action"] == "stop":
+            j["held"] = True  # M7: a stop also holds at the junction it sees
 
     def phase(self, state):
         self.j["state"] = state
 
     def done(self):
+        self._mark_done()
         self.j = None
 
     def off(self):
         self.mode = "OFF"
         if self.j is not None and self.j["state"] in MANOEUVRE:
+            self._mark_done()
             self.j.update(state="aborted", reason="mode_change")
         else:
             self.j = None
@@ -241,17 +269,33 @@ def test_the_fake_core_follows_the_junction_contract():
     assert core.send("stop", "B", 0.3, 15, None)["accepted"] and core.status()["state"] == "executing"
     ports.pose = dataclasses.replace(ports.pose, x=0.31)
     assert core.j["held"] is False and core.status()["state"] == "executing" and core.j["held"]
-    assert core.send("left", "B", None, 15, 90.0) == {"accepted": True, "junction_seq": 2}
+    assert core.send("left", "B", None, 15, 90.0) == {"accepted": True, "junction_seq": 2, "state": "armed"}
     core.see_junction()
     assert core.status()["state"] == "turning"
-    assert core.send("straight", "C", None, 15, None) == {"accepted": False, "junction_seq": 2}
+    assert core.send("left", "B", None, 15, 90.0) == {"accepted": True, "junction_seq": 2, "state": "turning"}
+    core.phase("advancing")
+    assert core.send("straight", "C", None, 15, None) == {"accepted": False, "junction_seq": 2, "state": "aborted"}
     assert core.status()["state"] == "aborted"
-    assert core.send("left", "B", None, 15, None)["accepted"] and core.status()["state"] == "unresolved"
+    with pytest.raises(RobotApiError) as err:  # past its turn: the place's left already ran
+        core.send("left", "B", None, 15, 90.0)
+    assert err.value.code == "JUNCTION_ALREADY_DONE"
+    assert core.send("left", "E", None, 15, None)["accepted"] and core.status()["state"] == "unresolved"
     assert core.send("straight", "B", None, 1, None)["accepted"]
     ports.now += 2
     assert core.status() == {"pending_action": None, "place_id": None, "state": "idle", "seq": 4, "reason": None}
     with pytest.raises(RobotApiError):
         core.send("right", "B", None, 15, 30.0)  # right takes a negative angle
+    for mode, released, code in (("IR_LINE", True, "JUNCTION_CAMERA_ONLY"), ("OFF", True, "LINE_FOLLOW_NOT_ACTIVE"),
+                                 ("CAMERA_LINE", False, "MODE_CONFLICT")):
+        core.mode, core.manual_released = mode, released
+        with pytest.raises(RobotApiError) as err:
+            core.send("stop", "D", 0.0, 15, None)
+        assert err.value.code == code
+    core.mode, core.manual_released = "CAMERA_LINE", True
+    ports.pose = dataclasses.replace(ports.pose, x=0.0)
+    core.send("stop", "D", 1.0, 15, None)
+    core.see_junction()
+    assert core.j["held"]  # M7: at the junction before the distance
 
 
 # ---- start checks ---------------------------------------------------------------------
@@ -270,7 +314,9 @@ def test_start_refuses_with_every_d491_code_in_order():
     ports.caps = {"rosy_60": LANE}
     ports.core.mode = "OFF"
     assert _code(runner.start("p1", "bob")) == "TRIP_LINE_FOLLOW_NOT_ACTIVE"
-    ports.core.mode = "IR_LINE"
+    ports.core.mode = "IR_LINE"  # no junction detection on IR (M4)
+    assert _code(runner.start("p1", "bob")) == "TRIP_LINE_FOLLOW_NOT_ACTIVE"
+    ports.core.mode = "CAMERA_LINE"
     ring_s = _arc(store, "ring_s:fwd")
     for state, anchor in (("DEGRADED", 0.1), ("LOCALIZED", 2.5), ("LOCALIZED", None)):
         ports.at(ring_s, 0.1, state=state, anchor_age_s=anchor)
@@ -981,13 +1027,79 @@ def test_a_robot_on_a_trip_refuses_other_fleet_motion(tmp_path):
                        headers={**OPERATOR, "Idempotency-Key": "k2"}).status_code == 200
 
 
-def test_formation_refuses_a_robot_on_a_trip():
-    robots = [FakeRobot("a"), FakeRobot("b")]
+class _TripOf:
+    """A runner stand-in for the guard: ``robot`` is on a trip."""
+
+    def __init__(self, robot):
+        self.robot, self.canceled = robot, []
+
+    def robot_busy(self, robot_id):
+        return robot_id == self.robot
+
+    async def cancel_robot(self, robot_id, reason):
+        self.canceled.append((robot_id, reason))
+
+
+def _guarded(*ids, trip="b"):
+    from fleet.server.trip_guard import install_trip_guard
+
+    robots = [FakeRobot(robot_id) for robot_id in ids]
     console = FleetConsole([RobotEndpoint(r.robot_id, "http://x", "t") for r in robots], robots)
-    console.trip_busy = lambda robot_id: robot_id == "b"
+    runner = _TripOf(trip)
+    install_trip_guard(console, runner)
+    return console, runner, robots
+
+
+def test_formation_refuses_a_robot_on_a_trip():
+    console, _runner, _robots = _guarded("a", "b")
     with pytest.raises(HubError) as err:
         run(console.formation_start("a"))
     assert err.value.code == "TRIP_ROBOT_BUSY"
+
+
+def test_a_trip_robot_never_yields_and_is_not_a_reassignment_candidate(monkeypatch):
+    import fleet.server.console as console_module
+
+    console, _runner, robots = _guarded("a", "b", "c")
+    monkeypatch.setattr(console_module.bays, "best_bay", lambda *args, **kwargs: (2.0, 2.0))
+
+    async def no_map():
+        return {}
+
+    console.map = no_map
+    console._pose_of = lambda robot_id: (0.5, 0.0)
+    result = run(console._make_room("a", 1.0, 0.0, 0.0, [(0.0, 0.0), (1.0, 0.0)], ["b", "c"]))
+    assert result["no_space"] == ["b"] and result["yielding"] == ["c"]
+    assert not [c for c in robots[1].calls if c[0] == "navigation_goal"]
+    rows = [{"robot_id": rid, "online": True, "state": {"capabilities_degraded": rid == "a"}} for rid in "abc"]
+    console._goals["a"] = {"x": 1.0, "y": 0.0, "yaw": 0.0}
+    console._queued.pop("c", None)
+    console._goals.pop("c", None)
+    console._yielding.clear()
+    run(console._run_traffic(rows))
+    assert "b" not in console._queued and "b" not in console._goals
+    assert (console._queued.get("c") or console._goals.get("c"))["x"] == 1.0  # c took the mission
+
+
+def test_line_follow_off_stops_and_cancels_the_trip_other_modes_are_refused():
+    console, runner, robots = _guarded("a", "b")
+    with pytest.raises(HubError) as err:
+        run(console.line_follow_mode("b", "IR_LINE"))
+    assert err.value.code == "TRIP_ROBOT_BUSY"
+    run(console.line_follow_mode("b", "OFF"))
+    assert ("line_follow_mode", "OFF") in robots[1].calls and runner.canceled == [("b", "operator_line_follow_off")]
+    run(console.line_follow_mode("a", "IR_LINE"))  # another robot is not affected
+    assert runner.canceled == [("b", "operator_line_follow_off")]
+
+
+def test_cancel_robot_ends_the_trip_with_the_reason():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    run(runner.cancel_robot("rosy_60", "operator_line_follow_off"))
+    view = runner.view("p1")
+    assert (view["state"], view["reason"], view["detail"]["canceled_by"]) == (
+        "canceled", "operator_line_follow_off", None)
 
 
 def test_default_wiring_refuses_start_until_the_providers_land(tmp_path):
@@ -998,3 +1110,175 @@ def test_default_wiring_refuses_start_until_the_providers_land(tmp_path):
     plan = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR).json()
     refused = client.post(f"/api/fleet/trips/{plan['plan_id']}/start", headers=OPERATOR)
     assert refused.status_code == 422 and refused.json()["detail"]["code"] == "TRIP_ROBOT_CAPS_UNKNOWN"
+
+
+# ---- re-review R1-R8 ----------------------------------------------------------------------
+
+@pytest.mark.parametrize("reply", [{"accepted": False, "queued": True, "reason": "ROUTE_CONFLICT"},
+                                   {"accepted": False, "queued": False, "reason": "YIELDED"}])
+def test_a_goal_the_console_did_not_send_fails_the_trip_and_clears_its_queue(reply):
+    released = []
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    runner._release_queue = released.append
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+
+    async def refused(robot_id, x, y, yaw):
+        return reply
+
+    ports.goal = refused
+    runner._goal = refused
+    _ticks(runner, ports)
+    view = runner.view("p1")
+    assert (view["state"], view["reason"], view["detail"]["goal_reason"]) == (
+        "failed", "TRIP_GOAL_REFUSED", reply["reason"])
+    assert ports.canceled == ["rosy_60"] and released == ["rosy_60"]
+
+
+def test_a_free_arrival_clears_the_robots_console_queue():
+    released = []
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    runner._release_queue = released.append
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    ports.at(_arc(store, "bc:fwd"), 0.97)
+    _ticks(runner, ports)
+    assert runner.view("p1")["state"] == "arrived" and released == ["rosy_60"]
+
+
+def test_start_refuses_a_robot_that_already_moves_for_the_console():
+    runner, store, ports = _setup()
+    runner._engaged = lambda robot_id: "yielding"
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    with pytest.raises(TripError) as err:
+        run(runner.start("p1", "bob"))
+    assert (err.value.status, err.value.code, err.value.detail) == (409, "TRIP_ROBOT_BUSY", {"reason": "yielding"})
+
+
+def test_engaged_reads_queue_goal_yield_and_formation():
+    from fleet.server.trip_guard import engaged
+
+    console, _runner, _robots = _guarded("a", "b")
+    assert engaged(console, "a") is None
+    console._goals["a"] = {"x": 0, "y": 0, "yaw": 0}
+    assert engaged(console, "a") is None  # a finished goal is still shown; it does not count
+    console._seen["a"] = {"navigation": "NAVIGATING"}
+    assert engaged(console, "a") == "goal"
+    console._goals.clear()
+    console._queued["a"] = {"x": 0}
+    assert engaged(console, "a") == "queued"
+    console._queued.clear()
+    console._yielding["a"] = {"for": "b"}
+    assert engaged(console, "a") == "yielding"
+
+
+def test_a_carried_out_instruction_is_never_sent_again():
+    runner, store, ports = _setup(junction_expires_s=2.0)
+    ring_s = _arc(store, "ring_s:fwd")
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports)
+    ports.core.see_junction()  # CORE executes our straight through SE
+    _ticks(runner, ports)
+    assert runner._live.sent["carried"]
+    ports.core.j = None  # CORE went idle without our seeing it finish; SE is 0.32 m ahead
+    ports.at(ring_s, 0.05)
+    _ticks(runner, ports, 3, dt=3.0)
+    assert len(ports.sent) == 1
+
+
+def test_already_done_from_core_counts_as_carried_out():
+    runner, store, ports = _setup()
+    ring_s = _arc(store, "ring_s:fwd")
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    ports.core.done_place = ("SE", "straight")  # it ran between two ticks
+    ports.at(ring_s, ring_s.length_m - 0.02)
+    _ticks(runner, ports)
+    assert runner.running() is not None and runner._live.sent["done"]
+    _ticks(runner, ports)
+    assert runner.running()["segment_index"] == 1 and ports.sent[-1] == ("straight", "NE", None)
+
+
+def test_lane_arrival_needs_our_accepted_stop_and_accepts_core_holding_it():
+    runner, store, ports = _setup()
+    arc = _arc(store, "east:fwd")
+    _plan(store, ports, "east:fwd", 0.5, "SE")
+    run(runner.start("p1", "bob"))
+    ports.core.manual_released = False  # the stop is refused: no arrival on distance alone
+    ports.at(arc, arc.length_m - 0.05)
+    _ticks(runner, ports)
+    assert runner.view("p1")["state"] == "failed" and runner.view("p1")["reason"] == "MODE_CONFLICT"
+    runner, store, ports = _setup()
+    _plan(store, ports, "east:fwd", 0.5, "SE")
+    run(runner.start("p1", "bob"))
+    ports.at(arc, arc.length_m - 0.25)
+    _ticks(runner, ports)
+    assert runner.view("p1")["state"] == "running"  # stop sent this tick
+    ports.core.see_junction()  # CORE holds our stop at the junction it sighted (M7)
+    _ticks(runner, ports)
+    assert runner.view("p1")["state"] == "arrived"
+
+
+def test_confirm_replan_forgets_the_last_instruction():
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    run(runner.start("p1", "bob"))
+    ports.blocked = frozenset({"ring_e"})
+    _ticks(runner, ports)
+    held = runner._live.sent["seq"]
+    run(runner.confirm_replan("p1", "bob"))
+    assert runner._live.sent is None and runner._live.replaceable == held
+
+
+def test_the_restart_halt_is_retried_until_it_takes_or_the_robot_leaves(tmp_path):
+    store = SiteMapStore(tmp_path / "fleet.sqlite3")
+    for trip_id, robot_id in (("t1", "rosy_60"), ("t2", "gone")):
+        store.put_trip({"trip_id": trip_id, "robot_id": robot_id, "state": "running", "drive_mode": "lane",
+                        "next_place": None, "detail": {}})
+    store.close()
+    runner, store, ports = _setup(path=tmp_path / "fleet.sqlite3")
+    runner._roster = lambda: ["rosy_60"]
+    hold = ports.hold
+    calls = []
+
+    async def flaky(robot_id):
+        calls.append(robot_id)
+        if len(calls) == 1:
+            raise OSError("robot unreachable")
+        return await hold(robot_id)
+
+    ports.hold = flaky
+    run(runner._halt_restarted())
+    assert [t["robot_id"] for t in runner._restarted] == ["rosy_60"]  # "gone" left the roster
+    run(runner._halt_restarted())
+    assert runner._restarted == [] and calls == ["rosy_60", "rosy_60"]
+    assert store.trip("t1")["detail"]["stop_sent"] is True
+
+
+def test_robot_routes_refuse_a_trip_robot(tmp_path):
+    ports = Ports()
+    client, _tasks, _store, robot, _console = _app(tmp_path, ports)
+    ports.now = time.time()
+    plan = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR).json()
+    assert client.post(f"/api/fleet/trips/{plan['plan_id']}/start", headers=OPERATOR).status_code == 200
+    stuck = client.post("/api/fleet/robots/rosy_60/line-stuck/decision",
+                        json={"stuck_id": "s1", "decision": "RESUME"}, headers=OPERATOR)
+    assert stuck.status_code == 409 and stuck.json()["detail"]["code"] == "TRIP_ROBOT_BUSY"
+    ir = client.post("/api/fleet/robots/rosy_60/line-follow", json={"mode": "IR_LINE"}, headers=OPERATOR)
+    assert ir.status_code == 409 and ir.json()["detail"]["code"] == "TRIP_ROBOT_BUSY"
+    off = client.post("/api/fleet/robots/rosy_60/line-follow", json={"mode": "OFF"}, headers=OPERATOR)
+    assert off.status_code == 200 and ("line_follow_mode", "OFF") in robot.calls
+    view = client.get(f"/api/fleet/trips/{plan['plan_id']}", headers=VIEWER).json()
+    assert (view["state"], view["reason"]) == ("canceled", "operator_line_follow_off")
+
+
+def test_start_through_the_api_refuses_a_robot_with_a_queued_console_mission(tmp_path):
+    ports = Ports()
+    client, _tasks, _store, _robot, console = _app(tmp_path, ports)
+    ports.now = time.time()
+    plan = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR).json()
+    console._queued["rosy_60"] = {"x": 0.0, "y": 0.0, "yaw": 0.0, "reason": "ROUTE_CONFLICT"}
+    refused = client.post(f"/api/fleet/trips/{plan['plan_id']}/start", headers=OPERATOR)
+    assert refused.status_code == 409 and refused.json()["detail"] == {
+        "code": "TRIP_ROBOT_BUSY", "detail": {"reason": "queued"}}

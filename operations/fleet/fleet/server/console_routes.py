@@ -190,6 +190,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         client = console.clients().get(robot_id)
         if client is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
+        if console.trip_busy(robot_id):  # D-491 5: the trip loop owns this robot until it ends
+            raise http_error(HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first"))
         # D-438 §1: claim before forwarding, so the resolver cannot answer in the gap.
         # The claim stays even if the CORE forward fails: a human owns this stuck now.
         resolver_loop = getattr(app.state, "stuck_resolver", None)

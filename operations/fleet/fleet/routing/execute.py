@@ -11,6 +11,8 @@ from typing import Optional
 
 from fleet.routing.cost import LEFT, RIGHT, STOP, UTURN, RoutingConfig, classify, turn_deg
 from fleet.routing.graph import Graph
+from fleet.routing.snap import PlanError
+from fleet.routing.trip import PlanRequest, plan_trip
 
 #: D-492 1: CORE turns at most this much at a junction.
 MAX_TURN_DEG = 150.0
@@ -80,3 +82,36 @@ def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, jun
         if action in (LEFT, RIGHT) and abs(angle) > max_turn_deg:
             return {"edge_id": segment["edge_id"], "reason": "LANE_TURN_TOO_SHARP", "turn_deg": round(angle, 1)}
     return None
+
+
+def replan_hold(active, start_pose, remaining: list, request: dict, caps: dict, blocked: frozenset,
+                passed: set, map_version, config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG) -> Optional[dict]:
+    """D-489 9: plan again from ``start_pose`` (just before the next place) on the active map.
+
+    None when the route is unchanged (same map version); otherwise the hold to show the
+    operator: a new plan to confirm, or ``plan: None`` with the reason it cannot go on.
+    """
+    to = request["to"]
+    goal = to if isinstance(to, str) else (to["x"], to["y"], to.get("yaw"))
+    try:
+        if active is None:
+            raise PlanError("TRIP_NO_ACTIVE_MAP")
+        plan = plan_trip(active[2], PlanRequest(
+            map_version=active[0], start_pose=tuple(start_pose), goal=goal, robot_kind=caps.get("kind"),
+            drive_modes=frozenset(caps.get("modes") or ("lane", "free")), max_speed_mps=caps.get("max_speed"),
+            via=tuple(v for v in request.get("via", ()) if v not in passed), arrive_yaw=request.get("arrive_yaw"),
+            speed_cap=request.get("speed_cap"), blocked_edges=blocked), config)
+    except PlanError as exc:
+        return {"reason": "replan", "plan": None, "code": exc.code, "detail": exc.detail}
+    body = plan_body(plan)
+    refused = unsupported(active[2], body["segments"], kind=caps.get("kind"), modes=frozenset(caps.get("modes") or ()),
+                          junction_turn=bool(caps.get("junction_turn")), config=config, max_turn_deg=max_turn_deg)
+    if refused is not None:
+        return {"reason": "replan", "plan": None, "code": "TRIP_MODE_UNSUPPORTED", "detail": refused}
+    old = [(s["edge_id"], s["forward"], s["s_to"]) for s in remaining]
+    new = [(s["edge_id"], s["forward"], s["s_to"]) for s in body["segments"]]
+    if old == new and plan.map_version == map_version:
+        return None
+    return {"reason": "replan", "map_version": plan.map_version,
+            "plan": {k: body[k] for k in ("segments", "places", "actions")},
+            "length_m": body["length_m"], "eta_s": body["eta_s"]}

@@ -8,11 +8,16 @@ the console's robot clients.
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass, fields
 from typing import Any, Awaitable, Callable, Mapping, Optional, Protocol
 
 from fleet.hub.hub import HubError
+from fleet.routing.execute import arc_id, ends_at_place
+
+#: Trip states that are still going.
+OPEN = ("started", "running")
 
 
 @dataclass(frozen=True)
@@ -169,3 +174,56 @@ class TripError(Exception):
     def __init__(self, status: int, code: str, detail: Optional[dict] = None) -> None:
         super().__init__(code)
         self.status, self.code, self.detail = status, code, detail or {}
+
+
+def pose_diagnostics(pose) -> dict:
+    # the provider's types are its own; the trip row stores JSON (a dataclass becomes its str)
+    return json.loads(json.dumps({key: getattr(pose, key, None)
+                                  for key in ("sightings_filtered_map_id", "odom_refused")}, default=str))
+
+
+def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
+    if pose is None:
+        return None
+    return {"x": round(pose.x, 3), "y": round(pose.y, 3), "yaw": round(pose.yaw, 3), "state": pose.state,
+            "source": pose.source, "dead_reckon_m": round(pose.dead_reckon_m, 3), "age_s": round(pose.age_s, 2),
+            "anchor_age_s": getattr(pose, "anchor_age_s", None)}
+
+
+class LiveTrip:
+    """Runtime state of the one open trip (``trip_runner``); ``view`` is what is stored and returned."""
+
+    def __init__(self, view: dict, graph, request: dict) -> None:
+        self.view = view
+        self.graph = graph
+        self.request = request
+        #: The last instruction CORE accepted: index, action, place, seq, at.
+        self.sent: Optional[dict] = None
+        self.first_seq: Optional[int] = None
+        #: Our held replan stop (seq) that the confirmed plan's action may replace while executing.
+        self.replaceable: Optional[int] = None
+        self.last_goal: Optional[tuple[float, float]] = None
+        self.replan_pending = False
+        self.waiting_since: Optional[float] = None
+        self.junction: dict = {}
+        self.best_progress = -math.inf
+        self.progress_at: Optional[float] = None
+
+    @property
+    def segments(self) -> list:
+        return self.view["plan"]["segments"]
+
+    @property
+    def open(self) -> bool:
+        return self.view["state"] in OPEN
+
+    def arc(self, index: int):
+        return self.graph.arcs[arc_id(self.segments[index])]
+
+    def place(self, index: int) -> Optional[str]:
+        return ends_at_place(self.graph, self.segments[index])
+
+    def progress(self, index: int, s: float) -> float:
+        """Metres along the whole plan."""
+        done = sum(seg["s_to"] - seg["s_from"] for seg in self.segments[:index])
+        return done + s - self.segments[index]["s_from"]

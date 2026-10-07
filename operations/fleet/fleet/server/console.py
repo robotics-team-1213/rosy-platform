@@ -33,7 +33,7 @@ from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, traffic
 from fleet.server.console_view import (
-    CapabilityDisplay, _error_of, _formation_stream_evidence, _shown,
+    CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
 )
 from fleet.swarm.session import (
@@ -52,7 +52,7 @@ logger = logging.getLogger("fleet.console")
 MAP_TTL_S = 10.0
 
 
-class FleetConsole:
+class FleetConsole(TripAware):
     """robots.yaml 한 장에 적힌 N대를 하나의 관제 표면으로 묶는다."""
 
     def __init__(
@@ -120,8 +120,6 @@ class FleetConsole:
         self._loc_null_since: dict[str, Optional[float]] = {}
         #: robot_id -> the localization service's view (needs_human), set by app.py.
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
-        #: D-491 5: a robot on a running trip takes motion only from the trip loop (app.py sets it).
-        self.trip_busy: Callable[[str], bool] = lambda _robot_id: False
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
@@ -346,7 +344,7 @@ class FleetConsole:
 
     async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
                    task_id: str | None = None, attempt_id: str | None = None,
-                   attempt_seq: int | None = None, trip: bool = False) -> dict:
+                   attempt_seq: int | None = None) -> dict:
         """한 대에 목표 하나. 로봇은 원자 액션만 받는다 (D-12).
 
         내려간 뒤 그 로봇의 계획 경로를 읽어, 이미 달리는 다른 로봇의 경로와 부딪히면
@@ -359,8 +357,6 @@ class FleetConsole:
         달리는 로봇이 아니라 **서 있는 로봇**이 길을 막고 있으면 순서로는 풀리지 않는다.
         그때는 `bays` 로 비켜설 자리를 찾아 그 로봇을 먼저 치운다 (`_make_room`).
         """
-        if not trip and self.trip_busy(robot_id):  # D-491 5: only the trip loop drives it
-            raise HubError("TRIP_ROBOT_BUSY", f"{robot_id} is on a running trip; cancel the trip first")
         client = self._client(robot_id)
         await require_capability(client, "navigation.goal_navigation")
         if self._clients.get(robot_id) is not client:
@@ -554,7 +550,7 @@ class FleetConsole:
             pose = self._pose_of(robot_id)
             # 거리장 계산은 순수 계산이고 맵이 커지면 몇백 ms 가 된다(40x40 m, 20 m 경로에서
             # 0.38 s). 이벤트 루프에서 돌리면 그동안 다른 로봇의 폴링까지 같이 멈춘다.
-            bay = None if pose is None else await asyncio.to_thread(
+            bay = None if pose is None or self.trip_busy(robot_id) else await asyncio.to_thread(
                 bays.best_bay, grid, route, pose, keep_out_m=self._yield_keep_out_m)
             if bay is None:
                 no_space.append(robot_id)
@@ -733,7 +729,7 @@ class FleetConsole:
                         for alt_row in robots:
                             alt_id = alt_row["robot_id"]
                             alt_state = alt_row.get("state") or {}
-                            busy = alt_id in self._goals or alt_id in self._queued
+                            busy = alt_id in self._goals or alt_id in self._queued or self.trip_busy(alt_id)
                             if (alt_id != robot_id and alt_row.get("online")
                                     and not alt_state.get("capabilities_degraded")
                                     and not busy):
@@ -1104,8 +1100,6 @@ class FleetConsole:
             follower_ids = [rid for rid in member_ids if rid != leader_id]
         if not follower_ids:
             raise HubError("NO_FOLLOWERS", "a formation needs at least one follower")
-        if any(self.trip_busy(rid) for rid in (leader_id, *follower_ids)):  # D-491 5
-            raise HubError("TRIP_ROBOT_BUSY", "a selected robot is on a running trip; cancel the trip first")
         leader = self._client(leader_id)
         followers = [self._clients[rid] for rid in follower_ids]
         kwargs = {} if self._relay_factory is None else {"relay_factory": self._relay_factory}
