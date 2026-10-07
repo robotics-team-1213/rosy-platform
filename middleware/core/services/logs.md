@@ -684,4 +684,9 @@
 - 증거: `test_line_junction.py::test_turn_armed_right_after_mode_select_waits_for_the_first_odom_sample` 먼저 실패 후 통과, `test_no_fresh_odom_at_the_junction_aborts_before_turning`은 0.3 s 대기 뒤 중단으로 바뀜.
 - gate 변화: 없음. 호스트 시험만. SIM(`s2_sw_r110_a0`, `s9_scan_turn` 재현) 미실행.
 - 결정: D-495 SIM 결과 결함 3 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
+## 2026-10-07 · uncommitted · fix(line_follow): 회전 뒤 unresolved도 그 교차로 실행 완료로 기록한다
+- 변경: `junction.py` `_maneuver`의 `unresolved` 전이 세 곳(재획득 중 D-407 stuck, 재획득 시간 한도, `REACQUIRE_M` 이동)을 `_unresolved(j, decision)` 하나로 모으고, 상태가 아직 `reacquiring`일 때 `_mark_done(j)`를 먼저 부른다. 진입 방향은 이미 지워져 있으므로 같은 `place_id` 재전송은 두 번째 회전을 쌓지 않고 409 `JUNCTION_ALREADY_DONE`이 된다. 다른 `place_id`가 기록을 지운다.
+- 증거: `test_line_junction.py::test_unresolved_after_the_turn_counts_as_done`(세 경로) 먼저 실패 후 통과.
+- gate 변화: 없음. 호스트 시험만. SIM S6(`s6_unresolved_resend`) 미실행.
+- 결정: D-495 SIM 결과 결함 4 (`docs/validation/d495-junction-sim-2026-10-07/result.md`), 리뷰 R1
 - 교훈: 없음
