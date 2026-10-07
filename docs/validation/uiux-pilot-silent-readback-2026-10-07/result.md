@@ -7,3 +7,5 @@
 수정 전 집중 브라우저 **1 failed**(숫자가 남음), 수정 후 503·응답 정지의 수신 중단·회복 **2 passed**다. 인접한 증거 4상태×선언 폭 4개, 수신 전 상태, 소켓 닫힘 4폭을 합친 브라우저는 **11 passed**다. D-153 명명 G1은 **90 passed, 1 warning**이며 각 성공 실행의 `known_failures.py`는 **0 NEW**다. 320px 중단 화면은 `X:\DevTemp\pilot-silent-readback\shots\pilot-readback-{status,hang}-320x568.png`, 실행 기록은 같은 X: 폴더의 `red.txt`, `transport-two.txt`, `browser-final.txt`, `g1.txt`다.
 
 이 캡처는 첫 화면의 비상 정지, 숫자 숨김, 경고 문구, 가로 넘침 없음을 보여 준다. 나머지 Pilot 선언 상태·폭, 실제 장치 readback, 운전자 G3 여덟 항목은 여전히 **HOLD**다.
+
+2026-10-07 추가 LOCAL 확인: 동일한 소켓 무응답·REST 503/무응답 전이를 Pilot 선언 폭 2000×1200, 1200×2000, 390×844, 320×568에서 다시 재생했다. 마지막 속도·배터리 숫자 숨김, 「상태 수신 없음」, 비상 정지 표시, 가로 넘침 없음, REST 회복을 모두 확인했다. 브라우저 **8 passed**, `known_failures.py` **0 NEW**. 원본은 `X:/DevTemp/pilot-silent-widths/shots/pilot-readback-{status,hang}-{2000x1200,1200x2000,390x844,320x568}.png`, 실행 기록은 같은 X: 폴더의 `browser.txt`다. 다른 Pilot G2 셀, 실물 장치와 G3는 **HOLD**다.

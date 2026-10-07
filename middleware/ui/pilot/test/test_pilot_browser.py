@@ -704,7 +704,8 @@ def test_drive_hud_does_not_invent_zero_before_velocity_readback(base_url):
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
 @pytest.mark.parametrize("failure", ["status", "hang"])
-def test_drive_hud_clears_readback_when_open_socket_goes_silent_and_rest_fails(base_url, failure):
+@pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_drive_hud_clears_readback_when_open_socket_goes_silent_and_rest_fails(base_url, failure, viewport):
     stamp = "2026-10-07T06:00:00Z"
     frame = {"type": "state", "mode": "MANUAL", "timestamp": stamp,
              "velocity": {"linear": 0.12, "angular": 0.1}, "battery": {"percent": 81},
@@ -714,7 +715,7 @@ def test_drive_hud_clears_readback_when_open_socket_goes_silent_and_rest_fails(b
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            page = browser.new_page(viewport={"width": 320, "height": 568})
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
             def state_reply(route):
                 if failing["value"] == "hang":
                     return
@@ -734,7 +735,7 @@ def test_drive_hud_clears_readback_when_open_socket_goes_silent_and_rest_fails(b
             if output := os.environ.get("ROSY_SHOT_DIR"):
                 shot_dir = Path(output)
                 shot_dir.mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(shot_dir / f"pilot-readback-{failure}-320x568.png"))
+                page.screenshot(path=str(shot_dir / f"pilot-readback-{failure}-{viewport[0]}x{viewport[1]}.png"))
             failing["value"] = ""
             page.wait_for_function("document.querySelector('[data-drive-fact=speed]').textContent === '0.12'")
             assert page.locator("[data-drive-fact=link]").inner_text() == "상태 수신"
