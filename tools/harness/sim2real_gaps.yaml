@@ -179,9 +179,10 @@ gaps:
       - middleware/perception/control/sensing/perception/lane_keep_lines.py
       - middleware/perception/control/sensing/perception/lane_containment.py
       - middleware/core/services/core_features/line_follow/lane_return_evidence.py
+      - middleware/perception/test/test_lane_slope_g16.py
       - D-468
       - D-476
     tier: [M, R]
     owner: perception / core line_follow
     status: IN-PROGRESS
-    next: product decision (perception, D-468 owners) - drop frame-edge-truncated and blob-carved cells from the boundary fit, or put fit slope error into uncertainty_m, or shorten the receiver extrapolation; until then sim (and device) containment does not prove the body inside the lane
+    next: fixed on host 2026-10-07 (fix/g16-lane-slope-error, D-468 implementation note G-16) - the keep fit uses whole visible cross-sections outside the D-491 crosswalk rows and uncertainty_m adds 2 sqrt(2) sigma of the fit slope over support + 0.3 m; frame replay margin 21.5 / 22.0 mm vs STL 23.4 (u 22.9 / 13.7 mm; C start now refused as excessive, not a false departure); model PC scenario C rerun pending
