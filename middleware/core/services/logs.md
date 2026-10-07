@@ -716,3 +716,10 @@
 - gate 변화: D-507 10 SOURCE·SIM. DEVICE(D9 근거리)는 열림.
 - 결정: D-507 10, D-422
 - 교훈: trailer 없이 main에 들어간 safety 커밋은 amend 할 수 없어 독립 검토를 EXEMPT로 남긴다. 착지 전에 `safety_review.py`를 돌린다.
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 6 motion_admitted refuses non-finite twists
+- 변경: `recovery/motion_admit.py` `motion_admitted`가 NaN·inf 선속도·각속도를 거부한다(현장 근거에서 NaN은 후진 판정과 sweep 비교를 통과했다). `test_motion_admit.py`에 중복 브랜치 `feat/site-floor-declaration`의 non-finite 시험을 옮겼다(6 kind × 4 twist).
+- 증거: 수정 전 24건 모두 실패, 수정 후 `test_motion_admit.py` 101 passed.
+- gate 변화: 없음(SOURCE).
+- 결정: D-507 6
+- 교훈: 같은 항목을 두 세션이 구현하면 뒤 브랜치의 시험부터 옮겨 앞 구현에 대 본다.

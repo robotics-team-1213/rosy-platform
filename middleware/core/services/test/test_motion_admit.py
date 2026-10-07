@@ -1,5 +1,7 @@
 """D-507 6: motion_admitted, one admission with two bases (enforce, site) and the site-basis
 reverse for the D-468 retrace only. Real manager, no ROS, no physical motion."""
+import math
+
 import pytest
 
 from core_features.line_follow.manager import LineFollowManager
@@ -278,3 +280,11 @@ def test_l4_traffic_gate_arc_family_is_swept_in_reverse():
         site.m.bind_motion_envelope(lambda f=floor: (.1, 1., f))
         results.append(site.admit(-.03, -.2, 'retrace'))
     assert results == [True, False]
+
+
+# ---- ported from feat/site-floor-declaration (superseded by this module) -------------------
+
+@pytest.mark.parametrize('kind', KINDS)
+@pytest.mark.parametrize('twist', [(math.nan, 0.), (0., math.inf), (-math.nan, 0.), (.02, math.nan)])
+def test_non_finite_twists_are_never_admitted(kind, twist):
+    assert Site().admit(*twist, kind) is False
