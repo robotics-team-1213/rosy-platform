@@ -69,8 +69,6 @@ ADR_BODY_HEADING = re.compile(r"^## (D-\d+):? (.+)$", re.MULTILINE)
 # in place would violate the same history gate, so it is excused by exact
 # name too. Same class of defect: a committed line that cannot be reformed.
 KNOWN_LEGACY_HEADINGS = frozenset({
-    # Committed (db92172b5) with the branch name in the hash slot (D-502).
-    "## 2026-10-07 · fix/core-battery-health · fix(core): 배터리 정지 해제 경로와 배터리 입력 근거 (D-502)",
     # Already committed before the missing commit placeholder was detected.
     "## 2026-10-07 · uiux/pilot-empty-copy · Pilot 로봇 미발견 안내 줄바꿈",
     # Both committed D-441 bodies survive the 6333f89/518edcf80 merge.
