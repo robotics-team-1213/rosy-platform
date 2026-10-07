@@ -24,8 +24,13 @@ API 계약은 [구현 계획](../plans/2026-10-02-d418-robot-ssh-access.md)에 �
 접속할 PC에서 저장소의 `Rosy OS` 폴더를 열고 실행한다.
 
 ```sh
-python tools/ssh/rosy_ssh_enroll.py <robot-ip> --label dev:<내-기기-이름>
+python tools/ssh/rosy_ssh_enroll.py <robot-ip> --label dev:<내-기기-이름> --ca-file <robot.pem>
 ```
+
+CORE API는 8080의 HTTPS다. 로봇마다 자기 인증서(`rosy-pinky-xxxx.local`)를 내놓고, 도구는 주소로 접속하므로
+이름 대신 `--ca-file`로 준 PEM(로봇이 내놓는 인증서나 그 CA)에 묶어 확인한다. 이미 접속되는 사람이 로봇에서
+`echo | openssl s_client -connect 127.0.0.1:8080 2>/dev/null | openssl x509 > robot.pem`으로 받아 전한다.
+그럴 수 없으면 믿을 수 있는 LAN에서만 `--ca-file` 대신 `--insecure`(인증서를 확인하지 않음)를 쓴다.
 
 도구가 하는 일:
 
@@ -55,19 +60,21 @@ ssh rosy-pinky-xxxx
   `Host *` 같은 앞선 설정보다 먼저 적용되고, 쓴 뒤 `ssh -G`로 사용자·키·known_hosts까지 확인한다.
 - `~/.ssh/config`가 심볼릭 링크면 링크는 그대로 두고 링크가 가리키는 파일을 고친다(백업도 그 옆에 둔다).
 - 같은 라벨을 다른 키가 쓰고 있으면 409로 멈춘다. 그 라벨을 먼저 지우거나 다른 라벨을 쓴다.
-- 옵션: `--key PATH`(이미 있는 키), `--known-hosts`, `--ssh-config`, `--api-port`(기본 8080).
+- 옵션: `--key PATH`(이미 있는 키), `--known-hosts`, `--ssh-config`, `--api-port`(기본 8080),
+  `--ca-file PEM` 또는 `--insecure`(둘 중 하나는 꼭 준다).
 
-등록된 키 보기와 지우기는 3절의 `list`, 아래 API를 쓴다.
+등록된 키 보기와 지우기는 3절의 `list`, 아래 API를 쓴다. `rosy_ssh_share.py`도 `--ca-file`/`--insecure`를 받는다.
+`--via-operator-key`를 붙이고 둘 다 없으면 로봇이 내놓는 인증서를 운영 키 ssh로 읽어 그 인증서에 묶는다.
 
 ```sh
 # 등록된 관리 키 목록 (모든 라벨)
-python tools/ssh/rosy_ssh_share.py list --robot <robot-ip>
+python tools/ssh/rosy_ssh_share.py list --robot <robot-ip> --ca-file <robot.pem>
 ```
 
 기기 라벨 하나를 지운다.
 
 ```sh
-python tools/ssh/rosy_ssh_share.py revoke --label dev:<이름> --robot <robot-ip>
+python tools/ssh/rosy_ssh_share.py revoke --label dev:<이름> --robot <robot-ip> --ca-file <robot.pem>
 ```
 
 ## 2. 임시 비밀번호 (필요할 때만)
@@ -77,6 +84,8 @@ python tools/ssh/rosy_ssh_share.py revoke --label dev:<이름> --robot <robot-ip
 지금은 API로 켠다.
 
 먼저 administrator 코드로 토큰을 받는다. 토큰은 화면에 출력하지 말고 변수에만 둔다.
+API는 HTTPS이고 로봇 인증서는 주소가 아닌 `rosy-pinky-xxxx.local` 이름이라, 아래 예는 인증서를 확인하지 않는다
+(`curl -k`, PowerShell 7의 `-SkipCertificateCheck`). 믿을 수 있는 LAN에서만 쓴다.
 
 bash (macOS, Linux, Git Bash):
 
@@ -84,43 +93,43 @@ bash (macOS, Linux, Git Bash):
 # Windows Git Bash에서는 아래 python3를 python으로 바꾼다.
 R=<robot-ip>
 read -rs -p "administrator login code: " CODE; echo
-TOKEN=$(curl -fsS -X POST "http://$R:8080/api/v1/auth/pair" -H 'Content-Type: application/json' \
+TOKEN=$(curl -fsSk -X POST "https://$R:8080/api/v1/auth/pair" -H 'Content-Type: application/json' \
   -d "{\"code\":\"$CODE\",\"label\":\"ssh-password\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
 unset CODE
 
 # 켜기: 응답의 password를 받는 사람에게 전한다 (minutes 1..60)
-curl -fsS -X POST "http://$R:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN" \
+curl -fsSk -X POST "https://$R:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"minutes": 30}'
 
 # 상태 보기 / 지금 끄기
-curl -fsS "http://$R:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN"
-curl -fsS -X DELETE "http://$R:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN"
+curl -fsSk "https://$R:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN"
+curl -fsSk -X DELETE "https://$R:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN"
 
 # 끝나면 토큰 logout
-curl -fsS -X POST "http://$R:8080/api/v1/auth/logout" -H "Authorization: Bearer $TOKEN"; unset TOKEN
+curl -fsSk -X POST "https://$R:8080/api/v1/auth/logout" -H "Authorization: Bearer $TOKEN"; unset TOKEN
 ```
 
-PowerShell (Windows):
+PowerShell 7 (`pwsh`, Windows):
 
 ```powershell
 $R = "<robot-ip>"
 $code = Read-Host "administrator login code" -AsSecureString
 $plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($code))
-$pair = Invoke-RestMethod -Method Post "http://${R}:8080/api/v1/auth/pair" -ContentType "application/json" `
+$pair = Invoke-RestMethod -SkipCertificateCheck -Method Post "https://${R}:8080/api/v1/auth/pair" -ContentType "application/json" `
   -Body (@{ code = $plain; label = "ssh-password" } | ConvertTo-Json)
 Remove-Variable plain, code
 $h = @{ Authorization = "Bearer $($pair.token)" }
 
 # 켜기 (minutes 1..60): 결과의 user, password, expires_at
-Invoke-RestMethod -Method Post "http://${R}:8080/api/v1/host/ssh/password" -Headers $h `
+Invoke-RestMethod -SkipCertificateCheck -Method Post "https://${R}:8080/api/v1/host/ssh/password" -Headers $h `
   -ContentType "application/json" -Body '{"minutes": 30}'
 
 # 상태 보기 / 지금 끄기
-Invoke-RestMethod "http://${R}:8080/api/v1/host/ssh/password" -Headers $h
-Invoke-RestMethod -Method Delete "http://${R}:8080/api/v1/host/ssh/password" -Headers $h
+Invoke-RestMethod -SkipCertificateCheck "https://${R}:8080/api/v1/host/ssh/password" -Headers $h
+Invoke-RestMethod -SkipCertificateCheck -Method Delete "https://${R}:8080/api/v1/host/ssh/password" -Headers $h
 
 # 끝나면 토큰 logout
-Invoke-RestMethod -Method Post "http://${R}:8080/api/v1/auth/logout" -Headers $h; Remove-Variable pair, h
+Invoke-RestMethod -SkipCertificateCheck -Method Post "https://${R}:8080/api/v1/auth/logout" -Headers $h; Remove-Variable pair, h
 ```
 
 받는 사람은 `ssh rosy@<robot-ip>`로 접속하고 비밀번호를 입력한다. 휴대폰 SSH 앱(Termius 등)은 사용자 `rosy`,
@@ -145,7 +154,8 @@ python tools/ssh/rosy_ssh_share.py create --name <팀이름> --robot <robot-ip> 
 - passphrase를 두 번 묻는다(12자 이상). **비워 두면 도구가 만들어 마지막에 한 번만 보여 준다.**
   passphrase는 어떤 파일에도 쓰이지 않는다.
 - 로봇마다 administrator 로그인 코드를 묻는다. 운영 키로 접속되는 로봇이면 `--via-operator-key`를 붙여
-  코드를 ssh로 받아 쓸 수 있다(코드는 화면에 나오지 않는다).
+  코드를 ssh로 받아 쓸 수 있다(코드는 화면에 나오지 않는다). 이때 HTTPS 인증서도 같은 ssh로 읽어 고정한다.
+  아니면 `--ca-file`이나 `--insecure`를 준다(1절).
 - 한 로봇이라도 실패하면 묶음을 만들지 않고, 이미 등록된 로봇을 지우는 `revoke` 명령을 알려 준다.
 - 결과: `<out>/rosy-<팀이름>.zip` — 폴더 없이 파일만 든 압축으로, 잠긴 개인 키와 `.pub`, `config`(로봇별 `Host`), `known_hosts`,
   받는 사람용 `README.md`(한국어).
@@ -204,14 +214,15 @@ python tools/ssh/rosy_ssh_share.py list --robot <robot-ip> [--name <팀이름>]
 
 그 밖에:
 
-- **host key 신뢰는 LAN 신뢰와 같다.** 도구는 로봇의 host key를 API(평문 HTTP)로 받아 `known_hosts`에 쓴다. 그래서
-  첫 접속의 "믿겠습니까" 질문은 없지만, 같은 망에서 응답을 바꿔치기할 수 있는 사람이 있다면 그 사람의 key가 들어갈
-  수 있다. 믿을 수 있는 망에서만 등록하고, 의심되면 로봇 화면이나 콘솔에서
+- **host key 신뢰는 HTTPS 확인과 같다.** 도구는 로봇의 host key를 API(HTTPS)로 받아 `known_hosts`에 쓴다. 그래서
+  첫 접속의 "믿겠습니까" 질문은 없다. `--ca-file`이 그 로봇의 것이면 응답을 바꿔치기할 수 없지만, `--insecure`면
+  같은 망에서 응답을 바꿔치기할 수 있는 사람의 key가 들어갈 수 있다. 그때는 믿을 수 있는 망에서만 등록하고, 의심되면 로봇 화면이나 콘솔에서
   `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`로 지문을 대조한다. key가 바뀌면 도구는 옛·새 지문을 보여 주고
   `--accept-new-host-keys` 없이는 바꾸지 않는다.
 
 - 로그인 코드와 토큰은 출력하거나 저장소·채팅에 남기지 않는다. 도구는 토큰을 출력하지 않고 끝나면 logout한다.
-- API는 로봇 LAN의 평문 HTTP다(대시보드와 같음). 믿을 수 있는 망에서만 쓴다.
+- API는 로봇 LAN의 HTTPS(8080)다. 인증서를 확인하지 않는 `--insecure`, `curl -k`, `-SkipCertificateCheck`는
+  믿을 수 있는 망에서만 쓴다.
 - `create`는 passphrase를 `ssh-keygen -N`으로 넘긴다(비대화식으로 넘길 다른 방법이 없다). 그 몇 초 동안 같은
   PC의 프로세스 목록에 보일 수 있으므로 공용 PC에서 실행하지 않는다.
 - host key가 바뀌었다는 경고(`REMOTE HOST IDENTIFICATION HAS CHANGED`)가 나오면 카드를 새로 구웠는지

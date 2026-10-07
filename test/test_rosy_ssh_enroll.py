@@ -15,7 +15,7 @@ import shutil
 
 import pytest
 
-from fake_core_ssh import FakeCore, ed25519_public_key, fingerprint, isolate_home, real_ssh_snapshot
+from fake_core_ssh import FakeCore, ed25519_public_key, fingerprint, isolate_home, real_ssh_snapshot, robot_certificate
 
 ROOT = Path(__file__).resolve().parents[1]
 _SPEC = importlib.util.spec_from_file_location("rosy_ssh_enroll", ROOT / "tools" / "ssh" / "rosy_ssh_enroll.py")
@@ -659,3 +659,25 @@ def test_non_ascii_pc_names_get_a_short_hash_suffix():
                                   '    IdentityFile ""', '    ProxyCommand x', '    User pinky', '    HostName '])
 def test_the_config_line_allowlist_is_a_second_layer(line):
     assert not tool.CONFIG_OPTION.fullmatch(line)
+
+
+# --- 2026-10-07: CORE serves HTTPS on 8080 -------------------------------------------------------
+
+def _enroll_default_client(paths, *extra):
+    return tool.main(["127.0.0.1", "--label", "dev:laptop", "--key", str(paths["key"]),
+                      "--known-hosts", str(paths["known_hosts"]), "--ssh-config", str(paths["config"]), *extra],
+                     ask_code=lambda p: ADMIN_CODE, ask_lock=lambda p: "", keygen=FakeKeygen(), ssh=FakeSsh())
+
+
+def test_https_core_is_verified_against_the_given_certificate(paths, tmp_path, capsys):
+    cert = robot_certificate(tmp_path / "tls", HOST + ".local")
+    with FakeCore(codes={ADMIN_CODE: "administrator"}, tls=cert) as core:
+        status = _enroll_default_client(paths, "--api-port", str(core.port), "--ca-file", str(cert[0]))
+    assert status == 0, capsys.readouterr().err
+    assert "dev:laptop" in core.keys
+
+
+def test_https_without_ca_file_or_insecure_sends_nothing(paths, capsys):
+    status = _enroll_default_client(paths)
+    assert status == 1
+    assert "--ca-file" in capsys.readouterr().err

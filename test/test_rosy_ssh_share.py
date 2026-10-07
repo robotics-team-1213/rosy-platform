@@ -16,7 +16,7 @@ import zipfile
 
 import pytest
 
-from fake_core_ssh import FakeCore, ed25519_public_key, isolate_home, real_ssh_snapshot
+from fake_core_ssh import FakeCore, ed25519_public_key, isolate_home, real_ssh_snapshot, robot_certificate
 
 ROOT = Path(__file__).resolve().parents[1]
 _SPEC = importlib.util.spec_from_file_location("rosy_ssh_share", ROOT / "tools" / "ssh" / "rosy_ssh_share.py")
@@ -429,3 +429,54 @@ def test_revoke_needs_exactly_one_valid_target(argv, robots):
         run(robots, *argv)
     assert exit_info.value.code == 2
     assert all(core.requests == [] for core in robots.values())
+
+
+# --- 2026-10-07: HTTPS CORE and the bare --via-operator-key ---------------------------------------
+
+def test_bare_via_operator_key_uses_the_default_operator_key(robots, monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    keys: list[str] = []
+
+    def fake_ssh(argv):
+        keys.append(argv[argv.index("-i") + 1])
+        return 0, f"Login code {CODE1}\n", ""
+
+    status, _ = run(robots, "list", "--robot", R1, "--via-operator-key", ssh=fake_ssh)
+    assert status == 0, _text(capsys)[1]
+    assert keys == [str(tmp_path / "appdata" / "Rosy" / "ssh" / "rosy-operator-ed25519")]
+
+
+def _tls_robot_ssh(served: Path):
+    def fake_ssh(argv):
+        if "openssl s_client" in argv[-1]:
+            return 0, served.read_text(encoding="ascii"), ""
+        return 0, f"Login code {CODE1}\n", ""
+    return fake_ssh
+
+
+def test_via_operator_key_pins_the_certificate_read_over_ssh(tmp_path, capsys):
+    cert = robot_certificate(tmp_path / "tls", H1 + ".local")
+    with FakeCore(codes={CODE1: "administrator"}, hostname=H1, tls=cert) as core:
+        status = tool.main(["list", "--robot", "127.0.0.1", "--api-port", str(core.port),
+                            "--via-operator-key", str(tmp_path / "k")], ssh=_tls_robot_ssh(cert[0]))
+    stdout, stderr = _text(capsys)
+    assert status == 0, stderr
+    assert "127.0.0.1: no managed keys" in stdout
+    assert core.issued and core.logged_out == core.issued
+
+
+def test_a_certificate_other_than_the_served_one_is_refused(tmp_path, capsys):
+    cert = robot_certificate(tmp_path / "tls", H1 + ".local")
+    other = robot_certificate(tmp_path / "other", H1 + ".local")
+    with FakeCore(codes={CODE1: "administrator"}, hostname=H1, tls=cert) as core:
+        status = tool.main(["list", "--robot", "127.0.0.1", "--api-port", str(core.port),
+                            "--via-operator-key", str(tmp_path / "k")], ssh=_tls_robot_ssh(other[0]))
+    assert status == 1
+    assert "CERTIFICATE_VERIFY_FAILED" in _text(capsys)[1]
+    assert core.requests == []
+
+
+def test_no_tls_anchor_is_refused_before_any_request(capsys):
+    status = tool.main(["list", "--robot", R1], ask_code=lambda prompt: CODE1)
+    assert status == 1
+    assert "--ca-file" in _text(capsys)[1]
