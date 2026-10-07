@@ -72,3 +72,17 @@ def test_track_carpet_loads_one_segment_at_a_time_and_covers_every_frame(tmp_pat
     assert [s["qwen"] for s in seeds] == [1, 0, 1]
     assert carpet[:, 12:, :].all() and not carpet[:, :12, :].any()
     assert not (tmp_path / "segment").exists()
+
+
+def test_sha_streams_large_files_instead_of_reading_them_whole(tmp_path, monkeypatch):
+    """The receipt hashes the 3.4 GB SAM checkpoint; reading it whole OOM-killed the model PC run."""
+    import hashlib
+    p = tmp_path / "big.bin"
+    data = bytes(range(256)) * 9000          # > one read chunk
+    p.write_bytes(data)
+
+    def no_whole_read(self):
+        raise AssertionError("sha() must stream, not read_bytes()")
+
+    monkeypatch.setattr(Path, "read_bytes", no_whole_read)
+    assert srd.sha(p) == hashlib.sha256(data).hexdigest()

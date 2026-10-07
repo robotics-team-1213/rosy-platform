@@ -28,6 +28,7 @@ CONSOLE_ASSETS = {
     "address-drift.js": "application/javascript",
     "state-age.js": "application/javascript",
     "authorization.js": "application/javascript",
+    "development-auth.js": "application/javascript",
     "camera-pairing.js": "application/javascript",
     "camera-peer.js": "application/javascript",
     "field-layers.js": "application/javascript",

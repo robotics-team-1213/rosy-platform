@@ -872,6 +872,8 @@ async function connectionMode() {
   try {
     const info = await fleetClient("/api/fleet/auth/connection");
     el("development-badge").hidden = info?.mode !== "development";
+    el("console-token").hidden = info?.mode === "development";
+    el("token-save").hidden = info?.mode === "development";
     return info?.mode === "development";
   } catch (_err) {
     return false;
