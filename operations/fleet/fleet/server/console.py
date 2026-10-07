@@ -29,7 +29,6 @@ from typing import Any, Callable, Optional, Sequence
 from urllib.parse import urlsplit
 
 from core_common.succession import next_leader
-from core_common.protocol.power_health import PowerHealthResponse
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
@@ -89,8 +88,6 @@ class FleetConsole(TripAware):
         self._map_at = 0.0
         self._capability_display = CapabilityDisplay(self._clients, self._clock)
         self._capability_cache = self._capability_display.cache
-        self._power_display = CapabilityDisplay(
-            self._clients, self._clock, read_method="power_health", schema=PowerHealthResponse)
         self._hub_state_max_age_s = hub_state_max_age_s
         # 하달한 목표는 Fleet 이 기억한다. 로봇 상태 스냅샷에는 목표가 없고, 있어서도 안 된다
         # — 미션은 Fleet 쪽 개념이고 로봇은 원자 액션만 받는다 (D-12). 화면의 목표 표시는
@@ -201,7 +198,6 @@ class FleetConsole(TripAware):
         self._order.remove(robot_id)
         self._registered_endpoints.pop(robot_id, None)
         self._capability_display.invalidate(robot_id)
-        self._power_display.invalidate(robot_id)
         self._rest_tokens.pop(robot_id, None)
         self._agent_pairing_tokens.pop(robot_id, None)
         self._hub.drop(robot_id)
@@ -216,7 +212,6 @@ class FleetConsole(TripAware):
         old = self._clients[robot_id]
         self._clients[robot_id] = client
         self._capability_display.invalidate(robot_id)
-        self._power_display.invalidate(robot_id)
         self._registered_endpoints[robot_id] = endpoint.base_url
         self._rest_tokens[robot_id] = endpoint.token
         self._hub.set_client(robot_id, client)
@@ -307,13 +302,6 @@ class FleetConsole(TripAware):
         caps = iter(shown)
         for row in robots:
             row["capabilities"] = next(caps) if row["online"] else None
-        power = await asyncio.gather(*(self._power_display.shown(r["robot_id"])
-                                       for r in robots if r["online"]))
-        power_values = iter(power)
-        for row in robots:
-            row["power_health"] = next(power_values) if row["online"] else None
-            row["power_health_age_s"] = (self._power_display.age(row["robot_id"])
-                                         if row["online"] and row["power_health"] is not None else None)
         await self._handoff_dead_leader(robots)
         await self._run_traffic(robots)
         await self._manage_swarm_speed(robots)
@@ -1229,7 +1217,6 @@ class FleetConsole(TripAware):
 
     async def aclose(self) -> None:
         await self._capability_display.aclose()
-        await self._power_display.aclose()
         for client in list(self._clients.values()):
             closer: Any = getattr(client, "aclose", None)
             if closer is not None:

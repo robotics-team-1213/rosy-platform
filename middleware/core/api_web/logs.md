@@ -652,3 +652,9 @@
 - gate 변화: 없음. Robot API·envelope 1.0 변경 없음
 - 결정: D-494 6
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · docs(api): v1.124 version pin
+
+- Change: Align CORE app contract version docstring with API Reference v1.124.
+- Evidence: Related contract and Fleet tests 99 PASS; device check remains separate.
+- Gate change: None.

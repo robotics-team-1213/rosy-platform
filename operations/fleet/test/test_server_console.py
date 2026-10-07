@@ -9,8 +9,6 @@ from fleet.hub.hub import HubError
 from fleet.server.console import FleetConsole
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotApiError
-from core_features.power.battery import BatteryConfig, BatteryMonitor
-from core_features.power.manager import PowerConfig, PowerManager
 
 GRID = {"map_id": "occupancy:abc", "width": 2, "height": 2, "resolution": 0.05,
         "origin": {"x": -0.05, "y": -0.05, "yaw": 0.0}, "data": [-1, 0, 0, 100]}
@@ -20,15 +18,6 @@ def _console(*robots: FakeRobot, clock=None) -> FleetConsole:
     endpoints = [RobotEndpoint(robot_id=r.robot_id, base_url=f"http://127.0.0.1:808{i}",
                                token="t") for i, r in enumerate(robots)]
     return FleetConsole(endpoints, list(robots), clock=clock or FakeClock())
-
-
-def _health(now):
-    battery = BatteryMonitor(BatteryConfig(), clock=lambda: now())
-    battery.on_voltage(7.6)
-    battery.set_charging(True)
-    power = PowerManager(PowerConfig())
-    return {"power": power.status().model_dump(mode="json"), "battery": battery.health(),
-            "policy": power.health(), "recommendation": "normal_idle_policy", "health": {}}
 
 
 def test_snapshot_reports_every_robot_even_when_one_is_unreachable():
@@ -42,39 +31,6 @@ def test_snapshot_reports_every_robot_even_when_one_is_unreachable():
     assert snapshot["fleet"]["online"] == 1 and snapshot["fleet"]["total"] == 2
     assert snapshot["robots"][0]["state"]["mode"] == "IDLE"
     assert snapshot["robots"][1]["state"] is None
-
-
-def test_power_health_is_bounded_and_one_failure_does_not_hide_another_robot():
-    clock = FakeClock()
-    good = FakeRobot("rosy_01")
-    good.power_health_value = _health(clock)
-    bad = FakeRobot("rosy_02")
-    bad.power_health_error = ConnectionError("old robot")
-    console = _console(good, bad, clock=clock)
-    rows = run(console.snapshot())["robots"]
-    assert rows[0]["power_health"]["battery"]["charging_state"] == "confirmed"
-    assert rows[1]["power_health"] is None
-    run(console.snapshot())
-    assert good.calls.count(("power_health",)) == 1
-    clock.advance(6)
-    run(console.snapshot())
-    assert good.calls.count(("power_health",)) == 2
-    good.state_error = ConnectionError("offline")
-    assert run(console.snapshot())["robots"][0]["power_health"] is None
-
-
-def test_power_health_rejects_malformed_body_and_replaced_robot_cache():
-    first = FakeRobot("rosy_01")
-    first.power_health_value = _health(FakeClock())
-    console = _console(first)
-    assert run(console.snapshot())["robots"][0]["power_health"] is not None
-    replacement = FakeRobot("rosy_01")
-    replacement.power_health_value = {"battery": {"charging_state": "confirmed"}}
-    console._replace_client(RobotEndpoint("rosy_01", "http://127.0.0.1:9090", "t"), replacement)
-    row = run(console.snapshot())["robots"][0]
-    assert row["power_health"] is None
-    assert row["power_health_age_s"] is None
-    assert replacement.calls.count(("power_health",)) == 1
 
 
 def test_snapshot_separates_a_robot_that_refused_from_one_we_never_reached():

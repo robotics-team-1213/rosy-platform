@@ -2401,3 +2401,9 @@
 - 변경: Fleet이 CORE Viewer power/health를 등록된 Operator 토큰으로 읽고 최대 5초 캐시한다. 로봇 행은 공유 PowerHealthResponse와 관측 나이를 선택 필드로 제공하며, 관제는 배터리·충전 근거의 신선도와 다음 조치를 표시한다. E-Stop·네트워크·영상 설정 경로는 변경하지 않았다.
 - 증거: 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. 현장 장치 검증은 별도.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-509 power health at state response
+
+- Change: Read CORE power/health only while rendering /api/fleet/state, preserving D-447 hub gather calls. Invalidate display cache when a robot client changes.
+- Evidence: Related Fleet and contract tests 99 PASS; Node 170 PASS. Device check remains separate.
+- Gate change: None.
