@@ -109,8 +109,16 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        38_952,
-        "split: independently re-judged at 38952 on 2026-10-07. Since 37182 the package grew 1770 "
+        39_797,
+        "split: re-judged at 39797 on 2026-10-07 by the D-491 5 trip loop author (independent "
+        "confirmation pending at landing). The 845 new lines are the server trip loop "
+        "fleet/server/trip_runner.py +585 (ports, start checks, state machine, 0.5 s loop) and its "
+        "routes/store/wiring (trip_routes.py +31 net, site_map_store.py +35, app.py +9, transport.py +13), "
+        "plus the site-map trip panel (site-map.js +51, site-map-model.js +52, site-map.html +10). "
+        "The trip loop is a new server file beside the routing package, inside the server owner of "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; the panel stays in the site-map web "
+        "owner. No new owner. +150 allowance unchanged. "
+        "Previously independently re-judged at 38952 on 2026-10-07. Since 37182 the package grew 1770 "
         "production and web lines in the existing site-map owners: site-map.js +238, site_map_store.py +198, "
         "routing/graph.py +168, site-map-model.js +153, site_map.py +151, routing/trip.py +149, "
         "routing/planner.py +140, trip_routes.py +113, site_map_routes.py +92, routing/cost.py +82, "
