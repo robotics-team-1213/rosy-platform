@@ -40,8 +40,6 @@ class SightingSource:
     credential: str = "static"
     # D-484: where the worker measures the image-to-map calibration from.
     calibration_source: str = "corner_markers"
-    # D-513 7: clockwise screen turn of the raw picture in the console; never calibration input.
-    display_rotation_deg: int = 0
 
 
 class SightingService:
@@ -185,7 +183,6 @@ class SightingService:
                                       else list(source.corner_marker_ids)),
                 "robot_ids": list(source.robot_ids),
                 "robot_markers": dict(source.robot_markers),
-                "display_rotation_deg": source.display_rotation_deg,
             })
         return {"maps": list(maps.values())} if maps else None
 

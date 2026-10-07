@@ -39,7 +39,7 @@ class Conflict(ValueError):
 
 class ReviewStore:
     def __init__(self, state, source=None, human=None, images=None, object_classes=None, *,
-                 empty_eval=False):
+                 empty_eval=False, empty_training=False):
         self.state = Path(state).resolve()
         self.state.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
@@ -55,7 +55,7 @@ class ReviewStore:
                 CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT);''')
             initialized = db.execute("SELECT value FROM metadata WHERE key='initialized'").fetchone()
             if initialized:
-                if empty_eval:
+                if empty_eval or empty_training:
                     raise ValueError('existing workspace: reopen with --state only')
                 if any(x is not None for x in (source, human, images)):
                     raise ValueError('existing workspace: restart with --state only; imports never overwrite reviews')
@@ -71,6 +71,16 @@ class ReviewStore:
                     class_sets.bind_object_set(self, object_classes, db)
                 db.execute("INSERT INTO metadata VALUES ('initialized','true')")
                 db.execute("INSERT INTO metadata VALUES ('workspace_kind','evaluation')")
+                db.commit()
+                review_masks.configure(self)
+                review_evidence.configure(self)
+                return
+            if empty_training:
+                if any(x is not None for x in (source, human, images)):
+                    raise ValueError('empty training workspace has no initial inputs')
+                class_sets.bind_object_set(self, object_classes or class_sets.legacy_object_set(), db)
+                db.execute("INSERT INTO metadata VALUES ('initialized','true')")
+                db.execute("INSERT INTO metadata VALUES ('workspace_kind','training')")
                 db.commit()
                 review_masks.configure(self)
                 review_evidence.configure(self)
@@ -333,9 +343,30 @@ def make_server(store, port=8767, host='127.0.0.1'):
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.get(store, int(path.rsplit('/', 1)[1])))
                 if path == '/api/learning':
+                    frames = store.list_frames()
+                    pixel_reviews = [review_masks.get(store, f['index']) for f in frames]
+                    pixel_statuses = [row['status'] for row in pixel_reviews]
+                    object_draft_indices = [f['index'] for f in frames if f['status'] == 'pending'
+                                            and (f['source'].get('objects') or f['source'].get('boxes'))]
+                    pixel_draft_indices = [row['frame'] for row in pixel_reviews
+                                           if row['status'] == 'pending' and
+                                           bool((review_masks.pixels(store, row) != 255).any())]
                     return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
-                                      'counts': {state: sum(f['status'] == state for f in store.list_frames())
-                                                 for state in ('approved', 'pending', 'excluded')}})
+                                      'counts': {state: sum(f['status'] == state for f in frames)
+                                                 for state in ('approved', 'pending', 'excluded')},
+                                      'object_drafts': len(object_draft_indices),
+                                      'object_draft_first': object_draft_indices[0] if object_draft_indices else None,
+                                      'pixel_draft_first': pixel_draft_indices[0] if pixel_draft_indices else None,
+                                      'pixel_counts': {state: pixel_statuses.count(state)
+                                                       for state in ('approved', 'pending', 'excluded')}
+                                                      | {'drafted': len(pixel_draft_indices),
+                                                         'blank': pixel_statuses.count('pending') - len(pixel_draft_indices)}})
+                if path.startswith('/api/learning/images/'):
+                    prefix, identifier, name = path.rsplit('/', 2)
+                    if prefix != '/api/learning/images':
+                        raise ValueError('invalid JPG evidence path')
+                    raw, digest = learning.image(identifier, name)
+                    return self.send(raw, mime='image/jpeg', etag='"' + digest + '"', cache='no-cache')
                 if path.startswith('/api/images/'):
                     index = int(path.rsplit('/', 1)[1])
                     image = store.image(index)
@@ -433,6 +464,8 @@ def main():
     parser.add_argument('--images', type=Path)
     parser.add_argument('--empty-eval', action='store_true',
                         help='initialize a separate empty evaluation workspace once')
+    parser.add_argument('--empty-training', action='store_true',
+                        help='initialize a separate verified-import review workspace once')
     parser.add_argument('--port', type=int, default=8767)
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
@@ -440,6 +473,8 @@ def main():
                         help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
     parser.add_argument('--cad-catalog', type=Path, help='verified CAD reference catalog shown in app')
     args = parser.parse_args()
+    if args.empty_eval and args.empty_training:
+        parser.error('choose one empty workspace kind')
     object_classes = None
     if args.object_classes:
         try:
@@ -447,7 +482,7 @@ def main():
         except (OSError, ValueError) as exc:
             parser.error(f'--object-classes: {exc}')
     store = ReviewStore(args.state, args.source, args.human, args.images, object_classes,
-                        empty_eval=args.empty_eval)
+                        empty_eval=args.empty_eval, empty_training=args.empty_training)
     with store.connect() as db:
         for key, path in [('import_catalog', args.catalog), ('cad_catalog', args.cad_catalog)]:
             if path:
