@@ -74,6 +74,8 @@ class TrackingService:
         self.gate_m = gate_m
         self._sources = {source.source_id: _SourceState() for source in self.sources}
         self._states: dict[str, tuple[dict, float]] = {}
+        #: D-472 IdentityService (set by the app): its challenge rides the config, bindings follow detections.
+        self.identity = None
 
     @property
     def enabled(self) -> bool:
@@ -93,9 +95,12 @@ class TrackingService:
         source = self.authenticate(authorization)
         record = self.calibrations.get(source.source_id)
         usable = record is not None and record.map_id == source.map_id
-        return {"source_id": source.source_id, "map_id": source.map_id,
-                "calibration": record.to_dict() if usable else None,
-                "relearn_seq": self._sources[source.source_id].relearn_seq}
+        config = {"source_id": source.source_id, "map_id": source.map_id,
+                  "calibration": record.to_dict() if usable else None,
+                  "relearn_seq": self._sources[source.source_id].relearn_seq}
+        if self.identity is not None:
+            config["identity_challenge"] = self.identity.challenge_for(source.source_id)
+        return config
 
     def accept(self, authorization: Optional[str], payload: OverheadDetectionsPayload) -> dict:
         source = self.authenticate(authorization)
@@ -125,6 +130,8 @@ class TrackingService:
         state.last_error = None
         state.arrivals.append(now)
         self._trim(state, now)
+        if self.identity is not None:
+            self.identity.on_detections(source.source_id, payload)
         return {"accepted": True, "source_id": source.source_id, "seq": payload.seq,
                 "status": payload.status}
 
@@ -252,6 +259,24 @@ class TrackingService:
         robots = [_render(tracks[rid], track_source[rid]) for rid in sorted(tracks)]
         return {"ts": now, "lease_s": self.lease_s, "gate_m": self.gate_m, "use": "display-only",
                 "sources": sources_out, "robots": robots, "unknown": unknown}
+
+    def latest(self, source_id: str) -> Optional[OverheadDetectionsPayload]:
+        """The source's last accepted payload while inside the lease, else None."""
+        state = self._sources.get(source_id)
+        payload = None if state is None else state.payload
+        if payload is None or self._clock() - payload.captured_at > self.lease_s:
+            return None
+        return payload
+
+    def robot_state(self, robot_id: str) -> Optional[dict]:
+        """The robot's state from the last console gather while fresh, else None."""
+        entry = self._states.get(robot_id)
+        if entry is None or not 0.0 <= self._clock() - entry[1] <= self.state_fresh_s:
+            return None
+        return entry[0]
+
+    def revisions(self, source: SightingSource) -> set[str]:
+        return self._revisions(source)
 
     def _revisions(self, source: SightingSource) -> set[str]:
         allowed = {source.calibration_revision}  # corner-marker path (CameraMap), D-457 2

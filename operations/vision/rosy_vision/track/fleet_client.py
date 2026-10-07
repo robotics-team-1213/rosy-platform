@@ -2,7 +2,7 @@
 
 Writes anonymous detections and reads this source's own tracking config (approved
 calibration record and relearn counter). The token is sent only as a header. Vision
-calls no other Fleet route besides sightings and pairing sync (test_app_roles.py).
+calls no other Fleet route besides sightings, pairing sync and the D-472 identity verdict (test_app_roles.py).
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from core_common.protocol.overhead_detections import OverheadDetectionsPayload
 
 DETECTIONS_PATH = "/api/fleet/detections"
 CONFIG_PATH = "/api/fleet/detections/config"
+IDENTITY_PATH = "/api/fleet/detections/identity"  # D-472: verdict numbers only, no image
 
 
 class TrackPublishError(RuntimeError):
@@ -51,6 +52,11 @@ class TrackClient:
         response = await self._client.post(DETECTIONS_PATH, json=payload.model_dump(mode="json"),
                                            headers={"Authorization": self._authorization})
         return _body(response, "DETECTION_HTTP_ERROR", "BAD_RESPONSE")
+
+    async def publish_identity(self, body: dict[str, Any]) -> dict[str, Any]:
+        response = await self._client.post(IDENTITY_PATH, json=body,
+                                           headers={"Authorization": self._authorization})
+        return _body(response, "IDENTITY_HTTP_ERROR", "BAD_RESPONSE")
 
     async def fetch_config(self) -> dict[str, Any]:
         response = await self._client.get(CONFIG_PATH, headers={"Authorization": self._authorization})

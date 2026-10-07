@@ -35,8 +35,9 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
         config = yaml.safe_load(source_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         raise ValueError(f"cannot read sighting config {source_path}: {exc}") from exc
-    if not isinstance(config, dict) or set(config) != {"sources"} or not isinstance(config["sources"], list):
-        raise ValueError("sighting config must contain only a sources list")
+    if (not isinstance(config, dict) or "sources" not in config or set(config) - {"sources", "identity"}
+            or not isinstance(config["sources"], list)):
+        raise ValueError("sighting config must contain a sources list and optionally identity")
     if not config["sources"]:
         raise ValueError("sighting config needs at least one source")
 
@@ -132,3 +133,18 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
             raise ValueError(f"sources {first.source_id} and {source.source_id} share map_id "
                              f"{source.map_id} but differ in corner_world_m")
     return sources
+
+
+def load_identity_config(path: Path | str):
+    """D-472: the optional ``identity:`` mapping of the same site YAML (IdentityConfig fields)."""
+    from fleet.server.identity import IdentityConfig
+
+    try:
+        config = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise ValueError(f"cannot read sighting config {path}: {exc}") from exc
+    try:
+        return IdentityConfig.from_mapping((config or {}).get("identity"))
+    except TypeError as exc:
+        raise ValueError(f"identity config: {exc}") from exc
+
