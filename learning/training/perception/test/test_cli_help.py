@@ -22,6 +22,7 @@ CLIS = [
     "learning/training/perception/dataset/sam3_road_draft.py",
     "learning/training/perception/model/convert.py",
     "learning/training/perception/model/deliver.py",
+    "learning/training/perception/model/export_class_names.py",
     "learning/training/perception/model/export_onnx.py",
     "learning/training/perception/model/intake.py",
     "learning/training/perception/model/sign_model.py",

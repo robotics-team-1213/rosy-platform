@@ -152,7 +152,7 @@ class CalibrationCamera:
             values = {k: candidate[k] for k in (*extrinsic.PROFILE_KEYS, 'roll_rad', 'max_range_m') if k in candidate}
             return store.add(default_robot(), 'camera_profile', values, method=CAMERA_METHOD,
                              sessions=[candidate['revision']],
-                             intervals={'uncertainty': candidate['uncertainty']},
+                             intervals={'uncertainty': candidate['uncertainty'], 'fit_step': candidate['fit_step']},
                              extra={k: candidate[k] for k in ('score', 'score_at_base', 'wall_points', 'height_source',
                                                              'recommended', 'why', 'source', 'lidar_yaw_check')
                                     if k in candidate})

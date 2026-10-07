@@ -101,13 +101,14 @@ def test_cell_page_keeps_emergency_stop_in_first_view(browser_site, width, heigh
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
 
 
-def test_cell_emergency_stop_uses_console_session_and_reports_uncertainty(browser_site):
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_emergency_stop_uses_console_session_and_reports_uncertainty(browser_site, width, height):
     from playwright.sync_api import expect
 
     page, _, _ = browser_site
     page.evaluate("sessionStorage.setItem('rosy-console-token', 'operator-secret')")
     page.reload()
-    page.set_viewport_size({"width": 320, "height": 568})
+    page.set_viewport_size({"width": width, "height": height})
     assert page.locator("#credential input").input_value() == "operator-secret"
     replies = {"status": 200}
     sent = []
@@ -127,13 +128,20 @@ def test_cell_emergency_stop_uses_console_session_and_reports_uncertainty(browse
     content = page.locator("main > ui-section").first.bounding_box()
     assert abs(feedback["x"] - content["x"]) <= 1
     assert abs(feedback["width"] - content["width"]) <= 1
+    assert feedback["y"] + feedback["height"] <= height
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
-        page.screenshot(path=str(Path(output) / "fleet-cell-estop-partial-320x568.png"))
+        page.screenshot(path=str(Path(output) / f"fleet-cell-estop-partial-{width}x{height}.png"))
     replies["status"] = 503
     page.locator("#estop").click()
     expect(page.locator("#estop-feedback")).to_contain_text("비상 정지 결과 확인 불가")
+    unknown = page.locator("#estop-feedback").bounding_box()
+    assert unknown and unknown["y"] + unknown["height"] <= height
+    assert abs(unknown["x"] - content["x"]) <= 1
+    assert abs(unknown["width"] - content["width"]) <= 1
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output:
-        page.screenshot(path=str(Path(output) / "fleet-cell-estop-unknown-320x568.png"))
+        page.screenshot(path=str(Path(output) / f"fleet-cell-estop-unknown-{width}x{height}.png"))
     assert len(sent) == 2
     assert all(request.headers.get("authorization") == "Bearer operator-secret" for request in sent)
 
@@ -163,6 +171,10 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
 def test_cell_panels_and_compact_actions_use_uniform_width(browser_site, width, height):
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
+    for kind in ("recipe", "cell"):
+        picker = page.locator(f"#{kind}-file").locator("..")
+        assert picker.locator(f"#{kind}-file-name").inner_text() == "선택한 파일 없음"
+        assert abs(picker.bounding_box()["width"] - page.locator(f"#{kind}-id").bounding_box()["width"]) <= 1
     assert page.locator("#layout-preview").count() == 1
     assert page.locator("#layout-preview").is_hidden()
     panels = [panel.bounding_box() for panel in page.locator(".documents > ui-section").all()]
@@ -214,11 +226,12 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site):
 
 
 @pytest.mark.parametrize("denial,notice", [(401, "토큰"), (403, "운영자 토큰을 확인하고 다시 접속하세요")])
-def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice):
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice, width, height):
     from playwright.sync_api import expect
 
     page, _, _ = browser_site
-    page.set_viewport_size({"width": 320, "height": 568})
+    page.set_viewport_size({"width": width, "height": height})
     _prepare(page)
     expect(page.locator("#saved li")).to_have_count(2)
     page.route("**/api/fleet/session", lambda route: route.fulfill(status=denial, body="unauthorized"))
@@ -232,10 +245,14 @@ def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice):
     expect(page.locator("#recipe-revision")).to_have_text("저장 전")
     expect(page.locator("#summary")).not_to_contain_text("18회 전송")
     notice_box = page.locator("#notice").bounding_box()
-    assert notice_box and 0 <= notice_box["y"] < 568
+    assert notice_box and 0 <= notice_box["y"] < height
+    panels = [panel.bounding_box() for panel in page.locator(".documents > ui-section").all()]
+    assert len(panels) == 2 and abs(panels[0]["width"] - panels[1]["width"]) <= 1
+    stop_box = page.locator("#estop").bounding_box()
+    assert stop_box and 0 <= stop_box["y"] < height
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
-        page.screenshot(path=str(Path(output) / f"fleet-cell-auth-{denial}-320x568.png"))
+        page.screenshot(path=str(Path(output) / f"fleet-cell-auth-{denial}-{width}x{height}.png"))
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -444,6 +461,11 @@ def test_import_updates_existing_revision_and_guided_fields(browser_site):
     page.locator("#recipe-file").set_input_files({
         "name": "recipe.json", "mimeType": "application/json", "buffer": json.dumps(recipe).encode()})
     expect(page.locator("#notice")).to_contain_text("파일을 불러왔습니다")
+    expect(page.locator("#recipe-file-name")).to_have_text("recipe.json")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.set_viewport_size({"width": 320, "height": 568})
+        page.locator("#recipe-file-name").scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / "fleet-cell-file-selected-320x568.png"))
     assert page.locator("#propose").get_attribute("disabled") is not None
     assert page.locator("#recipe-fields input").count() == 6
     assert page.locator("#cell-fields input").count() == 7

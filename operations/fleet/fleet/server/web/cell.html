@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rosy Console · Cell</title>
+  <title>Rosy Fleet · Cell</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
@@ -15,7 +15,7 @@
 <body>
 <ui-shell grammar="procedure">
   <ui-topbar>
-    <ui-brand href="/console" aria-label="Rosy Console 홈"><b>Rosy Console</b><small>Cell · 팔레타이징 작업 준비</small></ui-brand>
+    <ui-brand href="/console" aria-label="Rosy Fleet 홈"><b>Rosy Fleet</b><small>Cell · 팔레타이징 작업 준비</small></ui-brand>
     <span data-spacer></span>
     <ui-tag id="session">접속 전</ui-tag>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
@@ -31,7 +31,7 @@
       <ui-section aria-labelledby="recipe-heading">
         <ui-head><ui-text id="recipe-heading" scale="label">1 · 레시피</ui-text></ui-head>
         <label for="recipe-id">문서 이름</label><input class="ui-field" id="recipe-id" value="recipe-demo" maxlength="64">
-        <label for="recipe-file">레시피 JSON 파일 불러오기</label><input class="ui-field" id="recipe-file" type="file" accept=".json,application/json">
+        <label for="recipe-file">레시피 JSON 파일 불러오기</label><div class="file-picker"><input class="ui-field" id="recipe-file" type="file" accept=".json,application/json" aria-describedby="recipe-file-name"><span class="file-picker-button" aria-hidden="true">JSON 파일 선택</span><span id="recipe-file-name" aria-live="polite">선택한 파일 없음</span></div>
         <div id="recipe-fields" class="scope" aria-label="박스와 적재 간격 편집"></div>
         <div id="recipe-structure" aria-label="팔레트와 층 설정 편집"></div>
         <details><summary>레시피 문서 편집 · JSON</summary><label for="recipe-document">레시피 문서</label><textarea class="ui-field" id="recipe-document" rows="14" spellcheck="false"></textarea></details>
@@ -41,7 +41,7 @@
       <ui-section aria-labelledby="cell-heading">
         <ui-head><ui-text id="cell-heading" scale="label">2 · 셀 설정</ui-text></ui-head>
         <label for="cell-id">문서 이름</label><input class="ui-field" id="cell-id" value="cell-demo" maxlength="64">
-        <label for="cell-file">티칭된 셀 JSON 파일 불러오기</label><input class="ui-field" id="cell-file" type="file" accept=".json,application/json">
+        <label for="cell-file">티칭된 셀 JSON 파일 불러오기</label><div class="file-picker"><input class="ui-field" id="cell-file" type="file" accept=".json,application/json" aria-describedby="cell-file-name"><span class="file-picker-button" aria-hidden="true">JSON 파일 선택</span><span id="cell-file-name" aria-live="polite">선택한 파일 없음</span></div>
         <ui-text>프레임·스테이션·home은 승인된 장치 티칭값을 사용하세요. 파일을 불러온 뒤 설정과 미리보기를 확인합니다.</ui-text>
         <div id="cell-fields" class="scope" aria-label="셀 home과 도구 설정 편집"></div>
         <ui-text>아래 좌표 입력은 셀 문서 초안입니다. 장치의 현재 좌표 측정이나 티칭 수락을 대신하지 않습니다.</ui-text>

@@ -628,8 +628,8 @@ class FleetConsole:
         """A robot that reported localization and is null inside its grace (a CORE restart)."""
         return self._loc_null_since.get(robot_id) is not None
 
-    async def trusted_map_pose(self, robot_id: str) -> Optional[tuple[float, float]]:
-        """Fresh pose only when this snapshot is LOCALIZED in the map frame.
+    async def trusted_map_pose(self, robot_id: str) -> Optional[tuple[float, float, Optional[float]]]:
+        """Fresh ``(x, y, yaw or None)`` only when this snapshot is LOCALIZED in the map frame.
 
         A legacy snapshot, an odom pose, and a lapsed D-395 robot are not a
         lane-route pose (D-463). Remembering the row keeps a following goal
@@ -646,7 +646,11 @@ class FleetConsole:
             return None
         if not math.isfinite(x) or not math.isfinite(y):
             return None
-        return x, y
+        try:
+            yaw = float(pose["yaw"])
+        except (KeyError, TypeError, ValueError):
+            yaw = None
+        return x, y, (yaw if yaw is not None and math.isfinite(yaw) else None)
 
     def _verdict(self, robot_id: str) -> str:
         """`trust.classify`, except a lapsed D-395 robot is untrusted, not legacy."""

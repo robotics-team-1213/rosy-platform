@@ -44,3 +44,22 @@ test("a locked shared button states the operator reason and gets its own back", 
   assert.equal(button.getAttribute("reason"), "대형 없음");
   assert.equal(button.disabled, true);
 });
+
+test("a button inside a role-lock group shares the group's one note instead of repeating the reason", () => {
+  const note = { id: "formation-role-lock", hidden: true };
+  const button = fakeControl(false, "ui-button");
+  button.setAttribute("reason", "대형 없음");
+  button.closest = () => ({ querySelector: () => note });
+
+  applyRoleToControls("viewer", [button]);
+  assert.equal(button.disabled, true);
+  assert.equal(button.getAttribute("reason"), null);
+  assert.equal(note.hidden, false);
+  assert.equal(button.getAttribute("aria-describedby"), "formation-role-lock");
+
+  applyRoleToControls("operator", [button]);
+  assert.equal(button.disabled, false);
+  assert.equal(button.getAttribute("reason"), "대형 없음");
+  assert.equal(note.hidden, true);
+  assert.equal(button.getAttribute("aria-describedby"), null);
+});

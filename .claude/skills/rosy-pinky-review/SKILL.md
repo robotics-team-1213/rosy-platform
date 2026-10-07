@@ -84,6 +84,9 @@ pending ones, and `page.reload()` after a store write so the page sees it. Serve
 contract suites: the test block in `review-app.md`. Run `node --test` for
 `review_box_geometry.test.mjs`.
 
+## Class sets (D-485)
+
+A workspace holds one object class set and one pixel class set. For another model, make a new `--state` and pass the model's names at first start: `--object-classes <data.yaml>` (Ultralytics `names`, optional `display`/`colors`; default is the D-423 six classes). Get `data.yaml` on the model PC with `python learning/training/perception/model/export_class_names.py best.pt --out data.yaml`. The lane model's pixel classes are `learning/training/perception/classes/lane_lr5.yaml`. Hotkeys in a walkthrough: `1`-`9` class, `A` approve (after ticking `#complete`), `X` exclude (pending photos only), arrows move; they follow key codes, so Korean IME does not matter. Hotkey/class-set browser checks live in `test_pixel_review_browser.py` and `test_review_flow_browser.py` (section 4).
 ## Common mistakes
 
 - Approving in a test or walkthrough on the operational state turns synthetic approvals into training truth. Copy first.

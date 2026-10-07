@@ -103,11 +103,11 @@ def test_originals_changing_after_capture_cannot_change_export(tmp_path, monkeyp
     original_image = (images / '0.jpg').read_bytes()
     delegate = module.exporter.main
 
-    def mutate_originals(argv):
+    def mutate_originals(argv, **kw):
         source.write_bytes(b'invalid new source')
         human.write_bytes(b'invalid new review')
         (images / '0.jpg').write_bytes(b'changed original')
-        return delegate(argv)
+        return delegate(argv, **kw)
 
     monkeypatch.setattr(module.exporter, 'main', mutate_originals)
     out = tmp_path / 'return'
@@ -121,11 +121,11 @@ def test_second_group_failure_has_no_outer_complete_receipt(tmp_path, monkeypatc
     source, human, images = fixture_inputs(tmp_path)
     delegate, calls = module.exporter.main, []
 
-    def fail_second(argv):
+    def fail_second(argv, **kw):
         calls.append(argv)
         if len(calls) == 2:
             raise ValueError('group failed')
-        return delegate(argv)
+        return delegate(argv, **kw)
 
     monkeypatch.setattr(module.exporter, 'main', fail_second)
     out = tmp_path / 'return'
@@ -133,3 +133,16 @@ def test_second_group_failure_has_no_outer_complete_receipt(tmp_path, monkeypatc
         module.receive_review(source, human, images, out)
     assert not (out / 'manifest.json').exists()
     assert not (out / 'COMPLETE').exists()
+
+
+def test_custom_class_list_is_accepted_and_recorded(tmp_path):
+    source, human, images = fixture_inputs(tmp_path)
+    classes = ('car', 'traffic_light')
+    out = tmp_path / 'return'
+    result = module.receive_review(source, human, images, out, classes=classes)
+    assert result['classes'] == list(classes)
+    group = json.loads((out / 'groups/32x24/manifest.json').read_text(encoding='utf-8'))
+    assert group['classes'] == list(classes)
+    assert (out / 'groups/32x24/000000.txt').read_text().startswith('1 ')
+    with pytest.raises(ValueError, match='object class'):
+        module.receive_review(source, human, images, tmp_path / 'other', classes=('car',))

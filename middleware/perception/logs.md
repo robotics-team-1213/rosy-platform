@@ -1134,8 +1134,21 @@
 - 증거: `test_lane_containment_payload.py` 6 PASS.
 - gate 변화: 없음.
 
+## 2026-10-07 · b53e1fe19 · fix(perception): camera fit grid steps, fine height band, record fit_step
+- 변경: `camera_extrinsic.fit_camera_extrinsic(steps=)`가 미세 격자 간격을 받아 결과에 `fit_step`으로 적는다. 기본은 로봇 격자(`FINE_STEPS` 0.1° / 0.5° / 2.5 mm), PC 오프라인 적합(`tools/calibration/analyze_session.py`)만 `PC_FINE_STEPS`(0.1° / 0.1° / 1 mm, 실행당 약 170 s, 로봇 격자 18 s). `lane_containment.geometry_error`의 하한은 기록의 `intervals.fit_step`(없으면 로봇 격자)
+- 로봇 경로 출력도 바뀐다(리뷰 지적): (1) 높이를 적합할 때 높이 band를 5 mm 거친 표가 아니라 미세 표에서 잰다. band가 미세 창 끝에 닿으면 거친 band 범위를 함께 쓴다. 그래서 로봇 기록의 높이 band가 5 mm 단위에서 2.5 mm 단위로 좁아질 수 있다. 하한(로봇 격자 2.5 mm)은 그대로 적용된다. (2) 미세 높이 창을 `HEIGHT_RANGE_M` 안으로 자른다. 범위 아래 최적값(8kcn 133221Z에서 0.025 m가 recommended였다)은 이제 at_bound, not recommended. (3) `calibration_camera`가 기록 intervals에 `fit_step`을 함께 저장한다. 로봇이 PC 격자를 돌리지는 않는다(`test_camera_extrinsic.py` StepTest가 고정)
+- 증거: `test_camera_extrinsic.py` FitStepTest(뾰족한 점수 대역으로 간격·창 자르기·band), `test_lane_containment_payload.py` fit_step 하한, `test_analyze_store.py`. 8kcn 세션 5개 PC 재적합: 피치 12.52 ± 2.43°, 롤 −0.96 ± 1.24°, 높이 0.0627 ± 0.0236 m(95 %, n=5) → 후보 기록 `20261006T18485199375_0c367ced2231`(PC 미러, 미승인), 투영 불확실도 0.12–0.30 m 지지에서 약 88 mm
+- gate 변화: 없음. SOURCE만
+- 결정: D-468, D-47 addendum. G-15(D-480)
+- 교훈: 벽-모서리 점수는 높이 방향으로 들쭉날쭉하다. 한 실행의 점수 band가 아니라 실행 간 ci95가 실제 오차를 보여 준다
 ## 2026-10-07 · uncommitted · fix(perception): IR 좌우 두 띠는 선 하나가 아니다(횡단보도 중앙 위상만)
 
 - 변경: `detect_ir_line`이 좌·우 채널이 모두 `min_white` 이상이고 가운데가 그보다 `min_contrast` 이상 어두우면 `None`(선 없음)을 낸다. 260919 지도의 횡단보도 두 곳은 줄무늬가 차로와 나란히 40 mm 간격이라, 중앙 주행에서 좌·우 IR이 약 12 cm 동안 줄무늬 위, 가운데 IR이 그 사이 바닥에 있다. 이전에는 무게중심 0·신뢰도 0.96이 나와 D-344 §12 IR 가드가 `centre`(`lane_departure` HOLD)로 읽었다. 25–28 mm 경계선 하나는 가운데+한쪽까지만 덮으므로 실제 이탈 신호는 그대로다. 관측 계약·CORE는 바꾸지 않았다. **남은 것:** 줄무늬는 폭 25 mm·피치 40 mm라 차로 중심에서 12.5–27.5 mm 비키면 가운데 IR만 줄무늬 위다. 이 위상은 경계선 하나가 가운데 밑에 있는 것과 IR로 구별되지 않아 가짜 `lane_departure`가 남는다. 횡단보도 구간은 별도 ADR(D-344 §12 보강 2026-10-07)에서 정한다.
 - 증거: `test_line_modes.py` 추가 3건(두 띠·역극성, 임계 경계, 한 띠 유지. 수정 전 실패 재현). 독립 리뷰가 위상 표를 0.5 mm 래스터로 확인. 횡단보도 위치·줄무늬 방향은 STL 도색 래스터로 확인(스크래치, 저장소 밖).
 - gate 변화: 없음. IR 가드는 기본 꺼짐이며 장치 IR 교정·실주행 확인은 별도다.
+
+## 2026-10-07 · uncommitted · docs(adr): 횡단보도 구간 ADR 번호는 D-491
+
+- 변경: 위 항목의 "별도 ADR"은 D-491(Proposed)이다. D-488은 main에서 다른 ADR이 먼저 썼다.
+- 증거: `rosy_harness.py lint` ADR 번호 검사.
+- gate 변화: 없음.

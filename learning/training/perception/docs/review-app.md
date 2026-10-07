@@ -149,3 +149,30 @@ ETag(원본은 `image_sha256`, 마스크는 인코딩된 PNG 바이트 sha256)�
 thumbnail을 다시 만들지 않고, 픽셀 검수의 마스크 오버레이 채색을 마스크 version·불투명도·테마가
 바뀔 때만 다시 계산한다. 서버 검증 오류는 화면에서 한국어 안내로 바꿔 보여주며, 미분류 박스가
 있으면 승인을 화면에서 먼저 막는다. 서버 검증은 그대로 최종 방어다.
+
+### 클래스셋 (D-485)
+
+객체 클래스는 첫 실행의 `--object-classes <data.yaml>`로 정한다. 파일은 Ultralytics `data.yaml`의 `names`(목록 또는 번호 사전)를 읽고, 선택 항목 `display`(이름별 표시 문구)와 `colors`(이름별 `[r, g, b]`)를 받는다. 생략하면 D-423의 기본 6개 클래스다. 한 작업 공간은 객체 클래스셋 하나와 픽셀 클래스셋 하나에 묶인다. 다른 모델의 클래스로 검수하려면 다른 `--state`로 새 작업 공간을 만든다.
+
+```powershell
+python learning/training/perception/dataset/review_app.py --state X:/DevTemp/<name>/state --source <source.jsonl> --human <human.jsonl> --images <image-root> --object-classes <data.yaml> --port 8767
+```
+
+픽셀 `classes.yaml`은 항목마다 선택 항목 `display`를 둘 수 있다. 차선 모델(왼쪽/오른쪽 차선, 횡단보도, 과속방지턱)용 파일은 `learning/training/perception/classes/lane_lr5.yaml`이다. 카탈로그 가져오기(`/api/import`) 요청 본문의 `classes`에 이 파일 경로를 넣는다. 비우면 초안 마스크 zip 옆이나 카탈로그 옆의 `classes.yaml`을 찾는다.
+
+모델 PC에서 `.pt`의 클래스 이름을 `data.yaml`로 뽑는다. 검수 앱은 모델을 열지 않는다.
+
+```powershell
+python learning/training/perception/model/export_class_names.py best.pt --out data.yaml
+```
+
+클래스셋 sha(`object_class_set_sha256`)는 `review-contract.json`과 `/api/workspace`에 있고 `/api/decisions`에는 없다.
+
+단축키 (입력 칸에 포커스가 없을 때, 한글 입력 상태에서도 같은 키):
+
+| 키 | 동작 |
+|---|---|
+| `1`-`9` | 클래스 선택 (선택한 박스에 지정) |
+| `A` | 승인 (전체 확인 체크 후에만, 픽셀 검수는 기본 배경 확인 체크도 필요) |
+| `X` | 제외 (검수 대기 사진만) |
+| `←` / `→` | 이전 / 다음 사진 |

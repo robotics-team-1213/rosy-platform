@@ -3,21 +3,23 @@ import os
 import re
 import threading
 
+from contextlib import contextmanager
+
 import pytest
 
-from test_review_app import open_store
+import class_sets
+from test_review_app import fixture_inputs, open_store
 from test_review_cycle import CLASSES, catalog
-from review_app import make_server
+from review_app import ReviewStore, make_server
 import review_masks
 
 pytestmark = pytest.mark.skipif(os.getenv('ROSY_RUN_BROWSER_TESTS') != '1',
                                 reason='requires explicit local Chromium browser run')
 
 
-@pytest.fixture
-def browser_workspace(tmp_path):
+@contextmanager
+def serve(store):
     playwright = pytest.importorskip('playwright.sync_api')
-    store = open_store(tmp_path)
     server = make_server(store, 0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -36,6 +38,21 @@ def browser_workspace(tmp_path):
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+
+
+@pytest.fixture
+def browser_workspace(tmp_path):
+    with serve(open_store(tmp_path)) as value:
+        yield value
+
+
+@pytest.fixture
+def custom_class_workspace(request, tmp_path):
+    source, human, images = fixture_inputs(tmp_path)
+    data = getattr(request, 'param', 'names: [car, traffic_light]\ndisplay: {car: 자동차}\n')
+    record = class_sets.from_data_yaml(data.encode(), 'detect')
+    with serve(ReviewStore(tmp_path / 'state', source, human, images, record)) as value:
+        yield value
 
 
 def test_pixel_points_preview_before_explicit_apply(browser_workspace):
@@ -131,6 +148,23 @@ def test_review_editor_peer_widths(browser_workspace, route, left, right, width)
         page.screenshot(path=str(target), full_page=True)
 
 
+@pytest.mark.parametrize('width', [390, 320])
+def test_object_filter_uses_photo_strip_width_on_phone(browser_workspace, width):
+    from pathlib import Path
+
+    page, _, _ = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/', wait_until='networkidle')
+    filter_box = page.locator('.photo-sidebar > label').bounding_box()
+    strip = page.locator('#frames').bounding_box()
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        page.screenshot(path=str(Path(output) / f'learning-filter-{width}.png'), full_page=True)
+    assert filter_box and strip
+    assert abs(filter_box['x'] - strip['x']) <= 1
+    assert abs(filter_box['width'] - strip['width']) <= 1, (filter_box, strip)
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+
+
 @pytest.mark.parametrize('width', [1440, 800, 390])
 def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
     page, _, expect = browser_workspace
@@ -207,6 +241,40 @@ def test_learning_compact_actions_and_connection_form_use_full_width(browser_wor
         target = Path(output) / f'learning-work-form-{width}.png'
         target.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(target), full_page=True)
+
+
+@pytest.mark.parametrize('width', [1440, 800, 390, 320])
+def test_learning_report_age_advances_and_refreshes(browser_workspace, tmp_path, width):
+    page, _, expect = browser_workspace
+    report = tmp_path / 'learning-result'
+    report.mkdir()
+    (report / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
+    page.clock.install()
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.locator('#new-task').click()
+    page.locator('#name').fill('검수할 결과')
+    page.locator('#path').fill(str(report))
+    page.locator('#connect').click()
+    age = page.locator('[data-report-age]')
+    expect(age).to_contain_text('방금 확인')
+    expect(page.locator('#jobs')).to_contain_text('보고서 상태와 단계별 근거를 확인')
+    expect(page.locator('#jobs')).not_to_contain_text('실패·거절 이유')
+    page.clock.fast_forward(121_000)
+    expect(age).to_contain_text('2분 전 확인')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if width <= 390:
+        card = page.locator('#jobs .ui-task-row').bounding_box()
+        search = page.locator('#search').bounding_box()
+        assert abs(card['x'] - search['x']) <= 1 and abs(card['width'] - search['width']) <= 1
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-report-age-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.evaluate('window.scrollTo(0, 0)')
+        page.screenshot(path=str(target), full_page=True)
+    page.locator('#refresh').click()
+    expect(age).to_contain_text('방금 확인')
 
 
 @pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels'])
@@ -804,3 +872,74 @@ def test_stale_undo_never_overwrites_other_tab(browser_workspace, width):
     page.locator('#reload').click()
     expect(page.get_by_label('박스 1 x0',exact=True)).to_have_value('2')
     expect(page.locator('#undo')).to_have_attribute('disabled', '')
+
+
+def test_class_select_lists_the_workspace_class_set(browser_workspace):
+    page, store, expect = browser_workspace
+    options = page.locator('#boxes .box-top select').first.locator('option')
+    expect(options).to_have_text(['클래스 선택 필요', '로봇', '장애물 상자', '콘', '신호등', '표지판', '사람 발'])
+
+
+def test_custom_class_set_names_and_saves(custom_class_workspace):
+    page, store, expect = custom_class_workspace
+    select = page.locator('#boxes .box-top select').first
+    expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', '신호등'])
+    select.select_option('car')
+    expect(page.locator('#save-status')).to_contain_text('v2')
+    expect(page.locator('#boxes summary').first).to_contain_text('자동차')
+    assert store.get(0)['review']['boxes'][0]['label'] == 'car'
+
+
+def test_number_keys_pick_classes_and_a_x_decide(browser_workspace):
+    page, store, expect = browser_workspace
+    page.get_by_role('button', name='박스 1 선택', exact=True).click()
+    page.locator('#canvas').focus()
+    page.keyboard.press('2')
+    expect(page.locator('#boxes .box-top select').first).to_have_value('obstacle_box')
+    expect(page.locator('#status')).to_have_text('검수 대기')
+    assert store.get(0)['review']['boxes'][0]['label'] == 'obstacle_box'
+    # Approval stays explicit (D-461): A never ticks the whole-photo check.
+    page.locator('#canvas').focus()
+    page.keyboard.press('a')
+    page.wait_for_timeout(300)
+    expect(page.locator('#complete')).not_to_be_checked()
+    assert store.get(0)['status'] == 'pending'
+    # Right after ticking the checkbox, without moving focus back to the canvas.
+    page.locator('#complete').check()
+    page.keyboard.press('a')
+    expect(page.locator('#status')).to_have_text('승인')
+    assert store.get(0)['status'] == 'approved'
+    # X only excludes a pending photo; an approved one stays approved.
+    page.keyboard.press('x')
+    page.wait_for_timeout(300)
+    assert store.get(0)['status'] == 'approved'
+    page.locator('#reopen').click()
+    expect(page.locator('#status')).to_have_text('검수 대기')
+    # Korean IME: key is 'ㅁ' but the physical key is still KeyA.
+    page.locator('#complete').check()
+    page.evaluate("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ㅁ', code: 'KeyA', bubbles: true}))")
+    expect(page.locator('#status')).to_have_text('승인')
+    page.locator('#reopen').click()
+    expect(page.locator('#status')).to_have_text('검수 대기')
+    page.keyboard.press('x')
+    expect(page.locator('#status')).to_have_text('제외')
+    assert store.get(0)['status'] == 'excluded'
+
+
+def test_number_key_in_a_number_field_stays_typing(browser_workspace):
+    page, store, expect = browser_workspace
+    field = page.get_by_label('박스 1 x0', exact=True)
+    field.focus()
+    page.keyboard.press('2')
+    expect(page.locator('#boxes .box-top select').first).to_have_value('traffic_light')
+    page.keyboard.press('Control+a')
+    page.wait_for_timeout(300)
+    assert store.get(0)['review']['boxes'][0]['label'] == 'traffic_light'
+    assert store.get(0)['status'] == 'approved'
+
+
+@pytest.mark.parametrize('custom_class_workspace', ["names: ['10', car, traffic_light]\n"], indirect=True)
+def test_class_options_keep_class_index_order(custom_class_workspace):
+    page, store, expect = custom_class_workspace
+    expect(page.locator('#boxes .box-top select').first.locator('option')).to_have_text(
+        ['클래스 선택 필요', '10', 'car', '신호등'])

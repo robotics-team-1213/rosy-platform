@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · uiux(games): 현재 보드 상태·폭 재검증
-- 2026-10-07 · uncommitted · uiux: 현재 main G1 재검증
-- 2026-10-07 · uncommitted · uiux(learning): 대기 중 중복 빈 상태 제거
-- 2026-10-07 · uncommitted · uiux(learning): 작업·자료 등록의 응답 대기 시간
-- 2026-10-07 · uncommitted · uiux(fleet): LED 행동 추가 뒤 전화 폭 재검증
+- 2026-10-07 · uncommitted · feat(review): D-485 검수 앱 클래스셋
+- 2026-10-07 · uncommitted · uiux(fleet): 예외 상태 27셀 현재 화면 재촬영
+- 2026-10-07 · uncommitted · uiux(fleet): D-487 브라우저 전체 재실행
+- 2026-10-07 · uncommitted · uiux: D-153 G1 현 후보 재확인
+- 2026-10-07 · uncommitted · uiux(fleet): 병합 뒤 roster 계측 경합 제거

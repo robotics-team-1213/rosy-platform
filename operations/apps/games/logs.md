@@ -353,3 +353,9 @@
 - 변경: 보드 브라우저 시험의 원시 `wait_for_function` 식 9곳을 함수 식으로 고쳐 CSP에서 실행 가능한 대기 검사로 통일했다. 제품 보드 코드는 변경하지 않았다.
 - 증거: X: `2026-10-07-games-current/run.txt` 전체 28 passed/1 failed, `failed-case-rerun.txt`의 320px 유실 HOLD 1 passed, `known_failures.py` 0 NEW. 수정 뒤 전체 29셀 재실행은 하지 않았다.
 - gate 변화: LOCAL 시험 배관 복구. 실제 경기·정지 readback과 사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · test(games): 시간 결측의 선언 전화 폭
+
+- 변경: 시간 근거 없는 이전 형식의 경기 응답을 1280·390·320px에 렌더하고 좁은 폭의 동등 패널·넘침·정지를 확인한다.
+- 증거: X: `2026-10-07-games-csp-final/run.txt` 29 passed(확장 전), `2026-10-07-games-unavailable/run.txt` 확장 3 passed, `games_board_unavailable_{1280x800,390x800,320x568}.png`, 각 `known_failures.py` 0 NEW.
+- gate 변화: LOCAL G2 시간 결측 전화 폭 일부 근거 추가. 실제 경기·정지 readback과 사용자 G3는 HOLD.

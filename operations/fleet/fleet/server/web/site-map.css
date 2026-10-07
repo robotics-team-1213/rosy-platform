@@ -1,0 +1,52 @@
+main { display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 90rem; margin: 0 auto; word-break: keep-all; overflow-wrap: break-word; }
+.site-access { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4) 0; max-width: 90rem; margin: 0 auto; }
+#credential { flex: 1; min-width: 0; }
+ui-section { display: grid; gap: var(--space-3); }
+.columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+.form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.form[hidden] { display: none; }
+label { display: grid; gap: var(--space-2); }
+label.inline { display: inline-flex; align-items: center; gap: var(--space-2); }
+input, select { box-sizing: border-box; width: 100%; background: var(--field-bg); color: var(--ink); border: 1px solid var(--field-line); border-radius: var(--radius-control); padding: var(--space-2); font: inherit; }
+input[type="checkbox"] { width: auto; }
+input:focus-visible, select:focus-visible, a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+a { color: var(--ink); }
+.console-return { box-sizing: border-box; min-height: var(--target-secondary); display: inline-flex; align-items: center; padding: var(--space-3); }
+.map-viewport { min-width: 0; max-width: 100%; }
+.map-viewport:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.map-scroll-hint { display: none; }
+.map-scroll-hint[hidden] { display: none; }
+#site-map-svg { width: 100%; height: 30rem; background: var(--surface-flat); border: 1px solid var(--line-14); border-radius: var(--radius-control); }
+#site-map-svg.picking { cursor: crosshair; }
+#site-map-svg .edge { fill: none; stroke: var(--ink-quiet); stroke-width: 3px; cursor: pointer; }
+#site-map-svg .edge.free { stroke-dasharray: 8 6; }
+#site-map-svg .edge.selected { stroke: var(--series-primary); stroke-width: 5px; }
+#site-map-svg .arrow { fill: var(--ink-quiet); pointer-events: none; }
+#site-map-svg .place { fill: var(--surface-raised); stroke: var(--ink); stroke-width: 2px; cursor: pointer; }
+#site-map-svg .place.selected { stroke: var(--series-primary); stroke-width: 4px; }
+#site-map-svg .label { fill: var(--ink); font: var(--text-micro) var(--mono); pointer-events: none; }
+#site-map-svg .plan { fill: none; stroke: var(--series-goal); stroke-width: 6px; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+#site-map-svg .target { fill: var(--series-goal); pointer-events: none; }
+#trip-actions { margin: 0; padding-inline-start: var(--space-5); }
+.estop { min-width: var(--target-irreversible); min-height: var(--target-irreversible); width: auto; height: auto; display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; }
+.estop .ui-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); flex: none; }
+.estop span { white-space: nowrap; }
+.estop small { flex-basis: 100%; text-align: center; }
+#estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
+@media (width < 64rem) {
+  .columns, .form { grid-template-columns: 1fr; }
+  .map-viewport { overflow-x: auto; }
+  .map-scroll-hint { display: block; }
+  #site-map-svg { width: 50rem; height: 30rem; }
+}
+@media (width < 30rem) {
+  .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .draft-actions { grid-template-columns: minmax(0, 1fr); }
+  ui-topbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8.5rem); grid-template-areas: "brand estop" "session estop"; gap: var(--space-1); }
+  ui-topbar ui-brand { grid-area: brand; min-width: 0; }
+  ui-topbar ui-brand small, ui-topbar [data-spacer], #estop small { display: none; }
+  #session { grid-area: session; min-width: 0; overflow-wrap: anywhere; }
+  #estop { grid-area: estop; }
+}

@@ -490,6 +490,13 @@
 - 증거: JVM 신규 2건 - mintedSessionIsStoredAndReusedUntilNaturalExpiry(재연결이 challenge·session POST 0회, Bearer 확인 2회), storedSessionPastExpiryIsDiscardedAndFreshMintReplacesIt - 전체 89 passed. 실기 8kcn: 연결 발급 1개 → 로봇 목록 복귀 → 재연결에도 발급 수 1 그대로(재사용 확인, 2026-10-06).
 - gate 변화: SOURCE/LOCAL 및 실기 관찰. FIELD는 별도.
 
+## 2026-10-06 · 65692ce69 · fix(pilot): 만료된 승인에서 재승인 요청 경로를 연다
+
+- 원인(실기 9dfk): 저장된 승인의 사용 기한이 끝나면 PeerClient가 네트워크 없이 PeerApprovalExpired를 던지고, 화면은 "수신 장치에서 재승인을 확인하세요"라고 안내했다. 앱이 새 요청을 보내지 않으므로 수신 쪽에 확인할 것이 없어 막다른 길이었다.
+- 변경: 만료가 나면 "다시 승인 요청" 대화상자를 띄운다. 사용자가 누르면 이 태블릿의 만료 기록만 지우고(기존 "이 앱의 연결 기록 지우기"와 같은 경로) 로봇이 다시 보이는 즉시 자동 재선택해 새 요청을 보낸다. 사용자 동작 없이 요청을 보내지 않는 기존 규칙(만료 = 네트워크 0회 JVM 시험)은 그대로다.
+- 증거: JVM 89 passed. 태블릿 실기(2026-10-06 9dfk): 대화상자 표시 → 승인 요청 → 수신 승인 대기 화면(새 요청) 확인.
+- gate 변화: SOURCE/LOCAL 및 실기 관찰.
+
 ## 2026-10-06 · uncommitted · uiux(pilot): 영상 없는 연습 화면의 조작 창 너비 통일
 
 - 변경: Gazebo 팔 연습에서 영상이 없으면 빈 영상 칸 대신 조작부를 먼저 전폭으로 보이고 팔·그리퍼 창을 같은 폭으로 맞췄다. 영상이 있으면 기존 영상·조작부 병렬 배치를 유지한다.
@@ -591,9 +598,22 @@
 - gate 변화: SOURCE/LOCAL만.
 - 결정: D-483
 
+## 2026-10-06 · uncommitted · fix(pilot): 10분 상한 뒤 로봇 녹화를 이어 간다
+
+- 원인(실기 9dfk, 무선 adb·WebView CDP): 운전자 보고 "로봇 녹화가 저절로 꺼짐". 로봇 manifest 두 회 모두 정확히 600 s 에서 `stop_reason: max_duration`(D-411 결정 3 의 1회 10분). 화면은 지난 녹화 칩만 바꾸고 녹화는 끝났다.
+- 변경: `recording.js` `continueRecording(wanted, active)` — 이 기기가 켜고 끄지 않은 녹화가 `max_duration` 으로 쉬면 곧바로 다음 녹화본을 시작하고 칩에 "N번째 녹화로 이어 갑니다"를 보인다. 남의 정지·쿼터·디스크·오류·조종 종료 뒤에는 잇지 않는다. `drive.js` 의 스트림 재시도 타이머를 함수로 부르던 결함도 찾았으나 main 에서 같은 결함이 따로 고쳐져(`retryTimer`) 병합 때 main 쪽을 썼다. D-411 구현 부록 19. `sw.js` 캐시 키 갱신.
+- 증거: Node 순수 시험(continueRecording 7경우), 브라우저 시험 신규 `test_robot_recording_continues_past_the_ten_minute_cap_until_stopped`(가짜 CORE `cap`) 포함 녹화 브라우저 11 passed. 전체 결과는 커밋 메시지.
+- gate 변화: SOURCE/LOCAL. 실기 10분 경계 관찰은 태블릿 재설치 뒤.
+
 ## 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
 
 - 변경: LCD가 요청 여러 개를 보일 수 있어 입력칸 안내를 "로봇 화면에서 <표시 번호> 옆의 승인 코드"로 바꿨다. `confirm`의 400은 `detail.remaining_attempts`가 있을 때만 틀린 코드로 보고, 없으면 `PeerRefused(400)`로 다룬다.
 - 증거: JVM 신규 badRequestWithoutRemainingAttemptsIsARefusalNotAWrongCode 포함 PeerClientTest 통과, assembleDebug 성공. 실기 태블릿 확인은 하지 않았다.
 - gate 변화: SOURCE/LOCAL만.
 - 결정: D-483
+
+## 2026-10-07 · uiux/pilot-empty-copy · Pilot 로봇 미발견 안내 줄바꿈
+
+- 변경: 연결 로비의 빈 목록 안내를 짧게 써 400dp·글자 130%에서 마지막 음절만 다음 줄로 밀리지 않게 했다. 발견·연결 로직은 그대로다.
+- 증거: 격리 Android 35 에뮬레이터 400/600/1000dp 캡처와 JVM 93 passed. 원본·해시는 `docs/validation/uiux-pilot-empty-copy-2026-10-07/result.md`에 있다.
+- gate 변화: LOCAL 빈 목록 G2 셀만 보강. 실물 태블릿 후보 설치·사용자 G3는 HOLD.

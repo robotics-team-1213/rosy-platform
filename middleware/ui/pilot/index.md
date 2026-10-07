@@ -35,7 +35,7 @@
 ## 최근 기록
 
 - 2026-10-07 · uncommitted · fix(pilot): D-483 보안 검토 반영(M1 안내, L3)
+- 2026-10-06 · uncommitted · fix(pilot): 10분 상한 뒤 로봇 녹화를 이어 간다
 - 2026-10-06 · uncommitted · feat(pilot): D-483 수신 승인 대기에 로봇 화면 승인 코드 입력
 - 2026-10-06 · uncommitted · uiux(pilot): 전화 회전 버튼 동등 폭 검증
 - 2026-10-06 · uncommitted · uiux(pilot-shell): 400dp 후보 이름 판독
-- 2026-10-06 · uncommitted · uiux(pilot-shell): 후보 행과 600dp 목록 폭
