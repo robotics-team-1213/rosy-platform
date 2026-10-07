@@ -77,7 +77,7 @@ Ignore `__pycache__/`.
 ```bash
 python3 -m pytest test/ -v
 python3 -m pytest test/test_motor_control.py test/test_host_agent.py -v
-ROSY_RUN_BROWSER_TESTS=1 python -m pytest $(python test/browser_scope.py <changed paths...>) -q -rfE -p no:cacheprovider
+t=$(python test/browser_scope.py <changed paths...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider
 ```
 
 ### Common Patterns

@@ -84,7 +84,7 @@ python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only�
 작업 중에는 바꾼 경로에 걸린 브라우저 시험만 돌린다. 경로와 시험의 대응은 `test/browser_scope.py`의 `SCOPE`다.
 
 ```bash
-ROSY_RUN_BROWSER_TESTS=1 python -m pytest $(python test/browser_scope.py <바꾼 경로...>) -q -rfE -p no:cacheprovider > X:/DevTemp/<이름>/browser.txt
+t=$(python test/browser_scope.py <바꾼 경로...>) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider > X:/DevTemp/<이름>/browser.txt
 python test/known_failures.py X:/DevTemp/<이름>/browser.txt
 ```
 
@@ -94,11 +94,11 @@ python test/known_failures.py X:/DevTemp/<이름>/browser.txt
 # 현장 PC 또는 모델 PC에서. <checkout>은 그 PC의 rosy-platform 클론 또는 worktree, <ref>는 시험할 브랜치나 커밋.
 cd <checkout> && git fetch && git checkout --detach <ref>
 python -m playwright install chromium   # 처음 한 번
-ROSY_RUN_BROWSER_TESTS=1 python -m pytest $(python test/browser_scope.py test/browser_harness.py) -q -rfE -p no:cacheprovider > <scratch>/browser.txt
+t=$(python test/browser_scope.py test/browser_harness.py) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t -q -rfE -p no:cacheprovider > <scratch>/browser.txt
 python test/known_failures.py <scratch>/browser.txt
 ```
 
-`test/browser_harness.py`를 넘기면 모든 브라우저 시험이 골라진다. 일부만 필요하면 바꾼 경로를 넘긴다.
+`test/browser_harness.py`를 넘기면 모든 브라우저 시험이 골라진다. 고를 시험이 없으면 `browser_scope.py`가 exit 3으로 끝나 `&&` 뒤의 pytest가 돌지 않는다(빈 목록이 저장소 전체 pytest가 되지 않게). 일부만 필요하면 바꾼 경로를 넘긴다.
 
 CI(`.github/workflows/ci.yml`)는 `ros:jazzy-ros-base` 이미지에서 colcon 빌드, pytest, 부트 스모크(slam_toolbox 없이 기동), SaveMap 타입 가드를 돌린다. 호스트 pytest가 통과해도 장치·ARM64 이미지·현장 수용 증거를 대신하지 않는다.
 

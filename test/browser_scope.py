@@ -3,11 +3,13 @@
 Usage (from the repo root):
 
     python test/browser_scope.py <changed paths...>      # prints pytest targets
-    ROSY_RUN_BROWSER_TESTS=1 python -m pytest $(python test/browser_scope.py $(git diff --name-only main...))
+    t=$(python test/browser_scope.py $(git diff --name-only main...)) && ROSY_RUN_BROWSER_TESTS=1 python -m pytest $t
 
 SCOPE maps a source path prefix to the browser tests that load those pages
 (derived from the pages each test serves or routes). Targets may be globs. A
-changed browser test selects itself. Prints nothing when no browser test applies.
+changed browser test (any file a SCOPE entry lists, or any *_browser.py) selects
+itself. Exit 3 with a stderr note when nothing applies, so `&&` never turns an
+empty selection into a bare repo-wide pytest.
 """
 
 from __future__ import annotations
@@ -67,7 +69,7 @@ SCOPE: dict[str, list[str]] = {
     "learning/training/perception/dataset/": REVIEW,
     "integrations/simulation/gazebo/scripts/": GAZEBO,
     # Every surface loads /common (ui.js, components.css, tokens.css).
-    "shared/web/": SHARED + FLEET + ROBOT + PILOT + GAMES + REVIEW,
+    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW,
     "test/browser_harness.py": EVERYTHING,
 }
 
@@ -79,6 +81,7 @@ def _expand(pattern: str) -> list[str]:
 
 
 def targets(paths: list[str]) -> list[str]:
+    known = {t for pattern in EVERYTHING for t in _expand(pattern)}
     selected: set[str] = set()
     for raw in paths:
         path = raw.replace("\\", "/").removeprefix("./")
@@ -86,10 +89,19 @@ def targets(paths: list[str]) -> list[str]:
             if path.startswith(prefix):
                 for pattern in patterns:
                     selected.update(_expand(pattern))
-        if path.endswith("_browser.py") and (ROOT / path).is_file():
+        if path in known or (path.endswith("_browser.py") and (ROOT / path).is_file()):
             selected.add(path)
     return sorted(selected)
 
 
+def main(argv: list[str]) -> int:
+    found = targets(argv)
+    if not found:
+        print("browser_scope: no browser tests for these paths", file=sys.stderr)
+        return 3
+    print(" ".join(found))
+    return 0
+
+
 if __name__ == "__main__":
-    print(" ".join(targets(sys.argv[1:])))
+    raise SystemExit(main(sys.argv[1:]))

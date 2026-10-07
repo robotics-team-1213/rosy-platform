@@ -35,3 +35,22 @@ def test_every_scope_target_exists():
     for patterns in browser_scope.SCOPE.values():
         for pattern in patterns:
             assert browser_scope._expand(pattern), pattern
+
+
+def test_a_listed_non_browser_named_test_selects_itself():
+    path = "learning/training/perception/test/test_review_app_smoke.py"
+    assert browser_scope.targets([path]) == [path]
+
+
+def test_shared_web_reaches_review_smoke_and_core_console():
+    found = browser_scope.targets(["shared/web/ui.js"])
+    assert "learning/training/perception/test/test_review_app_smoke.py" in found
+    assert "middleware/core/api_web/test/test_d283_console_browser.py" in found
+
+
+def test_empty_selection_exits_3_without_targets(capsys):
+    assert browser_scope.main(["docs/logs.md"]) == 3
+    out = capsys.readouterr()
+    assert out.out == "" and "no browser tests" in out.err
+    assert browser_scope.main(["test/test_games_board_browser.py"]) == 0
+    assert capsys.readouterr().out.strip() == "test/test_games_board_browser.py"
