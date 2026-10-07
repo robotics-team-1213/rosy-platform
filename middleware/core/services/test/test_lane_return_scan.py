@@ -71,3 +71,12 @@ def test_old_or_replayed_source_timestamp_cannot_refresh_scan_evidence():
     sample=scan(source_stamp_ns=500_000_000)
     assert return_scan_view(sample,body=BODY,source_now_ns=1_000_000_000,
                             clearance_horizon_m=.5) is None
+
+
+@pytest.mark.parametrize('ahead_ns,kept',[(1_000_000,True),(100_000_000,True),(100_000_001,False)])
+def test_scan_stamp_ahead_of_core_clock_counts_as_now_within_the_tolerance(ahead_ns,kept):
+    # D-507 8: one SOURCE_FUTURE_TOLERANCE_S (0.1 s); inside it the age is 0, beyond it dropped.
+    evidence=return_scan_view(scan(source_stamp_ns=1_000_000_000+ahead_ns),body=BODY,
+                              source_now_ns=1_000_000_000,clearance_horizon_m=.5)
+    assert (evidence is not None)==kept
+    if kept: assert evidence[1]==0.
