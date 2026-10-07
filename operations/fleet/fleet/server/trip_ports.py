@@ -8,6 +8,7 @@ closure, the ``MapPoseService`` and ``HttpLaneJunction`` (through the console's 
 from __future__ import annotations
 
 import json
+import logging
 import math
 from dataclasses import dataclass, fields
 from typing import Any, Awaitable, Callable, Mapping, Optional, Protocol
@@ -15,9 +16,11 @@ from typing import Any, Awaitable, Callable, Mapping, Optional, Protocol
 from fleet.hub.hub import HubError
 from fleet.localization.map_pose import MapPose
 from fleet.server.console_view import TripCaps
-from fleet.routing.cost import LEFT, RIGHT
+from fleet.routing.cost import LEFT, RIGHT, STRAIGHT
 from fleet.routing.execute import arc_id, ends_at_place
 from fleet.site_map import ENDPOINT_TOL_M
+
+_LOG = logging.getLogger(__name__)
 
 #: Trip states that are still going.
 OPEN = ("started", "running")
@@ -117,6 +120,8 @@ class TripConfig:
     stall_m: float = 0.05
     #: Every robot call of the loop gives up after this long (a stuck robot is an error).
     port_timeout_s: float = 1.5
+    #: D-507 2: the narrowest ``expect_tol_m`` sent (site calibration knob, at most 0.30).
+    expect_tol_min_m: float = 0.12
     #: Robots of trips open before a restart are stopped every this long, this many times at most.
     restart_retry_s: float = 10.0
     restart_attempts: int = 30
@@ -127,6 +132,8 @@ class TripConfig:
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
                     math.isfinite(value) and value > 0):
                 raise ValueError(f"fleet.trip.{item.name} must be a positive finite number")
+        if self.expect_tol_min_m > MAX_EXPECT_TOL_M:
+            raise ValueError(f"fleet.trip.expect_tol_min_m must be at most {MAX_EXPECT_TOL_M}")
 
     @classmethod
     def from_mapping(cls, raw: Optional[Mapping]) -> "TripConfig":
@@ -158,29 +165,47 @@ MAX_PIVOT_PAST_LINE_M = 0.30
 ODOM_DRIFT_PER_M = 0.05
 
 
-def junction_fields(graph, segments: list, index: int, action: str, remaining: float, view: dict,
-                    active) -> Optional[dict]:
+def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float, active,
+                    config: TripConfig) -> Optional[dict]:
     """D-507 2: the optional junction fields, only for a robot whose caps report ``junction_pivot``.
 
     ``map_id`` (the active map the plan runs on) always; the expectation (``expect_in_m``,
     ``expect_tol_m``, ``pivot_past_line_m``) only while the place is (0, 2] m along the lane,
-    otherwise CORE keeps today's behaviour for it.
+    otherwise CORE keeps today's behaviour for it. A plan whose map version is no longer the
+    active one sends none of them (logged, ``detail.junction_fields_dropped``); the replan
+    rule then holds the trip at the place.
+
+    CORE's keeper sees a junction ``JUNCTION_AHEAD_M`` (0.45 m) ahead, so ``arm_distance_m``
+    should be at least 0.45 + ``pivot_past_line_m`` + ``expect_tol_m`` for the instruction to
+    arrive before the detection; the default 0.6 is checked in SIM, not here.
     """
+    view = live.view
     caps, pose = view.get("caps") or {}, view.get("pose") or {}
-    if caps.get("junction_pivot") is not True or active is None or active[0] != view["map_version"]:
+    if caps.get("junction_pivot") is not True:
+        return None
+    if active is None or active[0] != view["map_version"]:
+        if view["detail"].get("junction_fields_dropped") != "map_version":
+            _LOG.warning("trip %s: active map is not the plan's version %s; junction fields not sent",
+                         view.get("trip_id"), view["map_version"])
+        view["detail"]["junction_fields_dropped"] = "map_version"
         return None
     fields = {"map_id": active[1].map_id}
     expect_in = round(remaining, 3)
     if not 0.0 < expect_in <= MAX_EXPECT_IN_M:
         return fields
-    # ponytail: the map pose has no heading-direction error estimate, so it is odom drift over the
-    # distance dead-reckoned since the last sighting plus how far the robot drives at its trip speed
-    # while the pose ages; replace with the provider's own covariance once MapPose reports one.
-    error = (ODOM_DRIFT_PER_M * (pose.get("dead_reckon_m") or 0.0)
-             + (caps.get("max_speed") or 0.0) * (pose.get("age_s") or 0.0))
-    fields.update(expect_in_m=expect_in, expect_tol_m=round(min(error + ENDPOINT_TOL_M, MAX_EXPECT_TOL_M), 3))
-    if action in (LEFT, RIGHT):  # the place is on the outgoing lane's centre line (D-490)
-        width = graph.arcs[arc_id(segments[index + 1])].width_m
+    speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
+    if age is None or reckoned is None:
+        tol = MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
+    else:
+        # ponytail: the map pose has no heading-direction error estimate, so it is odom drift over
+        # the distance dead-reckoned since the last sighting, plus how far the robot drives at its
+        # trip speed while the pose ages and while the call is in flight, floored by the site knob
+        # ``expect_tol_min_m``; replace with the provider's own covariance once MapPose reports one.
+        tol = max(config.expect_tol_min_m, ODOM_DRIFT_PER_M * reckoned + speed * age
+                  + speed * config.port_timeout_s + ENDPOINT_TOL_M)
+    fields.update(expect_in_m=expect_in, expect_tol_m=round(min(tol, MAX_EXPECT_TOL_M), 3))
+    if action in (STRAIGHT, LEFT, RIGHT):  # the place is on the outgoing lane's centre line (D-490)
+        width = live.arc(index + 1).width_m
         fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
     return fields
 

@@ -257,6 +257,8 @@ class TripRunner:
             try:
                 if live.arc(live.view["segment_index"]).drive_mode == "lane":
                     live.junction = await self._call(self._junction.junction_state(robot_id)) or {}
+                else:  # a free segment: no stale lane ``waiting`` may end it
+                    live.junction = {}
                     sent = live.sent
                     if sent is not None and live.junction.get("seq") == sent["seq"] and \
                             live.junction.get("state") in (*MANOEUVRE, "executing"):
@@ -347,7 +349,7 @@ class TripRunner:
                 return
         stop_after = min(max(remaining, 0.0), MAX_STOP_AFTER_M) if action == STOP else None
         turn = round(theta(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
-        expect = junction_fields(live.graph, live.segments, index, action, remaining, live.view, self._store.active())
+        expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
         if not live.open:
             return
         try:
@@ -355,9 +357,13 @@ class TripRunner:
                 live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s,
                 turn_deg=turn, expect=expect)) or {}
         except RobotApiError as exc:
+            if exc.code == "JUNCTION_ODOM_STALE":  # D-507 2: no fresh odom at receipt; next tick sends again
+                live.view["detail"]["junction_retry"] = exc.code
+                return
             if exc.code != "JUNCTION_ALREADY_DONE":
                 raise
             reply = {"already_done": True}  # CORE R1: this place's action already ran
+        live.view["detail"].pop("junction_retry", None)
         await self._after_send(live)
         if reply.get("accepted") is False:  # CORE aborted a manoeuvre instead: an operator decides
             raise _JunctionAborted(reply.get("junction_seq"))

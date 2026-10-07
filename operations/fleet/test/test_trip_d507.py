@@ -6,15 +6,16 @@ import dataclasses
 import json
 
 import httpx
+import pytest
 
 from fleet.routing.cost import STOP
 from fleet.server.console_view import TripCaps, trip_caps
-from fleet.server.trip_ports import HttpLaneJunction, TripError
+from fleet.server.trip_ports import HttpLaneJunction, TripConfig, TripError
 from fleet.site_map import SiteMap
 from fleet.swarm.robots import RobotEndpoint
-from fleet.swarm.transport import HttpRobotClient
+from fleet.swarm.transport import HttpRobotClient, RobotApiError
 from test_trip_caps import _caps
-from test_trip_runner import LANE, _arc, _free_map, _map, _plan, _setup, _ticks, run
+from test_trip_runner import LANE, _activate_again, _arc, _free_map, _map, _plan, _setup, _ticks, run
 
 PIVOT = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
 
@@ -25,14 +26,20 @@ def _straight_map():
                 edges=[("ab", "A", "B", [[0, 0], [1, 0]], "lane"), ("bc", "B", "C", [[1, 0], [2, 0]], "lane")])
 
 
-def _sent_at(site_map, caps, s, to="C"):
+def _sent_at(site_map, caps, s, to="C", pose=None, **config):
     """Start A -> ``to`` and tick once with the robot ``s`` along ``ab``; the junction sends made."""
-    runner, store, ports = _setup(site_map, caps=caps)
+    runner, store, ports = _setup(site_map, caps=caps, **config)
     _plan(store, ports, "ab:fwd", 0.1, to)
     run(runner.start("p1", "bob"))
     ports.at(_arc(store, "ab:fwd"), s)
+    if pose:
+        ports.pose = dataclasses.replace(ports.pose, **pose)
     _ticks(runner, ports)
     return ports
+
+
+def _tol(pose=None, **config):
+    return _sent_at(_free_map("lane"), PIVOT, 0.5, pose=pose, **config).expects[0]["expect_tol_m"]
 
 
 # ---- 2: junction instruction fields --------------------------------------------------------
@@ -50,38 +57,44 @@ def test_fields_go_only_to_a_junction_pivot_robot():
     assert _sent_at(_free_map("lane"), LANE, 0.5).expects == [None]
     ports = _sent_at(_free_map("lane"), PIVOT, 0.5)
     assert ports.sent[0][0] == "left"
-    # pose: a sighting (0 m dead-reckoned) 0.1 s old at 0.2 m/s -> 0.02 + ENDPOINT_TOL_M 0.05
-    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.5, "expect_tol_m": 0.07,
+    # default config: 0.2 m/s x the 1.5 s call timeout alone is 0.30 -> the cap
+    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.5, "expect_tol_m": 0.3,
                               "pivot_past_line_m": 0.1}]  # outgoing lane 0.2 m wide
 
 
-def test_straight_carries_the_expectation_without_a_pivot():
+def test_straight_carries_the_expectation_and_the_window_pivot():
     ports = _sent_at(_straight_map(), PIVOT, 0.6)
     assert ports.sent[0][0] == "straight"
-    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.4, "expect_tol_m": 0.07}]
+    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.4, "expect_tol_m": 0.3,
+                              "pivot_past_line_m": 0.1}]
 
 
 def test_the_last_stop_carries_the_expectation_without_a_pivot():
     ports = _sent_at(_straight_map(), PIVOT, 0.7, to="B")
     assert ports.sent[0][0] == STOP
-    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.3, "expect_tol_m": 0.07}]
+    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.3, "expect_tol_m": 0.3}]
 
 
-def test_tolerance_grows_with_dead_reckoning_and_is_capped():
-    runner, store, ports = _setup(_free_map("lane"), caps=PIVOT)
-    _plan(store, ports, "ab:fwd", 0.1, "C")
-    run(runner.start("p1", "bob"))
-    ports.at(_arc(store, "ab:fwd"), 0.5)
-    ports.pose = dataclasses.replace(ports.pose, source="bridged", dead_reckon_m=1.0)  # + 0.05
-    _ticks(runner, ports)
-    assert ports.expects[-1]["expect_tol_m"] == 0.12
-    runner, store, ports = _setup(_free_map("lane"), caps=PIVOT)
-    _plan(store, ports, "ab:fwd", 0.1, "C")
-    run(runner.start("p1", "bob"))
-    ports.at(_arc(store, "ab:fwd"), 0.5)
-    ports.pose = dataclasses.replace(ports.pose, source="bridged", dead_reckon_m=9.0)
-    _ticks(runner, ports)
-    assert ports.expects[-1]["expect_tol_m"] == 0.30
+def test_tolerance_adds_drift_age_and_call_latency_and_is_capped():
+    fast = {"port_timeout_s": 0.25, "expect_tol_min_m": 0.01}
+    # sighting 0.1 s old at 0.2 m/s: 0.02 + 0.2 x 0.25 + ENDPOINT_TOL_M 0.05
+    assert _tol(**fast) == 0.12
+    assert _tol({"source": "bridged", "dead_reckon_m": 1.0}, **fast) == 0.17   # + 0.05 drift
+    assert _tol({"source": "bridged", "dead_reckon_m": 9.0}, **fast) == 0.30   # capped
+
+
+def test_tolerance_is_floored_by_the_site_knob():
+    assert _tol(port_timeout_s=0.1) == 0.12                     # 0.09 computed, default knob 0.12
+    assert _tol(port_timeout_s=0.1, expect_tol_min_m=0.2) == 0.2
+    assert TripConfig.from_mapping({"expect_tol_min_m": 0.15}).expect_tol_min_m == 0.15
+    with pytest.raises(ValueError):
+        TripConfig(expect_tol_min_m=0.31)
+
+
+def test_an_unknown_pose_error_sends_the_widest_window():
+    fast = {"port_timeout_s": 0.1, "expect_tol_min_m": 0.01}
+    assert _tol({"age_s": None}, **fast) == 0.30
+    assert _tol({"dead_reckon_m": None}, **fast) == 0.30
 
 
 def test_pivot_is_capped_at_0_30():
@@ -95,6 +108,36 @@ def test_pivot_is_capped_at_0_30():
 def test_a_place_outside_the_expectation_range_sends_only_the_map_id():
     ports = _sent_at(_free_map("lane"), PIVOT, 1.0)   # on the place: expect_in_m 0 is out of (0, 2]
     assert ports.sent[0][0] == "left" and ports.expects == [{"map_id": "site"}]
+
+
+def test_a_changed_map_version_sends_no_fields_and_says_so(caplog):
+    runner, store, ports = _setup(_free_map("lane"), caps=PIVOT)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    _activate_again(store)
+    ports.at(_arc(store, "ab:fwd"), 0.5)
+    _ticks(runner, ports)
+    assert ports.sent and ports.expects[-1] is None
+    assert runner.view("p1")["detail"]["junction_fields_dropped"] == "map_version"
+    assert "junction fields not sent" in caplog.text
+
+
+def test_odom_stale_is_retried_on_the_next_tick():
+    runner, store, ports = _setup(_free_map("lane"), caps=PIVOT)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    ports.at(_arc(store, "ab:fwd"), 0.5)
+    ports.junction_error = RobotApiError("rosy_60", 409, "JUNCTION_ODOM_STALE", "no fresh odom")
+    _ticks(runner, ports)
+    view = runner.view("p1")
+    assert view["state"] == "running" and ports.sent == [] and runner._live.sent is None
+    assert view["detail"]["junction_retry"] == "JUNCTION_ODOM_STALE"
+    _ticks(runner, ports)                                   # still stale: tried again, still running
+    assert runner.running() is not None and ports.sent == []
+    ports.junction_error = None
+    _ticks(runner, ports)
+    assert ports.sent[-1][0] == "left" and ports.expects[-1]["map_id"] == "site"
+    assert runner._live.sent["action"] == "left" and "junction_retry" not in runner.view("p1")["detail"]
 
 
 def test_http_client_puts_the_fields_in_the_junction_body():
@@ -208,3 +251,30 @@ def test_the_http_port_carries_the_line_follow_reason():
 
     port = HttpLaneJunction(lambda: {"r": Client()})
     assert run(port.junction_state("r")) == {"state": "waiting", "seq": 3, "line_reason": "junction_waiting"}
+
+
+def test_a_stale_lane_waiting_does_not_end_a_free_segment():
+    """A lane segment into a free one: CORE's last lane ``waiting`` is not read on the free segment."""
+    site_map = _map(("A", 0, 0), ("B", 1, 0), ("C", 1, 1),
+                    edges=[("ab", "A", "B", [[0, 0], [1, 0]], "lane"), ("bc", "B", "C", [[1, 0], [1, 1]], "free")])
+    caps = dataclasses.replace(PIVOT, modes=frozenset({"lane", "free"}))
+    runner, store, ports = _setup(site_map, caps=caps)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    ports.at(_arc(store, "ab:fwd"), 0.95)
+    _ticks(runner, ports)
+    _core_shows(ports, "waiting")                          # left over at B
+    ports.at(_arc(store, "bc:fwd"), 0.3)
+    _ticks(runner, ports, 25)                               # 12.5 s, past junction_wait_s
+    assert runner.running() is not None and runner.view("p1")["drive_mode"] == "free"
+
+
+def test_the_site_floor_check_comes_before_trip_busy():
+    runner, store, ports = _setup(_named(_free_map("lane"), "hall_a"), caps=PIVOT)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    ports.caps = {"rosy_60": dataclasses.replace(PIVOT, site_floor_map_id="hall_b")}
+    _plan(store, ports, "ab:fwd", 0.1, "C", plan_id="p2")
+    with pytest.raises(TripError) as err:
+        run(runner.start("p2", "bob"))
+    assert err.value.code == "TRIP_SITE_FLOOR_MISMATCH"
