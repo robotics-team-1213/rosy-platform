@@ -81,3 +81,19 @@
 - DEVICE: 9dfk(마커·Rosy Cam 맞춤 뒤, 사용자 승인)
 
 CORE 변경 두 가지(1·2항, 4항)는 서명 릴리스가 있어야 로봇에 닿는다.
+
+### 구현 부록 (2026-10-07) — 3항 map pose
+
+브랜치 `feat/d491-fleet-map-pose`. 3항을 `operations/fleet/fleet/localization/map_pose.py`(순수, 표준 라이브러리만)와 `server/map_pose_service.py`(`arbitrated_pose`, `GET /api/fleet/robots/{robot_id}/map-pose`, viewer 이상)로 구현했다. 구현에서 정한 것은 다음과 같다.
+
+1. **sighting 신선도.** lease는 1 s(`fleet.map_pose.sighting_lease_s`, 설정 가능)다. D-488 3항·D-257 5항의 300 ms보다 길다. 짝짓기가 `captured_at` 시각의 odom으로 하므로 지연이 자세 정확도를 바꾸지 않는다.
+2. **품질 통과.** `min_quality` 기본 0.5다. `quality`가 없는 sighting은 통과한다.
+3. **첫 앵커.** 첫 sighting은 `DEGRADED`로 앵커하고, 연속 2회 일치해야 `LOCALIZED`다. 회복 규칙과 같다. trip 시작에는 sighting 3건이 필요하다.
+4. **회복 세기.** 점프한 sighting은 0회로 세고 다시 앵커한다. `dead_reckon_m` 1.5 m를 넘긴 뒤 일치한 sighting은 1회로 센다.
+5. **보간 간격.** 감싸는 두 odom 표본이 `max_interp_gap_s`(기본 1.2 s, 1 Hz heartbeat 포함) 안이면 보간한다. 아니면 0.25 s 안의 가장 가까운 표본을 쓰고, 없으면 그 sighting을 버린다.
+6. **hub 경로의 odom.** `StateSnapshot`에 `odom_pose`가 없는 동안 hub heartbeat는 그 필드를 버린다. 1·2항 브랜치(`feat/d491-robot-trip-contracts`)가 필드를 넣으면 hub 경로로도 들어온다. REST 스냅숏은 그대로 전달된다.
+7. **시계.** sighting `captured_at`은 사이트 벽시계, `odom_pose.stamp`는 로봇 UTC다. 두 시계가 chrony로 맞춰져 있다고 가정한다.
+8. **API Ref 버전.** 작성 시점에 v1.112를 썼다. 7항 착지 순서에 따라 착지 때 다음 빈 번호로 다시 매긴다.
+9. **읽기 엔드포인트.** 읽을 때 로봇 상태를 새로 읽는다(신선한 hub 스냅숏, 아니면 REST). 로봇에 닿지 못하면 마지막 odom으로 답하고 3 s 뒤 `UNKNOWN`이 된다. `UNKNOWN`이면 `x`·`y`·`yaw`는 null이다. 모르는 로봇은 404 `UNKNOWN_ROBOT`이다.
+
+`trusted_map_pose`·`/route`·교통정리·D-395는 바꾸지 않았다. D-457 tracking은 입력이 아니다.
