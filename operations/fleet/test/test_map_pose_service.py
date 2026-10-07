@@ -8,7 +8,8 @@ from hashlib import sha256
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
-from fleet.localization.map_pose import BRIDGED, DEGRADED, LOCALIZED, UNKNOWN, MapPoseConfig
+from fleet.localization.map_pose import (BRIDGED, DEGRADED, LOCALIZED, UNKNOWN, MapPoseConfig,
+                                         parse_utc)
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.map_pose_service import MapPoseService
@@ -54,10 +55,10 @@ def test_service_anchors_on_sightings_and_bridges_on_snapshot_odom():
         service.observe_sighting(row(wall.now))
     assert service.arbitrated_pose("r1").state == LOCALIZED
     wall.now = T0 + 0.5
-    service.observe_state("r1", state(wall.now, x=0.4))
+    service.observe_state("r1", state(wall.now, x=0.3))
     pose = service.arbitrated_pose("r1")
     assert (pose.source, pose.state) == (BRIDGED, LOCALIZED)
-    assert abs(pose.x - 1.4) < 1e-6 and abs(pose.y - 2.0) < 1e-6
+    assert abs(pose.x - 1.3) < 1e-6 and abs(pose.y - 2.0) < 1e-6
 
 
 def test_service_ignores_robots_off_the_roster_and_snapshots_without_odom():
@@ -131,9 +132,9 @@ def test_map_pose_endpoint_reads_accepted_sightings_and_robot_odom(tmp_path):
         assert unknown["state"] == UNKNOWN and unknown["x"] is None
 
         for _ in range(3):
-            now = time.time()
+            now = parse_utc(iso(time.time()))     # the stamp exactly as the robot reports it
             robot._state = state(now)
-            client.get("/api/fleet/robots/r1/map-pose", headers=viewer)       # feeds odom
+            app.state.map_pose.observe_state("r1", robot._state)   # as a hub heartbeat would
             assert client.post("/api/fleet/sightings", json=_sighting(now),
                                headers=source).status_code == 200
         pose = client.get("/api/fleet/robots/r1/map-pose", headers=viewer).json()
@@ -171,3 +172,94 @@ def test_cli_reads_fleet_map_pose_from_the_site_config(tmp_path):
     config.write_text("fleet:\n  map_pose:\n    max_jump_m: 5\n", encoding="utf-8")
     with pytest.raises(SystemExit):
         cli._map_pose_config(cli.parse_args(["console", "--site-config", str(config)]))
+
+
+def test_sightings_for_another_map_frame_are_ignored():
+    wall = Wall()
+    active = {"id": "site"}
+    service = MapPoseService(lambda: ["r1"], wall=wall, map_id=lambda: active["id"])
+    service.observe_state("r1", state(T0))
+    service.observe_sighting({**row(T0), "map_id": "other"})
+    assert service.arbitrated_pose("r1").state == UNKNOWN
+    service.observe_sighting({**row(T0 + 0.05), "map_id": "site"})
+    wall.now = T0 + 1.3                     # no bracket arrived: nearest sample pairs it
+    assert service.arbitrated_pose("r1").map_id == "site"
+
+
+def test_roster_change_drops_the_tracker():
+    wall = Wall()
+    roster = ["r1"]
+    service = MapPoseService(lambda: roster, wall=wall)
+    service.observe_state("r1", state(T0))
+    service.observe_sighting(row(T0))
+    assert service.arbitrated_pose("r1").state == DEGRADED
+    roster[:] = []
+    assert service.arbitrated_pose("r1") is None
+    roster[:] = ["r1"]
+    assert service.arbitrated_pose("r1").state == UNKNOWN       # re-enrolled: starts over
+
+
+def test_malformed_odom_pose_is_counted():
+    wall = Wall()
+    service = MapPoseService(lambda: ["r1"], wall=wall)
+    service.observe_state("r1", {"odom_pose": {"x": "nan?", "y": 0, "yaw": 0, "stamp": iso(T0)}})
+    pose = service.arbitrated_pose("r1")
+    assert (pose.odom_refused, pose.odom_refused_reason) == (1, "malformed")
+
+
+def test_refresh_is_coalesced_and_skipped_while_odom_is_fresh():
+    wall = Wall()
+    calls = []
+
+    async def gather(robot_id):
+        calls.append(robot_id)
+        await asyncio.sleep(0)
+        return state(wall.now)
+
+    service = MapPoseService(lambda: ["r1"], wall=wall, gather=gather)
+
+    async def run():
+        await asyncio.gather(service.refresh("r1"), service.refresh("r1"))
+        await service.refresh("r1")                              # odom 0 s old: skipped
+        wall.now += 0.5
+        await service.refresh("r1")
+
+    asyncio.run(run())
+    assert calls == ["r1", "r1"]
+
+
+def test_unreachable_robot_answers_its_last_pose(tmp_path):
+    import httpx
+
+    app, robot = _app(tmp_path)
+    viewer = {"Authorization": f"Bearer {VIEWER_TOKEN}"}
+    robot.state_error = httpx.ConnectError("unreachable")
+    with TestClient(app) as client:
+        response = client.get("/api/fleet/robots/r1/map-pose", headers=viewer)
+    assert response.status_code == 200 and response.json()["state"] == UNKNOWN
+
+
+def test_a_failing_state_sink_does_not_break_the_snapshot():
+    robot = FakeRobot("r1", state={"robot_id": "r1"})
+    console = FleetConsole([RobotEndpoint("r1", "http://127.0.0.1:8080", "robot-rest")], [robot])
+    calls = []
+
+    def boom(robot_id, _state):
+        calls.append(robot_id)
+        raise RuntimeError("bad sink")
+
+    console.set_state_sink(boom)
+    for _ in range(2):
+        snapshot = asyncio.run(console.snapshot())
+        assert snapshot["robots"][0]["online"] is True
+    assert calls == ["r1", "r1"]
+
+
+def test_map_pose_lease_must_fit_the_ingest_lease(tmp_path):
+    import pytest
+
+    robot = FakeRobot("r1", state={"robot_id": "r1"})
+    console = FleetConsole([RobotEndpoint("r1", "http://127.0.0.1:8080", "robot-rest")], [robot])
+    sightings = SightingService([], known_robot_ids=console.robot_ids, lease_s=0.5)
+    with pytest.raises(ValueError):
+        create_app(console, sightings=sightings, start_task_dispatcher=False)

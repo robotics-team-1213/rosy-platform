@@ -122,6 +122,7 @@ class FleetConsole:
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
         #: D-491 3: every state read also feeds the trip-only map pose (its `odom_pose`).
         self._state_sink: Optional[Callable[[str, dict], None]] = None
+        self._sink_failed: set[str] = set()      # logged once per robot
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
@@ -615,7 +616,12 @@ class FleetConsole:
                 robot_id = row["robot_id"]
                 self._seen[robot_id] = state
                 if self._state_sink is not None:
-                    self._state_sink(robot_id, state)
+                    try:
+                        self._state_sink(robot_id, state)
+                    except Exception:   # a bad snapshot must not break the gather
+                        if robot_id not in self._sink_failed:
+                            self._sink_failed.add(robot_id)
+                            logger.exception("map pose: snapshot of %s not usable", robot_id)
                 if state.get("localization") is not None:
                     self._loc_null_since[robot_id] = None
                 elif robot_id in self._loc_null_since:

@@ -480,7 +480,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     async def _gather_state(robot_id: str):
         return (await console._gather_state(robot_id))[0]
 
-    map_pose = MapPoseService(lambda: console.robot_ids, config=map_pose_config or MapPoseConfig(),
+    map_pose_config = map_pose_config or MapPoseConfig()
+    if sightings is not None and map_pose_config.sighting_lease_s > sightings.lease_s:
+        raise ValueError("fleet.map_pose.sighting_lease_s must not exceed the sighting ingest lease")
+
+    def _active_map_id():
+        active = site_maps.active()
+        return active[1].map_id if active is not None else None
+
+    map_pose = MapPoseService(lambda: console.robot_ids, config=map_pose_config,
+                              map_id=_active_map_id,
                               gather=_gather_state)
     console.set_state_sink(map_pose.observe_state)
     app.state.map_pose = map_pose
