@@ -376,6 +376,39 @@ def test_a_vanished_point_exactly_on_the_body_outline_is_remembered_conservative
     assert status.body_gap_m == 0.0
 
 
+def _enter_then_move(base_point, wheels, *, range_min=0.12):
+    """A return under range_min enters memory outside the body (two standing scans), then
+    the wheels run each twist in `wheels` for 0.5 s, then the robot stands (10 scans)."""
+    lidar_x = PINKY["body_lidar_x_m"]
+    m, t = _manager(), T
+    _step(m, [(base_point[0] - lidar_x, base_point[1])], t=t, range_min=range_min)
+    t += 0.1
+    _step(m, [], t=t, range_min=range_min)                              # remembered now
+    for linear, angular in wheels:
+        m.note_wheels(linear, angular, owned=True, now=t)
+        t += 0.5
+        _step(m, [], t=t, range_min=range_min)
+    m.note_wheels(0.0, 0.0, owned=True, now=t)
+    for index in range(10):
+        _, status = _step(m, [], t=t + 0.1 * (index + 1), range_min=range_min)
+    return status
+
+
+def test_a_remembered_point_that_odometry_creeps_inside_the_body_keeps_holding():
+    """D-507 10 review HIGH: the outline check is made once, when a point enters memory.
+    Base x 0.083 enters outside; 0.06 m of creep puts it at 0.023, inside: contact, hold."""
+    status = _enter_then_move((0.083, 0.0), [(0.04, 0.0)] * 3)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+    assert status.body_gap_m == 0.0
+
+
+def test_a_remembered_point_an_in_place_turn_rotates_into_the_body_keeps_holding():
+    """Base (0.05, 0) is outside the rectangle, inside the rotation radius; a 1 rad turn
+    brings it to x 0.027, inside the rectangle. It stays held."""
+    status = _enter_then_move((0.05, 0.0), [(0.0, 1.0)] * 2)
+    assert (status.reason, status.clearance_source) == ("obstacle_ahead", "memory")
+
+
 def test_a_lidar_whose_range_min_reaches_past_the_body_remembers_as_before():
     """D-507 10: synthetic body (front 0.10, rear -0.10, half 0.08, R 0.13, LiDAR at the base)
     and range_min 0.25. A post that vanishes outside the body still stops from memory."""
