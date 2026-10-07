@@ -2,14 +2,12 @@
 
 import asyncio
 import time
-from datetime import datetime, timezone
 from hashlib import sha256
 
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
-from fleet.localization.map_pose import (BRIDGED, DEGRADED, LOCALIZED, UNKNOWN, MapPoseConfig,
-                                         parse_utc)
+from fleet.localization.map_pose import BRIDGED, DEGRADED, LOCALIZED, UNKNOWN, MapPoseConfig
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.map_pose_service import MapPoseService
@@ -24,13 +22,9 @@ OPERATOR_TOKEN = "operator-secret"
 VIEWER_TOKEN = "viewer-secret"
 
 
-def iso(t):
-    return datetime.fromtimestamp(t, timezone.utc).isoformat().replace("+00:00", "Z")
-
-
 def state(t, x=0.0, y=0.0, yaw=0.0):
     return {"robot_id": "r1", "pose": {"x": 9.0, "y": 9.0, "yaw": 0.0},
-            "odom_pose": {"x": x, "y": y, "yaw": yaw, "stamp": iso(t)}}
+            "odom_pose": {"x": x, "y": y, "yaw": yaw, "stamp": t}}
 
 
 def row(t, x=1.0, y=2.0, yaw=0.0, robot="r1"):
@@ -132,7 +126,7 @@ def test_map_pose_endpoint_reads_accepted_sightings_and_robot_odom(tmp_path):
         assert unknown["state"] == UNKNOWN and unknown["x"] is None
 
         for _ in range(3):
-            now = parse_utc(iso(time.time()))     # the stamp exactly as the robot reports it
+            now = time.time()
             robot._state = state(now)
             app.state.map_pose.observe_state("r1", robot._state)   # as a hub heartbeat would
             assert client.post("/api/fleet/sightings", json=_sighting(now),
@@ -202,7 +196,7 @@ def test_roster_change_drops_the_tracker():
 def test_malformed_odom_pose_is_counted():
     wall = Wall()
     service = MapPoseService(lambda: ["r1"], wall=wall)
-    service.observe_state("r1", {"odom_pose": {"x": "nan?", "y": 0, "yaw": 0, "stamp": iso(T0)}})
+    service.observe_state("r1", {"odom_pose": {"x": "nan?", "y": 0, "yaw": 0, "stamp": T0}})
     pose = service.arbitrated_pose("r1")
     assert (pose.odom_refused, pose.odom_refused_reason) == (1, "malformed")
 

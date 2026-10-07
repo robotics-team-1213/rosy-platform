@@ -17,7 +17,8 @@ drops the anchor: the pose stays UNKNOWN until the next sighting.
 Path and turn are summed per received sample (chord, |dyaw|), so they are lower bounds that
 depend on the odom rate; the trip loop refreshes odom at 2 Hz or faster (D-491 appendix).
 
-Times are site wall seconds: sighting `captured_at`, odom `stamp` parsed from UTC ISO. The
+Times are UTC epoch seconds: sighting `captured_at` and odom `stamp` (CORE wall clock on odom
+arrival; an ISO string is also read). The
 caller passes `now`; no clock, no transport. Only trip execution reads this pose: `/route`
 (D-463), D-395 and traffic keep `trusted_map_pose`. D-457 markerless tracking is not an input.
 """
@@ -162,11 +163,15 @@ def parse_utc(text) -> Optional[float]:
 
 
 def odom_from_snapshot(state: Optional[Mapping]) -> Optional[OdomSample]:
-    """The snapshot's D-491 2 `odom_pose {x, y, yaw, stamp}`; None when absent or malformed."""
+    """The snapshot's D-491 2 `odom_pose {x, y, yaw, stamp}`; None when absent or malformed.
+
+    `stamp` is UTC epoch seconds (float, same as sighting `captured_at`); a UTC ISO string is
+    accepted for robustness."""
     raw = state.get("odom_pose") if isinstance(state, Mapping) else None
     if not isinstance(raw, Mapping):
         return None
-    x, y, yaw, stamp = raw.get("x"), raw.get("y"), raw.get("yaw"), parse_utc(raw.get("stamp"))
+    x, y, yaw, stamp = raw.get("x"), raw.get("y"), raw.get("yaw"), raw.get("stamp")
+    stamp = float(stamp) if _finite(stamp) else parse_utc(stamp)
     if stamp is None or not _finite(x, y, yaw):
         return None
     return OdomSample(float(x), float(y), float(yaw), stamp)

@@ -225,11 +225,14 @@ def test_stale_wrong_robot_and_low_quality_sightings_are_ignored():
 def test_snapshot_adapter_reads_odom_pose_or_none():
     assert odom_from_snapshot({"pose": {"x": 1}}) is None
     assert odom_from_snapshot(None) is None
-    assert odom_from_snapshot({"odom_pose": {"x": 1, "y": 2, "yaw": 0.5,
-                                              "stamp": "2026-10-07T00:00:00Z"}}) == OdomSample(
-        1.0, 2.0, 0.5, 1791331200.0)
+    expected = OdomSample(1.0, 2.0, 0.5, 1791331200.0)
+    assert odom_from_snapshot({"odom_pose": {"x": 1, "y": 2, "yaw": 0.5, "stamp": 1791331200.0}}) == expected
+    assert odom_from_snapshot({"odom_pose": {"x": 1, "y": 2, "yaw": 0.5,          # ISO also read
+                                              "stamp": "2026-10-07T00:00:00Z"}}) == expected
     for bad in ({"x": 1, "y": 2, "yaw": 0, "stamp": "2026-10-07T00:00:00"},       # no zone
-                {"x": 1, "y": 2, "yaw": 0, "stamp": 12.0},
+                {"x": 1, "y": 2, "yaw": 0, "stamp": float("inf")},
+                {"x": 1, "y": 2, "yaw": 0, "stamp": True},
+                {"x": 1, "y": 2, "yaw": 0, "stamp": None},
                 {"x": True, "y": 2, "yaw": 0, "stamp": "2026-10-07T00:00:00Z"},
                 {"x": float("nan"), "y": 2, "yaw": 0, "stamp": "2026-10-07T00:00:00Z"},
                 {"x": 1, "y": 2, "stamp": "2026-10-07T00:00:00Z"}):
