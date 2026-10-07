@@ -330,3 +330,8 @@
 - 변경: `site-cameras.yaml` source의 `display_rotation_deg`를 허용 키에 넣는다. Vision은 값을 쓰지 않는다(Fleet 관제 표시 전용).
 - 증거: Vision 설정·예시 시험 통과.
 - gate 변화: SOURCE/LOCAL만.
+
+## 2026-10-08 · uncommitted · refactor(vision): D-513 7 화면 회전 키 제거
+- 변경: `display_rotation_deg` 허용을 되돌린다. 관제가 보정에서 회전을 계산하므로 설치 키가 필요 없다.
+- 증거: Vision 설정·예시 시험 통과.
+- gate 변화: SOURCE/LOCAL만.

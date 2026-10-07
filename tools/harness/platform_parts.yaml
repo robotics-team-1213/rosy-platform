@@ -706,6 +706,7 @@ safety_anchors:
   - {symbol: core_api_web.api.v1.safety.safety_release}
   - {symbol: core_api_web.api.v1.safety.safety_limits}
   - {symbol: core_common.robot_body.RobotBody}
+  - {symbol: core_common.robot_body.PINKY_PRO, public: true}
   - {symbol: omx_adapter.command_owner.ArmCommandOwner}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
   - {symbol: omx_adapter.action_api.LocalStopApi.dispatch}

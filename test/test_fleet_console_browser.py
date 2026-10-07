@@ -220,6 +220,41 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
         browser.close()
 
 
+def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(console_url):
+    from playwright.sync_api import sync_playwright
+
+    robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
+    robot["power_health_age_s"] = 0.2
+    robot["power_health"] = {"battery": {
+        "evidence": "fresh", "sample_age_s": 0.2, "stale_after_s": 5,
+        "level": "ok", "percent": 63, "charging_state": "confirmed",
+        "charging_evidence_age_s": 0.2,
+    }}
+    api = {"/api/fleet/state": {"fleet": {"name": "site", "online": 1, "total": 1},
+                                 "robots": [robot], "ts": 0.0},
+           "/api/fleet/map": MAP_GRID,
+           "/api/fleet/formation": {"active": False, "state": "IDLE"}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        page.locator("#roster-toggle").click()
+        card = page.locator('#roster article[data-robot-id="rosy_01"]')
+        page.wait_for_function("() => document.querySelector('#roster [data-fact=battery] strong')?.textContent === '63%'")
+        assert "충전 확인" in card.locator('[data-fact="charging"]').inner_text()
+
+        robot["power_health_age_s"] = 6.0
+        page.wait_for_function("() => document.querySelector('#roster [data-fact=battery] strong')?.textContent === '확인 불가'")
+        assert "충전 확인" not in card.locator('[data-fact="charging"]').inner_text()
+
+        robot["power_health_age_s"] = 0.2
+        robot["state"]["safety"]["estop"] = True
+        page.wait_for_function("() => document.querySelector('#roster [data-fact=safety]')?.textContent.includes('비상 정지')")
+        assert "충전 확인" in card.locator('[data-fact="charging"]').inner_text()
+        assert "관리자:" in card.inner_text()
+        assert not errors
+        browser.close()
+
+
 @pytest.mark.parametrize("supported", [False, True])
 def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
     from playwright.sync_api import sync_playwright
