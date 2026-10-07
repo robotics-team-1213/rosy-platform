@@ -6703,3 +6703,33 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 문서·제안만 바뀐다. `omx` 프로필·어댑터·Pilot 게이트는 그대로.
 - 결정: D-496 Proposed. D-390 §5(실물 범위 밖)는 유지되고, 이 결정은 여는 조건만 정의한다.
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · uiux(pilot): 주행 HUD 증거 상태와 좁은 폭 가독성
+
+- 변경: 속도·회전율을 수신 전 0으로 표시하던 HUD를 서버의 속도·배터리 증거 판정에 연결했다. 지연 수치에는 수신 나이를 붙이고 연결 끊김·결측에서는 수치를 숨긴다. 320px에서 상태 문구가 단어 중간에 잘리지 않도록 HUD 항목을 통째로 줄바꿈한다.
+- 증거: [LOCAL 결과](validation/uiux-pilot-telemetry-2026-10-07/result.md). 합성 상태 4개×폭 4개와 수신 전 상태의 브라우저 **5 passed**. D-153 명명 G1 재실행 **90 passed, 1 warning**, clean exit 0, `known_failures.py` **0 NEW**. 첫 G1 실행은 요약 뒤 종료되지 않아 중단했고, 재실행으로 확인했다. 캡처와 G1 원본은 `X:\DevTemp\pilot-telemetry-evidence\`에 둔다.
+- gate 변화: Pilot G2 일부만 채웠다. 나머지 선언 상태·폭, 실제 설치본/로봇 readback, 운전자 G3 및 제품 전체 판정은 **HOLD**.
+
+## 2026-10-07 · uncommitted · fix(pilot): 열린 상태 소켓의 무응답 readback 표시
+
+- 변경: 상태 소켓이 열린 채 조용해지고 REST 상태 조회도 실패할 때 이전 숫자와 모드를 숨기고 상태 수신 중단을 표시한다. readback이 돌아오면 회복한다.
+- 증거: [LOCAL 결과](validation/uiux-pilot-silent-readback-2026-10-07/result.md). 수정 전 집중 브라우저 1 failed, 수정 후 관련 11 passed, D-153 명명 G1 90 passed, 1 warning, 각 `known_failures.py` 0 NEW. 실행 기록은 `X:\DevTemp\pilot-silent-readback\`.
+- gate 변화: Pilot G2 일부 보강. 남은 선언 상태·폭, 사이트 설치·실물 readback, 운전자 G3와 제품 전체는 **HOLD**.
+
+## 2026-10-07 · uncommitted · docs(uiux): 사이트 G3 준비 버전 재확인
+
+- 변경: 기존 사이트 PC의 배포 태그와 두 로봇 mDNS 해석을 현재 로컬 후보와 다시 대조하고 운영자 독회 기록지에 날짜별 준비 상태를 남겼다.
+- 증거: [읽기 전용 결과](validation/uiux-site-g3-readiness-2026-10-07/result.md). 세 사이트 이미지 태그 `5eb726c13…`은 후보 `43a823ac5…`의 조상이고, Fleet UID 10001은 두 `.local` 이름을 해석했다. 원본은 X:의 해시된 요약이다. 문서·계약 시험 **127 passed, 1 skipped**, `known_failures.py` **0 NEW**, harness lint 0 errors.
+- gate 변화: 없음. 현재 후보 설치·실물 상태 readback·요청자 G3가 없어 제품 전체 **HOLD**.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 비상 화면 폭
+
+- 변경: 320/390px 읽기 전용 카메라 상단의 겹침을 고치고 홈·비상 정지 행동 너비를 통일했다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-emergency-width-2026-10-07/result.md), 게이트·카메라 4폭×2화면. 관련 브라우저 12 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실제 사이트 설치본·정지 readback과 사용자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 녹화본 시트 가림과 폭
+
+- 변경: 좁은 화면의 녹화본 시트가 조작부 뒤에 가려진 문제와 하단 행동 너비를 고쳤다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 네 폭 관련 브라우저 7 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실제 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.

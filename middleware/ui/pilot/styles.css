@@ -188,7 +188,7 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   backdrop-filter: blur(6px);
 }
 
-[data-drive-gauge] { display: flex; align-items: baseline; gap: var(--space-1); }
+[data-drive-gauge] { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1); }
 
 /* 실측 속도 — HUD 의 주인공 */
 [data-drive-hud] [data-drive-fact=speed] {
@@ -207,6 +207,7 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   font-variant-numeric: tabular-nums;
   min-width: 7ch;
   color: var(--nominal-quiet);
+  white-space: nowrap;
 }
 
 /* 지금 보내는 동작 — 제자리 회전은 눈에 띄게 */
@@ -224,11 +225,13 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
 
 [data-drive-hud] [data-drive-fact=cap] { font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
 
-[data-drive-facts] { display: flex; gap: var(--space-2); font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
+[data-drive-facts] { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-label); font-family: var(--mono); color: var(--nominal-quiet); }
+[data-drive-facts] > span { white-space: nowrap; }
 [data-drive-fact=link][data-state=BLOCKED],
 [data-drive-fact=link][data-state=OFFLINE],
 [data-drive-fact=link][data-state=FORBIDDEN] { color: var(--status-crit); }
 [data-drive-fact=link][data-state=RETRYING] { color: var(--status-warn); }
+[data-drive-fact=link][data-readback=silent] { color: var(--status-warn); }
 [data-drive-fact=latency][data-slow=true] { color: var(--status-warn); }
 [data-drive-fact=activity] { color: var(--status-warn); }
 [data-drive-fact=activity][hidden] { display: none; }
@@ -434,6 +437,19 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
 }
 [data-recording-facts] { display: grid; gap: var(--space-1); min-width: 0; }
 [data-recording-status] { color: var(--status-warn); }
+[data-recordings-sheet] ui-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+[data-recordings-sheet] ui-actions ui-button { min-width: 0; width: 100%; }
+@media (width < 22rem) {
+  [data-recordings-sheet] { padding: var(--space-2); gap: var(--space-1); }
+  [data-recordings-sheet] > p { display: none; }
+  [data-recordings-sheet] ui-actions {
+    grid-template-columns: minmax(0, 1fr);
+    position: sticky;
+    bottom: 0;
+    padding-top: var(--space-1);
+    background: var(--ground-raise);
+  }
+}
 
 /* 조작 버튼·상단 버튼은 한 줄을 지킨다 — 쪼개진 "제자 리" 는 누를 곳을 흐린다 */
 [data-drive-left] ui-button,
@@ -446,6 +462,12 @@ body[data-pilot-screen="drive"] ui-topbar ui-button { white-space: nowrap; }
 
 /* 휴대폰 세로: 게이트 안내문·속도 라벨은 뺀다(상태는 HUD 가 말한다) */
 @media (width < 30rem) {
+  body[data-pilot-screen="preview"] ui-topbar { flex-wrap: wrap; gap: var(--space-1) var(--space-2); padding-block: var(--space-1); }
+  body[data-pilot-screen="preview"] ui-topbar ui-brand,
+  body[data-pilot-screen="preview"] ui-topbar [data-spacer],
+  body[data-pilot-screen="preview"] ui-topbar [data-gate-state] { display: none; }
+  body[data-pilot-screen="preview"] #pilot-notice { flex: 1 1 100%; min-width: 0; }
+  body[data-pilot-screen="preview"] ui-topbar ui-button { flex: 1 1 0; min-width: 0; padding-inline: var(--inset-button-irreversible); white-space: nowrap; }
   [data-drive-presets] > ui-text { display: none; }
   [data-drive-controls] { padding-left: var(--space-3); padding-right: var(--space-3); gap: var(--space-2); }
   [data-drive-presets] ui-button { min-width: 2.5rem; padding: 0 var(--space-1); }

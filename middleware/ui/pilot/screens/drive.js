@@ -22,10 +22,12 @@ import {readControls, profileFromBaseVelocity} from "../controls.js";
 import {calibrationView} from "../calibration.js";
 import {el, mountDriveView, buildStage, buildControls, actionIcon} from "./drive-view.js";
 import {classifyOperation, saveCameraFile} from "/common/evidence.js";
-import {MODE_LABEL, operatorModeLabel} from "/common/core_ui_logic.js";
+import {HeadlessState, MODE_LABEL, evidenceAgeText, operatorModeLabel} from "/common/core_ui_logic.js";
 
 const LOOP_MS = 100;
 const STATE_POLL_MS = 500;
+// ponytail: 1 s detects transport silence at the default 10 Hz; use a negotiated rate if slower streams matter.
+const READBACK_GAP_MS = 2 * STATE_POLL_MS; // Server evidence still decides value freshness.
 const DEG = 180 / Math.PI;
 const PRESET_LABEL = {low: "저속", mid: "보통", high: "빠름"};
 const LINK_LABEL = {
@@ -81,6 +83,43 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     element.mode.title = mode;
   }
 
+  function ageText(frame, channel) {
+    const observed = Date.parse(frame?.evidence?.[channel]?.received_at);
+    const reported = Date.parse(frame?.timestamp);
+    return Number.isFinite(observed) && Number.isFinite(reported) && reported >= observed
+      ? evidenceAgeText((reported - observed) / 1000) : " · 시각 없음";
+  }
+
+  function renderTelemetry(frame) {
+    const evidence = new HeadlessState(frame);
+    const velocity = frame?.velocity;
+    const usableVelocity = typeof velocity?.linear === "number" && Number.isFinite(velocity.linear)
+      && typeof velocity?.angular === "number" && Number.isFinite(velocity.angular);
+    const velocityState = !frame ? "disconnected"
+      : usableVelocity ? evidence.evidenceOf("velocity") : "unavailable";
+    element.speed.dataset.evidence = velocityState;
+    element.turn.dataset.evidence = velocityState;
+    if (velocityState === "fresh" || velocityState === "delayed") {
+      element.speed.textContent = Math.abs(velocity.linear).toFixed(2);
+      const turn = velocity.angular * DEG;
+      const direction = turn > 0.5 ? "↺" : turn < -0.5 ? "↻" : "·";
+      element.turn.textContent = `${direction} ${Math.abs(turn).toFixed(0)}°/s`
+        + (velocityState === "delayed" ? ` · 지연${ageText(frame, "velocity")}` : "");
+    } else {
+      element.speed.textContent = "—";
+      element.turn.textContent = velocityState === "disconnected" ? "· 속도 연결 끊김" : "· 속도 정보 없음";
+    }
+
+    const percent = frame?.battery?.percent;
+    const batteryState = !frame ? "disconnected"
+      : typeof percent === "number" && Number.isFinite(percent)
+        ? evidence.evidenceOf("battery") : "unavailable";
+    element.battery.dataset.evidence = batteryState;
+    element.battery.textContent = batteryState === "fresh" ? `${Math.round(percent)}%`
+      : batteryState === "delayed" ? `${Math.round(percent)}% · 지연${ageText(frame, "battery")}`
+      : batteryState === "disconnected" ? "배터리 연결 끊김" : "배터리 정보 없음";
+  }
+
   // --- 보정 세션(D-321 부록): 누가 보정 중인지 보이고, 남의 보정이면 주행 조작을 잠근다 -----
   // 비상 정지(상단 막대)는 이 화면 밖에 있고 잠그지 않는다. 409 CALIBRATION_ACTIVE 가 최종 판정이다.
   let myTokenId = null;
@@ -128,6 +167,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   }
 
   // --- 상태 채널: /ws/state(auth 첫 프레임) + REST teleop -------------------
+  let lastSocketReadbackAt = -Infinity;
   const session = createDeviceSession({
     token: token(),
     openSocket: (url) => {
@@ -145,10 +185,17 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       element.state.textContent = LINK_LABEL[state] ?? "상태 확인 필요";
       element.state.dataset.state = state;
       element.state.title = state;
+      delete element.state.dataset.readback;
+      if (["RETRYING", "OFFLINE", "FORBIDDEN"].includes(state)) {
+        renderTelemetry(null);
+        element.mode.textContent = "—";
+      }
     },
     onSnapshot: (frame) => {
-      const percent = frame?.battery?.percent;
-      if (percent !== undefined && percent !== null) element.battery.textContent = `${Math.round(percent)}%`;
+      lastSocketReadbackAt = Date.now();
+      delete element.state.dataset.readback;
+      element.state.textContent = LINK_LABEL[session.state()] ?? "상태 수신";
+      renderTelemetry(frame);
       if (frame?.mode) showMode(frame.mode);
       if (frame && "activity" in frame) renderActivity(frame.activity);
     },
@@ -492,18 +539,23 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
 
   // --- 로봇 상태 폴링: 실측 속도·회전율 ---------------------------------------
   const stateTimer = setInterval(async () => {
-    const state = await apiGet("/api/v1/robot/state").catch(() => null);
-    if (!state || state.status !== 200) return;
-    const percent = state.body?.battery?.percent;
-    if (percent !== undefined && percent !== null) element.battery.textContent = `${Math.round(percent)}%`;
+    const state = await apiGet("/api/v1/robot/state", {timeoutMs: READBACK_GAP_MS}).catch(() => null);
+    if (!state || state.status !== 200) {
+      if (Date.now() - lastSocketReadbackAt >= READBACK_GAP_MS) {
+        renderTelemetry(null);
+        element.mode.textContent = "—";
+        if (session.state() === "OPEN") {
+          element.state.textContent = "상태 수신 없음";
+          element.state.dataset.readback = "silent";
+        }
+      }
+      return;
+    }
+    delete element.state.dataset.readback;
+    element.state.textContent = LINK_LABEL[session.state()] ?? "상태 수신";
+    renderTelemetry(state.body);
     if (state.body?.mode) showMode(state.body.mode);
     renderActivity(state.body?.activity);
-    const velocity = state.body?.velocity;
-    if (velocity) {
-      element.speed.textContent = Math.abs(Number(velocity.linear ?? 0)).toFixed(2);
-      const turn = Number(velocity.angular ?? 0) * DEG;
-      element.turn.textContent = `${turn > 0.5 ? "↺" : turn < -0.5 ? "↻" : "·"} ${Math.abs(turn).toFixed(0)}°/s`;
-    }
   }, STATE_POLL_MS);
 
   // --- HUD 액션 --------------------------------------------------------------
@@ -633,7 +685,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   placeCompactTools();
   const robotRecording = mountRobotRecording({
     toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,
-    sheetHost: root.querySelector("[data-drive-stage]"), anchor: element.hud, save: saveCameraFile,
+    sheetHost: root, anchor: element.hud, save: saveCameraFile,
     returnFocus: toolsButton,
   });
   view.applyZoom();

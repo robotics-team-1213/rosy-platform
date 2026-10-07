@@ -30,7 +30,7 @@ class Rig:
         self.m = LineFollowManager(Bus(), clock=lambda: self.now, config=LineFollowConfig(**config))
         self.m.bind_recovery(calibration_active=lambda: self.calibrating, linear_ceiling=lambda: .1)
         if proof:
-            self.m.bind_return_motion(lambda now, v, w: True)
+            self.m.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: True)
         self.m.set_mode(CAMERA)
 
     def step(self, *, junction=False, pose=True, dx=0., seen=True, move=False, points=None,
@@ -451,7 +451,7 @@ def test_d422_near_stop_aborts_the_turn():
 
 def test_motion_proof_refusal_aborts():
     rig = Rig()
-    rig.m.bind_return_motion(lambda now, v, w: w == 0.)
+    rig.m.bind_return_motion(lambda now, v, w: w == 0., proof_configured=lambda: True)
     _to_turning(rig, 90.)  # standing still passes the (0, 0) proof
     decision, status = rig.turn_until('turning', seen=False)
     assert decision.angular == 0.

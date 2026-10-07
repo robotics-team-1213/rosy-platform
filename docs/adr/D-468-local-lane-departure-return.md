@@ -43,7 +43,7 @@
 
 Decision 2의 "차체 footprint와 경계의 부호 있는 여유 및 예측 여유"를 구현에서 고정 상수 없이 정한다. 상태와 결정 항목은 바꾸지 않는다.
 
-**원인.** 첫 구현은 추종 단계의 차로 안 판정에 여유 0.015 m, checkpoint에 0.025 m를 상수로 썼다. 그런데 `lane_return_evidence`는 경계를 이미 측정된 투영 불확실도만큼 안쪽으로 깎은 뒤 여유를 잰다. 상수는 불확실도를 두 번 뺐다. 260919 트랙(Pinky 폭 0.113 m, 차로 중심에서 한쪽 여유 약 5 mm, sim 불확실도 4.3 mm)에서는 첫 프레임에 이탈이 열렸고 D-476 bridge는 무장될 수 없었다(`docs/validation/d476-gazebo-model-pc-2026-10-06/result.md` 2차 실행, 브랜치 `feat/sim-sensor-fidelity`).
+**원인.** 첫 구현은 추종 단계의 차로 안 판정에 여유 0.015 m, checkpoint에 0.025 m를 상수로 썼다. 그런데 `lane_return_evidence`는 경계를 이미 측정된 투영 불확실도만큼 안쪽으로 깎은 뒤 여유를 잰다. 상수는 불확실도를 두 번 뺐다. Gazebo 260919 실행(Pinky 폭 0.113 m, 그 실행에서 차로 중심 한쪽 여유 약 5 mm, sim 불확실도 4.3 mm)에서는 첫 프레임에 이탈이 열렸고 D-476 bridge는 무장될 수 없었다(`docs/validation/d476-gazebo-model-pc-2026-10-06/result.md` 2차 실행, 브랜치 `feat/sim-sensor-fidelity`).
 
 **규칙** (`core_features/line_follow/lane_return.py`):
 
@@ -51,10 +51,15 @@ Decision 2의 "차체 footprint와 경계의 부호 있는 여유 및 예측 여
    - 여유는 URDF footprint 네 모서리(`body_front_x_m`, `body_rear_x_m`, `body_half_width_m`)에서 불확실도만큼 깎은 두 경계까지 잰 부호 있는 최소 수직거리다. `uncertainty_m`은 생산자가 보내는 경계별 전체 횡오차 한계다(투영·보정·검출, `LaneContainmentEvidence` 문서). 그 한계가 모든 횡오차를 덮을 때에만, 여유 0 이상이 네 모서리가 모두 차로 안에 있다는 뜻이 된다.
    - `v·|sin θ|·0.3 s`는 예측 여유다. `v`는 실제 속도가 아니라 live 선속도 상한이다. 그래서 보수적이고, 로봇이 서 있는 verify 단계에도 같은 식을 쓴다. `θ`는 차로에 대한 진행각, 0.3 s는 이 모듈의 기존 근거 신선도 상한이다. 다음 근거가 오기 전 경계 쪽으로 갈 수 있는 거리다.
    - `lane_return_body_margin_m`은 `uncertainty_m`에 없는 오차(프레임 간 경계 흔들림, footprint 공차)를 덮는 몸 여유다. 범위는 [0, 0.05]다. 기본 0은 임시값이다. 실제 생산자가 `uncertainty_m`을 보내기 시작하면(브랜치 `fix/lane-projection-uncertainty`) 측정된 경계 흔들림의 2σ로 다시 정한다.
-   - 이탈(이력): 추종 중 이미 차로 안으로 판정된 로봇은 기하 여유(`여유 + uncertainty_m`)가 음수일 때만 이탈을 연다. 그때는 몸이 추정 경계를 실제로 넘었다. 이력 폭은 불확실도 자체여서 새 상수가 없다. 260919 트랙에서는 깎인 여유가 진행각 0°에서 0.70 mm, 0.5°에서 0.04 mm, 1°에서 −0.62 mm다. 이력이 없으면 프레임마다 이탈·HOLD·verify를 오간다.
+   - 이탈(이력): 추종 중 이미 차로 안으로 판정된 로봇은 기하 여유(`여유 + uncertainty_m`)가 음수일 때만 이탈을 연다. 그때는 몸이 추정 경계를 실제로 넘었다. 이력 폭은 불확실도 자체여서 새 상수가 없다. 한쪽 유격 5 mm인 아주 좁은 차로(시험의 스트레스 경우)에서는 깎인 여유가 진행각 0°에서 0.70 mm, 0.5°에서 0.04 mm, 1°에서 −0.62 mm다. 260919 STL 공칭(유격 23.45 mm, u 4.3 mm)에서는 0°에서 19.15 mm, 1°에서 17.8 mm다(아래 정정). 이력이 없으면 프레임마다 이탈·HOLD·verify를 오간다.
    - 불확실도가 기하 여유보다 크면 깎인 여유가 음수가 되어 차로 안이 아니다. 불확실도가 없거나 상한(0.015 m)을 넘으면 지금처럼 근거 자체가 없다.
 2. 정상 checkpoint: 진입 판정에 더해 `기하 여유 ≥ lane_return_checkpoint_fraction × 기하 좌우 유격`(기본 0.5). 기하 값은 깎기 전 값이다(`Corridor.free_half + uncertainty_m`). 차로 폭이 허락하는 좌우 유격의 가운데 절반 안에 있어야 한다는 뜻이다. 넓은 차로와 좁은 차로에 같은 비율로 적용되고, 경계에 붙은 복구 직후 자세가 정상 checkpoint가 되지 않게 하는 원래 의도를 유지한다. 범위는 [0, 1]이다. checkpoint는 안전 판정이 아니다. 역추적 뒤에도 새 근거로 다시 검증한다.
 
 **확인.** `recovery_local_enabled: false`(장치 기본)이면 이 controller를 만들지 않으므로 동작이 같다. 시험: `middleware/core/services/test/test_lane_return_margin.py`. 대상은 좁은 차로 중심 Pinky의 차로 안 판정과 checkpoint, ±1°·±1 mm 흔들림에서 추종 유지, 모서리가 추정 경계를 넘으면 이탈, 몸 모서리 3 mm 밖, 불확실도 > 기하 여유, 진행각 예측 여유, 치우친 자세의 checkpoint 거부, OFF 불변, 파라미터 범위다. 호스트 pytest는 sim·장치 수용이 아니다. 260919 sim 재실행은 별도다.
+
+**정정 (2026-10-07, 260919 유격과 경계 의미, `fix/lane-play-stl-nominal`):** 위의 "한쪽 여유 약 5 mm"는 기하에서 나온 값이 아니라 설명되지 않은 Gazebo 실행 값이다. 사용자 결정(2026-10-07)으로 실측 전까지 STL 기하를 공칭으로 쓴다. 표시는 "STL 공칭, 미측정"이고 매트 실측이 나오면 바꾼다. `260919 MAP FILE.STL` 직선 구간에서 테이프 폭은 25.0 mm, 테이프 중심 간격은 185 mm, 안쪽 가장자리 간격은 160 mm다(`lane_graph.py`의 반폭 92.5 mm − 반테이프 12.5 mm = 80 mm와 같다). Pinky footprint 폭 113.1 mm(`PINKY_PRO_GEOMETRY`)를 빼면 차로 중심에서 한쪽 유격은 23.45 mm다.
+- 경계 의미: keep 검출기는 칠한 선의 중심을 맞춘다(`lane_keep.py`, `lane_half_width_m` 0.0925). 그래서 지금까지 containment 경계는 테이프 중심이었고 여유가 한쪽 12.5 mm 부풀려졌다. 생산자(`lane_containment.containment_payload`)가 각 경계를 칠 폭의 절반(`lane_paint_half_width_m`, 기본 `PAINT_HALF_WIDTH_M` 0.0125, STL과 대조 시험)만큼 차로 쪽으로 옮긴다. 계약(`LaneContainmentEvidence`)과 API 문서는 경계를 달릴 수 있는 안쪽 가장자리로 적는다. 두 경계가 엇갈리면 경계를 보내지 않는다. 수신기 규칙은 그대로다.
+- 결과: Gazebo 불확실도 4.3 mm에서 중심 Pinky는 진입(깎인 여유 19.15 mm), 이력(폭 4.3 mm), checkpoint(기하 여유 23.45 ≥ 0.5 × 23.45) 모두 닿는다. 상한 15 mm에서도 닿는다. u ≥ 23.45 mm면 차로 안이 아니다. 실기는 지금 코드의 불확실도가 보정 기록(8kcn 대역) 26–46 mm, URDF NOMINAL 77–134 mm(지지 끝 0.15–0.4 m)라 상한 15 mm와 유격을 모두 넘어 여전히 증명되지 않는다.
+- 남은 것: Gazebo 5 mm 값의 원인(STL 기하로는 안쪽 가장자리 기준 23.45 mm, 중심 기준 35.95 mm라 둘 다 맞지 않는다). 모델 PC에서 원인을 찾는다(`tools/harness/sim2real_gaps.yaml` G-16). Gazebo 검출기가 칠 안쪽 깊이 선을 맞추고 있었다면 이번 이동으로 sim 유격이 음수가 될 수 있다. 그 경우는 차로 안이 아님으로 끝나 안전 쪽이다. 그래도 모델 PC에서 시나리오 C를 다시 돌리기 전에는 sim containment를 증거로 쓰지 않는다. 매트 테이프 실측.
 
 **개정 (2026-10-07, [D-495](D-495-lane-junction-bounded-turn-and-junction-defaults.md) 결정 개정 2항):** `recovery_local_enabled` 로봇 기본값은 `true`다(`rosy_default.yaml`). 모델 PC SIM 한 바퀴와 실기 차선 한 바퀴를 통과한 페이로드만 robots에 간다. 되돌리기는 CORE 설정 겹의 `line_follow.recovery_local_enabled: false`다.

@@ -4,6 +4,14 @@
 
 제품 전체 수용 기준은 사용자 확인에 따라 **활성 표면 모두의 G1, 선언한 G2 상태·폭 전부, G3 실제 사용자 검토와 해당 실물 장치 readback**이다. 일부 화면의 너비 보정이나 LOCAL 시험 통과로 이 판정을 올리지 않는다.
 
+2026-10-07 Pilot 녹화본 시트가 390/320px에서 조작부 뒤에 가려지는 결함을 [LOCAL 재현·수정](../uiux-pilot-recording-sheet-2026-10-07/result.md)했다. 네 폭에서 파일 행, 동등 행동 폭, 첫 화면의 닫기·비상 정지, 받기·취소 흐름을 확인했다. 관련 브라우저 7 passed, G1 90 passed, 각각 0 NEW. 실제 로봇 녹화·태블릿, 남은 G2, 사용자 G3는 **HOLD**다.
+
+2026-10-07 Pilot 비상 게이트와 읽기 전용 카메라를 선언 폭 네 개에서 [LOCAL로 확인](../uiux-pilot-emergency-width-2026-10-07/result.md)했다. 320/390px 카메라 상단의 안내·행동 겹침을 고쳐 홈·비상 정지를 같은 너비로 배치했다. 관련 브라우저 12 passed, G1 90 passed, 각각 0 NEW. 다른 Pilot G2 셀, 실제 정지 readback과 사용자 G3는 남아 **HOLD**다.
+
+2026-10-07 Pilot 주행 HUD의 속도·배터리 `fresh/delayed/disconnected/unavailable` × 선언 폭 4개를 로컬 브라우저에서 다시 확인했다. [상태별 결과와 원본 캡처 위치](../uiux-pilot-telemetry-2026-10-07/result.md)를 기록했다. 이는 Pilot G2의 부분 근거이며 제품 전체 판정은 **HOLD**다.
+
+상태 소켓이 열린 채 조용해지고 REST 조회가 실패하거나 멈춘 경우의 오래된 속도·배터리를 숨겼다. [320px 수신 중단·회복 LOCAL 전이](../uiux-pilot-silent-readback-2026-10-07/result.md)는 브라우저 11 passed와 현재 숫자 오인을 막는 근거다. 다른 폭의 이 전이와 실물 연결·운전자 G3는 남아 **HOLD**다.
+
 G3 실제 운영자 독회는 요청자가 수행하기로 했다. [실제 사용자 독회 기록지](operator-walkthrough.md)에 표면별 작업·여덟 판정 항목과 실물 근거 자리를 마련했다. 결과·관찰·재현 폭은 아직 받지 않았으므로 G3 판정은 HOLD다. 픽셀 검수의 class 파일 미연결 상태에서는 점/브러시 전환을 막고 연결 이유를 표시한다. 1440/800/390/320px 브라우저 회귀와 점 미리보기·브러시 조작 **10 passed**, `known_failures.py` **0 NEW**; 수정 후 320px 원본은 X: `captures/pixel-disabled-fix/learning-pixels-320.png`, 실행 기록은 `logs/merge-20261006/pixel-disabled-fix.txt`다.
 
 ## 이번 회차의 질문과 근거
@@ -443,3 +451,11 @@ The follow-up browser harness allows the active preview port in Chromium; port 6
 ## 2026-10-07 Pilot 재연결 중 주행 차단
 
 [LOCAL 결과](../uiux-pilot-reconnect-2026-10-07/result.md): 상태 소켓 상실 후 새 인증 상태 프레임 전까지 주행 명령을 차단하고 0을 보낸다. 상태 재연결 중은 2000×1200, 1200×2000, 390×844, 320×568에서 비상 정지와 함께 보인다. 세션·브라우저 23 passed, G1 90 passed, 각각 known_failures 0 NEW. 전체 G2, 설치본 readback, 사용자 G3는 HOLD.
+
+## 2026-10-07 현장 mDNS·이미지 재확인
+
+[읽기 전용 현장 기록](../uiux-site-readback-2026-10-07/result.md#2026-10-07-1557-kst-재확인): Fleet·Vision·proxy 이미지 태그는 `5eb726c13`으로 현재 로컬 후보 `899d7a1a5`보다 이전이다. 두 로봇의 IPv4 `_rosy._tcp` 광고와 Fleet 컨테이너 UID 10001 이름 해석은 확인됐다. 이는 발견·이미지 계층 근거이며 설치된 현장 UI 화면, 제어 건강, 현재 후보의 장치 readback 또는 G3 수용은 아니다. **제품 전체 HOLD**.
+
+## 2026-10-07 16:41 KST 사이트 G3 준비 재확인
+
+[현재 읽기 전용 기록](../uiux-site-g3-readiness-2026-10-07/result.md): Fleet·Vision·proxy의 `5eb726c13…` 이미지 태그는 로컬 후보 `43a823ac5…`의 조상이다. 로봇 mDNS 광고 2개와 Fleet 서비스 UID 10001의 이름 해석 2건은 확인했다. 현재 후보의 설치 화면·로봇/카메라 readback과 [실제 운영자 독회](operator-walkthrough.md)는 아직 없다. **제품 전체 HOLD**.

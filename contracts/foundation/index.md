@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(config): D-498 junction_turn_site_accepted
+- 2026-10-07 · uncommitted · docs(protocol): LaneContainmentEvidence 경계 = 칠 안쪽 가장자리
 - 2026-10-07 · uncommitted · fix(config): D-495 검토 설정과 주석
 - 2026-10-07 · uncommitted · feat(config): D-495 recovery_local_enabled 로봇 기본값 켜짐
 - 2026-10-07 · uncommitted · feat(config): D-495 bridge 기본값과 LineJunctionStatus 확장
-- 2026-10-07 · uncommitted · feat(schemas): LineFollowStatus.junction
-- 2026-10-07 · uncommitted · feat(protocol): D-495 junction_turn 능력 필드
