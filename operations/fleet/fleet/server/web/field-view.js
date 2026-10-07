@@ -6,8 +6,8 @@ import {
   configuredSize, aspectMismatch, parseFieldSize, homography, rectifiedLayout,
   ASPECT_TOLERANCE,
 } from "./field-layers.js";
-import { multiply3, fieldToMap } from "./map-fit.js";
-import { warpImage } from "./field-warp.js";
+import { multiply3, fieldToMap } from "/console/assets/map-fit.js";
+import { warpImage } from "/console/assets/field-warp.js";
 
 export { warpImage };
 

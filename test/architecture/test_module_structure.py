@@ -395,7 +395,7 @@ SIZE_VERDICTS = {
         608,
         "accept: D-473 added the development-session connection-mode gate to the Fleet CLI, growing it past 600 lines (measured 608). The argument parsing stays with the one CLI entry owner for now; follow-up split: move the connection-mode and session CLI parsing into its own module when the CLI next grows. Budgets and allowance unchanged",
     ),
-    "fleet/fleet/server/web/styles.css": (
+    "fleet/fleet/server/web/shared/styles.css": (
         809,
         "accept: the Fleet console page stylesheet crossed the 800 web ceiling (measured 809) through "
         "2026-10-06 UI/UX layout fixes (uniform peer widths, E-stop/cancel feedback placement, phone "

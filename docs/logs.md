@@ -6968,3 +6968,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-518 Accepted (2026-10-08, 사용자 선택: 문서 소유 + 하위 폴더)
 - 교훈: 패키지 폴더를 옮기면 서빙 주인만 같고 문서가 서로의 모듈을 가져오는 문제는 남는다. 울타리가 위치를 먼저 고정한다.
+
+## 2026-10-08 · uncommitted · refactor(fleet): 관제 공유 읽기를 web/shared로 옮긴다
+
+- 변경: D-518의 첫 폴더 이동. 공유 읽기 아홉 파일(address-drift, authorization, poll-gate, development-auth, map-fit, vision-view, field-warp, styles.css, doc-tabs.css)을 server/web/shared로 옮겼다. 공개 URL /console/assets/<파일이름>은 유지하고 allowlist가 실제 경로를 가리킨다. 다른 문서의 ./ import는 그 URL로 바꿨다. 같은 문서의 ./ 는 그대로다.
+- 증거: document imports, server app, site lanes, node --test, palette, queues, grammar, doc tabs, canvas, chrome, token scan, disabled controls, size verdict. 117 passed, 1 known failure (site-map.js canvas contract, already listed). known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run-shared.txt.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 공개 URL을 파일 이름에 고정하면 폴더를 옮겨도 브라우저 주소가 그대로다. node 시험은 그 지정자를 파일로 푸는 훅이 필요하다.

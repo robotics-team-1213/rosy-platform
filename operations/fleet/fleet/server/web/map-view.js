@@ -11,7 +11,7 @@ import {
   streamEvidence, mapUpTurn, quarterTurn, siteViewTurn,
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
-import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
+import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import {drawStartPointMarks} from './start-point-layer.js';
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
 

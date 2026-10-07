@@ -75,7 +75,10 @@ def _local(spec):
 
 
 def _imports(name):
-    text = (WEB / name).read_text(encoding="utf-8")
+    path = WEB / "shared" / name
+    if not path.is_file():
+        path = WEB / name
+    text = path.read_text(encoding="utf-8")
     found = set()
     for spec in _FROM.findall(text):
         local = _local(spec)

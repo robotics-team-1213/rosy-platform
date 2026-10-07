@@ -17,50 +17,50 @@ from fastapi.responses import FileResponse, RedirectResponse
 WEB_ROOT = Path(__file__).resolve().parent / "web"
 
 CONSOLE_ASSETS = {
-    "cell.js": "application/javascript",
-    "cell-document-editor.js": "application/javascript",
-    "cell.css": "text/css",
-    "doc-tabs.css": "text/css",
-    "styles.css": "text/css",
-    "console.js": "application/javascript",
-    "confirmed-action.js": "application/javascript",
-    "install.js": "application/javascript",
-    "peer-picker.js": "application/javascript",
-    "address-drift.js": "application/javascript",
-    "state-age.js": "application/javascript",
-    "authorization.js": "application/javascript",
-    "development-auth.js": "application/javascript",
-    "camera-pairing.js": "application/javascript",
-    "camera-peer.js": "application/javascript",
-    "field-layers.js": "application/javascript",
-    "field-view.js": "application/javascript",
-    "field-warp.js": "application/javascript",
-    "formation.js": "application/javascript",
-    "motion-readiness.js": "application/javascript",
-    "line-stuck.js": "application/javascript",
-    "link-tag.js": "application/javascript",
-    "site-path.js": "application/javascript",
-    "localization-badge.js": "application/javascript",
-    "camera-warp.js": "application/javascript",
-    "map-fit.js": "application/javascript",
-    "map-fit-view.js": "application/javascript",
-    "map-view.js": "application/javascript",
-    "poll-gate.js": "application/javascript",
-    "roster.js": "application/javascript",
-    "power-health-view.js": "application/javascript",
-    "enrollment.js": "application/javascript",
-    "signals.js": "application/javascript",
-    "site-map.css": "text/css",
-    "site-map.js": "application/javascript",
-    "site-map-model.js": "application/javascript",
-    "site-map-teach.js": "application/javascript",
-    "site-layer.js": "application/javascript",
-    "tracking-layer.js": "application/javascript",
-    "tracking-view.js": "application/javascript",
-    "start-point-layer.js": "application/javascript",
-    "start-point-view.js": "application/javascript",
-    "connection-view.js": "application/javascript",
-    "vision-view.js": "application/javascript",
+    "cell.js": ("cell.js", "application/javascript"),
+    "cell-document-editor.js": ("cell-document-editor.js", "application/javascript"),
+    "cell.css": ("cell.css", "text/css"),
+    "doc-tabs.css": ("shared/doc-tabs.css", "text/css"),
+    "styles.css": ("shared/styles.css", "text/css"),
+    "console.js": ("console.js", "application/javascript"),
+    "confirmed-action.js": ("confirmed-action.js", "application/javascript"),
+    "install.js": ("install.js", "application/javascript"),
+    "peer-picker.js": ("peer-picker.js", "application/javascript"),
+    "address-drift.js": ("shared/address-drift.js", "application/javascript"),
+    "state-age.js": ("state-age.js", "application/javascript"),
+    "authorization.js": ("shared/authorization.js", "application/javascript"),
+    "development-auth.js": ("shared/development-auth.js", "application/javascript"),
+    "camera-pairing.js": ("camera-pairing.js", "application/javascript"),
+    "camera-peer.js": ("camera-peer.js", "application/javascript"),
+    "field-layers.js": ("field-layers.js", "application/javascript"),
+    "field-view.js": ("field-view.js", "application/javascript"),
+    "field-warp.js": ("shared/field-warp.js", "application/javascript"),
+    "formation.js": ("formation.js", "application/javascript"),
+    "motion-readiness.js": ("motion-readiness.js", "application/javascript"),
+    "line-stuck.js": ("line-stuck.js", "application/javascript"),
+    "link-tag.js": ("link-tag.js", "application/javascript"),
+    "site-path.js": ("site-path.js", "application/javascript"),
+    "localization-badge.js": ("localization-badge.js", "application/javascript"),
+    "camera-warp.js": ("camera-warp.js", "application/javascript"),
+    "map-fit.js": ("shared/map-fit.js", "application/javascript"),
+    "map-fit-view.js": ("map-fit-view.js", "application/javascript"),
+    "map-view.js": ("map-view.js", "application/javascript"),
+    "poll-gate.js": ("shared/poll-gate.js", "application/javascript"),
+    "roster.js": ("roster.js", "application/javascript"),
+    "power-health-view.js": ("power-health-view.js", "application/javascript"),
+    "enrollment.js": ("enrollment.js", "application/javascript"),
+    "signals.js": ("signals.js", "application/javascript"),
+    "site-map.css": ("site-map.css", "text/css"),
+    "site-map.js": ("site-map.js", "application/javascript"),
+    "site-map-model.js": ("site-map-model.js", "application/javascript"),
+    "site-map-teach.js": ("site-map-teach.js", "application/javascript"),
+    "site-layer.js": ("site-layer.js", "application/javascript"),
+    "tracking-layer.js": ("tracking-layer.js", "application/javascript"),
+    "tracking-view.js": ("tracking-view.js", "application/javascript"),
+    "start-point-layer.js": ("start-point-layer.js", "application/javascript"),
+    "start-point-view.js": ("start-point-view.js", "application/javascript"),
+    "connection-view.js": ("connection-view.js", "application/javascript"),
+    "vision-view.js": ("shared/vision-view.js", "application/javascript"),
 }
 
 CONSOLE_CSP = (
@@ -149,8 +149,14 @@ def install_static_routes(app: FastAPI) -> None:
 
     @app.get("/console/assets/{asset_name:path}", include_in_schema=False)
     def console_asset(asset_name: str):
-        media_type = CONSOLE_ASSETS.get(asset_name)
-        if media_type is None:
+        # D-518: the public name stays the key. The value is the file under web/.
+        entry = CONSOLE_ASSETS.get(asset_name)
+        if entry is None:
             raise HTTPException(status_code=404, detail="console asset not found")
-        return FileResponse(WEB_ROOT / asset_name, media_type=media_type,
+        relative, media_type = entry
+        path = (WEB_ROOT / relative).resolve()
+        root = WEB_ROOT.resolve()
+        if root not in path.parents or not path.is_file():
+            raise HTTPException(status_code=404, detail="console asset not found")
+        return FileResponse(path, media_type=media_type,
                             headers={"Cache-Control": "no-cache"})
