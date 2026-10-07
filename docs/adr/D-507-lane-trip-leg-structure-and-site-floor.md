@@ -46,6 +46,7 @@
    - `expect_tol_m`((0, 0.30]): Fleet이 장소 위치를 아는 오차(지도 자세의 진행 방향 오차 + 장소 고정 허용치 `ENDPOINT_TOL_M`). Fleet 설정·자세 진단에서 나온다.
    - `pivot_past_line_m`([0, 0.30], `left`/`right`만): 감지된 가로선에서 회전 축(장소 점)까지 거리. Fleet은 나가는 차로의 `width_m / 2`로 보낸다(장소는 나가는 차로 중심선 위에 있다, D-490). 상한 0.30은 D-495 `MAX_ADVANCE_M`과 같은 값이다.
    - 능력 `junction_pivot: true`(CORE가 위 필드를 받는다는 표시)가 없는 로봇에는 Fleet이 이 필드를 보내지 않는다.
+   - CORE의 기대 창은 받은 자리의 진행 방향으로 곧게 내다본 점이므로, 장소 앞에서 차로 방향이 15°보다 많이 바뀌면 Fleet은 `expect_in_m`·`expect_tol_m`을 보내지 않고(`map_id`·`pivot_past_line_m`만 보낸다), 경로를 따라가는 기대 창은 뒤의 일로 둔다.
 
 3. **기대 창과 굽이.** 지시를 받을 때 CORE는 받은 자리의 odom 자세와 진행 방향으로 기대 가로선 점(`expect_in_m − pivot_past_line_m`, 갈래면 `expect_in_m`)을 odom 좌표에 둔다. 감지마다 측정 가로선 점(감지 자세 + `junction_ahead_m`)과 기대 점의 거리가 `expect_tol_m` 안이면 이 지시의 교차로다.
    - 창 밖 감지(지도에 없는 굽이, 다른 교차로)는 지시를 쓰지 않는다. HOLD `junction_unexpected`이고 지시는 `armed`로 남는다. 그래서 장소 바로 앞의 굽이에서 회전 지시가 쓰이는 일이 없다.

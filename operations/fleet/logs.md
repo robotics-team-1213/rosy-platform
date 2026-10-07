@@ -2389,9 +2389,16 @@
 - 증거: 새 Chromium 직접 진입 시험 4 passed, 개발 인증 pytest 60 passed, 웹 Node 시험 160 passed. 넓은 pytest의 Cell 컴파일러 import 실패 1건은 깨끗한 main에서도 동일하게 재현했다.
 - gate 변화: SOURCE/LOCAL만 확인. 사이트 배포·실기 수용은 별도다.
 
-## 2026-10-08 · feat/d507-fleet-trip-expect · feat(fleet): D-507 2·3·9 Fleet 쪽
+## 2026-10-08 · dc9026930 · feat(fleet): D-507 2·3·9 Fleet 쪽
 - 변경: `junction_pivot: true` 로봇에만 교차로 지시에 `map_id`·`expect_in_m`·`expect_tol_m`·`pivot_past_line_m`(좌·우만, 나가는 차로 폭/2, 상한 0.30)를 싣는다. `expect_in_m`이 (0, 2] 밖이면 `map_id`만. `expect_tol_m`은 지도 자세에 오차 추정이 없어 0.05×추측항법 거리 + trip 최고 속도×자세 나이 + `ENDPOINT_TOL_M`(상한 0.30)로 둔다. `site_floor_map_id`가 활성 지도와 다른 로봇의 `lane` trip은 422 `TRIP_SITE_FLOOR_MISMATCH`(키 없음·null은 검사 안 함). CORE `unexpected`, 또는 다음 장소가 `arm_distance_m`보다 먼 `waiting`은 10 s를 기다리지 않고 `stopped(junction_unexpected)`. API Ref v1.127.
 - 증거: `test_trip_d507.py` 16건, trip·caps·문서 시험, 웹 Node 시험, 변이 검사 2건(능력 문, `waiting` 거리 규칙), `test/known_failures.py`.
 - gate 변화: SOURCE만. SIM·DEVICE는 CORE 브랜치(`feat/d507-junction-approach`)와 함께.
 - 결정: 판정 규칙은 `LiveTrip.junction_end`로 옮겨 `trip_runner.py`를 600줄 아래로 둔다. 바닥 선언 키가 null이면 선언이 없는 것으로 보고 검사하지 않는다.
 - 교훈: `feat/trip-site-floor-check`가 같은 9항을 따로 구현했다. 착지 때 하나로 합친다.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-507 Fleet 검토 2회 반영
+- 변경: `expect_tol_m`은 지도 자세 나이 + 자세를 읽고 보내기까지 잰 시간 + 0.2 s 여유(`SEND_ALLOWANCE_S`)에 trip 최고 속도를 곱한 값에 드리프트·`ENDPOINT_TOL_M`을 더하고, 아래는 `fleet.trip.expect_tol_min_m`(0.12), 위는 0.30, 자세 값이 없으면 0.30이다. `expect_in_m`은 로봇 진행 방향으로 투영한 장소 거리이고, 장소 앞에서 차로 방향이 15°보다 많이 바뀌면 기대 쌍을 보내지 않는다(`map_id`·`pivot_past_line_m`만). 직진에도 `pivot_past_line_m`. `JUNCTION_ODOM_STALE`은 다음 틱에 다시 보낸다. 좌표 구간에서는 차선 교차로 상태를 비운다. 지도 버전이 다르면 필드를 빼고 `detail.junction_fields_dropped`.
+- 증거: `test_trip_d507.py` 26건, 변이 검사(굽은 길 규칙, 잰 지연), fleet 묶음과 `test/known_failures.py`.
+- gate 변화: SOURCE만.
+- 결정: CORE 창은 곧게 내다보는 투영이라 굽은 접근에서는 창을 주지 않는다. 경로를 따르는 창은 뒤의 일(D-507 2항 문장).
+- 교훈: 최악 지연(호출 시한)을 오차에 넣으면 모든 창이 상한에 붙어 창이 쓸모없어진다. 잰 지연을 쓴다.
