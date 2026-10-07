@@ -109,8 +109,22 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        38_952,
-        "split: independently re-judged at 38952 on 2026-10-07. Since 37182 the package grew 1770 "
+        39_679,
+        "split: independently re-judged at 39679 on 2026-10-07 (security-reviewer agent). Since 38952 the"
+        " package grew 727 production and web lines. D-494 M2 contracts +634: localization/map_pose.py "
+        "+377 (pure map-pose tracker beside trust.py and arbiter.py in fleet/localization), "
+        "server/map_pose_service.py +154 (trip-only service beside localization_service.py), "
+        "console_view.py +33 (TripCaps), app.py +32 (incl. the trip-caps closure moved out of "
+        "console.py), cli.py +18, console.py +10, trip_routes.py +6, ingest_routes.py +4. Site-map, Cell "
+        "and D-493 map-first web +93 net: site-map.js +58, cell.js +17, map-view.js +15, console.js +13, "
+        "site-map.css +9, cell.css +7, site-map-model.js +5, site-map.html +3, start-point-view.js +1, "
+        "less index.html -16, styles.css -12, roster.js -5, connection-view.js -2. Tests are exempt. No "
+        "new owner: the map pose sits in the existing localization owner, trip caps in the capability "
+        "display. The first web/server seam stays docs/plans/2026-10-07-fleet-site-map-web-server-seam.md"
+        " (owner fleet), and map_pose_service.py joins the B2 server-subpackage obligation beside "
+        "localization_service.py. The split is not done here. +150 allowance unchanged. Previously "
+        "independently re-judged at 38952 on 2026-10-07. "
+        "Since 37182 the package grew 1770 "
         "production and web lines in the existing site-map owners: site-map.js +238, site_map_store.py +198, "
         "routing/graph.py +168, site-map-model.js +153, site_map.py +151, routing/trip.py +149, "
         "routing/planner.py +140, trip_routes.py +113, site_map_routes.py +92, routing/cost.py +82, "

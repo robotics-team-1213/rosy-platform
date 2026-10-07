@@ -43,6 +43,7 @@ class MapPoseService:
         self._gather_rest = gather_rest    # always the robot's REST state (trip loop)
         #: The active site map frame id; None (or no provider) accepts any sighting map id.
         self._map_id = map_id
+        self._bad_snapshot: set[str] = set()
         self._source_map_ids = frozenset(source_map_ids)
         self._warned_map_ids: set[str] = set()
         self._wall = wall           # sighting captured_at and odom stamps are UTC epoch seconds
@@ -83,6 +84,14 @@ class MapPoseService:
             tracker.add_sighting(sighting, self._wall(), self.active_map_id())
 
     def observe_state(self, robot_id: str, state: Optional[Mapping]) -> None:
+        try:
+            self._observe_state(robot_id, state)
+        except Exception:           # a bad snapshot is logged once per robot, never raised
+            if robot_id not in self._bad_snapshot:
+                self._bad_snapshot.add(robot_id)
+                logger.exception("map pose: snapshot of %s not usable", robot_id)
+
+    def _observe_state(self, robot_id: str, state: Optional[Mapping]) -> None:
         if not isinstance(state, Mapping) or state.get("odom_pose") is None:
             return                  # a robot before D-494 2: nothing to count
         tracker = self._tracker(robot_id)
