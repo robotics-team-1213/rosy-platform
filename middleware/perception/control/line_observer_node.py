@@ -38,7 +38,8 @@ from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_debug import next_publish_due, render_debug
-from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error
+from .sensing.perception.lane_containment import (
+    PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width)
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
 from .sensing.perception.route_hybrid import RouteHybridFollower
@@ -92,7 +93,6 @@ class LineObserverNode(Node):
         self.declare_parameter('learned_paint_reuse_max_wz', 0.15)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
-        # D-468 containment: half the painted line width (keep mode fits the paint centre).
         self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
         # 'between' only: bottom band start (keeps white walls out) and the
@@ -135,10 +135,7 @@ class LineObserverNode(Node):
         self._simulation_ground = None
         self._nominal_profile_cache = None
         self._ground_error = None
-        # Negative would move containment edges outward past the paint: refuse at startup.
-        self._paint_half_width_m = float(self.get_parameter('lane_paint_half_width_m').value)
-        if not (math.isfinite(self._paint_half_width_m) and self._paint_half_width_m >= 0.0):
-            raise ValueError('lane_paint_half_width_m must be a finite number >= 0')
+        self._paint_half_width_m = paint_half_width(self.get_parameter('lane_paint_half_width_m').value)
         self._odom_pose = None
         self._odom_stamp = None
         self._odom_wz = None

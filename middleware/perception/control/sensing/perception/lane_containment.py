@@ -159,10 +159,16 @@ def projection_uncertainty_m(ground, error, segments):
     return min(worst*(1+SAMPLING_MARGIN), 1.0)
 
 
+def paint_half_width(value):
+    """``value`` as a float; a negative (edges moved outward, past the paint) or non-finite one is refused."""
+    if not (_real(value) and value >= 0):
+        raise ValueError("lane_paint_half_width_m must be a finite number >= 0")
+    return float(value)
+
+
 def containment_payload(keeper, ground, *, stamp, source, camera_x, geometry_bounds=None,
                         paint_half_width_m=PAINT_HALF_WIDTH_M):
-    if not (_real(paint_half_width_m) and paint_half_width_m >= 0):
-        raise ValueError("paint_half_width_m must be a finite number >= 0")
+    paint_half_width_m = paint_half_width(paint_half_width_m)
     if ground is None or source not in ("NOMINAL", "CALIBRATED", "GAZEBO"):
         return None
     geometry = [source, camera_x, ground.height_m, ground.pitch_rad,

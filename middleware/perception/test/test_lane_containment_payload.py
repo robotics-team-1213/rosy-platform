@@ -300,7 +300,7 @@ def test_node_paint_half_width_is_read_only_and_validated_at_startup():
     source = (REPO / "middleware" / "perception" / "control" / "line_observer_node.py").read_text(encoding="utf-8")
     assert "self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)" in source
     startup = source.split("def __init__", 1)[1].split("\n    def ", 1)[0]
-    assert "lane_paint_half_width_m must be a finite number >= 0" in startup
+    assert "paint_half_width(self.get_parameter('lane_paint_half_width_m').value)" in startup
 
 
 def test_crosswalk_extent_rides_in_the_payload_and_passes_the_contract():
