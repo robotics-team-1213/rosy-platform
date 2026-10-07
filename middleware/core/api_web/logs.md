@@ -664,3 +664,9 @@
 - 변경: CORE app contract version now matches API Reference v1.124.
 - 증거: Contract and Fleet focus tests passed; hardware remains unverified.
 - gate 변화: None.
+
+## 2026-10-08 · uncommitted · docs(api): merged contract v1.125
+
+- 변경: CORE app contract docstring follows API Reference v1.125 after D-513 merge.
+- 증거: Pinned version test included in merged tree verification.
+- gate 변화: None.

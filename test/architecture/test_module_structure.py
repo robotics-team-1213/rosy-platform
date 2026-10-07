@@ -115,8 +115,10 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        42_376,
-        "split: re-judged at 42376 on 2026-10-07: D-499 link status uses the existing "
+        42_546,
+        "split: re-judged at 42546 on 2026-10-08: D-509 display readback and D-513 start place "
+        "and camera rotation stay with the Fleet server and site-map web owners. "
+        "Previously re-judged at 42376 on 2026-10-07: D-499 link status uses the existing "
         "Fleet gather and display owner; D-493 stale-age rows use that same snapshot. The "
         "site-map web/server split plan and +150 allowance remain unchanged. "
         "Previously re-judged at 42184 on 2026-10-07: D-407 episode recording and routes, D-493 "

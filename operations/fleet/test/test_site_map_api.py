@@ -69,6 +69,7 @@ def test_site_map_returns_the_configured_rectangle_without_secrets():
             "corner_marker_ids": [30, 31, 32, 33],
             "robot_ids": ["rosy-pinky-8kcn"],
             "robot_markers": {"rosy-pinky-8kcn": 40},
+            "display_rotation_deg": 0,
         }],
     }]
     assert SOURCE_TOKEN not in response.text
@@ -150,6 +151,15 @@ def test_loader_keeps_site_geometry_for_display(tmp_path):
 
     assert source.corner_world_m == RECT
     assert source.robot_markers == (("rosy-pinky-8kcn", 40),)
+
+
+def test_loader_keeps_a_quarter_turn_display_rotation_and_rejects_others(tmp_path):
+    """D-513 7: the console turns the raw picture; the value is a quarter turn or the load fails."""
+    source = load_sighting_sources(_write(tmp_path / "c.yaml", _row(display_rotation_deg=90)), environ=ENV)[0]
+    assert source.display_rotation_deg == 90
+    for bad in (45, "90", True, -90):
+        with pytest.raises(ValueError, match="display_rotation_deg"):
+            load_sighting_sources(_write(tmp_path / "c.yaml", _row(display_rotation_deg=bad)), environ=ENV)
 
 
 def test_loader_geometry_is_optional(tmp_path):

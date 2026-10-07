@@ -29,9 +29,11 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), also when loaded by path
 import sim2real  # noqa: E402
+from adr_gaps import (  # noqa: E402,F401
+    ADR_GAPS, ADR_ID, load_adr_gaps, parse_adr_gaps, reservation_warnings, reserved_adrs, validate_adr_log,
+)
 
 CONFIG = Path("tools") / "harness" / "harness.yaml"
-ADR_GAPS = Path("tools") / "harness" / "adr_gaps.txt"  # D-510, merge=union
 GATES = ("SOURCE", "LOCAL", "ROS-SIM", "ARTIFACT", "DEVICE", "FIELD")
 STATES = ("GO", "HOLD", "PARKED", "N/A")
 REQUIRED_PROGRESS = ("module", "owner", "last_verified", "gates")
@@ -48,7 +50,6 @@ UNCOMMITTED = "uncommitted"
 KNOWN_LOG_ENCODING_REPAIRS = yaml.safe_load(
     Path(__file__).with_name("log_repairs.yaml").read_text(encoding="utf-8"))
 
-ADR_ID = re.compile(r"^D-(\d+)$")
 COMMIT = re.compile(rf"^(?:[0-9a-f]{{7,40}}|{UNCOMMITTED})$")
 LOGICAL_MODULE = re.compile(r"^M\d{2}$")
 LOG_HEADING = re.compile(rf"^## (\d{{4}}-\d{{2}}-\d{{2}}) · ([0-9a-f]{{7,40}}|{UNCOMMITTED}) · (\S.*)$")
@@ -406,73 +407,6 @@ def parse_adr_log(text: str, adr_dir: Path | None = None) -> AdrLog:
         bodies[match.group(1)] = match.group(2).strip()
     return AdrLog(index=index, bodies=bodies, duplicates=tuple(duplicates),
                   index_duplicates=tuple(index_duplicates))
-
-
-def parse_adr_gaps(text: str) -> tuple[dict[str, str], list[str]]:
-    """``D-nnn reason`` per line; union merges may repeat or reorder lines (D-510)."""
-    gaps: dict[str, str] = {}
-    errors: list[str] = []
-    for number, line in enumerate(_normalize(text).split("\n"), 1):
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        adr_id, reason = (line.split(None, 1) + [""])[:2]
-        if not ADR_ID.match(adr_id) or not reason:
-            errors.append(f"line {number}: expected 'D-nnn reason', got {line!r}")
-            continue
-        gaps.setdefault(adr_id, reason)
-    return gaps, errors
-
-
-def reserved_adrs(repo: Path) -> set[str]:
-    """Numbers claimed with tools/harness/adr_reserve.py (refs/adr/D-nnn, D-510). Local only."""
-    out = _git(repo, "for-each-ref", "--format=%(refname:lstrip=2)", "refs/adr") or ""
-    return {name for name in out.split() if ADR_ID.match(name)}
-
-
-def load_adr_gaps(repo: Path, config: dict) -> tuple[dict[str, str], list[str]]:
-    # ponytail: harness.yaml adr_gaps still read for in-flight branches; drop once none add there.
-    gaps = dict(config.get("adr_gaps") or {})
-    errors: list[str] = []
-    path = repo / ADR_GAPS
-    if path.is_file():
-        parsed, errors = parse_adr_gaps(path.read_text(encoding="utf-8"))
-        for adr_id, reason in parsed.items():
-            gaps.setdefault(adr_id, reason)
-    return gaps, errors
-
-
-def reservation_warnings(adr: AdrLog, gaps: dict[str, str], reserved: set[str]) -> list[str]:
-    """refs/adr are local: CI and other clones lack them, so they never excuse a gap (D-510).
-
-    Only a number below the branch's highest ADR would fail CI as a missing gap.
-    """
-    present = set(adr.index) | set(adr.bodies)
-    highest = max((_adr_number(i) for i in present), default=0)
-    return [f"{adr_id} reserved locally (refs/adr) but not on this branch"
-            " — land its ADR or add a gap line to tools/harness/adr_gaps.txt before push"
-            for adr_id in sorted(reserved - present - set(gaps), key=_adr_number)
-            if _adr_number(adr_id) < highest]
-
-
-def validate_adr_log(adr: AdrLog, gaps: dict[str, str]) -> list[str]:
-    errors = [f"{adr_id}: duplicate body section" for adr_id in adr.duplicates]
-    errors += [f"{adr_id}: duplicate index row" for adr_id in adr.index_duplicates]
-    for adr_id in sorted(set(adr.bodies) - set(adr.index), key=_adr_number):
-        errors.append(f"{adr_id}: body section missing from index")
-    for adr_id in sorted(set(adr.index) - set(adr.bodies), key=_adr_number):
-        errors.append(f"{adr_id}: index row has no body section")
-
-    present = set(adr.index) | set(adr.bodies)
-    highest = max((_adr_number(i) for i in present), default=0)
-    for number in range(1, highest + 1):
-        adr_id = f"D-{number}"
-        if adr_id not in present and adr_id not in gaps:
-            errors.append(f"{adr_id}: missing and not declared in adr_gaps")
-    for adr_id in sorted(gaps, key=_adr_number):
-        if adr_id in present:
-            errors.append(f"{adr_id}: declared gap now exists; remove it from adr_gaps")
-    return errors
 
 
 # --- rendering -------------------------------------------------------------
