@@ -238,6 +238,16 @@ class IdentityService:
                 self._drop(robot_id, "overlap")
             elif isinstance(found, tuple):
                 binding.x, binding.y, binding.seen_at = found[0], found[1], payload.captured_at
+        # Review 2026-10-08: A's blob hidden, B's within track_step_m of A's last position -> A
+        # would follow B. Two bindings within overlap_m can no longer tell who is who: drop both.
+        followed = [b for b in self._bindings.values() if b.source_id == source_id]
+        crowded: set[str] = set()
+        for i, first in enumerate(followed):
+            for second in followed[i + 1:]:
+                if math.hypot(first.x - second.x, first.y - second.y) <= self.config.overlap_m:
+                    crowded |= {first.robot_id, second.robot_id}
+        for robot_id in sorted(crowded):
+            self._drop(robot_id, "overlap")
 
     def _continue(self, payload, x: float, y: float):
         """(x, y) of the one anonymous detection continuing (x, y), or a reason string."""

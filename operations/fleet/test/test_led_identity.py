@@ -192,3 +192,21 @@ def test_verdict_and_readback_routes():
     readback = client.get("/api/fleet/tracking/identity").json()
     row = next(r for r in readback["robots"] if r["robot_id"] == "rosy_60")
     assert row["state"] == "CONFIRMED" and readback["use"] == "observation-only"
+
+
+def test_two_bindings_that_meet_on_one_blob_both_return_to_unknown():
+    # Review 2026-10-08: A's blob hidden, B's within track_step_m of A -> A must not take B's blob.
+    clock, tracking, identity, _ = _setup()
+    _confirm(clock, tracking, identity, "rosy_60")                  # A at (1.05, 1.0)
+    _moving(tracking, clock, "rosy_26")
+    started = asyncio.run(identity.request("rosy_26"))
+    for _ in range(20):                                              # through the 6 s window
+        clock.now += 0.31
+        _detections(tracking, clock, (1.05, 1.0), (1.40, 1.0))
+    assert _verdict(identity, started["request_id"], x=1.40, at=clock.now - 1.0)["state"] == "CONFIRMED"
+    assert identity.confirmed_track_pose("rosy_60")["state"] == "CONFIRMED"
+    clock.now += 0.3
+    _detections(tracking, clock, (1.25, 1.0))                        # A hidden, B moved next to A
+    for robot_id in ("rosy_60", "rosy_26"):
+        pose = identity.confirmed_track_pose(robot_id)
+        assert (pose["state"], pose["reason"]) == ("UNKNOWN", "overlap")
