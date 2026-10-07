@@ -77,7 +77,8 @@ def receive_review(source_path, human_path, image_root, out, *, classes=exporter
         for box in candidates:
             exporter._check_human_box(box)
             if box.get('label') not in classes + (None,):
-                raise ValueError('unknown source object class')
+                raise ValueError(f"unknown source object class {box.get('label')!r} in source "
+                                 f"{index}; allowed: {', '.join(classes)}")
             a = box['bbox_xyxy']
             if not (0 <= a[0] < a[2] <= size[0] and 0 <= a[1] < a[3] <= size[1]):
                 raise ValueError('source object outside actual image')
@@ -92,7 +93,8 @@ def receive_review(source_path, human_path, image_root, out, *, classes=exporter
             for box in review['boxes']:
                 exporter._check_human_box(box)
                 if box.get('label') not in classes + (exporter.REJECT,):
-                    raise ValueError('unknown object class')
+                    raise ValueError(f"unknown object class {box.get('label')!r} in human review "
+                                     f"{index}; allowed: {', '.join(classes)}")
                 a = box['bbox_xyxy']
                 if not (0 <= a[0] < a[2] <= size[0] and 0 <= a[1] < a[3] <= size[1]):
                     raise ValueError('review box outside actual image')
