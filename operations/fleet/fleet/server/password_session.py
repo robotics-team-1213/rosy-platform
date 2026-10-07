@@ -10,7 +10,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from contextlib import closing
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -34,6 +34,12 @@ LOGIN_FAILURES_PER_MINUTE = 10
 _RATE_WINDOW_S = 60.0
 _TOUCH_EVERY_S = 60.0  # sliding-expiry writes at most once a minute per session, not per poll
 _MAX_TRACKED = 1024
+_AUTH_DB_TIMEOUT_S = 1.0  # an auth read never waits out a long writer
+_CACHE_S = 60.0  # a cookie validated this recently authenticates from memory
+_CACHE_MAX = 256
+_SCRYPT_WAIT_S = 5.0
+#: Each scrypt holds about 33 MiB; at most two run at once.
+_SCRYPT_SLOTS = threading.BoundedSemaphore(2)
 
 
 def _digest(text: str) -> str:
@@ -56,24 +62,36 @@ def same_origin(request: Request) -> bool:
     return parsed.scheme in {"http", "https"} and parsed.netloc.lower() == host.lower()
 
 
+class SessionStorageUnavailable(Exception):
+    """The sessions table could not be read or written."""
+
+
+class LoginRateLimited(Exception):
+    """Too many failed logins, or too many password checks already running."""
+
+
 class PasswordSessions:
     def __init__(self, path: Path | str, logins: Mapping[str, Mapping[str, str]], *,
                  clock: Callable[[], float] = time.time) -> None:
         self.path = Path(path)
+        # D-519 3: the site-users snapshot loaded at startup; account changes apply on restart.
         self._logins = dict(logins)
         self._clock = clock
         self._lock = threading.Lock()
         self._failures: dict[tuple[str, str], deque[float]] = {}
+        self._limit_audited: dict[str, float] = {}
+        # digest -> session row plus "validated_at": recent cookies authenticate without the DB.
+        self._cache: OrderedDict[str, dict] = OrderedDict()
         # Unknown logins still pay one scrypt so the 401 does not reveal which accounts exist.
         self._dummy_hash = hash_password(secrets.token_urlsafe(16))
-        with closing(self._connect()) as db, db:
+        with closing(self._connect(timeout=10)) as db, db:
             db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_sessions (
                 session_sha256 TEXT PRIMARY KEY, login TEXT NOT NULL,
                 principal_id TEXT NOT NULL, role TEXT NOT NULL, password_sha256 TEXT NOT NULL,
                 created_at REAL NOT NULL, last_used_at REAL NOT NULL, remember INTEGER NOT NULL)""")
 
-    def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.path, timeout=10)
+    def _connect(self, *, timeout: float = _AUTH_DB_TIMEOUT_S) -> sqlite3.Connection:
+        db = sqlite3.connect(self.path, timeout=timeout)
         db.row_factory = sqlite3.Row
         return db
 
@@ -88,64 +106,149 @@ class PasswordSessions:
             hits.popleft()
         return hits
 
-    def limited(self, address: str, login: str) -> bool:
+    def audit_limit(self, address: str) -> bool:
+        """True at most once per address per window, so a 429 flood leaves one audit row."""
         now = self._clock()
         with self._lock:
-            return (len(self._hits(("address", address), now)) >= ADDRESS_FAILURES_PER_MINUTE
-                    or len(self._hits(("login", login), now)) >= LOGIN_FAILURES_PER_MINUTE)
+            if len(self._limit_audited) > _MAX_TRACKED:
+                self._limit_audited = {k: t for k, t in self._limit_audited.items()
+                                       if now - t < _RATE_WINDOW_S}
+            if now - self._limit_audited.get(address, now - _RATE_WINDOW_S) < _RATE_WINDOW_S:
+                return False
+            self._limit_audited[address] = now
+            return True
 
     def check(self, address: str, login: str, password: str) -> Optional[SitePrincipal]:
-        account = self._logins.get(login)
-        ok = verify_password(password, account["password_scrypt"] if account else self._dummy_hash)
-        if ok and account is not None:
-            return SitePrincipal(account["principal_id"], account["role"])
+        """The account for a correct password, else None; raises LoginRateLimited.
+
+        The failure slot is reserved under the lock before scrypt runs and refunded on success,
+        so concurrent attempts cannot all pass the count. A login outside the login pattern is
+        refused like a wrong password and never becomes a per-login rate key.
+        """
+        valid = bool(_LOGIN.fullmatch(login))
+        keys = [("address", address)] + ([("login", login)] if valid else [])
         now = self._clock()
         with self._lock:
-            self._hits(("address", address), now).append(now)
-            self._hits(("login", login), now).append(now)
+            if (len(self._hits(keys[0], now)) >= ADDRESS_FAILURES_PER_MINUTE
+                    or (valid and len(self._hits(keys[1], now)) >= LOGIN_FAILURES_PER_MINUTE)):
+                raise LoginRateLimited()
+            for key in keys:
+                self._hits(key, now).append(now)
+        if not _SCRYPT_SLOTS.acquire(timeout=_SCRYPT_WAIT_S):
+            self._refund(keys, now)
+            raise LoginRateLimited()
+        try:
+            account = self._logins.get(login) if valid else None
+            ok = verify_password(password, account["password_scrypt"] if account else self._dummy_hash)
+        finally:
+            _SCRYPT_SLOTS.release()
+        if ok and account is not None:
+            self._refund(keys, now)
+            return SitePrincipal(account["principal_id"], account["role"])
         return None
+
+    def _refund(self, keys, stamp: float) -> None:
+        with self._lock:
+            for key in keys:
+                hits = self._failures.get(key)
+                if hits is not None and stamp in hits:
+                    hits.remove(stamp)
 
     def issue(self, login: str, *, remember: bool) -> str:
         account = self._logins[login]
         value = secrets.token_urlsafe(32)
         now = self._clock()
-        with closing(self._connect()) as db, db:
-            db.execute("DELETE FROM fleet_console_sessions WHERE created_at <= ? "
-                       "OR (remember = 0 AND last_used_at <= ?)", (now - ABSOLUTE_S, now - IDLE_S))
-            db.execute("INSERT INTO fleet_console_sessions VALUES (?,?,?,?,?,?,?,?)", (
-                _digest(value), login, account["principal_id"], account["role"],
-                _digest(account["password_scrypt"]), now, now, int(remember)))
+        row = {"login": login, "principal_id": account["principal_id"], "role": account["role"],
+               "password_sha256": _digest(account["password_scrypt"]), "created_at": now,
+               "last_used_at": now, "remember": int(remember)}
+        try:
+            with closing(self._connect()) as db, db:
+                db.execute("DELETE FROM fleet_console_sessions WHERE created_at <= ? "
+                           "OR (remember = 0 AND last_used_at <= ?)", (now - ABSOLUTE_S, now - IDLE_S))
+                db.execute("INSERT INTO fleet_console_sessions VALUES (?,?,?,?,?,?,?,?)", (
+                    _digest(value), row["login"], row["principal_id"], row["role"],
+                    row["password_sha256"], now, now, row["remember"]))
+        except sqlite3.Error:
+            raise SessionStorageUnavailable() from None
+        self._remember(_digest(value), row, now)
         return value
 
-    def principal(self, value: str) -> Optional[tuple[SitePrincipal, str]]:
-        """The live session's principal and UTC ISO expiry, sliding its idle window."""
+    def _remember(self, key: str, row: Mapping, validated_at: float) -> None:
+        with self._lock:
+            self._cache[key] = {**row, "validated_at": validated_at}
+            self._cache.move_to_end(key)
+            while len(self._cache) > _CACHE_MAX:
+                self._cache.popitem(last=False)
+
+    def _forget(self, key: str) -> None:
+        with self._lock:
+            self._cache.pop(key, None)
+
+    def _expiry(self, row: Mapping, now: float) -> Optional[float]:
+        """The row's expiry if the account snapshot still matches and it has not lapsed."""
+        account = self._logins.get(row["login"])
+        window = REMEMBER_S if row["remember"] else IDLE_S
+        expires = min(row["created_at"] + ABSOLUTE_S, row["last_used_at"] + window)
+        if (account is None or account["principal_id"] != row["principal_id"]
+                or account["role"] != row["role"]
+                or _digest(account["password_scrypt"]) != row["password_sha256"] or now >= expires):
+            return None
+        return expires
+
+    def _best_effort(self, sql: str, params: tuple) -> bool:
+        # The sliding touch and expiry cleanup never fail authentication.
+        try:
+            with closing(self._connect()) as db, db:
+                db.execute(sql, params)
+            return True
+        except sqlite3.Error:
+            return False
+
+    def principal(self, value: str, *, allow_stale: bool = False) -> Optional[tuple[SitePrincipal, str]]:
+        """The live session's principal and UTC ISO expiry, sliding its idle window.
+
+        A cookie validated within `_CACHE_S` needs no DB. Otherwise the DB decides; a DB error
+        raises SessionStorageUnavailable unless `allow_stale` (e-stop) and the cache knows the cookie.
+        """
         key = _digest(value)
         now = self._clock()
-        with closing(self._connect()) as db, db:
-            row = db.execute("SELECT * FROM fleet_console_sessions WHERE session_sha256 = ?",
-                             (key,)).fetchone()
-            if row is None:
-                return None
-            account = self._logins.get(row["login"])
-            window = REMEMBER_S if row["remember"] else IDLE_S
-            cap = row["created_at"] + ABSOLUTE_S
-            if (account is None or account["principal_id"] != row["principal_id"]
-                    or account["role"] != row["role"]
-                    or _digest(account["password_scrypt"]) != row["password_sha256"]
-                    or now >= min(cap, row["last_used_at"] + window)):
-                db.execute("DELETE FROM fleet_console_sessions WHERE session_sha256 = ?", (key,))
-                return None
-            if now - row["last_used_at"] >= _TOUCH_EVERY_S:
-                db.execute("UPDATE fleet_console_sessions SET last_used_at = ? WHERE session_sha256 = ?",
-                           (now, key))
-                last_used = now
+        with self._lock:
+            cached = dict(self._cache[key]) if key in self._cache else None
+        if cached is None or now - cached["validated_at"] >= _CACHE_S:
+            try:
+                with closing(self._connect()) as db:
+                    found = db.execute("SELECT * FROM fleet_console_sessions WHERE session_sha256 = ?",
+                                       (key,)).fetchone()
+            except sqlite3.Error:
+                if not (allow_stale and cached is not None):
+                    raise SessionStorageUnavailable() from None
+                found = None  # e-stop on the stale cache entry; it stays stale for everything else
             else:
-                last_used = row["last_used_at"]
-        return SitePrincipal(row["principal_id"], row["role"]), _iso(min(cap, last_used + window))
+                if found is None:
+                    self._forget(key)
+                    return None
+                cached = {name: found[name] for name in (
+                    "login", "principal_id", "role", "password_sha256", "created_at", "last_used_at",
+                    "remember")}
+                cached["validated_at"] = now
+        if self._expiry(cached, now) is None:
+            self._forget(key)
+            self._best_effort("DELETE FROM fleet_console_sessions WHERE session_sha256 = ?", (key,))
+            return None
+        if now - cached["last_used_at"] >= _TOUCH_EVERY_S and self._best_effort(
+                "UPDATE fleet_console_sessions SET last_used_at = ? WHERE session_sha256 = ?", (now, key)):
+            cached["last_used_at"] = now
+        self._remember(key, cached, cached["validated_at"])
+        return SitePrincipal(cached["principal_id"], cached["role"]), _iso(self._expiry(cached, now))
 
     def revoke(self, value: str) -> None:
-        with closing(self._connect()) as db, db:
-            db.execute("DELETE FROM fleet_console_sessions WHERE session_sha256 = ?", (_digest(value),))
+        key = _digest(value)
+        self._forget(key)
+        try:
+            with closing(self._connect()) as db, db:
+                db.execute("DELETE FROM fleet_console_sessions WHERE session_sha256 = ?", (key,))
+        except sqlite3.Error:
+            raise SessionStorageUnavailable() from None
 
     def authenticate(self, request: Request) -> Optional[SitePrincipal]:
         """Cookie authentication for `authorize`; Bearer has already been ruled out."""
@@ -155,16 +258,30 @@ class PasswordSessions:
         if request.method not in {"GET", "HEAD"} and not same_origin(request):
             raise HTTPException(status_code=403, detail={
                 "code": "CSRF_REJECTED", "message": "cookie requests must come from this console"})
-        found = self.principal(value)
+        try:
+            found = self.principal(value, allow_stale=request.url.path == "/api/fleet/estop")
+        except SessionStorageUnavailable:
+            raise _storage_unavailable() from None
         if found is None:
             return None
         request.state.site_auth_expires_at = found[1]
         return found[0]
 
 
+def _storage_unavailable() -> HTTPException:
+    return HTTPException(status_code=503, detail={
+        "code": "SESSION_STORAGE_UNAVAILABLE", "message": "console session storage is unavailable"})
+
+
 def _set_cookie(response: Response, value: str, *, remember: bool) -> None:
     response.set_cookie(COOKIE, value, max_age=int(REMEMBER_S) if remember else None,
                         path="/", secure=True, httponly=True, samesite="strict")
+
+
+def _begin_audit(request: Request, task_service, principal: SitePrincipal) -> None:
+    request.state.site_api_audit_id = task_service.store.begin_api_audit(
+        principal_id=principal.principal_id, role=principal.role,
+        method=request.method, path=request.url.path)
 
 
 def install_password_routes(app, *, sessions: Optional[PasswordSessions], authorize, task_service,
@@ -191,17 +308,20 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
             raise HTTPException(status_code=403, detail={
                 "code": "CSRF_REJECTED", "message": "login must come from this console"})
         address = client_address(request, trust_forwarded=trust_forwarded)
-        if sessions.limited(address, login):
+        attempted = SitePrincipal(f"login:{login if _LOGIN.fullmatch(login) else '?'}", "viewer")
+        try:
+            principal = sessions.check(address, login, password)
+        except LoginRateLimited:
+            if sessions.audit_limit(address):
+                try:
+                    _begin_audit(request, task_service, attempted)
+                except (OSError, sqlite3.Error, ValueError):
+                    pass  # the 429 stands either way
             raise HTTPException(status_code=429, headers={"Retry-After": "60"}, detail={
-                "code": "RATE_LIMITED", "message": "too many failed logins; wait a minute"})
-        principal = sessions.check(address, login, password)
-        audited = principal or SitePrincipal(
-            f"login:{login if _LOGIN.fullmatch(login) else '?'}", "viewer")
+                "code": "RATE_LIMITED", "message": "too many failed logins; wait a minute"}) from None
         try:
             # D-519 2: success under the principal, failure as login:<name>; the middleware closes it.
-            request.state.site_api_audit_id = task_service.store.begin_api_audit(
-                principal_id=audited.principal_id, role=audited.role,
-                method=request.method, path=request.url.path)
+            _begin_audit(request, task_service, principal or attempted)
         except (OSError, sqlite3.Error, ValueError):
             raise HTTPException(status_code=503, detail={
                 "code": "AUDIT_STORAGE_UNAVAILABLE", "message": "site command audit is unavailable",
@@ -209,8 +329,12 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
         if principal is None:
             raise HTTPException(status_code=401, detail={
                 "code": "LOGIN_FAILED", "message": "login or password is incorrect"})
+        try:
+            value = sessions.issue(login, remember=remember)
+        except SessionStorageUnavailable:
+            raise _storage_unavailable() from None
         response = Response(status_code=204, headers=NO_STORE)
-        _set_cookie(response, sessions.issue(login, remember=remember), remember=remember)
+        _set_cookie(response, value, remember=remember)
         return response
 
     @app.post("/api/fleet/auth/logout", status_code=204, tags=["fleet-auth"])
@@ -220,7 +344,10 @@ def install_password_routes(app, *, sessions: Optional[PasswordSessions], author
             raise HTTPException(status_code=403, detail={
                 "code": "CSRF_REJECTED", "message": "cookie requests must come from this console"})
         if value:
-            sessions.revoke(value)
+            try:
+                sessions.revoke(value)
+            except SessionStorageUnavailable:
+                raise _storage_unavailable() from None
         response = Response(status_code=204, headers=NO_STORE)
         response.delete_cookie(COOKIE, path="/", secure=True, httponly=True, samesite="strict")
         return response

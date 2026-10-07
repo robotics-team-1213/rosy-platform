@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import io
+import sqlite3
 import sys
+import threading
+import time
 from hashlib import sha256
 from pathlib import Path
 
@@ -15,7 +18,8 @@ from fakes import FakeRobot
 from fleet.server import site_users as site_users_module
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
-from fleet.server.password_session import COOKIE, PasswordSessions
+from fleet.server import password_session as password_session_module
+from fleet.server.password_session import COOKIE, LoginRateLimited, PasswordSessions
 from fleet.server.site_auth import SitePrincipal, build_authorize, build_role_guards
 from fleet.server.site_users import hash_password, load_site_accounts, load_site_users, verify_password
 from fleet.server.task_service import FleetTaskService
@@ -174,12 +178,77 @@ def test_ten_failures_per_login_rate_limit_and_window_expiry():
     sessions = PasswordSessions(":memory:", _accounts(), clock=clock)
 
     for index in range(10):
-        assert not sessions.limited(f"10.0.0.{index}", "alice")
         assert sessions.check(f"10.0.0.{index}", "alice", "nope") is None
-    assert sessions.limited("10.0.0.99", "alice")
-    assert not sessions.limited("10.0.0.99", "bob")
+    with pytest.raises(LoginRateLimited):
+        sessions.check("10.0.0.99", "alice", PASSWORD)
+    assert sessions.check("10.0.0.99", "bob", "nope") is None
     clock.now += 60
-    assert not sessions.limited("10.0.0.99", "alice")
+    assert sessions.check("10.0.0.99", "alice", PASSWORD) == SitePrincipal("alice", "operator")
+
+
+def test_concurrent_failures_from_one_address_run_at_most_five_password_checks(monkeypatch):
+    sessions = PasswordSessions(":memory:", _accounts())
+    calls = []
+
+    def slow_verify(password, encoded):
+        calls.append(password)
+        time.sleep(0.05)
+        return False
+
+    monkeypatch.setattr(password_session_module, "verify_password", slow_verify)
+    start = threading.Barrier(12)
+    outcomes = []
+
+    def attempt():
+        start.wait()
+        try:
+            outcomes.append(sessions.check("10.0.0.7", "alice", "nope"))
+        except LoginRateLimited:
+            outcomes.append("limited")
+
+    workers = [threading.Thread(target=attempt) for _ in range(12)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    assert len(calls) <= 5
+    assert outcomes.count("limited") >= 7
+
+
+def test_success_refunds_its_reserved_slot():
+    sessions = PasswordSessions(":memory:", _accounts())
+
+    for _ in range(10):
+        assert sessions.check("10.0.0.8", "alice", PASSWORD) is not None
+    for _ in range(5):
+        assert sessions.check("10.0.0.8", "alice", "nope") is None
+    with pytest.raises(LoginRateLimited):
+        sessions.check("10.0.0.8", "alice", PASSWORD)
+
+
+@pytest.mark.parametrize("login", ["a" * 33, "Alice", "bad login", ""])
+def test_malformed_login_gets_the_same_401_and_is_no_rate_key(tmp_path, login):
+    app, tasks = _app(tmp_path)
+    client = _client(app)
+
+    response = _login(client, login=login)
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "LOGIN_FAILED"
+    sessions_failures = [key for key in app.state.password_sessions._failures if key[0] == "login"]
+    assert sessions_failures == []
+    assert any(r["principal_id"] == "login:?" for r in tasks.store.api_audit(limit=10))
+
+
+def test_rate_limited_logins_are_audited_once_per_address_window(tmp_path):
+    app, tasks = _app(tmp_path)
+    client = _client(app)
+
+    for _ in range(5):
+        _login(client, password="nope")
+    for _ in range(4):
+        assert _login(client).status_code == 429
+    rows = [r for r in tasks.store.api_audit(limit=50) if r["event_type"] == "RESULT" and r["status_code"] == 429]
+    assert len(rows) == 1
 
 
 def test_login_routes_are_absent_without_login_accounts(tmp_path):
@@ -316,6 +385,79 @@ def test_cookie_principal_passes_the_named_operator_gate(tmp_path):
     assert client.post("/api/fleet/named", headers=ORIGIN).json() == {"principal_id": "alice"}
     client.cookies.clear()
     assert client.post("/api/fleet/named", headers=ORIGIN).status_code == 401
+
+
+def _locked_writer(path):
+    """Hold a write transaction on the tasks DB from another connection (WAL: reads still work)."""
+    holder = sqlite3.connect(path, timeout=0)
+    holder.execute("BEGIN IMMEDIATE")
+    holder.execute("UPDATE fleet_console_sessions SET last_used_at = last_used_at")
+    return holder
+
+
+def test_cookie_estop_succeeds_while_the_sessions_table_is_locked(tmp_path):
+    app, _ = _app(tmp_path)
+    client = _client(app)
+    _login(client)
+    assert client.get("/api/fleet/auth/session").status_code == 200  # one prior successful use
+
+    holder = _locked_writer(tmp_path / "fleet.sqlite3")
+    try:
+        stop = client.post("/api/fleet/estop", headers=ORIGIN)
+    finally:
+        holder.rollback()
+        holder.close()
+    assert stop.status_code not in {401, 403, 500, 503}
+
+
+def test_unreadable_session_storage_is_503_except_a_cached_estop(tmp_path, monkeypatch):
+    clock = Clock()
+    sessions = PasswordSessions(tmp_path / "s.sqlite3", _accounts(), clock=clock)
+    known = sessions.issue("alice", remember=False)
+    unknown = sessions.issue("alice", remember=False)
+    sessions._forget(password_session_module._digest(unknown))
+
+    def broken(**_kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(sessions, "_connect", broken)
+    assert sessions.principal(known)[0] == SitePrincipal("alice", "operator")  # cache, no DB
+    clock.now += 61 * 60  # past the cache window and the touch interval
+    with pytest.raises(password_session_module.SessionStorageUnavailable):
+        sessions.principal(known)
+    assert sessions.principal(known, allow_stale=True)[0] == SitePrincipal("alice", "operator")
+    with pytest.raises(password_session_module.SessionStorageUnavailable):
+        sessions.principal(unknown, allow_stale=True)
+
+    authorize = build_authorize(None, {}, None, password_sessions=sessions)
+    probe = FastAPI()
+
+    @probe.get("/api/fleet/probe")
+    def probe_route(caller: SitePrincipal = Depends(authorize)) -> dict:
+        return {"principal_id": caller.principal_id}
+
+    probe_client = TestClient(probe, base_url=BASE)
+    probe_client.cookies.set(COOKIE, known)
+    unavailable = probe_client.get("/api/fleet/probe")
+    assert unavailable.status_code == 503
+    assert unavailable.json()["detail"]["code"] == "SESSION_STORAGE_UNAVAILABLE"
+
+
+def test_cookie_operator_presence_names_the_actor(tmp_path):
+    from fake_signals import FakeSignal
+    from fleet.server.signals import SignalConsole, SignalEndpoint
+
+    signals = SignalConsole([SignalEndpoint("signal_1", "http://127.0.0.1:9081", "t1")],
+                            [FakeSignal("signal_1")])
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8081", "t")], [FakeRobot("rosy_01")],
+                           signal_console=signals)
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids=console.robot_ids)
+    client = _client(create_app(console, task_service=tasks, site_users={}, site_logins=_accounts()))
+    _login(client)
+
+    response = client.post("/api/fleet/signals/presence", headers=ORIGIN)
+    assert response.status_code == 200
+    assert "alice" in signals._presence
 
 
 def test_api_reference_documents_the_login_routes():
