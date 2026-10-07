@@ -1,13 +1,31 @@
 """Perception overlay renderer (spec §4.3): what the robot saw and chose."""
 
+import json
+
 import numpy as np
 import pytest
 
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker
-from control.sensing.perception.lane_debug import PANEL_H, PANEL_W, next_publish_due, render_debug
+from control.sensing.perception.lane_debug import PANEL_H, PANEL_W, keep_debug_payload, next_publish_due, render_debug
 from lane_sim import CAM_X, GROUND, KW, lane
 
 STRAIGHT = np.array([(-1.0, 0.0), (1.4, 0.0)])
+
+
+def test_keep_debug_records_the_effective_ground_and_preserves_decision_fields():
+    last = {"strategy": "right_only", "target_m": [0.4, 0.02]}
+    metadata = dict(paint_source_used="threshold", corner_turning=True, stamp=12.5)
+    payload = keep_debug_payload(last, GROUND, CAM_X, **metadata)
+    assert payload["strategy"] == "right_only" and payload["target_m"] == [0.4, 0.02]
+    assert all(payload[key] == value for key, value in metadata.items())
+    assert payload["ground_projection"] == {
+        "height_m": GROUND.height_m, "pitch_rad": GROUND.pitch_rad,
+        "focal_px": GROUND.focal_px, "principal_x": GROUND.principal_x,
+        "principal_y": GROUND.principal_y, "max_range_m": GROUND.max_range_m,
+        "camera_x_offset_m": CAM_X,
+    }
+    assert json.loads(json.dumps(payload))["ground_projection"]["pitch_rad"] == GROUND.pitch_rad
+    assert keep_debug_payload(last, None, CAM_X, **metadata)["ground_projection"] is None
 
 
 def _frame_and_tracker():

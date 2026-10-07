@@ -1234,3 +1234,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만
 - 결정: D-468 구현 메모(G-16) 보강
 - 교훈: 맞춤을 고치면 안전 근거만이 아니라 조향 축도 바뀐다. 실물 녹화 재생으로 추종 변화를 같이 잰다
+
+## 2026-10-08 · uncommitted · feat(perception): keep 판단에 쓰인 지면 투영값 기록
+- 변경: `line/keep_debug`에 프레임의 실제 GroundPlane 수치와 keeper 카메라 오프셋을 `ground_projection`으로 기록. 지면 없음은 null. 디버그 묶음 조립을 ROS 없는 `lane_debug`로 이동
+- 증거: `test_lane_debug.py`, `test_line_observer_wiring.py`, `test_module_structure.py` 69건 및 known_failures 대조 통과
+- gate 변화: 없음. 호스트 SOURCE만 확인했고 보정 승인·장치 녹화·주행 수용은 남음
+- 결정: D-364 재생 요구와 2026-10-08 영상 조사 계획의 진단 증거
+- 교훈: nominal이라는 출처 이름만으로 당시 사용된 투영 숫자를 복원할 수 없다
