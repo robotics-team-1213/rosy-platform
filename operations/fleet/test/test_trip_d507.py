@@ -139,14 +139,21 @@ def test_a_ring_arc_sends_no_window():
     assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1}]
 
 
-def _bent_map(bend_deg):
-    """A straight 0.7 m, then 0.3 m turned by ``bend_deg`` into B, then on in that direction to C."""
+def _bent_map(bend_deg, straight=0.7, bent=0.3):
+    """A ``straight`` run, then ``bent`` m turned by ``bend_deg`` into B, then on in that direction to C."""
     c, s = math.cos(math.radians(bend_deg)), math.sin(math.radians(bend_deg))
-    b = (round(0.7 + 0.3 * c, 4), round(0.3 * s, 4))
+    b = (round(straight + bent * c, 4), round(bent * s, 4))
     end = (round(b[0] + c, 4), round(b[1] + s, 4))
     return _map(("A", 0, 0), ("B", *b), ("C", *end),
-                edges=[("ab", "A", "B", [[0, 0], [0.7, 0], list(b)], "lane"),
+                edges=[("ab", "A", "B", [[0, 0], [straight, 0], list(b)], "lane"),
                        ("bc", "B", "C", [list(b), list(end)], "lane")])
+
+
+def test_a_bend_widens_the_window_by_how_far_the_lane_runs_beside_the_heading():
+    lateral = 0.5 * math.sin(math.radians(10))                  # 0.087 m at B
+    tol = _sent_at(_bent_map(10.0, straight=0.5, bent=0.5), PIVOT, 0.45).expects[0]["expect_tol_m"]
+    assert tol >= 0.12 + lateral - 0.001 and tol == pytest.approx(0.12 + lateral, abs=0.002)
+    assert _sent_at(_straight_map(), PIVOT, 0.6).expects[0]["expect_tol_m"] == 0.12   # a straight lane adds 0
 
 
 def test_a_bend_of_15_degrees_keeps_the_window_and_more_drops_it():

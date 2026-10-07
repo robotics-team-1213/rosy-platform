@@ -202,9 +202,10 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
     if action in (STRAIGHT, LEFT, RIGHT):  # the place is on the outgoing lane's centre line (D-490)
         width = live.arc(index + 1).width_m
         fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
-    expect_in = _straight_ahead(live, index, remaining, pose)
-    if expect_in is None or not 0.0 < expect_in <= MAX_EXPECT_IN_M:
+    window = _straight_ahead(live, index, remaining, pose)
+    if window is None or not 0.0 < window[0] <= MAX_EXPECT_IN_M:
         return fields  # no window: CORE keeps today's behaviour for this place
+    expect_in, lateral = window
     speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
     if age is None or reckoned is None or live.pose_read_at is None:
         tol = MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
@@ -216,27 +217,34 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
         # once MapPose reports one.
         latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
         tol = max(config.expect_tol_min_m, ODOM_DRIFT_PER_M * reckoned + speed * latency + ENDPOINT_TOL_M)
+        tol += lateral  # CORE's straight-ahead point is this far beside the lane on a bend
     fields.update(expect_in_m=expect_in, expect_tol_m=round(min(tol, MAX_EXPECT_TOL_M), 3))
     return fields
 
 
-def _straight_ahead(live: "LiveTrip", index: int, remaining: float, pose: dict) -> Optional[float]:
-    """The place's distance along the robot's heading, or None where CORE's window would be wrong.
+def _straight_ahead(live: "LiveTrip", index: int, remaining: float,
+                    pose: dict) -> Optional[tuple[float, float]]:
+    """``(the place's distance along the robot's heading, the lane's largest distance beside that
+    heading ray up to the place)``, or None where CORE's window would be wrong.
 
     CORE puts the expected point ``expect_in_m`` straight ahead of its pose at receipt, so a
     lane that turns more than ``MAX_WINDOW_BEND_DEG`` between the robot and the place (the
     260919 ring, the east/west bends) gets no window; a window along the path is later work.
+    A smaller bend widens the window by how far the lane runs beside the ray.
     """
     if pose.get("x") is None or pose.get("y") is None or pose.get("yaw") is None:
         return None
     arc, s_to = live.arc(index), live.segments[index]["s_to"]
     heading = arc.point_at(s_to - remaining)[2]
-    steps = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M))
-    if any(abs(math.degrees(wrap(arc.point_at(s_to - remaining * (1 - k / steps))[2] - heading)))
-           > MAX_WINDOW_BEND_DEG for k in range(1, steps + 1)):
-        return None
+    cos, sin = math.cos(pose["yaw"]), math.sin(pose["yaw"])
+    steps, lateral = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M)), 0.0
+    for k in range(steps + 1):
+        x, y, yaw = arc.point_at(s_to - remaining * (1 - k / steps))
+        if abs(math.degrees(wrap(yaw - heading))) > MAX_WINDOW_BEND_DEG:
+            return None
+        lateral = max(lateral, abs(-(x - pose["x"]) * sin + (y - pose["y"]) * cos))
     x, y, _yaw = arc.point_at(s_to)
-    return round((x - pose["x"]) * math.cos(pose["yaw"]) + (y - pose["y"]) * math.sin(pose["yaw"]), 3)
+    return round((x - pose["x"]) * cos + (y - pose["y"]) * sin, 3), lateral
 
 
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
