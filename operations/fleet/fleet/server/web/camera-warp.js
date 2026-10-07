@@ -10,6 +10,11 @@ export function warpMesh(mapToImage, bounds, nx = 24, ny = 12) {
   if (!Array.isArray(mapToImage) || mapToImage.length !== 9 || !bounds) return [];
   const { min_x: x0, max_x: x1, min_y: y0, max_y: y1 } = bounds;
   if (![x0, x1, y0, y1].every(Number.isFinite) || !(x1 > x0) || !(y1 > y0)) return [];
+  // 호모그래피는 배율과 무관하다. 사각형 중심의 w 가 음수인 보정(API로 올린 행렬)은 부호를 뒤집어
+  // 바닥 점이 앞쪽(w > 0)에 오게 한다 — 그러지 않으면 모든 점이 지평선 뒤로 빠진다.
+  const h = mapToImage;
+  const wc = h[6] * (x0 + x1) / 2 + h[7] * (y0 + y1) / 2 + h[8];
+  if (wc < 0) mapToImage = h.map((v) => -v);
   const node = (i, j) => {
     const x = x0 + ((x1 - x0) * i) / nx, y = y0 + ((y1 - y0) * j) / ny;
     const p = project(mapToImage, x, y);

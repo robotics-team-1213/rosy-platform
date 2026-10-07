@@ -30,7 +30,27 @@ export function cameraMapCalibration(frame, calibrations, siteMap) {
 
 // D-515: 원본 영상을 삼각형마다 아핀으로 옮겨 사이트 사각형 위에 위에서 본 그림으로 그린다.
 // 이웃 삼각형 사이 머리카락 틈이 보이지 않게 잘라 내는 경로를 화면에서 0.5 px 넓힌다.
-function drawCameraTopDown(ctx, image, mapToImage, bounds, toPx) {
+// 지도는 상태 폴링·관측·콜백으로 초당 여러 번 다시 그려진다. 펴는 일(576 번 그리기)은 새 프레임·
+// 보정·크기에서만 하고, 그 사이에는 화면 밖 캔버스에 둔 결과를 한 번에 옮긴다.
+let topDownCache = null;
+function drawCameraTopDown(ctx, image, calibration, bounds, toPx, width, height, dpr) {
+  const key = [calibration.calibration_revision, width, height, dpr,
+    bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y].join("|");
+  if (!topDownCache || topDownCache.image !== image || topDownCache.key !== key) {
+    const off = document.createElement("canvas");
+    off.width = Math.round(width * dpr);
+    off.height = Math.round(height * dpr);
+    const octx = off.getContext("2d");
+    octx.scale(dpr, dpr);
+    warpOnto(octx, image, calibration.map_to_image, bounds, toPx);
+    topDownCache = { image, key, canvas: off };
+  }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(topDownCache.canvas, 0, 0);
+  ctx.restore();
+}
+function warpOnto(ctx, image, mapToImage, bounds, toPx) {
   for (const tri of warpMesh(mapToImage, bounds)) {
     const dst = tri.map.map(([x, y]) => { const p = toPx(x, y); return [p.x, p.y]; });
     const affine = affineFromTriangles(tri.image, dst);
@@ -433,7 +453,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const toPx = (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
-    if (cameraOn) drawCameraTopDown(ctx, cameraFrame.image, calibration.map_to_image, bounds, toPx);
+    if (cameraOn) drawCameraTopDown(ctx, cameraFrame.image, calibration, bounds, toPx, width, height, dpr);
     else {
       if (drift) {
         const text = `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}).`

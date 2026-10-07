@@ -28,6 +28,7 @@ test("triangles behind the horizon are dropped, bad input gives no mesh", () => 
   const mesh = warpMesh(horizon, { min_x: 0, max_x: 1, min_y: -1, max_y: 3 }, 2, 4);
   assert.equal(mesh.length, 2 * 2 * 2);
   assert.ok(mesh.every((tri) => tri.map.every(([, y]) => y > 0)));
+  assert.equal(warpMesh(H.map((v) => -v), BOUNDS, 24, 12).length, 24 * 12 * 2); // sign-flipped H
   assert.deepEqual(warpMesh(null, BOUNDS), []);
   assert.deepEqual(warpMesh(H, { min_x: 1, max_x: 0, min_y: 0, max_y: 1 }), []);
 });
