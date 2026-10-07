@@ -375,3 +375,17 @@ def test_a_flickering_scan_does_not_end_a_pivot_a_near_return_does(monkeypatch):
     logs = []
     assert rc.drive(Flicker(["ok", "near"]), pivot, 182.0, logs.append) is None
     assert any("ended early" in line for line in logs)
+
+
+def test_core_uses_https_pinned_to_the_robot_ca(tmp_path):
+    """ROSY_API_TLS=required robots answer HTTPS only; the leaf names <host>.local, not the IP."""
+    import ssl
+    import subprocess
+    ca = tmp_path / "ca.pem"
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
+                    "-nodes", "-keyout", str(tmp_path / "k.pem"), "-out", str(ca), "-days", "1",
+                    "-subj", "/CN=test-ca"], check=True, capture_output=True)
+    core = rc.Core("192.0.2.1", ca_file=ca)
+    assert core.base == "https://192.0.2.1:8080"
+    assert core.context.verify_mode == ssl.CERT_REQUIRED and core.context.check_hostname is False
+    assert rc.Core("192.0.2.1").base == "http://192.0.2.1:8080"

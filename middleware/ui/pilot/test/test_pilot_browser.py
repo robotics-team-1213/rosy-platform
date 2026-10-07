@@ -570,8 +570,8 @@ def test_lobby_failure_shows_retry_and_gate_survives(tablet_page):
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
-@pytest.mark.parametrize("width,height", [(320, 568), (390, 844)])
-def test_lobby_empty_and_failure_fit_phone_width(base_url, width, height):
+@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_lobby_empty_and_failure_fit_declared_widths(base_url, width, height):
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": width, "height": height})
@@ -596,11 +596,16 @@ def test_lobby_empty_and_failure_fit_phone_width(base_url, width, height):
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 assert page.locator("[data-lobby-retry]").is_visible()
                 assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
-                assert page.locator("ui-topbar [data-estop]").is_visible()
+                assert page.locator("form[data-pilot-token-form] label").is_visible()
+                estop = page.locator("ui-topbar [data-estop]").bounding_box()
+                assert estop and estop["y"] + estop["height"] <= height, (state, width, estop)
+                main_width = page.locator(".pilot-main").bounding_box()["width"]
+                assert main_width >= min(width, 768) - 1, (state, width, main_width)
                 widths = page.evaluate("""() => ['form[data-pilot-token-form] ui-field',
                     'form[data-pilot-token-form] ui-button', '[data-lobby-retry]']
                     .map(selector => document.querySelector(selector).getBoundingClientRect().width)""")
-                assert max(widths) - min(widths) <= 1, (state, width, widths)
+                if width < 480:
+                    assert max(widths) - min(widths) <= 1, (state, width, widths)
             assert errors == [], errors
         finally:
             browser.close()
@@ -2318,10 +2323,11 @@ def test_a_settle_survives_a_failed_readback_right_after_it(tablet_page):
     assert page.evaluate("window.rejections") == []
     assert errors == [], errors
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1", reason="browser opt-in")
-def test_startup_target_failure_retries_without_pinky_fallback(tablet_page):
+@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
+def test_startup_target_failure_retries_without_pinky_fallback(tablet_page, width, height):
     from playwright.sync_api import expect
     base_url, page, errors = tablet_page
-    page.set_viewport_size({"width": 390, "height": 844})
+    page.set_viewport_size({"width": width, "height": height})
     state = {"status": 503, "body": {}, "held": []}
     def target(route):
         if state["status"] is None: state["held"].append(route)
@@ -2329,18 +2335,26 @@ def test_startup_target_failure_retries_without_pinky_fallback(tablet_page):
     page.route('**/api/v1/sim/omx/target', target)
     page.goto(base_url + '/pilot')
     retry = page.get_by_role('button', name='대상 다시 확인', exact=True)
+    def capture_target_error(state_name):
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        for control in (retry, page.locator('ui-topbar [data-estop]')):
+            box = control.bounding_box()
+            assert box and box['x'] >= 0 and box['x'] + box['width'] <= width
+            assert box['y'] >= 0 and box['y'] + box['height'] <= height
+            assert box['height'] >= 44
+        if os.environ.get('ROSY_SHOT_DIR'):
+            shot_dir = Path(os.environ['ROSY_SHOT_DIR'])
+            shot_dir.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(shot_dir / f'pilot-target-{state_name}-{width}x{height}.png'))
     expect(retry).to_be_visible()
     expect(page.locator('[data-screen=connect]')).to_contain_text('조종 대상을 확인하지 못했습니다')
     assert not page.locator('[data-pilot-token-form]').count()
+    capture_target_error('unavailable')
     state.update(status=200, body={"kind": "invalid"})
     retry.click()
     expect(page.locator('[data-screen=connect]')).to_contain_text('연결과 대상 정보를 확인한 뒤 다시 시도하세요')
     expect(page.locator('[data-screen=connect]')).not_to_contain_text('invalid simulation target')
-    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-    if os.environ.get('ROSY_SHOT_DIR'):
-        shot_dir = Path(os.environ['ROSY_SHOT_DIR'])
-        shot_dir.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(shot_dir / 'pilot-target-error-390x844.png'))
+    capture_target_error('invalid')
     state['status'] = None
     retry.click()
     page.wait_for_function("document.querySelector('[data-discovery-retry]').disabled")
