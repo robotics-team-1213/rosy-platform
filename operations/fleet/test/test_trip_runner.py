@@ -1282,3 +1282,29 @@ def test_start_through_the_api_refuses_a_robot_with_a_queued_console_mission(tmp
     refused = client.post(f"/api/fleet/trips/{plan['plan_id']}/start", headers=OPERATOR)
     assert refused.status_code == 409 and refused.json()["detail"] == {
         "code": "TRIP_ROBOT_BUSY", "detail": {"reason": "queued"}}
+
+
+def test_an_aborted_place_is_never_sent_again_even_back_in_camera_line():
+    runner, store, ports = _setup(_free_map("lane"))
+    _plan(store, ports, "ab:fwd", 0.5, "C")
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports)
+    ports.core.see_junction()  # turning at B
+    ports.core.off()  # e.g. the driver released: CORE aborts the turn
+    ports.core.mode = "CAMERA_LINE"  # back in camera line follow, 'aborted' still shown
+    _ticks(runner, ports, 3)
+    view = runner.view("p1")
+    assert (view["state"], view["reason"], view["detail"]["junction_state"]) == ("stopped", "junction", "aborted")
+    assert ports.sent == [("left", "B", None), ("stop", "B", 0.0)]  # only the halt's stop after it
+
+
+def test_an_instruction_that_aborts_a_manoeuvre_stops_the_trip():
+    runner, store, ports = _setup(_free_map("lane"))
+    _plan(store, ports, "ab:fwd", 0.5, "C")
+    run(runner.start("p1", "bob"))
+    ports.core.send("left", "Z", None, 15, 45.0)  # someone else's turn, already running
+    ports.core.see_junction()
+    ports.state_none = True  # Fleet cannot see it, sends ours, and CORE aborts its turn instead
+    _ticks(runner, ports)
+    view = runner.view("p1")
+    assert (view["state"], view["reason"], view["detail"]["junction_state"]) == ("stopped", "junction", "aborted")

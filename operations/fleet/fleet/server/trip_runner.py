@@ -49,6 +49,10 @@ class _GoalRefused(RuntimeError):
     """The console did not send the trip's goal (queued behind traffic, yielding, untrusted)."""
 
 
+class _JunctionAborted(RuntimeError):
+    """CORE answered our instruction by aborting its manoeuvre (D-492): never resent."""
+
+
 def _code(exc: BaseException) -> str:
     return getattr(exc, "code", None) or type(exc).__name__
 
@@ -275,6 +279,10 @@ class TripRunner:
                     await self._step_lane(live, index, remaining)
                 else:
                     await self._step_free(live, index, s)
+            except _JunctionAborted as exc:
+                await self._stop(live, "stopped", "junction", {"junction_state": "aborted",
+                                                               "junction_seq": exc.args[0] if exc.args else None})
+                return
             except _GoalRefused as exc:
                 await self._stop(live, "failed", "TRIP_GOAL_REFUSED", {"goal_reason": str(exc) or None})
                 return
@@ -338,8 +346,8 @@ class TripRunner:
                 raise
             reply = {"already_done": True}  # CORE R1: this place's action already ran
         await self._after_send(live)
-        if reply.get("accepted") is False:
-            return  # CORE aborted a manoeuvre instead; the next tick reads 'aborted' and stops
+        if reply.get("accepted") is False:  # CORE aborted a manoeuvre instead: an operator decides
+            raise _JunctionAborted(reply.get("junction_seq"))
         seq = reply.get("junction_seq")
         live.replaceable = None
         live.sent = {"index": index, "action": action, "place": place, "seq": seq, "at": now,
