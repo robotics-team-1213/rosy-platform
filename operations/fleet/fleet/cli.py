@@ -603,7 +603,10 @@ def _build_site_map(args, tasks_db):
         site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
         source = getattr(args, "site_map_import", None)
         if source is not None:
-            site_maps.import_if_empty(from_lane_graph(source), source=Path(source).name)
+            # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
+            # report; the default "site" would filter every sighting (map pose UNKNOWN).
+            site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
+                                      source=Path(source).name)
     except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"site map / routing config: {exc}")
     if tasks_db is None:
