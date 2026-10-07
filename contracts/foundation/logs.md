@@ -484,3 +484,10 @@
 - 증거: `test_controls_contract.py`(새 시험: 옛 서술자 파싱, 범위 밖 값 거절), contracts/foundation 스위트 통과. API Ref v1.112 행과 같은 변경.
 - gate 변화: 없음. envelope 1.0 불변, additive(PRT-006).
 - 결정: D-491 (Proposed)
+
+## 2026-10-07 · uncommitted · feat(protocol): D-492 junction_turn 능력 필드
+
+- 변경: `BaseVelocityControl`에 선택 필드 `junction_turn: bool`을 더했다. CORE line-follow가 D-492 교차로 제한 회전을 지원할 때 true다. 없으면 지원하지 않는 것으로 읽는다.
+- 증거: `test_controls_contract.py` 9 PASS(생략 시 와이어에 없음, true 왕복, 잘못된 값 거절).
+- gate 변화: 없음. API Ref v1.112 행에 포함.
+- 결정: D-491, D-492 (Proposed)

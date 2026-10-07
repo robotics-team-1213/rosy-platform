@@ -2182,3 +2182,10 @@
 - 증거: `test_trip_caps.py` 2 PASS, `test_site_map_trip.py` 통과. fleet 스위트 2284 passed·90 skip, 1 NEW는 4개 스위트 병행 부하에서 난 `test_discovery_transport.py` 시간 초과(이 변경이 건드리지 않은 파일)로 단독 재실행 19 passed·known_failures 0 new.
 - gate 변화: 없음. SOURCE 호스트 시험만.
 - 결정: D-491 (Proposed)
+
+## 2026-10-07 · uncommitted · feat(fleet): D-492 TripCaps.junction_turn
+
+- 변경: `TripCaps`에 `junction_turn: bool = False`를 더했다. 능력의 값이 정확히 `true`일 때만 참이다. 계획에는 쓰지 않고 trip 실행(D-491 5, 다른 가지)이 읽는다.
+- 증거: `test_trip_caps.py` 2 PASS.
+- gate 변화: 없음.
+- 결정: D-492 (Proposed)

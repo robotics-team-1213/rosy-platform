@@ -214,6 +214,8 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # It drives the same base, so it is never announced without the drive control.
     # D-491 1 (v1.112 additive): robot package, trip drive modes and trip speed for Fleet
     # planning. `free` follows the live goal_navigation flag after withholding above.
+    # `junction_turn` (D-492): the line-follow manager declares `supports_junction_turn`;
+    # a manager without that hook cannot do the bounded junction turn.
     limits = svc.safety.limits
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
     if svc.line_follow is not None:
@@ -228,7 +230,9 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       robot_kind=str((svc.config.get("robot") or {}).get("model")
                                                      or DEFAULT_ROBOT),
                                       drive_modes=drive_modes,
-                                      trip_max_linear=max(0.0, trip_max_linear))
+                                      trip_max_linear=max(0.0, trip_max_linear),
+                                      junction_turn=getattr(svc.line_follow, "supports_junction_turn",
+                                                            False) is True)
     return data
 
 

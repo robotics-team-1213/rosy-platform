@@ -69,6 +69,8 @@ class TripCaps:
     kind: str
     modes: frozenset
     max_speed: float
+    #: D-492: the robot can turn at a junction on its own (bounded turn); absent means no.
+    junction_turn: bool = False
 
 
 def trip_caps(capabilities) -> Optional[TripCaps]:
@@ -86,7 +88,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                 and all(mode in ("lane", "free") for mode in modes)
                 and isinstance(speed, (int, float)) and not isinstance(speed, bool)
                 and math.isfinite(speed) and speed >= 0):
-            return TripCaps(kind, frozenset(modes), float(speed))
+            return TripCaps(kind, frozenset(modes), float(speed), item.get("junction_turn") is True)
     return None
 
 

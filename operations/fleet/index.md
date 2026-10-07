@@ -88,8 +88,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(fleet): D-492 TripCaps.junction_turn
 - 2026-10-07 · uncommitted · feat(fleet): D-491 1 로봇 trip 능력으로 계획을 묶는다
 - 2026-10-07 · uncommitted · Cell rejected-session widths
 - 2026-10-07 · uncommitted · Cell emergency-stop feedback widths
 - 2026-10-07 · uncommitted · Site-map rejected credential widths
-- 2026-10-07 · uncommitted · Cell 문서 파일 선택 어휘와 폭

@@ -42,6 +42,7 @@ class BaseVelocityControl(_Wire):
     ``drive_modes`` the trip drive modes it offers (``lane`` with the line-follow
     service, ``free`` with goal navigation) and ``trip_max_linear`` (m/s) the
     fastest speed it allows a Fleet trip. A device without them is an older image.
+    ``junction_turn`` (D-492) is true when its line-follow can do the bounded junction turn.
     """
 
     id: str = Field(pattern=_ID)
@@ -55,6 +56,7 @@ class BaseVelocityControl(_Wire):
     robot_kind: str | None = Field(None, pattern=r"^[a-z][a-z0-9_]*$", max_length=64)
     drive_modes: tuple[Literal["lane", "free"], ...] | None = None
     trip_max_linear: float | None = Field(None, ge=0, allow_inf_nan=False)
+    junction_turn: bool | None = None
 
 
 class JointRange(_Wire):
@@ -142,7 +144,7 @@ class ControlsDescriptor(_Wire):
 def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    autonomy: tuple[Literal["line"], ...] = (), robot_kind: str | None = None,
                    drive_modes: tuple[Literal["lane", "free"], ...] | None = None,
-                   trip_max_linear: float | None = None) -> dict:
+                   trip_max_linear: float | None = None, junction_turn: bool | None = None) -> dict:
     """Pinky's controls from its adapter manifest's `provides` (D-411 §8).
 
     `autonomy` is what the caller provides (not live readiness); pivot/fine are Pinky profile constants.
@@ -153,5 +155,6 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
         items.append(BaseVelocityControl(id="base", label="주행", max_linear=max_linear,
                                          max_angular=max_angular, pivot=True, fine=True,
                                          autonomy=autonomy, robot_kind=robot_kind,
-                                         drive_modes=drive_modes, trip_max_linear=trip_max_linear))
+                                         drive_modes=drive_modes, trip_max_linear=trip_max_linear,
+                                         junction_turn=junction_turn))
     return ControlsDescriptor(items=tuple(items)).model_dump(by_alias=True, mode="json", exclude_none=True)

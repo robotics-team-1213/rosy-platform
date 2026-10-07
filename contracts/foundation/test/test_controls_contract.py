@@ -95,13 +95,17 @@ def test_d491_trip_fields_are_optional_and_bounded():
                             robot_kind="pinky_pro", drive_modes=("lane",), trip_max_linear=0.1)
     (base,) = body["items"]
     assert (base["robot_kind"], base["drive_modes"], base["trip_max_linear"]) == ("pinky_pro", ["lane"], 0.1)
+    assert "junction_turn" not in base
+    (turn,) = c.pinky_controls(provides={"drive"}, max_linear=0.15, max_angular=0.6,
+                               junction_turn=True)["items"]
+    assert turn["junction_turn"] is True
     # An older image sends none of them; a consumer reads the same descriptor.
     old = c.ControlsDescriptor.model_validate({"schema": "rosy.controls/1", "items": [
         {"id": "base", "kind": "base_velocity", "label": "주행", "max_linear": 0.1, "max_angular": 0.5,
          "pivot": False, "fine": False}]})
     assert old.items[0].robot_kind is None and old.items[0].drive_modes is None
     for bad in ({"drive_modes": ("fly",)}, {"trip_max_linear": -0.1}, {"trip_max_linear": float("nan")},
-                {"robot_kind": "Pinky Pro"}):
+                {"robot_kind": "Pinky Pro"}, {"junction_turn": 2}):
         with pytest.raises(ValidationError):
             c.BaseVelocityControl(id="base", label="주행", max_linear=0.1, max_angular=0.5,
                                   pivot=False, fine=False, **bad)

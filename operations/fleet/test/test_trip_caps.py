@@ -18,6 +18,9 @@ def _caps(**base) -> dict:
 
 def test_trip_caps_reads_the_base_and_ignores_unknown_fields():
     assert trip_caps(_caps(future_field=1)) == TripCaps("pinky_pro", frozenset({"lane"}), 0.1)
+    assert trip_caps(_caps()).junction_turn is False
+    assert trip_caps(_caps(junction_turn=True)).junction_turn is True
+    assert trip_caps(_caps(junction_turn="true")).junction_turn is False
     old = _caps()
     for key in ("robot_kind", "drive_modes", "trip_max_linear"):
         del old["controls"]["items"][0][key]

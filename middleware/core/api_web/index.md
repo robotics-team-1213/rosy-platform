@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · feat(api): D-492 capabilities의 junction_turn
 - 2026-10-07 · uncommitted · feat(api): D-491 1 capabilities가 trip 능력 필드를 채운다
 - 2026-10-07 · uncommitted · fix(api): D-483 N1 전체 틀린 코드 예산
 - 2026-10-07 · uncommitted · fix(api): D-483 재검토 반영(R1~R5)
 - 2026-10-07 · uncommitted · fix(api): D-483 보안 검토 반영(M1·M2·L1·L2·L4·L6)
-- 2026-10-06 · uncommitted · feat(api): D-483 로봇 화면 승인 코드로 피어 요청 승인

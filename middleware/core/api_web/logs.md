@@ -604,3 +604,10 @@
 - 증거: gateway `test_capabilities_controls.py` 새 시험 2개, api_web 스위트 통과.
 - gate 변화: 없음. SOURCE 호스트 시험만. 서명 릴리스 전에는 로봇에 닿지 않는다.
 - 결정: D-491 (Proposed)
+
+## 2026-10-07 · uncommitted · feat(api): D-492 capabilities의 junction_turn
+
+- 변경: `base_velocity.junction_turn`은 line-follow 매니저의 `supports_junction_turn` 훅이 `True`일 때만 true다. 회전 동작은 `feat/d491-core-junction-action` 가지에 있어, 이 가지는 훅이 없으면 false를 낸다(가지 사이 의존 없음).
+- 증거: gateway `test_capabilities_controls.py` 10 PASS(훅 없음 false, 훅 true, line-follow 없음 false).
+- gate 변화: 없음.
+- 결정: D-492 (Proposed)
