@@ -524,8 +524,13 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        14_258,
-        "accept: independently re-judged 2026-10-06 at 14258 for D-476 lane bridge "
+        14_449,
+        "accept: with condition: re-judged 2026-10-07 at 14449 for D-476 rev 1 (main 14328 + "
+        "branch 121). Condition: before the next core_features re-judge, a dated plan in "
+        "docs/plans/ splits line_follow lane recovery (lane_return*, lane_bridge, stuck_*) into "
+        "its own core_features subpackage with its own size verdict, keeping the single manager "
+        "lock/generation; a re-judge without that plan is REJECT. "
+        "Previously independently re-judged 2026-10-06 at 14258 for D-476 lane bridge "
         "(feat/d476-lane-bridge, review ACCEPT: one cohesive line_follow feature under the D-468 "
         "lock/generation; no file over threshold; X1): main already sat at 14083 = 13933+150; "
         "175 above it are lane_bridge114, model+33 (bridge_* config), lane_return+4 "
