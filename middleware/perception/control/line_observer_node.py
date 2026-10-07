@@ -34,6 +34,7 @@ from .sensing.perception.lane import (
     detect_lane_error,
     line_observation_payload,
 )
+from .sensing.perception.keep_pivot import release_flip_on_pivot
 from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
@@ -138,7 +139,7 @@ class LineObserverNode(Node):
         self._paint_half_width_m = paint_half_width(self.get_parameter('lane_paint_half_width_m').value)
         self._odom_pose = None
         self._odom_stamp = None
-        self._odom_wz = None
+        self._odom_wz = self._odom_twist = None
         self._corner_tracker = LaneCornerTracker(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
         self._edge_follower = LaneEdgeFollower(
@@ -200,7 +201,7 @@ class LineObserverNode(Node):
         self.create_subscription(
             String, 'camera/controls', self._on_camera_controls, controls_qos)
         mode = str(self.get_parameter('camera_lane_mode').value)
-        if mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
+        if mode in ('lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab'):
             self.create_subscription(
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
         if self._ir_calibration is None:
@@ -452,6 +453,7 @@ class LineObserverNode(Node):
                     if self._paint_worker is not None:
                         self._paint_worker.reset()
                 self._keep_last_stamp = image_stamp
+                release_flip_on_pivot(self._lane_keeper, pose_if_fresh(self._odom_twist, self._odom_stamp, image_stamp))
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
                 observation = self._lane_keeper.update(
@@ -578,6 +580,7 @@ class LineObserverNode(Node):
         # The header stamp, not arrival time: edge_left compares it with the
         # image stamp, so dead or delayed odometry is no pose.
         self._odom_wz = float(msg.twist.twist.angular.z)
+        self._odom_twist = (float(msg.twist.twist.linear.x), self._odom_wz)
         self._odom_stamp = (float(msg.header.stamp.sec)
                             + float(msg.header.stamp.nanosec) * 1e-9)
 
