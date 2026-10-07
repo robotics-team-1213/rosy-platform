@@ -26,7 +26,7 @@ class RosyEmotion(Node):
     def __init__(self):
         super().__init__('emotion')
 
-        self.declare_parameter('load_frame_skip', 2)
+        self.declare_parameter('load_frame_skip', 1)
         self.declare_parameter('play_frame_skip', 1)
         # PWR-003 모드별 백라이트 듀티(%). standby=0이면 백라이트가 완전히 꺼진다.
         self.declare_parameter('backlight_active', 100)
@@ -172,8 +172,7 @@ class RosyEmotion(Node):
         self._lcd('set_backlight', self._backlight_for('active'))
 
     def _frame_size(self):
-        # GIF assets are 1000x750, but the information card's pixel layout is
-        # for the LCD. Drawing it at GIF size shrinks every label on img_show.
+        # Cards use the LCD size even if a bench supplies a different GIF size.
         return self.lcd.h, self.lcd.w
 
     def timer_callback(self):
