@@ -78,6 +78,8 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: P6 subpackages counted as their own size unit (path relative to the colcon root): their lines
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
 #: docs/plans/2026-10-07-line-follow-recovery-subpackage.md
+#: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
+#: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",)
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
@@ -1285,6 +1287,22 @@ def test_over_budget_code_has_a_recorded_verdict():
         f"needs a verdict: {sorted((k, over[k]) for k in set(over) - set(SIZE_VERDICTS))}, "
         f"stale: {sorted(set(SIZE_VERDICTS) - set(over))}"
     )
+
+
+def test_size_units_are_real_subpackages_with_a_split_plan():
+    """P6: each SIZE_UNITS entry is a counted Python subpackage whose verdict cites its split plan."""
+    over = _over_budget()
+    bad = []
+    for unit in SIZE_UNITS:
+        dirs = [root / unit for root in COLCON_ROOTS if (root / unit / "__init__.py").is_file()]
+        if not dirs:
+            bad.append(f"{unit}: no Python subpackage (__init__.py) under a colcon root")
+        if over[unit] <= 0:
+            bad.append(f"{unit}: counts no lines")
+        plans = re.findall(r"docs/plans/\S+?\.md", SIZE_VERDICTS.get(unit, (0, ""))[1])
+        if not any((ROOT / plan).is_file() for plan in plans):
+            bad.append(f"{unit}: verdict cites no existing docs/plans split plan")
+    assert bad == [], bad
 
 
 def _allowance(key: str, at_verdict: int, now: int) -> int:
