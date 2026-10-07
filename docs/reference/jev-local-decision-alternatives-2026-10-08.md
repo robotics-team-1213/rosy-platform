@@ -1,7 +1,7 @@
 # ROSY AI PC의 Jev 대체 의사결정 모델 조사
 
 **조사일:** 2026-10-08
-**범위:** TypeSafe AI의 Jev(`typesafe.ai`)와 ROSY의 로컬 판단·비전·로봇 행동 후보. 이 문서는 조사와 제안이며, 모델 설치·운전 승인·ADR 변경은 아니다.
+**범위:** TypeSafe AI의 Jev(`typesafe.ai`)와 ROSY의 로컬 판단·비전·로봇 행동 후보. 조사와 구조 제안에 AI PC의 오프라인 Laya 연결 시험을 덧붙였다. 운전 승인이나 현장 수용은 아니다.
 
 ## 결론
 
@@ -80,7 +80,7 @@ CORE/카메라/LiDAR 사실 ─→ Fleet의 사건·시각·출처 검사 ─→
 
 **권고:** D-492의 로컬 Qwen3-VL 정체 V0 데이터를 먼저 만들고, 그 데이터의 `규칙만으로 모호한 상태`로 Laya 다국어·typed-decisions와 Kev 0.8B를 **동일한 그림자 세트**에서 비교한다. 이 단계에서 어느 후보도 운전 답을 내지 않는다. 어느 후보도 사람 검토를 실질적으로 줄이면서 위험 혼동·지연·확률 보정 기준을 통과하지 못하면 추가 서빙 없이 규칙+VLM+사람으로 끝낸다. Kev 4B는 정확도가 더 필요하고 GPU를 단독 예약할 수 있을 때, Clef-Flash는 AI PC 메모리/런타임 대안을 실측할 수 있을 때 시험한다. Jev는 공식 API에 접근할 수 있더라도 로컬 운전 경로가 아니라 외부 기준선으로만 둔다. [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md), [D-503](../adr/D-503-autonomy-chain-facts-and-exception-queue.md).
 
-**미확인:** AI PC GPU 예약/소유자 동의, Laya·Kev의 실제 한국어·로봇 막힘 정확도와 확률 보정, Clef-Flash의 16GB VRAM 양자화와 joint-head 호환, AI PC 동시 Qwen 상주 지연, 사람 라벨 정답 세트, 현장 실기 결과. 이번 조사는 공개 자료와 저장소 계약만 확인했으며 AI PC에 모델을 설치하거나 호출하지 않았다.
+**미확인:** AI PC GPU 상주 예약/소유자 동의, Laya·Kev의 실제 한국어·로봇 막힘 정확도와 확률 보정, Clef-Flash의 16GB VRAM 양자화와 joint-head 호환, AI PC 동시 Qwen 상주 지연, 사람 라벨 정답 세트, 현장 실기 결과. AI PC에서 Laya의 CPU 연결 시험만 했으며 정확도·실시간 적합성은 확인하지 않았다.
 
 ## 6. 모델 교체를 위한 최소 구조
 
@@ -107,4 +107,16 @@ CORE/카메라/LiDAR 사실 ─→ Fleet의 사건·시각·출처 검사 ─→
 
 Laya와 Kev의 공식 서버가 같은 `POST /v1/systemone`을 받으므로 서버만 바꾸고 **같은 JSONL**을 재생한다. 서버는 AI PC의 loopback에만 묶는다. Laya는 `LAYA_HOST=127.0.0.1 LAYA_DEVICE=cuda LAYA_MODELS=multilingual laya-serve`, Kev는 별도 환경에서 공식 `kev.serve`의 loopback 바인딩을 쓴다. 실행 예시는 `python tools/decision_replay.py <평가.jsonl> --endpoint http://127.0.0.1:8000/v1/systemone --model multilingual`이며 Kev를 띄운 뒤에는 포트와 `--model kev-latest`만 바꾼다. 설치 명령·정확한 서버 버전은 실행 때 고정하고 기록한다. [Laya 서버](https://github.com/NandhaKishorM/laya#self-hosting-http-server-jev-compatible), [Kev API](https://github.com/jaredpalmer/kev#api).
 
-2026-10-08 현재 AI PC는 Tailscale에서 온라인인 `ai` 노드로 확인했다. SSH 별칭 없이 주소만 입력하자 클라이언트가 이 Windows PC의 사용자명 `livs`를 사용했고, `livs` 로그인 시도에는 `tailnet policy does not permit you to SSH as user "livs"`가 반환됐다. 이것은 **그 사용자명으로 한 번 시도한 결과**이며, AI PC의 올바른 계정이나 다른 승인된 접속 경로가 막혔다는 뜻은 아니다. 현재 저장소의 호스트 기록과 SSH 설정에는 AI PC의 로그인 계정이 없다. 따라서 AI PC에서 모델 설치·추론·지연 시험은 아직 실행하지 못했다. 소유자 동의와 올바른 접속 정보가 확인되면 먼저 `nvidia-smi`로 다른 GPU 작업을 확인하고, 별도 환경에서 Laya 다국어만 실행한 뒤 Kev 0.8B를 순차 비교한다. 사람 정답 사건이 없으면 연결·형식·지연만 보고 정확도나 승격을 주장하지 않는다. VLM은 [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md)의 별도 정체 V0 세트로 시험한다.
+2026-10-08에 `ai` 계정으로 AI PC SSH 접속을 확인했다. 첫 실패는 별칭 없이 주소만 입력해 이 Windows PC의 사용자명 `livs`로 접속한 탓이었다. 로컬 SSH 별칭과 비공개 호스트 목록에 올바른 계정을 기록했다. 접속 당시 별도 SAM worker가 GPU 메모리 약 2.1 GiB를 사용 중이어서 이번 Laya 시험은 **CPU만** 사용했다. GPU 점유는 시험 전후 같았고, 시험 서버는 종료했다.
+
+### AI PC 첫 Laya 실측: 연결 시험, 정확도 평가 아님
+
+| 항목 | 확인값 |
+| --- | --- |
+| 실행 | AI PC의 격리된 `~/rosy-decision-eval/.venv`, Laya 0.4.0, PyTorch 2.14.1+cpu, `LAYA_MODELS=multilingual`, loopback `127.0.0.1:8766` |
+| 체크포인트 | `convaiinnovations/laya` bundle revision `7b928d828b7b0e022f929d9bd2e44165aa270148`, 다국어 모델 선택 |
+| 재생 | `tools/decision_replay.py`로 만든 인위적 2건. `person`→`WAIT` 기대에 모델 `ESCALATE`, `unknown`→`ESCALATE` 기대에 모델 `ESCALATE`. 1/2 일치, 기권·호출 오류 0 |
+| 호출 지연 | 첫 건 160.5 ms, 다음 건 94.8 ms, 두 건의 p95 160.5 ms. CPU·짧은 합성 입력의 수치이며 운영 지연 증거가 아님 |
+| 기록 | 입력 SHA-256 `c67ebce24dd11280d3ad3ee07d6d5c38c3d37c31ec721201aeaa98ebb415994e`, 결과 SHA-256 `7c150d05874d50e44eceaa7efeebe99e93e6384f58479ca89d25caaa21153423`; 원본은 `X:\DevTemp\rosy-decision-replay-20261008\`과 AI PC의 시험 폴더에 보관 |
+
+예시 `thing_source` 문자열은 형식 시험을 위해 만든 것이며 실제 검수된 영상 사실이 아니다. 이 두 건으로 정확도, 확률 보정, 정체 위험 혼동률을 추정하지 않는다. Kev는 아직 설치·실행하지 않았다. 다음 비교는 독립적으로 사람이 라벨링한 막힘 사건 세트를 마련한 뒤 같은 입력으로 실행한다. VLM은 [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md)의 별도 정체 V0 세트로 시험한다.
