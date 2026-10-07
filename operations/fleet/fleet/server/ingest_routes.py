@@ -151,7 +151,7 @@ def install_ingest_routes(app, *, console, console_token, hub, sightings,
             except SightingError as exc:
                 raise HTTPException(status_code=exc.status_code,
                                     detail={"code": exc.code, "message": str(exc)}) from exc
-            if map_pose is not None:   # D-491 3: only an accepted sighting anchors the map pose
+            if map_pose is not None:   # D-494 3: only an accepted sighting anchors the map pose
                 map_pose.observe_sighting(row)
             return row
 

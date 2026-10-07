@@ -1,9 +1,9 @@
-"""D-491 3: feed accepted sightings and robot `odom_pose` into one map pose tracker per robot.
+"""D-494 3: feed accepted sightings and robot `odom_pose` into one map pose tracker per robot.
 
 Sightings come only from `SightingService.accept` (source token bound to the robot id, lease,
 order) and, when a map id provider is given, only for the active site map frame. Odom comes from
 every state snapshot the console reads (hub heartbeat or REST) and from `refresh`.
-`arbitrated_pose` is for the trip loop (D-491 5) only; `/route`, D-395 and traffic keep
+`arbitrated_pose` is for the trip loop (D-494 5) only; `/route`, D-395 and traffic keep
 `FleetConsole.trusted_map_pose`. D-457 tracking is not an input.
 """
 
@@ -84,7 +84,7 @@ class MapPoseService:
 
     def observe_state(self, robot_id: str, state: Optional[Mapping]) -> None:
         if not isinstance(state, Mapping) or state.get("odom_pose") is None:
-            return                  # a robot before D-491 2: nothing to count
+            return                  # a robot before D-494 2: nothing to count
         tracker = self._tracker(robot_id)
         if tracker is None:
             return

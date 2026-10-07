@@ -120,7 +120,7 @@ class FleetConsole:
         self._loc_null_since: dict[str, Optional[float]] = {}
         #: robot_id -> the localization service's view (needs_human), set by app.py.
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
-        #: D-491 3: every state read also feeds the trip-only map pose (its `odom_pose`).
+        #: D-494 3: every state read also feeds the trip-only map pose (its `odom_pose`).
         self._state_sink: Optional[Callable[[str, dict], None]] = None
         self._sink_failed: set[str] = set()      # logged once per robot
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a

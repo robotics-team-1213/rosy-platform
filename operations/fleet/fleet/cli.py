@@ -108,7 +108,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                               "the store has none (stored in --tasks-db, else memory)")
     console.add_argument("--site-config", default=None, type=Path,
                          help="site YAML; its fleet.routing section sets the D-490 planner costs, "
-                              "fleet.map_pose the D-491 trip map pose limits")
+                              "fleet.map_pose the D-494 trip map pose limits")
     console.add_argument("--no-localization-service", dest="localization_service",
                          action="store_false", default=True,
                          help="D-395: do not run the Fleet localization service (on by default)")
@@ -598,7 +598,7 @@ def _build_site_map(args, tasks_db):
 
 
 def _map_pose_config(args):
-    """D-491 3: the site YAML's ``fleet.map_pose`` limits; defaults without a site config."""
+    """D-494 3: the site YAML's ``fleet.map_pose`` limits; defaults without a site config."""
     import yaml
 
     from fleet.localization.map_pose import MapPoseConfig

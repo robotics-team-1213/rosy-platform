@@ -1,4 +1,4 @@
-"""D-491 3: Fleet map pose for trip execution. Rosy Cam sightings anchor, robot odom bridges. Pure.
+"""D-494 3: Fleet map pose for trip execution. Rosy Cam sightings anchor, robot odom bridges. Pure.
 
 Each accepted sighting is paired with the robot's `odom_pose` at its capture time and becomes
 the anchor. Sightings wait in a `captured_at`-ordered queue (odom usually arrives later than the
@@ -18,7 +18,7 @@ A caller that knows the active map frame passes it: a sighting for another frame
 ignored, and an anchor in another frame reads DEGRADED.
 
 Path and turn are summed per received sample (chord, |dyaw|), so they are lower bounds that
-depend on the odom rate; the trip loop refreshes odom at 2 Hz or faster (D-491 appendix).
+depend on the odom rate; the trip loop refreshes odom at 2 Hz or faster (D-494 appendix).
 
 Times are UTC epoch seconds: sighting `captured_at` and odom `stamp` (CORE wall clock on odom
 arrival; an ISO string is also read). The
@@ -38,7 +38,7 @@ LOCALIZED, DEGRADED, UNKNOWN = "LOCALIZED", "DEGRADED", "UNKNOWN"
 SIGHTING, BRIDGED = "sighting", "bridged"
 #: A sighting further ahead of `now` than this is refused (as the sighting ingest does).
 MAX_SIGHTING_FUTURE_S = 0.05
-#: D-491 3: consecutive consistent sightings that end a DEGRADED episode (and confirm a first anchor).
+#: D-494 3: consecutive consistent sightings that end a DEGRADED episode (and confirm a first anchor).
 RECOVER_AFTER = 2
 #: The newest odom samples kept per robot for pairing (25 s at 10 Hz; less when polled faster).
 ODOM_BUFFER = 256
@@ -61,7 +61,7 @@ def _finite(*values) -> bool:
 
 @dataclass(frozen=True)
 class MapPoseConfig:
-    """Site config ``fleet.map_pose`` (D-491 3). Out-of-range values are refused at start-up."""
+    """Site config ``fleet.map_pose`` (D-494 3). Out-of-range values are refused at start-up."""
 
     max_dead_reckon_m: float = 1.5
     max_jump_m: float = 0.15
@@ -174,7 +174,7 @@ def parse_utc(text) -> Optional[float]:
 
 
 def odom_from_snapshot(state: Optional[Mapping]) -> Optional[OdomSample]:
-    """The snapshot's D-491 2 `odom_pose {x, y, yaw, stamp}`; None when absent or malformed.
+    """The snapshot's D-494 2 `odom_pose {x, y, yaw, stamp}`; None when absent or malformed.
 
     `stamp` is UTC epoch seconds (float, same as sighting `captured_at`); a UTC ISO string is
     accepted for robustness."""

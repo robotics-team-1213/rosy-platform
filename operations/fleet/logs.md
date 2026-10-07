@@ -2176,7 +2176,7 @@
 - Evidence: 6 Chromium cases passed, 0 NEW known failures; six capture hashes in docs/validation/uiux-cell-auth-widths-2026-10-07/result.md.
 - Gate: LOCAL synthetic G2 partial evidence; real site/device and operator G3 remain HOLD.
 
-## 2026-10-07 · uncommitted · feat(fleet): D-491 3 trip 전용 지도 자세(map pose)
+## 2026-10-07 · uncommitted · feat(fleet): D-494 3 trip 전용 지도 자세(map pose)
 
 - 변경: `fleet/localization/map_pose.py`(순수, 표준 라이브러리만)가 로봇마다 받아들인 Rosy Cam sighting을 그 시각의 `odom_pose`(0.25 s 안 가장 가까운 표본, 둘이 감싸면 보간)와 짝지어 앵커로 두고, 그 뒤 odom 강체 증분으로 잇는다. `LOCALIZED`/`DEGRADED`(odom 1.5 m 초과, 예측과 0.15 m·20° 넘게 어긋남 → 다시 앵커, 연속 2회 일치로 회복)/`UNKNOWN`(앵커 없음, odom 3 s 초과). 설정은 사이트 YAML `fleet.map_pose`.
 - 연결: `server/map_pose_service.py`의 `MapPoseService`가 `/api/fleet/sightings`에서 받아들인 행과 콘솔이 읽는 모든 상태 스냅숏(hub heartbeat·REST)의 `odom_pose`를 먹는다. trip 루프용 `arbitrated_pose(robot_id)`와 읽기 전용 `GET /api/fleet/robots/{robot_id}/map-pose`(viewer 이상, API Ref v1.112)를 낸다.
@@ -2185,14 +2185,14 @@
 - gate 변화: SOURCE만. SIM·DEVICE 수용은 그대로 열려 있다.
 - 열린 것: `odom_pose`는 `feat/d491-robot-trip-contracts`가 CORE와 `StateSnapshot`에 넣기 전까지 비어 있어(hub 경로는 pydantic이 모르는 필드를 버린다) 자세는 `UNKNOWN`이다. 실차·SIM 수용 없음.
 
-## 2026-10-07 · uncommitted · fix(fleet): D-491 3 map pose 독립 검토 반영
+## 2026-10-07 · uncommitted · fix(fleet): D-494 3 map pose 독립 검토 반영
 
 - 변경: `odom_pose.stamp`를 UTC epoch 초(float, `captured_at`과 같은 형식)로 읽는다(ISO 문자열도 읽음, trip-contracts 브랜치와 맞춤). odom 끊김(3 s 초과)·낡은 뒤 재개·불가능한 걸음(1 m/s 초과, CORE 재시작의 odom 0)이면 앵커를 버리고 `UNKNOWN`. odom 미래 허용 `max_odom_future_s` 0.5 s와 거절 수·이유 출력. 누적 회전 180°·앵커 나이 10 s 한도, `map_id` 고정과 활성 지도 프레임 필터, 감싸는 표본이 올 수 있는 동안 sighting 대기. 엔드포인트는 httpx 오류에도 마지막 자세로 답하고, 동시 읽기를 합치며, 0.2 s 안이면 다시 읽지 않는다. 로스터에서 빠진 로봇의 추적기는 버린다. 콘솔 sink 실패는 로봇마다 한 번 기록하고 수집을 멈추지 않는다.
 - 증거: `test_map_pose.py`(41)·`test_map_pose_service.py`(14), 검토 probe 사례를 테스트로 옮김. Fleet 전체·계약 문서 테스트와 `known_failures` 새 실패 0(X:\DevTemp\d491-map-pose).
-- gate 변화: SOURCE만. trip 루프는 odom을 2 Hz 이상 읽어야 한다(D-491 부록). SIM·DEVICE 수용은 그대로 열려 있다.
+- gate 변화: SOURCE만. trip 루프는 odom을 2 Hz 이상 읽어야 한다(D-494 부록). SIM·DEVICE 수용은 그대로 열려 있다.
 
-## 2026-10-07 · uncommitted · fix(fleet): D-491 3 map pose 재검토 반영
+## 2026-10-07 · uncommitted · fix(fleet): D-494 3 map pose 재검토 반영
 
 - 변경: odom이 카메라보다 늦게 오면(hub 스냅숏 최대 약 1 s) 새 sighting이 기다리던 sighting을 밀어내 앵커가 영영 생기지 않던 문제를 고쳤다. sighting은 `captured_at` 순서 대기열(32건)에서 그 시각 이후 odom을 기다렸다가 순서대로 짝짓는다. 활성 지도와 다른 `map_id` sighting 수(`sightings_filtered_map_id`)와 출처가 없는 활성 지도 경고, 다른 프레임 앵커는 `DEGRADED`. trip 루프용 `refresh(force_rest=True)`(hub 캐시 건너뜀). odom 방향 변화율 360°/s 초과도 재설정, `max_bridge_turn_deg` 기본 270. 공유 읽기의 예외는 회수해 기록한다.
 - 증거: 재검토 probe2 사례(odom 0.3 s·0.5 s 늦음, 1 Hz heartbeat를 0.5 s 폴링, 위상 0.4)를 회귀 테스트로 옮겨 모두 `LOCALIZED`. Fleet 전체·계약 문서 테스트와 `known_failures` 새 실패 0(X:\DevTemp\d491-map-pose).
-- gate 변화: SOURCE만. trip 루프는 `force_rest`로 2 Hz 이상 읽는다(D-491 부록). SIM·DEVICE 수용은 그대로 열려 있다.
+- gate 변화: SOURCE만. trip 루프는 `force_rest`로 2 Hz 이상 읽는다(D-494 부록). SIM·DEVICE 수용은 그대로 열려 있다.

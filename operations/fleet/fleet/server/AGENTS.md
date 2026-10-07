@@ -17,7 +17,7 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | `signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 검증 |
 | `line_stuck.py` | D-407 `LineStuckBoard` — 로봇별 열린 차선 막힘(CORE `line_follow.stuck` + `nav.line_stuck_opened` 여유)과 넘긴 답 기록. 판단은 CORE 가 한다; 콘솔은 `web/line-stuck.js` |
 | `traffic.py` | 경로 충돌 판정(순수 기하). 전송도 asyncio 도 없다 |
-| `map_pose_service.py` | D-491 3 `MapPoseService` — 받아들인 sighting과 스냅숏 `odom_pose`로 trip 전용 지도 자세, `GET /api/fleet/robots/{id}/map-pose`. `/route`·교통정리는 읽지 않는다 |
+| `map_pose_service.py` | D-494 3 `MapPoseService` — 받아들인 sighting과 스냅숏 `odom_pose`로 trip 전용 지도 자세, `GET /api/fleet/robots/{id}/map-pose`. `/route`·교통정리는 읽지 않는다 |
 | (대형) | `swarm/session.py` 의 `FormationSession` 을 콘솔이 하나만 들고 연다 |
 | `app.py` | FastAPI 표면. `/api/fleet/*` 와 `/console` 정적 자산 allowlist |
 | `web/` | 관제 UI (index.html, tokens.css, styles.css, console.js) (see `web/AGENTS.md`) |

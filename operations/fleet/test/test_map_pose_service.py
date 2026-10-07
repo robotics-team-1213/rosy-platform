@@ -1,4 +1,4 @@
-"""D-491 3: MapPoseService wiring — accepted sightings and snapshot odom_pose in, map pose out."""
+"""D-494 3: MapPoseService wiring — accepted sightings and snapshot odom_pose in, map pose out."""
 
 import asyncio
 import time
