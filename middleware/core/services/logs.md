@@ -581,7 +581,7 @@
 - 증거: `test_state_odom_pose.py` 2 PASS(null→값, 하트비트 왕복, 옛 스냅숏 파싱). services 941 passed, known_failures 0 new.
 - gate 변화: 없음.
 - 결정: D-491 (Proposed)
-
+
 ## 2026-10-07 · uncommitted · fix(state): D-491 검토 — 유한하지 않은 odom 표본을 버린다
 
 - 변경: `OdomPose`를 frozen·유한 값만으로 바꾸고, `set_odom_pose`는 NaN/inf 표본을 버리고 이전 값을 두며 한 번만 경고한다. NaN 하나가 `/state`를 500으로 만들지 않는다.
