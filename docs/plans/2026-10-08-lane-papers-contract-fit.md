@@ -72,3 +72,7 @@
 ## 녹화 재생에 필요한 지면값 기록
 
 `keep` 판단 직후 `line/keep_debug`에 `ground_projection`을 붙인다. 이는 그 프레임의 `_ground()`가 실제로 반환한 높이(m), pitch(rad), 초점거리(px), 주점(px), 최대 신뢰 거리(m)와 keeper의 카메라 전방 오프셋(m)이다. 지면을 사용할 수 없으면 `null`이다. 기존 카메라 stamp로 영상 프레임과 결합한다. 이 수치는 **사용된 투영값**이지 측정 승인된 보정 revision이나 실제 차로 정답은 아니다. 과거 10/6·10/7 MCAP에는 이 필드가 없으므로 당시의 유효 pitch를 이 변경으로 소급 확정할 수 없다. 다음 현장 녹화에서 값과 영상이 같이 남아야 후보 재생의 기하 가정을 검증할 수 있다.
+
+재생기는 `road_replay.py --recorded-ground`에서 MCAP이나 변환 MP4 sidecar의 동일 이미지 stamp `line/keep_debug`를 읽는다. 모든 프레임에 유효하고 일정한 투영값과 320×240 이미지 크기가 있어야 하며, 누락·시각 불일치·중간 변경은 오류로 중단한다. pitch/높이/roll 가설 override와 함께 쓰지 않는다. 이 옵션은 **지면 투영의 재현**일 뿐, threshold 대신 learned/denoise 페인트를 쓴 녹화의 완전한 keeper 재현은 아니다. 10/6·10/7 옛 원본에는 투영 필드가 없어 이 옵션으로 재생할 수 없다.
+
+10/6 `091340Z` 원본 MCAP과 그 MP4 sidecar의 첫 프레임을 각각 `--recorded-ground --max-frames 1`로 실행하자 둘 다 `missing or invalid ground projection`으로 종료됐다. 이는 옛 영상에 보정값을 채워 넣지 않는 음성 대조 결과다. 새 형식의 동기화·검사 경로는 MCAP 결합 함수 및 sidecar 테스트 87건으로 확인했다. 아직 새 형식의 **실물 녹화**는 없어 재생 수용은 미완료다.
