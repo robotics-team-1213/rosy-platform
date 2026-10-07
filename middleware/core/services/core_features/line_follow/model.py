@@ -123,6 +123,8 @@ class LineFollowConfig:
     ir_row_x_m: Optional[float] = None
     crosswalk_zone_max_m: float = 0.20
     crosswalk_odom_error_fraction: float = 0.05
+    # 카메라가 잰 횡단보도 끝 거리의 앞뒤 오차 비율(9dfk 실측 2026-10-07: 0.3 m에서 약 1.5 cm).
+    crosswalk_range_error_fraction: float = 0.05
     # D-407 막힘 복구. 관제에 묻고 recovery_ask_s 안에 답이 없으면(또는 관제 연결이 없으면)
     # 로컬 후진·재판단. 모델 기본값은 꺼짐이고, 로봇 기본값(rosy_default.yaml)은 D-495부터 켜짐이다.
     recovery_local_enabled: bool = False
@@ -267,6 +269,8 @@ class LineFollowConfig:
             raise ValueError("crosswalk_zone_max_m must be in (0, 0.5]")
         if not (_finite(self.crosswalk_odom_error_fraction) and 0.0 <= self.crosswalk_odom_error_fraction <= 0.5):
             raise ValueError("crosswalk_odom_error_fraction must be in [0, 0.5]")
+        if not (_finite(self.crosswalk_range_error_fraction) and 0.0 <= self.crosswalk_range_error_fraction <= 0.5):
+            raise ValueError("crosswalk_range_error_fraction must be in [0, 0.5]")
         if (self.ir_calibration_revision is not None
                 and (not isinstance(self.ir_calibration_revision, str)
                      or not re.fullmatch(r"[0-9a-f]{64}", self.ir_calibration_revision))):

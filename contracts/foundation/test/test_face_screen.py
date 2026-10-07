@@ -245,8 +245,8 @@ def test_charging_at_rest_is_a_strip():
     ("IDLE", "IDLE", "Waiting"),
     ("MANUAL", "IDLE", "Manual"),
     ("NAVIGATION", "NAVIGATING", "Going"),
-    ("NAVIGATION", "BLOCKED", "Blocked"),
-    ("NAVIGATION", "FAILED", "Blocked"),
+    ("NAVIGATION", "BLOCKED", "Route blocked"),
+    ("NAVIGATION", "FAILED", "Navigation failed"),
     ("DOCKING", "IDLE", "Docking"),
 ])
 def test_the_situation_line_names_the_mode_under_the_face(mode, nav, line):

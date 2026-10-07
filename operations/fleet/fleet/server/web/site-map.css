@@ -20,6 +20,8 @@ a { color: var(--ink); }
 .map-scroll-hint[hidden] { display: none; }
 #site-map-svg { width: 100%; height: 30rem; background: var(--surface-flat); border: 1px solid var(--line-14); border-radius: var(--radius-control); }
 #site-map-svg.picking { cursor: crosshair; }
+#site-map-svg .plane-border { fill: none; stroke: var(--ink-quiet); stroke-width: 1px; pointer-events: none; }
+#site-map-svg.has-plane .edge { stroke: var(--series-primary); }
 #site-map-svg .edge { fill: none; stroke: var(--ink-quiet); stroke-width: 3px; cursor: pointer; }
 #site-map-svg .edge.free { stroke-dasharray: 8 6; }
 #site-map-svg .edge.selected { stroke: var(--series-primary); stroke-width: 5px; }

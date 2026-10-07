@@ -51,7 +51,8 @@ class LaneReturnMixin(LaneReturnDecisionMixin):
         c = self._config
         return c.ir_row_x_m is not None and self._crosswalks.holds(
             self._return_evidence, now=now, guard=guard, ir_x=c.ir_row_x_m,
-            max_length=c.crosswalk_zone_max_m, odom_error_fraction=c.crosswalk_odom_error_fraction)
+            max_length=c.crosswalk_zone_max_m, odom_error_fraction=c.crosswalk_odom_error_fraction,
+            range_error_fraction=c.crosswalk_range_error_fraction)
 
     def return_evidence(self, *, now=None):
         with self._lock:
