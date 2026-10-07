@@ -10,11 +10,11 @@ Raw captures and logs: `X:/DevTemp/projects/rosy-platform/2026-10-07--cell-job-r
 
 | File | SHA-256 |
 |---|---|
-| `red.txt` | `c8ff155c23372ec7208541217b9fd6be1275a7881acda933f64865af1df7e285` |
-| `related.txt` | `9960fe6a9807e1bdccbe939ff8779a7abb7015870a72de7330ffcd2bc2db84b9` |
-| `g1.txt` | `9ca551d82fcc0b5cca2cfe2ae74576cda8c8beaa6c3e3ec6366998fde8645829` |
-| `fleet-cell-job-read-error-1440x1000.png` | `b0a734be3e8c60f7044733f26c9107d476c2213a2c29e7520393d2512a6502b2` |
-| `fleet-cell-job-read-error-390x844.png` | `9ad4a45f8d77e7c81e6314829c57b5f7f4181f7b14563c3872eba63888b6417c` |
-| `fleet-cell-job-read-error-320x568.png` | `6318d2ab27f21f50566f399f185aab1cd2568d392e7b5d3864546e57a76a760d` |
+| `red.txt` | SHA-256 `c8ff155c23372ec7208541217b9fd6be1275a7881acda933f64865af1df7e285` |
+| `related.txt` | SHA-256 `9960fe6a9807e1bdccbe939ff8779a7abb7015870a72de7330ffcd2bc2db84b9` |
+| `g1.txt` | SHA-256 `9ca551d82fcc0b5cca2cfe2ae74576cda8c8beaa6c3e3ec6366998fde8645829` |
+| `fleet-cell-job-read-error-1440x1000.png` | SHA-256 `b0a734be3e8c60f7044733f26c9107d476c2213a2c29e7520393d2512a6502b2` |
+| `fleet-cell-job-read-error-390x844.png` | SHA-256 `9ad4a45f8d77e7c81e6314829c57b5f7f4181f7b14563c3872eba63888b6417c` |
+| `fleet-cell-job-read-error-320x568.png` | SHA-256 `6318d2ab27f21f50566f399f185aab1cd2568d392e7b5d3864546e57a76a760d` |
 
 This is LOCAL synthetic G2 evidence for one failed read state. Real site/device readback, the remaining declared G2 cells, and the user's G3 walkthrough remain **HOLD**. No site operation or device command occurred.

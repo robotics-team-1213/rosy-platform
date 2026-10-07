@@ -168,6 +168,29 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_saved_documents_show_readable_kind_and_local_time(browser_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
+    _prepare(page)
+    for kind in ("recipe", "cell"):
+        page.locator(f"#{kind}-save").click()
+        expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
+    rows = page.locator("#saved li")
+    expect(rows).to_have_count(2)
+    expect(rows.nth(0).locator("strong")).to_contain_text("셀 문서 · cell-demo")
+    expect(rows.nth(1).locator("strong")).to_contain_text("레시피 · recipe-demo")
+    for row in rows.all():
+        expect(row.locator("time")).to_contain_text("수정")
+        assert "T" in row.locator("time").get_attribute("datetime")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        rows.first.scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / f"fleet-cell-saved-list-{width}x{height}.png"))
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_cell_panels_and_compact_actions_use_uniform_width(browser_site, width, height):
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
@@ -196,11 +219,12 @@ def test_cell_panels_and_compact_actions_use_uniform_width(browser_site, width, 
         page.screenshot(path=str(Path(output) / f"fleet-cell-widths-{width}x{height}.png"), full_page=True)
 
 
-def test_cell_saved_documents_failure_retry_and_credential_change(browser_site):
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, width, height):
     from playwright.sync_api import expect
 
     page, _, _ = browser_site
-    page.set_viewport_size({"width": 320, "height": 568})
+    page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(status=503, body="unavailable"))
     page.locator("#credential input").fill("operator-secret")
     page.locator("#connect").click()
@@ -211,13 +235,17 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site):
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
         status.scroll_into_view_if_needed()
-        page.screenshot(path=str(Path(output) / "fleet-cell-list-error-320x568.png"))
+        page.screenshot(path=str(Path(output) / f"fleet-cell-list-error-{width}x{height}.png"))
     page.unroute("**/api/fleet/cell-app/documents")
     page.locator("#connect").click()
     expect(status).to_have_attribute("state", "empty")
     _prepare(page)
     expect(page.locator("#saved li")).to_have_count(2)
     expect(status).to_be_hidden()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output:
+        page.locator("#saved").scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / f"fleet-cell-list-recovered-{width}x{height}.png"))
     page.locator("#credential input").fill("different-token")
     expect(status).to_have_attribute("state", "unavailable")
     assert page.locator("#saved").is_hidden()
@@ -457,6 +485,30 @@ def test_failed_job_read_clears_actionable_snapshot(browser_site, width, height)
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.locator("#job-summary").scroll_into_view_if_needed()
         page.screenshot(path=str(Path(output) / f"fleet-cell-job-read-error-{width}x{height}.png"))
+
+
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_changing_job_id_clears_previous_job_evidence(browser_site, width, height):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
+    _prepare(page)
+    page.locator("#workcell").fill("omx_sim")
+    page.locator("#instance").fill("omx_sim_01")
+    page.locator("#propose").click()
+    page.locator("#read-job").click()
+    expect(page.locator("#job-summary")).to_contain_text("제안됨")
+    assert page.locator("#step-progress li").count() > 0
+    page.locator("#mission-id").fill("another-job")
+    expect(page.locator("#job-summary")).to_have_text("작업 ID로 상태를 확인하세요.")
+    expect(page.locator("#job-state")).to_be_empty()
+    expect(page.locator("#step-progress li")).to_have_count(0)
+    expect(page.locator("#admit")).to_be_disabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.locator("#job-summary").scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / f"fleet-cell-job-switch-{width}x{height}.png"))
 
 
 def test_import_updates_existing_revision_and_guided_fields(browser_site):

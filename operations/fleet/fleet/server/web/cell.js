@@ -60,6 +60,12 @@ let jobGeneration = null;
 let layoutData = null;
 const commands = ['recipe-save', 'cell-save', 'compile', 'propose', 'admit', 'reconcile', 'resume', 'cancel'];
 const jobActionLabels = {admit: '실행 승인', reconcile: '실제 상태를 대조', resume: '재승인', cancel: '취소'};
+function clearJobSnapshot(summary = '작업 ID로 상태를 확인하세요.') {
+  job = null; jobGeneration = null;
+  $('job-state').textContent = '';
+  $('job-summary').textContent = summary;
+  $('step-progress').replaceChildren(); $('sheet-progress').replaceChildren();
+}
 function invalidate() {
   previewRefs = null; layoutData = null;
   $('summary').setAttribute('state', 'unavailable');
@@ -67,7 +73,7 @@ function invalidate() {
   $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); $('layout-preview').hidden = true; refreshControls();
 }
 function clearSession() {
-  role = null; job = null; jobGeneration = null; invalidate();
+  role = null; clearJobSnapshot(); invalidate();
   $('session').textContent = '접속 전';
   revisions.clear();
   for (const kind of ['recipe', 'cell']) {
@@ -75,9 +81,6 @@ function clearSession() {
     $(kind + '-revision').textContent = '저장 전';
   }
   $('proposal').textContent = '';
-  $('job-state').textContent = '';
-  $('job-summary').textContent = '작업 ID로 상태를 확인하세요.';
-  $('step-progress').replaceChildren(); $('sheet-progress').replaceChildren();
   $('saved').hidden = true;
   $('saved-status').hidden = false;
   $('saved-status').setAttribute('state', 'unavailable');
@@ -122,7 +125,7 @@ async function action(fn) {
   $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
     if (error.status === 401 || error.status === 403) clearSession();
-    else if (error.status === 409) { job = null; jobGeneration = null; }
+    else if (error.status === 409) clearJobSnapshot();
     $('notice').textContent = error.status === 403
       ? '이 계정에는 Cell 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.' : error.message;
     if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
@@ -154,7 +157,16 @@ async function list() {
     throw error;
   }
   saved.replaceChildren(...result.documents.map(item => {
-    const li = document.createElement('li'); li.textContent = `${item.kind} · ${item.id} · ${item.updated_at}`; return li;
+    const li = document.createElement('li');
+    const name = document.createElement('strong');
+    name.textContent = `${item.kind === 'recipe' ? '레시피' : '셀 문서'} · ${item.id}`;
+    const time = document.createElement('time');
+    time.dateTime = item.updated_at;
+    const date = new Date(item.updated_at);
+    time.textContent = Number.isNaN(date.getTime()) ? '수정 시각 확인 불가'
+      : `수정 ${date.toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'})}`;
+    li.append(name, time);
+    return li;
   }));
   saved.hidden = result.documents.length === 0;
   status.hidden = result.documents.length > 0;
@@ -343,7 +355,7 @@ $('propose').addEventListener('click', () => action(async () => {
     request_key: $('request-key').value, workcell_id: $('workcell').value, instance_id: $('instance').value});
   $('proposal').textContent = `제안 ${result.proposal.proposal_id}\n상태 ${jobStatusLabel(result.mission?.status || result.proposal.state)}\n운영자 별도 승인 대기`;
   $('mission-id').value = result.proposal.proposal_id;
-  job = null;
+  clearJobSnapshot();
   $('notice').textContent = '제안 완료 · 관제에서 별도 승인 후 진행 상태를 확인하세요.';
 }));
 function renderLayout() {
@@ -374,17 +386,14 @@ function renderLayout() {
 $('layout-layer').addEventListener('change', renderLayout);
 async function readJob() {
   const id = $('mission-id').value;
-  job = null; jobGeneration = null;
+  clearJobSnapshot('현재 상태 확인 중');
   $('job-state').textContent = '현재 상태 확인 중';
-  $('job-summary').textContent = '현재 상태 확인 중'; $('step-progress').replaceChildren();
-  $('sheet-progress').replaceChildren();
   let result, control;
   try {
     result = await api(`/api/fleet/cell-jobs/${encodeURIComponent(id)}`);
     control = await api('/api/fleet/dispatch-control');
   } catch (error) {
-    $('job-state').textContent = '';
-    $('job-summary').textContent = '작업 상태 확인 불가 · 접속 상태를 확인하고 다시 시도하세요';
+    clearJobSnapshot('작업 상태 확인 불가 · 접속 상태를 확인하고 다시 시도하세요');
     throw error;
   }
   jobGeneration = control.generation;
@@ -405,7 +414,7 @@ async function readJob() {
   }));
   $('notice').textContent = `작업 ${jobStatusLabel(job.status, job.reason)}${job.reason ? ' · ' + jobReasonLabel(job.reason) : ''} · 확인한 정지 세대 ${jobGeneration}`;
 }
-$('mission-id').addEventListener('input', () => { editEpoch++; job = null; jobGeneration = null; refreshControls(); });
+$('mission-id').addEventListener('input', () => { editEpoch++; clearJobSnapshot(); refreshControls(); });
 $('read-job').addEventListener('click', () => action(readJob));
 $('new-proposal').addEventListener('click', () => {
   if (busy) return;
