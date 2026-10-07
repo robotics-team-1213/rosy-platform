@@ -4,11 +4,11 @@
 
 **Goal:** 현장 Fleet이 TLS 로봇을 평문 `http`로 폴링해 오프라인으로 보이는 고장, 테일넷에서 닫힌 관제 8443, 꺼진 발견 광고를 이미 있는 절차로 고치고, 그 고장을 관제에서 한 단어로 보게 한다.
 
-**Architecture:** 새 모니터·새 프로브·스킴 자동 변경은 없다. 모니터링은 D-499가 이미 정한 사이트 경로 세 줄과 로봇 링크 단어다. `protocol`의 수리는 [등록된 HTTPS 연결 설정](../../deploy/site/enrolled-tls-runbook.md)이다. 테일넷 관제는 [tailnet-remote-access.md](../deployment/tailnet-remote-access.md) 4절의 `tailscale0` 허용이다. 발견은 이미 설치돼 있는 광고 유닛 세 개를 켜는 것이다. 제품 코드를 고치기 전에 Task 1이 지금 돌고 있는 이미지와 등록 상태를 읽는다. 그 결과가 이 갈림과 다르면 현장에서 멈추고 별도 계획을 연다.
+**Architecture:** 새 모니터·새 프로브·스킴 자동 변경은 없다. 모니터링은 D-499가 이미 정한 사이트 경로 세 줄과 로봇 링크 단어다. `protocol`의 수리는 [등록된 HTTPS 연결 설정](../../deploy/site/enrolled-tls-runbook.md)이다. 그 수리는 실패한 평문 연결을 멈춘다. 로봇 Wi-Fi의 반복 상태 조회가 줄었는지는 그 다음, 기존 `GET /api/fleet/state` 행의 `gather_source`가 `hub`일 때만 본다(D-447). 테일넷 관제는 [tailnet-remote-access.md](../deployment/tailnet-remote-access.md) 4절의 `tailscale0` 허용이다. 발견은 이미 설치돼 있는 광고 유닛 세 개를 켜는 것이다. 제품 코드를 고치기 전에 Task 1이 지금 돌고 있는 이미지와 등록 상태를 읽는다. 그 결과가 이 갈림과 다르면 현장에서 멈추고 별도 계획을 연다.
 
 **Tech Stack:** 사이트 호스트 `robttt` (`tailscale ssh robttt@100.82.51.8`), Docker Compose 사이트 스택, systemd, 기존 Fleet SQLite `/var/lib/rosy/fleet.sqlite3`. 이 계획의 호스트 시험은 문서가 저장소에 있는지만 본다. ROS와 로봇 주행은 열지 않는다.
 
-**기준:** [D-499](../adr/D-499-console-site-path-and-robot-link.md)는 Proposed로 둔다. 등록·재페어링은 [D-361](../adr/D-361-site-console-enrolls-robot-by-screen-code.md), 발견은 [D-452](../adr/D-452-network-peer-discovery-and-identity-targets.md), 테일넷 콘솔 허용은 D-477 런북. 2026-10-07에 적은 현장 상태(이미지 `5eb726c13271`, HTTP 폴링, 광고 유닛 꺼짐, Tailscale 8443 닫힘)는 그때의 기록이다. Task 1이 오늘 값을 다시 읽기 전에는 그 기록을 아직 참이라고 쓰지 않는다.
+**기준:** [D-499](../adr/D-499-console-site-path-and-robot-link.md)는 Proposed로 둔다. 등록·재페어링은 [D-361](../adr/D-361-site-console-enrolls-robot-by-screen-code.md), 발견은 [D-452](../adr/D-452-network-peer-discovery-and-identity-targets.md), 열린 소켓 재사용은 [D-447](../adr/D-447-web-realtime-reuse-open-sockets.md), 테일넷 콘솔 허용은 D-477 런북. 2026-10-07에 적은 현장 상태(이미지 `5eb726c13271`, HTTP 폴링, 광고 유닛 꺼짐, Tailscale 8443 닫힘)는 그때의 기록이다. Task 1이 오늘 값을 다시 읽기 전에는 그 기록을 아직 참이라고 쓰지 않는다.
 
 **작업 위치:** 워크트리 `rosy-platform/.worktrees/site-link-repair`, 브랜치 `docs/site-link-repair`. 공유 `main` 체크아웃에는 쓰지 않는다. 현장 변경(site.env, systemctl enable/restart, 스택 재시작, 릴리스 설치)은 각 태스크의 사용자 확인 뒤에만 한다. 확인 없는 태스크는 읽기만 한다. `sudo` 암호는 없다. 암호 프롬프트가 나오면 멈추고 관리자에게 넘긴다. 토큰, 로그인 코드, CA PEM, `site.env`의 비밀 값은 출력·기록·채팅에 남기지 않는다.
 
@@ -30,6 +30,8 @@ Task 1의 여섯 값을 이 표에 넣는다. 표에 없는 조합이면 Task 2�
 | `ROSY_SITE_LAN_IFACE`에 `tailscale0`이 없다 | Task 5 |
 | 광고 유닛 셋 중 하나라도 `inactive` 또는 `failed` | Task 6 |
 | 로봇 행 `state`가 `needs_new_code` | 링크 수리로 토큰을 연장하지 않는다. 관제의 기존 재등록 안내로 남긴다 |
+| `link`가 `up`이고 `gather_source`가 `rest` 또는 없다 | Task 4는 끝난 것이다. 반복 조회는 남아 있다. Task 8에서 멈추고 FleetAgent는 이 계획에서 켜지 않는다 |
+| `gather_source`가 `hub` | 그 주기의 `GET /api/v1/robot/state`는 없다. 사이트는 로봇이 이미 밀어 넣은 복사본을 읽는다 |
 
 비상 정지, 위치 추정, 바닥 IR, 램프는 이 계획의 링크 고장이 아니다. 로스터에 이미 있는 칸으로 두고 여기서 해제하거나 주행하지 않는다.
 
@@ -147,10 +149,12 @@ Task 1의 값을 위 「갈림」 표에 맞춘다. 맞는 행마다 `diagnose.t
 
 ---
 
-### Task 4: 등록된 HTTPS 바인딩으로 폴링을 올린다
+### Task 4: 등록된 HTTPS 바인딩으로 실패한 연결을 멈춘다
 
 **Files:**
 - Follow: `deploy/site/enrolled-tls-runbook.md` 전체. 이 태스크는 그 절차를 반복하지 않고 현장 값만 채운다.
+
+이 태스크는 실패한 평문 연결을 멈춘다. 성공한 REST 횟수는 그대로다. 로봇 Wi-Fi의 반복 상태 조회가 줄었는지는 Task 8에서 `gather_source`가 `hub`일 때만 확인한다.
 
 사용자 확인 전에는 파일을 쓰지 않는다.
 
@@ -291,9 +295,41 @@ Task 5 뒤 `ts 0`인 주소로 같은 세 줄을 본다. LAN에서만 열리고 
 
 ---
 
+### Task 8: 부하가 줄었는지는 `gather_source`로만 본다
+
+**Files:**
+- Read: `docs/adr/D-447-web-realtime-reuse-open-sockets.md`
+- Read: `operations/fleet/fleet/server/console.py`의 `_gather_state`
+- Read: 기존 `GET /api/fleet/state` 로봇 행의 `gather_source` (`hub`·`rest`·없음)
+
+Task 4 뒤에만 한다. 패킷 캡처, 바이트 카운터, 로봇으로의 추가 조회는 만들지 않는다.
+
+**Step 1: 이미 있는 상태 행을 읽는다**
+
+Task 7과 같은 관제 조회에서 로봇 행의 `gather_source`만 `X:\DevTemp\site-link-repair\diagnose.txt`에 적는다. 토큰과 상태 본문은 적지 않는다.
+
+**Step 2: `hub`의 의미**
+
+`hub`이면 그 주기의 gather는 사이트에 있는 복사본을 읽는다. FleetAgent가 hub로 1 Hz heartbeat를 밀어 넣었고, 마지막 도착이 3초 안이다. 그 주기에는 `GET /api/v1/robot/state`가 없다.
+
+**Step 3: `rest`이면 여기서 멈춘다**
+
+`rest`이거나 필드가 없으면 소켓이 없거나 오래되었다. `SharedGather`는 약 1초마다 REST로 돌아간다. `link: up`은 그 REST가 성공했다는 뜻이고, 횟수가 줄었다는 뜻이 아니다. FleetAgent를 켜는 일은 D-361 7항의 별도 계획이다. 이 계획에서 에이전트를 켜거나 heartbeat 주기·본문을 바꾸지 않는다.
+
+**Step 4: 다른 흐름은 그대로 둔다**
+
+천장 JPEG와 로봇 앞 영상은 이 상태 조회와 다른 흐름이다. 브라우저가 사이트 PC의 `/api/fleet/state`를 당기는 주기도 D-447이 그대로 둔다. 테일넷 8443과 발견 광고는 로봇 Wi-Fi의 반복 조회를 줄이지 않는다.
+
+**Step 5: Commit**
+
+저장소 변경이 없다.
+
+---
+
 ## 범위 밖
 
-- 패킷 목록, 바이트 그래프, Docker CPU·메모리, 공유기 관리, 로봇 Wi-Fi 카드, `nmcli`.
+- 패킷 목록, 바이트 그래프, Docker CPU·메모리, 공유기 관리, 로봇 Wi-Fi 카드, `nmcli`. 부하를 재는 새 프로브.
+- 이 계획에서 FleetAgent를 켜는 일. heartbeat 주기·본문 변경.
 - 콘솔이 `http`를 `https`로 바꾸는 버튼. 여섯 번째 `link` 단어. `/healthz` 본문을 세 서비스 상태로 늘리는 일.
 - TLS 마커, enrollment DB, credential key를 지우는 일. 확인된 로그아웃 전의 등록 해제.
 - `rosy_60` 비상 정지 해제, 위치 추정 기동, 램프, 바닥 IR 릴리스.
