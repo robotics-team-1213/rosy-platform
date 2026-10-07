@@ -15,6 +15,7 @@ D-395 Fleet localization arbiter. Scores each robot's pose candidates with bound
 | `cues.py` | Bounded cues per hypothesis: peers, slot (10 cm / 20 deg, either way along the axis), last good pose (never after a pickup), overhead sighting (≤ 300 ms), reference square |
 | `arbiter.py` | `Weights`, `Context`, `score()`, `Arbiter.observe()` → `LocalizationDecision` |
 | `map_pose.py` | D-494 3 trip-only map pose: sighting anchor + odom bridge, `MapPoseTracker`, `MapPoseConfig` (`fleet.map_pose`), stdlib only. Not read by `/route`, D-395 or traffic |
+| `lane_compliance.py` | D-511 2: signed lateral offset (left +), body margin `width_m/2 − (|d| + half width)` from `core_common.robot_body`, `LaneComplianceTracker` (OK/WARN/ACT/UNKNOWN, `persist_n`), `LaneComplianceConfig` (`fleet.lane_compliance`, provisional defaults). Observe only |
 
 ## For AI Agents
 
