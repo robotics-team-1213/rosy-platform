@@ -110,7 +110,9 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
                 # Existing legacy observations retain their contract.
                 return self._bridge_alone(now,decision,bridge_state)
             if None in (c.body_front_x_m,c.body_rear_x_m,c.body_half_width_m):
-                return self._stop_decision('HOLD','lane_return_body_unknown')
+                # D-507 7: no body geometry = containment unprovable = as recovery off.
+                self._status=self._status.model_copy(update={'lane_return_containment':'unknown'})
+                return self._bridge_alone(now,decision,bridge_state)
             self._return_controller=ReturnController(Footprint(
                 c.body_front_x_m,c.body_rear_x_m,c.body_half_width_m),
                 c.lane_return_body_margin_m,c.lane_return_checkpoint_fraction)
@@ -144,6 +146,9 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
         if bridge is not None:
             return bridge  # D-468 only measured this tick; the bridge owns the twist.
         if action.phase=='tracking' and not action.recovered:
+            # D-507 7: unknown = today's following, shown so the operator sees D-468 is idle.
+            self._status=self._status.model_copy(update={'lane_return_containment':
+                'unknown' if action.reason=='containment_unknown' else 'contained'})
             return decision
         if action.recovered:
             self._release_stuck(now)

@@ -197,7 +197,8 @@ def test_distance_ladder_halves_then_stops_by_measured_travel():
     assert speeds[0] == pytest.approx(.04) and speeds[-1] == pytest.approx(.02)
     # 1.08 x travel reaches 0.25 m after 12 ticks of 2 cm (0.24 m -> 0.259 m).
     assert len(speeds) == 12
-    assert r.reason.startswith('lane_return_')
+    # D-507 7: an unseen lane is no departure evidence; today's loss path holds, D-468 idle.
+    assert r.m.status().state == 'HOLD' and r.m.status().lane_return_containment == 'unknown'
 
 
 def test_time_bound_ends_bridge_before_lost_and_never_moves_the_loss_clock():
@@ -230,25 +231,26 @@ def test_reacquired_lane_is_verified_by_d468_then_follows_and_rearms():
     assert r.step(seen=False).linear > 0 and r.reason == 'lane_bridge'
 
 
-def test_exhausted_bridge_hands_over_to_d468_retrace_over_the_bridged_path():
+def test_exhausted_bridge_rebases_d468_retrace_but_an_unseen_lane_only_holds():
     r = Rig()
     r.follow()
-    # Bridge 0.24 m: farther than D-468's 0.15 m retrace reach from the loss pose, so the
+    # Bridge 0.24 m: farther than D-468's 0.15 m retrace reach from the loss pose, so a later
     # retrace only works because its path now includes the bridged travel.
     while r.step(seen=False, slip=.02).linear > 0 and r.reason == 'lane_bridge':
         pass
-    retrace = []
+    path = r.m._return_controller._path
+    assert path and math.hypot(path[-1].x-path[0].x, path[-1].y-path[0].y) > .15
+    # D-507 7: with no lane evidence D-468 does not open a departure; the robot holds.
     for _ in range(10):
         d = r.step(seen=False)
-        assert r.reason != 'lane_bridge'
-        retrace.append((d.linear, r.reason))
-    assert any(v < 0 and reason == 'lane_return_measured_path_return' for v, reason in retrace)
+        assert r.reason != 'lane_bridge' and d.linear == d.angular == 0
+    assert r.m._return_controller.phase == 'tracking'
 
 
-def test_lost_latches_on_the_same_clock_with_or_without_bridge_and_d468_continues():
+def test_lost_latches_on_the_same_clock_with_or_without_bridge_and_d468_stays_idle():
     # D-476 open question: the bridge does not reset or extend _loss_started_at, so LOST
-    # latches lost_after_s after the first loss tick either way. D-468 keeps acting under
-    # the LOST latch (reselection_required is one of its local reasons).
+    # latches lost_after_s after the first loss tick either way. An unseen lane is no
+    # departure evidence (D-507 7), so LOST stays today's latch with D-468 idle.
     latched = {}
     for enabled in (False, True):
         r = Rig(bridge_enabled=enabled)
@@ -260,7 +262,8 @@ def test_lost_latches_on_the_same_clock_with_or_without_bridge_and_d468_continue
         latched[enabled] = round(r.now - loss, 6)
         assert 'nav.lane_lost' in r.bus.events
         r.step(seen=False)
-        assert r.reason.startswith('lane_return_')
+        assert r.reason == 'camera_reselection_required'
+        assert r.m.status().lane_return_containment == 'unknown'
     assert latched[True] == latched[False]
     assert latched[True] > 3.0
 
@@ -288,9 +291,10 @@ def _unbound(r):
 # (rig config, setup before the loss tick, loss-tick step kwargs, expected reason or None)
 REFUSALS = {
     'ir_guard_not_clear': (dict(ir_guard_enabled=True), dict(ir='none'), dict(ir=-.5), None),
-    # IR centre = lane_departure: D-468 owns that tick (it holds), the bridge never enters.
+    # IR centre = lane_departure: today's follower holds (D-468 has no lane evidence,
+    # D-507 7), the bridge never enters.
     'lane_departure': (dict(ir_guard_enabled=True), dict(ir='none'), dict(ir=0.),
-                       'lane_return_containment_unconfirmed'),
+                       'lane_departure'),
     'stale_pose': ({}, {}, dict(pose=False, dt=.35), None),
     'frame_mismatch': ({}, {}, dict(frame='map'), None),
     'probe_false': (dict(probe=lambda now, v, w: False), {}, {}, 'lane_bridge_motion_unconfirmed'),

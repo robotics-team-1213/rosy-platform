@@ -695,3 +695,10 @@
 - gate 변화: 없음. 호스트 시험만. SIM(D-495 harness, odom 지연 제거) 미실행.
 - 결정: D-495 SIM 결과 결함 2 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · core_features(line_follow): D-468 departure only on positive evidence (D-507 7)
+- 변경: `recovery/lane_return.py` 추종 단계는 신선한 `ready` corridor 에서 `margin + uncertainty_m < 0`(또는 증명된 차로 안이지만 체크포인트 차로가 아님)일 때만 이탈을 연다. 그 밖은 `ReturnAction('tracking','containment_unknown')`. `recovery/lane_return_decision.py` 는 그 틱을 오늘의 추종 결정으로 넘기고 상태 `lane_return_containment` 을 채운다. 몸 기하 없음도 recovery off 와 같다(`lane_return_body_unknown` HOLD 제거). 포즈 불연속·epoch 변화는 그대로 이탈을 연다.
+- 증거: `python -m pytest middleware/core/gateway/test middleware/core/services/test contracts -q` → `X:/DevTemp/d507-impl/b6/run.txt`, known_failures 비교.
+- gate 변화: SOURCE. 선 잃음(근거 없음)은 이제 D-468 복귀가 아니라 손실 시계 → LOST 다. bridge 소진 뒤 역추적도 양의 증거가 있을 때만.
+- 결정: D-507 7
+- 교훈: 기존 시험 여럿이 `corridor=None` 을 이탈 신호로 썼다 — 이탈 시험은 몸이 경계를 넘은 corridor 로 쓴다.

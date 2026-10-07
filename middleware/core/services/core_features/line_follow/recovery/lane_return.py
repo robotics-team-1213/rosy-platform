@@ -312,10 +312,16 @@ class ReturnController:
                     self.checkpoint = (p, lane)
                     self._candidate = None
                 return ReturnAction(self.phase, "contained")
-            self.phase, self._opened = "departure_stop", inp.now
             self._count = 0
             self._last_evidence = None
             self._entered = False
+            # D-507 7: departure needs positive evidence -- the body geometrically over a
+            # ready boundary (margin + u < 0), or a proven-inside lane that is not the
+            # checkpointed one. Anything unproven is today's following (as recovery off).
+            if not ((lane is not None and lane.margin(self.body)+lane.uncertainty_m < 0)
+                    or (fresh_pose and inside)):
+                return ReturnAction(self.phase, "containment_unknown")
+            self.phase, self._opened = "departure_stop", inp.now
             self.rebase_retrace()
             return self._hold("containment_unconfirmed")
         # Perception continues on every tick; no movement if authority or data is absent.
