@@ -9,6 +9,7 @@ import httpx
 
 from fleet.routing.cost import STOP
 from fleet.server.console_view import TripCaps, trip_caps
+from fleet.server.trip_ports import HttpLaneJunction, TripError
 from fleet.site_map import SiteMap
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import HttpRobotClient
@@ -112,3 +113,98 @@ def test_http_client_puts_the_fields_in_the_junction_body():
     run(go())
     assert seen["body"] == {"action": "left", "place_id": "B", "expires_s": 15.0, "turn_deg": 90.0,
                             "map_id": "site", "expect_in_m": 0.5}
+
+
+# ---- 9: site floor map binding -------------------------------------------------------------
+
+def _named(site_map, map_id):
+    return SiteMap.model_validate({**site_map.model_dump(), "map_id": map_id})
+
+
+def _start_code(site_map, caps):
+    runner, store, ports = _setup(site_map, caps=caps)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    try:
+        return run(runner.start("p1", "bob"))["state"], None
+    except TripError as err:
+        return err.code, err.detail
+
+
+def test_a_lane_trip_is_refused_when_the_site_floor_covers_another_map():
+    code, detail = _start_code(_named(_free_map("lane"), "hall_a"),
+                               dataclasses.replace(PIVOT, site_floor_map_id="hall_b"))
+    assert code == "TRIP_SITE_FLOOR_MISMATCH"
+    assert detail == {"site_floor_map_id": "hall_b", "map_id": "hall_a"}
+
+
+def test_a_matching_or_absent_site_floor_starts():
+    hall_a = _named(_free_map("lane"), "hall_a")
+    assert _start_code(hall_a, dataclasses.replace(PIVOT, site_floor_map_id="hall_a"))[0] == "started"
+    assert _start_code(hall_a, PIVOT)[0] == "started"   # absent key (older CORE): no check
+    assert _start_code(hall_a, LANE)[0] == "started"
+
+
+def test_a_free_trip_is_not_bound_to_the_site_floor():
+    both = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True, site_floor_map_id="hall_b")
+    assert _start_code(_named(_free_map("free"), "hall_a"), both)[0] == "started"
+
+
+# ---- 3: unexpected junction ----------------------------------------------------------------
+
+def _running_at(s):
+    runner, store, ports = _setup(_free_map("lane"), caps=PIVOT)
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    ports.at(_arc(store, "ab:fwd"), s)
+    _ticks(runner, ports)
+    return runner, ports
+
+
+def _core_shows(ports, state, reason=None):
+    ports.core.j = {"action": None, "place_id": None, "seq": ports.core.seq, "state": state, "reason": reason}
+
+
+def test_unexpected_stops_the_trip_at_once_with_the_pose_and_reason():
+    runner, ports = _running_at(0.1)                      # 0.9 m before B: nothing sent yet
+    _core_shows(ports, "unexpected", "junction_unexpected")
+    _ticks(runner, ports)
+    view = runner.view("p1")
+    assert (view["state"], view["reason"]) == ("stopped", "junction_unexpected")
+    assert view["detail"]["junction_state"] == "unexpected"
+    assert view["detail"]["junction_reason"] == "junction_unexpected"
+    assert view["pose"]["x"] is not None and ports.held == ["rosy_60"]
+
+
+def test_unexpected_within_the_arm_distance_also_stops_at_once():
+    runner, ports = _running_at(0.5)
+    _core_shows(ports, "unexpected")
+    _ticks(runner, ports)
+    assert runner.view("p1")["reason"] == "junction_unexpected"
+
+
+def test_waiting_beyond_the_arm_distance_stops_without_the_wait():
+    runner, ports = _running_at(0.1)
+    _core_shows(ports, "waiting")
+    _ticks(runner, ports)                                  # 0.5 s, not junction_wait_s (10 s)
+    view = runner.view("p1")
+    assert (view["state"], view["reason"]) == ("stopped", "junction_unexpected")
+    assert view["detail"]["junction_state"] == "waiting"
+
+
+def test_waiting_within_the_arm_distance_is_answered_as_before():
+    """Within 0.6 m the instruction goes out to the waiting CORE and the trip runs on
+    (the 10 s timeout there: ``test_trip_runner.test_core_waiting_at_a_junction_stops_the_trip_after_the_timeout``)."""
+    runner, ports = _running_at(0.1)
+    ports.at(runner._live.arc(0), 0.5)
+    _core_shows(ports, "waiting")
+    _ticks(runner, ports)
+    assert runner.running() is not None and ports.sent[-1][0] == "left"
+
+
+def test_the_http_port_carries_the_line_follow_reason():
+    class Client:
+        async def state(self):
+            return {"line_follow": {"reason": "junction_waiting", "junction": {"state": "waiting", "seq": 3}}}
+
+    port = HttpLaneJunction(lambda: {"r": Client()})
+    assert run(port.junction_state("r")) == {"state": "waiting", "seq": 3, "line_reason": "junction_waiting"}

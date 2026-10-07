@@ -216,6 +216,29 @@ class LiveTrip:
         self.best_progress = -math.inf
         self.progress_at: Optional[float] = None
 
+    def junction_end(self, now: float, remaining: Optional[float], config: TripConfig) -> Optional[tuple]:
+        """``(reason, detail)`` when CORE's junction state ends the trip, else None.
+
+        D-495 ``junction``: ``aborted``/``unresolved`` after our first instruction, or ``waiting``
+        for ``junction_wait_s``. D-507 3 ``junction_unexpected``, at once: on a lane segment
+        (``remaining`` m to its place) CORE is ``unexpected``, or ``waiting`` with the place
+        beyond ``arm_distance_m`` (no instruction of ours is due there). The trip view keeps the
+        map pose; ``line_reason`` is CORE's line-follow reason beside the junction state.
+        """
+        junction = self.junction
+        state = junction.get("state")
+        self.waiting_since = (self.waiting_since or now) if state == "waiting" else None
+        detail = {"junction_state": state, "junction_place": junction.get("place_id"),
+                  "junction_reason": junction.get("reason")}
+        if remaining is not None and (state == "unexpected" or (
+                state == "waiting" and remaining > config.arm_distance_m)):
+            return "junction_unexpected", {**detail, "line_reason": junction.get("line_reason")}
+        ours = self.first_seq is not None and (junction.get("seq") or 0) >= self.first_seq
+        if (state in ("aborted", "unresolved") and ours) or (
+                state == "waiting" and now - self.waiting_since >= config.junction_wait_s):
+            return "junction", detail
+        return None
+
     @property
     def segments(self) -> list:
         return self.view["plan"]["segments"]

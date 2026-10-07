@@ -542,10 +542,16 @@ def test_an_abort_left_from_before_the_trip_is_not_the_trips():
 
 
 def test_core_waiting_at_a_junction_stops_the_trip_after_the_timeout():
+    """Within ``arm_distance_m`` of the place (D-507 3: beyond it ``waiting`` ends the trip at once)."""
     runner, store, ports = _setup()
     _plan(store, ports, "east:fwd", 0.5, "SE")
     run(runner.start("p1", "bob"))
-    ports.core.see_junction()  # a junction the plan does not expect, far from SE
+    east = _arc(store, "east:fwd")
+    ports.at(east, east.length_m - 0.5)
+    _ticks(runner, ports)
+    assert ports.sent[-1][0] == "stop"  # sent once, never again
+    ports.core.j = None
+    ports.core.see_junction()  # CORE waits at a junction 0.5 m before SE
     _ticks(runner, ports)
     _ticks(runner, ports, 1, dt=9.4)
     assert runner.running() is not None
