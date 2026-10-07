@@ -10,6 +10,15 @@ CLEAR = [(1.5, 1.5)]
 IR = LineFollowMode.IR_LINE
 
 
+def site_rig(**config):
+    """Sensor adapter off (robot default): the D-400 floor proof is known not live, so the
+    site basis may hold (D-507 6: a live or unknown proof alone decides)."""
+    rig = Rig(proof=False, **config)
+    rig.m.bind_return_motion(lambda now, v, w: False, floor_proof_live=lambda: False,
+                             proof_configured=lambda: False)
+    return rig
+
+
 def site_step(rig, ir='clear', points=CLEAR, **kwargs):
     """One rig tick with an IR guard sample ('clear', 'centre' or 'stale' = none) and a scan."""
     t = round(rig.now + .05, 6)
@@ -31,7 +40,7 @@ def test_enforce_basis_alone_reports_junction_turn():
 
 
 def test_site_basis_alone_reports_junction_turn():
-    rig = Rig(proof=False, **SITE)
+    rig = site_rig(**SITE)
     site_step(rig)
     _corner(rig)
     assert rig.m.supports_junction_turn is True
@@ -55,7 +64,7 @@ def test_any_missing_site_piece_reports_no_junction_turn(missing):
 
 
 def test_capability_is_recomputed_when_the_ir_verdict_ages():
-    rig = Rig(proof=False, **SITE)
+    rig = site_rig(**SITE)
     site_step(rig)
     _corner(rig)
     assert rig.m.supports_junction_turn is True
@@ -76,7 +85,7 @@ def _site_turning(rig):
 
 
 def test_site_basis_turns_without_a_motion_probe_and_completes():
-    rig = Rig(proof=False, **SITE)
+    rig = site_rig(**SITE)
     _site_turning(rig)
     for _ in range(200):
         decision, status = site_step(rig, seen=False, move=True)
@@ -87,7 +96,7 @@ def test_site_basis_turns_without_a_motion_probe_and_completes():
 
 @pytest.mark.parametrize('ir', ['stale', 'centre'])
 def test_losing_the_site_basis_mid_turn_aborts_turn_basis_lost(ir):
-    rig = Rig(proof=False, **SITE)
+    rig = site_rig(**SITE)
     _site_turning(rig)
     rig.now += .3 if ir == 'stale' else 0.
     decision, status = site_step(rig, ir=ir, seen=False, move=True)
@@ -96,7 +105,7 @@ def test_losing_the_site_basis_mid_turn_aborts_turn_basis_lost(ir):
 
 
 def test_without_any_basis_the_turn_is_motion_unconfirmed():
-    rig = Rig(proof=False, **BODY)
+    rig = site_rig(**BODY)
     site_step(rig, ir='stale')
     rig.send('left', turn_deg=90.)
     decision, status = rig.step(junction=True, seen=False, points=CLEAR)
@@ -105,7 +114,7 @@ def test_without_any_basis_the_turn_is_motion_unconfirmed():
 
 def test_default_is_off_and_reports_no_turn_without_enforce():
     assert LineFollowConfig().site_floor_map_id is None
-    rig = Rig(proof=False, **BODY)
+    rig = site_rig(**BODY)
     site_step(rig, ir='stale')
     _corner(rig)
     assert rig.m.supports_junction_turn is False

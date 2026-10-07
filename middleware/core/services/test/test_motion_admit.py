@@ -34,6 +34,10 @@ class Site:
         if enforce is not None:
             self.m.bind_return_motion(enforce, floor_proof_live=lambda: True,
                                       proof_configured=lambda: True)
+        else:  # control.sensor_adapter off: the worker floor proof is known not live
+            self.m.bind_return_motion(lambda now, v, w: False, floor_proof_live=lambda: False,
+                                      proof_configured=lambda: False)
+        self.m.observe_body_points((), range_min=.05, received_at=self.now)  # LiDAR range_min
         self.m.set_mode(LineFollowMode.CAMERA_LINE)
         self.feed(ir, points)
 
@@ -177,6 +181,7 @@ def test_junction_turn_capability_follows_the_shared_site_basis():
 
 def _retrace(**config):
     r = BridgeRig(probe=lambda now, v, w: False, floor=lambda: False, **config)
+    r.m.observe_body_points((), range_min=.05, received_at=r.now)
     r.follow()
     while r.step(seen=False, slip=.02).linear > 0 and r.reason == 'lane_bridge':
         pass
@@ -199,3 +204,77 @@ def test_site_basis_retraces_backwards_within_the_d468_limits():
 def test_without_a_basis_the_retrace_does_not_move():
     out = _retrace(site_floor_map_id=None, bridge_enabled=False)
     assert all(v == 0. and w == 0. for v, w, *_ in out)
+
+
+# ---- safety review fixes 2026-10-08 ----------------------------------------------------------
+
+def _live(site, probe, configured):
+    """Sensor adapter enforce: the worker floor proof is live; the site evidence stays complete."""
+    site.m.bind_return_motion(probe, floor_proof_live=lambda: True, proof_configured=configured)
+
+
+def test_m1_unbound_probe_with_a_live_proof_is_refused_not_the_site_basis():
+    site = Site()
+    assert site.admit(.02, 0., 'return') is True    # proof not live: the site basis
+    _live(site, lambda now, v, w: True, lambda: True)
+    site.m._return_motion = None                    # live floor proof, no probe bound
+    assert site.admit(.02, 0., 'return') is False
+    assert site.admit(0., 0., 'return') is False
+
+
+def test_m1_unconfigured_probe_with_a_live_proof_is_refused_not_the_site_basis():
+    site = Site()
+    _live(site, lambda now, v, w: False, lambda: False)  # return_sensor_allowed says no
+    for kind in KINDS:
+        assert site.admit(.02, 0., kind) is False
+    site.m.observe_junction('no_boundary', site.now, corner_turning=True)
+    assert site.m.supports_junction_turn is False
+
+
+def test_m3_unknown_proof_configuration_reports_no_junction_turn():
+    site = Site()
+    site.m.bind_return_motion(lambda now, v, w: True)  # liveness and configuration unknown
+    site.m.observe_junction('no_boundary', site.now, corner_turning=True)
+    assert site.m.supports_junction_turn is False
+    assert site.admit(0., .3, 'turn') is True          # admission is still the probe's
+
+
+@pytest.mark.parametrize('unknown, ok', [(((-.30, 0.),), False), (((.30, 0.),), True), ((), True)])
+def test_l2_unknown_rear_beams_block_reverse(unknown, ok):
+    from core_common.robot_body import ScanView
+    site = Site()
+    site.m.observe_return_scan(ScanView((), unknown, .05), source_age_s=0., source_stamp_ns=1,
+                               received_at=site.now)
+    assert site.admit(-.03, 0., 'retrace') is ok
+
+
+def test_l3_unknown_range_min_refuses_reverse():
+    site = Site(points=[(-.40, 0.)])
+    assert site.admit(-.03, 0., 'retrace') is True
+    site.m._range_min = None
+    assert site.admit(-.03, 0., 'retrace') is False
+    assert site.admit(.02, 0., 'return') is True       # forward unaffected
+
+
+def test_l4_angular_retrace_twist_sweeps_its_own_arc():
+    site = Site(points=[(-.10, .07)])               # rear left, beside the straight path
+    assert site.admit(-.03, 0., 'retrace') is True
+    assert site.admit(-.03, .4, 'retrace') is True
+    assert site.admit(-.03, -.4, 'retrace') is False  # this arc swings the body into it
+
+
+def test_l4_stop_override_is_moved_to_the_body_rear():
+    point = [(-.38, 0.)]                             # 0.30 m behind the rear, LiDAR 0.38 m
+    assert Site(points=point).admit(-.03, 0., 'retrace') is True
+    override = Site(points=point, obstacle_stop_m=.30, obstacle_resume_m=.40)
+    assert override.admit(-.03, 0., 'retrace') is False  # resume 0.40 - 0.08 = 0.32 > 0.30
+
+
+def test_l4_traffic_gate_arc_family_is_swept_in_reverse():
+    """The gate scales linear only (floor 0.3): every scaled arc is tighter and must clear too."""
+    results = []
+    for floor in (1., .3):
+        site = Site(points=[(-.09, .09)])
+        site.m.bind_motion_envelope(lambda f=floor: (.1, 1., f))
+        results.append(site.admit(-.03, -.2, 'retrace'))
+    assert results == [True, False]
