@@ -529,8 +529,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps or NoTripCaps(), poses=map_pose or NoMapPose(),
                              junction=lane_junction or HttpLaneJunction(console.clients),
-                             goal=console.goal, cancel_goal=console.cancel,
+                             goal=partial(console.goal, trip=True), cancel_goal=console.cancel,
                              config=trip_config or TripConfig())
+    console.set_trip_busy(trip_runner.robot_busy)
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps,
@@ -607,6 +608,7 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
                 and row["state"].get("navigation") in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
                 and row["state"].get("mode") in {"IDLE", "NAVIGATION"}
                 and not row["state"].get("capabilities_degraded")
+                and not console.trip_busy(row["robot_id"])  # D-491 5: the trip loop drives it
                 and row["state"].get("safety", {}).get("estop") is False
             }
             await task_service.dispatch_next(

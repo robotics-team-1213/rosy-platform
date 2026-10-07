@@ -120,6 +120,8 @@ class FleetConsole:
         self._loc_null_since: dict[str, Optional[float]] = {}
         #: robot_id -> the localization service's view (needs_human), set by app.py.
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
+        #: D-491 5: a robot on a running trip takes motion only from the trip loop.
+        self._trip_busy: Callable[[str], bool] = lambda _robot_id: False
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
@@ -218,6 +220,17 @@ class FleetConsole:
 
     def set_localization_view(self, view: Optional[Callable[[str], Optional[dict]]]) -> None:
         self._localization_view = view
+
+    def set_trip_busy(self, busy: Callable[[str], bool]) -> None:
+        self._trip_busy = busy
+
+    def trip_busy(self, robot_id: str) -> bool:
+        return bool(self._trip_busy(robot_id))
+
+    def refuse_trip_robot(self, robot_ids) -> None:
+        busy = [robot_id for robot_id in robot_ids if self.trip_busy(robot_id)]
+        if busy:
+            raise HubError("TRIP_ROBOT_BUSY", f"{', '.join(busy)} is on a running trip; cancel the trip first")
 
     def _client(self, robot_id: str) -> RobotClient:
         client = self._clients.get(robot_id)
@@ -344,7 +357,7 @@ class FleetConsole:
 
     async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
                    task_id: str | None = None, attempt_id: str | None = None,
-                   attempt_seq: int | None = None) -> dict:
+                   attempt_seq: int | None = None, trip: bool = False) -> dict:
         """한 대에 목표 하나. 로봇은 원자 액션만 받는다 (D-12).
 
         내려간 뒤 그 로봇의 계획 경로를 읽어, 이미 달리는 다른 로봇의 경로와 부딪히면
@@ -357,6 +370,8 @@ class FleetConsole:
         달리는 로봇이 아니라 **서 있는 로봇**이 길을 막고 있으면 순서로는 풀리지 않는다.
         그때는 `bays` 로 비켜설 자리를 찾아 그 로봇을 먼저 치운다 (`_make_room`).
         """
+        if not trip:  # D-491 5: only the trip loop drives a robot on a trip
+            self.refuse_trip_robot([robot_id])
         client = self._client(robot_id)
         await require_capability(client, "navigation.goal_navigation")
         if self._clients.get(robot_id) is not client:
@@ -1100,6 +1115,7 @@ class FleetConsole:
             follower_ids = [rid for rid in member_ids if rid != leader_id]
         if not follower_ids:
             raise HubError("NO_FOLLOWERS", "a formation needs at least one follower")
+        self.refuse_trip_robot([leader_id, *follower_ids])
         leader = self._client(leader_id)
         followers = [self._clients[rid] for rid in follower_ids]
         kwargs = {} if self._relay_factory is None else {"relay_factory": self._relay_factory}

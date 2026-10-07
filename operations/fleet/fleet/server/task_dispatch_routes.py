@@ -187,6 +187,7 @@ def install_task_dispatch_routes(
         principal: SitePrincipal = Depends(require_operator),
     ) -> dict:
         try:
+            console.refuse_trip_robot([robot_id])  # D-491 5: before a task is queued for it
             if task_service is not None:
                 if not idempotency_key:
                     raise HTTPException(status_code=400, detail={
