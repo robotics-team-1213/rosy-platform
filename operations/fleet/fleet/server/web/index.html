@@ -10,6 +10,7 @@
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
+  <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/console.js"></script>
 </head>
@@ -32,19 +33,20 @@
         <ui-button kind="segment" type="button" data-theme-choice="light" aria-pressed="false" title="밝게" data-action-icon="theme-light"><span class="sr-only">밝게</span></ui-button>
         <ui-button kind="segment" type="button" data-theme-choice="system" aria-pressed="false" title="시스템" data-action-icon="theme-system"><span class="sr-only">시스템</span></ui-button>
       </div>
-      <!-- D-493 — 다른 문서로 가는 길은 머리의 이 링크 하나씩이다. 본문에는 "…에서 합니다" 문장을 두지 않는다. -->
-      <nav class="topbar-links" aria-label="다른 관제 문서">
-        <a class="topbar-link" href="/console/install">설치·보정</a>
-        <a class="topbar-link" href="/console/site-map">현장 지도 편집</a>
-        <a class="topbar-link" href="/console/cell">Cell 작업</a>
-      </nav>
     </div>
     <!-- D-473 — 개발 연결 모드면 항상 보인다. 접힌 설정 칸(#topbar-extra) 밖에 둔다. -->
-    <ui-tag id="development-badge" status="warn" hidden title="같은 망 PC 누구나 1시간 운용자 세션을 받는다 (D-473)">개발 연결 모드</ui-tag>
+    <ui-tag id="development-badge" status="warn" hidden title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발 연결 모드</ui-tag>
     <ui-tag id="online-pill" status="neutral">연결 대기</ui-tag>
     <ui-text id="clock" scale="value">--:--:--</ui-text>
     <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
   </ui-topbar>
+  <!-- D-501 — Fleet 문서 넷은 같은 탭 줄을 쓴다. 다른 문서로 가는 길은 이 줄 하나다. -->
+  <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
+    <a href="/console" aria-current="page">관제</a>
+    <a href="/console/install">설치·보정</a>
+    <a href="/console/site-map">현장 지도</a>
+    <a href="/console/cell">Cell</a>
+  </nav>
   <ui-status id="estop-feedback" hidden></ui-status>
 
   <section id="connection-guide" class="connection-guide" aria-labelledby="connection-guide-title" hidden>
@@ -99,7 +101,7 @@
         </table>
         <div data-role-lock>
           <ui-button kind="quiet" id="tracking-relearn" type="button" hidden>배경 다시 학습</ui-button>
-          <ui-status id="tracking-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
+          <ui-status id="tracking-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
         </div>
       </div>
       <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
@@ -216,7 +218,7 @@
           <div class="robot-head">
             <h3 id="formation-heading">대형</h3>
             <span class="spacer"></span>
-            <ui-status id="formation-role-lock" class="role-lock-note" state="forbidden" hidden>운용자 권한이 필요합니다</ui-status>
+            <ui-status id="formation-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
             <ui-tag id="formation-state" status="neutral" title="IDLE">대기</ui-tag>
           </div>
           <details class="formation-form-wrap"><summary>대형 설정</summary><div class="formation-form">

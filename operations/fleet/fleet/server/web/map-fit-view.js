@@ -333,7 +333,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     render();
     onChanged();
   });
-  // D-457 1항: 같은 최신 제안을 Fleet 추적 보정 기록으로 승인한다(운용자). 승인 뒤에는 그 기록이
+  // D-457 1항: 같은 최신 제안을 Fleet 추적 보정 기록으로 승인한다(운영자). 승인 뒤에는 그 기록이
   // 이 카메라 영상을 편다. "맞춤 수락"은 기록이 없을 때의 이 브라우저 초안이다.
   scope.listen(applyButton, "click", async () => {
     const life = scope.capture();

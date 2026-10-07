@@ -74,7 +74,7 @@
 
 Status 는 Proposed 그대로다. 기본 꺼짐(`line_follow.bridge_enabled: false`)이고 결정 7의 재생·시뮬·장치 단계는 하지 않았다. 호스트 pytest 통과는 장치·현장 수용이 아니다.
 
-- 코드: `middleware/core/services/core_features/line_follow/lane_bridge.py`(mixin, 목표 기하). D-468 중재(`lane_return_decision.py`) 안에서 같은 잠금·generation·evidence_revision으로 돈다. `body_stop.py`·`clearance.py`(safety)는 고치지 않고 부르기만 한다.
+- 코드: `middleware/core/services/core_features/line_follow/recovery/lane_bridge.py`(mixin, 목표 기하). D-468 중재(`lane_return_decision.py`) 안에서 같은 잠금·generation·evidence_revision으로 돈다. `body_stop.py`·`clearance.py`(safety)는 고치지 않고 부르기만 한다.
 - 진입: 직전 틱이 D-468 `tracking`이고 checkpoint가 있는 `TRACKING`이었고, 이번 사유가 `line_not_visible`·`observation_stale`·`no_observation`일 때만. 영상 품질, `obstacle_ahead`, IR 가드(`clear`가 아니면), `lane_departure`, 열린 stuck, `low_confidence`, `invalid_observation`에서는 들어가지 않는다. 한 손실에서 한 번 끝나면 다시 `TRACKING`을 거쳐야 재진입한다. D-468(`recovery_local_enabled`, containment 증거)과 path 모드 URDF 몸(`body_stop_known`, scan 점)이 없으면 bridge도 없다.
 - 목표: checkpoint 차로 중심선을 odom에서 직선으로 늘리고, 로봇 투영점 + `bridge_lookahead_m`을 pure pursuit로 좇는다. 각속도가 live 상한을 넘으면 같은 호로 속도를 줄인다(D-344 §13).
 - 상한: 실측 odom 경로 길이 × `bridge_distance_scale`(1.08)가 `bridge_coast_m`(0.10) 미만이면 `min(cruise_speed, 수동 선속도 한도)`, `bridge_slow_m`(0.25) 미만이면 × `bridge_slow_scale`(0.5), 그 뒤 끝. 시간은 `lost_after_s − bridge_time_margin_s`(2.5 s)에서 끝.

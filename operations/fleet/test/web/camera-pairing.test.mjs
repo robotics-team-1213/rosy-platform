@@ -94,7 +94,7 @@ test("each refusal maps to its operator sentence; a wrong code says the tries le
     assert.equal(messageFor({ code })[0], MESSAGES[code], code);
   }
   const named = messageFor({ code: "OPERATOR_IDENTITY_REQUIRED", message: "named operator required (site-users.yaml)" });
-  assert.match(named[0], /이름 있는 운용자/);
+  assert.match(named[0], /이름 있는 운영자/);
   assert.match(named[0], /site-users\.yaml/);
   assert.match(messageFor({ code: "SOMETHING_NEW" })[0], /SOMETHING_NEW/);
   assert.match(messageFor({ code: "PAIRING_RATE_LIMITED" })[0], /잠시 뒤/);

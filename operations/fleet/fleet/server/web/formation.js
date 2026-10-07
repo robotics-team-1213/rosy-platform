@@ -2,7 +2,7 @@
 // 대기 요약을 가진다. 지도 오버레이(drawFormationOverlay)는 console.js에 남는다 —
 // 그리는 것과 여는 것은 다른 일이다. 서버 기하를 복제하지 않는다.
 
-// D-359 US-009 — 대형 세션 상태(fleet/swarm/session.py SessionState)의 운용자 말. 열거값은 title에만.
+// D-359 US-009 — 대형 세션 상태(fleet/swarm/session.py SessionState)의 운영자 말. 열거값은 title에만.
 export const FORMATION_STATE_LABEL = {
   IDLE: "대기", ARMING: "무장 중", RUNNING: "진행 중", HOLDING: "유지 중", STOPPED: "해제됨",
 };

@@ -14,7 +14,6 @@ input:focus-visible, select:focus-visible, a:focus-visible { outline: var(--focu
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 a { color: var(--ink); }
-.console-return { box-sizing: border-box; min-height: var(--target-secondary); display: inline-flex; align-items: center; padding: var(--space-3); }
 .map-viewport { min-width: 0; max-width: 100%; }
 .map-viewport:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .map-scroll-hint { display: none; }
@@ -54,3 +53,5 @@ a { color: var(--ink); }
   #session { grid-area: session; min-width: 0; overflow-wrap: anywhere; }
   #estop { grid-area: estop; }
 }
+/* D-501 — 탭 줄을 이 문서의 가운데 90rem 본문과 같은 가장자리에 둔다. */
+.doc-tabs { max-width: 90rem; margin-inline: auto; padding-inline: var(--space-4); }

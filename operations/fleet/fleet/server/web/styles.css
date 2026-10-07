@@ -206,16 +206,19 @@ main {
   main { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); padding-bottom: var(--space-1); }
   .console-primary { grid-column: 1; }
   .console-secondary { grid-column: 2; }
-  .map-stage #map-canvas, .map-birdseye { height: max(20rem, calc(100dvh - 17rem)); }
+  .map-stage #map-canvas, .map-birdseye { height: max(20rem, calc(100dvh - 20rem)); }
   /* 접속 안내 띠가 보이는 동안은 그 높이만큼 지도가 줄어 첫 화면에 머문다. */
-  body:has(#connection-guide:not([hidden])) :is(.map-stage #map-canvas, .map-birdseye) { height: max(20rem, calc(100dvh - 24rem)); }
+  body:has(#connection-guide:not([hidden])) :is(.map-stage #map-canvas, .map-birdseye) { height: max(20rem, calc(100dvh - 27rem)); }
   .queues-panel:not([hidden]) { max-height: min(20dvh, 12rem); overflow-y: auto; }
-  #roster { min-height: 0; max-height: min(16rem, 30dvh); overflow-y: auto; }
+  #roster { min-height: 0; max-height: min(15rem, 30dvh); overflow-y: auto; }
   .ops-block { gap: var(--space-2); }
   .ops-block > h2 { margin: 0; }
-  .ops-block .log { min-height: calc(var(--text-micro) * var(--leading-copy) * 3); max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
+  /* D-501 — 탭 줄 높이만큼 오른쪽 열을 줄인다. 대형 칸 간격은 ops-block의 gap이 맡는다. */
+  .ops-block > .formation { margin-top: 0; }
+  .console-secondary > .panel { padding: var(--space-3); }
+  .ops-block .log { min-height: calc(var(--text-micro) * var(--leading-copy) * 2); max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
   /* 오른쪽 열의 카메라는 썸네일이다. 크게 보려면 지도 칸으로 보낸다(#birdseye-toggle). */
-  .console-secondary .vision-frame { max-height: 11rem; }
+  .console-secondary .vision-frame { max-height: 8.5rem; }
 }
 @media (width >= 110rem) {
   .ops-block > .log-panel { grid-column: 1; }
@@ -245,7 +248,7 @@ main {
 
 .map-stage { position: relative; }
 /* D-493 버드아이 — 천장 카메라 원본은 한 번에 한 곳에만 보인다. 지도가 없을 때(접속 전·지도 없음·대기)나
-   운용자가 "크게 보기"를 누르면 지도 칸이 영상을 보이고, 오른쪽 열 썸네일은 접힌다. 빈 지도 안내는 영상 위 한 줄이다. */
+   운영자가 "크게 보기"를 누르면 지도 칸이 영상을 보이고, 오른쪽 열 썸네일은 접힌다. 빈 지도 안내는 영상 위 한 줄이다. */
 .map-birdseye { display: none; width: 100%; object-fit: contain; background: var(--ground-deep); border-radius: var(--radius-button); }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]) > .map-birdseye:not([hidden]) { display: block; }
 .map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]):has(> .map-birdseye:not([hidden])) > #map-canvas { display: none; }
@@ -528,27 +531,6 @@ main {
   #estop small { display: none; }
 }
 
-/* D-493 — 다른 문서로 가는 링크(설치·보정, 현장 지도 편집, Cell)는 머리의 접힘 칸 안에 하나씩이다. 조용한 버튼과 같은 면이다. */
-.topbar-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.topbar-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--target-secondary);
-  padding-inline: var(--space-2);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-button);
-  color: var(--nominal-quiet);
-  background: transparent;
-  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.topbar-link:hover { color: var(--ink); border-color: var(--ink); }
-.topbar-link:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset-outer);
-}
 
 /* D-466 — 바깥 자리는 brand | cluster | estop. cluster는 연결·Cell·시계·설정이다.
    머리 한 줄: 이름 | 연결 | 시계 | 설정 | 정지. 접속·역할·테마는 설정 뒤에 접힌다.
@@ -559,7 +541,7 @@ main {
   ui-topbar {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto auto auto;
-    /* D-493 — 다른 문서 링크(설치·보정·현장 지도·Cell)는 설정 뒤 접힘 칸에 있다. */
+    /* D-501 — 다른 문서로 가는 길은 머리 아래 탭 줄(doc-tabs.css)이다. */
     grid-template-areas: "brand pill clock more estop";
     align-items: center;
     gap: var(--space-2);
@@ -801,7 +783,7 @@ main {
   }
   .console-secondary .vision-preview > .map-head { grid-area: head; margin-bottom: var(--space-2); }
   .console-secondary .vision-preview > .vision-controls { grid-area: controls; margin: 0; }
-  .console-secondary .vision-preview > .vision-frame { grid-area: frame; height: 11rem; }
+  .console-secondary .vision-preview > .vision-frame { grid-area: frame; height: 8.5rem; }
   .console-secondary .vision-preview > #vision-meta { grid-area: meta; margin: var(--space-2) 0 0; }
   .console-secondary .vision-preview:has(> .vision-frame:is([data-state="waiting"], [data-state="warn"])) { display: block; }
   #fleet-main:has(.map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]) > .map-birdseye:not([hidden])) .console-secondary .vision-preview {

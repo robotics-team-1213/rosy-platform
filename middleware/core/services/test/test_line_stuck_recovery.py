@@ -8,7 +8,7 @@ import pytest
 from core_features.line_follow.clearance import (body_clearances, self_mask_from_config,
                                                  self_mask_rear_blind_m)
 from core_features.line_follow.model import LineFollowConfig
-from core_features.line_follow.stuck_recovery import (ASKING, BACKING, SETTLING, WAITING_CONSOLE,
+from core_features.line_follow.recovery.stuck_recovery import (ASKING, BACKING, SETTLING, WAITING_CONSOLE,
                                                       AnswerRefused, ForwardTrail, StuckInput,
                                                       StuckRecovery)
 

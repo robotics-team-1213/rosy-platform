@@ -574,7 +574,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
     else updateCornerOverlay();
   }
 
-  // 운용자가 수락한 모서리만 D-318 브라우저 로컬 초안이 된다.
+  // 운영자가 수락한 모서리만 D-318 브라우저 로컬 초안이 된다.
   function acceptCorners(corners) {
     corners.forEach(([x, y], index) => setCorner(index, x, y));
     proposalCorners = null;
