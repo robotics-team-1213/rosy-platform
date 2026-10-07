@@ -656,6 +656,12 @@
 - 증거: `test_ir_guard_crosswalk.py` 17건. 회전·차로 이탈 시험은 각 검사를 끄면 실패함을 확인했다(MAX_TURN_RAD, CORRIDOR_HALF_M 변이). NOMINAL 거부는 구간 단위로, odom 끊김은 구간이 고정된 뒤로 시험을 고쳤다(리뷰: 로직 없이도 통과하던 두 시험).
 - gate 변화: 없음. 결정 1의 D-468 문구를 ADR 구현 메모에서 정정했다(장치 기본에서 D-468 꺼짐).
 
+## 2026-10-07 · uncommitted · test(line_follow): 260919 유격을 STL·URDF에서
+- 변경: `test_lane_return_margin.py`가 몸을 `PINKY_PRO_GEOMETRY`에서, 260919 안쪽 가장자리를 STL 직선(160 mm)에서 가져온다. 유격 23.45 mm, u 4.3 mm·15 mm에서 차로 안·checkpoint, u ≥ 유격이면 아님. 5 mm 경우는 `VERY_NARROW_EDGE` 스트레스 차로로 이름을 바꿈. 수신기 코드 변경 없음
+- 증거: perception 2712 PASS·109 skip, services+test/test_sim2real_gaps.py+test/architecture 1230 PASS·1 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). generate·lint 0 error
+- gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
+- 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
+- 교훈: 시험 상수는 출처 있는 기하에서 끌어온다. 설명 없는 sim 값은 registry에 열어 둔다(G-16)
 ## 2026-10-07 · uncommitted · feat(line_follow): D-498 교차로 회전의 현장 근거
 - 변경: `_turn_basis`: D-400 enforce 증명 또는 현장 근거(`junction_turn_site_accepted` + 신선한 IR 가드 판정(이탈 아님) + 신선한 스캔의 D-422 몸체 정지). `supports_junction_turn`은 읽을 때마다 재판단. 현장 근거로 시작한 회전이 근거를 잃으면 `turn_basis_lost`
 - 증거: `test_junction_turn_site_basis.py` 15 PASS, `test_line_junction.py` 73 PASS. services·api_web·contracts/foundation·문서·perception 배선/lane_keep·test/architecture·Fleet 버전 고정 2297 PASS·19 skip, gateway 2212 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). core_features 15050 (판정 14934+150=15084 안)

@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · uiux(pilot): 주행 HUD 증거 상태와 좁은 폭 가독성
 - 2026-10-07 · uncommitted · docs(adr): OMX 실물 팔 활성화 조건 설계(D-496)
 - 2026-10-07 · uncommitted · feat(review): D-485 검수 앱 클래스셋
 - 2026-10-07 · uncommitted · uiux(fleet): 예외 상태 27셀 현재 화면 재촬영
 - 2026-10-07 · uncommitted · uiux(fleet): D-487 브라우저 전체 재실행
-- 2026-10-07 · uncommitted · uiux: D-153 G1 현 후보 재확인

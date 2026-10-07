@@ -24,6 +24,8 @@
 `boundaries`(0~2개)를 보낸다. 각 경계는 `side`(left/right), `slope`,
 `intercept_m`, 실제 관측 구간 `observed_x_min_m`/`observed_x_max_m`를 갖는다.
 좌표는 base footprint 기준 x 전방/y 좌측, 직선 y=slope*x+intercept_m이다.
+경계는 칠한 선의 중심이 아니라 차로 쪽(안쪽) 가장자리, 곧 달릴 수 있는 끝이다(생산자가
+칠 폭의 절반 `lane_paint_half_width_m`만큼 안쪽으로 옮긴다).
 CALIBRATED는 실제 승인된 calibration이 있을 때만 사용한다. unknown uncertainty는
 null이며 임의의 안전 여유로 대체하지 않는다. 누락/단일 경계로 전체 차체 containment를
 증명할 수 없고 관측 구간 밖으로 무제한 외삽하지 않는다. 명령 필드는 없다.
@@ -2438,6 +2440,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.118 | 2026-10-07 | Additive (D-498, feat/d498-junction-turn-site-basis): 교차로 회전의 운동 근거에 현장 근거를 더함 — 설정 `line_follow.junction_turn_site_accepted`(기본 false, `ir_guard_enabled` 없이 true 면 CORE 시작 거부), `junction_turn` 능력은 enforce 증명 또는 현장 근거가 있을 때만 참(읽을 때마다 재판단), 중단 사유 `turn_basis_lost`. envelope 1.0 유지 |
+| v1.117 | 2026-10-07 | Corrective/semantic (D-468): containment boundaries are the drivable inner edge of the paint (previously paint centre). 생산자가 칠 폭 절반(`lane_paint_half_width_m`, 260919 STL 공칭 12.5 mm)만큼 안쪽으로 옮기고 그 값을 `geometry_id`에 넣는다. 필드 모양·envelope 1.0 변경 없음 |
 | v1.116 | 2026-10-07 | Additive (D-494 5, D-495 3): Fleet trip loop `POST /api/fleet/trips/{plan_id}/start` (opens the v1.111 501 reservation), `POST /api/fleet/trips/{trip_id}/cancel`, `POST /api/fleet/trips/{trip_id}/confirm-replan`, `GET /api/fleet/trips`, `GET /api/fleet/trips/{trip_id}`; map activation now waits for a running trip instead of a recent `/route` step. While a trip runs, `/goal`, `/route`, task dispatch, `formation/start|reform|resume`, moving line-stuck decisions and line-follow modes other than `OFF` for that robot answer 409 `TRIP_ROBOT_BUSY`; every operator stop (cancel, cancel-all, E-stop, `OFF`, stuck `ABORT`/`MANUAL`) reaches the robot and cancels the trip. Uses robot `POST /api/v1/line-follow/junction` (D-494 4) and the D-494 1/3 capability and map pose inputs. Robot API and envelope 1.0 unchanged |
 | v1.115 | 2026-10-07 | Additive (D-491): 내부 `line/observation` CAMERA_LINE `containment`에 optional `crosswalk`(`near_m`, `far_m`). `GET /api/v1/line-follow` 추종 사유 `ir_guard_crosswalk`(IR 감시가 알려진 횡단보도 구간에서 쉼). 기본 동작 불변: IR 감시 기본 꺼짐, 로봇 패키지 `ir_row_x_m` 없으면 쉬지 않음 |
 | v1.114 | 2026-10-07 | Additive (D-494 4항, D-495, feat/d491-core-junction-action): CORE `POST /api/v1/line-follow/junction`(operator, 보정 lease)·에러 `LINE_FOLLOW_NOT_ACTIVE`·`JUNCTION_CAMERA_ONLY`·`JUNCTION_ALREADY_DONE`(409)·line-follow 상태와 스냅숏의 `junction`(`LineJunctionStatus`: `pending_action, place_id, state, seq`)·정지 사유 `junction_waiting`·`junction_unresolved`·`junction_stop`. 좌·우는 분기 인식 없이 D-495 제한 회전(`turn_deg`·`advance_m`, 상태 `turning`·`advancing`·`reacquiring`·`aborted`, `junction.turn_deg`·`junction.reason`, 사유 `junction_turning`·`junction_advancing`·`junction_reacquiring`·`junction_aborted`)으로만 간다. envelope 1.0 유지 |
