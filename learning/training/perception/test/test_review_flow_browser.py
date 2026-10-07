@@ -744,6 +744,9 @@ def test_object_decision_and_preparation_result_are_visible(browser_workspace, w
     shot('approved')
     page.locator('#prepare').click()
     expect(page.locator('#export-result')).to_contain_text('승인 1장 준비 완료')
+    expect(page.locator('#export-result')).to_contain_text('이번 준비 결과')
+    page.reload()
+    expect(page.locator('#export-result')).to_contain_text('이전 준비 결과')
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     if width <= 390:
         navigation = page.locator('.frame-navigation').bounding_box()
