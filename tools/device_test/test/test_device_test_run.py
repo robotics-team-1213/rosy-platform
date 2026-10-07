@@ -6,12 +6,19 @@ import signal
 import sys
 from pathlib import Path
 
+import importlib.util
+
 import pytest
 import yaml
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-import run  # noqa: E402
+_TOOL = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_TOOL))
+# Load by path under a unique name: another suite already imports a different
+# top-level `run` module, and a bare `import run` would reuse that one.
+_spec = importlib.util.spec_from_file_location("device_test_run", _TOOL / "run.py")
+run = importlib.util.module_from_spec(_spec)
+sys.modules["device_test_run"] = run
+_spec.loader.exec_module(run)
 
 ROBOT = "rosy-pinky-test"
 PLAN = Path(__file__).resolve().parents[1] / "plans" / "d476_bridge_9dfk.yaml"

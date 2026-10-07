@@ -393,6 +393,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             self._path_evaluated = False
             try:
                 decision = self._tick_locked(current)
+                # D-468 trail feed; observe() still raises on an invalid epoch, as tick() did.
+                self._feed_return_trail(current)
                 if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
                         and self._observation.quality_reason in ('low_light', 'overexposed')):
                     self._recovery_reset('camera_' + self._observation.quality_reason, current)
