@@ -14,7 +14,7 @@
 
 2026-10-07 Pilot 주행 HUD의 속도·배터리 `fresh/delayed/disconnected/unavailable` × 선언 폭 4개를 로컬 브라우저에서 다시 확인했다. [상태별 결과와 원본 캡처 위치](../uiux-pilot-telemetry-2026-10-07/result.md)를 기록했다. 이는 Pilot G2의 부분 근거이며 제품 전체 판정은 **HOLD**다.
 
-상태 소켓이 열린 채 조용해지고 REST 조회가 실패하거나 멈춘 경우의 오래된 속도·배터리를 숨겼다. [수신 중단·회복 LOCAL 전이](../uiux-pilot-silent-readback-2026-10-07/result.md)는 선언 폭 네 개에서 8 passed, 0 NEW로 확인했다. 다른 Pilot G2 셀과 실물 연결·운전자 G3는 남아 **HOLD**다.
+상태 소켓이 열린 채 조용해지고 REST 조회가 실패하거나 멈춘 경우의 오래된 속도·배터리를 숨겼다. [수신 중단·회복 LOCAL 전이](../uiux-pilot-silent-readback-2026-10-07/result.md)는 선언 폭 네 개에서 8 passed, 0 NEW로 확인했다. 상태가 끊겨도 표시될 수 있는 조작 요청 응답 시간은 출처를 명시했다(네 폭 8 passed, 0 NEW). 다른 Pilot G2 셀과 실물 연결·운전자 G3는 남아 **HOLD**다.
 
 G3 실제 운영자 독회는 요청자가 수행하기로 했다. [실제 사용자 독회 기록지](operator-walkthrough.md)에 표면별 작업·여덟 판정 항목과 실물 근거 자리를 마련했다. 결과·관찰·재현 폭은 아직 받지 않았으므로 G3 판정은 HOLD다. 픽셀 검수의 class 파일 미연결 상태에서는 점/브러시 전환을 막고 연결 이유를 표시한다. 1440/800/390/320px 브라우저 회귀와 점 미리보기·브러시 조작 **10 passed**, `known_failures.py` **0 NEW**; 수정 후 320px 원본은 X: `captures/pixel-disabled-fix/learning-pixels-320.png`, 실행 기록은 `logs/merge-20261006/pixel-disabled-fix.txt`다.
 

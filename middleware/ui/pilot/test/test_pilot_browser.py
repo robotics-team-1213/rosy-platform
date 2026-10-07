@@ -726,6 +726,7 @@ def test_drive_hud_clears_readback_when_open_socket_goes_silent_and_rest_fails(b
                 lambda raw: route.send(json.dumps(frame)) if json.loads(raw).get("type") == "auth" else None))
             _enter_drive(page, base_url)
             page.wait_for_function("document.querySelector('[data-drive-fact=speed]').textContent === '0.12'")
+            page.wait_for_function("document.querySelector('[data-drive-fact=latency]').textContent.startsWith('조작 응답 ')")
             failing["value"] = failure
             page.wait_for_function("document.querySelector('[data-drive-fact=speed]').textContent === '—'", timeout=5000)
             assert page.locator("[data-drive-fact=battery]").inner_text() != "81%"
