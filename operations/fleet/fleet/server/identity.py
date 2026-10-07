@@ -277,7 +277,8 @@ class IdentityService:
         """Map-frame pose of the robot's confirmed track, or UNKNOWN with the reason.
 
         Observation only (addendum 3): D-511 lane compliance and the console. ``yaw`` is None:
-        the blob tracker reports no heading.
+        the blob tracker reports no heading. ``age_s`` is not clamped: a negative age is a
+        future-stamped detection, which the consumer refuses like a future map pose sighting.
         """
         now = self._clock()
         binding = self._bindings.get(robot_id)
@@ -296,7 +297,7 @@ class IdentityService:
                     "map_id": None, "calibration_revision": None, "confirmed_at": None,
                     "use": "observation-only"}
         return {"robot_id": robot_id, "state": "CONFIRMED", "reason": None,
-                "x": binding.x, "y": binding.y, "yaw": None, "age_s": round(max(0.0, now - binding.seen_at), 3),
+                "x": binding.x, "y": binding.y, "yaw": None, "age_s": round(now - binding.seen_at, 3),
                 "source_id": binding.source_id, "map_id": binding.map_id,
                 "calibration_revision": binding.calibration_revision,
                 "confirmed_at": binding.confirmed_at, "use": "observation-only"}

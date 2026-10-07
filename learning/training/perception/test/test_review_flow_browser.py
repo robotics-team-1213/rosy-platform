@@ -2,6 +2,7 @@
 import os
 import re
 import threading
+import json
 
 from contextlib import contextmanager
 
@@ -85,10 +86,58 @@ def test_pixel_review_shows_unclassified_coverage(browser_workspace):
     unknown = int((review_masks.pixels(store, review_masks.get(store, 0)) == 255).sum())
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
     expect(page.locator('#pixel-coverage')).to_contain_text(f'미검수 {unknown:,}픽셀')
+    assert page.locator('#pixel-coverage').bounding_box()['y'] < page.locator('#pixel-class').bounding_box()['y']
     page.locator('#pixel-class').select_option('0')
     page.on('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill').click()
     expect(page.locator('#pixel-coverage')).to_contain_text('미검수 0픽셀')
+
+
+def test_pixel_number_key_recalculates_current_selection(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
+    page.locator('#pixel-canvas').click(position={'x': 8, 'y': 8})
+    expect(page.locator('#pixel-draft')).to_contain_text('픽셀 미리보기')
+    with page.expect_request(lambda request: request.url.endswith('/api/mask-preview/0')
+                             and request.post_data_json['label'] == 1):
+        page.keyboard.press('2')
+    expect(page.locator('#pixel-class')).to_have_value('1')
+
+
+def test_pixel_multiple_lane_classes_require_explicit_choice(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES.replace(b'name: lane_line', b'name: left_lane'))
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
+    expect(page.locator('#pixel-class')).to_have_value('')
+    expect(page.locator('#pixel-fill')).to_be_disabled()
+    page.locator('#pixel-canvas').click(position={'x': 8, 'y': 8})
+    expect(page.locator('#pixel-draft')).to_contain_text('클래스를 선택')
+    page.locator('#pixel-class').select_option('1')
+    expect(page.locator('#pixel-fill')).to_be_enabled()
+    page.locator('#pixel-canvas').click(position={'x': 8, 'y': 8})
+    expect(page.locator('#pixel-draft')).to_contain_text('픽셀 미리보기')
+
+
+def test_object_candidate_is_findable_and_empty_review_is_neutral(tmp_path):
+    source, human, images = fixture_inputs(tmp_path)
+    rows = [json.loads(line) for line in source.read_text().splitlines()]
+    rows[0]['boxes'] = [{'label': 'traffic_light', 'bbox_xyxy': [1, 2, 12, 14],
+                         'signal_state': 'unknown'}]
+    source.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
+    reviews = [json.loads(line) for line in human.read_text().splitlines()]
+    reviews[0].update(boxes=[], review_status='pending_human', complete_frame_review=False)
+    human.write_text('\n'.join(json.dumps(row) for row in reviews), encoding='utf-8')
+    with serve(ReviewStore(tmp_path / 'state', source, human, images)) as (page, store, expect):
+        expect(page.locator('#candidate-details')).to_have_attribute('open', '')
+        expect(page.locator('#candidates')).to_be_visible()
+        page.on('dialog', lambda dialog: dialog.accept())
+        page.locator('#candidates').click()
+        expect(page.locator('#boxes summary')).to_contain_text('박스 1')
+        page.get_by_role('button', name='박스 1 삭제').click()
+        expect(page.locator('#empty')).to_contain_text('객체가 없으면 전체 확인 후 승인하세요')
+        page.reload(wait_until='networkidle')
+        expect(page.locator('#candidate-details')).not_to_have_attribute('open', '')
 
 @pytest.mark.parametrize('width', [390, 320])
 def test_catalog_import_reaches_pending_review_on_phone(browser_workspace, tmp_path, width):
