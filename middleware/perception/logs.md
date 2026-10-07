@@ -1247,3 +1247,10 @@
 - 증거: `test_lane_debug.py` 14건. 새 시험은 고치기 전 코드에서 실패
 - gate 변화: 없음
 - 교훈: 디버그 묶음 조립 함수는 노드가 실제로 넘기는 키워드로 시험한다
+
+## 2026-10-08 · a411c2801 · fix(control): 제자리 회전 뒤 keep flipping hold가 풀리지 않던 것
+- 변경: `keep` 모드도 `odom`을 구독한다. 신선한 odom이 제자리 회전(|wz| > 0.15 rad/s, D-495 회전 하한 0.3의 절반; |vx| < 0.01 m/s, CORE junction_still_linear)을 보이면 카메라 공백처럼 keeper를 `reset()`한다(`line_observer_node._spinning_in_place`). 직진 중 조향 반전 hold(fd4fad93c)는 그대로다. 같은 구독으로 D-408 learned paint 재사용 판정이 keep 모드에서 처음 odom을 받는다
+- 증거: `test_keep_pivot.py` 7건(회전 sweep 뒤 한 줄 링에서 목표가 나온다, 주행 중 weave와 odom 없음은 hold 유지, 변이 시험 3종 실패 확인), `test_lane_keep.py`·`test_line_observer_wiring.py`·`test_lane_paint_source.py`·`test_perception_folder.py` 120 passed 1 skipped, `test_module_structure.py` 34 passed, known_failures 0 new
+- gate 변화: 없음. 호스트 SOURCE만. D-507 SIM 3회차(모델 PC/현장 PC)에서 junction turn 뒤 `camera_line_not_visible` 정지가 사라지는지 확인이 남음
+- 결정: D-507 SIM 2회차 원인 1. no-target 프레임에서 hold를 푸는 안은 링(선 하나, 목표 있음)에 효과가 없고 R2C weave 재발을 열어 하지 않았다
+- 교훈: 끈적한 latch는 그것을 만든 원인(차체의 제자리 회전)이 사라질 때 풀리는 경로도 같이 둔다. control 패키지 크기는 45254/45254로 여유가 없다
