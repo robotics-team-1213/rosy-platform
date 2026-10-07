@@ -42,6 +42,15 @@ def robot_velocity(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
 sensors_router = APIRouter(prefix="/api/v1/sensors", tags=["sensors"])
 
 
+def battery_health(svc) -> dict:
+    """`BatteryMonitor.health()`, or "missing" where no monitor is wired (D-502)."""
+    health = getattr(getattr(svc, "battery", None), "health", None)
+    if health is None:
+        return {"evidence": "missing", "sample_age_s": None, "stale_after_s": 5.0,
+                "level": None, "percent": None}
+    return health()
+
+
 def _json_safe(value):
     """inf/NaN are not JSON: a LaserScan no-return beam is +inf. Wire form is null (API ref 12)."""
     if isinstance(value, float):
@@ -64,7 +73,7 @@ def sensor_detail(sensor_type: str, _: AuthContext = Depends(viewer),
     data = svc.state.get_sensor(sensor_type)
     if sensor_type == "battery":
         # SAF-005 input: missing or stale is an answer, not a 404 (API ref 5.2, v1.119).
-        health = svc.battery.health()
+        health = battery_health(svc)
         data = {"voltage": None, "received_at": None, "source": None, **(data or {}),
                 "evidence": health["evidence"], "sample_age_s": health["sample_age_s"],
                 "stale_after_s": health["stale_after_s"]}

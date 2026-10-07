@@ -335,7 +335,7 @@ def battery_voltage(services, voltage: float, *, received_at: float) -> None:
     """`battery/voltage` (Float32), the product graph's only battery source (D-192 4).
 
     It is also the `battery` sensor sample: `batt_state` is bench-only, and without
-    this `/sensors/battery` stayed 404 on every Pinky. Freshness comes from the
+    this `/sensors/battery` stayed 404 on every robot. Freshness comes from the
     monitor (`BatteryMonitor.health`), so a non-finite sample is not recorded.
     """
     if math.isfinite(voltage):

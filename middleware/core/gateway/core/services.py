@@ -521,8 +521,11 @@ class CoreServices:
             state.set_estop(True)
             # SAF-001: every latch is an EMERGENCY, whoever set it. battery_policy and
             # battery_deep latched without it, and admin release refused ("not in EMERGENCY").
-            modes.transition(Mode.EMERGENCY)
+            ok, reason = modes.transition(Mode.EMERGENCY)
+            if not ok:
+                logging.getLogger(__name__).warning("e-stop latched but EMERGENCY refused: %s", reason)
         safety.estop_listeners.append(reflect_stop)
+        safety.estop_listeners.append(docking.on_estop)
         safety.estop_listeners.append(swarm.on_estop)
         safety.estop_listeners.append(lambda: nav.cancel(source='safety_manager'))
         def stop_line_follow():

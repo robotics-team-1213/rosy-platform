@@ -1172,6 +1172,26 @@ class TestReturnToDock:
         manager.on_battery_level(BatteryLevel.WARNING)
         assert manager.state is DockState.UNDOCKED
 
+    def test_no_return_drives_after_an_estop_release_without_a_new_command(self, clock):
+        """D-502: a release is not a command. A return armed before the latch, or
+        re-armed by later WARNING samples, must not start driving after release."""
+        from core_common.protocol.schemas import BatteryLevel, DockState
+        manager = self._manager(clock)
+        manager.set_manual_active(True)
+        manager.on_battery_level(BatteryLevel.WARNING)
+        assert manager.return_pending is True
+        manager._safety.estop = True
+        manager.on_estop()
+        manager.set_manual_active(False)
+        manager._safety.estop = False                 # admin release
+        manager.on_battery_level(BatteryLevel.WARNING)
+        clock.advance(0.5)
+        manager.tick()
+        assert manager.state is DockState.UNDOCKED and manager.return_pending is False
+        manager.on_battery_level(BatteryLevel.OK)     # recovery re-enables the policy
+        manager.on_battery_level(BatteryLevel.WARNING)
+        assert manager.state is DockState.DOCKING
+
     def test_an_unsupported_robot_does_not_try(self, clock):
         from core_common.protocol.schemas import BatteryLevel, DockState
         manager = self._manager(clock, supported=False)
