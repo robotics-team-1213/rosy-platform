@@ -124,7 +124,7 @@ def clashes_are_insertions(base: bytes, ours: bytes, theirs: bytes) -> bool:
 
 
 def append_blocks(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
-    """logs.md: base + ours' appended block + theirs' appended block, each kept whole.
+    """logs.md: base + theirs' appended block + ours' appended block, each kept whole.
 
     Line union would fold lines both entries share ("- 결정: 없음"). None unless
     both sides only appended at the end — or ours appended at the end and theirs
@@ -149,11 +149,12 @@ def append_blocks(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
         return ours
     if not mine:
         return theirs
+    # Theirs (main) landed first, so its block goes first: entries stay in date order.
     eol = b"\r\n" if b"\r\n" in ours + theirs else b"\n"
-    if mine and not mine.endswith(b"\n"):
-        mine += eol
-    gap = b"" if mine.endswith(eol + eol) or other.startswith((b"\n", b"\r\n")) else eol
-    return base + mine + gap + other
+    if not other.endswith(b"\n"):
+        other += eol
+    gap = b"" if other.endswith(eol + eol) or mine.startswith((b"\n", b"\r\n")) else eol
+    return base + other + gap + mine
 
 
 def sort_adr_rows(data: bytes) -> bytes:

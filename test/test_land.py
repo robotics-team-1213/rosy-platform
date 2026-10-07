@@ -160,7 +160,8 @@ def test_logs_md_appends_with_shared_trailing_lines_stay_whole(repos):
     commit(main, {"docs/logs.md": base + ENTRY.format(who="peer")}, "peer entry")
     assert land.main(["--tests", "none"]) == 0
     text = (main / "docs/logs.md").read_text(encoding="utf-8")
-    assert text == base + ENTRY.format(who="branch") + ENTRY.format(who="peer")
+    # main's entry landed first, so it stays first (lint wants log dates in order).
+    assert text == base + ENTRY.format(who="peer") + ENTRY.format(who="branch")
 
 
 def test_logs_md_edit_next_to_append_is_manual(repos):
