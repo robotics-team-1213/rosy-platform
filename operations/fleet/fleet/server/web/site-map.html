@@ -95,6 +95,33 @@
         <ui-button id="trip-cancel" kind="irreversible" disabled reason="관제 접속이 필요합니다">운행 취소</ui-button>
       </div>
     </ui-section>
+    <ui-section aria-labelledby="teach-heading">
+      <ui-head><ui-text id="teach-heading" scale="label">지도 가르치기</ui-text></ui-head>
+      <ui-text>운전자가 Pilot으로 로봇을 모는 동안 지도 위치를 기록합니다. 가르치기는 로봇을 움직이지 않습니다. 확정하면 초안에만 들어가고, 활성화는 따로 합니다.</ui-text>
+      <label>로봇<select class="ui-field" id="teach-robot"></select></label>
+      <div class="actions">
+        <ui-button id="teach-start" kind="primary" disabled reason="관제 접속이 필요합니다">기록 시작</ui-button>
+        <ui-button id="teach-stop" kind="quiet" disabled reason="관제 접속이 필요합니다">기록 멈춤</ui-button>
+      </div>
+      <ui-status id="teach-status" state="empty">관제 접속 필요</ui-status>
+      <div id="teach-form" class="form" hidden>
+        <label>시작 장소<select class="ui-field" id="teach-from"></select></label>
+        <label>시작이 새 주소면 이름<input class="ui-field" id="teach-from-name" maxlength="64"></label>
+        <label>끝 장소<select class="ui-field" id="teach-to"></select></label>
+        <label>끝이 새 주소면 이름<input class="ui-field" id="teach-to-name" maxlength="64"></label>
+        <label>통행 방향<select class="ui-field" id="teach-direction">
+          <option value="one_way">일방</option><option value="two_way">양방</option></select></label>
+        <label>주행 방식<select class="ui-field" id="teach-mode">
+          <option value="lane">차선 따라가기</option><option value="free">지도 좌표 추종</option></select></label>
+        <label>속도 상한 (m/s)<input class="ui-field" id="teach-speed" type="number" min="0.01" max="5" step="0.01" value="0.2"></label>
+        <div class="actions"><ui-button id="teach-confirm" kind="primary" disabled>초안에 차로 확정</ui-button></div>
+      </div>
+      <div class="form">
+        <label>새 주소 이름<input class="ui-field" id="teach-place-name" maxlength="64"></label>
+        <label>장소 종류<select class="ui-field" id="teach-place-kind"></select></label>
+        <div class="actions"><ui-button id="teach-place" kind="quiet" disabled reason="관제 접속이 필요합니다">여기에 주소 만들기</ui-button></div>
+      </div>
+    </ui-section>
   </main>
 </ui-shell>
 </body>

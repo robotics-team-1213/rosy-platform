@@ -1294,6 +1294,115 @@ def test_stale_camera_calibration_drops_the_frame_and_warns(console_url):
         browser.close()
 
 
+# --- D-457 1: "추적 보정 적용"은 적용 시점 라이브 프레임의 렌즈를 본문에 찍는다 ----
+
+LENS_WIDE_HEADER = "kind=wide;focal_mm=2.2;hfov_deg=104.1"
+FIT_FRAME_BODY = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">'
+                  '<rect width="1280" height="720" fill="#bf2030"/></svg>')
+FIT_SITE_LANES = {
+    "maps": [{
+        "map_id": "map_v2_fleet", "source_ids": ["ceiling_north"],
+        "lane_graph_sha256": "lane-sha", "paint_sha256": "paint-sha",
+        "bounds_m": {"min_x": 0.0, "min_y": 0.0, "max_x": 6.4, "max_y": 3.6},
+        "polylines": [{"points": [[0.3, 0.4], [6.1, 0.4]]}, {"points": [[0.3, 3.2], [6.1, 3.2]]}],
+        "paint_triangles": [[0.3, 0.4, 6.1, 0.4, 3.2, 2.8]],
+    }],
+}
+# 1280×720 프레임 전체가 6.4×3.6 m 트랙에 닿는 통과 제안(가로 세로 배율 모두 0.005 m/px).
+FIT_MAP_PROPOSAL = {
+    "accepted": True,
+    "image": {"width": 1280, "height": 720},
+    "frame_seq": 42,
+    "proposal": {"image_to_map": [[0.005, 0.0, 0.0], [0.0, -0.005, 3.6], [0.0, 0.0, 1.0]],
+                 "score": 0.92, "precision": 0.88, "coverage": 0.9},
+}
+
+
+def _apply_flow_api():
+    return {
+        "/api/fleet/state": EMPTY_SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/site-lanes": FIT_SITE_LANES,
+        "/api/fleet/calibrations": {"calibrations": []},
+        "/api/fleet/vision/sources": {"sources": ["ceiling_north"]},
+        "/api/fleet/vision/lease": {"source_id": "ceiling_north", "lease": "test-lease",
+                                    "frame_path": "/api/vision/sources/ceiling_north/frame",
+                                    "expires_in_s": 60},
+    }
+
+
+def _run_map_fit_apply(page, console_url, lens_header):
+    """맞춤 패널을 열어 제안을 받고 '추적 보정 적용'을 누른다; POST 본문 목록을 돌려준다."""
+    applied = []
+
+    def serve_vision(route):
+        if urlparse(route.request.url).path.endswith("/map-proposal"):
+            route.fulfill(status=200, json=FIT_MAP_PROPOSAL)
+            return
+        headers = {"X-Frame-Rectified": "false", "X-Frame-Seq": "42", "X-Frame-Age-Ms": "20"}
+        if lens_header:
+            headers["X-Source-Lens"] = lens_header
+        route.fulfill(status=200, content_type="image/svg+xml", body=FIT_FRAME_BODY,
+                      headers=headers)
+
+    def capture_apply(route):
+        if route.request.method == "POST":
+            applied.append(route.request.post_data_json)
+            route.fulfill(status=200, json={"source_id": "ceiling_north",
+                                            "calibration_revision": "paint-lenstest",
+                                            "use": "display-only"})
+            return
+        route.fulfill(status=200, json={"calibrations": [], "use": "display-only"})
+
+    page.route("**/api/vision/**", serve_vision)
+    page.route("**/api/fleet/calibrations", capture_apply)
+    page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
+    page.get_by_role("tab", name="카메라 설치·보정", exact=True).click()
+    page.wait_for_function("() => document.querySelector('#vision-meta')?.textContent.includes('sequence 42')")
+    page.locator("#map-fit-detect").click()
+    page.wait_for_function("!document.querySelector('#map-fit-apply')?.hidden")
+    page.locator("#map-fit-apply").click()
+    page.wait_for_function(
+        "() => document.querySelector('#map-fit-state')?.textContent.includes('paint-lenstest 적용')")
+    return applied
+
+
+def test_applying_tracking_calibration_stamps_the_live_frame_lens(console_url):
+    """라이브 프레임이 렌즈를 알리면 적용 본문에 그 렌즈가 실려 저장된다(X-Source-Lens)."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(
+            playwright, _apply_flow_api(),
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+        applied = _run_map_fit_apply(page, console_url, LENS_WIDE_HEADER)
+        assert len(applied) == 1, applied
+        assert applied[0]["source_id"] == "ceiling_north"
+        assert applied[0]["map_id"] == "map_v2_fleet"
+        assert applied[0]["lens"] == {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1}
+        # 렌즈가 찍혔으니 '렌즈 검사 없이 적용' 안내는 붙지 않는다.
+        assert "렌즈 정보가 없어" not in page.locator("#map-fit-state").inner_text()
+        save_temp_screenshot(page, "fleet_map_fit_apply_lens.png")
+        assert not errors
+        browser.close()
+
+
+def test_applying_tracking_calibration_without_a_frame_lens_says_so(console_url):
+    """프레임에 렌즈 정보가 없을 때만 lens 없이 저장하고 그 안내를 유지한다."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(
+            playwright, _apply_flow_api(),
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+        applied = _run_map_fit_apply(page, console_url, None)
+        assert len(applied) == 1, applied
+        assert applied[0]["lens"] is None
+        assert "렌즈 정보가 없어 렌즈 검사 없이 적용했습니다" in page.locator("#map-fit-state").inner_text()
+        assert not errors
+        browser.close()
+
+
 # --- D-224: 예외 문법의 키보드 어휘 — ↑/↓ 순회 · Enter 목표 · Escape 해소 ----
 
 def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
