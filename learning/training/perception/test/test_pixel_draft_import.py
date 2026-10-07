@@ -12,6 +12,24 @@ import review_ingest
 import review_masks
 
 
+def test_verified_object_draft_is_pending_and_bad_box_rejects_import(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    rows[0]['objects'] = [{'bbox_xyxy': [2, 3, 12, 14], 'label': 'cone',
+                           'source': 'vision_model_candidate'}]
+    catalog_file = folder / 'verified-inputs.jsonl'
+    catalog_file.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    result = review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    assert result['added'] == 1
+    assert store.get(2)['source']['objects'] == rows[0]['objects']
+    assert store.get(2)['review']['boxes'] == []
+    assert store.get(2)['status'] == 'pending'
+    rows[0]['objects'][0]['bbox_xyxy'] = [2, 3, 99, 14]
+    catalog_file.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    with pytest.raises(ValueError, match='outside'):
+        review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+
+
 def test_indexed_draft_import_keeps_255_and_pending_status(tmp_path):
     store = open_store(tmp_path)
     folder, classes, rows = catalog(tmp_path)
