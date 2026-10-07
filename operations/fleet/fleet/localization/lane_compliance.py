@@ -27,11 +27,11 @@ import math
 from dataclasses import dataclass, fields
 from typing import Mapping, Optional
 
-from core_common.robot_body import PINKY_PRO
+from core_common.robot_body import NOMINAL_BODY
 
 OK, WARN, ACT, UNKNOWN = "OK", "WARN", "ACT", "UNKNOWN"
 #: D-424 URDF nominal. ponytail: one body for every robot; per-kind bodies when a second kind drives.
-BODY_HALF_WIDTH_M = PINKY_PRO.half_width_m
+BODY_HALF_WIDTH_M = NOMINAL_BODY.half_width_m
 
 
 @dataclass(frozen=True)

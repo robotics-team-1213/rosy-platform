@@ -11,7 +11,7 @@ from browser_harness import browser_tests_enabled, free_port
 import class_sets
 from test_review_app import fixture_inputs, open_store
 from test_review_cycle import CLASSES, catalog
-from review_app import ReviewStore, make_server
+from review_app import ReviewStore, Conflict, make_server
 import review_masks
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
@@ -77,6 +77,19 @@ def test_pixel_points_preview_before_explicit_apply(browser_workspace):
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     assert review_masks.get(store, 0)['status'] == 'pending'
     assert review_masks.get(store, 0)['version'] == 1
+
+
+def test_pixel_review_shows_unclassified_coverage(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    unknown = int((review_masks.pixels(store, review_masks.get(store, 0)) == 255).sum())
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels', wait_until='networkidle')
+    expect(page.locator('#pixel-coverage')).to_contain_text(f'미검수 {unknown:,}픽셀')
+    page.locator('#pixel-class').select_option('0')
+    page.on('dialog', lambda dialog: dialog.accept())
+    page.locator('#pixel-fill').click()
+    expect(page.locator('#pixel-coverage')).to_contain_text('미검수 0픽셀')
+
 @pytest.mark.parametrize('width', [390, 320])
 def test_catalog_import_reaches_pending_review_on_phone(browser_workspace, tmp_path, width):
     page, store, expect = browser_workspace
@@ -1016,6 +1029,26 @@ def test_learning_summary_separates_review_from_training(browser_workspace):
     expect(page.locator('#review-stage-summary')).to_contain_text('등록 2장')
     expect(page.locator('#training-data-state')).to_contain_text('픽셀 승인 0장')
     expect(page.get_by_text('현재 검수 중인 사진의 학습 완료를 뜻하지 않습니다.')).to_be_visible()
+
+
+def test_learning_shows_prepared_export_and_stale_decision(browser_workspace):
+    page, store, expect = browser_workspace
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    expect(page.locator('#preparation-status')).to_contain_text('준비본 없음')
+    store.prepare()
+    page.reload(wait_until='networkidle')
+    expect(page.locator('#preparation-status')).to_contain_text('픽셀 승인 0장 · 학습 입력 없음')
+    review_masks.bind_classes(store, CLASSES)
+    review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, Conflict)
+    review_masks.update(store, 0, {'version': 1, 'action': 'approve',
+                                   'complete_frame_review': True, 'background_reviewed': True}, Conflict)
+    store.prepare()
+    page.reload(wait_until='networkidle')
+    expect(page.locator('#preparation-status')).to_contain_text('객체 1장 · 픽셀 1장 · 현재 결정 일치')
+    row = store.get(0)
+    store.update(0, {'version': row['version'], 'action': 'reopen'})
+    page.reload(wait_until='networkidle')
+    expect(page.locator('#preparation-status')).to_contain_text('현재 결정과 다름')
 
 
 def test_number_key_in_a_number_field_stays_typing(browser_workspace):
