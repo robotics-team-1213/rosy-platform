@@ -10,6 +10,7 @@ every state snapshot the console reads (hub heartbeat or REST) and from `refresh
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import asdict
 from typing import Awaitable, Callable, Iterable, Mapping, Optional
@@ -25,21 +26,39 @@ from fleet.swarm.transport import RobotApiError
 #: `refresh` skips the robot read while the newest odom sample is younger than this.
 REFRESH_FRESH_S = 0.2
 
+logger = logging.getLogger("fleet.map_pose")
+
 
 class MapPoseService:
     def __init__(self, robot_ids: Callable[[], Iterable[str]], *,
                  config: MapPoseConfig = MapPoseConfig(),
                  gather: Optional[Callable[[str], Awaitable[Optional[Mapping]]]] = None,
+                 gather_rest: Optional[Callable[[str], Awaitable[Optional[Mapping]]]] = None,
                  map_id: Optional[Callable[[], Optional[str]]] = None,
+                 source_map_ids: Iterable[str] = (),
                  wall: Callable[[], float] = time.time) -> None:
         self.config = config
         self._robot_ids = robot_ids
-        self._gather = gather
+        self._gather = gather              # hub snapshot when fresh, else REST
+        self._gather_rest = gather_rest    # always the robot's REST state (trip loop)
         #: The active site map frame id; None (or no provider) accepts any sighting map id.
         self._map_id = map_id
-        self._wall = wall           # sighting captured_at and odom stamps are site wall time
+        self._source_map_ids = frozenset(source_map_ids)
+        self._warned_map_ids: set[str] = set()
+        self._wall = wall           # sighting captured_at and odom stamps are UTC epoch seconds
         self._trackers: dict[str, MapPoseTracker] = {}
-        self._refreshing: dict[str, asyncio.Future] = {}
+        self._refreshing: dict[tuple[str, bool], asyncio.Future] = {}
+
+    def active_map_id(self) -> Optional[str]:
+        """The active site map frame id; warns once per id that no sighting source reports."""
+        active = self._map_id() if self._map_id is not None else None
+        if (active is not None and self._source_map_ids and active not in self._source_map_ids
+                and active not in self._warned_map_ids):
+            self._warned_map_ids.add(active)
+            logger.warning("map pose: active site map id %r matches no sighting source map_id %s; "
+                           "every sighting is filtered and trip map poses stay UNKNOWN",
+                           active, sorted(self._source_map_ids))
+        return active
 
     def knows(self, robot_id: str) -> bool:
         return robot_id in set(self._robot_ids())
@@ -59,12 +78,9 @@ class MapPoseService:
         sighting = sighting_from_row(row)
         if sighting is None:
             return
-        expected = self._map_id() if self._map_id is not None else None
-        if expected is not None and sighting.map_id != expected:
-            return
         tracker = self._tracker(sighting.robot_id)
         if tracker is not None:
-            tracker.add_sighting(sighting, self._wall())
+            tracker.add_sighting(sighting, self._wall(), self.active_map_id())
 
     def observe_state(self, robot_id: str, state: Optional[Mapping]) -> None:
         if not isinstance(state, Mapping) or state.get("odom_pose") is None:
@@ -78,27 +94,37 @@ class MapPoseService:
         else:
             tracker.add_odom(sample, self._wall())
 
-    async def refresh(self, robot_id: str) -> None:
-        """Read the robot's state now (hub snapshot when fresh, else REST) and feed its odom.
+    async def refresh(self, robot_id: str, *, force_rest: bool = False) -> None:
+        """Read the robot's state now and feed its odom.
 
-        Concurrent callers share one read; a read is skipped while odom is fresher than 0.2 s."""
+        Default: the hub snapshot when fresh, else REST. `force_rest` (the trip loop, at 2 Hz or
+        faster) bypasses the hub cache. Concurrent callers share one read per robot and mode; a
+        read is skipped while odom is fresher than 0.2 s."""
+        gather = self._gather_rest if force_rest else self._gather
         tracker = self._tracker(robot_id)
-        if self._gather is None or tracker is None:
+        if gather is None or tracker is None:
             return
         latest = tracker.latest_odom_stamp
         if latest is not None and self._wall() - latest < REFRESH_FRESH_S:
             return
-        running = self._refreshing.get(robot_id)
+        key = (robot_id, force_rest)
+        running = self._refreshing.get(key)
         if running is None:
-            running = self._refreshing[robot_id] = asyncio.ensure_future(self._gather(robot_id))
-            running.add_done_callback(lambda _f: self._refreshing.pop(robot_id, None))
+            running = self._refreshing[key] = asyncio.ensure_future(gather(robot_id))
+            running.add_done_callback(lambda done: self._refresh_done(key, done))
         state = await asyncio.shield(running)
         self.observe_state(robot_id, state)
+
+    def _refresh_done(self, key: tuple, done: asyncio.Future) -> None:
+        self._refreshing.pop(key, None)
+        # Retrieved here so a read whose waiters were all cancelled never logs "never retrieved".
+        if not done.cancelled() and done.exception() is not None:
+            logger.debug("map pose: state read for %s failed: %r", key[0], done.exception())
 
     def arbitrated_pose(self, robot_id: str) -> Optional[MapPose]:
         """The robot's map pose for trip execution; None for a robot not on the roster."""
         tracker = self._tracker(robot_id)
-        return tracker.pose(self._wall()) if tracker is not None else None
+        return tracker.pose(self._wall(), self.active_map_id()) if tracker is not None else None
 
 
 def install_map_pose_routes(app, *, service: MapPoseService, read_guard) -> None:

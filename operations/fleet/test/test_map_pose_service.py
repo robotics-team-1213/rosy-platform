@@ -176,8 +176,12 @@ def test_sightings_for_another_map_frame_are_ignored():
     service.observe_sighting({**row(T0), "map_id": "other"})
     assert service.arbitrated_pose("r1").state == UNKNOWN
     service.observe_sighting({**row(T0 + 0.05), "map_id": "site"})
-    wall.now = T0 + 1.3                     # no bracket arrived: nearest sample pairs it
-    assert service.arbitrated_pose("r1").map_id == "site"
+    wall.now = T0 + 0.1
+    service.observe_state("r1", state(T0 + 0.1))           # odom after the capture pairs it
+    pose = service.arbitrated_pose("r1")
+    assert (pose.map_id, pose.sightings_filtered_map_id) == ("site", 1)
+    active["id"] = "new-site"                              # activation of another frame
+    assert service.arbitrated_pose("r1").state == DEGRADED
 
 
 def test_roster_change_drops_the_tracker():
@@ -257,3 +261,61 @@ def test_map_pose_lease_must_fit_the_ingest_lease(tmp_path):
     sightings = SightingService([], known_robot_ids=console.robot_ids, lease_s=0.5)
     with pytest.raises(ValueError):
         create_app(console, sightings=sightings, start_task_dispatcher=False)
+
+
+
+def test_force_rest_bypasses_the_hub_cache_and_is_coalesced():
+    wall = Wall()
+    calls = []
+
+    async def hub(robot_id):
+        calls.append("hub")
+        return state(wall.now - 0.9)                       # a 1 Hz heartbeat cached 0.9 s ago
+
+    async def rest(robot_id):
+        calls.append("rest")
+        await asyncio.sleep(0)
+        return state(wall.now)
+
+    service = MapPoseService(lambda: ["r1"], wall=wall, gather=hub, gather_rest=rest)
+
+    async def run():
+        await asyncio.gather(service.refresh("r1", force_rest=True),
+                             service.refresh("r1", force_rest=True))
+
+    asyncio.run(run())
+    assert calls == ["rest"]
+    assert service._trackers["r1"].latest_odom_stamp == T0
+
+
+def test_active_map_without_a_matching_source_warns_once(caplog):
+    import logging
+
+    service = MapPoseService(lambda: ["r1"], map_id=lambda: "site", source_map_ids=["lane-map:v1"])
+    with caplog.at_level(logging.WARNING, logger="fleet.map_pose"):
+        service.active_map_id()
+        service.active_map_id()
+    assert len([r for r in caplog.records if "matches no sighting source" in r.message]) == 1
+
+
+def test_a_failed_read_with_a_cancelled_waiter_is_retrieved():
+    wall = Wall()
+    gate = {}
+
+    async def gather(robot_id):
+        await gate["event"].wait()
+        raise OSError("down")
+
+    service = MapPoseService(lambda: ["r1"], wall=wall, gather=gather)
+
+    async def run():
+        gate["event"] = asyncio.Event()
+        waiter = asyncio.ensure_future(service.refresh("r1"))
+        await asyncio.sleep(0)
+        waiter.cancel()
+        gate["event"].set()
+        for _ in range(3):
+            await asyncio.sleep(0)
+        assert service._refreshing == {}
+
+    asyncio.run(run())
