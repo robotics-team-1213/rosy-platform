@@ -2388,3 +2388,10 @@
 - 변경: 개발 모드에서 `/console/install`, `/console/site-map`, `/console/cell` 직접 진입 시 Fleet 개발 세션을 자동 발급·재사용하고 토큰 입력 칸을 숨긴다. `/console`도 개발 모드에서는 토큰 입력 칸을 숨긴다. 일반 모드의 토큰 접속은 유지한다.
 - 증거: 새 Chromium 직접 진입 시험 4 passed, 개발 인증 pytest 60 passed, 웹 Node 시험 160 passed. 넓은 pytest의 Cell 컴파일러 import 실패 1건은 깨끗한 main에서도 동일하게 재현했다.
 - gate 변화: SOURCE/LOCAL만 확인. 사이트 배포·실기 수용은 별도다.
+
+## 2026-10-08 · uncommitted · feat(fleet): D-511 M0 차로 준수 감시(관찰·알림만)
+- 변경: 순수 판정 `fleet/localization/lane_compliance.py`(부호 있는 가로 편차 왼쪽 +, 몸체 여유 `width_m/2 − (|d| + half width)`, `core_common.robot_body` PINKY_PRO 반폭, `persist_n` 연속 규칙, `fleet.lane_compliance` 잠정 기본값 0.02 m·3회·3.0 s). 2 Hz 감시 `server/lane_compliance_service.py` + `background_workers.lane_compliance_loop`: odom이 움직인 로봇만 `refresh(force_rest=True)`, 모든 로봇을 `arbitrated_pose`로 판정(D-511 §2가 D-494 §3을 넓힘). `GET /api/fleet/robots/{id}/lane-compliance`, `/api/fleet/state` 행 `lane_compliance`, 콘솔 예외 큐 WARN/ACT 항목. API Ref v1.128(v1.124–127은 열린 동료 브랜치)
+- 증거: `test_lane_compliance.py`·`test_lane_compliance_service.py` 신규, node `attention-stale.test.mjs` 8 passed, fleet 묶음 + `test/known_failures.py` (X:/DevTemp/d511-m0/run.txt)
+- gate 변화: 없음. SOURCE/LOCAL만. 지도 자세 LOCALIZED 연결(D-511 §5)·SIM·현장 임계값 측정은 열려 있다
+- 결정: D-511 M0. 로봇 명령 없음, trip·`/route`·meet 임계값 그대로(M1), CORE 신호 없음(M2)
+- 교훈: 없음
