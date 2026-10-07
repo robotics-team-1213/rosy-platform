@@ -81,6 +81,47 @@ export function offsetLabel(row) {
   return `${row.robotId} · 차이 ${Math.round(row.offsetM * 100)} cm`;
 }
 
+// 조감도 카메라 교정 낡음(카메라를 재조준한 뒤 D-457 추적 보정이 어긋난 경우). 한 폴링의
+// 큰 차이(offset_m)만으로 낡은 게 아니다 — 움직이는 로봇의 관측 지연도 크다. 정지한 로봇
+// (직전 폴링 자세 이동 ≤ STILL_POSE_M)에서 잰 차이가 CALIBRATION_DRIFT_POLLS 폴링 연속
+// 한계를 넘어야 낡음이다. 마커 관측(measured)은 보정과 무관한 절대 위치라 세지 않는다.
+export const CALIBRATION_DRIFT_M = 0.4;
+export const CALIBRATION_DRIFT_POLLS = 3;
+export const STILL_POSE_M = 0.05;
+
+// tracking-view 가 폴링마다 한 번 부른다. previousPoses는 직전 rememberTrackingPoses 결과.
+// 잴 수 있는 정지 로봇이 없으면 null(낡음 판정의 연속을 끊는다 — 오탐 방지).
+export function trackingDriftSample(tracking, previousPoses) {
+  let worst = null;
+  for (const row of tracking?.robots || []) {
+    if (!row.pose || row.measured) continue;
+    const previous = previousPoses?.get?.(row.robotId);
+    if (!previous || !finite(previous.x) || !finite(previous.y)) continue;
+    const moved = Math.hypot(row.pose.x - previous.x, row.pose.y - previous.y);
+    if (moved > STILL_POSE_M) continue;
+    if (!worst || row.offsetM > worst.distanceM) worst = { robotId: row.robotId, distanceM: row.offsetM };
+  }
+  return worst;
+}
+
+// history: 폴링별 trackingDriftSample 결과(null 허용). 최근 POLLS 표본이 모두 있고 모두
+// 한계를 넘어야 낡음이다. null이 하나라도 끼면 연속이 아니므로 낡지 않다.
+export function calibrationDriftVerdict(history) {
+  const recent = (history || []).slice(-CALIBRATION_DRIFT_POLLS);
+  if (recent.length < CALIBRATION_DRIFT_POLLS || recent.some((row) => !row)) return null;
+  if (!recent.every((row) => row.distanceM > CALIBRATION_DRIFT_M)) return null;
+  return recent.reduce((worst, row) => (!worst || row.distanceM > worst.distanceM ? row : worst));
+}
+
+// 다음 폴링의 정지 판정 재료 — 이번 표본의 MATCHED 자세를 robotId 별로 남긴다.
+export function rememberTrackingPoses(tracking) {
+  const poses = new Map();
+  for (const row of tracking?.robots || []) {
+    if (row.pose) poses.set(row.robotId, { x: row.pose.x, y: row.pose.y });
+  }
+  return poses;
+}
+
 // Display resolution is a centimetre; it is not a measured accuracy claim.
 export function positionRows(tracking) {
   return [...tracking.robots.map(row => ({ name: row.robotId, x: row.camera.x.toFixed(2),
