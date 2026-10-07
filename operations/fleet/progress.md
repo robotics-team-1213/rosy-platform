@@ -33,7 +33,11 @@ gates:
       admission, SO_PEERCRED UDS grant/receipt, local Action journal, and one ROS
       ActionServer goal; it verifies callback acceptance, nonterminal Mission state,
       and restart UNKNOWN/no replay. It is not vendor Gazebo, physical stop/goal evidence,
-      ARTIFACT, DEVICE, or FIELD acceptance.
+      ARTIFACT, DEVICE, or FIELD acceptance. 2026-10-07 — the console bird's-eye now detects
+      a stale camera calibration (still-robot tracking offset over 0.4 m for 3 consecutive
+      polls) and falls back to the metric view with a warning instead of projecting the map
+      onto a re-aimed camera; node tracking-layer 12 passed and a mutation-proven browser
+      regression cover it (ROSY_RUN_BROWSER_TESTS=1).
     cmd: python3 -m pytest src/site/fleet/test -q
   ROS-SIM:
     state: HOLD

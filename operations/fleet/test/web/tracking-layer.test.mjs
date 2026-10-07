@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   classifyTracking, trackingStatusLine, offsetLabel, OFFSET_WARN_M, TRACKING_STATUS_TEXT,
-  preferMarkers, positionRows, displayLeaseMs,
+  preferMarkers, positionRows, displayLeaseMs, trackingDriftSample, calibrationDriftVerdict,
+  rememberTrackingPoses, CALIBRATION_DRIFT_POLLS, CALIBRATION_DRIFT_M,
 } from "../../fleet/server/web/tracking-layer.js";
 
 const source = (changes = {}) => ({
@@ -107,4 +108,41 @@ test("display lease subtracts server age and transport delay and never exceeds o
   assert.equal(displayLeaseMs({ lease_s: 1, sources: [{ status: "OK", age_ms: 400 }] }, 250), 350);
   assert.equal(displayLeaseMs({ lease_s: 1, sources: [{ status: "OK", age_ms: 900 }] }, 200), 0);
   assert.equal(displayLeaseMs({ lease_s: 5, sources: [] }), 1000);
+});
+
+test("drift samples only count still robots with a pose, never marker measurements", () => {
+  const tracking = { robots: [
+    { robotId: "rosy_01", camera: { x: 1, y: 1 }, pose: { x: 1, y: 1 }, offsetM: 0.9 },   // 정지 · 어긋남
+    { robotId: "rosy_02", camera: { x: 2, y: 2 }, pose: { x: 2.5, y: 2 }, offsetM: 1.2 },  // 움직임 — 제외
+    { robotId: "rosy_03", camera: { x: 3, y: 3 }, pose: null, offsetM: null, measured: true },
+    { robotId: "rosy_04", camera: { x: 4, y: 4 }, pose: { x: 4, y: 4 }, offsetM: 0.05 },   // 정지 · 정상
+  ] };
+  const previous = new Map([["rosy_01", { x: 1, y: 1 }], ["rosy_02", { x: 2, y: 2 }],
+    ["rosy_03", { x: 3, y: 3 }], ["rosy_04", { x: 4, y: 4 }]]);
+  assert.deepEqual(trackingDriftSample(tracking, previous), { robotId: "rosy_01", distanceM: 0.9 });
+  // 첫 폴링(직전 자세 없음)·빈 추적 — 잴 게 없다.
+  assert.equal(trackingDriftSample(tracking, new Map()), null);
+  assert.equal(trackingDriftSample(null, previous), null);
+});
+
+test("calibration drift needs every one of the last polls above the limit", () => {
+  const sample = (distanceM) => ({ robotId: "rosy_01", distanceM });
+  assert.equal(calibrationDriftVerdict([]), null);
+  assert.equal(calibrationDriftVerdict([sample(0.9), sample(0.9)]), null);        // 폴링 수 부족
+  assert.deepEqual(calibrationDriftVerdict([sample(0.9), sample(0.5), sample(0.7)]),
+    { robotId: "rosy_01", distanceM: 0.9 });                                       // 연속 초과
+  assert.equal(calibrationDriftVerdict([sample(0.9), sample(0.5), null, sample(0.9), sample(0.9)]), null); // 연속 끊김
+  assert.equal(calibrationDriftVerdict([sample(0.9), sample(0.9), sample(0.2)]), null); // 마지막 폴링 정상
+  assert.equal(calibrationDriftVerdict([null, null, null]), null);
+  assert.equal(CALIBRATION_DRIFT_POLLS, 3);
+  assert.equal(CALIBRATION_DRIFT_M, 0.4);
+});
+
+test("pose memory keeps matched poses for the next poll's stillness check", () => {
+  const poses = rememberTrackingPoses({ robots: [
+    { robotId: "rosy_01", pose: { x: 1, y: 2 } },
+    { robotId: "rosy_02", pose: null, measured: true },
+  ] });
+  assert.deepEqual(Object.fromEntries(poses), { rosy_01: { x: 1, y: 2 } });
+  assert.equal(rememberTrackingPoses(null).size, 0);
 });

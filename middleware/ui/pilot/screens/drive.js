@@ -26,6 +26,8 @@ import {HeadlessState, MODE_LABEL, evidenceAgeText, operatorModeLabel} from "/co
 
 const LOOP_MS = 100;
 const STATE_POLL_MS = 500;
+// ponytail: 1 s detects transport silence at the default 10 Hz; use a negotiated rate if slower streams matter.
+const READBACK_GAP_MS = 2 * STATE_POLL_MS; // Server evidence still decides value freshness.
 const DEG = 180 / Math.PI;
 const PRESET_LABEL = {low: "저속", mid: "보통", high: "빠름"};
 const LINK_LABEL = {
@@ -165,6 +167,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   }
 
   // --- 상태 채널: /ws/state(auth 첫 프레임) + REST teleop -------------------
+  let lastSocketReadbackAt = -Infinity;
   const session = createDeviceSession({
     token: token(),
     openSocket: (url) => {
@@ -182,12 +185,16 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       element.state.textContent = LINK_LABEL[state] ?? "상태 확인 필요";
       element.state.dataset.state = state;
       element.state.title = state;
+      delete element.state.dataset.readback;
       if (["RETRYING", "OFFLINE", "FORBIDDEN"].includes(state)) {
         renderTelemetry(null);
         element.mode.textContent = "—";
       }
     },
     onSnapshot: (frame) => {
+      lastSocketReadbackAt = Date.now();
+      delete element.state.dataset.readback;
+      element.state.textContent = LINK_LABEL[session.state()] ?? "상태 수신";
       renderTelemetry(frame);
       if (frame?.mode) showMode(frame.mode);
       if (frame && "activity" in frame) renderActivity(frame.activity);
@@ -532,11 +539,20 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
 
   // --- 로봇 상태 폴링: 실측 속도·회전율 ---------------------------------------
   const stateTimer = setInterval(async () => {
-    const state = await apiGet("/api/v1/robot/state").catch(() => null);
+    const state = await apiGet("/api/v1/robot/state", {timeoutMs: READBACK_GAP_MS}).catch(() => null);
     if (!state || state.status !== 200) {
-      if (["RETRYING", "OFFLINE", "FORBIDDEN"].includes(session.state())) renderTelemetry(null);
+      if (Date.now() - lastSocketReadbackAt >= READBACK_GAP_MS) {
+        renderTelemetry(null);
+        element.mode.textContent = "—";
+        if (session.state() === "OPEN") {
+          element.state.textContent = "상태 수신 없음";
+          element.state.dataset.readback = "silent";
+        }
+      }
       return;
     }
+    delete element.state.dataset.readback;
+    element.state.textContent = LINK_LABEL[session.state()] ?? "상태 수신";
     renderTelemetry(state.body);
     if (state.body?.mode) showMode(state.body.mode);
     renderActivity(state.body?.activity);
@@ -669,7 +685,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   placeCompactTools();
   const robotRecording = mountRobotRecording({
     toggle: robotRecordButton, detail: recordingFact, openButton: recordingsButton,
-    sheetHost: root.querySelector("[data-drive-stage]"), anchor: element.hud, save: saveCameraFile,
+    sheetHost: root, anchor: element.hud, save: saveCameraFile,
     returnFocus: toolsButton,
   });
   view.applyZoom();
