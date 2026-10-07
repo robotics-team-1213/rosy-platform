@@ -134,7 +134,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_item_pose_tolerance=None, cell_goal_registry=None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
-               site_maps=None, routing_config=None) -> FastAPI:
+               site_maps=None, routing_config=None, map_pose_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
     if development_sessions is not None and task_service is None:
@@ -473,10 +473,22 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.camera_peer = install_camera_peer(app, pairing=pairing,
         current_users=lambda:site_users or {}, require_named_operator=require_named_operator)
 
+    # D-491 3: trip-only map pose from accepted sightings and robot odom_pose.
+    from fleet.localization.map_pose import MapPoseConfig
+    from fleet.server.map_pose_service import MapPoseService, install_map_pose_routes
+
+    async def _gather_state(robot_id: str):
+        return (await console._gather_state(robot_id))[0]
+
+    map_pose = MapPoseService(lambda: console.robot_ids, config=map_pose_config or MapPoseConfig(),
+                              gather=_gather_state)
+    console.set_state_sink(map_pose.observe_state)
+    app.state.map_pose = map_pose
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
                           principals=principals, require_viewer=require_viewer,
-                          read_guard=read_guard)
+                          read_guard=read_guard, map_pose=map_pose)
+    install_map_pose_routes(app, service=map_pose, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,
                            require_viewer=require_viewer, read_guard=read_guard,

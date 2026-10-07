@@ -120,6 +120,8 @@ class FleetConsole:
         self._loc_null_since: dict[str, Optional[float]] = {}
         #: robot_id -> the localization service's view (needs_human), set by app.py.
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
+        #: D-491 3: every state read also feeds the trip-only map pose (its `odom_pose`).
+        self._state_sink: Optional[Callable[[str, dict], None]] = None
         #: Robots whose pinned address is unverified (D-361 3): stop-only, kept as a
         #: blocked obstacle in traffic, alarmed when they were moving.
         self._held: dict[str, dict] = {}
@@ -218,6 +220,9 @@ class FleetConsole:
 
     def set_localization_view(self, view: Optional[Callable[[str], Optional[dict]]]) -> None:
         self._localization_view = view
+
+    def set_state_sink(self, sink: Optional[Callable[[str, dict], None]]) -> None:
+        self._state_sink = sink
 
     def _client(self, robot_id: str) -> RobotClient:
         client = self._clients.get(robot_id)
@@ -609,6 +614,8 @@ class FleetConsole:
             if state:
                 robot_id = row["robot_id"]
                 self._seen[robot_id] = state
+                if self._state_sink is not None:
+                    self._state_sink(robot_id, state)
                 if state.get("localization") is not None:
                     self._loc_null_since[robot_id] = None
                 elif robot_id in self._loc_null_since:
