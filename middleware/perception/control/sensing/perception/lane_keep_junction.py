@@ -35,7 +35,10 @@ def _across_path(ends, half):
 
 def _junction(strategy, transverse, left, right, half, corner_turning, max_lateral_m):
     """(reason, ahead_m) to HOLD at a junction, (None, None) otherwise. ahead_m is
-    base_link x of the transverse line, or of the diverging branch's near end (D-507 §5). Only with corner turning: there
+    base_footprint x of the transverse line, or of the diverging branch's near
+    end (D-507 §5). base_footprint and base_link share x on Pinky:
+    base_link_fixed_joint is `origin xyz="0 0 0.028"` (z only, rosy.urdf.xacro).
+    Only with corner turning: there
     the corner reading can pull the robot out of the lane at a junction mouth.
     Without it (the device default until D-495) both rules held 5-10 % more of the real
     replay frames (pilot none 0.32 -> 0.36-0.43), so the plain keeper goes on

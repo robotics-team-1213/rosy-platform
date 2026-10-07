@@ -277,7 +277,7 @@ class LaneKeeper:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
         self.last = {"strategy": "none", "boundaries": [], "transverse": [], "candidates": [], "blobs": 0,
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None,
-                     "lane_width_m": 2.0 * lane_half_width_m}
+                     "lane_width_m": 2.0 * lane_half_width_m, "junction_ahead_v": 1}
         if ground is None:
             self.last["reason"] = "no_ground"
             self._forget()
