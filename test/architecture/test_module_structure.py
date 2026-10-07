@@ -387,7 +387,11 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_322,
+        1_335,
+        "accept: independently re-judged at 1335 on 2026-10-07 (code-reviewer agent, read-only) for "
+        "D-494 4 / D-495: one LineJunctionStatus model and a defaulted LineFollowStatus.junction field "
+        "(always present, state idle) beside LineStuckStatus; additive, no envelope version change or "
+        "runtime owner. Zero-growth allowance remains. "
         "accept: re-judged at 1322 on 2026-10-07 for D-494 2: one optional StateSnapshot.odom_pose "
         "field; the OdomPose model lives in protocol/localization.py and joins the existing import "
         "line. No envelope version change or runtime owner. Zero-growth allowance remains. "
@@ -541,7 +545,13 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core_features": (
-        14_449,
+        14_934,
+        "accept: Independently re-judged 2026-10-07 (code-reviewer agent, read-only): ACCEPT with condition at 14934. "
+        "The growth is one line_follow junction mixin (junction.py 443, under the 600 file limit) plus "
+        "manager/model/wiring hooks under the same manager lock, generation and CORE final publisher; "
+        "no new owner, store, publisher or deploy unit. Condition: "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md lands as its own branch; the next "
+        "core_features re-judge before that move is on main is REJECT. "
         "accept: with condition: re-judged 2026-10-07 at 14449 for D-476 rev 1 (main 14328 + "
         "branch 121). Condition: before the next core_features re-judge, a dated plan in "
         "docs/plans/ splits line_follow lane recovery (lane_return*, lane_bridge, stuck_*) into "

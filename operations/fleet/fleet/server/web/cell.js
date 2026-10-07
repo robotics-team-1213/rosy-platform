@@ -314,7 +314,10 @@ $('credential').addEventListener('input', () => {
 });
 $('connect').addEventListener('click', () => action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
-  $('session').textContent = `${session.principal_id} · ${role}`;
+  const roleName = role === 'operator' ? '운영자' :
+    role === 'viewer' ? '조회 전용' :
+      role === 'policy-admin' ? '정책 관리자' : '권한 없음';
+  $('session').textContent = `${session.principal_id} · ${roleName}`;
   await list(); $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
 }));
 $('compile').addEventListener('click', () => action(async () => {

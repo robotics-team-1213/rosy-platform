@@ -25,7 +25,7 @@ from core_api_web.api.v1.common import (
 from core_common.domain.tasks import TaskKind
 from core_common.protocol.schemas import DockState, LanePerceptionRequest, LanePerceptionStatus, RobotMode
 from core_api_web.api.deps import Mode
-from core_api_web.api.deps import LineFollowMode, LineStuckRefused
+from core_api_web.api.deps import JunctionRefused, LineFollowMode, LineStuckRefused
 
 
 line_follow_router = APIRouter(prefix="/api/v1/line-follow", tags=["line-follow"])
@@ -188,6 +188,42 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
     if not svc.line_follow.hold():
         raise ApiError("LINE_FOLLOW_NOT_HELD", 409, "no active hold-to-run line-follow session")
     return _status(svc)
+
+
+class LineJunctionRequest(BaseModel):
+    """D-494 decision 4: what to do at the next junction (Fleet trip loop)."""
+
+    action: str = Field(pattern="^(straight|left|right|stop)$")
+    place_id: str = Field(min_length=1, max_length=128)
+    stop_after_m: Optional[float] = Field(default=None, ge=0, le=2.0)
+    expires_s: float = Field(gt=0, le=30)
+    # D-495: bounded turn for left (+) / right (-); without it left/right stay unresolved.
+    turn_deg: Optional[float] = Field(default=None, ge=-150, le=150)
+    advance_m: Optional[float] = Field(default=None, ge=0, le=0.30)
+
+
+@line_follow_router.post("/junction")
+def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(operator),
+                      svc: CoreServicesLike = Depends(get_services)):
+    """D-494 decision 4 / D-495. Never changes mode; the turn maneuver runs in CORE's own tick.
+    "Seat" is the existing vocabulary (D-460): operator token, manual control released and the
+    calibration lease, as the other motion endpoints. CAMERA_LINE only (IR has no junctions)."""
+    if body.stop_after_m is not None and body.action != "stop":
+        raise ApiError("VALIDATION_ERROR", 400, "stop_after_m belongs to stop")
+    if body.turn_deg is not None and (body.action not in ("left", "right") or body.turn_deg == 0
+                                      or (body.turn_deg > 0) != (body.action == "left")):
+        raise ApiError("VALIDATION_ERROR", 400, "turn_deg is left (+) or right (-) and not 0")
+    if body.advance_m is not None and body.turn_deg is None:
+        raise ApiError("VALIDATION_ERROR", 400, "advance_m belongs to a turn")
+    require_manual_released(svc)
+    require_calibration_owner(svc, auth, "line-follow junction")
+    try:
+        result = svc.line_follow.set_junction(body.action, body.place_id, body.expires_s,
+                                              body.stop_after_m, body.turn_deg, body.advance_m)
+    except JunctionRefused as exc:
+        raise ApiError(exc.code, 409, str(exc)) from exc
+    svc.state.set_line_follow(svc.line_follow.status())
+    return {"accepted": result[0], "junction_seq": result[1], "state": result[2]}
 
 
 @line_follow_router.post("/stuck/decision")

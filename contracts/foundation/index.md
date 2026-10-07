@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · fix(config): D-495 검토 설정과 주석
+- 2026-10-07 · uncommitted · feat(config): D-495 recovery_local_enabled 로봇 기본값 켜짐
+- 2026-10-07 · uncommitted · feat(config): D-495 bridge 기본값과 LineJunctionStatus 확장
+- 2026-10-07 · uncommitted · feat(schemas): LineFollowStatus.junction
 - 2026-10-07 · uncommitted · feat(protocol): D-495 junction_turn 능력 필드
-- 2026-10-07 · uncommitted · feat(protocol): D-494 1·2 trip 능력 필드와 odom_pose
-- 2026-10-06 · uncommitted · feat(core_common): D-484 sighting/preview 스키마 additive
-- 2026-10-05 · uncommitted · refactor(protocol): keep containment in its leaf contract
-- 2026-10-05 · uncommitted · feat(protocol): D-468 image-bound lane containment

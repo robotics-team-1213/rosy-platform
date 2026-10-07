@@ -114,6 +114,11 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         bridge_arm_max_angular=float(raw.get(
             "bridge_arm_max_angular", defaults.bridge_arm_max_angular)),
         bridge_site_no_dropoffs=_flag(raw, "bridge_site_no_dropoffs", defaults.bridge_site_no_dropoffs),
+        junction_reacquire_frames=_whole(raw, "junction_reacquire_frames",
+                                         defaults.junction_reacquire_frames),
+        junction_turn_lead_s=float(raw.get("junction_turn_lead_s", defaults.junction_turn_lead_s)),
+        junction_still_linear=float(raw.get("junction_still_linear", defaults.junction_still_linear)),
+        junction_still_angular=float(raw.get("junction_still_angular", defaults.junction_still_angular)),
         lane_return_body_margin_m=float(raw.get(
             "lane_return_body_margin_m", defaults.lane_return_body_margin_m)),
         lane_return_checkpoint_fraction=float(raw.get(
@@ -174,4 +179,5 @@ def bind_lane_return_motion(line_follow, sensor_adapter, policy_clock=None) -> N
             return False
 
     line_follow.bind_return_motion(
-        allowed, floor_proof_live=lambda: sensor_adapter.config.mode == "enforce")
+        allowed, floor_proof_live=lambda: sensor_adapter.config.mode == "enforce",
+        proof_configured=lambda: sensor_adapter.return_proof_configured() is True)
