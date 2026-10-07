@@ -108,15 +108,15 @@ def test_snapshot_signing_key_is_pinned_by_fingerprint_and_scoped():
     lock = yaml.safe_load(
         (ROOT / "deploy/robot/pinky_pro/image/inputs.lock.yaml").read_text(encoding="utf-8-sig")
     )
-    fpr = lock["ros"]["apt_snapshot_key_fingerprint"]
+    key_fingerprint = lock["ros"]["apt_snapshot_key_fingerprint"]
     text = _run_text()
     rendered = WORKFLOW.read_text(encoding="utf-8")
     keyring = "/etc/apt/keyrings/ros-snapshots-archive-keyring.gpg"
 
     # ROS 2 docs "Snapshot repository": 4B63 CF8F DE49 746E 98FA 01DD AD19 BAB3 CBF1 25EA.
-    assert fpr == "4B63CF8FDE49746E98FA01DDAD19BAB3CBF125EA"
+    assert key_fingerprint == "4B63CF8FDE49746E98FA01DDAD19BAB3CBF125EA"
     assert "['ros']['apt_snapshot_key_fingerprint']" in text
-    assert fpr not in rendered  # single source: the lock
+    assert key_fingerprint not in rendered  # single source: the lock
     assert "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${ros_snapshot_key_fpr}" in text
     assert "gpg --dearmor" in text and f"ros_snapshot_keyring={keyring}" in text
     # The fetched key must be exactly the pinned fingerprint, or the job stops.
