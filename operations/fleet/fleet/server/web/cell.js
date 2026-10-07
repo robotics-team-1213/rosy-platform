@@ -157,7 +157,16 @@ async function list() {
     throw error;
   }
   saved.replaceChildren(...result.documents.map(item => {
-    const li = document.createElement('li'); li.textContent = `${item.kind} · ${item.id} · ${item.updated_at}`; return li;
+    const li = document.createElement('li');
+    const name = document.createElement('strong');
+    name.textContent = `${item.kind === 'recipe' ? '레시피' : '셀 문서'} · ${item.id}`;
+    const time = document.createElement('time');
+    time.dateTime = item.updated_at;
+    const date = new Date(item.updated_at);
+    time.textContent = Number.isNaN(date.getTime()) ? '수정 시각 확인 불가'
+      : `수정 ${date.toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'})}`;
+    li.append(name, time);
+    return li;
   }));
   saved.hidden = result.documents.length === 0;
   status.hidden = result.documents.length > 0;
