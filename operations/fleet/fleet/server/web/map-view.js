@@ -8,7 +8,7 @@
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
-  streamEvidence, displayRotation, quarterTurn, cameraScreenToMap,
+  streamEvidence, mapUpTurn, quarterTurn, cameraScreenToMap,
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
@@ -396,8 +396,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
     const rect = canvas.getBoundingClientRect();
     const fallback = canvasSizeFor(bounds, 800);
-    // D-513 7: 실영상은 설치 회전만큼 돌려 그리고, 지도 점도 같은 회전을 거친다.
-    const turn = cameraOn ? quarterTurn(displayRotation(view.siteMap, calibration.source_id),
+    // D-513 7: 실영상은 지도 +y 가 위로 오게 돌려 그리고(mapUpTurn), 지도 점도 같은 회전을 거친다.
+    const turn = cameraOn ? quarterTurn(mapUpTurn(calibration),
       cameraFrame.image.naturalWidth, cameraFrame.image.naturalHeight) : null;
     const width = cameraOn ? turn.width : rect.width > 0 ? rect.width : fallback.width;
     const height = cameraOn ? turn.height : rect.height > 0 ? rect.height : fallback.height;
@@ -784,10 +784,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     cameraFrame = frame?.state === "live" ? frame : null;
     if (!view.map && view.siteMap) draw();
   }
-  // D-513 7: 크게 보기도 설치 회전만큼 돌린다. 회전이 없으면 받은 URL 그대로다.
+  // D-513 7: 크게 보기·썸네일도 이 카메라 보정의 지도 방향으로 돌린다. 펴 놓은 미리보기도
+  // 모서리 순서를 지켜 펴므로 같은 회전이다. 보정이 없으면 0 — 받은 URL 그대로다.
+  function frameTurn(frame) {
+    return mapUpTurn(calibrations.find((row) => row.source_id === frame.source));
+  }
   function turnedUrl(frame) {
     const image = frame.image;
-    const rot = displayRotation(view.siteMap, frame.source);
+    const rot = frameTurn(frame);
     if (!rot || !image?.naturalWidth) return frame.url;
     const turn = quarterTurn(rot, image.naturalWidth, image.naturalHeight);
     const canvas = document.createElement("canvas");
@@ -833,7 +837,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       }
       lastFrame = frame;
       // 레일 썸네일도 같은 회전 — 모서리 편집 중에는 CSS 가 원본으로 둔다(styles.css .vision-frame[data-turn]).
-      frame.image?.closest?.(".vision-frame")?.setAttribute("data-turn", String(displayRotation(view.siteMap, frame.source)));
+      frame.image?.closest?.(".vision-frame")?.setAttribute("data-turn", String(frameTurn(frame)));
       setCameraFrame(frame);
       showFrame();
       cancelMapCameraExpiry = scope.timeout(() => { lastFrame = null; setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
