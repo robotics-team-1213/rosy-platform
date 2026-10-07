@@ -3,6 +3,9 @@
 
 # dock
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Charging-dock firmware and the ROSY-DOCK-001 agent contract. The microcontroller exists first to **not energise bare floor contacts** without a load; current reporting is secondary. The robot polls `GET /status`; the dock never initiates a connection (local-first, no inbound robot API).

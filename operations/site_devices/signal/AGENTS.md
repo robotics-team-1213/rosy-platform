@@ -3,6 +3,9 @@
 
 # signal
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Traffic-signal controller contract (ROSY-SIGNAL-001, Draft) and ESP32 reference

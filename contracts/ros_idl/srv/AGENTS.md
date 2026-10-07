@@ -3,6 +3,9 @@
 
 # srv
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 rosidl service definitions for on-robot UI/hardware.

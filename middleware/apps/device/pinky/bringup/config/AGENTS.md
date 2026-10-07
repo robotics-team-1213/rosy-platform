@@ -3,6 +3,9 @@
 
 # config
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Bringup parameters and a localhost CycloneDDS profile for isolated DDS (D-6).

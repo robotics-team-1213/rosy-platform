@@ -3,6 +3,9 @@
 
 # native
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 D-161 product runtime units for Ubuntu Server 24.04 arm64 with native ROS 2

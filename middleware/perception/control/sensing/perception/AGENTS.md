@@ -3,6 +3,9 @@
 
 # perception
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Camera and lane evidence (D-209, D-228). This folder answers what is visible. It does not publish `cmd_vel`. Lidar, body geometry, and dock tags stay in the parent `sensing/` package.

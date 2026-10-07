@@ -3,6 +3,9 @@
 
 # omx_adapter (Python package)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Disabled-by-default profile validation plus optional ROS action and camera adapters. No serial access, fake joint-state publisher, or `cmd_vel`.
