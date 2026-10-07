@@ -829,11 +829,14 @@ SIZE_VERDICTS = {
         "without it, REJECT.",
     ),
     "perception/control/line_observer_node.py": (
-        604,
+        608,
         "accept: with condition: one ROS adapter for the line observer; detection/keep/containment/paint "
-        "logic is ROS-free in sensing/perception. Judged 2026-10-07 at 604 for the D-468 paint inner edge "
-        "(read-only lane_paint_half_width_m, startup refusal). Condition: the node's next change moves "
-        "logic out first; a re-judge above 604 is REJECT. (independently re-judged 2026-10-07)",
+        "logic is ROS-free in sensing/perception. Judged 2026-10-07 at 604 (D-468 paint inner edge). "
+        "Re-judged 2026-10-08 at 608 for the D-507 keep spin-in-place reset (odom twist joins the "
+        "camera-gap reset; paint freshness deduplicated onto pose_if_fresh): no extraction target had "
+        "room (lane_keep.py 600, lane_bev.py over, control at its 45254 limit), so the debt moves to the "
+        "dated P1a step in docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. Condition: no "
+        "further node growth before that step lands; a re-judge above 608 is REJECT.",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "perception/web/diagnostic.html": (
