@@ -113,7 +113,7 @@ SIZE_VERDICTS = {
         "split: independently re-judged at 41014 on 2026-10-07 (security-reviewer agent). Two components "
         "already judged on different bases, now combined after merging main. (1) main's D-494 M2 "
         "contracts 1-3, judged at 39679 (localization/map_pose.py, server/map_pose_service.py, "
-        "console_view.py TripCaps, the app.py trip-caps closure). (2) The branch"s D-494 5 trip loop, "
+        "console_view.py TripCaps, the app.py trip-caps closure). (2) The branch's D-494 5 trip loop, "
         "judged at 40348 on the 38952 base (+1396): fleet/server/trip_runner.py (at its 600 cap; the next"
         " change splits it), trip_ports.py, trip_guard.py (TRIP_ROBOT_BUSY guard; every operator stop "
         "ends the trip after the stop is sent), routing/execute.py, trip_routes.py, the site-map trip "
