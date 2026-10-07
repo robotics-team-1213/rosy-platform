@@ -19,6 +19,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 | `recovery/stuck_wiring.py` | Manager mixin feeding the machine; the back-off is the manager's own decision (D-2) |
 | `recovery/lane_return*.py` | D-468 local lane return: evidence ledger, checkpoint/retrace/search controller, arbitration inside the manager lock |
 | `recovery/lane_bridge.py` | D-476 expected-road bridge (default off): armed by confident following (rev 1, no D-468 containment), slow drive along the followed lane's straight extension on a short loss, swept by D-422 (plus the D-468 floor proof when enforce), then hand-over to D-468 or today's HOLD/LOST |
+| `recovery/motion_admit.py` | D-507 6 `motion_admitted(now, linear, angular, kind, map_id)`: the one motion admission for D-468 return/retrace, D-476 bridge and D-495 junction motion; D-400 enforce proof, else the `site_floor_map_id` site basis (IR verdict per kind, path + URDF body, fresh scan, D-422 sweep of the twist); site-basis reverse only for `retrace` |
 | `recovery/junction.py` | D-494 decision 4 / D-495 junction instruction gate and bounded turn: one pending instruction, keeps or zeroes the tick's decision (waiting, unresolved, stop after measured odom); the D-495 turn is its only own twist |
 
 ## Subdirectories

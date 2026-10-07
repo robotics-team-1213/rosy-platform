@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.123
+**Version:** v1.127
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1125,7 +1125,7 @@ inventory 기술자의 `state`(available/constrained/… presentation 어휘)와
   line-follow 서비스를 가지면 `lane`, 같은 응답의 `navigation.goal_navigation` 이 참이면 `free`(보류 뒤 값)다. 둘 다 없으면
   `[]` 이다. `trip_max_linear`(m/s, ≥0)는 로봇이 trip 에 허용하는 최고 속도로, `safety` 의 `max_linear`·`fleet_linear` 와
   line-follow 가 있을 때 그 `max_linear` 중 가장 작은 값이다. `junction_turn`(bool, D-495)은 CORE line-follow 가 교차로의
-  제한된 회전 동작을 지원할 때 `true` 다(지원하지 않으면 `false`, 없으면 지원하지 않는 것으로 읽는다). 지원은 읽을 때마다 다시 판단한다: keep 모드 교차로 감지 증거와 회전의 운동 근거가 함께 있어야 한다. 운동 근거는 D-400 enforce 바닥 증명이거나, D-498 현장 근거(`line_follow.junction_turn_site_accepted: true` + `ir_guard_enabled` 의 신선한 IR 가드 판정(이탈 아님) + 신선한 스캔의 D-422 몸체 정지)다 (v1.118). D-494 세 필드 `robot_kind`·`drive_modes`·`trip_max_linear`가 **없는** 로봇은 D-494 이전 이미지다(`junction_turn`도 없다). `robot.model`이 로봇 패키지 이름(`[a-z][a-z0-9_]*`, 64자 이하)이 아니면 CORE는 `robot_kind`만 뺀다. Fleet 은 모르는 `drive_modes` 값을 무시한다. Fleet 은 그
+  제한된 회전 동작을 지원할 때 `true` 다(지원하지 않으면 `false`, 없으면 지원하지 않는 것으로 읽는다). 지원은 읽을 때마다 다시 판단한다: keep 모드 교차로 감지 증거와 회전의 운동 근거가 함께 있어야 한다. 운동 근거는 D-400 enforce 바닥 증명이거나, D-498/D-507 6 현장 근거(`line_follow.site_floor_map_id` 선언 + `ir_guard_enabled` 의 신선한 IR 가드 판정(이탈 아님) + `obstacle_mode: path`·URDF 몸 + 신선한 스캔의 D-422 몸체 정지)다 (v1.118, v1.127). `site_floor_map_id`(문자열, D-507 9, v1.127)는 로봇의 현장 바닥 선언, 곧 걸어서 확인한 지도의 `SiteMap.map_id`다. 선언이 없으면(설정 null) 필드가 없다. Fleet 은 이 값이 활성 지도의 `map_id`와 다른 로봇의 `lane` trip 을 열지 않는다. D-494 세 필드 `robot_kind`·`drive_modes`·`trip_max_linear`가 **없는** 로봇은 D-494 이전 이미지다(`junction_turn`도 없다). `robot.model`이 로봇 패키지 이름(`[a-z][a-z0-9_]*`, 64자 이하)이 아니면 CORE는 `robot_kind`만 뺀다. Fleet 은 모르는 `drive_modes` 값을 무시한다. Fleet 은 그
   로봇의 계획 미리보기를 지금처럼 허용하고, trip 실행은 열지 않는다(`TRIP_ROBOT_CAPS_UNKNOWN`, D-494 5).
 - `joint_jog`: 요청 한 번은 관절 하나를 `max_step_rad` 이하로 옮긴다. `duration_s` 는 **클라이언트가 각 요청에 보낼 목표
   길이**다. 이전 목표가 끝난 뒤에만 다음 목표를 보낸다(D-390 §2).
@@ -2453,6 +2453,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.127 | 2026-10-08 | Breaking config + Additive (D-507 6·9, feat/d507-motion-admitted-site-floor): 설정 `line_follow.site_floor_map_id`(문자열 또는 null, 기본 null; `^[A-Za-z0-9_.-]{1,64}$`, `site` 아님, `ir_guard_enabled`·`obstacle_mode: path`·URDF 몸 필요)가 `bridge_site_no_dropoffs`·`junction_turn_site_accepted`를 대신한다. 옛 키가 어느 설정 겹에 있어도 CORE 는 새 키 이름을 담은 오류로 시작을 거부한다(별칭 없음). `rosy.controls/1` `base_velocity` 선택 필드 `site_floor_map_id`. D-468 복귀·역추적, D-476 bridge, D-495 회전이 한 운동 허가(enforce 또는 현장 근거)를 쓰고, 현장 근거의 후진은 D-468 역추적만(한도 그대로). 중단 사유 그대로. envelope 1.0 유지 |
 | v1.123 | 2026-10-07 | Additive (D-499): Fleet `GET /api/fleet/state` 로봇 행 선택 필드 `link`(`up`·`unreachable`·`moved`·`tls-refused`·`protocol`). 401이 아닌 로봇 API 오류에는 필드가 없다. 표시 전용. CORE 경로·envelope 1.0·발행 루프의 online/state/goal 판정은 그대로다 |
 | v1.122 | 2026-10-07 | Additive (D-493, fix/d493-attention-stale-state): `GET /api/fleet/state` 로봇 행에 `state_age_s`(상태가 관찰된 뒤 지난 초. hub 나이와 SharedGather 캐시 나이 포함, 오프라인이면 `null`)와 최상위 `gathered_at`(마지막 실제 수집의 서버 UTC epoch 초, 표시용)을 더함. 콘솔 예외 큐는 `state_age_s` + 받은 뒤 지난 시간이 5초를 넘으면 "상태 오래됨" warn 을 붙인다. 기존 필드는 그대로다. |
 | v1.121 | 2026-10-07 | Additive (D-407 Fleet 쪽, feat/d407-stuck-episode-log): Site Fleet 새 경로 `GET /api/fleet/line-stuck/episodes`(viewer+) — 막힘 에피소드 기록(`fleet_line_stuck_episodes`, `--tasks-db` 파일). 보드 전이에서만 쓰고 로봇 요청은 늘지 않는다. Robot API·envelope 1.0 변경 없음 |
