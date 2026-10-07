@@ -740,3 +740,10 @@
 - gate 변화: 없음. 실기 태블릿·폰 화면은 미확인.
 - 결정: D-411, D-359.
 - 교훈: sticky 행동 줄은 뒤가 비쳐 면을 칠해야 한다 — 공용 부품을 칠하지 말고 스크롤 영역을 목록으로 옮긴다.
+
+## 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트 overflow-y auto, 녹화본 12개 시험
+- 변경: 22rem 미만 시트를 `overflow-y: hidden` 대신 `auto`로 둔다(목록 밖 내용이 넘쳐도 잘리지 않게). dev_server `/__test__/recordings` 에 `many`(녹화본 12개)를 더하고 320x568 시험이 목록만 스크롤하고 닫기·다시 불러오기가 스크롤 없이 보이며 마지막 행에 닿는지 본다.
+- 증거: `ROSY_RUN_BROWSER_TESTS=1` `test_narrow_recordings_sheet_scrolls_many_rows_and_keeps_actions_visible` 1 passed(`X:/DevTemp/browser-infra/pilot_sheet3.txt`), `test_robot_recording_toggle_and_sheet` 4 viewport 4 passed(`pilot_sheet2.txt`), known_failures 0 new.
+- gate 변화: 없음. 실기 화면은 미확인.
+- 결정: D-411.
+- 교훈: 없음

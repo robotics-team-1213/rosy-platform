@@ -1543,6 +1543,33 @@ def _enter_recording_drive(page, base_url, **scenario):
 
 @pytest.mark.skipif(not browser_tests_enabled(),
                     reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
+def test_narrow_recordings_sheet_scrolls_many_rows_and_keeps_actions_visible(base_url):
+    """22rem 미만: 녹화본이 많으면 목록만 스크롤하고 하단 행동은 스크롤 없이 보인다."""
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 320, "height": 568})
+        page.set_default_timeout(10_000)
+        try:
+            _enter_recording_drive(page, base_url, many=True)
+            _open_sheet(page)
+            rows = page.locator("[data-recordings-sheet] [data-recording-id]")
+            assert rows.count() == 12
+            assert page.evaluate("""(() => { const l = document.querySelector('[data-recordings-list]');
+              return l.scrollHeight > l.clientHeight; })()"""), "많은 녹화본은 목록이 스크롤한다"
+            for selector in ("[data-recordings-close]", "[data-recordings-refresh]"):
+                box = page.locator(selector).bounding_box()
+                assert box and box["y"] >= 0 and box["y"] + box["height"] <= 568, selector
+            last = rows.last
+            last.scroll_into_view_if_needed()
+            assert last.evaluate("""row => { const b = row.getBoundingClientRect();
+              return document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('[data-recording-id]') === row; }""")
+        finally:
+            _recordings(page, base_url, reset=True)
+            browser.close()
+
+
+@pytest.mark.skipif(not browser_tests_enabled(),
+                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_robot_recording_toggle_and_sheet(base_url, viewport):
     """D-411 A: 로봇 녹화 토글(화면 녹화와 따로)과 녹화본 시트 — 받기는 CORE 의 차단 사유를 따른다."""

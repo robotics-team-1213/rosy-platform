@@ -449,7 +449,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
     gap: var(--space-1);
     display: flex;
     flex-direction: column;
-    overflow-y: hidden;
+    overflow-y: auto;
   }
   [data-recordings-sheet] > * { flex: none; }
   [data-recordings-sheet] > p { display: none; }
