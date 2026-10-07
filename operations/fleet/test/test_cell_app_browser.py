@@ -179,6 +179,8 @@ def test_cell_saved_documents_show_readable_kind_and_local_time(browser_site, wi
         expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
     rows = page.locator("#saved li")
     expect(rows).to_have_count(2)
+    expect(page.locator("#saved-status")).to_be_visible()
+    expect(page.locator("#saved-status")).to_contain_text("문서 목록을 마지막으로 받은 시각")
     expect(rows.nth(0).locator("strong")).to_contain_text("셀 문서 · cell-demo")
     expect(rows.nth(1).locator("strong")).to_contain_text("레시피 · recipe-demo")
     for row in rows.all():
@@ -241,7 +243,8 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
     expect(status).to_have_attribute("state", "empty")
     _prepare(page)
     expect(page.locator("#saved li")).to_have_count(2)
-    expect(status).to_be_hidden()
+    expect(status).to_be_visible()
+    expect(status).to_contain_text("문서 목록을 마지막으로 받은 시각")
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output:
         page.locator("#saved").scroll_into_view_if_needed()
@@ -677,4 +680,5 @@ def test_saved_structured_controls_stay_locked_until_list_read_finishes(browser_
     expect(page.locator("#notice")).to_contain_text("문서 저장 완료")
     assert locked == [True]
     expect(page.locator("#saved li")).to_have_count(2)
-    expect(page.locator("#saved-status")).to_be_hidden()
+    expect(page.locator("#saved-status")).to_have_attribute("state", "ready")
+    expect(page.locator("#saved-status")).to_contain_text("문서 목록을 마지막으로 받은 시각")
