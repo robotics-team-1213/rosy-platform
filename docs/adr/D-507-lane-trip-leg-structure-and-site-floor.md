@@ -126,3 +126,9 @@
   - SOURCE: 기대 창 안·밖 감지, 창 밖에서 지시 보존, 접근 거리(가로선 + 절반 폭, 갈래 0, 필드 없음 0), 접근 중단 규칙, 운동 허가 한 함수의 두 근거와 동작별 IR 허용 값, 현장 근거 후진(역추적만 허가, 다른 동작의 후진 거절, 뒤 방향 sweep 미달·낡음에서 거절, 역추적 한도 그대로), D-468 양의 증거(미증명 → 추종, `margin + u < 0` → 이탈), 선언 검증과 옛 키 거절, Fleet 필드 전송·능력 확인·`TRIP_SITE_FLOOR_MISMATCH`·`junction_unexpected` 즉시 정지, D-422 몸 안 점 버림, 원본 시각 허용치.
   - SIM(모델 PC, 이 노트북 아님): 로봇 기본값 + 현장 오버레이로 `map_v2_fleet_real` 출발(60 s에 0.5 m 이상), 증명된 이탈(차로 중심에서 0.04 m, yaw 0.2 rad로 놓음)에서 복귀(역추적 포함)로 `tracking` 복귀, 선언 null이면 HOLD만, 로봇 뒤에 상자를 둔 역추적은 `near_stop`으로 멈춤, SW spoke 좌 60·우 −110·−150 재획득 9/9와 벽 `near_stop` 0, 굽이 15회 진입에서 회전 지시 소비 0, 좌·우·직진·마지막 `stop` trip 한 바퀴, S5–S9 재실행.
   - DEVICE(9dfk, 사용자 승인): D1–D9(D-495, D-498) + 접근 뒤 회전 축 위치(장소 점과 거리), 역추적 끝 자세(LiDAR 벽 정합, odom 아님), 선언 기록(지도 id, 걸은 사람, 날짜, 뒤쪽 바닥 확인).
+
+## 구현 메모: B9 굽이 규칙은 경로가 굽이를 기대할 때만 (2026-10-08, perception 쪽, fix/keep-bend-not-fork)
+
+- keeper 입력 `LaneKeeper.update(..., bend_expected=False)`를 새로 둔다. 이 값이 참이고 corner turning이 켜져 있을 때만 B9 규칙이 돈다: 굽이 규칙(`lane_keep_bend`), 가파른 선의 가까운 끝 편 정하기, 이어진 조각의 편 상속, 가까운 순서, fork 끝-시작 연속성. 기본값(거짓)이면 keeper는 B9 이전과 같다. 실물 라벨 434프레임(124745Z·133221Z)에서 main과 결정이 0프레임 다르다. corner turning은 장치 기본으로 켜져 있어서 이 게이트가 될 수 없다. 장치 검토에서 corner turning만으로 켠 B9는 HOLD → 주행 29프레임 중 맞은 것이 0이었다.
+- 참은 Fleet이 이 자리에 굽이를 기대한다고 보낼 때만이다. 3항의 기대 창(`expect_in_m`, `expect_tol_m`)과 장소 종류 `bend`를 Fleet이 보내고, CORE가 창 안에서 keeper에 넘긴다. 이 배선(Fleet trip 지시 필드, CORE 지시 상태, `line_observer_node`로 넘기는 경로)은 B11·B12 범위다. B9는 keeper 쪽 입력과 기본값만 둔다.
+- 게이트가 켜져도: 굽이 중심선이 경로와 만나는 점이 `CORNER_LOOKAHEAD_M`보다 멀면 차로의 자기 목표를 굽이 선의 경로 교차점에서 반폭을 뺀 거리 안으로 당긴다(`bend_ahead`, 평활 뒤에도). 차로 쪽 경계가 없으면 HOLD다. 65°를 넘는 굽이 선은 교차로 규칙에도 가로선으로 넘긴다(교차로는 닫힌 쪽으로 실패). 증거: `docs/validation/lane-keep-bend-sim-2026-10-08`.
