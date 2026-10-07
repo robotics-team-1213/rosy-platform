@@ -24,7 +24,7 @@ from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import arc_id, lane_action, replan_hold, theta, unsupported
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
-                                     OPEN, LiveTrip, TripError, pose_diagnostics, pose_view)
+                                     OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view)
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -149,7 +149,7 @@ class TripRunner:
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
                     "caps": {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
-                             "junction_turn": caps.junction_turn}}
+                             "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot}}
             live = LiveTrip(view, graph, row["request"])
             self._live = live
             self._restarted = [t for t in self._restarted if t["robot_id"] != robot_id]  # this trip owns it
@@ -342,12 +342,13 @@ class TripRunner:
                 return
         stop_after = min(max(remaining, 0.0), MAX_STOP_AFTER_M) if action == STOP else None
         turn = round(theta(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
+        expect = junction_fields(live.graph, live.segments, index, action, remaining, live.view, self._store.active())
         if not live.open:
             return
         try:
             reply = await self._call(self._junction.send_junction(
                 live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s,
-                turn_deg=turn)) or {}
+                turn_deg=turn, expect=expect)) or {}
         except RobotApiError as exc:
             if exc.code != "JUNCTION_ALREADY_DONE":
                 raise

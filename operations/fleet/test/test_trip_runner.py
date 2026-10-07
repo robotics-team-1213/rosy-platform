@@ -146,6 +146,7 @@ class Ports:
         self.core = FakeCore(self)
         self.sent: list[tuple] = []
         self.turns: list = []
+        self.expects: list = []  # D-507 2 fields per send (None: not sent)
         self.goals: list[tuple] = []
         self.canceled: list[str] = []
         self.held: list[str] = []
@@ -178,12 +179,13 @@ class Ports:
         return self.core.mode
 
     async def send_junction(self, robot_id, action, place_id, stop_after_m, expires_s, turn_deg=None,
-                            advance_m=None):
+                            advance_m=None, expect=None):
         if self.junction_error is not None:
             raise self.junction_error
         reply = self.core.send(action, place_id, stop_after_m, expires_s, turn_deg)
         self.sent.append((action, place_id, None if stop_after_m is None else round(stop_after_m, 3)))
         self.turns.append(turn_deg)
+        self.expects.append(expect)
         return reply
 
     async def goal(self, robot_id, x, y, yaw):
@@ -909,7 +911,8 @@ def test_the_http_junction_port_uses_the_robot_client():
     class Client:
         modes: list = []
 
-        async def line_follow_junction(self, action, place_id, *, stop_after_m, expires_s, turn_deg, advance_m):
+        async def line_follow_junction(self, action, place_id, *, stop_after_m, expires_s, turn_deg, advance_m,
+                                       expect=None):
             return {"args": (action, place_id, stop_after_m, expires_s, turn_deg)}
 
         async def state(self):

@@ -15,7 +15,9 @@ from typing import Any, Awaitable, Callable, Mapping, Optional, Protocol
 from fleet.hub.hub import HubError
 from fleet.localization.map_pose import MapPose
 from fleet.server.console_view import TripCaps
+from fleet.routing.cost import LEFT, RIGHT
 from fleet.routing.execute import arc_id, ends_at_place
+from fleet.site_map import ENDPOINT_TOL_M
 
 #: Trip states that are still going.
 OPEN = ("started", "running")
@@ -37,7 +39,7 @@ class MapPosePort(Protocol):
 class LaneJunctionPort(Protocol):
     async def send_junction(self, robot_id: str, action: str, place_id: str, stop_after_m: Optional[float],
                             expires_s: float, turn_deg: Optional[float] = None,
-                            advance_m: Optional[float] = None) -> dict: ...
+                            advance_m: Optional[float] = None, expect: Optional[dict] = None) -> dict: ...
 
     async def junction_state(self, robot_id: str) -> Optional[dict]:
         """The snapshot's ``line_follow.junction`` ({pending_action, place_id, state, seq}) or None."""
@@ -63,14 +65,16 @@ class HttpLaneJunction:
 
     async def send_junction(self, robot_id: str, action: str, place_id: str, stop_after_m: Optional[float],
                             expires_s: float, turn_deg: Optional[float] = None,
-                            advance_m: Optional[float] = None) -> dict:
+                            advance_m: Optional[float] = None, expect: Optional[dict] = None) -> dict:
         return await self._client(robot_id).line_follow_junction(
             action, place_id, stop_after_m=stop_after_m, expires_s=expires_s, turn_deg=turn_deg,
-            advance_m=advance_m)
+            advance_m=advance_m, expect=expect)
 
     async def junction_state(self, robot_id: str) -> Optional[dict]:
-        junction = ((await self._client(robot_id).state()).get("line_follow") or {}).get("junction")
-        return junction if isinstance(junction, dict) else None
+        line = (await self._client(robot_id).state()).get("line_follow") or {}
+        junction = line.get("junction")
+        # D-507 3: the line-follow reason beside it, shown when the trip stops at an unexpected junction
+        return {**junction, "line_reason": line.get("reason")} if isinstance(junction, dict) else None
 
     async def hold(self, robot_id: str) -> dict:
         # ponytail: CORE POST /line-follow/hold extends a hold-to-run session (D-344 8, it keeps the
@@ -143,6 +147,42 @@ def pose_diagnostics(pose) -> dict:
     # the provider's types are its own; the trip row stores JSON (a dataclass becomes its str)
     keys = ("sightings_filtered_map_id", "odom_refused", "odom_refused_reason")
     return json.loads(json.dumps({key: getattr(pose, key, None) for key in keys}, default=str))
+
+
+#: D-507 2: CORE takes ``expect_in_m`` in (0, 2], ``expect_tol_m`` in (0, 0.30] and
+#: ``pivot_past_line_m`` in [0, 0.30] (the D-495 ``MAX_ADVANCE_M``).
+MAX_EXPECT_IN_M = 2.0
+MAX_EXPECT_TOL_M = 0.30
+MAX_PIVOT_PAST_LINE_M = 0.30
+#: Along-track odom drift per metre dead-reckoned since the last sighting (wheel slip on carpet).
+ODOM_DRIFT_PER_M = 0.05
+
+
+def junction_fields(graph, segments: list, index: int, action: str, remaining: float, view: dict,
+                    active) -> Optional[dict]:
+    """D-507 2: the optional junction fields, only for a robot whose caps report ``junction_pivot``.
+
+    ``map_id`` (the active map the plan runs on) always; the expectation (``expect_in_m``,
+    ``expect_tol_m``, ``pivot_past_line_m``) only while the place is (0, 2] m along the lane,
+    otherwise CORE keeps today's behaviour for it.
+    """
+    caps, pose = view.get("caps") or {}, view.get("pose") or {}
+    if caps.get("junction_pivot") is not True or active is None or active[0] != view["map_version"]:
+        return None
+    fields = {"map_id": active[1].map_id}
+    expect_in = round(remaining, 3)
+    if not 0.0 < expect_in <= MAX_EXPECT_IN_M:
+        return fields
+    # ponytail: the map pose has no heading-direction error estimate, so it is odom drift over the
+    # distance dead-reckoned since the last sighting plus how far the robot drives at its trip speed
+    # while the pose ages; replace with the provider's own covariance once MapPose reports one.
+    error = (ODOM_DRIFT_PER_M * (pose.get("dead_reckon_m") or 0.0)
+             + (caps.get("max_speed") or 0.0) * (pose.get("age_s") or 0.0))
+    fields.update(expect_in_m=expect_in, expect_tol_m=round(min(error + ENDPOINT_TOL_M, MAX_EXPECT_TOL_M), 3))
+    if action in (LEFT, RIGHT):  # the place is on the outgoing lane's centre line (D-490)
+        width = graph.arcs[arc_id(segments[index + 1])].width_m
+        fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
+    return fields
 
 
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:

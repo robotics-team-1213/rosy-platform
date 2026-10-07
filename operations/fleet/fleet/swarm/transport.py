@@ -128,7 +128,7 @@ class RobotClient(Protocol):
     async def line_follow(self) -> dict: ...
     async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
                                    expires_s: float, turn_deg: float | None = None,
-                                   advance_m: float | None = None) -> dict: ...
+                                   advance_m: float | None = None, expect: dict | None = None) -> dict: ...
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
@@ -287,9 +287,12 @@ class HttpRobotClient:
 
     async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
                                    expires_s: float, turn_deg: float | None = None,
-                                   advance_m: float | None = None) -> dict:
-        """D-494 4 / D-495 1: the action at the next junction; an old CORE answers 404."""
-        body: dict = {"action": action, "place_id": place_id, "expires_s": expires_s}
+                                   advance_m: float | None = None, expect: dict | None = None) -> dict:
+        """D-494 4 / D-495 1: the action at the next junction; an old CORE answers 404.
+
+        ``expect`` holds the D-507 2 fields (map_id, expect_in_m, ...) for a ``junction_pivot`` CORE.
+        """
+        body: dict = {"action": action, "place_id": place_id, "expires_s": expires_s, **(expect or {})}
         for key, value in (("stop_after_m", stop_after_m), ("turn_deg", turn_deg), ("advance_m", advance_m)):
             if value is not None:
                 body[key] = value
