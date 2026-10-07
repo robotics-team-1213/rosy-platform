@@ -69,6 +69,7 @@ class JunctionRefused(Exception):
 class JunctionMixin:
     def _init_junction(self):
         self._junction_seq = 0
+        self._turn_basis_now = None  # D-498 basis of this tick's maneuver refusal check
         self._junction = None  # None (idle) | dict: action, place_id, seq, state, ...
         self._junction_seen_at = None
         self._junction_first_seen = None  # start of the current run of sightings
@@ -87,17 +88,26 @@ class JunctionMixin:
         junction HOLD that starts a turn) and a motion proof that can admit the turn at all.
         The observer's lane mode and flag are perception parameters; CORE learns them only from
         line/keep_debug (published in keep mode only, carrying corner_turning), so no fresh frame
-        means False. The proof today is the D-400 enforce floor proof (LiDAR, IMU, IR); without
-        it every turn would abort motion_unconfirmed, so the capability is False."""
+        means False. The motion basis is D-498 _turn_basis, recomputed on every read."""
         with self._lock:
             at = self._keep_corner_at
-            if at is None or not 0 <= self._clock()-at <= KEEP_EVIDENCE_S:
-                return False
-            ready = self._return_proof_configured
-            try:
-                return self._return_motion is not None and ready is not None and ready() is True
-            except Exception:  # noqa: BLE001 - an unreadable proof reports no turn
-                return False
+            return (at is not None and 0 <= self._clock()-at <= KEEP_EVIDENCE_S
+                    and self._turn_basis(self._clock()) is not None)
+
+    def _turn_basis(self, now):
+        """D-498: 'enforce' (D-400 floor proof), 'site' (fresh IR guard without departure, live
+        D-422 body stop on a fresh scan, junction_turn_site_accepted) or None."""
+        try:
+            if self._return_motion is not None and self._return_proof_configured() is True:
+                return 'enforce'
+        except Exception:  # noqa: BLE001 - an unbound or unreadable proof is no basis
+            pass
+        c, at = self._config, self._clearance_at
+        if (c.junction_turn_site_accepted and c.ir_guard_enabled and c.body_stop_known
+                and self._scan_points is not None and at is not None
+                and 0 <= now-at <= c.clearance_stale_s and self._ir_guard(now) not in ('stale', 'centre')):
+            return 'site'
+        return None
 
     def _reset_junction(self):
         """A line-follow session owns its instruction. A maneuver cut by a mode change (incl.
@@ -294,8 +304,9 @@ class JunctionMixin:
         """Why the bounded turn may not run this tick, or None (D-468/D-476 authority rules)."""
         if self._provided('calibration_active') is not False:
             return 'calibration_active'
-        if self._return_motion is None:
-            return 'motion_unconfirmed'  # review L2: an unbound motion check is a refusal
+        self._turn_basis_now = self._turn_basis(now)
+        if self._turn_basis_now is None:
+            return 'motion_unconfirmed'  # review L2 / D-498: no enforce proof and no site basis
         if self._recovery.stuck_id is not None:
             return 'stuck'
         if self._angular_cap() <= 0:
@@ -316,7 +327,7 @@ class JunctionMixin:
         refusal = self._maneuver_refusal(now)
         if refusal is not None:
             return self._abort(j, refusal, decision)
-        key = (self._return_evidence.epoch, pose.frame)
+        key, j['basis'] = (self._return_evidence.epoch, pose.frame), self._turn_basis_now
         if self._junction_entry is not None and self._junction_entry[1] != key:
             return self._abort(j, 'odom', decision)  # entry yaw no longer comparable
         self._loss_started_at, self._lost_latched = None, False
@@ -339,6 +350,8 @@ class JunctionMixin:
             j['state'] = 'unresolved'
             self._bridge_hint = None
             return self._junction_hold('junction_unresolved', decision)
+        if refusal == 'motion_unconfirmed' and j.get('basis') == 'site':
+            refusal = 'turn_basis_lost'  # D-498 decision 3
         if refusal is not None:
             return self._abort(j, refusal, decision)
         own_body_check = self._config.body_stop_known and self._scan_points is not None
@@ -441,8 +454,8 @@ class JunctionMixin:
             gap, _, _, resume = self._body_clearance(now)
             if gap is not None and gap <= resume:
                 return self._abort(j, 'near_stop', decision)
-        if not self._return_probe(now, linear, angular):
-            return self._abort(j, 'motion_unconfirmed', decision)
+        if self._turn_basis_now == 'enforce' and not self._return_probe(now, linear, angular):
+            return self._abort(j, 'motion_unconfirmed', decision)  # site basis: D-422 above
         # D-468 measured the old lane; it starts afresh after the maneuver, not toward it.
         self._return_controller, self._bridge = None, None
         self._loss_started_at, self._lost_latched = None, False
