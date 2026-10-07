@@ -3,7 +3,7 @@
 Sightings come only from `SightingService.accept` (source token bound to the robot id, lease,
 order) and, when a map id provider is given, only for the active site map frame. Odom comes from
 every state snapshot the console reads (hub heartbeat or REST) and from `refresh`.
-`arbitrated_pose` is for the trip loop (D-494 5) only; `/route`, D-395 and traffic keep
+`arbitrated_pose` is for the trip loop (D-494 5) and the D-511 lane-compliance monitor; `/route`, D-395 and traffic keep
 `FleetConsole.trusted_map_pose`. D-457 tracking is not an input.
 """
 
@@ -130,8 +130,14 @@ class MapPoseService:
         if not done.cancelled() and done.exception() is not None:
             logger.debug("map pose: state read for %s failed: %r", key[0], done.exception())
 
+    def moved(self, robot_id: str) -> bool:
+        """D-511 2: the robot's odom moved within the last `max_odom_age_s`."""
+        tracker = self._tracker(robot_id)
+        return tracker is not None and tracker.moved_since(self._wall() - self.config.max_odom_age_s)
+
     def arbitrated_pose(self, robot_id: str) -> Optional[MapPose]:
-        """The robot's map pose for trip execution; None for a robot not on the roster."""
+        """The robot's map pose for trip execution and the D-511 lane-compliance monitor
+        (D-511 2 widens D-494 3); None for a robot not on the roster."""
         tracker = self._tracker(robot_id)
         return tracker.pose(self._wall(), self.active_map_id()) if tracker is not None else None
 

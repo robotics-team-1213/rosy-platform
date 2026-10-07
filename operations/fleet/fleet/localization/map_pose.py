@@ -237,6 +237,14 @@ class MapPoseTracker:
     def latest_odom_stamp(self) -> Optional[float]:
         return self._odom[-1].stamp if self._odom else None
 
+    def moved_since(self, since: float) -> bool:
+        """D-511 2: odom path or heading grew after `since` (an odom reset starts over)."""
+        if not self._odom or self._odom[-1].stamp < since:
+            return False
+        base = next((o for o in reversed(self._odom) if o.stamp < since), self._odom[0])
+        last = self._odom[-1]
+        return last.path_m > base.path_m or last.turn_rad > base.turn_rad
+
     def refuse_odom(self, reason: str) -> None:
         """Count an odom sample that never reached `add_odom` (malformed snapshot)."""
         self._refused += 1
