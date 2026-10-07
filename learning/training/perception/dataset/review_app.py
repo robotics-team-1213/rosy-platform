@@ -317,6 +317,7 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     object_set = class_sets.object_set(store)
                     return self.send({'frames': frames, 'classes': [c['name'] for c in object_set['classes']],
                                       'object_class_set': object_set,
+                                      'workspace_kind': review_evidence.metadata(store, 'workspace_kind'),
                                       'token': token, 'exports': store.exports(), 'segmentation_supported': True,
                                       'pixel_classes': review_masks.served_classes(store),
                                       'map_reference': review_evidence.map_reference(store)})

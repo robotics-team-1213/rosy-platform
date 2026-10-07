@@ -103,6 +103,10 @@ def test_mask_requires_full_background_review_and_never_restores_object_approval
     with pytest.raises(ValueError, match='미검수'):
         review_masks.update(store, 0, {'version':0, 'action':'approve',
                                       'complete_frame_review':True, 'background_reviewed':True}, Conflict)
+    with pytest.raises(ValueError, match='미검수'):
+        review_masks.update(store, 0, {'version':0, 'action':'approve',
+                                      'complete_frame_review':True, 'background_reviewed':True,
+                                      'unknown_pixels_reviewed':True}, Conflict)
     painted = review_masks.update(store, 0, {'version':0, 'action':'fill', 'label':0}, Conflict)
     with pytest.raises(ValueError, match='각각'):
         review_masks.update(store, 0, {'version':painted['version'], 'action':'approve',
