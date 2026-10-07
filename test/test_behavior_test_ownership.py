@@ -27,6 +27,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_initial_pose.py",
     "middleware/core/gateway/test/test_line_follow.py",
     "middleware/core/gateway/test/test_line_follow_api.py",
+    # D-507 9 CORE config seam: line_follow.site_floor_map_id parsing in gateway wiring
+    # (_line_follow_config, check_bridge_floor_basis) against the core_features config.
+    "middleware/core/gateway/test/test_site_floor_declaration.py",
     # D-494 HTTP-to-CORE seam; pure junction decisions stay in services/test.
     "middleware/core/gateway/test/test_line_junction_api.py",
     # CORE HTTP-to-Host seam and atomic mode/calibration admission integration;

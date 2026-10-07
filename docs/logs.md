@@ -6939,3 +6939,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: D-515 (D-513 7항의 메인 지도 실영상 회전 대체)
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(push): 2026-10-08 pre-push 검사 복구
+
+- 변경: `map-view.js` 크기 판정 split 903 기록, fleet 재판정 43217, 분리 계획에 camera backdrop 절 추가. `test_site_floor_declaration.py`를 외부 행동 시험 목록에 이유와 함께 추가. 주석의 Pinky 문자열 두 곳을 일반 표현으로 바꾸고 `lane_compliance.py`(PINKY_PRO 몸체 사용)를 de-Pinky 부채 목록에 추가.
+- 증거: architecture·behavior ownership·robot literal 시험 39 passed. 크기 판정은 독립 critic 에이전트가 했다.
+- gate 변화: pre-push의 4개 실패 해소 대상.
+- 결정: 없음(기존 split 계획에 절 추가)
+- 교훈: 여러 세션이 같은 웹 파일을 키우면 크기 판정이 푸시 시점에 한꺼번에 걸린다.
