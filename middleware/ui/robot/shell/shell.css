@@ -133,6 +133,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     align-content: stretch;
     min-height: 0;
     overflow: hidden;
+    scrollbar-gutter: stable;
   }
   body[data-surface="console"] .surface-slot[data-slot="act"] {
     grid-template-columns: minmax(0, 1fr);
@@ -140,6 +141,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
     align-content: start;
     min-height: 0;
     overflow: hidden;
+    scrollbar-gutter: stable;
   }
   body[data-surface="console"] .surface-slot[data-slot="observe"] > ui-section,
   body[data-surface="console"] .surface-slot[data-slot="act"] > .action-group-panel {

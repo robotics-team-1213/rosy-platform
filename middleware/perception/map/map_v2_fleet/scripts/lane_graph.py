@@ -101,7 +101,13 @@ def crosswalks(scene):
     for k in range(1, count):
         rows, cols = np.nonzero(bars & (labels == k))
         pts = np.stack([x0 + cols * RASTER_M, y1 - rows * RASTER_M], axis=1).astype(np.float32)
-        zones.append({"polygon": _round(cv2.boxPoints(cv2.minAreaRect(pts)))})
+        polygon = np.array(_round(cv2.boxPoints(cv2.minAreaRect(pts))))
+        # OpenCV versions choose different starting corners. Emit CCW from
+        # the lexicographically smallest rounded corner on every platform.
+        centre = polygon.mean(axis=0)
+        polygon = polygon[np.argsort(np.arctan2(polygon[:, 1] - centre[1], polygon[:, 0] - centre[0]))]
+        first = min(range(len(polygon)), key=lambda i: tuple(polygon[i]))
+        zones.append({"polygon": np.roll(polygon, -first, axis=0).tolist()})
     return sorted(zones, key=lambda z: np.mean(z["polygon"], axis=0).tolist())
 
 

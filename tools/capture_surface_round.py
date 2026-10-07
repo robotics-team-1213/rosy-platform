@@ -124,6 +124,9 @@ def main() -> int:
                             authGate: Boolean(document.querySelector('.surface-auth-link')),
                             role: document.querySelector('#shell-role')?.title || null,
                             panels: document.querySelectorAll('#surface-main ui-section').length,
+                            panelWidths: [...document.querySelectorAll('#surface-main ui-section')]
+                                .filter(panel => panel.getClientRects().length)
+                                .map(panel => Math.round(panel.getBoundingClientRect().width * 100) / 100),
                             failedPanels: document.querySelectorAll('[data-failed=true]').length,
                             overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
                         })""")
@@ -145,10 +148,13 @@ def main() -> int:
     (args.out_dir / "report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     bad = [f"{r['surface']}/{r['theme']}@{r['viewport']}: data-theme={r['data-theme']!r} "
-           f"bad={r['badResponses']}" for r in rows
+           f"bad={r['badResponses']} widths={r['measurements']['panelWidths']}" for r in rows
            if r["data-theme"] != r["theme"] or r["badResponses"]
            or not r["contentReady"] or r["measurements"]["authGate"]
-           or r["measurements"]["failedPanels"] or r["measurements"]["overflow"]]
+           or r["measurements"]["failedPanels"] or r["measurements"]["overflow"]
+           or (r["surface"] == "console" and r["measurements"]["panelWidths"]
+               and max(r["measurements"]["panelWidths"])
+               - min(r["measurements"]["panelWidths"]) > 1)]
     for line in bad:
         print(f"PROBLEM {line}", file=sys.stderr)
     if errors:

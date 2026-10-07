@@ -1,6 +1,7 @@
 """D-488 M1 site map page in real Chromium (opt-in, ROSY_BROWSER_TESTS=1). No robot moves."""
 
 import os
+import json
 import re
 import socket
 import threading
@@ -15,6 +16,38 @@ from test_site_map_trip import _app, _on_ring_s
 pytestmark = pytest.mark.skipif(os.environ.get("ROSY_BROWSER_TESTS") != "1",
                                 reason="opt-in real Chromium browser scenario")
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_import_camera_map_draft_never_activates(page_site):
+    from playwright.sync_api import expect
+    from test_site_map_trip import _line
+
+    page, store, robot = page_site
+    page.locator("#credential input").fill("operator-token")
+    page.locator("#connect").click()
+    expect(page.locator("#session")).to_contain_text("bob")
+    previous = store.active_view()
+    camera_fixture = os.environ.get("ROSY_CAMERA_MAP_FIXTURE")
+    draft = json.loads(Path(camera_fixture).read_text(encoding="utf-8")) if camera_fixture \
+        else {"schema": "rosy.site_map/1", **_line()}
+    page.locator("#camera-map-file").set_input_files({
+        "name": "camera-draft.json", "mimeType": "application/json",
+        "buffer": json.dumps(draft).encode()})
+    page.locator("#import-camera-map").click()
+    expect(page.locator("#notice")).to_contain_text("카메라 지도 초안")
+    expect(page.locator("#site-map-svg [data-edge]")).to_have_count(len(draft["edges"]))
+    assert store.active_view() == previous
+    assert store.draft_view()["map"]["edges"]
+    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        for width, height in ((1440, 1000), (390, 844)):
+            page.set_viewport_size({"width": width, "height": height})
+            page.screenshot(path=str(Path(output) / f"camera-map-import-{width}x{height}.png"), full_page=True)
+    page.locator("#camera-map-file").set_input_files({
+        "name": "invalid.json", "mimeType": "application/json", "buffer": b'{"schema":"wrong"}'})
+    page.locator("#import-camera-map").click()
+    expect(page.locator("#notice")).to_contain_text("rosy.site_map/1")
+    assert store.active_view() == previous
 
 
 @pytest.fixture
