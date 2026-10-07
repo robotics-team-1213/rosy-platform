@@ -210,3 +210,39 @@ def test_failure_while_resolving_aborts_the_merge(repos, monkeypatch):
     monkeypatch.setattr(land, "git", git_failing_commit)
     assert land.main(["--tests", "none"]) == 1
     assert no_merge_left(wt)
+
+
+def test_commit_on_branch_during_checks_is_not_landed(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    real = land.run_tests
+
+    def run_tests(wt_, *rest):
+        result = real(wt_, *rest)
+        commit(wt, {"pkg/b.py": "late = 1\n"}, "untested late commit")
+        return result
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_main_checkout_must_have_main(repos, tmp_path):
+    main, wt = repos
+    other = tmp_path / "other"
+    git(main, "worktree", "add", "-q", str(other), "-b", "feat/other", "main")
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    assert land.main(["--tests", "none", "--main-checkout", str(other)]) == 1
+    assert git(other, "rev-parse", "HEAD") == git(main, "rev-parse", "HEAD")
+
+
+def test_ff_refused_by_peer_dirty_file_leaves_it(repos, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    (main / "pkg/a.py").write_bytes(b"peer's uncommitted edit\n")
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "none"]) == 1
+    assert "would be overwritten" in capsys.readouterr().err
+    assert (main / "pkg/a.py").read_bytes() == b"peer's uncommitted edit\n"
+    assert git(main, "rev-parse", "HEAD") == before

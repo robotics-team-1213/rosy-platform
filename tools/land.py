@@ -366,6 +366,12 @@ def main_checkout(wt: Path) -> Path:
     raise Stop("no worktree has main checked out; pass --main-checkout")
 
 
+def on_main(main_co: Path) -> None:
+    head = git(main_co, "symbolic-ref", "-q", "HEAD", check=False).stdout.strip()
+    if head != "refs/heads/main":
+        raise Stop(f"{main_co} has {head or 'a detached HEAD'} checked out, not refs/heads/main")
+
+
 def tmp_dir(branch: str) -> Path:
     base = os.environ.get("ROSY_LAND_TMP") or ("X:/DevTemp/land" if os.name == "nt" else "/tmp/rosy-land")
     path = Path(base) / branch.replace("/", "-")
@@ -379,6 +385,7 @@ def land(args) -> int:
     if branch in ("main", "HEAD"):
         raise Stop(f"run from a topic worktree, not on {branch!r}")
     main_co = Path(args.main_checkout) if args.main_checkout else main_checkout(wt)
+    on_main(main_co)
     if main_co.resolve() == wt.resolve():
         raise Stop("this is the shared main checkout; run from .worktrees/<topic>")
     dirty = git(wt, "status", "--porcelain").stdout.strip()
@@ -397,6 +404,7 @@ def land(args) -> int:
             resolved = merge(wt, main_sha, branch, python, args.dry_run)
             summary.append(f"round {round_no}: merged main {main_sha[:10]}"
                            + (f", auto-resolved {resolved}" if resolved else ""))
+        candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
         if args.tests == "none":
             invocations: list[list[str]] = []
         elif args.tests == "auto":
@@ -406,7 +414,7 @@ def land(args) -> int:
         if args.dry_run:
             print("[plan] lint, then pytest invocations:")
             print("\n".join("  " + " ".join(inv) for inv in invocations) or "  (none)")
-            print(f"[plan] then git -C {main_co} merge --ff-only {branch}")
+            print(f"[plan] then git -C {main_co} merge --ff-only {candidate}  ({branch})")
             return 0
 
         delta = lines(wt, "diff", "--name-only", tested_main, main_sha) if tested_main else []
@@ -423,7 +431,11 @@ def land(args) -> int:
         if out(wt, "rev-parse", "main") != main_sha:
             print("[land] main moved during the round; merging again")
             continue
-        ff = git(main_co, "merge", "--ff-only", branch, check=False)
+        tip = out(wt, "rev-parse", f"refs/heads/{branch}")
+        if tip != candidate or out(wt, "rev-parse", "HEAD") != candidate:
+            raise Stop(f"{branch} moved to {tip[:10]} during the checks; {candidate[:10]} was tested, not that")
+        on_main(main_co)
+        ff = git(main_co, "merge", "--ff-only", candidate, check=False)
         if ff.returncode == 0:
             landed = out(main_co, "rev-parse", "HEAD")
             count = out(wt, "rev-list", "--count", f"{start}..{landed}")
