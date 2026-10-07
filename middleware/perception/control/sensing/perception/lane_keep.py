@@ -67,7 +67,7 @@ import numpy as np
 from .lane import LaneObservation
 from .crosswalk_stripes import crosswalk_extent
 from .lane_bev import BEV_CELL_M, BirdsEye
-from .lane_containment import PAINT_HALF_WIDTH_M, paint_half_width
+from .lane_containment import PAINT_HALF_WIDTH_M
 from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tests
     CORE_HALF_M,
     FLANK_INNER_M,
@@ -95,7 +95,7 @@ from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tes
     _validate_positive,
     clean_learned_mask,
     denoise_white_mask,
-    extract_lines,
+    extract_lines, fit_cells,
     floor_white_mask,
 )
 from .lane_keep_pairs import (  # noqa: F401 — re-exported; patch constants on lane_keep_pairs
@@ -205,8 +205,7 @@ class LaneKeeper:
     def __init__(self, *, camera_x_offset_m: float = 0.0,
                  lookahead_m: float = LOOKAHEAD_M,
                  smoothing: float = 0.5, seed: int = 0,
-                 corner_turning: bool = False,
-                 paint_half_width_m: float = PAINT_HALF_WIDTH_M) -> None:
+                 corner_turning: bool = False) -> None:
         if (isinstance(camera_x_offset_m, bool)
                 or not isinstance(camera_x_offset_m, (int, float))
                 or not math.isfinite(camera_x_offset_m)):
@@ -220,7 +219,6 @@ class LaneKeeper:
         self._smoothing = float(smoothing)
         self._seed = int(seed)
         self._corner_turning = bool(corner_turning)
-        self._paint_half = paint_half_width(paint_half_width_m)
         self._view = None
         self._view_key = None
         self._previous_target = None
@@ -309,16 +307,8 @@ class LaneKeeper:
         rng = np.random.default_rng(self._seed)
         if len(points) > MAX_POINTS:
             points = points[rng.choice(len(points), MAX_POINTS, replace=False)]
-        # G-16: fit each line on its whole visible stroke (half the paint + one fit cell),
-        # leaving out the rows of a D-491 crosswalk (its bars sit beside the lane lines).
-        crosswalk = self.last["crosswalk"]
-
-        def usable(xy):
-            seen = view.seen(xy)
-            return seen if crosswalk is None else seen & ((xy[:, 0] < crosswalk[0]) | (xy[:, 0] > crosswalk[1]))
-        lines, blobs = extract_lines(points, rng, usable=usable,
-                                     paint_half_m=self._paint_half + FIT_STRIDE * BEV_CELL_M
-                                     ) if len(points) else ([], [])
+        lines, blobs = extract_lines(points, rng, usable=fit_cells(view.seen, self.last["crosswalk"]),  # G-16
+                                     paint_half_m=PAINT_HALF_WIDTH_M + FIT_STRIDE * BEV_CELL_M) if len(points) else ([], [])
         self.last["blobs"] = len(blobs)
         previous = self._previous_target
         left, right, transverse = [], [], []

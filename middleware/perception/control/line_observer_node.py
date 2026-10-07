@@ -152,8 +152,7 @@ class LineObserverNode(Node):
         self._keep_last_stamp = None
         self._lane_keeper = LaneKeeper(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
-            corner_turning=bool(self.get_parameter('lane_corner_turning').value),
-            paint_half_width_m=self._paint_half_width_m)
+            corner_turning=bool(self.get_parameter('lane_corner_turning').value))
         self._paint_worker = self._build_paint_worker()
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)

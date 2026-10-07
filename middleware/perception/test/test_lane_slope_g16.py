@@ -19,7 +19,7 @@ from control.sensing.perception.lane_bev import BEV_CELL_M, BirdsEye
 from control.sensing.perception.lane_containment import (
     PAINT_HALF_WIDTH_M, RECEIVER_EXTRAPOLATION_M, SLOPE_SIGMAS, containment_payload)
 from control.sensing.perception.lane_keep import FIT_STRIDE, LaneKeeper
-from control.sensing.perception.lane_keep_lines import extract_lines
+from control.sensing.perception.lane_keep_lines import extract_lines, fit_cells
 
 REPO = Path(__file__).resolve().parents[3]
 EVIDENCE = REPO / "docs" / "validation" / "d476-gazebo-rev1-2026-10-07" / "evidence" / "runs"
@@ -47,10 +47,7 @@ def lines_of(lit, seed, fixed):
     thin = grid[::FIT_STRIDE, ::FIT_STRIDE].astype(bool)
     points = np.stack([VIEW.x[::FIT_STRIDE, ::FIT_STRIDE][thin], VIEW.y[::FIT_STRIDE, ::FIT_STRIDE][thin]], axis=1)
 
-    def usable(xy):
-        seen = VIEW.seen(xy)
-        return seen if crosswalk is None else seen & ((xy[:, 0] < crosswalk[0]) | (xy[:, 0] > crosswalk[1]))
-    kwargs = dict(usable=usable, paint_half_m=FIT_HALF) if fixed else {}
+    kwargs = dict(usable=fit_cells(VIEW.seen, crosswalk), paint_half_m=FIT_HALF) if fixed else {}
     lines, _ = extract_lines(points, np.random.default_rng(seed), **kwargs)
     return lines
 

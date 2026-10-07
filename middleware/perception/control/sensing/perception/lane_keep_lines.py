@@ -182,6 +182,14 @@ def _paint_fit(points, centre, direction, lo, hi, half_m, usable):
     return centre, direction, math.sqrt(variance / float(np.sum((rows - rows.mean()) ** 2)))
 
 
+def fit_cells(seen, crosswalk):
+    """G-16 ``usable`` for _paint_fit: floor points ``seen`` by the camera and outside the
+    rows (near_m, far_m) of a D-491 crosswalk, whose bars sit beside the lane lines."""
+    if crosswalk is None:
+        return seen
+    return lambda xy: seen(xy) & ((xy[:, 0] < crosswalk[0]) | (xy[:, 0] > crosswalk[1]))
+
+
 def extract_lines(points: np.ndarray, rng: np.random.Generator, *, usable=None, paint_half_m=None,
                   _prefer_forward=False):
     """Thin straight paint lines in `points` (N x 2, metres). Returns
