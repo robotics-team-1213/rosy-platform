@@ -1,5 +1,5 @@
 // "기기 연결" 패널의 카메라 연결 승인 구역 (D-341 3–5, 11; D-391 4의 3단계).
-// 콘솔은 6자리 코드를 모른다 — 운용자가 폰 화면의 코드를 입력해 Fleet으로만 보낸다.
+// 콘솔은 6자리 코드를 모른다 — 운영자가 폰 화면의 코드를 입력해 Fleet으로만 보낸다.
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createCameraPairingPanel 이 화면 배선이다.
 
 import { createPollGate } from "./poll-gate.js";
@@ -37,7 +37,7 @@ export const MESSAGES = {
   UNKNOWN_CREDENTIAL: "모르는 자격입니다. 목록을 다시 확인하세요.",
   ALREADY_REVOKED: "이미 폐기된 자격입니다.",
   PAIRING_RATE_LIMITED: "요청이 너무 많습니다. 잠시 뒤 다시 시도하세요.",
-  OPERATOR_IDENTITY_REQUIRED: "이름 있는 운용자 계정으로만 카메라 연결을 승인·거절·폐기할 수 있습니다 — 공용 관제 토큰으로는 할 수 없습니다(site-users.yaml).",
+  OPERATOR_IDENTITY_REQUIRED: "이름 있는 운영자 계정으로만 카메라 연결을 승인·거절·폐기할 수 있습니다 — 공용 관제 토큰으로는 할 수 없습니다(site-users.yaml).",
 };
 
 // 서버가 말한 분류만 문구로 옮긴다(D-193 S3 규칙). 모르는 분류는 짐작하지 않는다.

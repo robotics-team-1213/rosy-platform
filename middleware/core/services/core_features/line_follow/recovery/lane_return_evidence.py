@@ -9,7 +9,7 @@ import math
 from dataclasses import dataclass
 
 from core_common.protocol.lane_containment import LaneContainmentEvidence
-from core_features.line_follow.lane_return import Boundary, Corridor, Pose, PoseTrail, _angle, _finite
+from core_features.line_follow.recovery.lane_return import Boundary, Corridor, Pose, PoseTrail, _angle, _finite
 from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 
 

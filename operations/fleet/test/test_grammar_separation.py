@@ -32,9 +32,10 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
     """D-129·D-130.1 — 참조할 수 있는 시트는 자기 것과 공용 토큰뿐이다."""
     shared_sheets = ["/common/tokens.css", "/common/components.css"]
     page_sheets = {
-        "index.html": [*shared_sheets, "/console/assets/styles.css"],
+        # D-501: doc-tabs.css is Fleet's own tab-row sheet, shared by its four documents.
+        "index.html": [*shared_sheets, "/console/assets/styles.css", "/console/assets/doc-tabs.css"],
         "install.html": [*shared_sheets, "/common/task-chooser.css",
-                         "/console/assets/styles.css"],
+                         "/console/assets/styles.css", "/console/assets/doc-tabs.css"],
     }
     for page_name, expected_sheets in page_sheets.items():
         hrefs = re.findall(r'<link[^>]+href="([^"]+\.css)"',

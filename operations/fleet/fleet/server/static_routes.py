@@ -20,6 +20,7 @@ CONSOLE_ASSETS = {
     "cell.js": "application/javascript",
     "cell-document-editor.js": "application/javascript",
     "cell.css": "text/css",
+    "doc-tabs.css": "text/css",
     "styles.css": "text/css",
     "console.js": "application/javascript",
     "confirmed-action.js": "application/javascript",
