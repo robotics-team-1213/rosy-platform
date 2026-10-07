@@ -188,6 +188,7 @@ def _retrace(**config):
     # D-507 7: an unseen lane opens no departure; a ready frame with the body over the
     # left edge (margin + u < 0) is the positive evidence that opens it.
     r.step(seen=True, edges=(.05, -.15))
+    assert r.m._return_controller.phase != 'tracking'  # the evidence opened the departure
     checkpoint = r.m._return_controller.checkpoint[0].received_at
     out = []
     for _ in range(10):

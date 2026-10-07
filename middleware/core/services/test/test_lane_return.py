@@ -237,14 +237,15 @@ def _checkpointed():
 def test_pose_jump_while_following_opens_departure_without_lane_evidence():
     ctl = _checkpointed()
     action = ctl.tick(inp(1.3, pose=pose(1.3, 2), corridor=None))
-    assert action.phase != "tracking"  # departure opened; recovery owns the tick
+    # Departure opened this tick; with no checkpoint path left the same tick goes to search.
+    assert ctl._opened == 1.3 and (action.phase, action.reason) == ("search", "sensor_search")
 
 
 def test_epoch_change_while_following_opens_departure_without_lane_evidence():
     from dataclasses import replace
     ctl = _checkpointed()
     action = ctl.tick(replace(inp(1.3, corridor=None), epoch=1))
-    assert action.phase != "tracking"  # departure opened; recovery owns the tick
+    assert ctl._opened == 1.3 and (action.phase, action.reason) == ("search", "sensor_search")
 
 
 def test_continuous_drift_into_a_lane_that_is_not_the_checkpointed_one_opens_departure():
