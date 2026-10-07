@@ -337,6 +337,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             angular = -turn if guard == "left" else turn
             linear *= self._config.ir_guard_speed_scale
             reason = f"lane_edge_{guard}"
+        elif guard == "crosswalk":
+            reason = "ir_guard_crosswalk"
         if abs(angular) > cap:
             # D-344 §13: 계단 상한으로 자를 때 선속도도 같은 비율로 — 같은 호를 더 천천히 돈다.
             linear *= cap / abs(angular)
@@ -437,6 +439,8 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
         guard = None
         if self._mode is LineFollowMode.CAMERA_LINE and self._config.ir_guard_enabled:
             guard = self._ir_guard(current)
+            if self._crosswalk_rest(current, guard):
+                guard = "crosswalk"  # D-491: known crosswalk under the IR row
         if self._clearance_at is not None:
             # 앞 물체 정지는 차선 상실이 아니다 — LOST 로 누적하지 않고 치워지면 곧바로 간다.
             if current - self._clearance_at > self._config.clearance_stale_s:

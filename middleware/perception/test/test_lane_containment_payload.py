@@ -218,3 +218,12 @@ def test_bound_covers_the_true_projection_error_for_a_record():
 def test_a_ray_that_may_clear_the_true_horizon_is_excessive_not_bounded():
     g = SimpleNamespace(height_m=.06, pitch_rad=.14, focal_px=281.6)
     assert projection_uncertainty_m(g, (.07, 0., 0., 2.), [((.5, .09), (1., .09))]) == 1.0
+
+
+def test_crosswalk_extent_rides_in_the_payload_and_passes_the_contract():
+    from core_common.protocol.lane_containment import LaneContainmentEvidence
+    raw = containment_payload({"crosswalk": (.15, .27)}, ground(), stamp=1., source="CALIBRATED", camera_x=.033)
+    assert raw["crosswalk"] == dict(near_m=.15, far_m=.27)
+    assert LaneContainmentEvidence.model_validate(raw).crosswalk.near_m == .15
+    assert "crosswalk" not in containment_payload({"crosswalk": None}, ground(), stamp=1., source="CALIBRATED",
+                                                  camera_x=.033)

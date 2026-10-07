@@ -143,7 +143,7 @@ CORE 변경 두 가지(1·2항, 4항)는 서명 릴리스가 있어야 로봇에
 
 ### 구현 부록 (2026-10-07) — 5항 trip 루프
 
-브랜치 `feat/d491-fleet-trip-loop`의 구현과 두 번의 검토(조정자 검토, 독립 검토)에서 정한 것이다. 결정 본문은 바꾸지 않는다. API Reference 행은 착지 순서대로 v1.115다(v1.112–v1.114는 1·2항, 3항, 4항이 먼저 썼다). CORE 쪽 동작은 4항 구현(`feat/d491-core-junction-action`의 `line_follow/junction.py`)을 기준으로 한다.
+브랜치 `feat/d491-fleet-trip-loop`의 구현과 두 번의 검토(조정자 검토, 독립 검토)에서 정한 것이다. 결정 본문은 바꾸지 않는다. API Reference 행은 착지 순서대로 v1.116다(v1.112–v1.114는 1·2항, 3항, 4항이 먼저 썼다). CORE 쪽 동작은 4항 구현(`feat/d491-core-junction-action`의 `line_follow/junction.py`)을 기준으로 한다.
 
 1. **trip id.** trip id는 `plan_id`다. 한 계획은 한 번만 출발한다(409 `TRIP_ALREADY_STARTED`). 상태 코드는 없는 계획·trip 404, `TRIP_BUSY`·`TRIP_ALREADY_STARTED`·`TRIP_NOT_RUNNING` 409, 나머지 시작 거절 422다. `/trip`의 `execute: true`는 계속 501이다. 출발은 언제나 이름 있는 운영자의 별도 호출이다.
 2. **차선 로봇이 갈 수 없는 계획.** `TRIP_MODE_UNSUPPORTED`로 거절한다. 차로 중간에서 끝나는 `lane` trip(`LANE_END_NOT_A_PLACE`), `lane` U턴(`LANE_UTURN`), 150°를 넘는 회전(`LANE_TURN_TOO_SHARP`)이다. `lane` 간선이 하나라도 있으면 능력 `junction_turn: true`가 있어야 한다(`JUNCTION_TURN_UNSUPPORTED`). CORE의 교차로 판정은 keep 모드 증거가 살아 있을 때만 작동해서, 없으면 교차로에서 멈추지도 꺾지도 않는다(D-495). 실행 가능 규칙은 순수 모듈 `fleet/routing/execute.py`에 둔다.
