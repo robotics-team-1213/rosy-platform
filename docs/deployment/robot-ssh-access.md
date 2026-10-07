@@ -84,32 +84,36 @@ python tools/ssh/rosy_ssh_share.py revoke --label dev:<이름> --robot <robot-ip
 지금은 API로 켠다.
 
 먼저 administrator 코드로 토큰을 받는다. 토큰은 화면에 출력하지 말고 변수에만 둔다.
-API는 HTTPS이고 로봇 인증서는 주소가 아닌 `rosy-pinky-xxxx.local` 이름이라, 아래 예는 인증서를 확인하지 않는다
-(`curl -k`, PowerShell 7의 `-SkipCertificateCheck`). 믿을 수 있는 LAN에서만 쓴다.
+API는 HTTPS이고 로봇 인증서는 주소가 아닌 `rosy-pinky-xxxx.local` 이름이다. 아래 bash 예는 그 인증서
+(`robot.pem`, 1절에서 받은 것)에 묶어 확인하고, `--resolve`로 이름을 로봇 주소에 잇는다. Windows에서는
+Git Bash에서 그대로 쓴다.
 
 bash (macOS, Linux, Git Bash):
 
 ```bash
 # Windows Git Bash에서는 아래 python3를 python으로 바꾼다.
 R=<robot-ip>
+N=rosy-pinky-xxxx.local   # 로봇 화면의 이름
+C="curl -fsS --cacert robot.pem --resolve $N:8080:$R"
 read -rs -p "administrator login code: " CODE; echo
-TOKEN=$(curl -fsSk -X POST "https://$R:8080/api/v1/auth/pair" -H 'Content-Type: application/json' \
+TOKEN=$($C -X POST "https://$N:8080/api/v1/auth/pair" -H 'Content-Type: application/json' \
   -d "{\"code\":\"$CODE\",\"label\":\"ssh-password\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
 unset CODE
 
 # 켜기: 응답의 password를 받는 사람에게 전한다 (minutes 1..60)
-curl -fsSk -X POST "https://$R:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN" \
+$C -X POST "https://$N:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"minutes": 30}'
 
 # 상태 보기 / 지금 끄기
-curl -fsSk "https://$R:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN"
-curl -fsSk -X DELETE "https://$R:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN"
+$C "https://$N:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN"
+$C -X DELETE "https://$N:8080/api/v1/host/ssh/password" -H "Authorization: Bearer $TOKEN"
 
 # 끝나면 토큰 logout
-curl -fsSk -X POST "https://$R:8080/api/v1/auth/logout" -H "Authorization: Bearer $TOKEN"; unset TOKEN
+$C -X POST "https://$N:8080/api/v1/auth/logout" -H "Authorization: Bearer $TOKEN"; unset TOKEN
 ```
 
-PowerShell 7 (`pwsh`, Windows):
+PowerShell 7 (`pwsh`, Windows) — 인증서를 확인하지 않는 대안(`-SkipCertificateCheck`, `curl -k`와 같다).
+`robot.pem`이 없을 때 믿을 수 있는 LAN에서만 쓴다.
 
 ```powershell
 $R = "<robot-ip>"
@@ -155,6 +159,8 @@ python tools/ssh/rosy_ssh_share.py create --name <팀이름> --robot <robot-ip> 
   passphrase는 어떤 파일에도 쓰이지 않는다.
 - 로봇마다 administrator 로그인 코드를 묻는다. 운영 키로 접속되는 로봇이면 `--via-operator-key`를 붙여
   코드를 ssh로 받아 쓸 수 있다(코드는 화면에 나오지 않는다). 이때 HTTPS 인증서도 같은 ssh로 읽어 고정한다.
+  ssh는 `StrictHostKeyChecking=yes`라서 로봇의 host key가 운영 known_hosts(`%LOCALAPPDATA%\Rosy\known_hosts`)에
+  이미 있어야 한다. 없으면 멈추고 넣는 방법을 알려 준다(로봇 콘솔의 지문을 대조한 뒤 운영 키로 한 번 접속).
   아니면 `--ca-file`이나 `--insecure`를 준다(1절).
 - 한 로봇이라도 실패하면 묶음을 만들지 않고, 이미 등록된 로봇을 지우는 `revoke` 명령을 알려 준다.
 - 결과: `<out>/rosy-<팀이름>.zip` — 폴더 없이 파일만 든 압축으로, 잠긴 개인 키와 `.pub`, `config`(로봇별 `Host`), `known_hosts`,

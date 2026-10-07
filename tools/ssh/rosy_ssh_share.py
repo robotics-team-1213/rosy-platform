@@ -109,11 +109,17 @@ def operator_ssh(robot: str, key: Path, ssh, command: str) -> str:
         known = ["-o", "UserKnownHostsFile=" + (Path(os.environ["LOCALAPPDATA"]) / "Rosy" / "known_hosts").as_posix()]
     argv = ["ssh", "-i", str(key), "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
             "-o", "PasswordAuthentication=no", "-o", "KbdInteractiveAuthentication=no",
-            "-o", "StrictHostKeyChecking=accept-new", *known, "-o", "ConnectTimeout=10",
+            # yes, not accept-new: the login code and the pinned HTTPS certificate are only as good as this host key.
+            "-o", "StrictHostKeyChecking=yes", *known, "-o", "ConnectTimeout=10",
             f"rosy@{robot}", command]
     code, out, err = ssh(argv)
     if code != 0:
-        raise SshAccessError(f"{robot}: ssh with the operator key failed (exit {code}): {err.strip()[:300]}")
+        hint = ""
+        if "Host key verification failed" in err:
+            hint = ("; the robot's host key is not in the operator known_hosts (%LOCALAPPDATA%\\Rosy\\known_hosts). "
+                    "Connect once with the operator key after comparing the fingerprint with the robot console "
+                    "(ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub), or type the login code instead")
+        raise SshAccessError(f"{robot}: ssh with the operator key failed (exit {code}): {err.strip()[:300]}{hint}")
     return out
 
 
@@ -129,7 +135,7 @@ def served_certificate(robot: str, key: Path, port: int, ssh) -> str:
     """The HTTPS certificate CORE serves, read on the robot over the host-key-checked operator ssh."""
     match = CERTIFICATE.search(operator_ssh(robot, key, ssh, SERVED_CERT_COMMAND.format(port=port)))
     if match is None:
-        raise SshAccessError(f"{robot}: could not read the CORE HTTPS certificate over ssh")
+        raise SshAccessError(f"{robot}: CORE on 127.0.0.1:{port} did not present a certificate (is CORE running?)")
     return match.group(0)
 
 
@@ -496,8 +502,8 @@ def main(argv: list[str] | None = None, *, ask_code=None, ask_lock=None, keygen=
     deps = Deps(get_code=get_code, ask_lock=ask_lock or getpass.getpass, keygen=keygen or enroll.run_tool,
                 client_for=client_for or https_client)
     try:
-        if client_for is None and args.via_operator_key is None:
-            enroll.tls_context(args.ca_file, insecure=args.insecure)  # refuse a missing --ca-file before anything
+        if client_for is None and (args.via_operator_key is None or args.ca_file or args.insecure):
+            enroll.tls_context(args.ca_file, insecure=args.insecure)  # refuse a missing/bad --ca-file before anything
         return {"create": create, "revoke": revoke, "list": list_keys}[args.command](args, deps)
     except SshAccessError as error:
         print(f"rosy_ssh_share: {error}", file=sys.stderr)
