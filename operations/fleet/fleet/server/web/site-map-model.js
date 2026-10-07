@@ -34,8 +34,7 @@ export const TRIP_ERROR_LABEL = {
 export const TRIP_STATE_LABEL = {
   started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨',
 };
-// Map pose states (fleet/localization/map_pose.py), worded like trust.py STATE_LABELS.
-export const POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 의심', UNKNOWN: '위치 모름'};
+const TRIP_POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 정확도 저하', UNKNOWN: '위치 확인 불가'};
 export const TRIP_REASON_LABEL = {
   pose: '위치를 믿을 수 없어 멈췄습니다',
   junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
@@ -54,6 +53,15 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
   SITE_MAP_INVALID: '지도에 맞지 않는 값이 있습니다',
+  // D-494 6 teach
+  TEACH_BUSY: '다른 로봇을 기록하는 중입니다 · 한 번에 한 대만 가르칩니다',
+  TEACH_NOT_RECORDING: '기록 중이 아닙니다',
+  TEACH_POSE_UNTRUSTED: '로봇 지도 위치가 LOCALIZED가 아닙니다 · Rosy Cam이 로봇을 보는 곳에서 다시 하세요',
+  TEACH_TOO_SHORT: '기록한 길이 0.1 m보다 짧아 버렸습니다',
+  TEACH_UNKNOWN: '확정할 기록이 없습니다 · 10분이 지났거나 이미 확정했습니다',
+  TEACH_UNKNOWN_PLACE: '없는 장소입니다',
+  TEACH_PLACE_TOO_FAR: '고른 장소가 기록 끝에서 0.15 m보다 멉니다',
+  UNKNOWN_ROBOT: '등록되지 않은 로봇입니다',
 };
 
 export function siteMapErrorText(error) {
@@ -193,7 +201,7 @@ export function tripStatusText(trip, map) {
   const parts = [`${TRIP_STATE_LABEL[trip.state] || trip.state} · ${trip.robot_id}`];
   if (trip.current_edge) parts.push(`차로 ${trip.current_edge}`);
   if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
-  if (trip.pose) parts.push(`${POSE_STATE_LABEL[trip.pose.state] || '위치 상태 미보고'} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
+  if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
   if (trip.hold) parts.push('바뀐 경로 확인 대기 · 장소에서 서 있음');
   if (trip.reason === 'stall' && Number.isFinite(trip.detail?.stall_s)) {
     parts.push(`${trip.detail.stall_s}초 넘게 ${TRIP_REASON_LABEL.stall}`);
@@ -216,4 +224,30 @@ export function tripStartReason({role, plan, active, running, now = Date.now() /
 export function tripCancelReason({role, running}) {
   if (role !== 'operator') return role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
   return running ? '' : '진행 중인 운행이 없습니다';
+}
+
+/** One line for the teach panel from `GET /api/fleet/teach`. */
+export function teachStatusText(view) {
+  const live = view?.recording;
+  if (live) return `기록 중 · ${live.robot_id} · ${live.points.length}점 · ${live.started_by}`;
+  if (view?.pending?.length) return `확정 대기 ${view.pending.length}건 · 멈춘 뒤 10분 안에 확정하세요`;
+  return '기록 없음';
+}
+
+/** `POST /api/fleet/teach/confirm` body; an empty place id means a new address named `name`. */
+export function teachConfirmBody({teachId, from, fromName, to, toName, direction, driveMode, speed, revision}) {
+  const end = (id, name, label) => {
+    if (id) return id;
+    if (!String(name || '').trim() || String(name).length > 64) throw new Error(`${label} 새 주소 이름은 1–64자입니다`);
+    return {name: String(name).trim(), kind: 'junction'};
+  };
+  const value = Number(speed);
+  if (!Number.isFinite(value) || value <= 0 || value > 5) throw new Error('속도 상한은 0–5 m/s입니다');
+  return {teach_id: teachId, from: end(from, fromName, '시작'), to: end(to, toName, '끝'), direction,
+    drive_mode: driveMode, speed_cap_mps: value, expected_revision: revision || null};
+}
+
+/** The recording the confirm form acts on: the newest stopped one (latest `expires_at`). */
+export function newestPending(view) {
+  return (view?.pending || []).reduce((best, item) => (!best || item.expires_at > best.expires_at ? item : best), null);
 }

@@ -32,6 +32,12 @@ class ActivateRequest(BaseModel):
     expected_revision: str = Field(min_length=1, max_length=64)
 
 
+def invalid_errors(exc: ValidationError) -> list[dict]:
+    """Field errors without the submitted values (``SITE_MAP_INVALID`` ``detail.errors``)."""
+    return [{"loc": [str(part) for part in item["loc"]], "msg": item["msg"]}
+            for item in exc.errors(include_url=False, include_context=False, include_input=False)[:20]]
+
+
 def site_map_error(status: int, code: str, message: str = "") -> HTTPException:
     return HTTPException(status_code=status, detail={"code": code, "detail": {"message": message} if message else {}})
 
@@ -71,11 +77,9 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
                                   principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         try:
             body = DraftRequest.model_validate_json(await _bounded_body(request))
-        except ValidationError as exc:  # field errors without the submitted values
-            errors = [{"loc": [str(part) for part in item["loc"]], "msg": item["msg"]}
-                      for item in exc.errors(include_url=False, include_context=False, include_input=False)[:20]]
+        except ValidationError as exc:
             raise HTTPException(status_code=422, detail={"code": "SITE_MAP_INVALID",
-                                                         "detail": {"errors": errors}}) from exc
+                                                         "detail": {"errors": invalid_errors(exc)}}) from exc
         try:
             return site_maps.save_draft(body.map, expected_revision=body.expected_revision,
                                         principal_id=principal.principal_id)

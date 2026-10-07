@@ -2314,3 +2314,37 @@
 - gate 변화: 없음. SOURCE/LOCAL만
 - 결정: D-494 Proposed(구현 부록 갱신)
 - 교훈: 로봇을 몰고 있는 루프가 있으면 그 로봇에 닿는 모든 멈춤 경로가 루프도 끝내야 한다. 하나라도 빠지면 다음 tick이 멈춘 로봇을 다시 움직인다
+
+## 2026-10-07 · uncommitted · fix(fleet): 운행 위치 상태를 한국어로 표시
+- 변경: D-494 운행 패널의 LOCALIZED·DEGRADED·UNKNOWN을 위치 확정·위치 정확도 저하·위치 확인 불가로 표시. 미지 상태 원문과 API 본문은 보존
+- 증거: CI 37593064818의 operator-copy 실패 재현 뒤 Python 표기 검사 18건과 Node 지도 표시 검사 9건 통과. 독립 검토와 Node 재실행 통과
+- gate 변화: SOURCE/LOCAL. 서명·관제 적용은 새 커밋 CI 통과 뒤 확인
+- 교훈: 순수 표시 함수 시험도 운영자 표기 검사를 함께 돌린다
+
+## 2026-10-07 · uncommitted · feat(fleet): 조감도 낡은 카메라 교정 감지 — 실영상 대신 미터 눈금과 경고
+- 변경: 카메라를 재조준하면 D-457 추적 보정이 어긋나 조감도가 잘려 돌아간 지도를 정확해 보이게 그렸다. 이제 정지 로봇(직전 폴링 자세 이동 ≤ 0.05 m)의 추적 차이(`offset_m`)가 3폴링 연속 0.4 m를 넘으면 교정이 낡은 것으로 판정해(`tracking-layer.js` `trackingDriftSample`·`calibrationDriftVerdict`, 순수) 실영상 배경을 내리고 미터 눈금 뷰로 돌아간 뒤 "카메라 교정 어긋남 — 맞춤 재수락 필요" 경고를 캔버스와 `#map-tag`·aria-label에 보인다. 표본은 `tracking-view.js show()`가 실제 폴링 응답마다 한 번만 쌓고, 수명 만료 `show(null)`은 연속을 끊지 않는다. 마커 관측(measured)·움직이는 로봇은 세지 않는다
+- 증거: node `tracking-layer.test.mjs` 12 passed(신규 3건: 정지 로봇만 표본·연속 판정·자세 기억), 콘솔 브라우저 신규 `test_stale_camera_calibration_drops_the_frame_and_warns` + 기존 카메라 배경 회귀 2 passed(ROSY_RUN_BROWSER_TESTS=1). 변이 증명: `view.trackingDrift = null`으로 무력화하면 신규 시험 TimeoutError로 빨개진다
+- gate 변화: 없음. LOCAL GO 유지 — 표시 경고만 만들었고 관측·목표·주행 경로는 그대로
+- 결정: 해당 없음(D-457 추적 보정의 표시 전용 보강)
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · feat(fleet): D-494 6 주행 가르치기 — 기록·RDP·초안 확정·여기에 주소
+- 변경: 순수 `fleet/routing/teach.py`(점 남기기 `LOCALIZED` 또는 다리 ≤ 0.5 m·0.1 m 간격, 반복형 RDP 0.02 m, 끝 0.15 m 장소 후보, 초안 본문에 간선·새 장소 붙이기), `server/teach_service.py`·`teach_routes.py`(`GET /api/fleet/teach`, `POST /api/fleet/teach/start|stop|confirm|place`, 이름 있는 운영자, 현장 지도 이벤트), `SiteMapStore.record_event`, `app.py` 4줄 배선, 현장 지도 화면 "지도 가르치기" 칸(`web/site-map-teach.js`, 모델 도우미, 점선 표시). `console.py`는 고치지 않음
+- 증거: `operations/fleet/test` 2459 passed·124 skipped·1 failed(`test_routing` 표준 라이브러리 import 규칙: `copy` → 고친 뒤 `test_routing.py`·`test_routing_teach.py`·`test_teach.py` 45 passed), node `test/web/*.mjs` 151 passed, Chromium 스모크(1440·390, 기록→멈춤→확정→주소, 콘솔 오류 0, X:\DevTemp\d494-teach). `test/architecture`+문서+api_web 271 passed·1 failed = 크기 판정 `fleet: 41719 > 41014+150`(이 브랜치 +593, 재판정 대기). `test/known_failures.py` 그 외 0 new
+- gate 변화: 없음. SOURCE 호스트 시험만. 로봇에 아무것도 보내지 않는다. 현장 가르치기는 Rosy Cam 맞춤 뒤
+- 결정: D-494 6 (구현 부록 2026-10-07 — 6항 가르치기)
+- 교훈: `fleet/routing`은 표준 라이브러리 화이트리스트(`copy` 포함 안 됨)가 시험으로 걸려 있다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-494 6 독립 검토 반영 — LOCALIZED만 기록·최신 기록 확정·유휴 자동 멈춤·끝 고정
+- 변경: `DEGRADED`는 다리 길이와 상관없이 남기지 않음(재앵커 튐 제거). 확정 대기 목록은 최신 먼저, 콘솔은 가장 최근 기록(`newestPending`)을 확정. 10분 동안 새 점이 없거나 20000점이면 같은 멈춤 길로 스스로 멈춤(`system:teach_idle`, `reason idle|full`). 끝 고정 때 장소 0.15 m 안의 앞·뒤 중간 점을 뺌. 점 mm 반올림, 주소 yaw 감기, 멈춘 뒤 원점 비움, 첫 표본 오류 잡기, 바뀔 때만 지도 다시 그림, 초안 크기·오류 변환은 `site_map_routes`의 것을 함께 씀. 크기 판정 41764(독립 재판정, 추가분 +638)
+- 증거: `operations/fleet/test` 2464 passed·124 skipped, `test/architecture` 132 passed·1 skipped, node `site-map.test.mjs` 12 passed, Chromium 스모크(1440·390) 콘솔 오류 0, `test/known_failures.py` 0 new (2026-10-07 Windows)
+- gate 변화: 없음. SOURCE 호스트 시험만
+- 결정: D-494 6 구현 부록 1·5·6항 갱신
+- 교훈: 기록 규칙의 "또는"은 신뢰 상태 하나를 다리 길이로 대신하게 한다. 재앵커 순간의 DEGRADED 0 m 다리가 그대로 선에 들어갔다
+
+## 2026-10-07 · uncommitted · test(fleet): 추적 보정 적용의 렌즈 지문을 브라우저·라우트 시험으로 고정
+- 변경: "추적 보정 적용"의 렌즈 지문 배선은 c598918fc·0965acc94에서 이미 main에 다 들어 있었다(적용 시점 라이브 프레임 X-Source-Lens → `map-fit-view.js` applyButton의 `visionView.currentLensInfo()` → `map-fit.js` `calibrationRequest` lensBody → 서버 `CalibrationApproval.lens` → `build_record` 검증·개정 해시 포함; 프레임에 렌즈가 없을 때만 "렌즈 정보가 없어 렌즈 검사 없이 적용했습니다" 안내). 이 커밋은 그 배선을 증명하는 시험만 더한다. `test/test_fleet_console_browser.py` 신규 2건 — 설치 맞춤 패널에서 통과 제안과 렌즈 헤더 프레임으로 적용을 누르면 POST 본문에 `{kind, focal_mm, hfov_deg}`가 실리고 안내가 붙지 않는다 / 헤더 없는 프레임이면 `lens: null`로 저장되고 안내가 붙는다. `test_overhead_tracking_api.py` — 렌즈를 넣은 승인이 목록·Vision 설정 조회까지 그대로 남으며 렌즈 없는 승인과 개정이 다르고, 잘못된 렌즈 본문 3종(필드 누락·대문자 kind·여분 필드)이 422
+- 증거: 브라우저 신규 2 passed(ROSY_RUN_BROWSER_TESTS=1), 변이 증명 — applyButton의 lens 인자를 지우면 적색, 복원 녹색; `tracking.py` approve의 lens 전달을 지우면 라우트 시험 적색, 복원 녹색. `test_overhead_tracking_api.py` 11 passed, tracking 3종·서버 앱·콘솔 계약 targeted 103 passed, node map-fit 17·vision-lens-profile 7·camera-map 1 passed, known_failures 0 NEW
+- gate 변화: 없음. 제품 코드 변경 없음(시험만)
+- 결정: 해당 없음(D-457 1항 표시 전용 경로의 시험 보강)
+- 교훈: 소스 문자열 단언(`"calibrationRequest(" in fit_view`)은 배선이 빠져도 녹색으로 남는다 — 클릭해서 본문을 잡는 브라우저 시험이 배선의 증거다
