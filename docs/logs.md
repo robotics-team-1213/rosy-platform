@@ -6833,12 +6833,6 @@ osy-d395-s1d\`.
 - 결정: D-509 Proposed
 - 교훈: 충전 래치는 신선한 충전 확인의 대용이 아니다.
 
-## 2026-10-08 · uncommitted · D-509 관제 전원 근거
-
-- 변경: D-509를 CORE/Fleet/Vision/Host API 실체에 맞게 수정하고 실행 계획과 Fleet 선택 전원 근거 필드를 계약에 기록했다. 송신 enabled·D-350 Phase 1은 미증명으로 명시했다.
-- 증거: Fleet 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. DEVICE/FIELD 검증 전.
-- gate 변화: 없음.
-
 ## 2026-10-07 · uncommitted · feat(tools): 착지 도구 tools/land.py
 - 변경: `python tools/land.py --tests auto`가 워크트리에서 main 머지 → 자동 해소(ADR Log 행 합집합+D-번호 정렬·BOM/CRLF 유지, `logs.md` 합집합, `adr_gaps.txt` 합집합, 생성 `index.md`·`STATUS.md`는 theirs 후 generate) → D-436 `affected` 선택 + lint → `test/known_failures.py` → `--ff-only`를 main이 멈출 때까지(기본 5회) 되풀이한다. 그 밖의 충돌은 `git merge --abort` 후 경로를 알리고, NEW 실패·lint 실패·ff 거절에서 멈춘다. main이 움직였어도 그 차이가 시험한 범위 밖이면 lint만 다시 돌린다. 푸시·stash·reset·clean은 하지 않는다. `--dry-run`, `--node`, `--browser` 지원. AGENTS.md·shared-checkout.md 6항과 `rosy-land-on-main` 스킬에 기본 방법으로 적었다.
 - 증거: `test/test_land.py` 7 passed(임시 저장소: Log 충돌 해소, 비자동 충돌 중단, 실패 시험에서 ff 안 함, 범위 밖 main 이동은 재시험 생략, 더러운 워크트리 거부, dry-run 무변경, main 체크아웃 거부). 실제 저장소 `--dry-run`이 affected 선택을 출력.
@@ -6891,3 +6885,8 @@ osy-d395-s1d\`.
 - 결정: D-436.
 - 교훈: 옵트인 이름을 합치면 CI 의 잡 전역 플래그가 묶인 다른 묶음까지 켠다 — 플래그는 실행 단위로 준다.
 
+## 2026-10-08 · uncommitted · D-509 관제 전원 근거
+
+- 변경: D-509를 CORE/Fleet/Vision/Host API 실체에 맞게 수정하고 실행 계획과 Fleet 선택 전원 근거 필드를 계약에 기록했다. 송신 enabled·D-350 Phase 1은 미증명으로 명시했다.
+- 증거: Fleet 집중 pytest 103 passed, known_failures 0 NEW; 웹 Node 170 passed. DEVICE/FIELD 검증 전.
+- gate 변화: 없음.
