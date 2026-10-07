@@ -2189,3 +2189,10 @@
 - gate 변화: 없음. SOURCE/LOCAL만
 - 결정: D-491 Proposed(구현 부록 추가)
 - 교훈: CORE의 같은 이름 API(`/line-follow/hold`)가 반대 뜻(계속 가기)일 수 있다. 멈춤 경로는 엔드포인트 본문을 읽고 고른다
+
+## 2026-10-07 · uncommitted · fix(fleet): D-491 5 trip 루프 독립 검토 반영 — CORE 교차로 상태 기반 전송·넘김, 모든 끝에서 정지
+- 변경: 시험의 가짜 교차로 포트를 CORE `junction.py`대로(받은 뒤 odom 거리로 서는 `stop`, 동작 중 새 지시는 동작을 abort하고 거절, seq·상태). `stop_after_m`=남은 거리(0–2 m), `stop` 재전송 없음, CORE `executing`·동작 중에는 전송 없음, CORE 완료 또는 다음 차로 투영으로 넘김, 모든 실패·멈춤에서 정지(교차로 stop + line-follow OFF / 목표 취소), 루프가 저장소 실패에도 살아 있음, 취소는 tick 잠금을 기다리지 않음, 로봇 호출 1.5 s 제한, `lane` 계획은 `junction_turn` 필요, 시작 직전 지도 버전 재확인, `anchor_age_s` 없으면 거절, 재시작 때 열린 trip 로봇 정지, refresh 경고 30 s 제한, trip 중 `/goal`·`/route`·배차·대형은 409 `TRIP_ROBOT_BUSY`. 실행 가능 규칙을 `fleet/routing/execute.py`로. 콘솔 멈춤 사유 문구(설정된 `stall_s`, `TRIP_LOOP_ERROR`)와 취소 확인 문구. D-491 구현 부록 갱신
+- 증거: 아래 실행의 `operations/fleet/test` 전체와 known_failures는 보고서에 남긴다. `test_trip_runner.py` 51건, `test_routing_execute.py` 10건, site-map node 9건, 구조·안전 분리·대화창 계약 시험 통과, harness lint 0 오류
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-491 Proposed(구현 부록 갱신)
+- 교훈: 가짜 포트가 실제 CORE 상태기계를 흉내 내지 않으면, 지시 덮어쓰기·동작 중 재전송 같은 결함이 시험을 통과한다. 짝 브랜치의 구현 파일을 읽어 가짜를 만든다

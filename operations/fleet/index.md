@@ -88,8 +88,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · fix(fleet): D-491 5 trip 루프 독립 검토 반영 — CORE 교차로 상태 기반 전송·넘김, 모든 끝에서 정지
 - 2026-10-07 · uncommitted · feat(fleet): D-491 5 trip 루프 검토 반영 — 즉시 멈춤·멈춤 규칙·차선 시작 검사
 - 2026-10-07 · uncommitted · feat(fleet): D-491 5 서버 trip 루프 (브랜치 feat/d491-fleet-trip-loop)
 - 2026-10-07 · uncommitted · Cell rejected-session widths
 - 2026-10-07 · uncommitted · Cell emergency-stop feedback widths
-- 2026-10-07 · uncommitted · Site-map rejected credential widths
