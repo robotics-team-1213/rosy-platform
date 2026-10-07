@@ -86,6 +86,16 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/server/web/map-view.js": (
+        903,
+        "split: judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
+        "and the D-515 top-down camera warp made map-view.js own two jobs, map drawing (grid, robots, "
+        "formation, mediation, metre site view) and the camera picture path. Move cameraMapCalibration, "
+        "drawCameraTopDown, warpOnto, setCameraFrame, frameTurn, turnedUrl and bindCamera to a new "
+        "web/camera-backdrop.js beside camera-warp.js; map-view keeps a draw hook and the toPx projection "
+        "it passes in. Recorded in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. Re-judge "
+        "after the move or if the file grows again",
+    ),
     "web/components.css": (
         814,
         "accept: shared token-based component styles remain one web_common responsibility; "
@@ -115,8 +125,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        42_945,
-        "split: re-judged at 42945 on 2026-10-08: D-511 M0 lane compliance (fleet/localization/"
+        43_623,
+        "split: re-judged at 43623 on 2026-10-08: main's 43217 verdict plus D-472 + Addendum 2026-10-08 "
+        "LED identity (server/identity.py orchestrator and binding store, tracking/console route wiring), "
+        "independently judged to stay with the existing Fleet server owner as its own module (critic agent, "
+        "2026-10-08); no new owner, the site-map web/server split plan and +150 allowance remain unchanged. "
+        "Previously re-judged at 43217 on 2026-10-08 (independent re-judge, critic agent): D-507 junction "
+        "expectation and site floor binding (server/trip_ports.py, trip_runner.py) stay with the routing/trip "
+        "server owner, and the D-513 7 / D-515 camera turn and top-down warp (web/map-view.js, camera-warp.js) "
+        "get the camera-backdrop seam now named in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. "
+        "No new package owner; the +150 allowance is unchanged. "
+        "Previously re-judged at 42945 on 2026-10-08: D-511 M0 lane compliance (fleet/localization/"
         "lane_compliance.py observe-only judgement, server/lane_compliance_service.py worker, "
         "cli/app/roster wiring) stays with the existing Fleet localization and server owners; no "
         "new owner, the site-map web/server split plan and +150 allowance remain unchanged. "
@@ -609,32 +628,17 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core/services/core_features/line_follow/recovery": (
-        # PENDING RE-JUDGE (combined D-507 6+2-5, re-judge required by reviewer): 2713 is the merged
-        # count after feat/d507-motion-admitted-site-floor (2491) and feat/d507-junction-approach
-        # (2537) both landed; it is over 2491 + 150, so an independent re-judge must replace this note.
         2_713,
-        "accept: PENDING independent re-judge at the merged 2713 (combined D-507 6+2-5, re-judge "
-        "required by reviewer; recorded by the landing executor 2026-10-08, not a judgement). "
-        "Branch verdicts: junction-approach re-judged 2026-10-08 at 2537 (architect agent, "
-        "read-only): D-507 items 3-4 junction_approach JunctionApproachMixin (expected window and "
-        "approach to the pivot, mixed into JunctionMixin, math only), the approach twist goes out "
-        "through _maneuver_twist, CORE CommandManager stays the final cmd_vel publisher (D-18). "
-        "Independently re-judged 2026-10-08 at 2491 for D-507 6 (architect, read-only): "
-        "recovery/motion_admit.py is the one motion_admitted admission (D-400 enforce basis or the "
-        "site_floor_map_id site basis, plus the reverse D-422 body sweep the D-468 retrace needs), "
-        "a LineFollowManager mixin under the single manager lock and generation with no own lock, "
-        "thread, store or publisher; it replaced the separate checks in junction _turn_basis, "
-        "lane_bridge and lane_return_decision (branch net +96), so no split is warranted; every file "
-        "below 600 and the sibling core_features unit has no room. Condition: whichever of this and "
-        "feat/d507-junction-approach lands second re-judges on the merged count; if the reverse sweep "
-        "is ever needed outside the retrace, move it beside _body_clearance in body_stop.py. "
-        "Previously independently re-judged 2026-10-07. Own size unit per "
-        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md (moved "
-        "2026-10-07 by git mv, imports only): D-407 stuck recovery/wiring, D-468 lane_return*, D-476 "
-        "lane_bridge and D-494/D-495/D-498 junction as LineFollowManager mixins under the single manager "
-        "lock and generation; no own lock, thread, store or publisher, CORE CommandManager stays the final "
-        "cmd_vel publisher. Every file below 600. Baseline is the line count at the move; the +150 "
-        "allowance applies; re-judge on the next +150",
+        "accept: independently re-judged 2026-10-08 at the merged 2713 (D-507 2-5 junction_approach + "
+        "D-507 6/9 motion_admit, architect read-only). Unit total is far below the 10000 package budget; "
+        "every file below 600 (largest stuck_recovery.py 573, junction.py 507). Junction and motion "
+        "admission stay LineFollowManager mixins under the single manager lock and generation, no own "
+        "lock, thread, store or publisher; CORE CommandManager stays the final cmd_vel publisher. A "
+        "junction/ unit was rejected: 685 lines do not justify a new size unit and core_features has no "
+        "room. Conditions: if the reverse sweep is needed outside the D-468 retrace, move it beside "
+        "_body_clearance in body_stop.py; if junction code passes 800 lines, give it its own subpackage via "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md follow-up. Split plan of record: "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md; re-judge on the next +150",
     ),
     "core_features": (
         12_772,
@@ -871,8 +875,12 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1148,
-        "accept: re-judged at 1148 on 2026-10-07: the existing display owner draws safety cues "
+        1177,
+        "accept: re-judged at 1177 on 2026-10-08 for D-472 4/5: the identity blink's SIGKILL reap, "
+        "hard 3.5 s cut and immediate refusal answer stay with the one process that spawns "
+        "lamp_pattern; IDENTIFY_OVER and the identify age constants may later move to "
+        "core_common.face_screen; zero growth allowance remains. "
+        "Previously re-judged at 1148 on 2026-10-07: the existing display owner draws safety cues "
         "before the blocking buzzer and still announces when LCD rendering fails; zero growth allowance. "
         "Previously re-judged at 1140 on 2026-10-07. An accepted fleet identify plays two "
         "1400 Hz beeps from this same buzzer owner and leaves the health sound in place. "

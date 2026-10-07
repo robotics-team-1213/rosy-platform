@@ -36,8 +36,8 @@ from fleet.server import bays, traffic
 from fleet.server.console_view import (
     CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
+    classify_link,
 )
-from fleet.server.link_class import classify_link
 from fleet.swarm.session import (
     FormationSession,
     FormationSpec,

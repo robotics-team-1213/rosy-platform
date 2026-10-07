@@ -209,6 +209,7 @@ async function mutate(action, extras={}, restoring=false) {
   try {
     const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
+    $('export-result').textContent=$('export-result').textContent.replace(/^이번 준비 결과 · /,'이전 준비 결과 · 현재 결정을 반영하려면 다시 준비하세요. ');
     undo=restoring?null:['save','candidates'].includes(action)?{index:id,boxes:previous}:null;
     // A decision finishes this photo, so open the next pending one (D-461 next task first).
     // Audits inside the approved/excluded filters stay where they are.
@@ -291,7 +292,7 @@ $('canvas').onlostpointercapture=event=> {if(gesture?.pointerId===event.pointerI
 const TEXT_ENTRY='input:not([type=checkbox]):not([type=radio]), textarea, select';
 function shortcut(event) {
   const digit=/^(?:Digit|Numpad)([1-9])$/.exec(event.code||'');
-  return digit ? digit[1] : {KeyA:'a',KeyX:'x'}[event.code] || (/^[1-9ax]$/i.test(event.key) ? event.key.toLowerCase() : null);
+  return digit ? digit[1] : {KeyA:'a',KeyC:'c',KeyN:'n',KeyX:'x'}[event.code] || (/^[1-9acnx]$/i.test(event.key) ? event.key.toLowerCase() : null);
 }
 document.addEventListener('keydown',event=> {
   if(event.key==='Escape' && gesture) {event.preventDefault();cancelGesture();}
@@ -306,8 +307,10 @@ document.addEventListener('keydown',event=> {
   // Number keys set the selected box's class, A approves, X excludes (D-485). Approval
   // stays explicit (D-461): A only clicks an enabled 승인, never ticks 사진 전체 확인.
   // Physical keys (event.code) so a Korean IME layout still works; checkboxes keep working.
-  if(event.target?.matches?.(TEXT_ENTRY) || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || busy || gesture) return;
+  if(event.target?.matches?.(TEXT_ENTRY) || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.repeat || busy || gesture) return;
   const key=shortcut(event);
+  if(key==='c' && !$('complete').disabled) {event.preventDefault();$('complete').click();return;}
+  if(key==='n' && !$('next-pending').disabled) {event.preventDefault();$('next-pending').click();return;}
   const cls=workspace?.object_class_set.classes.find(c=>c.hotkey===key);
   const field=cls && selected!==null ? $('boxes').children[selected]?.querySelector('select') : null;
   if(field && !field.disabled) {event.preventDefault(); if(field.value!==cls.name) {field.value=cls.name; field.onchange();}}
@@ -342,8 +345,8 @@ $('next-pending').onclick=()=> {const next=nextPending(frame.index);if(next) {$(
 $('reload').onclick=async()=> {if(!busy) await load(frame?.index);};
 $('theme').value=document.documentElement.dataset.theme || 'dark';
 $('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value; try {localStorage.setItem('rosy.theme',$('theme').value);} catch {} clearPalette(); document.dispatchEvent(new CustomEvent('rosy:theme')); paint();};
-function receipt(value) {
-  $('export-result').textContent=`승인 ${value.exported_frames}장 준비 완료 · 미승인 ${value.queued_frames}장 유지. 학습 반영은 학습 세션의 세션 분리·고정 평가 제외 확인 후 진행합니다.`;
+function receipt(value, historical=false) {
+  $('export-result').textContent=`${historical?'이전 준비 결과 · 현재 결정을 반영하려면 다시 준비하세요. ':'이번 준비 결과 · '}승인 ${value.exported_frames}장 준비 완료 · 미승인 ${value.queued_frames}장 유지. 학습 반영은 학습 세션의 세션 분리·고정 평가 제외 확인 후 진행합니다.`;
   $('export-details').textContent=JSON.stringify(value,null,2);
 }
 $('prepare').onclick=async()=> {
@@ -359,11 +362,12 @@ async function load(index) {
     // An ordered list, not object keys: integer-like names would jump ahead of the others.
     classOptions=[['','클래스 선택 필요'],...classes.map(c=>[c.name,c.display])]; names=Object.fromEntries(classOptions);
     classColors=Object.fromEntries(classes.filter(c=>c.color).map(c=>[c.name,c.color]));
+    $('object-class-help').textContent=`객체 박스 · ${classes.map(c=>c.display).join(' · ')}. 종류와 경계를 확인하세요. 통로 안팎은 로봇·콘·표지판 등의 종류를 바꾸지 않습니다.`;
     let guide=$('obstacle-guide');
     if(!guide){guide=document.createElement('p');guide.id='obstacle-guide';guide.className='quiet';document.querySelector('.inspector-heading').append(guide);}
     guide.hidden=!classes.some(c=>c.name==='obstacle');
     guide.textContent='기타 장애물은 주행 경로를 실제로 막는 독립 물체에만 사용하세요. 벽·고정 기둥·바닥 표시·그림자·경로 밖 물체는 제외합니다. 애매하면 승인 전에 박스를 수정하거나 삭제하세요.';
-    if(workspace.exports.length) receipt(workspace.exports[0]);
+    if(workspace.exports.length) receipt(workspace.exports[0],true);
     if (!workspace.frames.length) {applyFilter();return;}
     const params=new URLSearchParams(location.search);
     $('filter').value=params.get('filter')||'all';if(!$('filter').value) $('filter').value='all';

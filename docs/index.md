@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · docs(api): D-509 and D-513 contract union v1.125
-- 2026-10-08 · uncommitted · D-509 관제 전원 근거
-- 2026-10-08 · uncommitted · fix(tools): 착지 도구가 logs.md 중간 삽입 충돌을 해소
-- 2026-10-08 · uncommitted · docs(plan): 링크 수리와 폴링 부하를 가른다
-- 2026-10-08 · uncommitted · docs(plan): 사이트 링크 수리 실행 계획
+- 2026-10-08 · uncommitted · docs: Decision 모델 호스트 역할과 파이프라인 명시
+- 2026-10-08 · uncommitted · docs(plan): 논문 가림·시간 지표를 ROSY 계약에 대조
+- 2026-10-08 · uncommitted · docs(plan): 세션 간 검토로 10/6 양성 시험 가정 수정
+- 2026-10-08 · uncommitted · docs(plan): 10/6·10/7 영상 기반 drivable·차선 기억 조사
+- 2026-10-08 · uncommitted · fix(push): 2026-10-08 pre-push 검사 복구

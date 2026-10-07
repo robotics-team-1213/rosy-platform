@@ -46,6 +46,7 @@
    - `expect_tol_m`((0, 0.30]): Fleet이 장소 위치를 아는 오차(지도 자세의 진행 방향 오차 + 장소 고정 허용치 `ENDPOINT_TOL_M`). Fleet 설정·자세 진단에서 나온다.
    - `pivot_past_line_m`([0, 0.30], `left`/`right`만): 감지된 가로선에서 회전 축(장소 점)까지 거리. Fleet은 나가는 차로의 `width_m / 2`로 보낸다(장소는 나가는 차로 중심선 위에 있다, D-490). 상한 0.30은 D-495 `MAX_ADVANCE_M`과 같은 값이다.
    - 능력 `junction_pivot: true`(CORE가 위 필드를 받는다는 표시)가 없는 로봇에는 Fleet이 이 필드를 보내지 않는다.
+   - CORE의 기대 창은 받은 자리의 진행 방향으로 곧게 내다본 점이므로, 장소 앞에서 차로 방향이 15°보다 많이 바뀌면 Fleet은 `expect_in_m`·`expect_tol_m`을 보내지 않고(`map_id`·`pivot_past_line_m`만 보낸다), 경로를 따라가는 기대 창은 뒤의 일로 둔다.
 
 3. **기대 창과 굽이.** 지시를 받을 때 CORE는 받은 자리의 odom 자세와 진행 방향으로 기대 가로선 점(`expect_in_m − pivot_past_line_m`, 갈래면 `expect_in_m`)을 odom 좌표에 둔다. 감지마다 측정 가로선 점(감지 자세 + `junction_ahead_m`)과 기대 점의 거리가 `expect_tol_m` 안이면 이 지시의 교차로다.
    - 창 밖 감지(지도에 없는 굽이, 다른 교차로)는 지시를 쓰지 않는다. HOLD `junction_unexpected`이고 지시는 `armed`로 남는다. 그래서 장소 바로 앞의 굽이에서 회전 지시가 쓰이는 일이 없다.
@@ -126,6 +127,10 @@
   - SOURCE: 기대 창 안·밖 감지, 창 밖에서 지시 보존, 접근 거리(가로선 + 절반 폭, 갈래 0, 필드 없음 0), 접근 중단 규칙, 운동 허가 한 함수의 두 근거와 동작별 IR 허용 값, 현장 근거 후진(역추적만 허가, 다른 동작의 후진 거절, 뒤 방향 sweep 미달·낡음에서 거절, 역추적 한도 그대로), D-468 양의 증거(미증명 → 추종, `margin + u < 0` → 이탈), 선언 검증과 옛 키 거절, Fleet 필드 전송·능력 확인·`TRIP_SITE_FLOOR_MISMATCH`·`junction_unexpected` 즉시 정지, D-422 몸 안 점 버림, 원본 시각 허용치.
   - SIM(모델 PC, 이 노트북 아님): 로봇 기본값 + 현장 오버레이로 `map_v2_fleet_real` 출발(60 s에 0.5 m 이상), 증명된 이탈(차로 중심에서 0.04 m, yaw 0.2 rad로 놓음)에서 복귀(역추적 포함)로 `tracking` 복귀, 선언 null이면 HOLD만, 로봇 뒤에 상자를 둔 역추적은 `near_stop`으로 멈춤, SW spoke 좌 60·우 −110·−150 재획득 9/9와 벽 `near_stop` 0, 굽이 15회 진입에서 회전 지시 소비 0, 좌·우·직진·마지막 `stop` trip 한 바퀴, S5–S9 재실행.
   - DEVICE(9dfk, 사용자 승인): D1–D9(D-495, D-498) + 접근 뒤 회전 축 위치(장소 점과 거리), 역추적 끝 자세(LiDAR 벽 정합, odom 아님), 선언 기록(지도 id, 걸은 사람, 날짜, 뒤쪽 바닥 확인).
+
+### 구현 기록
+
+- 10항 (2026-10-08, `fix/d422-memory-outside-body`): 구현은 `35945410f`·`32f98d98b`(main, `body_stop._remember_near` 한 곳: 진입 때 URDF 윤곽 엄격 안쪽 점은 버리고, 이미 기억한 점은 몸 안으로 들어가도 유지). 독립 safety 검토(oh-my-claudecode code-reviewer, opus, 읽기 전용) 결론은 **APPROVE WITH NOTES**, HIGH·CRITICAL 없음: C1 사각 원판(LiDAR에서 0.05 m)이 Pinky 몸 안에 6.5 mm 이상 여유로 들어가 몸 밖 장애물을 숨기지 않는다. 기억을 읽는 곳(틱, junction, lane_bridge, motion_admit 전진·후진)이 한 저장소를 읽는다. 시험 77건 통과. MEDIUM 2건(몸 안 진입 점의 접촉 처리, C1 원판이 몸 안이라는 전제)은 이 브랜치의 시험으로 고정했다. 두 커밋은 trailer 없이 main에 들어가서 검토 내용을 `tools/harness/safety_review.py` EXEMPT에 적었다. 이 기록의 착지는 사용자 결정이다. SIM(모델 PC, `docs/validation/d422-memory-outside-body-sim-2026-10-08/result.md`): 수정 전 B9 묶음 19 run 중 7 run이 기억 래치(42.9–86.2 s)였고, 이 코드로 같은 출발 22 run은 래치 0, memory 정지 사건 0이다. 상자 4회는 모두 lidar로 멈추고 닿지 않았다(주행 중 0.08 m 앞에 놓으면 0 지시까지 0.15–0.17 s, 최소 간격 0.048 m). 10항 수용 상태: SOURCE·SIM 통과. DEVICE(D9 근거리 0.06–0.12 m, 실기 C1이 `range_min` 위에서 무효를 내는지)는 열려 있다. Pinky에서는 이 개정으로 D-422 기억이 사실상 쓰이지 않는다.
 
 ## 구현 메모: B9 굽이 규칙은 경로가 굽이를 기대할 때만 (2026-10-08, perception 쪽, fix/keep-bend-not-fork)
 

@@ -129,14 +129,14 @@ class RobotClient(Protocol):
     async def line_follow(self) -> dict: ...
     async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
                                    expires_s: float, turn_deg: float | None = None,
-                                   advance_m: float | None = None) -> dict: ...
+                                   advance_m: float | None = None, expect: dict | None = None) -> dict: ...
 
     async def line_stuck_decision(self, stuck_id: str, decision: str, *,
                                   yield_m: float | None = None,
                                   yield_turn_rad: float | None = None) -> dict: ...
 
     async def estop(self) -> dict: ...
-    async def identify_lamp(self, color: str) -> dict: ...
+    async def identify_lamp(self, color: Optional[str] = None) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
     async def localization_decision(self, decision: LocalizationDecision) -> dict: ...
@@ -291,9 +291,12 @@ class HttpRobotClient:
 
     async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
                                    expires_s: float, turn_deg: float | None = None,
-                                   advance_m: float | None = None) -> dict:
-        """D-494 4 / D-495 1: the action at the next junction; an old CORE answers 404."""
-        body: dict = {"action": action, "place_id": place_id, "expires_s": expires_s}
+                                   advance_m: float | None = None, expect: dict | None = None) -> dict:
+        """D-494 4 / D-495 1: the action at the next junction; an old CORE answers 404.
+
+        ``expect`` holds the D-507 2 fields (map_id, expect_in_m, ...) for a ``junction_pivot`` CORE.
+        """
+        body: dict = {"action": action, "place_id": place_id, "expires_s": expires_s, **(expect or {})}
         for key, value in (("stop_after_m", stop_after_m), ("turn_deg", turn_deg), ("advance_m", advance_m)):
             if value is not None:
                 body[key] = value
@@ -313,10 +316,11 @@ class HttpRobotClient:
     async def estop(self) -> dict:
         return await self._post("/api/v1/safety/stop")
 
-    async def identify_lamp(self, color: str) -> dict:
-        if color not in {"blue", "amber"}:
+    async def identify_lamp(self, color: Optional[str] = None) -> dict:
+        """D-472: None asks for the robot's configured colour; the answer names the one used."""
+        if color not in {None, "blue", "amber"}:
             raise ValueError("unsupported identification color")
-        return await self._post("/api/v1/host/lamp/identify", {"color": color})
+        return await self._post("/api/v1/host/lamp/identify", {} if color is None else {"color": color})
 
     # --- D-395 localization (contract §2) -------------------------------------------
 

@@ -186,6 +186,32 @@ EXEMPT: dict[str, str] = {
         "../../AGENTS.md to ../AGENTS.md; all parent targets exist on main. Markdown only; no "
         "code, config, firmware or build/flash change; no safety rule, fail-safe, interlock or "
         "auth text altered or made optional. Exemption approved by livsbittt.",
+    "35945410f33f55daac79ac68aea73ab72e953b69":  # git commit revision
+        "Independent safety review (oh-my-claudecode code-reviewer, opus, read-only) on "
+        "2026-10-08, APPROVE WITH NOTES, no HIGH/CRITICAL, together with its follow-up "
+        "32f98d98b: D-507 10 drops a D-422 memory point only when it is strictly inside the "
+        "URDF outline on entry; the C1 blind disc (range_min 0.05 around LiDAR x -0.017) lies "
+        "strictly inside the Pinky body (>= 6.5 mm margin), so no obstacle outside the body is "
+        "hidden; a range_min reaching past the body still remembers outside points; all memory "
+        "readers (tick, junction, lane_bridge, motion_admit forward/reverse) use the one "
+        "filtered store. 77 tests passed. Its two MEDIUM notes became tests on "
+        "fix/d422-memory-outside-body (C1 disc inside the body guard, contact on entry). "
+        "Trailer missing because the commits landed before the review; SIM on model PC.",
+    "32f98d98bd9aab0a1ef7242ad7080b502ff75d9b":  # git commit revision
+        "Same independent safety review as 35945410f (2026-10-08, APPROVE WITH NOTES): the "
+        "outline check runs once, on entry, so a remembered point that odometry later puts "
+        "inside the body (creep into contact, in-place turn) keeps holding; inside_body(strict=) "
+        "in core_common.robot_body keeps a point exactly on the outline (conservative). Creep "
+        "and turn hold tests pass.",
+    "b4f96a974df15956b41086587c5003bb0bdc9794":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: import-only; console.py takes the pure "
+        "D-499 classify_link (link word for status rows, not on the estop_all path) from the frozen "
+        "console_view edge, where the function is now defined (link_class.py removed). No new "
+        "safety->decision module; estop_all and dispatch unchanged. Exemption approved by livsbittt.",
+    "d69299d04b9b47fc6c2390963d32ab3f50b48e68":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: adds NOMINAL_BODY = PINKY_PRO alias and its "
+        "public safety anchor; second name for an already public object, no new capability; "
+        "robot_body.py stays in the literal backlog. Exemption approved by livsbittt.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)

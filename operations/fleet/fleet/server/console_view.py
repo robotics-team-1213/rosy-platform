@@ -8,7 +8,12 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
+import httpx
+
 from fleet.swarm.transport import RobotApiError
+
+# D-499: plain HTTP against a TLS-only CORE. Do not add SSLError or ConnectError here.
+_PROTOCOL = (httpx.RemoteProtocolError,)
 
 
 class TripAware:
@@ -103,6 +108,10 @@ class TripCaps:
     max_speed: float
     #: D-495: the robot can turn at a junction on its own (bounded turn); absent means no.
     junction_turn: bool = False
+    #: D-507 9: the map the robot's site floor declaration covers; None when absent (older CORE) or null.
+    site_floor_map_id: Optional[str] = None
+    #: D-507 2: CORE takes the junction expectation fields (map_id, expect_in_m, ...); absent means no.
+    junction_pivot: bool = False
 
 
 def trip_caps(capabilities) -> Optional[TripCaps]:
@@ -121,7 +130,10 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                 and isinstance(speed, (int, float)) and not isinstance(speed, bool)
                 and math.isfinite(speed) and speed >= 0):
             known = frozenset(mode for mode in modes if mode in ("lane", "free"))
-            return TripCaps(kind, known, float(speed), item.get("junction_turn") is True)
+            floor = item.get("site_floor_map_id")
+            return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
+                            site_floor_map_id=floor if isinstance(floor, str) else None,
+                            junction_pivot=item.get("junction_pivot") is True)
     return None
 
 
@@ -180,3 +192,20 @@ def _error_of(exc: BaseException) -> dict:
     if isinstance(exc, RobotApiError):
         return {"reachable": True, "code": exc.code, "message": str(exc)}
     return {"reachable": False, "code": type(exc).__name__, "message": str(exc) or type(exc).__name__}
+
+
+def classify_link(exc: BaseException | None, *, scheme: str,
+                  address_status: str | None) -> str | None:
+    """D-499 robot link class: a closed link word, or None when the row must omit `link`.
+    The browser reads the returned word and never an exception name."""
+    if exc is None:
+        return "up"
+    if address_status == "seen_at_other_address":
+        return "moved"
+    if isinstance(exc, RobotApiError):
+        if exc.status == 401:
+            return "tls-refused"
+        return None
+    if scheme.lower() == "http" and isinstance(exc, _PROTOCOL):
+        return "protocol"
+    return "unreachable"

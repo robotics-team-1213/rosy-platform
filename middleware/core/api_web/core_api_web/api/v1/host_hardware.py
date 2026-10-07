@@ -374,10 +374,14 @@ def host_lamp_identify(
 ):
     """Ask the sole face owner for a short visual challenge; no motion or identity claim."""
     request_path, _result, _confirm = _test_paths(svc)
+    color = body.color or _identify_color(svc)
+    if color is None:
+        raise ApiError("IDENTIFY_COLOR_UNSET", 409, "이 로봇의 식별 색이 설정되지 않았습니다")
     request_id = secrets.token_hex(8)
-    payload = json.dumps({"action": f"identify_{body.color}", "request_id": request_id,
+    # Milliseconds: rosy-hw-test refuses an identify older than 1.5 s (D-472 4, total <= 6 s).
+    payload = json.dumps({"action": f"identify_{color}", "request_id": request_id,
                           "by": auth.token_id,
-                          "requested_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+                          "requested_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")},
                          sort_keys=True) + "\n"
     with _test_lock:
         now = time.monotonic()
@@ -389,8 +393,23 @@ def host_lamp_identify(
         except OSError as exc:
             raise ApiError("HW_TEST_UNAVAILABLE", 503, "램프 식별 요청을 전달하지 못했습니다") from exc
         _last_test[request_path] = now
-    return {"accepted": True, "request_id": request_id, "color": body.color,
+    return {"accepted": True, "request_id": request_id, "color": color,
             "state": "pending_visual_confirmation"}
+
+
+#: D-472 4: colours lamp_pattern can show for an identity blink (amber = the ADR's orange).
+LAMP_IDENTIFY_COLORS = ("blue", "amber")
+#: D-472 4 default per robot (config, not wire schema); CORE config ``lamp_identify.color`` overrides it.
+LAMP_IDENTIFY_DEFAULT_COLORS = {"rosy_26": "blue", "rosy_60": "amber"}
+
+
+def _identify_color(svc: CoreServicesLike):
+    """CORE config ``lamp_identify.color``, else the D-472 4 default for this robot id; None when neither."""
+    configured = ((getattr(svc, "config", None) or {}).get("lamp_identify") or {}).get("color")
+    if configured is not None:
+        return configured if configured in LAMP_IDENTIFY_COLORS else None
+    identity = getattr(svc, "identity", None)
+    return LAMP_IDENTIFY_DEFAULT_COLORS.get(getattr(identity, "robot_id", None))
 
 
 class HardwareConfirmRequest(BaseModel):

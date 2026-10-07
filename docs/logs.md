@@ -6919,3 +6919,56 @@ osy-d395-s1d\`.
 - 변경: Merged D-513 v1.124 and assigned the additive D-509 Fleet power health row to v1.125.
 - 증거: Version header, history, CORE docstring, and pinned contract tests aligned; merged tree verification pending.
 - gate 변화: None.
+
+## 2026-10-08 · uncommitted · docs(review): D-514 객체·픽셀 클래스 의미와 시나리오
+
+- 변경: 객체 종류와 통로 점유 판단을 분리하고, 기존 obstacle 의미 보존·새 작업 공간 전환·픽셀 255와 role ignore 구분 및 장면별 검수 행동을 D-514에 제안.
+- 증거: ADR lint 0 error, 23 기존 모듈 경고; 문서 계약 pytest 121 passed, known_failures 0 NEW. 모델 PC·실제 승인·학습·장치 검증은 별도.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · uiux(review): D-514 검수 화면과 실제 브라우저 흐름
+
+- 변경: 객체 사진 목록을 좁은 화면에서 가로 목록으로 정리하고 객체/픽셀 현재 클래스 안내·픽셀 255 승인 조건·준비 결과의 시점 표시를 추가했다. 잘못된 고정 클래스 안내를 제거했다.
+- 증거: 모델 PC /learning·객체·픽셀 화면 읽기 전용 확인(43장 대기, 승인 0). X:/DevTemp/review-taxonomy 복사 상태 브라우저에서 등록 1/중복 재등록 0, 객체 박스 추가·수정·삭제·승인 후 재접속, 미검수 255 픽셀 승인 거절, 전체 채움 후 픽셀 승인·결과 준비 확인. 390/1280 화면 캡처; 브라우저 집중 시험 2 passed, 검수 백엔드 63 passed·known_failures 0 NEW. 모델 PC 8772 미리보기의 공용 정적 파일 5개를 원본 백업 뒤 반영하고 해시·객체/픽셀 브라우저 화면을 재확인했다. 실제 검수 상태는 변경하지 않았다(43장 대기·승인0).
+- gate 변화: SOURCE/LOCAL 화면·복사 상태 검증 및 모델 PC 미리보기 적용. 실제 사람 승인·학습/장치 수용은 별도.
+
+## 2026-10-08 · uncommitted · docs(adr): D-515 관제 지도 천장 카메라 직사각형
+
+- 변경: D-515 ADR과 Log 행, 2026-10-07 천장 카메라 직사각형 실측 기록, `tools/harness/adr_gaps.txt`에 D-514(다른 브랜치 예약) 줄.
+- 증거: harness lint 0 errors.
+- gate 변화: 없음.
+- 결정: D-515 (D-513 7항의 메인 지도 실영상 회전 대체)
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(push): 2026-10-08 pre-push 검사 복구
+
+- 변경: `map-view.js` 크기 판정 split 903 기록, fleet 재판정 43217, 분리 계획에 camera backdrop 절 추가. `test_site_floor_declaration.py`를 외부 행동 시험 목록에 이유와 함께 추가. 주석의 Pinky 문자열 두 곳을 일반 표현으로 바꾸고 `lane_compliance.py`(PINKY_PRO 몸체 사용)를 de-Pinky 부채 목록에 추가.
+- 증거: architecture·behavior ownership·robot literal 시험 39 passed. 크기 판정은 독립 critic 에이전트가 했다.
+- gate 변화: pre-push의 4개 실패 해소 대상.
+- 결정: 없음(기존 split 계획에 절 추가)
+- 교훈: 여러 세션이 같은 웹 파일을 키우면 크기 판정이 푸시 시점에 한꺼번에 걸린다.
+
+## 2026-10-08 · uncommitted · docs(plan): 10/6·10/7 영상 기반 drivable·차선 기억 조사
+
+- 변경: 영상의 유효한 좌우 경계 쌍을 drivable 초안으로 채우는 연구와, 학습 녹화의 카메라·오도메트리·지도 자세·보정 증거 및 실제 로봇 어려운 장면 검수 순서를 기록했다. 10/6 두 영상의 무관측·한쪽 선·회전 구간을 재확인하고 기존 road_state shadow 추정기를 우선 재생 평가 대상으로 정했다.
+- 증거: 10/6 두 MP4·sidecar(2,487프레임/310.75초, 642프레임/80.12초)를 다시 읽고 대표 장면과 선 상태·오도메트리를 대조했다. 짧은 영상의 `both` 190프레임은 같은 차로 경계 쌍 검증 없이 정답으로 쓰지 않는다. 문서 계약 시험 121 passed, `known_failures.py` 0 NEW, harness lint 0 errors/23 기존 검증 시점 경고.
+- gate 변화: 없음. 새 라벨 승인·모델 학습·장치 추정기 동작·현장 주행은 미검증.
+- 결정: D-475의 사람 검수 drivable 정의, D-384의 shadow 추정과 D-481의 녹화 증거 게이트를 유지한다.
+
+## 2026-10-08 · uncommitted · docs(plan): 세션 간 검토로 10/6 양성 시험 가정 수정
+
+- 변경: 10/6 두 영상의 선형 명령 0과 오도메트리 위치 변화 0.5/1.2mm를 확인해 한쪽 선 기억의 전진 검증 후보에서 뺐다. 10/7의 전진 구간은 `keep_debug`가 없으므로 기존 재생에서 후보를 추출하고 사람의 같은 차로 쌍 확인을 선행하도록 계획을 고쳤다.
+- 증거: 세 독립 검토가 영상 사실, D-384 시간 추정, D-475 학습·평가 권한을 교차 비판했다. 10/7 두 sidecar의 선형 명령은 106/124, 71/83프레임에서 0이 아니고 x 변화 범위는 0.476/0.280m다. 신뢰할 양성 선 쌍은 아직 0건이며 새 장치 주행은 하지 않았다.
+- gate 변화: 없음. 10/6은 회전·벽·선 소실의 거절/정지 음성 사례로만 쓴다.
+
+## 2026-10-08 · uncommitted · docs(plan): 논문 가림·시간 지표를 ROSY 계약에 대조
+
+- 변경: OMR 논문의 가림 보류, 합성 가림, `R_F`·`R_M`, 시간 기억 아이디어를 기존 D-379·D-475·`lane_bev`·`denoise_fallback`에 맞춘 오프라인 진단 순서로 기록했다.
+- 근거: 가린 화소는 255이고 이전 경계는 불확실한 후보로만 남는다. 검수된 같은 경계 쌍이 없으면 논문 시간 지표는 계산하지 않는다. 10/6·10/7 네 영상만으로 가림 복원 성능은 입증할 수 없다.
+- gate 변화: 없음. 학습·런타임·장치 동작은 바꾸지 않았다.
+
+## 2026-10-08 · uncommitted · docs: Decision 모델 호스트 역할과 파이프라인 명시
+
+- 변경: 루트 README·AGENTS에 모델 PC, AI PC, 현장 PC, 로봇의 역할과 권한을 기록하고 D-516 기반 Decision 파이프라인 설계를 연결했다. 후보 조사 보고서에서도 설계로 연결한다.
+- 증거: docs lint 0 errors, 문서 계약 pytest 121 passed, known_failures 0 new. 오프라인 합성 재생은 현장 모델 정확도나 활성화 증거가 아니다.
+- gate 변화: 없음.

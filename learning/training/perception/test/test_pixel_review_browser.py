@@ -149,6 +149,7 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     shot('approved')
     page.locator('#pixel-export').click()
     expect(page.locator('#pixel-export-result')).to_contain_text('픽셀 승인 1장 준비')
+    expect(page.locator('#pixel-class-help')).to_contain_text('미검수 255는 클래스가 아닙니다')
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     shot('decision-result')
 
@@ -262,6 +263,25 @@ def test_pixel_number_keys_pick_class_and_x_excludes(browser_workspace):
     page.keyboard.press('x')
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 제외')
     assert review_masks.get(store, 0)['status'] == 'excluded'
+
+
+def test_pixel_shortcuts_confirm_both_checks_and_move_without_approving(browser_workspace):
+    page, store, expect = browser_workspace
+    row = store.get(1)
+    store.update(1, {'version': row['version'], 'action': 'reopen'})
+    open_pixels(page, store, expect)
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('c')
+    page.keyboard.press('b')
+    expect(page.locator('#pixel-complete')).to_be_checked()
+    expect(page.locator('#pixel-background')).to_be_checked()
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    page.keyboard.press('a')
+    expect(page.locator('#pixel-error')).to_contain_text('미검수 픽셀이 남아 있습니다')
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    page.keyboard.press('n')
+    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
+    assert review_masks.get(store, 0)['status'] == 'pending'
 
 
 def test_pixel_legend_shows_default_korean_names(browser_workspace):
