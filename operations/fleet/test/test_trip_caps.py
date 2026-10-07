@@ -25,7 +25,10 @@ def test_trip_caps_reads_the_base_and_ignores_unknown_fields():
     for key in ("robot_kind", "drive_modes", "trip_max_linear"):
         del old["controls"]["items"][0][key]
     assert trip_caps(old) is None                      # older image
-    for bad in ({"drive_modes": ["fly"]}, {"trip_max_linear": -1}, {"trip_max_linear": True},
+    # A newer robot's unknown mode is dropped; the known ones still bound the plan.
+    assert trip_caps(_caps(drive_modes=["lane", "fly"])).modes == frozenset({"lane"})
+    assert trip_caps(_caps(drive_modes=["fly"])).modes == frozenset()   # plans to TRIP_NO_ROUTE
+    for bad in ({"trip_max_linear": -1}, {"trip_max_linear": True},
                 {"robot_kind": ""}, {"drive_modes": "lane"}):
         assert trip_caps(_caps(**bad)) is None
     assert trip_caps(None) is None and trip_caps({"controls": {"items": "x"}}) is None

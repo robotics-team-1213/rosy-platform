@@ -76,7 +76,8 @@ class TripCaps:
 def trip_caps(capabilities) -> Optional[TripCaps]:
     """The base's trip fields, or None for an older image or a malformed descriptor.
 
-    Read field by field: a consumer ignores fields it does not know (rosy.controls/1).
+    Read field by field: a consumer ignores fields and drive modes it does not know
+    (rosy.controls/1), so an unknown mode is dropped, not a reason to distrust the rest.
     """
     controls = capabilities.get("controls") if isinstance(capabilities, dict) else None
     items = controls.get("items") if isinstance(controls, dict) else None
@@ -85,10 +86,10 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
             continue
         kind, modes, speed = item.get("robot_kind"), item.get("drive_modes"), item.get("trip_max_linear")
         if (isinstance(kind, str) and kind and isinstance(modes, list)
-                and all(mode in ("lane", "free") for mode in modes)
                 and isinstance(speed, (int, float)) and not isinstance(speed, bool)
                 and math.isfinite(speed) and speed >= 0):
-            return TripCaps(kind, frozenset(modes), float(speed), item.get("junction_turn") is True)
+            known = frozenset(mode for mode in modes if mode in ("lane", "free"))
+            return TripCaps(kind, known, float(speed), item.get("junction_turn") is True)
     return None
 
 
