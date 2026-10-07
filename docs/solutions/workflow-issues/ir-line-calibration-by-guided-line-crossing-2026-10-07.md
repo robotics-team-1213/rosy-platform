@@ -45,7 +45,7 @@ The map-predicted crossing lagged the IR by about 2 cm. Treat LiDAR-wall pose ag
 
 The real crosswalk also read differently from the STL model: a centred crossing showed C+R white, not the alternating phases. So IR expectations derived from the map need a real pass before anyone relies on them.
 
-The method repeated on the second robot the same day. 8kcn was driven from the site PC rather than the laptop (D-507). It crossed the inner lane line at 30 deg on the first try: R → R+C → C → L+C → L. All checks passed: spans 1557–2030, read-back left −1.00, centre +0.06, right +1.00.
+The method repeated on the second robot the same day. 8kcn was driven from the site PC rather than the laptop (D-508). It crossed the inner lane line at 30 deg on the first try: R → R+C → C → L+C → L. All checks passed: spans 1557–2030, read-back left −1.00, centre +0.06, right +1.00.
 
 Three findings from that run:
 
