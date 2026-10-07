@@ -3,6 +3,7 @@
 // (rosy-console-token)를 공유한다 — 운용 화면에서 접속했으면 여기도 풀려 있다.
 
 import { applyRoleToControls } from "./authorization.js";
+import { developmentToken } from "./development-auth.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
 import { createCameraPeerPanel } from "./camera-peer.js";
@@ -301,7 +302,7 @@ async function refreshDiscovery() {
 }
 pageScope.listen(el("discovery-retry"), "click", () => { discoveryGate.reset(); return refreshDiscovery(); });
 
-async function refreshAuthorization() {
+async function refreshAuthorization(renewed = false) {
   const life = pageScope.capture();
   life.check();
   discoveryGate.reset();
@@ -312,6 +313,10 @@ async function refreshAuthorization() {
     life.check();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
+    if (identity.principal_id.startsWith("development-")) {
+      el("console-token").hidden = true;
+      el("token-save").hidden = true;
+    }
     const roleName = identity.role === "operator" ? "운영자" :
       identity.role === "viewer" ? "조회 전용" :
         identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
@@ -334,6 +339,19 @@ async function refreshAuthorization() {
     life.check();
   } catch (_err) {
     if (_err.name === "AbortError") return;
+    if (_err.status === 401 && !renewed) {
+      try {
+        const token = await developmentToken(auth.token);
+        if (token && token !== auth.token) {
+          auth.token = token;
+          el("console-token").value = token;
+          el("console-token").hidden = true;
+          el("token-save").hidden = true;
+          await refreshAuthorization(true);
+          return;
+        }
+      } catch (_issueError) { /* Paired and unavailable consoles keep the token prompt. */ }
+    }
     if (!auth.locked) markLocked();
   }
 }
