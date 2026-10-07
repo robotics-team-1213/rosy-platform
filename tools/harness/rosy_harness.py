@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-
 import sim2real  # noqa: E402
 
 CONFIG = Path("tools") / "harness" / "harness.yaml"
-ADR_GAPS = Path("tools") / "harness" / "adr_gaps.txt"  # D-508, merge=union
+ADR_GAPS = Path("tools") / "harness" / "adr_gaps.txt"  # D-510, merge=union
 GATES = ("SOURCE", "LOCAL", "ROS-SIM", "ARTIFACT", "DEVICE", "FIELD")
 STATES = ("GO", "HOLD", "PARKED", "N/A")
 REQUIRED_PROGRESS = ("module", "owner", "last_verified", "gates")
@@ -406,7 +406,7 @@ def parse_adr_log(text: str, adr_dir: Path | None = None) -> AdrLog:
 
 
 def parse_adr_gaps(text: str) -> tuple[dict[str, str], list[str]]:
-    """``D-nnn reason`` per line; union merges may repeat or reorder lines (D-508)."""
+    """``D-nnn reason`` per line; union merges may repeat or reorder lines (D-510)."""
     gaps: dict[str, str] = {}
     errors: list[str] = []
     for number, line in enumerate(_normalize(text).split("\n"), 1):
@@ -422,7 +422,7 @@ def parse_adr_gaps(text: str) -> tuple[dict[str, str], list[str]]:
 
 
 def reserved_adrs(repo: Path) -> set[str]:
-    """Numbers claimed with tools/harness/adr_reserve.py (refs/adr/D-nnn, D-508). Local only."""
+    """Numbers claimed with tools/harness/adr_reserve.py (refs/adr/D-nnn, D-510). Local only."""
     out = _git(repo, "for-each-ref", "--format=%(refname:lstrip=2)", "refs/adr") or ""
     return {name for name in out.split() if ADR_ID.match(name)}
 
@@ -440,7 +440,7 @@ def load_adr_gaps(repo: Path, config: dict) -> tuple[dict[str, str], list[str]]:
 
 
 def reservation_warnings(adr: AdrLog, gaps: dict[str, str], reserved: set[str]) -> list[str]:
-    """refs/adr are local: CI and other clones lack them, so they never excuse a gap (D-508)."""
+    """refs/adr are local: CI and other clones lack them, so they never excuse a gap (D-510)."""
     present = set(adr.index) | set(adr.bodies)
     return [f"{adr_id} reserved locally (refs/adr) but not on this branch"
             " — land its ADR or add a gap line to tools/harness/adr_gaps.txt before push"

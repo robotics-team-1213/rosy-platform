@@ -36,7 +36,7 @@ deploy/site/rosy-model-watch text eol=lf
 # Vendored OMX assets are pinned by sha256 in manifest.json; never convert line endings.
 learning/envs/isaac/assets/** -text
 
-# D-508: one-record-per-line append-only files take both sides on merge (git built-in
+# D-510: one-record-per-line append-only files take both sides on merge (git built-in
 # union driver). Not logs.md: union collapses identical trailing lines of two multi-line
 # entries, so logs.md conflicts stay loud. Lint dedupes gaps and ignores Log row order.
 "docs/reference/ROSY ADR Log.md" merge=union

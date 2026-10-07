@@ -5,7 +5,7 @@
 
 adr_log: docs/reference/ROSY ADR Log.md
 
-# ADR gaps live in tools/harness/adr_gaps.txt (D-508).
+# ADR gaps live in tools/harness/adr_gaps.txt (D-510).
 
 status: STATUS.md
 

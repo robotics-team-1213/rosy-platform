@@ -1,4 +1,4 @@
-# D-508: ADR numbers absent from the ADR Log on purpose, one per line: D-nnn reason.
+# D-510: ADR numbers absent from the ADR Log on purpose, one per line: D-nnn reason.
 # Append only (merge=union). Remove a line once the ADR lands. Duplicates are harmless.
 D-29 unused; the vision accelerator shield design only proposed the number
 D-35 reserved for the swarm formation HOLD decision pending the sim bench

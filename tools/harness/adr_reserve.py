@@ -1,4 +1,4 @@
-"""Claim the next ADR number atomically with a git ref (D-508).
+"""Claim the next ADR number atomically with a git ref (D-510).
 
 Usage (from any worktree of the repository)::
 
@@ -10,7 +10,7 @@ Usage (from any worktree of the repository)::
 added Log rows or gap lines in the history of every local branch and remote-
 tracking ref, the same files in every worktree (untracked included), and
 existing ``refs/adr/D-*``. Numbers more than ``CAP`` above main's highest are
-ignored with a warning (a typo such as D-5080 would otherwise move everyone).
+ignored with a warning (a typo such as D-5100 would otherwise move everyone).
 It then creates ``refs/adr/D-nnn`` with ``git update-ref <ref> <sha> 0{40}``,
 which fails if the ref already exists. All worktrees share one ref store, so
 two sessions cannot both create the same ref; the loser tries the next number.

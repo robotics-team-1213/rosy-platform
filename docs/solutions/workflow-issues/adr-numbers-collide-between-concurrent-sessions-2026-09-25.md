@@ -52,4 +52,4 @@ e5ef699f), D-223 declared as a gap in `tools/harness/harness.yaml`.
   commits
 
 ## 후속
-- 2026-10-07 후속: D-508이 번호 선점을 `python tools/harness/adr_reserve.py next "<주제>"`(로컬 `refs/adr/D-nnn`)로 바꾸고, gap은 `tools/harness/adr_gaps.txt`로 옮겼다. 위 `harness.yaml` gap 안내는 그 전의 기록이다.
+- 2026-10-07 후속: D-510이 번호 선점을 `python tools/harness/adr_reserve.py next "<주제>"`(로컬 `refs/adr/D-nnn`)로 바꾸고, gap은 `tools/harness/adr_gaps.txt`로 옮겼다. 위 `harness.yaml` gap 안내는 그 전의 기록이다.

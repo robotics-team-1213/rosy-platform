@@ -59,7 +59,7 @@ same commit. Never add a line to hide a failure your branch introduced.
 
 ## ADR numbers
 
-Reserve **right before writing** — peers take numbers minutes apart (D-508):
+Reserve **right before writing** — peers take numbers minutes apart (D-510):
 
 ```bash
 python tools/harness/adr_reserve.py next "<topic>"                    # prints D-nnn; use it

@@ -1,6 +1,6 @@
-## D-508 한 줄이 한 기록인 이어 쓰기 파일(ADR Log, adr_gaps.txt)은 git 내장 union 머지로 합치고, ADR 번호는 `refs/adr/D-nnn` ref를 만들어 선점한다
+## D-510 한 줄이 한 기록인 이어 쓰기 파일(ADR Log, adr_gaps.txt)은 git 내장 union 머지로 합치고, ADR 번호는 `refs/adr/D-nnn` ref를 만들어 선점한다
 
-**Status:** Accepted (2026-10-07, 사용자 결정). 사용자가 이 방향을 승인했다. 독립 리뷰(2026-10-07)에 따라 `logs.md`를 union에서 빼고, 로컬 선점 ref를 lint gap으로 보지 않게 고쳤다. 잇는 결정: [D-372](D-372-topic-branch-names-and-shared-checkout-wip.md)(같이 하는 깃, 브랜치 이름) · [D-346](D-346-commit-time-collision-defenses.md)(커밋 시점 충돌 방어, 이 ADR이 4항을 개정) · [D-427](D-427-platform-three-parts-middleware-operations-learning.md) 4항(푸시 순서) · [D-61](D-61-progress-logs-index.md)(모듈 harness lint).
+**Status:** Accepted (2026-10-07, 사용자 결정). 사용자가 이 방향을 승인했다. 이 결정은 처음 D-508로 선점했지만, 그 사이 동료 세션이 도구 없이 main에 다른 D-508(제어 고리)과 D-509를 넣어 `adr_reserve.py next`가 고른 D-510으로 옮겼다. 독립 리뷰(2026-10-07)에 따라 `logs.md`를 union에서 빼고, 로컬 선점 ref를 lint gap으로 보지 않게 고쳤다. 잇는 결정: [D-372](D-372-topic-branch-names-and-shared-checkout-wip.md)(같이 하는 깃, 브랜치 이름) · [D-346](D-346-commit-time-collision-defenses.md)(커밋 시점 충돌 방어, 이 ADR이 4항을 개정) · [D-427](D-427-platform-three-parts-middleware-operations-learning.md) 4항(푸시 순서) · [D-61](D-61-progress-logs-index.md)(모듈 harness lint).
 
 ### Context
 

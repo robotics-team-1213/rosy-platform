@@ -501,4 +501,4 @@
 | D-505 | 로봇 상태 전환에서 화면·램프를 먼저 갱신하고 소리로 알린다; 막힘과 내비게이션 실패를 LCD 문구로 구분한다 | Proposed (2026-10-07, SOURCE/LOCAL 구현; DEVICE/FIELD 별도) |
 | D-506 | Pilot 녹화는 바닥 IR 원시값(`ir_sensor/range`, 좌·중·우 ADC)을 라이다와 같은 증거로 남긴다. 초음파 `us_sensor/range`는 넣지 않는다 | Proposed (2026-10-07; 사용자 지시; D-411 A에 토픽 하나 추가, D-504는 얼굴 ADR, D-505는 상태 전환 화면이 먼저 씀) |
 | D-507 | 차선 trip의 한 구간은 CORE가 추종 → 접근 → 회전 축 → 회전 → 재획득 상태 기계로 실행하고 Fleet은 지도에서 그 구간의 기대만 준다; 현장 근거는 지도 하나에 묶인 바닥 선언 `site_floor_map_id` 하나로 합치고, D-468은 이탈의 양의 증거가 있을 때만 연다 | Accepted (2026-10-07, 사용자 결정: 7·9항 수락, 6항 변경 — 현장 근거로 D-468 역추적 후진 허용, 뒤쪽 바닥은 선언이 진다; 옛 현장 키는 시작 거부; 구현·SIM·DEVICE 별도) |
-| D-508 | 한 줄이 한 기록인 이어 쓰기 파일(ADR Log, adr_gaps.txt)은 git 내장 union 머지로 합치고, ADR 번호는 `refs/adr/D-nnn` ref를 만들어 선점한다 | Accepted (2026-10-07, 사용자 결정) |
+| D-510 | 한 줄이 한 기록인 이어 쓰기 파일(ADR Log, adr_gaps.txt)은 git 내장 union 머지로 합치고, ADR 번호는 `refs/adr/D-nnn` ref를 만들어 선점한다 | Accepted (2026-10-07, 사용자 결정) |

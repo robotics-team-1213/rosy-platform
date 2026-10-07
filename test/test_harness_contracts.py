@@ -665,7 +665,7 @@ def test_logs_only_reconcile_exact_native_policy_callback_record(mutation):
     assert any("malformed heading" in error for error in harness.validate_log(old))
 
 
-# --- D-508: union merge for append-only records, adr_gaps.txt, refs/adr --------
+# --- D-510: union merge for append-only records, adr_gaps.txt, refs/adr --------
 
 import subprocess  # noqa: E402
 
