@@ -3,13 +3,17 @@
 Junctions fail closed (HOLD): with corner turning on, a lone boundary whose
 side bends out of the lane while a transverse line crosses the path ahead is
 a junction mouth (which lane goes on is unknown), and two boundaries on the
-followed side that split wide are a fork. Pure functions over the keeper's
+followed side that split wide are a fork -- unless one starts where the other
+ends: that is one painted line bent in two straight fits (D-507 B9). Pure functions over the keeper's
 per-frame boundary records; the caller (LaneKeeper.update) owns all state.
 ROS-free, same contract onboard and in fixtures."""
 
 from __future__ import annotations
 
+import itertools
 import math
+
+from .lane_keep_lines import MAX_GAP_M
 
 
 #: A transverse line across the path this close ahead of a lone, diverging
@@ -21,6 +25,18 @@ FORK_MIN_ANGLE_RAD = math.radians(30.0)
 DIVERGE_MIN_RAD = math.radians(15.0)
 #: Both branches of a fork are real paint, not a far fragment.
 FORK_MIN_LENGTH_M = 0.12
+#: A piece whose near end lies within the extractor's own piece gap of another
+#: piece's far end continues it (B8: spoke edge into the roundabout arc, ends
+#: 0.035-0.044 m apart p10-p90): one line, not two fork branches.
+CONTINUITY_M = MAX_GAP_M
+
+
+def _continues(first, then):
+    """True when boundary record `then` starts where `first` ends (near and far
+    by distance from base_link)."""
+    far = max(first["ends_m"], key=lambda p: math.hypot(p[0], p[1]))
+    near = min(then["ends_m"], key=lambda p: math.hypot(p[0], p[1]))
+    return math.dist(far, near) <= CONTINUITY_M
 
 
 def _across_path(ends, half):
@@ -51,9 +67,10 @@ def _junction(strategy, transverse, left, right, half, corner_turning, max_later
     if diverging and any(not steep and _across_path(ends, half) is not None
                          for _, _, ends, steep in transverse):
         return "junction_transverse"
-    headings = [math.radians(r["heading_deg"]) for r in side
-                if abs(r["y_at_side_x_m"]) <= max_lateral_m
-                and r["length_m"] >= FORK_MIN_LENGTH_M]
-    if headings and max(headings) - min(headings) > FORK_MIN_ANGLE_RAD:
+    branches = [r for r in side
+                if abs(r["y_at_side_x_m"]) <= max_lateral_m and r["length_m"] >= FORK_MIN_LENGTH_M]
+    if any(abs(math.radians(a["heading_deg"] - b["heading_deg"])) > FORK_MIN_ANGLE_RAD
+           and not _continues(a, b) and not _continues(b, a)
+           for a, b in itertools.combinations(branches, 2)):
         return "junction_fork"
     return None
