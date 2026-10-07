@@ -126,6 +126,10 @@ class CoreClient:
             status, raw = error.code, error.read()
         except (urllib.error.URLError, OSError) as error:
             reason = getattr(error, "reason", error)
+            if isinstance(reason, ssl.SSLCertVerificationError):
+                raise SshAccessError(f"{self.base_url} presented a certificate that does not match the pinned one "
+                                     f"({reason.verify_message}): the wrong file, a re-provisioned robot, or "
+                                     "someone in between. Nothing was sent") from None
             # urllib wraps connect/send failures in URLError; a bare timeout came while waiting for the answer.
             if isinstance(error, TimeoutError) and not isinstance(error, urllib.error.URLError):
                 raise SshAccessError(f"{self.base_url} did not answer {method} {path} within {self.timeout:g} s; "

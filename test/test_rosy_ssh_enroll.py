@@ -664,20 +664,53 @@ def test_the_config_line_allowlist_is_a_second_layer(line):
 # --- 2026-10-07: CORE serves HTTPS on 8080 -------------------------------------------------------
 
 def _enroll_default_client(paths, *extra):
-    return tool.main(["127.0.0.1", "--label", "dev:laptop", "--key", str(paths["key"]),
-                      "--known-hosts", str(paths["known_hosts"]), "--ssh-config", str(paths["config"]), *extra],
-                     ask_code=lambda p: ADMIN_CODE, ask_lock=lambda p: "", keygen=FakeKeygen(), ssh=FakeSsh())
+    asked, keygen = [], FakeKeygen()
+    status = tool.main(["127.0.0.1", "--label", "dev:laptop", "--key", str(paths["key"]),
+                        "--known-hosts", str(paths["known_hosts"]), "--ssh-config", str(paths["config"]), *extra],
+                       ask_code=lambda p: asked.append(p) or ADMIN_CODE, ask_lock=lambda p: "", keygen=keygen,
+                       ssh=FakeSsh())
+    return status, asked, keygen
 
 
-def test_https_core_is_verified_against_the_given_certificate(paths, tmp_path, capsys):
+@pytest.fixture
+def tls_core(tmp_path):
     cert = robot_certificate(tmp_path / "tls", HOST + ".local")
     with FakeCore(codes={ADMIN_CODE: "administrator"}, tls=cert) as core:
-        status = _enroll_default_client(paths, "--api-port", str(core.port), "--ca-file", str(cert[0]))
+        yield core, cert[0]
+
+
+def test_https_core_is_verified_against_the_given_certificate(paths, tls_core, capsys):
+    core, cert = tls_core
+    status, _, _ = _enroll_default_client(paths, "--api-port", str(core.port), "--ca-file", str(cert))
     assert status == 0, capsys.readouterr().err
     assert "dev:laptop" in core.keys
 
 
-def test_https_without_ca_file_or_insecure_sends_nothing(paths, capsys):
-    status = _enroll_default_client(paths)
+def test_insecure_works_against_https_core(paths, tls_core, capsys):
+    core, _ = tls_core
+    status, _, _ = _enroll_default_client(paths, "--api-port", str(core.port), "--insecure")
+    assert status == 0, capsys.readouterr().err
+    assert "dev:laptop" in core.keys
+
+
+def test_https_without_ca_file_or_insecure_sends_nothing(paths, tls_core, capsys):
+    core, _ = tls_core
+    status, asked, keygen = _enroll_default_client(paths, "--api-port", str(core.port))
     assert status == 1
     assert "--ca-file" in capsys.readouterr().err
+    assert core.requests == [] and asked == [] and keygen.calls == []
+
+
+def test_a_wrong_ca_file_is_refused_with_nothing_sent(paths, tls_core, tmp_path, capsys):
+    core, _ = tls_core
+    other = robot_certificate(tmp_path / "other", HOST + ".local")[0]
+    status, _, _ = _enroll_default_client(paths, "--api-port", str(core.port), "--ca-file", str(other))
+    assert status == 1
+    assert "does not match the pinned" in capsys.readouterr().err
+    assert core.requests == [] and core.keys == {}
+
+
+def test_ca_file_and_insecure_together_are_a_usage_error(paths, tmp_path):
+    with pytest.raises(SystemExit) as exit_info:
+        _enroll_default_client(paths, "--ca-file", str(tmp_path / "x.pem"), "--insecure")
+    assert exit_info.value.code == 2
