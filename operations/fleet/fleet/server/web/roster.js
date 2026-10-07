@@ -453,5 +453,5 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     document.querySelector(".queues-panel").hidden = (warningCount + criticalCount) === 0;
   }
 
-  return { card, fillQueues, queuedReason, needsAttention };
+  return { card, fillQueues, queuedReason, needsAttention, attentionItems };
 }

@@ -80,6 +80,7 @@ class SharedGather:
         self._lock = asyncio.Lock()
         self._snapshot: Optional[dict] = None
         self._at = 0.0
+        self.gathered_at = 0.0  # D-493: server UTC epoch s of the last real gather (display only)
 
     async def __call__(self) -> dict:
         async with self._lock:
@@ -90,6 +91,7 @@ class SharedGather:
                     self._tracking.observe_states(snapshot["robots"], now=gathered_at)
                 self._board.observe(snapshot["robots"], self._console.hub.registry.events_since)
                 self._snapshot, self._at = snapshot, self._clock()
+                self.gathered_at = time.time()
             return self._snapshot
 
 
@@ -113,7 +115,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             observed = row.pop("_state_mono", None)
             row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
             rows.append(row)
-        return {**snapshot, "robots": rows, "gathered_at": time.time()}
+        return {**snapshot, "robots": rows, "gathered_at": gather.gathered_at}
 
     @app.get("/api/fleet/state", dependencies=read_guard, tags=["fleet"])
     async def fleet_state() -> dict:

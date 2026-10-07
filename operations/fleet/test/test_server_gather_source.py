@@ -141,7 +141,7 @@ def test_state_route_ages_a_cached_hub_row_and_hides_the_internal_stamp(tmp_path
     assert first.json()["robots"][0]["state_age_s"] == 2.0
     body = second.json()
     assert body["robots"][0]["state_age_s"] == 2.5
-    assert isinstance(body["gathered_at"], float)
+    assert body["gathered_at"] == first.json()["gathered_at"] > 0  # gather time, not response time
     assert "_state_mono" not in first.text and "_state_mono" not in second.text
 
 
