@@ -4,6 +4,8 @@
 
 제품 전체 수용 기준은 사용자 확인에 따라 **활성 표면 모두의 G1, 선언한 G2 상태·폭 전부, G3 실제 사용자 검토와 해당 실물 장치 readback**이다. 일부 화면의 너비 보정이나 LOCAL 시험 통과로 이 판정을 올리지 않는다.
 
+2026-10-07 Pilot Gazebo 팔 화면의 [320px 머리·동등 창 LOCAL 확인](../uiux-pilot-arm-header-2026-10-07/result.md)에서 실제 앱과 같은 시뮬레이션 헤더를 재현하고, 오래된 「대기」·「직접 조종」 문구를 팔 화면에서 숨겼다. 네 폭 팔·그리퍼 배치 관련 브라우저 6 passed, G1 90 passed, 각각 0 NEW. 실제 장치·남은 G2·요청자 G3는 **HOLD**다.
+
 2026-10-07 Pilot [전체 브라우저 회귀](../uiux-pilot-full-browser-2026-10-07/result.md)는 현재 동일한 Pilot 코드에서 108 passed, `known_failures.py` 0 NEW였다. 실행 중 공유 `main`은 사이트 문서 한 파일만 변경됐다. 이는 LOCAL 경로 회귀 근거이며 미캡처 G2 셀·실물 장치·사용자 G3는 여전히 **HOLD**다.
 
 2026-10-07 Pilot 녹화본 시트가 390/320px에서 조작부 뒤에 가려지는 결함을 [LOCAL 재현·수정](../uiux-pilot-recording-sheet-2026-10-07/result.md)했다. 네 폭에서 파일 행, 동등 행동 폭, 첫 화면의 닫기·비상 정지, 받기·취소 흐름을 확인했다. 관련 브라우저 7 passed, G1 90 passed, 각각 0 NEW. 실제 로봇 녹화·태블릿, 남은 G2, 사용자 G3는 **HOLD**다.
@@ -12,7 +14,7 @@
 
 2026-10-07 Pilot 주행 HUD의 속도·배터리 `fresh/delayed/disconnected/unavailable` × 선언 폭 4개를 로컬 브라우저에서 다시 확인했다. [상태별 결과와 원본 캡처 위치](../uiux-pilot-telemetry-2026-10-07/result.md)를 기록했다. 이는 Pilot G2의 부분 근거이며 제품 전체 판정은 **HOLD**다.
 
-상태 소켓이 열린 채 조용해지고 REST 조회가 실패하거나 멈춘 경우의 오래된 속도·배터리를 숨겼다. [320px 수신 중단·회복 LOCAL 전이](../uiux-pilot-silent-readback-2026-10-07/result.md)는 브라우저 11 passed와 현재 숫자 오인을 막는 근거다. 다른 폭의 이 전이와 실물 연결·운전자 G3는 남아 **HOLD**다.
+상태 소켓이 열린 채 조용해지고 REST 조회가 실패하거나 멈춘 경우의 오래된 속도·배터리를 숨겼다. [수신 중단·회복 LOCAL 전이](../uiux-pilot-silent-readback-2026-10-07/result.md)는 선언 폭 네 개에서 8 passed, 0 NEW로 확인했다. 상태가 끊겨도 표시될 수 있는 조작 요청 응답 시간은 출처를 명시했다(네 폭 8 passed, 0 NEW). 다른 Pilot G2 셀과 실물 연결·운전자 G3는 남아 **HOLD**다.
 
 G3 실제 운영자 독회는 요청자가 수행하기로 했다. [실제 사용자 독회 기록지](operator-walkthrough.md)에 표면별 작업·여덟 판정 항목과 실물 근거 자리를 마련했다. 결과·관찰·재현 폭은 아직 받지 않았으므로 G3 판정은 HOLD다. 픽셀 검수의 class 파일 미연결 상태에서는 점/브러시 전환을 막고 연결 이유를 표시한다. 1440/800/390/320px 브라우저 회귀와 점 미리보기·브러시 조작 **10 passed**, `known_failures.py` **0 NEW**; 수정 후 320px 원본은 X: `captures/pixel-disabled-fix/learning-pixels-320.png`, 실행 기록은 `logs/merge-20261006/pixel-disabled-fix.txt`다.
 

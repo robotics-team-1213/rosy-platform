@@ -708,6 +708,8 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 [data-drive-intent][data-state="hold"] [data-intent-steer] { color: var(--status-warn); }
 
 [data-screen="arm"] { width: 100%; max-width: 72rem; margin: 0 auto; padding: var(--space-4); min-width: 0; }
+body[data-pilot-screen="arm"] ui-topbar ui-brand small,
+body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 [data-screen="arm"] label { display: block; margin-block: var(--space-3); }
 [data-screen="arm"] input, [data-screen="arm"] select { display: flex; width: 100%; }
 [data-screen="arm"] h2, [data-screen="arm"] h3 { margin: 0; }

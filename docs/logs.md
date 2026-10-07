@@ -6739,3 +6739,17 @@ osy-d395-s1d\`.
 - 변경: Pilot 108개 브라우저 시험의 현재 LOCAL 회귀 결과와 실행 중 공유 main의 사이트 문서 단일 변경을 분리해 기록했다.
 - 근거: [회귀 기록](validation/uiux-pilot-full-browser-2026-10-07/result.md). 108 passed, known_failures 0 NEW, 로그 SHA256 기록.
 - gate 변화: Pilot 브라우저 경로 근거 보강. 미캡처 G2·실물 readback·요청자 G3와 제품 전체는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 320px 상태·폭
+
+- 변경: 시뮬레이션 팔 헤더의 오래된 게이트·직접 조종 문구를 제거하고 320px 팔·그리퍼 동등 폭을 현재 화면에서 확인했다.
+- 근거: [LOCAL 결과](validation/uiux-pilot-arm-header-2026-10-07/result.md). 관련 브라우저 6 passed, D-153 G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 근거. 실물 장치·나머지 선언 셀·요청자 G3 전에는 제품 전체 HOLD.
+
+## 2026-10-07 · uncommitted · docs(validation): 관제 콘솔 카메라 교정 재수락 회차 증거 기록
+
+- 변경: 천장 Rosy Cam 재조준 뒤 관제 콘솔 조감도가 저장된 추적 보정(paint-daccc3e53522)과 어긋나던 것을 2026-10-07 `/console/install` 맞춤 패널로 다시 맞춘 회차를 `docs/validation/site-camera-refit-2026-10-07/`(result.md + 스크린샷 3장)로 남겼다.
+- 증거: [회차 결과](validation/site-camera-refit-2026-10-07/result.md). 새 교정 `paint-f81a872f5cd8`이 Fleet DB `tracking_calibrations`에 활성으로 저장됐고 Fleet 재시작 2회를 넘겨 유지됨을 확인(`tracking_calibration_audit` 승인 이력). 문서 계약 시험 103 passed, 1 skipped, `known_failures.py` 0 NEW, harness lint 0 errors.
+- gate 변화: 없음. 검증 기록 추가만. 로봇 관측 0/0대에서 경로 감지가 불가한 점과 적용 교정에 렌즈 지문이 없어 렌즈 교체 가드가 약한 점은 후속 과제로 남는다.
+- 결정: 없음
+- 교훈: 카메라 재조준은 저장된 추적 보정과 조용히 어긋난다. 같은 날 착지된 낡은 교정 자동 경고(feat/cam-drift-warn, 커밋 `27081f83c`)가 다음 재조준부터 침묵 오정렬을 잡는다. 적용에 쓴 임시 계정 `camfit-temp`는 작업 직후 제거했다.

@@ -659,3 +659,29 @@
 - 변경: 시트를 stage 밖 주행 root에 붙여 조작부 뒤 가림을 없앴다. 동등한 하단 행동을 같은 폭으로 하고 320px에서는 전폭으로 쌓아 녹화본 행·닫기를 첫 화면에 둔다.
 - 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 가림 재현 2 failed, 수정 뒤 관련 브라우저 7 passed, G1 90 passed, 각각 known_failures 0 NEW.
 - gate 변화: Pilot G2 부분 보강. 실제 태블릿·로봇 녹화 readback, 다른 상태와 사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): Gazebo 팔 머리 상태 정직성
+
+- 변경: 실제 앱과 같이 Gazebo 팔 시험 fixture의 Home·비상 정지를 숨겼고, 팔 화면에서는 오래된 접속 대기·직접 조종 부제를 숨겨 본문의 시뮬레이션 전용·조작 가능 상태와 충돌하지 않게 했다.
+- 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-arm-header-2026-10-07/result.md). 수정 전 320px 1 failed, 수정 후 집중 브라우저 6 passed, G1 90 passed, 각각 known_failures 0 NEW.
+- gate 변화: Pilot G2 부분 보강. 실물 태블릿·팔 장치 readback, 다른 상태·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 로비의 기기·연결 버튼에 아이콘을 붙이고 왼쪽에 맞춘다
+
+- 변경: 네이티브 Pilot 로비 왼쪽 열의 「기기·연결」 버튼이 아이콘 대응표에 없어(옛 이름 "태블릿"만 있음) 글자만 보였고, 세로 레이아웃 기본 폭(가득 참)이라 글자가 가운데로 밀려 테두리 없는 글자처럼 보였다. 아이콘 대응에 "기기·연결"을 더하고(ic_tablet), 버튼을 내용 폭·왼쪽 정렬로 둔다.
+- 증거: Android JVM 93 passed. Lenovo 태블릿(무선 adb)에 설치해 로비 화면에서 아이콘과 정렬 확인(2026-10-07).
+- gate 변화: 없음.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 수신 중단·회복 네 폭 LOCAL 확인
+- 변경: 상태 소켓 무응답과 REST 503/무응답의 기존 브라우저 검사를 Pilot 선언 폭 네 개로 확장.
+- 증거: 브라우저 8 passed, `known_failures.py` 0 NEW; 원본은 `X:/DevTemp/pilot-silent-widths/`.
+- gate 변화: Pilot G2 부분 근거 확대, 제품 전체 HOLD.
+- 결정: D-153.
+- 교훈: 좁은 폭만 통과해도 태블릿·가로 화면의 수신 중단 상태는 검증되지 않는다.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 조작 응답 시간 출처 표시
+- 변경: 주행 HUD의 무표제 ms 값과 시한 초과에 `조작 응답`을 붙여 상태 수신 신선도와 구분.
+- 증거: 수신 중단 네 폭×두 실패 브라우저 8 passed, G1 관련 계약 35 passed, 각각 `known_failures.py` 0 NEW. 원본은 `X:/DevTemp/pilot-latency-label/`.
+- gate 변화: Pilot G2 정직성 부분 근거, 제품 전체 HOLD.
+- 결정: D-153, D-280.
+- 교훈: 요청 왕복 시간은 로봇 동작 완료나 상태 수신 시간의 근거가 아니다.
