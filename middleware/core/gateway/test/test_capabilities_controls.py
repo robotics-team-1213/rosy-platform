@@ -1,5 +1,7 @@
 """D-411 B: CORE announces Pinky's controls from adapter provides (or teleop)."""
 
+import pytest
+
 from core_common.domain.adapters import AdapterManifest, AdapterRegistry
 
 VIEWER = {"Authorization": "Bearer rosy-dev-viewer"}
@@ -103,3 +105,11 @@ def test_d491_free_mode_needs_live_goal_navigation(core_client, monkeypatch):
     monkeypatch.setattr(system, "withhold_hardware_flags", lambda data, _reasons: data)
     svc.capability._data.setdefault("navigation", {})["goal_navigation"] = True
     assert _controls(client)["items"][0]["drive_modes"] == ["lane", "free"]
+
+
+@pytest.mark.parametrize("model", ["Pinky", "pinky-pro", "p" * 65, 7])
+def test_d491_unusable_robot_model_omits_robot_kind_not_a_500(core_client, model):
+    client, svc = _live_core(core_client)
+    svc.config.setdefault("robot", {})["model"] = model
+    (base,) = _controls(client)["items"]
+    assert "robot_kind" not in base and "lane" in base["drive_modes"]

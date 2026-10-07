@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import logging
 from dataclasses import asdict, is_dataclass
 from enum import Enum
 from typing import Any
@@ -30,7 +31,7 @@ from core_api_web.api.deps import (
     token_digest,
 )
 from core_api_web.api.errors import ApiError
-from core_common.config import ConfigError, patch_local_config
+from core_common.config import ROBOT_NAME_PATTERN, ConfigError, patch_local_config
 from core_common.domain.capabilities import (
     lifecycle_from,
     runtime_truth,
@@ -42,6 +43,8 @@ from core_common.protocol.controls import pinky_controls
 
 
 system_router = APIRouter(prefix="/api/v1/system", tags=["system"])
+_log = logging.getLogger(__name__)
+_bad_robot_kinds: set[str] = set()  # each unusable robot.model is logged once
 
 
 @system_router.get("/info")
@@ -227,13 +230,23 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                       max_linear=limits.manual_linear,
                                       max_angular=limits.manual_angular,
                                       autonomy=("line",) if svc.line_follow is not None else (),
-                                      robot_kind=str((svc.config.get("robot") or {}).get("model")
-                                                     or DEFAULT_ROBOT),
+                                      robot_kind=_robot_kind(svc),
                                       drive_modes=drive_modes,
                                       trip_max_linear=max(0.0, trip_max_linear),
                                       junction_turn=getattr(svc.line_follow, "supports_junction_turn",
                                                             False) is True)
     return data
+
+
+def _robot_kind(svc: CoreServicesLike):
+    """D-491 1: robot.model as a wire robot_kind, or None (omitted) when it is not a package name."""
+    kind = str((svc.config.get("robot") or {}).get("model") or DEFAULT_ROBOT)
+    if len(kind) <= 64 and ROBOT_NAME_PATTERN.fullmatch(kind):
+        return kind
+    if kind not in _bad_robot_kinds:
+        _bad_robot_kinds.add(kind)
+        _log.warning("robot.model %r is not a robot package name; robot_kind omitted", kind[:80])
+    return None
 
 
 def _drive_provides(svc: CoreServicesLike, data: dict) -> set[str]:
