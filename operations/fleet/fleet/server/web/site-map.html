@@ -41,6 +41,10 @@
         <label class="inline">보기 <select class="ui-field" id="map-source" aria-label="보는 지도">
           <option value="active">활성 지도</option><option value="draft">초안</option>
         </select></label>
+        <label class="inline">화면 방향 <select class="ui-field" id="map-view-turn" aria-label="지도 화면 방향, 기본 화면에서 시계 방향 회전">
+          <option value="0">기본 (+y 위)</option><option value="90">90° 돌림</option>
+          <option value="180">180° 돌림</option><option value="270">270° 돌림</option>
+        </select></label>
       </ui-head>
       <ui-status id="map-status" state="empty">관제 접속 필요</ui-status>
       <div class="actions">
