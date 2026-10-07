@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · 4cb87d467 · fix(perception): B9를 keeper 입력 bend_expected 뒤로 (장치 검토 반영)
 - 2026-10-08 · e192ef089 · fix(perception): B9 독립 검토 반영
 - 2026-10-08 · 05462b7d9 · fix(perception): 남서 굽이를 굽이로 읽는다 (D-507 B9)
 - 2026-10-07 · uncommitted · fix(perception): G-16 독립 검토 반영
 - 2026-10-07 · uncommitted · fix(perception): G-16 keep 경계 기울기와 그 오차
-- 2026-10-07 · uncommitted · feat(recording): Pilot 바닥 IR 녹화 번호는 D-506

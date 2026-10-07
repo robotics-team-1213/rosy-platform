@@ -1,18 +1,8 @@
-bend_1 trip --plan left:60 --duration 90 --tag B9B1_
-bend_2 trip --plan left:60 --duration 90 --tag B9B2_
-bend_3 trip --plan left:60 --duration 90 --tag B9B3_
-bend_4 trip --plan left:60 --duration 90 --tag B9B4_
-bend_5 trip --plan left:60 --duration 90 --tag B9B5_
-bend_6 trip --plan left:60 --duration 90 --tag B9B6_
-bend_7 trip --plan left:60 --duration 90 --tag B9B7_
-bend_8 trip --plan left:60 --duration 90 --tag B9B8_
-bend_9 trip --plan left:60 --duration 90 --tag B9B9_
-bend_10 trip --plan left:60 --duration 90 --tag B9B10_
-bend_11 trip --plan left:60 --duration 90 --tag B9B11_
-bend_12 trip --plan left:60 --duration 90 --tag B9B12_
-bend_13 trip --plan left:60 --duration 90 --tag B9B13_
-bend_14 trip --plan left:60 --duration 90 --tag B9B14_
-bend_15 trip --plan left:60 --duration 90 --tag B9B15_
-south_c1 trip --plan left:60 --duration 60 --x -1.15 --y -0.509 --yaw 0 --tag B9S1_
-south_c2 trip --plan left:60 --duration 60 --x -1.15 --y -0.509 --yaw 0 --tag B9S2_
-south_c3 trip --plan left:60 --duration 60 --x -1.15 --y -0.509 --yaw 0 --tag B9S3_
+g_1 trip --plan left:60 --duration 90 --tag B9G1_
+g_2 trip --plan left:60 --duration 90 --tag B9G2_
+g_3 trip --plan left:60 --duration 90 --tag B9G3_
+g_4 trip --plan left:60 --duration 90 --tag B9G4_
+g_5 trip --plan left:60 --duration 90 --tag B9G5_
+g_6 trip --plan left:60 --duration 90 --tag B9G6_
+g_7 trip --plan left:60 --duration 90 --tag B9G7_
+g_8 trip --plan left:60 --duration 90 --tag B9G8_
