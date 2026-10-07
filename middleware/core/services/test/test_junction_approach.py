@@ -124,7 +124,7 @@ def test_window_needs_fresh_odom_when_it_arrives():
 @pytest.mark.parametrize('expect', [dict(expect_in_m=.5), dict(expect_tol_m=.1),
                                     dict(expect_in_m=2.1, expect_tol_m=.1),
                                     dict(expect_in_m=.5, expect_tol_m=.31),
-                                    dict(pivot_past_line_m=.31)])
+                                    dict(pivot_past_line_m=.31), dict(pivot_past_line_m=-.31)])
 def test_invalid_window_fields_raise(expect):
     rig = Rig()
     rig.step()
@@ -163,6 +163,8 @@ def _approaching(rig, pivot=.1, reason='junction_transverse', step=None, **kwarg
 @pytest.mark.parametrize('pivot, reason, distance, basis', [
     (.1, 'junction_transverse', .3, 'map'),   # cross line .2 ahead + half lane width
     (.1, 'junction_fork', .2, 'map'),         # a fork turns at the measured branch end
+    (-.1, 'junction_transverse', .1, 'map'),  # 2026-10-08: the far edge, the place .1 before it
+    (-.25, 'junction_transverse', 0., 'map'),  # goal .15 is behind the robot at .2: turn here
     (None, 'junction_transverse', 0., 'stop_point')])  # no field: today's stop point
 def test_approach_distance(pivot, reason, distance, basis):
     rig = Rig()
@@ -260,6 +262,16 @@ def test_unexpected_clears_when_a_later_sighting_matches_while_still_seen(action
     assert rig.m._junction['outside'] is False
 
 
+def test_a_negative_pivot_expects_the_line_past_the_place():
+    """2026-10-08: the far edge (roundabout entry, T) is .1 past the place at .5: line at .6."""
+    for ahead, state in ((.4, 'turning'), (.2, 'unexpected')):
+        rig = Rig()
+        rig.step()
+        send(rig, pivot_past_line_m=-.1, **WINDOW)
+        drive_to(rig, .2)
+        assert sight(rig, ahead=ahead, seen=False)[1].junction.state == state
+
+
 def test_straight_pivot_biases_only_the_window():
     for ahead, state in ((.2, 'executing'), (.32, 'unexpected')):
         rig = Rig()
@@ -334,16 +346,17 @@ def test_approach_aborts_on_an_odom_epoch_change():
 # --- review 2: IR centre on the measured cross line (D-507 6, 2026-10-08) -------------------
 
 def test_cross_line_band_edges():
-    line = (.4, 0.)
-    assert cross_line_band((.3901, 0.), line, 0., .025, .01, .1)
-    assert not cross_line_band((.3899, 0.), line, 0., .025, .01, .1)
-    assert cross_line_band((.4349, 0.), line, 0., .025, .01, .1)
-    assert not cross_line_band((.4351, 0.), line, 0., .025, .01, .1)
+    line = (.4, 0.)                                                      # the tape centre
+    assert cross_line_band((.3776, 0.), line, 0., .025, .01, .1)         # .4 - .0125 - .01
+    assert not cross_line_band((.3774, 0.), line, 0., .025, .01, .1)
+    assert cross_line_band((.4224, 0.), line, 0., .025, .01, .1)         # .4 + .0125 + .01
+    assert not cross_line_band((.4226, 0.), line, 0., .025, .01, .1)
     assert cross_line_band((.41, .1099), line, 0., .025, .01, .1)       # lateral: half + error
     assert not cross_line_band((.41, -.1101), line, 0., .025, .01, .1)
     assert cross_line_band((.05, .41), (0., .4), math.pi/2, .025, 0., .1)  # at yaw pi/2
     assert not cross_line_band((.15, .41), (0., .4), math.pi/2, .025, 0., .1)
-    assert not cross_line_band((0., .39), (0., .4), math.pi/2, .025, 0., .1)
+    assert cross_line_band((0., .39), (0., .4), math.pi/2, .025, 0., .1)   # inside the tape half
+    assert not cross_line_band((0., .385), (0., .4), math.pi/2, .025, 0., .1)
 
 
 IR_ROW = dict(SITE, ir_row_x_m=.05)
@@ -358,9 +371,10 @@ def _band_straight(rig):
     assert rig.m._cross_band['kind'] == 'straight'
 
 
-@pytest.mark.parametrize('x, inside', [(.33, False), (.335, True), (.394, True), (.397, False)])
+@pytest.mark.parametrize('x, inside', [(.316, False), (.326, True), (.378, True), (.386, False)])
 def test_band_edges_carry_range_and_odom_error(x, inside):
-    # lower edge: x + .05 = .39 - .05 (x - .2) -> x = .3333; upper: x + .05 = .435 + .05 (x - .2) -> .3947
+    # tape centre .4 +/- .0125, error .01 + .05 (x - .2):
+    # lower edge: x + .05 = .3775 - .05 (x - .2) -> x = .3214; upper: x + .05 = .4225 + .05 (x - .2) -> .3816
     rig = site_rig(**IR_ROW)
     _band_straight(rig)
     while rig.x < x - .01:
@@ -436,7 +450,8 @@ def test_a_side_line_a_metre_later_is_lane_departure():
 
 @pytest.mark.parametrize('pivot, lateral, inside', [
     (None, .10, True), (None, .125, False),      # D-491 corridor half-width .10 + error
-    (.05, .06, True), (.05, .08, False)])         # Fleet's lane half-width (pivot_past_line_m)
+    (.05, .06, True), (.05, .08, False),         # Fleet's lane half-width (pivot_past_line_m)
+    (-.05, .10, True), (-.05, .125, False)])     # a negative pivot is no width: the corridor
 def test_band_lateral_bound(pivot, lateral, inside):
     rig = site_rig(**IR_ROW)
     site_step(rig)
