@@ -433,10 +433,12 @@ def test_reviewed_generation_conflict_and_cancel_are_explicit(browser_site, widt
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
 
 
-def test_failed_job_read_clears_actionable_snapshot(browser_site):
+@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+def test_failed_job_read_clears_actionable_snapshot(browser_site, width, height):
     from playwright.sync_api import expect
 
     page, _, _ = browser_site
+    page.set_viewport_size({"width": width, "height": height})
     _prepare(page)
     page.locator("#workcell").fill("omx_sim")
     page.locator("#instance").fill("omx_sim_01")
@@ -448,7 +450,13 @@ def test_failed_job_read_clears_actionable_snapshot(browser_site):
         status=503, content_type="application/json", body='{"detail":{"code":"TEST_READ_UNAVAILABLE"}}'))
     page.locator("#read-job").click()
     expect(page.locator("#notice")).to_contain_text("TEST_READ_UNAVAILABLE")
-    assert page.locator("#admit").get_attribute("disabled") is not None
+    expect(page.locator("#job-summary")).to_contain_text("작업 상태 확인 불가 · 접속 상태를 확인하고 다시 시도하세요")
+    expect(page.locator("#job-state")).to_be_empty()
+    expect(page.locator("#admit")).to_be_disabled()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.locator("#job-summary").scroll_into_view_if_needed()
+        page.screenshot(path=str(Path(output) / f"fleet-cell-job-read-error-{width}x{height}.png"))
 
 
 def test_import_updates_existing_revision_and_guided_fields(browser_site):

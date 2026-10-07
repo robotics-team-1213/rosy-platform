@@ -378,8 +378,15 @@ async function readJob() {
   $('job-state').textContent = '현재 상태 확인 중';
   $('job-summary').textContent = '현재 상태 확인 중'; $('step-progress').replaceChildren();
   $('sheet-progress').replaceChildren();
-  const result = await api(`/api/fleet/cell-jobs/${encodeURIComponent(id)}`);
-  const control = await api('/api/fleet/dispatch-control');
+  let result, control;
+  try {
+    result = await api(`/api/fleet/cell-jobs/${encodeURIComponent(id)}`);
+    control = await api('/api/fleet/dispatch-control');
+  } catch (error) {
+    $('job-state').textContent = '';
+    $('job-summary').textContent = '작업 상태 확인 불가 · 접속 상태를 확인하고 다시 시도하세요';
+    throw error;
+  }
   jobGeneration = control.generation;
   job = result.job; $('job-state').textContent = JSON.stringify(job, null, 2);
   $('job-summary').textContent = `${jobStatusLabel(job.status, job.reason)} · ${job.steps.length}단계 중 ${job.current_step_index + 1}단계${job.reason ? ' · ' + jobReasonLabel(job.reason) : ''}`;

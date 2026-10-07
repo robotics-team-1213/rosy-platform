@@ -2181,3 +2181,9 @@
 - Change: Keep disconnected robots visible in the trip picker and block preview until a connected robot is selected.
 - Evidence: 34 site-map Chromium, 90 D-153 G1, 7 Node passed; Python known failures 0 NEW. See docs/validation/uiux-site-map-offline-2026-10-07/result.md.
 - Gate: LOCAL G2 partial evidence; deployed site candidate and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell failed job read status
+
+- Change: A failed job/dispatch-generation read clears the pending summary and gives a retry instruction while approval remains blocked.
+- Evidence: 3 declared-width Chromium cases and 6 related cases passed; D-153 G1 90 passed, Python known failures 0 NEW. See docs/validation/uiux-cell-job-read-2026-10-07/result.md.
+- Gate: LOCAL synthetic G2 partial evidence; site/device and operator G3 remain HOLD.
