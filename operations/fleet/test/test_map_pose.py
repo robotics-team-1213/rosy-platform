@@ -106,13 +106,14 @@ def test_sighting_without_odom_within_the_pair_window_is_dropped():
     assert close((pose.x, pose.y), ANCHOR[:2])  # not re-anchored to the unpaired sighting
 
 
-def test_nearest_odom_pairs_only_once_no_bracket_can_arrive():
+def test_nearest_odom_pairs_only_once_the_next_sample_cannot_bracket():
     tr = localized()
     tr.add_odom(odom(1.0, x=0.2), T0 + 1.0)
     tr.add_sighting(seen(1.2, y=2.2), T0 + 1.2)      # 0.2 s after the newest odom
-    assert tr.pose(T0 + 1.2).source == BRIDGED       # still waiting for a bracket
-    pose = tr.pose(T0 + 2.25)                        # 1.0 + max_interp_gap_s passed
-    assert (pose.source, pose.state) == (SIGHTING, LOCALIZED)
+    assert tr.pose(T0 + 2.4).anchor_age_s == pytest.approx(2.2)   # still waiting for odom
+    tr.add_odom(odom(2.5, x=0.2), T0 + 2.5)          # 1.5 s gap: too wide to interpolate
+    pose = tr.pose(T0 + 2.5)
+    assert pose.state == LOCALIZED and pose.anchor_age_s == pytest.approx(1.3)
     assert close((pose.x, pose.y), (1.0, 2.2))
 
 
@@ -342,10 +343,18 @@ def test_odom_refusals_are_counted_with_the_last_reason():
 
 def test_rotation_budget_degrades_a_spin_in_place():
     tr = localized()
-    for i in range(1, 12):                                      # 11 x 20 deg = 220 deg
+    for i in range(1, 17):                                      # 16 x 20 deg = 320 deg
         tr.add_odom(odom(0.2 + 0.1 * i, yaw=math.radians(20 * i)), T0 + 0.2 + 0.1 * i)
-    pose = tr.pose(T0 + 1.3)
+        if i == 9:                                              # one U-turn is still fine
+            assert tr.pose(T0 + 1.1).state == LOCALIZED
+    pose = tr.pose(T0 + 1.8)
     assert pose.dead_reckon_m == 0.0 and pose.state == DEGRADED
+
+
+def test_impossible_turn_rate_is_an_odom_reset():
+    tr = localized()
+    tr.add_odom(odom(0.3, yaw=math.radians(90)), T0 + 0.3)      # 90 deg in 0.1 s
+    assert tr.pose(T0 + 0.3).state == UNKNOWN
 
 
 def test_anchor_age_degrades_without_new_sightings():
@@ -390,3 +399,62 @@ def test_huge_numbers_are_malformed_not_a_crash():
                                               "stamp": "2026-10-07T00:00:00Z"}}) is None
     assert odom_from_snapshot({"odom_pose": {"x": 0, "y": 0, "yaw": 0, "stamp": "9999-99-99"}}) is None
     assert odom_from_snapshot("not a mapping") is None
+
+
+def _late_odom_run(odom_period, odom_lat, cam_period, cam_lat, dur=20.0, v=0.2):
+    """Robot drives at v along map x; odom and sightings are delivered late, in arrival order."""
+    tr = MapPoseTracker("r1")
+    events = [(k * odom_period + odom_lat, "o", k * odom_period) for k in range(int(dur / odom_period))]
+    events += [(j * cam_period + cam_lat, "s", j * cam_period) for j in range(int(dur / cam_period))]
+    states = []
+    for at, kind, t in sorted(events):
+        if kind == "o":
+            tr.add_odom(odom(t, x=v * t), T0 + at)
+        else:
+            tr.add_sighting(seen(t, x=1.0 + v * t, yaw=0.0), T0 + at)
+        states.append(tr.pose(T0 + at).state)
+    return states[len(states) // 2:]
+
+
+@pytest.mark.parametrize("odom_lat, cam_lat", [(0.3, 0.02), (0.5, 0.15), (0.05, 0.15)])
+def test_odom_arriving_later_than_sightings_still_localizes(odom_lat, cam_lat):
+    assert set(_late_odom_run(1.0, odom_lat, 0.1, cam_lat)) == {LOCALIZED}
+
+
+def test_heartbeat_read_by_a_half_second_poll_still_localizes():
+    tr = MapPoseTracker("r1")
+    events = []
+    for k in range(20):                    # 1 Hz heartbeat, seen at the next 0.5 s poll (phase 0.4)
+        deliver = math.ceil((k - 0.4) / 0.5) * 0.5 + 0.4
+        events.append((deliver if deliver >= k else deliver + 0.5, "o", float(k)))
+    events += [(j * 0.1 + 0.15, "s", j * 0.1) for j in range(200)]
+    states = []
+    for at, kind, t in sorted(events):
+        if kind == "o":
+            tr.add_odom(odom(t, x=0.2 * t), T0 + at)
+        else:
+            tr.add_sighting(seen(t, x=1.0 + 0.2 * t, yaw=0.0), T0 + at)
+        states.append(tr.pose(T0 + at).state)
+    assert set(states[len(states) // 2:]) == {LOCALIZED}
+
+
+def test_waiting_sightings_are_not_displaced_by_newer_ones():
+    tr = localized()
+    for j in range(1, 8):                                       # 0.3 .. 0.9, odom not yet here
+        assert tr.add_sighting(seen(0.2 + 0.1 * j), T0 + 0.2 + 0.1 * j)
+    tr.add_odom(odom(1.0), T0 + 1.0)
+    pose = tr.pose(T0 + 1.0)
+    assert pose.state == LOCALIZED and pose.anchor_age_s == pytest.approx(0.1)
+
+
+def test_active_map_frame_filters_and_degrades():
+    tr = MapPoseTracker("r1")
+    for i in range(3):
+        t = 0.1 * i
+        tr.add_odom(odom(t), T0 + t)
+        tr.add_sighting(Sighting("r1", 1.0, 2.0, 0.0, T0 + t, map_id="a"), T0 + t, active_map_id="a")
+    assert tr.pose(T0 + 0.2, active_map_id="a").state == LOCALIZED
+    assert not tr.add_sighting(Sighting("r1", 1.0, 2.0, 0.0, T0 + 0.25, map_id="b"), T0 + 0.25,
+                               active_map_id="a")
+    assert tr.pose(T0 + 0.25, active_map_id="a").sightings_filtered_map_id == 1
+    assert tr.pose(T0 + 0.25, active_map_id="b").state == DEGRADED   # the site map changed

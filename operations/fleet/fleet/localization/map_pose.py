@@ -1,18 +1,21 @@
 """D-491 3: Fleet map pose for trip execution. Rosy Cam sightings anchor, robot odom bridges. Pure.
 
 Each accepted sighting is paired with the robot's `odom_pose` at its capture time and becomes
-the anchor: interpolated between two samples that bracket it (gap at most `max_interp_gap_s`);
-while such a bracket can still arrive the sighting waits; after that the nearest sample within
-`max_pair_s` is used, else the sighting is dropped. Between sightings the pose is the anchor
-composed with the rigid odom delta since it.
+the anchor. Sightings wait in a `captured_at`-ordered queue (odom usually arrives later than the
+camera) until an odom sample at or after their capture time arrives: then they are interpolated
+between the two samples that bracket them (gap at most `max_interp_gap_s`), else paired with the
+nearest sample within `max_pair_s`, else dropped. A sighting waits at most `max_odom_age_s`.
+Between sightings the pose is the anchor composed with the rigid odom delta since it.
 
 States: LOCALIZED; DEGRADED when the bridge is longer than `max_dead_reckon_m` or turned more
 than `max_bridge_turn_deg`, the anchor is older than `max_anchor_age_s`, or a sighting disagreed
 with the bridged prediction by more than `max_jump_m` / `max_jump_deg` (it re-anchors and needs
 `RECOVER_AFTER` consistent sightings; so does a first anchor); UNKNOWN when never anchored or
 odom is older than `max_odom_age_s`. An odom gap longer than `max_odom_age_s`, odom resuming
-after such staleness, or a step faster than `max_speed_mps` (a CORE restart resets odom to 0)
-drops the anchor: the pose stays UNKNOWN until the next sighting.
+after such staleness, or a step faster than `max_speed_mps` / `max_turn_rate_dps` (a CORE
+restart resets odom to 0) drops the anchor: the pose stays UNKNOWN until the next sighting.
+A caller that knows the active map frame passes it: a sighting for another frame is counted and
+ignored, and an anchor in another frame reads DEGRADED.
 
 Path and turn are summed per received sample (chord, |dyaw|), so they are lower bounds that
 depend on the odom rate; the trip loop refreshes odom at 2 Hz or faster (D-491 appendix).
@@ -41,6 +44,9 @@ RECOVER_AFTER = 2
 ODOM_BUFFER = 256
 #: Allowance on top of `max_speed_mps * dt` for odom noise before a step counts as an odom reset.
 ODOM_STEP_MARGIN_M = 0.05
+ODOM_TURN_MARGIN_RAD = 0.1
+#: Sightings waiting for odom per robot (3.2 s at 10 Hz); the oldest goes first when full.
+PENDING_SIGHTINGS = 32
 
 Pose = tuple[float, float, float]
 
@@ -72,14 +78,17 @@ class MapPoseConfig:
     max_odom_future_s: float = 0.5
     #: An odom step faster than this is an odom reset, not motion.
     max_speed_mps: float = 1.0
-    max_bridge_turn_deg: float = 180.0
+    #: An odom heading change faster than this is an odom reset, not motion.
+    max_turn_rate_dps: float = 360.0
+    #: One planned U-turn (180 deg) plus margin bridges without a sighting.
+    max_bridge_turn_deg: float = 270.0
     max_anchor_age_s: float = 10.0
 
     def __post_init__(self) -> None:
         upper = {"max_dead_reckon_m": 20.0, "max_jump_m": 2.0, "max_jump_deg": 180.0,
                  "max_odom_age_s": 30.0, "max_pair_s": 1.0, "max_interp_gap_s": 5.0,
                  "sighting_lease_s": 5.0, "max_odom_future_s": 5.0, "max_speed_mps": 10.0,
-                 "max_bridge_turn_deg": 3600.0, "max_anchor_age_s": 600.0}
+                 "max_bridge_turn_deg": 3600.0, "max_turn_rate_dps": 3600.0, "max_anchor_age_s": 600.0}
         for item in fields(self):
             value = getattr(self, item.name)
             if not _finite(value):
@@ -133,6 +142,8 @@ class MapPose:
     #: Odom samples refused so far and why the last one was (future, out_of_order, malformed).
     odom_refused: int = 0
     odom_refused_reason: Optional[str] = None
+    #: Sightings ignored because their map_id is not the active site map frame.
+    sightings_filtered_map_id: int = 0
 
 
 def _wrap(angle: float) -> float:
@@ -214,7 +225,8 @@ class MapPoseTracker:
         self.config = config
         self._odom: deque[_Odom] = deque(maxlen=ODOM_BUFFER)
         self._anchor: Optional[_Anchor] = None
-        self._pending: Optional[Sighting] = None
+        self._pending: deque[Sighting] = deque(maxlen=PENDING_SIGHTINGS)
+        self._filtered_map_id = 0
         self._newest_sighting: Optional[float] = None
         self._degraded = False
         self._consistent = 0
@@ -245,9 +257,11 @@ class MapPoseTracker:
         if last is not None:
             dt = sample.stamp - last.stamp
             step = math.dist(last.pose[:2], pose[:2])
+            turn = abs(_wrap(pose[2] - last.pose[2]))
             if (dt > cfg.max_odom_age_s or now - last.stamp > cfg.max_odom_age_s
-                    or step > cfg.max_speed_mps * dt + ODOM_STEP_MARGIN_M):
-                self._reset()          # gap, resumed after UNKNOWN, or odom reset: old anchor is void
+                    or step > cfg.max_speed_mps * dt + ODOM_STEP_MARGIN_M
+                    or turn > math.radians(cfg.max_turn_rate_dps) * dt + ODOM_TURN_MARGIN_RAD):
+                self._reset(sample.stamp)   # gap, resumed after UNKNOWN, or odom reset: anchor is void
                 last = None
         if last is None:
             self._odom.append(_Odom(sample.stamp, pose, 0.0, 0.0))
@@ -257,24 +271,29 @@ class MapPoseTracker:
         self._resolve(now)
         return True
 
-    def add_sighting(self, sighting: Sighting, now: float) -> bool:
-        """False for another robot, low quality, outside the lease, future or not newer."""
+    def add_sighting(self, sighting: Sighting, now: float, active_map_id: Optional[str] = None) -> bool:
+        """False for another robot or map frame, low quality, outside the lease, future or not newer."""
         cfg = self.config
         age = now - sighting.captured_at
+        if (sighting.robot_id == self.robot_id and active_map_id is not None
+                and sighting.map_id != active_map_id):
+            self._filtered_map_id += 1
+            return False
         if (sighting.robot_id != self.robot_id
                 or (sighting.quality is not None and sighting.quality < cfg.min_quality)
                 or age < -MAX_SIGHTING_FUTURE_S or age > cfg.sighting_lease_s
                 or (self._newest_sighting is not None and sighting.captured_at <= self._newest_sighting)):
             return False
         self._newest_sighting = sighting.captured_at
-        self._pending = sighting       # a newer sighting supersedes one still waiting for odom
+        self._pending.append(sighting)   # in captured_at order; never displaces a waiting one
         self._resolve(now)
         return True
 
-    def pose(self, now: float) -> MapPose:
+    def pose(self, now: float, active_map_id: Optional[str] = None) -> MapPose:
         cfg = self.config
         self._resolve(now)
-        diag = {"odom_refused": self._refused, "odom_refused_reason": self._refused_reason}
+        diag = {"odom_refused": self._refused, "odom_refused_reason": self._refused_reason,
+                "sightings_filtered_map_id": self._filtered_map_id}
         latest = self._odom[-1] if self._odom else None
         anchor = self._anchor
         if anchor is None or latest is None or now - latest.stamp > cfg.max_odom_age_s:
@@ -289,36 +308,38 @@ class MapPoseTracker:
             bridged = latest.path_m - anchor.odom.path_m
             turned = latest.turn_rad - anchor.odom.turn_rad
         degraded = (self._degraded or bridged > cfg.max_dead_reckon_m
+                    or (active_map_id is not None and anchor.map_id != active_map_id)
                     or turned > math.radians(cfg.max_bridge_turn_deg) or anchor_age > cfg.max_anchor_age_s)
         return MapPose(x, y, yaw, DEGRADED if degraded else LOCALIZED, source, bridged, age,
                        anchor_age, anchor.map_id, **diag)
 
-    def _reset(self) -> None:
+    def _reset(self, since: float) -> None:
         self._odom.clear()
         self._anchor = None
-        self._pending = None
+        while self._pending and self._pending[0].captured_at < since:
+            self._pending.popleft()        # seen in the odom frame that just ended
         self._degraded, self._consistent = False, 0
 
     def _resolve(self, now: float) -> None:
-        sighting = self._pending
-        if sighting is None:
-            return
-        t, cfg = sighting.captured_at, self.config
-        before = next((o for o in reversed(self._odom) if o.stamp <= t), None)
-        after = next((o for o in self._odom if o.stamp >= t), None)
-        odom = None
-        if before is not None and after is not None and after.stamp - before.stamp <= cfg.max_interp_gap_s:
-            odom = _interpolate(before, after, t)
-        elif after is None and (before is None or now < before.stamp + cfg.max_interp_gap_s):
-            if now - t > cfg.max_odom_age_s:
-                self._pending = None          # stale while waiting
-            return                            # a bracketing sample can still arrive
-        if odom is None:
-            near = [o for o in (before, after) if o is not None and abs(o.stamp - t) <= cfg.max_pair_s]
-            odom = min(near, key=lambda o: abs(o.stamp - t)) if near else None
-        self._pending = None
-        if odom is not None:
-            self._apply(sighting, odom)
+        cfg = self.config
+        while self._pending:
+            sighting = self._pending[0]
+            t = sighting.captured_at
+            after = next((o for o in self._odom if o.stamp >= t), None)
+            if after is None:
+                if now - t <= cfg.max_odom_age_s:
+                    return                    # its odom has not arrived yet; later ones wait too
+                self._pending.popleft()       # stale while waiting
+                continue
+            self._pending.popleft()
+            before = next((o for o in reversed(self._odom) if o.stamp <= t), None)
+            if before is not None and after.stamp - before.stamp <= cfg.max_interp_gap_s:
+                odom = _interpolate(before, after, t)
+            else:
+                near = [o for o in (before, after) if o is not None and abs(o.stamp - t) <= cfg.max_pair_s]
+                odom = min(near, key=lambda o: abs(o.stamp - t)) if near else None
+            if odom is not None:
+                self._apply(sighting, odom)
 
     def _apply(self, sighting: Sighting, odom: _Odom) -> None:
         cfg = self.config
