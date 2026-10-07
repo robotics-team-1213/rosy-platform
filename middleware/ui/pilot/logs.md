@@ -659,3 +659,9 @@
 - 변경: 시트를 stage 밖 주행 root에 붙여 조작부 뒤 가림을 없앴다. 동등한 하단 행동을 같은 폭으로 하고 320px에서는 전폭으로 쌓아 녹화본 행·닫기를 첫 화면에 둔다.
 - 근거: [LOCAL 네 폭](../../../docs/validation/uiux-pilot-recording-sheet-2026-10-07/result.md). 가림 재현 2 failed, 수정 뒤 관련 브라우저 7 passed, G1 90 passed, 각각 known_failures 0 NEW.
 - gate 변화: Pilot G2 부분 보강. 실제 태블릿·로봇 녹화 readback, 다른 상태와 사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 로비의 기기·연결 버튼에 아이콘을 붙이고 왼쪽에 맞춘다
+
+- 변경: 네이티브 Pilot 로비 왼쪽 열의 「기기·연결」 버튼이 아이콘 대응표에 없어(옛 이름 "태블릿"만 있음) 글자만 보였고, 세로 레이아웃 기본 폭(가득 참)이라 글자가 가운데로 밀려 테두리 없는 글자처럼 보였다. 아이콘 대응에 "기기·연결"을 더하고(ic_tablet), 버튼을 내용 폭·왼쪽 정렬로 둔다.
+- 증거: Android JVM 93 passed. Lenovo 태블릿(무선 adb)에 설치해 로비 화면에서 아이콘과 정렬 확인(2026-10-07).
+- gate 변화: 없음.

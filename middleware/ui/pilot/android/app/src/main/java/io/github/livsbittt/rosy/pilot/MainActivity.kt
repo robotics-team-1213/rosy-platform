@@ -86,7 +86,7 @@ class MainActivity : Activity() {
             identity.addView(views.label("로봇을 선택하고\n직접 조종하세요.", 16f, true).apply { setPadding(0, views.dp(24), 0, 0) })
             identity.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
             identity.addView(healthText)
-            identity.addView(deviceButton)
+            identity.addView(deviceButton, LinearLayout.LayoutParams(-2, -2).apply { gravity = android.view.Gravity.START; topMargin = views.dp(8) })
         }
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
