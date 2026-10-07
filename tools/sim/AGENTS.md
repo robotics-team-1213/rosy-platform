@@ -3,6 +3,9 @@
 
 # sim
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Developer-side simulation helpers that compose several packages: ROS-free host simulations, the D-395 S1 Gazebo bench, the D-131 live sim check, and a pile of small shell probes used while debugging the multi-robot Gazebo plus Fleet console setup. Not a second product tree and not installed on the robot. Everything here is LOCAL evidence (D-91), never DEVICE or FIELD.

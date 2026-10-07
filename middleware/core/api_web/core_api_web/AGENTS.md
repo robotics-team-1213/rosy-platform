@@ -3,6 +3,9 @@
 
 # core_api_web
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Python package holding the CORE HTTP/WebSocket surface: the FastAPI app factory, `/api/v1` routers, token auth, and the Host Agent client. It is a library tier module: CORE (`middleware/core/gateway`) imports it and remains the only external API process and the only final `/cmd_vel` publisher. Nothing here touches rclpy or publishes a command.

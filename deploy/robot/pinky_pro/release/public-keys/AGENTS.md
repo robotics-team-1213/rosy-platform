@@ -3,6 +3,9 @@
 
 # public-keys
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Committed Ed25519 **public** trust anchors for signed releases. No production key is selected yet.

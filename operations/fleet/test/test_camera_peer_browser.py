@@ -1,7 +1,7 @@
 """Real shared UI component fixture only; API/SQLite is covered separately, no device claims."""
-import os
 from pathlib import Path
 import pytest
+from browser_harness import browser_tests_enabled
 
 ROOT=Path(__file__).resolve().parents[3]
 WEB=ROOT/'operations/fleet/fleet/server/web'
@@ -30,8 +30,8 @@ await panel.refresh();window.ready=true;
 
 @pytest.fixture
 def browser():
-    if os.environ.get("ROSY_BROWSER_TESTS") != "1":
-        pytest.skip("opt-in Chromium scenario; set ROSY_BROWSER_TESTS=1")
+    if not browser_tests_enabled():
+        pytest.skip("opt-in Chromium scenario; set ROSY_RUN_BROWSER_TESTS=1")
     # Explicit opt-in requires both the package and browser; dependency failure is real.
     from playwright.sync_api import sync_playwright
     with sync_playwright() as play:

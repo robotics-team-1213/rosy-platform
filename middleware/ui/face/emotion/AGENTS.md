@@ -3,6 +3,9 @@
 
 # emotion (Python package)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 LCD node, GIF playback, ROS-free info-card drawing, and the GIF assets themselves.
