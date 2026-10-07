@@ -3,6 +3,9 @@
 
 # test
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Launch-file contracts for `gz_multi.launch.py` when `core:=true`: per-robot identity, API port, and bind address. Skips when `launch` is missing (Windows host).

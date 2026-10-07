@@ -3,6 +3,9 @@
 
 # training
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 The trainer-side contract of the D-356/D-373 learned loop. Training itself runs outside this repository (Colab or any GPU PC); what lives here is the input/output agreement: export a model folder with a manifest, check it, and hand it to the store inbox. The store folder, not Hugging Face, is the source of truth (HF is optional).

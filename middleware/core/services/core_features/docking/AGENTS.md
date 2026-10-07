@@ -3,6 +3,9 @@
 
 # docking
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Docking state machine (DNC-002–003). Map pose is only for staging; final approach is sensor closed-loop. Whole action runs in `DOCKING` mode so Fleet/Nav cannot preempt.
