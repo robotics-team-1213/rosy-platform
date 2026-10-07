@@ -8,12 +8,12 @@
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
-  streamEvidence, mapUpTurn, quarterTurn, cameraScreenToMap, siteViewTurn,
+  streamEvidence, mapUpTurn, quarterTurn, siteViewTurn,
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
 import {drawStartPointMarks} from './start-point-layer.js';
-import { project as projectCamera } from "./map-fit.js";
+import { affineFromTriangles, warpMesh } from "./camera-warp.js";
 
 export function cameraMapCalibration(frame, calibrations, siteMap) {
   if (!frame || frame.state !== "live" || frame.rectified || !siteMap
@@ -26,6 +26,49 @@ export function cameraMapCalibration(frame, calibrations, siteMap) {
       && row.lens.focal_mm === frame.lens?.focal_mm
       && row.lens.hfov_deg === frame.lens?.hfov_deg))
     && Array.isArray(row.map_to_image) && row.map_to_image.length === 9) || null;
+}
+
+// D-515: 원본 영상을 삼각형마다 아핀으로 옮겨 사이트 사각형 위에 위에서 본 그림으로 그린다.
+// 이웃 삼각형 사이 머리카락 틈이 보이지 않게 잘라 내는 경로를 화면에서 0.5 px 넓힌다.
+// 지도는 상태 폴링·관측·콜백으로 초당 여러 번 다시 그려진다. 펴는 일(576 번 그리기)은 새 프레임·
+// 보정·크기에서만 하고, 그 사이에는 화면 밖 캔버스에 둔 결과를 한 번에 옮긴다.
+let topDownCache = null;
+function drawCameraTopDown(ctx, image, calibration, bounds, toPx, width, height, dpr, rot = 0) {
+  const key = [calibration.calibration_revision, width, height, dpr, rot,
+    bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y].join("|");
+  if (!topDownCache || topDownCache.image !== image || topDownCache.key !== key) {
+    const off = document.createElement("canvas");
+    off.width = Math.round(width * dpr);
+    off.height = Math.round(height * dpr);
+    const octx = off.getContext("2d");
+    octx.scale(dpr, dpr);
+    warpOnto(octx, image, calibration.map_to_image, bounds, toPx);
+    topDownCache = { image, key, canvas: off };
+  }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(topDownCache.canvas, 0, 0);
+  ctx.restore();
+}
+function warpOnto(ctx, image, mapToImage, bounds, toPx) {
+  for (const tri of warpMesh(mapToImage, bounds)) {
+    const dst = tri.map.map(([x, y]) => { const p = toPx(x, y); return [p.x, p.y]; });
+    const affine = affineFromTriangles(tri.image, dst);
+    if (!affine) continue;
+    const cx = (dst[0][0] + dst[1][0] + dst[2][0]) / 3, cy = (dst[0][1] + dst[1][1] + dst[2][1]) / 3;
+    ctx.save();
+    ctx.beginPath();
+    dst.forEach(([x, y], k) => {
+      const len = Math.hypot(x - cx, y - cy) || 1;
+      const ex = x + ((x - cx) / len) * 0.5, ey = y + ((y - cy) / len) * 0.5;
+      if (k === 0) ctx.moveTo(ex, ey); else ctx.lineTo(ex, ey);
+    });
+    ctx.closePath();
+    ctx.clip();
+    ctx.transform(...affine);
+    ctx.drawImage(image, 0, 0);
+    ctx.restore();
+  }
 }
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable }) {
@@ -396,32 +439,32 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
     const rect = canvas.getBoundingClientRect();
     const fallback = canvasSizeFor(bounds, 800);
-    // D-513 7: 실영상은 지도 +y 가 위로 오게 돌려 그리고(mapUpTurn), 지도 점도 같은 회전을 거친다.
-    const turn = cameraOn ? quarterTurn(mapUpTurn(calibration),
-      cameraFrame.image.naturalWidth, cameraFrame.image.naturalHeight) : null;
-    const width = cameraOn ? turn.width : rect.width > 0 ? rect.width : fallback.width;
-    const height = cameraOn ? turn.height : rect.height > 0 ? rect.height : fallback.height;
-    const dpr = cameraOn ? 1 : window.devicePixelRatio || 1;
-    // 실영상 위 클릭(시작점 선택)은 그린 것과 같은 회전·보정을 거꾸로 거친다.
-    const pickRef = { x: (bounds.min_x + bounds.max_x) / 2, y: (bounds.min_y + bounds.max_y) / 2 };
-    view.cameraPick = cameraOn ? (x, y) => cameraScreenToMap(calibration.map_to_image, turn, x, y, pickRef) : null;
+    // D-515: 실영상도 지도 미터 뷰(+y 위) 위에 위에서 본 직사각형으로 편다. 지도 방향이 화면
+    // 방향이라 따로 돌리지 않고(D-513 7의 mapUpTurn 불필요), 클릭도 미터 뷰를 그대로 거꾸로 푼다.
+    const width = rect.width > 0 ? rect.width : fallback.width;
+    const height = rect.height > 0 ? rect.height : fallback.height;
+    const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
-    const t = fitTransform(bounds, width, height, 32);
-    const toPx = cameraOn
-      ? (x, y) => { const p = projectCamera(calibration.map_to_image, x, y); return p ? turn.point(p[0], p[1]) : { x: NaN, y: NaN }; }
-      : (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
-    if (cameraOn) {
-      ctx.save();
-      ctx.transform(...turn.matrix);
-      ctx.drawImage(cameraFrame.image, 0, 0, cameraFrame.image.naturalWidth, cameraFrame.image.naturalHeight);
-      ctx.restore();
-    }
+    // D-515 + D-513 7: 사이트 지도의 화면 방향(view_turn_deg, 시계 방향 quarter turn)만큼 미터 뷰를
+    // 돌린다. 돌린 상자 크기에 맞춰 넣고, 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로
+    // 돌리므로 글자는 똑바로 선다. 클릭은 돌림을 먼저 풀고 미터 뷰를 거꾸로 푼다.
+    const rot = view.siteViewTurn || 0;
+    const side = rot === 90 || rot === 270;
+    const fw = side ? height : width, fh = side ? width : height;
+    const t = fitTransform(bounds, fw, fh, 32);
+    const turn = quarterTurn(rot, fw, fh);
+    const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
+    view.cameraPick = rot ? (bx, by) => {
+      const q = turn.unpoint(bx / dpr, by / dpr);
+      return { x: (q.x - t.ox) / t.scale, y: (t.oy - q.y) / t.scale };
+    } : null;
+    ctx.fillStyle = css("--ground-deep");
+    ctx.fillRect(0, 0, width, height);
+    if (cameraOn) drawCameraTopDown(ctx, cameraFrame.image, calibration, bounds, toPx, width, height, dpr, rot);
     else {
-      ctx.fillStyle = css("--ground-deep");
-      ctx.fillRect(0, 0, width, height);
       if (drift) {
         const text = `카메라 교정 어긋남 — 정지 로봇 관측 차이 최대 ${Math.round(drift.distanceM * 100)} cm(${drift.robotId}).`
           + " 카메라 맞춤을 다시 검토·수락하세요.";

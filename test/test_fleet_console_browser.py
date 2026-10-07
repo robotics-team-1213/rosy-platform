@@ -1262,9 +1262,15 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
         page.wait_for_function("() => document.querySelector('#map-tag')?.textContent.includes('paint-test')")
         # D-487: the calibrated canvas carries the frame; no second copy under the map.
         assert page.locator("#map-camera").count() == 0
-        assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
-                             "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
-                             "return p[0] > 150 && p[1] < 100 && p[2] < 100; }")
+        # D-515: the frame is laid top-down on the metre view. The site centre (canvas centre for
+        # these symmetric bounds) shows the red frame; the fit pad around the site stays ground.
+        red = page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
+                            "const g = c.getContext('2d'); "
+                            "const at = (x, y) => [...g.getImageData(x, y, 1, 1).data]; "
+                            "return [at(Math.floor(c.width / 2), Math.floor(c.height / 2)), at(2, 2)]; }")
+        centre, pad = red
+        assert centre[0] > 150 and centre[1] < 100 and centre[2] < 100, red
+        assert not (pad[0] > 150 and pad[1] < 100 and pad[2] < 100), red
         frame_age["ms"] = "4000"
         page.wait_for_function("() => !document.querySelector('#map-tag')?.textContent.includes('paint-test')",
                                timeout=7000)
