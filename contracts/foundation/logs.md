@@ -530,7 +530,7 @@
 - 교훈: 없음
 
 ## 2026-10-07 · uncommitted · core_common(protocol): LineFollowStatus.lane_return_containment (D-507 7)
-- 변경: `protocol/schemas.py` `LineFollowStatus` 선택 필드 `lane_return_containment: contained | unknown | None`. API Ref v1.124.
+- 변경: `protocol/schemas.py` `LineFollowStatus` 선택 필드 `lane_return_containment: contained | unknown | None`. API Ref v1.133.
 - 증거: core_features D-507 7 시험(`test_lane_return_manager.py`).
 - gate 변화: 없음(additive).
 - 결정: D-507 7
