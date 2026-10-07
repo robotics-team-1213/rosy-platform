@@ -264,7 +264,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/api/v1/robot/battery` | Viewer | §12 |
 | GET | `/api/v1/robot/velocity` | Viewer | §12 |
 | GET | `/api/v1/sensors` | Viewer | §12 |
-| GET | `/api/v1/sensors/{lidar\|imu\|ultrasonic\|battery\|encoder\|motor}` | Viewer | §12. 표본이 없으면 404 `NOT_FOUND`. 예외로 `battery` 는 404 를 내지 않는다(D-502, v1.120): 200 `{voltage, received_at, source, evidence, sample_age_s, stale_after_s}`. `evidence` 는 `missing`\|`fresh`\|`stale`(`GET /power/health` 의 `battery` 와 같은 판정, 5 s), 표본이 없으면 `voltage`·`received_at`·`source` 는 `null`. 제품 그래프의 표본은 `battery/voltage` 에서 오며 `source: "battery/voltage"` 다(D-192 4). 벤치의 `batt_state` 표본은 기존 필드 `percentage`·`power_supply_status`·`location` 을 더 싣는다. 두 토픽이 함께 돌면 마지막으로 온 표본이 이기므로 이 세 필드는 나타났다 사라진다 — 소비자는 있을 때만 읽는다 |
+| GET | `/api/v1/sensors/{lidar\|imu\|ultrasonic\|battery\|encoder\|motor}` | Viewer | §12. 표본이 없으면 404 `NOT_FOUND`. 예외로 `battery` 는 404 를 내지 않는다(D-502, v1.120): 200 `{voltage, received_at, source, evidence, sample_age_s, stale_after_s}`. `evidence` 는 `missing`\|`fresh`\|`stale`(`GET /power/health` 의 `battery` 와 같은 판정, 5 s), 표본이 없으면 `voltage`·`received_at`·`source` 는 `null`. 배터리 모니터가 없는 런타임은 `evidence: missing`, `stale_after_s: null`. 제품 그래프의 표본은 `battery/voltage` 에서 오며 `source: "battery/voltage"` 다(D-192 4). 벤치의 `batt_state` 표본은 기존 필드 `percentage`·`power_supply_status`·`location` 을 더 싣는다. 두 토픽이 함께 돌면 마지막으로 온 표본이 이기므로 이 세 필드는 나타났다 사라진다 — 소비자는 있을 때만 읽는다 |
 | GET | `/api/v1/power` | Viewer | PWR-001 (절전 모드·프레즌스·샘플링 주기) |
 | GET | `/api/v1/power/health` | Viewer | 전원 정책·절전 blockers·wake 제약·배터리 age/신선도/충전 확인·health 조회. 읽기 전용이며 깨우지 않음 |
 | POST | `/api/v1/power/wake` | Operator | PWR-004 (원격 웨이크 — 정보 화면 표시) |

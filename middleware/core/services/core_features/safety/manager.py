@@ -297,10 +297,7 @@ class SafetyManager:
         self.estop: bool = False
         self.estop_source: str = ""
         self._battery_state: str = "ok"
-        #: D-502: an e-stop (any source) turns off the battery's automatic return
-        #: (dock or RETURN_HOME). battery_policy clears it once the monitor's
-        #: debounced level is OK again. A release does not clear it.
-        self.battery_return_suppressed: bool = False
+        self.battery_return_suppressed = False  # D-502: any e-stop sets; battery_policy clears at level OK
         #: 한 활동이 자기 구간 동안만 더 낮춰 쓰는 상한 (SWM-002 max_speed).
         #: 프로필 상한을 넘겨 올릴 수는 없다 — clip 이 둘 중 작은 값을 쓴다.
         self._session_linear: Optional[float] = None

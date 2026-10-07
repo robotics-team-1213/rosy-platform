@@ -77,7 +77,7 @@ def apply_voltage(services, voltage: float) -> None:
     if action == "RETURN_HOME":
         if services.nav.docking_active_provider():
             return
-        if getattr(services.safety, "battery_return_suppressed", False):
+        if services.safety.battery_return_suppressed:
             # D-502: after an e-stop the robot does not drive itself home; a
             # critical crossing latches again until a new command moves it.
             services.safety.trigger_estop("battery_policy")
