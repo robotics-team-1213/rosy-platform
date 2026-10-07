@@ -1,6 +1,6 @@
 """D-494 6: teach a lane by driving it — the pure part.
 
-Recording keeps a map pose when it is ``LOCALIZED`` or bridged at most ``MAX_BRIDGE_M``,
+Recording keeps a map pose only when it is ``LOCALIZED`` and bridged at most ``MAX_BRIDGE_M``,
 at least ``SPACING_M`` from the last kept point. Stopping simplifies with Ramer–Douglas–Peucker
 (``RDP_TOL_M``) and proposes the existing places within ``SNAP_M`` of each end. Confirming
 appends the edge (and new places) to a site map body; the caller validates and saves it as the
@@ -24,9 +24,9 @@ Point = tuple[float, float]
 
 def keep(points: list[Point], pose) -> Optional[Point]:
     """The point to append for ``pose`` (a ``MapPose``), or None."""
-    if pose is None or pose.x is None or pose.y is None or pose.state == "UNKNOWN":
+    if pose is None or pose.x is None or pose.y is None:
         return None
-    if pose.state != "LOCALIZED" and not pose.dead_reckon_m <= MAX_BRIDGE_M:
+    if pose.state != "LOCALIZED" or not pose.dead_reckon_m <= MAX_BRIDGE_M:  # DEGRADED is never kept
         return None
     point = (float(pose.x), float(pose.y))
     if points and math.dist(points[-1], point) < SPACING_M:

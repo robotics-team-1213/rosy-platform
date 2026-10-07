@@ -76,10 +76,10 @@ def test_record_stop_confirm_appends_a_draft_edge_and_audits():
         with pytest.raises(TeachError) as err:
             await service.start("rosy_60", "eve")
         assert err.value.code == "TEACH_BUSY" and err.value.status == 409
-        await _drive(service, poses, [(0.05, 0.0), (0.5, 0.01), (1.0, 0.0), (1.0, 0.5, "DEGRADED", 0.6),
+        await _drive(service, poses, [(0.05, 0.0), (0.5, 0.01), (1.0, 0.0), (1.0, 0.5, "LOCALIZED", 0.6),
                                       (1.5, 0.0, "DEGRADED", 0.3), (1.9, 0.0)])
         assert [p[:2] for p in service.view()["recording"]["points"]] == [
-            [0.02, 0.0], [0.5, 0.01], [1.0, 0.0], [1.5, 0.0], [1.9, 0.0]]
+            [0.02, 0.0], [0.5, 0.01], [1.0, 0.0], [1.9, 0.0]]
         return view, await service.stop("bob")
 
     view, result = run(go())

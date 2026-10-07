@@ -18,11 +18,21 @@ def test_keep_spaces_points_and_filters_untrusted_poses():
     assert keep(points, _pose(0.099, 0.0)) is None                       # under 0.1 m
     assert keep(points, _pose(0.1, 0.0)) == (0.1, 0.0)                    # exactly 0.1 m
     assert keep([], _pose(0.0, 0.0)) == (0.0, 0.0)
-    assert keep(points, _pose(1.0, 0.0, "DEGRADED", 0.5)) == (1.0, 0.0)   # short bridge
-    assert keep(points, _pose(1.0, 0.0, "DEGRADED", 0.51)) is None        # long bridge
-    assert keep(points, _pose(1.0, 0.0, "LOCALIZED", 0.9)) == (1.0, 0.0)  # LOCALIZED is enough
+    assert keep(points, _pose(1.0, 0.0, "LOCALIZED", 0.5)) == (1.0, 0.0)  # short bridge
+    assert keep(points, _pose(1.0, 0.0, "LOCALIZED", 0.51)) is None       # long bridge
+    assert keep(points, _pose(1.0, 0.0, "DEGRADED", 0.0)) is None         # DEGRADED is never kept
     assert keep(points, _pose(None, None, "UNKNOWN")) is None
     assert keep(points, None) is None
+
+
+def test_a_degraded_re_anchor_spike_is_dropped_from_the_line():
+    points = []
+    for pose in (_pose(0.0, 0.0), _pose(0.2, 0.0), _pose(0.4, 0.3, "DEGRADED", 0.0),  # jump re-anchor
+                 _pose(0.4, 0.0, "LOCALIZED", 0.2), _pose(0.6, 0.0)):
+        point = keep(points, pose)
+        if point is not None:
+            points.append(point)
+    assert points == [(0.0, 0.0), (0.2, 0.0), (0.4, 0.0), (0.6, 0.0)]
 
 
 def test_rdp_drops_points_within_tolerance_and_keeps_corners():

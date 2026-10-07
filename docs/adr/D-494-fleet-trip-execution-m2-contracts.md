@@ -165,7 +165,7 @@ CORE 변경 두 가지(1·2항, 4항)는 서명 릴리스가 있어야 로봇에
 
 브랜치 `feat/d494-fleet-teach-drive`. 6항을 순수 모듈 `operations/fleet/fleet/routing/teach.py`, 서비스 `server/teach_service.py`, 경로 `server/teach_routes.py`(`GET /api/fleet/teach`, `POST /api/fleet/teach/start`·`/stop`·`/confirm`·`/place`), 콘솔 `web/site-map-teach.js`(현장 지도 화면의 "지도 가르치기" 칸)로 구현했다. 결정 본문은 바꾸지 않는다. API Reference 행은 v1.119다(착지 때 다음 빈 번호로 다시 매긴다). 안전 파일 `console.py`는 고치지 않았다.
 
-1. **기록.** 0.5 s마다 3항 `refresh(robot_id, force_rest=True)`로 로봇 상태를 REST로 한 번 읽고 `arbitrated_pose`를 본다. `LOCALIZED`이거나 `dead_reckon_m` ≤ 0.5 m인 자세만, 마지막으로 남긴 점에서 0.1 m 이상 떨어졌을 때 남긴다. `UNKNOWN`과 좌표 없는 자세는 버린다. 한 기록은 최대 20000점(지도 전체 점 상한)이다.
+1. **기록.** 0.5 s마다 3항 `refresh(robot_id, force_rest=True)`로 로봇 상태를 REST로 한 번 읽고 `arbitrated_pose`를 본다. `LOCALIZED`이고 `dead_reckon_m` ≤ 0.5 m인 자세만, 마지막으로 남긴 점에서 0.1 m 이상 떨어졌을 때 남긴다. `DEGRADED`는 다리 길이와 상관없이 남기지 않는다(점프로 다시 앵커한 순간의 튐이 선에 들어가지 않게). 결정 본문의 "또는"을 이렇게 좁혔다(독립 검토). `UNKNOWN`과 좌표 없는 자세도 버린다. 한 기록은 최대 20000점(지도 전체 점 상한)이다.
 2. **한 대.** 사이트에 기록은 하나다. 기록 중의 시작은 409 `TEACH_BUSY`다. 멈춘 기록은 확정을 기다리는 동안 여럿 있을 수 있고, 각각 `teach_id`로 확정한다. 확정 요청은 `robot_id`가 아니라 `teach_id`만 받는다(같은 로봇을 다시 가르칠 수 있어서다).
 3. **시작과 주소 만들기의 위치 조건.** 시작과 "여기에 주소 만들기"는 자세가 `LOCALIZED`가 아니면 422 `TEACH_POSE_UNTRUSTED`(`detail.state`)다. 신뢰할 앵커 없이 시작한 기록은 첫 점부터 다리일 수 있어서다.
 4. **멈춤.** RDP 허용 0.02 m, 거리는 현의 선분까지 잰다(시작과 끝이 같은 고리도 반대편을 남긴다). 반복형이라 긴 기록에서 재귀 한도에 걸리지 않는다. 점이 2개 미만이거나 길이가 0.10 m(`MIN_EDGE_M`) 이하면 422 `TEACH_TOO_SHORT`로 버린다. 끝마다 0.15 m 안의 기존 장소를 가까운 순으로 낸다. 비어 있으면 새 주소를 제안한다. 멈춤은 지도를 쓰지 않는다.
