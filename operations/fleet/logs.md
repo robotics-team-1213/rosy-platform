@@ -2199,3 +2199,9 @@
 - Change: Show Korean document kind and ID separately from locally formatted modification time; keep long IDs within narrow screens.
 - Evidence: Three declared-width Chromium and 74 relevant G1 cases passed after one failing 320px case, `known_failures.py` 0 NEW. See docs/validation/uiux-cell-saved-list-2026-10-07/result.md.
 - Gate: LOCAL G2 partial evidence; site/device and operator G3 remain HOLD.
+
+## 2026-10-07 · uncommitted · Cell saved-list error widths
+
+- Change: Replay the existing saved-list failure and recovery flow at all three declared Cell widths.
+- Evidence: Six LOCAL G2 captures, three Chromium cases passed, Python known failures 0 NEW. See docs/validation/uiux-cell-list-errors-2026-10-07/result.md.
+- Gate: Other G2 cells, real site/device, and operator G3 remain HOLD.
