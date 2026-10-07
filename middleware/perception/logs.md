@@ -1158,3 +1158,9 @@
 - 변경: `scripts/lane_graph.py`가 STL의 짧은 도색 성분(횡단보도 막대)을 20 mm 팽창으로 묶어 횡단보도마다 막대를 감싸는 사각형 하나를 `crosswalks[].polygon`(map 좌표, m)으로 낸다. 래스터 2 mm라 변은 ±2 mm다. 도색 래스터는 `paint_masks`로 `LineField`와 함께 쓴다. 두 구간: 중심 (−1.27, −0.146) 146×120 mm, (0.369, −0.510) 120×144 mm.
 - 증거: `test_lane_graph.py` 추가 1건(두 구간, 변 길이), 기존 바이트 결정성 시험 PASS.
 - gate 변화: 없음. 지도 구간을 쓰는 소비자(CORE IR 가드)는 아직 없다. CAMERA_LINE 중 CORE에는 지도 자세가 없어 이 구간은 지도 주행(D-481)·시뮬 검증용이다.
+
+## 2026-10-07 · uncommitted · feat(perception): 차로와 나란한 횡단보도 줄무늬 구간 (D-491 §4)
+
+- 변경: `sensing/perception/crosswalk_stripes.py` 추가. keep 모드가 지면 격자에서 횡단보도 앞뒤 끝을 `last["crosswalk"]`에 두고, `containment_payload`가 `crosswalk {near_m, far_m}`로 싣는다. 판단은 CORE 몫이다.
+- 증거: `test_crosswalk_stripes.py` 4건(앞뒤 끝, 20 mm 비킴·경계와 붙은 막대, 일반 차로·가로 사다리 아님, 띠 2개·얇은 조각 아님), `test_lane_containment_payload.py` 추가 1건.
+- gate 변화: 없음. 실제 카메라 영상에서 검출 확인은 아직이다.

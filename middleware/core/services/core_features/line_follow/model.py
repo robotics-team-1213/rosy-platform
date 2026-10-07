@@ -117,6 +117,12 @@ class LineFollowConfig:
     ir_guard_edge_error: float = 0.3
     ir_guard_turn: float = 0.5
     ir_guard_speed_scale: float = 0.5
+    # D-491: 감시가 쉬어도 되는 알려진 횡단보도 구간. ir_row_x_m 은 IR 센서 줄의 x(URDF ir_*_link,
+    # base_footprint 앞)이고 없으면 쉬지 않는다. 구간 길이 상한과, 영상 시각부터 움직인 odom 거리에
+    # 대한 오차 비율(여유 = 투영 불확실도 + 비율 × 이동 거리). 둘 다 실측 뒤 다시 정한다.
+    ir_row_x_m: Optional[float] = None
+    crosswalk_zone_max_m: float = 0.20
+    crosswalk_odom_error_fraction: float = 0.05
     # D-407 막힘 복구. 관제에 묻고 recovery_ask_s 안에 답이 없으면(또는 관제 연결이 없으면)
     # 로컬 후진·재판단. 로컬 복구는 로봇별로 켠다(self-mask 측정 뒤).
     recovery_local_enabled: bool = False
@@ -244,6 +250,12 @@ class LineFollowConfig:
             raise ValueError("IR guard edge error must be in (0, 1) and turn positive")
         if not 0.0 <= self.ir_guard_speed_scale <= 1.0:
             raise ValueError("ir_guard_speed_scale must be in [0, 1]")
+        if self.ir_row_x_m is not None and not (_finite(self.ir_row_x_m) and abs(self.ir_row_x_m) <= 0.2):
+            raise ValueError("ir_row_x_m must be a finite base_footprint x within 0.2 m")
+        if not (_finite(self.crosswalk_zone_max_m) and 0.0 < self.crosswalk_zone_max_m <= 0.5):
+            raise ValueError("crosswalk_zone_max_m must be in (0, 0.5]")
+        if not (_finite(self.crosswalk_odom_error_fraction) and 0.0 <= self.crosswalk_odom_error_fraction <= 0.5):
+            raise ValueError("crosswalk_odom_error_fraction must be in [0, 0.5]")
         if (self.ir_calibration_revision is not None
                 and (not isinstance(self.ir_calibration_revision, str)
                      or not re.fullmatch(r"[0-9a-f]{64}", self.ir_calibration_revision))):

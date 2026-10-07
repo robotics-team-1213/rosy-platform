@@ -588,3 +588,9 @@
 - 증거: `test_state_odom_pose.py` 3 PASS, gateway `/robot/state` NaN 시험 PASS.
 - gate 변화: 없음.
 - 결정: D-494 (Proposed)
+
+## 2026-10-07 · uncommitted · feat(line_follow): IR 감시는 알려진 횡단보도 구간에서 쉰다 (D-491)
+
+- 변경: `crosswalk_zone.py`(odom 고정 구간), `LaneReturnMixin._crosswalk_rest`, `manager.py`에서 IR 판정이 left/right/centre이고 구간 안이면 `crosswalk`(사유 `ir_guard_crosswalk`, 정지·비킴 없음). 설정 `ir_row_x_m`(로봇 패키지, URDF), `crosswalk_zone_max_m`, `crosswalk_odom_error_fraction`. 계약 `CrosswalkExtentEvidence`, API v1.114.
+- 증거: `test_ir_guard_crosswalk.py` 11건(구간 안 centre/left/right 계속, 구간 없음·NOMINAL·불확실도 없음·지나침·길이 상한·odom 끊김·IR 줄 없음은 `lane_departure`), 계약 시험 1건, URDF 일치 시험 1줄.
+- gate 변화: 없음. IR 감시 기본 꺼짐. SIM·DEVICE 수용 별도.
