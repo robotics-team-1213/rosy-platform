@@ -40,6 +40,7 @@ CONSOLE_ASSETS = {
     "link-tag.js": "application/javascript",
     "site-path.js": "application/javascript",
     "localization-badge.js": "application/javascript",
+    "camera-warp.js": "application/javascript",
     "map-fit.js": "application/javascript",
     "map-fit-view.js": "application/javascript",
     "map-view.js": "application/javascript",

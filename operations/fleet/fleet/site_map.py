@@ -98,6 +98,9 @@ class SiteMap(BaseModel):
     places: list[SitePlace] = Field(max_length=MAX_PLACES)
     edges: list[SiteEdge] = Field(max_length=MAX_EDGES)
     turn_bans: list[TurnBan] = Field(default_factory=list, max_length=MAX_EDGES)
+    #: D-513 7: clockwise screen turn of the plain (+y up) map view. Display only; the one
+    #: orientation every Fleet map and camera view follows.
+    view_turn_deg: Literal[0, 90, 180, 270] = 0
 
     @model_validator(mode="after")
     def _references(self) -> "SiteMap":
@@ -135,7 +138,10 @@ class SiteMap(BaseModel):
         return self
 
     def body(self) -> dict:
-        return self.model_dump(by_alias=True, mode="json")
+        body = self.model_dump(by_alias=True, mode="json")
+        if body["view_turn_deg"] == 0:  # keep stored maps readable by a Fleet without the field
+            del body["view_turn_deg"]
+        return body
 
 
 def from_lane_graph(path: Path | str, *, map_id: str = "site") -> SiteMap:

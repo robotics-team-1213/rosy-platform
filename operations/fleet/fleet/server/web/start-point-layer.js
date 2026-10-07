@@ -15,7 +15,8 @@ export function pointerPose(view, rect, canvas, clientX, clientY) {
   }
   const b=siteBounds(view.siteMap);
   if (!b) return null;
-  // Live camera picture (D-513 7): undo the drawn turn and calibration, in bitmap pixels.
+  // D-515: the camera picture is drawn on the metre view, so clicks use the metre inverse; a screen
+  // turn of that view (site view_turn_deg) may set view.cameraPick to undo the turn first.
   const t=fitTransform(b, rect.width, rect.height, 32);
   const point=view.cameraPick ? view.cameraPick(px/w*canvas.width, py/h*canvas.height)
     : {x:(clientX-rect.left-t.ox)/t.scale, y:(t.oy-clientY+rect.top)/t.scale};

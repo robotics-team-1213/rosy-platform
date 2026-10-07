@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · docs(adr): D-515 관제 지도 천장 카메라 직사각형
+- 2026-10-08 · uncommitted · uiux(review): D-514 검수 화면과 실제 브라우저 흐름
+- 2026-10-08 · uncommitted · docs(review): D-514 객체·픽셀 클래스 의미와 시나리오
 - 2026-10-08 · uncommitted · docs(api): D-509 and D-513 contract union v1.125
 - 2026-10-08 · uncommitted · D-509 관제 전원 근거
-- 2026-10-08 · uncommitted · fix(tools): 착지 도구가 logs.md 중간 삽입 충돌을 해소
-- 2026-10-08 · uncommitted · docs(plan): 링크 수리와 폴링 부하를 가른다
-- 2026-10-08 · uncommitted · docs(plan): 사이트 링크 수리 실행 계획

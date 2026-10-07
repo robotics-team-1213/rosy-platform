@@ -716,3 +716,10 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM·DEVICE는 D-507 수용 절차.
 - 결정: D-507 6·9 (Accepted 2026-10-07)
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · test(line_follow): D-507 10 D-422 기억 몸 밖 규칙의 safety 시험·검토·SIM
+- 변경: 코드 변경 없음(구현은 main `35945410f`·`32f98d98b`). `test_line_follow_body_stop.py`에 시험 6건: 패키지 Pinky 겹에서 정지 간격 안 실제 상자는 그 틱 0 지시(lidar), range_min 0.12에서 몸 밖으로 사라진 상자는 다음 틱 0 지시(memory), C1 range_min으로 움직이는 동안 몸 안 점은 매 스캔 기억 0(B9 래치 형태, 진입 판정을 빼면 실패), 몸 밖 기억은 바퀴 움직임 `obstacle_path_horizon_m`까지 유지·뒤에 만료, C1 사각 원판이 패키지 URDF 몸 안이라는 전제 고정, 몸 안 진입 점은 접촉으로 버림. `tools/harness/safety_review.py` EXEMPT에 두 커밋의 독립 safety 검토 기록.
+- 증거: 독립 검토(code-reviewer opus) APPROVE WITH NOTES, HIGH·CRITICAL 없음. SIM 모델 PC `docs/validation/d422-memory-outside-body-sim-2026-10-08/result.md`: 수정 전 B9 19 run 중 래치 7, 이 코드 22 run 래치 0·memory 정지 사건 0, 상자 4회 모두 lidar 정지·접촉 없음(주행 중 0.08 m 앞 상자 0 지시까지 0.15–0.17 s).
+- gate 변화: D-507 10 SOURCE·SIM. DEVICE(D9 근거리)는 열림.
+- 결정: D-507 10, D-422
+- 교훈: trailer 없이 main에 들어간 safety 커밋은 amend 할 수 없어 독립 검토를 EXEMPT로 남긴다. 착지 전에 `safety_review.py`를 돌린다.

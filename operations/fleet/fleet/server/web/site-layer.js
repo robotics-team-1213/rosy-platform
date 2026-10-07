@@ -137,6 +137,13 @@ export function cameraScreenToMap(mapToImage, turn, x, y, ref) {
   return p ? { x: p[0], y: p[1] } : null;
 }
 
+// D-513 7: 현장 지도(D-488 활성 지도)의 화면 방향 — 기본(+y 위) 화면을 시계 방향으로 돌릴 각.
+// 모든 지도·카메라 화면이 이 값 하나를 따른다. 응답이 없거나 값이 이상하면 0.
+export function siteViewTurn(activeView) {
+  const turn = activeView?.map?.view_turn_deg;
+  return [90, 180, 270].includes(turn) ? turn : 0;
+}
+
 // D-513 7: 실영상은 지도 방향으로 보인다 — 지도 +y 가 화면 위로 오는 가장 가까운 quarter turn(시계 방향 도).
 // 방향의 근거는 지도 좌표계와 보정 하나뿐이다. 설치 키를 따로 두지 않는다. 보정이 없으면 0(원본 그대로).
 export function mapUpTurn(record) {
