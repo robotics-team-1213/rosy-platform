@@ -115,8 +115,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        43_317,
-        "split: re-judged at 43317 on 2026-10-08: D-472 + Addendum 2026-10-08 LED identity "
+        43_623,
+        "split: re-judged at 43623 on 2026-10-08: growth since 43317 is main's own (D-507 trip ports "
+        "in server/trip_ports.py and trip_runner.py, D-513 site-map view turn in site_map.py and "
+        "site-map web, D-515 top-down camera in web/camera-warp.js and map-view.js), each in its "
+        "existing Fleet server or site-map web owner; D-472 adds one line; no new owner, the "
+        "site-map web/server split plan and +150 allowance remain unchanged. "
+        "Previously re-judged at 43317 on 2026-10-08: D-472 + Addendum 2026-10-08 LED identity "
         "(server/identity.py orchestrator and binding store, tracking/console route wiring) stays "
         "with the existing Fleet server owner as its own module; no new owner, the site-map "
         "web/server split plan in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and +150 "
