@@ -2151,8 +2151,8 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
           stopAccessibleName: document.querySelector('#estop').getAttribute('aria-label'),
         })""")
         if width <= 320:
-            page.locator("#topbar-more").click()
-            assert page.locator('#topbar-extra a[href="/console/cell"]').is_visible()
+            # D-501: the Cell link lives in the document tab row, visible without opening settings.
+            assert page.locator('.doc-tabs a[href="/console/cell"]').is_visible()
         browser.close()
     assert errors == []
     assert layout["overflow"] == 0, layout["outside"]

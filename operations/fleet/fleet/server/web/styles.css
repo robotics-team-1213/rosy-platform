@@ -209,13 +209,13 @@ main {
   /* 접속 안내 띠가 보이는 동안은 그 높이만큼 지도가 줄어 첫 화면에 머문다. */
   body:has(#connection-guide:not([hidden])) :is(.map-stage #map-canvas, .map-birdseye) { height: max(20rem, calc(100dvh - 27rem)); }
   .queues-panel:not([hidden]) { max-height: min(20dvh, 12rem); overflow-y: auto; }
-  #roster { min-height: 0; max-height: min(16rem, 30dvh); overflow-y: auto; }
+  #roster { min-height: 0; max-height: min(15rem, 30dvh); overflow-y: auto; }
   .ops-block { gap: var(--space-2); }
   .ops-block > h2 { margin: 0; }
   /* D-501 — 탭 줄 높이만큼 오른쪽 열을 줄인다. 대형 칸 간격은 ops-block의 gap이 맡는다. */
   .ops-block > .formation { margin-top: 0; }
   .console-secondary > .panel { padding: var(--space-3); }
-  .ops-block .log { min-height: calc(var(--text-micro) * var(--leading-copy) * 3); max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
+  .ops-block .log { min-height: calc(var(--text-micro) * var(--leading-copy) * 2); max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
   /* 오른쪽 열의 카메라는 썸네일이다. 크게 보려면 지도 칸으로 보낸다(#birdseye-toggle). */
   .console-secondary .vision-frame { max-height: 8.5rem; }
 }
