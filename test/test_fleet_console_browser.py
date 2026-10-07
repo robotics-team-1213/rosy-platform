@@ -1236,6 +1236,64 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
         browser.close()
 
 
+def test_stale_camera_calibration_drops_the_frame_and_warns(console_url):
+    from playwright.sync_api import sync_playwright
+
+    # 카메라를 재조준한 뒤의 조감도: 정지 로봇의 추적 차이(offset_m)가 3폴링 연속 한계를
+    # 넘으면 낡은 교정으로 실영상을 얹지 않고 미터 눈금으로 돌아간다(map-view drawSiteView).
+    api = {
+        "/api/fleet/state": EMPTY_SNAPSHOT,
+        "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
+        "/api/fleet/site-map": {"maps": [{"map_id": "map_v2_fleet",
+                                      "polygon_m": [[0, 0], [1, 0], [1, 1], [0, 1]],
+                                      "bounds_m": {"min_x": 0, "min_y": 0,
+                                                   "max_x": 1, "max_y": 1}}]},
+        "/api/fleet/calibrations": {"calibrations": [{
+            "source_id": "ceiling_north", "map_id": "map_v2_fleet",
+            "calibration_revision": "paint-test", "image": {"width": 1280, "height": 720},
+            "lens": {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1},
+            "map_to_image": [1000, 0, 100, 0, 600, 50, 0, 0, 1]}]},
+        "/api/fleet/vision/sources": {"sources": ["ceiling_north"]},
+        "/api/fleet/vision/lease": {"source_id": "ceiling_north", "lease": "test-lease",
+                                     "frame_path": "/api/vision/sources/ceiling_north/frame", "expires_in_s": 60},
+        "/api/fleet/tracking": {"lease_s": 1, "sources": [
+            {"source_id": "ceiling_north", "map_id": "map_v2_fleet", "status": "OK",
+             "calibration_revision": "paint-test", "age_ms": 120, "fps": 3,
+             "last_error": None, "relearn_seq": 0}],
+            "robots": [{"robot_id": "rosy_01", "status": "MATCHED", "source_id": "ceiling_north",
+                        "offset_m": 0.8, "camera": {"x": 0.2, "y": 0.2, "footprint_m": 0.18, "score": 0.9},
+                        "pose": {"x": 0.8, "y": 0.8}, "pose_frame_verified": True}],
+            "unknown": []},
+    }
+    with sync_playwright() as sync_playwright_p:
+        browser, page, errors = _open_console(
+            sync_playwright_p, api,
+            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+
+        def serve_frame(route):
+            route.fulfill(status=200, content_type="image/svg+xml",
+                          body='<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">'
+                               '<rect width="1280" height="720" fill="#bf2030"/></svg>',
+                          headers={"X-Frame-Rectified": "false", "X-Frame-Seq": "42",
+                                   "X-Frame-Age-Ms": "20",
+                                   "X-Source-Lens": "kind=wide;focal_mm=2.2;hfov_deg=104.1"})
+
+        page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function(
+            "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남')",
+            timeout=20000)
+        assert not page.evaluate("() => document.querySelector('#map-tag')?.textContent.includes('Rosy Cam 실영상')")
+        # 낡은 교정이므로 실영상(빨강)을 캔버스에 얹지 않았다 — 미터 눈금 바탕이다.
+        assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
+                             "const p = c.getContext('2d').getImageData(10, 10, 1, 1).data; "
+                             "return p[0] < 100 && p[1] < 100; }")
+        assert page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')"
+                             ".includes('미터 눈금')")
+        assert not errors
+        browser.close()
+
+
 # --- D-224: 예외 문법의 키보드 어휘 — ↑/↓ 순회 · Enter 목표 · Escape 해소 ----
 
 def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
