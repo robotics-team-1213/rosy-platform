@@ -31,6 +31,16 @@ _PARKING = (200, 180, 60)
 _RATE_TOLERANCE_S = 1e-3
 
 
+def keep_debug_payload(last, ground, camera_x_offset_m, **metadata):
+    """Bind one keeper decision to the ground projection it actually used."""
+    projection = None if ground is None else {
+        key: getattr(ground, key) for key in (
+            'height_m', 'pitch_rad', 'focal_px', 'principal_x', 'principal_y', 'max_range_m')}
+    if projection is not None:
+        projection['camera_x_offset_m'] = camera_x_offset_m
+    return dict(last, **metadata, ground_projection=projection)
+
+
 def next_publish_due(last_published_s, stamp_s, max_hz):
     """True if a sample at `stamp_s` should publish, given the last publish
     at `last_published_s` and a `max_hz` cap. Pure and ROS-free so the rate
