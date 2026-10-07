@@ -2182,3 +2182,10 @@
 - gate 변화: 없음. SOURCE/LOCAL만. 능력(1항)·지도 자세(3항)·교차로 API(4항) 제공자는 형제 브랜치가 착지한 뒤 `create_app(trip_caps=…, map_pose=…)`로 연결한다. 기본 연결은 `TRIP_ROBOT_CAPS_UNKNOWN`으로 시작을 거절한다. Gazebo·실차 미실행
 - 결정: D-491 Proposed, D-492 Proposed
 - 교훈: 짧은 차로(0.37 m)는 arm 거리 0.6 m보다 짧다. 차선 로봇은 장소를 지난 뒤에만 다음 장소 지시를 보내야 CORE가 가진 하나뿐인 지시를 덮어쓰지 않는다
+
+## 2026-10-07 · uncommitted · feat(fleet): D-491 5 trip 루프 검토 반영 — 즉시 멈춤·멈춤 규칙·차선 시작 검사
+- 변경: 취소와 차선 위치 상실은 교차로 `stop` 뒤 `PUT /line-follow/mode OFF`로 바로 멈춘다(`POST /line-follow/hold`는 hold-to-run 연장이라 쓰지 않음). `fleet.trip.stall_s`(기본 20 s) 동안 0.05 m 미만 진행이면 `stopped(stall)`(교차로 동작 중·재계획 대기 제외). `lane` 계획은 line-follow `CAMERA_LINE`/`IR_LINE`이 아니면 `TRIP_LINE_FOLLOW_NOT_ACTIVE`. 포트를 `trip_ports.py`로 분리. D-491 구현 부록(5항 trip 루프)
+- 증거: `operations/fleet/test` 전체와 known_failures는 이 항목 아래 실행 결과를 보고서에 남긴다. 집중 묶음(`test_trip_runner.py` 43건 포함) 통과, harness lint 0 오류
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-491 Proposed(구현 부록 추가)
+- 교훈: CORE의 같은 이름 API(`/line-follow/hold`)가 반대 뜻(계속 가기)일 수 있다. 멈춤 경로는 엔드포인트 본문을 읽고 고른다
