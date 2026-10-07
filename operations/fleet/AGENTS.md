@@ -78,7 +78,9 @@ python -m pytest operations/fleet/test -v
 python -m flake8 operations/fleet --max-line-length=120
 ```
 
-No ROS required — `conftest.py` puts `contracts/foundation` on `sys.path` for the schema import.
+No ROS required — `conftest.py` puts `contracts/foundation` on `sys.path` for the schema import, and appends `test/` so browser tests import `browser_harness`.
+
+Browser tests (`*_browser.py`) are opt-in with `ROSY_RUN_BROWSER_TESTS=1` (the older `ROSY_BROWSER_TESTS=1` also works). Run only the ones a change reaches: `ROSY_RUN_BROWSER_TESTS=1 python -m pytest $(python test/browser_scope.py <changed paths...>)`. Run the full browser set on the site PC or model PC, not the dev laptop (`docs/reference/developer-guide.md` 「브라우저 시험」). Serve test pages through `browser_harness.safe_listener()`, never port 0.
 
 ### Common Patterns
 
