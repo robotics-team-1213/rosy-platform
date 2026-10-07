@@ -1,6 +1,6 @@
 ## D-517 여러 로봇이 같은 차로망을 동시에 달린다 — 로봇마다 trip 하나, Fleet 고정 블록 통행권, 로봇 우선 해결과 Fleet 판단
 
-**Status:** Proposed (2026-10-08, 사용자 요청: "2대를 동시에 돌게 할거고 이에 대한 규칙도 세워야겠지 … 군집, 수십 대도 가능하도록". 안전 경로 변경이라 사용자 수락과 Safety-Review 전에는 구현하지 않는다. rev 2: 독립 검토 반영.)
+**Status:** Accepted (2026-10-08, 사용자 결정: "그렇게 해서 바로 처리해야지 … 리더를 팔로워가 따라가는것부터 해서 그런 것들이 다 구현이 되어야해서 이를 adr로 하고 … 하나하나 해보자"). rev 2 독립 검토 반영. 9항 로드맵 순서로 하나씩 구현한다. CORE 통행권(M2)과 차로 따라가기(M3)는 안전 경로라 각 단계에서 Safety-Review를 받는다. 처음 요청: "2대를 동시에 돌게 할거고 이에 대한 규칙도 세워야겠지 … 군집, 수십 대도 가능하도록".
 
 고치는 결정: [D-494](D-494-fleet-trip-execution-m2-contracts.md)(사이트 전체 trip 한 대 `TRIP_BUSY`, 14항 trip 로봇 해결기 제외) · [D-438](D-438-fleet-stuck-resolver-rules-model-human.md)(해결기 대상) · [D-451](D-451-fleet-lane-meet-decider.md)(같은 방향은 로봇이 간격을 선다) · [D-474](D-474-caution-point-zone-grant.md)(구역 허가를 지도 기준으로 넓힌다) · [D-513](D-513-demo-start-places-fixed-heading.md)(출발 자리를 목적지로 쓴다).
 잇는 결정: [D-18](D-18-rosy-core.md)(CORE만 최종 `cmd_vel`) · [D-422](D-422-line-follow-body-referenced-obstacle-stop.md)/[D-424](D-424-one-robot-body-for-every-near-check.md) 몸체 기준 정지 · [D-500](D-500-measured-motion-response-and-clearance-budget.md)(정지 거리) · [D-426](D-426-fleet-gazebo-end-to-end-conformance.md) 3항(점유는 사실, 시간 만료로 풀지 않음) · [D-489](D-489-fleet-route-planning-concept-and-algorithm.md)/[D-490](D-490-fleet-route-planner-implementation.md)(경로 계산) · [D-507](D-507-lane-trip-leg-structure-and-site-floor.md)(trip 구간 실행, 현장 근거).
@@ -78,6 +78,16 @@
    - **M2 (CORE 통행권):** Safety-Review. `pose_stamp` 보정, 줄지 않음, 만료 정지, Fleet 정지, 링크 단절, 통행권과 몸체 정지 경합을 시험한다.
    - **SIM:** 모델 PC나 관제 PC의 Gazebo(이 노트북 금지)에서 `map_v2_fleet` 시연 고리 2대 30분 연속 주행. 접촉 0, 블록 중복 0, 사람 개입 0이어야 한다. 이어서 수용 한도인 3대로 같은 시험을 한다.
    - **DEVICE/FIELD:** 2대 실물, 현장 시연 지도(D-513)에서 10바퀴. 사람이 옆에 있고 E-stop을 쥔 채 한다.
+
+9. **로드맵.** 아래 순서로 하나씩 한다. 각 단계는 자기 브랜치·시험·착지를 가진다. 앞 단계가 착지해야 다음 단계를 시작한다.
+   1. **M0 순수 계산**(이 ADR 8항): `operations/fleet/fleet/routing/blocks.py`. 로봇에 아무것도 보내지 않는다.
+   2. **M1 Fleet 동시 운행**: 로봇별 trip, 반복 운행, 출발 자리 목적지, 블록 허가 루프(아직 CORE 통행권 없이 Fleet이 허가 상태만 계산·표시). 콘솔 지도에 블록 점유와 허가를 그린다.
+   3. **M2 CORE 통행권**: 4항 계약. Safety-Review. 이 단계부터 실제로 간격이 지켜진다.
+   4. **M3 차로 따라가기(리더–팔로워)**: 팔로워는 리더의 계획을 같은 차로로 따라가고, 통행권 끝을 고정 블록 대신 리더 꼬리 − (d_stop + 2u)로 받는다. 리더 위치를 모르면 3항 고정 블록으로 돌아간다. 넓은 공간의 대형(D-20 `FormationSession`)은 그대로 두고, 차로 위 따라가기는 이 통행권 위에 얹는다. 대열은 "리더 1 + 팔로워 N"이며, 대열 전체가 고리 수용 한도에 들어가야 한다.
+   5. **M4 해결기 연결**: 5항. trip 로봇 해결기, `blocked` 재계획, 교착 순환 처리.
+   6. **M5 SIM**: Gazebo 2대·3대 고리, 리더–팔로워 대열(모델 PC 또는 관제 PC).
+   7. **M6 DEVICE/FIELD**: 실물 2대 고리 10바퀴, 이어서 리더–팔로워 2대.
+   8. **M7 규모**: 위치 오차 실측으로 u를 줄이고, 긴 고리·격자에서 10대 이상을 시험한다. 처리량이 모자라면 이동 블록이나 시간 예약을 별도 ADR로 본다.
 
 ### Alternatives
 
