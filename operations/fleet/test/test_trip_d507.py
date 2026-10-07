@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 
 import httpx
 import pytest
@@ -57,44 +58,53 @@ def test_fields_go_only_to_a_junction_pivot_robot():
     assert _sent_at(_free_map("lane"), LANE, 0.5).expects == [None]
     ports = _sent_at(_free_map("lane"), PIVOT, 0.5)
     assert ports.sent[0][0] == "left"
-    # default config: 0.2 m/s x the 1.5 s call timeout alone is 0.30 -> the cap
-    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.5, "expect_tol_m": 0.3,
-                              "pivot_past_line_m": 0.1}]  # outgoing lane 0.2 m wide
+    # a sighting 0.1 s old at 0.2 m/s: 0.2 x (0.1 + ~0 measured + 0.2 allowance) + 0.05 = 0.11 -> floor 0.12
+    assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1,  # outgoing lane 0.2 m wide
+                              "expect_in_m": 0.5, "expect_tol_m": 0.12}]
 
 
 def test_straight_carries_the_expectation_and_the_window_pivot():
     ports = _sent_at(_straight_map(), PIVOT, 0.6)
     assert ports.sent[0][0] == "straight"
-    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.4, "expect_tol_m": 0.3,
-                              "pivot_past_line_m": 0.1}]
+    assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1, "expect_in_m": 0.4,
+                              "expect_tol_m": 0.12}]
 
 
 def test_the_last_stop_carries_the_expectation_without_a_pivot():
     ports = _sent_at(_straight_map(), PIVOT, 0.7, to="B")
     assert ports.sent[0][0] == STOP
-    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.3, "expect_tol_m": 0.3}]
+    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.3, "expect_tol_m": 0.12}]
 
 
-def test_tolerance_adds_drift_age_and_call_latency_and_is_capped():
-    fast = {"port_timeout_s": 0.25, "expect_tol_min_m": 0.01}
-    # sighting 0.1 s old at 0.2 m/s: 0.02 + 0.2 x 0.25 + ENDPOINT_TOL_M 0.05
-    assert _tol(**fast) == 0.12
-    assert _tol({"source": "bridged", "dead_reckon_m": 1.0}, **fast) == 0.17   # + 0.05 drift
-    assert _tol({"source": "bridged", "dead_reckon_m": 9.0}, **fast) == 0.30   # capped
+def test_tolerance_adds_drift_and_the_measured_latency_and_is_capped():
+    low = {"expect_tol_min_m": 0.01}
+    # 0.2 m/s x (age 0.1 + read-to-send ~0 + SEND_ALLOWANCE_S 0.2) + ENDPOINT_TOL_M 0.05
+    assert _tol(**low) == pytest.approx(0.11, abs=0.002)
+    assert _tol({"age_s": 0.6}, **low) == pytest.approx(0.21, abs=0.002)        # older pose: + 0.1
+    assert _tol({"source": "bridged", "dead_reckon_m": 1.0}, **low) == pytest.approx(0.16, abs=0.002)
+    assert _tol({"source": "bridged", "dead_reckon_m": 9.0}, **low) == 0.30     # capped
+
+
+def test_tolerance_counts_the_time_between_the_pose_read_and_the_send(monkeypatch):
+    import fleet.server.trip_ports as trip_ports
+    clock = iter([100.0, 100.5])  # read at 100.0 (live.see), send 0.5 s later
+    monkeypatch.setattr(trip_ports, "_monotonic", lambda: next(clock, 100.5))
+    # 0.2 x (0.1 + 0.5 + 0.2) + 0.05
+    assert _tol(expect_tol_min_m=0.01) == pytest.approx(0.21, abs=1e-6)
 
 
 def test_tolerance_is_floored_by_the_site_knob():
-    assert _tol(port_timeout_s=0.1) == 0.12                     # 0.09 computed, default knob 0.12
-    assert _tol(port_timeout_s=0.1, expect_tol_min_m=0.2) == 0.2
+    assert _tol() == 0.12                                         # 0.11 computed, default knob 0.12
+    assert _tol(expect_tol_min_m=0.2) == 0.2
     assert TripConfig.from_mapping({"expect_tol_min_m": 0.15}).expect_tol_min_m == 0.15
     with pytest.raises(ValueError):
         TripConfig(expect_tol_min_m=0.31)
 
 
 def test_an_unknown_pose_error_sends_the_widest_window():
-    fast = {"port_timeout_s": 0.1, "expect_tol_min_m": 0.01}
-    assert _tol({"age_s": None}, **fast) == 0.30
-    assert _tol({"dead_reckon_m": None}, **fast) == 0.30
+    low = {"expect_tol_min_m": 0.01}
+    assert _tol({"age_s": None}, **low) == 0.30
+    assert _tol({"dead_reckon_m": None}, **low) == 0.30
 
 
 def test_pivot_is_capped_at_0_30():
@@ -105,9 +115,45 @@ def test_pivot_is_capped_at_0_30():
     assert ports.expects[0]["pivot_past_line_m"] == 0.30
 
 
-def test_a_place_outside_the_expectation_range_sends_only_the_map_id():
+def test_a_place_outside_the_expectation_range_sends_no_window():
     ports = _sent_at(_free_map("lane"), PIVOT, 1.0)   # on the place: expect_in_m 0 is out of (0, 2]
-    assert ports.sent[0][0] == "left" and ports.expects == [{"map_id": "site"}]
+    assert ports.sent[0][0] == "left" and ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1}]
+
+
+def test_a_heading_off_the_lane_sends_the_distance_along_the_heading():
+    ports = _sent_at(_free_map("lane"), PIVOT, 0.5, pose={"yaw": math.radians(10)})
+    assert ports.expects[0]["expect_in_m"] == round(0.5 * math.cos(math.radians(10)), 3)
+
+
+def _ring_map():
+    """A quarter circle (radius 0.25) from A into B, then straight on to C: the 260919 ring leg."""
+    arc = [[round(0.25 * math.sin(t), 4), round(0.25 - 0.25 * math.cos(t), 4)]
+           for t in (math.radians(d) for d in range(0, 91, 10))]
+    return _map(("A", 0, 0), ("B", 0.25, 0.25), ("C", 0.25, 1.0),
+                edges=[("ab", "A", "B", arc, "lane"), ("bc", "B", "C", [[0.25, 0.25], [0.25, 1.0]], "lane")])
+
+
+def test_a_ring_arc_sends_no_window():
+    ports = _sent_at(_ring_map(), PIVOT, 0.05)
+    assert ports.sent[0][0] == "straight"
+    assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1}]
+
+
+def _bent_map(bend_deg):
+    """A straight 0.7 m, then 0.3 m turned by ``bend_deg`` into B, then on in that direction to C."""
+    c, s = math.cos(math.radians(bend_deg)), math.sin(math.radians(bend_deg))
+    b = (round(0.7 + 0.3 * c, 4), round(0.3 * s, 4))
+    end = (round(b[0] + c, 4), round(b[1] + s, 4))
+    return _map(("A", 0, 0), ("B", *b), ("C", *end),
+                edges=[("ab", "A", "B", [[0, 0], [0.7, 0], list(b)], "lane"),
+                       ("bc", "B", "C", [list(b), list(end)], "lane")])
+
+
+def test_a_bend_of_15_degrees_keeps_the_window_and_more_drops_it():
+    within = _sent_at(_bent_map(15.0), PIVOT, 0.5).expects[0]
+    assert within["expect_in_m"] == round(0.2 + 0.3 * math.cos(math.radians(15)), 3)
+    beyond = _sent_at(_bent_map(16.0), PIVOT, 0.5).expects[0]
+    assert "expect_in_m" not in beyond and "expect_tol_m" not in beyond and beyond["map_id"] == "site"
 
 
 def test_a_changed_map_version_sends_no_fields_and_says_so(caplog):

@@ -10,13 +10,14 @@ from __future__ import annotations
 import json
 import logging
 import math
+import time
 from dataclasses import dataclass, fields
 from typing import Any, Awaitable, Callable, Mapping, Optional, Protocol
 
 from fleet.hub.hub import HubError
 from fleet.localization.map_pose import MapPose
 from fleet.server.console_view import TripCaps
-from fleet.routing.cost import LEFT, RIGHT, STRAIGHT
+from fleet.routing.cost import LEFT, RIGHT, STRAIGHT, wrap
 from fleet.routing.execute import arc_id, ends_at_place
 from fleet.site_map import ENDPOINT_TOL_M
 
@@ -163,6 +164,14 @@ MAX_EXPECT_TOL_M = 0.30
 MAX_PIVOT_PAST_LINE_M = 0.30
 #: Along-track odom drift per metre dead-reckoned since the last sighting (wheel slip on carpet).
 ODOM_DRIFT_PER_M = 0.05
+#: ponytail: a fixed allowance for the send's HTTP time and CORE taking the instruction after the
+#: send starts; measure it on the site network and make it site config if it is off.
+SEND_ALLOWANCE_S = 0.2
+_monotonic = time.monotonic  # the read-to-send clock (a test replaces it)
+#: D-507 2: CORE projects ``expect_in_m`` straight ahead, so no window past this lane bend.
+MAX_WINDOW_BEND_DEG = 15.0
+#: The lane heading is checked this often between the robot and the place.
+WINDOW_BEND_STEP_M = 0.02
 
 
 def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float, active,
@@ -190,24 +199,44 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
         view["detail"]["junction_fields_dropped"] = "map_version"
         return None
     fields = {"map_id": active[1].map_id}
-    expect_in = round(remaining, 3)
-    if not 0.0 < expect_in <= MAX_EXPECT_IN_M:
-        return fields
+    if action in (STRAIGHT, LEFT, RIGHT):  # the place is on the outgoing lane's centre line (D-490)
+        width = live.arc(index + 1).width_m
+        fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
+    expect_in = _straight_ahead(live, index, remaining, pose)
+    if expect_in is None or not 0.0 < expect_in <= MAX_EXPECT_IN_M:
+        return fields  # no window: CORE keeps today's behaviour for this place
     speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
-    if age is None or reckoned is None:
+    if age is None or reckoned is None or live.pose_read_at is None:
         tol = MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
     else:
         # ponytail: the map pose has no heading-direction error estimate, so it is odom drift over
         # the distance dead-reckoned since the last sighting, plus how far the robot drives at its
-        # trip speed while the pose ages and while the call is in flight, floored by the site knob
-        # ``expect_tol_min_m``; replace with the provider's own covariance once MapPose reports one.
-        tol = max(config.expect_tol_min_m, ODOM_DRIFT_PER_M * reckoned + speed * age
-                  + speed * config.port_timeout_s + ENDPOINT_TOL_M)
+        # trip speed over the pose age, the measured read-to-send time and SEND_ALLOWANCE_S,
+        # floored by the site knob ``expect_tol_min_m``; replace with the provider's own covariance
+        # once MapPose reports one.
+        latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
+        tol = max(config.expect_tol_min_m, ODOM_DRIFT_PER_M * reckoned + speed * latency + ENDPOINT_TOL_M)
     fields.update(expect_in_m=expect_in, expect_tol_m=round(min(tol, MAX_EXPECT_TOL_M), 3))
-    if action in (STRAIGHT, LEFT, RIGHT):  # the place is on the outgoing lane's centre line (D-490)
-        width = live.arc(index + 1).width_m
-        fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
     return fields
+
+
+def _straight_ahead(live: "LiveTrip", index: int, remaining: float, pose: dict) -> Optional[float]:
+    """The place's distance along the robot's heading, or None where CORE's window would be wrong.
+
+    CORE puts the expected point ``expect_in_m`` straight ahead of its pose at receipt, so a
+    lane that turns more than ``MAX_WINDOW_BEND_DEG`` between the robot and the place (the
+    260919 ring, the east/west bends) gets no window; a window along the path is later work.
+    """
+    if pose.get("x") is None or pose.get("y") is None or pose.get("yaw") is None:
+        return None
+    arc, s_to = live.arc(index), live.segments[index]["s_to"]
+    heading = arc.point_at(s_to - remaining)[2]
+    steps = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M))
+    if any(abs(math.degrees(wrap(arc.point_at(s_to - remaining * (1 - k / steps))[2] - heading)))
+           > MAX_WINDOW_BEND_DEG for k in range(1, steps + 1)):
+        return None
+    x, y, _yaw = arc.point_at(s_to)
+    return round((x - pose["x"]) * math.cos(pose["yaw"]) + (y - pose["y"]) * math.sin(pose["yaw"]), 3)
 
 
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
@@ -238,6 +267,8 @@ class LiveTrip:
         self.replan_pending = False
         self.waiting_since: Optional[float] = None
         self.junction: dict = {}
+        #: ``time.monotonic()`` when the trip's map pose was last read (D-507 2 send latency).
+        self.pose_read_at: Optional[float] = None
         self.best_progress = -math.inf
         self.progress_at: Optional[float] = None
 
@@ -263,6 +294,10 @@ class LiveTrip:
                 state == "waiting" and now - self.waiting_since >= config.junction_wait_s):
             return "junction", detail
         return None
+
+    def see(self, pose) -> None:
+        """Keep the map pose just read and when it was read."""
+        self.view["pose"], self.pose_read_at = pose_view(pose), _monotonic()
 
     @property
     def segments(self) -> list:

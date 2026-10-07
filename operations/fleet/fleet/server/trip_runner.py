@@ -249,7 +249,7 @@ class TripRunner:
             pose = await self._pose(robot_id)
             if not live.open:
                 return
-            live.view["pose"] = pose_view(pose)
+            live.see(pose)
             if pose is None or pose.state != LOCALIZED:
                 await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None,
                                                            **pose_diagnostics(pose)}, halt_free=False)
