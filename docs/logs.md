@@ -6761,3 +6761,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: D-502(자동 해제는 고르지 않음, 관리자 해제, Deep 재래치).
 - 교훈: 래치와 모드를 따로 쓰는 경로가 있으면 해제 계약이 깨진다. 래치 쪽 리스너 한 곳에서 모드를 맞춘다.
+
+## 2026-10-07 · uncommitted · docs(solutions): 검증 문서의 빈백 git id가 push를 막는 오탐 — 교훈 기록
+- 변경: `docs/validation/uiux-current-width-device-2026-10-07/result.md`의 40자리 SHA에 `commit` 접두어를 붙여 시크릿 스캐너 high-entropy-token 오탐을 해제했다(관측 내용 불변, `db006d7cf`와 같은 표기 수정). 같은 날 같은 클래스가 두 번째라 재발 방지 문서 `docs/solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md`를 남겼다 — 회차 문서에 git id를 쓸 때 `commit` 접두어(16진수는 종류 표기), 착지 전 시크릿 시험 1회 실행.
+- 증거: `test_release_boundary_guards.py::test_no_secrets_in_tracked_files` 수정 전 1 failed(해당 문서 line 3 지목) → 수정 후 통과. 이 오탐이 58커밋 push를 pre-push 훅에서 두 차례 거부했다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 오탐 하나가 공유 push 게이트를 막아 모든 세션의 푸시를 지연시킨다 — 문서 착지 전 1분 시험이 push 훅 실패를 예방한다
