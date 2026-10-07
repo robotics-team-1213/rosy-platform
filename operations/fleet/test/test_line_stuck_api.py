@@ -305,3 +305,186 @@ def test_an_old_answer_log_gains_the_resolver_columns(tmp_path):
     new, old = log.rows()
     assert (new["tier"], new["rule"], new["escalated"]) == ("rule", "R1", None)
     assert old["stuck_id"] == "stuck-old" and old["tier"] is None
+
+
+# ---- stuck episode log (autonomy-chain step 1) -------------------------------------------
+
+
+def _online(robot_id="rosy_01", stuck=STUCK, pose=None) -> dict:
+    state = _state(stuck)
+    if pose is not None:
+        state["pose"] = {"x": pose[0], "y": pose[1], "yaw": pose[2]}
+    return {"robot_id": robot_id, "online": True, "state": state}
+
+
+def _episode_board(tmp_path, **kwargs):
+    log = LineStuckAnswerLog(tmp_path / "fleet.sqlite3")
+    wall = FakeClock()
+    return LineStuckBoard(FakeClock(), log=log, wall=wall, **kwargs), log, wall
+
+
+def test_an_episode_opens_tracks_the_max_and_closes_cleared(tmp_path):
+    board, log, wall = _episode_board(tmp_path)
+    for held in (3.5, 4.5, 5.5):
+        board.observe([_online(stuck={**STUCK, "held_s": held, "attempts": 1})])
+        wall.advance(1.0)
+    board.observe([_online(stuck=None)])
+
+    [row] = log.episodes()
+    assert (row["robot_id"], row["stuck_id"], row["close_reason"], row["source"]) == (
+        "rosy_01", "stuck-abc", "cleared", "fleet_poll")
+    assert row["held_s_max"] == 5.5 and row["attempts_max"] == 1
+    assert row["cause"] == "obstacle_ahead" and row["phase_at_open"] == "ASKING"
+    assert row["local_enabled_at_open"] == 0
+    assert row["opened_at"] < row["closed_at"]
+    assert row["resolved_by"] is None and row["escalation_code"] is None
+
+
+def test_a_new_stuck_id_replaces_the_open_episode(tmp_path):
+    board, log, _ = _episode_board(tmp_path)
+    board.observe([_online()])
+    board.observe([_online(stuck={**STUCK, "stuck_id": "stuck-def"})])
+    by_id = {row["stuck_id"]: row for row in log.episodes()}
+    assert by_id["stuck-abc"]["close_reason"] == "replaced"
+    assert by_id["stuck-def"]["closed_at"] is None
+
+
+def test_leaving_the_roster_closes_and_offline_keeps_open(tmp_path):
+    board, log, _ = _episode_board(tmp_path)
+    board.observe([_online()])
+    board.observe([{"robot_id": "rosy_01", "online": False, "state": None}])
+    assert log.episodes()[0]["closed_at"] is None
+    board.observe([])
+    assert log.episodes()[0]["close_reason"] == "left_roster"
+
+
+def test_a_restart_closes_open_episodes_and_the_same_stuck_reopens_one_row(tmp_path):
+    board, log, wall = _episode_board(tmp_path)
+    board.observe([_online()])
+    opened_at = log.episodes()[0]["opened_at"]
+
+    wall.advance(30.0)
+    again = LineStuckBoard(FakeClock(), log=LineStuckAnswerLog(log.path), wall=wall)
+    [row] = log.episodes()
+    assert row["close_reason"] == "fleet_restart" and row["closed_at"] is not None
+
+    again.observe([_online()])
+    again.observe([_online()])                      # the same opening twice: still one row
+    [row] = log.episodes()
+    assert row["closed_at"] is None and row["close_reason"] is None
+    assert row["opened_at"] == opened_at
+
+
+@pytest.mark.parametrize("answers, resolved_by, last_tier, escalation", [
+    ([("ESCALATE", None, "human", "no_resolver_token")], None, None, "no_resolver_token"),
+    ([("RESUME", False, "human", None), ("WAIT", True, "rule", None)], "rule", "rule", None),
+    ([("WAIT", None, "rule", None)], "rule_unconfirmed", "rule", None),
+    ([("RESUME", False, "human", None)], None, "human", None),
+])
+def test_resolved_by_comes_from_the_last_non_escalate_answer(tmp_path, answers, resolved_by,
+                                                             last_tier, escalation):
+    board, log, _ = _episode_board(tmp_path)
+    board.observe([_online()])
+    for decision, accepted, tier, escalated in answers:
+        board.record(robot_id="rosy_01", stuck_id="stuck-abc", decision=decision,
+                     principal_id="fleet-resolver", accepted=accepted, tier=tier,
+                     escalated=escalated)
+    board.observe([_online(stuck=None)])
+    [row] = log.episodes()
+    assert (row["resolved_by"], row["last_answer_tier"], row["escalation_code"]) == (
+        resolved_by, last_tier, escalation)
+    if resolved_by == "rule":
+        assert row["resolved_principal"] == "fleet-resolver"
+
+
+@pytest.mark.parametrize("peer_pose, expected", [
+    ((0.20, 0.03, 3.14), 1),        # in the R1 band
+    ((0.80, 0.00, 3.14), 0),        # beyond reach
+])
+def test_peer_ahead_at_open_uses_the_resolver_judgement(tmp_path, peer_pose, expected):
+    from fleet.server.stuck_resolver import ResolverConfig, peer_ahead
+
+    board, log, _ = _episode_board(tmp_path)
+    me = _online(pose=(0.0, 0.0, 0.0), stuck={**STUCK, "local_enabled": True})
+    peer = _online("rosy_02", stuck=None, pose=peer_pose)
+    board.observe([me, peer])
+    row = next(r for r in log.episodes() if r["robot_id"] == "rosy_01")
+    assert row["peer_ahead_at_open"] == expected
+    assert row["peer_ahead_at_open"] == int(peer_ahead(me, [me, peer], ResolverConfig()))
+    assert row["local_enabled_at_open"] == 1
+
+
+def test_no_own_pose_leaves_peer_ahead_unknown_and_trip_busy_is_recorded(tmp_path):
+    board, log, _ = _episode_board(tmp_path)
+    board.observe([_online()])
+    assert log.episodes()[0]["peer_ahead_at_open"] is None
+    assert log.episodes()[0]["trip_busy_at_open"] is None       # no trip runner yet
+
+    board.trip_busy = lambda robot_id: robot_id == "rosy_02"
+    board.observe([_online(), _online("rosy_02")])
+    by_robot = {row["robot_id"]: row for row in log.episodes()}
+    assert by_robot["rosy_02"]["trip_busy_at_open"] == 1
+
+
+def test_the_map_pose_is_recorded_when_the_service_exists(tmp_path):
+    from fleet.localization.map_pose import MapPose
+
+    board, log, _ = _episode_board(tmp_path)
+    board.map_pose = lambda robot_id: MapPose(x=1.0, y=2.0, yaw=0.5, state="LOCALIZED",
+                                              source="sighting", dead_reckon_m=0.0, age_s=0.4)
+    board.observe([_online()])
+    row = log.episodes()[0]
+    assert (row["pose_x"], row["pose_y"], row["pose_yaw"], row["pose_state"], row["pose_age_s"]) == (
+        1.0, 2.0, 0.5, "LOCALIZED", 0.4)
+
+
+def test_episode_writes_equal_transitions_and_no_log_writes_nothing(tmp_path):
+    calls = []
+
+    class CountingLog(LineStuckAnswerLog):
+        def open_episode(self, row):
+            calls.append("open")
+            super().open_episode(row)
+
+        def close_episode(self, *args, **kwargs):
+            calls.append("close")
+            super().close_episode(*args, **kwargs)
+
+    board = LineStuckBoard(FakeClock(), log=CountingLog(tmp_path / "fleet.sqlite3"))
+    for _ in range(5):
+        board.observe([_online()])
+    board.observe([_online(stuck=None)])
+    board.observe([_online(stuck=None)])
+    assert calls == ["open", "close"]
+
+    bare = LineStuckBoard(FakeClock())                   # no --tasks-db: memory only, as before
+    bare.observe([_online()])
+    bare.observe([_online(stuck=None)])
+    assert bare.episodes() == []
+
+
+def test_an_old_database_without_the_episode_table_opens(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE unrelated (x INTEGER)")
+    db.close()
+    board = LineStuckBoard(FakeClock(), log=LineStuckAnswerLog(path))
+    board.observe([_online()])
+    assert len(board.episodes()) == 1
+
+
+def test_episode_list_route_is_read_guarded_and_lists_recent(tmp_path):
+    robot = FakeRobot("rosy_01", state=_state())
+    client, _ = _named_app(_console(robot), tmp_path)
+    assert client.get("/api/fleet/line-stuck/episodes").status_code == 401
+    board = client.app.state.line_stuck
+    assert board.trip_busy is not None and board.map_pose is not None    # wired by the app
+    _row(client)
+    robot._state = _state(stuck=None)
+    client.app.state.fleet_gather.max_age_s = 0.0
+    _row(client)
+    listed = client.get("/api/fleet/line-stuck/episodes?limit=5", headers=_auth(VIEWER))
+    assert listed.status_code == 200, listed.text
+    [episode] = listed.json()["episodes"]
+    assert episode["stuck_id"] == "stuck-abc" and episode["close_reason"] == "cleared"
