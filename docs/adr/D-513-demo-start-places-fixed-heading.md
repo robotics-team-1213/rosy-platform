@@ -1,6 +1,6 @@
 ## D-513 시연 출발 자리는 현장 지도의 `start` 장소로 두고, 방향은 로봇을 놓아 기록한 `yaw`로 고정한다
 
-**Status:** Proposed (2026-10-08, 사용자 요청; SOURCE/LOCAL 구현, 현장 지도 입력·SIM·DEVICE 별도)
+**Status:** Accepted (2026-10-08, 사용자 확인: "좋아 그렇게 하는게 맞아" — 벽 방향 해석과 두 출발 방향 수락; SOURCE/LOCAL 구현, 현장 지도 입력 F2·SIM·DEVICE 별도)
 
 잇는 결정: [D-488](D-488-fleet-site-map-address-routes.md)(현장 지도 장소·차로) · [D-489](D-489-fleet-route-planning-concept-and-algorithm.md)(출발 붙이기, 방향 충돌) · [D-490](D-490-fleet-route-planner-implementation.md)(장소 종류 확장) · [D-494](D-494-fleet-trip-execution-m2-contracts.md) 6항(기록 모드 `POST /teach/place`) · [D-497](D-497-camera-lane-map-draft.md)(카메라 차선 지도 초안)
 
@@ -20,7 +20,7 @@ Fleet에는 지금 출발 기준이 두 가지 있다. 둘 다 이 요청에 맞
 | 출발-남 | 좌상단 (155, 170), 왼쪽 세로 통로 위 끝 | 남쪽 왼편 | 오른쪽(동). 영상에서는 아래(+y) |
 | 출발-북 | 우하단 (885, 640), 아래쪽 직선로 | 북쪽 | 위쪽(북). 영상에서는 오른쪽(+x) |
 
-벽(북)은 영상 오른쪽의 금속 벽과 삼각대 쪽으로 읽었다. 그렇게 읽으면 두 출발 방향이 바깥 고리 하나의 같은 순환 방향(영상에서 반시계)이 된다. 벽을 영상 왼쪽이나 위쪽으로 읽으면 한쪽 출발 방향이 통로를 가로지른다. 그래서 오른쪽 해석을 택했다. 현장에서 사용자가 이 해석을 확인한다(아래 수용 F1).
+벽(북)은 영상 오른쪽의 금속 벽과 삼각대 쪽으로 읽었다. 그렇게 읽으면 두 출발 방향이 바깥 고리 하나의 같은 순환 방향(영상에서 반시계)이 된다. 벽을 영상 왼쪽이나 위쪽으로 읽으면 한쪽 출발 방향이 통로를 가로지른다. 그래서 오른쪽 해석을 택했다. 사용자가 2026-10-08 이 해석을 확인했다(아래 수용 F1).
 
 ### Decision
 
@@ -40,7 +40,7 @@ Fleet에는 지금 출발 기준이 두 가지 있다. 둘 다 이 요청에 맞
 ### 수용
 
 - **SOURCE/LOCAL (이 브랜치):** `test_site_map_trip.py::test_a_start_place_must_face_along_its_lane`에서 차로 반대 방향은 `SITE_MAP_START_INVALID`, 차로 방향은 활성화 200, `yaw` 없는 `start`는 스키마 거절. `site-map.test.mjs`에서 `yaw` 없는 장소를 `start`로 바꾸면 거절.
-- **F1 (현장, 사용자):** 위 표의 벽 방향 해석과 두 출발 방향을 사용자가 확인한다.
+- **F1 (사용자):** 위 표의 벽 방향 해석과 두 출발 방향 — 2026-10-08 사용자 확인 완료.
 - **F2 (현장):** D-497 초안 → 고리 간선을 `one_way`로 → 로봇을 두 파란 자리에 정한 방향으로 놓고 `teach/place kind=start` → 활성화 200 → 각 로봇의 trip 계획이 `TRIP_HEADING_CONFLICT` 없이 나온다.
 
 ### Consequences
