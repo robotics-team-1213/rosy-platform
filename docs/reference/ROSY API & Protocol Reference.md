@@ -34,9 +34,9 @@ null이며 임의의 안전 여유로 대체하지 않는다. 누락/단일 경�
 
 D-491(v1.115): `containment`는 optional `crosswalk`(`near_m`, `far_m`)를 더 가질 수 있다.
 같은 영상 시각에 카메라가 본 차로와 나란한 줄무늬 횡단보도의 가까운 끝과 먼 끝이며,
-base footprint 기준 전방 거리(m, 0~1, near < far)다. CORE는 CALIBRATED/GAZEBO 지면이고
-`uncertainty_m`이 있을 때만 이 구간을 영상 시각의 odom 자세에 고정해 IR 차선 감시의
-휴식 구간으로 쓴다. NOMINAL·불확실도 없음·odom 끊김이면 구간이 없고 감시는 그대로다.
+base footprint 기준 전방 거리(m, 0~1, near < far)다. CORE는 지면 표시와 상관없이
+`uncertainty_m`이 있고 0.015 m 이하일 때만(D-468과 같다) 이 구간을 영상 시각의 odom 자세에 고정해 IR 차선 감시의
+휴식 구간으로 쓴다(D-491 개정 2026-10-07). 불확실도 없음·odom 끊김이면 구간이 없고 감시는 그대로다.
 명령 필드는 없다.
 
 ### API-001 경로 버저닝

@@ -1204,6 +1204,47 @@ def test_entering_emergency_sounds_even_with_a_healthy_state(tmp_path):
     assert len(_starts(gpio)) == 6
 
 
+def test_emergency_card_and_lamp_are_visible_before_the_entry_sound(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path)
+    spawn = FakeSpawn()
+    display, lamp, clock, rendered, _lines = _state_loop(module, tmp_path, spawn=spawn, wall=lambda: WALL)
+    display.step()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="EMERGENCY")
+    _face_inputs(tmp_path, robot_mode="EMERGENCY", estop=True)
+    clock.now += 1
+    seen = []
+
+    def announce(sound):
+        seen.append((sound, lamp.pattern, rendered[-1]["screen"]["kind"], len(display.lcd.shown)))
+
+    display._buzzer.announce = announce
+    display.step()
+
+    assert seen == [("emergency", "emergency", "stopped", 1)]
+
+
+def test_emergency_sound_survives_a_broken_lcd(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    spawn = FakeSpawn()
+    display, lamp, clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    display.step()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="EMERGENCY")
+    clock.now += 1
+    heard = []
+    display._buzzer.announce = heard.append
+    display._render = lambda _card: (_ for _ in ()).throw(RuntimeError("LCD offline"))
+
+    with pytest.raises(RuntimeError, match="LCD offline"):
+        display.step()
+
+    assert lamp.pattern == "emergency" and heard == ["emergency"]
+
+
 def test_the_lcd_state_line_names_the_operating_mode_in_ascii(tmp_path):
     module = _display()
     _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="NAVIGATION")
