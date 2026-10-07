@@ -614,32 +614,17 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core/services/core_features/line_follow/recovery": (
-        # PENDING RE-JUDGE (combined D-507 6+2-5, re-judge required by reviewer): 2713 is the merged
-        # count after feat/d507-motion-admitted-site-floor (2491) and feat/d507-junction-approach
-        # (2537) both landed; it is over 2491 + 150, so an independent re-judge must replace this note.
         2_713,
-        "accept: PENDING independent re-judge at the merged 2713 (combined D-507 6+2-5, re-judge "
-        "required by reviewer; recorded by the landing executor 2026-10-08, not a judgement). "
-        "Branch verdicts: junction-approach re-judged 2026-10-08 at 2537 (architect agent, "
-        "read-only): D-507 items 3-4 junction_approach JunctionApproachMixin (expected window and "
-        "approach to the pivot, mixed into JunctionMixin, math only), the approach twist goes out "
-        "through _maneuver_twist, CORE CommandManager stays the final cmd_vel publisher (D-18). "
-        "Independently re-judged 2026-10-08 at 2491 for D-507 6 (architect, read-only): "
-        "recovery/motion_admit.py is the one motion_admitted admission (D-400 enforce basis or the "
-        "site_floor_map_id site basis, plus the reverse D-422 body sweep the D-468 retrace needs), "
-        "a LineFollowManager mixin under the single manager lock and generation with no own lock, "
-        "thread, store or publisher; it replaced the separate checks in junction _turn_basis, "
-        "lane_bridge and lane_return_decision (branch net +96), so no split is warranted; every file "
-        "below 600 and the sibling core_features unit has no room. Condition: whichever of this and "
-        "feat/d507-junction-approach lands second re-judges on the merged count; if the reverse sweep "
-        "is ever needed outside the retrace, move it beside _body_clearance in body_stop.py. "
-        "Previously independently re-judged 2026-10-07. Own size unit per "
-        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md (moved "
-        "2026-10-07 by git mv, imports only): D-407 stuck recovery/wiring, D-468 lane_return*, D-476 "
-        "lane_bridge and D-494/D-495/D-498 junction as LineFollowManager mixins under the single manager "
-        "lock and generation; no own lock, thread, store or publisher, CORE CommandManager stays the final "
-        "cmd_vel publisher. Every file below 600. Baseline is the line count at the move; the +150 "
-        "allowance applies; re-judge on the next +150",
+        "accept: independently re-judged 2026-10-08 at the merged 2713 (D-507 2-5 junction_approach + "
+        "D-507 6/9 motion_admit, architect read-only). Unit total is far below the 10000 package budget; "
+        "every file below 600 (largest stuck_recovery.py 573, junction.py 507). Junction and motion "
+        "admission stay LineFollowManager mixins under the single manager lock and generation, no own "
+        "lock, thread, store or publisher; CORE CommandManager stays the final cmd_vel publisher. A "
+        "junction/ unit was rejected: 685 lines do not justify a new size unit and core_features has no "
+        "room. Conditions: if the reverse sweep is needed outside the D-468 retrace, move it beside "
+        "_body_clearance in body_stop.py; if junction code passes 800 lines, give it its own subpackage via "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md follow-up. Split plan of record: "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md; re-judge on the next +150",
     ),
     "core_features": (
         12_772,
