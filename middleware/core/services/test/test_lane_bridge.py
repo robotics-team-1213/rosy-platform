@@ -599,10 +599,12 @@ def test_dropoff_acceptance_or_live_floor_proof_is_required():
     assert r.step(seen=False).linear > 0 and r.reason == 'lane_bridge'
 
 
-@pytest.mark.parametrize('error', [.2, -.2, .15])
+@pytest.mark.parametrize('error', [.2, -.2, .3])
 def test_curve_or_correction_does_not_arm(error):
-    # A curving or yawed follow steers (|error| 0.15-0.2 -> |angular| 0.12-0.16): the body
+    # A curving or yawed follow steers (|error| 0.2-0.3 -> |angular| 0.16-0.24): the body
     # heading is not the lane's, so its straight extension would leave a narrow lane.
+    # Rev 2: at this rig's cruise 0.04 these are also tighter than bridge_arm_max_curvature;
+    # rev 1's 0.15 (kappa 3.9, steady) now arms as an arc (test_steady_curvature_arc_*).
     r = _narrow()
     r.follow(error=error)
     assert abs(r.m.status().angular) > r.m.config.bridge_arm_max_angular
@@ -816,7 +818,7 @@ def test_arc_sweep_is_the_arc_not_the_straight_extension():
     off_arc = _arc()
     off_arc.follow(error=ROUND_E)
     off_arc.m._intended = (0., .5)
-    off_arc.points = ((.12, -.05),)  # on the straight extension, outside the arc's sweep
+    off_arc.points = ((.13, -.058),)  # the straight sweep holds here, the arc's does not
     d = off_arc.step(seen=False)
     assert off_arc.reason == 'lane_bridge' and d.linear > 0
 

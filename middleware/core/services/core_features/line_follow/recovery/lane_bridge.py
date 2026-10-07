@@ -1,4 +1,5 @@
-"""D-476 expected-road bridge: a short, slow drive along the followed lane's straight extension.
+"""D-476 expected-road bridge: a short, slow drive along the followed lane's extension, straight
+or (rev 2) along the arc of a steady curvature.
 
 Runs inside the manager lock next to the D-468 arbitration (lane_return_decision.py), so the
 same generation/evidence_revision and CommandManager path apply, with or without D-468.
@@ -21,9 +22,10 @@ BRIDGE_REASONS = frozenset({'line_not_visible', 'observation_stale', 'no_observa
 ROUTE_HINTS = (None, 'left', 'straight', 'right')
 
 
-def bridge_target(anchor, corridor, pose, lookahead):
+def bridge_target(anchor, corridor, pose, lookahead, kappa=0.):
     """Robot-frame (x, y) of the point `lookahead` past the robot's projection on the
-    anchored lane's centre line, extended straight in odom (D-476 decision 2).
+    anchored lane's centre line, extended in odom (D-476 decision 2): straight, or (rev 2)
+    along the arc of the body's steady curvature `kappa` (1/m, left positive).
 
     corridor None: no certified corridor, the line the body itself followed (anchor pose and
     heading). On a narrow lane the play bounds that line's offset from the centre."""
@@ -31,9 +33,16 @@ def bridge_target(anchor, corridor, pose, lookahead):
     ca, sa = math.cos(anchor.yaw), math.sin(anchor.yaw)
     ox, oy = anchor.x - sa*center, anchor.y + ca*center
     heading += anchor.yaw
-    ux, uy = math.cos(heading), math.sin(heading)
-    s = (pose.x-ox)*ux + (pose.y-oy)*uy + lookahead
-    dx, dy = ox + s*ux - pose.x, oy + s*uy - pose.y
+    if kappa:
+        # The lane centre runs concentric with the body's circle, `center` to its left.
+        k = kappa/(1-kappa*center)
+        cx, cy = ox - math.sin(heading)/k, oy + math.cos(heading)/k
+        theta = math.atan2(pose.y-cy, pose.x-cx) + k*lookahead
+        dx, dy = cx + math.cos(theta)/abs(k) - pose.x, cy + math.sin(theta)/abs(k) - pose.y
+    else:
+        ux, uy = math.cos(heading), math.sin(heading)
+        s = (pose.x-ox)*ux + (pose.y-oy)*uy + lookahead
+        dx, dy = ox + s*ux - pose.x, oy + s*uy - pose.y
     cp, sp = math.cos(pose.yaw), math.sin(pose.yaw)
     return cp*dx + sp*dy, -sp*dx + cp*dy
 
@@ -45,6 +54,11 @@ class LaneBridgeMixin:
         self._bridge_open = False  # a bridge ran last tick and has not yet been handed to D-468
         self._bridge_hint = None
         self._confident_frames = 0  # consecutive accepted confident camera frames
+        # Rev 2: this streak's ticks (frame count, error, curvature); the frame count after the
+        # last tick outside the straight band (rev 1 restarted its count there). Cleared by a
+        # new streak (lane_return_wiring.py).
+        self._arm_ticks, self._straight_from = [], 0
+        self._bridge_kappa = 0.  # curvature of the armed anchor; 0 = straight (rev 1)
         self._floor_proof_live = None  # () -> bool: worker floor proof is live (enforce)
         self._return_proof_configured = None  # () -> bool: the motion proof can admit at all
         # After a bridge: [odom travel while confidently tracking, (epoch, pose)]; None = none yet.
@@ -69,12 +83,34 @@ class LaneBridgeMixin:
             if last is not None and last[0] == view.epoch and last[1].frame == pose.frame:
                 self._rearm[0] += math.hypot(pose.x-last[1].x, pose.y-last[1].y)
             self._rearm[1] = (view.epoch, pose)
+        n = self._confident_frames
         if abs(st.error) > c.bridge_arm_max_error or abs(st.angular) > c.bridge_arm_max_angular:
-            self._confident_frames = 0  # a curve or a correction: its heading is not the lane's
+            self._straight_from = n  # a curve or a correction: no straight extension (rev 1)
+        kappa = st.angular/st.linear if st.linear > 0 else math.inf
+        self._arm_ticks = [t for t in self._arm_ticks if t[0] > n-c.bridge_arm_frames]
+        self._arm_ticks.append((n, st.error, kappa))
+        if self._rearm is not None and self._rearm[0] < c.bridge_slow_m:
             return
-        if (self._confident_frames >= c.bridge_arm_frames
-                and (self._rearm is None or self._rearm[0] >= c.bridge_slow_m)):
-            self._bridge = (view.epoch, pose, view.corridor)
+        if n-self._straight_from >= c.bridge_arm_frames:
+            kappa = 0.  # rev 1: straight extension
+        elif n >= c.bridge_arm_frames:
+            # Rev 2: a steady arc (steady error and curvature: the body runs parallel to the
+            # lane, so its heading is the lane's tangent). Corrections change the error.
+            _, errors, kappas = zip(*self._arm_ticks)
+            kappa = sum(kappas)/len(kappas)
+            if not (max(errors)-min(errors) <= c.bridge_arm_error_spread
+                    and max(kappas)-min(kappas) <= c.bridge_arm_curvature_tolerance
+                    and abs(kappa) <= c.bridge_arm_max_curvature):
+                return
+        else:
+            return
+        self._bridge, self._bridge_kappa = (view.epoch, pose, view.corridor), kappa
+
+    def _junction_pending(self, now):
+        """A junction instruction other than 'straight', or a sighting within stale_after_s (D-494)."""
+        j, seen = self._junction, self._junction_seen_at
+        return ((j is not None and j.get('action') != 'straight')
+                or (seen is not None and 0 <= now-seen <= self._config.stale_after_s))
 
     def _floor_proof_required(self):
         """The worker floor proof gates the bridge unless it is known not to be live."""
@@ -130,13 +166,14 @@ class LaneBridgeMixin:
                 return None  # an active D-468 return owns the robot
             epoch, anchor, corridor = state
             state = {'epoch': epoch, 'anchor': anchor, 'corridor': corridor,
-                     'last': None, 'travel': 0.}
-        anchor, corridor = state['anchor'], state['corridor']
+                     'last': None, 'travel': 0., 'kappa': self._bridge_kappa}
+        anchor, corridor, kappa = state['anchor'], state['corridor'], state.get('kappa', 0.)
         pose = view.pose
         guard = self._ir_guard(now) if c.ir_guard_enabled else 'clear'
         if (not authority or self._recovery.stuck_id is not None
                 or not (c.bridge_site_no_dropoffs or self._floor_proof_required())
                 or self._bridge_hint not in (None, 'straight') or guard != 'clear'
+                or (kappa and self._junction_pending(now))  # rev 2: no arc into a junction
                 or pose is None or not 0 <= now-pose.received_at <= .3
                 or view.epoch != state['epoch'] or pose.frame != anchor.frame
                 or not c.body_stop_known or self._scan_points is None
@@ -153,7 +190,7 @@ class LaneBridgeMixin:
         linear = min(c.cruise_speed, linear_limit)
         if travel >= c.bridge_coast_m:
             linear *= c.bridge_slow_scale
-        x, y = bridge_target(anchor, corridor, pose, c.bridge_lookahead_m)
+        x, y = bridge_target(anchor, corridor, pose, c.bridge_lookahead_m, kappa)
         if x <= 0 or linear <= 0:
             return None
         angular = 2*linear*y/(x*x+y*y)  # pure pursuit onto the extended centre line

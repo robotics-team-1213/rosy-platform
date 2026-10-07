@@ -196,6 +196,12 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   bridge_arm_max_error: 0.1        # ... and straight: |error| (follower slows < 7 % there)
   bridge_arm_max_angular: 0.08     # ... and |angular| (steering_gain x max_error); all four are
                                    # plausibility gates until D-476 replay justifies them
+  # D-476 rev 2: outside that straight band, arm on a steady arc instead: over the last
+  # bridge_arm_frames the curvature (angular/linear) spreads <= the tolerance (13.4 mm worst
+  # lateral over the 0.23 m reach), the error spreads <= tolerance x cruise_speed / steering_gain,
+  # and |mean| <= the max (lane_graph roundabout radius 0.2514 m). Bridges then follow that arc.
+  bridge_arm_max_curvature: 4.0      # 1/m
+  bridge_arm_curvature_tolerance: 0.5  # 1/m
   # Site acceptance (D-476 rev 1): nothing in CORE sees a drop-off ahead. bridge_enabled also
   # needs ir_guard_enabled, and either control.sensor_adapter enforce (live floor proof) or this
   # true for a site with no drop-off or hole within bridge reach. CORE refuses to start otherwise.

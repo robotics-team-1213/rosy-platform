@@ -181,6 +181,14 @@ class LineFollowConfig:
     bridge_arm_frames: int = 3
     bridge_arm_max_error: float = 0.1
     bridge_arm_max_angular: float = 0.08
+    # D-476 rev 2: a streak outside that straight band arms on a steady arc instead. Over the
+    # last bridge_arm_frames frames the commanded curvature (angular/linear) spreads by at most
+    # bridge_arm_curvature_tolerance (0.5 1/m: worst lateral error 0.5 x (0.25/1.08)^2 / 2 =
+    # 13.4 mm, about half the 23.5 mm play), its mean is within bridge_arm_max_curvature (4.0 1/m:
+    # lane_graph map_v2_fleet roundabout radius 0.2514 m, the tightest lane arc), and the error
+    # spreads by at most bridge_arm_error_spread (derived below).
+    bridge_arm_max_curvature: float = 4.0
+    bridge_arm_curvature_tolerance: float = 0.5
     # D-476 rev 1 site acceptance: nothing in CORE sees a drop-off ahead. Without the live
     # enforce floor proof, an enabled bridge needs this true (the site has no drop-off or hole
     # within bridge reach); the enforce floor proof replaces it later.
@@ -329,12 +337,19 @@ class LineFollowConfig:
                 self.junction_turn_site_accepted and not self.ir_guard_enabled):
             raise ValueError("junction_turn_site_accepted must be a boolean and needs ir_guard_enabled")
 
+    @property
+    def bridge_arm_error_spread(self) -> float:
+        """D-476 rev 2: the error spread that commands bridge_arm_curvature_tolerance at cruise
+        (angular = steering_gain x error), so a steady arc is steady in error and curvature."""
+        return self.bridge_arm_curvature_tolerance*self.cruise_speed/self.steering_gain
+
     def _check_bridge(self) -> None:
         if type(self.bridge_enabled) is not bool:
             raise ValueError("bridge_enabled must be a boolean")
         values = (self.bridge_lookahead_m, self.bridge_coast_m, self.bridge_slow_m,
                   self.bridge_slow_scale, self.bridge_distance_scale, self.bridge_time_margin_s,
-                  self.bridge_arm_confidence, self.bridge_arm_max_error, self.bridge_arm_max_angular)
+                  self.bridge_arm_confidence, self.bridge_arm_max_error, self.bridge_arm_max_angular,
+                  self.bridge_arm_max_curvature, self.bridge_arm_curvature_tolerance)
         if not all(_finite(value) for value in values):
             raise ValueError("line-follow bridge config must be finite")
         if not 0.0 < self.bridge_lookahead_m <= 0.5:
@@ -355,6 +370,9 @@ class LineFollowConfig:
                 and 0.0 < self.bridge_arm_max_angular <= self.max_angular):
             raise ValueError("bridge_arm_max_error must be in (0, 1] and bridge_arm_max_angular "
                              "in (0, max_angular]")
+        if not 0.0 < self.bridge_arm_curvature_tolerance <= self.bridge_arm_max_curvature <= 10.0:
+            raise ValueError("bridge arc config must satisfy 0 < bridge_arm_curvature_tolerance "
+                             "<= bridge_arm_max_curvature <= 10")
         if type(self.bridge_site_no_dropoffs) is not bool:
             raise ValueError("bridge_site_no_dropoffs must be a boolean")
         if self.bridge_enabled and self.bridge_arm_confidence < self.min_confidence:
