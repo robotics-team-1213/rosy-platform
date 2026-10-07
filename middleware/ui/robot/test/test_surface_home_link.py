@@ -8,12 +8,12 @@ behaviour, and the real click-through.
 
 from __future__ import annotations
 
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Thread
 
 import pytest
-from browser_harness import browser_tests_enabled, free_port
+from browser_harness import browser_tests_enabled, safe_http_server
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,7 +52,7 @@ def test_the_home_link_states_live_in_the_shared_stylesheet():
 
 @BROWSER_GATE
 def test_clicking_the_role_surface_brand_opens_the_dashboard_home():
-    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

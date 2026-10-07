@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 import pytest
-from browser_harness import browser_tests_enabled, free_port
+from browser_harness import browser_tests_enabled, safe_listener
 
 playwright_sync = pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
 import uvicorn  # noqa: E402
@@ -332,16 +332,16 @@ def test_shared_action_icon_preserves_reason_and_button_behavior(tablet_page):
 
 @pytest.fixture(scope="module")
 def base_url():
-    config = uvicorn.Config(dev_server.app, host="127.0.0.1",
-                            port=free_port(), log_level="warning")
-    server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
+    listener = safe_listener()
+    server = uvicorn.Server(uvicorn.Config(dev_server.app, log_level="warning"))
+    thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
     thread.start()
     while not server.started:
         thread.join(0.05)
-    yield f"http://127.0.0.1:{config.port}"
+    yield f"http://127.0.0.1:{listener.getsockname()[1]}"
     server.should_exit = True
     thread.join(timeout=5)
+    listener.close()
 
 
 def _click_tool(page, selector):

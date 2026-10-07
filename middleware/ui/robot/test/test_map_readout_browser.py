@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Thread
 
 import pytest
-from browser_harness import browser_tests_enabled, free_port
+from browser_harness import browser_tests_enabled, safe_http_server
 from playwright.sync_api import sync_playwright
 
 
@@ -69,7 +69,7 @@ class _Handler(SimpleHTTPRequestHandler):
 
 
 def test_map_keyboard_crosshair_announces_world_coordinates_and_outside_map_without_sending():
-    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

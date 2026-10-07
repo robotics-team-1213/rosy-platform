@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Thread
 
 import pytest
-from browser_harness import browser_tests_enabled, free_port
+from browser_harness import browser_tests_enabled, safe_http_server
 from playwright.sync_api import sync_playwright
 
 
@@ -34,7 +34,7 @@ class _Handler(SimpleHTTPRequestHandler):
 
 
 def test_waypoint_save_tracks_fresh_pose_and_stays_blocked_after_disconnect():
-    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -106,7 +106,7 @@ def test_short_waypoint_list_sits_under_the_status_line():
     """D-359 US-008 /setup capture: with no saved waypoints the panel kept a large empty area
     between the status line and the list — the empty save/list status lines each took a section
     gap (plus its margins). The list follows the last visible line by one gap and its margins."""
-    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Thread
 
 import pytest
-from browser_harness import browser_tests_enabled, free_port
+from browser_harness import browser_tests_enabled, safe_http_server
 from playwright.sync_api import expect, sync_playwright
 
 
@@ -33,7 +33,7 @@ class _Handler(SimpleHTTPRequestHandler):
 
 
 def test_network_action_reports_rejection_and_success_beside_controls():
-    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -125,7 +125,7 @@ def test_network_action_reports_rejection_and_success_beside_controls():
 
 
 def test_host_actions_stay_locked_during_request_and_status_poll():
-    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -189,7 +189,7 @@ def test_host_actions_stay_locked_during_request_and_status_poll():
 
 
 def test_host_status_cards_render_only_server_evidence_and_block_untrusted_actions():
-    server = ThreadingHTTPServer(("127.0.0.1", free_port()), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

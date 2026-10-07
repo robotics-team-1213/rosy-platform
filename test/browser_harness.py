@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import socket
+from http.server import ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 # Chromium net/base/port_util.cc kRestrictedPorts: page loads to these fail with
@@ -41,8 +42,20 @@ def safe_listener(host: str = "127.0.0.1") -> socket.socket:
     raise RuntimeError("could not allocate a browser-safe local port")
 
 
+def safe_http_server(handler_cls, *, server_cls=ThreadingHTTPServer, host: str = "127.0.0.1"):
+    """`server_cls` serving on an already-bound `safe_listener()` socket (no bind race)."""
+    listener = safe_listener(host)
+    server = server_cls(listener.getsockname(), handler_cls, bind_and_activate=False)
+    server.socket.close()
+    server.socket = listener
+    server.server_address = listener.getsockname()
+    server.server_activate()
+    return server
+
+
 def free_port(host: str = "127.0.0.1") -> int:
-    """A browser-safe free port for servers that bind by number (closed before return)."""
+    """A browser-safe free port, closed before return, so another bind can take it first.
+    Use only for a server API that accepts nothing but a port number."""
     with safe_listener(host) as listener:
         return listener.getsockname()[1]
 

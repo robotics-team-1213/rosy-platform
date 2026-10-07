@@ -21,6 +21,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
 @contextmanager
 def serve(store):
     playwright = pytest.importorskip('playwright.sync_api')
+    # make_server takes only a port number, so this one keeps free_port().
     server = make_server(store, free_port())
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from http.server import BaseHTTPRequestHandler
 import socket
+import threading
+from urllib.request import urlopen
 
 import browser_harness
 
@@ -50,3 +53,27 @@ def test_either_opt_in_name_enables_browser_tests(monkeypatch):
     monkeypatch.setenv("ROSY_BROWSER_TESTS", "0")
     monkeypatch.setenv("ROSY_RUN_BROWSER_TESTS", "0")
     assert not browser_harness.browser_tests_enabled()
+
+
+def test_safe_http_server_serves_on_the_bound_safe_socket():
+    class Hello(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, *args):
+            pass
+
+    server = browser_harness.safe_http_server(Hello)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        port = server.server_address[1]
+        assert port not in browser_harness.CHROMIUM_RESTRICTED_PORTS
+        assert server.socket.getsockname()[1] == port
+        with urlopen(f"http://127.0.0.1:{port}/", timeout=5) as reply:
+            assert reply.read() == b"ok"
+    finally:
+        server.shutdown()
+        server.server_close()
