@@ -154,3 +154,5 @@ host pytest 통과는 DEVICE가 아니고(D-91), 벤치 1대는 FIELD가 아니�
 - 여러 대를 한 번에 옮기는 동작은 두지 않는다. 로봇마다 그 로봇의 화면 코드가 필요하다.
 
 **References:** D-5, D-30, D-31, D-91, D-95, D-190, D-193, D-276, D-302, D-341, D-382, ROSY FLEET SRS REG-001/REG-001a/SEC-201/SEC-203, `site-lan-discovery-profile.md`, `deploy/site/README.md`.
+
+**덧붙임 (2026-10-07):** 등록 로봇의 추가 `stuck_resolver` 자격(`robot_enrollment_credentials`)은 [D-503](D-503-autonomy-chain-facts-and-exception-queue.md) 6항이 이 ADR에 덧붙인다(Proposed).

@@ -1,6 +1,6 @@
-## D-503 자율 사슬은 다섯 층이다 — 모델은 출처와 나이가 붙은 사실만 내고, 규칙이 고르고, CORE가 확인하며, 사람은 예외 큐에서 예외만 본다
+## D-503 자율 사슬은 다섯 층이다 — 모델은 출처와 나이가 붙은 사실만 내고, 규칙이 고르고, CORE가 확인하며, 운용 판단 요청은 Fleet 예외 큐 하나로 오른다
 
-**Status:** Proposed (2026-10-07; 계획 `.omc/plans/2026-10-07-rosy-autonomy-chain-plan.md` 2단계, ralplan 합의). 문서만이다. D-361을 고친다(6항, 등록 로봇의 추가 `stuck_resolver` 자격). 구현은 3단계 `feat/d438-enrolled-resolver-credential`이고, 이 ADR은 그 배포·코드 발급·`--stuck-resolver` 켜기·D-407 local recovery 켜기를 승인하지 않는다. CORE·제어 코드·프로토콜 필드·`/cmd_vel` 경로·안전 계층(D-430)은 바꾸지 않는다.
+**Status:** Proposed (2026-10-07; 계획 `.omc/plans/2026-10-07-rosy-autonomy-chain-plan.md` 2단계, ralplan 합의). 문서만이다. Proposed D-361에 6항을 덧붙인다(등록 로봇의 추가 `stuck_resolver` 자격). 구현은 3단계 `feat/d438-enrolled-resolver-credential`이고, 이 ADR은 그 배포·코드 발급·`--stuck-resolver` 켜기·D-407 local recovery 켜기를 승인하지 않는다. CORE·제어 코드·프로토콜 필드·`/cmd_vel` 경로·안전 계층(D-430)은 바꾸지 않는다.
 
 잇는 결정: [D-438](D-438-fleet-stuck-resolver-rules-model-human.md)(판단기 규칙 → 모델 → 사람) · [D-492](D-492-d438-vision-tier-local-qwen-ai-pc-gated.md)(비전 단계, 이 ADR과 같은 날 개정) · [D-493](D-493-fleet-console-map-first-layout.md)(예외 규칙 하나) · [D-495](D-495-lane-junction-bounded-turn-and-junction-defaults.md)·[D-498](D-498-junction-turn-site-basis.md)(현장이 정하고 로봇이 확인) · [D-361](D-361-site-console-enrolls-robot-by-screen-code.md)(등록) · [D-407](D-407-lane-stuck-recovery-console-then-local.md)(막힘 질문)
 
@@ -34,7 +34,7 @@
    - `MapPose` 대응: `value` = (`x`, `y`, `yaw`), `source` = `sighting`|`bridged`, `age_s`, `state` = `LOCALIZED`|`DEGRADED`|`UNKNOWN`. `observed_at`은 MapPose에서는 앵커 sighting의 `captured_at`이다. 새 사실 공급자는 `observed_at`을 명시한다.
    - 규칙은 `state`가 쓸 수 있는 값이 아니거나 `age_s`가 그 규칙의 한도를 넘은 사실을 쓰지 않는다. 그런 막힘은 사실이 없는 것으로 보고 예외 큐로 간다.
    - 일반 사실 클래스나 서비스는 지금 만들지 않는다. 필드 이름만 정한다. 두 번째 소비자가 생기면 `operations/world`에 계약을 둔다.
-3. **사람이 보는 곳은 예외 큐 하나다(D-493 `attentionItems`).**
+3. **운용 판단 요청이 오르는 Fleet 표면은 예외 큐 하나다(D-493 `attentionItems`). 로봇 화면의 직접 처리는 D-407대로 남는다.**
    - 자동으로 풀린 막힘은 에피소드 기록(7항)에만 남고 큐에 오르지 않는다.
    - 큐에 오르는 것: 판단기가 `ESCALATE`한 막힘(D-438 상승 사유와 함께), 오래된 사실(4단계 `fix/d493-attention-stale-state`가 상태 나이를 붙인다), 지금의 D-493 항목.
    - 새 알림 화면이나 별도 사람 승인 화면을 만들지 않는다. 학습 라벨 검수(D-462·D-475)는 운용 큐가 아니라 오프라인 작업이다.
@@ -51,14 +51,14 @@
    | judge(L0 IoU 등) | 오프라인 learning | 검수 대기열 순서, "불일치" 표시 | D-465 §5, D-475 §7 |
 
    어느 모델도 막힘 답, 라벨 승인, 평가 정답, Motion Intent, 이동·정지 명령을 내지 않는다(D-326 §2, D-392 §4, D-442의 금지 항목 3).
-6. **D-361 개정: 등록 로봇은 `stuck_resolver` 자격을 하나 더 가질 수 있다.**
+6. **Proposed D-361에 덧붙임: 등록 로봇은 `stuck_resolver` 자격을 하나 더 가질 수 있다.**
    - 새 표 `robot_enrollment_credentials`(`robot_id` → `robot_enrollments(robot_id)` `ON DELETE CASCADE`, `role`, `state`, `token_id`, `expires_at`, `fleet_expires_at`, `warn_at`, `ciphertext`, `created_at`, PRIMARY KEY(`robot_id`, `role`))에 둔다. operator 자격은 `robot_enrollments`에 그대로 둔다.
    - `stuck_resolver` 코드는 같은 `robot_id`의 operator 등록이 이미 있을 때만 받는다. `administrator` 코드는 계속 거절한다.
    - 봉인은 operator(`rest`)와 다른 slot `resolver`를 쓴다. 이 자격의 401은 그 행만 `needs_new_code`로 바꾸고 operator 행과 로봇 게이트는 건드리지 않는다.
    - 해지는 operator 토큰과 resolver 토큰을 둘 다 로그아웃 시도한다(resolver 쪽은 최선 노력).
    - 판단기는 클라이언트 목록을 막힘마다 다시 읽는다. 시작 뒤 등록한 자격도 쓰인다. `robots.yaml`의 `resolver_token`이 같은 로봇에 있으면 그쪽이 우선이다.
    - 토큰 자동 갱신은 하지 않는다(CORE 엔드포인트 없음). 7일(168 h)마다 사람이 다시 발급한다.
-7. **막힘 에피소드 기록.** Fleet은 막힘마다 한 행을 `fleet_line_stuck_episodes`(`fleet_line_stuck_answers`와 같은 `--tasks-db` 파일, 1단계 `feat/d407-stuck-episode-log`)에 남긴다. 열: `robot_id`, `stuck_id`(둘이 UNIQUE), `source`(`fleet_poll`, 폴링 해상도 ±1 s), `cause`(`obstacle_ahead`|`lane_lost`), `phase_at_open`, `local_enabled_at_open`, `trip_busy_at_open`, `peer_ahead_at_open`, `opened_at`, `closed_at`, `held_s_max`, `attempts_max`, `close_reason`(`cleared`|`replaced`|`left_roster`|`fleet_restart`), `resolved_by`(`rule`|`human`|`model`|`rule_unconfirmed`|NULL), `resolved_principal`, `last_answer_tier`, `escalation_code`, `pose_x`, `pose_y`, `pose_yaw`, `pose_state`, `pose_age_s`. 자동화율과 아래 트리거는 이 표로만 잰다.
+7. **막힘 에피소드 기록.** Fleet은 막힘마다 한 행을 `fleet_line_stuck_episodes`(`fleet_line_stuck_answers`와 같은 `--tasks-db` 파일, 1단계 `feat/d407-stuck-episode-log`)에 남긴다. 열: `robot_id`, `stuck_id`(둘이 UNIQUE), `source`(`fleet_poll`, 폴링 해상도 ±1 s), `cause`(`obstacle_ahead`|`lane_lost`), `phase_at_open`, `local_enabled_at_open`, `trip_busy_at_open`, `peer_ahead_at_open`, `opened_at`, `closed_at`, `held_s_max`, `attempts_max`, `close_reason`(`cleared`|`replaced`|`left_roster`|`fleet_restart`), `resolved_by`(`rule`|`human`|`model`|`<tier>_unconfirmed` 곧 `rule_unconfirmed`·`human_unconfirmed`(CORE 수락 여부를 모르는 답)|NULL), `resolved_principal`, `last_answer_tier`, `escalation_code`, `pose_x`, `pose_y`, `pose_yaw`, `pose_state`, `pose_age_s`. 자동화율과 아래 트리거는 이 표로만 잰다.
 8. **데이터가 먼저다.** 순서: (1) 에피소드 기록 → (2) 이 ADR과 D-492 개정 → (3-0) 커버리지 판단 → (3) 등록 로봇 resolver 자격과 1단계 규칙 켜기(로봇 하나씩) → (4) 큐 신선도 → (5) 게이트 뒤 지도 투영 라벨 초안(D-497 Accepted, trip 밖 MapPose 기록). 실제 막힘 분포를 보기 전에는 2단계 모델도 일반 사실 계약도 만들지 않는다.
    - 3-0: `tier1_share`(동료가 앞에 있는 앞 장애물 + local recovery가 켜진 동료 없는 막힘, trip이 아닌 막힘 수로 나눔, 상한 추정)와 `obstacle_upper_bound`가 둘 다 0.05 미만이면, 3단계는 로봇별 D-407 `recovery_local_enabled` 켜기(별도 사용자 승인) 없이는 사람 일을 줄이지 못한다고 판정한다.
 9. **VLM 정체 사실의 트리거.** 에피소드가 3 운행일 이상 쌓이고 3단계를 켠 뒤, 아래 `share` ≥ 0.20이고 `n` ≥ 20이며, 그 앞 장애물 표본 10건 이상을 사람이 보아 정체를 알면 규칙이 다른 답을 냈을 경우가 절반 이상일 때만 D-492의 구현을 연다.
