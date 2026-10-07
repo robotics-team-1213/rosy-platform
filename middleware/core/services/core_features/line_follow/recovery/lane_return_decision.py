@@ -66,6 +66,13 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
         kind='retrace' if self._return_controller.phase=='retrace' else 'return'
         return self.motion_admitted(now,decision.linear,decision.angular,kind)
 
+    def _feed_return_trail(self, now):
+        """Every manager tick, holds included: odom reaches the D-468 trail even while a
+        non-local HOLD (obstacle_ahead, stuck, camera quality) leaves the controller idle."""
+        if self._return_controller is not None and self._mode is LineFollowMode.CAMERA_LINE:
+            view=self.return_evidence(now=now)
+            self._return_controller.observe(now,view.pose,view.epoch)
+
     def _apply_lane_return(self, now, decision):
         # D-476: a bridge continues only if this tick bridges again; any return path that
         # does not (obstacle, stuck, mode) hands it back to D-468 once. An armed anchor lives
