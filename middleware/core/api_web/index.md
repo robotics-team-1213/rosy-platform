@@ -30,8 +30,8 @@
 
 ## 최근 기록
 
+- 2026-10-07 · uncommitted · docs(api): D-494 6 v1.119
 - 2026-10-07 · uncommitted · docs(api): D-498 v1.118
 - 2026-10-07 · uncommitted · fix(api): D-495 검토 L6 junction 수동 해제와 409 코드
 - 2026-10-07 · uncommitted · feat(api): D-495 junction turn_deg·advance_m
 - 2026-10-07 · uncommitted · feat(api): D-494 POST /api/v1/line-follow/junction
-- 2026-10-07 · uncommitted · fix(api): D-494 검토 — 잘못된 robot.model이 capabilities를 500으로 만들지 않는다

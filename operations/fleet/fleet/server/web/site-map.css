@@ -29,6 +29,7 @@ a { color: var(--ink); }
 #site-map-svg .label { fill: var(--ink); font: var(--text-micro) var(--mono); pointer-events: none; }
 #site-map-svg .plan { fill: none; stroke: var(--series-goal); stroke-width: 6px; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 #site-map-svg .target { fill: var(--series-goal); pointer-events: none; }
+#site-map-svg .teach { fill: none; stroke: var(--series-secondary); stroke-width: 4px; stroke-dasharray: 2 4; stroke-linecap: round; pointer-events: none; }
 #trip-actions { margin: 0; padding-inline-start: var(--space-5); }
 .estop { min-width: var(--target-irreversible); min-height: var(--target-irreversible); width: auto; height: auto; display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; }
 .estop .ui-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); flex: none; }
