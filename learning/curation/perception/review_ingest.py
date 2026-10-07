@@ -14,6 +14,10 @@ import review_masks
 from mcap_proof import prove_frames
 
 
+OTHER_CLASS_SET = ('초안 마스크가 다른 클래스셋으로 만들어졌습니다 ({}). 초안은 같은 클래스셋의 것만 '
+                   '가져올 수 있습니다. 초안 없이 가져오거나 초안과 같은 classes.yaml을 지정하세요.')
+
+
 def bounded(path, limit=32 * 1024 * 1024):
     path = Path(path)
     if path.stat().st_size > limit:
@@ -132,7 +136,7 @@ def import_frames(store, body):
                 raise ValueError('draft mask digest required')
             if set(ref) == {'indexed_png', 'sha256', 'classes_sha256'}:
                 if ref['classes_sha256'] != binding['sha256']:
-                    raise ValueError('indexed draft classes hash differs')
+                    raise ValueError(OTHER_CLASS_SET.format('indexed draft classes hash differs'))
                 draft = bounded(edge_review.bound(catalog.parent, ref['indexed_png']))
                 if review_masks.sha(draft) != ref['sha256']:
                     raise ValueError('draft mask hash differs')
@@ -147,7 +151,10 @@ def import_frames(store, body):
                         raise ValueError('draft mask hash differs')
                     labelmap_raw = archive.read('labelmap.txt')
                     labelmap_sha = review_masks.sha(labelmap_raw)
-                    mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
+                    try:
+                        mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
+                    except build.BuildError as exc:   # labelmap names another class set
+                        raise ValueError(OTHER_CLASS_SET.format(exc)) from exc
             else:
                 raise ValueError('draft mask reference must be indexed PNG or color ZIP')
             indexed = cv2.imdecode(np.frombuffer(mask, np.uint8), cv2.IMREAD_UNCHANGED)

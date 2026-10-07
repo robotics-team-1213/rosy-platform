@@ -232,7 +232,7 @@ Ollama `qwen3-vl:8b-instruct`는 모델 PC의 `127.0.0.1:11434`에서만 사용�
 python learning/curation/perception/review_app.py --state X:/DevTemp/<name>/state --source <source.jsonl> --human <human.jsonl> --images <image-root> --object-classes <data.yaml> --port 8767
 ```
 
-픽셀 `classes.yaml`은 항목마다 선택 항목 `display`를 둘 수 있다. 차선 모델(왼쪽/오른쪽 차선, 횡단보도, 과속방지턱)용 파일은 `learning/curation/perception/classes/lane_lr5.yaml`이다. `/catalog`의 「클래스 파일 경로 (classes.yaml)」 칸에 이 파일 경로를 넣는다. 이 칸은 `/api/import` 요청 본문의 `classes`로 간다. 칸을 비우면 초안 마스크 zip 옆이나 카탈로그 옆의 `classes.yaml`을 쓴다. 초안 마스크가 없는 카탈로그도 작업 공간에 아직 픽셀 클래스가 없으면 카탈로그 옆 `classes.yaml`로 묶는다. 이미 픽셀 클래스가 묶인 작업 공간에서는 빈 칸이 기존 클래스를 그대로 쓴다.
+픽셀 `classes.yaml`은 항목마다 선택 항목 `display`를 둘 수 있다. 차선 모델(왼쪽/오른쪽 차선, 횡단보도, 과속방지턱)용 파일은 `learning/curation/perception/classes/lane_lr5.yaml`이다. `/catalog`의 「클래스 파일 경로 (classes.yaml)」 칸에 이 파일 경로를 넣는다. 이 칸은 `/api/import` 요청 본문의 `classes`로 간다. 칸을 비우면 초안 마스크 zip 옆이나 카탈로그 옆의 `classes.yaml`을 쓴다. 초안 마스크가 없는 카탈로그도 작업 공간에 아직 픽셀 클래스가 없으면 카탈로그 옆 `classes.yaml`로 묶는다. 이미 픽셀 클래스가 묶인 작업 공간에서는 빈 칸이 기존 클래스를 그대로 쓴다. 초안 마스크는 같은 클래스셋으로 만든 것만 가져올 수 있다. labelmap 이름이나 indexed 초안의 classes sha가 묶을 클래스셋과 다르면 등록 전체를 거부하고, 화면은 「초안 마스크가 다른 클래스셋으로 만들어졌습니다」라고 알린다. 이때는 초안 없이 가져오거나 초안과 같은 `classes.yaml`을 지정한다.
 
 주행 가능 영역을 검수할 때는 `learning/curation/perception/classes/lane_lr6_drivable.yaml`을 **새 `--state` 작업 공간**의 `/api/import` `classes`로 지정한다. 기존 0~4번은 그대로이고 5번 `drivable`이 추가된다. v12 작업 공간에 이 파일을 다시 바인딩하면 마스크의 뜻을 바꾸게 되므로 서버가 거절한다. 새 작업 공간에는 원본 검증 카탈로그를 다시 가져오고, 기존 픽셀 승인이나 초안을 승인 상태로 복사하지 않는다. 새 마스크는 검수 대기에서 시작하며 저장·전체 확인·픽셀 승인을 거쳐야 학습 입력으로 내보낼 수 있다. `drivable`은 D-475의 화면에 보이는 흰 경계선 안쪽 도로 바닥 전체이며, 차선 칠·도로 밖 바닥·장애물에 가린 화소와 구분한다. 기존 5채널 모델의 클래스 순서를 그대로 둔 채 6클래스 정답으로 학습하거나 승격하지 않는다.
 

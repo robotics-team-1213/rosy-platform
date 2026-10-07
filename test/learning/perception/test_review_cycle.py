@@ -463,3 +463,23 @@ def test_missing_classes_file_is_a_clean_refusal(tmp_path):
     classes.unlink()
     with pytest.raises(ValueError, match='verified classes.yaml required'):
         review_ingest.import_frames(store, {'path': str(folder)})
+
+
+
+def test_drafts_from_another_class_set_are_refused_in_plain_words(tmp_path):
+    import zipfile
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    png = cv2.imencode('.png', np.full((24, 32, 3), 90, np.uint8))[1].tobytes()
+    archive = folder / 'drafts.zip'
+    with zipfile.ZipFile(archive, 'w') as out:   # labelled with the old floor/lane_line set
+        out.writestr('labelmap.txt', 'floor:90,90,90::\nlane_line:255,255,255::\n')
+        out.writestr('SegmentationClass/0.png', png)
+    rows[0]['mask'] = {'zip': str(archive), 'entry': 'SegmentationClass/0.png',
+                       'sha256': hashlib.sha256(png).hexdigest()}
+    (folder / 'verified-inputs.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in rows))
+    lane = Path(__file__).resolve().parents[1] / 'classes' / 'lane_lr5.yaml'
+    with pytest.raises(ValueError, match='다른 클래스셋') as refused:
+        review_ingest.import_frames(store, {'path': str(folder), 'classes': str(lane)})
+    assert 'floor' in str(refused.value) and '초안 없이' in str(refused.value)
+    assert review_masks.classes(store) is None and len(store.list_frames()) == 2
