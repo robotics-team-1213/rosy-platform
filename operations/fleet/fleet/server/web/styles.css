@@ -138,6 +138,7 @@ body {
 /* 관제 토큰 입력 — 루프백 밖 바인드에서는 서버가 토큰을 강제한다(cli.run_console).
    얼굴은 공용 input.ui-field, 잠김은 aria-invalid다(D-359 §5.1). 여기는 폭만 정한다. */
 .token { width: 11rem; }
+#console-token[hidden], #token-save[hidden] { display: none; }
 
 /* 화면 테마(D-359 §2.5) — 이 브라우저의 선호. 누름은 /common/theme.js가 받는다.
    이름표는 한 줄이다 — 1366px에서 "화면 테마"가 두 줄로 접히던 것을 막는다. */
