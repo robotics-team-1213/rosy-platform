@@ -89,6 +89,10 @@ function render() {
     const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id,
       class: `place ${place.kind}${state.selected?.place === place.id ? ' selected' : ''}`}, svg);
     el('title', {}, dot).textContent = `${place.name} (${PLACE_KIND_LABEL[place.kind] || place.kind})`;
+    if (place.kind === 'start') {
+      el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
+        transform: `translate(${px} ${py}) rotate(${-place.yaw * 180 / Math.PI})`}, svg);
+    }
     el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = place.name;
   }
   if (state.point && $('map-source').value === 'active') {

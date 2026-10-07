@@ -3,6 +3,9 @@
 
 # bringup (Python package)
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Bringup node and ROS-independent motor/deadman/Dynamixel helpers.

@@ -3,6 +3,9 @@
 
 # Pinky Pro deployment
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Pinky Pro deployment inputs for Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy (D-161).

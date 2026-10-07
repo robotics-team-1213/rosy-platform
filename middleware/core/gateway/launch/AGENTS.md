@@ -3,6 +3,9 @@
 
 # launch
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Launch file for the `core` node.

@@ -3,6 +3,9 @@
 
 # decision
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 Shared judgment library (D-228). A product supplies an allowed action set and a deterministic rule. The result is an action id or a failure status. It is not a velocity, and it is not a safety override.

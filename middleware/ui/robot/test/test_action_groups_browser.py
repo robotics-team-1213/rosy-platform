@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import os
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from threading import Thread
 
 import pytest
+from browser_harness import browser_tests_enabled, safe_http_server
 from playwright.sync_api import sync_playwright
 
 
@@ -16,7 +16,7 @@ REPO_ROOT = ROOT.parents[2]
 WEB_COMMON = (ROOT.parents[2] / "shared") / "web"
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("ROSY_RUN_BROWSER_TESTS") != "1",
+    not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
 
@@ -161,7 +161,7 @@ class _Handler(SimpleHTTPRequestHandler):
 
 
 def test_action_group_keeps_only_the_selected_tab_in_the_tab_order():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -189,7 +189,7 @@ def test_action_group_keeps_only_the_selected_tab_in_the_tab_order():
 
 
 def test_group_switch_sends_terminal_zero_before_unmount_and_never_resumes_motion():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -252,7 +252,7 @@ def test_group_switch_sends_terminal_zero_before_unmount_and_never_resumes_motio
 
 
 def test_failed_terminal_zero_keeps_the_current_action_group_visible():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -275,7 +275,7 @@ def test_failed_terminal_zero_keeps_the_current_action_group_visible():
 
 
 def test_active_group_operation_blocks_switch_until_terminal():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -302,7 +302,7 @@ def test_active_group_operation_blocks_switch_until_terminal():
 
 
 def test_unmount_all_keeps_action_group_when_terminal_zero_fails():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -324,7 +324,7 @@ def test_unmount_all_keeps_action_group_when_terminal_zero_fails():
 
 
 def test_real_operation_panels_block_switch_during_start_and_while_active():
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

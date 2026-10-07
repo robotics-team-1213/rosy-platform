@@ -108,7 +108,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                               "the store has none (stored in --tasks-db, else memory)")
     console.add_argument("--site-config", default=None, type=Path,
                          help="site YAML; its fleet.routing section sets the D-490 planner costs, "
-                              "fleet.map_pose the D-494 trip map pose limits")
+                              "fleet.map_pose the D-494 trip map pose limits, "
+                              "fleet.lane_compliance the D-511 lane watch thresholds")
     console.add_argument("--no-localization-service", dest="localization_service",
                          action="store_false", default=True,
                          help="D-395: do not run the Fleet localization service (on by default)")
@@ -562,7 +563,8 @@ def run_console(args: argparse.Namespace) -> None:
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
-                     identity_config=identity_config)
+                     identity_config=identity_config,
+                     lane_compliance_config=_lane_compliance_config(args))
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
           f"({len(console.robot_ids)} robots{signals_note})",
@@ -630,6 +632,21 @@ def _map_pose_config(args):
         return MapPoseConfig.from_mapping((site_config.get("fleet") or {}).get("map_pose"))
     except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"map_pose config: {exc}")
+
+
+def _lane_compliance_config(args):
+    """D-511 2: the site YAML's ``fleet.lane_compliance`` thresholds; provisional defaults without."""
+    import yaml
+
+    from fleet.localization.lane_compliance import LaneComplianceConfig
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        return LaneComplianceConfig.from_mapping((site_config.get("fleet") or {}).get("lane_compliance"))
+    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"lane_compliance config: {exc}")
 
 
 def _relax_retired_sighting_targets(sources, *, known: set, retired: set):

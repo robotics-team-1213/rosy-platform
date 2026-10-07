@@ -8,7 +8,7 @@
 
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines, GRID_STEP_M,
-  streamEvidence,
+  streamEvidence, mapUpTurn, quarterTurn, cameraScreenToMap,
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
@@ -307,8 +307,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    // 캔버스 y 가 아래로 자라므로 sin 은 뒤집는다.
-    ctx.lineTo(cx + Math.cos(s.yaw) * size * 1.4, cy - Math.sin(s.yaw) * size * 1.4);
+    // 방향도 같은 toPoint 로 그린다 — 카메라 영상(호모그래피·D-513 7 회전)에서도 지도 방향이 맞다.
+    const ahead = toPoint(s.x + 0.1 * Math.cos(s.yaw), s.y + 0.1 * Math.sin(s.yaw));
+    const span = Math.hypot(ahead.x - cx, ahead.y - cy) || 1;
+    ctx.lineTo(cx + (ahead.x - cx) / span * size * 1.4, cy + (ahead.y - cy) / span * size * 1.4);
     ctx.stroke();
     ctx.restore();
     drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "delayed" ? "warn" : undefined);
@@ -394,18 +396,29 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 박스를 아직 모르면(숨김 등) 사각형 종횡비로 대신한다.
     const rect = canvas.getBoundingClientRect();
     const fallback = canvasSizeFor(bounds, 800);
-    const width = cameraOn ? cameraFrame.image.naturalWidth : rect.width > 0 ? rect.width : fallback.width;
-    const height = cameraOn ? cameraFrame.image.naturalHeight : rect.height > 0 ? rect.height : fallback.height;
+    // D-513 7: 실영상은 지도 +y 가 위로 오게 돌려 그리고(mapUpTurn), 지도 점도 같은 회전을 거친다.
+    const turn = cameraOn ? quarterTurn(mapUpTurn(calibration),
+      cameraFrame.image.naturalWidth, cameraFrame.image.naturalHeight) : null;
+    const width = cameraOn ? turn.width : rect.width > 0 ? rect.width : fallback.width;
+    const height = cameraOn ? turn.height : rect.height > 0 ? rect.height : fallback.height;
     const dpr = cameraOn ? 1 : window.devicePixelRatio || 1;
+    // 실영상 위 클릭(시작점 선택)은 그린 것과 같은 회전·보정을 거꾸로 거친다.
+    const pickRef = { x: (bounds.min_x + bounds.max_x) / 2, y: (bounds.min_y + bounds.max_y) / 2 };
+    view.cameraPick = cameraOn ? (x, y) => cameraScreenToMap(calibration.map_to_image, turn, x, y, pickRef) : null;
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
     const t = fitTransform(bounds, width, height, 32);
     const toPx = cameraOn
-      ? (x, y) => { const p = projectCamera(calibration.map_to_image, x, y); return { x: p?.[0] ?? NaN, y: p?.[1] ?? NaN }; }
+      ? (x, y) => { const p = projectCamera(calibration.map_to_image, x, y); return p ? turn.point(p[0], p[1]) : { x: NaN, y: NaN }; }
       : (x, y) => { const p = project(t, x, y); return { x: p.px, y: p.py }; };
-    if (cameraOn) ctx.drawImage(cameraFrame.image, 0, 0, width, height);
+    if (cameraOn) {
+      ctx.save();
+      ctx.transform(...turn.matrix);
+      ctx.drawImage(cameraFrame.image, 0, 0, cameraFrame.image.naturalWidth, cameraFrame.image.naturalHeight);
+      ctx.restore();
+    }
     else {
       ctx.fillStyle = css("--ground-deep");
       ctx.fillRect(0, 0, width, height);
@@ -479,8 +492,16 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // 축과 원점: 원점이 보이면 그 자리에, 아니면 범위 왼쪽 아래에 x/y 방향만 그린다.
     const originVisible = bounds.min_x <= 0 && bounds.max_x >= 0
       && bounds.min_y <= 0 && bounds.max_y >= 0;
-    const axisAt = originVisible ? toPx(0, 0) : toPx(bounds.min_x + 0.1, bounds.min_y + 0.1);
+    const axisOrigin = originVisible ? [0, 0] : [bounds.min_x + 0.1, bounds.min_y + 0.1];
+    const axisAt = toPx(...axisOrigin);
     const axisLen = Math.min(t.scale * 0.4, width / 8);
+    // 축은 지도 방향으로 그린다 — 실영상(호모그래피·회전)에서도 x/y 가 실제 지도 축을 가리킨다.
+    const axisTip = (dx, dy) => {
+      const p = toPx(axisOrigin[0] + dx, axisOrigin[1] + dy);
+      const span = Math.hypot(p.x - axisAt.x, p.y - axisAt.y) || 1;
+      return { x: axisAt.x + (p.x - axisAt.x) / span * axisLen, y: axisAt.y + (p.y - axisAt.y) / span * axisLen };
+    };
+    const xTip = axisTip(0.1, 0), yTip = axisTip(0, 0.1);
     ctx.save();
     ctx.lineWidth = 2;
     ctx.font = labelFont;
@@ -489,13 +510,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.fillStyle = css("--ink");
     ctx.beginPath();
     ctx.moveTo(axisAt.x, axisAt.y);
-    ctx.lineTo(axisAt.x + axisLen, axisAt.y);
+    ctx.lineTo(xTip.x, xTip.y);
     ctx.moveTo(axisAt.x, axisAt.y);
-    ctx.lineTo(axisAt.x, axisAt.y - axisLen);
+    ctx.lineTo(yTip.x, yTip.y);
     ctx.stroke();
-    ctx.fillText("x", axisAt.x + axisLen + 4, axisAt.y);
     ctx.textAlign = "center";
-    ctx.fillText("y", axisAt.x, axisAt.y - axisLen - 10);
+    ctx.fillText("x", xTip.x + (xTip.x - axisAt.x) / axisLen * 10, xTip.y + (xTip.y - axisAt.y) / axisLen * 10);
+    ctx.fillText("y", yTip.x + (yTip.x - axisAt.x) / axisLen * 10, yTip.y + (yTip.y - axisAt.y) / axisLen * 10);
     if (originVisible) {
       ctx.beginPath();
       ctx.arc(axisAt.x, axisAt.y, 4, 0, Math.PI * 2);
@@ -763,6 +784,27 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     cameraFrame = frame?.state === "live" ? frame : null;
     if (!view.map && view.siteMap) draw();
   }
+  // D-513 7: 크게 보기·썸네일도 이 카메라 보정의 지도 방향으로 돌린다. 펴 놓은 미리보기도
+  // 모서리 순서를 지켜 펴므로 같은 회전이다. 보정이 없으면 0 — 받은 URL 그대로다.
+  // 실영상과 같은 조건으로 고른다: 지금 지도의 보정이고, 원본 프레임이면 크기도 같아야 한다.
+  function frameTurn(frame) {
+    const maps = (view.siteMap?.maps || []).map((map) => map.map_id);
+    return mapUpTurn(calibrations.find((row) => row.source_id === frame.source && maps.includes(row.map_id)
+      && (frame.rectified || (row.image?.width === frame.image?.naturalWidth
+        && row.image?.height === frame.image?.naturalHeight))));
+  }
+  function turnedUrl(frame) {
+    const image = frame.image;
+    const rot = frameTurn(frame);
+    if (!rot || !image?.naturalWidth) return frame.url;
+    const turn = quarterTurn(rot, image.naturalWidth, image.naturalHeight);
+    const canvas = document.createElement("canvas");
+    canvas.width = turn.width; canvas.height = turn.height;
+    const ctx = canvas.getContext("2d");
+    ctx.transform(...turn.matrix);
+    ctx.drawImage(image, 0, 0);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  }
   function bindCamera(visionView) {
     // The calibrated map draws the same authenticated Vision frame; Fleet does not relay image bytes.
     // D-493: the raw frame shows in one place at a time — the rail thumbnail, or the map stage
@@ -775,20 +817,34 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
     };
     setLive(null);
+    // 돌린 조감도는 보일 때만 다시 그린다 — 숨은 동안 프레임마다 JPEG 을 만들지 않는다.
+    let lastFrame = null;
+    const shown = () => stage.dataset.view === "camera" || ["auth", "unavailable", "loading"].includes(stage.dataset.mapState);
+    const showFrame = () => setLive(lastFrame && (shown() ? turnedUrl(lastFrame) : lastFrame.url));
+    // 지도 상태가 바뀌어 조감도가 드러나면 다음 프레임을 기다리지 않고 돌린 그림으로 바꾼다.
+    scope.subscribe(() => {
+      const observer = new MutationObserver(showFrame);
+      observer.observe(stage, { attributes: true, attributeFilter: ["data-map-state"] });
+      return () => observer.disconnect();
+    });
     scope.listen(toggle, "click", () => {
       const large = stage.dataset.view !== "camera";
       stage.dataset.view = large ? "camera" : "map";
       toggle.setAttribute("aria-pressed", String(large));
+      showFrame();
     });
     let cancelMapCameraExpiry = () => {};
     scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
       cancelMapCameraExpiry();
       if (frame.state !== "live" || !Number.isFinite(frame.ageMs) || frame.ageMs < 0 || frame.ageMs > 3000) {
-        setCameraFrame(null); setLive(null); return;
+        lastFrame = null; setCameraFrame(null); setLive(null); return;
       }
+      lastFrame = frame;
+      // 레일 썸네일도 같은 회전 — 모서리 편집 중에는 CSS 가 원본으로 둔다(styles.css .vision-frame[data-turn]).
+      frame.image?.closest?.(".vision-frame")?.setAttribute("data-turn", String(frameTurn(frame)));
       setCameraFrame(frame);
-      setLive(frame.url);
-      cancelMapCameraExpiry = scope.timeout(() => { setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
+      showFrame();
+      cancelMapCameraExpiry = scope.timeout(() => { lastFrame = null; setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
     })));
   }
   return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence, setCameraFrame, bindCamera };

@@ -115,8 +115,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        42_184,
-        "split: re-judged at 42184 on 2026-10-07: D-407 episode recording and routes, D-493 "
+        42_945,
+        "split: re-judged at 42945 on 2026-10-08: D-511 M0 lane compliance (fleet/localization/"
+        "lane_compliance.py observe-only judgement, server/lane_compliance_service.py worker, "
+        "cli/app/roster wiring) stays with the existing Fleet localization and server owners; no "
+        "new owner, the site-map web/server split plan and +150 allowance remain unchanged. "
+        "Previously re-judged at 42546 on 2026-10-08: D-509 display readback and D-513 start place "
+        "and camera rotation stay with the Fleet server and site-map web owners. "
+        "Previously re-judged at 42376 on 2026-10-07: D-499 link status uses the existing "
+        "Fleet gather and display owner; D-493 stale-age rows use that same snapshot. The "
+        "site-map web/server split plan and +150 allowance remain unchanged. "
+        "Previously re-judged at 42184 on 2026-10-07: D-407 episode recording and routes, D-493 "
         "stale-state age, D-501 shared console tabs, camera map inspection and development console "
         "entry remain with their existing Fleet server and web owners. Keep the site-map web/server "
         "split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and the +150 allowance. "
@@ -513,8 +522,11 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1202,
-        "accept: re-judged at 1202 on 2026-10-07: D-493 records each gathered state observation "
+        1225,
+        "accept: re-judged at 1225 on 2026-10-07: D-499 adds a read-only link class "
+        "to each gathered robot row using the existing address-status snapshot; provider "
+        "failure falls back to an empty status map. No goal, stop, or admission path changed. "
+        "The zero growth allowance remains. Previously re-judged at 1202: D-493 records each gathered state observation "
         "time in this owner's robot row for the stale-state display; keep zero growth allowance. "
         "Previously independently re-judged at 1198 on 2026-10-05: CAP-001 presentation cache "
         "and live dispatch fences add 39 lines beside this owner's mutable roster and goal "
@@ -597,8 +609,26 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core/services/core_features/line_follow/recovery": (
-        2_320,
-        "accept: Independently re-judged 2026-10-07. Own size unit per "
+        # PENDING RE-JUDGE (combined D-507 6+2-5, re-judge required by reviewer): 2713 is the merged
+        # count after feat/d507-motion-admitted-site-floor (2491) and feat/d507-junction-approach
+        # (2537) both landed; it is over 2491 + 150, so an independent re-judge must replace this note.
+        2_713,
+        "accept: PENDING independent re-judge at the merged 2713 (combined D-507 6+2-5, re-judge "
+        "required by reviewer; recorded by the landing executor 2026-10-08, not a judgement). "
+        "Branch verdicts: junction-approach re-judged 2026-10-08 at 2537 (architect agent, "
+        "read-only): D-507 items 3-4 junction_approach JunctionApproachMixin (expected window and "
+        "approach to the pivot, mixed into JunctionMixin, math only), the approach twist goes out "
+        "through _maneuver_twist, CORE CommandManager stays the final cmd_vel publisher (D-18). "
+        "Independently re-judged 2026-10-08 at 2491 for D-507 6 (architect, read-only): "
+        "recovery/motion_admit.py is the one motion_admitted admission (D-400 enforce basis or the "
+        "site_floor_map_id site basis, plus the reverse D-422 body sweep the D-468 retrace needs), "
+        "a LineFollowManager mixin under the single manager lock and generation with no own lock, "
+        "thread, store or publisher; it replaced the separate checks in junction _turn_basis, "
+        "lane_bridge and lane_return_decision (branch net +96), so no split is warranted; every file "
+        "below 600 and the sibling core_features unit has no room. Condition: whichever of this and "
+        "feat/d507-junction-approach lands second re-judges on the merged count; if the reverse sweep "
+        "is ever needed outside the retrace, move it beside _body_clearance in body_stop.py. "
+        "Previously independently re-judged 2026-10-07. Own size unit per "
         "docs/plans/2026-10-07-line-follow-recovery-subpackage.md (moved "
         "2026-10-07 by git mv, imports only): D-407 stuck recovery/wiring, D-468 lane_return*, D-476 "
         "lane_bridge and D-494/D-495/D-498 junction as LineFollowManager mixins under the single manager "
@@ -825,7 +855,7 @@ SIZE_VERDICTS = {
         "test/test_media_readback.py (X5)",
     ),
     "tools/harness/rosy_harness.py": (
-        693,
+        897,
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
     ),

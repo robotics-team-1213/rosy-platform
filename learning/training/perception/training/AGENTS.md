@@ -3,6 +3,9 @@
 
 # training
 
+**Parent context:** `../AGENTS.md`
+**Updated:** 2026-10-07
+
 ## Purpose
 
 The trainer-side contract of the D-356/D-373 learned loop. Training itself runs outside this repository (Colab or any GPU PC); what lives here is the input/output agreement: export a model folder with a manifest, check it, and hand it to the store inbox. The store folder, not Hugging Face, is the source of truth (HF is optional).
@@ -16,6 +19,7 @@ The trainer-side contract of the D-356/D-373 learned loop. Training itself runs 
 | `rosy_lane_training.ipynb` | Ready-to-run Colab notebook: baseline model training, export, check, hand-over. Generated, do not edit by hand |
 | `gen_notebook.py` | Source of the notebook: edit here, then `python gen_notebook.py`; `test_training_notebook.py` fails if they differ |
 | `rosy_lane_model.py` | Baseline trainer (`LaneUNet`, same structure as the deployed 0930 model). Imports torch at module level; `train(on_epoch=...)` feeds an optional tracker, never imports wandb |
+| `drivable_head.py` | Frozen delivered lane model (TorchScript, e.g. now2466 v11) + a trained drivable head (user decision 2026-10-07). Rebuilds the lane model as `LaneUNet` (key renames, output parity checked), trains only the head on a dataset/1 with one `drivable` role class, exports C+1 logits where the lane argmax is unchanged and background splits into background/drivable; `--ignore-top` forces the top rows to background |
 | `run_log.py` | Default experiment record (D-356 addendum 2026-10-03): `RunLog(run_dir)` writes `config.json` (secret-looking keys dropped), `history.json` (per epoch, atomic), `summary.json` and optional TensorBoard events; `chain()` joins `on_epoch` hooks. Logging errors never stop training. No torch import at module level |
 | `export_cell.py` | Trainer-side export of `model.onnx` plus `model_manifest.json` (`rosy.perception.model/1`). Copy into a notebook or import it; torch is imported lazily and `write_manifest()` needs none. `experiment=` stores a `wandb` or `local` run link as `metrics.experiment` (known keys per tracker only) |
 | `check_manifest.py` | `check_manifest.py <model_folder>`: load the manifest, verify files, open the model if `onnxruntime` is importable; prints `OK <model_revision>` or the error, exit 1 on failure |
@@ -36,7 +40,7 @@ The trainer-side contract of the D-356/D-373 learned loop. Training itself runs 
 ### Testing Requirements
 
 ```bash
-python -m pytest learning/training/perception/test/test_training_contract.py learning/training/perception/test/test_training_handover.py learning/training/perception/test/test_training_model.py learning/training/perception/test/test_training_notebook.py learning/training/perception/test/test_training_run_log.py -q -p no:cacheprovider
+python -m pytest learning/training/perception/test/test_training_contract.py learning/training/perception/test/test_training_handover.py learning/training/perception/test/test_training_model.py learning/training/perception/test/test_training_notebook.py learning/training/perception/test/test_training_run_log.py learning/training/perception/test/test_drivable_head.py -q -p no:cacheprovider
 ```
 
 Needs `torch` and `onnxruntime`; tests skip where missing.

@@ -122,6 +122,23 @@ def test_camera_quality_and_raw_pair_require_fresh_ros_capture_clock():
     assert svc.vision.status(now=frame.received_at+1.9)['quality'] is None
 
 
+def test_camera_capture_stamp_ahead_of_core_clock_counts_as_now_within_the_tolerance():
+    # D-507 8: one SOURCE_FUTURE_TOLERANCE_S (0.1 s) for image source times too.
+    from core_features.vision import VisionFrameStore
+    svc = SimpleNamespace(vision=VisionFrameStore())
+    msg = SimpleNamespace(header=SimpleNamespace(frame_id='front', stamp=SimpleNamespace(sec=10,nanosec=1_000_000)),
+        format='jpeg;width=8;height=8;quality_valid=false;quality_reason=low_light',
+        data=b'\xff\xd8frame\xff\xd9')
+    warnings = []
+    obs.camera_preview(svc, msg, warn=warnings.append, source_now=10.)
+    assert svc.vision.frame().quality == dict(valid=False, reason='low_light')
+    obs.camera_preview(svc, msg, warn=warnings.append, raw=True, source_now=10.)
+    assert not warnings
+    msg.header.stamp.nanosec = 200_000_000
+    obs.camera_preview(svc, msg, warn=warnings.append, raw=True, source_now=10.)
+    assert warnings  # 0.2 s ahead: the raw sample is refused
+
+
 def test_a_well_formed_observation_reaches_the_manager_with_both_clocks():
     """The ROS clock and the receipt clock are different questions."""
     svc, calls = _services()

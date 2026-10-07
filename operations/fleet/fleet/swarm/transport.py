@@ -112,6 +112,7 @@ class RobotClient(Protocol):
     robot_id: str
 
     async def state(self) -> dict: ...
+    async def power_health(self) -> dict: ...
     async def capabilities(self) -> dict: ...
     async def map(self) -> dict: ...
     async def swarm_state(self) -> dict: ...
@@ -243,6 +244,9 @@ class HttpRobotClient:
 
     async def state(self) -> dict:
         return await self._get("/api/v1/robot/state")
+
+    async def power_health(self) -> dict:
+        return await self._get("/api/v1/power/health")
 
     async def capabilities(self) -> dict:
         return await self._get("/api/v1/system/capabilities")

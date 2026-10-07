@@ -653,6 +653,24 @@
 - 결정: D-494 6
 - 교훈: 없음
 
+## 2026-10-08 · uncommitted · docs(api): v1.124 version pin
+
+- Change: Align CORE app contract version docstring with API Reference v1.124.
+- Evidence: Related contract and Fleet tests 99 PASS; device check remains separate.
+- Gate change: None.
+
+## 2026-10-08 · uncommitted · docs(api): D-509 v1.124 follow-up
+
+- 변경: CORE app contract version now matches API Reference v1.124.
+- 증거: Contract and Fleet focus tests passed; hardware remains unverified.
+- gate 변화: None.
+
+## 2026-10-08 · uncommitted · docs(api): merged contract v1.125
+
+- 변경: CORE app contract docstring follows API Reference v1.125 after D-513 merge.
+- 증거: Pinned version test included in merged tree verification.
+- gate 변화: None.
+
 ## 2026-10-08 · uncommitted · feat(api): D-472 식별 색 설정과 v1.129/v1.130
 - 변경: `POST /host/lamp/identify`의 `color`를 생략하면 CORE 설정 `lamp_identify.color`, 없으면 D-472 4항 기본(`rosy_26` blue, `rosy_60` amber)을 쓴다. 둘 다 없으면 409 `IDENTIFY_COLOR_UNSET`. `requested_at`을 ms로 쓴다. 앱 설명의 계약 버전을 v1.130으로 맞췄다
 - 증거: `test_lamp_identify_api.py`, `test_protocol_version_alignment.py`
