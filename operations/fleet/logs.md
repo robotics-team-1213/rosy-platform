@@ -2327,3 +2327,10 @@
 - gate 변화: 없음. LOCAL GO 유지 — 표시 경고만 만들었고 관측·목표·주행 경로는 그대로
 - 결정: 해당 없음(D-457 추적 보정의 표시 전용 보강)
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · test(fleet): 추적 보정 적용의 렌즈 지문을 브라우저·라우트 시험으로 고정
+- 변경: "추적 보정 적용"의 렌즈 지문 배선은 c598918fc·0965acc94에서 이미 main에 다 들어 있었다(적용 시점 라이브 프레임 X-Source-Lens → `map-fit-view.js` applyButton의 `visionView.currentLensInfo()` → `map-fit.js` `calibrationRequest` lensBody → 서버 `CalibrationApproval.lens` → `build_record` 검증·개정 해시 포함; 프레임에 렌즈가 없을 때만 "렌즈 정보가 없어 렌즈 검사 없이 적용했습니다" 안내). 이 커밋은 그 배선을 증명하는 시험만 더한다. `test/test_fleet_console_browser.py` 신규 2건 — 설치 맞춤 패널에서 통과 제안과 렌즈 헤더 프레임으로 적용을 누르면 POST 본문에 `{kind, focal_mm, hfov_deg}`가 실리고 안내가 붙지 않는다 / 헤더 없는 프레임이면 `lens: null`로 저장되고 안내가 붙는다. `test_overhead_tracking_api.py` — 렌즈를 넣은 승인이 목록·Vision 설정 조회까지 그대로 남으며 렌즈 없는 승인과 개정이 다르고, 잘못된 렌즈 본문 3종(필드 누락·대문자 kind·여분 필드)이 422
+- 증거: 브라우저 신규 2 passed(ROSY_RUN_BROWSER_TESTS=1), 변이 증명 — applyButton의 lens 인자를 지우면 적색, 복원 녹색; `tracking.py` approve의 lens 전달을 지우면 라우트 시험 적색, 복원 녹색. `test_overhead_tracking_api.py` 11 passed, tracking 3종·서버 앱·콘솔 계약 targeted 103 passed, node map-fit 17·vision-lens-profile 7·camera-map 1 passed, known_failures 0 NEW
+- gate 변화: 없음. 제품 코드 변경 없음(시험만)
+- 결정: 해당 없음(D-457 1항 표시 전용 경로의 시험 보강)
+- 교훈: 소스 문자열 단언(`"calibrationRequest(" in fit_view`)은 배선이 빠져도 녹색으로 남는다 — 클릭해서 본문을 잡는 브라우저 시험이 배선의 증거다

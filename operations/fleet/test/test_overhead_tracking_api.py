@@ -142,9 +142,34 @@ def test_bad_approval_bodies_are_refused(tmp_path):
                              ({**APPROVAL, "extra": 1}, 422),
                              ({**APPROVAL, "map_to_image": [0.0] * 9}, 422),
                              ({**APPROVAL, "source_id": "nope"}, 404),
-                             ({**APPROVAL, "map_id": "other_map"}, 409)]:
+                             ({**APPROVAL, "map_id": "other_map"}, 409),
+                             # D-457: 콘솔이 찍는 렌즈 지문도 모양 검사를 지난다.
+                             ({**APPROVAL, "lens": {"kind": "standard"}}, 422),
+                             ({**APPROVAL, "lens": {"kind": "Standard", "focal_mm": 5.4,
+                                                    "hfov_deg": 66.9}}, 422),
+                             ({**APPROVAL, "lens": {"kind": "standard", "focal_mm": 5.4,
+                                                    "hfov_deg": 66.9, "zoom": 2}}, 422)]:
             response = client.post("/api/fleet/calibrations", json=body, headers=_auth(OPERATOR_TOKEN))
             assert response.status_code == status, (body, response.text)
+
+
+def test_an_applied_fit_keeps_its_live_frame_lens(tmp_path):
+    """D-457 1: '추적 보정 적용' 본문의 렌즈(라이브 프레임 X-Source-Lens)가 기록에 그대로 남는다."""
+    lens = {"kind": "wide", "focal_mm": 2.2, "hfov_deg": 104.1}
+    with _client(tmp_path) as client:
+        approved = client.post("/api/fleet/calibrations", json={**APPROVAL, "lens": lens},
+                               headers=_auth(OPERATOR_TOKEN))
+        assert approved.status_code == 200, approved.text
+        stamped = approved.json()
+        assert stamped["lens"] == lens
+        listing = client.get("/api/fleet/calibrations", headers=_auth(VIEWER_TOKEN)).json()
+        assert listing["calibrations"][0]["lens"] == lens
+        config = client.get("/api/fleet/detections/config", headers=_auth(SOURCE_TOKEN)).json()
+        assert config["calibration"]["lens"] == lens
+        # 같은 맞춤이라도 렌즈가 없으면 다른 기록이다 — 개정이 렌즈를 따라간다.
+        bare = client.post("/api/fleet/calibrations", json=APPROVAL, headers=_auth(OPERATOR_TOKEN))
+        assert bare.json()["lens"] is None
+        assert bare.json()["calibration_revision"] != stamped["calibration_revision"]
 
 
 def test_tracking_pairs_the_console_state_with_detections(tmp_path):
