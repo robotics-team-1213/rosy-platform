@@ -90,6 +90,18 @@ def line_observation(services, raw: str, *, source_now: float,
         })
 
 
+def keep_junction(services, raw: str, *, source_now: float, received_at: float) -> None:
+    """D-491 decision 4: the keeper's junction HOLD reason, a stop input only (never motion)."""
+    try:
+        data = json.loads(raw)
+        reason, stamp = data.get("reason"), data.get("stamp")
+    except (AttributeError, TypeError, ValueError):
+        return
+    if (type(stamp) in (int, float) and math.isfinite(stamp)
+            and 0.0 <= source_now - stamp <= services.line_follow.config.stale_after_s):
+        services.line_follow.observe_junction(reason, received_at - (source_now - stamp))
+
+
 def road_observation(services, raw: str, *, source_now: float,
                      received_at: float) -> None:
     """Decode road evidence; invalid data invalidates an enforced lease."""

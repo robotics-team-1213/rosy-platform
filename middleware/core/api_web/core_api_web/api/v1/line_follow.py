@@ -190,6 +190,31 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
     return _status(svc)
 
 
+class LineJunctionRequest(BaseModel):
+    """D-491 decision 4: what to do at the next junction (Fleet trip loop)."""
+
+    action: str = Field(pattern="^(straight|left|right|stop)$")
+    place_id: str = Field(min_length=1, max_length=128)
+    stop_after_m: Optional[float] = Field(default=None, ge=0, le=2.0)
+    expires_s: float = Field(gt=0, le=30)
+
+
+@line_follow_router.post("/junction")
+def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(operator),
+                      svc: CoreServicesLike = Depends(get_services)):
+    """D-491 decision 4. Never changes mode; CORE only keeps or zeroes its own line command.
+    "Seat" is the existing vocabulary (D-460): operator token + calibration lease, as /hold."""
+    if body.stop_after_m is not None and body.action != "stop":
+        raise ApiError("VALIDATION_ERROR", 400, "stop_after_m belongs to stop")
+    require_calibration_owner(svc, auth, "line-follow junction")
+    result = svc.line_follow.set_junction(body.action, body.place_id, body.expires_s,
+                                          body.stop_after_m)
+    if result is None:
+        raise ApiError("LINE_FOLLOW_NOT_ACTIVE", 409, "line-follow must be CAMERA_LINE or IR_LINE")
+    svc.state.set_line_follow(svc.line_follow.status())
+    return {"accepted": True, "junction_seq": result[0], "state": result[1]}
+
+
 @line_follow_router.post("/stuck/decision")
 def decide_line_stuck(body: LineStuckDecisionRequest,
                       auth: AuthContext = Depends(require_grant(STUCK_DECIDE)),

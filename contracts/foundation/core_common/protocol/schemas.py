@@ -1018,6 +1018,15 @@ class LineStuckStatus(BaseModel):
     decisions: list[str] = Field(default_factory=list)
 
 
+class LineJunctionStatus(BaseModel):
+    """D-491 decision 4: the one pending next-junction instruction and its progress."""
+
+    pending_action: Optional[str] = None  # straight | left | right | stop
+    place_id: Optional[str] = None
+    state: str = "idle"                   # idle | armed | executing | waiting | unresolved
+    seq: int = 0
+
+
 class LineFollowStatus(BaseModel):
     """Selected line source and the last fail-closed control decision (D-143)."""
 
@@ -1037,6 +1046,7 @@ class LineFollowStatus(BaseModel):
     stop_gap_m: Optional[float] = None
     clearance_source: Optional[str] = None
     stuck: Optional[LineStuckStatus] = None  # D-407: open stuck (None = not stuck)
+    junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-491 decision 4
 
 
 class TrafficPolicyStatus(BaseModel):
