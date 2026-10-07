@@ -617,3 +617,9 @@
 - 변경: 연결 로비의 빈 목록 안내를 짧게 써 400dp·글자 130%에서 마지막 음절만 다음 줄로 밀리지 않게 했다. 발견·연결 로직은 그대로다.
 - 증거: 격리 Android 35 에뮬레이터 400/600/1000dp 캡처와 JVM 93 passed. 원본·해시는 `docs/validation/uiux-pilot-empty-copy-2026-10-07/result.md`에 있다.
 - gate 변화: LOCAL 빈 목록 G2 셀만 보강. 실물 태블릿 후보 설치·사용자 G3는 HOLD.
+
+## 2026-10-07 · uncommitted · uiux(pilot): 연결 로비 전화 폭
+
+- 변경: 320/390px에서 로봇 목록 재검색·로그인 연결 버튼을 코드 입력 칸의 가용 폭에 맞췄다.
+- 증거: `docs/validation/uiux-pilot-lobby-width-2026-10-07/result.md`; 로비·태블릿 브라우저 7 passed, G1 90 passed, 각 known_failures 0 NEW.
+- gate 변화: LOCAL 전화 빈 목록·실패 폭 G2 부분 근거. 전체 상태·실물·운전자 G3는 HOLD.
