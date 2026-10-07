@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · docs: Decision 모델 호스트 역할과 파이프라인 명시
 - 2026-10-08 · uncommitted · fix(push): 2026-10-08 pre-push 검사 복구
 - 2026-10-08 · uncommitted · docs(adr): D-515 관제 지도 천장 카메라 직사각형
 - 2026-10-08 · uncommitted · uiux(review): D-514 검수 화면과 실제 브라우저 흐름
 - 2026-10-08 · uncommitted · docs(review): D-514 객체·픽셀 클래스 의미와 시나리오
-- 2026-10-08 · uncommitted · docs(api): D-509 and D-513 contract union v1.125

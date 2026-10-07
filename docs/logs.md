@@ -6947,3 +6947,9 @@ osy-d395-s1d\`.
 - gate 변화: pre-push의 4개 실패 해소 대상.
 - 결정: 없음(기존 split 계획에 절 추가)
 - 교훈: 여러 세션이 같은 웹 파일을 키우면 크기 판정이 푸시 시점에 한꺼번에 걸린다.
+
+## 2026-10-08 · uncommitted · docs: Decision 모델 호스트 역할과 파이프라인 명시
+
+- 변경: 루트 README·AGENTS에 모델 PC, AI PC, 현장 PC, 로봇의 역할과 권한을 기록하고 D-516 기반 Decision 파이프라인 설계를 연결했다. 후보 조사 보고서에서도 설계로 연결한다.
+- 증거: docs lint 0 errors, 문서 계약 pytest 121 passed, known_failures 0 new. 오프라인 합성 재생은 현장 모델 정확도나 활성화 증거가 아니다.
+- gate 변화: 없음.

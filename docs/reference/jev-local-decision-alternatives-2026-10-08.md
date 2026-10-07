@@ -84,6 +84,8 @@ CORE/카메라/LiDAR 사실 ─→ Fleet의 사건·시각·출처 검사 ─→
 
 ## 6. 모델 교체를 위한 최소 구조
 
+호스트별 권한, 사건 수집부터 모델 교체·현장 결과 회수까지의 순서는 [Decision 모델 파이프라인 설계](../plans/2026-10-08-decision-model-pipeline-design.md)에 정리했다.
+
 **호스트를 먼저 구분한다.** 모델 PC(D-434)는 재생·정답 평가·학습에 쓰고, AI PC(D-492)는 소유자 동의와 지연 관문을 통과한 **사이트 로컬 추론 후보**다. Laya·Kev는 크기상 모델 PC에서 오프라인 시험할 만하지만, 이 사실만으로 AI PC에서 Qwen3-VL과 동시 상주하거나 운전에 충분하다고 결론 낼 수 없다. Kev 4B는 제작자 측정 상주량만 14.3GB다. [Kev 4B 모델 카드](https://huggingface.co/jaredpalmer/kev-4b), [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md).
 
 **교체 경계는 모델 제품명이 아니라 판단 작업이다.**
