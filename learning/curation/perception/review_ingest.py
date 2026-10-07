@@ -6,6 +6,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import yaml
 
 import build
 import edge_review
@@ -67,15 +68,19 @@ def import_frames(store, body):
     try:
         class_raw = bounded(classes_path, 1024 * 1024) if classes_path else None
     except OSError as exc:
-        raise ValueError(f'pixel classes file not readable: {classes_path}') from exc
+        raise ValueError(f'픽셀 클래스 파일을 읽을 수 없습니다: {classes_path}') from exc
     if class_raw:
-        values = build.load_classes(Path(classes_path), source_bytes=class_raw)
+        try:
+            values = build.load_classes(Path(classes_path), source_bytes=class_raw)
+        except (ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError) as exc:
+            raise ValueError(f'픽셀 클래스 파일을 해석할 수 없습니다: {classes_path} ({exc})') from exc
         binding = {'classes': values, 'sha256': review_masks.sha(class_raw), 'ignore_index': 255}
         old = review_masks.classes(store)
         if old and old['sha256'] != binding['sha256']:
             raise ValueError('pixel classes differ from existing workspace')
     if not binding:
-        raise ValueError('verified classes.yaml required for pixel review')
+        raise ValueError('픽셀 검수에는 검증된 classes.yaml이 필요합니다. 클래스 파일 경로를 넣거나 '
+                         '자료 폴더 옆에 classes.yaml을 두세요.')
     mcap_groups = {}
     with store.connect() as db:
         kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
@@ -153,7 +158,9 @@ def import_frames(store, body):
                     labelmap_sha = review_masks.sha(labelmap_raw)
                     try:
                         mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
-                    except build.BuildError as exc:   # labelmap names another class set
+                    except build.BuildError as exc:   # only an unknown label means another class set
+                        if 'is not in classes.yaml' not in str(exc):
+                            raise
                         raise ValueError(OTHER_CLASS_SET.format(exc)) from exc
             else:
                 raise ValueError('draft mask reference must be indexed PNG or color ZIP')

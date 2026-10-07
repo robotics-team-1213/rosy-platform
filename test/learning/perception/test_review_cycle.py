@@ -457,11 +457,11 @@ def test_draft_free_catalog_binds_the_classes_yaml_beside_it(tmp_path):
 def test_missing_classes_file_is_a_clean_refusal(tmp_path):
     store = open_store(tmp_path)
     folder, classes, _ = catalog(tmp_path)
-    with pytest.raises(ValueError, match='classes file') as refused:
+    with pytest.raises(ValueError, match='클래스 파일을 읽을 수 없습니다') as refused:
         review_ingest.import_frames(store, {'path': str(folder), 'classes': str(tmp_path / 'nope.yaml')})
     assert 'WinError' not in str(refused.value) and 'Errno' not in str(refused.value)
     classes.unlink()
-    with pytest.raises(ValueError, match='verified classes.yaml required'):
+    with pytest.raises(ValueError, match='검증된 classes.yaml이 필요합니다'):
         review_ingest.import_frames(store, {'path': str(folder)})
 
 
@@ -483,3 +483,46 @@ def test_drafts_from_another_class_set_are_refused_in_plain_words(tmp_path):
         review_ingest.import_frames(store, {'path': str(folder), 'classes': str(lane)})
     assert 'floor' in str(refused.value) and '초안 없이' in str(refused.value)
     assert review_masks.classes(store) is None and len(store.list_frames()) == 2
+
+
+@pytest.mark.parametrize('broken', [b'classes: [\n', b'classes:\n- {name: x}\n', b'classes:\n- just-a-name\n'])
+def test_unparsable_classes_file_is_a_plain_400(tmp_path, broken):
+    from review_app import make_server
+    import threading, urllib.request, urllib.error
+    store = open_store(tmp_path)
+    folder, classes, _ = catalog(tmp_path)
+    classes.write_bytes(broken)
+    with pytest.raises(ValueError, match='클래스 파일'):
+        review_ingest.import_frames(store, {'path': str(folder)})
+    server = make_server(store, 0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f'http://127.0.0.1:{server.server_port}'
+        token = json.load(urllib.request.urlopen(base + '/api/catalog'))['token']
+        request = urllib.request.Request(base + '/api/import', method='POST',
+                                         data=json.dumps({'path': str(folder)}).encode(),
+                                         headers={'Content-Type': 'application/json', 'X-Pinky-Token': token})
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            urllib.request.urlopen(request)
+        assert refused.value.code == 400
+        assert str(classes) in json.load(refused.value)['error']
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_other_labelmap_errors_keep_their_own_text(tmp_path):
+    import zipfile
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    png = cv2.imencode('.png', np.full((24, 32, 3), 90, np.uint8))[1].tobytes()
+    archive = folder / 'drafts.zip'
+    with zipfile.ZipFile(archive, 'w') as out:   # same class set, but a duplicate label line
+        out.writestr('labelmap.txt', 'background:90,90,90::\nbackground:1,1,1::\n')
+        out.writestr('SegmentationClass/0.png', png)
+    rows[0]['mask'] = {'zip': str(archive), 'entry': 'SegmentationClass/0.png',
+                       'sha256': hashlib.sha256(png).hexdigest()}
+    (folder / 'verified-inputs.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in rows))
+    with pytest.raises(ValueError, match='duplicate label') as refused:
+        review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    assert '다른 클래스셋' not in str(refused.value)

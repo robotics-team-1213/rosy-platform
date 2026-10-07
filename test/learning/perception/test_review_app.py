@@ -439,3 +439,13 @@ def test_first_start_unknown_label_names_the_class(tmp_path, monkeypatch, capsys
                          '--human', human, '--images', images, '--object-classes', classes)
     assert code == 2 and 'Traceback' not in err
     assert "'traffic_light'" in err and 'car' in err and 'robot' in err
+
+
+def test_source_box_without_bbox_is_a_usage_error_naming_the_field(tmp_path, monkeypatch, capsys):
+    source, human, images = fixture_inputs(tmp_path)
+    rows = [json.loads(line) for line in source.read_text().splitlines()]
+    rows[0]['objects'] = [{'label': 'car'}]
+    source.write_text('\n'.join(json.dumps(r) for r in rows), encoding='utf-8')
+    code, err = run_main(monkeypatch, capsys, '--state', tmp_path / 'state', '--source', source,
+                         '--human', human, '--images', images)
+    assert code == 2 and 'Traceback' not in err and 'bbox_xyxy' in err
