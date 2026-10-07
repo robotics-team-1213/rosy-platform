@@ -38,6 +38,7 @@ import argparse
 import json
 import math
 import os
+import ssl
 import subprocess
 import sys
 import threading
@@ -214,15 +215,22 @@ def plan_step(sample, step: Step, lidar_yaw_deg, fresh=True, *, body=BODY, self_
 # --- robot I/O ------------------------------------------------------------------
 
 class Core:
-    def __init__(self, host, token=None, port=8080):
-        self.base, self.token = f"http://{host}:{port}", token
+    def __init__(self, host, token=None, port=8080, ca_file=None):
+        # A robot with ROSY_API_TLS=required answers HTTPS only: verify against its CA
+        # (/etc/rosy/tls/ca.pem). The leaf names <hostname>.local, not the IP, so the
+        # chain is pinned to that CA and the name is not checked.
+        self.context = None
+        if ca_file:
+            self.context = ssl.create_default_context(cafile=str(ca_file))
+            self.context.check_hostname = False
+        self.base, self.token = f"{'https' if ca_file else 'http'}://{host}:{port}", token
 
     def call(self, method, path, body=None, timeout=2.0):
         req = urllib.request.Request(self.base + path, method=method,
                                      data=None if body is None else json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json",
                                               **({"Authorization": f"Bearer {self.token}"} if self.token else {})})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=self.context) as resp:
             text = resp.read().decode() or "null"
             return resp.status, json.loads(text)
 
@@ -431,7 +439,8 @@ def _run_robot(name, host, code, args, results, stop_event, live, state, log):
             log(f"  {s.name:12s} v={s.linear:+.3f} w={s.angular:+.2f} {s.seconds:5.1f}s")
         results[name] = {"dry_run": True}
         return
-    core = Core(host)
+    ca_file = getattr(args, "ca", {}).get(name)
+    core = Core(host, ca_file=ca_file) if ca_file else Core(host)
     if live is not None:
         live[name] = (core, host)
     core.pair(code)
@@ -522,6 +531,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--robots", default="", help="name=host,... (name as in rosy-pinky-<name>)")
     ap.add_argument("--codes", default="", help="name=LOGIN-CODE,... (asked for when missing)")
+    ap.add_argument("--ca", default="", help="name=CA.pem,... HTTPS against a robot with ROSY_API_TLS=required "
+                         "(copy of its /etc/rosy/tls/ca.pem); without it the robot is reached over HTTP")
     ap.add_argument("--max-angular", default="", help="name=rad/s,... robot limit (default 0.1, L0)")
     ap.add_argument("--max-linear", default="", help="name=m/s,... robot limit (default 0.03)")
     ap.add_argument("--lidar-yaw-deg", type=float, default=None)
@@ -537,6 +548,7 @@ def main(argv=None) -> int:
     def pairs(text, cast=str):
         return {k.strip(): cast(v.strip()) for k, v in (p.split("=", 1) for p in text.split(",") if "=" in p)}
     args.max_angular, args.max_linear = pairs(args.max_angular, float), pairs(args.max_linear, float)
+    args.ca = pairs(args.ca)
     args.self_mask = parse_self_mask(args.self_mask)
     if args.offline:
         import analyze_session as AS
