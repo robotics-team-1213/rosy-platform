@@ -10,12 +10,12 @@ Raw files: `X:/DevTemp/projects/rosy-platform/2026-10-07--cell-job-switch/` (SHA
 
 | File | SHA-256 |
 |---|---|
-| `red.txt` | `4ffb0b6dffe7811dc2cbcd5590b4feb600202d1b59874a116ce9af2f2c758cac` |
-| `targeted.txt` | `9e44f72b3eed6198e30a6fbb0be14a24d3b67d2645bb4eeadd36d090fc53e5e4` |
-| `g1.txt` | `e225a9990c85b19bb66e6bac3fa8fc98b40e7399af0e708f7a40f595798a69db` |
-| `full.txt` (incomplete) | `ce80221492b7d37fb2d50cb6ab4f74f55f618c49ea4e2d4b471489eb071b9dce` |
-| `fleet-cell-job-switch-1440x1000.png` | `c87b68b74f0b74eb0a564f9d0d9140677aa76dfe7d13e67fdaa5acaeb5637b2a` |
-| `fleet-cell-job-switch-390x844.png` | `708248d80eb96548605e1d9690fb395cacca68ff5ad30017a7c408f42fcda25e` |
-| `fleet-cell-job-switch-320x568.png` | `bfef412c9c2e4fa077207170ea47a94867c7daa61545828acd5582ca9b27948a` |
+| `red.txt` | SHA-256 `4ffb0b6dffe7811dc2cbcd5590b4feb600202d1b59874a116ce9af2f2c758cac` |
+| `targeted.txt` | SHA-256 `9e44f72b3eed6198e30a6fbb0be14a24d3b67d2645bb4eeadd36d090fc53e5e4` |
+| `g1.txt` | SHA-256 `e225a9990c85b19bb66e6bac3fa8fc98b40e7399af0e708f7a40f595798a69db` |
+| `full.txt` (incomplete) | SHA-256 `ce80221492b7d37fb2d50cb6ab4f74f55f618c49ea4e2d4b471489eb071b9dce` |
+| `fleet-cell-job-switch-1440x1000.png` | SHA-256 `c87b68b74f0b74eb0a564f9d0d9140677aa76dfe7d13e67fdaa5acaeb5637b2a` |
+| `fleet-cell-job-switch-390x844.png` | SHA-256 `708248d80eb96548605e1d9690fb395cacca68ff5ad30017a7c408f42fcda25e` |
+| `fleet-cell-job-switch-320x568.png` | SHA-256 `bfef412c9c2e4fa077207170ea47a94867c7daa61545828acd5582ca9b27948a` |
 
 This is LOCAL synthetic G2 evidence for job switching. The current site UI/device readback, remaining G2 cells, and the user's G3 walkthrough remain **HOLD**. No site operation or device command occurred.
