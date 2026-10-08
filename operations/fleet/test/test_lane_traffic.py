@@ -462,3 +462,16 @@ def test_a_repeat_trip_drops_finished_laps_and_the_table_follows():
         held = runner.traffic._state.held["a"]
         assert held and all(spans[i].unit == unit for i, (unit, _forward) in held.items())
     assert fleet.p["a"].sent[-1][0] != "stop"
+
+
+def test_a_shift_past_every_grant_drops_the_authority():
+    """Review: two trims between table steps dropped all grants; authority must not outlive them."""
+    from fleet.routing import blocks
+    from fleet.server.lane_traffic import _shift
+    spans = (blocks.Span("a", 0, 1), blocks.Span("b", 1, 2), blocks.Span("c", 2, 3))
+    state = blocks.TableState(held={"r": {0: ("a", True), 1: ("b", True)}}, authority={"r": 1.9})
+    _shift(state, "r", spans, 2.0)
+    assert state.held["r"] == {} and "r" not in state.authority
+    state = blocks.TableState(held={"r": {1: ("b", True), 2: ("c", True)}}, authority={"r": 2.9})
+    _shift(state, "r", spans, 1.0)
+    assert state.held["r"] == {0: ("b", True), 1: ("c", True)} and abs(state.authority["r"] - 1.9) < 1e-9

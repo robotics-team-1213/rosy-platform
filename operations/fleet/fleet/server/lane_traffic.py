@@ -9,7 +9,10 @@ only holds back a junction instruction into a refused block (``trip_runner._traf
 D-517 6: a robot whose trip ended, or whose trip is on another map version, keeps its last
 grants and body as ``pinned`` units until a fresh ``LOCALIZED`` pose shows it clear of them
 (the pose's units replace the pins); a map activation re-pins every robot from its last pose.
-"""
+
+
+The single writer of lane-trip grants (D-517 3). ``traffic_reservations.py`` (D-426 segment
+states) writes no trip grant; it stays only as the Gazebo conformance harness's segment record."""
 
 from __future__ import annotations
 
@@ -144,9 +147,12 @@ class TrafficService:
         state = self._state
         for robot_id in {*state.route, *state.held, *state.last_occupied} - set(trips):
             self._pin(robot_id)
+        moving = {live.view["robot_id"] for live in lives if live.open}  # open trips on an old map
         for robot_id in [r for r in state.pinned if r not in trips and r in fresh]:
-            units = self._under(layout, active[2], fresh[robot_id])  # where it is now replaces the pins
-            if units:
+            units = self._under(layout, active[2], fresh[robot_id])
+            if robot_id in moving:  # still driving: its pose may lag a period, so pins only grow
+                state.pinned[robot_id] = {**state.pinned[robot_id], **units}
+            elif units:  # where it stands now replaces the pins
                 state.pinned[robot_id] = units
             else:
                 blocks.release_robot(state, robot_id)
@@ -247,7 +253,10 @@ def _shift(state: blocks.TableState, robot_id: str, old_spans, shift: float) -> 
     if held is not None:
         state.held[robot_id] = {i - n: grant for i, grant in held.items() if i >= n}
     if robot_id in state.authority:
-        state.authority[robot_id] -= shift
+        if state.held.get(robot_id):
+            state.authority[robot_id] -= shift
+        else:  # every grant was in the dropped laps: no authority without a grant behind it
+            del state.authority[robot_id]
 
 
 def _edges(arc_ids) -> frozenset:
