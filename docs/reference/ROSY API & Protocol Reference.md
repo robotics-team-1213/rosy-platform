@@ -2777,3 +2777,13 @@ P-256 public key는 canonical padded Base64 DER SPKI이며 키 digest는 DER의 
 `{version: rosy.peer-proof/1, context, fields}`의 키 정렬·공백 없는 ensure_ascii JSON이다.
 context는 request, receiver-challenge, session-request로 분리한다. 공개 golden vector는
 `test/fixtures/protocol/camera-peer.v1.json`이며 Native Cam resource와 바이트가 같아야 한다.
+
+## Service Control (D-524 Proposed)
+
+운영자만 `GET /api/fleet/hosts`와 `POST /api/fleet/hosts/{host}/control`을 호출한다.
+`host`는 `site`, `ai`, `model`이다. POST 본문은 `{action, unit, operator_confirmed:true}`이고
+추가 필드는 거절한다. `action`은 `reboot`, `cancel-reboot`, `restart-unit`, `stop-unit`만이다.
+`pkill`, 시그널, 셸, 프로세스 이름은 400 `UNKNOWN_ACTION`이다. `unit`은 그 호스트의 허용
+목록에 있을 때만 받는다. 재부팅은 `shutdown -r +10`이고 `cancel-reboot`는 `shutdown -c`다.
+도우미 `rosy-host-control`이 그 호스트에 없으면 503 `HOST_HELPER_UNAVAILABLE`이다.
+다른 호스트의 도우미로는 409 `HOST_NOT_LOCAL`이다. 이 API는 로봇을 재부팅하지 않는다.

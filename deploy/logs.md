@@ -2615,3 +2615,9 @@
 - 변경: `deploy/ai_pc/`에 systemd 사용자 GPU 점검 타이머와 수동 활성화 Laya loopback 서비스를 추가했다. AI PC에서 linger와 GPU 타이머를 켰고 Laya 자동 시작은 꺼 두었다.
 - 증거: 두 번의 GPU 점검이 드라이버 부재를 exit 9로 기록했다. Laya GPU 서비스는 preflight에서 거부됐고 포트 8000은 닫혔다. 별도 CPU 서버에서 합성 2건을 5회 재생해 호출 오류 0을 확인했다(`docs/validation/decision-ai-pc-watchdog-2026-10-08/`).
 - gate 변화: 없음. GPU 복구, 사람 라벨 L0, 고정 ModelProfile 및 현장 Fleet/CORE 수용은 미검증.
+
+## 2026-10-09 · uncommitted · docs(decision): split model test hosts
+
+- 변경: 모델 PC 독립 L0, AI PC 승인 버전 스모크, 개발 로컬 PC 계약 검사와 현장 수용을 ADR·계획·호스트 안내에 분리.
+- 증거: 문서 lint·관련 계약 시험은 착지 전 확인; 모델 PC 모델 평가와 AI PC GPU 스모크는 HOLD.
+- gate 변화: 없음.

@@ -151,8 +151,8 @@ async function load() {
     : prepared
     ? `${prepared.current_decisions_match?'최신 준비본':'이전 준비본'} · 객체 ${prepared.object_frames}장 · 픽셀 ${prepared.pixel_frames}장 · ${prepared.current_decisions_match?'현재 결정 일치':'현재 결정과 다름 · 다시 준비 필요'}. 학습 수용은 별도 검증 대기입니다.`
     : '준비본 없음 · 승인 자료 준비를 실행하세요. 학습 수용은 별도 검증 대기입니다.';
-  $('review-counts').textContent=`검수 대기 ${pending}장 · 원본 객체 초안 ${workspace.object_drafts}장 · 승인 ${approved}장`;
-  $('pixel-counts').textContent=`승인 ${workspace.pixel_counts.approved}장 · 검수 대기 ${workspace.pixel_counts.pending}장 · 초안 있음 ${workspace.pixel_counts.drafted}장 · 빈 마스크 ${workspace.pixel_counts.blank}장`;
+  $('review-counts').textContent=`검수 대기 ${pending}장 · 객체 초안 ${workspace.object_drafts}장 · 승인 ${approved}장`;
+  $('pixel-counts').textContent=`승인 ${workspace.pixel_counts.approved}장 · 검수 대기 ${workspace.pixel_counts.pending}장 · 선택 가능한 초안 ${workspace.pixel_counts.candidates}장 · 적용된 초안 ${workspace.pixel_counts.drafted}장`;
   $('object-review-link').href=workspace.object_draft_first==null?'/?filter=pending':`/?filter=pending&frame=${workspace.object_draft_first}`;
   $('pixel-review-link').href=workspace.pixel_draft_first==null?'/pixels?filter=pending':`/pixels?filter=pending&frame=${workspace.pixel_draft_first}`;
   $('object-review-link').querySelector('span').textContent=workspace.object_draft_first==null?'객체 검수·승인 열기':'객체 초안 검수·승인';

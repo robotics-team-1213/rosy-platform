@@ -66,7 +66,7 @@ store `models/inbox/`의 **한 폴더**에 두 파일과 `READY`가 있어야 �
 
 | 필드 | 뜻 |
 |---|---|
-| `model_revision` | `lane-seg-YYYYMMDD-<sha8>`, 전역 유일 (`export_cell`이 만든다) |
+| `model_revision` | 기본 `lane-seg-YYYYMMDD-<sha8>`; 주행 가능 영역 추가 계열은 `v13-drivable-YYYYMMDD-<sha8>` (D-532). 불변 판 식별자 (`export_cell`이 만든다) |
 | `task` | `lane_seg` |
 | `files[]` | `name`, `sha256`, `precision` (`fp32`/`int8`) |
 | `input` | `shape`, `layout: nchw`, `color` (`rgb`/`bgr`), `scale`, `mean[3]`, `std[3]` |

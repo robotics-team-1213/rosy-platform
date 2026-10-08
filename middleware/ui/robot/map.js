@@ -141,7 +141,7 @@ export function createFieldMap(options) {
     targetReadoutTimer = setTimeout(() => {
       targetReadoutTimer = null;
       if (!cross || !state.occupancy || !canvas) {
-        options.onTargetReadout?.({inside: false, unavailable: !state.occupancy});
+        options.onTargetReadout?.({inside: false, unavailable: !cross || !state.occupancy});
         return;
       }
       const frame = new GridFrame(state.occupancy);

@@ -17,6 +17,45 @@ V13_CLASSES = (Path(__file__).resolve().parents[1] / 'classes' /
                'lane_lr6_drivable.yaml').read_bytes()
 
 
+def test_model_object_draft_for_existing_frame_waits_for_explicit_review(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    before = store.get(2)
+    rows[0]['objects'] = [{'bbox_xyxy': [2, 3, 12, 14], 'label': 'cone'}]
+    rows[0]['annotation_source'] = 'qwen3-vl:8b-instruct'
+    (folder / 'verified-inputs.jsonl').write_text(json.dumps(rows[0]) + '\n')
+
+    result = review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    assert result['object_draft_candidates_queued'] == 1
+    assert store.get(2) == before
+    draft = store.object_drafts(2)[0]
+    assert draft['boxes'] == rows[0]['objects']
+    assert draft['origin'] == 'qwen3-vl:8b-instruct'
+    assert review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})['object_draft_candidates_queued'] == 0
+
+    with pytest.raises(ValueError, match='다른 탭'):
+        store.update(2, {'version': before['version'] - 1, 'action': 'apply_object_draft',
+                         'draft_sha256': draft['sha256']})
+    applied = store.update(2, {'version': before['version'], 'action': 'apply_object_draft',
+                               'draft_sha256': draft['sha256']})
+    assert applied['review']['boxes'] == rows[0]['objects']
+    assert applied['status'] == 'pending'
+    assert applied['review']['review_origin'] == 'model_draft_pending_human'
+    assert applied['review']['draft_origin'] == 'qwen3-vl:8b-instruct'
+
+
+def test_object_draft_rejects_alternate_image_of_same_video_frame(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    rows[1]['objects'] = [{'bbox_xyxy': [2, 3, 12, 14], 'label': 'cone'}]
+    (folder / 'verified-inputs.jsonl').write_text(json.dumps(rows[1]) + '\n')
+    with pytest.raises(ValueError, match='exact reviewed image'):
+        review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    assert store.object_drafts(2) == []
+
+
 @pytest.mark.parametrize('outside_column,side', [(2, 'left'), (29, 'right')])
 def test_v13_draft_and_approval_reject_drivable_outside_visible_lane(tmp_path, outside_column, side):
     store = open_store(tmp_path)
