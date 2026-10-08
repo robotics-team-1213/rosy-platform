@@ -7243,4 +7243,5 @@ osy-d395-s1d\`.
 ## 2026-10-09 · uncommitted · fix(fleet): D-520 호 진입 회전각을 lead 접선 대신 차로 방향으로
 - 변경: `trip_runner._step_lane`이 `exit_segment`를 싣는 회전에도 `turn_target`(들어오는 차로 끝 방향 → 나가는 차로 시작 접선, D-507 4항 lap SIM 3 개정)을 보낸다. 지금까지는 `theta`(5 cm lead 접선)를 보냈고, 260919 SW에서 그 값이 12–17° 틀려 호가 접선보다 바깥을 향해 시작했다(lap SIM 2). D-520 1항 47행 문장과 D-507 4항의 끝 문장, `test_trip_d520.py`의 기대·주석("tangent - 6 deg")을 고쳤다.
 - 증거: 모델 PC pytest(`X:\DevTemp\d520-entry\run.txt`) `test_trip_d520.py`·`test_trip_runner.py`·`test_routing_execute.py` 135 passed. SIM은 lap SIM 4(`validation/lane-trip-lap-sim4-2026-10-09/`)에서 원 추종·기본 켬과 함께 봤다.
+- 검토: 독립 code-reviewer(opus) 2026-10-09 APPROVE WITH NOTES(시험 이름 고침 반영, 원 추종 브랜치보다 먼저 또는 함께 착지).
 - gate 변화: 없음. DEVICE/FIELD HOLD.
