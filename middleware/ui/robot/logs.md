@@ -1211,3 +1211,8 @@
 - 변경: D-537의 일회성 몸체 대조를 위해 기존 CORE host/hardware/test 램프 자가 시험을 설치·정비 패널에 연결했다. 관리자와 장치 상태를 확인한 뒤 요청 ID가 같은 장치 결과만 표시하고, 완료를 물리 신원 확인으로 표현하지 않는다.
 - 증거: 역할·요청 ID·장치 완료 문구를 검사하는 브라우저 회귀 시험을 추가했다. 역할 PC 실행 결과와 장치 설치본은 별도 기록한다.
 - gate 변화: SOURCE 구현. ARTIFACT·DEVICE/FIELD는 설치·현장 확인 전까지 HOLD.
+## 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 근거와 설정 카드 높이
+
+- 변경: Console과 기존 Dashboard에서 맵핑 세션 수락을 실제 SLAM 실행·지도 갱신과 구별했다. 데스크톱 현장 설정 카드가 같은 행 높이로 늘어나지 않게 했다.
+- 증거: [맵핑 세션 화면 검증](../../../docs/validation/uiux-robot-slam-truth-2026-10-09/result.md). 320·390·1366px Console, 390·1366px Dashboard 캡처; 관련 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 표시 근거 보강. 설치 이미지·실제 SLAM·DEVICE/FIELD·전체 G2/G3는 HOLD.
