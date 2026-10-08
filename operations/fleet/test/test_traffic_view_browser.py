@@ -76,7 +76,10 @@ OPEN = [_trip("rosy_01", [{"edge_id": "ring_e", "forward": True, "s_from": 0.6, 
 
 
 def _robot(robot_id, x, y, yaw):
+    battery = {"evidence": "fresh", "sample_age_s": 0.2, "stale_after_s": 5, "percent": 80, "level": "ok",
+               "charging_state": "unknown"}
     return {"robot_id": robot_id, "online": True, "goal": None, "queued": None, "yielding": None, "error": None,
+            "power_health_age_s": 0.3, "power_health": {"battery": battery},
             "state": {"robot_id": robot_id, "mode": "LINE_FOLLOW", "navigation": "IDLE",
                       "pose": {"x": x, "y": y, "yaw": yaw}, "battery": {"percent": 80}, "safety": {"estop": False}}}
 
@@ -157,7 +160,11 @@ def _shots(page, name, fits=False):
         if out:
             page.screenshot(path=str(Path(out) / f"{name}-{width}x{height}.png"), full_page=True)
         if fits and (width, height) == (1920, 1080):  # D-517 10: the console never scrolls at 1920x1080
-            assert page.evaluate("document.documentElement.scrollHeight <= innerHeight + 1"), "1920x1080 scrolls"
+            fit = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll(
+                '.console-secondary > *, .console-primary > *')].map((n) => [n.className || n.tagName,
+                Math.round(n.getBoundingClientRect().height)]))""")
+            overflow = page.evaluate("document.documentElement.scrollHeight - innerHeight")
+            assert overflow <= 1, f"1920x1080 scrolls {overflow}px: {fit}"
 
 
 def test_console_traffic_layer_card_line_and_queue_row(site):

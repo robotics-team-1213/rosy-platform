@@ -639,14 +639,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       }
     }
     ctx.restore();
-    // 구역 글은 차로 바깥쪽(차로망 가운데의 반대편)에 둔다 — 띠와 통행권 표시를 덮지 않는다.
+    // 구역 글은 차로망 안쪽(가운데 쪽)에 둔다 — 띠·통행권 표시와 바깥 사각형 치수 글을 덮지 않는다.
     const centre = toPoint(...drawing.centre);
     for (const zone of drawing.zones) {
       const p = toPoint(zone.anchor.x, zone.anchor.y);
       const q = toPoint(zone.anchor.x + Math.cos(zone.anchor.angle) * 0.05, zone.anchor.y + Math.sin(zone.anchor.angle) * 0.05);
       const span = Math.hypot(q.x - p.x, q.y - p.y) || 1;
       let nx = -(q.y - p.y) / span, ny = (q.x - p.x) / span;
-      if (nx * (centre.x - p.x) + ny * (centre.y - p.y) > 0) { nx = -nx; ny = -ny; }
+      if (nx * (centre.x - p.x) + ny * (centre.y - p.y) < 0) { nx = -nx; ny = -ny; }
       const reach = band + 14 + Math.abs(nx) * 48;  // a sideways label needs room for its width
       drawChip(ctx, null, p.x + nx * reach, p.y + ny * reach, zone.label, "");
     }

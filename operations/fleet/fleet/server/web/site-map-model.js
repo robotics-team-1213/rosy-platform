@@ -376,7 +376,7 @@ export function routePoint(segments, edges, r) {
 /**
  * What the 교통 layer draws, in map metres, or null when the table is for another map version.
  * bands: non-FREE blocks {points, state, robot}; zones: {lines, label, anchor}; ticks: authority ends;
- * centre: the middle of the lanes, so a zone label can sit on the outer side.
+ * centre: the middle of the lanes, so a zone label can sit on the inner side.
  */
 export function trafficDrawing(traffic, active, trips = []) {
   if (!traffic || !active?.map || traffic.map_version !== active.version) return null;
