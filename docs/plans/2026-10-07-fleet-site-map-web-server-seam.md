@@ -39,3 +39,4 @@ Named at the trip_runner.py re-judge (847 lines, ceiling 600) after D-517 M1a.
 - Register `fleet/fleet/traffic` in `SIZE_UNITS`. Later D-517 convoy and grant code goes there, not into server/ or routing/.
 - Allowed imports out of the subpackage: `routing.graph`, `routing.execute.arc_id`, `server.trip_ports`, `localization.map_pose`. Nothing in traffic/ may import trip_runner.
 - The move does not change behaviour. Do it before D-517 M4, then re-judge. Decide then whether `server/traffic_reservations.py` (no production importer) moves in or retires.
+- Status 2026-10-08: applied as a pure move (`git mv`, no shim). Names kept: `fleet/traffic/blocks.py`, `lane_traffic.py`, `trip_authority.py`. `fleet/fleet/traffic` is in `SIZE_UNITS` at 867; the fleet package base dropped by the 863 moved lines. `server/traffic_reservations.py` stays in server/ until the M4 re-judge.
