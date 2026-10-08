@@ -37,7 +37,9 @@ def main():
     parser.add_argument("keep_jsonl")
     parser.add_argument("lane_graph_yaml")
     parser.add_argument("arc_id")
-    parser.add_argument("--frame-index", type=int, required=True)
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--frame-index", type=int)
+    selection.add_argument("--summary", action="store_true")
     args = parser.parse_args()
     frames = np.load(args.frames_npz)
     rows = [json.loads(line) for line in Path(args.keep_jsonl).read_text(encoding="utf-8").splitlines()]
@@ -45,7 +47,7 @@ def main():
     if len(keep) != len(rows):
         raise ValueError("duplicate keeper stamps")
     stamps = frames["stamp"]
-    if not 0 <= args.frame_index < len(stamps) or any(float(t) not in keep for t in stamps):
+    if (args.frame_index is not None and not 0 <= args.frame_index < len(stamps)) or any(float(t) not in keep for t in stamps):
         raise ValueError("frame index or keeper stamp mismatch")
     geometry = keep[float(stamps[0])]["ground_projection"]
     if any(keep[float(t)].get("ground_projection") != geometry for t in stamps):
@@ -56,12 +58,29 @@ def main():
         raise ValueError("invalid recorded ground projection")
     arc = build_graph(from_lane_graph(args.lane_graph_yaml)).arcs[args.arc_id]
     follower = LaneEdgeFollower(camera_x_offset_m=geometry["camera_x_offset_m"])
-    for i in range(args.frame_index + 1):
+    source_counts = {"LEFT": 0, "RIGHT": 0, "NONE": 0}
+    bend_offsets = []
+    for i in range(len(stamps) if args.summary else args.frame_index + 1):
         pose = tuple(map(float, frames["gt"][i]))
         if not all(math.isfinite(v) for v in pose):
             raise ValueError(f"missing SIM GT pose at frame {i}")
         follower.update(float(stamps[i]), pose, frames["frames"][i], ground,
                         lane_half_width_m=0.0925, bright_threshold=180)
+        if args.summary:
+            source = follower.last.get("source") or "NONE"
+            source_counts[source] = source_counts.get(source, 0) + 1
+            target = follower.last.get("target")
+            if target is not None and -1.05 <= pose[0] <= -0.78 and pose[1] < -0.3:
+                tx = pose[0] + target[0] * math.cos(pose[2]) - target[1] * math.sin(pose[2])
+                ty = pose[1] + target[0] * math.sin(pose[2]) + target[1] * math.cos(pose[2])
+                bend_offsets.append(arc.project(tx, ty)[0])
+    if args.summary:
+        print(json.dumps({"image_frames": len(stamps), "source_counts":
+                          source_counts,
+                          "bend_target_frames": len(bend_offsets),
+                          "bend_max_target_map_offset_m": round(max(bend_offsets), 4) if bend_offsets else None},
+                         indent=2))
+        return
     target = follower.last.get("target")
     target_offset = None
     if target is not None:
