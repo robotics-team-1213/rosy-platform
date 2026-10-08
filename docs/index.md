@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · 정적 차선 경로 끝 정지 ROS-SIM
 - 2026-10-08 · uncommitted · 지도 밖 자세의 굽이 기억 ROS 거절
 - 2026-10-08 · uncommitted · 굽이 원본의 격리 ROS 관측 재발행
 - 2026-10-08 · uncommitted · 굽이 공백의 지도 경계 기억 반례 재생
 - 2026-10-08 · uncommitted · 차선 경계 완전 미관측 ROS SIM 재생
-- 2026-10-08 · uncommitted · D-507 4 회전각: 접선 + 6° 더 돌림(잠정)
