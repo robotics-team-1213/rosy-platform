@@ -7202,3 +7202,125 @@ osy-d395-s1d\`.
 - 변경: 사용자 지시에 따라 원격 단독 시험의 반복 승인 생략과 강제 진행의 범위를 D-522로 기록했다. 장치의 인증·E-Stop·CORE 정지와 몸체 신원·구역 확인은 유지한다.
 - 증거: 두 로봇의 CORE IDLE·속도 0, 최신 LiDAR·전면 영상과 Rosy Cam 영상 수신. 램프 명령 수락만으로 영상 속 로봇별 신원은 확정하지 못했다. 사이트 Fleet Web 설치 버전의 인증·tether API도 아직 목표 계약과 다르다.
 - gate 변화: 없음. 실물 이동과 G4/G5 수용은 별도 장치 증거가 필요하다.
+
+## 2026-10-08 · uncommitted · 10/6·10/7 주행영역 후보와 LiDAR 근접 대조
+
+- 변경: 네 원본 녹화 3,336프레임의 시험 drivable 면적과 신선한 정면 LiDAR 거리의 동시 발생을 계산하는 읽기 전용 분석·영수증을 [검증 기록](validation/drivable-lidar-candidate-2026-10-08/result.md)에 남겼다. 모델 출력은 평가 정답이나 조향 입력으로 쓰지 않았다.
+- 증거: 180° 기준 0.30m 이내 근접·넓은 마스크 동시 발생은 10/6 두 영상 990+271프레임, 10/7 두 영상 0+19프레임. 4개 기준 프레임은 제품 `front_sector`와 거리·유효 빔 수가 일치했다. 동일 입력 재실행 결과 해시 일치, 문서 계약 136 passed·1 skipped·NEW 0, lint 0 errors. 사람 검수 정답 0건.
+- gate 변화: 없음. LiDAR 반환은 벽 화소가 아니며, 10/7 첫 영상의 경계 실패는 근접 조건 없이도 발생했다. 주행 수용 HOLD.
+
+
+## 2026-10-09 · uncommitted · D-528 과노출 후보와 정답 가능성 분리
+
+- 변경: 과노출 비율은 검수 우선순위만 정하고 자동 제외를 하지 않도록 `review_quality.py`의 `--apply`를 제거했다. D-528에 사람의 정답 가능성 판단, 255 대기와 학습 승인 경계를 기록했다. 수치만으로 제외했던 v13 사진 9~23의 15장을 검수 API로 재검수 대기에 되돌렸다.
+- 증거: 모델 PC 원본 15장 확인, 검수 API 응답 15건 `reopen`/skip 0건, `/api/learning` 객체 대기 43·제외 0·픽셀 승인 0. `test_review_quality.py`는 후보 보고가 저장 결정을 바꾸지 않음을 확인했다.
+- gate 변화: 없음. v13 픽셀 승인과 원본 영상 출처 검증, 학습 admission은 아직 끝나지 않았다.
+
+## 2026-10-09 · uncommitted · D-529 역할별 시험 실행 위치
+
+- 변경: 개발 PC의 pytest 자동 fallback을 중단하고, 모델/AI PC 호스트 시험, 현장 PC Fleet·Cam, Pinky DEVICE/FIELD, GitHub full CI의 증거를 분리하는 결정 D-529를 기록했다.
+- 증거: AI PC에서 기체 ID/API 관련 호스트 시험 102개 통과; 현장 Fleet 등록 두 행의 serial_number·device_uid는 아직 비어 있다.
+- gate 변화: 문서 결정만. 원격 실행기 착지·푸시·ARM64 payload·두 로봇 배포·현장 수용은 별도 검증한다.
+
+## 2026-10-09 · uncommitted · 10/6·10/7 주행영역 후보의 몸체 경로 재대조
+
+- 변경: 기존 정면 LiDAR 0.30 m 근접 후보를 제품 ody_path_gap의 직진 몸체 경로에 투영한 [검증 기록](validation/drivable-body-path-audit-2026-10-09/result.md)을 추가했다. 원본은 X:에 두고 코드·해시·집계만 공개 저장소에 기록했다.
+- 증거: 원본 3,336프레임 중 스캔 사용 가능 2,621프레임. 가정한 0.08 m/s 직진 정지거리 0.0384 m 이하는 0건. 10/7 둘째 영상 80번의 경로 거리 0.05097 m는 정지 기준과 0.01257 m 차이여서 안전 여유를 확정하지 못한다.
+- gate 변화: 없음. 실제 회전 경로·mount 실측·사람 정답·실물 주행 수용이 없으므로 주행 허용 HOLD.
+
+## 2026-10-09 · uncommitted · Pilot 태블릿 재연결과 현재 후보 출처 확인
+
+- 변경: Lenovo Pilot 설치 화면을 다시 촬영하고 설치 APK를 읽기 전용으로 확인했다. 현재 소스에서 Android 후보 APK를 격리 빌드해 설치본과 자산·서명을 비교한 결과를 [검증 기록](validation/uiux-pilot-tablet-reconnect-2026-10-09/result.md)에 남겼다.
+- 증거: 현재 후보 93 JVM tests PASS, UI 자산 50개 소스 일치. 설치본과 후보 자산 10개 차이, 서명 인증서 일치. 후보 에뮬레이터는 부팅 후 ADB 미등록으로 화면 캡처 실패.
+- gate 변화: 없음. 설치본 DEVICE 로비만 관찰했고 현재 후보 DEVICE G2, 사용자 G3와 현장 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 첫 화면 LOCAL 증거
+- 변경: `validation/uiux-fleet-map-first-2026-10-09/result.md`에 변경 전후 스크린샷 해시, 모바일 지도 시작 위치와 인증·평면 영상 검증 범위를 기록했다.
+- 증거: 현장 지도 3개 폭의 브라우저 캡처와 위치 검증, 평면 영상 좌표 표시 전용 테스트.
+- gate 변화: 없음. DEVICE/FIELD/G3는 별도 수용 전까지 HOLD.
+
+## 2026-10-09 · uncommitted · Pinky 실물 차선 디버그 지면값 읽기 전용 대조
+
+- 변경: 두 Pinky의 설치본과 ROS 토픽을 읽기 전용으로 확인하고, rosy_26 keep 디버그와 이미지 시각·투영값·페인트 실제 사용을 검증 기록에 남겼다.
+- 증거: rosy_26 디버그 84건 중 이미지 시각 83건 일치, 전략 none/flipping 84건, 목표점 0, denoise_fallback 84건. 장치의 shadow 모델 포인터가 없고 rosy_60은 keep 모드가 아니다.
+- gate 변화: 없음. 사람 경계 정답, 승인 보정, 학습 모델 실제 추론, 자율 주행 수용은 확인되지 않았다. 주행 허용 HOLD.
+
+## 2026-10-09 · uncommitted · 공개 증거 SHA-256 문맥 표기
+
+- 변경: 두 검증 기록의 원본 해시·증거 경로는 유지하고 SHA-256 문맥을 같은 줄에 명시했다.
+- 증거: 수정 전 공개 파일 비밀정보 검사 오탐 5건, 수정 후 저장소 전체 검사 1 passed·새 실패 0건.
+- gate 변화: 문서 표기만 수정했다. Lane 후보의 학습·주행 수용은 이 검사 통과와 별개로 HOLD.
+
+## 2026-10-09 · uncommitted · Fleet 지도 증거 SHA-256 문맥 표기
+
+- 변경: 병렬 착지한 현장 지도 검증 기록의 공개 PNG 해시 세 줄에 같은 줄의 SHA-256 문맥을 추가했다. 원본 해시와 경로는 보존했다.
+- 증거: 착지 검사에서 새 오탐 3건을 확인했고 해당 파일만 다시 스캔해 0건으로 낮췄다.
+- gate 변화: 문서 표기만 수정했다. 현장 배포나 Lane 주행 수용을 뜻하지 않는다.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 지도 마커 비율 LOCAL 화면 기록
+- 변경: `validation/uiux-fleet-marker-scale-2026-10-09/result.md`에 큰 화면에서 과장된 방향 마커와 변경 후 모바일·데스크톱 지도 캡처를 기록했다.
+- 증거: 1920×1080 기존 약 161.94px, 변경 후 42px 이하 검증; 브라우저 6 passed / NEW 0. 원본 캡처와 실행 로그는 X:에 둔다.
+- gate 변화: 없음. 실제 위치·주행·SLAM 및 G3 수용은 이 화면으로 입증하지 않는다.
+
+## 2026-10-09 · uncommitted · fix(fleet): D-520 호 진입 회전각을 lead 접선 대신 차로 방향으로
+- 변경: `trip_runner._step_lane`이 `exit_segment`를 싣는 회전에도 `turn_target`(들어오는 차로 끝 방향 → 나가는 차로 시작 접선, D-507 4항 lap SIM 3 개정)을 보낸다. 지금까지는 `theta`(5 cm lead 접선)를 보냈고, 260919 SW에서 그 값이 12–17° 틀려 호가 접선보다 바깥을 향해 시작했다(lap SIM 2). D-520 1항 47행 문장과 D-507 4항의 끝 문장, `test_trip_d520.py`의 기대·주석("tangent - 6 deg")을 고쳤다.
+- 증거: 모델 PC pytest(`X:\DevTemp\d520-entry\run.txt`) `test_trip_d520.py`·`test_trip_runner.py`·`test_routing_execute.py` 135 passed. SIM은 lap SIM 4(`validation/lane-trip-lap-sim4-2026-10-09/`)에서 원 추종·기본 켬과 함께 봤다.
+- 검토: 독립 code-reviewer(opus) 2026-10-09 APPROVE WITH NOTES(시험 이름 고침 반영, 원 추종 브랜치보다 먼저 또는 함께 착지).
+- gate 변화: 없음. DEVICE/FIELD HOLD.
+
+## 2026-10-09 · uncommitted · feat(core): D-520 호가 odom의 지도 원을 반지름 보정으로 따른다
+- 변경: `line_follow/arc/lane_arc.py`. 호를 열 때 odom에 원 하나를 놓는다. 회전 뒤면 회전 목표 yaw를 접선으로 하고, 이어지는 `straight`면 앞 호의 원을 그대로 쓴다. 매 틱 ω = g·v·κ + v·clamp(sign κ·(64·e_r + I) − 16·e_θ, ±1.5)이다. I는 150·∫e_r ds이고 |I| ≤ 1.0이며, 이어지는 호가 원과 함께 이어받는다. IR 보정의 away·level 동안 보정은 0이고 I도 쌓지 않는다. 보정 밖에서 |e_r| > 0.075 m면 `lane_arc_edge`로 선다. 원을 다시 쓰는 것은 같은 세대의 이어지는 `straight`뿐이다(안전 검토). 첫 IR `left`·`right` 판정은 원을 옮긴다(몸이 칠한 선 중심에서 0.0325 m 안쪽). `motion_admitted`, D-422 sweep, 길이·시간 한도, 멈춤 HOLD는 그대로다. 시험 6개를 새로 넣었다(곡률 0.88/1.1배로 도는 로봇이 원에서 12 mm 안, 8° 틀린 회전 끝에서 원으로 돌아옴, 보정 상한, 반지름 한도 멈춤, 이어지는 호의 원 유지, IR 판정이 원을 옮김). 피드포워드만 보던 시험 셋은 그 뜻대로 보정 없는 틱을 보거나 이득 0으로 고쳤다.
+- 증거: 모델 PC pytest `test_lane_arc.py` 77 passed(±κ 시험 포함), 앞서 `test_line_arc_api.py`·`test_line_junction.py`와 함께 151 passed. SIM은 lap SIM 4(`validation/lane-trip-lap-sim4-2026-10-09/`).
+- 검토: 독립 code-reviewer(opus) 2026-10-09 1차 REQUEST CHANGES(턴에서 옛 원 재사용) → 고친 뒤 APPROVE WITH NOTES.
+- gate 변화: 없음. DEVICE/FIELD HOLD(D-520 개정 2026-10-09 4항).
+
+## 2026-10-09 · uncommitted · docs(adr): D-520 개정 — ring 호 주행 기본 켬, 장치 조건
+- 변경: 사용자 결정(2026-10-09 "둘 다")을 D-520 끝 「개정 2026-10-09」로 적었다. 내용은 진입 회전각, odom 원 추종, 기본 켬, 장치 조건이다. `line_follow.arc_enabled` 기본을 true로 바꿨다(`rosy_default.yaml`, `model.py`). 능력 `lane_arc`는 `arc_enabled`와 `site_floor_map_id` 선언이 함께 있을 때만 참이다. 선언 없는 `arc_enabled: true`는 시작 거부 대신 능력이 거짓이다. 장치 시험 계획은 `arc_enabled`를 false로만 둘 수 있다(`plan_rules.py`). 현장 바닥을 선언하는 `d476_bridge_9dfk.yaml`에 `arc_enabled: false`를 넣었다. API Reference의 `lane_arc`·`LANE_ARC_UNAVAILABLE`·호 명령 문장을 고치고 v1.154로 올렸다(v1.153은 `feat/host-control`이 씀). 안전 검토 뒤 고침: 바닥을 선언하는 계획은 `arc_enabled: false`가 없으면 거절, `ir_guard_speed_scale` 0은 시작 거부 대신 능력 거짓.
+- 증거: 모델 PC pytest gateway·services·device_test 전체에서 plan 규칙 추가 뒤 device_test 129 passed. 새 실패는 plan 규칙을 넣기 전의 overlay 키 거절뿐이었고 그 뒤 0이다. SIM은 lap SIM 4.
+- 검토: 독립 code-reviewer(opus) 2026-10-09 1차 REQUEST CHANGES → 고친 뒤 APPROVE WITH NOTES. 열린 점: 계획 밖 로봇 overlay가 바닥을 선언하면 다음 payload부터 호 능력이 켜진다(개정 「남는 위험」, 8kcn·9dfk overlay는 이 세션이 읽지 않았다).
+- gate 변화: 없음. lap SIM 4는 합격선(모든 호 |Δr| ≤ 0.05 m)을 넘지 못했다(lap 1/12씩 0.051–0.056 m, NE 4/4 0.049–0.052 m). 장치 사용은 SIM 합격, DEVICE 체크리스트, 사용자 승인 뒤다.
+
+## 2026-10-09 · uncommitted · docs(validation): lap SIM 4 — ring 호 주행 기본 켬, 모델 PC
+- 변경: `validation/lane-trip-lap-sim4-2026-10-09/`에 결과와 하네스(`ring4_run.sh`·`ring4_batch.sh`·`ring4_arc.py`), 호별 참값 Δr·구간·Fleet 송신 기록을 두었다. 원시 기록은 `X:\DevTemp\lap-sim4\lap4_runs_full.tgz`다.
+- 증거: 모델 PC Gazebo(도메인 93, `rosy_ring4`, 포트 8588/8589)에서 출하 기본 겹으로 돌렸다. 비례 보정 12 lap은 12/12 완료다. 착지한 비례+적분 12 lap은 11/12 완료이고, 나머지 1회는 ring 앞 서→남 모서리의 `lane_return_fleet_required`다. NE 진입은 4/4와 4/4다. IR 보정, `lane_arc_edge`, `near_stop`은 모두 0이다. ring 호 최대 |Δr|은 lap 0.014–0.056 m이고, 각 묶음에서 1회가 0.05 m를 넘었다. NE `ring_n`은 −0.049…−0.052 m(안쪽)다.
+- gate 변화: 없음. D-520 개정 SIM 합격선(모든 호 |Δr| ≤ 0.05 m)을 넘지 못해 장치 조건 (1)은 열리지 않는다. 남은 원인은 원의 기준 방향(회전 목표 yaw)이 참값 접선과 다른 것이다(SW −1…−7°, NE +14–16°). 카메라 원 맞춤(단계 2)이나 지도 자세 방향이 필요하다.
+
+## 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 표시 LOCAL 검증
+- 변경: `validation/uiux-robot-slam-truth-2026-10-09/result.md`에 CORE 맵핑 세션 수락과 실제 SLAM 실행의 증거 경계를 기록했다. Dashboard 설정 카드가 불필요하게 늘어나지 않도록 고친 모바일·데스크톱 화면을 함께 기록했다.
+- 증거: Console 320·390·1366px와 Dashboard 390·1366px 캡처, 관련 브라우저 3 passed / NEW 0, 이미지 SHA-256.
+- gate 변화: 없음. 설치본·SLAM Toolbox 실행·지도 갱신·DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · 10/6·10/7 주행영역 연속 검수 후보
+
+- 변경: 기존 3,336프레임 smoke 출력을 세션별 연속 구간으로 재집계하고 입력 해시·frame index를 확인하는 재현 코드를 추가했다.
+- 증거: 10/6 이동 중 `none`이면서 하단 후보 면적 >50%인 최장 16·13프레임, 10/7 STOP이면서 같은 면적 조건인 13·83프레임, 10/6 keeper 한쪽 출력 168프레임과 10/7 재생 `ONE` 104프레임 구간을 특정했다.
+- gate 변화: 없음. 후보 분석만이며 사람 픽셀 정답·동일 경계 ID·실물 주행 수용은 여전히 HOLD.
+
+## 2026-10-09 · uncommitted · 10/6·10/7 원본 검수 후보 시각 대조
+
+- 변경: 연속 출력 구간의 시작·중간·끝 원본 프레임을 순차 디코드해 X: 접촉 시트로 대조하고 선택 index·관찰·한계를 새 검증 기록에 남겼다.
+- 증거: 10/6 한쪽 출력 110프레임 안에 굽은 선과 흰 구조물 근접 장면이 함께 있고, 10/7 STOP 83프레임에는 원형·갈림·가로 표식이 보인다. 긴 출력이나 넓은 마스크만으로 동일 경계·진입 허가를 주장할 수 없다.
+- gate 변화: 없음. AI 후보 판독이며 사람 승인 정답, 재생·SIM·DEVICE 주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(pilot/robot): 같은 탭 운전석→운용 지도 검증
+- 변경: Pilot 조종 종료 요청부터 실제 Robot Console 지도 문서·인증 인계까지 LOCAL 연속 화면을 기록하고, 지도 없음 상태에서 현재 지도 열람을 단정하던 문구를 수정했다.
+- 증거: `validation/uiux-pilot-console-continuity-2026-10-09/result.md`. 2000×1200·390×844 전환 전후 캡처, 브라우저 4 passed / NEW 0.
+- gate 변화: 없음. 실제 로봇 정지·지도/SLAM, 설치본, DEVICE/FIELD 및 전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · 10/7 MCAP 원본 207프레임 검수 후보 갤러리
+
+- 변경: 증명된 원본 JPEG 207장을 연속 갤러리와 공란 검수 CSV로 묶고, 입력 목록·이미지 해시를 확인하는 재현 코드를 추가했다.
+- 증거: 124+83장, CSV 207행, 이미지 해시 207건, 갤러리 링크 207개 일치. 검수 입력 칸은 모두 공란이고 모델 출력은 갤러리에 없다.
+- gate 변화: 없음. 고정 평가 세션 중복을 유지해 학습 입장을 허가하지 않았으며 사람 정답·주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(robot): 마지막 수신 계획 표시 검증
+
+- 변경: API가 보장하는 마지막 계획과 현재 목표 연동의 경계를 Console 경로 모양·문구에 반영하고 LOCAL 반응형 증거를 기록했다.
+- 증거: `validation/uiux-robot-last-plan-2026-10-09/result.md`. 1366·390·320px 캡처, 브라우저 1 passed / NEW 0.
+- gate 변화: 없음. 실제 경로 추종·SLAM, 설치본, DEVICE/FIELD와 전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 우선 배치
+
+- 변경: 전화와 데스크톱 현장 지도에서 지도→경로 미리보기→운행→초안 편집 순서를 적용하고 선택형 평면 영상 도구를 접었다.
+- 증거: `validation/uiux-fleet-site-map-task-order-2026-10-09/result.md`. 320px 전후·390px·1440px 캡처, 브라우저 7 passed / NEW 0.
+- gate 변화: 없음. 실제 로봇 운행·SLAM, 설치본·DEVICE/FIELD와 전체 D-153 G2/G3는 HOLD.

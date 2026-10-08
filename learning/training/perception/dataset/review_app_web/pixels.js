@@ -14,6 +14,7 @@ let workspace,frame,review,original,displayPhoto,maskImage,busy=false,ready=fals
 let candidatePreviewDigest='';
 $('pixel-view-status').before($('pixel-candidate-tools'));
 $('pixel-candidate-tools').after($('pixel-candidate-preview'));
+$('pixel-candidate-tools').classList.add('review-draft-bar');
 $('pixel-preview-candidate').textContent='초안 미리보기';
 $('pixel-candidate-image').alt='선택한 자동 초안을 원본 사진 위에 표시';
 let detailView=false;
@@ -42,7 +43,7 @@ let candidateKey='';
 function v13Review(){return !!review?.classes?.classes.some(row=>row.name==='lane_left')&&!!review?.classes?.classes.some(row=>row.name==='lane_right'&&row.role==='lane_marking')&&!!review?.classes?.classes.some(row=>row.name==='drivable');}
 function legacyCandidate(){return v13Review()&&review?.draft_candidates?.find(row=>row.sha256===$('pixel-candidates').value)?.origin==='v12_pixel_mask_candidate';}
 function candidateOptions(){const rows=ready?review?.draft_candidates||[]:[],key=`${frame?.index}:${rows.map(row=>`${row.sha256}:${row.origin}`).join(',')}`,select=$('pixel-candidates');
- if(key!==candidateKey){candidateKey=key;select.replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.sha256;option.textContent=`${row.origin==='v12_pixel_mask_candidate'&&v13Review()?'v12 이관 참고 · v13 주행영역 없음':({'v12_pixel_mask_candidate':'v12 기존 마스크','sam3_road_v1_v12_base':'SAM3 주행영역 + v12 마스크','sam3_obstacle_unknown_v12_base':'SAM3 장애물 보류 · 사람 확인 필요'})[row.origin]||'자동 초안'} · ${row.sha256.slice(0,8)}`;option.title=`출처: ${row.origin||'미기록'} · 목록 ${row.catalog_sha256}`;select.append(option);}}
+ if(key!==candidateKey){candidateKey=key;select.replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.sha256;option.textContent=`${row.origin==='v12_pixel_mask_candidate'&&v13Review()?'v12 이관 참고 · v13 주행영역 없음':({'v12_pixel_mask_candidate':'v12 기존 마스크','sam3_road_v1_v12_base':'SAM3 주행영역 + v12 마스크','sam3_road_visible_lane_clip':'SAM3 차선 밖 미검수 보정','sam3_obstacle_unknown_v12_base':'SAM3 장애물 보류 · 사람 확인 필요'})[row.origin]||'자동 초안'} · ${row.sha256.slice(0,8)}`;option.title=`출처: ${row.origin||'미기록'} · 목록 ${row.catalog_sha256}`;select.append(option);}}
   $('pixel-candidate-tools').hidden=!rows.length;select.disabled=busy||!ready||loading||conflicted||forbidden||draft.length>0||seeds.length>0||polygon.length>0;
  $('pixel-apply-candidate').disabled=select.disabled||!rows.length||frame?.status==='excluded'||review?.status==='excluded';
  $('pixel-apply-candidate').textContent=legacyCandidate()?'v12 참고 마스크 가져오기':'선택 초안 적용';

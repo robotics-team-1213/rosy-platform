@@ -43,6 +43,13 @@ class TripConvoy(BaseModel):
     leader: str = Field(min_length=1, max_length=96)
 
 
+class SignalCommand(BaseModel):
+    """D-525 4: an operator verb for one virtual signal."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    verb: str = Field(min_length=1, max_length=16)
+    approach: Optional[str] = Field(default=None, min_length=1, max_length=128)  # set_aspect only
+
+
 class TripRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     to: Union[PlaceRef, TripPoint]
@@ -169,6 +176,25 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
     def fleet_traffic() -> dict:
         """D-517 3 (M1): the block table of the last trip period; nothing of it is sent to robots."""
         return runner.traffic.view()
+
+    @app.post("/api/fleet/traffic/signals/presence", tags=["fleet"])
+    def fleet_traffic_signal_presence(principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """D-525 4: the operator's console is open; a manual green lasts while this keeps coming."""
+        return runner.traffic.signal_presence()
+
+    @app.post("/api/fleet/traffic/signals/{signal_id}", tags=["fleet"])
+    def fleet_traffic_signal(signal_id: str, body: SignalCommand,
+                             principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """D-525 4: operator verb for a virtual signal: ``cycle``, ``hold``, ``all_red``, or ``set_aspect``
+        with ``approach`` (green for that approach while the operator's console sends presence)."""
+        try:
+            return runner.traffic.signal_command(signal_id, body.verb, body.approach)
+        except KeyError:
+            raise _refuse("SIGNAL_UNKNOWN", status=404)
+        except ValueError:
+            raise _refuse("SIGNAL_VERB", status=422)
+        except PermissionError:
+            raise _refuse("SIGNAL_NO_PRESENCE", status=409)
 
     @app.get("/api/fleet/trips/{trip_id}", dependencies=read_guard, tags=["fleet"])
     def fleet_trip_view(trip_id: str) -> dict:

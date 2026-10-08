@@ -573,7 +573,7 @@
 .risk-tape li.risk-unavailable { color: var(--nominal-quiet); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
 .risk-tape > p { margin: var(--space-4) 0 0; color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-copy) var(--mono); }
 
-.settings-grid { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
+.settings-grid { display: grid; align-items: start; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
 .settings-card {
   display: flex;
   flex-direction: column;

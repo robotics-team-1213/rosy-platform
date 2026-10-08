@@ -772,3 +772,14 @@
 - gate 변화: 없음. 이 파일은 로봇에 올라가기 전에는 현장 화면이 바뀌지 않는다.
 - 결정: D-432, D-471. 새 API와 새 ADR은 없다.
 - 교훈: 앱 핸드오프는 `<head>`의 일반 스크립트다. Playwright init script는 그 순서보다 먼저 실행되어 같은 시험이 되지 않는다.
+
+## 2026-10-09 · uncommitted · fix(pilot): 연결 상태와 이유를 늘 보인다 (D-483 보완)
+- 변경: 실패마다 `LinkReason`(ROBOT_UNREACHABLE·CA_UNKNOWN·APPROVAL_*·RATE_LIMITED·CORE_NOT_READY·API_VERSION_TOO_OLD 등)과 다음 행동 문구를 `LinkStatus` 한 곳에서 정한다. 승인 대기 대화상자는 요청 번호·남은 시간·두 승인 경로와 "로봇 화면에 Pair request가 없으면 릴리스가 화면 코드를 못 보인다"를 보인다. 처음 연결의 인증서 확인은 로봇 LCD의 `CA xxxx xxxx xxxx xxxx`(앞 16자리) 또는 대시보드 전체 값과 대조하게 한다. 수신기가 끝낸 요청은 `PeerEnded(state)`로 거절·만료·취소를 구분한다. 세션 바는 끊김 동안 "연결 끊김 · 로봇이 응답하지 않습니다"를 보인다.
+- 증거: Android 단위 시험 97 passed(LinkStatusTest·PeerClientTest 종료 상태·TrustedProxyTest). 실기 9dfk·8kcn(055)에서 `/run/rosy-peer-display` 부재로 LCD 코드가 뜨지 않음을 확인(CORE 경고 FileNotFoundError).
+- gate 변화: SOURCE/LOCAL. 화면 코드 경로의 DEVICE 확인은 디렉터리·CA 줄이 든 릴리스(056 이후)에서.
+
+## 2026-10-09 · uncommitted · uiux(pilot): Robot 운용 지도 같은 탭 인계 검증
+
+- 변경: Pilot 주행→0 속도·IDLE 요청→실제 CORE Console 지도 문서의 인증 인계를 한 브라우저 탭에서 검증한다. 쿼리와 지도 없음 상태를 보존한다.
+- 증거: [Pilot→Robot Console 연속 화면](../../../docs/validation/uiux-pilot-console-continuity-2026-10-09/result.md). 2000·390px 전환 전후 캡처, 관련 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 사용자 흐름 근거 보강. 설치 앱·실제 정지 readback·지도/SLAM·전체 G2/G3·DEVICE/FIELD는 HOLD.
