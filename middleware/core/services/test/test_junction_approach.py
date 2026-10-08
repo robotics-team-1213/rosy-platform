@@ -661,3 +661,17 @@ def test_an_instruction_expiring_without_a_corner_releases_as_before():
     rig.now += 10.5
     decision, status = corner(rig, 'both')
     assert decision.linear > 0 and status.junction.state == 'idle'
+
+
+def test_an_expired_corner_hold_stays_on_a_sighting_and_ends_on_a_mode_change():
+    """Review: a sighting after expiry neither waits nor turns; a mode change releases it."""
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)
+    corner(rig)
+    rig.now += 10.
+    corner(rig)                                                          # expired while held
+    decision, status = sight(rig, ahead=.4)
+    assert (decision.linear, decision.angular, status.reason) == (0., 0., 'junction_corner_hold')
+    rig.m.set_mode(LineFollowMode.OFF)
+    assert rig.m._junction is None and rig.m.status().reason != 'junction_corner_hold'
