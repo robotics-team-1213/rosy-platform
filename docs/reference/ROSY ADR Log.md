@@ -517,3 +517,4 @@
 | D-520 | 곡률을 아는 차로 구간(회전교차로 ring)에서는 CORE가 지도의 호(ω = v·κ)를 주 명령으로 달리고 카메라는 바깥선을 반지름 고정 원으로 맞춰 옆 보정만 준다; 구간 기하는 D-507 교차로 지시의 `exit_segment`로 보내고 IR 가드(`clear`만)와 D-422가 지킨다 | Accepted (2026-10-08, 사용자 확정; 결정 방향: 지도 호 feed-forward 주 명령 + 카메라 호 맞춤 보정, 단계 1 feed-forward SIM → 단계 2 보정; 문서만, 구현·SIM·DEVICE 별도) |
 | D-521 | Rosy Cam 원격 입회로 G4/G5를 진행하고 별도 현장 담당자를 필수로 두지 않는다 | Accepted (2026-10-08, 사용자 결정; DEVICE/FIELD 미수용) |
 | D-522 | 개발 환경 원격 이동은 사용자 지시로 진행하며 반복 승인 대신 장치 증거를 확인한다 | Accepted (2026-10-08, 사용자 지시; DEVICE/FIELD 미수용) |
+| D-524 | Service Control. 관제 API가 사이트·AI·모델 Ubuntu의 재부팅과 허용된 systemd 유닛 정지·재시작만 받는다. pkill·셸·프로세스 이름은 거절하고, 재부팅은 shutdown -r +10이다 | Proposed (2026-10-08, 사용자 지시; 구현은 feat/host-control, 현장 설치·재부팅 없음) |
