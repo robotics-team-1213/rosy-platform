@@ -2,17 +2,17 @@
 // 로스터·지도·대형·신호등·발행 상태는 없다. 관제 토큰은 같은 세션 저장소
 // (rosy-console-token)를 공유한다 — 운용 화면에서 접속했으면 여기도 풀려 있다.
 
-import { applyRoleToControls } from "./authorization.js";
-import { developmentToken } from "./development-auth.js";
+import { applyRoleToControls } from "/console/assets/authorization.js";
+import { developmentToken } from "/console/assets/development-auth.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
 import { createCameraPeerPanel } from "./camera-peer.js";
-import { createVisionView } from "./vision-view.js";
+import { createVisionView } from "/console/assets/vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
-import { createPollGate } from "./poll-gate.js";
+import { createPollGate } from "/console/assets/poll-gate.js";
 import { createPeerPicker } from "./peer-picker.js";
-import { addressMap, movableRobots } from "./address-drift.js";
+import { addressMap, movableRobots } from "/console/assets/address-drift.js";
 import { createFleetClient } from "/common/fleet-client.js";
 import { createPasswordLogin } from "./password-login.js";
 import { createPageScope } from "/common/scope.js";

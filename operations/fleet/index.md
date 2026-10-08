@@ -50,6 +50,7 @@
 | D-453 | 양보 한 구간은 기존 막힘 답 YIELD 로 보내고, CORE 는 돌려 확인한 뒤 앞으로만 간다 |
 | D-455 | 방에서 선으로 돌아오는 구간은 지도 자세가 정하고, 오도메트리 좌표는 차선에 올리지 않는다 |
 | D-456 | 같은 LAN에서 장비를 선택하고 상대 화면에서 승인한다 — 오프라인과 로그인 만료는 페어링 해제가 아니다 |
+| D-472 | Rosy Cam 현장 영상을 지도에 표시하고 후면 LED 점멸로 로봇 신원을 대조한다 |
 | D-488 | 관제(Fleet)가 현장 지도의 주소·방향 있는 길로 경로를 잡아 로봇을 보낸다 — 위치는 Rosy Cam이 주, 지도는 주행으로 가르치고 콘솔에서 확정한다 |
 | D-489 | 관제 경로 계획은 방향 있는 차로 그래프에서 "차로 단위 상태"로 시간 비용 A*를 푼다 — 전역 경로는 Fleet, 국소 추종은 로봇, 다중 로봇 교통은 별도 층 |
 | D-490 | 관제 경로 계획기 구현 — `fleet/routing` 순수 모듈, 표준 라이브러리 A*, 설정·오류 코드·API·시험 기준 |
@@ -89,8 +90,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · D-515 관제 지도 천장 카메라를 위에서 본 직사각형으로
-- 2026-10-08 · uncommitted · feat(fleet): D-513 7 지도 화면 방향 `view_turn_deg`
-- 2026-10-08 · uncommitted · fix(fleet): D-507 굽은 길 옆 거리, main 병합
-- 2026-10-08 · uncommitted · fix(fleet): D-507 Fleet 검토 2회 반영
-- 2026-10-08 · dc9026930 · feat(fleet): D-507 2·3·9 Fleet 쪽
+- 2026-10-08 · uncommitted · feat(fleet): 지도 edge 굽이 후보 진단
+- 2026-10-08 · uncommitted · docs(fleet): 지도 교차로 창 누락 시 CORE HOLD 설명
+- 2026-10-08 · uncommitted · docs(fleet): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 2026-10-08 · uncommitted · fix(trip): D-507 pivot 검토 반영 — lane 차로만, 창 없으면 음수 pivot 없음
+- 2026-10-08 · uncommitted · fix(trip): D-507 회전 축을 지도의 첫 칠한 선에서 (SIM 발견 1–2)

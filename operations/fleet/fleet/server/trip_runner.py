@@ -24,7 +24,8 @@ from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import arc_id, lane_action, replan_hold, theta, unsupported
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
-                                     OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view)
+                                     OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view,
+                                     record_bend_candidate)
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -245,6 +246,7 @@ class TripRunner:
             live = self._live
             if live is None or not live.open:
                 return
+            live.view["detail"].pop("bend_candidate", None)
             robot_id = live.view["robot_id"]
             pose = await self._pose(robot_id)
             if not live.open:
@@ -281,6 +283,7 @@ class TripRunner:
                 if index != live.view["segment_index"]:
                     live.view["segment_index"] = index
                     live.last_goal = None
+                record_bend_candidate(live, pose, self._store.active(), index, s)
                 self._describe(live)
                 last = index == len(live.segments) - 1
                 if not last and not live.replan_pending and self._needs_replan(live, index):
@@ -595,5 +598,7 @@ class TripRunner:
                                                                                 self._routing))
 
     def _save(self, live: LiveTrip) -> None:
+        if not live.open:
+            live.view["detail"].pop("bend_candidate", None)
         live.view["updated_at"] = self._clock()
         self._store.put_trip(live.view)

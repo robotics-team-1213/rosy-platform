@@ -447,12 +447,15 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("--sightings-db requires --sightings-config")
     sighting_service = None
     tracking_service = None
+    identity_config = None
     vision_sources = ()
     if sightings_config is not None:
         from fleet.server.sighting_store import SightingStore
         from fleet.server.sightings_config import load_sighting_sources
 
         sources = load_sighting_sources(sightings_config)
+        from fleet.server.sightings_config import load_identity_config
+        identity_config = load_identity_config(sightings_config)  # D-472, optional identity: block
         if enrollment_store is not None:
             sources = _relax_retired_sighting_targets(
                 sources, known={*console.robot_ids, *(
@@ -560,6 +563,7 @@ def run_console(args: argparse.Namespace) -> None:
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
+                     identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args))
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
     print(f"fleet console: http://{args.host}:{args.port}/console  "
@@ -603,7 +607,10 @@ def _build_site_map(args, tasks_db):
         site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
         source = getattr(args, "site_map_import", None)
         if source is not None:
-            site_maps.import_if_empty(from_lane_graph(source), source=Path(source).name)
+            # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
+            # report; the default "site" would filter every sighting (map pose UNKNOWN).
+            site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
+                                      source=Path(source).name)
     except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"site map / routing config: {exc}")
     if tasks_db is None:

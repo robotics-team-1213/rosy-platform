@@ -25,6 +25,7 @@ that); Fleet orders detections by ``captured_at``.
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import math
 import time
@@ -40,6 +41,7 @@ from rosy_vision.project import CameraMap, Point
 from rosy_vision.track.background_blob import BackgroundBlobDetector
 from rosy_vision.track.calibration import choose
 from rosy_vision.track.fleet_client import TrackPublishError
+from rosy_vision.track import led_identity
 from rosy_vision.track.model import (
     Calibration, Detection, DetectorResult, Frame, RobotDetector, ROBOT_TOP_HEIGHT_M,
     ROTATION_RADIUS_M, MAX_DETECTIONS,
@@ -114,6 +116,11 @@ class TrackWorker:
         self._executor: ThreadPoolExecutor | None = None
         self._publish_log = _FailureLog("detections not accepted", camera.source_id, clock)
         self._config_log = _FailureLog("tracking config read failed", camera.source_id, clock)
+        # D-472: the one open identity challenge Fleet named, its ring samples, and the last reported.
+        self._identity_id: str | None = None
+        self._identity_samples: list[led_identity.Sample] = []
+        self._identity_done: str | None = None
+        self.led_config = led_identity.LedConfig()
 
     @property
     def config(self) -> dict | None:
@@ -164,9 +171,13 @@ class TrackWorker:
         if self._executor is None:
             self._executor = ThreadPoolExecutor(
                 max_workers=1, thread_name_prefix=f"rosy-vision-track-{self.camera.source_id}")
+        challenge = _challenge(config.get("identity_challenge"), self.led_config)
         step = await asyncio.get_running_loop().run_in_executor(
-            self._executor, self._detect, frame.jpeg, frame.captured_at, markers,
-            config.get("calibration"), lens, relearn)
+            self._executor, functools.partial(
+                self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
+                lens, relearn, challenge=challenge))
+        if challenge is not None:
+            await self._report_identity(challenge, frame.captured_at)
         if step is None:
             return None
         calibration, result = step
@@ -186,8 +197,55 @@ class TrackWorker:
             self._publish_log.ok()
         return payload
 
-    def _detect(self, jpeg: bytes, captured_at: float, markers, record, lens, relearn: int | None
-                ) -> tuple[Calibration | None, DetectorResult] | None:
+    async def _report_identity(self, challenge: dict, now: float) -> None:
+        """D-472: once the window has passed, send Fleet the verdict (never an image)."""
+        request_id = challenge["request_id"]
+        if now <= challenge["not_after"] or self._identity_done == request_id:
+            return
+        self._identity_done = request_id
+        samples = self._identity_samples if self._identity_id == request_id else []
+        verdict = led_identity.decide(samples, not_before=challenge["not_before"],
+                                      not_after=challenge["not_after"], now=now, config=self.led_config)
+        self._identity_samples = []
+        body = {"source_id": self.camera.source_id, "map_id": self.camera.map_id,
+                "request_id": request_id, "processor_revision": led_identity.PROCESSOR_REVISION,
+                **verdict}
+        try:
+            await self.client.publish_identity(body)
+        except TrackPublishError as exc:
+            self._publish_log.failed((("identity_status", exc.status_code), ("code", exc.code)))
+        except httpx.HTTPError as exc:
+            self._publish_log.failed((("identity_error_type", type(exc).__name__),))
+
+    def _identity_sample(self, image: np.ndarray, captured_at: float, calibration: Calibration,
+                         result: DetectorResult, challenge: dict | None) -> None:
+        """Ring samples of the anonymous blobs while a challenge window is open (detection thread)."""
+        if (challenge is None or result.status != "OK"
+                or not challenge["not_before"] <= captured_at <= challenge["not_after"]):
+            return
+        if challenge["request_id"] != self._identity_id:
+            self._identity_id, self._identity_samples = challenge["request_id"], []
+        inverse = np.linalg.inv(geometry.as_matrix(calibration.image_to_map))
+        scale_x = image.shape[1] / calibration.image_size[0]
+        scale_y = image.shape[0] / calibration.image_size[1]
+        blobs = []
+        for d in result.detections:
+            if d.marker_id is not None:
+                continue
+            # ponytail: floor-plane inverse, no parallax; the ring's outer radius absorbs the
+            # top-height offset. Use the lens camera model if the field measurement says so.
+            (px, py), (ex, ey) = geometry.apply(inverse, [(d.x, d.y), (d.x + d.footprint_m / 2, d.y)])
+            if not all(math.isfinite(v) for v in (px, py, ex, ey)):
+                continue
+            radius = math.hypot((ex - px) * scale_x, (ey - py) * scale_y)
+            blobs.append(led_identity.Blob(px * scale_x, py * scale_y, radius, d.x, d.y))
+        if len(self._identity_samples) < led_identity.MAX_SAMPLES:
+            self._identity_samples.append(led_identity.sample_frame(
+                image, captured_at=captured_at, calibration_revision=calibration.revision,
+                blobs=blobs, color=challenge["color"], config=self.led_config))
+
+    def _detect(self, jpeg: bytes, captured_at: float, markers, record, lens, relearn: int | None,
+                challenge: dict | None = None) -> tuple[Calibration | None, DetectorResult] | None:
         """Detection-thread half of a step: relearn, decode, choose the calibration, detect."""
         if relearn is not None:
             if self._relearn_seen is not None and relearn > self._relearn_seen:
@@ -201,6 +259,7 @@ class TrackWorker:
         if calibration is None:
             return None, DetectorResult((), "CALIBRATION_REQUIRED")
         result = self.detector.detect(Frame(image, captured_at), calibration)
+        self._identity_sample(image, captured_at, calibration, result, challenge)
         matrix = geometry.as_matrix(calibration.image_to_map)
         camera = geometry.camera_from_homography(matrix, calibration.image_size, calibration.hfov_deg)
         measured = []
@@ -228,3 +287,17 @@ class TrackWorker:
             anonymous = list(result.detections) if result.status == "OK" else []
             result = DetectorResult(tuple((measured + anonymous)[:MAX_DETECTIONS]), "OK")
         return calibration, result
+
+
+def _challenge(raw, config: led_identity.LedConfig) -> dict | None:
+    """Fleet's ``identity_challenge``, checked; None when absent or malformed."""
+    if not isinstance(raw, dict):
+        return None
+    request_id, color = raw.get("request_id"), raw.get("color")
+    start, end = raw.get("not_before"), raw.get("not_after")
+    if (not isinstance(request_id, str) or not request_id or color not in config.hues
+            or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+                   for v in (start, end))
+            or not 0.0 < end - start <= led_identity.MAX_WINDOW_S):
+        return None
+    return {"request_id": request_id, "color": color, "not_before": float(start), "not_after": float(end)}

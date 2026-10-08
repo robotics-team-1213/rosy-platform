@@ -4,7 +4,7 @@ import ssl
 
 import httpx
 
-from fleet.server.link_class import classify_link
+from fleet.server.console_view import classify_link
 from fleet.swarm.transport import RobotApiError
 
 

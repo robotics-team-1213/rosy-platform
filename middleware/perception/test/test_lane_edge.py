@@ -245,6 +245,20 @@ def test_edge_failure_hands_off_to_an_armed_corner(monkeypatch):
 
 # --- Loss ------------------------------------------------------------------------
 
+def test_right_fallback_rejects_a_distant_line_when_left_memory_is_nearby():
+    view = BirdsEye(GROUND, W, HT, CAM_X)
+    left = ((view.x >= 0.09) & (view.x <= 0.13) & (abs(view.y - H) <= 0.005)).astype(np.uint8)
+
+    def pursue(right_y):
+        right = ((view.x >= 0.09) & (view.x <= 0.40) & (abs(view.y - right_y) <= 0.01)).astype(np.uint8)
+        return LaneEdgeFollower(camera_x_offset_m=CAM_X)._pursue(
+            view, {"left_grid": left, "right_grid": right, "fresh_length": 0.3}, H)
+
+    assert pursue(-H) is not None          # the same lane's right line can carry a short loss
+    assert pursue(-0.198) is None          # 0.290 m apart: too wide for this 0.185 m lane
+    assert pursue(-0.01) is None           # an inner branch is too close to the left line
+
+
 def test_boundary_truly_lost_ends_in_no_output():
     """Paint vanishes: memory carries the path a bounded distance at
     MEMORY_CONFIDENCE, then the output is None and CORE stops."""

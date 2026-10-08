@@ -345,6 +345,8 @@ def test_console_web_node_unit_tests_pass():
         pytest.skip("node is not installed; run `node --test test/web/` where it is")
     specs = sorted((Path(__file__).resolve().parent / "web").glob("*.test.mjs"))
     assert specs, "no .test.mjs specs found under test/web"
-    result = subprocess.run([node, "--test", *map(str, specs)], capture_output=True, text=True,
+    hook = Path(__file__).resolve().parent / "web" / "register-console-assets.mjs"
+    result = subprocess.run([node, "--import", hook.as_uri(), "--test", *map(str, specs)],
+                            capture_output=True, text=True,
                             encoding="utf-8", errors="replace", timeout=60, check=False)
     assert result.returncode == 0, result.stdout + result.stderr

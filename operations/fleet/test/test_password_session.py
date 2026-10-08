@@ -488,5 +488,5 @@ def test_api_reference_documents_the_login_routes():
     reference = (root / "docs/reference/ROSY API & Protocol Reference.md").read_text(encoding="utf-8")
 
     for row in ("| POST | `/api/fleet/auth/login` |", "| POST | `/api/fleet/auth/logout` |",
-                "| GET | `/api/fleet/auth/session` |", "| v1.131 | 2026-10-08 | Additive (D-519)"):
+                "| GET | `/api/fleet/auth/session` |", "| v1.137 | 2026-10-08 | Additive (D-519)"):
         assert row in reference

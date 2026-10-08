@@ -22,8 +22,8 @@ Task 1의 여섯 값을 이 표에 넣는다. 표에 없는 조합이면 Task 2�
 
 | 읽은 값 | 다음 |
 |---|---|
-| Fleet 이미지 안에 `fleet.server.link_class`가 없다 | 모니터가 현장 이미지에 없다. Task 3은 사용자에게 사이트 릴리스를 요청하는 데서 끝난다. 이 계획이 릴리스를 만들거나 후보 트리에서 `docker compose build` 하지 않는다 |
-| `link_class`가 있다 | 관제 등록 로봇 칸에 사이트 경로 세 줄이 보여야 한다. Task 5의 확인에 그 세 줄을 포함한다 |
+| Fleet 이미지 안에 D-499 분류 `classify_link`가 없다 | 모니터가 현장 이미지에 없다. Task 3은 사용자에게 사이트 릴리스를 요청하는 데서 끝난다. 이 계획이 릴리스를 만들거나 후보 트리에서 `docker compose build` 하지 않는다 |
+| `classify_link`가 있다 | 관제 등록 로봇 칸에 사이트 경로 세 줄이 보여야 한다. Task 5의 확인에 그 세 줄을 포함한다 |
 | `ROSY_ENROLLED_TLS_BINDINGS_FILE`이 비어 있고 `robot_enrollment_tls.origin`은 `https://`이다 | 마커는 있는데 프로세스에 바인딩이 없다. Task 4는 런북의 공개 바인딩 파일을 관리자가 넣는 길이다. HTTP로 내리지 않는다 |
 | 바인딩 파일이 있고 origin이 그 파일의 `https://hostname:port`와 같다 | Task 4는 스택이 그 파일을 이미 쓰는지 확인하고, 폴링이 아직 `protocol`이면 검토된 Fleet 재시작만 한다 |
 | 바인딩 파일의 hostname·port·CA 지문이 origin과 다르다 | 재시작해도 거절된다. Task 4에서 멈추고 관리자에게 보인다. DB·마커·credential key를 지우지 않는다 |
@@ -64,10 +64,10 @@ Expected: `rosy-site-proxy-1`, `rosy-site-fleet-1`, `rosy-site-vision-1`의 이�
 **Step 3: 그 이미지에 D-499 분류가 있는지**
 
 ```powershell
-& 'C:\Program Files\Tailscale\tailscale.exe' ssh robttt@100.82.51.8 -- docker exec rosy-site-fleet-1 python -c "import importlib.util; print(importlib.util.find_spec('fleet.server.link_class') is not None)"
+& 'C:\Program Files\Tailscale\tailscale.exe' ssh robttt@100.82.51.8 -- docker exec rosy-site-fleet-1 python -c "import importlib.util as u, pathlib as p; v=u.find_spec('fleet.server.console_view'); print(u.find_spec('fleet.server.link_class') is not None or (v is not None and 'def classify_link' in p.Path(v.origin).read_text(encoding='utf-8')))"
 ```
 
-Expected: `True` 또는 `False` 한 단어. `ModuleNotFoundError`는 `False`와 같이 적는다.
+Expected: `True` 또는 `False` 한 단어. 2026-10-08부터 `classify_link`는 `fleet.server.console_view`에 있다(D-430 §3). 그 전 이미지는 `fleet.server.link_class`에 있어 둘 다 `True`로 센다. `ModuleNotFoundError`는 `False`와 같이 적는다.
 
 **Step 4: 바인딩 환경과 TLS 마커**
 
@@ -97,7 +97,7 @@ Expected: `lan 0`은 LAN에서 포트가 열린 것이다. `ts`가 0이 아니�
 
 **Step 6: 기록**
 
-`X:\DevTemp\site-link-repair\diagnose.txt`에 시각, 이미지 태그, `link_class` 유무, 바인딩 환경 `set`/`empty`, TLS origin과 지문 길이, 등록 `state`, 유닛 여섯 개의 active 여부, `lan`/`ts` 숫자만 남긴다. 이 파일을 저장소에 넣지 않는다.
+`X:\DevTemp\site-link-repair\diagnose.txt`에 시각, 이미지 태그, `classify_link` 유무, 바인딩 환경 `set`/`empty`, TLS origin과 지문 길이, 등록 `state`, 유닛 여섯 개의 active 여부, `lan`/`ts` 숫자만 남긴다. 이 파일을 저장소에 넣지 않는다.
 
 **Step 7: Commit**
 
@@ -119,7 +119,7 @@ Task 1의 값을 위 「갈림」 표에 맞춘다. 맞는 행마다 `diagnose.t
 아래면 이 계획의 Task 4를 실행하지 않고 사용자에게 그 사실만 알린다.
 
 - 바인딩 환경이 `set`이고 origin과 바인딩 파일의 hostname·port가 같은데, 관제 `link`가 `protocol`이다.
-- `link_class`가 `True`인데 등록 로봇 칸에 사이트 경로 세 줄이 없다.
+- `classify_link`가 `True`인데 등록 로봇 칸에 사이트 경로 세 줄이 없다.
 
 그때의 수리는 콘솔이 스킴을 바꾸는 버튼이 아니다. D-499가 그 버튼을 범위 밖으로 두었다. 등록된 base URL을 프로세스가 `https`로 올리는 기존 `EnrolledTlsBindings.endpoint`가 왜 비었는지를 별도 계획으로 연다.
 
@@ -135,7 +135,7 @@ Task 1의 값을 위 「갈림」 표에 맞춘다. 맞는 행마다 `diagnose.t
 - Read: `docs/adr/D-499-console-site-path-and-robot-link.md`
 - Read: `docs/plans/2026-10-07-console-site-path-and-robot-link.md`
 
-**Step 1: `link_class`가 True이면 이 태스크를 건너뛴다**
+**Step 1: `classify_link`가 True이면 이 태스크를 건너뛴다**
 
 현장 이미지가 이미 링크 단어를 낼 수 있다. 화면 확인은 Task 7이다.
 
