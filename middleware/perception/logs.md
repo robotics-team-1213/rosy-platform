@@ -1307,3 +1307,9 @@
 - 변경: 분기 보조 진입과 진행 중 지도 측면 오차를 기존 `AGREE_MAX_LATERAL_M`과 비교해, 초과하면 각각 STOP 또는 래치된 `MANOEUVRE_ABORT`로 처리한다.
 - 증거: 저장된 ROS SIM frame 192의 80 mm 자세 교란은 수정 전 `MANOEUVRE`, 수정 후 STOP. 원래 자세의 `MEMORY` 후보는 유지. 분기·혼합·코스 시험 77 passed, 10 skipped, 신규 실패 0.
 - gate 변화: 없음. 오프라인 반례와 호스트 시험이며, 활성 Fleet 지도 연동·ROS SIM 폐루프·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · test(perception): 남쪽 출발 굽이 재획득과 긴 페인트 공백
+
+- 변경: `west:r → ring_s:f` 남쪽 직선 출발 호스트 폐루프와 굽이 앞 0.30 m 반경 페인트 공백을 `test_route_camera.py`에 고정했다.
+- 증거: 정상 바닥은 분기 도달·올바른 방향·MEMORY 재획득, 최대 중심선 편차 0.0356 m. 긴 공백은 0.249 m 진행 뒤 LOST, 최대 편차 0.002 m. 두 시험 모두 통과.
+- gate 변화: 없음. 합성 바닥·SIM 참 자세의 호스트 검증이며 ROS 그래프, Fleet 활성 경로, 실제 벽·페인트 검수는 별도다.

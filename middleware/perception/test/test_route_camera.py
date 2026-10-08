@@ -55,6 +55,26 @@ def test_every_junction_transition_is_driven(index):
     assert result["max_centre_dev_m"] <= 0.040, summary([result])
 
 
+def test_south_west_bend_reacquires_on_the_route():
+    scenario = dict(SCENARIOS[11], start=(-1.15, -0.511, 0.0))
+    result = run_scenario(scenario, follower(scenario), steps=300)
+    assert result["reached_end"] and result["branch_ok"] and not result["wrong_way"]
+    assert "MEMORY" in result["tiers"]
+    assert result["max_centre_dev_m"] <= 0.040
+
+
+def test_south_west_bend_stops_before_a_long_paint_gap():
+    scenario = dict(SCENARIOS[11], start=(-1.15, -0.511, 0.0))
+    world = _blank_world()
+    col, row = world.px([(-0.61, -0.38)])[0]
+    rows, cols = np.ogrid[:world.paint.shape[0], :world.paint.shape[1]]
+    world.paint[(rows - row) ** 2 + (cols - col) ** 2 <= 300 ** 2] = 0
+    result = run_scenario(scenario, follower(scenario), steps=300, world=world)
+    assert result["reason"] == "lost" and not result["reached_end"]
+    assert result["final_pose"][0] < -0.8
+    assert result["max_centre_dev_m"] <= 0.040
+
+
 class _OdomFrameAtOrigin:
     """Hands the follower odometry whose frame starts at (0, 0, 0) while the
     robot stands at the scenario start (a real /odom, unlike Gazebo's)."""
