@@ -22,7 +22,6 @@ for path in (
     SRC.parent / "middleware" / "core" / "services",
     # Cell app tests import this production dependency before test_cell_compiler.
     SRC.parent / "operations" / "processes" / "palletizing" / "src",
-    SRC.parent / "operations" / "execution" / "src",
 ):
     entry = str(path)
     if entry not in sys.path:
