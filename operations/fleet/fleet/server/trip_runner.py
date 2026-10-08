@@ -25,8 +25,8 @@ import httpx
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
-from fleet.routing.execute import (advance_m, arc_id, lane_action, plan_again, replan_hold, route_key, turn_target,
-                                   unsupported)
+from fleet.routing.execute import (advance_m, arc_id, exit_segment, lane_action, plan_again, replan_hold, route_key,
+                                   theta, turn_target, unsupported)
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view,
                                      record_bend_candidate)
@@ -140,7 +140,8 @@ class TripRunner:
             pose = await self._pose_checks(robot_id, graph, plan["segments"])
             graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
             caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
-                         "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot}
+                         "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
+                         "lane_arc": caps.lane_arc}
             arcs = lap_arcs(self._store.active(), plan["segments"], row["request"], caps_view,
                             frozenset(self._blocked()), self._routing, self.config.max_turn_deg) if repeat else ()
             if repeat:  # D-517 3: no await from this check to the trip opening
@@ -453,9 +454,17 @@ class TripRunner:
             elif state not in ("armed", None, "idle", "waiting"):
                 return
         stop_after = min(max(remaining, 0.0), MAX_STOP_AFTER_M) if action == STOP else None
-        turn = round(turn_target(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
-        advance = advance_m(live.graph, live.segments, index) if turn is not None else None
         expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
+        arc = None  # D-520 1: only to a lane_arc robot, and only with the map_id
+        if action != STOP and (live.view["caps"] or {}).get("lane_arc") and (expect or {}).get("map_id"):
+            arc = exit_segment(live.graph, live.segments, index, fit_tol_m=self.config.arc_fit_tol_m,
+                               outer_line_offset_m=self.config.arc_outer_line_offset_m)
+        if arc is not None:
+            expect = {**expect, "exit_segment": arc}
+        # D-520 1: with an exit_segment the plain tangent and no advance_m (CORE starts the arc there)
+        turn = (round((theta if arc else turn_target)(live.graph, live.segments, index), 1)
+                if action in (LEFT, RIGHT) else None)
+        advance = advance_m(live.graph, live.segments, index) if turn is not None and arc is None else None
         if not live.open:
             return
         if action in (LEFT, RIGHT) and (expect or {}).get("expect_in_m") is None:
