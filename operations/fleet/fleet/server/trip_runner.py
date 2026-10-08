@@ -442,10 +442,8 @@ class TripRunner:
             return  # D-517 3 (M1): nothing tells the robot to drive into a refused block
         state, sent, now = live.junction.get("state"), live.sent, self._clock()
         same = sent is not None and (sent["index"], sent["action"], sent["place"]) == (index, action, place)
-        if state in MANOEUVRE:
-            return  # a new instruction would abort CORE's turn
-        if state == "executing" and live.junction.get("seq") != live.replaceable:
-            return  # CORE is carrying out an instruction; only our own held replan stop may be replaced
+        if self._core_busy(live):
+            return
         if same:
             if action == STOP or sent.get("carried") or sent.get("done"):
                 return  # one stop per place (CORE measures it from receipt); a carried-out place is done
@@ -468,10 +466,51 @@ class TripRunner:
             await self._stop(live, "stopped", "junction_no_window",
                              {"junction_place": place, "junction_action": action, "junction_fields": expect})
             return
+        await self._send(live, index, action, place, stop_after, turn_deg=turn, advance_m=advance, expect=expect)
+
+    async def _step_bend(self, live: LiveTrip, index: int, s: float) -> bool:
+        """D-507 addendum: True while a site-map bend on this lane is ahead (its instruction, sent
+        within ``arm_distance_m`` of the arc start to a ``lane_bend`` robot, owns CORE's one slot)."""
+        bend = next_bend(live, index, s) if (live.view.get("caps") or {}).get("lane_bend") else None
+        if bend is None:
+            return False
+        state, sent, seq = live.junction.get("state"), live.sent, live.junction.get("seq")
+        ours = sent is not None and (sent["action"], sent["place"]) == ("bend", bend["place_id"])
+        newer = ours and isinstance(seq, int) and isinstance(sent["seq"], int) and seq > sent["seq"]
+        finished = ours and (sent.get("done") or (sent.get("carried") and (state == "idle" or newer)))
+        if finished or (not ours and s >= bend["s_start"]):
+            live.bends_done.add(bend["place_id"])  # finished, or passed without one: never again
+            return await self._step_bend(live, index, s)
+        if live.view["hold"] is not None or self.traffic.holds(live, index):
+            # held (operator, replan, lap or D-517 traffic): only the place's stop may go out; a bend
+            # passed while held counts as passed (at most one per lap)
+            return False
+        if self._core_busy(live) or bend["s_start"] - s > self.config.arm_distance_m or (
+                ours and state == "armed" and self._clock() - sent["at"] < self.config.junction_expires_s / 2):
+            return True
+        fields = bend_fields(live, bend, s, self._store.active(), self.config)
+        if fields is None:
+            return True  # another map version: the bend is not sent and its place waits
+        await self._send(live, index, "bend", bend["place_id"], None, turn_deg=round(bend["turn_deg"], 1),
+                         expect=fields)
+        return True
+
+    @staticmethod
+    def _core_busy(live: LiveTrip) -> bool:
+        """A new instruction would abort CORE's manoeuvre, or CORE is carrying one out (only our own
+        held replan stop may be replaced)."""
+        state = live.junction.get("state")
+        return state in MANOEUVRE or (state == "executing" and live.junction.get("seq") != live.replaceable)
+
+    async def _send(self, live: LiveTrip, index: int, action: str, place: str, stop_after: Optional[float],
+                    **kwargs) -> None:
+        """Send one junction instruction to an open trip's robot and record it as ``live.sent``."""
+        if not live.open:
+            return
+        now = self._clock()
         try:
             reply = await self._call(self._junction.send_junction(
-                live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s,
-                turn_deg=turn, advance_m=advance, expect=expect)) or {}
+                live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s, **kwargs)) or {}
         except RobotApiError as exc:
             if exc.code == "JUNCTION_ODOM_STALE":  # D-507 2: no fresh odom at receipt; next tick sends again
                 live.view["detail"]["junction_retry"] = exc.code
@@ -489,45 +528,6 @@ class TripRunner:
                      "done": bool(reply.get("already_done"))}
         if live.first_seq is None:
             live.first_seq = seq if isinstance(seq, int) else 0
-
-    async def _step_bend(self, live: LiveTrip, index: int, s: float) -> bool:
-        """D-507 addendum: True while a site-map bend on this lane is ahead (its instruction, sent
-        within ``arm_distance_m`` of the arc start to a ``lane_bend`` robot, owns CORE's one slot)."""
-        bend = next_bend(live, index, s) if (live.view.get("caps") or {}).get("lane_bend") else None
-        if bend is None:
-            return False
-        state, sent, seq = live.junction.get("state"), live.sent, live.junction.get("seq")
-        ours = sent is not None and (sent["action"], sent["place"]) == ("bend", bend["place_id"])
-        newer = ours and isinstance(seq, int) and isinstance(sent["seq"], int) and seq > sent["seq"]
-        finished = ours and (sent.get("done") or (sent.get("carried") and (state == "idle" or newer)))
-        if finished or (not ours and s >= bend["s_start"]):
-            live.bends_done.add(bend["place_id"])  # finished, or passed without one: never again
-            return await self._step_bend(live, index, s)
-        if state in MANOEUVRE or bend["s_start"] - s > self.config.arm_distance_m or (
-                ours and state == "armed" and self._clock() - sent["at"] < self.config.junction_expires_s / 2):
-            return True
-        fields = bend_fields(live, bend, s, self._store.active(), self.config)
-        if fields is None:
-            return True  # another map version: the bend is not sent and its place waits
-        try:
-            reply = await self._call(self._junction.send_junction(
-                live.view["robot_id"], "bend", bend["place_id"], None, self.config.junction_expires_s,
-                turn_deg=round(bend["turn_deg"], 1), expect=fields)) or {}
-        except RobotApiError as exc:
-            if exc.code == "JUNCTION_ODOM_STALE":
-                return True  # next tick sends again
-            if exc.code != "JUNCTION_ALREADY_DONE":
-                raise
-            reply = {"already_done": True}
-        await self._after_send(live)
-        if reply.get("accepted") is False:
-            raise _JunctionAborted(reply.get("junction_seq"))
-        seq = reply.get("junction_seq")
-        live.sent = {"index": index, "action": "bend", "place": bend["place_id"], "seq": seq,
-                     "at": self._clock(), "done": bool(reply.get("already_done"))}
-        if live.first_seq is None:
-            live.first_seq = seq if isinstance(seq, int) else 0
-        return True
 
     async def _step_free(self, live: LiveTrip, index: int, s: float) -> None:
         segment = live.segments[index]
