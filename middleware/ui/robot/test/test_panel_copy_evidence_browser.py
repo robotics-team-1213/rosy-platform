@@ -314,7 +314,13 @@ def test_robot_map_read_failure_is_an_overlay_with_retry_and_no_target_row(panel
     retry.click()
     failure.wait_for(state="hidden")
     assert retry.is_hidden()
-    assert page.locator(".surface-map-readout").is_visible()
+    readout = page.locator(".surface-map-readout")
+    assert readout.is_hidden()
+    page.locator(".surface-map-canvas").focus()
+    page.keyboard.press("ArrowRight")
+    readout.wait_for(state="visible")
+    page.keyboard.press("Escape")
+    readout.wait_for(state="hidden")
 
 
 @pytest.mark.parametrize(("module", "path", "payload", "text"), [

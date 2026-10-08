@@ -1253,6 +1253,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                     data = _response(client, path, TOKENS["operator"], "normal", "console").json()
                     data["slam"] = True
                     data["navigation"] = {"goal_navigation": True}
+                    data["runtime"]["maps"] = {"occupancy": True, "global_costmap": True}
                     response = Response(content=json.dumps(data), media_type="application/json")
                 elif path == "/api/v1/navigation/state":
                     if mapping_session["readable"]:
@@ -1336,6 +1337,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                   return values[1]?.textContent.includes(expected) && values[2]?.textContent.includes(expected);
                 }""", arg=label)
                 image = f"operator-console-navigation-{scenario}-{viewport[0]}x{viewport[1]}.png"
+                assert page.locator("#map-status").get_attribute("state") == "ready"
                 page.screenshot(path=str(capture_dir / image), full_page=True)
                 records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "scenario": scenario,
                                 "image": image, "synthetic": True, "errors": errors[:]})
