@@ -799,6 +799,15 @@
 - gate 변화: SOURCE.
 - 결정: D-507 2·3항 2026-10-08 사용자 결정 (1), 안전 검토 REQUEST_CHANGES 1·2.
 
+## 2026-10-08 · uncommitted · fix(maps): 수신 지도의 ID를 스냅숏에 보관
+- 변경: `MapSnapshotStore.set_map`이 선택 `map_id`를 격자와 같은 잠금 안에 저장한다. 로봇 상태 ID가 바뀌어도 기존 지도에 새 ID가 붙지 않는다.
+- 증거: gateway `test_map_snapshots.py` 11 passed. [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 계약 근거 추가. 실물 지도 전환은 HOLD.
+
+## 2026-10-08 · uncommitted · fix(maps): 계획 경로 수신 근거 보관
+- 변경: `MapSnapshotStore`는 경로 점과 함께 수신 때 map ID·frame ID·monotonic 시각을 보관하고 마지막 수신 나이를 원자적으로 읽는다. 기존 `get_path()` 점 목록 계약은 유지한다.
+- 증거: gateway 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 경로 출처 근거 추가. 실기 메시지 readback은 HOLD.
 ## 2026-10-08 · uncommitted · feat(line_follow): D-507 보충, 지도 굽이를 odom 호로 지남 (action `bend`)
 - 변경: `recovery/junction_bend.py`(새 mixin) — `bend` 지시는 `armed` 동안 카메라 추종을 그대로 두고 받은 뒤 odom 이동 거리를 센다. 곧은 확신 추종 틱이 닻(몸이 따라온 선)을 남긴다. 호 시작점 `bend_tol_m` + 0.25 m 앞부터 곧은 확신이 아닌 첫 틱(또는 호 시작점 `bend_tol_m` 앞)에서 `bending`: 닻 직선 + 반지름 `bend_radius_m` 호 + 나가는 직선을 pure pursuit로 좇고, `reacquiring`은 나가는 직선을 0.20 m·5 s 안에서 좇으며 D-495 재획득이나 다음 교차로 감지로 끝, 아니면 `unresolved`. 매 틱 D-495 기동 twist(D-422 몸 sweep, enforce 증명)와 `motion_admitted(..., 'bend', map_id)`(IR `clear`만). 거리(odom × 1.08 > 남은 경로 + 0.05)·시간 상한, 근거 상실 `bend_basis_lost`. `junction.py`는 action·검증·`MANEUVER`·운동 근거 종류만 고쳤고, D-495 재획득 상수는 `junction_approach.py`로 옮겼다(값 그대로).
 - 증거: `test_junction_bend.py` 26건(지시 없음과 비트 같음, 카메라 추종 뒤 호와 재획득, lead 창 안 손실로 넘겨받기, 장애물 HOLD에서는 넘겨받지 않음, 닻 없음, 창 밖 감지 unexpected, IR·스캔 stale 근거 상실, IR centre, D-422 막힘 HOLD·재개·오래 막히면 끝, 거리·시간 상한, unresolved, 다음 교차로 감지로 끝, 재전송이 거리 유지, 필드 검증). services 전체 1310 passed(첫 커밋 기준).

@@ -164,13 +164,15 @@ def test_the_summary_line_builds_no_markup_from_server_text():
 
 def test_map_interaction_controls_explain_and_enforce_the_operator_boundary():
     script = (ROOT / "panels" / "console" / "map.js").read_text(encoding="utf-8")
+    field_map = (ROOT / "map.js").read_text(encoding="utf-8")
     shell = (ROOT / "shell" / "shell.css").read_text(encoding="utf-8")
     shared_controls = (ROOT.parents[2] / "shared" / "web" / "components.css").read_text(encoding="utf-8")
     assert 'ctx.role === "operator" || ctx.role === "administrator"' in script
-    assert 'button.disabled = !enabled' in script
+    assert 'button.disabled = !allowed' in field_map
     assert 'button.setAttribute("aria-describedby", clickReason.id)' in script
     assert "위치·주행 목표 설정에는 운용자 권한이 필요합니다." in script
-    assert "canGoal: () => ctx.role !== \"viewer\"" in script
+    assert 'canGoal: canMapAction' in script
+    assert 'mode !== "goal" || (!safeStopped() && goalPoseReady())' in script
     assert 'el("ui-actions", "surface-actions map-layer-actions")' in script
     panel_styles = (ROOT / "panels" / "surface-panels.css").read_text(encoding="utf-8")
     assert ".surface-link[hidden] { display: none; }" in panel_styles

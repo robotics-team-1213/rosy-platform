@@ -31,3 +31,9 @@ export function visionRow(sample) {
   if (sample.status === 200) return { name: "Vision", word: "없음", kind: "warn" };
   return { name: "Vision", word: `응답 ${sample.status}`, kind: "warn" };
 }
+
+export function sitePathSummary(rows) {
+  const issues = rows.filter((row) => row.kind === "warn" || row.kind === "crit");
+  if (issues.length) return `${issues[0].name} ${issues[0].word}${issues.length > 1 ? ` 외 ${issues.length - 1}건` : ""}`;
+  return rows.some((row) => row.kind === "neutral") ? "확인 중" : "모두 정상";
+}

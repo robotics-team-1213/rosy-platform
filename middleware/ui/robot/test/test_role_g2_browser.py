@@ -947,7 +947,7 @@ def test_console_map_data_and_action_feedback_full_shell_captures(tmp_path):
             panel = page.locator('[data-panel="console.map"]')
             page.wait_for_selector('[data-panel="console.map"] canvas')
             page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
-            panel.locator('[data-map-click="goal"]').click()
+            assert panel.locator('[data-map-click="goal"]').is_disabled()
             panel.locator("canvas").click(position={"x":40,"y":40})
             action = panel.locator('ui-status[role="status"]').last
             assert action.inner_text()
@@ -1203,4 +1203,226 @@ def test_operator_device_entry_denial_captures(tmp_path):
             context.close()
         browser.close()
     (capture_dir / "operator-device-entry-denied-matrix.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_console_navigation_stage_local_captures(tmp_path):
+    """A real map/route fixture checks the navigation display at both declared sizes."""
+    from fastapi import Response
+
+    client = _core_client(tmp_path)
+    capture_dir = CAPTURES / "navigation-stage"
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    width, height = 100, 80
+    cells = [100 if x in (12, 88) or y in (10, 69) or (x == 64 and 18 < y < 52)
+             else 0 for y in range(height) for x in range(width)]
+    grid = {"width": width, "height": height, "resolution": 0.1,
+            "origin": {"x": -5, "y": -4}, "map_id": "local-map", "data": cells}
+    route_points = [{"x": x, "y": y} for x, y in
+                    ((1.2, 0.3), (1.5, 0.3), (1.8, 0.6), (2.0, 1.0), (2.3, 1.2), (2.7, 1.2))]
+    records = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for viewport in ((1366, 768), (390, 844)):
+            context = browser.new_context(viewport={"width": viewport[0], "height": viewport[1]})
+            page = context.new_page()
+            errors = []
+            location = {"state": "LOCALIZED", "frame": "map", "map_id": "local-map"}
+            path_info = {"map_id": "local-map", "frame_id": "map"}
+            mapping_session = {"active": True, "readable": True}
+            evidence_mode = {"value": "fresh"}
+            safety_mode = {"value": "NAVIGATION"}
+            page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def serve(request_route):
+                path = urlsplit(request_route.request.url).path
+                if request_route.request.method != "GET":
+                    request_route.fulfill(status=501, body='{"detail":"fixture blocks writes"}')
+                    return
+                if path == "/api/v1/robot/state":
+                    state = json.loads(_response(client, path, TOKENS["operator"], "normal", "console").body)
+                    state.update(mode=safety_mode["value"], navigation="NAVIGATING", map_id=location["map_id"],
+                                 localization={"state": location["state"], "pose_frame": location["frame"], "confidence": 0.92})
+                    received_at = (datetime.now(timezone.utc) - timedelta(
+                        seconds=22 if evidence_mode["value"] == "delayed" else 0)).isoformat()
+                    for channel in ("navigation", "pose"):
+                        state["evidence"][channel] = {"evidence": evidence_mode["value"], "received_at": received_at}
+                    response = Response(content=json.dumps(state), media_type="application/json")
+                elif path == "/api/v1/system/capabilities":
+                    data = _response(client, path, TOKENS["operator"], "normal", "console").json()
+                    data["slam"] = True
+                    data["navigation"] = {"goal_navigation": True}
+                    response = Response(content=json.dumps(data), media_type="application/json")
+                elif path == "/api/v1/navigation/state":
+                    if mapping_session["readable"]:
+                        data = _response(client, path, TOKENS["operator"], "normal", "console").json()
+                        data["mapping_active"] = mapping_session["active"]
+                        response = Response(content=json.dumps(data), media_type="application/json")
+                    else:
+                        response = Response(status_code=503)
+                elif path == "/api/v1/host/commissioning":
+                    data = _response(client, path, TOKENS["operator"], "normal", "console").json()
+                    data["runtime_mode"] = "hardware"
+                    response = Response(content=json.dumps(data), media_type="application/json")
+                elif path == "/api/v1/map":
+                    response = Response(content=json.dumps(grid), media_type="application/json")
+                elif path == "/api/v1/navigation/path":
+                    response = Response(content=json.dumps({"poses": route_points, **path_info, "age_s": 2.0}), media_type="application/json")
+                elif path == "/api/v1/map/costmap":
+                    response = Response(content=json.dumps(grid | {"data": [0] * len(cells)}), media_type="application/json")
+                else:
+                    response = _response(client, path, TOKENS["operator"], "normal", "console")
+                request_route.fulfill(status=response.status_code, headers={
+                    "content-type": response.headers.get("content-type", "application/octet-stream")},
+                    body=response.content if hasattr(response, "content") else response.body)
+
+            page.route("**/*", serve)
+            page.goto("http://rosy.test/console", wait_until="domcontentloaded")
+            stage = page.locator(".surface-map-stage")
+            page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.overview\"] .ui-readout')?.hidden === false")
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 마지막 수신')")
+            assert "주행 · 주행 중" in stage.inner_text()
+            assert "계획 경로 · 마지막 수신" in stage.inner_text()
+            assert "위치 추정 · 지도 좌표 확인" in stage.inner_text()
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 맵핑 세션 활성')")
+            assert "SLAM · 맵핑 세션 활성" in stage.inner_text()
+            result = page.evaluate("""() => ({
+              overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+              eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
+              slotOrder: [...document.querySelectorAll('#surface-main > .surface-slot')].map(slot => slot.dataset.slot),
+              mapTop: document.querySelector('[data-slot="observe"]').getBoundingClientRect().top,
+              actionTop: document.querySelector('[data-slot="act"]').getBoundingClientRect().top,
+              cameraTop: document.querySelector('[data-slot="sense"]').getBoundingClientRect().top,
+            })""")
+            assert result["overflowX"] == 0 and result["eStopVisible"] and errors == [], result
+            if viewport[0] < 1024:
+                assert result["mapTop"] < result["actionTop"] < result["cameraTop"], result
+                assert result["slotOrder"] == ["banner", "observe", "act", "sense"], result
+            else:
+                assert result["slotOrder"] == ["banner", "sense", "observe", "act"], result
+            filename = f"operator-console-navigation-{viewport[0]}x{viewport[1]}.png"
+            page.screenshot(path=str(capture_dir / filename), full_page=True)
+            for scenario, label in (("delayed", "지연"), ("disconnected", "연결 끊김"),
+                                    ("unavailable", "정보 없음")):
+                evidence_mode["value"] = scenario
+                page.wait_for_function("""expected => {
+                  const text = document.querySelector('.surface-map-stage')?.textContent || '';
+                  return text.includes('주행 · ' + expected) && text.includes('위치 추정 · ' + expected)
+                    && document.querySelector('[data-map-click="goal"]')?.disabled;
+                }""", arg=label)
+                if scenario == "delayed":
+                    assert "초 전" in stage.inner_text()
+                page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 주행 상태 확인 필요')")
+                assert "계획 경로 · 주행 상태 확인 필요" in stage.inner_text()
+                page.wait_for_function("""expected => {
+                  const values = document.querySelectorAll('[data-panel="console.overview"] .ui-readout dd');
+                  return values[1]?.textContent.includes(expected) && values[2]?.textContent.includes(expected);
+                }""", arg=label)
+                image = f"operator-console-navigation-{scenario}-{viewport[0]}x{viewport[1]}.png"
+                page.screenshot(path=str(capture_dir / image), full_page=True)
+                records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "scenario": scenario,
+                                "image": image, "synthetic": True, "errors": errors[:]})
+            evidence_mode["value"] = "fresh"
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 주행 중')")
+            safety_mode["value"] = "SAFE_STOP"
+            page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 안전 정지')
+              && document.querySelector('[data-map-click="goal"]')?.disabled
+              && !document.querySelector('[data-map-click="pose"]')?.disabled
+              && document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 주행 상태 확인 필요')""")
+            assert page.locator("#shell-estop").is_visible()
+            assert "안전 정지 중" in page.locator("#map-action-reason").inner_text()
+            assert page.locator('[data-map-click="goal"]').get_attribute("reason") == "안전 정지 중 주행 목표 불가"
+            page.wait_for_function("""() => document.querySelector('[data-panel="console.overview"] .ui-readout')?.textContent.includes('안전 정지 적용')""")
+            stop_image = f"operator-console-navigation-safe-stop-{viewport[0]}x{viewport[1]}.png"
+            page.screenshot(path=str(capture_dir / stop_image), full_page=True)
+            records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "scenario": "safe_stop",
+                            "image": stop_image, "synthetic": True, "errors": errors[:]})
+            safety_mode["value"] = "NAVIGATION"
+            page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 주행 중')
+              && !document.querySelector('[data-map-click="goal"]')?.disabled""")
+            mapping_session["active"] = False
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 맵핑 세션 대기')")
+            page.screenshot(path=str(capture_dir / f"operator-console-mapping-idle-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            mapping_session["readable"] = False
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 세션 확인 불가')")
+            page.screenshot(path=str(capture_dir / f"operator-console-mapping-unknown-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            if viewport[0] == 1366:
+                location["state"] = "SUSPECT"
+                page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 주행 중 보고 · 위치 확인 필요')
+                  && document.querySelector('[data-map-click="goal"]')?.disabled""")
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-suspect-1366x768.png"), full_page=True)
+                location["state"] = "LOCALIZED"
+                page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
+            if viewport[0] == 390:
+                blue_pixels = """() => {
+                  const canvas = document.querySelector('.surface-map-canvas');
+                  const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+                  let count = 0;
+                  for (let i = 0; i < data.length; i += 4)
+                    if (data[i + 2] > data[i + 1] * 1.2 && data[i + 2] > data[i] * 1.5 && data[i + 2] > 100) count++;
+                  return count;
+                }"""
+                assert page.evaluate(blue_pixels) > 0
+                location["state"] = "SUSPECT"
+                page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled
+                  && !document.querySelector('[data-map-click="pose"]')?.disabled""")
+                assert "위치 추정 · 위치 확인 필요" in stage.inner_text()
+                assert "주행 · 주행 중 보고 · 위치 확인 필요" in stage.inner_text()
+                assert "주행 목표를 막았습니다" in page.locator("#map-action-reason").inner_text()
+                assert page.locator('[data-map-click="goal"]').get_attribute("reason") == "위치 추정 확인 후 가능"
+                assert page.evaluate(blue_pixels) == 0
+                overview_values = page.locator('[data-panel="console.overview"] .ui-readout dd')
+                page.wait_for_function("""() => document.querySelector('[data-panel="console.overview"] .ui-readout')?.textContent.includes('위치 확인 필요')""")
+                assert "위치 확인 필요" in overview_values.nth(1).inner_text()
+                assert overview_values.nth(2).inner_text() == "지도 위치 확인 불가"
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-suspect-390x844.png"), full_page=True)
+                location.update(state="LOCALIZED", frame="odom")
+                page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('지도 좌표 미확인')")
+                assert page.locator('[data-map-click="goal"]').is_disabled()
+                location["frame"] = "map"
+                page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
+                location["map_id"] = "other-map"
+                page.wait_for_function("""() => document.querySelector('#map-status')?.textContent.includes('지도 ID가 다릅니다')""")
+                assert page.locator('[data-map-click="pose"]').is_disabled()
+                assert page.locator('[data-map-click="goal"]').is_disabled()
+                assert "위치 추정 · 지도 ID 불일치" in stage.inner_text()
+                assert "지도 ID가 달라" in page.locator("#map-action-reason").inner_text()
+                assert page.evaluate(blue_pixels) == 0
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-map-mismatch-390x844.png"), full_page=True)
+                location["map_id"] = "local-map"
+                page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
+                path_info["map_id"] = "old-map"
+                page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 지도 ID 불일치')""")
+                assert page.evaluate(blue_pixels) == 0
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-path-mismatch-390x844.png"), full_page=True)
+                path_info.update(map_id="local-map", frame_id="odom")
+                page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 지도 좌표 미확인')""")
+                assert page.evaluate(blue_pixels) == 0
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-path-odom-390x844.png"), full_page=True)
+            if viewport[0] == 1366:
+                location["map_id"] = "other-map"
+                page.wait_for_function("""() => document.querySelector('#map-status')?.textContent.includes('지도 ID가 다릅니다')""")
+                assert page.locator('[data-map-click="goal"]').is_disabled()
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-map-mismatch-1366x768.png"), full_page=True)
+                location["map_id"] = "local-map"
+                page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
+                path_info["map_id"] = "old-map"
+                page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 지도 ID 불일치')""")
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-path-mismatch-1366x768.png"), full_page=True)
+                page.locator(".surface-map-canvas").focus()
+                page.set_viewport_size({"width": 390, "height": 844})
+                page.wait_for_function("""() => [...document.querySelectorAll('#surface-main > .surface-slot')]
+                  .map(slot => slot.dataset.slot).join(',') === 'banner,observe,act,sense'""")
+                assert page.evaluate("document.activeElement?.classList.contains('surface-map-canvas')")
+                page.set_viewport_size({"width": 1366, "height": 768})
+                page.wait_for_function("""() => [...document.querySelectorAll('#surface-main > .surface-slot')]
+                  .map(slot => slot.dataset.slot).join(',') === 'banner,sense,observe,act'""")
+                assert page.evaluate("document.activeElement?.classList.contains('surface-map-canvas')")
+            records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "scenario": "normal", "image": filename,
+                            "synthetic": True, "errors": errors, **result})
+            context.close()
+        browser.close()
+    (capture_dir / "navigation-stage-matrix.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
