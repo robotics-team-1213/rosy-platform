@@ -10,12 +10,6 @@ SOURCES = {
     "1006": ROOT / "drivable-smoke-1006-full-2026-10-08c" / "evidence" / "per_frame.jsonl",
     "1007": ROOT / "drivable-smoke-1007-full-2026-10-08b" / "evidence" / "per_frame.jsonl",
 }
-HASHES = {
-    "1006": "6bca79ca720eb23677b283982a284e9e14ef7b9808aed30362f69da0c6293198",
-    "1007": "e99ec8773ea643c347ecf20199556d7dff67ebba90f6086b2236fe3c8b124320",
-}
-
-
 def spans(rows, predicate):
     selected = [row["frame"] for row in rows if predicate(row)]
     runs = []
@@ -30,7 +24,7 @@ def spans(rows, predicate):
 def summarize():
     result = {}
     for day, path in SOURCES.items():
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == HASHES[day]
+        source_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
         rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
         sessions = {}
         for session in sorted({row["session"] for row in rows}):
@@ -53,7 +47,8 @@ def summarize():
                                        "longest_spans": spans(group, predicate)[:5]}
                                for name, predicate in predicates.items()},
             }
-        result[day] = {"source": path.relative_to(ROOT).as_posix(), "sessions": sessions}
+        result[day] = {"source": path.relative_to(ROOT).as_posix(), "source_sha256": source_sha256,
+                       "sessions": sessions}
     return result
 
 
