@@ -157,6 +157,22 @@ class BoundedPeer(unittest.TestCase):
         self.assertEqual(413, secure.post("/api/v1/auth/peer-pairing/requests", content=b"x"*5000).status_code)
         self.assertEqual(1, len(deps.auth_entries(self.svc.config)))
 
+    def test_fleet_identity_poll_does_not_spend_session_proof_budget(self):
+        app = FastAPI()
+        app.state.peer_receiver = self.receiver
+        app.include_router(router)
+        with TestClient(app, base_url="https://receiver.test", client=('192.168.10.20', 40000)) as client:
+            for _ in range(35):
+                self.assertEqual(200, client.get("/api/v1/auth/peer-pairing/identity").status_code)
+            for _ in range(30):
+                self.receiver.admit_proof('192.168.10.20')
+            with self.assertRaises(Refused):
+                self.receiver.admit_proof('192.168.10.20')
+            for _ in range(300 - 35):
+                self.receiver.admit_proof('192.168.10.20', identity=True)
+            with self.assertRaises(Refused):
+                self.receiver.admit_proof('192.168.10.20', identity=True)
+
     def test_final_repository_rechecks_grant_after_successful_key_proof(self):
         _, grant = self.grant()
         fields = self.receiver.challenge(grant)["fields"]
