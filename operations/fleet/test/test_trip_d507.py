@@ -19,8 +19,50 @@ from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import HttpRobotClient, RobotApiError
 from test_trip_caps import _caps
 from test_trip_runner import LANE, LANE_GRAPH, _activate_again, _arc, _free_map, _map, _plan, _setup, _ticks, run
+import fleet.server.trip_ports as trip_ports
 
 PIVOT = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
+
+
+def test_west_edge_bend_candidate_needs_a_fresh_aligned_pose():
+    arc = build_graph(from_lane_graph(LANE_GRAPH)).arcs["west:rev"]
+    _, s, _ = arc.project(-0.951, -0.491)
+    pose = {"x": -0.951, "y": -0.491, "yaw": -0.068, "age_s": 0.1, "dead_reckon_m": 0.0}
+    candidate = trip_ports.bend_candidate(arc, s, pose)
+    assert candidate["arc_id"] == "west:rev"
+    assert 0.20 < candidate["bend_in_m"] < 0.30
+    assert 55 < candidate["heading_change_deg"] < 70
+    for rejected in ({"age_s": 0.4}, {"dead_reckon_m": 0.1}, {"yaw": 1.0},
+                     {"y": -0.40}):
+        assert trip_ports.bend_candidate(arc, s, {**pose, **rejected}) is None
+    _, straight_s, _ = arc.project(-1.15, -0.511)
+    assert trip_ports.bend_candidate(arc, straight_s,
+                                     {**pose, "x": -1.15, "y": -0.511, "yaw": 0.0}) is None
+
+
+def test_live_trip_exposes_only_a_map_bound_bend_diagnostic():
+    runner, store, ports = _setup(caps=PIVOT)
+    arc = _arc(store, "west:rev")
+    _plan(store, ports, arc.id, 2.0, "SE")
+    run(runner.start("p1", "bob"))
+    ports.at(arc, arc.project(-0.951, -0.491)[1])
+    ports.pose = dataclasses.replace(ports.pose, x=-0.951, y=-0.491, yaw=-0.068,
+                                     age_s=0.1, dead_reckon_m=0.0)
+    _ticks(runner, ports)
+    view = runner.view("p1")
+    assert view["detail"]["bend_candidate"]["map_id"] == "site"
+    assert view["detail"]["bend_candidate"]["arc_id"] == arc.id
+    assert view["detail"]["bend_candidate"]["map_version"] == view["map_version"]
+    assert ports.sent == []  # the cue is not a robot command
+    ports.pose = dataclasses.replace(ports.pose, age_s=0.304)
+    _ticks(runner, ports)
+    assert "bend_candidate" not in runner.view("p1")["detail"]
+    ports.pose = dataclasses.replace(ports.pose, age_s=0.1)
+    _activate_again(store)
+    _ticks(runner, ports)
+    assert "bend_candidate" not in runner.view("p1")["detail"]
+    run(runner.cancel("p1", "bob"))
+    assert "bend_candidate" not in runner.view("p1")["detail"]
 
 
 def _straight_map():

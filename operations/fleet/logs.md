@@ -2523,3 +2523,9 @@
 - 증거: `test_trip_d507.py`와 CORE 교차로·API·계약 시험 194건 통과. 실제 Fleet→CORE 폐루프 SIM은 미실행.
 - gate 변화: 없음. SIM·DEVICE는 열림.
 - 결정: D-507 3항 보충.
+
+## 2026-10-08 · uncommitted · feat(fleet): 지도 edge 굽이 후보 진단
+- 변경: 진행 중 lane trip의 활성 지도 edge에서 가까운 굽이를 찾아 `detail.bend_candidate`에 기록한다. 원본 자세의 나이·dead reckoning·지도 offset·yaw·버전을 검사하고, 근거 상실 또는 trip 종료 시 지운다. CORE 명령은 추가하지 않았다.
+- 증거: `test_trip_d507.py`의 실제 west edge 후보·낡은 자세(0.304 s 반올림 경계)·지도 버전 변경·trip 종료 검사. 관련 pytest 217 통과, `known_failures.py` 0 new, flake8 및 harness lint 0 error. SOURCE/LOCAL 범위.
+- gate 변화: 없음. Fleet→CORE 폐루프 SIM·장치·현장 검수는 열림.
+- 결정: B9 굽이 접근 허가는 같은 경계의 검수 및 음성 사례를 통과할 때까지 보류.

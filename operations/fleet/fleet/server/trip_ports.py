@@ -172,8 +172,44 @@ _monotonic = time.monotonic  # the read-to-send clock (a test replaces it)
 MAX_WINDOW_BEND_DEG = 15.0
 #: The lane heading is checked this often between the robot and the place.
 WINDOW_BEND_STEP_M = 0.02
+# D-507 B9 diagnostic only: inspect the current edge, never authorize motion from this.
+BEND_PREVIEW_M = 0.40
+BEND_MAX_ANGLE_DEG = 80.0  # keeper's non-square bend limit
 #: The cross line search steps this far, then halves the last step to 1 mm.
 LINE_STEP_M = 0.01
+
+
+def bend_candidate(arc, s: float, pose: dict, *, end_s: float | None = None) -> Optional[dict]:
+    """A nearby turn in this lane edge, using only a fresh, aligned map pose. No motion grant."""
+    if arc.drive_mode != "lane" or not isinstance(pose, dict):
+        return None
+    keys = ("x", "y", "yaw", "age_s", "dead_reckon_m")
+    if any(isinstance(pose.get(key), bool) or not isinstance(pose.get(key), (int, float))
+           or not math.isfinite(pose[key]) for key in keys):
+        return None
+    if not 0 <= pose["age_s"] <= 0.30 or not 0 <= pose["dead_reckon_m"] <= ENDPOINT_TOL_M:
+        return None
+    offset, projected_s, heading = arc.project(pose["x"], pose["y"])
+    if (offset > 0.04 or abs(projected_s - s) > ENDPOINT_TOL_M
+            or abs(math.degrees(wrap(pose["yaw"] - heading))) > MAX_WINDOW_BEND_DEG):
+        return None
+    limit = min(arc.length_m if end_s is None else end_s, s + BEND_PREVIEW_M)
+    if not math.isfinite(limit) or limit <= s:
+        return None
+    first, change = None, 0.0
+    steps = math.ceil((limit - s) / WINDOW_BEND_STEP_M)
+    for index in range(1, steps + 1):
+        ahead = (limit - s) * index / steps
+        _, _, future = arc.point_at(s + ahead)
+        change = math.degrees(wrap(future - heading))
+        if abs(change) > BEND_MAX_ANGLE_DEG:
+            return None
+        if first is None and abs(change) >= MAX_WINDOW_BEND_DEG:
+            first = ahead
+    if first is None:
+        return None
+    return {"arc_id": arc.id, "bend_in_m": round(first, 3),
+            "heading_change_deg": round(change, 1), "map_offset_m": round(offset, 3)}
 
 
 def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float, active,

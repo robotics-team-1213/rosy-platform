@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.135
+**Version:** v1.136
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1578,6 +1578,8 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 | POST | `/api/fleet/robots/{robot_id}/line-stuck/decision` | `operator` bearer | D-407 (v1.77): `{stuck_id, decision: WAIT\|RESUME\|BACK_AND_RETRY\|MANUAL\|ABORT}`; `stuck_id` 1-64 chars of `[A-Za-z0-9_.:-]` (CORE ids are `stuck-<12 hex>`), extra fields 422. Forwarded unchanged to that robot's `POST /api/v1/line-follow/stuck/decision` with the robot credential; Fleet never refuses on CORE's behalf. 200 `{robot_id, actor_id, answer, result}` (`result` is CORE's body incl. `outcome`). A CORE 409 (`STUCK_ID_MISMATCH`, `STUCK_DECISION_REFUSED` with its reason, `EMERGENCY_ACTIVE`, `CALIBRATION_ACTIVE`) is returned as 409 `{code, message, robot_id, robot_status}` with CORE's code and message verbatim; other robot error statuses are 502 with the same body, unknown robot 404. A transport failure is 502 `{code, message, robot_id, transport}`: `ROBOT_UNREACHABLE` when the connection was never made (not delivered), `STUCK_DECISION_OUTCOME_UNKNOWN` on a timeout or a dropped reply (CORE may have applied the answer; re-read the stuck before answering again). Every forwarded answer is recorded with the site principal in memory and, with durable task storage, in the `fleet_line_stuck_answers` table of the Fleet journal database, keyed by the API audit `request_id` (§10.10). D-438 (v1.91) nullable columns: `tier` (`human` for this route, `rule` for a resolver answer), `rule` (`R1`–`R3`, resolver only), `escalated` (hand-off reason). Every resolver hand-off to a human is its own row with `decision: "ESCALATE"`, `accepted` null, `tier: "human"`, `escalated` = the reason and `principal_id: "fleet-resolver"`. A database created before v1.91 gains the three columns when Fleet opens it (rows written before stay null). |
 | POST | `/api/fleet/robots/{robot_id}/line-stuck/claim` | `operator` bearer | D-438 (v1.91): `{stuck_id}` — 사람이 그 막힘을 맡는다. 판단기는 맡은 막힘에 답하지 않고 `human_claimed` 로 올린다. 200 `{robot_id, stuck_id, claimed_by}`, 모르는 로봇 404 `UNKNOWN_ROBOT`. `.../line-stuck/decision` 도 404 확인 뒤 먼저 맡고, CORE 전달이 실패해도 맡음을 유지한다. 로봇 행 `line_stuck.resolver` = `{tier, rule, decision, escalated, at}` 또는 null(escalated 사유: `no_rule`, `rule_budget`, `deadline`, `restuck_after_resume`, `estop`, `calibration`, `no_resolver_token`, `human_claimed`, `core:<CODE>`). 판단기 답은 `principal_id: "fleet-resolver"` 로 기록하고, 전송 실패는 `ROBOT_UNREACHABLE` 이면 `accepted=false`, 아니면 null. 설정: `robots.yaml` 의 `resolver_token`(비어 있지 않은 따옴표 문자열, `token`·`fleet_pairing_token` 과 달라야 함), `fleet console --stuck-resolver`. `robots.yaml` 로봇만 판단기 클라이언트를 가진다(등록 D-361 로봇은 아직 없음) |
 
+v1.136: 진행 중인 lane trip의 `detail.bend_candidate`는 읽기 전용 지도 굽이 **후보**다. 현재 활성 지도 버전이 trip과 같고, 자세가 `LOCALIZED`이며 나이 ≤0.30 s, dead reckoning ≤0.05 m, 현재 edge 중심선에서 ≤0.04 m, 투영 진행 거리 차 ≤0.05 m, 접선과 yaw 차 ≤15°일 때만 기록한다. 값은 `{map_id, map_version, arc_id, bend_in_m, heading_change_deg, map_offset_m}`이며 0.40 m 앞까지의 edge polyline에서 접선 변화 ≥15°와 전체 변화 ≤80°를 찾는다. 다음 tick에서 근거가 사라지거나 trip이 끝나면 삭제한다. CORE로 보내는 지시나 운동 허가가 아니며 페인트·벽·분기의 같은 경계 확인을 뜻하지 않는다.
+
 Task status is the shared `FleetTaskStatus` enum: `REQUESTED`, `QUEUED`,
 `ACCEPTED`, `RUNNING`, `COMPLETED`, `FAILED`, `UNKNOWN`, `HOLD`, `CANCELED`,
 or `EXPIRED`. The normal path is `REQUESTED` → `QUEUED` → `ACCEPTED`; a queued
@@ -2474,6 +2476,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.136 | 2026-10-08 | Additive (feat/lane-bend-cue): Fleet lane trip `detail.bend_candidate` 읽기 전용 지도 굽이 후보. 활성 지도 버전·신선한 정렬 자세 조건에서만 표시하고 근거 상실·trip 종료 시 삭제한다. 로봇 API·CORE 명령·envelope 1.0 변화 없음. |
 | v1.135 | 2026-10-08 | D-507 2·4 개정(fix/d507-map-cross-line-pivot, SIM 발견 1–2): `POST /api/v1/line-follow/junction` `pivot_past_line_m` 범위 [0, 0.30] → [−0.30, 0.30]. 음수는 측정 가로선이 장소 점 너머(먼 쪽 경계)라는 뜻이다. 접근 목표가 로봇 자리이거나 뒤면 접근 0, 후진 없음. 직진 띠 반폭은 양수 pivot 일 때만 그 값. 가로선 띠는 측정 선(테이프 중심) ± 테이프 폭/2 ± e. Fleet은 지도 `lane` 차로의 합집합 경계에서 장소 너머 첫 칠한 선을 찾아 부호 있는 거리를 보내고, 0.30 m 안에 선이 없으면 나가는 차로 폭/2 와 창 없음. 창을 보내지 않는 장소에는 음수 pivot 을 보내지 않는다(CORE `stop_point`). v1.131·v1.132는 다른 브랜치 몫 |
 | v1.134 | 2026-10-08 | Behaviour (D-507 7 개정 2026-10-08, feat/d507-item7-departure-evidence): v1.133 위에서 — D-468 이탈은 (1) 신선한 `ready` 차로에서 `margin + uncertainty_m < 0` 외에 (2) 추종 중 자세 불연속(odom 점프)·연속성 epoch 변경, (3) 증명된 차로 안이지만 체크포인트 차로가 아님에서도 열린다(사용자 결정, D-507 7 개정). `lane_return_containment: unknown` 틱은 D-468이 결정을 내지 않아 D-407 막힘(`stuck`)이 `recovery_local_enabled: false` 와 같은 시각에 열리고, 그동안 필드는 `unknown` 이다. 점프 뒤 새로 잡은 체크포인트가 기준이 되어 같은 차로를 (3)으로 읽지 않는다. 필드 이름·형식 변화 없음 |
 | v1.133 | 2026-10-07 | Additive + behaviour (D-507 7, feat/d468-departure-on-evidence): `GET /api/v1/line-follow` 선택 필드 `lane_return_containment`(`contained`\|`unknown`\|null). D-468은 이탈의 양의 증거(신선한 `ready` 차로에서 `margin + uncertainty_m < 0`)가 있을 때만 `lane_return_*` 로 선다. 근거가 없거나 낡거나 불확실도가 미상·초과이거나 몸 기하가 없으면 추종은 `recovery_local_enabled: false` 와 같다(손실 시계 → LOST). 체크포인트 규칙은 그대로다. 기존 필드 이름·형식 변화 없음 |
