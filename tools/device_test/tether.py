@@ -26,6 +26,7 @@ import math
 from pathlib import Path
 
 import edge_drive
+import identify
 from core_common.robot_body import PINKY_PRO
 
 CABLES_M = (2.0, 5.0)             # the two cables on site (user 2026-10-08)
@@ -163,7 +164,8 @@ def from_pixels(map_to_image, pixels, size, body=PINKY_PRO):
 
 def tether_check(robot, args):
     """--tether-check VERDICT --plan PLAN: draw the declared tether on the judged overhead frame.
-    Reads the site calibration only; sends nothing to the robot. Refuses rather than guessing a scale."""
+    Reads the site calibration; to the robot it sends only the lamp identify (identify.py, D-512
+    amendment 2), which must blink at the drawn robot. Refuses rather than guessing a scale or a robot."""
     import cv2
     import numpy as np
     from plan_rules import load_plan
@@ -209,11 +211,17 @@ def tether_check(robot, args):
     if not all(0 <= u < w and 0 <= q < h for u, q in (pts["charger"], pts["robot"])):
         raise SystemExit(f"tether check: charger or robot falls outside the overhead picture: {pts['charger']}, "
                          f"{pts['robot']}")
+    try:      # the drawn robot must be the target: its lamp blinks there (D-512 amendment 2)
+        t["identity"] = identify.identify(robot, pts["robot"], identify.radius_px(
+            rec["map_to_image"], draw_pose[:2], _project), path.parent)
+    except identify.Refused as exc:
+        raise SystemExit(f"tether check: {exc}") from exc
     ring = np.array([p for p in pts["circle"] if all(map(math.isfinite, p))], np.int32)
     cv2.polylines(img, [ring], True, (0, 220, 255), 2)
     cv2.circle(img, tuple(map(round, pts["charger"])), 7, (0, 0, 255), -1)
     cv2.circle(img, tuple(map(round, pts["robot"])), 6, (0, 200, 0), 2)
     cv2.arrowedLine(img, tuple(map(round, pts["robot"])), tuple(map(round, pts["heading"])), (0, 200, 0), 2)
+    cv2.circle(img, tuple(map(round, t["identity"]["blob_center"])), 4, (255, 0, 255), -1)   # lamp blob
     cv2.putText(img, f"charger, {t['cable_m']} m cable - {policy['margin_m']} m = {radius:.2f} m", (10, 24),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 255), 2)
     out = path.parent / CHECK_IMAGE
@@ -223,7 +231,8 @@ def tether_check(robot, args):
         "for": binding(v, policy), "mode": "pixels" if pixel else "map", "source_id": source, "map_id": rec["map_id"],
         "calibration_revision": rec.get("calibration_revision"), "use": rec.get("use")})   # D-457: display-only
     path.write_text(json.dumps(v, indent=2), encoding="utf-8")
-    print(f"look at {out}: red = charger, yellow = {radius:.2f} m stop radius, green = robot and heading. "
+    print(f"look at {out}: red = charger, yellow = {radius:.2f} m stop radius, green = robot and heading, "
+          f"magenta = the target's lamp blink. "
           f"If they match the picture, set tether.visual_check_ok true in {path}; otherwise fix the tether and rerun.")
     return 0
 
