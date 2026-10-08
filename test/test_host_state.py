@@ -32,8 +32,7 @@ def _fakes(tmp_path, units=None, sshd_rc=0, wifi=""):
         "nmcli": '[ "$1" = -t ] && cat "$FAKE/nmcli.out"\n',
         "sshd": f"exit {sshd_rc}\n",
         "sysctl": "",
-        "visudo": 'grep -q "^Bad" "$2" && exit 1
-',
+        "visudo": 'grep -q "^Bad" "$2" && exit 1\n',
     }
     for name, body in scripts.items():
         path = bin_dir / name
@@ -160,20 +159,16 @@ def test_wifi_autoconnect_is_cut_only_outside_a_nonempty_allow_list(tmp_path):
 
 
 def test_sudoers_gets_the_login_and_a_broken_file_is_never_installed(tmp_path):
-    _lib(tmp_path, "safe file /etc/sudoers.d/rosy-host-control common/s.in 0440
-", "",
-         {"common/s.in": "@LOGIN@ ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control
-"})
+    _lib(tmp_path, "safe file /etc/sudoers.d/rosy-host-control common/s.in 0440\n", "",
+         {"common/s.in": "@LOGIN@ ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control\n"})
     fake, bin_dir = _fakes(tmp_path)
     assert _run(tmp_path, bin_dir, fake, "check").returncode == 0
     sudoers = tmp_path / "host/etc/sudoers.d/rosy-host-control"
-    assert sudoers.read_text() == "op ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control
-"
+    assert sudoers.read_text() == "op ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control\n"
     assert sudoers.stat().st_mode & 0o777 == 0o440
     assert _run(tmp_path, bin_dir, fake, "check").returncode == 0  # idempotent: no drift now
 
-    (tmp_path / "host/usr/local/lib/rosy-host-state/common/s.in").write_text("Bad line
-")
+    (tmp_path / "host/usr/local/lib/rosy-host-state/common/s.in").write_text("Bad line\n")
     result = _run(tmp_path, bin_dir, fake, "check")
     assert result.returncode == 1 and "visudo -c failed" in result.stdout
     assert sudoers.read_text().startswith("op ALL")
