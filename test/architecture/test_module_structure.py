@@ -171,8 +171,14 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_295,
-        "split: re-judged at 46295 on 2026-10-09: D-523 adds fleet/ai/decision_pipeline.py "
+        46_701,
+        "split: re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
+        "(fleet/guide/situation.py, fleet/server/guide_service.py, web/guide-layer.js) "
+        "over the map snapshot Fleet already holds. It does not call the network or emit a command. "
+        "D-523's ask parser stays in the previous count. No new robot command path or package owner. "
+        "The site-map web/server split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; "
+        "+150 allowance unchanged, measured from 46701. "
+        "Previously re-judged at 46295 on 2026-10-09: D-523 adds fleet/ai/decision_pipeline.py "
         "(194 lines), parsers that return an identity fact or an allowlisted choice and do not "
         "call the network or emit a command. Main measured 46083 after the traffic-config move; "
         "D-525 S1 virtual signals and D-524 Service Control stay in the existing site, traffic, "

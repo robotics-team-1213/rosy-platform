@@ -71,6 +71,8 @@ integrations/simulation/gazebo/worlds/rosy_gauntlet.world
 integrations/simulation/gazebo/worlds/rosy_maze.world
 # Service Control (D-524): the AI PC unit names contain pinky. They are systemd unit names.
 operations/fleet/fleet/host_control.py
+# D-536: guide_service imports PINKY_PRO, the public body anchor, and does not command a robot.
+operations/fleet/fleet/server/guide_service.py
 operations/fleet/fleet/localization/service_logic.py
 operations/fleet/fleet/server/bays.py
 operations/fleet/fleet/server/traffic.py
