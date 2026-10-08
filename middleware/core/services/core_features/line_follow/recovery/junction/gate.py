@@ -19,7 +19,7 @@ from dataclasses import replace
 
 from core_common.protocol.schemas import LineJunctionStatus
 from core_features.line_follow.recovery.junction.approach import (
-    CORNER_TURNS, MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
+    MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
     JunctionApproachMixin, check_expect)
 from core_features.line_follow.recovery.junction.bend import JunctionBendMixin, check_bend
 
@@ -146,8 +146,10 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 self._junction_ahead = (float(ahead_m) if type(ahead_m) in (int, float)
                                         and 0 <= ahead_m <= MAX_AHEAD_M else None, reason)
             self._keep_corner_at = float(received_at) if corner_turning is True else None
-            if strategy in CORNER_TURNS:
-                self._corner_turn_at = float(received_at)  # latched CORNER_LATCH_S (review)
+            if strategy == 'corner_left':  # each way latched CORNER_LATCH_S (review)
+                self._corner_left_at = float(received_at)
+            elif strategy == 'corner_right':
+                self._corner_right_at = float(received_at)
             # D-507 2: perception announces junction_ahead_m support on every keep_debug frame.
             self._junction_ahead_v_at = (float(received_at) if type(ahead_v) is int and ahead_v >= 1
                                          else None)
@@ -216,7 +218,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                                   stop_after_m=float(stop_after_m or 0.), travel=0.,
                                   last=None, held=False, turn_deg=turn_deg, advance_m=advance,
                                   window=window, map_id=(expect or {}).get('map_id'),
-                                  pivot=(expect or {}).get('pivot_past_line_m'), exit_segment=exit_segment)
+                                  pivot=(expect or {}).get('pivot_past_line_m'), exit_segment=exit_segment,
+                                  lane_turn=(expect or {}).get('lane_turn_deg'))
             if pose is not None:  # D-507 addendum: odom travel counts from here
                 self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
                                       radius=expect['bend_radius_m'], anchor=None,

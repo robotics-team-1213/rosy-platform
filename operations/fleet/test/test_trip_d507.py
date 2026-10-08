@@ -235,6 +235,21 @@ def test_260919_sw_spoke_without_a_window_sends_no_negative_pivot():
     assert ports.sent == [("stop", "SW", 0.0)] and ports.expects == [None]  # the halt only, no turn
 
 
+def test_a_straight_on_the_ring_sends_its_lane_turn_and_a_turn_does_not():
+    """lap SIM 2: SE ``straight`` on ``ring_s`` (bends left to SE) carries ``lane_turn_deg``, the
+    lane's heading change to the place, so CORE follows the keeper's ``corner_left`` there."""
+    runner, store, ports = _setup(caps=PIVOT)  # the 260919 lane graph
+    arc = _arc(store, "ring_s:fwd")
+    _plan(store, ports, "ring_s:fwd", 0.0, "NW")
+    run(runner.start("p1", "bob"))
+    ports.at(arc, arc.length_m - 0.25)
+    _ticks(runner, ports)
+    assert ports.sent[0][:2] == ("straight", "SE")
+    turn = math.degrees(trip_ports._lane_turn(arc, arc.length_m, 0.25))
+    assert ports.expects[0]["lane_turn_deg"] == pytest.approx(turn, abs=0.1) and 45 < turn < 65
+    assert "lane_turn_deg" not in _sw_spoke_sends().expects[0]   # a turn: its action says the way
+
+
 def test_without_a_window_and_without_a_line_the_old_half_width_stays():
     ports = _sent_at(_ring_map(), PIVOT, 0.05)            # a ring bend: no window, straight on
     assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1}]

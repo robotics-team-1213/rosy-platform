@@ -200,6 +200,8 @@ class TripRunner:
             raise TripError(422, "TRIP_SITE_FLOOR_MISMATCH", {"site_floor_map_id": floor, "map_id": map_id})
         if lane and self.authority.mode(caps) == "core" and caps.line_follow_authority_required is not True:
             raise TripError(422, "TRIP_AUTHORITY_NOT_REQUIRED")  # D-517 4: no first-authority gap after a restart
+        if lane and self.authority.mode(caps) != "core" and caps.line_follow_authority_required is True:
+            raise TripError(422, "TRIP_AUTHORITY_SITE_OFF")  # D-517 M5: no authority goes out, so CORE never moves
         return caps
 
     async def _pose_checks(self, robot_id: str, graph, segments: list) -> MapPose:

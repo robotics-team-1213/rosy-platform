@@ -76,6 +76,10 @@ ALLOWED = Counter({
     # missing source time becomes zero and therefore cannot pass the freshness gate.
     ("bridge/translate.py", "getattr", "msg", '"angle_increment"'): 1,
     ("bridge/translate.py", "getattr", "msg.header", '"stamp"'): 1,
+    # Accepted: nav path metadata is optional on injected state/message doubles;
+    # absent values stay None and do not authorize motion.
+    ("bridge/observation.py", "getattr", "services.state", '"map_id"'): 1,
+    ("bridge/observation.py", "getattr", "msg", '"header"'): 1,
 })
 
 
