@@ -105,8 +105,10 @@ SIZE_VERDICTS = {
         "at 604 (bend diagnostic)",
     ),
     "fleet/fleet/traffic": (
-        867,
-        "split: measured at 867 on 2026-10-08 when the lane traffic seam was applied (pure move, no shim, no "
+        1095,
+        "split: re-judged at 1095 on 2026-10-09: main added signal_phase.py and the D-517 block edits. "
+        "+150 allowance measured from 1095. "
+        "Previously measured at 867 on 2026-10-08 when the lane traffic seam was applied (pure move, no shim, no "
         "behaviour change): blocks.py 425, lane_traffic.py 369, trip_authority.py 69, __init__.py 4, out of "
         "the fleet package count. Only server/trip_runner.py imports it; it imports routing.graph, "
         "routing.execute.arc_id, server.trip_ports and localization.map_pose, never trip_runner. Later "
