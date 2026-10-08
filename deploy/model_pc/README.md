@@ -16,7 +16,7 @@ systemctl --user enable --now rosy-pilot-fetch@9dfk.timer
 journalctl --user -u rosy-pilot-fetch@9dfk.service -n 80 --no-pager
 ```
 
-`9dfk`는 설치 예시의 mDNS ID이며 현장 로봇 ID를 사용한다. `start`에서 정지·토큰·TLS·해시·변환 결과를 확인한 뒤 타이머를 켠다. 변환이 실패하면 검증된 raw 폴더는 남고 재수신은 건너뛰므로 `bag_to_video.py`를 해당 세션에 수동 재실행한다. 로봇의 원본과 승인 상태는 이 타이머가 변경하지 않는다.
+`9dfk`는 설치 예시의 mDNS ID이며 현장 로봇 ID를 사용한다. `start`에서 정지·토큰·TLS·해시·변환 결과를 확인한 뒤 타이머를 켠다. 변환이 실패하면 검증된 raw 폴더를 남기고 다음 주기에 로컬 변환을 재시도한다. 성공 영수증은 사이드카 해시·영상 존재·조작 짝을 확인한 뒤에만 만든다. 로봇의 원본과 승인 상태는 이 타이머가 변경하지 않는다.
 물리 로그인 코드로 받은 Operator 토큰은 만료된다(D-193 기본 7일). 만료 전에 새 코드로 재페어링하고 타이머의 마지막 성공 시각을 확인한다.
 
 [D-527](../../docs/adr/D-527-decision-test-host-boundaries.md)의 L0 실행 위치다. 개발 로컬 PC는 `test/test_decision_replay.py`와 lint·푸시 검사를 수행한다. 모델 PC는 사람 정답이 있는 독립 세트로 텍스트 Laya/Kev/규칙 기준선을 비교하고, VLM은 별도의 영상·LiDAR 정답 세트로 평가한다. AI PC의 역할은 승인된 고정 버전의 적재·추론 스모크와 watchdog 확인이다.

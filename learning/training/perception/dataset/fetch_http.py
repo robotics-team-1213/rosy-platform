@@ -255,6 +255,63 @@ def _read_rows(path: Path):
         return [json.loads(line) for line in handle if line.strip()]
 
 
+def _receipt_path(dest: Path, recording_id: str) -> Path:
+    return dest / ".paired" / f"{recording_id}.json"
+
+
+def _paired_receipt_valid(dest: Path, recording_id: str) -> bool:
+    try:
+        receipt = json.loads(_receipt_path(dest, recording_id).read_text(encoding="utf-8"))
+        sidecar = Path(receipt["sidecar"])
+        video = sidecar.with_suffix(".mp4")
+        return (receipt["recording_id"] == recording_id and sidecar.is_file()
+                and video.is_file() and video.stat().st_size > 0
+                and _sha256(sidecar) == receipt["sidecar_sha256"]
+                and pair_counts(_read_rows(sidecar))["paired"] > 0)
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def _existing_video(args, final: Path) -> Path | None:
+    import bag_to_video
+    try:
+        meta = json.loads((final / "session.json").read_text(encoding="utf-8"))
+        sidecar = Path(args.video_out) / f"{bag_to_video.output_stem(final, meta)}.jsonl"
+        if (sidecar.is_file() and sidecar.with_suffix(".mp4").is_file()
+                and sidecar.with_suffix(".mp4").stat().st_size > 0
+                and pair_counts(_read_rows(sidecar))["paired"] > 0):
+            return sidecar
+    except (OSError, ValueError, TypeError):
+        pass
+    return None
+
+
+def _write_paired_receipt(dest: Path, recording_id: str, rows_path: Path) -> None:
+    receipt = _receipt_path(dest, recording_id)
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    temporary = receipt.with_suffix(".tmp")
+    temporary.write_text(json.dumps({"recording_id": recording_id, "sidecar": str(rows_path.resolve()),
+                                     "sidecar_sha256": _sha256(rows_path)}), encoding="utf-8")
+    os.replace(temporary, receipt)
+
+
+def _convert_verified(args, dest: Path, recording_id: str, final: Path, convert) -> int:
+    rc, rows_path = convert(final, Path(args.video_out), args.codec)
+    if rc != 0 or rows_path is None or not Path(rows_path).is_file():
+        print(f"{recording_id}: FAILED conversion (rc {rc}); raw copy kept in {final}", file=sys.stderr)
+        return 1
+    rows_path = Path(rows_path)
+    counts = pair_counts(_read_rows(rows_path))
+    print(f"{recording_id}: {counts['frames']} frames, {counts['paired']} paired cmd_vel+intent "
+          f"({counts['paired_accepted']} accepted)")
+    if counts["paired"] == 0:
+        print(f"{recording_id}: FAILED no frame has both cmd_vel and {INTENT_TOPIC}; "
+              f"raw copy kept in {final}", file=sys.stderr)
+        return 1
+    _write_paired_receipt(dest, recording_id, rows_path)
+    return 0
+
+
 def _fetch_one(args, token: str, dest: Path, recording_id: str, convert) -> int:
     part, staging, final = dest / f".part-{recording_id}.tar", dest / f".staging-{recording_id}", \
         dest / recording_id
@@ -276,20 +333,8 @@ def _fetch_one(args, token: str, dest: Path, recording_id: str, convert) -> int:
         print(f"{recording_id}: warning: rosbag2 ended badly (returncode "
               f"{manifest.get('bag_returncode')}, killed {manifest.get('writer_killed')}); "
               "the last split may be unindexed", file=sys.stderr)
-    # The raw copy is verified and the robot may now reclaim its own, so a conversion or
-    # pairing failure keeps it: rerun bag_to_video on <dest>/<id> by hand.
-    rc, rows_path = convert(final, Path(args.video_out), args.codec)
-    if rc != 0 or rows_path is None or not Path(rows_path).is_file():
-        print(f"{recording_id}: FAILED conversion (rc {rc}); raw copy kept in {final}", file=sys.stderr)
-        return 1
-    counts = pair_counts(_read_rows(Path(rows_path)))
-    print(f"{recording_id}: {counts['frames']} frames, {counts['paired']} paired cmd_vel+intent "
-          f"({counts['paired_accepted']} accepted)")
-    if counts["paired"] == 0:
-        print(f"{recording_id}: FAILED no frame has both cmd_vel and {INTENT_TOPIC}; "
-              f"raw copy kept in {final}", file=sys.stderr)
-        return 1
-    return 0
+    # A verified raw copy survives conversion failure; the next poll retries it locally.
+    return _convert_verified(args, dest, recording_id, final, convert)
 
 
 def main(argv=None, *, convert=default_convert) -> int:
@@ -357,7 +402,22 @@ def main(argv=None, *, convert=default_convert) -> int:
             rc, failed = 1, failed + 1
             continue
         if (dest / recording_id).exists():
-            print(f"{recording_id}: already in {dest}")
+            if _paired_receipt_valid(dest, recording_id):
+                print(f"{recording_id}: paired video already verified")
+                continue
+            try:
+                verify(dest / recording_id, recording_id)
+            except FetchError as exc:
+                print(f"FAILED existing raw copy: {exc}", file=sys.stderr)
+                rc, failed = 1, failed + 1
+                continue
+            existing = _existing_video(args, dest / recording_id)
+            if existing is not None:
+                _write_paired_receipt(dest, recording_id, existing)
+                print(f"{recording_id}: existing paired video verified")
+                continue
+            one = _convert_verified(args, dest, recording_id, dest / recording_id, convert)
+            rc, failed = max(rc, one), failed + (one != 0)
             continue
         try:
             one = _fetch_one(args, token, dest, recording_id, convert)
