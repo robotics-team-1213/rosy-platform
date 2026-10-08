@@ -14,6 +14,7 @@ let workspace,frame,review,original,displayPhoto,maskImage,busy=false,ready=fals
 let candidatePreviewDigest='';
 $('pixel-view-status').before($('pixel-candidate-tools'));
 $('pixel-candidate-tools').after($('pixel-candidate-preview'));
+$('pixel-candidate-tools').classList.add('review-draft-bar');
 $('pixel-preview-candidate').textContent='초안 미리보기';
 $('pixel-candidate-image').alt='선택한 자동 초안을 원본 사진 위에 표시';
 let detailView=false;
