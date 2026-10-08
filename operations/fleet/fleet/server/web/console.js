@@ -119,7 +119,7 @@ function markLocked(reason = "auth") {
   // D-473 4 — the first 401 of a lock asks once whether this console is in development mode.
   if (firstLock && reason === "auth") renewDevelopmentSession();
   // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
-  if (firstLock && reason === "auth") passwordLogin.refresh(true);
+  if (firstLock && reason === "auth") loginForm.refresh(true);
 }
 
 function markUnlocked() {
@@ -532,7 +532,7 @@ async function refreshAuthorization() {
       pill.setAttribute("status", "neutral");
     }
     applyRoleToControls(auth.role, operatorControls());
-    passwordLogin.refresh(false);
+    loginForm.refresh(false);
     render();
     // Independent panels refresh side by side; one slow source does not delay the rest.
     await Promise.allSettled([
@@ -867,7 +867,7 @@ function useToken(token) {
 }
 pageScope.listen(el("token-save"), "click", saveToken);
 // D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
-const passwordLogin = createPasswordLogin(el("password-login"), {onChange: () => {
+const loginForm = createPasswordLogin(el("password-login"), {onChange: () => {
   el("console-token").value = "";
   useToken("");
 }});

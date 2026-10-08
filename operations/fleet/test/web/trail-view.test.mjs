@@ -13,6 +13,14 @@ test('a trail point needs 1 cm of travel', () => {
   assert.deepEqual(trails.get('a').map(p => p.x), [0, 0.012]);
 });
 
+test('odom-frame poses never join the map trail', () => {
+  const trails = new Map();
+  const odom = [{robot_id: 'a', state: {pose: {x: 1, y: 1}, localization: {pose_frame: 'odom'}}}];
+  recordTrails(trails, at(0, 0), 0);
+  recordTrails(trails, odom, 1000);
+  assert.deepEqual(trails.get('a').map(p => p.x), [0]);
+});
+
 test('the trail keeps the last 120 s and at most 600 points; a dropped robot loses its trail', () => {
   const trails = new Map();
   for (let i = 0; i <= TRAIL_MAX + 50; i += 1) recordTrails(trails, at(i * 0.02, 0), i);

@@ -24,6 +24,12 @@ min_battery_percent: 40
 verdict_max_age_s: 300
 hold_s: 1.0            # line-follow driver-hold session; the tool posts /line-follow/hold every 0.1 s
 
+# D-512 개정 1 tether guard (user 2026-10-08: drive on the charging cable). The verdict's
+# `tether` names the cable (2 m or 5 m) and its charger; these limits may only be stricter.
+tether_policy:
+  margin_m: 0.3        # stop radius = cable_m - margin_m from the charger
+  max_turn_deg: 360    # |cumulative yaw since start|; retrace unwinds to max_turn_deg - 90
+
 stop:
   duration_s: 120      # about two laps of the 260919 track at cruise 0.08 m/s
   max_distance_m: 8.0

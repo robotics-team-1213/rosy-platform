@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.server.site_auth import SitePrincipal
 
-Metres = Annotated[float, Field(allow_inf_nan=False)]
+Metres = Annotated[float, Field(ge=-1000, le=1000, allow_inf_nan=False)]
 
 
 class TetherRequest(BaseModel):
@@ -29,6 +29,8 @@ def install_tether_routes(app, *, robot_ids, read_guard, require_named_operator)
 
     @app.get("/api/fleet/tethers", dependencies=read_guard, tags=["tether"])
     def tether_list() -> dict:
+        for key in [key for key in tethers if key not in robot_ids()]:  # robot left the roster
+            del tethers[key]
         return {"tethers": [{"robot_id": key, **row} for key, row in sorted(tethers.items())]}
 
     @app.post("/api/fleet/robots/{robot_id}/tether", tags=["tether"])

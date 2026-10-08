@@ -22,6 +22,7 @@ from test_trip_runner import LANE, LANE_GRAPH, _activate_again, _arc, _free_map,
 import fleet.server.trip_ports as trip_ports
 
 PIVOT = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
+LEGACY = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True)  # no junction_pivot
 
 
 def test_west_edge_bend_candidate_needs_a_fresh_aligned_pose():
@@ -83,11 +84,21 @@ def _sent_at(site_map, caps, s, to="C", pose=None, **config):
     if pose:
         ports.pose = dataclasses.replace(ports.pose, **pose)
     _ticks(runner, ports)
+    ports.runner = runner
     return ports
 
 
-def _tol(pose=None, **config):
-    return _sent_at(_free_map("lane"), PIVOT, 0.5, pose=pose, **config).expects[0]["expect_tol_m"]
+def _stopped_without_window(ports, action="left", place="B"):
+    """D-507 2 (2026-10-08 user decision): a turn without a window is never sent; the trip stops."""
+    view = ports.runner.view("p1")
+    assert (view["state"], view["reason"]) == ("stopped", "junction_no_window")
+    assert (view["detail"]["junction_action"], view["detail"]["junction_place"]) == (action, place)
+    assert [sent[0] for sent in ports.sent] == ["stop"]       # only the halt
+    return view["detail"]["junction_fields"]
+
+
+def _tol(pose=None, s=0.5, **config):
+    return _sent_at(_free_map("lane"), PIVOT, s, pose=pose, **config).expects[0]["expect_tol_m"]
 
 
 # ---- 2: junction instruction fields --------------------------------------------------------
@@ -102,13 +113,14 @@ def test_caps_read_junction_pivot_and_site_floor_map_id():
 
 
 def test_fields_go_only_to_a_junction_pivot_robot():
-    assert _sent_at(_free_map("lane"), LANE, 0.5).expects == [None]
+    assert _stopped_without_window(_sent_at(_free_map("lane"), LEGACY, 0.5)) is None
     ports = _sent_at(_free_map("lane"), PIVOT, 0.5)
     assert ports.sent[0][0] == "left"
-    # a sighting 0.1 s old at 0.2 m/s: 0.2 x (0.1 + ~0 measured + 0.2 allowance) + 0.05 = 0.11 -> floor 0.12
+    # odom drift 0.05 x (0 dead-reckoned + 0.5 to drive) + a sighting 0.1 s old at 0.2 m/s:
+    # 0.2 x (0.1 + ~0 measured + 0.2 allowance) + 0.05 = 0.135
     # the corner's outer line is the far edge of the 0.2 m outgoing lane, 0.1 m past B
     assert ports.expects == [{"map_id": "site", "pivot_past_line_m": -0.1,
-                              "expect_in_m": 0.5, "expect_tol_m": 0.12}]
+                              "expect_in_m": 0.5, "expect_tol_m": pytest.approx(0.135, abs=0.002)}]
 
 
 def test_straight_through_has_no_line_so_half_width_and_no_window():
@@ -120,15 +132,17 @@ def test_straight_through_has_no_line_so_half_width_and_no_window():
 def test_the_last_stop_carries_the_expectation_without_a_pivot():
     ports = _sent_at(_straight_map(), PIVOT, 0.7, to="B")
     assert ports.sent[0][0] == STOP
-    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.3, "expect_tol_m": 0.12}]
+    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.3, "expect_tol_m": pytest.approx(0.125, abs=0.002)}]
 
 
 def test_tolerance_adds_drift_and_the_measured_latency_and_is_capped():
     low = {"expect_tol_min_m": 0.01}
-    # 0.2 m/s x (age 0.1 + read-to-send ~0 + SEND_ALLOWANCE_S 0.2) + ENDPOINT_TOL_M 0.05
-    assert _tol(**low) == pytest.approx(0.11, abs=0.002)
-    assert _tol({"age_s": 0.6}, **low) == pytest.approx(0.21, abs=0.002)        # older pose: + 0.1
-    assert _tol({"source": "bridged", "dead_reckon_m": 1.0}, **low) == pytest.approx(0.16, abs=0.002)
+    # 0.05 x 0.5 m to the place + 0.2 m/s x (age 0.1 + read-to-send ~0 + SEND_ALLOWANCE_S 0.2)
+    # + ENDPOINT_TOL_M 0.05
+    assert _tol(**low) == pytest.approx(0.135, abs=0.002)
+    assert _tol(s=0.6, **low) == pytest.approx(0.13, abs=0.002)                # 0.4 m on: - 0.005
+    assert _tol({"age_s": 0.6}, **low) == pytest.approx(0.235, abs=0.002)       # older pose: + 0.1
+    assert _tol({"source": "bridged", "dead_reckon_m": 1.0}, **low) == pytest.approx(0.185, abs=0.002)
     assert _tol({"source": "bridged", "dead_reckon_m": 9.0}, **low) == 0.30     # capped
 
 
@@ -136,12 +150,13 @@ def test_tolerance_counts_the_time_between_the_pose_read_and_the_send(monkeypatc
     import fleet.server.trip_ports as trip_ports
     clock = iter([100.0, 100.5])  # read at 100.0 (live.see), send 0.5 s later
     monkeypatch.setattr(trip_ports, "_monotonic", lambda: next(clock, 100.5))
-    # 0.2 x (0.1 + 0.5 + 0.2) + 0.05
-    assert _tol(expect_tol_min_m=0.01) == pytest.approx(0.21, abs=1e-6)
+    # 0.05 x 0.5 + 0.2 x (0.1 + 0.5 + 0.2) + 0.05
+    assert _tol(expect_tol_min_m=0.01) == pytest.approx(0.235, abs=1e-6)
 
 
 def test_tolerance_is_floored_by_the_site_knob():
-    assert _tol() == 0.12                                         # 0.11 computed, default knob 0.12
+    assert _tol(s=0.9) == 0.12                                    # 0.115 computed, default knob 0.12
+    assert _tol() == pytest.approx(0.135, abs=0.002)  # the measured read-to-send time adds ~ms
     assert _tol(expect_tol_min_m=0.2) == 0.2
     assert TripConfig.from_mapping({"expect_tol_min_m": 0.15}).expect_tol_min_m == 0.15
     with pytest.raises(ValueError):
@@ -155,22 +170,29 @@ def test_an_unknown_pose_error_sends_the_widest_window():
 
 
 def test_pivot_is_capped_at_0_30():
-    wide = _free_map("lane").model_dump()
+    wide = _straight_map().model_dump()
     for edge in wide["edges"]:
         edge["width_m"] = 0.8
-    ports = _sent_at(SiteMap.model_validate(wide), PIVOT, 0.5)
-    assert ports.expects[0]["pivot_past_line_m"] == 0.30
+    ports = _sent_at(SiteMap.model_validate(wide), PIVOT, 0.6)
+    assert ports.sent[0][0] == "straight" and ports.expects[0]["pivot_past_line_m"] == 0.30
+
+
+def test_a_turn_with_no_line_within_0_30_stops_the_trip():
+    wide = _free_map("lane").model_dump()
+    for edge in wide["edges"]:
+        edge["width_m"] = 0.8                              # the corner's outer line is 0.4 m on
+    fields = _stopped_without_window(_sent_at(SiteMap.model_validate(wide), PIVOT, 0.5))
+    assert fields == {"map_id": "site", "pivot_past_line_m": 0.3}   # the half-width fallback, no window
 
 
 def test_a_place_outside_the_expectation_range_sends_no_window():
     ports = _sent_at(_free_map("lane"), PIVOT, 1.0)   # on the place: expect_in_m 0 is out of (0, 2]
-    # the far line is there (-0.1) but without a window a negative pivot goes unchecked: stop_point
-    assert ports.sent[0][0] == "left" and ports.expects == [{"map_id": "site"}]
+    assert _stopped_without_window(ports) == {"map_id": "site"}
 
 
-def test_a_heading_off_the_lane_sends_the_distance_along_the_heading():
+def test_a_heading_off_the_lane_still_sends_the_distance_along_the_lane():
     ports = _sent_at(_free_map("lane"), PIVOT, 0.5, pose={"yaw": math.radians(10)})
-    assert ports.expects[0]["expect_in_m"] == round(0.5 * math.cos(math.radians(10)), 3)
+    assert ports.expects[0]["expect_in_m"] == 0.5
 
 
 def _ring_map():
@@ -179,12 +201,6 @@ def _ring_map():
            for t in (math.radians(d) for d in range(0, 91, 10))]
     return _map(("A", 0, 0), ("B", 0.25, 0.25), ("C", 0.25, 1.0),
                 edges=[("ab", "A", "B", arc, "lane"), ("bc", "B", "C", [[0.25, 0.25], [0.25, 1.0]], "lane")])
-
-
-def test_a_ring_arc_sends_no_window():
-    ports = _sent_at(_ring_map(), PIVOT, 0.05)
-    assert ports.sent[0][0] == "straight"
-    assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1}]
 
 
 # 2026-10-08 D-507 SIM findings 1-2 (docs/validation/d507-lane-trip-sim-2026-10-08): the SIM
@@ -208,16 +224,15 @@ def _sw_spoke_sends(pose=SW_POSE, back=0.3, to="SE"):
 def test_260919_sw_spoke_pivots_on_the_place_before_the_far_line():
     ports = _sw_spoke_sends()
     sent = ports.expects[0]
-    assert ports.sent[0][0] in ("left", "right") and sent["expect_in_m"] == pytest.approx(0.296, abs=0.002)
-    assert sent["pivot_past_line_m"] == pytest.approx(-0.10, abs=0.01)    # place 0.296, line 0.402
-    expected_line = sent["expect_in_m"] - sent["pivot_past_line_m"]       # CORE's window point
-    assert expected_line == pytest.approx(0.402, abs=0.01)
-    assert abs(expected_line - 0.402) < sent["expect_tol_m"]              # SIM measured: inside
+    assert ports.sent[0][0] in ("left", "right") and sent["expect_in_m"] == 0.3   # 0.3 m along the lane
+    assert sent["pivot_past_line_m"] == pytest.approx(-0.10, abs=0.01)
+    expected_line = sent["expect_in_m"] - sent["pivot_past_line_m"]       # CORE's travelled distance
+    assert abs(expected_line - 0.402) < sent["expect_tol_m"]              # SIM measured 0.402: inside
 
 
 def test_260919_sw_spoke_without_a_window_sends_no_negative_pivot():
     ports = _sw_spoke_sends(pose=None, back=0.0)          # on the place: expect_in_m 0, no window
-    assert ports.expects == [{"map_id": "site"}]          # CORE turns at its stop point
+    assert ports.sent == [("stop", "SW", 0.0)] and ports.expects == [None]  # the halt only, no turn
 
 
 def test_without_a_window_and_without_a_line_the_old_half_width_stays():
@@ -225,14 +240,15 @@ def test_without_a_window_and_without_a_line_the_old_half_width_stays():
     assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1}]
 
 
-def test_the_window_pivot_follows_the_robot_heading_not_the_lane():
-    """SW: the robot heads 64 deg, the lane's last stretch 53.8 deg (about 10 deg apart)."""
+def test_the_window_pivot_follows_the_lane_heading_not_the_robot():
+    """SW: the robot heads 64 deg, the lane's last stretch 53.8 deg (about 10 deg apart). The
+    window is a distance along the lane (2026-10-08), so the line is found along the lane too."""
     ports = _sw_spoke_sends()
     graph = build_graph(from_lane_graph(LANE_GRAPH))
     x, y, lane_heading = graph.arcs["west:rev"].point_at(graph.arcs["west:rev"].length_m)
     robot, lane = line_past(graph, x, y, SW_POSE["yaw"]), line_past(graph, x, y, lane_heading)
     assert abs(robot - lane) >= 0.005                     # the two choices differ here
-    assert ports.expects[0]["pivot_past_line_m"] == -robot
+    assert ports.expects[0]["pivot_past_line_m"] == -lane
 
 
 def test_line_past_is_the_edge_of_the_lanes_union():
@@ -273,18 +289,12 @@ def _bent_map(bend_deg, straight=0.7, bent=0.3):
                        ("bc", "B", "C", [list(b), list(end)], "lane")])
 
 
-def test_a_bend_widens_the_window_by_how_far_the_lane_runs_beside_the_heading():
-    lateral = 0.5 * math.sin(math.radians(10))                  # 0.087 m at B
-    tol = _sent_at(_bent_map(10.0, straight=0.5, bent=0.5), PIVOT, 0.45).expects[0]["expect_tol_m"]
-    assert tol >= 0.12 + lateral - 0.001 and tol == pytest.approx(0.12 + lateral, abs=0.002)
-    assert _sent_at(_free_map("lane"), PIVOT, 0.5).expects[0]["expect_tol_m"] == 0.12   # a straight lane adds 0
-
-
-def test_a_bend_of_15_degrees_keeps_the_window_and_more_drops_it():
-    within = _sent_at(_bent_map(15.0), PIVOT, 0.5).expects[0]
-    assert within["expect_in_m"] == round(0.2 + 0.3 * math.cos(math.radians(15)), 3)
-    beyond = _sent_at(_bent_map(16.0), PIVOT, 0.5).expects[0]
-    assert "expect_in_m" not in beyond and "expect_tol_m" not in beyond and beyond["map_id"] == "site"
+@pytest.mark.parametrize("bend_deg", [10.0, 15.0, 16.0, 60.0])
+def test_a_bend_before_the_place_keeps_the_window_along_the_path(bend_deg):
+    """2026-10-08: no bend rule; the window is the lane distance whatever the bend."""
+    sent = _sent_at(_bent_map(bend_deg), PIVOT, 0.5).expects[0]
+    assert sent["expect_in_m"] == 0.5                       # 0.2 straight + 0.3 bent, not the chord
+    assert sent["expect_tol_m"] == pytest.approx(0.135, abs=0.002)  # no beside-the-ray term any more
 
 
 def test_a_changed_map_version_sends_no_fields_and_says_so(caplog):
@@ -294,7 +304,7 @@ def test_a_changed_map_version_sends_no_fields_and_says_so(caplog):
     _activate_again(store)
     ports.at(_arc(store, "ab:fwd"), 0.5)
     _ticks(runner, ports)
-    assert ports.sent and ports.expects[-1] is None
+    assert ports.sent == [("stop", "B", 0.5)] and ports.expects[-1] is None   # the replan hold's stop
     assert runner.view("p1")["detail"]["junction_fields_dropped"] == "map_version"
     assert "junction fields not sent" in caplog.text
 
@@ -455,3 +465,73 @@ def test_the_site_floor_check_comes_before_trip_busy():
     with pytest.raises(TripError) as err:
         run(runner.start("p2", "bob"))
     assert err.value.code == "TRIP_SITE_FLOOR_MISMATCH"
+
+
+# 2026-10-08 user decision (D-507 SIM round 3, R3-1/R3-4): the window is a distance along the
+# lane, so the 260919 ring approaches that bend before the place get one.
+
+def test_260919_lap_sw_window_puts_the_misread_bend_outside():
+    """The lap: SW armed 0.6 m before the place on west:rev; the keeper misread the bend at
+    (-0.761, -0.455), 0.45 m before SW, as the junction and CORE turned toward the wall."""
+    runner, store, ports = _setup(caps=PIVOT)
+    arc = _arc(store, "west:rev")
+    _plan(store, ports, "west:rev", arc.length_m - 1.0, "SE")
+    run(runner.start("p1", "bob"))
+    ports.at(arc, arc.length_m - 0.6)
+    _ticks(runner, ports)
+    sent, expect = ports.sent[0], ports.expects[0]
+    assert sent[0] == "right" and ports.turns[0] == pytest.approx(-108.9, abs=0.1)  # D-507 4 chord aim
+    assert expect["expect_in_m"] == 0.6                   # along the lane; the 15 deg rule sent none
+    bend = arc.project(-0.761, -0.455)[1] - (arc.length_m - 0.6)          # 0.15 m driven to the bend
+    line = expect["expect_in_m"] - expect["pivot_past_line_m"]            # the far line, 0.7 m on
+    assert line - (bend + 0.10) > expect["expect_tol_m"]  # a line seen up to 0.10 m past the bend: out
+
+
+@pytest.mark.parametrize("ring, to, blocked, turn", [("ring_n", "SW", "ring_w", -102.2),
+                                                     ("ring_s", "NE", "ring_e", -98.6)])
+def test_260919_ring_exits_send_the_arc_length(ring, to, blocked, turn):
+    """NW and SE exits (R3-1): the ring arc into the place is the distance, not its chord. Turn
+    angles are the D-507 4 chord aim (main e72e8dfa1)."""
+    runner, store, ports = _setup(caps=PIVOT)
+    arc = _arc(store, f"{ring}:fwd")
+    _plan(store, ports, arc.id, 0.05, to, blocked_edges=(blocked,))
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports)
+    expect = ports.expects[0]
+    assert ports.sent[0][0] == "right" and ports.turns[0] == pytest.approx(turn, abs=0.1)
+    assert expect["expect_in_m"] == round(arc.length_m - 0.05, 3)
+    (x0, y0, _), (x1, y1, _) = arc.point_at(0.05), arc.point_at(arc.length_m)
+    assert expect["expect_in_m"] - math.dist((x0, y0), (x1, y1)) > 0.02  # the chord is shorter
+    assert "pivot_past_line_m" in expect and runner.view("p1")["state"] == "running"
+
+
+@pytest.mark.parametrize("bend_deg, dy", [(60.0, 0.03), (60.0, -0.03), (16.0, 0.03), (0.0, 0.03)])
+def test_an_offset_robot_on_a_curve_widens_the_window_by_offset_times_turn(bend_deg, dy):
+    """Safety review 2026-10-08: beside the centre line a curve is longer or shorter by
+    offset x heading change, which the travelled-distance window must allow."""
+    sent = _sent_at(_bent_map(bend_deg), PIVOT, 0.5, pose={"y": dy}).expects[0]
+    assert sent["expect_in_m"] == 0.5
+    assert sent["expect_tol_m"] == pytest.approx(0.135 + abs(dy) * math.radians(bend_deg), abs=0.002)
+
+
+def test_the_curve_offset_term_is_still_capped_at_0_30():
+    sent = _sent_at(_bent_map(60.0), PIVOT, 0.5, pose={"y": 0.09, "age_s": 0.6},
+                    expect_tol_min_m=0.29).expects[0]
+    assert sent["expect_tol_m"] == 0.30
+
+
+def test_a_refresh_at_or_past_the_place_while_armed_stops_the_trip():
+    """Intended (D-507 2, 2026-10-08): CORE still armed with the robot on the place means
+    ``expect_in_m`` 0, outside (0, 2], so the refreshed turn would go without a window: stop."""
+    runner, store, ports = _setup(_free_map("lane"), caps=PIVOT)
+    arc = _arc(store, "ab:fwd")
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    ports.at(arc, 0.5)
+    _ticks(runner, ports)
+    assert ports.sent == [("left", "B", None)] and ports.core.status()["state"] == "armed"
+    ports.at(arc, 1.0)                                    # on the place, CORE still armed
+    _ticks(runner, ports, 1, dt=8.0)                      # past half the 15 s expiry: a refresh
+    view = runner.view("p1")
+    assert (view["state"], view["reason"]) == ("stopped", "junction_no_window")
+    assert ports.sent == [("left", "B", None), ("stop", "B", 0.0)]   # the halt, no second turn

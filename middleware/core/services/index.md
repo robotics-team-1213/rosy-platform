@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(line_follow): 창 odometer를 부호 있는 전진 거리로, 후진하면 창 닫힘 (D-507 2, 안전 검토 1·2)
+- 2026-10-08 · uncommitted · feat(line_follow): 교차로 기대 창을 주행 거리로 비교 (D-507 2·3, 사용자 결정 1)
+- 2026-10-08 · uncommitted · fix(line_follow): D-507 6 motion_admitted refuses non-finite twists
 - 2026-10-08 · uncommitted · fix(line_follow): 지도 교차로의 기대 창이 없으면 감지로 회전하지 않음
 - 2026-10-08 · uncommitted · fix(line_follow): D-468 궤적은 HOLD 틱에도 odom을 받는다
-- 2026-10-08 · uncommitted · docs(core): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
-- 2026-10-08 · uncommitted · fix(line_follow): D-507 6 가로선 띠는 테이프 중심 ± 폭/2 (검토)
-- 2026-10-08 · uncommitted · fix(line_follow): D-507 2·4 pivot_past_line_m 부호 있음 [−0.30, 0.30]

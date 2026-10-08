@@ -2530,8 +2530,54 @@
 - gate 변화: 없음. Fleet→CORE 폐루프 SIM·장치·현장 검수는 열림.
 - 결정: B9 굽이 접근 허가는 같은 경계의 검수 및 음성 사례를 통과할 때까지 보류.
 
+## 2026-10-08 · uncommitted · fix(fleet): D-507 4 교차로 회전 각을 전진 현으로 조준
+- 변경: `execute.turn_target`이 장소 점에서 나가는 차로를 따라 `ADVANCE_M`(0.10, D-495 기본) 앞 점으로의 방향과 진입 접선의 차이를 `turn_deg`로 낸다. trip 러너는 회전 지시에 이 각과 `advance_m` 0.10을 함께 보낸다. 분류(직진·좌·우)는 접선 각 그대로이고 150° 한도는 보내는 각으로 본다. CORE·API 문구는 그대로다(버전 없음).
+- 증거: 260919 SW(west.rev→ring_s.fwd) −114.6°→−108.9°, NE(east.rev→ring_n.fwd) −102.8°→−97.1°(접선 대비 +5.7°, (0.10−0.05)/(2·0.25)). 장소에서 0.10 m 직진 끝의 차로 중심선 거리 0.1 mm(접선 조준 9.8 mm). 곧은 차로 변화 없음. 부호 변이(현 오프셋을 반대로) 2건 실패 확인 뒤 복원. fleet routing·trip 시험 통과.
+- gate 변화: SOURCE. SIM 재실행(NE 차선 유지)·장치는 열림.
+- 결정: D-507 4항 개정(2026-10-08 사용자 결정).
+
+## 2026-10-08 · uncommitted · fix(fleet): D-507 4 검토 반영 — 보내는 현 각의 한도·부호 검사
+- 변경: 앞 항목의 "150° 한도는 보내는 각" 수정이 실제로 적용되지 않아 `unsupported`가 접선 각을 보고 있었다. 이제 분류는 접선 각, 좌·우는 보내는 현 각(반올림 0.1°)이 150° 초과·0·반대 부호면 `LANE_TURN_TOO_SHARP`(CORE `set_junction`이 셋 다 거절). `advance_m`은 나가는 차로 길이로 자르고 같은 점을 겨눈다(지도 schema가 차로 ≥ 0.1 m라 오늘 0.10은 잘리지 않음).
+- 증거: `test_routing_execute.py` 접선 95°·현 112.5° 한도 100 거절/120 통과, +25° 좌인데 현이 음수인 차로 거절, ADVANCE_M 0.30에서 0.15 m 차로 자름. 변이 2건(부호 검사 제거, 접선으로 한도) 실패 확인 뒤 복원. fleet routing·trip + 구조 시험 246 통과, 1 실패는 fleet 크기 판정(깨끗한 main 공유 체크아웃에서도 실패, 44433 > 43809+150).
+- gate 변화: SOURCE. SIM·장치는 열림.
+- 결정: D-507 4항 개정 문구에 부호·`advance_m` 자름을 더함.
+
+## 2026-10-08 · uncommitted · feat(fleet): D-517 M0 고정 블록 통행권 계산
+- 변경: `fleet/routing/blocks.py` 블록 길이(몸체·정지 거리·불확실성·경로 감시 거리), 블록·구역·방향 잠금 양방 차로, 점유는 사실(UNKNOWN은 풀지 않음), 허가는 경로 위치별·줄지 않음·허가 범위만, 앞쪽 블록 먼저 주기, 공정 순서와 합류 대기 상한, 고리 수용 N·h ≤ S−1, 기다림 순환 판정, 위치를 한 번도 모르는 로봇이 있으면 새 허가 중지.
+- 증거: 모델 PC `test_blocks.py` 19 passed, 반복 360회(최대 50대, 위치 오차·UNKNOWN·정지·앞뒤 밀착·수용 2 구역) 실패 0. 독립 검토 2회 지적 반영.
+- gate 변화: SOURCE/LOCAL만. 로봇에 아무것도 보내지 않는다(M2 전).
+
+## 2026-10-08 · uncommitted · fix(fleet): 창 없는 좌·우 지시를 보내지 않고 trip 정지 (D-507 2, 사용자 결정 2)
+- 변경: trip 루프가 `left`·`right`를 기대 창(`expect_in_m`·`expect_tol_m`) 없이 보내게 되면 보내지 않고 trip을 `stopped` `junction_no_window`로 끝낸다(`detail.junction_place`·`junction_action`·`junction_fields`). `junction_pivot`이 없는 로봇, 다른 지도 버전, 0.30 m 안 가로선 없음, 장소가 (0, 2] 밖, 15° 넘는 굽이가 모두 해당한다. `straight`·`stop`은 그대로. 콘솔 사유 문구, API Ref v1.138.
+- 증거: `test_trip_d507.py`(옛 로봇·선 없음·장소 위·SW 장소 위·16° 굽이가 정지하고 halt `stop` 외에 보낸 지시 없음), `test_trip_runner.py`(시험 로봇에 `junction_pivot`), `site-map.test.mjs` 사유 문구. 관련 fleet pytest 246 통과, node 15 통과.
+- gate 변화: SOURCE. SIM 3차 R3-4(창 없는 SW 지시가 굽이에서 −112° 회전)의 Fleet 쪽 경로를 닫는다. SIM·장치는 열림.
+- 결정: D-507 2항 2026-10-08 사용자 결정 (2).
+
+## 2026-10-08 · uncommitted · feat(fleet): 차로를 따른 거리로 기대 창, 15° 굽이 규칙 삭제 (D-507 2, 사용자 결정 1)
+- 변경: `junction_fields`의 `expect_in_m` = 로봇 투영점에서 장소까지 차로 polyline 거리(`remaining`), 선 찾기는 장소의 차로 방향, `_straight_ahead`와 15° 규칙 삭제. `expect_tol_m`의 odom 오차 항 = 0.05 × (dead reckoning + `expect_in_m`), 광선 옆 거리 항 삭제. 선이 없거나 범위 밖이면 여전히 창이 없고 그 좌·우는 `junction_no_window`로 멈춘다.
+- 증거: `test_trip_d507.py` — 260919 한 바퀴 SW(장소 0.6 m 앞, 오른쪽 −114.6, `expect_in_m` 0.6, 굽이 오감지 +0.10 m까지 창 밖), ring_n→NW(0.322 m, 현 0.301 m)·ring_s→SE(0.324 m) 진출 창, 10/15/16/60° 굽이 창, 허용치 항. 변이(`expect_in_m`을 직선 거리로) 8건 실패 확인 뒤 복원. fleet pytest 250 통과, node 15 통과, `known_failures` 신규 0.
+- gate 변화: SOURCE. 회전교차로 진출의 축·재획득, 한 바퀴 SIM은 열림(Gazebo는 모델 PC).
+- 결정: D-507 2항 2026-10-08 사용자 결정 (1).
+
+## 2026-10-08 · uncommitted · fix(fleet): 굽이에서 차로 옆 거리만큼 기대 창을 넓힘, 장소 위 재전송 정지 시험 (D-507 2, 안전 검토 3·4)
+- 변경: `junction_fields`의 `expect_tol_m`에 (로봇의 차로 중심선 옆 거리) × (로봇에서 장소까지 차로 방향 변화의 절댓값 합, rad)을 더한다(상한 0.30 그대로). 주행 거리로 비교하는 창에서 굽이 옆길은 중심선보다 그만큼 길거나 짧다. ADR 2항에 알려진 한계(보낸 뒤 옆 거리 변화, keeper 곧은 `junction_ahead_m`) 추가.
+- 증거: `test_trip_d507.py` — 60°·16° 굽이에서 ±0.03 m 옆이면 0.135 + 0.03 × 굽이(rad), 0° 굽이 0, 상한 0.30. armed 중 장소 위(`remaining` 0) 재전송은 `junction_no_window` 정지이고 두 번째 회전은 없음(의도한 동작). 변이(항 0) 4건 실패 뒤 복원. fleet trip pytest 통과.
+- gate 변화: SOURCE.
+- 결정: D-507 2항 2026-10-08 사용자 결정 (1), 안전 검토 REQUEST_CHANGES 3·4.
+
+## 2026-10-08 · uncommitted · docs(fleet): D-507 주행 거리 창의 API Ref 번호를 v1.139로 옮김, main 병합
+- 변경: main(v1.137, D-507 4 현 조준 e72e8dfa1 포함) 병합. v1.138은 다른 브랜치(feat/d517-m1-fleet 커밋, feat/fleet-map-trail 미커밋)가 써서 이 브랜치의 API Ref 행·머리글·`app.py`·버전 핀을 v1.139로 옮겼다. 앞 항목들의 v1.138은 그 때의 번호다. 260919 시험의 회전각을 현 조준 값(SW −108.9, NW −102.2, SE −98.6)으로 맞췄다.
+- 증거: fleet trip·버전 핀 256 통과, CORE 교차로·services·api_web·구조 시험에서 실패 1건은 fleet 크기 판정(44805 > 43809+150)이며 공유 main 체크아웃에서도 같은 값으로 실패한다(이 브랜치의 fleet 줄 수는 main과 같다).
+- gate 변화: 없음.
+
 ## 2026-10-08 · uncommitted · feat(fleet): 지도 궤적과 D-512 테더 표시
 - 변경: 새 `web/trail-view.js`가 1 s 상태 폴링 pose로 로봇별 궤적(최근 120 s, 600점, 1 cm 이상 이동)을 브라우저에 모아 나이에 따라 흐리게 그리고, 테더 원과 기준점을 그린다(로봇이 원 밖이면 주의 색). `map-view.js`는 import와 그리기 hook 두 줄만 늘었다(격자·D-513 7 회전 미터 뷰의 toPx를 넘긴다). 새 `server/tether_routes.py`: `GET /api/fleet/tethers`(viewer), named operator `POST`·`DELETE /api/fleet/robots/{robot_id}/tether`, 메모리 전용. API Ref v1.138.
 - 증거: `test_tether_routes.py`(인증·멱등·검증), `web/trail-view.test.mjs`(간격·한도·회전 투영), Chromium `test_start_point_browser.py::test_map_draws_the_travelled_trail_and_a_tether`. SOURCE/LOCAL 범위.
 - gate 변화: 없음. 실기 궤적·테더 강제(tools/device_test, D-512)는 열림.
 - 결정: D-512 표시 절반. fleet 패키지 크기 판정은 main에서 이미 43809+150을 넘었다(44433) — 재판정 필요.
+
+## 2026-10-08 · uncommitted · fix(fleet): 지도 궤적·테더 검토 반영
+- 변경: main(API v1.139, D-512 개정 1) 병합. 이 브랜치의 API Ref 행·머리글·CORE `app.py`·버전 핀을 v1.140으로 옮겼다(앞 항목의 v1.138은 그때 번호). odom 자세(`localization.pose_frame`)는 궤적·테더 판정에 넣지 않는다. anchor_xy는 ±1000 m, 테더 폴링 실패 시 직전 목록을 둔다, 로스터에서 빠진 로봇의 테더는 목록에서 지운다. D-512 개정 1 5항에 표시 쪽이 있다는 문장을 더했다.
+- 증거: tether·trail 시험(odom 제외, anchor 범위, NaN 500 고정) 통과. fleet 2685 통과, shared/web 237, architecture 133 통과. `known_failures.py` NEW 1건 `test_grammar_separation`은 깨끗한 main에서도 실패한다(D-519 password-login.css).
+- gate 변화: 없음. D-512 개정 1 5항의 Fleet tether 감시(정지 지시)는 열림.
+- 결정: 병합 후 fleet 44929 ≤ 44806+150이라 크기 판정 변경 없음. 앱 공통 422 응답이 JSON 아닌 NaN을 담지 못해 500이 되는 문제는 후속.

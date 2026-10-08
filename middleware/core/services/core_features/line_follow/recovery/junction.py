@@ -304,6 +304,8 @@ class JunctionMixin(JunctionApproachMixin):
                 return decision
             j = self._junction = dict(action=None, place_id=None, state='waiting')
         if j['state'] == 'armed':
+            if j.get('window') is not None:
+                self._track_retreat(j['window'])  # D-507 2: see every odom sample since receipt
             if now > j['expires_at']:
                 self._bridge_hint = None
                 if not seen:

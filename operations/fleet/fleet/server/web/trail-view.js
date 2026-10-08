@@ -1,14 +1,17 @@
 // 지도 위 로봇 궤적(지나온 길)과 D-512 테더 원. 표시 전용 — 목표·교통정리에 쓰지 않는다.
 // 궤적은 브라우저가 1 s 상태 폴링의 robot.state.pose(map 프레임)로 모은다: 최근 TRAIL_S 초,
 // 최대 TRAIL_MAX 점, TRAIL_STEP_M 이상 움직였을 때만 새 점. 새로 고치면 처음부터 다시 모은다.
+// odom 자세(localization.pose_frame)는 지도 좌표가 아니므로 궤적·테더 판정에 쓰지 않는다.
 // map-view 가 자기 toPx(격자 칸 또는 D-513 7 로 돌린 미터 뷰)를 넘기므로 지도와 같이 돈다.
 export const TRAIL_S = 120, TRAIL_MAX = 600, TRAIL_STEP_M = 0.01, TETHER_POLL_MS = 5000;
+
+const mapPose = (robot) => (robot?.state?.localization?.pose_frame === "odom" ? null : robot?.state?.pose);
 
 export function recordTrails(trails, robots, now) {
   const ids = new Set();
   for (const robot of robots || []) {
     ids.add(robot.robot_id);
-    const pose = robot.state?.pose;
+    const pose = mapPose(robot);
     const points = trails.get(robot.robot_id) || [];
     const last = points[points.length - 1];
     if (pose && Number.isFinite(pose.x) && Number.isFinite(pose.y)
@@ -28,7 +31,7 @@ export function drawTrails(ctx, view, toPx, lineWidth, call) {
   view.trails = recordTrails(view.trails || new Map(), view.robots, now);
   if (call && now - tetherAt > TETHER_POLL_MS) {
     tetherAt = now;
-    call("/api/fleet/tethers").then((r) => { view.tethers = r.tethers || []; }, () => { view.tethers = []; });
+    call("/api/fleet/tethers").then((r) => { view.tethers = r.tethers || []; }, () => {}); // 실패하면 직전 목록을 둔다
   }
   let drawn = 0;
   ctx.save();
@@ -48,7 +51,7 @@ export function drawTrails(ctx, view, toPx, lineWidth, call) {
   ctx.setLineDash([lineWidth * 3, lineWidth * 2]);
   for (const tether of view.tethers || []) {
     const [ax, ay] = tether.anchor_xy, r = tether.radius_m;
-    const pose = view.robots.find((robot) => robot.robot_id === tether.robot_id)?.state?.pose;
+    const pose = mapPose(view.robots.find((robot) => robot.robot_id === tether.robot_id));
     // 로봇이 원 밖일 때만 주의 색 — 테더 자체는 경계선일 뿐 경고가 아니다.
     const outside = pose && Math.hypot(pose.x - ax, pose.y - ay) > r;
     ctx.strokeStyle = ctx.fillStyle = window.RosyPalette.cssColor(outside ? "--status-warn" : "--ink-quiet");

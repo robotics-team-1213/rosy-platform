@@ -46,10 +46,11 @@ def test_tether_rejects_unknown_robots_and_bad_circles(tmp_path):
         unknown = client.post("/api/fleet/robots/ghost/tether", json=BODY, headers=OPERATOR)
         assert unknown.status_code == 404 and unknown.json()["detail"]["code"] == "UNKNOWN_ROBOT"
         for bad in ({**BODY, "radius_m": 0}, {**BODY, "radius_m": 51}, {**BODY, "anchor_xy": [1.0]},
-                    {**BODY, "anchor_xy": [True, 0.0]}, {**BODY, "extra": 1}):
+                    {**BODY, "anchor_xy": [True, 0.0]}, {**BODY, "anchor_xy": [1001.0, 0.0]},
+                    {**BODY, "extra": 1}):
             assert client.post(URL, json=bad, headers=OPERATOR).status_code == 422, bad
         # Non-JSON NaN is refused (the app's default 422 echo cannot encode it, so it surfaces as 500).
         nan = client.post(URL, content='{"anchor_xy": [NaN, 0], "radius_m": 1}', headers={
             **OPERATOR, "Content-Type": "application/json"})
-        assert nan.status_code >= 400
+        assert nan.status_code == 500  # follow-up: the app-wide 422 handler cannot encode NaN
         assert client.get("/api/fleet/tethers", headers=VIEWER).json() == {"tethers": []}
