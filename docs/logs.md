@@ -7263,6 +7263,7 @@ osy-d395-s1d\`.
 - gate 변화: 없음. DEVICE/FIELD HOLD(D-520 개정 2026-10-09 4항).
 
 ## 2026-10-09 · uncommitted · docs(adr): D-520 개정 — ring 호 주행 기본 켬, 장치 조건
-- 변경: 사용자 결정(2026-10-09 "둘 다")을 D-520 끝 「개정 2026-10-09」로 적었다. 내용은 진입 회전각, odom 원 추종, 기본 켬, 장치 조건이다. `line_follow.arc_enabled` 기본을 true로 바꿨다(`rosy_default.yaml`, `model.py`). 능력 `lane_arc`는 `arc_enabled`와 `site_floor_map_id` 선언이 함께 있을 때만 참이다. 선언 없는 `arc_enabled: true`는 시작 거부 대신 능력이 거짓이다. 장치 시험 계획은 `arc_enabled`를 false로만 둘 수 있다(`plan_rules.py`). 현장 바닥을 선언하는 `d476_bridge_9dfk.yaml`에 `arc_enabled: false`를 넣었다. API Reference의 `lane_arc`·`LANE_ARC_UNAVAILABLE`·호 명령 문장을 고치고 판을 올렸다.
+- 변경: 사용자 결정(2026-10-09 "둘 다")을 D-520 끝 「개정 2026-10-09」로 적었다. 내용은 진입 회전각, odom 원 추종, 기본 켬, 장치 조건이다. `line_follow.arc_enabled` 기본을 true로 바꿨다(`rosy_default.yaml`, `model.py`). 능력 `lane_arc`는 `arc_enabled`와 `site_floor_map_id` 선언이 함께 있을 때만 참이다. 선언 없는 `arc_enabled: true`는 시작 거부 대신 능력이 거짓이다. 장치 시험 계획은 `arc_enabled`를 false로만 둘 수 있다(`plan_rules.py`). 현장 바닥을 선언하는 `d476_bridge_9dfk.yaml`에 `arc_enabled: false`를 넣었다. API Reference의 `lane_arc`·`LANE_ARC_UNAVAILABLE`·호 명령 문장을 고치고 v1.154로 올렸다(v1.153은 `feat/host-control`이 씀). 안전 검토 뒤 고침: 바닥을 선언하는 계획은 `arc_enabled: false`가 없으면 거절, `ir_guard_speed_scale` 0은 시작 거부 대신 능력 거짓.
 - 증거: 모델 PC pytest gateway·services·device_test 전체에서 plan 규칙 추가 뒤 device_test 129 passed. 새 실패는 plan 규칙을 넣기 전의 overlay 키 거절뿐이었고 그 뒤 0이다. SIM은 lap SIM 4.
-- gate 변화: 없음. 장치 사용은 SIM 합격, DEVICE 체크리스트, 사용자 승인 뒤다.
+- 검토: 독립 code-reviewer(opus) 2026-10-09 1차 REQUEST CHANGES → 고친 뒤 APPROVE WITH NOTES. 열린 점: 계획 밖 로봇 overlay가 바닥을 선언하면 다음 payload부터 호 능력이 켜진다(개정 「남는 위험」, 8kcn·9dfk overlay는 이 세션이 읽지 않았다).
+- gate 변화: 없음. lap SIM 4는 합격선(모든 호 |Δr| ≤ 0.05 m)을 넘지 못했다(lap 1/12씩 0.051–0.056 m, NE 4/4 0.049–0.052 m). 장치 사용은 SIM 합격, DEVICE 체크리스트, 사용자 승인 뒤다.
