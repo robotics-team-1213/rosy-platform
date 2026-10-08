@@ -50,6 +50,23 @@ def browser_workspace(tmp_path):
         yield value
 
 
+def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_workspace):
+    page, store, expect = browser_workspace
+    expect(page.locator('#object-flow [aria-current="step"]')).to_have_text('전체 확인 · 결정')
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#object-keys')).to_have_attribute('open', '')
+    page.locator('#filter').focus()
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#object-keys')).to_have_attribute('open', '')
+    review_masks.bind_classes(store, CLASSES)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#pixel-flow [aria-current="step"]')).to_have_text('영역 수정 · 초안 저장')
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#pixel-keys')).to_have_attribute('open', '')
+    assert store.get(0)['status'] == 'approved'
+    assert review_masks.get(store, 0)['status'] == 'pending'
+
+
 def test_imported_approval_and_recheck_history_are_visible(browser_workspace):
     page, store, expect = browser_workspace
     expect(page.locator('#review-history-summary')).to_contain_text('객체 승인 · 픽셀 대기')

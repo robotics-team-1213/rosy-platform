@@ -66,6 +66,8 @@ function previewCandidate(){
 function visible(){return workspace?.frames.filter(row=>$('pixel-filter').value==='all'||row.status!=='excluded'&&row.pixel_status===$('pixel-filter').value)||[];}
 function url(){const link=new URL(location.href);if(frame)link.searchParams.set('frame',frame.index);else link.searchParams.delete('frame');if($('pixel-filter').value==='all')link.searchParams.delete('filter');else link.searchParams.set('filter',$('pixel-filter').value);history.replaceState(null,'',link);}
 function enable(){const dirty=draft.length>0,hasSamples=seeds.length>0,hasPolygon=polygon.length>0,selection=hasSamples||hasPolygon,locked=busy||!ready||loading||conflicted||forbidden||!!stroke,excluded=frame?.status==='excluded'||review?.status==='excluded',editable=!locked&&!excluded&&!!review?.classes,labelReady=editable&&$('pixel-class').value!=='';
+  const step=!ready?0:review?.status!=='pending'?3:dirty||selection||unknownPixels>0?2:3;
+  [...$('pixel-flow').children].forEach((item,index)=>{if(index===step)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');});
   const selectedRole=review?.classes?.classes.find(row=>String(row.index)===$('pixel-class').value)?.role;
   const toolHint=!ready?'':excluded?'제외된 사진은 수정할 수 없습니다. 재검수로 돌린 뒤 편집하세요.':!review?.classes?'자료 등록에서 픽셀 클래스를 연결하세요.':dirty?'먼저 초안을 저장하거나 버리세요.':selection?'선택 영역을 적용하거나 취소하세요.':!$('pixel-class').value?'먼저 흰 경계선 바깥의 주행 불가 바닥을 배경으로 확인하세요. 다음으로 경계선 안쪽 도로를 판단하세요.':selectedRole==='background'?'흰 경계선 바깥의 주행 불가 바닥만 배경으로 칠하세요. 장애물에 가려 판단할 수 없는 곳은 255로 남기세요.':selectedRole==='drivable'?'흰 경계선 안쪽에 보이는 도로 바닥 전체를 칠하세요. 차선 칠과 장애물에 가린 영역은 제외합니다.':'';
   $('pixel-tool-hint').textContent=toolHint;$('pixel-tool-hint').hidden=!toolHint;
@@ -223,6 +225,7 @@ function cancel(){if(!stroke)return;const id=stroke.id;stroke=null;if(canvas.has
   // Number keys pick the n-th class, A approves, X excludes (D-485); approval checks stay manual (D-461).
   // Physical keys (event.code) so a Korean IME layout still works; checkboxes keep working.
   if(event.target?.matches?.('input:not([type=checkbox]):not([type=radio]), textarea, select')||event.isComposing||event.ctrlKey||event.metaKey||event.altKey||event.repeat||busy||stroke)return;
+  if(event.key==='?'||event.code==='Slash'&&event.shiftKey){event.preventDefault();$('pixel-keys').open=!$('pixel-keys').open;return;}
   const digit=/^(?:Digit|Numpad)([1-9])$/.exec(event.code||''),key=digit?digit[1]:{KeyA:'a',KeyB:'b',KeyC:'c',KeyM:'m',KeyN:'n',KeyP:'p',KeyT:'t',KeyV:'v',KeyX:'x'}[event.code]||(/^[1-9abcmnptvx]$/i.test(event.key)?event.key.toLowerCase():null);
   if(key==='v'&&ready){event.preventDefault();setView(!detailView);return;}
   if(key==='m'&&ready){event.preventDefault();$('pixel-mask-visible').click();return;}
