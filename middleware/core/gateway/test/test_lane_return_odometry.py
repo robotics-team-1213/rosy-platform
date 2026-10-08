@@ -17,7 +17,7 @@ def bridge():
         body_front_x_m=.08, body_rear_x_m=-.08, body_half_width_m=.06))
     manager.set_mode(LineFollowMode.CAMERA_LINE)
     return SimpleNamespace(_svc=SimpleNamespace(line_follow=manager),
-        _line_clock=lambda: 10., _node=SimpleNamespace(get_namespace=lambda: "/rosy_26", get_clock=lambda:
+        _frame_prefix="rosy_26/", _line_clock=lambda: 10., _node=SimpleNamespace(get_clock=lambda:
             SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=100100000000))))
 
 
@@ -37,7 +37,8 @@ def test_original_ros_time_and_frame_are_preserved_with_source_age():
 
 
 @pytest.mark.parametrize("child,ok", [("rosy_26/base_footprint", True), ("rosy_26/base_link", True),
-                                      ("rosy_99/base_footprint", False), ("rosy_26/camera", False)])
+                                      ("base_footprint", True), ("rosy_99/base_footprint", False),
+                                      ("rosy_26/camera", False)])
 def test_own_namespace_body_frame_is_accepted(child, ok):
     # Device bringup publishes rosy_26/odom -> rosy_26/base_footprint (9dfk, 2026-10-08).
     b = bridge()

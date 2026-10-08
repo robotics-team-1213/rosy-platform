@@ -73,11 +73,8 @@ def observe_lane_return(bridge, msg, sample, *, now=None):
                 or not 0 <= stamp.nanosec < 1_000_000_000):
             raise ValueError("invalid original odometry timestamp")
         # Accepted body frames share the planar origin; other transforms need resolution.
-        # Device bringup prefixes frames with the robot namespace (rosy_26/base_footprint).
-        ns = bridge._node.get_namespace().strip("/")
-        child = msg.child_frame_id
-        if ns and child.startswith(ns + "/"):
-            child = child[len(ns)+1:]
+        # Device bringup prefixes frames as robot.frame_prefix does (rosy_26/base_footprint).
+        child = msg.child_frame_id.removeprefix(bridge._frame_prefix)
         if child not in ("base_link", "base_footprint"):
             raise ValueError("unresolved odometry body frame")
         q = msg.pose.pose.orientation
