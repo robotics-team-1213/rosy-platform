@@ -31,8 +31,10 @@ def configure(store):
             id INTEGER PRIMARY KEY, ts TEXT DEFAULT CURRENT_TIMESTAMP,
             frame INTEGER, version INTEGER, action TEXT, review TEXT);
             CREATE TABLE IF NOT EXISTS pixel_drafts (
-            frame INTEGER NOT NULL, sha256 TEXT NOT NULL, path TEXT NOT NULL,
-            catalog_sha256 TEXT NOT NULL, PRIMARY KEY(frame, sha256));''')
+                frame INTEGER NOT NULL, sha256 TEXT NOT NULL, path TEXT NOT NULL,
+                catalog_sha256 TEXT NOT NULL, origin TEXT, PRIMARY KEY(frame, sha256));''')
+        if 'origin' not in {r['name'] for r in db.execute('PRAGMA table_info(pixel_drafts)')}:
+            db.execute('ALTER TABLE pixel_drafts ADD COLUMN origin TEXT')
         if 'approval' not in {r['name'] for r in db.execute('PRAGMA table_info(masks)')}:
             db.execute('ALTER TABLE masks ADD COLUMN approval TEXT')
 
@@ -104,7 +106,7 @@ def get(store, index):
     with store.connect() as db:
         row = db.execute('SELECT * FROM masks WHERE frame=?', (index,)).fetchone()
         drafts = [dict(value) for value in db.execute(
-            'SELECT sha256,catalog_sha256 FROM pixel_drafts WHERE frame=? ORDER BY rowid DESC', (index,))
+            'SELECT sha256,catalog_sha256,origin FROM pixel_drafts WHERE frame=? ORDER BY rowid DESC', (index,))
                   if row is None or value['sha256'] != row['sha256']]
     result = dict(row) if row else {'frame': index, 'version': 0, 'status': 'pending',
                                    'path': None, 'sha256': None, 'complete': 0, 'background': 0}

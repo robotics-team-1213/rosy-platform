@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · uiux(robot): 운용 세 열의 가시 패널 너비 일치
-- 2026-10-06 · uncommitted · uiux(robot): 상태 메시지 의미 구조 수정
-- 2026-10-06 · uncommitted · uiux(robot): 첫 상태 수신 전 안내
-- 2026-10-06 · uncommitted · uiux(robot): 개발 연결 대기 이유와 G2 기록 이름
-- 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
+- 2026-10-08 · uncommitted · uiux(robot): 지도 레이어를 지도 아래로 배치
+- 2026-10-08 · 5ee382a0f · API Ref v1.147 충돌 정리
+- 2026-10-08 · 098e8d522 · 현재 main과 내비게이션 UI 결합 검증
+- 2026-10-08 · 9318050f6 · 위치 불확실 중 주행 보고 보존
+- 2026-10-08 · uncommitted · uiux(robot): 안전 정지의 지도 목표 차단

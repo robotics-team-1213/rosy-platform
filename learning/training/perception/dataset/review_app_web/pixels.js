@@ -1,6 +1,12 @@
 import {cssColor, clearPalette} from '/common/ui.js';
 import {showHistory} from '/history.js';
+import {reviewViewport} from '/viewport.js';
 const $=id=>document.getElementById(id);
+reviewViewport(document.querySelector('.pixel-stage'),$('pixel-canvas'),document.querySelector('.pixel-layout .review-view-bar'),()=>!stroke);
+const toolOptions=document.querySelector('.pixel-editor-column section .ui-workspace-bar');
+document.querySelector('.pixel-quick-tools').prepend($('pixel-tool-hint'),$('pixel-quick-classes'),document.querySelector('.pixel-quick-actions'));
+document.querySelector('.pixel-quick-actions').after(toolOptions);
+for(const id of ['pixel-flood','pixel-brush-tool','pixel-polygon-tool'])$(id).setAttribute('aria-describedby','pixel-tool-hint');
 const states={pending:'픽셀 검수 대기',approved:'픽셀 승인',excluded:'픽셀 제외'};
 const serverReasons={'known mask index required':'등록된 픽셀 클래스만 사용할 수 있습니다.','flood seed outside original image':'누른 점이 원본 사진 범위를 벗어났습니다.','bounded flood tolerance required':'비슷한 색 허용치는 0~100 사이 정수입니다.','bounded brush radius required':'브러시 반지름은 0~128 사이 정수입니다.','bounded brush points required':'브러시 획이 너무 깁니다. 나누어 그리세요.','brush point outside original image':'브러시 획이 원본 사진 범위를 벗어났습니다.','3..128 polygon points required':'영역은 꼭짓점 3~128개가 필요합니다.','polygon point outside original image':'영역 꼭짓점이 사진 밖에 있습니다.','mask encoding failed':'마스크를 저장하지 못했습니다.','no unknown pixels remain':'남은 미검수 픽셀이 없습니다.','exactly one background class required':'배경 클래스가 정확히 하나여야 합니다.','unknown pixel review action':'지원하지 않는 동작입니다.'};
 function readableError(message){return serverReasons[message]||message;}
@@ -28,13 +34,20 @@ async function setView(detail){
 }
 function evaluationControls(){if(workspace.workspace_kind!=='evaluation')return;const label=document.createElement('label');label.className='ui-check';label.innerHTML='<input class="ui-field" id="pixel-unknown" type="checkbox">가려져 경계를 판단할 수 없는 투명 영역을 모두 확인했습니다 (평가 전용)';$('pixel-background').parentElement.insertAdjacentElement('afterend',label);$('pixel-unknown').onchange=enable;const help=[...label.parentElement.querySelectorAll('p')].find(p=>p.textContent.includes('255'));if(help)help.textContent='평가 전용: 가림 때문에 판단할 수 없는 영역만 255로 남기고 확인하세요. 학습 자료에는 포함되지 않습니다.';$('pixel-preparation').hidden=true;}
 let candidateKey='';
-function candidateOptions(){const rows=ready?review?.draft_candidates||[]:[],key=`${frame?.index}:${rows.map(row=>row.sha256).join(',')}`,select=$('pixel-candidates');
- if(key!==candidateKey){candidateKey=key;select.replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.sha256;option.textContent=`${row.sha256.slice(0,12)} · ${row.catalog_sha256.slice(0,8)}`;select.append(option);}}
+function candidateOptions(){const rows=ready?review?.draft_candidates||[]:[],key=`${frame?.index}:${rows.map(row=>`${row.sha256}:${row.origin}`).join(',')}`,select=$('pixel-candidates');
+ if(key!==candidateKey){candidateKey=key;select.replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.sha256;option.textContent=`${({'v12_pixel_mask_candidate':'v12 기존 마스크','sam3_road_v1_v12_base':'SAM3 주행영역 + v12 마스크'})[row.origin]||'자동 초안'} · ${row.sha256.slice(0,8)}`;option.title=`출처: ${row.origin||'미기록'} · 목록 ${row.catalog_sha256}`;select.append(option);}}
   $('pixel-candidate-tools').hidden=!rows.length;select.disabled=busy||!ready||loading||conflicted||forbidden||draft.length>0||seeds.length>0||polygon.length>0;
  $('pixel-apply-candidate').disabled=select.disabled||!rows.length||frame?.status==='excluded'||review?.status==='excluded';}
 function visible(){return workspace?.frames.filter(row=>$('pixel-filter').value==='all'||row.pixel_status===$('pixel-filter').value)||[];}
 function url(){const link=new URL(location.href);if(frame)link.searchParams.set('frame',frame.index);else link.searchParams.delete('frame');if($('pixel-filter').value==='all')link.searchParams.delete('filter');else link.searchParams.set('filter',$('pixel-filter').value);history.replaceState(null,'',link);}
 function enable(){const dirty=draft.length>0,hasSamples=seeds.length>0,hasPolygon=polygon.length>0,selection=hasSamples||hasPolygon,locked=busy||!ready||loading||conflicted||forbidden||!!stroke,excluded=frame?.status==='excluded'||review?.status==='excluded',editable=!locked&&!excluded&&!!review?.classes,labelReady=editable&&$('pixel-class').value!=='';
+  const selectedRole=review?.classes?.classes.find(row=>String(row.index)===$('pixel-class').value)?.role;
+  const toolHint=!ready?'':excluded?'제외된 사진은 수정할 수 없습니다. 재검수로 돌린 뒤 편집하세요.':!review?.classes?'자료 등록에서 픽셀 클래스를 연결하세요.':dirty?'먼저 초안을 저장하거나 버리세요.':selection?'선택 영역을 적용하거나 취소하세요.':!$('pixel-class').value?'먼저 픽셀 클래스를 선택하면 점·브러시·영역 도구를 쓸 수 있습니다.':selectedRole==='drivable'?'흰 경계선 안쪽에 보이는 도로 바닥 전체를 칠하세요. 차선 칠과 장애물에 가린 영역은 제외합니다.':'';
+  $('pixel-tool-hint').textContent=toolHint;$('pixel-tool-hint').hidden=!toolHint;
+  document.querySelector('.pixel-save-panel').hidden=!(dirty||selection);
+  $('pixel-radius').closest('label').hidden=tool!=='brush';
+  $('pixel-tolerance-mode').closest('label').hidden=tool!=='sample';
+  $('pixel-tolerance').closest('label').hidden=tool!=='sample';
  for(const button of $('pixel-quick-classes').querySelectorAll('button')){button.disabled=!editable;button.setAttribute('aria-pressed',String(button.value===$('pixel-class').value));}
  for(const button of $('pixel-frames').children)button.disabled=busy||loading||!!stroke||dirty||selection;
  $('pixel-fill-unknown').disabled=!editable||dirty||selection||!unknownPixels;
@@ -165,8 +178,8 @@ function brushAt(event){
   const size=2*Number($('pixel-radius').value)*box.width/frame.source.width;
   if(!Number.isFinite(size)||size<3){brush.hidden=true;return;}
   brush.style.width=brush.style.height=size+'px';
-  brush.style.left=(event.clientX-stage.left)+'px';
-  brush.style.top=(event.clientY-stage.top)+'px';
+   brush.style.left=(event.clientX-stage.left+brush.parentElement.scrollLeft)+'px';
+   brush.style.top=(event.clientY-stage.top+brush.parentElement.scrollTop)+'px';
   brush.hidden=false;
 }
 const canvas=$('pixel-canvas');canvas.onpointerdown=event=>{if(!ready||busy||conflicted||forbidden||!review.classes||!$('pixel-class').value||frame.status==='excluded'||review.status==='excluded'||event.button!==0)return;if(tool==='sample'){if(seeds.length>=32){error('선택 점은 최대 32개입니다.');return;}seeds.push(point(event));refreshSample();event.preventDefault();return;}if(tool==='polygon'){if(polygon.length>=128){error('영역 꼭짓점은 최대 128개입니다.');return;}polygon.push(point(event));paint();enable();event.preventDefault();return;}const radius=Number($('pixel-radius').value);if(!Number.isInteger(radius)||radius<0||radius>128){error('브러시 반지름은 0~128 사이 정수입니다.');return;}stroke={id:event.pointerId,points:[point(event)],radius,label:Number($('pixel-class').value)};canvas.setPointerCapture(event.pointerId);event.preventDefault();enable();paint();};

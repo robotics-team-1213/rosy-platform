@@ -83,7 +83,8 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
-              "core/services/core_features/line_follow/arc")
+              "core/services/core_features/line_follow/arc",
+              "fleet/fleet/traffic")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -102,6 +103,16 @@ SIZE_VERDICTS = {
         "trip_runner keeps start/cancel/tick/_step*/replan. Recorded in "
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; re-judge after the move. Previously accepted "
         "at 604 (bend diagnostic)",
+    ),
+    "fleet/fleet/traffic": (
+        867,
+        "split: measured at 867 on 2026-10-08 when the lane traffic seam was applied (pure move, no shim, no "
+        "behaviour change): blocks.py 425, lane_traffic.py 369, trip_authority.py 69, __init__.py 4, out of "
+        "the fleet package count. Only server/trip_runner.py imports it; it imports routing.graph, "
+        "routing.execute.arc_id, server.trip_ports and localization.map_pose, never trip_runner. Later "
+        "D-517 convoy and grant code goes here. Re-judge after D-517 M4 per "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md, and decide then whether "
+        "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/server/web/map-view.js": (
         831,
@@ -136,8 +147,13 @@ SIZE_VERDICTS = {
         "growth allowance remain unchanged",
     ),
     "dashboard": (
-        10_473,
-        "split: D-447(b) adds a focused shared state-stream store to the already separated task "
+        10_668,
+        "split: re-judged at 10668 on 2026-10-08 (independent re-judge, critic agent): +195 since 10473 is "
+        "navigation-map UI in the existing map owner (map.js 534, panels/console/map.js 207: "
+        "trusted-localization and safe-stop goal gating, path/route evidence, map identity, mobile stage); "
+        "every asset under 800, no transport or command path. Next growth: move pathEvidence/setPath/"
+        "canMapClick/mapIdMismatch out of createFieldMap in map.js into a sibling goal-gate module. "
+        "Previously D-447(b) adds a focused shared state-stream store to the already separated task "
         "panels; package total crosses 10k on integration, while individual asset ceilings and "
         "the +150 package allowance stay unchanged. The stream, REST fallback and scope teardown "
         "remain one owner (five Node regressions pass). Group robot role resources by their "
@@ -148,8 +164,24 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_317,
-        "split: re-judged at 46317 on 2026-10-08 (independent re-judge, architect agent): D-520 1-2 Fleet "
+        45_723,
+        "split: re-judged at 45723 on 2026-10-08 (independent re-judge, critic agent): 45571 was 46434 - 863 "
+        "by arithmetic; measured 45699 after the traffic move because main's D-520 1-2 arc handshake and the "
+        "CORE-approaching busy fix (91b15708b) landed beside D-517 M3, each in its existing owner; then +24 "
+        "console web (site-path summary, settings close). No new owner or robot command path. The site-map "
+        "web/server split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; +150 "
+        "allowance unchanged, measured from 45723. "
+        "Previously 45571 = 46434 - 863 after the pure move of routing/blocks.py, server/lane_traffic.py and "
+        "server/trip_authority.py into the fleet/fleet/traffic size unit (lane traffic seam, "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md); no new judgement, the +150 allowance is "
+        "still measured from the 46434 base. "
+        "Re-judged at 46434 on 2026-10-08 (independent re-judge, critic agent): D-517 M3 lane convoy "
+        "(blocks.py follow/_front_on/shared grants, lane_traffic.py convoy block, trip_laps/trip_routes/trip_runner "
+        "convoy gates, site-map convoy view) adds no owner or robot command path; trip_runner 747 within 686+150. "
+        "Traffic growth is steady per D-517 step, so the lane-traffic seam is named in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and is the next split; the +150 allowance is "
+        "unchanged. "
+        "Previously re-judged at 46317 on 2026-10-08 (independent re-judge, architect agent): D-520 1-2 Fleet "
         "side (+97 over main) adds no module, owner, service or robot command path: exit_segment (circle fit "
         "of the next lane arc, CORE curvature/length range) is pure routing math in routing/execute.py "
         "beside turn_target; trip_runner sends it in the existing LaneJunctionPort instruction and reads "

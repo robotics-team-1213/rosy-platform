@@ -7,7 +7,7 @@ import {confirmIrreversible} from '/common/ui.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
   planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripErrorText, tripStartReason,
-  tripStatusText, rectangularView, viewTurnOf, editViewTurn, loopCapacityText, repeatTripBody,
+  tripStatusText, rectangularView, viewTurnOf, editViewTurn, loopCapacityText, repeatTripBody, convoyLeaders,
 } from '/console/assets/site-map-model.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {warpImage} from '/console/assets/field-warp.js';
@@ -136,6 +136,10 @@ function syncButtons() {
   // D-517 1: one trip per robot — start, cancel and confirm act on the selected robot's open trip.
   state.running = state.open.find(trip => trip.robot_id === $('trip-robot').value) || null;
   $('trip-start-label').textContent = $('trip-robot').value ? `${$('trip-robot').value} 출발 자리` : '고른 로봇의 출발 자리';
+  // D-517 9 M3: 대열 리더는 반복 운행 중이고 아무도 따라가지 않는 로봇만 고른다.
+  const leader = $('trip-leader').value, leaders = convoyLeaders(state.open, $('trip-robot').value);
+  $('trip-leader').replaceChildren($('trip-leader').options[0], ...leaders.map(id => new Option(`${id} 뒤를 따라감`, id)));
+  $('trip-leader').value = leaders.includes(leader) ? leader : '';
   gate('plane-load', !state.role ? '관제 접속이 필요합니다' : !$('plane-source').value ? '이 지도에 맞는 카메라 보정이 없습니다' : '');
   gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
   gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
@@ -537,8 +541,9 @@ $('trip-repeat').addEventListener('click', async () => {
   gate('trip-repeat', '출발하는 중');
   try {
     const plan = await request(`/api/fleet/robots/${encodeURIComponent(robot)}/trip`, {method: 'POST',
-      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(repeatTripBody(state.active?.map, $('trip-start-place').value))});
-    await tripAction(`/api/fleet/trips/${encodeURIComponent(plan.plan_id)}/start`, `반복 운행을 시작했습니다 · ${robot} · ${place}`);
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(repeatTripBody(state.active?.map, $('trip-start-place').value, $('trip-leader').value))});
+    const follows = $('trip-leader').value ? ` · ${$('trip-leader').value} 뒤 대열` : '';
+    await tripAction(`/api/fleet/trips/${encodeURIComponent(plan.plan_id)}/start`, `반복 운행을 시작했습니다 · ${robot} · ${place}${follows}`);
   } catch (error) {
     notice(`반복 운행 거절 · ${error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error)}`);
     syncButtons();

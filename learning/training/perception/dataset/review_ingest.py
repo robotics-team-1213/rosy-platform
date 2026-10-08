@@ -221,8 +221,10 @@ def import_frames(store, body):
                     if mask is not None:
                         current = db.execute('SELECT sha256 FROM masks WHERE frame=?', (index,)).fetchone()
                         if not current or current['sha256'] != mask[1]:
-                            queued += db.execute('INSERT OR IGNORE INTO pixel_drafts VALUES (?,?,?,?)',
-                                                 (index, mask[1], mask[0], source['import_catalog_sha256'])).rowcount
+                            queued += db.execute('INSERT OR IGNORE INTO pixel_drafts '
+                                                 '(frame,sha256,path,catalog_sha256,origin) VALUES (?,?,?,?,?)',
+                                                 (index, mask[1], mask[0], source['import_catalog_sha256'],
+                                                  source.get('annotation_source'))).rowcount
                     duplicates += 1
                 else:
                     index = next_id
