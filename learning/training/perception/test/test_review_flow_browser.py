@@ -50,6 +50,17 @@ def browser_workspace(tmp_path):
         yield value
 
 
+def test_review_studio_help_stays_inside_narrow_viewport(browser_workspace):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': 390, 'height': 844})
+    for path, help_id in [('/', 'object-keys'), ('/pixels', 'pixel-keys')]:
+        page.goto(page.url.split('?')[0].split('/pixels')[0].rstrip('/') + path,
+                  wait_until='networkidle')
+        page.locator(f'#{help_id} summary').click()
+        box = page.locator(f'#{help_id} p').bounding_box()
+        assert box is not None and box['x'] >= 0 and box['x'] + box['width'] <= 390
+
+
 def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_workspace):
     page, store, expect = browser_workspace
     expect(page.locator('#object-flow [aria-current="step"]')).to_have_text('전체 확인 · 결정')

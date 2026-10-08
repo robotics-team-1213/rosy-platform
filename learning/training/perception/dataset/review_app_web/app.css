@@ -40,6 +40,7 @@ main { padding: var(--space-6); min-width: 0; }
 .review-flow details { position: relative; }
 .review-flow summary { white-space: nowrap; color: var(--ink); }
 .review-flow details p { position: absolute; z-index: 5; right: 0; width: min(27rem, 90vw); margin: var(--space-1) 0 0; padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--ground-deep); box-shadow: 0 6px 20px #0006; line-height: var(--leading-copy); }
+@media (width < 40rem) { .review-flow { position: relative; } .review-flow details { position: static; } .review-flow details p { left: 0; right: 0; width: auto; } }
 .review-draft-bar > div:first-child { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
 .review-draft-bar strong { color: var(--ink); }
 .review-draft-bar small, #candidate-source { color: var(--ink-quiet); }
