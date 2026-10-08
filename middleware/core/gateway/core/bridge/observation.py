@@ -281,7 +281,9 @@ def nav_twist(services, linear: float, angular: float) -> None:
 def nav_path(services, msg, *, warn: Warn) -> None:
     """MAP-003 plan snapshot; a malformed path is ignored, not fatal."""
     try:
-        services.maps.set_path(translate.path_points(msg))
+        services.maps.set_path(translate.path_points(msg),
+                               map_id=getattr(services.state, "map_id", None),
+                               frame_id=getattr(getattr(msg, "header", None), "frame_id", None))
     except ValueError as exc:
         warn(f"ignored nav path: {exc}")
 
