@@ -25,8 +25,8 @@ import httpx
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
-from fleet.routing.execute import (advance_m, arc_id, lane_action, plan_again, replan_hold, route_key, turn_target,
-                                    unsupported)
+from fleet.routing.execute import (advance_m, arc_id, ends_at_place, lane_action, plan_again, replan_hold, route_key,
+                                    turn_target, unsupported)
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view,
                                      record_bend_candidate)
@@ -290,6 +290,7 @@ class TripRunner:
             sent = live.sent
             live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
             live.sent, live.last_goal, live.replan_pending, live.at = None, None, False, None
+            live.lap_start = 0
             self._describe(live)
             self._save(live)
             return live.view
@@ -423,10 +424,12 @@ class TripRunner:
                 self._describe(live)
             if live.repeat and live.view["hold"] is None and self._lap_due(live, index, remaining):
                 await self._next_lap(live, index)
+                index = live.view["segment_index"]  # finished laps may have been dropped
                 self._describe(live)
                 last = index == len(live.segments) - 1
             elif self._lap_retry_due(live):
                 await self._retry_lap(live, index)
+                index = live.view["segment_index"]
                 self._describe(live)
                 last = index == len(live.segments) - 1
             if lane:
@@ -643,11 +646,15 @@ class TripRunner:
                     "actions": [*live.view["plan"]["actions"][:-1], *body["actions"]]}
             if route_key(body["segments"]) == live.lap_route:
                 live.lap_tries = 0
-                live.view.update(plan=plan, lap=live.view["lap"] + 1)
                 live.lap_arcs = tuple(arc_id(seg) for seg in body["segments"])
+                # Keep this lap and the next one: earlier laps are dropped so the plan stays bounded.
+                cut, live.lap_start = live.lap_start, len(plan["segments"]) - len(body["segments"]) - live.lap_start
+                live.view.update(plan=_from(live.graph, plan, cut), lap=live.view["lap"] + 1)
+                if cut:
+                    _dropped(live, segments[:cut])
                 return
             hold = {"map_version": body["map_version"], "lap_route": route_key(body["segments"]),
-                    "plan": {**plan, "segments": plan["segments"][index:]},
+                    "plan": _from(live.graph, plan, index),
                     "length_m": body["length_m"], "eta_s": body["eta_s"]}
         if hold.get("plan") is None:
             live.lap_tries, live.lap_tried_at = live.lap_tries + 1, self._clock()
@@ -807,6 +814,23 @@ class TripRunner:
             live.view["detail"].pop("bend_candidate", None)
         live.view["updated_at"] = self._clock()
         self._store.put_trip(live.view)
+
+
+def _from(graph, plan: dict, k: int) -> dict:
+    """``plan`` from segment ``k`` on, without the places (and their actions) of the segments before it."""
+    n = sum(1 for seg in plan["segments"][:k] if ends_at_place(graph, seg))
+    return {**plan, "segments": plan["segments"][k:], "places": plan["places"][n:], "actions": plan["actions"][n:]}
+
+
+def _dropped(live: LiveTrip, dropped: list) -> None:
+    """Every index and plan metre the trip keeps moves with the segments dropped from its front."""
+    cut = len(dropped)
+    live.view["segment_index"] -= cut
+    live.at = None if live.at is None else (live.at[0] - cut, live.at[1])
+    if live.sent is not None:
+        live.sent = {**live.sent, "index": live.sent["index"] - cut}
+    live.best_progress -= sum(seg["s_to"] - seg["s_from"] for seg in dropped)
+    live.trim_m += sum(live.graph.arcs[arc_id(seg)].length_m for seg in dropped)  # route metres (blocks)
 
 
 def _joined(old: list, new: list) -> list:

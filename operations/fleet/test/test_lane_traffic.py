@@ -8,7 +8,7 @@ import time
 import pytest
 
 from fleet.localization.map_pose import MapPose
-from fleet.routing.execute import plan_body
+from fleet.routing.execute import ends_at_place, plan_body
 from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.server.lane_traffic import TrafficService
 from fleet.server.site_map_store import SiteMapStore
@@ -190,6 +190,8 @@ def test_a_lap_on_another_route_holds_until_the_operator_confirms_it():
     _ticks(runner, fleet)
     hold = runner.view("a")["hold"]
     assert hold["reason"] == "lap" and hold["plan"] is not None and fleet.p["a"].sent[-1][0] == "stop"
+    live = runner._live["a"]  # review LOW 9: the held plan's places match its own segments
+    assert len(hold["plan"]["places"]) == sum(1 for seg in hold["plan"]["segments"] if ends_at_place(live.graph, seg))
     assert runner._live["a"].at is not None
     view = run(runner.confirm_replan("a", "bob"))
     assert view["hold"] is None and view["lap"] == 2 and view["segment_index"] == 0
@@ -437,3 +439,26 @@ def test_the_loop_period_includes_the_tick_and_finished_steps_are_dropped(monkey
     with pytest.raises(asyncio.CancelledError):
         run(runner._loop())
     assert len(slept) == 1 and slept[0] < 0.1
+
+
+def test_a_repeat_trip_drops_finished_laps_and_the_table_follows():
+    """Review LOW 8: the plan keeps the current and the next lap; indices, places and grants stay consistent."""
+    runner, store, fleet = _setup(ids=("a",))
+    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
+    live, _tail = _to_tail(runner, store, fleet, "a")
+    _ticks(runner, fleet)
+    two_laps = len(live.segments)
+    for lap in (3, 4, 5):
+        live, _tail = _to_tail(runner, store, fleet, "a")
+        _ticks(runner, fleet)
+        plan = runner.view("a")["plan"]
+        assert runner.view("a")["lap"] == lap and runner.view("a")["hold"] is None
+        assert len(live.segments) == two_laps and live.trim_m > 0
+        assert plan["places"] == [action["place_id"] for action in plan["actions"][:-1]]
+        assert len(plan["places"]) == sum(1 for i in range(len(live.segments)) if live.place(i))
+        assert live.at[0] == live.view["segment_index"]
+        assert live.sent is None or 0 <= live.sent["index"] <= live.view["segment_index"]
+        spans = runner.traffic._seen["a"][2]
+        held = runner.traffic._state.held["a"]
+        assert held and all(spans[i].unit == unit for i, (unit, _forward) in held.items())
+    assert fleet.p["a"].sent[-1][0] != "stop"

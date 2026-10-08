@@ -44,6 +44,8 @@ class TrafficService:
         self._view: dict = _empty(None)
         #: robot id -> its last LOCALIZED map pose ``(x, y, yaw)``, to re-pin it on a new map version.
         self._last_pose: dict[str, tuple[float, float, float]] = {}
+        #: robot id -> (route id, trim_m, spans) of the last period, to shift grants when laps are dropped.
+        self._seen: dict[str, tuple[str, float, tuple]] = {}
 
     # ---- the table ------------------------------------------------------------------------
 
@@ -59,7 +61,7 @@ class TrafficService:
                 units = self._under(layout, active[2], pose) if pose is not None else {}
                 if units:
                     state.pinned[robot_id] = units
-            self._layout, self._version, self._state = layout, active[0], state
+            self._layout, self._version, self._state, self._seen = layout, active[0], state, {}
         return self._layout
 
     def _under(self, layout: blocks.Layout, graph, pose: tuple[float, float, float]) -> dict[str, bool]:
@@ -107,8 +109,12 @@ class TrafficService:
         # ponytail: the route is cut again every period (linear in segments); cache by route_rev
         # and plan length if 30 robots on long repeat trips measure slow (D-517 7: 100 ms).
         spans = layout.route(graph, [arc_id(seg) for seg in segments])
-        return blocks.Robot(live.view["robot_id"], spans, d, lookahead, u, self._length,
-                            route_id=f"{live.view['trip_id']}:{live.route_rev}")
+        robot_id, route_id = live.view["robot_id"], f"{live.view['trip_id']}:{live.route_rev}"
+        seen = self._seen.get(robot_id)
+        if seen is not None and seen[0] == route_id and live.trim_m > seen[1]:
+            _shift(self._state, robot_id, seen[2], live.trim_m - seen[1])
+        self._seen[robot_id] = (route_id, live.trim_m, spans)
+        return blocks.Robot(robot_id, spans, d, lookahead, u, self._length, route_id=route_id)
 
     def pinned(self) -> list[str]:
         """Robots that block with pins: the trip loop reads their poses (``step(poses=...)``)."""
@@ -231,6 +237,17 @@ class TrafficService:
             "wait_cycle": list(cycle) if cycle else None,
             "unplaced": list(result.unplaced),
         }
+
+
+def _shift(state: blocks.TableState, robot_id: str, old_spans, shift: float) -> None:
+    """A repeat trip dropped ``shift`` route metres of finished laps: its grants and authority move
+    with the route (span ``i`` becomes ``i - n``), so the same route id stays valid."""
+    n = sum(1 for span in old_spans if span.d1 <= shift + 1e-6)
+    held = state.held.get(robot_id)
+    if held is not None:
+        state.held[robot_id] = {i - n: grant for i, grant in held.items() if i >= n}
+    if robot_id in state.authority:
+        state.authority[robot_id] -= shift
 
 
 def _edges(arc_ids) -> frozenset:
