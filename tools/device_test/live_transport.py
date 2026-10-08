@@ -17,7 +17,9 @@ class Live:
 
     def __init__(self, args):
         self.core = edge_drive.Core(args.host, Path(args.token_file).read_text(encoding="utf-8").strip(),
-                                    args.port, edge_drive.tls_context(args.ca_file, args.insecure))
+                                    args.port, edge_drive.tls_context(args.ca_file, args.insecure),
+                                    # the certificate names the robot; --host may be its address
+                                    tls_host=f"{args.robot}.local" if args.ca_file else None)
         base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Rosy"
         self.ssh_argv = ["ssh", "-i", str(base / "ssh" / "rosy-operator-ed25519"), "-o", "IdentitiesOnly=yes",
                          "-o", "BatchMode=yes", "-o", "PasswordAuthentication=no",
