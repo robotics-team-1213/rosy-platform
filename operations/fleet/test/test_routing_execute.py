@@ -222,6 +222,11 @@ def test_straight_and_bent_lanes_get_no_exit_segment():
     graph, trip = _circle_map(False)
     assert exit_segment(graph, trip, 1, **ARC_ARGS) is None               # no next segment
     assert exit_segment(graph, [trip[0], {**trip[1], "s_to": 0.2}], 0, **ARC_ARGS) is None  # ends mid-lane
+    assert exit_segment(graph, [trip[0], {**trip[1], "s_from": 0.1}], 0, **ARC_ARGS) is None  # starts mid-lane
+    graph, trip = _circle_map(False, degrees=80, step=20)                 # 5 points: too few to prove a circle
+    assert exit_segment(graph, trip, 0, **ARC_ARGS) is None
+    graph, trip = _circle_map(False, degrees=100, step=20)                # 6 points
+    assert exit_segment(graph, trip, 0, **ARC_ARGS) is not None
     graph, trip = _circle_map(False, radius=2.5, degrees=20, step=4)      # 0.4 1/m: under CORE's range
     assert exit_segment(graph, trip, 0, **ARC_ARGS) is None
     graph, trip = _circle_map(False, radius=0.5, degrees=180, step=15)    # 1.57 m: over 1.0 m

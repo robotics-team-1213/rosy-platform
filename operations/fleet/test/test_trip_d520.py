@@ -16,9 +16,11 @@ ARC = dataclasses.replace(LANE, lane_arc=True)
 RING_K = pytest.approx(1 / 0.2514, abs=0.01)
 
 
-def _sw_entry(caps=ARC, to="NE"):
-    """The 260919 SW spoke 0.3 m before SW, going round the ring to ``to``; one tick."""
+def _sw_entry(caps=ARC, to="NE", arc=None):
+    """The 260919 SW spoke 0.3 m before SW, going round the ring to ``to``; one tick. CORE shows
+    ``line_follow.arc`` = ``arc`` (an earlier visit's, or None: no arc yet) from the first read."""
     runner, store, ports = _setup(caps=caps)
+    _with_arc(ports, arc)
     arc = _arc(store, "west:rev")
     _plan(store, ports, "west:rev", arc.length_m - 0.5, to)
     run(runner.start("p1", "bob"))
@@ -56,6 +58,7 @@ def test_without_lane_arc_the_instruction_is_todays():
 def _on_ring_s(caps=ARC, to="NE"):
     """On ``ring_s`` 0.2 m before SE (inside arm_distance_m), going on to ``to``; one tick."""
     runner, store, ports = _setup(caps=caps)
+    _with_arc(ports)
     ring = _arc(store, "ring_s:fwd")
     _plan(store, ports, "ring_s:fwd", 0.05, to)
     run(runner.start("p1", "bob"))
@@ -98,7 +101,6 @@ def _arc_rec(seq, place, end, state="running", reason=None):
 def _entered_ring(arc_seq=1):
     """SW right sent; CORE turned (unseen by a tick), marked it done and opened arc ``arc_seq``."""
     runner, store, ports = _sw_entry()
-    _with_arc(ports)
     west, ring = _arc(store, "west:rev"), _arc(store, "ring_s:fwd")
     ports.core.done()                                       # (a): done at the end of turning
     ports.arc = _arc_rec(arc_seq, "SW", "SE")
@@ -142,21 +144,8 @@ def test_a_chained_straight_is_carried_by_the_next_arc_and_the_trip_moves_on():
     assert [s[:2] for s in ports.sent] == [("right", "SW"), ("straight", "SE"), ("stop", "NE")]
 
 
-def _sw_entry_after(arc):
-    """``_sw_entry`` with CORE already showing ``arc`` (an earlier visit) before the first send."""
-    runner, store, ports = _setup(caps=ARC)
-    _with_arc(ports, arc)
-    west = _arc(store, "west:rev")
-    _plan(store, ports, "west:rev", west.length_m - 0.5, "NE")
-    run(runner.start("p1", "bob"))
-    ports.at(west, west.length_m - 0.3)
-    ports.pose = dataclasses.replace(ports.pose, **SW_POSE)
-    _ticks(runner, ports)
-    return runner, store, ports, west
-
-
 def test_an_older_arc_from_the_same_place_does_not_carry():
-    runner, store, ports, west = _sw_entry_after(_arc_rec(4, "SW", "SE", state="ended"))
+    runner, store, ports = _sw_entry(arc=_arc_rec(4, "SW", "SE", state="ended"))
     assert ports.sent[0][:2] == ("right", "SW")
     _ticks(runner, ports)
     assert runner._live["rosy_60"].sent.get("carried") is not True
@@ -183,7 +172,7 @@ def test_a_stopped_arc_of_this_trip_stops_it():
 
 
 def test_a_stopped_arc_from_before_the_trip_is_not_ours():
-    runner, store, ports, west = _sw_entry_after(_arc_rec(7, "SE", "NE", state="stopped", reason="lane_arc_edge"))
+    runner, store, ports = _sw_entry(arc=_arc_rec(7, "SE", "NE", state="stopped", reason="lane_arc_edge"))
     _ticks(runner, ports)
     assert runner.view("p1")["state"] == "running" and ports.sent[0][:2] == ("right", "SW")
 
@@ -207,3 +196,91 @@ def test_the_http_port_passes_line_follow_arc():
             return {"line_follow": {"junction": {"state": "idle", "seq": 3}, "arc": _arc_rec(2, "SE", "NE")}}
 
     assert run(HttpLaneJunction(lambda: {"r": Client()}).junction_state("r"))["arc"]["arc_seq"] == 2
+
+
+def test_no_send_before_the_arc_baseline_is_read():
+    """Review 2026-10-08: CORE keeps its last arc for the whole process. A first read without
+    ``line_follow.arc`` gives no baseline, so nothing goes out; old arcs then neither stop nor carry."""
+    runner, store, ports = _setup(caps=ARC)
+    _with_arc(ports, _arc_rec(7, "SW", "SE", state="stopped", reason="lane_arc_edge"))
+    west = _arc(store, "west:rev")
+    _plan(store, ports, "west:rev", west.length_m - 0.5, "NE")
+    run(runner.start("p1", "bob"))
+    ports.at(west, west.length_m - 0.3)
+    ports.pose = dataclasses.replace(ports.pose, **SW_POSE)
+    ports.state_none = True                                  # a read without the junction state
+    _ticks(runner, ports)
+    assert ports.sent == [] and runner.view("p1")["state"] == "running"
+    ports.state_none = False
+    _ticks(runner, ports, 2)
+    view = runner.view("p1")
+    assert view["state"] == "running" and [s[:2] for s in ports.sent] == [("right", "SW")]
+    assert runner._live["rosy_60"].sent.get("carried") is not True
+
+
+def test_a_newer_arc_from_another_place_does_not_carry():
+    runner, store, ports = _sw_entry()
+    ports.arc = _arc_rec(1, "NW", "SW")                      # not SW: not our right
+    _ticks(runner, ports)
+    assert runner._live["rosy_60"].sent.get("carried") is not True
+
+
+def test_a_stop_never_carries_an_exit_segment():
+    """A replan hold stops at SE although ring_e follows: the stop carries no exit_segment."""
+    runner, store, ports = _on_ring_s()
+    ports.core.j = None
+    runner._live["rosy_60"].view["hold"] = {"reason": "replan", "plan": None, "code": "TEST"}
+    _ticks(runner, ports)
+    assert ports.sent[-1][:2] == ("stop", "SE") and "exit_segment" not in (ports.expects[-1] or {})
+
+
+def test_an_unarmed_note_goes_when_the_arc_reason_changes():
+    runner, store, ports, ring = _entered_ring()
+    ports.arc = _arc_rec(1, "SW", "SE", state="ended", reason="lane_arc_end_unarmed")
+    _ticks(runner, ports)
+    assert "arc_end_unarmed" in runner.view("p1")["detail"]
+    ports.arc = _arc_rec(2, "SE", "NE")
+    _ticks(runner, ports)
+    assert "arc_end_unarmed" not in runner.view("p1")["detail"]
+
+
+def test_arc_newer_refuses_a_bool():
+    from fleet.server.trip_ports import arc_newer
+    assert arc_newer(2, 1) and arc_newer(0, None) and not arc_newer(1, 1) and not arc_newer(True, None)
+
+
+def test_outer_line_offset_is_range_checked():
+    from fleet.server.trip_ports import TripConfig
+    for bad in (0.04, 0.21):
+        with pytest.raises(ValueError, match="arc_outer_line_offset_m"):
+            TripConfig(arc_outer_line_offset_m=bad)
+    assert TripConfig(arc_outer_line_offset_m=0.05).arc_outer_line_offset_m == 0.05
+
+
+def test_a_right_at_an_arc_end_onto_a_spoke_goes_with_its_window():
+    """A -> B straight, B -> C quarter circle left (r 0.25), C -> D straight right (a spoke). On the
+    arc, C's right goes out with the window (CORE ignores it at ``segment_end``), today's tangent and
+    advance_m, no exit_segment; CORE's turn there carries it."""
+    import math
+    from test_trip_runner import _map
+    quarter = [[round(1 + 0.25 * math.sin(t), 4), round(0.25 - 0.25 * math.cos(t), 4)]
+               for t in (math.radians(d) for d in range(0, 91, 10))]
+    site = _map(("A", 0, 0), ("B", 1, 0), ("C", 1.25, 0.25), ("D", 1.75, 0.25),
+                edges=[("ab", "A", "B", [[0, 0], [1, 0]], "lane"), ("bc", "B", "C", quarter, "lane"),
+                       ("cd", "C", "D", [[1.25, 0.25], [1.75, 0.25]], "lane")])
+    runner, store, ports = _setup(site, caps=ARC)
+    _with_arc(ports, _arc_rec(1, "B", "C"))
+    _plan(store, ports, "ab:fwd", 0.1, "D")
+    run(runner.start("p1", "bob"))
+    bc = _arc(store, "bc:fwd")
+    ports.at(bc, bc.length_m - 0.25)
+    _ticks(runner, ports)
+    assert [s[:2] for s in ports.sent] == [("right", "C")]
+    expect = ports.expects[0]
+    assert expect["expect_in_m"] == pytest.approx(0.25, abs=1e-3) and "exit_segment" not in expect
+    segments = runner.view("p1")["plan"]["segments"]
+    assert ports.turns[0] == round(turn_target(store.active()[2], segments, 1), 1) < 0  # today's rule
+    assert ports.advances == [0.10]
+    ports.core.see_junction()                                # segment_end pivot: CORE turns
+    _ticks(runner, ports)
+    assert runner._live["rosy_60"].sent["carried"] is True

@@ -140,6 +140,8 @@ class TripConfig:
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
                     math.isfinite(value) and value > 0):
                 raise ValueError(f"fleet.trip.{item.name} must be a positive finite number")
+        if not 0.05 <= self.arc_outer_line_offset_m <= 0.20:  # D-520 1: CORE's range
+            raise ValueError("fleet.trip.arc_outer_line_offset_m must be in [0.05, 0.20]")
         if self.expect_tol_min_m > MAX_EXPECT_TOL_M:
             raise ValueError(f"fleet.trip.expect_tol_min_m must be at most {MAX_EXPECT_TOL_M}")
 

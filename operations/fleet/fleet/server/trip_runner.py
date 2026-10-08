@@ -350,8 +350,9 @@ class TripRunner:
         try:
             if live.arc(live.view["segment_index"]).drive_mode == "lane":
                 live.junction = await self._call(self._junction.junction_state(robot_id)) or {}
+                # D-520 2: CORE's arc record; a CORE restart resets arc_seq (as the junction seq)
                 sent, arc = live.sent, live.junction.get("arc")
-                live.junction["arc"] = arc = arc if isinstance(arc, dict) else {}
+                arc = arc if isinstance(arc, dict) else {}
                 if sent is not None and (live.junction.get("seq") == sent["seq"] and live.junction.get("state") in (
                         *MANOEUVRE, "executing") or (arc.get("from_place_id") == sent["place"]
                                                      and arc_newer(arc.get("arc_seq"), sent.get("arc_before")))):
@@ -362,6 +363,7 @@ class TripRunner:
                             "arc_reason": arc.get("reason"), "arc_place": arc.get("from_place_id"),
                             "arc_end_place": arc.get("end_place_id")})
                         return
+                    live.view["detail"].pop("arc_end_unarmed", None)
                     if arc.get("reason") == ARC_END_UNARMED:  # CORE follows on: shown, not an end
                         live.view["detail"]["arc_end_unarmed"] = {
                             "end_place_id": arc.get("end_place_id"), "travelled_m": arc.get("travelled_m")}
@@ -451,6 +453,8 @@ class TripRunner:
                   else lane_action(live.graph, live.segments, index, self._routing))
         if action != STOP and self.traffic.holds(live, index):
             return  # D-517 3 (M1): nothing tells the robot to drive into a refused block
+        if (live.view["caps"] or {}).get("lane_arc") and "arc" not in live.junction:
+            return  # D-520 2: no arc baseline read yet; an old CORE arc would pass as this trip's
         state, sent, now = live.junction.get("state"), live.sent, self._clock()
         same = sent is not None and (sent["index"], sent["action"], sent["place"]) == (index, action, place)
         if state in MANOEUVRE:
@@ -502,7 +506,7 @@ class TripRunner:
         await self._after_send(live)
         if reply.get("accepted") is False:  # CORE aborted a manoeuvre instead: an operator decides
             raise _JunctionAborted(reply.get("junction_seq"))
-        seq, arc_before = reply.get("junction_seq"), live.junction.get("arc", {}).get("arc_seq")
+        seq, arc_before = reply.get("junction_seq"), (live.junction.get("arc") or {}).get("arc_seq")
         live.replaceable = None
         live.sent = {"index": index, "action": action, "place": place, "seq": seq, "at": now,
                      "done": bool(reply.get("already_done")), "arc_before": arc_before}
