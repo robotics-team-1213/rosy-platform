@@ -837,7 +837,8 @@ def test_tether_check_draws_the_charger_and_binds_the_values(tmp_path):
     assert v["tether"]["check"]["source_id"] == "cam1" and v["tether"]["check"]["map_id"] == "map_v2_fleet"
     b, g, r = cv2.imdecode(np.frombuffer(img.read_bytes(), np.uint8), cv2.IMREAD_COLOR)[240, 170]
     assert r > 180 and g < 90 and b < 90                               # red charger dot at map (-1.5, 0)
-    assert not any(e.startswith(("POST", "PUT")) or e.startswith("ssh") for e in robot.log)   # no robot call
+    sent = [e for e in robot.log if e.startswith(("POST", "PUT", "ssh"))]
+    assert sent == ["POST /host/lamp/identify"]                       # only the lamp blink (D-512 amendment 2)
 
 
 @pytest.mark.parametrize("change, why", [
