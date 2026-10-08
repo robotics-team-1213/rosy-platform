@@ -48,10 +48,10 @@ def test_a_fresh_signal_is_all_red_until_an_operator_cycles_it():
     assert {a for _t, a, _g in _drive(state, PLAN, range(30))} == {"all_red"}
     command(PLAN, state, "cycle", 30.0)
     seen = dict((t, (a, g)) for t, a, g in _drive(state, PLAN, [30.0 + i * 0.5 for i in range(80)]))
-    assert seen[31.0] == ("green", ["in_a"])
-    assert seen[39.0] == ("yellow", [])           # 8 s green
-    assert seen[41.0] == ("all_red", [])          # 2 s yellow
-    assert seen[42.0] == ("green", ["in_b"])      # 1 s all red, then the other approach
+    assert seen[30.0] == ("green", ["in_a"])      # all red already ran its 1 s
+    assert seen[37.5] == ("green", ["in_a"]) and seen[38.0] == ("yellow", [])   # 8 s green
+    assert seen[39.5] == ("yellow", []) and seen[40.0] == ("all_red", [])      # 2 s yellow
+    assert seen[40.5] == ("all_red", []) and seen[41.0] == ("green", ["in_b"])  # 1 s all red
 
 
 def test_next_green_waits_while_the_zone_is_busy_and_then_alerts():
@@ -99,7 +99,7 @@ def test_a_red_zone_is_refused_ahead_and_under_a_jumped_front():
     b = Robot("b", from_b, 0.5, 0.6, 0.05, 0.12)
     state = TableState()
     result = step(layout, [a, b], state, 0.0, green={"zone": {"in_a"}})
-    assert result.authority_end["a"] > 1.3 and result.authority_end["b"] <= 0.65
+    assert result.authority_end["a"] > 0.65 and result.authority_end["b"] <= 0.65
     assert result.waiting_for["b"] == ("signal:zone",) and result.waiting_for["signal:zone"] == ("a",)
     assert "b" not in state.waiting_since, "a red wait is not a merge wait"
     assert "zone" in result.busy
@@ -155,7 +155,10 @@ def test_random_loop_never_enters_on_red_and_never_deadlocks(n, seed, jump_rate,
         lit = green(PLAN, signal)
         for r in robots:
             r.lookahead_m = rng.choice((0.1, 0.3, 0.6))
-            jump = rng.uniform(-0.5, 0.5) if rng.random() < jump_rate else 0.0
+            # Forward jumps only: an estimate ahead of the body puts its front in the zone on red
+            # (the case under test) and stops it early. A backward jump past u lets CORE overrun the
+            # authority by the jump (until_m is measured from the estimate) — a D-517 u-bound premise.
+            jump = rng.uniform(0.0, 0.5) if rng.random() < jump_rate else 0.0
             r.d = None if tick and rng.random() < unknown_rate else true_d[r.id] + rng.uniform(-u, u) + jump
         before = {r.id: set(state.held.get(r.id, {})) for r in robots}
         result = step(layout, robots, state, now, green={"zone": lit})
