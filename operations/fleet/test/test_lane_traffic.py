@@ -326,7 +326,7 @@ def test_a_robot_never_localized_holds_every_junction_instruction():
         live = runner._live[robot_id]
         assert live.traffic == {"waiting_for": ["c"], "authority_end_m": live.traffic["authority_end_m"],
                                 "refused_at_m": 0.0}
-        assert runner._traffic_holds(live, live.view["segment_index"])
+        assert runner.traffic.holds(live, live.view["segment_index"])
 
 
 def test_a_loop_is_its_lap_cycle_not_the_approach_to_it():
@@ -392,7 +392,7 @@ def test_the_hold_back_covers_the_entry_past_the_place():
     for refused, holds in ((place_m + 0.02, True), (place_m + PAST_PLACE_M - 1e-3, True),
                            (place_m + PAST_PLACE_M + 0.01, False), (None, False)):
         live.traffic = {"waiting_for": [], "authority_end_m": None, "refused_at_m": refused}
-        assert runner._traffic_holds(live, index) is holds, refused
+        assert runner.traffic.holds(live, index) is holds, refused
 
 
 def test_a_failed_lap_check_is_tried_again_then_left_to_the_operator():

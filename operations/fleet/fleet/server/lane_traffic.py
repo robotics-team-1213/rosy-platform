@@ -4,18 +4,20 @@ Each trip period ``TripRunner`` hands its trips here. The active map's ``Layout`
 map version (zones from site config ``fleet.traffic.zones``; a two-way lane becomes a
 direction-locked zone by itself), each trip robot becomes a ``blocks.Robot`` and
 ``blocks.step`` runs. No authority goes to a robot (that is M2, safety-reviewed); the trip loop
-only holds back a junction instruction into a refused block (``trip_runner._traffic_holds``).
+only holds back a junction instruction into a refused block (``holds``).
 
 D-517 6: a robot whose trip ended, or whose trip is on another map version, keeps its last
 grants and body as ``pinned`` units until a fresh ``LOCALIZED`` pose shows it clear of them
 (the pose's units replace the pins); a map activation re-pins every robot from its last pose.
-
 
 The single writer of lane-trip grants (D-517 3). ``traffic_reservations.py`` (D-426 segment
 states) writes no trip grant; it stays only as the Gazebo conformance harness's segment record."""
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import logging
 import math
 import time
 from typing import Iterable, Mapping, Optional
@@ -49,6 +51,7 @@ class TrafficService:
         self._last_pose: dict[str, tuple[float, float, float]] = {}
         #: robot id -> (route id, trim_m, spans) of the last period, to shift grants when laps are dropped.
         self._seen: dict[str, tuple[str, float, tuple]] = {}
+        self._parked, self._warned = {}, False  # map poses read this period for ``pinned`` robots (D-517 6)
 
     # ---- the table ------------------------------------------------------------------------
 
@@ -178,6 +181,35 @@ class TrafficService:
 
     def view(self) -> dict:
         return self._view
+
+    def holds(self, live, index: int) -> bool:
+        refused = (live.traffic or {}).get("refused_at_m")  # D-517 3: refused before PAST_PLACE_M past the place
+        return refused is not None and refused < live.progress(index, live.segments[index]["s_to"]) + PAST_PLACE_M
+
+    def watch(self, inflight: dict, busy, read) -> None:
+        """A pinned robot without a trip or a read in flight gets one (hub cache, no forced REST read)."""
+        for robot_id in self.pinned():
+            task = inflight.get(robot_id)
+            if not busy(robot_id) and (task is None or task.done()):
+                inflight[robot_id] = asyncio.ensure_future(self._watch(robot_id, read))
+
+    async def _watch(self, robot_id: str, read) -> None:
+        with contextlib.suppress(Exception):  # an unread pose keeps the pins
+            self._parked[robot_id] = await read(robot_id)
+
+    def period(self, lives) -> None:
+        """``step`` with this period's parked poses; a fault never ends a trip (logged once)."""
+        poses, self._parked = self._parked, {}
+        try:
+            self.step(lives, poses)
+            self._warned = False
+        except Exception:  # the table is shown only (M1); a fault never ends a trip
+            for live in lives:  # no stale refusal holds a robot or hides a stall
+                live.traffic = None
+            if not self._warned:
+                logging.getLogger("fleet.server.trip_runner").exception(  # the trip loop's logger (D-517 split)
+                    "traffic table step failed (repeats muted until it works)")
+            self._warned = True
 
     # ---- start check ----------------------------------------------------------------------
 
