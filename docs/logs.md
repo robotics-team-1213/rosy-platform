@@ -7083,6 +7083,12 @@ osy-d395-s1d\`.
 - 증거: 호스트 pytest `test_keep_pivot` 16개(느린 명령 0.0108, ×0.6, ×0.7, 0.002 → 초기화 없음, 기준을 0.01로 되돌리면 실패), `test_lane_keep`, `test_line_observer_wiring`, `test_lane_paint_source`, `test_latest_only_subscriptions`, `test/test_module_separation.py` 통과. `test/architecture/`는 `test_safety_separation::test_decision_and_learning_use_only_safety_public_api` 하나가 실패하고, 같은 실패가 main 64d7a68a8에서도 난다. Gazebo 재실행과 실기는 하지 않았다.
 - gate 변화: 없음.
 
+## 2026-10-08 · uncommitted · D-507 4 회전각: 접선 + 6° 더 돌림(잠정)
+
+- 변경: Fleet `turn_target`(`operations/fleet/fleet/routing/execute.py`)이 현(chord) 조준 대신 접선 각 `theta`에 회전 방향으로 `TURN_OVERTURN_DEG` = 6.0°를 더한 값을 보낸다. 더하는 것은 나가는 차로가 `advance_m` 안에서 회전 반대쪽으로 휠 때(`advance_m` 점으로의 현이 시작 접선보다 회전 반대쪽으로 `BEND_MIN_DEG` = 1° 넘게)뿐이고, 곧은 차로와 회전 쪽으로 휘는 차로는 접선 그대로다. 분류는 `theta`, 150° 한도·부호·0 검사는 보내는 각, `advance_m` 명시·클램프는 그대로다. 260919에서는 ring 진입(SW −120.6°, NE −108.8°)과 ring 출구(NW→SW −114.1°, SE→NE −110.0°)가 모두 해당한다. 출구 spoke도 첫 0.1 m에서 회전 반대쪽으로 휜다(현 편차 약 5.9°). D-507 4항에 개정 문장을 더했다. API 변경 없음.
+- 증거: D-507 SIM 4c차(54회, d507-sim 워크트리 `docs/validation/d507-lane-trip-sim-2026-10-08/result.md` 「4c차 회전각」): 현 조준은 SW 5 s 유지 0/3, NE 재획득 0/3, 접선 −6°는 3/3, 3/3(−9°도 같음), 10 s 유지는 어느 각도도 없음. 호스트 pytest `operations/fleet/test/` 2704 passed, 2 failed(`test_document_imports`, `test_grammar_separation`: 콘솔 문서·시트, 이 브랜치가 고치지 않은 파일, 기준 868a4bb99에서 온 실패), known_failures 2 new(같은 둘). 부호 변이(+→−, 반대쪽 판정 뒤집기)에서 `test_routing_execute`·`test_trip_d507` 실패 확인 후 복구. Gazebo 재실행과 실기는 하지 않았다.
+- gate 변화: 없음. 잠정값이라 링 추종을 고친 뒤 SIM에서 다시 잰다(보정 후보).
+
 ## 2026-10-08 · uncommitted · 차선 경계 완전 미관측 ROS SIM 재생
 
 - 변경: `edge_left`의 기억만으로 주행하지 않는 가드를 독립 Gazebo/ROS 그래프로 재생하고 `docs/validation/lane-blind-stop-sim-2026-10-08/result.md`에 원본 해시와 정지 자세를 기록했다.
