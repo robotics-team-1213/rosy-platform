@@ -128,12 +128,12 @@ def main(argv: list[str]) -> int:
     if argv != ["hash-password"]:
         print("usage: python -m fleet.server.site_users hash-password < password", file=sys.stderr)
         return 2
-    password = (getpass.getpass("password: ") if sys.stdin.isatty()
-                else sys.stdin.readline().rstrip("\r\n"))
-    if not password:
+    typed = (getpass.getpass("password: ") if sys.stdin.isatty()
+             else sys.stdin.readline().rstrip("\r\n"))
+    if not typed:
         print("password must not be empty", file=sys.stderr)
         return 1
-    print(hash_password(password))
+    print(hash_password(typed))
     return 0
 
 

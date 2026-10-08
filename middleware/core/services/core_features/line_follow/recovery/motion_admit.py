@@ -7,6 +7,8 @@ mode with the URDF body, a fresh scan and the D-422 sweep of the very twist abov
 (c) Reverse on (b) only for the D-468 retrace (limits stay in lane_return.py): no IR sees the rear
 floor, the declaration covers it and the rear sweep is the space evidence. Under the manager lock.
 """
+import math
+
 from core_common.robot_body import RobotBody
 from core_features.line_follow.clearance import body_envelope_gap, body_path_gap
 
@@ -49,6 +51,8 @@ class MotionAdmitMixin:
         centre_ok: IR row inside the camera's cross-line band (user 2026-10-08), approach/advance."""
         if kind not in IR_ALLOWED:
             raise ValueError(f"unknown motion kind {kind!r}")
+        if not (math.isfinite(linear) and math.isfinite(angular)):
+            return False  # NaN compares False everywhere below and would pass the sweep
         with self._lock:
             if self._proof_live():
                 return self._return_probe(now, linear, angular)  # unbound: False

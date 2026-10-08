@@ -73,6 +73,8 @@ LOOKAHEAD_MAX_M = 0.25
 LOOKAHEAD_STEP_M = 0.01
 #: A path point further off the heading than this is behind, not ahead.
 LOOKAHEAD_MAX_BEARING_RAD = math.radians(100.0)
+# ponytail: Host 65-deg gap calibration; tune from reviewed camera frames before activation.
+RIGHT_MATE_MAX_LATERAL_FRACTION = 0.65
 #: The robot must be within this of the path it pursues.
 PATH_MAX_OFFSET_M = 0.14
 #: Half-thickness of the iso-line band, so it stays 8-connected.
@@ -479,7 +481,17 @@ class LaneEdgeFollower:
         of the same lane stands in where the left has left the field of view
         (convex left turns)."""
         target, supported, source = None, False, None
-        for name, grid in (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"])):
+        candidates = (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"]))
+        if (found.get("left") is None and found.get("right") is not None
+                and found["left_grid"].any() and found["right_grid"].any()):
+            left_target, left_supported = self._lookahead(view, found["left_grid"], half)
+            right_target, right_supported = self._lookahead(view, found["right_grid"], half)
+            if (left_supported and right_supported
+                    and abs(right_target[1]) <= half * RIGHT_MATE_MAX_LATERAL_FRACTION
+                    and abs(left_target[1] - right_target[1]) > LANE_LINE_WIDTH_M):
+                # A forward observed mate beats the old line's turning end cap.
+                candidates = candidates[1:]
+        for name, grid in candidates:
             if not grid.any():
                 continue
             if name == "RIGHT":

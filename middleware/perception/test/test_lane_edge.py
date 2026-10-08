@@ -120,6 +120,46 @@ def test_straight_lane_holds_the_centre():
     assert pose[0] > 0.8
 
 
+def test_one_boundary_gap_reacquires_while_moving():
+    """A short missing left stripe keeps the same lane; the right stripe remains visible."""
+    world = lane([(-1.0, 0.0), (2.0, 0.0)])
+    x0, x1 = 0.35, 0.55
+    world.paint[int((world.y1 - H - 0.03) * 1000):int((world.y1 - H + 0.03) * 1000),
+                int((x0 - world.x0) * 1000):int((x1 - world.x0) * 1000)] = 0
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    pose = (0.0, 0.0, 0.0)
+    poses, sources = [], []
+    for k in range(75):
+        obs = follower.update(k * DT, pose, world.render(pose), GROUND, **KW)
+        assert obs is not None
+        poses.append(pose)
+        sources.append(follower.last["source"])
+        v, w = core_command(obs)
+        mid = pose[2] + w * DT / 2
+        pose = (pose[0] + v * DT * math.cos(mid), pose[1] + v * DT * math.sin(mid),
+                pose[2] + w * DT)
+    assert any(x0 < p[0] < x1 for p in poses)
+    assert any(p[0] > x1 for p in poses)
+    assert any(x0 < p[0] < x1 and s == "RIGHT" for p, s in zip(poses, sources))
+    assert all(abs(p[1]) < 0.04 for p in poses)
+    assert sources[-1] == "LEFT"
+
+
+@pytest.mark.parametrize("side", [1.0, -1.0])
+def test_bend_with_one_boundary_gap_stays_inside_nominal_body_margin(side):
+    turn = side * math.radians(65.0)
+    centre = np.array([(-1.0, 0.0), (0.45, 0.0),
+                       (0.45 + 1.2 * math.cos(turn), 1.2 * math.sin(turn))])
+    world = lane(centre)
+    world.paint[int((world.y1 - H - 0.03) * 1000):int((world.y1 - H + 0.03) * 1000),
+                int((0.28 - world.x0) * 1000):int((0.43 - world.x0) * 1000)] = 0
+    log, pose = drive(world, steps=100, pose=(-0.3, 0.0, 0.0))
+    assert all(obs is not None for _, obs, _ in log)
+    assert pose[2] == pytest.approx(turn, abs=math.radians(6))
+    # Nominal half-width 92.5 mm minus body half-width 56.55 mm is 35.95 mm.
+    assert max(_distance_to_polyline(p[:2], centre) for p, _, _ in log) < 0.035
+
+
 @pytest.mark.parametrize("side", [1.0, -1.0])
 def test_65_degree_bend_is_followed(side):
     """The 260919 chevrons: both lines bend ~65 deg (run 184434 stopped here)."""
