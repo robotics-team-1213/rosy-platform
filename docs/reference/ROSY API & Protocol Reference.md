@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.152
+**Version:** v1.153
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1481,11 +1481,11 @@ Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사�
 
 | Method | Path | 권한 | 내용 |
 |---|---|---|---|
-| GET | `/api/fleet/tethers` | viewer 이상 | `{tethers: [{robot_id, anchor_xy: [x, y], radius_m, set_by}]}` |
-| POST | `/api/fleet/robots/{robot_id}/tether` | named operator | `{anchor_xy: [x, y], radius_m}`. 같은 본문을 다시 보내도 결과가 같다. 응답은 저장 행 |
+| GET | `/api/fleet/tethers` | viewer 이상 | `{tethers: [{robot_id, anchor_xy: [x, y], radius_m, set_by, watch}]}`. `watch`(v1.153, D-526)는 아직 틱이 없으면 null, 아니면 `{state: watching\|tripped, trip: null\|tether_radius\|tether_turn\|tether_pose_stale, distance_m, turn_deg, pose_age_s, stop_sent, stop_error}` |
+| POST | `/api/fleet/robots/{robot_id}/tether` | named operator | `{anchor_xy: [x, y], radius_m}`. 같은 본문을 다시 보내도 결과가 같다. 응답은 저장 행. 보낼 때마다 그 로봇의 감시를 새로 시작한다(트립 해제, 회전 0) |
 | DELETE | `/api/fleet/robots/{robot_id}/tether` | named operator | 테더를 지운다. `{robot_id, cleared}`, 없던 테더도 200 |
 
-테더(v1.140, D-512 개정 1의 표시·설정 쪽)는 로봇별 map 프레임 원(anchor_xy 각 −1000~1000 m, 0 < radius_m ≤ 50)이다. Fleet 지도는 원과 기준점을 그리고, 로봇 map pose가 원 밖이면 주의 색으로 바꾼다. Fleet은 주행을 막지 않는다. D-512 개정 1 5항의 Fleet tether 감시(정지 지시)는 아직 없고, 그때까지 감시와 집행은 tools/device_test가 맡는다. 메모리에만 두어 Fleet 재시작 때 사라지고, 로스터에서 빠진 로봇의 테더는 목록에서 지운다. 미등록 로봇은 404 UNKNOWN_ROBOT, bool·Infinity·범위 밖·추가 필드는 422다. JSON이 아닌 NaN도 저장 전에 거절된다(현재 앱 공통 검증 응답이 NaN을 담지 못해 500). 지도 궤적(지나온 길)은 브라우저가 기존 `GET /api/fleet/state` pose로 모으며(최근 120 s, 600점, 1 cm 이상 이동 시, `localization.pose_frame`이 `odom`인 자세는 넣지 않는다) 새 필드가 없다.
+테더(v1.140, D-512 개정 1의 표시·설정 쪽)는 로봇별 map 프레임 원(anchor_xy 각 −1000~1000 m, 0 < radius_m ≤ 50)이다. Fleet 지도는 원과 기준점을 그리고, 로봇 map pose가 원 밖이면 주의 색, 감시가 정지를 내렸으면 위험 색으로 바꾼다. D-526(v1.153): Fleet tether 감시가 0.5 s마다 테더가 있는 로봇의 지도 자세(`GET /api/fleet/state`와 같은 상태 pose, `localization.pose_frame`이 `odom`이면 자세 없음)를 읽는다. 기준점 거리 > `radius_m` + 0.15 m(`tether_radius`), 선언 뒤 펼친 누적 yaw의 절댓값 > 405°(`tether_turn`), 신선한 지도 자세 없음 2 s 초과(`tether_pose_stale`) 가운데 하나면 그 로봇에 기존 CORE E-Stop(`POST /api/v1/safety/stop`, 전체 정지와 같은 로봇 클라이언트)을 보내고 열린 trip을 `tether_trip`으로 끝낸다. 트립은 다시 POST하거나 DELETE할 때까지 래치되고 정지는 CORE가 답할 때까지 틱마다 다시 보낸다. 되돌아가기는 하지 않는다(운영자 몫). CORE E-Stop 해제는 기존 관리자 경로 그대로다. 메모리에만 두어 Fleet 재시작 때 사라지고, 로스터에서 빠진 로봇의 테더는 목록에서 지운다. 미등록 로봇은 404 UNKNOWN_ROBOT, bool·Infinity·범위 밖·추가 필드는 422다. JSON이 아닌 NaN도 저장 전에 거절된다(현재 앱 공통 검증 응답이 NaN을 담지 못해 500). 지도 궤적(지나온 길)은 브라우저가 기존 `GET /api/fleet/state` pose로 모으며(최근 120 s, 600점, 1 cm 이상 이동 시, `localization.pose_frame`이 `odom`인 자세는 넣지 않는다) 새 필드가 없다.
 
 
 `OverheadDetectionsPayload`는 source_id/map_id/calibration_revision/processor_revision/captured_at/seq/status,
@@ -2495,6 +2495,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.153 | 2026-10-08 | Additive (D-526 1단계, feat/fleet-tether-watch, Safety-Review 대상): Fleet tether 감시. `GET /api/fleet/tethers` 행에 `watch {state, trip, distance_m, turn_deg, pose_age_s, stop_sent, stop_error}`(첫 틱 전 null); 반경+0.15 m·누적 회전 405°·지도 자세 2 s 없음이면 기존 로봇 E-Stop을 보내고 그 로봇의 trip을 `tether_trip`으로 끝낸다. 테더 POST가 감시를 다시 시작한다. 로봇 API·envelope 1.0 변경 없음 |
 | v1.152 | 2026-10-08 | Additive (lap SIM 2, fix/junction-corner-hold-scope, Safety-Review 대상): `POST /line-follow/junction` 선택 필드 `lane_turn_deg`(`straight` + 기대 창, −360…360); `junction_corner_hold` 는 지시와 어긋나는 모서리에서만(`left`/`right` 의 반대쪽, `straight` 는 `lane_turn_deg` 가 그쪽 20° 미만이거나 없을 때). Fleet 이 `straight` 에 지도 차로 방향 변화를 싣는다. envelope 1.0 그대로 |
 | v1.151 | 2026-10-08 | Additive (D-517 M5 발견 1, fix/d517-trip-authority-mismatch, Safety-Review 대상): `POST /api/fleet/trips/{plan_id}/start` 422 `TRIP_AUTHORITY_SITE_OFF` — 사이트 `fleet.traffic.authority` 가 꺼져 있는데 로봇 능력 `line_follow_authority_required` 가 참이면 `lane` trip 을 열지 않는다(통행권이 나가지 않아 CORE 가 서 있고 trip 이 20 s 뒤 `stall` 로 끝나던 것). CORE 동작 변경 없음. envelope 1.0 변경 없음 |
 | v1.150 | 2026-10-08 | Additive (D-361 S4 identity readback): robot `GET /api/v1/system/info` includes provisioned `device_uid` (or null); on a provisioned Pi with no configured serial, `serial_number` reads the CPU serial (or remains null). Fleet enrollment can store both on a new pairing; existing rows are unchanged. Envelope 1.0 and motion authority unchanged |
