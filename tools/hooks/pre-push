@@ -7,7 +7,7 @@
 #   because this tier never read those files. Measured cost: ~3 min on Windows.
 # 2026-10-03 (D-436): + affected tier after the fast suites.
 # 2026-10-08: pytest runs on the model PC, then the AI PC (tools/remote/remote_pytest.py),
-#   on the commit being pushed; this machine only when neither host answers.
+#   on the commit being pushed; an unavailable test host stops the push.
 # Install: tools/hooks/install.sh   Uninstall: rm .git/hooks/pre-push
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -87,9 +87,9 @@ if out:
     sys.exit(1)
 EOF
 
-# D-430 §5: opt-in early warning only. It never blocks the push; CI enforces it.
-echo "[pre-push] Safety-Review trailers (warning only)"
-"$PY" tools/harness/safety_review.py "$(git merge-base HEAD origin/main 2>/dev/null || true)" HEAD --warn-only
+# D-430 §5: local early warning for this tip; CI checks the complete pushed range.
+echo "[pre-push] Safety-Review trailer on pushed tip (warning only)"
+"$PY" tools/harness/safety_review.py "${PUSH_SHA}^" "$PUSH_SHA" --warn-only
 
 FAST_SUITES=(
   test/test_harness_contracts.py
