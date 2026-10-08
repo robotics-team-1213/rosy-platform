@@ -779,3 +779,10 @@
 - 증거: 변경 전 map-backed left/straight 회귀 2건 실패(각각 조기 회전·실행), 변경 후 CORE 교차로·API·Fleet·계약 시험 194건 통과, `known_failures` 신규 0. B9 게이트 켬 SIM의 조기 회전 2/6 유형을 소스에서 차단한 것이며 SIM 재실행·굽이 통과·실물 수용은 열림.
 - gate 변화: SOURCE만. SIM·DEVICE·FIELD는 열림.
 - 결정: D-507 3항 보충.
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 6 motion_admitted refuses non-finite twists
+- 변경: `recovery/motion_admit.py` `motion_admitted`가 NaN·inf 선속도·각속도를 거부한다(현장 근거에서 NaN은 후진 판정과 sweep 비교를 통과했다). `test_motion_admit.py`에 중복 브랜치 `feat/site-floor-declaration`의 non-finite 시험을 옮겼다(6 kind × 4 twist).
+- 증거: 수정 전 24건 모두 실패, 수정 후 `test_motion_admit.py` 101 passed.
+- gate 변화: 없음(SOURCE).
+- 결정: D-507 6
+- 교훈: 같은 항목을 두 세션이 구현하면 뒤 브랜치의 시험부터 옮겨 앞 구현에 대 본다.
