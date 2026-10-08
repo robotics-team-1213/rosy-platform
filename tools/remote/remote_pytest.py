@@ -38,6 +38,7 @@ PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider"]
 CI = ".github/workflows/ci.yml"
 DEVICE_REQ = "deploy/robot/pinky_pro/image/device-python-requirements.txt"
 CRYPTO_REQ = "deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt"
+FLEET_REQ = "deploy/site/requirements-fleet.txt"
 TAIL_LINES = 25
 
 # Fetch public main, unpack the bundle (stdin), check the commit out. Exit 3 = the
@@ -56,27 +57,49 @@ git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 """
 
 # The CI test-job install (ci.yml "Install colcon & tools", receiver crypto, platform
-# wheels) into a venv over the system site-packages (apt cv2/PIL/numpy, as in CI).
+# wheels) plus the deploy/site/requirements-fleet.txt pins the device set lacks
+# (cryptography 50: Ubuntu's 41 has no x509.verification) and pip numpy/pillow/
+# opencv-python-headless for CI's apt python3-opencv/python3-pil. No system
+# site-packages: they leak Ubuntu's old cryptography/Jinja2 and give no rclpy.
+# Built in venv.new and swapped in: other sessions use ~/rosy-test/venv directly, so
+# it is never missing or half-built, and never swapped during a run's first 90 s
+# (imports). The replaced venv stays as venv.old-<time>; prune those by hand.
 VENV = r"""set -euo pipefail
-R=~/rosy-test; V=$R/venv; DEPS=$2; cd "$R/runs/$1"; shift 2
+R=~/rosy-test; V=$R/venv; N=$R/venv.new; DEPS=$2; cd "$R/runs/$1"; shift 2
 exec 9>"$R/venv.lock"; flock 9
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] && exit 0
-echo "[remote] installing test dependencies into $V (CI install inputs changed)"
-rm -rf "$V"
+echo "[remote] building $N (CI install inputs changed)"
+rm -rf "$N"
 UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)
-if [ -n "$UV" ]; then "$UV" venv -q --seed --system-site-packages -p /usr/bin/python3 "$V"
-else /usr/bin/python3 -m venv --system-site-packages "$V"; fi
-P="$V/bin/python -m pip -q --disable-pip-version-check --no-cache-dir"
+if [ -n "$UV" ]; then "$UV" venv -q --seed -p /usr/bin/python3 "$N"
+else /usr/bin/python3 -m venv "$N"; fi
+P="$N/bin/python -m pip -q --disable-pip-version-check --no-cache-dir"
 REQ=deploy/robot/pinky_pro/image/device-python-requirements.txt
-$P install --ignore-installed --require-hashes --no-deps --only-binary=:all: -r "$REQ"
-grep -o '^[A-Za-z0-9._-]*==[^ ]*' "$REQ" > "$V/constraints.txt"
-$P install -c "$V/constraints.txt" pytest setuptools wheel flake8 httpx pyyaml jsonschema ext4
+$P install --require-hashes --no-deps --only-binary=:all: -r "$REQ"
+grep -o '^[A-Za-z0-9._-]*==[^ ]*' "$REQ" > "$N/constraints.txt"
+norm() { tr 'A-Z_.' 'a-z--'; }
+cut -d= -f1 "$N/constraints.txt" | norm > "$N/pinned.txt"
+while read -r line; do
+  grep -qx "$(printf %s "${line%%==*}" | norm)" "$N/pinned.txt" || echo "$line"
+done < deploy/site/requirements-fleet.txt > "$N/fleet-extra.txt"
+$P install -c "$N/constraints.txt" -r "$N/fleet-extra.txt" pytest setuptools wheel flake8 httpx pyyaml \
+  jsonschema ext4 numpy pillow opencv-python-headless
 $P install --require-hashes --no-deps --only-binary=:all: \
   --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
-  --target "$V/receiver-crypto" -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
-$P wheel --no-deps --no-build-isolation --wheel-dir "$V/wheelhouse" "$@"
-$P install --no-deps --no-index "$V"/wheelhouse/*.whl
-echo "$DEPS" > "$V/.deps-sha"
+  --target "$N/receiver-crypto" -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
+$P wheel --no-deps --no-build-isolation --wheel-dir "$N/wheelhouse" "$@"
+$P install --no-deps --no-index "$N"/wheelhouse/*.whl
+$P check
+echo "$DEPS" > "$N/.deps-sha"
+[ "${ROSY_VENV_NO_SWAP:-}" = 1 ] && exit 0
+grep -rlI --exclude-dir=__pycache__ "$N" "$N/bin" | xargs -r sed -i "s|$N|$V|g"
+pat="rosy-test/ven""v/bin/python"  # split so this script's own command line never matches
+while pgrep -f "$pat" | xargs -r -n1 ps -o etimes= -p | awk '$1 < 90 {young = 1} END {exit !young}'; do
+  echo "[remote] a run started under 90 s ago uses $V; waiting to swap"; sleep 15
+done
+[ -e "$V" ] && mv "$V" "$R/venv.old-$(date +%Y%m%d-%H%M%S)"
+mv "$N" "$V"
+echo "[remote] swapped in the new $V"
 """
 
 # ponytail: the venv lock is taken per step, so a run whose deps differ from a
@@ -138,7 +161,7 @@ def deps(repo: Path, sha: str) -> tuple[str, list[str]]:
     if not match:
         raise SystemExit(f"[remote-pytest] no `pip3 wheel ... --wheel-dir` line in {CI}; update VENV")
     dirs = match.group(1).split()
-    ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (CI, DEVICE_REQ, CRYPTO_REQ, *dirs)]
+    ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (CI, DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, *dirs)]
     return hashlib.sha256("\n".join([VENV, *ids]).encode()).hexdigest()[:16], dirs
 
 
