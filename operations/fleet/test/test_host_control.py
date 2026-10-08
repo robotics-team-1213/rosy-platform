@@ -8,10 +8,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from fleet.host_control import (
+    CONFIG_DIR,
     HOSTS,
     HostControlError,
     SshHostHelper,
@@ -88,9 +90,29 @@ def test_installer_ships_a_sudoers_line_without_env_rights():
     text = INSTALL.read_text(encoding="utf-8")
     assert "ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control\"" in text
     assert "SETENV" not in text and "env_keep" not in text
-    assert 'command=\\"/usr/local/sbin/rosy-host-control-remote\\",restrict' in text
-    assert "/etc/rosy/host-control/role" in text
+    assert ('from=\\"$FROM\\",command=\\"/usr/local/sbin/rosy-host-control-remote\\",restrict'
+            in text)
+    assert 'grep -qxF "$LINE"' in text  # an unrestricted line with the same key is replaced
+    assert "/etc/rosy/host-control/role" in text and "host-control-role" not in text
     assert "exec sudo -n /usr/local/sbin/rosy-host-control" in REMOTE.read_text(encoding="utf-8")
+
+
+def test_only_fleet_mounts_the_service_control_key():
+    services = yaml.safe_load((SITE / "compose.yaml").read_text(encoding="utf-8"))["services"]
+    mount = "/etc/rosy/fleet-host-control:/run/rosy-fleet-host-control:ro"
+    assert mount in services["fleet"]["volumes"]
+    assert CONFIG_DIR.as_posix() == "/run/rosy-fleet-host-control"
+    for name, service in services.items():
+        mounted = " ".join(str(item) for item in service.get("volumes", []))
+        secrets = " ".join(str(item) for item in service.get("secrets", []))
+        if name != "fleet":
+            assert "host-control" not in mounted and "host_control" not in secrets, name
+    # The key dir must not sit inside the config dir that Vision mounts too.
+    env = (SITE / ".env.example").read_text(encoding="utf-8")
+    config_dir = next(line.split("=", 1)[1] for line in env.splitlines()
+                      if line.startswith("ROSY_SITE_CONFIG_DIR="))
+    assert not "/etc/rosy/fleet-host-control".startswith(config_dir.rstrip("/") + "/")
+    assert "FLEET_DIR=/etc/rosy/fleet-host-control" in INSTALL.read_text(encoding="utf-8")
 
 
 def _config(tmp_path, targets):
