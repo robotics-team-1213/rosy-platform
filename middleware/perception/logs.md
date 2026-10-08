@@ -1313,3 +1313,10 @@
 - 변경: `west:r → ring_s:f` 남쪽 직선 출발 호스트 폐루프와 굽이 앞 0.30 m 반경 페인트 공백을 `test_route_camera.py`에 고정했다.
 - 증거: 정상 바닥은 분기 도달·올바른 방향·MEMORY 재획득, 최대 중심선 편차 0.0356 m. 긴 공백은 0.249 m 진행 뒤 LOST, 최대 편차 0.002 m. 두 시험 모두 통과.
 - gate 변화: 없음. 합성 바닥·SIM 참 자세의 호스트 검증이며 ROS 그래프, Fleet 활성 경로, 실제 벽·페인트 검수는 별도다.
+
+## 2026-10-08 · uncommitted · fix(perception): 정적 경로 끝에서 관측 후보 중단
+
+- 원인: `route_a`가 마지막 경로 조각 끝에서도 `near_node` 분기 manoeuvre를 시작해, 카메라 tier STOP 중 경로 마지막 점에서 72.5 mm 떨어진 위치까지 이동했다.
+- 변경: 마지막 점 20 mm 전부터 관측 후보를 반환하지 않고 진행 중 manoeuvre를 해제한다. CORE 단일 `/cmd_vel` 경계는 그대로다.
+- 증거: 끝점·15 mm 앞 단위 반례 수정 후 29 passed; hybrid·관측 연결·투어 74 passed, 10 skipped. 독립 ROS-SIM 재실행은 끝점 18.1 mm 앞 HOLD 후 LOST, 최대 중심선 편차 47.8 mm로 주행 전체는 HOLD.
+- gate 변화: 없음. 경로 끝 정지만 검증했고 활성 경로·사람 승인 정답·실물 수용은 남았다.

@@ -1026,6 +1026,23 @@ def test_class_select_lists_the_workspace_class_set(browser_workspace):
     expect(options).to_have_text(['클래스 선택 필요', '로봇', '장애물 상자', '콘', '신호등', '표지판', '사람 발'])
 
 
+def test_object_ribbon_class_click_saves_selected_box_only(browser_workspace):
+    page, store, expect = browser_workspace
+    chip = page.locator('#object-quick-classes button[value="obstacle_box"]')
+    expect(chip).to_be_disabled()
+    assert page.locator('.review-tool-ribbon').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y']
+    expect(page.locator('#view-original .ui-icon')).to_have_count(1)
+    expect(page.locator('#view-detail .ui-icon')).to_have_count(1)
+    page.get_by_role('button', name='박스 1 선택', exact=True).click()
+    expect(chip).to_be_enabled()
+    chip.click()
+    expect(page.locator('#save-status')).to_contain_text('서버 저장됨')
+    expect(chip).to_have_attribute('aria-pressed', 'true')
+    assert store.get(0)['review']['boxes'][0]['label'] == 'obstacle_box'
+    assert store.get(0)['status'] == 'pending'
+    expect(page.locator('#approve')).to_be_disabled()
+
+
 def test_custom_class_set_names_and_saves(custom_class_workspace):
     page, store, expect = custom_class_workspace
     select = page.locator('#boxes .box-top select').first
