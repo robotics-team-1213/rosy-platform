@@ -8,6 +8,7 @@
 - 결정: D-323.
 - 교훈: 없음
 
+
 ## 2026-09-29 · 434ceb0b · feat(pilot): stick.js 순수 입력 매핑 (실행 계획 T3)
 - 변경: `stick.js` — `shapeAxis`(데드존·감도 곡선·클램프·원점 대칭), `mapInput`(pad·pedals·keys), `PRESETS`(low/mid/high 클라이언트 상한). 모듈을 `pilot_assets`·CMakeLists 에 등록.
 - 증거: `test_stick.py` 8 passed(Node 서브프로세스, `_run_js` 패턴). 라우트 시험 포함 10 passed.
@@ -754,3 +755,9 @@
 - gate 변화: 없음. 실기 화면은 미확인.
 - 결정: D-411.
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · uiux(pilot): 긴 휴대폰 주행·회전 조작 첫 화면
+- 변경: 30rem 미만 Pilot HUD의 모델·차선·영상 설정을 기존 도구 패널로 옮겼다. 긴 휴대폰은 HUD 세로 여백을 줄이고 조작부 높이를 늘려 좌우 회전을 첫 화면에 둔다. 도구 패널은 휴대폰 폭에서 내부 스크롤한다.
+- 증거: `docs/validation/uiux-pilot-phone-turn-layout-2026-10-08/result.md`. LOCAL Chromium 2000×1200·1333×760·1200×2000·390×844·320×568 영상/조작 5건, 수동/자동 회전 2건, 도구 전환·스크롤 1건 통과. G1 관련 80 passed/1 failed(`pinky-review` 원시 색상, 공유 `main`에서도 재현).
+- gate 변화: Pilot 표면과 제품 전체 HOLD. G1 실패, 전체 G2·실기·G3 미수용.
+- 결정: D-153, D-363의 영상 비율·조작 접근 계약을 유지한다.
