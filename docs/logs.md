@@ -7052,3 +7052,33 @@ osy-d395-s1d\`.
 - 변경: 재생 입력 전체를 서버 호출 전에 검증하고 세트 SHA-256을 결과에 남긴다. 호출 오류는 결과 JSON을 보존하면서 CLI 실패 코드로 올린다. AI PC Laya CPU 호출·서버 중단 시험을 `docs/validation/decision-model-replay-2026-10-08/`에 기록했다.
 - 증거: 재생 시험 3 passed, known failures 0 new. AI PC 합성 2건 중 1건 일치·오류 0; 서버 중단 2건은 예측 없음·CLI exit 1. GPU 장치 노드 부재로 GPU/VLM 지연 미측정.
 - gate 변화: 없음. 사람 정답 L0, Kev, ModelProfile 배포, Fleet/CORE·현장 수용은 미검증.
+
+## 2026-10-08 · uncommitted · D-512 개정 1 충전 케이블 tether 감시와 되돌아가기
+
+- 변경: 사용자 결정(2026-10-08)으로 케이블을 꽂은 실기 시험을 허용했다. `tools/device_test/tether.py`가 판정 파일의 `tether`(2 m/5 m, 닻 위치, 판단 근거)를 검사하고, 주행 틱마다 닻 거리와 누적 회전을 재며 `trail.jsonl`을 남긴다. 한도(케이블 − 0.3 m, ±360°)에 닿으면 line-follow OFF 확인 뒤 기록한 길을 0.03 m/s로 거꾸로 따라가 되감고 중단(종료 코드 2)한다.
+- 증거: `python -m pytest tools/device_test/test tools/capture/test -q` 호스트 시험(가짜 전송). 로봇은 움직이지 않았다.
+- gate 변화: 없음. D-512는 Proposed 그대로이고 Fleet tether 감시는 후속이다.
+
+## 2026-10-08 · uncommitted · D-512 개정 1 충전기 기준 반경과 tether 영상 확인
+
+- 변경: 사용자 정정(2026-10-08)으로 반경을 충전기에서 잰다(`tether.charger_robot_frame`). `run.py --tether-check`가 사이트의 승인된 카메라-지도 보정으로 판정한 머리 위 프레임에 충전기, 반경 원, 로봇을 그려 `tether_check.jpg`를 남기고, 에이전트가 보고 `visual_check_ok`를 참으로 둬야 출발한다. 보정이 없거나 맞지 않으면 케이블 주행을 거부한다.
+- 증거: `python -m pytest tools/device_test/test -q` 호스트 시험(알려진 homography의 픽셀 위치, 거부 경로). 로봇은 움직이지 않았다.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · D-512 개정 1 독립 안전 리뷰 반영과 픽셀 모드
+
+- 변경: 충전기를 확인한 촬영 자세에 두고 첫 주행 자세가 0.05 m·3° 넘게 다르면 중단, 되돌아가기에서 오래된 LiDAR 스캔(0.5 s)·느린 송신 간격(0.3 s) 정지와 실제 10 Hz, 보정 지도 일치(로봇 지도 또는 Fleet 활성 SiteMap), 여유 0.1 m 안 시작 거부, `trail.jsonl` phase 표시. D-395 이전 로봇(9dfk)용 픽셀 모드: 머리 위 프레임에서 고른 세 점으로 충전기를 계산한다. ADR에 되돌아가는 동안 D-422가 작동하지 않음과 두 한도 모두 되돌아감(케이블 밟음은 받아들인 위험)을 적었다.
+- 증거: `python -m pytest tools/device_test/test tools/capture/test -q` 호스트 시험(가짜 전송, 알려진 homography). 로봇은 움직이지 않았다.
+- gate 변화: 없음. 겹 적용 뒤 CORE 재시작이 odom을 바꾸는지는 장치에서 확인하지 않았다.
+
+## 2026-10-08 · uncommitted · D-507 keep 제자리 회전 판정을 CORE 명령 twist로
+
+- 변경: bd0d5e791(877dab90f로 착지)의 keep 초기화가 측정 odom(|wz| > 0.15, |vx| < 0.01)으로 제자리 회전을 판정해, 느린 keep 코너(명령 v 0.0188, w 0.48, Gazebo odom vx ≈ 0.001)에서 코너 기억을 지웠다. `line_observer_node`가 keep 모드에서 CORE의 최종 `cmd_vel`(D-18 단일 발행자)을 읽기만 하고, 명령 |v| < 0.01(CORE `junction_still_linear`)이고 |w| > 0.15이며 0.3 s 안의 명령일 때만 keeper를 다시 시작한다. 측정 odom 조건은 뺐다. 느린 코너에서 odom이 정지처럼 읽히는 것이 바로 오판의 원인이고, 교차로 회전은 명령이 v = 0으로 정확히 구분한다. 노드는 608 → 607줄이다.
+- 증거: D-507 SIM 4b차 `docs/validation/d507-lane-trip-sim-2026-10-08/result.md`, `evidence/spin_reset_log_r4b.txt`(d507-sim 워크트리). 호스트 pytest `test_keep_pivot`(느린 코너·교차로 회전·오래된 명령, 노드 게이트 식을 그대로 평가, odom으로 되돌린 변이에서 실패 확인), `test_lane_keep`, `test_line_observer_wiring`, `test_lane_paint_source`, `test/architecture/test_module_structure.py`, known_failures 0 new. Gazebo 재실행과 실기는 하지 않았다.
+- gate 변화: 없음. SIM 4b 주행 거리 회복은 모델 PC Gazebo 재실행으로 확인해야 한다.
+
+## 2026-10-08 · uncommitted · D-507 keep 명령 회전 판정 리뷰 반영
+
+- 변경: 앞 기록의 명령 |v| < 0.01(odom 정지 기준인 `junction_still_linear`)은 가장 느린 keep 명령(e=1에서 0.0108, 각속도 상한이나 v 배율이면 더 낮음)과 너무 가까워, 제자리 회전 기준을 `COMMANDED_PIVOT_LINEAR_MPS` = 1e-3으로 바꿨다. 실제 회전은 v를 정확히 0으로 명령한다. 받은 명령이 카메라 시각보다 0.3 s 넘게 늦은 keep 프레임이 30번 이어지면 한 번 경고한다(`use_sim_time` 불일치면 초기화가 조용히 꺼진다). `test/test_module_separation.py`의 `FINAL_TOPIC_EXCEPTIONS`에 이 노드의 읽기 전용 `cmd_vel` 구독 줄을 고정했다. 노드는 608줄이다.
+- 증거: 호스트 pytest `test_keep_pivot` 16개(느린 명령 0.0108, ×0.6, ×0.7, 0.002 → 초기화 없음, 기준을 0.01로 되돌리면 실패), `test_lane_keep`, `test_line_observer_wiring`, `test_lane_paint_source`, `test_latest_only_subscriptions`, `test/test_module_separation.py` 통과. `test/architecture/`는 `test_safety_separation::test_decision_and_learning_use_only_safety_public_api` 하나가 실패하고, 같은 실패가 main 64d7a68a8에서도 난다. Gazebo 재실행과 실기는 하지 않았다.
+- gate 변화: 없음.

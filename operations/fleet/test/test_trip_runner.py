@@ -36,7 +36,8 @@ ROOT = Path(__file__).resolve().parents[3]
 LANE_GRAPH = ROOT / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 OPERATOR = {"Authorization": "Bearer operator-token"}
 VIEWER = {"Authorization": "Bearer viewer-token"}
-LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True)
+# D-507 2 (2026-10-08): a turn goes only with a window, which only a junction_pivot robot takes.
+LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
 BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True)
 MANOEUVRE = ("turning", "advancing", "reacquiring")
 
@@ -335,7 +336,7 @@ def test_start_refuses_with_every_d491_code_in_order():
     assert run(runner.start("p1", "bob"))["state"] == "started"
     assert _code(runner.start("p1", "bob")) == "TRIP_ALREADY_STARTED"
     _plan(store, ports, "ring_s:fwd", 0.1, "NE", plan_id="p2")
-    assert _code(runner.start("p2", "bob")) == "TRIP_BUSY"  # one trip on the whole site
+    assert _code(runner.start("p2", "bob")) == "TRIP_BUSY"  # this robot already has an open trip (D-517 1)
 
 
 def _activate_again(store):
@@ -442,9 +443,8 @@ def test_straight_is_refreshed_only_while_core_shows_it_armed_and_never_while_ex
 
 
 def test_an_expired_instruction_before_the_place_is_sent_again():
-    runner, store, ports = _setup(junction_expires_s=2.0)
-    arc = _arc(store, "east:fwd")
-    _plan(store, ports, "east:fwd", arc.length_m - 0.5, "NW")
+    runner, store, ports = _setup(_free_map("lane"), junction_expires_s=2.0)
+    _plan(store, ports, "ab:fwd", 0.5, "C")
     run(runner.start("p1", "bob"))
     _ticks(runner, ports)
     first = len(ports.sent)
@@ -699,7 +699,7 @@ def test_a_restart_halt_without_a_place_only_turns_line_follow_off(tmp_path):
                     "next_place": None, "detail": {}})
     store.close()
     runner, store, ports = _setup(path=tmp_path / "fleet.sqlite3")
-    run(runner._halt_restarted())
+    run(runner.halts.halt_restarted())
     assert ports.sent == [] and ports.held == ["rosy_60"]
 
 
@@ -1050,6 +1050,9 @@ class _TripOf:
     def robot_busy(self, robot_id):
         return robot_id == self.robot
 
+    def open_trips(self):
+        return [{"robot_id": self.robot}] if self.robot else []
+
     async def cancel_robot(self, robot_id, reason):
         self.canceled.append((robot_id, reason))
 
@@ -1194,7 +1197,7 @@ def test_a_carried_out_instruction_is_never_sent_again():
     _ticks(runner, ports)
     ports.core.see_junction()  # CORE executes our straight through SE
     _ticks(runner, ports)
-    assert runner._live.sent["carried"]
+    assert runner._live["rosy_60"].sent["carried"]
     ports.core.j = None  # CORE went idle without our seeing it finish; SE is 0.32 m ahead
     ports.at(ring_s, 0.05)
     _ticks(runner, ports, 3, dt=3.0)
@@ -1209,7 +1212,7 @@ def test_already_done_from_core_counts_as_carried_out():
     ports.core.done_place = ("SE", "straight")  # it ran between two ticks
     ports.at(ring_s, ring_s.length_m - 0.02)
     _ticks(runner, ports)
-    assert runner.running() is not None and runner._live.sent["done"]
+    assert runner.running() is not None and runner._live["rosy_60"].sent["done"]
     _ticks(runner, ports)
     assert runner.running()["segment_index"] == 1 and ports.sent[-1] == ("straight", "NE", None)
 
@@ -1240,9 +1243,9 @@ def test_confirm_replan_forgets_the_last_instruction():
     run(runner.start("p1", "bob"))
     ports.blocked = frozenset({"ring_e"})
     _ticks(runner, ports)
-    held = runner._live.sent["seq"]
+    held = runner._live["rosy_60"].sent["seq"]
     run(runner.confirm_replan("p1", "bob"))
-    assert runner._live.sent is None and runner._live.replaceable == held
+    assert runner._live["rosy_60"].sent is None and runner._live["rosy_60"].replaceable == held
 
 
 def test_the_restart_halt_is_retried_until_it_takes_or_the_robot_leaves(tmp_path):
@@ -1252,7 +1255,7 @@ def test_the_restart_halt_is_retried_until_it_takes_or_the_robot_leaves(tmp_path
                         "next_place": None, "detail": {}})
     store.close()
     runner, store, ports = _setup(path=tmp_path / "fleet.sqlite3")
-    runner._roster = lambda: ["rosy_60"]
+    runner.halts.roster = lambda: ["rosy_60"]
     hold = ports.hold
     calls = []
 
@@ -1263,10 +1266,10 @@ def test_the_restart_halt_is_retried_until_it_takes_or_the_robot_leaves(tmp_path
         return await hold(robot_id)
 
     ports.hold = flaky
-    run(runner._halt_restarted())
-    assert [t["robot_id"] for t in runner._restarted] == ["rosy_60"]  # "gone" left the roster
-    run(runner._halt_restarted())
-    assert runner._restarted == [] and calls == ["rosy_60", "rosy_60"]
+    run(runner.halts.halt_restarted())
+    assert [t["robot_id"] for t in runner.halts.restarted] == ["rosy_60"]  # "gone" left the roster
+    run(runner.halts.halt_restarted())
+    assert runner.halts.restarted == [] and calls == ["rosy_60", "rosy_60"]
     assert store.trip("t1")["detail"]["stop_sent"] is True
 
 
@@ -1438,13 +1441,13 @@ def test_restart_halts_run_outside_the_tick_with_a_cap_and_yield_to_a_new_trip(t
         raise OSError("robot unreachable")
 
     ports.hold = unreachable
-    run(runner._restart_halts())
-    assert runner._restarted == []  # gave up after 3 tries
+    run(runner.halts.run_restart())
+    assert runner.halts.restarted == []  # gave up after 3 tries
     runner, store, ports = _setup(path=tmp_path / "fleet2.sqlite3")
-    runner._restarted = [{"trip_id": "old", "robot_id": "rosy_60", "drive_mode": "lane", "next_place": None}]
+    runner.halts.restarted = [{"trip_id": "old", "robot_id": "rosy_60", "drive_mode": "lane", "next_place": None}]
     _plan(store, ports, "ring_s:fwd", 0.1, "NW")
     run(runner.start("p1", "bob"))
-    assert runner._restarted == []  # the new trip owns the robot now
+    assert runner.halts.restarted == []  # the new trip owns the robot now
 
 
 def test_a_trip_store_failure_never_replaces_the_stop_result(tmp_path, caplog):
@@ -1453,14 +1456,21 @@ def test_a_trip_store_failure_never_replaces_the_stop_result(tmp_path, caplog):
     async def broken(robot_id, reason):
         raise RuntimeError("trip store unavailable")
 
-    client.app.state.trip_runner.cancel_robot = broken
+    def store_down(_trip):
+        raise RuntimeError("trip store unavailable")
+
+    runner = client.app.state.trip_runner
+    runner.cancel_robot = broken
     with caplog.at_level(logging.ERROR):
-        estop = client.post("/api/fleet/estop", headers=OPERATOR)
         cancel = client.post("/api/fleet/robots/rosy_60/cancel", headers=OPERATOR)
         off = client.post("/api/fleet/robots/rosy_60/line-follow", json={"mode": "OFF"}, headers=OPERATOR)
+        runner._store.put_trip = store_down  # the E-stop closes the trip itself, then records it
+        estop = client.post("/api/fleet/estop", headers=OPERATOR)
     assert estop.status_code == 200 and estop.json()["total"] == 1 and ("estop",) in robot.calls
     assert cancel.status_code == 200 and off.status_code == 200
-    assert sum("could not end the trip" in r.message for r in caplog.records) == 3
+    assert sum("could not end the trip" in r.message for r in caplog.records) == 2
+    assert sum("could not record a trip ended by the E-stop" in r.message for r in caplog.records) == 1
+    assert runner.open_trips() == []
 
 
 def test_create_app_wires_the_real_trip_providers(tmp_path):

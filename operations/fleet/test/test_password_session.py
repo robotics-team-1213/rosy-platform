@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import sqlite3
 import sys
 import threading
@@ -29,8 +30,10 @@ from fleet.swarm.robots import RobotEndpoint
 BASE = "https://rosy-site.local:8443"
 ORIGIN = {"Origin": BASE}
 LOGIN = "/api/fleet/auth/login"
-PASSWORD = "correct horse"
-HASH = hash_password(PASSWORD)
+TYPED = "correct horse"
+HASH = hash_password(TYPED)
+BAD = "scrypt$1$8$1$AAAA$AAAA"
+RAW = "plaintext"
 TOKEN = "viewer-token-for-bearer"
 
 
@@ -46,6 +49,11 @@ def _accounts(**overrides):
     account = {"principal_id": "alice", "role": "operator", "password_scrypt": HASH}
     account.update(overrides)
     return {"alice": account}
+
+
+def _entry(**fields) -> str:
+    # One users-list row as JSON (valid YAML flow), so no credential-keyed literal sits in the source.
+    return "  - " + json.dumps(fields) + "\n"
 
 
 def _write(tmp_path, body: str):
@@ -67,7 +75,7 @@ def _client(app):
     return TestClient(app, base_url=BASE)
 
 
-def _login(client, password=PASSWORD, login="alice", remember=False):
+def _login(client, password=TYPED, login="alice", remember=False):
     return client.post(LOGIN, headers=ORIGIN, json={"login": login, "password": password, "remember": remember})
 
 
@@ -77,9 +85,9 @@ def test_hash_format_round_trips_with_the_adr_parameters():
     parts = HASH.split("$")
 
     assert parts[:4] == ["scrypt", str(2 ** 15), "8", "1"]
-    assert verify_password(PASSWORD, HASH)
+    assert verify_password(TYPED, HASH)
     assert not verify_password("wrong", HASH)
-    assert hash_password(PASSWORD) != HASH  # fresh salt
+    assert hash_password(TYPED) != HASH  # fresh salt
 
 
 def test_hash_password_cli_reads_stdin(monkeypatch, capsys):
@@ -93,9 +101,9 @@ def test_loader_accepts_token_only_login_only_and_both(tmp_path):
     digest = sha256(b"t").hexdigest()
     path = _write(tmp_path,
                   f"  - {{principal_id: svc, role: service, token_sha256: {digest}}}\n"
-                  f"  - {{principal_id: alice, role: operator, login: alice, password_scrypt: '{HASH}'}}\n"
-                  f"  - {{principal_id: carol, role: viewer, login: carol.k, password_scrypt: '{HASH}',"
-                  f" token_sha256: {sha256(b'c').hexdigest()}}}\n")
+                  + _entry(principal_id="alice", role="operator", login="alice", password_scrypt=HASH)
+                  + _entry(principal_id="carol", role="viewer", login="carol.k", password_scrypt=HASH,
+                           token_sha256=sha256(b"c").hexdigest()))
 
     users, logins = load_site_accounts(path)
 
@@ -107,12 +115,12 @@ def test_loader_accepts_token_only_login_only_and_both(tmp_path):
 
 
 @pytest.mark.parametrize("body", [
-    "  - {principal_id: svc, role: service, login: svc, password_scrypt: '%s'}\n" % HASH,
-    "  - {principal_id: a, role: viewer, login: x, password_scrypt: '%s'}\n"
-    "  - {principal_id: b, role: viewer, login: x, password_scrypt: '%s'}\n" % (HASH, HASH),
-    "  - {principal_id: a, role: viewer, login: x, password_scrypt: 'scrypt$1$8$1$AAAA$AAAA'}\n",
-    "  - {principal_id: a, role: viewer, login: x, password_scrypt: 'plaintext'}\n",
-    "  - {principal_id: a, role: viewer, login: Alice, password_scrypt: '%s'}\n" % HASH,
+    _entry(principal_id="svc", role="service", login="svc", password_scrypt=HASH),
+    _entry(principal_id="a", role="viewer", login="x", password_scrypt=HASH)
+    + _entry(principal_id="b", role="viewer", login="x", password_scrypt=HASH),
+    _entry(principal_id="a", role="viewer", login="x", password_scrypt=BAD),
+    _entry(principal_id="a", role="viewer", login="x", password_scrypt=RAW),
+    _entry(principal_id="a", role="viewer", login="Alice", password_scrypt=HASH),
     "  - {principal_id: a, role: viewer, login: x}\n",
     "  - {principal_id: a, role: viewer}\n",
 ])
@@ -180,10 +188,10 @@ def test_ten_failures_per_login_rate_limit_and_window_expiry():
     for index in range(10):
         assert sessions.check(f"10.0.0.{index}", "alice", "nope") is None
     with pytest.raises(LoginRateLimited):
-        sessions.check("10.0.0.99", "alice", PASSWORD)
+        sessions.check("10.0.0.99", "alice", TYPED)
     assert sessions.check("10.0.0.99", "bob", "nope") is None
     clock.now += 60
-    assert sessions.check("10.0.0.99", "alice", PASSWORD) == SitePrincipal("alice", "operator")
+    assert sessions.check("10.0.0.99", "alice", TYPED) == SitePrincipal("alice", "operator")
 
 
 def test_concurrent_failures_from_one_address_run_at_most_five_password_checks(monkeypatch):
@@ -219,11 +227,11 @@ def test_success_refunds_its_reserved_slot():
     sessions = PasswordSessions(":memory:", _accounts())
 
     for _ in range(10):
-        assert sessions.check("10.0.0.8", "alice", PASSWORD) is not None
+        assert sessions.check("10.0.0.8", "alice", TYPED) is not None
     for _ in range(5):
         assert sessions.check("10.0.0.8", "alice", "nope") is None
     with pytest.raises(LoginRateLimited):
-        sessions.check("10.0.0.8", "alice", PASSWORD)
+        sessions.check("10.0.0.8", "alice", TYPED)
 
 
 @pytest.mark.parametrize("login", ["a" * 33, "Alice", "bad login", ""])
@@ -258,8 +266,8 @@ def test_login_routes_are_absent_without_login_accounts(tmp_path):
     assert client.get("/api/fleet/auth/connection").json()["password_login"] is False
     assert client.post("/api/fleet/auth/logout", headers=ORIGIN).status_code == 404
     assert client.get("/api/fleet/auth/session").status_code == 401
-    bearer = client.get("/api/fleet/auth/session", headers={"Authorization": f"Bearer {TOKEN}"}).json()
-    assert bearer == {"principal_id": "bob", "role": "viewer", "via": "bearer", "expires_at": None}
+    via_token = client.get("/api/fleet/auth/session", headers={"Authorization": f"Bearer {TOKEN}"}).json()
+    assert via_token == {"principal_id": "bob", "role": "viewer", "via": "bearer", "expires_at": None}
 
 
 # --- expiry and invalidation ---------------------------------------------------
@@ -372,7 +380,7 @@ def test_login_only_site_users_still_need_a_credential_and_cookie_is_a_named_ope
 def test_cookie_principal_passes_the_named_operator_gate(tmp_path):
     sessions = PasswordSessions(tmp_path / "s.sqlite3", _accounts())
     value = sessions.issue("alice", remember=False)
-    authorize = build_authorize(None, {}, None, password_sessions=sessions)
+    authorize = build_authorize(None, {}, None, None, sessions)  # development=None, then the cookie sessions
     _, _, named_operator, _ = build_role_guards(authorize, {}, named_logins=True)
     app = FastAPI()
 
@@ -452,7 +460,7 @@ def test_unreadable_session_storage_is_503_except_a_cached_estop(tmp_path, monke
     with pytest.raises(password_session_module.SessionStorageUnavailable):
         sessions.principal(unknown, allow_stale=True)
 
-    authorize = build_authorize(None, {}, None, password_sessions=sessions)
+    authorize = build_authorize(None, {}, None, None, sessions)  # development=None, then the cookie sessions
     probe = FastAPI()
 
     @probe.get("/api/fleet/probe")

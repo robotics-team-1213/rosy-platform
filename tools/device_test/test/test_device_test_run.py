@@ -41,15 +41,17 @@ class FakeCore:
         if key == ("GET", "/robot/state"):
             if r.state_fail and r.lf_mode == "CAMERA_LINE":
                 return 0, None
-            pose = None if r.pose_none else {"x": r.x, "y": 0.0, "yaw": 0.0}
-            return 200, {"online": True, "mode": "IDLE", "battery": {"percent": 80}, "safety": {"estop": False},
+            pose = None if r.pose_none else {"x": r.x, "y": r.y, "yaw": math.atan2(math.sin(r.yaw), math.cos(r.yaw))}
+            return 200, {"online": True, "mode": r.mode, "map_id": r.map_id, "battery": {"percent": 80}, "safety": {"estop": False},
                          "pose": pose, "localization": r.localization}
         if key == ("GET", "/line-follow"):
             if r.lf_mode == "OFF":
                 return 200, {"mode": "OFF", "state": "IDLE", "reason": "off", "linear": 0.0}
             reason = r.reasons.pop(0) if r.reasons else r.default_reason
             moving = reason not in ("blocked_unexplained",)
-            r.x += 0.008 if moving else 0.0
+            r.yaw += r.yaw_rate if moving else 0.0
+            r.x += 0.008 * math.cos(r.yaw) if moving else 0.0
+            r.y += 0.008 * math.sin(r.yaw) if moving else 0.0
             state = "RECOVERING" if reason == "lane_bridge" else "TRACKING"
             return 200, {"mode": "CAMERA_LINE", "state": state, "reason": reason,
                          "linear": 0.08 if moving else 0.0, "angular": 0.0}
@@ -59,7 +61,15 @@ class FakeCore:
                 r.lf_mode = mode
             return status, {"mode": mode} if status == 200 else {"code": "NOT_LOCALIZED"}
         if key == ("POST", "/mode"):
+            if r.idle_status == 200:
+                r.mode = mode
             return r.idle_status, {}
+        if key == ("POST", "/teleop"):
+            r.teleops.append((body["linear"], body["angular"]))
+            r.yaw += body["angular"] * 0.1
+            r.x += body["linear"] * math.cos(r.yaw) * 0.1
+            r.y += body["linear"] * math.sin(r.yaw) * 0.1
+            return 200, {}
         if key == ("POST", "/line-follow/hold"):
             return 200, {}
         if key == ("GET", "/vision/front/status"):
@@ -67,7 +77,7 @@ class FakeCore:
         if key == ("GET", "/vision/front/frame"):
             return 200, b"\xff\xd8front\xff\xd9"
         if key == ("GET", "/sensors/lidar"):
-            return 200, {"ranges": [1.5] * 360, "angle_min": -math.pi, "angle_increment": 2 * math.pi / 360,
+            return 200, {"ranges": r.lidar_ranges(), "received_at": r.scan_t, "source_stamp_ns": int(r.scan_t * 1e9), "angle_min": -math.pi, "angle_increment": 2 * math.pi / 360,
                          "range_min": 0.05, "range_max": 12.0}
         if key == ("POST", "/recordings"):
             r.rec = True
@@ -102,6 +112,10 @@ class FakeRobot:
         self.core_env, self.core_errors, self.on_call = "HOME=/var/lib/rosy/core", "0", None
         self.state_fail = self.rec_unreachable = False
         self.restart_rc = self.precheck_rc = 0
+        self.y = self.yaw = self.yaw_rate = 0.0
+        self.mode, self.lidar_range, self.teleops = "IDLE", 1.5, []
+        self.lidar_block, self.lidar_frozen, self.site_map_id, self.map_id = None, False, "map_v2_fleet", "map_v2_fleet"
+        self.calib = [CALIB]
         self.__dict__.update(kw)
         self.core = FakeCore(self)
 
@@ -113,6 +127,30 @@ class FakeRobot:
 
     def overhead(self):
         return b"\xff\xd8overhead\xff\xd9"
+
+    def overhead_source(self):
+        return "cam1"
+
+    def calibrations(self):
+        return self.calib
+
+    def active_site_map_id(self):
+        return self.site_map_id
+
+    @property
+    def scan_t(self):
+        return 5.0 if self.lidar_frozen else self.t
+
+    def lidar_ranges(self):
+        """1.5 m everywhere; lidar_block "front"/"rear" puts 0.1 m returns in that +-30 deg body sector."""
+        fwd = run.edge_drive.lidar_forward_deg(ROBOT)[0]
+        centre = {"front": 0.0, "rear": 180.0}.get(self.lidar_block)
+        out = []
+        for i in range(360):
+            body = (-180.0 + i - fwd + 180.0) % 360.0 - 180.0
+            near = centre is not None and abs((body - centre + 180.0) % 360.0 - 180.0) <= 30.0
+            out.append(0.1 if near else self.lidar_range)
+        return out
 
     def ssh(self, cmd, stdin=b""):
         self.log.append("ssh " + cmd)
@@ -171,7 +209,7 @@ def verdict(tmp_path, robot, **over):
         (ev / name).write_bytes(b"\xff\xd8" + name.encode())
         frames[name] = run.sha(ev / name)
     v = {"captured_at": robot.t, "pose_at_capture": {"x": 0.0, "y": 0.0}, "robot_at_start": True,
-         "robot_seen_is_target": True, "path_clear": True, "cable_seen": True,
+         "robot_seen_is_target": True, "path_clear": True, "cable_seen": True, "cable_attached": False,
          "cable_in_path_or_wheels": False, "note": "cable behind the robot", "judged_by": "agent rosy-test",
          "frames": frames, **over}
     p = ev / "camera_verdict.json"
@@ -600,3 +638,355 @@ def test_observed_keys_are_sanitized_and_id_pattern_is_bounded():
     assert run.sanitize({"reasons": {"seen 10.0.0.7": 1}}) == {"reasons": {"seen <ip>": 1}}
     long_id = "20261008T120000Z-" + "aB3" * 30
     assert run.sanitize(long_id) == "<redacted>"
+
+
+# --- D-512 tether guard (user decision 2026-10-08) ----------------------------------------------
+
+LOCALIZED = {"state": "LOCALIZED", "pose_frame": "map"}
+CALIB = {"source_id": "cam1", "map_id": "map_v2_fleet", "calibration_revision": "paint-abc",
+         "map_to_image": [100.0, 0.0, 320.0, 0.0, -100.0, 240.0, 0.0, 0.0, 1.0],   # 100 px/m, map origin at (320, 240)
+         "image": {"width": 640, "height": 480}, "use": "display-only"}
+
+
+def overhead_jpeg(width=640, height=480):
+    import cv2
+    import numpy as np
+    return cv2.imencode(".jpg", np.full((height, width, 3), 90, np.uint8))[1].tobytes()
+
+
+def tether_check(robot, path, plan=PLAN):
+    return run.main(["--robot", ROBOT, "--plan", str(plan), "--tether-check", str(path)], robot=robot)
+
+
+def tethered(tmp_path, robot, charger, cable_m=2.0, check=True, plan=PLAN, **over):
+    """A tethered verdict; check=True also runs --tether-check and records the agent's look."""
+    t = {"cable_m": cable_m, "charger_robot_frame": charger, "how": "overhead: 2 m cable to the charger behind"}
+    p = verdict(tmp_path, robot, **{"cable_attached": True, "tether": t, "pose_at_capture": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+                                    "localization_at_capture": LOCALIZED, "map_id_at_capture": "map_v2_fleet", **over})
+    if check:
+        v = json.loads(p.read_text(encoding="utf-8"))
+        (p.parent / "before_overhead.jpg").write_bytes(overhead_jpeg())
+        v["frames"]["before_overhead.jpg"] = run.sha(p.parent / "before_overhead.jpg")
+        p.write_text(json.dumps(v), encoding="utf-8")
+        assert tether_check(robot, p, plan) == 0
+        v = json.loads(p.read_text(encoding="utf-8"))
+        assert v["tether"]["visual_check_ok"] is False                 # the agent has not looked yet
+        v["tether"]["visual_check_ok"] = True
+        p.write_text(json.dumps(v), encoding="utf-8")
+    return p
+
+
+def tplan(tmp_path, duration_s=10, **policy):
+    plan = yaml.safe_load(PLAN.read_text(encoding="utf-8"))
+    plan["stop"].update(duration_s=duration_s, max_distance_m=20.0)
+    if policy:
+        plan["tether_policy"] = policy
+    p = tmp_path / "tplan.yaml"
+    p.write_text(yaml.safe_dump(plan), encoding="utf-8")
+    return p
+
+
+def tgo(tmp_path, robot, charger, duration_s=10, policy=None, **over):
+    plan = tplan(tmp_path, duration_s, **(policy or {}))
+    v = tethered(tmp_path, robot, charger, plan=plan, **over)
+    return go(tmp_path, robot, plan=plan, verdict_path=v)
+
+
+def moving_teleops(robot):
+    return [t for t in robot.teleops if t != (0.0, 0.0)]
+
+
+def test_charger_is_placed_in_the_start_pose_frame_and_yaw_unwraps(tmp_path):
+    assert run.tether.place((2.0, 3.0, math.pi / 2), (1.0, 0.5)) == pytest.approx((1.5, 4.0))
+    g = run.tether.Guard({"cable_attached": False, "tether": None}, {"margin_m": 0.3, "max_turn_deg": 360}, tmp_path)
+    assert g._update(2.0, 3.0, math.pi / 2) is None                    # no tether: trail and turn only
+    g._update(2.0, 3.0, math.pi - 0.1)
+    g._update(2.0, 3.0, -math.pi + 0.1)                                 # across +-pi: +0.2 rad, not -6.08
+    assert g.turn == pytest.approx(math.pi / 2 - 0.1 + 0.2)
+
+
+def test_radius_trip_turns_off_then_retraces_the_trail_backwards(tmp_path):
+    robot = FakeRobot()
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0])
+    assert code == 2 and "tether trip tether_radius, retraced" in s["outcome"], s["outcome"]
+    t = s["tether"]
+    assert t["trip"] == "tether_radius" and t["retrace_completed"] and t["retrace_end"] == "unwound"
+    assert t["max_charger_m"] >= 1.7 and t["final_charger_m"] <= 1.6 and t["retrace_m"] > 0.05
+    assert t["declared"]["cable_m"] == 2.0 and t["policy"] == {"margin_m": 0.3, "max_turn_deg": 360}
+    assert moving_teleops(robot) and all(lin == -run.tether.RETRACE_SPEED for lin, _ in moving_teleops(robot))
+    assert 0.0 < robot.x <= 0.008 + 0.1 and abs(robot.y) < 0.01        # start pose x 0.008; slack at 1.6 m
+    log = robot.log
+    assert log.index("PUT /line-follow/mode OFF") < log.index("POST /mode MANUAL") < log.index("POST /teleop")
+    ph = phases(s)
+    assert ph.index("tether") < ph.index("tether:retrace") < ph.index("cleanup:line-follow OFF")
+    assert s["evidence"]["trail.jsonl"].startswith("sha256:")
+    assert_restored(robot, tmp_path)
+
+
+def test_turn_trip_unwraps_across_pi_and_unwinds_below_the_threshold(tmp_path):
+    robot = FakeRobot(yaw_rate=0.05)                                   # a 0.16 m circle, ~12.6 s per turn
+    code, s = tgo(tmp_path, robot, [0.0, 0.0], duration_s=30)
+    t = s["tether"]
+    assert code == 2 and t["trip"] == "tether_turn", s["outcome"]
+    assert t["max_turn_deg"] > 360                                     # unwrapped, not the +-180 pose yaw
+    assert t["retrace_completed"] and abs(t["final_turn_deg"]) <= 360 - run.tether.UNWIND_TURN_DEG
+    assert_restored(robot, tmp_path)
+
+
+def test_exhausted_trail_stops_at_the_start_pose(tmp_path):
+    robot = FakeRobot(yaw_rate=0.05)
+    code, s = tgo(tmp_path, robot, [0.0, 0.0], duration_s=30, policy={"max_turn_deg": 91})   # unwind to 1 deg
+    t = s["tether"]
+    assert code == 2 and t["retrace_end"] == "trail end (start pose)" and t["retrace_completed"]
+    start = json.loads((tmp_path / "ev" / "trail.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert abs(robot.x - start["x"]) <= run.tether.END_M + 1e-6
+
+
+@pytest.mark.parametrize("attr, value, why", [("lidar_block", "rear", "rear body path blocked"),
+                                              ("lidar_range", 0.1, "rear body path blocked"),
+                                              ("pose_none", True, "pose unknown")])
+def test_retrace_stops_on_rear_obstacle_or_pose_gap_without_moving(tmp_path, attr, value, why):
+    robot = FakeRobot()
+    robot.on_call = lambda m, p, mode: setattr(robot, attr, value) if mode == "MANUAL" else None
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0])
+    t = s["tether"]
+    assert code == 2 and t["retrace_end"].startswith(why) and not t["retrace_completed"], t
+    assert "retrace stopped" in s["outcome"] and not moving_teleops(robot)
+    assert robot.teleops == [(0.0, 0.0)] and "POST /mode IDLE" in robot.log
+
+
+def test_retrace_leaves_the_trail_when_odom_diverges(tmp_path):
+    robot = FakeRobot()
+    robot.on_call = lambda m, p, mode: setattr(robot, "y", robot.y + 0.2) if mode == "MANUAL" else None
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0])
+    assert code == 2 and s["tether"]["retrace_end"].startswith("off the driven trail") and not moving_teleops(robot)
+
+
+def test_retrace_never_moves_before_line_follow_off_is_confirmed(tmp_path):
+    robot = FakeRobot(off_status=503)
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0])
+    assert code == 2 and "OFF not confirmed" in s["tether"]["retrace_end"]
+    assert "POST /mode MANUAL" not in robot.log and not robot.teleops
+
+
+@pytest.mark.parametrize("over, why", [
+    ({"tether": None}, "cable attached but no tether"),
+    ({"tether": {"cable_m": 3.0, "charger_robot_frame": [0.5, 0.0], "how": "x"}}, "cable_m must be one of"),
+    ({"tether": {"cable_m": 2.0, "charger_robot_frame": [1.8, 0.0], "how": "x"}}, "over the 1.70 m limit"),
+    ({"tether": {"cable_m": 2.0, "charger_robot_frame": [float("nan"), 0.0], "how": "x"}}, "[forward_m, left_m]"),
+    ({"tether": {"cable_m": 2.0, "charger_robot_frame": [0.5, 0.0], "how": " "}}, "tether.how is empty"),
+    ({"cable_attached": False}, "tether declared but cable_attached is false")])
+def test_tether_declaration_gates_before_any_change(tmp_path, over, why):
+    robot = FakeRobot()
+    code, s = go(tmp_path, robot, verdict_path=tethered(tmp_path, robot, [0.5, 0.0], check=False, **over))
+    assert code == 2 and why in s["outcome"], s["outcome"]
+    assert not any("rosy_auto_update.py" in e or e.startswith(("POST /mode", "PUT")) for e in robot.log)
+
+
+def test_own_tether_in_the_wheels_is_allowed_and_the_run_completes(tmp_path):
+    robot = FakeRobot(reasons=["lane_bridge"])
+    code, s = go(tmp_path, robot, verdict_path=tethered(tmp_path, robot, [-0.5, 0.0], cable_in_path_or_wheels=True))
+    assert code == 0, s["outcome"]
+    assert s["tether"]["trail_points"] > 1 and "trip" not in s["tether"]
+    assert s["phases"][4]["tether"]["cable_m"] == 2.0
+
+
+@pytest.mark.parametrize("policy, ok", [({"margin_m": 0.1}, False), ({"max_turn_deg": 400}, False),
+                                        ({"max_turn_deg": 90}, False), ({"margin_m": 0.5, "max_turn_deg": 180}, True)])
+def test_tether_policy_may_only_be_stricter(tmp_path, policy, ok):
+    p = tplan(tmp_path, **policy)
+    if ok:
+        assert run.load_plan(p)["tether_policy"] == {"margin_m": 0.5, "max_turn_deg": 180}
+    else:
+        with pytest.raises(SystemExit, match="tether_policy"):
+            run.load_plan(p)
+
+def test_overlay_points_from_a_known_homography():
+    pts = run.tether.overlay_points(CALIB["map_to_image"], (1.0, 0.0, math.pi / 2), [1.0, 0.0], 0.5)
+    assert pts["charger"] == pytest.approx((420.0, 140.0))           # 1 m ahead of a robot facing +y: map (1, 1)
+    assert pts["robot"] == pytest.approx((420.0, 240.0)) and pts["heading"] == pytest.approx((420.0, 230.0))
+    assert pts["circle"][0] == pytest.approx((470.0, 140.0))
+    assert all(math.hypot(u - 420.0, v - 140.0) == pytest.approx(50.0) for u, v in pts["circle"])
+    behind = [0, 0, 0, 0, 0, 0, 0, 0, -1.0]                            # w <= 0: never a guessed pixel
+    assert all(math.isnan(c) for c in run.tether.overlay_points(behind, (0, 0, 0), [0, 0], 1)["charger"])
+
+
+def test_tether_check_draws_the_charger_and_binds_the_values(tmp_path):
+    import cv2
+    import numpy as np
+    robot = FakeRobot()
+    p = tethered(tmp_path, robot, [-1.5, 0.0])
+    v = json.loads(p.read_text(encoding="utf-8"))
+    img = p.parent / run.tether.CHECK_IMAGE
+    assert v["frames"][run.tether.CHECK_IMAGE] == run.sha(img)
+    assert v["tether"]["check"]["source_id"] == "cam1" and v["tether"]["check"]["map_id"] == "map_v2_fleet"
+    b, g, r = cv2.imdecode(np.frombuffer(img.read_bytes(), np.uint8), cv2.IMREAD_COLOR)[240, 170]
+    assert r > 180 and g < 90 and b < 90                               # red charger dot at map (-1.5, 0)
+    assert not any(e.startswith(("POST", "PUT")) or e.startswith("ssh") for e in robot.log)   # no robot call
+
+
+@pytest.mark.parametrize("change, why", [
+    (lambda r, v: setattr(r, "calib", []), "no approved camera-to-map calibration"),
+    (lambda r, v: setattr(r, "calib", None), "no approved camera-to-map calibration"),
+    (lambda r, v: setattr(r, "calib", [{**CALIB, "source_id": "other"}]), "no approved camera-to-map calibration"),
+    (lambda r, v: setattr(r, "calib", [{**CALIB, "image": {"width": 1280, "height": 720}}]), "matching the judged"),
+    (lambda r, v: v.update(localization_at_capture=None), "not a localized map pose"),
+    (lambda r, v: v.update(localization_at_capture={"state": "LOCALIZED", "pose_frame": "odom"}), "map pose"),
+    (lambda r, v: v["tether"].update(cable_m=5.0, charger_robot_frame=[4.6, 0.0]), "outside the overhead picture")])
+def test_tether_check_fails_closed(tmp_path, change, why):
+    robot = FakeRobot()
+    p = tethered(tmp_path, robot, [-1.5, 0.0], check=False)
+    v = json.loads(p.read_text(encoding="utf-8"))
+    (p.parent / "before_overhead.jpg").write_bytes(overhead_jpeg())
+    v["frames"]["before_overhead.jpg"] = run.sha(p.parent / "before_overhead.jpg")
+    change(robot, v)
+    p.write_text(json.dumps(v), encoding="utf-8")
+    with pytest.raises(SystemExit, match=why):
+        tether_check(robot, p)
+    assert not (p.parent / run.tether.CHECK_IMAGE).exists()
+
+
+@pytest.mark.parametrize("edit", [lambda t: t.update(visual_check_ok=False),
+                                  lambda t: t.update(charger_robot_frame=[-1.2, 0.3]),   # changed after the look
+                                  lambda t: t.pop("check")])
+def test_tethered_run_needs_the_visual_check_for_these_values(tmp_path, edit):
+    robot = FakeRobot()
+    p = tethered(tmp_path, robot, [-1.5, 0.0])
+    v = json.loads(p.read_text(encoding="utf-8"))
+    edit(v["tether"])
+    p.write_text(json.dumps(v), encoding="utf-8")
+    code, s = go(tmp_path, robot, plan=tplan(tmp_path), verdict_path=p)
+    assert code == 2 and "run --tether-check" in s["outcome"], s["outcome"]
+    assert not any("rosy_auto_update.py" in e or e.startswith(("POST /mode", "PUT")) for e in robot.log)
+
+
+def test_retrace_reverses_with_only_the_front_blocked(tmp_path):
+    robot = FakeRobot()
+    robot.on_call = lambda m, p, mode: setattr(robot, "lidar_block", "front") if mode == "MANUAL" else None
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0])
+    assert s["tether"]["retrace_end"] == "unwound" and moving_teleops(robot)
+
+
+def test_retrace_stops_on_a_stale_scan(tmp_path):
+    robot = FakeRobot()
+    robot.on_call = lambda m, p, mode: setattr(robot, "lidar_frozen", True) if mode == "MANUAL" else None
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0])
+    assert s["tether"]["retrace_end"].startswith("LiDAR scan not updated") and not s["tether"]["retrace_completed"]
+    assert len(moving_teleops(robot)) <= run.tether.SCAN_STALE_S / run.tether.TICK_S + 1
+
+
+def test_retrace_keeps_ten_hertz_and_stops_on_a_slow_period(tmp_path):
+    robot = FakeRobot()
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0])
+    assert s["tether"]["retrace_max_period_s"] == pytest.approx(run.tether.TICK_S)
+    robot, seen = FakeRobot(), []
+
+    def slow(m, p, mode):
+        if p == "/teleop" and len(robot.teleops) == 3 and not seen:
+            seen.append(1)
+            robot.t += 0.35                                            # one stalled call
+    robot.on_call = slow
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0])
+    assert s["tether"]["retrace_end"].startswith("send period") and s["tether"]["retrace_max_period_s"] > 0.3
+
+
+def test_retrace_samples_are_marked_in_the_trail(tmp_path):
+    code, s = tgo(tmp_path, FakeRobot(), [-1.5, 0.0])
+    rows = [json.loads(x) for x in (tmp_path / "ev" / "trail.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert {r["phase"] for r in rows} == {"drive", "retrace"} and rows[0]["phase"] == "drive"
+
+
+@pytest.mark.parametrize("attr, value", [("x", 0.1), ("yaw", math.radians(5))])
+def test_first_driving_pose_must_be_the_checked_capture_pose(tmp_path, attr, value):
+    robot = FakeRobot()
+    robot.on_call = lambda m, p, mode: setattr(robot, attr, value) if mode == "CAMERA_LINE" else None
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0])
+    assert code == 2 and "first driving pose" in s["outcome"] and not robot.teleops, s["outcome"]
+    assert_restored(robot, tmp_path)
+
+
+def test_charger_inside_the_retrace_slack_of_the_limit_is_refused(tmp_path):
+    robot = FakeRobot()
+    code, s = go(tmp_path, robot, verdict_path=tethered(tmp_path, robot, [-1.65, 0.0], check=False))
+    assert code == 2 and "retrace slack" in s["outcome"]
+
+
+def test_check_records_the_display_only_label_and_map(tmp_path):
+    p = tethered(tmp_path, FakeRobot(), [-1.5, 0.0])
+    c = json.loads(p.read_text(encoding="utf-8"))["tether"]["check"]
+    assert c["use"] == "display-only" and c["mode"] == "map" and c["map_id"] == "map_v2_fleet"
+
+
+def test_map_mode_needs_the_robots_map(tmp_path):
+    robot = FakeRobot()
+    with pytest.raises(SystemExit, match="not the robot's map at capture"):
+        tethered(tmp_path, robot, [-1.5, 0.0], map_id_at_capture="other_map")
+
+
+# --- pixel mode (pre-D-395 robots such as 9dfk: odom pose, no localization) ----------------------
+
+CALIB_HD = {**CALIB, "map_to_image": [1000.0, 0.0, 640.0, 0.0, -1000.0, 360.0, 0.0, 0.0, 1.0],   # 1 mm/px
+            "image": {"width": 1280, "height": 720}}
+FRONT = run.tether.PINKY_PRO.front_x_m
+
+
+def px(x, y):
+    return [640.0 + 1000.0 * x, 360.0 - 1000.0 * y]
+
+
+@pytest.mark.parametrize("front, charger, want_yaw, want", [
+    ((FRONT, 0.0), (-0.3, 0.2), 0.0, [-0.3, 0.2]),
+    ((0.0, FRONT), (-0.3, 0.2), 90.0, [0.2, 0.3])])
+def test_pixels_give_the_charger_in_the_robot_frame(front, charger, want_yaw, want):
+    pose, got, length = run.tether.from_pixels(CALIB_HD["map_to_image"], {
+        "robot_center": px(0, 0), "robot_front": px(*front), "charger": px(*charger)}, (1280, 720))
+    assert pose == pytest.approx((0.0, 0.0, math.radians(want_yaw))) and got == pytest.approx(want)
+    assert length == pytest.approx(FRONT)
+
+
+@pytest.mark.parametrize("h, pixels, why", [
+    ([1, 2, 3, 2, 4, 6, 0, 0, 1], None, "singular"),
+    (None, {"robot_front": [1300.0, 360.0]}, "inside the 1280x720 frame"),
+    (None, {"robot_front": px(0.3, 0.0)}, "not within"),                 # 0.3 m: not the body front
+    (None, {"robot_front": px(0.002, 0.0)}, "not within"),
+    (None, {"charger": "here"}, r"charger must be \[u, v\]")])
+def test_pixel_mode_fails_closed(h, pixels, why):
+    base = {"robot_center": px(0, 0), "robot_front": px(FRONT, 0), "charger": px(-0.3, 0.2)}
+    with pytest.raises(ValueError, match=why):
+        run.tether.from_pixels(h or CALIB_HD["map_to_image"], {**base, **(pixels or {})}, (1280, 720))
+
+
+def pixel_verdict(tmp_path, robot, **over):
+    t = {"cable_m": 2.0, "how": "picked on before_overhead.jpg", "pixels": {
+        "robot_center": px(0, 0), "robot_front": px(FRONT, 0), "charger": px(-0.3, 0.2)}}
+    p = verdict(tmp_path, robot, **{"cable_attached": True, "tether": t, "localization_at_capture": None,
+                                    "pose_at_capture": {"x": 0.0, "y": 0.0, "yaw": 0.0}, **over})
+    v = json.loads(p.read_text(encoding="utf-8"))
+    (p.parent / "before_overhead.jpg").write_bytes(overhead_jpeg(1280, 720))
+    v["frames"]["before_overhead.jpg"] = run.sha(p.parent / "before_overhead.jpg")
+    p.write_text(json.dumps(v), encoding="utf-8")
+    return p
+
+
+def test_pixel_mode_check_then_odom_run(tmp_path):
+    robot = FakeRobot(calib=[CALIB_HD], reasons=["lane_bridge"])
+    p = pixel_verdict(tmp_path, robot)
+    assert tether_check(robot, p) == 0
+    v = json.loads(p.read_text(encoding="utf-8"))
+    t = v["tether"]
+    assert t["charger_robot_frame"] == pytest.approx([-0.3, 0.2]) and t["check"]["mode"] == "pixels"
+    assert t["from_pixels"]["heading_deg"] == 0.0 and t["from_pixels"]["robot_center_m"] == [0.0, 0.0]
+    t["visual_check_ok"] = True
+    p.write_text(json.dumps(v), encoding="utf-8")
+    code, s = go(tmp_path, robot, verdict_path=p)                      # odom pose, no localization: allowed
+    assert code == 0, s["outcome"]
+    assert s["tether"]["max_charger_m"] == pytest.approx(math.hypot(-0.3 - robot.x, 0.2), abs=0.02)
+
+
+def test_pixel_mode_needs_the_fleet_active_site_map(tmp_path):
+    robot = FakeRobot(calib=[CALIB_HD], site_map_id="another_site")
+    with pytest.raises(SystemExit, match="not the Fleet active SiteMap"):
+        tether_check(robot, pixel_verdict(tmp_path, robot))
+    robot.site_map_id = None
+    with pytest.raises(SystemExit, match="not the Fleet active SiteMap"):
+        tether_check(robot, pixel_verdict(tmp_path, robot))

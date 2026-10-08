@@ -42,7 +42,10 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/site_map.py` | D-488 `rosy.site_map/1` 스키마(장소·방향 있는 차로·회전 금지)와 `lane_graph.yaml` 가져오기. 순수 |
 | `fleet/routing/` | D-489/D-490 경로 계획기: 차로 단위 상태 A*(`graph`·`cost`·`planner`·`snap`·`trip`). 표준 라이브러리만, 네트워크·DB·시계 없음 |
 | `fleet/server/site_map_store.py`, `site_map_routes.py`, `trip_routes.py` | 지도 초안·활성 버전 저장과 활성화(이름 있는 운영자, 진행 중 trip이 있으면 거절), `POST /trip` 계획 응답과 계획 본문 저장 |
-| `fleet/server/trip_runner.py` | D-494 5 서버 trip 루프: 시작 검사·상태기계(재시작 뒤 `stopped`)·0.5 s 루프(`lane` 교차로 지시, `free` D-463 점)·다음 장소 재계획 대기. 능력·지도 자세·교차로 지시는 `trip_ports.py`의 포트로 주입, 실행 가능 규칙은 `fleet/routing/execute.py`, trip 중 다른 이동 거절은 `trip_guard.py` |
+| `fleet/server/trip_runner.py` | D-494 5 / D-517 서버 trip 루프(로봇마다 trip 하나, 반복 운행): 시작 검사·상태기계(재시작 뒤 `stopped`)·0.5 s 루프(`lane` 교차로 지시, `free` D-463 점)·다음 장소 재계획 대기. 능력·지도 자세·교차로 지시는 `trip_ports.py`의 포트로 주입, 실행 가능 규칙은 `fleet/routing/execute.py`, trip 중 다른 이동 거절은 `trip_guard.py` |
+| `fleet/server/lane_traffic.py` | D-517 3 (M1) `TrafficService`: 열린 trip 전부를 `fleet/routing/blocks.py` 고정 블록 표로 계산해 `GET /api/fleet/traffic`에 보인다. 로봇에 보내지 않는다(M2). trip 루프의 교차로 보류(`holds`)와 고정 점유 갱신도 여기서 한다. 운행 블록 허가를 쓰는 곳은 이 모듈 하나다 |
+| `fleet/server/trip_laps.py` | D-517 2 반복 운행의 순수 계산: 바퀴 경로(`lap_arcs`), 바퀴 끝 판정(`lap_due`), 실패한 바퀴 검사 재시도(`lap_retry_due`), 다음 바퀴 잇기·지난 바퀴 정리(`carry_on`). 로봇을 부르지 않는다 |
+| `fleet/server/trip_halts.py` | D-494/D-517 로봇 정지: `TripHalts.halt_robot`, 재시작 뒤 열려 있던 trip의 로봇 정지(`run_restart`, `halt_restarted`). 교차로·취소 포트만 쓴다 |
 | `test/fakes.py` | Fake `RobotClient` + `FakeClock` shared by relay/session tests — no network |
 | `test/fake_signals.py` | Fake `SignalClient` — 장치의 409/403/충돌 가드 응답 모양을 고정 + `FakeObserver`/`observed_body()` (관측 v0.3 본문) |
 | `test/conftest.py` | Puts `operations/fleet`, `contracts/foundation`, and `middleware/core/services` on `sys.path` so pytest runs without colcon install |

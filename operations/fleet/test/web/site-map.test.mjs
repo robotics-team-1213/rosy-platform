@@ -97,7 +97,7 @@ test('D-494 trip panel text and button reasons', async () => {
   const active = {version: 1};
   assert.equal(tripStartReason({role: 'operator', plan, active, running: null, now: 99}), '');
   assert.match(tripStartReason({role: 'operator', plan, active, running: null, now: 101}), /30초/);
-  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /진행 중/);
+  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /이 로봇은 이미 운행 중/);
   assert.match(tripStartReason({role: 'operator', plan, active: {version: 2}, running: null, now: 99}), /지도가 바뀌었습니다/);
   assert.match(tripStartReason({role: 'viewer', plan, active, running: null, now: 99}), /운영자/);
   assert.match(tripStartReason({role: 'operator', plan: null, active, running: null}), /경로를 계산/);
@@ -117,6 +117,8 @@ test('D-494 trip stop reasons name the configured stall time and loop errors', a
   assert.match(unexpected, /지도 자세 \(1\.23, -0\.50\) · 사유 junction_waiting/);
   assert.match(tripStatusText({...trip, state: 'running', reason: null, detail: {junction_retry: 'JUNCTION_ODOM_STALE', junction_fields_dropped: 'map_version'}}, MAP),
     /odom이 낡아 교차로 지시를 다음 주기에 다시 보냅니다 · 활성 지도가 바뀌어/);
+  assert.match(tripStatusText({...trip, reason: 'junction_no_window', detail: {junction_action: 'left', junction_place: 'SW'}}, MAP),
+    /기대 창이 없어 좌·우 회전 지시를 보내지 않고 멈췄습니다/);  // D-507 2, 2026-10-08
   assert.equal(PLACE_KIND_LABEL.stall, undefined);
 });
 

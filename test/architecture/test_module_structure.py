@@ -87,14 +87,28 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet/fleet/server/trip_runner.py": (
-        604,
-        "accept: the 604-line Fleet trip state machine gained a read-only bend diagnostic on the "
-        "existing map-pose tick. Moving four lines would split its stop and persistence rules; "
-        "re-judge if trip execution grows beyond the standard allowance",
+        686,
+        "split: measured at 686 on 2026-10-08 after the named seam was applied (D-517 split, behaviour-preserving): "
+        "lap helpers are in server/trip_laps.py, halts and restart halts in server/trip_halts.py, the traffic "
+        "hold-back and the tick's pinned/step block in lane_traffic.TrafficService (holds/watch/period). What "
+        "remains is one state machine: start/cancel/tick/_step*/replan and the CORE junction protocol. Re-judge "
+        "after the next growth. Previously judged at 847 on 2026-10-08 (independent re-judge, critic agent): D-517 M1a gave the trip loop "
+        "three more jobs on top of the D-494 state machine: repeat-lap bookkeeping, robot halts and post-restart "
+        "halts, and traffic glue. Move the lap helpers to server/trip_laps.py, the halt helpers to "
+        "server/trip_halts.py, and the traffic hold-back and pinned/step block into lane_traffic.TrafficService; "
+        "trip_runner keeps start/cancel/tick/_step*/replan. Recorded in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; re-judge after the move. Previously accepted "
+        "at 604 (bend diagnostic)",
     ),
     "fleet/fleet/server/web/map-view.js": (
-        903,
-        "split: judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
+        831,
+        "split: measured at 831 on 2026-10-08 after the named camera backdrop seam was applied "
+        "(behaviour-preserving): the camera picture path (cameraMapCalibration, the top-down cache, "
+        "drawCameraTopDown, warpOnto, setCameraFrame, frameTurn, turnedUrl, bindCamera) is in "
+        "web/camera-backdrop.js, which map-view feeds its draw hook, calibrations and toPx; the D-517 10 "
+        "traffic drawing is in web/traffic-view.js (polling and toggle stay here). Still over the web "
+        "ceiling 800 with one job left, map drawing and its polling; re-judge after the next growth. "
+        "Previously judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
         "and the D-515 top-down camera warp made map-view.js own two jobs, map drawing (grid, robots, "
         "formation, mediation, metre site view) and the camera picture path. Move cameraMapCalibration, "
         "drawCameraTopDown, warpOnto, setCameraFrame, frameTurn, turnedUrl and bindCamera to a new "
@@ -131,8 +145,27 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        43_809,
-        "split: re-judged at 43809 on 2026-10-08: map-bound bend candidate diagnostics in trip_ports "
+        45_942,
+        "split: re-judged at 45942 on 2026-10-08 (independent re-judge, critic agent): D-517 M1a's trip runner "
+        "split (server/trip_laps.py, trip_halts.py, traffic glue in lane_traffic.TrafficService), the D-517 "
+        "M1b traffic map layer, the feat/fleet-map-trail web/trail-view.js and the D-512 tether display stay "
+        "with their existing Fleet server and web owners, as named in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. No new package owner; the +150 allowance is "
+        "unchanged. Previously re-judged at 45423 on 2026-10-08 (independent re-judge, critic agent): D-517 M1a adds "
+        "server/lane_traffic.py (block table, computed and shown, never sent); lane_traffic.py is the single "
+        "writer of lane-trip grants and traffic_reservations.py stays only as the Gazebo segment record. "
+        "Per-robot and repeat-lap trips stay with the server/routing owners; no new package owner. The "
+        "trip-runner seam is named in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; +150 "
+        "allowance unchanged. Previously re-judged at 44806 on 2026-10-08 (independent re-judge, critic agent): D-519 password "
+        "login (server/password_session.py, site_users.py, web/shared/password-login.js/.css, page and "
+        "app/cli wiring) stays with the site-auth owner beside site_auth.py and development_session.py, "
+        "now the console auth seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. D-507 4 "
+        "chord turn stays in routing/execute.py and trip_runner.py. D-517 M0 routing/blocks.py is pure "
+        "block arithmetic on routing.graph and stays in Fleet routing (D-12); D-517 M1 must name one grant "
+        "writer between it and server/traffic_reservations.py, and re-judge then. No new package owner; "
+        "the +150 allowance is unchanged. "
+        "Previously re-judged at 43809 on 2026-10-08: "
+        "map-bound bend candidate diagnostics in trip_ports "
         "and trip_runner, with fake-port tests, stay in Fleet's existing trip owner. No robot command "
         "or new service. The site-map web/server split plan and +150 allowance remain unchanged. "
         "Previously re-judged at 43623 on 2026-10-08: main's 43217 verdict plus D-472 + Addendum 2026-10-08 "

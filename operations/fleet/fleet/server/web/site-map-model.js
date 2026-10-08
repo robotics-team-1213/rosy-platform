@@ -24,7 +24,8 @@ export const TRIP_ERROR_LABEL = {
   TRIP_MODE_UNSUPPORTED: '이 로봇의 주행 방식으로 갈 수 없는 차로가 경로에 있습니다',
   TRIP_SITE_FLOOR_MISMATCH: '로봇의 현장 바닥 선언이 활성 지도와 다릅니다 · 로봇 설정을 확인하세요',
   TRIP_LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행(카메라 또는 IR)이 켜져 있지 않습니다 · 켠 뒤 다시 출발하세요',
-  TRIP_BUSY: '다른 운행이 진행 중입니다 · 현장에서 한 번에 한 대만 운행합니다',
+  TRIP_BUSY: '이 로봇은 이미 운행 중입니다',
+  TRIP_LOOP_FULL: '고리 수용 한도를 넘어 출발할 수 없습니다',
   TRIP_ALREADY_STARTED: '이미 출발시킨 경로입니다',
   TRIP_NOT_RUNNING: '진행 중인 운행이 아닙니다',
   TRIP_UNKNOWN: '없는 운행입니다',
@@ -41,6 +42,7 @@ export const TRIP_REASON_LABEL = {
   junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
   JUNCTION_ODOM_STALE: '로봇 odom이 낡아 교차로 지시를 다음 주기에 다시 보냅니다',
   junction_unexpected: '지도에 없는 자리에서 교차로를 봐 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
+  junction_no_window: '교차로 위치를 확인할 기대 창이 없어 좌·우 회전 지시를 보내지 않고 멈췄습니다 · 차선 주행을 껐습니다',
   stall: '경로를 따라 나아가지 않아 멈췄습니다 · 현장을 확인하세요',
   TRIP_LOOP_ERROR: '관제 운행 처리에 오류가 나 멈췄습니다 · 로봇 정지를 확인하고 관리자에게 알리세요',
   restart: '관제 서버가 다시 시작돼 멈췄습니다 · 자동으로 다시 출발하지 않습니다',
@@ -92,6 +94,8 @@ export function planIsCurrent(plan, active) {
 
 export function tripErrorText(code, detail = {}) {
   const base = TRIP_ERROR_LABEL[code] || `경로 계획 거절 (${code || '알 수 없음'})`;
+  if (code === 'TRIP_LOOP_FULL' && Number.isInteger(detail.robots) && Number.isInteger(detail.capacity))
+    return `${base} · 고리 ${detail.robots}/${detail.capacity}대`;  // robots counts this one too
   if (code !== 'TRIP_NO_ROUTE') return base;
   const leg = Number.isInteger(detail.segment) ? ` · ${detail.segment + 1}번째 구간` : '';
   return base + leg + (detail.unblock_would_help ? ' · 막은 차로를 풀면 길이 있습니다' : '');
@@ -145,7 +149,7 @@ export function rectangularView(record, mapId, width, height, turn = 0) {
     transform: `rotate(${turn} ${cx} ${cy})`}};
 }
 
-function lengths(points) {
+export function lengths(points) {
   const knots = [0];
   for (let i = 1; i < points.length; i += 1) {
     knots.push(knots[i - 1] + Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
@@ -153,7 +157,7 @@ function lengths(points) {
   return knots;
 }
 
-function pointAt(points, knots, s) {
+export function pointAt(points, knots, s) {
   for (let i = 1; i < points.length; i += 1) {
     if (s <= knots[i] || i === points.length - 1) {
       const span = knots[i] - knots[i - 1];
@@ -264,10 +268,20 @@ export function tripStatusText(trip, map) {
   return parts.join(' · ');
 }
 
+/** D-517 2: a lap over the start places, beginning and ending at ``start`` (the robot's own place). */
+export function repeatTripBody(map, start) {
+  const starts = (map?.places || []).filter(place => place.kind === 'start').map(place => place.id);
+  if (!starts.includes(start)) throw new Error('출발 자리를 고르세요');
+  const via = starts.filter(id => id !== start);
+  if (!via.length) throw new Error('반복 운행에는 출발 자리가 두 곳 이상 필요합니다');
+  const at = starts.indexOf(start);
+  return {to: start, via: [...starts.slice(at + 1), ...starts.slice(0, at)], repeat: true};
+}
+
 /** '' when the plan may start now; otherwise why the start button is off. */
 export function tripStartReason({role, plan, active, running, now = Date.now() / 1000}) {
   if (role !== 'operator') return role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
-  if (running) return '다른 운행이 진행 중입니다';
+  if (running) return '이 로봇은 이미 운행 중입니다';
   if (!plan) return '먼저 경로를 계산하세요';
   if (!planIsCurrent(plan, active)) return '활성 지도가 바뀌었습니다 · 다시 계산하세요';
   if (plan.expires_at && now > plan.expires_at) return '계산한 지 30초가 지났습니다 · 다시 계산하세요';
@@ -303,4 +317,160 @@ export function teachConfirmBody({teachId, from, fromName, to, toName, direction
 /** The recording the confirm form acts on: the newest stopped one (latest `expires_at`). */
 export function newestPending(view) {
   return (view?.pending || []).reduce((best, item) => (!best || item.expires_at > best.expires_at ? item : best), null);
+}
+
+// ---- D-517 10 교통 층 — GET /api/fleet/traffic 을 그릴 것·카드 한 줄·예외 큐 행으로 바꾼다 ----
+// 관제 화면(map-view.js·roster.js)과 이 페이지의 운행 칸이 같이 쓴다.
+// 표가 말하는 것만 옮긴다. M1 에서 Fleet 은 블록 표를 계산해 보이기만 하고 로봇에 보내지 않는다.
+// 좌표는 활성 지도 미터다. 화면 방향(D-513 7)과 위에서 본 보기(D-515)는 그리는 쪽의 toPx 가 맡는다.
+
+// D-517 3: UNKNOWN 점유가 이만큼 이어지면 해결기 → 사람이다.
+export const UNKNOWN_ALARM_MS = 30000;
+// D-517 3 `merge_max_wait_s` 기본값. Fleet 은 이 값을 /traffic 에 싣지 않는다.
+export const MERGE_MAX_WAIT_MS = 20000;
+// 블록 사이 틈(m) — 이웃 블록이 한 띠로 붙어 보이지 않게 양 끝을 줄인다.
+const BLOCK_GAP_M = 0.03;
+
+const isZone = (unit) => unit.zone === true;
+const twoWay = (unit) => unit.id.startsWith("lane:");
+
+/** A unit's stretches as [edge id, s0, s1] in the edge's own forward metres. */
+export function unitParts(unitId, traffic) {
+  if (unitId.startsWith("lane:")) return [[unitId.slice(5), 0, Infinity]];
+  const hash = unitId.lastIndexOf("#");
+  if (hash > 0) {
+    const edge = unitId.slice(0, hash), index = Number(unitId.slice(hash + 1));
+    const step = traffic.block_length_m?.[edge];
+    return Number.isInteger(index) && step > 0 ? [[edge, index * step, (index + 1) * step]] : [];
+  }
+  // A zone: the edges that have no block or two-way unit of their own.
+  // ponytail: /traffic does not name a zone's edges, so only a one-zone site can be drawn; add
+  // `edges` to the zone unit when a site configures two zones.
+  const zones = (traffic.units || []).filter((unit) => isZone(unit) && !twoWay(unit));
+  if (zones.length !== 1) return [];
+  const ids = new Set((traffic.units || []).map((unit) => unit.id));
+  return Object.keys(traffic.block_length_m || {})
+    .filter((edge) => !ids.has(`${edge}#0`) && !ids.has(`lane:${edge}`))
+    .map((edge) => [edge, 0, Infinity]);
+}
+
+function partPoints(edge, s0, s1, gap) {
+  const total = lengths(edge.polyline).at(-1);
+  const a = Math.max(0, s0) + gap, b = Math.min(total, s1) - gap;
+  return b > a ? segmentPoints(edge, true, a, b) : null;
+}
+
+/** A point on a trip's plan at route metres ``r`` (the first arc starts at 0, as /traffic counts). */
+export function routePoint(segments, edges, r) {
+  let base = 0;
+  for (const seg of segments || []) {
+    const edge = edges.get(seg.edge_id);
+    if (!edge) return null;
+    const line = seg.forward ? edge.polyline : [...edge.polyline].reverse();
+    const knots = lengths(line);
+    if (r <= base + seg.s_to + 1e-9) return pointAt(line, knots, Math.min(Math.max(r - base, seg.s_from), seg.s_to));
+    base += knots.at(-1);
+  }
+  return null;
+}
+
+/**
+ * What the 교통 layer draws, in map metres, or null when the table is for another map version.
+ * bands: non-FREE blocks {points, state, robot}; zones: {lines, label, anchor}; ticks: authority ends;
+ * centre: the middle of the lanes, so a zone label can sit on the inner side.
+ */
+export function trafficDrawing(traffic, active, trips = []) {
+  if (!traffic || !active?.map || traffic.map_version !== active.version) return null;
+  const edges = new Map((active.map.edges || []).map((edge) => [edge.id, edge]));
+  const bands = [], zones = [], ticks = [];
+  for (const unit of traffic.units || []) {
+    const parts = unitParts(unit.id, traffic).filter(([edge]) => edges.has(edge));
+    const zone = isZone(unit);
+    if (unit.state !== "FREE") {
+      for (const [edge, s0, s1] of parts) {
+        const points = partPoints(edges.get(edge), s0, s1, zone ? 0 : BLOCK_GAP_M);
+        if (points) bands.push({ points, state: unit.state, robot: unit.holders?.[0] || null, unit: unit.id });
+      }
+    }
+    if (zone && parts.length) {
+      const lines = parts.map(([edge, s0, s1]) => partPoints(edges.get(edge), s0, s1, 0)).filter(Boolean);
+      const knots = lengths(lines[0]);
+      zones.push({ unit: unit.id, lines, anchor: pointAt(lines[0], knots, knots.at(-1) / 2),
+        label: `점유 ${(unit.holders || []).length}/${unit.capacity} · 대기 ${(unit.waiting || []).length}` });
+    }
+  }
+  const plans = new Map(trips.map((trip) => [trip.robot_id, trip.plan?.segments]));
+  for (const robot of traffic.robots || []) {
+    if (typeof robot.authority_end_m !== "number") continue;
+    const at = routePoint(plans.get(robot.robot_id), edges, robot.authority_end_m);
+    if (at) ticks.push({ ...at, robot: robot.robot_id });
+  }
+  const xs = [...edges.values()].flatMap((edge) => edge.polyline.map((p) => p[0]));
+  const ys = [...edges.values()].flatMap((edge) => edge.polyline.map((p) => p[1]));
+  const centre = xs.length ? [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2] : [0, 0];
+  return { bands, zones, ticks, centre };
+}
+
+function waitingUnit(traffic, robotId) {
+  return (traffic?.units || []).find((unit) => (unit.waiting || []).includes(robotId)) || null;
+}
+
+/** One card line for a trip robot, '' for a robot without an open trip. */
+export function trafficCardLine(traffic, robotId) {
+  const robot = (traffic?.robots || []).find((row) => row.robot_id === robotId);
+  if (!robot) return "";
+  const parts = [];
+  if (typeof robot.lap === "number") parts.push(`반복 운행 ${robot.lap}바퀴째`);
+  const held = (traffic.units || []).some((unit) => unit.state === "UNKNOWN" && (unit.holders || []).includes(robotId));
+  const unit = waitingUnit(traffic, robotId);
+  if (held) parts.push("위치 불명 · 블록 유지");
+  else if (unit && isZone(unit)) {
+    const ahead = (unit.holders || []).filter((id) => id !== robotId);
+    parts.push(`${twoWay(unit) ? "양방 차로" : "교차로"} 대기${ahead.length ? ` · ${ahead.join(", ")} 통과 중` : ""}`);
+  } else if (robot.waiting_for?.length) parts.push(`앞 블록 대기 · ${robot.waiting_for.join(", ")}`);
+  if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
+  return parts.join(" · ");
+}
+
+/** When the console first saw each robot hold an UNKNOWN block or wait at a zone entry. */
+export function trafficClock(prev, traffic, now) {
+  const next = { unknown: {}, merge: {} };
+  for (const unit of traffic?.units || []) {
+    if (unit.state === "UNKNOWN") for (const id of unit.holders || []) next.unknown[id] = prev?.unknown?.[id] ?? now;
+    if (isZone(unit)) for (const id of unit.waiting || []) next.merge[id] = prev?.merge?.[id] ?? now;
+  }
+  return next;
+}
+
+/**
+ * Exception-queue rows (D-493 one rule) for one robot. A block wait itself is normal and is not a row.
+ * ponytail: the wait clocks start when this console first saw the state (a reload restarts them);
+ * move them to /traffic if the 30 s / 20 s rows must survive a reload.
+ */
+export function trafficAttention(traffic, robotId, clock, now) {
+  const items = [];
+  const cycle = traffic?.wait_cycle;
+  if (Array.isArray(cycle) && cycle.includes(robotId)) {
+    items.push({ severity: "crit", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · 운영자 판단 필요` });
+  }
+  const unknownSince = clock?.unknown?.[robotId];
+  if (unknownSince !== undefined && now - unknownSince > UNKNOWN_ALARM_MS) {
+    items.push({ severity: "crit",
+      text: `: 위치 불명 ${Math.floor((now - unknownSince) / 1000)}초 — 블록을 풀지 않습니다 · 로봇 위치를 확인하세요` });
+  }
+  const mergeSince = clock?.merge?.[robotId];
+  if (mergeSince !== undefined && now - mergeSince > MERGE_MAX_WAIT_MS) {
+    items.push({ severity: "warn", text: `: 합류 대기 ${Math.floor((now - mergeSince) / 1000)}초 — 구역 ${waitingUnit(traffic, robotId)?.id || ""} 입구` });
+  }
+  for (const loop of traffic?.loop_capacity || []) {
+    if ((loop.robots || []).includes(robotId) && loop.robots.length > loop.capacity) {
+      items.push({ severity: "warn", text: `: 고리 수용 초과 — 고리 ${loop.robots.length}/${loop.capacity}대` });
+    }
+  }
+  return items;
+}
+
+/** "고리 2/3대" per repeat loop, or '' when no repeat trip runs. */
+export function loopCapacityText(traffic) {
+  return (traffic?.loop_capacity || []).map((loop) => `고리 ${loop.robots.length}/${loop.capacity}대`).join(" · ");
 }

@@ -7,7 +7,7 @@ import {confirmIrreversible} from '/common/ui.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
   planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripErrorText, tripStartReason,
-  tripStatusText, rectangularView, viewTurnOf, editViewTurn,
+  tripStatusText, rectangularView, viewTurnOf, editViewTurn, loopCapacityText, repeatTripBody,
 } from '/console/assets/site-map-model.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {warpImage} from '/console/assets/field-warp.js';
@@ -20,7 +20,7 @@ const W = 800, H = 480;
 
 $('credential').value = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
-const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, running: null};
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, running: null, open: []};
 const TRIP_POLL_MS = 1000;
 let plane = null, planeEpoch = 0;
 let calibrations = [];
@@ -133,6 +133,9 @@ function select(selection) {
 
 function syncButtons() {
   const reason = operatorReason();
+  // D-517 1: one trip per robot — start, cancel and confirm act on the selected robot's open trip.
+  state.running = state.open.find(trip => trip.robot_id === $('trip-robot').value) || null;
+  $('trip-start-label').textContent = $('trip-robot').value ? `${$('trip-robot').value} 출발 자리` : '고른 로봇의 출발 자리';
   gate('plane-load', !state.role ? '관제 접속이 필요합니다' : !$('plane-source').value ? '이 지도에 맞는 카메라 보정이 없습니다' : '');
   gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
   gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');
@@ -161,6 +164,11 @@ function syncButtons() {
   gate('estop', reason);
   gate('trip-start', inspecting || tripStartReason({role: state.role, plan: state.plan, active: state.active, running: state.running}));
   gate('trip-cancel', tripCancelReason({role: state.role, running: state.running}));
+  const starts = (state.active?.map.places || []).filter(place => place.kind === 'start');
+  gate('trip-repeat', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason
+    || (state.running ? '이 로봇은 이미 운행 중입니다' : '')
+    || (starts.length < 2 ? '반복 운행에는 출발 자리가 두 곳 이상 필요합니다'
+      : $('trip-start-place').value ? '' : '출발 자리를 고르세요')));
   $('trip-confirm').hidden = !state.running?.hold;
   gate('trip-confirm', inspecting || reason || (state.running?.hold?.plan ? '' : '다시 계산한 경로가 없습니다 · 운행을 취소하세요'));
   teach.sync();
@@ -169,10 +177,14 @@ function syncButtons() {
 async function pollTrips() {
   if (state.loadState === 'ready') {
     try {
-      const {running, trips} = await request('/api/fleet/trips');
-      state.running = running;
-      const shown = running || trips[0] || null;
-      status('trip-run', tripStatusText(shown, state.active?.map), running ? 'pending' : shown?.state === 'arrived' ? 'ready' : shown ? 'error' : 'empty');
+      const {running, trips, open} = await request('/api/fleet/trips');
+      state.open = open || (running ? [running] : []);
+      const mine = state.open.find(trip => trip.robot_id === $('trip-robot').value);
+      const shown = mine || running || trips[0] || null;
+      const others = state.open.length - (shown && state.open.includes(shown) ? 1 : 0);
+      status('trip-run', tripStatusText(shown, state.active?.map) + (others > 0 ? ` · 다른 로봇 ${others}대 운행 중` : ''),
+        state.open.includes(shown) ? 'pending' : shown?.state === 'arrived' ? 'ready' : shown ? 'error' : 'empty');
+      await pollLoops();
     } catch (error) {
       status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(error)}`, 'error');
     }
@@ -181,6 +193,18 @@ async function pollTrips() {
   setTimeout(pollTrips, TRIP_POLL_MS);
 }
 pollTrips();
+
+// D-517 3: "고리 n/m대" from the Fleet block table; a Fleet without /traffic hides the line.
+async function pollLoops() {
+  try {
+    const text = loopCapacityText(await request('/api/fleet/traffic'));
+    $('trip-loop').hidden = false;
+    status('trip-loop', text || '반복 운행 없음', text ? 'ready' : 'empty');
+  } catch (error) {
+    $('trip-loop').hidden = error.status === 404 && !error.code;
+    if (!$('trip-loop').hidden) status('trip-loop', `고리 수용 확인 불가 · ${siteMapErrorText(error)}`, 'error');
+  }
+}
 
 async function load() {
   state.planEpoch += 1;
@@ -205,6 +229,8 @@ async function load() {
   catch { calibrations = []; }
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
+    .map(place => new Option(`${place.name} (${place.id})`, place.id)));
+  $('trip-start-place').replaceChildren(...(state.active?.map.places || []).filter(place => place.kind === 'start')
     .map(place => new Option(`${place.name} (${place.id})`, place.id)));
   $('trip-robot').replaceChildren(...robots.map(robot => {
     const safety = robot.state?.safety?.estop;
@@ -239,6 +265,8 @@ $('connect').addEventListener('click', async () => {
   state.planEpoch += 1;
   state.robotsError = false;
   state.active = state.draft = state.working = state.selected = state.plan = state.point = state.running = null;
+  state.open = [];
+  $('trip-start-place').replaceChildren();
   state.dirty = false;
   $('session').textContent = '접속 전';
   $('trip-place').replaceChildren();
@@ -253,7 +281,7 @@ $('connect').addEventListener('click', async () => {
     sessionStorage.setItem('rosy-console-token', $('credential').value);
     state.role = session.role;
     $('session').textContent = `${session.principal_id} · ${session.role}`;
-    passwordLogin.refresh(false);
+    loginForm.refresh(false);
     syncButtons();
     await load();
     notice(state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
@@ -265,7 +293,7 @@ $('connect').addEventListener('click', async () => {
       state.role = null;
       $('session').textContent = '접속 전';
     }
-    if (error.status === 401) passwordLogin.refresh(true);
+    if (error.status === 401) loginForm.refresh(true);
     render();
     syncButtons();
     notice(siteMapErrorText(error));
@@ -487,8 +515,9 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
 async function tripAction(path, done) {
   try {
     const trip = await request(path, {method: 'POST'});
-    state.running = ['started', 'running'].includes(trip.state) ? trip : null;
-    status('trip-run', tripStatusText(trip, state.active?.map), state.running ? 'pending' : 'ready');
+    const open = ['started', 'running'].includes(trip.state);
+    state.open = [...state.open.filter(item => item.trip_id !== trip.trip_id), ...(open ? [trip] : [])];
+    status('trip-run', tripStatusText(trip, state.active?.map), open ? 'pending' : 'ready');
     notice(done);
   } catch (error) {  // the poll rewrites #trip-run each second; the refusal stays in the notice
     notice(`운행 거절 · ${error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error)}`);
@@ -499,6 +528,21 @@ async function tripAction(path, done) {
 $('trip-start').addEventListener('click', () => {
   const plan = state.plan;
   if (plan) tripAction(`/api/fleet/trips/${encodeURIComponent(plan.plan_id)}/start`, '운행을 시작했습니다.');
+});
+// D-517 2: the selected robot and its start place make one lap trip over every start place; Fleet
+// plans it (POST /trip repeat) and the same click starts it. A refusal of either step stays in the notice.
+$('trip-start-place').addEventListener('change', syncButtons);
+$('trip-repeat').addEventListener('click', async () => {
+  const robot = $('trip-robot').value, place = $('trip-start-place').selectedOptions[0]?.textContent;
+  gate('trip-repeat', '출발하는 중');
+  try {
+    const plan = await request(`/api/fleet/robots/${encodeURIComponent(robot)}/trip`, {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(repeatTripBody(state.active?.map, $('trip-start-place').value))});
+    await tripAction(`/api/fleet/trips/${encodeURIComponent(plan.plan_id)}/start`, `반복 운행을 시작했습니다 · ${robot} · ${place}`);
+  } catch (error) {
+    notice(`반복 운행 거절 · ${error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error)}`);
+    syncButtons();
+  }
 });
 $('trip-confirm').addEventListener('click', () => {
   if (state.running) tripAction(`/api/fleet/trips/${encodeURIComponent(state.running.trip_id)}/confirm-replan`, '바뀐 경로로 계속합니다.');
@@ -528,9 +572,9 @@ $('estop').addEventListener('click', async () => {
 
 developmentToken($('credential').value).then(token => {
   if (token) { $('credential').value = token; $('credential').parentElement.hidden = true; $('connect').click(); }
-  else passwordLogin.refresh(true).then(cookie => { if (cookie) $('connect').click(); });
+  else loginForm.refresh(true).then(cookie => { if (cookie) $('connect').click(); });
 }).catch(() => {});
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
-const passwordLogin = createPasswordLogin($('password-login'), {onChange: () => {
+const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
   $('credential').value = ''; $('connect').click();
 }});

@@ -73,6 +73,8 @@
         </div>
         <div class="spacer"></div>
         <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
+        <!-- D-517 10 — 교통 층 하나. Fleet 블록 표가 있을 때만 보인다. 표시 선호라 권한과 무관하다. -->
+        <ui-button kind="quiet" id="traffic-toggle" type="button" aria-pressed="true" aria-controls="map-canvas" hidden>교통 켬</ui-button>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
       </div>
       <div class="map-stage" id="map-stage" data-map-state="loading">
@@ -97,6 +99,7 @@
         <span><i class="sw goal"></i>목표</span>
         <span id="legend-sighting" hidden><i class="sw sighting"></i>카메라 관측</span>
         <span id="legend-tracking" hidden><i class="sw tracking"></i>관제 카메라 추적</span>
+        <span id="legend-traffic" hidden><i class="sw traffic-occupied"></i>블록 점유 <i class="sw traffic-granted"></i>허가 <i class="sw traffic-unknown"></i>위치 불명</span>
       </div>
       <div class="tracking-bar">
         <p class="hint tracking-state" id="tracking-state" role="status" data-state="none" hidden></p>

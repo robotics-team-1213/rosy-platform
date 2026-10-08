@@ -2488,6 +2488,11 @@
 - 증거: 영향 시험 58 passed, known_failures 0 NEW. 두 시험 모두 수정 전 코드에서 실패함을 확인
 - gate 변화: 없음. D-430 독립 검토(critic) APPROVE
 
+## 2026-10-08 · uncommitted · feat(fleet): D-517 M1a 로봇마다 trip, 반복 운행, Fleet 블록 표(표시만)
+- 변경: `trip_runner.py` 로봇마다 trip 하나(`TRIP_BUSY`는 그 로봇), 0.5 s마다 로봇별 task·잠금으로 동시에 한 걸음, 이전 걸음이 안 끝난 로봇은 그 주기를 건너뜀. `POST /trip` `repeat`(경유지 순환), 바퀴 마지막 장소 앞에서 출발 검사를 다시 하고 다음 바퀴를 붙임, 경로가 바뀌거나 검사가 실패하면 `hold.reason: lap`. `routing/trip.py` 차로 끝이 아닌 장소(출발 자리)를 좌표·yaw 목적지와 경유지로. 새 `server/lane_traffic.py` `TrafficService`가 주기마다 `blocks.step`, `GET /api/fleet/traffic` 읽기 전용, 거절된 블록으로 들어가는 교차로 지시는 보내지 않음(블록 대기는 정체 아님), 반복 운행 출발 `TRIP_LOOP_FULL`. 사이트 설정 `fleet.traffic.zones`. API Ref v1.138
+- 증거: 모델 PC `test_lane_traffic.py` 10 passed, trip·routing·blocks·site_map·cancel_all 묶음 252 passed(1 실패는 시험 배치 오류, 고쳐서 통과)
+- gate 변화: SOURCE/LOCAL만. 통행권 전송(M2)·SIM·DEVICE 없음
+- 결정: D-517 1·2·3·4(정체)·7항
 ## 2026-10-08 · uncommitted · feat(fleet): D-511 감시가 LED 확인 트랙을 입력으로 쓴다
 - 변경: `LaneComplianceMonitor`가 지도 자세가 LOCALIZED가 아니면 D-472 `IdentityService.confirmed_track_pose`를 판정한다(CONFIRMED, `age_s` ≤ `fleet.map_pose.sighting_lease_s`, 활성 지도 map id). 결과에 `pose_source`(`map_pose`|`led_track`)·`heading_source`(`pose`|`track_motion`|`none`)를 싣고 바뀔 때 로그를 남긴다. 트랙에 yaw가 없어 `moving_min_m`을 넘게 움직인 이전 위치에서의 방향을 쓰고, 정지면 순수 판정이 방향 문 없이 가장 가까운 호를 고른다. `pose_state`는 지도 자세 그대로. API Ref v1.132(가산)
 - 증거: `test_lane_compliance_service.py` 신규 2개, `test_boundaries.py`(lane_compliance_service만 identity 읽기 허용, map pose·trip 모듈 금지) — fleet 묶음·`test/architecture`·`test/test_line_follow_contract_docs.py` + `test/known_failures.py` (X:/DevTemp/d511-led/)
@@ -2546,3 +2551,65 @@
 - 변경: `fleet/routing/blocks.py` 블록 길이(몸체·정지 거리·불확실성·경로 감시 거리), 블록·구역·방향 잠금 양방 차로, 점유는 사실(UNKNOWN은 풀지 않음), 허가는 경로 위치별·줄지 않음·허가 범위만, 앞쪽 블록 먼저 주기, 공정 순서와 합류 대기 상한, 고리 수용 N·h ≤ S−1, 기다림 순환 판정, 위치를 한 번도 모르는 로봇이 있으면 새 허가 중지.
 - 증거: 모델 PC `test_blocks.py` 19 passed, 반복 360회(최대 50대, 위치 오차·UNKNOWN·정지·앞뒤 밀착·수용 2 구역) 실패 0. 독립 검토 2회 지적 반영.
 - gate 변화: SOURCE/LOCAL만. 로봇에 아무것도 보내지 않는다(M2 전).
+
+## 2026-10-08 · uncommitted · fix(fleet): 창 없는 좌·우 지시를 보내지 않고 trip 정지 (D-507 2, 사용자 결정 2)
+- 변경: trip 루프가 `left`·`right`를 기대 창(`expect_in_m`·`expect_tol_m`) 없이 보내게 되면 보내지 않고 trip을 `stopped` `junction_no_window`로 끝낸다(`detail.junction_place`·`junction_action`·`junction_fields`). `junction_pivot`이 없는 로봇, 다른 지도 버전, 0.30 m 안 가로선 없음, 장소가 (0, 2] 밖, 15° 넘는 굽이가 모두 해당한다. `straight`·`stop`은 그대로. 콘솔 사유 문구, API Ref v1.138.
+- 증거: `test_trip_d507.py`(옛 로봇·선 없음·장소 위·SW 장소 위·16° 굽이가 정지하고 halt `stop` 외에 보낸 지시 없음), `test_trip_runner.py`(시험 로봇에 `junction_pivot`), `site-map.test.mjs` 사유 문구. 관련 fleet pytest 246 통과, node 15 통과.
+- gate 변화: SOURCE. SIM 3차 R3-4(창 없는 SW 지시가 굽이에서 −112° 회전)의 Fleet 쪽 경로를 닫는다. SIM·장치는 열림.
+- 결정: D-507 2항 2026-10-08 사용자 결정 (2).
+
+## 2026-10-08 · uncommitted · feat(fleet): 차로를 따른 거리로 기대 창, 15° 굽이 규칙 삭제 (D-507 2, 사용자 결정 1)
+- 변경: `junction_fields`의 `expect_in_m` = 로봇 투영점에서 장소까지 차로 polyline 거리(`remaining`), 선 찾기는 장소의 차로 방향, `_straight_ahead`와 15° 규칙 삭제. `expect_tol_m`의 odom 오차 항 = 0.05 × (dead reckoning + `expect_in_m`), 광선 옆 거리 항 삭제. 선이 없거나 범위 밖이면 여전히 창이 없고 그 좌·우는 `junction_no_window`로 멈춘다.
+- 증거: `test_trip_d507.py` — 260919 한 바퀴 SW(장소 0.6 m 앞, 오른쪽 −114.6, `expect_in_m` 0.6, 굽이 오감지 +0.10 m까지 창 밖), ring_n→NW(0.322 m, 현 0.301 m)·ring_s→SE(0.324 m) 진출 창, 10/15/16/60° 굽이 창, 허용치 항. 변이(`expect_in_m`을 직선 거리로) 8건 실패 확인 뒤 복원. fleet pytest 250 통과, node 15 통과, `known_failures` 신규 0.
+- gate 변화: SOURCE. 회전교차로 진출의 축·재획득, 한 바퀴 SIM은 열림(Gazebo는 모델 PC).
+- 결정: D-507 2항 2026-10-08 사용자 결정 (1).
+
+## 2026-10-08 · uncommitted · fix(fleet): 굽이에서 차로 옆 거리만큼 기대 창을 넓힘, 장소 위 재전송 정지 시험 (D-507 2, 안전 검토 3·4)
+- 변경: `junction_fields`의 `expect_tol_m`에 (로봇의 차로 중심선 옆 거리) × (로봇에서 장소까지 차로 방향 변화의 절댓값 합, rad)을 더한다(상한 0.30 그대로). 주행 거리로 비교하는 창에서 굽이 옆길은 중심선보다 그만큼 길거나 짧다. ADR 2항에 알려진 한계(보낸 뒤 옆 거리 변화, keeper 곧은 `junction_ahead_m`) 추가.
+- 증거: `test_trip_d507.py` — 60°·16° 굽이에서 ±0.03 m 옆이면 0.135 + 0.03 × 굽이(rad), 0° 굽이 0, 상한 0.30. armed 중 장소 위(`remaining` 0) 재전송은 `junction_no_window` 정지이고 두 번째 회전은 없음(의도한 동작). 변이(항 0) 4건 실패 뒤 복원. fleet trip pytest 통과.
+- gate 변화: SOURCE.
+- 결정: D-507 2항 2026-10-08 사용자 결정 (1), 안전 검토 REQUEST_CHANGES 3·4.
+
+## 2026-10-08 · uncommitted · docs(fleet): D-507 주행 거리 창의 API Ref 번호를 v1.139로 옮김, main 병합
+- 변경: main(v1.137, D-507 4 현 조준 e72e8dfa1 포함) 병합. v1.138은 다른 브랜치(feat/d517-m1-fleet 커밋, feat/fleet-map-trail 미커밋)가 써서 이 브랜치의 API Ref 행·머리글·`app.py`·버전 핀을 v1.139로 옮겼다. 앞 항목들의 v1.138은 그 때의 번호다. 260919 시험의 회전각을 현 조준 값(SW −108.9, NW −102.2, SE −98.6)으로 맞췄다.
+- 증거: fleet trip·버전 핀 256 통과, CORE 교차로·services·api_web·구조 시험에서 실패 1건은 fleet 크기 판정(44805 > 43809+150)이며 공유 main 체크아웃에서도 같은 값으로 실패한다(이 브랜치의 fleet 줄 수는 main과 같다).
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · feat(fleet): 지도 궤적과 D-512 테더 표시
+- 변경: 새 `web/trail-view.js`가 1 s 상태 폴링 pose로 로봇별 궤적(최근 120 s, 600점, 1 cm 이상 이동)을 브라우저에 모아 나이에 따라 흐리게 그리고, 테더 원과 기준점을 그린다(로봇이 원 밖이면 주의 색). `map-view.js`는 import와 그리기 hook 두 줄만 늘었다(격자·D-513 7 회전 미터 뷰의 toPx를 넘긴다). 새 `server/tether_routes.py`: `GET /api/fleet/tethers`(viewer), named operator `POST`·`DELETE /api/fleet/robots/{robot_id}/tether`, 메모리 전용. API Ref v1.138.
+- 증거: `test_tether_routes.py`(인증·멱등·검증), `web/trail-view.test.mjs`(간격·한도·회전 투영), Chromium `test_start_point_browser.py::test_map_draws_the_travelled_trail_and_a_tether`. SOURCE/LOCAL 범위.
+- gate 변화: 없음. 실기 궤적·테더 강제(tools/device_test, D-512)는 열림.
+- 결정: D-512 표시 절반. fleet 패키지 크기 판정은 main에서 이미 43809+150을 넘었다(44433) — 재판정 필요.
+
+## 2026-10-08 · uncommitted · fix(fleet): 지도 궤적·테더 검토 반영
+- 변경: main(API v1.139, D-512 개정 1) 병합. 이 브랜치의 API Ref 행·머리글·CORE `app.py`·버전 핀을 v1.140으로 옮겼다(앞 항목의 v1.138은 그때 번호). odom 자세(`localization.pose_frame`)는 궤적·테더 판정에 넣지 않는다. anchor_xy는 ±1000 m, 테더 폴링 실패 시 직전 목록을 둔다, 로스터에서 빠진 로봇의 테더는 목록에서 지운다. D-512 개정 1 5항에 표시 쪽이 있다는 문장을 더했다.
+- 증거: tether·trail 시험(odom 제외, anchor 범위, NaN 500 고정) 통과. fleet 2685 통과, shared/web 237, architecture 133 통과. `known_failures.py` NEW 1건 `test_grammar_separation`은 깨끗한 main에서도 실패한다(D-519 password-login.css).
+- gate 변화: 없음. D-512 개정 1 5항의 Fleet tether 감시(정지 지시)는 열림.
+- 결정: 병합 후 fleet 44929 ≤ 44806+150이라 크기 판정 변경 없음. 앱 공통 422 응답이 JSON 아닌 NaN을 담지 못해 500이 되는 문제는 후속.
+## 2026-10-08 · uncommitted · fix(fleet): D-517 M1a 리뷰 반영 — 끝난 trip의 점유 유지, 고리 키, 바퀴 재시도·정리
+- 변경: main(M0 `unplaced`·`pinned`·발생별 허가) 병합. `lane_traffic.py` 위치 없는 trip 로봇이 있으면 그 주기 교차로 지시 없음, `GET /api/fleet/traffic` `unplaced`. 끝난 trip·다른 지도 버전 trip의 허가·몸체는 `pinned`로 남고 신선한 LOCALIZED 자세가 벗어남을 보일 때 풀림(D-517 6), 지도 활성화는 마지막 자세로 다시 핀. `TRIP_LOOP_FULL`은 한 바퀴(via…, to) 간선 집합으로 고리를 묶고 그 바퀴 블록으로 S를 센다. 표 계산 예외 시 모든 trip의 `traffic`을 비움. 교차로 지시 보류는 장소 + `PAST_PLACE_M`까지. 실패한 바퀴 검사는 5 s마다 2회(D-438 예산)·확인 때 다시. E-stop은 모든 trip을 먼저 닫고 동시에 정지. `confirm_replan`이 `at` 초기화. 반복 trip은 지난 바퀴를 잘라 계획을 두 바퀴로 유지(표의 허가 색인·통행권을 같이 옮김). 주기는 틱 시간을 뺀 나머지만 잔다. `routing/trip.py` 차로 중간 장소의 도달 불가 yaw는 `TRIP_ARRIVE_YAW_UNREACHABLE`
+- 증거: 모델 PC `operations/fleet/test/` + `test/test_line_follow_contract_docs.py`; 기존 실패 3건(grammar_separation password-login.css, learning_receiver PIL, site_map_api attention-stale.test.mjs)은 깨끗한 main ba15e926b에서도 같은 문구로 실패
+- gate 변화: SOURCE/LOCAL만. 통행권 전송(M2)·SIM·DEVICE 없음
+- 결정: D-517 2·3·6·7항
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · uiux(fleet-web): D-517 M1b 교통 층, 카드 한 줄, 예외 큐 행, 반복 운행 시작
+- 변경: `site-map-model.js`에 순수 함수(`trafficDrawing`, `trafficCardLine`, `trafficClock`, `trafficAttention`, `loopCapacityText`, `repeatTripBody`). 새 자산 파일 대신 이 파일에 둬서 `static_routes.py` 허용 목록은 그대로다. `map-view.js`가 관제 지도에 "교통" 층 하나를 그린다. 블록 띠(점유 채움, 허가 테두리, 불명 빗금), 구역 윤곽과 "점유 a/b · 대기 n", 통행권 끝 가로 표시와 로봇 이름을 같은 toPx로 그리고, `/traffic`는 1 s마다 poll-gate로 읽는다. 지도 머리에 "교통 켬/끔" 단추를 둔다. `roster.js`에 카드 한 줄과 `attentionItems` 행(교착, 30 s 넘은 불명, 20 s 넘은 합류 대기, 고리 수용 초과)을 더한다. 현장 지도 운행 칸은 로봇마다 시작·취소를 따로 하고(`TRIP_BUSY` "이 로봇은 이미 운행 중입니다"), 출발 자리 + "반복 운행 시작"과 "고리 n/m대"를 둔다. `TRIP_LOOP_FULL`에는 robots/capacity를 붙인다. 넓은 단의 관제 경로는 한 줄로 줄인다
+- 증거: 모델 PC node 단위 191 중 190 통과. 실패 1건 `attention-stale.test.mjs`는 node 18의 `import.meta.dirname` 때문이고 base d4cab5388에서도 실패한다. 실제 Chromium 브라우저 범위 256 passed, 7 failed. 실패 7건은 base에서도 모두 실패한다(fit 4, session 2, node 1). 그중 fit 넘침은 143 px에서 28 px로 줄었다. 새 `test_traffic_view_browser.py` 2 passed, 1920×1080에서 스크롤 없음. 화면은 X:/DevTemp/d517-m1b/shots/ 세 폭이고, impeccable 방식의 독립 검토를 반영했다
+- gate 변화: SOURCE/LOCAL만. 통행권(M2)·SIM·DEVICE 없음
+- 결정: D-517 10항
+- 교훈: `/traffic`는 구역의 차로를 알려 주지 않아 구역이 하나일 때만 윤곽을 그린다. 대기 순서와 대기 시각도 싣지 않아 "교차로 대기 n번째"는 쓰지 못한다. 30 s·20 s 시계는 콘솔이 처음 본 시각부터 잰다
+
+## 2026-10-08 · 7e883f418 · refactor(fleet): D-517 trip runner split — 바퀴·정지·교통 이음매
+- 변경: 크기 판정이 이름 붙인 이음매대로 나눴다. `server/trip_laps.py`(바퀴 호 계산, 바퀴 시점·재시도 시점, 다음 바퀴 이어붙임·지난 바퀴 자르기·대기 `carry_on`, `_from`/`_dropped`/`_joined`), `server/trip_halts.py`(`TripHalts`: 로봇 정지, 재시작 전 trip 로봇 정지와 그 목록), `lane_traffic.TrafficService`(`holds` 교차로 지시 보류, `watch` 핀 로봇 자세 읽기, `period` 표 계산과 예외 처리). `trip_runner.py`는 start/cancel/tick/`_step*`/replan만 남는다. 로그 문구·로거 이름·오류 코드·await 순서는 그대로. 시험은 `runner.halts.*`, `runner.traffic.holds`로 옮김
+- 증거: 모델 PC 7e883f418 `test_trip_runner`·`test_lane_traffic`·`test_site_map_trip`·`test_cancel_all`·`test_routing`·`test_blocks`·`test/architecture/test_module_structure.py` 263 passed(분리 전 27cd04cc0도 263 passed), `known_failures.py` 0 new; `test_trip_d507.py` 50 passed
+- gate 변화: 없음(동작 변경 없음)
+- 결정: trip_runner 847→686, 크기 판정 split 유지(남은 것은 상태기계 하나, 다음 증가 때 다시 판정). trip_halts 81, trip_laps 77, lane_traffic 305. fleet 패키지 45573 = 45423+150, 허용치를 다 썼다
+- 교훈: 분리도 모듈 머리말·import로 줄을 늘린다. 패키지 허용치가 거의 찬 때는 분리 전에 남은 줄을 센다
+
+## 2026-10-08 · 727d96501 · refactor(fleet-web): map-view.js 카메라 배경·교통 층 분리
+- 변경: 크기 판정이 이름 붙인 카메라 배경 이음매대로 나눴다. 새 `web/camera-backdrop.js`(`cameraMapCalibration`, 위에서 본 그림 캐시·`drawCameraTopDown`·`warpOnto`, `setCameraFrame`, `frameTurn`, `turnedUrl`, `bindCamera`), 새 `web/traffic-view.js`(D-517 10 교통 층 그리기). `map-view.js`는 지도 그리기·폴링·교통 토글을 가지고 draw hook, 받은 보정, toPx를 넘긴다. DOM·그리기 순서·폴링은 그대로. 자산은 `static_routes.py`, `test_document_imports.py`, 캔버스 팔레트 계약, `web/AGENTS.md`에 등록
+- 증거: 모델 PC node 단위 + 브라우저 범위 + `test/architecture/test_module_structure.py`: 분리 전 64d7a68a8 11 failed/288 passed, 분리 뒤 727d96501 11 failed/288 passed, 실패 목록 같음(attention-stale node, console_session 2, fit 4, peer_picker 3, 크기 판정). 크기 판정 실패는 분리 전 map-view 1030>903+0과 fleet 패키지였고 분리 뒤 fleet 패키지만 남는다
+- gate 변화: 없음(동작 변경 없음)
+- 결정: map-view.js 1030→831, 판정 split 유지(다음 증가 때 다시 판정). camera-backdrop 141, traffic-view 82. fleet 패키지 45944→45968(+24, 머리말·import), 패키지 판정은 다른 단계가 다시 한다
+- 교훈: 없음

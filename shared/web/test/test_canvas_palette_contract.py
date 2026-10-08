@@ -26,6 +26,9 @@ CANVAS_FILES = [
     # camera-capture.js는 재수출만 한다 — 본체는 web_common evidence.js(D-323 T9).
     COMMON / "evidence.js",
     FLEET / "map-view.js",
+    FLEET / "trail-view.js",
+    FLEET / "camera-backdrop.js",
+    FLEET / "traffic-view.js",
     FLEET / "field-view.js",
     FLEET / "map-fit-view.js",
     FLEET / "shared" / "field-warp.js",

@@ -44,6 +44,7 @@ CONSOLE_ASSETS = {
     "site-path.js": ("site-path.js", "application/javascript"),
     "localization-badge.js": ("localization-badge.js", "application/javascript"),
     "camera-warp.js": ("camera-warp.js", "application/javascript"),
+    "camera-backdrop.js": ("camera-backdrop.js", "application/javascript"),
     "map-fit.js": ("shared/map-fit.js", "application/javascript"),
     "map-fit-view.js": ("map-fit-view.js", "application/javascript"),
     "map-view.js": ("map-view.js", "application/javascript"),
@@ -61,6 +62,8 @@ CONSOLE_ASSETS = {
     "tracking-view.js": ("tracking-view.js", "application/javascript"),
     "start-point-layer.js": ("start-point-layer.js", "application/javascript"),
     "start-point-view.js": ("start-point-view.js", "application/javascript"),
+    "trail-view.js": ("trail-view.js", "application/javascript"),
+    "traffic-view.js": ("traffic-view.js", "application/javascript"),
     "connection-view.js": ("connection-view.js", "application/javascript"),
     "vision-view.js": ("shared/vision-view.js", "application/javascript"),
 }

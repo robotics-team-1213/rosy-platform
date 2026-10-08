@@ -139,7 +139,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
                site_maps=None, routing_config=None, map_pose_config=None,
-               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None,
+               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None,
                identity_config=None, lane_compliance_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
@@ -455,7 +455,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-473: `--lan-camera-proxy` already means "Fleet sits behind the site Caddy", whose
     # X-Forwarded-For carries the browser address the development session checks.
     install_development_routes(app, sessions=development_sessions, task_service=task_service,
-                               trust_forwarded=lan_camera_proxy, password_login=password_sessions is not None)
+                               trust_forwarded=lan_camera_proxy, account_login=password_sessions is not None)
     install_password_routes(app, sessions=password_sessions, authorize=authorize, task_service=task_service,
                             trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
@@ -609,7 +609,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
                              cancel_goal=console.cancel, config=trip_config or TripConfig(),
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
-                             roster=lambda: console.robot_ids)
+                             roster=lambda: console.robot_ids, traffic_zones=traffic_zones)
     install_trip_guard(console, trip_runner)
     app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
     if getattr(app.state, "stuck_resolver", None) is not None:  # D-494 5: no automatic answer on a trip
@@ -620,6 +620,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_teach_routes(app, service=TeachService(poses=map_pose_port or map_pose, site_maps=site_maps,
                                                    roster=lambda: console.robot_ids),
                          read_guard=read_guard, require_named_operator=require_named_operator)
+    from fleet.server.tether_routes import install_tether_routes  # D-512 map display half
+    install_tether_routes(app, robot_ids=lambda: console.robot_ids, read_guard=read_guard,
+                          require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,
                         require_named_operator=require_named_operator, runner=trip_runner,

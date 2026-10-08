@@ -102,6 +102,10 @@ def load_plan(path):
     plan.setdefault("min_battery_percent", 40)
     plan.setdefault("verdict_max_age_s", 300)
     plan.setdefault("hold_s", 1.0)
+    pol = plan["tether_policy"] = {"margin_m": 0.3, "max_turn_deg": 360, **(plan.get("tether_policy") or {})}
+    # D-512 tether guard: only stricter than the user's 0.3 m / 360 deg; retrace unwinds to max_turn - 90
+    if not (_num(0.2, 2.0)[0](pol["margin_m"]) and _num(90, 360, lo_open=True)[0](pol["max_turn_deg"])):
+        raise SystemExit("tether_policy: margin_m in [0.2, 2.0], max_turn_deg in (90, 360]")
     if not 0 < float(plan["hold_s"]) <= 1.0:
         raise SystemExit("hold_s must be in (0, 1] so CORE's deadman stops a stalled loop within 1 s")
     return plan
@@ -150,7 +154,7 @@ def merge(base, over):
 
 
 VERDICT_KEYS = ("robot_at_start", "robot_seen_is_target", "path_clear", "cable_seen",
-                "cable_in_path_or_wheels")
+                "cable_attached", "cable_in_path_or_wheels")
 
 
 def sha(path):
@@ -185,8 +189,8 @@ def check_verdict(path, max_age_s, now, pose):
         raise ValueError("pose unknown: cannot show the robot has not moved since the judged frames")
     if math.hypot(pose["x"] - was["x"], pose["y"] - was["y"]) > 0.05:
         raise ValueError("robot moved since the judged frames; run --preflight-only again")
-    if v["cable_in_path_or_wheels"]:
-        raise ValueError("camera verdict: cable in the planned path or the wheels")
+    if v["cable_in_path_or_wheels"] and v.get("tether") is None:   # own charging tether: user 2026-10-08
+        raise ValueError("camera verdict: cable in the planned path or the wheels and no tether declared")
     bad = [k for k in ("robot_at_start", "robot_seen_is_target", "path_clear") if not v[k]]
     if bad:
         raise ValueError(f"camera verdict: {bad} false")
