@@ -7082,3 +7082,9 @@ osy-d395-s1d\`.
 - 변경: 독립 ROS SIM의 frame 192를 `route_a`로 재생하고, 경로에서 80 mm 벗어난 자세의 분기 보조 우회를 고친 결과와 재현 스크립트를 `docs/validation/lane-route-gap-replay-2026-10-08/`에 기록했다.
 - 증거: 원래 자세는 MEMORY 후보, 측면 오차 +0.0609 m 교란 자세는 수정 후 STOP. 기존 관련 시험 77 passed, 10 skipped.
 - gate 변화: 없음. 오프라인 SIM 프레임 후보이며 ROS 폐루프·Fleet 활성 지도·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 굽이 원본의 격리 ROS 관측 재발행
+
+- 변경: `line_observer_node`의 `route_a`에 녹화 영상·odom·clock 125프레임을 독립 ROS domain 97에서 재발행하고 `docs/validation/lane-route-ros-graph-2026-10-08/`에 재현 스크립트와 결과를 기록했다.
+- 증거: 카메라 관측 125/125 수신, 첫 무관측 frame 192는 `visible=true`, confidence 0.6. 중복 사용 중이던 domain 83의 첫 시도는 증거에서 제외했고 전용 노드를 종료했다.
+- gate 변화: 없음. 노드 배선 증거이며 CORE 수용·Gazebo 폐루프·실물 수용은 미검증.
