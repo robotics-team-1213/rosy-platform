@@ -4,7 +4,8 @@
 WS=$HOME/rosy_bendodom_ws; H=$WS/src/rosy-platform/docs/validation/lane-bend-odom-sim-2026-10-08/evidence
 cd "$WS" || exit 1
 source /opt/ros/jazzy/setup.bash; source install/setup.bash
-export PYTHONPATH=$WS/pydeps:$PYTHONPATH ROS_DOMAIN_ID=86 GZ_PARTITION=rosy_bendodom
+# pyextra: httpx for fleet.server (uv pip install --target pyextra httpx)
+export PYTHONPATH=$WS/pydeps:$WS/pyextra:$PYTHONPATH ROS_DOMAIN_ID=86 GZ_PARTITION=rosy_bendodom
 mkdir -p runs
 while read -r name args; do
   [ -z "$name" ] && continue

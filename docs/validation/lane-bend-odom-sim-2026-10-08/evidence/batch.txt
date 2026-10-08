@@ -8,8 +8,13 @@ west_07
 west_08
 west_09
 west_10
-west_11
-west_12
 south_01 --x -1.15 --y -0.509 --yaw 0
 south_02 --x -1.15 --y -0.509 --yaw 0
 south_03 --x -1.15 --y -0.509 --yaw 0
+south_04 --x -1.15 --y -0.509 --yaw 0
+south_05 --x -1.15 --y -0.509 --yaw 0
+south_06 --x -1.15 --y -0.509 --yaw 0
+south_07 --x -1.15 --y -0.509 --yaw 0
+south_08 --x -1.15 --y -0.509 --yaw 0
+south_09 --x -1.15 --y -0.509 --yaw 0
+south_10 --x -1.15 --y -0.509 --yaw 0

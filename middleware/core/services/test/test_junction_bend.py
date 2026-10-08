@@ -49,7 +49,7 @@ def test_bend_follows_the_camera_then_drives_the_arc_and_reacquires():
     assert decision.linear > 0 and decision.angular >= 0
     until(rig, 'reacquiring')                              # on the path at the arc's end point
     assert (rig.x, rig.y) == pytest.approx((.30+.1*math.sin(math.pi/3), .05), abs=.005)
-    assert math.degrees(rig.yaw) == pytest.approx(60., abs=10.)  # pursuit still turning onto the exit
+    assert 30. < math.degrees(rig.yaw) < 60.               # turned in early, still turning onto the exit
     decision, status = until(rig, 'idle')
     assert status.junction.seq == 1 and decision.linear > 0  # lane following again
     with pytest.raises(JunctionRefused):
@@ -130,8 +130,8 @@ def test_d422_body_sweep_stops_the_arc():
 def test_arc_distance_bound():
     rig = armed_rig()
     until(rig, 'bending')
-    for _ in range(100):                                  # wheels slip: odom runs ahead of the path
-        decision, status = site_step(rig, move=True, dx=.012)
+    for _ in range(100):                                  # odom travels, the path does not advance
+        decision, status = site_step(rig, move=True, dx=-.008)
         if status.junction.state != 'bending':
             break
     assert (status.junction.state, status.junction.reason) == ('aborted', 'distance')
@@ -155,6 +155,7 @@ def test_lane_not_found_after_the_arc_is_unresolved_and_holds():
     x, y = rig.x, rig.y
     decision, status = until(rig, 'unresolved', seen=False)
     assert math.hypot(rig.x-x, rig.y-y) == pytest.approx(.2, abs=.02)  # the bounded search
+    assert math.degrees(rig.yaw) == pytest.approx(60., abs=3.)          # along the exit line
     assert (decision.linear, decision.angular) == (0., 0.) and status.reason == 'junction_unresolved'
 
 

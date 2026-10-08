@@ -5,7 +5,9 @@ Fleet sends action 'bend' for a site-map bend place: the lane distance to the ar
 camera follows and CORE sums fresh odom travel; every straight confident tick anchors the line
 the body followed (D-476 rev 1). Inside the lead window CORE takes over at the first tick that is
 not straight confident following (HOLD, loss, large error, a sighting), or at the earliest arc
-start (bend_in - tol): 'bending' pursues the anchor line, the arc and the exit line, then
+start (bend_in - tol): 'bending' pursues the anchor line, the arc and the exit line (pure pursuit
+at the D-476 bridge_lookahead_m: on a circle it commands that circle's curvature, and on a
+corner it turns in early, inside the arc, away from the wall outside the turn), then
 'reacquiring' keeps to the exit line until D-495 M5 reacquisition or the next junction's
 sighting, else 'unresolved'. Every moving tick goes through the D-495 maneuver twist (D-422
 sweep, enforce probe) and motion_admitted kind 'bend'; distance and time are bounded.
@@ -22,10 +24,8 @@ BEND_FIELDS = ('bend_in_m', 'bend_tol_m', 'bend_radius_m')
 #: ponytail: the 260919 camera/keeper sees a 63 deg bend's new lines ~0.22 m before the arc
 #: start (B8 misread onset 0.22 m, B9 gate-on HOLD 0.21 m); a plausibility value, SIM-tuned.
 BEND_LEAD_M = .25
-BEND_LOOKAHEAD_M = .05  # pure pursuit on the path; on a circle it commands that circle's curvature
 BEND_STEP_M = .005      # path sample spacing
 _SEARCH = 40            # nearest-point search window (0.2 m of path) after the first tick
-REACQUIRE_TAIL_M = REACQUIRE_M+2*BEND_LOOKAHEAD_M  # the exit line the bounded search drives
 
 
 def check_bend(action, turn_deg, expect):
@@ -98,8 +98,9 @@ class JunctionBendMixin:
             return self._abort(j, 'linear_limit_zero', decision)
         x, y, yaw, travel = anchor
         turn, radius = math.radians(j['turn_deg']), j['radius']
+        ahead = self._config.bridge_lookahead_m
         points, arc_end = bend_path(x, y, yaw, max(0., j['bend_in']-travel), radius, turn,
-                                    REACQUIRE_TAIL_M)
+                                    REACQUIRE_M+2*ahead)  # the exit line the bounded search drives
         i = min(range(arc_end+1), key=lambda k: math.dist(points[k], (pose.x, pose.y)))
         # Time: the rest of the straight at speed, the arc at the speed the angular cap allows.
         line_left = max(0., (arc_end-i)*BEND_STEP_M-radius*abs(turn))
@@ -107,7 +108,7 @@ class JunctionBendMixin:
         self._loss_started_at, self._lost_latched = None, False
         j.update(basis=self._turn_basis_now, path=points, arc_end=arc_end, i=i, speed=speed,
                  target=math.remainder(yaw+turn, math.tau),
-                 bound=(arc_end-i)*BEND_STEP_M+BEND_LOOKAHEAD_M)
+                 bound=(arc_end-i)*BEND_STEP_M+ahead)
         self._next_phase(j, 'bending', now, line_left/speed+radius*abs(turn)/arc_speed+STEP_MARGIN_S)
         self._odom_travel(j, now)
         return self._maneuver(j, now, decision)
@@ -140,12 +141,12 @@ class JunctionBendMixin:
         return out
 
     def _bend_twist(self, j, pose):
-        """Pure pursuit to the path point BEND_LOOKAHEAD_M past the nearest one; None when that
+        """Pure pursuit to the path point bridge_lookahead_m past the nearest one; None when that
         point is not ahead of the robot."""
         points, i = j['path'], j['i']
         i = j['i'] = min(range(i, min(i+_SEARCH, len(points))),
                          key=lambda k: math.dist(points[k], (pose.x, pose.y)))
-        px, py = points[min(i+round(BEND_LOOKAHEAD_M/BEND_STEP_M), len(points)-1)]
+        px, py = points[min(i+round(self._config.bridge_lookahead_m/BEND_STEP_M), len(points)-1)]
         dx, dy = px-pose.x, py-pose.y
         x = math.cos(pose.yaw)*dx+math.sin(pose.yaw)*dy
         y = -math.sin(pose.yaw)*dx+math.cos(pose.yaw)*dy
