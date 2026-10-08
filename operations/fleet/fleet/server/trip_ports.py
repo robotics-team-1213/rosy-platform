@@ -276,6 +276,7 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
         latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
         tol = max(config.expect_tol_min_m,
                   ODOM_DRIFT_PER_M * (reckoned + expect_in) + speed * latency + ENDPOINT_TOL_M)
+        tol += _curve_offset_m(live.arc(index), live.segments[index]["s_to"], remaining, pose)
     fields.update(expect_in_m=expect_in, expect_tol_m=round(min(tol, MAX_EXPECT_TOL_M), 3))
     return fields
 
@@ -308,6 +309,18 @@ def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
             t += step
     past = round(t + step, 3)
     return past if past <= MAX_PIVOT_PAST_LINE_M else None
+
+
+def _curve_offset_m(arc, s_to: float, remaining: float, pose: dict) -> float:
+    """A robot this far beside the lane drives a curve this much longer or shorter than its
+    centre line: the offset times the heading change (rad) along the rest of the lane. Safety
+    review 2026-10-08: the window compares travelled distance, so this widens it."""
+    if pose.get("x") is None or pose.get("y") is None:
+        return 0.0
+    offset = arc.project(pose["x"], pose["y"])[0]
+    steps = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M))
+    headings = [arc.point_at(s_to - remaining * (1 - k / steps))[2] for k in range(steps + 1)]
+    return offset * sum(abs(wrap(b - a)) for a, b in zip(headings, headings[1:]))
 
 
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:

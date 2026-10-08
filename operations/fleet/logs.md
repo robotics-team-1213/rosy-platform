@@ -2541,3 +2541,9 @@
 - 증거: `test_trip_d507.py` — 260919 한 바퀴 SW(장소 0.6 m 앞, 오른쪽 −114.6, `expect_in_m` 0.6, 굽이 오감지 +0.10 m까지 창 밖), ring_n→NW(0.322 m, 현 0.301 m)·ring_s→SE(0.324 m) 진출 창, 10/15/16/60° 굽이 창, 허용치 항. 변이(`expect_in_m`을 직선 거리로) 8건 실패 확인 뒤 복원. fleet pytest 250 통과, node 15 통과, `known_failures` 신규 0.
 - gate 변화: SOURCE. 회전교차로 진출의 축·재획득, 한 바퀴 SIM은 열림(Gazebo는 모델 PC).
 - 결정: D-507 2항 2026-10-08 사용자 결정 (1).
+
+## 2026-10-08 · uncommitted · fix(fleet): 굽이에서 차로 옆 거리만큼 기대 창을 넓힘, 장소 위 재전송 정지 시험 (D-507 2, 안전 검토 3·4)
+- 변경: `junction_fields`의 `expect_tol_m`에 (로봇의 차로 중심선 옆 거리) × (로봇에서 장소까지 차로 방향 변화의 절댓값 합, rad)을 더한다(상한 0.30 그대로). 주행 거리로 비교하는 창에서 굽이 옆길은 중심선보다 그만큼 길거나 짧다. ADR 2항에 알려진 한계(보낸 뒤 옆 거리 변화, keeper 곧은 `junction_ahead_m`) 추가.
+- 증거: `test_trip_d507.py` — 60°·16° 굽이에서 ±0.03 m 옆이면 0.135 + 0.03 × 굽이(rad), 0° 굽이 0, 상한 0.30. armed 중 장소 위(`remaining` 0) 재전송은 `junction_no_window` 정지이고 두 번째 회전은 없음(의도한 동작). 변이(항 0) 4건 실패 뒤 복원. fleet trip pytest 통과.
+- gate 변화: SOURCE.
+- 결정: D-507 2항 2026-10-08 사용자 결정 (1), 안전 검토 REQUEST_CHANGES 3·4.

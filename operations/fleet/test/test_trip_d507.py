@@ -120,7 +120,7 @@ def test_fields_go_only_to_a_junction_pivot_robot():
     # 0.2 x (0.1 + ~0 measured + 0.2 allowance) + 0.05 = 0.135
     # the corner's outer line is the far edge of the 0.2 m outgoing lane, 0.1 m past B
     assert ports.expects == [{"map_id": "site", "pivot_past_line_m": -0.1,
-                              "expect_in_m": 0.5, "expect_tol_m": 0.135}]
+                              "expect_in_m": 0.5, "expect_tol_m": pytest.approx(0.135, abs=0.002)}]
 
 
 def test_straight_through_has_no_line_so_half_width_and_no_window():
@@ -132,7 +132,7 @@ def test_straight_through_has_no_line_so_half_width_and_no_window():
 def test_the_last_stop_carries_the_expectation_without_a_pivot():
     ports = _sent_at(_straight_map(), PIVOT, 0.7, to="B")
     assert ports.sent[0][0] == STOP
-    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.3, "expect_tol_m": 0.125}]
+    assert ports.expects == [{"map_id": "site", "expect_in_m": 0.3, "expect_tol_m": pytest.approx(0.125, abs=0.002)}]
 
 
 def test_tolerance_adds_drift_and_the_measured_latency_and_is_capped():
@@ -156,7 +156,7 @@ def test_tolerance_counts_the_time_between_the_pose_read_and_the_send(monkeypatc
 
 def test_tolerance_is_floored_by_the_site_knob():
     assert _tol(s=0.9) == 0.12                                    # 0.115 computed, default knob 0.12
-    assert _tol() == 0.135
+    assert _tol() == pytest.approx(0.135, abs=0.002)  # the measured read-to-send time adds ~ms
     assert _tol(expect_tol_min_m=0.2) == 0.2
     assert TripConfig.from_mapping({"expect_tol_min_m": 0.15}).expect_tol_min_m == 0.15
     with pytest.raises(ValueError):
@@ -294,7 +294,7 @@ def test_a_bend_before_the_place_keeps_the_window_along_the_path(bend_deg):
     """2026-10-08: no bend rule; the window is the lane distance whatever the bend."""
     sent = _sent_at(_bent_map(bend_deg), PIVOT, 0.5).expects[0]
     assert sent["expect_in_m"] == 0.5                       # 0.2 straight + 0.3 bent, not the chord
-    assert sent["expect_tol_m"] == 0.135                    # no beside-the-ray term any more
+    assert sent["expect_tol_m"] == pytest.approx(0.135, abs=0.002)  # no beside-the-ray term any more
 
 
 def test_a_changed_map_version_sends_no_fields_and_says_so(caplog):
@@ -502,3 +502,35 @@ def test_260919_ring_exits_send_the_arc_length(ring, to, blocked, turn):
     (x0, y0, _), (x1, y1, _) = arc.point_at(0.05), arc.point_at(arc.length_m)
     assert expect["expect_in_m"] - math.dist((x0, y0), (x1, y1)) > 0.02  # the chord is shorter
     assert "pivot_past_line_m" in expect and runner.view("p1")["state"] == "running"
+
+
+@pytest.mark.parametrize("bend_deg, dy", [(60.0, 0.03), (60.0, -0.03), (16.0, 0.03), (0.0, 0.03)])
+def test_an_offset_robot_on_a_curve_widens_the_window_by_offset_times_turn(bend_deg, dy):
+    """Safety review 2026-10-08: beside the centre line a curve is longer or shorter by
+    offset x heading change, which the travelled-distance window must allow."""
+    sent = _sent_at(_bent_map(bend_deg), PIVOT, 0.5, pose={"y": dy}).expects[0]
+    assert sent["expect_in_m"] == 0.5
+    assert sent["expect_tol_m"] == pytest.approx(0.135 + abs(dy) * math.radians(bend_deg), abs=0.002)
+
+
+def test_the_curve_offset_term_is_still_capped_at_0_30():
+    sent = _sent_at(_bent_map(60.0), PIVOT, 0.5, pose={"y": 0.09, "age_s": 0.6},
+                    expect_tol_min_m=0.29).expects[0]
+    assert sent["expect_tol_m"] == 0.30
+
+
+def test_a_refresh_at_or_past_the_place_while_armed_stops_the_trip():
+    """Intended (D-507 2, 2026-10-08): CORE still armed with the robot on the place means
+    ``expect_in_m`` 0, outside (0, 2], so the refreshed turn would go without a window: stop."""
+    runner, store, ports = _setup(_free_map("lane"), caps=PIVOT)
+    arc = _arc(store, "ab:fwd")
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    ports.at(arc, 0.5)
+    _ticks(runner, ports)
+    assert ports.sent == [("left", "B", None)] and ports.core.status()["state"] == "armed"
+    ports.at(arc, 1.0)                                    # on the place, CORE still armed
+    _ticks(runner, ports, 1, dt=8.0)                      # past half the 15 s expiry: a refresh
+    view = runner.view("p1")
+    assert (view["state"], view["reason"]) == ("stopped", "junction_no_window")
+    assert ports.sent == [("left", "B", None), ("stop", "B", 0.0)]   # the halt, no second turn
