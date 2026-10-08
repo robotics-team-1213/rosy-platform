@@ -168,6 +168,17 @@ thumbnail을 다시 만들지 않고, 픽셀 검수의 마스크 오버레이 �
 흰색으로 포화된 원본 정보는 복원되지 않는다. 경계를 여전히 판단할 수 없으면 검수 대기로
 두고 노출을 조절해 새로 촬영한 원본을 별도 자료로 등록한다.
 
+과노출 후보는 원본 사진의 하단 절반에서 회색조 245 이상인 픽셀 비율로 확인한다.
+`review_quality.py`는 기본 실행에서 결정 기록을 바꾸지 않는다. 사진과 후보를 확인한 후
+`--apply`를 주면 **검수 대기** 후보만 기존 제외 결정으로 기록한다. 승인 사진은 건드리지 않고,
+제외 결정은 검수 화면에서 재검수로 되돌릴 수 있다. 0.15는 2026-10-08 v13 촬영분에서
+측정한 분리값이므로 다른 촬영분에 그대로 적용하지 않는다. 정규분포 가정이나 흐림 필터는 쓰지 않는다.
+
+```powershell
+python learning/training/perception/dataset/review_quality.py --state X:/DevTemp/<name>/state --threshold 0.15 > X:/DevTemp/<name>/exposure-preview.json
+python learning/training/perception/dataset/review_quality.py --state X:/DevTemp/<name>/state --threshold 0.15 --apply > X:/DevTemp/<name>/exposure-applied.json
+```
+
 ### 클래스셋 (D-485)
 
 객체 클래스는 첫 실행의 `--object-classes <data.yaml>`로 정한다. 파일은 Ultralytics `data.yaml`의 `names`(목록 또는 번호 사전)를 읽고, 선택 항목 `display`(이름별 표시 문구)와 `colors`(이름별 `[r, g, b]`)를 받는다. 생략하면 D-423의 기본 6개 클래스다. 한 작업 공간은 객체 클래스셋 하나와 픽셀 클래스셋 하나에 묶인다. 다른 모델의 클래스로 검수하려면 다른 `--state`로 새 작업 공간을 만든다.
