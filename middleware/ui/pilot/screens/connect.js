@@ -26,7 +26,7 @@ function removeRecentEntry(host) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(getRecent().filter((r) => r.host !== host)));
 }
 
-import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders} from "../client.js";
+import {token, setToken, clearToken, whoami, fetchCapabilities, LOGIN_CODE, pairWithCode, requestEnrollmentCode, connectionOffer, developmentSession, api, authHeaders, inPilotApp} from "../client.js";
 import {driverFor} from "../drivers/registry.js";
 import {createVisionPreview} from "../vision.js";
 import {mountDriveView, actionIcon} from "./drive-view.js";
@@ -211,6 +211,11 @@ function tokenForm() {
 }
 
 function renderTokenForm(root, onConnect, message) {
+  // 앱이 연 화면은 코드·개발 연결·다른 로봇으로 다시 나가지 않는다.
+  if (inPilotApp()) {
+    renderAppSession(root);
+    return;
+  }
   const head = el("ui-head", "접속", {id: "pilot-gate-heading"});
   root.replaceChildren(head);
 
@@ -324,6 +329,16 @@ function mountShowCode(root, onSwitchCredential) {
   root.__enrollDispose = stopTick;
 }
 
+function renderAppSession(root) {
+  setTag("앱");
+  notice("");
+  root.replaceChildren(
+    el("ui-head", "접속", {id: "pilot-gate-heading"}),
+    el("ui-status", "이 화면의 연결은 Rosy Pilot 앱이 엽니다. 위쪽 로봇 목록에서 로봇을 다시 선택하세요.",
+      {role: "status", "data-app-session": ""}),
+  );
+}
+
 function renderOffline(root, onConnect) {
   setTag("오프라인");
   notice("CORE 에 연결할 수 없습니다");
@@ -356,6 +371,10 @@ async function check(root, onReady, onEnter) {
   rememberRobot(root, offer);
   if (me.status === 401) {
     clearToken();
+    if (inPilotApp()) {
+      renderAppSession(root);
+      return;
+    }
     setTag("차단");
     notice("토큰이 유효하지 않습니다");
     renderTokenForm(root, () => check(root, onReady, onEnter), "토큰이 유효하지 않습니다. 다시 입력해 주세요.");
@@ -377,13 +396,16 @@ async function check(root, onReady, onEnter) {
     const retry = el("ui-button", "다시 시도", {type: "button"});
     retry.setAttribute("kind", "quiet");
     retry.addEventListener("click", () => check(root, onReady, onEnter));
-    const reset = el("ui-button", "토큰 초기화", {type: "button"});
-    reset.setAttribute("kind", "segment");
-    reset.addEventListener("click", () => {
-      clearToken();
-      renderTokenForm(root, () => check(root, onReady, onEnter));
-    });
-    actions.append(retry, reset);
+    actions.append(retry);
+    if (!inPilotApp()) {
+      const reset = el("ui-button", "토큰 초기화", {type: "button"});
+      reset.setAttribute("kind", "segment");
+      reset.addEventListener("click", () => {
+        clearToken();
+        renderTokenForm(root, () => check(root, onReady, onEnter));
+      });
+      actions.append(reset);
+    }
     root.replaceChildren(
       el("ui-head", "접속", {id: "pilot-gate-heading"}),
       readoutPair(pairs), ...statuses, actions,
@@ -423,12 +445,14 @@ async function check(root, onReady, onEnter) {
       : "먼저 카메라를 확인하세요. 주행을 시작하면 누르는 동안만 로봇을 조종합니다.", {"data-ready-guidance": ""}),
     actions,
   );
-  // 연동 코드 보여주기: 운영자에게도 항목을 보여 준다(발급은 관리자 — 거절 시 전환 길 제공).
-  mountShowCode(root, () => {
-    clearToken();
-    renderTokenForm(root, () => check(root, onReady, onEnter),
-      "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
-  });
+  // 연동 코드는 브라우저 접속의 두 번째 연결이다. 앱은 자기 세션만 쓴다.
+  if (!inPilotApp()) {
+    mountShowCode(root, () => {
+      clearToken();
+      renderTokenForm(root, () => check(root, onReady, onEnter),
+        "관리자 코드를 입력하면 연동 코드를 발급할 수 있습니다.");
+    });
+  }
   onReady?.({role: me.body?.role});
 }
 
@@ -492,7 +516,15 @@ export function mountConnect(root, {onReady, onEnter} = {}) {
   root.__enrollDispose?.();
   const run = () => check(root, onReady, onEnter);
   root.__pilotRunCheck = run;
-  root.__pilotForm = () => renderTokenForm(root, run);
+  root.__pilotForm = () => (inPilotApp() ? renderAppSession(root) : renderTokenForm(root, run));
+  if (inPilotApp()) {
+    if (!token()) {
+      renderAppSession(root);
+      return;
+    }
+    run();
+    return;
+  }
   if (!token()) {
     renderTokenForm(root, run);
     return;
