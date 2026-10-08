@@ -55,6 +55,7 @@ export function mount(root, ctx) {
   root.append(head, status, readinessStatus, layers, clicks, mapFrame, clickReason, setupLink, mapStatus, action);
 
   let state = null;
+  let mappingActive = null;
   let capabilities = null;
   let commissioning = null;
   let mapIdMismatch = false;
@@ -73,7 +74,8 @@ export function mount(root, ctx) {
         : state?.localization?.state === "SUSPECT" ? "위치 확인 필요"
         : state?.localization?.state === "UNKNOWN" ? "위치 미확인" : "상태 정보 없음";
     setText(locationStage, `위치 추정 · ${location}`);
-    setText(slamStage, `SLAM · ${capabilities?.slam === true ? "기능 제공" : capabilities?.slam === false ? "미제공" : "확인 불가"}`);
+    setText(slamStage, `SLAM · ${capabilities?.slam === false ? "미제공" : capabilities?.slam !== true ? "기능 확인 불가"
+      : mappingActive === true ? "맵핑 세션 활성" : mappingActive === false ? "맵핑 세션 대기" : "세션 확인 불가"}`);
   }
   const baseMapAction = () => (ctx.role === "operator" || ctx.role === "administrator")
     && capabilities?.navigation?.goal_navigation === true && commissioning?.runtime_mode === "hardware";
@@ -154,6 +156,10 @@ export function mount(root, ctx) {
   }, (error) => {
     capabilities = null; readErrors.capabilities = error.message; renderReadiness(); renderStage(); syncMapActions(); map.setPose();
   });
+  const stopMapping = ctx.store.poll("/api/v1/navigation/state", 1_000, (payload) => {
+    mappingActive = typeof payload?.mapping_active === "boolean" ? payload.mapping_active : null;
+    renderStage();
+  }, () => { mappingActive = null; renderStage(); });
   const stopCommissioning = ctx.store.poll("/api/v1/host/commissioning", 2_000, (payload) => {
     commissioning = payload; readErrors.commissioning = null; renderReadiness(); syncMapActions(); map.setPose();
   }, (error) => {
@@ -184,5 +190,5 @@ export function mount(root, ctx) {
   retry.addEventListener("click", () => { refresh(); });
   refresh();
   const timer = setInterval(refresh, 10_000);
-  return () => { disposed = true; clearInterval(timer); stopState(); stopCapabilities(); stopCommissioning(); map.destroy(); };
+  return () => { disposed = true; clearInterval(timer); stopState(); stopCapabilities(); stopMapping(); stopCommissioning(); map.destroy(); };
 }

@@ -79,6 +79,7 @@ def navigation_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = D
     readiness = svc.readiness.snapshot()
     return {
         "navigation": svc.nav.nav_state.value,
+        "mapping_active": svc.nav.mapping_active,
         "map_id": svc.state.map_id,
         "readiness": {
             "required": readiness.required,

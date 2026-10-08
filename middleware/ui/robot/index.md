@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · uiux(robot): SLAM 세션 상태와 지도 HUD 밀도
 - 2026-10-08 · uncommitted · uiux(robot): 계획 경로 수신 근거 표시
 - 2026-10-08 · uncommitted · uiux(robot): 표시 지도 ID와 로봇 ID 대조
 - 2026-10-08 · uncommitted · uiux(robot): 위치 추정 불확실 시 목표·표시 정합성
 - 2026-10-08 · uncommitted · uiux(robot): 운용 폭별 문서·초점 순서 일치
-- 2026-10-08 · uncommitted · uiux(robot): 지도 중심 운용 화면

@@ -40,8 +40,10 @@
 .surface-map-stage {
   position: absolute;
   inset: var(--space-2) var(--space-2) auto;
-  display: grid;
-  gap: var(--space-1);
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
   max-width: calc(100% - 2 * var(--space-2));
   padding: var(--space-2) var(--space-3);
   background: var(--scrim-solid);

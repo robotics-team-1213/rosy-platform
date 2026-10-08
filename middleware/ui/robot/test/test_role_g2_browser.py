@@ -1229,6 +1229,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             errors = []
             location = {"state": "LOCALIZED", "frame": "map", "map_id": "local-map"}
             path_info = {"map_id": "local-map", "frame_id": "map"}
+            mapping_session = {"active": True, "readable": True}
             page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
             page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -1248,6 +1249,13 @@ def test_console_navigation_stage_local_captures(tmp_path):
                     data["slam"] = True
                     data["navigation"] = {"goal_navigation": True}
                     response = Response(content=json.dumps(data), media_type="application/json")
+                elif path == "/api/v1/navigation/state":
+                    if mapping_session["readable"]:
+                        data = _response(client, path, TOKENS["operator"], "normal", "console").json()
+                        data["mapping_active"] = mapping_session["active"]
+                        response = Response(content=json.dumps(data), media_type="application/json")
+                    else:
+                        response = Response(status_code=503)
                 elif path == "/api/v1/host/commissioning":
                     data = _response(client, path, TOKENS["operator"], "normal", "console").json()
                     data["runtime_mode"] = "hardware"
@@ -1273,7 +1281,8 @@ def test_console_navigation_stage_local_captures(tmp_path):
             assert "주행 · 주행 중" in stage.inner_text()
             assert "계획 경로 · 마지막 수신" in stage.inner_text()
             assert "위치 추정 · 지도 좌표 확인" in stage.inner_text()
-            assert "SLAM · 기능 제공" in stage.inner_text()
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 맵핑 세션 활성')")
+            assert "SLAM · 맵핑 세션 활성" in stage.inner_text()
             result = page.evaluate("""() => ({
               overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
               eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
@@ -1290,6 +1299,12 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 assert result["slotOrder"] == ["banner", "sense", "observe", "act"], result
             filename = f"operator-console-navigation-{viewport[0]}x{viewport[1]}.png"
             page.screenshot(path=str(capture_dir / filename), full_page=True)
+            mapping_session["active"] = False
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 맵핑 세션 대기')")
+            page.screenshot(path=str(capture_dir / f"operator-console-mapping-idle-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            mapping_session["readable"] = False
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 세션 확인 불가')")
+            page.screenshot(path=str(capture_dir / f"operator-console-mapping-unknown-{viewport[0]}x{viewport[1]}.png"), full_page=True)
             if viewport[0] == 390:
                 blue_pixels = """() => {
                   const canvas = document.querySelector('.surface-map-canvas');

@@ -58,3 +58,11 @@ CORE는 마지막 `nav_msgs/Path`의 `frame_id`, 수신 때의 `map_id`, 서버 
 - 같은 X: 세션 `evidence/path-provenance/navigation-stage/`에 정상 1366×768·390×844, 경로 지도 ID 불일치 1366×768·390×844, `odom` 경로 390×844 캡처를 둔다. 파란 경로는 정상 근거에서만 보이며, 불일치에서도 로봇 위치 마커는 유지된다.
 - CORE 지도·브리지 41 passed (`logs/path-provenance-core.txt`), 로봇 화면 브라우저·패키지 21 passed (`logs/path-provenance-browser.txt`). 둘 다 `known_failures.py`에서 NEW 여부를 확인한다.
 - 수신 나이는 경로가 만들어진 시각이나 현재 목표에 속한다는 증거가 아니다. 작업 브랜치는 API Ref v1.141 기반이고 현재 공유 main은 v1.142여서 착지 전 API 버전·변경 이력의 재조정이 필요하다. 실제 Nav2 메시지 빈도, 현장 경로 추종·도착 및 G3 판정은 HOLD다.
+
+## 후속: SLAM 맵핑 세션 읽기와 지도 HUD 공간
+
+CORE의 `GET /api/v1/navigation/state`에 기존 `NavigationManager.mapping_active`를 읽기 전용 `mapping_active`로 노출했다. 콘솔은 SLAM capability와 이 세션 값을 분리해 `미제공`·`맵핑 세션 활성`·`맵핑 세션 대기`·`세션 확인 불가`로 표시한다. 구형 응답이나 조회 실패를 대기로 단정하지 않는다. 이 플래그는 CORE가 맵핑 세션을 수락했다는 뜻이며 slam_toolbox 실행, 지도 갱신, 저장 성공을 증명하지 않는다. 지도 위 HUD는 자동 줄바꿈 두 줄로 모아 기존 네 줄보다 지도 가림을 줄였다.
+
+- LOCAL: 실제 FastAPI 정적 자산과 합성 API 응답의 1366×768·390×844 정상/대기/조회 실패 캡처를 X: 세션 `evidence/slam-session-final/navigation-stage/`에 기록하고 두 폭을 육안 확인했다. 캡처는 로봇 readback이 아니다.
+- `test_navigation_readiness.py`와 해당 브라우저 시험 12 passed (`logs/slam-session-tests.txt`), 최종 HUD CSS 캡처 시험 1 passed (`logs/slam-session-browser-final.txt`), 계약·패키지 24 passed (`logs/slam-session-contract.txt`), `known_failures.py` 0 NEW. `impeccable detect --json`은 `[]` (`logs/impeccable-slam-session.json`).
+- 공유 main은 이 브랜치보다 앞서 있고 API Ref 버전이 독립적으로 진행 중이다. 이 브랜치의 v1.143 표기는 착지 전 최신 계약 이력과 양측 합의 확인이 필요하다. 장치 이미지, 실제 SLAM 처리·지도 생성, 전체 G2 상태 매트릭스, G3 운용자 평가는 HOLD다.

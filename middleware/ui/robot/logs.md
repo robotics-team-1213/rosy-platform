@@ -1110,3 +1110,9 @@
 - 변경: 지도 위 계획 경로를 CORE 수신 나이·경로 지도 ID·좌표계가 확인될 때만 그린다. HUD는 마지막 수신 나이를 표시하고 근거가 없거나 다른 지도·좌표계이면 이유를 표시한다. 주행 상태 전환 시 이전 선을 지우고 늦은 HTTP 응답은 무시한다.
 - 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/path-provenance/navigation-stage/`의 두 폭 정상·경로 ID 불일치와 모바일 odom 캡처. CORE 지도·브리지 41 passed, 화면 브라우저·패키지 21 passed.
 - gate 변화: LOCAL 경로 출처·레이아웃 부분 근거. 현재 목표 식별과 실물·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): SLAM 세션 상태와 지도 HUD 밀도
+
+- 변경: 지도 HUD는 capability와 CORE 맵핑 세션을 구분하고 조회 실패를 확인 불가로 남긴다. 상태 네 항목을 자동 줄바꿈으로 배치해 지도 상단 가림을 줄였다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/slam-session-final/navigation-stage/`의 1366×768·390×844 세션 활성/대기/조회 실패 캡처. Chromium 1 passed, 계약·패키지 24 passed, `impeccable detect` `[]`.
+- gate 변화: LOCAL 부분 근거. 장치·전체 G2·G3는 HOLD.

@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.141
+**Version:** v1.143
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -292,7 +292,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/navigation/goal` | Operator | NAV-001 (`{x,y,yaw}` 또는 `{waypoint}`; 선택적 `correlation_id`는 Fleet dispatch 시도 ID와 실행 이벤트를 잇는 추적 메타데이터). 기능 보류 시 모드 전이 전에 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | POST | `/api/v1/navigation/cancel` | Operator | NAV-002 |
 | POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
-| GET | `/api/v1/navigation/state` | Viewer | NAV-004 |
+| GET | `/api/v1/navigation/state` | Viewer | NAV-004. `mapping_active: bool`은 CORE가 수락한 맵핑 세션 상태다. SLAM Toolbox의 실제 실행·지도 갱신 성공을 증명하지 않는다. |
 | GET | `/api/v1/navigation/path` | Viewer | MAP-003. `{poses}`; 경로 메시지를 받은 뒤에는 `map_id`(그때 로봇 지도 ID 또는 null), `frame_id`(`nav_msgs/Path.header.frame_id` 또는 null), `age_s`(CORE 수신 뒤 경과 초, 서버 monotonic 시계)를 함께 반환한다. 최초 수신 전은 `{poses: []}`. 이 응답은 마지막 수신 계획이며 현재 목표와의 동일성은 증명하지 않는다. |
 | GET | `/api/v1/line-follow/perception` | Viewer | 저장된 `paint_source`(threshold / denoise / learned), `camera_lane_mode`, 서명·해시 확인 `model_ready`와 `model_revision`. 별도 `applied_paint_source`는 실제 최신 keeper 프레임의 threshold / denoise / learned / denoise_fallback 또는 null; `applied_source_age_s`는 monotonic 수신 나이(2초 이내), `applied_model_revision`은 실제 사용한 learned mask의 producer revision(없으면 null). stale·malformed·설정 불일치·재시작 전 증거는 null. 운전 모드와 독립이며 물체 검출이나 주행 허가가 아니다. |
 | PUT | `/api/v1/line-follow/perception` | Administrator | `{paint_source: threshold\|denoise\|learned}`만 허용. IDLE·line-follow OFF·보정 비활성, Host Agent가 fresh 정지 및 active mission 부재를 재확인. 기존 기하 보존, learned는 고정 signed model pointer 검증, camera만 재시작·실패 복구. `applied: true`는 설정/서비스 적용이며 live 추론이나 실제 주행 성공이 아니다. |
@@ -2488,6 +2488,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.143 | 2026-10-08 | Additive (uiux/robot-navigation-stage): `GET /api/v1/navigation/state`에 `mapping_active`를 추가해 CORE 맵핑 세션 수락 상태를 읽는다. 실제 SLAM Toolbox 실행 증거는 아니다. 같은 브랜치의 `/navigation/path` 수신 `map_id`·`frame_id`·`age_s`도 명시한다. 주행 권한과 envelope 1.0은 그대로다. 공유 main 착지 전에 버전 번호와 양측 계약 합의를 다시 확인한다. |
 | v1.141 | 2026-10-08 | Additive (D-517 M1a, feat/d517-m1-fleet): one Fleet trip per robot (`TRIP_BUSY` per robot, `GET /api/fleet/trips` `open`), `POST /trip` `repeat` laps with per-lap start checks and `hold.reason: lap`, D-513 start places part-way along a lane as goals and vias, `TRIP_LOOP_FULL`, read-only `GET /api/fleet/traffic` block table; a junction instruction into a refused block is held back and that wait is not a stall. No authority is sent; Robot API, CORE commands and envelope 1.0 unchanged |
 | v1.140 | 2026-10-08 | Additive (D-512 개정 1 표시 쪽, feat/fleet-map-trail): Fleet `GET /api/fleet/tethers`, named operator `POST`·`DELETE /api/fleet/robots/{robot_id}/tether`. 지도 궤적은 기존 상태 pose(map 프레임만)를 브라우저가 모은다. 로봇 API·envelope 1.0·주행 권한 변경 없음 |
 | v1.139 | 2026-10-08 | Behaviour (D-507 2 개정, 2026-10-08 사용자 결정, fix/d507-travelled-distance-window): Fleet trip 루프는 기대 창(`expect_in_m`·`expect_tol_m`) 없는 `left`·`right` 를 보내지 않고 trip 을 `stopped` `junction_no_window` 로 끝낸다(`detail.junction_place`·`junction_action`·`junction_fields`). `straight`·`stop` 은 그대로. 같은 결정 (1): `POST /api/v1/line-follow/junction` 의 기대 창은 주행 거리로 비교한다. `expect_in_m` 은 차로를 따른 거리이고 CORE 는 받은 뒤 odom 경로 길이 + `junction_ahead_m` 을 `expect_in_m − pivot_past_line_m` 과 비교한다(곧은 접근에서는 예전 값과 같다). Fleet 은 15° 굽이 규칙을 없애고 `expect_in_m` = 차로 polyline 거리, 선 찾기는 장소의 차로 방향, `expect_tol_m` 의 odom 오차 항에 갈 거리를 더하고 광선 옆 거리 항을 뺀다. 필드 이름·범위는 그대로. envelope 1.0 변경 없음 |

@@ -712,3 +712,9 @@
 - 변경: `GET /api/v1/navigation/path`가 마지막 경로의 점과 선택 map ID·frame ID·서버 수신 나이를 응답한다. 최초 수신 전 `{poses: []}`은 그대로이며 현재 목표와의 동일성은 주장하지 않는다.
 - 증거: gateway 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
 - gate 변화: LOCAL 응답 근거 추가. 현재 목표 식별과 실물 readback은 HOLD.
+
+## 2026-10-08 · uncommitted · feat(api): SLAM 맵핑 세션 읽기
+
+- 변경: `GET /api/v1/navigation/state`에 CORE가 보유한 `mapping_active`를 읽기 전용으로 추가한다. 이는 수락된 세션 플래그이지 slam_toolbox 실행 증명이 아니다.
+- 증거: gateway readiness/API 시험과 로봇 브라우저 시험 12 passed, 계약·패키지 24 passed, [지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 세션 readback 근거 추가. 실제 SLAM 지도 갱신과 계약 착지 합의는 HOLD.
