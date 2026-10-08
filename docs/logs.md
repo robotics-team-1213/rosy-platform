@@ -7221,3 +7221,9 @@ osy-d395-s1d\`.
 - 변경: 개발 PC의 pytest 자동 fallback을 중단하고, 모델/AI PC 호스트 시험, 현장 PC Fleet·Cam, Pinky DEVICE/FIELD, GitHub full CI의 증거를 분리하는 결정 D-529를 기록했다.
 - 증거: AI PC에서 기체 ID/API 관련 호스트 시험 102개 통과; 현장 Fleet 등록 두 행의 serial_number·device_uid는 아직 비어 있다.
 - gate 변화: 문서 결정만. 원격 실행기 착지·푸시·ARM64 payload·두 로봇 배포·현장 수용은 별도 검증한다.
+
+## 2026-10-09 · uncommitted · 10/6·10/7 주행영역 후보의 몸체 경로 재대조
+
+- 변경: 기존 정면 LiDAR 0.30 m 근접 후보를 제품 ody_path_gap의 직진 몸체 경로에 투영한 [검증 기록](validation/drivable-body-path-audit-2026-10-09/result.md)을 추가했다. 원본은 X:에 두고 코드·해시·집계만 공개 저장소에 기록했다.
+- 증거: 원본 3,336프레임 중 스캔 사용 가능 2,621프레임. 가정한 0.08 m/s 직진 정지거리 0.0384 m 이하는 0건. 10/7 둘째 영상 80번의 경로 거리 0.05097 m는 정지 기준과 0.01257 m 차이여서 안전 여유를 확정하지 못한다.
+- gate 변화: 없음. 실제 회전 경로·mount 실측·사람 정답·실물 주행 수용이 없으므로 주행 허용 HOLD.
