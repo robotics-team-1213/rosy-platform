@@ -12,7 +12,9 @@ branch and the rule is inert until then), runs the selected tests, compares them
 ``test/known_failures.py``, and fast-forwards main only if main is still the
 commit that was tested. A failing step stops the tool: landing is never chained
 after a failure. Any other conflict aborts the merge and lists the paths.
-Never pushes, stashes, resets or cleans. Standard library only.
+pytest runs through ``tools/remote/remote_pytest.py`` (model PC, then AI PC, here
+only when neither answers or with ``--browser``); lint, node and the
+known_failures comparison stay here. Never pushes, stashes, resets or cleans. Standard library only.
 """
 
 from __future__ import annotations
@@ -27,6 +29,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path, PurePosixPath
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
+import remote_pytest  # noqa: E402  (tools/remote: pytest on the model PC / AI PC)
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
@@ -355,10 +360,15 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     env = dict(ENV)
     if args.browser:
         env.update(ROSY_RUN_BROWSER_TESTS="1", ROSY_BROWSER_TESTS="1")
-    for i, inv in enumerate(invocations, 1):
-        log = logdir / f"run-{round_no}-{i}.txt"
-        code, _ = step(wt, [python, "-m", "pytest", *inv, "-q", "-rfE", "-p", "no:cacheprovider"], log,
-                       "pytest", env, allow_fail=True)
+    logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(invocations) + 1)]
+    if args.browser:
+        # Playwright/Chromium are not on the test hosts, so browser runs stay on this machine.
+        codes = [step(wt, [python, "-m", "pytest", *inv, *remote_pytest.PYTEST_TAIL], log, "pytest", env,
+                      allow_fail=True)[0] for inv, log in zip(invocations, logs)]
+    else:
+        # HEAD is the candidate (merge commit included); the runner ships it to the model/AI PC.
+        codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
+    for inv, log, code in zip(invocations, logs, codes):
         # 2/3/4 (interrupted, internal error, usage/path error) and 5 (nothing collected)
         # print no FAILED lines, so known_failures would wave them through.
         if code not in (0, 1):
