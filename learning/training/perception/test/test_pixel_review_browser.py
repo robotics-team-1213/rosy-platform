@@ -275,6 +275,9 @@ def test_zoom_pan_never_paints_and_brush_uses_zoomed_coordinates(browser_workspa
     object_canvas = page.locator('#canvas').bounding_box()
     object_decision = page.locator('.label-inspector').bounding_box()
     open_pixels(page, store, expect)
+    page.locator('#pixel-class').select_option('')
+    expect(page.locator('#pixel-tool-hint')).to_contain_text('픽셀 클래스를 선택')
+    expect(page.locator('#pixel-brush-tool')).to_be_disabled()
     pixel_tools = page.locator('.pixel-quick-tools').bounding_box()
     pixel_canvas = page.locator('#pixel-canvas').bounding_box()
     pixel_decision = page.locator('.pixel-review-column').bounding_box()
@@ -282,6 +285,7 @@ def test_zoom_pan_never_paints_and_brush_uses_zoomed_coordinates(browser_workspa
     assert pixel_tools['x'] < pixel_canvas['x'] < pixel_decision['x']
     assert abs(object_tools['x']-pixel_tools['x']) <= 1
     page.locator('#pixel-class').select_option('4')
+    expect(page.locator('#pixel-tool-hint')).to_be_hidden()
     page.locator('#pixel-brush-tool').click()
     stage = page.locator('.pixel-stage')
     canvas = page.locator('#pixel-canvas')

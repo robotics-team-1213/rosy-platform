@@ -129,6 +129,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
 .pixel-quick-tools .review-viewport-controls { display: flex; flex-wrap: wrap; margin: 0; }
 .pixel-quick-tools .review-viewport-controls ui-button span { display: none; }
 .pixel-quick-tools .review-zoom-level { min-width: 2.5rem; }
+#pixel-tool-hint { margin: 0; font-size: var(--text-label); }
 .pixel-quick-classes { max-height: 10rem; overflow-y: auto; }
 .review-view-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-2); font-size: var(--text-label); }
 .pixel-layout .review-view-bar .ui-check { margin: 0; }
