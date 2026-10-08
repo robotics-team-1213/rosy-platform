@@ -19,7 +19,7 @@ from dataclasses import replace
 
 from core_common.protocol.schemas import LineJunctionStatus
 from core_features.line_follow.recovery.junction.approach import (
-    MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
+    CORNER_TURNS, MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
     JunctionApproachMixin, check_expect)
 from core_features.line_follow.recovery.junction.bend import JunctionBendMixin, check_bend
 
@@ -126,7 +126,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                           if j is not None and j['state'] in MANEUVER else None)
         self._cross_band = None  # D-507 6: a mode change or stop ends any crossing
 
-    def observe_junction(self, reason, received_at, corner_turning=False, ahead_m=None, ahead_v=None):
+    def observe_junction(self, reason, received_at, corner_turning=False, ahead_m=None, ahead_v=None,
+                         strategy=None):
         """One fresh line/keep_debug frame: a junction reason is a sighting (D-507 5: with its
         junction_ahead_m, if any); corner_turning is the keep-mode evidence behind
         supports_junction_turn."""
@@ -145,6 +146,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 self._junction_ahead = (float(ahead_m) if type(ahead_m) in (int, float)
                                         and 0 <= ahead_m <= MAX_AHEAD_M else None, reason)
             self._keep_corner_at = float(received_at) if corner_turning is True else None
+            if strategy in CORNER_TURNS:
+                self._corner_turn_at = float(received_at)  # latched CORNER_LATCH_S (review)
             # D-507 2: perception announces junction_ahead_m support on every keep_debug frame.
             self._junction_ahead_v_at = (float(received_at) if type(ahead_v) is int and ahead_v >= 1
                                          else None)
@@ -338,12 +341,19 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 self._track_retreat(j['window'])  # D-507 2: see every odom sample since receipt
             if now > j['expires_at']:
                 self._bridge_hint = None
+                if j.get('corner_held') or self._corner_at_expected_line(j, now):
+                    # Fail closed: expiry never releases the robot into the keeper's corner; the
+                    # expired instruction holds until a fresh one replaces it (or a mode change).
+                    j['corner_held'] = True
+                    return self._junction_hold('junction_corner_hold', decision)
                 if not seen:
                     self._junction = None
                     return decision
                 j = self._junction = dict(action=None, place_id=None, state='waiting')
             elif not seen:
                 j['outside'] = False
+                if self._corner_at_expected_line(j, now):  # lap SIM A: hold, never the keeper's corner
+                    return self._junction_hold('junction_corner_hold', decision)
                 return decision
             else:
                 j['outside'] = not self._in_window(j, now)

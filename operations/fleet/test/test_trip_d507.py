@@ -431,6 +431,33 @@ def test_waiting_within_the_arm_distance_is_answered_as_before():
     assert runner.running() is not None and ports.sent[-1][0] == "left"
 
 
+def _core_reason(ports, line_reason):
+    plain = ports.junction_state
+
+    async def junction_state(robot_id):
+        state = await plain(robot_id)
+        return None if state is None else {**state, "line_reason": line_reason}
+    ports.junction_state = junction_state
+
+
+def test_corner_hold_on_our_instruction_stops_the_trip_at_once():
+    """Lap SIM A liveness: CORE holds short of the keeper's corner; no 20 s stall."""
+    runner, ports = _running_at(0.5)
+    assert ports.sent[-1][0] == "left"                     # our instruction is armed
+    _core_reason(ports, "junction_corner_hold")
+    _ticks(runner, ports, 1)
+    view = runner.view("p1")
+    assert (view["state"], view["reason"]) == ("stopped", "junction_corner_hold")
+    assert view["detail"]["line_reason"] == "junction_corner_hold" and ports.held == ["rosy_60"]
+
+
+def test_corner_hold_before_our_instruction_does_not_end_the_trip():
+    runner, ports = _running_at(0.1)                      # nothing sent yet
+    _core_reason(ports, "junction_corner_hold")
+    _ticks(runner, ports, 1)
+    assert runner.running() is not None
+
+
 def test_the_http_port_carries_the_line_follow_reason():
     class Client:
         async def state(self):
