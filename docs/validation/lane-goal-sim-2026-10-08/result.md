@@ -1,6 +1,6 @@
 # 차선 추종 주행 목표: B9 굽이 후보와 현재 CORE의 결합 재생
 
-2026-10-08, 모델 PC의 독립 `~/rosy_bend_window_ws`에서 시행했다. 소스는 `feat/bend-window-sim`의 `3a65869475e81f1bdf31442e2608ec919d296f04`이다. 이 브랜치는 현재 main의 CORE 기대 창 가드와 미착지 B9 keeper를 SIM용으로만 합쳤다. B9의 `bend_expected`는 장치 기본값 `false`이며, 이 실험에서만 `sitecustomize.py`로 켰다. ROS domain 81, Gazebo partition `rosy_bws`, CORE port 8101을 썼고 종료 뒤 이 partition의 프로세스를 멈췄다.
+2026-10-08, 모델 PC의 독립 `~/rosy_bend_window_ws`에서 시행했다. 소스는 `feat/bend-window-sim`의 `3a6586947`이다. 이 브랜치는 현재 main의 CORE 기대 창 가드와 미착지 B9 keeper를 SIM용으로만 합쳤다. B9의 `bend_expected`는 장치 기본값 `false`이며, 이 실험에서만 `sitecustomize.py`로 켰다. ROS domain 81, Gazebo partition `rosy_bws`, CORE port 8101을 썼고 종료 뒤 이 partition의 프로세스를 멈췄다.
 
 | 재생 | 결과 | 해석 |
 |---|---|---|
