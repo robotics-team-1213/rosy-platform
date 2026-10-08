@@ -271,7 +271,16 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
 
 def test_zoom_pan_never_paints_and_brush_uses_zoomed_coordinates(browser_workspace):
     page, store, expect = browser_workspace
+    object_tools = page.locator('.review-editor-tools').bounding_box()
+    object_canvas = page.locator('#canvas').bounding_box()
+    object_decision = page.locator('.label-inspector').bounding_box()
     open_pixels(page, store, expect)
+    pixel_tools = page.locator('.pixel-quick-tools').bounding_box()
+    pixel_canvas = page.locator('#pixel-canvas').bounding_box()
+    pixel_decision = page.locator('.pixel-review-column').bounding_box()
+    assert object_tools['x'] < object_canvas['x'] < object_decision['x']
+    assert pixel_tools['x'] < pixel_canvas['x'] < pixel_decision['x']
+    assert abs(object_tools['x']-pixel_tools['x']) <= 1
     page.locator('#pixel-class').select_option('4')
     page.locator('#pixel-brush-tool').click()
     stage = page.locator('.pixel-stage')

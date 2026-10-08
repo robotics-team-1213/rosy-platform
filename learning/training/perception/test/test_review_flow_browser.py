@@ -1032,11 +1032,8 @@ def test_object_ribbon_class_click_saves_selected_box_only(browser_workspace):
     expect(chip).to_be_disabled()
     expect(page.locator('#object-quick-classes .ui-icon')).to_have_count(
         page.locator('#object-quick-classes button').count())
-    assert page.locator('.review-tool-ribbon').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y']
-    assert page.locator('.review-tool-ribbon ui-actions').bounding_box()['height'] < 60
-    tools = page.locator('.review-tool-ribbon ui-actions').bounding_box()
-    reload = page.locator('#reload').bounding_box()
-    assert reload['x'] + reload['width'] <= tools['x'] + tools['width']
+    assert page.locator('.review-editor-tools').bounding_box()['x'] < page.locator('#canvas').bounding_box()['x']
+    assert page.locator('.review-editor-tools').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y'] + 1
     expect(page.locator('#view-original .ui-icon')).to_have_count(1)
     expect(page.locator('#view-detail .ui-icon')).to_have_count(1)
     page.get_by_role('button', name='박스 1 선택', exact=True).click()
