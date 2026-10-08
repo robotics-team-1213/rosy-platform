@@ -367,6 +367,8 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
                       allow_fail=True)[0] for inv, log in zip(invocations, logs)]
     else:
         # HEAD is the candidate (merge commit included); the runner ships it to the model/AI PC.
+        # Unlike pre-push (--require-host), no reachable host falls back to a local run of this
+        # same merged worktree with a warning: land tests what it lands either way.
         codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
     for inv, log, code in zip(invocations, logs, codes):
         # 2/3/4 (interrupted, internal error, usage/path error) and 5 (nothing collected)

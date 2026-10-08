@@ -7210,6 +7210,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. LiDAR 반환은 벽 화소가 아니며, 10/7 첫 영상의 경계 실패는 근접 조건 없이도 발생했다. 주행 수용 HOLD.
 
 
+## 2026-10-08 · uncommitted · D-512 개정 2 램프 식별과 정책 off 알림
+
+- 변경: `run.py --tether-check`가 램프 식별(`POST /host/lamp/identify`)을 보내고 6 s 동안 머리 위 프레임을 받아, 깜빡임 덩어리가 그림의 로봇 점에서 몸 반경(회전 반경 × 1.5, 보정 축척의 px) 안에 있고 다른 곳에 센 덩어리가 없을 때만 확인을 끝낸다. 식별 없음·색 없음·약함·다른 곳·애매함은 거부, 429는 한 번 기다려 다시 요청한다. 증거는 `tether.identity`. 계획 `stop.ok_events`(`plan_rules.OK_EVENTS`, 지금은 `safety.policy_off`만)로 D-400 정책 off 알림이 중단하지 않는다. `safety.*`의 다른 이벤트는 그대로 중단이다.
+- 증거: 2026-10-08 9dfk 실행에서 다른 로봇을 9dfk로 고른 일과 램프 깜빡임 프레임(진짜 자리만 바뀜). 그 프레임에 새 판정을 대 보면 진짜 자리는 2 px로 통과, 오른쪽 아래 로봇은 거부. 모델 PC에서 `python -m pytest tools/device_test/test tools/capture/test -q`(가짜 전송). 로봇은 움직이지 않았다.
+- gate 변화: 없음.
+
 ## 2026-10-09 · uncommitted · D-528 과노출 후보와 정답 가능성 분리
 
 - 변경: 과노출 비율은 검수 우선순위만 정하고 자동 제외를 하지 않도록 `review_quality.py`의 `--apply`를 제거했다. D-528에 사람의 정답 가능성 판단, 255 대기와 학습 승인 경계를 기록했다. 수치만으로 제외했던 v13 사진 9~23의 15장을 검수 API로 재검수 대기에 되돌렸다.
@@ -7328,3 +7334,9 @@ osy-d395-s1d\`.
 - 변경: 전화와 데스크톱 현장 지도에서 지도→경로 미리보기→운행→초안 편집 순서를 적용하고 선택형 평면 영상 도구를 접었다.
 - 증거: `validation/uiux-fleet-site-map-task-order-2026-10-09/result.md`. 320px 전후·390px·1440px 캡처, 브라우저 7 passed / NEW 0.
 - gate 변화: 없음. 실제 로봇 운행·SLAM, 설치본·DEVICE/FIELD와 전체 D-153 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · docs: GitHub 첫 화면에 인지·월드·판단 경계를 둔다
+
+- 변경: README 인지와 판단을 층·자리·지금 표로 줄이고, 아키텍처 색인 11·12행과 11·12장에 2026-10-09 경계만 남겼다. CONCEPTS에 Perception·World state·Decision candidate 용어를 더했다.
+- 증거: 워크트리 docs/github-glance. pytest test/test_readme_agent_start.py test/test_native_runtime_docs.py test/test_pi_wifi_deployment.py::test_wifi_runbook_is_linked_from_runtime_guide test/architecture/test_document_placement.py 17 passed. python tools/harness/rosy_harness.py lint 0 errors, 23 warnings(기존 last_verified). 새 상대 링크는 파일로 확인했다. generate가 docs/index.md를 다시 썼고, 그 뒤 lint도 0 errors, 23 warnings였다.
+- gate 변화: 없음. 문서 정합이며 구현·배포·장치 수용은 그대로다.
