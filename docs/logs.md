@@ -7267,3 +7267,13 @@ osy-d395-s1d\`.
 - 증거: 모델 PC pytest gateway·services·device_test 전체에서 plan 규칙 추가 뒤 device_test 129 passed. 새 실패는 plan 규칙을 넣기 전의 overlay 키 거절뿐이었고 그 뒤 0이다. SIM은 lap SIM 4.
 - 검토: 독립 code-reviewer(opus) 2026-10-09 1차 REQUEST CHANGES → 고친 뒤 APPROVE WITH NOTES. 열린 점: 계획 밖 로봇 overlay가 바닥을 선언하면 다음 payload부터 호 능력이 켜진다(개정 「남는 위험」, 8kcn·9dfk overlay는 이 세션이 읽지 않았다).
 - gate 변화: 없음. lap SIM 4는 합격선(모든 호 |Δr| ≤ 0.05 m)을 넘지 못했다(lap 1/12씩 0.051–0.056 m, NE 4/4 0.049–0.052 m). 장치 사용은 SIM 합격, DEVICE 체크리스트, 사용자 승인 뒤다.
+
+## 2026-10-09 · uncommitted · docs(validation): lap SIM 4 — ring 호 주행 기본 켬, 모델 PC
+- 변경: `validation/lane-trip-lap-sim4-2026-10-09/`에 결과와 하네스(`ring4_run.sh`·`ring4_batch.sh`·`ring4_arc.py`), 호별 참값 Δr·구간·Fleet 송신 기록을 두었다. 원시 기록은 `X:\DevTemp\lap-sim4\lap4_runs_full.tgz`다.
+- 증거: 모델 PC Gazebo(도메인 93, `rosy_ring4`, 포트 8588/8589)에서 출하 기본 겹으로 돌렸다. 비례 보정 12 lap은 12/12 완료다. 착지한 비례+적분 12 lap은 11/12 완료이고, 나머지 1회는 ring 앞 서→남 모서리의 `lane_return_fleet_required`다. NE 진입은 4/4와 4/4다. IR 보정, `lane_arc_edge`, `near_stop`은 모두 0이다. ring 호 최대 |Δr|은 lap 0.014–0.056 m이고, 각 묶음에서 1회가 0.05 m를 넘었다. NE `ring_n`은 −0.049…−0.052 m(안쪽)다.
+- gate 변화: 없음. D-520 개정 SIM 합격선(모든 호 |Δr| ≤ 0.05 m)을 넘지 못해 장치 조건 (1)은 열리지 않는다. 남은 원인은 원의 기준 방향(회전 목표 yaw)이 참값 접선과 다른 것이다(SW −1…−7°, NE +14–16°). 카메라 원 맞춤(단계 2)이나 지도 자세 방향이 필요하다.
+
+## 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 표시 LOCAL 검증
+- 변경: `validation/uiux-robot-slam-truth-2026-10-09/result.md`에 CORE 맵핑 세션 수락과 실제 SLAM 실행의 증거 경계를 기록했다. Dashboard 설정 카드가 불필요하게 늘어나지 않도록 고친 모바일·데스크톱 화면을 함께 기록했다.
+- 증거: Console 320·390·1366px와 Dashboard 390·1366px 캡처, 관련 브라우저 3 passed / NEW 0, 이미지 SHA-256.
+- gate 변화: 없음. 설치본·SLAM Toolbox 실행·지도 갱신·DEVICE/FIELD·전체 G2/G3는 HOLD.

@@ -86,7 +86,7 @@ export function mount(root, ctx) {
         : state?.localization?.state === "UNKNOWN" ? "위치 미확인" : "상태 정보 없음";
     setText(locationStage, `위치 추정 · ${location}`);
     setText(slamStage, `SLAM · ${capabilities?.slam === false ? "미제공" : capabilities?.slam !== true ? "기능 확인 불가"
-      : mappingActive === true ? "맵핑 세션 활성" : mappingActive === false ? "맵핑 세션 대기" : "세션 확인 불가"}`);
+      : mappingActive === true ? "세션 수락 · 지도 갱신 미확인" : mappingActive === false ? "세션 없음" : "세션 확인 불가"}`);
   }
   const baseMapAction = () => (ctx.role === "operator" || ctx.role === "administrator")
     && capabilities?.navigation?.goal_navigation === true && commissioning?.runtime_mode === "hardware";
