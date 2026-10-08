@@ -257,7 +257,14 @@ def update(store, index, body, conflict):
         action = body.get('action')
         complete = background = 0
         status = 'pending'
-        if action in ('paint', 'fill', 'flood', 'sample'):
+        if action == 'fill_unknown':
+            backgrounds = [c['index'] for c in binding['classes'] if c['role'] == 'background']
+            if len(backgrounds) != 1:
+                raise ValueError('exactly one background class required')
+            if not np.any(image == 255):
+                raise ValueError('no unknown pixels remain')
+            image[image == 255] = backgrounds[0]
+        elif action in ('paint', 'fill', 'flood', 'sample'):
             value = body.get('label')
             if type(value) is not int or value not in allowed:
                 raise ValueError('known mask index required')
@@ -300,8 +307,8 @@ def update(store, index, body, conflict):
             last = db.execute('SELECT action, review FROM pixel_events WHERE frame=? ORDER BY id DESC LIMIT 1', (index,)).fetchone()
             target = None
             if last and review['status'] == 'pending' and json.loads(last[1]).get('saved_version') == review['version']:
-                want = review['version'] if last[0] in ('paint', 'fill', 'flood', 'sample', 'apply_draft') else json.loads(last[1]).get('restored_version')
-                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','flood','sample','apply_draft')", (index, want)).fetchone()
+                want = review['version'] if last[0] in ('paint', 'fill', 'fill_unknown', 'flood', 'sample', 'apply_draft') else json.loads(last[1]).get('restored_version')
+                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','fill_unknown','flood','sample','apply_draft')", (index, want)).fetchone()
             if not target:
                 raise ValueError('되돌릴 픽셀 수정이 없습니다.')
             prior = json.loads(target[0])
