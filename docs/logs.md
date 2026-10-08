@@ -7113,6 +7113,12 @@ osy-d395-s1d\`.
 - 증거: 관측 125/125 수신; frame 191 visible, 교란한 192 invisible(confidence 0), 원래 자세의 193 visible. 종료 뒤 전용 노드 없음.
 - gate 변화: 없음. 합성 위치 오차에 대한 관측 노드 반례이며 CORE·폐루프·실물 수용은 미검증.
 
+## 2026-10-08 · uncommitted · 정적 차선 경로 끝 정지 ROS-SIM
+
+- 변경: `route_a`가 마지막 지도 조각의 끝 20 mm 앞에서 관측 후보를 끊도록 하고, 남쪽 출발 `west:r → ring_s:f` 폐루프 두 실행을 `docs/validation/lane-route-terminal-ros-sim-2026-10-08/`에 기록했다.
+- 증거: 기존 실행은 경로 끝점에서 72.5 mm 떨어져 LOST; 수정 후 실행은 18.1 mm 앞에서 HOLD 후 LOST. `/cmd_vel` publisher는 CORE 하나. 호스트 관련 시험 103 passed, 10 skipped, 신규 실패 0.
+- gate 변화: 끝점 초과 방지만 검증. 굽이 최대 지도 중심선 편차 47.8 mm·교차로 완료 0건이므로 전체 차선 추종, 사람 승인 R0, 실물 수용은 HOLD.
+
 ## 2026-10-08 · uncommitted · fix(fleet): 굽이 지시가 정지·교통 대기를 따른다
 
 - 변경: `trip_runner._step_bend`가 trip hold, D-517 교통 대기(`traffic.holds`), `live.open`, CORE `executing`(교체 가능한 우리 stop 제외)일 때 `bend`를 보내지 않는다. 정지 중에는 곳(place)의 stop만 나간다. 두 단계의 송신·응답과 슬롯 검사를 `_send`, `_core_busy`로 합쳤다.
