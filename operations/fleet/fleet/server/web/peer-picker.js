@@ -1,5 +1,5 @@
 // D-452: catalogue metadata selects a known owner, never an advertised URL.
-import {createPollGate} from './poll-gate.js';
+import {createPollGate} from '/console/assets/poll-gate.js';
 export const PEER_ROLES = {robot: '로봇', fleet: '사이트 관제', 'overhead-camera': '관제 카메라',
   dock: '도킹 장치', signal: '신호기', 'model-host': '모델 호스트', pilot: 'Pilot 앱', cam: 'Cam 앱'};
 

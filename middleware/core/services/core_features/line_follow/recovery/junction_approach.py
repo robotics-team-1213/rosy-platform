@@ -7,6 +7,9 @@ pose at the sighting + line/keep_debug junction_ahead_m) lies within expect_tol_
 the stop confirm, a turn with pivot_past_line_m drives straight on the entry heading to the
 latest sighting's cross-line point plus pivot_past_line_m, through the same tick, gate and
 abort rules as the D-495 advance, then stop-confirms and turns. Mixed into JunctionMixin.
+pivot_past_line_m is signed (2026-10-08): negative when the measured line is past the place
+(the far edge at a roundabout entry or a T). A goal at or behind the robot is no approach: it
+turns where it stands, never reverses.
 """
 from __future__ import annotations
 
@@ -36,8 +39,8 @@ def check_expect(expect, action, turn_deg):
             0 < e_in <= MAX_EXPECT_IN_M and 0 < tol <= MAX_EXPECT_TOL_M)):
         raise ValueError('expect_in_m (0, 2] and expect_tol_m (0, 0.30] come together')
     if pivot is not None and (action == 'stop' or (action != 'straight' and turn_deg is None)
-                              or not 0 <= pivot <= MAX_PIVOT_PAST_LINE_M):
-        raise ValueError('pivot_past_line_m belongs to straight or a turn and must be in [0, 0.30]')
+                              or not -MAX_PIVOT_PAST_LINE_M <= pivot <= MAX_PIVOT_PAST_LINE_M):
+        raise ValueError('pivot_past_line_m belongs to straight or a turn and must be in [-0.30, 0.30]')
 
 
 #: ponytail: 260919 transverse tape width; must become a per-site calibration value.
@@ -51,11 +54,11 @@ def band_coords(row, line, yaw):
 
 
 def cross_line_band(row, line, yaw, width, error, half_width):
-    """D-507 6 (2026-10-08): is the IR row inside [line - error, line + width + error] along yaw
-    and within half_width + error across it? row and line are odom (x, y); line is the measured
-    near edge of the cross line on the robot's track."""
+    """D-507 6 (2026-10-08): is the IR row inside [line - width/2 - error, line + width/2 + error]
+    along yaw and within half_width + error across it? row and line are odom (x, y); line is the
+    measured tape centre on the robot's track (keeper _across_path, Fleet's map edge)."""
     along, lateral = band_coords(row, line, yaw)
-    return -error <= along <= width+error and abs(lateral) <= half_width+error
+    return abs(along) <= width/2+error and abs(lateral) <= half_width+error
 
 
 class JunctionApproachMixin:
@@ -95,10 +98,10 @@ class JunctionApproachMixin:
             self._return_evidence.epoch, pose.frame) else None
 
     def _in_window(self, j, now):
-        """D-507 3: no window means today's behaviour; an unmeasurable sighting is outside."""
+        """D-507 3: legacy no-window sightings pass; map-backed ones need a window."""
         w, a = j.get('window'), self._anchor_now(now)
         if w is None:
-            return True
+            return j.get('map_id') is None
         if a is None or a['key'] != w['key']:
             return False
         pivot = 0. if a['reason'] == 'junction_fork' else (j.get('pivot') or 0.)
@@ -106,12 +109,12 @@ class JunctionApproachMixin:
         return math.dist(_point(a['pose'], a['ahead'], a['pose'].yaw), expected) <= w['tol']
 
     def _set_band(self, kind, yaw, now, half_width=None):
-        """half_width: the instruction's pivot_past_line_m (Fleet's lane width / 2), else the
-        D-491 corridor half-width."""
+        """half_width: a positive pivot_past_line_m (Fleet's lane width / 2), else the D-491
+        corridor half-width (a negative pivot is a far-edge offset, not a width)."""
         a = self._anchor_now(now)
         self._cross_band = None if a is None else dict(
             kind=kind, key=a['key'], yaw=a['pose'].yaw if yaw is None else yaw, ahead=a['ahead'],
-            start=(a['pose'].x, a['pose'].y), half=half_width or CORRIDOR_HALF_M,
+            start=(a['pose'].x, a['pose'].y), half=half_width if (half_width or 0.) > 0 else CORRIDOR_HALF_M,
             line=_point(a['pose'], a['ahead'], a['pose'].yaw))
 
     def _centre_on_cross_line(self, now):
@@ -127,11 +130,11 @@ class JunctionApproachMixin:
             return False
         # The band's own window: from the anchor until the row leaves the far edge. Odom error
         # counts only over that travel, so it cannot grow without bound.
-        travel, window = math.dist((pose.x, pose.y), b['start']), b['ahead']+CROSS_LINE_TAPE_M
+        travel, window = math.dist((pose.x, pose.y), b['start']), b['ahead']+CROSS_LINE_TAPE_M/2
         error = (c.crosswalk_range_error_fraction*b['ahead']
                  + c.crosswalk_odom_error_fraction*min(travel, window))
         row = _point(pose, c.ir_row_x_m, pose.yaw)
-        if (band_coords(row, b['line'], b['yaw'])[0] > CROSS_LINE_TAPE_M+error
+        if (band_coords(row, b['line'], b['yaw'])[0] > CROSS_LINE_TAPE_M/2+error
                 or travel > window+error):
             self._cross_band = None  # past the line: the band is spent
             return False

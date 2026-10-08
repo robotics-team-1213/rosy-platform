@@ -335,3 +335,9 @@
 - 변경: `display_rotation_deg` 허용을 되돌린다. 관제가 보정에서 회전을 계산하므로 설치 키가 필요 없다.
 - 증거: Vision 설정·예시 시험 통과.
 - gate 변화: SOURCE/LOCAL만.
+
+## 2026-10-08 · uncommitted · feat(vision): D-472 LED 점멸 검출과 Fleet 판정
+- 변경: 순수 검출기 `track/led_identity.py`(blob 둘레 고리의 HSV 색 비율, 프레임 간 blob 연결, 켬/끔/켬 시간). 한 사슬만 맞고 창 전체 프레임·신선도·revision 하나일 때만 `matched`, 아니면 `ambiguous`(none·multiple·frames_missing·stale·calibration_changed)와 근거 숫자. 추적 워커가 Fleet `identity_challenge` 창 동안 고리를 재고 창이 끝나면 판정 하나를 `POST /api/fleet/detections/identity`로 보낸다(숫자만, 영상 없음)
+- 증거: 합성 프레임 시험(일치, 두 blob, 가림, 프레임 누락, 다른 색, 설정 임계) 6건과 워커 1건. 임계값은 잠정, ceiling_north 실측 전
+- gate 변화: 없음. FIELD 실측(LED 가시성·색 분리·시각 오차) 미실시
+- 결정: D-472 addendum 6항 측정 먼저

@@ -1,7 +1,8 @@
-"""Fleet console documents import only their own modules.
+"""Fleet console documents reach only their own modules and shared reads.
 
 D-410 splits operate and install. D-450 keeps Cell on `/console/cell`.
-An entry that imports another document's module fails this test.
+D-518 adds the site-map document and names the shared-read modules.
+An entry that reaches another document's module fails this test.
 """
 
 import re
@@ -12,8 +13,19 @@ WEB = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
 
 _FROM = re.compile(r"""\bfrom\s+['"]([^'"]+)['"]""")
 _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")
+_ASSET = "/console/assets/"
 
-ALLOWED = {
+SHARED = {
+    "address-drift.js",
+    "authorization.js",
+    "poll-gate.js",
+    "development-auth.js",
+    "map-fit.js",
+    "vision-view.js",
+    "field-warp.js",
+}
+
+OWN = {
     "console.js": {
         "connection-view.js",
         "formation.js",
@@ -22,51 +34,80 @@ ALLOWED = {
         "line-stuck.js",
         "signals.js",
         "tracking-view.js",
+        "tracking-layer.js",
         "start-point-view.js",
-        "vision-view.js",
-        "authorization.js",
-        "address-drift.js",
+        "start-point-layer.js",
         "site-path.js",
-        "poll-gate.js",
+        "site-layer.js",
         "confirmed-action.js",
-        "/common/fleet-client.js",
-        "/common/ui.js",
-        "/common/scope.js",
+        "camera-warp.js",
+        "motion-readiness.js",
+        "link-tag.js",
+        "localization-badge.js",
+        "power-health-view.js",
+        "state-age.js",
     },
     "install.js": {
-        "authorization.js",
         "enrollment.js",
         "camera-pairing.js",
         "camera-peer.js",
-        "vision-view.js",
         "field-view.js",
+        "field-layers.js",
         "map-fit-view.js",
-        "poll-gate.js",
         "peer-picker.js",
-        "address-drift.js",
-        "/common/fleet-client.js",
-        "/common/scope.js",
-        "/common/task-chooser.js",
-        "/common/ui.js",
     },
     "cell.js": {
-        "/common/fleet-client.js",
-        "/common/ui.js",
-        "/console/assets/cell-document-editor.js",
+        "cell-document-editor.js",
+    },
+    "site-map.js": {
+        "site-map-model.js",
+        "site-map-teach.js",
     },
 }
 
 
+def _local(spec):
+    if spec.startswith("./"):
+        return spec[2:]
+    if spec.startswith(_ASSET):
+        return spec[len(_ASSET):]
+    return None
+
+
+def _path(name):
+    for folder in ("shared", "cell"):
+        path = WEB / folder / name
+        if path.is_file():
+            return path
+    return WEB / name
+
+
 def _imports(name):
-    text = (WEB / name).read_text(encoding="utf-8")
-    assert not _DYNAMIC.search(text), f"{name} uses a dynamic import"
+    text = _path(name).read_text(encoding="utf-8")
     found = set()
     for spec in _FROM.findall(text):
-        found.add(spec[2:] if spec.startswith("./") else spec)
+        local = _local(spec)
+        if local is not None:
+            found.add(local)
     return found
 
 
-def test_each_console_document_imports_only_its_modules():
-    for name, allowed in ALLOWED.items():
-        extra = _imports(name) - allowed
-        assert not extra, f"{name} imports outside its document: {sorted(extra)}"
+def _reached(entry):
+    seen = set()
+    stack = [entry]
+    while stack:
+        name = stack.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        stack.extend(sorted(_imports(name)))
+    seen.discard(entry)
+    return seen
+
+
+def test_each_console_document_reaches_only_its_modules():
+    for entry, owned in OWN.items():
+        text = _path(entry).read_text(encoding="utf-8")
+        assert not _DYNAMIC.search(text), f"{entry} uses a dynamic import"
+        extra = _reached(entry) - owned - SHARED
+        assert not extra, f"{entry} reaches another document: {sorted(extra)}"

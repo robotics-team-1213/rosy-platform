@@ -8,7 +8,7 @@ import {
   normalizeMapProposal, fitSummary, pickLanes, topDownLayout, parseMapDraft, draftFrom,
   retryDelay, MAP_FIT_MAX_TRIES, canAccept, fitUsable, STALE_FIT_TEXT, calibrationRequest,
   fitFromCalibration,
-} from "./map-fit.js";
+} from "/console/assets/map-fit.js";
 import { warpImage } from "./field-view.js";
 
 // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 토큰에서 푼다(테마를 따른다).

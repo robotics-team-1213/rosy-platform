@@ -93,7 +93,8 @@ def test_vision_writes_detections_and_reads_only_its_own_config(tmp_path):
         assert accepted.json() == {"accepted": True, "source_id": "ceiling_north", "seq": 41, "status": "OK"}
         config = client.get("/api/fleet/detections/config", headers=_auth(SOURCE_TOKEN))
         assert config.json() == {"source_id": "ceiling_north", "map_id": "map_v2_fleet",
-                                 "calibration": None, "relearn_seq": 0}
+                                 "calibration": None, "relearn_seq": 0,
+                                 "identity_challenge": None}  # D-472: no open LED request
         assert client.get("/api/fleet/detections/config").status_code == 401
         assert client.get("/api/fleet/tracking", headers=_auth(SOURCE_TOKEN)).status_code == 401
         assert client.post("/api/fleet/calibrations", json=APPROVAL,
@@ -219,7 +220,8 @@ def test_tracking_routes_are_exactly_these_and_name_no_media(tmp_path):
             if any(word in path for word in ("detections", "tracking", "calibrations"))}
     assert ours == {"/api/fleet/detections", "/api/fleet/detections/config", "/api/fleet/tracking",
                     "/api/fleet/tracking/relearn", "/api/fleet/calibrations",
-                    "/api/fleet/calibrations/{source_id}"}
+                    "/api/fleet/calibrations/{source_id}",
+                    "/api/fleet/detections/identity", "/api/fleet/tracking/identity"}  # D-472
 
 
 def test_tracking_needs_the_sighting_sources():

@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
-- 2026-10-07 · uncommitted · fix(perception): G-16 독립 검토 반영
-- 2026-10-07 · uncommitted · fix(perception): G-16 keep 경계 기울기와 그 오차
-- 2026-10-07 · uncommitted · feat(recording): Pilot 바닥 IR 녹화 번호는 D-506
-- 2026-10-07 · uncommitted · feat(recording): Pilot 녹화에 바닥 IR 원시값 (D-504)
-- 2026-10-07 · uncommitted · fix(perception): D-468 containment 경계를 칠 안쪽 가장자리로
+- 2026-10-08 · uncommitted · feat(control): Pilot 녹화에 TF 원본 추가
+- 2026-10-08 · uncommitted · fix(control): 오른쪽 경계 기억 대체 전 차로 폭 검사
+- 2026-10-08 · uncommitted · fix(control): keep 제자리 회전 reset 검토 반영 — odom twist 하나, 신선도 판정 하나
+- 2026-10-08 · a411c2801 · fix(control): 제자리 회전 뒤 keep flipping hold가 풀리지 않던 것
+- 2026-10-08 · uncommitted · fix(perception): keep_debug 조립이 ground 이름표와 충돌해 매 프레임 죽던 것

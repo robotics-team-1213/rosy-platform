@@ -140,7 +140,7 @@ def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
     assert "LaneEdgeFollower" in source
     assert "mode == 'edge_left'" in source
     assert "self._edge_follower.update(" in source
-    assert "mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab')" in source   # odom subscription
+    assert "mode in ('lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab')" in source   # odom subscription (keep: D-507 pivot)
     # 'line' and 'lane' branches are untouched and the default stays 'line'.
     config = yaml.safe_load((ROOT / "config/line_follow.yaml").read_text(encoding="utf-8"))
     assert config["/**/line_observer_node"]["ros__parameters"]["camera_lane_mode"] == "line"

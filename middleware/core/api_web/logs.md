@@ -424,6 +424,7 @@
 - 변경: 살아 있는 수동 세션의 NAVIGATION 전환을 ModeMachine에서 거부한다. teleop 입력과 watchdog 갱신은 같은 모드 잠금 안에서 다시 확인한 뒤 반영한다. API의 자율 진입은 부작용 전에 409 MODE_CONFLICT로 거부한다. 정지와 만료된 세션은 기존 전환을 유지한다.
 - 증거: 신규 회귀 시험에서 탈취 5 failed, 경합 1 failed, line-follow 취소 부작용 1 failed를 수정 전에 재현했다. 관련 시험 167 passed, known_failures 비교 NEW 0, lint 0 errors. 독립 재리뷰에서 경합 양방향과 교착 부재를 확인했고 코드 차단 사항 없이 승인했다. 근거는 docs/validation/d427-source-migration/manual-ownership-review-2026-10-04.md.
 - gate 변화: 없음. 호스트 검증이며 sim·장치·실주행 수용은 미실행이다.
+
 ## 2026-10-04 · uncommitted · feat(api): D-438 `stuck_resolver` 역할과 `STUCK_DECIDE` 권한, API Ref v1.90
 - 변경: `api/grants.py` `STUCK_DECIDE`, `api/deps.py` 역할 순위, `api/v1/line_follow.py` 막힘 답 경로가 `STUCK_DECIDE` 를 요구(`stuck_resolver` 의 `MANUAL` 은 403), `api/v1/auth.py`·`system.py` 역할 목록 문구, `api/app.py` 계약 표기 v1.90
 - 증거: `python -m pytest src/runtime/gateway/test -q` 2025 passed, 16 skipped (2026-10-04 Windows; 첫 실행의 1 failed 는 app.py 계약 표기를 v1.90 으로 올리기 전의 `test_protocol_version_alignment.py` 였고 표기 정정 뒤 통과); `python -m pytest test/test_harness_contracts.py -q` 59 passed
@@ -471,7 +472,6 @@
 - 증거: 실제 UI 경로·CSP와 구조 예산 16 passed (8.21s). 공용 템플릿 CSS는 기존 shared-assets.json 소비 경로를 따른다.
 - gate 변화: SOURCE/LOCAL 정적 자산 계약만 보완했다.
 - 결정: D-439 Task5. 동작 소유자는 공용 작업 선택이며 서버 요청을 보내는 견본이 아니다.
-
 
 ## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 
@@ -564,12 +564,12 @@
 - 증거: API 입력·쿨다운 호스트 테스트 통과. 장치 적용과 실제 점멸은 미확인.
 - gate 변화: SOURCE/LOCAL만 확인. DEVICE/FIELD 상태는 그대로 둔다.
 
-
 ## 2026-10-06 · uncommitted · chore(core_api_web): 계약 문서 버전 v1.109 동기
 
 - 변경: FastAPI docstring/설명의 라이브 계약 버전을 v1.109로 갱신(D-484 additive 행). 동작 변화 없음.
 - 증거: `test_protocol_version_alignment.py`가 문서 헤더·변경 이력·설명 일치를 검증.
 - gate 변화: 없음.
+
 ## 2026-10-06 · uncommitted · feat(api): D-483 로봇 화면 승인 코드로 피어 요청 승인
 
 - 변경: D-456 요청마다 6자 승인 코드를 만들고 hash만 비교한다. `POST /api/v1/auth/peer-pairing/requests/{id}/confirm`(인증 없음, `X-Request-Secret`, `{approval_code}`)이 맞으면 같은 요청을 승인한다. 5회 틀리면 rejected, 출처별 30회/분 한도 공유, 요청 역할이 operator를 넘으면 403. 화면 코드 관계는 `screen-code` 출처·168 h·persistent=false이고 `_grant`·`issue`·세션 정책이 발급자 token 대신 관계 자체의 만료·폐기·수신 키만 본다. 기다리는 가장 최근 요청을 `/run/rosy-peer-display/approval.json`(0640, tmp+rename)으로 rosy-face에 넘기고 끝나면 지운다. 쓰기 실패는 한 번만 기록하고 요청 흐름은 그대로다. 계약 v1.109.
@@ -618,6 +618,7 @@
 - 증거: `test_capabilities_controls.py` "Pinky"·"pinky-pro"·65자·숫자 4건 PASS.
 - gate 변화: 없음.
 - 결정: D-494 (Proposed)
+
 ## 2026-10-07 · uncommitted · feat(api): D-494 POST /api/v1/line-follow/junction
 - 변경: operator + 보정 lease. CAMERA_LINE·IR_LINE이 아니면 409 `LINE_FOLLOW_NOT_ACTIVE`. 응답 `{accepted, junction_seq, state}`. API Ref v1.112, `app.py` 버전 문구 v1.112
 - 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
@@ -653,6 +654,20 @@
 - 결정: D-494 6
 - 교훈: 없음
 
+## 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.124 (D-507 7)
+- 변경: `core_api_web/api/app.py` 첫 줄 계약 버전 v1.122 → v1.124(main 은 문서 v1.123 과 어긋나 `test_protocol_version_alignment` 실패 중이었다).
+- 증거: `python -m pytest middleware/core/gateway/test/test_protocol_version_alignment.py -q` 3 passed.
+- gate 변화: 없음.
+- 결정: D-507 7
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · docs(api): app docstring names API Ref v1.133 (D-507 7)
+- 변경: `core_api_web/api/app.py` 첫 줄 계약 버전 v1.122 → v1.133(main 은 문서 v1.123 과 어긋나 `test_protocol_version_alignment` 실패 중이었다).
+- 증거: `python -m pytest middleware/core/gateway/test/test_protocol_version_alignment.py -q` 3 passed.
+- gate 변화: 없음.
+- 결정: D-507 7
+- 교훈: 없음
+
 ## 2026-10-08 · uncommitted · docs(api): v1.124 version pin
 
 - Change: Align CORE app contract version docstring with API Reference v1.124.
@@ -670,3 +685,20 @@
 - 변경: CORE app contract docstring follows API Reference v1.125 after D-513 merge.
 - 증거: Pinned version test included in merged tree verification.
 - gate 변화: None.
+
+## 2026-10-08 · uncommitted · feat(api): D-472 식별 색 설정과 v1.129/v1.130
+- 변경: `POST /host/lamp/identify`의 `color`를 생략하면 CORE 설정 `lamp_identify.color`, 없으면 D-472 4항 기본(`rosy_26` blue, `rosy_60` amber)을 쓴다. 둘 다 없으면 409 `IDENTIFY_COLOR_UNSET`. `requested_at`을 ms로 쓴다. 앱 설명의 계약 버전을 v1.130으로 맞췄다
+- 증거: `test_lamp_identify_api.py`, `test_protocol_version_alignment.py`
+- gate 변화: 없음. 장치 적용과 실제 점멸은 미확인
+- gate 변화: None.
+
+## 2026-10-08 · uncommitted · fix(api): D-507 pivot_past_line_m [−0.30, 0.30]과 v1.133
+- 변경: `LineJunctionRequest.pivot_past_line_m` 범위를 ge=−0.30으로 넓혔다. 앱 설명의 계약 버전을 v1.133으로 맞췄다(v1.131·v1.132는 다른 브랜치).
+- 증거: `test_line_junction_api.py` −0.31 400, −0.30 200 `armed`.
+- gate 변화: SOURCE.
+- 결정: D-507 2 개정
+
+## 2026-10-08 · uncommitted · fix(api): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.

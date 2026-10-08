@@ -519,6 +519,7 @@ def test_console_page_and_its_assets_are_served():
     assert client.get("/console/assets/console.js").status_code == 200
     assert client.get("/console/assets/authorization.js").status_code == 200
     assert client.get("/console/assets/styles.css").status_code == 200
+    assert client.get("/console/assets/shared/styles.css").status_code == 404
     assert 'id="user-role"' in page.text
     assert 'href="/common/tokens.css"' in page.text
 
@@ -539,6 +540,18 @@ def test_install_page_and_its_entry_are_served():
     assert 'id="robot-enrollment"' not in ops
     assert 'id="vision-adjustments"' not in ops
     assert 'href="/console/install"' in ops
+
+
+def test_cell_page_and_its_entry_are_served():
+    """D-518 — Cell stays at /console/cell. The folder is not part of the public URL."""
+    client = _client(FakeRobot("rosy_01"))
+    page = client.get("/console/cell")
+    assert page.status_code == 200 and "Rosy Fleet · Cell" in page.text
+    assert "default-src 'self'" in page.headers["content-security-policy"]
+    assert client.get("/console/assets/cell.js").status_code == 200
+    assert client.get("/console/assets/cell.css").status_code == 200
+    assert client.get("/console/assets/cell-document-editor.js").status_code == 200
+    assert client.get("/console/assets/cell/cell.js").status_code == 404
 
 
 def test_the_tokens_copy_is_gone_from_the_allowlist():
@@ -594,8 +607,9 @@ def test_every_console_module_import_is_served():
     web = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
     client = _client(FakeRobot("rosy_01"))
     imported = set()
-    for script in web.glob("*.js"):
-        imported |= set(re.findall(r'from\s+"\./([\w.-]+\.js)"', script.read_text(encoding="utf-8")))
+    spec = re.compile(r"""from\s+['"](?:\./|/console/assets/)([\w.-]+\.js)['"]""")
+    for script in web.rglob("*.js"):
+        imported |= set(spec.findall(script.read_text(encoding="utf-8")))
     assert "enrollment.js" in imported
     for name in sorted(imported | {"console.js"}):
         assert client.get(f"/console/assets/{name}").status_code == 200, name

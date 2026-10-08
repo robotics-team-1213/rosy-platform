@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createFleetClient} from '../../../../shared/web/fleet-client.js';
-import {createPollGate} from '../../fleet/server/web/poll-gate.js';
+import {createPollGate} from '../../fleet/server/web/shared/poll-gate.js';
 
 function clientFor(status, body) {
   const calls = [];

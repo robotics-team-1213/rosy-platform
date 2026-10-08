@@ -2477,3 +2477,55 @@
 - 변경: `camera-warp.js`(사이트 사각형 576 삼각형 메시·아핀, 순수), `map-view.js` `drawSiteView` 실영상을 지도 미터 뷰 위에 편 그림으로 그림(돌린 원본 대신), `view.cameraPick` 제거(미터 뷰 역변환 사용), `static_routes.py` 자산 등록. 썸네일·크게 보기는 원본 회전 그대로.
 - 증거: `camera-warp.test.mjs` 3 passed(실제 보정 paint-f81a872f5cd8), 웹 Node 178 passed, 실프레임 1920 캡처에서 사이트 사각형이 차선과 맞고 원이 둥글다([실측](../../docs/validation/site-camera-topdown-2026-10-07/result.md)).
 - gate 변화: LOCAL 표시. SITE/FIELD 상태는 그대로 둔다.
+## 2026-10-08 · uncommitted · feat(fleet): D-472 LED 신원 오케스트레이터와 확인 트랙
+- 변경: `server/identity.py` `IdentityService` — 움직이는 미확인 로봇 한 대씩, 6 s 창, 로봇 설정 색으로 CORE 점멸 요청. Vision 판정으로 익명 트랙에 묶고 트랙 손실·0.30 m 겹침·map/보정 revision 변경·`identity_ttl_s`에 UNKNOWN. `confirmed_track_pose(robot_id)`가 D-511 입력. 읽기 전용 `GET /api/fleet/tracking/identity`, Vision 판정 `POST /api/fleet/detections/identity`, detections config `identity_challenge`. 사이트 YAML `identity:`(기본 `auto_request: false`). API Ref v1.130
+- 증거: `test_led_identity.py`, `test_lamp_identify_route.py`, `test_boundaries.py`(지도 자세 중재·trip·명령 경로가 identity를 읽지 않음)
+- gate 변화: 없음. 현장 측정·DEVICE/FIELD 미확인
+- 결정: D-472 addendum 3·4·5항
+
+## 2026-10-08 · uncommitted · fix(fleet): D-472 독립 안전 검토 지적 반영
+- 변경: 두 확인 트랙이 같은 source에서 0.30 m 안으로 만나면 둘 다 UNKNOWN(overlap). 경계 시험이 상대 import와 `tracking.identity`·`app.state.identity` 속성 접근도 잡는다(공용 `_server_imports`)
+- 증거: 영향 시험 58 passed, known_failures 0 NEW. 두 시험 모두 수정 전 코드에서 실패함을 확인
+- gate 변화: 없음. D-430 독립 검토(critic) APPROVE
+
+## 2026-10-08 · uncommitted · feat(fleet): D-511 감시가 LED 확인 트랙을 입력으로 쓴다
+- 변경: `LaneComplianceMonitor`가 지도 자세가 LOCALIZED가 아니면 D-472 `IdentityService.confirmed_track_pose`를 판정한다(CONFIRMED, `age_s` ≤ `fleet.map_pose.sighting_lease_s`, 활성 지도 map id). 결과에 `pose_source`(`map_pose`|`led_track`)·`heading_source`(`pose`|`track_motion`|`none`)를 싣고 바뀔 때 로그를 남긴다. 트랙에 yaw가 없어 `moving_min_m`을 넘게 움직인 이전 위치에서의 방향을 쓰고, 정지면 순수 판정이 방향 문 없이 가장 가까운 호를 고른다. `pose_state`는 지도 자세 그대로. API Ref v1.132(가산)
+- 증거: `test_lane_compliance_service.py` 신규 2개, `test_boundaries.py`(lane_compliance_service만 identity 읽기 허용, map pose·trip 모듈 금지) — fleet 묶음·`test/architecture`·`test/test_line_follow_contract_docs.py` + `test/known_failures.py` (X:/DevTemp/d511-led/)
+- gate 변화: 없음. SOURCE/LOCAL만. 실제 `ceiling_north` LED 실측(D-472 addendum 6)·현장 수용은 열려 있다
+- 결정: D-472 addendum 3. 확인 트랙은 D-494 arbitrated_pose·trip·initialpose·명령에 닿지 않는다
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(fleet): D-511 LED 트랙 입력 리뷰 반영
+- 변경: 카메라가 프레임을 건너뛰어 같은 위치가 와도 트랙이 신선한 동안 마지막 이동 방향을 유지한다. 방향은 odom이 움직임을 말하고 트랙이 새 잠정 설정 `fleet.lane_compliance.track_heading_min_m`(0.05 m, 카메라 blob 잡음 이상)을 넘게 움직였을 때만 잡는다. `pose_source`가 바뀌면 WARN/ACT 누적을 새로 시작한다. `identity.confirmed_track_pose`의 `age_s`를 0으로 자르지 않고, 감시는 `MAX_SIGHTING_FUTURE_S`(0.05 s)보다 미래인 트랙을 지도 자세 sighting처럼 거절한다. API Ref v1.132 행 문구 수정("margin exact" 삭제, 교차로에서 가로지르는 차로 가능), D-511 Open M1 공백 (4) 추가
+- 증거: `test_lane_compliance_service.py`(건너뛴 프레임·odom 정지·출처 전환·미래 시각), `test_led_identity.py`(음수 age), `test_lane_compliance.py`(설정 검증) — fleet 묶음·`test/architecture`·`test/test_line_follow_contract_docs.py` + `test/known_failures.py` (X:/DevTemp/d511-led/)
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-472 addendum 3, D-511 Open (4)
+- 교훈: 없음
+## 2026-10-08 · uncommitted · fix(trip): D-507 회전 축을 지도의 첫 칠한 선에서 (SIM 발견 1–2)
+- 변경: `trip_ports.line_past` — 칠한 선 = 차로 합집합 경계(차로마다 중심선 둘레 `width_m` 띠). 장소에서 진행 방향(창이 있으면 로봇 yaw, 없으면 장소의 차로 방향)으로 처음 벗어나는 거리. `junction_fields`가 `pivot_past_line_m = −그 거리`를 보낸다. 0.30 m 안에 선이 없으면 나가는 차로 폭/2, 창 없음. API Ref v1.133.
+- 증거: `test_trip_d507.py` 260919 SW spoke SIM 자세(−0.655, −0.432, 64°): pivot −0.105, 창 기대 선 0.401(SIM 측정 0.402), 창 없음 −0.096. L자 −0.1, 곧게 지나감 폭/2·창 없음. 부호 변이 4건 실패 확인 뒤 복원.
+- gate 변화: SOURCE. SIM 재실행은 열림.
+- 결정: D-507 2 개정(2026-10-08 사용자 결정)
+
+## 2026-10-08 · uncommitted · fix(trip): D-507 pivot 검토 반영 — lane 차로만, 창 없으면 음수 pivot 없음
+- 변경: `line_past`는 `drive_mode: lane` 차로만 칠한 선으로 보고, 반올림 뒤 0.30 m에서 한 번만 자른다. 창을 보내지 않는 장소에는 음수 pivot을 보내지 않는다(CORE `stop_point`). 선이 없으면 예전대로 폭/2.
+- 증거: `test_trip_d507.py` free 차로, 0.30 경계(0.6→0.3, 0.604→None), SW 로봇 yaw 64° 대 차로 53.8°, 창 없는 두 경우. 변이(창 없이 음수 pivot) 2건 실패 확인 뒤 복원.
+- gate 변화: SOURCE.
+- 결정: D-507 2 개정 검토
+
+## 2026-10-08 · uncommitted · docs(fleet): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · docs(fleet): 지도 교차로 창 누락 시 CORE HOLD 설명
+- 변경: `trip_ports.py`의 창 누락 주석을 D-507 3항 보충 계약에 맞췄다. Fleet은 여전히 창이 없는 지도 지시를 보낼 수 있지만, 새 CORE는 가로선 감지에서 `junction_unexpected`로 멈추고 Fleet은 trip을 끝낸다. 기존 장치 CORE에는 이 변경이 적용되지 않는다.
+- 증거: `test_trip_d507.py`와 CORE 교차로·API·계약 시험 194건 통과. 실제 Fleet→CORE 폐루프 SIM은 미실행.
+- gate 변화: 없음. SIM·DEVICE는 열림.
+- 결정: D-507 3항 보충.
+
+## 2026-10-08 · uncommitted · feat(fleet): 지도 edge 굽이 후보 진단
+- 변경: 진행 중 lane trip의 활성 지도 edge에서 가까운 굽이를 찾아 `detail.bend_candidate`에 기록한다. 원본 자세의 나이·dead reckoning·지도 offset·yaw·버전을 검사하고, 근거 상실 또는 trip 종료 시 지운다. CORE 명령은 추가하지 않았다.
+- 증거: `test_trip_d507.py`의 실제 west edge 후보·낡은 자세(0.304 s 반올림 경계)·지도 ID/버전 변경·trip 종료 검사. 관련 pytest 217 통과 후 착지 게이트가 파일/패키지 크기 판정 2건을 발견해 중단됐다(깨끗한 main의 두 시험은 통과). 굽이 진단을 `trip_ports.py`로 모으고 P6 판정을 갱신한 뒤 해당 시험 포함 41 통과. `known_failures.py` 0 new, flake8 및 harness lint 0 error. SOURCE/LOCAL 범위.
+- gate 변화: 없음. Fleet→CORE 폐루프 SIM·장치·현장 검수는 열림.
+- 결정: B9 굽이 접근 허가는 같은 경계의 검수 및 음성 사례를 통과할 때까지 보류.
