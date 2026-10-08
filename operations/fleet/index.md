@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · uiux(fleet): 지도 로봇 방향 마커 화면 비율
+- 2026-10-09 · uncommitted · uiux(fleet): 연결 뒤 토큰 접기와 현장 지도 우선 배치
 - 2026-10-09 · uncommitted · refactor(fleet): traffic 설정 파서를 전용 단위로 이동
 - 2026-10-09 · uncommitted · uiux(fleet): D-517 trip error codes all have console text
 - 2026-10-08 · uncommitted · fix(fleet): 교차로 회전은 들어오는 차로 끝 방향에서 나가는 차로 접선까지 (lap SIM 2 원인 2)
-- 2026-10-08 · uncommitted · fix(fleet): 실행 끝난 장소는 로봇이 다음 차로에 있을 때만 넘어간다 (lap SIM 2 lap_12)
-- 2026-10-08 · uncommitted · fix(fleet): `straight` 지시에 지도 차로 방향 변화 `lane_turn_deg` (API v1.152)

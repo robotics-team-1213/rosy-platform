@@ -49,7 +49,7 @@ async def call(function, *args, schema):
 
 @router.get("/identity")
 async def identity(request: Request):
-    candidate = proof_service(request)
+    candidate = proof_service(request, identity=True)
     return await call(candidate.identity, schema=IdentitySnapshot)
 
 
@@ -126,14 +126,15 @@ async def revoke(request: Request, relationship_id: str = Path(pattern=r'^[A-Za-
     return await call(service(request).revoke, owner.token_id, relationship_id, schema=RevokedSnapshot)
 
 
-def admit(request, candidate):
+def admit(request, candidate, *, identity=False):
     try:
-        candidate.admit_proof(request.client.host if request.client else 'unknown')
+        candidate.admit_proof(request.client.host if request.client else 'unknown', identity=identity)
     except ValueError:
-        raise HTTPException(429, 'anonymous proof rate limit reached') from None
+        detail = 'anonymous identity rate limit reached' if identity else 'anonymous proof rate limit reached'
+        raise HTTPException(429, detail) from None
 
 
-def proof_service(request):
+def proof_service(request, *, identity=False):
     candidate = service(request)
-    admit(request, candidate)
+    admit(request, candidate, identity=identity)
     return candidate

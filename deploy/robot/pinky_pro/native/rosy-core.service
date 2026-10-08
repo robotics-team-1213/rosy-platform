@@ -74,8 +74,11 @@ LockPersonality=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 # Maps are written by slam_toolbox in rosy-navigation; CORE only reads them back.
 ReadWritePaths=/run/rosy
-# D-483: the peer-request approval code hand-over to rosy-face (tmpfiles creates it;
-# optional so a payload update before the next boot still starts CORE).
+# D-483: the peer-request approval code hand-over to rosy-face. A payload release never
+# updates the image's /etc/tmpfiles.d (sync-image-layer only syncs units, udev, modprobe and
+# native-runtime), so root creates it before every start. "-": a card without the
+# rosy-display group still starts CORE (no LCD code, console approval only).
+ExecStartPre=-+/usr/bin/install -d -m 2750 -o rosy-core -g rosy-display /run/rosy-peer-display
 ReadWritePaths=-/run/rosy-peer-display
 # D-411: Pilot recordings are written by rosy-camera; CORE only lists and streams them.
 ReadOnlyPaths=/var/lib/rosy/pilot-recordings
