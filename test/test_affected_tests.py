@@ -163,6 +163,16 @@ def test_selection_table(sample, case, changed, mode, extra):
         assert all(sel.reasons[p] for p in sel.reasons), "every suite carries a reason"
 
 
+def test_full_local_uses_deploy_functional_tests_and_leaves_root_suite_to_ci(sample):
+    sel = _select(sample, "deploy/robot/run.sh", ".github/workflows/ci.yml")
+    local = {path for invocation in sel.local_invocations for path in invocation}
+    full = {path for invocation in sel.invocations for path in invocation}
+    assert sel.mode == "full"
+    assert "test" not in local
+    assert "test/test_robot_runtime.py" in local
+    assert "test" in full
+
+
 def test_duplicate_basenames_run_in_separate_invocations(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
