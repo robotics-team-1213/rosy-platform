@@ -15,8 +15,8 @@
 
 | 자료 | 경로 | SHA-256 |
 |---|---|---|
-| 변경 전 320px 지도 | `2026-10-09--fleet-site-map-current/site-map-fresh-320x568.png` | `5bc2e75d7ecf39dd9bf0088ef7406a9d3e010bdbfc3e5d85b8a825dcb5ada283` |
-| 변경 후 320px 지도 | `2026-10-09--fleet-site-map-mapfirst/site-map-fresh-320x568.png` | `68c174eff9eedcc8a03c9107122e82cf03ecdba37a481936cf990f18c8dedcd5` |
-| 변경 후 1440px 지도 | `2026-10-09--fleet-site-map-mapfirst/site-map-fresh-1440x1000.png` | `4cbccc6fca1f3d4b92587026e0e5d069a14ff3914c41e1ff9103dcdfee61ed4b` |
+| 변경 전 320px 지도 | `2026-10-09--fleet-site-map-current/site-map-fresh-320x568.png` | SHA-256 `5bc2e75d7ecf39dd9bf0088ef7406a9d3e010bdbfc3e5d85b8a825dcb5ada283` |
+| 변경 후 320px 지도 | `2026-10-09--fleet-site-map-mapfirst/site-map-fresh-320x568.png` | SHA-256 `68c174eff9eedcc8a03c9107122e82cf03ecdba37a481936cf990f18c8dedcd5` |
+| 변경 후 1440px 지도 | `2026-10-09--fleet-site-map-mapfirst/site-map-fresh-1440x1000.png` | SHA-256 `4cbccc6fca1f3d4b92587026e0e5d069a14ff3914c41e1ff9103dcdfee61ed4b` |
 
 브라우저 테스트는 `ROSY_RUN_BROWSER_TESTS=1`로 현장 지도 폭 3종, 경로 미리보기, 평면 영상 좌표 표시 전용, 비밀번호 로그인 흐름을 실행했다. 결과와 `known_failures.py` 판정은 `2026-10-09--fleet-site-map-mapfirst-full.txt`에 있다. UI 이미지 검토는 LOCAL 브라우저 증거다. 실제 현장 배포, 장치 화면, 운행 및 사용자 G3 수용은 이 기록으로 입증되지 않는다.
