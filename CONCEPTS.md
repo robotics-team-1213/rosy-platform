@@ -50,6 +50,22 @@ The one ROSY process on a robot that holds host privilege — network mode, Wi-F
 
 When it cannot be reached, every host action it would carry is blocked for the same reason, so the screen states that cause and its next step once for the whole group rather than beside each button.
 
+## Observation and decision
+
+Glossary for the perception and model boundary. The picture and the status of each layer are in the repository README section 「인지와 판단」. These entries do not add an API.
+
+### Perception
+
+The production of an observation from sensors or a camera, carrying source, time, frame, and calibration revision (D-290). On the robot that code lives in `middleware/perception` and does not publish the final `/cmd_vel`. Site ceiling-camera observations live in `operations/vision`. Offline drafts and training live in `learning/training/perception`. A learned lane model publishes a shadow observation only (D-356, Proposed).
+
+### World state
+
+The gathered, aged facts for one robot. Today that shape is Fleet `MapPose` (`state`, `source`, `age_s`). A general World State contract waits until a second consumer exists (D-503, Proposed). `world` contrasts an observation with a confirmed event. It is not a generative world model, and a model's description does not overwrite an execution fact (architecture design v0.2 §3.1, D-290).
+
+### Decision candidate
+
+A fact or an allowlisted choice returned by an approved model version on the AI PC. Fleet checks it and picks. CORE rechecks before motion. The model PC owns learning, evaluation, and promotion evidence. Identity facts (`wall`, `object`, `robot`, `person`, `unknown`) and text choice candidates are separate tasks (D-516, D-527, D-492). A candidate string is not a command.
+
 ## Robot commissioning
 
 ### Robot number
