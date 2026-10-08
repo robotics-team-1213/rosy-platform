@@ -1135,7 +1135,7 @@
 - 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: 같은 세션 `evidence/navigation-evidence/navigation-stage/`의 1366×768·390×844 안전 정지 캡처. Chromium 1 passed, 패키지 19 passed, 새 실패 0. 확장 회귀 묶음은 멈춰 중단했고 통과로 세지 않는다.
 - gate 변화: LOCAL G2 안전 정지 셀 보강. 장치·전체 G2·G3는 HOLD.
 
-## 2026-10-08 · uiux/robot-navigation-stage · 위치 불확실 중 주행 보고 보존
+## 2026-10-08 · 9318050f6 · 위치 불확실 중 주행 보고 보존
 
 - 변경: 최신 `NAVIGATING` 보고와 `SUSPECT` 위치 추정이 겹치면 HUD에 `주행 중 보고 · 위치 확인 필요`를 함께 보여 준다. 목표와 계획 경로 차단은 유지한다.
 - 증거: `docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md`의 두 폭 캡처와 `logs/navigation-status-honesty-final.txt` (Chromium 1 passed, 신규 실패 0, 매트릭스 브라우저 오류 0).
