@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · docs: Pinky 현장 램프 재대조와 이동 전 재확인
 - 2026-10-09 · uncommitted · docs: 짧은 경계 필터 폐루프 재검증
 - 2026-10-09 · uncommitted · docs: 짧은 경계 길이 문턱 반례 재생
 - 2026-10-09 · uncommitted · docs: 굽이 SIM 페인트 출처 차이 반례
 - 2026-10-09 · uncommitted · docs: Pinky learned paint 지연·수명 충돌 재현
-- 2026-10-09 · uncommitted · docs: 실기 learned paint 사용률과 추론 지연 진단
