@@ -18,8 +18,9 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-for _path in (ROOT / "src" / "runtime" / name for name in
-              ("gateway", "events", "services", "api_web", "sensing")):
+for _path in (ROOT / path for path in
+              ("middleware/core/gateway", "middleware/core/events", "middleware/core/services",
+               "middleware/core/api_web", "middleware/perception")):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
