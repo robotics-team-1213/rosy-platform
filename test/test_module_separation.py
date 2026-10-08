@@ -81,7 +81,16 @@ PILOT_RECORDING_TOPICS = (
     'PILOT_TOPICS = (COMPRESSED_CAMERA_TOPIC, "cmd_vel", ODOM_TOPIC, SCAN_TOPIC, "line/observation",',
 )
 
-FINAL_TOPIC_EXCEPTIONS = (LEGACY_FINAL_PUBLISHER, RECORDING_SIDE_TOPIC, PILOT_RECORDING_TOPICS)
+#: D-507 SIM r4b: keep mode judges "spin in place" on CORE's commanded twist, so the line
+#: observer SUBSCRIBES to the final command read-only (it publishes no Twist; pinned in
+#: test_line_observer_wiring). Same pin rule.
+LINE_OBSERVER_COMMAND_READ = (
+    "middleware/perception/control/line_observer_node.py",
+    "self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)",
+)
+
+FINAL_TOPIC_EXCEPTIONS = (LEGACY_FINAL_PUBLISHER, RECORDING_SIDE_TOPIC, PILOT_RECORDING_TOPICS,
+                          LINE_OBSERVER_COMMAND_READ)
 
 
 def _prod_py_files(tree: Path):
