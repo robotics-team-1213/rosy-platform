@@ -1027,7 +1027,32 @@ class LineJunctionStatus(BaseModel):
     seq: int = 0
     turn_deg: Optional[float] = None      # D-495: signed bounded turn (left +)
     reason: Optional[str] = None          # D-495: why a maneuver aborted
-    pivot_basis: Optional[str] = None     # D-507 4: map | stop_point
+    pivot_basis: Optional[str] = None     # D-507 4: map | stop_point; D-520: segment_end
+
+
+class LineArcIrCorrection(BaseModel):
+    """D-520 2: the one IR correction of an arc (side: left | right, phase: away | level | done)."""
+
+    side: Optional[str] = None
+    phase: Optional[str] = None
+    away_m: float = 0.0
+    level_m: float = 0.0
+    used: bool = False
+
+
+class LineArcStatus(BaseModel):
+    """D-520 2: the map-guided arc after a junction instruction's turn (state: running | ended |
+    stopped). Fleet reads from_place_id and a new arc_seq as the instruction carried."""
+
+    arc_seq: int
+    from_place_id: Optional[str] = None
+    end_place_id: str
+    curvature_1pm: float
+    length_m: float
+    travelled_m: float = 0.0
+    state: str = "running"
+    reason: Optional[str] = None
+    ir_correction: LineArcIrCorrection = Field(default_factory=LineArcIrCorrection)
 
 
 class LineFollowStatus(BaseModel):
@@ -1053,6 +1078,7 @@ class LineFollowStatus(BaseModel):
     # following as recovery off). None when D-468 is not tracking or not configured.
     lane_return_containment: Optional[Literal['contained', 'unknown']] = None
     junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-494 decision 4
+    arc: Optional[LineArcStatus] = None  # D-520 2: the latest arc of this process, if any
 
 
 class TrafficPolicyStatus(BaseModel):
