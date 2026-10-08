@@ -19,4 +19,11 @@ test("camera map accepts only a fresh raw frame with matching source, map, lens 
     { image: { naturalWidth: 640, naturalHeight: 360 } },
   ]) assert.equal(cameraMapCalibration({ ...frame, ...changed }, [calibration], siteMap), null);
   assert.equal(cameraMapCalibration(frame, [calibration], { maps: [{ map_id: "wrong" }] }), null);
+  // D-457: Vision voids a lens-less record once the frame reports a lens; the map must not draw it.
+  const lensless = { ...calibration, lens: null };
+  assert.equal(cameraMapCalibration(frame, [lensless], siteMap), null);
+  assert.equal(cameraMapCalibration({ ...frame, lens: null }, [lensless], siteMap), lensless);
+  // header rounding (6 significant digits) still matches
+  assert.equal(cameraMapCalibration({ ...frame, lens: { ...frame.lens, hfov_deg: 104.10001 } },
+    [calibration], siteMap), calibration);
 });

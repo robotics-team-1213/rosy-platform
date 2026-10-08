@@ -786,3 +786,15 @@
 - gate 변화: 없음(SOURCE).
 - 결정: D-507 6
 - 교훈: 같은 항목을 두 세션이 구현하면 뒤 브랜치의 시험부터 옮겨 앞 구현에 대 본다.
+
+## 2026-10-08 · uncommitted · feat(line_follow): 교차로 기대 창을 주행 거리로 비교 (D-507 2·3, 사용자 결정 1)
+- 변경: `PoseTrail`에 연속 표본의 odom 경로 길이 누적값 `odometer`와 `odometer_at(sample)`을 더했다. 지시를 받을 때 창에 누적값을 기록하고, 감지 고정(anchor)에 감지 자세의 누적값을 기록한다. `_in_window`는 |(감지 누적값 − 받은 누적값) + `junction_ahead_m` − (`expect_in_m` − pivot)| ≤ `expect_tol_m`으로 판정한다(곧은 접근에서는 예전 점 비교와 같은 값). 측정할 수 없는 감지(고정 없음, epoch·frame 바뀜, 누적값 없음)는 창 밖. 회전 축 접근과 측정 가로선 띠는 그대로 감지 자세에 고정. API Ref v1.138.
+- 증거: `test_junction_approach.py` 새 시험 — 반원 호(경로 0.785 m, 현 0.50 m) 뒤 호 길이 기대는 안(`turning`), 현 길이 기대는 밖, 장소 0.3 m 앞 굽이 오감지 밖 뒤 진짜 먼 선은 안, 지시와 감지 사이 odom 끊김은 밖. 변이(측정을 직선 거리로) 호 시험 2건 실패 확인 뒤 복원. CORE services·api_web pytest 1429 통과 13 skip, `known_failures` 신규 0.
+- gate 변화: SOURCE. 곡선 접근 SIM(회전교차로 진출, 한 바퀴)은 열림.
+- 결정: D-507 2·3항 2026-10-08 사용자 결정 (1).
+
+## 2026-10-08 · uncommitted · fix(line_follow): 창 odometer를 부호 있는 전진 거리로, 후진하면 창 닫힘 (D-507 2, 안전 검토 1·2)
+- 변경: `PoseTrail.odometer`가 매 걸음을 앞 표본의 진행 방향에 투영해 더한다(후진은 음수, 제자리 떨림은 상쇄). D-468의 `distance`(부호 없는 경로 길이)는 그대로. 기대 창은 받은 뒤 odometer가 봉우리에서 `WINDOW_RETREAT_M`(0.01 m)보다 내려가면(D-468 역추적 같은 후진) 측정할 수 없는 것으로 보고 창 밖으로 닫는다. armed 틱마다 새 표본을 접어 넣어 trail 5 s 한도에 놓치지 않는다.
+- 증거: `test_junction_approach.py` — 전진 0.3 m·후진 0.2 m·전진 뒤 0.4 m 짧은 선과 진짜 선이 모두 `unexpected`(부호 없는 합이면 짧은 선이 창 안 0.9 m), 제자리 ±2 mm 떨림 2 s에 odometer 변화 < 1 mm이고 창 안 감지는 그대로 `turning`. 변이 A(부호 없는 합) 3건 실패, 변이 B(후진 검사 삭제) 1건 실패, 복원 뒤 69 통과. CORE services·api_web 1432 통과 13 skip, `known_failures` 신규 0.
+- gate 변화: SOURCE.
+- 결정: D-507 2·3항 2026-10-08 사용자 결정 (1), 안전 검토 REQUEST_CHANGES 1·2.

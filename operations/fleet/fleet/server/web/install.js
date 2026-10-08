@@ -73,7 +73,7 @@ function setTopbarOpen(open) {
 function markLocked() {
   stopNotice();
   // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
-  if (!auth.locked) passwordLogin.refresh(true);
+  if (!auth.locked) loginForm.refresh(true);
   auth.locked = true;
   setTopbarOpen(true);
   auth.role = null;
@@ -217,7 +217,7 @@ function saveToken() {
 }
 pageScope.listen(el("token-save"), "click", saveToken);
 // D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
-const passwordLogin = createPasswordLogin(el("password-login"), {onChange: () => {
+const loginForm = createPasswordLogin(el("password-login"), {onChange: () => {
   el("console-token").value = "";
   saveToken();
 }});
@@ -322,7 +322,7 @@ async function refreshAuthorization(renewed = false) {
     auth.role = identity.role;
     auth.principal = identity.principal_id;
     if (identity.principal_id.startsWith("development-")) el("token-access").hidden = true;
-    passwordLogin.refresh(false);
+    loginForm.refresh(false);
     const roleName = identity.role === "operator" ? "운영자" :
       identity.role === "viewer" ? "조회 전용" :
         identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
