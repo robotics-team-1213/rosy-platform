@@ -606,3 +606,12 @@ def test_a_low_confidence_visible_line_is_no_clear(enforce):
     decision, status = rig.drive(ir='left')
     assert rig.m._ir_guard(rig.now) == 'clear'
     assert (decision.linear, status.arc.reason) == (0., 'lane_arc_motion_unconfirmed')
+
+
+def test_d517_authority_gate_also_stops_an_arc_tick():
+    """D-520 2 (D-517): a required but missing Fleet authority zeroes the arc's twist too."""
+    rig = ArcRig(authority_required=True)
+    rig.open()
+    decision, status = rig.step()
+    assert (decision.linear, decision.angular) == (0., 0.) and status.state == 'HOLD'
+    assert running(rig)
