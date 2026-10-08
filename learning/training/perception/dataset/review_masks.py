@@ -157,12 +157,25 @@ def merge_unknown(current, proposal, binding):
         for y, row in enumerate(current):
             left = np.flatnonzero(row == by_name['lane_left'])
             right = np.flatnonzero(row == by_name['lane_right'])
+            human_road = np.flatnonzero(row == by_name['drivable'])
+            if human_road.size:
+                selected[y, human_road.min():] &= proposal[y, human_road.min():] != by_name['lane_left']
+                selected[y, :human_road.max() + 1] &= proposal[y, :human_road.max() + 1] != by_name['lane_right']
             if left.size:
                 selected[y, :left.min()] &= proposal[y, :left.min()] != by_name['drivable']
             if right.size:
                 selected[y, right.max() + 1:] &= proposal[y, right.max() + 1:] != by_name['drivable']
     out = current.copy()
     out[selected] = proposal[selected]
+    if {'lane_left', 'lane_right', 'drivable'} <= by_name.keys():
+        for y, row in enumerate(out):
+            fresh_road = (current[y] == 255) & (row == by_name['drivable'])
+            left = np.flatnonzero(row == by_name['lane_left'])
+            right = np.flatnonzero(row == by_name['lane_right'])
+            if left.size:
+                row[:left.min()][fresh_road[:left.min()]] = 255
+            if right.size:
+                row[right.max() + 1:][fresh_road[right.max() + 1:]] = 255
     return out
 
 

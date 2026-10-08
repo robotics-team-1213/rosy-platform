@@ -62,11 +62,11 @@ def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
         pytest.skip("POSIX flock is required")
     root = tmp_path / "rosy-test"
     (root / "runs" / "run1").mkdir(parents=True)
-    (root / "venv").mkdir()
-    (root / "venv" / ".deps-sha").write_text("same\n")
+    (root / "venvs" / "same").mkdir(parents=True)
+    (root / "venvs" / "same" / ".deps-sha").write_text("same\n")
     lock = root / "venv.lock"
     holder = subprocess.Popen(
-        ["bash", "-c", f'exec 9>{shlex.quote(str(lock))}; flock -s 9; echo ready; sleep 5'],
+        ["bash", "-c", f'exec 9>{shlex.quote(str(lock))}; flock -x 9; echo ready; sleep 5'],
         stdout=subprocess.PIPE, text=True,
     )
     try:
@@ -77,6 +77,20 @@ def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
     finally:
         holder.terminate()
         holder.wait(timeout=2)
+
+
+def test_pytest_uses_the_same_dependency_environment_as_setup():
+    assert 'V=$R/venvs/$DEPS' in rp.VENV
+    assert 'V=$R/venvs/$DEPS' in rp.PYTEST
+    assert '[ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ]' in rp.PYTEST
+
+
+def test_lock_change_does_not_rebuild_venv_but_install_change_does(monkeypatch):
+    baseline = rp.deps(ROOT, "HEAD")[0]
+    monkeypatch.setattr(rp, "VENV", rp.VENV.replace("flock -x -w 600 9", "flock -x -w 60 9"))
+    assert rp.deps(ROOT, "HEAD")[0] == baseline
+    monkeypatch.setattr(rp, "VENV", rp.VENV.replace("$P check", "$P install extra\n$P check"))
+    assert rp.deps(ROOT, "HEAD")[0] != baseline
 
 
 def _git(cwd, *args):
