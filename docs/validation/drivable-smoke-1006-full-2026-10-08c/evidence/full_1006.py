@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from hashlib import sha256
 from collections import Counter,defaultdict
 import json, subprocess
