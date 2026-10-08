@@ -7376,3 +7376,9 @@ osy-d395-s1d\`.
 - 변경: SIM의 68 mm 경계를 없애는 후처리 길이 문턱을 60/70/80/100 mm로 스윕하고, SIM 89장과 기존 실물 434장의 진행·정지 차이를 분리했다.
 - 증거: `validation/lane-short-boundary-2026-10-09/result.md`. 문제의 SIM 6장 목표 중심 오차 4.5–6.2 mm; 70 mm는 그 6장을 정지시키지만 실물 `bend_expected=True`도 6장 추가 정지. 전역 길이 변경은 보류.
 - gate 변화: 없음. 사람 물리 경계 ID와 폐루프·현장 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 짧은 경계 필터 폐루프 재검증
+
+- 변경: 현재 로컬 main `247561153`을 모델 PC에 격리 빌드하고 B9 SIM에서 60/70 mm 선 길이 조건을 각각 2회 CORE 폐루프로 비교했다.
+- 증거: `validation/lane-short-boundary-closed-loop-2026-10-09/result.md`. 기준은 교차부 횡선 뒤 2/2 HOLD, 70 mm는 교차부 명령 전 2/2 LOST. 전역 길이 증가 가설을 채택하지 않는다.
+- gate 변화: 없음. 사람 물리 경계 ID·실물 주행 수용은 HOLD.
