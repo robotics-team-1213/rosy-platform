@@ -8,7 +8,8 @@ export function reviewViewport(stage, canvas, viewBar, canChange=()=>true) {
   controls.setAttribute('aria-label','사진 확대와 이동');
   const buttons=[['minus','축소 · -'],['fit','화면 맞춤 · 0'],['plus','확대 · +'],['hand','이동 · H']].map(([icon,label])=>{
     const button=document.createElement('ui-button');
-    button.setAttribute('kind',icon==='hand'?'toggle':'quiet');
+    button.setAttribute('kind','quiet');
+    if(icon==='hand')button.setAttribute('kind','toggle');
     button.setAttribute('aria-label',label);
     button.title=label;
     button.textContent=label.split(' · ')[0];
