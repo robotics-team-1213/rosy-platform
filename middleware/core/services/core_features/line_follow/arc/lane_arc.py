@@ -1,8 +1,9 @@
-"""D-520 step 1: map-guided arc following after a junction instruction's turn (feed-forward only).
+"""D-520: map-guided arc following after a junction instruction's turn (odom circle tracking).
 
 A 'left'/'right' instruction carrying `exit_segment` is done when its turn ends (pivot basis map or
 segment_end); a 'straight' one carrying it is done where the previous arc ended. Either opens one
-`line_follow.arc` record: omega = g*v*kappa on odom path length to `length_m`, under the IR guard
+`line_follow.arc` record: omega = g*v*kappa + a bounded correction toward the map circle placed in
+odom (2026-10-09 addendum), on odom path length to `length_m`, under the IR guard
 (one correction per arc), the D-422 sweep of the arc twist and motion_admitted kind 'arc'. The
 keeper's reasons, the loss clock, D-476 and D-468 (1)/(3) are off while it runs. At the end an
 armed instruction for `end_place_id` pivots right there (segment_end); none (or another place's,
@@ -157,7 +158,8 @@ class ArcMixin:
         key = (self._return_evidence.epoch, pose.frame)
         # The circle: a chained straight keeps the ring it ended on; a turn's circle leaves along the
         # turn's target yaw (the map tangent), so a turn that ended off it is corrected, not followed.
-        if (prev is not None and prev['state'] == 'ended' and prev.get('key') == key
+        if (j['action'] == 'straight' and prev is not None and prev['state'] == 'ended'
+                and prev['generation'] == self._generation and prev.get('key') == key
                 and prev['end'] == j.get('place_id') and prev['k'] == k):
             centre, yaw0, integral = prev['centre'], pose.yaw, prev['integral']
         else:
@@ -233,9 +235,9 @@ class ArcMixin:
         if v <= 0:
             return self._arc_stop('linear_limit_zero')
         e_r, e_th = self._arc_error(a, pose)
-        if abs(e_r) > ARC_MAX_RADIAL_M:
-            return self._arc_stop('lane_arc_edge')
         busy = a['corr'] is not None and a['corr']['phase'] in ('away', 'level')
+        if abs(e_r) > ARC_MAX_RADIAL_M and not busy:  # a correction has its own IR and level stops
+            return self._arc_stop('lane_arc_edge')
         if not busy:
             a['integral'] = max(-ARC_MAX_INTEGRAL_1PM, min(ARC_MAX_INTEGRAL_1PM,
                                                           a['integral'] + ARC_GAIN_INTEGRAL_1PM3*e_r*step))

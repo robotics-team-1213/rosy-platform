@@ -658,15 +658,21 @@ def _radial(rig):
     return math.hypot(rig.x, rig.y - 1/K) - 1/K
 
 
+def _radial_k(rig, k):
+    """True distance outside the circle of curvature k (either sign) starting at the origin heading +x."""
+    return math.hypot(rig.x, rig.y - 1/k) - 1/abs(k)
+
+
+@pytest.mark.parametrize('k', [K, -K])
 @pytest.mark.parametrize('turn_scale', [.88, 1., 1.1])
-def test_tracking_holds_the_circle_when_the_robot_turns_less_or_more(turn_scale):
+def test_tracking_holds_the_circle_when_the_robot_turns_less_or_more(turn_scale, k):
     """SIM stage 1: feed-forward alone drifted 33 mm outward on ring_s; odom feedback holds it."""
     rig = ArcRig()
-    rig.open()
+    rig.open(dict(SEGMENT, curvature_1pm=k))
     rig.turn_scale, worst = turn_scale, 0.
     while running(rig):
         rig.drive()
-        worst = max(worst, abs(_radial(rig)))
+        worst = max(worst, abs(_radial_k(rig, k)))
     assert rig.m._arc['reason'] == 'lane_arc_end_unarmed' and worst <= .012
     assert rig.m._arc['corr'] is None
 
@@ -715,7 +721,7 @@ def test_far_off_the_circle_stops_lane_arc_edge():
     rig.turn_scale = 0.                               # the robot never turns: it leaves the circle
     _, status = rig.until(lambda d, s: not running(rig))
     assert status.arc.reason == 'lane_arc_edge' and status.arc.ir_correction.used is False
-    assert _radial(rig) > .07
+    assert .075 < _radial(rig) < .08
 
 
 def test_a_chained_straight_keeps_the_ring_circle():
@@ -727,11 +733,12 @@ def test_a_chained_straight_keeps_the_ring_circle():
     assert rig.m._arc['centre'] == centre
 
 
-@pytest.mark.parametrize('side, radial', [('right', .0625), ('left', -.0625)])
-def test_an_ir_verdict_reanchors_the_circle(side, radial):
-    """IR is a measurement: the right IR on the outer line puts the body 0.0625 m outside."""
+@pytest.mark.parametrize('k, side, radial', [(K, 'right', .0625), (K, 'left', -.0625),
+                                             (-K, 'left', .0625), (-K, 'right', -.0625)])
+def test_an_ir_verdict_reanchors_the_circle(k, side, radial):
+    """IR is a measurement: the IR on the outer line (right on a left turn) puts the body 0.0625 m out."""
     rig = ArcRig()
-    rig.open(dict(SEGMENT, length_m=1.))
+    rig.open(dict(SEGMENT, length_m=1., curvature_1pm=k))
     _past_grace(rig)
     with rig.m._lock:
         pose = rig.m._fresh_pose(rig.now)
@@ -740,3 +747,42 @@ def test_an_ir_verdict_reanchors_the_circle(side, radial):
     with rig.m._lock:
         pose = rig.m._fresh_pose(rig.now)
     assert rig.m._arc_error(rig.m._arc, pose)[0] == pytest.approx(radial, abs=.004)
+
+
+@pytest.mark.parametrize('k', [K, -K])
+def test_correction_is_bounded_both_ways(k):
+    rig = ArcRig()
+    rig.yaw = math.copysign(math.radians(20.), k)      # 20 deg inward of the tangent
+    rig.step()
+    with rig.m._lock:
+        rig.m._open_arc(dict(place_id='SW', action='left', map_id='lab-a',
+                             exit_segment=dict(SEGMENT, curvature_1pm=k), target=0.), rig.now)
+    decision, _ = rig.drive()
+    assert decision.angular == pytest.approx(V*(k - math.copysign(1.5, k)))
+
+
+def test_a_turn_at_the_last_arc_end_places_a_new_circle():
+    """Review: only a chained straight keeps the previous circle; a turn there uses its target."""
+    rig = ArcRig()
+    rig.open()
+    old = rig.m._arc['centre']
+    rig.until(lambda d, s: not running(rig))
+    with rig.m._lock:
+        pose = rig.m._fresh_pose(rig.now)
+        rig.m._open_arc(dict(place_id='SE', action='left', map_id='lab-a', exit_segment=dict(SEGMENT),
+                             target=pose.yaw), rig.now)
+    centre = rig.m._arc['centre']
+    assert centre != old and centre == pytest.approx((pose.x - math.sin(pose.yaw)/K, pose.y + math.cos(pose.yaw)/K))
+
+
+def test_a_straight_after_a_mode_change_places_a_new_circle():
+    rig = ArcRig()
+    rig.open()
+    rig.until(lambda d, s: not running(rig))
+    old = rig.m._arc['centre']
+    rig.m.set_mode(LineFollowMode.CAMERA_LINE)
+    rig.step()
+    with rig.m._lock:
+        rig.m._open_arc(dict(place_id='SE', action='straight', map_id='lab-a', exit_segment=dict(SEGMENT)),
+                        rig.now)
+    assert rig.m._arc['centre'] != old
