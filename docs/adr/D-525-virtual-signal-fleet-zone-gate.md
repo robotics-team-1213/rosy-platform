@@ -133,6 +133,20 @@
 - **시험.** `test_traffic_signals.py`(9), 교통 관련 Fleet 시험 897, 노드 화면 시험 30(`traffic-layer`·`site-map`·`signal-presence`·`convoy-view`), Chromium `test_traffic_view_browser` 1. 모델 PC. `test_site_map_repeat_start_pairs_robot_and_start_place`와 convoy Chromium 1건은 S0 기준(main)에서도 `#site-path` 대기 시간 초과로 실패한다(이 브랜치와 무관).
 - **남은 일.** 수동 녹색과 운영자 있음, 실제 현장 지도(Rosy Cam) 기준 정지선·구역 재검증, S2 Gazebo, S3 실물. D-517 M2 Safety-Review 재확인이 먼저다.
 
+### 실제 현장 지도 검증과 후속 (2026-10-09, feat/d525-realmap-manual)
+
+- **실제 바닥에 겹쳐 봄.** 현장 PC가 오프라인이라 지난밤 Rosy Cam 원본(`ceil.jpg`, 1280×720)과 수락된 보정 `map_to_image`, 실제 운영 지도 `map_v2_fleet`(시연 일방 고리)로 겹쳤다. 신호 구역은 칠한 회전 교차로 위에 놓이고, 입구는 `east:fwd`(오른쪽 위)와 `west:fwd`(왼쪽 아래) 둘이다. 설정 검사는 통과한다. 증거: `X:\DevTemp\d525-realmap\overlay-raw.jpg`, `overlay-topdown.jpg`, `realmap.json`.
+- **바닥과 다른 점.**
+  - 실제 바닥에는 회전 교차로 입구 네 곳에 노랑·검정 빗금 표시가 있다. 지도의 정지선(접근 호 끝 = 회전 고리 중심선)은 이 빗금보다 약 0.12 m 안쪽이다.
+  - 로봇 앞 끝이 실제로 서는 자리는 정지선 0.315 m 앞(u 0.195 + d_stop 0.12), 빗금보다 약 0.2 m 앞이다. 일찍 들어가지는 않지만 화면에서는 일찍 서 보인다. 줄이려면 u를 줄여야 한다(Rosy Cam 정확도, D-517 M7).
+  - 한 바퀴(7.6 m)에 구역을 두 번 지나고 한 번이 0.37 m뿐이다. 합성 8자 고리(1.3 m)와 다르다.
+- **실제 지도 무작위 시험.** `test_real_site_loop_never_enters_on_red_and_never_deadlocks`: 실제 지도 고리, 실제 u 0.195 m, Pinky 몸체, 2·3대, 추정 오차를 ±u 가장자리에 자주 두고 UNKNOWN을 섞는다. 적색 허가 0, 허가 없이 구역 안 몸체 0, 바쁠 때 녹색 0, 순환 대기 0, 모두 한 바퀴 이상.
+- **찾은 것: 0.5 m 위치 점프는 짧은 구역을 건너뛴다.** 추정이 u를 넘어 앞으로 튀어 0.37 m 구역 전체를 넘으면 표는 로봇이 이미 지났다고 보고 다음 블록과 통행권을 준다. `until_m`이 추정에서 재므로 실제 로봇은 구역을 지난다. 뒤로 튀면 그만큼 통행권을 넘는다. 신호만의 문제가 아니라 D-517 전제(모든 추정은 몸체 u 안)가 깨진 경우이고, 모든 블록에 같다.
+- **Fleet 점프 막음(D-517 안전 경로, Safety-Review 대상).** CORE 통행권을 받는 로봇만. 같은 경로에서 앞 끝이 지난 채택값보다 `최대 속도 × 자세 시각 차 + 2u + 0.05 m`를 넘게 움직였으면 그 주기는 UNKNOWN이다: 새 통행권 없음, 모든 교차로 지시 보류(`refused_at_m` 0), `waiting_for: ["pose_jump"]`(정체 아님). 같은 새 자리가 3주기 이어지면 받아들인다(손으로 옮김, 실제 보정). 한 프레임 오류는 받아들이지 않는다. 시각은 자세 자체의 시각(`at_stamp`)이라 오래된 자세가 새로 와도 점프로 보지 않는다. 반복 운행이 바퀴를 떼어 내면 새로 시작한다. 이 한계 아래(u와 그 경계 사이)의 오차는 보이지 않으므로 u 자체가 참이어야 한다.
+- **수동 녹색.** `POST /api/fleet/traffic/signals/{id}` `{verb: set_aspect, approach}`. 운영자 있음이 필요하다: 관제 화면이 열려 보이는 동안 `POST /api/fleet/traffic/signals/presence`를 보내고(이름 있는 운영자), 10 s 안에 다시 오지 않으면 그 신호는 `all_red`다(자동으로 돌아가지 않음). 있음이 없으면 409 `SIGNAL_NO_PRESENCE`, 모르는 입구는 422. 수동 녹색도 녹 → 황 → 전체 적색 → (구역 빔) → 녹을 지난다. 신호 카드에 입구마다 "녹 · east:fwd" 버튼, 태그 "수동 · east:fwd 녹".
+- **S2 Gazebo는 막혀 있다.** 같은 날 D-517 M5(여러 대 고리 SIM)가 한 대 바퀴 SIM 실패를 기다린다(다른 세션 진단). 여러 대 고리가 돌기 전에는 신호 SIM이 뜻이 없다.
+- **시험.** 모델 PC: 교통 관련 Fleet 915 통과(새 실패 0), 노드 화면 194/195(실패 1건 `attention-stale`은 main에서도 실패).
+
 ### 개정 이력
 
 - rev 2 (2026-10-08, 독립 critic 검토 반영): 다음 녹색 조건을 점유에서 구역 칸 `FREE`(허가·점유·핀 없음)로 바꿈(허가가 정지선보다 약 5 s 먼저 나감). 신호 구역 수용 1·단계당 접근로 1을 설정 검사로 강제. 접근로를 경로 호로, 정지선을 구역 span `d0`로 정의하고 실제 정지 위치(약 0.3 m 앞)를 적음. 2단계 앞 끝 칸 허가에도 신호 검사. 신호 대기를 기다림 그래프·고리 수용에 넣음. 적색 대기를 `merge_max_wait_s`에서 뺌. `hold` 120 s 주의, `set_aspect` 접근로 인자, `hold_back` 거절 범위와 trip 밖 로봇을 적음.
