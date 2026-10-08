@@ -768,3 +768,9 @@
 - gate 변화: 없음(SOURCE)
 - 결정: 옛 CORE는 pydantic 기본 `extra=ignore` 로 필드를 버리고 v1.148 정지를 유지한다(능력 플래그 없이 하위 호환)
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · test(api): Console 지도 증거 라우터 쿼리 보존
+
+- 변경: 실제 CORE 브라우저 테스트의 요청 중계가 비용 지도 `scope=global` 쿼리를 보존하고, 지도 미수신 상태가 안정된 뒤 화면을 촬영한다. 제품 API 동작은 변경하지 않았다.
+- 증거: [Console 지도 미수신 상태 검증](../../../docs/validation/uiux-console-map-truth-2026-10-08/result.md). 관련 브라우저 3 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 캡처 정합성. DEVICE/FIELD는 HOLD.

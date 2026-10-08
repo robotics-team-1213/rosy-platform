@@ -140,6 +140,7 @@ export function mount(root, ctx) {
         throw error;
       }
     },
+    getMapSources: () => capabilities?.runtime?.maps,
     getPose: () => state?.pose,
     getCurrentMapId: () => state?.map_id,
     onMapIdMismatch: (value) => { mapIdMismatch = value; renderStage(); syncMapActions(); },
