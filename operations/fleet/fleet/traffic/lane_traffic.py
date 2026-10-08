@@ -24,7 +24,7 @@ from typing import Iterable, Mapping, Optional
 
 from core_common.robot_body import PINKY_PRO  # public read-only anchor (D-430 §3); RobotBody is not
 from fleet.localization.map_pose import MapPoseConfig
-from fleet.routing import blocks
+from fleet.traffic import blocks
 from fleet.routing.execute import arc_id
 from fleet.server.trip_ports import ODOM_DRIFT_PER_M, TripConfig, pose_view
 
