@@ -60,7 +60,7 @@ kernel.softlockup_panic = 1"
 run sysctl -q --system
 
 # 3. swap off ZFS, zram to the size of RAM
-if grep -qE '^[^#].*/dev/zvol/rpool/swap2' /etc/fstab; then
+if grep -qE '^[[:space:]]*/dev/zvol/rpool/swap2[[:space:]]' /etc/fstab; then
   run swapoff /dev/zvol/rpool/swap2 || echo "swapoff failed (in use?); fstab still changed, reboot to apply" >&2
   run sed -i 's|^\(/dev/zvol/rpool/swap2 .*\)$|# rosy-model-pc-guard: zvol swap can deadlock under pressure\n# \1|' /etc/fstab
 fi
