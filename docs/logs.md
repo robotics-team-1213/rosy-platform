@@ -7233,3 +7233,9 @@ osy-d395-s1d\`.
 - 변경: Lenovo Pilot 설치 화면을 다시 촬영하고 설치 APK를 읽기 전용으로 확인했다. 현재 소스에서 Android 후보 APK를 격리 빌드해 설치본과 자산·서명을 비교한 결과를 [검증 기록](validation/uiux-pilot-tablet-reconnect-2026-10-09/result.md)에 남겼다.
 - 증거: 현재 후보 93 JVM tests PASS, UI 자산 50개 소스 일치. 설치본과 후보 자산 10개 차이, 서명 인증서 일치. 후보 에뮬레이터는 부팅 후 ADB 미등록으로 화면 캡처 실패.
 - gate 변화: 없음. 설치본 DEVICE 로비만 관찰했고 현재 후보 DEVICE G2, 사용자 G3와 현장 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · Pinky 실물 차선 디버그 지면값 읽기 전용 대조
+
+- 변경: 두 Pinky의 설치본과 ROS 토픽을 읽기 전용으로 확인하고, rosy_26 keep 디버그와 이미지 시각·투영값·페인트 실제 사용을 검증 기록에 남겼다.
+- 증거: rosy_26 디버그 84건 중 이미지 시각 83건 일치, 전략 none/flipping 84건, 목표점 0, denoise_fallback 84건. 장치의 shadow 모델 포인터가 없고 rosy_60은 keep 모드가 아니다.
+- gate 변화: 없음. 사람 경계 정답, 승인 보정, 학습 모델 실제 추론, 자율 주행 수용은 확인되지 않았다. 주행 허용 HOLD.

@@ -774,3 +774,10 @@
 - 변경: 실제 CORE 브라우저 테스트의 요청 중계가 비용 지도 `scope=global` 쿼리를 보존하고, 지도 미수신 상태가 안정된 뒤 화면을 촬영한다. 제품 API 동작은 변경하지 않았다.
 - 증거: [Console 지도 미수신 상태 검증](../../../docs/validation/uiux-console-map-truth-2026-10-08/result.md). 관련 브라우저 3 passed, known_failures 0 NEW.
 - gate 변화: LOCAL 캡처 정합성. DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · fix(api): 램프 식별 결과 조회
+- 변경: CORE의 장치 결과 조회가 identify_blue/identify_amber를 유효한 시험 동작으로 받아 실패·거절 결과도 표시한다. 사람 확인 대상은 기존 buzzer/lamp로 유지한다.
+- 증거: test_host_hardware.py 68 passed, 1 skipped; known_failures 0 NEW (Windows 보조 증거).
+- gate 변화: 없음. 장치 배포·영상상 점멸 확인은 별도.
+- 결정: D-247, D-472.
+- 교훈: 요청 수락과 실제 점멸·결과 조회는 서로 다른 판정이다.
