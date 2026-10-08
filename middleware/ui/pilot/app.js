@@ -17,8 +17,10 @@ const connectRoot = document.querySelector('[data-screen="connect"]');
 const driveRoot = document.querySelector('[data-screen="drive"]');
 const armRoot = document.querySelector('[data-screen="arm"]');
 let simTarget = null;
+let leaveDrive = null;
 
 function showConnect() {
+  leaveDrive = null;
   document.body.dataset.pilotScreen = "connect";
   driveRoot.hidden = true;
   connectRoot.hidden = false;
@@ -48,7 +50,7 @@ function showDrive({capabilities} = {}) {
       back);
     return;
   }
-  mountDrive(driveRoot, {
+  leaveDrive = mountDrive(driveRoot, {
     profile: profileFromBaseVelocity(base),
     unsupported: plan.filter((entry) => !entry.supported).map((entry) => entry.control),
     onExit: exit,
@@ -69,10 +71,15 @@ for (const button of document.querySelectorAll("[data-estop]")) {
   });
 }
 
-// 두 앱(관제 /dashboard · 조종 /pilot) 사이 이동.
+// 조종 화면에서 운용 지도(/console)로 이동.
 for (const button of document.querySelectorAll("[data-goto]")) {
   button.addEventListener("click", () => {
-    location.assign(button.dataset.goto);
+    button.disabled = true;
+    if (leaveDrive) {
+      const notice = document.querySelector("#pilot-notice");
+      if (notice) notice.textContent = "조종을 종료하고 지도를 여는 중입니다.";
+      leaveDrive(() => location.assign(button.dataset.goto));
+    } else location.assign(button.dataset.goto);
   });
 }
 

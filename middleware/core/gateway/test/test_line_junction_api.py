@@ -106,6 +106,15 @@ def test_keep_debug_junction_reason_feeds_the_manager(core_client):
     assert services.line_follow.status().reason == "junction_waiting"
 
 
+def test_keep_debug_strategy_reaches_the_manager(core_client):
+    """Lap SIM A: the keeper's corner turn is read from line/keep_debug (strategy)."""
+    _, services, clock = _active(core_client)
+    for strategy, expected in ((7, False), ("both", False), ("corner_left", True)):  # a corner latches
+        raw = json.dumps({"reason": None, "strategy": strategy, "stamp": 100.0})
+        observation.keep_junction(services, raw, source_now=100.1, received_at=clock["t"])
+        assert (services.line_follow._corner_turn_at is not None) is expected, strategy
+
+
 def test_stale_or_other_keep_debug_is_not_a_sighting(core_client):
     _, services, clock = _active(core_client)
     for raw, now in ((json.dumps({"reason": "junction_fork", "stamp": 100.0}), 105.0),

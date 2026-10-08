@@ -51,6 +51,7 @@ import {
 import {
   TELEMETRY_CHANNELS,
   lineFollow,
+  lineFollowStartReady,
   renderCapabilityPanels,
   renderEvents,
   renderFormationHero,
@@ -652,7 +653,7 @@ document.querySelectorAll("[data-line-mode]").forEach((button) => {
     };
     const fail = error => announceAction(`차선 추종 변경 실패: ${error.message}`);
     if (mode !== "OFF") await runConfirmed(`${button.textContent.trim()} 차선 추종을 시작할까요? 주변 안전을 확인하세요.`, button,
-      () => !lineFollow.pending && session.capabilities?.navigation?.goal_navigation === true && session.robotState?.safety?.estop !== true, run, fail, pending, "line");
+      () => !lineFollow.pending && lineFollowStartReady(), run, fail, pending, "line");
     else {
       if (commandOwner?.kind === "line") commandOwner = null;
       const owner = authTicket(), role = session.role, active = () => owner.current() && role === session.role; pending(true);
