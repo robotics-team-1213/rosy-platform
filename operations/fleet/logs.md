@@ -2529,3 +2529,9 @@
 - 증거: `test_trip_d507.py`의 실제 west edge 후보·낡은 자세(0.304 s 반올림 경계)·지도 ID/버전 변경·trip 종료 검사. 관련 pytest 217 통과 후 착지 게이트가 파일/패키지 크기 판정 2건을 발견해 중단됐다(깨끗한 main의 두 시험은 통과). 굽이 진단을 `trip_ports.py`로 모으고 P6 판정을 갱신한 뒤 해당 시험 포함 41 통과. `known_failures.py` 0 new, flake8 및 harness lint 0 error. SOURCE/LOCAL 범위.
 - gate 변화: 없음. Fleet→CORE 폐루프 SIM·장치·현장 검수는 열림.
 - 결정: B9 굽이 접근 허가는 같은 경계의 검수 및 음성 사례를 통과할 때까지 보류.
+
+## 2026-10-08 · uncommitted · feat(fleet): 지도 궤적과 D-512 테더 표시
+- 변경: 새 `web/trail-view.js`가 1 s 상태 폴링 pose로 로봇별 궤적(최근 120 s, 600점, 1 cm 이상 이동)을 브라우저에 모아 나이에 따라 흐리게 그리고, 테더 원과 기준점을 그린다(로봇이 원 밖이면 주의 색). `map-view.js`는 import와 그리기 hook 두 줄만 늘었다(격자·D-513 7 회전 미터 뷰의 toPx를 넘긴다). 새 `server/tether_routes.py`: `GET /api/fleet/tethers`(viewer), named operator `POST`·`DELETE /api/fleet/robots/{robot_id}/tether`, 메모리 전용. API Ref v1.138.
+- 증거: `test_tether_routes.py`(인증·멱등·검증), `web/trail-view.test.mjs`(간격·한도·회전 투영), Chromium `test_start_point_browser.py::test_map_draws_the_travelled_trail_and_a_tether`. SOURCE/LOCAL 범위.
+- gate 변화: 없음. 실기 궤적·테더 강제(tools/device_test, D-512)는 열림.
+- 결정: D-512 표시 절반. fleet 패키지 크기 판정은 main에서 이미 43809+150을 넘었다(44433) — 재판정 필요.
