@@ -180,6 +180,7 @@ class Repo:
     test_files: list[str]
     _texts: dict[str, str] = field(default_factory=dict)
     _imports: dict[str, set[str]] = field(default_factory=dict)
+    _tokens: dict[str, set[str]] = field(default_factory=dict)
 
     @classmethod
     def load(cls, root: Path) -> Repo:
@@ -234,6 +235,11 @@ class Repo:
     def imports_prefix(self, path: str, prefixes: tuple[str, ...]) -> bool:
         return any(name == p or name.startswith(p + ".") for name in self.imports(path) for p in prefixes)
 
+    def tokens(self, path: str) -> set[str]:
+        if path not in self._tokens:
+            self._tokens[path] = set(re.findall(r"[\w.-]+", self.text(path)))
+        return self._tokens[path]
+
     def test_files_under(self, path: str) -> list[str]:
         if path.endswith(".py"):
             return [path]
@@ -258,7 +264,8 @@ class Repo:
             needles.append(p.name)
         parts = None
         if p.name not in IGNORED_BASENAMES and p.parent.name:
-            parts = [re.compile(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])") for token in (p.name, p.parent.name)]
+            parts = (p.name, p.parent.name)
+        simple_parts = bool(parts and all(re.fullmatch(r"[\w.-]+", token) for token in parts))
         helper = p.stem if p.suffix == ".py" and not TEST_FILE.search(path) else None
         found = []
         for test in self.test_files:
@@ -266,7 +273,10 @@ class Repo:
                 continue
             text = self.text(test)
             if (any(n in text for n in needles) or (helper and helper in self.imports(test))
-                    or (parts and all(rx.search(text) for rx in parts))):
+                    or (parts and (all(token in self.tokens(test) for token in parts)
+                                   if simple_parts
+                                   else all(re.search(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])", text)
+                                            for token in parts)))):
                 found.append(test)
         return found
 
