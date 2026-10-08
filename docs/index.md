@@ -301,7 +301,7 @@
 ## 최근 기록
 
 - 2026-10-08 · uncommitted · Decision 오프라인 재생 선검증과 AI PC 재시험
+- 2026-10-08 · uncommitted · feat(site): 모델 PC 멈춤 대비
 - 2026-10-08 · uncommitted · 차선 녹화 TF와 10/7 연속 검수 준비
 - 2026-10-08 · uncommitted · 10/7 현재 R0 재생 게이트
 - 2026-10-08 · uncommitted · 차선 추종 녹화 증거 준비
-- 2026-10-08 · uncommitted · 굽이 SIM의 전체 차로 중심선 투영
