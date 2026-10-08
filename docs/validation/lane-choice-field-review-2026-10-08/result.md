@@ -16,10 +16,10 @@
 
 The raw field notes and captured images are under `X:/DevTemp/lane-choice-20261008/`. The ceiling frame SHA-256 is `ec3b4c60a58a497e635d80dd976292384d8b6dd6830b3b551b26388fd02da7dc`. Temporary robot login tokens were logged out and removed.
 
-## What the operator should do now
+## Direct control follow-up — 21:08 KST
 
-1. **Keep both robots stopped.** Leave E-Stop access clear and keep people and loose cable out of the intended lane. Keep the site PC and ceiling camera on.
-2. **Prepare the physical markers.** `X:/DevTemp/lane-choice-20261008/aruco-provisional.pdf` contains proposed `DICT_4X4_50` IDs 30–33 for four fixed map points and ID 7 for `rosy_26`. Print at **100%** and measure the printed squares (120 mm map, 60 mm robot). The PDF is a preparation artifact; these IDs are not yet in the installed site configuration. Place the four fixed markers flat, fully visible to the ceiling camera and outside the robot path. Put ID 7 flat on `rosy_26` without covering its camera, vents, controls, or cable. Record which ID is where and the robot marker's orientation. The map origin is the inner-track centre, +x right and +y up; use surveyed map metres for the four fixed marker centres. Do not infer the coordinates from image corners alone.
-3. **Send the marker placement photo and measured positions.** I can then update the site marker configuration using those surveyed points, verify fresh detections and authenticated sightings, and require Fleet `LOCALIZED` map pose. I will check live IR, keep-mode and motion evidence before asking CORE for `junction_turn:true` through its normal gate.
+The operator clarified that the agent should control the robot for this test. The provisional marker PDF under `X:/DevTemp/lane-choice-20261008/` was neither printed nor installed and is not an operator action for this run.
 
-The physical branch run stays HOLD until those gates pass and the wrong-way simulation case is resolved. A marker detection or a healthy service by itself is not field acceptance.
+Authenticated CORE readback from `rosy_26` at this follow-up: `mode: IDLE`, `safety.estop: false`, battery 100%, `line_follow.mode: OFF`, junction idle, motor drive ready, `localization: null`. A fresh front frame showed a left lane and unclassified regions; it did not show a confirmed junction or the clearance around the robot. Tailscale reported the site PC offline, and `tailscale ping` timed out. Therefore the agent could not obtain a fresh overhead frame to identify the robot and its cable/path. No motion or junction instruction was sent in this follow-up. The temporary CORE token was logged out after the read.
+
+The intended next run is supervised direct CORE control of one identified robot, with the live overhead and front views, tether/path check, hold deadman, and stop available. Recheck the site link and a fresh camera verdict before starting. A Fleet lane trip still needs trusted map pose and junction admission; the current readback does not establish either. The physical lane-choice result remains **HOLD**.
