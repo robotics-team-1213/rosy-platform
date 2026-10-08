@@ -89,6 +89,47 @@ def test_load_frozen_lane_renames_keys_and_checks_parity(tmp_path):
         dh.load_frozen_lane(_scripted(tmp_path, lane), classes=LANE_CLASSES[:4])
 
 
+def test_parent_torchscript_and_delivered_onnx_agree_on_input_frames(tmp_path):
+    pytest.importorskip('onnx')
+    pytest.importorskip('onnxruntime')
+    lane = _lane(3)
+    script = _scripted(tmp_path, lane)
+    parent, _ = dh.load_frozen_lane(script, classes=LANE_CLASSES)
+    onnx = tmp_path / 'parent.onnx'
+    torch.onnx.export(lane, torch.rand(1, 3, 240, 320), str(onnx),
+                      opset_version=17, input_names=['x'], output_names=['logits'])
+    frames = [torch.rand(1, 3, 240, 320), torch.rand(1, 3, 240, 320)]
+    assert dh.verify_parent_parity(parent, script, onnx, frames, ignore_top=110)['samples'] == 2
+    other = _lane(4)
+    torch.onnx.export(other, torch.rand(1, 3, 240, 320), str(onnx),
+                      opset_version=17, input_names=['x'], output_names=['logits'])
+    with pytest.raises(ValueError, match='ONNX'):
+        dh.verify_parent_parity(parent, script, onnx, frames, ignore_top=110)
+
+
+def test_candidate_onnx_preserves_parent_lane_pixels(tmp_path):
+    pytest.importorskip('onnx')
+    pytest.importorskip('onnxruntime')
+    lane = _lane(5)
+    model = dh.LaneWithDrivable(lane, ignore_top=110).eval()
+    with torch.no_grad():
+        model.drivable[-1].bias.fill_(5.0)
+    parent = tmp_path / 'parent.onnx'
+    candidate = tmp_path / 'candidate.onnx'
+    for module, path in ((lane, parent), (model, candidate)):
+        torch.onnx.export(module, torch.rand(1, 3, 240, 320), str(path), opset_version=17,
+                          input_names=['x'], output_names=['logits'])
+    frames = [torch.rand(1, 3, 240, 320)]
+    parity = dh.verify_candidate_lane_parity(parent, candidate, frames, ignore_top=110)
+    assert parity['samples'] == 1 and parity['parent_lane_pixels_preserved']
+    assert parity['ambiguous_pixels'] >= 0
+    other = _lane(6)
+    torch.onnx.export(other, torch.rand(1, 3, 240, 320), str(parent), opset_version=17,
+                      input_names=['x'], output_names=['logits'])
+    with pytest.raises(ValueError, match='parent lane pixels'):
+        dh.verify_candidate_lane_parity(parent, candidate, frames, ignore_top=110)
+
+
 def test_pinky_lane_segmentation_names_map_to_lane_unet():
     names = ["enc1.body.0.weight", "middle.4.running_var", "dec1.body.3.weight", "head.bias"]
     renamed = []

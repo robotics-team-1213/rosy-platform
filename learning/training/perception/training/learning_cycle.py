@@ -288,7 +288,7 @@ def run_once(config, out, *, trainer_fn=None, review_pipeline=None):
                        review_pipeline.cycle_key(config,job,request['dataset'],recipe))
                 row = cycles.setdefault(key, {"dataset": request["dataset"], "recipe": recipe,
                                                "attempts": 0, "status": "pending"})
-                if row["status"] in ("ready", "rejected", "gave_up"):
+                if row["status"] in ("ready", "candidate", "rejected", "gave_up"):
                     continue
                 if row["attempts"] >= config["max_attempts"]:
                     row.update(status="gave_up", error="interrupted attempt limit reached")
@@ -305,7 +305,14 @@ def run_once(config, out, *, trainer_fn=None, review_pipeline=None):
                         # identical. Keep the shared attempt budget but never
                         # reuse a Job directory for different immutable inputs.
                         result = trainer_fn(cfg, out / "jobs" / key / signature(cfg), indexed_review=indexed_context)
-                    row.update(status="ready", result=result)
+                    if recipe.get("recipe") == "drivable_head":
+                        if result.get("status") != "candidate":
+                            raise JobError("drivable_head must return a candidate, never READY")
+                        row.update(status="candidate", result=result)
+                    else:
+                        if result.get("status") == "candidate":
+                            raise JobError("only drivable_head may return a candidate")
+                        row.update(status="ready", result=result)
                 except Rejected as error:
                     row.update(status="rejected", error=str(error))
                 except Exception as error:
