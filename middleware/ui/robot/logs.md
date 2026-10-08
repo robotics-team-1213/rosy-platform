@@ -1080,3 +1080,9 @@
 - 변경: wide 고정 프레임에서 감지·지도·조작 세 열에 같은 스크롤바 자리를 예약한다. 콘솔 셸 시험이 실제 패널 폭을 검사한다.
 - 증거: `docs/validation/uiux-robot-column-width-2026-10-07/result.md`; 1280px 네 패널 폭 차이 15.01→0.01px, 역할 셸 브라우저 9 passed, G1 90 passed, 각 known_failures 0 NEW.
 - gate 변화: LOCAL 동등 폭 G2 부분 근거. 전체 상태·실물·운영자 G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): Host Agent 차단 시 네트워크 입력 잠금
+
+- 변경: `/device` 네트워크 작업에서 Host Agent 원본을 사용할 수 없거나 조회가 지연된 동안 SSID·암호·프로파일 입력도 실행 버튼과 함께 잠그고 같은 차단 안내에 연결한다. fresh 회복 시 초안을 유지해 다시 입력할 수 있다.
+- 증거: [Robot 절차 LOCAL 검증](../../../docs/validation/uiux-robot-procedure-2026-10-08/result.md). Host 작업 브라우저 3 passed, 역할 G2 60기록 1 passed, 넘침·pageerror 0, 비상 정지 60/60, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 차단·회복 부분 근거. 실물 Host Agent, 설치자 G3와 현장 수용은 HOLD.
