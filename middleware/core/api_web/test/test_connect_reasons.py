@@ -64,6 +64,12 @@ class RelationshipReasons(unittest.TestCase):
         lost = lan.get(f"{BASE}/requests/{'x' * 32}", headers={"X-Request-Secret": "y" * 43})
         self.assertEqual("APPROVAL_EXPIRED", _reason(lost, 409))
         self.assertEqual("request unavailable or changed", lost.json()["detail"])
+        request = self.request()
+        lan.get(f"{BASE}/requests/{request['request_id']}", headers={"X-Request-Secret": request["request_secret"]})
+        early = lan.get(f"{BASE}/requests/{request['request_id']}",
+                        headers={"X-Request-Secret": request["request_secret"]})
+        self.assertEqual("RATE_LIMITED", _reason(early, 409))
+        self.assertEqual("2", early.headers["retry-after"])
 
 
 class ScreenCodeReasons(unittest.TestCase):

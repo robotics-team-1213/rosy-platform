@@ -226,7 +226,7 @@ def classify_link(exc: BaseException | None, *, scheme: str,
     return "unreachable"
 
 
-def _transport_kind(exc: BaseException, scheme: str) -> str:
+def _transport_kind(exc: BaseException, scheme: str) -> str | None:
     """D-535 closed transport vocabulary for an exception that never got an HTTP answer."""
     chain, seen = [], exc
     while seen is not None and len(chain) < 8:
@@ -247,7 +247,7 @@ def _transport_kind(exc: BaseException, scheme: str) -> str:
             return "no_route"
     if scheme.lower() == "http" and isinstance(exc, _PROTOCOL):
         return "plain_http_to_tls"
-    return "timeout"
+    return "timeout" if isinstance(exc, (httpx.TransportError, OSError, asyncio.TimeoutError)) else None
 
 
 def link_reason(exc: BaseException | None, *, scheme: str) -> dict | None:
@@ -257,6 +257,7 @@ def link_reason(exc: BaseException | None, *, scheme: str) -> dict | None:
     if isinstance(exc, RobotApiError):
         code = connect_reason.classify(code=exc.code, http_status=exc.status) or connect_reason.HTTP_FALLBACK
     else:
-        code = connect_reason.classify(transport=_transport_kind(exc, scheme))
+        kind = _transport_kind(exc, scheme)
+        code = connect_reason.classify(transport=kind) if kind else connect_reason.HTTP_FALLBACK
     retry, message, action = connect_reason.REASONS[code]
     return {"code": code, "message": message, "action": action, "retry": retry}

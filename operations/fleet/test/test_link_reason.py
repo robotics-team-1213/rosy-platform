@@ -39,6 +39,7 @@ def test_transport_failures_get_reasons():
         reason = link_reason(exc, scheme="https")
         assert reason["code"] == code and reason["message"] and reason["action"], (exc, reason)
     assert link_reason(httpx.RemoteProtocolError("bad"), scheme="http")["code"] == "TLS_REQUIRED"
+    assert link_reason(KeyError("parse bug"), scheme="https")["code"] == "UNEXPECTED_RESPONSE"
 
 
 def test_robot_answers_keep_their_reason():

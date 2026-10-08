@@ -33,14 +33,17 @@ class Refused(ValueError):
     """``code`` is the D-535 reason a client shows; the message stays internal."""
     code = "PAIRING_REQUIRED"
 
-    def __init__(self, message, code=None):
+    def __init__(self, message, code=None, *, retry_after_s=None):
         super().__init__(message)
         if code is not None:
             self.code = code
+        if retry_after_s is not None:
+            self.retry_after_s = retry_after_s
 
 
 class RateLimited(Refused):
     code = "RATE_LIMITED"
+    retry_after_s = 60
 
 
 class CodeBudgetSpent(RateLimited):
@@ -58,6 +61,7 @@ class WrongCode(Refused):
 
 
 #: D-535: why a request that is no longer pending cannot be confirmed, cancelled or decided.
+#: An approved one keeps the default (PAIRING_REQUIRED): the requester reads status, which says approved.
 _ENDED = {"expired": "APPROVAL_EXPIRED", "rejected": "APPROVAL_DENIED", "cancelled": "PAIRING_REQUIRED"}
 
 
@@ -129,6 +133,7 @@ class PeerReceiver:
                 os.chmod(temporary, 0o640)
                 os.replace(temporary, target)
             self._display_shown = shown
+            self._display_warned = False  # D-535: pairing_state() reads the hand-over as working again
         except OSError as exc:
             if not self._display_warned:  # The type only: never the code.
                 self._display_warned = True
@@ -246,7 +251,7 @@ class PeerReceiver:
             self._prune()
             row = self._row(request_id, secret)
             if row.get('last_poll') and (self.clock() - row['last_poll']).total_seconds() < 2:
-                raise RateLimited('status polling interval is two seconds')
+                raise RateLimited('status polling interval is two seconds', retry_after_s=2)
             row['last_poll'] = self.clock()
             return self._view(request_id, row)
 
@@ -370,7 +375,7 @@ class PeerReceiver:
             if issuer["digest"] != grant["issuer_digest"] or issuer["source"] != grant["issuer_source"]:
                 raise RepositoryDenied("issuer identity changed")
         except RepositoryDenied as exc:
-            raise Refused("issuer unavailable", "APPROVAL_EXPIRED") from exc
+            raise Refused("issuer unavailable") from exc
         return grant
 
     def challenge(self, grant_id):

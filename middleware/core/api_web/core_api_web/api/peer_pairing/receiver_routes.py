@@ -23,6 +23,12 @@ def _reason(exc):
     return code if code in REASONS else "PAIRING_REQUIRED"
 
 
+def _retry(exc):
+    """Retry-After for a limit refusal that keeps its older 409 status."""
+    wait = getattr(exc, "retry_after_s", None)
+    return ({"retry_after_s": wait}, {"Retry-After": str(wait)}) if wait else (None, None)
+
+
 def service(request):
     if request.url.scheme != "https":
         raise ReasonError(403, "TLS_REQUIRED", "authenticated HTTPS required")
@@ -52,7 +58,7 @@ async def call(function, *args, schema):
         result = adapter.dump_python(adapter.validate_python(result), mode='json')
         return JSONResponse(content=result, headers={"Cache-Control": "no-store"})
     except ValueError as exc:
-        raise ReasonError(409, _reason(exc), "request unavailable or changed") from None
+        raise ReasonError(409, _reason(exc), "request unavailable or changed", *_retry(exc)) from None
 
 
 @router.get("/identity")
@@ -112,9 +118,10 @@ async def confirm(request: Request, request_id: str = Path(pattern=r'^[A-Za-z0-9
         raise ReasonError(429, CodeBudgetSpent.code,
                           "approval code attempts exhausted; approve from the console") from None
     except RateLimited:
-        raise ReasonError(429, "RATE_LIMITED", "source rate limit reached") from None
+        raise ReasonError(429, "RATE_LIMITED", "source rate limit reached", {"retry_after_s": 60},
+                          {"Retry-After": "60"}) from None
     except ValueError as exc:
-        raise ReasonError(409, _reason(exc), "request unavailable or changed") from None
+        raise ReasonError(409, _reason(exc), "request unavailable or changed", *_retry(exc)) from None
     return await call(lambda: result, schema=StateSnapshot)
 
 
@@ -141,7 +148,7 @@ def admit(request, candidate, *, identity=False):
         candidate.admit_proof(request.client.host if request.client else 'unknown', identity=identity)
     except ValueError:
         detail = 'anonymous identity rate limit reached' if identity else 'anonymous proof rate limit reached'
-        raise ReasonError(429, 'RATE_LIMITED', detail) from None
+        raise ReasonError(429, 'RATE_LIMITED', detail, {'retry_after_s': 60}, {'Retry-After': '60'}) from None
 
 
 def proof_service(request, *, identity=False):

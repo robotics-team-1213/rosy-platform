@@ -48,9 +48,10 @@ def local_authority(request: Request, svc: CoreServicesLike) -> bool:
 
 #: D-535: bump when the reason contract (connect-reasons vector) changes meaning.
 CONNECT_CONTRACT = 1
-#: D-535 reachability reads: per source and overall, per minute. The answer is public
-#: anyway (mDNS TXT carries stage, release and tls_host); the limit bounds work, not secrecy.
-PER_SOURCE_LIMIT, GLOBAL_LIMIT, WINDOW_S = 30, 240, 60.0
+#: D-535 reachability reads per source per minute. The answer is public anyway (mDNS TXT
+#: carries stage, release and tls_host); the limit bounds work, not secrecy. No global
+#: window: one LAN host with a few aliases must not lock every Pilot out (review M1).
+PER_SOURCE_LIMIT, WINDOW_S = 30, 60.0
 _rates_lock = threading.Lock()
 
 
@@ -58,18 +59,17 @@ def _admit(request: Request, host: str):
     state = request.app.state
     with _rates_lock:
         if not hasattr(state, 'connection_rates'):
-            state.connection_rates = ({}, _Window(GLOBAL_LIMIT, WINDOW_S))
-        sources, overall = state.connection_rates
+            state.connection_rates = {}
+        sources = state.connection_rates
         now = time.monotonic()
         if len(sources) > 1024:
-            sources.clear()  # ponytail: forgets per-source windows under a flood; the global window still holds
+            sources.clear()  # ponytail: >1024 private sources forget their windows; each answer is a small read
         window = sources.setdefault(host, _Window(PER_SOURCE_LIMIT, WINDOW_S))
-        wait = max(window.retry_after(now) or 0.0, overall.retry_after(now) or 0.0)
+        wait = window.retry_after(now)
         if wait:
             raise ReasonError(429, 'RATE_LIMITED', None, {'retry_after_s': int(wait) + 1},
                               {'Retry-After': str(int(wait) + 1)})
         window.hits.append(now)
-        overall.hits.append(now)
 
 
 def _pairing_word(request: Request, tls: bool) -> str:
@@ -78,7 +78,7 @@ def _pairing_word(request: Request, tls: bool) -> str:
     from core_api_web.api.peer_pairing.receiver_initializer import get_receiver
     try:
         return get_receiver(request).pairing_state()
-    except (ValueError, OSError):
+    except Exception:  # A reachability read never fails because pairing cannot start (review M2).
         return 'unavailable'
 
 
