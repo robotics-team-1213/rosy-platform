@@ -1029,8 +1029,11 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1177,
-        "accept: re-judged at 1177 on 2026-10-08 for D-472 4/5: the identity blink's SIGKILL reap, "
+        1182,
+        "accept: re-judged at 1182 on 2026-10-09 for D-483: the peer request LCD now "
+        "shows the first 16 digits of the TLS CA digest for first-contact comparison; "
+        "card_renderer remains the single LCD owner, and test/test_rosy_face.py covers the row. "
+        "Previously re-judged at 1177 on 2026-10-08 for D-472 4/5: the identity blink's SIGKILL reap, "
         "hard 3.5 s cut and immediate refusal answer stay with the one process that spawns "
         "lamp_pattern; IDENTIFY_OVER and the identify age constants may later move to "
         "core_common.face_screen; zero growth allowance remains. "

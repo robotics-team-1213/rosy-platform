@@ -718,10 +718,11 @@ def test_lobby_rejects_unsafe_urls_and_suppresses_current_robot(tablet_page):
     assert errors == [], errors
 
 
-def _enter_drive(page, base_url, access_token="devtoken"):
+def _enter_drive(page, base_url, access_token=None):
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    page.fill("form[data-pilot-token-form] ui-field input", access_token)
+    page.fill("form[data-pilot-token-form] ui-field input",
+              dev_server.DEV_TOKEN if access_token is None else access_token)
     page.click("form[data-pilot-token-form] ui-button")
     page.wait_for_selector("[data-drive-enter]")
     page.click("[data-drive-enter]")
@@ -789,7 +790,8 @@ def test_drive_handoff_opens_real_console_map_in_same_tab(base_url, viewport, tm
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["auth"] = {**config["auth"], **yaml.safe_load(
         (config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))["auth"]}
-    access_token = "rosy-dev-operator"
+    access_token = next(token["token"] for token in config["auth"]["tokens"]
+                        if token["role"] == "operator")
     monkeypatch.setattr(dev_server, "DEV_TOKEN", access_token)
     profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
     capabilities = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))

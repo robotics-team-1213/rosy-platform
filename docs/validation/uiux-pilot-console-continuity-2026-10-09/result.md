@@ -1,6 +1,6 @@
 # Pilot 운전석에서 Robot 운용 지도로 이어지는 LOCAL 검증 — 2026-10-09
 
-- 기준: `uiux/pilot-console-map-flow`, 분기 기준 `fda0abffffbe71d7397782424996d172a23a3238`.
+- 기준: `uiux/pilot-console-map-flow`, 분기 기준 commit `fda0abffffbe71d7397782424996d172a23a3238`.
 - 시나리오: 2000×1200·390×844의 Pilot 주행 화면에서 `운용 지도`를 누른다. 개발 CORE가 0 속도와 IDLE 요청을 받은 뒤 같은 탭에서 실제 CORE FastAPI의 `/console` 문서·정적 자산으로 이동한다. Pilot 세션 토큰을 Console 세션으로 넘기고 인증된 `/api/v1/ui/surfaces/console` 조회, 지도 화면, 비상 정지 접근을 확인한다. Console API·화면은 실제 소스를 썼으며 로봇 상태와 지도 미수신은 LOCAL 합성 데이터다.
 - 발견·수정: 통합 시험 라우터가 `/api/v1/map/costmap?scope=global`의 쿼리를 버리자 지도 없음이 연결 실패로 보였다. URL 쿼리를 보존해 CORE의 지도 미수신 상태를 그대로 검사한다. 또한 실제 지도 데이터가 없는 화면에서 “현재 지도를 볼 수는 있습니다”라고 단정하던 Robot Console 문구를 “지도가 들어오면 읽기 전용으로 볼 수 있습니다”로 고쳤다.
 - 화면 확인: 전환 후 두 폭 모두 지도 없음 원인과 작업 준비 링크가 보인다. 지도 레이어·링크·상태줄이 순서대로 놓이고 가로 넘침과 브라우저 페이지 오류가 없다. 주행 목표·초기 위치 버튼은 사용 불가 상태이며 비상 정지는 보인다.
