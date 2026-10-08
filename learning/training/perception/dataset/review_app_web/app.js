@@ -1,4 +1,4 @@
-import { cssColor, canvasFont, clearPalette } from '/common/ui.js';
+import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory } from '/history.js';
 const font = (size, family) => canvasFont(size, family);
@@ -232,14 +232,16 @@ function renderBoxes() {
 }
 function quickClasses() {
   const row=$('object-quick-classes'); row.replaceChildren();
+  const icons={robot:'robot',obstacle_box:'box',cone:'cone',traffic_light:'traffic-light',sign:'sign',person_feet:'person-feet',obstacle:'obstacle'};
   for (const cls of workspace.object_class_set.classes) {
-    const button=document.createElement('button'), swatch=document.createElement('i'), label=document.createElement('span'), key=document.createElement('kbd');
+    const button=document.createElement('button'), icon=document.createElement('span'), label=document.createElement('span'), key=document.createElement('kbd');
     button.type='button'; button.value=cls.name; button.className='review-class-chip';
     button.setAttribute('aria-label',`${cls.display} 클래스 지정${cls.hotkey ? ` · ${cls.hotkey.toUpperCase()}` : ''}`);
-    swatch.className='review-swatch'; swatch.setAttribute('aria-hidden','true');
-    if(cls.color) swatch.style.background=`rgb(${cls.color.join(',')})`;
+    icon.setAttribute('aria-hidden','true');
+    actionIcon(icon,icons[cls.name]||'box');
+    if(cls.color) icon.style.color=`rgb(${cls.color.join(',')})`;
     label.textContent=cls.display; key.textContent=cls.hotkey?.toUpperCase()||'·';
-    button.append(swatch,label,key);
+    button.append(icon,label,key);
     button.onclick=()=>{if(button.disabled||selected===null)return;
       edit(boxes=>{boxes[selected].label=cls.name;if(cls.name==='traffic_light')boxes[selected].signal_state ??= 'unknown';});
       $('canvas').focus({preventScroll:true});};
