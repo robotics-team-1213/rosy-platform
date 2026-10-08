@@ -57,7 +57,10 @@ def test_live_trip_exposes_only_a_map_bound_bend_diagnostic():
     ports.pose = dataclasses.replace(ports.pose, age_s=0.304)
     _ticks(runner, ports)
     assert "bend_candidate" not in runner.view("p1")["detail"]
-    ports.pose = dataclasses.replace(ports.pose, age_s=0.1)
+    ports.pose = dataclasses.replace(ports.pose, age_s=0.1, map_id="other")
+    _ticks(runner, ports)
+    assert "bend_candidate" not in runner.view("p1")["detail"]
+    ports.pose = dataclasses.replace(ports.pose, map_id=None)
     _activate_again(store)
     _ticks(runner, ports)
     assert "bend_candidate" not in runner.view("p1")["detail"]

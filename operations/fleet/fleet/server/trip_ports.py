@@ -212,6 +212,17 @@ def bend_candidate(arc, s: float, pose: dict, *, end_s: float | None = None) -> 
             "heading_change_deg": round(change, 1), "map_offset_m": round(offset, 3)}
 
 
+def record_bend_candidate(live: "LiveTrip", pose: MapPose, active, index: int, s: float) -> None:
+    """Put a map-bound, read-only bend hint in the current trip view when its evidence holds."""
+    if (live.view["hold"] is not None or active is None or active[0] != live.view["map_version"]
+            or pose.map_id not in (None, active[1].map_id)):
+        return
+    cue = bend_candidate(live.arc(index), s, vars(pose), end_s=live.segments[index]["s_to"])
+    if cue is not None:
+        live.view["detail"]["bend_candidate"] = {
+            **cue, "map_id": active[1].map_id, "map_version": active[0]}
+
+
 def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float, active,
                     config: TripConfig) -> Optional[dict]:
     """D-507 2 fields for a ``junction_pivot`` robot: ``map_id``, ``pivot_past_line_m`` (not for

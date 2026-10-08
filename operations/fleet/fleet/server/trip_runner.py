@@ -24,8 +24,8 @@ from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import arc_id, lane_action, replan_hold, theta, unsupported
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
-                                     OPEN, LiveTrip, TripError, bend_candidate, junction_fields,
-                                     pose_diagnostics, pose_view)
+                                     OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view,
+                                     record_bend_candidate)
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -283,16 +283,7 @@ class TripRunner:
                 if index != live.view["segment_index"]:
                     live.view["segment_index"] = index
                     live.last_goal = None
-                active = self._store.active()
-                if (lane and live.view["hold"] is None and active is not None
-                        and active[0] == live.view["map_version"]):
-                    cue = bend_candidate(live.arc(index), s, {
-                        "x": pose.x, "y": pose.y, "yaw": pose.yaw,
-                        "age_s": pose.age_s, "dead_reckon_m": pose.dead_reckon_m},
-                                         end_s=live.segments[index]["s_to"])
-                    if cue is not None:
-                        live.view["detail"]["bend_candidate"] = {
-                            **cue, "map_id": active[1].map_id, "map_version": active[0]}
+                record_bend_candidate(live, pose, self._store.active(), index, s)
                 self._describe(live)
                 last = index == len(live.segments) - 1
                 if not last and not live.replan_pending and self._needs_replan(live, index):

@@ -2526,6 +2526,6 @@
 
 ## 2026-10-08 · uncommitted · feat(fleet): 지도 edge 굽이 후보 진단
 - 변경: 진행 중 lane trip의 활성 지도 edge에서 가까운 굽이를 찾아 `detail.bend_candidate`에 기록한다. 원본 자세의 나이·dead reckoning·지도 offset·yaw·버전을 검사하고, 근거 상실 또는 trip 종료 시 지운다. CORE 명령은 추가하지 않았다.
-- 증거: `test_trip_d507.py`의 실제 west edge 후보·낡은 자세(0.304 s 반올림 경계)·지도 버전 변경·trip 종료 검사. 관련 pytest 217 통과, `known_failures.py` 0 new, flake8 및 harness lint 0 error. SOURCE/LOCAL 범위.
+- 증거: `test_trip_d507.py`의 실제 west edge 후보·낡은 자세(0.304 s 반올림 경계)·지도 ID/버전 변경·trip 종료 검사. 관련 pytest 217 통과 후 착지 게이트가 파일/패키지 크기 판정 2건을 발견해 중단됐다(깨끗한 main의 두 시험은 통과). 굽이 진단을 `trip_ports.py`로 모으고 P6 판정을 갱신한 뒤 해당 시험 포함 41 통과. `known_failures.py` 0 new, flake8 및 harness lint 0 error. SOURCE/LOCAL 범위.
 - gate 변화: 없음. Fleet→CORE 폐루프 SIM·장치·현장 검수는 열림.
 - 결정: B9 굽이 접근 허가는 같은 경계의 검수 및 음성 사례를 통과할 때까지 보류.

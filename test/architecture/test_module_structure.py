@@ -86,6 +86,12 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/server/trip_runner.py": (
+        604,
+        "accept: the 604-line Fleet trip state machine gained a read-only bend diagnostic on the "
+        "existing map-pose tick. Moving four lines would split its stop and persistence rules; "
+        "re-judge if trip execution grows beyond the standard allowance",
+    ),
     "fleet/fleet/server/web/map-view.js": (
         903,
         "split: judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
@@ -125,8 +131,11 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        43_623,
-        "split: re-judged at 43623 on 2026-10-08: main's 43217 verdict plus D-472 + Addendum 2026-10-08 "
+        43_809,
+        "split: re-judged at 43809 on 2026-10-08: map-bound bend candidate diagnostics in trip_ports "
+        "and trip_runner, with fake-port tests, stay in Fleet's existing trip owner. No robot command "
+        "or new service. The site-map web/server split plan and +150 allowance remain unchanged. "
+        "Previously re-judged at 43623 on 2026-10-08: main's 43217 verdict plus D-472 + Addendum 2026-10-08 "
         "LED identity (server/identity.py orchestrator and binding store, tracking/console route wiring), "
         "independently judged to stay with the existing Fleet server owner as its own module (critic agent, "
         "2026-10-08); no new owner, the site-map web/server split plan and +150 allowance remain unchanged. "
