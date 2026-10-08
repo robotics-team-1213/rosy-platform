@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import subprocess
+import shlex
+import shutil
 import sys
 from pathlib import Path
 
@@ -53,6 +55,28 @@ def test_affected_selection_uses_local_invocations_when_full_and_drops_skipped()
            "local_invocations": [["guard.py"]]}
     assert rp.affected_invocations(sel, {"test/b.py"}) == [["test/a.py"]]
     assert rp.affected_invocations({**sel, "mode": "full"}, set()) == [["guard.py"]]
+
+
+def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
+    if not shutil.which("flock") or not shutil.which("bash"):
+        pytest.skip("POSIX flock is required")
+    root = tmp_path / "rosy-test"
+    (root / "runs" / "run1").mkdir(parents=True)
+    (root / "venv").mkdir()
+    (root / "venv" / ".deps-sha").write_text("same\n")
+    lock = root / "venv.lock"
+    holder = subprocess.Popen(
+        ["bash", "-c", f'exec 9>{shlex.quote(str(lock))}; flock -s 9; echo ready; sleep 5'],
+        stdout=subprocess.PIPE, text=True,
+    )
+    try:
+        assert holder.stdout.readline().strip() == "ready"
+        script = rp.VENV.replace("R=~/rosy-test", f"R={shlex.quote(str(root))}")
+        subprocess.run(["bash", "-c", script, "remote", "run1", "same"],
+                       check=True, timeout=2)
+    finally:
+        holder.terminate()
+        holder.wait(timeout=2)
 
 
 def _git(cwd, *args):
