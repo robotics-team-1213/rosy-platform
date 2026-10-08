@@ -126,6 +126,11 @@ def test_indexed_draft_import_keeps_255_and_pending_status(tmp_path):
     assert np.all(review_masks.pixels(store, review_masks.get(store, 2)) == 0)
     candidate = review_masks.get(store, 2)['draft_candidates'][0]['sha256']
     assert review_masks.get(store, 2)['draft_candidates'][0]['origin'] == 'v12_pixel_mask_candidate'
+    before_preview = review_masks.get(store, 2)
+    preview = cv2.imdecode(np.frombuffer(review_masks.draft_preview(store, 2, candidate), np.uint8),
+                           cv2.IMREAD_COLOR)
+    assert preview.shape == (24, 32, 3)
+    assert review_masks.get(store, 2) == before_preview
     with pytest.raises(ValueError):
         review_masks.update(store, 2, {'version': approved['version'] - 1,
                                         'action': 'apply_draft', 'draft_sha256': candidate}, ValueError)
@@ -142,6 +147,8 @@ def test_indexed_draft_import_keeps_255_and_pending_status(tmp_path):
     with pytest.raises(ValueError, match='selected draft is unavailable'):
         review_masks.update(store, 2, {'version': undone['version'],
                                         'action': 'apply_draft', 'draft_sha256': candidate}, ValueError)
+    with pytest.raises(ValueError, match='selected draft is unavailable'):
+        review_masks.draft_preview(store, 2, candidate)
     assert review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})['added'] == 0
     with store.connect() as db:
         assert db.execute('SELECT withdrawn FROM pixel_drafts WHERE frame=? AND sha256=?',
