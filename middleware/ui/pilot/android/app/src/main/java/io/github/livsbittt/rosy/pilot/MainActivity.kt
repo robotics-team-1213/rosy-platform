@@ -117,7 +117,7 @@ class MainActivity : Activity() {
     private fun refresh() {
         val current = session
         if (current != null && !current.authorized()) {
-            lastError = "연결이 끝났습니다. 로봇을 다시 선택하세요."
+            lastError = "연결 끊김 · 로그인 세션이 끝났거나 로봇 목록이 바뀌었습니다. 로봇을 다시 선택하면 승인 기록으로 다시 연결합니다."
             returnToLobby(); status.text = lastError; return
         }
         if (web != null || opening) return
@@ -163,22 +163,17 @@ class MainActivity : Activity() {
                     else pairingCode(candidate, offer, store, version, remembered.status)
                 }
             } catch (error: Exception) {
-                if (error is PeerApprovalExpired) main.post { if (version == attempt && foreground) reapprove(candidate) }
-                failed(version, candidate, when {
-                error is PeerApprovalExpired -> "승인 사용 기한이 끝났습니다. 다시 승인을 요청하세요."
-                error is PeerApprovalTimeout -> "수신 승인을 기다리는 시간이 끝났습니다. 로봇을 다시 선택해 요청하세요."
-                error is PeerKeyChanged -> "기억한 수신 장치의 키와 다릅니다. 승인 기록을 유지하고 연결을 차단했습니다."
-                error is PeerRefused -> "승인 기록은 지우지 않았습니다. 수신 장치에서 승인·발급자 상태를 확인한 뒤 다시 선택하세요."
-                candidate.secure -> "연결할 수 없습니다. 로봇 전원·같은 Wi-Fi·신뢰된 HTTPS 연결을 확인한 뒤 다시 선택하세요."
-                else -> "연결할 수 없습니다. 로봇 전원과 같은 Wi-Fi 연결을 확인한 뒤 다시 선택하세요."
-            }) }
+                if (LinkStatus.reason(error) in setOf(LinkReason.APPROVAL_EXPIRED, LinkReason.APPROVAL_REVOKED))
+                    main.post { if (version == attempt && foreground) reapprove(candidate, LinkStatus.reason(error)) }
+                failed(version, candidate, LinkStatus.failure(error, candidate.secure))
+            }
         }
     }
     private fun pairingCode(candidate: Candidate, offer: LobbyOffer, store: CandidateStore, version: Long, savedStatus: SavedLoginStatus) {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val input = EditText(this).apply {
             hint = "8자리 로그인 코드"; textSize = 28f; setSingleLine(); setTextColor(PilotColors.foreground)
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             filters = arrayOf(android.text.InputFilter.LengthFilter(9))
         }
         fun canceled() { if (version == attempt) { opening = false; refresh() } }
@@ -204,7 +199,7 @@ class MainActivity : Activity() {
                 val approved = reused ?: LobbyPairing.connect(candidate, offer, store, code)
                 if (version != attempt) return@execute
                 relay = PilotProxy(approved, AssetBundle(assets),
-                    { message -> main.post { if (version == attempt) status.text = message } },
+                    { message -> main.post { if (version == attempt) status.text = "${candidate.name} · 연결 끊김 · $message" } },
                     { main.post { if (version == attempt) connectedLabel?.let { status.text = it } } })
                 relay.verifyIdentity(); relay.start(5000, false)
                 if (offer.mode == "paired" && version == attempt) vault.saveVerified(candidate, approved)
@@ -257,9 +252,7 @@ class MainActivity : Activity() {
                 relay?.stop(); failed(version, candidate, when {
                     error is PairingRejected && error.status == 401 -> "로그인 코드가 유효하지 않습니다. 로봇에서 새 코드를 발급한 뒤 다시 연결하세요."
                     error is PairingRejected && error.status == 429 -> "연결 요청이 많습니다. 잠시 뒤 다시 선택하세요."
-                    error is javax.net.ssl.SSLException -> "로봇의 HTTPS 인증을 확인할 수 없습니다. 설치 담당자에게 확인하세요."
-                    error is java.io.IOException -> "로봇에 닿지 못했습니다. 같은 Wi-Fi와 로봇 전원을 확인하세요."
-                    else -> "연결 승인을 확인하지 못했습니다. 로봇을 다시 선택하세요."
+                    else -> LinkStatus.failure(error, candidate.secure)
                 })
             }
         }
@@ -311,16 +304,20 @@ class MainActivity : Activity() {
         pairingDialog = AlertDialog.Builder(this).setTitle("이 앱의 연결 기록 지우기")
             .setMessage("${candidate.name}\n${candidate.host}\n\n조종 연결을 닫고 이 태블릿에 저장된 로그인과 승인 연결 기록만 지웁니다. 수신 장치의 승인이나 다른 앱의 연결은 해제하지 않습니다.")
             .setNegativeButton("취소", null).setPositiveButton("지우기") { _, _ ->
-                endSession(forget = candidate) { lastSelectedCandidate = null; opening = false; startDiscovery() }; opening = true
+                endSession(forget = candidate) {
+                    lastSelectedCandidate = null; opening = false
+                    lastError = "${candidate.name} · 이 태블릿의 연결 기록을 지웠습니다. 로봇을 선택하면 새 승인을 요청합니다."; startDiscovery()
+                }; opening = true
             }.create()
         pairingDialog!!.show()
     }
     // D-456 4: an expired grant needs a separate receiver approval. Connect never sends one on its own;
     // the user asks here, which drops only this tablet's expired record and starts a fresh request.
-    private fun reapprove(candidate: Candidate) {
+    private fun reapprove(candidate: Candidate, reason: LinkReason) {
         pairingDialog?.dismiss()
         pairingDialog = AlertDialog.Builder(this).setTitle("다시 승인 요청")
-            .setMessage("${candidate.name}\n\n이 태블릿의 승인 사용 기한이 끝났습니다. 새 승인을 요청하면 로봇 화면에 코드가 뜹니다. 로봇에서 승인하세요.")
+            .setMessage("${candidate.name}\n\n" + (if (reason == LinkReason.APPROVAL_EXPIRED) "이 태블릿의 승인 사용 기한이 끝났습니다." else "로봇이 이 태블릿의 승인을 더 쓰지 않습니다(폐기·만료·권한 변경).") +
+                " 새 승인을 요청하면 이 태블릿의 기록만 지우고 새 요청을 보냅니다. 로봇 화면 코드나 로봇 대시보드로 승인하세요.")
             .setNegativeButton("취소", null).setPositiveButton("승인 요청") { _, _ ->
                 endSession(forget = candidate) { reselect = candidate; opening = false; startDiscovery() }; opening = true
             }.create()

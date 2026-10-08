@@ -45,6 +45,8 @@ class BaseVelocityControl(_Wire):
     ``junction_turn`` (D-495) is true when its line-follow can do the bounded junction turn.
     ``junction_pivot`` (D-507 2) is true when CORE takes the junction instruction's ``map_id``,
     ``expect_in_m``, ``expect_tol_m`` and ``pivot_past_line_m``; Fleet sends them only then.
+    ``lane_arc`` (D-520 1) is true when CORE takes the junction instruction's ``exit_segment``
+    (``line_follow.arc_enabled``, on by default, and the site floor declaration); Fleet sends it only then.
     ``lane_bend`` (D-507 addendum) is true when CORE takes the junction instruction's action
     ``bend`` (``bend_in_m``, ``bend_tol_m``, ``bend_radius_m``); Fleet sends bends only then.
     ``site_floor_map_id`` (D-507 9) is the robot's site floor declaration, the SiteMap map_id
@@ -64,6 +66,7 @@ class BaseVelocityControl(_Wire):
     trip_max_linear: float | None = Field(None, ge=0, allow_inf_nan=False)
     junction_turn: bool | None = None
     junction_pivot: bool | None = None
+    lane_arc: bool | None = None
     lane_bend: bool | None = None
     site_floor_map_id: str | None = Field(None, pattern=r"^[A-Za-z0-9_.-]{1,64}$")
     line_follow_authority: bool | None = None  # D-517 4: POST /line-follow/authority is enforced
@@ -157,7 +160,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    drive_modes: tuple[Literal["lane", "free"], ...] | None = None,
                    trip_max_linear: float | None = None, junction_turn: bool | None = None,
                    junction_pivot: bool | None = None, lane_bend: bool | None = None,
-                   site_floor_map_id: str | None = None,
+                   lane_arc: bool | None = None, site_floor_map_id: str | None = None,
                    line_follow_authority: bool | None = None,
                    line_follow_authority_required: bool | None = None) -> dict:
     """Pinky's controls from its adapter manifest's `provides` (D-411 §8).
@@ -172,7 +175,7 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          autonomy=autonomy, robot_kind=robot_kind,
                                          drive_modes=drive_modes, trip_max_linear=trip_max_linear,
                                          junction_turn=junction_turn, junction_pivot=junction_pivot,
-                                         lane_bend=lane_bend,
+                                         lane_bend=lane_bend, lane_arc=lane_arc,
                                          site_floor_map_id=site_floor_map_id,
                                          line_follow_authority=line_follow_authority,
                                          line_follow_authority_required=line_follow_authority_required))

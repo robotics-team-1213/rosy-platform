@@ -54,6 +54,46 @@ def test_write_manifest_valid_and_revision(tmp_path):
     assert doc["trainer"] == "colab-x"
 
 
+def test_v13_drivable_revision_is_separate_and_requires_class(tmp_path):
+    lineage = {"model_revision": "lane-seg-20260930-abcd1234", "onnx_sha256": "b" * 64,
+               "torchscript_sha256": "c" * 64}
+    classes = [("background", "background"), ("lane", "lane_marking"),
+               ("stop", "stop_line"), ("road", "drivable")]
+    out, doc = _write(tmp_path, revision_prefix="v13-drivable", dataset_revision="a" * 64,
+                      parent_lane_model=lineage, classes=classes)
+    assert doc["model_revision"].startswith("v13-drivable-20260930-")
+    assert doc["parent_lane_model"] == lineage
+    assert load_manifest(out).model_revision == doc["model_revision"]
+    (tmp_path / "no-drivable").mkdir()
+    with pytest.raises(ValueError, match="exactly one drivable"):
+        _write(tmp_path / "no-drivable", revision_prefix="v13-drivable",
+               classes=[("background", "background"), ("lane", "lane_marking")])
+    (tmp_path / "bad-prefix").mkdir()
+    with pytest.raises(ValueError, match="unsupported model revision prefix"):
+        _write(tmp_path / "bad-prefix", revision_prefix="v13/unsafe")
+
+
+def test_v13_requires_parent_and_content_addressed_dataset(tmp_path):
+    lineage = {"model_revision": "lane-seg-20260930-abcd1234", "onnx_sha256": "b" * 64,
+               "torchscript_sha256": "c" * 64}
+    classes = [("background", "background"), ("lane", "lane_marking"),
+               ("stop", "stop_line"), ("road", "drivable")]
+    with pytest.raises(ValueError, match="parent_lane_model"):
+        _write(tmp_path, revision_prefix="v13-drivable", dataset_revision="a" * 64,
+               classes=classes)
+    with pytest.raises(ValueError, match="dataset_revision"):
+        _write(tmp_path, revision_prefix="v13-drivable", parent_lane_model=lineage,
+               classes=classes)
+    out, doc = _write(tmp_path, revision_prefix="v13-drivable", dataset_revision="a" * 64,
+                      parent_lane_model=lineage, classes=classes)
+    manifest_path = out / "model_manifest.json"
+    for invalid in ({"model_revision": "lane-seg-20260930-abcd1234", "onnx_sha256": "bad"}, None):
+        doc["parent_lane_model"] = invalid
+        manifest_path.write_text(json.dumps(doc), encoding="utf-8")
+        with pytest.raises(ManifestError, match="parent_lane_model"):
+            load_manifest(out)
+
+
 def test_write_manifest_rejects_bad_role(tmp_path):
     with pytest.raises(ValueError):
         _write(tmp_path, classes=[("a", "background"), ("b", "nonsense")])

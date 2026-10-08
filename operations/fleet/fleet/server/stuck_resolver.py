@@ -288,6 +288,12 @@ class StuckResolver:
 
     def _rule(self, row, stuck, rows, chain) -> Optional[tuple[str, str]]:
         cause = stuck.get("cause")
+        if row.get("trip"):
+            # D-517 5 (M4): a trip robot gets only the stopping R1 WAIT. A back-off, yield or resume could
+            # take its body into a block the table already released behind it or never granted (D-494 14);
+            # CORE's own site-evidence retrace (D-507 6) stays local. Anything else goes to a human.
+            peer = cause == "obstacle_ahead" and self._peer_ahead(row, rows)
+            return ("R1", "WAIT") if peer and "R1" not in chain.retired else None
         can_back = (bool(stuck.get("local_enabled"))
                     and int(stuck.get("attempts") or 0) < int(stuck.get("max_attempts") or 0))
         peer = cause == "obstacle_ahead" and self._peer_ahead(row, rows)

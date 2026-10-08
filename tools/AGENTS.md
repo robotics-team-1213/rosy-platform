@@ -33,6 +33,7 @@ Commands a developer runs from the workspace. These are not installed on the rob
 |-----------|---------|
 | `harness/` | Reads each module's `progress.md` and `logs.md` (see `harness/AGENTS.md`) |
 | `hooks/` | D-346 pre-push fast gate and its installer (see `hooks/AGENTS.md`) |
+| `remote/` | `remote_pytest.py`: run pytest for one commit on the model PC, then the AI PC, local only when neither answers (see `remote/AGENTS.md`) |
 | `release/` | Artifact download and signed payload preparation (see `release/AGENTS.md`) |
 | `sim/` | Local sim probes, `sim_verify.sh`, and host simulations that compose several packages (`simulate_line_follow.py`, `simulate_semantic_road.py`). Not a second product tree (see `sim/AGENTS.md`) |
 | `perception_prototype/` | Unreviewed camera-estimation and real-video replay prototypes (D-205). Replaced by the reviewed P2 replay tool (see `perception_prototype/AGENTS.md`). The D-356 learned-loop tooling is in `learning/training/perception/` (D-427 wave 1) |

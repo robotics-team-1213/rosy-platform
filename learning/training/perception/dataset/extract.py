@@ -21,6 +21,7 @@ One two-class clock rule for both inputs (D-356 addendum, D-373 decision 9):
     `stamp_ns` (written before that field) attaches no stamped evidence: null.
 (b) Every other side topic (cmd_vel, odom, scan, ...) is the latest message
     logged at or before the frame's log time; a later one is never used.
+    Camera calibration status is null if its latest message is over 2.5 s old.
     From MCAP odom is {stamp_ns, log_ns, x, y, yaw, linear, angular} (pose and
     twist of nav_msgs/Odometry).
     From MCAP the LiDAR scan (sensor_msgs/LaserScan) is attached as {stamp,
@@ -62,15 +63,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "contracts" / "foun
 
 from frames import FrameSelector  # noqa: E402
 from control.recording import (  # noqa: E402
-    CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC,
-    SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
+    CAMERA_GROUND_STATUS_MAX_AGE_NS, CAMERA_GROUND_STATUS_TOPIC,
+    CAMERA_TELEMETRY_TOPIC, CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, IR_RANGE_TOPIC,
+    KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC, SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
 from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
 
 STRING_SCHEMA = "std_msgs/msg/String"
 JPEG_Q = 95
 # Class (a) of the clock rule: payloads carrying the stamp of the image they judged.
 # Keeper diagnostics follow their source frame too; they remain evidence, not labels.
-STAMPED_SIDE_TOPICS = (SHADOW_TOPIC, "line/observation", KEEP_DEBUG_TOPIC)
+STAMPED_SIDE_TOPICS = (SHADOW_TOPIC, "line/observation", KEEP_DEBUG_TOPIC,
+                       CAMERA_TELEMETRY_TOPIC)
 SIDE_LOOKAHEAD_S = 0.5  # a stamped side message may be logged this long after its frame
 STAMP_TOL_S = 1e-6  # equal stamps: within 1 us (JSON float seconds keep ~0.2 us at epoch scale)
 CAMERA_LINE = "CAMERA_LINE"  # the only line/observation source that judged an image
@@ -347,7 +350,8 @@ def _mcap_frames(files, skipped=None, truncated=None):
             while early and early[0][0] / 1e9 + SIDE_LOOKAHEAD_S < t:
                 early.popleft()
             # Channels carry absolute, possibly namespaced topics.
-            name = next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, IR_RANGE_TOPIC)
+            name = next((n for n in (*SIDE_TOPICS, IR_RANGE_TOPIC,
+                                     CAMERA_TELEMETRY_TOPIC)
                          if _topic_is(ch.topic, n)), None)
             if name is not None:
                 if name == IR_RANGE_TOPIC:
@@ -399,6 +403,11 @@ def _mcap_frames(files, skipped=None, truncated=None):
             side = {n: v for n, (_, v) in latest.items()}
             dts = {n: round((log_ns - message.log_time) / 1e9, 4)
                    for n, (log_ns, _) in latest.items()}
+            ground_status = latest.get(CAMERA_GROUND_STATUS_TOPIC)
+            if ground_status and not (0 <= message.log_time - ground_status[0]
+                                      <= CAMERA_GROUND_STATUS_MAX_AGE_NS):
+                side[CAMERA_GROUND_STATUS_TOPIC] = None
+                dts[CAMERA_GROUND_STATUS_TOPIC] = None
             if stamp is not None:
                 for e_log, e_stamp, e_name, e_value in early:
                     # logged before this frame's log time, but not before its capture

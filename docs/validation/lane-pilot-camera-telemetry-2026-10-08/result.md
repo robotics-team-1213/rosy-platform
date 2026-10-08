@@ -1,0 +1,9 @@
+# Pilot 영상의 카메라 실행 프로필 증거
+
+기존 Pilot 세션은 `session.json.camera_profile_revision`이 빈 문자열이고, 원본 MCAP에도 카메라 실행 프로필을 보고하는 `camera/telemetry`가 없었다. 따라서 10/6·10/7 같은 과거 영상의 프로필 revision을 사후에 확정할 수 없다.
+
+이 변경은 향후 Pilot 녹화의 원본 MCAP에 카메라 노드가 이미 발행하는 `camera/telemetry`를 추가하고, 텔레메트리에 해당 영상과 같은 capture `stamp`를 싣는다. MP4 변환 sidecar와 MCAP 직접 추출은 **화상 header stamp와 텔레메트리 stamp가 일치**하고 capture 뒤 제한된 시간 안에 기록된 경우에만 결합한다. 텔레메트리의 `profile_revision`과 `image_size`, 품질·지연 값은 카메라 실행 상태의 증거다. 다른 프레임의 값을 빌리거나 빈 `session.json` 값을 임의로 채우지 않는다.
+
+먼저 녹화 토픽·sidecar 테스트 2개가 실패하는 것을 확인했다. 첫 변경 뒤에는 합성 MCAP에서 프로필 revision 두 값의 순서가 MCAP 직접 추출과 MP4 sidecar 경로에서 같은지 확인했고, 관련 세 묶음은 **91 passed**, `test/known_failures.py` **0 new**였다. 이어서 텔레메트리 stamp·잘못된 프레임 결합·두 추출 경로의 정확한 결합 테스트 3개가 실패하는 것을 확인하고, capture stamp를 연결했다. 최종 관련 네 묶음은 **98 passed**, `test/known_failures.py` **0 new**였다. 로그는 `X:/DevTemp/pilot-camera-telemetry/{red,related,stamp-red,stamp-green,stamp-related}.txt`에 있다.
+
+**범위:** `null`은 그 영상과 매칭된 보고값이 없다는 뜻이다. 프로필 이름만으로 카메라 외부 보정의 정확도나 활성 지도·로봇 위치를 승인하지 않는다. 과거 MCAP에 없는 값을 소급 생성하지 않는다. 로봇에 배포해 실제 새 세션으로 읽어 본 증거는 아직 없다.

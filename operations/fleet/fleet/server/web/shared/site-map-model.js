@@ -26,6 +26,21 @@ export const TRIP_ERROR_LABEL = {
   TRIP_LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행(카메라 또는 IR)이 켜져 있지 않습니다 · 켠 뒤 다시 출발하세요',
   TRIP_BUSY: '이 로봇은 이미 운행 중입니다',
   TRIP_LOOP_FULL: '고리 수용 한도를 넘어 출발할 수 없습니다',
+  // D-517 9 M3 대열
+  TRIP_CONVOY_SELF: '자기 자신을 리더로 고를 수 없습니다',
+  TRIP_CONVOY_LEADER_NOT_RUNNING: '리더가 반복 운행 중이 아닙니다 · 리더를 먼저 출발시키세요',
+  TRIP_CONVOY_LEADER_IS_FOLLOWER: '고른 리더도 다른 로봇을 따라갑니다 · 대열의 맨 앞 로봇을 고르세요',
+  TRIP_CONVOY_OTHER_LOOP: '리더와 다른 고리입니다 · 같은 출발 자리 순환으로 다시 하세요',
+  TRIP_CONVOY_NO_AUTHORITY: '이 로봇은 통행권(CORE)을 받지 않아 대열에 들 수 없습니다',
+  TRIP_CONVOY_LOOP_FULL: '대열을 더하면 고리 수용 한도를 넘습니다',
+  TRIP_CONVOY_NOT_BEHIND: '리더 뒤 같은 고리에 있지 않습니다 · 리더 뒤에 세운 뒤 다시 하세요',
+  // D-517 4 통행권: 현장 설정과 로봇 CORE 설정이 맞아야 출발한다
+  TRIP_AUTHORITY_SITE_OFF: '이 로봇 CORE는 통행권이 있어야 움직이는데 현장 통행권이 꺼져 있습니다 · 현장 설정을 켜거나 로봇의 통행권 필수를 끄세요',
+  TRIP_AUTHORITY_NOT_REQUIRED: '현장은 통행권을 보내는데 이 로봇 CORE는 통행권 없이 움직입니다 · 로봇 설정에서 통행권 필수를 켜세요',
+  // D-525 가상 신호
+  TRIP_SIGNAL_START_IN_ZONE: '신호 교차로 안에서는 출발할 수 없습니다 · 교차로 밖으로 옮긴 뒤 다시 하세요',
+  TRIP_SIGNAL_NEEDS_AUTHORITY: '경로가 신호 교차로를 지나는데 이 로봇은 통행권(CORE)을 받지 않습니다 · 적색에서 선다는 보장이 없습니다',
+  TRIP_ROBOT_BUSY: '이 로봇은 운행 중입니다 · 운행을 먼저 취소하세요',
   TRIP_ALREADY_STARTED: '이미 출발시킨 경로입니다',
   TRIP_NOT_RUNNING: '진행 중인 운행이 아닙니다',
   TRIP_UNKNOWN: '없는 운행입니다',
@@ -42,6 +57,7 @@ export const TRIP_REASON_LABEL = {
   junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
   JUNCTION_ODOM_STALE: '로봇 odom이 낡아 교차로 지시를 다음 주기에 다시 보냅니다',
   junction_unexpected: '지도에 없는 자리에서 교차로를 봐 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
+  junction_corner_hold: '지시한 교차로 바로 앞에서 차선 모서리로 돌지 않게 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
   junction_no_window: '교차로 위치를 확인할 기대 창이 없어 좌·우 회전 지시를 보내지 않고 멈췄습니다 · 차선 주행을 껐습니다',
   stall: '경로를 따라 나아가지 않아 멈췄습니다 · 현장을 확인하세요',
   lane_arc: '회전교차로 호를 달리던 로봇이 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
@@ -49,6 +65,7 @@ export const TRIP_REASON_LABEL = {
   restart: '관제 서버가 다시 시작돼 멈췄습니다 · 자동으로 다시 출발하지 않습니다',
   TRIP_ROBOT_JUNCTION_UNSUPPORTED: '로봇 CORE가 교차로 지시를 모릅니다 · 새 이미지가 필요합니다',
   TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
+  TRIP_GOAL_REFUSED: '로봇이 목적지 지시를 거절해 멈췄습니다 · 현장을 확인하세요',
   LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행이 켜져 있지 않습니다',
 };
 export const SITE_MAP_ERROR_LABEL = {
@@ -95,7 +112,7 @@ export function planIsCurrent(plan, active) {
 
 export function tripErrorText(code, detail = {}) {
   const base = TRIP_ERROR_LABEL[code] || `경로 계획 거절 (${code || '알 수 없음'})`;
-  if (code === 'TRIP_LOOP_FULL' && Number.isInteger(detail.robots) && Number.isInteger(detail.capacity))
+  if (code?.endsWith('LOOP_FULL') && Number.isInteger(detail.robots) && Number.isInteger(detail.capacity))
     return `${base} · 고리 ${detail.robots}/${detail.capacity}대`;  // robots counts this one too
   if (code !== 'TRIP_NO_ROUTE') return base;
   const leg = Number.isInteger(detail.segment) ? ` · ${detail.segment + 1}번째 구간` : '';
@@ -273,13 +290,20 @@ export function tripStatusText(trip, map) {
 }
 
 /** D-517 2: a lap over the start places, beginning and ending at ``start`` (the robot's own place). */
-export function repeatTripBody(map, start) {
+export function repeatTripBody(map, start, leader = '') {
   const starts = (map?.places || []).filter(place => place.kind === 'start').map(place => place.id);
   if (!starts.includes(start)) throw new Error('출발 자리를 고르세요');
   const via = starts.filter(id => id !== start);
   if (!via.length) throw new Error('반복 운행에는 출발 자리가 두 곳 이상 필요합니다');
   const at = starts.indexOf(start);
-  return {to: start, via: [...starts.slice(at + 1), ...starts.slice(0, at)], repeat: true};
+  return {to: start, via: [...starts.slice(at + 1), ...starts.slice(0, at)], repeat: true,
+    ...(leader ? {convoy: {leader}} : {})};
+}
+
+/** D-517 9 M3: robots ``robotId`` may follow — open repeat trips that follow nobody. */
+export function convoyLeaders(open, robotId) {
+  return (open || []).filter(trip => trip.repeat && !trip.convoy && trip.robot_id !== robotId)
+    .map(trip => trip.robot_id);
 }
 
 /** '' when the plan may start now; otherwise why the start button is off. */
@@ -328,8 +352,6 @@ export function newestPending(view) {
 // 표가 말하는 것만 옮긴다. M1 에서 Fleet 은 블록 표를 계산해 보이기만 하고 로봇에 보내지 않는다.
 // 좌표는 활성 지도 미터다. 화면 방향(D-513 7)과 위에서 본 보기(D-515)는 그리는 쪽의 toPx 가 맡는다.
 
-// D-517 3: UNKNOWN 점유가 이만큼 이어지면 해결기 → 사람이다.
-export const UNKNOWN_ALARM_MS = 30000;
 // D-517 3 `merge_max_wait_s` 기본값. Fleet 은 이 값을 /traffic 에 싣지 않는다.
 export const MERGE_MAX_WAIT_MS = 20000;
 // 블록 사이 틈(m) — 이웃 블록이 한 띠로 붙어 보이지 않게 양 끝을 줄인다.
@@ -386,7 +408,7 @@ export function routePoint(segments, edges, r) {
 export function trafficDrawing(traffic, active, trips = []) {
   if (!traffic || !active?.map || traffic.map_version !== active.version) return null;
   const edges = new Map((active.map.edges || []).map((edge) => [edge.id, edge]));
-  const bands = [], zones = [], ticks = [];
+  const bands = [], zones = [], ticks = [], convoys = [];
   for (const unit of traffic.units || []) {
     const parts = unitParts(unit.id, traffic).filter(([edge]) => edges.has(edge));
     const zone = isZone(unit);
@@ -399,8 +421,9 @@ export function trafficDrawing(traffic, active, trips = []) {
     if (zone && parts.length) {
       const lines = parts.map(([edge, s0, s1]) => partPoints(edges.get(edge), s0, s1, 0)).filter(Boolean);
       const knots = lengths(lines[0]);
+      const signal = (traffic.signals || []).find((s) => s.zone === unit.id);  // D-525 8
       zones.push({ unit: unit.id, lines, anchor: pointAt(lines[0], knots, knots.at(-1) / 2),
-        label: `점유 ${(unit.holders || []).length}/${unit.capacity} · 대기 ${(unit.waiting || []).length}` });
+        label: `점유 ${(unit.holders || []).length}/${unit.capacity} · 대기 ${(unit.waiting || []).length}${signal ? ` · ${signalText(signal)}` : ""}` });
     }
   }
   const plans = new Map(trips.map((trip) => [trip.robot_id, trip.plan?.segments]));
@@ -409,10 +432,49 @@ export function trafficDrawing(traffic, active, trips = []) {
     const at = routePoint(plans.get(robot.robot_id), edges, robot.authority_end_m);
     if (at) ticks.push({ ...at, robot: robot.robot_id });
   }
+  // D-517 10: 대열은 앞 로봇(따라가는 대상, 모르면 리더)에서 팔로워로 가는 가는 선 하나.
+  const front = (id) => {
+    const row = (traffic.robots || []).find((r) => r.robot_id === id);
+    return typeof row?.front_d_m === "number" ? routePoint(plans.get(id), edges, row.front_d_m) : null;
+  };
+  for (const robot of traffic.robots || []) {
+    const ahead = robot.convoy && (robot.convoy.follows || robot.convoy.leader);
+    const from = ahead && front(ahead), to = ahead && front(robot.robot_id);
+    if (from && to) convoys.push({ from, to, robot: robot.robot_id, leader: robot.convoy.leader });
+  }
+  // D-525 8: 가상 신호 — 접근로마다 정지선 막대와 등 색, 신호마다 "가상 신호 · 녹 5 s" 한 줄.
+  const signals = [];
+  for (const signal of traffic.signals || []) {
+    for (const row of signal.approaches || []) {
+      if (!row.stop_line) continue;
+      signals.push({ x: row.stop_line.x, y: row.stop_line.y, angle: row.stop_line.yaw, lamp: row.lamp,
+        label: `${signal.signal_id} · ${signalLampText(row.lamp)}`, signal: signal.signal_id });
+    }
+  }
   const xs = [...edges.values()].flatMap((edge) => edge.polyline.map((p) => p[0]));
   const ys = [...edges.values()].flatMap((edge) => edge.polyline.map((p) => p[1]));
   const centre = xs.length ? [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2] : [0, 0];
-  return { bands, zones, ticks, centre };
+  return { bands, zones, ticks, convoys, centre, signals };
+}
+
+const LAMP_TEXT = { green: "녹", yellow: "황", red: "적" };
+export const signalLampText = (lamp) => LAMP_TEXT[lamp] || "적";
+
+/** D-525: the virtual signal a robot waits at (its waiting_for is `signal:<zone>`), or null. */
+export function signalWait(traffic, robotId) {
+  const robot = (traffic?.robots || []).find((row) => row.robot_id === robotId);
+  const node = (robot?.waiting_for || []).find((id) => id.startsWith("signal:"));
+  if (!node) return null;
+  return (traffic.signals || []).find((s) => s.zone === node.slice(7)) || { signal_id: node.slice(7), zone: node.slice(7) };
+}
+
+/** "가상 신호 · 녹 5 s" for one signal row of /traffic. */
+export function signalText(signal) {
+  if (signal.errors?.length) return `${signal.signal_id} · 설정 오류 · 늘 적색`;
+  const word = { green: "녹", yellow: "황", all_red: "전체 적색" }[signal.aspect] || signal.aspect;
+  const left = typeof signal.left_s === "number" ? ` ${Math.ceil(signal.left_s)} s` : "";
+  const mode = { hold: " · 유지", all_red: " · 운영자 전체 적색" }[signal.mode] || "";
+  return `가상 신호 ${signal.signal_id} · ${word}${left}${mode}`;
 }
 
 function waitingUnit(traffic, robotId) {
@@ -425,47 +487,65 @@ export function trafficCardLine(traffic, robotId) {
   if (!robot) return "";
   const parts = [];
   if (typeof robot.lap === "number") parts.push(`반복 운행 ${robot.lap}바퀴째`);
+  const convoy = robot.convoy;  // D-517 10: "대열 · rosy_01 뒤 0.5 m"; 앞 로봇을 모르면 고정 블록
+  if (convoy) {
+    parts.push(convoy.follows ? `대열 · ${convoy.follows} 뒤${typeof convoy.gap_m === "number" ? ` ${convoy.gap_m.toFixed(1)} m` : ""}`
+      : `대열 · ${convoy.leader} 위치 모름 · 고정 블록`);
+  }
   const held = (traffic.units || []).some((unit) => unit.state === "UNKNOWN" && (unit.holders || []).includes(robotId));
   const unit = waitingUnit(traffic, robotId);
+  const signal = signalWait(traffic, robotId);
   if (held) parts.push("위치 불명 · 블록 유지");
+  else if (signal) parts.push(`신호 대기 · ${signal.signal_id} 적색`);
   else if (unit && isZone(unit)) {
     const ahead = (unit.holders || []).filter((id) => id !== robotId);
     parts.push(`${twoWay(unit) ? "양방 차로" : "교차로"} 대기${ahead.length ? ` · ${ahead.join(", ")} 통과 중` : ""}`);
-  } else if (robot.waiting_for?.length) parts.push(`앞 블록 대기 · ${robot.waiting_for.join(", ")}`);
+  } else if (robot.waiting_for?.length && !(convoy?.follows && robot.waiting_for.join() === convoy.follows)) parts.push(`앞 블록 대기 · ${robot.waiting_for.join(", ")}`);
+  const resolver = (traffic.resolver || []).find((row) => row.robot_id === robotId);  // D-517 5 (M4)
+  if (resolver?.trigger === "wait_cycle") {
+    parts.push({ replan: "교착 · 다른 길 계획", wait: "교착 · 다른 로봇 대기" }[resolver.decision] || "교착 · 운영자 판단");
+  }
   if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
   return parts.join(" · ");
 }
 
-/** When the console first saw each robot hold an UNKNOWN block or wait at a zone entry. */
+/** When the console first saw each robot wait at a zone entry (UNKNOWN 30 s is Fleet's resolver row). */
 export function trafficClock(prev, traffic, now) {
-  const next = { unknown: {}, merge: {} };
-  for (const unit of traffic?.units || []) {
-    if (unit.state === "UNKNOWN") for (const id of unit.holders || []) next.unknown[id] = prev?.unknown?.[id] ?? now;
-    if (isZone(unit)) for (const id of unit.waiting || []) next.merge[id] = prev?.merge?.[id] ?? now;
+  const next = { merge: {} };
+  for (const unit of traffic?.units || []) {  // D-525 3: a red wait is not a merge wait
+    if (isZone(unit)) for (const id of unit.waiting || []) if (!signalWait(traffic, id)) next.merge[id] = prev?.merge?.[id] ?? now;
   }
   return next;
 }
 
 /**
  * Exception-queue rows (D-493 one rule) for one robot. A block wait itself is normal and is not a row.
- * ponytail: the wait clocks start when this console first saw the state (a reload restarts them);
- * move them to /traffic if the 30 s / 20 s rows must survive a reload.
+ * D-517 5 (M4): a wait cycle and a 30 s UNKNOWN carry Fleet's resolver decision (`traffic.resolver`).
+ * ponytail: the merge clock starts when this console first saw the wait (a reload restarts it);
+ * move it to /traffic if the 20 s row must survive a reload.
  */
 export function trafficAttention(traffic, robotId, clock, now) {
   const items = [];
   const cycle = traffic?.wait_cycle;
+  const resolver = traffic?.resolver || [];
+  const mine = resolver.find((row) => row.robot_id === robotId);
   if (Array.isArray(cycle) && cycle.includes(robotId)) {
-    items.push({ severity: "crit", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · 운영자 판단 필요` });
+    const replanned = resolver.find((row) => row.trigger === "wait_cycle" && row.decision === "replan");
+    const then = mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
+      : mine?.decision === "wait" && replanned ? `해결기: ${replanned.robot_id} 다른 길 대기` : "운영자 판단 필요";
+    items.push({ severity: "crit", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · ${then}` });
   }
-  const unknownSince = clock?.unknown?.[robotId];
-  if (unknownSince !== undefined && now - unknownSince > UNKNOWN_ALARM_MS) {
-    items.push({ severity: "crit",
-      text: `: 위치 불명 ${Math.floor((now - unknownSince) / 1000)}초 — 블록을 풀지 않습니다 · 로봇 위치를 확인하세요` });
+  if (mine?.trigger === "unknown") {
+    items.push({ severity: "crit", text: ": 위치 불명 30초 넘음 — 블록을 풀지 않습니다 · 로봇 위치를 확인하세요" });
   }
   const mergeSince = clock?.merge?.[robotId];
   if (mergeSince !== undefined && now - mergeSince > MERGE_MAX_WAIT_MS) {
     items.push({ severity: "warn", text: `: 합류 대기 ${Math.floor((now - mergeSince) / 1000)}초 — 구역 ${waitingUnit(traffic, robotId)?.id || ""} 입구` });
   }
+  const signal = signalWait(traffic, robotId);  // D-525 8: rows only for robots held at that signal
+  if (signal?.errors?.length) items.push({ severity: "crit", text: `: 신호 ${signal.signal_id} 설정 오류 — 구역이 늘 적색입니다 · ${signal.errors[0]}` });
+  else if (signal?.alert === "all_red_stretched") items.push({ severity: "crit", text: `: 신호 ${signal.signal_id} 전체 적색 30초 넘음 — 구역이 비지 않습니다 · 구역 안 로봇을 확인하세요` });
+  else if (signal?.alert === "hold_long") items.push({ severity: "warn", text: `: 신호 ${signal.signal_id} 유지 2분 넘음 — 다른 입구가 기다립니다` });
   for (const loop of traffic?.loop_capacity || []) {
     if ((loop.robots || []).includes(robotId) && loop.robots.length > loop.capacity) {
       items.push({ severity: "warn", text: `: 고리 수용 초과 — 고리 ${loop.robots.length}/${loop.capacity}대` });

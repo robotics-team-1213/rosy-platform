@@ -41,6 +41,11 @@ def test_rectangular_camera_coordinates_are_display_only(page_site):
     page.locator("#credential input").fill("operator-token")
     page.locator("#connect").click()
     expect(page.locator("#session")).to_contain_text("bob")
+    plane_tools = page.locator(".plane-tools")
+    expect(plane_tools).not_to_have_attribute("open", "")
+    plane_tools.locator("summary").focus()
+    page.keyboard.press("Enter")
+    expect(plane_tools).to_have_attribute("open", "")
     page.locator("#plane-load").click()
     expect(page.locator("#plane-status")).to_contain_text("불러온 평면 영상")
     expect(page.locator("#site-map-svg image")).to_be_visible()
@@ -48,6 +53,7 @@ def test_rectangular_camera_coordinates_are_display_only(page_site):
     page.locator("#plane-pick").check()
     expect(page.locator("#trip-pick")).not_to_be_checked()
     writes.clear()
+    page.locator("#map-viewport").scroll_into_view_if_needed()
     point = page.locator("#site-map-svg").evaluate("svg => { const p = new DOMPoint(400, 240).matrixTransform(svg.getScreenCTM()); return {x: p.x, y: p.y}; }")
     page.mouse.click(point["x"], point["y"])
     expect(page.locator("#plane-point")).to_contain_text("확인한 좌표 x")
@@ -148,9 +154,25 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     page.locator("#credential input").fill("operator-token")
     page.locator("#connect").click()
     expect(page.locator("#session")).to_contain_text("bob")
+    expect(page.locator("#token-access")).not_to_have_attribute("open", "")
+    expect(page.locator("#token-access summary")).to_be_visible()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#site-map-svg [data-place]")).to_have_count(4)
     expect(page.locator("#site-map-svg .arrow")).to_have_count(8)  # 4 one-way + 2 two-way edges
+    positions = page.evaluate("""() => ({
+      map: document.querySelector('#map-viewport').getBoundingClientRect().top,
+      trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().top,
+      run: document.querySelector('[aria-labelledby=run-heading]').getBoundingClientRect().top,
+      edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().top,
+      plane: document.querySelector('.plane-tools summary').getBoundingClientRect().top,
+    })""")
+    assert positions["map"] < positions["plane"] < positions["trip"] and positions["map"] < height, positions
+    expect(page.locator(".plane-tools")).not_to_have_attribute("open", "")
+    expect(page.locator("#plane-source")).to_be_hidden()
+    if width < 1024:
+        assert positions["trip"] < positions["run"] < positions["edit"], positions
+    else:
+        assert abs(positions["trip"] - positions["edit"]) <= 1 and positions["trip"] < positions["run"], positions
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-fresh-{width}x{height}.png"), full_page=True)
 

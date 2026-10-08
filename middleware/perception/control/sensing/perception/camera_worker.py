@@ -87,6 +87,7 @@ class CameraTelemetry:
     """Secret-free, serialisable processing evidence."""
 
     frame_id: int
+    stamp: float
     profile_revision: str
     image_size: tuple[int, int]
     dropped_frames: int
@@ -100,6 +101,7 @@ class CameraTelemetry:
     def as_dict(self) -> dict[str, Any]:
         return {
             "frame_id": self.frame_id,
+            "stamp": self.stamp,
             "profile_revision": self.profile_revision,
             "image_size": list(self.image_size),
             "dropped_frames": self.dropped_frames,
@@ -229,6 +231,7 @@ class CameraPreprocessWorker:
             capture_age = max(0.0, (self._wall_clock() - frame.captured_at) * 1000.0)
         telemetry = CameraTelemetry(
             frame_id=frame.frame_id,
+            stamp=frame.captured_at,
             profile_revision=self.profile.revision,
             image_size=size,
             dropped_frames=self._dropped_frames,

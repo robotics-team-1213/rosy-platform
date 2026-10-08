@@ -1,0 +1,69 @@
+{
+ "min_gap_m": 0.785,
+ "min_gap_at": [
+  0.05,
+  "a",
+  "b"
+ ],
+ "contacts": 0,
+ "overlap_periods": 0,
+ "grant_conflicts": 0,
+ "grants": 3,
+ "authority_stops": {
+  "a": 0,
+  "b": 0
+ },
+ "laps": {
+  "a": [],
+  "b": []
+ },
+ "ends": {
+  "a": {
+   "t": 20.5,
+   "state": "stopped",
+   "reason": "stall",
+   "detail": {
+    "stall_s": 20.0,
+    "progress_m": 0.0,
+    "stop_sent": true
+   }
+  },
+  "b": {
+   "t": 20.5,
+   "state": "stopped",
+   "reason": "stall",
+   "detail": {
+    "stall_s": 20.0,
+    "progress_m": 0.0,
+    "stop_sent": true
+   }
+  }
+ },
+ "holds": [],
+ "resolver": [],
+ "max_tick_ms": 1.431892997061368,
+ "authority_refusals": 0,
+ "dist_m": {
+  "a": 0.0,
+  "b": 0.0
+ },
+ "waiting_periods": {
+  "a": 0,
+  "b": 0
+ },
+ "min_convoy_gap_m": null,
+ "sim_s": 20.5,
+ "lap_times_s": {
+  "a": [],
+  "b": []
+ },
+ "block_length_m": {
+  "east": 0.665,
+  "ring_e": 0.46,
+  "ring_n": 0.372,
+  "ring_s": 0.374,
+  "ring_w": 0.374,
+  "west": 0.716
+ },
+ "stop_gap_m": 0.045000000000000005
+}
