@@ -7,6 +7,12 @@ import pytest
 from layout import ActivationRecord, Layout, write_activation
 from release_fixture import signed_tree
 
+import os
+# CI runs as root in its container; a non-root POSIX host (the shared test PCs) cannot.
+# Windows keeps its existing behaviour.
+REQUIRES_ROOT = pytest.mark.skipif(os.name == "posix" and os.geteuid() != 0,
+                                   reason="needs root: chown of the activation config to root needs root")
+
 
 def test_host_runtime_exists():
     assert importlib.util.find_spec("release_runtime") is not None
@@ -46,6 +52,7 @@ def test_loaded_image_must_match_digest_and_arm64(tmp_path):
     assert calls[0][:3] == ["docker", "image", "load"]
 
 
+@REQUIRES_ROOT
 def test_start_selects_activation_paths_and_never_builds(tmp_path):
     from release_runtime import DockerRuntime
     layout = Layout.rooted(tmp_path / "device")
