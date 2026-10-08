@@ -15,7 +15,7 @@ import math
 
 from core_common.robot_body import PINKY_PRO
 
-BASELINE_S = 2.0            # frames before the request: what changes without the blink
+BASELINE_S = 4.0            # frames before the request: what changes without the blink (>= 2 cycles of a 2 s flasher)
 CAPTURE_S = 6.0             # D-472 4: the identify blink lasts at most 6 s
 PERIOD_S = 0.2              # one overhead frame every 0.2 s (as the 2026-10-08 manual check)
 COOLDOWN_S = 10.5           # CORE HW_TEST_COOLDOWN_S 10 s; one retry after it, with a fresh baseline
@@ -48,8 +48,10 @@ def radius_px(map_to_image, floor_xy, project):
     """RADIUS_M in pixels at floor_xy (the largest of four directions; NaN past the horizon)."""
     x, y = floor_xy
     u, v = project(map_to_image, x, y)
-    return max(math.hypot(a - u, b - v) for a, b in (project(map_to_image, x + dx, y + dy) for dx, dy in (
-        (RADIUS_M, 0), (-RADIUS_M, 0), (0, RADIUS_M), (0, -RADIUS_M))))
+    d = [math.hypot(a - u, b - v) for a, b in (project(map_to_image, x + dx, y + dy) for dx, dy in (
+        (RADIUS_M, 0), (-RADIUS_M, 0), (0, RADIUS_M), (0, -RADIUS_M)))]
+    # max() can skip a NaN that is not first; any direction past the horizon is unusable.
+    return math.nan if any(not math.isfinite(r) for r in d) else max(d)
 
 
 def blobs(ref, baseline, frames):

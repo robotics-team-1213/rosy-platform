@@ -1032,7 +1032,7 @@ def test_identify_blob_at_the_robot_passes_and_is_recorded(tmp_path):
     frames = ident["frames"]
     assert all(f["sha256"].startswith("sha256:") for f in frames) and frames[0]["name"] == "identify_00.jpg"
     base = [f for f in frames if f["phase"] == "baseline"]
-    assert len(base) == 11 and base[-1]["t"] == pytest.approx(IDENT.BASELINE_S)     # 2 s before the request
+    assert len(base) == round(IDENT.BASELINE_S / IDENT.PERIOD_S) + 1 and base[-1]["t"] == pytest.approx(IDENT.BASELINE_S)
     assert [f["phase"] for f in frames[len(base):]] == ["blink"] * (len(frames) - len(base))
     # Never backwards; the first blink frame is grabbed right after the request, so on the
     # fake clock it shares the last baseline frame's time.
@@ -1095,7 +1095,8 @@ def test_identify_waits_out_the_cooldown_once(tmp_path):
     assert robot.log.count("POST /host/lamp/identify") == 2 and robot.t - t0 >= IDENT.COOLDOWN_S
     base = [f for f in json.loads(p.read_text(encoding="utf-8"))["tether"]["identity"]["frames"]
             if f["phase"] == "baseline"]
-    assert len(base) == 22 and base[11]["t"] >= IDENT.BASELINE_S + IDENT.COOLDOWN_S   # a fresh baseline after the wait
+    n = round(IDENT.BASELINE_S / IDENT.PERIOD_S) + 1
+    assert len(base) == 2 * n and base[n]["t"] >= IDENT.BASELINE_S + IDENT.COOLDOWN_S   # a fresh baseline after the wait
 
 
 def test_pixel_mode_identify_uses_the_picked_center(tmp_path):
