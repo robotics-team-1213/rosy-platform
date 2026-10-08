@@ -482,7 +482,9 @@ class TripRunner:
             live.bends_done.add(bend["place_id"])  # finished, or passed without one: never again
             return await self._step_bend(live, index, s)
         if live.view["hold"] is not None or self.traffic.holds(live, index):
-            return False  # held (operator, replan, lap or D-517 traffic): only the place's stop may go out
+            # held (operator, replan, lap or D-517 traffic): only the place's stop may go out; a bend
+            # passed while held counts as passed (at most one per lap)
+            return False
         if self._core_busy(live) or bend["s_start"] - s > self.config.arm_distance_m or (
                 ours and state == "armed" and self._clock() - sent["at"] < self.config.junction_expires_s / 2):
             return True
@@ -501,14 +503,14 @@ class TripRunner:
         return state in MANOEUVRE or (state == "executing" and live.junction.get("seq") != live.replaceable)
 
     async def _send(self, live: LiveTrip, index: int, action: str, place: str, stop_after: Optional[float],
-                    **fields) -> None:
+                    **kwargs) -> None:
         """Send one junction instruction to an open trip's robot and record it as ``live.sent``."""
         if not live.open:
             return
         now = self._clock()
         try:
             reply = await self._call(self._junction.send_junction(
-                live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s, **fields)) or {}
+                live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s, **kwargs)) or {}
         except RobotApiError as exc:
             if exc.code == "JUNCTION_ODOM_STALE":  # D-507 2: no fresh odom at receipt; next tick sends again
                 live.view["detail"]["junction_retry"] = exc.code
