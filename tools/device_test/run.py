@@ -7,11 +7,10 @@
 
 --preflight-only saves frames and a verdict template and changes nothing; --camera-verdict
 runs the test; --restore finishes the undo of a run that died (RESTORE_PENDING.json).
-Order, abort rules and the undo contract: tools/device_test/AGENTS.md and ADR D-512.
-CORE is the motion authority when this loop stalls (line-follow hold session <= 1 s,
-D-422 body stop, teleop watchdog); loop calls make one short attempt each.
-The SIGTERM handler is best effort: on Windows a kill is TerminateProcess and runs no
-handler, so only RESTORE_PENDING.json and --restore protect the robot then.
+Order, abort rules, tether guard (tether.py) and undo: tools/device_test/AGENTS.md, ADR D-512.
+CORE is the motion authority when this loop stalls (line-follow hold session <= 1 s, D-422
+body stop, teleop watchdog); loop calls make one short attempt each. SIGTERM handling is best
+effort: a Windows kill runs no handler, so only RESTORE_PENDING.json and --restore help then.
 """
 from __future__ import annotations
 
@@ -34,6 +33,7 @@ sys.path.insert(0, str(REPO / "tools" / "capture"))
 import edge_drive  # noqa: E402  (Core, tls_context, rec_start/rec_stop, front_frame, advisory)
 from core_common.robot_body import PINKY_PRO  # noqa: E402  (edge_drive put contracts/foundation on sys.path)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tether  # noqa: E402
 from live_transport import Live  # noqa: E402
 from plan_rules import (OVERLAY_PATH, VERDICT_KEYS, check_verdict, flatten, load_plan,  # noqa: E402
                         merge, sanitize, sha)
@@ -55,8 +55,7 @@ class Abort(RuntimeError):
     pass
 
 
-def log(*a):
-    print(time.strftime("%H:%M:%S"), *a, flush=True)
+log = edge_drive.log
 
 
 def _sigterm(_signum, _frame):
@@ -167,10 +166,10 @@ class Run:
     def verdict(self, pose):
         try:
             v = check_verdict(self.args.camera_verdict, self.plan["verdict_max_age_s"], self.r.now(), pose)
+            self.tether = tether.Guard(v, self.plan["tether_policy"], self.ev)
         except ValueError as exc:
             raise Abort(str(exc)) from exc
-        self.phase("verdict", **{k: v[k] for k in VERDICT_KEYS}, note=v.get("note", ""),
-                   judged_by=v["judged_by"],
+        self.phase("verdict", **{k: v.get(k) for k in (*VERDICT_KEYS, "note", "judged_by", "tether")},
                    accepted_risk="cable near the robot (user 2026-10-08)" if v["cable_seen"] else None)
 
     # -- changes (each undone in cleanup) --
@@ -331,6 +330,7 @@ class Run:
                 if pose and last_pose:
                     dist += math.hypot(pose["x"] - last_pose["x"], pose["y"] - last_pose["y"])
                 last_pose = pose or last_pose
+                self.tether.tick(st, self)   # trail.jsonl; tether limits, retrace and abort on a trip (D-512)
                 if now - last_ok > 1.0:
                     raise Abort("CORE unreachable or hold refused for > 1 s")
                 if any(p in reason for p in abort_reasons):
@@ -447,7 +447,8 @@ class Run:
             frames = self.camera("before" if preflight_only else "start")
             if preflight_only:
                 template = {"captured_at": self.r.now(), "pose_at_capture": st.get("pose"),
-                            "frames": frames, **{k: None for k in VERDICT_KEYS}, "note": "", "judged_by": ""}
+                            "frames": frames, **{k: None for k in VERDICT_KEYS}, "note": "", "judged_by": "",
+                            "tether": None}    # or {cable_m, anchor_robot_frame, how}: tether.py
                 path = self.ev / "camera_verdict.json"
                 path.write_text(json.dumps(template, indent=2), encoding="utf-8")
                 self.summary["outcome"] = "preflight"
@@ -550,8 +551,7 @@ def dry_run(plan, args):
         print(" -", name)
     print("overlay", plan["overlay_path"], json.dumps(flatten(plan["overlay"])))
     print("stop", json.dumps(plan["stop"]), "expect", json.dumps(plan.get("expect", {})))
-    print("cleanup: line-follow OFF, IDLE, recording stop, overlay restore + readback + CORE check, "
-          "hold release (only after a verified restore), after frames")
+    print("cleanup: OFF, IDLE, recording stop, overlay restore + readback + CORE check, hold release, after frames")
     return 0
 
 

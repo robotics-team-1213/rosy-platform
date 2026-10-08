@@ -7032,3 +7032,9 @@ osy-d395-s1d\`.
 - 변경: 원본 화소가 증명된 10/7 두 MCAP을 현재 로컬 main에서 기본 지면과 11.8° 후보로 재생하고, R0 게이트 실패를 `docs/validation/lane-1007-r0-gate-2026-10-08/`에 고정했다.
 - 증거: 후보 pitch 첫 세션 RoadState TRACK 111/124이지만 페인트 위 목표 비율 등 6개 게이트 실패; 둘째 세션 STOP 83/83. 기본 지면은 두 세션 모두 STOP 207/207. 네 결과 모두 `validated=false`.
 - gate 변화: R0 HOLD 유지. 승인된 보정값·사람 동일 경계 정답·실기 주행 증거가 없다.
+
+## 2026-10-08 · uncommitted · D-512 개정 1 충전 케이블 tether 감시와 되돌아가기
+
+- 변경: 사용자 결정(2026-10-08)으로 케이블을 꽂은 실기 시험을 허용했다. `tools/device_test/tether.py`가 판정 파일의 `tether`(2 m/5 m, 닻 위치, 판단 근거)를 검사하고, 주행 틱마다 닻 거리와 누적 회전을 재며 `trail.jsonl`을 남긴다. 한도(케이블 − 0.3 m, ±360°)에 닿으면 line-follow OFF 확인 뒤 기록한 길을 0.03 m/s로 거꾸로 따라가 되감고 중단(종료 코드 2)한다.
+- 증거: `python -m pytest tools/device_test/test tools/capture/test -q` 호스트 시험(가짜 전송). 로봇은 움직이지 않았다.
+- gate 변화: 없음. D-512는 Proposed 그대로이고 Fleet tether 감시는 후속이다.
