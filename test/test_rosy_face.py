@@ -15,6 +15,11 @@ from types import SimpleNamespace
 
 import pytest
 
+# CI runs as root in its container; a non-root POSIX host (the shared test PCs) cannot.
+# Windows keeps its existing behaviour.
+REQUIRES_ROOT = pytest.mark.skipif(os.name == "posix" and os.geteuid() != 0,
+                                   reason="needs root: fchown of the hand-over file to its group needs root")
+
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 IMAGE = ROOT / "deploy/robot/pinky_pro/image"
@@ -545,6 +550,7 @@ def test_group_and_mode_are_set_before_any_byte_is_written(tmp_path, monkeypatch
     assert all(position == 0 and size == 0 for _name, position, size in seen)
 
 
+@REQUIRES_ROOT
 def test_closing_or_failing_the_ap_removes_the_handoff(tmp_path, monkeypatch):
     network = _network()
     monkeypatch.setattr(network, "_display_gid", lambda: 0)
