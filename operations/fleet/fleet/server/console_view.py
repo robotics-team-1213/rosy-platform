@@ -112,6 +112,8 @@ class TripCaps:
     site_floor_map_id: Optional[str] = None
     #: D-507 2: CORE takes the junction expectation fields (map_id, expect_in_m, ...); absent means no.
     junction_pivot: bool = False
+    #: D-507 addendum: CORE takes action ``bend`` (a site-map bend on odometry); absent means no.
+    lane_bend: bool = False
 
 
 def trip_caps(capabilities) -> Optional[TripCaps]:
@@ -133,7 +135,8 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
             floor = item.get("site_floor_map_id")
             return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
                             site_floor_map_id=floor if isinstance(floor, str) else None,
-                            junction_pivot=item.get("junction_pivot") is True)
+                            junction_pivot=item.get("junction_pivot") is True,
+                            lane_bend=item.get("lane_bend") is True)
     return None
 
 

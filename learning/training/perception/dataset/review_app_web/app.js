@@ -10,13 +10,32 @@ const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'
 const statuses = {approved:'승인', excluded:'제외', pending:'검수 대기'};
 const serverReasons = {'known object class required':'모든 박스에 클래스를 지정하세요.','box outside original image':'박스가 원본 사진 범위를 벗어났습니다.','unknown signal state':'신호 상태가 올바르지 않습니다.','boxes must be a list':'박스 목록이 올바르지 않습니다.','unknown review action':'지원하지 않는 동작입니다.'};
 function readableError(message) {return serverReasons[message] || message;}
-let workspace, frame, image, ready = false, busy = false, loading = true, conflicted = false, forbidden = false, loadFailed = false, loadSerial = 0, drawing = false;
+let workspace, frame, image, sourceImage, ready = false, busy = false, loading = true, conflicted = false, forbidden = false, loadFailed = false, loadSerial = 0, drawing = false;
+let detailView=false;
+try {detailView=sessionStorage.getItem('rosy.review.detailView')==='true';} catch {}
 let gesture = null, selected = null, coordinatePreview = null;
 let undo = null;
 function visibleFrames() {return workspace?.frames.filter(item=>$('filter').value==='all'||item.status===$('filter').value)||[];}
 function sourceCandidates() {return frame?.source?.objects || frame?.source?.boxes || [];}
 
 function error(message='') { $('error').textContent = message; $('error').hidden = !message; }
+function setView(detail) {
+  detailView=detail;
+  try {sessionStorage.setItem('rosy.review.detailView',String(detail));} catch {}
+  $('view-original').setAttribute('aria-pressed',String(!detail));
+  $('view-detail').setAttribute('aria-pressed',String(detail));
+  if (!ready) return;
+  if (!detail) {image=sourceImage;$('view-status').textContent='원본 사진 · 학습 입력';paint();return;}
+  const ticket=loadSerial,index=frame.index,next=new Image();
+  $('view-status').textContent='명암 보정 화면을 불러오는 중…';
+  next.onload=()=>{if(ticket!==loadSerial||!detailView)return;
+    if(next.naturalWidth!==sourceImage.naturalWidth||next.naturalHeight!==sourceImage.naturalHeight){next.onerror();return;}
+    image=next;$('view-status').textContent='명암 보정 보기 · 흰 포화 영역은 복원되지 않음';paint();};
+  next.onerror=()=>{if(ticket!==loadSerial)return;detailView=false;image=sourceImage;
+    $('view-original').setAttribute('aria-pressed','true');$('view-detail').setAttribute('aria-pressed','false');
+    $('view-status').textContent='명암 보정을 표시하지 못했습니다. 원본 보기로 돌아왔습니다.';paint();};
+  next.src=`/api/view-images/${index}`;
+}
 function enable() {
   const locked = !ready || busy || loading || conflicted || forbidden || !!gesture;
   const unclassified = frame?.review.boxes.some(box => box.label == null);
@@ -35,6 +54,7 @@ function enable() {
   $('prepare').disabled = busy || loading || conflicted || forbidden || !!gesture || !workspace;
   $('prepare').reason = loading ? '검수 내용을 불러오는 중입니다.' : forbidden ? '검수 권한이 거부되었습니다. 최신 내용을 다시 불러오세요.' : '';
   $('reload').disabled = busy || loading || !!gesture;
+  $('view-original').disabled = $('view-detail').disabled = !ready || loading;
   $('filter').disabled = busy || loading || !!gesture;
   $('complete').disabled = locked || frame?.status === 'excluded';
   document.querySelectorAll('#boxes input, #boxes select, #boxes ui-button').forEach(el => el.disabled = locked || frame?.status === 'excluded');
@@ -162,8 +182,9 @@ async function select(index) {
     if (next.naturalWidth !== frame.source.width || next.naturalHeight !== frame.source.height) {
       error('사진 크기가 원본과 다릅니다'); return;
     }
-    image = next; ready = true; $('image-message').hidden = true;
+    sourceImage=image=next; ready = true; $('image-message').hidden = true;
     $('save-status').textContent = `서버 저장됨 · v${frame.version}`; paint(); enable();
+    if(detailView)setView(true);else $('view-status').textContent='원본 사진 · 학습 입력';
   };
   next.onerror = () => { if (serial === loadSerial) {error('원본 사진을 불러오지 못했습니다. 승인할 수 없습니다.'); enable();} };
   next.src = `/api/images/${index}?v=${frame.version}`;
@@ -298,7 +319,7 @@ $('canvas').onlostpointercapture=event=> {if(gesture?.pointerId===event.pointerI
 const TEXT_ENTRY='input:not([type=checkbox]):not([type=radio]), textarea, select';
 function shortcut(event) {
   const digit=/^(?:Digit|Numpad)([1-9])$/.exec(event.code||'');
-  return digit ? digit[1] : {KeyA:'a',KeyC:'c',KeyN:'n',KeyX:'x'}[event.code] || (/^[1-9acnx]$/i.test(event.key) ? event.key.toLowerCase() : null);
+  return digit ? digit[1] : {KeyA:'a',KeyC:'c',KeyN:'n',KeyV:'v',KeyX:'x'}[event.code] || (/^[1-9acnvx]$/i.test(event.key) ? event.key.toLowerCase() : null);
 }
 document.addEventListener('keydown',event=> {
   if(event.key==='Escape' && gesture) {event.preventDefault();cancelGesture();}
@@ -315,6 +336,7 @@ document.addEventListener('keydown',event=> {
   // Physical keys (event.code) so a Korean IME layout still works; checkboxes keep working.
   if(event.target?.matches?.(TEXT_ENTRY) || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.repeat || busy || gesture) return;
   const key=shortcut(event);
+  if(key==='v'&&ready){event.preventDefault();setView(!detailView);return;}
   if(key==='c' && !$('complete').disabled) {event.preventDefault();$('complete').click();return;}
   if(key==='n' && !$('next-pending').disabled) {event.preventDefault();$('next-pending').click();return;}
   const cls=workspace?.object_class_set.classes.find(c=>c.hotkey===key);
@@ -324,6 +346,8 @@ document.addEventListener('keydown',event=> {
   const decision=key==='a' ? 'approve' : key==='x' && frame?.status==='pending' ? 'exclude' : null;
   if(decision && !$(decision).disabled) {event.preventDefault(); $(decision).click();}
 });
+$('view-original').onclick=()=>setView(false);
+$('view-detail').onclick=()=>setView(true);
 function frameHeading() {
   $('status').setAttribute('status',frame.status==='pending'?'warn':'neutral');
   const visible=visibleFrames();

@@ -2613,3 +2613,20 @@
 - gate 변화: 없음(동작 변경 없음)
 - 결정: map-view.js 1030→831, 판정 split 유지(다음 증가 때 다시 판정). camera-backdrop 141, traffic-view 82. fleet 패키지 45944→45968(+24, 머리말·import), 패키지 판정은 다른 단계가 다시 한다
 - 교훈: 없음
+## 2026-10-08 · uncommitted · feat(fleet): 지도 굽이 장소와 trip의 `bend` 지시 (D-507 보충)
+- 변경: `site_map.py` 장소 종류 `bend`(꼭짓점, `yaw`·`exit_yaw`·`radius_m` 필수, 회전 15–90°, 다른 종류는 두 필드 불가, 저장 body는 굽이 필드가 없는 장소에서 그대로). `trip_ports.py` `bend_geometry`(두 접점이 이 차선에 있고 진행 방향으로 회전 부호), `next_bend`, `bend_fields`(`bend_in_m` = 차로를 따른 호 시작점까지 거리, `bend_tol_m` = 기존 `expect_tol_m` 식, 옆 항 없음), `_pose_tol`로 tol 식을 한 곳에 둠. `trip_runner.py` `_step_bend`: `lane_bend` 로봇에만, 지나지 않은 굽이가 있으면 그 굽이가 다음 장소보다 먼저, 호 시작점 0.6 m 안에서 보내고 절반 만료에 갱신, CORE가 끝내야(`bending`/`reacquiring` 뒤 `idle`) 장소 지시. `MANOEUVRE`에 `bending`, `_completed`는 굽이 지시를 장소 완료로 세지 않음. `TripCaps.lane_bend`.
+- 증거: `test_trip_bend.py` 9건(장소 검증, 기존 지도 body 그대로, 실제 west 간선 방향별 회전 부호·호 시작점, 능력 읽기, 굽이 구간에서만 보냄·기동 중 안 보냄·끝난 뒤 다음 장소, armed 굽이가 다음 장소를 막음, 굽이 없는 지도·`lane_bend` 없는 로봇은 `bend` 없음, unresolved면 trip 정지). FakeCore가 `bend`를 받도록 `test_trip_runner.py` 보충.
+- gate 변화: SOURCE. SIM은 Fleet 함수를 쓰는 probe로.
+- 결정: D-507 보충
+
+## 2026-10-08 · uncommitted · fix(fleet): 굽이 지시는 굽이 앞 차로가 곧을 때만
+- 변경: `trip_ports.straight_approach`, `bend_fields`가 로봇에서 호 시작점까지 차로 방향이 15° 안일 때만 필드를 만든다. CORE가 `bend_in_m`을 odom 이동으로 재므로 모서리 안에서 보내면 질러 간 만큼 호가 늦다(모델 PC SIM 서쪽 출발 2회 `bend_basis_lost`, 호 중간 바깥 4.9 cm).
+- 증거: `test_trip_bend.py::test_bend_waits_until_the_lane_before_it_is_straight`, trip 시험 133 passed.
+- gate 변화: SOURCE. SIM 재실행은 `docs/validation/lane-bend-odom-sim-2026-10-08`.
+- 결정: D-507 보충
+
+## 2026-10-08 · uncommitted · fix(fleet): `repeat` trip의 다음 바퀴가 굽이 지시를 다시 보낸다
+- 변경: main의 D-517 M1a 반복 trip과 병합. 굽이 장소 id는 바퀴마다 같으므로 `LiveTrip.bends_done`을 다음 바퀴가 시작될 때(`_next_lap` 같은 경로, `confirm_replan`의 `lap_route`) 비운다. 비우지 않으면 2바퀴부터 굽이를 지시 없이 지나간다. `_pose_tol`은 main의 주행 거리 항을 받고 `bend_tol_m`은 이 브랜치의 규칙(dead-reckon 거리만) 그대로다.
+- 증거: `test_lane_traffic.py::test_a_new_lap_drives_its_bends_again`, trip 시험 118 passed.
+- gate 변화: SOURCE.
+- 결정: D-507 보충, D-517

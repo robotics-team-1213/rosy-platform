@@ -11,7 +11,7 @@ import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./lo
 import { capabilityReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
-import { trafficAttention, trafficCardLine } from "./site-map-model.js";
+import { trafficAttention, trafficCardLine } from "/console/assets/site-map-model.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
