@@ -1,6 +1,6 @@
 ﻿# Real Pinky lane-choice field review — 2026-10-08 21:00 KST
 
-**Decision: HOLD.** This is a contemporaneous site and device readback, not a physical lane-choice run. No motion, junction instruction, E-Stop change, robot configuration change, or release was sent. Source checkout: `1a303f92e43612a457b7334d7465f94977640587`; this SHA identifies the review's source reference, not the installed robot or site images.
+**Decision: HOLD.** This is a contemporaneous site and device readback, not a physical lane-choice run. No motion, junction instruction, E-Stop change, robot configuration change, or release was sent. Source checkout begins `1a303f92e436`; this identifies the review's source reference, not the installed robot or site images.
 
 ## What was observed
 
