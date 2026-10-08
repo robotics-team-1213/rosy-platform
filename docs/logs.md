@@ -7277,3 +7277,8 @@ osy-d395-s1d\`.
 - 변경: `validation/uiux-robot-slam-truth-2026-10-09/result.md`에 CORE 맵핑 세션 수락과 실제 SLAM 실행의 증거 경계를 기록했다. Dashboard 설정 카드가 불필요하게 늘어나지 않도록 고친 모바일·데스크톱 화면을 함께 기록했다.
 - 증거: Console 320·390·1366px와 Dashboard 390·1366px 캡처, 관련 브라우저 3 passed / NEW 0, 이미지 SHA-256.
 - gate 변화: 없음. 설치본·SLAM Toolbox 실행·지도 갱신·DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(pilot/robot): 같은 탭 운전석→운용 지도 검증
+- 변경: Pilot 조종 종료 요청부터 실제 Robot Console 지도 문서·인증 인계까지 LOCAL 연속 화면을 기록하고, 지도 없음 상태에서 현재 지도 열람을 단정하던 문구를 수정했다.
+- 증거: `validation/uiux-pilot-console-continuity-2026-10-09/result.md`. 2000×1200·390×844 전환 전후 캡처, 브라우저 4 passed / NEW 0.
+- gate 변화: 없음. 실제 로봇 정지·지도/SLAM, 설치본, DEVICE/FIELD 및 전체 G2/G3는 HOLD.
