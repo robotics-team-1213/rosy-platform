@@ -9,7 +9,9 @@ import math
 import pytest
 
 from fleet.routing.cost import RoutingConfig
-from fleet.routing.execute import ADVANCE_M, ends_at_place, lane_action, plan_body, theta, turn_target, unsupported
+from fleet.routing.execute import (ADVANCE_M, advance_m, ends_at_place, lane_action, plan_body, theta,
+                                   turn_target, unsupported)
+from fleet.routing import execute
 from fleet.routing.graph import TANGENT_M, build_graph
 from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.site_map import SiteMap, from_lane_graph
@@ -88,6 +90,48 @@ def test_ring_turn_aims_at_the_advance_chord(into, out):
         return arc.project(px + ADVANCE_M * math.cos(heading), py + ADVANCE_M * math.sin(heading))[0]
 
     assert off_lane(chord) < 0.002 < 0.005 < off_lane(tangent)
+
+
+def _bent(*legs):
+    """A(0,0) -> B(1,0) -> C, the outgoing lane leaving B in ``(heading_deg, length_m)`` legs."""
+    line = [[1.0, 0.0]]
+    for heading, length in legs:
+        x, y = line[-1]
+        line.append([x + length * math.cos(math.radians(heading)), y + length * math.sin(math.radians(heading))])
+    site = SiteMap.model_validate({
+        "places": [{"id": p, "name": p, "x": x, "y": y, "kind": "junction"}
+                   for p, (x, y) in (("A", (0, 0)), ("B", (1, 0)), ("C", line[-1]))],
+        "edges": [{"id": "ab", "from": "A", "to": "B", "polyline": [[0, 0], [1, 0]], "width_m": 0.2,
+                   "speed_cap_mps": 0.2, "drive_mode": "lane"},
+                  {"id": "bc", "from": "B", "to": "C", "polyline": line, "width_m": 0.2,
+                   "speed_cap_mps": 0.2, "drive_mode": "lane"}]})
+    graph = build_graph(site, version=1)
+    return graph, [LEFT_TRIP[0], {**LEFT_TRIP[1], "s_to": graph.arcs["bc:fwd"].length_m}]
+
+
+def test_the_sent_chord_angle_is_what_the_limit_checks():
+    """Tangent 95 deg is within a 100 deg limit; the chord the robot is sent (about 112) is not."""
+    graph, trip = _bent((95, 0.05), (130, 0.5))
+    assert theta(graph, trip, 0) == pytest.approx(95.0, abs=0.1)
+    assert _refused(graph, trip, max_turn_deg=100.0) == {"edge_id": "ab", "reason": "LANE_TURN_TOO_SHARP",
+                                                         "turn_deg": round(turn_target(graph, trip, 0), 1)}
+    assert turn_target(graph, trip, 0) > 100.0 and _refused(graph, trip, max_turn_deg=120.0) is None
+
+
+def test_a_chord_of_the_other_sign_is_refused():
+    """A left by the tangent (+25) whose lane hooks right: the chord is negative, CORE would refuse it."""
+    graph, trip = _bent((25, 0.05), (-60, 0.5))
+    assert lane_action(graph, trip, 0, CONFIG) == "left" and turn_target(graph, trip, 0) < 0
+    assert _refused(graph, trip)["reason"] == "LANE_TURN_TOO_SHARP"
+
+
+def test_advance_never_runs_past_a_short_outgoing_lane(monkeypatch):
+    """The schema keeps lanes >= 0.1 m (= ADVANCE_M today); a longer advance (CORE allows 0.30) is clamped."""
+    graph, trip = _bent((90, 0.15))
+    assert advance_m(graph, trip, 0) == ADVANCE_M
+    monkeypatch.setattr(execute, "ADVANCE_M", 0.30)
+    assert advance_m(graph, trip, 0) == pytest.approx(0.15)
+    assert turn_target(graph, trip, 0) == pytest.approx(90.0)
 
 
 @pytest.mark.parametrize(("graph", "segments", "kwargs", "reason"), [
