@@ -21,3 +21,6 @@ D-523 reserved on another session for the AI PC ask (refs/adr/D-523); the ADR bo
 D-523 reserved in another active branch; D-527 lands independently
 D-526 reserved in another active branch; D-527 lands independently
 D-530 reserved in another active branch (feat/host-management-guard, host desired state); D-531 lands independently
+D-535 reserved in another active branch (fix/robot-breakpoint-contract); D-538 lands independently; remove when its ADR lands
+D-536 reserved in another active branch (feat/d520-arc-radial-tracking); D-538 lands independently; remove when its ADR lands
+D-537 reserved in another active branch (refs/adr/D-537); D-538 lands independently; remove when its ADR lands
