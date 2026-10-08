@@ -7318,3 +7318,9 @@ osy-d395-s1d\`.
 - 변경: API가 보장하는 마지막 계획과 현재 목표 연동의 경계를 Console 경로 모양·문구에 반영하고 LOCAL 반응형 증거를 기록했다.
 - 증거: `validation/uiux-robot-last-plan-2026-10-09/result.md`. 1366·390·320px 캡처, 브라우저 1 passed / NEW 0.
 - gate 변화: 없음. 실제 경로 추종·SLAM, 설치본, DEVICE/FIELD와 전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 우선 배치
+
+- 변경: 전화와 데스크톱 현장 지도에서 지도→경로 미리보기→운행→초안 편집 순서를 적용하고 선택형 평면 영상 도구를 접었다.
+- 증거: `validation/uiux-fleet-site-map-task-order-2026-10-09/result.md`. 320px 전후·390px·1440px 캡처, 브라우저 7 passed / NEW 0.
+- gate 변화: 없음. 실제 로봇 운행·SLAM, 설치본·DEVICE/FIELD와 전체 D-153 G2/G3는 HOLD.
