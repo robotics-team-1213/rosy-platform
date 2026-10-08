@@ -16,7 +16,7 @@ The current 10/7 candidate marks more than half the lower image drivable on all 
 
 1. **Pixels:** On identical recorded SIM frames, compare map/ground-truth projected paint, current threshold paint, and frozen lane-model paint. Record point coverage and wall/spoke false positives. Projection is a SIM oracle, not real-camera truth.
 2. **Geometry:** Feed each paint source into the same fixed-radius outer-circle fit with GT pose, then repeat with odometry pose. Record outer-boundary ID, residual, radial/heading error, and invalid/HOLD count. If even oracle+GT fails, fix association/fit; if oracle succeeds but model fails, improve paint perception; if GT succeeds and odometry fails, fix localization/entry.
-3. **Real video:** Use only human-approved 10/6–10/7 same-boundary IDs and visible-floor/unknown masks for flicker, consecutive miss, corridor-target error, wall/junction negatives and STOP delay. D-475's proposed `255` unknown labels currently conflict with D-464's rejection of `255`; resolve this contract before treating occlusions as fixed evaluation truth.
+3. **Real video:** Use only human-approved 10/6–10/7 same-boundary IDs and visible-floor/unknown masks for flicker, consecutive miss, corridor-target error, wall/junction negatives and STOP delay. D-475 separates the evaluation-only reviewed `255` path from D-464's training-mask rejection; verify the sealed evaluation companion and actual approved pixels before scoring occlusions.
 
 No outcome above turns a drivable mask into motion authority. CORE retains final `cmd_vel` and uncertain boundaries STOP.
 
