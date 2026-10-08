@@ -168,6 +168,26 @@ class RelockWatch:
         return True
 
 
+def controls_are_locked(summary):
+    """True when /camera/controls is a finished exposure lock, not settling or auto."""
+    text = str(summary or '')
+    return text.startswith('exposure=') or text.startswith('v4l2 exposure=')
+
+
+def image_controls_record(summary):
+    """Image settings a first-drive pose fit records. Sharpness stays off.
+
+    The exposure line is the lock that was current when the still capture
+    started. Later illuminance changes re-lock exposure only; they do not
+    rewrite this record or the fitted pitch and height.
+    """
+    return {
+        'Sharpness': SHARPNESS_OFF,
+        'NoiseReductionMode': NOISE_REDUCTION_FAST,
+        'capture_controls': str(summary),
+    }
+
+
 def lock_summary(controls):
     """One-line record of what the camera was frozen at, for the log and the bag."""
     if not controls:
