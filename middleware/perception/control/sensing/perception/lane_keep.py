@@ -118,6 +118,7 @@ from .lane_keep_junction import (  # noqa: F401 — re-exported; patch constants
     _junction,
 )
 from .lane_keep_bend import as_transverse, bend_side, bend_target, nearest_first, parallel_spans, runs_past, stop_short
+from .lane_keep_paint import extract_paint_points
 
 #: Lookahead from base_link where the lane centre is read.
 LOOKAHEAD_M = 0.25
@@ -174,8 +175,6 @@ CORNER_PAST_MARGIN_M = 0.03
 BOTH_CONFIDENCE = 0.9
 ONE_CONFIDENCE = 0.6
 MAX_POINTS = 6000
-#: D-520 stage 2: bounded, evenly sampled paint evidence for offline arc-fit diagnosis.
-ARC_PAINT_MAX_POINTS = 48
 #: Lit fraction of the floor above which the frame is washed out.
 WASHED_FRACTION = 0.5
 #: Corners: the lookahead on the corner path (shorter than LOOKAHEAD_M, or the
@@ -309,14 +308,7 @@ class LaneKeeper:
             self._forget()
             return None
         self.last["crosswalk"] = crosswalk_extent(grid, view.x[:, 0], view.y[0, :])  # D-491 §4
-        coarse = grid[::FIT_STRIDE, ::FIT_STRIDE]
-        cells = np.flatnonzero(coarse.ravel())
-        points = np.stack([view.x[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells],
-                           view.y[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells]], axis=1)
-        arc_paint = points[(points[:, 0] >= 0.10) & (points[:, 0] <= 0.40)]
-        if len(arc_paint):
-            chosen = np.linspace(0, len(arc_paint) - 1, min(len(arc_paint), ARC_PAINT_MAX_POINTS), dtype=int)
-            self.last["paint_points_m"] = np.round(arc_paint[chosen], 3).tolist()
+        points, self.last["paint_points_m"] = extract_paint_points(view, grid, FIT_STRIDE)
         rng = np.random.default_rng(self._seed)
         if len(points) > MAX_POINTS:
             points = points[rng.choice(len(points), MAX_POINTS, replace=False)]

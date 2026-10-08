@@ -759,8 +759,10 @@ def test_keep_debug_carries_bounded_ground_paint_points_without_selecting_a_boun
     assert all(len(point) == 2 and 0.10 <= point[0] <= 0.40 for point in points)
     assert any(point[1] > 0.05 for point in points)
     assert any(point[1] < -0.05 for point in points)
+    assert len({min(11, int((point[0] - 0.10) / 0.025)) for point in points}) >= 8
     assert all(point == [round(point[0], 3), round(point[1], 3)] for point in points)
     assert json.loads(json.dumps(last))["paint_points_m"] == points
+    assert len(json.dumps({"paint_points_v": 1, "paint_points_m": points}).encode()) < 2048
     assert _keep(_render())[1]["paint_points_m"] == []
 
 
