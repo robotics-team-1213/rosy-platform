@@ -16,6 +16,8 @@ from fleet.routing.trip import PlanRequest, plan_trip
 
 #: D-495 1: CORE turns at most this much at a junction.
 MAX_TURN_DEG = 150.0
+#: D-495 1: CORE's default straight run after a junction turn; Fleet sends it with every turn.
+ADVANCE_M = 0.10
 
 
 def plan_body(plan) -> dict:
@@ -37,6 +39,18 @@ def theta(graph: Graph, segments: list, index: int) -> float:
     """Signed turn at the end of segment ``index`` into the next one (+ is left)."""
     return turn_deg(graph.arcs[arc_id(segments[index])].end_tangent,
                     graph.arcs[arc_id(segments[index + 1])].start_tangent)
+
+
+def turn_target(graph: Graph, segments: list, index: int, advance_m: float = ADVANCE_M) -> float:
+    """D-507 4 (2026-10-08): the ``turn_deg`` sent at the end of segment ``index``.
+
+    CORE turns on the place point (the D-507 pivot) to ``entry yaw + turn_deg`` and then drives
+    ``advance_m`` straight, so aim at the chord to the point ``advance_m`` along the outgoing lane:
+    the straight run then ends on its centre line. On a straight lane this is the tangent turn.
+    """
+    nxt = graph.arcs[arc_id(segments[index + 1])]
+    (px, py), (x, y, _) = nxt.polyline[0], nxt.point_at(advance_m)
+    return turn_deg(graph.arcs[arc_id(segments[index])].end_tangent, math.atan2(y - py, x - px))
 
 
 def ends_at_place(graph: Graph, segment: dict) -> Optional[str]:
