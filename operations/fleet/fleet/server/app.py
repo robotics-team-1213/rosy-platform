@@ -678,6 +678,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 "frame_path": f"/api/vision/sources/{body.source_id}/frame",
                 "expires_in_s": 60}
 
+    from fleet.host_control import helper_from_environment
+    from fleet.server.host_control_routes import install_host_control_routes
+    install_host_control_routes(app, require_operator=require_operator,
+                                helper=helper_from_environment())
+
     install_static_routes(app)
 
     return app
