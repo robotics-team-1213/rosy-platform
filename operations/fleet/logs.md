@@ -2592,3 +2592,9 @@
 - gate 변화: SOURCE/LOCAL만. 통행권 전송(M2)·SIM·DEVICE 없음
 - 결정: D-517 2·3·6·7항
 - 교훈: 없음
+## 2026-10-08 · 7e883f418 · refactor(fleet): D-517 trip runner split — 바퀴·정지·교통 이음매
+- 변경: 크기 판정이 이름 붙인 이음매대로 나눴다. `server/trip_laps.py`(바퀴 호 계산, 바퀴 시점·재시도 시점, 다음 바퀴 이어붙임·지난 바퀴 자르기·대기 `carry_on`, `_from`/`_dropped`/`_joined`), `server/trip_halts.py`(`TripHalts`: 로봇 정지, 재시작 전 trip 로봇 정지와 그 목록), `lane_traffic.TrafficService`(`holds` 교차로 지시 보류, `watch` 핀 로봇 자세 읽기, `period` 표 계산과 예외 처리). `trip_runner.py`는 start/cancel/tick/`_step*`/replan만 남는다. 로그 문구·로거 이름·오류 코드·await 순서는 그대로. 시험은 `runner.halts.*`, `runner.traffic.holds`로 옮김
+- 증거: 모델 PC 7e883f418 `test_trip_runner`·`test_lane_traffic`·`test_site_map_trip`·`test_cancel_all`·`test_routing`·`test_blocks`·`test/architecture/test_module_structure.py` 263 passed(분리 전 27cd04cc0도 263 passed), `known_failures.py` 0 new; `test_trip_d507.py` 50 passed
+- gate 변화: 없음(동작 변경 없음)
+- 결정: trip_runner 847→686, 크기 판정 split 유지(남은 것은 상태기계 하나, 다음 증가 때 다시 판정). trip_halts 81, trip_laps 77, lane_traffic 305. fleet 패키지 45573 = 45423+150, 허용치를 다 썼다
+- 교훈: 분리도 모듈 머리말·import로 줄을 늘린다. 패키지 허용치가 거의 찬 때는 분리 전에 남은 줄을 센다
