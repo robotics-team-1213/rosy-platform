@@ -1456,14 +1456,21 @@ def test_a_trip_store_failure_never_replaces_the_stop_result(tmp_path, caplog):
     async def broken(robot_id, reason):
         raise RuntimeError("trip store unavailable")
 
-    client.app.state.trip_runner.cancel_robot = broken
+    def store_down(_trip):
+        raise RuntimeError("trip store unavailable")
+
+    runner = client.app.state.trip_runner
+    runner.cancel_robot = broken
     with caplog.at_level(logging.ERROR):
-        estop = client.post("/api/fleet/estop", headers=OPERATOR)
         cancel = client.post("/api/fleet/robots/rosy_60/cancel", headers=OPERATOR)
         off = client.post("/api/fleet/robots/rosy_60/line-follow", json={"mode": "OFF"}, headers=OPERATOR)
+        runner._store.put_trip = store_down  # the E-stop closes the trip itself, then records it
+        estop = client.post("/api/fleet/estop", headers=OPERATOR)
     assert estop.status_code == 200 and estop.json()["total"] == 1 and ("estop",) in robot.calls
     assert cancel.status_code == 200 and off.status_code == 200
-    assert sum("could not end the trip" in r.message for r in caplog.records) == 3
+    assert sum("could not end the trip" in r.message for r in caplog.records) == 2
+    assert sum("could not record a trip ended by the E-stop" in r.message for r in caplog.records) == 1
+    assert runner.open_trips() == []
 
 
 def test_create_app_wires_the_real_trip_providers(tmp_path):
