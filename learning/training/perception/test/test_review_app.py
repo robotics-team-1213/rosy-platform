@@ -47,6 +47,20 @@ def test_empty_training_workspace_reopens_without_initial_labels(tmp_path):
         ReviewStore(store.state, empty_training=True)
 
 
+def test_history_distinguishes_imported_state_from_app_decisions(tmp_path):
+    store = open_store(tmp_path)
+    assert store.history(0)['object_status'] == 'approved'
+    assert [event['action'] for event in store.history(0)['events']['object']] == ['import']
+    pending = store.update(0, {'version': store.get(0)['version'], 'action': 'reopen'})
+    approved = store.update(0, {'version': pending['version'], 'action': 'approve',
+                                'complete_frame_review': True})
+    history = ReviewStore(store.state).history(0)
+    assert history['object_status'] == 'approved'
+    assert [(event['action'], event['version']) for event in history['events']['object']] == [
+        ('approve', approved['version']), ('reopen', pending['version']), ('import', 1)]
+    assert history['events']['pixel'] == []
+
+
 def test_restart_preserves_approval_exclusion_and_unknown(tmp_path):
     store = open_store(tmp_path)
     assert [r['status'] for r in store.list_frames()] == ['approved', 'excluded']
