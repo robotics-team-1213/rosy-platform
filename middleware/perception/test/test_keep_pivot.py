@@ -1,5 +1,7 @@
-"""D-507 SIM round 2, root cause 1: a spin in place must not leave the keeper's flipping hold latched."""
+"""D-507 SIM round 2, root cause 1: a spin in place must not leave the keeper's flipping hold latched.
+Round 4b: "spin in place" is CORE's commanded twist (cmd_vel), not measured odom."""
 import ast
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -21,7 +23,7 @@ RING = _render([(HALF, 0.0)])
 
 
 def _drive(twist, keeper=None, skew_s=0.0):
-    """The node's keep frame: a spin in place on fresh odom restarts the keeper, then it reads the frame."""
+    """The node's keep frame: a fresh commanded spin in place restarts the keeper, then it reads the frame."""
     keeper = keeper or LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
     for i, frame in enumerate(SWEEP):
         image_stamp = 100.0 + 0.1 * i
@@ -53,12 +55,41 @@ def test_a_hold_latched_before_odometry_shows_the_spin_is_released_by_it():
     assert keeper.update(RING, GROUND, lane_half_width_m=HALF) is not None
 
 
-def test_keep_mode_subscribes_odometry_and_a_fresh_spin_restarts_the_keeper():
-    assert "mode in ('lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab')" in NODE
-    assert "self._odom_twist = (float(msg.twist.twist.linear.x), float(msg.twist.twist.angular.z))" in NODE
-    keep = NODE.split("elif mode == 'keep':", 1)[1].split("self._lane_keeper.update(", 1)[0]
-    gate = keep.split("if (self._keep_last_stamp is None", 1)[1].split("self._lane_keeper.reset()", 1)[0]
-    assert "or _spinning_in_place(pose_if_fresh(self._odom_twist, self._odom_stamp, image_stamp))):" in gate
+_KEEP = NODE.split("elif mode == 'keep':", 1)[1].split("self._lane_keeper.update(", 1)[0]
+_GATE = _KEEP.split("if (self._keep_last_stamp is None", 1)[1].split("self._lane_keeper.reset()", 1)[0]
+#: The node's own spin term of the keep reset gate, evaluated as written.
+_SPIN_TERM = "_spinning_in_place(" + _GATE.split("or _spinning_in_place(", 1)[1].rsplit("):", 1)[0]
+
+
+def _node_gate(cmd, odom, image_stamp=100.0, cmd_age_s=0.0):
+    node = SimpleNamespace(_cmd_twist=cmd, _cmd_stamp=image_stamp - cmd_age_s,
+                           _odom_twist=odom, _odom_stamp=image_stamp)
+    return eval(_SPIN_TERM, {"_spinning_in_place": spinning, "pose_if_fresh": pose_if_fresh},
+                {"self": node, "image_stamp": image_stamp})
+
+
+def test_keep_mode_subscribes_the_commanded_twist_read_only():
+    assert "if mode == 'keep':" in NODE and "create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)" in NODE
+    assert "create_publisher(Twist" not in NODE
+    assert "self._cmd_twist, self._cmd_stamp = (msg.linear.x, msg.angular.z)" in NODE
+
+
+def test_a_slow_keep_corner_is_no_spin_although_odom_reads_still():
+    # D-507 r4b: CORE commands (0.0188, 0.48); Gazebo odom reads vx ~0.001, wz 0.4.
+    assert spinning((0.001, 0.4))   # the measured twist alone looks like a spin (the regression)
+    assert not _node_gate(cmd=(0.0188, 0.48), odom=(0.001, 0.4))
+    keeper = _drive((0.0188, 0.48))
+    assert keeper.last["reason"] == "flipping"   # corner memory kept: no reset
+
+
+def test_a_commanded_junction_turn_restarts_the_keeper():
+    assert _node_gate(cmd=(0.0, 0.5), odom=(0.0, 0.5))
+    assert _node_gate(cmd=(0.0, -0.5), odom=None)   # the command decides, not odom
+
+
+def test_a_stale_command_restarts_nothing():
+    assert not _node_gate(cmd=(0.0, 0.5), odom=(0.0, 0.5), cmd_age_s=ODOM_MAX_SKEW_S + 0.05)
+    assert not _node_gate(cmd=None, odom=(0.0, 0.5))
 
 
 def test_trade_a_weave_while_standing_still_and_turning_is_not_held_until_the_robot_moves():
@@ -71,7 +102,7 @@ def test_trade_a_weave_while_standing_still_and_turning_is_not_held_until_the_ro
 
 
 def test_a_stale_spin_twist_restarts_nothing():
-    # Odometry older than ODOM_MAX_SKEW_S is no motion evidence (pose_if_fresh, as the node gate uses it).
+    # A command older than ODOM_MAX_SKEW_S is no motion evidence (pose_if_fresh, as the node gate uses it).
     keeper = _drive((0.0, 0.7), skew_s=ODOM_MAX_SKEW_S + 0.05)
     assert keeper.last["reason"] == "flipping"
     assert _drive((0.0, 0.7), skew_s=ODOM_MAX_SKEW_S - 0.05).last.get("reason") != "flipping"
