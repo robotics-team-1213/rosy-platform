@@ -244,3 +244,8 @@
 - 변경: 얼굴을 3배 해상도에서 그린 뒤 320×240으로 줄여 눈·입의 대각선과 곡선을 부드럽게 했다. `fun`의 웃는 입도 `happy`와 더 분리했다. 런타임 규칙은 변경하지 않았다.
 - 증거: 여덟 GIF 첫 프레임에 중간색이 생겼고, 32×24 운용 실루엣 최소 차이는 6.25%다. 자산 합계 511,159 bytes. 최종 호스트 시험·lint와 실물 수용 범위는 별도 검증 기록을 따른다.
 - gate 변화: 없음. 실물 1.5 m 판독은 미확인.
+
+## 2026-10-09 · uncommitted · fix(face): Pair request 카드에 CA 줄 (D-483 보완)
+- 변경: rosy-face가 `approval.json`의 `tls_ca_sha256` 앞 16자리를 코드 줄 아래 `CA xxxx xxxx xxxx xxxx`로 그린다(`face_screen.read_peer_approval`가 소문자 64자리만 통과). Pilot의 인증서 확인 대화상자가 같은 16자리를 보인다.
+- 증거: `test_rosy_face.py` peer 카드 시험, `test_face_screen.py` 103 passed.
+- gate 변화: SOURCE. LCD 실기 확인은 다음 릴리스에서.

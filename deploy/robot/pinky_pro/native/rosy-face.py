@@ -1037,8 +1037,13 @@ def card_renderer(info_screen) -> Callable[[dict], object]:
         elif screen.get("row") == "peer_request":
             # D-483: ASCII, as every card (the DejaVu card font has no Hangul).
             # One "XXXX  CODE" line per live request, so each requester reads its own code.
-            rows = (screen.get("peer") or {}).get("requests") or []
-            image = info_screen.render_notice("Pair request", [f"{r['display_code']}  {r['approval_code']}" for r in rows])
+            peer = screen.get("peer") or {}
+            lines = [f"{r['display_code']}  {r['approval_code']}" for r in peer.get("requests") or []]
+            if peer.get("tls_ca_sha256"):
+                # What the tablet asks a first-contact requester to compare (its first 16 digits).
+                ca = peer["tls_ca_sha256"][:16]
+                lines.append("CA " + " ".join(ca[i:i + 4] for i in range(0, 16, 4)))
+            image = info_screen.render_notice("Pair request", lines)
         else:
             image = info_screen.render_boot(card, frame=frame)
         if kind == "face" and screen.get("strip"):
