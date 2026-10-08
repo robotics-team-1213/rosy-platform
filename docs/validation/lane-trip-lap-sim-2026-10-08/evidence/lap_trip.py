@@ -23,6 +23,32 @@ sys.path[:0] = [str(REPO/'docs/validation/d495-junction-sim-2026-10-07/evidence'
 from d495_sim_probe import Probe, brief, path_len  # noqa: E402
 
 OPEN = ('started', 'running')
+#: CORE /line-follow fields the D-495 probe does not keep (D-422 source, D-468 containment).
+EXTRA = ('clearance_source', 'stop_gap_m', 'lane_return_containment', 'error', 'confidence', 'stuck')
+
+
+class LapProbe(Probe):
+    """The D-495 probe; its 10 Hz log row also carries EXTRA."""
+
+    def _recorder(self):
+        while not self.stop_rec.is_set():
+            _, st = self.call('GET', '/api/v1/line-follow', log=False)
+            q = '' if self.since is None else f'since_seq={self.since}&'
+            _, ev = self.call('GET', f'/api/v1/events?{q}limit=200', log=False)
+            for e in ev.get('events', []):
+                if self.since is None or e.get('seq', 0) > self.since:
+                    self.files['events'].write(json.dumps({'t': self.t(), **e})+'\n')
+            if ev.get('last_seq') is not None:
+                self.since = ev['last_seq']
+            row = {'t': self.t(), **{k: self.get(k) for k in ('sim_t', 'gt', 'odom', 'cmd', 'ir')},
+                   'keep': self.keep_reason, 'state': st.get('state'), 'reason': st.get('reason'),
+                   'junction': st.get('junction'), 'body_gap_m': st.get('body_gap_m'),
+                   **{k: st.get(k) for k in EXTRA}}
+            with self.lock:
+                self.rows.append(row)
+            self.files['log'].write(json.dumps(row)+'\n')
+            self.files['log'].flush()
+            time.sleep(0.1)
 
 
 def fleet(a, method, path, body=None):
@@ -116,7 +142,7 @@ def main():
     ap.add_argument('--fleet', default='http://127.0.0.1:8189')
     ap.add_argument('--fleet-token', default='lap-operator')
     a = ap.parse_args()
-    p = Probe(a)
+    p = LapProbe(a)
     try:
         summary = run(p, a)
     except Exception as e:  # noqa: BLE001 - keep the evidence of a broken run

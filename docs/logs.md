@@ -7124,3 +7124,9 @@ osy-d395-s1d\`.
 - 변경: `trip_runner._step_bend`가 trip hold, D-517 교통 대기(`traffic.holds`), `live.open`, CORE `executing`(교체 가능한 우리 stop 제외)일 때 `bend`를 보내지 않는다. 정지 중에는 곳(place)의 stop만 나간다. 두 단계의 송신·응답과 슬롯 검사를 `_send`, `_core_busy`로 합쳤다.
 - 증거: `test_trip_bend`·`test_trip_runner`·`test_trip_caps`·`test_lane_traffic`·`test_module_structure` 157 passed, known_failures 0 new. 새 시험 5개는 이전 코드에서 모두 실패한다. code-reviewer(opus) APPROVE.
 - gate 변화: 없음. 호스트 시험이며 CORE 굽이 의미·SIM·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · D-507 B13 Fleet trip 한 바퀴 수용 SIM
+
+- 변경: 진짜 Fleet 서버(`create_app`, `TripRunner`, `HttpLaneJunction`)로 서쪽 길에서 NW까지 `POST /trip` 20회를 모델 PC Gazebo(도메인 88)에서 돌려 `docs/validation/lane-trip-lap-sim-2026-10-08/`에 기록했다. 지도 자세만 Gazebo 참값이다.
+- 증거: trip 완료 0/20. 모서리 16/20, 굽이 16/16, SW 회전 시작 3/16·끝 0. 원인 A(굽이 뒤 SW 교차로를 keeper가 `corner_left`로 읽어 원형 교차로 역주행) 11, B(Fleet `MANOEUVRE`에 CORE `approaching` 없음 → 다음 곳 송신이 회전을 중단) 3, C(모서리 출구 D-468 이탈 → 국소 복귀 소진 → stall) 4, D·E 각 1. Fleet은 20/20 trip을 멈추고 로봇을 세웠다(hang 0). D-422 출처 `memory` 0, `near_stop` 0.
+- gate 변화: Fleet 차선 trip은 SIM에서 HOLD. 실제 지도 자세 오차·bridge 켬·장치 수용은 미검증.
