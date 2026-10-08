@@ -127,7 +127,7 @@ async function action(fn) {
   $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
     if (error.status === 401 || error.status === 403) clearSession();
-    if (error.status === 401) passwordLogin.refresh(true);
+    if (error.status === 401) loginForm.refresh(true);
     else if (error.status === 409) clearJobSnapshot();
     $('notice').textContent = error.status === 403
       ? '이 계정에는 Cell 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.' : error.message;
@@ -322,11 +322,11 @@ $('connect').addEventListener('click', () => action(async () => {
     role === 'viewer' ? '조회 전용' :
       role === 'policy-admin' ? '정책 관리자' : '권한 없음';
   $('session').textContent = `${session.principal_id} · ${roleName}`;
-  passwordLogin.refresh(false);
+  loginForm.refresh(false);
   await list(); $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
 }));
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
-const passwordLogin = createPasswordLogin($('password-login'), {onChange: () => {
+const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
   $('credential').value = ''; editEpoch++; clearSession(); $('connect').click();
 }});
 $('compile').addEventListener('click', () => action(async () => {
@@ -463,5 +463,5 @@ for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
 refreshControls();
 developmentToken($('credential').value).then(token => {
   if (token) { $('credential').value = token; $('credential').parentElement.hidden = true; $('connect').click(); }
-  else passwordLogin.refresh(true).then(cookie => { if (cookie) $('connect').click(); });
+  else loginForm.refresh(true).then(cookie => { if (cookie) $('connect').click(); });
 }).catch(() => {});

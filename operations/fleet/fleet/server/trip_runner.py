@@ -356,6 +356,12 @@ class TripRunner:
         expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
         if not live.open:
             return
+        if action in (LEFT, RIGHT) and (expect or {}).get("expect_in_m") is None:
+            # D-507 2 (2026-10-08 user decision): without a window CORE could take any sighting,
+            # a misread bend included, as this turn; stop the trip instead of sending it.
+            await self._stop(live, "stopped", "junction_no_window",
+                             {"junction_place": place, "junction_action": action, "junction_fields": expect})
+            return
         try:
             reply = await self._call(self._junction.send_junction(
                 live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s,

@@ -117,6 +117,8 @@ test('D-494 trip stop reasons name the configured stall time and loop errors', a
   assert.match(unexpected, /지도 자세 \(1\.23, -0\.50\) · 사유 junction_waiting/);
   assert.match(tripStatusText({...trip, state: 'running', reason: null, detail: {junction_retry: 'JUNCTION_ODOM_STALE', junction_fields_dropped: 'map_version'}}, MAP),
     /odom이 낡아 교차로 지시를 다음 주기에 다시 보냅니다 · 활성 지도가 바뀌어/);
+  assert.match(tripStatusText({...trip, reason: 'junction_no_window', detail: {junction_action: 'left', junction_place: 'SW'}}, MAP),
+    /기대 창이 없어 좌·우 회전 지시를 보내지 않고 멈췄습니다/);  // D-507 2, 2026-10-08
   assert.equal(PLACE_KIND_LABEL.stall, undefined);
 });
 
