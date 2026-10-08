@@ -174,6 +174,8 @@ CORNER_PAST_MARGIN_M = 0.03
 BOTH_CONFIDENCE = 0.9
 ONE_CONFIDENCE = 0.6
 MAX_POINTS = 6000
+#: D-520 stage 2: bounded, evenly sampled paint evidence for offline arc-fit diagnosis.
+ARC_PAINT_MAX_POINTS = 48
 #: Lit fraction of the floor above which the frame is washed out.
 WASHED_FRACTION = 0.5
 #: Corners: the lookahead on the corner path (shorter than LOOKAHEAD_M, or the
@@ -283,7 +285,8 @@ class LaneKeeper:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
         self.last = {"strategy": "none", "boundaries": [], "transverse": [], "candidates": [], "blobs": 0,
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None,
-                     "lane_width_m": 2.0 * lane_half_width_m, "junction_ahead_v": 1}
+                     "lane_width_m": 2.0 * lane_half_width_m, "junction_ahead_v": 1,
+                     "paint_points_v": 1, "paint_points_m": []}
         if ground is None:
             self.last["reason"] = "no_ground"
             self._forget()
@@ -310,6 +313,10 @@ class LaneKeeper:
         cells = np.flatnonzero(coarse.ravel())
         points = np.stack([view.x[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells],
                            view.y[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells]], axis=1)
+        arc_paint = points[(points[:, 0] >= 0.10) & (points[:, 0] <= 0.40)]
+        if len(arc_paint):
+            chosen = np.linspace(0, len(arc_paint) - 1, min(len(arc_paint), ARC_PAINT_MAX_POINTS), dtype=int)
+            self.last["paint_points_m"] = np.round(arc_paint[chosen], 3).tolist()
         rng = np.random.default_rng(self._seed)
         if len(points) > MAX_POINTS:
             points = points[rng.choice(len(points), MAX_POINTS, replace=False)]
