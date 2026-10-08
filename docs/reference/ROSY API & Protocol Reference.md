@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.154
+**Version:** v1.155
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -194,6 +194,7 @@ Fleet 의 로봇 토큰은 operator 토큰이다(`robots.yaml` 의 `token`, 또�
 | `SSH_ACCESS_UNAVAILABLE` | 503 | D-418 root `rosy-ssh-access`가 10 s 안에 답하지 않았거나(요청은 거둬들인다), 요청 파일을 못 썼거나, 적용에 실패함(`chpasswd`·`sshd -t`·만료 타이머·파일 쓰기 실패, `keys.json` 손상 — 비밀번호는 켜지지 않은 채로 되돌린다) (`/host/ssh/...`, v1.89) | 로봇 |
 | `COMMAND_TIMEOUT` | 504 | 명령 추적 타임아웃 (PRT-004) | Fleet |
 | `PAIRING_INVALID` | 401 | 페어링 토큰 무효/만료 | Fleet |
+| D-535 연결 이유 코드 (`ROBOT_UNREACHABLE` · `TLS_REQUIRED` · `TLS_NAME_MISMATCH` · `CA_UNKNOWN` · `CORE_NOT_READY` · `API_VERSION_TOO_OLD` · `PAIRING_UNAVAILABLE` · `PAIRING_REQUIRED` · `IDENTITY_CHANGED` · `LAN_REQUIRED` · `APPROVAL_PENDING` · `APPROVAL_CODE_WRONG` · `CONSOLE_APPROVAL_REQUIRED` · `APPROVAL_TIMEOUT` · `APPROVAL_CANCELLED` · `APPROVAL_EXPIRED` · `APPROVAL_DENIED` · `APPROVAL_REVOKED` · `RATE_LIMITED` · `SESSION_TAKEN` · `UNEXPECTED_RESPONSE`) | 경로의 기존 상태 그대로 | 연결·승인·세션이 안 된 이유. `/api/v1/auth/peer-pairing/*`·`/api/v1/auth/connection` 거절의 `error.code`이고, `error.message`(운영자 문장)와 `error.detail.action`(할 일)·`detail.retry`(`auto`\|`person`)를 싣는다. 기존 `detail` 필드는 본문 맨 위에 그대로 있다. 로봇에 닿지 못한 실패(이름·TCP·TLS)와 옛 로봇의 답은 클라이언트가 같은 코드로 분류한다. 기계 원천 `test/fixtures/protocol/connect-reasons.v1.json` = `core_common.protocol.connect_reason` (D-535, v1.155) | 로봇/클라이언트 |
 | `IDEMPOTENCY_CONFLICT` | 409 | 동일 key·다른 내용 | Fleet |
 | `INTERNAL_ERROR` | 500 | 내부 오류 | 로봇/Fleet |
 
@@ -1542,6 +1543,9 @@ Fleet `GET /api/fleet/state` robot rows also expose optional `link` (D-499):
 API error other than HTTP 401. `up` is a successful gather and carries no
 console tag. The field is display-only. CORE paths, envelope 1.0, and the
 dispatch loop's online/state/goal read are unchanged. An older Fleet omits the field.
+D-535 (v1.155) adds optional `link_reason {code, message, action, retry}` to a row whose
+gather failed: the D-535 reason (transport failure classified by the Fleet, or the robot's
+`error.code`/HTTP status). Message and action come from Fleet's own table, never the robot's text.
 
 Fleet `GET /api/fleet/state` robot rows also carry optional D-509 display fields
 `power_health` and `power_health_age_s`. `power_health` is the existing shared
@@ -2449,6 +2453,17 @@ administrator일 때만 허용한다. issuer ID/digest/source/named principal/sc
 API 오류: 실제 HTTPS 또는 최초 LAN 조건 불충족 403, 기존 인증 없음 401,
 권한 부족 403, 409(변경·만료·한도·증명 거부), 잘못된 typed 입력 422,
 4096 bytes 초과 413, 저장 identity 초기화 불가 503. 응답은 no-store다.
+
+D-535 이유 코드(v1.155, additive): 위 거절은 상태와 기존 `detail`을 그대로 두고 ERR-101
+`error {code, message, detail{action, retry, …}}`을 더한다. HTTP로 온 요청 403 `TLS_REQUIRED`,
+수신 초기화 불가 503 `PAIRING_UNAVAILABLE`, LAN 밖 최초 요청 403 `LAN_REQUIRED`, 없는 관계
+409 `PAIRING_REQUIRED`, 철회·발급자 회수 409 `APPROVAL_REVOKED`, 다른 수신 키·옛 수신 키 요청
+`IDENTITY_CHANGED`, 관계 만료 409 `APPROVAL_EXPIRED`, 사라진 요청(없는 id·틀린 비밀 구분 없음)
+409 `APPROVAL_TIMEOUT`, 끝난 요청의 확인·취소·결정은 상태대로(`APPROVAL_TIMEOUT`·`APPROVAL_DENIED`·
+`APPROVAL_CANCELLED`; 이미 승인된 요청은 기본값 `PAIRING_REQUIRED`, 요청자는 상태를 읽는다),
+틀린 화면 코드 400 `APPROVAL_CODE_WRONG`(`detail.remaining_attempts` 유지, 다섯째 `APPROVAL_DENIED`),
+역할 초과 403·틀린 코드 전체 한도 429 `CONSOLE_APPROVAL_REQUIRED`, 모든 한도 `RATE_LIMITED` +
+`Retry-After`(상태 읽기 간격 2 s, 나머지 60 s; 예전에 409였던 한도는 409 그대로).
 이 로그인 발급은 Pilot seat·teleop 수락·calibration lease·모드·정지 해제를
 발급하지 않는다(D-460/D-411). 실제 조작은 기존 CORE 게이트를 그대로 통과한다.
 
@@ -2496,6 +2511,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.155 | 2026-10-09 | Additive (D-535, feat/connect-failure-reasons): 연결 이유 코드 21개(ERR-102 행, 기계 원천 `connect-reasons.v1.json`). `/api/v1/auth/peer-pairing/*` 거절에 기존 상태·`detail`을 두고 `error {code, message, detail.action, detail.retry}`를 더함, 한도 거절에 `Retry-After`. `GET /api/v1/auth/connection`에 `connect_contract`·`api`·`core_ready`·`stage`·`release`·`tls_hostname`·`pairing`, 출발지별 30회/분 429, LAN 밖 403 코드 `LAN_REQUIRED`(이전 `FORBIDDEN`). Fleet `GET /api/fleet/state` 로봇 행 선택 필드 `link_reason {code, message, action, retry}`. envelope 1.0 변화 없음 |
 | v1.154 | 2026-10-09 | 동작 변경 (D-520 개정 2026-10-09, fix/d520-arc-entry-tangent·feat/d520-arc-radial-tracking·docs/d520-default-on-ring, Safety-Review 대상): `line_follow.arc_enabled` 기본 켬, 능력 `lane_arc` 는 그 설정·`site_floor_map_id` 선언·`ir_guard_speed_scale` > 0 이 함께 있을 때만 참(선언 없는 켬은 시작 거부가 아님); 409 `LANE_ARC_UNAVAILABLE` 은 그 능력이 거짓일 때; 호 명령에 odom 지도 원으로의 반지름·방향 보정(\|c\| ≤ 1.5 1/m), 원과 0.075 m 넘게 떨어지면 HOLD `lane_arc_edge`, 첫 IR 판정이 원을 옮김. 스키마 필드 변경 없음. Fleet 은 `exit_segment` 가 있는 회전에도 `turn_target` 회전각을 보낸다 |
 | v1.152 | 2026-10-08 | Additive (lap SIM 2, fix/junction-corner-hold-scope, Safety-Review 대상): `POST /line-follow/junction` 선택 필드 `lane_turn_deg`(`straight` + 기대 창, −360…360); `junction_corner_hold` 는 지시와 어긋나는 모서리에서만(`left`/`right` 의 반대쪽, `straight` 는 `lane_turn_deg` 가 그쪽 20° 미만이거나 없을 때). Fleet 이 `straight` 에 지도 차로 방향 변화를 싣는다. envelope 1.0 그대로 |
 | v1.151 | 2026-10-08 | Additive (D-517 M5 발견 1, fix/d517-trip-authority-mismatch, Safety-Review 대상): `POST /api/fleet/trips/{plan_id}/start` 422 `TRIP_AUTHORITY_SITE_OFF` — 사이트 `fleet.traffic.authority` 가 꺼져 있는데 로봇 능력 `line_follow_authority_required` 가 참이면 `lane` trip 을 열지 않는다(통행권이 나가지 않아 CORE 가 서 있고 trip 이 20 s 뒤 `stall` 로 끝나던 것). CORE 동작 변경 없음. envelope 1.0 변경 없음 |
@@ -2672,7 +2688,7 @@ Pilot은 같은 LAN에서 발견한 장비 목록으로 시작한다. 설정 파
 
 | Method/path | Admission | Response |
 |---|---|---|
-| `GET /api/v1/auth/connection` | LAN peer, 인증 불필요, `no-store` | 200 `{mode: paired|development, robot_id: string, transport: http|https}` (`ConnectionInfo`) |
+| `GET /api/v1/auth/connection` | LAN peer, 인증 불필요, `no-store`; D-535부터 출발지별 30회/분(넘으면 429 `RATE_LIMITED` + `Retry-After`), LAN 밖 403 `LAN_REQUIRED` | 200 `{mode: paired|development, robot_id: string, transport: http|https}` (`ConnectionInfo`). D-535 (v1.155) 추가: `connect_contract`(정수, 1), `api`(`v1`), `core_ready`(부팅 단계가 `CORE_READY`; 표시 파일이 없으면 CORE가 답하므로 true), `stage`, `release`(없으면 null), `tls_hostname`(TLS일 때 `<host>.local`, 아니면 null), `pairing`(`open`\|`console_only`(LCD가 화면 코드를 보일 수 없음 — 관제 승인)\|`full`(대기 요청 3개)\|`unavailable`(HTTP이거나 수신 초기화 불가)). mDNS TXT가 이미 광고하는 값과 개수·가능 여부뿐이며 신뢰 앵커가 아니다 |
 | `POST /api/v1/auth/development-session` | 아래 개발 조건, LAN peer, 허용 Host와 같은 Origin 또는 Origin 없음 | 201 `{id, token, role: operator, label, source: pair-development, expires_at}` |
 
 개발 자동 접속은 장비의 `network.connection_mode=development`와 `ROSY_DEPLOYMENT=development`가
