@@ -84,8 +84,7 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.create_subscription(String, 'safety/profile', self.on_safety_profile, latched)
         self.create_subscription(String, 'calibration/applied', self.on_applied, latched)
         self.create_subscription(String, 'safety/decision', self.on_gate_decision, 1)  # latest only (D-185 R2)
-        # 감지 프로파일은 속도를 내지 않는다. 발행자를 만들기만 해도 그래프에
-        # cmd_vel_raw 주인이 하나 더 생긴다.
+        # 감지 프로파일은 속도를 내지 않는다. 발행자를 만들기만 해도 그래프에 cmd_vel_raw 주인이 하나 더 생긴다.
         sensing_only = bool(self.get_parameter('calibration_sensing_only').value)
         self.raw_pub = None if sensing_only else self.create_publisher(Twist, 'cmd_vel_raw', 10)
         self.wander_pub = self.create_publisher(String, 'wander/cmd', 10)
@@ -99,6 +98,7 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.create_subscription(Range, 'us_sensor/range', self.on_us, qos_profile_sensor_data)
         self.create_subscription(Imu, 'imu_raw', self.on_imu, qos_profile_sensor_data)
         self.create_subscription(Image, 'camera/front', self.on_camera, qos_profile_sensor_data)
+        self.create_subscription(String, 'camera/controls', lambda msg: self.note_camera_controls(msg.data), latched)
         self.hazards = {}
         self.safety_limits = (0., {})
         self.create_subscription(String, 'safety/motion_limits', self.on_motion_limits, 1)  # latest only (D-185 R2)
