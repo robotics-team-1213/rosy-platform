@@ -76,7 +76,8 @@ class TripRunner:
                  engaged: Callable[[str], Optional[str]] = lambda _robot_id: None,
                  release_queue: Callable[[str], None] = lambda _robot_id: None,
                  roster: Optional[Callable[[], Iterable[str]]] = None,
-                 traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False) -> None:
+                 traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False,
+                 traffic_signals=()) -> None:
         self._store = store
         self._routing = routing_config
         self._caps, self._poses, self._junction = caps, poses, junction
@@ -92,7 +93,8 @@ class TripRunner:
         self._locks: dict[str, asyncio.Lock] = {}
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
-        self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones)
+        self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
+                                                                          signals=traffic_signals)
         self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
         self._refresh_warned_at = -math.inf
         self.halts = TripHalts(store, junction, config, self._call, clock, cancel_goal,
@@ -160,6 +162,9 @@ class TripRunner:
             refused = leader and (self.convoy_refusal(robot_id, leader, arcs=arcs, segments=plan["segments"]) or (
                 self.authority.mode(caps) != "core" and ("TRIP_CONVOY_NO_AUTHORITY", {"leader": leader})))
             if refused:  # D-517 9 M3: a follower keeps its gap only through CORE authority
+                raise TripError(422, *refused)
+            refused = self.traffic.signal_refusal(plan["segments"], self.authority.mode(caps))
+            if refused:  # D-525 1/6: not from inside a signalled zone; crossing one needs CORE authority
                 raise TripError(422, *refused)
             if repeat:  # D-517 3: no await from this check to the trip opening
                 full = self.traffic.loop_full(arcs, self._live.values())

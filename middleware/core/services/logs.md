@@ -874,3 +874,10 @@
 - gate 변화: SOURCE. SIM은 lane-trip-lap-sim3 행
 - 결정: 같은 방향 모서리는 지시를 `armed` 로 둔다(47fa82b1a 이전 동작, 창·`junction_unexpected`·만료가 처리). 260919 회전교차로에는 안쪽 spoke가 없어 `straight` 의 차로 쪽 모서리 허용이 안전하다
 - 교훈: 지도 지시를 기준으로 keeper 판단을 막을 때는 지시가 말하는 방향과 keeper 방향이 같은지부터 본다. 곡선 차로 위 `straight` 는 방향이 없는 지시가 아니다
+
+## 2026-10-09 · uncommitted · test(sim): Fleet 한 바퀴 SIM 3차, 회전교차로 둘레 (모델 PC, main b23055884)
+- 변경: `docs/validation/lane-trip-lap-sim3-2026-10-09` (lap 하네스, 도메인 92·`rosy_ring`·포트 8488/8489, 출하 기본, arc 끔)
+- 증거: 12회: 모서리·굽이·SW 회전 12/12. SW 회전 끝 방향 −1.1…−8.0°(수정 전 약 −20°). ring 0/12, 완료 0/12. `junction_corner_hold` 오정지는 사라졌다(남은 8건은 차선을 잃은 뒤 후진 중 `corner_right`). ring 상실 원인: 섬 선이 시야 밖이고 접선 방향 화면에 SE spoke의 두 경계가 쌍으로 보여 keeper가 spoke로 향함(기록 2회, B8 재생 488/553·474/537 재현). 원시 기록 `X:\DevTemp\lap-sim3\lap3_runs_full.tgz`
+- gate 변화: ROS-SIM 기록(부분). DEVICE 열림
+- 결정: keeper는 바꾸지 않았다. ring 통과는 D-520 호 주행 또는 keeper 지도 사전(새 입력)의 결정이 필요하다. B9 fixture 그대로
+- 교훈: 0.25 m 원 차로에서는 한쪽 경계가 늘 시야 밖이다. 보이는 온전한 차로가 내 차로라는 keeper 가정은 회전교차로 둘레에서 틀린다
