@@ -12,7 +12,7 @@ from core_common.protocol.schemas import LineFollowStatus
 from core_features.line_follow.authority import AuthorityMixin
 from core_features.line_follow.body_stop import BodyStopMixin
 from core_features.line_follow.clearance import Point, path_clearance
-from core_features.line_follow.recovery.junction import JunctionMixin
+from core_features.line_follow.recovery.junction.gate import JunctionMixin
 from core_features.line_follow.recovery.stuck_wiring import StuckRecoveryMixin
 from core_features.line_follow.recovery.lane_return_wiring import LaneReturnMixin
 from core_features.line_follow.model import (  # noqa: F401 — re-exported
