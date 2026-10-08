@@ -13,11 +13,13 @@ from core_common.robot_body import RobotBody
 from core_features.line_follow.clearance import body_envelope_gap, body_path_gap
 
 #: IR guard verdicts (manager._ir_guard) each kind may move on; 'stale' never. Bridge: D-476
-#: rev 1; approach/turn/advance: D-498 (not on the line); return/retrace: D-468 starts on it.
+#: rev 1 and the bend pass (its blind arc, the same fence); approach/turn/advance: D-498 (not on
+#: the line); return/retrace: D-468 starts on it.
 _OFF_LINE, _ANY = frozenset({'clear', 'left', 'right'}), frozenset({'clear', 'left', 'right', 'centre'})
 #: D-520 2: the map-guided arc runs on 'clear' only; its one IR correction ('arc_edge') on the
 #: side that opened it (ir_side) or 'clear'.
-IR_ALLOWED = {'bridge': frozenset({'clear'}), 'approach': _OFF_LINE, 'turn': _OFF_LINE,
+IR_ALLOWED = {'bridge': frozenset({'clear'}), 'bend': frozenset({'clear'}),  # bend: D-507 addendum
+              'approach': _OFF_LINE, 'turn': _OFF_LINE,
               'advance': _OFF_LINE, 'return': _ANY, 'retrace': _ANY,
               'arc': frozenset({'clear'}), 'arc_edge': _OFF_LINE}
 

@@ -1,0 +1,14 @@
+/**/line_observer_node:
+  ros__parameters:
+    use_sim_time: true
+    require_camera_controls_stable: false
+    camera_lane_mode: route_a
+    lane_graph_path: /home/rosy/rosy_lfstop_ws/install/control/share/control/map/map_v2_fleet/lane_graph.yaml
+    route: ["west:r", "ring_s:f"]
+    route_start: [-1.15, -0.511, 0.0]
+    camera_ground_source: GAZEBO
+    allow_simulation_ground: true
+    gazebo_camera_height_m: 0.06343
+    gazebo_camera_pitch_rad: 0.13962634015954636
+    gazebo_camera_hfov_rad: 1.0333902775245543
+    gazebo_camera_max_range_m: 0.6

@@ -40,6 +40,7 @@ def carry_on(live: LiveTrip, index: int, segments: list, body: dict | None, hold
             # Keep this lap and the next one: earlier laps are dropped so the plan stays bounded.
             cut, live.lap_start = live.lap_start, len(plan["segments"]) - len(body["segments"]) - live.lap_start
             live.view.update(plan=_from(live.graph, plan, cut), lap=live.view["lap"] + 1)
+            live.bends_done.clear()  # D-507 addendum: the new lap drives its bends again
             if cut:
                 _dropped(live, segments[:cut])
             return

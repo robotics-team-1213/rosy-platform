@@ -19,9 +19,11 @@ from dataclasses import replace
 
 from core_common.protocol.schemas import LineJunctionStatus
 from core_features.line_follow.recovery.junction_approach import (
-    MAX_AHEAD_M, STEP_MARGIN_S, JunctionApproachMixin, check_expect)
+    MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
+    JunctionApproachMixin, check_expect)
+from core_features.line_follow.recovery.junction_bend import JunctionBendMixin, check_bend
 
-JUNCTION_ACTIONS = ('straight', 'left', 'right', 'stop')
+JUNCTION_ACTIONS = ('straight', 'left', 'right', 'stop', 'bend')
 JUNCTION_REASONS = frozenset({'junction_transverse', 'junction_fork'})
 MAX_EXPIRES_S = 30.
 MAX_STOP_AFTER_M = 2.
@@ -31,8 +33,6 @@ POSE_MAX_AGE_S = .3
 MAX_TURN_DEG = 150.
 MAX_ADVANCE_M = .30
 DEFAULT_ADVANCE_M = .10
-REACQUIRE_M = .20
-REACQUIRE_HEADING_RAD = math.radians(30.)
 TURN_TOLERANCE_RAD = math.radians(5.)
 TURN_GAIN = 2.            # rad/s per rad of yaw error, clipped to [TURN_MIN_W, angular cap]
 TURN_MIN_W = .3           # rad/s floor (or the cap, if lower); sets the turn time limit
@@ -41,8 +41,7 @@ SETTLE_S = .3             # inside the tolerance this long before the turn count
 #: Review L1: the turn starts only after odom shows the robot standing still this long.
 #: Speeds are config (junction_still_linear / junction_still_angular, review L3).
 STILL_S, STILL_LIMIT_S = .2, 2.
-STEP_TIME_S = 5.          # reacquire
-MANEUVER = ('approaching', 'turning', 'advancing', 'reacquiring')
+MANEUVER = ('approaching', 'turning', 'advancing', 'reacquiring', 'bending')
 #: keep_debug arrives only in keep mode; this recent a frame with corner_turning proves both.
 KEEP_EVIDENCE_S = 2.
 #: Base reasons a maneuver may run over: the lane is (expectedly) out of view, or D-468/D-476
@@ -67,7 +66,7 @@ class JunctionRefused(Exception):
         self.code = code
 
 
-class JunctionMixin(JunctionApproachMixin):
+class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
     def _init_junction(self):
         self._junction_seq = 0
         self._turn_basis_now = None  # D-498 basis of this tick's maneuver refusal check
@@ -109,6 +108,8 @@ class JunctionMixin(JunctionApproachMixin):
         twist's own D-422 sweep is _maneuver_twist's. While approaching (D-507 4) the kind is
         'approach' and an IR centre inside the camera's cross-line band is allowed."""
         j = self._junction
+        if j is not None and j.get('action') == 'bend':  # D-507 addendum: the bridge's IR rule
+            return self._motion_basis(now, 'bend', j.get('map_id'))
         if j is not None and j.get('state') == 'approaching':
             return self._motion_basis(now, 'approach', centre_ok=self._centre_on_cross_line(now))
         return self._motion_basis(now, 'turn')
@@ -155,16 +156,17 @@ class JunctionMixin(JunctionApproachMixin):
         maneuver the same instruction is a no-op; a different one aborts it, unaccepted.
         D-520: with exit_segment advance_m is ignored; during an arc every instruction is armed."""
         if action not in JUNCTION_ACTIONS:
-            raise ValueError('junction action must be straight, left, right or stop')
+            raise ValueError('junction action must be straight, left, right, stop or bend')
         if not (isinstance(expires_s, (int, float)) and 0 < expires_s <= MAX_EXPIRES_S):
             raise ValueError('expires_s must be in (0, 30]')
         if stop_after_m is not None and (action != 'stop' or not 0 <= stop_after_m <= MAX_STOP_AFTER_M):
             raise ValueError('stop_after_m belongs to stop and must be in [0, 2]')
-        if turn_deg is not None and (action not in ('left', 'right') or not math.isfinite(turn_deg)
+        check_bend(action, turn_deg, expect)  # D-507 addendum
+        if action != 'bend' and turn_deg is not None and (action not in ('left', 'right') or not math.isfinite(turn_deg)
                                      or not 0 < abs(turn_deg) <= MAX_TURN_DEG
                                      or (turn_deg > 0) != (action == 'left')):
             raise ValueError('turn_deg belongs to left (+) or right (-), 0 < |turn_deg| <= 150')
-        if advance_m is not None and (turn_deg is None or not 0 <= advance_m <= MAX_ADVANCE_M):
+        if advance_m is not None and (turn_deg is None or action == 'bend' or not 0 <= advance_m <= MAX_ADVANCE_M):
             raise ValueError('advance_m belongs to a turn and must be in [0, 0.30]')
         check_expect(expect, action, turn_deg)  # D-507 2; None is an old client
         self._check_exit_segment(exit_segment, action, turn_deg, expect)
@@ -188,11 +190,17 @@ class JunctionMixin(JunctionApproachMixin):
                 j.update(state='aborted', reason='new_instruction')
                 self._bridge_hint = None
                 return False, j['seq'], 'aborted'
+            current = self._clock() if now is None else now
+            if action == 'bend' and j is not None and j['state'] == 'armed' and (
+                    j['action'], j['place_id'], j['turn_deg'], j['map_id'], j.get('radius')) == (
+                    action, place_id, turn_deg, expect['map_id'], expect['bend_radius_m']):
+                j['expires_at'] = current+float(expires_s)  # a refresh keeps the measured travel
+                return True, j['seq'], 'armed'
             if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
                 self._junction_done_place = None
-            current = self._clock() if now is None else now
             window = self._expect_window(expect, current)
-            if window is False:
+            pose = self._fresh_pose(current) if action == 'bend' else None
+            if window is False or (action == 'bend' and pose is None):
                 raise JunctionRefused('JUNCTION_ODOM_STALE', 'no fresh odom to place the expected junction')
             self._junction_seq += 1
             self._cross_band = None  # a past straight crossing's band ends with the next instruction
@@ -204,7 +212,15 @@ class JunctionMixin(JunctionApproachMixin):
                                   last=None, held=False, turn_deg=turn_deg, advance_m=advance,
                                   window=window, map_id=(expect or {}).get('map_id'),
                                   pivot=(expect or {}).get('pivot_past_line_m'), exit_segment=exit_segment)
-            self._bridge_hint = None if action == 'stop' else action  # D-476 route hint
+            if pose is not None:  # D-507 addendum: odom travel counts from here
+                self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
+                                      radius=expect['bend_radius_m'], anchor=None,
+                                      key=(self._return_evidence.epoch, pose.frame),
+                                      last=((self._return_evidence.epoch, pose.frame), pose.x, pose.y))
+            # D-476 route hint. A bend leaves it unknown: before the take-over the bridge runs as
+            # without an instruction (SIM: a left/right hint stopped it bridging the corner before
+            # the bend), and a bridge tick in the lead window hands over (CAMERA_HOLDS).
+            self._bridge_hint = None if action in ('stop', 'bend') else action
             return True, self._junction_seq, state
 
     def _junction_status(self):
@@ -257,7 +273,7 @@ class JunctionMixin(JunctionApproachMixin):
     def _mark_done(self, j):
         """Review R1: an instruction past its turn (or passed straight) is not run again."""
         if j.get('place_id') is not None and (
-                j['state'] in ('advancing', 'reacquiring') or j['action'] == 'straight'):
+                j['state'] in ('advancing', 'reacquiring', 'bending') or j['action'] == 'straight'):
             self._junction_done_place = (j['place_id'], j['action'])
 
     def _abort(self, j, reason, decision):
@@ -308,6 +324,8 @@ class JunctionMixin(JunctionApproachMixin):
                     self._junction_entry = None  # review N2: the junction is left behind
                 return decision
             j = self._junction = dict(action=None, place_id=None, state='waiting')
+        if j['state'] == 'armed' and j['action'] == 'bend':
+            return self._bend_armed(j, now, seen, decision)
         if j['state'] == 'armed':
             if j.get('window') is not None:
                 self._track_retreat(j['window'])  # D-507 2: see every odom sample since receipt
@@ -397,13 +415,14 @@ class JunctionMixin(JunctionApproachMixin):
             # failed reacquisition, not a broken maneuver.
             return self._unresolved(j, decision)
         if refusal == 'motion_unconfirmed' and j.get('basis') == 'site':
-            refusal = 'turn_basis_lost'  # D-498 decision 3
+            refusal = 'bend_basis_lost' if j['action'] == 'bend' else 'turn_basis_lost'  # D-498 3
         if refusal is not None:
             return self._abort(j, refusal, decision)
         own_body_check = self._config.body_stop_known and self._scan_points is not None
         reason = (self._status.reason or '').removeprefix('camera_')
         if not (reason in _CONTINUE or reason.startswith(('lane_return_', 'junction_'))
-                or (reason == 'obstacle_ahead' and own_body_check and j['state'] != 'reacquiring')):
+                or (reason == 'obstacle_ahead' and own_body_check
+                    and (j['state'] != 'reacquiring' or j['action'] == 'bend'))):  # bend: own pursuit
             return self._abort(j, reason or 'hold', decision)
         if now-j['phase_at'] > j['limit']:
             if j['state'] == 'reacquiring':
@@ -411,6 +430,8 @@ class JunctionMixin(JunctionApproachMixin):
             return self._abort(j, 'not_still' if j.get('sub') == 'stopping' else 'timeout', decision)
         if j['state'] != 'turning' and not self._odom_travel(j, now):
             return self._abort(j, 'odom', decision)
+        if j['action'] == 'bend':
+            return self._bend_step(j, now, pose, decision)
         if (j['state'] == 'turning' and j['sub'] == 'stopping' and 'pivot_basis' not in j
                 and self._standing_still(now)):
             refusal = self._start_approach(j, now, pose)  # D-507 4

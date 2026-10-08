@@ -237,6 +237,9 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   arc_enabled: false
   arc_curvature_gain: 1.0          # [0.8, 1.25]; per robot from the D-500 measured motion response
   arc_blind_max_m: 1.0             # step 1 SIM: the whole segment (<= 1.0 m) without a camera fit
+  # D-517 4 (M2): true = no line-follow motion without a live Fleet movement authority. False:
+  # enforced only once Fleet sent one in this line-follow session (a trip on an authority site).
+  authority_required: false
   # D-468 containment (needs recovery_local_enabled; implementation note 2026-10-06). The lane
   # boundaries are eroded by the producer's uncertainty_m and the body is the URDF footprint, so
   # 0 means every corner is inside only if uncertainty_m bounds every lateral error. Jitter and

@@ -137,6 +137,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         arc_enabled=_flag(raw, "arc_enabled", defaults.arc_enabled),
         arc_curvature_gain=float(raw.get("arc_curvature_gain", defaults.arc_curvature_gain)),
         arc_blind_max_m=float(raw.get("arc_blind_max_m", defaults.arc_blind_max_m)),
+        authority_required=_flag(raw, "authority_required", defaults.authority_required),
         lane_return_body_margin_m=float(raw.get(
             "lane_return_body_margin_m", defaults.lane_return_body_margin_m)),
         lane_return_checkpoint_fraction=float(raw.get(
