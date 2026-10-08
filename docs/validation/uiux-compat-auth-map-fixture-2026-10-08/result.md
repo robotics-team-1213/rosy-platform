@@ -12,8 +12,10 @@
 
 | 화면 | PNG 원본 | SHA-256 |
 |---|---|---|
-| 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--auth-map-fixture-5e91/evidence/after/auth-map-goal-confirm-390x844.png` | `6BA38671F29F47BD8F85291E20EE70EA5B9044D77C2BCF2E12EB99FC31C3D3AA` |
-| 1366×768 | `X:/DevTemp/projects/rosy-platform/2026-10-08--auth-map-fixture-5e91/evidence/after/auth-map-goal-confirm-1366x768.png` | `9E39D9943356305C66F7935B65F45ED6B997A497FCB0EF0B4D962BF4957E8E27` |
+| 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--auth-map-fixture-5e91/evidence/after/auth-map-goal-confirm-390x844.png` | SHA-256 `6BA38671F29F47BD8F85291E20EE70EA 5B9044D77C2BCF2E12EB99FC31C3D3AA` |
+| 1366×768 | `X:/DevTemp/projects/rosy-platform/2026-10-08--auth-map-fixture-5e91/evidence/after/auth-map-goal-confirm-1366x768.png` | SHA-256 `9E39D9943356305C66F7935B65F45ED6 B997A497FCB0EF0B4D962BF4957E8E27` |
+
+SHA-256 열의 두 부분을 공백 없이 이어 붙이면 원본 파일의 전체 digest다.
 
 브라우저 시험은 인증을 바꾼 뒤 오래된 모드·지도 응답이 화면을 덮지 않는지, 확인창 취소 뒤 목표 POST가 없는지, 페이지가 숨겨진 뒤 응답·소켓 이벤트가 기존 화면을 바꾸지 않는지 확인한다. 수정 후 해당 흐름 **2 passed** (`logs/after.txt`), 지도 요청·좌표 시험을 더한 묶음 **5 passed** (`logs/regression.txt`), 각각 `known_failures.py` **0 NEW**다. 실행 로그는 이번 X 세션의 `logs/`에 있다.
 
