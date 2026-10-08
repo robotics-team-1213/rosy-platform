@@ -23,7 +23,7 @@ D-512: an agent session runs a supervised device test on a real Pinky by itself.
 ### Working In This Directory
 
 - Reuse `tools/capture/edge_drive.py` (`Core`, `tls_context`, `rec_start`/`rec_stop`, `front_frame`, `advisory`, `lidar_forward_deg`); do not copy them here.
-- Addresses, the site URL, tokens and CA files are command-line or env values (`ROSY_CORE_OPERATOR_TOKEN_FILE`, `ROSY_SITE_URL`). Plans hold no address.
+- Addresses, the site URL, tokens and CA files are command-line or env values (`ROSY_CORE_OPERATOR_TOKEN_FILE`, `ROSY_SITE_URL`, and `ROSY_SITE_TOKEN_FILE` for the read-guarded Fleet calibration and site-map routes). Plans hold no address.
 - Raw evidence (frames, JSONL) stays outside the public repo (default `X:/DevTemp/device-test/`); only `summary.json` with `sha256:` digests and a README go to `docs/validation/<topic>-<date>/`.
 - The RobotBody gap in the camera phase is advisory (user decision 2026-10-07); CORE's D-422 stop is authoritative. The camera verdict is the agent's and is a gate.
 - Every change the tool makes must have its undo in `cleanup()`, and the undo must run when anything before it failed. Add a fake-robot test for each new change.
