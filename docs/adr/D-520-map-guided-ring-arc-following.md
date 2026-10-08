@@ -60,7 +60,8 @@
    - **호 주행 중의 지시 칸.** 칸은 비어 있다. 호는 `MANEUVER`도 Fleet `MANOEUVRE`도 아니다.
      - Fleet의 의무: 호가 도는 동안 `end_place_id`의 지시를 보낸다. 앞 지시가 `done`이 되면 바로 보낸다. 260919 호 길이 0.37–0.46 m는 `arm_distance_m` 0.6 m보다 짧아서 오늘의 무장 규칙으로도 곧 보내진다.
      - CORE는 그 지시를 `armed`로 받는다. 받은 지시가 호를 끊지 않는다. 호가 끝날 때까지 그 지시는 실행되지 않고, keeper 교차로 감지로 쓰이지도 않는다.
-     - 다른 장소의 지시는 오늘 규칙대로 `armed`로 남는다. 그래도 호 끝에서는 지시가 없는 것으로 본다.
+     - Fleet의 `carried` 판정: 이어지는 `straight`(b)는 `MANOEUVRE`나 `executing`을 거치지 않고 호 끝에서 곧바로 `done`이 된다. 그래서 오늘의 판정(`trip_runner.py` 349–352, `_completed`)으로는 그 지시가 `carried`로 보이지 않는다. Fleet은 `line_follow.arc.from_place_id`가 보낸 장소와 같고 `arc_seq`가 새로우면 그 지시를 `carried`로 본다. `left`·`right` 뒤의 호도 같은 규칙으로 본다.
+     - 다른 장소의 지시는 호가 도는 동안 `armed`로 남는다. 호 끝에서는 그 지시를 `aborted`(`reason: arc_mismatch`)로 버리고, 지시가 없는 경우와 같이 처리한다.
    - **명령.**
      - v = 그 trip의 차선 주행 속도(`min(cruise_speed, 수동 선속도 한도)`, 기본 0.08 m/s).
      - ω = g·v·κ + v·(k_y·e_y + k_θ·e_θ).
@@ -81,7 +82,7 @@
    - **운동 허가.** 매 틱 `motion_admitted(now, v, ω, kind='arc', map_id)`(D-507 6항)를 거친다.
      - `IR_ALLOWED`(`motion_admit.py`)에 새 kind 둘을 더한다. `arc`는 {`clear`}, `arc_edge`는 {`clear`, `left`, `right`}다. `arc_edge`에서는 새 인자 `ir_side`로 한쪽만 받는다(아래 보정).
      - ring 위에서는 차로 안에 IR 밑을 지나는 선이 없다. 그래서 `left`·`right`·`centre`는 몸이 경계에 걸쳤다는 뜻이다.
-     - **입구 유예.** 호 시작 뒤 odom 0.03 m(`ARC_START_IR_GRACE_M`) 안에서는 `left`·`right`를 허가하고, 보정도 열지 않는다. 회전 축은 spoke 입구 위의 장소이고, IR 줄(x 0.0295 m)이 입구의 끊긴 선 끝 위에 있을 수 있다. SIM 기록에서 이 자리의 IR 판정을 찾지 못해서 증거 대신 이 유예를 둔다. `centre`는 유예 중에도 멈춘다.
+     - **입구 유예.** 호 시작 뒤 odom 0.03 m(`ARC_START_IR_GRACE_M`) 안에서는 `left`·`right`를 허가하고, 보정도 열지 않는다. 회전 축은 spoke 입구 위의 장소이고, IR 줄(x 0.0295 m)이 입구의 끊긴 선 끝 위에 있을 수 있다. SIM 기록에서 이 자리의 IR 판정을 찾지 못해서 증거 대신 이 유예를 둔다. `centre`는 유예 중에도 멈춘다. 유예가 끝난 뒤 처음 판정이 유예 중에 본 판정과 같은 쪽이면 보정을 열지 않고 `lane_arc_edge`로 선다. 입구 선이 아니라 몸이 그쪽 경계에 걸쳐 있다는 뜻이기 때문이다.
      - `stale`은 언제나 거절이다. 후진은 없다.
    - **D-422 sweep.** 그 틱의 (v, ω) 호를 `_sweep_clear`가 그대로 쓴다. 직선 연장이 아니라 호를 쓴다. 그래서 섬이나 ring 바깥 벽이 직선 앞에 있다는 이유로는 서지 않고, 호 위의 물체에는 선다. 틱 단위 D-422(`obstacle_ahead`)도 그대로다.
    - **IR 한 번 보정(사용자 결정 2026-10-08, 곧바로 멈추는 대신).** 한 호에서 한 번만 한다.
@@ -148,6 +149,8 @@
      - `line_follow.junction.pivot_basis` 값 `segment_end`(`core_common/protocol/schemas.py`의 `pivot_basis` 주석 `map | stop_point`에 더함).
      - 사유 `lane_arc_*`.
      - 이벤트 `nav.lane_arc_end_unarmed`.
+     - 지시 `aborted` 사유 `arc_mismatch`.
+     - Fleet: `line_follow.arc`의 `from_place_id`·`arc_seq`로 `carried` 판정.
      - 내부: `IR_ALLOWED`의 `arc`·`arc_edge`, `motion_admitted(..., ir_side=None)` 인자.
      - 단계 2에서 keep_debug `paint_points_m`·`paint_points_v`.
    - **코드 위치와 크기.**
@@ -187,7 +190,7 @@
      - 곡률 오차 δ(비율)는 r·δ·(1 − cos θ)다. Gazebo 회전 부족 2.4 %에서 85°는 0.0055 m, 105°(`ring_e`)는 0.0076 m다.
      - 합: SW 진입(`ring_s`, 85°)은 약 0.024 m, NE 진입(`ring_n`, 85°)은 약 0.051 m다. NE는 0.05 m 합격선에 걸려 있다. 단계 1에서 NE가 떨어지면 단계 2가 필요하다는 증거다.
    - **진입 방향 오차.** 진입 회전은 odom yaw로 멈춘다. 카펫에서 제자리 회전 odom yaw는 몇 배 틀렸다(D-500, 9dfk: odom 111°가 실제 약 30°).
-     - 장치: `arc_enabled`를 켜기 전에, 카펫 제자리 회전의 yaw 비(odom ÷ 실제)를 독립 기준으로 잰다.
+     - 장치: `arc_enabled`를 켜기 전에 카펫 yaw 비(odom ÷ 실제)를 같은 독립 기준(7항 DEVICE)으로 잰다. 두 가지를 잰다. 하나는 제자리 회전이다. 다른 하나는 곡선 주행으로, IR 보정과 같은 곡률(κ + b ≈ 8 1/m)과 속도 0.04 m/s, 그리고 호 주행 곡률(κ)과 0.08 m/s다. 곡선 주행의 비가 IR `level`의 기준 방향과 `arc_curvature_gain`의 근거다.
      - 단계 2: 호 시작 뒤 0.10 m(`ARC_ENTRY_CHECK_M`) 안의 첫 확신 맞춤에서 |e_θ| > 5°면 `lane_arc_entry`로 선다.
      - 5°의 근거: 방향 오차 하나에 0.05 m 여유의 절반 0.025 m를 준다. ε ≤ 0.025 / 0.2514 = 0.0994 rad = 5.7°이고, 이것을 내림했다. 5°에서 r·ε = 0.022 m다.
      - 그 거리 안에 확신 맞춤이 없으면 진입 검사 없이 보정 없는 거리에 더한다.
@@ -226,11 +229,11 @@
    - **SOURCE: 일반.**
      - 지시 검증: `exit_segment` 범위, `map_id` 없으면 400, 능력 `lane_arc`, `exit_segment`가 있으면 `advance_m` 무시.
      - 호 열기: `turning` 끝에서 지시가 `done`이 되고 `arc_seq`가 열림. `stop_point`에서는 호 없음.
-     - 호 중의 지시 칸: 호 중 `end_place_id` 지시가 `armed`로 받아지고 호를 끊지 않음. 다른 장소 지시는 호 끝에서 없는 것으로 봄.
+     - 호 중의 지시 칸: 호 중 `end_place_id` 지시가 `armed`로 받아지고 호를 끊지 않음. 다른 장소 지시는 호 끝에서 `aborted`(`arc_mismatch`)가 되고, 지시 없는 끝과 같이 처리함.
      - 명령: ω = g·v·κ + 보정, 보정·전체 한도.
      - 끝: odom 길이·시간 끝, `segment_end` 축으로 `left`·`right`·`straight`(호 잇기)·`stop` 실행, 지시 없는 끝 → `follow` + `nav.lane_arc_end_unarmed`.
      - 멈춤 사유 전부.
-     - IR 허가: kind `arc`의 IR 허용 값(`clear`만), 입구 유예 0.03 m(`left`·`right` 허가, `centre` 멈춤).
+     - IR 허가: kind `arc`의 IR 허용 값(`clear`만), 입구 유예 0.03 m(`left`·`right` 허가, `centre` 멈춤), 유예 끝 첫 판정이 유예 중과 같은 쪽 → `lane_arc_edge`(보정 없음).
      - 무시와 꺼짐: 호 주행 중 keeper 사유 무시와 손실 시계 정지, D-476·D-468 (1)(3) 꺼짐.
      - 호 sweep: 직선 앞 점은 막지 않고 호 위 점은 막음.
      - 설정 검증과 시작 거부.
@@ -238,6 +241,7 @@
        - `exit_segment` 계산: 원호 적합 허용치, 횡단보도 구간 제외, `outer_line_offset_m`은 선 간격에서 옴.
        - `exit_segment`가 있으면 `turn_deg`는 접선, 6° 없음, `advance_m` 없음.
        - 호 중 `end_place_id` 지시 송신. `MANOEUVRE`에 호가 없음.
+       - 이어지는 `straight`: CORE가 곧바로 `done`으로 넘기고 새 `arc_seq`·`from_place_id`를 보이면 Fleet이 `carried`로 보고, 같은 지시를 다시 보내지 않으며, 다음 장소로 넘어감. `left`·`right` 뒤 호도 같음.
      - 골든: `arc_enabled: false`일 때 오늘의 결정 순서와 틱마다 같음.
    - **SOURCE: IR 한 번 보정.**
      - 편향 방향과 크기: 처음 `left` → 음의 각속도 편향, `right` → 양의 편향. 크기는 v_c·b, 속도는 v × `ir_guard_speed_scale`이고 v > 0이다.
@@ -280,6 +284,7 @@
        - 벽 `near_stop` 0, `lane_arc_edge` 0, IR 보정 0.
      - 함께 기록: 구간마다 시작 Δr·방향 오차, 끝 자리와 장소 사이 거리, SE `straight`로 이은 `ring_e`(105°) 한 번.
      - 이 측정으로 장치 `arc_blind_max_m`을 정한다.
+     - **실패의 뜻.** 단계 1 합격선은 측정이다. NE만의 0.05 m 초과는 단계 2를 막지 않는다(6항 예산에서 NE는 합격선에 걸려 있다). SW 초과나 흐름 평균 0.03 m 초과면 단계 2 전에 원인을 본다. 어느 경우든 `arc_blind_max_m`은 측정한 최대 흐름에서 정한다.
    - **SIM 단계 1 보정 사례.** 보정을 실제로 돌리는 사례다. 위 합격선은 보정 0을 요구하므로 따로 둔다.
      - 설정: `arc_curvature_gain` 0.9로 SW → `ring_s` 3회, SE `straight` → `ring_e`(105°) 3회.
      - 예상 바깥 흐름은 r·δ·(1 − cos θ)다. 85°에서 0.0255 m, 105°에서 0.035 m이고, 축 옆 오차가 더해진다.
@@ -302,7 +307,7 @@
      - 준비:
        - D-507 9항 선언과 걷기 기록.
        - IR 보정.
-       - 카펫 제자리 회전 yaw 비 측정(6항).
+       - 카펫 yaw 비 측정: 제자리 회전과 곡선 주행(6항).
        - 운동 응답 측정으로 정한 `arc_curvature_gain`.
      - 시작: SW 진입 한 번 → 호 하나부터.
      - 판정 기준: Δr과 끝 자리는 odom이 아니라 독립 기준으로 판정한다. 기준은 LiDAR-벽 정합(`docs/solutions/workflow-issues/field-scripts-driving-a-real-robot-need-clearance-identity-and-wall-pose-2026-10-07.md`) 또는 Rosy Cam 천장 자세이고, 오차 ≤ 0.01 m여야 한다.
