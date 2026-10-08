@@ -167,7 +167,7 @@ async function select(index) {
   frameHeading();saveView();
   $('review-history-summary').textContent='검수 기록을 불러오는 중…';
   request(`/api/history/${index}`).then(value=>{if(serial===loadSerial)showHistory(value);})
-    .catch(()=>{if(serial===loadSerial)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 최신 내용 불러오기를 눌러 다시 확인하세요.';});
+    .catch(()=>{if(serial===loadSerial)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 새로고침을 눌러 다시 확인하세요.';});
   $('source-info').textContent = frame.source.source_kind === 'mcap'
     ? `${frame.source.width} × ${frame.source.height} · MCAP ${frame.source.source_session} · ${frame.source.mcap.frame.bag} SHA ${frame.source.mcap.bags.find(b => b.name === frame.source.mcap.frame.bag).sha256} · ${frame.source.mcap.frame.topic} · log ${frame.source.mcap.frame.log_ns} · channel ${frame.source.mcap.frame.channel_id} · ordinal ${frame.source.mcap.frame.message_ordinal} · 가져올 때 원본 픽셀 검증`
     : `${frame.source.width} × ${frame.source.height} · ${frame.source.video || '원본 사진'} · frame ${frame.source.video_frame ?? index}`;
@@ -266,7 +266,7 @@ async function mutate(action, extras={}, restoring=false) {
     if(advance) {select(advance.index); return;}
     frameHeading();
     request(`/api/history/${id}`).then(value=>{if(frame?.index===id)showHistory(value);})
-      .catch(()=>{if(frame?.index===id)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 최신 내용 불러오기를 눌러 다시 확인하세요.';});
+      .catch(()=>{if(frame?.index===id)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 새로고침을 눌러 다시 확인하세요.';});
     coordinatePreview=null; if (selected>=frame.review.boxes.length) selected=null;
     renderBoxes(); list(); paint();
   } catch(e) {coordinatePreview=null; error(e.message); renderBoxes(); paint(); $('save-status').textContent=`저장 실패 · ${e.message}`;}

@@ -718,3 +718,20 @@
 - 변경: main 병합으로 v1.141이 D-517 M1a에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.142로 옮겼다. 앞 항목의 v1.141은 그 때의 번호다.
 - 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
 - gate 변화: 없음.
+
+## 2026-10-08 · b570504a2 · feat(api): POST /line-follow/authority, 능력 line_follow_authority, v1.142
+- 변경: operator·수동 해제·보정 lease seat, 409 `LINE_FOLLOW_NOT_ACTIVE`·`AUTHORITY_ODOM_STALE`·`AUTHORITY_POSE_STALE`·`AUTHORITY_POSE_FUTURE`, 강제 중에만 `GET /line-follow` `authority`. 앱 설명 v1.142.
+- 증거: 모델 PC gateway 2208 통과(17 오류는 `rosy` wheel 없는 ROS bridge 모듈 수집 실패, 변경 무관), `test_line_authority_api.py`·`test_capabilities_controls.py` 통과.
+- gate 변화: SOURCE.
+- 결정: D-517 4항 (M2)
+
+## 2026-10-08 · 887abb1a9 · feat(core): D-517 M2 능력 line_follow_authority_required
+- 변경: `base_velocity` 능력에 `line_follow_authority_required`(설정 `line_follow.authority_required` 가 참이면 true, line-follow 없으면 false).
+- 증거: 모델 PC 수정 전 `test_d491_trip_caps_follow_robot_package_services_and_limits` 실패, 수정 뒤 통과.
+- gate 변화: SOURCE.
+- 결정: D-517 4항 독립 리뷰 3 (E-Stop·CORE 재시작 뒤 첫 통행권 전 강제). API v1.142.
+
+## 2026-10-08 · uncommitted · fix(api): D-517 M2 통행권의 API Ref 번호를 v1.143으로 옮김
+- 변경: main 병합으로 v1.142가 D-507 보충(굽이 지시)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.143으로 옮겼다. 앞 두 항목의 v1.142는 그 때의 번호다. `base_velocity` 능력은 `lane_bend`와 `line_follow_authority`·`line_follow_authority_required`를 함께 낸다.
+- 증거: `test/test_line_follow_contract_docs.py`, fleet 버전 핀 시험, `test_capabilities_controls.py`.
+- gate 변화: 없음.

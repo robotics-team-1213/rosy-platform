@@ -31,6 +31,7 @@ from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, Tri
                                      OPEN, LiveTrip, TripError, bend_fields, junction_fields, next_bend,
                                      pose_diagnostics, pose_view, record_bend_candidate)
 from fleet.server.lane_traffic import TrafficService
+from fleet.server.trip_authority import AuthoritySender
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import LAP_RETRIES, LAP_RETRY_S, carry_on, lap_arcs, lap_due, lap_retry_due  # noqa: F401
 from fleet.swarm.transport import RobotApiError
@@ -70,7 +71,7 @@ class TripRunner:
                  engaged: Callable[[str], Optional[str]] = lambda _robot_id: None,
                  release_queue: Callable[[str], None] = lambda _robot_id: None,
                  roster: Optional[Callable[[], Iterable[str]]] = None,
-                 traffic: Optional[TrafficService] = None, traffic_zones=None) -> None:
+                 traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False) -> None:
         self._store = store
         self._routing = routing_config
         self._caps, self._poses, self._junction = caps, poses, junction
@@ -87,6 +88,7 @@ class TripRunner:
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones)
+        self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
         self._refresh_warned_at = -math.inf
         self.halts = TripHalts(store, junction, config, self._call, clock, cancel_goal,
                                lambda robot_id: self._release_queue(robot_id), self.robot_busy, roster)
@@ -141,6 +143,7 @@ class TripRunner:
             graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
             caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
                          "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
+                         "line_follow_authority": getattr(caps, "line_follow_authority", False),
                          "lane_bend": caps.lane_bend}
             arcs = lap_arcs(self._store.active(), plan["segments"], row["request"], caps_view,
                             frozenset(self._blocked()), self._routing, self.config.max_turn_deg) if repeat else ()
@@ -153,7 +156,8 @@ class TripRunner:
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
-                    "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view}
+                    "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view,
+                    "traffic_authority": self.authority.mode(caps)}
             live = LiveTrip(view, graph, row["request"])
             live.lap_route, live.lap_arcs = route_key(plan["segments"]), arcs
             self._live[robot_id] = live
@@ -180,6 +184,8 @@ class TripRunner:
         floor = caps.site_floor_map_id  # D-507 9: absent (older CORE) or null declares no floor
         if lane and floor is not None and floor != map_id:
             raise TripError(422, "TRIP_SITE_FLOOR_MISMATCH", {"site_floor_map_id": floor, "map_id": map_id})
+        if lane and self.authority.mode(caps) == "core" and caps.line_follow_authority_required is not True:
+            raise TripError(422, "TRIP_AUTHORITY_NOT_REQUIRED")  # D-517 4: no first-authority gap after a restart
         return caps
 
     async def _pose_checks(self, robot_id: str, graph, segments: list) -> MapPose:
@@ -270,7 +276,7 @@ class TripRunner:
             live.view["detail"]["replan_confirmed_by"] = principal_id
             sent = live.sent
             live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
-            live.sent, live.last_goal, live.replan_pending, live.at = None, None, False, None
+            live.sent, live.last_goal, live.replan_pending, live.at, live.at_stamp = None, None, False, None, None
             live.lap_start = 0
             self._describe(live)
             self._save(live)
@@ -321,6 +327,7 @@ class TripRunner:
             await asyncio.wait(pending, timeout=self.config.period_s)
         self._inflight = {robot_id: task for robot_id, task in self._inflight.items() if not task.done()}
         self.traffic.period(self._live.values())
+        self.authority.period(live for r, live in self._live.items() if r not in self._inflight)  # mid-step: none
 
     async def _tick_robot(self, live: LiveTrip) -> None:
         """Every failure ends at most this one trip."""
@@ -357,7 +364,7 @@ class TripRunner:
             if not live.open:
                 return
             index, s, off = self._locate(live, pose)
-            live.at = (index, s)
+            live.at, live.at_stamp = (index, s), getattr(pose, "odom_stamp", None)  # one pose, one assignment
             remaining = live.segments[index]["s_to"] - s
             lane = live.arc(index).drive_mode == "lane"
             if lane and self.traffic.holds(live, index):  # CORE waits at the junction for the block
@@ -598,7 +605,8 @@ class TripRunner:
         progress = live.progress(index, s)
         if (live.progress_at is None or progress >= live.best_progress + self.config.stall_m
                 or live.view["hold"] is not None or live.junction.get("state") in MANOEUVRE
-                or (live.traffic or {}).get("waiting_for")):  # D-517 4: waiting for a block is no stall
+                or (live.traffic or {}).get("waiting_for")  # D-517 4: waiting for a block is no stall
+                or (live.authority or {}).get("state") == "HOLDING"):  # nor at the authority's end
             live.best_progress = max(live.best_progress, progress)
             live.progress_at = now
             return False
@@ -659,6 +667,7 @@ class TripRunner:
         A trip already closed (a cancel that landed mid-tick) keeps its state; the robot is
         still stopped again.
         """
+        live.at, live.at_stamp = None, None
         if live.open:
             live.view.update(state=state, reason=reason)
             live.view["detail"].update(detail or {})
