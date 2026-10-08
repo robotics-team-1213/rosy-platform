@@ -837,3 +837,10 @@
 - gate 변화: SOURCE. SIM(모델 PC) 결과 기록 전
 - 결정: 크기 junction 959→978(판정 959+150 안)
 - 교훈: 한 칸을 쥔 기동이 끝날 때 그 기동 중 본 다음 근거를 지우면 다음 지시가 그 근거 없이 시작된다. 끝낼 때 넘길 것과 버릴 것을 측정(odom 앞인지)으로 가른다
+
+## 2026-10-08 · 7cb2d775a · test(sim): 굽이→교차로 넘겨주기 SIM (모델 PC)
+- 변경: `docs/validation/bend-junction-handoff-sim-2026-10-08` (lap 하네스, 도메인 89·`rosy_handoff`·포트 8288/8289)
+- 증거: 12회. SW 회전 끝 10/11(lap SIM 전 0/16), 넘겨주기 10/11, trip 완료 0/12. 원인 A·B·D로 끝난 run 0. 넘겨주지 못한 1회는 굽이 중 목격이 없던 run(모서리 오독, `fix/junction-corner-hold` 몫). 나머지 정지는 모두 SW 회전 뒤 회전교차로 둘레(D-520 호 주행 꺼짐)
+- gate 변화: ROS-SIM 기록(부분). DEVICE 열림
+- 결정: 없음
+- 교훈: 없음
