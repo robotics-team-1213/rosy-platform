@@ -947,7 +947,7 @@ def test_console_map_data_and_action_feedback_full_shell_captures(tmp_path):
             panel = page.locator('[data-panel="console.map"]')
             page.wait_for_selector('[data-panel="console.map"] canvas')
             page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
-            panel.locator('[data-map-click="goal"]').click()
+            assert panel.locator('[data-map-click="goal"]').is_disabled()
             panel.locator("canvas").click(position={"x":40,"y":40})
             action = panel.locator('ui-status[role="status"]').last
             assert action.inner_text()
@@ -1227,6 +1227,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             context = browser.new_context(viewport={"width": viewport[0], "height": viewport[1]})
             page = context.new_page()
             errors = []
+            location = {"state": "LOCALIZED", "frame": "map"}
             page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
             page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -1238,13 +1239,17 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 if path == "/api/v1/robot/state":
                     state = json.loads(_response(client, path, TOKENS["operator"], "normal", "console").body)
                     state.update(mode="NAVIGATION", navigation="NAVIGATING", map_id="local-map",
-                                 localization={"state": "LOCALIZED", "pose_frame": "map", "confidence": 0.92})
+                                 localization={"state": location["state"], "pose_frame": location["frame"], "confidence": 0.92})
                     state["evidence"]["navigation"] = {"evidence": "fresh", "received_at": datetime.now(timezone.utc).isoformat()}
                     response = Response(content=json.dumps(state), media_type="application/json")
                 elif path == "/api/v1/system/capabilities":
                     data = _response(client, path, TOKENS["operator"], "normal", "console").json()
                     data["slam"] = True
                     data["navigation"] = {"goal_navigation": True}
+                    response = Response(content=json.dumps(data), media_type="application/json")
+                elif path == "/api/v1/host/commissioning":
+                    data = _response(client, path, TOKENS["operator"], "normal", "console").json()
+                    data["runtime_mode"] = "hardware"
                     response = Response(content=json.dumps(data), media_type="application/json")
                 elif path == "/api/v1/map":
                     response = Response(content=json.dumps(grid), media_type="application/json")
@@ -1281,6 +1286,33 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 assert result["slotOrder"] == ["banner", "sense", "observe", "act"], result
             filename = f"operator-console-navigation-{viewport[0]}x{viewport[1]}.png"
             page.screenshot(path=str(capture_dir / filename), full_page=True)
+            if viewport[0] == 390:
+                blue_pixels = """() => {
+                  const canvas = document.querySelector('.surface-map-canvas');
+                  const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+                  let count = 0;
+                  for (let i = 0; i < data.length; i += 4)
+                    if (data[i + 2] > data[i + 1] * 1.2 && data[i + 2] > data[i] * 1.5 && data[i + 2] > 100) count++;
+                  return count;
+                }"""
+                assert page.evaluate(blue_pixels) > 0
+                location["state"] = "SUSPECT"
+                page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled
+                  && !document.querySelector('[data-map-click="pose"]')?.disabled""")
+                assert "위치 추정 · 위치 확인 필요" in stage.inner_text()
+                assert "주행 · 위치 확인 중" in stage.inner_text()
+                assert "주행 목표를 막았습니다" in page.locator("#map-action-reason").inner_text()
+                assert page.locator('[data-map-click="goal"]').get_attribute("reason") == "위치 추정 확인 후 가능"
+                assert page.evaluate(blue_pixels) == 0
+                overview_values = page.locator('[data-panel="console.overview"] .ui-readout dd')
+                assert "위치 확인 필요" in overview_values.nth(1).inner_text()
+                assert overview_values.nth(2).inner_text() == "지도 위치 확인 불가"
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-suspect-390x844.png"), full_page=True)
+                location.update(state="LOCALIZED", frame="odom")
+                page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('지도 좌표 미확인')")
+                assert page.locator('[data-map-click="goal"]').is_disabled()
+                location["frame"] = "map"
+                page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
             if viewport[0] == 1366:
                 page.locator(".surface-map-canvas").focus()
                 page.set_viewport_size({"width": 390, "height": 844})

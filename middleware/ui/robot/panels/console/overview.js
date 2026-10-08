@@ -39,14 +39,17 @@ export function mount(el, ctx) {
     summary.replaceChildren();
     const pose = state.pose;
     const battery = state.battery;
+    const mapPoseTrusted = new HeadlessState(state).isFresh("pose")
+      && (state.localization == null || (state.localization.state === "LOCALIZED"
+        && state.localization.pose_frame === "map"));
     // D-359 US-009 — 모드는 CORE 자신의 값이라 채널이 없다: 이 응답이 곧 증거(부모 증거)다.
     // 내비게이션은 자기 채널이 있어 지연·끊김을 다른 값처럼 readout()이 말한다.
     const values = {
       mode: state.mode ? {evidence: "fresh", text: operatorModeLabel(state.mode), title: state.mode} : null,
       navigation: {...readout(state, "navigation", "내비게이션",
-        state.navigation ? enumLabel(NAVIGATION_LABEL, state.navigation) : null), title: state.navigation},
+        state.navigation ? `${enumLabel(NAVIGATION_LABEL, state.navigation)}${["PLANNING", "NAVIGATING"].includes(state.navigation) && !mapPoseTrusted ? " · 위치 확인 필요" : ""}` : null), title: state.navigation},
       pose: readout(state, "pose", "위치",
-        Number.isFinite(pose?.x) && Number.isFinite(pose?.y)
+        !mapPoseTrusted ? "지도 위치 확인 불가" : Number.isFinite(pose?.x) && Number.isFinite(pose?.y)
           ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : null),
       battery: readout(state, "battery", "배터리",
         Number.isFinite(battery?.percent) ? `${Math.round(battery.percent)}%` : null),

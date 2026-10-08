@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · uiux(robot): 위치 추정 불확실 시 목표·표시 정합성
 - 2026-10-08 · uncommitted · uiux(robot): 운용 폭별 문서·초점 순서 일치
 - 2026-10-08 · uncommitted · uiux(robot): 지도 중심 운용 화면
 - 2026-10-07 · uncommitted · uiux(robot): 운용 세 열의 가시 패널 너비 일치
 - 2026-10-06 · uncommitted · uiux(robot): 상태 메시지 의미 구조 수정
-- 2026-10-06 · uncommitted · uiux(robot): 첫 상태 수신 전 안내

@@ -1092,3 +1092,9 @@
 - 변경: 모바일 지도→조작→감지, 데스크톱 감지→지도→조작의 보이는 순서에 맞춰 셸 슬롯 DOM 순서를 동기화한다. 폭 전환 때 패널 안 키보드 초점을 복원한다.
 - 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). 실제 CORE fixture의 1366×768·390×844 캡처와 320×568 오류 캡처, 순서·초점 3 passed, 모바일 뷰포트 2 passed. 추가 레이아웃 13 passed/2 failed는 공유 main에서 같은 `/setup` 시험 2건 실패로 재현.
 - gate 변화: LOCAL 접근 순서 부분 근거. 실물·G3·전체 G2는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 위치 추정 불확실 시 목표·표시 정합성
+
+- 변경: 지도 목표는 최신 pose와 `LOCALIZED/map` 확인 뒤에만 허용한다. 초기 위치 설정은 복구 조작으로 유지한다. `SUSPECT`에서는 계획 경로·현재 좌표를 숨기고 지도와 로봇 요약에 위치 확인 필요를 표시한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/goal-gate/navigation-stage/`의 정상 2폭·SUSPECT 모바일 캡처. 브라우저·지도 3 passed, 추가 요약·오류·패키지 회귀 21 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 상태 전환과 목표 버튼 근거 추가. 장치 pose·주행 readback, 전체 G2와 G3는 HOLD.

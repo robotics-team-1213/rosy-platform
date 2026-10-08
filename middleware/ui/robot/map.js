@@ -147,11 +147,10 @@ export function createFieldMap(options) {
   }
 
   function syncClickButtons() {
-    const allowed = canGoal?.() === true;
-    // D-359 §5.3 — 사유는 호출자가 안다(goalReason). 역할 화면 패널은 버튼에 잇는 공용
-    // 안내문(#map-action-reason)으로 말하므로 goalReason을 넘기지 않는다.
-    const reason = allowed ? "" : (options.goalReason?.() || "");
+    // D-359 §5.3 — 역할 화면은 공용 안내문을 쓰고, 목표만 막힐 때는 해당 버튼에도 이유를 단다.
     clickButtons.forEach((button) => {
+      const allowed = canGoal?.(button.dataset.mapClick) === true;
+      const reason = allowed ? "" : (options.goalReason?.(button.dataset.mapClick) || "");
       button.disabled = !allowed;
       if (reason) button.setAttribute("reason", reason);
       else button.removeAttribute("reason");
@@ -181,7 +180,7 @@ export function createFieldMap(options) {
 
   function syncCursor() {
     if (!canvas) return;
-    canvas.toggleAttribute("data-goal-cursor", Boolean(canGoal?.()));
+    canvas.toggleAttribute("data-goal-cursor", canGoal?.(clickMode) === true);
   }
 
   function rebuildRaster() {
@@ -345,7 +344,7 @@ export function createFieldMap(options) {
   clickButtons.forEach((button) => {
     const mode = button.dataset.mapClick;
     button.addEventListener("click", () => {
-      if (button.disabled || canGoal?.() !== true) return;
+      if (button.disabled || canGoal?.(mode) !== true) return;
       clickMode = mode;
       syncClickButtons();
     }, {signal: listenerController.signal});
@@ -375,8 +374,8 @@ export function createFieldMap(options) {
       setAction?.("최신 지도 데이터를 확인할 수 없어 위치·목표를 보내지 않았습니다.");
       return;
     }
-    if (!canGoal?.()) {
-      setAction?.("현재 실행 모드나 로봇 기능으로는 위치·목표 조작을 쓸 수 없습니다.");
+    if (!canGoal?.(clickMode)) {
+      setAction?.(options.goalReason?.(clickMode) || "현재 실행 모드나 로봇 기능으로는 위치·목표 조작을 쓸 수 없습니다.");
       return;
     }
     const world = new GridFrame(state.occupancy).canvasToWorld(px, py, canvas.width, canvas.height);
@@ -392,7 +391,7 @@ export function createFieldMap(options) {
     committing = true;
     try {
       const confirmed = await (options.confirm || confirmIrreversible)({message: `${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 로 보낼까요?`, action: locating ? "위치 설정" : "목표 전송", opener: canvas, signal: AbortSignal.any([owner.signal, listenerController.signal])});
-      if (!confirmed || !owner.current() || listenerController.signal.aborted || !canGoal?.() || modeSnapshot !== clickMode || mapSnapshot !== JSON.stringify(state.occupancy) || yaw !== (Number(getPose?.()?.yaw) || 0)) return;
+      if (!confirmed || !owner.current() || listenerController.signal.aborted || !canGoal?.(modeSnapshot) || modeSnapshot !== clickMode || mapSnapshot !== JSON.stringify(state.occupancy) || yaw !== (Number(getPose?.()?.yaw) || 0)) return;
       await api(path, {
         method: "POST",
         body: JSON.stringify({ x: world.x, y: world.y, yaw }),

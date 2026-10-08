@@ -13,7 +13,7 @@
 | 지도·SLAM·위치 추정의 의미가 섞일 수 있다 | 주행 상태는 navigation 채널, 지도 좌표 확인은 최신 pose + LOCALIZED/map, SLAM은 capability 제공 여부만 표시 | fixture의 명시적 상태가 각각 별도 문구로 출력됨 |
 | 준비 완료 문구와 조작 제한 안내가 지도보다 먼저 공간을 차지한다 | 중복된 준비 완료 문구는 숨기고 조작 제한 사유는 지도 아래에 배치 | 지도 시야가 늘고 비활성 조작의 사유는 남음 |
 
-경로는 Nav2 계획 경로(`/api/v1/navigation/path`)다. 차선 추종의 센서 선이나 실제 주행 궤적이라고 부르지 않는다. 이 API에 서버 시각이 없어 지도 패널은 최신 navigation 상태가 `PLANNING`/`NAVIGATING`일 때만 경로를 그린다. SLAM 기능 제공은 현재 지도 생성 중이라는 뜻이 아니다. 실제 SLAM 실행 상태를 보여 주려면 별도 서버 계약이 필요하다.
+경로는 Nav2 계획 경로(`/api/v1/navigation/path`)다. 차선 추종의 센서 선이나 실제 주행 궤적이라고 부르지 않는다. 이 API에 서버 시각이 없어 지도 패널은 최신 navigation 상태가 `PLANNING`/`NAVIGATING`이고 pose가 최신이며 지도 좌표를 신뢰할 수 있을 때만 경로를 그린다. SLAM 기능 제공은 현재 지도 생성 중이라는 뜻이 아니다. 실제 SLAM 실행 상태를 보여 주려면 별도 서버 계약이 필요하다.
 
 ## 증거
 
@@ -35,3 +35,11 @@
 - 실제 FastAPI·Chromium에서 DOM/시각 순서와 1366→390→1366 폭 전환 후 지도 캔버스 초점 유지 등 3 passed, `known_failures.py` 0 NEW (`logs/responsive-focus-tests.txt`). 레이아웃 추가 묶음은 13 passed, 2 failed (`logs/focus-order-layout.txt`); 실패는 `/setup` 사실 격자 시험 2건이며 공유 `main`에서 같은 2건이 재현됐다 (`logs/main-procedure-baseline.txt`). 두 실행 모두 `known_failures.py`는 `NEW`로 분류하므로 전체 묶음 PASS는 주장하지 않는다.
 - 390×844·320×568의 실제 CORE 셸 뷰포트 시험에서 문서 순서·정지 가시성·가로 넘침을 다시 확인했다: 2 passed, 0 NEW (`logs/focus-order-viewport.txt`).
 - `impeccable detect --json` 변경 파일 검사 결과 `[]` (`logs/impeccable-focus-order.json`). 이 정적 검사와 합성 CORE 캡처는 실제 로봇·사용자 수용을 대체하지 않는다.
+
+## 후속: 위치 추정 불확실 시 지도 목표 차단
+
+CORE는 지도 좌표를 신뢰할 수 없는 로봇의 주행 목표를 거절한다. 콘솔도 최신 pose와 `LOCALIZED/map` 확인 전에는 목표 버튼을 막고 이유를 표시한다. 초기 위치 설정은 위치 추정을 회복하기 위한 조작이므로 권한·기능·하드웨어 조건을 만족하면 계속 사용할 수 있다. `SUSPECT` 등 불확실한 상태에서는 오래된 계획 경로와 로봇 좌표를 숨기고, 지도 HUD와 로봇 상태 요약에 위치 확인 필요를 표시한다. 위치 추정 블록이 없는 이전 CORE 응답은 기존 API 호환 범위로 처리한다.
+
+- 같은 X: 세션의 `evidence/goal-gate/navigation-stage/`에 1366×768·390×844 정상 화면과 390×844 `SUSPECT` 화면, 매트릭스 JSON을 기록했다. 합성 API 응답으로 렌더링한 실제 FastAPI·Chromium 화면이며 로봇 readback은 아니다.
+- `SUSPECT`에서 초기 위치 버튼 활성, 목표 버튼 비활성 및 사유, 파란 계획 경로와 좌표 숨김을 확인했다. `LOCALIZED/odom`에서도 목표 비활성, `LOCALIZED/map` 복귀 뒤 활성 상태를 확인했다. 브라우저·지도 관련 3 passed (`logs/goal-gate-tests.txt`), 추가 요약·지도 오류·패키지 회귀 21 passed (`logs/goal-gate-regression.txt`), 각 `known_failures.py` 0 NEW.
+- 실제 장치의 pose 전환, 목표 전송 성공, 물리 주행, G3 운용자 판단과 전체 G2 상태 매트릭스는 여전히 HOLD다.
