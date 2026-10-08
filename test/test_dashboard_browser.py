@@ -1162,6 +1162,30 @@ def test_compatibility_settings_confirmation_preserves_stop_and_rechecks_named_t
         browser.close()
 
 
+@pytest.mark.parametrize("width,height", [(390, 844), (1366, 768)])
+def test_compatibility_slam_start_reports_session_acceptance(width, height):
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, width=width, height=height)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_selector('#compatibility-shell[data-ready="true"]')
+        page.locator('#view-inspect').click()
+        page.locator('#slam-start').click()
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        expect(page.locator('#slam-message')).to_have_text('맵핑 세션을 수락했습니다. 지도 갱신은 확인되지 않았습니다.')
+        assert page.evaluate("__apiCalls.some(c=>c.path==='/api/v1/slam/start')")
+        assert page.locator('.settings-card[aria-labelledby="slam-heading"]').evaluate('(card) => card.getBoundingClientRect().height') < 500
+        if shot_dir := os.environ.get('ROSY_DASHBOARD_STATE_SHOT_DIR'):
+            output = Path(shot_dir) / f"compatibility_slam_session_{width}x{height}_local.png"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(output), full_page=True)
+            card = page.locator('.settings-card[aria-labelledby="slam-heading"]')
+            card.evaluate('(element) => element.scrollIntoView({block: "center"})')
+            card.screenshot(path=str(output.with_name(f"compatibility_slam_card_{width}x{height}_local.png")))
+        browser.close()
+
+
 def test_compatibility_traffic_confirmation_abort_releases_new_owner_without_old_readback():
     from playwright.sync_api import sync_playwright, expect
 
