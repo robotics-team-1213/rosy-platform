@@ -7249,3 +7249,8 @@ osy-d395-s1d\`.
 - 변경: `validation/uiux-fleet-marker-scale-2026-10-09/result.md`에 큰 화면에서 과장된 방향 마커와 변경 후 모바일·데스크톱 지도 캡처를 기록했다.
 - 증거: 1920×1080 기존 약 161.94px, 변경 후 42px 이하 검증; 브라우저 6 passed / NEW 0. 원본 캡처와 실행 로그는 X:에 둔다.
 - gate 변화: 없음. 실제 위치·주행·SLAM 및 G3 수용은 이 화면으로 입증하지 않는다.
+
+## 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 표시 LOCAL 검증
+- 변경: `validation/uiux-robot-slam-truth-2026-10-09/result.md`에 CORE 맵핑 세션 수락과 실제 SLAM 실행의 증거 경계를 기록했다. Dashboard 설정 카드가 불필요하게 늘어나지 않도록 고친 모바일·데스크톱 화면을 함께 기록했다.
+- 증거: Console 320·390·1366px와 Dashboard 390·1366px 캡처, 관련 브라우저 3 passed / NEW 0, 이미지 SHA-256.
+- gate 변화: 없음. 설치본·SLAM Toolbox 실행·지도 갱신·DEVICE/FIELD·전체 G2/G3는 HOLD.
