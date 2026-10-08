@@ -28,3 +28,9 @@
 ## Fleet 굽이 후보: SOURCE/LOCAL 진단
 
 `feat/lane-bend-cue`는 활성 lane trip의 edge polyline에서 0.40 m 앞 굽이를 `detail.bend_candidate`에 기록한다. `west:rev`의 위 자세에서 굽이 시작까지 약 0.24 m, 창 끝 접선 변화 +63.2°다. 활성 지도의 `map_id`·버전과 trip 버전이 같고 원본 지도 자세가 신선하며 edge에 정렬됐을 때만 표시한다. 다음 tick에서 자세가 0.304 s로 낡거나 지도 버전이 달라지면 사라지고, trip 종료 때도 삭제한다. 이 값은 Fleet 읽기 전용 진단이다. CORE나 keeper에 전달되지 않았고 B9 `no_boundary`를 해결하거나 주행을 허가하지 않는다. 동일 경계 사람 정답, 벽·분기 음성 재생, Fleet→CORE 폐루프 SIM, 실물 증거는 아직 필요하다.
+
+## 동일 시각 굽이 기억 재생: 왼쪽 후보와 오른쪽 반례
+
+`bw1`의 293개 영상 프레임과 294개 keeper 디버그 행을 **행 번호가 아닌 `stamp`**로 결합했다. 첫 `no_boundary`인 영상 frame 260(`stamp=61.625 s`)에서 변경 없는 `LaneEdgeFollower`를 처음부터 재생한 결과, 왼쪽 경계 기억에서 목표 `(x=0.15025 m, y=−0.00675 m; 로봇 좌표)`를 냈다. SIM 참 자세로 `west:rev` 지도 중심선에 투영한 **한 개 목표점**의 거리는 0.0008 m였다. 같은 프레임에서 전방 0.09–0.40 m의 기억 화소를 지도 edge에 투영하면 왼쪽의 부호 있는 오프셋 중앙값은 +0.0890 m(865 셀; 지도 반폭 0.0925 m), 오른쪽은 −0.1982 m(7,095 셀; 기대 오른쪽 −0.0925 m)였다. 따라서 이 오른쪽 기억을 같은 차로의 대체 경계로 수용할 근거는 없다. 이는 지도와 SIM 참 자세를 이용한 **기하 진단**이며 사람 승인 페인트/벽 정답이 아니다.
+
+재계산: `python docs/validation/lane-goal-sim-2026-10-08/analyze_bend_memory.py X:/DevTemp/bend-window-sim/bw1-frames.npz X:/DevTemp/bend-window-sim/bw1-keep.jsonl middleware/perception/map/map_v2_fleet/lane_graph.yaml west:rev --frame-index 260`. `bw1-keep.jsonl` SHA-256은 `E3FE8B98DE853D657393467E7A196AA0D8672A2C589A0C37B654C349F60752FF`다. 정지 뒤 frame 260→292의 4.0 s 동안 SIM 자세 이동은 0.0033 m이므로, 같은 위치에서 기억 목표가 반복된 프레임을 독립적인 굽이 통과 성공으로 세지 않는다. 다음 주행 후보는 **같은 물리 경계 확인 + 차로 폭에 맞는 반대편 경계 확인 또는 명시적 한쪽 선 모드 + 실제 전진 중 재획득**을 요구한다. 이 조건이 없는 오른쪽 기억 대체와 B9 자동 활성화는 보류한다.
