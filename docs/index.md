@@ -301,7 +301,7 @@
 ## 최근 기록
 
 - 2026-10-08 · uncommitted · feat(decision-ask): AI PC 질의는 사실과 후보만 반환한다
+- 2026-10-08 · uncommitted · D-522 개발 환경 원격 이동 권한
+- 2026-10-08 · uncommitted · D-521 원격 단독 입회 수정
+- 2026-10-08 · uncommitted · Rosy Cam 원격 입회 역할 정리
 - 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 재검증 반영: 호 중 bend 거절
-- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 병합 뒤 시험과 core_features 크기
-- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 안전 리뷰 반영과 main 병합
-- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) API 판 v1.143 → v1.145

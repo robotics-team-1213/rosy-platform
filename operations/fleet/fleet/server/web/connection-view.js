@@ -1,13 +1,16 @@
 // Connection guidance owns presentation; authorization remains in console.js.
 export function createConnectionView({scope, el}) {
+  let openedForLock = false;
   function setTopbarOpen(open) {
     el("topbar-more").setAttribute("aria-expanded", String(open));
     el("topbar-extra").dataset.open = String(open);
   }
   scope.listen(el("topbar-more"), "click", () => {
+    openedForLock = false;
     setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
   });
   scope.listen(el("connection-guide-action"), "click", event => {
+    openedForLock = false;
     event.preventDefault(); setTopbarOpen(true);
     // D-519 — the 아이디 field when the login form shows, else the token field.
     const form = document.getElementById("password-login");
@@ -33,8 +36,15 @@ export function createConnectionView({scope, el}) {
     el("dispatch-control").hidden = true;
     el("dispatch-rearm").hidden = true;
   }
-  return {open: () => setTopbarOpen(true), show, hide: () => {
+  return {open: () => {
+    if (el("topbar-more").getAttribute("aria-expanded") !== "true") {
+      setTopbarOpen(true);
+      openedForLock = true;
+    }
+  }, show, hide: () => {
     el("connection-guide").hidden = true;
+    if (openedForLock) setTopbarOpen(false);
+    openedForLock = false;
     // 지난 세션의 발행 문구를 살아 있는 상태처럼 보이지 않는다. 다음 조회가 덮어쓴다.
     el("dispatch-control-title").textContent = "발행 상태 확인 중";
     el("dispatch-control-detail").textContent = "대기 작업과 정지 세대를 읽고 있습니다.";

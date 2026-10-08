@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · 7cb2d775a · test(sim): 굽이→교차로 넘겨주기 SIM (모델 PC)
+- 2026-10-08 · 070959eea · fix(core): 굽이 통과 중 본 교차로를 교차로 게이트로 넘김
 - 2026-10-08 · 854d2de64 · refactor(core): 교차로 믹스인을 recovery/junction/ 하위 패키지로
 - 2026-10-08 · 4fb9eb1c4 · fix(core): D-517 M2 리뷰 반영 — IR 설정 문구, 정지 거리 속도
 - 2026-10-08 · b570504a2 · feat(core): D-517 M2 CORE 이동 통행권 (line_follow/authority.py)
-- 2026-10-08 · uncommitted · test(line_follow): D-507 굽이 통과 모델 PC SIM
-- 2026-10-08 · uncommitted · feat(line_follow): D-507 보충, 지도 굽이를 odom 호로 지남 (action `bend`)

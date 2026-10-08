@@ -7185,6 +7185,24 @@ osy-d395-s1d\`.
 - 증거: 단위 시험 2개(거절, 끝의 armed bend), API 시험 1개(409). 변이 확인: 거절을 빼면 2개 실패, 끝 guard 를 빼면 리뷰가 본 `KeyError: 'bound'` 로 1개 실패, 각각 복구. 골든: 병합 때의 main c06ddcad5(d5b75ff06^2)에서 다시 만든 궤적이 저장한 골든, 이 브랜치의 호 꺼짐 궤적과 같다(차이 없음, 골든 갱신 없음). services 1438 passed, gateway 관련 159 passed, api_web 140 passed(13 skipped), `test_module_structure` 와 판 고정 36 passed, known_failures 0 new(`X:\DevTemp\d520-core\run_rv.txt`).
 - gate 변화: 없음.
 
+## 2026-10-08 · uncommitted · Rosy Cam 원격 입회 역할 정리
+
+- 변경: D-521을 제안하고 G4/G5 런북과 Rosy Cam 운영 가이드에 원격 관찰·현장 물리 차단·영상 단절 시 HOLD를 일치시켰다. 기존 G4/G5 승인·지도 게이트와 장치 설정은 바꾸지 않았다.
+- 증거: 현장 `ceiling_north` 프레임 수신(2026-10-08, 응답 시 나이 171 ms); `rosy_26`·`rosy_60`은 모두 motor, navigation inactive, 승인 마커·지도 없음. harness lint 0 errors/23 기존 경고, 문서 계약 시험 119 passed/2 failed(로그 제목·생성 index), 수정 후 두 실패 재실행 2 passed·known_failures 0 NEW.
+- gate 변화: 없음. 카메라 연결만으로 G4/G5 또는 ROSY Web 목적지 주행을 수용하지 않는다.
+
+## 2026-10-08 · uncommitted · D-521 원격 단독 입회 수정
+
+- 변경: 사용자 결정에 따라 D-521을 Accepted로 바꾸고 G4 schema v2·G5의 별도 현장 담당자 필수 조건을 제거했다. 런북의 신원·이동 여유·영상·기존 정지 경로 확인을 일치시켰다.
+- 증거: 앞선 현장 카메라 프레임은 두 로봇을 보였지만 영상만으로 개별 ID와 케이블 주변 10 cm 이동 여유는 확정하지 못했다. 코드·장치 설정은 변경하지 않았다.
+- gate 변화: 없음. 각 로봇의 원시 G4 계측과 G5 지도·정지 증거는 아직 없다.
+
+## 2026-10-08 · uncommitted · D-522 개발 환경 원격 이동 권한
+
+- 변경: 사용자 지시에 따라 원격 단독 시험의 반복 승인 생략과 강제 진행의 범위를 D-522로 기록했다. 장치의 인증·E-Stop·CORE 정지와 몸체 신원·구역 확인은 유지한다.
+- 증거: 두 로봇의 CORE IDLE·속도 0, 최신 LiDAR·전면 영상과 Rosy Cam 영상 수신. 램프 명령 수락만으로 영상 속 로봇별 신원은 확정하지 못했다. 사이트 Fleet Web 설치 버전의 인증·tether API도 아직 목표 계약과 다르다.
+- gate 변화: 없음. 실물 이동과 G4/G5 수용은 별도 장치 증거가 필요하다.
+
 ## 2026-10-08 · uncommitted · feat(decision-ask): AI PC 질의는 사실과 후보만 반환한다
 
 - 변경: D-523. leet.ai.decision_pipeline이 정체 사실과 허용 후보를 검사한다. 막힘 답, meet 주문, 네트워크, 공개 REST, Laya 기동은 없다. D-492와 D-503은 Proposed로 남는다.

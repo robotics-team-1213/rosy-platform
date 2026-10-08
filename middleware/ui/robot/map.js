@@ -121,7 +121,8 @@ export function createFieldMap(options) {
   window.addEventListener("rosy:goal-clear", () => { goal = null; paint(); });
   const CROSS_STEP = 12;
   if (canvas && !canvas.hasAttribute("tabindex")) canvas.tabIndex = 0;
-  const state = { occupancy: null, path: [], costmap: null, raster: null, lastNav: null, mapState: "loading" };
+  const state = { occupancy: null, path: null, pathLoaded: false, costmap: null, raster: null, lastNav: null, mapState: "loading" };
+  let pathRequest = 0;
   const ctx = canvas?.getContext("2d") || null;
 
   function notifyTargetReadout() {
@@ -146,12 +147,48 @@ export function createFieldMap(options) {
     }
   }
 
+  const mapIdMismatch = () => Boolean(state.occupancy?.map_id && options.getCurrentMapId?.()
+    && state.occupancy.map_id !== options.getCurrentMapId());
+  const canMapClick = (mode) => Boolean(state.occupancy) && !mapIdMismatch() && canGoal?.(mode) === true;
+  function pathEvidence() {
+    const path = state.path;
+    if (!state.pathLoaded) return {visible: false, label: "확인 중"};
+    if (!path) return {visible: false, label: "수신 실패"};
+    if (options.onlyActivePath && !["PLANNING", "NAVIGATING"].includes(getNavigation?.()))
+      return {visible: false, label: "주행 상태 확인 필요"};
+    if (!Array.isArray(path.poses) || path.poses.length < 2) return {visible: false, label: "없음"};
+    if (path.poses.some((pose) => !Number.isFinite(pose?.x) || !Number.isFinite(pose?.y)))
+      return {visible: false, label: "좌표 확인 불가"};
+    if (mapIdMismatch() || (path.map_id && state.occupancy?.map_id && path.map_id !== state.occupancy.map_id))
+      return {visible: false, label: "지도 ID 불일치"};
+    if (!path.map_id || !state.occupancy?.map_id) return {visible: false, label: "지도 ID 미확인"};
+    if (path.frame_id !== "map") return {visible: false, label: "지도 좌표 미확인"};
+    if (!Number.isFinite(path.age_s) || path.age_s < 0) return {visible: false, label: "수신 나이 미확인"};
+    const age = Math.floor(path.age_s + (performance.now() - path.readAt) / 1000);
+    return {visible: true, label: `마지막 수신 ${age}초 전`};
+  }
+  function setPath(path) {
+    state.path = path ? {...path, readAt: performance.now()} : null;
+    state.pathLoaded = true;
+    options.onPathReadout?.(pathEvidence());
+  }
+  function syncMapStatus() {
+    const mismatch = mapIdMismatch();
+    options.onMapIdMismatch?.(mismatch);
+    if (state.mapState !== "ready") return;
+    const grid = state.occupancy;
+    const message = mismatch ? "로봇과 지도 ID가 다릅니다. 지도 갱신을 기다리세요."
+      : !Number.isFinite(Number(grid.width)) || !Number.isFinite(Number(grid.height))
+        ? grid.map_id || "크기 미상" : `${grid.width}×${grid.height}${grid.map_id ? ` · ${grid.map_id}` : ""}`;
+    const statusState = mismatch ? "pending" : "ready";
+    if (status?.textContent !== message || status?.getAttribute("state") !== statusState) setStatus(message, statusState);
+  }
+
   function syncClickButtons() {
-    const allowed = canGoal?.() === true;
-    // D-359 §5.3 — 사유는 호출자가 안다(goalReason). 역할 화면 패널은 버튼에 잇는 공용
-    // 안내문(#map-action-reason)으로 말하므로 goalReason을 넘기지 않는다.
-    const reason = allowed ? "" : (options.goalReason?.() || "");
+    // D-359 §5.3 — 역할 화면은 공용 안내문을 쓰고, 목표만 막힐 때는 해당 버튼에도 이유를 단다.
     clickButtons.forEach((button) => {
+      const allowed = canMapClick(button.dataset.mapClick);
+      const reason = allowed ? "" : mapIdMismatch() ? "로봇과 지도 ID 불일치" : (options.goalReason?.(button.dataset.mapClick) || "");
       button.disabled = !allowed;
       if (reason) button.setAttribute("reason", reason);
       else button.removeAttribute("reason");
@@ -181,7 +218,7 @@ export function createFieldMap(options) {
 
   function syncCursor() {
     if (!canvas) return;
-    canvas.toggleAttribute("data-goal-cursor", Boolean(canGoal?.()));
+    canvas.toggleAttribute("data-goal-cursor", canMapClick(clickMode));
   }
 
   function rebuildRaster() {
@@ -206,16 +243,35 @@ export function createFieldMap(options) {
     }
     ctx.putImageData(state.raster, 0, 0);
     const frame = new GridFrame(state.occupancy);
-    if (layers.path && state.path.length >= 2) {
+    if (layers.path && pathEvidence().visible) {
+      const scale = window.devicePixelRatio || 1;
+      const points = state.path.poses.map((pose) => frame.worldToCanvas(pose.x, pose.y, canvas.width, canvas.height));
       ctx.beginPath();
-      state.path.forEach((pose, index) => {
-        const point = frame.worldToCanvas(pose.x, pose.y, canvas.width, canvas.height);
+      points.forEach((point, index) => {
         if (index === 0) ctx.moveTo(point.x, point.y);
         else ctx.lineTo(point.x, point.y);
       });
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       ctx.strokeStyle = cssColor("route");
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 4 * scale;
       ctx.stroke();
+      // 마지막 수신 계획의 끝 방향만 표시한다. 현재 목표나 실제 주행 궤적 표시는 아니다.
+      const end = points[points.length - 1];
+      const previous = points.slice(0, -1).reverse().find((point) => Math.hypot(end.x - point.x, end.y - point.y) > scale);
+      if (previous) {
+        ctx.save();
+        ctx.translate(end.x, end.y);
+        ctx.rotate(Math.atan2(end.y - previous.y, end.x - previous.x));
+        ctx.fillStyle = cssColor("route");
+        ctx.beginPath();
+        ctx.moveTo(5 * scale, 0);
+        ctx.lineTo(-9 * scale, -6 * scale);
+        ctx.lineTo(-9 * scale, 6 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
     }
     if (cross) {
       ctx.save();
@@ -235,7 +291,7 @@ export function createFieldMap(options) {
       ctx.restore();
     }
     // D-396: 목표 마커 — 경로 색 다이아몬드. 로봇 삼각형(pose)과 구분된다.
-    if (goal && state.occupancy) {
+    if (goal && state.occupancy && !mapIdMismatch()) {
       const goalPoint = frame.worldToCanvas(goal.x, goal.y, canvas.width, canvas.height);
       ctx.save();
       ctx.translate(goalPoint.x, goalPoint.y);
@@ -245,16 +301,22 @@ export function createFieldMap(options) {
       ctx.strokeRect(-5, -5, 10, 10);
       ctx.restore();
     }
-    const pose = getPose?.();
+    const pose = mapIdMismatch() ? null : options.getDisplayPose ? options.getDisplayPose() : getPose?.();
     if (!pose || !Number.isFinite(Number(pose.x))) return;
     const point = frame.worldToCanvas(pose.x, pose.y, canvas.width, canvas.height);
+    const scale = window.devicePixelRatio || 1;
     ctx.save();
     ctx.translate(point.x, point.y);
     ctx.rotate(-Number(pose.yaw) || 0);
+    ctx.strokeStyle = cssColor("pose");
+    ctx.lineWidth = 1.5 * scale;
     ctx.beginPath();
-    ctx.moveTo(10, 0);
-    ctx.lineTo(-7, 7);
-    ctx.lineTo(-7, -7);
+    ctx.arc(0, 0, 16 * scale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(12 * scale, 0);
+    ctx.lineTo(-8 * scale, 8 * scale);
+    ctx.lineTo(-8 * scale, -8 * scale);
     ctx.closePath();
     ctx.fillStyle = cssColor("pose");
     ctx.fill();
@@ -263,20 +325,27 @@ export function createFieldMap(options) {
 
   function setPose() {
     syncClickButtons();
+    syncMapStatus();
     const nav = getNavigation?.();
-    if (nav && nav !== state.lastNav) {
+    if (nav !== state.lastNav) {
+      pathRequest++;
       state.lastNav = nav;
-      refreshPath();
+      state.pathLoaded = false;
+      state.path = null;
+      if (nav) refreshPath();
+      else setPath({poses: []});
     }
+    options.onPathReadout?.(pathEvidence());
     syncCursor();
     paint();
   }
 
   async function refreshPath() {
+    const request = ++pathRequest;
     const isCurrent = options.captureLifetime?.().current || (() => true);
     const path = await apiMaybe("/api/v1/navigation/path").catch(() => null);
-    if (listenerController.signal.aborted || !isCurrent()) return;
-    state.path = path?.poses || [];
+    if (listenerController.signal.aborted || !isCurrent() || request !== pathRequest) return;
+    setPath(path);
     paint();
   }
 
@@ -286,28 +355,26 @@ export function createFieldMap(options) {
   }
 
   async function refresh(isCurrent = options.captureLifetime?.().current || (() => true)) {
+    const request = ++pathRequest;
     try {
       const [grid, path, costmap] = await Promise.all([
         wanted("occupancy") ? apiMaybe("/api/v1/map") : null,
-        apiMaybe("/api/v1/navigation/path"),
+        apiMaybe("/api/v1/navigation/path").catch(() => null),
         wanted("global_costmap") ? apiMaybe("/api/v1/map/costmap?scope=global") : null,
       ]);
       if (listenerController.signal.aborted || !isCurrent()) return;
       state.occupancy = grid;
-      state.path = path?.poses || [];
+      if (request === pathRequest) setPath(path);
       state.costmap = costmap;
       state.mapState = grid ? "ready" : "empty";
       syncEmpty();
       syncCursor();
       if (!grid) setStatus("지도가 아직 없습니다.", "empty");
-      else if (!Number.isFinite(Number(grid.width)) || !Number.isFinite(Number(grid.height)))
-        setStatus(grid.map_id || "크기 미상");
-      else setStatus(`${grid.width}×${grid.height}${grid.map_id ? ` · ${grid.map_id}` : ""}`);
     } catch (error) {
       if (listenerController.signal.aborted || !isCurrent()) return;
       // Without a server freshness field, do not leave a previous snapshot looking current.
       state.occupancy = null;
-      state.path = [];
+      if (request === pathRequest) setPath(null);
       state.costmap = null;
       state.mapState = error.status === 403 ? "forbidden" : "error";
       syncEmpty();
@@ -317,6 +384,9 @@ export function createFieldMap(options) {
         : "최신 지도 데이터를 읽지 못했습니다. 연결 상태를 확인하고 다시 시도하십시오.", error.status === 403 ? "forbidden" : "error");
     }
     rebuildRaster();
+    syncMapStatus();
+    syncClickButtons();
+    options.onPathReadout?.(pathEvidence());
     paint();
     if (cross) notifyTargetReadout();
   }
@@ -335,7 +405,7 @@ export function createFieldMap(options) {
   clickButtons.forEach((button) => {
     const mode = button.dataset.mapClick;
     button.addEventListener("click", () => {
-      if (button.disabled || canGoal?.() !== true) return;
+      if (button.disabled || !canMapClick(mode)) return;
       clickMode = mode;
       syncClickButtons();
     }, {signal: listenerController.signal});
@@ -365,8 +435,12 @@ export function createFieldMap(options) {
       setAction?.("최신 지도 데이터를 확인할 수 없어 위치·목표를 보내지 않았습니다.");
       return;
     }
-    if (!canGoal?.()) {
-      setAction?.("현재 실행 모드나 로봇 기능으로는 위치·목표 조작을 쓸 수 없습니다.");
+    if (mapIdMismatch()) {
+      setAction?.("로봇과 지도 ID가 달라 위치·목표를 보내지 않았습니다. 지도 갱신을 기다리세요.");
+      return;
+    }
+    if (!canGoal?.(clickMode)) {
+      setAction?.(options.goalReason?.(clickMode) || "현재 실행 모드나 로봇 기능으로는 위치·목표 조작을 쓸 수 없습니다.");
       return;
     }
     const world = new GridFrame(state.occupancy).canvasToWorld(px, py, canvas.width, canvas.height);
@@ -382,7 +456,7 @@ export function createFieldMap(options) {
     committing = true;
     try {
       const confirmed = await (options.confirm || confirmIrreversible)({message: `${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 로 보낼까요?`, action: locating ? "위치 설정" : "목표 전송", opener: canvas, signal: AbortSignal.any([owner.signal, listenerController.signal])});
-      if (!confirmed || !owner.current() || listenerController.signal.aborted || !canGoal?.() || modeSnapshot !== clickMode || mapSnapshot !== JSON.stringify(state.occupancy) || yaw !== (Number(getPose?.()?.yaw) || 0)) return;
+      if (!confirmed || !owner.current() || listenerController.signal.aborted || !canMapClick(modeSnapshot) || modeSnapshot !== clickMode || mapSnapshot !== JSON.stringify(state.occupancy) || yaw !== (Number(getPose?.()?.yaw) || 0)) return;
       await api(path, {
         method: "POST",
         body: JSON.stringify({ x: world.x, y: world.y, yaw }),
@@ -419,7 +493,7 @@ export function createFieldMap(options) {
     if (!cross) {
       // 첫 진입은 로봇 자리, 모르면 한가운데 — 어디서 시작했는지 보이게 한다.
       // 격자가 비정상이면 worldToCanvas 가 NaN 을 내므로 유한성까지 본다.
-      const pose = getPose?.();
+      const pose = options.getDisplayPose ? options.getDisplayPose() : getPose?.();
       let start = null;
       if (pose && Number.isFinite(Number(pose.x))) {
         const frame = new GridFrame(state.occupancy);

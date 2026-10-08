@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.146
+**Version:** v1.147
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -297,8 +297,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | POST | `/api/v1/navigation/goal` | Operator | NAV-001 (`{x,y,yaw}` 또는 `{waypoint}`; 선택적 `correlation_id`는 Fleet dispatch 시도 ID와 실행 이벤트를 잇는 추적 메타데이터). 기능 보류 시 모드 전이 전에 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
 | POST | `/api/v1/navigation/cancel` | Operator | NAV-002 |
 | POST | `/api/v1/navigation/home` | Operator | NAV-003. 기능 보류 시 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
-| GET | `/api/v1/navigation/state` | Viewer | NAV-004 |
-| GET | `/api/v1/navigation/path` | Viewer | MAP-003 |
+| GET | `/api/v1/navigation/state` | Viewer | NAV-004. `mapping_active: bool`은 CORE가 수락한 맵핑 세션 상태다. SLAM Toolbox의 실제 실행·지도 갱신 성공을 증명하지 않는다. |
+| GET | `/api/v1/navigation/path` | Viewer | MAP-003. `{poses}`; 경로 메시지를 받은 뒤에는 `map_id`(그때 로봇 지도 ID 또는 null), `frame_id`(`nav_msgs/Path.header.frame_id` 또는 null), `age_s`(CORE 수신 뒤 경과 초, 서버 monotonic 시계)를 함께 반환한다. 최초 수신 전은 `{poses: []}`. 이 응답은 마지막 수신 계획이며 현재 목표와의 동일성은 증명하지 않는다. |
 | GET | `/api/v1/line-follow/perception` | Viewer | 저장된 `paint_source`(threshold / denoise / learned), `camera_lane_mode`, 서명·해시 확인 `model_ready`와 `model_revision`. 별도 `applied_paint_source`는 실제 최신 keeper 프레임의 threshold / denoise / learned / denoise_fallback 또는 null; `applied_source_age_s`는 monotonic 수신 나이(2초 이내), `applied_model_revision`은 실제 사용한 learned mask의 producer revision(없으면 null). stale·malformed·설정 불일치·재시작 전 증거는 null. 운전 모드와 독립이며 물체 검출이나 주행 허가가 아니다. |
 | PUT | `/api/v1/line-follow/perception` | Administrator | `{paint_source: threshold\|denoise\|learned}`만 허용. IDLE·line-follow OFF·보정 비활성, Host Agent가 fresh 정지 및 active mission 부재를 재확인. 기존 기하 보존, learned는 고정 signed model pointer 검증, camera만 재시작·실패 복구. `applied: true`는 설정/서비스 적용이며 live 추론이나 실제 주행 성공이 아니다. |
 | GET | `/api/v1/line-follow` | Viewer | D-143 — 선택 모드, 상태, 증거 신뢰도·나이, 최종 선속도·각속도와 사유. `clearance_m`(정면 LiDAR 최소 거리, 없으면 null)과 정지 사유 `obstacle_ahead`·`obstacle_sensor_stale`·`driver_released` (D-344, v1.63). IR 이탈 감시(`line_follow.ir_guard_enabled`)가 켜지면 추종 사유 `lane_edge_left`·`lane_edge_right`(경계 반대로 비킴)와 정지 사유 `lane_departure`·`lane_guard_stale` (D-344 §12, v1.63). 감시가 알려진 횡단보도 구간(D-491)에서 쉬면 추종 사유 `ir_guard_crosswalk` (v1.115). 공칭 지면(`ground: NOMINAL`) 카메라 증거는 `hold_s` 세션이 없으면 `nominal_ground_requires_driver` 로 멈춘다 (D-364 §3, v1.63). 정지 사유 `limit_level_too_low`(수동 한도 L1 미만)·`angular_limit_zero`(각속도 한도를 읽을 수 없음) (D-344 §13, feat/device-prep, v1.64). 몸 기준 정지(D-422, v1.84: `obstacle_mode: path` + 로봇 패키지 URDF 몸 기하)에서는 `body_gap_m`(의도한 차선 호를 따라 몸 윤곽이 닿기까지의 거리, 없으면 null)·`stop_gap_m`(그 속도의 정지 간격)·`clearance_source`(`lidar`·`memory`(LiDAR `range_min` 아래로 사라져 기억한 반환)·`ultrasonic`·`odometry_lost`(바퀴 값 적분 실패 — 다음 스캔까지 정지), 아무것도 없으면 null)가 오고 `clearance_m` 은 `body_gap_m` 과 같은 몸 간격이다. 그 밖에는 세 필드 모두 null. 선택 필드 `lane_return_containment`(D-507 7, v1.133, 개정 v1.134): D-468(`recovery_local_enabled`)이 추종 중일 때 `contained`(차로 안이 증명됨) 또는 `unknown`(증명 못 함 — D-468은 멈추지도 움직이지도 않고 추종은 `recovery_local_enabled: false` 와 같다), 그 밖에는 null. D-468 이탈(`lane_return_*`)은 양의 증거가 있을 때만 열린다: (1) 신선한 `ready` 차로에서 몸이 경계를 넘음(`margin + uncertainty_m < 0`), (2) 추종 중 자세 불연속(odom 점프) 또는 연속성 epoch 변경, (3) 증명된 차로 안이지만 체크포인트 차로가 아님. 차로가 보이지 않은 채 D-476 bridge 가 끝나면 D-468은 역추적하지 않고 손실 경로(LOST)로 간다. D-517 4 (v1.143): CORE 가 통행권을 강제하는 동안에만 `authority {state: FREE\|HOLDING\|EXPIRED\|NONE, authority_id, leg_id, remaining_m, expires_in_s, reason}` 가 붙는다(`POST /line-follow/authority`). 강제하지 않으면 이 키가 없고 응답은 이전과 같다. 이 응답에만 있고 상태 스냅숏 `line_follow` 에는 없다 |
@@ -333,7 +333,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|
-| GET | `/api/v1/map` | Viewer | MAP-003 (응답에 `map_id` 포함) |
+| GET | `/api/v1/map` | Viewer | MAP-003 (응답의 `map_id`는 해당 점유 지도 스냅숏을 수신할 때 묶인 ID. 이후 로봇 상태의 `map_id`가 바뀌어도 이전 격자에 새 ID를 붙이지 않음) |
 | GET | `/api/v1/map/costmap?scope=global\|local` | Viewer | MAP-003 |
 | GET | `/api/v1/waypoints` | Viewer | WPT-002 |
 | POST | `/api/v1/waypoints` | Operator | WPT-002 |
@@ -2495,6 +2495,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.147 | 2026-10-08 | Additive (uiux/robot-navigation-stage): `GET /api/v1/navigation/state`에 `mapping_active`를 추가해 CORE 맵핑 세션 수락 상태를 읽는다. 실제 SLAM Toolbox 실행 증거는 아니다. 같은 브랜치의 `/navigation/path` 수신 `map_id`·`frame_id`·`age_s`도 명시한다. 주행 권한과 envelope 1.0은 그대로다. |
 | v1.146 | 2026-10-08 | Additive (D-517 9 M3, feat/d517-m3-lane-convoy, Safety-Review 대상): Fleet `POST /api/fleet/robots/{robot_id}/trip` `convoy {leader}` (with `repeat`), start refusals `TRIP_CONVOY_SELF`, `_LEADER_NOT_RUNNING`, `_LEADER_IS_FOLLOWER`, `_OTHER_LOOP`, `_NOT_BEHIND`, `_NO_AUTHORITY`, `_LOOP_FULL`, trip view `convoy`, `GET /api/fleet/traffic` robot `front_d_m` and `convoy {leader, follows, gap_m}`; a follower's authority end follows the member ahead (moving block). Robot API, CORE commands and envelope 1.0 unchanged |
 | v1.145 | 2026-10-08 | Additive (D-520 단계 1 CORE, feat/d520-core-arc-feedforward): `POST /api/v1/line-follow/junction` 선택 객체 `exit_segment {curvature_1pm, length_m, outer_line_offset_m, end_place_id}`(`map_id` 필수, 400 `VALIDATION_ERROR`), 409 `LANE_ARC_UNAVAILABLE`, 능력 `base_velocity.lane_arc`, `line_follow.arc` 상태와 `junction.pivot_basis` 값 `segment_end`, 정지 사유 `lane_arc_edge`·`lane_arc_pose_lost`·`lane_arc_motion_unconfirmed`·`lane_arc_timeout`·`lane_arc_blind`(·`lane_arc_entry` 예약), 상태 사유 `lane_arc`·`lane_arc_correcting`, 이벤트 `nav.lane_arc_end_unarmed`, 지시 `aborted` 사유 `arc_mismatch`, 호 기록 `reason` `lane_arc_end_unarmed`, 횡단보도 구역 위 호 거절(`junction.reason` `arc_crosswalk`), 호가 도는 동안의 `bend` 409 `JUNCTION_ARC_RUNNING`(호 끝에 `armed` `bend` 가 있으면 `aborted`·`arc_mismatch` 로 지시 없는 끝과 같다). 설정 `line_follow.arc_enabled`(기본 false)·`arc_curvature_gain`·`arc_blind_max_m`. 카메라 호 맞춤(단계 2) 없음. v1.142–v1.144 는 다른 브랜치(feat/d507-bend-odom-pass, feat/d517-m2-authority, feat/d517-m3-lane-convoy 워크트리)가 쓰고 있어 건너뜀 |
 | v1.143 | 2026-10-08 | Additive (D-517 4 M2, feat/d517-m2-authority, Safety-Review 대상): CORE `POST /api/v1/line-follow/authority` 와 에러 `AUTHORITY_ODOM_STALE`·`AUTHORITY_POSE_STALE`·`AUTHORITY_POSE_FUTURE`, 강제 중에만 붙는 `GET /line-follow` `authority`, 설정 `line_follow.authority_required`(기본 false), `base_velocity` 능력 `line_follow_authority`·`line_follow_authority_required`, 공유 schema `core_common.protocol.line_authority`. Fleet: 사이트 설정 `fleet.traffic.authority`(기본 false)와 능력이 있을 때만 trip 주기마다 통행권 전송, trip 보기 `traffic_authority`·`caps.line_follow_authority`, map-pose `odom_stamp`, `until_m` 은 표의 앞 끝 `d` 기준, trip 시작 거절 422 `TRIP_AUTHORITY_NOT_REQUIRED`. 둘 다 꺼져 있으면 동작 변경 없음. envelope 1.0 변경 없음 |
