@@ -253,7 +253,7 @@ $('connect').addEventListener('click', async () => {
     sessionStorage.setItem('rosy-console-token', $('credential').value);
     state.role = session.role;
     $('session').textContent = `${session.principal_id} · ${session.role}`;
-    passwordLogin.refresh(false);
+    loginForm.refresh(false);
     syncButtons();
     await load();
     notice(state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
@@ -265,7 +265,7 @@ $('connect').addEventListener('click', async () => {
       state.role = null;
       $('session').textContent = '접속 전';
     }
-    if (error.status === 401) passwordLogin.refresh(true);
+    if (error.status === 401) loginForm.refresh(true);
     render();
     syncButtons();
     notice(siteMapErrorText(error));
@@ -528,9 +528,9 @@ $('estop').addEventListener('click', async () => {
 
 developmentToken($('credential').value).then(token => {
   if (token) { $('credential').value = token; $('credential').parentElement.hidden = true; $('connect').click(); }
-  else passwordLogin.refresh(true).then(cookie => { if (cookie) $('connect').click(); });
+  else loginForm.refresh(true).then(cookie => { if (cookie) $('connect').click(); });
 }).catch(() => {});
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
-const passwordLogin = createPasswordLogin($('password-login'), {onChange: () => {
+const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
   $('credential').value = ''; $('connect').click();
 }});
