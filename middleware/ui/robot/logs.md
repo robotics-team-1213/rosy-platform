@@ -1194,3 +1194,9 @@
 - 변경: `/dashboard`의 저속 직접 제어 버튼이 `NAVIGATION`에서 차단 이유를 표시할 때 1366px 조작 열 밖으로 넘치던 문제를 해결했다. 차단 이유가 있는 상태만 2열로 배치한다.
 - 증거: [조작 열 적합성 검증](../../../docs/validation/uiux-dashboard-act-fit-2026-10-08/result.md). 390×844·1366×768 수정 전후 Chromium 캡처, 관련 시험 28 passed, known_failures 0 NEW.
 - gate 보류: LOCAL 합성 상태만 검증. 전체 G2/G3 및 ARTIFACT/DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): Console 지도 미수신 상태 정합성
+
+- 변경: Console 지도에 `runtime.maps` 기능 근거를 연결하고, 지도가 아직 없을 때 설정 의무를 단정하지 않는 안내로 고쳤다.
+- 증거: [실제 CORE 지도 미수신 화면](../../../docs/validation/uiux-console-map-truth-2026-10-08/result.md). 390×844·1366×768 캡처, 관련 브라우저 3 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 시나리오 근거 추가. 전체 G2/G3와 설치본·DEVICE/FIELD는 HOLD.

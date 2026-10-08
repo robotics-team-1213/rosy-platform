@@ -619,7 +619,11 @@ class TripRunner:
             onto_next = nxt_s > nxt_segment["s_from"] + self.config.advance_eps_m and nxt_dist < dist
             remaining = live.segments[index]["s_to"] - s
             if arc.drive_mode == "lane":
-                done = self._completed(live, index) and remaining <= self.config.pass_window_m
+                # lap SIM 2 lap_12: CORE closed a straight while D-407 backed the robot 0.26 m short
+                # of SE; advancing there judged the pose against ring_e (0.276 m) and stopped a robot
+                # 0.07 m off ring_s. A carried-out place moves on only once the robot is on the next lane.
+                done = (self._completed(live, index) and remaining <= self.config.pass_window_m
+                        and nxt_dist <= nxt.width_m / 2)
             else:
                 done = remaining <= self.config.advance_free_m
             if not (done or onto_next):
