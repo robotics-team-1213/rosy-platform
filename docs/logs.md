@@ -7202,3 +7202,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 지시에 따라 원격 단독 시험의 반복 승인 생략과 강제 진행의 범위를 D-522로 기록했다. 장치의 인증·E-Stop·CORE 정지와 몸체 신원·구역 확인은 유지한다.
 - 증거: 두 로봇의 CORE IDLE·속도 0, 최신 LiDAR·전면 영상과 Rosy Cam 영상 수신. 램프 명령 수락만으로 영상 속 로봇별 신원은 확정하지 못했다. 사이트 Fleet Web 설치 버전의 인증·tether API도 아직 목표 계약과 다르다.
 - gate 변화: 없음. 실물 이동과 G4/G5 수용은 별도 장치 증거가 필요하다.
+
+## 2026-10-08 · uncommitted · D-512 개정 2 램프 식별과 정책 off 알림
+
+- 변경: `run.py --tether-check`가 램프 식별(`POST /host/lamp/identify`)을 보내고 6 s 동안 머리 위 프레임을 받아, 깜빡임 덩어리가 그림의 로봇 점에서 몸 반경(회전 반경 × 1.5, 보정 축척의 px) 안에 있고 다른 곳에 센 덩어리가 없을 때만 확인을 끝낸다. 식별 없음·색 없음·약함·다른 곳·애매함은 거부, 429는 한 번 기다려 다시 요청한다. 증거는 `tether.identity`. 계획 `stop.ok_events`(`plan_rules.OK_EVENTS`, 지금은 `safety.policy_off`만)로 D-400 정책 off 알림이 중단하지 않는다. `safety.*`의 다른 이벤트는 그대로 중단이다.
+- 증거: 2026-10-08 9dfk 실행에서 다른 로봇을 9dfk로 고른 일과 램프 깜빡임 프레임(진짜 자리만 바뀜). 그 프레임에 새 판정을 대 보면 진짜 자리는 2 px로 통과, 오른쪽 아래 로봇은 거부. 모델 PC에서 `python -m pytest tools/device_test/test tools/capture/test -q`(가짜 전송). 로봇은 움직이지 않았다.
+- gate 변화: 없음.
