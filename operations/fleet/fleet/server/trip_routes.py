@@ -38,6 +38,11 @@ class TripPoint(BaseModel):
     yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
 
 
+class TripConvoy(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    leader: str = Field(min_length=1, max_length=96)
+
+
 class TripRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     to: Union[PlaceRef, TripPoint]
@@ -47,11 +52,15 @@ class TripRequest(BaseModel):
     execute: bool = False
     #: D-517 2: lap ``via`` then ``to`` again and again; the cycle is place ids.
     repeat: bool = False
+    #: D-517 9 M3: follow this robot's open repeat trip in a lane convoy (the same cycle).
+    convoy: Optional[TripConvoy] = None
 
     @model_validator(mode="after")
     def _cycle(self) -> "TripRequest":
         if self.repeat and (not isinstance(self.to, str) or not self.via):
             raise ValueError("repeat needs a place id in to and at least one via place")
+        if self.convoy is not None and not self.repeat:
+            raise ValueError("convoy needs repeat")
         return self
 
 
@@ -87,6 +96,11 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
         if active is None:
             record({"error": "TRIP_NO_ACTIVE_MAP"})
             raise _refuse("TRIP_NO_ACTIVE_MAP")
+        refused = body.convoy and runner.convoy_refusal(robot_id, body.convoy.leader,
+                                                        cycle=frozenset([body.to, *body.via]))
+        if refused:
+            record({"error": refused[0], "detail": refused[1]})
+            raise _refuse(*refused)
         try:
             pose = await console.trusted_map_pose(robot_id)
         except (HubError, RobotApiError, OSError) as exc:

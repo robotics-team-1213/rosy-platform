@@ -145,8 +145,13 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_107,
-        "split: re-judged at 46107 on 2026-10-08 (independent re-judge, critic agent): the D-507 addendum"
+        46_434,
+        "split: re-judged at 46434 on 2026-10-08 (independent re-judge, critic agent): D-517 M3 lane convoy "
+        "(blocks.py follow/_front_on/shared grants, lane_traffic.py convoy block, trip_laps/trip_routes/trip_runner "
+        "convoy gates, site-map convoy view) adds no owner or robot command path; trip_runner 747 within 686+150. "
+        "Traffic growth is steady per D-517 step, so the lane-traffic seam is named in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and is the next split; the +150 allowance is "
+        "unchanged. Previously re-judged at 46107 on 2026-10-08 (independent re-judge, critic agent): the D-507 addendum"
         " bend pass (+129 over main 2fa5d896f) adds no module, owner, service or robot command path: bend"
         " geometry (bend_geometry, next_bend, straight_approach, bend_fields, shared _pose_tol) sits in "
         "server/trip_ports.py beside junction_fields; trip_runner._step_bend sends the bend through the "

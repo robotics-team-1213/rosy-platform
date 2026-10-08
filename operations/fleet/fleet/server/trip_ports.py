@@ -77,8 +77,11 @@ class HttpLaneJunction:
     async def junction_state(self, robot_id: str) -> Optional[dict]:
         line = (await self._client(robot_id).state()).get("line_follow") or {}
         junction = line.get("junction")
-        # D-507 3: the line-follow reason beside it, shown when the trip stops at an unexpected junction
-        return {**junction, "line_reason": line.get("reason")} if isinstance(junction, dict) else None
+        # D-507 3: the line-follow reason beside it, shown when the trip stops at an unexpected junction.
+        # D-517 M3: a D-407 stuck or a RECOVERING state may reverse; no follower follows it then.
+        recovering = line.get("state") == "RECOVERING" or line.get("stuck") is not None
+        return ({**junction, "line_reason": line.get("reason"), "line_recovering": recovering}
+                if isinstance(junction, dict) else None)
 
     async def hold(self, robot_id: str) -> dict:
         # ponytail: CORE POST /line-follow/hold extends a hold-to-run session (D-344 8, it keeps the
@@ -422,6 +425,8 @@ class LiveTrip:
         self.lap_route: Optional[list] = None
         #: D-517 3: the arc ids of one lap of the cycle (via…, to); the loop it shares with others.
         self.lap_arcs: tuple[str, ...] = ()
+        #: D-517 9 M3: the leader this trip follows in a lane convoy (None: not a follower).
+        self.convoy: Optional[str] = (request.get("convoy") or {}).get("leader")
         #: Failed lap checks in a row and when the last one ran (retried every ``LAP_RETRY_S``).
         self.lap_tries = 0
         self.lap_tried_at = -math.inf

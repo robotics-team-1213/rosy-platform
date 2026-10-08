@@ -33,7 +33,8 @@ from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, Tri
 from fleet.server.lane_traffic import TrafficService
 from fleet.server.trip_authority import AuthoritySender
 from fleet.server.trip_halts import TripHalts, error_code as _code
-from fleet.server.trip_laps import LAP_RETRIES, LAP_RETRY_S, carry_on, lap_arcs, lap_due, lap_retry_due  # noqa: F401
+from fleet.server.trip_laps import (LAP_RETRIES, LAP_RETRY_S, carry_on, convoy_refusal, lap_arcs,  # noqa: F401
+                                    lap_due, lap_retry_due)
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -108,6 +109,9 @@ class TripRunner:
         live = self._live.get(robot_id)
         return live is not None and live.open
 
+    def convoy_refusal(self, robot_id: str, leader: str, **cycle) -> Optional[tuple]:
+        return convoy_refusal(self._live, robot_id, leader, **cycle)
+
     def _find(self, trip_id: str) -> Optional[LiveTrip]:
         return next((live for live in self._live.values() if live.view["trip_id"] == trip_id), None)
 
@@ -147,17 +151,22 @@ class TripRunner:
                          "lane_bend": caps.lane_bend}
             arcs = lap_arcs(self._store.active(), plan["segments"], row["request"], caps_view,
                             frozenset(self._blocked()), self._routing, self.config.max_turn_deg) if repeat else ()
+            leader = (row["request"].get("convoy") or {}).get("leader")
+            refused = leader and (self.convoy_refusal(robot_id, leader, arcs=arcs, segments=plan["segments"]) or (
+                self.authority.mode(caps) != "core" and ("TRIP_CONVOY_NO_AUTHORITY", {"leader": leader})))
+            if refused:  # D-517 9 M3: a follower keeps its gap only through CORE authority
+                raise TripError(422, *refused)
             if repeat:  # D-517 3: no await from this check to the trip opening
                 full = self.traffic.loop_full(arcs, self._live.values())
-                if full is not None:
-                    raise TripError(422, "TRIP_LOOP_FULL", full)
+                if full is not None:  # a convoy counts as 1 + N robots
+                    raise TripError(422, "TRIP_CONVOY_LOOP_FULL" if leader else "TRIP_LOOP_FULL", full)
             now = self._clock()
             view = {"trip_id": plan_id, "plan_id": plan_id, "robot_id": robot_id, "started_by": principal_id,
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
                     "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view,
-                    "traffic_authority": self.authority.mode(caps)}
+                    "traffic_authority": self.authority.mode(caps), "convoy": leader and {"leader": leader}}
             live = LiveTrip(view, graph, row["request"])
             live.lap_route, live.lap_arcs = route_key(plan["segments"]), arcs
             self._live[robot_id] = live
