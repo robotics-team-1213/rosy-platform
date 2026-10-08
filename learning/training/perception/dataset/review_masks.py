@@ -149,10 +149,13 @@ def draft_image(store, index, digest):
     return encode(pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256'])))
 
 
-def draft_preview(store, index, digest):
+def draft_preview(store, index, digest, merge=False):
     """Visual comparison only; the indexed draft and review remain unchanged."""
     review = get(store, index)
     mask = cv2.imdecode(np.frombuffer(draft_image(store, index, digest), np.uint8), cv2.IMREAD_UNCHANGED)
+    if merge:
+        current = pixels(store, review)
+        mask = np.where(current == 255, mask, current)
     photo = cv2.imdecode(np.frombuffer(store.image(index).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
     if photo is None or photo.shape[:2] != mask.shape:
         raise ValueError('draft preview dimensions differ')
@@ -375,13 +378,13 @@ def update(store, index, body, conflict):
             last = db.execute('SELECT action, review FROM pixel_events WHERE frame=? ORDER BY id DESC LIMIT 1', (index,)).fetchone()
             target = None
             if last and review['status'] == 'pending' and json.loads(last[1]).get('saved_version') == review['version']:
-                want = review['version'] if last[0] in ('paint', 'fill', 'fill_unknown', 'flood', 'sample', 'polygon', 'apply_draft') else json.loads(last[1]).get('restored_version')
-                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','fill_unknown','flood','sample','polygon','apply_draft')", (index, want)).fetchone()
+                want = review['version'] if last[0] in ('paint', 'fill', 'fill_unknown', 'flood', 'sample', 'polygon', 'apply_draft', 'merge_draft') else json.loads(last[1]).get('restored_version')
+                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','fill_unknown','flood','sample','polygon','apply_draft','merge_draft')", (index, want)).fetchone()
             if not target:
                 raise ValueError('되돌릴 픽셀 수정이 없습니다.')
             prior = json.loads(target[0])
             image = pixels(store, dict(review, path=prior['path'], sha256=prior['sha256']))
-        elif action == 'apply_draft':
+        elif action in ('apply_draft', 'merge_draft'):
             digest = body.get('draft_sha256')
             if not isinstance(digest, str):
                 raise ValueError('draft SHA required')
@@ -389,7 +392,14 @@ def update(store, index, body, conflict):
                                    (index, digest)).fetchone()
             if not candidate:
                 raise ValueError('selected draft is unavailable')
-            image = pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256']))
+            proposal = pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256']))
+            if action == 'merge_draft':
+                selected = (image == 255) & (proposal != 255)
+                if not np.any(selected):
+                    raise ValueError('draft has no labels for remaining unknown pixels')
+                image[selected] = proposal[selected]
+            else:
+                image = proposal
             require_inside_lane_boundaries(image, binding)
         elif action == 'approve':
             if body.get('complete_frame_review') is not True or body.get('background_reviewed') is not True:

@@ -27,6 +27,12 @@ python learning/training/perception/dataset/review_app.py --state X:/DevTemp/pin
 
 기존 사진과 동일한 영상 해시·프레임·원본 해시의 모델 객체 카탈로그를 `자료 등록`으로 다시 가져오면 박스는 별도 모델 초안으로 보관된다. 객체 검수의 `모델 박스 초안`에서 출처와 개수를 확인하고 명시적으로 가져올 때만 현재 박스를 바꾸며, 결정은 검수 대기로 돌아간다. 픽셀 초안은 별도 후보로 비교·적용한다. 모델 초안 등록과 적용은 승인이나 학습 반영이 아니다.
 
+픽셀 검수의 `255만 초안 보완`은 현재 사람이 저장한 0~254 라벨을 보존하고,
+선택한 초안에 실제 클래스가 있는 255 픽셀만 채운다. 미리보기는 합친 결과를 보여 준다.
+초안에도 255인 곳은 미검수로 남으며 적용 후 상태는 대기다. `전체 교체`는 현재
+마스크를 버리는 별도 동작이다. AI 의견 패널은 픽셀을 채우지 않는다. 승인 전에는
+남은 255와 경계를 사람이 확인한다.
+
 SAM 주행 영역 초안이 보이는 좌·우 차선 밖을 침범하면 가져오기가 거절된다. 모델 PC에서 `clip_lane_draft.py --catalog <SAM verified-inputs.jsonl> --classes <v13 classes.yaml> --out <새 폴더>`로 차선 밖 `drivable` 픽셀만 255로 되돌린 새 후보와 receipt를 만든 뒤, 그 폴더를 등록할 수 있다. 이 처리는 차선이 보이는 행에서만 작동하며 255를 배경이나 주행 가능 정답으로 바꾸지 않는다. 사람의 경계 확인과 승인은 여전히 필요하다.
 
 `승인 자료 준비`는 서버에서 기존 `review_return.receive_review`를 호출한다. 수동 다운로드/JSONL 이동 없이 `<state>/exports/<id>`에 원본 크기별 YOLO 객체 라벨, 동결된 source/human 입력, hash manifest와 COMPLETE가 기록된다. 앱 안의 전달 정보에서 경로·승인 장수·제외 index·frame version·HOLD를 확인할 수 있다. 학습 세션은 이 export를 읽어 검증하고 session mapping, session-disjoint 분할, 고정 평가 세트 전체 `build.py --exclude-eval`을 확인한다. export는 학습 dataset 수용·학습 실행·모델 활성화가 아니다.
