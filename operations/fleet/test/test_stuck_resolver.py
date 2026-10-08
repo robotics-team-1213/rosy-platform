@@ -443,3 +443,36 @@ def test_the_shared_peer_ahead_matches_the_resolvers_r1(peer_pose):
     fired = r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
     assert peer_ahead(me, [me, peer], ResolverConfig()) is fired
     assert peer_ahead(_row("rosy_01", _stuck(), pose=None), [me, peer], ResolverConfig()) is None
+
+
+def _trip(row):
+    return {**row, "trip": True}
+
+
+def test_trip_robot_gets_only_the_stopping_r1_wait():
+    """D-517 5 (M4): a trip robot is answered, but only WAIT; a moving rule goes to a human (D-494 14)."""
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    me = _trip(_row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0)))
+    peer = _row("rosy_02", None, pose=(0.20, 0.03, 3.14))
+    assert r.step(0.0, [me, peer]) == [Answer("rosy_01", "stuck-1", "WAIT", "R1")]
+    alone = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert alone.step(0.0, [_trip(_row(stuck=_stuck()))]) == [Escalate("rosy_01", "stuck-1", "no_rule")]
+    lost = StuckResolver(ResolverConfig(), painted=painted_track)
+    assert lost.step(0.0, [_trip(_row(stuck=_stuck(cause="lane_lost")))]) == [
+        Escalate("rosy_01", "stuck-1", "no_rule")]
+
+
+def test_trip_robot_head_on_waits_instead_of_yielding():
+    _painted, _door, near, far = _east_pair()
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    actions = r.step(0.0, [_trip(_row("near", _stuck(), pose=near)), _row("far", None, pose=far)])
+    assert actions == [Answer("near", "stuck-1", "WAIT", "R1")]
+
+
+def test_trip_robot_refused_wait_goes_to_a_human_not_a_back_off():
+    r = StuckResolver(ResolverConfig(), painted=painted_track)
+    rows = [_trip(_row("rosy_01", _stuck(), pose=(0.0, 0.0, 0.0))), _row("rosy_02", None, pose=(0.20, 0.0, 3.14))]
+    wait = r.step(0.0, rows)[0]
+    r.sent(wait, 0.0)
+    assert r.result(wait, code="STUCK_DECISION_REFUSED") is None
+    assert r.step(1.0, rows) == [Escalate("rosy_01", "stuck-1", "no_rule")]
