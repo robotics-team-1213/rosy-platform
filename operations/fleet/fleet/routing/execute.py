@@ -59,8 +59,10 @@ def turn_target(graph: Graph, segments: list, index: int) -> float:
     12-20 deg outward of the ring).
     """
     lane, step = graph.arcs[arc_id(segments[index])], INCOMING_HEADING_M
-    x0, y0, _ = lane.point_at(max(0.0, lane.length_m - 2 * step))
-    x1, y1, _ = lane.point_at(max(0.0, lane.length_m - step))
+    if lane.length_m < 2 * step:  # review: two chords need 0.20 m of lane
+        return theta(graph, segments, index)
+    x0, y0, _ = lane.point_at(lane.length_m - 2 * step)
+    x1, y1, _ = lane.point_at(lane.length_m - step)
     x2, y2, _ = lane.point_at(lane.length_m)
     last = math.degrees(math.atan2(y2 - y1, x2 - x1))
     heading = last + turn_deg(math.atan2(y1 - y0, x1 - x0), math.atan2(y2 - y1, x2 - x1)) / 2

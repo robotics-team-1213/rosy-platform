@@ -97,6 +97,34 @@ def _bent(*legs):
     return graph, [LEFT_TRIP[0], {**LEFT_TRIP[1], "s_to": graph.arcs["bc:fwd"].length_m}]
 
 
+def _circle_into_b(radius=0.25, length=0.35):
+    """An incoming lane that is a left (counter-clockwise) arc of ``radius`` and ``length`` ending at
+    B (0, 0) heading north (centre (-radius, 0)), then a lane from B heading east: -90 deg."""
+    sweep = length / radius
+    arc = [[round(-radius + radius * math.cos(sweep * (k / 40 - 1)), 5), round(radius * math.sin(sweep * (k / 40 - 1)), 5)]
+           for k in range(41)]
+    site = SiteMap.model_validate({
+        "places": [{"id": p, "name": p, "x": x, "y": y, "kind": "junction"}
+                   for p, (x, y) in (("A", tuple(arc[0])), ("B", (0.0, 0.0)), ("C", (0.5, 0.0)))],
+        "edges": [{"id": "ab", "from": "A", "to": "B", "polyline": arc, "width_m": 0.2, "speed_cap_mps": 0.2,
+                   "drive_mode": "lane"},
+                  {"id": "bc", "from": "B", "to": "C", "polyline": [[0, 0], [0.5, 0]], "width_m": 0.2,
+                   "speed_cap_mps": 0.2, "drive_mode": "lane"}]})
+    return build_graph(site, version=1), [{"edge_id": "ab", "forward": True}, {"edge_id": "bc", "forward": True}]
+
+
+def test_off_a_circle_the_turn_starts_from_its_end_tangent():
+    """lap SIM 3 two-chord estimate: the analytic end tangent of an r 0.25 arc (+90 deg), within 0.5 deg."""
+    graph, trip = _circle_into_b()
+    assert turn_target(graph, trip, 0) == pytest.approx(-90.0, abs=0.5)
+
+
+def test_a_lane_shorter_than_two_chords_keeps_the_lead_tangent():
+    graph, trip = _circle_into_b(length=0.15)
+    assert graph.arcs["ab:fwd"].length_m < 2 * execute.INCOMING_HEADING_M
+    assert turn_target(graph, trip, 0) == pytest.approx(theta(graph, trip, 0), abs=1e-9)
+
+
 def test_a_lane_bending_with_the_turn_gets_the_tangent():
     """SIM 4c measured only lanes bending back against the turn; one bending further the same way is not over-turned."""
     graph, trip = _bent((90, 0.05), (130, 0.5))
