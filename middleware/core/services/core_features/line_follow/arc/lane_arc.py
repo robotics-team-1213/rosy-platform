@@ -14,8 +14,9 @@ from __future__ import annotations
 import math
 
 from core_common.protocol.schemas import LineArcStatus
+from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M
 from core_features.line_follow.model import LineFollowDecision
-from core_features.line_follow.recovery.junction import JunctionRefused
+from core_features.line_follow.recovery.junction import DEFAULT_ADVANCE_M, JunctionRefused
 from core_features.line_follow.recovery.junction_approach import STEP_MARGIN_S
 
 MIN_CURVATURE, MAX_CURVATURE = .5, 5.
@@ -98,10 +99,33 @@ class ArcMixin:
             return 0.
         return max(0., min(self._config.cruise_speed, self._config.max_linear, float(ceiling)))
 
+    def _arc_on_crosswalk(self, pose, k):
+        """D-491 / D-520 1: a known crosswalk zone (odom-anchored, this epoch) under the first
+        crosswalk_zone_max_m of the map arc from pose. Fleet has no zone data, so CORE checks."""
+        ev = self._return_evidence
+        for z in self._crosswalks._zones:  # ponytail: reads the zone list; a zones_on(path) API if reused
+            anchor = z['anchor'] or (ev._image_pose(z['stamp_ns']) if z['epoch'] == ev.epoch else None)
+            if anchor is None or z['epoch'] != ev.epoch:
+                continue
+            c, n = math.cos(anchor.yaw), math.sin(anchor.yaw)
+            for i in range(5):
+                d = self._config.crosswalk_zone_max_m*i/4
+                x = pose.x + (math.sin(pose.yaw+k*d)-math.sin(pose.yaw))/k - anchor.x
+                y = pose.y - (math.cos(pose.yaw+k*d)-math.cos(pose.yaw))/k - anchor.y
+                along, across = c*x+n*y, -n*x+c*y
+                if (z['near']-z['uncertainty'] <= along <= z['far']+z['uncertainty']
+                        and abs(across) <= CORRIDOR_HALF_M+z['uncertainty']):
+                    return True
+        return False
+
     def _open_arc(self, j, now):
         """Instruction j is done (its turn ended, or a straight at an arc end); open its arc.
-        Returns None, or the HOLD decision when the arc cannot start."""
+        Returns None, the HOLD decision when the arc cannot start, or False when a known
+        crosswalk lies on the arc start: then j keeps today's path (advance or straight pass)."""
         segment, pose, v = j['exit_segment'], self._fresh_pose(now), self._arc_speed()
+        if pose is not None and self._arc_on_crosswalk(pose, float(segment['curvature_1pm'])):
+            j.update(exit_segment=None, reason='arc_crosswalk', advance_m=DEFAULT_ADVANCE_M)
+            return False
         if j.get('place_id') is not None:
             self._junction_done_place = (j['place_id'], j['action'])
         self._junction_done()
@@ -246,7 +270,7 @@ class ArcMixin:
         if j is None or j['state'] != 'armed' or j['place_id'] != a['end']:
             if j is not None and j['state'] == 'armed':
                 j.update(state='aborted', reason='arc_mismatch')
-            a['reason'] = 'arc_mismatch' if j is not None and j.get('reason') == 'arc_mismatch' else 'unarmed'
+            a['reason'] = 'lane_arc_end_unarmed'  # Fleet reads this on the record (mismatch included)
             self._events.publish('nav.lane_arc_end_unarmed', severity='warning',
                                  source='line_follow_manager',
                                  data={'end_place_id': a['end'], 'arc_seq': a['seq'],
@@ -259,10 +283,12 @@ class ArcMixin:
             j.update(state='executing', held=True)
             return None  # the junction gate holds junction_stop
         if j['action'] == 'straight':
-            if j.get('exit_segment') is None:
-                j['state'] = 'executing'  # passes the place as today's straight
-                return None
-            return self._open_arc(j, now) or self._arc_step(self._arc, now)
+            if j.get('exit_segment') is not None:
+                out = self._open_arc(j, now)
+                if out is not False:
+                    return out or self._arc_step(self._arc, now)
+            j['state'] = 'executing'  # passes the place as today's straight
+            return None
         if j['turn_deg'] is None:
             j['state'] = 'unresolved'
             return None
