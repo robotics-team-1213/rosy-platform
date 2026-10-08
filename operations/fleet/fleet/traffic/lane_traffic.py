@@ -43,6 +43,15 @@ PAST_PLACE_M = 0.05
 #: (target within 0.15 m, ≤ 5 s from the checkpoint at ≤ 0.03 m/s). Fleet cannot read the robot's
 #: recovery config (not in caps), so the caps are summed. d_stop(v) + u alone is 0.18–0.24 m.
 MEMBER_REVERSE_M = 0.20 + 0.15
+#: D-525 real-map finding: D-517 needs every estimate within u of the body. A front that moved further
+#: between two periods than the robot can (max speed × time + 2u + this) is a jump, not travel: that
+#: period it is UNKNOWN (no new authority). A jump below the bound stays invisible; u must be true.
+JUMP_MARGIN_M = 0.05
+#: A refused front is taken once this many periods in a row agree with it (a robot moved by hand, a real
+#: correction). A one-frame glitch never gets there. Until then the robot holds every instruction.
+JUMP_SETTLE_PERIODS = 3
+#: D-525 4 / D-443: a manual green lasts while a named operator's console says it is there this often.
+PRESENCE_S = 10.0
 
 
 class TrafficService:
@@ -59,6 +68,7 @@ class TrafficService:
         self._signal_errors: dict[str, list[str]] = {}
         self._busy: Optional[frozenset] = None
         self._signal_clock = signal_clock
+        self._present_until = -math.inf  # D-525 4: a manual green needs an operator present
         # ponytail: one body for the whole site (Pinky); the longest registered body (D-517 3 L)
         # comes from robot capabilities once a second kind joins.
         self._body, self._length = body, body.front_x_m - body.rear_x_m
@@ -76,6 +86,10 @@ class TrafficService:
         self._unknown_since: dict[str, float] = {}
         self._tried: dict[str, tuple[str, list]] = {}
         self._cycle: tuple[frozenset, int] = (frozenset(), 0)
+        #: robot id -> (route id, trim, front in route metres, clock) of its last accepted front
+        self._front: dict[str, tuple[str, float, float, float]] = {}
+        #: robot id -> (front, clock, periods in a row) of a refused front that may settle (JUMP_SETTLE_PERIODS)
+        self._jumped: dict[str, tuple[float, float, int]] = {}
 
     # ---- the table ------------------------------------------------------------------------
 
@@ -142,6 +156,8 @@ class TrafficService:
         # and plan length if 30 robots on long repeat trips measure slow (D-517 7: 100 ms).
         spans = layout.route(graph, [arc_id(seg) for seg in segments])
         robot_id, route_id = live.view["robot_id"], f"{live.view['trip_id']}:{live.route_rev}"
+        if live.view.get("traffic_authority") == "core":  # only an until_m can be overrun by a jump
+            d = self._jump_guard(robot_id, route_id, d, live.trim_m, speed, u, live.at_stamp)
         seen = self._seen.get(robot_id)
         if seen is not None and seen[0] == route_id and live.trim_m > seen[1]:
             _shift(self._state, robot_id, seen[2], live.trim_m - seen[1])
@@ -149,6 +165,34 @@ class TrafficService:
         line = getattr(live, "junction", None) or {}  # this period's CORE line-follow read (lane segments)
         return blocks.Robot(robot_id, spans, d, lookahead, u, self._length, route_id=route_id,
                             convoy=getattr(live, "convoy", None), recovering=line.get("line_recovering") is True)
+
+    def _jump_guard(self, robot_id: str, route_id: str, d: Optional[float], trim: float, speed: float,
+                    u: float, stamp: Optional[float] = None) -> Optional[float]:
+        """``d``, or None when it jumped from the last accepted front on the same route (JUMP_MARGIN_M).
+        Time is the pose's own stamp (a stale pose that refreshes is travel, not a jump), else the clock."""
+        if d is None:
+            return None
+        now, prev = (stamp if stamp is not None else self._clock()), self._front.get(robot_id)
+        if prev is not None and prev[:2] == (route_id, trim):  # same route metres (dropped laps restart it)
+            allowed = speed * max(0.0, now - prev[3]) + 2 * u + JUMP_MARGIN_M
+            if abs(d - prev[2]) > allowed:
+                last = self._jumped.get(robot_id)
+                if last is None:
+                    logging.getLogger("fleet.server.trip_runner").warning(
+                        "%s map pose jumped %.2f m (allowed %.2f m): no new authority until it settles",
+                        robot_id, d - prev[2], allowed)
+                agree = last is not None and abs(d - last[0]) <= speed * max(0.0, now - last[1]) + 2 * u + JUMP_MARGIN_M
+                count = last[2] + 1 if agree else 1
+                if count < JUMP_SETTLE_PERIODS:
+                    self._jumped[robot_id] = (d, now, count)
+                    return None
+        self._jumped.pop(robot_id, None)
+        self._front[robot_id] = (route_id, trim, d, now)
+        return d
+
+    def jumped(self, robot_id: str) -> bool:
+        """Its last front was refused as a jump: it holds every instruction (D-525 real-map finding)."""
+        return robot_id in self._jumped
 
     def _link(self, graph, robots: list, trips: dict) -> dict:
         """D-517 9 M3: each follower of an open convoy follows the nearest localized member ahead on
@@ -224,15 +268,15 @@ class TrafficService:
                 live.traffic = {"waiting_for": [r for r in result.unplaced if r != robot.id],
                                 "authority_end_m": result.authority_end.get(robot.id), "refused_at_m": 0.0, **used}
                 continue
-            refused = None
+            refused = 0.0 if self.jumped(robot.id) else None  # a refused jump holds every instruction
             if waiting and robot.d is not None:
                 held = self._state.held.get(robot.id, {})
                 index = next((i for i, span in enumerate(robot.spans) if span.d1 > robot.d and i not in held), None)
                 if index is not None:
                     refused_unit[robot.id] = robot.spans[index].unit
                     refused = robot.spans[index].d0 - live.segments[0]["s_from"]  # back to plan metres
-            live.traffic = {"waiting_for": list(waiting), "authority_end_m": result.authority_end.get(robot.id),
-                            "refused_at_m": refused, **used}
+            live.traffic = {"waiting_for": list(waiting) or (["pose_jump"] if self.jumped(robot.id) else []),
+                            "authority_end_m": result.authority_end.get(robot.id), "refused_at_m": refused, **used}
         self._view = self._make_view(active[0], layout, active[2], trips, result, refused_unit, robots, gaps)
         self._view["signals"] = self._signal_view(active[2])
         self._hand_over(layout, trips, robots, refused_unit, now)
@@ -276,17 +320,32 @@ class TrafficService:
         now, green = self._signal_clock(), {}
         for signal_id, plan in self._signals.items():
             state = self._phase[signal_id]
+            if state.mode == "manual" and now >= self._present_until:  # nobody there: all red, not cycle
+                signal_phase.command(plan, state, "all_red", now)
             signal_phase.advance(plan, state, now, self._busy is None or plan.zone in self._busy)
             green[plan.zone] = frozenset() if self._signal_errors.get(signal_id) else signal_phase.green(plan, state)
         return green
 
-    def signal_command(self, signal_id: str, verb: str) -> dict:
-        """Operator verb (D-525 4): ``cycle``, ``hold`` or ``all_red``. KeyError: unknown signal."""
+    def signal_command(self, signal_id: str, verb: str, approach: Optional[str] = None) -> dict:
+        """Operator verb (D-525 4): ``cycle``, ``hold``, ``all_red`` or ``set_aspect`` (green for one
+        approach while the operator is present). KeyError: unknown signal; ValueError: bad verb or
+        approach; PermissionError: a manual green without presence."""
         plan = self._signals[signal_id]
-        if verb not in ("cycle", "hold", "all_red"):  # set_aspect needs operator presence (S1 leaves it out)
+        now = self._signal_clock()
+        if verb == "set_aspect":
+            if approach not in {a for a, _green in plan.phases}:
+                raise ValueError(approach)
+            if now >= self._present_until:
+                raise PermissionError("presence")
+        elif verb not in ("cycle", "hold", "all_red"):
             raise ValueError(verb)
-        signal_phase.command(plan, self._phase[signal_id], verb, self._signal_clock())
+        signal_phase.command(plan, self._phase[signal_id], verb, now, approach)
         return self._signal_row(plan, None)
+
+    def signal_presence(self) -> dict:
+        """A named operator's console is open (D-525 4): a manual green may stay for PRESENCE_S."""
+        self._present_until = self._signal_clock() + PRESENCE_S
+        return {"present": True, "for_s": PRESENCE_S}
 
     def signals_all_red(self) -> None:
         """E-stop: every virtual signal all red at once (D-525 4)."""
@@ -328,7 +387,8 @@ class TrafficService:
                 row["stop_line"] = {"x": round(x, 3), "y": round(y, 3), "yaw": round(yaw, 4)}
             approaches.append(row)
         errors = self._signal_errors.get(plan.id) or []
-        return {"signal_id": plan.id, "zone": plan.zone, "virtual": True, "mode": state.mode,
+        manual = plan.phases[state.manual][0] if state.mode == "manual" and state.manual is not None else None
+        return {"signal_id": plan.id, "zone": plan.zone, "virtual": True, "mode": state.mode, "manual": manual,
                 "aspect": "all_red" if errors else state.aspect,
                 "left_s": None if left is None or errors else round(max(0.0, left), 1),
                 "zone_busy": self._busy is None or plan.zone in self._busy,

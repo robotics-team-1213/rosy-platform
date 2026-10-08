@@ -174,6 +174,7 @@ def test_console_mission_api_persists_candidates_without_enabling_dispatch(
 
 def test_cell_job_stack_tolerance_injects_the_palletizing_compiler(tmp_path, monkeypatch):
     """C4b G5: the Fleet composition root injects the production CellJobCompiler."""
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / "operations/execution/src"))
     robots = _write(tmp_path)
     users = tmp_path / "site-users.yaml"
     users.write_text(yaml.safe_dump({"users": [{
