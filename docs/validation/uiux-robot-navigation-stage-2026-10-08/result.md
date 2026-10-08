@@ -65,7 +65,7 @@ CORE의 `GET /api/v1/navigation/state`에 기존 `NavigationManager.mapping_acti
 
 - LOCAL: 실제 FastAPI 정적 자산과 합성 API 응답의 1366×768·390×844 정상/대기/조회 실패 캡처를 X: 세션 `evidence/slam-session-final/navigation-stage/`에 기록하고 두 폭을 육안 확인했다. 캡처는 로봇 readback이 아니다.
 - `test_navigation_readiness.py`와 해당 브라우저 시험 12 passed (`logs/slam-session-tests.txt`), 최종 HUD CSS 캡처 시험 1 passed (`logs/slam-session-browser-final.txt`), 계약·패키지 24 passed (`logs/slam-session-contract.txt`), `known_failures.py` 0 NEW. `impeccable detect --json`은 `[]` (`logs/impeccable-slam-session.json`).
-- 현재 main의 API Ref v1.145와 이 브랜치의 추가 필드를 합쳐 후보 문서 버전을 v1.146으로 올렸다. 양측 계약 검토와 장치 이미지, 실제 SLAM 처리·지도 생성, 전체 G2 상태 매트릭스, G3 운용자 평가는 HOLD다.
+- 현재 main의 API Ref v1.146과 이 브랜치의 추가 필드를 합쳐 후보 문서 버전을 v1.147로 올렸다. 양측 계약 검토와 장치 이미지, 실제 SLAM 처리·지도 생성, 전체 G2 상태 매트릭스, G3 운용자 평가는 HOLD다.
 
 ## 후속: 마지막 계획 경로의 방향
 
@@ -98,8 +98,10 @@ CORE의 내비게이션 증거는 최신 `NAVIGATING`인데 위치 추정이 `SU
 
 ## 현재 main 결합 검증
 
-`aba6737a7`의 API Ref v1.145 변경과 이 브랜치의 맵핑 세션·경로 근거를 합쳐 v1.146으로 정리했다. `app.py` 설명과 문서 버전 핀도 같다. 충돌 난 CORE API·서비스 로그는 양쪽 기록을 보존하고 목차를 재생성했다.
+`aba6737a7`의 API Ref v1.145 변경과 이 브랜치의 맵핑 세션·경로 근거를 합쳤다. 이어 공유 `main`의 `2595c929f`가 Fleet 행에 v1.146을 사용해, 로봇 행은 v1.147로 옮겼다. `app.py` 설명과 문서 버전 핀도 같다. 충돌 난 CORE API·서비스 로그는 양쪽 기록을 보존하고 목차를 재생성했다.
 
 - 계약·지도·패키지 관련 pytest **76 passed**, `known_failures.py` **0 NEW** (`logs/post-main-merge-targeted.txt`). Harness lint **0 error, 23 기존 경고** (`logs/post-main-merge-lint-after.txt`).
 - Chromium 내비게이션 상태 캡처 **1 passed**, 10개 매트릭스 행의 pageerror **0**, `known_failures.py` **0 NEW** (`logs/post-main-merge-browser.txt`). 모바일 390×844와 데스크톱 1366×768 원본은 같은 X: 세션의 `evidence/post-main-merge/navigation-stage/`에 있다.
 - 이 검증은 LOCAL 결합 후보의 근거다. 현장 설치 이미지, 실제 로봇의 SLAM·경로 추종·위치 readback 및 운영자 G3는 HOLD다.
+
+v1.147 재조정 후 API 문서 핀·프로토콜 정렬 시험 **5 passed**, `known_failures.py` **0 NEW** (`logs/v147-contract.txt`). 이전의 76건과 브라우저 1건은 v1.146 상태에서 실행된 근거이며, v1.147에서는 버전 표기 외 동작 코드를 바꾸지 않았다.

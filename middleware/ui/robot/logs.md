@@ -1146,3 +1146,9 @@
 - 변경: API Ref 최신 v1.145와 맵핑 세션·경로 근거를 v1.146으로 결합했다. CORE API·서비스 로그 양쪽과 생성 목차를 보존했다.
 - 증거: `docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md`의 post-main-merge 두 폭 캡처, 계약·지도·패키지 76 passed, Chromium 1 passed, 신규 실패 0, lint 0 error.
 - gate 변화: LOCAL 결합 후보. 실제 로봇·운영자 G3·FIELD는 HOLD.
+
+## 2026-10-08 · 5ee382a0f · API Ref v1.147 충돌 정리
+
+- 변경: 공유 main의 Fleet convoy v1.146 행을 보존하고 로봇 맵핑 세션·경로 근거 행을 v1.147로 옮겼다. `app.py` 설명·버전 핀을 함께 맞췄다.
+- 증거: [지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). v1.147 계약 시험 5 passed, known_failures 0 NEW (`logs/v147-contract.txt`). 이전 v1.146 결합 테스트는 버전 표기 전의 근거로 남긴다.
+- gate 변화: SOURCE 계약 버전 재조정. 장치·현장 수용은 HOLD.
