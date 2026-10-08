@@ -163,7 +163,8 @@ class MainActivity : Activity() {
                     else pairingCode(candidate, offer, store, version, remembered.status)
                 }
             } catch (error: Exception) {
-                if (error is PeerApprovalExpired) main.post { if (version == attempt && foreground) reapprove(candidate) }
+                if (LinkStatus.reason(error) in setOf(LinkReason.APPROVAL_EXPIRED, LinkReason.APPROVAL_REVOKED))
+                    main.post { if (version == attempt && foreground) reapprove(candidate, LinkStatus.reason(error)) }
                 failed(version, candidate, LinkStatus.failure(error, candidate.secure))
             }
         }
@@ -172,7 +173,7 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val input = EditText(this).apply {
             hint = "8자리 로그인 코드"; textSize = 28f; setSingleLine(); setTextColor(PilotColors.foreground)
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             filters = arrayOf(android.text.InputFilter.LengthFilter(9))
         }
         fun canceled() { if (version == attempt) { opening = false; refresh() } }
@@ -303,16 +304,20 @@ class MainActivity : Activity() {
         pairingDialog = AlertDialog.Builder(this).setTitle("이 앱의 연결 기록 지우기")
             .setMessage("${candidate.name}\n${candidate.host}\n\n조종 연결을 닫고 이 태블릿에 저장된 로그인과 승인 연결 기록만 지웁니다. 수신 장치의 승인이나 다른 앱의 연결은 해제하지 않습니다.")
             .setNegativeButton("취소", null).setPositiveButton("지우기") { _, _ ->
-                endSession(forget = candidate) { lastSelectedCandidate = null; opening = false; startDiscovery() }; opening = true
+                endSession(forget = candidate) {
+                    lastSelectedCandidate = null; opening = false
+                    lastError = "${candidate.name} · 이 태블릿의 연결 기록을 지웠습니다. 로봇을 선택하면 새 승인을 요청합니다."; startDiscovery()
+                }; opening = true
             }.create()
         pairingDialog!!.show()
     }
     // D-456 4: an expired grant needs a separate receiver approval. Connect never sends one on its own;
     // the user asks here, which drops only this tablet's expired record and starts a fresh request.
-    private fun reapprove(candidate: Candidate) {
+    private fun reapprove(candidate: Candidate, reason: LinkReason) {
         pairingDialog?.dismiss()
         pairingDialog = AlertDialog.Builder(this).setTitle("다시 승인 요청")
-            .setMessage("${candidate.name}\n\n이 태블릿의 승인 사용 기한이 끝났습니다. 새 승인을 요청하면 로봇 화면에 코드가 뜹니다. 로봇에서 승인하세요.")
+            .setMessage("${candidate.name}\n\n" + (if (reason == LinkReason.APPROVAL_EXPIRED) "이 태블릿의 승인 사용 기한이 끝났습니다." else "로봇이 이 태블릿의 승인을 더 쓰지 않습니다(폐기·만료·권한 변경).") +
+                " 새 승인을 요청하면 이 태블릿의 기록만 지우고 새 요청을 보냅니다. 로봇 화면 코드나 로봇 대시보드로 승인하세요.")
             .setNegativeButton("취소", null).setPositiveButton("승인 요청") { _, _ ->
                 endSession(forget = candidate) { reselect = candidate; opening = false; startDiscovery() }; opening = true
             }.create()

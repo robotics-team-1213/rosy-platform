@@ -770,3 +770,6 @@
 - 변경: 실패마다 `LinkReason`(ROBOT_UNREACHABLE·CA_UNKNOWN·APPROVAL_*·RATE_LIMITED·CORE_NOT_READY·API_VERSION_TOO_OLD 등)과 다음 행동 문구를 `LinkStatus` 한 곳에서 정한다. 승인 대기 대화상자는 요청 번호·남은 시간·두 승인 경로와 "로봇 화면에 Pair request가 없으면 릴리스가 화면 코드를 못 보인다"를 보인다. 처음 연결의 인증서 확인은 로봇 LCD의 `CA xxxx xxxx xxxx xxxx`(앞 16자리) 또는 대시보드 전체 값과 대조하게 한다. 수신기가 끝낸 요청은 `PeerEnded(state)`로 거절·만료·취소를 구분한다. 세션 바는 끊김 동안 "연결 끊김 · 로봇이 응답하지 않습니다"를 보인다.
 - 증거: Android 단위 시험 97 passed(LinkStatusTest·PeerClientTest 종료 상태·TrustedProxyTest). 실기 9dfk·8kcn(055)에서 `/run/rosy-peer-display` 부재로 LCD 코드가 뜨지 않음을 확인(CORE 경고 FileNotFoundError).
 - gate 변화: SOURCE/LOCAL. 화면 코드 경로의 DEVICE 확인은 디렉터리·CA 줄이 든 릴리스(056 이후)에서.
+
+## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다
+- 실기(태블릿 Gboard 한국어): 코드가 한글로 바뀌어 입력됐고, 키보드가 "승인 코드 확인" 버튼을 가렸다. 입력칸을 `VISIBLE_PASSWORD`(라틴 배열)로 바꾸고 코드 알파벳만 남기는 필터, 키보드 완료 키로 보내기를 넣었다. 연결 기록을 지운 뒤 옛 실패 문구가 남던 것을 "기록을 지웠습니다"로 바꾸고, 승인 폐기(401/403/409)도 만료처럼 "다시 승인 요청" 대화상자를 연다. 코드 거절은 클래스·HTTP 상태만 로그에 남긴다.

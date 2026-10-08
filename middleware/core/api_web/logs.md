@@ -792,3 +792,8 @@
 - 변경: `approval.json`에 검증된 `tls_ca_sha256`을 함께 쓴다(첫 검증 성공 뒤 캐시). 처음 연결하는 요청 기기는 승인 뒤 이 값을 대조해야 CA를 고정하는데, 화면 코드 경로에는 대조할 화면이 없었다. 코드 행 형식·0640·로그 금지는 그대로다.
 - 증거: `test_peer_pairing.py` 44 passed(새 시험: hand-over에 CA 값).
 - gate 변화: SOURCE. 로봇 반영은 서명 릴리스 필요.
+
+## 2026-10-09 · uncommitted · fix(core): 화면 코드 승인이 실기에서 항상 409였다 (D-483)
+- 원인: `confirm`이 `approved_at`과 `expires_at`을 시계 두 번으로 만들어 차이가 168 h를 몇 µs 넘었고, `Relationship` 모델이 모든 화면 코드 행을 거부했다(`RepositoryDenied` → `Refused` → 409). 시험은 고정 시계라 보지 못했다. 8kcn(055)의 overlay 사본으로 같은 오류를 재현했다.
+- 변경: 시계 한 번(`now`)으로 두 값을 만든다. 움직이는 시계 시험 추가(되돌리면 실패 확인).
+- 증거: `test_peer_pairing.py` 46 passed. 실기 반영은 서명 릴리스 필요.
