@@ -55,7 +55,7 @@
    - **들어감.** 다음 가운데 하나다.
      - (a) `exit_segment`가 있는 `left`·`right` 지시가 `turning`을 마쳤고 `pivot_basis`가 `map` 또는 `segment_end`다. 그 지시는 `advancing`·`reacquiring` 없이 그 자리에서 `done`이 된다(`_mark_done`). CORE는 새 호 기록을 연다.
      - (b) 앞 호가 끝난 자리에서, `end_place_id`의 `straight` 지시가 `exit_segment`를 실었다. 그 지시도 `done`이 되고 다음 호 기록이 곧바로 열린다.
-   - `pivot_basis: stop_point`면 호를 열지 않고 오늘처럼 전진·재획득한다.
+   - `pivot_basis: stop_point`면 호를 열지 않고 오늘처럼 전진·재획득한다. `stop_point` 폴백은 오늘처럼 기본 전진이다. `exit_segment`가 있어도 `DEFAULT_ADVANCE_M` 0.10 m를 쓰고, 1항의 `advance_m` 무시는 호가 열릴 때만이다(구현 리뷰 2026-10-08).
    - **기록.** 호 기록은 자기 번호 `arc_seq`를 갖는다. `line_follow.arc`는 `{arc_seq, from_place_id, end_place_id, curvature_1pm, length_m, travelled_m, state: running|ended|stopped, reason, ...}`이다. 매니저 잠금 안의 한 상태이고, 새 스레드·저장소·발행자는 없다. twist는 매니저 틱에서 같은 generation·evidence revision으로 CommandManager에 간다(D-18).
    - **호 주행 중의 지시 칸.** 칸은 비어 있다. 호는 `MANEUVER`도 Fleet `MANOEUVRE`도 아니다.
      - Fleet의 의무: 호가 도는 동안 `end_place_id`의 지시를 보낸다. 앞 지시가 `done`이 되면 바로 보낸다. 260919 호 길이 0.37–0.46 m는 `arm_distance_m` 0.6 m보다 짧아서 오늘의 무장 규칙으로도 곧 보내진다.

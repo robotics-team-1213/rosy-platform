@@ -509,9 +509,11 @@ SIZE_VERDICTS = {
     ),
     "foundation/core_common/protocol/schemas.py": (
         1_340,
-        "accept: PENDING INDEPENDENT RE-JUDGE at 1340 (D-520 step 1, written by the implementing "
-        "executor): +2 lines, one re-export import and the optional LineFollowStatus.arc field; the arc "
-        "record models live in core_common/protocol/line_arc.py so schemas.py does not take them. "
+        "accept: independently re-judged at 1340 (2026-10-08, read-only critic agent) for D-520 step 1: "
+        "+2 lines, one re-export import and the optional LineFollowStatus.arc field (default None). The "
+        "arc record models live in core_common/protocol/line_arc.py and the field cannot move because "
+        "LineFollowStatus is defined here. Additive, no envelope version change. Zero-growth allowance "
+        "remains. "
         "Previously independently re-judged at 1338 on 2026-10-08 (critic agent, read-only) for "
         "D-507 7: one optional LineFollowStatus.lane_return_containment Literal['contained', "
         "'unknown'] field (default None) with its two-line comment beside the D-407 stuck and D-494 "
@@ -693,13 +695,15 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-07-line-follow-recovery-subpackage.md; re-judge on the next +150",
     ),
     "core/services/core_features/line_follow/arc": (
-        299,
-        "accept: PENDING INDEPENDENT RE-JUDGE (written by the implementing executor, not an independent "
-        "verdict; measured 299 at D-520 step 1, lane_arc.py 298). D-520 2 puts map-guided arc following in its own size unit because line_follow/recovery "
-        "(2713 +150) and core_features (12772 +150) have no room for it. The unit is a LineFollowManager "
-        "mixin under the single manager lock and generation, no own lock, thread, store or publisher; CORE "
-        "CommandManager stays the final cmd_vel publisher; it calls the D-422 sweep, never changes it. "
-        "Split plan of record: docs/plans/2026-10-08-line-follow-arc-subpackage.md; re-judge on the next +150",
+        310,
+        "accept: independently re-judged 2026-10-08 at 299 (lane_arc.py 298, read-only critic agent). "
+        "D-520 2 puts map-guided arc following in its own size unit because line_follow/recovery "
+        "(2713 +150) and core_features (12772 +150) have no room for it. One cohesive LineFollowManager "
+        "mixin under the single manager lock and generation, with no own lock, thread, store or publisher. "
+        "CORE CommandManager stays the final cmd_vel publisher, and the D-422 sweep is called, never "
+        "changed. Dependency runs arc to recovery only. Split plan of record: "
+        "docs/plans/2026-10-08-line-follow-arc-subpackage.md; re-judge on the next +150. Measured 310 "
+        "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
     "core_features": (
         12_772,
