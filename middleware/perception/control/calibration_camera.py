@@ -47,6 +47,11 @@ MOTION_PHASES = ('validating_motion', 'validating_rotation', 'relocating_calibra
 
 
 class CalibrationCamera:
+    # '' until the latched /camera/controls line arrives. The node subscribes
+    # with the camera node's transient-local QoS, so a lock taken before this
+    # node started is still the line the pose fit records.
+    camera_controls = ''
+
     def camera_candidate_path(self):
         return Path(str(self.get_parameter('result_path').value)).expanduser().with_suffix(
             '.camera_candidate.json')
