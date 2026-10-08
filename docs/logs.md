@@ -7136,3 +7136,9 @@ osy-d395-s1d\`.
 - 변경: 기존 10/6·10/7 원본을 현 소스에서 재생하고, 정적 `route_a` 시작 위치 ±20/40/80 mm 오프라인 스윕과 +40 mm Gazebo 출발을 `docs/validation/lane-route-start-disagreement-2026-10-08/`에 기록했다.
 - 증거: 오프라인 −40 mm는 1.0468 m 주행 중 지도 중심선 편차 최대 60.0 mm, 대응 ROS-SIM은 0.0 m에서 LOST. 두 렌더링은 동일 물리 장면이 아니다.
 - gate 변화: 없음. 정적 시작 위치의 운영 권한과 사람 승인 차선 정답, 실물 수용은 계속 HOLD.
+
+## 2026-10-08 · uncommitted · 정적 경로 시제품의 ROS 진입 제한
+
+- 변경: 물리 카메라 설정에서 `route_a/b/ab` 시제품 follower를 생성하지 않도록 observer의 Gazebo 조건을 고정하고 `docs/validation/lane-route-prototype-admission-2026-10-08/`에 ROS 노드 확인을 기록했다.
+- 증거: 관련 호스트 181 passed, 모델 PC의 PINKY형 설정 `NoneType`·Gazebo 설정 `RouteCameraFollower` readback. 실물 장치에는 적용하지 않았다.
+- gate 변화: 없음. 활성 Fleet 지도·독립 위치 승인과 실물 수용은 별도다.
