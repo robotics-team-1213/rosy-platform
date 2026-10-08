@@ -730,6 +730,47 @@ def _enter_drive(page, base_url):
 
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
+def test_drive_map_handoff_reaches_console_after_stop_readback(base_url, viewport):
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            _enter_drive(page, base_url)
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]')?.dataset.state === 'OPEN'")
+            if output := os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(output)
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-map-handoff-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            button = page.locator("ui-topbar [data-goto]")
+            assert button.get_attribute("data-goto") == "/console"
+            assert button.inner_text() == "운용 지도"
+            assert page.locator('[aria-label="운전 모드"] [data-drive-goal]').count() == 0
+            page.evaluate("sessionStorage.setItem('rosy.dashboard.token', 'old-surface-token')")
+            modes_before, teleop_before = len(dev_server.MODE_LOG), len(dev_server.TELEOP_LOG)
+            arrived = []
+
+            def console(route):
+                arrived.append({"modes": dev_server.MODE_LOG[modes_before:],
+                                "teleop": dev_server.TELEOP_LOG[teleop_before:]})
+                route.fulfill(status=200, content_type="text/html", body="<h1>운용 지도</h1>")
+
+            page.route("**/console", console)
+            button.click()
+            page.wait_for_url("**/console")
+            assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == dev_server.DEV_TOKEN
+            assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
+            assert dev_server.DEV_TOKEN not in page.url
+            assert arrived and "IDLE" in arrived[0]["modes"]
+            assert any(item["linear"] == 0 and item["angular"] == 0 for item in arrived[0]["teleop"])
+            assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_drive_hud_uses_operator_labels_at_each_width(base_url, viewport):
     with playwright_sync.sync_playwright() as playwright:
@@ -1326,7 +1367,7 @@ def test_turn_cue_follows_manual_mode_on_phone(tablet_page, width, height):
     base_url, page, errors = tablet_page
     page.set_viewport_size({"width": width, "height": height})
     _arm_auto(page, base_url)
-    robot = page.locator('ui-topbar [data-goto="/dashboard"]').bounding_box()
+    robot = page.locator('ui-topbar [data-goto="/console"]').bounding_box()
     stop = page.locator('ui-topbar [data-estop]').bounding_box()
     assert robot and stop and robot["x"] + robot["width"] <= stop["x"]
     if page.locator("ui-topbar ui-brand").is_visible():

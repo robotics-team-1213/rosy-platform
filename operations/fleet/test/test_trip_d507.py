@@ -235,6 +235,21 @@ def test_260919_sw_spoke_without_a_window_sends_no_negative_pivot():
     assert ports.sent == [("stop", "SW", 0.0)] and ports.expects == [None]  # the halt only, no turn
 
 
+def test_a_straight_on_the_ring_sends_its_lane_turn_and_a_turn_does_not():
+    """lap SIM 2: SE ``straight`` on ``ring_s`` (bends left to SE) carries ``lane_turn_deg``, the
+    lane's heading change to the place, so CORE follows the keeper's ``corner_left`` there."""
+    runner, store, ports = _setup(caps=PIVOT)  # the 260919 lane graph
+    arc = _arc(store, "ring_s:fwd")
+    _plan(store, ports, "ring_s:fwd", 0.0, "NW")
+    run(runner.start("p1", "bob"))
+    ports.at(arc, arc.length_m - 0.25)
+    _ticks(runner, ports)
+    assert ports.sent[0][:2] == ("straight", "SE")
+    turn = math.degrees(trip_ports._lane_turn(arc, arc.length_m, 0.25))
+    assert ports.expects[0]["lane_turn_deg"] == pytest.approx(turn, abs=0.1) and 45 < turn < 65
+    assert "lane_turn_deg" not in _sw_spoke_sends().expects[0]   # a turn: its action says the way
+
+
 def test_without_a_window_and_without_a_line_the_old_half_width_stays():
     ports = _sent_at(_ring_map(), PIVOT, 0.05)            # a ring bend: no window, straight on
     assert ports.expects == [{"map_id": "site", "pivot_past_line_m": 0.1}]
@@ -431,6 +446,33 @@ def test_waiting_within_the_arm_distance_is_answered_as_before():
     assert runner.running() is not None and ports.sent[-1][0] == "left"
 
 
+def _core_reason(ports, line_reason):
+    plain = ports.junction_state
+
+    async def junction_state(robot_id):
+        state = await plain(robot_id)
+        return None if state is None else {**state, "line_reason": line_reason}
+    ports.junction_state = junction_state
+
+
+def test_corner_hold_on_our_instruction_stops_the_trip_at_once():
+    """Lap SIM A liveness: CORE holds short of the keeper's corner; no 20 s stall."""
+    runner, ports = _running_at(0.5)
+    assert ports.sent[-1][0] == "left"                     # our instruction is armed
+    _core_reason(ports, "junction_corner_hold")
+    _ticks(runner, ports, 1)
+    view = runner.view("p1")
+    assert (view["state"], view["reason"]) == ("stopped", "junction_corner_hold")
+    assert view["detail"]["line_reason"] == "junction_corner_hold" and ports.held == ["rosy_60"]
+
+
+def test_corner_hold_before_our_instruction_does_not_end_the_trip():
+    runner, ports = _running_at(0.1)                      # nothing sent yet
+    _core_reason(ports, "junction_corner_hold")
+    _ticks(runner, ports, 1)
+    assert runner.running() is not None
+
+
 def test_the_http_port_carries_the_line_follow_reason():
     class Client:
         async def state(self):
@@ -482,18 +524,18 @@ def test_260919_lap_sw_window_puts_the_misread_bend_outside():
     ports.at(arc, arc.length_m - 0.6)
     _ticks(runner, ports)
     sent, expect = ports.sent[0], ports.expects[0]
-    assert sent[0] == "right" and ports.turns[0] == pytest.approx(-120.6, abs=0.1)  # D-507 4 tangent - 6 (SIM 4c)
+    assert sent[0] == "right" and ports.turns[0] == pytest.approx(-104.7, abs=0.1)  # D-507 4: lane heading to tangent (lap SIM 3)
     assert expect["expect_in_m"] == 0.6                   # along the lane; the 15 deg rule sent none
     bend = arc.project(-0.761, -0.455)[1] - (arc.length_m - 0.6)          # 0.15 m driven to the bend
     line = expect["expect_in_m"] - expect["pivot_past_line_m"]            # the far line, 0.7 m on
     assert line - (bend + 0.10) > expect["expect_tol_m"]  # a line seen up to 0.10 m past the bend: out
 
 
-@pytest.mark.parametrize("ring, to, blocked, turn", [("ring_n", "SW", "ring_w", -114.1),
-                                                     ("ring_s", "NE", "ring_e", -110.0)])
+@pytest.mark.parametrize("ring, to, blocked, turn", [("ring_n", "SW", "ring_w", -113.9),
+                                                     ("ring_s", "NE", "ring_e", -109.7)])
 def test_260919_ring_exits_send_the_arc_length(ring, to, blocked, turn):
     """NW and SE exits (R3-1): the ring arc into the place is the distance, not its chord. Turn
-    angles are the D-507 4 tangent - 6 (SIM 4c): the spokes bend back against the turn too."""
+    angles run from the ring's end heading (its circle tangent) to the spoke's tangent (lap SIM 3)."""
     runner, store, ports = _setup(caps=PIVOT)
     arc = _arc(store, f"{ring}:fwd")
     _plan(store, ports, arc.id, 0.05, to, blocked_edges=(blocked,))

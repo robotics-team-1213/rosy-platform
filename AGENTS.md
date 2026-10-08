@@ -56,6 +56,8 @@ ROSY is a robot middleware and fleet-control platform (ROS 2 Jazzy, first hardwa
 - **현장 PC:** `operations/fleet`가 사실을 검증하고 규칙·admission·사람 확인을 거쳐 답을 고른다. 숙고형 코드 목표 자리는 `operations/decision`; 현재 경로와 구현 여부는 [설계](docs/plans/2026-10-08-decision-model-pipeline-design.md)를 본다.
 - **로봇:** CORE가 장치 상태·안전을 다시 확인하고 최종 `/cmd_vel`을 단독 발행한다. 소스 경로로 실행 호스트를 추정하지 않는다(D-315). 이 역할 분담은 D-516이며, AI PC의 현장 경로는 아직 활성화되지 않았다.
 
+시험 위치도 분리한다(D-527). 개발 로컬 PC·CI는 코드 계약과 푸시 게이트, 모델 PC는 사람 정답 기반 Laya/Kev·VLM 독립 평가와 승격 receipt, AI PC는 승인 고정 버전의 적재·GPU·loopback 스모크와 watchdog, 현장 Fleet·CORE는 그림자/장치 수용을 맡는다. AI PC 합성 재생의 일치 수치를 L0 정확도로 쓰지 않는다.
+
 상세 입력·출력, 모델 교체와 실패 처리: [Decision 모델 파이프라인](docs/plans/2026-10-08-decision-model-pipeline-design.md). 실제 장치 주소·계정은 공개 문서 대신 gitignored `private/`에 둔다.
 
 ### D-427 이후 공동 작업 규칙 (2026-10-04, 이동 기간 2·5항 삭제)

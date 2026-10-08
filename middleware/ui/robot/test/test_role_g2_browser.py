@@ -1223,7 +1223,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
     records = []
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
-        for viewport in ((1366, 768), (390, 844)):
+        for viewport in ((1366, 768), (390, 844), (320, 568)):
             context = browser.new_context(viewport={"width": viewport[0], "height": viewport[1]})
             page = context.new_page()
             errors = []
@@ -1253,6 +1253,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                     data = _response(client, path, TOKENS["operator"], "normal", "console").json()
                     data["slam"] = True
                     data["navigation"] = {"goal_navigation": True}
+                    data["runtime"]["maps"] = {"occupancy": True, "global_costmap": True}
                     response = Response(content=json.dumps(data), media_type="application/json")
                 elif path == "/api/v1/navigation/state":
                     if mapping_session["readable"]:
@@ -1288,6 +1289,8 @@ def test_console_navigation_stage_local_captures(tmp_path):
             assert "위치 추정 · 지도 좌표 확인" in stage.inner_text()
             page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 맵핑 세션 활성')")
             assert "SLAM · 맵핑 세션 활성" in stage.inner_text()
+            filename = f"operator-console-navigation-{viewport[0]}x{viewport[1]}.png"
+            page.screenshot(path=str(capture_dir / filename), full_page=True)
             result = page.evaluate("""() => ({
               overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
               eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
@@ -1297,21 +1300,26 @@ def test_console_navigation_stage_local_captures(tmp_path):
               cameraTop: document.querySelector('[data-slot="sense"]').getBoundingClientRect().top,
               canvasTop: document.querySelector('.surface-map-canvas').getBoundingClientRect().top,
               canvasHeight: document.querySelector('.surface-map-canvas').getBoundingClientRect().height,
+              stageTop: document.querySelector('.surface-map-stage').getBoundingClientRect().top,
               clicksBottom: document.querySelector('[aria-label="지도 작업"]').getBoundingClientRect().bottom,
+              clickButtons: [...document.querySelectorAll('[aria-label="지도 작업"] ui-button')]
+                .map(button => ({top: button.getBoundingClientRect().top, height: button.getBoundingClientRect().height})),
               layersTop: document.querySelector('[aria-label="지도 레이어"]').getBoundingClientRect().top,
             })""")
             assert result["overflowX"] == 0 and result["eStopVisible"] and errors == [], result
             assert result["clicksBottom"] <= result["canvasTop"], result
+            assert len(result["clickButtons"]) == 2 and result["clickButtons"][0]["top"] == result["clickButtons"][1]["top"], result
+            assert all(button["height"] >= 44 for button in result["clickButtons"]), result
             assert result["layersTop"] >= result["canvasTop"] + result["canvasHeight"], result
             if viewport[0] < 1024:
                 assert result["mapTop"] < result["actionTop"] < result["cameraTop"], result
                 assert result["slotOrder"] == ["banner", "observe", "act", "sense"], result
                 assert result["canvasTop"] < 270, result
+                if viewport[0] == 320:
+                    assert result["stageTop"] >= result["canvasTop"] + result["canvasHeight"], result
             else:
                 assert result["slotOrder"] == ["banner", "sense", "observe", "act"], result
                 assert result["canvasHeight"] >= 300, result
-            filename = f"operator-console-navigation-{viewport[0]}x{viewport[1]}.png"
-            page.screenshot(path=str(capture_dir / filename), full_page=True)
             for scenario, label in (("delayed", "지연"), ("disconnected", "연결 끊김"),
                                     ("unavailable", "정보 없음")):
                 evidence_mode["value"] = scenario
@@ -1329,6 +1337,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                   return values[1]?.textContent.includes(expected) && values[2]?.textContent.includes(expected);
                 }""", arg=label)
                 image = f"operator-console-navigation-{scenario}-{viewport[0]}x{viewport[1]}.png"
+                assert page.locator("#map-status").get_attribute("state") == "ready"
                 page.screenshot(path=str(capture_dir / image), full_page=True)
                 records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "scenario": scenario,
                                 "image": image, "synthetic": True, "errors": errors[:]})

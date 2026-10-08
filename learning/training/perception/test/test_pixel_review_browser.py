@@ -85,11 +85,11 @@ def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
         np.full((source['height'], source['width']), 1, np.uint8)))
     with store.connect() as db:
         db.execute('INSERT INTO pixel_drafts (frame,sha256,path,catalog_sha256,origin) VALUES (?,?,?,?,?)',
-                   (0, digest, path, 'c' * 64, 'v12_pixel_mask_candidate'))
+                   (0, digest, path, 'c' * 64, 'sam3_obstacle_unknown_v12_base'))
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
     button = page.locator('#pixel-apply-candidate')
     expect(button).to_be_visible()
-    expect(page.locator('#pixel-candidates')).to_contain_text('v12 기존 마스크')
+    expect(page.locator('#pixel-candidates')).to_contain_text('SAM3 장애물 보류 · 사람 확인 필요')
     expect(button).to_be_enabled()
     page.once('dialog', lambda dialog: dialog.accept())
     button.click()
@@ -236,6 +236,14 @@ def test_pixel_decision_advances_to_next_editable_pending(browser_workspace):
     expect(page.locator('#pixel-class')).to_have_value('4')
     expect(page.locator('#pixel-filter')).to_have_value('pending')
     assert review_masks.get(store, 0)['status'] == 'excluded'
+
+
+def test_pending_filter_omits_object_excluded_frame(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.locator('#pixel-filter').select_option('pending')
+    expect(page.locator('#pixel-frame option')).to_have_count(1)
+    expect(page.locator('#pixel-frame')).to_have_value('0')
 
 
 def test_brush_cancellation_coordinates_and_undo(browser_workspace):

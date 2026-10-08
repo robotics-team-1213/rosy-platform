@@ -754,3 +754,14 @@
 - gate 변화: 없음. 실기 화면은 미확인.
 - 결정: D-411.
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · uiux(pilot): 운용 지도 인계와 운전 모드 정리
+- 변경: 상단 `운용 지도`에서 `/console`로 이동한다. Pilot의 가짜 `지도 목표` 운전 모드를 제거하고, 주행 중 이동에는 0 속도와 소유한 MANUAL의 IDLE 요청을 기다리도록 했다. 대기 중 모드 진입·중복 클릭을 처리하고 모드 요청을 3초로 제한한다.
+- 증거: `docs/validation/uiux-pilot-map-handoff-2026-10-08/result.md`의 390×844·2000×1200 전후 PNG, 브라우저 회귀 12 passed, 셸 자산 4 passed, known_failures 0 NEW. 합성 CORE의 LOCAL 증거다.
+- gate 변화: 없음. 설치본·실기 정지 readback·D-153 전체 G2/G3·현장 독회는 HOLD.
+- 결정: D-323, D-344, D-153. 지도 읽기와 목표 실행을 구분한다.
+
+## 2026-10-08 · uncommitted · fix(pilot): 운용 지도로 같은 탭 인증 인계
+- 변경: 주행 종료 요청 뒤 Pilot 토큰을 Console의 같은 탭 세션 키에 전달한다. 이전 Console 토큰은 현재 Pilot 사용자로 교체하고 URL·영구 저장소는 쓰지 않는다.
+- 증거: [Pilot→실제 Console 인증 인계](../../../docs/validation/uiux-pilot-console-session-2026-10-08/result.md). 주행 화면과 실제 CORE Console의 모바일·데스크톱 캡처, 관련 시험 10 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 흐름 증거 추가. 설치 앱·실기 정지 readback·전체 G2/G3·DEVICE/FIELD는 HOLD.

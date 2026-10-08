@@ -18,6 +18,7 @@ let detailView=false;
 try {detailView=sessionStorage.getItem('rosy.review.detailView')==='true';} catch {}
 let gesture = null, selected = null, coordinatePreview = null;
 let undo = null;
+let modelDrafts = [];
 function visibleFrames() {return workspace?.frames.filter(item=>$('filter').value==='all'||item.status===$('filter').value)||[];}
 function sourceCandidates() {return frame?.source?.objects || frame?.source?.boxes || [];}
 
@@ -56,6 +57,7 @@ function enable() {
   }
   $('candidates').disabled = locked || frame?.status === 'excluded' || !sourceCandidates().length;
   $('candidates').reason = !sourceCandidates().length ? '이 사진에는 가져올 원본 객체 후보가 없습니다.' : '';
+  $('model-candidates').disabled = locked || frame?.status === 'excluded' || !modelDrafts.length;
   $('undo').disabled = locked || !undo || frame?.status === 'excluded';
   $('undo').reason=locked?'작업 중':!undo?'수정 없음':frame?.status==='excluded'?'제외된 사진':'';
   $('prepare').disabled = busy || loading || conflicted || forbidden || !!gesture || !workspace;
@@ -164,6 +166,7 @@ async function select(index) {
   cancelGesture(); selected=null; coordinatePreview=null; undo=null;
   $('empty-review').hidden=true;$('review-content').hidden=false;
   ready = false; frame = structuredClone(workspace.frames.find(f => f.index === index));
+  modelDrafts=[];$('model-draft-panel').hidden=true;
   for (const link of document.querySelectorAll('a[href^="/pixels"]')) link.href = `/pixels?frame=${frame.index}`;
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
@@ -180,6 +183,16 @@ async function select(index) {
     ? `원본 객체 후보 ${candidates.length}개 · 출처: ${frame.source.annotation_source || '원본 라벨 자료'} · 사람이 모든 박스를 확인해야 합니다.`
     : '원본 객체 후보가 없습니다. 자동 객체 탐지는 이 화면에서 실행하지 않습니다. 사진을 확인하고 필요한 박스를 직접 그리세요.';
   if(frame.source.annotation_note) $('candidate-source').textContent += ` ${frame.source.annotation_note}.`;
+  request(`/api/object-drafts/${index}`).then(value=>{
+    if(serial!==loadSerial)return;
+    modelDrafts=value.drafts;
+    $('model-draft-select').replaceChildren(...modelDrafts.map((draft,i)=>new Option(
+      `${draft.origin || '모델'} · 박스 ${draft.boxes.length}개`,String(i))));
+    $('model-draft-panel').hidden=!modelDrafts.length;
+    if(modelDrafts.length){$('candidate-details').open=true;
+      $('candidate-source').textContent+=` 모델 초안 ${modelDrafts.length}개를 비교할 수 있습니다.`;}
+    enable();
+  }).catch(()=>{if(serial===loadSerial)error('모델 객체 초안을 불러오지 못했습니다. 새로고침해 주세요.');});
   $('image-message').hidden = false; $('image-message').textContent = '사진을 불러오는 중';
   $('canvas').width = frame.source.width; $('canvas').height = frame.source.height;
   renderBoxes(); list(); paint(); enable();
@@ -260,7 +273,7 @@ async function mutate(action, extras={}, restoring=false) {
     const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
     $('export-result').textContent=$('export-result').textContent.replace(/^이번 준비 결과 · /,'이전 준비 결과 · 현재 결정을 반영하려면 다시 준비하세요. ');
-    undo=restoring?null:['save','candidates'].includes(action)?{index:id,boxes:previous}:null;
+    undo=restoring?null:['save','candidates','apply_object_draft'].includes(action)?{index:id,boxes:previous}:null;
     // A decision finishes this photo, so open the next pending one (D-461 next task first).
     // Audits inside the approved/excluded filters stay where they are.
     const decided=['approve','exclude'].includes(action), advance=decided&&['all','pending'].includes($('filter').value)&&nextPending(id);
@@ -284,6 +297,9 @@ $('complete').onchange=enable;
 $('approve').onclick=()=> {if ($('complete').checked) mutate('approve',{complete_frame_review:true});};
 $('exclude').onclick=()=>mutate('exclude'); $('reopen').onclick=()=>mutate('reopen');
 $('candidates').onclick=()=> {if (window.confirm('현재 수정 라벨을 원본 초안으로 바꾸고 재검수하시겠습니까?')) mutate('candidates');};
+$('model-candidates').onclick=()=>{const draft=modelDrafts[Number($('model-draft-select').value)];
+  if(draft&&window.confirm(`현재 박스를 ${draft.origin || '모델'} 초안 ${draft.boxes.length}개로 바꾸고 재검수하시겠습니까?`))
+    mutate('apply_object_draft',{draft_sha256:draft.sha256});};
 $('draw').onclick=()=> {drawing=!drawing; $('draw').setAttribute('aria-pressed',String(drawing));};
 $('add').onclick=()=>edit(boxes=>boxes.push({label:null,bbox_xyxy:[0,0,Math.min(40,frame.source.width),Math.min(40,frame.source.height)]}));
 $('delete-selected').onclick=()=> {if(selected!==null) {const index=selected; selected=null;edit(boxes=>boxes.splice(index,1));}};

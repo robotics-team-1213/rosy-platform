@@ -1,0 +1,108 @@
+== rec_01  corner-hold scope only (56e68a256)
+  182.36 gt=(-0.494,-0.188, +59.7) dr=-0.005 dyaw=+99.7 cmd=[0.0, 0.0] RECOVERING/junction_stopping keep=None j=turning:SW:right
+  187.34 gt=(-0.493,-0.189, -58.3) dr=-0.004 dyaw=-18.7 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+  188.04 gt=(-0.475,-0.219, -58.3) dr=+0.009 dyaw=-26.0 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=junction_fork j=advancing:SW:right
+  188.28 gt=(-0.468,-0.230, -58.3) dr=+0.015 dyaw=-28.5 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+  189.34 gt=(-0.441,-0.275, -58.3) dr=+0.044 dyaw=-37.5 cmd=[0.0, 0.0] HOLD/junction_reacquiring keep=None j=reacquiring:SW:right
+  189.46 gt=(-0.440,-0.276, -57.9) dr=+0.045 dyaw=-37.3 cmd=[0.0206, 0.4049] TRACKING/tracking keep=None j=reacquiring:SW:right
+  189.69 gt=(-0.436,-0.282, -53.9) dr=+0.049 dyaw=-34.3 cmd=[0.0261, 0.5] TRACKING/lane_edge_right keep=None j=idle:None:None
+  189.93 gt=(-0.432,-0.287, -48.0) dr=+0.052 dyaw=-29.5 cmd=[0.0297, 0.5] TRACKING/lane_edge_right keep=None j=armed:SE:straight
+  191.47 gt=(-0.415,-0.299,  -9.2) dr=+0.059 dyaw= +5.5 cmd=[0.0092, -0.6] TRACKING/tracking keep=None j=armed:SE:straight
+  195.12 gt=(-0.329,-0.281, +19.8) dr=+0.031 dyaw=+18.4 cmd=[0.0, 0.0] HOLD/camera_line_not_visible keep=no_boundary j=armed:SE:straight
+  198.18 gt=(-0.332,-0.282, +20.1) dr=+0.032 dyaw=+19.3 cmd=[-0.03, 0.0] RECOVERING/stuck_back_off keep=no_boundary j=armed:SE:straight
+  200.79 gt=(-0.405,-0.309, +20.1) dr=+0.066 dyaw=+32.7 cmd=[0.0, 0.0] LOST/camera_reselection_required keep=no_boundary j=armed:SE:straight
+  201.85 gt=(-0.407,-0.310, +20.1) dr=+0.068 dyaw=+33.1 cmd=[-0.03, 0.0] RECOVERING/stuck_back_off keep=no_boundary j=armed:SE:straight
+  202.32 gt=(-0.420,-0.314, +20.1) dr=+0.075 dyaw=+35.1 cmd=[-0.03, 0.0] HOLD/junction_unexpected keep=junction_transverse j=unexpected:SE:straight
+  202.43 gt=(-0.421,-0.315, +20.1) dr=+0.076 dyaw=+35.2 cmd=[0.0, 0.0] OFF/mode_off keep=junction_transverse j=idle:None:None
+== rec_02  corner-hold scope only (56e68a256)
+  211.38 gt=(-0.421,-0.315, +20.1) dr=+0.076 dyaw=+35.2 cmd=[0.0, 0.0] OFF/mode_off keep=junction_transverse j=idle:None:None
+  257.52 gt=(-0.491,-0.189, +59.2) dr=-0.006 dyaw=+98.4 cmd=[0.0, 0.0] RECOVERING/junction_stopping keep=None j=turning:SW:right
+  262.49 gt=(-0.490,-0.190, -58.8) dr=-0.006 dyaw=-19.8 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+  263.19 gt=(-0.472,-0.220, -58.8) dr=+0.008 dyaw=-27.1 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=junction_fork j=advancing:SW:right
+  263.31 gt=(-0.469,-0.225, -58.8) dr=+0.011 dyaw=-28.2 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+  263.42 gt=(-0.466,-0.230, -58.8) dr=+0.014 dyaw=-29.4 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=junction_fork j=advancing:SW:right
+  263.54 gt=(-0.463,-0.235, -58.8) dr=+0.017 dyaw=-30.5 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+  264.61 gt=(-0.436,-0.279, -58.7) dr=+0.046 dyaw=-38.9 cmd=[0.0206, 0.4059] TRACKING/tracking keep=None j=reacquiring:SW:right
+  264.86 gt=(-0.432,-0.285, -54.8) dr=+0.050 dyaw=-36.1 cmd=[0.0246, 0.5] TRACKING/lane_edge_right keep=None j=reacquiring:SW:right
+  264.97 gt=(-0.431,-0.287, -51.8) dr=+0.052 dyaw=-33.5 cmd=[0.0262, 0.5] TRACKING/lane_edge_right keep=None j=idle:None:None
+  265.21 gt=(-0.426,-0.292, -45.8) dr=+0.056 dyaw=-28.6 cmd=[0.0318, 0.5] TRACKING/lane_edge_right keep=None j=armed:SE:straight
+  266.89 gt=(-0.408,-0.303,  -3.3) dr=+0.062 dyaw=+10.1 cmd=[0.0188, 0.48] TRACKING/tracking keep=None j=armed:SE:straight
+  270.10 gt=(-0.325,-0.283, +19.7) dr=+0.033 dyaw=+17.6 cmd=[0.0, 0.0] HOLD/camera_line_not_visible keep=no_boundary j=armed:SE:straight
+  273.17 gt=(-0.328,-0.284, +20.2) dr=+0.034 dyaw=+18.6 cmd=[-0.03, 0.0] RECOVERING/stuck_back_off keep=no_boundary j=armed:SE:straight
+  275.63 gt=(-0.396,-0.309, +20.2) dr=+0.064 dyaw=+31.2 cmd=[0.0, 0.0] HOLD/junction_corner_hold keep=None j=armed:SE:straight
+  275.74 gt=(-0.396,-0.309, +20.2) dr=+0.064 dyaw=+31.2 cmd=[0.0, 0.0] OFF/mode_off keep=no_boundary j=idle:None:None
+== rec_03  corner-hold scope only (56e68a256)
+  284.49 gt=(-0.396,-0.309, +20.2) dr=+0.064 dyaw=+31.2 cmd=[0.0, 0.0] OFF/mode_off keep=no_boundary j=idle:None:None
+  329.38 gt=(-0.499,-0.184, +60.0) dr=-0.005 dyaw=+101.3 cmd=[0.0, 0.0] RECOVERING/junction_stopping keep=None j=turning:SW:right
+  334.36 gt=(-0.498,-0.184, -57.9) dr=-0.005 dyaw=-16.5 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+  335.42 gt=(-0.470,-0.229, -57.9) dr=+0.015 dyaw=-27.6 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=junction_fork j=advancing:SW:right
+  335.67 gt=(-0.464,-0.239, -57.9) dr=+0.021 dyaw=-29.8 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+  336.50 gt=(-0.443,-0.272, -57.8) dr=+0.042 dyaw=-36.5 cmd=[0.0206, 0.408] TRACKING/tracking keep=None j=reacquiring:SW:right
+  336.86 gt=(-0.435,-0.283, -51.9) dr=+0.050 dyaw=-32.5 cmd=[0.0258, 0.5] TRACKING/lane_edge_right keep=None j=idle:None:None
+  336.98 gt=(-0.433,-0.285, -48.9) dr=+0.051 dyaw=-30.0 cmd=[0.0279, 0.5] TRACKING/lane_edge_right keep=None j=armed:SE:straight
+  338.28 gt=(-0.419,-0.296, -15.7) dr=+0.058 dyaw= -0.1 cmd=[0.0092, -0.6] TRACKING/tracking keep=None j=armed:SE:straight
+  338.99 gt=(-0.413,-0.298, -21.3) dr=+0.058 dyaw= -6.8 cmd=[0.0054, 0.5] TRACKING/lane_edge_right keep=None j=armed:SE:straight
+  339.82 gt=(-0.409,-0.300, -13.8) dr=+0.058 dyaw= -0.1 cmd=[0.0054, 0.5] TRACKING/tracking keep=None j=armed:SE:straight
+  343.40 gt=(-0.331,-0.288, +18.5) dr=+0.037 dyaw=+17.6 cmd=[0.0254, 0.2151] TRACKING/tracking keep=no_boundary j=armed:SE:straight
+  343.52 gt=(-0.330,-0.287, +19.5) dr=+0.037 dyaw=+18.4 cmd=[0.0, 0.0] HOLD/camera_line_not_visible keep=no_boundary j=armed:SE:straight
+  345.99 gt=(-0.330,-0.287, +19.5) dr=+0.037 dyaw=+18.4 cmd=[0.0, 0.0] OFF/mode_off keep=no_boundary j=idle:None:None
+== rec_05  + turn fix (ece8307a9/69549fb5f)
+ 1025.94 gt=(-0.499,-0.183, +60.3) dr=-0.005 dyaw=+101.8 cmd=[0.0, 0.0] RECOVERING/junction_stopping keep=junction_fork j=turning:SW:right
+ 1026.06 gt=(-0.499,-0.183, +60.3) dr=-0.005 dyaw=+101.8 cmd=[0.0, 0.0] RECOVERING/junction_stopping keep=None j=turning:SW:right
+ 1030.27 gt=(-0.499,-0.183, -41.4) dr=-0.005 dyaw= +0.3 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+ 1032.39 gt=(-0.421,-0.252, -41.4) dr=+0.016 dyaw=-22.8 cmd=[0.0, 0.0] HOLD/junction_reacquiring keep=None j=reacquiring:SW:right
+ 1032.52 gt=(-0.419,-0.253, -41.8) dr=+0.016 dyaw=-23.5 cmd=[0.0198, -0.4396] TRACKING/tracking keep=None j=reacquiring:SW:right
+ 1032.75 gt=(-0.416,-0.256, -46.2) dr=+0.018 dyaw=-28.8 cmd=[0.0195, -0.4494] TRACKING/tracking keep=None j=idle:None:None
+ 1033.23 gt=(-0.410,-0.264, -54.4) dr=+0.024 dyaw=-38.8 cmd=[0.0266, -0.1659] TRACKING/tracking keep=None j=armed:SE:straight
+ 1033.94 gt=(-0.389,-0.295, -55.8) dr=+0.050 dyaw=-45.6 cmd=[0.0329, 0.5] TRACKING/lane_edge_right keep=None j=armed:SE:straight
+ 1036.21 gt=(-0.364,-0.315,  -1.0) dr=+0.066 dyaw= +4.1 cmd=[0.0, 0.0] HOLD/camera_line_not_visible keep=no_boundary j=armed:SE:straight
+ 1036.33 gt=(-0.364,-0.315,  +1.3) dr=+0.066 dyaw= +6.4 cmd=[0.0054, 0.5] TRACKING/lane_edge_right keep=None j=armed:SE:straight
+ 1036.57 gt=(-0.362,-0.315,  +5.9) dr=+0.066 dyaw=+10.7 cmd=[0.0092, 0.6] TRACKING/tracking keep=None j=armed:SE:straight
+ 1036.93 gt=(-0.358,-0.314, +16.4) dr=+0.064 dyaw=+20.4 cmd=[0.0, 0.0] HOLD/camera_line_not_visible keep=no_boundary j=armed:SE:straight
+ 1040.00 gt=(-0.359,-0.314, +19.0) dr=+0.065 dyaw=+23.2 cmd=[-0.03, 0.0] RECOVERING/stuck_back_off keep=no_boundary j=armed:SE:straight
+ 1040.59 gt=(-0.375,-0.320, +19.0) dr=+0.072 dyaw=+26.0 cmd=[0.0, 0.0] HOLD/junction_corner_hold keep=None j=armed:SE:straight
+ 1040.70 gt=(-0.375,-0.320, +19.0) dr=+0.072 dyaw=+26.0 cmd=[0.0, 0.0] OFF/mode_off keep=None j=idle:None:None
+== rec_06  + turn fix (ece8307a9/69549fb5f)
+ 1050.05 gt=(-0.375,-0.320, +19.0) dr=+0.072 dyaw=+26.0 cmd=[0.0, 0.0] OFF/mode_off keep=None j=idle:None:None
+ 1093.95 gt=(-0.490,-0.192, +59.2) dr=-0.004 dyaw=+97.9 cmd=[0.0, 0.0] RECOVERING/junction_stopping keep=None j=turning:SW:right
+ 1098.35 gt=(-0.489,-0.193, -42.5) dr=-0.004 dyaw= -4.3 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+ 1100.47 gt=(-0.413,-0.263, -42.6) dr=+0.023 dyaw=-26.3 cmd=[0.0194, -0.4544] TRACKING/tracking keep=None j=reacquiring:SW:right
+ 1100.70 gt=(-0.410,-0.265, -45.8) dr=+0.025 dyaw=-30.3 cmd=[0.0197, -0.4444] TRACKING/tracking keep=None j=idle:None:None
+ 1101.06 gt=(-0.405,-0.271, -53.0) dr=+0.029 dyaw=-38.7 cmd=[0.023, -0.31] TRACKING/tracking keep=None j=armed:SE:straight
+ 1101.64 gt=(-0.388,-0.297, -55.9) dr=+0.051 dyaw=-46.0 cmd=[0.0334, 0.5] TRACKING/lane_edge_right keep=None j=armed:SE:straight
+ 1103.79 gt=(-0.366,-0.315,  -3.4) dr=+0.066 dyaw= +2.0 cmd=[0.0142, 0.5] TRACKING/lane_edge_right keep=no_boundary j=armed:SE:straight
+ 1103.91 gt=(-0.365,-0.315,  -0.5) dr=+0.066 dyaw= +4.8 cmd=[0.0, 0.0] HOLD/camera_line_not_visible keep=None j=armed:SE:straight
+ 1104.04 gt=(-0.364,-0.315,  +2.0) dr=+0.066 dyaw= +7.2 cmd=[0.0054, 0.5] TRACKING/lane_edge_right keep=None j=armed:SE:straight
+ 1104.15 gt=(-0.364,-0.315,  +5.0) dr=+0.066 dyaw=+10.0 cmd=[0.0092, 0.6] TRACKING/tracking keep=None j=armed:SE:straight
+ 1104.51 gt=(-0.361,-0.314, +15.6) dr=+0.065 dyaw=+20.2 cmd=[0.0, 0.0] HOLD/camera_line_not_visible keep=no_boundary j=armed:SE:straight
+ 1107.48 gt=(-0.362,-0.315, +18.9) dr=+0.065 dyaw=+23.6 cmd=[-0.03, 0.0] RECOVERING/stuck_back_off keep=no_boundary j=armed:SE:straight
+ 1108.07 gt=(-0.379,-0.320, +18.9) dr=+0.073 dyaw=+26.5 cmd=[0.0, 0.0] HOLD/junction_corner_hold keep=None j=armed:SE:straight
+ 1108.53 gt=(-0.379,-0.321, +18.9) dr=+0.073 dyaw=+26.6 cmd=[0.0, 0.0] OFF/mode_off keep=None j=idle:None:None
+== rec_07  + turn fix (ece8307a9/69549fb5f)
+ 1117.05 gt=(-0.379,-0.321, +18.9) dr=+0.073 dyaw=+26.6 cmd=[0.0, 0.0] OFF/mode_off keep=None j=idle:None:None
+ 1164.12 gt=(-0.497,-0.184, +60.4) dr=-0.006 dyaw=+101.4 cmd=[0.0, 0.0] RECOVERING/junction_stopping keep=None j=turning:SW:right
+ 1168.62 gt=(-0.495,-0.186, -41.3) dr=-0.006 dyaw= -1.0 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+ 1170.64 gt=(-0.419,-0.253, -41.3) dr=+0.016 dyaw=-23.1 cmd=[0.0, 0.0] HOLD/junction_reacquiring keep=None j=reacquiring:SW:right
+ 1170.75 gt=(-0.418,-0.254, -41.6) dr=+0.016 dyaw=-23.8 cmd=[0.019, -0.4709] TRACKING/tracking keep=None j=reacquiring:SW:right
+ 1170.97 gt=(-0.414,-0.257, -45.6) dr=+0.018 dyaw=-28.6 cmd=[0.0192, -0.4637] TRACKING/tracking keep=None j=idle:None:None
+ 1171.33 gt=(-0.410,-0.262, -52.9) dr=+0.022 dyaw=-37.2 cmd=[0.0248, -0.2396] TRACKING/tracking keep=None j=armed:SE:straight
+ 1172.16 gt=(-0.388,-0.295, -55.9) dr=+0.050 dyaw=-46.0 cmd=[0.0325, 0.5] TRACKING/lane_edge_right keep=None j=armed:SE:straight
+ 1174.64 gt=(-0.362,-0.313,  +4.4) dr=+0.064 dyaw= +9.2 cmd=[0.0188, 0.48] TRACKING/tracking keep=None j=armed:SE:straight
+ 1176.76 gt=(-0.310,-0.297, +21.7) dr=+0.048 dyaw=+16.8 cmd=[0.0, 0.0] HOLD/camera_line_not_visible keep=no_boundary j=armed:SE:straight
+ 1179.71 gt=(-0.311,-0.297, +21.7) dr=+0.048 dyaw=+17.1 cmd=[-0.03, 0.0] RECOVERING/stuck_back_off keep=no_boundary j=armed:SE:straight
+ 1181.39 gt=(-0.356,-0.315, +21.7) dr=+0.066 dyaw=+25.4 cmd=[0.0, 0.0] OFF/mode_off keep=no_boundary j=idle:None:None
+== rec_08  + turn fix (ece8307a9/69549fb5f)
+ 1190.53 gt=(-0.356,-0.315, +21.7) dr=+0.066 dyaw=+25.4 cmd=[0.0, 0.0] OFF/mode_off keep=None j=idle:None:None
+ 1190.65 gt=(-0.356,-0.315, +21.7) dr=+0.066 dyaw=+25.4 cmd=[0.0, 0.0] OFF/mode_off keep=no_boundary j=idle:None:None
+ 1237.96 gt=(-0.499,-0.185, +60.2) dr=-0.004 dyaw=+101.5 cmd=[0.0, 0.0] RECOVERING/junction_stopping keep=None j=turning:SW:right
+ 1242.33 gt=(-0.498,-0.186, -41.5) dr=-0.004 dyaw= -0.6 cmd=[0.05, 0.0] RECOVERING/junction_advancing keep=None j=advancing:SW:right
+ 1244.47 gt=(-0.420,-0.254, -41.6) dr=+0.018 dyaw=-23.3 cmd=[0.0203, -0.4184] TRACKING/tracking keep=None j=reacquiring:SW:right
+ 1244.70 gt=(-0.417,-0.257, -44.8) dr=+0.020 dyaw=-27.4 cmd=[0.0199, -0.4354] TRACKING/tracking keep=None j=idle:None:None
+ 1245.06 gt=(-0.412,-0.263, -52.2) dr=+0.024 dyaw=-36.1 cmd=[0.025, -0.2317] TRACKING/tracking keep=None j=armed:SE:straight
+ 1245.88 gt=(-0.391,-0.294, -55.4) dr=+0.048 dyaw=-44.8 cmd=[0.033, 0.5] TRACKING/lane_edge_right keep=None j=armed:SE:straight
+ 1248.14 gt=(-0.368,-0.312,  -0.3) dr=+0.063 dyaw= +5.5 cmd=[0.0, 0.0] HOLD/camera_line_not_visible keep=no_boundary j=armed:SE:straight
+ 1248.26 gt=(-0.367,-0.312,  +2.5) dr=+0.063 dyaw= +8.3 cmd=[0.0092, 0.6] TRACKING/tracking keep=None j=armed:SE:straight
+ 1248.74 gt=(-0.363,-0.311, +16.6) dr=+0.062 dyaw=+21.6 cmd=[0.0, 0.0] HOLD/camera_line_not_visible keep=no_boundary j=armed:SE:straight
+ 1251.72 gt=(-0.364,-0.312, +20.1) dr=+0.063 dyaw=+25.3 cmd=[-0.03, 0.0] RECOVERING/stuck_back_off keep=no_boundary j=armed:SE:straight
+ 1252.43 gt=(-0.384,-0.319, +20.1) dr=+0.072 dyaw=+28.7 cmd=[0.0, 0.0] HOLD/junction_corner_hold keep=None j=armed:SE:straight
+ 1252.55 gt=(-0.385,-0.319, +20.1) dr=+0.072 dyaw=+28.8 cmd=[0.0, 0.0] OFF/mode_off keep=no_boundary j=idle:None:None

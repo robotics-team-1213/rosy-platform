@@ -25,6 +25,10 @@ python learning/training/perception/dataset/review_app.py --state X:/DevTemp/pin
 
 `자동·초안 라벨`은 원본의 기존 LiDAR `objects` 또는 모델/시각 `boxes` 후보를 다시 가져온다. 현재 수동 수정을 대체하므로 브라우저 확인을 받는다. 이 동작은 새 모델 추론·자동 기하 job 실행이 아니며 미승인 상태를 만든다. 미분류 후보의 클래스는 사람이 지정해야 한다. 기존 자동 생성은 `autolabel.py`, `prelabel.py` 경로에서 준비한다. 벽·차선·횡단보도 등은 `/pixels`에서 별도로 검수하거나 기존 CVAT와 `edge_review_return.py` 경로를 사용한다.
 
+기존 사진과 동일한 영상 해시·프레임·원본 해시의 모델 객체 카탈로그를 `자료 등록`으로 다시 가져오면 박스는 별도 모델 초안으로 보관된다. 객체 검수의 `모델 박스 초안`에서 출처와 개수를 확인하고 명시적으로 가져올 때만 현재 박스를 바꾸며, 결정은 검수 대기로 돌아간다. 픽셀 초안은 별도 후보로 비교·적용한다. 모델 초안 등록과 적용은 승인이나 학습 반영이 아니다.
+
+SAM 주행 영역 초안이 보이는 좌·우 차선 밖을 침범하면 가져오기가 거절된다. 모델 PC에서 `clip_lane_draft.py --catalog <SAM verified-inputs.jsonl> --classes <v13 classes.yaml> --out <새 폴더>`로 차선 밖 `drivable` 픽셀만 255로 되돌린 새 후보와 receipt를 만든 뒤, 그 폴더를 등록할 수 있다. 이 처리는 차선이 보이는 행에서만 작동하며 255를 배경이나 주행 가능 정답으로 바꾸지 않는다. 사람의 경계 확인과 승인은 여전히 필요하다.
+
 `승인 자료 준비`는 서버에서 기존 `review_return.receive_review`를 호출한다. 수동 다운로드/JSONL 이동 없이 `<state>/exports/<id>`에 원본 크기별 YOLO 객체 라벨, 동결된 source/human 입력, hash manifest와 COMPLETE가 기록된다. 앱 안의 전달 정보에서 경로·승인 장수·제외 index·frame version·HOLD를 확인할 수 있다. 학습 세션은 이 export를 읽어 검증하고 session mapping, session-disjoint 분할, 고정 평가 세트 전체 `build.py --exclude-eval`을 확인한다. export는 학습 dataset 수용·학습 실행·모델 활성화가 아니다.
 
 운영 workspace에서 승인된 원본을 자동 테스트 승인으로 덮어쓰지 않는다. 브라우저 시나리오는 별도 `--state`에서 실행한다. 기본 loopback Host와 쓰기 token/origin 검사는 외부 사이트 요청을 거부하지만 인증된 검수자 신원을 증명하지 않는다. 서비스 배포는 지원 범위 밖이다. 원격 접근은 아래 `--host`로만 연다. SQLite·동결 원본·exports를 포함한 state 디렉터리가 재시작 정본이다.
@@ -167,6 +171,18 @@ thumbnail을 다시 만들지 않고, 픽셀 검수의 마스크 오버레이 �
 승인 바인딩, 학습 export는 언제나 원본 사진과 원래 마스크를 사용한다. 보정 보기에서
 흰색으로 포화된 원본 정보는 복원되지 않는다. 경계를 여전히 판단할 수 없으면 검수 대기로
 두고 노출을 조절해 새로 촬영한 원본을 별도 자료로 등록한다.
+
+과노출 후보는 원본 사진의 하단 절반에서 회색조 245 이상인 픽셀 비율로 확인한다.
+`review_quality.py`는 결정 기록을 바꾸지 않고 후보만 보고한다. 과노출이어도 원본에서
+정답을 판단할 수 있으면 검수 대기로 남긴다. 일부 영역만 판단하기 어려우면 그 픽셀을
+255(미검수)로 두고, 사진 전체의 정답을 판단할 수 없을 때만 검수 화면에서 사람이 제외한다.
+255가 남은 마스크는 학습용 픽셀 승인을 할 수 없다(D-464).
+0.15는 2026-10-08 v13 촬영분에서 측정한 분리값이므로 다른 촬영분에 그대로 적용하지 않는다.
+정규분포 가정이나 흐림 필터는 쓰지 않는다.
+
+```powershell
+python learning/training/perception/dataset/review_quality.py --state X:/DevTemp/<name>/state --threshold 0.15 > X:/DevTemp/<name>/exposure-preview.json
+```
 
 ### 클래스셋 (D-485)
 

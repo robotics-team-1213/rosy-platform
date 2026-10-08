@@ -12,7 +12,7 @@ export function mount(root, ctx) {
   for (const [id, label] of [["occupancy", "점유 지도"], ["costmap", "비용 지도"], ["path", "경로"]]) {
     const button = el("ui-button", "", label); button.setAttribute("kind", "segment"); button.type = "button"; button.dataset.mapLayer = id; layers.append(button);
   }
-  const clicks = el("ui-actions", "surface-actions"); clicks.setAttribute("aria-label", "지도 작업");
+  const clicks = el("ui-actions", "surface-actions map-click-actions"); clicks.setAttribute("aria-label", "지도 작업");
   for (const [id, label] of [["pose", "초기 위치 설정"], ["goal", "주행 목표 설정"]]) {
     const button = el("ui-button", "", label); button.setAttribute("kind", "segment"); button.type = "button"; button.dataset.mapClick = id; clicks.append(button);
   }
@@ -26,6 +26,7 @@ export function mount(root, ctx) {
   empty.hidden = true;
   const canvas = el("canvas", "surface-map-canvas"); canvas.setAttribute("aria-label", "점유 지도. 화살표 키로 십자선을 이동하고 Enter 키로 위치를 선택합니다.");
   const targetReadout = el("dl", "ui-readout surface-map-readout");
+  targetReadout.hidden = true;
   const targetLabel = el("dt", "", "선택 좌표");
   const targetValue = el("dd", "", "지도를 키보드로 선택하세요.");
   targetValue.setAttribute("role", "status");
@@ -140,6 +141,7 @@ export function mount(root, ctx) {
         throw error;
       }
     },
+    getMapSources: () => capabilities?.runtime?.maps,
     getPose: () => state?.pose,
     getCurrentMapId: () => state?.map_id,
     onMapIdMismatch: (value) => { mapIdMismatch = value; renderStage(); syncMapActions(); },
@@ -152,6 +154,7 @@ export function mount(root, ctx) {
       ? safeStopped() ? "안전 정지 중 주행 목표 불가" : !goalPoseReady() ? "위치 추정 확인 후 가능" : "" : "",
     setAction: (text) => { setText(action, text); },
     onTargetReadout: (target) => {
+      targetReadout.hidden = target.unavailable;
       targetValue.textContent = target.unavailable
         ? "지도 데이터가 없습니다."
         : target.inside
@@ -197,7 +200,7 @@ export function mount(root, ctx) {
       } else empty.removeAttribute("role");
       retry.hidden = !failed || map.mapState === "forbidden";
       // 선택 좌표는 지도가 쓸 수 있을 때만 뜻이 있다.
-      targetReadout.hidden = map.mapState !== "ready";
+      if (map.mapState !== "ready") targetReadout.hidden = true;
     }
   };
   retry.addEventListener("click", () => { refresh(); });

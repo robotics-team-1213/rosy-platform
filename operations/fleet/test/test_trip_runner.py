@@ -1234,6 +1234,29 @@ def test_a_carried_out_instruction_is_never_sent_again():
     assert len(ports.sent) == 1
 
 
+def test_a_carried_out_place_short_of_the_next_lane_keeps_the_pose_on_this_lane():
+    """lap SIM 2 lap_12: CORE went idle on our straight while the robot backed off 0.26 m before
+    SE; the pose is judged against ring_s, not ring_e (0.276 m away), so no false 'pose' stop."""
+    runner, store, ports = _setup()
+    ring_s = _arc(store, "ring_s:fwd")
+    _plan(store, ports, "ring_s:fwd", 0.05, "NW")
+    run(runner.start("p1", "bob"))
+    ports.at(ring_s, ring_s.length_m - 0.2)
+    _ticks(runner, ports)
+    ports.core.see_junction()  # CORE executes our straight through SE
+    _ticks(runner, ports)
+    assert runner._live["rosy_60"].sent["carried"]
+    ports.core.j = None  # CORE closed it (the keeper lost the junction while backing off)
+    ports.at(ring_s, ring_s.length_m - 0.26)
+    sent = len(ports.sent)
+    _ticks(runner, ports)
+    assert runner.view("p1")["state"] == "running" and runner.view("p1")["segment_index"] == 0
+    assert len(ports.sent) == sent                         # the carried-out straight is not sent again
+    ports.at(_arc(store, "ring_e:fwd"), 0.03)               # on the next lane: it moves on
+    _ticks(runner, ports)
+    assert runner.view("p1")["segment_index"] == 1
+
+
 def test_already_done_from_core_counts_as_carried_out():
     runner, store, ports = _setup()
     ring_s = _arc(store, "ring_s:fwd")
@@ -1415,14 +1438,15 @@ def test_formation_reform_and_resume_refuse_a_trip_robot():
         assert err.value.code == "TRIP_ROBOT_BUSY"
 
 
-def test_the_fleet_stuck_resolver_skips_a_trip_robot():
+def test_the_fleet_stuck_resolver_marks_a_trip_robot():
+    """D-517 5 (M4): no longer skipped; the resolver gives a marked trip robot stopping answers only."""
     from fleet.server.stuck_resolver_loop import StuckResolverLoop
 
     seen = []
 
     class Resolver:
         def step(self, now, rows):
-            seen.extend(row["robot_id"] for row in rows)
+            seen.extend((row["robot_id"], row.get("trip", False)) for row in rows)
             return []
 
     async def snapshot():
@@ -1431,7 +1455,7 @@ def test_the_fleet_stuck_resolver_skips_a_trip_robot():
     loop = StuckResolverLoop(snapshot, board=None, resolver=Resolver(), clients=dict)
     loop.trip_busy = lambda robot_id: robot_id == "b"
     run(loop.run_once())
-    assert seen == ["a"]
+    assert seen == [("a", False), ("b", True)]
 
 
 @pytest.mark.parametrize(("decision", "status", "ends"), [

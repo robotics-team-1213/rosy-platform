@@ -577,3 +577,165 @@ def test_standing_jitter_does_not_move_the_odometer_or_close_the_window():
     assert abs(trail.odometer - start) < .001
     assert trail.distance - path > .02                   # the unsigned path length would have grown
     assert sight(rig, ahead=.3, seen=False)[1].junction.state == 'turning'
+
+
+# --- lap SIM A: the keeper's corner reading of the expected cross line holds ----------------
+
+def corner(rig, strategy='corner_left', **kwargs):
+    """One tick whose keep_debug frame names the keeper's strategy (no junction reason)."""
+    rig.m.observe_junction('no_boundary', round(rig.now + .05, 6), strategy=strategy)
+    return rig.step(**kwargs)
+
+
+@pytest.mark.parametrize('action, turn, strategy', [('right', -90., 'corner_left'), ('left', 90., 'corner_right')])
+def test_a_corner_turn_near_the_expected_line_holds_instead_of_following(action, turn, strategy):
+    rig = Rig()
+    rig.step()
+    send(rig, action, turn, map_id='site', pivot_past_line_m=.1, **WINDOW)  # line .4 ahead
+    decision, status = corner(rig, strategy)
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert (status.state, status.reason, status.junction.state) == ('HOLD', 'junction_corner_hold', 'armed')
+    for _ in range(10):                                                    # flipping to 'both' within
+        decision, status = corner(rig, 'both')                             # the latch: still held
+        assert decision.linear == 0. and status.reason == 'junction_corner_hold'
+    rig.now += 2.
+    decision, status = corner(rig, 'both')                                 # the keeper follows again
+    assert decision.linear > 0 and status.junction.state == 'armed'
+
+
+@pytest.mark.parametrize('action, turn, strategy', [('right', -90., 'corner_right'), ('left', 90., 'corner_left')])
+def test_a_corner_the_way_of_the_armed_turn_is_followed(action, turn, strategy):
+    """lap SIM 2: only a corner against the instruction is the misread line."""
+    rig = Rig()
+    rig.step()
+    send(rig, action, turn, map_id='site', pivot_past_line_m=.1, **WINDOW)
+    decision, status = corner(rig, strategy)
+    assert decision.linear > 0 and status.junction.state == 'armed'
+
+
+def test_a_corner_frame_the_other_way_never_ends_an_against_corners_latch():
+    """Review: right armed, keeper flips corner_left -> corner_right: still held, and an expiry
+    inside the latch keeps the hold (never drops the instruction into the wrong-way corner)."""
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)  # expires in 10 s
+    assert corner(rig, 'corner_left')[1].reason == 'junction_corner_hold'
+    for strategy in ('corner_right', 'both', 'corner_right'):
+        decision, status = corner(rig, strategy)
+        assert (decision.linear, decision.angular, status.reason) == (0., 0., 'junction_corner_hold')
+    rig.now += 9.5
+    corner(rig, 'corner_left')
+    rig.now += 1.                                                        # expired, latest frame right
+    decision, status = corner(rig, 'corner_right')
+    assert (decision.linear, status.reason) == (0., 'junction_corner_hold') and rig.m._junction['corner_held']
+
+
+def test_ring_straight_follows_the_lanes_left_corner_but_holds_a_right_one():
+    """lap SIM 2: SE straight on the left-curving ring_s (expected line .44 m ahead): the keeper's
+    corner_left is the ring itself; corner_right (out onto the spoke) still holds."""
+    rig = Rig()
+    rig.step()
+    send(rig, 'straight', map_id='site', expect_in_m=.232, expect_tol_m=.17, pivot_past_line_m=-.231,
+         lane_turn_deg=52.)
+    decision, status = corner(rig, 'corner_left')
+    assert decision.linear > 0 and status.reason != 'junction_corner_hold'
+    rig.now += 3.                                                      # past the latch
+    assert corner(rig, 'corner_right')[1].reason == 'junction_corner_hold'
+
+
+@pytest.mark.parametrize('lane_turn', [None, 0., 10., -52.])
+def test_a_straight_holds_a_corner_its_lane_does_not_turn(lane_turn):
+    """A straight spoke (or no lane_turn_deg: an older Fleet) keeps the lap SIM A hold."""
+    rig = Rig()
+    rig.step()
+    expect = dict(map_id='site', pivot_past_line_m=.1, **WINDOW)
+    if lane_turn is not None:
+        expect['lane_turn_deg'] = lane_turn
+    send(rig, 'straight', **expect)
+    assert corner(rig, 'corner_left')[1].reason == 'junction_corner_hold'
+
+
+@pytest.mark.parametrize('bad', [dict(action='right', lane_turn_deg=10.), dict(lane_turn_deg=361.),
+                                 dict(lane_turn_deg=float('nan')), dict(lane_turn_deg=10., window=False)])
+def test_lane_turn_deg_belongs_to_a_straight_with_a_window(bad):
+    rig = Rig()
+    rig.step()
+    action, expect = bad.pop('action', 'straight'), dict(map_id='site', **WINDOW)
+    if bad.pop('window', True) is False:
+        expect = dict(map_id='site')
+    with pytest.raises(ValueError, match='lane_turn_deg'):
+        send(rig, action, -90., **expect, **bad)
+
+
+def test_a_corner_far_before_the_expected_line_or_corner_ahead_follows():
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', expect_in_m=1.2, expect_tol_m=.1, pivot_past_line_m=.1)
+    assert corner(rig)[0].linear > 0                                       # line 1.1 ahead: a real corner
+    drive_to(rig, .7)
+    assert corner(rig, 'corner_ahead')[0].linear > 0                      # straight on, not a turn
+    assert corner(rig)[1].reason == 'junction_corner_hold'                # line .4 ahead
+
+
+def test_no_window_or_no_instruction_leaves_the_keeper_corner_alone():
+    rig = Rig()
+    rig.step()
+    assert corner(rig)[0].linear > 0                                       # no instruction
+    send(rig, 'straight')                                                  # legacy: no map, no window
+    assert corner(rig)[0].linear > 0
+
+
+def test_an_unmeasurable_window_fails_closed():
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', expect_in_m=1.2, expect_tol_m=.1, pivot_past_line_m=.1)
+    rig.m._return_evidence.epoch += 1                                    # odom restarted
+    assert corner(rig)[1].reason == 'junction_corner_hold'
+
+
+def test_a_corner_frame_older_than_the_latch_no_longer_holds():
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)
+    rig.m.observe_junction('no_boundary', rig.now - 2.5, strategy='corner_left')
+    assert rig.step()[0].linear > 0
+
+
+def test_an_expiring_instruction_keeps_the_corner_hold_until_a_fresh_one():
+    """Liveness review: expiry must not release the robot into the keeper's corner (fail closed)."""
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)  # expires in 10 s
+    assert corner(rig)[1].reason == 'junction_corner_hold'
+    rig.now += 10.                                                       # the robot stands; keeper
+    decision, status = corner(rig)                                       # still reads the corner
+    assert (decision.linear, decision.angular, status.reason) == (0., 0., 'junction_corner_hold')
+    rig.now += 3.                                                        # past the latch: 'both'
+    for _ in range(5):
+        decision, status = corner(rig, 'both')
+        assert (decision.linear, status.reason) == (0., 'junction_corner_hold')
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)  # a fresh instruction
+    assert corner(rig, 'both')[0].linear > 0
+
+
+def test_an_instruction_expiring_without_a_corner_releases_as_before():
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)
+    rig.now += 10.5
+    decision, status = corner(rig, 'both')
+    assert decision.linear > 0 and status.junction.state == 'idle'
+
+
+def test_an_expired_corner_hold_stays_on_a_sighting_and_ends_on_a_mode_change():
+    """Review: a sighting after expiry neither waits nor turns; a mode change releases it."""
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)
+    corner(rig)
+    rig.now += 10.
+    corner(rig)                                                          # expired while held
+    decision, status = sight(rig, ahead=.4)
+    assert (decision.linear, decision.angular, status.reason) == (0., 0., 'junction_corner_hold')
+    rig.m.set_mode(LineFollowMode.OFF)
+    assert rig.m._junction is None and rig.m.status().reason != 'junction_corner_hold'

@@ -69,6 +69,8 @@ integrations/simulation/gazebo/scripts/pinky_acceptance.py
 integrations/simulation/gazebo/scripts/pinky_nav2_probe.py
 integrations/simulation/gazebo/worlds/rosy_gauntlet.world
 integrations/simulation/gazebo/worlds/rosy_maze.world
+# Service Control (D-524): the AI PC unit names contain pinky. They are systemd unit names.
+operations/fleet/fleet/host_control.py
 operations/fleet/fleet/localization/service_logic.py
 operations/fleet/fleet/server/bays.py
 operations/fleet/fleet/server/traffic.py

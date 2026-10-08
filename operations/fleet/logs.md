@@ -2694,3 +2694,55 @@
 - gate 변화: SOURCE. SIM은 core 행과 같이
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-10-08 · 8fa0df8f6 · fix(fleet): CORE junction_corner_hold 이면 trip 을 바로 멈춤
+- 변경: `LiveTrip.junction_end` 는 자기 지시(`junction.seq` ≥ 첫 seq)에서 CORE `line_follow.reason` 이 `junction_corner_hold` 이면 `stopped(junction_corner_hold)`. 20 s stall 을 기다리지 않는다. 지도 화면 문구 추가. API Ref v1.148
+- 증거: 수정 전 `test_corner_hold_on_our_instruction_stops_the_trip_at_once` 실패, 수정 뒤 모델 PC `test_trip_d507.py` 통과, node `site-map.test.mjs` 15 pass
+- gate 변화: SOURCE
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-10-08 · 303152390 · feat(fleet): D-517 M4 해결기 연결 (Safety-Review 전)
+- 변경: Fleet 막힘 해결기가 trip 로봇에도 답한다(멈추는 R1 `WAIT`만, 그 밖은 사람). `fleet/traffic/handover.py`(순수)가 교착 순환에서 한 대를 막힌 차로를 피해 다시 계획(운영자 확인 `replan_hold`), 나머지 대기, 못 피하면 사람, 30 s 넘는 UNKNOWN은 사람. `GET /api/fleet/traffic` `resolver`, 예외 큐·카드 한 줄 문구. API Ref v1.148. ADR 5항 구현 노트와 옛 경로(`server/lane_traffic.py`, `routing/blocks.py`) 고침
+- 증거: 모델 PC 관련 pytest와 node `traffic-layer`·`convoy-view` 12 passed. 전체 결과는 브랜치 보고에 있음
+- gate 변화: 없음(SOURCE). 움직임 판단이라 독립 Safety-Review 전에는 착지하지 않음
+- 결정: Fleet은 trip 로봇에 물러서기·비켜서기·재개를 보내지 않는다(풀린 블록으로 들어갈 수 있음). 교착은 경로를 스스로 바꾸지 않고 운영자 확인으로만 바꾼다
+- 교훈: 없음
+
+## 2026-10-08 · 0fd6d230e · fix(fleet): D-517 M4 Safety-Review M1/M2 반영
+- 변경: 해결기 재계획은 장소 `arm_distance_m` 안, CORE 기동 아님, 그 장소 지시 미전송일 때만(M1). 순환은 `CYCLE_PERIODS` 3주기 이어져야 재계획을 고르고, 경로가 있는 재계획 보류가 운영자를 기다리는 동안 `replan`/`wait` 행 유지(M2). 지도 없는 경로에서 해결기 시계 초기화. main 병합, API Ref v1.149
+- 증거: 모델 PC `operations/fleet/test/`·`test/architecture/test_module_structure.py` 2839 passed, 실패 2(learning_receiver PIL, site_map_api node: main에서도 실패)
+- gate 변화: 없음(SOURCE)
+- 결정: 확인 재계획의 장소 검사(LOW)는 하지 않음. 오류 코드가 새로 필요해 별도 단계
+- 교훈: 없음
+
+## 2026-10-08 · d3db27b9d · fix(fleet): D-517 사이트 통행권 꺼짐 + CORE 통행권 필수면 lane trip 거절
+- 변경: `_caps_checks`가 `fleet.traffic.authority`가 꺼져 있고(또는 송신 모드가 `hold_back`) 능력 `line_follow_authority_required`가 참인 로봇의 `lane` trip을 422 `TRIP_AUTHORITY_SITE_OFF`로 거절. 반복 바퀴 재검사도 같은 함수를 쓴다. API Ref v1.150, ADR D-517 4항 Fleet 문단 한 문장
+- 증거: 시험 `test_a_robot_requiring_authority_is_refused_while_the_site_flag_is_off`(고치기 전 실패 e722804ac). 모델 PC 결과는 브랜치 보고
+- gate 변화: 없음(SOURCE). trip 시작 판단이라 독립 Safety-Review 전에는 착지하지 않음
+- 결정: CORE 상태 필드는 늘리지 않음. 이미 있는 능력 `line_follow_authority_required`로 시작에서 막는다
+## 2026-10-08 · uncommitted · fix(fleet): `straight` 지시에 지도 차로 방향 변화 `lane_turn_deg` (API v1.152)
+- 변경: `junction_fields` 가 기대 창이 있는 `straight` 에 로봇에서 장소까지 차로의 부호 있는 방향 변화(도, `WINDOW_BEND_STEP_M` 간격 합, ±360 클램프)를 싣는다. `_curve_offset_m` 과 같은 표본(`_lane_steps`)을 쓴다
+- 증거: `test_trip_d507.py::test_a_straight_on_the_ring_sends_its_lane_turn_and_a_turn_does_not` (ring_s → SE 45–65°), 모델 PC 53 passed
+- gate 변화: 없음(SOURCE)
+- 결정: 회전 지시에는 싣지 않는다(방향은 action 이 말한다)
+- 교훈: 없음
+## 2026-10-08 · uncommitted · fix(fleet): 실행 끝난 장소는 로봇이 다음 차로에 있을 때만 넘어간다 (lap SIM 2 lap_12)
+- 변경: `_locate` 의 `done`(CORE가 우리 지시를 끝냄 + `pass_window_m` 안)에 다음 차로 반폭 안 조건을 더했다
+- 증거: lap_12 `off_lane_m` 0.276은 ring_e까지 거리(참값 ring_s 밖 0.07 m). CORE가 D-407 후진 중 SE `straight` 를 닫자 Fleet이 SE 0.26 m 앞에서 ring_e로 넘어가 거기서 위치를 쟀다. 새 시험은 고치기 전 실패, 모델 PC `test_trip_runner.py` 87 passed
+- gate 변화: SOURCE
+- 결정: CORE가 직진을 일찍 닫는 일(후진 중 감지 끊김)은 그대로다. 그 경우 이제 잘못된 `pose` 대신 뒤의 `junction`·`stall` 로 끝날 수 있다
+- 교훈: 위치 판정은 로봇이 실제로 있는 차로에 대고 한다. 지시 완료는 위치의 증거가 아니다
+## 2026-10-08 · uncommitted · fix(fleet): 교차로 회전은 들어오는 차로 끝 방향에서 나가는 차로 접선까지 (lap SIM 2 원인 2)
+- 변경: `turn_target` 이 `theta`(5 cm lead 접선) + 6° 대신, 들어오는 차로의 끝 방향(마지막 두 0.10 m 현: 마지막 현 + 차이의 절반)에서 나가는 차로 `start_tangent` 까지를 보낸다. `TURN_OVERTURN_DEG`·`BEND_MIN_DEG` 삭제, 0.20 m보다 짧은 차로는 `theta`. D-507 4항 개정 줄
+- 증거: 260919 SW lead 접선 72.6°(입구 polyline 잡음) vs 현 62.7°, 로봇 진입 59–60° → 회전 끝이 ring 접선보다 약 20° 바깥(lap SIM 2·3 rec_01–03). 고친 뒤 SIM 4회 회전 끝 −4.3…+0.3°. 모델 PC `test_routing_execute.py`·`test_trip_d507.py`·`test_trip_d520.py` 100 passed
+- gate 변화: SOURCE, ROS-SIM(SW 회전 끝 방향)
+- 결정: D-520 `exit_segment` 경로(`theta`)는 다른 세션 몫이라 그대로 둔다(result.md에 기록)
+- 교훈: 지도 polyline 끝 몇 cm의 방향을 로봇 자세처럼 쓰지 않는다. 회전 목표는 로봇이 실제로 달린 구간의 방향에서 잰다
+
+## 2026-10-09 · uncommitted · uiux(fleet): D-517 trip error codes all have console text
+- 변경: `web/shared/site-map-model.js` 에 `TRIP_AUTHORITY_SITE_OFF`, `TRIP_AUTHORITY_NOT_REQUIRED`, `TRIP_CONVOY_NOT_BEHIND`, `TRIP_ROBOT_BUSY`, `TRIP_GOAL_REFUSED` 운영자 문구 추가(전에는 원시 코드가 보였다); `test/test_trip_error_labels.py` 가 Fleet 이 내는 모든 `TRIP_*` 코드에 문구가 있는지 지킨다
+- 증거: 모델 PC `operations/fleet/test/` (아래 커밋 메시지)
+- gate 변화: 없음
+- 결정: 없음(D-517 10 화면 문구)
+- 교훈: 새 오류 코드를 낼 때 화면 문구가 빠지기 쉽다 → 가드 테스트로 막는다

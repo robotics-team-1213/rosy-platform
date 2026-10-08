@@ -126,7 +126,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                           if j is not None and j['state'] in MANEUVER else None)
         self._cross_band = None  # D-507 6: a mode change or stop ends any crossing
 
-    def observe_junction(self, reason, received_at, corner_turning=False, ahead_m=None, ahead_v=None):
+    def observe_junction(self, reason, received_at, corner_turning=False, ahead_m=None, ahead_v=None,
+                         strategy=None):
         """One fresh line/keep_debug frame: a junction reason is a sighting (D-507 5: with its
         junction_ahead_m, if any); corner_turning is the keep-mode evidence behind
         supports_junction_turn."""
@@ -145,6 +146,10 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 self._junction_ahead = (float(ahead_m) if type(ahead_m) in (int, float)
                                         and 0 <= ahead_m <= MAX_AHEAD_M else None, reason)
             self._keep_corner_at = float(received_at) if corner_turning is True else None
+            if strategy == 'corner_left':  # each way latched CORNER_LATCH_S (review)
+                self._corner_left_at = float(received_at)
+            elif strategy == 'corner_right':
+                self._corner_right_at = float(received_at)
             # D-507 2: perception announces junction_ahead_m support on every keep_debug frame.
             self._junction_ahead_v_at = (float(received_at) if type(ahead_v) is int and ahead_v >= 1
                                          else None)
@@ -213,7 +218,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                                   stop_after_m=float(stop_after_m or 0.), travel=0.,
                                   last=None, held=False, turn_deg=turn_deg, advance_m=advance,
                                   window=window, map_id=(expect or {}).get('map_id'),
-                                  pivot=(expect or {}).get('pivot_past_line_m'), exit_segment=exit_segment)
+                                  pivot=(expect or {}).get('pivot_past_line_m'), exit_segment=exit_segment,
+                                  lane_turn=(expect or {}).get('lane_turn_deg'))
             if pose is not None:  # D-507 addendum: odom travel counts from here
                 self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
                                       radius=expect['bend_radius_m'], anchor=None,
@@ -338,12 +344,19 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 self._track_retreat(j['window'])  # D-507 2: see every odom sample since receipt
             if now > j['expires_at']:
                 self._bridge_hint = None
+                if j.get('corner_held') or self._corner_at_expected_line(j, now):
+                    # Fail closed: expiry never releases the robot into the keeper's corner; the
+                    # expired instruction holds until a fresh one replaces it (or a mode change).
+                    j['corner_held'] = True
+                    return self._junction_hold('junction_corner_hold', decision)
                 if not seen:
                     self._junction = None
                     return decision
                 j = self._junction = dict(action=None, place_id=None, state='waiting')
             elif not seen:
                 j['outside'] = False
+                if self._corner_at_expected_line(j, now):  # lap SIM A: hold, never the keeper's corner
+                    return self._junction_hold('junction_corner_hold', decision)
                 return decision
             else:
                 j['outside'] = not self._in_window(j, now)

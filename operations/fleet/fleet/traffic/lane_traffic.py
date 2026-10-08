@@ -10,6 +10,10 @@ D-517 6: a robot whose trip ended, or whose trip is on another map version, keep
 grants and body as ``pinned`` units until a fresh ``LOCALIZED`` pose shows it clear of them
 (the pose's units replace the pins); a map activation re-pins every robot from its last pose.
 
+D-525 (S1): virtual signals from site config ``fleet.traffic.signals`` run here each period; a
+signalled zone is granted only to its green approach (``blocks.step(green=...)``). A plan that fails
+``signal_phase.check`` on the active map keeps its zone red. Robots get no colour, only D-517 authority.
+
 The single writer of lane-trip grants (D-517 3). ``traffic_reservations.py`` (D-426 segment
 states) writes no trip grant; it stays only as the Gazebo conformance harness's segment record."""
 
@@ -24,7 +28,7 @@ from typing import Iterable, Mapping, Optional
 
 from core_common.robot_body import PINKY_PRO  # public read-only anchor (D-430 §3); RobotBody is not
 from fleet.localization.map_pose import MapPoseConfig
-from fleet.traffic import blocks
+from fleet.traffic import blocks, handover, signal_phase
 from fleet.routing.execute import arc_id
 from fleet.server.trip_ports import ODOM_DRIFT_PER_M, TripConfig, pose_view
 
@@ -44,8 +48,17 @@ MEMBER_REVERSE_M = 0.20 + 0.15
 class TrafficService:
     def __init__(self, store, config: TripConfig = TripConfig(), *,
                  zones: Optional[Mapping[str, tuple[Iterable[str], int]]] = None,
-                 body=PINKY_PRO, held_per_robot: int = HELD_PER_ROBOT, clock=time.time) -> None:
+                 signals: Iterable[signal_phase.SignalPlan] = (),
+                 body=PINKY_PRO, held_per_robot: int = HELD_PER_ROBOT, clock=time.time,
+                 signal_clock=time.monotonic) -> None:
         self._store, self._config, self._zones = store, config, dict(zones or {})
+        #: D-525: plan per signal id, its phase state (a restart starts all red), the active map's
+        #: check errors, and the last table's busy units (None: not known yet, so busy)
+        self._signals = {plan.id: plan for plan in signals}
+        self._phase = {signal_id: signal_phase.SignalState() for signal_id in self._signals}
+        self._signal_errors: dict[str, list[str]] = {}
+        self._busy: Optional[frozenset] = None
+        self._signal_clock = signal_clock
         # ponytail: one body for the whole site (Pinky); the longest registered body (D-517 3 L)
         # comes from robot capabilities once a second kind joins.
         self._body, self._length = body, body.front_x_m - body.rear_x_m
@@ -58,6 +71,11 @@ class TrafficService:
         #: robot id -> (route id, trim_m, spans) of the last period, to shift grants when laps are dropped.
         self._seen: dict[str, tuple[str, float, tuple]] = {}
         self._parked, self._warned = {}, False  # map poses read this period for ``pinned`` robots (D-517 6)
+        #: D-517 5 (M4): robot id -> when it was first seen UNKNOWN; robot id -> (route id, edges) of the
+        #: replan given; the last wait cycle and how many periods in a row it was seen
+        self._unknown_since: dict[str, float] = {}
+        self._tried: dict[str, tuple[str, list]] = {}
+        self._cycle: tuple[frozenset, int] = (frozenset(), 0)
 
     # ---- the table ------------------------------------------------------------------------
 
@@ -74,6 +92,8 @@ class TrafficService:
                 if units:
                     state.pinned[robot_id] = units
             self._layout, self._version, self._state, self._seen = layout, active[0], state, {}
+            self._signal_errors = {i: signal_phase.check(plan, active[2], layout) for i, plan in self._signals.items()}
+            self._busy = None
         return self._layout
 
     def _under(self, layout: blocks.Layout, graph, pose: tuple[float, float, float]) -> dict[str, bool]:
@@ -176,6 +196,8 @@ class TrafficService:
                 live.traffic = {"waiting_for": [], "authority_end_m": None, "refused_at_m": 0.0}
         if layout is None:
             self._view = _empty(None)
+            self._view["signals"] = self._signal_view(None)
+            self._unknown_since, self._tried, self._cycle = {}, {}, (frozenset(), 0)
             return
         state = self._state
         for robot_id in {*state.route, *state.held, *state.last_occupied} - set(trips):
@@ -191,7 +213,9 @@ class TrafficService:
                 blocks.release_robot(state, robot_id)
         robots = [self._robot(layout, active[2], live) for live in trips.values()]
         gaps = self._link(active[2], robots, trips)
-        result = blocks.step(layout, robots, self._state, self._clock())
+        now = self._clock()
+        result = blocks.step(layout, robots, self._state, now, green=self._green())
+        self._busy = result.busy
         refused_unit: dict[str, str] = {}
         for robot in robots:
             live, waiting = trips[robot.id], result.waiting_for.get(robot.id, ())
@@ -210,9 +234,108 @@ class TrafficService:
             live.traffic = {"waiting_for": list(waiting), "authority_end_m": result.authority_end.get(robot.id),
                             "refused_at_m": refused, **used}
         self._view = self._make_view(active[0], layout, active[2], trips, result, refused_unit, robots, gaps)
+        self._view["signals"] = self._signal_view(active[2])
+        self._hand_over(layout, trips, robots, refused_unit, now)
+
+    def _hand_over(self, layout, trips: dict, robots, refused_unit: dict, now: float) -> None:
+        """D-517 5 (M4): Fleet's resolver for a wait cycle or a 30 s UNKNOWN (``handover.decide``)."""
+        localized = {robot.id for robot in robots if robot.d is not None}
+        unknown = set(self._state.pinned) | (set(self._state.last_occupied) - localized)  # as the view's UNKNOWN
+        self._unknown_since = {r: self._unknown_since.get(r, now) for r in unknown}
+        route = {robot.id: robot.route_id for robot in robots}
+        self._tried = {r: tried for r, tried in self._tried.items() if route.get(r) == tried[0]}
+        avoidable = {}
+        for robot_id, unit in refused_unit.items():
+            live = trips[robot_id]
+            index = live.view["segment_index"]
+            edges = [edge for edge, parts in layout.edge_units.items() if any(p[0] == unit for p in parts)]
+            if index < len(live.segments) - 1 and live.segments[index]["edge_id"] not in edges:
+                avoidable[robot_id] = edges  # the unit lies past its next place: plan around it from there
+        cycle = self._view["wait_cycle"]
+        seen = frozenset(cycle or ())
+        self._cycle = (seen, self._cycle[1] + 1 if seen and seen == self._cycle[0] else int(bool(seen)))
+        pending = {r for r, live in trips.items()  # a replan hold with a route to confirm (none: human)
+                   if (live.view["hold"] or {}).get("reason") == "replan" and live.view["hold"].get("plan")}
+        decisions = handover.decide(cycle, self._cycle[1], avoidable, {r: t[1] for r, t in self._tried.items()},
+                                    pending, self._unknown_since, now)
+        decisions = {r: row for r, row in decisions.items() if not r.startswith("signal:")}  # D-525 pseudo node
+        for robot_id, row in decisions.items():
+            if row["decision"] == "replan":
+                self._tried[robot_id] = (route[robot_id], row["blocked_edges"])
+            if robot_id in trips:
+                trips[robot_id].traffic["resolver"] = row
+        self._view["resolver"] = [{"robot_id": r, **row} for r, row in sorted(decisions.items())]
 
     def view(self) -> dict:
         return self._view
+
+    # ---- D-525 virtual signals ------------------------------------------------------------
+
+    def _green(self) -> dict[str, frozenset]:
+        """Advance every signal and return ``{zone: approaches allowed in}``; a refused plan stays red."""
+        now, green = self._signal_clock(), {}
+        for signal_id, plan in self._signals.items():
+            state = self._phase[signal_id]
+            signal_phase.advance(plan, state, now, self._busy is None or plan.zone in self._busy)
+            green[plan.zone] = frozenset() if self._signal_errors.get(signal_id) else signal_phase.green(plan, state)
+        return green
+
+    def signal_command(self, signal_id: str, verb: str) -> dict:
+        """Operator verb (D-525 4): ``cycle``, ``hold`` or ``all_red``. KeyError: unknown signal."""
+        plan = self._signals[signal_id]
+        if verb not in ("cycle", "hold", "all_red"):  # set_aspect needs operator presence (S1 leaves it out)
+            raise ValueError(verb)
+        signal_phase.command(plan, self._phase[signal_id], verb, self._signal_clock())
+        return self._signal_row(plan, None)
+
+    def signals_all_red(self) -> None:
+        """E-stop: every virtual signal all red at once (D-525 4)."""
+        now = self._signal_clock()
+        for signal_id, plan in self._signals.items():
+            signal_phase.command(plan, self._phase[signal_id], "all_red", now)
+
+    def signal_refusal(self, segments, authority_mode: str) -> Optional[tuple[str, dict]]:
+        """D-525 1/6 trip start check: no route starting inside a signalled zone, and only a robot that
+        takes CORE authority may cross one (junction hold-back alone does not stop it at red)."""
+        if not self._signals or not segments:
+            return None
+        layout = self._layout_for(self._store.active())
+        if layout is None:
+            return None
+        zones = {plan.zone: signal_id for signal_id, plan in self._signals.items()}
+        spans = layout.route(self._store.active()[2], [arc_id(seg) for seg in segments])
+        if spans and spans[0].unit in zones:
+            return "TRIP_SIGNAL_START_IN_ZONE", {"signal_id": zones[spans[0].unit]}
+        crossed = sorted({zones[s.unit] for s in spans if s.unit in zones})
+        if crossed and authority_mode != "core":
+            return "TRIP_SIGNAL_NEEDS_AUTHORITY", {"signals": crossed}
+        return None
+
+    def _signal_row(self, plan, graph) -> dict:
+        state, now = self._phase[plan.id], self._signal_clock()
+        lit = signal_phase.green(plan, state)
+        last = plan.phases[state.phase][0] if state.phase >= 0 else None
+        held = now - state.since
+        left = {"green": (plan.phases[state.phase][1] - held) if state.mode == "cycle" else None,
+                "yellow": plan.yellow_s - held, "all_red": plan.all_red_s - held}[state.aspect]
+        approaches = []
+        for approach, green_s in plan.phases:
+            lamp = "green" if approach in lit else "yellow" if state.aspect == "yellow" and approach == last else "red"
+            row = {"approach": approach, "lamp": lamp, "green_s": green_s}
+            if graph is not None and approach in graph.arcs:  # the stop line: where the approach meets the zone
+                arc = graph.arcs[approach]
+                x, y, yaw = arc.point_at(arc.length_m)
+                row["stop_line"] = {"x": round(x, 3), "y": round(y, 3), "yaw": round(yaw, 4)}
+            approaches.append(row)
+        errors = self._signal_errors.get(plan.id) or []
+        return {"signal_id": plan.id, "zone": plan.zone, "virtual": True, "mode": state.mode,
+                "aspect": "all_red" if errors else state.aspect,
+                "left_s": None if left is None or errors else round(max(0.0, left), 1),
+                "zone_busy": self._busy is None or plan.zone in self._busy,
+                "approaches": approaches, "errors": errors, "alert": signal_phase.alert(plan, state, now)}
+
+    def _signal_view(self, graph) -> list[dict]:
+        return [self._signal_row(plan, graph) for _id, plan in sorted(self._signals.items())]
 
     def holds(self, live, index: int) -> bool:
         refused = (live.traffic or {}).get("refused_at_m")  # D-517 3: refused before PAST_PLACE_M past the place
@@ -366,4 +489,4 @@ def _round(value: Optional[float]) -> Optional[float]:
 
 def _empty(version) -> dict:
     return {"map_version": version, "block_length_m": {}, "units": [], "robots": [], "loop_capacity": [],
-            "wait_cycle": None, "unplaced": []}
+            "wait_cycle": None, "unplaced": [], "resolver": [], "signals": []}

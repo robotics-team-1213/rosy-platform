@@ -259,7 +259,7 @@ def test_traffic_api_is_read_only_and_repeat_needs_a_place_cycle(tmp_path):
     client, *_rest = _app(tmp_path, Ports())
     body = client.get("/api/fleet/traffic", headers=VIEWER).json()
     assert set(body) == {"map_version", "block_length_m", "units", "robots", "loop_capacity", "wait_cycle",
-                         "unplaced"}
+                         "unplaced", "resolver", "signals"}
     assert client.get("/api/fleet/traffic").status_code in (401, 403)
     trips = client.get("/api/fleet/trips", headers=VIEWER).json()
     assert trips["open"] == [] and trips["running"] is None
@@ -485,3 +485,70 @@ def test_a_shift_past_every_grant_drops_the_authority():
     state = blocks.TableState(held={"r": {1: ("b", True), 2: ("c", True)}}, authority={"r": 2.9})
     _shift(state, "r", spans, 1.0)
     assert state.held["r"] == {0: ("b", True), 1: ("c", True)} and abs(state.authority["r"] - 1.9) < 1e-9
+
+
+def _cycle(monkeypatch, before=0.5):
+    from fleet.traffic import lane_traffic
+
+    runner, store, fleet = _setup()
+    _trip(runner, store, fleet, "a", "ring_n:fwd", 0.15)
+    east = _arc(store, "east:fwd")
+    _trip(runner, store, fleet, "b", "east:fwd", east.length_m - 0.75)
+    _ticks(runner, fleet)  # the table refuses the block past the place before b is armed (no instruction sent)
+    fleet.at("b", east, east.length_m - before)  # 0.5: within arm_distance_m (0.6) of its place
+    monkeypatch.setattr(lane_traffic.blocks, "wait_cycle", lambda waiting: ("a", "b"))
+    return runner, store, fleet
+
+
+def _rows(runner):
+    return {row["robot_id"]: row["decision"] for row in runner.traffic.view()["resolver"]}
+
+
+def test_a_wait_cycle_replans_one_member_and_holds_it_for_the_operator(monkeypatch):
+    """D-517 5 (M4): the table hands a cycle to Fleet's resolver; one member is planned around the unit it
+    waits for and stands at its next place until an operator confirms (never switched by itself)."""
+    from fleet.traffic.handover import CYCLE_PERIODS
+
+    runner, store, fleet = _cycle(monkeypatch)
+    _ticks(runner, fleet, n=CYCLE_PERIODS - 1)
+    assert _rows(runner) == {}  # review M2: a cycle must persist first
+    _ticks(runner, fleet)
+    row = next(r for r in runner.traffic.view()["resolver"] if r["robot_id"] == "b")
+    assert row["decision"] == "replan" and row["blocked_edges"] == ["ring_n"]
+    assert _rows(runner)["a"] == "wait" and runner.view("b")["hold"] is None
+    _ticks(runner, fleet)  # the step applies it once: a hold the operator must confirm
+    hold = runner.view("b")["hold"]
+    assert hold is not None and runner.view("b")["state"] == "running"
+    assert all(seg["edge_id"] != "ring_n" for seg in (hold.get("plan") or {}).get("segments", []))
+    _ticks(runner, fleet, n=3)
+    # review M2: kept while a route waits for the operator; no other route (plan null) is a human's
+    kept = {"a": "wait", "b": "replan"} if hold.get("plan") else {"a": "human", "b": "human"}
+    assert _rows(runner) == kept and runner.view("b")["hold"] == hold
+
+
+def test_no_resolver_replan_once_the_place_is_instructed_or_out_of_arm_reach(monkeypatch):
+    """Review M1: a hold over an instruction CORE may be carrying out would freeze ``_locate`` mid-turn."""
+    from fleet.traffic.handover import CYCLE_PERIODS
+
+    runner, store, fleet = _cycle(monkeypatch)
+    _ticks(runner, fleet, n=CYCLE_PERIODS)
+    live = runner._live["b"]
+    live.sent = {"index": live.view["segment_index"], "action": "straight", "place": "x", "seq": 1, "at": fleet.now}
+    _ticks(runner, fleet)
+    assert runner.view("b")["hold"] is None and _rows(runner)["b"] == "human"
+    far, _store, far_fleet = _cycle(monkeypatch, before=0.75)
+    _ticks(far, far_fleet, n=CYCLE_PERIODS + 1)
+    assert far.view("b")["hold"] is None and _rows(far)["b"] == "human"
+
+
+def test_unknown_occupancy_past_30_s_goes_to_a_human():
+    runner, store, fleet = _setup()
+    _trip(runner, store, fleet, "a", "ring_n:fwd", 0.15)
+    _ticks(runner, fleet)
+    runner.traffic._clock = lambda: fleet.now
+    run(runner.cancel("a", "bob"))  # its trip ended but it still stands in the ring: UNKNOWN pins
+    _ticks(runner, fleet, n=2)
+    assert runner.traffic.view()["resolver"] == []
+    _ticks(runner, fleet, n=61)
+    assert [(r["robot_id"], r["trigger"], r["decision"]) for r in runner.traffic.view()["resolver"]] == [
+        ("a", "unknown", "human")]

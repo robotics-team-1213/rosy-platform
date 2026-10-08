@@ -190,6 +190,8 @@ _monotonic = time.monotonic  # the read-to-send clock (a test replaces it)
 MAX_WINDOW_BEND_DEG = 15.0
 #: The lane heading is checked this often ahead of the robot.
 WINDOW_BEND_STEP_M = 0.02
+#: CORE's lane_turn_deg range (lap SIM 2).
+MAX_LANE_TURN_DEG = 360.0
 # D-507 B9 diagnostic only: inspect the current edge, never authorize motion from this.
 BEND_PREVIEW_M = 0.40
 BEND_MAX_ANGLE_DEG = 80.0  # keeper's non-square bend limit
@@ -283,6 +285,9 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
     tol = _pose_tol(live, config, expect_in,
                     _curve_offset_m(live.arc(index), live.segments[index]["s_to"], remaining, pose))
     fields.update(expect_in_m=expect_in, expect_tol_m=tol)
+    if action == STRAIGHT:  # lap SIM 2: CORE follows a keeper corner the way this lane turns
+        turn = math.degrees(_lane_turn(live.arc(index), live.segments[index]["s_to"], remaining))
+        fields["lane_turn_deg"] = round(max(-MAX_LANE_TURN_DEG, min(turn, MAX_LANE_TURN_DEG)), 1)
     return fields
 
 
@@ -385,6 +390,18 @@ def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
     return past if past <= MAX_PIVOT_PAST_LINE_M else None
 
 
+def _lane_steps(arc, s_to: float, remaining: float) -> list:
+    """Heading changes (rad, left +) along the rest of the lane, WINDOW_BEND_STEP_M apart."""
+    steps = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M))
+    headings = [arc.point_at(s_to - remaining * (1 - k / steps))[2] for k in range(steps + 1)]
+    return [wrap(b - a) for a, b in zip(headings, headings[1:])]
+
+
+def _lane_turn(arc, s_to: float, remaining: float) -> float:
+    """The signed heading change (rad, left +) along the rest of the lane to the place."""
+    return sum(_lane_steps(arc, s_to, remaining))
+
+
 def _curve_offset_m(arc, s_to: float, remaining: float, pose: dict) -> float:
     """A robot this far beside the lane drives a curve this much longer or shorter than its
     centre line: the offset times the heading change (rad) along the rest of the lane. Safety
@@ -392,9 +409,7 @@ def _curve_offset_m(arc, s_to: float, remaining: float, pose: dict) -> float:
     if pose.get("x") is None or pose.get("y") is None:
         return 0.0
     offset = arc.project(pose["x"], pose["y"])[0]
-    steps = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M))
-    headings = [arc.point_at(s_to - remaining * (1 - k / steps))[2] for k in range(steps + 1)]
-    return offset * sum(abs(wrap(b - a)) for a, b in zip(headings, headings[1:]))
+    return offset * sum(abs(step) for step in _lane_steps(arc, s_to, remaining))
 
 
 def arc_newer(seq, base: Optional[int]) -> bool:
@@ -470,6 +485,8 @@ class LiveTrip:
         (``remaining`` m to its place) CORE is ``unexpected``, or ``waiting`` with the place
         beyond ``arm_distance_m`` (no instruction of ours is due there). The trip view keeps the
         map pose; ``line_reason`` is CORE's line-follow reason beside the junction state.
+        Lap SIM A ``junction_corner_hold``, at once: CORE holds our instruction short of the
+        keeper's corner and keeps holding it, so the trip ends now, not at the stall check.
         """
         junction = self.junction
         state = junction.get("state")
@@ -480,6 +497,8 @@ class LiveTrip:
                 state == "waiting" and remaining > config.arm_distance_m)):
             return "junction_unexpected", {**detail, "line_reason": junction.get("line_reason")}
         ours = self.first_seq is not None and (junction.get("seq") or 0) >= self.first_seq
+        if ours and junction.get("line_reason") == "junction_corner_hold":
+            return "junction_corner_hold", {**detail, "line_reason": "junction_corner_hold"}
         if (state in ("aborted", "unresolved") and ours) or (
                 state == "waiting" and now - self.waiting_since >= config.junction_wait_s):
             return "junction", detail
