@@ -73,8 +73,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(device identity): system/info에 프로비저닝 UID 노출
 - 2026-10-08 · uncommitted · fix(bridge): 경로 frame과 지도 ID 수신 근거 보존
 - 2026-10-08 · uncommitted · fix(bridge): 점유 지도 수신 시 ID와 격자를 묶음
 - 2026-10-08 · uncommitted · fix(bridge): 카메라 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
 - 2026-10-07 · uncommitted · fix(bridge): ControlSensorAdapter.return_proof_configured
-- 2026-10-07 · uncommitted · fix(bridge): D-495 검토 L3 keep_debug 문서
