@@ -140,10 +140,10 @@ def test_pinky_lane_segmentation_names_map_to_lane_unet():
     assert set(renamed) <= set(rlm.LaneUNet(n_classes=5, base=4).state_dict())
 
 
-def _dataset(root: Path) -> Path:
+def _dataset(root: Path, *, classes=None, drivable_index=1) -> Path:
     """Left half drivable (index 1), right half floor (0), top rows unlabelled (255)."""
-    classes = [{"index": 0, "name": "floor", "role": "background", "color": [0, 0, 0]},
-               {"index": 1, "name": "drivable", "role": "drivable", "color": [0, 255, 0]}]
+    classes = classes or [{"index": 0, "name": "floor", "role": "background", "color": [0, 0, 0]},
+                          {"index": 1, "name": "drivable", "role": "drivable", "color": [0, 255, 0]}]
     frames = []
     for split in ("train", "val"):
         for i in range(2):
@@ -153,7 +153,7 @@ def _dataset(root: Path) -> Path:
             bgr = np.zeros((240, 320, 3), np.uint8)
             bgr[:, :160] = (40, 200, 40)
             m = np.zeros((240, 320), np.uint8)
-            m[:, :160] = 1
+            m[:, :160] = drivable_index
             m[:20] = 255
             cv2.imwrite(str(root / img), bgr)
             cv2.imwrite(str(root / mask), m)
@@ -190,3 +190,43 @@ def test_dataset_without_one_drivable_class_is_refused(tmp_path):
     with pytest.raises(ValueError, match="exactly one class with role drivable"):
         dh.train_head(dh.LaneWithDrivable(_lane()), ds, ds, epochs=1, lr=1e-3,
                       batch_size=2, device="cpu", log=None)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason='candidate job needs model PC CUDA')
+def test_candidate_job_exports_without_ready_or_lane_changes(tmp_path, monkeypatch):
+    pytest.importorskip('onnx')
+    pytest.importorskip('onnxruntime')
+    from contextlib import nullcontext
+    import hashlib
+    import train_job
+
+    lane = _lane(7)
+    with torch.no_grad():
+        lane.head.bias[0] += 100  # all pixels are parent background
+    parent_dir = tmp_path / 'parent'; parent_dir.mkdir()
+    script = _scripted(parent_dir, lane)
+    onnx = parent_dir / 'model.onnx'
+    torch.onnx.export(lane, torch.rand(1, 3, 240, 320), str(onnx), opset_version=17,
+                      input_names=['x'], output_names=['logits'])
+    classes = [{'index': i, 'name': name, 'role': role, 'color': [0, 0, 0]}
+               for i, (name, role) in enumerate([*LANE_CLASSES, ('drivable', 'drivable')])]
+    dataset = _dataset(tmp_path / ('a' * 64), classes=classes, drivable_index=5)
+    profile = tmp_path / 'camera.json'; profile.write_text('{"accepted":true}')
+    parent = {'torchscript': script, 'onnx': onnx,
+              'input': {'color': 'rgb', 'scale': 1 / 255, 'mean': (0, 0, 0),
+                        'std': (1, 1, 1)},
+              'lineage': {'model_revision': 'lane-seg-synthetic',
+                          'onnx_sha256': hashlib.sha256(onnx.read_bytes()).hexdigest(),
+                          'torchscript_sha256': hashlib.sha256(script.read_bytes()).hexdigest()}}
+    config = {'dataset': 'synthetic@' + dataset.name}
+    training = {'seed': 7, 'epochs': 1, 'lr': 0.001, 'batch_size': 2,
+                'ignore_top': 110}
+    monkeypatch.setattr(train_job, 'gpu_lease', nullcontext)
+    out = tmp_path / 'candidate-job'
+    result = train_job._run_drivable_candidate(config, out, dataset, profile, training,
+                                                parent, {'test': 'synthetic'}, lambda: None)
+    assert result['status'] == 'candidate'
+    assert result['revision'].startswith('v13-drivable-')
+    assert json.loads((out / 'state.json').read_text())['outcome'] == 'candidate'
+    assert (Path(result['artifact']) / 'candidate_parity.json').is_file()
+    assert not list(tmp_path.rglob('READY'))

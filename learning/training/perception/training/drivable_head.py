@@ -114,6 +114,8 @@ def verify_candidate_lane_parity(parent_onnx, candidate_onnx, frames, *, ignore_
         rebuilt = np.concatenate((np.maximum(output[:, :1], output[:, -1:]),
                                   output[:, 1:-1]), axis=1)
         error = np.max(np.abs(original[:, :, ignore_top:] - rebuilt[:, :, ignore_top:]), axis=1)
+        if np.max(error) > 1e-3:
+            raise ValueError("candidate ONNX changes parent lane pixels or logits")
         unstable = mismatch & (margin <= 2 * error + 1e-7)
         ambiguous += int(unstable.sum())
         if np.any(mismatch & ~unstable):
