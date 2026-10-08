@@ -28,6 +28,20 @@ def test_merge_unknown_clips_new_drivable_to_human_lane_edges():
     assert review_masks.lane_boundary_violations(merged, binding) == {'left': 1, 'right': 0}
 
 
+def test_merge_unknown_holds_new_lane_marking_that_conflicts_with_human_drivable():
+    current = np.array([[255, 5, 255, 255, 5, 255]], dtype=np.uint8)
+    proposal = np.array([[0, 255, 1, 5, 2, 0]], dtype=np.uint8)
+    binding = {'classes': [{'name': 'lane_left', 'index': 1},
+                           {'name': 'lane_right', 'index': 2},
+                           {'name': 'drivable', 'index': 5}]}
+    merged = review_masks.merge_unknown(current, proposal, binding)
+    assert merged.tolist() == [[0, 5, 255, 5, 5, 0]]
+    assert review_masks.lane_boundary_violations(merged, binding) == {'left': 0, 'right': 0}
+    empty = np.full((1, 5), 255, np.uint8)
+    suggested = np.array([[5, 1, 5, 2, 5]], dtype=np.uint8)
+    assert review_masks.merge_unknown(empty, suggested, binding).tolist() == [[255, 1, 5, 2, 255]]
+
+
 def test_merge_draft_fills_only_unknown_and_keeps_human_review_pending(tmp_path):
     store = open_store(tmp_path)
     folder, classes, _ = catalog(tmp_path)

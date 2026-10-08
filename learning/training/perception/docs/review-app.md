@@ -33,7 +33,8 @@ python learning/training/perception/dataset/review_app.py --state X:/DevTemp/pin
 마스크를 버리는 별도 동작이다. AI 의견 패널은 픽셀을 채우지 않는다. 승인 전에는
 남은 255와 경계를 사람이 확인한다.
 사람이 표시한 좌·우 차선 바깥의 새 `drivable` 제안은 255로 남기며,
-기존 사람 라벨의 경계 오류를 늘리는 초안은 거절한다.
+사람의 주행 라벨과 충돌하는 새 차선 제안도 255로 남긴다.
+남은 충돌이나 기존 사람 라벨의 경계 오류는 사람이 확인한다.
 
 SAM 주행 영역 초안이 보이는 좌·우 차선 밖을 침범하면 가져오기가 거절된다. 모델 PC에서 `clip_lane_draft.py --catalog <SAM verified-inputs.jsonl> --classes <v13 classes.yaml> --out <새 폴더>`로 차선 밖 `drivable` 픽셀만 255로 되돌린 새 후보와 receipt를 만든 뒤, 그 폴더를 등록할 수 있다. 이 처리는 차선이 보이는 행에서만 작동하며 255를 배경이나 주행 가능 정답으로 바꾸지 않는다. 사람의 경계 확인과 승인은 여전히 필요하다.
 
