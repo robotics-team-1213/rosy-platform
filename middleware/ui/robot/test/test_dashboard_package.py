@@ -174,11 +174,12 @@ def test_map_interaction_controls_explain_and_enforce_the_operator_boundary():
     assert 'canGoal: canMapAction' in script
     assert 'mode !== "goal" || (!safeStopped() && goalPoseReady())' in script
     assert 'el("ui-actions", "surface-actions map-layer-actions")' in script
+    assert 'el("ui-actions", "surface-actions map-click-actions")' in script
     panel_styles = (ROOT / "panels" / "surface-panels.css").read_text(encoding="utf-8")
     assert ".surface-link[hidden] { display: none; }" in panel_styles
     assert 'ui-button[kind="segment"][aria-pressed="true"]' in shared_controls
     assert "#shell-estop { flex: none; white-space: nowrap; }" in shell
-    assert ".surface-actions.map-layer-actions > ui-button { flex: 1;" in shell
+    assert ".surface-actions:is(.map-click-actions, .map-layer-actions) > ui-button { flex: 1;" in shell
 
 
 def test_every_module_the_shell_imports_is_installed_and_served():
