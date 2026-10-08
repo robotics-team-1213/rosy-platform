@@ -15,7 +15,7 @@ from fleet.server.site_map_store import SiteMapStore
 from fleet.server.trip_ports import TripConfig
 from fleet.server.trip_runner import TripError, TripRunner
 from test_routing import demo_site
-from test_trip_runner import LANE, Ports, run
+from test_trip_runner import LANE, Ports, _activate_again, run
 
 
 class Fleet:
@@ -231,7 +231,11 @@ def test_no_junction_instruction_into_a_refused_block():
     _ticks(runner, fleet)
     assert fleet.p["b"].sent == []  # CORE waits at the junction
     run(runner.cancel("a", "bob"))
+    _ticks(runner, fleet, n=2)  # review HIGH 2 (D-517 6): a ended its trip but still stands in the ring
+    assert fleet.p["b"].sent == [] and runner.traffic.pinned() == ["a"]
+    fleet.p["a"].pose = MapPose(5.0, 5.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, 0.1)  # seen off the lanes
     _ticks(runner, fleet, n=2)
+    assert runner.traffic.pinned() == []
     assert len(fleet.p["b"].sent) == 1 and fleet.p["b"].sent[0][0] in ("straight", "left", "right")
 
 
@@ -307,3 +311,19 @@ def test_a_loop_is_its_lap_cycle_not_the_approach_to_it():
     with pytest.raises(TripError) as err:
         _trip(runner, store, fleet, "d", "ring_w:fwd", 0.05, to="start_s", via=("start_n",))
     assert (err.value.code, err.value.detail["robots"]) == ("TRIP_LOOP_FULL", 4)
+
+
+def test_a_map_activation_keeps_every_robots_occupancy():
+    """Review HIGH 2: a new map version re-pins each robot from its last LOCALIZED pose."""
+    runner, store, fleet = _setup(ids=("a",))
+    _trip(runner, store, fleet, "a", "ring_n:fwd", 0.15)
+    _ticks(runner, fleet)
+    run(runner.cancel("a", "bob"))
+    fleet.p["a"].pose = None  # no pose any more: only the last one can place it
+    _activate_again(store)
+    _ticks(runner, fleet)
+    view = runner.traffic.view()
+    assert view["map_version"] == store.active()[0] and runner.traffic.pinned() == ["a"]
+    assert [u["id"] for u in view["units"] if u["state"] == "UNKNOWN" and u["holders"] == ["a"]]
+    _ticks(runner, fleet, n=3)
+    assert runner.traffic.pinned() == ["a"]  # still nothing shows it left

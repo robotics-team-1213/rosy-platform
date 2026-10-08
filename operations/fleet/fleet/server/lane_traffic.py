@@ -5,10 +5,15 @@ map version (zones from site config ``fleet.traffic.zones``; a two-way lane beco
 direction-locked zone by itself), each trip robot becomes a ``blocks.Robot`` and
 ``blocks.step`` runs. No authority goes to a robot (that is M2, safety-reviewed); the trip loop
 only holds back a junction instruction into a refused block (``trip_runner._traffic_holds``).
+
+D-517 6: a robot whose trip ended, or whose trip is on another map version, keeps its last
+grants and body as ``pinned`` units until a fresh ``LOCALIZED`` pose shows it clear of them
+(the pose's units replace the pins); a map activation re-pins every robot from its last pose.
 """
 
 from __future__ import annotations
 
+import math
 import time
 from typing import Iterable, Mapping, Optional
 
@@ -16,7 +21,7 @@ from core_common.robot_body import PINKY_PRO, RobotBody
 from fleet.localization.map_pose import MapPoseConfig
 from fleet.routing import blocks
 from fleet.routing.execute import arc_id
-from fleet.server.trip_ports import ODOM_DRIFT_PER_M, TripConfig
+from fleet.server.trip_ports import ODOM_DRIFT_PER_M, TripConfig, pose_view
 
 LOCALIZED = "LOCALIZED"
 #: D-517 3: blocks one robot holds at worst (occupancy 2 + one grant ahead on the demo blocks).
@@ -37,17 +42,52 @@ class TrafficService:
         self._u_max = config.expect_tol_min_m + ODOM_DRIFT_PER_M * MapPoseConfig().max_dead_reckon_m
         self._version, self._layout, self._state = None, None, blocks.TableState()
         self._view: dict = _empty(None)
+        #: robot id -> its last LOCALIZED map pose ``(x, y, yaw)``, to re-pin it on a new map version.
+        self._last_pose: dict[str, tuple[float, float, float]] = {}
 
     # ---- the table ------------------------------------------------------------------------
 
     def _layout_for(self, active) -> Optional[blocks.Layout]:
         if active is None:
             return None
-        if active[0] != self._version:  # a new map version starts a new table
+        if active[0] != self._version:  # a new map version starts a new table, occupancy carried over
             rules = blocks.BlockRules(self._length, self._u_max, self._body.resume_gap_m)
-            self._layout = blocks.build_layout(active[2], rules, self._zones)
-            self._version, self._state = active[0], blocks.TableState()
+            layout = blocks.build_layout(active[2], rules, self._zones)
+            old, state = self._state, blocks.TableState()
+            for robot_id in {*old.route, *old.held, *old.last_occupied, *old.pinned}:
+                pose = self._last_pose.get(robot_id)
+                units = self._under(layout, active[2], pose) if pose is not None else {}
+                if units:
+                    state.pinned[robot_id] = units
+            self._layout, self._version, self._state = layout, active[0], state
         return self._layout
+
+    def _under(self, layout: blocks.Layout, graph, pose: tuple[float, float, float]) -> dict[str, bool]:
+        """``{unit: forward}`` a robot body at ``pose`` (± its length and u along the lane) may touch."""
+        x, y, yaw = pose
+        reach = self._length + self._u_max
+        units: dict[str, bool] = {}
+        for arc in graph.arcs.values():
+            if not arc.forward:
+                continue
+            dist, s, tangent = arc.project(x, y)
+            if dist > arc.width_m / 2 + self._u_max:
+                continue
+            forward = yaw is None or math.cos(yaw - tangent) >= 0.0
+            for unit, s0, s1 in layout.edge_units[arc.edge_id]:
+                if s1 > s - reach and s0 < s + reach:
+                    units[unit] = forward
+        return units
+
+    def _pin(self, robot_id: str) -> None:
+        """Its trip left the table: grants and last body stay as pins (D-517 6)."""
+        state = self._state
+        kept = dict(state.pinned.get(robot_id, {}))
+        kept.update(state.last_occupied.get(robot_id, {}))
+        kept.update({unit: forward for unit, forward in state.held.get(robot_id, {}).values()})
+        blocks.release_robot(state, robot_id)
+        if kept:
+            state.pinned[robot_id] = kept
 
     def _robot(self, layout: blocks.Layout, graph, live) -> blocks.Robot:
         segments, pose = live.segments, live.view.get("pose") or {}
@@ -70,19 +110,40 @@ class TrafficService:
         return blocks.Robot(live.view["robot_id"], spans, d, lookahead, u, self._length,
                             route_id=f"{live.view['trip_id']}:{live.route_rev}")
 
-    def step(self, lives: Iterable) -> None:
-        """One period over every open trip on the active map version."""
+    def pinned(self) -> list[str]:
+        """Robots that block with pins: the trip loop reads their poses (``step(poses=...)``)."""
+        return sorted(self._state.pinned)
+
+    def step(self, lives: Iterable, poses: Optional[Mapping[str, object]] = None) -> None:
+        """One period over every open trip on the active map version.
+
+        ``poses`` are map poses read this period for robots without an open trip (``pinned``).
+        """
+        lives = list(lives)
+        fresh = {robot_id: pose_view(pose) for robot_id, pose in (poses or {}).items()}
+        fresh.update({live.view["robot_id"]: live.view.get("pose") for live in lives if live.open})
+        fresh = {robot_id: (p["x"], p["y"], p["yaw"]) for robot_id, p in fresh.items()
+                 if p and p.get("state") == LOCALIZED and p.get("x") is not None and p.get("y") is not None}
+        self._last_pose.update(fresh)
         active = self._store.active()
         layout = self._layout_for(active)
+        trips = {live.view["robot_id"]: live for live in lives
+                 if live.open and layout is not None and live.view["map_version"] == active[0]}
+        for live in lives:
+            if live.open and live.view["robot_id"] not in trips:  # no table for its map: no instruction
+                live.traffic = {"waiting_for": [], "authority_end_m": None, "refused_at_m": 0.0}
         if layout is None:
             self._view = _empty(None)
             return
-        trips = {live.view["robot_id"]: live for live in lives
-                 if live.open and live.view["map_version"] == active[0]}
-        for robot_id in [r for r in self._state.route if r not in trips]:
-            # ponytail: an ended trip frees its blocks at once; D-517 6 keeps them until the pose
-            # shows the robot left (recovery, M4) — nothing is sent in M1, so nothing is unsafe yet.
-            blocks.release_robot(self._state, robot_id)
+        state = self._state
+        for robot_id in {*state.route, *state.held, *state.last_occupied} - set(trips):
+            self._pin(robot_id)
+        for robot_id in [r for r in state.pinned if r not in trips and r in fresh]:
+            units = self._under(layout, active[2], fresh[robot_id])  # where it is now replaces the pins
+            if units:
+                state.pinned[robot_id] = units
+            else:
+                blocks.release_robot(state, robot_id)
         robots = [self._robot(layout, active[2], live) for live in trips.values()]
         result = blocks.step(layout, robots, self._state, self._clock())
         refused_unit: dict[str, str] = {}

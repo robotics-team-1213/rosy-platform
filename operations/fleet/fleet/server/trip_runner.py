@@ -88,6 +88,8 @@ class TripRunner:
         self._locks: dict[str, asyncio.Lock] = {}
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
+        #: Map poses read this period for robots the block table still pins without a trip (D-517 6).
+        self._parked: dict[str, Optional[MapPose]] = {}
         self.traffic = traffic if traffic is not None else TrafficService(store, config)
         self._traffic_warned = False
         self._refresh_warned_at = -math.inf
@@ -296,16 +298,28 @@ class TripRunner:
             task = self._inflight.get(robot_id)
             if live.open and (task is None or task.done()):
                 self._inflight[robot_id] = asyncio.ensure_future(self._tick_robot(live))
+        for robot_id in self.traffic.pinned():  # an ended trip's robot blocks until a pose shows it left
+            task = self._inflight.get(robot_id)
+            if not self.robot_busy(robot_id) and (task is None or task.done()):
+                self._inflight[robot_id] = asyncio.ensure_future(self._watch(robot_id))
         pending = [task for task in self._inflight.values() if not task.done()]
         if pending:
             await asyncio.wait(pending, timeout=self.config.period_s)
+        poses, self._parked = self._parked, {}
         try:
-            self.traffic.step(self._live.values())
+            self.traffic.step(self._live.values(), poses)
             self._traffic_warned = False
         except Exception:  # the table is shown only (M1); a fault never ends a trip
             if not self._traffic_warned:
                 _LOG.exception("traffic table step failed (repeats muted until it works)")
             self._traffic_warned = True
+
+    async def _watch(self, robot_id: str) -> None:
+        """The map pose of a robot without a trip (hub cache, no forced REST read); none on failure."""
+        try:
+            self._parked[robot_id] = await self._call(self._poses.arbitrated_pose(robot_id))
+        except Exception:  # an unread pose keeps the pins
+            pass
 
     async def _tick_robot(self, live: LiveTrip) -> None:
         """Every failure ends at most this one trip."""
