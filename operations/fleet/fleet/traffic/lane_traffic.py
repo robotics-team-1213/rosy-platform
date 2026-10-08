@@ -156,7 +156,8 @@ class TrafficService:
         # and plan length if 30 robots on long repeat trips measure slow (D-517 7: 100 ms).
         spans = layout.route(graph, [arc_id(seg) for seg in segments])
         robot_id, route_id = live.view["robot_id"], f"{live.view['trip_id']}:{live.route_rev}"
-        d = self._jump_guard(robot_id, route_id, d, live.trim_m, speed, u)
+        if live.view.get("traffic_authority") == "core":  # only an until_m can be overrun by a jump
+            d = self._jump_guard(robot_id, route_id, d, live.trim_m, speed, u, live.at_stamp)
         seen = self._seen.get(robot_id)
         if seen is not None and seen[0] == route_id and live.trim_m > seen[1]:
             _shift(self._state, robot_id, seen[2], live.trim_m - seen[1])
@@ -166,11 +167,12 @@ class TrafficService:
                             convoy=getattr(live, "convoy", None), recovering=line.get("line_recovering") is True)
 
     def _jump_guard(self, robot_id: str, route_id: str, d: Optional[float], trim: float, speed: float,
-                    u: float) -> Optional[float]:
-        """``d``, or None when it jumped from the last accepted front on the same route (JUMP_MARGIN_M)."""
+                    u: float, stamp: Optional[float] = None) -> Optional[float]:
+        """``d``, or None when it jumped from the last accepted front on the same route (JUMP_MARGIN_M).
+        Time is the pose's own stamp (a stale pose that refreshes is travel, not a jump), else the clock."""
         if d is None:
             return None
-        now, prev = self._clock(), self._front.get(robot_id)
+        now, prev = (stamp if stamp is not None else self._clock()), self._front.get(robot_id)
         if prev is not None and prev[:2] == (route_id, trim):  # same route metres (dropped laps restart it)
             allowed = speed * max(0.0, now - prev[3]) + 2 * u + JUMP_MARGIN_M
             if abs(d - prev[2]) > allowed:

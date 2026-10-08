@@ -154,9 +154,9 @@ def test_a_pose_jump_is_refused_until_it_settles():
     assert tick(1.50) == 1.50
     assert tick(2.10) is None and service.jumped("a")   # +0.60: a one-frame glitch forward
     assert tick(1.55) == 1.55 and not service.jumped("a")  # agrees with the last accepted front again
-    assert tick(0.95) is None          # −0.60: a jump back would let CORE overrun its authority
-    assert tick(0.95) is None          # second period at the new place
-    assert tick(0.95) == 0.95          # third: moved by hand or a real correction, taken
+    assert tick(0.50) is None          # −1.05: a jump back would let CORE overrun its authority
+    assert tick(0.50) is None          # second period at the new place
+    assert tick(0.50) == 0.50          # third: moved by hand or a real correction, taken
     assert tick(0.20, trim=1.40) == 0.20  # a repeat trip dropped laps: route metres restart
     assert tick(5.0, route="t:2") == 5.0  # a new route starts fresh
     assert guard(None) is None
