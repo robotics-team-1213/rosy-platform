@@ -1,0 +1,87 @@
+"""tools/remote/remote_pytest.py with fake ssh: host order, local fallback, exit codes, bundle range."""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools" / "remote"))
+
+import remote_pytest as rp  # noqa: E402
+
+
+def test_first_reachable_host_wins_in_listed_order(monkeypatch):
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    monkeypatch.setenv("ROSY_TEST_HOSTS", "a@1 b@2 c@3")
+    probed = []
+
+    def probe(host):
+        probed.append(host)
+        return host != "a@1"
+
+    assert rp.pick_host(probe=probe) == "b@2"
+    assert probed == ["a@1", "b@2"]
+
+
+def test_no_host_or_forced_local_means_local(monkeypatch):
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    assert rp.pick_host(["a@1", "b@2"], probe=lambda h: False) is None
+    monkeypatch.setenv("ROSY_TEST_LOCAL", "1")
+    assert rp.pick_host(["a@1"], probe=lambda h: True) is None
+
+
+def test_unreachable_hosts_fall_back_to_a_local_pytest(monkeypatch, tmp_path, capsys):
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    monkeypatch.setattr(rp, "reachable", lambda host: False)
+    commands = []
+    monkeypatch.setattr(rp, "capture", lambda command, log, cwd=None: commands.append(command) or 1)
+    assert rp.run([["test/x.py"]], [tmp_path / "run-1.txt"], repo=ROOT) == [1]
+    assert commands == [[sys.executable, "-m", "pytest", "test/x.py", *rp.PYTEST_TAIL]]
+    assert "no test host reachable" in capsys.readouterr().err
+
+
+def test_worst_exit_code_counts_nothing_collected_as_pass():
+    assert rp.worst([]) == 0
+    assert rp.worst([0, 5]) == 0
+    assert rp.worst([0, 1, 5]) == 1
+    assert rp.worst([1, 4, 0]) == 4
+
+
+def test_affected_selection_uses_local_invocations_when_full_and_drops_skipped():
+    sel = {"mode": "affected", "invocations": [["test/a.py", "test/b.py"], ["test/b.py"]],
+           "local_invocations": [["guard.py"]]}
+    assert rp.affected_invocations(sel, {"test/b.py"}) == [["test/a.py"]]
+    assert rp.affected_invocations({**sel, "mode": "full"}, set()) == [["guard.py"]]
+
+
+def _git(cwd, *args):
+    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True,
+                          text=True).stdout.strip()
+
+
+def test_bundle_starts_at_origin_main_and_falls_back_to_full_history(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    for n in range(3):
+        _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", str(n))
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD~1")
+    head, pushed = _git(repo, "rev-parse", "HEAD"), _git(repo, "rev-parse", "HEAD~1")
+    assert rp.bundle_base(repo, head) == pushed
+
+    sent = []
+
+    def fake_remote(host, script, *args, input=None, **kw):
+        listing = subprocess.run(["git", "bundle", "list-heads", "-"], input=input, capture_output=True,
+                                 cwd=repo)
+        prereq = b"\n-" in input.split(b"\n\n", 1)[0] or input.split(b"\n", 2)[1].startswith(b"-")
+        sent.append(prereq)
+        assert args[1] == head and listing.returncode == 0
+        return subprocess.CompletedProcess([], 3 if prereq else 0, b"", b"")  # host lacks the base
+
+    monkeypatch.setattr(rp, "remote", fake_remote)
+    rp.ship(repo, "h", head, "run1")
+    assert sent == [True, False]  # origin/main..sha first, then the whole history
+    assert _git(repo, "for-each-ref", "refs/remote-pytest") == ""  # temporary ref removed
