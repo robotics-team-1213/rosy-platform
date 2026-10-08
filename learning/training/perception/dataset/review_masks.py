@@ -32,9 +32,12 @@ def configure(store):
             frame INTEGER, version INTEGER, action TEXT, review TEXT);
             CREATE TABLE IF NOT EXISTS pixel_drafts (
                 frame INTEGER NOT NULL, sha256 TEXT NOT NULL, path TEXT NOT NULL,
-                catalog_sha256 TEXT NOT NULL, origin TEXT, PRIMARY KEY(frame, sha256));''')
+                catalog_sha256 TEXT NOT NULL, origin TEXT, withdrawn INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(frame, sha256));''')
         if 'origin' not in {r['name'] for r in db.execute('PRAGMA table_info(pixel_drafts)')}:
             db.execute('ALTER TABLE pixel_drafts ADD COLUMN origin TEXT')
+        if 'withdrawn' not in {r['name'] for r in db.execute('PRAGMA table_info(pixel_drafts)')}:
+            db.execute('ALTER TABLE pixel_drafts ADD COLUMN withdrawn INTEGER NOT NULL DEFAULT 0')
         if 'approval' not in {r['name'] for r in db.execute('PRAGMA table_info(masks)')}:
             db.execute('ALTER TABLE masks ADD COLUMN approval TEXT')
 
@@ -106,7 +109,7 @@ def get(store, index):
     with store.connect() as db:
         row = db.execute('SELECT * FROM masks WHERE frame=?', (index,)).fetchone()
         drafts = [dict(value) for value in db.execute(
-            'SELECT sha256,catalog_sha256,origin FROM pixel_drafts WHERE frame=? ORDER BY rowid DESC', (index,))
+            'SELECT sha256,catalog_sha256,origin FROM pixel_drafts WHERE frame=? AND withdrawn=0 ORDER BY rowid DESC', (index,))
                   if row is None or value['sha256'] != row['sha256']]
     result = dict(row) if row else {'frame': index, 'version': 0, 'status': 'pending',
                                    'path': None, 'sha256': None, 'complete': 0, 'background': 0}
@@ -329,7 +332,7 @@ def update(store, index, body, conflict):
             digest = body.get('draft_sha256')
             if not isinstance(digest, str):
                 raise ValueError('draft SHA required')
-            candidate = db.execute('SELECT path,sha256 FROM pixel_drafts WHERE frame=? AND sha256=?',
+            candidate = db.execute('SELECT path,sha256 FROM pixel_drafts WHERE frame=? AND sha256=? AND withdrawn=0',
                                    (index, digest)).fetchone()
             if not candidate:
                 raise ValueError('selected draft is unavailable')
