@@ -1,4 +1,4 @@
-import { cssColor, canvasFont, clearPalette } from '/common/ui.js';
+import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory } from '/history.js';
 const font = (size, family) => canvasFont(size, family);
@@ -54,7 +54,7 @@ function enable() {
   $('candidates').disabled = locked || frame?.status === 'excluded' || !sourceCandidates().length;
   $('candidates').reason = !sourceCandidates().length ? '이 사진에는 가져올 원본 객체 후보가 없습니다.' : '';
   $('undo').disabled = locked || !undo || frame?.status === 'excluded';
-  $('undo').reason=locked?'사진 저장과 불러오기를 마친 뒤 사용하세요.':!undo?'이 사진에서 저장한 라벨 수정이 없습니다.':frame?.status==='excluded'?'제외 사진은 수정할 수 없습니다.':'';
+  $('undo').reason=locked?'작업 중':!undo?'수정 없음':frame?.status==='excluded'?'제외된 사진':'';
   $('prepare').disabled = busy || loading || conflicted || forbidden || !!gesture || !workspace;
   $('prepare').reason = loading ? '검수 내용을 불러오는 중입니다.' : forbidden ? '검수 권한이 거부되었습니다. 최신 내용을 다시 불러오세요.' : '';
   $('reload').disabled = busy || loading || !!gesture;
@@ -167,7 +167,7 @@ async function select(index) {
   frameHeading();saveView();
   $('review-history-summary').textContent='검수 기록을 불러오는 중…';
   request(`/api/history/${index}`).then(value=>{if(serial===loadSerial)showHistory(value);})
-    .catch(()=>{if(serial===loadSerial)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 최신 내용 불러오기를 눌러 다시 확인하세요.';});
+    .catch(()=>{if(serial===loadSerial)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 새로고침을 눌러 다시 확인하세요.';});
   $('source-info').textContent = frame.source.source_kind === 'mcap'
     ? `${frame.source.width} × ${frame.source.height} · MCAP ${frame.source.source_session} · ${frame.source.mcap.frame.bag} SHA ${frame.source.mcap.bags.find(b => b.name === frame.source.mcap.frame.bag).sha256} · ${frame.source.mcap.frame.topic} · log ${frame.source.mcap.frame.log_ns} · channel ${frame.source.mcap.frame.channel_id} · ordinal ${frame.source.mcap.frame.message_ordinal} · 가져올 때 원본 픽셀 검증`
     : `${frame.source.width} × ${frame.source.height} · ${frame.source.video || '원본 사진'} · frame ${frame.source.video_frame ?? index}`;
@@ -232,14 +232,15 @@ function renderBoxes() {
 }
 function quickClasses() {
   const row=$('object-quick-classes'); row.replaceChildren();
+  const icons={robot:'robot',obstacle_box:'box',cone:'cone',traffic_light:'traffic-light',sign:'sign',person_feet:'person-feet',obstacle:'obstacle'};
   for (const cls of workspace.object_class_set.classes) {
-    const button=document.createElement('button'), swatch=document.createElement('i'), label=document.createElement('span'), key=document.createElement('kbd');
+    const button=document.createElement('button'), icon=document.createElement('span'), label=document.createElement('span'), key=document.createElement('kbd');
     button.type='button'; button.value=cls.name; button.className='review-class-chip';
     button.setAttribute('aria-label',`${cls.display} 클래스 지정${cls.hotkey ? ` · ${cls.hotkey.toUpperCase()}` : ''}`);
-    swatch.className='review-swatch'; swatch.setAttribute('aria-hidden','true');
-    if(cls.color) swatch.style.background=`rgb(${cls.color.join(',')})`;
+    icon.setAttribute('aria-hidden','true');
+    actionIcon(icon,icons[cls.name]||'box');
     label.textContent=cls.display; key.textContent=cls.hotkey?.toUpperCase()||'·';
-    button.append(swatch,label,key);
+    button.append(icon,label,key);
     button.onclick=()=>{if(button.disabled||selected===null)return;
       edit(boxes=>{boxes[selected].label=cls.name;if(cls.name==='traffic_light')boxes[selected].signal_state ??= 'unknown';});
       $('canvas').focus({preventScroll:true});};
@@ -266,7 +267,7 @@ async function mutate(action, extras={}, restoring=false) {
     if(advance) {select(advance.index); return;}
     frameHeading();
     request(`/api/history/${id}`).then(value=>{if(frame?.index===id)showHistory(value);})
-      .catch(()=>{if(frame?.index===id)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 최신 내용 불러오기를 눌러 다시 확인하세요.';});
+      .catch(()=>{if(frame?.index===id)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 새로고침을 눌러 다시 확인하세요.';});
     coordinatePreview=null; if (selected>=frame.review.boxes.length) selected=null;
     renderBoxes(); list(); paint();
   } catch(e) {coordinatePreview=null; error(e.message); renderBoxes(); paint(); $('save-status').textContent=`저장 실패 · ${e.message}`;}

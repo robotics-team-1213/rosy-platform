@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(fleet): 굽이 지시가 정지·교통 대기를 따른다
-- 2026-10-08 · uncommitted · 정적 차선 경로 끝 정지 ROS-SIM
-- 2026-10-08 · uncommitted · 지도 밖 자세의 굽이 기억 ROS 거절
-- 2026-10-08 · uncommitted · 굽이 원본의 격리 ROS 관측 재발행
-- 2026-10-08 · uncommitted · 굽이 공백의 지도 경계 기억 반례 재생
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 재검증 반영: 호 중 bend 거절
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 병합 뒤 시험과 core_features 크기
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 안전 리뷰 반영과 main 병합
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) API 판 v1.143 → v1.145
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 단계 1 CORE: 지도 호 feed-forward, IR 한 번 보정, API v1.143

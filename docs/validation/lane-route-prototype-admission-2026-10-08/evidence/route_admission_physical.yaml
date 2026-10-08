@@ -1,0 +1,9 @@
+/line_observer_node:
+  ros__parameters:
+    camera_lane_mode: route_a
+    camera_ground_source: PINKY
+    allow_simulation_ground: false
+    use_sim_time: false
+    lane_graph_path: /home/rosy/rosy_lfstop_ws/src/rosy-platform/middleware/perception/map/map_v2_fleet/lane_graph.yaml
+    route: ["west:r", "ring_s:f"]
+    route_start: [-1.15, -0.511, 0.0]

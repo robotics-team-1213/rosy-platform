@@ -112,6 +112,8 @@ class TripCaps:
     site_floor_map_id: Optional[str] = None
     #: D-507 2: CORE takes the junction expectation fields (map_id, expect_in_m, ...); absent means no.
     junction_pivot: bool = False
+    #: D-520 1: CORE takes ``exit_segment`` and runs the arc; absent means no.
+    lane_arc: bool = False
     #: D-517 4: CORE enforces a movement authority (``_required``: before any, too); absent means no.
     line_follow_authority: bool = False
     line_follow_authority_required: bool = False
@@ -139,6 +141,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
             return TripCaps(kind, known, float(speed), item.get("junction_turn") is True,
                             site_floor_map_id=floor if isinstance(floor, str) else None,
                             junction_pivot=item.get("junction_pivot") is True,
+                            lane_arc=item.get("lane_arc") is True,
                             line_follow_authority=item.get("line_follow_authority") is True,
                             line_follow_authority_required=item.get("line_follow_authority_required") is True,
                             lane_bend=item.get("lane_bend") is True)

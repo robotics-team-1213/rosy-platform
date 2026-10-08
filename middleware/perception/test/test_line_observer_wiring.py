@@ -227,3 +227,71 @@ def test_route_ab_builds_the_hybrid_with_the_paint_map_beside_the_graph():
     assert "camera_lane_mode in ('route_a', 'route_b', 'route_ab')" in source
     assert "mode in ('route_a', 'route_b', 'route_ab'):" in source
     assert "'route_ab': self._route_follower," in source
+
+
+@pytest.mark.parametrize('source,enabled,sim_time,admitted', [
+    ('PINKY', False, False, False),
+    ('NOMINAL', True, True, False),
+    ('GAZEBO', False, True, False),
+    ('GAZEBO', True, False, False),
+    ('GAZEBO', True, True, True),
+])
+def test_route_prototype_node_needs_simulation_context(source, enabled, sim_time, admitted):
+    """Execute the ROS wrapper method without ROS so alternate configs cannot open route mode."""
+    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+                  and n.name == '_build_route_follower')
+    built, warnings = object(), []
+    params = {'camera_ground_source': source, 'allow_simulation_ground': enabled,
+              'use_sim_time': sim_time, 'lane_graph_path': str(ROOT / 'map/map_v2_fleet/lane_graph.yaml'),
+              'route': ['west:r', 'ring_s:f'], 'route_start': [-1.15, -0.511, 0.0],
+              'camera_x_offset_m': 0.03317}
+    node = SimpleNamespace(get_parameter=lambda name: SimpleNamespace(value=params[name]),
+                           get_logger=lambda: SimpleNamespace(warning=warnings.append))
+    namespace = {'simulation_ground_allowed': lambda **kw: (
+        kw['source'] == 'GAZEBO' and kw['simulation_enabled'] and kw['use_sim_time']),
+        'yaml': yaml, 'open': open, 'RouteCameraFollower': lambda *a, **kw: built}
+    exec(compile(ast.Module(body=[method], type_ignores=[]), '<route-admission>', 'exec'), namespace)
+    follower = namespace['_build_route_follower'](node, 'route_a')
+    assert (follower is built) is admitted
+    if not admitted:
+        assert warnings and 'simulation' in warnings[0].lower()
+
+
+def test_route_prototype_latches_invisible_after_simulation_context_changes():
+    """A once-admitted route must not keep its old follower under new ground geometry."""
+    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+                  and n.name == '_on_camera')
+    target, calls, publications, warnings = object(), [], [], []
+    params = {'require_camera_controls_stable': False, 'camera_lane_mode': 'route_a',
+              'camera_ground_source': 'GAZEBO', 'allow_simulation_ground': True,
+              'use_sim_time': True, 'camera_bright_threshold': 180,
+              'lane_half_width_m': 0.0925, 'camera_roi_top_fraction': 0.4,
+              'camera_roi_bottom_fraction': 1.0, 'camera_washed_fraction': 0.4}
+    def ground(*_):
+        if params['camera_ground_source'] == 'NOMINAL':
+            raise ValueError('missing physical calibration')
+        return object()
+    follower = SimpleNamespace(update=lambda *a, **kw: calls.append(a) or target)
+    node = SimpleNamespace(get_parameter=lambda name: SimpleNamespace(value=params[name]),
+                           get_logger=lambda: SimpleNamespace(warning=lambda *a, **kw: warnings.append(a)),
+                           _camera_controls_stable=True, _paint_worker=None, _route_follower=follower,
+                           _ground=ground, _odom_pose=(0., 0., 0.), _odom_stamp=1.,
+                           _publish=lambda _source, value, **kw: publications.append(value),
+                           _publish_debug=lambda *a: None)
+    namespace = {'Image': object, 'image_msg_to_frame': lambda _: np.zeros((8, 8, 3), np.uint8),
+                 'visibility_reason': lambda _: 'usable', 'pose_if_fresh': lambda *a: (0., 0., 0.),
+                 'simulation_ground_allowed': lambda **kw: (
+                     kw['source'] == 'GAZEBO' and kw['simulation_enabled'] and kw['use_sim_time'])}
+    exec(compile(ast.Module(body=[method], type_ignores=[]), '<route-frame>', 'exec'), namespace)
+    msg = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=1, nanosec=0)))
+    namespace['_on_camera'](node, msg)
+    assert publications == [target] and len(calls) == 1
+    params['camera_ground_source'] = 'NOMINAL'
+    namespace['_on_camera'](node, msg)
+    assert publications == [target, None] and len(calls) == 1
+    assert node._route_follower is None and warnings
+    params['camera_ground_source'] = 'GAZEBO'
+    namespace['_on_camera'](node, msg)
+    assert publications == [target, None, None] and len(calls) == 1

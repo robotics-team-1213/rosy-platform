@@ -51,6 +51,7 @@ export const TRIP_REASON_LABEL = {
   junction_unexpected: '지도에 없는 자리에서 교차로를 봐 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
   junction_no_window: '교차로 위치를 확인할 기대 창이 없어 좌·우 회전 지시를 보내지 않고 멈췄습니다 · 차선 주행을 껐습니다',
   stall: '경로를 따라 나아가지 않아 멈췄습니다 · 현장을 확인하세요',
+  lane_arc: '회전교차로 호를 달리던 로봇이 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
   TRIP_LOOP_ERROR: '관제 운행 처리에 오류가 나 멈췄습니다 · 로봇 정지를 확인하고 관리자에게 알리세요',
   restart: '관제 서버가 다시 시작돼 멈췄습니다 · 자동으로 다시 출발하지 않습니다',
   TRIP_ROBOT_JUNCTION_UNSUPPORTED: '로봇 CORE가 교차로 지시를 모릅니다 · 새 이미지가 필요합니다',
@@ -266,6 +267,9 @@ export function tripStatusText(trip, map) {
   }
   if (trip.detail?.junction_retry) parts.push(TRIP_REASON_LABEL[trip.detail.junction_retry] || trip.detail.junction_retry);
   if (trip.detail?.junction_fields_dropped) parts.push('활성 지도가 바뀌어 교차로 기대 값을 보내지 않았습니다');
+  if (trip.reason === 'lane_arc' && trip.detail?.arc_reason) parts.push(`사유 ${trip.detail.arc_reason}`);  // D-520 2
+  if (trip.detail?.junction_reason === 'arc_mismatch') parts.push('호 끝 장소와 다른 장소의 지시라 로봇이 버렸습니다');
+  if (trip.detail?.arc_end_unarmed) parts.push('호 끝에 다음 지시가 없어 로봇이 일반 차선 추종으로 돌아갔습니다');
   if (trip.reason === 'junction_unexpected') {  // D-507 3: where it stopped and why CORE held
     const {x, y} = trip.pose || {};
     if (Number.isFinite(x) && Number.isFinite(y)) parts.push(`지도 자세 (${x.toFixed(2)}, ${y.toFixed(2)})`);
