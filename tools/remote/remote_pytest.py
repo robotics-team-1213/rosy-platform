@@ -73,7 +73,9 @@ git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 # (imports). The replaced venv stays as venv.old-<time>; prune those by hand.
 VENV = r"""set -euo pipefail
 R=~/rosy-test; V=$R/venv; N=$R/venv.new; DEPS=$2; cd "$R/runs/$1"; shift 2
-exec 9>"$R/venv.lock"; flock -w 600 9
+exec 9>"$R/venv.lock"; flock -s -w 600 9
+[ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] && exit 0
+flock -u 9; flock -x -w 600 9
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] && exit 0
 echo "[remote] building $N (CI install inputs changed)"
 rm -rf "$N"
