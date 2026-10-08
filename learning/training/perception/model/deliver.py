@@ -404,6 +404,10 @@ def _push(args, ssh, scp, runner) -> int:
     except ManifestError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
+    if rev.startswith("v13-drivable-"):
+        print("refused: v13-drivable trusted owner lineage admission is not implemented (D-532)",
+              file=sys.stderr)
+        return 2
     folder = Path(args.models) / rev
     try:
         report = json.loads((folder / REPORT_NAME).read_text(encoding="utf-8"))

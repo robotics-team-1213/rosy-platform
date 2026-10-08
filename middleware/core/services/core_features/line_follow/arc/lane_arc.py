@@ -37,7 +37,7 @@ ARC_GAIN_INTEGRAL_1PM3, ARC_MAX_INTEGRAL_1PM = 150., 1.
 #: |e_r| past this stops lane_arc_edge (IR sees the paint near 0.0625 m; half lane 0.0925 m).
 ARC_MAX_RADIAL_M = .075
 #: An IR verdict puts the body this far inside the painted line's centre: tape half width 0.0125 m
-#: + IR row offset 0.020 m (Pinky URDF); the circle is re-anchored there (IR as a measurement).
+#: + IR row offset 0.020 m (device URDF); the circle is re-anchored there (IR as a measurement).
 ARC_IR_INSET_M = .0325
 #: HOLD reasons of a stopped arc (besides today's mode and limit reasons). lane_arc_entry is step 2:
 #: the first confident fit within 0.10 m with |e_theta| > 5 deg; it needs lane_arc_fit.py.
@@ -61,7 +61,8 @@ def check_exit_segment(segment, action, turn_deg, expect, arc_enabled):
         raise ValueError('exit_segment needs map_id, 0.5 <= |curvature_1pm| <= 5, length_m (0, 1], '
                          'outer_line_offset_m [0.05, 0.20], end_place_id and straight or a turn')
     if not arc_enabled:
-        raise JunctionRefused('LANE_ARC_UNAVAILABLE', 'exit_segment needs line_follow.arc_enabled')
+        raise JunctionRefused('LANE_ARC_UNAVAILABLE', 'exit_segment needs line_follow.arc_enabled '
+                              'and site_floor_map_id')
 
 
 def _wrap(angle):
@@ -78,11 +79,13 @@ class ArcMixin:
 
     @property
     def supports_lane_arc(self):
-        """D-520 1 capability: arc_enabled, which the config refuses without site_floor_map_id."""
-        return self._config.arc_enabled
+        """D-520 1 capability: arc_enabled (default on), the site floor declaration (D-520 5) and an
+        IR guard speed for the one-time correction (else no arc, not a refused start)."""
+        cfg = self._config
+        return cfg.arc_enabled and cfg.site_floor_map_id is not None and cfg.ir_guard_speed_scale > 0
 
     def _check_exit_segment(self, segment, action, turn_deg, expect):
-        check_exit_segment(segment, action, turn_deg, expect, self._config.arc_enabled)
+        check_exit_segment(segment, action, turn_deg, expect, self.supports_lane_arc)
 
     def _arc_running(self):
         a = self._arc
