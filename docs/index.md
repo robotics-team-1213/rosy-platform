@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · 굽이 공백의 지도 경계 기억 반례 재생
 - 2026-10-08 · uncommitted · 차선 경계 완전 미관측 ROS SIM 재생
 - 2026-10-08 · uncommitted · D-512 개정 1 독립 안전 리뷰 반영과 픽셀 모드
 - 2026-10-08 · uncommitted · D-512 개정 1 충전기 기준 반경과 tether 영상 확인
 - 2026-10-08 · uncommitted · D-512 개정 1 충전 케이블 tether 감시와 되돌아가기
-- 2026-10-08 · uncommitted · Decision 오프라인 재생 선검증과 AI PC 재시험
