@@ -44,3 +44,9 @@
 - `ea7f7a925` 전체 소스 스냅샷을 모델 PC에서 `tools/land.py --dry-run --tests auto` 선택 목록으로 실행: 1,118 passed, 12 skipped, 16 failed. 원본 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-09--031749--physical-id-proof--138376/logs/affected-run.txt`, 호스트·SHA·종료 코드는 같은 폴더의 `affected-verification.txt`다.
 - 브라우저 실패 9건은 같은 모델 PC의 깨끗한 `main` 스냅샷 `fda0abfff`에서 모두 재현됐다(7건은 UI 묶음, 로그인 2건은 전체 의존 소스를 보충한 뒤 재현). 기준선 로그는 `main-browser-baseline.txt`와 모델 PC의 `entry-baseline.txt`다. 새 램프 패널의 집중 브라우저 시험은 위 8건 통과다.
 - 나머지 7건은 이 토픽 밖의 원인 또는 시험 포장에 묶인다: 임시 실행 스크립트가 소스 루트에 있어 폴더 구조 검사 1건, `.git` 없는 tar 스냅샷이라 Git 속성·비밀 파일 검사 2건, 원본 `main`에도 있는 face 크기·lane literal 검사 각 1건, 다른 세션 선점 D-535·D-536이 미착지라 ADR 연속성 검사 2건. 이 설명은 전체 선택 시험의 통과 판정이 아니다.
+
+## 2026-10-09 04:18 KST 읽기 재확인
+
+- 현장 PC `robttt-15Z95N-GP7QL`의 `rosy-site-stack.service`는 active이며 Fleet·Vision 컨테이너는 실행 중이었다. 설치 이미지 태그는 `ed006ce92cc4832619dc96d4d0e00f779b439ec9`였다.
+- 현장 PC에서 각 로봇의 사이트 CA와 TLS 호스트명 검증을 적용한 `GET /api/v1/auth/connection`은 `rosy-pinky-9dfk.local` → `paired`, `rosy_26`, HTTPS, HTTP 200; `rosy-pinky-8kcn.local` → `paired`, `rosy_60`, HTTPS, HTTP 200을 반환했다. 이 응답은 네트워크·인증서·논리 ID 확인이지 Rosy Cam 속 몸체의 현재 위치 확인은 아니다.
+- `rosy_60`의 인증 없는 `GET /api/v1/robot/state`는 401이었다. 현장 PC SSH 계정에서 서비스 viewer·operator 토큰을 읽을 수 없어 인증된 현재 안전 상태, LCD 픽셀과 이동 경로는 이 재확인에서 판정하지 않았다.
