@@ -122,13 +122,14 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     open_pixels(page, store, expect)
+    assert page.locator('#pixel-approve').bounding_box()['y'] < page.locator('#pixel-class-help').bounding_box()['y']
     if width <= 390:
         field_widths = page.evaluate("""() => ({
           available: document.querySelector('.pixel-layout > section').getBoundingClientRect().width,
-          labels: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar > label')]
+          labels: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar > label, .pixel-quick-tools > label')]
             .filter(node => node.getClientRects().length)
             .map(node => node.getBoundingClientRect().width),
-          fields: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar .ui-field')]
+          fields: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar .ui-field, .pixel-quick-tools > label .ui-field')]
             .filter(node => node.getClientRects().length)
             .map(node => node.getBoundingClientRect().width),
         })""")
@@ -260,8 +261,8 @@ def test_pixel_screen_shows_classes_yaml_display_names(browser_workspace):
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
     expect(page.locator('#pixel-legend')).to_contain_text('왼쪽 차선')
-    expect(page.locator('#pixel-class option').nth(1)).to_have_text('왼쪽 차선')
-    expect(page.locator('#pixel-class option').first).to_have_text('배경')
+    expect(page.locator('#pixel-class option[value="1"]')).to_have_text('왼쪽 차선')
+    expect(page.locator('#pixel-class option[value="0"]')).to_have_text('배경')
 
 
 
@@ -299,12 +300,41 @@ def test_pixel_shortcuts_confirm_both_checks_and_move_without_approving(browser_
     assert review_masks.get(store, 0)['status'] == 'pending'
 
 
+def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.set_viewport_size({'width': 1280, 'height': 800})
+    canvas = page.locator('#pixel-canvas').bounding_box()
+    tools = page.locator('.pixel-quick-tools').bounding_box()
+    assert canvas['x'] < tools['x'] and canvas['y'] <= tools['y'] + 32
+    page.locator('#pixel-frame').select_option('1')
+    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
+    expect(page.locator('#pixel-canvas')).to_be_focused()
+    page.keyboard.press('ArrowLeft')
+    expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
+    page.locator('#pixel-quick-classes button').nth(1).click()
+    expect(page.locator('#pixel-class')).to_have_value('1')
+    expect(page.locator('#pixel-canvas')).to_be_focused()
+    page.keyboard.press('t')
+    expect(page.locator('#pixel-flood')).to_have_attribute('aria-pressed', 'false')
+    page.keyboard.press('t')
+    expect(page.locator('#pixel-flood')).to_have_attribute('aria-pressed', 'true')
+    page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
+    expect(page.locator('#pixel-sample-apply')).to_be_enabled()
+    page.locator('#pixel-canvas').focus()
+    page.keyboard.press('Enter')
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    page.set_viewport_size({'width': 390, 'height': 800})
+    assert page.locator('.pixel-quick-tools').bounding_box()['y'] < page.locator('#pixel-canvas').bounding_box()['y']
+    assert review_masks.get(store, 0)['version'] == 1
+
+
 def test_pixel_legend_shows_default_korean_names(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
     expect(page.locator('#pixel-legend')).to_contain_text('배경')
     expect(page.locator('#pixel-legend')).to_contain_text('차선')
-    expect(page.locator('#pixel-class option').first).to_have_text('배경')
+    expect(page.locator('#pixel-class option[value="0"]')).to_have_text('배경')
 
 
 def test_pixel_a_works_right_after_ticking_checks_and_x_only_on_pending(browser_workspace):

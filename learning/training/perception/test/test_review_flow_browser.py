@@ -786,6 +786,8 @@ def test_review_service_unavailable_is_distinct_from_connection_failure(
 def test_object_decision_and_preparation_result_are_visible(browser_workspace, width):
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
+    expect(page.locator('#object-approval-hint')).to_contain_text('사진 전체 확인')
+    assert page.locator('.review-actions').bounding_box()['y'] < page.locator('.inspector-heading').bounding_box()['y']
     def shot(state):
         if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
             from pathlib import Path
@@ -1078,6 +1080,13 @@ def test_learning_summary_separates_review_from_training(browser_workspace):
     expect(page.locator('#review-stage-summary')).to_contain_text('등록 2장')
     expect(page.locator('#training-data-state')).to_contain_text('픽셀 승인 0장')
     expect(page.get_by_text('현재 검수 중인 사진의 학습 완료를 뜻하지 않습니다.')).to_be_visible()
+    expect(page.locator('#object-review-link')).to_contain_text('검수·승인')
+    expect(page.locator('#pixel-review-link')).to_contain_text('검수·승인')
+    page.locator('#object-review-link').click()
+    expect(page.locator('#approve')).to_be_visible()
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.locator('#pixel-review-link').click()
+    expect(page.locator('#pixel-approve')).to_be_visible()
 
 
 def test_learning_shows_prepared_export_and_stale_decision(browser_workspace):
