@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · 지도 밖 자세의 굽이 기억 ROS 거절
 - 2026-10-08 · uncommitted · 굽이 원본의 격리 ROS 관측 재발행
 - 2026-10-08 · uncommitted · 굽이 공백의 지도 경계 기억 반례 재생
 - 2026-10-08 · uncommitted · 차선 경계 완전 미관측 ROS SIM 재생
 - 2026-10-08 · uncommitted · D-512 개정 1 독립 안전 리뷰 반영과 픽셀 모드
-- 2026-10-08 · uncommitted · D-512 개정 1 충전기 기준 반경과 tether 영상 확인

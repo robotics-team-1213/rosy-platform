@@ -7088,3 +7088,9 @@ osy-d395-s1d\`.
 - 변경: `line_observer_node`의 `route_a`에 녹화 영상·odom·clock 125프레임을 독립 ROS domain 97에서 재발행하고 `docs/validation/lane-route-ros-graph-2026-10-08/`에 재현 스크립트와 결과를 기록했다.
 - 증거: 카메라 관측 125/125 수신, 첫 무관측 frame 192는 `visible=true`, confidence 0.6. 중복 사용 중이던 domain 83의 첫 시도는 증거에서 제외했고 전용 노드를 종료했다.
 - gate 변화: 없음. 노드 배선 증거이며 CORE 수용·Gazebo 폐루프·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 지도 밖 자세의 굽이 기억 ROS 거절
+
+- 변경: 같은 굽이 영상의 frame 192 odom 위치만 80 mm 옮겨 독립 ROS domain 97에서 재발행하고 `docs/validation/lane-route-ros-graph-2026-10-08b/`에 변환·재현 절차와 결과를 기록했다.
+- 증거: 관측 125/125 수신; frame 191 visible, 교란한 192 invisible(confidence 0), 원래 자세의 193 visible. 종료 뒤 전용 노드 없음.
+- gate 변화: 없음. 합성 위치 오차에 대한 관측 노드 반례이며 CORE·폐루프·실물 수용은 미검증.
