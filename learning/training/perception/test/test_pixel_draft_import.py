@@ -1,6 +1,7 @@
 """An indexed draft enters review as pending pixels, never as approval."""
 import hashlib
 import json
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -10,6 +11,69 @@ from test_review_app import open_store
 from test_review_cycle import catalog
 import review_ingest
 import review_masks
+
+
+V13_CLASSES = (Path(__file__).resolve().parents[1] / 'classes' /
+               'lane_lr6_drivable.yaml').read_bytes()
+
+
+@pytest.mark.parametrize('outside_column,side', [(2, 'left'), (29, 'right')])
+def test_v13_draft_and_approval_reject_drivable_outside_visible_lane(tmp_path, outside_column, side):
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    classes.write_bytes(V13_CLASSES)
+    pixels = np.zeros((24, 32), np.uint8)
+    pixels[:, 8] = 1
+    pixels[:, 24] = 2
+    pixels[:, 9:24] = 5
+    draft = folder / 'draft.png'
+
+    def write_draft(image):
+        draft.write_bytes(review_masks.encode(image))
+        rows[0]['mask'] = {'indexed_png': draft.name,
+                           'sha256': hashlib.sha256(draft.read_bytes()).hexdigest(),
+                           'classes_sha256': hashlib.sha256(V13_CLASSES).hexdigest()}
+        (folder / 'verified-inputs.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
+
+    bad = pixels.copy()
+    bad[:, outside_column] = 5
+    binding = {'classes': [{'name': 'lane_left', 'index': 1},
+                           {'name': 'lane_right', 'index': 2},
+                           {'name': 'drivable', 'index': 5}]}
+    assert review_masks.lane_boundary_violations(bad, binding)[side] == 24
+    write_draft(bad)
+    with pytest.raises(ValueError, match='drivable outside visible lane boundary'):
+        review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    with pytest.raises(KeyError):
+        store.get(2)
+
+    write_draft(pixels)
+    assert review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})['added'] == 1
+    review = review_masks.get(store, 2)
+    assert review_masks.lane_boundary_violations(review_masks.pixels(store, review), review['classes']) == {'left': 0, 'right': 0}
+    candidate_path, candidate_sha = review_masks.freeze(store, review_masks.encode(bad))
+    with store.connect() as db:
+        db.execute('INSERT INTO pixel_drafts(frame,sha256,path,catalog_sha256) VALUES (?,?,?,?)',
+                   (2, candidate_sha, candidate_path, '0' * 64))
+    with pytest.raises(ValueError, match='drivable outside visible lane boundary'):
+        review_masks.update(store, 2, {'version': review['version'], 'action': 'apply_draft',
+                                       'draft_sha256': candidate_sha}, ValueError)
+    assert review_masks.get(store, 2)['version'] == review['version']
+    edited = review_masks.update(store, 2, {'version': review['version'], 'action': 'paint',
+                                           'label': 5, 'radius': 0,
+                                           'points': [[outside_column, 12]]}, ValueError)
+    with pytest.raises(ValueError, match='drivable outside visible lane boundary'):
+        review_masks.update(store, 2, {'version': edited['version'], 'action': 'approve',
+                                       'complete_frame_review': True,
+                                       'background_reviewed': True}, ValueError)
+    assert review_masks.get(store, 2)['status'] == 'pending'
+    corrected = review_masks.update(store, 2, {'version': edited['version'], 'action': 'paint',
+                                              'label': 0, 'radius': 0,
+                                              'points': [[outside_column, 12]]}, ValueError)
+    approved = review_masks.update(store, 2, {'version': corrected['version'], 'action': 'approve',
+                                              'complete_frame_review': True,
+                                              'background_reviewed': True}, ValueError)
+    assert approved['status'] == 'approved'
 
 
 def test_verified_object_draft_is_pending_and_bad_box_rejects_import(tmp_path):
@@ -72,6 +136,16 @@ def test_indexed_draft_import_keeps_255_and_pending_status(tmp_path):
     assert applied['draft_candidates'] == []
     undone = review_masks.update(store, 2, {'version': applied['version'], 'action': 'undo'}, ValueError)
     assert undone['status'] == 'pending' and np.all(review_masks.pixels(store, undone) == 0)
+    with store.connect() as db:
+        db.execute('UPDATE pixel_drafts SET withdrawn=1 WHERE frame=? AND sha256=?', (2, candidate))
+    assert all(row['sha256'] != candidate for row in review_masks.get(store, 2)['draft_candidates'])
+    with pytest.raises(ValueError, match='selected draft is unavailable'):
+        review_masks.update(store, 2, {'version': undone['version'],
+                                        'action': 'apply_draft', 'draft_sha256': candidate}, ValueError)
+    assert review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})['added'] == 0
+    with store.connect() as db:
+        assert db.execute('SELECT withdrawn FROM pixel_drafts WHERE frame=? AND sha256=?',
+                          (2, candidate)).fetchone()[0] == 1
 
 
 @pytest.mark.parametrize('kind', ['rgb', '16bit', 'unknown', 'escape', 'hash', 'jpeg', 'classes'])

@@ -1415,14 +1415,15 @@ def test_formation_reform_and_resume_refuse_a_trip_robot():
         assert err.value.code == "TRIP_ROBOT_BUSY"
 
 
-def test_the_fleet_stuck_resolver_skips_a_trip_robot():
+def test_the_fleet_stuck_resolver_marks_a_trip_robot():
+    """D-517 5 (M4): no longer skipped; the resolver gives a marked trip robot stopping answers only."""
     from fleet.server.stuck_resolver_loop import StuckResolverLoop
 
     seen = []
 
     class Resolver:
         def step(self, now, rows):
-            seen.extend(row["robot_id"] for row in rows)
+            seen.extend((row["robot_id"], row.get("trip", False)) for row in rows)
             return []
 
     async def snapshot():
@@ -1431,7 +1432,7 @@ def test_the_fleet_stuck_resolver_skips_a_trip_robot():
     loop = StuckResolverLoop(snapshot, board=None, resolver=Resolver(), clients=dict)
     loop.trip_busy = lambda robot_id: robot_id == "b"
     run(loop.run_once())
-    assert seen == ["a"]
+    assert seen == [("a", False), ("b", True)]
 
 
 @pytest.mark.parametrize(("decision", "status", "ends"), [

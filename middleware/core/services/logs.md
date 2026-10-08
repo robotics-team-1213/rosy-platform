@@ -860,3 +860,10 @@
 - gate 변화: SOURCE. SIM은 lane-trip-lap-sim2 행
 - 결정: 없음
 - 교훈: 정지 사유를 새로 만들면 그 정지가 만료·재전송·모드 변경 중 어디서 풀리는지와 관제가 그 사유로 무엇을 하는지를 같이 정한다. 아니면 조용한 정지(stall 20 s)나 만료 뒤 풀림이 된다
+
+## 2026-10-08 · uncommitted · test(sim): Fleet 한 바퀴 SIM 2차 (모델 PC, main 47fa82b1a)
+- 변경: `docs/validation/lane-trip-lap-sim2-2026-10-08` (lap 하네스, 도메인 91·`rosy_lap2`·포트 8388/8389), `.gitattributes` 배치 목록 LF
+- 증거: 출하 기본 12회: 모서리·굽이·SW 회전 12/12, ring 0/12(`junction_corner_hold` 11 — keeper `corner_left`가 ring 곡선을 따름, SE `straight` 창이 `ring_s` 전체를 덮음; `pose` 1), 완료 0/12. D-520 `arc_enabled` 12회: SW 회전 12/12, SE 통과 2/12, 완료 1/12(arc_11), `lane_arc_edge` 10(호 시작 yaw가 접선보다 −12…−17°, Δr 최대 +0.068 m). 정지 뒤 Fleet 종료 0.12–0.49 s, hang 0
+- gate 변화: ROS-SIM 기록(부분). DEVICE 열림
+- 결정: 없음
+- 교훈: 지도가 교차로를 말하는 자리의 keeper 모서리 금지는 곧은 spoke에서만 오독이다. 곡선 차로 위 `straight` 지시에서는 차로 자체를 막는다
