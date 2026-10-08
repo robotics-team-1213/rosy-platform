@@ -327,7 +327,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|
-| GET | `/api/v1/map` | Viewer | MAP-003 (응답에 `map_id` 포함) |
+| GET | `/api/v1/map` | Viewer | MAP-003 (응답의 `map_id`는 해당 점유 지도 스냅숏을 수신할 때 묶인 ID. 이후 로봇 상태의 `map_id`가 바뀌어도 이전 격자에 새 ID를 붙이지 않음) |
 | GET | `/api/v1/map/costmap?scope=global\|local` | Viewer | MAP-003 |
 | GET | `/api/v1/waypoints` | Viewer | WPT-002 |
 | POST | `/api/v1/waypoints` | Operator | WPT-002 |

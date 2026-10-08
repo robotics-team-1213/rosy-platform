@@ -978,3 +978,8 @@
 - gate 변화: 없음. 호스트 시험만.
 - 결정: D-507 8
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(bridge): 점유 지도 수신 시 ID와 격자를 묶음
+- 변경: `_on_map`은 수신 격자와 그때의 map ID를 같이 저장한다. 이후 상태 map ID가 바뀌어도 API가 오래된 격자를 새 지도처럼 말하지 않는다.
+- 증거: `test_map_snapshots.py` 11 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). ROS 실기 수신은 미확인.
+- gate 변화: LOCAL 스냅숏 계약 근거 추가. DEVICE/FIELD는 HOLD.

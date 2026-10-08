@@ -798,3 +798,8 @@
 - 증거: `test_junction_approach.py` — 전진 0.3 m·후진 0.2 m·전진 뒤 0.4 m 짧은 선과 진짜 선이 모두 `unexpected`(부호 없는 합이면 짧은 선이 창 안 0.9 m), 제자리 ±2 mm 떨림 2 s에 odometer 변화 < 1 mm이고 창 안 감지는 그대로 `turning`. 변이 A(부호 없는 합) 3건 실패, 변이 B(후진 검사 삭제) 1건 실패, 복원 뒤 69 통과. CORE services·api_web 1432 통과 13 skip, `known_failures` 신규 0.
 - gate 변화: SOURCE.
 - 결정: D-507 2·3항 2026-10-08 사용자 결정 (1), 안전 검토 REQUEST_CHANGES 1·2.
+
+## 2026-10-08 · uncommitted · fix(maps): 수신 지도의 ID를 스냅숏에 보관
+- 변경: `MapSnapshotStore.set_map`이 선택 `map_id`를 격자와 같은 잠금 안에 저장한다. 로봇 상태 ID가 바뀌어도 기존 지도에 새 ID가 붙지 않는다.
+- 증거: gateway `test_map_snapshots.py` 11 passed. [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 계약 근거 추가. 실물 지도 전환은 HOLD.

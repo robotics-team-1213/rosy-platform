@@ -116,6 +116,7 @@ const fieldMap = createFieldMap({
   apiMaybe,
   captureLifetime: authTicket,
   getPose: () => session.robotState?.pose,
+  getCurrentMapId: () => session.robotState?.map_id,
   getNavigation: () => session.robotState?.navigation,
   // v1.21: the server says which snapshots exist; asking for a missing one is
   // a 404 in the console. Absent block (older CORE): ask as before.

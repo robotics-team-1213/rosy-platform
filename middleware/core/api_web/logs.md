@@ -702,3 +702,8 @@
 - 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
 - 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(api): 지도 ID를 수신 격자와 함께 응답
+- 변경: `GET /api/v1/map`의 기존 `map_id` 필드는 스냅숏에 저장된 ID를 우선한다. 지도 수신 뒤 로봇 상태 ID만 바뀌면 이전 격자에 새 ID를 덧씌우지 않는다. 응답 스키마는 그대로다.
+- 증거: gateway `test_map_snapshots.py` 11 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL API 의미 근거 추가. 실물 readback은 HOLD.

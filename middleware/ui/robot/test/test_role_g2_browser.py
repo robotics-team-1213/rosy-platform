@@ -1227,7 +1227,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             context = browser.new_context(viewport={"width": viewport[0], "height": viewport[1]})
             page = context.new_page()
             errors = []
-            location = {"state": "LOCALIZED", "frame": "map"}
+            location = {"state": "LOCALIZED", "frame": "map", "map_id": "local-map"}
             page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
             page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -1238,7 +1238,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                     return
                 if path == "/api/v1/robot/state":
                     state = json.loads(_response(client, path, TOKENS["operator"], "normal", "console").body)
-                    state.update(mode="NAVIGATION", navigation="NAVIGATING", map_id="local-map",
+                    state.update(mode="NAVIGATION", navigation="NAVIGATING", map_id=location["map_id"],
                                  localization={"state": location["state"], "pose_frame": location["frame"], "confidence": 0.92})
                     state["evidence"]["navigation"] = {"evidence": "fresh", "received_at": datetime.now(timezone.utc).isoformat()}
                     response = Response(content=json.dumps(state), media_type="application/json")
@@ -1267,6 +1267,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             page.goto("http://rosy.test/console", wait_until="domcontentloaded")
             stage = page.locator(".surface-map-stage")
             page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.overview\"] .ui-readout')?.hidden === false")
             assert "주행 · 주행 중" in stage.inner_text()
             assert "위치 추정 · 지도 좌표 확인" in stage.inner_text()
             assert "SLAM · 기능 제공" in stage.inner_text()
@@ -1313,7 +1314,23 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 assert page.locator('[data-map-click="goal"]').is_disabled()
                 location["frame"] = "map"
                 page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
+                location["map_id"] = "other-map"
+                page.wait_for_function("""() => document.querySelector('#map-status')?.textContent.includes('지도 ID가 다릅니다')""")
+                assert page.locator('[data-map-click="pose"]').is_disabled()
+                assert page.locator('[data-map-click="goal"]').is_disabled()
+                assert "위치 추정 · 지도 ID 불일치" in stage.inner_text()
+                assert "지도 ID가 달라" in page.locator("#map-action-reason").inner_text()
+                assert page.evaluate(blue_pixels) == 0
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-map-mismatch-390x844.png"), full_page=True)
+                location["map_id"] = "local-map"
+                page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
             if viewport[0] == 1366:
+                location["map_id"] = "other-map"
+                page.wait_for_function("""() => document.querySelector('#map-status')?.textContent.includes('지도 ID가 다릅니다')""")
+                assert page.locator('[data-map-click="goal"]').is_disabled()
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-map-mismatch-1366x768.png"), full_page=True)
+                location["map_id"] = "local-map"
+                page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
                 page.locator(".surface-map-canvas").focus()
                 page.set_viewport_size({"width": 390, "height": 844})
                 page.wait_for_function("""() => [...document.querySelectorAll('#surface-main > .surface-slot')]

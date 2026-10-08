@@ -146,11 +146,26 @@ export function createFieldMap(options) {
     }
   }
 
+  const mapIdMismatch = () => Boolean(state.occupancy?.map_id && options.getCurrentMapId?.()
+    && state.occupancy.map_id !== options.getCurrentMapId());
+  const canMapClick = (mode) => Boolean(state.occupancy) && !mapIdMismatch() && canGoal?.(mode) === true;
+  function syncMapStatus() {
+    const mismatch = mapIdMismatch();
+    options.onMapIdMismatch?.(mismatch);
+    if (state.mapState !== "ready") return;
+    const grid = state.occupancy;
+    const message = mismatch ? "로봇과 지도 ID가 다릅니다. 지도 갱신을 기다리세요."
+      : !Number.isFinite(Number(grid.width)) || !Number.isFinite(Number(grid.height))
+        ? grid.map_id || "크기 미상" : `${grid.width}×${grid.height}${grid.map_id ? ` · ${grid.map_id}` : ""}`;
+    const statusState = mismatch ? "pending" : "ready";
+    if (status?.textContent !== message || status?.getAttribute("state") !== statusState) setStatus(message, statusState);
+  }
+
   function syncClickButtons() {
     // D-359 §5.3 — 역할 화면은 공용 안내문을 쓰고, 목표만 막힐 때는 해당 버튼에도 이유를 단다.
     clickButtons.forEach((button) => {
-      const allowed = canGoal?.(button.dataset.mapClick) === true;
-      const reason = allowed ? "" : (options.goalReason?.(button.dataset.mapClick) || "");
+      const allowed = canMapClick(button.dataset.mapClick);
+      const reason = allowed ? "" : mapIdMismatch() ? "로봇과 지도 ID 불일치" : (options.goalReason?.(button.dataset.mapClick) || "");
       button.disabled = !allowed;
       if (reason) button.setAttribute("reason", reason);
       else button.removeAttribute("reason");
@@ -180,7 +195,7 @@ export function createFieldMap(options) {
 
   function syncCursor() {
     if (!canvas) return;
-    canvas.toggleAttribute("data-goal-cursor", canGoal?.(clickMode) === true);
+    canvas.toggleAttribute("data-goal-cursor", canMapClick(clickMode));
   }
 
   function rebuildRaster() {
@@ -206,7 +221,7 @@ export function createFieldMap(options) {
     ctx.putImageData(state.raster, 0, 0);
     const frame = new GridFrame(state.occupancy);
     // ponytail: path has no server timestamp; use active navigation until the API supplies path freshness.
-    if (layers.path && (!options.onlyActivePath || ["PLANNING", "NAVIGATING"].includes(getNavigation?.())) && state.path.length >= 2) {
+    if (!mapIdMismatch() && layers.path && (!options.onlyActivePath || ["PLANNING", "NAVIGATING"].includes(getNavigation?.())) && state.path.length >= 2) {
       const scale = window.devicePixelRatio || 1;
       ctx.beginPath();
       state.path.forEach((pose, index) => {
@@ -238,7 +253,7 @@ export function createFieldMap(options) {
       ctx.restore();
     }
     // D-396: 목표 마커 — 경로 색 다이아몬드. 로봇 삼각형(pose)과 구분된다.
-    if (goal && state.occupancy) {
+    if (goal && state.occupancy && !mapIdMismatch()) {
       const goalPoint = frame.worldToCanvas(goal.x, goal.y, canvas.width, canvas.height);
       ctx.save();
       ctx.translate(goalPoint.x, goalPoint.y);
@@ -248,7 +263,7 @@ export function createFieldMap(options) {
       ctx.strokeRect(-5, -5, 10, 10);
       ctx.restore();
     }
-    const pose = options.getDisplayPose ? options.getDisplayPose() : getPose?.();
+    const pose = mapIdMismatch() ? null : options.getDisplayPose ? options.getDisplayPose() : getPose?.();
     if (!pose || !Number.isFinite(Number(pose.x))) return;
     const point = frame.worldToCanvas(pose.x, pose.y, canvas.width, canvas.height);
     const scale = window.devicePixelRatio || 1;
@@ -272,6 +287,7 @@ export function createFieldMap(options) {
 
   function setPose() {
     syncClickButtons();
+    syncMapStatus();
     const nav = getNavigation?.();
     if (nav && nav !== state.lastNav) {
       state.lastNav = nav;
@@ -309,9 +325,6 @@ export function createFieldMap(options) {
       syncEmpty();
       syncCursor();
       if (!grid) setStatus("지도가 아직 없습니다.", "empty");
-      else if (!Number.isFinite(Number(grid.width)) || !Number.isFinite(Number(grid.height)))
-        setStatus(grid.map_id || "크기 미상");
-      else setStatus(`${grid.width}×${grid.height}${grid.map_id ? ` · ${grid.map_id}` : ""}`);
     } catch (error) {
       if (listenerController.signal.aborted || !isCurrent()) return;
       // Without a server freshness field, do not leave a previous snapshot looking current.
@@ -326,6 +339,8 @@ export function createFieldMap(options) {
         : "최신 지도 데이터를 읽지 못했습니다. 연결 상태를 확인하고 다시 시도하십시오.", error.status === 403 ? "forbidden" : "error");
     }
     rebuildRaster();
+    syncMapStatus();
+    syncClickButtons();
     paint();
     if (cross) notifyTargetReadout();
   }
@@ -344,7 +359,7 @@ export function createFieldMap(options) {
   clickButtons.forEach((button) => {
     const mode = button.dataset.mapClick;
     button.addEventListener("click", () => {
-      if (button.disabled || canGoal?.(mode) !== true) return;
+      if (button.disabled || !canMapClick(mode)) return;
       clickMode = mode;
       syncClickButtons();
     }, {signal: listenerController.signal});
@@ -374,6 +389,10 @@ export function createFieldMap(options) {
       setAction?.("최신 지도 데이터를 확인할 수 없어 위치·목표를 보내지 않았습니다.");
       return;
     }
+    if (mapIdMismatch()) {
+      setAction?.("로봇과 지도 ID가 달라 위치·목표를 보내지 않았습니다. 지도 갱신을 기다리세요.");
+      return;
+    }
     if (!canGoal?.(clickMode)) {
       setAction?.(options.goalReason?.(clickMode) || "현재 실행 모드나 로봇 기능으로는 위치·목표 조작을 쓸 수 없습니다.");
       return;
@@ -391,7 +410,7 @@ export function createFieldMap(options) {
     committing = true;
     try {
       const confirmed = await (options.confirm || confirmIrreversible)({message: `${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 로 보낼까요?`, action: locating ? "위치 설정" : "목표 전송", opener: canvas, signal: AbortSignal.any([owner.signal, listenerController.signal])});
-      if (!confirmed || !owner.current() || listenerController.signal.aborted || !canGoal?.(modeSnapshot) || modeSnapshot !== clickMode || mapSnapshot !== JSON.stringify(state.occupancy) || yaw !== (Number(getPose?.()?.yaw) || 0)) return;
+      if (!confirmed || !owner.current() || listenerController.signal.aborted || !canMapClick(modeSnapshot) || modeSnapshot !== clickMode || mapSnapshot !== JSON.stringify(state.occupancy) || yaw !== (Number(getPose?.()?.yaw) || 0)) return;
       await api(path, {
         method: "POST",
         body: JSON.stringify({ x: world.x, y: world.y, yaw }),

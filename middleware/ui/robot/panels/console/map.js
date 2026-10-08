@@ -56,6 +56,7 @@ export function mount(root, ctx) {
   let state = null;
   let capabilities = null;
   let commissioning = null;
+  let mapIdMismatch = false;
   const readErrors = {state: null, capabilities: null, commissioning: null};
   function setText(target, text) { if (target.textContent !== text) target.textContent = text; }
   function renderStage() {
@@ -64,6 +65,7 @@ export function mount(root, ctx) {
     setText(navStage, `주행 · ${navigation && ["PLANNING", "NAVIGATING"].includes(navigation) && !goalPoseReady()
       ? "위치 확인 중" : navigation ? enumLabel(NAVIGATION_LABEL, navigation) : "상태 확인 불가"}`);
     const location = !evidence.isFresh("pose") ? EVIDENCE_LABEL[evidence.evidenceOf("pose")]
+      : mapIdMismatch ? "지도 ID 불일치"
       : state?.localization?.state === "LOCALIZED"
         ? state.localization.pose_frame === "map" ? "지도 좌표 확인" : "지도 좌표 미확인"
         : state?.localization?.state === "CANDIDATES" ? "후보 확인 중"
@@ -98,7 +100,8 @@ export function mount(root, ctx) {
   const syncMapActions = () => {
     const operator = ctx.role === "operator" || ctx.role === "administrator";
     const hardware = commissioning?.runtime_mode === "hardware";
-    if (baseMapAction() && !goalPoseReady()) clickReason.textContent = "현재 위치 추정이 확인되지 않아 주행 목표를 막았습니다. 초기 위치 설정은 사용할 수 있습니다.";
+    if (mapIdMismatch) clickReason.textContent = "로봇과 지도 ID가 달라 위치·주행 목표를 막았습니다. 지도 갱신을 기다리세요.";
+    else if (baseMapAction() && !goalPoseReady()) clickReason.textContent = "현재 위치 추정이 확인되지 않아 주행 목표를 막았습니다. 초기 위치 설정은 사용할 수 있습니다.";
     else if (baseMapAction()) clickReason.textContent = "지도를 선택하면 확인 후 위치 또는 주행 목표를 전송합니다.";
     else if (!operator) clickReason.textContent = "위치·주행 목표 설정에는 운용자 권한이 필요합니다.";
     else if (readErrors.capabilities) clickReason.textContent = `내비게이션 기능을 확인할 수 없어 지도 조작을 막았습니다: ${readErrors.capabilities}`;
@@ -123,6 +126,8 @@ export function mount(root, ctx) {
       }
     },
     getPose: () => state?.pose,
+    getCurrentMapId: () => state?.map_id,
+    onMapIdMismatch: (value) => { mapIdMismatch = value; renderStage(); syncMapActions(); },
     getDisplayPose: () => new HeadlessState(state).isFresh("pose") && state?.localization?.state === "LOCALIZED"
       && state.localization.pose_frame === "map" ? state.pose : null,
     getNavigation: () => new HeadlessState(state).isFresh("navigation") && goalPoseReady() ? state.navigation : null,

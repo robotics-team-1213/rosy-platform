@@ -116,8 +116,10 @@ class MapSnapshotStore:
         self._path: list[dict[str, float]] = []
         self._costmaps: dict[str, dict[str, Any]] = {}
 
-    def set_map(self, grid: dict[str, Any]) -> None:
+    def set_map(self, grid: dict[str, Any], *, map_id: str | None = None) -> None:
         normalized = GridFrame.from_dict(grid).to_dict()
+        if map_id is not None:
+            normalized["map_id"] = map_id
         with self._lock:
             self._map = normalized
 

@@ -67,6 +67,13 @@ def test_map_returns_grid_and_map_id(client):
     assert body["data"] == [0, 100, -1, 50]
 
 
+def test_map_id_stays_with_received_grid_when_robot_changes_map(client):
+    tc, svc = client
+    svc.maps.set_map(GRID, map_id="old-map")
+    svc.state.set_map_id("new-map")
+    assert tc.get("/api/v1/map", headers=VIEWER).json()["map_id"] == "old-map"
+
+
 def test_path_empty_until_plan_arrives(client):
     tc, svc = client
     empty = tc.get("/api/v1/navigation/path", headers=VIEWER)

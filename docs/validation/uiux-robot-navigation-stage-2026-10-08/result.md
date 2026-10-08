@@ -43,3 +43,10 @@ CORE는 지도 좌표를 신뢰할 수 없는 로봇의 주행 목표를 거절�
 - 같은 X: 세션의 `evidence/goal-gate/navigation-stage/`에 1366×768·390×844 정상 화면과 390×844 `SUSPECT` 화면, 매트릭스 JSON을 기록했다. 합성 API 응답으로 렌더링한 실제 FastAPI·Chromium 화면이며 로봇 readback은 아니다.
 - `SUSPECT`에서 초기 위치 버튼 활성, 목표 버튼 비활성 및 사유, 파란 계획 경로와 좌표 숨김을 확인했다. `LOCALIZED/odom`에서도 목표 비활성, `LOCALIZED/map` 복귀 뒤 활성 상태를 확인했다. 브라우저·지도 관련 3 passed (`logs/goal-gate-tests.txt`), 추가 요약·지도 오류·패키지 회귀 21 passed (`logs/goal-gate-regression.txt`), 각 `known_failures.py` 0 NEW.
 - 실제 장치의 pose 전환, 목표 전송 성공, 물리 주행, G3 운용자 판단과 전체 G2 상태 매트릭스는 여전히 HOLD다.
+
+## 후속: 로봇과 표시 지도의 ID 정합성
+
+지도 응답의 `map_id`와 로봇 상태의 `map_id`가 둘 다 있고 서로 다르면 지도 좌표 조작을 막는다. 경로·로봇 마커·기억한 목표 마커도 그 지도에 겹치지 않는다. 지도 HUD와 조작 사유에 불일치를 표시하고, ID가 다시 일치하면 표시와 조작을 복구한다. `/dashboard`의 기존 지도 호출도 같은 비교를 사용한다. CORE는 점유 지도를 수신할 때의 ID를 격자와 함께 저장한다. 이후 로봇 상태 ID가 바뀌어도 오래된 격자에 새 ID를 덧씌우지 않는다. 한쪽 ID가 없는 이전 응답에서는 비교를 확정할 수 없어 기존 동작을 유지한다.
+
+- 같은 X: 세션 `evidence/map-identity/navigation-stage/`의 1366×768·390×844 정상 화면과 양쪽 폭의 `operator-console-navigation-map-mismatch-*.png`를 확인했다. 불일치 화면에서 양쪽 좌표 버튼 비활성, 이유 표시, 경로와 로봇 마커 숨김, 일치 복귀 뒤 목표 버튼 활성화가 브라우저 시험으로 확인됐다.
+- 실제 FastAPI 정적 자산과 합성 CORE 응답의 관련 21 passed, `known_failures.py` 0 NEW (`logs/map-identity-tests.txt`). CORE 지도 스냅숏 API 11 passed (`logs/map-snapshot-tests.txt`): 로봇 상태 ID가 바뀐 뒤에도 이전 지도 응답 ID가 그대로인 시험을 포함한다. 추가 패널 브라우저 묶음은 21 passed/1 failed (`logs/map-identity-regression.txt`); 실패한 차선 추종 확인 시험은 기존 공유 `main`의 같은 시험에서도 재현돼 별도 결함으로 기록한다. 이 비교만으로 경로의 생성 시각이나 목표별 동일성을 증명할 수 없다. 경로 API에는 그 메타데이터가 없으며 실기 판정은 HOLD다.
