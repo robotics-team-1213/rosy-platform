@@ -17,7 +17,10 @@ while read -r name args; do
   [ -z "$name" ] && continue
   echo "=== $name $(date +%T)" >> $OUTD/batch.log
   rm -rf "$OUTD/$name"; mkdir -p "$OUTD/$name"
+  # REC=1: also camera frames, keep_debug bundles (keeper strategy), odom and ground truth
+  [ "$REC" = "1" ] && { python3 "$H/lap_record.py" --out "$OUTD/$name/rec" --duration 1300 > "$OUTD/$name/rec.out" 2>&1 & R=$!; }
   eval timeout 1200 python3 "$H/lap_trip.py" --base http://127.0.0.1:8388 --fleet http://127.0.0.1:8389 --out "$OUTD/$name" $args > "$OUTD/$name/probe.out" 2>&1
+  [ "$REC" = "1" ] && { kill -INT $R; wait $R; }
   python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('result'), d.get('reason'), d.get('error'))" \
     "$OUTD/$name/summary.json" >> $OUTD/batch.log 2>&1
 done < "${1:-$H/batch.txt}"
