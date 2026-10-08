@@ -480,18 +480,18 @@ def test_260919_lap_sw_window_puts_the_misread_bend_outside():
     ports.at(arc, arc.length_m - 0.6)
     _ticks(runner, ports)
     sent, expect = ports.sent[0], ports.expects[0]
-    assert sent[0] == "right" and ports.turns[0] == pytest.approx(-108.9, abs=0.1)  # D-507 4 chord aim
+    assert sent[0] == "right" and ports.turns[0] == pytest.approx(-120.6, abs=0.1)  # D-507 4 tangent - 6 (SIM 4c)
     assert expect["expect_in_m"] == 0.6                   # along the lane; the 15 deg rule sent none
     bend = arc.project(-0.761, -0.455)[1] - (arc.length_m - 0.6)          # 0.15 m driven to the bend
     line = expect["expect_in_m"] - expect["pivot_past_line_m"]            # the far line, 0.7 m on
     assert line - (bend + 0.10) > expect["expect_tol_m"]  # a line seen up to 0.10 m past the bend: out
 
 
-@pytest.mark.parametrize("ring, to, blocked, turn", [("ring_n", "SW", "ring_w", -102.2),
-                                                     ("ring_s", "NE", "ring_e", -98.6)])
+@pytest.mark.parametrize("ring, to, blocked, turn", [("ring_n", "SW", "ring_w", -114.1),
+                                                     ("ring_s", "NE", "ring_e", -110.0)])
 def test_260919_ring_exits_send_the_arc_length(ring, to, blocked, turn):
     """NW and SE exits (R3-1): the ring arc into the place is the distance, not its chord. Turn
-    angles are the D-507 4 chord aim (main e72e8dfa1)."""
+    angles are the D-507 4 tangent - 6 (SIM 4c): the spokes bend back against the turn too."""
     runner, store, ports = _setup(caps=PIVOT)
     arc = _arc(store, f"{ring}:fwd")
     _plan(store, ports, arc.id, 0.05, to, blocked_edges=(blocked,))
