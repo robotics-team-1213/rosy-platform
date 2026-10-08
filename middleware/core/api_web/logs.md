@@ -750,3 +750,27 @@
 - 변경: main 병합으로 v1.142가 D-507 보충(굽이 지시)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.143으로 옮겼다. 앞 두 항목의 v1.142는 그 때의 번호다. `base_velocity` 능력은 `lane_bend`와 `line_follow_authority`·`line_follow_authority_required`를 함께 낸다.
 - 증거: `test/test_line_follow_contract_docs.py`, fleet 버전 핀 시험, `test_capabilities_controls.py`.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(api): API v1.150 표기 정렬
+
+- 변경: API 팩토리 설명과 Fleet·계약 테스트의 버전 핀을 v1.150으로 맞췄다.
+- 증거: 관련 테스트 94개 통과, known_failures 0 NEW.
+- gate 변화: 없음.
+
+
+## 2026-10-08 · uncommitted · test(api): Pilot에서 실제 Console 지도 패널까지 인증 인계
+- 변경: 실제 CORE FastAPI 자산으로 Pilot→Console 같은 탭 이동을 실행하고 인증된 매니페스트 요청·역할·지도 패널을 390×844·1366×768에서 검증한다.
+- 증거: [Pilot→실제 Console 인증 인계](../../../docs/validation/uiux-pilot-console-session-2026-10-08/result.md). TestClient·Chromium 2 passed, 관련 묶음 10 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 브라우저 근거 추가. DEVICE/FIELD 수용 근거는 아님.
+## 2026-10-08 · uncommitted · fix(api): `POST /line-follow/junction` 선택 필드 `lane_turn_deg` (API v1.152)
+- 변경: `straight` + 기대 창일 때만 받는 `lane_turn_deg`(−360…360, 왼쪽 +). 아니면 400 `VALIDATION_ERROR`. `_expect` 로 CORE에 넘긴다
+- 증거: `test_line_junction_api.py::test_lane_turn_deg_belongs_to_a_straight_with_a_window` (모델 PC)
+- gate 변화: 없음(SOURCE)
+- 결정: 옛 CORE는 pydantic 기본 `extra=ignore` 로 필드를 버리고 v1.148 정지를 유지한다(능력 플래그 없이 하위 호환)
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · test(api): Console 지도 증거 라우터 쿼리 보존
+
+- 변경: 실제 CORE 브라우저 테스트의 요청 중계가 비용 지도 `scope=global` 쿼리를 보존하고, 지도 미수신 상태가 안정된 뒤 화면을 촬영한다. 제품 API 동작은 변경하지 않았다.
+- 증거: [Console 지도 미수신 상태 검증](../../../docs/validation/uiux-console-map-truth-2026-10-08/result.md). 관련 브라우저 3 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 캡처 정합성. DEVICE/FIELD는 HOLD.

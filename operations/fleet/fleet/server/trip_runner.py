@@ -76,7 +76,8 @@ class TripRunner:
                  engaged: Callable[[str], Optional[str]] = lambda _robot_id: None,
                  release_queue: Callable[[str], None] = lambda _robot_id: None,
                  roster: Optional[Callable[[], Iterable[str]]] = None,
-                 traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False) -> None:
+                 traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False,
+                 traffic_signals=()) -> None:
         self._store = store
         self._routing = routing_config
         self._caps, self._poses, self._junction = caps, poses, junction
@@ -92,7 +93,8 @@ class TripRunner:
         self._locks: dict[str, asyncio.Lock] = {}
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
-        self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones)
+        self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones,
+                                                                          signals=traffic_signals)
         self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
         self._refresh_warned_at = -math.inf
         self.halts = TripHalts(store, junction, config, self._call, clock, cancel_goal,
@@ -161,6 +163,9 @@ class TripRunner:
                 self.authority.mode(caps) != "core" and ("TRIP_CONVOY_NO_AUTHORITY", {"leader": leader})))
             if refused:  # D-517 9 M3: a follower keeps its gap only through CORE authority
                 raise TripError(422, *refused)
+            refused = self.traffic.signal_refusal(plan["segments"], self.authority.mode(caps))
+            if refused:  # D-525 1/6: not from inside a signalled zone; crossing one needs CORE authority
+                raise TripError(422, *refused)
             if repeat:  # D-517 3: no await from this check to the trip opening
                 full = self.traffic.loop_full(arcs, self._live.values())
                 if full is not None:  # a convoy counts as 1 + N robots
@@ -200,6 +205,8 @@ class TripRunner:
             raise TripError(422, "TRIP_SITE_FLOOR_MISMATCH", {"site_floor_map_id": floor, "map_id": map_id})
         if lane and self.authority.mode(caps) == "core" and caps.line_follow_authority_required is not True:
             raise TripError(422, "TRIP_AUTHORITY_NOT_REQUIRED")  # D-517 4: no first-authority gap after a restart
+        if lane and self.authority.mode(caps) != "core" and caps.line_follow_authority_required is True:
+            raise TripError(422, "TRIP_AUTHORITY_SITE_OFF")  # D-517 M5: no authority goes out, so CORE never moves
         return caps
 
     async def _pose_checks(self, robot_id: str, graph, segments: list) -> MapPose:
@@ -617,7 +624,11 @@ class TripRunner:
             onto_next = nxt_s > nxt_segment["s_from"] + self.config.advance_eps_m and nxt_dist < dist
             remaining = live.segments[index]["s_to"] - s
             if arc.drive_mode == "lane":
-                done = self._completed(live, index) and remaining <= self.config.pass_window_m
+                # lap SIM 2 lap_12: CORE closed a straight while D-407 backed the robot 0.26 m short
+                # of SE; advancing there judged the pose against ring_e (0.276 m) and stopped a robot
+                # 0.07 m off ring_s. A carried-out place moves on only once the robot is on the next lane.
+                done = (self._completed(live, index) and remaining <= self.config.pass_window_m
+                        and nxt_dist <= nxt.width_m / 2)
             else:
                 done = remaining <= self.config.advance_free_m
             if not (done or onto_next):

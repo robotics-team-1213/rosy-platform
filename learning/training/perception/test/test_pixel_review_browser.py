@@ -238,6 +238,14 @@ def test_pixel_decision_advances_to_next_editable_pending(browser_workspace):
     assert review_masks.get(store, 0)['status'] == 'excluded'
 
 
+def test_pending_filter_omits_object_excluded_frame(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.locator('#pixel-filter').select_option('pending')
+    expect(page.locator('#pixel-frame option')).to_have_count(1)
+    expect(page.locator('#pixel-frame')).to_have_value('0')
+
+
 def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)

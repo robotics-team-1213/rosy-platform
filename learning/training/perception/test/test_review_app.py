@@ -70,6 +70,27 @@ def test_learning_counts_unverified_source_video(tmp_path):
         thread.join()
 
 
+def test_learning_pixel_queue_omits_object_excluded_frames(tmp_path):
+    import threading
+    import urllib.request
+    from review_app import make_server
+
+    store = open_store(tmp_path)
+    server = make_server(store, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f'http://127.0.0.1:{server.server_port}/api/learning'
+        result = json.load(urllib.request.urlopen(url))
+        assert result['counts']['excluded'] == 1
+        assert result['pixel_counts']['pending'] == 1
+        assert result['pixel_counts']['blank'] == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 def test_empty_training_workspace_reopens_without_initial_labels(tmp_path):
     store = ReviewStore(tmp_path / 'state', empty_training=True)
     assert store.list_frames() == []

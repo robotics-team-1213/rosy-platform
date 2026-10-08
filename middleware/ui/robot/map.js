@@ -141,7 +141,7 @@ export function createFieldMap(options) {
     targetReadoutTimer = setTimeout(() => {
       targetReadoutTimer = null;
       if (!cross || !state.occupancy || !canvas) {
-        options.onTargetReadout?.({inside: false, unavailable: !state.occupancy});
+        options.onTargetReadout?.({inside: false, unavailable: !cross || !state.occupancy});
         return;
       }
       const frame = new GridFrame(state.occupancy);
@@ -212,7 +212,7 @@ export function createFieldMap(options) {
     if (!empty) return;
     const knownEmpty = state.mapState === "empty";
     empty.hidden = !knownEmpty;
-    if (knownEmpty) empty.textContent = "지도 데이터가 아직 없습니다. 운용자가 작업 준비에서 지도를 설정해야 합니다.";
+    if (knownEmpty) empty.textContent = "지도 데이터가 아직 없습니다. 작업 준비에서 지도 상태를 확인하세요.";
     if (emptyRecoveryLink) emptyRecoveryLink.hidden = !(knownEmpty && mayOpenSetup);
   }
 

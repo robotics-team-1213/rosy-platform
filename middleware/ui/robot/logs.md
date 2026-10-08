@@ -1188,3 +1188,21 @@
 - 변경: `/dashboard`의 주행 목표·로봇 마커·경로 표시를 위치 추정, 증거 freshness, 안전 정지에 맞춰 `/console`과 일치시켰다. 초기 자세 설정은 위치 회복을 위해 유지한다.
 - 증거: [기존 Dashboard 지도 위치 추정 검증](../../../docs/validation/uiux-legacy-map-localization-2026-10-08/result.md). 390×844·1366×768 수정 전후 Chromium 캡처, 관련 시험 24 passed, known_failures 0 NEW.
 - gate 보류: LOCAL 합성 상태만 검증. 전체 G2/G3 및 DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 조작 열 차단 이유 적합성
+
+- 변경: `/dashboard`의 저속 직접 제어 버튼이 `NAVIGATION`에서 차단 이유를 표시할 때 1366px 조작 열 밖으로 넘치던 문제를 해결했다. 차단 이유가 있는 상태만 2열로 배치한다.
+- 증거: [조작 열 적합성 검증](../../../docs/validation/uiux-dashboard-act-fit-2026-10-08/result.md). 390×844·1366×768 수정 전후 Chromium 캡처, 관련 시험 28 passed, known_failures 0 NEW.
+- gate 보류: LOCAL 합성 상태만 검증. 전체 G2/G3 및 ARTIFACT/DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): Console 지도 미수신 상태 정합성
+
+- 변경: Console 지도에 `runtime.maps` 기능 근거를 연결하고, 지도가 아직 없을 때 설정 의무를 단정하지 않는 안내로 고쳤다.
+- 증거: [실제 CORE 지도 미수신 화면](../../../docs/validation/uiux-console-map-truth-2026-10-08/result.md). 390×844·1366×768 캡처, 관련 브라우저 3 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 시나리오 근거 추가. 전체 G2/G3와 설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(robot): 현재 내비게이션 지도 상태 재검증과 좌표 행 정리
+
+- 변경: 지도 G2 fixture의 `runtime.maps`를 제공하는 지도와 일치시켜 지연·단절 캡처 중 지도가 사라지지 않게 했다. Console의 선택 좌표 행은 실제 선택 동안만 보이며 Esc 해제 뒤 숨긴다.
+- 증거: [현재 Console 내비게이션 화면 재검증](../../../docs/validation/uiux-nav-current-g2-2026-10-09/result.md). 320·390·1366px, 정상 등 15행 캡처, 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 지도 상태 매트릭스 근거 보강. 전체 G2/G3와 설치본·DEVICE/FIELD는 HOLD.

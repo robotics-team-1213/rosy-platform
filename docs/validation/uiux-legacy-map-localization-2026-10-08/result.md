@@ -12,9 +12,9 @@
 
 | 상태 | 뷰포트 | PNG | SHA-256 |
 |---|---|---|---|
-| 수정 전 `SUSPECT/odom` | 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--legacy-localization-4c8e/evidence/before/compat-map-suspect-390x844.png` | `FF79C9196A89738B9A32913050FDDFA8EF67BF9F81FCA2E50CBF06C1E8C942F6` |
-| 수정 후 `SUSPECT/odom` | 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--legacy-localization-4c8e/evidence/after/compat-map-suspect-390x844.png` | `7D609561A37A60EB39B23D5C4641C1D78C142DD2D1BDCDC2D3126A15B3998B53` |
-| 수정 후 `SUSPECT/odom` | 1366×768 | `X:/DevTemp/projects/rosy-platform/2026-10-08--legacy-localization-4c8e/evidence/after/compat-map-suspect-1366x768.png` | `D07823AD0D8CA060B4C3AD09D0A273FCE4BAED5B924B0B77E6D931E64F86FCC8` |
+| 수정 전 `SUSPECT/odom` | 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--legacy-localization-4c8e/evidence/before/compat-map-suspect-390x844.png` | SHA-256 `FF79C9196A89738B9A32913050FDDFA8 EF67BF9F81FCA2E50CBF06C1E8C942F6` |
+| 수정 후 `SUSPECT/odom` | 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--legacy-localization-4c8e/evidence/after/compat-map-suspect-390x844.png` | SHA-256 `7D609561A37A60EB39B23D5C4641C1D7 8C142DD2D1BDCDC2D3126A15B3998B53` |
+| 수정 후 `SUSPECT/odom` | 1366×768 | `X:/DevTemp/projects/rosy-platform/2026-10-08--legacy-localization-4c8e/evidence/after/compat-map-suspect-1366x768.png` | SHA-256 `D07823AD0D8CA060B4C3AD09D0A273FC E4BAED5B924B0B77E6D931E64F86FCC8` |
 
 수정 후 목표 버튼은 위치 확인 이유와 함께 비활성화되고 초기 자세 버튼은 활성화된다. 로봇·경로는 사라지며 `LOCALIZED/map` 복구 후 목표와 경로가 다시 나타난다. `SAFE_STOP`에서도 목표·경로가 제한되고 초기 자세는 남는다. 이 동작은 390×844 및 1366×768에서 시험했다.
 
