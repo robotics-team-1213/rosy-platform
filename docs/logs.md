@@ -7184,3 +7184,11 @@ osy-d395-s1d\`.
 - 변경: 재검증 HIGH. 호가 도는 동안 `end_place_id` 의 `bend` 가 `armed` 되면 호 끝 `_start_turn` 을 거쳐 `_bend_step` 이 `j['bound']` 를 읽다 `KeyError` 로 `tick()` 이 깨졌다. 호가 도는 동안 `action: bend` 를 409 `JUNCTION_ARC_RUNNING` 으로 거절하고, 호 끝의 `armed` `bend` 는 `aborted`·`arc_mismatch`(지시 없는 끝)로 처리한다. API Reference v1.145 항목에 적었다. Fleet 은 호가 도는 그 차로에서 굽이를 보내지 않는다(`_step_bend`). 다만 Fleet 이 아직 호 시작을 못 본 상태에서 보내면 이 409 를 모르는 코드로 다시 던진다.
 - 증거: 단위 시험 2개(거절, 끝의 armed bend), API 시험 1개(409). 변이 확인: 거절을 빼면 2개 실패, 끝 guard 를 빼면 리뷰가 본 `KeyError: 'bound'` 로 1개 실패, 각각 복구. 골든: 병합 때의 main c06ddcad5(d5b75ff06^2)에서 다시 만든 궤적이 저장한 골든, 이 브랜치의 호 꺼짐 궤적과 같다(차이 없음, 골든 갱신 없음). services 1438 passed, gateway 관련 159 passed, api_web 140 passed(13 skipped), `test_module_structure` 와 판 고정 36 passed, known_failures 0 new(`X:\DevTemp\d520-core\run_rv.txt`).
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · feat(decision-ask): AI PC 질의는 사실과 후보만 반환한다
+
+- 변경: D-523. leet.ai.decision_pipeline이 정체 사실과 허용 후보를 검사한다. 막힘 답, meet 주문, 네트워크, 공개 REST, Laya 기동은 없다. D-492와 D-503은 Proposed로 남는다.
+- 증거: pytest operations/fleet/test/test_decision_pipeline.py 34 passed. known_failures.py 0 new. 출력 X:\DevTemp\decision-ask\run.txt.
+- gate 변화: 없음. 현장 그림자, V0/V1, 장치 동작은 미검증.
+- 결정: D-523 Accepted (2026-10-08, 사용자 계획 승인; 내부 파서)
+- 교훈: 없음

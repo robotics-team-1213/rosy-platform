@@ -25,6 +25,8 @@
 
 `WAIT` 같은 오프라인 choice 값은 평가용 후보이며 로봇 명령이 아니다. VLM도 막힘 답을 고르지 않는다. 현장 Fleet이 규칙·admission·사람 확인으로 선택하고, 로봇 CORE가 실행 직전 다시 검사한다. AI PC에는 Fleet 원장, ROS, 장치 Action, 취소·정지·재무장, `/cmd_vel` 권한을 주지 않는다. [D-516](../adr/D-516-offline-decision-model-replay-boundary.md), [D-429](../adr/D-429-five-concerns-control-port-and-site-devices.md).
 
+내부 파서가 받는 두 작업의 필드와 거절 규칙은 [D-523](../adr/D-523-ai-pc-ask-returns-facts-or-candidates.md)과 [질의 규약](2026-10-08-ai-pc-ask-contract.md)이다. 그 규약은 공개 wire·전송·인증이 아니다.
+
 ## 호스트, 코드 소유, 권한
 
 | 위치 | 실제 역할 | 저장소 소유 경로 | 입력 → 출력 | 쓰기 권한 |
