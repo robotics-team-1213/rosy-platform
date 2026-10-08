@@ -103,7 +103,7 @@ def test_a_red_zone_is_refused_ahead_and_under_a_jumped_front():
     assert result.waiting_for["b"] == ("signal:zone",) and result.waiting_for["signal:zone"] == ("a",)
     assert "b" not in state.waiting_since, "a red wait is not a merge wait"
     assert "zone" in result.busy
-    # b's estimate jumps into the zone on red: the unit under its front is still refused
+    # b's estimate lands in the zone on red (within u of a body before the line): still refused
     b.d = 1.1
     after = step(layout, [a, b], TableState(), 0.5, green={"zone": set()})
     assert after.authority_end["b"] <= 0.65 and "zone" not in after.busy
@@ -129,9 +129,9 @@ def _spans(cycle, start, laps):
     return tuple(spans)
 
 
-def _simulate(layout, cycle, plan, n, seed, jump_rate, unknown_rate, *, u=0.05, body=0.12, ticks=2400):
+def _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, *, u=0.05, body=0.12, ticks=2400):
     """Robots on a one-way loop of ``cycle`` ``(unit, length, entry)`` with ``plan`` gating its zone.
-    Estimates are true ± u (+ forward jumps); CORE drives to ``authority − estimate`` past the true
+    Estimates are true ± u, at the ±u edge with ``edge_rate`` (the worst case D-517 allows); CORE drives to ``authority − estimate`` past the true
     position (odom-anchored, D-517 4). Checks every tick: no zone grant on red, no real body in the
     zone without a grant, no green while busy, no circular wait; at the end every robot did a lap."""
     zone = plan.zone
@@ -156,11 +156,12 @@ def _simulate(layout, cycle, plan, n, seed, jump_rate, unknown_rate, *, u=0.05, 
         lit = green(plan, signal)
         for r in robots:
             r.lookahead_m = rng.choice((0.1, 0.3, 0.6))
-            # Forward jumps only: an estimate ahead of the body puts its front in the zone on red
-            # (the case under test) and stops it early. A backward jump past u lets CORE overrun the
-            # authority by the jump (until_m is measured from the estimate) — a D-517 u-bound premise.
-            jump = rng.uniform(0.0, 0.5) if rng.random() < jump_rate else 0.0
-            r.d = None if tick and rng.random() < unknown_rate else true_d[r.id] + rng.uniform(-u, u) + jump
+            # D-517 assumes every estimate is within u of the body. A jump past u breaks every block, not
+            # only a signal (until_m is measured from the estimate): a forward jump across a short zone
+            # skips it, a backward one overruns the authority. Fleet refuses gross jumps (lane_traffic
+            # jump guard); inside that bound u itself must be true. So: noise within u, often at its edge.
+            error = rng.choice((-u, u)) if rng.random() < edge_rate else rng.uniform(-u, u)
+            r.d = None if tick and rng.random() < unknown_rate else true_d[r.id] + error
         before = {r.id: set(state.held.get(r.id, {})) for r in robots}
         result = step(layout, robots, state, now, green={zone: lit})
         assert result.conflicts == ()
@@ -188,16 +189,16 @@ def _simulate(layout, cycle, plan, n, seed, jump_rate, unknown_rate, *, u=0.05, 
     assert min(progress.values()) > loop_m, f"a robot starved: {progress}"
 
 
-@pytest.mark.parametrize("n,seed,jump_rate,unknown_rate", [(2, 1, 0.0, 0.0), (3, 2, 0.0, 0.0),
-                                                           (3, 3, 0.05, 0.1), (2, 4, 0.1, 0.15)])
-def test_random_loop_never_enters_on_red_and_never_deadlocks(n, seed, jump_rate, unknown_rate):
+@pytest.mark.parametrize("n,seed,edge_rate,unknown_rate", [(2, 1, 0.0, 0.0), (3, 2, 0.0, 0.0),
+                                                           (3, 3, 0.3, 0.1), (2, 4, 0.5, 0.15)])
+def test_random_loop_never_enters_on_red_and_never_deadlocks(n, seed, edge_rate, unknown_rate):
     layout, cycle = _loop_with_two_entries(5, 2, 0.65)
-    _simulate(layout, cycle, PLAN, n, seed, jump_rate, unknown_rate)
+    _simulate(layout, cycle, PLAN, n, seed, edge_rate, unknown_rate)
 
 
-@pytest.mark.parametrize("n,seed,jump_rate,unknown_rate", [(2, 11, 0.0, 0.0), (3, 12, 0.0, 0.0),
-                                                           (3, 13, 0.05, 0.1), (2, 14, 0.1, 0.15)])
-def test_real_site_loop_never_enters_on_red_and_never_deadlocks(n, seed, jump_rate, unknown_rate):
+@pytest.mark.parametrize("n,seed,edge_rate,unknown_rate", [(2, 11, 0.0, 0.0), (3, 12, 0.0, 0.0),
+                                                           (3, 13, 0.3, 0.1), (2, 14, 0.5, 0.15)])
+def test_real_site_loop_never_enters_on_red_and_never_deadlocks(n, seed, edge_rate, unknown_rate):
     """The live site map (map_v2_fleet, demo one-way loop east → ring_n → west → ring_s) with the real
     roundabout as the signalled zone: two 0.37 m passes per 7.6 m lap, entered from east:fwd and
     west:fwd. Real u (0.195 m) and the Pinky body (D-517 3)."""
@@ -208,4 +209,4 @@ def test_real_site_loop_never_enters_on_red_and_never_deadlocks(n, seed, jump_ra
     cycle = [(s.unit, s.d1 - s.d0, s.entry) for s in lap]
     assert [(round(length, 2), entry) for unit, length, entry in cycle if unit == "roundabout"] == \
         [(0.37, "east:fwd"), (0.37, "west:fwd")]
-    _simulate(layout, cycle, plan, n, seed, jump_rate, unknown_rate, u=U_DEMO, body=BODY, ticks=3200)
+    _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, u=U_DEMO, body=BODY, ticks=3200)

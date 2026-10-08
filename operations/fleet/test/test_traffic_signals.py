@@ -134,6 +134,45 @@ def test_signal_route_needs_a_named_operator_and_a_known_signal(tmp_path):
     url = "/api/fleet/traffic/signals/sig"
     assert client.post(url, json={"verb": "cycle"}).status_code in (401, 403)
     assert client.post(url, json={"verb": "cycle"}, headers=VIEWER).status_code in (401, 403)
+    assert client.post("/api/fleet/traffic/signals/presence", headers=OPERATOR).json()["present"] is True
     response = client.post(url, json={"verb": "cycle"}, headers=OPERATOR)
     assert response.status_code == 404 and response.json()["detail"]["code"] == "SIGNAL_UNKNOWN"
     assert client.post(url, json={"verb": ""}, headers=OPERATOR).status_code == 422
+
+
+def test_a_pose_jump_beyond_travel_and_two_u_gives_no_authority_that_period():
+    """D-525 real-map finding (D-517 premise): |Δfront| > max speed × dt + 2u + margin is a jump."""
+    now = [100.0]
+    service = TrafficService(None, TripConfig(), clock=lambda: now[0])
+    guard = lambda d, trim=0.0, route="t:1": service._jump_guard("a", route, d, trim, 0.2, 0.195)  # noqa: E731
+    assert guard(1.00) == 1.00
+    now[0] += 0.5                      # allowed 0.1 + 0.39 + 0.05 = 0.54 m
+    assert guard(1.50) == 1.50
+    now[0] += 0.5
+    assert guard(2.10) is None         # +0.60: a jump forward, refused
+    now[0] += 0.5
+    assert guard(1.55) == 1.55         # agrees with the last accepted front again
+    now[0] += 0.5
+    assert guard(0.95) is None         # −0.60: a jump back would let CORE overrun its authority
+    assert guard(0.20, trim=1.40) == 0.20  # a repeat trip dropped 1.4 m of laps: same place, no jump
+    assert guard(5.0, route="t:2") == 5.0  # a new route starts fresh
+    assert guard(None) is None
+
+
+def test_manual_green_needs_presence_and_falls_to_all_red_when_the_console_leaves():
+    runner, _store, fleet, entries = _setup()
+    with pytest.raises(PermissionError):
+        runner.traffic.signal_command("sig", "set_aspect", entries[1])
+    runner.traffic.signal_presence()
+    with pytest.raises(ValueError):
+        runner.traffic.signal_command("sig", "set_aspect", "nope:fwd")
+    row = runner.traffic.signal_command("sig", "set_aspect", entries[1])
+    assert row["mode"] == "manual" and row["manual"] == entries[1]
+    for _ in range(4):                      # learn the zone, then the manual approach goes green
+        fleet.advance(0.5)
+        runner.traffic.signal_presence()
+        row = _signals(runner)["sig"]
+    assert row["aspect"] == "green" and [a["approach"] for a in row["approaches"] if a["lamp"] == "green"] == [entries[1]]
+    fleet.advance(10.5)                     # no presence for longer than PRESENCE_S
+    row = _signals(runner)["sig"]
+    assert row["mode"] == "all_red" and row["aspect"] == "all_red", "never back to cycle on its own"
