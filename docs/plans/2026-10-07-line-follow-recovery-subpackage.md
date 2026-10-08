@@ -56,4 +56,5 @@ D-495 교차로 동작 브랜치가 main에 들어간 뒤에 한다. 같은 시�
 - `motion_admit.py`는 `recovery`에 남는다. `lane_bridge`와 `lane_return_decision`도 쓴다.
 - 지키는 것은 위와 같다. 교차로 믹스인은 그대로 `LineFollowManager`의 믹스인이고 매니저 잠금 하나와 generation 하나를 쓴다. 최종 발행자는 CORE CommandManager다.
 - 크기: `SIZE_UNITS`에 `core_features/line_follow/recovery/junction`을 더하고 파일은 가장 안쪽 단위로 센다. 옮긴 뒤 `recovery` 2093, `junction` 947(`__init__.py` 2줄 포함). 두 판정은 독립 재판정을 받는다.
+- 독립 검토: critic 에이전트(읽기 전용) 2026-10-08 승인(APPROVE WITH CHANGES, 요구 문구 반영). recovery 2093, junction 947.
 - 검증: `test_line_junction.py`, `test_junction_approach.py`, `test_junction_bend.py`, `test_junction_turn_site_basis.py`, gateway `test_line_junction_api.py`, `test_line_follow*.py`, Fleet `test_trip_runner.py`, `test/architecture`. `test/known_failures.py`가 새 실패 0이어야 한다.

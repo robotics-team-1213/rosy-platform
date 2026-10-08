@@ -706,13 +706,14 @@ SIZE_VERDICTS = {
     ),
     "core/services/core_features/line_follow/recovery/junction": (
         947,
-        "split: judged at 947 on 2026-10-08 (critic agent, read-only) when it left recovery "
+        "split: judged at 947 on 2026-10-08 (critic agent, read-only, APPROVE WITH CHANGES applied) when it left recovery "
         "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-08 section): gate.py 530 "
         "(D-494 4 / D-495 instruction gate and bounded turn), approach.py 207 (D-507 2-4 window and pivot "
         "approach), bend.py 208 (D-507 addendum map bend pass), __init__.py 2. Mixins of LineFollowManager "
         "under its one lock and generation; motion admission stays recovery/motion_admit.py. Growth inside "
-        "+150 is open again (the 2987 verdict's block ends with this move); past 1097 re-judge, and a file "
-        "nearing 600 (gate.py) splits by state (e.g. the turn/approach maneuver out of the gate) first.",
+        "+150 is open again (the 2987 verdict's block ends with this move); past 1097 re-judge, and no file "
+        "may pass 600 (gate.py is 530): split gate.py by state (e.g. the turn/approach maneuver out of the "
+        "gate) before that.",
     ),
     "core_features": (
         12_772,
