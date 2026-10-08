@@ -107,6 +107,12 @@ def test_pytest_runs_through_the_remote_runner_on_the_pushed_commit():
     assert pushed.stdout.strip() == "1" * 40, pushed.stderr
 
 
+def test_safety_warning_checks_tip_while_ci_checks_full_range():
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert 'safety_review.py "${PUSH_SHA}^" "$PUSH_SHA" --warn-only' in text
+    assert "git merge-base HEAD origin/main" not in text.split("Safety-Review trailer on pushed tip")[1].split("FAST_SUITES", 1)[0]
+
+
 INSTALLER = ROOT / "tools" / "hooks" / "install.sh"
 INSTALL_BASH = (str(Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe")
                 if os.name == "nt" else BASH)
