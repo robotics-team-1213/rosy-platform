@@ -31,7 +31,7 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(api): `POST /line-follow/junction` 선택 필드 `lane_turn_deg` (API v1.151)
+- 2026-10-08 · uncommitted · fix(api): `POST /line-follow/junction` 선택 필드 `lane_turn_deg` (API v1.152)
 - 2026-10-08 · uncommitted · test(api): Pilot에서 실제 Console 지도 패널까지 인증 인계
 - 2026-10-08 · uncommitted · fix(api): API v1.150 표기 정렬
 - 2026-10-08 · uncommitted · fix(api): D-517 M2 통행권의 API Ref 번호를 v1.143으로 옮김
