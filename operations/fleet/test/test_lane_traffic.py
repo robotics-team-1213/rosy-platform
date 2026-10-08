@@ -256,3 +256,20 @@ def test_traffic_service_without_an_active_map_is_empty():
     service = TrafficService(NoMap())
     service.step([])
     assert service.view()["units"] == [] and service.loop_full([{"edge_id": "e"}], []) is None
+
+
+def test_estop_ends_every_open_trip():
+    from fakes import FakeRobot
+    from fleet.server.console import FleetConsole
+    from fleet.server.trip_guard import install_trip_guard
+    from fleet.swarm.robots import RobotEndpoint
+
+    runner, store, fleet = _setup()
+    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
+    _trip(runner, store, fleet, "b", "west:fwd", _s_of(store, "west:fwd", START_S), to="start_s", via=("start_n",))
+    robots = [FakeRobot("a"), FakeRobot("b")]
+    console = FleetConsole([RobotEndpoint(r.robot_id, "http://x", "t") for r in robots], robots)
+    install_trip_guard(console, runner)
+    run(console.estop_all())
+    assert runner.open_trips() == []
+    assert runner.view("a")["reason"] == runner.view("b")["reason"] == "operator_estop"
