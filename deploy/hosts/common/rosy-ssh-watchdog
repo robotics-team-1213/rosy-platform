@@ -1,68 +1,93 @@
 #!/usr/bin/env bash
 # Host-local SSH self-recovery for every Linux host (site, model, AI PC, robots).
-# A remote guard cannot help once SSH itself is dead, so each host checks itself:
-# sshd answers on :22, tailscale is up (where installed), the default gateway answers.
-# Ladder on consecutive failed runs: 1 restart ssh, 2 restart tailscaled,
-# 3 restart NetworkManager, >=4 reboot (not within BOOT_GRACE_S of boot, at most
-# once per REBOOT_MIN_GAP_S). Runs as root from rosy-ssh-watchdog.timer.
+# A remote guard cannot help once SSH itself is dead, so each host checks itself.
+#
+# Only an SSH failure can climb to a reboot. Tailscale and the gateway are repaired
+# by restarting their own service and never reboot the host: a robot that was never
+# joined, a gateway that drops ICMP or a host without a default route must not
+# reboot forever.
+#
+# SSH ladder over consecutive failed runs: 1 restart ssh (+ssh.socket),
+# 2 restart NetworkManager (not on robots), >=3 reboot, guarded:
+#   - never within BOOT_GRACE_S of boot, at most once per REBOOT_MIN_GAP_S,
+#   - at most MAX_REBOOTS reboots until a run finds SSH healthy again,
+#   - a robot (ROSY_ROBOT=1) never reboots while rosy-core is active: it may be
+#     driving, and CORE's own API still reaches it.
+# Runs as root from rosy-ssh-watchdog.timer; settings in /etc/default/rosy-ssh-watchdog.
 set -u
 STATE_DIR=${ROSY_SSH_WATCHDOG_STATE:-/var/lib/rosy-ssh-watchdog}
 BOOT_GRACE_S=${BOOT_GRACE_S:-600}
 REBOOT_MIN_GAP_S=${REBOOT_MIN_GAP_S:-3600}
+MAX_REBOOTS=${MAX_REBOOTS:-2}
+ROSY_ROBOT=${ROSY_ROBOT:-0}
 DRY_RUN=${DRY_RUN:-0}
-# Robots set CHECK_GATEWAY=0 in /etc/default/rosy-ssh-watchdog: rosy-network's
-# fallback AP has no default route on purpose and owns the robot's networking.
-CHECK_GATEWAY=${CHECK_GATEWAY:-1}
-mkdir -p "$STATE_DIR"
 log() { echo "rosy-ssh-watchdog: $*"; }
 act() { log "action: $*"; [ "$DRY_RUN" = 1 ] || "$@"; }
+mkdir -p "$STATE_DIR" 2>/dev/null || log "cannot create $STATE_DIR; counters will not climb"
+num() { local v; v=$(cat "$STATE_DIR/$1" 2>/dev/null); [[ $v =~ ^[0-9]+$ ]] && echo "$v" || echo 0; }
+put() { [ "$DRY_RUN" = 1 ] || echo "$2" > "$STATE_DIR/$1" 2>/dev/null; }
 
 ssh_ok() {
   # The banner proves sshd accepts and answers, not just that the unit is active.
-  timeout 5 bash -c 'exec 3<>/dev/tcp/127.0.0.1/22 && head -c 4 <&3' 2>/dev/null | grep -q '^SSH-'
+  local addr
+  for addr in 127.0.0.1 ::1; do
+    timeout 8 bash -c "exec 3<>/dev/tcp/$addr/22 && head -c 4 <&3" 2>/dev/null | grep -q '^SSH-' && return 0
+  done
+  return 1
 }
 tailscale_ok() {
+  # Only a dead daemon is a failure. NeedsLogin/Stopped are deliberate states.
   command -v tailscale >/dev/null 2>&1 || return 0
   systemctl is-enabled tailscaled >/dev/null 2>&1 || return 0
-  timeout 10 tailscale status --json 2>/dev/null | grep -q '"BackendState": *"Running"'
+  timeout 10 tailscale status --json >/dev/null 2>&1
 }
 gateway_ok() {
-  local gw
-  gw=$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')
-  [ -n "$gw" ] && timeout 5 ping -c 1 -W 2 "$gw" >/dev/null 2>&1
+  # No default route (Tailscale-only, fallback AP) is not a failure; neither is a
+  # gateway that drops ICMP while it still answers ARP.
+  local gw dev
+  read -r gw dev < <(ip -4 route show default 2>/dev/null | awk '{print $3, $5; exit}')
+  [ -z "${gw:-}" ] && return 0
+  timeout 5 ping -c 1 -W 2 "$gw" >/dev/null 2>&1 && return 0
+  ip neigh show "$gw" dev "$dev" 2>/dev/null | grep -q -E 'REACHABLE|STALE|DELAY|PROBE'
 }
 
-failed=""
-ssh_ok || failed="$failed ssh"
-tailscale_ok || failed="$failed tailscale"
-[ "$CHECK_GATEWAY" = 0 ] || gateway_ok || failed="$failed gateway"
+if ! tailscale_ok; then log "tailscaled not answering"; act systemctl restart tailscaled; fi
+if [ "$ROSY_ROBOT" != 1 ] && ! gateway_ok; then
+  n=$(( $(num gateway_failures) + 1 )); put gateway_failures "$n"
+  log "gateway not answering ($n)"
+  # One NetworkManager restart per 3 bad runs, never a reboot.
+  [ $(( n % 3 )) = 1 ] && act systemctl restart NetworkManager
+else
+  put gateway_failures 0
+fi
 
-count_file=$STATE_DIR/failures
-if [ -z "$failed" ]; then
-  [ -s "$count_file" ] && log "recovered"
-  : > "$count_file"
+if ssh_ok; then
+  [ "$(num ssh_failures)" -gt 0 ] && log "ssh recovered"
+  put ssh_failures 0; put reboots 0
   exit 0
 fi
-n=$(( $(cat "$count_file" 2>/dev/null || echo 0) + 1 ))
-echo "$n" > "$count_file"
-log "check failed ($n):$failed"
-
+n=$(( $(num ssh_failures) + 1 )); put ssh_failures "$n"
+log "ssh check failed ($n)"
+restart_ssh() {
+  systemctl is-enabled ssh.socket >/dev/null 2>&1 && act systemctl restart ssh.socket
+  act systemctl restart ssh
+}
 case $n in
-  1) act systemctl restart ssh ;;
-  2) act systemctl restart tailscaled ;;
-  3) [ "$CHECK_GATEWAY" = 0 ] || act systemctl restart NetworkManager ;;
+  1) restart_ssh ;;
+  2) if [ "$ROSY_ROBOT" = 1 ]; then restart_ssh; else act systemctl restart NetworkManager; restart_ssh; fi ;;
   *)
     up=$(awk '{print int($1)}' /proc/uptime)
-    last=$(cat "$STATE_DIR/last_reboot" 2>/dev/null || echo 0)
-    now=$(date +%s)
+    now=$(date +%s); last=$(num last_reboot); done_reboots=$(num reboots)
     if [ "$up" -lt "$BOOT_GRACE_S" ]; then
-      log "within boot grace (${up}s); no reboot"
+      log "within boot grace (${up}s); no reboot"; restart_ssh
     elif [ $(( now - last )) -lt "$REBOOT_MIN_GAP_S" ]; then
-      log "rebooted $(( now - last ))s ago; no reboot"
-      act systemctl restart ssh
+      log "rebooted $(( now - last ))s ago; no reboot"; restart_ssh
+    elif [ "$done_reboots" -ge "$MAX_REBOOTS" ]; then
+      log "already rebooted $done_reboots times without recovery; no reboot"; restart_ssh
+    elif [ "$ROSY_ROBOT" = 1 ] && systemctl is-active --quiet rosy-core; then
+      log "robot with rosy-core active; no reboot"; restart_ssh
     else
-      echo "$now" > "$STATE_DIR/last_reboot"
-      : > "$count_file"
+      put last_reboot "$now"; put reboots $(( done_reboots + 1 )); put ssh_failures 0
       act systemctl reboot
     fi ;;
 esac

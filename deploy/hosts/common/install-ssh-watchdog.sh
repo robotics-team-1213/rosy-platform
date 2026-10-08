@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # Install or refresh the host-local SSH self-recovery check (idempotent). Run as root
-# from this folder: sudo bash install-ssh-watchdog.sh
+# from this folder:  sudo bash install-ssh-watchdog.sh [--robot]
+# --robot (or a ROSY robot detected by its rosy-network unit) writes ROSY_ROBOT=1:
+# no gateway/NetworkManager steps and no reboot while rosy-core is active.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
+robot=0
+[ "${1:-}" = --robot ] && robot=1
+systemctl cat rosy-network.service >/dev/null 2>&1 && robot=1
 install -m 0755 "$here/rosy-ssh-watchdog" /usr/local/sbin/rosy-ssh-watchdog
 install -m 0644 "$here/rosy-ssh-watchdog.service" /etc/systemd/system/rosy-ssh-watchdog.service
 install -m 0644 "$here/rosy-ssh-watchdog.timer" /etc/systemd/system/rosy-ssh-watchdog.timer
-# A ROSY robot (rosy-network present) skips the gateway check; see the script.
-if [ -e /etc/systemd/system/rosy-network.service ] && [ ! -e /etc/default/rosy-ssh-watchdog ]; then
-  echo "CHECK_GATEWAY=0" > /etc/default/rosy-ssh-watchdog
-fi
+# Rewritten on every install so a robot can never lose its robot setting.
+echo "ROSY_ROBOT=$robot" > /etc/default/rosy-ssh-watchdog
 # sshd and tailscaled must come back on their own after any reboot.
 systemctl enable ssh >/dev/null 2>&1 || systemctl enable sshd >/dev/null 2>&1 || true
-if systemctl list-unit-files tailscaled.service >/dev/null 2>&1; then systemctl enable tailscaled >/dev/null 2>&1 || true; fi
+if systemctl cat tailscaled.service >/dev/null 2>&1; then systemctl enable tailscaled >/dev/null 2>&1 || true; fi
 systemctl daemon-reload
 systemctl enable --now rosy-ssh-watchdog.timer
-DRY_RUN=1 /usr/local/sbin/rosy-ssh-watchdog
-echo "rosy-ssh-watchdog installed: $(systemctl is-active rosy-ssh-watchdog.timer)"
+# Dry run with the installed settings; it never changes the counters.
+( set -a; . /etc/default/rosy-ssh-watchdog; set +a; DRY_RUN=1 /usr/local/sbin/rosy-ssh-watchdog )
+echo "rosy-ssh-watchdog installed (ROSY_ROBOT=$robot): $(systemctl is-active rosy-ssh-watchdog.timer)"
