@@ -27,3 +27,9 @@
 ## 판정 한계
 
 이 기록은 2026-10-09의 주차 위치에서 장치 ID와 화면 속 몸체를 연결한다(D-537). 카메라의 자동 named track은 0/0이고, Fleet 연결은 이전 설치물의 identity 조회 429로 0/2–2/2 사이를 오갔다(D-533). LCD 화면 내용은 카메라에서 보이지 않았다. 지도 localization, 이동 구역 수용, Web 이동, 두 로봇의 물리 주행은 이 회차에서 확인하지 않았다. 몸체나 카메라를 옮긴 뒤에는 다시 대조해야 한다.
+
+## 역할별 구현 시험
+
+- 대상: `ebba1acda` (D-537과 설치·정비 화면 구현을 포함한 `main` 병합 커밋).
+- 모델 PC `rosy@100.98.162.71`의 격리된 소스와 Chromium에서 `ROSY_RUN_BROWSER_TESTS=1`로 `middleware/ui/robot/test/test_remaining_workflows_browser.py` 실행: 8 passed, exit 0, `known_failures.py` NEW 0. 원격 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-09--031749--physical-id-proof--138376/logs/browser-run.txt`에 보관.
+- 현장 PC의 Fleet·Rosy Cam 영상과 각 Pinky의 하드웨어 시험 결과는 위 물리 대조 증거다. 새 설치·정비 화면 버튼은 로봇 설치본에 아직 배포되지 않았다.
