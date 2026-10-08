@@ -17,6 +17,17 @@ V13_CLASSES = (Path(__file__).resolve().parents[1] / 'classes' /
                'lane_lr6_drivable.yaml').read_bytes()
 
 
+def test_merge_unknown_clips_new_drivable_to_human_lane_edges():
+    current = np.array([[5, 1, 255, 255, 2, 255]], dtype=np.uint8)
+    proposal = np.full(current.shape, 5, np.uint8)
+    binding = {'classes': [{'name': 'lane_left', 'index': 1},
+                           {'name': 'lane_right', 'index': 2},
+                           {'name': 'drivable', 'index': 5}]}
+    merged = review_masks.merge_unknown(current, proposal, binding)
+    assert merged.tolist() == [[5, 1, 5, 5, 2, 255]]
+    assert review_masks.lane_boundary_violations(merged, binding) == {'left': 1, 'right': 0}
+
+
 def test_merge_draft_fills_only_unknown_and_keeps_human_review_pending(tmp_path):
     store = open_store(tmp_path)
     folder, classes, _ = catalog(tmp_path)
