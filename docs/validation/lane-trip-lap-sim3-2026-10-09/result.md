@@ -165,5 +165,5 @@ PYTHONPATH=middleware/perception:contracts/foundation python3 \
 `ring_tracks.png`의 빨강은 회전 수정 전(rec_02)이고, 보라·파랑·주황은 수정 후다.
 
 원시 기록(run마다 `log/cmd/keep/actions/events/trip.jsonl`, `summary.json`, 기록 run의 `rec/keep.jsonl`·`frames.npz`, `runs_ne`, 수정 전
-`runs_rec`)은 저장소 밖에 있다. `X:\DevTemp\lap-sim3\lap3_runs_full.tgz`(120,601,379 bytes, SHA-256
-`ff5495e63c0f81982f4aed98c93b80a7b4d3fb9c27388953fd3d3d2976dc4657`)와 모델 PC `~/rosy_ring_ws`다.
+`runs_rec`)은 저장소 밖에 있다. `X:\DevTemp\lap-sim3\lap3_runs_full.tgz`(120,601,379 bytes,
+SHA-256 `ff5495e63c0f81982f4aed98c93b80a7b4d3fb9c27388953fd3d3d2976dc4657`)와 모델 PC `~/rosy_ring_ws`다.

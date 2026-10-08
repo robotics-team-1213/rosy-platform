@@ -54,6 +54,19 @@ def test_write_manifest_valid_and_revision(tmp_path):
     assert doc["trainer"] == "colab-x"
 
 
+def test_v13_drivable_revision_is_separate_and_requires_class(tmp_path):
+    out, doc = _write(tmp_path, revision_prefix="v13-drivable")
+    assert doc["model_revision"].startswith("v13-drivable-20260930-")
+    assert load_manifest(out).model_revision == doc["model_revision"]
+    (tmp_path / "no-drivable").mkdir()
+    with pytest.raises(ValueError, match="exactly one drivable"):
+        _write(tmp_path / "no-drivable", revision_prefix="v13-drivable",
+               classes=[("background", "background"), ("lane", "lane_marking")])
+    (tmp_path / "bad-prefix").mkdir()
+    with pytest.raises(ValueError, match="unsupported model revision prefix"):
+        _write(tmp_path / "bad-prefix", revision_prefix="v13/unsafe")
+
+
 def test_write_manifest_rejects_bad_role(tmp_path):
     with pytest.raises(ValueError):
         _write(tmp_path, classes=[("a", "background"), ("b", "nonsense")])
