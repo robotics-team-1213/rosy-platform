@@ -333,7 +333,7 @@ def test_start_refuses_with_every_d491_code_in_order():
     assert run(runner.start("p1", "bob"))["state"] == "started"
     assert _code(runner.start("p1", "bob")) == "TRIP_ALREADY_STARTED"
     _plan(store, ports, "ring_s:fwd", 0.1, "NE", plan_id="p2")
-    assert _code(runner.start("p2", "bob")) == "TRIP_BUSY"  # one trip on the whole site
+    assert _code(runner.start("p2", "bob")) == "TRIP_BUSY"  # this robot already has an open trip (D-517 1)
 
 
 def _activate_again(store):
