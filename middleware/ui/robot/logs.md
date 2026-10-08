@@ -1182,3 +1182,9 @@
 - 변경: `/dashboard`의 인증 교체·페이지 이탈 시험에 10×10 격자 지도를 제공한다. 비어 있던 `/api/v1/map` 응답 때문에 현재 지도 검증이 목표 확인창을 올바르게 막던 시험 불일치를 해소했다. 제품 동작은 변경하지 않았다.
 - 증거: [인증·지도 확인창 회귀 복구](../../../docs/validation/uiux-compat-auth-map-fixture-2026-10-08/result.md). 390×844·1366×768 확인창 캡처, 대상 2 passed, 지도 인접 묶음 5 passed, 0 NEW.
 - gate 변화: LOCAL 회귀 근거 복구. 전체 G2/G3·설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 지도 위치 추정 게이트
+
+- 변경: `/dashboard`의 주행 목표·로봇 마커·경로 표시를 위치 추정, 증거 freshness, 안전 정지에 맞춰 `/console`과 일치시켰다. 초기 자세 설정은 위치 회복을 위해 유지한다.
+- 증거: [기존 Dashboard 지도 위치 추정 검증](../../../docs/validation/uiux-legacy-map-localization-2026-10-08/result.md). 390×844·1366×768 수정 전후 Chromium 캡처, 관련 시험 24 passed, known_failures 0 NEW.
+- gate 보류: LOCAL 합성 상태만 검증. 전체 G2/G3 및 DEVICE/FIELD는 HOLD.
