@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · e8ba5ada0 · 모바일 관제 첫 화면 결합 검증
 - 2026-10-08 · 91b15708b · fix(fleet): CORE `approaching`도 기동 중으로 센다; Fleet 목록을 CORE 목록에 묶음
 - 2026-10-08 · 7f67af26a · fix(fleet): D-520 검토 반영 — 호 기준선 전 송신 없음, 미무장 표시 지움, 오프셋 범위
 - 2026-10-08 · 482c98340 · feat(fleet): D-520 1–2 Fleet 쪽 — exit_segment, 접선 회전, 호 carried 판정
 - 2026-10-08 · uncommitted · fix(fleet): D-517 M3 독립 Safety-Review 반영
-- 2026-10-08 · uncommitted · feat(fleet): D-517 M3 차로 대열(리더–팔로워) 이동 블록
