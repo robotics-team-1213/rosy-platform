@@ -52,7 +52,7 @@ export function mount(root, ctx) {
   const slamStage = el("span", "", "SLAM · 확인 중");
   stage.append(navStage, pathStage, locationStage, slamStage);
   const mapFrame = el("div", "surface-map-frame"); mapFrame.append(overlay, canvas, stage, targetReadout);
-  root.append(head, status, readinessStatus, layers, clicks, mapFrame, clickReason, setupLink, mapStatus, action);
+  root.append(head, status, readinessStatus, clicks, mapFrame, clickReason, layers, setupLink, mapStatus, action);
 
   let state = null;
   let mappingActive = null;

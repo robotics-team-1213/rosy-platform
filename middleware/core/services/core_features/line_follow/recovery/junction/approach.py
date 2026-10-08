@@ -75,6 +75,7 @@ class JunctionApproachMixin:
     _junction_anchor = None  # the latest measured sighting, anchored in odom (any age)
     _cross_band = None  # D-507 6: where IR 'centre' is the measured cross line
     _junction_ahead_v_at = None  # last keep_debug frame carrying junction_ahead_v >= 1
+    _junction_held = False  # lap SIM A: a bend pass handed its sighting on; seen until odom passes the line
 
     def _expect_window(self, expect, now):
         """The odom placement of the expected window, None without the fields, False without
@@ -111,6 +112,16 @@ class JunctionApproachMixin:
         if pose is not None and abs(pose.received_at-at) <= SIGHTING_POSE_S:
             self._junction_anchor = dict(key=(self._return_evidence.epoch, pose.frame), pose=pose,
                                          odometer=trail.odometer_at(pose), ahead=ahead, reason=reason)
+
+    def _line_ahead(self, now, since=-math.inf):
+        """The latest sighting, of a run that began after `since` (review: not one carried
+        over from the bend's own corner), is anchored in this odom frame with a measured line the
+        odometer has not passed yet. Locked."""
+        a, at, first = self._anchor_now(now), self._junction_seen_at, self._junction_first_seen
+        return (a is not None and a['odometer'] is not None and at is not None
+                and first is not None and first > since
+                and a['pose'].received_at >= since-SIGHTING_POSE_S
+                and self._return_evidence.trail.odometer-a['odometer'] < a['ahead'])
 
     def _anchor_now(self, now):
         """The anchor if it is in the current odom frame, else None."""
