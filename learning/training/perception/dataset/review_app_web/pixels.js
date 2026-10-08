@@ -62,7 +62,7 @@ function previewCandidate(){
  $('pixel-candidate-caption').textContent=`사진 ${index+1} · ${$('pixel-candidates').selectedOptions[0].textContent} · 미적용 초안`;
  $('pixel-candidate-image').src=`/api/draft-preview/${index}/${digest}`;
 }
-function visible(){return workspace?.frames.filter(row=>$('pixel-filter').value==='all'||row.pixel_status===$('pixel-filter').value)||[];}
+function visible(){return workspace?.frames.filter(row=>$('pixel-filter').value==='all'||row.status!=='excluded'&&row.pixel_status===$('pixel-filter').value)||[];}
 function url(){const link=new URL(location.href);if(frame)link.searchParams.set('frame',frame.index);else link.searchParams.delete('frame');if($('pixel-filter').value==='all')link.searchParams.delete('filter');else link.searchParams.set('filter',$('pixel-filter').value);history.replaceState(null,'',link);}
 function enable(){const dirty=draft.length>0,hasSamples=seeds.length>0,hasPolygon=polygon.length>0,selection=hasSamples||hasPolygon,locked=busy||!ready||loading||conflicted||forbidden||!!stroke,excluded=frame?.status==='excluded'||review?.status==='excluded',editable=!locked&&!excluded&&!!review?.classes,labelReady=editable&&$('pixel-class').value!=='';
   const selectedRole=review?.classes?.classes.find(row=>String(row.index)===$('pixel-class').value)?.role;

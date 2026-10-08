@@ -223,6 +223,8 @@ class LineJunctionRequest(BaseModel):
     pivot_past_line_m: Optional[float] = Field(default=None, ge=-0.30, le=0.30)
     # D-520 1: the arc after this place, sent only to a robot announcing lane_arc.
     exit_segment: Optional[LineExitSegment] = None
+    # lap SIM 2 (2026-10-08): a straight's lane heading change to the place (deg, left +).
+    lane_turn_deg: Optional[float] = Field(default=None, ge=-360, le=360, allow_inf_nan=False)
     # D-507 addendum (2026-10-08): a site-map bend, sent only to a robot announcing lane_bend.
     bend_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
     bend_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
@@ -233,7 +235,8 @@ def _expect(body: LineJunctionRequest):
     """D-507 2: the optional fields as one dict, or None for an old client (behaviour unchanged)."""
     fields = dict(map_id=body.map_id, expect_in_m=body.expect_in_m, expect_tol_m=body.expect_tol_m,
                   pivot_past_line_m=body.pivot_past_line_m, bend_in_m=body.bend_in_m,
-                  bend_tol_m=body.bend_tol_m, bend_radius_m=body.bend_radius_m)
+                  bend_tol_m=body.bend_tol_m, bend_radius_m=body.bend_radius_m,
+                  lane_turn_deg=body.lane_turn_deg)
     return fields if any(v is not None for v in fields.values()) else None
 
 
@@ -265,6 +268,8 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
     if body.pivot_past_line_m is not None and (body.action == "stop" or (
             body.action != "straight" and body.turn_deg is None)):
         raise ApiError("VALIDATION_ERROR", 400, "pivot_past_line_m belongs to straight or a turn")
+    if body.lane_turn_deg is not None and (body.action != "straight" or body.expect_in_m is None):
+        raise ApiError("VALIDATION_ERROR", 400, "lane_turn_deg belongs to straight with a window")
     if body.exit_segment is not None and (
             body.map_id is None or abs(body.exit_segment.curvature_1pm) < 0.5
             or not (body.action == "straight" or body.turn_deg is not None)):

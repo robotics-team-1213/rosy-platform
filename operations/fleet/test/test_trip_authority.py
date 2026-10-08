@@ -80,7 +80,8 @@ def test_sent_only_with_the_flag_and_the_robot_capability():
     _ticks(runner, fleet, n=2)
     assert len(fleet.bodies["a"]) == 2 and fleet.bodies["b"] == []  # b keeps the M1 junction hold-back
 
-    runner, store, fleet = _setup({"a": AUTH}, enabled=False)
+    # flag off: nothing goes out (an authority_required robot is refused at start instead)
+    runner, store, fleet = _setup({"a": dataclasses.replace(AUTH, line_follow_authority_required=False)}, enabled=False)
     _trip(runner, store, fleet, "a", "east:fwd", 0.3)
     _ticks(runner, fleet, n=2)
     assert runner.view("a")["traffic_authority"] == "hold_back" and fleet.bodies["a"] == []
@@ -206,3 +207,11 @@ def test_an_authority_robot_without_authority_required_is_refused():
     assert _trip(runner, store, fleet, "a", "east:fwd", 0.3)["traffic_authority"] == "hold_back"
     runner, store, fleet = _setup({"a": LANE})  # no line_follow_authority: M1 hold-back as before
     assert _trip(runner, store, fleet, "a", "east:fwd", 0.3)["traffic_authority"] == "hold_back"
+
+
+def test_a_robot_requiring_authority_is_refused_while_the_site_flag_is_off():
+    # D-517 M5 finding 1: with no authority sent, CORE authority_required stands the robot, so the trip would end on stall.
+    runner, store, fleet = _setup({"a": AUTH}, enabled=False)
+    with pytest.raises(TripError) as err:
+        _trip(runner, store, fleet, "a", "east:fwd", 0.3)
+    assert err.value.code == "TRIP_AUTHORITY_SITE_OFF"
