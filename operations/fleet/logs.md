@@ -2592,3 +2592,17 @@
 - gate 변화: SOURCE/LOCAL만. 통행권 전송(M2)·SIM·DEVICE 없음
 - 결정: D-517 2·3·6·7항
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · uiux(fleet-web): D-517 M1b 교통 층, 카드 한 줄, 예외 큐 행, 반복 운행 시작
+- 변경: `site-map-model.js`에 순수 함수(`trafficDrawing`, `trafficCardLine`, `trafficClock`, `trafficAttention`, `loopCapacityText`, `repeatTripBody`). 새 자산 파일 대신 이 파일에 둬서 `static_routes.py` 허용 목록은 그대로다. `map-view.js`가 관제 지도에 "교통" 층 하나를 그린다. 블록 띠(점유 채움, 허가 테두리, 불명 빗금), 구역 윤곽과 "점유 a/b · 대기 n", 통행권 끝 가로 표시와 로봇 이름을 같은 toPx로 그리고, `/traffic`는 1 s마다 poll-gate로 읽는다. 지도 머리에 "교통 켬/끔" 단추를 둔다. `roster.js`에 카드 한 줄과 `attentionItems` 행(교착, 30 s 넘은 불명, 20 s 넘은 합류 대기, 고리 수용 초과)을 더한다. 현장 지도 운행 칸은 로봇마다 시작·취소를 따로 하고(`TRIP_BUSY` "이 로봇은 이미 운행 중입니다"), 출발 자리 + "반복 운행 시작"과 "고리 n/m대"를 둔다. `TRIP_LOOP_FULL`에는 robots/capacity를 붙인다. 넓은 단의 관제 경로는 한 줄로 줄인다
+- 증거: 모델 PC node 단위 191 중 190 통과. 실패 1건 `attention-stale.test.mjs`는 node 18의 `import.meta.dirname` 때문이고 base d4cab5388에서도 실패한다. 실제 Chromium 브라우저 범위 256 passed, 7 failed. 실패 7건은 base에서도 모두 실패한다(fit 4, session 2, node 1). 그중 fit 넘침은 143 px에서 28 px로 줄었다. 새 `test_traffic_view_browser.py` 2 passed, 1920×1080에서 스크롤 없음. 화면은 X:/DevTemp/d517-m1b/shots/ 세 폭이고, impeccable 방식의 독립 검토를 반영했다
+- gate 변화: SOURCE/LOCAL만. 통행권(M2)·SIM·DEVICE 없음
+- 결정: D-517 10항
+- 교훈: `/traffic`는 구역의 차로를 알려 주지 않아 구역이 하나일 때만 윤곽을 그린다. 대기 순서와 대기 시각도 싣지 않아 "교차로 대기 n번째"는 쓰지 못한다. 30 s·20 s 시계는 콘솔이 처음 본 시각부터 잰다
+
+## 2026-10-08 · 7e883f418 · refactor(fleet): D-517 trip runner split — 바퀴·정지·교통 이음매
+- 변경: 크기 판정이 이름 붙인 이음매대로 나눴다. `server/trip_laps.py`(바퀴 호 계산, 바퀴 시점·재시도 시점, 다음 바퀴 이어붙임·지난 바퀴 자르기·대기 `carry_on`, `_from`/`_dropped`/`_joined`), `server/trip_halts.py`(`TripHalts`: 로봇 정지, 재시작 전 trip 로봇 정지와 그 목록), `lane_traffic.TrafficService`(`holds` 교차로 지시 보류, `watch` 핀 로봇 자세 읽기, `period` 표 계산과 예외 처리). `trip_runner.py`는 start/cancel/tick/`_step*`/replan만 남는다. 로그 문구·로거 이름·오류 코드·await 순서는 그대로. 시험은 `runner.halts.*`, `runner.traffic.holds`로 옮김
+- 증거: 모델 PC 7e883f418 `test_trip_runner`·`test_lane_traffic`·`test_site_map_trip`·`test_cancel_all`·`test_routing`·`test_blocks`·`test/architecture/test_module_structure.py` 263 passed(분리 전 27cd04cc0도 263 passed), `known_failures.py` 0 new; `test_trip_d507.py` 50 passed
+- gate 변화: 없음(동작 변경 없음)
+- 결정: trip_runner 847→686, 크기 판정 split 유지(남은 것은 상태기계 하나, 다음 증가 때 다시 판정). trip_halts 81, trip_laps 77, lane_traffic 305. fleet 패키지 45573 = 45423+150, 허용치를 다 썼다
+- 교훈: 분리도 모듈 머리말·import로 줄을 늘린다. 패키지 허용치가 거의 찬 때는 분리 전에 남은 줄을 센다

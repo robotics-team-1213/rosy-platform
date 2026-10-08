@@ -699,7 +699,7 @@ def test_a_restart_halt_without_a_place_only_turns_line_follow_off(tmp_path):
                     "next_place": None, "detail": {}})
     store.close()
     runner, store, ports = _setup(path=tmp_path / "fleet.sqlite3")
-    run(runner._halt_restarted())
+    run(runner.halts.halt_restarted())
     assert ports.sent == [] and ports.held == ["rosy_60"]
 
 
@@ -1255,7 +1255,7 @@ def test_the_restart_halt_is_retried_until_it_takes_or_the_robot_leaves(tmp_path
                         "next_place": None, "detail": {}})
     store.close()
     runner, store, ports = _setup(path=tmp_path / "fleet.sqlite3")
-    runner._roster = lambda: ["rosy_60"]
+    runner.halts.roster = lambda: ["rosy_60"]
     hold = ports.hold
     calls = []
 
@@ -1266,10 +1266,10 @@ def test_the_restart_halt_is_retried_until_it_takes_or_the_robot_leaves(tmp_path
         return await hold(robot_id)
 
     ports.hold = flaky
-    run(runner._halt_restarted())
-    assert [t["robot_id"] for t in runner._restarted] == ["rosy_60"]  # "gone" left the roster
-    run(runner._halt_restarted())
-    assert runner._restarted == [] and calls == ["rosy_60", "rosy_60"]
+    run(runner.halts.halt_restarted())
+    assert [t["robot_id"] for t in runner.halts.restarted] == ["rosy_60"]  # "gone" left the roster
+    run(runner.halts.halt_restarted())
+    assert runner.halts.restarted == [] and calls == ["rosy_60", "rosy_60"]
     assert store.trip("t1")["detail"]["stop_sent"] is True
 
 
@@ -1441,13 +1441,13 @@ def test_restart_halts_run_outside_the_tick_with_a_cap_and_yield_to_a_new_trip(t
         raise OSError("robot unreachable")
 
     ports.hold = unreachable
-    run(runner._restart_halts())
-    assert runner._restarted == []  # gave up after 3 tries
+    run(runner.halts.run_restart())
+    assert runner.halts.restarted == []  # gave up after 3 tries
     runner, store, ports = _setup(path=tmp_path / "fleet2.sqlite3")
-    runner._restarted = [{"trip_id": "old", "robot_id": "rosy_60", "drive_mode": "lane", "next_place": None}]
+    runner.halts.restarted = [{"trip_id": "old", "robot_id": "rosy_60", "drive_mode": "lane", "next_place": None}]
     _plan(store, ports, "ring_s:fwd", 0.1, "NW")
     run(runner.start("p1", "bob"))
-    assert runner._restarted == []  # the new trip owns the robot now
+    assert runner.halts.restarted == []  # the new trip owns the robot now
 
 
 def test_a_trip_store_failure_never_replaces_the_stop_result(tmp_path, caplog):
