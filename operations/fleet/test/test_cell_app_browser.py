@@ -63,9 +63,10 @@ def browser_site(tmp_path):
 def _prepare(page):
     from playwright.sync_api import expect
 
-    open_token_access(page)
-    page.locator("#credential input").fill("operator-secret")
-    page.locator("#connect").click()
+    if "operator-1" not in page.locator("#session").inner_text():
+        open_token_access(page)
+        page.locator("#credential input").fill("operator-secret")
+        page.locator("#connect").click()
     expect(page.locator("#session")).to_have_text("operator-1 · 운영자")
     for kind in ("recipe", "cell"):
         path = ROOT / f"operations/processes/cell/examples/omx_sim/{kind}.yaml"
@@ -240,6 +241,7 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
         page.screenshot(path=str(Path(output) / f"fleet-cell-list-error-{width}x{height}.png"))
     page.unroute("**/api/fleet/cell-app/documents")
     open_token_access(page)
+    page.evaluate("window.scrollTo(0, 0)")
     page.locator("#connect").click()
     expect(status).to_have_attribute("state", "empty")
     _prepare(page)
