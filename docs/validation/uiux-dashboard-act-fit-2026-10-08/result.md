@@ -14,10 +14,10 @@
 
 | 상태 | 뷰포트 | PNG | SHA-256 |
 |---|---|---|---|
-| 수정 전 | 1366×768 | `X:/DevTemp/projects/rosy-platform/2026-10-08--dashboard-act-fit-6f2b/evidence/before/navigation-teleop-1366x768.png` | `3E24C993853244C676EC92A9F093D144D4FF9FD3F14A2CC4294773B846DF3866` |
-| 수정 후 | 1366×768 | `X:/DevTemp/projects/rosy-platform/2026-10-08--dashboard-act-fit-6f2b/evidence/after/navigation-teleop-1366x768.png` | `43CBF979B5FA94B16D4FA126D9FAA61E147A5AE2D91A5A51A36D4E972E2F8559` |
-| 수정 전 | 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--dashboard-act-fit-6f2b/evidence/before/navigation-teleop-390x844.png` | `F110B84ECCF5B805719F99086A7F8A86BAE38DE97CA70ED7A8EEE506D1B0908B` |
-| 수정 후 | 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--dashboard-act-fit-6f2b/evidence/after/navigation-teleop-390x844.png` | `547F2C640FA9B7C4264BA2F2597034B3DB3C365338E38A09609EC565AA167633` |
+| 수정 전 | 1366×768 | `X:/DevTemp/projects/rosy-platform/2026-10-08--dashboard-act-fit-6f2b/evidence/before/navigation-teleop-1366x768.png` | SHA-256 `3E24C993853244C676EC92A9F093D144D4FF9FD3F14A2CC4294773B846DF3866` |
+| 수정 후 | 1366×768 | `X:/DevTemp/projects/rosy-platform/2026-10-08--dashboard-act-fit-6f2b/evidence/after/navigation-teleop-1366x768.png` | SHA-256 `43CBF979B5FA94B16D4FA126D9FAA61E147A5AE2D91A5A51A36D4E972E2F8559` |
+| 수정 전 | 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--dashboard-act-fit-6f2b/evidence/before/navigation-teleop-390x844.png` | SHA-256 `F110B84ECCF5B805719F99086A7F8A86BAE38DE97CA70ED7A8EEE506D1B0908B` |
+| 수정 후 | 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--dashboard-act-fit-6f2b/evidence/after/navigation-teleop-390x844.png` | SHA-256 `547F2C640FA9B7C4264BA2F2597034B3DB3C365338E38A09609EC565AA167633` |
 
 새 시험은 `NAVIGATION`의 네 버튼 이유가 모두 존재하고 조작 영역·버튼 행의 가로 넘침이 없는지 390×844와 1366×768에서 확인한다. 1366×768에서는 세로 넘침도 검사한다. 수동·안전 정지·CORE 전용·낮은 데스크톱·패키지 시험까지 **28 passed**, `known_failures.py` **0 NEW** (`X:/DevTemp/projects/rosy-platform/2026-10-08--dashboard-act-fit-6f2b/logs/regression-final.txt`). 수정 전 같은 시험은 1366×768에서 가로 넘침으로 실패했다 (`logs/before-navigation-fit.txt`).
 
