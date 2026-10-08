@@ -179,6 +179,7 @@ class Repo:
     tracked: list[str]
     test_files: list[str]
     _texts: dict[str, str] = field(default_factory=dict)
+    _imports: dict[str, set[str]] = field(default_factory=dict)
 
     @classmethod
     def load(cls, root: Path) -> Repo:
@@ -219,12 +220,15 @@ class Repo:
         return tuple(dict.fromkeys(found or owner))
 
     def imports(self, path: str) -> set[str]:
+        if path in self._imports:
+            return self._imports[path]
         names: set[str] = set()
         for frm, imp in IMPORT.findall(self.text(path)):
             if frm:
                 names.add(frm)
             else:
                 names.update(n.strip().split(" ")[0] for n in imp.split(","))
+        self._imports[path] = names
         return names
 
     def imports_prefix(self, path: str, prefixes: tuple[str, ...]) -> bool:
