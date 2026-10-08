@@ -26,6 +26,8 @@ cookie, 정확한 Host/Origin 검사, 경로 allowlist로 제한한다. JS bridg
 접근은 없다. CORE 응답의 `X-Rosy-*` 카메라 증명 헤더(출처·시퀀스·촬영시각·변형)는
 번들 화면의 프레임 검증(web_common evidence.js)을 위해 그대로 전달한다. PWA의 sessionStorage 자격을 URL·로그에 넣지 않고 쿠키를 CORE로 전달하지
 않는다. CORE로는 API와 WS만 전달하며 API는 PWA의 Authorization을 사용한다.
+앱이 연 세션만 쓴다. 번들 화면은 앱 안에서 두 번째 개발 연결, 코드 입력, 로봇 콘솔이나
+다른 로봇으로의 이동을 열지 않는다.
 HTML에는 CSP를 보낸다. 원본 JS는 복제 구현하지 않고 X:의 generated assets에서 묶는다.
 
 후보 64개·60초, legacy resolve 직렬 처리·갱신 jitter, WS 대기 8개/64 KiB,

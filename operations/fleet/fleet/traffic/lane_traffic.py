@@ -313,6 +313,10 @@ class TrafficService:
     def view(self) -> dict:
         return self._view
 
+    def zone_edges(self) -> dict[str, tuple]:
+        """Site zones ``{zone: (edges, capacity)}`` (D-536 guide reads them)."""
+        return dict(self._zones)
+
     # ---- D-525 virtual signals ------------------------------------------------------------
 
     def _green(self) -> dict[str, frozenset]:

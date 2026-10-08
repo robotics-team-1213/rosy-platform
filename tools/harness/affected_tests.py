@@ -156,12 +156,16 @@ def _git(repo: Path, *args: str) -> str:
     return result.stdout
 
 
-def changed_files(repo: Path, base: str) -> list[str]:
-    """Committed changes since the merge base plus staged, unstaged and untracked files."""
+def changed_files(repo: Path, base: str, head: str | None = None) -> list[str]:
+    """Committed changes since the merge base plus staged, unstaged and untracked files.
+
+    With ``head`` (the pre-push hook's pushed commit): only ``base...head``, no working tree.
+    """
     names: set[str] = set()
-    names.update(_git(repo, "diff", "--name-only", "--no-renames", f"{base}...HEAD").splitlines())
-    names.update(_git(repo, "diff", "--name-only", "--no-renames", "HEAD").splitlines())
-    names.update(_git(repo, "ls-files", "--others", "--exclude-standard").splitlines())
+    names.update(_git(repo, "diff", "--name-only", "--no-renames", f"{base}...{head or 'HEAD'}").splitlines())
+    if head is None:
+        names.update(_git(repo, "diff", "--name-only", "--no-renames", "HEAD").splitlines())
+        names.update(_git(repo, "ls-files", "--others", "--exclude-standard").splitlines())
     return sorted(n.strip() for n in names if n.strip())
 
 
@@ -175,6 +179,8 @@ class Repo:
     tracked: list[str]
     test_files: list[str]
     _texts: dict[str, str] = field(default_factory=dict)
+    _imports: dict[str, set[str]] = field(default_factory=dict)
+    _tokens: dict[str, set[str]] = field(default_factory=dict)
 
     @classmethod
     def load(cls, root: Path) -> Repo:
@@ -215,16 +221,24 @@ class Repo:
         return tuple(dict.fromkeys(found or owner))
 
     def imports(self, path: str) -> set[str]:
+        if path in self._imports:
+            return self._imports[path]
         names: set[str] = set()
         for frm, imp in IMPORT.findall(self.text(path)):
             if frm:
                 names.add(frm)
             else:
                 names.update(n.strip().split(" ")[0] for n in imp.split(","))
+        self._imports[path] = names
         return names
 
     def imports_prefix(self, path: str, prefixes: tuple[str, ...]) -> bool:
         return any(name == p or name.startswith(p + ".") for name in self.imports(path) for p in prefixes)
+
+    def tokens(self, path: str) -> set[str]:
+        if path not in self._tokens:
+            self._tokens[path] = set(re.findall(r"[\w.-]+", self.text(path)))
+        return self._tokens[path]
 
     def test_files_under(self, path: str) -> list[str]:
         if path.endswith(".py"):
@@ -250,7 +264,8 @@ class Repo:
             needles.append(p.name)
         parts = None
         if p.name not in IGNORED_BASENAMES and p.parent.name:
-            parts = [re.compile(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])") for token in (p.name, p.parent.name)]
+            parts = (p.name, p.parent.name)
+        simple_parts = bool(parts and all(re.fullmatch(r"[\w.-]+", token) for token in parts))
         helper = p.stem if p.suffix == ".py" and not TEST_FILE.search(path) else None
         found = []
         for test in self.test_files:
@@ -258,7 +273,10 @@ class Repo:
                 continue
             text = self.text(test)
             if (any(n in text for n in needles) or (helper and helper in self.imports(test))
-                    or (parts and all(rx.search(text) for rx in parts))):
+                    or (parts and (all(token in self.tokens(test) for token in parts)
+                                   if simple_parts
+                                   else all(re.search(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])", text)
+                                            for token in parts)))):
                 found.append(test)
         return found
 
@@ -434,10 +452,11 @@ def run(repo_root: Path, sel: Selection, allow_full: bool = False,
 
 
 def main(repo_root: Path, base: str, mode: str, as_json: bool,
-         matrix: bool = False, allow_full: bool = False, skip: tuple[str, ...] = ()) -> int:
+         matrix: bool = False, allow_full: bool = False, skip: tuple[str, ...] = (),
+         head: str | None = None) -> int:
     repo = Repo.load(repo_root)
     try:
-        changed = changed_files(repo_root, base)
+        changed = changed_files(repo_root, base, head)
         sel = select(repo, changed)
     except SelectionError as exc:
         sel = Selection(mode="full", changed=[], escalations=[f"cannot diff against {base!r}: {exc}"])

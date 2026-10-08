@@ -2513,6 +2513,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 |---|---|---|
 | v1.155 | 2026-10-09 | Additive (D-535, feat/connect-failure-reasons): 연결 이유 코드 21개(ERR-102 행, 기계 원천 `connect-reasons.v1.json`). `/api/v1/auth/peer-pairing/*` 거절에 기존 상태·`detail`을 두고 `error {code, message, detail.action, detail.retry}`를 더함, 한도 거절에 `Retry-After`. `GET /api/v1/auth/connection`에 `connect_contract`·`api`·`core_ready`·`stage`·`release`·`tls_hostname`·`pairing`, 출발지별 30회/분 429, LAN 밖 403 코드 `LAN_REQUIRED`(이전 `FORBIDDEN`). Fleet `GET /api/fleet/state` 로봇 행 선택 필드 `link_reason {code, message, action, retry}`. envelope 1.0 변화 없음 |
 | v1.154 | 2026-10-09 | 동작 변경 (D-520 개정 2026-10-09, fix/d520-arc-entry-tangent·feat/d520-arc-radial-tracking·docs/d520-default-on-ring, Safety-Review 대상): `line_follow.arc_enabled` 기본 켬, 능력 `lane_arc` 는 그 설정·`site_floor_map_id` 선언·`ir_guard_speed_scale` > 0 이 함께 있을 때만 참(선언 없는 켬은 시작 거부가 아님); 409 `LANE_ARC_UNAVAILABLE` 은 그 능력이 거짓일 때; 호 명령에 odom 지도 원으로의 반지름·방향 보정(\|c\| ≤ 1.5 1/m), 원과 0.075 m 넘게 떨어지면 HOLD `lane_arc_edge`, 첫 IR 판정이 원을 옮김. 스키마 필드 변경 없음. Fleet 은 `exit_segment` 가 있는 회전에도 `turn_target` 회전각을 보낸다 |
+| v1.153 | 2026-10-09 | Additive (D-524 Proposed, feat/host-control, Safety-Review 대상): `GET /api/fleet/hosts`(운영자, 행에 `stoppable_units`)와 `POST /api/fleet/hosts/{host}/control`(이름 있는 운영자). 409 `REBOOT_ALREADY_SCHEDULED`·`NO_HOST_CONTROL_REBOOT`, 503 `HOST_HELPER_UNAVAILABLE`, 502 `HOST_HELPER_FAILED`. 사이트 유닛은 재시작만. envelope 1.0 변경 없음 |
 | v1.152 | 2026-10-08 | Additive (lap SIM 2, fix/junction-corner-hold-scope, Safety-Review 대상): `POST /line-follow/junction` 선택 필드 `lane_turn_deg`(`straight` + 기대 창, −360…360); `junction_corner_hold` 는 지시와 어긋나는 모서리에서만(`left`/`right` 의 반대쪽, `straight` 는 `lane_turn_deg` 가 그쪽 20° 미만이거나 없을 때). Fleet 이 `straight` 에 지도 차로 방향 변화를 싣는다. envelope 1.0 그대로 |
 | v1.151 | 2026-10-08 | Additive (D-517 M5 발견 1, fix/d517-trip-authority-mismatch, Safety-Review 대상): `POST /api/fleet/trips/{plan_id}/start` 422 `TRIP_AUTHORITY_SITE_OFF` — 사이트 `fleet.traffic.authority` 가 꺼져 있는데 로봇 능력 `line_follow_authority_required` 가 참이면 `lane` trip 을 열지 않는다(통행권이 나가지 않아 CORE 가 서 있고 trip 이 20 s 뒤 `stall` 로 끝나던 것). CORE 동작 변경 없음. envelope 1.0 변경 없음 |
 | v1.150 | 2026-10-08 | Additive (D-361 S4 identity readback): robot `GET /api/v1/system/info` includes provisioned `device_uid` (or null); on a provisioned Pi with no configured serial, `serial_number` reads the CPU serial (or remains null). Fleet enrollment can store both on a new pairing; existing rows are unchanged. Envelope 1.0 and motion authority unchanged |
@@ -2798,10 +2799,15 @@ context는 request, receiver-challenge, session-request로 분리한다. 공개 
 
 ## Service Control (D-524 Proposed)
 
-운영자만 `GET /api/fleet/hosts`와 `POST /api/fleet/hosts/{host}/control`을 호출한다.
-`host`는 `site`, `ai`, `model`이다. POST 본문은 `{action, unit, operator_confirmed:true}`이고
-추가 필드는 거절한다. `action`은 `reboot`, `cancel-reboot`, `restart-unit`, `stop-unit`만이다.
-`pkill`, 시그널, 셸, 프로세스 이름은 400 `UNKNOWN_ACTION`이다. `unit`은 그 호스트의 허용
-목록에 있을 때만 받는다. 재부팅은 `shutdown -r +10`이고 `cancel-reboot`는 `shutdown -c`다.
-도우미 `rosy-host-control`이 그 호스트에 없으면 503 `HOST_HELPER_UNAVAILABLE`이다.
-다른 호스트의 도우미로는 409 `HOST_NOT_LOCAL`이다. 이 API는 로봇을 재부팅하지 않는다.
+`GET /api/fleet/hosts`는 운영자가, `POST /api/fleet/hosts/{host}/control`은 이름 있는 운영자
+(site-users 자격, 로그인 세션, 개발 세션)만 호출한다. 이름 없는 `site-console`은 403
+`OPERATOR_IDENTITY_REQUIRED`이고, site-users와 로그인이 둘 다 없으면 Fleet은 도우미를 만들지 않는다.
+`host`는 `site`, `ai`, `model`이다. GET 행은 `{host, actions, units, stoppable_units, reboot_delay_min}`이다.
+POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 거절한다. `action`은 `reboot`,
+`cancel-reboot`, `restart-unit`, `stop-unit`만이다. `pkill`, 시그널, 셸, 프로세스 이름은 400
+`UNKNOWN_ACTION`이다. `unit`은 그 호스트의 허용 목록에 있고 그 동작이 허용될 때만 받는다(사이트 유닛은
+`restart-unit`만, 아니면 400 `UNIT_NOT_ALLOWED`). 재부팅은 `shutdown -r +10`이다. 이미 예약된 재부팅이
+있으면 409 `REBOOT_ALREADY_SCHEDULED`이다. `cancel-reboot`는 이 도우미가 예약한 재부팅만 `shutdown -c`로
+취소하고, 아니면 409 `NO_HOST_CONTROL_REBOOT`이다. 그 호스트의 연결 설정이 없으면 503
+`HOST_HELPER_UNAVAILABLE`, SSH나 도우미가 실패하면 502 `HOST_HELPER_FAILED`이다. 성공은 200
+`{host, action, unit, requested_by, code:"ACCEPTED", output}`이다. 이 API는 로봇을 재부팅하지 않는다.
