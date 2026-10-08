@@ -123,7 +123,7 @@ export function mount(root, ctx) {
     else if (readErrors.capabilities) clickReason.textContent = `내비게이션 기능을 확인할 수 없어 지도 조작을 막았습니다: ${readErrors.capabilities}`;
     else if (readErrors.commissioning) clickReason.textContent = `장치 실행 모드를 확인할 수 없어 지도 조작을 막았습니다: ${readErrors.commissioning}`;
     else if (!capabilities || !commissioning) clickReason.textContent = "내비게이션 기능과 장치 실행 모드를 확인하는 중입니다.";
-    else if (!hardware) clickReason.textContent = "바닥 주행과 지도 목표 조작은 승인된 하드웨어 실행 모드에서만 가능합니다. 현재 지도를 볼 수는 있습니다.";
+    else if (!hardware) clickReason.textContent = "바닥 주행과 지도 목표 조작은 승인된 하드웨어 실행 모드에서만 가능합니다. 지도가 들어오면 읽기 전용으로 볼 수 있습니다.";
     else clickReason.textContent = "이 로봇에는 위치·주행 목표 설정에 쓰는 내비게이션 기능이 없습니다.";
   };
   syncMapActions();
