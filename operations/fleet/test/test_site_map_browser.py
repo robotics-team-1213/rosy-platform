@@ -229,6 +229,9 @@ def test_site_map_fits_declared_widths(page_site, width, height):
       label: document.querySelector('#site-map-svg .label').getBoundingClientRect().height,
       mapWindow: document.querySelector('.map-viewport').clientWidth,
       mapContent: document.querySelector('.map-viewport').scrollWidth,
+      sessionRight: document.querySelector('#session').getBoundingClientRect().right,
+      sessionOverflow: getComputedStyle(document.querySelector('#session')).overflowX,
+      stopLeft: document.querySelector('#estop').getBoundingClientRect().left,
       edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().width,
       trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().width,
       stop: document.querySelector('#estop').getBoundingClientRect().right
@@ -237,6 +240,8 @@ def test_site_map_fits_declared_widths(page_site, width, height):
     assert sizes["label"] >= 12, sizes
     if width < 1024:
         assert sizes["mapWindow"] <= width and sizes["mapContent"] > sizes["mapWindow"], sizes
+    if width < 480:
+        assert sizes["sessionRight"] <= sizes["stopLeft"] and sizes["sessionOverflow"] == "hidden", sizes
     assert abs(sizes["edit"] - sizes["trip"]) <= 1, sizes
     assert sizes["stop"] <= width, sizes
 
