@@ -7370,3 +7370,9 @@ osy-d395-s1d\`.
 - 변경: B8의 같은 Gazebo 89프레임·동일 keeper에서 threshold와 지도/참값 자세 투영 페인트를 비교해 페인트 출처가 경계 추출·STOP을 바꾸는 구간을 특정했다.
 - 증거: `validation/lane-sim-paint-source-2026-10-09/result.md`. `south_centre_lost` 15–20번 6장에서 threshold만 `bend_ahead`로 진행; 지도 투영에서는 옆 경계가 없어 `no_boundary`. 지도 투영은 벽 가림 없는 진단 후보이며 승인 정답이 아니다.
 - gate 변화: 없음. 실물 경계 ID·카메라 보정·폐루프 SIM·실기 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 짧은 경계 길이 문턱 반례 재생
+
+- 변경: SIM의 68 mm 경계를 없애는 후처리 길이 문턱을 60/70/80/100 mm로 스윕하고, SIM 89장과 기존 실물 434장의 진행·정지 차이를 분리했다.
+- 증거: `validation/lane-short-boundary-2026-10-09/result.md`. 문제의 SIM 6장 목표 중심 오차 4.5–6.2 mm; 70 mm는 그 6장을 정지시키지만 실물 `bend_expected=True`도 6장 추가 정지. 전역 길이 변경은 보류.
+- gate 변화: 없음. 사람 물리 경계 ID와 폐루프·현장 수용은 HOLD.
