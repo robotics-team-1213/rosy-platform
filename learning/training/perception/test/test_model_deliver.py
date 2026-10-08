@@ -56,8 +56,12 @@ def _model(models: Path, verdict: str, files=None, *, revision_prefix="lane-seg"
         tmp, onnx_path=onnx, classes=[("bg", "background"), ("lane", "lane_marking")]
         + ([("drivable", "drivable")] if revision_prefix == "v13-drivable" else []),
         color="rgb", scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1], dataset_repo="org/ds",
-        dataset_revision="a" * 40, camera_profile_revision="cam-1", trainer="t",
-        date="20260930", revision_prefix=revision_prefix)
+        dataset_revision="a" * (64 if revision_prefix == "v13-drivable" else 40),
+        camera_profile_revision="cam-1", trainer="t",
+        date="20260930", revision_prefix=revision_prefix,
+        parent_lane_model=({"model_revision": "lane-seg-20260930-abcd1234", "onnx_sha256": "b" * 64,
+                            "torchscript_sha256": "c" * 64}
+                           if revision_prefix == "v13-drivable" else None))
     rev = doc["model_revision"]
     models.mkdir(parents=True, exist_ok=True)
     tmp.rename(models / rev)
