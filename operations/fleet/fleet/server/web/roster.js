@@ -11,6 +11,7 @@ import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./lo
 import { capabilityReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
+import { trafficAttention, trafficCardLine } from "./site-map-model.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -85,6 +86,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         ? { severity: "crit", text: `: 차로 이탈 — ${text}` }
         : { severity: "warn", text: `: 차로 가장자리 접근 — ${text}` });
     }
+    // D-517 10: 교착·30 s 넘는 위치 불명·긴 합류 대기·고리 수용 초과. 블록 대기 자체는 정상이라 행이 아니다.
+    items.push(...trafficAttention(view.traffic, robot.robot_id, view.trafficClock, Date.now()));
     if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
     if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });
@@ -188,6 +191,13 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       head.appendChild(locTag);
     }
     node.appendChild(head);
+    // D-517 10: 운행 상태 한 줄("반복 운행 3바퀴째", "앞 블록 대기 · rosy_02"). 새 패널을 만들지 않는다.
+    const tripLine = view.stateUnavailable ? "" : trafficCardLine(view.traffic, robot.robot_id);
+    if (tripLine) {
+      const line = nodeWithText("p", "trip-line", tripLine);
+      line.dataset.fact = "trip";
+      node.appendChild(line);
+    }
 
     const facts = nodeWithText("div", "facts");
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());

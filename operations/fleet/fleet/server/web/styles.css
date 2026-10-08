@@ -336,6 +336,11 @@ main {
 /* D-257 카메라 관측은 CORE pose(채운 색)와 달리 점선 고리다. */
 .sw.sighting { background: transparent; border: 1px dashed var(--ink); border-radius: 50%; }
 .legend [hidden] { display: none; }
+/* D-517 10 교통 층 견본 — 캔버스와 같은 닫힌 어휘: 점유는 로봇 색 채움, 허가는 로봇 색 테두리, 위치 불명은 경고 빗금과 점선 테두리(견본은 점선만). */
+.sw.traffic-occupied { background: var(--robot-1); }
+.sw.traffic-granted { background: transparent; border: 2px solid var(--robot-1); }
+.sw.traffic-unknown { background: transparent; border: 2px dashed var(--status-warn); }
+#legend-traffic i:not(:first-child) { margin-left: var(--space-2); }
 
 .roster { display: flex; flex-direction: column; gap: var(--space-3); }
 /* 카드는 내용 높이를 지킨다 — 스크롤 칸 안에서 줄어들면 까닭 줄과 버튼이 잘린다. */
@@ -377,6 +382,8 @@ main {
 .robot-head b, .robot-head h3 { font-family: var(--mono); font-size: var(--text-body); letter-spacing: var(--track-wide); }
 .robot-head h3 { margin: 0; }
 .robot-head .spacer { flex: 1; }
+/* D-517 10 — 운행 상태 한 줄. 이름 줄 바로 아래, 값과 같은 mono 글자. */
+.robot .trip-line { margin: var(--space-1) 0 0; font-family: var(--mono); font-size: var(--text-label); color: var(--ink); overflow-wrap: anywhere; }
 
 .facts {
   display: grid;
