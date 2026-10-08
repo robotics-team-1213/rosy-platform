@@ -70,7 +70,8 @@ STRING_SCHEMA = "std_msgs/msg/String"
 JPEG_Q = 95
 # Class (a) of the clock rule: payloads carrying the stamp of the image they judged.
 # Keeper diagnostics follow their source frame too; they remain evidence, not labels.
-STAMPED_SIDE_TOPICS = (SHADOW_TOPIC, "line/observation", KEEP_DEBUG_TOPIC)
+STAMPED_SIDE_TOPICS = (SHADOW_TOPIC, "line/observation", KEEP_DEBUG_TOPIC,
+                       CAMERA_TELEMETRY_TOPIC)
 SIDE_LOOKAHEAD_S = 0.5  # a stamped side message may be logged this long after its frame
 STAMP_TOL_S = 1e-6  # equal stamps: within 1 us (JSON float seconds keep ~0.2 us at epoch scale)
 CAMERA_LINE = "CAMERA_LINE"  # the only line/observation source that judged an image

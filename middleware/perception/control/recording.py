@@ -40,7 +40,6 @@ SHADOW_SCHEMA = "rosy.perception.learned_shadow/1"  # == shadow.SHADOW_SCHEMA
 CAMERA_TOPIC = "camera/front"
 COMPRESSED_CAMERA_TOPIC = CAMERA_TOPIC + "/compressed"
 CAMERA_TELEMETRY_TOPIC = "camera/telemetry"
-# ponytail: Telemetry has no image stamp; consumers use prior bag log time until it carries one.
 # scan is the LiDAR sensor_msgs/LaserScan; extract.py attaches the latest scan
 # logged at or before each frame (no future leakage, D-356 clock rule), the
 # input of LiDAR-projected wall labels (D-373 decision 9, D-379): the LiDAR

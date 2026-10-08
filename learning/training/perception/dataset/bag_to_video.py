@@ -71,7 +71,8 @@ SCAN_TOPIC = "scan"
 INTENT_TOPIC = "teleop/intent"
 PIX_FMT = "yuv420p"
 # Evidence stamped with its source image's header stamp (see the module docstring).
-STAMPED_TOPICS = ("line/observation", SHADOW_TOPIC, KEEP_DEBUG_TOPIC)
+STAMPED_TOPICS = ("line/observation", SHADOW_TOPIC, KEEP_DEBUG_TOPIC,
+                  CAMERA_TELEMETRY_TOPIC)
 STAMP_TOL_NS = 1_000             # payload stamp vs frame header stamp
 # Only this payload "source" is a frame's stamped evidence (IR_LINE shares the topic).
 STAMPED_SOURCES = {"line/observation": "CAMERA_LINE"}

@@ -503,14 +503,16 @@ def test_sidecar_row_takes_the_camera_line_even_when_an_ir_line_is_logged_first(
     assert row["side"]["line/observation"]["n"] == "cam"
 
 
-def test_camera_telemetry_uses_prior_log_time_and_keeps_profile_revision():
+def test_camera_telemetry_matches_source_frame_stamp_and_keeps_profile_revision():
     assert b2v._side_name('/rosy_01/camera/telemetry') == 'camera/telemetry'
     frames = [{'log_ns': 1_000_000_000, 'stamp_ns': 1_000_000_000},
               {'log_ns': 1_100_000_000, 'stamp_ns': 1_100_000_000}]
-    side = {'camera/telemetry': ([1_020_000_000], [{'profile_revision': 'cam-v2'}])}
+    side = {'camera/telemetry': ([1_020_000_000, 1_120_000_000],
+                                 [{'stamp': 1.1, 'profile_revision': 'wrong-frame'},
+                                  {'stamp': 1.1, 'profile_revision': 'cam-v2'}])}
     first, second = b2v.sidecar_rows(frames, side, 0.5)
     assert first['side']['camera/telemetry'] is None
-    assert second['side']['camera/telemetry'] == {'profile_revision': 'cam-v2'}
+    assert second['side']['camera/telemetry']['profile_revision'] == 'cam-v2'
 
 
 def test_ir_range_attaches_the_latest_sample_and_ignores_a_bad_array():
