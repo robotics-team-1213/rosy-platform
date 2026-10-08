@@ -608,7 +608,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       for (const line of lines) { trace(o, line); o.stroke(); }
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(sheet, 0, 0); ctx.restore();
     };
-    for (const zone of drawing.zones) outline(zone.lines, css("--ink-quiet"), band + 10, 1.5);
+    for (const zone of drawing.zones) outline(zone.lines, css("--ink-quiet"), band + 10, 2);
     const hatch = document.createElement("canvas");
     hatch.width = hatch.height = 8;
     const h = hatch.getContext("2d");
@@ -639,6 +639,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       }
     }
     ctx.restore();
+    // 통행권 끝에 로봇 이름 — 띠 색만으로는 어느 로봇의 블록인지 읽히지 않는다(같은 계열 색).
+    for (const tick of drawing.ticks) {
+      const p = toPoint(tick.x, tick.y);
+      drawChip(ctx, null, p.x, p.y - band - 14, tick.robot, "");
+    }
     // 구역 글은 차로망 안쪽(가운데 쪽)에 둔다 — 띠·통행권 표시와 바깥 사각형 치수 글을 덮지 않는다.
     const centre = toPoint(...drawing.centre);
     for (const zone of drawing.zones) {
@@ -647,7 +652,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const span = Math.hypot(q.x - p.x, q.y - p.y) || 1;
       let nx = -(q.y - p.y) / span, ny = (q.x - p.x) / span;
       if (nx * (centre.x - p.x) + ny * (centre.y - p.y) < 0) { nx = -nx; ny = -ny; }
-      const reach = band + 14 + Math.abs(nx) * 48;  // a sideways label needs room for its width
+      const reach = band + 18 + Math.abs(nx) * 52;  // a sideways label needs room for its width
       drawChip(ctx, null, p.x + nx * reach, p.y + ny * reach, zone.label, "");
     }
     window.__trafficLayer = { bands: drawing.bands.length, zones: drawing.zones.length, ticks: drawing.ticks.length };
@@ -848,6 +853,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const on = !layerOn("traffic");
     view.layers = { ...view.layers, traffic: on };
     el("traffic-toggle").setAttribute("aria-pressed", String(on));
+    el("traffic-toggle").textContent = on ? "교통 켬" : "교통 끔";  // the quiet button has no pressed look
     draw();
   });
 

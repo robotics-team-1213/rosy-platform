@@ -101,7 +101,7 @@
       <ui-head><ui-text id="run-heading" scale="label">운행</ui-text></ui-head>
       <ui-text>계산한 경로를 30초 안에 출발시킵니다. 로봇마다 운행 하나입니다. 위치를 믿을 수 없으면 지시를 멈춥니다.</ui-text>
       <ui-status id="trip-run" state="empty">관제 접속 필요</ui-status>
-      <label>출발 자리<select class="ui-field" id="trip-start-place"></select></label>
+      <label><span id="trip-start-label">고른 로봇의 출발 자리</span><select class="ui-field" id="trip-start-place"></select></label>
       <ui-status id="trip-loop" state="empty">반복 운행 없음</ui-status>
       <div class="actions">
         <ui-button id="trip-start" kind="primary" disabled reason="관제 접속이 필요합니다">운행 시작</ui-button>

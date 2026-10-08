@@ -459,7 +459,7 @@ export function trafficAttention(traffic, robotId, clock, now) {
   }
   const mergeSince = clock?.merge?.[robotId];
   if (mergeSince !== undefined && now - mergeSince > MERGE_MAX_WAIT_MS) {
-    items.push({ severity: "warn", text: `: 합류 대기 ${Math.floor((now - mergeSince) / 1000)}초 — ${waitingUnit(traffic, robotId)?.id || "구역"} 입구` });
+    items.push({ severity: "warn", text: `: 합류 대기 ${Math.floor((now - mergeSince) / 1000)}초 — 구역 ${waitingUnit(traffic, robotId)?.id || ""} 입구` });
   }
   for (const loop of traffic?.loop_capacity || []) {
     if ((loop.robots || []).includes(robotId) && loop.robots.length > loop.capacity) {

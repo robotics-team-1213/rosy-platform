@@ -191,6 +191,7 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             before = page.locator("#map-canvas").evaluate("c => c.toDataURL()")
             page.locator("#traffic-toggle").click()
             expect(page.locator("#traffic-toggle")).to_have_attribute("aria-pressed", "false")
+            expect(page.locator("#traffic-toggle")).to_have_text("교통 끔")
             expect(page.locator("#legend-traffic")).to_be_hidden()
             assert page.locator("#map-canvas").evaluate("c => c.toDataURL()") != before
             page.locator("#traffic-toggle").click()

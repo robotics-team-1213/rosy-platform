@@ -134,6 +134,7 @@ function syncButtons() {
   const reason = operatorReason();
   // D-517 1: one trip per robot — start, cancel and confirm act on the selected robot's open trip.
   state.running = state.open.find(trip => trip.robot_id === $('trip-robot').value) || null;
+  $('trip-start-label').textContent = $('trip-robot').value ? `${$('trip-robot').value} 출발 자리` : '고른 로봇의 출발 자리';
   gate('plane-load', !state.role ? '관제 접속이 필요합니다' : !$('plane-source').value ? '이 지도에 맞는 카메라 보정이 없습니다' : '');
   gate('plane-clear', plane ? '' : '불러온 영상이 없습니다');
   gate('plane-pick', plane?.mapId === shown()?.map_id ? '' : '평면 영상을 먼저 불러오세요');

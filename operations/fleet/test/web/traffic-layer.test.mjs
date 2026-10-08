@@ -79,7 +79,7 @@ test('queue rows: wait cycle and 30 s UNKNOWN are critical, a long merge wait an
   assert.equal(clock.unknown.rosy_04, 1000);
   assert.deepEqual(trafficAttention(TRAFFIC, 'rosy_02', clock, 15000), []);  // a block wait is normal
   assert.deepEqual(trafficAttention(TRAFFIC, 'rosy_02', clock, 22000),
-    [{severity: 'warn', text: ': 합류 대기 21초 — ring_zone 입구'}]);
+    [{severity: 'warn', text: ': 합류 대기 21초 — 구역 ring_zone 입구'}]);
   assert.equal(trafficAttention(TRAFFIC, 'rosy_04', clock, 32000)[0].severity, 'crit');
   const cycle = {...TRAFFIC, wait_cycle: ['rosy_01', 'rosy_05']};
   assert.deepEqual(trafficAttention(cycle, 'rosy_05', {}, 0),
