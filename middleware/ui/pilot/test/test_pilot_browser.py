@@ -718,6 +718,89 @@ def test_lobby_rejects_unsafe_urls_and_suppresses_current_robot(tablet_page):
     assert errors == [], errors
 
 
+def _refuse_second_session(page):
+    calls = []
+
+    def refuse(route):
+        calls.append(route.request.url)
+        route.fulfill(status=500, body="second session")
+
+    page.route("**/api/v1/auth/development-session", refuse)
+    page.route("**/api/v1/auth/pair", refuse)
+    return calls
+
+
+def _open_in_pilot_app(page, base_url, token):
+    """Same handoff as PilotProxy: a classic script at the start of <head>, before the modules."""
+
+    def inject(route):
+        response = route.fetch()
+        store = (
+            f"sessionStorage.setItem('rosy.pilot.token',{json.dumps(token)});"
+            if token else "")
+        script = (
+            "<script>document.documentElement.dataset.pilotShell='android';"
+            f"{store}</script>")
+        headers = {
+            key: value for key, value in response.headers.items()
+            if key.lower() not in {"content-length", "content-encoding"}}
+        route.fulfill(
+            status=response.status, headers=headers,
+            body=response.text().replace("<head>", "<head>" + script, 1))
+
+    page.route("**/pilot", inject)
+    page.goto(f"{base_url}/pilot")
+
+
+def _assert_visible(page, selector, errors):
+    try:
+        page.locator(selector).wait_for()
+    except Exception:
+        shell = page.evaluate("document.documentElement.dataset.pilotShell")
+        token = page.evaluate("sessionStorage.getItem('rosy.pilot.token')")
+        text = page.locator("body").inner_text()
+        raise AssertionError(
+            f"missing {selector}; shell={shell!r} token={token!r} text={text!r} errors={errors!r}") from None
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_android_shell_uses_the_app_session(tablet_page):
+    """The Pilot app already connected. The page uses that token and does not open another session."""
+    base_url, page, errors = tablet_page
+    calls = _refuse_second_session(page)
+    _open_in_pilot_app(page, base_url, "devtoken")
+    _assert_visible(page, "[data-drive-enter]", errors)
+    assert calls == []
+    assert page.locator("[data-dev-connect]").count() == 0
+    assert page.locator("[data-lobby-list]").count() == 0
+    assert page.locator("form[data-pilot-token-form]").count() == 0
+    assert page.locator("[data-enroll-section]").count() == 0
+    assert page.locator("ui-topbar [data-goto]").is_hidden()
+    assert page.evaluate("navigator.serviceWorker.getRegistrations().then((list) => list.length)") == 0
+    page.click("[data-drive-enter]")
+    page.locator("[data-drive-goal]").wait_for(state="attached")
+    assert page.locator("[data-drive-goal]").is_hidden()
+    page.locator("[data-drive-goal]").evaluate("node => node.click()")
+    page.wait_for_timeout(200)
+    assert "/console" not in page.url
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("token_value", ["", "not-a-session"])
+def test_android_shell_without_a_session_stays_with_the_app(tablet_page, token_value):
+    base_url, page, errors = tablet_page
+    calls = _refuse_second_session(page)
+    _open_in_pilot_app(page, base_url, token_value)
+    _assert_visible(page, "[data-app-session]", errors)
+    assert "Rosy Pilot 앱이 엽니다" in page.locator("[data-app-session]").inner_text()
+    assert page.locator("[data-dev-connect]").count() == 0
+    assert page.locator("form[data-pilot-token-form]").count() == 0
+    assert page.locator("[data-lobby-list]").count() == 0
+    assert calls == []
+    assert errors == [], errors
+
+
 def _enter_drive(page, base_url):
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")

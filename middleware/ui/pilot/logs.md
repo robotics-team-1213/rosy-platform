@@ -754,3 +754,10 @@
 - gate 변화: 없음. 실기 화면은 미확인.
 - 결정: D-411.
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · feat(pilot): 앱이 연 세션만 쓴다
+- 변경: Rosy Pilot 앱(`pilotShell=android`) 안에서는 주입된 세션만 쓴다. 개발 연결, 코드 입력, 연동 코드, 서비스 워커, Rosy Robot 이동, 지도 목표(`/console`)를 열지 않는다. 세션이 없거나 거절되면 앱이 다시 고르도록 안내한다.
+- 증거: Android JVM `ShellConnectionTest` 1 passed (`X:/DevTemp/pilot-app-connect/build`). 브라우저 `test_android_shell_uses_the_app_session`와 `test_android_shell_without_a_session_stays_with_the_app` 3 passed, `known_failures.py` 0 NEW. 앱 프록시를 띄운 `test_bundled_page_uses_the_app_proxy` 1 passed(81.44s): 개발 연결은 한 번이었고 주행 시작까지 갔다. `known_failures.py` 0 NEW. 로그 `X:/DevTemp/pilot-app-connect/browser.txt`, `proxy-page.txt`. adb에 붙은 기기는 없었다.
+- gate 변화: 없음. 이 파일은 로봇에 올라가기 전에는 현장 화면이 바뀌지 않는다.
+- 결정: D-432, D-471. 새 API와 새 ADR은 없다.
+- 교훈: 앱 핸드오프는 `<head>`의 일반 스크립트다. Playwright init script는 그 순서보다 먼저 실행되어 같은 시험이 되지 않는다.

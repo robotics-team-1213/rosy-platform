@@ -5,7 +5,7 @@
 // 부호: angular > 0 은 반시계(좌회전, REP-103). 화면 오른쪽 입력은 우회전이어야
 // 한다 — 변환은 stick.js 한 곳에서만 한다.
 
-import {postJson, whoami, api as apiGet, authHeaders, token} from "../client.js";
+import {postJson, whoami, api as apiGet, authHeaders, token, inPilotApp} from "../client.js";
 import {createDriverStream, STREAM_STALE_WARN_MS} from "../vision.js";
 import {createDeviceSession} from "../link.js";
 import {createModelStatus, renderModels} from "../models.js";
@@ -77,6 +77,8 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     calibration: "[data-drive-calibration]", calibrationTitle: "[data-drive-calibration-title]",
     calibrationReason: "[data-drive-calibration-reason]", activity: "[data-drive-fact=activity]",
   })) element[key] = root.querySelector(selector);
+  // 지도 목표는 로봇 콘솔(/console)이다. 앱 프록시는 그 화면을 열지 않는다.
+  if (inPilotApp() && element.goal) element.goal.hidden = true;
 
   function showMode(mode) {
     element.mode.textContent = operatorModeLabel(mode, "확인 필요");
@@ -392,7 +394,8 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     perception.refresh();
   });
   element.goal.addEventListener("click", () => {
-    if (!element.goal.disabled && !perceptionPending) teardown(() => location.assign("/console"));
+    if (inPilotApp() || element.goal.disabled || perceptionPending) return;
+    teardown(() => location.assign("/console"));
   });
   function takeover() {
     auto.takeover();

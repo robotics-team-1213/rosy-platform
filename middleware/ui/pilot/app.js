@@ -6,7 +6,7 @@ import {pinkyCore} from "./drivers/pinky_core.js";
 import {omxSim} from "./drivers/omx_sim.js";
 import {mountConnect} from "./screens/connect.js";
 import {mountDrive} from "./screens/drive.js";
-import {postJson} from "./client.js";
+import {postJson, inPilotApp} from "./client.js";
 import {mountArm} from "./screens/arm.js";
 import {readControls, widgetPlan, fallbackPinkyControls, profileFromBaseVelocity} from "./controls.js";
 
@@ -69,15 +69,18 @@ for (const button of document.querySelectorAll("[data-estop]")) {
   });
 }
 
-// 두 앱(관제 /dashboard · 조종 /pilot) 사이 이동.
+// 두 앱(관제 /dashboard · 조종 /pilot) 사이 이동. 앱 안에서는 프록시 밖으로 나가지 않는다.
 for (const button of document.querySelectorAll("[data-goto]")) {
+  if (inPilotApp()) button.hidden = true;
   button.addEventListener("click", () => {
+    if (inPilotApp()) return;
     location.assign(button.dataset.goto);
   });
 }
 
 // 설치형(D-365): PWA. 서비스 워커는 앱 셸만 캐시하고 /api·/ws 는 네트워크 전용.
-if ("serviceWorker" in navigator) {
+// 안드로이드 셸은 번들 자산을 직접 주고 sw.js 를 거부한다.
+if (!inPilotApp() && "serviceWorker" in navigator) {
   navigator.serviceWorker.register("/pilot/assets/sw.js", {scope: "/pilot"})
     .catch((error) => console.warn("service worker registration failed", error));
 }
