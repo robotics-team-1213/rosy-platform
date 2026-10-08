@@ -1118,3 +1118,17 @@ def test_ok_events_only_informational_names(tmp_path, ok):
     p = plan_file(tmp_path, ok_events=ok)
     with pytest.raises(SystemExit, match="ok_events"):
         run.load_plan(p)
+
+
+def test_identify_on_real_frames_of_the_nw_robot_blue_blink():
+    """2026-10-08 crops (100x60 at x80,y206 of the overhead frame): f00 before, f01..f13 during a blue
+    blink of the NW-corner robot. The lamp looks nearly white to the ceiling camera (saturation ~18),
+    so the colour is recorded as not judged; the position and the still baseline decide."""
+    import cv2
+    d = Path(__file__).resolve().parent / "data" / "identify_real"
+    f = [cv2.imread(str(d / f"f{i:02d}.png")) for i in range(14)]
+    found = IDENT.blobs(f[0], [f[0]], f[1:])
+    ev = IDENT.judge(found, (130.0 - 80, 236.0 - 206), 40.0, 13, "blue")
+    assert ev["blob_frames"] >= 10 and ev["distance_px"] < 10 and "not judged" in ev["colour_check"]
+    with pytest.raises(IDENT.Refused, match="3 of 13|already changed|from the picked"):
+        IDENT.judge(found, (90.0, 50.0), 20.0, 13, "blue")        # a pick on another robot
