@@ -125,7 +125,7 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     assert page.locator('#pixel-approve').bounding_box()['y'] < page.locator('#pixel-class-help').bounding_box()['y']
     if width <= 390:
         field_widths = page.evaluate("""() => ({
-          available: document.querySelector('.pixel-layout > section').getBoundingClientRect().width,
+          available: document.querySelector('.pixel-editor-column > section').getBoundingClientRect().width,
           labels: [...document.querySelectorAll('.pixel-layout .ui-workspace-bar > label, .pixel-quick-tools > label')]
             .filter(node => node.getClientRects().length)
             .map(node => node.getBoundingClientRect().width),
@@ -306,7 +306,9 @@ def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace)
     page.set_viewport_size({'width': 1280, 'height': 800})
     canvas = page.locator('#pixel-canvas').bounding_box()
     tools = page.locator('.pixel-quick-tools').bounding_box()
-    assert canvas['x'] < tools['x'] and canvas['y'] <= tools['y'] + 32
+    assert abs(canvas['x'] - tools['x']) < 32 and tools['y'] < canvas['y']
+    assert page.locator('#pixel-prev').bounding_box()['y'] < canvas['y']
+    assert page.locator('#pixel-undo').bounding_box()['y'] < canvas['y']
     page.locator('#pixel-frame').select_option('1')
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
     expect(page.locator('#pixel-canvas')).to_be_focused()
@@ -327,6 +329,24 @@ def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace)
     page.set_viewport_size({'width': 390, 'height': 800})
     assert page.locator('.pixel-quick-tools').bounding_box()['y'] < page.locator('#pixel-canvas').bounding_box()['y']
     assert review_masks.get(store, 0)['version'] == 1
+
+
+def test_pixel_thumbnails_and_unknown_background_draft(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    thumbs = page.locator('#pixel-frames .pixel-frame-item')
+    expect(thumbs).to_have_count(2)
+    expect(thumbs.nth(0).locator('img')).to_have_attribute('loading', 'lazy')
+    thumbs.nth(1).click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
+    thumbs.nth(0).click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('#pixel-fill-unknown').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    assert review_masks.get(store, 0)['status'] == 'pending'
+    assert not np.any(review_masks.pixels(store, review_masks.get(store, 0)) == 255)
+    expect(page.locator('#pixel-approve')).to_be_disabled()
 
 
 def test_pixel_legend_shows_default_korean_names(browser_workspace):
