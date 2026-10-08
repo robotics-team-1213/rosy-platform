@@ -149,13 +149,30 @@ def draft_image(store, index, digest):
     return encode(pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256'])))
 
 
+def merge_unknown(current, proposal, binding):
+    """Keep reviewed pixels; never add drivable beyond reviewed lane edges."""
+    selected = (current == 255) & (proposal != 255)
+    by_name = {entry['name']: entry['index'] for entry in binding['classes']}
+    if {'lane_left', 'lane_right', 'drivable'} <= by_name.keys():
+        for y, row in enumerate(current):
+            left = np.flatnonzero(row == by_name['lane_left'])
+            right = np.flatnonzero(row == by_name['lane_right'])
+            if left.size:
+                selected[y, :left.min()] &= proposal[y, :left.min()] != by_name['drivable']
+            if right.size:
+                selected[y, right.max() + 1:] &= proposal[y, right.max() + 1:] != by_name['drivable']
+    out = current.copy()
+    out[selected] = proposal[selected]
+    return out
+
+
 def draft_preview(store, index, digest, merge=False):
     """Visual comparison only; the indexed draft and review remain unchanged."""
     review = get(store, index)
     mask = cv2.imdecode(np.frombuffer(draft_image(store, index, digest), np.uint8), cv2.IMREAD_UNCHANGED)
     if merge:
         current = pixels(store, review)
-        mask = np.where(current == 255, mask, current)
+        mask = merge_unknown(current, mask, review['classes'])
     photo = cv2.imdecode(np.frombuffer(store.image(index).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
     if photo is None or photo.shape[:2] != mask.shape:
         raise ValueError('draft preview dimensions differ')
@@ -394,13 +411,17 @@ def update(store, index, body, conflict):
                 raise ValueError('selected draft is unavailable')
             proposal = pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256']))
             if action == 'merge_draft':
-                selected = (image == 255) & (proposal != 255)
-                if not np.any(selected):
+                before = lane_boundary_violations(image, binding)
+                merged = merge_unknown(image, proposal, binding)
+                if np.array_equal(merged, image):
                     raise ValueError('draft has no labels for remaining unknown pixels')
-                image[selected] = proposal[selected]
+                image = merged
+                after = lane_boundary_violations(image, binding)
+                if any(after[side] > before[side] for side in before):
+                    raise ValueError('drivable outside visible lane boundary')
             else:
                 image = proposal
-            require_inside_lane_boundaries(image, binding)
+                require_inside_lane_boundaries(image, binding)
         elif action == 'approve':
             if body.get('complete_frame_review') is not True or body.get('background_reviewed') is not True:
                 raise ValueError('사진 전체와 기본 배경을 각각 확인하세요.')
