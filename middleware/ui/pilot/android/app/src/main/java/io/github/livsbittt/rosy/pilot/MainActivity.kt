@@ -117,7 +117,7 @@ class MainActivity : Activity() {
     private fun refresh() {
         val current = session
         if (current != null && !current.authorized()) {
-            lastError = "연결이 끝났습니다. 로봇을 다시 선택하세요."
+            lastError = "연결 끊김 · 로그인 세션이 끝났거나 로봇 목록이 바뀌었습니다. 로봇을 다시 선택하면 승인 기록으로 다시 연결합니다."
             returnToLobby(); status.text = lastError; return
         }
         if (web != null || opening) return
@@ -164,14 +164,8 @@ class MainActivity : Activity() {
                 }
             } catch (error: Exception) {
                 if (error is PeerApprovalExpired) main.post { if (version == attempt && foreground) reapprove(candidate) }
-                failed(version, candidate, when {
-                error is PeerApprovalExpired -> "승인 사용 기한이 끝났습니다. 다시 승인을 요청하세요."
-                error is PeerApprovalTimeout -> "수신 승인을 기다리는 시간이 끝났습니다. 로봇을 다시 선택해 요청하세요."
-                error is PeerKeyChanged -> "기억한 수신 장치의 키와 다릅니다. 승인 기록을 유지하고 연결을 차단했습니다."
-                error is PeerRefused -> "승인 기록은 지우지 않았습니다. 수신 장치에서 승인·발급자 상태를 확인한 뒤 다시 선택하세요."
-                candidate.secure -> "연결할 수 없습니다. 로봇 전원·같은 Wi-Fi·신뢰된 HTTPS 연결을 확인한 뒤 다시 선택하세요."
-                else -> "연결할 수 없습니다. 로봇 전원과 같은 Wi-Fi 연결을 확인한 뒤 다시 선택하세요."
-            }) }
+                failed(version, candidate, LinkStatus.failure(error, candidate.secure))
+            }
         }
     }
     private fun pairingCode(candidate: Candidate, offer: LobbyOffer, store: CandidateStore, version: Long, savedStatus: SavedLoginStatus) {
@@ -204,7 +198,7 @@ class MainActivity : Activity() {
                 val approved = reused ?: LobbyPairing.connect(candidate, offer, store, code)
                 if (version != attempt) return@execute
                 relay = PilotProxy(approved, AssetBundle(assets),
-                    { message -> main.post { if (version == attempt) status.text = message } },
+                    { message -> main.post { if (version == attempt) status.text = "${candidate.name} · 연결 끊김 · $message" } },
                     { main.post { if (version == attempt) connectedLabel?.let { status.text = it } } })
                 relay.verifyIdentity(); relay.start(5000, false)
                 if (offer.mode == "paired" && version == attempt) vault.saveVerified(candidate, approved)
@@ -257,9 +251,7 @@ class MainActivity : Activity() {
                 relay?.stop(); failed(version, candidate, when {
                     error is PairingRejected && error.status == 401 -> "로그인 코드가 유효하지 않습니다. 로봇에서 새 코드를 발급한 뒤 다시 연결하세요."
                     error is PairingRejected && error.status == 429 -> "연결 요청이 많습니다. 잠시 뒤 다시 선택하세요."
-                    error is javax.net.ssl.SSLException -> "로봇의 HTTPS 인증을 확인할 수 없습니다. 설치 담당자에게 확인하세요."
-                    error is java.io.IOException -> "로봇에 닿지 못했습니다. 같은 Wi-Fi와 로봇 전원을 확인하세요."
-                    else -> "연결 승인을 확인하지 못했습니다. 로봇을 다시 선택하세요."
+                    else -> LinkStatus.failure(error, candidate.secure)
                 })
             }
         }
