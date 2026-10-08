@@ -33,6 +33,7 @@ def browser_tests_enabled() -> bool:
 
 def open_token_access(page) -> None:
     """Open the paired console's token fallback before using its controls."""
+    page.wait_for_load_state("networkidle")
     details = page.locator("#token-access")
     if details.get_attribute("open") is None:
         details.locator("summary").click()
