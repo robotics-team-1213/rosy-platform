@@ -7216,6 +7216,12 @@ osy-d395-s1d\`.
 - 증거: 모델 PC 원본 15장 확인, 검수 API 응답 15건 `reopen`/skip 0건, `/api/learning` 객체 대기 43·제외 0·픽셀 승인 0. `test_review_quality.py`는 후보 보고가 저장 결정을 바꾸지 않음을 확인했다.
 - gate 변화: 없음. v13 픽셀 승인과 원본 영상 출처 검증, 학습 admission은 아직 끝나지 않았다.
 
+## 2026-10-09 · uncommitted · 10/6·10/7 주행영역 후보의 몸체 경로 재대조
+
+- 변경: 기존 정면 LiDAR 0.30 m 근접 후보를 제품 ody_path_gap의 직진 몸체 경로에 투영한 [검증 기록](validation/drivable-body-path-audit-2026-10-09/result.md)을 추가했다. 원본은 X:에 두고 코드·해시·집계만 공개 저장소에 기록했다.
+- 증거: 원본 3,336프레임 중 스캔 사용 가능 2,621프레임. 가정한 0.08 m/s 직진 정지거리 0.0384 m 이하는 0건. 10/7 둘째 영상 80번의 경로 거리 0.05097 m는 정지 기준과 0.01257 m 차이여서 안전 여유를 확정하지 못한다.
+- gate 변화: 없음. 실제 회전 경로·mount 실측·사람 정답·실물 주행 수용이 없으므로 주행 허용 HOLD.
+
 ## 2026-10-09 · uncommitted · Pilot 태블릿 재연결과 현재 후보 출처 확인
 
 - 변경: Lenovo Pilot 설치 화면을 다시 촬영하고 설치 APK를 읽기 전용으로 확인했다. 현재 소스에서 Android 후보 APK를 격리 빌드해 설치본과 자산·서명을 비교한 결과를 [검증 기록](validation/uiux-pilot-tablet-reconnect-2026-10-09/result.md)에 남겼다.
