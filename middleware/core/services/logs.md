@@ -780,6 +780,13 @@
 - gate 변화: SOURCE만. SIM·DEVICE·FIELD는 열림.
 - 결정: D-507 3항 보충.
 
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 6 motion_admitted refuses non-finite twists
+- 변경: `recovery/motion_admit.py` `motion_admitted`가 NaN·inf 선속도·각속도를 거부한다(현장 근거에서 NaN은 후진 판정과 sweep 비교를 통과했다). `test_motion_admit.py`에 중복 브랜치 `feat/site-floor-declaration`의 non-finite 시험을 옮겼다(6 kind × 4 twist).
+- 증거: 수정 전 24건 모두 실패, 수정 후 `test_motion_admit.py` 101 passed.
+- gate 변화: 없음(SOURCE).
+- 결정: D-507 6
+- 교훈: 같은 항목을 두 세션이 구현하면 뒤 브랜치의 시험부터 옮겨 앞 구현에 대 본다.
+
 ## 2026-10-08 · uncommitted · feat(line_follow): 교차로 기대 창을 주행 거리로 비교 (D-507 2·3, 사용자 결정 1)
 - 변경: `PoseTrail`에 연속 표본의 odom 경로 길이 누적값 `odometer`와 `odometer_at(sample)`을 더했다. 지시를 받을 때 창에 누적값을 기록하고, 감지 고정(anchor)에 감지 자세의 누적값을 기록한다. `_in_window`는 |(감지 누적값 − 받은 누적값) + `junction_ahead_m` − (`expect_in_m` − pivot)| ≤ `expect_tol_m`으로 판정한다(곧은 접근에서는 예전 점 비교와 같은 값). 측정할 수 없는 감지(고정 없음, epoch·frame 바뀜, 누적값 없음)는 창 밖. 회전 축 접근과 측정 가로선 띠는 그대로 감지 자세에 고정. API Ref v1.138.
 - 증거: `test_junction_approach.py` 새 시험 — 반원 호(경로 0.785 m, 현 0.50 m) 뒤 호 길이 기대는 안(`turning`), 현 길이 기대는 밖, 장소 0.3 m 앞 굽이 오감지 밖 뒤 진짜 먼 선은 안, 지시와 감지 사이 odom 끊김은 밖. 변이(측정을 직선 거리로) 호 시험 2건 실패 확인 뒤 복원. CORE services·api_web pytest 1429 통과 13 skip, `known_failures` 신규 0.

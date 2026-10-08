@@ -479,7 +479,17 @@ class LaneEdgeFollower:
         of the same lane stands in where the left has left the field of view
         (convex left turns)."""
         target, supported, source = None, False, None
-        for name, grid in (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"])):
+        candidates = (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"]))
+        if (found.get("left") is None and found.get("right") is not None
+                and found["left_grid"].any() and found["right_grid"].any()):
+            left_target, left_supported = self._lookahead(view, found["left_grid"], half)
+            right_target, right_supported = self._lookahead(view, found["right_grid"], half)
+            if (left_supported and right_supported
+                    and abs(right_target[1]) <= LANE_LINE_WIDTH_M / 2
+                    and abs(left_target[1] - right_target[1]) > LANE_LINE_WIDTH_M):
+                # A straight observed mate beats the old line's turning end cap.
+                candidates = candidates[1:]
+        for name, grid in candidates:
             if not grid.any():
                 continue
             if name == "RIGHT":
