@@ -26,7 +26,7 @@ from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import (advance_m, arc_id, exit_segment, lane_action, plan_again, replan_hold, route_key,
-                                   theta, turn_target, unsupported)
+                                   turn_target, unsupported)
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
                                      pose_diagnostics, pose_view, record_bend_candidate)
@@ -512,9 +512,9 @@ class TripRunner:
                                outer_line_offset_m=self.config.arc_outer_line_offset_m)
         if arc is not None:
             expect = {**expect, "exit_segment": arc}
-        # D-520 1: with an exit_segment the plain tangent and no advance_m (CORE starts the arc there)
-        turn = (round((theta if arc else turn_target)(live.graph, live.segments, index), 1)
-                if action in (LEFT, RIGHT) else None)
+        # D-520 1 (lap SIM 3): the lane-heading turn either way (the 5 cm lead tangent is 12-17 deg
+        # off at SW); with an exit_segment no advance_m (CORE starts the arc there)
+        turn = round(turn_target(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
         advance = advance_m(live.graph, live.segments, index) if turn is not None and arc is None else None
         if not live.open:
             return

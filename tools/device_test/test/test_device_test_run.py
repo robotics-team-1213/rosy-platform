@@ -500,6 +500,20 @@ def test_waiver_needs_a_named_dated_acceptance(tmp_path):
             run.load_plan(p)
 
 
+def test_a_site_floor_plan_must_turn_the_ring_arc_off(tmp_path):
+    plan = yaml.safe_load(PLAN.read_text(encoding="utf-8"))
+    assert plan["overlay"]["line_follow"]["arc_enabled"] is False
+    for arc in (None, True):
+        if arc is None:
+            plan["overlay"]["line_follow"].pop("arc_enabled", None)
+        else:
+            plan["overlay"]["line_follow"]["arc_enabled"] = arc
+        p = tmp_path / "a.yaml"
+        p.write_text(yaml.safe_dump(plan), encoding="utf-8")
+        with pytest.raises(SystemExit, match="arc_enabled"):
+            run.load_plan(p)
+
+
 def test_plan_overlay_path_is_fixed(tmp_path):
     plan = yaml.safe_load(PLAN.read_text(encoding="utf-8"))
     plan["overlay_path"] = "/var/lib/rosy/core/.rosy/rosy.yaml; rm -rf /"

@@ -222,7 +222,7 @@ def _code(value: Any, length: int) -> Optional[str]:
 
 
 def read_peer_approval(path: str, now: datetime, owner_uid: Optional[int] = None) -> Optional[dict]:
-    """``{"requests": [{"display_code", "approval_code"}, ...]}`` of the live pending requests
+    """``{"requests": [{"display_code", "approval_code"}, ...], "tls_ca_sha256"?}`` of the live pending requests
     (at most three, in CORE's newest-first order), or None (absent, malformed, all expired).
 
     Read as strictly as ``read_face_inputs``; a malformed or expired entry is dropped alone.
@@ -243,7 +243,14 @@ def read_peer_approval(path: str, now: datetime, owner_uid: Optional[int] = None
             continue
         if display is not None and approval is not None and expires.tzinfo is not None and expires > now:
             shown.append({"display_code": display, "approval_code": approval})
-    return {"requests": shown} if shown else None
+    if not shown:
+        return None
+    answer = {"requests": shown}
+    # The CA digest the requester compares on first contact; the LCD draws its first 16 digits.
+    ca = data.get("tls_ca_sha256")
+    if isinstance(ca, str) and re.fullmatch(r"[0-9a-f]{64}", ca):
+        answer["tls_ca_sha256"] = ca
+    return answer
 
 
 def _read_bounded_json(path: str, limit: int, owner_uid: Optional[int]) -> Any:
