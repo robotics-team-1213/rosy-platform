@@ -1034,7 +1034,9 @@ def test_identify_blob_at_the_robot_passes_and_is_recorded(tmp_path):
     base = [f for f in frames if f["phase"] == "baseline"]
     assert len(base) == 11 and base[-1]["t"] == pytest.approx(IDENT.BASELINE_S)     # 2 s before the request
     assert [f["phase"] for f in frames[len(base):]] == ["blink"] * (len(frames) - len(base))
-    assert all(a["t"] < b["t"] for a, b in zip(frames, frames[1:]))
+    # Never backwards; the first blink frame is grabbed right after the request, so on the
+    # fake clock it shares the last baseline frame's time.
+    assert all(a["t"] <= b["t"] for a, b in zip(frames, frames[1:]))
     assert ident["blob_frames"] < len(frames) - len(base)                         # it blinked, not steady
     assert ident["colour_check"].startswith("hue 1") and ident["colour_check"].endswith("within 20 of blue")
     assert (p.parent / "identify_00.jpg").exists() and "POST /host/lamp/identify" in robot.log
