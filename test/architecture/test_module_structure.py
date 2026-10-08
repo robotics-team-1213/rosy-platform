@@ -87,10 +87,14 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet/fleet/server/trip_runner.py": (
-        604,
-        "accept: the 604-line Fleet trip state machine gained a read-only bend diagnostic on the "
-        "existing map-pose tick. Moving four lines would split its stop and persistence rules; "
-        "re-judge if trip execution grows beyond the standard allowance",
+        847,
+        "split: judged at 847 on 2026-10-08 (independent re-judge, critic agent): D-517 M1a gave the trip loop "
+        "three more jobs on top of the D-494 state machine: repeat-lap bookkeeping, robot halts and post-restart "
+        "halts, and traffic glue. Move the lap helpers to server/trip_laps.py, the halt helpers to "
+        "server/trip_halts.py, and the traffic hold-back and pinned/step block into lane_traffic.TrafficService; "
+        "trip_runner keeps start/cancel/tick/_step*/replan. Recorded in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; re-judge after the move. Previously accepted "
+        "at 604 (bend diagnostic)",
     ),
     "fleet/fleet/server/web/map-view.js": (
         903,
@@ -131,8 +135,20 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        44_806,
-        "split: re-judged at 44806 on 2026-10-08 (independent re-judge, critic agent): D-519 password "
+        45_672,
+        "split: re-judged at 45672 on 2026-10-08 (independent re-judge, critic agent): the D-507 addendum "
+        "bend pass (+128 over main 27cd04cc0) adds no module, owner, service or robot command path: bend "
+        "geometry (bend_geometry, next_bend, straight_approach, bend_fields, shared _pose_tol) sits in "
+        "server/trip_ports.py beside junction_fields; trip_runner._step_bend sends the bend through the "
+        "existing LaneJunctionPort instruction; site_map.py validates the bend place kind (exit_yaw, "
+        "radius_m) and TripCaps gains lane_bend. _step_bend is a _step* and stays in trip_runner under the "
+        "D-517 M1a split; the split plan and the +150 allowance are unchanged. Previously "
+        "re-judged at 45423 on 2026-10-08 (independent re-judge, critic agent): D-517 M1a adds "
+        "server/lane_traffic.py (block table, computed and shown, never sent); lane_traffic.py is the single "
+        "writer of lane-trip grants and traffic_reservations.py stays only as the Gazebo segment record. "
+        "Per-robot and repeat-lap trips stay with the server/routing owners; no new package owner. The "
+        "trip-runner seam is named in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; +150 "
+        "allowance unchanged. Previously re-judged at 44806 on 2026-10-08 (independent re-judge, critic agent): D-519 password "
         "login (server/password_session.py, site_users.py, web/shared/password-login.js/.css, page and "
         "app/cli wiring) stays with the site-auth owner beside site_auth.py and development_session.py, "
         "now the console auth seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. D-507 4 "

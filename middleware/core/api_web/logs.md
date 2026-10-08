@@ -713,3 +713,8 @@
 - 변경: main 병합으로 v1.137–v1.140이 다른 브랜치(D-519, D-507 2 개정, D-512)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.141로 옮겼다. 앞 항목의 v1.137은 그 때의 번호다.
 - 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(api): D-507 보충 굽이 지시의 API Ref 번호를 v1.142로 옮김
+- 변경: main 병합으로 v1.141이 D-517 M1a에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.142로 옮겼다. 앞 항목의 v1.141은 그 때의 번호다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.

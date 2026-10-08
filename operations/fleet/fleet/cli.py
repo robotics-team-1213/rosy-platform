@@ -563,6 +563,7 @@ def run_console(args: argparse.Namespace) -> None:
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
+                     traffic_zones=_traffic_zones(args),
                      identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args))
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
@@ -588,6 +589,26 @@ def _trip_config(args):
         return TripConfig.from_mapping(trip)
     except (OSError, ValueError, TypeError, yaml.YAMLError) as exc:
         sys.exit(f"trip config: {exc}")
+
+
+def _traffic_zones(args) -> dict:
+    """D-517 3: ``fleet.traffic.zones`` of ``--site-config``: ``{zone id: {edges: [...], capacity: 1}}``."""
+    import yaml
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        raw = ((site_config.get("fleet") or {}).get("traffic") or {}).get("zones") or {}
+        zones = {}
+        for zone, spec in raw.items():
+            edges, capacity = [str(edge) for edge in spec["edges"]], int(spec.get("capacity", 1))
+            if not edges or capacity < 1:
+                raise ValueError(f"zone {zone} needs edges and a capacity of at least 1")
+            zones[str(zone)] = (edges, capacity)
+        return zones
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"traffic config: {exc}")
 
 
 def _build_site_map(args, tasks_db):

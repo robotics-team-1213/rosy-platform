@@ -52,17 +52,23 @@ class Live:
         except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
             return None
 
+    @staticmethod
+    def _site_token():
+        """Site viewer credential for read-guarded Fleet routes, from ROSY_SITE_TOKEN_FILE (None: unset)."""
+        path = os.environ.get("ROSY_SITE_TOKEN_FILE")
+        return Path(path).read_text(encoding="utf-8").strip() if path else None
+
     def calibrations(self):
         """Approved camera-to-map records (D-457 GET /api/fleet/calibrations), None on any failure."""
         try:
-            return json.loads(self._site("/api/fleet/calibrations"))["calibrations"]
+            return json.loads(self._site("/api/fleet/calibrations", token=self._site_token()))["calibrations"]
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return None
 
     def active_site_map_id(self):
         """The Fleet active SiteMap's map_id (GET /api/fleet/site-map/active), None on any failure."""
         try:
-            return json.loads(self._site("/api/fleet/site-map/active"))["map"]["map_id"]
+            return json.loads(self._site("/api/fleet/site-map/active", token=self._site_token()))["map"]["map_id"]
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return None
 

@@ -2488,6 +2488,11 @@
 - 증거: 영향 시험 58 passed, known_failures 0 NEW. 두 시험 모두 수정 전 코드에서 실패함을 확인
 - gate 변화: 없음. D-430 독립 검토(critic) APPROVE
 
+## 2026-10-08 · uncommitted · feat(fleet): D-517 M1a 로봇마다 trip, 반복 운행, Fleet 블록 표(표시만)
+- 변경: `trip_runner.py` 로봇마다 trip 하나(`TRIP_BUSY`는 그 로봇), 0.5 s마다 로봇별 task·잠금으로 동시에 한 걸음, 이전 걸음이 안 끝난 로봇은 그 주기를 건너뜀. `POST /trip` `repeat`(경유지 순환), 바퀴 마지막 장소 앞에서 출발 검사를 다시 하고 다음 바퀴를 붙임, 경로가 바뀌거나 검사가 실패하면 `hold.reason: lap`. `routing/trip.py` 차로 끝이 아닌 장소(출발 자리)를 좌표·yaw 목적지와 경유지로. 새 `server/lane_traffic.py` `TrafficService`가 주기마다 `blocks.step`, `GET /api/fleet/traffic` 읽기 전용, 거절된 블록으로 들어가는 교차로 지시는 보내지 않음(블록 대기는 정체 아님), 반복 운행 출발 `TRIP_LOOP_FULL`. 사이트 설정 `fleet.traffic.zones`. API Ref v1.138
+- 증거: 모델 PC `test_lane_traffic.py` 10 passed, trip·routing·blocks·site_map·cancel_all 묶음 252 passed(1 실패는 시험 배치 오류, 고쳐서 통과)
+- gate 변화: SOURCE/LOCAL만. 통행권 전송(M2)·SIM·DEVICE 없음
+- 결정: D-517 1·2·3·4(정체)·7항
 ## 2026-10-08 · uncommitted · feat(fleet): D-511 감시가 LED 확인 트랙을 입력으로 쓴다
 - 변경: `LaneComplianceMonitor`가 지도 자세가 LOCALIZED가 아니면 D-472 `IdentityService.confirmed_track_pose`를 판정한다(CONFIRMED, `age_s` ≤ `fleet.map_pose.sighting_lease_s`, 활성 지도 map id). 결과에 `pose_source`(`map_pose`|`led_track`)·`heading_source`(`pose`|`track_motion`|`none`)를 싣고 바뀔 때 로그를 남긴다. 트랙에 yaw가 없어 `moving_min_m`을 넘게 움직인 이전 위치에서의 방향을 쓰고, 정지면 순수 판정이 방향 문 없이 가장 가까운 호를 고른다. `pose_state`는 지도 자세 그대로. API Ref v1.132(가산)
 - 증거: `test_lane_compliance_service.py` 신규 2개, `test_boundaries.py`(lane_compliance_service만 identity 읽기 허용, map pose·trip 모듈 금지) — fleet 묶음·`test/architecture`·`test/test_line_follow_contract_docs.py` + `test/known_failures.py` (X:/DevTemp/d511-led/)
@@ -2581,6 +2586,12 @@
 - 증거: tether·trail 시험(odom 제외, anchor 범위, NaN 500 고정) 통과. fleet 2685 통과, shared/web 237, architecture 133 통과. `known_failures.py` NEW 1건 `test_grammar_separation`은 깨끗한 main에서도 실패한다(D-519 password-login.css).
 - gate 변화: 없음. D-512 개정 1 5항의 Fleet tether 감시(정지 지시)는 열림.
 - 결정: 병합 후 fleet 44929 ≤ 44806+150이라 크기 판정 변경 없음. 앱 공통 422 응답이 JSON 아닌 NaN을 담지 못해 500이 되는 문제는 후속.
+## 2026-10-08 · uncommitted · fix(fleet): D-517 M1a 리뷰 반영 — 끝난 trip의 점유 유지, 고리 키, 바퀴 재시도·정리
+- 변경: main(M0 `unplaced`·`pinned`·발생별 허가) 병합. `lane_traffic.py` 위치 없는 trip 로봇이 있으면 그 주기 교차로 지시 없음, `GET /api/fleet/traffic` `unplaced`. 끝난 trip·다른 지도 버전 trip의 허가·몸체는 `pinned`로 남고 신선한 LOCALIZED 자세가 벗어남을 보일 때 풀림(D-517 6), 지도 활성화는 마지막 자세로 다시 핀. `TRIP_LOOP_FULL`은 한 바퀴(via…, to) 간선 집합으로 고리를 묶고 그 바퀴 블록으로 S를 센다. 표 계산 예외 시 모든 trip의 `traffic`을 비움. 교차로 지시 보류는 장소 + `PAST_PLACE_M`까지. 실패한 바퀴 검사는 5 s마다 2회(D-438 예산)·확인 때 다시. E-stop은 모든 trip을 먼저 닫고 동시에 정지. `confirm_replan`이 `at` 초기화. 반복 trip은 지난 바퀴를 잘라 계획을 두 바퀴로 유지(표의 허가 색인·통행권을 같이 옮김). 주기는 틱 시간을 뺀 나머지만 잔다. `routing/trip.py` 차로 중간 장소의 도달 불가 yaw는 `TRIP_ARRIVE_YAW_UNREACHABLE`
+- 증거: 모델 PC `operations/fleet/test/` + `test/test_line_follow_contract_docs.py`; 기존 실패 3건(grammar_separation password-login.css, learning_receiver PIL, site_map_api attention-stale.test.mjs)은 깨끗한 main ba15e926b에서도 같은 문구로 실패
+- gate 변화: SOURCE/LOCAL만. 통행권 전송(M2)·SIM·DEVICE 없음
+- 결정: D-517 2·3·6·7항
+- 교훈: 없음
 ## 2026-10-08 · uncommitted · feat(fleet): 지도 굽이 장소와 trip의 `bend` 지시 (D-507 보충)
 - 변경: `site_map.py` 장소 종류 `bend`(꼭짓점, `yaw`·`exit_yaw`·`radius_m` 필수, 회전 15–90°, 다른 종류는 두 필드 불가, 저장 body는 굽이 필드가 없는 장소에서 그대로). `trip_ports.py` `bend_geometry`(두 접점이 이 차선에 있고 진행 방향으로 회전 부호), `next_bend`, `bend_fields`(`bend_in_m` = 차로를 따른 호 시작점까지 거리, `bend_tol_m` = 기존 `expect_tol_m` 식, 옆 항 없음), `_pose_tol`로 tol 식을 한 곳에 둠. `trip_runner.py` `_step_bend`: `lane_bend` 로봇에만, 지나지 않은 굽이가 있으면 그 굽이가 다음 장소보다 먼저, 호 시작점 0.6 m 안에서 보내고 절반 만료에 갱신, CORE가 끝내야(`bending`/`reacquiring` 뒤 `idle`) 장소 지시. `MANOEUVRE`에 `bending`, `_completed`는 굽이 지시를 장소 완료로 세지 않음. `TripCaps.lane_bend`.
 - 증거: `test_trip_bend.py` 9건(장소 검증, 기존 지도 body 그대로, 실제 west 간선 방향별 회전 부호·호 시작점, 능력 읽기, 굽이 구간에서만 보냄·기동 중 안 보냄·끝난 뒤 다음 장소, armed 굽이가 다음 장소를 막음, 굽이 없는 지도·`lane_bend` 없는 로봇은 `bend` 없음, unresolved면 trip 정지). FakeCore가 `bend`를 받도록 `test_trip_runner.py` 보충.
@@ -2592,3 +2603,9 @@
 - 증거: `test_trip_bend.py::test_bend_waits_until_the_lane_before_it_is_straight`, trip 시험 133 passed.
 - gate 변화: SOURCE. SIM 재실행은 `docs/validation/lane-bend-odom-sim-2026-10-08`.
 - 결정: D-507 보충
+
+## 2026-10-08 · uncommitted · fix(fleet): `repeat` trip의 다음 바퀴가 굽이 지시를 다시 보낸다
+- 변경: main의 D-517 M1a 반복 trip과 병합. 굽이 장소 id는 바퀴마다 같으므로 `LiveTrip.bends_done`을 다음 바퀴가 시작될 때(`_next_lap` 같은 경로, `confirm_replan`의 `lap_route`) 비운다. 비우지 않으면 2바퀴부터 굽이를 지시 없이 지나간다. `_pose_tol`은 main의 주행 거리 항을 받고 `bend_tol_m`은 이 브랜치의 규칙(dead-reckon 거리만) 그대로다.
+- 증거: `test_lane_traffic.py::test_a_new_lap_drives_its_bends_again`, trip 시험 118 passed.
+- gate 변화: SOURCE.
+- 결정: D-507 보충, D-517

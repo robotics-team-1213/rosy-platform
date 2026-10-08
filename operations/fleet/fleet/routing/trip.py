@@ -83,18 +83,47 @@ def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan
         return speed(arc.speed_cap_mps, request.max_speed_mps, request.speed_cap)
 
     at = snap_start(graph, *request.start_pose, config)
-    goal, loose = _goal(graph, request.goal, request.arrive_yaw, config)
-    kwargs = dict(speed=arc_speed, extra_cost=request.extra_cost, via=tuple(request.via))
-    stats: dict = {}
-    found = search(graph, at, goal, config, allowed=allowed, stats=stats, **kwargs)
-    if found is None:
-        if search(graph, at, goal, config, allowed=lambda arc: allowed(arc, frozenset()), **kwargs):
-            raise PlanError("TRIP_NO_ROUTE", {"segment": stats["layer"], "unblock_would_help": True})
-        if loose is not None and search(graph, at, loose, config, allowed=allowed, **kwargs):
-            raise PlanError("TRIP_ARRIVE_YAW_UNREACHABLE", {"segment": stats["layer"]})
-        raise PlanError("TRIP_NO_ROUTE", {"segment": stats["layer"], "unblock_would_help": False})
-    eta, segments = found
+    eta, segments, done = 0.0, [], 0
+    legs = _legs(graph, request)
+    for index, (via, target) in enumerate(legs):
+        last = index == len(legs) - 1
+        goal, loose = _goal(graph, target, request.arrive_yaw if last else None, config)
+        kwargs = dict(speed=arc_speed, extra_cost=request.extra_cost, via=via)
+        stats: dict = {}
+        found = search(graph, at, goal, config, allowed=allowed, stats=stats, **kwargs)
+        if found is None:
+            layer = done + stats["layer"]
+            if search(graph, at, goal, config, allowed=lambda arc: allowed(arc, frozenset()), **kwargs):
+                raise PlanError("TRIP_NO_ROUTE", {"segment": layer, "unblock_would_help": True})
+            if loose is not None and search(graph, at, loose, config, allowed=allowed, **kwargs):
+                raise PlanError("TRIP_ARRIVE_YAW_UNREACHABLE", {"segment": layer})
+            raise PlanError("TRIP_NO_ROUTE", {"segment": layer, "unblock_would_help": False})
+        eta += found[0]
+        for arc_id, s_from, s_to in found[1]:  # a leg ending part-way carries on along the same arc
+            if segments and segments[-1][0] == arc_id and math.isclose(segments[-1][2], s_from, abs_tol=1e-9):
+                segments[-1] = (arc_id, segments[-1][1], s_to)
+            else:
+                segments.append((arc_id, s_from, s_to))
+        at, done = (segments[-1][0], segments[-1][2]), done + len(via) + 1
     return _assemble(graph, segments, eta, config)
+
+
+def _mid_lane(graph: Graph, place: str) -> bool:
+    """D-517 2: a place on no lane end (a D-513 start slot part-way along a lane)."""
+    return not any(place in (arc.start_place, arc.end_place) for arc in graph.arcs.values())
+
+
+def _legs(graph: Graph, request: PlanRequest) -> list[tuple[tuple[str, ...], object]]:
+    """``(via, target)`` legs: a part-way place cannot be a via of the layered A*, so the trip
+    is cut there and that place becomes a coordinate goal (D-489 6); lane-end vias stay in one leg."""
+    legs, via = [], []
+    for place in request.via:
+        if _mid_lane(graph, place):
+            legs.append((tuple(via), place))
+            via = []
+        else:
+            via.append(place)
+    return legs + [(tuple(via), request.goal)]
 
 
 def _arrived(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan | None:
@@ -117,6 +146,12 @@ def _goal(graph: Graph, target, arrive_yaw, config: RoutingConfig) -> tuple[Goal
     if isinstance(target, str):
         place = graph.places[target]
         yaw = arrive_yaw if arrive_yaw is not None else getattr(place, "yaw", None)
+        if _mid_lane(graph, target):  # D-517 2: a part-way place is its coordinates and yaw
+            point, on_arcs = snap_goal(graph, *graph.place_xy(target), yaw, config)
+            if yaw is None:
+                return Goal(point, on_arcs=on_arcs), None
+            any_way, any_arcs = snap_goal(graph, *graph.place_xy(target), None, config)
+            return Goal(point, on_arcs=on_arcs), Goal(any_way, on_arcs=any_arcs)
         loose = Goal(graph.place_xy(target), place=target)
         if yaw is None:
             return loose, None
