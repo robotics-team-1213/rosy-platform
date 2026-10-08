@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 지도 위치 추정 게이트
-- 2026-10-08 · uncommitted · test(robot): 인증·지도 회귀에 유효한 합성 지도
-- 2026-10-08 · uncommitted · uiux(robot): 기존 화면의 차선 추종 구동 관문 일치
-- 2026-10-08 · uncommitted · uiux(robot): 지도 격자와 경로의 실제 축척 보존
-- 2026-10-08 · uncommitted · uiux(robot): 320px 지도와 상태 가독성
+- 2026-10-09 · uncommitted · feat(robot): 설치·정비 화면에 후면 램프 대조 시험
+- 2026-10-09 · uncommitted · uiux(robot): 마지막 계획 경로의 불확실성 표시
+- 2026-10-09 · uncommitted · fix(robot): paired 연결에서 개발 입장 숨김
+- 2026-10-09 · uncommitted · uiux(robot): Pilot 인계 뒤 빈 지도 안내
+- 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 근거와 설정 카드 높이

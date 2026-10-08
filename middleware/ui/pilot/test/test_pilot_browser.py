@@ -718,10 +718,94 @@ def test_lobby_rejects_unsafe_urls_and_suppresses_current_robot(tablet_page):
     assert errors == [], errors
 
 
-def _enter_drive(page, base_url):
+def _refuse_second_session(page):
+    calls = []
+
+    def refuse(route):
+        calls.append(route.request.url)
+        route.fulfill(status=500, body="second session")
+
+    page.route("**/api/v1/auth/development-session", refuse)
+    page.route("**/api/v1/auth/pair", refuse)
+    return calls
+
+
+def _open_in_pilot_app(page, base_url, token):
+    """Same handoff as PilotProxy: a classic script at the start of <head>, before the modules."""
+
+    def inject(route):
+        response = route.fetch()
+        store = (
+            f"sessionStorage.setItem('rosy.pilot.token',{json.dumps(token)});"
+            if token else "")
+        script = (
+            "<script>document.documentElement.dataset.pilotShell='android';"
+            f"{store}</script>")
+        headers = {
+            key: value for key, value in response.headers.items()
+            if key.lower() not in {"content-length", "content-encoding"}}
+        route.fulfill(
+            status=response.status, headers=headers,
+            body=response.text().replace("<head>", "<head>" + script, 1))
+
+    page.route("**/pilot", inject)
+    page.goto(f"{base_url}/pilot")
+
+
+def _assert_visible(page, selector, errors):
+    try:
+        page.locator(selector).wait_for()
+    except Exception:
+        shell = page.evaluate("document.documentElement.dataset.pilotShell")
+        token = page.evaluate("sessionStorage.getItem('rosy.pilot.token')")
+        text = page.locator("body").inner_text()
+        raise AssertionError(
+            f"missing {selector}; shell={shell!r} token={token!r} text={text!r} errors={errors!r}") from None
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+def test_android_shell_uses_the_app_session(tablet_page):
+    """The Pilot app already connected. The page uses that token and does not open another session."""
+    base_url, page, errors = tablet_page
+    calls = _refuse_second_session(page)
+    _open_in_pilot_app(page, base_url, "devtoken")
+    _assert_visible(page, "[data-drive-enter]", errors)
+    assert calls == []
+    assert page.locator("[data-dev-connect]").count() == 0
+    assert page.locator("[data-lobby-list]").count() == 0
+    assert page.locator("form[data-pilot-token-form]").count() == 0
+    assert page.locator("[data-enroll-section]").count() == 0
+    assert page.locator("ui-topbar [data-goto]").is_hidden()
+    assert page.evaluate("navigator.serviceWorker.getRegistrations().then((list) => list.length)") == 0
+    page.click("[data-drive-enter]")
+    page.wait_for_selector("[data-drive-stick]")
+    assert page.locator("[data-drive-goal]").count() == 0
+    assert page.locator("ui-topbar [data-goto]").is_hidden()
+    page.locator("ui-topbar [data-goto]").evaluate("node => node.click()")
+    page.wait_for_timeout(200)
+    assert "/console" not in page.url
+    assert errors == [], errors
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("token_value", ["", "not-a-session"])
+def test_android_shell_without_a_session_stays_with_the_app(tablet_page, token_value):
+    base_url, page, errors = tablet_page
+    calls = _refuse_second_session(page)
+    _open_in_pilot_app(page, base_url, token_value)
+    _assert_visible(page, "[data-app-session]", errors)
+    assert "Rosy Pilot 앱이 엽니다" in page.locator("[data-app-session]").inner_text()
+    assert page.locator("[data-dev-connect]").count() == 0
+    assert page.locator("form[data-pilot-token-form]").count() == 0
+    assert page.locator("[data-lobby-list]").count() == 0
+    assert calls == []
+    assert errors == [], errors
+
+
+def _enter_drive(page, base_url, access_token=None):
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    page.fill("form[data-pilot-token-form] ui-field input", "devtoken")
+    page.fill("form[data-pilot-token-form] ui-field input", access_token or dev_server.DEV_TOKEN)
     page.click("form[data-pilot-token-form] ui-button")
     page.wait_for_selector("[data-drive-enter]")
     page.click("[data-drive-enter]")
@@ -748,6 +832,7 @@ def test_drive_map_handoff_reaches_console_after_stop_readback(base_url, viewpor
             assert button.get_attribute("data-goto") == "/console"
             assert button.inner_text() == "운용 지도"
             assert page.locator('[aria-label="운전 모드"] [data-drive-goal]').count() == 0
+            page.evaluate("sessionStorage.setItem('rosy.dashboard.token', 'old-surface-token')")
             modes_before, teleop_before = len(dev_server.MODE_LOG), len(dev_server.TELEOP_LOG)
             arrived = []
 
@@ -759,9 +844,100 @@ def test_drive_map_handoff_reaches_console_after_stop_readback(base_url, viewpor
             page.route("**/console", console)
             button.click()
             page.wait_for_url("**/console")
+            assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == dev_server.DEV_TOKEN
+            assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
+            assert dev_server.DEV_TOKEN not in page.url
             assert arrived and "IDLE" in arrived[0]["modes"]
             assert any(item["linear"] == 0 and item["angular"] == 0 for item in arrived[0]["teleop"])
             assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
+@pytest.mark.parametrize("viewport", [(2000, 1200), (390, 844)])
+def test_drive_handoff_opens_real_console_map_in_same_tab(base_url, viewport, tmp_path, monkeypatch):
+    """Pilot's live tab reaches the real CORE Console assets with its own token."""
+    root = HERE.parents[3]
+    for package in ("middleware/core/api_web", "middleware/core/gateway", "middleware/core/events",
+                    "middleware/core/services", "contracts/foundation"):
+        monkeypatch.syspath_prepend(str(root / package))
+    from fastapi.testclient import TestClient
+    from core_api_web.api.app import create_app
+    from core_common.profile import RobotProfile, robot_config_dir
+    from core.services import CoreServices
+    import yaml
+    from urllib.parse import urlsplit
+
+    config_dir = root / "contracts/foundation/config"
+    config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
+    config["auth"] = {**config["auth"], **yaml.safe_load(
+        (config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))["auth"]}
+    operator = next(item for item in config["auth"]["tokens"] if item["role"] == "operator")
+    monkeypatch.setattr(dev_server, "DEV_TOKEN", operator["token"])
+    profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
+    capabilities = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))
+    core = TestClient(create_app(config, CoreServices.build(config, profile, capabilities, tmp_path / "docks.json")))
+    phase = {"console": False}
+    requests = []
+
+    def serve(route):
+        target = urlsplit(route.request.url)
+        path = target.path
+        if path == "/console":
+            phase["console"] = True
+        if not phase["console"]:
+            route.continue_()
+            return
+        requests.append((route.request.method, path, route.request.headers.get("authorization")))
+        if route.request.method != "GET":
+            route.fulfill(status=501, json={"detail": "fixture blocks writes"})
+            return
+        response = core.get(path + (f"?{target.query}" if target.query else ""),
+                            headers={"Authorization": route.request.headers.get("authorization", "")})
+        route.fulfill(status=response.status_code, headers={
+            "content-type": response.headers.get("content-type", "application/octet-stream"),
+            "cache-control": "no-store",
+        }, body=response.content)
+
+    with playwright_sync.sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": viewport[0], "height": viewport[1]})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", serve)
+            _enter_drive(page, base_url, operator["token"])
+            page.wait_for_function("document.querySelector('[data-drive-fact=link]')?.dataset.state === 'OPEN'")
+            if output := os.environ.get("ROSY_SHOT_DIR"):
+                shots = Path(output)
+                shots.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(shots / f"pilot-before-console-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            modes_before, teleop_before = len(dev_server.MODE_LOG), len(dev_server.TELEOP_LOG)
+            page.locator("ui-topbar [data-goto='/console']").click()
+            page.wait_for_url("**/console")
+            page.locator('[data-panel="console.map"] .surface-map-frame').wait_for(state="visible")
+            page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
+            assert "지도 데이터가 아직 없습니다" in page.locator('.surface-map-overlay').inner_text()
+            assert "지도가 들어오면 읽기 전용으로" in page.locator('#map-action-reason').inner_text()
+            assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == operator["token"]
+            assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
+            assert ("GET", "/api/v1/ui/surfaces/console", f"Bearer {operator['token']}") in requests
+            assert "IDLE" in dev_server.MODE_LOG[modes_before:]
+            assert any(item["linear"] == 0 and item["angular"] == 0 for item in dev_server.TELEOP_LOG[teleop_before:])
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert page.locator("#shell-estop").is_visible()
+            spacing = page.evaluate("""() => {
+              const layers = document.querySelector('[aria-label="지도 레이어"]').getBoundingClientRect();
+              const setup = document.querySelector('.surface-link[href="/setup"]').getBoundingClientRect();
+              const status = document.querySelector('#map-status').getBoundingClientRect();
+              return {layersBottom: layers.bottom, setupTop: setup.top,
+                      setupBottom: setup.bottom, statusTop: status.top};
+            }""")
+            assert spacing["layersBottom"] <= spacing["setupTop"] <= spacing["setupBottom"] <= spacing["statusTop"], spacing
+            assert errors == [], errors
+            if output:
+                page.screenshot(path=str(shots / f"console-after-pilot-{viewport[0]}x{viewport[1]}.png"), full_page=True)
         finally:
             browser.close()
 

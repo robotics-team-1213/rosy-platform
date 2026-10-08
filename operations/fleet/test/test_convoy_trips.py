@@ -83,7 +83,8 @@ def test_the_follower_keeps_the_gap_behind_its_leader_across_lanes():
     assert live.traffic["waiting_for"] == ["a"]  # standing back is waiting, not a stall
     sent = fleet.bodies["b"][-1]["until_m"]
     fleet.at("a", _arc(store, "east:fwd"), 2.0)  # the leader drives on: the end follows it
-    _ticks(runner, fleet, n=2)
+    # 1.6 m in one period is a pose jump for an authority robot (D-525): taken after JUMP_SETTLE_PERIODS
+    _ticks(runner, fleet, n=4)
     assert fleet.bodies["b"][-1]["until_m"] > sent + 0.5
     assert _row(runner, "a")["convoy"] is None
 

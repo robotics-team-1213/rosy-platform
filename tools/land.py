@@ -12,8 +12,8 @@ branch and the rule is inert until then), runs the selected tests, compares them
 ``test/known_failures.py``, and fast-forwards main only if main is still the
 commit that was tested. A failing step stops the tool: landing is never chained
 after a failure. Any other conflict aborts the merge and lists the paths.
-pytest runs through ``tools/remote/remote_pytest.py`` (model PC, then AI PC, here
-only when neither answers or with ``--browser``); lint, node and the
+pytest runs through ``tools/remote/remote_pytest.py`` (model PC, then AI PC;
+an unavailable host stops landing). Lint, node and the
 known_failures comparison stay here. Never pushes, stashes, resets or cleans. Standard library only.
 """
 

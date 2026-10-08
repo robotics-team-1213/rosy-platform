@@ -2141,6 +2141,23 @@ def test_every_card_renders_on_the_panel_size(screen):
     assert image.size == (320, 240)
 
 
+def test_the_peer_request_card_draws_the_ca_digest_the_tablet_asks_for(monkeypatch):
+    # First contact asks the requester to compare the CA digest; the LCD shows its first 16 digits.
+    module = _display()
+    info_screen = _info_screen()
+    drawn = []
+    real = info_screen.render_notice
+    monkeypatch.setattr(info_screen, "render_notice", lambda title, lines, **kw: drawn.append(list(lines)) or real(title, lines, **kw))
+    render = module.card_renderer(info_screen)
+    peer = {"requests": [{"display_code": "K7QM", "approval_code": "ABC234"}]}
+
+    render({"stage": "CORE_READY", "screen": {"kind": "status", "row": "peer_request",
+                                              "peer": dict(peer, tls_ca_sha256="0123456789abcdef" + "f" * 48)}})
+    render({"stage": "CORE_READY", "screen": {"kind": "status", "row": "peer_request", "peer": peer}})
+
+    assert drawn == [["K7QM  ABC234", "CA 0123 4567 89ab cdef"], ["K7QM  ABC234"]]
+
+
 def test_the_strip_paints_only_its_band():
     import numpy as np
 

@@ -485,6 +485,8 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                                 store=store)
         manifest = load_manifest(folder)
         report["model_revision"] = manifest.model_revision
+        if manifest.model_revision.startswith("v13-drivable-"):
+            raise ValueError("v13-drivable trusted owner lineage admission is not implemented (D-532)")
         verify_files(manifest)
         check_precision(manifest)
         # deliver.py push refuses a model whose files differ from these.

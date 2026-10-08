@@ -69,10 +69,14 @@ integrations/simulation/gazebo/scripts/pinky_acceptance.py
 integrations/simulation/gazebo/scripts/pinky_nav2_probe.py
 integrations/simulation/gazebo/worlds/rosy_gauntlet.world
 integrations/simulation/gazebo/worlds/rosy_maze.world
+# Service Control (D-524): the AI PC unit names contain pinky. They are systemd unit names.
+operations/fleet/fleet/host_control.py
 operations/fleet/fleet/localization/service_logic.py
 operations/fleet/fleet/server/bays.py
 operations/fleet/fleet/server/traffic.py
 operations/fleet/fleet/server/cancel_all.py
+# D-536 guide defaults to the Pinky body geometry for its read-only clearance display.
+operations/fleet/fleet/server/guide_service.py
 # D-430 follow-up classification (2026-10-03); each entry says what it is and who should own the value.
 # (a) data-shaped Pinky constant in a descriptor builder: pinky_controls() is the Pinky controls profile (D-411 section 8); move it to the Pinky product profile.
 contracts/foundation/core_common/protocol/controls.py

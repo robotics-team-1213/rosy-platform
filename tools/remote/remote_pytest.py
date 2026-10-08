@@ -6,12 +6,14 @@
 Only the committed ``--sha`` (default HEAD) is tested: uncommitted changes are not
 shipped. The commit travels as a git bundle (so guard tests that run git see a real
 ``.git``) into ``~/rosy-test/repo``, a clone of the public origin, and is checked out
-as a detached worktree under ``~/rosy-test/runs/``, removed afterwards. The venv
-``~/rosy-test/venv`` follows the CI install step (``.github/workflows/ci.yml``) and is
-rebuilt only when those inputs change. Each pytest runs under a 6 GB memory cap.
+as a detached worktree under ``~/rosy-test/runs/``, removed afterwards. Venvs
+under ``~/rosy-test/venvs/<deps-sha>`` follow the CI install step
+(``.github/workflows/ci.yml``); different dependency versions can run together.
+Each pytest runs under a 6 GB memory cap.
 
 Hosts: ``ROSY_TEST_HOSTS`` (space separated, first reachable wins), default model PC
-then AI PC. ``ROSY_TEST_LOCAL=1`` or no reachable host runs pytest here instead.
+then AI PC. A missing host fails the gate; ``--local`` or ``ROSY_TEST_LOCAL=1``
+is for explicit diagnostics.
 Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``), one
 ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
 collected, counts as 0). Standard library only.
@@ -43,7 +45,7 @@ FLEET_REQ = "deploy/site/requirements-fleet.txt"
 TAIL_LINES = 25
 # Seconds before one pytest invocation counts as hung (a failure).
 PYTEST_TIMEOUT = int(os.environ.get("ROSY_TEST_TIMEOUT", "5400"))
-STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}  # each includes a 600 s lock wait
+STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}
 
 # Fetch public main, unpack the bundle (stdin), check the commit out. Exit 3 = the
 # bundle's prerequisite commit is missing there; the caller resends a full bundle.
@@ -67,12 +69,12 @@ git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 # opencv-python-headless for CI's apt python3-opencv/python3-pil, and the playwright
 # package (no browser) because *_browser.py modules import it at collection. No system
 # site-packages: they leak Ubuntu's old cryptography/Jinja2 and give no rclpy.
-# Built in venv.new and swapped in: other sessions use ~/rosy-test/venv directly, so
-# it is never missing or half-built, and never swapped during a run's first 90 s
-# (imports). The replaced venv stays as venv.old-<time>; prune those by hand.
+# Each dependency hash has its own venv and lock. Old ~/rosy-test/venv remains for
+# other sessions that use it directly; a new hash never waits for their tests.
 VENV = r"""set -euo pipefail
-R=~/rosy-test; V=$R/venv; N=$R/venv.new; DEPS=$2; cd "$R/runs/$1"; shift 2
-exec 9>"$R/venv.lock"; flock -w 600 9
+R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; N=$R/venvs/.new-$DEPS; cd "$R/runs/$1"; shift 2
+mkdir -p "$R/venvs"
+exec 9>"$R/venvs/$DEPS.lock"; flock -x -w 600 9
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] && exit 0
 echo "[remote] building $N (CI install inputs changed)"
 rm -rf "$N"
@@ -97,25 +99,14 @@ $P wheel --no-deps --no-build-isolation --wheel-dir "$N/wheelhouse" "$@"
 $P install --no-deps --no-index "$N"/wheelhouse/*.whl
 $P check
 echo "$DEPS" > "$N/.deps-sha"
-[ "${ROSY_VENV_NO_SWAP:-}" = 1 ] && exit 0
 grep -rlI --exclude-dir=__pycache__ "$N" "$N/bin" | xargs -r sed -i "s|$N|$V|g"
-pat="rosy-test/ven""v/bin/python"  # split so this script's own command line never matches
-tries=0
-while pgrep -f "$pat" | xargs -r -n1 ps -o etimes= -p | awk '$1 < 90 {young = 1} END {exit !young}'; do
-  tries=$((tries + 1))
-  [ "$tries" -le 40 ] || { echo "[remote] runs kept starting for 10 min; $V left as it was" >&2; exit 1; }
-  echo "[remote] a run started under 90 s ago uses $V; waiting to swap"; sleep 15
-done
-[ -e "$V" ] && mv "$V" "$R/venv.old-$(date +%Y%m%d-%H%M%S)"
 mv "$N" "$V"
-echo "[remote] swapped in the new $V"
+echo "[remote] ready $V"
 """
 
-# ponytail: the venv lock is taken per step, so a run whose deps differ from a
-# concurrent run's can rebuild the venv between our install and our pytest.
 PYTEST = r"""set -euo pipefail
-R=~/rosy-test; V=$R/venv; cd "$R/runs/$1"; shift
-exec 9>"$R/venv.lock"; flock -s -w 600 9
+R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; cd "$R/runs/$1"; shift 2
+[ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] || { echo "[remote] venv hash mismatch" >&2; exit 1; }
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 # 9>&-: the shared venv lock covers setup only; pytest must not hold it for the whole run,
 # or a concurrent session's exclusive VENV step times out after 600 s.
@@ -179,7 +170,9 @@ def deps(repo: Path, sha: str) -> tuple[str, list[str]]:
         raise SystemExit(f"[remote-pytest] no `pip3 wheel ... --wheel-dir` line in {CI}; update VENV")
     dirs = match.group(1).split()
     ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (CI, DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, *dirs)]
-    return hashlib.sha256("\n".join([VENV, *ids]).encode()).hexdigest()[:16], dirs
+    # Lock/swap changes do not change installed packages or need another venv build.
+    install = VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
+    return hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16], dirs
 
 
 def ship(repo: Path, host: str, sha: str, name: str) -> None:
@@ -222,7 +215,7 @@ def capture(command: list[str], log: Path, cwd: Path | None = None) -> int:
 
 
 def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo: Path | None = None,
-        local: bool = False, label: str | None = None, require_host: bool = False) -> list[int]:
+        local: bool = False, label: str | None = None, require_host: bool = True) -> list[int]:
     """Run each pytest invocation for commit sha; one exit code per invocation."""
     repo = Path(git(repo or Path.cwd(), "rev-parse", "--show-toplevel"))
     sha = git(repo, "rev-parse", f"{sha}^{{commit}}")
@@ -232,7 +225,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     if host is None:
         if require_host and not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
             raise SystemExit("[remote-pytest] no test host reachable; a local run would test the working"
-                             " tree, not the commit. Set ROSY_TEST_LOCAL=1 to run here anyway.")
+                             " tree, not the commit. Use --local only for explicit diagnostics.")
         if not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
             print("[remote-pytest] WARNING: no test host reachable; running pytest on this machine"
                   " (working tree, not only the commit)", file=sys.stderr, flush=True)
@@ -249,7 +242,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         for inv, log in zip(invocations, logs):
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
             codes.append(capture([*SSH, host, "bash -c " + shlex.quote(PYTEST) + " remote "
-                                  + " ".join(map(shlex.quote, [name, *inv, *PYTEST_TAIL]))], log))
+                                  + " ".join(map(shlex.quote, [name, deps_sha, *inv, *PYTEST_TAIL]))], log))
         return codes
     finally:
         remote(host, CLEANUP, name, capture_output=True, timeout=STEP_TIMEOUT["cleanup"])

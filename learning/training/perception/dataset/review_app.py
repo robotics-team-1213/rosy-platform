@@ -12,6 +12,7 @@ import hashlib
 import ipaddress
 import json
 import mimetypes
+import re
 import secrets
 import sqlite3
 import threading
@@ -24,12 +25,9 @@ from urllib.parse import urlparse
 import cv2
 import numpy as np
 
-import class_sets
-import review_return
+import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence
-import review_ingest
-import review_masks
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[4] / 'shared' / 'web'
@@ -179,6 +177,13 @@ class ReviewStore:
             raise KeyError(index)
         return self.decoded(row)
 
+    def object_drafts(self, index):
+        self.get(index)
+        with self.connect() as db:
+            return [dict(row, boxes=json.loads(row['boxes'])) for row in db.execute(
+                'SELECT sha256,boxes,origin,catalog_sha256 FROM object_drafts '
+                'WHERE frame=? ORDER BY rowid DESC', (index,))]
+
     def list_frames(self):
         with self.connect() as db:
             return [self.decoded(row) for row in db.execute('SELECT * FROM frames ORDER BY id')]
@@ -239,6 +244,23 @@ class ReviewStore:
                 self.validate_boxes(frame['source'], boxes, classes=classes)
                 review.update(boxes=boxes, review_status='pending_human', complete_frame_review=False,
                               review_origin='pinky_web_candidate_import')
+                review.pop('disposition', None)
+                status = 'pending'
+            elif action == 'apply_object_draft':
+                if status == 'excluded':
+                    raise ValueError('제외 사진은 재검수로 돌린 후 초안을 가져오세요.')
+                digest = body.get('draft_sha256')
+                if not isinstance(digest, str) or not re.fullmatch('[0-9a-f]{64}', digest):
+                    raise ValueError('object draft SHA required')
+                candidate = db.execute('SELECT boxes,origin,catalog_sha256 FROM object_drafts '
+                                       'WHERE frame=? AND sha256=?', (index, digest)).fetchone()
+                if candidate is None:
+                    raise ValueError('selected object draft is unavailable')
+                boxes = json.loads(candidate['boxes'])
+                self.validate_boxes(frame['source'], boxes, classes=classes)
+                review.update(boxes=boxes, review_status='pending_human', complete_frame_review=False,
+                              review_origin='model_draft_pending_human', draft_origin=candidate['origin'],
+                              draft_sha256=digest, draft_catalog_sha256=candidate['catalog_sha256'])
                 review.pop('disposition', None)
                 status = 'pending'
             elif action in ('exclude', 'reopen'):
@@ -363,6 +385,8 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     return self.send(value, etag=tag)
                 if path.startswith('/api/history/'):
                     return self.send(store.history(int(path.rsplit('/', 1)[1])))
+                if path.startswith('/api/vlm-feedback/'):
+                    return self.send(vlm_mask_feedback.read_current_feedback(store.state, int(path.rsplit('/', 1)[1])))
                 if path == '/api/catalog':
                     return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
                                       'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),
@@ -377,17 +401,34 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     if self.headers.get('If-None-Match') == etag:
                         return self.send(b'', 304, etag=etag, cache='no-cache')
                     return self.send(pixels, mime='image/png', etag=etag, cache='no-cache')
+                if path.startswith('/api/draft-images/'):
+                    _, _, frame_id, digest = path.rsplit('/', 3)
+                    return self.send(review_masks.draft_image(store, int(frame_id), digest),
+                                     mime='image/png', cache='no-cache')
+                if path.startswith(('/api/draft-preview/', '/api/draft-merge-preview/')):
+                    _, _, frame_id, digest = path.rsplit('/', 3)
+                    merged = path.startswith('/api/draft-merge-preview/')
+                    return self.send(review_masks.draft_preview(store, int(frame_id), digest, merge=merged),
+                                     mime='image/png', cache='no-cache')
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.get(store, int(path.rsplit('/', 1)[1])))
+                if path.startswith('/api/object-drafts/'):
+                    return self.send({'drafts': store.object_drafts(int(path.rsplit('/', 1)[1]))})
                 if path == '/api/learning':
                     frames = store.list_frames()
-                    pixel_reviews = [review_masks.get(store, f['index']) for f in frames]
+                    pixel_reviews = [review_masks.get(store, f['index']) for f in frames
+                                     if f['status'] != 'excluded']
                     pixel_statuses = [row['status'] for row in pixel_reviews]
+                    with store.connect() as db:
+                        queued_objects = {row[0] for row in db.execute('SELECT DISTINCT frame FROM object_drafts')}
                     object_draft_indices = [f['index'] for f in frames if f['status'] == 'pending'
-                                            and (f['source'].get('objects') or f['source'].get('boxes'))]
+                                            and (f['index'] in queued_objects or f['source'].get('objects')
+                                                 or f['source'].get('boxes'))]
                     pixel_draft_indices = [row['frame'] for row in pixel_reviews
                                            if row['status'] == 'pending' and
                                            bool((review_masks.pixels(store, row) != 255).any())]
+                    pixel_candidate_indices = [row['frame'] for row in pixel_reviews if row['status'] == 'pending'
+                                               and (row['draft_candidates'] or row['frame'] in pixel_draft_indices)]
                     latest = next(iter(store.exports()), None)
                     preparation = None
                     if latest:
@@ -410,10 +451,11 @@ def make_server(store, port=8767, host='127.0.0.1'):
                                           and f['source'].get('original_video_verified') is not True
                                           for f in frames),
                                       'object_draft_first': object_draft_indices[0] if object_draft_indices else None,
-                                      'pixel_draft_first': pixel_draft_indices[0] if pixel_draft_indices else None,
+                                      'pixel_draft_first': pixel_candidate_indices[0] if pixel_candidate_indices else None,
                                       'pixel_counts': {state: pixel_statuses.count(state)
                                                        for state in ('approved', 'pending', 'excluded')}
                                                       | {'drafted': len(pixel_draft_indices),
+                                                         'candidates': len(pixel_candidate_indices),
                                                          'blank': pixel_statuses.count('pending') - len(pixel_draft_indices)}})
                 if path.startswith('/api/learning/images/'):
                     prefix, identifier, name = path.rsplit('/', 2)

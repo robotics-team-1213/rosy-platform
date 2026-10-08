@@ -17,6 +17,108 @@ V13_CLASSES = (Path(__file__).resolve().parents[1] / 'classes' /
                'lane_lr6_drivable.yaml').read_bytes()
 
 
+def test_merge_unknown_clips_new_drivable_to_human_lane_edges():
+    current = np.array([[5, 1, 255, 255, 2, 255]], dtype=np.uint8)
+    proposal = np.full(current.shape, 5, np.uint8)
+    binding = {'classes': [{'name': 'lane_left', 'index': 1},
+                           {'name': 'lane_right', 'index': 2},
+                           {'name': 'drivable', 'index': 5}]}
+    merged = review_masks.merge_unknown(current, proposal, binding)
+    assert merged.tolist() == [[5, 1, 5, 5, 2, 255]]
+    assert review_masks.lane_boundary_violations(merged, binding) == {'left': 1, 'right': 0}
+
+
+def test_merge_unknown_holds_new_lane_marking_that_conflicts_with_human_drivable():
+    current = np.array([[255, 5, 255, 255, 5, 255]], dtype=np.uint8)
+    proposal = np.array([[0, 255, 1, 5, 2, 0]], dtype=np.uint8)
+    binding = {'classes': [{'name': 'lane_left', 'index': 1},
+                           {'name': 'lane_right', 'index': 2},
+                           {'name': 'drivable', 'index': 5}]}
+    merged = review_masks.merge_unknown(current, proposal, binding)
+    assert merged.tolist() == [[0, 5, 255, 5, 5, 0]]
+    assert review_masks.lane_boundary_violations(merged, binding) == {'left': 0, 'right': 0}
+    empty = np.full((1, 5), 255, np.uint8)
+    suggested = np.array([[5, 1, 5, 2, 5]], dtype=np.uint8)
+    assert review_masks.merge_unknown(empty, suggested, binding).tolist() == [[255, 1, 5, 2, 255]]
+
+
+def test_merge_draft_fills_only_unknown_and_keeps_human_review_pending(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, _ = catalog(tmp_path)
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    initial = review_masks.get(store, 2)
+    current = review_masks.update(store, 2, {'version': initial['version'], 'action': 'paint',
+                                               'label': 0, 'radius': 0,
+                                               'points': [[0, 0]]}, ValueError)
+    proposal = np.full((24, 32), 1, np.uint8)
+    proposal[0, 1] = 255
+    path, digest = review_masks.freeze(store, review_masks.encode(proposal))
+    with store.connect() as db:
+        db.execute('INSERT INTO pixel_drafts(frame,sha256,path,catalog_sha256,origin) '
+                   'VALUES (?,?,?,?,?)', (2, digest, path, '0' * 64, 'sam3_test'))
+    preview = cv2.imdecode(np.frombuffer(
+        review_masks.draft_preview(store, 2, digest, merge=True), np.uint8), cv2.IMREAD_COLOR)
+    photo = cv2.imdecode(np.frombuffer(store.image(2).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+    assert not np.array_equal(preview[0, 0], photo[0, 0])
+    assert np.array_equal(preview[0, 1], photo[0, 1])
+    with pytest.raises(ValueError):
+        review_masks.update(store, 2, {'version': 0, 'action': 'merge_draft',
+                                        'draft_sha256': digest}, ValueError)
+    merged = review_masks.update(store, 2, {'version': current['version'],
+                                            'action': 'merge_draft',
+                                            'draft_sha256': digest}, ValueError)
+    pixels = review_masks.pixels(store, merged)
+    assert pixels[0, 0] == 0 and pixels[0, 1] == 255 and pixels[1, 1] == 1
+    assert merged['status'] == 'pending' and merged['approval'] is None
+    with pytest.raises(ValueError, match='no labels for remaining unknown'):
+        review_masks.update(store, 2, {'version': merged['version'],
+                                        'action': 'merge_draft',
+                                        'draft_sha256': digest}, ValueError)
+    undone = review_masks.update(store, 2, {'version': merged['version'],
+                                             'action': 'undo'}, ValueError)
+    assert np.array_equal(review_masks.pixels(store, undone),
+                          review_masks.pixels(store, current))
+
+
+def test_model_object_draft_for_existing_frame_waits_for_explicit_review(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    before = store.get(2)
+    rows[0]['objects'] = [{'bbox_xyxy': [2, 3, 12, 14], 'label': 'cone'}]
+    rows[0]['annotation_source'] = 'qwen3-vl:8b-instruct'
+    (folder / 'verified-inputs.jsonl').write_text(json.dumps(rows[0]) + '\n')
+
+    result = review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    assert result['object_draft_candidates_queued'] == 1
+    assert store.get(2) == before
+    draft = store.object_drafts(2)[0]
+    assert draft['boxes'] == rows[0]['objects']
+    assert draft['origin'] == 'qwen3-vl:8b-instruct'
+    assert review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})['object_draft_candidates_queued'] == 0
+
+    with pytest.raises(ValueError, match='다른 탭'):
+        store.update(2, {'version': before['version'] - 1, 'action': 'apply_object_draft',
+                         'draft_sha256': draft['sha256']})
+    applied = store.update(2, {'version': before['version'], 'action': 'apply_object_draft',
+                               'draft_sha256': draft['sha256']})
+    assert applied['review']['boxes'] == rows[0]['objects']
+    assert applied['status'] == 'pending'
+    assert applied['review']['review_origin'] == 'model_draft_pending_human'
+    assert applied['review']['draft_origin'] == 'qwen3-vl:8b-instruct'
+
+
+def test_object_draft_rejects_alternate_image_of_same_video_frame(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    rows[1]['objects'] = [{'bbox_xyxy': [2, 3, 12, 14], 'label': 'cone'}]
+    (folder / 'verified-inputs.jsonl').write_text(json.dumps(rows[1]) + '\n')
+    with pytest.raises(ValueError, match='exact reviewed image'):
+        review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    assert store.object_drafts(2) == []
+
+
 @pytest.mark.parametrize('outside_column,side', [(2, 'left'), (29, 'right')])
 def test_v13_draft_and_approval_reject_drivable_outside_visible_lane(tmp_path, outside_column, side):
     store = open_store(tmp_path)
@@ -126,6 +228,11 @@ def test_indexed_draft_import_keeps_255_and_pending_status(tmp_path):
     assert np.all(review_masks.pixels(store, review_masks.get(store, 2)) == 0)
     candidate = review_masks.get(store, 2)['draft_candidates'][0]['sha256']
     assert review_masks.get(store, 2)['draft_candidates'][0]['origin'] == 'v12_pixel_mask_candidate'
+    before_preview = review_masks.get(store, 2)
+    preview = cv2.imdecode(np.frombuffer(review_masks.draft_preview(store, 2, candidate), np.uint8),
+                           cv2.IMREAD_COLOR)
+    assert preview.shape == (24, 32, 3)
+    assert review_masks.get(store, 2) == before_preview
     with pytest.raises(ValueError):
         review_masks.update(store, 2, {'version': approved['version'] - 1,
                                         'action': 'apply_draft', 'draft_sha256': candidate}, ValueError)
@@ -142,6 +249,8 @@ def test_indexed_draft_import_keeps_255_and_pending_status(tmp_path):
     with pytest.raises(ValueError, match='selected draft is unavailable'):
         review_masks.update(store, 2, {'version': undone['version'],
                                         'action': 'apply_draft', 'draft_sha256': candidate}, ValueError)
+    with pytest.raises(ValueError, match='selected draft is unavailable'):
+        review_masks.draft_preview(store, 2, candidate)
     assert review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})['added'] == 0
     with store.connect() as db:
         assert db.execute('SELECT withdrawn FROM pixel_drafts WHERE frame=? AND sha256=?',

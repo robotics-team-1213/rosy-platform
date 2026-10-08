@@ -522,6 +522,20 @@ def test_development_entry_logs_in_without_a_code():
             "document.querySelector('.entry-heading h1')?.textContent === '작업을 선택하세요'")
         browser.close()
 
+def test_paired_connection_never_offers_development_entry():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(
+            playwright, extra_init=DEV_ENTRY_INIT.replace("mode: 'development'", "mode: 'paired'"))
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.path === '/api/v1/auth/connection')")
+        assert page.locator("#dev-connect-row").is_hidden()
+        browser.close()
+
+
 def test_compatibility_development_entry_names_pending_reason():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
@@ -1159,6 +1173,30 @@ def test_compatibility_settings_confirmation_preserves_stop_and_rechecks_named_t
         page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.waypoints=[];}")
         dialog.locator('ui-button[kind=irreversible]').click()
         assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/navigation/goal').length") == 0
+        browser.close()
+
+
+@pytest.mark.parametrize("width,height", [(390, 844), (1366, 768)])
+def test_compatibility_slam_start_reports_session_acceptance(width, height):
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, width=width, height=height)
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_selector('#compatibility-shell[data-ready="true"]')
+        page.locator('#view-inspect').click()
+        page.locator('#slam-start').click()
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        expect(page.locator('#slam-message')).to_have_text('맵핑 세션을 수락했습니다. 지도 갱신은 확인되지 않았습니다.')
+        assert page.evaluate("__apiCalls.some(c=>c.path==='/api/v1/slam/start')")
+        assert page.locator('.settings-card[aria-labelledby="slam-heading"]').evaluate('(card) => card.getBoundingClientRect().height') < 500
+        if shot_dir := os.environ.get('ROSY_DASHBOARD_STATE_SHOT_DIR'):
+            output = Path(shot_dir) / f"compatibility_slam_session_{width}x{height}_local.png"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(output), full_page=True)
+            card = page.locator('.settings-card[aria-labelledby="slam-heading"]')
+            card.evaluate('(element) => element.scrollIntoView({block: "center"})')
+            card.screenshot(path=str(output.with_name(f"compatibility_slam_card_{width}x{height}_local.png")))
         browser.close()
 
 
@@ -1907,6 +1945,34 @@ def test_operate_view_fits_and_does_not_crush(viewport, state):
         f" {fit['modeHeight']}px로 눌렸다(D-201): {fit}"
     )
     assert fit["estopInside"], f"{viewport}: 즉시 정지가 뷰포트 밖이다: {fit}"
+
+
+@pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
+def test_navigation_teleop_disabled_reasons_fit_the_action_column(viewport):
+    from playwright.sync_api import sync_playwright
+
+    init = """window.__rosyStateOverrides={robot_state:{mode:'NAVIGATION'}};"""
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, extra_init=init, width=viewport[0], height=viewport[1])
+        page.goto("http://rosy.test/dashboard#compatibility")
+        page.wait_for_function("document.querySelector('#robot-mode')?.textContent === '내비게이션'")
+        page.wait_for_function("document.querySelector('.teleop-pad ui-button')?.hasAttribute('reason')")
+        if output := os.environ.get("ROSY_SCREENSHOT_DIR"):
+            shots = Path(output)
+            shots.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(shots / f"navigation-teleop-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+        sizes = page.evaluate("""() => {
+          const act=document.querySelector('.region-act');
+          const pad=document.querySelector('.teleop-pad');
+          return {act:[act.clientWidth,act.scrollWidth,act.clientHeight,act.scrollHeight],pad:[pad.clientWidth,pad.scrollWidth],
+            reasons:[...pad.querySelectorAll('ui-button')].map(button => button.querySelector('small[data-reason]')?.textContent)};
+        }""")
+        browser.close()
+    assert len(sizes["reasons"]) == 4 and all(sizes["reasons"]), sizes
+    assert sizes["act"][1] <= sizes["act"][0] + 1, sizes
+    if viewport[0] >= 1024:
+        assert sizes["act"][3] <= sizes["act"][2] + 1, sizes
+    assert sizes["pad"][1] <= sizes["pad"][0] + 1, sizes
 
 
 def test_wide_but_short_operate_view_keeps_three_columns():

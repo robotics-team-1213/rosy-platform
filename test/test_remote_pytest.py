@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import subprocess
+import shlex
+import shutil
 import sys
 from pathlib import Path
 
@@ -34,14 +36,11 @@ def test_no_host_or_forced_local_means_local(monkeypatch):
     assert rp.pick_host(["a@1"], probe=lambda h: True) is None
 
 
-def test_unreachable_hosts_fall_back_to_a_local_pytest(monkeypatch, tmp_path, capsys):
+def test_unreachable_hosts_stop_the_gate(monkeypatch, tmp_path):
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     monkeypatch.setattr(rp, "reachable", lambda host: False)
-    commands = []
-    monkeypatch.setattr(rp, "capture", lambda command, log, cwd=None: commands.append(command) or 1)
-    assert rp.run([["test/x.py"]], [tmp_path / "run-1.txt"], repo=ROOT) == [1]
-    assert commands == [[sys.executable, "-m", "pytest", "test/x.py", *rp.PYTEST_TAIL]]
-    assert "no test host reachable" in capsys.readouterr().err
+    with pytest.raises(SystemExit, match="no test host reachable"):
+        rp.run([["test/x.py"]], [tmp_path / "run-1.txt"], repo=ROOT)
 
 
 def test_worst_exit_code_counts_nothing_collected_as_pass():
@@ -57,6 +56,42 @@ def test_affected_selection_uses_local_invocations_when_full_and_drops_skipped()
            "local_invocations": [["guard.py"]]}
     assert rp.affected_invocations(sel, {"test/b.py"}) == [["test/a.py"]]
     assert rp.affected_invocations({**sel, "mode": "full"}, set()) == [["guard.py"]]
+
+
+def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
+    if not shutil.which("flock") or not shutil.which("bash"):
+        pytest.skip("POSIX flock is required")
+    root = tmp_path / "rosy-test"
+    (root / "runs" / "run1").mkdir(parents=True)
+    (root / "venvs" / "same").mkdir(parents=True)
+    (root / "venvs" / "same" / ".deps-sha").write_text("same\n")
+    lock = root / "venv.lock"
+    holder = subprocess.Popen(
+        ["bash", "-c", f'exec 9>{shlex.quote(str(lock))}; flock -x 9; echo ready; sleep 5'],
+        stdout=subprocess.PIPE, text=True,
+    )
+    try:
+        assert holder.stdout.readline().strip() == "ready"
+        script = rp.VENV.replace("R=~/rosy-test", f"R={shlex.quote(str(root))}")
+        subprocess.run(["bash", "-c", script, "remote", "run1", "same"],
+                       check=True, timeout=2)
+    finally:
+        holder.terminate()
+        holder.wait(timeout=2)
+
+
+def test_pytest_uses_the_same_dependency_environment_as_setup():
+    assert 'V=$R/venvs/$DEPS' in rp.VENV
+    assert 'V=$R/venvs/$DEPS' in rp.PYTEST
+    assert '[ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ]' in rp.PYTEST
+
+
+def test_lock_change_does_not_rebuild_venv_but_install_change_does(monkeypatch):
+    baseline = rp.deps(ROOT, "HEAD")[0]
+    monkeypatch.setattr(rp, "VENV", rp.VENV.replace("flock -x -w 600 9", "flock -x -w 60 9"))
+    assert rp.deps(ROOT, "HEAD")[0] == baseline
+    monkeypatch.setattr(rp, "VENV", rp.VENV.replace("$P check", "$P install extra\n$P check"))
+    assert rp.deps(ROOT, "HEAD")[0] != baseline
 
 
 def _git(cwd, *args):
