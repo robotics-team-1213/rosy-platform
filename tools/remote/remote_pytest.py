@@ -108,9 +108,7 @@ PYTEST = r"""set -euo pipefail
 R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; cd "$R/runs/$1"; shift 2
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] || { echo "[remote] venv hash mismatch" >&2; exit 1; }
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
-# 9>&-: the shared venv lock covers setup only; pytest must not hold it for the whole run,
-# or a concurrent session's exclusive VENV step times out after 600 s.
-exec systemd-run --user --scope -q -p MemoryMax=6G -- "$V/bin/python" -m pytest "$@" 2>&1 9>&-
+exec systemd-run --user --scope -q -p MemoryMax=6G -- "$V/bin/python" -m pytest "$@" 2>&1
 """
 
 CLEANUP = r"""R=~/rosy-test
