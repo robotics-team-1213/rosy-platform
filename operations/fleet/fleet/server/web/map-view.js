@@ -14,12 +14,9 @@ import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import {drawStartPointMarks} from './start-point-layer.js';
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
-<<<<<<< HEAD
-import { trafficClock, trafficDrawing } from "./site-map-model.js";
-=======
 import { drawTrails } from "./trail-view.js";
 import { lensesMatch } from "/console/assets/map-fit.js";
->>>>>>> main
+import { trafficClock, trafficDrawing } from "./site-map-model.js";
 
 export function cameraMapCalibration(frame, calibrations, siteMap) {
   if (!frame || frame.state !== "live" || frame.rectified || !siteMap
@@ -574,11 +571,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
-<<<<<<< HEAD
-    drawTraffic(ctx, toPx, t.scale);
-=======
     drawTrails(ctx, view, toPx, 1.5, call);
->>>>>>> main
+    drawTraffic(ctx, toPx, t.scale);
     drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
     drawStartPointMarks(ctx, toPx, view.startPoints, view.siteMap.maps.map(row=>row.map_id), css('--series-secondary'), 2);
     if (layerOn("sightings")) {
