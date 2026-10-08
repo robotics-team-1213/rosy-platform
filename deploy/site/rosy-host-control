@@ -1,90 +1,65 @@
 #!/usr/bin/env bash
-# Local helper for Service Control (D-524). Fleet calls this with one allowlisted action.
-# It does not accept a process name, a signal, or a shell string.
-# Reboot is shutdown -r +10. shutdown -c cancels it.
-# ROSY_HOST_CONTROL_ROLE is site, ai, or model.
-# ROSY_HOST_CONTROL_PRINT=1 prints the command and does not run it.
+# Service Control helper (D-524), installed root-owned as /usr/local/sbin/rosy-host-control.
+# Runs only through `sudo -n` (sudoers drop-in from install-host-control.sh, no SETENV, no
+# env_keep). The role (site, ai, or model) comes from the root-owned
+# /etc/rosy/host-control/role and the account that owns the AI user units from
+# /etc/rosy/host-control/units-user, never from the environment. It does not accept a process name,
+# a signal, or a shell string.
+#   reboot          shutdown -r +10, refused (exit 3) while any reboot is already scheduled
+#   cancel-reboot   shutdown -c, only for the reboot this helper scheduled (else exit 4); the
+#                   nightly window reboot and unattended-upgrades are never cancelled here
+#   restart-unit U  systemctl --no-block restart U (allowlisted U)
+#   stop-unit U     systemctl --no-block stop U (allowlisted U; site units are restart-only)
 set -euo pipefail
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 
-ROLE=${ROSY_HOST_CONTROL_ROLE:-}
+CONF=/etc/rosy/host-control
+SCHEDULED=/run/systemd/shutdown/scheduled   # logind's record of a pending shutdown -r
+STATE=/run/rosy-host-control                # tmpfs: the marker disappears with the reboot
 ACTION=${1:-}
 UNIT=${2:-}
-if [ -n "${3:-}" ]; then
-  echo "refused" >&2
-  exit 2
-fi
+ROLE=$(cat "$CONF/role" 2>/dev/null || true)
 
-run() {
-  if [ -n "${ROSY_HOST_CONTROL_PRINT:-}" ]; then
-    printf '%s\n' "$*"
-    return 0
-  fi
-  command "$@"
-}
+log() { logger -t rosy-host-control "role=$ROLE action=$ACTION unit=$UNIT by=${SUDO_USER:-root} $*"; }
+refuse() { log "result=refused($1)"; echo "refused: $1" >&2; exit "${2:-2}"; }
+scheduled_usec() { sed -n 's/^USEC=//p' "$SCHEDULED" 2>/dev/null || true; }
+
+[ $# -le 2 ] || refuse "arguments"
+mkdir -p -m 0700 "$STATE"
+exec 9>"$STATE/lock"
+flock 9
 
 case "$ROLE:$ACTION:$UNIT" in
   site:reboot:|ai:reboot:|model:reboot:)
-    run shutdown -r +10 "Rosy control will reboot this host in 10 minutes."
+    [ -z "$(scheduled_usec)" ] || refuse "a reboot is already scheduled" 3
+    shutdown -r +10 "Rosy Service Control will reboot this host in 10 minutes."
+    scheduled_usec > "$STATE/reboot"
     ;;
   site:cancel-reboot:|ai:cancel-reboot:|model:cancel-reboot:)
-    run shutdown -c
+    mine=$(cat "$STATE/reboot" 2>/dev/null || true)
+    [ -n "$mine" ] && [ "$mine" = "$(scheduled_usec)" ] || refuse "no reboot scheduled by Service Control" 4
+    shutdown -c
+    rm -f "$STATE/reboot"
     ;;
-  site:stop-unit:docker.service)
-    run systemctl stop docker.service
-    ;;
-  site:restart-unit:docker.service)
-    run systemctl restart docker.service
-    ;;
-  site:stop-unit:rosy-site-stack.service)
-    run systemctl stop rosy-site-stack.service
-    ;;
-  site:restart-unit:rosy-site-stack.service)
-    run systemctl restart rosy-site-stack.service
-    ;;
-  site:stop-unit:rosy-site-firewall.service)
-    run systemctl stop rosy-site-firewall.service
-    ;;
+  site:restart-unit:docker.service|\
+  site:restart-unit:rosy-site-stack.service|\
   site:restart-unit:rosy-site-firewall.service)
-    run systemctl restart rosy-site-firewall.service
+    systemctl --no-block restart "$UNIT"
     ;;
-  ai:stop-unit:pinky-backend.service)
-    run systemctl --user --machine=ai@ stop pinky-backend.service
-    ;;
-  ai:restart-unit:pinky-backend.service)
-    run systemctl --user --machine=ai@ restart pinky-backend.service
-    ;;
-  ai:stop-unit:pinky-frontend.service)
-    run systemctl --user --machine=ai@ stop pinky-frontend.service
-    ;;
-  ai:restart-unit:pinky-frontend.service)
-    run systemctl --user --machine=ai@ restart pinky-frontend.service
-    ;;
-  ai:stop-unit:pinky-nav2.service)
-    run systemctl --user --machine=ai@ stop pinky-nav2.service
-    ;;
-  ai:restart-unit:pinky-nav2.service)
-    run systemctl --user --machine=ai@ restart pinky-nav2.service
-    ;;
-  ai:stop-unit:pinky-rosbridge-d12.service)
-    run systemctl --user --machine=ai@ stop pinky-rosbridge-d12.service
-    ;;
-  ai:restart-unit:pinky-rosbridge-d12.service)
-    run systemctl --user --machine=ai@ restart pinky-rosbridge-d12.service
-    ;;
-  ai:stop-unit:pinky-rosbridge-d13.service)
-    run systemctl --user --machine=ai@ stop pinky-rosbridge-d13.service
-    ;;
-  ai:restart-unit:pinky-rosbridge-d13.service)
-    run systemctl --user --machine=ai@ restart pinky-rosbridge-d13.service
-    ;;
-  ai:stop-unit:pinky-r2-watch.service)
-    run systemctl --user --machine=ai@ stop pinky-r2-watch.service
-    ;;
-  ai:restart-unit:pinky-r2-watch.service)
-    run systemctl --user --machine=ai@ restart pinky-r2-watch.service
+  ai:stop-unit:pinky-backend.service|ai:restart-unit:pinky-backend.service|\
+  ai:stop-unit:pinky-frontend.service|ai:restart-unit:pinky-frontend.service|\
+  ai:stop-unit:pinky-nav2.service|ai:restart-unit:pinky-nav2.service|\
+  ai:stop-unit:pinky-rosbridge-d12.service|ai:restart-unit:pinky-rosbridge-d12.service|\
+  ai:stop-unit:pinky-rosbridge-d13.service|ai:restart-unit:pinky-rosbridge-d13.service|\
+  ai:stop-unit:pinky-r2-watch.service|ai:restart-unit:pinky-r2-watch.service)
+    owner=$(cat "$CONF/units-user" 2>/dev/null || true)
+    [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
+    systemctl --user --machine="$owner@" --no-block "${ACTION%-unit}" "$UNIT"
     ;;
   *)
-    echo "refused" >&2
-    exit 2
+    refuse "not allowlisted"
     ;;
 esac
+log "result=accepted"
+echo accepted
