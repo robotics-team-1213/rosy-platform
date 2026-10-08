@@ -1,0 +1,14 @@
+# D-530 desired state shared by the site, model and AI PCs. One line: <policy> <kind> <args>.
+# policy: safe (the timer fixes it), report (install applies, timer reports), approval (only with --approve).
+# file sources: role/<name> is the role's host-state folder, common/<name> is this folder.
+safe file /etc/systemd/system/rosy-host-state.service common/rosy-host-state.service
+safe file /etc/systemd/system/rosy-host-state.timer common/rosy-host-state.timer
+safe enabled rosy-host-state.timer
+safe file /etc/systemd/logind.conf.d/rosy-no-lid-suspend.conf common/rosy-no-lid-suspend.conf
+safe enabled tailscaled.service
+safe linger
+report masked sleep.target
+report masked suspend.target
+report masked hibernate.target
+report masked hybrid-sleep.target
+approval file /etc/ssh/sshd_config.d/10-rosy.conf common/sshd-10-rosy.conf

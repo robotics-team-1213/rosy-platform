@@ -18,7 +18,8 @@ deploy/robot/native/rosy-diag text eol=lf
 deploy/robot/pinky_pro/image/device-python-requirements.txt text eol=lf
 deploy/robot/pinky_pro/image/camera-sources.lock.json text eol=lf
 deploy/robot/pinky_pro/image/camera-python-requirements.txt text eol=lf
-# D-373: systemd EnvironmentFile would read a CRLF value as "false" (not a switch value).
+# D-373: systemd EnvironmentFile would read a CRLF value as "false
+" (not a switch value).
 deploy/robot/pinky_pro/native/learned-perception.env.example text eol=lf
 # D-247: inputs.lock.yaml pins the rpi_ws281x patch by SHA-256; the overlay and
 # the udev/modprobe files go into the image byte for byte.
@@ -41,8 +42,12 @@ learning/envs/isaac/assets/** -text
 # entries, so logs.md conflicts stay loud. Lint dedupes gaps and ignores Log row order.
 "docs/reference/ROSY ADR Log.md" merge=union
 tools/harness/adr_gaps.txt merge=union
-# Model PC hang guard scripts run under Linux shells (no extension, so *.sh does not cover them).
-deploy/site/rosy-model-guard-check text eol=lf
-deploy/site/rosy-model-guard-remote text eol=lf
+# Host guard scripts run under Linux shells (no extension, so *.sh does not cover them).
+deploy/site/rosy-host-guard text eol=lf
+deploy/hosts/common/rosy-host-guard-remote text eol=lf
+deploy/hosts/common/rosy-host-state text eol=lf
+# D-530: host-state files are compared byte for byte with the installed copies on the hosts.
+deploy/*/host-state/** text eol=lf
+deploy/hosts/common/host-state/** text eol=lf
 # Lap SIM batch lists are read by bash on the model PC; CRLF left a CR at the end of each run name.
 docs/validation/**/evidence/*batch*.txt text eol=lf

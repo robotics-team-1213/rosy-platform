@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""Rosy host desired state: install, dry-run diff and drift check (D-530).
+
+  sudo python3 deploy/hosts/common/rosy-host-state install <site|model|ai> [--approve TARGET]...
+  python3 deploy/hosts/common/rosy-host-state install <role> --dry-run   # no root, prints the diff
+  rosy-host-state check                                                  # rosy-host-state.timer
+
+install copies the role's host-state folder and the common one to /usr/local/lib/rosy-host-state
+(the approved copy), then applies every safe and report line, and approval lines named by
+--approve. check compares the host with that copy: it fixes safe lines, reports the rest and
+writes /var/lib/rosy-host-state/status.json. It never pulls the repo.
+
+Manifest line: <policy> <kind> <args>. Kinds: file <path> <role/x|common/x> [mode], enabled <unit>,
+disabled <unit>, masked <unit>, linger, wifi-allow. ROSY_HOST_STATE_ROOT prefixes every absolute
+path (tests).
+"""
+
+from __future__ import annotations
+
+import difflib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROLE_DIRS = {"site": "site", "model": "model_pc", "ai": "ai_pc"}
+ROOT = os.environ.get("ROSY_HOST_STATE_ROOT", "")
+LIB = "/usr/local/lib/rosy-host-state"
+STATUS = "/var/lib/rosy-host-state/status.json"
+WIFI_ALLOW = "/etc/rosy/host-state/wifi-allow"
+
+
+def host(path: str) -> Path:
+    return Path(ROOT + path)
+
+
+def sh(*cmd: str) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+
+def read_manifest(dirs: dict[str, Path]) -> list[tuple[str, str, list[str]]]:
+    lines = []
+    for name in ("common", "role"):
+        for raw in (dirs[name] / "manifest").read_text(encoding="utf-8").splitlines():
+            raw = raw.split("#", 1)[0].split()
+            if raw:
+                if raw[0] not in ("safe", "report", "approval"):
+                    raise SystemExit(f"bad policy: {raw}")
+                lines.append((raw[0], raw[1], raw[2:]))
+    return lines
+
+
+def login_user() -> str:
+    path = host(LIB + "/login")
+    if path.exists():
+        return path.read_text(encoding="utf-8").strip()
+    return os.environ.get("SUDO_USER", "")
+
+
+def wifi_autoconnect() -> list[str]:
+    """Names of Wi-Fi connections with autoconnect on (nmcli -t escapes ':' as '\\:')."""
+    out = sh("nmcli", "-t", "-f", "NAME,TYPE,AUTOCONNECT", "connection", "show").stdout
+    names = []
+    for line in out.splitlines():
+        parts = line.rsplit(":", 2)
+        if len(parts) == 3 and parts[1] == "802-11-wireless" and parts[2] == "yes":
+            names.append(parts[0].replace("\\:", ":"))
+    return names
+
+
+def wifi_allowed() -> list[str]:
+    path = host(WIFI_ALLOW)
+    if not path.exists():
+        return []
+    return [n.strip() for n in path.read_text(encoding="utf-8").splitlines() if n.strip()]
+
+
+def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
+    """Return a one-line description of the drift, or None when the host matches."""
+    if kind == "file":
+        target, source = args[0], args[1]
+        want = (dirs[source.split("/", 1)[0]] / source.split("/", 1)[1]).read_bytes()
+        mode = int(args[2], 8) if len(args) > 2 else 0o644
+        path = host(target)
+        if not path.exists():
+            return f"{target}: missing"
+        if path.read_bytes() != want:
+            return f"{target}: content differs"
+        if os.name != "nt" and path.stat().st_mode & 0o7777 != mode:
+            return f"{target}: mode {oct(path.stat().st_mode & 0o7777)} != {oct(mode)}"
+        return None
+    if kind == "enabled":
+        state = sh("systemctl", "is-enabled", args[0]).stdout.strip()
+        active = sh("systemctl", "is-active", args[0]).stdout.strip()
+        ok = state == "enabled" and active in ("active", "activating")
+        return None if ok else f"{args[0]}: {state or '?'}/{active or '?'}, want enabled/active"
+    if kind == "disabled":
+        state = sh("systemctl", "is-enabled", args[0]).stdout.strip()
+        return f"{args[0]}: {state}, want disabled" if state == "enabled" else None
+    if kind == "masked":
+        state = sh("systemctl", "is-enabled", args[0]).stdout.strip()
+        return None if state == "masked" else f"{args[0]}: {state or '?'}, want masked"
+    if kind == "linger":
+        user = login_user()
+        if not user:
+            return "linger: no login recorded (rerun install with sudo)"
+        return None if host(f"/var/lib/systemd/linger/{user}").exists() else f"linger off for {user}"
+    if kind == "wifi-allow":
+        allowed = wifi_allowed()
+        if not allowed:
+            return f"wifi-allow: {WIFI_ALLOW} is empty; nothing is turned off"
+        extra = [n for n in wifi_autoconnect() if n not in allowed]
+        return f"wifi autoconnect outside the allow list: {', '.join(extra)}" if extra else None
+    raise SystemExit(f"unknown kind: {kind}")
+
+
+def file_diff(args: list[str], dirs: dict[str, Path]) -> str:
+    target, source = args[0], args[1]
+    want = (dirs[source.split("/", 1)[0]] / source.split("/", 1)[1]).read_text(encoding="utf-8")
+    path = host(target)
+    have = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+    return "".join(difflib.unified_diff(have.splitlines(True), want.splitlines(True),
+                                        f"host:{target}", f"repo:{source}"))
+
+
+def fix(kind: str, args: list[str], dirs: dict[str, Path]) -> str:
+    """Apply one line. Returns what was done; raises on failure."""
+    if kind == "file":
+        target, source = args[0], args[1]
+        path = host(target)
+        old = path.read_bytes() if path.exists() else None
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".rosy-tmp")
+        shutil.copyfile(dirs[source.split("/", 1)[0]] / source.split("/", 1)[1], tmp)
+        tmp.chmod(int(args[2], 8) if len(args) > 2 else 0o644)
+        os.replace(tmp, path)
+        if target.startswith("/etc/ssh/"):
+            # A broken sshd config would lock everyone out: test it, roll back on failure.
+            if sh("sshd", "-t").returncode != 0:
+                if old is None:
+                    path.unlink()
+                else:
+                    path.write_bytes(old)
+                raise RuntimeError(f"{target}: sshd -t failed, restored")
+            sh("systemctl", "reload", "ssh")
+        elif target.startswith("/etc/systemd/system/"):
+            sh("systemctl", "daemon-reload")
+        elif target.startswith("/etc/sysctl.d/"):
+            sh("sysctl", "-q", "--system")
+        return f"wrote {target}"
+    if kind in ("enabled", "disabled"):
+        verb = "enable" if kind == "enabled" else "disable"
+        result = sh("systemctl", verb, "--now", args[0])
+        if result.returncode != 0:
+            raise RuntimeError(f"systemctl {verb} {args[0]}: {result.stderr.strip()}")
+        return f"{verb}d {args[0]}"
+    if kind == "masked":
+        sh("systemctl", "mask", args[0])
+        return f"masked {args[0]}"
+    if kind == "linger":
+        sh("loginctl", "enable-linger", login_user())
+        return f"linger on for {login_user()}"
+    if kind == "wifi-allow":
+        allowed = wifi_allowed()
+        if not allowed:
+            raise RuntimeError("wifi-allow list is empty; refusing to turn Wi-Fi off")
+        done = []
+        for name in wifi_autoconnect():
+            if name not in allowed:
+                sh("nmcli", "connection", "modify", name, "connection.autoconnect", "no")
+                done.append(name)
+        return f"autoconnect off: {', '.join(done)}"
+    raise SystemExit(f"unknown kind: {kind}")
+
+
+def line_id(kind: str, args: list[str]) -> str:
+    return args[0] if args else kind
+
+
+def repo_dirs(role: str) -> dict[str, Path]:
+    if role not in ROLE_DIRS:
+        raise SystemExit(f"role must be one of {', '.join(ROLE_DIRS)}")
+    return {"common": HERE / "host-state", "role": HERE.parent.parent / ROLE_DIRS[role] / "host-state"}
+
+
+def install(role: str, dry_run: bool, approve: list[str]) -> int:
+    dirs = repo_dirs(role)
+    changes = 0
+    for policy, kind, args in read_manifest(dirs):
+        found = drift(kind, args, dirs)
+        if found is None:
+            continue
+        gated = policy == "approval" and line_id(kind, args) not in approve
+        tag = "skip (needs --approve)" if gated else "would apply" if dry_run else "apply"
+        print(f"[{policy}] {found}: {tag}")
+        if kind == "file":
+            sys.stdout.write(file_diff(args, dirs))
+        if dry_run or gated:
+            continue
+        try:
+            print("  " + fix(kind, args, dirs))
+            changes += 1
+        except RuntimeError as exc:  # e.g. empty Wi-Fi allow list: report and carry on
+            print(f"  not applied: {exc}")
+    return changes
+
+
+def copy_approved(role: str) -> None:
+    dirs = repo_dirs(role)
+    lib = host(LIB)
+    for name, src in dirs.items():
+        shutil.rmtree(lib / name, ignore_errors=True)
+        shutil.copytree(src, lib / name)
+    (lib / "role-name").write_text(role + "\n", encoding="utf-8")
+    user = os.environ.get("SUDO_USER", "")
+    if user and user != "root":
+        (lib / "login").write_text(user + "\n", encoding="utf-8")
+    tool = host("/usr/local/sbin/rosy-host-state")
+    tool.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(Path(__file__).resolve(), tool)
+    tool.chmod(0o755)
+
+
+def check() -> int:
+    lib = host(LIB)
+    dirs = {"common": lib / "common", "role": lib / "role"}
+    status = {"time": int(time.time()), "fixed": [], "drift": [], "awaiting_approval": [], "errors": []}
+    for policy, kind, args in read_manifest(dirs):
+        found = drift(kind, args, dirs)
+        if found is None:
+            continue
+        if policy == "approval":
+            status["awaiting_approval"].append(found)
+        elif policy == "report":
+            status["drift"].append(found)
+        else:
+            try:
+                status["fixed"].append(f"{found} -> {fix(kind, args, dirs)}")
+            except Exception as exc:  # report and carry on with the other lines
+                status["errors"].append(f"{found}: {exc}")
+    for key in ("fixed", "drift", "awaiting_approval", "errors"):
+        for item in status[key]:
+            print(f"{key}: {item}")
+    out = host(STATUS)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(status, indent=1) + "\n", encoding="utf-8")
+    return 1 if status["drift"] or status["errors"] else 0
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] == ["check"]:
+        return check()
+    if len(argv) >= 2 and argv[0] == "install":
+        role, rest = argv[1], argv[2:]
+        dry_run = "--dry-run" in rest
+        approve = [rest[i + 1] for i, a in enumerate(rest) if a == "--approve" and i + 1 < len(rest)]
+        if not dry_run:
+            if not ROOT and os.geteuid() != 0:
+                raise SystemExit("run with sudo (or --dry-run)")
+            copy_approved(role)
+        changes = install(role, dry_run, approve)
+        print(f"{'dry run: ' if dry_run else ''}{changes} change(s) applied")
+        return 0
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

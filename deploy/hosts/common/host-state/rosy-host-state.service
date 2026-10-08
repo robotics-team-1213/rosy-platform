@@ -1,0 +1,8 @@
+[Unit]
+Description=Rosy host drift check against the installed desired state (D-530)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/rosy-host-state check
+SyslogIdentifier=rosy-host-state
+TimeoutStartSec=300

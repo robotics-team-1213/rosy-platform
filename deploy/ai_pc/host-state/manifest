@@ -1,0 +1,7 @@
+# D-530 AI PC desired state (role: ai). Format: deploy/hosts/common/host-state/manifest.
+# Nightly reboot was copied byte for byte from the AI PC on 2026-10-09. The AI PC is shared:
+# install only after its owner agrees (D-530 5).
+safe file /etc/systemd/system/rosy-nightly-reboot.timer role/rosy-nightly-reboot.timer
+safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-reboot.service
+safe enabled rosy-nightly-reboot.timer
+report wifi-allow
