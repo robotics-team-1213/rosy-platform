@@ -2613,6 +2613,7 @@
 - gate 변화: 없음(동작 변경 없음)
 - 결정: map-view.js 1030→831, 판정 split 유지(다음 증가 때 다시 판정). camera-backdrop 141, traffic-view 82. fleet 패키지 45944→45968(+24, 머리말·import), 패키지 판정은 다른 단계가 다시 한다
 - 교훈: 없음
+
 ## 2026-10-08 · uncommitted · feat(fleet): 지도 굽이 장소와 trip의 `bend` 지시 (D-507 보충)
 - 변경: `site_map.py` 장소 종류 `bend`(꼭짓점, `yaw`·`exit_yaw`·`radius_m` 필수, 회전 15–90°, 다른 종류는 두 필드 불가, 저장 body는 굽이 필드가 없는 장소에서 그대로). `trip_ports.py` `bend_geometry`(두 접점이 이 차선에 있고 진행 방향으로 회전 부호), `next_bend`, `bend_fields`(`bend_in_m` = 차로를 따른 호 시작점까지 거리, `bend_tol_m` = 기존 `expect_tol_m` 식, 옆 항 없음), `_pose_tol`로 tol 식을 한 곳에 둠. `trip_runner.py` `_step_bend`: `lane_bend` 로봇에만, 지나지 않은 굽이가 있으면 그 굽이가 다음 장소보다 먼저, 호 시작점 0.6 m 안에서 보내고 절반 만료에 갱신, CORE가 끝내야(`bending`/`reacquiring` 뒤 `idle`) 장소 지시. `MANOEUVRE`에 `bending`, `_completed`는 굽이 지시를 장소 완료로 세지 않음. `TripCaps.lane_bend`.
 - 증거: `test_trip_bend.py` 9건(장소 검증, 기존 지도 body 그대로, 실제 west 간선 방향별 회전 부호·호 시작점, 능력 읽기, 굽이 구간에서만 보냄·기동 중 안 보냄·끝난 뒤 다음 장소, armed 굽이가 다음 장소를 막음, 굽이 없는 지도·`lane_bend` 없는 로봇은 `bend` 없음, unresolved면 trip 정지). FakeCore가 `bend`를 받도록 `test_trip_runner.py` 보충.
@@ -2630,3 +2631,15 @@
 - 증거: `test_lane_traffic.py::test_a_new_lap_drives_its_bends_again`, trip 시험 118 passed.
 - gate 변화: SOURCE.
 - 결정: D-507 보충, D-517
+
+## 2026-10-08 · 138ee8567 · feat(fleet): D-517 M2 통행권 전송 (server/trip_authority.py)
+- 변경: `fleet.traffic.authority`(기본 false) + 로봇 능력 `line_follow_authority` 일 때만 trip 주기마다 표 계산 뒤 `POST /api/v1/line-follow/authority`. `until_m` = `authority_end_m` − 표가 쓴 자세의 경로 위치, `pose_stamp` = `MapPose.odom_stamp`(새 필드), `ttl_s` 2, leg `{trip_id}:{route_rev}` 별로 줄지 않음. 로봇당 전송 하나, 주기 안 재시도 없음. trip 보기 `traffic_authority`(core|hold_back), CORE `HOLDING` 은 정체 아님.
+- 증거: 모델 PC `operations/fleet/test` 2712 통과·4 실패 — 4건 모두 이 브랜치 기준 main 에서도 실패(3건 main 재현, `test_grammar_separation` 은 main bfaf00df6 에서 고침). `test_trip_authority.py` 통과.
+- gate 변화: SOURCE.
+- 결정: D-517 4항 (M2). fleet 46053 (판정 45942+150 안), app.py 751.
+
+## 2026-10-08 · 311469e4c · fix(fleet): D-517 M2 리뷰 반영 — 앞 끝 d, 자세 짝, 첫 통행권 전 강제
+- 변경: (887abb1a9 와 함께) 표의 `d` = base 경로 위치 + 몸 `front_x_m`(blocks.py 정의, `PINKY_PRO` URDF 값). 표가 `live.traffic` 에 `front_d_m`·`pose_stamp` 를 내보내고 송신기는 다시 계산하지 않는다(`until_m` = 끝 − 앞 끝 d). `(live.at, live.at_stamp)` 를 한 자세에서 한 번에 쓰고 정지·재계획 때 같이 지운다. 단계가 진행 중인 로봇에는 그 주기에 보내지 않는다. `fleet.traffic.authority` 이고 `line_follow_authority` 인데 `line_follow_authority_required` 가 없으면 lane trip 시작 422 `TRIP_AUTHORITY_NOT_REQUIRED`.
+- 증거: 모델 PC 수정 전 `test_trip_authority.py` 수집 실패(새 능력 필드), 수정 뒤 대상 241 통과. `operations/fleet/test` 2718 통과·3 실패 — 3건 main(16115e269)에서도 실패(`test_document_imports`, `test_learning_receiver`, `test_site_map_api` node).
+- gate 변화: SOURCE. M1 표도 앞 끝 d 를 쓴다(blocks.py 정의대로 바로잡음).
+- 결정: D-517 4항 독립 리뷰 1·2·3. fleet 46092 (판정 45942+150 안). 능력은 trip 시작 때만 본다.

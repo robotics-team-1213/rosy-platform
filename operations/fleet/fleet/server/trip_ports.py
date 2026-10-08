@@ -85,6 +85,10 @@ class HttpLaneJunction:
         # robot going), so the immediate stop is mode OFF, the existing Fleet-allowed selection.
         return await self._client(robot_id).line_follow_mode("OFF")
 
+    async def send_authority(self, robot_id: str, body: dict) -> dict:
+        """D-517 4: ``POST /api/v1/line-follow/authority`` (``trip_authority``)."""
+        return await self._client(robot_id).line_follow_authority(body)
+
     async def line_follow_mode(self, robot_id: str) -> Optional[str]:
         mode = (await self._client(robot_id).line_follow()).get("mode")
         return mode if isinstance(mode, str) else None
@@ -431,6 +435,9 @@ class LiveTrip:
         self.at: Optional[tuple[int, float]] = None
         #: The block table's answer for this robot (``TrafficService``): waiting_for, authority, refused_at_m.
         self.traffic: Optional[dict] = None
+        #: D-517 4: the odom stamp of the pose ``at`` came from (set with it); CORE's last ``authority``.
+        self.at_stamp: Optional[float] = None
+        self.authority: Optional[dict] = None
         #: D-507 addendum: bend place ids CORE finished (or the robot passed without one).
         self.bends_done: set[str] = set()
 

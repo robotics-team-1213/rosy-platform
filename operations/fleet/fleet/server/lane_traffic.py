@@ -103,7 +103,7 @@ class TrafficService:
         lookahead, d = self._body.resume_gap_m(speed), None
         if pose.get("state") == LOCALIZED and live.at is not None:
             index, s = live.at
-            d = segments[0]["s_from"] + live.progress(index, s)  # route metres: the first arc from 0
+            d = segments[0]["s_from"] + live.progress(index, s) + self._body.front_x_m  # route m of the FRONT
             remaining = segments[index]["s_to"] - s
             # The table runs after the steps, so the block past a place is asked for two periods
             # before the robot is within ``arm_distance_m`` of it (a trip that starts there is not).
@@ -164,9 +164,10 @@ class TrafficService:
         refused_unit: dict[str, str] = {}
         for robot in robots:
             live, waiting = trips[robot.id], result.waiting_for.get(robot.id, ())
+            used = {"front_d_m": robot.d, "pose_stamp": None if robot.d is None else live.at_stamp}  # D-517 4
             if result.unplaced:  # a robot never localized could be anywhere: no instruction for anyone
                 live.traffic = {"waiting_for": [r for r in result.unplaced if r != robot.id],
-                                "authority_end_m": result.authority_end.get(robot.id), "refused_at_m": 0.0}
+                                "authority_end_m": result.authority_end.get(robot.id), "refused_at_m": 0.0, **used}
                 continue
             refused = None
             if waiting and robot.d is not None:
@@ -176,7 +177,7 @@ class TrafficService:
                     refused_unit[robot.id] = robot.spans[index].unit
                     refused = robot.spans[index].d0 - live.segments[0]["s_from"]  # back to plan metres
             live.traffic = {"waiting_for": list(waiting), "authority_end_m": result.authority_end.get(robot.id),
-                            "refused_at_m": refused}
+                            "refused_at_m": refused, **used}
         self._view = self._make_view(active[0], layout, active[2], trips, result, refused_unit)
 
     def view(self) -> dict:
