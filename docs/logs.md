@@ -7065,6 +7065,12 @@ osy-d395-s1d\`.
 - 증거: `python -m pytest tools/device_test/test -q` 호스트 시험(알려진 homography의 픽셀 위치, 거부 경로). 로봇은 움직이지 않았다.
 - gate 변화: 없음.
 
+## 2026-10-08 · uncommitted · D-512 개정 1 독립 안전 리뷰 반영과 픽셀 모드
+
+- 변경: 충전기를 확인한 촬영 자세에 두고 첫 주행 자세가 0.05 m·3° 넘게 다르면 중단, 되돌아가기에서 오래된 LiDAR 스캔(0.5 s)·느린 송신 간격(0.3 s) 정지와 실제 10 Hz, 보정 지도 일치(로봇 지도 또는 Fleet 활성 SiteMap), 여유 0.1 m 안 시작 거부, `trail.jsonl` phase 표시. D-395 이전 로봇(9dfk)용 픽셀 모드: 머리 위 프레임에서 고른 세 점으로 충전기를 계산한다. ADR에 되돌아가는 동안 D-422가 작동하지 않음과 두 한도 모두 되돌아감(케이블 밟음은 받아들인 위험)을 적었다.
+- 증거: `python -m pytest tools/device_test/test tools/capture/test -q` 호스트 시험(가짜 전송, 알려진 homography). 로봇은 움직이지 않았다.
+- gate 변화: 없음. 겹 적용 뒤 CORE 재시작이 odom을 바꾸는지는 장치에서 확인하지 않았다.
+
 ## 2026-10-08 · uncommitted · 차선 경계 완전 미관측 ROS SIM 재생
 
 - 변경: `edge_left`의 기억만으로 주행하지 않는 가드를 독립 Gazebo/ROS 그래프로 재생하고 `docs/validation/lane-blind-stop-sim-2026-10-08/result.md`에 원본 해시와 정지 자세를 기록했다.

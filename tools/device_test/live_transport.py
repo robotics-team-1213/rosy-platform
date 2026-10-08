@@ -59,6 +59,13 @@ class Live:
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             return None
 
+    def active_site_map_id(self):
+        """The Fleet active SiteMap's map_id (GET /api/fleet/site-map/active), None on any failure."""
+        try:
+            return json.loads(self._site("/api/fleet/site-map/active"))["map"]["map_id"]
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return None
+
     def overhead(self):
         """One fresh Rosy Cam JPEG through a 60 s Viewer lease (D-318), None on any failure."""
         if not self.site_url:
