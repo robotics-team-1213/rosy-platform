@@ -2535,3 +2535,9 @@
 - 증거: `test_trip_bend.py` 9건(장소 검증, 기존 지도 body 그대로, 실제 west 간선 방향별 회전 부호·호 시작점, 능력 읽기, 굽이 구간에서만 보냄·기동 중 안 보냄·끝난 뒤 다음 장소, armed 굽이가 다음 장소를 막음, 굽이 없는 지도·`lane_bend` 없는 로봇은 `bend` 없음, unresolved면 trip 정지). FakeCore가 `bend`를 받도록 `test_trip_runner.py` 보충.
 - gate 변화: SOURCE. SIM은 Fleet 함수를 쓰는 probe로.
 - 결정: D-507 보충
+
+## 2026-10-08 · uncommitted · fix(fleet): 굽이 지시는 굽이 앞 차로가 곧을 때만
+- 변경: `trip_ports.straight_approach`, `bend_fields`가 로봇에서 호 시작점까지 차로 방향이 15° 안일 때만 필드를 만든다. CORE가 `bend_in_m`을 odom 이동으로 재므로 모서리 안에서 보내면 질러 간 만큼 호가 늦다(모델 PC SIM 서쪽 출발 2회 `bend_basis_lost`, 호 중간 바깥 4.9 cm).
+- 증거: `test_trip_bend.py::test_bend_waits_until_the_lane_before_it_is_straight`, trip 시험 133 passed.
+- gate 변화: SOURCE. SIM 재실행은 `docs/validation/lane-bend-odom-sim-2026-10-08`.
+- 결정: D-507 보충

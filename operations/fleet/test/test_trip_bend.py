@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from fleet.routing.graph import build_graph
 from fleet.server.console_view import TripCaps, trip_caps
-from fleet.server.trip_ports import bend_geometry
+from fleet.server.trip_ports import bend_geometry, straight_approach
 from fleet.site_map import SiteMap, SitePlace, from_lane_graph
 from test_trip_caps import _caps
 from test_trip_runner import LANE, LANE_GRAPH, _arc, _plan, _setup, _ticks, run
@@ -28,7 +28,7 @@ def _bend_map(*bends) -> SiteMap:
                    edges=base.edges)
 
 
-def _trip(site_map, caps=BEND_CAPS, ahead=0.5):
+def _trip(site_map, caps=BEND_CAPS, ahead=0.4):
     """Start NW -> SE on west:rev with the SW bend's arc start ``ahead`` m in front; tick once."""
     runner, store, ports = _setup(site_map, caps=caps)
     arc = _arc(store, "west:rev")
@@ -88,7 +88,7 @@ def test_bend_instruction_goes_out_only_on_the_bend_stretch():
     assert ports.turns == [pytest.approx(63.6, abs=0.1)]
     fields = ports.expects[0]
     assert fields["map_id"] == "site" and fields["bend_radius_m"] == 0.064
-    assert fields["bend_in_m"] == pytest.approx(0.5, abs=0.001)          # along the lane
+    assert fields["bend_in_m"] == pytest.approx(0.4, abs=0.001)          # along the lane
     assert fields["bend_tol_m"] == pytest.approx(0.12, abs=0.001)         # the junction tol rule
     assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}
     ports.core.phase("bending")
@@ -125,3 +125,17 @@ def test_core_unresolved_bend_stops_the_trip():
     _ticks(runner, ports)
     view = runner.view("p1")
     assert (view["state"], view["reason"]) == ("stopped", "junction")
+
+
+def test_bend_waits_until_the_lane_before_it_is_straight():
+    """bend_in_m is odom travel in CORE: not sent while the W->S corner is still ahead of the arc."""
+    graph = build_graph(_bend_map(SW_BEND))
+    arc = graph.arcs["west:rev"]
+    s_start = bend_geometry(SitePlace(**SW_BEND), arc)[0]
+    assert straight_approach(arc, s_start - 0.40, s_start)
+    assert not straight_approach(arc, s_start - 0.58, s_start)            # inside the corner
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND), ahead=0.58)
+    assert ports.sent == []
+    ports.at(arc, s_start - 0.40)
+    _ticks(runner, ports)
+    assert ports.sent == [("bend", "B_SW", None)]

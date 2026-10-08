@@ -311,11 +311,23 @@ def next_bend(live: "LiveTrip", index: int, s: float) -> Optional[dict]:
     return {"place_id": place_id, "s_start": s_start, "s_end": s_end, "turn_deg": turn, "radius_m": radius}
 
 
+def straight_approach(arc, s: float, s_start: float) -> bool:
+    """The lane runs within ``MAX_WINDOW_BEND_DEG`` of its heading at ``s_start`` from ``s`` on:
+    CORE measures ``bend_in_m`` as odom travel, and through a corner the robot cuts the lane short
+    (SIM 2026-10-08: sent inside the W->S corner, the arc started late, 5 cm outside)."""
+    heading = arc.point_at(s_start)[2]
+    steps = max(1, math.ceil((s_start - s) / WINDOW_BEND_STEP_M))
+    return all(abs(math.degrees(wrap(arc.point_at(s + (s_start - s) * k / steps)[2] - heading)))
+               <= MAX_WINDOW_BEND_DEG for k in range(steps + 1))
+
+
 def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConfig) -> Optional[dict]:
     """D-507 addendum: ``map_id``, ``bend_in_m`` (lane distance to the arc start), ``bend_tol_m``
-    and ``bend_radius_m``; None on another map version or when the arc start is not 0-2 m ahead."""
+    and ``bend_radius_m``; None on another map version, when the arc start is not 0-2 m ahead or
+    while the lane before it still turns (``straight_approach``)."""
     bend_in = round(bend["s_start"] - s, 3)
-    if active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M:
+    if (active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M
+            or not straight_approach(live.arc(live.view["segment_index"]), s, bend["s_start"])):
         return None
     return {"map_id": active[1].map_id, "bend_in_m": bend_in, "bend_tol_m": _pose_tol(live, config),
             "bend_radius_m": bend["radius_m"]}
