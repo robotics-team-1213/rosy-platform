@@ -368,6 +368,11 @@ window.fetch = async (input, options = {}) => {
       status: admin ? 200 : 403, headers: {'Content-Type': 'application/json'},
     });
   }
+  if (path === '/api/v1/map' && window.__rosyMapSnapshot) {
+    return new Response(JSON.stringify(window.__rosyMapSnapshot), {
+      status: 200, headers: {'Content-Type': 'application/json'},
+    });
+  }
   return new Response(JSON.stringify(bodies[path] ?? {}), {
     status: 200, headers: {'Content-Type': 'application/json'},
   });
@@ -1313,11 +1318,17 @@ def test_compatibility_confirmation_rechecks_capability_and_network_targets():
         browser.close()
 
 
-def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks():
+@pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
+def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks(viewport):
     from playwright.sync_api import sync_playwright, expect
 
     with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, real_map=True, extra_init="const interval=setInterval;window.setInterval=(fn,ms)=>{if(ms===5000)window.slowTick=fn;return interval(fn,ms);};")
+        browser, page = _launch_page(playwright, width=viewport[0], height=viewport[1], real_map=True, extra_init="""
+          const interval=setInterval;
+          window.setInterval=(fn,ms)=>{if(ms===5000)window.slowTick=fn;return interval(fn,ms);};
+          window.__rosyMapSnapshot={width:10,height:10,resolution:1,origin:{x:-5,y:-5},
+            data:Array(100).fill(0),map_id:'fixture-map'};
+        """)
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
         page.evaluate("""async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/mode')?new Promise(resolve=>window.finishOldMode=()=>resolve(new Response('{}'))):prior(url,options);}""")
@@ -1334,10 +1345,15 @@ def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks()
         page.wait_for_timeout(80)
         assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/robot/state').length") == before
         assert '모드 요청을 전송했습니다' not in page.locator('#action-message').inner_text()
+        page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
         page.locator('[data-map-click=goal]').click()
         page.locator('#map-canvas').focus()
         page.locator('#map-canvas').press('Enter')
         expect(page.locator('dialog.ui-confirm')).to_have_count(1)
+        if output := os.environ.get("ROSY_SCREENSHOT_DIR"):
+            shots = Path(output)
+            shots.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(shots / f"auth-map-goal-confirm-{viewport[0]}x{viewport[1]}.png"), full_page=True)
         page.locator('#token-input').evaluate("input=>input.value='map-replacement-fixture-token'")
         page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
         expect(page.locator('dialog.ui-confirm')).to_have_count(0)

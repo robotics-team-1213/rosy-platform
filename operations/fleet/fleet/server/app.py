@@ -612,7 +612,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              roster=lambda: console.robot_ids, traffic_zones=traffic_zones, authority=traffic_authority)
     install_trip_guard(console, trip_runner)
     app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
-    if getattr(app.state, "stuck_resolver", None) is not None:  # D-494 5: no automatic answer on a trip
+    if getattr(app.state, "stuck_resolver", None) is not None:  # D-517 5: stopping answers only on a trip
         app.state.stuck_resolver.trip_busy = trip_runner.robot_busy
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
