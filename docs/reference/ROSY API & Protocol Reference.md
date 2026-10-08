@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.139
+**Version:** v1.140
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1472,6 +1472,14 @@ Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사�
 
 무마커 시작점(v1.103)은 `source_id`, `map_id`, `calibration_revision`, `revision`, `x`, `y`, `yaw`, `saved_by`, `saved_at`(Unix초), `valid`, `use: reference-only`를 반환한다. 승인된 보정이 현재 source/map과 일치하고 기록 revision과 같을 때만 valid=true다. 좌표는 지도 원점을 바꾸지 않으며, 저장은 goal·initialpose·로봇 신원 대응·주행 승인에 쓰지 않는다. 시작점에 마커는 요구하지 않는다. SQLite는 보정 DB와 같은 writable 데이터 디렉터리의 start-points.sqlite3에 저장한다. 보정이 메모리 전용이면 persistent=false이며 서버 재시작 시 사라진다. 미등록 source는 404 UNKNOWN_SOURCE, 보정 미승인은 409 CALIBRATION_REQUIRED, 지도 불일치는 409 MAP_MISMATCH, 보정 변경은 409 CALIBRATION_CHANGED, 동시 편집은 409 START_POINT_CHANGED, 범위 밖은 400 START_POINT_OUT_OF_BOUNDS다. bool/NaN/Infinity·추가 필드는 거절한다.
 
+| Method | Path | 권한 | 내용 |
+|---|---|---|---|
+| GET | `/api/fleet/tethers` | viewer 이상 | `{tethers: [{robot_id, anchor_xy: [x, y], radius_m, set_by}]}` |
+| POST | `/api/fleet/robots/{robot_id}/tether` | named operator | `{anchor_xy: [x, y], radius_m}`. 같은 본문을 다시 보내도 결과가 같다. 응답은 저장 행 |
+| DELETE | `/api/fleet/robots/{robot_id}/tether` | named operator | 테더를 지운다. `{robot_id, cleared}`, 없던 테더도 200 |
+
+테더(v1.140, D-512 개정 1의 표시·설정 쪽)는 로봇별 map 프레임 원(anchor_xy 각 −1000~1000 m, 0 < radius_m ≤ 50)이다. Fleet 지도는 원과 기준점을 그리고, 로봇 map pose가 원 밖이면 주의 색으로 바꾼다. Fleet은 주행을 막지 않는다. D-512 개정 1 5항의 Fleet tether 감시(정지 지시)는 아직 없고, 그때까지 감시와 집행은 tools/device_test가 맡는다. 메모리에만 두어 Fleet 재시작 때 사라지고, 로스터에서 빠진 로봇의 테더는 목록에서 지운다. 미등록 로봇은 404 UNKNOWN_ROBOT, bool·Infinity·범위 밖·추가 필드는 422다. JSON이 아닌 NaN도 저장 전에 거절된다(현재 앱 공통 검증 응답이 NaN을 담지 못해 500). 지도 궤적(지나온 길)은 브라우저가 기존 `GET /api/fleet/state` pose로 모으며(최근 120 s, 600점, 1 cm 이상 이동 시, `localization.pose_frame`이 `odom`인 자세는 넣지 않는다) 새 필드가 없다.
+
 
 `OverheadDetectionsPayload`는 source_id/map_id/calibration_revision/processor_revision/captured_at/seq/status,
 `detections[{x,y,footprint_m,score,marker_id?}]`(최대 16)를 싣는다. x/y는 map metres,
@@ -2479,6 +2487,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.140 | 2026-10-08 | Additive (D-512 개정 1 표시 쪽, feat/fleet-map-trail): Fleet `GET /api/fleet/tethers`, named operator `POST`·`DELETE /api/fleet/robots/{robot_id}/tether`. 지도 궤적은 기존 상태 pose(map 프레임만)를 브라우저가 모은다. 로봇 API·envelope 1.0·주행 권한 변경 없음 |
 | v1.139 | 2026-10-08 | Behaviour (D-507 2 개정, 2026-10-08 사용자 결정, fix/d507-travelled-distance-window): Fleet trip 루프는 기대 창(`expect_in_m`·`expect_tol_m`) 없는 `left`·`right` 를 보내지 않고 trip 을 `stopped` `junction_no_window` 로 끝낸다(`detail.junction_place`·`junction_action`·`junction_fields`). `straight`·`stop` 은 그대로. 같은 결정 (1): `POST /api/v1/line-follow/junction` 의 기대 창은 주행 거리로 비교한다. `expect_in_m` 은 차로를 따른 거리이고 CORE 는 받은 뒤 odom 경로 길이 + `junction_ahead_m` 을 `expect_in_m − pivot_past_line_m` 과 비교한다(곧은 접근에서는 예전 값과 같다). Fleet 은 15° 굽이 규칙을 없애고 `expect_in_m` = 차로 polyline 거리, 선 찾기는 장소의 차로 방향, `expect_tol_m` 의 odom 오차 항에 갈 거리를 더하고 광선 옆 거리 항을 뺀다. 필드 이름·범위는 그대로. envelope 1.0 변경 없음 |
 | v1.137 | 2026-10-08 | Additive (D-519): Fleet `POST /api/fleet/auth/login`, `POST /api/fleet/auth/logout`, `GET /api/fleet/auth/session`; `GET /api/fleet/auth/connection` adds `password_login`. Console people log in with site-users `login` + `password_scrypt` and get an HttpOnly `SameSite=Strict` `Secure` session cookie (12 h idle, 30 d with remember, 30 d absolute, voided on account change); Bearer still wins, cookie-authenticated unsafe methods need `Origin` = `Host` (403 `CSRF_REJECTED`). Robot API·envelope 1.0 변경 없음 |
 | v1.136 | 2026-10-08 | Additive (feat/lane-bend-cue): Fleet lane trip `detail.bend_candidate` 읽기 전용 지도 굽이 후보. 활성 지도 버전·신선한 정렬 자세 조건에서만 표시하고 근거 상실·trip 종료 시 삭제한다. 로봇 API·CORE 명령·envelope 1.0 변화 없음. |
