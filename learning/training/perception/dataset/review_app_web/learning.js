@@ -155,8 +155,8 @@ async function load() {
   $('pixel-counts').textContent=`승인 ${workspace.pixel_counts.approved}장 · 검수 대기 ${workspace.pixel_counts.pending}장 · 초안 있음 ${workspace.pixel_counts.drafted}장 · 빈 마스크 ${workspace.pixel_counts.blank}장`;
   $('object-review-link').href=workspace.object_draft_first==null?'/?filter=pending':`/?filter=pending&frame=${workspace.object_draft_first}`;
   $('pixel-review-link').href=workspace.pixel_draft_first==null?'/pixels?filter=pending':`/pixels?filter=pending&frame=${workspace.pixel_draft_first}`;
-  $('object-review-link').querySelector('span').textContent=workspace.object_draft_first==null?'검수 대기 사진 열기':'객체 초안부터 검수';
-  $('pixel-review-link').querySelector('span').textContent=workspace.pixel_draft_first==null?'검수 대기 마스크 열기':'픽셀 초안부터 검수';
+  $('object-review-link').querySelector('span').textContent=workspace.object_draft_first==null?'객체 검수·승인 열기':'객체 초안 검수·승인';
+  $('pixel-review-link').querySelector('span').textContent=workspace.pixel_draft_first==null?'픽셀 검수·승인 열기':'픽셀 초안 검수·승인';
   if(!$('kind').options.length) {
     for(const row of workspace.workflows) {
       text($('capabilities'),'h3',row.name);text($('capabilities'),'p',row.support);text($('capabilities'),'p',row.next);
