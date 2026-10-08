@@ -1,8 +1,9 @@
-"""D-520 step 1: map-guided arc following after a junction instruction's turn (feed-forward only).
+"""D-520: map-guided arc following after a junction instruction's turn (odom circle tracking).
 
 A 'left'/'right' instruction carrying `exit_segment` is done when its turn ends (pivot basis map or
 segment_end); a 'straight' one carrying it is done where the previous arc ended. Either opens one
-`line_follow.arc` record: omega = g*v*kappa on odom path length to `length_m`, under the IR guard
+`line_follow.arc` record: omega = g*v*kappa + a bounded correction toward the map circle placed in
+odom (2026-10-09 addendum), on odom path length to `length_m`, under the IR guard
 (one correction per arc), the D-422 sweep of the arc twist and motion_admitted kind 'arc'. The
 keeper's reasons, the loss clock, D-476 and D-468 (1)/(3) are off while it runs. At the end an
 armed instruction for `end_place_id` pivots right there (segment_end); none (or another place's,
@@ -26,6 +27,18 @@ MIN_OFFSET_M, MAX_OFFSET_M = .05, .20
 ARC_START_IR_GRACE_M = .03
 ARC_IR_AWAY_M = .12
 ARC_IR_LEVEL_MAX_M = 1.5*ARC_IR_AWAY_M
+#: D-520 2026-10-09 addendum: track the map circle in odom (feed-forward + bounded radial correction).
+#: kappa_corr = sign(k)*(k_y*e_r + I) - k_th*e_th, |kappa_corr| <= ARC_MAX_CORRECTION_1PM, I = k_i times the
+#: integral of e_r over odom length, |I| <= ARC_MAX_INTEGRAL_1PM. Poles (distance) -11.5, -2.3 +- 2.8i
+#: (Routh: k_i < k_th*k_y); the integral removes the steady offset of a robot that turns less than
+#: commanded (lap SIM 4: Gazebo ~15 % at 0.08 m/s gave +0.02-0.04 m on P alone). e_r: + outward.
+ARC_GAIN_LATERAL_1PM2, ARC_GAIN_HEADING_1PM, ARC_MAX_CORRECTION_1PM = 64., 16., 1.5
+ARC_GAIN_INTEGRAL_1PM3, ARC_MAX_INTEGRAL_1PM = 150., 1.
+#: |e_r| past this stops lane_arc_edge (IR sees the paint near 0.0625 m; half lane 0.0925 m).
+ARC_MAX_RADIAL_M = .075
+#: An IR verdict puts the body this far inside the painted line's centre: tape half width 0.0125 m
+#: + IR row offset 0.020 m (Pinky URDF); the circle is re-anchored there (IR as a measurement).
+ARC_IR_INSET_M = .0325
 #: HOLD reasons of a stopped arc (besides today's mode and limit reasons). lane_arc_entry is step 2:
 #: the first confident fit within 0.10 m with |e_theta| > 5 deg; it needs lane_arc_fit.py.
 ARC_STOP_REASONS = ('lane_arc_edge', 'lane_arc_entry', 'obstacle_ahead', 'lane_arc_pose_lost',
@@ -126,6 +139,7 @@ class ArcMixin:
         if pose is not None and self._arc_on_crosswalk(pose, float(segment['curvature_1pm'])):
             j.update(exit_segment=None, reason='arc_crosswalk', advance_m=DEFAULT_ADVANCE_M)
             return False
+        prev, k = self._arc, float(segment['curvature_1pm'])
         if j.get('place_id') is not None:
             self._junction_done_place = (j['place_id'], j['action'])
         self._junction_done()
@@ -134,14 +148,24 @@ class ArcMixin:
             'seq': self._arc_seq, 'generation': self._generation, 'from': j.get('place_id'),
             'end': segment['end_place_id'], 'k': float(segment['curvature_1pm']),
             'length': float(segment['length_m']), 'map_id': j.get('map_id'), 'travelled': 0.,
+            'offset': float(segment['outer_line_offset_m']),
             'state': 'running', 'reason': None, 'corr': None, 'grace': set(), 'checked': False,
             'deadline': now + STEP_MARGIN_S}
         v = self._arc_capped(v, 0.)
         a['deadline'] += segment['length_m']/v if v > 0 else 0.
         if pose is None:
             return self._arc_stop('lane_arc_pose_lost')
-        a.update(key=(self._return_evidence.epoch, pose.frame), last=(pose.x, pose.y, pose.yaw),
-                 yaw0=pose.yaw)
+        key = (self._return_evidence.epoch, pose.frame)
+        # The circle: a chained straight keeps the ring it ended on; a turn's circle leaves along the
+        # turn's target yaw (the map tangent), so a turn that ended off it is corrected, not followed.
+        if (j['action'] == 'straight' and prev is not None and prev['state'] == 'ended'
+                and prev['generation'] == self._generation and prev.get('key') == key
+                and prev['end'] == j.get('place_id') and prev['k'] == k):
+            centre, yaw0, integral = prev['centre'], pose.yaw, prev['integral']
+        else:
+            yaw0 = j['target'] if j.get('target') is not None and j['action'] != 'straight' else pose.yaw
+            centre, integral = (pose.x-math.sin(yaw0)/k, pose.y+math.cos(yaw0)/k), 0.
+        a.update(key=key, last=(pose.x, pose.y, pose.yaw), yaw0=yaw0, centre=centre, integral=integral)
         if v <= 0:
             return self._arc_stop('linear_limit_zero')
         self._arc_quiet()
@@ -210,8 +234,17 @@ class ArcMixin:
         v = self._arc_speed()*(cfg.ir_guard_speed_scale if sigma else 1.)
         if v <= 0:
             return self._arc_stop('linear_limit_zero')
+        e_r, e_th = self._arc_error(a, pose)
+        busy = a['corr'] is not None and a['corr']['phase'] in ('away', 'level')
+        if abs(e_r) > ARC_MAX_RADIAL_M and not busy:  # a correction has its own IR and level stops
+            return self._arc_stop('lane_arc_edge')
+        if not busy:
+            a['integral'] = max(-ARC_MAX_INTEGRAL_1PM, min(ARC_MAX_INTEGRAL_1PM,
+                                                          a['integral'] + ARC_GAIN_INTEGRAL_1PM3*e_r*step))
+        corr = 0. if busy else max(-ARC_MAX_CORRECTION_1PM, min(ARC_MAX_CORRECTION_1PM, math.copysign(
+            1., a['k'])*(ARC_GAIN_LATERAL_1PM2*e_r + a['integral']) - ARC_GAIN_HEADING_1PM*e_th))
         # REP-103: a line under the left IR (sigma +1) bends right, as today's IR guard.
-        w = cfg.arc_curvature_gain*v*a['k'] - sigma*v*cfg.bridge_arm_max_curvature
+        w = cfg.arc_curvature_gain*v*a['k'] + v*corr - sigma*v*cfg.bridge_arm_max_curvature
         if abs(w) > cap:  # D-344 13: the same curvature, slower
             v, w = v*cap/abs(w), math.copysign(cap, w)
         if cfg.body_stop_known and self._scan_points is not None and not self._sweep_clear(now, v, w):
@@ -225,6 +258,13 @@ class ArcMixin:
             'linear': v, 'angular': w, 'clearance_m': self._clearance})
         return LineFollowDecision(linear=v, angular=w, generation=self._generation,
                                   evidence_revision=self._evidence_revision, mode=self._mode)
+
+    @staticmethod
+    def _arc_error(a, pose):
+        """(e_r, e_theta): odom distance outside the arc's circle and heading minus its tangent."""
+        dx, dy = pose.x-a['centre'][0], pose.y-a['centre'][1]
+        tangent = math.atan2(dy, dx) + math.copysign(math.pi/2, a['k'])
+        return math.hypot(dx, dy) - 1/abs(a['k']), _wrap(pose.yaw-tangent)
 
     def _arc_ir(self, a, now, pose):
         """(sigma, motion kind, ir_side) of this tick, or (0, None, stop reason). D-520 2."""
@@ -252,6 +292,13 @@ class ArcMixin:
                 return 0, None, 'lane_arc_edge'
             limit = (ARC_IR_AWAY_M+ARC_IR_LEVEL_MAX_M)/v_c + STEP_MARGIN_S
             c = a['corr'] = dict(side=side, phase='away', away_m=0., level_m=0., deadline=now+limit)
+            # IR as a measurement, not the path: the body is ARC_IR_INSET_M inside the painted line
+            # on that side (left is inward on a left-turning arc); shift the circle to agree.
+            e_r, (cx, cy) = self._arc_error(a, pose)[0], a['centre']
+            dx, dy = pose.x-cx, pose.y-cy
+            shift = (e_r - math.copysign(a['offset']-ARC_IR_INSET_M, a['k'])*(-1 if side == 'left' else 1))
+            shift /= max(math.hypot(dx, dy), 1e-6)
+            a['centre'] = (cx+dx*shift, cy+dy*shift)
             a['deadline'] += limit  # the arc's own limit does not run out during the correction
         s = 1 if c['side'] == 'left' else -1
         if c['phase'] == 'away':
