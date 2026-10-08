@@ -1188,3 +1188,9 @@
 - 변경: `/dashboard`의 주행 목표·로봇 마커·경로 표시를 위치 추정, 증거 freshness, 안전 정지에 맞춰 `/console`과 일치시켰다. 초기 자세 설정은 위치 회복을 위해 유지한다.
 - 증거: [기존 Dashboard 지도 위치 추정 검증](../../../docs/validation/uiux-legacy-map-localization-2026-10-08/result.md). 390×844·1366×768 수정 전후 Chromium 캡처, 관련 시험 24 passed, known_failures 0 NEW.
 - gate 보류: LOCAL 합성 상태만 검증. 전체 G2/G3 및 DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 조작 열 차단 이유 적합성
+
+- 변경: `/dashboard`의 저속 직접 제어 버튼이 `NAVIGATION`에서 차단 이유를 표시할 때 1366px 조작 열 밖으로 넘치던 문제를 해결했다. 차단 이유가 있는 상태만 2열로 배치한다.
+- 증거: [조작 열 적합성 검증](../../../docs/validation/uiux-dashboard-act-fit-2026-10-08/result.md). 390×844·1366×768 수정 전후 Chromium 캡처, 관련 시험 28 passed, known_failures 0 NEW.
+- gate 보류: LOCAL 합성 상태만 검증. 전체 G2/G3 및 ARTIFACT/DEVICE/FIELD는 HOLD.
