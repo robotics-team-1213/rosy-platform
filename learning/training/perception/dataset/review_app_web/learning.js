@@ -144,6 +144,7 @@ async function load() {
   const total=approved+pending+excluded;
   $('review-stage-summary').textContent=`등록 ${total}장 · 객체 승인 ${approved}장 · 픽셀 승인 ${workspace.pixel_counts.approved}장`;
   $('training-data-state').textContent=workspace.pixel_counts.approved===0?'현재 검수분의 픽셀 승인 0장 · 픽셀 학습 데이터 입력 전입니다.':'승인 자료 준비 후 세션 분리·고정 평가 제외·최신 결정 대조를 거쳐야 학습 데이터로 수용됩니다.';
+  if(workspace.source_video_unverified>0)$('training-data-state').textContent+=` 원본 영상 ${workspace.source_video_unverified}장의 출처 검증이 필요합니다.`;
   const prepared=workspace.preparation;
   $('preparation-status').textContent=prepared?.pixel_frames===0
     ? '최신 준비본 · 픽셀 승인 0장 · 학습 입력 없음. 승인된 픽셀 검수가 필요합니다.'

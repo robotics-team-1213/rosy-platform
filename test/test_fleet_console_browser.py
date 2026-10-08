@@ -106,7 +106,10 @@ def console_url():
                 if name in json.loads((WEB_COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]:
                     return str(WEB_COMMON / name)
             if path.startswith("/console/assets/"):
-                path = "/" + path[len("/console/assets/"):]
+                # D-518: the URL stays flat while files live in web/<document>/ folders.
+                name = path[len("/console/assets/"):].split("?", 1)[0]
+                moved = next(iter(sorted(WEB.glob(f"*/{name}"))), None)
+                path = "/" + (moved.relative_to(WEB).as_posix() if moved and not (WEB / name).exists() else name)
             return super().translate_path(path)
 
         def log_message(self, *args):  # 시험 출력을 조용히

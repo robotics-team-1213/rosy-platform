@@ -102,8 +102,8 @@ def test_unknown_pixels_cannot_be_approved_and_explicit_fill_persists(browser_wo
     page.locator('#pixel-complete').check()
     expect(page.locator('#pixel-approve')).to_have_attribute('disabled', '')
     page.locator('#pixel-background').check()
-    page.locator('#pixel-approve').click()
-    expect(page.locator('#pixel-error')).to_contain_text('미검수')
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approval-hint')).to_contain_text('미검수')
     assert review_masks.get(store, 0)['version'] == 0
     page.once('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill').click()
@@ -163,7 +163,7 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     shot('approved')
     page.locator('#pixel-export').click()
     expect(page.locator('#pixel-export-result')).to_contain_text('픽셀 승인 1장 준비')
-    expect(page.locator('#pixel-class-help')).to_contain_text('미검수 255는 클래스가 아닙니다')
+    expect(page.locator('#pixel-class-help')).to_contain_text('255는 클래스가 아닙니다')
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     shot('decision-result')
 
@@ -291,7 +291,8 @@ def test_pixel_shortcuts_confirm_both_checks_and_move_without_approving(browser_
     expect(page.locator('#pixel-background')).to_be_checked()
     assert review_masks.get(store, 0)['status'] == 'pending'
     page.keyboard.press('a')
-    expect(page.locator('#pixel-error')).to_contain_text('미검수 픽셀이 남아 있습니다')
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+    expect(page.locator('#pixel-approval-hint')).to_contain_text('미검수')
     assert review_masks.get(store, 0)['status'] == 'pending'
     page.keyboard.press('n')
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')

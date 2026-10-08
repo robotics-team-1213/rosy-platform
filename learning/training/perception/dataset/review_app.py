@@ -368,6 +368,11 @@ def make_server(store, port=8767, host='127.0.0.1'):
                                       'counts': {state: sum(f['status'] == state for f in frames)
                                                  for state in ('approved', 'pending', 'excluded')},
                                       'object_drafts': len(object_draft_indices),
+                                      'source_video_unverified': sum(
+                                          f['status'] != 'excluded'
+                                          and bool(f['source'].get('source_video_sha256'))
+                                          and f['source'].get('original_video_verified') is not True
+                                          for f in frames),
                                       'object_draft_first': object_draft_indices[0] if object_draft_indices else None,
                                       'pixel_draft_first': pixel_draft_indices[0] if pixel_draft_indices else None,
                                       'pixel_counts': {state: pixel_statuses.count(state)
