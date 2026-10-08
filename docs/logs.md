@@ -7255,3 +7255,8 @@ osy-d395-s1d\`.
 - 증거: 모델 PC pytest(`X:\DevTemp\d520-entry\run.txt`) `test_trip_d520.py`·`test_trip_runner.py`·`test_routing_execute.py` 135 passed. SIM은 lap SIM 4(`validation/lane-trip-lap-sim4-2026-10-09/`)에서 원 추종·기본 켬과 함께 봤다.
 - 검토: 독립 code-reviewer(opus) 2026-10-09 APPROVE WITH NOTES(시험 이름 고침 반영, 원 추종 브랜치보다 먼저 또는 함께 착지).
 - gate 변화: 없음. DEVICE/FIELD HOLD.
+
+## 2026-10-09 · uncommitted · docs(validation): lap SIM 4 — ring 호 주행 기본 켬, 모델 PC
+- 변경: `validation/lane-trip-lap-sim4-2026-10-09/`에 결과와 하네스(`ring4_run.sh`·`ring4_batch.sh`·`ring4_arc.py`), 호별 참값 Δr·구간·Fleet 송신 기록을 두었다. 원시 기록은 `X:\DevTemp\lap-sim4\lap4_runs_full.tgz`다.
+- 증거: 모델 PC Gazebo(도메인 93, `rosy_ring4`, 포트 8588/8589)에서 출하 기본 겹으로 돌렸다. 비례 보정 12 lap은 12/12 완료다. 착지한 비례+적분 12 lap은 11/12 완료이고, 나머지 1회는 ring 앞 서→남 모서리의 `lane_return_fleet_required`다. NE 진입은 4/4와 4/4다. IR 보정, `lane_arc_edge`, `near_stop`은 모두 0이다. ring 호 최대 |Δr|은 lap 0.014–0.056 m이고, 각 묶음에서 1회가 0.05 m를 넘었다. NE `ring_n`은 −0.049…−0.052 m(안쪽)다.
+- gate 변화: 없음. D-520 개정 SIM 합격선(모든 호 |Δr| ≤ 0.05 m)을 넘지 못해 장치 조건 (1)은 열리지 않는다. 남은 원인은 원의 기준 방향(회전 목표 yaw)이 참값 접선과 다른 것이다(SW −1…−7°, NE +14–16°). 카메라 원 맞춤(단계 2)이나 지도 자세 방향이 필요하다.
