@@ -47,9 +47,10 @@ export function mount(root, ctx) {
   stage.setAttribute("role", "group");
   stage.setAttribute("aria-label", "주행 관측");
   const navStage = el("span", "", "주행 · 확인 중");
+  const pathStage = el("span", "", "계획 경로 · 확인 중");
   const locationStage = el("span", "", "위치 추정 · 확인 중");
   const slamStage = el("span", "", "SLAM · 확인 중");
-  stage.append(navStage, locationStage, slamStage);
+  stage.append(navStage, pathStage, locationStage, slamStage);
   const mapFrame = el("div", "surface-map-frame"); mapFrame.append(overlay, canvas, stage, targetReadout);
   root.append(head, status, readinessStatus, layers, clicks, mapFrame, clickReason, setupLink, mapStatus, action);
 
@@ -128,6 +129,7 @@ export function mount(root, ctx) {
     getPose: () => state?.pose,
     getCurrentMapId: () => state?.map_id,
     onMapIdMismatch: (value) => { mapIdMismatch = value; renderStage(); syncMapActions(); },
+    onPathReadout: (evidence) => { setText(pathStage, `계획 경로 · ${evidence.label}`); },
     getDisplayPose: () => new HeadlessState(state).isFresh("pose") && state?.localization?.state === "LOCALIZED"
       && state.localization.pose_frame === "map" ? state.pose : null,
     getNavigation: () => new HeadlessState(state).isFresh("navigation") && goalPoseReady() ? state.navigation : null,

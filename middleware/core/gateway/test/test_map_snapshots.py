@@ -84,6 +84,16 @@ def test_path_empty_until_plan_arrives(client):
     assert body["poses"] == [{"x": 0.1, "y": 0.2}, {"x": 1.0, "y": 0.0}]
 
 
+def test_path_keeps_receive_evidence_when_robot_map_changes(client):
+    tc, svc = client
+    svc.maps.set_path([{"x": 0.1, "y": 0.2}], map_id="old-map", frame_id="map")
+    svc.state.set_map_id("new-map")
+    body = tc.get("/api/v1/navigation/path", headers=VIEWER).json()
+    assert body["poses"] == [{"x": 0.1, "y": 0.2}]
+    assert body["map_id"] == "old-map" and body["frame_id"] == "map"
+    assert 0 <= body["age_s"] < 5
+
+
 def test_costmap_rejects_bad_scope(client):
     tc, _ = client
     missing = tc.get("/api/v1/map/costmap", headers=VIEWER)

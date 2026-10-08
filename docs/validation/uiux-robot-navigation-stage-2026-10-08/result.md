@@ -13,7 +13,7 @@
 | 지도·SLAM·위치 추정의 의미가 섞일 수 있다 | 주행 상태는 navigation 채널, 지도 좌표 확인은 최신 pose + LOCALIZED/map, SLAM은 capability 제공 여부만 표시 | fixture의 명시적 상태가 각각 별도 문구로 출력됨 |
 | 준비 완료 문구와 조작 제한 안내가 지도보다 먼저 공간을 차지한다 | 중복된 준비 완료 문구는 숨기고 조작 제한 사유는 지도 아래에 배치 | 지도 시야가 늘고 비활성 조작의 사유는 남음 |
 
-경로는 Nav2 계획 경로(`/api/v1/navigation/path`)다. 차선 추종의 센서 선이나 실제 주행 궤적이라고 부르지 않는다. 이 API에 서버 시각이 없어 지도 패널은 최신 navigation 상태가 `PLANNING`/`NAVIGATING`이고 pose가 최신이며 지도 좌표를 신뢰할 수 있을 때만 경로를 그린다. SLAM 기능 제공은 현재 지도 생성 중이라는 뜻이 아니다. 실제 SLAM 실행 상태를 보여 주려면 별도 서버 계약이 필요하다.
+경로는 Nav2 계획 경로(`/api/v1/navigation/path`)다. 차선 추종의 센서 선이나 실제 주행 궤적이라고 부르지 않는다. 지도 패널은 최신 navigation 상태가 `PLANNING`/`NAVIGATING`이고 pose가 최신이며 경로의 지도 ID·좌표계가 표시 지도와 맞을 때만 경로를 그린다. HUD의 나이는 CORE가 그 경로 메시지를 마지막으로 수신한 뒤의 시간이다. 목표와 경로의 동일성은 API가 증명하지 않으므로 현재 목표의 확정 경로라고 부르지 않는다. SLAM 기능 제공은 현재 지도 생성 중이라는 뜻이 아니다. 실제 SLAM 실행 상태를 보여 주려면 별도 서버 계약이 필요하다.
 
 ## 증거
 
@@ -49,4 +49,12 @@ CORE는 지도 좌표를 신뢰할 수 없는 로봇의 주행 목표를 거절�
 지도 응답의 `map_id`와 로봇 상태의 `map_id`가 둘 다 있고 서로 다르면 지도 좌표 조작을 막는다. 경로·로봇 마커·기억한 목표 마커도 그 지도에 겹치지 않는다. 지도 HUD와 조작 사유에 불일치를 표시하고, ID가 다시 일치하면 표시와 조작을 복구한다. `/dashboard`의 기존 지도 호출도 같은 비교를 사용한다. CORE는 점유 지도를 수신할 때의 ID를 격자와 함께 저장한다. 이후 로봇 상태 ID가 바뀌어도 오래된 격자에 새 ID를 덧씌우지 않는다. 한쪽 ID가 없는 이전 응답에서는 비교를 확정할 수 없어 기존 동작을 유지한다.
 
 - 같은 X: 세션 `evidence/map-identity/navigation-stage/`의 1366×768·390×844 정상 화면과 양쪽 폭의 `operator-console-navigation-map-mismatch-*.png`를 확인했다. 불일치 화면에서 양쪽 좌표 버튼 비활성, 이유 표시, 경로와 로봇 마커 숨김, 일치 복귀 뒤 목표 버튼 활성화가 브라우저 시험으로 확인됐다.
-- 실제 FastAPI 정적 자산과 합성 CORE 응답의 관련 21 passed, `known_failures.py` 0 NEW (`logs/map-identity-tests.txt`). CORE 지도 스냅숏 API 11 passed (`logs/map-snapshot-tests.txt`): 로봇 상태 ID가 바뀐 뒤에도 이전 지도 응답 ID가 그대로인 시험을 포함한다. 추가 패널 브라우저 묶음은 21 passed/1 failed (`logs/map-identity-regression.txt`); 실패한 차선 추종 확인 시험은 기존 공유 `main`의 같은 시험에서도 재현돼 별도 결함으로 기록한다. 이 비교만으로 경로의 생성 시각이나 목표별 동일성을 증명할 수 없다. 경로 API에는 그 메타데이터가 없으며 실기 판정은 HOLD다.
+- 실제 FastAPI 정적 자산과 합성 CORE 응답의 관련 21 passed, `known_failures.py` 0 NEW (`logs/map-identity-tests.txt`). CORE 지도 스냅숏 API 11 passed (`logs/map-snapshot-tests.txt`): 로봇 상태 ID가 바뀐 뒤에도 이전 지도 응답 ID가 그대로인 시험을 포함한다. 추가 패널 브라우저 묶음은 21 passed/1 failed (`logs/map-identity-regression.txt`); 실패한 차선 추종 확인 시험은 기존 공유 `main`의 같은 시험에서도 재현돼 별도 결함으로 기록한다. 이 시점에는 경로 생성 시각이나 목표별 동일성을 증명할 수 없었고 실기 판정은 HOLD다.
+
+## 후속: 계획 경로의 수신 근거와 좌표계
+
+CORE는 마지막 `nav_msgs/Path`의 `frame_id`, 수신 때의 `map_id`, 서버 수신 나이 `age_s`를 경로 점과 함께 반환한다. [ROS 2 Jazzy `Path` 정의](https://github.com/ros2/common_interfaces/blob/jazzy/nav_msgs/msg/Path.msg)의 header가 좌표계를 담는다. 지도는 점이 둘 이상이고, 경로가 `map` 좌표계이며, 경로·지도 ID가 일치하고, 수신 나이가 유효한 경우에만 선을 그린다. HUD는 `계획 경로 · 마지막 수신 N초 전`이라고 말한다. 경로 데이터가 없거나 근거가 모자라면 그 이유를 표시한다. 전환 중 늦은 HTTP 응답이 새 경로를 덮어쓰지 않도록 요청 순서도 확인한다.
+
+- 같은 X: 세션 `evidence/path-provenance/navigation-stage/`에 정상 1366×768·390×844, 경로 지도 ID 불일치 1366×768·390×844, `odom` 경로 390×844 캡처를 둔다. 파란 경로는 정상 근거에서만 보이며, 불일치에서도 로봇 위치 마커는 유지된다.
+- CORE 지도·브리지 41 passed (`logs/path-provenance-core.txt`), 로봇 화면 브라우저·패키지 21 passed (`logs/path-provenance-browser.txt`). 둘 다 `known_failures.py`에서 NEW 여부를 확인한다.
+- 수신 나이는 경로가 만들어진 시각이나 현재 목표에 속한다는 증거가 아니다. 작업 브랜치는 API Ref v1.141 기반이고 현재 공유 main은 v1.142여서 착지 전 API 버전·변경 이력의 재조정이 필요하다. 실제 Nav2 메시지 빈도, 현장 경로 추종·도착 및 G3 판정은 HOLD다.

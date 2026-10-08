@@ -1228,6 +1228,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             page = context.new_page()
             errors = []
             location = {"state": "LOCALIZED", "frame": "map", "map_id": "local-map"}
+            path_info = {"map_id": "local-map", "frame_id": "map"}
             page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
             page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -1254,7 +1255,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 elif path == "/api/v1/map":
                     response = Response(content=json.dumps(grid), media_type="application/json")
                 elif path == "/api/v1/navigation/path":
-                    response = Response(content=json.dumps({"poses": route_points}), media_type="application/json")
+                    response = Response(content=json.dumps({"poses": route_points, **path_info, "age_s": 2.0}), media_type="application/json")
                 elif path == "/api/v1/map/costmap":
                     response = Response(content=json.dumps(grid | {"data": [0] * len(cells)}), media_type="application/json")
                 else:
@@ -1268,7 +1269,9 @@ def test_console_navigation_stage_local_captures(tmp_path):
             stage = page.locator(".surface-map-stage")
             page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
             page.wait_for_function("document.querySelector('[data-panel=\"console.overview\"] .ui-readout')?.hidden === false")
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 마지막 수신')")
             assert "주행 · 주행 중" in stage.inner_text()
+            assert "계획 경로 · 마지막 수신" in stage.inner_text()
             assert "위치 추정 · 지도 좌표 확인" in stage.inner_text()
             assert "SLAM · 기능 제공" in stage.inner_text()
             result = page.evaluate("""() => ({
@@ -1306,6 +1309,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 assert page.locator('[data-map-click="goal"]').get_attribute("reason") == "위치 추정 확인 후 가능"
                 assert page.evaluate(blue_pixels) == 0
                 overview_values = page.locator('[data-panel="console.overview"] .ui-readout dd')
+                page.wait_for_function("""() => document.querySelector('[data-panel="console.overview"] .ui-readout')?.textContent.includes('위치 확인 필요')""")
                 assert "위치 확인 필요" in overview_values.nth(1).inner_text()
                 assert overview_values.nth(2).inner_text() == "지도 위치 확인 불가"
                 page.screenshot(path=str(capture_dir / "operator-console-navigation-suspect-390x844.png"), full_page=True)
@@ -1324,6 +1328,14 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 page.screenshot(path=str(capture_dir / "operator-console-navigation-map-mismatch-390x844.png"), full_page=True)
                 location["map_id"] = "local-map"
                 page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
+                path_info["map_id"] = "old-map"
+                page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 지도 ID 불일치')""")
+                assert page.evaluate(blue_pixels) == 0
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-path-mismatch-390x844.png"), full_page=True)
+                path_info.update(map_id="local-map", frame_id="odom")
+                page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 지도 좌표 미확인')""")
+                assert page.evaluate(blue_pixels) == 0
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-path-odom-390x844.png"), full_page=True)
             if viewport[0] == 1366:
                 location["map_id"] = "other-map"
                 page.wait_for_function("""() => document.querySelector('#map-status')?.textContent.includes('지도 ID가 다릅니다')""")
@@ -1331,6 +1343,9 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 page.screenshot(path=str(capture_dir / "operator-console-navigation-map-mismatch-1366x768.png"), full_page=True)
                 location["map_id"] = "local-map"
                 page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
+                path_info["map_id"] = "old-map"
+                page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 지도 ID 불일치')""")
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-path-mismatch-1366x768.png"), full_page=True)
                 page.locator(".surface-map-canvas").focus()
                 page.set_viewport_size({"width": 390, "height": 844})
                 page.wait_for_function("""() => [...document.querySelectorAll('#surface-main > .surface-slot')]

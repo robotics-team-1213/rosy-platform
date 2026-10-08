@@ -707,3 +707,8 @@
 - 변경: `GET /api/v1/map`의 기존 `map_id` 필드는 스냅숏에 저장된 ID를 우선한다. 지도 수신 뒤 로봇 상태 ID만 바뀌면 이전 격자에 새 ID를 덧씌우지 않는다. 응답 스키마는 그대로다.
 - 증거: gateway `test_map_snapshots.py` 11 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
 - gate 변화: LOCAL API 의미 근거 추가. 실물 readback은 HOLD.
+
+## 2026-10-08 · uncommitted · fix(api): 마지막 계획 경로 수신 근거 추가
+- 변경: `GET /api/v1/navigation/path`가 마지막 경로의 점과 선택 map ID·frame ID·서버 수신 나이를 응답한다. 최초 수신 전 `{poses: []}`은 그대로이며 현재 목표와의 동일성은 주장하지 않는다.
+- 증거: gateway 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 응답 근거 추가. 현재 목표 식별과 실물 readback은 HOLD.

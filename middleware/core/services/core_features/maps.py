@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -114,6 +115,9 @@ class MapSnapshotStore:
         self._lock = threading.Lock()
         self._map: Optional[dict[str, Any]] = None
         self._path: list[dict[str, float]] = []
+        self._path_map_id: str | None = None
+        self._path_frame_id: str | None = None
+        self._path_received_at: float | None = None
         self._costmaps: dict[str, dict[str, Any]] = {}
 
     def set_map(self, grid: dict[str, Any], *, map_id: str | None = None) -> None:
@@ -127,7 +131,8 @@ class MapSnapshotStore:
         with self._lock:
             return None if self._map is None else dict(self._map)
 
-    def set_path(self, poses: list[dict[str, float]]) -> None:
+    def set_path(self, poses: list[dict[str, float]], *, map_id: str | None = None,
+                 frame_id: str | None = None) -> None:
         cleaned: list[dict[str, float]] = []
         for pose in poses:
             x = float(pose["x"])
@@ -137,10 +142,21 @@ class MapSnapshotStore:
             cleaned.append({"x": x, "y": y})
         with self._lock:
             self._path = cleaned
+            self._path_map_id = map_id
+            self._path_frame_id = frame_id
+            self._path_received_at = time.monotonic()
 
     def get_path(self) -> list[dict[str, float]]:
         with self._lock:
             return list(self._path)
+
+    def get_path_snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            if self._path_received_at is None:
+                return {"poses": []}
+            return {"poses": list(self._path), "map_id": self._path_map_id,
+                    "frame_id": self._path_frame_id,
+                    "age_s": max(0.0, time.monotonic() - self._path_received_at)}
 
     def set_costmap(self, scope: str, grid: dict[str, Any]) -> None:
         if not valid_costmap_scope(scope):

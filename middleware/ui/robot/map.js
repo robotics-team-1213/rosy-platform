@@ -121,7 +121,8 @@ export function createFieldMap(options) {
   window.addEventListener("rosy:goal-clear", () => { goal = null; paint(); });
   const CROSS_STEP = 12;
   if (canvas && !canvas.hasAttribute("tabindex")) canvas.tabIndex = 0;
-  const state = { occupancy: null, path: [], costmap: null, raster: null, lastNav: null, mapState: "loading" };
+  const state = { occupancy: null, path: null, pathLoaded: false, costmap: null, raster: null, lastNav: null, mapState: "loading" };
+  let pathRequest = 0;
   const ctx = canvas?.getContext("2d") || null;
 
   function notifyTargetReadout() {
@@ -149,6 +150,28 @@ export function createFieldMap(options) {
   const mapIdMismatch = () => Boolean(state.occupancy?.map_id && options.getCurrentMapId?.()
     && state.occupancy.map_id !== options.getCurrentMapId());
   const canMapClick = (mode) => Boolean(state.occupancy) && !mapIdMismatch() && canGoal?.(mode) === true;
+  function pathEvidence() {
+    const path = state.path;
+    if (!state.pathLoaded) return {visible: false, label: "확인 중"};
+    if (!path) return {visible: false, label: "수신 실패"};
+    if (!Array.isArray(path.poses) || path.poses.length < 2) return {visible: false, label: "없음"};
+    if (path.poses.some((pose) => !Number.isFinite(pose?.x) || !Number.isFinite(pose?.y)))
+      return {visible: false, label: "좌표 확인 불가"};
+    if (mapIdMismatch() || (path.map_id && state.occupancy?.map_id && path.map_id !== state.occupancy.map_id))
+      return {visible: false, label: "지도 ID 불일치"};
+    if (!path.map_id || !state.occupancy?.map_id) return {visible: false, label: "지도 ID 미확인"};
+    if (path.frame_id !== "map") return {visible: false, label: "지도 좌표 미확인"};
+    if (!Number.isFinite(path.age_s) || path.age_s < 0) return {visible: false, label: "수신 나이 미확인"};
+    if (options.onlyActivePath && !["PLANNING", "NAVIGATING"].includes(getNavigation?.()))
+      return {visible: false, label: "주행 상태 확인 필요"};
+    const age = Math.floor(path.age_s + (performance.now() - path.readAt) / 1000);
+    return {visible: true, label: `마지막 수신 ${age}초 전`};
+  }
+  function setPath(path) {
+    state.path = path ? {...path, readAt: performance.now()} : null;
+    state.pathLoaded = true;
+    options.onPathReadout?.(pathEvidence());
+  }
   function syncMapStatus() {
     const mismatch = mapIdMismatch();
     options.onMapIdMismatch?.(mismatch);
@@ -220,11 +243,10 @@ export function createFieldMap(options) {
     }
     ctx.putImageData(state.raster, 0, 0);
     const frame = new GridFrame(state.occupancy);
-    // ponytail: path has no server timestamp; use active navigation until the API supplies path freshness.
-    if (!mapIdMismatch() && layers.path && (!options.onlyActivePath || ["PLANNING", "NAVIGATING"].includes(getNavigation?.())) && state.path.length >= 2) {
+    if (layers.path && pathEvidence().visible) {
       const scale = window.devicePixelRatio || 1;
       ctx.beginPath();
-      state.path.forEach((pose, index) => {
+      state.path.poses.forEach((pose, index) => {
         const point = frame.worldToCanvas(pose.x, pose.y, canvas.width, canvas.height);
         if (index === 0) ctx.moveTo(point.x, point.y);
         else ctx.lineTo(point.x, point.y);
@@ -289,19 +311,25 @@ export function createFieldMap(options) {
     syncClickButtons();
     syncMapStatus();
     const nav = getNavigation?.();
-    if (nav && nav !== state.lastNav) {
+    if (nav !== state.lastNav) {
+      pathRequest++;
       state.lastNav = nav;
-      refreshPath();
+      state.pathLoaded = false;
+      state.path = null;
+      if (nav) refreshPath();
+      else setPath({poses: []});
     }
+    options.onPathReadout?.(pathEvidence());
     syncCursor();
     paint();
   }
 
   async function refreshPath() {
+    const request = ++pathRequest;
     const isCurrent = options.captureLifetime?.().current || (() => true);
     const path = await apiMaybe("/api/v1/navigation/path").catch(() => null);
-    if (listenerController.signal.aborted || !isCurrent()) return;
-    state.path = path?.poses || [];
+    if (listenerController.signal.aborted || !isCurrent() || request !== pathRequest) return;
+    setPath(path);
     paint();
   }
 
@@ -311,15 +339,16 @@ export function createFieldMap(options) {
   }
 
   async function refresh(isCurrent = options.captureLifetime?.().current || (() => true)) {
+    const request = ++pathRequest;
     try {
       const [grid, path, costmap] = await Promise.all([
         wanted("occupancy") ? apiMaybe("/api/v1/map") : null,
-        apiMaybe("/api/v1/navigation/path"),
+        apiMaybe("/api/v1/navigation/path").catch(() => null),
         wanted("global_costmap") ? apiMaybe("/api/v1/map/costmap?scope=global") : null,
       ]);
       if (listenerController.signal.aborted || !isCurrent()) return;
       state.occupancy = grid;
-      state.path = path?.poses || [];
+      if (request === pathRequest) setPath(path);
       state.costmap = costmap;
       state.mapState = grid ? "ready" : "empty";
       syncEmpty();
@@ -329,7 +358,7 @@ export function createFieldMap(options) {
       if (listenerController.signal.aborted || !isCurrent()) return;
       // Without a server freshness field, do not leave a previous snapshot looking current.
       state.occupancy = null;
-      state.path = [];
+      if (request === pathRequest) setPath(null);
       state.costmap = null;
       state.mapState = error.status === 403 ? "forbidden" : "error";
       syncEmpty();
@@ -341,6 +370,7 @@ export function createFieldMap(options) {
     rebuildRaster();
     syncMapStatus();
     syncClickButtons();
+    options.onPathReadout?.(pathEvidence());
     paint();
     if (cross) notifyTargetReadout();
   }

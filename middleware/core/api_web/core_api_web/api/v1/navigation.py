@@ -91,7 +91,7 @@ def navigation_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = D
 
 @navigation_router.get("/navigation/path")
 def navigation_path(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    return {"poses": svc.maps.get_path()}
+    return svc.maps.get_path_snapshot()
 
 
 class InitialPoseRequest(BaseModel):

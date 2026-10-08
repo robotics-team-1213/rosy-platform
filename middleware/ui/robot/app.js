@@ -115,6 +115,7 @@ const fieldMap = createFieldMap({
   api,
   apiMaybe,
   captureLifetime: authTicket,
+  onlyActivePath: true,
   getPose: () => session.robotState?.pose,
   getCurrentMapId: () => session.robotState?.map_id,
   getNavigation: () => session.robotState?.navigation,

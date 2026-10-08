@@ -1104,3 +1104,9 @@
 - 변경: 지도와 로봇의 `map_id`가 충돌하면 두 좌표 버튼을 막고 불일치를 알린다. 다른 지도 위에 경로·로봇·목표 마커를 겹치지 않으며 ID 일치 뒤 복구한다. 기존 `/dashboard`도 공용 지도 비교를 쓴다. CORE 점유 지도는 수신 ID를 격자와 함께 저장한다.
 - 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/map-identity/navigation-stage/`의 두 폭 정상·불일치 캡처. 관련 Chromium·패키지 21 passed, CORE 지도 스냅숏 11 passed, 각 `known_failures.py` 0 NEW. 추가 패널 묶음 21 passed/1 failed는 공유 main에서도 재현한 차선 추종 확인 시험이다.
 - gate 변화: LOCAL 지도 정합성 부분 근거. 서버 경로 시각·목표 식별, 실물 readback, 전체 G2·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 계획 경로 수신 근거 표시
+
+- 변경: 지도 위 계획 경로를 CORE 수신 나이·경로 지도 ID·좌표계가 확인될 때만 그린다. HUD는 마지막 수신 나이를 표시하고 근거가 없거나 다른 지도·좌표계이면 이유를 표시한다. 주행 상태 전환 시 이전 선을 지우고 늦은 HTTP 응답은 무시한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/path-provenance/navigation-stage/`의 두 폭 정상·경로 ID 불일치와 모바일 odom 캡처. CORE 지도·브리지 41 passed, 화면 브라우저·패키지 21 passed.
+- gate 변화: LOCAL 경로 출처·레이아웃 부분 근거. 현재 목표 식별과 실물·G3는 HOLD.

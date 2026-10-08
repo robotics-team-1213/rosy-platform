@@ -803,3 +803,8 @@
 - 변경: `MapSnapshotStore.set_map`이 선택 `map_id`를 격자와 같은 잠금 안에 저장한다. 로봇 상태 ID가 바뀌어도 기존 지도에 새 ID가 붙지 않는다.
 - 증거: gateway `test_map_snapshots.py` 11 passed. [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
 - gate 변화: LOCAL 계약 근거 추가. 실물 지도 전환은 HOLD.
+
+## 2026-10-08 · uncommitted · fix(maps): 계획 경로 수신 근거 보관
+- 변경: `MapSnapshotStore`는 경로 점과 함께 수신 때 map ID·frame ID·monotonic 시각을 보관하고 마지막 수신 나이를 원자적으로 읽는다. 기존 `get_path()` 점 목록 계약은 유지한다.
+- 증거: gateway 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 경로 출처 근거 추가. 실기 메시지 readback은 HOLD.
