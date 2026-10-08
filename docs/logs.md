@@ -7352,3 +7352,9 @@ osy-d395-s1d\`.
 - 변경: 원본 출처가 증명된 10/7 카메라 207장과 odom의 header stamp, 연속 자세 차이를 측정하고 같은 물리 경계 ID가 없는 한쪽 선 기억의 반례와 다음 shadow 검증을 기록했다.
 - 증거: `validation/lane-boundary-identity-2026-10-09/result.md`. 두 MCAP에서 prior odom 0.3초 이내 206/207, 최대 시각 차이 86.4 ms, 카메라 간 최대 odom 이동 7.8 mm. `evidence/measure_odom.py` 재실행으로 확인.
 - gate 변화: 없음. 사람 경계 ID·실물 이동 정답·주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 실기 learned paint 사용률과 추론 지연 진단
+
+- 변경: 10/7 MCAP의 `keep_debug` 부재와 현재 두 Pinky의 읽기 전용 카메라·CORE 경계를 조사했다. 9dfk의 live 25프레임 `denoise_fallback` 25건과 별도 모델 추론 327.7–337.4 ms를 재현 가능한 probe와 함께 기록했다.
+- 증거: `validation/learned-paint-live-2026-10-09/result.md`. 10/7 두 세션의 `--recorded-ground` 첫 프레임 거절, 현재 설치본 revision, live ROS 구독·모델 로드·`/cmd_vel` 발행자 readback을 분리했다.
+- gate 변화: 없음. 실측 보정·사람 경계 ID·실기 주행은 HOLD.
