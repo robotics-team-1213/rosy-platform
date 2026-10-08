@@ -7244,3 +7244,14 @@ osy-d395-s1d\`.
 - 변경: 두 Pinky의 설치본과 ROS 토픽을 읽기 전용으로 확인하고, rosy_26 keep 디버그와 이미지 시각·투영값·페인트 실제 사용을 검증 기록에 남겼다.
 - 증거: rosy_26 디버그 84건 중 이미지 시각 83건 일치, 전략 none/flipping 84건, 목표점 0, denoise_fallback 84건. 장치의 shadow 모델 포인터가 없고 rosy_60은 keep 모드가 아니다.
 - gate 변화: 없음. 사람 경계 정답, 승인 보정, 학습 모델 실제 추론, 자율 주행 수용은 확인되지 않았다. 주행 허용 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 지도 마커 비율 LOCAL 화면 기록
+- 변경: `validation/uiux-fleet-marker-scale-2026-10-09/result.md`에 큰 화면에서 과장된 방향 마커와 변경 후 모바일·데스크톱 지도 캡처를 기록했다.
+- 증거: 1920×1080 기존 약 161.94px, 변경 후 42px 이하 검증; 브라우저 6 passed / NEW 0. 원본 캡처와 실행 로그는 X:에 둔다.
+- gate 변화: 없음. 실제 위치·주행·SLAM 및 G3 수용은 이 화면으로 입증하지 않는다.
+
+## 2026-10-09 · uncommitted · fix(fleet): D-520 호 진입 회전각을 lead 접선 대신 차로 방향으로
+- 변경: `trip_runner._step_lane`이 `exit_segment`를 싣는 회전에도 `turn_target`(들어오는 차로 끝 방향 → 나가는 차로 시작 접선, D-507 4항 lap SIM 3 개정)을 보낸다. 지금까지는 `theta`(5 cm lead 접선)를 보냈고, 260919 SW에서 그 값이 12–17° 틀려 호가 접선보다 바깥을 향해 시작했다(lap SIM 2). D-520 1항 47행 문장과 D-507 4항의 끝 문장, `test_trip_d520.py`의 기대·주석("tangent - 6 deg")을 고쳤다.
+- 증거: 모델 PC pytest(`X:\DevTemp\d520-entry\run.txt`) `test_trip_d520.py`·`test_trip_runner.py`·`test_routing_execute.py` 135 passed. SIM은 lap SIM 4(`validation/lane-trip-lap-sim4-2026-10-09/`)에서 원 추종·기본 켬과 함께 봤다.
+- 검토: 독립 code-reviewer(opus) 2026-10-09 APPROVE WITH NOTES(시험 이름 고침 반영, 원 추종 브랜치보다 먼저 또는 함께 착지).
+- gate 변화: 없음. DEVICE/FIELD HOLD.
