@@ -123,6 +123,7 @@ class FakeRobot:
         self.lidar_block, self.lidar_frozen, self.site_map_id, self.map_id = None, False, "map_v2_fleet", "map_v2_fleet"
         self.calib = [CALIB]
         self.identify_status, self.blink_t, self.blink_at = [], None, None   # blink_at None: at the map origin
+        self.blink_s, self.blink_bgr, self.led_at, self.light_change = 6.0, (255, 0, 0), [], False
         self.__dict__.update(kw)
         self.core = FakeCore(self)
 
@@ -133,14 +134,22 @@ class FakeRobot:
         self.t += s
 
     def overhead(self):
-        """A grey overhead JPEG; while the identify blink lasts (6 s) the lamp shows at blink_at."""
+        """A grey overhead JPEG. For blink_s after an identify the lamp (blink_bgr, blue) blinks at
+        blink_at, 0.4 s on / 0.4 s off; led_at blink like that always (a charge light); light_change
+        brightens the whole frame after the request."""
         import cv2
         import numpy as np
         size, h = (self.calib or [CALIB])[0]["image"], (self.calib or [CALIB])[0]["map_to_image"]
         img = np.full((size["height"], size["width"], 3), 90, np.uint8)
-        if self.blink_t is not None and self.t - self.blink_t <= 6.0:
+        if self.light_change and self.blink_t is not None:
+            img[:] = 170
+        dt = None if self.blink_t is None else self.t - self.blink_t
+        if dt is not None and dt <= self.blink_s and int((dt + 1e-6) / 0.4) % 2 == 0:
             for u, v in [(h[2], h[5])] if self.blink_at is None else self.blink_at:
-                cv2.circle(img, (int(u), int(v)), 4, (255, 200, 0), -1)
+                cv2.circle(img, (int(u), int(v)), 4, self.blink_bgr, -1)
+        if int((self.t + 1e-6) / 0.4) % 2 == 0:
+            for u, v in self.led_at:
+                cv2.circle(img, (int(u), int(v)), 3, (40, 255, 40), -1)
         return cv2.imencode(".jpg", img)[1].tobytes()
 
     def overhead_source(self):
@@ -1020,30 +1029,71 @@ def test_identify_blob_at_the_robot_passes_and_is_recorded(tmp_path):
     assert ident["request_id"] == "req1" and ident["color"] == "blue" and ident["distance_px"] <= 2.0
     assert ident["pick_px"] == [320.0, 240.0] and ident["radius_px"] == pytest.approx(100 * IDENT.RADIUS_M, 0.01)
     assert ident["blob_frames"] >= IDENT.MIN_FRAMES and ident["pixel_count"] > 0 and len(ident["blob_bbox"]) == 4
-    assert all(d.startswith("sha256:") for d in ident["frames"].values()) and "identify_00.jpg" in ident["frames"]
+    frames = ident["frames"]
+    assert all(f["sha256"].startswith("sha256:") for f in frames) and frames[0]["name"] == "identify_00.jpg"
+    base = [f for f in frames if f["phase"] == "baseline"]
+    assert len(base) == 11 and base[-1]["t"] == pytest.approx(IDENT.BASELINE_S)     # 2 s before the request
+    assert [f["phase"] for f in frames[len(base):]] == ["blink"] * (len(frames) - len(base))
+    assert all(a["t"] < b["t"] for a, b in zip(frames, frames[1:]))
+    assert ident["blob_frames"] < len(frames) - len(base)                         # it blinked, not steady
+    assert ident["colour_check"].startswith("hue 1") and ident["colour_check"].endswith("within 20 of blue")
     assert (p.parent / "identify_00.jpg").exists() and "POST /host/lamp/identify" in robot.log
+    assert run.tether.check(json.loads(p.read_text(encoding="utf-8")), {"margin_m": 0.3, "max_turn_deg": 360})
 
 
 @pytest.mark.parametrize("over, why", [
     ({"blink_at": [(560, 420)]}, "the lamp blob at"),                     # the lamp blinks at another robot
     ({"blink_at": []}, "no lamp change seen"),
-    ({"blink_at": [(320, 240), (560, 420)]}, "another strong change"),    # two blobs: ambiguous
+    ({"blink_at": [(320, 240), (560, 420)]}, "another strong change|the lamp blob at"),   # two blobs: ambiguous
     ({"identify_status": [404]}, r"unavailable \(HTTP 404"),
     ({"identify_status": [409]}, "IDENTIFY_COLOR_UNSET"),
-    ({"identify_status": [429, 429]}, "HTTP 429, HW_TEST_COOLDOWN")])
+    ({"identify_status": [429, 429]}, "HTTP 429, HW_TEST_COOLDOWN"),
+    ({"blink_s": 0.3}, "no lamp change seen"),                               # 2 frames: weak
+    ({"light_change": True}, "larger than the body"),                        # whole-frame lighting change
+    ({"led_at": [(320, 240)]}, "already changed in"),                        # a charge light at the pick
+    ({"blink_bgr": (0, 170, 255)}, "from blue")])                            # an amber lamp, CORE said blue
 def test_identify_refuses_the_tether_check(tmp_path, over, why):
     robot = FakeRobot(**over)
     with pytest.raises(SystemExit, match=why) as exc:
         tethered(tmp_path, robot, [-1.5, 0.0])
     assert "confirm the robot another way" in str(exc.value)
     assert not (tmp_path / "pre" / run.tether.CHECK_IMAGE).exists()
+    v = json.loads((tmp_path / "pre" / "camera_verdict.json").read_text(encoding="utf-8"))
+    ident = v["tether"]["identity"]                                         # the refusal is evidence too
+    assert ident["refused"] == str(exc.value).removeprefix("tether check: ") and ident["frames"]
+    assert v["tether"]["visual_check_ok"] is False
+    with pytest.raises(ValueError, match="no lamp identify proved the robot"):
+        run.tether.check({**v, "tether": {**v["tether"], "visual_check_ok": True}}, {"margin_m": 0.3})
+
+
+def test_identify_refuses_a_radius_that_is_not_a_number(tmp_path):
+    h = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]                        # every floor point past the horizon
+    assert math.isnan(IDENT.radius_px(h, (0.0, 0.0), run.tether._project))
+    robot = FakeRobot()
+    for radius in (float("nan"), float("inf"), 0.0):
+        with pytest.raises(IDENT.Refused, match="not a positive number"):
+            IDENT.identify(robot, (320.0, 240.0), radius, tmp_path)
+    assert "POST /host/lamp/identify" not in robot.log
+
+
+def test_an_old_verdict_without_identity_does_not_run(tmp_path):
+    robot = FakeRobot()
+    p = tethered(tmp_path, robot, [-1.5, 0.0])
+    v = json.loads(p.read_text(encoding="utf-8"))
+    del v["tether"]["identity"]
+    p.write_text(json.dumps(v), encoding="utf-8")
+    code, s = go(tmp_path, robot, verdict_path=p)
+    assert code == 2 and "no lamp identify proved the robot" in s["outcome"]
 
 
 def test_identify_waits_out_the_cooldown_once(tmp_path):
     robot = FakeRobot(identify_status=[429])
     t0 = robot.t
-    tethered(tmp_path, robot, [-1.5, 0.0])
+    p = tethered(tmp_path, robot, [-1.5, 0.0])
     assert robot.log.count("POST /host/lamp/identify") == 2 and robot.t - t0 >= IDENT.COOLDOWN_S
+    base = [f for f in json.loads(p.read_text(encoding="utf-8"))["tether"]["identity"]["frames"]
+            if f["phase"] == "baseline"]
+    assert len(base) == 22 and base[11]["t"] >= IDENT.BASELINE_S + IDENT.COOLDOWN_S   # a fresh baseline after the wait
 
 
 def test_pixel_mode_identify_uses_the_picked_center(tmp_path):
@@ -1062,7 +1112,8 @@ def test_policy_off_notice_does_not_abort_but_estop_does(tmp_path):
     assert code == 2 and "safety.estop" in s["outcome"]
 
 
-@pytest.mark.parametrize("ok", [["safety.estop"], ["safety.*"], "safety.policy_off"])
+@pytest.mark.parametrize("ok", [["safety.estop"], ["safety.*"], "safety.policy_off", {"safety.policy_off": 1},
+                                [["safety.policy_off"]]])
 def test_ok_events_only_informational_names(tmp_path, ok):
     p = plan_file(tmp_path, ok_events=ok)
     with pytest.raises(SystemExit, match="ok_events"):

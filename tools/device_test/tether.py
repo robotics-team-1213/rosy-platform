@@ -71,10 +71,11 @@ def place(pose, offset):
 
 
 def binding(verdict, policy):
-    """What tether_check.jpg showed: cable, charger, picked pixels, margin and the capture pose."""
+    """What tether_check.jpg showed: cable, charger, picked pixels, margin, the capture pose and the
+    lamp identify that proved the robot (D-512 amendment 2)."""
     t = verdict["tether"]
     key = [t["cable_m"], t.get("charger_robot_frame"), t.get("pixels"), policy["margin_m"],
-           pose_of(verdict.get("pose_at_capture"))]
+           pose_of(verdict.get("pose_at_capture")), t.get("identity")]
     return hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -106,6 +107,9 @@ def declared(verdict, policy):
 def check(verdict, policy):
     """declared() plus the agent's look at tether_check.jpg for exactly these values."""
     t = declared(verdict, policy)
+    ident = (t or {}).get("identity") or {}
+    if t is not None and not (ident.get("request_id") and "refused" not in ident):
+        raise ValueError("tether: no lamp identify proved the robot (tether.identity); run --tether-check again")
     if t is not None and not (t.get("visual_check_ok") is True and CHECK_IMAGE in (verdict.get("frames") or {})
                               and (t.get("check") or {}).get("for") == binding(verdict, policy)):
         raise ValueError(f"tether: run --tether-check, look at {CHECK_IMAGE}, then set tether.visual_check_ok "
@@ -214,7 +218,9 @@ def tether_check(robot, args):
     try:      # the drawn robot must be the target: its lamp blinks there (D-512 amendment 2)
         t["identity"] = identify.identify(robot, pts["robot"], identify.radius_px(
             rec["map_to_image"], draw_pose[:2], _project), path.parent)
-    except identify.Refused as exc:
+    except identify.Refused as exc:     # the refusal and its frames go into the verdict as evidence
+        t.update(identity=exc.evidence, visual_check_ok=False)
+        path.write_text(json.dumps(v, indent=2), encoding="utf-8")
         raise SystemExit(f"tether check: {exc}") from exc
     ring = np.array([p for p in pts["circle"] if all(map(math.isfinite, p))], np.int32)
     cv2.polylines(img, [ring], True, (0, 220, 255), 2)

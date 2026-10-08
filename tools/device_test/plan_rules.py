@@ -101,8 +101,9 @@ def load_plan(path):
         raise SystemExit(f"overlay_path must be {OVERLAY_PATH}")
     check_overlay(flatten(plan["overlay"]), plan.get("accepted_risks"))
     stop = plan.setdefault("stop", {})
-    if not set(stop.setdefault("ok_events", [])) <= OK_EVENTS:
-        raise SystemExit(f"stop.ok_events: only {sorted(OK_EVENTS)} (exact names, informational notices)")
+    ok = stop.setdefault("ok_events", [])
+    if not (isinstance(ok, list) and all(isinstance(e, str) and e in OK_EVENTS for e in ok)):
+        raise SystemExit(f"stop.ok_events: a list of {sorted(OK_EVENTS)} only (exact names, informational notices)")
     if not 0 < float(stop.get("duration_s", 0)) <= 600:
         raise SystemExit("stop.duration_s must be in (0, 600]")
     plan.setdefault("min_battery_percent", 40)
