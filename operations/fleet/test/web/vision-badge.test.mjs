@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { FRAME_LATE_MS, frameBadge } from "../../fleet/server/web/vision-view.js";
+import { FRAME_LATE_MS, frameBadge } from "../../fleet/server/web/shared/vision-view.js";
 
 test("a fresh frame reads live, never an auth-waiting label", () => {
   const raw = frameBadge({ ok: true, status: 200, ageMs: "244", rectified: false });

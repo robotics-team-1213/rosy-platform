@@ -17,7 +17,9 @@ class Live:
 
     def __init__(self, args):
         self.core = edge_drive.Core(args.host, Path(args.token_file).read_text(encoding="utf-8").strip(),
-                                    args.port, edge_drive.tls_context(args.ca_file, args.insecure))
+                                    args.port, edge_drive.tls_context(args.ca_file, args.insecure),
+                                    # the certificate names the robot; --host may be its address
+                                    tls_host=f"{args.robot}.local" if args.ca_file else None)
         base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Rosy"
         self.ssh_argv = ["ssh", "-i", str(base / "ssh" / "rosy-operator-ed25519"), "-o", "IdentitiesOnly=yes",
                          "-o", "BatchMode=yes", "-o", "PasswordAuthentication=no",
@@ -43,12 +45,39 @@ class Live:
         with urllib.request.urlopen(req, timeout=5, context=self.site_ctx) as r:
             return r.read()
 
+    def overhead_source(self):
+        """--overhead-source, else the site's first Vision source; None when unknown."""
+        try:
+            return self.source or json.loads(self._site("/api/fleet/vision/sources"))["sources"][0]
+        except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
+            return None
+
+    @staticmethod
+    def _site_token():
+        """Site viewer credential for read-guarded Fleet routes, from ROSY_SITE_TOKEN_FILE (None: unset)."""
+        path = os.environ.get("ROSY_SITE_TOKEN_FILE")
+        return Path(path).read_text(encoding="utf-8").strip() if path else None
+
+    def calibrations(self):
+        """Approved camera-to-map records (D-457 GET /api/fleet/calibrations), None on any failure."""
+        try:
+            return json.loads(self._site("/api/fleet/calibrations", token=self._site_token()))["calibrations"]
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return None
+
+    def active_site_map_id(self):
+        """The Fleet active SiteMap's map_id (GET /api/fleet/site-map/active), None on any failure."""
+        try:
+            return json.loads(self._site("/api/fleet/site-map/active", token=self._site_token()))["map"]["map_id"]
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return None
+
     def overhead(self):
         """One fresh Rosy Cam JPEG through a 60 s Viewer lease (D-318), None on any failure."""
         if not self.site_url:
             return None
         try:
-            source = self.source or json.loads(self._site("/api/fleet/vision/sources"))["sources"][0]
+            source = self.overhead_source()
             lease = json.loads(self._site("/api/fleet/vision/lease", {"source_id": source}))
             return self._site(lease["frame_path"], token=lease["lease"])
         except (OSError, ValueError, KeyError, IndexError):

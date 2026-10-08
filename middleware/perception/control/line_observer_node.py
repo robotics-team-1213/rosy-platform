@@ -15,6 +15,7 @@ import yaml
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import ParameterDescriptor
 from sensor_msgs.msg import CompressedImage, Image
@@ -22,7 +23,9 @@ from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
 from .calibrated_values import calibrated
-from .sensing.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
+from .sensing.perception.camera_ground import (
+    nominal_ground_plane, simulation_ground_allowed, simulation_ground_plane,
+)
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.camera_visibility import visibility_reason
 from .sensing.perception.lane import (
@@ -38,23 +41,26 @@ from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
-from .sensing.perception.lane_containment import (
-    PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width)
+from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
 from .sensing.perception.route_hybrid import RouteHybridFollower
 from .sensing.perception.route_map import RouteMapFollower
 
-#: Fixed at startup: the edge follower and the odom subscription are built
-#: from these once, so a later change would silently run the wrong pipeline.
+#: Fixed at startup: the edge follower and odom subscription are built from these once (a change runs the wrong pipeline).
 _READ_ONLY = ParameterDescriptor(read_only=True)
 #: 'keep' mode: a gap between camera frames longer than this resets the keeper.
 KEEP_MAX_FRAME_GAP_S = 0.5
 
 
-#: A spin in place: |wz| over half D-495's 0.3 rad/s turn floor, |vx| under CORE's 0.01 m/s still bound.
+COMMANDED_PIVOT_LINEAR_MPS = 1e-3   # a pivot commands v exactly 0; slow keep steering commands ~0.01 m/s
+KEEP_CMD_STALE_WARN_FRAMES = 30     # 'keep': frames in a row with a stale received command before one warning
+
+
+#: A spin in place, judged on CORE's commanded (v, w): |w| over half D-495's 0.3 rad/s turn floor, |v| near 0.
+#: Not on odom: a slow keep corner (cmd v 0.0188) reads vx ~0.001 (D-507 r4b).
 def _spinning_in_place(twist):
-    return twist is not None and abs(twist[1]) > 0.15 and abs(twist[0]) < 0.01
+    return twist is not None and abs(twist[1]) > 0.15 and abs(twist[0]) < COMMANDED_PIVOT_LINEAR_MPS
 
 
 class LineObserverNode(Node):
@@ -71,16 +77,13 @@ class LineObserverNode(Node):
         self.declare_parameter('camera_washed_fraction', 0.4)
         self.declare_parameter('camera_min_pixels', 80)
         self.declare_parameter('require_camera_controls_stable', True)
-        # 'line' follows one bright line; 'lane' keeps the centre between two
-        # boundary lines; 'edge_left' holds the lane's left boundary a
-        # half-width off in bird's-eye view (bends, arcs). Both lane modes need
-        # a metric ground plane, edge_left also odometry (fail-closed without).
+        # 'line' follows one bright line; 'lane' keeps the centre between two boundary lines; 'edge_left'
+        # holds the lane's left boundary a half-width off in bird's-eye view (bends, arcs). Both lane
+        # modes need a metric ground plane, edge_left also odometry (fail-closed without).
         # 'centre' follows the centre line between both boundaries (fallback ladder).
-        # 'between' keeps the midpoint of the two boundary lines in image
-        # space (no ground plane, no odometry).
-        # 'keep' keeps the middle of the lane from ground-plane boundary lines
-        # found per frame (no odometry): the real-robot lane keeper (D-364 §2),
-        # on camera_ground_source NOMINAL + allow_nominal_ground, or GAZEBO.
+        # 'between' keeps the midpoint of the two boundary lines in image space (no ground plane, no odometry).
+        # 'keep' keeps the lane middle from ground-plane boundary lines found per frame: the real-robot
+        # lane keeper (D-364 §2), on camera_ground_source NOMINAL + allow_nominal_ground, or GAZEBO.
         # 'route_a'/'route_b' are the junction prototypes: route-driven
         # manoeuvres over the centre-line tracker (A) and planned-route
         # pursuit from a paint-localised pose (B). 'route_ab' is their
@@ -100,8 +103,7 @@ class LineObserverNode(Node):
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
-        # 'between' only: bottom band start (keeps white walls out) and the
-        # lane width as a frame fraction until both boundaries are seen.
+        # 'between' only: bottom band start (keeps white walls out), lane width as a frame fraction until both are seen.
         self.declare_parameter('camera_between_roi_top_fraction', 0.6)
         self.declare_parameter('camera_between_lane_width_fraction', 0.6, _READ_ONLY)
         self.declare_parameter('camera_ground_source', 'PINKY')
@@ -118,32 +120,26 @@ class LineObserverNode(Node):
         self.declare_parameter('gazebo_camera_pitch_rad', 0.0)
         self.declare_parameter('gazebo_camera_hfov_rad', 0.0)
         self.declare_parameter('gazebo_camera_max_range_m', 0.6)
-        # Lane mode only: odometry-bounded 90 deg corner turning. Off by
-        # default; without odometry the tracker never leaves FOLLOW.
+        # Lane mode only: odometry-bounded 90 deg corner turning; off by default, never leaves FOLLOW without odometry.
         self.declare_parameter('lane_corner_turning', False, _READ_ONLY)
         self.declare_parameter('camera_x_offset_m', 0.0)
         self.declare_parameter('debug_overlay', False, _READ_ONLY)
         self.declare_parameter('debug_overlay_max_hz', 5.0)
         self.declare_parameter('debug_lane_graph', '')
-        # route_a/route_b/route_ab only. route and route_start are declared by type,
-        # not value: an empty Python list default cannot be typed, and the
-        # config file's own empty-list override (line_follow.yaml) needs a
-        # declared element type (string / double) to resolve against.
+        # route_a/route_b/route_ab only. route and route_start are declared by type, not value: an
+        # empty Python list default cannot be typed, and the config file's own empty-list override
+        # (line_follow.yaml) needs a declared element type (string / double) to resolve against.
         self.declare_parameter('lane_graph_path', '', _READ_ONLY)
         self.declare_parameter('route', Parameter.Type.STRING_ARRAY, _READ_ONLY)
         self.declare_parameter('route_start', Parameter.Type.DOUBLE_ARRAY, _READ_ONLY)
 
-        self._ir_calibration = None
-        self._ir_calibration_revision = None
+        self._ir_calibration = self._ir_calibration_revision = None
         self._camera_controls_stable = False
-        self._simulation_ground_key = None
-        self._simulation_ground = None
+        self._simulation_ground_key = self._simulation_ground = None
         self._nominal_profile_cache = None
         self._ground_error = None
         self._paint_half_width_m = paint_half_width(self.get_parameter('lane_paint_half_width_m').value)
-        self._odom_pose = None
-        self._odom_stamp = None
-        self._odom_twist = None
+        self._odom_pose = self._odom_stamp = self._odom_twist = self._cmd_twist = self._cmd_stamp = None
         self._corner_tracker = LaneCornerTracker(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
         self._edge_follower = LaneEdgeFollower(
@@ -154,7 +150,7 @@ class LineObserverNode(Node):
         self._between_keeper = LaneBetweenKeeper(
             default_lane_width_fraction=float(
                 self.get_parameter('camera_between_lane_width_fraction').value))
-        self._keep_last_stamp = None
+        self._keep_last_stamp, self._cmd_stale_frames = None, 0
         self._lane_keeper = LaneKeeper(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_turning=bool(self.get_parameter('lane_corner_turning').value), paint_half_width_m=self._paint_half_width_m)
@@ -163,9 +159,7 @@ class LineObserverNode(Node):
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
         if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):
             self._route_follower = self._build_route_follower(camera_lane_mode)
-        self._debug_pub = None
-        self._debug_last_s = None
-        self._debug_graph = None
+        self._debug_pub = self._debug_last_s = self._debug_graph = None
         if bool(self.get_parameter('debug_overlay').value):
             self._debug_pub = self.create_publisher(
                 CompressedImage, 'line/debug/compressed', 2)
@@ -208,6 +202,8 @@ class LineObserverNode(Node):
         if mode in ('lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab'):
             self.create_subscription(
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
+        if mode == 'keep':   # read only: CORE stays the sole final cmd_vel publisher (D-18, D-143)
+            self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)
         if self._ir_calibration is None:
             self.get_logger().warning(
                 'IR line calibration disabled; IR_LINE will remain fail-closed')
@@ -220,6 +216,17 @@ class LineObserverNode(Node):
         and CAMERA_LINE keeps publishing None (visible:false) every frame
         rather than going silent (D-143: this node still owes CORE
         evidence)."""
+        # A static route_start anchors the first odometry pose without an
+        # independent map fix. Keep these junction prototypes in simulation
+        # until an active map and fresh localized start can authorize them.
+        if not simulation_ground_allowed(
+                source=self.get_parameter('camera_ground_source').value,
+                simulation_enabled=self.get_parameter('allow_simulation_ground').value,
+                use_sim_time=self.get_parameter('use_sim_time').value):
+            self.get_logger().warning(
+                f'{mode} prototype route modes require Gazebo simulation ground and clock; '
+                'no follower built, CAMERA_LINE will publish no observation')
+            return None
         graph_path = str(self.get_parameter('lane_graph_path').value)
         route = [str(key) for key in self.get_parameter('route').value]
         route_start = [float(v) for v in self.get_parameter('route_start').value]
@@ -444,14 +451,18 @@ class LineObserverNode(Node):
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
             elif mode == 'keep':
-                # A camera gap (or the first keep frame of this node) starts
-                # the keeper afresh: sides and steering remembered from before
-                # the gap may belong to another place. So does a spin in place (D-507: its swept view latched the flip hold).
+                # A camera gap (or the first keep frame of this node) starts the keeper afresh: sides and steering
+                # from before the gap may belong to another place. So does a commanded spin in place (D-507: its
+                # swept view latched the flip hold).
                 image_stamp = (float(msg.header.stamp.sec)
                                + float(msg.header.stamp.nanosec) * 1e-9)
+                cmd = pose_if_fresh(self._cmd_twist, self._cmd_stamp, image_stamp)
+                self._cmd_stale_frames = 0 if cmd is not None or self._cmd_twist is None else self._cmd_stale_frames + 1
+                if self._cmd_stale_frames >= KEEP_CMD_STALE_WARN_FRAMES:
+                    self.get_logger().warning('cmd_vel stale vs camera stamps; spin reset off (use_sim_time?)', once=True)
                 if (self._keep_last_stamp is None
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
-                        or _spinning_in_place(pose_if_fresh(self._odom_twist, self._odom_stamp, image_stamp))):
+                        or _spinning_in_place(cmd)):
                     self._lane_keeper.reset()
                     if self._paint_worker is not None:
                         self._paint_worker.reset()
@@ -474,6 +485,17 @@ class LineObserverNode(Node):
                               ground=self._ground_label(), stamp=image_stamp)
                 self._keep_debug_pub.publish(String(data=json.dumps(bundle, default=float)))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
+                if (mode in ('route_a', 'route_b', 'route_ab')
+                        and self._route_follower is not None
+                        and not simulation_ground_allowed(
+                            source=self.get_parameter('camera_ground_source').value,
+                            simulation_enabled=self.get_parameter('allow_simulation_ground').value,
+                            use_sim_time=self.get_parameter('use_sim_time').value)):
+                    # A geometry change invalidates the static map/odom anchor.
+                    # Require a fresh node instead of reviving stale memory.
+                    self._route_follower = None
+                    self.get_logger().warning(
+                        f'{mode} simulation context changed; route follower revoked', once=True)
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(
                     bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
@@ -579,11 +601,13 @@ class LineObserverNode(Node):
         yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y),
                          1.0 - 2.0 * (q.y * q.y + q.z * q.z))
         self._odom_pose = (float(pose.position.x), float(pose.position.y), yaw)
-        # The header stamp, not arrival time: edge_left compares it with the
-        # image stamp, so dead or delayed odometry is no pose.
+        # The header stamp, not arrival time: edge_left compares it with the image stamp (dead or delayed odom is no pose).
         self._odom_twist = (float(msg.twist.twist.linear.x), float(msg.twist.twist.angular.z))
         self._odom_stamp = (float(msg.header.stamp.sec)
                             + float(msg.header.stamp.nanosec) * 1e-9)
+
+    def _on_cmd_vel(self, msg: Twist) -> None:   # Twist has no header: stamped on arrival (node clock, sim time in SIM)
+        self._cmd_twist, self._cmd_stamp = (msg.linear.x, msg.angular.z), self.get_clock().now().nanoseconds * 1e-9
 
     def _on_camera_controls(self, msg: String) -> None:
         summary = str(msg.data)

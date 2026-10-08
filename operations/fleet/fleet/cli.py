@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
+from fleet.traffic.config import _traffic_authority, _traffic_signals, _traffic_zones
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
 from fleet.swarm.relay import Relay
 from fleet.swarm.robots import RobotEndpoint, load_robots
@@ -358,11 +359,11 @@ def run_console(args: argparse.Namespace) -> None:
         if not discovery_token:
             sys.exit(f"discovery token environment variable {discovery_token_env} is required")
     users_file = getattr(args, "users_file", None)
-    site_users = None
+    site_users = site_logins = None
     if users_file is not None:
-        from fleet.server.site_users import load_site_users
+        from fleet.server.site_users import load_site_accounts
 
-        site_users = load_site_users(users_file)
+        site_users, site_logins = load_site_accounts(users_file)
     tasks_db = getattr(args, "tasks_db", None)
     if site_users is not None and tasks_db is None:
         sys.exit("--tasks-db is required with --users-file for persistent audit")
@@ -391,7 +392,7 @@ def run_console(args: argparse.Namespace) -> None:
             development_sessions = DevelopmentSessions()
             print("warning: development connection mode: same-LAN browsers get 1 h operator sessions",
                   file=sys.stderr)
-    if args.host not in LOOPBACK_HOSTS and not (console_token or site_users):
+    if args.host not in LOOPBACK_HOSTS and not (console_token or users_file is not None):
         sys.exit("--token or --users-file 없이 루프백 밖으로 열 수 없다")
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
         sys.exit("--tasks-db is required when the Fleet control surface is externally reachable")
@@ -547,7 +548,7 @@ def run_console(args: argparse.Namespace) -> None:
                      cell_job_compiler=cell_job_compiler,
                      cell_app_service_id=getattr(args, "cell_app_service_id", None),
                      goal_evidence_service=goal_evidence_service,
-                     site_users=site_users, discovery=discovery,
+                     site_users=site_users, site_logins=site_logins, discovery=discovery,
                      discovery_token=discovery_token,
                      approved_peer_directory_file=getattr(args, 'approved_peer_directory_file', None),
                      start_task_dispatcher=not mission_api,
@@ -563,6 +564,8 @@ def run_console(args: argparse.Namespace) -> None:
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
+                     traffic_zones=_traffic_zones(args), traffic_authority=_traffic_authority(args),
+                     traffic_signals=_traffic_signals(args),
                      identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args))
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
@@ -607,7 +610,10 @@ def _build_site_map(args, tasks_db):
         site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
         source = getattr(args, "site_map_import", None)
         if source is not None:
-            site_maps.import_if_empty(from_lane_graph(source), source=Path(source).name)
+            # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
+            # report; the default "site" would filter every sighting (map pose UNKNOWN).
+            site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
+                                      source=Path(source).name)
     except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"site map / routing config: {exc}")
     if tasks_db is None:

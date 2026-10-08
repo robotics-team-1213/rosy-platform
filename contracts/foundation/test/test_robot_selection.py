@@ -13,7 +13,7 @@ SRC = (Path(__file__).resolve().parents[3] / "src")
 
 @pytest.fixture(autouse=True)
 def _no_operator_overlay(monkeypatch):
-    for name in ("ROSY_CONFIG", "ROSY_ROBOT", "ROSY_RUNTIME_MODE", "ROSY_NAMESPACE", "ROSY_DEVICE_NAME"):
+    for name in ("ROSY_CONFIG", "ROSY_ROBOT", "ROSY_RUNTIME_MODE", "ROSY_NAMESPACE", "ROSY_DEVICE_NAME", "ROSY_DEVICE_UID"):
         monkeypatch.delenv(name, raising=False)
 
 

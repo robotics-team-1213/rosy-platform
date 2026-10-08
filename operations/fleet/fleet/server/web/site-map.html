@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/console/assets/site-map.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
+  <link rel="stylesheet" href="/console/assets/password-login.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/site-map.js"></script>
 </head>
@@ -29,8 +30,12 @@
     <a href="/console/cell">Cell</a>
   </nav>
   <div class="site-access">
-    <ui-field id="credential" type="password" placeholder="관제 토큰" aria-label="관제 토큰"></ui-field>
-    <ui-button id="connect" kind="primary">접속</ui-button>
+    <div id="password-login" class="password-login" hidden></div>
+    <details id="token-access" class="token-access" open>
+      <summary>토큰으로 접속</summary>
+      <ui-field id="credential" type="password" placeholder="관제 토큰" aria-label="관제 토큰"></ui-field>
+      <ui-button id="connect" kind="primary">접속</ui-button>
+    </details>
   </div>
   <ui-status id="estop-feedback" hidden></ui-status>
   <main>
@@ -47,21 +52,50 @@
         </select></label>
       </ui-head>
       <ui-status id="map-status" state="empty">관제 접속 필요</ui-status>
-      <div class="actions">
-        <label>평면 영상 카메라<select class="ui-field" id="plane-source" aria-label="평면 영상 카메라"></select></label>
-        <ui-button id="plane-load" kind="quiet" disabled>직사각형 평면 영상 불러오기</ui-button>
-        <ui-button id="plane-clear" kind="quiet" disabled>영상 숨기기</ui-button>
-        <label class="ui-check"><input class="ui-field" id="plane-pick" type="checkbox" disabled> 평면 지도 좌표 확인</label>
-      </div>
-      <ui-text id="plane-status" role="status">카메라 평면 영상과 좌표 확인은 표시 전용입니다.</ui-text>
-      <ui-text id="plane-point" role="status">확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.</ui-text>
       <ui-text id="map-scroll-hint" class="map-scroll-hint" hidden>좁은 화면에서는 지도를 좌우로 밀어 확인하세요.</ui-text>
       <div id="map-viewport" class="map-viewport" role="region" aria-label="현장 지도 가로 이동" tabindex="0" hidden>
         <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
       </div>
       <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
+      <details class="plane-tools">
+        <summary>평면 영상 도구 · 표시 전용</summary>
+        <div class="plane-tools-body">
+          <div class="actions">
+            <label>평면 영상 카메라<select class="ui-field" id="plane-source" aria-label="평면 영상 카메라"></select></label>
+            <ui-button id="plane-load" kind="quiet" disabled>직사각형 평면 영상 불러오기</ui-button>
+            <ui-button id="plane-clear" kind="quiet" disabled>영상 숨기기</ui-button>
+            <label class="ui-check"><input class="ui-field" id="plane-pick" type="checkbox" disabled> 평면 지도 좌표 확인</label>
+          </div>
+          <ui-text id="plane-status" role="status">카메라 평면 영상과 좌표 확인은 표시 전용입니다.</ui-text>
+          <ui-text id="plane-point" role="status">확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.</ui-text>
+        </div>
+      </details>
     </ui-section>
-    <div class="columns">
+    <div class="map-workflow">
+      <ui-section aria-labelledby="trip-heading">
+        <ui-head><ui-text id="trip-heading" scale="label">경로 미리보기</ui-text></ui-head>
+        <label>로봇<select class="ui-field" id="trip-robot"></select></label>
+        <label>목적지 주소<select class="ui-field" id="trip-place"></select></label>
+        <label class="ui-check"><input class="ui-field" type="checkbox" id="trip-pick"> 지도에서 좌표 찍기</label>
+        <ui-text id="trip-point">찍은 좌표 없음</ui-text>
+        <div class="actions"><ui-button id="trip-plan" kind="primary" disabled>경로 계산</ui-button></div>
+        <ui-status id="trip-summary" state="empty">계산 전 · 실행은 하지 않습니다</ui-status>
+        <ol id="trip-actions" aria-label="교차로 동작"></ol>
+      </ui-section>
+      <ui-section aria-labelledby="run-heading">
+        <ui-head><ui-text id="run-heading" scale="label">운행</ui-text></ui-head>
+        <ui-text>계산한 경로를 30초 안에 출발시킵니다. 로봇마다 운행 하나입니다. 위치를 믿을 수 없으면 지시를 멈춥니다.</ui-text>
+        <ui-status id="trip-run" state="empty">관제 접속 필요</ui-status>
+        <label><span id="trip-start-label">고른 로봇의 출발 자리</span><select class="ui-field" id="trip-start-place"></select></label>
+        <label>대열 리더<select class="ui-field" id="trip-leader"><option value="">대열 없음 · 혼자 반복 운행</option></select></label>
+        <ui-status id="trip-loop" state="empty">반복 운행 없음</ui-status>
+        <div class="actions">
+          <ui-button id="trip-start" kind="primary" disabled reason="관제 접속이 필요합니다">운행 시작</ui-button>
+          <ui-button id="trip-repeat" kind="primary" disabled reason="관제 접속이 필요합니다">반복 운행 시작</ui-button>
+          <ui-button id="trip-confirm" kind="quiet" hidden>바뀐 경로로 계속</ui-button>
+          <ui-button id="trip-cancel" kind="irreversible" disabled reason="관제 접속이 필요합니다">운행 취소</ui-button>
+        </div>
+      </ui-section>
       <ui-section aria-labelledby="edit-heading">
         <ui-head><ui-text id="edit-heading" scale="label">초안 편집</ui-text></ui-head>
         <label>카메라에서 생성한 지도 초안<input class="ui-field" id="camera-map-file" type="file" accept="application/json,.json"></label>
@@ -86,27 +120,7 @@
         </div>
         <ui-status id="draft-status" state="empty">관제 접속 필요</ui-status>
       </ui-section>
-      <ui-section aria-labelledby="trip-heading">
-        <ui-head><ui-text id="trip-heading" scale="label">경로 미리보기</ui-text></ui-head>
-        <label>로봇<select class="ui-field" id="trip-robot"></select></label>
-        <label>목적지 주소<select class="ui-field" id="trip-place"></select></label>
-        <label class="ui-check"><input class="ui-field" type="checkbox" id="trip-pick"> 지도에서 좌표 찍기</label>
-        <ui-text id="trip-point">찍은 좌표 없음</ui-text>
-        <div class="actions"><ui-button id="trip-plan" kind="primary" disabled>경로 계산</ui-button></div>
-        <ui-status id="trip-summary" state="empty">계산 전 · 실행은 하지 않습니다</ui-status>
-        <ol id="trip-actions" aria-label="교차로 동작"></ol>
-      </ui-section>
     </div>
-    <ui-section aria-labelledby="run-heading">
-      <ui-head><ui-text id="run-heading" scale="label">운행</ui-text></ui-head>
-      <ui-text>계산한 경로를 30초 안에 출발시킵니다. 현장에서 한 번에 한 대만 운행합니다. 위치를 믿을 수 없으면 지시를 멈춥니다.</ui-text>
-      <ui-status id="trip-run" state="empty">관제 접속 필요</ui-status>
-      <div class="actions">
-        <ui-button id="trip-start" kind="primary" disabled reason="관제 접속이 필요합니다">운행 시작</ui-button>
-        <ui-button id="trip-confirm" kind="quiet" hidden>바뀐 경로로 계속</ui-button>
-        <ui-button id="trip-cancel" kind="irreversible" disabled reason="관제 접속이 필요합니다">운행 취소</ui-button>
-      </div>
-    </ui-section>
     <ui-section aria-labelledby="teach-heading">
       <ui-head><ui-text id="teach-heading" scale="label">지도 가르치기</ui-text></ui-head>
       <ui-text>운전자가 Pilot으로 로봇을 모는 동안 지도 위치를 기록합니다. 가르치기는 로봇을 움직이지 않습니다. 확정하면 초안에만 들어가고, 활성화는 따로 합니다.</ui-text>

@@ -16,7 +16,7 @@ import uuid
 from typing import Annotated, Optional, Union
 
 from fastapi import Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from fleet.hub.hub import HubError
 from fleet.routing.snap import PlanError
@@ -38,6 +38,18 @@ class TripPoint(BaseModel):
     yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
 
 
+class TripConvoy(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    leader: str = Field(min_length=1, max_length=96)
+
+
+class SignalCommand(BaseModel):
+    """D-525 4: an operator verb for one virtual signal."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    verb: str = Field(min_length=1, max_length=16)
+    approach: Optional[str] = Field(default=None, min_length=1, max_length=128)  # set_aspect only
+
+
 class TripRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     to: Union[PlaceRef, TripPoint]
@@ -45,6 +57,18 @@ class TripRequest(BaseModel):
     arrive_yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
     speed_cap: Optional[float] = Field(default=None, gt=0.0, le=5.0, allow_inf_nan=False)
     execute: bool = False
+    #: D-517 2: lap ``via`` then ``to`` again and again; the cycle is place ids.
+    repeat: bool = False
+    #: D-517 9 M3: follow this robot's open repeat trip in a lane convoy (the same cycle).
+    convoy: Optional[TripConvoy] = None
+
+    @model_validator(mode="after")
+    def _cycle(self) -> "TripRequest":
+        if self.repeat and (not isinstance(self.to, str) or not self.via):
+            raise ValueError("repeat needs a place id in to and at least one via place")
+        if self.convoy is not None and not self.repeat:
+            raise ValueError("convoy needs repeat")
+        return self
 
 
 def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTPException:
@@ -79,6 +103,11 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
         if active is None:
             record({"error": "TRIP_NO_ACTIVE_MAP"})
             raise _refuse("TRIP_NO_ACTIVE_MAP")
+        refused = body.convoy and runner.convoy_refusal(robot_id, body.convoy.leader,
+                                                        cycle=frozenset([body.to, *body.via]))
+        if refused:
+            record({"error": refused[0], "detail": refused[1]})
+            raise _refuse(*refused)
         try:
             pose = await console.trusted_map_pose(robot_id)
         except (HubError, RobotApiError, OSError) as exc:
@@ -141,7 +170,31 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
 
     @app.get("/api/fleet/trips", dependencies=read_guard, tags=["fleet"])
     def fleet_trips() -> dict:
-        return {"running": runner.running(), "trips": runner.recent()}
+        return {"running": runner.running(), "open": runner.open_trips(), "trips": runner.recent()}
+
+    @app.get("/api/fleet/traffic", dependencies=read_guard, tags=["fleet"])
+    def fleet_traffic() -> dict:
+        """D-517 3 (M1): the block table of the last trip period; nothing of it is sent to robots."""
+        return runner.traffic.view()
+
+    @app.post("/api/fleet/traffic/signals/presence", tags=["fleet"])
+    def fleet_traffic_signal_presence(principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """D-525 4: the operator's console is open; a manual green lasts while this keeps coming."""
+        return runner.traffic.signal_presence()
+
+    @app.post("/api/fleet/traffic/signals/{signal_id}", tags=["fleet"])
+    def fleet_traffic_signal(signal_id: str, body: SignalCommand,
+                             principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """D-525 4: operator verb for a virtual signal: ``cycle``, ``hold``, ``all_red``, or ``set_aspect``
+        with ``approach`` (green for that approach while the operator's console sends presence)."""
+        try:
+            return runner.traffic.signal_command(signal_id, body.verb, body.approach)
+        except KeyError:
+            raise _refuse("SIGNAL_UNKNOWN", status=404)
+        except ValueError:
+            raise _refuse("SIGNAL_VERB", status=422)
+        except PermissionError:
+            raise _refuse("SIGNAL_NO_PRESENCE", status=409)
 
     @app.get("/api/fleet/trips/{trip_id}", dependencies=read_guard, tags=["fleet"])
     def fleet_trip_view(trip_id: str) -> dict:

@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(control): keep 제자리 회전 reset 검토 반영 — odom twist 하나, 신선도 판정 하나
-- 2026-10-08 · a411c2801 · fix(control): 제자리 회전 뒤 keep flipping hold가 풀리지 않던 것
-- 2026-10-08 · uncommitted · fix(perception): keep_debug 조립이 ground 이름표와 충돌해 매 프레임 죽던 것
-- 2026-10-08 · uncommitted · feat(perception): keep 판단에 쓰인 지면 투영값 기록
-- 2026-10-07 · uncommitted · fix(perception): G-16 독립 검토 반영
+- 2026-10-09 · uncommitted · refactor(control): P1a perception 증거 크기 단위 분리
+- 2026-10-08 · uncommitted · feat(control): 녹화 프레임에 지면·차선 근거 보존
+- 2026-10-08 · uncommitted · fix(control): 경로 시제품의 시뮬레이션 조건 상실 폐기
+- 2026-10-08 · uncommitted · fix(control): 정적 경로 시제품을 Gazebo 조건에 한정
+- 2026-10-08 · uncommitted · fix(perception): 정적 경로 끝에서 관측 후보 중단

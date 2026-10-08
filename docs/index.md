@@ -208,6 +208,7 @@
 | D-461 | ROSY 작업 화면은 상태·다음 작업·행동을 먼저 보여주고 공용 작업 부품으로 구성한다 |
 | D-462 | Pinky 반복 검수는 프레임 정체성·객체/픽셀 독립 revision·최신 결정 확인을 보존한다 |
 | D-465 | 모델 PC에서 픽셀 자동 라벨 초안을 만들고 검수·학습 자격을 분리한다 |
+| D-529 | 시험 실행은 역할별 호스트에 배치하고 커밋별 증거로 판정한다 |
 
 ## 계획·결과 문서
 
@@ -300,8 +301,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · docs: Decision 모델 호스트 역할과 파이프라인 명시
-- 2026-10-08 · uncommitted · docs(plan): 논문 가림·시간 지표를 ROSY 계약에 대조
-- 2026-10-08 · uncommitted · docs(plan): 세션 간 검토로 10/6 양성 시험 가정 수정
-- 2026-10-08 · uncommitted · docs(plan): 10/6·10/7 영상 기반 drivable·차선 기억 조사
-- 2026-10-08 · uncommitted · fix(push): 2026-10-08 pre-push 검사 복구
+- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 우선 배치
+- 2026-10-09 · uncommitted · uiux(robot): 마지막 수신 계획 표시 검증
+- 2026-10-09 · uncommitted · 10/7 MCAP 원본 207프레임 검수 후보 갤러리
+- 2026-10-09 · uncommitted · uiux(pilot/robot): 같은 탭 운전석→운용 지도 검증
+- 2026-10-09 · uncommitted · 10/6·10/7 원본 검수 후보 시각 대조

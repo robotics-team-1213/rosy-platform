@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(line_follow): D-468 궤적은 HOLD 틱에도 odom을 받는다
-- 2026-10-08 · uncommitted · docs(core): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
-- 2026-10-08 · uncommitted · fix(line_follow): D-507 6 가로선 띠는 테이프 중심 ± 폭/2 (검토)
-- 2026-10-08 · uncommitted · fix(line_follow): D-507 2·4 pivot_past_line_m 부호 있음 [−0.30, 0.30]
-- 2026-10-08 · uncommitted · fix(line_follow): D-507 7 검토 — unknown은 오늘 경로, 새 체크포인트는 기준을 되살린다
+- 2026-10-09 · uncommitted · test(sim): Fleet 한 바퀴 SIM 3차, 회전교차로 둘레 (모델 PC, main b23055884)
+- 2026-10-08 · uncommitted · fix(core): 모서리 정지는 지시와 어긋나는 모서리만 (lap SIM 2 원인 1)
+- 2026-10-08 · uncommitted · test(sim): Fleet 한 바퀴 SIM 2차 (모델 PC, main 47fa82b1a)
+- 2026-10-08 · 8fa0df8f6 · fix(core): 기대 교차로 앞 keeper 모서리 회전은 HOLD junction_corner_hold
+- 2026-10-08 · 7cb2d775a · test(sim): 굽이→교차로 넘겨주기 SIM (모델 PC)

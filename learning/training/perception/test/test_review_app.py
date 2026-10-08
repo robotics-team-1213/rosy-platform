@@ -1,5 +1,6 @@
 """Persistent review, stale writes and explicit object-only approvals."""
 import json
+import hashlib
 
 import pytest
 
@@ -17,12 +18,99 @@ def open_store(tmp_path):
     return ReviewStore(tmp_path / 'state', source, human, images)
 
 
+def bright_store(tmp_path):
+    import cv2
+    import numpy as np
+    source, human, images = fixture_inputs(tmp_path)
+    gradient = np.tile(np.linspace(80, 245, 32, dtype=np.uint8), (24, 1))
+    raw = cv2.imencode('.jpg', cv2.cvtColor(gradient, cv2.COLOR_GRAY2BGR))[1].tobytes()
+    (images / '0.jpg').write_bytes(raw)
+    digest = hashlib.sha256(raw).hexdigest()
+    for path in (source, human):
+        rows = [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()]
+        rows[0]['image_sha256'] = digest
+        path.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
+    return ReviewStore(tmp_path / 'state', source, human, images)
+
+
+def test_detail_preview_is_read_only_and_keeps_original_dimensions(tmp_path):
+    import cv2
+    import numpy as np
+    from review_app import detail_preview
+    store = bright_store(tmp_path)
+    before = store.get(0)
+    original = store.image(0).read_bytes()
+    preview = cv2.imdecode(np.frombuffer(detail_preview(store, 0), np.uint8), cv2.IMREAD_COLOR)
+    source = cv2.imdecode(np.frombuffer(original, np.uint8), cv2.IMREAD_COLOR)
+    assert preview.shape == source.shape == (24, 32, 3)
+    assert not np.array_equal(preview, source)
+    assert store.image(0).read_bytes() == original
+    assert store.get(0) == before
+
+
+def test_learning_counts_unverified_source_video(tmp_path):
+    import threading
+    import urllib.request
+    from review_app import make_server
+
+    source, human, images = fixture_inputs(tmp_path)
+    rows = [json.loads(line) for line in source.read_text(encoding='utf-8').splitlines()]
+    rows[0].update(source_video_sha256='1' * 64, original_video_verified=False)
+    source.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
+    store = ReviewStore(tmp_path / 'state', source, human, images)
+    server = make_server(store, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f'http://127.0.0.1:{server.server_port}/api/learning'
+        assert json.load(urllib.request.urlopen(url))['source_video_unverified'] == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def test_learning_pixel_queue_omits_object_excluded_frames(tmp_path):
+    import threading
+    import urllib.request
+    from review_app import make_server
+
+    store = open_store(tmp_path)
+    server = make_server(store, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f'http://127.0.0.1:{server.server_port}/api/learning'
+        result = json.load(urllib.request.urlopen(url))
+        assert result['counts']['excluded'] == 1
+        assert result['pixel_counts']['pending'] == 1
+        assert result['pixel_counts']['blank'] == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 def test_empty_training_workspace_reopens_without_initial_labels(tmp_path):
     store = ReviewStore(tmp_path / 'state', empty_training=True)
     assert store.list_frames() == []
     assert ReviewStore(store.state).list_frames() == []
     with pytest.raises(ValueError, match='reopen'):
         ReviewStore(store.state, empty_training=True)
+
+
+def test_history_distinguishes_imported_state_from_app_decisions(tmp_path):
+    store = open_store(tmp_path)
+    assert store.history(0)['object_status'] == 'approved'
+    assert [event['action'] for event in store.history(0)['events']['object']] == ['import']
+    pending = store.update(0, {'version': store.get(0)['version'], 'action': 'reopen'})
+    approved = store.update(0, {'version': pending['version'], 'action': 'approve',
+                                'complete_frame_review': True})
+    history = ReviewStore(store.state).history(0)
+    assert history['object_status'] == 'approved'
+    assert [(event['action'], event['version']) for event in history['events']['object']] == [
+        ('approve', approved['version']), ('reopen', pending['version']), ('import', 1)]
+    assert history['events']['pixel'] == []
 
 
 def test_restart_preserves_approval_exclusion_and_unknown(tmp_path):

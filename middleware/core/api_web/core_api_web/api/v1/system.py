@@ -221,7 +221,11 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # a manager without that hook cannot do the bounded junction turn.
     # `junction_pivot` (D-507 2): CORE takes the window/pivot fields and this run's perception
     # announces keep_debug junction_ahead_v within 2 s (supports_junction_pivot).
+    # `lane_bend` (D-507 addendum): the line-follow manager takes action `bend`.
     # `site_floor_map_id` (D-507 9): the line-follow site floor declaration from config.
+    # `lane_arc` (D-520 1): line_follow.arc_enabled (default on) with that declaration (2026-10-09).
+    # `line_follow_authority` (D-517 4): the manager takes and enforces Fleet movement authority;
+    # `line_follow_authority_required`: config line_follow.authority_required (enforced before any).
     limits = svc.safety.limits
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
     if svc.line_follow is not None:
@@ -240,8 +244,15 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                                             False) is True,
                                       junction_pivot=getattr(svc.line_follow, "supports_junction_pivot",
                                                              False) is True,
+                                      lane_arc=getattr(svc.line_follow, "supports_lane_arc",
+                                                       False) is True,
+                                      lane_bend=getattr(svc.line_follow, "supports_lane_bend", False) is True,
                                       site_floor_map_id=(None if svc.line_follow is None else getattr(
-                                          svc.line_follow.config, "site_floor_map_id", None)))
+                                          svc.line_follow.config, "site_floor_map_id", None)),
+                                      line_follow_authority=callable(getattr(svc.line_follow,
+                                                                             "set_authority", None)),
+                                      line_follow_authority_required=svc.line_follow is not None and getattr(
+                                          svc.line_follow.config, "authority_required", False) is True)
     return data
 
 

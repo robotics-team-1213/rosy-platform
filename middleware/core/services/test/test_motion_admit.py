@@ -1,5 +1,7 @@
 """D-507 6: motion_admitted, one admission with two bases (enforce, site) and the site-basis
 reverse for the D-468 retrace only. Real manager, no ROS, no physical motion."""
+import math
+
 import pytest
 
 from core_features.line_follow.manager import LineFollowManager
@@ -281,3 +283,51 @@ def test_l4_traffic_gate_arc_family_is_swept_in_reverse():
         site.m.bind_motion_envelope(lambda f=floor: (.1, 1., f))
         results.append(site.admit(-.03, -.2, 'retrace'))
     assert results == [True, False]
+
+
+# ---- ported from feat/site-floor-declaration (superseded by this module) -------------------
+
+@pytest.mark.parametrize('kind', KINDS)
+@pytest.mark.parametrize('twist', [(math.nan, 0.), (0., math.inf), (-math.nan, 0.), (.02, math.nan)])
+def test_non_finite_twists_are_never_admitted(kind, twist):
+    assert Site().admit(*twist, kind) is False
+
+
+# ---- D-520 2: the arc kinds -------------------------------------------------------------------
+
+@pytest.mark.parametrize('ir', ['clear', 'left', 'right', 'centre', 'stale'])
+def test_arc_runs_on_clear_only(ir):
+    site = Site(ir=ir)
+    assert site.admit(.08, .3, 'arc') is (ir == 'clear')
+
+
+@pytest.mark.parametrize('side', ['left', 'right'])
+@pytest.mark.parametrize('ir', ['clear', 'left', 'right', 'centre', 'stale'])
+def test_arc_edge_takes_its_side_or_clear(side, ir):
+    site = Site(ir=ir)
+    assert site.admit(.04, -.1, 'arc_edge', ir_side=side) is (ir in ('clear', side))
+
+
+def test_arc_edge_needs_ir_side_and_arc_takes_none():
+    site = Site()
+    with pytest.raises(ValueError):
+        site.admit(.04, 0., 'arc_edge')
+    with pytest.raises(ValueError):
+        site.admit(.04, 0., 'arc', ir_side='left')
+
+
+@pytest.mark.parametrize('kind, side', [('arc', None), ('arc_edge', 'left')])
+def test_arc_kinds_never_reverse(kind, side):
+    site = Site()
+    assert site.admit(-.02, 0., kind, ir_side=side) is False
+    assert site.admit(.02, 0., kind, ir_side=side) is True
+
+
+def test_arc_needs_a_confident_clear():
+    """Review fix 4: a visible line below min_confidence reads 'clear' but does not admit kind arc."""
+    site = Site()
+    site.m.observe(LineObservation(LineFollowMode.IR_LINE, site.now, True, -.9, .2, ir_calibrated=True,
+                                   calibration_revision='r'), received_at=site.now)
+    assert site.m._ir_guard(site.now) == 'clear'
+    assert site.admit(.08, .3, 'arc') is False
+    assert site.admit(.04, 0., 'arc_edge', ir_side='left') is True   # away: the side or a clear

@@ -1,0 +1,122 @@
+[
+ {
+  "run": "base_west_1",
+  "result": "LOST",
+  "armed": false,
+  "reached_bend_stretch": false,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "LOST",
+   "reselection_required"
+  ],
+  "last_gt": [
+   -1.268,
+   -0.408,
+   -1.169
+  ]
+ },
+ {
+  "run": "base_west_2",
+  "result": "LOST",
+  "armed": false,
+  "reached_bend_stretch": false,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  "last_gt": [
+   -1.27,
+   -0.399,
+   -1.277
+  ]
+ },
+ {
+  "run": "base_west_3",
+  "result": "LOST",
+  "armed": false,
+  "reached_bend_stretch": false,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  "last_gt": [
+   -1.271,
+   -0.391,
+   -1.557
+  ]
+ },
+ {
+  "run": "base_west_4",
+  "result": "LOST",
+  "armed": false,
+  "reached_bend_stretch": false,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "LOST",
+   "reselection_required"
+  ],
+  "last_gt": [
+   -1.269,
+   -0.404,
+   -1.209
+  ]
+ },
+ {
+  "run": "base_west_5",
+  "result": "LOST",
+  "armed": false,
+  "reached_bend_stretch": false,
+  "took_over_gt": null,
+  "took_over_on": null,
+  "ended": null,
+  "ended_gt": null,
+  "handback_spoke_offset_m_heading_deg": null,
+  "min_to_sw_node_m": null,
+  "first_sighting_after_bend": null,
+  "last_state": [
+   "idle",
+   null,
+   "LOST",
+   "camera_reselection_required"
+  ],
+  "last_gt": [
+   -1.271,
+   -0.394,
+   -1.442
+  ]
+ }
+]

@@ -19,7 +19,7 @@ WEB = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
 #: 콘솔처럼 보이기 시작한 것이고 그것은 결함이다(D-92, concept 16 §4).
 CONSOLE_GRAMMAR = re.compile(r"\.regions?\b|\.region-(sense|observe|act|head)\b")
 
-SHEET = WEB / "styles.css"
+SHEET = WEB / "shared" / "styles.css"
 PAGE = WEB / "index.html"
 
 
@@ -33,9 +33,12 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
     shared_sheets = ["/common/tokens.css", "/common/components.css"]
     page_sheets = {
         # D-501: doc-tabs.css is Fleet's own tab-row sheet, shared by its four documents.
-        "index.html": [*shared_sheets, "/console/assets/styles.css", "/console/assets/doc-tabs.css"],
+        # D-519: password-login.css is Fleet's own login-form sheet, shared the same way.
+        "index.html": [*shared_sheets, "/console/assets/styles.css", "/console/assets/doc-tabs.css",
+                       "/console/assets/password-login.css"],
         "install.html": [*shared_sheets, "/common/task-chooser.css",
-                         "/console/assets/styles.css", "/console/assets/doc-tabs.css"],
+                         "/console/assets/styles.css", "/console/assets/doc-tabs.css",
+                         "/console/assets/password-login.css"],
     }
     for page_name, expected_sheets in page_sheets.items():
         hrefs = re.findall(r'<link[^>]+href="([^"]+\.css)"',

@@ -144,18 +144,19 @@ async function load() {
   const total=approved+pending+excluded;
   $('review-stage-summary').textContent=`등록 ${total}장 · 객체 승인 ${approved}장 · 픽셀 승인 ${workspace.pixel_counts.approved}장`;
   $('training-data-state').textContent=workspace.pixel_counts.approved===0?'현재 검수분의 픽셀 승인 0장 · 픽셀 학습 데이터 입력 전입니다.':'승인 자료 준비 후 세션 분리·고정 평가 제외·최신 결정 대조를 거쳐야 학습 데이터로 수용됩니다.';
+  if(workspace.source_video_unverified>0)$('training-data-state').textContent+=` 원본 영상 ${workspace.source_video_unverified}장의 출처 검증이 필요합니다.`;
   const prepared=workspace.preparation;
   $('preparation-status').textContent=prepared?.pixel_frames===0
     ? '최신 준비본 · 픽셀 승인 0장 · 학습 입력 없음. 승인된 픽셀 검수가 필요합니다.'
     : prepared
     ? `${prepared.current_decisions_match?'최신 준비본':'이전 준비본'} · 객체 ${prepared.object_frames}장 · 픽셀 ${prepared.pixel_frames}장 · ${prepared.current_decisions_match?'현재 결정 일치':'현재 결정과 다름 · 다시 준비 필요'}. 학습 수용은 별도 검증 대기입니다.`
     : '준비본 없음 · 승인 자료 준비를 실행하세요. 학습 수용은 별도 검증 대기입니다.';
-  $('review-counts').textContent=`검수 대기 ${pending}장 · 원본 객체 초안 ${workspace.object_drafts}장 · 승인 ${approved}장`;
-  $('pixel-counts').textContent=`승인 ${workspace.pixel_counts.approved}장 · 검수 대기 ${workspace.pixel_counts.pending}장 · 초안 있음 ${workspace.pixel_counts.drafted}장 · 빈 마스크 ${workspace.pixel_counts.blank}장`;
+  $('review-counts').textContent=`검수 대기 ${pending}장 · 객체 초안 ${workspace.object_drafts}장 · 승인 ${approved}장`;
+  $('pixel-counts').textContent=`승인 ${workspace.pixel_counts.approved}장 · 검수 대기 ${workspace.pixel_counts.pending}장 · 선택 가능한 초안 ${workspace.pixel_counts.candidates}장 · 적용된 초안 ${workspace.pixel_counts.drafted}장`;
   $('object-review-link').href=workspace.object_draft_first==null?'/?filter=pending':`/?filter=pending&frame=${workspace.object_draft_first}`;
   $('pixel-review-link').href=workspace.pixel_draft_first==null?'/pixels?filter=pending':`/pixels?filter=pending&frame=${workspace.pixel_draft_first}`;
-  $('object-review-link').querySelector('span').textContent=workspace.object_draft_first==null?'검수 대기 사진 열기':'객체 초안부터 검수';
-  $('pixel-review-link').querySelector('span').textContent=workspace.pixel_draft_first==null?'검수 대기 마스크 열기':'픽셀 초안부터 검수';
+  $('object-review-link').querySelector('span').textContent=workspace.object_draft_first==null?'객체 검수·승인 열기':'객체 초안 검수·승인';
+  $('pixel-review-link').querySelector('span').textContent=workspace.pixel_draft_first==null?'픽셀 검수·승인 열기':'픽셀 초안 검수·승인';
   if(!$('kind').options.length) {
     for(const row of workspace.workflows) {
       text($('capabilities'),'h3',row.name);text($('capabilities'),'p',row.support);text($('capabilities'),'p',row.next);

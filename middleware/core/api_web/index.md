@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(api): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
-- 2026-10-08 · uncommitted · fix(api): D-507 pivot_past_line_m [−0.30, 0.30]과 v1.133
-- 2026-10-08 · uncommitted · feat(api): D-472 식별 색 설정과 v1.129/v1.130
-- 2026-10-08 · uncommitted · docs(api): merged contract v1.125
-- 2026-10-08 · uncommitted · docs(api): D-509 v1.124 follow-up
+- 2026-10-09 · uncommitted · docs(core): 화면 코드 승인 409 수정의 gate 기록 보완 (D-483)
+- 2026-10-09 · uncommitted · fix(core): LCD hand-over에 CA 확인 값 (D-483 보완)
+- 2026-10-09 · uncommitted · fix(api): Fleet 공개 신원 조회 예산 분리
+- 2026-10-09 · uncommitted · fix(api): 램프 식별 결과 조회
+- 2026-10-08 · uncommitted · test(api): Console 지도 증거 라우터 쿼리 보존

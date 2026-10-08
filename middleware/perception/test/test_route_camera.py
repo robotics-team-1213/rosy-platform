@@ -55,6 +55,42 @@ def test_every_junction_transition_is_driven(index):
     assert result["max_centre_dev_m"] <= 0.040, summary([result])
 
 
+def test_south_west_bend_reacquires_on_the_route():
+    scenario = dict(SCENARIOS[11], start=(-1.15, -0.511, 0.0))
+    result = run_scenario(scenario, follower(scenario), steps=300)
+    assert result["reached_end"] and result["branch_ok"] and not result["wrong_way"]
+    assert "MEMORY" in result["tiers"]
+    assert result["max_centre_dev_m"] <= 0.040
+
+
+def test_south_west_bend_stops_before_a_long_paint_gap():
+    scenario = dict(SCENARIOS[11], start=(-1.15, -0.511, 0.0))
+    world = _blank_world()
+    col, row = world.px([(-0.61, -0.38)])[0]
+    rows, cols = np.ogrid[:world.paint.shape[0], :world.paint.shape[1]]
+    world.paint[(rows - row) ** 2 + (cols - col) ** 2 <= 300 ** 2] = 0
+    result = run_scenario(scenario, follower(scenario), steps=300, world=world)
+    assert result["reason"] == "lost" and not result["reached_end"]
+    assert result["final_pose"][0] < -0.8
+    assert result["max_centre_dev_m"] <= 0.040
+
+
+@pytest.mark.parametrize("before_end_m", [0.0, 0.015])
+def test_terminal_route_node_does_not_start_a_blind_manoeuvre(before_end_m):
+    endpoint = directed_points(GRAPH, "ring_s:f")[-1]
+    before = directed_points(GRAPH, "ring_s:f")[-2]
+    heading = math.atan2(endpoint[1] - before[1], endpoint[0] - before[0])
+    pose = (endpoint[0] - before_end_m * math.cos(heading),
+            endpoint[1] - before_end_m * math.sin(heading), heading)
+    subject = RouteCameraFollower(GRAPH, ["west:r", "ring_s:f"],
+                                  start_pose=pose, camera_x_offset_m=CAM_X)
+    subject.locked = True  # a prior confirmed pair, then paint fully disappears at the route end
+    blank = np.zeros_like(WORLD.render(pose))
+
+    assert subject.update(1.0, pose, blank, lane_sim.GROUND, **lane_sim.KW) is None
+    assert subject.state == "STOP"
+
+
 class _OdomFrameAtOrigin:
     """Hands the follower odometry whose frame starts at (0, 0, 0) while the
     robot stands at the scenario start (a real /odom, unlike Gazebo's)."""
@@ -185,6 +221,22 @@ def _locked_on_both(key, s_m):
     return subject, pose
 
 
+def test_route_manoeuvre_stops_when_pose_leaves_the_lane():
+    blank = np.full((lane_sim.HT, lane_sim.W), 109, np.uint8)
+    for active in (False, True):
+        subject, pose = _locked_on_both("east:r", 0.35)
+        assert subject.last["near_node"]
+        subject._tracker._forget()  # isolate the route-only fallback from camera memory
+        if active:
+            assert subject.update(0.6, pose, blank, lane_sim.GROUND, **lane_sim.KW)
+            assert subject.state == "MANOEUVRE"
+        off_route = (pose[0] - 0.08 * math.sin(pose[2]),
+                     pose[1] + 0.08 * math.cos(pose[2]), pose[2])
+        assert subject.update(0.8, off_route, blank, lane_sim.GROUND,
+                              **lane_sim.KW) is None
+        assert subject.state == ("MANOEUVRE_ABORT" if active else "STOP")
+
+
 def test_off_node_a_stale_memory_is_replaced_by_a_route_seeded_line():
     """East:r 0.9 m in (off-node), locked on BOTH. The odometry that carries
     the boundary memory then jumps 0.25 m sideways (the memory no longer
@@ -225,3 +277,15 @@ def test_at_a_node_the_relock_does_not_wipe_a_correct_memory():
     assert tracker.last["route_seed"][1] is not None
     assert subject.state == "ONE"
     assert tracker._left, "a correct left memory was wiped"
+
+
+def test_unseen_memory_requires_an_aligned_active_route():
+    subject, pose = _locked_on_both("east:r", 0.9)
+    assert not subject.last["near_node"]
+    blank = np.full((lane_sim.HT, lane_sim.W), 109, np.uint8)
+    subject.update(0.6, pose, blank, lane_sim.GROUND, **lane_sim.KW)
+    assert subject.state == "MEMORY"
+    off_route = (pose[0] - 0.06 * math.sin(pose[2]),
+                 pose[1] + 0.06 * math.cos(pose[2]), pose[2])
+    subject.update(0.8, off_route, blank, lane_sim.GROUND, **lane_sim.KW)
+    assert subject.state == "STOP"

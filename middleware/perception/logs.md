@@ -1261,3 +1261,90 @@
 - 받아들인 대가: 서서 도는(vx < 0.01, |wz| > 0.15) 낮은 신뢰도 weave는 매 프레임 keeper를 다시 시작하므로 거기서는 flipping hold가 쌓이지 않는다. vx가 0.01을 넘으면 hold가 다시 무장된다. keep 조향은 항상 앞으로 가므로(1 − 0.65|e|) 정상 주행 weave는 이 경우에 들지 않는다
 - 증거: `test_keep_pivot.py` 9건(대가 시험, 오래된 twist(skew > 0.30 s)는 reset하지 않음 — `pose_if_fresh` 변이로 실패 확인), `test_lane_paint_source.py` 고정 문자열 갱신
 - gate 변화: 없음. 호스트 SOURCE만
+
+## 2026-10-08 · uncommitted · fix(control): 오른쪽 경계 기억 대체 전 차로 폭 검사
+- 변경: `LaneEdgeFollower._pursue`가 왼쪽 목표를 낼 수 없어 오른쪽 기억을 쓰려 할 때, 가까운 창에 좌우 기억이 함께 있으면 중앙 간격을 기존 시드 범위 [1.2, 2.8] × 차로 반폭과 대조한다. 범위 밖이면 오른쪽 대체를 거절한다. 왼쪽 출력과 두 기억의 비교 창이 없는 경우는 그대로다.
+- 원인: `bw1` 굽이 첫 HOLD frame 260의 가까운 기억 간격 0.290 m는 상한 0.259 m보다 넓고, 기존 오른쪽 대체 목표의 지도 중심선 거리 0.0357 m는 명목 차체 여유를 거의 소진했다. 이는 SIM 참 자세 기반 진단이다.
+- 증거: 거짓 오른쪽 선 시험을 수정 전 실패로 확인; 정상 오른쪽 대체·65° 굽이·전체 랩을 포함한 `test_lane_edge.py` 41 passed, perception 전체 2,754 passed/108 skipped, `known_failures.py` 0 new.
+- gate 변화: 없음. SOURCE/LOCAL만. 보정된 실물 R0·R1·R2는 열림.
+
+## 2026-10-08 · uncommitted · feat(control): Pilot 녹화에 TF 원본 추가
+
+- 변경: Pilot MCAP 명령과 세션 토픽 목록에 네임스페이스 TF와 전역 `/tf`, `/tf_static`을 추가했다. 실제 게시 경로가 어느 쪽이든 원본을 보존한다.
+- 증거: `test_pilot_recorder.py` 39 passed, `known_failures.py` 0 new. 실제 게시·시각 동기·보정 revision은 별도 확인이 필요하다.
+- gate 변화: SOURCE만. 지도 투영 라벨과 실기 차선 추종 수용은 열려 있다.
+## 2026-10-08 · 05462b7d9 · fix(perception): 남서 굽이를 굽이로 읽는다 (D-507 B9)
+- 변경: `lane_keep_junction._continues`(끝-시작 간격 ≤ `MAX_GAP_M`)로 이어진 칠 조각은 fork 두 가지가 아니다. 새 `lane_keep_bend`: 모서리 모양 선(경로를 가로지르고, 가까운 끝이 한쪽에 분명, 먼 끝이 기우는 쪽 차로 밖, 그쪽에 경로 교차점을 넘는 평행선 없음) 중 45°보다 가파르고 직각에서 `CORNER_SQUARE_RAD`보다 먼 선은 닫힌 쪽 경계의 굽이다. 굽이 중심선이 경로와 만나는 점이 `CORNER_LOOKAHEAD_M` 안이면 그 반경에서 추종(`bend_<side>`, 오차 상한 `CORNER_MAX_ERROR`), 밖이면 직진(`bend_ahead`). 가파른 선은 외삽 오프셋이 아니라 보이는 칠의 가까운 끝으로 편을 정하고, 앞 조각에 이어진 조각은 그 편을 받는다. `_runs_past`·`_pursuit_point`는 옮겨 `lane_keep.py` 600줄 유지. 카메라·차로 폭·이득은 그대로
+- 증거: `test_lane_keep_bend.py` 10건(B8 고정 자료 7클립: fork·flipping·corner 0, 굽이 추종, spoke `junction_transverse` 유지, 목표 참 중심선 안쪽 반폭 이내·90 % 23.5 mm 이내). perception 2747 passed. 모델 PC SIM `docs/validation/lane-keep-bend-sim-2026-10-08`: 굽이에 닿은 11/11 통과, x −0.95…−0.78 중앙 +0.014…+0.016 m, `corner_*`·`junction_fork`·`flipping` 0
+- gate 변화: 없음. SOURCE 호스트 시험 + ROS-SIM. 장치·현장 아님
+- 결정: D-507 B9
+- 교훈: 가파른 선의 SIDE_X_M 외삽 오프셋은 편을 정하지 못한다. 보이는 칠로 정한다
+
+## 2026-10-08 · e192ef089 · fix(perception): B9 독립 검토 반영
+- 변경: 닫힌 쪽 평행선이 사선의 가까운 끝을 넘어 이어지면 굽이 아님(정지선 오판 수정). 교차로 규칙을 굽이보다 먼저 판단하고, 65°를 넘는 굽이 선도 교차로 규칙에는 가로선(교차로는 닫힌 쪽 실패). 가파른 선 가까운 끝 편 정하기·편 상속·가까운 순서는 corner turning에서만(끔이면 실물 434프레임 main과 같음)
+- 증거: 새 시험 5건(60° 표시 2건은 05462b7d9에서, 끊긴 경계 교차로 3건은 5a5965e55에서 실패). 모델 PC SIM 8회: 굽이에 닿은 5/5 통과, 3회는 CORE `obstacle_ahead` memory(B4). B8 66° 사건 프레임은 한 프레임 `junction_transverse`
+- gate 변화: 없음. 착지 전 운영자 검토 필요: corner turning 켬에서 실물 프레임 119장 변화(HOLD → 주행 29, `bend_*` 69)
+- 결정: D-507 B9
+- 교훈: 한 프레임에서 굽이와 교차로 입구가 같아 보이면 교차로 쪽으로 실패하고 경로 문맥(B11)에 넘긴다
+
+## 2026-10-08 · 4cb87d467 · fix(perception): B9를 keeper 입력 bend_expected 뒤로 (장치 검토 반영)
+- 변경: main 병합(`_junction`이 (사유, ahead_m)). B9 규칙 전부를 `LaneKeeper.update(..., bend_expected=False)` 뒤로. `bend_ahead`는 굽이 선 교차점 − 반폭 안으로 당기고(평활 뒤에도) 차로 쪽 경계가 없으면 HOLD. `bend_*` 평활 우회 제거. 가까운 끝 편 정하기는 반폭의 절반 이상 떨어진 끝만. 배선은 B11·B12(D-507 구현 메모)
+- 증거: 실물 라벨 434프레임 게이트 끔 main과 0 다름(게이트 켬 90 다름, HOLD → 주행 0, 주행 → HOLD 13). `test_lane_keep_bend.py` 40건(실물 2건은 데이터 없으면 건너뜀), 닫힌 고리 기운 L자 20건. perception 2782 passed. 게이트 켬 SIM 6회: 굽이 통과 0(굽이 앞 차로 경계 없는 구간에서 HOLD → LOST 4, 한 프레임 교차로 → 회전 중단 2)
+- gate 변화: 없음. 장치는 게이트 끔(호출자 없음)
+- 결정: D-507 B9. 굽이 앞 경계 없는 구간을 무엇이 메울지(B11 접근 또는 기대 창 안의 직진 허락)는 사용자 결정
+- 교훈: 한 프레임 규칙으로 SIM 굽이와 실물 벽·칠을 가를 수 없으면, 규칙을 경로 문맥 게이트 뒤에 두고 기본값은 이전 동작으로 둔다
+
+## 2026-10-08 · uncommitted · fix(perception): 양쪽 경계 미관측 시 기억 주행 후보 정지
+
+- 원인: 65° 오른쪽 굽이의 실제 왼쪽 경계를 절곡점 앞뒤 각 0.15 m 지운 호스트 폐루프에서 두 경계가 모두 미관측인데도 오래된 왼쪽 기억 목표로 잘못 좌회전했다. 정지 전 중심선 편차는 0.1518 m였다. 기존 축 정렬 0.15 m 삭제 시험은 오른쪽 굽이에서 왼쪽 화소가 계속 보였으므로 한쪽 선 소실 근거가 아니었다.
+- 변경: `LaneEdgeFollower`는 양쪽 경계가 모두 미관측이면 기억을 재획득용으로만 보관하고 관측 후보를 내지 않는다. `LaneBoundaryTracker`의 MEMORY는 한쪽 경계가 관측되지만 앞쪽 목표가 지지되지 않을 때에만 남긴다. 지도 경로 시제품은 기존 잠금·경로 정렬·기억 목표의 경로 일치를 확인한 경우만 예외다. 한쪽이 관측되는 짧은 왼쪽 굽이 공백의 RIGHT 대체는 유지한다.
+- 증거: 같은 긴 오른쪽 공백의 첫 정지 시 중심선 편차 0.0024 m, 이후 이동 0. 좌·우 짧은 공백·긴 공백, 전체 코스 첫 무관측 정지, 경계·예산·노드 배선 관련 시험 90건 및 지도 카메라·혼합 추종 관련 130건 통과. 지도 경로에서 0.06 m 벗어난 무관측 프레임은 STOP. 저장된 `bw1` 293프레임 집계와 frame 260 LEFT 후보는 변경 전후 동일했다.
+- gate 변화: 없음. SOURCE/LOCAL만. 기존 전체 코스 성공 시험은 안전상 첫 무관측 굽이 정지 시험으로 교체했다. ROS-SIM 새 폐루프, 사람 검수 R0, 실물 R1/R2는 남음.
+
+## 2026-10-08 · uncommitted · fix(perception): 지도 분기 보조의 경로 이탈 가드
+
+- 원인: `route_a`의 무관측 기억 게이트는 지도 중심선에서 0.0609 m 벗어난 자세를 거절했지만, 같은 프레임의 분기 `MANOEUVRE` 폴백이 경로 측면 오차를 확인하지 않고 주행 후보를 냈다.
+- 변경: 분기 보조 진입과 진행 중 지도 측면 오차를 기존 `AGREE_MAX_LATERAL_M`과 비교해, 초과하면 각각 STOP 또는 래치된 `MANOEUVRE_ABORT`로 처리한다.
+- 증거: 저장된 ROS SIM frame 192의 80 mm 자세 교란은 수정 전 `MANOEUVRE`, 수정 후 STOP. 원래 자세의 `MEMORY` 후보는 유지. 분기·혼합·코스 시험 77 passed, 10 skipped, 신규 실패 0.
+- gate 변화: 없음. 오프라인 반례와 호스트 시험이며, 활성 Fleet 지도 연동·ROS SIM 폐루프·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · test(perception): 남쪽 출발 굽이 재획득과 긴 페인트 공백
+
+- 변경: `west:r → ring_s:f` 남쪽 직선 출발 호스트 폐루프와 굽이 앞 0.30 m 반경 페인트 공백을 `test_route_camera.py`에 고정했다.
+- 증거: 정상 바닥은 분기 도달·올바른 방향·MEMORY 재획득, 최대 중심선 편차 0.0356 m. 긴 공백은 0.249 m 진행 뒤 LOST, 최대 편차 0.002 m. 두 시험 모두 통과.
+- gate 변화: 없음. 합성 바닥·SIM 참 자세의 호스트 검증이며 ROS 그래프, Fleet 활성 경로, 실제 벽·페인트 검수는 별도다.
+
+## 2026-10-08 · uncommitted · fix(perception): 정적 경로 끝에서 관측 후보 중단
+
+- 원인: `route_a`가 마지막 경로 조각 끝에서도 `near_node` 분기 manoeuvre를 시작해, 카메라 tier STOP 중 경로 마지막 점에서 72.5 mm 떨어진 위치까지 이동했다.
+- 변경: 마지막 점 20 mm 전부터 관측 후보를 반환하지 않고 진행 중 manoeuvre를 해제한다. CORE 단일 `/cmd_vel` 경계는 그대로다.
+- 증거: 끝점·15 mm 앞 단위 반례 수정 후 29 passed; hybrid·관측 연결·투어 74 passed, 10 skipped. 독립 ROS-SIM 재실행은 끝점 18.1 mm 앞 HOLD 후 LOST, 최대 중심선 편차 47.8 mm로 주행 전체는 HOLD.
+- gate 변화: 없음. 경로 끝 정지만 검증했고 활성 경로·사람 승인 정답·실물 수용은 남았다.
+
+## 2026-10-08 · uncommitted · fix(control): 정적 경로 시제품을 Gazebo 조건에 한정
+
+- 원인: `route_a/b/ab`의 정적 `route_start`는 첫 odom을 지도에 고정하지만 독립 위치 검증이 없다. −40 mm 시작 오차의 오프라인 폐루프가 지도 중심선 60 mm 편차로 주행했다.
+- 변경: observer가 Gazebo 지면 출처·simulation ground 허용·sim time을 모두 확인한 뒤에만 시제품 route follower를 만든다. 그렇지 않으면 관측 없음으로 닫는다.
+- 증거: 호스트 관련 181 passed, 신규 실패 0; 모델 PC ROS 노드에서 PINKY 조건 follower 없음, Gazebo 조건 `RouteCameraFollower` 생성. [검증 기록](../../docs/validation/lane-route-prototype-admission-2026-10-08/result.md).
+- gate 변화: 시제품 진입 제한만 확인. 실제 지도 위치 권한, Gazebo 폐루프 재검증, 실물 R1/R2는 HOLD.
+
+## 2026-10-08 · uncommitted · fix(control): 경로 시제품의 시뮬레이션 조건 상실 폐기
+
+- 원인: 시작 때 만든 route follower는 이후 `camera_ground_source` 변경에도 유지됐다. 다음 유효 프레임에서 다른 지면 투영값을 사용할 수 있었다.
+- 변경: route 모드의 유효 프레임마다 Gazebo 조건을 재검사하고, 깨지면 follower를 폐기한다. 설정을 복구해도 노드 재시작 전에는 되살리지 않는다.
+- 증거: 재현 테스트 수정 전 1 failed, 수정 후 관련 11 passed·신규 실패 0. 모델 PC ROS 노드에서 Gazebo follower가 `PINKY` 전환 프레임 뒤 `NoneType`이 되고 재설정 후에도 유지됐다. [기록](../../docs/validation/lane-route-prototype-lifetime-2026-10-08/result.md).
+- gate 변화: 실행 중 조건 상실의 관측 폐기만 확인. 설정값은 하드웨어 증명이 아니며 운영 차선 추종은 HOLD.
+
+## 2026-10-08 · uncommitted · feat(control): 녹화 프레임에 지면·차선 근거 보존
+
+- 원인: 10/6 원본 3,129프레임의 R0 재생은 모두 STOP이었고 공칭 또는 미승인 후보 지면을 사용했다. Pilot은 차선 관측 진단을 담지만 스냅샷은 담지 않았으며, 둘 다 카메라 보정 상태가 빠져 있었다.
+- 변경: Pilot·스냅샷에 `camera/calibration/status`, 스냅샷에 `line/keep_debug`를 저장한다. 직접 MCAP 추출과 MP4 sidecar는 카메라 상태를 과거 방향 2.5초 이내에서만 연결한다. 스냅샷 side-topic 예산은 프레임당 8 KB로 조정했다.
+- 증거: 감지 전체 2,821 passed·110 skipped·NEW 0, 녹화·변환 집중 154 passed. 학습 전체의 Bash 선택 실패 5개는 같은 `main`에서도 재현했고 Git Bash를 앞에 둔 해당 파일 11 passed. [검증 기록](../../docs/validation/lane-ground-recording-2026-10-08/result.md).
+- gate 변화: SOURCE/LOCAL 증거만 추가. `camera_detect_node`의 보정 상태와 `line_observer_node`의 실제 투영은 서로 다른 출처다. 사람 승인 정답·실물 보정·ROS 폐루프·실물 주행은 HOLD.
+
+## 2026-10-09 · uncommitted · refactor(control): P1a perception 증거 크기 단위 분리
+
+- 변경: `control/sensing/perception/`을 구조 검사에서 별도 크기 단위로 계상했다. 현재 11,035줄이며 남은 `control`은 34,446줄이다. import 경로, colcon 패키지, ROS 실행, CORE 명령 소유권은 바뀌지 않았다.
+- 검증: 구조 34 passed, 관련 perception 133 passed·1 skipped, 각각 `known_failures` 신규 0. 실기·이미지 검증은 이 계상 변경의 증거가 아니다.
+- gate 변화: 없음. D-520 곡선 카메라 맞춤과 주행영역 학습 승인은 별도 검증이다.
+- 후속 판정: 이 브랜치가 건드리지 않은 `line_observer_node.py`는 현재 632줄로 계획 당시 608줄보다 24줄 늘었다. 기존 파일 verdict 허용폭 안이지만 2단계 전에 재판정해야 한다.

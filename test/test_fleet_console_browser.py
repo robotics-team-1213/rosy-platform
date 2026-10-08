@@ -106,7 +106,10 @@ def console_url():
                 if name in json.loads((WEB_COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]:
                     return str(WEB_COMMON / name)
             if path.startswith("/console/assets/"):
-                path = "/" + path[len("/console/assets/"):]
+                # D-518: the URL stays flat while files live in web/<document>/ folders.
+                name = path[len("/console/assets/"):].split("?", 1)[0]
+                moved = next(iter(sorted(WEB.glob(f"*/{name}"))), None)
+                path = "/" + (moved.relative_to(WEB).as_posix() if moved and not (WEB / name).exists() else name)
             return super().translate_path(path)
 
         def log_message(self, *args):  # 시험 출력을 조용히
@@ -2537,6 +2540,30 @@ def test_phone_map_raster_stays_close_to_display_size(console_url):
         browser.close()
 
     assert ratio <= 1.2, ratio
+
+
+@pytest.mark.parametrize("width,height", [(1920, 1080), (320, 568)])
+def test_robot_direction_marker_keeps_a_screen_sized_footprint(console_url, width, height):
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(console_url, wait_until="networkidle")
+        page.wait_for_function("() => (window.__mapMarkers || []).length > 0")
+        marker_sizes = page.evaluate("""() => {
+          const canvas = document.querySelector('#map-canvas');
+          const box = canvas.getBoundingClientRect();
+          return window.__mapMarkers.map(m => Math.max(
+            Math.abs(m.w) * box.width / canvas.width,
+            Math.abs(m.h) * box.height / canvas.height));
+        }""")
+        assert not errors
+        save_temp_screenshot(page, f"fleet_marker_{width}x{height}.png")
+        page.locator("#map-stage").screenshot(path=str(Path(os.environ.get("TEMP", "/tmp")) / f"fleet_marker_map_{width}x{height}.png"))
+        browser.close()
+
+    assert max(marker_sizes) <= 42, marker_sizes
 
 
 @pytest.mark.parametrize("width,height", [(320, 568), (390, 844), (1366, 768)])

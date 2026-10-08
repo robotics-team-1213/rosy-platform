@@ -127,8 +127,12 @@ def test_bag_command_records_the_d411_topics_namespaced_and_dies_with_its_parent
     topics = cmd[cmd.index("--topics") + 1:]
     assert topics == ["/rosy_01/camera/front/compressed", "/rosy_01/cmd_vel", "/rosy_01/odom",
                       "/rosy_01/scan", "/rosy_01/line/observation", "/rosy_01/teleop/intent",
-                      "/rosy_01/line/keep_debug", "/rosy_01/ir_sensor/range"]
+                      "/rosy_01/line/keep_debug", "/rosy_01/ir_sensor/range",
+                      "/rosy_01/camera/telemetry", "/rosy_01/camera/calibration/status",
+                      "/rosy_01/tf", "/rosy_01/tf_static",
+                      "/tf", "/tf_static"]
     assert "/rosy_01/us_sensor/range" not in topics
+    assert pr.pilot_bag_command("/r/s")[-2:] == ["tf", "tf_static"]
 
 
 def test_ir_range_sample_is_three_adc_counts_in_robot_order():
@@ -151,6 +155,7 @@ def test_annotated_recording_preserves_raw_and_separates_model_evidence(tmp_path
     meta = _meta(tmp_path / rid)
     assert meta['preview_mode'] == 'annotated'
     assert meta['annotation_origin'] == 'model_unreviewed'
+    assert meta['topics'][-2:] == ['/tf', '/tf_static']
     rig.write_bag(tmp_path / rid)
     rig.rec.tick()
     rig.rec.stop('requested')

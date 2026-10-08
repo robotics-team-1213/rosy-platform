@@ -14,6 +14,7 @@ from test_review_app import fixture_inputs, open_store
 from test_review_cycle import CLASSES, catalog
 from review_app import ReviewStore, Conflict, make_server
 import review_masks
+import review_ingest
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='requires explicit local Chromium browser run')
@@ -47,6 +48,48 @@ def serve(store):
 def browser_workspace(tmp_path):
     with serve(open_store(tmp_path)) as value:
         yield value
+
+
+def test_review_studio_help_stays_inside_narrow_viewport(browser_workspace):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': 390, 'height': 844})
+    for path, help_id in [('/', 'object-keys'), ('/pixels', 'pixel-keys')]:
+        page.goto(page.url.split('?')[0].split('/pixels')[0].rstrip('/') + path,
+                  wait_until='networkidle')
+        page.locator(f'#{help_id} summary').click()
+        box = page.locator(f'#{help_id} p').bounding_box()
+        assert box is not None and box['x'] >= 0 and box['x'] + box['width'] <= 390
+
+
+def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_workspace):
+    page, store, expect = browser_workspace
+    expect(page.locator('#object-flow [aria-current="step"]')).to_have_text('전체 확인 · 결정')
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#object-keys')).to_have_attribute('open', '')
+    page.locator('#filter').focus()
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#object-keys')).to_have_attribute('open', '')
+    review_masks.bind_classes(store, CLASSES)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#pixel-flow [aria-current="step"]')).to_have_text('영역 수정 · 초안 저장')
+    page.keyboard.press('Shift+/')
+    expect(page.locator('#pixel-keys')).to_have_attribute('open', '')
+    assert store.get(0)['status'] == 'approved'
+    assert review_masks.get(store, 0)['status'] == 'pending'
+
+
+def test_imported_approval_and_recheck_history_are_visible(browser_workspace):
+    page, store, expect = browser_workspace
+    expect(page.locator('#review-history-summary')).to_contain_text('객체 승인 · 픽셀 대기')
+    expect(page.locator('#review-history-events')).to_contain_text('검수자 식별 불가')
+    page.locator('#filter').select_option('approved')
+    page.locator('#reopen').click()
+    expect(page.locator('#review-history-events')).to_contain_text('재검수 시작')
+    review_masks.bind_classes(store, CLASSES)
+    review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, Conflict)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#review-history-summary')).to_contain_text('객체 대기 · 픽셀 대기')
+    expect(page.locator('#review-history-events')).to_contain_text('전체 채우기')
 
 
 @pytest.fixture
@@ -129,7 +172,9 @@ def test_object_candidate_is_findable_and_empty_review_is_neutral(tmp_path):
     reviews[0].update(boxes=[], review_status='pending_human', complete_frame_review=False)
     human.write_text('\n'.join(json.dumps(row) for row in reviews), encoding='utf-8')
     with serve(ReviewStore(tmp_path / 'state', source, human, images)) as (page, store, expect):
-        expect(page.locator('#candidate-details')).to_have_attribute('open', '')
+        expect(page.locator('#candidate-details')).to_be_visible()
+        expect(page.locator('#candidate-source')).to_contain_text('원본 후보 1개')
+        expect(page.locator('#source-preview')).to_have_attribute('aria-pressed', 'true')
         expect(page.locator('#candidates')).to_be_visible()
         page.on('dialog', lambda dialog: dialog.accept())
         page.locator('#candidates').click()
@@ -137,7 +182,29 @@ def test_object_candidate_is_findable_and_empty_review_is_neutral(tmp_path):
         page.get_by_role('button', name='박스 1 삭제').click()
         expect(page.locator('#empty')).to_contain_text('객체가 없으면 전체 확인 후 승인하세요')
         page.reload(wait_until='networkidle')
-        expect(page.locator('#candidate-details')).not_to_have_attribute('open', '')
+        expect(page.locator('#candidate-details')).to_be_visible()
+
+
+def test_model_object_draft_is_visible_before_apply(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    rows[0]['objects'] = [{'bbox_xyxy': [2, 3, 12, 14], 'label': 'cone'}]
+    rows[0]['annotation_source'] = 'qwen3-vl:8b-instruct'
+    (folder / 'verified-inputs.jsonl').write_text(json.dumps(rows[0]) + '\n', encoding='utf-8')
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    with serve(store) as (page, store, expect):
+        page.goto(page.url.split('?')[0] + '?frame=2', wait_until='networkidle')
+        expect(page.locator('#candidate-source')).to_contain_text('미적용 모델 초안 1개')
+        expect(page.locator('#model-preview')).to_have_attribute('aria-pressed', 'true')
+        assert page.locator('#candidate-details').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y']
+        assert store.get(2)['review']['boxes'] == []
+        page.on('dialog', lambda dialog: dialog.accept())
+        page.locator('#model-candidates').click()
+        expect(page.locator('#candidate-source')).to_contain_text('모델 초안 적용됨 · 검수 대기')
+        expect(page.locator('#model-preview')).to_have_attribute('aria-pressed', 'false')
+        assert store.get(2)['review']['boxes'] == rows[0]['objects']
+        assert store.get(2)['status'] == 'pending'
 
 @pytest.mark.parametrize('width', [390, 320])
 def test_catalog_import_reaches_pending_review_on_phone(browser_workspace, tmp_path, width):
@@ -786,6 +853,8 @@ def test_review_service_unavailable_is_distinct_from_connection_failure(
 def test_object_decision_and_preparation_result_are_visible(browser_workspace, width):
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
+    expect(page.locator('#object-approval-hint')).to_contain_text('사진 전체 확인')
+    assert page.locator('.review-actions').bounding_box()['y'] < page.locator('.inspector-heading').bounding_box()['y']
     def shot(state):
         if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
             from pathlib import Path
@@ -1010,6 +1079,65 @@ def test_class_select_lists_the_workspace_class_set(browser_workspace):
     expect(options).to_have_text(['클래스 선택 필요', '로봇', '장애물 상자', '콘', '신호등', '표지판', '사람 발'])
 
 
+def test_object_ribbon_class_click_saves_selected_box_only(browser_workspace):
+    page, store, expect = browser_workspace
+    chip = page.locator('#object-quick-classes button[value="obstacle_box"]')
+    expect(chip).to_be_disabled()
+    expect(page.locator('#object-quick-classes .ui-icon')).to_have_count(
+        page.locator('#object-quick-classes button').count())
+    assert page.locator('.review-editor-tools').bounding_box()['x'] < page.locator('#canvas').bounding_box()['x']
+    assert page.locator('.review-editor-tools').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y'] + 1
+    expect(page.locator('#view-original .ui-icon')).to_have_count(1)
+    expect(page.locator('#view-detail .ui-icon')).to_have_count(1)
+    page.get_by_role('button', name='박스 1 선택', exact=True).click()
+    expect(chip).to_be_enabled()
+    chip.click()
+    expect(page.locator('#save-status')).to_contain_text('서버 저장됨')
+    expect(chip).to_have_attribute('aria-pressed', 'true')
+    assert store.get(0)['review']['boxes'][0]['label'] == 'obstacle_box'
+    assert store.get(0)['status'] == 'pending'
+    expect(page.locator('#approve')).to_be_disabled()
+
+
+def test_object_zoom_pan_and_draw_keep_source_coordinates(browser_workspace):
+    page, store, expect = browser_workspace
+    stage = page.locator('.image-stage')
+    canvas = page.locator('#canvas')
+    original_width = canvas.bounding_box()['width']
+    page.locator('.review-viewport-controls [aria-label^="확대"]').click()
+    assert canvas.bounding_box()['width'] > original_width
+    page.locator('.review-viewport-controls [aria-label^="이동"]').click()
+    stage.scroll_into_view_if_needed()
+    box = stage.bounding_box()
+    cx, cy = box['x']+box['width']/2, box['y']+box['height']/2
+    page.mouse.move(cx, cy)
+    page.mouse.down()
+    page.mouse.move(cx-80, cy-30, steps=4)
+    page.mouse.up()
+    assert stage.evaluate('(node) => node.scrollLeft') > 0
+    assert len(store.get(0)['review']['boxes']) == 1
+    page.locator('.review-viewport-controls [aria-label^="이동"]').click()
+    page.locator('#draw').click()
+    image = canvas.bounding_box()
+    box = stage.bounding_box()
+    x0, y0 = box['x']+box['width']/2-35, box['y']+box['height']/2-20
+    x1, y1 = x0+90, y0+90
+    expected = [round((x0-image['x'])*32/image['width'], 1), round((y0-image['y'])*24/image['height'], 1),
+                round((x1-image['x'])*32/image['width'], 1), round((y1-image['y'])*24/image['height'], 1)]
+    assert not stage.evaluate('(node) => node.classList.contains("review-pan")')
+    assert 0 < expected[0] < expected[2] < 32 and 0 < expected[1] < expected[3] < 24, (image, box, expected)
+    assert page.evaluate('([x,y]) => document.elementFromPoint(x,y)?.id', [x0,y0]) == 'canvas', (image,box,x0,y0)
+    page.mouse.move(x0, y0)
+    page.mouse.down()
+    page.mouse.move(x1, y1, steps=4)
+    page.mouse.up()
+    expect(page.locator('#boxes .box-row')).to_have_count(2)
+    actual = store.get(0)['review']['boxes'][-1]['bbox_xyxy']
+    assert all(abs(a-b) < 1 for a, b in zip(actual, expected)), (actual, expected)
+    page.keyboard.press('0')
+    expect(page.locator('.review-zoom-level')).to_have_text('100%')
+
+
 def test_custom_class_set_names_and_saves(custom_class_workspace):
     page, store, expect = custom_class_workspace
     select = page.locator('#boxes .box-top select').first
@@ -1078,6 +1206,13 @@ def test_learning_summary_separates_review_from_training(browser_workspace):
     expect(page.locator('#review-stage-summary')).to_contain_text('등록 2장')
     expect(page.locator('#training-data-state')).to_contain_text('픽셀 승인 0장')
     expect(page.get_by_text('현재 검수 중인 사진의 학습 완료를 뜻하지 않습니다.')).to_be_visible()
+    expect(page.locator('#object-review-link')).to_contain_text('검수·승인')
+    expect(page.locator('#pixel-review-link')).to_contain_text('검수·승인')
+    page.locator('#object-review-link').click()
+    expect(page.locator('#approve')).to_be_visible()
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.locator('#pixel-review-link').click()
+    expect(page.locator('#pixel-approve')).to_be_visible()
 
 
 def test_learning_shows_prepared_export_and_stale_decision(browser_workspace):

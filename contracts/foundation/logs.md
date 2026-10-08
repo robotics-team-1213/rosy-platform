@@ -535,3 +535,27 @@
 - gate 변화: 없음(additive).
 - 결정: D-507 7
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · feat(core_common): `base_velocity.lane_bend` 능력 필드
+- 변경: `controls.py` `BaseVelocityControl.lane_bend`(bool|None)와 `pinky_controls(lane_bend=)`. 없으면 이전 이미지로 읽는다.
+- 증거: gateway `test_capabilities_controls.py`.
+- gate 변화: SOURCE.
+- 결정: D-507 보충
+
+## 2026-10-08 · b570504a2 · core_common(protocol): line_authority (D-517 M2)
+- 변경: `protocol/line_authority.py` — 요청·상태 모델, `MAX_TTL_S` 2, `MAX_UNTIL_M` 10, `STAMP_TOL_S` 0.05, `SHRINK_TOL_M` 0.02, `AuthorityRefused`. `controls.py` `BaseVelocityControl.line_follow_authority`. 기본 설정 `line_follow.authority_required: false`. schemas.py 는 건드리지 않음(1338 판정).
+- 증거: CORE·Fleet 시험(위 모듈 로그).
+- gate 변화: 없음(additive).
+- 결정: D-517 4항
+
+## 2026-10-08 · 887abb1a9 · feat(core_common): D-517 M2 controls 필드 line_follow_authority_required
+- 변경: `BaseVelocityControl.line_follow_authority_required`(bool|None), `pinky_controls(line_follow_authority_required=...)`.
+- 증거: 모델 PC `test_capabilities_controls.py` 통과.
+- gate 변화: SOURCE.
+- 결정: D-517 4항 독립 리뷰 3. API v1.142.
+
+## 2026-10-08 · uncommitted · fix(device identity): 프로비저닝 UID와 Pi 시리얼을 CORE 신원으로 전달
+
+- 변경: `ROSY_DEVICE_UID`를 로봇 설정에 반영하고, 프로비저닝된 Pi에서 설정 시리얼이 없으면 `/proc/cpuinfo`의 Serial을 읽는다. 둘 다 없는 경우 값을 만들어내지 않는다.
+- 증거: 관련 CORE/계약 테스트 97 passed; `known_failures.py` 신규 실패 0. 장치 배포·기존 Fleet 등록 행 보강은 별도 확인.
+- gate 변화: SOURCE/LOCAL 확인, DEVICE/FIELD 미확인.
