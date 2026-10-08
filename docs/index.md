@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 표시 LOCAL 검증
-- 2026-10-09 · uncommitted · docs(validation): lap SIM 4 — ring 호 주행 기본 켬, 모델 PC
-- 2026-10-09 · uncommitted · docs(adr): D-537 두 Pinky 현장 몸체 대조
-- 2026-10-09 · uncommitted · docs(adr): D-520 개정 — ring 호 주행 기본 켬, 장치 조건
-- 2026-10-09 · uncommitted · feat(core): D-520 호가 odom의 지도 원을 반지름 보정으로 따른다
+- 2026-10-09 · uncommitted · uiux(robot): 마지막 수신 계획 표시 검증
+- 2026-10-09 · uncommitted · 10/7 MCAP 원본 207프레임 검수 후보 갤러리
+- 2026-10-09 · uncommitted · uiux(pilot/robot): 같은 탭 운전석→운용 지도 검증
+- 2026-10-09 · uncommitted · 10/6·10/7 원본 검수 후보 시각 대조
+- 2026-10-09 · uncommitted · 10/6·10/7 주행영역 연속 검수 후보
