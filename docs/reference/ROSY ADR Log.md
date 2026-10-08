@@ -527,3 +527,4 @@
 | D-533 | Fleet의 TLS 공개 identity 조회는 source별 300회/분으로 따로 세고, 승인 challenge/session 증명은 기존 30회/분을 유지한다; 매 REST 요청의 CA·hostname·identity 검사를 생략하지 않는다 | Accepted (2026-10-09, 현장 429 재현; SOURCE 수정, DEVICE/FIELD 별도) |
 | D-537 | 현장 일회성 기체 몸체 대조는 인증된 장치 시험과 연속 영상으로 판정한다 | Accepted (2026-10-09, 두 Pinky 현재 배치 몸체 대조; Fleet 자동 추적·이동 수용 별도) |
 | D-534 | Pinky Pilot 녹화는 모델 PC가 정지 확인 후 자동 수신하고 검수 대기로 넘긴다 | Accepted (2026-10-09, 사용자 지시; SOURCE 계약·수신 타이머, 모델 PC 활성화와 실제 녹화 수신은 별도 확인) |
+| D-538 | 객체·픽셀 검수 스튜디오는 같은 작업 순서와 단축키를 보여주되 독립 결정·저장 조건을 유지한다 | Accepted (2026-10-09, 사용자 지시; SOURCE/브라우저·모델 PC 별도) |
