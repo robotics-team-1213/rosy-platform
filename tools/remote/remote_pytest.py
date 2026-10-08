@@ -59,7 +59,8 @@ git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 # The CI test-job install (ci.yml "Install colcon & tools", receiver crypto, platform
 # wheels) plus the deploy/site/requirements-fleet.txt pins the device set lacks
 # (cryptography 50: Ubuntu's 41 has no x509.verification) and pip numpy/pillow/
-# opencv-python-headless for CI's apt python3-opencv/python3-pil. No system
+# opencv-python-headless for CI's apt python3-opencv/python3-pil, and the playwright
+# package (no browser) because *_browser.py modules import it at collection. No system
 # site-packages: they leak Ubuntu's old cryptography/Jinja2 and give no rclpy.
 # Built in venv.new and swapped in: other sessions use ~/rosy-test/venv directly, so
 # it is never missing or half-built, and never swapped during a run's first 90 s
@@ -83,7 +84,7 @@ while read -r line; do
   grep -qx "$(printf %s "${line%%==*}" | norm)" "$N/pinned.txt" || echo "$line"
 done < deploy/site/requirements-fleet.txt > "$N/fleet-extra.txt"
 $P install -c "$N/constraints.txt" -r "$N/fleet-extra.txt" pytest setuptools wheel flake8 httpx pyyaml \
-  jsonschema ext4 numpy pillow opencv-python-headless
+  jsonschema ext4 numpy pillow opencv-python-headless playwright
 $P install --require-hashes --no-deps --only-binary=:all: \
   --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
   --target "$N/receiver-crypto" -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
