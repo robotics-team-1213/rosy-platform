@@ -1206,3 +1206,15 @@
 - 변경: 지도 G2 fixture의 `runtime.maps`를 제공하는 지도와 일치시켜 지연·단절 캡처 중 지도가 사라지지 않게 했다. Console의 선택 좌표 행은 실제 선택 동안만 보이며 Esc 해제 뒤 숨긴다.
 - 증거: [현재 Console 내비게이션 화면 재검증](../../../docs/validation/uiux-nav-current-g2-2026-10-09/result.md). 320·390·1366px, 정상 등 15행 캡처, 브라우저 4 passed, `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 지도 상태 매트릭스 근거 보강. 전체 G2/G3와 설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 근거와 설정 카드 높이
+
+- 변경: Console과 기존 Dashboard에서 맵핑 세션 수락을 실제 SLAM 실행·지도 갱신과 구별했다. 데스크톱 현장 설정 카드가 같은 행 높이로 늘어나지 않게 했다.
+- 증거: [맵핑 세션 화면 검증](../../../docs/validation/uiux-robot-slam-truth-2026-10-09/result.md). 320·390·1366px Console, 390·1366px Dashboard 캡처; 관련 브라우저 3 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 표시 근거 보강. 설치 이미지·실제 SLAM·DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(robot): Pilot 인계 뒤 빈 지도 안내
+
+- 변경: 지도 데이터가 없을 때 현재 지도를 볼 수 있다고 단정하지 않도록 Robot Console의 비하드웨어 모드 안내를 바로잡았다.
+- 증거: [Pilot→Robot Console 연속 화면](../../../docs/validation/uiux-pilot-console-continuity-2026-10-09/result.md). 390·2000px 실제 CORE 자산 캡처, 관련 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 빈 지도 설명 근거 보강. 지도·SLAM 실제 실행과 DEVICE/FIELD·전체 G2/G3는 HOLD.
