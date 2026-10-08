@@ -282,7 +282,7 @@ class ArcMixin:
             a['reason'] = 'segment_end'  # review: an armed stop always holds, whatever its place
             j.update(state='executing', held=True)
             return None  # the junction gate holds junction_stop
-        if j is None or j['state'] != 'armed' or j['place_id'] != a['end']:
+        if j is None or j['state'] != 'armed' or j['place_id'] != a['end'] or j['action'] == 'bend':
             if j is not None and j['state'] == 'armed':
                 j.update(state='aborted', reason='arc_mismatch')
             a['reason'] = 'lane_arc_end_unarmed'  # Fleet reads this on the record (mismatch included)

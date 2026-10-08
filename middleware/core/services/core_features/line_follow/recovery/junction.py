@@ -178,6 +178,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                                       'junction instructions need CAMERA_LINE (IR has no junction detection)')
             if self._mode.value != 'CAMERA_LINE':
                 raise JunctionRefused('LINE_FOLLOW_NOT_ACTIVE', 'line-follow must be CAMERA_LINE')
+            if action == 'bend' and self._arc_running():  # D-520: the arc drives this lane, no bend
+                raise JunctionRefused('JUNCTION_ARC_RUNNING', 'a D-520 arc is running; send no bend')
             if self._junction_done_place == (place_id, action):
                 raise JunctionRefused('JUNCTION_ALREADY_DONE',
                                       f'{action} at {place_id} already ran; send the next place')

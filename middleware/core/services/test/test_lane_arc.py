@@ -615,3 +615,30 @@ def test_d517_authority_gate_also_stops_an_arc_tick():
     decision, status = rig.step()
     assert (decision.linear, decision.angular) == (0., 0.) and status.state == 'HOLD'
     assert running(rig)
+
+
+BEND = dict(map_id='lab-a', bend_in_m=.2, bend_tol_m=.1, bend_radius_m=.3)
+
+
+def test_a_bend_is_refused_while_an_arc_runs():
+    """Re-verify fix 1: the arc drives this lane; a bend instruction is 409 JUNCTION_ARC_RUNNING."""
+    from core_features.line_follow.recovery.junction import JunctionRefused
+    rig = ArcRig()
+    rig.open()
+    with pytest.raises(JunctionRefused) as refused:
+        rig.m.set_junction('bend', 'SE', 10., None, 30., None, expect=dict(BEND))
+    assert refused.value.code == 'JUNCTION_ARC_RUNNING' and running(rig)
+
+
+def test_an_armed_bend_at_the_arc_end_is_an_unarmed_end(monkeypatch):
+    """Re-verify fix 1, second guard: a bend that got armed anyway never reaches _start_turn."""
+    rig = ArcRig()
+    rig.open()
+    with monkeypatch.context() as m:
+        m.setattr(rig.m, '_arc_running', lambda: False)
+        assert rig.m.set_junction('bend', 'SE', 10., None, 30., None, expect=dict(BEND))[2] == 'armed'
+    decision, status = rig.until(lambda d, s: not running(rig))
+    assert status.junction.state == 'aborted' and status.junction.reason == 'arc_mismatch'
+    assert status.arc.reason == 'lane_arc_end_unarmed'
+    decision, status = rig.drive()
+    assert status.state == 'TRACKING' and decision.linear > 0

@@ -85,3 +85,18 @@ def test_config_keys_defaults_and_start_refusal():
             LineFollowConfig(**{**SITE, **bad})
     with pytest.raises(ValueError, match='ir_guard_speed_scale'):
         LineFollowConfig(arc_enabled=True, ir_guard_speed_scale=0., **SITE)
+
+
+def test_bend_while_an_arc_runs_is_409(core_client):
+    client, services, clock = _active(core_client)
+    _enable(services)
+    _pose(services, clock)
+    lf = services.line_follow
+    lf.observe_scan_points([(1.5, 1.5)], received_at=clock["t"])
+    with lf._lock:
+        lf._open_arc(dict(place_id="SW", action="left", map_id="lab-a", exit_segment=dict(SEGMENT)), clock["t"])
+    assert lf._arc_running()
+    bend = {**BODY, "action": "bend", "place_id": "SE", "turn_deg": 30.0, "map_id": "lab-a",
+            "bend_in_m": 0.2, "bend_tol_m": 0.1, "bend_radius_m": 0.3}
+    refused = client.post(URL, json=bend, headers=OPERATOR)
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "JUNCTION_ARC_RUNNING"
