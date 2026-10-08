@@ -718,10 +718,10 @@ def test_lobby_rejects_unsafe_urls_and_suppresses_current_robot(tablet_page):
     assert errors == [], errors
 
 
-def _enter_drive(page, base_url, access_token="devtoken"):
+def _enter_drive(page, base_url, access_token=None):
     page.goto(f"{base_url}/pilot")
     page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    page.fill("form[data-pilot-token-form] ui-field input", access_token)
+    page.fill("form[data-pilot-token-form] ui-field input", access_token or dev_server.DEV_TOKEN)
     page.click("form[data-pilot-token-form] ui-button")
     page.wait_for_selector("[data-drive-enter]")
     page.click("[data-drive-enter]")
@@ -789,8 +789,8 @@ def test_drive_handoff_opens_real_console_map_in_same_tab(base_url, viewport, tm
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["auth"] = {**config["auth"], **yaml.safe_load(
         (config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))["auth"]}
-    access_token = "rosy-dev-operator"
-    monkeypatch.setattr(dev_server, "DEV_TOKEN", access_token)
+    operator = next(item for item in config["auth"]["tokens"] if item["role"] == "operator")
+    monkeypatch.setattr(dev_server, "DEV_TOKEN", operator["token"])
     profile = RobotProfile.load(robot_config_dir("pinky_pro") / "profile.yaml")
     capabilities = yaml.safe_load((robot_config_dir("pinky_pro") / "capabilities.yaml").read_text(encoding="utf-8"))
     core = TestClient(create_app(config, CoreServices.build(config, profile, capabilities, tmp_path / "docks.json")))
@@ -823,7 +823,7 @@ def test_drive_handoff_opens_real_console_map_in_same_tab(base_url, viewport, tm
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.route("**/*", serve)
-            _enter_drive(page, base_url, access_token)
+            _enter_drive(page, base_url, operator["token"])
             page.wait_for_function("document.querySelector('[data-drive-fact=link]')?.dataset.state === 'OPEN'")
             if output := os.environ.get("ROSY_SHOT_DIR"):
                 shots = Path(output)
@@ -836,9 +836,9 @@ def test_drive_handoff_opens_real_console_map_in_same_tab(base_url, viewport, tm
             page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
             assert "지도 데이터가 아직 없습니다" in page.locator('.surface-map-overlay').inner_text()
             assert "지도가 들어오면 읽기 전용으로" in page.locator('#map-action-reason').inner_text()
-            assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == access_token
+            assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == operator["token"]
             assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
-            assert ("GET", "/api/v1/ui/surfaces/console", f"Bearer {access_token}") in requests
+            assert ("GET", "/api/v1/ui/surfaces/console", f"Bearer {operator['token']}") in requests
             assert "IDLE" in dev_server.MODE_LOG[modes_before:]
             assert any(item["linear"] == 0 and item["angular"] == 0 for item in dev_server.TELEOP_LOG[teleop_before:])
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
