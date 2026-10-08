@@ -33,6 +33,12 @@ LOCALIZED = "LOCALIZED"
 HELD_PER_ROBOT = 3
 #: Before its junction instruction goes out a robot asks for the block just past the place.
 PAST_PLACE_M = 0.05
+#: D-517 9 M3 (Safety-Review): the most a convoy member may reverse below the farthest point it reached,
+#: added to the follower's moving-block gap. D-407 stuck back-off: one ``recovery_back_m`` (default 0.08,
+#: config cap 0.20; a next attempt needs that much forward travel first); then a D-468 retrace: ≤ 0.15 m
+#: (target within 0.15 m, ≤ 5 s from the checkpoint at ≤ 0.03 m/s). Fleet cannot read the robot's
+#: recovery config (not in caps), so the caps are summed. d_stop(v) + u alone is 0.18–0.24 m.
+MEMBER_REVERSE_M = 0.20 + 0.15
 
 
 class TrafficService:
@@ -120,7 +126,31 @@ class TrafficService:
         if seen is not None and seen[0] == route_id and live.trim_m > seen[1]:
             _shift(self._state, robot_id, seen[2], live.trim_m - seen[1])
         self._seen[robot_id] = (route_id, live.trim_m, spans)
-        return blocks.Robot(robot_id, spans, d, lookahead, u, self._length, route_id=route_id)
+        line = getattr(live, "junction", None) or {}  # this period's CORE line-follow read (lane segments)
+        return blocks.Robot(robot_id, spans, d, lookahead, u, self._length, route_id=route_id,
+                            convoy=getattr(live, "convoy", None), recovering=line.get("line_recovering") is True)
+
+    def _link(self, graph, robots: list, trips: dict) -> dict:
+        """D-517 9 M3: each follower of an open convoy follows the nearest localized member ahead on
+        the same arcs (moving block); ``{follower: gap m from its front to that member's rear}``.
+
+        Latest start first (Safety-Review liveness): two followers that both read the other as ahead
+        (estimate noise nose to tail, or a lap wrap) would both stand. The earlier-started one, ahead in
+        the convoy, never follows a later one that follows it; it falls back to its other members or
+        fixed blocks."""
+        gaps, follows = {}, {}
+        order = lambda r: (trips[r.id].view.get("created_at") or 0.0, r.id)  # noqa: E731
+        for robot in sorted((r for r in robots if r.convoy is not None), key=order, reverse=True):
+            live = trips[robot.id]
+            members = [r for r in robots if robot.convoy in (r.id, r.convoy) and not (
+                follows.get(r.id) == robot.id and order(r) > order(robot))] if robot.convoy in trips else []
+            front = blocks.follow(
+                robot, members, lambda m, after: _front_on(graph, live, trips[m.id], m.d, after, self._length),
+                self._body.resume_gap_m((live.view.get("caps") or {}).get("max_speed") or 0.0) + MEMBER_REVERSE_M)
+            follows[robot.id] = robot.follows
+            if front is not None:
+                gaps[robot.id] = round(front - self._length - robot.d, 3)
+        return gaps
 
     def pinned(self) -> list[str]:
         """Robots that block with pins: the trip loop reads their poses (``step(poses=...)``)."""
@@ -160,6 +190,7 @@ class TrafficService:
             else:
                 blocks.release_robot(state, robot_id)
         robots = [self._robot(layout, active[2], live) for live in trips.values()]
+        gaps = self._link(active[2], robots, trips)
         result = blocks.step(layout, robots, self._state, self._clock())
         refused_unit: dict[str, str] = {}
         for robot in robots:
@@ -178,7 +209,7 @@ class TrafficService:
                     refused = robot.spans[index].d0 - live.segments[0]["s_from"]  # back to plan metres
             live.traffic = {"waiting_for": list(waiting), "authority_end_m": result.authority_end.get(robot.id),
                             "refused_at_m": refused, **used}
-        self._view = self._make_view(active[0], layout, active[2], trips, result, refused_unit)
+        self._view = self._make_view(active[0], layout, active[2], trips, result, refused_unit, robots, gaps)
 
     def view(self) -> dict:
         return self._view
@@ -235,7 +266,7 @@ class TrafficService:
 
     # ---- the read-only view ---------------------------------------------------------------
 
-    def _make_view(self, version, layout, graph, trips: dict, result, refused_unit: dict) -> dict:
+    def _make_view(self, version, layout, graph, trips: dict, result, refused_unit: dict, robots, gaps) -> dict:
         state = self._state
         holders: dict[str, set] = {}
         unknown: dict[str, set] = {}
@@ -264,12 +295,16 @@ class TrafficService:
                 loops.setdefault(edges, {"edges": sorted(edges), "capacity": capacity, "robots": []})["robots"] \
                     .append(robot_id)
         cycle = blocks.wait_cycle(result.waiting_for)
+        at = {robot.id: robot for robot in robots}
         return {
             "map_version": version,
             "block_length_m": {edge: round(parts[0][2] - parts[0][1], 3)
                                for edge, parts in sorted(layout.edge_units.items())},
             "units": units,
             "robots": [{"robot_id": robot_id, "authority_end_m": _round(result.authority_end.get(robot_id)),
+                        "front_d_m": _round(at[robot_id].d), "convoy": at[robot_id].convoy and {
+                            "leader": at[robot_id].convoy, "follows": at[robot_id].follows,
+                            "gap_m": gaps.get(robot_id)},
                         "waiting_for": list(result.waiting_for.get(robot_id, ())), "lap": live.view.get("lap"),
                         "trip_state": live.view["state"]} for robot_id, live in sorted(trips.items())],
             "loop_capacity": list(loops.values()),
@@ -279,17 +314,46 @@ class TrafficService:
 
 
 def _shift(state: blocks.TableState, robot_id: str, old_spans, shift: float) -> None:
-    """A repeat trip dropped ``shift`` route metres of finished laps: its grants and authority move
-    with the route (span ``i`` becomes ``i - n``), so the same route id stays valid."""
+    """A repeat trip dropped ``shift`` route metres of finished laps: its grants, shared grants and
+    authority move with the route (span ``i`` becomes ``i - n``), so the same route id stays valid.
+    Every other table is keyed by unit, not span index."""
     n = sum(1 for span in old_spans if span.d1 <= shift + 1e-6)
     held = state.held.get(robot_id)
     if held is not None:
         state.held[robot_id] = {i - n: grant for i, grant in held.items() if i >= n}
+    shared = state.shared.get(robot_id)
+    if shared is not None:  # span-indexed too: a stale index would let a shared unit pass (Safety-Review)
+        state.shared[robot_id] = {i - n: member for i, member in shared.items() if i >= n}
     if robot_id in state.authority:
         if state.held.get(robot_id):
             state.authority[robot_id] -= shift
         else:  # every grant was in the dropped laps: no authority without a grant behind it
             del state.authority[robot_id]
+
+
+def _front_on(graph, live, other, d: float, after: float, body: float) -> Optional[float]:
+    """``other``'s front ``d`` (its route metres) in ``live``'s route metres: the first place past
+    ``after`` where the arcs under its body come in the same order, or None (not on shared arcs)."""
+    mine, theirs = _arcs(graph, live), _arcs(graph, other)
+    i = max((k for k, (_arc, base) in enumerate(theirs) if base <= d), default=0)
+    j = i
+    while j > 0 and theirs[j][1] > d - body:
+        j -= 1
+    need = [arc for arc, _base in theirs[j:i + 1]]
+    for k in range(i - j, len(mine)):
+        front = mine[k][1] + d - theirs[i][1]
+        if front > after and [arc for arc, _base in mine[k - (i - j):k + 1]] == need:
+            return front
+    return None
+
+
+def _arcs(graph, live) -> list:
+    """``(arc id, route metres where it starts)`` along a trip's plan."""
+    out, base = [], 0.0
+    for seg in live.segments:
+        out.append((arc_id(seg), base))
+        base += graph.arcs[arc_id(seg)].length_m
+    return out
 
 
 def _edges(arc_ids) -> frozenset:
