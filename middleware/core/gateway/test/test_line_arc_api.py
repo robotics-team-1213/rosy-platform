@@ -73,11 +73,11 @@ def test_capability_lane_arc_follows_arc_enabled(core_client):
 
 def test_config_keys_defaults_and_start_refusal():
     config = _line_follow_config({})
-    assert (config.arc_enabled, config.arc_curvature_gain, config.arc_blind_max_m) == (False, 1.0, 1.0)
-    on = _line_follow_config({**SITE, "arc_enabled": True, "arc_curvature_gain": 0.9})
+    # 2026-10-09 addendum: on by default; without the site floor declaration it is no capability
+    assert (config.arc_enabled, config.arc_curvature_gain, config.arc_blind_max_m) == (True, 1.0, 1.0)
+    on = _line_follow_config({**SITE, "arc_curvature_gain": 0.9})
     assert on.arc_enabled and on.arc_curvature_gain == 0.9
-    with pytest.raises(ValueError, match='site_floor_map_id'):
-        _line_follow_config({"arc_enabled": True})  # no site floor declaration
+    assert _line_follow_config({**SITE, "arc_enabled": False}).arc_enabled is False
     for bad in (dict(arc_curvature_gain=0.79), dict(arc_curvature_gain=1.26),
                 dict(arc_blind_max_m=0), dict(arc_blind_max_m=1.01), dict(arc_enabled=1)):
         with pytest.raises(ValueError):

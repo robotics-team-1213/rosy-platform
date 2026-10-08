@@ -48,7 +48,8 @@ def check_exit_segment(segment, action, turn_deg, expect, arc_enabled):
         raise ValueError('exit_segment needs map_id, 0.5 <= |curvature_1pm| <= 5, length_m (0, 1], '
                          'outer_line_offset_m [0.05, 0.20], end_place_id and straight or a turn')
     if not arc_enabled:
-        raise JunctionRefused('LANE_ARC_UNAVAILABLE', 'exit_segment needs line_follow.arc_enabled')
+        raise JunctionRefused('LANE_ARC_UNAVAILABLE', 'exit_segment needs line_follow.arc_enabled '
+                              'and site_floor_map_id')
 
 
 def _wrap(angle):
@@ -65,11 +66,11 @@ class ArcMixin:
 
     @property
     def supports_lane_arc(self):
-        """D-520 1 capability: arc_enabled, which the config refuses without site_floor_map_id."""
-        return self._config.arc_enabled
+        """D-520 1 capability: arc_enabled (default on) and the site floor declaration (D-520 5)."""
+        return self._config.arc_enabled and self._config.site_floor_map_id is not None
 
     def _check_exit_segment(self, segment, action, turn_deg, expect):
-        check_exit_segment(segment, action, turn_deg, expect, self._config.arc_enabled)
+        check_exit_segment(segment, action, turn_deg, expect, self.supports_lane_arc)
 
     def _arc_running(self):
         a = self._arc
