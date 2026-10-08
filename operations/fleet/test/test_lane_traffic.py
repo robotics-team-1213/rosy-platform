@@ -210,9 +210,9 @@ def test_the_loop_capacity_refuses_one_more_repeat_trip():
 
 def test_waiting_behind_a_robot_is_not_a_stall():
     runner, store, fleet = _setup()
-    s_n = _s_of(store, "east:fwd", START_N)
-    _trip(runner, store, fleet, "a", "east:fwd", s_n)
-    _trip(runner, store, fleet, "b", "east:fwd", s_n - 0.2)
+    middle = _arc(store, "east:fwd").length_m / 2  # a block boundary: east is cut into 6 (test_blocks)
+    _trip(runner, store, fleet, "a", "east:fwd", middle + 0.15)
+    _trip(runner, store, fleet, "b", "east:fwd", middle - 0.05)  # its stop gap reaches into a's block
     _ticks(runner, fleet)
     assert runner._live["b"].traffic["waiting_for"] == ["a"]
     assert next(r for r in runner.traffic.view()["robots"] if r["robot_id"] == "b")["waiting_for"] == ["a"]
