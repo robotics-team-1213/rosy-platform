@@ -10,8 +10,10 @@ for(const id of ['pixel-flood','pixel-brush-tool','pixel-polygon-tool'])$(id).se
 const states={pending:'픽셀 검수 대기',approved:'픽셀 승인',excluded:'픽셀 제외'};
 const serverReasons={'known mask index required':'등록된 픽셀 클래스만 사용할 수 있습니다.','flood seed outside original image':'누른 점이 원본 사진 범위를 벗어났습니다.','bounded flood tolerance required':'비슷한 색 허용치는 0~100 사이 정수입니다.','bounded brush radius required':'브러시 반지름은 0~128 사이 정수입니다.','bounded brush points required':'브러시 획이 너무 깁니다. 나누어 그리세요.','brush point outside original image':'브러시 획이 원본 사진 범위를 벗어났습니다.','3..128 polygon points required':'영역은 꼭짓점 3~128개가 필요합니다.','polygon point outside original image':'영역 꼭짓점이 사진 밖에 있습니다.','mask encoding failed':'마스크를 저장하지 못했습니다.','no unknown pixels remain':'남은 미검수 픽셀이 없습니다.','exactly one background class required':'배경 클래스가 정확히 하나여야 합니다.','drivable outside visible lane boundary':'보이는 왼쪽 차선 바깥 또는 오른쪽 차선 바깥에 주행 가능 영역이 있습니다. 해당 픽셀을 배경이나 미검수로 수정하세요.','unknown pixel review action':'지원하지 않는 동작입니다.'};
 function readableError(message){return serverReasons[message]||message;}
+serverReasons['draft has no labels for remaining unknown pixels']='이 초안은 남은 255 영역에 제안한 라벨이 없습니다. 다른 초안을 선택하거나 직접 검수하세요.';
 let workspace,frame,review,original,displayPhoto,maskImage,busy=false,ready=false,loading=true,conflicted=false,forbidden=false,serial=0,stroke=null,draft=[],tool='sample',polygon=[];
 let candidatePreviewDigest='';
+const mergeCandidate=document.createElement('ui-button');mergeCandidate.id='pixel-merge-candidate';mergeCandidate.setAttribute('data-action-icon','pixels');mergeCandidate.setAttribute('kind','primary');mergeCandidate.textContent='사람 라벨 유지 · 255만 초안 보완';$('pixel-apply-candidate').before(mergeCandidate);
 $('pixel-view-status').before($('pixel-candidate-tools'));
 $('pixel-candidate-tools').after($('pixel-candidate-preview'));
 $('pixel-candidate-tools').classList.add('review-draft-bar');
@@ -45,8 +47,9 @@ function legacyCandidate(){return v13Review()&&review?.draft_candidates?.find(ro
 function candidateOptions(){const rows=ready?review?.draft_candidates||[]:[],key=`${frame?.index}:${rows.map(row=>`${row.sha256}:${row.origin}`).join(',')}`,select=$('pixel-candidates');
  if(key!==candidateKey){candidateKey=key;select.replaceChildren();for(const row of rows){const option=document.createElement('option');option.value=row.sha256;option.textContent=`${row.origin==='v12_pixel_mask_candidate'&&v13Review()?'v12 이관 참고 · v13 주행영역 없음':({'v12_pixel_mask_candidate':'v12 기존 마스크','sam3_road_v1_v12_base':'SAM3 주행영역 + v12 마스크','sam3_road_visible_lane_clip':'SAM3 차선 밖 미검수 보정','sam3_obstacle_unknown_v12_base':'SAM3 장애물 보류 · 사람 확인 필요'})[row.origin]||'자동 초안'} · ${row.sha256.slice(0,8)}`;option.title=`출처: ${row.origin||'미기록'} · 목록 ${row.catalog_sha256}`;select.append(option);}}
   $('pixel-candidate-tools').hidden=!rows.length;select.disabled=busy||!ready||loading||conflicted||forbidden||draft.length>0||seeds.length>0||polygon.length>0;
- $('pixel-apply-candidate').disabled=select.disabled||!rows.length||frame?.status==='excluded'||review?.status==='excluded';
- $('pixel-apply-candidate').textContent=legacyCandidate()?'v12 참고 마스크 가져오기':'선택 초안 적용';
+  $('pixel-apply-candidate').disabled=select.disabled||!rows.length||frame?.status==='excluded'||review?.status==='excluded';
+  mergeCandidate.disabled=select.disabled||!rows.length||!unknownPixels||frame?.status==='excluded'||review?.status==='excluded';
+ $('pixel-apply-candidate').textContent=legacyCandidate()?'v12 참고 마스크로 전체 교체':'선택 초안으로 전체 교체';
  $('pixel-preview-candidate').disabled=select.disabled||!rows.length;
  $('pixel-preview-candidate').setAttribute('aria-pressed',String(!$('pixel-candidate-preview').hidden));}
 function previewCandidate(){
@@ -55,13 +58,13 @@ function previewCandidate(){
  candidatePreviewDigest=digest;
  $('pixel-candidate-image').onload=()=>{if(frame?.index!==index||candidatePreviewDigest!==digest)return;
   $('pixel-candidate-preview').hidden=false;
-  $('pixel-candidate-status').textContent=legacyCandidate()?'v12 이관 참고 · v13 주행 가능 영역 초안 없음':'미적용 초안 · 읽기 전용';enable();};
+  $('pixel-candidate-status').textContent=legacyCandidate()?'v12 참고 · 주행 가능 영역 제안 없음':'사람 라벨 보존 + 255 보완 미리보기';enable();};
  $('pixel-candidate-image').onerror=()=>{if(frame?.index!==index||candidatePreviewDigest!==digest)return;
   $('pixel-candidate-preview').hidden=true;
   $('pixel-candidate-status').textContent='초안을 미리 볼 수 없습니다.';enable();};
  $('pixel-candidate-status').textContent='초안 미리보기를 불러오는 중…';
- $('pixel-candidate-caption').textContent=`사진 ${index+1} · ${$('pixel-candidates').selectedOptions[0].textContent} · 미적용 초안`;
- $('pixel-candidate-image').src=`/api/draft-preview/${index}/${digest}`;
+ $('pixel-candidate-caption').textContent=`사진 ${index+1} · ${$('pixel-candidates').selectedOptions[0].textContent} · 현재 마스크와 합친 미리보기`;
+ $('pixel-candidate-image').src=`/api/draft-merge-preview/${index}/${digest}`;
 }
 function visible(){return workspace?.frames.filter(row=>$('pixel-filter').value==='all'||row.status!=='excluded'&&row.pixel_status===$('pixel-filter').value)||[];}
 function url(){const link=new URL(location.href);if(frame)link.searchParams.set('frame',frame.index);else link.searchParams.delete('frame');if($('pixel-filter').value==='all')link.searchParams.delete('filter');else link.searchParams.set('filter',$('pixel-filter').value);history.replaceState(null,'',link);}
@@ -189,6 +192,7 @@ $('pixel-save').onclick=()=>commit(draft.map(({label,radius,points})=>({action:'
 addEventListener('beforeunload',event=>{if(draft.length||stroke||seeds.length||polygon.length)event.preventDefault();});
 $('pixel-approve').onclick=()=>mutate('approve',{complete_frame_review:$('pixel-complete').checked,background_reviewed:$('pixel-background').checked,unknown_pixels_reviewed:$('pixel-unknown')?.checked===true});$('pixel-exclude').onclick=()=>mutate('exclude');$('pixel-reopen').onclick=()=>mutate('reopen');
 $('pixel-apply-candidate').onclick=()=>{if(confirm('새 초안을 적용하면 현재 마스크가 대체되고 픽셀 승인이 해제됩니다. 계속할까요?'))mutate('apply_draft',{draft_sha256:$('pixel-candidates').value});};
+mergeCandidate.onclick=()=>{if(confirm('사람이 칠한 픽셀은 그대로 두고 255 영역 중 초안에 라벨이 있는 픽셀만 채웁니다. 적용 후 전체 사진을 다시 확인하세요.'))mutate('merge_draft',{draft_sha256:$('pixel-candidates').value});};
 $('pixel-candidates').onchange=()=>{candidatePreviewDigest='';$('pixel-candidate-preview').hidden=true;previewCandidate();};
 $('pixel-preview-candidate').onclick=()=>{if(!$('pixel-candidate-preview').hidden){$('pixel-candidate-preview').hidden=true;$('pixel-candidate-status').textContent='현재 검수 마스크 표시 · 초안 미적용';enable();}else previewCandidate();};
 for(const id of ['pixel-complete','pixel-background'])$(id).onchange=enable;$('pixel-opacity').oninput=paint;$('pixel-show-unknown').onchange=paint;$('pixel-mask-visible').onchange=paint;

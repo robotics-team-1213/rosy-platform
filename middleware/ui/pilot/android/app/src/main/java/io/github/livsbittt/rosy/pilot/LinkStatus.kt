@@ -66,6 +66,13 @@ object LinkStatus {
             "요청 범위: 조종(operator) · 관리자 권한은 주지 않습니다."
     }
 
+    /** Keeps only the approval-code alphabet (after AllCaps), so a Hangul or symbol keystroke never lands. */
+    val codeFilter = android.text.InputFilter { source, start, end, _, _, _ ->
+        val kept = source.subSequence(start, end).filter { it in CODE_ALPHABET }
+        if (kept.length == end - start) null else kept
+    }
+    private const val CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+
     /** First 16 hex digits in fours: exactly what the robot LCD's "CA" line draws. */
     fun caShort(sha256: String): String = sha256.take(16).chunked(4).joinToString(" ")
 }
