@@ -136,7 +136,7 @@ class JunctionBendMixin:
         line_left = max(0., (arc_end-i)*BEND_STEP_M-radius*abs(turn))
         arc_speed = min(speed, self._angular_cap()*radius)
         self._loss_started_at, self._lost_latched = None, False
-        j.update(basis=self._turn_basis_now, path=points, arc_end=arc_end, i=i, speed=speed,
+        j.update(basis=self._turn_basis_now, path=points, arc_end=arc_end, i=i, speed=speed, pass_at=now,
                  target=math.remainder(yaw+turn, math.tau),
                  bound=(arc_end-i)*BEND_STEP_M+ahead)
         self._next_phase(j, 'bending', now, line_left/speed+radius*abs(turn)/arc_speed+STEP_MARGIN_S)
@@ -147,10 +147,16 @@ class JunctionBendMixin:
         """'bending' and the bend's 'reacquiring': pursue the path, bounded. Locked."""
         if j['state'] == 'reacquiring':
             seen = self._junction_seen_at is not None and self._junction_seen_at >= j['phase_at']
-            if self._reacquired(j, pose) or (
-                    seen and abs(math.remainder(pose.yaw-j['target'], math.tau)) <= REACQUIRE_HEADING_RAD):
-                self._junction_done()
-                return decision
+            ahead = self._line_ahead(now, j['pass_at'])  # lap SIM A: sighted during the pass, not yet reached
+            if self._reacquired(j, pose) or ((seen or ahead) and abs(
+                    math.remainder(pose.yaw-j['target'], math.tau)) <= REACQUIRE_HEADING_RAD):
+                self._junction_done(keep_sighting=ahead)
+                if not ahead:
+                    return decision
+                # The next junction's stop begins here, aimed along the exit line (D-507 addendum 3).
+                self._junction_held, self._junction_entry = True, (j['target'], j['key'])
+                self._junction = dict(action=None, place_id=None, state='waiting')
+                return self._junction_hold('junction_waiting', decision)
             if j['travel'] >= REACQUIRE_M:
                 return self._unresolved(j, decision)
         elif j['travel']*self._config.bridge_distance_scale > j['bound']:
@@ -161,8 +167,7 @@ class JunctionBendMixin:
         if j['state'] == 'bending' and j['i'] >= j['arc_end']:
             self._next_phase(j, 'reacquiring', now, STEP_TIME_S)
             self._odom_travel(j, now)
-            self._junction_seen_at = self._junction_first_seen = self._junction_anchor = None
-            self._junction_entry = None
+            self._junction_entry = None  # a mid-arc heading; a sighting on the arc is the next junction's
         if self._bend_blocked(now, twist):  # D-422 on the pass's own twist: hold, keep the pass
             self._return_controller, self._bridge = None, None
             self._loss_started_at, self._lost_latched = None, False  # the pass owns the loss clock
