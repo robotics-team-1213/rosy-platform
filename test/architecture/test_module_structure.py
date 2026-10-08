@@ -171,8 +171,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_083,
-        "split: measured at 46083 on 2026-10-09 after traffic config moved to its counted "
+        46_507,
+        "split: measured at 46507 on 2026-10-09 after D-536 added a read-only robot guide "
+        "in Fleet's existing guide/server owners and D-525 extended site-map and traffic views. "
+        "No new robot command publisher; the server/web split remains in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. +150 allowance from 46507. "
+        "Previously measured at 46083 on 2026-10-09 after traffic config moved to its counted "
         "subpackage. D-525 S1 adds virtual signal view and trip-loop wiring within Fleet's existing "
         "site and traffic owners; D-524 Service Control stays in the host-control owner. No new robot "
         "command path or package owner; continue the server/web split in "
