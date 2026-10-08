@@ -2643,3 +2643,17 @@
 - 증거: 모델 PC 수정 전 `test_trip_authority.py` 수집 실패(새 능력 필드), 수정 뒤 대상 241 통과. `operations/fleet/test` 2718 통과·3 실패 — 3건 main(16115e269)에서도 실패(`test_document_imports`, `test_learning_receiver`, `test_site_map_api` node).
 - gate 변화: SOURCE. M1 표도 앞 끝 d 를 쓴다(blocks.py 정의대로 바로잡음).
 - 결정: D-517 4항 독립 리뷰 1·2·3. fleet 46092 (판정 45942+150 안). 능력은 trip 시작 때만 본다.
+
+## 2026-10-08 · 482c98340 · feat(fleet): D-520 1–2 Fleet 쪽 — exit_segment, 접선 회전, 호 carried 판정
+- 변경: `routing/execute.exit_segment`가 나가는 차로 polyline을 원 하나로 맞춘다(Kasa). 장소에서 장소까지의 온 `lane` 차로, 점 6개 이상, 잔차 ≤ `fleet.trip.arc_fit_tol_m`(0.005), 0.5 ≤ |κ| ≤ 5.0, 길이 ≤ 1.0 m일 때만 `{curvature_1pm(왼쪽 +), length_m, outer_line_offset_m, end_place_id}`. `outer_line_offset_m`은 사이트 지도에 칠한 선이 없어 `fleet.trip.arc_outer_line_offset_m`(0.095)이다. 능력 `base_velocity.lane_arc: true`이고 `map_id`가 있는 지시에만 싣는다. 그때 `left`·`right`는 접선 `turn_deg`(6° 없음), `advance_m` 없음. `line_follow.arc.from_place_id`가 보낸 장소이고 `arc_seq`가 보낼 때보다 새로우면 그 지시는 carried(회전 뒤 호, 이어지는 `straight`). 이 trip의 호가 `stopped`면 trip `stopped`(`lane_arc`, `detail.arc_reason`), `reason: lane_arc_end_unarmed`면 `detail.arc_end_unarmed`만 남기고 계속. `arc_mismatch` 중단은 오늘의 `junction`. 콘솔 사유 문구 3개. API Ref trip 행에 문장 추가(판 올림은 CORE 쪽 D-520 항목)
+- 증거: 260919 ring 네 호 κ +3.978(반지름 0.2514), 잔차 ≤ 0.00007 m, 길이 0.3739/0.4595/0.3722/0.3739. east·west 잔차 ≥ 0.138 m. 변이 3건: κ 부호 뒤집기 → ring·합성 시험 실패, carried 호 규칙 끄기 → 6건 실패, `arc_seq` 새로움 무시 → 1건 실패, 모두 복원. `operations/fleet/test` 2725 passed/133 skipped/1 failed(`test_document_imports.py::test_each_console_document_reaches_only_its_modules`, 깨끗한 main 627ae3c0c에서도 같음), node `site-map.test.mjs` 15 passed, `test_module_structure.py` 34 passed
+- gate 변화: 없음(SOURCE만. SIM 단계 1 전이고 장치 `arc_enabled`는 꺼짐)
+- 결정: fleet 패키지 45979→46067(+88, 허용 46092까지 25 남음), trip_runner 686→709(허용 836). D-491 횡단보도 구간 제외는 Fleet이 구역을 모르므로 넣지 않았다(260919 ring에는 없음). 원 맞춤 허용치는 0.005 그대로
+- 교훈: 없음
+
+## 2026-10-08 · 7f67af26a · fix(fleet): D-520 검토 반영 — 호 기준선 전 송신 없음, 미무장 표시 지움, 오프셋 범위
+- 변경: `lane_arc` 로봇에는 `line_follow.arc`가 실린 교차로 상태를 한 번 읽기 전까지 지시를 보내지 않는다. CORE는 프로세스 동안 마지막 호를 들고 있어서, 기준선 없이 보내면 trip 전의 호가 이 trip의 호로 보여 멈추거나 carried가 될 수 있었다. 지금 호의 사유가 바뀌면 `detail.arc_end_unarmed`를 지운다. CORE 재시작이 `arc_seq`를 되돌린다는 주석(교차로 seq와 같음). `fleet.trip.arc_outer_line_offset_m`은 [0.05, 0.20]만 받는다. ADR D-520 1항에 횡단보도 제외는 CORE 검사(`_arc_on_crosswalk`)라는 줄(d9af50a27)
+- 증거: 검토의 변이 생존자 7건을 새 시험이 죽인다(기준선 문, 다른 장소의 호, `stop`의 `exit_segment`, `ARC_MIN_POINTS`, 온 차로 `s_from`, `arc_newer`의 bool, 미무장 표시 지우기). 모두 복원. `operations/fleet/test` 2732 passed/133 skipped/1 failed(`test_document_imports.py`, 깨끗한 main 627ae3c0c에서도 같음), node `site-map.test.mjs` 15 passed, `test_module_structure.py` 34 passed
+- gate 변화: 없음(SOURCE만)
+- 결정: fleet 패키지 46067→46073(허용 46092까지 19 남음), trip_runner 709→713(허용 836)
+- 교훈: 프로세스 수명 동안 남는 상대 쪽 번호(arc_seq)를 "새로움"으로 비교할 때는 첫 읽기를 기준선으로 잡기 전에 아무것도 보내지 않는다

@@ -145,8 +145,16 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_107,
-        "split: re-judged at 46107 on 2026-10-08 (independent re-judge, critic agent): the D-507 addendum"
+        46_317,
+        "split: re-judged at 46317 on 2026-10-08 (independent re-judge, architect agent): D-520 1-2 Fleet "
+        "side (+97 over main) adds no module, owner, service or robot command path: exit_segment (circle fit "
+        "of the next lane arc, CORE curvature/length range) is pure routing math in routing/execute.py "
+        "beside turn_target; trip_runner sends it in the existing LaneJunctionPort instruction and reads "
+        "CORE's line_follow.arc for carried/stopped/unarmed (768 within 686+150); trip_ports adds two "
+        "TripConfig site knobs and arc_newer; TripCaps adds lane_arc; site-map-model.js +4 labels. Moving "
+        "code inside fleet does not lower the package count; B2 stays unscheduled. The +150 allowance is "
+        "unchanged. Previously re-judged at 46107 on 2026-10-08 (independent re-judge, critic agent): the "
+        "D-507 addendum"
         " bend pass (+129 over main 2fa5d896f) adds no module, owner, service or robot command path: bend"
         " geometry (bend_geometry, next_bend, straight_approach, bend_fields, shared _pose_tol) sits in "
         "server/trip_ports.py beside junction_fields; trip_runner._step_bend sends the bend through the "

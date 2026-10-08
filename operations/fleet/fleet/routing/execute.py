@@ -69,6 +69,50 @@ def turn_target(graph: Graph, segments: list, index: int) -> float:
     return tangent + math.copysign(TURN_OVERTURN_DEG, tangent) if against > BEND_MIN_DEG else tangent
 
 
+#: D-520 1: CORE takes ``exit_segment`` with 0.5 <= |curvature| <= 5.0 1/m and length in (0, 1.0] m.
+ARC_CURVATURE_1PM = (0.5, 5.0)
+ARC_MAX_LENGTH_M = 1.0
+#: A circle through fewer points proves nothing (any three fit one); 260919 ring lanes have 38-47.
+ARC_MIN_POINTS = 6
+
+
+def exit_segment(graph: Graph, segments: list, index: int, *, fit_tol_m: float,
+                 outer_line_offset_m: float) -> Optional[dict]:
+    """D-520 1: the ``exit_segment`` for the place at the end of segment ``index``, or None.
+
+    Only when the next segment is a whole ``lane`` arc to its place whose polyline lies within
+    ``fit_tol_m`` of one circle (Kasa fit) of curvature and length in CORE's range. The sign is
+    REP-103: + when the circle's centre is left of the lane (counter-clockwise).
+    """
+    if index + 1 >= len(segments):
+        return None
+    nxt, arc = segments[index + 1], graph.arcs[arc_id(segments[index + 1])]
+    points = arc.polyline
+    if (arc.drive_mode != "lane" or nxt["s_from"] > 1e-3 or ends_at_place(graph, nxt) is None
+            or not 0 < arc.length_m <= ARC_MAX_LENGTH_M or len(points) < ARC_MIN_POINTS):
+        return None
+    n = len(points)
+    mx, my = sum(p[0] for p in points) / n, sum(p[1] for p in points) / n
+    u, v = [p[0] - mx for p in points], [p[1] - my for p in points]
+    suu, svv, suv = sum(a * a for a in u), sum(b * b for b in v), sum(a * b for a, b in zip(u, v))
+    det = suu * svv - suv * suv
+    if det <= 1e-9 * (suu + svv) ** 2:  # collinear: a straight lane
+        return None
+    ru = sum(a * (a * a + b * b) for a, b in zip(u, v)) / 2
+    rv = sum(b * (a * a + b * b) for a, b in zip(u, v)) / 2
+    uc, vc = (ru * svv - rv * suv) / det, (rv * suu - ru * suv) / det
+    radius, cx, cy = math.sqrt(uc * uc + vc * vc + (suu + svv) / n), uc + mx, vc + my
+    if max(abs(math.dist(p, (cx, cy)) - radius) for p in points) > fit_tol_m:
+        return None
+    (px, py), heading = points[0], arc.start_tangent
+    left = math.cos(heading) * (cy - py) - math.sin(heading) * (cx - px) > 0
+    curvature = (1.0 if left else -1.0) / radius
+    if not ARC_CURVATURE_1PM[0] <= abs(curvature) <= ARC_CURVATURE_1PM[1]:
+        return None
+    return {"curvature_1pm": round(curvature, 4), "length_m": round(arc.length_m, 4),
+            "outer_line_offset_m": outer_line_offset_m, "end_place_id": arc.end_place}
+
+
 def ends_at_place(graph: Graph, segment: dict) -> Optional[str]:
     arc = graph.arcs[arc_id(segment)]
     return arc.end_place if math.isclose(segment["s_to"], arc.length_m, abs_tol=1e-3) else None
