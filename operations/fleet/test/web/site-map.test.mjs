@@ -97,7 +97,7 @@ test('D-494 trip panel text and button reasons', async () => {
   const active = {version: 1};
   assert.equal(tripStartReason({role: 'operator', plan, active, running: null, now: 99}), '');
   assert.match(tripStartReason({role: 'operator', plan, active, running: null, now: 101}), /30초/);
-  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /진행 중/);
+  assert.match(tripStartReason({role: 'operator', plan, active, running: trip, now: 99}), /이 로봇은 이미 운행 중/);
   assert.match(tripStartReason({role: 'operator', plan, active: {version: 2}, running: null, now: 99}), /지도가 바뀌었습니다/);
   assert.match(tripStartReason({role: 'viewer', plan, active, running: null, now: 99}), /운영자/);
   assert.match(tripStartReason({role: 'operator', plan: null, active, running: null}), /경로를 계산/);
