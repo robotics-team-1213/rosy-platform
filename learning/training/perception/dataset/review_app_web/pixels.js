@@ -4,6 +4,7 @@ import {reviewViewport} from '/viewport.js';
 const $=id=>document.getElementById(id);
 reviewViewport(document.querySelector('.pixel-stage'),$('pixel-canvas'),document.querySelector('.pixel-layout .review-view-bar'),()=>!stroke);
 const toolOptions=document.querySelector('.pixel-editor-column section .ui-workspace-bar');
+document.querySelector('.pixel-quick-tools').prepend($('pixel-tool-hint'),$('pixel-quick-classes'),document.querySelector('.pixel-quick-actions'));
 document.querySelector('.pixel-quick-actions').after(toolOptions);
 for(const id of ['pixel-flood','pixel-brush-tool','pixel-polygon-tool'])$(id).setAttribute('aria-describedby','pixel-tool-hint');
 const states={pending:'픽셀 검수 대기',approved:'픽셀 승인',excluded:'픽셀 제외'};
