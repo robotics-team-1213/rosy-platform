@@ -185,6 +185,22 @@ def _locked_on_both(key, s_m):
     return subject, pose
 
 
+def test_route_manoeuvre_stops_when_pose_leaves_the_lane():
+    blank = np.full((lane_sim.HT, lane_sim.W), 109, np.uint8)
+    for active in (False, True):
+        subject, pose = _locked_on_both("east:r", 0.35)
+        assert subject.last["near_node"]
+        subject._tracker._forget()  # isolate the route-only fallback from camera memory
+        if active:
+            assert subject.update(0.6, pose, blank, lane_sim.GROUND, **lane_sim.KW)
+            assert subject.state == "MANOEUVRE"
+        off_route = (pose[0] - 0.08 * math.sin(pose[2]),
+                     pose[1] + 0.08 * math.cos(pose[2]), pose[2])
+        assert subject.update(0.8, off_route, blank, lane_sim.GROUND,
+                              **lane_sim.KW) is None
+        assert subject.state == ("MANOEUVRE_ABORT" if active else "STOP")
+
+
 def test_off_node_a_stale_memory_is_replaced_by_a_route_seeded_line():
     """East:r 0.9 m in (off-node), locked on BOTH. The odometry that carries
     the boundary memory then jumps 0.25 m sideways (the memory no longer

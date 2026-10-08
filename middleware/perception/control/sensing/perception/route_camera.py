@@ -369,6 +369,7 @@ class RouteCameraFollower:
                 self._manoeuvre = None
             elif (m["travel"] > MANOEUVRE_MAX_TRAVEL_M
                   or not 0.0 <= now_s - m["t0"] <= MANOEUVRE_TIMEOUT_S
+                  or abs(fix.lateral_m) > AGREE_MAX_LATERAL_M
                   or heading_error > MANOEUVRE_MAX_HEADING_RAD):
                 self._abort()
                 return None
@@ -378,7 +379,9 @@ class RouteCameraFollower:
         if observation is not None:
             self.state = tier
             return observation
-        if near_node and self.locked and heading_error <= MANOEUVRE_MAX_HEADING_RAD:
+        if (near_node and self.locked
+                and abs(fix.lateral_m) <= AGREE_MAX_LATERAL_M
+                and heading_error <= MANOEUVRE_MAX_HEADING_RAD):
             self._manoeuvre = {"travel": 0.0, "xy": pose[:2], "t0": float(now_s)}
             self.state = "MANOEUVRE"
             return self._route_observation()
