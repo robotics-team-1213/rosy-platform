@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · 8fa0df8f6 · fix(fleet): CORE junction_corner_hold 이면 trip 을 바로 멈춤
 - 2026-10-08 · 070959eea · fix(fleet): CORE가 교차로 목격으로 끝낸 굽이도 끝난 것으로 셈
 - 2026-10-08 · a90d9b705 · refactor(fleet): 차로 교통을 `fleet/traffic/` 하위 패키지로 옮김 (D-517 이음매)
 - 2026-10-08 · e8ba5ada0 · 모바일 관제 첫 화면 결합 검증
 - 2026-10-08 · 91b15708b · fix(fleet): CORE `approaching`도 기동 중으로 센다; Fleet 목록을 CORE 목록에 묶음
-- 2026-10-08 · 7f67af26a · fix(fleet): D-520 검토 반영 — 호 기준선 전 송신 없음, 미무장 표시 지움, 오프셋 범위
