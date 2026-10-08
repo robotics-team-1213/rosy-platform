@@ -762,6 +762,12 @@
 - 변경: 실제 CORE FastAPI 자산으로 Pilot→Console 같은 탭 이동을 실행하고 인증된 매니페스트 요청·역할·지도 패널을 390×844·1366×768에서 검증한다.
 - 증거: [Pilot→실제 Console 인증 인계](../../../docs/validation/uiux-pilot-console-session-2026-10-08/result.md). TestClient·Chromium 2 passed, 관련 묶음 10 passed, known_failures 0 NEW.
 - gate 변화: LOCAL 브라우저 근거 추가. DEVICE/FIELD 수용 근거는 아님.
+## 2026-10-08 · uncommitted · fix(api): `POST /line-follow/junction` 선택 필드 `lane_turn_deg` (API v1.152)
+- 변경: `straight` + 기대 창일 때만 받는 `lane_turn_deg`(−360…360, 왼쪽 +). 아니면 400 `VALIDATION_ERROR`. `_expect` 로 CORE에 넘긴다
+- 증거: `test_line_junction_api.py::test_lane_turn_deg_belongs_to_a_straight_with_a_window` (모델 PC)
+- gate 변화: 없음(SOURCE)
+- 결정: 옛 CORE는 pydantic 기본 `extra=ignore` 로 필드를 버리고 v1.148 정지를 유지한다(능력 플래그 없이 하위 호환)
+- 교훈: 없음
 
 ## 2026-10-08 · uncommitted · test(api): Console 지도 증거 라우터 쿼리 보존
 
