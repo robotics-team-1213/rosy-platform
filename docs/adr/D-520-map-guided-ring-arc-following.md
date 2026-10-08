@@ -368,13 +368,14 @@
 2. **원 추종(odom feed-forward + 반지름 보정).** 호를 열 때 CORE는 odom에 지도 원 하나를 놓는다.
    - 원을 놓는 법:
      - (a) 회전 뒤에는 회전 목표 yaw(진입 yaw + `turn_deg`, 지도 접선)를 접선으로 하고 지금 자리를 지나는 원이다. 회전이 목표에서 몇 도 덜 돌거나 더 돌고 끝나도, 로봇은 그 방향을 따르지 않고 원으로 돌아온다.
-     - (b) 이어지는 `straight`는 앞 호의 원을 그대로 쓴다. 같은 odom 궤적이고 같은 κ이며 앞 호의 `end_place_id`가 이 장소일 때다.
+     - (b) 이어지는 `straight`는 앞 호의 원을 그대로 쓴다. 같은 odom 궤적, 같은 세대(사이에 모드 변경 없음), 같은 κ이고 앞 호가 이 장소에서 끝났을 때만이다. 회전은 늘 (a)다(안전 검토 2026-10-09: 지난 바퀴의 원을 다시 쓰지 않는다).
+     - IR `level`의 기준 ψ₀ + κ·s에서 ψ₀도 (a)의 목표 yaw다(회전 끝 자세와 최대 5° 다름).
    - 매 틱 두 오차를 잰다. e_r은 원 밖으로의 거리이고 바깥이 +다. e_θ는 진행 방향 − 원 접선이다.
    - 명령은 ω = g·v·κ + v·c다.
-     - c = clamp(sign(κ)·k_y·e_r − k_θ·e_θ, ±`ARC_MAX_CORRECTION_1PM` 1.5 1/m).
-     - k_y는 36 1/m², k_θ는 12 1/m다(2항 설정의 시작값과 같고 임계 감쇠, 거리 시정수 약 0.17 m). 지금은 코드 상수다. 로봇별 값이 필요해지면(단계 2 카메라 맞춤) 2항의 설정 키로 옮긴다.
-     - IR 보정의 `away`·`level` 동안 c는 0이다.
-   - |e_r| > `ARC_MAX_RADIAL_M` 0.075 m면 `lane_arc_edge`로 선다. IR이 칠한 선을 보는 자리는 약 0.0625 m이고 차로 반폭은 0.0925 m다.
+     - c = clamp(sign(κ)·(k_y·e_r + I) − k_θ·e_θ, ±`ARC_MAX_CORRECTION_1PM` 1.5 1/m). I는 k_i·∫e_r ds(odom 길이)이고 |I| ≤ 1.0 1/m로 자른다. 이어지는 `straight`는 원과 함께 I도 이어받는다.
+     - k_y 64 1/m², k_θ 16 1/m, k_i 150 1/m³이다. 거리 영역 극점은 −11.5, −2.3 ± 2.8i이다(Routh k_i < k_θ·k_y). 비례만으로는(시작값 36·12) 명령보다 덜 도는 로봇에서 일정한 바깥 어긋남이 남았다(lap SIM 4 첫 묶음: Gazebo가 0.08 m/s 호에서 약 15 % 덜 돌아 +0.02–0.04 m). 지금은 코드 상수다. 로봇별 값이 필요해지면 2항의 설정 키로 옮긴다.
+     - IR 보정의 `away`·`level` 동안 c는 0이고 I도 쌓지 않는다.
+   - |e_r| > `ARC_MAX_RADIAL_M` 0.075 m면 `lane_arc_edge`로 선다. IR이 칠한 선을 보는 자리는 약 0.0625 m이고 차로 반폭은 0.0925 m다. IR 보정 중에는 이 한도를 쓰지 않는다. 보정에는 2항의 멈춤(반대쪽·`centre`·두 번째 판정·`level` 상한·시간)이 있다.
    - **IR은 경로가 아니라 측정과 안전이다.** 호에서 처음 나온 `left`·`right` 판정은 2항대로 한 번 보정을 연다. 그 순간 원을 반지름 방향으로 옮긴다. 옮긴 원에서 몸은 그 쪽 칠한 선 중심보다 0.0325 m(테이프 반폭 0.0125 m + IR 줄 옆 0.020 m, Pinky URDF) 안쪽에 있다. 보정이 끝나면 옮긴 원을 따른다. 두 번째 판정에서 서는 규칙은 그대로다.
    - 그대로 두는 것: 매 틱 `motion_admitted`(kind `arc`/`arc_edge`), 그 틱 twist의 D-422 sweep, odom 길이 끝, 시간 한도, 모든 멈춤은 HOLD(호 기록 `stopped`)다.
    - **반지름.** 지도 차로 중심 반지름은 0.2514 m(`lane_graph.yaml`)이고, 칠한 두 선의 가운데는 (0.155 + 0.345)/2 = 0.250 m다. 둘은 1.4 mm 다르므로 따로 고르지 않고 지도 차로 중심(κ)을 따른다. 바깥으로 흐른 원인은 반지름이 아니었다. 원인은 진입 방향 12–17°(lap SIM 2)와 명령보다 덜 도는 곡률이었다(단계 1 SW: 진입 오차 +1–2°에서도 흐름 33 mm, 이득 1.1에서 16 mm).
@@ -387,14 +388,15 @@
 3. **기본 켬.**
    - `line_follow.arc_enabled`의 기본은 true다. 능력 `lane_arc`는 `arc_enabled`와 현장 바닥 선언 `site_floor_map_id`(5항)가 함께 있을 때만 참이다.
    - 선언이 없는 로봇은 오늘과 같다. Fleet은 `exit_segment`를 보내지 않고, CORE는 받으면 409 `LANE_ARC_UNAVAILABLE`이다.
-   - 바뀐 시작 규칙: 선언 없는 `arc_enabled: true`는 이제 시작 거부가 아니다. 능력만 거짓이다. 선언이 있는 로봇에서 `ir_guard_speed_scale` ≤ 0이면 여전히 거부한다(선언 자체가 `ir_guard_enabled`·`obstacle_mode: path`·URDF 몸을 요구한다, D-507 9).
+   - 바뀐 시작 규칙: 선언 없는 `arc_enabled: true`는 이제 시작 거부가 아니다. 능력만 거짓이다. `ir_guard_speed_scale` 0도 거부 대신 능력 거짓이다(한 번 보정을 할 수 없다). 선언 자체는 `ir_guard_enabled`·`obstacle_mode: path`·URDF 몸을 요구한다(D-507 9).
    - 지도 쪽 조건은 1항 그대로다. Fleet은 원호 적합을 통과한 `lane` 호(260919의 ring 네 호)에만 `exit_segment`를 싣는다. 원호 기하가 없는 지도와 장소는 오늘의 추종이다.
    - 끄는 스위치는 `arc_enabled: false`다.
 4. **장치 조건(4항·7항 DEVICE의 "켜지 않는다"를 바꾼다).** 장치에서 호 주행은 다음 순서를 모두 지난 뒤에만 한다.
    - (1) 이 개정의 SIM 합격([lap SIM 4](../validation/lane-trip-lap-sim4-2026-10-09/result.md)).
    - (2) 아래 DEVICE 체크리스트.
    - (3) 사용자 승인.
-   - 그 전까지 현장 바닥을 선언하는 장치 계획은 `line_follow.arc_enabled: false`를 함께 둔다. `tools/device_test/plan_rules.py`는 이 키를 false로만 받는다.
+   - 그 전까지 현장 바닥을 선언하는 장치 계획은 `line_follow.arc_enabled: false`를 함께 둔다. `tools/device_test/plan_rules.py`는 이 키를 false로만 받고, `site_floor_map_id`를 선언하는 계획에 이 키가 없으면 거절한다.
+   - **남는 위험(안전 검토 2026-10-09, 사용자 판단).** 이 규칙은 장치 시험 계획만 지킨다. 계획 밖에서 로봇 overlay(`/var/lib/rosy/core/.rosy/rosy.yaml`)가 `site_floor_map_id`를 선언하면, 그 로봇은 다음 payload(D-412 자동 갱신 포함)부터 `lane_arc`를 알린다. 손 데모 overlay나 복원 전에 끊긴 시험이 그런 경우다. 저장소에서 이 키를 선언하는 것은 `d476_bridge_9dfk.yaml` 하나이고, 그 계획은 끝나면 overlay를 바이트 단위로 되돌린다. 장치 overlay를 직접 쓰는 사람은 DEVICE 체크리스트 전까지 `arc_enabled: false`를 함께 써야 한다. 코드로 막으려면 장치에서만 켜지는 수용 표지가 필요한데, 이는 이번 결정("추가 opt-in 없이 기본")과 맞서므로 사용자가 정한다.
    - SIM 합격선:
      - lap 12회 이상에서 각 ring 호의 참값 |Δr| ≤ 0.05 m.
      - IR 보정 0, `lane_arc_edge` 0, 벽 `near_stop` 0.

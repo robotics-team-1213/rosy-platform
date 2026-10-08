@@ -351,8 +351,6 @@ class LineFollowConfig:
         if not (_finite(self.arc_curvature_gain) and 0.8 <= self.arc_curvature_gain <= 1.25
                 and _finite(self.arc_blind_max_m) and 0.0 < self.arc_blind_max_m <= 1.0):
             raise ValueError("arc_curvature_gain must be in [0.8, 1.25] and arc_blind_max_m in (0, 1]")
-        if self.arc_enabled and self.site_floor_map_id is not None and not self.ir_guard_speed_scale > 0:
-            raise ValueError("arc_enabled with site_floor_map_id (D-520 5) needs ir_guard_speed_scale > 0")
         site = self.site_floor_map_id
         if site is None:
             return

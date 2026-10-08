@@ -82,8 +82,8 @@ def test_config_keys_defaults_and_start_refusal():
                 dict(arc_blind_max_m=0), dict(arc_blind_max_m=1.01), dict(arc_enabled=1)):
         with pytest.raises(ValueError):
             _line_follow_config({**SITE, **bad})
-    with pytest.raises(ValueError, match='ir_guard_speed_scale'):
-        _line_follow_config({**SITE, "arc_enabled": True, "ir_guard_speed_scale": 0.})
+    # an IR guard speed of 0 is no lane_arc capability, not a refused start
+    assert _line_follow_config({**SITE, "ir_guard_speed_scale": 0.}).arc_enabled is True
 
 
 def test_bend_while_an_arc_runs_is_409(core_client):

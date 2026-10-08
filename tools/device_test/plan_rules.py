@@ -85,6 +85,10 @@ def check_overlay(flat, accepted_risks=()):
             raise SystemExit(f"plan overlay {key}: not an allowed test key (RULES in plan_rules.py)")
         if not rule[0](value):
             raise SystemExit(f"plan overlay {key}={value!r}: must be {rule[1]}")
+    if "line_follow.site_floor_map_id" in flat and flat.get("line_follow.arc_enabled") is not False:
+        # D-520 addendum 2026-10-09: the arc is on by default and the site floor makes it a capability
+        raise SystemExit("plan overlay line_follow.site_floor_map_id needs line_follow.arc_enabled: false "
+                         "until the D-520 DEVICE checklist")
     coast, slow = flat.get("line_follow.bridge_coast_m", 0.10), flat.get("line_follow.bridge_slow_m", 0.25)
     if coast > slow:   # LineFollowConfig refuses coast > slow at CORE start
         raise SystemExit(f"bridge_coast_m {coast} > bridge_slow_m {slow}")

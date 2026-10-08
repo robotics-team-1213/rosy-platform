@@ -66,8 +66,10 @@ class ArcMixin:
 
     @property
     def supports_lane_arc(self):
-        """D-520 1 capability: arc_enabled (default on) and the site floor declaration (D-520 5)."""
-        return self._config.arc_enabled and self._config.site_floor_map_id is not None
+        """D-520 1 capability: arc_enabled (default on), the site floor declaration (D-520 5) and an
+        IR guard speed for the one-time correction (else no arc, not a refused start)."""
+        cfg = self._config
+        return cfg.arc_enabled and cfg.site_floor_map_id is not None and cfg.ir_guard_speed_scale > 0
 
     def _check_exit_segment(self, segment, action, turn_deg, expect):
         check_exit_segment(segment, action, turn_deg, expect, self.supports_lane_arc)
