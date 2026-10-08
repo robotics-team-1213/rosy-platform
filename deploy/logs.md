@@ -2622,7 +2622,7 @@
 - 증거: 문서 lint·관련 계약 시험은 착지 전 확인; 모델 PC 모델 평가와 AI PC GPU 스모크는 HOLD.
 - gate 변화: 없음.
 
-## 2026-10-09 · feat/host-management-guard · feat(deploy): D-530 호스트 바라는 상태·드리프트 점검·가드
+## 2026-10-09 · 2af714d5a · feat(deploy): D-530 호스트 바라는 상태·드리프트 점검·가드
 
 - 변경: 세 PC의 새벽 재부팅 유닛(관제 06:08, 모델 06:03, AI 05:58)과 관제 PC Docker 갱신 유닛·스크립트를 실제 파일 그대로 `deploy/{site,model_pc,ai_pc}/host-state/`에 옮겼다. `deploy/hosts/common/rosy-host-state`(역할별 설치, `--dry-run` diff, 30분 드리프트 점검은 safe만 수정). `rosy-model-guard-check`를 `deploy/site/rosy-host-guard`로 일반화(모델 PC·AI PC·로봇, N → 유닛 재시작 → 2N → 재부팅, 새벽 창 제외, 실행은 D-524 도우미).
 - 증거: 모델 PC `test/test_host_state.py`·`test/test_host_guard.py` 25 passed. 모델 PC에서 읽기 전용 `install model --dry-run`: 새벽 재부팅 파일 일치, 워치독·panic 설정 없음을 보고.
