@@ -76,6 +76,12 @@ store `models/inbox/`의 **한 폴더**에 두 파일과 `READY`가 있어야 �
 | `metrics` | 검증 split의 클래스별 IoU |
 | `trainer` | 코드 저장소·commit 또는 노트북 식별자 |
 
+`v13-drivable` manifest에는 `parent_lane_model`의 `model_revision`, `onnx_sha256`,
+`torchscript_sha256`와 64자리 store dataset 내용 SHA가 필요하다. `drivable`은 출력의
+마지막 채널이다. manifest 파서는 이 값의 형식만 확인한다. 실제 부모 파일과 사람 승인
+데이터의 해시 일치, 부모 출력과 최종 ONNX의 화소 일치는 별도 학습 admission 및
+평가 증거로 검증해야 한다. 이 필드만으로 접수나 주행 권한이 생기지 않는다.
+
 `role`은 닫힌 목록이다: `background`, `lane_marking`, `drivable`, `stop_line`, `ignore`, `wall`.
 `wall`(D-373 결정 9)은 차선도 주행 가능 영역도 아니다. 후처리는 차선 중심 계산에서 `wall` 화소를 빼고,
 섀도 결과에 가까운 영역(아래 40 %)의 벽 비율 `wall_fraction`을 낸다. `ignore`와 달리 평가와 라벨에서 따로 센다.

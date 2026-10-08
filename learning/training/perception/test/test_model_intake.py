@@ -60,6 +60,8 @@ def test_v13_drivable_intake_holds_until_review_lineage_is_verified(tmp_path):
         dataset_repo="unreviewed", dataset_revision="a" * 64,
         camera_profile_revision="cam-1", trainer="direct", date="20261009",
         revision_prefix="v13-drivable",
+        parent_lane_model={"model_revision": "lane-seg-20261006-abcd1234", "onnx_sha256": "b" * 64,
+                           "torchscript_sha256": "c" * 64},
     )
     rc, report = intake.run(str(folder), out=tmp_path / "accepted", root=tmp_path)
     assert rc != 0 and report["verdict"] == "fail" and report["transient"] is False
