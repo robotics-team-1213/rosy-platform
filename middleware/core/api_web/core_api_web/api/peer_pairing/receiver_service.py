@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import threading
 
@@ -62,7 +63,7 @@ class WrongCode(Refused):
 
 #: D-535: why a request that is no longer pending cannot be confirmed, cancelled or decided.
 #: An approved one keeps the default (PAIRING_REQUIRED): the requester reads status, which says approved.
-_ENDED = {"expired": "APPROVAL_EXPIRED", "rejected": "APPROVAL_DENIED", "cancelled": "PAIRING_REQUIRED"}
+_ENDED = {"expired": "APPROVAL_TIMEOUT", "rejected": "APPROVAL_DENIED", "cancelled": "APPROVAL_CANCELLED"}
 
 
 def _changed(row):
@@ -81,6 +82,7 @@ class PeerReceiver:
         self._display_dir = display_dir
         self._display_shown = _UNSYNCED  # L1: the first sync always writes or removes the file
         self._display_warned = False
+        self._display_ca_digest = None
         self._anchor = anchor or (lambda: {})
         self._lock = threading.RLock()
         grants = repository.grants()
@@ -115,6 +117,11 @@ class PeerReceiver:
         shown = {"requests": [{"display_code": row["display_code"], "approval_code": row["approval_code"],
                                "expires_at": row["expires"].isoformat()}
                               for row in live]} if live else None
+        ca = self._display_ca() if shown is not None else None
+        if ca:
+            # The requester standing at the robot compares this with the CA it pins (first contact)
+            # while the request is pending; without it the screen-code path has nothing to compare.
+            shown["tls_ca_sha256"] = ca
         if shown == self._display_shown:
             return
         target = os.path.join(self._display_dir, DISPLAY_FILE)
@@ -150,6 +157,17 @@ class PeerReceiver:
             and os.access(self._display_dir, os.W_OK)
         return "open" if shown and not self._display_warned else "console_only"
 
+    def _display_ca(self):
+        """The bootstrap CA digest the LCD shows beside the codes; cached once it validates, else None."""
+        if self._display_ca_digest is None:
+            try:
+                digest = self._anchor().get("tls_ca_sha256")
+            except ValueError:
+                return None
+            if isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest):
+                self._display_ca_digest = digest
+        return self._display_ca_digest
+
     def _live(self, source=None):
         now = self.clock()
         return [row for row in self._pending.values() if row["state"] == "pending" and now < row["expires"]
@@ -170,8 +188,10 @@ class PeerReceiver:
             if len(json.dumps(fields).encode()) > 4096:
                 raise Refused("request too large")
             if fields["receiver_id"] != self.receiver_id or fields["receiver_key_sha256"] != self._identity.fingerprint:
-                raise Refused("receiver identity mismatch")
+                raise Refused("receiver identity mismatch", "IDENTITY_CHANGED")
             verify(fields["client_public_key"], signature, "request", fields)
+        except Refused:
+            raise
         except (ValueError, ProofDenied) as exc:
             raise Refused("request proof rejected") from exc
         with self._lock:
@@ -217,7 +237,7 @@ class PeerReceiver:
     def _row(self, request_id, secret=None):
         row = self._pending.get(request_id)
         if not row or (secret is not None and not hmac.compare_digest(row["secret_hash"], hashlib.sha256(secret.encode()).digest())):
-            raise Refused("request unavailable", "APPROVAL_EXPIRED")
+            raise Refused("request unavailable", "APPROVAL_TIMEOUT")
         if row['state'] == 'pending':
             stored = self.repo.grants().get(request_id)
             if stored is not None:
@@ -360,10 +380,13 @@ class PeerReceiver:
 
     def _grant(self, grant_id):
         grant = self.repo.grants().get(grant_id)
-        # D-535: unknown, revoked or made for another receiver key needs a new request; a lapsed one expired.
-        if (not grant or grant["revoked"] or grant["receiver_key_sha256"] != self._identity.fingerprint
-                or grant["receiver_id"] != self.receiver_id):
+        # D-535: unknown needs a request, revoked was withdrawn, another receiver key is a changed identity.
+        if not grant:
             raise Refused("relationship unavailable")
+        if grant["revoked"]:
+            raise Refused("relationship unavailable", "APPROVAL_REVOKED")
+        if grant["receiver_key_sha256"] != self._identity.fingerprint or grant["receiver_id"] != self.receiver_id:
+            raise Refused("relationship unavailable", "IDENTITY_CHANGED")
         if grant["expires_at"] is not None and datetime.fromisoformat(grant["expires_at"]) <= self.clock():
             raise Refused("relationship unavailable", "APPROVAL_EXPIRED")
         if grant["issuer_source"] == SCREEN_CODE_ISSUER:
@@ -375,7 +398,7 @@ class PeerReceiver:
             if issuer["digest"] != grant["issuer_digest"] or issuer["source"] != grant["issuer_source"]:
                 raise RepositoryDenied("issuer identity changed")
         except RepositoryDenied as exc:
-            raise Refused("issuer unavailable") from exc
+            raise Refused("issuer unavailable", "APPROVAL_REVOKED") from exc
         return grant
 
     def challenge(self, grant_id):

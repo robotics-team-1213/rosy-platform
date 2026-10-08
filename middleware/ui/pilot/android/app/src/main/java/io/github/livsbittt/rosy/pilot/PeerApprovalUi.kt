@@ -37,7 +37,8 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
             return flow.connect(onPending = { pending -> main.post {
                 if (!owns()) return@post
                 activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                val message = "${candidate.name} · ${pending.receiverId}\n\n로봇 화면에 뜬 승인 코드를 입력하거나 수신 화면에서 Rosy Pilot의 연결 요청을 승인하세요.\n요청 범위: 조종 화면 · 기존 안전 규칙과 사용 권한 유지\n요청 확인: ${pending.code}\n\n4문자는 요청을 찾는 표시입니다. 조종이나 관리자 권한을 발급하지 않습니다."
+                val message = LinkStatus.pending("${candidate.name} · ${pending.receiverId}", pending.code,
+                    java.time.Duration.between(java.time.Instant.now(), pending.expiresAt).seconds, pending.caSha256)
                 if (dialog == null) {
                     val code = EditText(activity).apply {
                         // D-483 M1: the LCD may list several requests; ours is the line with our display code.
@@ -49,7 +50,7 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
                     val form = LinearLayout(activity).apply {
                         orientation = LinearLayout.VERTICAL; setPadding(48, 0, 48, 0); addView(code); addView(note)
                     }
-                    dialog = AlertDialog.Builder(activity).setTitle("수신 장치 승인 대기")
+                    dialog = AlertDialog.Builder(activity).setTitle("승인 대기 · ${pending.code}")
                         .setMessage(message).setView(form)
                         .setPositiveButton("승인 코드 확인", null)
                         .setNegativeButton("취소") { _, _ -> close(); canceled() }
@@ -74,7 +75,10 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
                                         code.visibility = View.GONE; send.visibility = View.GONE
                                         "이 로봇은 콘솔 승인만 지원합니다"
                                     }
-                                    else -> "승인 코드를 보내지 못했습니다. 다시 입력하거나 수신 화면에서 승인하세요."
+                                    outcome is PeerRefused && outcome.status == 429 -> "틀린 승인 코드가 많아 잠시 화면 코드를 받지 않습니다. 로봇 대시보드에서 승인하세요."
+                                    outcome is PeerRefused && outcome.status == 403 -> "화면 코드는 조종 권한까지만 승인합니다. 로봇 대시보드에서 승인하세요."
+                                    LinkStatus.unreachable(outcome) -> "로봇에 닿지 않아 코드를 보내지 못했습니다. Wi-Fi를 확인하고 다시 입력하세요."
+                                    else -> "승인 코드를 보내지 못했습니다. 다시 입력하거나 로봇 대시보드에서 승인하세요."
                                 }
                             }
                         }.start()
@@ -87,8 +91,12 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
                 main.post {
                     if (!owns()) { latch.countDown(); return@post }
                     dialog?.dismiss()
-                    dialog = AlertDialog.Builder(activity).setTitle("수신 화면의 인증서 확인")
-                        .setMessage("${candidate.name} · ${offer.hostname}\n\n수신 장치의 승인 화면과 아래 인증서 확인 값 전체가 같은지 확인하세요.\n\n${offer.sha256.chunked(8).joinToString(" ")}\n\n이름이나 4문자만 같아도 연결하지 마세요.")
+                    // D-483 2026-10-09: the LCD draws the first 16 digits as "CA xxxx xxxx xxxx xxxx"; the dashboard shows all 64.
+                    dialog = AlertDialog.Builder(activity).setTitle("승인됨 · 로봇 인증서 확인")
+                        .setMessage("${candidate.name} · ${offer.hostname}\n\n처음 연결하는 로봇입니다. 아래 값이 로봇 쪽 표시와 같은지 확인하세요.\n\n" +
+                            "승인 대기 중 로봇 화면 'CA' 줄과 비교한 값:\nCA ${LinkStatus.caShort(offer.sha256)}\n\n" +
+                            "또는 로봇 대시보드의 인증서 확인 값 전체와 비교:\n${offer.sha256.chunked(4).joinToString(" ")}\n\n" +
+                            "어느 쪽에서도 같은 값을 확인하지 못했으면 연결하지 마세요.")
                         .setPositiveButton("표시가 같습니다") { _, _ -> if (owns()) accepted = true; latch.countDown() }
                         .setNegativeButton("다릅니다 · 취소") { _, _ -> close(); canceled() }
                         .setOnCancelListener { close(); canceled() }.create()
