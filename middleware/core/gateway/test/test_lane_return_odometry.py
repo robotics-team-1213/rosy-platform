@@ -17,7 +17,7 @@ def bridge():
         body_front_x_m=.08, body_rear_x_m=-.08, body_half_width_m=.06))
     manager.set_mode(LineFollowMode.CAMERA_LINE)
     return SimpleNamespace(_svc=SimpleNamespace(line_follow=manager),
-        _line_clock=lambda: 10., _node=SimpleNamespace(get_clock=lambda:
+        _line_clock=lambda: 10., _node=SimpleNamespace(get_namespace=lambda: "/rosy_26", get_clock=lambda:
             SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=100100000000))))
 
 
@@ -34,6 +34,17 @@ def test_original_ros_time_and_frame_are_preserved_with_source_age():
     assert view.pose.stamp_ns == 100000000000
     assert view.pose.frame == "odom"
     assert view.pose.received_at == pytest.approx(9.9)
+
+
+@pytest.mark.parametrize("child,ok", [("rosy_26/base_footprint", True), ("rosy_26/base_link", True),
+                                      ("rosy_99/base_footprint", False), ("rosy_26/camera", False)])
+def test_own_namespace_body_frame_is_accepted(child, ok):
+    # Device bringup publishes rosy_26/odom -> rosy_26/base_footprint (9dfk, 2026-10-08).
+    b = bridge()
+    m = msg()
+    m.child_frame_id = child
+    observe_lane_return(b, m, dict(x=0., y=0., yaw=0.), now=10.)
+    assert (b._svc.line_follow.return_evidence(now=10.).pose is not None) is ok
 
 
 @pytest.mark.parametrize("bad", [msg(nanos=-1), msg(nanos=1000000000), msg(sec=True)])
