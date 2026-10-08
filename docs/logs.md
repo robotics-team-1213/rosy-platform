@@ -7364,3 +7364,9 @@ osy-d395-s1d\`.
 - 변경: 설치 모델과 실제 영상·odom을 읽기 전용 별도 worker에 넣어 마스크 수명 충돌을 계측하고, 주행 권한을 늘리지 않는 대안의 반례와 다음 실험 기준을 기록했다.
 - 증거: `validation/learned-paint-cadence-2026-10-09/result.md`. fresh odom 50/50, `every_n=1` 0건, 영상 간격 중앙값 124.8 ms, learned 사용 0/50, 완료 추론 354.2 ms, 오류 없음.
 - gate 변화: 없음. 운영 worker 내부 원인, 사람 경계 ID, 주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: 굽이 SIM 페인트 출처 차이 반례
+
+- 변경: B8의 같은 Gazebo 89프레임·동일 keeper에서 threshold와 지도/참값 자세 투영 페인트를 비교해 페인트 출처가 경계 추출·STOP을 바꾸는 구간을 특정했다.
+- 증거: `validation/lane-sim-paint-source-2026-10-09/result.md`. `south_centre_lost` 15–20번 6장에서 threshold만 `bend_ahead`로 진행; 지도 투영에서는 옆 경계가 없어 `no_boundary`. 지도 투영은 벽 가림 없는 진단 후보이며 승인 정답이 아니다.
+- gate 변화: 없음. 실물 경계 ID·카메라 보정·폐루프 SIM·실기 수용은 HOLD.

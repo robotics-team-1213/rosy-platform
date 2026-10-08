@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · docs: 굽이 SIM 페인트 출처 차이 반례
 - 2026-10-09 · uncommitted · docs: Pinky learned paint 지연·수명 충돌 재현
 - 2026-10-09 · uncommitted · docs: 실기 learned paint 사용률과 추론 지연 진단
 - 2026-10-09 · uncommitted · docs: 10/7 경계 기억의 odom 반례 범위 측정
 - 2026-10-09 · uncommitted · docs: GitHub 첫 화면에 인지·월드·판단 경계를 둔다
-- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 우선 배치
