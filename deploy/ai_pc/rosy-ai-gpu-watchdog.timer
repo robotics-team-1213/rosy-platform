@@ -1,0 +1,11 @@
+[Unit]
+Description=Check ROSY AI PC GPU every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=rosy-ai-gpu-watchdog.service
+
+[Install]
+WantedBy=timers.target

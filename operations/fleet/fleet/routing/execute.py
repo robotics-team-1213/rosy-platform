@@ -18,6 +18,13 @@ from fleet.routing.trip import PlanRequest, plan_trip
 MAX_TURN_DEG = 150.0
 #: D-495 1: CORE's default straight run after a junction turn; Fleet sends it with every turn.
 ADVANCE_M = 0.10
+#: D-507 4 (SIM 4c, 54 runs): onto a bending lane CORE turns this much past the tangent.
+# ponytail: interim from SIM 4c (-6 and -9 tied, the chord was worst); re-sweep after ring
+# following is fixed; calibration candidate.
+TURN_OVERTURN_DEG = 6.0
+#: Chord-to-``advance_m`` angle against the turn above which the outgoing lane bends back
+#: (1 deg of chord is about 2 deg of heading change on an arc).
+BEND_MIN_DEG = 1.0
 
 
 def plan_body(plan) -> dict:
@@ -47,15 +54,19 @@ def advance_m(graph: Graph, segments: list, index: int) -> float:
 
 
 def turn_target(graph: Graph, segments: list, index: int) -> float:
-    """D-507 4 (2026-10-08): the ``turn_deg`` sent at the end of segment ``index``.
+    """D-507 4 (2026-10-08 SIM 4c): the ``turn_deg`` sent with a left/right at the end of segment ``index``.
 
-    CORE turns on the place point (the D-507 pivot) to ``entry yaw + turn_deg`` and then drives
-    ``advance_m`` straight, so aim at the chord to the point ``advance_m`` (the value sent) along the outgoing lane:
-    the straight run then ends on its centre line. On a straight lane this is the tangent turn.
+    The tangent turn ``theta``, plus ``TURN_OVERTURN_DEG`` more in the turn's direction when the
+    outgoing lane bends back against the turn within ``advance_m`` (the 260919 ring entries: a right
+    onto a ring that bends left). The bend is the chord to the ``advance_m`` point against the lane's
+    start tangent (polyline segment headings are too noisy); any other lane gets the tangent.
     """
+    tangent = theta(graph, segments, index)
     nxt = graph.arcs[arc_id(segments[index + 1])]
     (px, py), (x, y, _) = nxt.polyline[0], nxt.point_at(advance_m(graph, segments, index))
-    return turn_deg(graph.arcs[arc_id(segments[index])].end_tangent, math.atan2(y - py, x - px))
+    bend = turn_deg(nxt.start_tangent, math.atan2(y - py, x - px))
+    against = -bend * math.copysign(1.0, tangent)
+    return tangent + math.copysign(TURN_OVERTURN_DEG, tangent) if against > BEND_MIN_DEG else tangent
 
 
 def ends_at_place(graph: Graph, segment: dict) -> Optional[str]:
