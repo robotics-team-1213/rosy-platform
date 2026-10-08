@@ -22,7 +22,7 @@ import httpx
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
-from fleet.routing.execute import ADVANCE_M, arc_id, lane_action, replan_hold, turn_target, unsupported
+from fleet.routing.execute import advance_m, arc_id, lane_action, replan_hold, turn_target, unsupported
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view,
                                      record_bend_candidate)
@@ -352,13 +352,14 @@ class TripRunner:
                 return
         stop_after = min(max(remaining, 0.0), MAX_STOP_AFTER_M) if action == STOP else None
         turn = round(turn_target(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
+        advance = advance_m(live.graph, live.segments, index) if turn is not None else None
         expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
         if not live.open:
             return
         try:
             reply = await self._call(self._junction.send_junction(
                 live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s,
-                turn_deg=turn, advance_m=None if turn is None else ADVANCE_M, expect=expect)) or {}
+                turn_deg=turn, advance_m=advance, expect=expect)) or {}
         except RobotApiError as exc:
             if exc.code == "JUNCTION_ODOM_STALE":  # D-507 2: no fresh odom at receipt; next tick sends again
                 live.view["detail"]["junction_retry"] = exc.code
