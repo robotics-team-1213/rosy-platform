@@ -563,7 +563,7 @@ def run_console(args: argparse.Namespace) -> None:
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
-                     traffic_zones=_traffic_zones(args),
+                     traffic_zones=_traffic_zones(args), traffic_authority=_traffic_authority(args),
                      identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args))
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
@@ -609,6 +609,22 @@ def _traffic_zones(args) -> dict:
         return zones
     except (OSError, ValueError, TypeError, KeyError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"traffic config: {exc}")
+
+
+def _traffic_authority(args) -> bool:
+    """D-517 4 (M2): ``fleet.traffic.authority`` (YAML true/false, default false) of ``--site-config``."""
+    import yaml
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        value = ((site_config.get("fleet") or {}).get("traffic") or {}).get("authority", False)
+    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"traffic config: {exc}")
+    if not isinstance(value, bool):
+        sys.exit("traffic config: fleet.traffic.authority must be true or false")
+    return value
 
 
 def _build_site_map(args, tasks_db):

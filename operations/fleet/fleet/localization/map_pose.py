@@ -144,6 +144,8 @@ class MapPose:
     odom_refused_reason: Optional[str] = None
     #: Sightings ignored because their map_id is not the active site map frame.
     sightings_filtered_map_id: int = 0
+    #: D-517 4: CORE's stamp of the newest odom sample in this pose (the authority's ``pose_stamp``).
+    odom_stamp: Optional[float] = None
 
 
 def _wrap(angle: float) -> float:
@@ -321,7 +323,7 @@ class MapPoseTracker:
                     or (active_map_id is not None and anchor.map_id != active_map_id)
                     or turned > math.radians(cfg.max_bridge_turn_deg) or anchor_age > cfg.max_anchor_age_s)
         return MapPose(x, y, yaw, DEGRADED if degraded else LOCALIZED, source, bridged, age,
-                       anchor_age, anchor.map_id, **diag)
+                       anchor_age, anchor.map_id, odom_stamp=latest.stamp, **diag)
 
     def _reset(self, since: float) -> None:
         self._odom.clear()

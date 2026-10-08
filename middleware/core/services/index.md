@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · 4fb9eb1c4 · fix(core): D-517 M2 리뷰 반영 — IR 설정 문구, 정지 거리 속도
+- 2026-10-08 · b570504a2 · feat(core): D-517 M2 CORE 이동 통행권 (line_follow/authority.py)
+- 2026-10-08 · uncommitted · test(line_follow): D-507 굽이 통과 모델 PC SIM
+- 2026-10-08 · uncommitted · feat(line_follow): D-507 보충, 지도 굽이를 odom 호로 지남 (action `bend`)
 - 2026-10-08 · uncommitted · fix(line_follow): 창 odometer를 부호 있는 전진 거리로, 후진하면 창 닫힘 (D-507 2, 안전 검토 1·2)
-- 2026-10-08 · uncommitted · feat(line_follow): 교차로 기대 창을 주행 거리로 비교 (D-507 2·3, 사용자 결정 1)
-- 2026-10-08 · uncommitted · fix(line_follow): D-507 6 motion_admitted refuses non-finite twists
-- 2026-10-08 · uncommitted · fix(line_follow): 지도 교차로의 기대 창이 없으면 감지로 회전하지 않음
-- 2026-10-08 · uncommitted · fix(line_follow): D-468 궤적은 HOLD 틱에도 odom을 받는다

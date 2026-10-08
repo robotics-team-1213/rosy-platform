@@ -228,6 +228,9 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   # the D-495 junction motions without D-400 enforce; capability site_floor_map_id shows it, and
   # Fleet opens lane trips only on the active map with that id. Clear it when the robot leaves.
   site_floor_map_id: null
+  # D-517 4 (M2): true = no line-follow motion without a live Fleet movement authority. False:
+  # enforced only once Fleet sent one in this line-follow session (a trip on an authority site).
+  authority_required: false
   # D-468 containment (needs recovery_local_enabled; implementation note 2026-10-06). The lane
   # boundaries are eroded by the producer's uncertainty_m and the body is the URDF footprint, so
   # 0 means every corner is inside only if uncertainty_m bounds every lateral error. Jitter and

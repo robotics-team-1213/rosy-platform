@@ -170,6 +170,16 @@ def test_a_repeat_trip_plans_the_next_lap_before_its_last_place_and_drives_throu
     assert fleet.p["a"].sent[-1][0] in ("straight", "left", "right")  # no stop at the lap end
 
 
+def test_a_new_lap_drives_its_bends_again():
+    """D-507 addendum: a bend done on the last lap is the same place id on the next one."""
+    runner, store, fleet = _setup(ids=("a",))
+    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
+    live, _ = _to_tail(runner, store, fleet, "a")
+    live.bends_done.add("B_SW")
+    _ticks(runner, fleet)
+    assert runner.view("a")["lap"] == 2 and live.bends_done == set()
+
+
 def test_a_lap_whose_start_check_fails_holds_at_its_last_place():
     runner, store, fleet = _setup(ids=("a",))
     _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
@@ -315,7 +325,7 @@ def test_a_robot_never_localized_holds_every_junction_instruction():
     for robot_id in ("a", "b"):
         live = runner._live[robot_id]
         assert live.traffic == {"waiting_for": ["c"], "authority_end_m": live.traffic["authority_end_m"],
-                                "refused_at_m": 0.0}
+                                "refused_at_m": 0.0, "front_d_m": live.traffic["front_d_m"], "pose_stamp": None}
         assert runner.traffic.holds(live, live.view["segment_index"])
 
 

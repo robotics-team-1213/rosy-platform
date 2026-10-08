@@ -7088,3 +7088,45 @@ osy-d395-s1d\`.
 - 변경: Fleet `turn_target`(`operations/fleet/fleet/routing/execute.py`)이 현(chord) 조준 대신 접선 각 `theta`에 회전 방향으로 `TURN_OVERTURN_DEG` = 6.0°를 더한 값을 보낸다. 더하는 것은 나가는 차로가 `advance_m` 안에서 회전 반대쪽으로 휠 때(`advance_m` 점으로의 현이 시작 접선보다 회전 반대쪽으로 `BEND_MIN_DEG` = 1° 넘게)뿐이고, 곧은 차로와 회전 쪽으로 휘는 차로는 접선 그대로다. 분류는 `theta`, 150° 한도·부호·0 검사는 보내는 각, `advance_m` 명시·클램프는 그대로다. 260919에서는 ring 진입(SW −120.6°, NE −108.8°)과 ring 출구(NW→SW −114.1°, SE→NE −110.0°)가 모두 해당한다. 출구 spoke도 첫 0.1 m에서 회전 반대쪽으로 휜다(현 편차 약 5.9°). D-507 4항에 개정 문장을 더했다. API 변경 없음.
 - 증거: D-507 SIM 4c차(54회, d507-sim 워크트리 `docs/validation/d507-lane-trip-sim-2026-10-08/result.md` 「4c차 회전각」): 현 조준은 SW 5 s 유지 0/3, NE 재획득 0/3, 접선 −6°는 3/3, 3/3(−9°도 같음), 10 s 유지는 어느 각도도 없음. 호스트 pytest `operations/fleet/test/` 2704 passed, 2 failed(`test_document_imports`, `test_grammar_separation`: 콘솔 문서·시트, 이 브랜치가 고치지 않은 파일, 기준 868a4bb99에서 온 실패), known_failures 2 new(같은 둘). 부호 변이(+→−, 반대쪽 판정 뒤집기)에서 `test_routing_execute`·`test_trip_d507` 실패 확인 후 복구. Gazebo 재실행과 실기는 하지 않았다.
 - gate 변화: 없음. 잠정값이라 링 추종을 고친 뒤 SIM에서 다시 잰다(보정 후보).
+
+## 2026-10-08 · uncommitted · 차선 경계 완전 미관측 ROS SIM 재생
+
+- 변경: `edge_left`의 기억만으로 주행하지 않는 가드를 독립 Gazebo/ROS 그래프로 재생하고 `docs/validation/lane-blind-stop-sim-2026-10-08/result.md`에 원본 해시와 정지 자세를 기록했다.
+- 증거: 226프레임, 0.5835 m 진행, 지도 west 중심선 최대 거리 0.0193 m; `camera_line_not_visible` HOLD 뒤 `reselection_required` LOST. `/cmd_vel` publisher는 CORE 하나. 굽이 통과·실물 수용은 미달.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · 굽이 공백의 지도 경계 기억 반례 재생
+
+- 변경: 독립 ROS SIM의 frame 192를 `route_a`로 재생하고, 경로에서 80 mm 벗어난 자세의 분기 보조 우회를 고친 결과와 재현 스크립트를 `docs/validation/lane-route-gap-replay-2026-10-08/`에 기록했다.
+- 증거: 원래 자세는 MEMORY 후보, 측면 오차 +0.0609 m 교란 자세는 수정 후 STOP. 기존 관련 시험 77 passed, 10 skipped.
+- gate 변화: 없음. 오프라인 SIM 프레임 후보이며 ROS 폐루프·Fleet 활성 지도·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 굽이 원본의 격리 ROS 관측 재발행
+
+- 변경: `line_observer_node`의 `route_a`에 녹화 영상·odom·clock 125프레임을 독립 ROS domain 97에서 재발행하고 `docs/validation/lane-route-ros-graph-2026-10-08/`에 재현 스크립트와 결과를 기록했다.
+- 증거: 카메라 관측 125/125 수신, 첫 무관측 frame 192는 `visible=true`, confidence 0.6. 중복 사용 중이던 domain 83의 첫 시도는 증거에서 제외했고 전용 노드를 종료했다.
+- gate 변화: 없음. 노드 배선 증거이며 CORE 수용·Gazebo 폐루프·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 지도 밖 자세의 굽이 기억 ROS 거절
+
+- 변경: 같은 굽이 영상의 frame 192 odom 위치만 80 mm 옮겨 독립 ROS domain 97에서 재발행하고 `docs/validation/lane-route-ros-graph-2026-10-08b/`에 변환·재현 절차와 결과를 기록했다.
+- 증거: 관측 125/125 수신; frame 191 visible, 교란한 192 invisible(confidence 0), 원래 자세의 193 visible. 종료 뒤 전용 노드 없음.
+- gate 변화: 없음. 합성 위치 오차에 대한 관측 노드 반례이며 CORE·폐루프·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 정적 차선 경로 끝 정지 ROS-SIM
+
+- 변경: `route_a`가 마지막 지도 조각의 끝 20 mm 앞에서 관측 후보를 끊도록 하고, 남쪽 출발 `west:r → ring_s:f` 폐루프 두 실행을 `docs/validation/lane-route-terminal-ros-sim-2026-10-08/`에 기록했다.
+- 증거: 기존 실행은 경로 끝점에서 72.5 mm 떨어져 LOST; 수정 후 실행은 18.1 mm 앞에서 HOLD 후 LOST. `/cmd_vel` publisher는 CORE 하나. 호스트 관련 시험 103 passed, 10 skipped, 신규 실패 0.
+- gate 변화: 끝점 초과 방지만 검증. 굽이 최대 지도 중심선 편차 47.8 mm·교차로 완료 0건이므로 전체 차선 추종, 사람 승인 R0, 실물 수용은 HOLD.
+
+## 2026-10-08 · uncommitted · fix(fleet): 굽이 지시가 정지·교통 대기를 따른다
+
+- 변경: `trip_runner._step_bend`가 trip hold, D-517 교통 대기(`traffic.holds`), `live.open`, CORE `executing`(교체 가능한 우리 stop 제외)일 때 `bend`를 보내지 않는다. 정지 중에는 곳(place)의 stop만 나간다. 두 단계의 송신·응답과 슬롯 검사를 `_send`, `_core_busy`로 합쳤다.
+- 증거: `test_trip_bend`·`test_trip_runner`·`test_trip_caps`·`test_lane_traffic`·`test_module_structure` 157 passed, known_failures 0 new. 새 시험 5개는 이전 코드에서 모두 실패한다. code-reviewer(opus) APPROVE.
+- gate 변화: 없음. 호스트 시험이며 CORE 굽이 의미·SIM·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 정적 차선 경로 시작 위치 오차 ROS-SIM
+
+- 변경: `route_a`의 선언 시작점과 Gazebo 실제 시작점을 80 mm, 50 mm 어긋나게 둔 폐루프 결과와 재현 스크립트를 `docs/validation/lane-route-start-offset-sim-2026-10-08/`에 기록했다.
+- 증거: 두 실행 모두 이동 0.0 m, `camera_line_not_visible` HOLD 후 LOST. 50 mm 실행의 `/cmd_vel` publisher는 CORE 하나였고, 원본 NPZ 해시를 기록했다.
+- gate 변화: 없음. 카메라가 선을 인식하지 못한 두 장면의 정지 증거이며 정적 `route_start` 위치 검증, Fleet 위치 권한, 실물 수용은 미검증.

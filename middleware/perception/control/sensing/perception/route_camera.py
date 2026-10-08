@@ -115,6 +115,8 @@ SEED_MIN_FRACTION = 0.5
 #: centre band / iso-line quantisation; a quarter of the 185 mm lane, so
 #: the other branch's lane centre fails it once the two have diverged.
 AGREE_MAX_LATERAL_M = 0.045
+# Stop before the last route point; continuing requires a new route segment.
+TERMINAL_STOP_M = 0.02
 #: Manoeuvre hands back to the camera when the heading is within this of
 #: the route: a pursuit target inside the lane (|lateral| <= half-width) at
 #: LOOKAHEAD_M bears at most atan(0.0925 / 0.15) = 31.7 deg.
@@ -360,6 +362,11 @@ class RouteCameraFollower:
         self.last = {"fix": fix, "camera_tier": tier, "near_node": near_node,
                      "gated": self._tracker.gate is not None, "tracker": self._tracker.last}
 
+        if self.route.length_m - self._s <= TERMINAL_STOP_M:
+            self._manoeuvre = None
+            self.state = "STOP"
+            return None
+
         if self._manoeuvre is not None:
             m = self._manoeuvre
             m["travel"] += math.dist(pose[:2], m["xy"])
@@ -369,6 +376,7 @@ class RouteCameraFollower:
                 self._manoeuvre = None
             elif (m["travel"] > MANOEUVRE_MAX_TRAVEL_M
                   or not 0.0 <= now_s - m["t0"] <= MANOEUVRE_TIMEOUT_S
+                  or abs(fix.lateral_m) > AGREE_MAX_LATERAL_M
                   or heading_error > MANOEUVRE_MAX_HEADING_RAD):
                 self._abort()
                 return None
@@ -378,7 +386,9 @@ class RouteCameraFollower:
         if observation is not None:
             self.state = tier
             return observation
-        if near_node and self.locked and heading_error <= MANOEUVRE_MAX_HEADING_RAD:
+        if (near_node and self.locked
+                and abs(fix.lateral_m) <= AGREE_MAX_LATERAL_M
+                and heading_error <= MANOEUVRE_MAX_HEADING_RAD):
             self._manoeuvre = {"travel": 0.0, "xy": pose[:2], "t0": float(now_s)}
             self.state = "MANOEUVRE"
             return self._route_observation()

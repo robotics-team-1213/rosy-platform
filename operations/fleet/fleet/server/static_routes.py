@@ -55,7 +55,7 @@ CONSOLE_ASSETS = {
     "signals.js": ("signals.js", "application/javascript"),
     "site-map.css": ("site-map.css", "text/css"),
     "site-map.js": ("site-map.js", "application/javascript"),
-    "site-map-model.js": ("site-map-model.js", "application/javascript"),
+    "site-map-model.js": ("shared/site-map-model.js", "application/javascript"),
     "site-map-teach.js": ("site-map-teach.js", "application/javascript"),
     "site-layer.js": ("site-layer.js", "application/javascript"),
     "tracking-layer.js": ("tracking-layer.js", "application/javascript"),

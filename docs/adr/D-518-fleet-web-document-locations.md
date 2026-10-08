@@ -33,7 +33,7 @@ Rosy Fleet은 Fleet 프로세스 한 곳이 서빙하는 정적 웹이다. 사�
    | Cell | `cell.html`, `cell.css`, `cell.js` | `cell-document-editor.js` |
    | 현장 지도 | `site-map.html`, `site-map.css`, `site-map.js` | `site-map-model.js`, `site-map-teach.js` |
 
-3. **공유 읽기.** 어느 문서의 조작도 소유하지 않는다. `address-drift.js`, `authorization.js`, `poll-gate.js`, `development-auth.js`, `map-fit.js`, `vision-view.js`, `field-warp.js`, `styles.css`, `doc-tabs.css`. `map-fit.js`는 DOM이 없는 맞춤 계산이다. `vision-view.js`는 미리보기와 렌즈 헤더 읽기이고 설치 쓰기를 받지 않는다. `field-warp.js`는 `warpImage`만 둔다. `styles.css`는 운용과 설치가 같이 쓰고, `doc-tabs.css`는 네 페이지가 같이 쓴다.
+3. **공유 읽기.** 어느 문서의 조작도 소유하지 않는다. `address-drift.js`, `authorization.js`, `poll-gate.js`, `development-auth.js`, `map-fit.js`, `vision-view.js`, `field-warp.js`, `site-map-model.js`, `styles.css`, `doc-tabs.css`. `map-fit.js`는 DOM이 없는 맞춤 계산이다. `vision-view.js`는 미리보기와 렌즈 헤더 읽기이고 설치 쓰기를 받지 않는다. `field-warp.js`는 `warpImage`만 둔다. `site-map-model.js`는 DOM이 없는 차로·trip 모델이다. 현장 지도 문서가 쓰고, 운용은 D-517 교통 층 계산만 읽는다(2026-10-08 추가). `styles.css`는 운용과 설치가 같이 쓰고, `doc-tabs.css`는 네 페이지가 같이 쓴다.
 
 4. **울타리.** `operations/fleet/test/test_document_imports.py`가 네 엔트리에서 따라간 모듈을 검사한다. `/common/`은 공유 웹이다. 동적 `import()`는 엔트리에서 거절한다. 시험은 파일 단위다. 공유 파일에 다른 문서의 조작을 넣으면 그 파일을 가져오는 문서가 같이 깨진다.
 

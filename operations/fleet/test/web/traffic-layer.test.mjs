@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   loopCapacityText, repeatTripBody, routePoint, tripErrorText, tripStartReason, trafficAttention, trafficCardLine, trafficClock, trafficDrawing, unitParts,
-} from '../../fleet/server/web/site-map-model.js';
+} from '../../fleet/server/web/shared/site-map-model.js';
 
 // A square loop: east (0,0)->(2,0) cut in 3 blocks, ring (2,0)->(2,1) one zone, west (2,1)->(0,1)->(0,0).
 const ACTIVE = {version: 7, map: {edges: [
