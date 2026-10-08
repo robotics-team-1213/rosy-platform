@@ -148,9 +148,14 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     page.locator("#credential input").fill("operator-token")
     page.locator("#connect").click()
     expect(page.locator("#session")).to_contain_text("bob")
+    expect(page.locator("#token-access")).not_to_have_attribute("open", "")
+    expect(page.locator("#token-access summary")).to_be_visible()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#site-map-svg [data-place]")).to_have_count(4)
     expect(page.locator("#site-map-svg .arrow")).to_have_count(8)  # 4 one-way + 2 two-way edges
+    positions = page.evaluate("""() => ({map: document.querySelector('#map-viewport').getBoundingClientRect().top,
+      plane: document.querySelector('#plane-source').getBoundingClientRect().top})""")
+    assert positions["map"] < positions["plane"] and positions["map"] < height, positions
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-fresh-{width}x{height}.png"), full_page=True)
 
