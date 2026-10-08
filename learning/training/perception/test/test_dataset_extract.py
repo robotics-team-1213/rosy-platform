@@ -186,7 +186,8 @@ def _write_side_session(tmp_path, shadow_text, camera="/camera/front", shadow_to
 def test_side_topics_share_the_recording_constants():
     from control.recording import RECORD_TOPICS, SHADOW_TOPIC, SIDE_TOPICS
     assert set(SIDE_TOPICS) <= set(RECORD_TOPICS)
-    assert {"cmd_vel", "line/observation", SHADOW_TOPIC, "scan", "odom"} == set(SIDE_TOPICS)
+    assert {"cmd_vel", "line/observation", SHADOW_TOPIC, "scan", "odom",
+            "camera/calibration/status", "line/keep_debug"} == set(SIDE_TOPICS)
 
 
 def test_string_side_data_round_trips_into_prelabel_score(tmp_path):
@@ -296,6 +297,10 @@ def _write_stamped(tmp_path, events):
             elif kind == 'telemetry':
                 w.write_message('/camera/telemetry', str_s, {'data': json.dumps(
                     {'stamp': stamp, 'profile_revision': f'cam-{stamp}'})}, ns, ns)
+            elif kind == 'calibration':
+                w.write_message('/camera/calibration/status', str_s, {'data': json.dumps(
+                    {'mode': 'homography', 'active': True,
+                     'source_sha256': 'a' * 64})}, ns, ns)
             elif kind in ("line", "irline"):
                 source = "CAMERA_LINE" if kind == "line" else "IR_LINE"
                 w.write_message("/line/observation", str_s, {"data": json.dumps(
@@ -341,6 +346,17 @@ def test_pilot_camera_telemetry_matches_source_frame_in_both_extractors(tmp_path
     for rows in (converted, direct):
         assert [row['side']['camera/telemetry']['profile_revision'] for row in rows] == [
             'cam-1.0', 'cam-1.1']
+
+
+def test_mcap_camera_ground_status_is_past_only_and_expires(tmp_path):
+    pytest.importorskip('mcap_ros2')
+    session = _write_stamped(tmp_path, [
+        (1.0, 'raw', 1.0), (1.1, 'calibration', 1.1),
+        (1.6, 'raw', 1.6), (3.5, 'raw', 3.5), (3.7, 'raw', 3.7)])
+    rows = list(extract._mcap_frames(extract._mcap_files(session)))
+    name = 'camera/calibration/status'
+    assert [row[2].get(name, {}).get('active') if row[2].get(name) else None
+            for row in rows] == [None, True, True, None]
 
 
 SCAN_DEF = """std_msgs/Header header

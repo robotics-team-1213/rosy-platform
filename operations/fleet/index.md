@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(fleet): `straight` 지시에 지도 차로 방향 변화 `lane_turn_deg` (API v1.152)
-- 2026-10-08 · d3db27b9d · fix(fleet): D-517 사이트 통행권 꺼짐 + CORE 통행권 필수면 lane trip 거절
-- 2026-10-08 · 0fd6d230e · fix(fleet): D-517 M4 Safety-Review M1/M2 반영
-- 2026-10-08 · 303152390 · feat(fleet): D-517 M4 해결기 연결 (Safety-Review 전)
-- 2026-10-08 · 8fa0df8f6 · fix(fleet): CORE junction_corner_hold 이면 trip 을 바로 멈춤
+- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 순서
+- 2026-10-09 · uncommitted · uiux(fleet): 지도 로봇 방향 마커 화면 비율
+- 2026-10-09 · uncommitted · uiux(fleet): 연결 뒤 토큰 접기와 현장 지도 우선 배치
+- 2026-10-09 · uncommitted · refactor(fleet): traffic 설정 파서를 전용 단위로 이동
+- 2026-10-09 · uncommitted · uiux(fleet): D-517 trip error codes all have console text

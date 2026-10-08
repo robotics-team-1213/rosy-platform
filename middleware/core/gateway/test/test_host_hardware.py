@@ -113,6 +113,15 @@ def test_the_card_needs_a_token(tmp_path):
     assert response.status_code == 401
 
 
+@pytest.mark.parametrize("action", ["identify_blue", "identify_amber"])
+def test_the_card_shows_lamp_identify_outcome(tmp_path, action):
+    _human_rows(tmp_path)
+    _tested(tmp_path, action, state="unavailable")
+    body = _client(_config(tmp_path)).get("/api/v1/host/hardware", headers=_auth(VIEWER_TOKEN)).json()
+    assert body["test"]["action"] == action
+    assert body["test"]["state"] == "unavailable"
+
+
 @pytest.mark.parametrize("mutate", [
     lambda doc: doc.update(schema=2),
     lambda doc: doc.update(measured_at="2026-09-25T10:00:00"),  # no zone

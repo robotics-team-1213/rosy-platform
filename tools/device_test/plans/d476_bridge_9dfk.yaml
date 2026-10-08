@@ -12,6 +12,7 @@ overlay:
     bridge_enabled: true
     ir_guard_enabled: true
     site_floor_map_id: map_v2_fleet   # Fleet's active SiteMap (read 2026-10-08)
+    arc_enabled: false                # D-520 addendum 2026-10-09: no ring arc before its DEVICE checklist
 
 # A site declaration that waives a floor proof needs a named, dated acceptance (D-512 decision 4).
 accepted_risks:

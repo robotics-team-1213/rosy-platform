@@ -124,7 +124,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
             } finally { if (!streaming) response.close() }
         } catch (_: Exception) {
             failureReported = true
-            failure("TLS 또는 연결을 확인하세요")
+            failure(LINK_LOST)
             return reply(502, "text/plain", "Trusted connection unavailable".toByteArray())
         }
     }
@@ -197,7 +197,7 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
                 }
                 override fun onFailure(socket: okhttp3.WebSocket, error: Throwable, response: okhttp3.Response?) {
                     failureReported = true
-                    failure("TLS 또는 연결을 확인하세요"); disconnect()
+                    failure(LINK_LOST); disconnect()
                 }
                 override fun onClosed(socket: okhttp3.WebSocket, code: Int, reason: String) { disconnect() }
             })
@@ -219,3 +219,6 @@ class PilotProxy(private val connection: PilotConnection, private val assets: Bu
         fun disconnect() { upstream?.cancel(); runCatching { close(WebSocketFrame.CloseCode.GoingAway, "connection ended", false) }; sockets.remove(this) }
     }
 }
+
+/** Shown on the session bar while the robot does not answer; the next good reply restores "연결됨". */
+const val LINK_LOST = "로봇이 응답하지 않습니다. 다시 닿으면 자동으로 이어집니다. 계속되면 '로봇 목록'에서 다시 선택하세요."
