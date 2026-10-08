@@ -71,6 +71,10 @@ ADR_BODY_HEADING = re.compile(r"^## (D-\d+):? (.+)$", re.MULTILINE)
 # in place would violate the same history gate, so it is excused by exact
 # name too. Same class of defect: a committed line that cannot be reformed.
 KNOWN_LEGACY_HEADINGS = frozenset({
+    # 823847295 committed these two entries without the standard field labels; the
+    # follow-up entries appended on 2026-10-09 carry 변경/증거/gate 변화.
+    "## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다",
+    "## 2026-10-09 · uncommitted · fix(core): 화면 코드 승인이 실기에서 항상 409였다 (D-483)",
     # Committed D-509 merge-fix entries used English field labels; preserve the blocks.
     "## 2026-10-08 \u00b7 uncommitted \u00b7 docs(api): v1.124 version pin",
     "## 2026-10-08 \u00b7 uncommitted \u00b7 fix(fleet): D-509 power health at state response",
@@ -787,6 +791,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
     # D-436 `affected`: change-scoped test selection (tools/harness/affected_tests.py).
     parser.add_argument("--base", default="main", help="affected: diff base ref (merge base with HEAD)")
+    parser.add_argument("--head", help="affected: diff base...HEAD for this commit only, ignoring the"
+                                       " working tree (the pre-push hook's pushed sha)")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--print", dest="action", action="store_const", const="print",
                         help="affected: print the selection (default)")
@@ -809,7 +815,8 @@ def main(argv: list[str] | None = None) -> int:
         import affected_tests  # noqa: E402 — sibling module, loaded on demand
 
         return affected_tests.main(repo, args.base, args.action or "print", args.json,
-                                   matrix=args.ci_matrix, allow_full=args.full, skip=tuple(args.skip))
+                                   matrix=args.ci_matrix, allow_full=args.full, skip=tuple(args.skip),
+                                   head=args.head)
     if args.command == "brief":
         print(render_brief(repo), end="")
         return 0

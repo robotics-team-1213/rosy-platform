@@ -45,8 +45,12 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
    ADR 파일과 Log 행은 한 커밋이다. 자세한 내용은 `AGENTS.md`의 「같이 하는 깃」
    4번에 적혀 있다.
 5. **테스트는 기존 실패와 비교한다.** 워크트리에서 관련 pytest 결과를 저장소
-   밖의 `run.txt`에 남기고 `python test/known_failures.py`에 그 파일을 넘긴다.
-   실험실 PC의 경로는 `X:\DevTemp\<이름>\run.txt`다. exit 1의 `NEW`는 그
+   밖의 `run-1.txt`에 남기고 `python test/known_failures.py`에 그 파일을 넘긴다.
+   pytest는 이 노트북에서 돌리지 않는다. `tools/remote/remote_pytest.py`가 모델 PC(OMEN),
+   그다음 AI PC에서 돌리고 로그를 `X:\DevTemp\<이름>\`로 가져온다. pre-push와
+   `tools/land.py`가 이를 쓴다. 두 PC 모두 닿지 않을 때만 로컬로 돌린다. 커밋된
+   HEAD만 보내므로 먼저 커밋한다. Gazebo는 원래대로 모델 PC나 현장 PC에서만 돌린다.
+   실험실 PC의 경로는 `X:\DevTemp\<이름>\run-1.txt`다. exit 1의 `NEW`는 그
    브랜치의 실패다. 고친 실패의 줄은 같은 커밋에서 `test/known_failures.txt`에서
    뺀다. 그 브랜치가 만든 실패를 그 파일에 넣지 않는다. 호스트 pytest 통과는
    장치, ARM64 이미지, 현장 수용을 대신하지 않는다.

@@ -223,7 +223,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # announces keep_debug junction_ahead_v within 2 s (supports_junction_pivot).
     # `lane_bend` (D-507 addendum): the line-follow manager takes action `bend`.
     # `site_floor_map_id` (D-507 9): the line-follow site floor declaration from config.
-    # `lane_arc` (D-520 1): line_follow.arc_enabled, which config refuses without that declaration.
+    # `lane_arc` (D-520 1): line_follow.arc_enabled (default on) with that declaration (2026-10-09).
     # `line_follow_authority` (D-517 4): the manager takes and enforces Fleet movement authority;
     # `line_follow_authority_required`: config line_follow.authority_required (enforced before any).
     limits = svc.safety.limits

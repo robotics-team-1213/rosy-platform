@@ -259,7 +259,7 @@ def test_traffic_api_is_read_only_and_repeat_needs_a_place_cycle(tmp_path):
     client, *_rest = _app(tmp_path, Ports())
     body = client.get("/api/fleet/traffic", headers=VIEWER).json()
     assert set(body) == {"map_version", "block_length_m", "units", "robots", "loop_capacity", "wait_cycle",
-                         "unplaced", "resolver"}
+                         "unplaced", "resolver", "signals"}
     assert client.get("/api/fleet/traffic").status_code in (401, 403)
     trips = client.get("/api/fleet/trips", headers=VIEWER).json()
     assert trips["open"] == [] and trips["running"] is None
