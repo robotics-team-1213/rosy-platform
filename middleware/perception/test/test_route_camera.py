@@ -75,6 +75,22 @@ def test_south_west_bend_stops_before_a_long_paint_gap():
     assert result["max_centre_dev_m"] <= 0.040
 
 
+@pytest.mark.parametrize("before_end_m", [0.0, 0.015])
+def test_terminal_route_node_does_not_start_a_blind_manoeuvre(before_end_m):
+    endpoint = directed_points(GRAPH, "ring_s:f")[-1]
+    before = directed_points(GRAPH, "ring_s:f")[-2]
+    heading = math.atan2(endpoint[1] - before[1], endpoint[0] - before[0])
+    pose = (endpoint[0] - before_end_m * math.cos(heading),
+            endpoint[1] - before_end_m * math.sin(heading), heading)
+    subject = RouteCameraFollower(GRAPH, ["west:r", "ring_s:f"],
+                                  start_pose=pose, camera_x_offset_m=CAM_X)
+    subject.locked = True  # a prior confirmed pair, then paint fully disappears at the route end
+    blank = np.zeros_like(WORLD.render(pose))
+
+    assert subject.update(1.0, pose, blank, lane_sim.GROUND, **lane_sim.KW) is None
+    assert subject.state == "STOP"
+
+
 class _OdomFrameAtOrigin:
     """Hands the follower odometry whose frame starts at (0, 0, 0) while the
     robot stands at the scenario start (a real /odom, unlike Gazebo's)."""
