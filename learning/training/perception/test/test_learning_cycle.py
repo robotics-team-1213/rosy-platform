@@ -39,6 +39,19 @@ def test_duplicate_request_and_restart_do_not_retrain_ready(setup):
     assert all(row["status"] == "ready" for row in state["cycles"].values())
 
 
+def test_candidate_result_remains_candidate_across_cycle_restart(setup):
+    config, out, _ = setup
+    config['recipes'] = [{'recipe': 'drivable_head'}]
+    calls = []
+    def candidate(cfg, path):
+        calls.append(path)
+        return {'status': 'candidate', 'artifact': 'local-only'}
+    cycle.run_once(config, out, trainer_fn=candidate)
+    state = cycle.run_once(config, out, trainer_fn=candidate)
+    assert len(calls) == 1
+    assert [row['status'] for row in state['cycles'].values()] == ['candidate']
+
+
 def test_one_quality_rejection_does_not_stop_other_recipe_or_retry(setup):
     config, out, _ = setup
     calls = []
