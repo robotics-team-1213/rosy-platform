@@ -1268,6 +1268,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             result = page.evaluate("""() => ({
               overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
               eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
+              slotOrder: [...document.querySelectorAll('#surface-main > .surface-slot')].map(slot => slot.dataset.slot),
               mapTop: document.querySelector('[data-slot="observe"]').getBoundingClientRect().top,
               actionTop: document.querySelector('[data-slot="act"]').getBoundingClientRect().top,
               cameraTop: document.querySelector('[data-slot="sense"]').getBoundingClientRect().top,
@@ -1275,8 +1276,21 @@ def test_console_navigation_stage_local_captures(tmp_path):
             assert result["overflowX"] == 0 and result["eStopVisible"] and errors == [], result
             if viewport[0] < 1024:
                 assert result["mapTop"] < result["actionTop"] < result["cameraTop"], result
+                assert result["slotOrder"] == ["banner", "observe", "act", "sense"], result
+            else:
+                assert result["slotOrder"] == ["banner", "sense", "observe", "act"], result
             filename = f"operator-console-navigation-{viewport[0]}x{viewport[1]}.png"
             page.screenshot(path=str(capture_dir / filename), full_page=True)
+            if viewport[0] == 1366:
+                page.locator(".surface-map-canvas").focus()
+                page.set_viewport_size({"width": 390, "height": 844})
+                page.wait_for_function("""() => [...document.querySelectorAll('#surface-main > .surface-slot')]
+                  .map(slot => slot.dataset.slot).join(',') === 'banner,observe,act,sense'""")
+                assert page.evaluate("document.activeElement?.classList.contains('surface-map-canvas')")
+                page.set_viewport_size({"width": 1366, "height": 768})
+                page.wait_for_function("""() => [...document.querySelectorAll('#surface-main > .surface-slot')]
+                  .map(slot => slot.dataset.slot).join(',') === 'banner,sense,observe,act'""")
+                assert page.evaluate("document.activeElement?.classList.contains('surface-map-canvas')")
             records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "image": filename,
                             "synthetic": True, "errors": errors, **result})
             context.close()

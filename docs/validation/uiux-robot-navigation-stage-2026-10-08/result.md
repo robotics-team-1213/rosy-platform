@@ -26,3 +26,12 @@
 - 현재 로봇 이미지 설치와 실제 지도·경로·위치 증거, SLAM 작업 상태는 확인하지 않았다.
 - 기준 트리에서도 실패하는 차선 추종 시험의 fixture/구동 준비 상태는 별도 수정이 필요하다.
 - D-153 전체 상태 매트릭스와 사용자 G3 평가는 별도 회차가 필요하다. 이 캡처만으로 GO를 선언하지 않는다.
+
+## 후속: 보이는 순서와 키보드 순서 일치
+
+모바일에서 지도→조작→감지 순서로 재배치한 뒤에도 실제 HTML 슬롯 순서는 감지→지도→조작이었다. 키보드와 화면 읽기 순서가 화면과 달라지는 결함이다. 셸에서 64rem 경계에 맞춰 슬롯 DOM 순서를 모바일 `지도→조작→감지`, 데스크톱 `감지→지도→조작`으로 동기화하고, 폭 전환 중 패널 안에 있던 초점을 복원했다. 패널을 새로 mount하거나 CORE 명령을 보내지 않는다.
+
+- 2026-10-08 후속 LOCAL 캡처: 같은 X: 세션의 `evidence/focus-order/navigation-stage/operator-console-navigation-{1366x768,390x844}.png`와 `evidence/focus-order/viewport/robot-console-{390x844,320x568}.png`. 390px의 지도 무대와 1366px의 3열, 320px의 지도 오류·재시도 및 비상 정지를 원본 크기로 확인했다.
+- 실제 FastAPI·Chromium에서 DOM/시각 순서와 1366→390→1366 폭 전환 후 지도 캔버스 초점 유지 등 3 passed, `known_failures.py` 0 NEW (`logs/responsive-focus-tests.txt`). 레이아웃 추가 묶음은 13 passed, 2 failed (`logs/focus-order-layout.txt`); 실패는 `/setup` 사실 격자 시험 2건이며 공유 `main`에서 같은 2건이 재현됐다 (`logs/main-procedure-baseline.txt`). 두 실행 모두 `known_failures.py`는 `NEW`로 분류하므로 전체 묶음 PASS는 주장하지 않는다.
+- 390×844·320×568의 실제 CORE 셸 뷰포트 시험에서 문서 순서·정지 가시성·가로 넘침을 다시 확인했다: 2 passed, 0 NEW (`logs/focus-order-viewport.txt`).
+- `impeccable detect --json` 변경 파일 검사 결과 `[]` (`logs/impeccable-focus-order.json`). 이 정적 검사와 합성 CORE 캡처는 실제 로봇·사용자 수용을 대체하지 않는다.

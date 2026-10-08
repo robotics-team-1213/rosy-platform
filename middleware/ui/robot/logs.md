@@ -1086,3 +1086,9 @@
 - 변경: 모바일 지도 → 조작 → 감지 순서, 지도 경로·로봇 마커 가독성, 최신 상태 기반 주행·위치 추정·SLAM 기능 표기. 지도 조작 제한 사유는 지도 아래에 둔다.
 - 증거: [검토 기록](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/navigation-stage/`의 1366×768·390×844 LOCAL 캡처. 지도·레이아웃 11 passed, 최종 뷰포트·지도 3 passed, 각 `known_failures.py` 0 NEW. 넓은 회귀에서 남은 차선 추종 1건은 변경 전 공유 main에서도 동일하게 실패.
 - gate 변화: 로봇 운용 LOCAL 지도 가독성 근거 추가. 현재 이미지·실기 경로·사용자 G3 및 전체 G2는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 운용 폭별 문서·초점 순서 일치
+
+- 변경: 모바일 지도→조작→감지, 데스크톱 감지→지도→조작의 보이는 순서에 맞춰 셸 슬롯 DOM 순서를 동기화한다. 폭 전환 때 패널 안 키보드 초점을 복원한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). 실제 CORE fixture의 1366×768·390×844 캡처와 320×568 오류 캡처, 순서·초점 3 passed, 모바일 뷰포트 2 passed. 추가 레이아웃 13 passed/2 failed는 공유 main에서 같은 `/setup` 시험 2건 실패로 재현.
+- gate 변화: LOCAL 접근 순서 부분 근거. 실물·G3·전체 G2는 HOLD.
