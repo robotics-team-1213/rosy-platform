@@ -33,3 +33,8 @@
 - 대상: `ebba1acda` (D-537과 설치·정비 화면 구현을 포함한 `main` 병합 커밋).
 - 모델 PC `rosy@100.98.162.71`의 격리된 소스와 Chromium에서 `ROSY_RUN_BROWSER_TESTS=1`로 `middleware/ui/robot/test/test_remaining_workflows_browser.py` 실행: 8 passed, exit 0, `known_failures.py` NEW 0. 원격 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-09--031749--physical-id-proof--138376/logs/browser-run.txt`에 보관.
 - 현장 PC의 Fleet·Rosy Cam 영상과 각 Pinky의 하드웨어 시험 결과는 위 물리 대조 증거다. 새 설치·정비 화면 버튼은 로봇 설치본에 아직 배포되지 않았다.
+## 2026-10-09 이동 전 재확인
+
+- `rosy_60` Web의 전방 영상은 일시 409 뒤 다시 320×240, 약 0.4초 나이의 프레임으로 수신됐다. 천장 카메라는 약 2.7 fps이며 몸체는 왼쪽 아래에 그대로 보였다.
+- 같은 시점 CORE는 `IDLE`, 속도 0, E-Stop `false`였지만 `/api/v1/robot/state`의 `evidence.safety.evidence`는 `disconnected`였다. LiDAR 최소값은 전방 −30…0° 0.491 m, 0…30° 0.257 m, 오른쪽 30…90° 0.111 m였다. 천장 영상의 몸체 주변에 선과 장비가 있어 짧은 주행의 바퀴 경로도 확정하지 못했다.
+- D-522의 이동 전 조건을 충족했다고 판정할 수 없어 MANUAL 전환과 속도 명령을 보내지 않았다. 다른 로봇 `rosy_26`도 Fleet에서 `EnrollmentTlsError`로 연결이 불안정하고 named track은 0/0이다. 두 로봇의 실제 이동은 미시험이다.
