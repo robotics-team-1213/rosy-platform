@@ -145,6 +145,9 @@ rec 8회의 33건 중 31건 `clearance_source: lidar`, 2건은 사유 전환 프
 - Fleet 허브(웹소켓)·D-395 위치 서비스·stuck 자동 응답은 쓰지 않았다(REST 폴백). Fleet의 stuck 응답이 C를 풀 수 있는지는 재지 않았다.
 - 원인 A·C의 「다른 run과의 차이」(목격이 한 프레임 남는지, 몸이 경계 위인지)는 기록된 프레임으로만 보였고 재생으로 확인하지 않았다.
 - 호스트 SIM은 DEVICE가 아니다.
+- SIM은 `caa74a53c`에서 돌렸다. 기록을 착지할 때 main에는 그 뒤 D-517 M2(이동 권한)와 D-520(ring 호 주행, `3b6378bae` 등)이
+  들어와 있었다. 그 main에서도 `trip_runner.py`의 `MANOEUVRE`에는 `approaching`이 없고(B) `junction_bend.py:164`는 호 끝에서
+  목격을 지운다(A). D-520은 SW 회전 뒤 ring 구간 몫이라 이번 run들이 닿지 못한 자리다. 새 main으로는 다시 돌리지 않았다.
 
 ## 재현
 
