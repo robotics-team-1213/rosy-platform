@@ -224,6 +224,26 @@ class TripRunner:
         self._save(live)
         return live.view
 
+    def close_all(self, reason: str) -> list[LiveTrip]:
+        """E-stop (D-517 1): every open trip ends now, before any await, so no step sends after it."""
+        closed = [live for live in self._live.values() if live.open]
+        for live in closed:
+            live.view.update(state="canceled", reason=reason)
+            live.view["detail"]["canceled_by"] = None
+        return closed
+
+    async def halt_closed(self, lives: list[LiveTrip]) -> None:
+        """Stop the robots of ``close_all`` at once (each halt bounded) and record each trip."""
+        async def halt(live: LiveTrip) -> None:
+            try:
+                live.view["detail"].update(await self._halt(live))
+            finally:
+                self._save(live)
+
+        for result in await asyncio.gather(*(halt(live) for live in lives), return_exceptions=True):
+            if isinstance(result, BaseException):
+                _LOG.error("could not record a trip ended by the E-stop", exc_info=result)
+
     async def _after_send(self, live: LiveTrip) -> None:
         """A send that was in flight when the trip closed (cancel) is stopped again."""
         if not live.open:

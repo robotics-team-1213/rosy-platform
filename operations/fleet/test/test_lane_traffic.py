@@ -274,10 +274,29 @@ def test_estop_ends_every_open_trip():
     _trip(runner, store, fleet, "b", "west:fwd", _s_of(store, "west:fwd", START_S), to="start_s", via=("start_n",))
     robots = [FakeRobot("a"), FakeRobot("b")]
     console = FleetConsole([RobotEndpoint(r.robot_id, "http://x", "t") for r in robots], robots)
+    seen = []
+    estop = console.estop_all
+
+    async def recorded_estop(*args, **kwargs):
+        seen.append(runner.open_trips())  # review MED 6: every trip is closed before the E-stop goes out
+        return await estop(*args, **kwargs)
+
+    console.estop_all = recorded_estop
     install_trip_guard(console, runner)
+    halts = []
+
+    async def slow_hold(robot_id):
+        halts.append(robot_id)
+        await asyncio.sleep(0.3)
+        return {"mode": "OFF"}
+
+    fleet.hold = slow_hold
+    started = time.monotonic()
     run(console.estop_all())
-    assert runner.open_trips() == []
+    assert time.monotonic() - started < 0.55  # both robots halted at once, not one after the other
+    assert seen == [[]] and runner.open_trips() == [] and sorted(halts) == ["a", "b"]
     assert runner.view("a")["reason"] == runner.view("b")["reason"] == "operator_estop"
+    assert store.trip("a")["state"] == "canceled"
 
 
 def test_a_robot_never_localized_holds_every_junction_instruction():
