@@ -7070,3 +7070,15 @@ osy-d395-s1d\`.
 - 변경: 충전기를 확인한 촬영 자세에 두고 첫 주행 자세가 0.05 m·3° 넘게 다르면 중단, 되돌아가기에서 오래된 LiDAR 스캔(0.5 s)·느린 송신 간격(0.3 s) 정지와 실제 10 Hz, 보정 지도 일치(로봇 지도 또는 Fleet 활성 SiteMap), 여유 0.1 m 안 시작 거부, `trail.jsonl` phase 표시. D-395 이전 로봇(9dfk)용 픽셀 모드: 머리 위 프레임에서 고른 세 점으로 충전기를 계산한다. ADR에 되돌아가는 동안 D-422가 작동하지 않음과 두 한도 모두 되돌아감(케이블 밟음은 받아들인 위험)을 적었다.
 - 증거: `python -m pytest tools/device_test/test tools/capture/test -q` 호스트 시험(가짜 전송, 알려진 homography). 로봇은 움직이지 않았다.
 - gate 변화: 없음. 겹 적용 뒤 CORE 재시작이 odom을 바꾸는지는 장치에서 확인하지 않았다.
+
+## 2026-10-08 · uncommitted · D-507 keep 제자리 회전 판정을 CORE 명령 twist로
+
+- 변경: bd0d5e791(877dab90f로 착지)의 keep 초기화가 측정 odom(|wz| > 0.15, |vx| < 0.01)으로 제자리 회전을 판정해, 느린 keep 코너(명령 v 0.0188, w 0.48, Gazebo odom vx ≈ 0.001)에서 코너 기억을 지웠다. `line_observer_node`가 keep 모드에서 CORE의 최종 `cmd_vel`(D-18 단일 발행자)을 읽기만 하고, 명령 |v| < 0.01(CORE `junction_still_linear`)이고 |w| > 0.15이며 0.3 s 안의 명령일 때만 keeper를 다시 시작한다. 측정 odom 조건은 뺐다. 느린 코너에서 odom이 정지처럼 읽히는 것이 바로 오판의 원인이고, 교차로 회전은 명령이 v = 0으로 정확히 구분한다. 노드는 608 → 607줄이다.
+- 증거: D-507 SIM 4b차 `docs/validation/d507-lane-trip-sim-2026-10-08/result.md`, `evidence/spin_reset_log_r4b.txt`(d507-sim 워크트리). 호스트 pytest `test_keep_pivot`(느린 코너·교차로 회전·오래된 명령, 노드 게이트 식을 그대로 평가, odom으로 되돌린 변이에서 실패 확인), `test_lane_keep`, `test_line_observer_wiring`, `test_lane_paint_source`, `test/architecture/test_module_structure.py`, known_failures 0 new. Gazebo 재실행과 실기는 하지 않았다.
+- gate 변화: 없음. SIM 4b 주행 거리 회복은 모델 PC Gazebo 재실행으로 확인해야 한다.
+
+## 2026-10-08 · uncommitted · D-507 keep 명령 회전 판정 리뷰 반영
+
+- 변경: 앞 기록의 명령 |v| < 0.01(odom 정지 기준인 `junction_still_linear`)은 가장 느린 keep 명령(e=1에서 0.0108, 각속도 상한이나 v 배율이면 더 낮음)과 너무 가까워, 제자리 회전 기준을 `COMMANDED_PIVOT_LINEAR_MPS` = 1e-3으로 바꿨다. 실제 회전은 v를 정확히 0으로 명령한다. 받은 명령이 카메라 시각보다 0.3 s 넘게 늦은 keep 프레임이 30번 이어지면 한 번 경고한다(`use_sim_time` 불일치면 초기화가 조용히 꺼진다). `test/test_module_separation.py`의 `FINAL_TOPIC_EXCEPTIONS`에 이 노드의 읽기 전용 `cmd_vel` 구독 줄을 고정했다. 노드는 608줄이다.
+- 증거: 호스트 pytest `test_keep_pivot` 16개(느린 명령 0.0108, ×0.6, ×0.7, 0.002 → 초기화 없음, 기준을 0.01로 되돌리면 실패), `test_lane_keep`, `test_line_observer_wiring`, `test_lane_paint_source`, `test_latest_only_subscriptions`, `test/test_module_separation.py` 통과. `test/architecture/`는 `test_safety_separation::test_decision_and_learning_use_only_safety_public_api` 하나가 실패하고, 같은 실패가 main 64d7a68a8에서도 난다. Gazebo 재실행과 실기는 하지 않았다.
+- gate 변화: 없음.
