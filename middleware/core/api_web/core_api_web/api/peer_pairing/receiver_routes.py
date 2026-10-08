@@ -26,7 +26,11 @@ def _reason(exc):
 def _retry(exc):
     """Retry-After for a limit refusal that keeps its older 409 status."""
     wait = getattr(exc, "retry_after_s", None)
-    return ({"retry_after_s": wait}, {"Retry-After": str(wait)}) if wait else (None, None)
+    if not wait:
+        return None, None
+    detail = {"retry_after_s": wait}
+    headers = {"Retry-After": str(wait)}
+    return detail, headers
 
 
 def service(request):

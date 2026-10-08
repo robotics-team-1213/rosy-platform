@@ -669,8 +669,11 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1225,
-        "accept: re-judged at 1225 on 2026-10-07: D-499 adds a read-only link class "
+        1229,
+        "accept: re-judged at 1229 on 2026-10-09: D-535 records link_reason beside the "
+        "existing link class on a gathered robot row. No goal, stop, or admission path "
+        "changed. The zero growth allowance remains. Previously re-judged at 1225 on "
+        "2026-10-07: D-499 adds a read-only link class "
         "to each gathered robot row using the existing address-status snapshot; provider "
         "failure falls back to an empty status map. No goal, stop, or admission path changed. "
         "The zero growth allowance remains. Previously re-judged at 1202: D-493 records each gathered state observation "
