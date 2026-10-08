@@ -93,12 +93,8 @@ def test_bundle_starts_at_origin_main_and_falls_back_to_full_history(tmp_path, m
 def _fake_ssh(tmp_path, monkeypatch, fail_on):
     """A fake ssh: `true` succeeds; a script containing `fail_on` exits 1, anything else 0."""
     fake = tmp_path / "fake_ssh.py"
-    fake.write_text("import sys
-c = sys.argv[-1]
-sys.stdin.buffer.read() if c != 'true' else None
-"
-                    f"sys.exit(1 if {fail_on!r} in c else 0)
-", encoding="utf-8")
+    fake.write_text("import sys\nc = sys.argv[-1]\nif c != 'true':\n    sys.stdin.buffer.read()\n"
+                    f"sys.exit(1 if {fail_on!r} in c else 0)\n", encoding="utf-8")
     monkeypatch.setattr(rp, "SSH", [sys.executable, str(fake)])
     monkeypatch.setenv("ROSY_TEST_HOSTS", "h")
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
