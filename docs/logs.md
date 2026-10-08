@@ -7382,3 +7382,9 @@ osy-d395-s1d\`.
 - 변경: 현재 로컬 main `247561153`을 모델 PC에 격리 빌드하고 B9 SIM에서 60/70 mm 선 길이 조건을 각각 2회 CORE 폐루프로 비교했다.
 - 증거: `validation/lane-short-boundary-closed-loop-2026-10-09/result.md`. 기준은 교차부 횡선 뒤 2/2 HOLD, 70 mm는 교차부 명령 전 2/2 LOST. 전역 길이 증가 가설을 채택하지 않는다.
 - gate 변화: 없음. 사람 물리 경계 ID·실물 주행 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · fix: 경로 밖 카메라 후보 중단 래치
+
+- 변경: Gazebo 전용 route_a 시제품이 지도 경로에서 크게 벗어난 자세의 카메라 ONE 후보를 내던 것을, 경계 기억·잠금 폐기와 해당 경로 실행 중단으로 바꿨다.
+- 증거: `validation/lane-route-offmap-stop-2026-10-09/result.md`. B9 저장 프레임의 80 mm 반례 두 건은 후보→STOP; 정상 자세 BOTH는 유지. route_camera 30건 통과. 기존 drift 표 미달과 실물 정답 부재는 HOLD.
+- gate 변화: 출하 keep/CORE final cmd_vel 변경 없음. 실물 주행 수용은 HOLD.
