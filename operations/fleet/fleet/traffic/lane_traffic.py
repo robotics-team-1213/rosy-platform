@@ -47,6 +47,9 @@ MEMBER_REVERSE_M = 0.20 + 0.15
 #: between two periods than the robot can (max speed × time + 2u + this) is a jump, not travel: that
 #: period it is UNKNOWN (no new authority). A jump below the bound stays invisible; u must be true.
 JUMP_MARGIN_M = 0.05
+#: A refused front is taken once this many periods in a row agree with it (a robot moved by hand, a real
+#: correction). A one-frame glitch never gets there. Until then the robot holds every instruction.
+JUMP_SETTLE_PERIODS = 3
 #: D-525 4 / D-443: a manual green lasts while a named operator's console says it is there this often.
 PRESENCE_S = 10.0
 
@@ -83,9 +86,10 @@ class TrafficService:
         self._unknown_since: dict[str, float] = {}
         self._tried: dict[str, tuple[str, list]] = {}
         self._cycle: tuple[frozenset, int] = (frozenset(), 0)
-        #: robot id -> (route id, front in route metres + trim, clock) of its last accepted front
-        self._front: dict[str, tuple[str, float, float]] = {}
-        self._jumped: set[str] = set()  # robots whose last front was refused (one log per episode)
+        #: robot id -> (route id, trim, front in route metres, clock) of its last accepted front
+        self._front: dict[str, tuple[str, float, float, float]] = {}
+        #: robot id -> (front, clock, periods in a row) of a refused front that may settle (JUMP_SETTLE_PERIODS)
+        self._jumped: dict[str, tuple[float, float, int]] = {}
 
     # ---- the table ------------------------------------------------------------------------
 
@@ -167,18 +171,26 @@ class TrafficService:
         if d is None:
             return None
         now, prev = self._clock(), self._front.get(robot_id)
-        if prev is not None and prev[0] == route_id:
-            allowed = speed * max(0.0, now - prev[2]) + 2 * u + JUMP_MARGIN_M
-            if abs(d + trim - prev[1]) > allowed:
-                if robot_id not in self._jumped:
+        if prev is not None and prev[:2] == (route_id, trim):  # same route metres (dropped laps restart it)
+            allowed = speed * max(0.0, now - prev[3]) + 2 * u + JUMP_MARGIN_M
+            if abs(d - prev[2]) > allowed:
+                last = self._jumped.get(robot_id)
+                if last is None:
                     logging.getLogger("fleet.server.trip_runner").warning(
-                        "%s map pose jumped %.2f m (allowed %.2f m): no new authority until it agrees",
-                        robot_id, d + trim - prev[1], allowed)
-                self._jumped.add(robot_id)
-                return None
-        self._jumped.discard(robot_id)
-        self._front[robot_id] = (route_id, d + trim, now)
+                        "%s map pose jumped %.2f m (allowed %.2f m): no new authority until it settles",
+                        robot_id, d - prev[2], allowed)
+                agree = last is not None and abs(d - last[0]) <= speed * max(0.0, now - last[1]) + 2 * u + JUMP_MARGIN_M
+                count = last[2] + 1 if agree else 1
+                if count < JUMP_SETTLE_PERIODS:
+                    self._jumped[robot_id] = (d, now, count)
+                    return None
+        self._jumped.pop(robot_id, None)
+        self._front[robot_id] = (route_id, trim, d, now)
         return d
+
+    def jumped(self, robot_id: str) -> bool:
+        """Its last front was refused as a jump: it holds every instruction (D-525 real-map finding)."""
+        return robot_id in self._jumped
 
     def _link(self, graph, robots: list, trips: dict) -> dict:
         """D-517 9 M3: each follower of an open convoy follows the nearest localized member ahead on
@@ -254,15 +266,15 @@ class TrafficService:
                 live.traffic = {"waiting_for": [r for r in result.unplaced if r != robot.id],
                                 "authority_end_m": result.authority_end.get(robot.id), "refused_at_m": 0.0, **used}
                 continue
-            refused = None
+            refused = 0.0 if self.jumped(robot.id) else None  # a refused jump holds every instruction
             if waiting and robot.d is not None:
                 held = self._state.held.get(robot.id, {})
                 index = next((i for i, span in enumerate(robot.spans) if span.d1 > robot.d and i not in held), None)
                 if index is not None:
                     refused_unit[robot.id] = robot.spans[index].unit
                     refused = robot.spans[index].d0 - live.segments[0]["s_from"]  # back to plan metres
-            live.traffic = {"waiting_for": list(waiting), "authority_end_m": result.authority_end.get(robot.id),
-                            "refused_at_m": refused, **used}
+            live.traffic = {"waiting_for": list(waiting) or (["pose_jump"] if self.jumped(robot.id) else []),
+                            "authority_end_m": result.authority_end.get(robot.id), "refused_at_m": refused, **used}
         self._view = self._make_view(active[0], layout, active[2], trips, result, refused_unit, robots, gaps)
         self._view["signals"] = self._signal_view(active[2])
         self._hand_over(layout, trips, robots, refused_unit, now)

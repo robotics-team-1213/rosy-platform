@@ -140,22 +140,25 @@ def test_signal_route_needs_a_named_operator_and_a_known_signal(tmp_path):
     assert client.post(url, json={"verb": ""}, headers=OPERATOR).status_code == 422
 
 
-def test_a_pose_jump_beyond_travel_and_two_u_gives_no_authority_that_period():
-    """D-525 real-map finding (D-517 premise): |Δfront| > max speed × dt + 2u + margin is a jump."""
+def test_a_pose_jump_is_refused_until_it_settles():
+    """D-525 real-map finding (D-517 premise): |Δfront| > max speed × dt + 2u + margin is a jump. It gives
+    no new authority and holds every instruction; it is taken once JUMP_SETTLE_PERIODS agree."""
     now = [100.0]
     service = TrafficService(None, TripConfig(), clock=lambda: now[0])
     guard = lambda d, trim=0.0, route="t:1": service._jump_guard("a", route, d, trim, 0.2, 0.195)  # noqa: E731
+
+    def tick(d, **kw):
+        now[0] += 0.5                  # allowed 0.1 + 0.39 + 0.05 = 0.54 m per period
+        return guard(d, **kw)
     assert guard(1.00) == 1.00
-    now[0] += 0.5                      # allowed 0.1 + 0.39 + 0.05 = 0.54 m
-    assert guard(1.50) == 1.50
-    now[0] += 0.5
-    assert guard(2.10) is None         # +0.60: a jump forward, refused
-    now[0] += 0.5
-    assert guard(1.55) == 1.55         # agrees with the last accepted front again
-    now[0] += 0.5
-    assert guard(0.95) is None         # −0.60: a jump back would let CORE overrun its authority
-    assert guard(0.20, trim=1.40) == 0.20  # a repeat trip dropped 1.4 m of laps: same place, no jump
-    assert guard(5.0, route="t:2") == 5.0  # a new route starts fresh
+    assert tick(1.50) == 1.50
+    assert tick(2.10) is None and service.jumped("a")   # +0.60: a one-frame glitch forward
+    assert tick(1.55) == 1.55 and not service.jumped("a")  # agrees with the last accepted front again
+    assert tick(0.95) is None          # −0.60: a jump back would let CORE overrun its authority
+    assert tick(0.95) is None          # second period at the new place
+    assert tick(0.95) == 0.95          # third: moved by hand or a real correction, taken
+    assert tick(0.20, trim=1.40) == 0.20  # a repeat trip dropped laps: route metres restart
+    assert tick(5.0, route="t:2") == 5.0  # a new route starts fresh
     assert guard(None) is None
 
 
