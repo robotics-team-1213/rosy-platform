@@ -2733,3 +2733,9 @@
 - gate 변화: SOURCE
 - 결정: CORE가 직진을 일찍 닫는 일(후진 중 감지 끊김)은 그대로다. 그 경우 이제 잘못된 `pose` 대신 뒤의 `junction`·`stall` 로 끝날 수 있다
 - 교훈: 위치 판정은 로봇이 실제로 있는 차로에 대고 한다. 지시 완료는 위치의 증거가 아니다
+## 2026-10-08 · uncommitted · fix(fleet): 교차로 회전은 들어오는 차로 끝 방향에서 나가는 차로 접선까지 (lap SIM 2 원인 2)
+- 변경: `turn_target` 이 `theta`(5 cm lead 접선) + 6° 대신, 들어오는 차로의 끝 방향(마지막 두 0.10 m 현: 마지막 현 + 차이의 절반)에서 나가는 차로 `start_tangent` 까지를 보낸다. `TURN_OVERTURN_DEG`·`BEND_MIN_DEG` 삭제, 0.20 m보다 짧은 차로는 `theta`. D-507 4항 개정 줄
+- 증거: 260919 SW lead 접선 72.6°(입구 polyline 잡음) vs 현 62.7°, 로봇 진입 59–60° → 회전 끝이 ring 접선보다 약 20° 바깥(lap SIM 2·3 rec_01–03). 고친 뒤 SIM 4회 회전 끝 −4.3…+0.3°. 모델 PC `test_routing_execute.py`·`test_trip_d507.py`·`test_trip_d520.py` 100 passed
+- gate 변화: SOURCE, ROS-SIM(SW 회전 끝 방향)
+- 결정: D-520 `exit_segment` 경로(`theta`)는 다른 세션 몫이라 그대로 둔다(result.md에 기록)
+- 교훈: 지도 polyline 끝 몇 cm의 방향을 로봇 자세처럼 쓰지 않는다. 회전 목표는 로봇이 실제로 달린 구간의 방향에서 잰다
