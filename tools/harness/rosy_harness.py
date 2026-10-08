@@ -787,6 +787,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
     # D-436 `affected`: change-scoped test selection (tools/harness/affected_tests.py).
     parser.add_argument("--base", default="main", help="affected: diff base ref (merge base with HEAD)")
+    parser.add_argument("--head", help="affected: diff base...HEAD for this commit only, ignoring the"
+                                       " working tree (the pre-push hook's pushed sha)")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--print", dest="action", action="store_const", const="print",
                         help="affected: print the selection (default)")
@@ -809,7 +811,8 @@ def main(argv: list[str] | None = None) -> int:
         import affected_tests  # noqa: E402 — sibling module, loaded on demand
 
         return affected_tests.main(repo, args.base, args.action or "print", args.json,
-                                   matrix=args.ci_matrix, allow_full=args.full, skip=tuple(args.skip))
+                                   matrix=args.ci_matrix, allow_full=args.full, skip=tuple(args.skip),
+                                   head=args.head)
     if args.command == "brief":
         print(render_brief(repo), end="")
         return 0

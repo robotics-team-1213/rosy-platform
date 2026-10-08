@@ -28,9 +28,7 @@ import numpy as np
 import class_sets
 import review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence
-import review_ingest
-import review_masks
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[4] / 'shared' / 'web'
@@ -388,6 +386,8 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     return self.send(value, etag=tag)
                 if path.startswith('/api/history/'):
                     return self.send(store.history(int(path.rsplit('/', 1)[1])))
+                if path.startswith('/api/vlm-feedback/'):
+                    return self.send(vlm_mask_feedback.read_current_feedback(store.state, int(path.rsplit('/', 1)[1])))
                 if path == '/api/catalog':
                     return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
                                       'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),

@@ -156,12 +156,16 @@ def _git(repo: Path, *args: str) -> str:
     return result.stdout
 
 
-def changed_files(repo: Path, base: str) -> list[str]:
-    """Committed changes since the merge base plus staged, unstaged and untracked files."""
+def changed_files(repo: Path, base: str, head: str | None = None) -> list[str]:
+    """Committed changes since the merge base plus staged, unstaged and untracked files.
+
+    With ``head`` (the pre-push hook's pushed commit): only ``base...head``, no working tree.
+    """
     names: set[str] = set()
-    names.update(_git(repo, "diff", "--name-only", "--no-renames", f"{base}...HEAD").splitlines())
-    names.update(_git(repo, "diff", "--name-only", "--no-renames", "HEAD").splitlines())
-    names.update(_git(repo, "ls-files", "--others", "--exclude-standard").splitlines())
+    names.update(_git(repo, "diff", "--name-only", "--no-renames", f"{base}...{head or 'HEAD'}").splitlines())
+    if head is None:
+        names.update(_git(repo, "diff", "--name-only", "--no-renames", "HEAD").splitlines())
+        names.update(_git(repo, "ls-files", "--others", "--exclude-standard").splitlines())
     return sorted(n.strip() for n in names if n.strip())
 
 
@@ -434,10 +438,11 @@ def run(repo_root: Path, sel: Selection, allow_full: bool = False,
 
 
 def main(repo_root: Path, base: str, mode: str, as_json: bool,
-         matrix: bool = False, allow_full: bool = False, skip: tuple[str, ...] = ()) -> int:
+         matrix: bool = False, allow_full: bool = False, skip: tuple[str, ...] = (),
+         head: str | None = None) -> int:
     repo = Repo.load(repo_root)
     try:
-        changed = changed_files(repo_root, base)
+        changed = changed_files(repo_root, base, head)
         sel = select(repo, changed)
     except SelectionError as exc:
         sel = Selection(mode="full", changed=[], escalations=[f"cannot diff against {base!r}: {exc}"])
