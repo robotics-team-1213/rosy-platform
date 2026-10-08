@@ -757,3 +757,8 @@
 - 증거: 관련 테스트 94개 통과, known_failures 0 NEW.
 - gate 변화: 없음.
 
+
+## 2026-10-08 · uncommitted · test(api): Pilot에서 실제 Console 지도 패널까지 인증 인계
+- 변경: 실제 CORE FastAPI 자산으로 Pilot→Console 같은 탭 이동을 실행하고 인증된 매니페스트 요청·역할·지도 패널을 390×844·1366×768에서 검증한다.
+- 증거: [Pilot→실제 Console 인증 인계](../../../docs/validation/uiux-pilot-console-session-2026-10-08/result.md). TestClient·Chromium 2 passed, 관련 묶음 10 passed, known_failures 0 NEW.
+- gate 변화: LOCAL 브라우저 근거 추가. DEVICE/FIELD 수용 근거는 아님.

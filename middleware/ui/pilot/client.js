@@ -22,6 +22,11 @@ export function clearToken() {
   sessionStorage.removeItem(KEY);
 }
 
+export function prepareConsoleSession() {
+  const current = token();
+  if (current) sessionStorage.setItem("rosy.dashboard.token", current);
+}
+
 export function authHeaders() {
   const value = token();
   return value ? {Authorization: `Bearer ${value}`} : {};
