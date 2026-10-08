@@ -118,6 +118,7 @@ from .lane_keep_junction import (  # noqa: F401 — re-exported; patch constants
     _junction,
 )
 from .lane_keep_bend import as_transverse, bend_side, bend_target, nearest_first, parallel_spans, runs_past, stop_short
+from .lane_keep_paint import extract_paint_points
 
 #: Lookahead from base_link where the lane centre is read.
 LOOKAHEAD_M = 0.25
@@ -283,7 +284,8 @@ class LaneKeeper:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
         self.last = {"strategy": "none", "boundaries": [], "transverse": [], "candidates": [], "blobs": 0,
                      "lookahead_m": self._lookahead, "target_m": None, "target_px": None,
-                     "lane_width_m": 2.0 * lane_half_width_m, "junction_ahead_v": 1}
+                     "lane_width_m": 2.0 * lane_half_width_m, "junction_ahead_v": 1,
+                     "paint_points_v": 1, "paint_points_m": []}
         if ground is None:
             self.last["reason"] = "no_ground"
             self._forget()
@@ -306,10 +308,7 @@ class LaneKeeper:
             self._forget()
             return None
         self.last["crosswalk"] = crosswalk_extent(grid, view.x[:, 0], view.y[0, :])  # D-491 §4
-        coarse = grid[::FIT_STRIDE, ::FIT_STRIDE]
-        cells = np.flatnonzero(coarse.ravel())
-        points = np.stack([view.x[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells],
-                           view.y[::FIT_STRIDE, ::FIT_STRIDE].ravel()[cells]], axis=1)
+        points, self.last["paint_points_m"] = extract_paint_points(view, grid, FIT_STRIDE)
         rng = np.random.default_rng(self._seed)
         if len(points) > MAX_POINTS:
             points = points[rng.choice(len(points), MAX_POINTS, replace=False)]
