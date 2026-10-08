@@ -53,3 +53,11 @@
 ## 제품 판단
 
 한쪽 선 소실 대응과 drivable head의 학습을 계속하더라도, 이 NE 진입 오차는 먼저 해결해야 한다. 가능한 경로는 (1) Fleet의 지도상 **호 시작 접선**과 신선한, 오차가 검증된 로봇 지도 자세를 같은 시각에 묶어 회전 목표를 만드는 것, (2) 정지 상태에서 카메라 바깥선 맞춤으로 진입 방향을 재측정하고 안전한 bounded 재회전을 별도 계약으로 승인하는 것이다. 둘 다 현재의 상대 `turn_deg`보다 더 많은 자세 권한·오차 근거가 필요하다. 그 근거가 없거나 맞춤이 불확실하면 D-520의 `lane_arc_entry`/`lane_arc_blind`로 HOLD한다. 다음 구현은 방향·위치 불확실도와 벽/스포크 음성 사례를 먼저 검증하고, 동일 SW·NE·한 바퀴 SIM 합격선을 다시 측정해야 한다.
+
+### 경로 계산과 게이트의 독립 검토
+
+현재 [Fleet `turn_target`](../../../operations/fleet/fleet/routing/execute.py)은 들어오는 차로의 끝 방향과 나가는 차로의 `start_tangent` 차이만 보낸다. [CORE 회전기](../../../middleware/core/services/core_features/line_follow/recovery/junction/gate.py)는 접근 중 기록한 실제 odom yaw에 그 상대각을 더한다. NE 기록에서는 지도 진입 방향과 실제 접근 방향이 약 5.2°, `start_tangent`와 원 맞춤 접선이 약 5.7° 다르다. 회전 완료 허용 오차까지 겹쳐 첫 호의 약 16°를 설명한다. 따라서 이 SIM의 −13° 상수는 다른 입구에 옮길 수 없다.
+
+진입 목표를 고치려면 원 맞춤 접선과 **회전 축의 실제 자세**를 같은 지도 ID·시각·odom epoch에서 결합해야 한다. Fleet `MapPose.odom_stamp`는 CORE odom 상태의 벽시계이고 CORE PoseTrail `stamp_ns`는 ROS 원본 시각이라 숫자 단위만 바꿔 직접 결합하면 안 된다. `LOCALIZED` 상태만으로도 마지막 시야 관측이 오래됐거나 dead reckoning이 길 수 있다. 멀리서 교차로를 무장한 시점의 자세도 축에 도착할 때의 자세가 아니다. 대응되는 신선한 자세와 오차 상한이 없으면 축에서 HOLD하는 계약을 먼저 정해야 한다.
+
+별도로 [CORE 호 단계](../../../middleware/core/services/core_features/line_follow/arc/lane_arc.py)의 첫 영상 검사는 아직 제품 구현이 아니다. D-520의 “첫 확신 맞춤이 0.10 m 안에 없으면 blind 거리에 더한다”는 규칙은 이번 NE처럼 이미 크게 틀어진 진입을 통과시킬 수 있다. **계약 개정 후보**는 같은 시각·epoch·TF의 바닥 도색 점만 받고 벽·spoke를 배제한 뒤, `|e_θ| + U95 ≤ 5°`일 때만 진입을 허용하며, 불확실하거나 0.10 m 안에 승인할 맞춤이 없으면 정지하는 것이다. 현재 후보는 SW에서도 0.10 m 안에서 흔들리고 NE oracle은 문턱까지 1°만 남아 있어 신뢰 가능한 `U95`를 아직 산정할 수 없다. 게이트만 넣으면 NE가 정지할 가능성이 크다. 주행 합격에는 신선한 자세로 **회전 목표를 바로잡는 경로**를 별도 검증해야 한다. CORE만 최종 `/cmd_vel`을 낸다.
