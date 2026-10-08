@@ -24,7 +24,7 @@ from typing import Iterable, Mapping, Optional
 
 from core_common.robot_body import PINKY_PRO  # public read-only anchor (D-430 §3); RobotBody is not
 from fleet.localization.map_pose import MapPoseConfig
-from fleet.traffic import blocks
+from fleet.traffic import blocks, handover
 from fleet.routing.execute import arc_id
 from fleet.server.trip_ports import ODOM_DRIFT_PER_M, TripConfig, pose_view
 
@@ -58,6 +58,11 @@ class TrafficService:
         #: robot id -> (route id, trim_m, spans) of the last period, to shift grants when laps are dropped.
         self._seen: dict[str, tuple[str, float, tuple]] = {}
         self._parked, self._warned = {}, False  # map poses read this period for ``pinned`` robots (D-517 6)
+        #: D-517 5 (M4): robot id -> when it was first seen UNKNOWN; robot id -> (route id, edges) of the
+        #: replan given; the last wait cycle and how many periods in a row it was seen
+        self._unknown_since: dict[str, float] = {}
+        self._tried: dict[str, tuple[str, list]] = {}
+        self._cycle: tuple[frozenset, int] = (frozenset(), 0)
 
     # ---- the table ------------------------------------------------------------------------
 
@@ -176,6 +181,7 @@ class TrafficService:
                 live.traffic = {"waiting_for": [], "authority_end_m": None, "refused_at_m": 0.0}
         if layout is None:
             self._view = _empty(None)
+            self._unknown_since, self._tried, self._cycle = {}, {}, (frozenset(), 0)
             return
         state = self._state
         for robot_id in {*state.route, *state.held, *state.last_occupied} - set(trips):
@@ -191,7 +197,8 @@ class TrafficService:
                 blocks.release_robot(state, robot_id)
         robots = [self._robot(layout, active[2], live) for live in trips.values()]
         gaps = self._link(active[2], robots, trips)
-        result = blocks.step(layout, robots, self._state, self._clock())
+        now = self._clock()
+        result = blocks.step(layout, robots, self._state, now)
         refused_unit: dict[str, str] = {}
         for robot in robots:
             live, waiting = trips[robot.id], result.waiting_for.get(robot.id, ())
@@ -210,6 +217,35 @@ class TrafficService:
             live.traffic = {"waiting_for": list(waiting), "authority_end_m": result.authority_end.get(robot.id),
                             "refused_at_m": refused, **used}
         self._view = self._make_view(active[0], layout, active[2], trips, result, refused_unit, robots, gaps)
+        self._hand_over(layout, trips, robots, refused_unit, now)
+
+    def _hand_over(self, layout, trips: dict, robots, refused_unit: dict, now: float) -> None:
+        """D-517 5 (M4): Fleet's resolver for a wait cycle or a 30 s UNKNOWN (``handover.decide``)."""
+        localized = {robot.id for robot in robots if robot.d is not None}
+        unknown = set(self._state.pinned) | (set(self._state.last_occupied) - localized)  # as the view's UNKNOWN
+        self._unknown_since = {r: self._unknown_since.get(r, now) for r in unknown}
+        route = {robot.id: robot.route_id for robot in robots}
+        self._tried = {r: tried for r, tried in self._tried.items() if route.get(r) == tried[0]}
+        avoidable = {}
+        for robot_id, unit in refused_unit.items():
+            live = trips[robot_id]
+            index = live.view["segment_index"]
+            edges = [edge for edge, parts in layout.edge_units.items() if any(p[0] == unit for p in parts)]
+            if index < len(live.segments) - 1 and live.segments[index]["edge_id"] not in edges:
+                avoidable[robot_id] = edges  # the unit lies past its next place: plan around it from there
+        cycle = self._view["wait_cycle"]
+        seen = frozenset(cycle or ())
+        self._cycle = (seen, self._cycle[1] + 1 if seen and seen == self._cycle[0] else int(bool(seen)))
+        pending = {r for r, live in trips.items()  # a replan hold with a route to confirm (none: human)
+                   if (live.view["hold"] or {}).get("reason") == "replan" and live.view["hold"].get("plan")}
+        decisions = handover.decide(cycle, self._cycle[1], avoidable, {r: t[1] for r, t in self._tried.items()},
+                                    pending, self._unknown_since, now)
+        for robot_id, row in decisions.items():
+            if row["decision"] == "replan":
+                self._tried[robot_id] = (route[robot_id], row["blocked_edges"])
+            if robot_id in trips:
+                trips[robot_id].traffic["resolver"] = row
+        self._view["resolver"] = [{"robot_id": r, **row} for r, row in sorted(decisions.items())]
 
     def view(self) -> dict:
         return self._view
@@ -366,4 +402,4 @@ def _round(value: Optional[float]) -> Optional[float]:
 
 def _empty(version) -> dict:
     return {"map_version": version, "block_length_m": {}, "units": [], "robots": [], "loop_capacity": [],
-            "wait_cycle": None, "unplaced": []}
+            "wait_cycle": None, "unplaced": [], "resolver": []}
