@@ -8,7 +8,8 @@ motion and stop methods are replaced on the console instance (``console_view.Tri
   other than ``OFF``.
 - Stops are never refused and always run first; afterwards the trip ends ``canceled``:
   ``cancel`` (per robot, cancel-all, intent cancel) -> ``operator_cancel``, ``estop_all`` ->
-  ``operator_estop``, ``line_follow_mode(OFF)`` -> ``operator_line_follow_off``.
+  ``operator_estop``, ``line_follow_mode(OFF)`` -> ``operator_line_follow_off``. The E-stop
+  closes every trip before it goes out (no trip step sends after it), then halts them all at once.
 - ``trip_busy`` makes ``_make_room`` find no bay for a trip robot and keeps it out of the
   degraded-capability reassignment. The trip loop's own halt keeps the methods bound before
   this wrapping (no recursion).
