@@ -53,7 +53,7 @@ TRAFFIC = {
     "block_length_m": {"east": 0.667, "ring_e": 1.2, "west": 0.667, "ring_w": 1.2},
     "units": [_unit("east#0"), _unit("east#1", "OCCUPIED", ["rosy_02"]), _unit("east#2", "OCCUPIED", ["rosy_02"]),
               _unit("ring", "OCCUPIED", ["rosy_01"], ["rosy_02"], zone=True),
-              _unit("west#0", "GRANTED", ["rosy_01"]), _unit("west#1"), _unit("west#2")],
+              _unit("west#0", "GRANTED", ["rosy_01"]), _unit("west#1"), _unit("west#2"), _unit("ring_w#0")],
     "robots": [{"robot_id": "rosy_01", "authority_end_m": 1.867, "waiting_for": [], "lap": 3, "trip_state": "running"},
                {"robot_id": "rosy_02", "authority_end_m": 1.95, "waiting_for": ["rosy_01"], "lap": 1,
                 "trip_state": "running"}],
@@ -146,14 +146,14 @@ def _open(playwright, origin, path, posts, answers=None):
     return browser, page, errors
 
 
-def _shots(page, name):
+def _shots(page, name, fits=False):
     out = os.environ.get("ROSY_SHOT_DIR")
     for width, height in SIZES:
         page.set_viewport_size({"width": width, "height": height})
         page.clock.run_for(1500)  # a poll and a redraw at this size
         if out:
             page.screenshot(path=str(Path(out) / f"{name}-{width}x{height}.png"), full_page=True)
-        if (width, height) == (1920, 1080):
+        if fits and (width, height) == (1920, 1080):  # D-517 10: the console never scrolls at 1920x1080
             assert page.evaluate("document.documentElement.scrollHeight <= innerHeight + 1"), "1920x1080 scrolls"
 
 
@@ -176,7 +176,7 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             expect(page.locator("#warning-list")).to_contain_text("rosy_02: 합류 대기")
             expect(page.locator('#roster article[data-robot-id="rosy_02"] .trip-line')).to_have_text(
                 "반복 운행 1바퀴째 · 교차로 대기 · rosy_01 통과 중")
-            _shots(page, "console-traffic")
+            _shots(page, "console-traffic", fits=True)
             page.set_viewport_size({"width": 1920, "height": 1080})
             before = page.locator("#map-canvas").evaluate("c => c.toDataURL()")
             page.locator("#traffic-toggle").click()
