@@ -139,7 +139,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                cell_app_service_id: str | None = None,
                development_sessions=None,
                site_maps=None, routing_config=None, map_pose_config=None,
-               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None,
+               trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None,
                identity_config=None, lane_compliance_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
@@ -609,7 +609,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
                              cancel_goal=console.cancel, config=trip_config or TripConfig(),
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
-                             roster=lambda: console.robot_ids)
+                             roster=lambda: console.robot_ids, traffic_zones=traffic_zones)
     install_trip_guard(console, trip_runner)
     app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
     if getattr(app.state, "stuck_resolver", None) is not None:  # D-494 5: no automatic answer on a trip

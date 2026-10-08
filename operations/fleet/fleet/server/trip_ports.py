@@ -336,7 +336,7 @@ def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
 
 
 class LiveTrip:
-    """Runtime state of the one open trip (``trip_runner``); ``view`` is what is stored and returned."""
+    """Runtime state of one robot's trip (``trip_runner``); ``view`` is what is stored and returned."""
 
     def __init__(self, view: dict, graph, request: dict) -> None:
         self.view = view
@@ -355,6 +355,24 @@ class LiveTrip:
         self.pose_read_at: Optional[float] = None
         self.best_progress = -math.inf
         self.progress_at: Optional[float] = None
+        #: D-517 2: a repeat trip and the last lap's route (``route_key``) a new lap must match.
+        self.repeat = bool(request.get("repeat"))
+        self.lap_route: Optional[list] = None
+        #: D-517 3: the arc ids of one lap of the cycle (via…, to); the loop it shares with others.
+        self.lap_arcs: tuple[str, ...] = ()
+        #: Failed lap checks in a row and when the last one ran (retried every ``LAP_RETRY_S``).
+        self.lap_tries = 0
+        self.lap_tried_at = -math.inf
+        #: Index of the current lap's first segment; finished laps before it are dropped (bounded plan).
+        self.lap_start = 0
+        #: Route metres (whole arcs) dropped from the plan's front so far; the block table shifts by it.
+        self.trim_m = 0.0
+        #: Bumped when an operator confirms another plan (the block table's route id, D-517 3).
+        self.route_rev = 0
+        #: ``(segment index, s)`` where the last step located the robot.
+        self.at: Optional[tuple[int, float]] = None
+        #: The block table's answer for this robot (``TrafficService``): waiting_for, authority, refused_at_m.
+        self.traffic: Optional[dict] = None
 
     def junction_end(self, now: float, remaining: Optional[float], config: TripConfig) -> Optional[tuple]:
         """``(reason, detail)`` when CORE's junction state ends the trip, else None.

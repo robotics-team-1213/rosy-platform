@@ -25,3 +25,10 @@ Named at the package re-judge at 44806 after D-519 password login. About 900 lin
 - Boundary: route modules depend on the unit only through `SitePrincipal` and the FastAPI dependencies it exports. The unit imports nothing from routing, trip, tracking, traffic or the robot clients. Pages load the shared scripts; they do not read cookies or tokens directly.
 - New login, session, account or role code goes inside this unit, not in a route module or a page script. The next auth change moves the unit to `fleet/server/auth/`, makes `site_users._LOGIN` public, and registers the subpackage in `SIZE_UNITS` with its own verdict, in the same change.
 - `deploy/site/site_users.py` mirrors `load_site_users` rules. Change both together.
+
+## Trip runner seam (2026-10-08)
+
+Named at the trip_runner.py re-judge (847 lines, ceiling 600) after D-517 M1a.
+- `server/trip_laps.py`: `_lap_arcs`, `_lap_due`, `_lap_retry_due`, the join/trim/hold part of `_next_lap`, `_from`, `_dropped`, `_joined`; pure on `LiveTrip` and plans, no robot calls.
+- `server/trip_halts.py`: `_halt_robot`, `_restart_halts`, `_halt_restarted` and the restart list, through the junction/cancel ports only.
+- `_traffic_holds` and the tick's pinned/step block move into `lane_traffic.TrafficService`. trip_runner keeps start, cancel, tick, `_step*` and replan, about 670 lines. Re-judge after the move.

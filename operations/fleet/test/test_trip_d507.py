@@ -317,14 +317,14 @@ def test_odom_stale_is_retried_on_the_next_tick():
     ports.junction_error = RobotApiError("rosy_60", 409, "JUNCTION_ODOM_STALE", "no fresh odom")
     _ticks(runner, ports)
     view = runner.view("p1")
-    assert view["state"] == "running" and ports.sent == [] and runner._live.sent is None
+    assert view["state"] == "running" and ports.sent == [] and runner._live["rosy_60"].sent is None
     assert view["detail"]["junction_retry"] == "JUNCTION_ODOM_STALE"
     _ticks(runner, ports)                                   # still stale: tried again, still running
     assert runner.running() is not None and ports.sent == []
     ports.junction_error = None
     _ticks(runner, ports)
     assert ports.sent[-1][0] == "left" and ports.expects[-1]["map_id"] == "site"
-    assert runner._live.sent["action"] == "left" and "junction_retry" not in runner.view("p1")["detail"]
+    assert runner._live["rosy_60"].sent["action"] == "left" and "junction_retry" not in runner.view("p1")["detail"]
 
 
 def test_http_client_puts_the_fields_in_the_junction_body():
@@ -425,7 +425,7 @@ def test_waiting_within_the_arm_distance_is_answered_as_before():
     """Within 0.6 m the instruction goes out to the waiting CORE and the trip runs on
     (the 10 s timeout there: ``test_trip_runner.test_core_waiting_at_a_junction_stops_the_trip_after_the_timeout``)."""
     runner, ports = _running_at(0.1)
-    ports.at(runner._live.arc(0), 0.5)
+    ports.at(runner._live["rosy_60"].arc(0), 0.5)
     _core_shows(ports, "waiting")
     _ticks(runner, ports)
     assert runner.running() is not None and ports.sent[-1][0] == "left"
