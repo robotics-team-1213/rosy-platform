@@ -221,6 +221,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # a manager without that hook cannot do the bounded junction turn.
     # `junction_pivot` (D-507 2): CORE takes the window/pivot fields and this run's perception
     # announces keep_debug junction_ahead_v within 2 s (supports_junction_pivot).
+    # `lane_bend` (D-507 addendum): the line-follow manager takes action `bend`.
     # `site_floor_map_id` (D-507 9): the line-follow site floor declaration from config.
     limits = svc.safety.limits
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
@@ -240,6 +241,7 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                                             False) is True,
                                       junction_pivot=getattr(svc.line_follow, "supports_junction_pivot",
                                                              False) is True,
+                                      lane_bend=getattr(svc.line_follow, "supports_lane_bend", False) is True,
                                       site_floor_map_id=(None if svc.line_follow is None else getattr(
                                           svc.line_follow.config, "site_floor_map_id", None)))
     return data

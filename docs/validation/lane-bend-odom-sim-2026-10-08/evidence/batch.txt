@@ -1,0 +1,23 @@
+west_01
+west_02
+west_03
+west_04
+west_05
+west_06
+west_07
+west_08
+west_09
+west_10
+south_left_01 --x -1.15 --y -0.489 --yaw 0
+south_left_02 --x -1.15 --y -0.489 --yaw 0
+south_left_03 --x -1.15 --y -0.489 --yaw 0
+south_left_04 --x -1.15 --y -0.489 --yaw 0
+south_left_05 --x -1.15 --y -0.489 --yaw 0
+south_left_06 --x -1.15 --y -0.489 --yaw 0
+south_left_07 --x -1.15 --y -0.489 --yaw 0
+south_left_08 --x -1.15 --y -0.489 --yaw 0
+south_left_09 --x -1.15 --y -0.489 --yaw 0
+south_left_10 --x -1.15 --y -0.489 --yaw 0
+south_centre_1 --x -1.15 --y -0.509 --yaw 0
+south_centre_2 --x -1.15 --y -0.509 --yaw 0
+south_centre_3 --x -1.15 --y -0.509 --yaw 0
