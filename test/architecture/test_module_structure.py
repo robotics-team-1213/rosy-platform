@@ -87,8 +87,12 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
     "fleet/fleet/server/trip_runner.py": (
-        847,
-        "split: judged at 847 on 2026-10-08 (independent re-judge, critic agent): D-517 M1a gave the trip loop "
+        686,
+        "split: measured at 686 on 2026-10-08 after the named seam was applied (D-517 split, behaviour-preserving): "
+        "lap helpers are in server/trip_laps.py, halts and restart halts in server/trip_halts.py, the traffic "
+        "hold-back and the tick's pinned/step block in lane_traffic.TrafficService (holds/watch/period). What "
+        "remains is one state machine: start/cancel/tick/_step*/replan and the CORE junction protocol. Re-judge "
+        "after the next growth. Previously judged at 847 on 2026-10-08 (independent re-judge, critic agent): D-517 M1a gave the trip loop "
         "three more jobs on top of the D-494 state machine: repeat-lap bookkeeping, robot halts and post-restart "
         "halts, and traffic glue. Move the lap helpers to server/trip_laps.py, the halt helpers to "
         "server/trip_halts.py, and the traffic hold-back and pinned/step block into lane_traffic.TrafficService; "
