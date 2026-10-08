@@ -1,6 +1,6 @@
 ## D-525 가상 신호등 — 실물 신호기 없이 Fleet이 구역 입구를 신호 단계로 열고 닫고, 로봇은 D-517 통행권만 따른다
 
-**Status:** Proposed (2026-10-08, 사용자 요청: "신호등 … 위치가 있고 … fleet 에서 보면 이를 우리가 신호등 체계로 해서 이를 화면에서 보여주고 그걸 보고 rosy pinky 가 이를 통해서 접근하고 처리", "초록색으로 나오면 그떄관제에서 받아서 로봇이 진행하면 되는거아니야?"). rev 2 독립 검토 반영. 문서만. 구현·SIM·DEVICE는 9항 단계로 따로 한다. CORE 계약은 바꾸지 않는다.
+**Status:** Accepted (2026-10-08, 사용자 결정 "Accepted로 하고 S0 시작"; 처음 요청: "신호등 … 위치가 있고 … fleet 에서 보면 이를 우리가 신호등 체계로 해서 이를 화면에서 보여주고 그걸 보고 rosy pinky 가 이를 통해서 접근하고 처리", "초록색으로 나오면 그떄관제에서 받아서 로봇이 진행하면 되는거아니야?"). rev 2 독립 검토 반영. 문서만. 구현·SIM·DEVICE는 9항 단계로 따로 한다. CORE 계약은 바꾸지 않는다.
 
 잇는 결정: [D-517](D-517-multi-robot-lane-traffic.md)(고정 블록·구역·CORE 통행권, 통행권은 줄지 않음, 만료하면 선다) · [D-474](D-474-caution-point-zone-grant.md)(구역 허가) · [D-443](D-443-site-device-contract.md) §1.4(실물 신호의 진입 허가 다섯 술어) · [D-337](D-337-robot-signal-source-measured-light.md)(로봇은 신호기 주장을 읽지 않는다) · [D-163](D-163-signal-observation-readonly-plane.md)(관측은 읽기 전용) · [D-12](D-12-mission-fleet.md) 신호 순서 소유자는 Fleet · [D-493](D-493-fleet-console-map-first-layout.md)(지도 먼저 화면) · [D-18](D-18-rosy-core.md)(CORE만 최종 `cmd_vel`).
 
