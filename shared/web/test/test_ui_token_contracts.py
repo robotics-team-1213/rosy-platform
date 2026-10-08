@@ -68,7 +68,7 @@ def test_the_raw_colour_scan_reads_every_web_file():
         "middleware/ui/robot/shell/shell.css", "middleware/ui/robot/shell/shell.js",
         "middleware/ui/robot/panels/surface-panels.css", "middleware/ui/robot/panels/setup/waypoints.js",
         "shared/web/components.css", "shared/web/ui.js", "shared/web/tokens.css",
-        "operations/fleet/fleet/server/web/styles.css", "operations/fleet/fleet/server/web/map-view.js",
+        "operations/fleet/fleet/server/web/shared/styles.css", "operations/fleet/fleet/server/web/map-view.js",
         "operations/fleet/fleet/server/web/index.html",
         "operations/apps/games/games/web/styles.css", "operations/apps/games/games/web/board.js",
         "operations/apps/games/games/web/index.html",

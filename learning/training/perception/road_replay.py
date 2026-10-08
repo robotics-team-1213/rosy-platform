@@ -2,6 +2,7 @@
 
   python learning/training/perception/road_replay.py data/perception/raw/<session> --out X:/DevTemp/road-replay/<name>
   python learning/training/perception/road_replay.py <bag_to_video>.mp4 --out ... [--labels data/perception/labels/<session>]
+  python learning/training/perception/road_replay.py <bag_to_video>.mp4 --out ... --compare-boundary
 
 Inputs follow extract.py's two-class rule: a folder is an MCAP session (odometry joined by
 stamp), a file a bag_to_video.py video with its sidecar; frame-only input is refused (the
@@ -23,18 +24,20 @@ Metrics and D-384 R0 gates (lane-owner review, 2026-10-01):
                   <= 1; wrong-side lock (TRACK while the keeper's pair centre is > w/2 away) = 0
   determinism     the estimator re-run over the cached inputs reproduces the snapshot hash
 Real-session numbers are unvalidated until the lane owner accepts them.
+--compare-boundary is an offline threshold-image/odometry comparison only. It does not
+feed learned paint to the boundary tracker or change a robot's active lane mode. Use
+original MCAP for header-stamped odometry; an old video sidecar without an odom
+stamp yields no boundary candidate.
 """
 from __future__ import annotations
 
 import argparse
-import bisect
 import copy
 import dataclasses
 import hashlib
 import json
 import math
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -46,13 +49,16 @@ for _p in (REPO / "middleware" / "perception",
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-import bag_to_video  # noqa: E402
-import extract  # noqa: E402
 import lane_replay  # noqa: E402
-from control.recording import CAMERA_TOPIC, SHADOW_TOPIC  # noqa: E402
+from road_replay_inputs import Frame, _interp, mcap_frames, recorded_projection, session_frames, video_frames  # noqa: E402, F401
 from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402
 from control.sensing.perception.lane_keep import LaneKeeper, floor_white_mask  # noqa: E402
+from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
+from control.sensing.perception.lane_bev import pose_if_fresh  # noqa: E402
 from road_replay_metrics import (  # noqa: E402, F401 — re-exported for tests and tools
+    _boundary_comparison,
+    boundary_candidate,
+    pair_seen_after,
     _coast_stats,
     _curve_residuals,
     _detector_metrics,
@@ -86,91 +92,6 @@ DROPOUTS_M = (0.05, 0.10)
 CHECKPOINT_EVERY, DROPOUT_MAX_S = 8, 4.0
 NIS_BINS = (0.0, 1.0, 2.0, 4.0, 6.0, 9.21, 16.0, math.inf)
 WALL_CLASS = 2
-
-
-@dataclass
-class Frame:
-    t: float
-    bgr: np.ndarray
-    odom: tuple | None = None          # (x, y, yaw)
-    shadow: dict | None = None
-    ir: dict | None = None             # latest IR_LINE line/observation payload
-
-
-# ------------------------------------------------------------------ inputs
-
-def _pose_tuple(pose):
-    return None if not pose else (float(pose["x"]), float(pose["y"]), float(pose["yaw"]))
-
-
-def _interp(series, t):
-    """Odometry pose at t, linear between the samples around it (yaw wrapped)."""
-    times, poses = series
-    if not times:
-        return None
-    j = bisect.bisect_right(times, t)
-    if j == 0:
-        return poses[0]
-    if j == len(times):
-        return poses[-1]
-    (t0, a), (t1, b) = (times[j - 1], poses[j - 1]), (times[j], poses[j])
-    k = 0.0 if t1 <= t0 else (t - t0) / (t1 - t0)
-    turn = math.atan2(math.sin(b[2] - a[2]), math.cos(b[2] - a[2]))
-    return (a[0] + k * (b[0] - a[0]), a[1] + k * (b[1] - a[1]), a[2] + k * turn)
-
-
-def _mcap_odom(files):
-    from mcap.reader import make_reader
-    from mcap_ros2.decoder import DecoderFactory
-    samples = []
-    for f in files:
-        with open(f, "rb") as fh:
-            reader = make_reader(fh, decoder_factories=[DecoderFactory()])
-            summary = reader.get_summary()
-            topics = None if summary is None else [
-                c.topic for c in summary.channels.values() if extract._topic_is(c.topic, "odom")]
-            for _, ch, _, msg in reader.iter_decoded_messages(topics=topics):
-                if extract._topic_is(ch.topic, "odom"):
-                    samples.append((bag_to_video._stamp_ns(msg) / 1e9, _pose_tuple(bag_to_video._pose(msg))))
-    samples.sort(key=lambda s: s[0])
-    return [s[0] for s in samples], [s[1] for s in samples]
-
-
-def mcap_frames(session: Path):
-    files = extract._mcap_files(session)
-    if not files:
-        raise SystemExit(f"no .mcap files under {session / 'bag'}")
-    odom = _mcap_odom(files)
-    shadow = ir = None
-    for name, _, schema, msg in bag_to_video._messages(files, camera_only=False):
-        if name == CAMERA_TOPIC:
-            bgr = bag_to_video._frame(schema, msg)
-            if bgr is not None:
-                t = bag_to_video._stamp_ns(msg) / 1e9
-                yield Frame(t, bgr, _interp(odom, t), shadow, ir)
-        elif name == SHADOW_TOPIC:
-            shadow = extract._side_value(schema, msg)
-        elif name == "line/observation":
-            value = extract._side_value(schema, msg)
-            if isinstance(value, dict) and value.get("source") == "IR_LINE":
-                ir = value
-
-
-def video_frames(path: Path):
-    rows, meta = extract._sidecar(path)
-    if rows is None:
-        raise SystemExit(f"{path}: no {path.with_suffix('.jsonl').name} sidecar; the estimator needs "
-                         "odometry, so frame-only video is not replayed")
-    extract._check_sidecar(path, rows, meta)
-    for t, bgr, side, _, _ in extract._video_frames(path, rows):
-        line = side.get("line/observation")
-        yield Frame(float(t), bgr, _pose_tuple(side.get("odom")), side.get(SHADOW_TOPIC),
-                    line if isinstance(line, dict) and line.get("source") == "IR_LINE" else None)
-
-
-def session_frames(source: Path):
-    """extract.py's rule: a folder is an MCAP session, a file a bag_to_video video."""
-    return mcap_frames(source) if source.is_dir() else video_frames(source)
 
 
 def load_labels(folder: Path | None) -> dict:
@@ -302,10 +223,16 @@ def _dropouts(inputs, rows, checkpoints, dropouts):
 def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
            params: RoadStateParams | None = None, pitch_deg: float | None = None,
            lidar_forward_deg: float = 180.0, height_m: float | None = None,
-           roll_deg: float = 0.0) -> tuple[dict, list]:
+           roll_deg: float = 0.0, compare_boundary: bool = False,
+           recorded_ground: bool = False) -> tuple[dict, list]:
+    if recorded_ground and (pitch_deg is not None or height_m is not None or roll_deg != 0.0):
+        raise SystemExit("recorded ground cannot be mixed with geometry overrides")
     params = params or RoadStateParams(lane_width_m=2 * HALF)
     profile, ground = ground_for(pitch_deg, height_m)
-    keeper = LaneKeeper(camera_x_offset_m=float(profile["x_offset_m"]))
+    camera_x_offset = float(profile["x_offset_m"])
+    keeper = LaneKeeper(camera_x_offset_m=camera_x_offset)
+    boundary = (LaneBoundaryTracker(camera_x_offset_m=camera_x_offset)
+                if compare_boundary else None)
     est = RoadStateEstimator(params)
     labels = labels or {}
     rows, inputs, checkpoints, nis = [], [], {}, []
@@ -319,15 +246,40 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     headings, pairs = [], 0
     straight_heading = {"left": [], "right": []}
     pair_widths = []
+    had_boundary_pair, memory_before_both = False, 0
+    fresh_odom_frames = 0
+    selected_projection = None
     for i, frame in enumerate(frames):
         img = frame.bgr
+        if recorded_ground:
+            plane, offset, projection = recorded_projection(frame)
+            if selected_projection is None:
+                ground, selected_projection = plane, projection
+                camera_x_offset = offset
+                keeper = LaneKeeper(camera_x_offset_m=camera_x_offset)
+                if compare_boundary:
+                    boundary = LaneBoundaryTracker(camera_x_offset_m=camera_x_offset)
+            elif projection != selected_projection:
+                raise SystemExit(f"frame {frame.t}: ground projection changed within session")
         if img.shape[:2] != (lane_replay.FRAME_H, lane_replay.FRAME_W):
             img = cv2.resize(img, (lane_replay.FRAME_W, lane_replay.FRAME_H), interpolation=cv2.INTER_AREA)
         img = derotate(img, roll_deg, ground.principal_x, ground.principal_y)
         t = frame.t
         if prev_t is None or not 0.0 <= t - prev_t <= KEEP_MAX_FRAME_GAP_S:
             keeper.reset()
+            if compare_boundary:
+                boundary = LaneBoundaryTracker(camera_x_offset_m=camera_x_offset)
+                had_boundary_pair = False
         obs = keeper.update(img, ground, lane_half_width_m=HALF)
+        boundary_pose = (pose_if_fresh(frame.odom, frame.odom_stamp, t)
+                         if boundary is not None else None)
+        fresh_odom_frames += boundary_pose is not None
+        boundary_obs = (boundary.update(t, boundary_pose, img, ground,
+                                        lane_half_width_m=HALF) if boundary is not None else None)
+        if boundary is not None:
+            if boundary.tier == "MEMORY" and not had_boundary_pair:
+                memory_before_both += 1
+            had_boundary_pair = pair_seen_after(had_boundary_pair, boundary.tier)
         keeper_digest.update(json.dumps(keeper.last, sort_keys=True, default=float).encode())
         ds = dth = 0.0
         if frame.odom is not None and prev_pose is not None:
@@ -360,6 +312,18 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
                "consistent_reason": snap["consistent_reason"], "decision_point": decision,
                "straight": dt > 0 and abs(dth / dt) < STRAIGHT_MAX_RATE, "keep": None, "road": None,
                "motion": _motion(ds, dth, dt)}
+        if boundary is not None:
+            row["boundary_tier"] = boundary.tier
+            boundary_target = boundary.last.get("target")
+            boundary_px = (keeper.to_pixel(ground, *boundary_target)
+                           if boundary_obs is not None and boundary_target is not None else None)
+            row["boundary"] = (None if boundary_obs is None else
+                               {"err": round(float(boundary_obs.error), 4),
+                                "confidence": round(float(boundary_obs.confidence), 4),
+                                "on_paint": bool(boundary_px is not None and
+                                                 lane_replay.target_on_paint(floor, boundary_px))})
+            row["boundary_candidate"] = boundary_candidate(row["boundary"], boundary.tier,
+                                                            had_boundary_pair)
         if obs is not None:
             point = keeper.last.get("target_px") or (img.shape[1] / 2 * (1 + obs.error), img.shape[0] * 0.835)
             row["keep"] = {"err": round(float(obs.error), 4),
@@ -404,6 +368,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
             wall_accepted, wall_hits = wall_accepted + a, wall_hits + w
         rows.append(row)
     n = len(rows)
+    if recorded_ground and not n:
+        raise SystemExit("recorded ground requires at least one camera frame")
     levels = {lv: round(sum(r["level"] == lv for r in rows) / max(1, n), 3)
               for lv in ("TRACK", "COAST", "SLOW", "STOP")}
     accepted = [r for r in rows if r["accepted"]]
@@ -425,6 +391,8 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
     wrong = sum(bool(r.get("wrong_side")) for r in rows)
     metrics = {
         "frames": n, "keep": keep_m, "road": road_m, "levels": levels,
+        "ground_provenance": "recorded_keep_debug" if recorded_ground else "nominal_or_override",
+        "ground_projection": selected_projection,
         "nis_candidates": {"n": len(nis_candidates),
                            "mean": round(float(np.mean(nis_candidates)), 3) if nis_candidates else None},
         "nis": {"basis": "associated", "n": len(nis), "mean": nis_mean, "above_9_21": nis_above,
@@ -463,6 +431,9 @@ def replay(frames, *, labels: dict | None = None, dropouts=DROPOUTS_M,
         "deterministic": baseline == again, "estimator_sha256": baseline,
         "keeper_sha256": keeper_digest.hexdigest(),
     }
+    if compare_boundary:
+        metrics["boundary_comparison"] = _boundary_comparison(rows, fresh_odom_frames,
+                                                              memory_before_both)
     metrics["determinism"] = {"scope": "estimator re-run over the cached keeper outputs in one run; "
                                         "compare keeper_sha256 across two runs for the full pipeline",
                                "estimator_sha256": baseline, "keeper_sha256": metrics["keeper_sha256"]}
@@ -509,6 +480,10 @@ def main(argv=None) -> int:
     parser.add_argument("source", help="session folder (bag/*.mcap) or bag_to_video mp4 with its sidecar")
     parser.add_argument("--out", required=True)
     parser.add_argument("--labels", help="D-379 labels folder (labels.jsonl + masks/) for wall false-accept")
+    parser.add_argument("--compare-boundary", action="store_true",
+                        help="offline LaneBoundaryTracker tier comparison on the same threshold frames")
+    parser.add_argument("--recorded-ground", action="store_true",
+                        help="require same-frame keep_debug ground projection; fail on missing or changed values")
     parser.add_argument("--max-frames", type=int, default=0)
     parser.add_argument("--pitch-deg", type=float, default=None,
                         help="camera pitch override (the D-379 real-frame fit is 11.8)")
@@ -521,12 +496,13 @@ def main(argv=None) -> int:
     out = Path(args.out).resolve()
     if REPO in out.parents or out == REPO:
         raise SystemExit("--out must be outside the public repo (D-226)")
-    frames = session_frames(Path(args.source))
+    frames = session_frames(Path(args.source), recorded_ground=args.recorded_ground)
     if args.max_frames:
         frames = (f for i, f in zip(range(args.max_frames), frames))
     metrics, rows = replay(frames, labels=load_labels(Path(args.labels) if args.labels else None),
                            pitch_deg=args.pitch_deg, lidar_forward_deg=args.lidar_forward_deg,
-                           height_m=args.height_m, roll_deg=args.roll_deg)
+                           height_m=args.height_m, roll_deg=args.roll_deg,
+                           compare_boundary=args.compare_boundary, recorded_ground=args.recorded_ground)
     metrics["source"] = str(args.source)
     metrics["validated"] = False
     out.mkdir(parents=True, exist_ok=True)

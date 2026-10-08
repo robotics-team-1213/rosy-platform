@@ -1,5 +1,5 @@
 // 천장 카메라 사이트 층 (D-257). DOM 없는 순수 계산만 둔다 — map-view.js 가 그린다.
-import { invert3, project as projectHomography } from "./map-fit.js";
+import { invert3, project as projectHomography } from "/console/assets/map-fit.js";
 
 // 대형 릴레이 증거(streamEvidence)도 같은 순수 계산이라 여기 있다(D-359 US-009).
 // 관측(sighting)은 표시·대조용이다. CORE TF pose 와 합치지 않고, 목표 좌표로 쓰지 않는다.

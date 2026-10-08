@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[3]
 TOKENS = ROOT / "shared" / "web" / "tokens.css"
 CHOOSER = ROOT / "shared" / "web" / "task-chooser.js"
 SHELL = ROOT / "middleware" / "ui" / "robot" / "shell" / "shell.css"
-FLEET = ROOT / "operations" / "fleet" / "fleet" / "server" / "web" / "styles.css"
+FLEET = ROOT / "operations" / "fleet" / "fleet" / "server" / "web" / "shared" / "styles.css"
 
 
 def test_sidebar_track_is_the_procedure_column():

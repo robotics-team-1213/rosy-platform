@@ -146,6 +146,7 @@ class Ports:
         self.core = FakeCore(self)
         self.sent: list[tuple] = []
         self.turns: list = []
+        self.advances: list = []
         self.expects: list = []  # D-507 2 fields per send (None: not sent)
         self.goals: list[tuple] = []
         self.canceled: list[str] = []
@@ -185,6 +186,7 @@ class Ports:
         reply = self.core.send(action, place_id, stop_after_m, expires_s, turn_deg)
         self.sent.append((action, place_id, None if stop_after_m is None else round(stop_after_m, 3)))
         self.turns.append(turn_deg)
+        self.advances.append(advance_m)
         self.expects.append(expect)
         return reply
 
@@ -457,6 +459,7 @@ def test_a_90_degree_turn_waits_out_the_manoeuvre_then_moves_on():
     run(runner.start("p1", "bob"))
     _ticks(runner, ports)
     assert ports.sent == [("left", "B", None)] and ports.turns == [pytest.approx(90.0, abs=0.1)]
+    assert ports.advances == [0.10]  # D-507 4: the advance turn_deg was aimed for, sent explicitly
     ports.at(ab, ab.length_m - 0.05)
     ports.core.see_junction()
     for state in MANOEUVRE:

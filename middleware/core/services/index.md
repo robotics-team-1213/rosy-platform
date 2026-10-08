@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · test(line_follow): D-507 10 D-422 기억 몸 밖 규칙의 safety 시험·검토·SIM
-- 2026-10-08 · uncommitted · feat(line_follow): D-507 6 motion_admitted, 9 site_floor_map_id
-- 2026-10-08 · uncommitted · fix(line_follow): LiDAR 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
-- 2026-10-07 · uncommitted · fix(line_follow): odom 원천 시각이 CORE 시계보다 조금 앞서도 자세 기록을 지우지 않는다
-- 2026-10-07 · uncommitted · fix(line_follow): 회전 뒤 unresolved도 그 교차로 실행 완료로 기록한다
+- 2026-10-08 · uncommitted · fix(line_follow): D-507 6 motion_admitted refuses non-finite twists
+- 2026-10-08 · uncommitted · fix(line_follow): 지도 교차로의 기대 창이 없으면 감지로 회전하지 않음
+- 2026-10-08 · uncommitted · fix(line_follow): D-468 궤적은 HOLD 틱에도 odom을 받는다
+- 2026-10-08 · uncommitted · docs(core): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 2026-10-08 · uncommitted · fix(line_follow): D-507 6 가로선 띠는 테이프 중심 ± 폭/2 (검토)

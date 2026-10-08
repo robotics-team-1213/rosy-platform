@@ -1,5 +1,7 @@
 """D-507 6: motion_admitted, one admission with two bases (enforce, site) and the site-basis
 reverse for the D-468 retrace only. Real manager, no ROS, no physical motion."""
+import math
+
 import pytest
 
 from core_features.line_follow.manager import LineFollowManager
@@ -183,8 +185,11 @@ def _retrace(**config):
     r = BridgeRig(probe=lambda now, v, w: False, floor=lambda: False, **config)
     r.m.observe_body_points((), range_min=.05, received_at=r.now)
     r.follow()
-    while r.step(seen=False, slip=.02).linear > 0 and r.reason == 'lane_bridge':
-        pass
+    # D-507 7: an unseen lane opens no departure; drift until the body is over the boundary.
+    r.yaw = .1
+    while r.m._return_controller.phase == 'tracking':
+        r.step(seen=True, slip=.02)
+    assert r.reason == 'lane_return_containment_unconfirmed'
     checkpoint = r.m._return_controller.checkpoint[0].received_at
     out = []
     for _ in range(10):
@@ -278,3 +283,11 @@ def test_l4_traffic_gate_arc_family_is_swept_in_reverse():
         site.m.bind_motion_envelope(lambda f=floor: (.1, 1., f))
         results.append(site.admit(-.03, -.2, 'retrace'))
     assert results == [True, False]
+
+
+# ---- ported from feat/site-floor-declaration (superseded by this module) -------------------
+
+@pytest.mark.parametrize('kind', KINDS)
+@pytest.mark.parametrize('twist', [(math.nan, 0.), (0., math.inf), (-math.nan, 0.), (.02, math.nan)])
+def test_non_finite_twists_are_never_admitted(kind, twist):
+    assert Site().admit(*twist, kind) is False

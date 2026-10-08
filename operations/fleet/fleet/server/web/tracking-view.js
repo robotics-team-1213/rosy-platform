@@ -4,7 +4,7 @@
 import { classifyTracking, trackingStatusLine, positionRows, displayLeaseMs,
   trackingDriftSample, calibrationDriftVerdict, rememberTrackingPoses, CALIBRATION_DRIFT_POLLS,
 } from "./tracking-layer.js";
-import { isRouteAbsent } from "./poll-gate.js";
+import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
 const RELEARN_WARNING = "배경을 다시 학습합니다. 트랙 위의 로봇과 물건을 모두 치운 뒤 진행하세요 — "
   + "남아 있으면 배경으로 굳어 추적되지 않습니다(약 10초). 계속할까요?";

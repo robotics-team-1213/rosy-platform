@@ -5,24 +5,30 @@ topic: d476-bridge-9dfk
 
 # Temporary robot-local CORE overlay, merged into /var/lib/rosy/core/.rosy/rosy.yaml, CORE
 # restarted, read back; restored byte for byte in finally. D-476 rev 1 floor basis: an enabled
-# bridge needs ir_guard_enabled and (enforce or the site declaration). After D-507 lands, replace
-# bridge_site_no_dropoffs with site_floor_map_id (CORE refuses the old key then).
+# bridge needs ir_guard_enabled and (enforce or the site declaration). D-507 9 (in release
+# 2026.10.08-053): the declaration is site_floor_map_id; CORE refuses bridge_site_no_dropoffs.
 overlay:
   line_follow:
     bridge_enabled: true
     ir_guard_enabled: true
-    bridge_site_no_dropoffs: true
+    site_floor_map_id: map_v2_fleet   # Fleet's active SiteMap (read 2026-10-08)
 
 # A site declaration that waives a floor proof needs a named, dated acceptance (D-512 decision 4).
 accepted_risks:
-  - key: line_follow.bridge_site_no_dropoffs
+  - key: line_follow.site_floor_map_id
     accepted_by: user livsbittt
     date: 2026-10-08
-    reason: floor track, no drop-offs
+    reason: floor track map_v2_fleet, no drop-offs, holes or steps
 
 min_battery_percent: 40
 verdict_max_age_s: 300
 hold_s: 1.0            # line-follow driver-hold session; the tool posts /line-follow/hold every 0.1 s
+
+# D-512 개정 1 tether guard (user 2026-10-08: drive on the charging cable). The verdict's
+# `tether` names the cable (2 m or 5 m) and its charger; these limits may only be stricter.
+tether_policy:
+  margin_m: 0.3        # stop radius = cable_m - margin_m from the charger
+  max_turn_deg: 360    # |cumulative yaw since start|; retrace unwinds to max_turn_deg - 90
 
 stop:
   duration_s: 120      # about two laps of the 260919 track at cruise 0.08 m/s

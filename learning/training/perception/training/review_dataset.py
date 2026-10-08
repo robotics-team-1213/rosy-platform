@@ -140,13 +140,37 @@ def _eval_inventory(folders):
         if not manifest.get('frames'):
             complete = False
         for row in manifest.get('frames', []):
-            group, video, frame = (row.get(k) for k in ('capture_group', 'source_video_sha256', 'video_frame'))
-            if (not isinstance(group, str) or not group.strip()
-                    or not isinstance(video, str) or re.fullmatch('[0-9a-f]{64}', video) is None
-                    or type(frame) is not int or frame < 0):
-                complete = False
+            group = row.get('capture_group')
+            if row.get('source_kind') == 'mcap':
+                mcap = row.get('mcap')
+                frame = mcap.get('frame') if isinstance(mcap, dict) else None
+                bags = mcap.get('bags') if isinstance(mcap, dict) else None
+                if (not isinstance(group, str) or not group.strip()
+                        or row.get('sources') != ['human_reviewed_eval']
+                        or not isinstance(row.get('identity'), str) or not row['identity'].startswith('mcap:')
+                        or not isinstance(mcap, dict)
+                        or not isinstance(mcap.get('metadata_sha256'), str)
+                        or re.fullmatch('[0-9a-f]{64}', mcap['metadata_sha256']) is None
+                        or not isinstance(mcap.get('session_dir'), str)
+                        or not Path(mcap['session_dir']).is_absolute()
+                        or Path(mcap['session_dir']).name != row.get('session')
+                        or not isinstance(bags, list) or not bags
+                        or any(not isinstance(b, dict) or not isinstance(b.get('sha256'), str)
+                               or re.fullmatch('[0-9a-f]{64}', b['sha256']) is None
+                               for b in bags)
+                        or not isinstance(frame, dict) or type(frame.get('log_ns')) is not int
+                        or type(frame.get('message_ordinal')) is not int):
+                    complete = False
+                else:
+                    groups.add(group)
             else:
-                groups.add(group); videos.add((video, frame))
+                video, frame = (row.get(k) for k in ('source_video_sha256', 'video_frame'))
+                if (not isinstance(group, str) or not group.strip()
+                        or not isinstance(video, str) or re.fullmatch('[0-9a-f]{64}', video) is None
+                        or type(frame) is not int or frame < 0):
+                    complete = False
+                else:
+                    groups.add(group); videos.add((video, frame))
             name = row.get('image')
             if not isinstance(name, str) or '\\' in name or ':' in name:
                 raise ValueError('eval image path required')
@@ -320,13 +344,18 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
         if not complete:
             raise ValueError('eval source group/video/frame inventory incomplete')
         proofs, observed = _capture_proofs(source_proof_files)
+        mcap_verified = {}
         if companions is not None:
             observed.update(companions['observed'])
             # Additional lineage can exclude candidates, never replace the
             # manifest's group fields or original PNG pixel-proof requirement.
             for row in companions['frames']:
                 sessions.add(row['session'])
-                videos.add((row['source_video_sha256'], row['video_frame']))
+                if row.get('source_kind') == 'mcap':
+                    key = (row['eval_ref']['content_sha'], row['session'], row['image'])
+                    mcap_verified[key] = row['mcap'] if row.get('decoded_mcap_pixels_verified') is True else None
+                else:
+                    videos.add((row['source_video_sha256'], row['video_frame']))
                 if row['capture_group'] is not None:
                     groups.add(row['capture_group'])
         eval_captured = {}
@@ -383,6 +412,15 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                 snapshot = eval_captured[Path(folder).absolute()]
                 manifest = json.loads(snapshot['manifest.json'])
                 for frame in manifest['frames']:
+                    if frame.get('source_kind') == 'mcap':
+                        key = (Path(folder).name, frame['session'], frame['image'])
+                        if mcap_verified.get(key) != frame['mcap']['frame']:
+                            raise ValueError('eval original MCAP companion proof unavailable')
+                        eval_provenance.append(dict(eval_revision=Path(folder).name,
+                                                    session=frame['session'], capture_group=frame['capture_group'],
+                                                    source_kind='mcap', mcap=frame['mcap']['frame'],
+                                                    image_sha256=frame['image_sha256']))
+                        continue
                     key = (frame['session'], frame['capture_group'], frame['source_video_sha256'])
                     if key not in proofs:
                         raise ValueError('eval original source proof unavailable')
@@ -462,6 +500,10 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                 raise ValueError('eval inventory changed before publication')
             if any(_stable_bytes(path) != raw for path, raw in observed.items()):
                 raise ValueError('source proof artifacts changed before publication')
+            if companions is not None:
+                from store import _sha256
+                if any(_sha256(path) != digest for path, digest in companions.get('source_hashes', {}).items()):
+                    raise ValueError('MCAP source changed before publication')
             published, sha = store.put_dataset(dataset, name)
             result.update(dataset_path=str(published), dataset_revision=sha, authority=revision, frames=len(entries))
             from store import content_sha
@@ -476,6 +518,10 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
                 raise ValueError('eval changed after immutable publication')
             if any(_stable_bytes(path) != raw for path, raw in observed.items()):
                 raise ValueError('source proofs changed after immutable publication')
+            if companions is not None:
+                from store import _sha256
+                if any(_sha256(path) != digest for path, digest in companions.get('source_hashes', {}).items()):
+                    raise ValueError('MCAP source changed after immutable publication')
             result.update(status='PUBLISHED_CONTENT_NOT_ADMITTED', build_integrity_verified=True,
                           blockers=['trainer_fresh_authority_admission_required'])
             return result

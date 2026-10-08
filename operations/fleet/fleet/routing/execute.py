@@ -16,6 +16,8 @@ from fleet.routing.trip import PlanRequest, plan_trip
 
 #: D-495 1: CORE turns at most this much at a junction.
 MAX_TURN_DEG = 150.0
+#: D-495 1: CORE's default straight run after a junction turn; Fleet sends it with every turn.
+ADVANCE_M = 0.10
 
 
 def plan_body(plan) -> dict:
@@ -37,6 +39,23 @@ def theta(graph: Graph, segments: list, index: int) -> float:
     """Signed turn at the end of segment ``index`` into the next one (+ is left)."""
     return turn_deg(graph.arcs[arc_id(segments[index])].end_tangent,
                     graph.arcs[arc_id(segments[index + 1])].start_tangent)
+
+
+def advance_m(graph: Graph, segments: list, index: int) -> float:
+    """The ``advance_m`` sent with a turn at the end of segment ``index``: never past the outgoing lane."""
+    return min(ADVANCE_M, graph.arcs[arc_id(segments[index + 1])].length_m)
+
+
+def turn_target(graph: Graph, segments: list, index: int) -> float:
+    """D-507 4 (2026-10-08): the ``turn_deg`` sent at the end of segment ``index``.
+
+    CORE turns on the place point (the D-507 pivot) to ``entry yaw + turn_deg`` and then drives
+    ``advance_m`` straight, so aim at the chord to the point ``advance_m`` (the value sent) along the outgoing lane:
+    the straight run then ends on its centre line. On a straight lane this is the tangent turn.
+    """
+    nxt = graph.arcs[arc_id(segments[index + 1])]
+    (px, py), (x, y, _) = nxt.polyline[0], nxt.point_at(advance_m(graph, segments, index))
+    return turn_deg(graph.arcs[arc_id(segments[index])].end_tangent, math.atan2(y - py, x - px))
 
 
 def ends_at_place(graph: Graph, segment: dict) -> Optional[str]:
@@ -79,12 +98,15 @@ def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, jun
             return {"edge_id": segment["edge_id"], "reason": "LANE_END_NOT_A_PLACE"}
         if lane_action(graph, segments, i, config) == STOP:
             continue  # the last place, or a hand-over
-        angle = theta(graph, segments, i)
-        action = classify(angle, config)
+        action = classify(theta(graph, segments, i), config)
         if action == UTURN:
             return {"edge_id": segment["edge_id"], "reason": "LANE_UTURN"}
-        if action in (LEFT, RIGHT) and abs(angle) > max_turn_deg:
-            return {"edge_id": segment["edge_id"], "reason": "LANE_TURN_TOO_SHARP", "turn_deg": round(angle, 1)}
+        if action not in (LEFT, RIGHT):
+            continue
+        # D-495 1 / D-507 4: CORE refuses a sent angle over the limit or of the other sign (or 0)
+        sent = round(turn_target(graph, segments, i), 1)
+        if abs(sent) > max_turn_deg or (sent > 0) != (action == LEFT) or sent == 0:
+            return {"edge_id": segment["edge_id"], "reason": "LANE_TURN_TOO_SHARP", "turn_deg": sent}
     return None
 
 

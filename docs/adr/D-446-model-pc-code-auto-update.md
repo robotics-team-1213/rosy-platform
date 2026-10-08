@@ -21,7 +21,7 @@ D-412는 로봇 런타임, D-441은 관제 PC의 사이트 스택을 갱신한�
 
 D-497 추가 범위(2026-10-07, 사용자 모델 PC 고려 요청): 서명 코드 묶음에 Vision의
 `__init__.py`, `lane_map.py`, `map_register.py` 세 파일과 isolated import 경로를 추가한다.
-perception의 `camera_lane_map.py`가 기존 잠금 실행기로 지도 초안만 생성한다. 다른 Vision
+작업 이름 `camera_lane_map.py`가 기존 잠금 실행기로 지도 초안만 생성한다(2026-10-08부터 perception 래퍼 없이 실행기의 고정 대응표가 서명된 Vision `lane_map.py`를 바로 실행한다, D-427 §2). 다른 Vision
 서비스 파일은 포함하지 않으며 고정 controller는 후보 밖에서 별도 갱신한다. 기존 후보의
 복귀·생성과 GPU 환경은 유지한다. 모델 PC 설치·작업 실행 수용은 별도 증거로 확인한다.
 

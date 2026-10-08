@@ -8,13 +8,14 @@ import { createLineStuckPanel } from "./line-stuck.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
 import { createStartPointView } from "./start-point-view.js";
-import { createVisionView } from "./vision-view.js";
-import { applyRoleToControls } from "./authorization.js";
+import { createVisionView } from "/console/assets/vision-view.js";
+import { applyRoleToControls } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
-import { addressMap, movableRobots, renumberBanner } from "./address-drift.js";
+import { addressMap, movableRobots, renumberBanner } from "/console/assets/address-drift.js";
 import { fleetRow, proxyRow, visionRow } from "./site-path.js";
-import { createPollGate } from "./poll-gate.js";
+import { createPollGate } from "/console/assets/poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
+import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
@@ -117,6 +118,8 @@ function markLocked(reason = "auth") {
   render();
   // D-473 4 — the first 401 of a lock asks once whether this console is in development mode.
   if (firstLock && reason === "auth") renewDevelopmentSession();
+  // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
+  if (firstLock && reason === "auth") passwordLogin.refresh(true);
 }
 
 function markUnlocked() {
@@ -129,7 +132,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4).
   return document.querySelectorAll(
-    "ui-button:not(#token-save):not(#topbar-more):not(#roster-toggle):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
+    "ui-button:not(#token-save):not(#topbar-more):not([data-login]):not(#roster-toggle):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -529,6 +532,7 @@ async function refreshAuthorization() {
       pill.setAttribute("status", "neutral");
     }
     applyRoleToControls(auth.role, operatorControls());
+    passwordLogin.refresh(false);
     render();
     // Independent panels refresh side by side; one slow source does not delay the rest.
     await Promise.allSettled([
@@ -862,6 +866,11 @@ function useToken(token) {
   visionView.refreshSources();
 }
 pageScope.listen(el("token-save"), "click", saveToken);
+// D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
+const passwordLogin = createPasswordLogin(el("password-login"), {onChange: () => {
+  el("console-token").value = "";
+  useToken("");
+}});
 pageScope.listen(el("console-token"), "keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
@@ -872,8 +881,7 @@ async function connectionMode() {
   try {
     const info = await fleetClient("/api/fleet/auth/connection");
     el("development-badge").hidden = info?.mode !== "development";
-    el("console-token").hidden = info?.mode === "development";
-    el("token-save").hidden = info?.mode === "development";
+    el("token-access").hidden = info?.mode === "development";
     return info?.mode === "development";
   } catch (_err) {
     return false;

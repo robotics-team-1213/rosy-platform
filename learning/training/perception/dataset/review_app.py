@@ -317,6 +317,7 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     object_set = class_sets.object_set(store)
                     return self.send({'frames': frames, 'classes': [c['name'] for c in object_set['classes']],
                                       'object_class_set': object_set,
+                                      'workspace_kind': review_evidence.metadata(store, 'workspace_kind'),
                                       'token': token, 'exports': store.exports(), 'segmentation_supported': True,
                                       'pixel_classes': review_masks.served_classes(store),
                                       'map_reference': review_evidence.map_reference(store)})
@@ -351,7 +352,19 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     pixel_draft_indices = [row['frame'] for row in pixel_reviews
                                            if row['status'] == 'pending' and
                                            bool((review_masks.pixels(store, row) != 255).any())]
+                    latest = next(iter(store.exports()), None)
+                    preparation = None
+                    if latest:
+                        current = review_evidence.decisions(store)
+                        authority = latest.get('authority', {})
+                        preparation = {'object_frames': latest['exported_frames'],
+                                       'pixel_frames': latest.get('pixel_approved_frames', 0),
+                                       'current_decisions_match':
+                                       authority.get('workspace_id') == current['workspace_id'] and
+                                       authority.get('generation') == current['generation'] and
+                                       authority.get('decision_sha256') == current['decision_sha256']}
                     return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
+                                      'preparation': preparation,
                                       'counts': {state: sum(f['status'] == state for f in frames)
                                                  for state in ('approved', 'pending', 'excluded')},
                                       'object_drafts': len(object_draft_indices),

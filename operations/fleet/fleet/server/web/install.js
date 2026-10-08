@@ -2,18 +2,19 @@
 // 로스터·지도·대형·신호등·발행 상태는 없다. 관제 토큰은 같은 세션 저장소
 // (rosy-console-token)를 공유한다 — 운용 화면에서 접속했으면 여기도 풀려 있다.
 
-import { applyRoleToControls } from "./authorization.js";
-import { developmentToken } from "./development-auth.js";
+import { applyRoleToControls } from "/console/assets/authorization.js";
+import { developmentToken } from "/console/assets/development-auth.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
 import { createCameraPeerPanel } from "./camera-peer.js";
-import { createVisionView } from "./vision-view.js";
+import { createVisionView } from "/console/assets/vision-view.js";
 import { createFieldView } from "./field-view.js";
 import { createMapFitView } from "./map-fit-view.js";
-import { createPollGate } from "./poll-gate.js";
+import { createPollGate } from "/console/assets/poll-gate.js";
 import { createPeerPicker } from "./peer-picker.js";
-import { addressMap, movableRobots } from "./address-drift.js";
+import { addressMap, movableRobots } from "/console/assets/address-drift.js";
 import { createFleetClient } from "/common/fleet-client.js";
+import { createPasswordLogin } from "./password-login.js";
 import { createPageScope } from "/common/scope.js";
 import { createTaskChooser } from "/common/task-chooser.js";
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
@@ -54,7 +55,7 @@ function authHeaders() {
 function operatorControls() {
   // 화면 테마(data-theme-choice)와 머리 토글은 권한과 무관다(D-359 §2.5·§6.4).
   return [...document.querySelectorAll(
-    "ui-button:not(#token-save):not(#topbar-more):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)")]
+    "ui-button:not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)")]
     .filter(control => !control.closest(".ui-task-chooser")
       && !control.closest("#peer-picker")
       && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel"].includes(control.id));
@@ -71,6 +72,8 @@ function setTopbarOpen(open) {
 
 function markLocked() {
   stopNotice();
+  // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
+  if (!auth.locked) passwordLogin.refresh(true);
   auth.locked = true;
   setTopbarOpen(true);
   auth.role = null;
@@ -213,6 +216,11 @@ function saveToken() {
   visionView.refreshSources();
 }
 pageScope.listen(el("token-save"), "click", saveToken);
+// D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
+const passwordLogin = createPasswordLogin(el("password-login"), {onChange: () => {
+  el("console-token").value = "";
+  saveToken();
+}});
 pageScope.listen(el("console-token"), "keydown", (event) => {
   if (event.key === "Enter") saveToken();
 });
@@ -313,10 +321,8 @@ async function refreshAuthorization(renewed = false) {
     life.check();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
-    if (identity.principal_id.startsWith("development-")) {
-      el("console-token").hidden = true;
-      el("token-save").hidden = true;
-    }
+    if (identity.principal_id.startsWith("development-")) el("token-access").hidden = true;
+    passwordLogin.refresh(false);
     const roleName = identity.role === "operator" ? "운영자" :
       identity.role === "viewer" ? "조회 전용" :
         identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
@@ -345,8 +351,7 @@ async function refreshAuthorization(renewed = false) {
         if (token && token !== auth.token) {
           auth.token = token;
           el("console-token").value = token;
-          el("console-token").hidden = true;
-          el("token-save").hidden = true;
+          el("token-access").hidden = true;
           await refreshAuthorization(true);
           return;
         }

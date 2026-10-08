@@ -120,6 +120,31 @@ def test_straight_lane_holds_the_centre():
     assert pose[0] > 0.8
 
 
+def test_one_boundary_gap_reacquires_while_moving():
+    """A short missing left stripe keeps the same lane; the right stripe remains visible."""
+    world = lane([(-1.0, 0.0), (2.0, 0.0)])
+    x0, x1 = 0.35, 0.55
+    world.paint[int((world.y1 - H - 0.03) * 1000):int((world.y1 - H + 0.03) * 1000),
+                int((x0 - world.x0) * 1000):int((x1 - world.x0) * 1000)] = 0
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    pose = (0.0, 0.0, 0.0)
+    poses, sources = [], []
+    for k in range(75):
+        obs = follower.update(k * DT, pose, world.render(pose), GROUND, **KW)
+        assert obs is not None
+        poses.append(pose)
+        sources.append(follower.last["source"])
+        v, w = core_command(obs)
+        mid = pose[2] + w * DT / 2
+        pose = (pose[0] + v * DT * math.cos(mid), pose[1] + v * DT * math.sin(mid),
+                pose[2] + w * DT)
+    assert any(x0 < p[0] < x1 for p in poses)
+    assert any(p[0] > x1 for p in poses)
+    assert any(x0 < p[0] < x1 and s == "RIGHT" for p, s in zip(poses, sources))
+    assert all(abs(p[1]) < 0.04 for p in poses)
+    assert sources[-1] == "LEFT"
+
+
 @pytest.mark.parametrize("side", [1.0, -1.0])
 def test_65_degree_bend_is_followed(side):
     """The 260919 chevrons: both lines bend ~65 deg (run 184434 stopped here)."""
@@ -244,6 +269,20 @@ def test_edge_failure_hands_off_to_an_armed_corner(monkeypatch):
 
 
 # --- Loss ------------------------------------------------------------------------
+
+def test_right_fallback_rejects_a_distant_line_when_left_memory_is_nearby():
+    view = BirdsEye(GROUND, W, HT, CAM_X)
+    left = ((view.x >= 0.09) & (view.x <= 0.13) & (abs(view.y - H) <= 0.005)).astype(np.uint8)
+
+    def pursue(right_y):
+        right = ((view.x >= 0.09) & (view.x <= 0.40) & (abs(view.y - right_y) <= 0.01)).astype(np.uint8)
+        return LaneEdgeFollower(camera_x_offset_m=CAM_X)._pursue(
+            view, {"left_grid": left, "right_grid": right, "fresh_length": 0.3}, H)
+
+    assert pursue(-H) is not None          # the same lane's right line can carry a short loss
+    assert pursue(-0.198) is None          # 0.290 m apart: too wide for this 0.185 m lane
+    assert pursue(-0.01) is None           # an inner branch is too close to the left line
+
 
 def test_boundary_truly_lost_ends_in_no_output():
     """Paint vanishes: memory carries the path a bounded distance at

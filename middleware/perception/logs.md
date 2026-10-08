@@ -1234,3 +1234,62 @@
 - gate 변화: 없음. SOURCE 호스트 시험만
 - 결정: D-468 구현 메모(G-16) 보강
 - 교훈: 맞춤을 고치면 안전 근거만이 아니라 조향 축도 바뀐다. 실물 녹화 재생으로 추종 변화를 같이 잰다
+
+## 2026-10-08 · uncommitted · feat(perception): keep 판단에 쓰인 지면 투영값 기록
+- 변경: `line/keep_debug`에 프레임의 실제 GroundPlane 수치와 keeper 카메라 오프셋을 `ground_projection`으로 기록. 지면 없음은 null. 디버그 묶음 조립을 ROS 없는 `lane_debug`로 이동
+- 증거: `test_lane_debug.py`, `test_line_observer_wiring.py`, `test_module_structure.py` 69건 및 known_failures 대조 통과
+- gate 변화: 없음. 호스트 SOURCE만 확인했고 보정 승인·장치 녹화·주행 수용은 남음
+- 결정: D-364 재생 요구와 2026-10-08 영상 조사 계획의 진단 증거
+- 교훈: nominal이라는 출처 이름만으로 당시 사용된 투영 숫자를 복원할 수 없다
+
+## 2026-10-08 · uncommitted · fix(perception): keep_debug 조립이 ground 이름표와 충돌해 매 프레임 죽던 것
+- 변경: `keep_debug_payload`의 지면 투영 인자를 위치 전용 `projector`로 바꿨다. 노드가 metadata로 넘기는 `ground=<이름표>`와 같은 이름이라 첫 카메라 프레임에서 `TypeError: got multiple values for argument 'ground'`로 line_observer가 죽고 keep_debug·junction 능력이 사라졌다(2d87d53b1, D-507 SIM 2회차에서 발견)
+- 증거: `test_lane_debug.py` 14건. 새 시험은 고치기 전 코드에서 실패
+- gate 변화: 없음
+- 교훈: 디버그 묶음 조립 함수는 노드가 실제로 넘기는 키워드로 시험한다
+
+## 2026-10-08 · a411c2801 · fix(control): 제자리 회전 뒤 keep flipping hold가 풀리지 않던 것
+- 변경: `keep` 모드도 `odom`을 구독한다. 신선한 odom이 제자리 회전(|wz| > 0.15 rad/s, D-495 회전 하한 0.3의 절반; |vx| < 0.01 m/s, CORE junction_still_linear)을 보이면 카메라 공백처럼 keeper를 `reset()`한다(`line_observer_node._spinning_in_place`). 직진 중 조향 반전 hold(fd4fad93c)는 그대로다. 같은 구독으로 D-408 learned paint 재사용 판정이 keep 모드에서 처음 odom을 받는다
+- 증거: `test_keep_pivot.py` 7건(회전 sweep 뒤 한 줄 링에서 목표가 나온다, 주행 중 weave와 odom 없음은 hold 유지, 변이 시험 3종 실패 확인), `test_lane_keep.py`·`test_line_observer_wiring.py`·`test_lane_paint_source.py`·`test_perception_folder.py` 120 passed 1 skipped, `test_module_structure.py` 34 passed, known_failures 0 new
+- gate 변화: 없음. 호스트 SOURCE만. D-507 SIM 3회차(모델 PC/현장 PC)에서 junction turn 뒤 `camera_line_not_visible` 정지가 사라지는지 확인이 남음
+- 결정: D-507 SIM 2회차 원인 1. no-target 프레임에서 hold를 푸는 안은 링(선 하나, 목표 있음)에 효과가 없고 R2C weave 재발을 열어 하지 않았다
+- 교훈: 끈적한 latch는 그것을 만든 원인(차체의 제자리 회전)이 사라질 때 풀리는 경로도 같이 둔다. control 패키지 크기는 45254/45254로 여유가 없다
+
+## 2026-10-08 · uncommitted · fix(control): keep 제자리 회전 reset 검토 반영 — odom twist 하나, 신선도 판정 하나
+- 변경: `_odom_wz`를 지우고 `_on_odom`이 `(vx, wz)`를 한 번 저장한다. `_paint_for`의 회전 판정도 `pose_if_fresh`(ODOM_MAX_SKEW_S 0.30 s)를 쓴다. 전에는 자체 0.5 s 창을 썼다. 노드 크기 판정은 608로 재판정했고, 남은 부담은 `docs/plans/2026-10-08-control-p1a-sensing-perception-split.md`로 넘겼다
+- 동작 변화: keep 모드가 `odom`을 구독하므로 D-408 learned paint 마스크 재사용(`learned_paint_every_n`)이 keep 모드에서 처음으로 작동한다. 영향은 `paint_source=learned`에서만 있다. 기본값 `threshold`는 영향이 없다. 전에는 odom이 없어 매 프레임 추론했다
+- 받아들인 대가: 서서 도는(vx < 0.01, |wz| > 0.15) 낮은 신뢰도 weave는 매 프레임 keeper를 다시 시작하므로 거기서는 flipping hold가 쌓이지 않는다. vx가 0.01을 넘으면 hold가 다시 무장된다. keep 조향은 항상 앞으로 가므로(1 − 0.65|e|) 정상 주행 weave는 이 경우에 들지 않는다
+- 증거: `test_keep_pivot.py` 9건(대가 시험, 오래된 twist(skew > 0.30 s)는 reset하지 않음 — `pose_if_fresh` 변이로 실패 확인), `test_lane_paint_source.py` 고정 문자열 갱신
+- gate 변화: 없음. 호스트 SOURCE만
+
+## 2026-10-08 · uncommitted · fix(control): 오른쪽 경계 기억 대체 전 차로 폭 검사
+- 변경: `LaneEdgeFollower._pursue`가 왼쪽 목표를 낼 수 없어 오른쪽 기억을 쓰려 할 때, 가까운 창에 좌우 기억이 함께 있으면 중앙 간격을 기존 시드 범위 [1.2, 2.8] × 차로 반폭과 대조한다. 범위 밖이면 오른쪽 대체를 거절한다. 왼쪽 출력과 두 기억의 비교 창이 없는 경우는 그대로다.
+- 원인: `bw1` 굽이 첫 HOLD frame 260의 가까운 기억 간격 0.290 m는 상한 0.259 m보다 넓고, 기존 오른쪽 대체 목표의 지도 중심선 거리 0.0357 m는 명목 차체 여유를 거의 소진했다. 이는 SIM 참 자세 기반 진단이다.
+- 증거: 거짓 오른쪽 선 시험을 수정 전 실패로 확인; 정상 오른쪽 대체·65° 굽이·전체 랩을 포함한 `test_lane_edge.py` 41 passed, perception 전체 2,754 passed/108 skipped, `known_failures.py` 0 new.
+- gate 변화: 없음. SOURCE/LOCAL만. 보정된 실물 R0·R1·R2는 열림.
+
+## 2026-10-08 · uncommitted · feat(control): Pilot 녹화에 TF 원본 추가
+
+- 변경: Pilot MCAP 명령과 세션 토픽 목록에 네임스페이스 TF와 전역 `/tf`, `/tf_static`을 추가했다. 실제 게시 경로가 어느 쪽이든 원본을 보존한다.
+- 증거: `test_pilot_recorder.py` 39 passed, `known_failures.py` 0 new. 실제 게시·시각 동기·보정 revision은 별도 확인이 필요하다.
+- gate 변화: SOURCE만. 지도 투영 라벨과 실기 차선 추종 수용은 열려 있다.
+## 2026-10-08 · 05462b7d9 · fix(perception): 남서 굽이를 굽이로 읽는다 (D-507 B9)
+- 변경: `lane_keep_junction._continues`(끝-시작 간격 ≤ `MAX_GAP_M`)로 이어진 칠 조각은 fork 두 가지가 아니다. 새 `lane_keep_bend`: 모서리 모양 선(경로를 가로지르고, 가까운 끝이 한쪽에 분명, 먼 끝이 기우는 쪽 차로 밖, 그쪽에 경로 교차점을 넘는 평행선 없음) 중 45°보다 가파르고 직각에서 `CORNER_SQUARE_RAD`보다 먼 선은 닫힌 쪽 경계의 굽이다. 굽이 중심선이 경로와 만나는 점이 `CORNER_LOOKAHEAD_M` 안이면 그 반경에서 추종(`bend_<side>`, 오차 상한 `CORNER_MAX_ERROR`), 밖이면 직진(`bend_ahead`). 가파른 선은 외삽 오프셋이 아니라 보이는 칠의 가까운 끝으로 편을 정하고, 앞 조각에 이어진 조각은 그 편을 받는다. `_runs_past`·`_pursuit_point`는 옮겨 `lane_keep.py` 600줄 유지. 카메라·차로 폭·이득은 그대로
+- 증거: `test_lane_keep_bend.py` 10건(B8 고정 자료 7클립: fork·flipping·corner 0, 굽이 추종, spoke `junction_transverse` 유지, 목표 참 중심선 안쪽 반폭 이내·90 % 23.5 mm 이내). perception 2747 passed. 모델 PC SIM `docs/validation/lane-keep-bend-sim-2026-10-08`: 굽이에 닿은 11/11 통과, x −0.95…−0.78 중앙 +0.014…+0.016 m, `corner_*`·`junction_fork`·`flipping` 0
+- gate 변화: 없음. SOURCE 호스트 시험 + ROS-SIM. 장치·현장 아님
+- 결정: D-507 B9
+- 교훈: 가파른 선의 SIDE_X_M 외삽 오프셋은 편을 정하지 못한다. 보이는 칠로 정한다
+
+## 2026-10-08 · e192ef089 · fix(perception): B9 독립 검토 반영
+- 변경: 닫힌 쪽 평행선이 사선의 가까운 끝을 넘어 이어지면 굽이 아님(정지선 오판 수정). 교차로 규칙을 굽이보다 먼저 판단하고, 65°를 넘는 굽이 선도 교차로 규칙에는 가로선(교차로는 닫힌 쪽 실패). 가파른 선 가까운 끝 편 정하기·편 상속·가까운 순서는 corner turning에서만(끔이면 실물 434프레임 main과 같음)
+- 증거: 새 시험 5건(60° 표시 2건은 05462b7d9에서, 끊긴 경계 교차로 3건은 5a5965e55에서 실패). 모델 PC SIM 8회: 굽이에 닿은 5/5 통과, 3회는 CORE `obstacle_ahead` memory(B4). B8 66° 사건 프레임은 한 프레임 `junction_transverse`
+- gate 변화: 없음. 착지 전 운영자 검토 필요: corner turning 켬에서 실물 프레임 119장 변화(HOLD → 주행 29, `bend_*` 69)
+- 결정: D-507 B9
+- 교훈: 한 프레임에서 굽이와 교차로 입구가 같아 보이면 교차로 쪽으로 실패하고 경로 문맥(B11)에 넘긴다
+
+## 2026-10-08 · 4cb87d467 · fix(perception): B9를 keeper 입력 bend_expected 뒤로 (장치 검토 반영)
+- 변경: main 병합(`_junction`이 (사유, ahead_m)). B9 규칙 전부를 `LaneKeeper.update(..., bend_expected=False)` 뒤로. `bend_ahead`는 굽이 선 교차점 − 반폭 안으로 당기고(평활 뒤에도) 차로 쪽 경계가 없으면 HOLD. `bend_*` 평활 우회 제거. 가까운 끝 편 정하기는 반폭의 절반 이상 떨어진 끝만. 배선은 B11·B12(D-507 구현 메모)
+- 증거: 실물 라벨 434프레임 게이트 끔 main과 0 다름(게이트 켬 90 다름, HOLD → 주행 0, 주행 → HOLD 13). `test_lane_keep_bend.py` 40건(실물 2건은 데이터 없으면 건너뜀), 닫힌 고리 기운 L자 20건. perception 2782 passed. 게이트 켬 SIM 6회: 굽이 통과 0(굽이 앞 차로 경계 없는 구간에서 HOLD → LOST 4, 한 프레임 교차로 → 회전 중단 2)
+- gate 변화: 없음. 장치는 게이트 끔(호출자 없음)
+- 결정: D-507 B9. 굽이 앞 경계 없는 구간을 무엇이 메울지(B11 접근 또는 기대 창 안의 직진 허락)는 사용자 결정
+- 교훈: 한 프레임 규칙으로 SIM 굽이와 실물 벽·칠을 가를 수 없으면, 규칙을 경로 문맥 게이트 뒤에 두고 기본값은 이전 동작으로 둔다
