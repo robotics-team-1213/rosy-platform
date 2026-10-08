@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(control): 정적 경로 시제품을 Gazebo 조건에 한정
 - 2026-10-08 · uncommitted · fix(perception): 정적 경로 끝에서 관측 후보 중단
 - 2026-10-08 · uncommitted · test(perception): 남쪽 출발 굽이 재획득과 긴 페인트 공백
 - 2026-10-08 · uncommitted · fix(perception): 지도 분기 보조의 경로 이탈 가드
 - 2026-10-08 · uncommitted · fix(perception): 양쪽 경계 미관측 시 기억 주행 후보 정지
-- 2026-10-08 · 4cb87d467 · fix(perception): B9를 keeper 입력 bend_expected 뒤로 (장치 검토 반영)

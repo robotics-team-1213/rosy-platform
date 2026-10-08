@@ -227,3 +227,32 @@ def test_route_ab_builds_the_hybrid_with_the_paint_map_beside_the_graph():
     assert "camera_lane_mode in ('route_a', 'route_b', 'route_ab')" in source
     assert "mode in ('route_a', 'route_b', 'route_ab'):" in source
     assert "'route_ab': self._route_follower," in source
+
+
+@pytest.mark.parametrize('source,enabled,sim_time,admitted', [
+    ('PINKY', False, False, False),
+    ('NOMINAL', True, True, False),
+    ('GAZEBO', False, True, False),
+    ('GAZEBO', True, False, False),
+    ('GAZEBO', True, True, True),
+])
+def test_route_prototype_node_needs_simulation_context(source, enabled, sim_time, admitted):
+    """Execute the ROS wrapper method without ROS so alternate configs cannot open route mode."""
+    tree = ast.parse((ROOT / 'control/line_observer_node.py').read_text(encoding='utf-8'))
+    method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+                  and n.name == '_build_route_follower')
+    built, warnings = object(), []
+    params = {'camera_ground_source': source, 'allow_simulation_ground': enabled,
+              'use_sim_time': sim_time, 'lane_graph_path': str(ROOT / 'map/map_v2_fleet/lane_graph.yaml'),
+              'route': ['west:r', 'ring_s:f'], 'route_start': [-1.15, -0.511, 0.0],
+              'camera_x_offset_m': 0.03317}
+    node = SimpleNamespace(get_parameter=lambda name: SimpleNamespace(value=params[name]),
+                           get_logger=lambda: SimpleNamespace(warning=warnings.append))
+    namespace = {'simulation_ground_allowed': lambda **kw: (
+        kw['source'] == 'GAZEBO' and kw['simulation_enabled'] and kw['use_sim_time']),
+        'yaml': yaml, 'open': open, 'RouteCameraFollower': lambda *a, **kw: built}
+    exec(compile(ast.Module(body=[method], type_ignores=[]), '<route-admission>', 'exec'), namespace)
+    follower = namespace['_build_route_follower'](node, 'route_a')
+    assert (follower is built) is admitted
+    if not admitted:
+        assert warnings and 'simulation' in warnings[0].lower()
