@@ -64,6 +64,19 @@ def test_camera_loss_inside_the_lead_window_starts_the_pass_from_the_last_straig
     assert status.junction.state == 'bending' and decision.linear > 0
 
 
+def test_obstacle_hold_in_the_lead_window_waits_then_the_pass_starts():
+    """A D-422 (or IR, limit) HOLD is not the camera losing the lane: CORE waits armed."""
+    rig = armed_rig()
+    while rig.x < .1:
+        site_step(rig, move=True)
+    for _ in range(5):
+        decision, status = site_step(rig, move=True, points=[(.07, 0.)])
+        assert decision.linear == 0. and status.reason == 'obstacle_ahead'
+        assert status.junction.state == 'armed'
+    decision, status = until(rig, 'bending')
+    assert rig.x == pytest.approx(.25, abs=.01)
+
+
 def test_loss_before_the_lead_window_is_ordinary_loss():
     rig = armed_rig(bend_in_m=1.)
     decision, status = site_step(rig, move=True, seen=False)
@@ -74,7 +87,11 @@ def test_loss_before_the_lead_window_is_ordinary_loss():
 def test_no_straight_tick_since_receipt_aborts_without_moving():
     rig = site_rig(**SITE)
     site_step(rig)
-    send(rig, bend_in_m=.1)
+    send(rig, bend_in_m=.2)
+    decision, status = site_step(rig, seen=False)             # in the lead window, no anchor yet:
+    assert decision.linear == 0. and status.junction.state == 'armed'  # the ordinary loss HOLD
+    assert status.reason == 'camera_line_not_visible'
+    rig.m.set_junction('bend', 'B2', 10., None, 60., None, expect={**BEND, 'bend_in_m': .04})  # at the arc
     decision, status = site_step(rig, seen=False)
     assert (decision.linear, decision.angular) == (0., 0.)
     assert (status.state, status.junction.state, status.junction.reason) == ('HOLD', 'aborted', 'no_anchor')
@@ -118,13 +135,28 @@ def test_ir_line_under_the_robot_during_the_arc_stops_it():
     assert (decision.linear, decision.angular) == (0., 0.) and status.junction.state == 'aborted'
 
 
-def test_d422_body_sweep_stops_the_arc():
+def test_d422_body_sweep_holds_the_arc_and_a_lasting_block_times_out():
+    """D-422 on every tick: a blocked sweep of the pass's own twist is a zero command (HOLD),
+    the pass resumes when the sweep clears, and a block that lasts ends it (its time bound, or
+    the D-407 stuck episode the lasting obstacle HOLD opens)."""
     rig = armed_rig()
     until(rig, 'bending')
     site_step(rig, move=True)
-    decision, status = site_step(rig, move=True, points=[(.13, .02)])  # on the arc, inside the stop gap
-    assert (decision.linear, decision.angular) == (0., 0.)
-    assert (status.junction.state, status.junction.reason) == ('aborted', 'near_stop')
+    x = rig.x
+    for _ in range(3):
+        decision, status = site_step(rig, move=True, points=[(.11, .02)])  # on the arc, in the stop gap
+        assert (decision.linear, decision.angular) == (0., 0.)
+        assert (status.state, status.reason, status.junction.state) == ('HOLD', 'junction_bend_blocked',
+                                                                         'bending')
+    assert rig.x == pytest.approx(x, abs=.003)
+    decision, status = site_step(rig, move=True)                            # cleared: on along the arc
+    assert decision.linear > 0 and status.reason == 'junction_bending'
+    for _ in range(200):
+        decision, status = site_step(rig, move=True, points=[(.11, .02)])
+        if status.junction.state != 'bending':
+            break
+    assert status.junction.state == 'aborted' and status.junction.reason in ('timeout', 'stuck')
+    assert (decision.linear, decision.angular) == (0., 0.)  # D-407 stuck may open first
 
 
 def test_arc_distance_bound():

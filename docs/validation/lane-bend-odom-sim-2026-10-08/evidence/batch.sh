@@ -12,7 +12,7 @@ while read -r name args; do
   echo "=== $name $(date +%T)" >> runs/batch.log
   rm -rf "runs/$name"; mkdir -p "runs/$name"
   eval timeout 240 python3 "$H/bend_probe.py" --out "runs/$name" $args > "runs/$name/probe.out" 2>&1
-  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('result'), d.get('error'), d.get('final_to_sw_node_m'))" \
+  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('result'), d.get('error'), d.get('min_to_sw_node_m'))" \
     "runs/$name/summary.json" >> runs/batch.log 2>&1
 done < "${1:-$H/batch.txt}"
 echo BATCH_DONE >> runs/batch.log

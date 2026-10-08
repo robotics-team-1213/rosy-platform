@@ -3,14 +3,16 @@
 Fleet sends action 'bend' for a site-map bend place: the lane distance to the arc start
 (bend_in_m, within bend_tol_m), the signed turn and the centre-line radius. While 'armed' the
 camera follows and CORE sums fresh odom travel; every straight confident tick anchors the line
-the body followed (D-476 rev 1). Inside the lead window CORE takes over at the first tick that is
-not straight confident following (HOLD, loss, large error, a sighting), or at the earliest arc
-start (bend_in - tol): 'bending' pursues the anchor line, the arc and the exit line (pure pursuit
+the body followed (D-476 rev 1). Inside the lead window CORE takes over at the first tick where
+the camera stops following straight (its own HOLD or loss, a large error, a sighting), or at the
+earliest arc start (bend_in - tol); any other HOLD (obstacle, IR, limits) just holds: 'bending' pursues the anchor line, the arc and the exit line (pure pursuit
 at the D-476 bridge_lookahead_m: on a circle it commands that circle's curvature, and on a
 corner it turns in early, inside the arc, away from the wall outside the turn), then
 'reacquiring' keeps to the exit line until D-495 M5 reacquisition or the next junction's
-sighting, else 'unresolved'. Every moving tick goes through the D-495 maneuver twist (D-422
-sweep, enforce probe) and motion_admitted kind 'bend'; distance and time are bounded.
+sighting, else 'unresolved'. Every tick judges the pass's own twist by D-422: a blocked sweep is
+a zero command (HOLD junction_bend_blocked) that resumes when clear, within the time bound (as
+following holds and resumes); every moving tick then goes through the D-495 maneuver twist
+(D-422 again, enforce probe) and motion_admitted kind 'bend'; distance and time are bounded.
 """
 from __future__ import annotations
 
@@ -26,6 +28,11 @@ BEND_FIELDS = ('bend_in_m', 'bend_tol_m', 'bend_radius_m')
 BEND_LEAD_M = .25
 BEND_STEP_M = .005      # path sample spacing
 _SEARCH = 40            # nearest-point search window (0.2 m of path) after the first tick
+#: The camera's own holds: the lane is out of view or unreadable. Any other HOLD (D-422 obstacle,
+#: IR guard, limits, driver, LOST) is not the bend coming into view, so the bend stays armed.
+CAMERA_HOLDS = frozenset({'line_not_visible', 'observation_stale', 'no_observation', 'low_confidence',
+                          'lane_recovery', 'invalid_observation', 'lane_bridge', 'lane_bridge_blocked',
+                          'lane_bridge_motion_unconfirmed'})
 
 
 def check_bend(action, turn_deg, expect):
@@ -72,16 +79,18 @@ class JunctionBendMixin:
         if not self._odom_travel(j, now):
             return self._abort(j, 'odom', decision)  # odom restarted: the distance is unknown
         st, a = self._status, j['travel']-j['bend_in']
-        straight = (st.state == 'TRACKING' and st.reason == 'tracking' and st.error is not None
-                    and abs(st.error) <= self._config.bridge_arm_max_error and not seen)
+        reason = (st.reason or '').removeprefix('camera_')
+        tracking = st.state == 'TRACKING' and reason == 'tracking' and st.error is not None
+        straight = tracking and abs(st.error) <= self._config.bridge_arm_max_error and not seen
+        camera = seen or tracking or reason in CAMERA_HOLDS  # else an obstacle/IR/limit hold
         if straight and a < -j['tol']:
             j['anchor'] = (pose.x, pose.y, pose.yaw, j['travel'])
         if a < -(j['tol']+BEND_LEAD_M):
             j['outside'] = seen  # D-507 3: a junction this far before the bend is not this place
             return self._junction_hold('junction_unexpected', decision) if seen else decision
         j['outside'] = False
-        if straight and a < -j['tol']:
-            return decision
+        if not camera or (a < -j['tol'] and (straight or j.get('anchor') is None)):
+            return decision  # no anchor yet: the ordinary hold and loss clock, until the arc start
         return self._start_bend(j, now, pose, decision)
 
     def _start_bend(self, j, now, pose, decision):
@@ -133,12 +142,24 @@ class JunctionBendMixin:
             self._odom_travel(j, now)
             self._junction_seen_at = self._junction_first_seen = self._junction_anchor = None
             self._junction_entry = None
+        if self._bend_blocked(now, twist):  # D-422 on the pass's own twist: hold, keep the pass
+            self._return_controller, self._bridge = None, None
+            self._loss_started_at, self._lost_latched = None, False  # the pass owns the loss clock
+            return self._junction_hold('junction_bend_blocked', decision)
         out = self._maneuver_twist(j, now, *twist, decision, 'junction_'+j['state'])
         if j['state'] == 'aborted':
             return out
         if not self.motion_admitted(now, *twist, 'bend', j['map_id']):
             return self._abort(j, 'motion_unconfirmed', decision)
         return out
+
+    def _bend_blocked(self, now, twist):
+        """The D-422 swept body gap of this twist is at or under its restart gap."""
+        self._intended = twist
+        if not (self._config.body_stop_known and self._scan_points is not None):
+            return False  # no own check: _maneuver_twist and motion_admitted decide (fail closed)
+        gap, _, _, resume = self._body_clearance(now)
+        return gap is not None and gap <= resume
 
     def _bend_twist(self, j, pose):
         """Pure pursuit to the path point bridge_lookahead_m past the nearest one; None when that

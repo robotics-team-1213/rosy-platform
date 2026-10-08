@@ -411,7 +411,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
         own_body_check = self._config.body_stop_known and self._scan_points is not None
         reason = (self._status.reason or '').removeprefix('camera_')
         if not (reason in _CONTINUE or reason.startswith(('lane_return_', 'junction_'))
-                or (reason == 'obstacle_ahead' and own_body_check and j['state'] != 'reacquiring')):
+                or (reason == 'obstacle_ahead' and own_body_check
+                    and (j['state'] != 'reacquiring' or j['action'] == 'bend'))):  # bend: own pursuit
             return self._abort(j, reason or 'hold', decision)
         if now-j['phase_at'] > j['limit']:
             if j['state'] == 'reacquiring':
