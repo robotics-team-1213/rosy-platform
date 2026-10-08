@@ -149,3 +149,34 @@ def test_display_follows_os_scheme_and_hardware_request_does_not_invent_measurem
     expect(page.locator('#hardware-action-note')).to_contain_text('완료 여부는 마지막 측정 시각')
     assert page.locator('.hardware-measured dd').inner_text()==before
     assert refresh.bounding_box()['width'] < page.locator('#root').bounding_box()['width']
+
+
+def test_lamp_test_shows_device_result_without_claiming_physical_identity(panel):
+    page = panel('host/hardware.js', role='administrator')
+    page.evaluate("""() => {
+      __callbacks['/api/v1/host/hardware'].onData({available:true,measured_at:'2026-10-09T00:00:00Z',
+        devices:[{id:'lamp',label:'후면 램프',state:'needs_human',evidence:'사람 확인 필요'}]});
+      window.__api = async (path, options) => {
+        __calls.push({path, body:options.body});
+        return {accepted:true,request_id:'lamp-1'};
+      };
+    }""")
+    page.get_by_role('button', name='후면 램프 자가 시험').click()
+    expect(page.locator('#hardware-action-note')).to_contain_text('lamp-1')
+    assert page.evaluate('__calls.at(-1)') == {
+        'path': '/api/v1/host/hardware/test', 'body': '{"device":"lamp"}'
+    }
+    page.evaluate("""() => __callbacks['/api/v1/host/hardware'].onData({available:true,
+      devices:[{id:'lamp',label:'후면 램프',state:'needs_human'}],
+      test:{request_id:'other',action:'lamp',state:'done'}})""")
+    assert '완료' not in page.locator('#hardware-action-note').inner_text()
+    page.evaluate("""() => __callbacks['/api/v1/host/hardware'].onData({available:true,
+      devices:[{id:'lamp',label:'후면 램프',state:'needs_human'}],
+      test:{request_id:'lamp-1',action:'lamp',state:'done'}})""")
+    expect(page.locator('#hardware-action-note')).to_contain_text('장치 시험 완료')
+    expect(page.locator('#hardware-action-note')).to_contain_text('영상에서 몸체를 확인')
+
+    viewer = panel('host/hardware.js', role='viewer')
+    viewer.evaluate("""() => __callbacks['/api/v1/host/hardware'].onData({available:true,
+      devices:[{id:'lamp',label:'후면 램프',state:'needs_human'}]})""")
+    assert viewer.get_by_role('button', name='후면 램프 자가 시험').is_disabled()

@@ -1206,3 +1206,8 @@
 - 변경: 지도 G2 fixture의 `runtime.maps`를 제공하는 지도와 일치시켜 지연·단절 캡처 중 지도가 사라지지 않게 했다. Console의 선택 좌표 행은 실제 선택 동안만 보이며 Esc 해제 뒤 숨긴다.
 - 증거: [현재 Console 내비게이션 화면 재검증](../../../docs/validation/uiux-nav-current-g2-2026-10-09/result.md). 320·390·1366px, 정상 등 15행 캡처, 브라우저 4 passed, `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 지도 상태 매트릭스 근거 보강. 전체 G2/G3와 설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · feat(robot): 설치·정비 화면에 후면 램프 대조 시험
+- 변경: D-537의 일회성 몸체 대조를 위해 기존 CORE host/hardware/test 램프 자가 시험을 설치·정비 패널에 연결했다. 관리자와 장치 상태를 확인한 뒤 요청 ID가 같은 장치 결과만 표시하고, 완료를 물리 신원 확인으로 표현하지 않는다.
+- 증거: 역할·요청 ID·장치 완료 문구를 검사하는 브라우저 회귀 시험을 추가했다. 역할 PC 실행 결과와 장치 설치본은 별도 기록한다.
+- gate 변화: SOURCE 구현. ARTIFACT·DEVICE/FIELD는 설치·현장 확인 전까지 HOLD.

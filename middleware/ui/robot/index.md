@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · feat(robot): 설치·정비 화면에 후면 램프 대조 시험
 - 2026-10-09 · uncommitted · uiux(robot): 현재 내비게이션 지도 상태 재검증과 좌표 행 정리
 - 2026-10-08 · uncommitted · uiux(robot): Console 지도 미수신 상태 정합성
 - 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 조작 열 차단 이유 적합성
 - 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 지도 위치 추정 게이트
-- 2026-10-08 · uncommitted · test(robot): 인증·지도 회귀에 유효한 합성 지도
