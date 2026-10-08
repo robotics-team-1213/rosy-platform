@@ -15,6 +15,7 @@ import yaml
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import ParameterDescriptor
 from sensor_msgs.msg import CompressedImage, Image
@@ -38,8 +39,7 @@ from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
-from .sensing.perception.lane_containment import (
-    PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width)
+from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
 from .sensing.perception.paint_localizer import PaintMap
 from .sensing.perception.route_camera import RouteCameraFollower
 from .sensing.perception.route_hybrid import RouteHybridFollower
@@ -52,7 +52,8 @@ _READ_ONLY = ParameterDescriptor(read_only=True)
 KEEP_MAX_FRAME_GAP_S = 0.5
 
 
-#: A spin in place: |wz| over half D-495's 0.3 rad/s turn floor, |vx| under CORE's 0.01 m/s still bound.
+#: A spin in place, judged on CORE's commanded (v, w): |w| over half D-495's 0.3 rad/s turn floor, |v| under
+#: CORE's junction_still_linear 0.01. Not on odom: a slow keep corner (cmd v 0.0188) reads vx ~0.001 (D-507 r4b).
 def _spinning_in_place(twist):
     return twist is not None and abs(twist[1]) > 0.15 and abs(twist[0]) < 0.01
 
@@ -100,8 +101,7 @@ class LineObserverNode(Node):
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
-        # 'between' only: bottom band start (keeps white walls out) and the
-        # lane width as a frame fraction until both boundaries are seen.
+        # 'between' only: bottom band start (keeps white walls out), lane width as a frame fraction until both are seen.
         self.declare_parameter('camera_between_roi_top_fraction', 0.6)
         self.declare_parameter('camera_between_lane_width_fraction', 0.6, _READ_ONLY)
         self.declare_parameter('camera_ground_source', 'PINKY')
@@ -133,17 +133,13 @@ class LineObserverNode(Node):
         self.declare_parameter('route', Parameter.Type.STRING_ARRAY, _READ_ONLY)
         self.declare_parameter('route_start', Parameter.Type.DOUBLE_ARRAY, _READ_ONLY)
 
-        self._ir_calibration = None
-        self._ir_calibration_revision = None
+        self._ir_calibration = self._ir_calibration_revision = None
         self._camera_controls_stable = False
-        self._simulation_ground_key = None
-        self._simulation_ground = None
+        self._simulation_ground_key = self._simulation_ground = None
         self._nominal_profile_cache = None
         self._ground_error = None
         self._paint_half_width_m = paint_half_width(self.get_parameter('lane_paint_half_width_m').value)
-        self._odom_pose = None
-        self._odom_stamp = None
-        self._odom_twist = None
+        self._odom_pose = self._odom_stamp = self._odom_twist = self._cmd_twist = self._cmd_stamp = None
         self._corner_tracker = LaneCornerTracker(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
         self._edge_follower = LaneEdgeFollower(
@@ -163,9 +159,7 @@ class LineObserverNode(Node):
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
         if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):
             self._route_follower = self._build_route_follower(camera_lane_mode)
-        self._debug_pub = None
-        self._debug_last_s = None
-        self._debug_graph = None
+        self._debug_pub = self._debug_last_s = self._debug_graph = None
         if bool(self.get_parameter('debug_overlay').value):
             self._debug_pub = self.create_publisher(
                 CompressedImage, 'line/debug/compressed', 2)
@@ -208,6 +202,8 @@ class LineObserverNode(Node):
         if mode in ('lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab'):
             self.create_subscription(
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
+        if mode == 'keep':   # read only: CORE stays the sole final cmd_vel publisher (D-18, D-143)
+            self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)
         if self._ir_calibration is None:
             self.get_logger().warning(
                 'IR line calibration disabled; IR_LINE will remain fail-closed')
@@ -451,7 +447,7 @@ class LineObserverNode(Node):
                                + float(msg.header.stamp.nanosec) * 1e-9)
                 if (self._keep_last_stamp is None
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
-                        or _spinning_in_place(pose_if_fresh(self._odom_twist, self._odom_stamp, image_stamp))):
+                        or _spinning_in_place(pose_if_fresh(self._cmd_twist, self._cmd_stamp, image_stamp))):
                     self._lane_keeper.reset()
                     if self._paint_worker is not None:
                         self._paint_worker.reset()
@@ -584,6 +580,9 @@ class LineObserverNode(Node):
         self._odom_twist = (float(msg.twist.twist.linear.x), float(msg.twist.twist.angular.z))
         self._odom_stamp = (float(msg.header.stamp.sec)
                             + float(msg.header.stamp.nanosec) * 1e-9)
+
+    def _on_cmd_vel(self, msg: Twist) -> None:   # Twist has no header: stamped on arrival (node clock, sim time in SIM)
+        self._cmd_twist, self._cmd_stamp = (msg.linear.x, msg.angular.z), self.get_clock().now().nanoseconds * 1e-9
 
     def _on_camera_controls(self, msg: String) -> None:
         summary = str(msg.data)
