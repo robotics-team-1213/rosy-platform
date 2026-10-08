@@ -25,8 +25,7 @@ from urllib.parse import urlparse
 import cv2
 import numpy as np
 
-import class_sets
-import review_return
+import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback
 
@@ -406,9 +405,10 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     _, _, frame_id, digest = path.rsplit('/', 3)
                     return self.send(review_masks.draft_image(store, int(frame_id), digest),
                                      mime='image/png', cache='no-cache')
-                if path.startswith('/api/draft-preview/'):
+                if path.startswith(('/api/draft-preview/', '/api/draft-merge-preview/')):
                     _, _, frame_id, digest = path.rsplit('/', 3)
-                    return self.send(review_masks.draft_preview(store, int(frame_id), digest),
+                    merged = path.startswith('/api/draft-merge-preview/')
+                    return self.send(review_masks.draft_preview(store, int(frame_id), digest, merge=merged),
                                      mime='image/png', cache='no-cache')
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.get(store, int(path.rsplit('/', 1)[1])))
