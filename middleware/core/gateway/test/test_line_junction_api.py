@@ -216,6 +216,19 @@ def test_d507_window_and_pivot_fields_validation(core_client):
     assert client.post(URL, json=far_edge, headers=OPERATOR).json()["state"] == "armed"
 
 
+def test_lane_turn_deg_belongs_to_a_straight_with_a_window(core_client):
+    """lap SIM 2: the straight's lane heading change, for the keeper corner hold's scope."""
+    client, services, clock = _active(core_client)
+    straight = {**BODY, "place_id": "J2", "map_id": "site_a", "expect_in_m": 0.5, "expect_tol_m": 0.1,
+                "lane_turn_deg": 52.0}
+    for bad in ({**D507, "lane_turn_deg": 10.0}, {**straight, "lane_turn_deg": 361.0},
+                {k: v for k, v in straight.items() if k not in ("expect_in_m", "expect_tol_m")}):
+        assert client.post(URL, json=bad, headers=OPERATOR).status_code == 400, bad
+    _pose(services, clock)
+    assert client.post(URL, json=straight, headers=OPERATOR).json()["state"] == "armed"
+    assert services.line_follow._junction["lane_turn"] == 52.0
+
+
 BEND = {**BODY, "action": "bend", "place_id": "B1", "turn_deg": 63.6, "map_id": "site_a",
         "bend_in_m": 0.5, "bend_tol_m": 0.12, "bend_radius_m": 0.064}
 

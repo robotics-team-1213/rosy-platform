@@ -42,6 +42,10 @@ CORNER_HOLD_AHEAD_M = .45
 #: Review: a keeper flipping between a corner and 'both'/'none' must not steer in bursts; one
 #: corner frame holds this long (the keep_debug evidence window of the junction capabilities).
 CORNER_LATCH_S = 2.
+#: lap SIM 2: a straight instruction's lane that turns at least this much (Fleet's lane_turn_deg)
+#: the corner's way is that lane (the 260919 ring), not a misread cross line.
+CORNER_LANE_TURN_DEG = 20.
+MAX_LANE_TURN_DEG = 360.
 
 
 def _point(pose, ahead, yaw, extra=0.):
@@ -60,6 +64,10 @@ def check_expect(expect, action, turn_deg):
     if pivot is not None and (action == 'stop' or (action != 'straight' and turn_deg is None)
                               or not -MAX_PIVOT_PAST_LINE_M <= pivot <= MAX_PIVOT_PAST_LINE_M):
         raise ValueError('pivot_past_line_m belongs to straight or a turn and must be in [-0.30, 0.30]')
+    lane_turn = expect.get('lane_turn_deg')
+    if lane_turn is not None and (action != 'straight' or e_in is None or not math.isfinite(lane_turn)
+                                  or abs(lane_turn) > MAX_LANE_TURN_DEG):
+        raise ValueError('lane_turn_deg belongs to straight with a window and must be in [-360, 360]')
 
 
 #: ponytail: 260919 transverse tape width; must become a per-site calibration value.
@@ -86,6 +94,7 @@ class JunctionApproachMixin:
     _cross_band = None  # D-507 6: where IR 'centre' is the measured cross line
     _junction_ahead_v_at = None  # last keep_debug frame carrying junction_ahead_v >= 1
     _corner_turn_at = None  # last keep_debug frame whose keeper strategy was a corner turn
+    _corner_turn_left = False  # that frame's corner was 'corner_left'
     _junction_held = False  # lap SIM A: a bend pass handed its sighting on; seen until odom passes the line
 
     def _expect_window(self, expect, now):
@@ -134,12 +143,21 @@ class JunctionApproachMixin:
                 and a['pose'].received_at >= since-SIGHTING_POSE_S
                 and self._return_evidence.trail.odometer-a['odometer'] < a['ahead'])
 
+    def _corner_against(self, j):
+        """lap SIM 2: the keeper's corner goes against the armed instruction: the other way from a
+        left/right, or on a straight one a way its lane does not turn (Fleet's lane_turn_deg; without
+        it any corner, fail closed). A corner the instruction or its lane takes is followed."""
+        if j['action'] in ('left', 'right'):
+            return (j['action'] == 'left') != self._corner_turn_left
+        turn = j.get('lane_turn')
+        return turn is None or (turn if self._corner_turn_left else -turn) < CORNER_LANE_TURN_DEG
+
     def _corner_at_expected_line(self, j, now):
         """An armed map instruction's expected line is within the keeper's corner range and the
-        keeper turns a corner this frame: that corner is the junction's line misread (it would
-        put the robot on a lane against the route). Locked."""
+        keeper turns a corner against it this frame: that corner is the junction's line misread
+        (it would put the robot on a lane against the route). Locked."""
         w, at, trail = j.get('window'), self._corner_turn_at, self._return_evidence.trail
-        if w is None or at is None or not 0 <= now-at <= CORNER_LATCH_S:
+        if w is None or at is None or not 0 <= now-at <= CORNER_LATCH_S or not self._corner_against(j):
             return False
         pose = self._fresh_pose(now)
         if pose is None or (self._return_evidence.epoch, pose.frame) != w['key']:
