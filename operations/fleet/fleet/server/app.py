@@ -677,10 +677,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 "frame_path": f"/api/vision/sources/{body.source_id}/frame",
                 "expires_in_s": 60}
 
-    from fleet.host_control import helper_from_environment
+    from fleet.host_control import UnavailableHostHelper, helper_from_config
     from fleet.server.host_control_routes import install_host_control_routes
-    install_host_control_routes(app, require_operator=require_operator,
-                                helper=helper_from_environment())
+    # D-524: without site-users or logins every caller is `site-console`, so no host control.
+    install_host_control_routes(
+        app, require_operator=require_operator, require_named_operator=require_named_operator,
+        helper=(helper_from_config() if principals or password_sessions is not None
+                else UnavailableHostHelper()))
 
     install_static_routes(app)
 

@@ -1,23 +1,39 @@
 """D-524 Service Control. No network and no real shutdown."""
 
+import os
+import re
+import shutil
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
-from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from fleet.host_control import (
     HOSTS,
     HostControlError,
-    SubprocessHostHelper,
+    SshHostHelper,
+    UnavailableHostHelper,
     catalogue,
     decide,
-    helper_from_environment,
+    helper_from_config,
 )
 from fleet.server.host_control_routes import install_host_control_routes
 
-HELPER = Path(__file__).resolve().parents[3] / "deploy" / "site" / "rosy-host-control"
+SITE = Path(__file__).resolve().parents[3] / "deploy" / "site"
+HELPER = SITE / "rosy-host-control"
+REMOTE = SITE / "rosy-host-control-remote"
+INSTALL = SITE / "install-host-control.sh"
+posix = pytest.mark.skipif(shutil.which("bash") is None or os.name == "nt",
+                           reason="needs a POSIX shell")
+
+
+def _code(call):
+    with pytest.raises(HostControlError) as caught:
+        call()
+    return caught.value.code
 
 
 def test_catalogue_is_the_three_ubuntu_hosts():
@@ -25,108 +41,115 @@ def test_catalogue_is_the_three_ubuntu_hosts():
     assert set(hosts) == {"site", "ai", "model"}
     assert hosts["model"]["units"] == []
     assert hosts["model"]["actions"] == ["reboot", "cancel-reboot"]
+    assert hosts["site"]["actions"] == ["reboot", "cancel-reboot", "restart-unit"]
+    assert hosts["site"]["stoppable_units"] == []
     assert "docker.service" in hosts["site"]["units"]
-    assert "pinky-backend.service" in hosts["ai"]["units"]
+    assert "pinky-backend.service" in hosts["ai"]["stoppable_units"]
 
 
 def test_reboot_is_a_delayed_helper_action_and_pkill_is_refused():
-    command = decide("site", "reboot", None, confirmed=True)
-    assert command["argv"] == ("reboot",)
+    assert decide("site", "reboot", None, confirmed=True)["argv"] == ("reboot",)
     for action in ("pkill", "kill", "shell", "poweroff"):
-        try:
-            decide("site", action, None, confirmed=True)
-        except HostControlError as exc:
-            assert exc.code == "UNKNOWN_ACTION"
-        else:
-            raise AssertionError(action)
+        assert _code(lambda: decide("site", action, None, confirmed=True)) == "UNKNOWN_ACTION"
+
+
+def test_site_units_restart_but_never_stop():
+    for unit in HOSTS["site"]:
+        assert decide("site", "restart-unit", unit, confirmed=True)["argv"] == ("restart-unit", unit)
+        assert _code(lambda: decide("site", "stop-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
 
 
 def test_only_an_allowlisted_unit_on_that_host_can_stop():
-    assert decide("site", "stop-unit", "docker.service", confirmed=True)["argv"] == (
-        "stop-unit", "docker.service")
-    for host, unit in (
-        ("ai", "docker.service"),
-        ("site", "ssh.service"),
-        ("model", "ollama.service"),
-        ("site", "docker.service;reboot"),
-    ):
-        try:
-            decide(host, "stop-unit", unit, confirmed=True)
-        except HostControlError as exc:
-            assert exc.code == "UNIT_NOT_ALLOWED"
-        else:
-            raise AssertionError((host, unit))
+    assert decide("ai", "stop-unit", "pinky-nav2.service", confirmed=True)["argv"] == (
+        "stop-unit", "pinky-nav2.service")
+    for host, unit in (("ai", "docker.service"), ("site", "ssh.service"),
+                       ("model", "ollama.service"), ("ai", "pinky-nav2.service;reboot")):
+        assert _code(lambda: decide(host, "stop-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
 
 
 def test_reboot_rejects_a_unit_and_an_unconfirmed_call():
-    try:
-        decide("model", "reboot", "docker.service", confirmed=True)
-    except HostControlError as exc:
-        assert exc.code == "UNIT_NOT_ALLOWED"
-    else:
-        raise AssertionError("unit")
-    try:
-        decide("model", "reboot", None, confirmed=False)
-    except HostControlError as exc:
-        assert exc.code == "CONFIRMATION_REQUIRED"
-    else:
-        raise AssertionError("confirm")
+    assert _code(lambda: decide("model", "reboot", "docker.service", confirmed=True)) == "UNIT_NOT_ALLOWED"
+    assert _code(lambda: decide("model", "reboot", None, confirmed=False)) == "CONFIRMATION_REQUIRED"
 
 
-def test_helper_script_matches_the_allowlist_and_has_no_pkill():
+def test_helper_script_matches_the_allowlist_and_has_no_test_switch():
     text = HELPER.read_text(encoding="utf-8")
-    assert "pkill" not in text
+    assert "pkill" not in text and "ROSY_HOST_CONTROL_PRINT" not in text
+    assert 'ROLE=$(cat "$CONF/role"' in text and "ROSY_HOST_CONTROL_ROLE" not in text
+    assert "--machine=ai@" not in text and "\nCONF=/etc/rosy/host-control\n" in text
     for host, units in HOSTS.items():
-        assert f"{host}:reboot:" in text
-        assert f"{host}:cancel-reboot:" in text
-        for unit in units:
-            assert f"{host}:stop-unit:{unit}" in text
-            assert f"{host}:restart-unit:{unit}" in text
+        for unit, actions in units.items():
+            for action in ("restart-unit", "stop-unit"):
+                listed = re.search(rf"\b{host}:{action}:{re.escape(unit)}[|)]", text) is not None
+                assert listed is (action in actions), (host, action, unit)
 
 
-def test_subprocess_helper_uses_an_argument_list(monkeypatch):
+def test_installer_ships_a_sudoers_line_without_env_rights():
+    text = INSTALL.read_text(encoding="utf-8")
+    assert "ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control\"" in text
+    assert "SETENV" not in text and "env_keep" not in text
+    assert 'command=\\"/usr/local/sbin/rosy-host-control-remote\\",restrict' in text
+    assert "/etc/rosy/host-control/role" in text
+    assert "exec sudo -n /usr/local/sbin/rosy-host-control" in REMOTE.read_text(encoding="utf-8")
+
+
+def _config(tmp_path, targets):
+    (tmp_path / "id_ed25519").write_text("k")
+    (tmp_path / "known_hosts").write_text("h")
+    (tmp_path / "targets").write_text(targets)
+    return tmp_path
+
+
+def test_ssh_helper_uses_an_argument_list_and_a_fixed_ssh(monkeypatch, tmp_path):
     seen = {}
 
     def fake_run(argv, **kwargs):
-        seen["argv"] = argv
-        seen["shell"] = kwargs.get("shell", False)
+        seen["argv"], seen["shell"] = argv, kwargs.get("shell", False)
         return subprocess.CompletedProcess(argv, 0, stdout="scheduled\n", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    helper = SubprocessHostHelper(helper="/usr/local/sbin/rosy-host-control", role="site")
-    assert helper.run("site", ("reboot",))["ok"] is True
-    assert seen["argv"] == ["/usr/local/sbin/rosy-host-control", "reboot"]
-    assert seen["shell"] is False
-    assert helper.run("ai", ("reboot",))["code"] == "HOST_NOT_LOCAL"
-    try:
-        SubprocessHostHelper(helper="/bin/bash", role="site")
-    except HostControlError as exc:
-        assert exc.code == "HELPER_REFUSED"
-    else:
-        raise AssertionError("name")
+    helper = helper_from_config(_config(tmp_path, "site rosy@site-pc.local\nai ai@ai-pc.local\n"))
+    assert helper.run("ai", ("restart-unit", "pinky-backend.service"))["ok"] is True
+    assert seen["argv"][0] == "/usr/bin/ssh" and seen["shell"] is False
+    assert seen["argv"][-4:] == ["--", "ai@ai-pc.local", "restart-unit", "pinky-backend.service"]
+    assert "StrictHostKeyChecking=yes" in seen["argv"]
+    assert helper.run("model", ("reboot",))["code"] == "HOST_HELPER_UNAVAILABLE"
 
 
-def test_environment_without_the_named_helper_stays_unavailable():
-    helper = helper_from_environment({})
-    assert helper.run("site", ("reboot",))["code"] == "HOST_HELPER_UNAVAILABLE"
-    helper = helper_from_environment({
-        "ROSY_HOST_CONTROL_HELPER": "/tmp/bash",
-        "ROSY_HOST_CONTROL_ROLE": "site",
-    })
-    assert helper.run("site", ("reboot",))["code"] == "HOST_HELPER_UNAVAILABLE"
+def test_helper_exit_codes_become_api_codes(monkeypatch, tmp_path):
+    codes = iter([3, 4, 255])
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(
+        argv, next(codes), stdout="", stderr=""))
+    helper = helper_from_config(_config(tmp_path, "model rosy@model-pc.local\n"))
+    assert [helper.run("model", ("reboot",))["code"] for _ in range(3)] == [
+        "REBOOT_ALREADY_SCHEDULED", "NO_HOST_CONTROL_REBOOT", "HOST_HELPER_FAILED"]
 
 
-def _client(helper):
+def test_missing_or_bad_config_stays_unavailable(tmp_path):
+    assert isinstance(helper_from_config(tmp_path), UnavailableHostHelper)
+    for bad in ("site -oProxyCommand=x@h\n", "robot rosy@h\n", "site rosy@h extra\n"):
+        assert isinstance(helper_from_config(_config(tmp_path, bad)), UnavailableHostHelper)
+    with pytest.raises(HostControlError):
+        SshHostHelper({"site": "-oProxyCommand=sh@h"}, key=tmp_path, known_hosts=tmp_path)
+
+
+def _client(helper, *, named=True):
     app = FastAPI()
 
     def operator():
         return SimpleNamespace(principal_id="operator-1", role="operator")
 
-    install_host_control_routes(app, require_operator=operator, helper=helper)
+    def named_operator():
+        if not named:
+            raise HTTPException(status_code=403, detail={"code": "OPERATOR_IDENTITY_REQUIRED"})
+        return operator()
+
+    install_host_control_routes(app, require_operator=operator,
+                                require_named_operator=named_operator, helper=helper)
     return TestClient(app)
 
 
-def test_route_schedules_a_confirmed_reboot_and_refuses_pkill():
+def test_route_schedules_a_confirmed_restart_and_refuses_pkill(caplog):
     class Recording:
         def run(self, host, argv):
             self.call = (host, argv)
@@ -139,16 +162,28 @@ def test_route_schedules_a_confirmed_reboot_and_refuses_pkill():
     assert refused.status_code == 400
     assert refused.json()["detail"]["code"] == "UNKNOWN_ACTION"
     assert not hasattr(helper, "call")
+    caplog.set_level("INFO", logger="fleet.server.host_control_routes")
     accepted = client.post("/api/fleet/hosts/ai/control", json={
         "action": "restart-unit", "unit": "pinky-backend.service",
         "operator_confirmed": True})
     assert accepted.status_code == 200
     assert helper.call == ("ai", ("restart-unit", "pinky-backend.service"))
     assert accepted.json()["requested_by"] == "operator-1"
+    logged = [r.getMessage() for r in caplog.records]
+    assert any("action=restart-unit unit=pinky-backend.service principal=operator-1" in m
+               and "code=ACCEPTED" in m for m in logged)
+    assert any(m.startswith("host control request host=ai") for m in logged)
 
 
-def test_route_reports_a_missing_helper_and_hides_other_hosts():
-    client = _client(helper_from_environment({}))
+def test_route_needs_a_named_operator():
+    client = _client(UnavailableHostHelper(), named=False)
+    refused = client.post("/api/fleet/hosts/site/control", json={
+        "action": "reboot", "operator_confirmed": True})
+    assert refused.status_code == 403
+
+
+def test_route_reports_a_missing_helper_and_lists_all_hosts(tmp_path):
+    client = _client(helper_from_config(tmp_path))
     missing = client.post("/api/fleet/hosts/site/control", json={
         "action": "reboot", "operator_confirmed": True})
     assert missing.status_code == 503
@@ -156,3 +191,85 @@ def test_route_reports_a_missing_helper_and_hides_other_hosts():
     listed = client.get("/api/fleet/hosts")
     assert listed.status_code == 200
     assert {row["host"] for row in listed.json()["hosts"]} == {"site", "ai", "model"}
+
+
+def test_app_without_named_principals_never_reaches_a_helper(monkeypatch):
+    import fleet.host_control as host_control
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+
+    monkeypatch.setattr(host_control, "helper_from_config",
+                        lambda *a: pytest.fail("helper built without named principals"))
+    client = TestClient(create_app(FleetConsole({}, [])))
+    answer = client.post("/api/fleet/hosts/site/control", json={
+        "action": "reboot", "operator_confirmed": True})
+    assert answer.status_code == 403
+    assert answer.json()["detail"]["code"] == "OPERATOR_IDENTITY_REQUIRED"
+
+
+# The shipped helper reads fixed root paths; the test runs its own copy with those paths
+# moved under tmp_path and stub shutdown/systemctl/logger on PATH.
+def _helper_copy(tmp_path, role):
+    stub = tmp_path / "bin"
+    stub.mkdir(exist_ok=True)
+    sched = tmp_path / "scheduled"
+    (stub / "shutdown").write_text(
+        "#!/bin/sh\n"
+        f'if [ "$1" = -c ]; then rm -f {sched}; echo cancel >> {tmp_path}/calls; exit 0; fi\n'
+        f'printf "USEC=%s\\nMODE=reboot\\n" "$(date +%s%N)" > {sched}; echo reboot >> {tmp_path}/calls\n')
+    for name in ("systemctl", "logger", "flock"):
+        (stub / name).write_text(f'#!/bin/sh\necho "{name} $*" >> {tmp_path}/calls\n')
+    for path in stub.iterdir():
+        path.chmod(0o755)
+    (tmp_path / "role").write_text(role + "\n")
+    text = HELPER.read_text(encoding="utf-8")
+    for old, new in (("CONF=/etc/rosy/host-control", f"CONF={tmp_path / 'conf'}"),
+                     ("/run/systemd/shutdown/scheduled", sched),
+                     ("/run/rosy-host-control", tmp_path / "state"),
+                     ("PATH=/usr/sbin:/usr/bin:/sbin:/bin", f"PATH={stub}:/usr/bin:/bin")):
+        assert old in text
+        text = text.replace(old, str(new))
+    copy = tmp_path / "helper"
+    copy.write_text(text)
+    return lambda *argv: subprocess.run(["bash", str(copy), *argv], capture_output=True,
+                                        text=True, timeout=20).returncode
+
+
+@posix
+def test_helper_refuses_a_second_reboot_and_cancels_only_its_own(tmp_path):
+    helper = _helper_copy(tmp_path, "model")
+    assert helper("cancel-reboot") == 4
+    assert helper("reboot") == 0
+    assert helper("reboot") == 3
+    assert helper("cancel-reboot") == 0
+    assert helper("cancel-reboot") == 4
+    # A reboot someone else scheduled (nightly window, unattended-upgrades) is not ours.
+    (tmp_path / "scheduled").write_text("USEC=1\nMODE=reboot\n")
+    assert helper("reboot") == 3
+    assert helper("cancel-reboot") == 4
+    assert (tmp_path / "calls").read_text().count("cancel") == 1
+
+
+@posix
+def test_helper_refuses_site_stop_and_unknown_role(tmp_path):
+    helper = _helper_copy(tmp_path, "site")
+    assert helper("stop-unit", "rosy-site-firewall.service") == 2
+    assert helper("restart-unit", "rosy-site-firewall.service") == 0
+    assert "systemctl --no-block restart rosy-site-firewall.service" in (tmp_path / "calls").read_text()
+    (tmp_path / "conf" / "role").write_text("robot\n")
+    assert helper("reboot") == 2
+    (tmp_path / "conf" / "role").write_text("ai\n")
+    assert helper("stop-unit", "pinky-nav2.service") == 0
+    assert "systemctl --user --machine=pinky@ --no-block stop pinky-nav2.service" in (
+        tmp_path / "calls").read_text()
+
+
+@posix
+def test_forced_command_passes_at_most_two_words(tmp_path):
+    def remote(command):
+        env = {**os.environ, "SSH_ORIGINAL_COMMAND": command}
+        return subprocess.run(["sh", str(REMOTE)], env=env, capture_output=True, timeout=10).returncode
+
+    assert remote("restart-unit a b") == 2
+    assert remote("") == 2
+    assert remote("reboot *") == 2
