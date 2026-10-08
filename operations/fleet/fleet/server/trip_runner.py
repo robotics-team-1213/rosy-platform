@@ -30,8 +30,8 @@ from fleet.routing.execute import (advance_m, arc_id, exit_segment, lane_action,
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
                                      pose_diagnostics, pose_view, record_bend_candidate)
-from fleet.server.lane_traffic import TrafficService
-from fleet.server.trip_authority import AuthoritySender
+from fleet.traffic.lane_traffic import TrafficService
+from fleet.traffic.trip_authority import AuthoritySender
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import (LAP_RETRIES, LAP_RETRY_S, carry_on, convoy_refusal, lap_arcs,  # noqa: F401
                                     lap_due, lap_retry_due)

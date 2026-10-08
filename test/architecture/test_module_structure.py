@@ -83,7 +83,8 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
-              "core/services/core_features/line_follow/arc")
+              "core/services/core_features/line_follow/arc",
+              "fleet/fleet/traffic")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -102,6 +103,16 @@ SIZE_VERDICTS = {
         "trip_runner keeps start/cancel/tick/_step*/replan. Recorded in "
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md; re-judge after the move. Previously accepted "
         "at 604 (bend diagnostic)",
+    ),
+    "fleet/fleet/traffic": (
+        867,
+        "split: measured at 867 on 2026-10-08 when the lane traffic seam was applied (pure move, no shim, no "
+        "behaviour change): blocks.py 425, lane_traffic.py 369, trip_authority.py 69, __init__.py 4, out of "
+        "the fleet package count. Only server/trip_runner.py imports it; it imports routing.graph, "
+        "routing.execute.arc_id, server.trip_ports and localization.map_pose, never trip_runner. Later "
+        "D-517 convoy and grant code goes here. Re-judge after D-517 M4 per "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md, and decide then whether "
+        "server/traffic_reservations.py moves in or retires.",
     ),
     "fleet/fleet/server/web/map-view.js": (
         831,
@@ -148,8 +159,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_434,
-        "split: re-judged at 46434 on 2026-10-08 (independent re-judge, critic agent): D-517 M3 lane convoy "
+        45_571,
+        "split: 45571 = 46434 - 863 after the pure move of routing/blocks.py, server/lane_traffic.py and "
+        "server/trip_authority.py into the fleet/fleet/traffic size unit (lane traffic seam, "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md); no new judgement, the +150 allowance is "
+        "still measured from the 46434 base. "
+        "Re-judged at 46434 on 2026-10-08 (independent re-judge, critic agent): D-517 M3 lane convoy "
         "(blocks.py follow/_front_on/shared grants, lane_traffic.py convoy block, trip_laps/trip_routes/trip_runner "
         "convoy gates, site-map convoy view) adds no owner or robot command path; trip_runner 747 within 686+150. "
         "Traffic growth is steady per D-517 step, so the lane-traffic seam is named in "

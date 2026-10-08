@@ -12,7 +12,7 @@ import pytest
 from core_common.robot_body import PINKY_PRO
 from fleet.server.console_view import TripCaps, trip_caps
 from fleet.server.site_map_store import SiteMapStore
-from fleet.server.trip_authority import AuthoritySender
+from fleet.traffic.trip_authority import AuthoritySender
 from fleet.server.trip_ports import TripConfig, TripError
 from fleet.server.trip_runner import TripRunner
 from test_lane_traffic import Fleet, _arc, _trip
