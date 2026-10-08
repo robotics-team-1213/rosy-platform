@@ -173,6 +173,20 @@ def test_full_local_uses_deploy_functional_tests_and_leaves_root_suite_to_ci(sam
     assert "test" in full
 
 
+def test_pack_bounds_remote_command_length_without_dropping_tests():
+    class FakeRepo:
+        @staticmethod
+        def test_files_under(path):
+            return [path]
+
+    paths = [f"test/test_case_{i:04d}_{'x' * 24}.py" for i in range(200)]
+    groups = affected.pack(FakeRepo(), paths)
+    assert len(groups) > 1
+    assert sorted(path for group in groups for path in group) == paths
+    assert all(sum(len(path) + 1 for path in group) <= affected.MAX_INVOCATION_CHARS
+               for group in groups)
+
+
 def test_duplicate_basenames_run_in_separate_invocations(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
