@@ -43,6 +43,8 @@ OWN = {
         "site-layer.js",
         "confirmed-action.js",
         "camera-warp.js",
+        "camera-backdrop.js",
+        "traffic-view.js",
         "motion-readiness.js",
         "link-tag.js",
         "localization-badge.js",
