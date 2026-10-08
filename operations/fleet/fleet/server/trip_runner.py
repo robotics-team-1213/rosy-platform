@@ -412,6 +412,13 @@ class TripRunner:
             record_bend_candidate(live, pose, self._store.active(), index, s)
             self._describe(live)
             last = index == len(live.segments) - 1
+            resolver = (live.traffic or {}).get("resolver") or {}
+            # D-517 5: a wait cycle; only before this place is instructed (review M1: a hold over a turn
+            # CORE carries out would freeze ``_locate``), else the resolver's next period says human
+            if (resolver.get("decision") == "replan" and live.view["hold"] is None and not last
+                    and remaining <= self.config.arm_distance_m and not self._core_busy(live)
+                    and (live.sent is None or live.sent["index"] != index)):
+                self._replan(live, index, frozenset(resolver["blocked_edges"]))
             if not last and not live.replan_pending and self._needs_replan(live, index):
                 live.replan_pending = True
             if (live.replan_pending and live.view["hold"] is None and not last
@@ -689,13 +696,14 @@ class TripRunner:
         blocked = self._blocked()
         return any(seg["edge_id"] in blocked for seg in live.segments[index + 1:])
 
-    def _replan(self, live: LiveTrip, index: int) -> None:
-        """D-489 9: plan again from just before the next place; a changed route holds there."""
+    def _replan(self, live: LiveTrip, index: int, closed: frozenset = frozenset()) -> None:
+        """D-489 9: plan again from just before the next place; a changed route holds there.
+        ``closed``: edges Fleet's resolver plans around (D-517 5), on top of ``blocked``."""
         live.replan_pending = False
         segment = live.segments[index]
         live.view["hold"] = replan_hold(
             self._store.active(), live.arc(index).point_at(max(segment["s_to"] - 0.01, segment["s_from"])),
-            live.segments[index:], live.request, live.view.get("caps") or {}, frozenset(self._blocked()),
+            live.segments[index:], live.request, live.view.get("caps") or {}, frozenset(self._blocked()) | closed,
             {live.place(i) for i in range(index)}, live.view["map_version"], self._routing,
             self.config.max_turn_deg)
 
