@@ -114,10 +114,12 @@ class JunctionApproachMixin:
                                          odometer=trail.odometer_at(pose), ahead=ahead, reason=reason)
 
     def _line_ahead(self, now, since=-math.inf):
-        """The latest sighting (at or after `since`) is anchored in this odom frame with a measured
-        line the odometer has not passed yet. Locked."""
-        a, at = self._anchor_now(now), self._junction_seen_at
-        return (a is not None and a['odometer'] is not None and at is not None and at >= since
+        """The latest sighting, of a run that began at or after `since` (review: not one carried
+        over from the bend's own corner), is anchored in this odom frame with a measured line the
+        odometer has not passed yet. Locked."""
+        a, at, first = self._anchor_now(now), self._junction_seen_at, self._junction_first_seen
+        return (a is not None and a['odometer'] is not None and at is not None
+                and first is not None and first >= since
                 and a['pose'].received_at >= since-SIGHTING_POSE_S
                 and self._return_evidence.trail.odometer-a['odometer'] < a['ahead'])
 

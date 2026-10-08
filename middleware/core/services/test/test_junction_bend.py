@@ -269,6 +269,34 @@ def test_a_straight_through_a_handed_over_line_ends_once_odom_passes_it():
     assert status.junction.state == 'idle' and decision.linear > 0
 
 
+def test_a_sighting_run_begun_before_the_take_over_is_not_handed_over():
+    """Review: the keeper's junction reason on the bend's own corner can start the pass and stay
+    fresh into it; only a run of sightings that begins inside the pass is the next junction."""
+    rig = armed_rig()
+    while rig.x < .2:
+        site_step(rig, move=True)
+    for _ in range(8):                                    # one run: before the take-over and on
+        sight(rig, .4)
+        decision, status = site_step(rig, move=True)
+    assert status.junction.state == 'bending'
+    decision, status = until(rig, 'idle')
+    assert decision.linear > 0
+
+
+def test_the_handed_over_line_survives_a_stale_odom_tick_and_ends_on_a_new_epoch():
+    rig = armed_rig()
+    bend_sighting_line_ahead(rig)
+    until(rig, 'waiting')
+    site_step(rig, pose=False)                            # one tick without fresh odom
+    site_step(rig, pose=False)
+    rig.now += .4
+    site_step(rig)
+    assert rig.m._junction_held is True
+    rig.m._return_evidence.epoch += 1                    # odom restarted: the line is unplaced
+    site_step(rig)
+    assert rig.m._junction_held is False
+
+
 def test_a_sighting_without_a_measured_line_is_not_handed_over():
     """No junction_ahead_m (old keeper): nothing places the line, so the pass ends as before."""
     rig = armed_rig()

@@ -312,7 +312,7 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
             return decision  # review M4: no junction detection on IR_LINE
         fresh = (self._junction_seen_at is not None
                  and 0 <= now-self._junction_seen_at <= self._config.stale_after_s)
-        if self._junction_held and not fresh:
+        if self._junction_held and not fresh and self._fresh_pose(now) is not None:
             self._junction_held = self._line_ahead(now)  # until odom passes the handed-over line
         seen = fresh or self._junction_held
         if seen and self._junction_entry is None:
