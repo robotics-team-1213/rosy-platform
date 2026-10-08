@@ -36,8 +36,8 @@
          sig_ring_n:
            zone: ring_n
            phases:                       # 순서대로 돈다
-             - {approaches: [east:fwd], green_s: 8}
-             - {approaches: [west:fwd], green_s: 8}
+             - {approach: east:fwd, green_s: 8}
+             - {approach: west:fwd, green_s: 8}
            yellow_s: 2
            all_red_s: 1
    ```
@@ -119,6 +119,19 @@
 - **시험.** `operations/fleet/test/test_signal_phase.py`: 시연 지도 입구와 설정 검사, 단계 시간, 바쁜 구역에서 녹색 지연, 수동 녹색 경로, 즉시 전체 적색, 앞 허가·2단계 거절과 신호 노드, 두 입구 고리 무작위 시험(2·3대, 위치 점프 ±0.5 m, UNKNOWN). 무작위 시험은 적색 허가 0, 허가 없이 구역 안 실제 몸체 0, 녹색이 켜질 때 `busy` 아님, 순환 대기 0, 모든 로봇 한 바퀴 이상을 본다.
 - **실제 현장 지도 검증(사용자 지적, 2026-10-09).** S0 시험은 합성 8자 고리와 시연 지도(`map_v2_fleet`) 입구 계산뿐이다. Rosy Cam이 본 실제 현장 바닥은 지도와 다르다(D-515 위에서 본 카메라, 현장 지도 view_turn). 신호 구역·정지선 위치와 블록 길이를 Rosy Cam 지도 자세 기준 실제 바닥으로 다시 맞추고, 그 지도로 무작위 시험을 다시 돌린다. 착지 뒤 후속으로 한다.
 - **S1에 넘기는 것.** `lane_traffic.py`가 단계 기계를 매 주기 돌리고 `green`을 넘긴다. 교착 처리(`handover`)는 `signal:` 노드를 로봇으로 보지 않게 한다. trip 시작 때 경로가 신호 구역 안에서 시작하면 거절하고, `hold_back` 로봇의 경로가 신호 구역을 지나면 `TRIP_SIGNAL_NEEDS_AUTHORITY`다. 운영자 명령·presence·E-stop `all_red`·화면.
+
+### 9항 S1 구현 노트 (Fleet 연결, 2026-10-09, feat/d525-s1-fleet-signal)
+
+- **설정.** `--site-config`의 `fleet.traffic.signals.<id>: {zone, phases: [{approach, green_s}], yellow_s, all_red_s}`(`cli.py` `_traffic_signals`). 형식이 틀리면 Fleet이 시작하지 않는다. 지도 검사(접근로, 수용 1)는 지도 버전마다 `TrafficService._layout_for`에서 하고, 실패한 신호의 구역은 늘 적색이며 `/api/fleet/traffic` `signals[].errors`에 이유가 나온다.
+- **주기.** `TrafficService.step`이 블록 표 직전에 단계를 돌리고 `blocks.step(green=...)`을 부른다. 다음 녹색 조건 `busy`는 앞 주기 표에서 온다. 새 지도 버전·재시작 뒤 첫 주기는 구역을 바쁘다고 본다(한 주기 늦은 녹색). 신호 시각은 Fleet 단조 시계다.
+- **읽기.** `GET /api/fleet/traffic`에 `signals`: `{signal_id, zone, virtual, mode, aspect, left_s, zone_busy, approaches: [{approach, lamp, green_s, stop_line: {x, y, yaw}}], errors, alert}`. 정지선은 접근 호의 끝점(구역이 시작하는 장소)이다.
+- **명령.** `POST /api/fleet/traffic/signals/{id}` `{verb: cycle|hold|all_red}`, 이름 있는 운영자만. 모르는 신호 404 `SIGNAL_UNKNOWN`, 다른 동사 422 `SIGNAL_VERB`. 수동 녹색(`set_aspect`)은 운영자 있음 규칙과 함께 다음 단계에 연다.
+- **E-stop.** `trip_guard.guarded_estop_all`이 trip을 닫은 직후 모든 가상 신호를 `all_red`로 바꾼다.
+- **출발 검사.** 경로가 신호 구역 안에서 시작하면 422 `TRIP_SIGNAL_START_IN_ZONE`, 신호 구역을 지나는데 통행권 방식이 `core`가 아니면 422 `TRIP_SIGNAL_NEEDS_AUTHORITY`(`fleet.traffic.authority: false`인 현장 포함).
+- **교착 처리.** `signal:<구역>` 노드는 해결기 행에서 뺀다. 순환의 로봇들은 지금 규칙(D-517 M4)대로 다뤄진다.
+- **화면.** 관제 지도 교통 층: 접근로마다 정지선 막대와 등(녹·황·적, 색 토큰은 신호 카드와 같은 `--nominal`·`--status-warn`·`--status-crit`) + "sig · 적" 글. 구역 글에 "가상 신호 sig · 녹 5 s". 신호 카드 목록에 "가상" 카드(단계·남은 시간·"비기를 기다림", 자동·유지·전체 적색 버튼, 운영자만). 로봇 카드 "신호 대기 · sig 적색". 예외 큐: 설정 오류, 전체 적색 30 s, 유지 2분. 적색 대기는 합류 대기 시계에 넣지 않는다.
+- **시험.** `test_traffic_signals.py`(9), 교통 관련 Fleet 시험 897, 노드 화면 시험 30(`traffic-layer`·`site-map`·`signal-presence`·`convoy-view`), Chromium `test_traffic_view_browser` 1. 모델 PC. `test_site_map_repeat_start_pairs_robot_and_start_place`와 convoy Chromium 1건은 S0 기준(main)에서도 `#site-path` 대기 시간 초과로 실패한다(이 브랜치와 무관).
+- **남은 일.** 수동 녹색과 운영자 있음, 실제 현장 지도(Rosy Cam) 기준 정지선·구역 재검증, S2 Gazebo, S3 실물. D-517 M2 Safety-Review 재확인이 먼저다.
 
 ### 개정 이력
 
