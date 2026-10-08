@@ -46,6 +46,7 @@ TAIL_LINES = 25
 SHIP = r"""set -euo pipefail
 R=~/rosy-test; NAME=$1; SHA=$2
 mkdir -p "$R/runs"
+exec 8>"$R/repo.lock"; flock 8  # concurrent runs fetching into one repo race on ref locks
 [ -d "$R/repo/.git" ] || git clone -q --no-checkout "$3" "$R/repo"
 cd "$R/repo"
 git fetch -q "$3" +refs/heads/main:refs/remotes/origin/main || echo "[remote] fetching public main failed" >&2
