@@ -819,6 +819,10 @@ def test_state_rules_keep_the_parent_and_root_only_state_with_root():
     # D-483: the approval-code hand-over; only CORE writes, only rosy-display's group reads.
     assert "d /run/rosy-peer-display 2750 rosy-core rosy-display -" in rules
     assert "-/run/rosy-peer-display" in _words(_directives("rosy-core.service"), "ReadWritePaths")
+    # A payload release never refreshes /etc/tmpfiles.d; the unit (which the image-layer sync
+    # does carry) must create the directory itself or old cards show no code (2026-10-09).
+    assert _directives("rosy-core.service")["ExecStartPre"] == [
+        "+/usr/bin/install -d -m 2750 -o rosy-core -g rosy-display /run/rosy-peer-display"]
 
 
 def test_contract_parser_sees_the_2026_09_23_005_defects():
