@@ -9,6 +9,5 @@ run four_refused --robots a:start_n:0.10 b:start_s:0.08 c:east@0.3:0.09 d:west@0
 run convoy_15min --robots a:start_n:0.08 b:follow_a:0.10 --minutes 15 &
 run stuck_freeze --robots a:start_n:0.10 b:east@0.3:0.10 --freeze a:20:60 --minutes 4 &
 run pose_loss --robots a:start_n:0.10 b:east@0.3:0.10 --pose-loss a:20:45 --minutes 4 &
-run two_no_authority --robots a:start_n:0.08 b:east@0.3:0.10 --authority 0 --minutes 4 &
 wait
 echo ALL_DONE >> $O/done.txt

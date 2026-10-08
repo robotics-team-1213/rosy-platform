@@ -267,6 +267,7 @@ def main():
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(),
                         authority=bool(args.authority))
+    runner.traffic._clock = lambda: fleet.now  # the table keeps its own (wall) clock: sim time here
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     for rid, where, _v in specs:
@@ -278,7 +279,7 @@ def main():
     m = {"min_gap_m": math.inf, "min_gap_at": None, "contacts": 0, "overlap_periods": 0, "grant_conflicts": 0, "grants": 0,
          "authority_stops": {r: 0 for r in ids}, "laps": {r: [] for r in ids}, "ends": {}, "holds": [],
          "resolver": [], "max_tick_ms": 0.0, "authority_refusals": 0, "dist_m": {r: 0.0 for r in ids},
-         "waiting_periods": {r: 0 for r in ids}}
+         "waiting_periods": {r: 0 for r in ids}, "min_convoy_gap_m": None}
     granted, lap_seen, was_held, hold_seen, res_seen = set(), {r: 1 for r in ids}, {r: False for r in ids}, {}, set()
     events = (out / "events.jsonl").open("w")
     trace = (out / "trace.jsonl").open("w")
@@ -328,6 +329,10 @@ def main():
         if over:
             m["grant_conflicts"] += 1
             ev("grant_conflict", units=over)
+        for row in view.get("robots") or []:
+            gap = (row.get("convoy") or {}).get("gap_m")
+            if gap is not None and (m["min_convoy_gap_m"] is None or gap < m["min_convoy_gap_m"]):
+                m["min_convoy_gap_m"] = gap
         for row in view.get("resolver") or []:
             key = (row["robot_id"], row["decision"])
             if key not in res_seen:
@@ -372,7 +377,7 @@ def main():
     m["min_gap_m"] = round(m["min_gap_m"], 4)
     m["dist_m"] = {r: round(v, 2) for r, v in m["dist_m"].items()}
     (out / "summary.json").write_text(json.dumps(m, indent=1, default=str))
-    print(json.dumps({k: m[k] for k in ("sim_s", "min_gap_m", "min_gap_at", "contacts", "overlap_periods", "grant_conflicts", "grants",
+    print(json.dumps({k: m[k] for k in ("sim_s", "min_gap_m", "min_gap_at", "contacts", "overlap_periods", "grant_conflicts", "grants", "min_convoy_gap_m", "resolver",
                                         "authority_stops", "ends", "lap_times_s", "max_tick_ms")}, default=str))
 
 
