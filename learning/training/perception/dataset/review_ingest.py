@@ -145,6 +145,8 @@ def import_frames(store, body):
                     mask = review_masks.from_color(draft, width, height, labelmap_raw, binding)
             else:
                 raise ValueError('draft mask reference must be indexed PNG or color ZIP')
+            indexed = cv2.imdecode(np.frombuffer(mask, np.uint8), cv2.IMREAD_UNCHANGED)
+            review_masks.require_inside_lane_boundaries(indexed, binding)
         normalized = {key: row.get(key) for key in
                       ('source_session', 'capture_group', 'source_video_sha256', 'video_frame',
                        'video_time_s', 'timestamp_basis', 'collection', 'dataset_memberships_snapshot')}

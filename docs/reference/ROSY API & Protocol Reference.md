@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.150
+**Version:** v1.151
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -247,7 +247,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|
-| GET | `/api/v1/system/info` | Viewer | IDN-003. `caller_role`(v1.18 additive) — 이 요청 토큰의 역할(`viewer`\|`operator`\|`administrator`). 대시보드는 이것으로 관리 패널을 가르고, 권한 밖 경로를 찔러 보지 않는다. `robot_name` 은 오버레이에 이름이 없고 기본값(`Rosy 01`)뿐이면 프로비저닝 신원(`ROSY_DEVICE_NAME`, 없으면 `Rosy NN` ← `ROSY_ROBOT_NUMBER`)에서 온다 |
+| GET | `/api/v1/system/info` | Viewer | IDN-003. `caller_role`(v1.18 additive) — 이 요청 토큰의 역할(`viewer`\|`operator`\|`administrator`). 대시보드는 이것으로 관리 패널을 가르고, 권한 밖 경로를 찔러 보지 않는다. `robot_name` 은 오버레이에 이름이 없고 기본값(`Rosy 01`)뿐이면 프로비저닝 신원(`ROSY_DEVICE_NAME`, 없으면 `Rosy NN` ← `ROSY_ROBOT_NUMBER`)에서 온다. `device_uid`(v1.150 additive)는 프로비저닝 UID이며 없으면 null. `serial_number`는 설정값이 없고 UID가 있을 때 Pi `/proc/cpuinfo`의 Serial을 읽으며, 못 읽으면 null이다. 두 값은 등록 일관성 확인용이며 물리 차체 위치 증거가 아니다 |
 | PUT | `/api/v1/system/info` | Admin | IDN-003 (payload: `{robot_id?, robot_name?}`) — 로컬 오버레이에 영속 |
 | GET | `/api/v1/system/capabilities` | Viewer | CAP-001. 지킬 수 있는 것만 광고한다(D-32) — §9.1 `withheld`, `runtime`(v1.21), `controls`(v1.87, D-411): `rosy.controls/1` `{schema, items[]}` — Pinky는 adapter `provides`의 `drive`(manifest가 없으면 `teleop`)에서 `base_velocity` 하나. 스키마 정본 `core_common.protocol.controls` |
 | GET | `/api/v1/system/runtime` | Viewer | ROS-102 — 호스트 OS/CPU/RAM/디스크/온도 + 읽기 전용 ROS 그래프 스냅샷 |
@@ -2495,7 +2495,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.150 | 2026-10-08 | Additive (D-517 M5 발견 1, fix/d517-trip-authority-mismatch, Safety-Review 대상): `POST /api/fleet/trips/{plan_id}/start` 422 `TRIP_AUTHORITY_SITE_OFF` — 사이트 `fleet.traffic.authority` 가 꺼져 있는데 로봇 능력 `line_follow_authority_required` 가 참이면 `lane` trip 을 열지 않는다(통행권이 나가지 않아 CORE 가 서 있고 trip 이 20 s 뒤 `stall` 로 끝나던 것). CORE 동작 변경 없음. envelope 1.0 변경 없음 |
+| v1.151 | 2026-10-08 | Additive (D-517 M5 발견 1, fix/d517-trip-authority-mismatch, Safety-Review 대상): `POST /api/fleet/trips/{plan_id}/start` 422 `TRIP_AUTHORITY_SITE_OFF` — 사이트 `fleet.traffic.authority` 가 꺼져 있는데 로봇 능력 `line_follow_authority_required` 가 참이면 `lane` trip 을 열지 않는다(통행권이 나가지 않아 CORE 가 서 있고 trip 이 20 s 뒤 `stall` 로 끝나던 것). CORE 동작 변경 없음. envelope 1.0 변경 없음 |
+| v1.150 | 2026-10-08 | Additive (D-361 S4 identity readback): robot `GET /api/v1/system/info` includes provisioned `device_uid` (or null); on a provisioned Pi with no configured serial, `serial_number` reads the CPU serial (or remains null). Fleet enrollment can store both on a new pairing; existing rows are unchanged. Envelope 1.0 and motion authority unchanged |
 | v1.149 | 2026-10-08 | Additive (D-517 5 M4, feat/d517-m4-fleet-resolver, Safety-Review 대상): `GET /api/fleet/traffic` `resolver [{robot_id, trigger wait_cycle\|unknown, decision replan\|wait\|human, cycle, blocked_edges, since}]`; a wait cycle replans one member around the unit it waits for as an operator-confirmed `hold.reason: replan`; the D-438 stuck resolver answers trip robots with `WAIT` only. Robot API, CORE commands and envelope 1.0 unchanged |
 | v1.148 | 2026-10-08 | Additive (lap SIM A, fix/junction-corner-hold, Safety-Review 대상): CORE HOLD 사유 `junction_corner_hold`(기대 창이 있는 지도 지시가 `armed` 이고 `line/keep_debug` `strategy` 가 기대 가로선 0.45 m + `expect_tol_m` 안에서 `corner_left`·`corner_right`, 2 s 래치; 그 정지 중 만료되면 새 지시나 모드 변경까지 HOLD). Fleet trip `stopped` `junction_corner_hold`(자기 지시에서 바로). envelope 1.0 그대로 |
 | v1.147 | 2026-10-08 | Additive (uiux/robot-navigation-stage): `GET /api/v1/navigation/state`에 `mapping_active`를 추가해 CORE 맵핑 세션 수락 상태를 읽는다. 실제 SLAM Toolbox 실행 증거는 아니다. 같은 브랜치의 `/navigation/path` 수신 `map_id`·`frame_id`·`age_s`도 명시한다. 주행 권한과 envelope 1.0은 그대로다. |

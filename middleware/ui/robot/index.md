@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 조작 열 차단 이유 적합성
+- 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 지도 위치 추정 게이트
 - 2026-10-08 · uncommitted · test(robot): 인증·지도 회귀에 유효한 합성 지도
 - 2026-10-08 · uncommitted · uiux(robot): 기존 화면의 차선 추종 구동 관문 일치
 - 2026-10-08 · uncommitted · uiux(robot): 지도 격자와 경로의 실제 축척 보존
-- 2026-10-08 · uncommitted · uiux(robot): 320px 지도와 상태 가독성
-- 2026-10-08 · uncommitted · uiux(robot): 지도 레이어를 지도 아래로 배치
