@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import threading
 
@@ -63,6 +64,7 @@ class PeerReceiver:
         self._display_dir = display_dir
         self._display_shown = _UNSYNCED  # L1: the first sync always writes or removes the file
         self._display_warned = False
+        self._display_ca_digest = None
         self._anchor = anchor or (lambda: {})
         self._lock = threading.RLock()
         grants = repository.grants()
@@ -97,6 +99,11 @@ class PeerReceiver:
         shown = {"requests": [{"display_code": row["display_code"], "approval_code": row["approval_code"],
                                "expires_at": row["expires"].isoformat()}
                               for row in live]} if live else None
+        ca = self._display_ca() if shown is not None else None
+        if ca:
+            # The requester standing at the robot compares this with the CA it pins (first contact)
+            # while the request is pending; without it the screen-code path has nothing to compare.
+            shown["tls_ca_sha256"] = ca
         if shown == self._display_shown:
             return
         target = os.path.join(self._display_dir, DISPLAY_FILE)
@@ -119,6 +126,17 @@ class PeerReceiver:
             if not self._display_warned:  # The type only: never the code.
                 self._display_warned = True
                 _log.warning("peer approval display hand-over unavailable (%s)", type(exc).__name__)
+
+    def _display_ca(self):
+        """The bootstrap CA digest the LCD shows beside the codes; cached once it validates, else None."""
+        if self._display_ca_digest is None:
+            try:
+                digest = self._anchor().get("tls_ca_sha256")
+            except ValueError:
+                return None
+            if isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest):
+                self._display_ca_digest = digest
+        return self._display_ca_digest
 
     def _live(self, source=None):
         now = self.clock()

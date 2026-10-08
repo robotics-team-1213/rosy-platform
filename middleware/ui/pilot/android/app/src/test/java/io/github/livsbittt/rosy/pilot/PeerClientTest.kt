@@ -38,7 +38,7 @@ class PeerClientTest {
         val leaf = HeldCertificate.Builder().commonName("robot.local").addSubjectAlternativeName("robot.local").signedBy(ca).build()
         val server = MockWebServer()
         val requests = mutableListOf<RecordedRequest>()
-        var approved = true; var corrupt = ""; var confirmStatus = 200;var statusHold: CountDownLatch? = null; var identityHold: CountDownLatch? = null
+        var approved = true; var terminal: String? = null; var corrupt = ""; var confirmStatus = 200;var statusHold: CountDownLatch? = null; var identityHold: CountDownLatch? = null
         val identityRead = CountDownLatch(1); val statusRead = CountDownLatch(1)
         var candidate: Candidate
         val store = CandidateStore()
@@ -89,7 +89,7 @@ class PeerClientTest {
                         assertEquals("S".repeat(43), request.getHeader("X-Request-Secret"))
                         assertNull(request.getHeader("Authorization"))
                         statusRead.countDown(); statusHold?.await(4, TimeUnit.SECONDS)
-                        return json(state(if (request.method == "DELETE") "cancelled" else if (approved) "approved" else "pending"))
+                        return json(state(if (request.method == "DELETE") "cancelled" else terminal ?: if (approved) "approved" else "pending"))
                     }
                     if (relative.endsWith("/challenge")) {
                         if (corrupt == "challenge503") return MockResponse().setResponseCode(503)
@@ -163,6 +163,13 @@ class PeerClientTest {
             val outcome = confirmWhilePending(f)
             assertTrue(outcome is PeerRefused)
             assertEquals(400, (outcome as PeerRefused).status)
+        }
+    }
+    @Test fun receiverEndingTheRequestNamesHowItEnded() {
+        for (ended in listOf("rejected", "expired", "cancelled")) Fixture().use { f ->
+            f.approved = false; f.terminal = ended
+            val error = assertThrows(PeerEnded::class.java) { f.flow().connect({}, { false }) }
+            assertEquals(ended, error.state)
         }
     }
     @Test fun olderCoreWithoutConfirmRouteIsConsoleOnly() {
