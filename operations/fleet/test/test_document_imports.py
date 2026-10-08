@@ -38,6 +38,7 @@ OWN = {
         "tracking-layer.js",
         "start-point-view.js",
         "start-point-layer.js",
+        "trail-view.js",
         "site-path.js",
         "site-layer.js",
         "confirmed-action.js",

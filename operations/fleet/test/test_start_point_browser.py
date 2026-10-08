@@ -57,6 +57,7 @@ def browser_site(tmp_path):
                 page=browser.new_page(viewport={'width':1440,'height':1000})
                 page.add_init_script("sessionStorage.setItem('rosy-console-token','operator-secret')")
                 page.goto(origin+'/console')
+                page.fleet_app=app  # lets a test seed server state (tethers) directly
                 yield page, robot, tracking
             finally: browser.close()
     finally:
@@ -172,3 +173,26 @@ def test_map_changed_during_pick_is_cancelled_and_grid_marker_is_drawn(browser_s
     page.locator('#map-canvas').click(position={'x':150,'y':100})
     expect(page.locator('#start-point-state')).to_contain_text('지도가 바뀌었습니다')
     assert not [call for call in robot.calls if call[0]=='navigation_goal']
+
+
+def test_map_draws_the_travelled_trail_and_a_tether(browser_site):
+    """Trail from the 1 s state poll and a D-512 tether circle on the metre site view."""
+    page, robot, tracking = browser_site
+    errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
+    from playwright.sync_api import expect
+    expect(page.locator('#map-stage')).to_have_attribute('data-map-state', 'site', timeout=15000)
+
+    def overlay(key, at_least):  # CSP forbids wait_for_function strings; poll with evaluate instead
+        deadline = time.monotonic() + 15
+        while (page.evaluate(f'window.__trailOverlay?.{key} || 0') < at_least) and time.monotonic() < deadline:
+            page.wait_for_timeout(200)
+        return page.evaluate(f'window.__trailOverlay?.{key} || 0')
+    robot._state['pose'] = {'x': 1.0, 'y': 1.0, 'yaw': 0.0}
+    for x, y in ((1.6, 1.2), (2.4, 1.8), (3.2, 2.0)):
+        page.wait_for_timeout(1300)
+        robot._state['pose'] = {'x': x, 'y': y, 'yaw': 0.0}
+    assert overlay('segments', 2) >= 2
+    page.fleet_app.state.tethers['robot-a'] = {'anchor_xy': [2.0, 1.5], 'radius_m': 1.0, 'set_by': 'op'}
+    assert overlay('tethers', 1) == 1
+    capture_console(page, 'map-trail-tether.png')
+    assert not errors
