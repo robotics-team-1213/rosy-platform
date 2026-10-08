@@ -2479,8 +2479,9 @@ D-341 첫 접촉은 anonymous identity/request/status와 물리 화면의 지문
 challenge/session이나 bearer 전송을 허용하지 않는다. mDNS·4자리 번호로 CA를
 신뢰하지 않는다. 이 CORE slice의 public QR renderer는 아직 구현하지 않았다.
 
-anonymous identity/challenge/session 호출은 crypto 전에 source별 합계 30회/분,
-source map 최대 128개로 admission하며 한도는 429다. 최초 신청의 별도 30회/분
+anonymous identity 호출은 D-533에 따라 source별 300회/분으로 따로 센다.
+challenge/session 증명 호출은 기존 source별 합계 30회/분을 유지한다. 두 예산 모두
+crypto 전에 적용하고 source map 최대 128개로 admission하며 한도는 429다. 최초 신청의 별도 30회/분
 한도도 잘못된 증명을 포함한다. overlay 거래는 config.yaml.lock의 동일 UID
 소유 0600 sidecar로 process/thread fence하고 unrelated token/config를 보존한다.
 기존 lower-layer card/manual token은 실제 merged config provenance로 확인하지만,
