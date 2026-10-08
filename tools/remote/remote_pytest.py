@@ -11,7 +11,8 @@ as a detached worktree under ``~/rosy-test/runs/``, removed afterwards. The venv
 rebuilt only when those inputs change. Each pytest runs under a 6 GB memory cap.
 
 Hosts: ``ROSY_TEST_HOSTS`` (space separated, first reachable wins), default model PC
-then AI PC. A missing host fails the gate; ``--local`` is for explicit diagnostics.
+then AI PC. A missing host fails the gate; ``--local`` or ``ROSY_TEST_LOCAL=1``
+is for explicit diagnostics.
 Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``), one
 ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
 collected, counts as 0). Standard library only.
@@ -223,7 +224,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         return []
     host = None if local else pick_host()
     if host is None:
-        if require_host and not local:
+        if require_host and not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
             raise SystemExit("[remote-pytest] no test host reachable; a local run would test the working"
                              " tree, not the commit. Use --local only for explicit diagnostics.")
         if not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
