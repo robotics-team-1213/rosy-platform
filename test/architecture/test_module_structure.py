@@ -101,14 +101,14 @@ SIZE_VERDICTS = {
         "at 604 (bend diagnostic)",
     ),
     "fleet/fleet/server/web/map-view.js": (
-        1030,
-        "split: re-judged at 1030 on 2026-10-08 (independent re-judge, critic agent): the D-517 M1b traffic "
-        "layer (+115) and the trail-view.js wiring grew the map-drawing job; the camera picture path is still "
-        "here. The seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stands, plus the traffic "
-        "layer moving to web/traffic-view.js; it is being applied on refactor/fleet-map-view-camera-backdrop "
-        "(in progress) with map-view.js at 860 or less, and that landing closes this verdict. Any growth of "
-        "map-view.js before it lands is refused. Previously judged at 903 on 2026-10-08: "
-        "split: judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
+        831,
+        "split: measured at 831 on 2026-10-08 after the named camera backdrop seam was applied "
+        "(behaviour-preserving): the camera picture path (cameraMapCalibration, the top-down cache, "
+        "drawCameraTopDown, warpOnto, setCameraFrame, frameTurn, turnedUrl, bindCamera) is in "
+        "web/camera-backdrop.js, which map-view feeds its draw hook, calibrations and toPx; the D-517 10 "
+        "traffic drawing is in web/traffic-view.js (polling and toggle stay here). Still over the web "
+        "ceiling 800 with one job left, map drawing and its polling; re-judge after the next growth. "
+        "Previously judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
         "and the D-515 top-down camera warp made map-view.js own two jobs, map drawing (grid, robots, "
         "formation, mediation, metre site view) and the camera picture path. Move cameraMapCalibration, "
         "drawCameraTopDown, warpOnto, setCameraFrame, frameTurn, turnedUrl and bindCamera to a new "

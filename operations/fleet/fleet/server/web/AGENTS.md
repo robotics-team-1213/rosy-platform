@@ -18,6 +18,8 @@ Static Fleet console UI (vanilla ES modules, no build step), served at `/console
 | `styles.css` | Console styles (shared tokens come from `/common/tokens.css`, not this folder) |
 | `console.js` | Shell: token, polling cadence, click-to-goal; composes the modules below |
 | `map-view.js` | Site map grid, coordinate transforms, robots, goals, overlays |
+| `camera-backdrop.js` | D-513 7 / D-515 camera picture path: calibration pick, top-down warp onto the metre view (`camera-warp.js` math), large view/thumbnail turn, Vision frame binding. `map-view.js` passes its draw hook and `toPx` |
+| `traffic-view.js` | D-517 10 traffic layer drawing (bands, zones, grant ticks). Polling and the toggle stay in `map-view.js` |
 | `roster.js` | Robot cards and attention/intervention queues |
 | `formation.js` | Formation panel |
 | `signals.js` | Traffic-signal cards |

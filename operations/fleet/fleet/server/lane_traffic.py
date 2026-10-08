@@ -22,7 +22,7 @@ import math
 import time
 from typing import Iterable, Mapping, Optional
 
-from core_common.robot_body import PINKY_PRO, RobotBody
+from core_common.robot_body import PINKY_PRO  # public read-only anchor (D-430 §3); RobotBody is not
 from fleet.localization.map_pose import MapPoseConfig
 from fleet.routing import blocks
 from fleet.routing.execute import arc_id
@@ -38,7 +38,7 @@ PAST_PLACE_M = 0.05
 class TrafficService:
     def __init__(self, store, config: TripConfig = TripConfig(), *,
                  zones: Optional[Mapping[str, tuple[Iterable[str], int]]] = None,
-                 body: RobotBody = PINKY_PRO, held_per_robot: int = HELD_PER_ROBOT, clock=time.time) -> None:
+                 body=PINKY_PRO, held_per_robot: int = HELD_PER_ROBOT, clock=time.time) -> None:
         self._store, self._config, self._zones = store, config, dict(zones or {})
         # ponytail: one body for the whole site (Pinky); the longest registered body (D-517 3 L)
         # comes from robot capabilities once a second kind joins.
