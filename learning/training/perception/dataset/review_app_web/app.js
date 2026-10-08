@@ -54,7 +54,7 @@ function enable() {
   $('candidates').disabled = locked || frame?.status === 'excluded' || !sourceCandidates().length;
   $('candidates').reason = !sourceCandidates().length ? '이 사진에는 가져올 원본 객체 후보가 없습니다.' : '';
   $('undo').disabled = locked || !undo || frame?.status === 'excluded';
-  $('undo').reason=locked?'사진 저장과 불러오기를 마친 뒤 사용하세요.':!undo?'이 사진에서 저장한 라벨 수정이 없습니다.':frame?.status==='excluded'?'제외 사진은 수정할 수 없습니다.':'';
+  $('undo').reason=locked?'작업 중':!undo?'수정 없음':frame?.status==='excluded'?'제외된 사진':'';
   $('prepare').disabled = busy || loading || conflicted || forbidden || !!gesture || !workspace;
   $('prepare').reason = loading ? '검수 내용을 불러오는 중입니다.' : forbidden ? '검수 권한이 거부되었습니다. 최신 내용을 다시 불러오세요.' : '';
   $('reload').disabled = busy || loading || !!gesture;
