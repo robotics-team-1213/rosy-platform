@@ -1,9 +1,11 @@
 import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory } from '/history.js';
+import {reviewViewport} from '/viewport.js';
 const font = (size, family) => canvasFont(size, family);
 
 const $ = id => document.getElementById(id);
+reviewViewport(document.querySelector('.image-stage'),$('canvas'),document.querySelector('.review-view-bar'),()=>!gesture);
 // Filled from the workspace's bound class set (D-485), in class index order.
 let names = {'':'클래스 선택 필요'}, classOptions = [['','클래스 선택 필요']], classColors = {};
 const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'초록', off:'꺼짐'};

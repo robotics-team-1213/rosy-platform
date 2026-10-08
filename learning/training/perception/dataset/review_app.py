@@ -432,7 +432,7 @@ def make_server(store, port=8767, host='127.0.0.1'):
                 if path.startswith('/api/view-images/'):
                     return self.send(detail_preview(store, int(path.rsplit('/', 1)[1])),
                                      mime='image/png')
-                files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/app.css': 'app.css',
+                files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js'}
