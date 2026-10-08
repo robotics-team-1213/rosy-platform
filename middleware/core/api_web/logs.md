@@ -750,3 +750,10 @@
 - 변경: main 병합으로 v1.142가 D-507 보충(굽이 지시)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.143으로 옮겼다. 앞 두 항목의 v1.142는 그 때의 번호다. `base_velocity` 능력은 `lane_bend`와 `line_follow_authority`·`line_follow_authority_required`를 함께 낸다.
 - 증거: `test/test_line_follow_contract_docs.py`, fleet 버전 핀 시험, `test_capabilities_controls.py`.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(api): API v1.150 표기 정렬
+
+- 변경: API 팩토리 설명과 Fleet·계약 테스트의 버전 핀을 v1.150으로 맞췄다.
+- 증거: 관련 테스트 94개 통과, known_failures 0 NEW.
+- gate 변화: 없음.
+
