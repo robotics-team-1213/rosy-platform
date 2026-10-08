@@ -59,6 +59,12 @@
 
 이 픽스처는 `state.mode=LINE_FOLLOW`를 넣지만 CORE `RobotMode`에는 그 값이 없다. 화면의 `LINE_FOLLOW` 태그는 공유 `enumLabel`이 알 수 없는 값을 숨기지 않고 원문 표시한 결과다. 이를 현재 실제 CORE의 운용자 어휘 결함으로 계산하지 않는다. 픽스처를 유효한 모드·별도 차선 상태로 맞춘 뒤 같은 장면을 다시 평가해야 한다. `Vision 응답 404`도 이 합성 API의 응답이며 현장 Vision 진단이 아니다.
 
+### 현행 Pilot 로컬 재촬영 (2026-10-08)
+
+공유 `main`에서 Pilot 브라우저 회귀 `test_pilot_browser.py -k 'camera_keeps_aspect_and_controls_never_cover_it or lobby_empty_and_failure_fit_declared_widths'`를 실행했다. 실행 시작 때 관측한 HEAD는 `2fa5d896f0f6abc7645eac9394171ee91bb18c7b`이고, 결과는 **9 passed, 116 deselected**다. 원본 캡처와 실행 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-08--155028--pilot-ui-review--cf4223/`에 있다. 2000×1200·1333×760·1200×2000·390×844·320×568 운전 화면과 로비 빈 목록/연결 실패 화면을 촬영했다.
+
+390px 운전 화면과 2000px 운전 화면, 390px 로비의 빈 목록·실패 화면을 원본 크기로 확인했다. 영상과 조작 영역은 분리되어 있고 비상 정지는 첫 화면에 있다. 로비는 빈 목록과 실패를 구별한다. 390px 회전 조작은 조작 영역의 스크롤 뒤에 있으며 힌트가 보인다. 이번 화면 검토만으로 이를 결함으로 확정하거나 화면을 재배치하지 않는다. 실제 운전자가 첫 시도에 회전을 찾는지, 태블릿 설치 APK가 같은 화면인지, 연결·정지의 장치 readback은 여전히 G3/DEVICE/HOLD다. 공유 `main` 체크아웃은 다른 세션과 함께 쓰므로 실행 시작 SHA와 종료 SHA의 동일성은 별도 고정하지 않았다.
+
 ## 공통 구조 결정
 
 - **앱 간 연결은 과업 이름으로 설명한다.** Robot은 한 대의 상세·정비, Console은 사이트·Mission, Pilot은 직접 운전, Cam은 카메라 설치다. 다른 앱으로 보내는 버튼은 대상과 이유를 적고, 그 앱의 권한을 대신 행사하지 않는다.
