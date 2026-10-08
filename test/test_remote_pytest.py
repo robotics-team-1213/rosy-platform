@@ -106,7 +106,7 @@ def test_ship_failure_is_a_nonzero_exit_and_leaves_no_ref(tmp_path, monkeypatch)
     with pytest.raises(SystemExit) as exc:
         rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"])
     assert exc.value.code != 0
-    assert _git(ROOT, "for-each-ref", "refs/remote-pytest") == ""
+    assert _git(ROOT, "for-each-ref", "refs/remote-pytest") == before  # this run left no ref
 
 
 def test_venv_failure_is_a_nonzero_exit(tmp_path, monkeypatch):
