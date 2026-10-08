@@ -413,3 +413,27 @@ def test_a_failed_lap_check_carries_on_once_a_retry_passes():
     _ticks(runner, fleet, n=10)
     view = runner.view("a")
     assert view["hold"] is None and view["lap"] == 2 and view["state"] == "running"
+
+
+def test_the_loop_period_includes_the_tick_and_finished_steps_are_dropped(monkeypatch):
+    """Review LOW 11: sleep only the rest of period_s; no done future stays in _inflight."""
+    import fleet.server.trip_runner as trip_runner
+
+    runner, store, fleet = _setup(ids=("a",), period_s=0.2)
+    _trip(runner, store, fleet, "a", "east:fwd", 0.2)
+    _ticks(runner, fleet)
+    assert runner._inflight == {}
+    real_sleep, slept = asyncio.sleep, []
+
+    async def slow_tick():
+        await real_sleep(0.15)
+
+    async def sleep(delay, *args):
+        slept.append(delay)
+        raise asyncio.CancelledError
+
+    runner.tick = slow_tick
+    monkeypatch.setattr(trip_runner.asyncio, "sleep", sleep)
+    with pytest.raises(asyncio.CancelledError):
+        run(runner._loop())
+    assert len(slept) == 1 and slept[0] < 0.1

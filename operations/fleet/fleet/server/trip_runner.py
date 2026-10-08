@@ -307,13 +307,14 @@ class TripRunner:
 
     async def _loop(self) -> None:
         while True:
+            started = time.monotonic()
             try:
                 await self.tick()
             except asyncio.CancelledError:
                 raise
             except Exception:  # the steps catch their own; this is the traffic table
                 _LOG.exception("trip loop tick failed")
-            await asyncio.sleep(self.config.period_s)
+            await asyncio.sleep(max(0.0, self.config.period_s - (time.monotonic() - started)))
 
     async def _loop_failed(self, live: LiveTrip) -> None:
         if not live.open:
@@ -339,6 +340,7 @@ class TripRunner:
         pending = [task for task in self._inflight.values() if not task.done()]
         if pending:
             await asyncio.wait(pending, timeout=self.config.period_s)
+        self._inflight = {robot_id: task for robot_id, task in self._inflight.items() if not task.done()}
         poses, self._parked = self._parked, {}
         try:
             self.traffic.step(self._live.values(), poses)
