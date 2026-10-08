@@ -111,10 +111,11 @@ from the manifest `signing_key_id`, or if the source revision differs.
 
 ## 1. Prepare before power-on
 
-- For G4/G5, the operator may observe and command remotely through the live Rosy Cam
-  view (D-521). A person must remain beside the robot, able to operate the independent
-  physical power cut immediately. Confirm voice/contact and a stop signal before motion;
-  a camera or remote E-stop cannot fill that role. With no local person, hold G4/G5.
+- For G4 schema v2 and G5, one operator may observe and command remotely through
+  the live Rosy Cam view (D-521). Before motion, match robot identity across Fleet,
+  CORE, and camera views; confirm clearance and the existing stop/readback paths.
+  Hold when identity, clearance, video freshness, or stop response is uncertain.
+  Legacy G4 schema v1 retains its separate reviewer requirement.
 - Wheels-off-ground stand, clear floor zone, tape measure/caliper, charger, and
   a wired LAN cable. Keep the E-stop reachable at all times.
 - Raspberry Pi 5, arm64 Raspberry Pi OS Lite, camera, LiDAR, and motors must be
