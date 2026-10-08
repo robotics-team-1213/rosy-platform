@@ -7064,3 +7064,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 정정(2026-10-08)으로 반경을 충전기에서 잰다(`tether.charger_robot_frame`). `run.py --tether-check`가 사이트의 승인된 카메라-지도 보정으로 판정한 머리 위 프레임에 충전기, 반경 원, 로봇을 그려 `tether_check.jpg`를 남기고, 에이전트가 보고 `visual_check_ok`를 참으로 둬야 출발한다. 보정이 없거나 맞지 않으면 케이블 주행을 거부한다.
 - 증거: `python -m pytest tools/device_test/test -q` 호스트 시험(알려진 homography의 픽셀 위치, 거부 경로). 로봇은 움직이지 않았다.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · D-512 개정 1 독립 안전 리뷰 반영과 픽셀 모드
+
+- 변경: 충전기를 확인한 촬영 자세에 두고 첫 주행 자세가 0.05 m·3° 넘게 다르면 중단, 되돌아가기에서 오래된 LiDAR 스캔(0.5 s)·느린 송신 간격(0.3 s) 정지와 실제 10 Hz, 보정 지도 일치(로봇 지도 또는 Fleet 활성 SiteMap), 여유 0.1 m 안 시작 거부, `trail.jsonl` phase 표시. D-395 이전 로봇(9dfk)용 픽셀 모드: 머리 위 프레임에서 고른 세 점으로 충전기를 계산한다. ADR에 되돌아가는 동안 D-422가 작동하지 않음과 두 한도 모두 되돌아감(케이블 밟음은 받아들인 위험)을 적었다.
+- 증거: `python -m pytest tools/device_test/test tools/capture/test -q` 호스트 시험(가짜 전송, 알려진 homography). 로봇은 움직이지 않았다.
+- gate 변화: 없음. 겹 적용 뒤 CORE 재시작이 odom을 바꾸는지는 장치에서 확인하지 않았다.

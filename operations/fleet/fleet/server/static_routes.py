@@ -61,6 +61,7 @@ CONSOLE_ASSETS = {
     "tracking-view.js": ("tracking-view.js", "application/javascript"),
     "start-point-layer.js": ("start-point-layer.js", "application/javascript"),
     "start-point-view.js": ("start-point-view.js", "application/javascript"),
+    "trail-view.js": ("trail-view.js", "application/javascript"),
     "connection-view.js": ("connection-view.js", "application/javascript"),
     "vision-view.js": ("shared/vision-view.js", "application/javascript"),
 }

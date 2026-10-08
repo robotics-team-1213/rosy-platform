@@ -447,7 +447,7 @@ class Run:
             if preflight_only:
                 template = {"captured_at": self.r.now(), "pose_at_capture": st.get("pose"), "frames": frames,
                             "localization_at_capture": st.get("localization"), **{k: None for k in VERDICT_KEYS},
-                            "note": "", "judged_by": "", "tether": None}   # see tether.py
+                            "note": "", "judged_by": "", "tether": None, "map_id_at_capture": st.get("map_id")}
                 path = self.ev / "camera_verdict.json"
                 path.write_text(json.dumps(template, indent=2), encoding="utf-8")
                 self.summary["outcome"] = "preflight"

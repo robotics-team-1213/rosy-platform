@@ -622,6 +622,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_teach_routes(app, service=TeachService(poses=map_pose_port or map_pose, site_maps=site_maps,
                                                    roster=lambda: console.robot_ids),
                          read_guard=read_guard, require_named_operator=require_named_operator)
+    from fleet.server.tether_routes import install_tether_routes  # D-512 map display half
+    install_tether_routes(app, robot_ids=lambda: console.robot_ids, read_guard=read_guard,
+                          require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,
                         require_named_operator=require_named_operator, runner=trip_runner,
