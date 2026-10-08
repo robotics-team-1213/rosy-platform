@@ -1,5 +1,6 @@
 """Real browser pixel editing and approval guards on isolated synthetic originals."""
 import os
+from pathlib import Path
 
 import pytest
 from browser_harness import browser_tests_enabled
@@ -351,6 +352,24 @@ def test_pixel_screen_shows_classes_yaml_display_names(browser_workspace):
     expect(page.locator('#pixel-legend')).to_contain_text('왼쪽 차선')
     expect(page.locator('#pixel-class option[value="1"]')).to_have_text('왼쪽 차선')
     expect(page.locator('#pixel-class option[value="0"]')).to_have_text('배경')
+
+
+def test_drivable_class_can_be_selected_painted_and_saved(browser_workspace):
+    page, store, expect = browser_workspace
+    raw = (Path(__file__).resolve().parents[1] / 'classes' / 'lane_lr6_drivable.yaml').read_bytes()
+    review_masks.bind_classes(store, raw)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#pixel-status')).to_contain_text('v0')
+    chip = page.locator('#pixel-quick-classes button').nth(5)
+    expect(chip).to_contain_text('주행 가능 영역')
+    chip.click()
+    expect(page.locator('#pixel-class')).to_have_value('5')
+    expect(page.locator('#pixel-tool-hint')).to_contain_text('경계선 안쪽')
+    page.locator('#pixel-brush-tool').click()
+    page.locator('#pixel-canvas').click(position={'x': 16, 'y': 12})
+    page.locator('#pixel-save').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    assert np.any(review_masks.pixels(store, review_masks.get(store, 0)) == 5)
 
 
 
