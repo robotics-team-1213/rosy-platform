@@ -7358,3 +7358,9 @@ osy-d395-s1d\`.
 - 변경: 10/7 MCAP의 `keep_debug` 부재와 현재 두 Pinky의 읽기 전용 카메라·CORE 경계를 조사했다. 9dfk의 live 25프레임 `denoise_fallback` 25건과 별도 모델 추론 327.7–337.4 ms를 재현 가능한 probe와 함께 기록했다.
 - 증거: `validation/learned-paint-live-2026-10-09/result.md`. 10/7 두 세션의 `--recorded-ground` 첫 프레임 거절, 현재 설치본 revision, live ROS 구독·모델 로드·`/cmd_vel` 발행자 readback을 분리했다.
 - gate 변화: 없음. 실측 보정·사람 경계 ID·실기 주행은 HOLD.
+
+## 2026-10-09 · uncommitted · docs: Pinky learned paint 지연·수명 충돌 재현
+
+- 변경: 설치 모델과 실제 영상·odom을 읽기 전용 별도 worker에 넣어 마스크 수명 충돌을 계측하고, 주행 권한을 늘리지 않는 대안의 반례와 다음 실험 기준을 기록했다.
+- 증거: `validation/learned-paint-cadence-2026-10-09/result.md`. fresh odom 50/50, `every_n=1` 0건, 영상 간격 중앙값 124.8 ms, learned 사용 0/50, 완료 추론 354.2 ms, 오류 없음.
+- gate 변화: 없음. 운영 worker 내부 원인, 사람 경계 ID, 주행 수용은 HOLD.
