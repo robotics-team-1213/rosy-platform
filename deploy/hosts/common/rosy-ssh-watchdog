@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Host-local SSH self-recovery for every Linux host (site, model, AI PC, robots).
+# A remote guard cannot help once SSH itself is dead, so each host checks itself:
+# sshd answers on :22, tailscale is up (where installed), the default gateway answers.
+# Ladder on consecutive failed runs: 1 restart ssh, 2 restart tailscaled,
+# 3 restart NetworkManager, >=4 reboot (not within BOOT_GRACE_S of boot, at most
+# once per REBOOT_MIN_GAP_S). Runs as root from rosy-ssh-watchdog.timer.
+set -u
+STATE_DIR=${ROSY_SSH_WATCHDOG_STATE:-/var/lib/rosy-ssh-watchdog}
+BOOT_GRACE_S=${BOOT_GRACE_S:-600}
+REBOOT_MIN_GAP_S=${REBOOT_MIN_GAP_S:-3600}
+DRY_RUN=${DRY_RUN:-0}
+# Robots set CHECK_GATEWAY=0 in /etc/default/rosy-ssh-watchdog: rosy-network's
+# fallback AP has no default route on purpose and owns the robot's networking.
+CHECK_GATEWAY=${CHECK_GATEWAY:-1}
+mkdir -p "$STATE_DIR"
+log() { echo "rosy-ssh-watchdog: $*"; }
+act() { log "action: $*"; [ "$DRY_RUN" = 1 ] || "$@"; }
+
+ssh_ok() {
+  # The banner proves sshd accepts and answers, not just that the unit is active.
+  timeout 5 bash -c 'exec 3<>/dev/tcp/127.0.0.1/22 && head -c 4 <&3' 2>/dev/null | grep -q '^SSH-'
+}
+tailscale_ok() {
+  command -v tailscale >/dev/null 2>&1 || return 0
+  systemctl is-enabled tailscaled >/dev/null 2>&1 || return 0
+  timeout 10 tailscale status --json 2>/dev/null | grep -q '"BackendState": *"Running"'
+}
+gateway_ok() {
+  local gw
+  gw=$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')
+  [ -n "$gw" ] && timeout 5 ping -c 1 -W 2 "$gw" >/dev/null 2>&1
+}
+
+failed=""
+ssh_ok || failed="$failed ssh"
+tailscale_ok || failed="$failed tailscale"
+[ "$CHECK_GATEWAY" = 0 ] || gateway_ok || failed="$failed gateway"
+
+count_file=$STATE_DIR/failures
+if [ -z "$failed" ]; then
+  [ -s "$count_file" ] && log "recovered"
+  : > "$count_file"
+  exit 0
+fi
+n=$(( $(cat "$count_file" 2>/dev/null || echo 0) + 1 ))
+echo "$n" > "$count_file"
+log "check failed ($n):$failed"
+
+case $n in
+  1) act systemctl restart ssh ;;
+  2) act systemctl restart tailscaled ;;
+  3) [ "$CHECK_GATEWAY" = 0 ] || act systemctl restart NetworkManager ;;
+  *)
+    up=$(awk '{print int($1)}' /proc/uptime)
+    last=$(cat "$STATE_DIR/last_reboot" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    if [ "$up" -lt "$BOOT_GRACE_S" ]; then
+      log "within boot grace (${up}s); no reboot"
+    elif [ $(( now - last )) -lt "$REBOOT_MIN_GAP_S" ]; then
+      log "rebooted $(( now - last ))s ago; no reboot"
+      act systemctl restart ssh
+    else
+      echo "$now" > "$STATE_DIR/last_reboot"
+      : > "$count_file"
+      act systemctl reboot
+    fi ;;
+esac
+exit 0
