@@ -51,6 +51,12 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
   for (const item of drawing.bands.filter((b) => b.state === "UNKNOWN")) outline([item.points], css("--status-warn"), band, 1.5, [4, 3]);
   ctx.save();
   ctx.lineCap = "round";
+  // 대열(M3): 앞 로봇에서 팔로워로 가는 가는 선 하나, 리더 색. 띠 위, 통행권 표시 아래.
+  for (const line of drawing.convoys) {
+    const a = toPoint(line.from.x, line.from.y), b = toPoint(line.to.x, line.to.y);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = colorOf(line.leader); ctx.lineWidth = 2; ctx.stroke();
+  }
   for (const tick of drawing.ticks) {
     const p = toPoint(tick.x, tick.y);
     const q = toPoint(tick.x + Math.cos(tick.angle) * 0.05, tick.y + Math.sin(tick.angle) * 0.05);
@@ -78,5 +84,6 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
     const reach = band + 18 + Math.abs(nx) * 52;  // a sideways label needs room for its width
     drawChip(ctx, null, p.x + nx * reach, p.y + ny * reach, zone.label, "");
   }
-  window.__trafficLayer = { bands: drawing.bands.length, zones: drawing.zones.length, ticks: drawing.ticks.length };
+  window.__trafficLayer = { bands: drawing.bands.length, zones: drawing.zones.length, ticks: drawing.ticks.length,
+    convoys: drawing.convoys.length };
 }

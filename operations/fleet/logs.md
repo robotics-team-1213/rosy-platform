@@ -2644,6 +2644,18 @@
 - gate 변화: SOURCE. M1 표도 앞 끝 d 를 쓴다(blocks.py 정의대로 바로잡음).
 - 결정: D-517 4항 독립 리뷰 1·2·3. fleet 46092 (판정 45942+150 안). 능력은 trip 시작 때만 본다.
 
+## 2026-10-08 · uncommitted · feat(fleet): D-517 M3 차로 대열(리더–팔로워) 이동 블록
+- 변경: `routing/blocks.py` `Robot.convoy/follows/follow_end`, `follow()`(대열에서 가장 가까운 앞 로봇, 문턱 = 앞 끝 − 몸 − 두 u), 따라가는 로봇 하나의 블록만 이동 블록 끝 너머 구간에서 함께 허가(`TableState.shared`), 따라가지 않게 된 공유 허가에서 고정 블록 끝이 멈춤, 팔로워는 더 작은 끝을 받지 않고 그 주기 통행권 없음. `server/lane_traffic.py` 앞 끝을 같은 차로 순서로 팔로워 경로에 옮김(`_front_on`), `/traffic` 로봇 행 `front_d_m`·`convoy`. `POST /trip` `convoy {leader}`, 시작 거절 `TRIP_CONVOY_*`(`trip_laps.convoy_refusal`, `NOT_BEHIND`는 회전 교차로 지름길·앞에서 출발). 화면: 교통 층 대열 선, 카드 "대열 · rosy_01 뒤 0.5 m", 운행 칸 "대열 리더". API Ref v1.144
+- 증거: 모델 PC 대상 pytest(blocks/convoy/convoy_trips/lane_traffic/trip_*) 통과, 브라우저 2+2 통과(X:/DevTemp/d517-m3/shots), node 27 통과, 무작위 대열 soak 180회 180000 틱 겹침·추월·축소 0, 최소 간격 0.132 m(d_stop 0.12).
+- gate 변화: SOURCE. Safety-Review 대상(독립 검토 전).
+- 결정: D-517 9항 4 (M3). fleet 46434 — 판정 46107+150 초과, 다시 판정 필요.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-517 M3 독립 Safety-Review 반영
+- 변경: (1) `lane_traffic._shift`가 `state.shared`(경로 구간 번호 키)도 바퀴 정리 때 옮긴다. 다른 표는 블록 키다. (2) 이동 블록 간격에 `MEMBER_REVERSE_M` 0.35 m(D-407 `recovery_back_m` 상한 0.20 + D-468 되짚기 0.15)를 더하고, CORE 읽기가 `RECOVERING`이거나 `stuck`이 열린 앞 로봇은 따라가지 않는다(`blocks.Robot.recovering`, `junction_state`의 `line_recovering`). caps에 복구 설정이 없어 출발 거절은 없다. (3) `_link`가 늦게 출발한 팔로워부터 정하고, 먼저 출발한 팔로워는 자기를 따라가는 나중 팔로워를 따라가지 않는다. (4) 용량 2 이상 구역에서는 함께 허가 예외가 없다(짝을 두 대로 셈). ADR M3 노트에 후진 상한, 상호 따라가기, 구역 용량, 합류 공정성.
+- 증거: 각 수정의 시험이 수정 전 실패. 모델 PC 대상 pytest 274 통과(58f866eee). 무작위 대열 soak 360회 360000 틱(바퀴 정리 + UNKNOWN/정체/리더 종료 180회 포함) 겹침·추월·축소·충돌 0.
+- gate 변화: SOURCE. Safety-Review 재검토 대기.
+- 결정: D-517 9항 4 리뷰 1–4. fleet 46464 (판정 46434+150 안).
+
 ## 2026-10-08 · 482c98340 · feat(fleet): D-520 1–2 Fleet 쪽 — exit_segment, 접선 회전, 호 carried 판정
 - 변경: `routing/execute.exit_segment`가 나가는 차로 polyline을 원 하나로 맞춘다(Kasa). 장소에서 장소까지의 온 `lane` 차로, 점 6개 이상, 잔차 ≤ `fleet.trip.arc_fit_tol_m`(0.005), 0.5 ≤ |κ| ≤ 5.0, 길이 ≤ 1.0 m일 때만 `{curvature_1pm(왼쪽 +), length_m, outer_line_offset_m, end_place_id}`. `outer_line_offset_m`은 사이트 지도에 칠한 선이 없어 `fleet.trip.arc_outer_line_offset_m`(0.095)이다. 능력 `base_velocity.lane_arc: true`이고 `map_id`가 있는 지시에만 싣는다. 그때 `left`·`right`는 접선 `turn_deg`(6° 없음), `advance_m` 없음. `line_follow.arc.from_place_id`가 보낸 장소이고 `arc_seq`가 보낼 때보다 새로우면 그 지시는 carried(회전 뒤 호, 이어지는 `straight`). 이 trip의 호가 `stopped`면 trip `stopped`(`lane_arc`, `detail.arc_reason`), `reason: lane_arc_end_unarmed`면 `detail.arc_end_unarmed`만 남기고 계속. `arc_mismatch` 중단은 오늘의 `junction`. 콘솔 사유 문구 3개. API Ref trip 행에 문장 추가(판 올림은 CORE 쪽 D-520 항목)
 - 증거: 260919 ring 네 호 κ +3.978(반지름 0.2514), 잔차 ≤ 0.00007 m, 길이 0.3739/0.4595/0.3722/0.3739. east·west 잔차 ≥ 0.138 m. 변이 3건: κ 부호 뒤집기 → ring·합성 시험 실패, carried 호 규칙 끄기 → 6건 실패, `arc_seq` 새로움 무시 → 1건 실패, 모두 복원. `operations/fleet/test` 2725 passed/133 skipped/1 failed(`test_document_imports.py::test_each_console_document_reaches_only_its_modules`, 깨끗한 main 627ae3c0c에서도 같음), node `site-map.test.mjs` 15 passed, `test_module_structure.py` 34 passed

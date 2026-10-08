@@ -148,8 +148,14 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_317,
-        "split: re-judged at 46317 on 2026-10-08 (independent re-judge, architect agent): D-520 1-2 Fleet "
+        46_434,
+        "split: re-judged at 46434 on 2026-10-08 (independent re-judge, critic agent): D-517 M3 lane convoy "
+        "(blocks.py follow/_front_on/shared grants, lane_traffic.py convoy block, trip_laps/trip_routes/trip_runner "
+        "convoy gates, site-map convoy view) adds no owner or robot command path; trip_runner 747 within 686+150. "
+        "Traffic growth is steady per D-517 step, so the lane-traffic seam is named in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md and is the next split; the +150 allowance is "
+        "unchanged. "
+        "Previously re-judged at 46317 on 2026-10-08 (independent re-judge, architect agent): D-520 1-2 Fleet "
         "side (+97 over main) adds no module, owner, service or robot command path: exit_segment (circle fit "
         "of the next lane arc, CORE curvature/length range) is pure routing math in routing/execute.py "
         "beside turn_target; trip_runner sends it in the existing LaneJunctionPort instruction and reads "
