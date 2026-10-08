@@ -117,13 +117,16 @@ PYTEST = r"""set -euo pipefail
 R=~/rosy-test; V=$R/venv; cd "$R/runs/$1"; shift
 exec 9>"$R/venv.lock"; flock -s -w 600 9
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
-exec systemd-run --user --scope -q -p MemoryMax=6G -- "$V/bin/python" -m pytest "$@" 2>&1
+# 9>&-: the shared venv lock covers setup only; pytest must not hold it for the whole run,
+# or a concurrent session's exclusive VENV step times out after 600 s.
+exec systemd-run --user --scope -q -p MemoryMax=6G -- "$V/bin/python" -m pytest "$@" 2>&1 9>&-
 """
 
 CLEANUP = r"""R=~/rosy-test
 git -C "$R/repo" worktree remove --force "$R/runs/$1" 2>/dev/null || rm -rf "$R/runs/$1"
 git -C "$R/repo" worktree prune
 git -C "$R/repo" update-ref -d "refs/remote-pytest/$1" 2>/dev/null || true
+rm -f "$R/runs/$1.bundle"
 """
 
 
@@ -183,7 +186,11 @@ def ship(repo: Path, host: str, sha: str, name: str) -> None:
     ref = f"refs/remote-pytest/{name}"
     git(repo, "update-ref", ref, sha)
     try:
-        for base in (bundle_base(repo, sha), None):
+        base0 = bundle_base(repo, sha)
+        # A sha that is the base or behind it gives an empty bundle, which git refuses.
+        if base0 and subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", sha, base0]).returncode == 0:
+            base0 = None
+        for base in (base0, None):
             data = subprocess.run(["git", "-C", str(repo), "bundle", "create", "-", ref,
                                    *([f"^{base}"] if base else [])], capture_output=True, check=True).stdout
             result = remote(host, SHIP, name, sha, PUBLIC, input=data, capture_output=True,

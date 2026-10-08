@@ -20,6 +20,8 @@ if [ $# -ge 2 ]; then
   while read -r _ local_sha _ _; do
     case "$local_sha" in
       *[!0]*)
+        # An annotated tag pushes a tag object; compare the commit it names.
+        local_sha=$(git rev-parse "$local_sha^{commit}" 2>/dev/null || echo "$local_sha")
         if [ -n "$PUSH_SHA" ] && [ "$PUSH_SHA" != "$local_sha" ]; then
           echo "[pre-push] this push carries several commits ($PUSH_SHA, $local_sha); the gate tests one. Push one ref at a time." >&2
           exit 1
@@ -89,7 +91,7 @@ EOF
 
 # D-430 §5: opt-in early warning only. It never blocks the push; CI enforces it.
 echo "[pre-push] Safety-Review trailers (warning only)"
-"$PY" tools/harness/safety_review.py "$(git merge-base HEAD origin/main 2>/dev/null || true)" HEAD --warn-only
+"$PY" tools/harness/safety_review.py "$(git merge-base "$PUSH_SHA" origin/main 2>/dev/null || true)" "$PUSH_SHA" --warn-only
 
 FAST_SUITES=(
   test/test_harness_contracts.py

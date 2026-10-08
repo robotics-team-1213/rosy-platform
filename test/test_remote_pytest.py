@@ -90,6 +90,27 @@ def test_bundle_starts_at_origin_main_and_falls_back_to_full_history(tmp_path, m
     assert _git(repo, "for-each-ref", "refs/remote-pytest") == ""  # temporary ref removed
 
 
+def test_pushing_origin_main_itself_sends_a_full_bundle(tmp_path, monkeypatch):
+    # sha == origin/main (or behind it) would give an empty bundle, which git refuses.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    for n in range(2):
+        _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", str(n))
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    head, sent = _git(repo, "rev-parse", "HEAD"), []
+
+    def fake_remote(host, script, *args, input=None, **kw):
+        sent.append(subprocess.run(["git", "bundle", "list-heads", "-"], input=input, cwd=repo,
+                                   capture_output=True).returncode)
+        return subprocess.CompletedProcess([], 0, b"", b"")
+
+    monkeypatch.setattr(rp, "remote", fake_remote)
+    for sha in (head, _git(repo, "rev-parse", "HEAD~1")):
+        rp.ship(repo, "h", sha, "run2")
+    assert sent == [0, 0]
+
+
 def _fake_ssh(tmp_path, monkeypatch, fail_on):
     """A fake ssh: `true` succeeds; a script containing `fail_on` exits 1, anything else 0."""
     fake = tmp_path / "fake_ssh.py"
