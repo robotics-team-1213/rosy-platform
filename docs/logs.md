@@ -7215,3 +7215,9 @@ osy-d395-s1d\`.
 - 변경: 과노출 비율은 검수 우선순위만 정하고 자동 제외를 하지 않도록 `review_quality.py`의 `--apply`를 제거했다. D-528에 사람의 정답 가능성 판단, 255 대기와 학습 승인 경계를 기록했다. 수치만으로 제외했던 v13 사진 9~23의 15장을 검수 API로 재검수 대기에 되돌렸다.
 - 증거: 모델 PC 원본 15장 확인, 검수 API 응답 15건 `reopen`/skip 0건, `/api/learning` 객체 대기 43·제외 0·픽셀 승인 0. `test_review_quality.py`는 후보 보고가 저장 결정을 바꾸지 않음을 확인했다.
 - gate 변화: 없음. v13 픽셀 승인과 원본 영상 출처 검증, 학습 admission은 아직 끝나지 않았다.
+
+## 2026-10-09 · uncommitted · Pilot 태블릿 재연결과 현재 후보 출처 확인
+
+- 변경: Lenovo Pilot 설치 화면을 다시 촬영하고 설치 APK를 읽기 전용으로 확인했다. 현재 소스에서 Android 후보 APK를 격리 빌드해 설치본과 자산·서명을 비교한 결과를 [검증 기록](validation/uiux-pilot-tablet-reconnect-2026-10-09/result.md)에 남겼다.
+- 증거: 현재 후보 93 JVM tests PASS, UI 자산 50개 소스 일치. 설치본과 후보 자산 10개 차이, 서명 인증서 일치. 후보 에뮬레이터는 부팅 후 ADB 미등록으로 화면 캡처 실패.
+- gate 변화: 없음. 설치본 DEVICE 로비만 관찰했고 현재 후보 DEVICE G2, 사용자 G3와 현장 수용은 HOLD.
