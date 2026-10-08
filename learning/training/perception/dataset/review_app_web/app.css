@@ -177,7 +177,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
 .pixel-stage { position: relative; padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--ground); overflow: auto; max-height: 70vh; }
 #pixel-candidate-preview { margin: var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); }
 #pixel-candidate-preview img { display: block; width: 100%; max-width: 640px; height: auto; image-rendering: auto; }
-#pixel-candidate-preview figcaption { margin-bottom: var(--space-2); color: var(--ink); font-weight: 600; }
+#pixel-candidate-preview figcaption { margin-bottom: var(--space-2); color: var(--ink); font-weight: var(--weight-label); }
 #pixel-candidate-preview { display: flex; flex-direction: column; }
 #pixel-candidate-preview figcaption { order: -1; }
 .pixel-brush { position: absolute; border: 1px solid var(--ink-quiet); border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); }
