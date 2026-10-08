@@ -12,8 +12,8 @@
 
 | 화면 | PNG 원본 | SHA-256 |
 |---|---|---|
-| 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--auth-map-fixture-5e91/evidence/after/auth-map-goal-confirm-390x844.png` | `6BA38671F29F47BD8F85291E20EE70EA 5B9044D77C2BCF2E12EB99FC31C3D3AA` |
-| 1366×768 | `X:/DevTemp/projects/rosy-platform/2026-10-08--auth-map-fixture-5e91/evidence/after/auth-map-goal-confirm-1366x768.png` | `9E39D9943356305C66F7935B65F45ED6 B997A497FCB0EF0B4D962BF4957E8E27` |
+| 390×844 | `X:/DevTemp/projects/rosy-platform/2026-10-08--auth-map-fixture-5e91/evidence/after/auth-map-goal-confirm-390x844.png` | SHA-256 `6BA38671F29F47BD8F85291E20EE70EA 5B9044D77C2BCF2E12EB99FC31C3D3AA` |
+| 1366×768 | `X:/DevTemp/projects/rosy-platform/2026-10-08--auth-map-fixture-5e91/evidence/after/auth-map-goal-confirm-1366x768.png` | SHA-256 `9E39D9943356305C66F7935B65F45ED6 B997A497FCB0EF0B4D962BF4957E8E27` |
 
 SHA-256 열의 두 부분을 공백 없이 이어 붙이면 원본 파일의 전체 digest다.
 
