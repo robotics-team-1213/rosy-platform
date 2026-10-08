@@ -37,6 +37,7 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · feat(robot): 설치·정비 화면에 후면 램프 대조 시험
 - 2026-10-09 · uncommitted · uiux(robot): 마지막 계획 경로의 불확실성 표시
 - 2026-10-09 · uncommitted · fix(robot): paired 연결에서 개발 입장 숨김
 - 2026-10-09 · uncommitted · uiux(robot): Pilot 인계 뒤 빈 지도 안내
