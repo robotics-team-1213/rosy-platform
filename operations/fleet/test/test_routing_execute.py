@@ -9,7 +9,7 @@ import math
 import pytest
 
 from fleet.routing.cost import RoutingConfig
-from fleet.routing.execute import (ADVANCE_M, advance_m, ends_at_place, lane_action, plan_body, theta,
+from fleet.routing.execute import (ADVANCE_M, advance_m, ends_at_place, exit_segment, lane_action, plan_body, theta,
                                    turn_target, unsupported)
 from fleet.routing import execute
 from fleet.routing.graph import TANGENT_M, build_graph
@@ -169,3 +169,65 @@ def test_plan_body_is_the_stored_shape():
     assert set(body) == {"map_version", "segments", "places", "actions", "length_m", "eta_s"}
     assert [s["edge_id"] for s in body["segments"]] == ["ring_s", "ring_e", "ring_n"]
     assert body["actions"][-1] == {"place_id": "NW", "action": "stop", "theta_deg": 0.0}
+
+
+# ---- D-520 1: exit_segment ------------------------------------------------------------------
+
+ARC_ARGS = {"fit_tol_m": 0.005, "outer_line_offset_m": 0.095}
+
+
+@pytest.mark.parametrize(("into", "out", "end", "length"), [
+    ("west", "ring_s", "SE", 0.3739), ("ring_s", "ring_e", "NE", 0.4595),
+    ("ring_e", "ring_n", "NW", 0.3722), ("ring_n", "ring_w", "SW", 0.3739)])
+def test_260919_ring_lanes_are_exit_segments(into, out, end, length):
+    """The ring is one-way counter-clockwise, radius 0.2514 m: + 3.98 1/m (ADR Context 1)."""
+    graph = build_graph(from_lane_graph(LANE_GRAPH), version=1)
+    first = {"edge_id": into, "forward": into != "west", "s_from": 0.0, "s_to": 0.0}
+    nxt = {"edge_id": out, "forward": True, "s_from": 0.0, "s_to": graph.arcs[f"{out}:fwd"].length_m}
+    found = exit_segment(graph, [first, nxt], 0, **ARC_ARGS)
+    assert found["curvature_1pm"] == pytest.approx(1 / 0.2514, abs=0.01)
+    assert found["length_m"] == pytest.approx(length, abs=0.0006)
+    assert (found["outer_line_offset_m"], found["end_place_id"]) == (0.095, end)
+
+
+def _circle_map(clockwise: bool, degrees=90, radius=0.25, step=10):
+    """A -> B straight, then a circular lane B -> C turning left (or right) of radius ``radius``."""
+    sign = -1 if clockwise else 1
+    arc = [[1 + radius * math.sin(t), sign * (radius - radius * math.cos(t))]
+           for t in (math.radians(d) for d in range(0, degrees + 1, step))]
+    site = SiteMap.model_validate({
+        "places": [{"id": "A", "name": "A", "x": 0, "y": 0}, {"id": "B", "name": "B", "x": 1, "y": 0},
+                   {"id": "C", "name": "C", "x": arc[-1][0], "y": arc[-1][1]}],
+        "edges": [{"id": "ab", "from": "A", "to": "B", "polyline": [[0, 0], [1, 0]], "width_m": 0.2,
+                   "speed_cap_mps": 0.2},
+                  {"id": "bc", "from": "B", "to": "C", "polyline": arc, "width_m": 0.2, "speed_cap_mps": 0.2}]})
+    graph = build_graph(site, version=1)
+    return graph, [LEFT_TRIP[0], {**LEFT_TRIP[1], "s_to": graph.arcs["bc:fwd"].length_m}]
+
+
+def test_curvature_sign_is_left_positive():
+    for clockwise, sign in ((False, 1), (True, -1)):
+        graph, trip = _circle_map(clockwise)
+        assert exit_segment(graph, trip, 0, **ARC_ARGS)["curvature_1pm"] == pytest.approx(sign * 4.0, abs=0.01)
+
+
+def test_straight_and_bent_lanes_get_no_exit_segment():
+    graph = build_graph(from_lane_graph(LANE_GRAPH), version=1)
+    spoke = [{"edge_id": "ring_w", "forward": True, "s_from": 0.0, "s_to": 0.374},
+             {"edge_id": "west", "forward": True, "s_from": 0.0, "s_to": graph.arcs["west:fwd"].length_m}]
+    assert exit_segment(graph, spoke, 0, **ARC_ARGS) is None              # long and not one circle
+    assert exit_segment(_graph((1, 1)), LEFT_TRIP, 0, **ARC_ARGS) is None   # a straight lane
+    graph, trip = _bent((90, 0.05), (90, 0.1), (60, 0.1), (60, 0.1), (30, 0.1), (30, 0.1))
+    assert exit_segment(graph, trip, 0, **ARC_ARGS) is None               # a polygon bend, not a circle
+    graph, trip = _circle_map(False)
+    assert exit_segment(graph, trip, 1, **ARC_ARGS) is None               # no next segment
+    assert exit_segment(graph, [trip[0], {**trip[1], "s_to": 0.2}], 0, **ARC_ARGS) is None  # ends mid-lane
+    assert exit_segment(graph, [trip[0], {**trip[1], "s_from": 0.1}], 0, **ARC_ARGS) is None  # starts mid-lane
+    graph, trip = _circle_map(False, degrees=80, step=20)                 # 5 points: too few to prove a circle
+    assert exit_segment(graph, trip, 0, **ARC_ARGS) is None
+    graph, trip = _circle_map(False, degrees=100, step=20)                # 6 points
+    assert exit_segment(graph, trip, 0, **ARC_ARGS) is not None
+    graph, trip = _circle_map(False, radius=2.5, degrees=20, step=4)      # 0.4 1/m: under CORE's range
+    assert exit_segment(graph, trip, 0, **ARC_ARGS) is None
+    graph, trip = _circle_map(False, radius=0.5, degrees=180, step=15)    # 1.57 m: over 1.0 m
+    assert exit_segment(graph, trip, 0, **ARC_ARGS) is None
