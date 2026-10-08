@@ -88,6 +88,10 @@ class TrafficService:
         refused_unit: dict[str, str] = {}
         for robot in robots:
             live, waiting = trips[robot.id], result.waiting_for.get(robot.id, ())
+            if result.unplaced:  # a robot never localized could be anywhere: no instruction for anyone
+                live.traffic = {"waiting_for": [r for r in result.unplaced if r != robot.id],
+                                "authority_end_m": result.authority_end.get(robot.id), "refused_at_m": 0.0}
+                continue
             refused = None
             if waiting and robot.d is not None:
                 held = self._state.held.get(robot.id, {})
@@ -165,6 +169,7 @@ class TrafficService:
                         "trip_state": live.view["state"]} for robot_id, live in sorted(trips.items())],
             "loop_capacity": list(loops.values()),
             "wait_cycle": list(cycle) if cycle else None,
+            "unplaced": list(result.unplaced),
         }
 
 
@@ -174,4 +179,4 @@ def _round(value: Optional[float]) -> Optional[float]:
 
 def _empty(version) -> dict:
     return {"map_version": version, "block_length_m": {}, "units": [], "robots": [], "loop_capacity": [],
-            "wait_cycle": None}
+            "wait_cycle": None, "unplaced": []}

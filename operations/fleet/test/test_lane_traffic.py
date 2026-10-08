@@ -240,7 +240,8 @@ def test_traffic_api_is_read_only_and_repeat_needs_a_place_cycle(tmp_path):
 
     client, *_rest = _app(tmp_path, Ports())
     body = client.get("/api/fleet/traffic", headers=VIEWER).json()
-    assert set(body) == {"map_version", "block_length_m", "units", "robots", "loop_capacity", "wait_cycle"}
+    assert set(body) == {"map_version", "block_length_m", "units", "robots", "loop_capacity", "wait_cycle",
+                         "unplaced"}
     assert client.get("/api/fleet/traffic").status_code in (401, 403)
     trips = client.get("/api/fleet/trips", headers=VIEWER).json()
     assert trips["open"] == [] and trips["running"] is None
@@ -273,3 +274,19 @@ def test_estop_ends_every_open_trip():
     run(console.estop_all())
     assert runner.open_trips() == []
     assert runner.view("a")["reason"] == runner.view("b")["reason"] == "operator_estop"
+
+
+def test_a_robot_never_localized_holds_every_junction_instruction():
+    runner, store, fleet = _setup(ids=("a", "b", "c"))
+    _trip(runner, store, fleet, "a", "east:fwd", 0.2)
+    _trip(runner, store, fleet, "b", "west:fwd", 0.2, to="start_s", via=("start_n",))
+    _ticks(runner, fleet)
+    assert runner._live["a"].traffic["refused_at_m"] is None
+    _trip(runner, store, fleet, "c", "east:fwd", 2.6)  # opened, not yet located by a step
+    runner.traffic.step(runner._live.values())
+    assert runner.traffic.view()["unplaced"] == ["c"]
+    for robot_id in ("a", "b"):
+        live = runner._live[robot_id]
+        assert live.traffic == {"waiting_for": ["c"], "authority_end_m": live.traffic["authority_end_m"],
+                                "refused_at_m": 0.0}
+        assert runner._traffic_holds(live, live.view["segment_index"])
