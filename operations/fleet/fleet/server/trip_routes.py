@@ -43,6 +43,12 @@ class TripConvoy(BaseModel):
     leader: str = Field(min_length=1, max_length=96)
 
 
+class SignalCommand(BaseModel):
+    """D-525 4: an operator verb for one virtual signal."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    verb: str = Field(min_length=1, max_length=16)
+
+
 class TripRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     to: Union[PlaceRef, TripPoint]
@@ -169,6 +175,17 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
     def fleet_traffic() -> dict:
         """D-517 3 (M1): the block table of the last trip period; nothing of it is sent to robots."""
         return runner.traffic.view()
+
+    @app.post("/api/fleet/traffic/signals/{signal_id}", tags=["fleet"])
+    def fleet_traffic_signal(signal_id: str, body: SignalCommand,
+                             principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """D-525 4: operator verb for a virtual signal: ``cycle``, ``hold`` or ``all_red``."""
+        try:
+            return runner.traffic.signal_command(signal_id, body.verb)
+        except KeyError:
+            raise _refuse("SIGNAL_UNKNOWN", status=404)
+        except ValueError:
+            raise _refuse("SIGNAL_VERB", status=422)
 
     @app.get("/api/fleet/trips/{trip_id}", dependencies=read_guard, tags=["fleet"])
     def fleet_trip_view(trip_id: str) -> dict:
