@@ -377,11 +377,20 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     if self.headers.get('If-None-Match') == etag:
                         return self.send(b'', 304, etag=etag, cache='no-cache')
                     return self.send(pixels, mime='image/png', etag=etag, cache='no-cache')
+                if path.startswith('/api/draft-images/'):
+                    _, _, frame_id, digest = path.rsplit('/', 3)
+                    return self.send(review_masks.draft_image(store, int(frame_id), digest),
+                                     mime='image/png', cache='no-cache')
+                if path.startswith('/api/draft-preview/'):
+                    _, _, frame_id, digest = path.rsplit('/', 3)
+                    return self.send(review_masks.draft_preview(store, int(frame_id), digest),
+                                     mime='image/png', cache='no-cache')
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.get(store, int(path.rsplit('/', 1)[1])))
                 if path == '/api/learning':
                     frames = store.list_frames()
-                    pixel_reviews = [review_masks.get(store, f['index']) for f in frames]
+                    pixel_reviews = [review_masks.get(store, f['index']) for f in frames
+                                     if f['status'] != 'excluded']
                     pixel_statuses = [row['status'] for row in pixel_reviews]
                     object_draft_indices = [f['index'] for f in frames if f['status'] == 'pending'
                                             and (f['source'].get('objects') or f['source'].get('boxes'))]

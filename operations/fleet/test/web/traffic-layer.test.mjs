@@ -74,16 +74,28 @@ test('one card line per trip robot', () => {
 
 test('queue rows: wait cycle and 30 s UNKNOWN are critical, a long merge wait and an over-full loop warn', () => {
   let clock = trafficClock(null, TRAFFIC, 1000);
-  assert.deepEqual(clock, {unknown: {rosy_04: 1000}, merge: {rosy_02: 1000}});
+  assert.deepEqual(clock, {merge: {rosy_02: 1000}});
   clock = trafficClock(clock, TRAFFIC, 5000);  // the first sighting time stays
-  assert.equal(clock.unknown.rosy_04, 1000);
+  assert.equal(clock.merge.rosy_02, 1000);
   assert.deepEqual(trafficAttention(TRAFFIC, 'rosy_02', clock, 15000), []);  // a block wait is normal
   assert.deepEqual(trafficAttention(TRAFFIC, 'rosy_02', clock, 22000),
     [{severity: 'warn', text: ': 합류 대기 21초 — 구역 ring_zone 입구'}]);
-  assert.equal(trafficAttention(TRAFFIC, 'rosy_04', clock, 32000)[0].severity, 'crit');
+  assert.deepEqual(trafficAttention(TRAFFIC, 'rosy_04', clock, 32000), []);  // D-517 M4: Fleet's resolver says when
+  const lost = {...TRAFFIC, resolver: [{robot_id: 'rosy_04', trigger: 'unknown', decision: 'human', since: 1}]};
+  assert.deepEqual(trafficAttention(lost, 'rosy_04', clock, 0),
+    [{severity: 'crit', text: ': 위치 불명 30초 넘음 — 블록을 풀지 않습니다 · 로봇 위치를 확인하세요'}]);
   const cycle = {...TRAFFIC, wait_cycle: ['rosy_01', 'rosy_05']};
   assert.deepEqual(trafficAttention(cycle, 'rosy_05', {}, 0),
     [{severity: 'crit', text: ': 교착 — rosy_01 → rosy_05 → rosy_01 서로 기다림 · 운영자 판단 필요'}]);
+  const resolved = {...cycle, resolver: [
+    {robot_id: 'rosy_01', trigger: 'wait_cycle', decision: 'wait', cycle: ['rosy_01', 'rosy_05']},
+    {robot_id: 'rosy_05', trigger: 'wait_cycle', decision: 'replan', cycle: ['rosy_01', 'rosy_05'], blocked_edges: ['ring_n']}]};
+  assert.equal(trafficAttention(resolved, 'rosy_05', {}, 0)[0].text,
+    ': 교착 — rosy_01 → rosy_05 → rosy_01 서로 기다림 · 해결기: 다른 길 계획 · 다음 장소에서 운영자 확인');
+  assert.equal(trafficAttention(resolved, 'rosy_01', {}, 0)[0].text,
+    ': 교착 — rosy_01 → rosy_05 → rosy_01 서로 기다림 · 해결기: rosy_05 다른 길 대기');
+  const card = {...resolved, robots: [{robot_id: 'rosy_05', waiting_for: [], lap: null, trip_state: 'running'}]};
+  assert.equal(trafficCardLine(card, 'rosy_05'), '교착 · 다른 길 계획');
   const full = {...TRAFFIC, loop_capacity: [{edges: [], capacity: 1, robots: ['rosy_01', 'rosy_02']}]};
   assert.deepEqual(trafficAttention(full, 'rosy_01', {}, 0), [{severity: 'warn', text: ': 고리 수용 초과 — 고리 2/1대'}]);
   assert.deepEqual(trafficAttention(null, 'rosy_01', {}, 0), []);

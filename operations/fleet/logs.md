@@ -2701,3 +2701,29 @@
 - gate 변화: SOURCE
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-10-08 · 303152390 · feat(fleet): D-517 M4 해결기 연결 (Safety-Review 전)
+- 변경: Fleet 막힘 해결기가 trip 로봇에도 답한다(멈추는 R1 `WAIT`만, 그 밖은 사람). `fleet/traffic/handover.py`(순수)가 교착 순환에서 한 대를 막힌 차로를 피해 다시 계획(운영자 확인 `replan_hold`), 나머지 대기, 못 피하면 사람, 30 s 넘는 UNKNOWN은 사람. `GET /api/fleet/traffic` `resolver`, 예외 큐·카드 한 줄 문구. API Ref v1.148. ADR 5항 구현 노트와 옛 경로(`server/lane_traffic.py`, `routing/blocks.py`) 고침
+- 증거: 모델 PC 관련 pytest와 node `traffic-layer`·`convoy-view` 12 passed. 전체 결과는 브랜치 보고에 있음
+- gate 변화: 없음(SOURCE). 움직임 판단이라 독립 Safety-Review 전에는 착지하지 않음
+- 결정: Fleet은 trip 로봇에 물러서기·비켜서기·재개를 보내지 않는다(풀린 블록으로 들어갈 수 있음). 교착은 경로를 스스로 바꾸지 않고 운영자 확인으로만 바꾼다
+- 교훈: 없음
+
+## 2026-10-08 · 0fd6d230e · fix(fleet): D-517 M4 Safety-Review M1/M2 반영
+- 변경: 해결기 재계획은 장소 `arm_distance_m` 안, CORE 기동 아님, 그 장소 지시 미전송일 때만(M1). 순환은 `CYCLE_PERIODS` 3주기 이어져야 재계획을 고르고, 경로가 있는 재계획 보류가 운영자를 기다리는 동안 `replan`/`wait` 행 유지(M2). 지도 없는 경로에서 해결기 시계 초기화. main 병합, API Ref v1.149
+- 증거: 모델 PC `operations/fleet/test/`·`test/architecture/test_module_structure.py` 2839 passed, 실패 2(learning_receiver PIL, site_map_api node: main에서도 실패)
+- gate 변화: 없음(SOURCE)
+- 결정: 확인 재계획의 장소 검사(LOW)는 하지 않음. 오류 코드가 새로 필요해 별도 단계
+- 교훈: 없음
+
+## 2026-10-08 · d3db27b9d · fix(fleet): D-517 사이트 통행권 꺼짐 + CORE 통행권 필수면 lane trip 거절
+- 변경: `_caps_checks`가 `fleet.traffic.authority`가 꺼져 있고(또는 송신 모드가 `hold_back`) 능력 `line_follow_authority_required`가 참인 로봇의 `lane` trip을 422 `TRIP_AUTHORITY_SITE_OFF`로 거절. 반복 바퀴 재검사도 같은 함수를 쓴다. API Ref v1.150, ADR D-517 4항 Fleet 문단 한 문장
+- 증거: 시험 `test_a_robot_requiring_authority_is_refused_while_the_site_flag_is_off`(고치기 전 실패 e722804ac). 모델 PC 결과는 브랜치 보고
+- gate 변화: 없음(SOURCE). trip 시작 판단이라 독립 Safety-Review 전에는 착지하지 않음
+- 결정: CORE 상태 필드는 늘리지 않음. 이미 있는 능력 `line_follow_authority_required`로 시작에서 막는다
+## 2026-10-08 · uncommitted · fix(fleet): `straight` 지시에 지도 차로 방향 변화 `lane_turn_deg` (API v1.152)
+- 변경: `junction_fields` 가 기대 창이 있는 `straight` 에 로봇에서 장소까지 차로의 부호 있는 방향 변화(도, `WINDOW_BEND_STEP_M` 간격 합, ±360 클램프)를 싣는다. `_curve_offset_m` 과 같은 표본(`_lane_steps`)을 쓴다
+- 증거: `test_trip_d507.py::test_a_straight_on_the_ring_sends_its_lane_turn_and_a_turn_does_not` (ring_s → SE 45–65°), 모델 PC 53 passed
+- gate 변화: 없음(SOURCE)
+- 결정: 회전 지시에는 싣지 않는다(방향은 action 이 말한다)
+- 교훈: 없음

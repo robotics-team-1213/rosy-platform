@@ -34,14 +34,18 @@ REACQUIRE_HEADING_RAD = math.radians(30.)
 STEP_TIME_S = 5.
 
 
-#: The keeper's L-corner turns (line/keep_debug strategy); 'corner_ahead' drives straight on.
-CORNER_TURNS = frozenset({'corner_left', 'corner_right'})
+#: The keeper's L-corner turns are line/keep_debug strategy 'corner_left'/'corner_right';
+#: 'corner_ahead' drives straight on.
 #: ponytail: the 260919 keeper's corner range (perception CORNER_MAX_AHEAD_M 0.45); a corner it
 #: reads this close to the expected cross line is that line misread (lap SIM A), SIM-tuned.
 CORNER_HOLD_AHEAD_M = .45
 #: Review: a keeper flipping between a corner and 'both'/'none' must not steer in bursts; one
 #: corner frame holds this long (the keep_debug evidence window of the junction capabilities).
 CORNER_LATCH_S = 2.
+#: lap SIM 2: when a straight instruction's lane turns at least this much (Fleet's lane_turn_deg)
+#: the corner's way, that corner is the lane (the 260919 ring), not a misread cross line.
+CORNER_LANE_TURN_DEG = 20.
+MAX_LANE_TURN_DEG = 360.
 
 
 def _point(pose, ahead, yaw, extra=0.):
@@ -60,6 +64,10 @@ def check_expect(expect, action, turn_deg):
     if pivot is not None and (action == 'stop' or (action != 'straight' and turn_deg is None)
                               or not -MAX_PIVOT_PAST_LINE_M <= pivot <= MAX_PIVOT_PAST_LINE_M):
         raise ValueError('pivot_past_line_m belongs to straight or a turn and must be in [-0.30, 0.30]')
+    lane_turn = expect.get('lane_turn_deg')
+    if lane_turn is not None and (action != 'straight' or e_in is None or not math.isfinite(lane_turn)
+                                  or abs(lane_turn) > MAX_LANE_TURN_DEG):
+        raise ValueError('lane_turn_deg belongs to straight with a window and must be in [-360, 360]')
 
 
 #: ponytail: 260919 transverse tape width; must become a per-site calibration value.
@@ -85,7 +93,8 @@ class JunctionApproachMixin:
     _junction_anchor = None  # the latest measured sighting, anchored in odom (any age)
     _cross_band = None  # D-507 6: where IR 'centre' is the measured cross line
     _junction_ahead_v_at = None  # last keep_debug frame carrying junction_ahead_v >= 1
-    _corner_turn_at = None  # last keep_debug frame whose keeper strategy was a corner turn
+    _corner_left_at = None  # last keep_debug frame whose keeper strategy was 'corner_left'
+    _corner_right_at = None  # ... 'corner_right'; each way latches on its own (review)
     _junction_held = False  # lap SIM A: a bend pass handed its sighting on; seen until odom passes the line
 
     def _expect_window(self, expect, now):
@@ -134,11 +143,23 @@ class JunctionApproachMixin:
                 and a['pose'].received_at >= since-SIGHTING_POSE_S
                 and self._return_evidence.trail.odometer-a['odometer'] < a['ahead'])
 
+    def _corner_against_at(self, j):
+        """lap SIM 2: the latest keeper corner frame against the armed instruction, or None: the
+        other way from a left/right, or on a straight a way its lane does not turn (Fleet's
+        lane_turn_deg; without it either way, fail closed). A corner the instruction or its lane
+        takes is followed; a frame the other way never ends an against corner's latch (review)."""
+        if j['action'] in ('left', 'right'):
+            return self._corner_right_at if j['action'] == 'left' else self._corner_left_at
+        turn = j.get('lane_turn')
+        ats = [at for at, way in ((self._corner_left_at, 1.), (self._corner_right_at, -1.))
+               if at is not None and (turn is None or way*turn < CORNER_LANE_TURN_DEG)]
+        return max(ats, default=None)
+
     def _corner_at_expected_line(self, j, now):
         """An armed map instruction's expected line is within the keeper's corner range and the
-        keeper turns a corner this frame: that corner is the junction's line misread (it would
-        put the robot on a lane against the route). Locked."""
-        w, at, trail = j.get('window'), self._corner_turn_at, self._return_evidence.trail
+        keeper turns a corner against it this frame: that corner is the junction's line misread
+        (it would put the robot on a lane against the route). Locked."""
+        w, at, trail = j.get('window'), self._corner_against_at(j), self._return_evidence.trail
         if w is None or at is None or not 0 <= now-at <= CORNER_LATCH_S:
             return False
         pose = self._fresh_pose(now)
