@@ -36,14 +36,15 @@ def test_caps_read_lane_arc():
     assert trip_caps(_caps(lane_arc="true")).lane_arc is False
 
 
-def test_a_lane_arc_robot_gets_the_ring_segment_the_tangent_and_no_advance():
+def test_a_lane_arc_robot_gets_the_ring_segment_the_lane_heading_turn_and_no_advance():
     runner, store, ports = _sw_entry()
     graph, segments = store.active()[2], runner.view("p1")["plan"]["segments"]
     assert ports.sent[0][:2] == ("right", "SW")
     assert ports.expects[0]["exit_segment"] == {"curvature_1pm": RING_K, "length_m": pytest.approx(0.3739, abs=6e-4),
                                                 "outer_line_offset_m": 0.095, "end_place_id": "SE"}
-    assert ports.turns[0] == round(theta(graph, segments, 0), 1)          # no TURN_OVERTURN_DEG
-    assert ports.turns[0] != round(turn_target(graph, segments, 0), 1)
+    # lap SIM 3: from the incoming lane's end heading (last two chords), not the 72.6 deg lead tangent
+    assert ports.turns[0] == round(turn_target(graph, segments, 0), 1)
+    assert abs(ports.turns[0] - theta(graph, segments, 0)) > 5
     assert ports.advances == [None]
 
 
@@ -51,7 +52,7 @@ def test_without_lane_arc_the_instruction_is_todays():
     runner, store, ports = _sw_entry(caps=LANE)
     graph, segments = store.active()[2], runner.view("p1")["plan"]["segments"]
     assert "exit_segment" not in ports.expects[0]
-    assert ports.turns[0] == round(turn_target(graph, segments, 0), 1)    # tangent - 6 deg
+    assert ports.turns[0] == round(turn_target(graph, segments, 0), 1)    # lane heading, no 6 deg
     assert ports.advances == [0.10]
 
 

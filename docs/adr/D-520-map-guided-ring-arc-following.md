@@ -44,7 +44,7 @@
        - 이 검사는 CORE가 한다(`_arc_on_crosswalk`). Fleet 지도에는 횡단보도 구역이 없어서 Fleet은 이 조건을 보지 않는다(2026-10-08 Fleet 구현 검토).
    - 260919의 네 호는 `ring_s` 0.3739 m, `ring_w` 0.3739 m, `ring_n` 0.3722 m(각 약 85°), `ring_e` 0.4595 m(약 105°)다(`lane_graph.yaml`, 반지름 0.2514 m).
    - 능력 `lane_arc: true`(CORE가 이 객체를 받고 5항의 선언이 있음)가 있는 로봇에만 Fleet이 보낸다. 없으면 필드를 빼고 오늘처럼 보낸다.
-   - **회전각과 `advance_m`(D-507 4항 개정).** `exit_segment`가 있으면 Fleet은 `turn_deg`를 접선 그대로 보낸다. 들어오는 차로의 `end_tangent`에서 나가는 차로의 `start_tangent`까지의 `theta`이고, `TURN_OVERTURN_DEG` 6°를 더하지 않는다. `advance_m`은 보내지 않는다. CORE는 `exit_segment`가 있으면 `advance_m`을 무시한다. 지금 `set_junction`은 `advance_m`이 없을 때 `DEFAULT_ADVANCE_M` 0.10 m를 쓰는데, 이 경우에는 그 값도 쓰지 않는다. `exit_segment`가 없으면 D-507 4항의 잠정 규칙(접선 + 6°, `advance_m` 0.10)이 그대로다. D-507 4항에 이 문장을 가리키는 줄을 더했다.
+   - **회전각과 `advance_m`(D-507 4항 개정).** `exit_segment`가 있어도 Fleet은 `turn_deg`를 D-507 4항(lap SIM 3 개정)의 `turn_target`으로 보낸다. 들어오는 차로의 끝 방향(마지막 두 0.10 m 현)에서 나가는 차로의 `start_tangent`까지이고, 6°를 더하지 않는다. (2026-10-09 개정, `fix/d520-arc-entry-tangent`) 처음에는 `end_tangent`(5 cm lead 접선)에서 잰 `theta`를 보냈는데, 260919 SW 입구에서 그 값이 polyline 잡음으로 12–17° 틀려 호가 접선보다 바깥을 향해 시작했다(lap SIM 2). `advance_m`은 보내지 않는다. CORE는 `exit_segment`가 있으면 `advance_m`을 무시한다. 지금 `set_junction`은 `advance_m`이 없을 때 `DEFAULT_ADVANCE_M` 0.10 m를 쓰는데, 이 경우에는 그 값도 쓰지 않는다. `exit_segment`가 없으면 D-507 4항의 잠정 규칙(접선 + 6°, `advance_m` 0.10)이 그대로다. D-507 4항에 이 문장을 가리키는 줄을 더했다.
    - 왜 이 계약인가:
      - 교차로 지시는 이미 `place_id`·`seq`·만료·`map_id`·능력 확인·Fleet 포트(`LaneJunctionPort.send_junction`)를 갖는다.
      - 호 구간은 늘 장소의 회전에서 시작해 다음 장소에서 끝난다.
