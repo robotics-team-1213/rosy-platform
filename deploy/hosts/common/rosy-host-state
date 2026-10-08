@@ -59,7 +59,8 @@ def login_user() -> str:
     path = host(LIB + "/login")
     if path.exists():
         return path.read_text(encoding="utf-8").strip()
-    return os.environ.get("SUDO_USER", "")
+    user = os.environ.get("SUDO_USER") or os.environ.get("USER", "")
+    return "" if user == "root" else user
 
 
 def wifi_autoconnect() -> list[str]:
