@@ -1,4 +1,5 @@
 import { createFieldMap } from "/assets/map.js";
+import { HeadlessState, NAVIGATION_LABEL, enumLabel } from "/common/core_ui_logic.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
@@ -42,15 +43,32 @@ export function mount(root, ctx) {
   const overlay = el("div", "surface-map-overlay");
   const retry = el("ui-button", "", "다시 시도"); retry.setAttribute("kind", "quiet"); retry.type = "button"; retry.hidden = true;
   overlay.append(empty, retry);
-  const mapFrame = el("div", "surface-map-frame"); mapFrame.append(overlay, canvas, targetReadout);
-  root.append(head, status, readinessStatus, layers, clickReason, clicks, mapFrame, setupLink, mapStatus, action);
+  const stage = el("div", "surface-map-stage");
+  stage.setAttribute("role", "group");
+  stage.setAttribute("aria-label", "주행 관측");
+  const navStage = el("span", "", "주행 · 확인 중");
+  const locationStage = el("span", "", "위치 추정 · 확인 중");
+  const slamStage = el("span", "", "SLAM · 확인 중");
+  stage.append(navStage, locationStage, slamStage);
+  const mapFrame = el("div", "surface-map-frame"); mapFrame.append(overlay, canvas, stage, targetReadout);
+  root.append(head, status, readinessStatus, layers, clicks, mapFrame, clickReason, setupLink, mapStatus, action);
 
   let state = null;
   let capabilities = null;
   let commissioning = null;
   const readErrors = {state: null, capabilities: null, commissioning: null};
   function setText(target, text) { if (target.textContent !== text) target.textContent = text; }
+  function renderStage() {
+    const evidence = new HeadlessState(state);
+    setText(navStage, `주행 · ${evidence.isFresh("navigation") && state?.navigation
+      ? enumLabel(NAVIGATION_LABEL, state.navigation) : "상태 확인 불가"}`);
+    const localized = evidence.isFresh("pose") && state?.localization?.state === "LOCALIZED"
+      && state.localization.pose_frame === "map";
+    setText(locationStage, `위치 추정 · ${localized ? "지도 좌표 확인" : "확인 불가"}`);
+    setText(slamStage, `SLAM · ${capabilities?.slam === true ? "기능 제공" : capabilities?.slam === false ? "미제공" : "확인 불가"}`);
+  }
   function renderReadiness() {
+    readinessStatus.hidden = false;
     const errors = [["로봇 상태", readErrors.state], ["내비게이션 기능", readErrors.capabilities], ["실행 모드", readErrors.commissioning]]
       .filter(([, reason]) => reason);
     if (errors.length) {
@@ -65,6 +83,7 @@ export function mount(root, ctx) {
     }
     readinessStatus.textContent = "로봇 상태·내비게이션 기능·실행 모드를 읽었습니다.";
     readinessStatus.setAttribute("state", "ready");
+    readinessStatus.hidden = true;
   }
   const syncMapActions = () => {
     const operator = ctx.role === "operator" || ctx.role === "administrator";
@@ -87,6 +106,7 @@ export function mount(root, ctx) {
     && (ctx.surfaces || []).some((surface) => surface.id === "setup");
   const map = createFieldMap({
     canvas, empty, status: mapStatus, layerRoot: root, api: ctx.api,
+    onlyActivePath: true,
     emptyRecoveryLink: setupLink,
     mayOpenSetup,
     apiMaybe: async (path) => {
@@ -97,7 +117,9 @@ export function mount(root, ctx) {
       }
     },
     getPose: () => state?.pose,
-    getNavigation: () => state?.navigation,
+    getDisplayPose: () => new HeadlessState(state).isFresh("pose") && state?.localization?.state === "LOCALIZED"
+      && state.localization.pose_frame === "map" ? state.pose : null,
+    getNavigation: () => new HeadlessState(state).isFresh("navigation") ? state.navigation : null,
     canGoal: () => ctx.role !== "viewer" && capabilities?.navigation?.goal_navigation === true && commissioning?.runtime_mode === "hardware",
     setAction: (text) => { setText(action, text); },
     onTargetReadout: (target) => {
@@ -109,14 +131,14 @@ export function mount(root, ctx) {
     },
   });
   const stopState = ctx.store.poll("/api/v1/robot/state", 1_000, (payload) => {
-    state = payload; readErrors.state = null; renderReadiness(); map.setPose();
+    state = payload; readErrors.state = null; renderReadiness(); renderStage(); map.setPose();
   }, (error) => {
-    state = null; readErrors.state = error.message; renderReadiness(); map.setPose();
+    state = null; readErrors.state = error.message; renderReadiness(); renderStage(); map.setPose();
   });
   const stopCapabilities = ctx.store.poll("/api/v1/system/capabilities", 10_000, (payload) => {
-    capabilities = payload; readErrors.capabilities = null; renderReadiness(); syncMapActions(); map.setPose();
+    capabilities = payload; readErrors.capabilities = null; renderReadiness(); renderStage(); syncMapActions(); map.setPose();
   }, (error) => {
-    capabilities = null; readErrors.capabilities = error.message; renderReadiness(); syncMapActions(); map.setPose();
+    capabilities = null; readErrors.capabilities = error.message; renderReadiness(); renderStage(); syncMapActions(); map.setPose();
   });
   const stopCommissioning = ctx.store.poll("/api/v1/host/commissioning", 2_000, (payload) => {
     commissioning = payload; readErrors.commissioning = null; renderReadiness(); syncMapActions();

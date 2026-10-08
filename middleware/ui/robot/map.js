@@ -206,15 +206,19 @@ export function createFieldMap(options) {
     }
     ctx.putImageData(state.raster, 0, 0);
     const frame = new GridFrame(state.occupancy);
-    if (layers.path && state.path.length >= 2) {
+    // ponytail: path has no server timestamp; use active navigation until the API supplies path freshness.
+    if (layers.path && (!options.onlyActivePath || ["PLANNING", "NAVIGATING"].includes(getNavigation?.())) && state.path.length >= 2) {
+      const scale = window.devicePixelRatio || 1;
       ctx.beginPath();
       state.path.forEach((pose, index) => {
         const point = frame.worldToCanvas(pose.x, pose.y, canvas.width, canvas.height);
         if (index === 0) ctx.moveTo(point.x, point.y);
         else ctx.lineTo(point.x, point.y);
       });
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       ctx.strokeStyle = cssColor("route");
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 4 * scale;
       ctx.stroke();
     }
     if (cross) {
@@ -245,16 +249,22 @@ export function createFieldMap(options) {
       ctx.strokeRect(-5, -5, 10, 10);
       ctx.restore();
     }
-    const pose = getPose?.();
+    const pose = options.getDisplayPose ? options.getDisplayPose() : getPose?.();
     if (!pose || !Number.isFinite(Number(pose.x))) return;
     const point = frame.worldToCanvas(pose.x, pose.y, canvas.width, canvas.height);
+    const scale = window.devicePixelRatio || 1;
     ctx.save();
     ctx.translate(point.x, point.y);
     ctx.rotate(-Number(pose.yaw) || 0);
+    ctx.strokeStyle = cssColor("pose");
+    ctx.lineWidth = 1.5 * scale;
     ctx.beginPath();
-    ctx.moveTo(10, 0);
-    ctx.lineTo(-7, 7);
-    ctx.lineTo(-7, -7);
+    ctx.arc(0, 0, 16 * scale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(12 * scale, 0);
+    ctx.lineTo(-8 * scale, 8 * scale);
+    ctx.lineTo(-8 * scale, -8 * scale);
     ctx.closePath();
     ctx.fillStyle = cssColor("pose");
     ctx.fill();
@@ -419,7 +429,7 @@ export function createFieldMap(options) {
     if (!cross) {
       // 첫 진입은 로봇 자리, 모르면 한가운데 — 어디서 시작했는지 보이게 한다.
       // 격자가 비정상이면 worldToCanvas 가 NaN 을 내므로 유한성까지 본다.
-      const pose = getPose?.();
+      const pose = options.getDisplayPose ? options.getDisplayPose() : getPose?.();
       let start = null;
       if (pose && Number.isFinite(Number(pose.x))) {
         const frame = new GridFrame(state.occupancy);

@@ -1080,3 +1080,9 @@
 - 변경: wide 고정 프레임에서 감지·지도·조작 세 열에 같은 스크롤바 자리를 예약한다. 콘솔 셸 시험이 실제 패널 폭을 검사한다.
 - 증거: `docs/validation/uiux-robot-column-width-2026-10-07/result.md`; 1280px 네 패널 폭 차이 15.01→0.01px, 역할 셸 브라우저 9 passed, G1 90 passed, 각 known_failures 0 NEW.
 - gate 변화: LOCAL 동등 폭 G2 부분 근거. 전체 상태·실물·운영자 G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 지도 중심 운용 화면
+
+- 변경: 모바일 지도 → 조작 → 감지 순서, 지도 경로·로봇 마커 가독성, 최신 상태 기반 주행·위치 추정·SLAM 기능 표기. 지도 조작 제한 사유는 지도 아래에 둔다.
+- 증거: [검토 기록](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/navigation-stage/`의 1366×768·390×844 LOCAL 캡처. 지도·레이아웃 11 passed, 최종 뷰포트·지도 3 passed, 각 `known_failures.py` 0 NEW. 넓은 회귀에서 남은 차선 추종 1건은 변경 전 공유 main에서도 동일하게 실패.
+- gate 변화: 로봇 운용 LOCAL 지도 가독성 근거 추가. 현재 이미지·실기 경로·사용자 G3 및 전체 G2는 HOLD.

@@ -39,7 +39,7 @@ MEASURE = """() => {
     topbar: box('ui-topbar'),
     sticky: getComputedStyle(document.querySelector('ui-topbar')).position,
     estop: box('#shell-estop'),
-    slots: ['act', 'sense', 'observe'].map(name => document.querySelector(`[data-slot="${name}"]`))
+    slots: ['observe', 'act', 'sense'].map(name => document.querySelector(`[data-slot="${name}"]`))
       .filter(Boolean).map(node => node.getBoundingClientRect().toJSON()),
     cameraActions: [...document.querySelectorAll('#vision-expand, #vision-record-stop')]
       .map(node => node.getBoundingClientRect().toJSON()),

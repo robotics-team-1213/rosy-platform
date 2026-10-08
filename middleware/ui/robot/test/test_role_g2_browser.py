@@ -1204,3 +1204,82 @@ def test_operator_device_entry_denial_captures(tmp_path):
         browser.close()
     (capture_dir / "operator-device-entry-denied-matrix.json").write_text(
         json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def test_console_navigation_stage_local_captures(tmp_path):
+    """A real map/route fixture checks the navigation display at both declared sizes."""
+    from fastapi import Response
+
+    client = _core_client(tmp_path)
+    capture_dir = CAPTURES / "navigation-stage"
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    width, height = 100, 80
+    cells = [100 if x in (12, 88) or y in (10, 69) or (x == 64 and 18 < y < 52)
+             else 0 for y in range(height) for x in range(width)]
+    grid = {"width": width, "height": height, "resolution": 0.1,
+            "origin": {"x": -5, "y": -4}, "map_id": "local-map", "data": cells}
+    route_points = [{"x": x, "y": y} for x, y in
+                    ((1.2, 0.3), (1.5, 0.3), (1.8, 0.6), (2.0, 1.0), (2.3, 1.2), (2.7, 1.2))]
+    records = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        for viewport in ((1366, 768), (390, 844)):
+            context = browser.new_context(viewport={"width": viewport[0], "height": viewport[1]})
+            page = context.new_page()
+            errors = []
+            page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def serve(request_route):
+                path = urlsplit(request_route.request.url).path
+                if request_route.request.method != "GET":
+                    request_route.fulfill(status=501, body='{"detail":"fixture blocks writes"}')
+                    return
+                if path == "/api/v1/robot/state":
+                    state = json.loads(_response(client, path, TOKENS["operator"], "normal", "console").body)
+                    state.update(mode="NAVIGATION", navigation="NAVIGATING", map_id="local-map",
+                                 localization={"state": "LOCALIZED", "pose_frame": "map", "confidence": 0.92})
+                    state["evidence"]["navigation"] = {"evidence": "fresh", "received_at": datetime.now(timezone.utc).isoformat()}
+                    response = Response(content=json.dumps(state), media_type="application/json")
+                elif path == "/api/v1/system/capabilities":
+                    data = _response(client, path, TOKENS["operator"], "normal", "console").json()
+                    data["slam"] = True
+                    data["navigation"] = {"goal_navigation": True}
+                    response = Response(content=json.dumps(data), media_type="application/json")
+                elif path == "/api/v1/map":
+                    response = Response(content=json.dumps(grid), media_type="application/json")
+                elif path == "/api/v1/navigation/path":
+                    response = Response(content=json.dumps({"poses": route_points}), media_type="application/json")
+                elif path == "/api/v1/map/costmap":
+                    response = Response(content=json.dumps(grid | {"data": [0] * len(cells)}), media_type="application/json")
+                else:
+                    response = _response(client, path, TOKENS["operator"], "normal", "console")
+                request_route.fulfill(status=response.status_code, headers={
+                    "content-type": response.headers.get("content-type", "application/octet-stream")},
+                    body=response.content if hasattr(response, "content") else response.body)
+
+            page.route("**/*", serve)
+            page.goto("http://rosy.test/console", wait_until="domcontentloaded")
+            stage = page.locator(".surface-map-stage")
+            page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
+            assert "주행 · 주행 중" in stage.inner_text()
+            assert "위치 추정 · 지도 좌표 확인" in stage.inner_text()
+            assert "SLAM · 기능 제공" in stage.inner_text()
+            result = page.evaluate("""() => ({
+              overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+              eStopVisible: document.querySelector('#shell-estop')?.getBoundingClientRect().right <= innerWidth,
+              mapTop: document.querySelector('[data-slot="observe"]').getBoundingClientRect().top,
+              actionTop: document.querySelector('[data-slot="act"]').getBoundingClientRect().top,
+              cameraTop: document.querySelector('[data-slot="sense"]').getBoundingClientRect().top,
+            })""")
+            assert result["overflowX"] == 0 and result["eStopVisible"] and errors == [], result
+            if viewport[0] < 1024:
+                assert result["mapTop"] < result["actionTop"] < result["cameraTop"], result
+            filename = f"operator-console-navigation-{viewport[0]}x{viewport[1]}.png"
+            page.screenshot(path=str(capture_dir / filename), full_page=True)
+            records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "image": filename,
+                            "synthetic": True, "errors": errors, **result})
+            context.close()
+        browser.close()
+    (capture_dir / "navigation-stage-matrix.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
