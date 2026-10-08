@@ -71,6 +71,10 @@ ADR_BODY_HEADING = re.compile(r"^## (D-\d+):? (.+)$", re.MULTILINE)
 # in place would violate the same history gate, so it is excused by exact
 # name too. Same class of defect: a committed line that cannot be reformed.
 KNOWN_LEGACY_HEADINGS = frozenset({
+    # 823847295 committed these two entries without the standard field labels; the
+    # follow-up entries appended on 2026-10-09 carry 변경/증거/gate 변화.
+    "## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다",
+    "## 2026-10-09 · uncommitted · fix(core): 화면 코드 승인이 실기에서 항상 409였다 (D-483)",
     # Committed D-509 merge-fix entries used English field labels; preserve the blocks.
     "## 2026-10-08 \u00b7 uncommitted \u00b7 docs(api): v1.124 version pin",
     "## 2026-10-08 \u00b7 uncommitted \u00b7 fix(fleet): D-509 power health at state response",

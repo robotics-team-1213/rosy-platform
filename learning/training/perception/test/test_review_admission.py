@@ -1,5 +1,7 @@
 """Synthetic boundary tests: no actual Job, GPU, request or READY is allowed."""
 import copy
+from contextlib import contextmanager
+import hashlib
 import json
 from pathlib import Path
 
@@ -11,8 +13,8 @@ import train_job
 from job_state import JobError
 
 
-def fixture(tmp_path):
-    args, authority = build_fixture(tmp_path)
+def fixture(tmp_path, *, with_drivable=False):
+    args, authority = build_fixture(tmp_path, with_drivable=with_drivable)
     built = review_dataset.build_dataset(**args)
     assert built['status'] == 'PUBLISHED_CONTENT_NOT_ADMITTED', built
     evaluation = args['eval_folders'][0]
@@ -34,6 +36,135 @@ def context(args, authority, **changes):
                   staging_parent=args['staging_parent'], previous_authority={key: authority[key]
                   for key in ('workspace_id', 'generation', 'decision_sha256')}, now=args['now'])
     return IndexedReview(**dict(values, **changes))
+
+
+def test_drivable_recipe_requires_owner_before_job_or_gpu(tmp_path, monkeypatch):
+    args, authority, _, config = fixture(tmp_path)
+    config['training'] = dict(seed=1, epochs=1, lr=0.001, batch_size=1,
+                              recipe='drivable_head', parent_model=str(tmp_path / 'parent'),
+                              parent_torchscript=str(tmp_path / 'lane.pt'), ignore_top=110)
+    monkeypatch.setattr(train_job, 'Job', lambda *a: pytest.fail('no Job without owner'))
+    monkeypatch.setattr(train_job, 'gpu_lease', lambda: pytest.fail('no GPU without owner'))
+    with pytest.raises(JobError, match='independent indexed review'):
+        train_job.run(config, tmp_path / 'job')
+    assert not (tmp_path / 'job').exists()
+
+
+def test_drivable_recipe_rejects_unaccepted_camera_before_parent_or_job(tmp_path, monkeypatch):
+    args, authority, _, config = fixture(tmp_path)
+    config['training'] = dict(seed=1, epochs=1, lr=0.001, batch_size=1,
+                              recipe='drivable_head', parent_model=str(tmp_path / 'missing'),
+                              parent_torchscript=str(tmp_path / 'missing.pt'), ignore_top=110)
+    monkeypatch.setattr(train_job, 'Job', lambda *a: pytest.fail('no Job with unaccepted camera'))
+    with pytest.raises(JobError, match='accepted camera'):
+        train_job.run(config, tmp_path / 'job', indexed_review=context(args, authority))
+    assert not (tmp_path / 'job').exists()
+
+
+def test_drivable_recipe_refuses_nonindexed_dataset_even_with_owner(tmp_path, monkeypatch):
+    from store import content_sha
+    args, authority, built, config = fixture(tmp_path)
+    folder = Path(built['dataset_path'])
+    doc = json.loads((folder / 'manifest.json').read_text())
+    doc['builder'] = 'untrusted'
+    for source in doc['sources']:
+        source['annotation_origin'] = 'untrusted'
+    (folder / 'manifest.json').write_text(json.dumps(doc))
+    digest = content_sha(folder)
+    folder.rename(folder.with_name(digest))
+    config['dataset'] = 'indexed@' + digest
+    config['training'] = dict(seed=1, epochs=1, lr=0.001, batch_size=1,
+                              recipe='drivable_head', parent_model=str(tmp_path / 'missing'),
+                              parent_torchscript=str(tmp_path / 'missing.pt'), ignore_top=110)
+    Path(config['camera_profile']).write_text('{"accepted":true}')
+    monkeypatch.setattr(train_job, 'Job', lambda *a: pytest.fail('no Job with unindexed dataset'))
+    with pytest.raises(JobError, match='indexed dataset'):
+        train_job.run(config, tmp_path / 'job', indexed_review=context(args, authority))
+
+
+def test_drivable_parent_requires_real_hashed_files_and_matching_class_order(tmp_path):
+    from export_cell import write_manifest
+    parent = tmp_path / 'parent'
+    raw = tmp_path / 'source.onnx'; raw.write_bytes(b'parent onnx')
+    doc = write_manifest(parent, onnx_path=raw,
+                         classes=[('floor', 'background'), ('lane_line', 'lane_marking')],
+                         color='rgb', scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1],
+                         dataset_repo='store:lane', dataset_revision='a' * 64,
+                         camera_profile_revision='camera-approved', trainer='parent')
+    script = tmp_path / 'lane.pt'; script.write_bytes(b'parent torchscript')
+    classes = [{'index': 0, 'name': 'floor', 'role': 'background'},
+               {'index': 1, 'name': 'lane_line', 'role': 'lane_marking'},
+               {'index': 2, 'name': 'drivable', 'role': 'drivable'}]
+    info = train_job.validate_drivable_parent(parent, script, classes)
+    assert info['lineage'] == {'model_revision': doc['model_revision'],
+                               'onnx_sha256': hashlib.sha256(b'parent onnx').hexdigest(),
+                               'torchscript_sha256': hashlib.sha256(b'parent torchscript').hexdigest()}
+    assert set(info['files']) == {parent / 'model_manifest.json', parent / 'model.onnx', script}
+    with pytest.raises(JobError, match='class order'):
+        train_job.validate_drivable_parent(parent, script, [classes[1], classes[0], classes[2]])
+    (parent / 'model.onnx').write_bytes(b'tampered')
+    with pytest.raises(JobError, match='sha256'):
+        train_job.validate_drivable_parent(parent, script, classes)
+
+
+def test_drivable_parent_files_enter_indexed_admission_and_remain_bound(tmp_path, monkeypatch):
+    from export_cell import write_manifest
+    args, authority, _, config = fixture(tmp_path, with_drivable=True)
+    parent = tmp_path / 'parent'
+    raw = tmp_path / 'source.onnx'; raw.write_bytes(b'parent onnx')
+    write_manifest(parent, onnx_path=raw,
+                   classes=[('floor', 'background'), ('lane_line', 'lane_marking')],
+                   color='rgb', scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1],
+                   dataset_repo='store:lane', dataset_revision='a' * 64,
+                   camera_profile_revision='camera-approved', trainer='parent')
+    script = tmp_path / 'lane.pt'; script.write_bytes(b'parent torchscript')
+    Path(config['camera_profile']).write_text('{"accepted":true}')
+    config['training'] = dict(seed=1, epochs=1, lr=0.001, batch_size=1,
+                              recipe='drivable_head', parent_model=str(parent),
+                              parent_torchscript=str(script), ignore_top=110)
+    owner = context(args, authority)
+    original_open = owner.open
+    seen = []
+    def open_checked(cfg, dataset, evaluation, source_files, **kwargs):
+        seen.extend(source_files)
+        return original_open(cfg, dataset, evaluation, source_files, **kwargs)
+    owner.open = open_checked
+    class Boundary(Exception):
+        pass
+    def job(out, inputs):
+        assert inputs['parent_lane_model']['model_revision'].startswith('lane-seg-')
+        assert inputs['parent_files'][str(script)] == hashlib.sha256(b'parent torchscript').hexdigest()
+        raise Boundary
+    monkeypatch.setattr(train_job, 'Job', job)
+    with pytest.raises(Boundary):
+        train_job.run(config, tmp_path / 'job', indexed_review=owner)
+    assert {parent / 'model_manifest.json', parent / 'model.onnx', script} <= set(seen)
+    assert not (tmp_path / 'job').exists()
+    assert not list(args['store'].root.rglob('READY'))
+
+    @contextmanager
+    def open_then_change(cfg, dataset, evaluation, source_files, **kwargs):
+        with original_open(cfg, dataset, evaluation, source_files, **kwargs) as admitted:
+            script.write_bytes(b'changed after admission')
+            yield admitted
+    owner.open = open_then_change
+    with pytest.raises(JobError, match='source changed'):
+        train_job.run(config, tmp_path / 'job', indexed_review=owner)
+    assert not (tmp_path / 'job').exists()
+
+
+def test_indexed_extra_source_link_is_not_hidden_by_path_resolution(tmp_path):
+    args, authority, built, config = fixture(tmp_path)
+    target = tmp_path / 'parent.pt'; target.write_bytes(b'parent')
+    link = tmp_path / 'linked-parent.pt'
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip('filesystem cannot create test symlink')
+    with pytest.raises(JobError, match='links refused'):
+        with context(args, authority).open(config, Path(built['dataset_path']),
+                                           args['eval_folders'][0], [link]):
+            pytest.fail('linked parent cannot enter admission')
 
 
 def test_independent_admission_reaches_only_fake_job_with_captured_dataset(tmp_path, monkeypatch):
