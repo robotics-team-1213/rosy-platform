@@ -264,7 +264,7 @@ def update(store, index, body, conflict):
             if not np.any(image == 255):
                 raise ValueError('no unknown pixels remain')
             image[image == 255] = backgrounds[0]
-        elif action in ('paint', 'fill', 'flood', 'sample'):
+        elif action in ('paint', 'fill', 'flood', 'sample', 'polygon'):
             value = body.get('label')
             if type(value) is not int or value not in allowed:
                 raise ValueError('known mask index required')
@@ -284,9 +284,19 @@ def update(store, index, body, conflict):
                 if type(tolerance) is not int or not 0 <= tolerance <= 100:
                     raise ValueError('bounded flood tolerance required')
                 image[flood_region(store, index, review, seed, tolerance)] = value
+            elif action == 'polygon':
+                points = body.get('points')
+                if not isinstance(points, list) or not 3 <= len(points) <= 128:
+                    raise ValueError('3..128 polygon points required')
+                for point in points:
+                    if (not isinstance(point, list) or len(point) != 2 or
+                            any(type(v) is not int for v in point) or
+                            not 0 <= point[0] < review['width'] or not 0 <= point[1] < review['height']):
+                        raise ValueError('polygon point outside original image')
+                cv2.fillPoly(image, [np.asarray(points, dtype=np.int32)], value)
             else:
                 points, radius = body.get('points'), body.get('radius')
-                if type(radius) is not int or not 1 <= radius <= 128:
+                if type(radius) is not int or not 0 <= radius <= 128:
                     raise ValueError('bounded brush radius required')
                 if not isinstance(points, list) or not 1 <= len(points) <= 2048:
                     raise ValueError('bounded brush points required')
@@ -300,15 +310,15 @@ def update(store, index, body, conflict):
                 for point in checked:
                     cv2.circle(image, point, radius, value, -1)
                 for first, second in zip(checked, checked[1:]):
-                    cv2.line(image, first, second, value, radius * 2)
+                    cv2.line(image, first, second, value, max(1, radius * 2))
         elif action == 'undo':
             # Walk back one edit per undo: after an undo, the next target is the
             # edit that produced the version that undo restored.
             last = db.execute('SELECT action, review FROM pixel_events WHERE frame=? ORDER BY id DESC LIMIT 1', (index,)).fetchone()
             target = None
             if last and review['status'] == 'pending' and json.loads(last[1]).get('saved_version') == review['version']:
-                want = review['version'] if last[0] in ('paint', 'fill', 'fill_unknown', 'flood', 'sample', 'apply_draft') else json.loads(last[1]).get('restored_version')
-                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','fill_unknown','flood','sample','apply_draft')", (index, want)).fetchone()
+                want = review['version'] if last[0] in ('paint', 'fill', 'fill_unknown', 'flood', 'sample', 'polygon', 'apply_draft') else json.loads(last[1]).get('restored_version')
+                target = db.execute("SELECT review FROM pixel_events WHERE frame=? AND version=? AND action IN ('paint','fill','fill_unknown','flood','sample','polygon','apply_draft')", (index, want)).fetchone()
             if not target:
                 raise ValueError('되돌릴 픽셀 수정이 없습니다.')
             prior = json.loads(target[0])

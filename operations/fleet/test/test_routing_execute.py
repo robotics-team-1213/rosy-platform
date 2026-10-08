@@ -70,26 +70,17 @@ def test_straight_outgoing_lane_turns_to_the_tangent():
 
 
 @pytest.mark.parametrize(("into", "out"), [("west", "ring_s"), ("east", "ring_n")])
-def test_ring_turn_aims_at_the_advance_chord(into, out):
-    """D-507 4 (2026-10-08, SIM round 3): SW and NE on 260919 turn right onto the ring (r ~ 0.25 m).
+def test_ring_entry_turns_6_deg_past_the_tangent(into, out):
+    """D-507 4 (2026-10-08, SIM 4c): SW and NE on 260919 turn right onto the ring, which bends left.
 
-    The ring bends left, so the chord to ``ADVANCE_M`` along it lies left of the lead tangent by
-    about (ADVANCE_M - TANGENT_M)/(2r), and the straight advance from the place ends on the lane.
+    The chord (5.7 deg less turn) was worst in SIM; tangent - 6 deg (more turn) held SW and reacquired NE.
     """
     graph = build_graph(from_lane_graph(LANE_GRAPH), version=1)
     trip = [{"edge_id": into, "forward": False}, {"edge_id": out, "forward": True}]
-    tangent, chord = theta(graph, trip, 0), turn_target(graph, trip, 0)
-    assert lane_action(graph, trip, 0, CONFIG) == "right"
-    assert chord - tangent == pytest.approx(math.degrees((ADVANCE_M - TANGENT_M) / (2 * 0.25)), abs=0.5)
-    arc = graph.arcs[f"{out}:fwd"]
-    px, py = arc.polyline[0]
-    entry = graph.arcs[f"{into}:rev"].end_tangent
-
-    def off_lane(turn):
-        heading = entry + math.radians(turn)
-        return arc.project(px + ADVANCE_M * math.cos(heading), py + ADVANCE_M * math.sin(heading))[0]
-
-    assert off_lane(chord) < 0.002 < 0.005 < off_lane(tangent)
+    tangent = theta(graph, trip, 0)
+    assert lane_action(graph, trip, 0, CONFIG) == "right" and tangent < 0
+    assert execute.TURN_OVERTURN_DEG == 6.0
+    assert turn_target(graph, trip, 0) == pytest.approx(tangent - 6.0, abs=1e-9)
 
 
 def _bent(*legs):
@@ -109,19 +100,35 @@ def _bent(*legs):
     return graph, [LEFT_TRIP[0], {**LEFT_TRIP[1], "s_to": graph.arcs["bc:fwd"].length_m}]
 
 
-def test_the_sent_chord_angle_is_what_the_limit_checks():
-    """Tangent 95 deg is within a 100 deg limit; the chord the robot is sent (about 112) is not."""
-    graph, trip = _bent((95, 0.05), (130, 0.5))
+def test_a_lane_bending_with_the_turn_gets_the_tangent():
+    """SIM 4c measured only lanes bending back against the turn; one bending further the same way is not over-turned."""
+    graph, trip = _bent((90, 0.05), (130, 0.5))
+    assert turn_target(graph, trip, 0) == pytest.approx(theta(graph, trip, 0), abs=1e-9)
+
+
+def test_the_sent_over_turn_is_what_the_limit_checks():
+    """Tangent 95 deg is within a 100 deg limit; the 101 deg the robot is sent is not."""
+    graph, trip = _bent((95, 0.05), (60, 0.5))
     assert theta(graph, trip, 0) == pytest.approx(95.0, abs=0.1)
+    assert turn_target(graph, trip, 0) == pytest.approx(theta(graph, trip, 0) + 6.0, abs=1e-9)
     assert _refused(graph, trip, max_turn_deg=100.0) == {"edge_id": "ab", "reason": "LANE_TURN_TOO_SHARP",
                                                          "turn_deg": round(turn_target(graph, trip, 0), 1)}
-    assert turn_target(graph, trip, 0) > 100.0 and _refused(graph, trip, max_turn_deg=120.0) is None
+    assert _refused(graph, trip, max_turn_deg=120.0) is None
 
 
-def test_a_chord_of_the_other_sign_is_refused():
-    """A left by the tangent (+25) whose lane hooks right: the chord is negative, CORE would refuse it."""
+def test_a_right_onto_a_lane_bending_back_turns_further_right():
+    graph, trip = _bent((-60, 0.05), (-20, 0.5))
+    assert lane_action(graph, trip, 0, CONFIG) == "right"
+    assert turn_target(graph, trip, 0) == pytest.approx(theta(graph, trip, 0) - 6.0, abs=1e-9)
+
+
+def test_a_sent_angle_of_the_other_sign_is_refused(monkeypatch):
+    """CORE refuses a sent angle whose sign is not the action's (or 0); the check reads the sent value."""
     graph, trip = _bent((25, 0.05), (-60, 0.5))
-    assert lane_action(graph, trip, 0, CONFIG) == "left" and turn_target(graph, trip, 0) < 0
+    assert lane_action(graph, trip, 0, CONFIG) == "left" and _refused(graph, trip) is None
+    monkeypatch.setattr(execute, "turn_target", lambda *_: -5.0)
+    assert _refused(graph, trip) == {"edge_id": "ab", "reason": "LANE_TURN_TOO_SHARP", "turn_deg": -5.0}
+    monkeypatch.setattr(execute, "turn_target", lambda *_: 0.0)
     assert _refused(graph, trip)["reason"] == "LANE_TURN_TOO_SHARP"
 
 

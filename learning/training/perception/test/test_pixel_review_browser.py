@@ -34,6 +34,22 @@ def test_unknown_highlight_is_visual_only(browser_workspace):
     assert review_masks.get(store, 0)['version'] == 0
 
 
+def test_sparse_unknown_pixels_are_visible_and_never_shown_as_zero_percent(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    filled = review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, ValueError)
+    review_masks.update(store, 0, {'version': filled['version'], 'action': 'paint',
+                                   'label': 255, 'radius': 0, 'points': [[10, 10]]}, ValueError)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#pixel-coverage')).to_contain_text('(<1%)')
+    sample = lambda: page.evaluate("""() => Array.from(document.querySelector('#pixel-canvas')
+        .getContext('2d').getImageData(10, 10, 1, 1).data)""")
+    highlighted = sample()
+    page.locator('#pixel-show-unknown').uncheck()
+    assert sample() != highlighted
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+
+
 def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
     page, store, expect = browser_workspace
     review_masks.bind_classes(store, CLASSES)
@@ -197,7 +213,7 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
     page.locator('#pixel-class').select_option('4')
-    page.locator('#pixel-flood').click()
+    page.locator('#pixel-brush-tool').click()
     page.locator('#pixel-radius').fill('2')
     canvas = page.locator('#pixel-canvas')
     canvas.scroll_into_view_if_needed()
@@ -347,6 +363,46 @@ def test_pixel_thumbnails_and_unknown_background_draft(browser_workspace):
     assert review_masks.get(store, 0)['status'] == 'pending'
     assert not np.any(review_masks.pixels(store, review_masks.get(store, 0)) == 255)
     expect(page.locator('#pixel-approve')).to_be_disabled()
+
+
+def test_polygon_tool_previews_saves_and_undoes(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    page.locator('#pixel-class').select_option('4')
+    canvas = page.locator('#pixel-canvas')
+    canvas.focus()
+    page.keyboard.press('p')
+    expect(page.locator('#pixel-polygon-tool')).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#pixel-polygon-tool .ui-icon')).to_have_count(1)
+    box = canvas.bounding_box()
+    for x, y in [(5, 5), (20, 5), (20, 18), (5, 18)]:
+        canvas.click(position={'x': x * box['width'] / 32,
+                               'y': y * box['height'] / 24})
+    expect(page.locator('#pixel-draft')).to_contain_text('4개')
+    assert review_masks.get(store, 0)['version'] == 0
+    expect(page.locator('#pixel-next')).to_be_disabled()
+    canvas.focus(); page.keyboard.press('Backspace')
+    expect(page.locator('#pixel-draft')).to_contain_text('3개')
+    canvas.focus(); page.keyboard.press('Enter')
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    mask = review_masks.pixels(store, review_masks.get(store, 0))
+    assert mask[8, 15] == 4 and mask[1, 1] == 255
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+    page.locator('#pixel-undo').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v2')
+    assert review_masks.pixels(store, review_masks.get(store, 0))[8, 15] == 255
+    page.locator('#pixel-brush-tool').click()
+    page.locator('#pixel-radius').fill('0')
+    canvas.focus(); page.keyboard.press(']')
+    expect(page.locator('#pixel-radius')).to_have_value('1')
+    page.keyboard.press('[')
+    expect(page.locator('#pixel-radius')).to_have_value('0')
+    box = canvas.bounding_box()
+    canvas.click(position={'x': 8 * box['width'] / 32,
+                           'y': 9 * box['height'] / 24})
+    page.locator('#pixel-save').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v3')
+    assert np.count_nonzero(review_masks.pixels(store, review_masks.get(store, 0)) != 255) == 1
 
 
 def test_pixel_legend_shows_default_korean_names(browser_workspace):
