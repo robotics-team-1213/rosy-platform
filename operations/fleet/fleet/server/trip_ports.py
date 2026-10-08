@@ -162,15 +162,17 @@ def pose_diagnostics(pose) -> dict:
 MAX_EXPECT_IN_M = 2.0
 MAX_EXPECT_TOL_M = 0.30
 MAX_PIVOT_PAST_LINE_M = 0.30
-#: Along-track odom drift per metre dead-reckoned since the last sighting (wheel slip on carpet).
+#: Along-track odom drift per metre of odom travel (wheel slip on carpet): the map pose's
+#: dead-reckoned distance and, since CORE measures the window in odom path length (2026-10-08),
+#: the distance driven from the send to the place.
 ODOM_DRIFT_PER_M = 0.05
 #: ponytail: a fixed allowance for the send's HTTP time and CORE taking the instruction after the
 #: send starts; measure it on the site network and make it site config if it is off.
 SEND_ALLOWANCE_S = 0.2
 _monotonic = time.monotonic  # the read-to-send clock (a test replaces it)
-#: D-507 2: CORE projects ``expect_in_m`` straight ahead, so no window past this lane bend.
+#: D-507 B9 diagnostic: a lane heading change this large is a bend (``bend_candidate`` only).
 MAX_WINDOW_BEND_DEG = 15.0
-#: The lane heading is checked this often between the robot and the place.
+#: The lane heading is checked this often ahead of the robot.
 WINDOW_BEND_STEP_M = 0.02
 # D-507 B9 diagnostic only: inspect the current edge, never authorize motion from this.
 BEND_PREVIEW_M = 0.40
@@ -226,11 +228,14 @@ def record_bend_candidate(live: "LiveTrip", pose: MapPose, active, index: int, s
 def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float, active,
                     config: TripConfig) -> Optional[dict]:
     """D-507 2 fields for a ``junction_pivot`` robot: ``map_id``, ``pivot_past_line_m`` (not for
-    ``stop``; the place minus the first painted line ``line_past`` finds, or the outgoing
-    half-width and no window when it finds none) and, where ``_straight_ahead`` allows, the
-    window pair; none on another map version
+    ``stop``; the place minus the first painted line ``line_past`` finds along the lane heading at
+    the place, or the outgoing half-width and no window when it finds none) and the window pair:
+    ``expect_in_m`` = ``remaining``, the distance along the lane from the robot's snapped position
+    to the place, which CORE compares with its odom path length (2026-10-08 user decision, curves
+    included), when it is in (0, 2]; none on another map version
     (logged, ``detail.junction_fields_dropped``). ``arm_distance_m`` should be at least the
     keeper's 0.45 m + pivot + tol so the instruction comes first; SIM checks the default 0.6.
+    The trip loop never sends a ``left``/``right`` without the window (``junction_no_window``).
     """
     view = live.view
     caps, pose = view.get("caps") or {}, view.get("pose") or {}
@@ -243,36 +248,34 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
         view["detail"]["junction_fields_dropped"] = "map_version"
         return None
     fields = {"map_id": active[1].map_id}
-    window = _straight_ahead(live, index, remaining, pose)
-    if window is not None and not 0.0 < window[0] <= MAX_EXPECT_IN_M:
-        window = None
+    expect_in = round(remaining, 3)
+    window = 0.0 < expect_in <= MAX_EXPECT_IN_M
     if action in (STRAIGHT, LEFT, RIGHT):
-        # 2026-10-08: the first painted line past the place, along the robot's heading (the
-        # keeper's ray) with a window, else along the lane's heading at the place.
+        # 2026-10-08: the first painted line past the place along the lane's heading there (on a
+        # curved approach the robot's heading is not the line's).
         x, y, heading = live.arc(index).point_at(live.segments[index]["s_to"])
-        past = line_past(live.graph, x, y, heading if window is None else pose["yaw"])
+        past = line_past(live.graph, x, y, heading)
         if past is None:  # no line near the place: the old near-edge half-width, and no window
             width = live.arc(index + 1).width_m
             fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
             return fields
-        if window is not None:
+        if window:
             fields["pivot_past_line_m"] = -past
         # No negative pivot without a window: map-backed CORE holds any unplaced sighting.
-    if window is None:
+    if not window:
         return fields  # no window: map-backed CORE holds a junction sighting here
-    expect_in, lateral = window
     speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
     if age is None or reckoned is None or live.pose_read_at is None:
         tol = MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
     else:
-        # ponytail: the map pose has no heading-direction error estimate, so it is odom drift over
-        # the distance dead-reckoned since the last sighting, plus how far the robot drives at its
-        # trip speed over the pose age, the measured read-to-send time and SEND_ALLOWANCE_S,
-        # floored by the site knob ``expect_tol_min_m``; replace with the provider's own covariance
-        # once MapPose reports one.
+        # ponytail: the map pose has no along-path error estimate, so it is odom drift over the
+        # distance dead-reckoned since the last sighting and over the path CORE measures to the
+        # place, plus how far the robot drives at its trip speed over the pose age, the measured
+        # read-to-send time and SEND_ALLOWANCE_S, floored by the site knob ``expect_tol_min_m``;
+        # replace with the provider's own covariance once MapPose reports one.
         latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
-        tol = max(config.expect_tol_min_m, ODOM_DRIFT_PER_M * reckoned + speed * latency + ENDPOINT_TOL_M)
-        tol += lateral  # CORE's straight-ahead point is this far beside the lane on a bend
+        tol = max(config.expect_tol_min_m,
+                  ODOM_DRIFT_PER_M * (reckoned + expect_in) + speed * latency + ENDPOINT_TOL_M)
     fields.update(expect_in_m=expect_in, expect_tol_m=round(min(tol, MAX_EXPECT_TOL_M), 3))
     return fields
 
@@ -305,29 +308,6 @@ def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
             t += step
     past = round(t + step, 3)
     return past if past <= MAX_PIVOT_PAST_LINE_M else None
-
-
-def _straight_ahead(live: "LiveTrip", index: int, remaining: float,
-                    pose: dict) -> Optional[tuple[float, float]]:
-    """``(place distance along the robot's heading, largest lane distance beside that ray)``, or None.
-
-    CORE projects ``expect_in_m`` straight ahead, so a lane turning more than
-    ``MAX_WINDOW_BEND_DEG`` before the place (the 260919 ring) gets no window (a path-following
-    window is later work); a smaller bend widens it by the lane's distance beside the ray.
-    """
-    if pose.get("x") is None or pose.get("y") is None or pose.get("yaw") is None:
-        return None
-    arc, s_to = live.arc(index), live.segments[index]["s_to"]
-    heading = arc.point_at(s_to - remaining)[2]
-    cos, sin = math.cos(pose["yaw"]), math.sin(pose["yaw"])
-    steps, lateral = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M)), 0.0
-    for k in range(steps + 1):
-        x, y, yaw = arc.point_at(s_to - remaining * (1 - k / steps))
-        if abs(math.degrees(wrap(yaw - heading))) > MAX_WINDOW_BEND_DEG:
-            return None
-        lateral = max(lateral, abs(-(x - pose["x"]) * sin + (y - pose["y"]) * cos))
-    x, y, _yaw = arc.point_at(s_to)
-    return round((x - pose["x"]) * cos + (y - pose["y"]) * sin, 3), lateral
 
 
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:

@@ -779,3 +779,9 @@
 - 증거: 변경 전 map-backed left/straight 회귀 2건 실패(각각 조기 회전·실행), 변경 후 CORE 교차로·API·Fleet·계약 시험 194건 통과, `known_failures` 신규 0. B9 게이트 켬 SIM의 조기 회전 2/6 유형을 소스에서 차단한 것이며 SIM 재실행·굽이 통과·실물 수용은 열림.
 - gate 변화: SOURCE만. SIM·DEVICE·FIELD는 열림.
 - 결정: D-507 3항 보충.
+
+## 2026-10-08 · uncommitted · feat(line_follow): 교차로 기대 창을 주행 거리로 비교 (D-507 2·3, 사용자 결정 1)
+- 변경: `PoseTrail`에 연속 표본의 odom 경로 길이 누적값 `odometer`와 `odometer_at(sample)`을 더했다. 지시를 받을 때 창에 누적값을 기록하고, 감지 고정(anchor)에 감지 자세의 누적값을 기록한다. `_in_window`는 |(감지 누적값 − 받은 누적값) + `junction_ahead_m` − (`expect_in_m` − pivot)| ≤ `expect_tol_m`으로 판정한다(곧은 접근에서는 예전 점 비교와 같은 값). 측정할 수 없는 감지(고정 없음, epoch·frame 바뀜, 누적값 없음)는 창 밖. 회전 축 접근과 측정 가로선 띠는 그대로 감지 자세에 고정. API Ref v1.138.
+- 증거: `test_junction_approach.py` 새 시험 — 반원 호(경로 0.785 m, 현 0.50 m) 뒤 호 길이 기대는 안(`turning`), 현 길이 기대는 밖, 장소 0.3 m 앞 굽이 오감지 밖 뒤 진짜 먼 선은 안, 지시와 감지 사이 odom 끊김은 밖. 변이(측정을 직선 거리로) 호 시험 2건 실패 확인 뒤 복원. CORE services·api_web pytest 1429 통과 13 skip, `known_failures` 신규 0.
+- gate 변화: SOURCE. 곡선 접근 SIM(회전교차로 진출, 한 바퀴)은 열림.
+- 결정: D-507 2·3항 2026-10-08 사용자 결정 (1).

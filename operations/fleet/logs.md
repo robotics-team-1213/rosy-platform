@@ -2535,3 +2535,9 @@
 - 증거: `test_trip_d507.py`(옛 로봇·선 없음·장소 위·SW 장소 위·16° 굽이가 정지하고 halt `stop` 외에 보낸 지시 없음), `test_trip_runner.py`(시험 로봇에 `junction_pivot`), `site-map.test.mjs` 사유 문구. 관련 fleet pytest 246 통과, node 15 통과.
 - gate 변화: SOURCE. SIM 3차 R3-4(창 없는 SW 지시가 굽이에서 −112° 회전)의 Fleet 쪽 경로를 닫는다. SIM·장치는 열림.
 - 결정: D-507 2항 2026-10-08 사용자 결정 (2).
+
+## 2026-10-08 · uncommitted · feat(fleet): 차로를 따른 거리로 기대 창, 15° 굽이 규칙 삭제 (D-507 2, 사용자 결정 1)
+- 변경: `junction_fields`의 `expect_in_m` = 로봇 투영점에서 장소까지 차로 polyline 거리(`remaining`), 선 찾기는 장소의 차로 방향, `_straight_ahead`와 15° 규칙 삭제. `expect_tol_m`의 odom 오차 항 = 0.05 × (dead reckoning + `expect_in_m`), 광선 옆 거리 항 삭제. 선이 없거나 범위 밖이면 여전히 창이 없고 그 좌·우는 `junction_no_window`로 멈춘다.
+- 증거: `test_trip_d507.py` — 260919 한 바퀴 SW(장소 0.6 m 앞, 오른쪽 −114.6, `expect_in_m` 0.6, 굽이 오감지 +0.10 m까지 창 밖), ring_n→NW(0.322 m, 현 0.301 m)·ring_s→SE(0.324 m) 진출 창, 10/15/16/60° 굽이 창, 허용치 항. 변이(`expect_in_m`을 직선 거리로) 8건 실패 확인 뒤 복원. fleet pytest 250 통과, node 15 통과, `known_failures` 신규 0.
+- gate 변화: SOURCE. 회전교차로 진출의 축·재획득, 한 바퀴 SIM은 열림(Gazebo는 모델 PC).
+- 결정: D-507 2항 2026-10-08 사용자 결정 (1).

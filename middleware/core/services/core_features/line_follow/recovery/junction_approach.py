@@ -1,9 +1,11 @@
 """D-507 items 3-4: the junction instruction's expected window and the approach to the pivot.
 
-Fleet's optional fields place one expected cross-line point in odom when the instruction
-arrives (expect_in_m along the receive heading, less pivot_past_line_m unless the sighting is a
-fork). A sighting is this instruction's junction only when its measured cross-line point (odom
-pose at the sighting + line/keep_debug junction_ahead_m) lies within expect_tol_m of it. After
+Fleet's optional fields give the expected cross line as a travelled distance (2026-10-08 user
+decision): expect_in_m is the place's distance along the lane from the robot when the instruction
+arrives, less pivot_past_line_m unless the sighting is a fork. A sighting is this instruction's
+junction only when the odom path length driven from receipt to the sighting's pose plus
+line/keep_debug junction_ahead_m is within expect_tol_m of it, so a curved approach (the 260919
+ring) gets a window too; on a straight approach this equals the old straight-ahead point. After
 the stop confirm, a turn with pivot_past_line_m drives straight on the entry heading to the
 latest sighting's cross-line point plus pivot_past_line_m, through the same tick, gate and
 abort rules as the D-495 advance, then stop-confirms and turns. Mixed into JunctionMixin.
@@ -75,7 +77,8 @@ class JunctionApproachMixin:
         pose = self._fresh_pose(now)
         if pose is None:
             return False
-        return dict(key=(self._return_evidence.epoch, pose.frame), pose=pose,
+        return dict(key=(self._return_evidence.epoch, pose.frame),
+                    odometer=self._return_evidence.trail.odometer,
                     expect_in=expect['expect_in_m'], tol=expect['expect_tol_m'])
 
     def _anchor_sighting(self):
@@ -85,11 +88,11 @@ class JunctionApproachMixin:
         if ahead is None:
             self._junction_anchor = None
             return
-        at = self._junction_seen_at
-        pose = min(self._return_evidence.trail.samples, key=lambda p: abs(p.received_at-at), default=None)
+        at, trail = self._junction_seen_at, self._return_evidence.trail
+        pose = min(trail.samples, key=lambda p: abs(p.received_at-at), default=None)
         if pose is not None and abs(pose.received_at-at) <= SIGHTING_POSE_S:
             self._junction_anchor = dict(key=(self._return_evidence.epoch, pose.frame), pose=pose,
-                                         ahead=ahead, reason=reason)
+                                         odometer=trail.odometer_at(pose), ahead=ahead, reason=reason)
 
     def _anchor_now(self, now):
         """The anchor if it is in the current odom frame, else None."""
@@ -98,15 +101,17 @@ class JunctionApproachMixin:
             self._return_evidence.epoch, pose.frame) else None
 
     def _in_window(self, j, now):
-        """D-507 3: legacy no-window sightings pass; map-backed ones need a window."""
+        """D-507 3: legacy no-window sightings pass; map-backed ones need a window. Travelled
+        distance: odom path length from receipt to the sighting pose + junction_ahead_m against
+        expect_in_m - pivot (fail closed: no anchor, another odom run, no path length)."""
         w, a = j.get('window'), self._anchor_now(now)
         if w is None:
             return j.get('map_id') is None
-        if a is None or a['key'] != w['key']:
+        if a is None or a['key'] != w['key'] or a['odometer'] is None:
             return False
         pivot = 0. if a['reason'] == 'junction_fork' else (j.get('pivot') or 0.)
-        expected = _point(w['pose'], w['expect_in']-pivot, w['pose'].yaw)
-        return math.dist(_point(a['pose'], a['ahead'], a['pose'].yaw), expected) <= w['tol']
+        measured = a['odometer']-w['odometer']+a['ahead']
+        return abs(measured-(w['expect_in']-pivot)) <= w['tol']
 
     def _set_band(self, kind, yaw, now, half_width=None):
         """half_width: a positive pivot_past_line_m (Fleet's lane width / 2), else the D-491

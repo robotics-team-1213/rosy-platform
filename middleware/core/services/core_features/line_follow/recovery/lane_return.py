@@ -113,9 +113,15 @@ class Corridor:
 
 
 class PoseTrail:
-    """Bounded measured path; invalidation never synthesizes missing travel."""
+    """Bounded measured path; invalidation never synthesizes missing travel.
+
+    ``odometer`` is the measured path length up to the newest sample (D-507 2, 2026-10-08). It
+    only grows over continuous samples, so a difference means something only inside one
+    continuous run (the junction window compares it within one odom epoch and frame).
+    """
     def __init__(self):
         self.samples = deque(maxlen=100)
+        self.odometer = 0.
 
     def add(self, sample):
         if self.samples:
@@ -128,10 +134,21 @@ class PoseTrail:
                 self.samples.clear()
                 self.samples.append(sample)
                 return False
+            self.odometer += jump
         self.samples.append(sample)
         while self.samples and sample.received_at-self.samples[0].received_at > 5:
             self.samples.popleft()
         return True
+
+    def odometer_at(self, sample):
+        """``odometer`` when ``sample`` (a sample still in the trail) was the newest, else None."""
+        samples, total = list(self.samples), self.odometer
+        for i in range(len(samples)-1, -1, -1):
+            if samples[i] is sample:
+                return total
+            if i:
+                total -= math.hypot(samples[i].x-samples[i-1].x, samples[i].y-samples[i-1].y)
+        return None
 
     @property
     def distance(self):
