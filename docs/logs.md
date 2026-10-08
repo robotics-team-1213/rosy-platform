@@ -7142,3 +7142,9 @@ osy-d395-s1d\`.
 - 변경: 물리 카메라 설정에서 `route_a/b/ab` 시제품 follower를 생성하지 않도록 observer의 Gazebo 조건을 고정하고 `docs/validation/lane-route-prototype-admission-2026-10-08/`에 ROS 노드 확인을 기록했다.
 - 증거: 관련 호스트 181 passed, 모델 PC의 PINKY형 설정 `NoneType`·Gazebo 설정 `RouteCameraFollower` readback. 실물 장치에는 적용하지 않았다.
 - gate 변화: 없음. 활성 Fleet 지도·독립 위치 승인과 실물 수용은 별도다.
+
+## 2026-10-08 · uncommitted · 경로 시제품의 실행 중 조건 변경 폐기
+
+- 변경: observer가 route 모드의 유효 카메라 프레임마다 Gazebo 조건을 다시 검사하고 깨지면 follower를 폐기하도록 했다. `docs/validation/lane-route-prototype-lifetime-2026-10-08/`에 ROS 파라미터 변경 readback을 기록했다.
+- 증거: 모델 PC의 Gazebo `RouteCameraFollower`가 `PINKY` 변경 프레임 뒤 `NoneType`; Gazebo 복구 뒤에도 `NoneType`. 호스트 회귀 11 passed, 신규 실패 0.
+- gate 변화: 없음. 이 설정 검사는 물리 장치 신원·Fleet 위치 권한·주행 수용을 대체하지 않는다.

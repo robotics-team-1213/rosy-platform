@@ -485,6 +485,17 @@ class LineObserverNode(Node):
                               ground=self._ground_label(), stamp=image_stamp)
                 self._keep_debug_pub.publish(String(data=json.dumps(bundle, default=float)))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
+                if (mode in ('route_a', 'route_b', 'route_ab')
+                        and self._route_follower is not None
+                        and not simulation_ground_allowed(
+                            source=self.get_parameter('camera_ground_source').value,
+                            simulation_enabled=self.get_parameter('allow_simulation_ground').value,
+                            use_sim_time=self.get_parameter('use_sim_time').value)):
+                    # A geometry change invalidates the static map/odom anchor.
+                    # Require a fresh node instead of reviving stale memory.
+                    self._route_follower = None
+                    self.get_logger().warning(
+                        f'{mode} simulation context changed; route follower revoked', once=True)
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(
                     bright_threshold=int(self.get_parameter('camera_bright_threshold').value),

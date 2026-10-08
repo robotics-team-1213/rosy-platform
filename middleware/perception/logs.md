@@ -1327,3 +1327,10 @@
 - 변경: observer가 Gazebo 지면 출처·simulation ground 허용·sim time을 모두 확인한 뒤에만 시제품 route follower를 만든다. 그렇지 않으면 관측 없음으로 닫는다.
 - 증거: 호스트 관련 181 passed, 신규 실패 0; 모델 PC ROS 노드에서 PINKY 조건 follower 없음, Gazebo 조건 `RouteCameraFollower` 생성. [검증 기록](../../docs/validation/lane-route-prototype-admission-2026-10-08/result.md).
 - gate 변화: 시제품 진입 제한만 확인. 실제 지도 위치 권한, Gazebo 폐루프 재검증, 실물 R1/R2는 HOLD.
+
+## 2026-10-08 · uncommitted · fix(control): 경로 시제품의 시뮬레이션 조건 상실 폐기
+
+- 원인: 시작 때 만든 route follower는 이후 `camera_ground_source` 변경에도 유지됐다. 다음 유효 프레임에서 다른 지면 투영값을 사용할 수 있었다.
+- 변경: route 모드의 유효 프레임마다 Gazebo 조건을 재검사하고, 깨지면 follower를 폐기한다. 설정을 복구해도 노드 재시작 전에는 되살리지 않는다.
+- 증거: 재현 테스트 수정 전 1 failed, 수정 후 관련 11 passed·신규 실패 0. 모델 PC ROS 노드에서 Gazebo follower가 `PINKY` 전환 프레임 뒤 `NoneType`이 되고 재설정 후에도 유지됐다. [기록](../../docs/validation/lane-route-prototype-lifetime-2026-10-08/result.md).
+- gate 변화: 실행 중 조건 상실의 관측 폐기만 확인. 설정값은 하드웨어 증명이 아니며 운영 차선 추종은 HOLD.

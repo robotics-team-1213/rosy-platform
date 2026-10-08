@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · 경로 시제품의 실행 중 조건 변경 폐기
 - 2026-10-08 · uncommitted · 정적 경로 시제품의 ROS 진입 제한
 - 2026-10-08 · uncommitted · 차선 경로 시작 위치 오차의 렌더러별 결과
 - 2026-10-08 · uncommitted · 정적 차선 경로 시작 위치 오차 ROS-SIM
 - 2026-10-08 · uncommitted · fix(fleet): 굽이 지시가 정지·교통 대기를 따른다
-- 2026-10-08 · uncommitted · 정적 차선 경로 끝 정지 ROS-SIM
