@@ -33,7 +33,7 @@ function GridFrame(grid) {
 }
 
 GridFrame.prototype.worldToCell = function worldToCell(x, y) {
-  if (this.resolution <= 0 || this.width <= 0 || this.height <= 0) return null;
+  if (this.resolution <= 0 || this.width <= 0 || this.height <= 0 || !Number.isFinite(x) || !Number.isFinite(y)) return null;
   const column = Math.floor((Number(x) - this.originX) / this.resolution);
   const row = Math.floor((Number(y) - this.originY) / this.resolution);
   if (column < 0 || row < 0 || column >= this.width || row >= this.height) return null;
@@ -47,9 +47,19 @@ GridFrame.prototype.sampleWorld = function sampleWorld(x, y) {
   return Number.isFinite(value) ? value : null;
 };
 
+GridFrame.prototype.viewport = function viewport(canvasWidth, canvasHeight) {
+  const scale = Math.min(canvasWidth / this.width, canvasHeight / this.height);
+  return {
+    scale,
+    left: (canvasWidth - this.width * scale) / 2,
+    top: (canvasHeight - this.height * scale) / 2,
+  };
+};
+
 GridFrame.prototype.canvasToWorld = function canvasToWorld(px, py, canvasWidth, canvasHeight) {
-  const cellX = (px / canvasWidth) * this.width;
-  const cellY = (1 - py / canvasHeight) * this.height;
+  const {scale, left, top} = this.viewport(canvasWidth, canvasHeight);
+  const cellX = (px - left) / scale;
+  const cellY = this.height - (py - top) / scale;
   return {
     x: this.originX + cellX * this.resolution,
     y: this.originY + cellY * this.resolution,
@@ -57,11 +67,12 @@ GridFrame.prototype.canvasToWorld = function canvasToWorld(px, py, canvasWidth, 
 };
 
 GridFrame.prototype.worldToCanvas = function worldToCanvas(x, y, canvasWidth, canvasHeight) {
+  const {scale, left, top} = this.viewport(canvasWidth, canvasHeight);
   const cellX = (Number(x) - this.originX) / this.resolution;
   const cellY = (Number(y) - this.originY) / this.resolution;
   return {
-    x: (cellX / this.width) * canvasWidth,
-    y: (1 - cellY / this.height) * canvasHeight,
+    x: left + cellX * scale,
+    y: top + (this.height - cellY) * scale,
   };
 };
 
@@ -443,7 +454,12 @@ export function createFieldMap(options) {
       setAction?.(options.goalReason?.(clickMode) || "현재 실행 모드나 로봇 기능으로는 위치·목표 조작을 쓸 수 없습니다.");
       return;
     }
-    const world = new GridFrame(state.occupancy).canvasToWorld(px, py, canvas.width, canvas.height);
+    const frame = new GridFrame(state.occupancy);
+    const world = frame.canvasToWorld(px, py, canvas.width, canvas.height);
+    if (!frame.worldToCell(world.x, world.y)) {
+      setAction?.("지도 영역 밖입니다. 지도 안의 위치를 선택하세요.");
+      return;
+    }
     const yaw = Number(getPose?.()?.yaw) || 0;
     const locating = clickMode === "pose";
     const label = locating ? "초기 자세" : "목표";

@@ -49,6 +49,7 @@ export const TRIP_REASON_LABEL = {
   junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
   JUNCTION_ODOM_STALE: '로봇 odom이 낡아 교차로 지시를 다음 주기에 다시 보냅니다',
   junction_unexpected: '지도에 없는 자리에서 교차로를 봐 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
+  junction_corner_hold: '지시한 교차로 바로 앞에서 차선 모서리로 돌지 않게 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
   junction_no_window: '교차로 위치를 확인할 기대 창이 없어 좌·우 회전 지시를 보내지 않고 멈췄습니다 · 차선 주행을 껐습니다',
   stall: '경로를 따라 나아가지 않아 멈췄습니다 · 현장을 확인하세요',
   lane_arc: '회전교차로 호를 달리던 로봇이 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
@@ -342,8 +343,6 @@ export function newestPending(view) {
 // 표가 말하는 것만 옮긴다. M1 에서 Fleet 은 블록 표를 계산해 보이기만 하고 로봇에 보내지 않는다.
 // 좌표는 활성 지도 미터다. 화면 방향(D-513 7)과 위에서 본 보기(D-515)는 그리는 쪽의 toPx 가 맡는다.
 
-// D-517 3: UNKNOWN 점유가 이만큼 이어지면 해결기 → 사람이다.
-export const UNKNOWN_ALARM_MS = 30000;
 // D-517 3 `merge_max_wait_s` 기본값. Fleet 은 이 값을 /traffic 에 싣지 않는다.
 export const MERGE_MAX_WAIT_MS = 20000;
 // 블록 사이 틈(m) — 이웃 블록이 한 띠로 붙어 보이지 않게 양 끝을 줄인다.
@@ -461,15 +460,18 @@ export function trafficCardLine(traffic, robotId) {
     const ahead = (unit.holders || []).filter((id) => id !== robotId);
     parts.push(`${twoWay(unit) ? "양방 차로" : "교차로"} 대기${ahead.length ? ` · ${ahead.join(", ")} 통과 중` : ""}`);
   } else if (robot.waiting_for?.length && !(convoy?.follows && robot.waiting_for.join() === convoy.follows)) parts.push(`앞 블록 대기 · ${robot.waiting_for.join(", ")}`);
+  const resolver = (traffic.resolver || []).find((row) => row.robot_id === robotId);  // D-517 5 (M4)
+  if (resolver?.trigger === "wait_cycle") {
+    parts.push({ replan: "교착 · 다른 길 계획", wait: "교착 · 다른 로봇 대기" }[resolver.decision] || "교착 · 운영자 판단");
+  }
   if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
   return parts.join(" · ");
 }
 
-/** When the console first saw each robot hold an UNKNOWN block or wait at a zone entry. */
+/** When the console first saw each robot wait at a zone entry (UNKNOWN 30 s is Fleet's resolver row). */
 export function trafficClock(prev, traffic, now) {
-  const next = { unknown: {}, merge: {} };
+  const next = { merge: {} };
   for (const unit of traffic?.units || []) {
-    if (unit.state === "UNKNOWN") for (const id of unit.holders || []) next.unknown[id] = prev?.unknown?.[id] ?? now;
     if (isZone(unit)) for (const id of unit.waiting || []) next.merge[id] = prev?.merge?.[id] ?? now;
   }
   return next;
@@ -477,19 +479,23 @@ export function trafficClock(prev, traffic, now) {
 
 /**
  * Exception-queue rows (D-493 one rule) for one robot. A block wait itself is normal and is not a row.
- * ponytail: the wait clocks start when this console first saw the state (a reload restarts them);
- * move them to /traffic if the 30 s / 20 s rows must survive a reload.
+ * D-517 5 (M4): a wait cycle and a 30 s UNKNOWN carry Fleet's resolver decision (`traffic.resolver`).
+ * ponytail: the merge clock starts when this console first saw the wait (a reload restarts it);
+ * move it to /traffic if the 20 s row must survive a reload.
  */
 export function trafficAttention(traffic, robotId, clock, now) {
   const items = [];
   const cycle = traffic?.wait_cycle;
+  const resolver = traffic?.resolver || [];
+  const mine = resolver.find((row) => row.robot_id === robotId);
   if (Array.isArray(cycle) && cycle.includes(robotId)) {
-    items.push({ severity: "crit", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · 운영자 판단 필요` });
+    const replanned = resolver.find((row) => row.trigger === "wait_cycle" && row.decision === "replan");
+    const then = mine?.decision === "replan" ? "해결기: 다른 길 계획 · 다음 장소에서 운영자 확인"
+      : mine?.decision === "wait" && replanned ? `해결기: ${replanned.robot_id} 다른 길 대기` : "운영자 판단 필요";
+    items.push({ severity: "crit", text: `: 교착 — ${[...cycle, cycle[0]].join(" → ")} 서로 기다림 · ${then}` });
   }
-  const unknownSince = clock?.unknown?.[robotId];
-  if (unknownSince !== undefined && now - unknownSince > UNKNOWN_ALARM_MS) {
-    items.push({ severity: "crit",
-      text: `: 위치 불명 ${Math.floor((now - unknownSince) / 1000)}초 — 블록을 풀지 않습니다 · 로봇 위치를 확인하세요` });
+  if (mine?.trigger === "unknown") {
+    items.push({ severity: "crit", text: ": 위치 불명 30초 넘음 — 블록을 풀지 않습니다 · 로봇 위치를 확인하세요" });
   }
   const mergeSince = clock?.merge?.[robotId];
   if (mergeSince !== undefined && now - mergeSince > MERGE_MAX_WAIT_MS) {

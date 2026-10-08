@@ -755,6 +755,12 @@
 - 결정: D-411.
 - 교훈: 없음
 
+## 2026-10-08 · uncommitted · uiux(pilot): 운용 지도 인계와 운전 모드 정리
+- 변경: 상단 `운용 지도`에서 `/console`로 이동한다. Pilot의 가짜 `지도 목표` 운전 모드를 제거하고, 주행 중 이동에는 0 속도와 소유한 MANUAL의 IDLE 요청을 기다리도록 했다. 대기 중 모드 진입·중복 클릭을 처리하고 모드 요청을 3초로 제한한다.
+- 증거: `docs/validation/uiux-pilot-map-handoff-2026-10-08/result.md`의 390×844·2000×1200 전후 PNG, 브라우저 회귀 12 passed, 셸 자산 4 passed, known_failures 0 NEW. 합성 CORE의 LOCAL 증거다.
+- gate 변화: 없음. 설치본·실기 정지 readback·D-153 전체 G2/G3·현장 독회는 HOLD.
+- 결정: D-323, D-344, D-153. 지도 읽기와 목표 실행을 구분한다.
+
 ## 2026-10-08 · uncommitted · feat(pilot): 앱이 연 세션만 쓴다
 - 변경: Rosy Pilot 앱(`pilotShell=android`) 안에서는 주입된 세션만 쓴다. 개발 연결, 코드 입력, 연동 코드, 서비스 워커, Rosy Robot 이동, 지도 목표(`/console`)를 열지 않는다. 세션이 없거나 거절되면 앱이 다시 고르도록 안내한다.
 - 증거: Android JVM `ShellConnectionTest` 1 passed (`X:/DevTemp/pilot-app-connect/build`). 브라우저 `test_android_shell_uses_the_app_session`와 `test_android_shell_without_a_session_stays_with_the_app` 3 passed, `known_failures.py` 0 NEW. 앱 프록시를 띄운 `test_bundled_page_uses_the_app_proxy` 1 passed(81.44s): 개발 연결은 한 번이었고 주행 시작까지 갔다. `known_failures.py` 0 NEW. 로그 `X:/DevTemp/pilot-app-connect/browser.txt`, `proxy-page.txt`. adb에 붙은 기기는 없었다.

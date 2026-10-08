@@ -168,6 +168,7 @@ window.fetch = async (input, options = {}) => {
     '/api/v1/system/capabilities': {
       teleop: true, slam: true, docking: {supported: false},
       navigation: {goal_navigation: true},
+      runtime: {drive: 'ready'},
     },
     '/api/v1/system/inventory': {
       descriptors: [
@@ -365,6 +366,16 @@ window.fetch = async (input, options = {}) => {
     const admin = bodies['/api/v1/system/info'].caller_role === 'administrator';
     return new Response(JSON.stringify(admin ? {events: []} : {error: {code: 'FORBIDDEN'}}), {
       status: admin ? 200 : 403, headers: {'Content-Type': 'application/json'},
+    });
+  }
+  if (path === '/api/v1/map' && window.__rosyMapSnapshot) {
+    return new Response(JSON.stringify(window.__rosyMapSnapshot), {
+      status: 200, headers: {'Content-Type': 'application/json'},
+    });
+  }
+  if (path === '/api/v1/navigation/path' && window.__rosyPathSnapshot) {
+    return new Response(JSON.stringify(window.__rosyPathSnapshot), {
+      status: 200, headers: {'Content-Type': 'application/json'},
     });
   }
   return new Response(JSON.stringify(bodies[path] ?? {}), {
@@ -1236,6 +1247,51 @@ def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion(
         browser.close()
 
 
+@pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
+def test_compatibility_lane_follow_uses_drive_readiness_without_nav2(viewport):
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, width=viewport[0], height=viewport[1], extra_init="""
+          window.__rosyCapabilitiesOverride = {
+            teleop: true, navigation: {goal_navigation: false}, runtime: {drive: 'ready'}
+          };
+        """)
+        page.goto("http://rosy.test/dashboard#compatibility")
+        button = page.locator('[data-line-mode="IR_LINE"]')
+        page.wait_for_function("document.querySelector('#robot-mode')?.textContent === '수동'")
+        if output := os.environ.get("ROSY_SCREENSHOT_DIR"):
+            shots = Path(output)
+            shots.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(shots / f"lane-follow-no-nav2-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+        expect(button).to_be_enabled()
+        button.click()
+        dialog = page.locator("dialog.ui-confirm")
+        expect(dialog).to_have_count(1)
+        page.evaluate("""async () => {
+          const {session} = await import('/dashboard/assets/client.js');
+          const {updateLineFollowButtons} = await import('/dashboard/assets/telemetry.js');
+          session.capabilities.runtime.drive = 'disabled';
+          updateLineFollowButtons();
+        }""")
+        dialog.locator("ui-button[kind=irreversible]").click()
+        expect(dialog).to_have_count(0)
+        assert not page.evaluate("window.__apiCalls.some(call => call.path === '/api/v1/line-follow/mode')")
+        expect(button).to_be_disabled()
+        assert button.get_attribute("reason") == "구동 준비 확인 필요"
+        expect(page.locator('[data-line-mode="OFF"]')).to_be_enabled()
+        page.evaluate("""async () => {
+          const {session} = await import('/dashboard/assets/client.js');
+          const {updateLineFollowButtons} = await import('/dashboard/assets/telemetry.js');
+          session.capabilities.runtime.drive = 'ready';
+          updateLineFollowButtons();
+        }""")
+        button.click()
+        dialog.locator("ui-button[kind=irreversible]").click()
+        page.wait_for_function("window.__apiCalls.some(call => call.path === '/api/v1/line-follow/mode' && call.body.mode === 'IR_LINE')")
+        browser.close()
+
+
 def test_compatibility_confirmation_rechecks_capability_and_network_targets():
     from playwright.sync_api import sync_playwright, expect
 
@@ -1267,11 +1323,17 @@ def test_compatibility_confirmation_rechecks_capability_and_network_targets():
         browser.close()
 
 
-def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks():
+@pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
+def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks(viewport):
     from playwright.sync_api import sync_playwright, expect
 
     with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, real_map=True, extra_init="const interval=setInterval;window.setInterval=(fn,ms)=>{if(ms===5000)window.slowTick=fn;return interval(fn,ms);};")
+        browser, page = _launch_page(playwright, width=viewport[0], height=viewport[1], real_map=True, extra_init="""
+          const interval=setInterval;
+          window.setInterval=(fn,ms)=>{if(ms===5000)window.slowTick=fn;return interval(fn,ms);};
+          window.__rosyMapSnapshot={width:10,height:10,resolution:1,origin:{x:-5,y:-5},
+            data:Array(100).fill(0),map_id:'fixture-map'};
+        """)
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
         page.evaluate("""async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/mode')?new Promise(resolve=>window.finishOldMode=()=>resolve(new Response('{}'))):prior(url,options);}""")
@@ -1288,10 +1350,15 @@ def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks()
         page.wait_for_timeout(80)
         assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/robot/state').length") == before
         assert '모드 요청을 전송했습니다' not in page.locator('#action-message').inner_text()
+        page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
         page.locator('[data-map-click=goal]').click()
         page.locator('#map-canvas').focus()
         page.locator('#map-canvas').press('Enter')
         expect(page.locator('dialog.ui-confirm')).to_have_count(1)
+        if output := os.environ.get("ROSY_SCREENSHOT_DIR"):
+            shots = Path(output)
+            shots.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(shots / f"auth-map-goal-confirm-{viewport[0]}x{viewport[1]}.png"), full_page=True)
         page.locator('#token-input').evaluate("input=>input.value='map-replacement-fixture-token'")
         page.locator('#auth-form').evaluate('form=>form.requestSubmit()')
         expect(page.locator('dialog.ui-confirm')).to_have_count(0)
@@ -1645,6 +1712,73 @@ def test_map_snapshots_are_asked_for_when_the_server_has_them():
         )
         paths = [call["path"] for call in page.evaluate("window.__apiCalls")]
         assert "/api/v1/map" in paths
+        browser.close()
+
+
+@pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
+def test_compatibility_map_trust_tracks_localization_and_recovers(viewport):
+    from playwright.sync_api import sync_playwright, expect
+
+    init = """
+      window.__rosyMapSnapshot={width:100,height:80,resolution:0.1,origin:{x:-5,y:-4},
+        data:Array(8000).fill(0),map_id:'fixture-map'};
+      window.__rosyPathSnapshot={poses:[{x:1.25,y:-0.5},{x:2,y:-0.1},{x:3,y:1}],
+        map_id:'fixture-map',frame_id:'map',age_s:0.5};
+      const fresh={evidence:'fresh',stale_after_s:2};
+      window.__rosyStateOverrides={robot_state:{mode:'NAVIGATION',navigation:'NAVIGATING',map_id:'fixture-map',
+        localization:{state:'LOCALIZED',pose_frame:'map'},
+        evidence:{pose:fresh,velocity:fresh,battery:fresh,safety:fresh,navigation:fresh}}};
+    """
+    blue_pixels = """() => {
+      const canvas=document.querySelector('#map-canvas');
+      const data=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+      let count=0;
+      for(let i=0;i<data.length;i+=4)
+        if(data[i+2]>data[i+1]*1.2 && data[i+2]>data[i]*1.5 && data[i+2]>100) count++;
+      return count;
+    }"""
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, extra_init=init, width=viewport[0], height=viewport[1], real_map=True)
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto('http://rosy.test/dashboard#compatibility')
+        page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
+        page.wait_for_function("document.querySelector('[data-map-click=goal]')?.disabled === false")
+        page.wait_for_function(f"() => ({blue_pixels})() > 0")
+        assert page.evaluate(blue_pixels) > 0
+        page.evaluate("""async () => {
+          const {session}=await import('/dashboard/assets/client.js');
+          const state=structuredClone(session.robotState);
+          state.localization={state:'SUSPECT',pose_frame:'odom'};
+          __sockets.at(-1).dispatchEvent(new MessageEvent('message',{data:JSON.stringify(state)}));
+        }""")
+        if output := os.environ.get("ROSY_SCREENSHOT_DIR"):
+            shots = Path(output)
+            shots.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(shots / f"compat-map-suspect-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+        expect(page.locator('[data-map-click=goal]')).to_be_disabled()
+        expect(page.locator('[data-map-click=pose]')).to_be_enabled()
+        assert page.locator('[data-map-click=goal]').get_attribute('reason') == '위치 추정 확인 후 가능'
+        assert page.evaluate(blue_pixels) == 0
+        page.evaluate("""async () => {
+          const {session}=await import('/dashboard/assets/client.js');
+          const state=structuredClone(session.robotState);
+          state.localization={state:'LOCALIZED',pose_frame:'map'};
+          __sockets.at(-1).dispatchEvent(new MessageEvent('message',{data:JSON.stringify(state)}));
+        }""")
+        expect(page.locator('[data-map-click=goal]')).to_be_enabled()
+        page.wait_for_function(f"() => ({blue_pixels})() > 0")
+        page.evaluate("""async () => {
+          const {session}=await import('/dashboard/assets/client.js');
+          const state=structuredClone(session.robotState);
+          state.mode='SAFE_STOP';
+          __sockets.at(-1).dispatchEvent(new MessageEvent('message',{data:JSON.stringify(state)}));
+        }""")
+        expect(page.locator('[data-map-click=goal]')).to_be_disabled()
+        expect(page.locator('[data-map-click=pose]')).to_be_enabled()
+        assert page.locator('[data-map-click=goal]').get_attribute('reason') == '안전 정지 중 주행 목표 불가'
+        assert page.evaluate(blue_pixels) == 0
+        assert errors == []
         browser.close()
 
 
@@ -2610,23 +2744,19 @@ def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
 
     with sync_playwright() as playwright:
         try:
-            browser, page = _launch_page(playwright, width=1366, height=768)
+            browser, page = _launch_page(playwright, width=1366, height=768, real_map=True, extra_init="""
+              window.__rosyMapSnapshot={width:10,height:10,resolution:1,origin:{x:-5,y:-5},
+                data:Array(100).fill(0),map_id:'fixture-map'};
+            """)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        real_map = (WEB / "map.js").read_text(encoding="utf-8")
-        page.route(
-            "http://rosy.test/dashboard/assets/map.js",
-            lambda route: route.fulfill(
-                status=200, content_type="application/javascript",
-                body=real_map),
-        )
         errors = []
         page.on("pageerror", lambda exc: errors.append(str(exc)))
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded",
                   timeout=5_000)
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'")
-        page.wait_for_timeout(800)
+        page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'ready'")
         canvas = page.locator("#map-canvas")
         assert canvas.get_attribute("tabindex") == "0"
         canvas.focus()

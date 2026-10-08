@@ -93,9 +93,10 @@ def test_bundled_page_uses_the_app_proxy():
                 assert page.locator("form[data-pilot-token-form]").count() == 0
                 assert page.locator("ui-topbar [data-goto]").is_hidden()
                 page.click("[data-drive-enter]")
-                page.locator("[data-drive-goal]").wait_for(state="attached")
-                assert page.locator("[data-drive-goal]").is_hidden()
-                page.locator("[data-drive-goal]").evaluate("node => node.click()")
+                page.locator("[data-drive-stick]").wait_for()
+                assert page.locator("[data-drive-goal]").count() == 0
+                assert page.locator("ui-topbar [data-goto]").is_hidden()
+                page.locator("ui-topbar [data-goto]").evaluate("node => node.click()")
                 page.wait_for_timeout(200)
                 assert "/console" not in page.url
                 assert errors == [], errors

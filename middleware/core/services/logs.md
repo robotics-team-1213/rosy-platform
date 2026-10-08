@@ -853,3 +853,17 @@
 - gate 변화: ROS-SIM 기록(부분). DEVICE 열림
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-10-08 · 8fa0df8f6 · fix(core): 기대 교차로 앞 keeper 모서리 회전은 HOLD junction_corner_hold
+- 변경: lap SIM 원인 A. 기대 창이 있는 지도 지시가 `armed` 이고 감지가 없을 때 `line/keep_debug` `strategy` 가 `corner_left`·`corner_right`(2 s 래치)이고 기대 가로선이 0.45 m + tol 안이면 keeper 의 모서리 회전 대신 HOLD(461259067, 5ec173670). 창을 잴 수 없으면 HOLD. 그 정지 중 지시가 만료되면 풀지 않고 새 지시나 모드 변경까지 HOLD(8fa0df8f6, fail closed). API Ref v1.148
+- 증거: 모델 PC 스냅숏 영향 묶음 423 passed, 교차로·Fleet d507 130 passed. 새 만료·목격 테스트는 수정 전 gate.py 에서 실패. 독립 Safety-Review code-reviewer(opus) APPROVE WITH NOTES
+- gate 변화: SOURCE. SIM은 lane-trip-lap-sim2 행
+- 결정: 없음
+- 교훈: 정지 사유를 새로 만들면 그 정지가 만료·재전송·모드 변경 중 어디서 풀리는지와 관제가 그 사유로 무엇을 하는지를 같이 정한다. 아니면 조용한 정지(stall 20 s)나 만료 뒤 풀림이 된다
+
+## 2026-10-08 · uncommitted · test(sim): Fleet 한 바퀴 SIM 2차 (모델 PC, main 47fa82b1a)
+- 변경: `docs/validation/lane-trip-lap-sim2-2026-10-08` (lap 하네스, 도메인 91·`rosy_lap2`·포트 8388/8389), `.gitattributes` 배치 목록 LF
+- 증거: 출하 기본 12회: 모서리·굽이·SW 회전 12/12, ring 0/12(`junction_corner_hold` 11 — keeper `corner_left`가 ring 곡선을 따름, SE `straight` 창이 `ring_s` 전체를 덮음; `pose` 1), 완료 0/12. D-520 `arc_enabled` 12회: SW 회전 12/12, SE 통과 2/12, 완료 1/12(arc_11), `lane_arc_edge` 10(호 시작 yaw가 접선보다 −12…−17°, Δr 최대 +0.068 m). 정지 뒤 Fleet 종료 0.12–0.49 s, hang 0
+- gate 변화: ROS-SIM 기록(부분). DEVICE 열림
+- 결정: 없음
+- 교훈: 지도가 교차로를 말하는 자리의 keeper 모서리 금지는 곧은 spoke에서만 오독이다. 곡선 차로 위 `straight` 지시에서는 차로 자체를 막는다
