@@ -158,11 +158,13 @@ def _fake_ssh(tmp_path, monkeypatch, fail_on):
 
 def test_ship_failure_is_a_nonzero_exit_and_leaves_no_ref(tmp_path, monkeypatch):
     _fake_ssh(tmp_path, monkeypatch, "git bundle verify")
-    before = _git(ROOT, "for-each-ref", "refs/remote-pytest")
+    monkeypatch.setattr(rp.secrets, "token_hex", lambda _: "f0f0f0")
+    sha = _git(ROOT, "rev-parse", "HEAD")
     with pytest.raises(SystemExit) as exc:
         rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"])
     assert exc.value.code != 0
-    assert _git(ROOT, "for-each-ref", "refs/remote-pytest") == before  # this run left no ref
+    ref = f"refs/remote-pytest/{sha[:10]}-f0f0f0"
+    assert subprocess.run(["git", "-C", str(ROOT), "show-ref", "--verify", "--quiet", ref]).returncode == 1
 
 
 def test_venv_failure_is_a_nonzero_exit(tmp_path, monkeypatch):
