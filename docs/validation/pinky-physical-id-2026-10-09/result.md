@@ -38,3 +38,9 @@
 - `rosy_60` Web의 전방 영상은 일시 409 뒤 다시 320×240, 약 0.4초 나이의 프레임으로 수신됐다. 천장 카메라는 약 2.7 fps이며 몸체는 왼쪽 아래에 그대로 보였다.
 - 같은 시점 CORE는 `IDLE`, 속도 0, E-Stop `false`였지만 `/api/v1/robot/state`의 `evidence.safety.evidence`는 `disconnected`였다. LiDAR 최소값은 전방 −30…0° 0.491 m, 0…30° 0.257 m, 오른쪽 30…90° 0.111 m였다. 천장 영상의 몸체 주변에 선과 장비가 있어 짧은 주행의 바퀴 경로도 확정하지 못했다.
 - D-522의 이동 전 조건을 충족했다고 판정할 수 없어 MANUAL 전환과 속도 명령을 보내지 않았다. 다른 로봇 `rosy_26`도 Fleet에서 `EnrollmentTlsError`로 연결이 불안정하고 named track은 0/0이다. 두 로봇의 실제 이동은 미시험이다.
+
+## 착지 선택 시험의 기준선 비교
+
+- `ea7f7a925` 전체 소스 스냅샷을 모델 PC에서 `tools/land.py --dry-run --tests auto` 선택 목록으로 실행: 1,118 passed, 12 skipped, 16 failed. 원본 로그는 `X:/DevTemp/projects/rosy-platform/2026-10-09--031749--physical-id-proof--138376/logs/affected-run.txt`, 호스트·SHA·종료 코드는 같은 폴더의 `affected-verification.txt`다.
+- 브라우저 실패 9건은 같은 모델 PC의 깨끗한 `main` 스냅샷 `fda0abfff`에서 모두 재현됐다(7건은 UI 묶음, 로그인 2건은 전체 의존 소스를 보충한 뒤 재현). 기준선 로그는 `main-browser-baseline.txt`와 모델 PC의 `entry-baseline.txt`다. 새 램프 패널의 집중 브라우저 시험은 위 8건 통과다.
+- 나머지 7건은 이 토픽 밖의 원인 또는 시험 포장에 묶인다: 임시 실행 스크립트가 소스 루트에 있어 폴더 구조 검사 1건, `.git` 없는 tar 스냅샷이라 Git 속성·비밀 파일 검사 2건, 원본 `main`에도 있는 face 크기·lane literal 검사 각 1건, 다른 세션 선점 D-535·D-536이 미착지라 ADR 연속성 검사 2건. 이 설명은 전체 선택 시험의 통과 판정이 아니다.
