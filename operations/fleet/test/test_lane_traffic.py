@@ -327,3 +327,21 @@ def test_a_map_activation_keeps_every_robots_occupancy():
     assert [u["id"] for u in view["units"] if u["state"] == "UNKNOWN" and u["holders"] == ["a"]]
     _ticks(runner, fleet, n=3)
     assert runner.traffic.pinned() == ["a"]  # still nothing shows it left
+
+
+def test_a_failing_block_table_drops_every_stale_answer(caplog):
+    """Review MED 3: refusals of the last good period do not hold forever; logged once."""
+    runner, store, fleet = _setup()
+    middle = _arc(store, "east:fwd").length_m / 2
+    _trip(runner, store, fleet, "a", "east:fwd", middle + 0.15)
+    _trip(runner, store, fleet, "b", "east:fwd", middle - 0.05)
+    _ticks(runner, fleet)
+    assert runner._live["b"].traffic["waiting_for"] == ["a"]
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("table")
+
+    runner.traffic.step = broken
+    _ticks(runner, fleet, n=2)
+    assert runner._live["a"].traffic is None and runner._live["b"].traffic is None
+    assert sum("traffic table step failed" in r.getMessage() for r in caplog.records) == 1

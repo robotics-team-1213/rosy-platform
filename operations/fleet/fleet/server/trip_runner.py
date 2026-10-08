@@ -310,6 +310,8 @@ class TripRunner:
             self.traffic.step(self._live.values(), poses)
             self._traffic_warned = False
         except Exception:  # the table is shown only (M1); a fault never ends a trip
+            for live in self._live.values():  # no stale refusal holds a robot or hides a stall
+                live.traffic = None
             if not self._traffic_warned:
                 _LOG.exception("traffic table step failed (repeats muted until it works)")
             self._traffic_warned = True
