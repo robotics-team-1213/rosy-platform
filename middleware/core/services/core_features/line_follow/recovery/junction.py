@@ -189,7 +189,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 return False, j['seq'], 'aborted'
             current = self._clock() if now is None else now
             if action == 'bend' and j is not None and j['state'] == 'armed' and (
-                    j['action'], j['place_id'], j['turn_deg']) == (action, place_id, turn_deg):
+                    j['action'], j['place_id'], j['turn_deg'], j['map_id'], j.get('radius')) == (
+                    action, place_id, turn_deg, expect['map_id'], expect['bend_radius_m']):
                 j['expires_at'] = current+float(expires_s)  # a refresh keeps the measured travel
                 return True, j['seq'], 'armed'
             if self._junction_done_place is not None and self._junction_done_place[0] != place_id:
@@ -213,8 +214,10 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                                       radius=expect['bend_radius_m'], anchor=None,
                                       key=(self._return_evidence.epoch, pose.frame),
                                       last=((self._return_evidence.epoch, pose.frame), pose.x, pose.y))
-            self._bridge_hint = (None if action == 'stop' else action if action != 'bend'
-                                 else 'left' if turn_deg > 0 else 'right')  # D-476 route hint
+            # D-476 route hint. A bend leaves it unknown: before the take-over the bridge runs as
+            # without an instruction (SIM: a left/right hint stopped it bridging the corner before
+            # the bend), and a bridge tick in the lead window hands over (CAMERA_HOLDS).
+            self._bridge_hint = None if action in ('stop', 'bend') else action
             return True, self._junction_seq, state
 
     def _junction_status(self):
@@ -267,7 +270,7 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
     def _mark_done(self, j):
         """Review R1: an instruction past its turn (or passed straight) is not run again."""
         if j.get('place_id') is not None and (
-                j['state'] in ('advancing', 'reacquiring') or j['action'] == 'straight'):
+                j['state'] in ('advancing', 'reacquiring', 'bending') or j['action'] == 'straight'):
             self._junction_done_place = (j['place_id'], j['action'])
 
     def _abort(self, j, reason, decision):

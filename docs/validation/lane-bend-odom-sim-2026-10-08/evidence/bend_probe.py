@@ -61,7 +61,8 @@ def run(p, a):
             states.append({'key': key, **brief(r)})
         if gt:
             bend_in = round(s_start-arc.project(gt[0], gt[1])[1], 3)
-            if (j.get('state') in (None, 'idle', 'armed') and done_at is None and 0 < bend_in <= ARM_M
+            if (not a.no_bend and j.get('state') in (None, 'idle', 'armed') and done_at is None
+                    and 0 < bend_in <= ARM_M
                     and (sent_at is None or time.monotonic()-sent_at > EXPIRES_S/2)):
                 code, _ = p.call('POST', '/api/v1/line-follow/junction', {
                     'action': 'bend', 'place_id': place_id, 'expires_s': EXPIRES_S, 'turn_deg': round(turn, 1),
@@ -105,6 +106,7 @@ def main():
     ap.add_argument('--yaw', type=float, default=-1.5708)
     ap.add_argument('--duration', type=float, default=150.0)
     ap.add_argument('--radius', type=float, default=0.15)
+    ap.add_argument('--no-bend', action='store_true', help='baseline: never send the bend')
     ap.add_argument('--base', default='http://127.0.0.1:8113')
     ap.add_argument('--token', default='rosy-dev-operator')
     a = ap.parse_args()

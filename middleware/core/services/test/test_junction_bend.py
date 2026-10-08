@@ -6,6 +6,7 @@ import pytest
 
 from core_features.line_follow.recovery.junction import JunctionRefused
 from test_junction_turn_site_basis import SITE, site_rig, site_step
+from test_line_junction import BODY, Rig
 
 BEND = dict(map_id='lab-a', bend_in_m=.3, bend_tol_m=.05, bend_radius_m=.1)
 
@@ -38,7 +39,7 @@ def test_without_a_bend_instruction_nothing_changes():
         (d1, s1), (d2, s2) = site_step(plain, move=True), site_step(armed, move=True)
         assert (d1.linear, d1.angular, s1.state, s1.reason) == (d2.linear, d2.angular, s2.state, s2.reason)
     assert s2.junction.state == 'armed' and plain.m.status().junction.state == 'idle'
-    assert armed.m._bridge_hint == 'left'  # no straight D-476 bridge into the bend
+    assert armed.m._bridge_hint is None  # the D-476 bridge runs as without an instruction
 
 
 def test_bend_follows_the_camera_then_drives_the_arc_and_reacquires():
@@ -162,8 +163,8 @@ def test_d422_body_sweep_holds_the_arc_and_a_lasting_block_times_out():
 def test_arc_distance_bound():
     rig = armed_rig()
     until(rig, 'bending')
-    for _ in range(100):                                  # odom travels, the path does not advance
-        decision, status = site_step(rig, move=True, dx=-.008)
+    for k in range(100):                                  # odom jitters: travel without progress
+        decision, status = site_step(rig, move=True, dx=.012 if k % 2 else -.012)
         if status.junction.state != 'bending':
             break
     assert (status.junction.state, status.junction.reason) == ('aborted', 'distance')
@@ -224,3 +225,58 @@ def test_bend_fields_belong_to_bend():
     site_step(rig)
     with pytest.raises(ValueError):
         rig.m.set_junction('left', 'J1', 10., None, 60., None, expect=BEND)
+
+
+def test_backward_travel_while_armed_does_not_bring_the_arc_closer():
+    """Review H1: travel while armed is signed along the heading (a D-468 retrace counts back)."""
+    rig = armed_rig()
+    for _ in range(10):
+        site_step(rig, move=True)
+    travel = rig.m._junction['travel']
+    for _ in range(5):
+        site_step(rig, dx=-.004)                           # driven backwards 2 cm
+    assert rig.m._junction['travel'] == pytest.approx(travel-.02, abs=.003)
+    until(rig, 'bending')
+    assert rig.x == pytest.approx(.25, abs=.01)           # the arc start did not move
+
+
+def test_odom_restart_while_armed_aborts():
+    rig = armed_rig()
+    site_step(rig, move=True)
+    rig.m._return_evidence.epoch += 1                    # the distance is no longer measurable
+    decision, status = site_step(rig, move=True)
+    assert (status.junction.state, status.junction.reason) == ('aborted', 'odom')
+    assert decision.linear == 0.
+
+
+def test_off_the_path_sideways_aborts():
+    """Review M2: a cross-track error past the IR fence's 0.06 m ends the pass (enforce has no IR)."""
+    rig = armed_rig()
+    until(rig, 'bending')
+    for _ in range(30):
+        rig.y -= .01                                       # odom says the body slid sideways
+        decision, status = site_step(rig, move=True)
+        if status.junction.state != 'bending':
+            break
+    assert (status.junction.state, status.junction.reason) == ('aborted', 'off_path')
+    assert decision.linear == 0.
+
+
+def test_enforce_basis_refusing_the_twist_aborts():
+    rig = Rig(**BODY, obstacle_mode='path')               # D-400 enforce proof bound and configured
+    rig.step(points=[(1.5, 1.5)])
+    rig.m.set_junction('bend', 'B1', 10., None, 60., None, expect=BEND)
+    for _ in range(200):
+        decision, status = rig.step(move=True, points=[(1.5, 1.5)])
+        if status.junction.state == 'bending':
+            break
+    rig.m.bind_return_motion(lambda now, v, w: False, proof_configured=lambda: True)  # proof refuses
+    decision, status = rig.step(move=True, points=[(1.5, 1.5)])
+    assert status.junction.state == 'aborted' and decision.linear == 0.
+
+
+def test_lane_bend_capability_needs_a_basis():
+    """Review M1: announced only when a bend could be admitted at all (enforce or the site parts)."""
+    assert site_rig().m.supports_lane_bend is False        # no floor declaration, proof not live
+    assert site_rig(**SITE).m.supports_lane_bend is True
+    assert Rig().m.supports_lane_bend is True             # enforce proof configured

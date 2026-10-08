@@ -28,6 +28,10 @@ BEND_FIELDS = ('bend_in_m', 'bend_tol_m', 'bend_radius_m')
 BEND_LEAD_M = .25
 BEND_STEP_M = .005      # path sample spacing
 _SEARCH = 40            # nearest-point search window (0.2 m of path) after the first tick
+#: Cross-track bound (review M2): a side IR (0.020 m off the centre) meets the 25 mm tape's inner
+#: edge (0.080 m off the lane centre, 260919) at 0.06 m, the IR fence of the site basis; enforce
+#: has no IR verdict, so the pass bounds itself the same.
+OFF_PATH_M = .06
 #: The camera's own holds: the lane is out of view or unreadable. Any other HOLD (D-422 obstacle,
 #: IR guard, limits, driver, LOST) is not the bend coming into view, so the bend stays armed.
 CAMERA_HOLDS = frozenset({'line_not_visible', 'observation_stale', 'no_observation', 'low_confidence',
@@ -66,7 +70,20 @@ def bend_path(x, y, yaw, line, radius, turn, tail):
 
 
 class JunctionBendMixin:
-    supports_lane_bend = True  # capability lane_bend: CORE takes action 'bend'
+    @property
+    def supports_lane_bend(self):
+        """Capability lane_bend (review M1): a bend could be admitted at all, i.e. the D-400 proof
+        is configured while live, or (not live) the standing D-507 6 site parts are configured."""
+        with self._lock:
+            if self._proof_live():
+                try:
+                    return (self._return_motion is not None and self._return_proof_configured is not None
+                            and self._return_proof_configured() is True)
+                except Exception:  # noqa: BLE001 - an unreadable proof admits nothing
+                    return False
+            c = self._config
+            return (c.site_floor_map_id is not None and c.ir_guard_enabled
+                    and c.obstacle_mode == 'path' and c.body_stop_known)
 
     def _bend_armed(self, j, now, seen, decision):
         """Follow and measure until the lead window, then take over. Locked."""
@@ -76,8 +93,12 @@ class JunctionBendMixin:
         pose = self._fresh_pose(now)
         if pose is None:
             return self._junction_hold('junction_bend_odom', decision)  # where is the arc?
-        if not self._odom_travel(j, now):
+        key = (self._return_evidence.epoch, pose.frame)
+        if j['last'][0] != key:
             return self._abort(j, 'odom', decision)  # odom restarted: the distance is unknown
+        # Signed along the heading (review H1): a D-468 retrace while armed counts back.
+        j['travel'] += ((pose.x-j['last'][1])*math.cos(pose.yaw)+(pose.y-j['last'][2])*math.sin(pose.yaw))
+        j['last'] = (key, pose.x, pose.y)
         st, a = self._status, j['travel']-j['bend_in']
         reason = (st.reason or '').removeprefix('camera_')
         tracking = st.state == 'TRACKING' and reason == 'tracking' and st.error is not None
@@ -97,7 +118,7 @@ class JunctionBendMixin:
         if self._lost_latched:
             return self._abort(j, 'lane_lost_before_bend', decision)
         anchor = j.get('anchor')
-        if anchor is None or j['travel']-anchor[3] > BEND_LEAD_M:
+        if anchor is None or abs(j['travel']-anchor[3]) > BEND_LEAD_M:
             return self._abort(j, 'no_anchor', decision)
         refusal = self._maneuver_refusal(now)
         if refusal is not None:
@@ -158,15 +179,20 @@ class JunctionBendMixin:
         self._intended = twist
         if not (self._config.body_stop_known and self._scan_points is not None):
             return False  # no own check: _maneuver_twist and motion_admitted decide (fail closed)
+        at = self._clearance_at
+        if at is None or not 0 <= now-at <= self._config.clearance_stale_s:
+            return True  # an old scan proves nothing (review L2)
         gap, _, _, resume = self._body_clearance(now)
         return gap is not None and gap <= resume
 
     def _bend_twist(self, j, pose):
-        """Pure pursuit to the path point bridge_lookahead_m past the nearest one; None when that
-        point is not ahead of the robot."""
+        """Pure pursuit to the path point bridge_lookahead_m past the nearest one; None when the
+        robot is more than OFF_PATH_M off the path or that point is not ahead of it."""
         points, i = j['path'], j['i']
         i = j['i'] = min(range(i, min(i+_SEARCH, len(points))),
                          key=lambda k: math.dist(points[k], (pose.x, pose.y)))
+        if math.dist(points[i], (pose.x, pose.y)) > OFF_PATH_M:
+            return None
         px, py = points[min(i+round(self._config.bridge_lookahead_m/BEND_STEP_M), len(points)-1)]
         dx, dy = px-pose.x, py-pose.y
         x = math.cos(pose.yaw)*dx+math.sin(pose.yaw)*dy

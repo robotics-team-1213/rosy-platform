@@ -86,12 +86,13 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
                                           svc.line_follow.config.max_linear)
     assert base["junction_turn"] is False              # no live keep-mode evidence yet
     assert base["junction_pivot"] is False             # D-507 2: no keep_debug junction_ahead_m yet
-    assert base["lane_bend"] is True                   # D-507 addendum: the manager takes 'bend'
+    assert base["lane_bend"] is False                  # D-507 addendum: no basis a bend could use
     lf = svc.line_follow  # D-495: a fresh keep_debug frame with corner_turning on
     lf.observe_junction("no_boundary", lf._clock(), corner_turning=True)
     assert _controls(client)["items"][0]["junction_turn"] is False  # no enforce floor proof
     lf.bind_return_motion(lambda now, v, w: True, proof_configured=lambda: True)
     assert _controls(client)["items"][0]["junction_turn"] is True
+    assert _controls(client)["items"][0]["lane_bend"] is True  # enforce proof configured
     lf.observe_junction("junction_transverse", lf._clock(), ahead_m=0.2)  # no marker
     assert _controls(client)["items"][0]["junction_pivot"] is False
     lf.observe_junction("no_boundary", lf._clock(), ahead_v=1)       # fresh marker
