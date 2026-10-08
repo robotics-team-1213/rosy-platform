@@ -708,3 +708,8 @@
 - 증거: `test_line_junction_api.py::test_d507_bend_fields_validation`, `test_capabilities_controls.py` `lane_bend` 참·line-follow 없으면 거짓. gateway 2266 passed.
 - gate 변화: SOURCE.
 - 결정: D-507 보충
+
+## 2026-10-08 · uncommitted · fix(api): D-507 보충 굽이 지시의 API Ref 번호를 v1.141로 옮김
+- 변경: main 병합으로 v1.137–v1.140이 다른 브랜치(D-519, D-507 2 개정, D-512)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.141로 옮겼다. 앞 항목의 v1.137은 그 때의 번호다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.

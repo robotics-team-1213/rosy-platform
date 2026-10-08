@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(api): D-507 보충 굽이 지시의 API Ref 번호를 v1.141로 옮김
 - 2026-10-08 · uncommitted · feat(api): `POST /line-follow/junction` action `bend`와 능력 `lane_bend` (v1.137)
 - 2026-10-08 · uncommitted · fix(api): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
 - 2026-10-08 · uncommitted · fix(api): D-507 pivot_past_line_m [−0.30, 0.30]과 v1.133
 - 2026-10-08 · uncommitted · feat(api): D-472 식별 색 설정과 v1.129/v1.130
-- 2026-10-08 · uncommitted · docs(api): merged contract v1.125

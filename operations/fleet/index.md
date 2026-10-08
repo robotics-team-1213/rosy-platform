@@ -92,6 +92,6 @@
 
 - 2026-10-08 · uncommitted · fix(fleet): 굽이 지시는 굽이 앞 차로가 곧을 때만
 - 2026-10-08 · uncommitted · feat(fleet): 지도 굽이 장소와 trip의 `bend` 지시 (D-507 보충)
-- 2026-10-08 · uncommitted · feat(fleet): 지도 edge 굽이 후보 진단
-- 2026-10-08 · uncommitted · docs(fleet): 지도 교차로 창 누락 시 CORE HOLD 설명
-- 2026-10-08 · uncommitted · docs(fleet): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 2026-10-08 · uncommitted · fix(fleet): 지도 궤적·테더 검토 반영
+- 2026-10-08 · uncommitted · feat(fleet): 지도 궤적과 D-512 테더 표시
+- 2026-10-08 · uncommitted · docs(fleet): D-507 주행 거리 창의 API Ref 번호를 v1.139로 옮김, main 병합

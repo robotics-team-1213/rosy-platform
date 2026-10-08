@@ -8,7 +8,10 @@ export function createConnectionView({scope, el}) {
     setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
   });
   scope.listen(el("connection-guide-action"), "click", event => {
-    event.preventDefault(); setTopbarOpen(true); el("console-token").focus();
+    event.preventDefault(); setTopbarOpen(true);
+    // D-519 — the 아이디 field when the login form shows, else the token field.
+    const form = document.getElementById("password-login");
+    ((form && !form.hidden && form.querySelector("[data-login=login]")) || el("console-token")).focus();
   });
 
   function show(reason, token) {
@@ -18,7 +21,7 @@ export function createConnectionView({scope, el}) {
     el("connection-guide-detail").textContent = reason !== "auth"
       ? "관제 PC의 연결 상태를 확인한 뒤 다시 접속하세요."
       : token ? "관제 토큰이 확인되지 않았습니다. 토큰을 확인한 뒤 다시 접속하세요."
-        : "관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.";
+        : "아이디·비밀번호나 관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.";
     el("map-stage").dataset.mapState = "auth";
     const canvas = el("map-canvas");
     canvas.setAttribute("aria-hidden", "true"); canvas.tabIndex = -1; canvas.classList.add("idle");

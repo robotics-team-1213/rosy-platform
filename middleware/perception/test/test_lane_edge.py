@@ -26,7 +26,7 @@ from control.sensing.perception.lane_bev import (
 )
 from lane_sim import (  # noqa: E402  (test-directory helper)
     CAM_X, DT, FLOOR, GROUND, H, HT, KW, START, W, World,
-    core_command, distance_to_polyline as _distance_to_polyline, lane,
+    core_command, distance_to_polyline as _distance_to_polyline, lane, offset_polyline,
     stl_world as _stl_world,
 )
 from lane_sim import drive as _drive
@@ -118,6 +118,68 @@ def test_straight_lane_holds_the_centre():
     assert abs(pose[2]) < math.radians(3)
     assert log[-1][1].confidence == 1.0
     assert pose[0] > 0.8
+
+
+def test_one_boundary_gap_reacquires_while_moving():
+    """A short missing left stripe keeps the same lane; the right stripe remains visible."""
+    world = lane([(-1.0, 0.0), (2.0, 0.0)])
+    x0, x1 = 0.35, 0.55
+    world.paint[int((world.y1 - H - 0.03) * 1000):int((world.y1 - H + 0.03) * 1000),
+                int((x0 - world.x0) * 1000):int((x1 - world.x0) * 1000)] = 0
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    pose = (0.0, 0.0, 0.0)
+    poses, sources = [], []
+    for k in range(75):
+        obs = follower.update(k * DT, pose, world.render(pose), GROUND, **KW)
+        assert obs is not None
+        poses.append(pose)
+        sources.append(follower.last["source"])
+        v, w = core_command(obs)
+        mid = pose[2] + w * DT / 2
+        pose = (pose[0] + v * DT * math.cos(mid), pose[1] + v * DT * math.sin(mid),
+                pose[2] + w * DT)
+    assert any(x0 < p[0] < x1 for p in poses)
+    assert any(p[0] > x1 for p in poses)
+    assert any(x0 < p[0] < x1 and s == "RIGHT" for p, s in zip(poses, sources))
+    assert all(abs(p[1]) < 0.04 for p in poses)
+    assert sources[-1] == "LEFT"
+
+
+@pytest.mark.parametrize(("side", "half_gap", "must_stop"), [
+    (1.0, 0.075, False), (-1.0, 0.075, True), (-1.0, 0.15, True),
+])
+def test_bend_with_left_paint_gap_stays_inside_nominal_body_margin(side, half_gap, must_stop):
+    turn = side * math.radians(65.0)
+    centre = np.array([(-1.0, 0.0), (0.45, 0.0),
+                       (0.45 + 1.2 * math.cos(turn), 1.2 * math.sin(turn))])
+    left = offset_polyline(centre, H)
+    right = offset_polyline(centre, -H)
+    before = left[1] - half_gap * (left[1] - left[0]) / np.linalg.norm(left[1] - left[0])
+    after = left[1] + half_gap * (left[2] - left[1]) / np.linalg.norm(left[2] - left[1])
+    world = World().line([left[0], before]).line([after, left[2]]).line(right)
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    sources = []
+
+    def record_source(pose, _):
+        sources.append((pose[0], follower.last.get("source"),
+                        follower.last.get("left_label"), follower.last.get("right_label")))
+        return False
+
+    log, pose = drive(world, steps=100, pose=(-0.3, 0.0, 0.0),
+                      follower=follower, stop=record_source)
+    if must_stop:
+        first_none = next(i for i, (_, obs, _) in enumerate(log) if obs is None)
+        assert all(obs is None for _, obs, _ in log[first_none:])
+        assert _distance_to_polyline(log[first_none][0][:2], centre) < 0.035
+        return
+    assert all(obs is not None for _, obs, _ in log)
+    gap = [row for row in sources if row[2] is None and row[3] is not None]
+    if side > 0:
+        assert any(source == "RIGHT" for _, source, _, _ in gap), gap
+    assert any(x > 0.43 and source == "LEFT" for x, source, _, _ in sources)
+    assert pose[2] == pytest.approx(turn, abs=math.radians(6))
+    # Nominal half-width 92.5 mm minus body half-width 56.55 mm is 35.95 mm.
+    assert max(_distance_to_polyline(p[:2], centre) for p, _, _ in log) < 0.035
 
 
 @pytest.mark.parametrize("side", [1.0, -1.0])
@@ -260,8 +322,7 @@ def test_right_fallback_rejects_a_distant_line_when_left_memory_is_nearby():
 
 
 def test_boundary_truly_lost_ends_in_no_output():
-    """Paint vanishes: memory carries the path a bounded distance at
-    MEMORY_CONFIDENCE, then the output is None and CORE stops."""
+    """With neither boundary visible, CORE receives no drive candidate."""
     full = lane([(-1.0, 0.0), (2.0, 0.0)])
     empty = World()
     follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
@@ -276,17 +337,14 @@ def test_boundary_truly_lost_ends_in_no_output():
                 pose[2] + w * DT)
         if blind:
             travel_blind += v * DT
-    assert outputs[0] is not None and outputs[0].confidence == lane_bev.MEMORY_CONFIDENCE
-    assert outputs[-1] is None
-    assert travel_blind <= lane_bev.MEMORY_TRAVEL_M
+    assert all(obs is None for obs in outputs)
+    assert travel_blind == 0.0
 
 
 # --- The 260919 lap ---------------------------------------------------------------
 
-def test_full_lap_of_the_260919_track_returns_to_the_start():
-    """Left lane -> 90 deg corner -> bottom corridor -> 65 deg chevron ->
-    roundabout outer arc -> chevron -> top corridor -> 90 deg corner. The
-    lane-centre loop is ~3.1 m."""
+def test_260919_track_stops_when_both_boundaries_disappear():
+    """Without a route cue, the first blind bend cannot authorize a lap."""
     world = _stl_world()
     follower = LaneEdgeFollower(camera_x_offset_m=CAM_X, corner_handoff=True)
     travelled = {"m": 0.0, "last": START}
@@ -297,12 +355,10 @@ def test_full_lap_of_the_260919_track_returns_to_the_start():
         return travelled["m"] > 2.5 and math.dist(pose[:2], START[:2]) < 0.05
 
     log, pose = drive(world, steps=600, pose=START, follower=follower, stop=home)
-    nones = sum(obs is None for _, obs, _ in log)
-    assert nones == 0
-    assert 2.8 < travelled["m"] < 3.4
-    assert math.dist(pose[:2], START[:2]) < 0.15
-    heading = math.atan2(math.sin(pose[2] - START[2]), math.cos(pose[2] - START[2]))
-    assert abs(heading) < math.radians(20)
+    first_none = next(i for i, (_, obs, _) in enumerate(log) if obs is None)
+    assert all(obs is None for _, obs, _ in log[first_none:])
+    assert math.dist(pose[:2], log[first_none][0][:2]) == pytest.approx(0.0)
+    assert travelled["m"] < 2.5
 
 
 # --- Stale or frozen odometry (review of bb85da6) --------------------------------
@@ -325,14 +381,11 @@ def test_frozen_odometry_cannot_drive_on_memory_past_its_age():
     pose = (0.0, 0.0, 0.0)
     for k in range(15):
         follower.update(k * DT, pose, full.render(pose), GROUND, **KW)
-    last_fresh = 14 * DT
     outputs = []
     for k in range(15, 15 + 3000):
         outputs.append((k * DT, follower.update(k * DT, pose, empty.render((0.5, 0.0, 0.0)),
                                                 GROUND, **KW)))
-    driven = [t for t, obs in outputs if obs is not None]
-    assert driven and max(driven) - last_fresh <= lane_bev.MEMORY_MAX_AGE_S
-    assert all(obs is None for t, obs in outputs if t - last_fresh > lane_bev.MEMORY_MAX_AGE_S)
+    assert all(obs is None for _, obs in outputs)
     # Forgotten, not merely silent: the same boundary must reseed from scratch.
     assert not follower._left and not follower._right
 

@@ -22,13 +22,12 @@ the floor instead:
 Frame: base_link, x ahead, y LEFT positive (REP 103). Output keeps the lane
 contract: error > 0 means steer right. No ground plane or no odometry means
 no output: the boundary memory cannot be carried without odometry. Odometry
-older than ODOM_MAX_SKEW_S against the image counts as none, and memory not
-refreshed by fresh paint for MEMORY_MAX_AGE_S is forgotten, so frozen
-odometry cannot drive on remembered paint for ever.
+older than ODOM_MAX_SKEW_S against the image counts as none. In the base
+follower, when both boundaries disappear, memory is retained for reacquisition
+but emits no drive candidate; it is forgotten after MEMORY_MAX_AGE_S.
 
 On the 260919 lap the inner block's outline is one closed line on the
-robot's left, so holding it at a half-width drives the whole lap with no
-junction decision (the roundabout is taken on its outer arc).
+robot's left. A fully unseen bend now stops until route evidence is available.
 """
 
 from __future__ import annotations
@@ -73,6 +72,8 @@ LOOKAHEAD_MAX_M = 0.25
 LOOKAHEAD_STEP_M = 0.01
 #: A path point further off the heading than this is behind, not ahead.
 LOOKAHEAD_MAX_BEARING_RAD = math.radians(100.0)
+# ponytail: Host 65-deg gap calibration; tune from reviewed camera frames before activation.
+RIGHT_MATE_MAX_LATERAL_FRACTION = 0.65
 #: The robot must be within this of the path it pursues.
 PATH_MAX_OFFSET_M = 0.14
 #: Half-thickness of the iso-line band, so it stays 8-connected.
@@ -368,6 +369,10 @@ class LaneEdgeFollower:
             self._view_key = key
         return self._view
 
+    def _allow_unseen_memory(self) -> bool:
+        # Route followers may override only with an active, aligned map gate.
+        return False
+
     def update(self, now_s: float, pose, bgr: np.ndarray, ground, *,
                lane_half_width_m: float,
                roi_top_fraction: float = 0.25,
@@ -463,6 +468,8 @@ class LaneEdgeFollower:
               or now_s - self._fresh_at > MEMORY_MAX_AGE_S):
             self._forget()
             return None
+        elif not self._allow_unseen_memory():
+            return None  # neither lane boundary is observed: no drive evidence
         left_grid = self._one_line(self._left.grid(view, pose),
                                    None if left is None else labels == left)
         right_grid = self._one_line(self._right.grid(view, pose),
@@ -479,7 +486,17 @@ class LaneEdgeFollower:
         of the same lane stands in where the left has left the field of view
         (convex left turns)."""
         target, supported, source = None, False, None
-        for name, grid in (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"])):
+        candidates = (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"]))
+        if (found.get("left") is None and found.get("right") is not None
+                and found["left_grid"].any() and found["right_grid"].any()):
+            left_target, left_supported = self._lookahead(view, found["left_grid"], half)
+            right_target, right_supported = self._lookahead(view, found["right_grid"], half)
+            if (left_supported and right_supported
+                    and abs(right_target[1]) <= half * RIGHT_MATE_MAX_LATERAL_FRACTION
+                    and abs(left_target[1] - right_target[1]) > LANE_LINE_WIDTH_M):
+                # A forward observed mate beats the old line's turning end cap.
+                candidates = candidates[1:]
+        for name, grid in candidates:
             if not grid.any():
                 continue
             if name == "RIGHT":

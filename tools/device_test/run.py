@@ -7,11 +7,10 @@
 
 --preflight-only saves frames and a verdict template and changes nothing; --camera-verdict
 runs the test; --restore finishes the undo of a run that died (RESTORE_PENDING.json).
-Order, abort rules and the undo contract: tools/device_test/AGENTS.md and ADR D-512.
-CORE is the motion authority when this loop stalls (line-follow hold session <= 1 s,
-D-422 body stop, teleop watchdog); loop calls make one short attempt each.
-The SIGTERM handler is best effort: on Windows a kill is TerminateProcess and runs no
-handler, so only RESTORE_PENDING.json and --restore protect the robot then.
+Order, abort rules, tether guard (tether.py) and undo: tools/device_test/AGENTS.md, ADR D-512.
+CORE is the motion authority when this loop stalls (line-follow hold session <= 1 s, D-422
+body stop, teleop watchdog); loop calls make one short attempt each. SIGTERM handling is best
+effort: a Windows kill runs no handler, so only RESTORE_PENDING.json and --restore help then.
 """
 from __future__ import annotations
 
@@ -34,6 +33,7 @@ sys.path.insert(0, str(REPO / "tools" / "capture"))
 import edge_drive  # noqa: E402  (Core, tls_context, rec_start/rec_stop, front_frame, advisory)
 from core_common.robot_body import PINKY_PRO  # noqa: E402  (edge_drive put contracts/foundation on sys.path)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tether  # noqa: E402
 from live_transport import Live  # noqa: E402
 from plan_rules import (OVERLAY_PATH, VERDICT_KEYS, check_verdict, flatten, load_plan,  # noqa: E402
                         merge, sanitize, sha)
@@ -51,12 +51,10 @@ VALIDATE = ("sudo -n python3 -c 'import sys,yaml,hashlib,json; b=open(sys.argv[1
             "sort_keys=True))' ")
 
 
-class Abort(RuntimeError):
-    pass
+Abort = tether.Abort
 
 
-def log(*a):
-    print(time.strftime("%H:%M:%S"), *a, flush=True)
+log = edge_drive.log
 
 
 def _sigterm(_signum, _frame):
@@ -167,10 +165,10 @@ class Run:
     def verdict(self, pose):
         try:
             v = check_verdict(self.args.camera_verdict, self.plan["verdict_max_age_s"], self.r.now(), pose)
+            self.tether = tether.Guard(v, self.plan["tether_policy"], self.ev)
         except ValueError as exc:
             raise Abort(str(exc)) from exc
-        self.phase("verdict", **{k: v[k] for k in VERDICT_KEYS}, note=v.get("note", ""),
-                   judged_by=v["judged_by"],
+        self.phase("verdict", **{k: v.get(k) for k in (*VERDICT_KEYS, "note", "judged_by", "tether")},
                    accepted_risk="cable near the robot (user 2026-10-08)" if v["cable_seen"] else None)
 
     # -- changes (each undone in cleanup) --
@@ -331,6 +329,7 @@ class Run:
                 if pose and last_pose:
                     dist += math.hypot(pose["x"] - last_pose["x"], pose["y"] - last_pose["y"])
                 last_pose = pose or last_pose
+                self.tether.tick(st, self)   # trail.jsonl; tether limits, retrace and abort on a trip (D-512)
                 if now - last_ok > 1.0:
                     raise Abort("CORE unreachable or hold refused for > 1 s")
                 if any(p in reason for p in abort_reasons):
@@ -446,8 +445,9 @@ class Run:
             st = self.health()
             frames = self.camera("before" if preflight_only else "start")
             if preflight_only:
-                template = {"captured_at": self.r.now(), "pose_at_capture": st.get("pose"),
-                            "frames": frames, **{k: None for k in VERDICT_KEYS}, "note": "", "judged_by": ""}
+                template = {"captured_at": self.r.now(), "pose_at_capture": st.get("pose"), "frames": frames,
+                            "localization_at_capture": st.get("localization"), **{k: None for k in VERDICT_KEYS},
+                            "note": "", "judged_by": "", "tether": None, "map_id_at_capture": st.get("map_id")}
                 path = self.ev / "camera_verdict.json"
                 path.write_text(json.dumps(template, indent=2), encoding="utf-8")
                 self.summary["outcome"] = "preflight"
@@ -550,8 +550,7 @@ def dry_run(plan, args):
         print(" -", name)
     print("overlay", plan["overlay_path"], json.dumps(flatten(plan["overlay"])))
     print("stop", json.dumps(plan["stop"]), "expect", json.dumps(plan.get("expect", {})))
-    print("cleanup: line-follow OFF, IDLE, recording stop, overlay restore + readback + CORE check, "
-          "hold release (only after a verified restore), after frames")
+    print("cleanup: OFF, IDLE, recording stop, overlay restore + readback + CORE check, hold release, after frames")
     return 0
 
 
@@ -573,6 +572,7 @@ def main(argv=None, robot=None):
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--camera-verdict")
     mode.add_argument("--restore", metavar="EVIDENCE_DIR", help=f"undo a run that died, from its {MARKER}")
+    mode.add_argument("--tether-check", metavar="VERDICT", help="draw the declared tether (tether.py); no robot call")
     ap.add_argument("--evidence-dir")
     ap.add_argument("--summary-dir")
     ap.add_argument("--dry-run", action="store_true")
@@ -581,8 +581,8 @@ def main(argv=None, robot=None):
     if robot is None and not args.dry_run:
         if not args.token_file or not (args.ca_file or args.insecure):
             ap.error(f"pass --token-file (or {edge_drive.TOKEN_ENV}) and --ca-file or --insecure")
-    if args.restore:
-        return restore(robot or Live(args), args)
+    if args.restore or args.tether_check:
+        return (restore if args.restore else tether.tether_check)(robot or Live(args), args)
     if not args.plan:
         ap.error("--plan is required")
     plan = load_plan(args.plan)

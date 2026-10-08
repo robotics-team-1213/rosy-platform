@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · 차선 추종 녹화 증거 준비
-- 2026-10-08 · uncommitted · 굽이 SIM의 전체 차로 중심선 투영
-- 2026-10-08 · uncommitted · 오른쪽 경계 대체 가드 SIM 회귀
-- 2026-10-08 · uncommitted · refactor(fleet): Cell 문서를 web/cell로 옮긴다
-- 2026-10-08 · uncommitted · docs(adr): D-518에 공유 읽기 이동을 기록한다
+- 2026-10-08 · uncommitted · D-512 개정 1 독립 안전 리뷰 반영과 픽셀 모드
+- 2026-10-08 · uncommitted · D-512 개정 1 충전기 기준 반경과 tether 영상 확인
+- 2026-10-08 · uncommitted · D-512 개정 1 충전 케이블 tether 감시와 되돌아가기
+- 2026-10-08 · uncommitted · Decision 오프라인 재생 선검증과 AI PC 재시험
+- 2026-10-08 · uncommitted · feat(site): 모델 PC 멈춤 대비

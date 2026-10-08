@@ -780,6 +780,24 @@
 - gate 변화: SOURCE만. SIM·DEVICE·FIELD는 열림.
 - 결정: D-507 3항 보충.
 
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 6 motion_admitted refuses non-finite twists
+- 변경: `recovery/motion_admit.py` `motion_admitted`가 NaN·inf 선속도·각속도를 거부한다(현장 근거에서 NaN은 후진 판정과 sweep 비교를 통과했다). `test_motion_admit.py`에 중복 브랜치 `feat/site-floor-declaration`의 non-finite 시험을 옮겼다(6 kind × 4 twist).
+- 증거: 수정 전 24건 모두 실패, 수정 후 `test_motion_admit.py` 101 passed.
+- gate 변화: 없음(SOURCE).
+- 결정: D-507 6
+- 교훈: 같은 항목을 두 세션이 구현하면 뒤 브랜치의 시험부터 옮겨 앞 구현에 대 본다.
+
+## 2026-10-08 · uncommitted · feat(line_follow): 교차로 기대 창을 주행 거리로 비교 (D-507 2·3, 사용자 결정 1)
+- 변경: `PoseTrail`에 연속 표본의 odom 경로 길이 누적값 `odometer`와 `odometer_at(sample)`을 더했다. 지시를 받을 때 창에 누적값을 기록하고, 감지 고정(anchor)에 감지 자세의 누적값을 기록한다. `_in_window`는 |(감지 누적값 − 받은 누적값) + `junction_ahead_m` − (`expect_in_m` − pivot)| ≤ `expect_tol_m`으로 판정한다(곧은 접근에서는 예전 점 비교와 같은 값). 측정할 수 없는 감지(고정 없음, epoch·frame 바뀜, 누적값 없음)는 창 밖. 회전 축 접근과 측정 가로선 띠는 그대로 감지 자세에 고정. API Ref v1.138.
+- 증거: `test_junction_approach.py` 새 시험 — 반원 호(경로 0.785 m, 현 0.50 m) 뒤 호 길이 기대는 안(`turning`), 현 길이 기대는 밖, 장소 0.3 m 앞 굽이 오감지 밖 뒤 진짜 먼 선은 안, 지시와 감지 사이 odom 끊김은 밖. 변이(측정을 직선 거리로) 호 시험 2건 실패 확인 뒤 복원. CORE services·api_web pytest 1429 통과 13 skip, `known_failures` 신규 0.
+- gate 변화: SOURCE. 곡선 접근 SIM(회전교차로 진출, 한 바퀴)은 열림.
+- 결정: D-507 2·3항 2026-10-08 사용자 결정 (1).
+
+## 2026-10-08 · uncommitted · fix(line_follow): 창 odometer를 부호 있는 전진 거리로, 후진하면 창 닫힘 (D-507 2, 안전 검토 1·2)
+- 변경: `PoseTrail.odometer`가 매 걸음을 앞 표본의 진행 방향에 투영해 더한다(후진은 음수, 제자리 떨림은 상쇄). D-468의 `distance`(부호 없는 경로 길이)는 그대로. 기대 창은 받은 뒤 odometer가 봉우리에서 `WINDOW_RETREAT_M`(0.01 m)보다 내려가면(D-468 역추적 같은 후진) 측정할 수 없는 것으로 보고 창 밖으로 닫는다. armed 틱마다 새 표본을 접어 넣어 trail 5 s 한도에 놓치지 않는다.
+- 증거: `test_junction_approach.py` — 전진 0.3 m·후진 0.2 m·전진 뒤 0.4 m 짧은 선과 진짜 선이 모두 `unexpected`(부호 없는 합이면 짧은 선이 창 안 0.9 m), 제자리 ±2 mm 떨림 2 s에 odometer 변화 < 1 mm이고 창 안 감지는 그대로 `turning`. 변이 A(부호 없는 합) 3건 실패, 변이 B(후진 검사 삭제) 1건 실패, 복원 뒤 69 통과. CORE services·api_web 1432 통과 13 skip, `known_failures` 신규 0.
+- gate 변화: SOURCE.
+- 결정: D-507 2·3항 2026-10-08 사용자 결정 (1), 안전 검토 REQUEST_CHANGES 1·2.
 ## 2026-10-08 · uncommitted · feat(line_follow): D-507 보충, 지도 굽이를 odom 호로 지남 (action `bend`)
 - 변경: `recovery/junction_bend.py`(새 mixin) — `bend` 지시는 `armed` 동안 카메라 추종을 그대로 두고 받은 뒤 odom 이동 거리를 센다. 곧은 확신 추종 틱이 닻(몸이 따라온 선)을 남긴다. 호 시작점 `bend_tol_m` + 0.25 m 앞부터 곧은 확신이 아닌 첫 틱(또는 호 시작점 `bend_tol_m` 앞)에서 `bending`: 닻 직선 + 반지름 `bend_radius_m` 호 + 나가는 직선을 pure pursuit로 좇고, `reacquiring`은 나가는 직선을 0.20 m·5 s 안에서 좇으며 D-495 재획득이나 다음 교차로 감지로 끝, 아니면 `unresolved`. 매 틱 D-495 기동 twist(D-422 몸 sweep, enforce 증명)와 `motion_admitted(..., 'bend', map_id)`(IR `clear`만). 거리(odom × 1.08 > 남은 경로 + 0.05)·시간 상한, 근거 상실 `bend_basis_lost`. `junction.py`는 action·검증·`MANEUVER`·운동 근거 종류만 고쳤고, D-495 재획득 상수는 `junction_approach.py`로 옮겼다(값 그대로).
 - 증거: `test_junction_bend.py` 26건(지시 없음과 비트 같음, 카메라 추종 뒤 호와 재획득, lead 창 안 손실로 넘겨받기, 장애물 HOLD에서는 넘겨받지 않음, 닻 없음, 창 밖 감지 unexpected, IR·스캔 stale 근거 상실, IR centre, D-422 막힘 HOLD·재개·오래 막히면 끝, 거리·시간 상한, unresolved, 다음 교차로 감지로 끝, 재전송이 거리 유지, 필드 검증). services 전체 1310 passed(첫 커밋 기준).

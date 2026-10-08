@@ -5,6 +5,7 @@ const serverReasons={'known mask index required':'등록된 픽셀 클래스만 
 function readableError(message){return serverReasons[message]||message;}
 let workspace,frame,review,original,maskImage,busy=false,ready=false,loading=true,conflicted=false,forbidden=false,serial=0,stroke=null,draft=[],flood=true;
 let seeds=[],sampleImage=null,samplePixels=0,sampleTolerance=null,previewing=false,previewSerial=0;
+let unknownPixels=null,totalPixels=0;
 function error(value=''){$('pixel-error').textContent=value;$('pixel-error').hidden=!value;}
 function evaluationControls(){if(workspace.workspace_kind!=='evaluation')return;const label=document.createElement('label');label.className='ui-check';label.innerHTML='<input class="ui-field" id="pixel-unknown" type="checkbox">가려져 경계를 판단할 수 없는 투명 영역을 모두 확인했습니다 (평가 전용)';$('pixel-background').parentElement.insertAdjacentElement('afterend',label);$('pixel-unknown').onchange=enable;const help=[...label.parentElement.querySelectorAll('p')].find(p=>p.textContent.includes('255'));if(help)help.textContent='평가 전용: 가림 때문에 판단할 수 없는 영역만 255로 남기고 확인하세요. 학습 자료에는 포함되지 않습니다.';$('pixel-preparation').hidden=true;}
 let candidateKey='';
@@ -32,6 +33,16 @@ function enable(){const dirty=draft.length>0,hasSamples=seeds.length>0,locked=bu
  for(const id of ['pixel-save','pixel-discard'])$(id).reason=!dirty?'저장하지 않은 브러시 획이 없습니다.':busy||stroke?'현재 저장·편집을 마친 뒤 다시 시도하세요.':conflicted?'다른 탭에서 바뀌었습니다. 초안을 버리고 다시 불러오세요.':'';
  $('pixel-draft').textContent=hasSamples?`${seeds.length}점 선택 · ${previewing?'색 영역 계산 중':sampleImage?`${samplePixels.toLocaleString()}픽셀 미리보기 · Lab 허용치 ${sampleTolerance}`:'미리보기 실패'}`:dirty?`저장하지 않은 브러시 ${draft.length}획`:!$('pixel-class').value?'먼저 픽셀 클래스를 선택하세요.':flood?'차선 안을 클릭해 색을 선택하세요. 여러 점을 추가할 수 있습니다.':'';
  if((!dirty&&!hasSamples)&&(!$('pixel-complete').checked||!$('pixel-background').checked)){$('pixel-approve').disabled=true;$('pixel-approve').reason='사진 전체와 기본 배경을 각각 확인하세요.';}
+ if(ready&&unknownPixels>0){
+  const evaluation=workspace.workspace_kind==='evaluation';
+  const canReviewUnknown=evaluation&&frame.source.source_kind==='mcap'&&unknownPixels<totalPixels&&$('pixel-unknown')?.checked;
+  if(!canReviewUnknown){
+   $('pixel-approve').disabled=true;
+   $('pixel-approve').reason=evaluation?(unknownPixels===totalPixels?'사진 전체가 가림 후보여서 승인할 수 없습니다.':frame.source.source_kind!=='mcap'?'MCAP 평가 사진에서만 가림 후보를 승인할 수 있습니다.':'가림 후보를 확인하고 평가 전용 확인란을 선택하세요.'):`미검수 ${unknownPixels.toLocaleString()}픽셀이 남았습니다. 경계를 수정하거나 판단할 수 없으면 대기로 두세요.`;
+  }
+ }
+ $('pixel-approval-hint').textContent=ready&&$('pixel-approve').disabled?$('pixel-approve').reason:'';
+ $('pixel-approve').reason='';
  const rows=visible(),pos=rows.findIndex(row=>row.index===frame?.index);
  for(const [id,available] of [['pixel-prev',pos>0],['pixel-next',pos>=0&&pos<rows.length-1],['pixel-next-pending',workspace?.frames.some(row=>row.pixel_status==='pending'&&row.status!=='excluded'&&row.index!==frame?.index)]]){$(id).disabled=busy||!!stroke||dirty||hasSamples||!ready||!available;$(id).reason=!available?id==='pixel-next-pending'?'다른 검수 대기 사진이 없습니다.':'현재 필터에서 더 이동할 사진이 없습니다.':busy||stroke||dirty||hasSamples?'현재 초안을 적용하거나 버린 뒤 이동하세요.':'';}
  for(const id of ['pixel-frame','pixel-filter'])$(id).disabled=busy||loading||!!stroke||dirty||hasSamples;
@@ -47,21 +58,22 @@ function classColor(index){const cls=review?.classes?.classes.find(row=>row.inde
 function className(cls){return cls.display||cls.name;}
 function legend(){ const classes=review.classes?.classes||[],ignored=classes.filter(c=>c.role==='ignore');$('pixel-legend').replaceChildren();for(const cls of classes){const item=document.createElement('span'),swatch=document.createElement('i');swatch.className='pixel-swatch';swatch.style.background=classColor(cls.index);swatch.setAttribute('aria-hidden','true');item.append(swatch,document.createTextNode(className(cls)));$('pixel-legend').append(item);}$('pixel-class-help').textContent=`픽셀 면 · ${classes.map(className).join(' · ')}. 255는 클래스가 아닙니다.${workspace.workspace_kind==='evaluation'?' 가림으로 판단할 수 없는 픽셀만 따로 확인할 수 있습니다.':''}${ignored.length?' '+ignored.map(className).join('·')+': 픽셀로 표시하지만 로봇 주행 해석에는 쓰지 않습니다.':''}`;}
 let paletteCache=null,paletteTheme='';
-function palette(){const theme=document.documentElement.dataset.theme;if(paletteCache&&paletteTheme===theme)return paletteCache;const scratch=document.createElement('canvas');scratch.width=scratch.height=1;const ctx=scratch.getContext('2d'),values={};for(const cls of review.classes?.classes||[]){ctx.fillStyle=classColor(cls.index);ctx.fillRect(0,0,1,1);values[cls.index]=[...ctx.getImageData(0,0,1,1).data];}paletteCache=values;paletteTheme=theme;return values;}
+function palette(){const theme=document.documentElement.dataset.theme;if(paletteCache&&paletteTheme===theme)return paletteCache;const scratch=document.createElement('canvas');scratch.width=scratch.height=1;const ctx=scratch.getContext('2d'),values={};for(const cls of review.classes?.classes||[]){ctx.fillStyle=classColor(cls.index);ctx.fillRect(0,0,1,1);values[cls.index]=[...ctx.getImageData(0,0,1,1).data];}ctx.fillStyle=cssColor('--status-warn');ctx.fillRect(0,0,1,1);values[255]=[...ctx.getImageData(0,0,1,1).data];paletteCache=values;paletteTheme=theme;return values;}
 function trace(ctx,line,style){ctx.strokeStyle=ctx.fillStyle=style;ctx.lineWidth=line.radius*2;ctx.lineCap=ctx.lineJoin='round';ctx.beginPath();line.points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke();for(const [x,y] of line.points){ctx.beginPath();ctx.arc(x,y,line.radius,0,Math.PI*2);ctx.fill();}}
 // Draft strokes are previews only; the eraser (255) shows the bare photo inside the stroke.
 let overlayCanvas=null,overlayKey='',scratch=null;
-function overlay(){ // Recoloured mask layer (D-469): rebuild only when frame, mask version, opacity or theme change.
-  const key=[frame.index,review.version,$('pixel-opacity').value,document.documentElement.dataset.theme].join('|');
+function overlay(){ // Recoloured mask layer (D-469): rebuild when frame, version or display setting changes.
+  const key=[frame.index,review.version,$('pixel-opacity').value,$('pixel-show-unknown').checked,document.documentElement.dataset.theme].join('|');
   if(overlayCanvas&&overlayKey===key)return overlayCanvas;
   const off=document.createElement('canvas');off.width=original.naturalWidth;off.height=original.naturalHeight;
   const other=off.getContext('2d');other.drawImage(maskImage,0,0);
   const data=other.getImageData(0,0,off.width,off.height),colors=palette();const opacity=Number($('pixel-opacity').value)/100;let unknown=0;
-  for(let i=0;i<data.data.length;i+=4){const value=data.data[i],color=colors[value];if(value===255)unknown++;if(value===255||!color){data.data[i+3]=0;continue;}data.data[i]=color[0];data.data[i+1]=color[1];data.data[i+2]=color[2];data.data[i+3]=Math.round(opacity*255);}
+  for(let i=0;i<data.data.length;i+=4){const value=data.data[i],color=colors[value];if(value===255)unknown++;if(!color||(value===255&&!$('pixel-show-unknown').checked)){data.data[i+3]=0;continue;}data.data[i]=color[0];data.data[i+1]=color[1];data.data[i+2]=color[2];data.data[i+3]=Math.round(opacity*(value===255?180:255));}
+  unknownPixels=unknown;totalPixels=off.width*off.height;
   $('pixel-coverage').textContent=`${workspace.workspace_kind==='evaluation'?'255 가림 후보':'미검수'} ${unknown.toLocaleString()}픽셀 / ${(off.width*off.height).toLocaleString()}픽셀 (${Math.round(unknown/(off.width*off.height)*100)}%)`;
   other.putImageData(data,0,0);overlayCanvas=off;overlayKey=key;return off;
 }
-function sampleOverlay(){if(!sampleImage)return null;const off=document.createElement('canvas');off.width=original.naturalWidth;off.height=original.naturalHeight;const ctx=off.getContext('2d');ctx.drawImage(sampleImage,0,0);const data=ctx.getImageData(0,0,off.width,off.height),colors=palette(),opacity=Number($('pixel-opacity').value)/100;for(let i=0;i<data.data.length;i+=4){const color=colors[data.data[i]];if(!color){data.data[i+3]=0;continue;}data.data[i]=color[0];data.data[i+1]=color[1];data.data[i+2]=color[2];data.data[i+3]=Math.round(opacity*255);}ctx.putImageData(data,0,0);return off;}
+function sampleOverlay(){if(!sampleImage)return null;const off=document.createElement('canvas');off.width=original.naturalWidth;off.height=original.naturalHeight;const ctx=off.getContext('2d');ctx.drawImage(sampleImage,0,0);const data=ctx.getImageData(0,0,off.width,off.height),colors=palette(),opacity=Number($('pixel-opacity').value)/100;for(let i=0;i<data.data.length;i+=4){const value=data.data[i],color=colors[value];if(value===255||!color){data.data[i+3]=0;continue;}data.data[i]=color[0];data.data[i+1]=color[1];data.data[i+2]=color[2];data.data[i+3]=Math.round(opacity*255);}ctx.putImageData(data,0,0);return off;}
 function eraserLines(ctx,lines){ // One scratch pass for every eraser stroke: trace all, then clip to the photo.
   if(!scratch||scratch.width!==ctx.canvas.width||scratch.height!==ctx.canvas.height){scratch=document.createElement('canvas');scratch.width=ctx.canvas.width;scratch.height=ctx.canvas.height;}
   const other=scratch.getContext('2d');other.clearRect(0,0,scratch.width,scratch.height);
@@ -96,7 +108,7 @@ $('pixel-save').onclick=()=>commit(draft.map(({label,radius,points})=>({action:'
 addEventListener('beforeunload',event=>{if(draft.length||stroke||seeds.length)event.preventDefault();});
 $('pixel-approve').onclick=()=>mutate('approve',{complete_frame_review:$('pixel-complete').checked,background_reviewed:$('pixel-background').checked,unknown_pixels_reviewed:$('pixel-unknown')?.checked===true});$('pixel-exclude').onclick=()=>mutate('exclude');$('pixel-reopen').onclick=()=>mutate('reopen');
 $('pixel-apply-candidate').onclick=()=>{if(confirm('새 초안을 적용하면 현재 마스크가 대체되고 픽셀 승인이 해제됩니다. 계속할까요?'))mutate('apply_draft',{draft_sha256:$('pixel-candidates').value});};
-for(const id of ['pixel-complete','pixel-background'])$(id).onchange=enable;$('pixel-opacity').oninput=paint;
+for(const id of ['pixel-complete','pixel-background'])$(id).onchange=enable;$('pixel-opacity').oninput=paint;$('pixel-show-unknown').onchange=paint;
 function clearSamples(){++previewSerial;seeds=[];sampleImage=null;samplePixels=0;sampleTolerance=null;previewing=false;if(ready){paint();enable();}}
 async function refreshSample(){const ticket=++previewSerial;sampleImage=null;samplePixels=0;sampleTolerance=null;if(!seeds.length){previewing=false;paint();enable();return;}previewing=true;paint();enable();try{const result=await request(`/api/mask-preview/${frame.index}`,{version:review.version,label:Number($('pixel-class').value),seeds,tolerance:$('pixel-tolerance-mode').value==='auto'?'auto':Number($('pixel-tolerance').value)});const preview=await image(`data:image/png;base64,${result.mask_png}`);if(ticket!==previewSerial)return;sampleImage=preview;samplePixels=result.selected_pixels;sampleTolerance=result.tolerance;error();}catch(value){if(ticket===previewSerial)error(value.message);}finally{if(ticket===previewSerial){previewing=false;paint();enable();}}}
 $('pixel-sample-apply').onclick=()=>{if(!sampleImage||previewing||!seeds.length)return;mutate('sample',{label:Number($('pixel-class').value),seeds:seeds.map(point=>[...point]),tolerance:sampleTolerance});};

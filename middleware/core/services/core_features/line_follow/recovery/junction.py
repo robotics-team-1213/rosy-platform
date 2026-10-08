@@ -322,6 +322,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
         if j['state'] == 'armed' and j['action'] == 'bend':
             return self._bend_armed(j, now, seen, decision)
         if j['state'] == 'armed':
+            if j.get('window') is not None:
+                self._track_retreat(j['window'])  # D-507 2: see every odom sample since receipt
             if now > j['expires_at']:
                 self._bridge_hint = None
                 if not seen:

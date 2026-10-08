@@ -17,6 +17,28 @@ def open_store(tmp_path):
     return ReviewStore(tmp_path / 'state', source, human, images)
 
 
+def test_learning_counts_unverified_source_video(tmp_path):
+    import threading
+    import urllib.request
+    from review_app import make_server
+
+    source, human, images = fixture_inputs(tmp_path)
+    rows = [json.loads(line) for line in source.read_text(encoding='utf-8').splitlines()]
+    rows[0].update(source_video_sha256='1' * 64, original_video_verified=False)
+    source.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
+    store = ReviewStore(tmp_path / 'state', source, human, images)
+    server = make_server(store, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f'http://127.0.0.1:{server.server_port}/api/learning'
+        assert json.load(urllib.request.urlopen(url))['source_video_unverified'] == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 def test_empty_training_workspace_reopens_without_initial_labels(tmp_path):
     store = ReviewStore(tmp_path / 'state', empty_training=True)
     assert store.list_frames() == []

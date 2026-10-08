@@ -131,8 +131,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        43_809,
-        "split: re-judged at 43809 on 2026-10-08: map-bound bend candidate diagnostics in trip_ports "
+        44_806,
+        "split: re-judged at 44806 on 2026-10-08 (independent re-judge, critic agent): D-519 password "
+        "login (server/password_session.py, site_users.py, web/shared/password-login.js/.css, page and "
+        "app/cli wiring) stays with the site-auth owner beside site_auth.py and development_session.py, "
+        "now the console auth seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. D-507 4 "
+        "chord turn stays in routing/execute.py and trip_runner.py. D-517 M0 routing/blocks.py is pure "
+        "block arithmetic on routing.graph and stays in Fleet routing (D-12); D-517 M1 must name one grant "
+        "writer between it and server/traffic_reservations.py, and re-judge then. No new package owner; "
+        "the +150 allowance is unchanged. "
+        "Previously re-judged at 43809 on 2026-10-08: "
+        "map-bound bend candidate diagnostics in trip_ports "
         "and trip_runner, with fake-port tests, stay in Fleet's existing trip owner. No robot command "
         "or new service. The site-map web/server split plan and +150 allowance remain unchanged. "
         "Previously re-judged at 43623 on 2026-10-08: main's 43217 verdict plus D-472 + Addendum 2026-10-08 "
@@ -644,23 +653,28 @@ SIZE_VERDICTS = {
     ),
     "core/services/core_features/line_follow/recovery": (
         2_987,
-        "split: independently re-judged at 2987 on 2026-10-08 (critic agent, read-only, after the bend "
-        "pass safety review fixes e5735bd5f) after D-507 addendum junction_bend.py (208, map-based bend "
-        "pass mixed into JunctionMixin) took junction code to 921 (junction.py 528, junction_approach.py "
-        "185, junction_bend.py 208), past the 800-line condition of the 2713 verdict, which is therefore "
-        "triggered. Every file stays below 600 (largest stuck_recovery.py 573); junction, bend and motion "
-        "admission remain LineFollowManager mixins under the single manager lock and generation, with no "
-        "own lock, thread, store or publisher, and CORE CommandManager stays the final cmd_vel publisher, "
-        "so this branch may land at 2987 without the move. Required follow-up, before any further "
-        "junction growth lands: a dated follow-up section in "
+        "split: independently re-judged at 3038 on 2026-10-08 (critic agent, read-only) after merging main "
+        "into feat/d507-bend-odom-pass; the recorded number stays 2987 so the +150 allowance is still "
+        "measured from it. The +51 over the 2987 verdict comes entirely from main's own commits, which landed "
+        "under main's 2713 accept: 06a7becd5 (junction window by travelled distance), 577ba9da5 (signed "
+        "forward odometer; a reverse closes the window) and 27ce8e6c0 (motion_admitted refuses non-finite "
+        "twists): junction.py +2, junction_approach.py +22 net, lane_return.py +23, motion_admit.py +4; the "
+        "merge resolution adds no lines to this unit. Junction code is now 945 (junction.py 530, "
+        "junction_approach.py 207, junction_bend.py 208). Every file stays below 600 (largest "
+        "stuck_recovery.py 573); junction, bend and motion admission remain LineFollowManager mixins under "
+        "the single manager lock and generation, with no own lock, thread, store or publisher, and CORE "
+        "CommandManager stays the final cmd_vel publisher, so this branch may land at 3038 without the move. "
+        "Previous verdict at 2987 (critic agent, after the bend pass safety review fixes e5735bd5f, D-507 "
+        "addendum junction_bend.py) triggered the 800-line junction condition of the 2713 verdict. Required "
+        "follow-up, still binding: a dated follow-up section in "
         "docs/plans/2026-10-07-line-follow-recovery-subpackage.md with independent review, then a short "
         "standalone refactor branch after this one lands that moves junction.py, junction_approach.py and "
-        "junction_bend.py with git mv into core_features/line_follow/recovery/junction/ as its own "
-        "SIZE_UNITS entry with its own verdict, in the same change as the recovery re-judge; pure move, no "
-        "shim, imports fixed in manager.py, core_api_web api/deps.py and test_line_junction.py, "
-        "test_junction_approach.py, test_junction_bend.py. motion_admit.py stays in recovery because "
-        "lane_bridge and lane_return_decision share it. The +150 allowance is not raised; the next "
-        "junction change or +150 is blocked until the split lands.",
+        "junction_bend.py with git mv into core_features/line_follow/recovery/junction/ as its own SIZE_UNITS "
+        "entry with its own verdict, in the same change as the recovery re-judge; pure move, no shim, imports "
+        "fixed in manager.py, core_api_web api/deps.py and test_line_junction.py, test_junction_approach.py, "
+        "test_junction_bend.py. motion_admit.py stays in recovery because lane_bridge and "
+        "lane_return_decision share it. The +150 allowance is not raised; the next junction change or +150 is "
+        "blocked until the split lands.",
     ),
     "core_features": (
         12_772,
@@ -754,8 +768,8 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        45_258,
-        f"split: re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
+        45_394,
+        f"split: 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
         "the existing ROS-free lane_bev owner with one focused regression; the P1a sensing split "
         f"still applies. Deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "

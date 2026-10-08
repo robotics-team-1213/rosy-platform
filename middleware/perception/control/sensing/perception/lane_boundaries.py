@@ -9,12 +9,14 @@ that yields a supported lookahead point wins:
           locus equidistant from the two (it needs no lane-width assumption)
   ONE     a seen boundary: pursue its half-width iso-line (lane_bev rule),
           confidence capped at ONE_MAX_CONFIDENCE
-  MEMORY  the fresh tiers found nothing supported (no line seen, or a seen
-          one runs out ahead): pursue the remembered centre, else either
-          remembered side, still inside lane_bev's travel and clock limits
+  MEMORY  a seen line runs out ahead without a supported fresh target (or a
+          locked, aligned route gates fully unseen memory): pursue the
+          remembered centre, else either remembered side, still inside
+          lane_bev's travel and clock limits
           and within MEMORY_MAX_BEARING_RAD of the heading, at
           MEMORY_CONFIDENCE
-  STOP    nothing: no output, CORE stops
+  STOP    neither boundary seen without a route gate, or no supported target:
+          CORE stops
 Confidence is CORE's speed scale, so each lower tier also drives slower.
 Tier 4 (a committed manoeuvre) belongs to the junction prototypes.
 
