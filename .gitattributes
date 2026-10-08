@@ -46,3 +46,4 @@ deploy/site/rosy-model-guard-check text eol=lf
 deploy/site/rosy-model-guard-remote text eol=lf
 # Lap SIM batch lists are read by bash on the model PC; CRLF left a CR at the end of each run name.
 docs/validation/**/evidence/*batch*.txt text eol=lf
+tools/hooks/pre-push text eol=lf
