@@ -7026,3 +7026,9 @@ osy-d395-s1d\`.
 - 변경: D-378 단계별 수용 목표와 장치 읽기 전용 관찰, TF 녹화 후보의 남은 증거 공백을 `docs/validation/lane-capture-readiness-2026-10-08/`에 기록했다.
 - 증거: `rosy_26` keep debug 39건/5초; Pilot 녹화 테스트 39 passed, known failures 0 new, harness lint 오류 0.
 - gate 변화: 없음. 실제 TF 게시·보정 revision·지도 자세·사람 검수와 실기 R0/R1/R2는 미확인.
+
+## 2026-10-08 · uncommitted · 10/7 현재 R0 재생 게이트
+
+- 변경: 원본 화소가 증명된 10/7 두 MCAP을 현재 로컬 main에서 기본 지면과 11.8° 후보로 재생하고, R0 게이트 실패를 `docs/validation/lane-1007-r0-gate-2026-10-08/`에 고정했다.
+- 증거: 후보 pitch 첫 세션 RoadState TRACK 111/124이지만 페인트 위 목표 비율 등 6개 게이트 실패; 둘째 세션 STOP 83/83. 기본 지면은 두 세션 모두 STOP 207/207. 네 결과 모두 `validated=false`.
+- gate 변화: R0 HOLD 유지. 승인된 보정값·사람 동일 경계 정답·실기 주행 증거가 없다.
