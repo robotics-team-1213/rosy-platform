@@ -427,9 +427,8 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     pixel_draft_indices = [row['frame'] for row in pixel_reviews
                                            if row['status'] == 'pending' and
                                            bool((review_masks.pixels(store, row) != 255).any())]
-                    pixel_candidate_indices = [row['frame'] for row in pixel_reviews
-                                               if row['status'] == 'pending' and
-                                               (row['draft_candidates'] or row['frame'] in pixel_draft_indices)]
+                    pixel_candidate_indices = [row['frame'] for row in pixel_reviews if row['status'] == 'pending'
+                                               and (row['draft_candidates'] or row['frame'] in pixel_draft_indices)]
                     latest = next(iter(store.exports()), None)
                     preparation = None
                     if latest:

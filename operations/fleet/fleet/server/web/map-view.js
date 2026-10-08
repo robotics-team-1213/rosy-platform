@@ -584,7 +584,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       const cell = worldToCell(grid, pose.x, pose.y);
       const cx = cell.col;
       const cy = grid.height - cell.row;
-      const size = Math.max(3, Math.min(grid.width, grid.height) * 0.045);
+      const pxPerCell = Math.max(canvas.clientWidth / grid.width, canvas.clientHeight / grid.height) || 1;
+      const size = Math.min(3, 18 / pxPerCell);
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(-pose.yaw); // 캔버스 y 가 아래로 자라므로 회전도 뒤집는다
