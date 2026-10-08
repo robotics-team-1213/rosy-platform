@@ -82,6 +82,7 @@
 - gate 변화: 없음.
 - 결정: D-32, D-192.
 - 교훈: 없음
+
 ## 2026-09-25 · uncommitted · feat(core_features): D-228 decision library under core_features
 
 - 변경: `core_features/decision` 계약과 로컬 라우터. 허용 집합 밖 동작은 INVALID, selected_action 은 DECIDED 만. SAFE_STOP·EMERGENCY·MANUAL 은 motion 선택지를 규칙보다 먼저 뺀다. src/runtime 과 rosy_pinky_pro 는 만들지 않는다.
@@ -113,11 +114,13 @@
 - gate 변화: 없음
 - 결정: D-231
 - 교훈: 없음
+
 ## 2026-09-26 · uncommitted · FleetAgent pinned mDNS location
 
 - 변경: `fleet_agent`가 승인된 지속 연결 토큰과 예상 호스트·사이트 CA가 있을 때만 Avahi 후보를 조회하고 TLS health를 확인한다. 실패하면 CORE를 막지 않고 재시도하며, 연결 단절 후에도 재조회한다.
 - 증거: Agent·first-boot·Fleet 통합 집중 58 passed, 변경 Python flake8 통과. 실제 Pi/Ubuntu 네트워크는 미검증.
 - gate 변화: LOCAL 범위만 추가.
+
 ## 2026-09-28 · uncommitted · add camera-fault eligibility policy
 
 - Change: add a ROS-free, fail-closed evaluator for explicitly selected IR_LINE, NAV_GOAL, and TELEOP alternatives; it reports reasons, evidence ages, and a short expiry but issues no motion command.
@@ -141,6 +144,7 @@
 - Change: carry `correlation_id` with each GoalTracker generation, reject moving-goal takeover while a Fleet attempt owns navigation, and clear the active association on cancel. Later moving-goal results cannot inherit the previous Fleet ID.
 - Evidence: CORE services 227 passed; focused gateway navigation and GoalTracker regressions 19 passed; changed implementation lint passed.
 - Gate: SOURCE/LOCAL only. The real Nav2 bridge and physical device remain unverified.
+
 ## 2026-09-28 · uncommitted · verify canceled navigation result isolation
 
 - Change: publish a canceled generation''s terminal event independently of current navigation state; preserve CANCELED/ABORTED reason codes.
@@ -165,12 +169,12 @@
 - Evidence: new `src/runtime/services/test/test_observer_source.py` (17 tests: binding validation, position→colour mapping, worst-lamp confidence, frozen/pending silence, 7 malformed-body mutations, outcome labels, http failure, poller→manager closed path to `signal_red`). Services suite 251 passed; traffic policy+API+foundation 156 passed; flake8 clean. Remaining `test_module_structure.py` failures (schemas.py 739, fleet 10631, app.py re-judge) pre-exist on main from the parallel Fleet/protocol work.
 - Gate: SOURCE/LOCAL only; no live observer on the bench, ROS-SIM, device, or FIELD acceptance. T3 (config gate + services wiring + status fields + API Ref MINOR) is next.
 
-
 ## 2026-09-29 · uncommitted · feat(traffic): D-337 T3 — observer wiring, config gate, status contract
 
 - Change: SignalObserverMonitor (daemon thread, injectable clock) owns the polling schedule — confirmed evidence reaches the manager with the server frame age compensated into the receipt time, and the fresh->stale transition publishes nav.traffic_policy_signal_source_stale (warning) exactly once per lapse. TrafficPolicyStatus gains signal_source_kind (camera|fused — fused only while the measured light is usable), signal_head_age_s, signal_head_frozen, computed in _set_status from the same usability rule the verdict uses. The T2 poller export now includes the monitor.
 - Evidence: services test_observer_source.py +3 (age compensation through the manager status, once-per-lapse announcement with re-arm after recovery, start/stop). traffic policy suite +3 (status view across fresh/stale/frozen, observer absent by default, binds+starts from config, missing map/scene fails the build). Combined host run 501 passed; semantic road simulation 2 passed; flake8 clean on changed lines.
 - Gate: SOURCE/LOCAL only; no live observer on the bench, ROS-SIM, device, or FIELD acceptance. T4 (dashboard signal-source row) remains.
+
 ## 2026-09-30 · uncommitted · feat(docking): D-350 하드웨어 단계·degrade·만춫·히스테리시스
 
 - 변경: ①ChargingConfirmation에 instrumented kwarg — false면 Phase 1(계측 없는 도크)에서 전압 비하락만으로 판정, source 프로퍼티로 단계 보고. ②DockPhase.CHARGED_HOLD 추가. ③DockingConfig에 full_enter_v(8.2V)/full_exit_v(8.0V)/instrumented(bool) — 만춫 히스테리시스·Phase 1 플래그. ④manager._check_full — DOCKED 중 만춫 감지 시 docking.full 이벤트 1회 방출, full_exit_v 아래로 떨어지면 재방출 허용. ⑤API Ref §8에 docking.full 행 추가. ⑥deploy/robot/pinky_pro/config/capabilities.dock-enabled.yaml 오버레이 신설.
@@ -178,6 +182,7 @@
 - gate 변화: 없음.
 - 결정: Phase 1에서 D-27 억제는 안 함(1소스로는 안전 경로를 못 끈다). Phase 2부터 2소스 확정 시에만.
 - 교훈: manager는 _cfg를 쓴다 (_config 아님) — 첫 커밋에서 9건 적신.
+
 ## 2026-09-30 · uncommitted · feat(docking): D-351 재시도 갈래 — 도달 실패/전류 없음/충전 단절 구분
 
 - 변경: manager._tick_settling에 contact_no_current 갈래 추가 — load_present=true인데 charging=false가 settle 타임아웃까지 지속하면 즉시 DOCK_FAILED(contact_no_current), 재시도하지 않는다(산화 접점은 재시도로 안 낫는다). 도달 실패(재착좌)와 충전 단절(charge_lost, DOCKED 유지)은 기존 동작 유지.
@@ -185,6 +190,7 @@
 - gate 변화: 없음.
 - 결정: D-351 — 재시도 예산은 도달 실패에만 쓴다. 전류 없음은 폴트 보고.
 - 교훈: 없음.
+
 ## 2026-09-30 · uncommitted · refactor(docking): D-353 봉합점 구현 착지
 
 - 변경: ①`docking/strategies.py` 신설 — ChargingStrategy·FullChargeStrategy Protocol + VoltageFullCharge 기본 구현 (전압 임계·히스테리시스). ②manager가 `_check_full`을 FullChargeStrategy에 위임, 만춫 시 `DockPhase.CHARGED_HOLD` 진입. ③DockAgent.poll()이 `core_common.device_poll.poll_json()`으로 폴링을 위임 (인라인 urllib 제거, 4상태 실패 매핑 유지). 기존 시험 전부 통과 — Protocol은 duck typing이라 기존 클래스가 자동으로 구현한다.
@@ -307,6 +313,7 @@
 - 변경: `LocalizationAssist.autonomy_allowed()`(LOCALIZED + map, 또는 D-395 이전 로봇)와 `gate`(RLock: 상태 반영·이탈 정지와 모든 시작이 같은 잠금). `localization/result` 는 모델 검증(`request_id` 규칙, `reason` ≤ 64), 64 KiB 넘는 메시지는 버림, 거부 로그는 예외 타입과 오류 종류만. `DockingManager.localization_ok` — `dock()` 거부(`NOT_LOCALIZED`), 배터리 복귀는 대기로 남아 LOCALIZED 가 되면 틱이 이어 간다. `wire_assist` 가 바인딩.
 - 증거: `test/test_localization_assist.py` +20, `test/test_docking_localization_gate.py` 5.
 - gate 변화: 없음.
+
 ## 2026-10-01 · uncommitted · feat(core_features): D-400 shadow verdicts without touching the output
 - 변경: `SafetyManager.check_decision`/`decision_valid` 분리, `shadow.py` `ShadowLog`(락, 판정 단위 전이 이벤트, 1 s 반복, 최소 0.2 s 간격, suppressed/dropped 카운터), 그림자·집행 바인딩 상호 배타와 `shadow_evaluate`(예외 비전파), `CommandManager`가 그림자를 `announce_pending`에서 바퀴 출력 뒤에 판정, 네비게이션·도킹의 `policy_off`(모드 진입마다 첫 0 아닌 출력), `StateManager.set_safety_policy_provider`.
 - 증거: 전체 시험(gateway+services+foundation+api_web+test/) `5 failed, 5919 passed, 249 skipped, 31 warnings, 4 errors in 3428.70s`; `known_failures.py`는 exit 1: 9건 모두 이 브랜치가 건드리지 않은 시험이며(main 4804d417에서도 test_module_separation, test_release_boundary_guards, test_robot_literals, test_dashboard_drive 4건이 같게 실패, test_module_criteria C6와 test_behavior_test_ownership은 main이 이후 고쳤고 이 브랜치는 그 이전 기준) 이 브랜치 기인 실패는 0건.
@@ -453,6 +460,7 @@
 - 변경: 살아 있는 수동 세션의 NAVIGATION 전환을 ModeMachine에서 거부한다. teleop 입력과 watchdog 갱신은 같은 모드 잠금 안에서 다시 확인한 뒤 반영한다. API의 자율 진입은 부작용 전에 409 MODE_CONFLICT로 거부한다. 정지와 만료된 세션은 기존 전환을 유지한다.
 - 증거: 신규 회귀 시험에서 탈취 5 failed, 경합 1 failed, line-follow 취소 부작용 1 failed를 수정 전에 재현했다. 관련 시험 167 passed, known_failures 비교 NEW 0, lint 0 errors. 독립 재리뷰에서 경합 양방향과 교착 부재를 확인했고 코드 차단 사항 없이 승인했다. 근거는 docs/validation/d427-source-migration/manual-ownership-review-2026-10-04.md.
 - gate 변화: 없음. 호스트 검증이며 sim·장치·실주행 수용은 미실행이다.
+
 ## 2026-10-04 · uncommitted · feat(vision): 차선 입력의 실제 출처와 정지 설정 예약
 
 - 변경: 읽기 전용 keeper paint 증거는 별도 vision store에서 camera stamp·requested source·실제 모델 판·receipt freshness를 검사한다. stale·잘못된 packet·다른 설정·다른 모델은 unknown이다. Motion 입력으로 소비하지 않는다.
@@ -480,13 +488,11 @@
 
 - gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.
 
-
 ## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 
 - 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
 - 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
 - gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.
-
 
 ## 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
 
@@ -517,7 +523,6 @@
 - 변경: private trial ledger, original odom stamp/frame and final CORE port restriction; no second publisher/API/config activation.
 - 증거: synthetic guard26PASS, installed geometry/CORE independent180PASS/NEW0. Actual measurement/braking UNKNOWN, no motion or push.
 - gate 변화: SOURCE/LOCAL only; HOLD/readiness retained. Plan docs/plans/2026-10-05-core-bounded-camera-trial.md.
-
 
 ## 2026-10-05 · uncommitted · fix(core): 제한 시험 STOP와 최종 제출 직렬화
 
@@ -588,6 +593,7 @@
 - 증거: `test_state_odom_pose.py` 3 PASS, gateway `/robot/state` NaN 시험 PASS.
 - gate 변화: 없음.
 - 결정: D-494 (Proposed)
+
 ## 2026-10-07 · uncommitted · feat(line_follow): D-494 교차로 지시 게이트
 - 변경: 새 `core_features/line_follow/junction.py`. 지시 하나를 보관하고 틱 결정을 그대로 두거나 0으로 만든다. 지시 없음·만료 + 교차로 감지는 `junction_waiting`, `left`·`right`는 분기 후보가 없어 곧바로 `junction_unresolved`, `stop`은 측정 odom으로 `stop_after_m` 뒤 `junction_stop`(odom 없으면 바로). `straight`는 D-476 route hint를 채운다. 모드 변경이 지시를 지운다
 - 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
@@ -662,39 +668,52 @@
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
 - 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
 - 교훈: 시험 상수는 출처 있는 기하에서 끌어온다. 설명 없는 sim 값은 registry에 열어 둔다(G-16)
+
 ## 2026-10-07 · uncommitted · feat(line_follow): D-498 교차로 회전의 현장 근거
 - 변경: `_turn_basis`: D-400 enforce 증명 또는 현장 근거(`junction_turn_site_accepted` + 신선한 IR 가드 판정(이탈 아님) + 신선한 스캔의 D-422 몸체 정지). `supports_junction_turn`은 읽을 때마다 재판단. 현장 근거로 시작한 회전이 근거를 잃으면 `turn_basis_lost`
 - 증거: `test_junction_turn_site_basis.py` 15 PASS, `test_line_junction.py` 73 PASS. services·api_web·contracts/foundation·문서·perception 배선/lane_keep·test/architecture·Fleet 버전 고정 2297 PASS·19 skip, gateway 2212 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). core_features 15050 (판정 14934+150=15084 안)
 - gate 변화: 없음. SOURCE 호스트 시험만. 현장 설정·SIM·DEVICE는 D-498 순서
 - 결정: D-498 (Proposed)
 - 교훈: 없음
+
 ## 2026-10-07 · uncommitted · feat(line_follow): NOMINAL 지면 횡단보도 구간과 앞뒤 거리 여유 (D-491 개정)
 
 - 변경: `CrosswalkZones.observe`가 지면 표시를 보지 않고 `uncertainty_m`(≤ 0.015 m)만 요구한다(D-468과 같다). 여유에 `crosswalk_range_error_fraction`(기본 0.05) × 먼 끝 거리를 더하고, 쉬는 거리 상한도 같은 비율만큼 늘린다.
 - 증거: `test_ir_guard_crosswalk.py` 20건(NOMINAL + 운전자 확인에서 쉼, 불확실도 없음/초과는 구간 없음, 거리 여유가 끝을 넓힘). 실기 9dfk 측정은 D-491 개정 절.
 - gate 변화: 없음. 장치 반영은 릴리스 뒤.
+
 ## 2026-10-07 · uncommitted · test(line_follow): D-495/D-498 교차로 회전 SIM 결과 기록
 - 변경: 코드 변경 없음. 모델 PC SIM 기록 `docs/validation/d495-junction-sim-2026-10-07/result.md`.
 - 증거: 현장 근거 회전 9건 오차 −4.08…+2.75°(모두 ±5° 안, 2–4° 덜 돎). 장애물·IR·스캔·odom 주입 7건 모두 다음 명령 주기(20 ms)에 0. 재획득 0/9, bridge 진입 0틱.
 - gate 변화: 없음. SIM 증거만이고 SIM 수용 항목 S1·S2·S6은 미통과다.
 - 결정: D-495, D-498 (Proposed). 결함 후보: `lane_return_evidence.py:52` 음수 odom 나이 리셋, `junction.py:318-320` CAMERA_LINE 선택 직후 회전 `aborted odom`, `unresolved`가 실행 기록에 안 남음(`junction.py:347-352`, `363-366`, `397-400`), 로봇 기본값 `recovery_local_enabled: true` + enforce 없음이면 출발 불가(`lane_return.py:326-327`).
 - 교훈: 없음
+
 ## 2026-10-07 · uncommitted · fix(line_follow): 모드 선택 직후 교차로 회전은 첫 odom을 기다린다
 - 변경: `junction.py` `_start_turn`에서 신선한 odom이 없으면 바로 `aborted odom`으로 끝내지 않고 `armed`로 남아 `junction_stopping` HOLD(명령 0)를 내며 첫 거부 시각부터 기다린다. `POSE_MAX_AGE_S`(0.3 s)를 넘도록 odom이 없으면 전과 같이 `odom`으로 중단한다.
 - 증거: `test_line_junction.py::test_turn_armed_right_after_mode_select_waits_for_the_first_odom_sample` 먼저 실패 후 통과, `test_no_fresh_odom_at_the_junction_aborts_before_turning`은 0.3 s 대기 뒤 중단으로 바뀜.
 - gate 변화: 없음. 호스트 시험만. SIM(`s2_sw_r110_a0`, `s9_scan_turn` 재현) 미실행.
 - 결정: D-495 SIM 결과 결함 3 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
+
 ## 2026-10-07 · uncommitted · fix(line_follow): 회전 뒤 unresolved도 그 교차로 실행 완료로 기록한다
 - 변경: `junction.py` `_maneuver`의 `unresolved` 전이 세 곳(재획득 중 D-407 stuck, 재획득 시간 한도, `REACQUIRE_M` 이동)을 `_unresolved(j, decision)` 하나로 모으고, 상태가 아직 `reacquiring`일 때 `_mark_done(j)`를 먼저 부른다. 진입 방향은 이미 지워져 있으므로 같은 `place_id` 재전송은 두 번째 회전을 쌓지 않고 409 `JUNCTION_ALREADY_DONE`이 된다. 다른 `place_id`가 기록을 지운다.
 - 증거: `test_line_junction.py::test_unresolved_after_the_turn_counts_as_done`(세 경로) 먼저 실패 후 통과.
 - gate 변화: 없음. 호스트 시험만. SIM S6(`s6_unresolved_resend`) 미실행.
 - 결정: D-495 SIM 결과 결함 4 (`docs/validation/d495-junction-sim-2026-10-07/result.md`), 리뷰 R1
+
 ## 2026-10-07 · uncommitted · fix(line_follow): odom 원천 시각이 CORE 시계보다 조금 앞서도 자세 기록을 지우지 않는다
 - 변경: `model.py`에 `SOURCE_FUTURE_TOLERANCE_S = 0.1`(기존 `manager.observe` 값)을 두고 `manager.observe`와 `lane_return_evidence.observe_pose`가 같이 쓴다. odom 나이가 `[-0.1, 0)`이면 0으로 보고, `-0.1`보다 앞서면 그 샘플만 버린다(trail·epoch 유지). 0.3 s 초과 리셋은 그대로다.
 - 증거: `test_lane_return_evidence.py`(1 ms 앞 유지, 0.2 s 앞 버림·epoch 불변), `test_line_junction.py::test_turn_completes_with_odom_stamps_1_ms_ahead_of_core_clock` 먼저 실패 후 통과.
 - gate 변화: 없음. 호스트 시험만. SIM(D-495 harness, odom 지연 제거) 미실행.
 - 결정: D-495 SIM 결과 결함 2 (`docs/validation/d495-junction-sim-2026-10-07/result.md`)
 - 교훈: 없음
+
+## 2026-10-07 · uncommitted · core_features(line_follow): D-468 departure only on positive evidence (D-507 7)
+- 변경: `recovery/lane_return.py` 추종 단계는 신선한 `ready` corridor 에서 `margin + uncertainty_m < 0`(또는 증명된 차로 안이지만 체크포인트 차로가 아님)일 때만 이탈을 연다. 그 밖은 `ReturnAction('tracking','containment_unknown')`. `recovery/lane_return_decision.py` 는 그 틱을 오늘의 추종 결정으로 넘기고 상태 `lane_return_containment` 을 채운다. 몸 기하 없음도 recovery off 와 같다(`lane_return_body_unknown` HOLD 제거). 포즈 불연속·epoch 변화는 그대로 이탈을 연다.
+- 증거: `python -m pytest middleware/core/gateway/test middleware/core/services/test contracts -q` → `X:/DevTemp/d507-impl/b6/run.txt`, known_failures 비교.
+- gate 변화: SOURCE. 선 잃음(근거 없음)은 이제 D-468 복귀가 아니라 손실 시계 → LOST 다. bridge 소진 뒤 역추적도 양의 증거가 있을 때만.
+- 결정: D-507 7
+- 교훈: 기존 시험 여럿이 `corridor=None` 을 이탈 신호로 썼다 — 이탈 시험은 몸이 경계를 넘은 corridor 로 쓴다.
 
 ## 2026-10-08 · uncommitted · fix(line_follow): LiDAR 원본 시각도 하나의 미래 허용치를 쓴다 (D-507 8)
 - 변경: `clearance.return_scan_view`가 1 ns라도 앞선 스캔을 버리던 것을 `SOURCE_FUTURE_TOLERANCE_S`(0.1 s) 안이면 나이 0으로 받고, 넘으면 버린다. odom(`lane_return_evidence.observe_pose`)과 선 관측(`manager.observe`)은 이미 같은 상수를 쓴다.
@@ -716,6 +735,50 @@
 - gate 변화: D-507 10 SOURCE·SIM. DEVICE(D9 근거리)는 열림.
 - 결정: D-507 10, D-422
 - 교훈: trailer 없이 main에 들어간 safety 커밋은 amend 할 수 없어 독립 검토를 EXEMPT로 남긴다. 착지 전에 `safety_review.py`를 돌린다.
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · test(line_follow): D-507 7 개정 — 이탈 조건 (2)·(3) 직접 시험
+- 변경: `test_lane_return.py`에 추종 중 odom 점프(차로 근거 없음), epoch 변경(차로 근거 없음), 연속 자세로 체크포인트가 아닌 차로 안에 듦(여유 0.04 m) 세 시험을 더했다. 각각 다른 조건이 열 수 없게 만들었다. main 머지에서 `test_motion_admit.py` 현장 근거 역추적 시험은 bridge 뒤 몸이 경계를 넘은 `ready` 프레임(1)으로 이탈을 연다(보이지 않는 차로는 더는 역추적하지 않는다). bridge Rig에 `edges=` 인자를 더했다.
+- 증거: 변이 3건(조건 (3) 제거, 점프 이탈 제거, epoch 이탈 제거)이 각각 새 시험 하나만 실패시키고 복원했다. lane_return·lane_bridge·junction·motion_admit 450 passed.
+- gate 변화: 없음. SOURCE 호스트 시험만.
+- 결정: D-507 7 (2026-10-08 개정)
+- 교훈: 기존 인접 차로 시험은 0.20 m 점프를 써서 (3)이 (2)에 가려졌다 — 조건별 시험은 다른 조건이 못 열게 만든다.
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 7 검토 — unknown은 오늘 경로, 새 체크포인트는 기준을 되살린다
+- 변경: `lane_return_decision.py` — `containment_unknown`과 쉬는 D-468(추종 단계)의 비-로컬 틱은 결정을 돌려주지 않고 None을 돌려줘 `_apply_recovery`(D-407 막힘)가 그 틱을 가진다. D-407이 가진 동안에도 `lane_return_containment: unknown`을 보인다. `lane_return.py` — 체크포인트를 새로 잡으면(검증·추종 두 곳) 점프가 남긴 `_reference_invalid`를 지운다.
+- 증거: `test_unknown_containment_opens_d407_stuck_exactly_as_recovery_off`(복귀 켬·끔이 같은 시각 같은 막힘), `test_checkpoint_taken_after_a_jump_is_the_new_reference`·`..._first_taken_while_tracking_...`. 각 수정을 되돌리면 그 시험만 실패한다.
+- gate 변화: 없음. SOURCE 호스트 시험만.
+- 결정: D-507 7 (2026-10-08 개정)
+- 교훈: "복귀를 끈 것과 같다"는 결정을 돌려주지 않는 것(None)이다 — 결정을 돌려주면 그 뒤 경로(D-407)가 건너뛰어진다.
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 2·4 pivot_past_line_m 부호 있음 [−0.30, 0.30]
+- 변경: `junction_approach.check_expect`가 음수 pivot을 받는다(측정 가로선이 장소 너머, 회전교차로 입구·T자의 먼 쪽 경계). 기대 창 점은 그대로 `expect_in_m − pivot`, 접근 목표 = 측정 선 + pivot. 목표가 로봇 자리이거나 뒤면 접근 0, 제자리 회전, 후진 없음(기존 `max(0, distance)`). 직진 띠 옆 반폭은 양수 pivot일 때만 그 값, 아니면 D-491 0.10 m.
+- 증거: `test_junction_approach.py` 음수 pivot 접근 0.1 m, 목표 뒤 접근 0, 창 0.6 m, 띠 반폭, 범위 −0.31 거절. sign 변이(범위 0 하한 복원) 5건 실패 확인 뒤 복원.
+- gate 변화: SOURCE. SIM 재실행(SW spoke)은 열림.
+- 결정: D-507 2·4 개정(2026-10-08 사용자 결정)
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-507 6 가로선 띠는 테이프 중심 ± 폭/2 (검토)
+- 변경: `cross_line_band`가 측정 선을 테이프 중심으로 보고 [선 − 테이프/2 − e, 선 + 테이프/2 + e]를 쓴다(keeper `_across_path`와 Fleet 지도 모형이 중심을 잰다). 띠가 끝나는 먼 끝도 + 테이프/2.
+- 증거: `test_junction_approach.py` 띠 경계(.3776/.3774, .4224/.4226)와 범위·odom 오차 경계(x .3214/.3816) 다시 계산.
+- gate 변화: SOURCE.
+- 결정: D-507 6, 2 개정 검토
+
+## 2026-10-08 · uncommitted · docs(core): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · fix(line_follow): D-468 궤적은 HOLD 틱에도 odom을 받는다
+- 변경: `ReturnController.observe()`가 epoch 확인과 `PoseTrail` 추가를 맡고 `tick()`은 그것을 부른다. `manager.tick`이 매 틱(`obstacle_ahead` 같은 비국소 HOLD 포함) `_feed_return_trail`로 궤적만 먹인다. 이탈 판단은 여전히 국소 틱의 `tick()`에서만 돈다. 0.5 s 넘는 HOLD 뒤 첫 틱이 간격(D-507 7 규칙 (2))으로 보여 이탈과 `sensor_search`를 열던 결함이다. ADR 바뀜 없음.
+- 증거: `test_lane_return_manager.py` 1 s 장애물 HOLD(odom 계속, 정지) 뒤 tracking 유지·search 없음, 0.6 s odom 공백과 0.2 m 자세 점프는 여전히 이탈. 변이(`_feed_return_trail` 호출 제거) 시 회귀 시험 실패 확인 뒤 복원. lane_return/bridge/junction/motion_admit/stuck/road + gateway line_follow 819 passed, `known_failures` 0 new.
+- gate 변화: SOURCE. SIM·장치는 열림.
+- 결정: D-468, D-507 7 (규칙 그대로)
+
+## 2026-10-08 · uncommitted · fix(line_follow): 지도 교차로의 기대 창이 없으면 감지로 회전하지 않음
+- 변경: `junction_approach._in_window`에서 `map_id`가 있고 `expect_in_m`·`expect_tol_m` 창이 없는 `straight`·회전 지시는 가로선 감지를 `junction_unexpected`로 HOLD하고 지시를 보존한다. 지도 없는 옛 지시와 `stop`은 그대로다. D-507 3항과 API reference에 보충했다.
+- 증거: 변경 전 map-backed left/straight 회귀 2건 실패(각각 조기 회전·실행), 변경 후 CORE 교차로·API·Fleet·계약 시험 194건 통과, `known_failures` 신규 0. B9 게이트 켬 SIM의 조기 회전 2/6 유형을 소스에서 차단한 것이며 SIM 재실행·굽이 통과·실물 수용은 열림.
+- gate 변화: SOURCE만. SIM·DEVICE·FIELD는 열림.
+- 결정: D-507 3항 보충.
 
 ## 2026-10-08 · uncommitted · fix(line_follow): D-507 6 motion_admitted refuses non-finite twists
 - 변경: `recovery/motion_admit.py` `motion_admitted`가 NaN·inf 선속도·각속도를 거부한다(현장 근거에서 NaN은 후진 판정과 sweep 비교를 통과했다). `test_motion_admit.py`에 중복 브랜치 `feat/site-floor-declaration`의 non-finite 시험을 옮겼다(6 kind × 4 twist).

@@ -6972,3 +6972,83 @@ osy-d395-s1d\`.
 - 변경: 루트 README·AGENTS에 모델 PC, AI PC, 현장 PC, 로봇의 역할과 권한을 기록하고 D-516 기반 Decision 파이프라인 설계를 연결했다. 후보 조사 보고서에서도 설계로 연결한다.
 - 증거: docs lint 0 errors, 문서 계약 pytest 121 passed, known_failures 0 new. 오프라인 합성 재생은 현장 모델 정확도나 활성화 증거가 아니다.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · docs(adr): 관제 웹의 위치는 문서 네 개다
+
+- 변경: D-518. 관제 웹은 operations/fleet/fleet/server/web에 두고 문서 넷(운용·설치·Cell·현장 지도)과 공유 읽기로 위치를 정했다. operations/ui/console 분리는 열지 않는다. 첫 구현은 네 엔트리의 import 울타리와 warpImage를 field-warp.js로 옮긴 것이다. site-map.js는 field-view.js를 가져오지 않는다. 하위 폴더 이동은 하지 않았다.
+- 증거: operations/fleet/test/test_document_imports.py, test_server_app.py::test_every_console_module_import_is_served, test_site_lanes_api.py — 19 passed, 1 warning. known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run.txt.
+- gate 변화: 없음
+- 결정: D-518 Accepted (2026-10-08, 사용자 선택: 문서 소유 + 하위 폴더)
+- 교훈: 패키지 폴더를 옮기면 서빙 주인만 같고 문서가 서로의 모듈을 가져오는 문제는 남는다. 울타리가 위치를 먼저 고정한다.
+
+## 2026-10-08 · uncommitted · refactor(fleet): 관제 공유 읽기를 web/shared로 옮긴다
+
+- 변경: D-518의 첫 폴더 이동. 공유 읽기 아홉 파일(address-drift, authorization, poll-gate, development-auth, map-fit, vision-view, field-warp, styles.css, doc-tabs.css)을 server/web/shared로 옮겼다. 공개 URL /console/assets/<파일이름>은 유지하고 allowlist가 실제 경로를 가리킨다. 다른 문서의 ./ import는 그 URL로 바꿨다. 같은 문서의 ./ 는 그대로다.
+- 증거: document imports, server app, site lanes, node --test, palette, queues, grammar, doc tabs, canvas, chrome, token scan, disabled controls, size verdict. 117 passed, 1 known failure (site-map.js canvas contract, already listed). known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run-shared.txt.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 공개 URL을 파일 이름에 고정하면 폴더를 옮겨도 브라우저 주소가 그대로다. node 시험은 그 지정자를 파일로 푸는 훅이 필요하다.
+
+## 2026-10-08 · uncommitted · docs(adr): D-518에 공유 읽기 이동을 기록한다
+
+- 변경: D-518 상태, 결정 5, 결과와 ADR Log 행을 구현에 맞췄다. 공유 읽기 아홉 파일은 web/shared에 있다. Cell, 현장 지도, 설치, 운용은 web/ 바로 아래에 있고 문서마다 옮긴다. 페이지 경로와 공개 URL은 그대로다.
+- 증거: 본문이 커밋 226e90f8f(울타리, warpImage 분리)와 671a439e7(web/shared)과 같다. harness lint 0 errors.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · refactor(fleet): Cell 문서를 web/cell로 옮긴다
+
+- 변경: D-518의 Cell 폴더 이동. cell.html, cell.css, cell.js, cell-document-editor.js를 server/web/cell로 옮겼다. 페이지는 /console/cell이고 공개 URL /console/assets/<파일이름>은 유지한다. allowlist가 실제 경로를 가리키고 /console/assets/cell/cell.js는 404다.
+- 증거: document imports, doc tabs, server app, node unit tests, surface icons, dialog contract. 58 passed, 1 warning. node hook으로 /console/assets/cell-document-editor.js를 읽었다. known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run-cell.txt.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · 오른쪽 경계 대체 가드 SIM 회귀
+
+- 변경: 분리된 모델 PC ROS-SIM에서 착지된 경계 가드를 로드하고, 굽이 폐루프 결과를 `docs/validation/lane-fallback-sim-2026-10-08/`에 기록했다.
+- 증거: 굽이 창 21프레임의 west edge 거리 중앙값 0.0007 m, 최대 0.0035 m; 1.4967 m 뒤 `obstacle_ahead` HOLD. 교차로 완료 0건이며 가드 발동 여부는 이 주행으로 검증되지 않았다.
+- gate 변화: 없음. 실물 R0/R1/R2 수용 전.
+- 결정: B9 자동 활성화와 `edge_left` trip 대체는 계속 보류.
+- 교훈: 굽이 통과 회귀와 한쪽 경계 대체 분기 검증은 별도 근거로 다룬다.
+
+## 2026-10-08 · uncommitted · 굽이 SIM의 전체 차로 중심선 투영
+
+- 변경: west edge 단독 거리 진단을 모든 지도 segment의 최소 거리로 재계산해 별도 validation 기록에 남겼다.
+- 증거: 이전 SIM 487프레임 최대 0.0638 m·40 mm 초과 16프레임, 가드 적용 SIM 334프레임 최대 0.0363 m·40 mm 초과 0프레임. 서로 다른 실행이므로 개선 효과 판정은 보류한다.
+- gate 변화: 없음. 경로 지시·차체 외곽·실물 수용은 미검증.
+- 결정: west edge에서 멀어진 회전교차로 구간을 곧바로 차선 침범으로 세지 않는다.
+- 교훈: 분기 지도에서는 선택 edge와 전체 network 최소 거리를 구분한다.
+
+## 2026-10-08 · uncommitted · 차선 추종 녹화 증거 준비
+
+- 변경: D-378 단계별 수용 목표와 장치 읽기 전용 관찰, TF 녹화 후보의 남은 증거 공백을 `docs/validation/lane-capture-readiness-2026-10-08/`에 기록했다.
+- 증거: `rosy_26` keep debug 39건/5초; Pilot 녹화 테스트 39 passed, known failures 0 new, harness lint 오류 0.
+- gate 변화: 없음. 실제 TF 게시·보정 revision·지도 자세·사람 검수와 실기 R0/R1/R2는 미확인.
+
+## 2026-10-08 · uncommitted · 10/7 현재 R0 재생 게이트
+
+- 변경: 원본 화소가 증명된 10/7 두 MCAP을 현재 로컬 main에서 기본 지면과 11.8° 후보로 재생하고, R0 게이트 실패를 `docs/validation/lane-1007-r0-gate-2026-10-08/`에 고정했다.
+- 증거: 후보 pitch 첫 세션 RoadState TRACK 111/124이지만 페인트 위 목표 비율 등 6개 게이트 실패; 둘째 세션 STOP 83/83. 기본 지면은 두 세션 모두 STOP 207/207. 네 결과 모두 `validated=false`.
+- gate 변화: R0 HOLD 유지. 승인된 보정값·사람 동일 경계 정답·실기 주행 증거가 없다.
+
+## 2026-10-08 · uncommitted · 차선 녹화 TF와 10/7 연속 검수 준비
+
+- 변경: 두 로봇의 전역 TF 게시·카메라 stamp 근접성을 읽기 전용으로 확인하고, 10/7 원본 207장의 빈 연속 검수 대기열을 X:에 만들어 `docs/validation/lane-tf-readback-2026-10-08/`에 기록했다.
+- 증거: 두 로봇 모두 `/tf` 19건/4초와 `/tf_static` 1건, 원본 카메라 48~49건/6초; 카메라와 최근접 odom TF stamp p95 0.0172초. 대기열 이미지 207/207 연결·해시 확인, 사람 승인 0건.
+- gate 변화: 없음. 지도 TF·승인 보정·장치 새 녹화·R0/R1/R2는 미확인.
+
+## 2026-10-08 · uncommitted · feat(site): 모델 PC 멈춤 대비
+
+- 변경: `deploy/site/install-model-pc-guard.sh`(워치독 iTCO_wdt, kernel.panic·softlockup 재부팅, ZFS zvol swap 끄고 zram 100%, 원격 점검 강제 명령과 reboot 한 줄 sudo), `install-model-guard-check.sh`·`rosy-model-guard-check`(관제 PC 10분 점검, 30분 연속 나쁘면 재부팅, 새벽 예약 재부팅 시간대 제외), 안내 `deploy/site/model-pc-guard.md`.
+- 증거: 2026-10-07 02:13 멈춤 로그(NV_ERR_NO_MEMORY, i915 Purging GPU memory, 17시간 정지), swap 32 GiB가 ZFS zvol. `test/test_model_pc_guard.py` 7 passed(모델 PC). 모델 PC `--dry-run` 확인.
+- gate 변화: 없음. 설치는 sudo 비밀번호를 아는 사람이 한 번 실행해야 한다.
+- 결정: 없음(사용자 선택: 워치독 + SSH 점검 + swap 이전)
+- 교훈: 확장자 없는 셸 스크립트는 `.gitattributes`에 `eol=lf`가 없으면 Windows `git archive`가 CRLF로 내보낸다.
+
+## 2026-10-08 · uncommitted · Decision 오프라인 재생 선검증과 AI PC 재시험
+
+- 변경: 재생 입력 전체를 서버 호출 전에 검증하고 세트 SHA-256을 결과에 남긴다. 호출 오류는 결과 JSON을 보존하면서 CLI 실패 코드로 올린다. AI PC Laya CPU 호출·서버 중단 시험을 `docs/validation/decision-model-replay-2026-10-08/`에 기록했다.
+- 증거: 재생 시험 3 passed, known failures 0 new. AI PC 합성 2건 중 1건 일치·오류 0; 서버 중단 2건은 예측 없음·CLI exit 1. GPU 장치 노드 부재로 GPU/VLM 지연 미측정.
+- gate 변화: 없음. 사람 정답 L0, Kev, ModelProfile 배포, Fleet/CORE·현장 수용은 미검증.

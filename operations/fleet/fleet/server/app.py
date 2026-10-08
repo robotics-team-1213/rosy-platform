@@ -70,6 +70,7 @@ from fleet.server.site_auth import (
 )
 from fleet.server.static_routes import install_static_routes
 from fleet.server.development_session import install_development_routes
+from fleet.server.password_session import PasswordSessions, install_password_routes
 from fleet.hub.server import fan_out_events as _fan_out_events
 from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest 재수출: test_task_contract_docs 참조
     GoalRequest,
@@ -112,6 +113,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                policy_evidence: Optional[PolicyEvidenceStore] = None,
                start_task_dispatcher: bool = True,
                site_users: Optional[Mapping[str, Mapping[str, str]]] = None,
+               site_logins: Optional[Mapping[str, Mapping[str, str]]] = None,
                discovery=None, discovery_token: Optional[str] = None,
                approved_peer_directory_file: Optional[Path] = None,
                vision_lease_secret: Optional[str] = None,
@@ -177,7 +179,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if cell_job_compiler is not None:
         from fleet.server.cell_goal_evidence import make_cell_job_resolver
         cell_job_resolver = make_cell_job_resolver(cell_job_compiler, cell_item_pose_tolerance)
-    if site_users is not None and task_service is None:
+    if (site_users is not None or site_logins) and task_service is None:
         raise ValueError("per-user site authorization requires persistent task/audit storage")
     if bool(discovery) != bool(discovery_token):
         raise ValueError("discovery and its dedicated credential must be configured together")
@@ -417,7 +419,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if tracking is not None and (sightings is None
                                  or tuple(tracking.sources) != tuple(sightings.sources)):
         raise ValueError("overhead tracking must use the configured sighting sources")
-    principals = parse_site_principals(site_users, console)
+    # D-519 1: a site-users file may hold only login accounts, leaving no token principals.
+    principals = {} if site_logins and not site_users else parse_site_principals(site_users, console)
+    password_sessions = PasswordSessions(task_service.store.path, site_logins) if site_logins else None
+    app.state.password_sessions = password_sessions
     if cell_goal_evidence_service is not None:
         from fleet.server.cell_goal_evidence_routes import (
             assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes)
@@ -443,13 +448,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             vision_lease_secret=vision_lease_secret, robot_credential_key=robot_credential_key,
             console=console, sightings=sightings, policy_evidence=policy_evidence,
             principals=principals)
-    authorize = build_authorize(console_token, principals, task_service, development=development_sessions)
+    authorize = build_authorize(console_token, principals, task_service, development=development_sessions,
+                                password_sessions=password_sessions)
     require_viewer, require_operator, require_named_operator, require_proposer = build_role_guards(
-        authorize, principals)
+        authorize, principals, named_logins=password_sessions is not None)
     # D-473: `--lan-camera-proxy` already means "Fleet sits behind the site Caddy", whose
     # X-Forwarded-For carries the browser address the development session checks.
     install_development_routes(app, sessions=development_sessions, task_service=task_service,
-                               trust_forwarded=lan_camera_proxy)
+                               trust_forwarded=lan_camera_proxy, password_login=password_sessions is not None)
+    install_password_routes(app, sessions=password_sessions, authorize=authorize, task_service=task_service,
+                            trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
 
     def require_camera_viewer(request: Request) -> SitePrincipal:
@@ -493,7 +501,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.central_registry_routes import install_registry_routes
     install_registry_routes(app, registry=central_registry, enrollment=enrollment, pairing=pairing,
                             sync_token=pairing_sync_token, require_viewer=require_viewer,
-                            require_operator=require_operator, named_identity=bool(principals))
+                            require_operator=require_operator,
+                            named_identity=bool(principals) or password_sessions is not None)
     from fleet.server.camera_peer_adapter import install_camera_peer
     app.state.camera_peer = install_camera_peer(app, pairing=pairing,
         current_users=lambda:site_users or {}, require_named_operator=require_named_operator)
@@ -534,7 +543,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_lane_compliance_routes
     app.state.lane_compliance = LaneComplianceMonitor(
         lambda: console.robot_ids, poses=map_pose, site_maps=site_maps,
-        config=lane_compliance_config or LaneComplianceConfig())
+        config=lane_compliance_config or LaneComplianceConfig(), identity=identity)
     install_lane_compliance_routes(app, monitor=app.state.lane_compliance, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,
@@ -553,7 +562,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                                               calibrations=tracking.calibrations),
                                    read_guard=read_guard, require_operator=require_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
-                          require_operator=require_operator, auth_configured=bool(principals or console_token))
+                          require_operator=require_operator,
+                          # D-519: login accounts are configured named operators too.
+                          auth_configured=bool(principals or console_token) or password_sessions is not None)
 
     if stuck_resolver_clients is not None:
         resolver_core = StuckResolver(ResolverConfig(),

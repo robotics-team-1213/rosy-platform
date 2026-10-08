@@ -31,6 +31,16 @@ def _lateral_at(centre, direction, x) -> float:
     return float(centre[1] + (x - centre[0]) * direction[1] / direction[0])
 
 
+def _pursuit_point(origin, direction, radius):
+    """Point of the line origin + t*direction at `radius` from base_link, ahead
+    (the larger root); the closest point when the line passes further away.
+    Returns (point, t)."""
+    b = float(np.dot(origin, direction))
+    disc = b * b - float(np.dot(origin, origin)) + radius * radius
+    t = -b + math.sqrt(disc) if disc > 0.0 else -b
+    return origin + direction * t, t
+
+
 def is_pair(left, right, lane, side_x):
     """True when boundary `left` and boundary `right` can bound one lane."""
     lo = max(min(p[0] for p in left["ends_m"]), min(p[0] for p in right["ends_m"]))

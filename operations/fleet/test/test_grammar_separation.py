@@ -19,7 +19,7 @@ WEB = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
 #: 콘솔처럼 보이기 시작한 것이고 그것은 결함이다(D-92, concept 16 §4).
 CONSOLE_GRAMMAR = re.compile(r"\.regions?\b|\.region-(sense|observe|act|head)\b")
 
-SHEET = WEB / "styles.css"
+SHEET = WEB / "shared" / "styles.css"
 PAGE = WEB / "index.html"
 
 

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { OPERATOR_REASON, applyRoleToControls } from "../../fleet/server/web/authorization.js";
+import { OPERATOR_REASON, applyRoleToControls } from "../../fleet/server/web/shared/authorization.js";
 
 // D-359 §5.3: the lock reads and writes the `reason` attribute, so the fakes carry attributes.
 function fakeControl(disabled, localName = "input") {
