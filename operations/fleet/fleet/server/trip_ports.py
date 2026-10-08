@@ -465,6 +465,8 @@ class LiveTrip:
         (``remaining`` m to its place) CORE is ``unexpected``, or ``waiting`` with the place
         beyond ``arm_distance_m`` (no instruction of ours is due there). The trip view keeps the
         map pose; ``line_reason`` is CORE's line-follow reason beside the junction state.
+        Lap SIM A ``junction_corner_hold``, at once: CORE holds our instruction short of the
+        keeper's corner and keeps holding it, so the trip ends now, not at the stall check.
         """
         junction = self.junction
         state = junction.get("state")
@@ -475,6 +477,8 @@ class LiveTrip:
                 state == "waiting" and remaining > config.arm_distance_m)):
             return "junction_unexpected", {**detail, "line_reason": junction.get("line_reason")}
         ours = self.first_seq is not None and (junction.get("seq") or 0) >= self.first_seq
+        if ours and junction.get("line_reason") == "junction_corner_hold":
+            return "junction_corner_hold", {**detail, "line_reason": "junction_corner_hold"}
         if (state in ("aborted", "unresolved") and ours) or (
                 state == "waiting" and now - self.waiting_since >= config.junction_wait_s):
             return "junction", detail

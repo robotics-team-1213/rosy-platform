@@ -341,6 +341,11 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 self._track_retreat(j['window'])  # D-507 2: see every odom sample since receipt
             if now > j['expires_at']:
                 self._bridge_hint = None
+                if j.get('corner_held') or self._corner_at_expected_line(j, now):
+                    # Fail closed: expiry never releases the robot into the keeper's corner; the
+                    # expired instruction holds until a fresh one replaces it (or a mode change).
+                    j['corner_held'] = True
+                    return self._junction_hold('junction_corner_hold', decision)
                 if not seen:
                     self._junction = None
                     return decision

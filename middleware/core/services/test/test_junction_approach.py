@@ -635,3 +635,29 @@ def test_a_corner_frame_older_than_the_latch_no_longer_holds():
     send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)
     rig.m.observe_junction('no_boundary', rig.now - 2.5, strategy='corner_left')
     assert rig.step()[0].linear > 0
+
+
+def test_an_expiring_instruction_keeps_the_corner_hold_until_a_fresh_one():
+    """Liveness review: expiry must not release the robot into the keeper's corner (fail closed)."""
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)  # expires in 10 s
+    assert corner(rig)[1].reason == 'junction_corner_hold'
+    rig.now += 10.                                                       # the robot stands; keeper
+    decision, status = corner(rig)                                       # still reads the corner
+    assert (decision.linear, decision.angular, status.reason) == (0., 0., 'junction_corner_hold')
+    rig.now += 3.                                                        # past the latch: 'both'
+    for _ in range(5):
+        decision, status = corner(rig, 'both')
+        assert (decision.linear, status.reason) == (0., 'junction_corner_hold')
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)  # a fresh instruction
+    assert corner(rig, 'both')[0].linear > 0
+
+
+def test_an_instruction_expiring_without_a_corner_releases_as_before():
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)
+    rig.now += 10.5
+    decision, status = corner(rig, 'both')
+    assert decision.linear > 0 and status.junction.state == 'idle'
