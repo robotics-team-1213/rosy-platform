@@ -45,3 +45,7 @@ The later overhead frame showed a third robot at the top edge and a person besid
 ## Supervised run interruption — 23:25 KST
 
 The operator offered live intervention while the agent controlled the robot. Before any drive command, Tailscale changed to site-PC offline, site camera and Fleet requests timed out, and the last known site LAN address did not answer HTTPS or a ping from `rosy_26`. Authenticated robot SSH still found `rosy-core.service` active. The camera and path verdict could not be refreshed after the site link dropped; the previous frame contained a person and another robot near the track. The agent sent no motion, line-follow activation, junction instruction, E-Stop change, or configuration change. The physical lane-choice run remains **HOLD** until continuous live camera access and the junction admission conditions are restored and rechecked.
+
+## Reconnection check — 2026-10-09 00:01 KST
+
+The operator reported Tailscale connected. Remote status confirmed the site PC online, its site stack active, and loopback health 200. A fresh `ceiling_north` frame was captured after one slow Tailscale fetch timed out. The frame showed no person, but three robot-shaped chassis and cables remained visible. Fleet again reported both robots online with `map-pose.state: UNKNOWN`, `odom_refused_reason: future`, one `display-only` calibration, and `junction_turn: false` for both robots. Reconnection restored observation, not junction admission or path clearance. No motion or junction instruction was sent.
