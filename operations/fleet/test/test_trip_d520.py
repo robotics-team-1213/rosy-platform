@@ -36,7 +36,7 @@ def test_caps_read_lane_arc():
     assert trip_caps(_caps(lane_arc="true")).lane_arc is False
 
 
-def test_a_lane_arc_robot_gets_the_ring_segment_the_tangent_and_no_advance():
+def test_a_lane_arc_robot_gets_the_ring_segment_the_lane_heading_turn_and_no_advance():
     runner, store, ports = _sw_entry()
     graph, segments = store.active()[2], runner.view("p1")["plan"]["segments"]
     assert ports.sent[0][:2] == ("right", "SW")
