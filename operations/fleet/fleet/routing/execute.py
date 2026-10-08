@@ -18,11 +18,10 @@ from fleet.routing.trip import PlanRequest, plan_trip
 MAX_TURN_DEG = 150.0
 #: D-495 1: CORE's default straight run after a junction turn; Fleet sends it with every turn.
 ADVANCE_M = 0.10
-#: D-507 4 (lap SIM 3): CORE turns from the heading it drove the incoming lane's last stretch
-#: with; the lane's 5 cm lead tangent catches paint noise at a mouth (260919 SW 72.6 deg, this
-#: chord 62.9 deg, the robot 59-60 deg).
-# ponytail: a chord lags a lane still curving into the place by curvature x this / 2 (none of the
-# 260919 turns); fit the lane's last stretch if a map turns off a curve.
+#: D-507 4 (lap SIM 3): the incoming lane's end heading from its last two chords of this length,
+#: the last one plus half their difference (a circle's tangent; a straight lane's chord). The
+#: 5 cm lead tangent catches paint noise at a mouth (260919 SW 72.6 deg, this 62.7, the robot
+#: 59-60); on the ring this equals the circle's tangent within 0.1 deg.
 INCOMING_HEADING_M = 0.10
 
 
@@ -54,14 +53,18 @@ def advance_m(graph: Graph, segments: list, index: int) -> float:
 
 def turn_target(graph: Graph, segments: list, index: int) -> float:
     """D-507 4 (lap SIM 3): the ``turn_deg`` sent with a left/right at the end of segment ``index``:
-    from the incoming lane's heading over its last ``INCOMING_HEADING_M`` (the chord) to the
-    outgoing lane's map tangent. CORE adds it to the heading it entered the junction with, so the
-    turn ends on the outgoing tangent (lap SIM 2: the 72.6 deg lead tangent and the former 6 deg
-    over-turn left SW 12-20 deg outward of the ring).
+    from the incoming lane's end heading (``INCOMING_HEADING_M``) to the outgoing lane's map
+    tangent. CORE adds it to the heading it entered the junction with, so the turn ends on the
+    outgoing tangent (lap SIM 2: the 72.6 deg lead tangent and the former 6 deg over-turn left SW
+    12-20 deg outward of the ring).
     """
-    lane = graph.arcs[arc_id(segments[index])]
-    (x0, y0, _), (x1, y1, _) = lane.point_at(max(0.0, lane.length_m - INCOMING_HEADING_M)), lane.point_at(lane.length_m)
-    return turn_deg(math.atan2(y1 - y0, x1 - x0), graph.arcs[arc_id(segments[index + 1])].start_tangent)
+    lane, step = graph.arcs[arc_id(segments[index])], INCOMING_HEADING_M
+    x0, y0, _ = lane.point_at(max(0.0, lane.length_m - 2 * step))
+    x1, y1, _ = lane.point_at(max(0.0, lane.length_m - step))
+    x2, y2, _ = lane.point_at(lane.length_m)
+    last = math.degrees(math.atan2(y2 - y1, x2 - x1))
+    heading = last + turn_deg(math.atan2(y1 - y0, x1 - x0), math.atan2(y2 - y1, x2 - x1)) / 2
+    return turn_deg(math.radians(heading), graph.arcs[arc_id(segments[index + 1])].start_tangent)
 
 
 #: D-520 1: CORE takes ``exit_segment`` with 0.5 <= |curvature| <= 5.0 1/m and length in (0, 1.0] m.

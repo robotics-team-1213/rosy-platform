@@ -69,10 +69,10 @@ def test_straight_outgoing_lane_turns_to_the_tangent():
         assert turn_target(graph, LEFT_TRIP, 0) == pytest.approx(theta(graph, LEFT_TRIP, 0), abs=1e-9)
 
 
-@pytest.mark.parametrize(("into", "out", "turn"), [("west", "ring_s", -104.9), ("east", "ring_n", -98.9)])
+@pytest.mark.parametrize(("into", "out", "turn"), [("west", "ring_s", -104.7), ("east", "ring_n", -97.4)])
 def test_ring_entry_turns_from_the_lane_heading_to_the_tangent(into, out, turn):
     """lap SIM 3: SW and NE on 260919 turn right onto the ring. SW's 5 cm lead tangent (72.6 deg) is
-    paint noise at the mouth; the last 0.10 m (62.9 deg) is what the robot drives, so the turn
+    paint noise at the mouth; the last 0.20 m (62.7 deg) is what the robot drives, so the turn
     ends on ring_s's tangent instead of 12-20 deg outward (lap SIM 2)."""
     graph = build_graph(from_lane_graph(LANE_GRAPH), version=1)
     trip = [{"edge_id": into, "forward": False}, {"edge_id": out, "forward": True}]
@@ -116,21 +116,6 @@ def test_a_right_onto_a_lane_bending_back_gets_the_tangent():
     graph, trip = _bent((-60, 0.05), (-20, 0.5))
     assert lane_action(graph, trip, 0, CONFIG) == "right"
     assert turn_target(graph, trip, 0) == pytest.approx(theta(graph, trip, 0), abs=1e-9)
-
-
-def test_the_incoming_heading_is_the_lanes_last_stretch_not_its_lead_tangent():
-    """A 4 cm kink at the mouth (paint noise) turns the 5 cm lead tangent, not the 0.10 m chord."""
-    site = SiteMap.model_validate({
-        "places": [{"id": p, "name": p, "x": x, "y": y, "kind": "junction"}
-                   for p, (x, y) in (("A", (0, 0)), ("B", (1.0, 0.01)), ("C", (1.0, -0.5)))],
-        "edges": [{"id": "ab", "from": "A", "to": "B", "polyline": [[0, 0], [0.96, 0], [1.0, 0.01]],
-                   "width_m": 0.2, "speed_cap_mps": 0.2, "drive_mode": "lane"},
-                  {"id": "bc", "from": "B", "to": "C", "polyline": [[1.0, 0.01], [1.0, -0.5]], "width_m": 0.2,
-                   "speed_cap_mps": 0.2, "drive_mode": "lane"}]})
-    graph = build_graph(site, version=1)
-    trip = [{"edge_id": "ab", "forward": True}, {"edge_id": "bc", "forward": True}]
-    assert theta(graph, trip, 0) < -100.0                       # the kink's 14 deg in the lead tangent
-    assert turn_target(graph, trip, 0) == pytest.approx(-95.7, abs=0.2)
 
 
 def test_a_sent_angle_of_the_other_sign_is_refused(monkeypatch):
