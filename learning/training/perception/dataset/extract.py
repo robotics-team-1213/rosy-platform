@@ -62,8 +62,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "contracts" / "foun
 
 from frames import FrameSelector  # noqa: E402
 from control.recording import (  # noqa: E402
-    CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC,
-    SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
+    CAMERA_TELEMETRY_TOPIC, CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, IR_RANGE_TOPIC,
+    KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC, SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
 from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
 
 STRING_SCHEMA = "std_msgs/msg/String"
@@ -347,7 +347,8 @@ def _mcap_frames(files, skipped=None, truncated=None):
             while early and early[0][0] / 1e9 + SIDE_LOOKAHEAD_S < t:
                 early.popleft()
             # Channels carry absolute, possibly namespaced topics.
-            name = next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, IR_RANGE_TOPIC)
+            name = next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, IR_RANGE_TOPIC,
+                                     CAMERA_TELEMETRY_TOPIC)
                          if _topic_is(ch.topic, n)), None)
             if name is not None:
                 if name == IR_RANGE_TOPIC:

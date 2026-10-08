@@ -257,7 +257,7 @@ def _frame_px(t):
 
 
 def _write_stamped(tmp_path, events):
-    """events: (log_s, kind, stamp_s[, extra]) with kind raw|jpeg|shadow|line|cmd."""
+    """events: (log_s, kind, stamp_s) for camera and side evidence."""
     from mcap_ros2.writer import Writer
 
     from control.recording import SHADOW_TOPIC
@@ -292,6 +292,9 @@ def _write_stamped(tmp_path, events):
                 w.write_message('/line/keep_debug', str_s, {'data': json.dumps(
                     {'stamp': stamp, 'target_m': [0.22, -0.04],
                      'strategy': 'right_only', 'paint_source_used': 'threshold'})}, ns, ns)
+            elif kind == 'telemetry':
+                w.write_message('/camera/telemetry', str_s, {'data': json.dumps(
+                    {'profile_revision': f'cam-{stamp}'})}, ns, ns)
             elif kind in ("line", "irline"):
                 source = "CAMERA_LINE" if kind == "line" else "IR_LINE"
                 w.write_message("/line/observation", str_s, {"data": json.dumps(
@@ -323,6 +326,20 @@ def test_keep_debug_mcap_conversion_and_extraction_have_the_same_source_frame(tm
         assert rows[0]['side']['line/keep_debug']['target_m'] == [0.22, -0.04]
         assert rows[1]['side']['line/keep_debug'] is None
         assert rows[2]['side']['line/keep_debug']['strategy'] == 'right_only'
+
+
+def test_pilot_camera_telemetry_is_prior_log_evidence_in_both_extractors(tmp_path):
+    pytest.importorskip('mcap_ros2')
+    import bag_to_video as b2v
+    session = _write_stamped(tmp_path, [
+        (0.9, 'telemetry', 1.0), (1.0, 'raw', 1.0),
+        (1.05, 'telemetry', 2.0), (1.1, 'raw', 1.1)])
+    frames, side, _, _, _ = b2v.first_pass(extract._mcap_files(session))
+    converted = list(b2v.sidecar_rows(frames, side, 0.5))
+    direct = [{'side': row[2]} for row in extract._mcap_frames(extract._mcap_files(session))]
+    for rows in (converted, direct):
+        assert [row['side']['camera/telemetry']['profile_revision'] for row in rows] == [
+            'cam-1.0', 'cam-2.0']
 
 
 SCAN_DEF = """std_msgs/Header header

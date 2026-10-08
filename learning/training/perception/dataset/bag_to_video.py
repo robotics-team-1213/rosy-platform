@@ -60,7 +60,8 @@ import numpy as np
 
 import extract
 from control.recording import (
-    CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
+    CAMERA_TELEMETRY_TOPIC, CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC,
+    SIDE_TOPICS, ir_range_sample)
 
 SCHEMA = "rosy.teleop.video/1"
 ODOM_TOPIC = "odom"
@@ -111,7 +112,7 @@ def _stamp_ns(msg) -> int:
 
 def _side_name(topic: str):
     return next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC,
-                             INTENT_TOPIC, IR_RANGE_TOPIC)
+                             INTENT_TOPIC, IR_RANGE_TOPIC, CAMERA_TELEMETRY_TOPIC)
                  if extract._topic_is(topic, n)), None)
 
 
