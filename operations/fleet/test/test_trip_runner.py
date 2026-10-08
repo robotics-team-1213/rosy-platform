@@ -36,7 +36,8 @@ ROOT = Path(__file__).resolve().parents[3]
 LANE_GRAPH = ROOT / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 OPERATOR = {"Authorization": "Bearer operator-token"}
 VIEWER = {"Authorization": "Bearer viewer-token"}
-LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True)
+# D-507 2 (2026-10-08): a turn goes only with a window, which only a junction_pivot robot takes.
+LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
 BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True)
 MANOEUVRE = ("turning", "advancing", "reacquiring")
 
@@ -440,9 +441,8 @@ def test_straight_is_refreshed_only_while_core_shows_it_armed_and_never_while_ex
 
 
 def test_an_expired_instruction_before_the_place_is_sent_again():
-    runner, store, ports = _setup(junction_expires_s=2.0)
-    arc = _arc(store, "east:fwd")
-    _plan(store, ports, "east:fwd", arc.length_m - 0.5, "NW")
+    runner, store, ports = _setup(_free_map("lane"), junction_expires_s=2.0)
+    _plan(store, ports, "ab:fwd", 0.5, "C")
     run(runner.start("p1", "bob"))
     _ticks(runner, ports)
     first = len(ports.sent)

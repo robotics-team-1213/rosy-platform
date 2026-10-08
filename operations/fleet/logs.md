@@ -2529,3 +2529,9 @@
 - 증거: `test_trip_d507.py`의 실제 west edge 후보·낡은 자세(0.304 s 반올림 경계)·지도 ID/버전 변경·trip 종료 검사. 관련 pytest 217 통과 후 착지 게이트가 파일/패키지 크기 판정 2건을 발견해 중단됐다(깨끗한 main의 두 시험은 통과). 굽이 진단을 `trip_ports.py`로 모으고 P6 판정을 갱신한 뒤 해당 시험 포함 41 통과. `known_failures.py` 0 new, flake8 및 harness lint 0 error. SOURCE/LOCAL 범위.
 - gate 변화: 없음. Fleet→CORE 폐루프 SIM·장치·현장 검수는 열림.
 - 결정: B9 굽이 접근 허가는 같은 경계의 검수 및 음성 사례를 통과할 때까지 보류.
+
+## 2026-10-08 · uncommitted · fix(fleet): 창 없는 좌·우 지시를 보내지 않고 trip 정지 (D-507 2, 사용자 결정 2)
+- 변경: trip 루프가 `left`·`right`를 기대 창(`expect_in_m`·`expect_tol_m`) 없이 보내게 되면 보내지 않고 trip을 `stopped` `junction_no_window`로 끝낸다(`detail.junction_place`·`junction_action`·`junction_fields`). `junction_pivot`이 없는 로봇, 다른 지도 버전, 0.30 m 안 가로선 없음, 장소가 (0, 2] 밖, 15° 넘는 굽이가 모두 해당한다. `straight`·`stop`은 그대로. 콘솔 사유 문구, API Ref v1.138.
+- 증거: `test_trip_d507.py`(옛 로봇·선 없음·장소 위·SW 장소 위·16° 굽이가 정지하고 halt `stop` 외에 보낸 지시 없음), `test_trip_runner.py`(시험 로봇에 `junction_pivot`), `site-map.test.mjs` 사유 문구. 관련 fleet pytest 246 통과, node 15 통과.
+- gate 변화: SOURCE. SIM 3차 R3-4(창 없는 SW 지시가 굽이에서 −112° 회전)의 Fleet 쪽 경로를 닫는다. SIM·장치는 열림.
+- 결정: D-507 2항 2026-10-08 사용자 결정 (2).

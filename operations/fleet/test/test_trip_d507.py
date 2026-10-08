@@ -22,6 +22,7 @@ from test_trip_runner import LANE, LANE_GRAPH, _activate_again, _arc, _free_map,
 import fleet.server.trip_ports as trip_ports
 
 PIVOT = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
+LEGACY = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True)  # no junction_pivot
 
 
 def test_west_edge_bend_candidate_needs_a_fresh_aligned_pose():
@@ -83,7 +84,17 @@ def _sent_at(site_map, caps, s, to="C", pose=None, **config):
     if pose:
         ports.pose = dataclasses.replace(ports.pose, **pose)
     _ticks(runner, ports)
+    ports.runner = runner
     return ports
+
+
+def _stopped_without_window(ports, action="left", place="B"):
+    """D-507 2 (2026-10-08 user decision): a turn without a window is never sent; the trip stops."""
+    view = ports.runner.view("p1")
+    assert (view["state"], view["reason"]) == ("stopped", "junction_no_window")
+    assert (view["detail"]["junction_action"], view["detail"]["junction_place"]) == (action, place)
+    assert [sent[0] for sent in ports.sent] == ["stop"]       # only the halt
+    return view["detail"]["junction_fields"]
 
 
 def _tol(pose=None, **config):
@@ -102,7 +113,7 @@ def test_caps_read_junction_pivot_and_site_floor_map_id():
 
 
 def test_fields_go_only_to_a_junction_pivot_robot():
-    assert _sent_at(_free_map("lane"), LANE, 0.5).expects == [None]
+    assert _stopped_without_window(_sent_at(_free_map("lane"), LEGACY, 0.5)) is None
     ports = _sent_at(_free_map("lane"), PIVOT, 0.5)
     assert ports.sent[0][0] == "left"
     # a sighting 0.1 s old at 0.2 m/s: 0.2 x (0.1 + ~0 measured + 0.2 allowance) + 0.05 = 0.11 -> floor 0.12
@@ -155,17 +166,24 @@ def test_an_unknown_pose_error_sends_the_widest_window():
 
 
 def test_pivot_is_capped_at_0_30():
-    wide = _free_map("lane").model_dump()
+    wide = _straight_map().model_dump()
     for edge in wide["edges"]:
         edge["width_m"] = 0.8
-    ports = _sent_at(SiteMap.model_validate(wide), PIVOT, 0.5)
-    assert ports.expects[0]["pivot_past_line_m"] == 0.30
+    ports = _sent_at(SiteMap.model_validate(wide), PIVOT, 0.6)
+    assert ports.sent[0][0] == "straight" and ports.expects[0]["pivot_past_line_m"] == 0.30
+
+
+def test_a_turn_with_no_line_within_0_30_stops_the_trip():
+    wide = _free_map("lane").model_dump()
+    for edge in wide["edges"]:
+        edge["width_m"] = 0.8                              # the corner's outer line is 0.4 m on
+    fields = _stopped_without_window(_sent_at(SiteMap.model_validate(wide), PIVOT, 0.5))
+    assert fields == {"map_id": "site", "pivot_past_line_m": 0.3}   # the half-width fallback, no window
 
 
 def test_a_place_outside_the_expectation_range_sends_no_window():
     ports = _sent_at(_free_map("lane"), PIVOT, 1.0)   # on the place: expect_in_m 0 is out of (0, 2]
-    # the far line is there (-0.1) but without a window a negative pivot goes unchecked: stop_point
-    assert ports.sent[0][0] == "left" and ports.expects == [{"map_id": "site"}]
+    assert _stopped_without_window(ports) == {"map_id": "site"}
 
 
 def test_a_heading_off_the_lane_sends_the_distance_along_the_heading():
@@ -217,7 +235,7 @@ def test_260919_sw_spoke_pivots_on_the_place_before_the_far_line():
 
 def test_260919_sw_spoke_without_a_window_sends_no_negative_pivot():
     ports = _sw_spoke_sends(pose=None, back=0.0)          # on the place: expect_in_m 0, no window
-    assert ports.expects == [{"map_id": "site"}]          # CORE turns at its stop point
+    assert ports.sent == [("stop", "SW", 0.0)] and ports.expects == [None]  # the halt only, no turn
 
 
 def test_without_a_window_and_without_a_line_the_old_half_width_stays():
@@ -283,8 +301,8 @@ def test_a_bend_widens_the_window_by_how_far_the_lane_runs_beside_the_heading():
 def test_a_bend_of_15_degrees_keeps_the_window_and_more_drops_it():
     within = _sent_at(_bent_map(15.0), PIVOT, 0.5).expects[0]
     assert within["expect_in_m"] == round(0.2 + 0.3 * math.cos(math.radians(15)), 3)
-    beyond = _sent_at(_bent_map(16.0), PIVOT, 0.5).expects[0]
-    assert "expect_in_m" not in beyond and "expect_tol_m" not in beyond and beyond["map_id"] == "site"
+    beyond = _stopped_without_window(_sent_at(_bent_map(16.0), PIVOT, 0.5))
+    assert beyond == {"map_id": "site"}
 
 
 def test_a_changed_map_version_sends_no_fields_and_says_so(caplog):
@@ -294,7 +312,7 @@ def test_a_changed_map_version_sends_no_fields_and_says_so(caplog):
     _activate_again(store)
     ports.at(_arc(store, "ab:fwd"), 0.5)
     _ticks(runner, ports)
-    assert ports.sent and ports.expects[-1] is None
+    assert ports.sent == [("stop", "B", 0.5)] and ports.expects[-1] is None   # the replan hold's stop
     assert runner.view("p1")["detail"]["junction_fields_dropped"] == "map_version"
     assert "junction fields not sent" in caplog.text
 
