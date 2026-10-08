@@ -595,7 +595,7 @@ def test_a_corner_turn_near_the_expected_line_holds_instead_of_following(strateg
     decision, status = corner(rig, strategy)
     assert (decision.linear, decision.angular) == (0., 0.)
     assert (status.state, status.reason, status.junction.state) == ('HOLD', 'junction_corner_hold', 'armed')
-    decision, status = rig.step()                                          # the keeper follows again
+    decision, status = corner(rig, 'both')                                 # the keeper follows again
     assert decision.linear > 0 and status.junction.state == 'armed'
 
 
