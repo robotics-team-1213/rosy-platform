@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 import json,subprocess
 import numpy as np
 import onnxruntime as ort
