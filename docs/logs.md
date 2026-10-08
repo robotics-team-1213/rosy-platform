@@ -7215,3 +7215,9 @@ osy-d395-s1d\`.
 - 변경: 과노출 비율은 검수 우선순위만 정하고 자동 제외를 하지 않도록 `review_quality.py`의 `--apply`를 제거했다. D-528에 사람의 정답 가능성 판단, 255 대기와 학습 승인 경계를 기록했다. 수치만으로 제외했던 v13 사진 9~23의 15장을 검수 API로 재검수 대기에 되돌렸다.
 - 증거: 모델 PC 원본 15장 확인, 검수 API 응답 15건 `reopen`/skip 0건, `/api/learning` 객체 대기 43·제외 0·픽셀 승인 0. `test_review_quality.py`는 후보 보고가 저장 결정을 바꾸지 않음을 확인했다.
 - gate 변화: 없음. v13 픽셀 승인과 원본 영상 출처 검증, 학습 admission은 아직 끝나지 않았다.
+
+## 2026-10-09 · uncommitted · D-529 역할별 시험 실행 위치
+
+- 변경: 개발 PC의 pytest 자동 fallback을 중단하고, 모델/AI PC 호스트 시험, 현장 PC Fleet·Cam, Pinky DEVICE/FIELD, GitHub full CI의 증거를 분리하는 결정 D-529를 기록했다.
+- 증거: AI PC에서 기체 ID/API 관련 호스트 시험 102개 통과; 현장 Fleet 등록 두 행의 serial_number·device_uid는 아직 비어 있다.
+- gate 변화: 문서 결정만. 원격 실행기 착지·푸시·ARM64 payload·두 로봇 배포·현장 수용은 별도 검증한다.
