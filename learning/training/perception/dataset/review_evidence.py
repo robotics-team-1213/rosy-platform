@@ -31,7 +31,11 @@ def configure(store):
             identity TEXT PRIMARY KEY, frame INTEGER NOT NULL UNIQUE);
             CREATE TABLE IF NOT EXISTS representations (
             frame INTEGER, image_sha256 TEXT, provenance TEXT,
-            PRIMARY KEY(frame,image_sha256));''')
+            PRIMARY KEY(frame,image_sha256));
+            CREATE TABLE IF NOT EXISTS object_drafts (
+            frame INTEGER NOT NULL, sha256 TEXT NOT NULL, boxes TEXT NOT NULL,
+            origin TEXT, catalog_sha256 TEXT NOT NULL,
+            PRIMARY KEY(frame,sha256));''')
         db.execute("INSERT OR IGNORE INTO metadata VALUES ('workspace_id',?)", (uuid.uuid4().hex,))
         db.execute("INSERT OR IGNORE INTO metadata VALUES ('generation','1')")
         for row in db.execute('SELECT id,source FROM frames').fetchall():
