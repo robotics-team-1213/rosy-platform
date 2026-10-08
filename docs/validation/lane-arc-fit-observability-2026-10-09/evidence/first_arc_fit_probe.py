@@ -4,10 +4,12 @@ Usage: python first_arc_fit_probe.py <run-dir>
 
 Requires rec/frames.npz, rec/keep.jsonl, and log.jsonl; also accepts the two
 recorder files flattened beside the log after copying them.
-The predicted circle is reconstructed from the first turning pose and sent
-turn_deg; the CORE private circle is not logged. The 45 mm local PCA direction
-filter and fixed-radius least squares are an offline D-520 proxy, not the
-admission or driving implementation. GT is used to evaluate this proxy.
+The predicted circle is reconstructed from the first turning ODOM pose and sent
+turn_deg; each camera point is gated in the matching frame's ODOM pose. The CORE
+private circle is not logged. The 45 mm local PCA direction filter and
+fixed-radius least squares are an offline D-520 proxy, not the admission or
+driving implementation. GT is used only for the separate oracle diagnostic and
+evaluation; the 'predicted gate' rows do not use it to select or fit points.
 """
 
 import argparse
@@ -79,24 +81,27 @@ REC = ROOT / "rec" if (ROOT / "rec" / "frames.npz").exists() else ROOT
 record = np.load(REC / "frames.npz")
 stamps = record["stamp"]
 gt = record["gt"]
+odom = record["odom"]
 keep = [json.loads(line) for line in (REC / "keep.jsonl").open()]
 log = [json.loads(line) for line in (ROOT / "log.jsonl").open()]
 arc = next(row for row in log if str(row.get("reason") or "").startswith("lane_arc") and row.get("gt"))
 turn = next(row for row in log if row.get("reason") == "junction_turning" and row.get("gt"))
 start_stamp = arc["sim_t"]
 start_gt = np.array(arc["gt"])
-yaw0 = wrap(turn["gt"][2] + math.radians(turn["junction"]["turn_deg"]))
-centre_pred_global = start_gt[:2] + R * np.array([-math.sin(yaw0), math.cos(yaw0)])
+yaw0 = wrap(turn["odom"][2] + math.radians(turn["junction"]["turn_deg"]))
+centre_pred_global = np.array(arc["odom"][:2]) + R * np.array([-math.sin(yaw0), math.cos(yaw0)])
 phi0 = math.atan2(start_gt[1] - C[1], start_gt[0] - C[0])
 print("arc_start", round(start_stamp, 3), "gt", np.round(start_gt, 4).tolist())
-print("centre_pred", np.round(centre_pred_global, 4).tolist(), "error_m", round(float(np.linalg.norm(centre_pred_global-C)), 4))
+print("centre_pred_odom", np.round(centre_pred_global, 4).tolist(),
+      "vs_gt_map_m", round(float(np.linalg.norm(centre_pred_global-C)), 4))
 print("stamp dist_m n_all n_gate span_deg rms_mm e_oracle_deg e_fit_deg weak_se10_mm n_dir span_dir rms_dir e_dir")
 for frame in keep:
     stamp = frame.get("stamp")
     if not isinstance(stamp, (int, float)) or not start_stamp <= stamp <= start_stamp + 2:
         continue
     idx = int(np.argmin(np.abs(stamps - stamp)))
-    if abs(stamps[idx] - stamp) > .07 or not np.isfinite(gt[idx]).all():
+    if (abs(stamps[idx] - stamp) > .07 or not np.isfinite(gt[idx]).all()
+            or not np.isfinite(odom[idx]).all() or abs(odom[idx, 5] - stamp) > .03):
         continue
     x, y, yaw = gt[idx]
     phi = math.atan2(y - C[1], x - C[0])
@@ -114,21 +119,24 @@ for frame in keep:
     oracle = math.degrees(wrap(yaw - (phi + math.pi / 2)))
     if len(selected) < 3:
         print(round(stamp, 3), round(along, 3), len(points), len(selected), "--", "--", round(oracle, 1))
-        continue
-    centre_fit, rms, se = fit_fixed_radius(selected, centre_true)
-    tangent_fit = math.atan2(-centre_fit[1], -centre_fit[0]) + math.pi / 2
-    efit = math.degrees(wrap(-tangent_fit))
-    direction_points = oriented(selected, centre_true)
-    if len(direction_points) >= 3:
-        direction_centre, direction_rms, _ = fit_fixed_radius(direction_points, centre_true)
-        direction_tangent = math.atan2(-direction_centre[1], -direction_centre[0]) + math.pi / 2
-        direction_error = math.degrees(wrap(-direction_tangent))
-        direction_report = f"{len(direction_points)} {span(direction_points, centre_true):.1f} {direction_rms*1000:.1f} {direction_error:.1f}"
     else:
-        direction_report = f"{len(direction_points)} -- -- --"
-    print(f"{stamp:.3f} {along:.3f} {len(points)} {len(selected)} {span(selected, centre_true):.1f} "
-          f"{rms*1000:.1f} {oracle:.1f} {efit:.1f} {se*1000:.1f} {direction_report}")
-    centre_pred = rot @ (centre_pred_global - np.array([x, y]))
+        centre_fit, rms, se = fit_fixed_radius(selected, centre_true)
+        tangent_fit = math.atan2(-centre_fit[1], -centre_fit[0]) + math.pi / 2
+        efit = math.degrees(wrap(-tangent_fit))
+        direction_points = oriented(selected, centre_true)
+        if len(direction_points) >= 3:
+            direction_centre, direction_rms, _ = fit_fixed_radius(direction_points, centre_true)
+            direction_tangent = math.atan2(-direction_centre[1], -direction_centre[0]) + math.pi / 2
+            direction_error = math.degrees(wrap(-direction_tangent))
+            direction_report = f"{len(direction_points)} {span(direction_points, centre_true):.1f} {direction_rms*1000:.1f} {direction_error:.1f}"
+        else:
+            direction_report = f"{len(direction_points)} -- -- --"
+        print(f"{stamp:.3f} {along:.3f} {len(points)} {len(selected)} {span(selected, centre_true):.1f} "
+              f"{rms*1000:.1f} {oracle:.1f} {efit:.1f} {se*1000:.1f} {direction_report}")
+    ox, oy, oyaw = odom[idx, :3]
+    rot_odom = np.array([[math.cos(oyaw), math.sin(oyaw)],
+                         [-math.sin(oyaw), math.cos(oyaw)]])
+    centre_pred = rot_odom @ (centre_pred_global - np.array([ox, oy]))
     pred_mask = np.abs(np.linalg.norm(points - centre_pred, axis=1) - RO) <= .06
     pred_points = oriented(points[pred_mask], centre_pred)
     if len(pred_points) >= 3:
