@@ -26,7 +26,7 @@
 
 ## 신규 격리 SIM: 진입 방향만 바꾸어 원인을 분리
 
-- 모델 PC `~/rosy_d520_obs_ws`에 local `main` **`a8185d3f93e276164b4a2b9c1a83e5221cd2f817`**의 archive를 설치했다. ROS_DOMAIN_ID 94, `GZ_PARTITION=rosy_d520_obs`, CORE 8598, Fleet 8599를 사용했다. 260919 `map_v2_fleet_real` 한 대, 기존 lap SIM 4의 `lap_trip.py`·`lap_record.py`를 썼다. 같은 SIM 그룹을 종료했다. 별도 세션의 Gazebo 프로세스는 건드리지 않았다.
+- 모델 PC `~/rosy_d520_obs_ws`에 local `main` commit **`a8185d3f93e276164b4a2b9c1a83e5221cd2f817`**의 archive를 설치했다. ROS_DOMAIN_ID 94, `GZ_PARTITION=rosy_d520_obs`, CORE 8598, Fleet 8599를 사용했다. 260919 `map_v2_fleet_real` 한 대, 기존 lap SIM 4의 `lap_trip.py`·`lap_record.py`를 썼다. 같은 SIM 그룹을 종료했다. 별도 세션의 Gazebo 프로세스는 건드리지 않았다.
 - 기본 조건의 NE 지시는 `turn_deg=-97.4°`다. **원인 분리용 가짜 Fleet**만 NE `right`와 `exit_segment`가 같이 있을 때 `turn_deg`에서 13.0°를 더 뺐다(`-110.4°`). 로봇/CORE/지도/카메라/원 추종/안전 게이트 코드는 동일하다. 이 수치는 SIM 참값을 보고 고른 oracle 조작이며 현장 보정값이나 제품 알고리즘이 아니다.
 
 | 시작·지시 | 4회 `ring_n` 최대 \|Δr\| | 4회 첫 `lane_arc` 틱 방향 − 참값 접선 | NW 도착 | IR 보정 / `lane_arc_edge` / unarmed |
@@ -48,7 +48,7 @@
 
 첫 영상의 점 수·호각·RMS는 D-520의 *기하* 하한을 넘지만, 점이 실제 바닥 테이프라는 승인이나 방향 불확실도 상한은 아니다. 특히 SW 추정과 참값은 3.7° 다르고, SW의 0.10 m 안쪽 후속 후보는 −5.7°까지 변했다. 독립 10 mm 반지름 잡음을 **가정**한 약한 축 표준오차는 SW 10.8 mm, NE 기본 10.1 mm이며, 영상 보정의 공통 오차를 포함하지 않는다. RMS만으로 5° 근처의 통과를 확정하면 안 된다. NE oracle의 첫 +4.0° 후보도 5° 문까지 여유가 1.0°뿐이며 반복 oracle의 첫 영상은 녹화되지 않았다. 반대로 NE 기본의 큰 오차는 첫 0.10 m에서 `lane_arc_entry` 정지가 필요한 사례로 관측된다. 정지 없이 지날 수 있는 진입 방향 기준을 실측으로 정하기 전에는 단계 2를 구동에 연결하지 않는다.
 
-원시 SIM 기록은 모델 PC `~/rosy_d520_obs_ws/runs_ne1`, `runs_lap1`, `runs_ne_oracle1`, `runs_ne_base3`, `runs_ne_oracle3`와 실험실 스크래치 `X:\DevTemp\d520-obs\`에 보관했다. [SHA-256 목록](evidence/sha256.txt)은 복사한 세 녹화의 `frames.npz`·`keep.jsonl`·`log.jsonl`·`summary.json`과 추가 6회 로그를 고정한다. `ring4_arc.py`로 반지름을 재계산하고 `first_arc_fit_probe.py <run-dir>`로 표의 첫 맞춤 후보를 재계산할 수 있다. 이 진단은 바닥 정답의 사람 검수, 카메라 보정 오차, 실차 주행을 대체하지 않는다.
+원시 SIM 기록은 모델 PC `~/rosy_d520_obs_ws/runs_ne1`, `runs_lap1`, `runs_ne_oracle1`, `runs_ne_base3`, `runs_ne_oracle3`와 실험실 스크래치 `X:\DevTemp\d520-obs\`에 보관했다. [SHA-256 목록](evidence/checksums.sha256)은 복사한 세 녹화의 `frames.npz`·`keep.jsonl`·`log.jsonl`·`summary.json`과 추가 6회 로그를 고정한다. `ring4_arc.py`로 반지름을 재계산하고 `first_arc_fit_probe.py <run-dir>`로 표의 첫 맞춤 후보를 재계산할 수 있다. 이 진단은 바닥 정답의 사람 검수, 카메라 보정 오차, 실차 주행을 대체하지 않는다.
 
 ## 제품 판단
 
