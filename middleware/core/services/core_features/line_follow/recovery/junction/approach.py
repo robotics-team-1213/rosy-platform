@@ -34,6 +34,13 @@ REACQUIRE_HEADING_RAD = math.radians(30.)
 STEP_TIME_S = 5.
 
 
+#: The keeper's L-corner turns (line/keep_debug strategy); 'corner_ahead' drives straight on.
+CORNER_TURNS = frozenset({'corner_left', 'corner_right'})
+#: ponytail: the 260919 keeper's corner range (perception CORNER_MAX_AHEAD_M 0.45); a corner it
+#: reads this close to the expected cross line is that line misread (lap SIM A), SIM-tuned.
+CORNER_HOLD_AHEAD_M = .45
+
+
 def _point(pose, ahead, yaw, extra=0.):
     return (pose.x+ahead*math.cos(pose.yaw)+extra*math.cos(yaw),
             pose.y+ahead*math.sin(pose.yaw)+extra*math.sin(yaw))
@@ -75,6 +82,7 @@ class JunctionApproachMixin:
     _junction_anchor = None  # the latest measured sighting, anchored in odom (any age)
     _cross_band = None  # D-507 6: where IR 'centre' is the measured cross line
     _junction_ahead_v_at = None  # last keep_debug frame carrying junction_ahead_v >= 1
+    _corner_turn_at = None  # last keep_debug frame whose keeper strategy was a corner turn
     _junction_held = False  # lap SIM A: a bend pass handed its sighting on; seen until odom passes the line
 
     def _expect_window(self, expect, now):
@@ -122,6 +130,19 @@ class JunctionApproachMixin:
                 and first is not None and first > since
                 and a['pose'].received_at >= since-SIGHTING_POSE_S
                 and self._return_evidence.trail.odometer-a['odometer'] < a['ahead'])
+
+    def _corner_at_expected_line(self, j, now):
+        """An armed map instruction's expected line is within the keeper's corner range and the
+        keeper turns a corner this frame: that corner is the junction's line misread (it would
+        put the robot on a lane against the route). Locked."""
+        w, at, trail = j.get('window'), self._corner_turn_at, self._return_evidence.trail
+        if w is None or at is None or not 0 <= now-at <= self._config.stale_after_s:
+            return False
+        pose = self._fresh_pose(now)
+        if pose is None or (self._return_evidence.epoch, pose.frame) != w['key']:
+            return True  # the window cannot be measured: fail closed
+        line = w['expect_in']-(j.get('pivot') or 0.)-(trail.odometer-w['odometer'])
+        return line <= CORNER_HOLD_AHEAD_M+w['tol']
 
     def _anchor_now(self, now):
         """The anchor if it is in the current odom frame, else None."""

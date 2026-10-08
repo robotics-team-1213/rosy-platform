@@ -577,3 +577,49 @@ def test_standing_jitter_does_not_move_the_odometer_or_close_the_window():
     assert abs(trail.odometer - start) < .001
     assert trail.distance - path > .02                   # the unsigned path length would have grown
     assert sight(rig, ahead=.3, seen=False)[1].junction.state == 'turning'
+
+
+# --- lap SIM A: the keeper's corner reading of the expected cross line holds ----------------
+
+def corner(rig, strategy='corner_left', **kwargs):
+    """One tick whose keep_debug frame names the keeper's strategy (no junction reason)."""
+    rig.m.observe_junction('no_boundary', round(rig.now + .05, 6), strategy=strategy)
+    return rig.step(**kwargs)
+
+
+@pytest.mark.parametrize('strategy', ['corner_left', 'corner_right'])
+def test_a_corner_turn_near_the_expected_line_holds_instead_of_following(strategy):
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)  # line .4 ahead
+    decision, status = corner(rig, strategy)
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert (status.state, status.reason, status.junction.state) == ('HOLD', 'junction_corner_hold', 'armed')
+    decision, status = rig.step()                                          # the keeper follows again
+    assert decision.linear > 0 and status.junction.state == 'armed'
+
+
+def test_a_corner_far_before_the_expected_line_or_corner_ahead_follows():
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', expect_in_m=1.2, expect_tol_m=.1, pivot_past_line_m=.1)
+    assert corner(rig)[0].linear > 0                                       # line 1.1 ahead: a real corner
+    drive_to(rig, .7)
+    assert corner(rig, 'corner_ahead')[0].linear > 0                      # straight on, not a turn
+    assert corner(rig)[1].reason == 'junction_corner_hold'                # line .4 ahead
+
+
+def test_no_window_or_no_instruction_leaves_the_keeper_corner_alone():
+    rig = Rig()
+    rig.step()
+    assert corner(rig)[0].linear > 0                                       # no instruction
+    send(rig, 'straight')                                                  # legacy: no map, no window
+    assert corner(rig)[0].linear > 0
+
+
+def test_an_unmeasurable_window_fails_closed():
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', expect_in_m=1.2, expect_tol_m=.1, pivot_past_line_m=.1)
+    rig.m._return_evidence.epoch += 1                                    # odom restarted
+    assert corner(rig)[1].reason == 'junction_corner_hold'

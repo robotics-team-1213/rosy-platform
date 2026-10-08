@@ -98,11 +98,13 @@ def keep_junction(services, raw: str, *, source_now: float, received_at: float) 
     motion, not only stops: the frame must reach CORE within stale_after_s (0.3 s) of its camera
     stamp or it is dropped here. corner_turning feeds supports_junction_turn. D-507 5: the
     optional junction_ahead_m (base_footprint x, m) places the sighting's cross line; the marker
-    junction_ahead_v (on every frame) gates the junction_pivot capability."""
+    junction_ahead_v (on every frame) gates the junction_pivot capability. The keeper's strategy
+    names its corner turn (lap SIM A: CORE holds it near an expected junction)."""
     try:
         data = json.loads(raw)
         reason, stamp, corner = data.get("reason"), data.get("stamp"), data.get("corner_turning")
         ahead, ahead_v = data.get("junction_ahead_m"), data.get("junction_ahead_v")
+        strategy = data.get("strategy")
     except (AttributeError, TypeError, ValueError):
         return
     if (type(stamp) in (int, float) and math.isfinite(stamp)
@@ -110,7 +112,8 @@ def keep_junction(services, raw: str, *, source_now: float, received_at: float) 
         services.line_follow.observe_junction(reason, received_at - (source_now - stamp),
                                               corner_turning=corner is True,
                                               ahead_m=ahead if type(ahead) in (int, float) else None,
-                                              ahead_v=ahead_v if type(ahead_v) is int else None)
+                                              ahead_v=ahead_v if type(ahead_v) is int else None,
+                                              strategy=strategy if type(strategy) is str else None)
 
 
 def road_observation(services, raw: str, *, source_now: float,
