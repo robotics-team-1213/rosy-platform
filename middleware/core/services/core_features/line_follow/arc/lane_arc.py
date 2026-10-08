@@ -189,12 +189,13 @@ class ArcMixin:
                  or not 0 <= now-self._clearance_at <= cfg.clearance_stale_s),
                 ('lane_arc_timeout', now > a['deadline']),
                 # a correction never runs into the next place's instruction or past its limit
-                ('lane_arc_edge', busy and (now > c['deadline'] or a['travelled'] >= a['length'])),
-                ('lane_arc_blind', a['travelled'] > cfg.arc_blind_max_m)):
+                ('lane_arc_edge', busy and (now > c['deadline'] or a['travelled'] >= a['length']))):
             if failed:
                 return self._arc_stop(reason)
         if a['travelled'] >= a['length']:
             return self._arc_end(a, now)
+        if a['travelled'] > cfg.arc_blind_max_m:  # step 1: no fit, so all of it is blind
+            return self._arc_stop('lane_arc_blind')
         # lane_arc_entry (D-520 6, step 2): the first confident fit's |e_theta| is checked here.
         sigma, kind, side = self._arc_ir(a, now, pose)
         if kind is None:
@@ -292,5 +293,6 @@ class ArcMixin:
         if j['turn_deg'] is None:
             j['state'] = 'unresolved'
             return None
+        self._status = self._status.model_copy(update={'reason': 'junction_stopping'})
         return self._start_turn(j, now, LineFollowDecision(
             generation=self._generation, evidence_revision=self._evidence_revision, mode=self._mode))

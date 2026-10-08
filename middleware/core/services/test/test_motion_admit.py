@@ -291,3 +291,33 @@ def test_l4_traffic_gate_arc_family_is_swept_in_reverse():
 @pytest.mark.parametrize('twist', [(math.nan, 0.), (0., math.inf), (-math.nan, 0.), (.02, math.nan)])
 def test_non_finite_twists_are_never_admitted(kind, twist):
     assert Site().admit(*twist, kind) is False
+
+
+# ---- D-520 2: the arc kinds -------------------------------------------------------------------
+
+@pytest.mark.parametrize('ir', ['clear', 'left', 'right', 'centre', 'stale'])
+def test_arc_runs_on_clear_only(ir):
+    site = Site(ir=ir)
+    assert site.admit(.08, .3, 'arc') is (ir == 'clear')
+
+
+@pytest.mark.parametrize('side', ['left', 'right'])
+@pytest.mark.parametrize('ir', ['clear', 'left', 'right', 'centre', 'stale'])
+def test_arc_edge_takes_its_side_or_clear(side, ir):
+    site = Site(ir=ir)
+    assert site.admit(.04, -.1, 'arc_edge', ir_side=side) is (ir in ('clear', side))
+
+
+def test_arc_edge_needs_ir_side_and_arc_takes_none():
+    site = Site()
+    with pytest.raises(ValueError):
+        site.admit(.04, 0., 'arc_edge')
+    with pytest.raises(ValueError):
+        site.admit(.04, 0., 'arc', ir_side='left')
+
+
+@pytest.mark.parametrize('kind, side', [('arc', None), ('arc_edge', 'left')])
+def test_arc_kinds_never_reverse(kind, side):
+    site = Site()
+    assert site.admit(-.02, 0., kind, ir_side=side) is False
+    assert site.admit(.02, 0., kind, ir_side=side) is True
