@@ -786,3 +786,9 @@
 - SIM 뒤 고침: 추적 lookahead를 D-476 `bridge_lookahead_m`으로(모서리 안쪽으로 일찍 돎), 카메라 자신의 HOLD에서만 넘겨받기, 닻 없으면 호 시작점까지 지금의 HOLD, D-422 막힘은 중단이 아니라 그 틱 HOLD(`junction_bend_blocked`). `junction.py`는 굽이 `reacquiring`에서도 `obstacle_ahead`를 이어 보게 했다.
 - gate 변화: SOURCE. SIM은 `docs/validation/lane-bend-odom-sim-2026-10-08`, DEVICE 열림.
 - 결정: D-507 보충(2026-10-08 "지도 기반 odom 통과")
+
+## 2026-10-08 · uncommitted · test(line_follow): D-507 굽이 통과 모델 PC SIM
+- 변경: 코드 변경 없음(SIM 증거). `docs/validation/lane-bend-odom-sim-2026-10-08/` 결과·하네스·분석.
+- 증거: CORE `e5735bd5f`, 도메인 86·`rosy_bendodom`·포트 8113. 아래 길 진입 18회 굽이 통과 18/18, 회전교차로 입구 14/18(4회는 넘겨준 뒤 keeper `flipping` LOST). 서쪽 출발은 굽이 전 모서리 LOST(기준선 5/5)로 측정 불가. 독립 안전 검토 APPROVE WITH NOTES, 크기 재판정 split(후속 브랜치).
+- gate 변화: SIM 부분 통과(아래 길 진입). DEVICE 열림.
+- 결정: D-507 보충

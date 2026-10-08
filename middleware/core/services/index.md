@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · test(line_follow): D-507 굽이 통과 모델 PC SIM
 - 2026-10-08 · uncommitted · feat(line_follow): D-507 보충, 지도 굽이를 odom 호로 지남 (action `bend`)
 - 2026-10-08 · uncommitted · fix(line_follow): 지도 교차로의 기대 창이 없으면 감지로 회전하지 않음
 - 2026-10-08 · uncommitted · fix(line_follow): D-468 궤적은 HOLD 틱에도 odom을 받는다
 - 2026-10-08 · uncommitted · docs(core): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
-- 2026-10-08 · uncommitted · fix(line_follow): D-507 6 가로선 띠는 테이프 중심 ± 폭/2 (검토)

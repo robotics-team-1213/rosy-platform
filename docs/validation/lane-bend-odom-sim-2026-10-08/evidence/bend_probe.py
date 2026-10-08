@@ -4,7 +4,7 @@
 Plays Fleet for the 260919 SW bend: the bend place is the site map's (lane_graph map_v2_fleet +
 one `bend` place), the map pose is Gazebo ground truth (d495/gt), and the fields come from Fleet's
 own trip_ports.bend_geometry, bend_in = s_start - s along west:rev, sent as Fleet sends them
-(within arm_distance_m 0.6 of the arc start, bend_tol_m = the 0.12 floor, refreshed at half the
+(within arm_distance_m 0.6 of the arc start on a straight approach (trip_ports.straight_approach), bend_tol_m = the 0.12 floor, refreshed at half the
 15 s expiry). Records through the D-495 probe (log/cmd/keep/actions/events.jsonl, summary.json).
   python3 bend_probe.py --out runs/<name> --base http://127.0.0.1:8113 [--x --y --yaw]
 """
@@ -19,7 +19,7 @@ REPO = HERE.parents[3]
 sys.path[:0] = [str(REPO/'docs/validation/d495-junction-sim-2026-10-07/evidence'), str(REPO/'operations/fleet')]
 from d495_sim_probe import Probe, brief, path_len  # noqa: E402
 from fleet.routing.graph import build_graph  # noqa: E402
-from fleet.server.trip_ports import bend_geometry  # noqa: E402
+from fleet.server.trip_ports import bend_geometry, straight_approach  # noqa: E402
 from fleet.site_map import SiteMap, SitePlace, from_lane_graph  # noqa: E402
 
 MAP_ID = 'map_v2_fleet'  # bend_run.sh: site_floor_map_id
@@ -60,8 +60,9 @@ def run(p, a):
         if not states or states[-1]['key'] != key:
             states.append({'key': key, **brief(r)})
         if gt:
-            bend_in = round(s_start-arc.project(gt[0], gt[1])[1], 3)
-            if (not a.no_bend and j.get('state') in (None, 'idle', 'armed') and done_at is None
+            s = arc.project(gt[0], gt[1])[1]
+            bend_in = round(s_start-s, 3)
+            if (not a.no_bend and straight_approach(arc, s, s_start) and j.get('state') in (None, 'idle', 'armed') and done_at is None
                     and 0 < bend_in <= ARM_M
                     and (sent_at is None or time.monotonic()-sent_at > EXPIRES_S/2)):
                 code, _ = p.call('POST', '/api/v1/line-follow/junction', {
