@@ -15,6 +15,7 @@ import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import {drawStartPointMarks} from './start-point-layer.js';
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
 import { drawTrails } from "./trail-view.js";
+import { lensesMatch } from "/console/assets/map-fit.js";
 
 export function cameraMapCalibration(frame, calibrations, siteMap) {
   if (!frame || frame.state !== "live" || frame.rectified || !siteMap
@@ -23,9 +24,8 @@ export function cameraMapCalibration(frame, calibrations, siteMap) {
     && (siteMap.maps || []).some((map) => map.map_id === row.map_id)
     && row.image?.width === frame.image?.naturalWidth
     && row.image?.height === frame.image?.naturalHeight
-    && (!row.lens || (row.lens.kind === frame.lens?.kind
-      && row.lens.focal_mm === frame.lens?.focal_mm
-      && row.lens.hfov_deg === frame.lens?.hfov_deg))
+    // Vision's rule (D-457): a record without a lens only fits a frame without one; numbers to 1e-4.
+    && lensesMatch(row.lens ?? null, frame.lens ?? null)
     && Array.isArray(row.map_to_image) && row.map_to_image.length === 9) || null;
 }
 
