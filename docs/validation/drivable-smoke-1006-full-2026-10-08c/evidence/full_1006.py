@@ -15,9 +15,9 @@ assert not any(c['role']=='wall' for c in manifest['output']['classes'])
 opts=ort.SessionOptions(); opts.intra_op_num_threads=2
 session=ort.InferenceSession(str(scratch/'model.onnx'),sess_options=opts,providers=['CPUExecutionProvider'])
 input_name=session.get_inputs()[0].name
-expected={'082612':('e6c3785b4cbc0cbd8f81ce4b09b1202ec4c15792981ee803628becef5949dd13',2487),'091340':('cb4eb6d39c24a6a0cc4ad5adee615b0e21ef2ef781f6b8d68aa89fe9fff3c491',642)}
+expected_video_sha256_and_frames={'082612':('e6c3785b4cbc0cbd8f81ce4b09b1202ec4c15792981ee803628becef5949dd13',2487),'091340':('cb4eb6d39c24a6a0cc4ad5adee615b0e21ef2ef781f6b8d68aa89fe9fff3c491',642)}
 rows=[]
-for prefix,(want_hash,want_count) in expected.items():
+for prefix,(want_hash,want_count) in expected_video_sha256_and_frames.items():
     video=video_dir/f'teleop_rosy_26_20261006T{prefix}Z.mp4'
     sidecar=video_dir/f'teleop_rosy_26_20261006T{prefix}Z.jsonl'
     assert sha256(video.read_bytes()).hexdigest()==want_hash
@@ -48,7 +48,7 @@ out=scratch/'full-1006';out.mkdir(exist_ok=True)
 with (out/'per_frame.jsonl').open('w',encoding='utf-8') as f:
     for row in rows:f.write(json.dumps(row,ensure_ascii=False)+'\n')
 summary={'status':'candidate_proxy_not_ground_truth','model_revision':manifest['model_revision'],'model_sha256':manifest['files'][0]['sha256'],'frames':len(rows),'sessions':{}}
-for prefix,(_,count) in expected.items():
+for prefix,(_,count) in expected_video_sha256_and_frames.items():
     rs=[r for r in rows if r['session']==prefix]
     assert len(rs)==count
     fr=np.asarray([r['near_drivable_fraction'] for r in rs])
