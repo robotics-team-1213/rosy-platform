@@ -7267,3 +7267,8 @@ osy-d395-s1d\`.
 - 증거: 모델 PC pytest gateway·services·device_test 전체에서 plan 규칙 추가 뒤 device_test 129 passed. 새 실패는 plan 규칙을 넣기 전의 overlay 키 거절뿐이었고 그 뒤 0이다. SIM은 lap SIM 4.
 - 검토: 독립 code-reviewer(opus) 2026-10-09 1차 REQUEST CHANGES → 고친 뒤 APPROVE WITH NOTES. 열린 점: 계획 밖 로봇 overlay가 바닥을 선언하면 다음 payload부터 호 능력이 켜진다(개정 「남는 위험」, 8kcn·9dfk overlay는 이 세션이 읽지 않았다).
 - gate 변화: 없음. lap SIM 4는 합격선(모든 호 |Δr| ≤ 0.05 m)을 넘지 못했다(lap 1/12씩 0.051–0.056 m, NE 4/4 0.049–0.052 m). 장치 사용은 SIM 합격, DEVICE 체크리스트, 사용자 승인 뒤다.
+
+## 2026-10-09 · uncommitted · docs(adr): D-537 두 Pinky 현장 몸체 대조
+- 변경: 인증된 로봇 Web 램프 자가 시험과 Rosy Cam 연속 프레임의 일회성 몸체 대조 계약을 D-537로 기록하고, D-472 운영 추적·D-522 이동 권한과 분리했다. 날짜별 FIELD 기록을 추가했다.
+- 증거: rosy_26 요청 58c3aba848b7af4e → 위쪽 몸체, rosy_60 요청 b3102100e354a95e → 아래쪽 몸체; 각 장치 done, 동시 영상의 다른 몸체 변화 없음. 원본은 X:/DevTemp에 보관하고 SHA-256을 날짜별 기록에 남겼다.
+- gate 변화: 현재 배치의 일회성 몸체 ID 대조 확인. Fleet named track·LCD 픽셀·Web 이동은 미확인.

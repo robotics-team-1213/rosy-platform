@@ -525,3 +525,4 @@
 | D-532 | 주행 가능 영역 추가 모델은 v13-drivable 계열로 구분하고 불변 revision·승인 데이터·기존 차선 모델의 계보를 각각 기록한다 | Accepted (2026-10-09, 사용자 결정; SOURCE 이름 규칙, 실제 학습·접수·배포 별도) |
 | D-531 | CORE가 지금 받아 둔 교차로·굽이·호 지시에서 경로 문맥을 만들어 `line/route_context`(String JSON, VOLATILE, 5 Hz, 만료 포함)로 인식 keeper에 준다; 문맥은 거부(HOLD 쪽)로만 쓰고 없거나 낡으면 keeper는 main과 같다; B9 `bend_expected`는 이 통로로만 켜진다; 실물 434프레임 HOLD → 주행은 독립 검증 없이 0 | Proposed (2026-10-09, 사용자 방향 결정 "둘 다": D-520 단계 2 먼저, 경로 문맥은 다음 단계; 문서만, 구현·SIM·DEVICE 별도) |
 | D-533 | Fleet의 TLS 공개 identity 조회는 source별 300회/분으로 따로 세고, 승인 challenge/session 증명은 기존 30회/분을 유지한다; 매 REST 요청의 CA·hostname·identity 검사를 생략하지 않는다 | Accepted (2026-10-09, 현장 429 재현; SOURCE 수정, DEVICE/FIELD 별도) |
+| D-537 | 현장 일회성 기체 몸체 대조는 인증된 장치 시험과 연속 영상으로 판정한다 | Accepted (2026-10-09, 두 Pinky 현재 배치 몸체 대조; Fleet 자동 추적·이동 수용 별도) |
