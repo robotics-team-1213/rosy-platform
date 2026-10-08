@@ -14,6 +14,7 @@ from test_review_app import fixture_inputs, open_store
 from test_review_cycle import CLASSES, catalog
 from review_app import ReviewStore, Conflict, make_server
 import review_masks
+import review_ingest
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
                                 reason='requires explicit local Chromium browser run')
@@ -143,7 +144,9 @@ def test_object_candidate_is_findable_and_empty_review_is_neutral(tmp_path):
     reviews[0].update(boxes=[], review_status='pending_human', complete_frame_review=False)
     human.write_text('\n'.join(json.dumps(row) for row in reviews), encoding='utf-8')
     with serve(ReviewStore(tmp_path / 'state', source, human, images)) as (page, store, expect):
-        expect(page.locator('#candidate-details')).to_have_attribute('open', '')
+        expect(page.locator('#candidate-details')).to_be_visible()
+        expect(page.locator('#candidate-source')).to_contain_text('원본 후보 1개')
+        expect(page.locator('#source-preview')).to_have_attribute('aria-pressed', 'true')
         expect(page.locator('#candidates')).to_be_visible()
         page.on('dialog', lambda dialog: dialog.accept())
         page.locator('#candidates').click()
@@ -151,7 +154,29 @@ def test_object_candidate_is_findable_and_empty_review_is_neutral(tmp_path):
         page.get_by_role('button', name='박스 1 삭제').click()
         expect(page.locator('#empty')).to_contain_text('객체가 없으면 전체 확인 후 승인하세요')
         page.reload(wait_until='networkidle')
-        expect(page.locator('#candidate-details')).not_to_have_attribute('open', '')
+        expect(page.locator('#candidate-details')).to_be_visible()
+
+
+def test_model_object_draft_is_visible_before_apply(tmp_path):
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    rows[0]['objects'] = [{'bbox_xyxy': [2, 3, 12, 14], 'label': 'cone'}]
+    rows[0]['annotation_source'] = 'qwen3-vl:8b-instruct'
+    (folder / 'verified-inputs.jsonl').write_text(json.dumps(rows[0]) + '\n', encoding='utf-8')
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    with serve(store) as (page, store, expect):
+        page.goto(page.url.split('?')[0] + '?frame=2', wait_until='networkidle')
+        expect(page.locator('#candidate-source')).to_contain_text('미적용 모델 초안 1개')
+        expect(page.locator('#model-preview')).to_have_attribute('aria-pressed', 'true')
+        assert page.locator('#candidate-details').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y']
+        assert store.get(2)['review']['boxes'] == []
+        page.on('dialog', lambda dialog: dialog.accept())
+        page.locator('#model-candidates').click()
+        expect(page.locator('#candidate-source')).to_contain_text('모델 초안 적용됨 · 검수 대기')
+        expect(page.locator('#model-preview')).to_have_attribute('aria-pressed', 'false')
+        assert store.get(2)['review']['boxes'] == rows[0]['objects']
+        assert store.get(2)['status'] == 'pending'
 
 @pytest.mark.parametrize('width', [390, 320])
 def test_catalog_import_reaches_pending_review_on_phone(browser_workspace, tmp_path, width):
