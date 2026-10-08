@@ -7328,3 +7328,9 @@ osy-d395-s1d\`.
 - 변경: 전화와 데스크톱 현장 지도에서 지도→경로 미리보기→운행→초안 편집 순서를 적용하고 선택형 평면 영상 도구를 접었다.
 - 증거: `validation/uiux-fleet-site-map-task-order-2026-10-09/result.md`. 320px 전후·390px·1440px 캡처, 브라우저 7 passed / NEW 0.
 - gate 변화: 없음. 실제 로봇 운행·SLAM, 설치본·DEVICE/FIELD와 전체 D-153 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · docs: GitHub 첫 화면에 인지·월드·판단 경계를 둔다
+
+- 변경: README 인지와 판단을 층·자리·지금 표로 줄이고, 아키텍처 색인 11·12행과 11·12장에 2026-10-09 경계만 남겼다. CONCEPTS에 Perception·World state·Decision candidate 용어를 더했다.
+- 증거: 워크트리 docs/github-glance. pytest test/test_readme_agent_start.py test/test_native_runtime_docs.py test/test_pi_wifi_deployment.py::test_wifi_runbook_is_linked_from_runtime_guide test/architecture/test_document_placement.py 17 passed. python tools/harness/rosy_harness.py lint 0 errors, 23 warnings(기존 last_verified). 새 상대 링크는 파일로 확인했다. generate가 docs/index.md를 다시 썼고, 그 뒤 lint도 0 errors, 23 warnings였다.
+- gate 변화: 없음. 문서 정합이며 구현·배포·장치 수용은 그대로다.

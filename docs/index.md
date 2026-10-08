@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · docs: GitHub 첫 화면에 인지·월드·판단 경계를 둔다
 - 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 우선 배치
 - 2026-10-09 · uncommitted · uiux(robot): 마지막 수신 계획 표시 검증
 - 2026-10-09 · uncommitted · 10/7 MCAP 원본 207프레임 검수 후보 갤러리
 - 2026-10-09 · uncommitted · uiux(pilot/robot): 같은 탭 운전석→운용 지도 검증
-- 2026-10-09 · uncommitted · 10/6·10/7 원본 검수 후보 시각 대조
