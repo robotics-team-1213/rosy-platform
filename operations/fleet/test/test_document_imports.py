@@ -24,6 +24,7 @@ SHARED = {
     "map-fit.js",
     "vision-view.js",
     "field-warp.js",
+    "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
 }
 
 OWN = {
@@ -64,7 +65,6 @@ OWN = {
         "cell-document-editor.js",
     },
     "site-map.js": {
-        "site-map-model.js",
         "site-map-teach.js",
     },
 }

@@ -170,6 +170,16 @@ def test_a_repeat_trip_plans_the_next_lap_before_its_last_place_and_drives_throu
     assert fleet.p["a"].sent[-1][0] in ("straight", "left", "right")  # no stop at the lap end
 
 
+def test_a_new_lap_drives_its_bends_again():
+    """D-507 addendum: a bend done on the last lap is the same place id on the next one."""
+    runner, store, fleet = _setup(ids=("a",))
+    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
+    live, _ = _to_tail(runner, store, fleet, "a")
+    live.bends_done.add("B_SW")
+    _ticks(runner, fleet)
+    assert runner.view("a")["lap"] == 2 and live.bends_done == set()
+
+
 def test_a_lap_whose_start_check_fails_holds_at_its_last_place():
     runner, store, fleet = _setup(ids=("a",))
     _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))

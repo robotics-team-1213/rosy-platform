@@ -145,8 +145,16 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        45_942,
-        "split: re-judged at 45942 on 2026-10-08 (independent re-judge, critic agent): D-517 M1a's trip runner "
+        46_107,
+        "split: re-judged at 46107 on 2026-10-08 (independent re-judge, critic agent): the D-507 addendum"
+        " bend pass (+129 over main 2fa5d896f) adds no module, owner, service or robot command path: bend"
+        " geometry (bend_geometry, next_bend, straight_approach, bend_fields, shared _pose_tol) sits in "
+        "server/trip_ports.py beside junction_fields; trip_runner._step_bend sends the bend through the "
+        "existing LaneJunctionPort instruction; trip_laps.carry_on and the replan-confirmed lap clear "
+        "bends_done so each lap drives its bends again; site_map.py validates the bend place kind "
+        "(exit_yaw, radius_m) and TripCaps gains lane_bend. The D-517 M1a seam holds (trip_runner 729 "
+        "within 686+150); the +150 allowance is unchanged. Previously "
+        "re-judged at 45942 on 2026-10-08 (independent re-judge, critic agent): D-517 M1a's trip runner "
         "split (server/trip_laps.py, trip_halts.py, traffic glue in lane_traffic.TrafficService), the D-517 "
         "M1b traffic map layer, the feat/fleet-map-trail web/trail-view.js and the D-512 tether display stay "
         "with their existing Fleet server and web owners, as named in "
@@ -676,17 +684,29 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core/services/core_features/line_follow/recovery": (
-        2_713,
-        "accept: independently re-judged 2026-10-08 at the merged 2713 (D-507 2-5 junction_approach + "
-        "D-507 6/9 motion_admit, architect read-only). Unit total is far below the 10000 package budget; "
-        "every file below 600 (largest stuck_recovery.py 573, junction.py 507). Junction and motion "
-        "admission stay LineFollowManager mixins under the single manager lock and generation, no own "
-        "lock, thread, store or publisher; CORE CommandManager stays the final cmd_vel publisher. A "
-        "junction/ unit was rejected: 685 lines do not justify a new size unit and core_features has no "
-        "room. Conditions: if the reverse sweep is needed outside the D-468 retrace, move it beside "
-        "_body_clearance in body_stop.py; if junction code passes 800 lines, give it its own subpackage via "
-        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md follow-up. Split plan of record: "
-        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md; re-judge on the next +150",
+        2_987,
+        "split: independently re-judged at 3038 on 2026-10-08 (critic agent, read-only) after merging main "
+        "into feat/d507-bend-odom-pass; the recorded number stays 2987 so the +150 allowance is still "
+        "measured from it. The +51 over the 2987 verdict comes entirely from main's own commits, which landed "
+        "under main's 2713 accept: 06a7becd5 (junction window by travelled distance), 577ba9da5 (signed "
+        "forward odometer; a reverse closes the window) and 27ce8e6c0 (motion_admitted refuses non-finite "
+        "twists): junction.py +2, junction_approach.py +22 net, lane_return.py +23, motion_admit.py +4; the "
+        "merge resolution adds no lines to this unit. Junction code is now 945 (junction.py 530, "
+        "junction_approach.py 207, junction_bend.py 208). Every file stays below 600 (largest "
+        "stuck_recovery.py 573); junction, bend and motion admission remain LineFollowManager mixins under "
+        "the single manager lock and generation, with no own lock, thread, store or publisher, and CORE "
+        "CommandManager stays the final cmd_vel publisher, so this branch may land at 3038 without the move. "
+        "Previous verdict at 2987 (critic agent, after the bend pass safety review fixes e5735bd5f, D-507 "
+        "addendum junction_bend.py) triggered the 800-line junction condition of the 2713 verdict. Required "
+        "follow-up, still binding: a dated follow-up section in "
+        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md with independent review, then a short "
+        "standalone refactor branch after this one lands that moves junction.py, junction_approach.py and "
+        "junction_bend.py with git mv into core_features/line_follow/recovery/junction/ as its own SIZE_UNITS "
+        "entry with its own verdict, in the same change as the recovery re-judge; pure move, no shim, imports "
+        "fixed in manager.py, core_api_web api/deps.py and test_line_junction.py, test_junction_approach.py, "
+        "test_junction_bend.py. motion_admit.py stays in recovery because lane_bridge and "
+        "lane_return_decision share it. The +150 allowance is not raised; the next junction change or +150 is "
+        "blocked until the split lands.",
     ),
     "core_features": (
         12_772,

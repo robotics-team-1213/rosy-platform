@@ -198,7 +198,7 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
 class LineJunctionRequest(BaseModel):
     """D-494 decision 4: what to do at the next junction (Fleet trip loop)."""
 
-    action: str = Field(pattern="^(straight|left|right|stop)$")
+    action: str = Field(pattern="^(straight|left|right|stop|bend)$")
     place_id: str = Field(min_length=1, max_length=128)
     stop_after_m: Optional[float] = Field(default=None, ge=0, le=2.0)
     expires_s: float = Field(gt=0, le=30)
@@ -211,12 +211,17 @@ class LineJunctionRequest(BaseModel):
     expect_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
     # signed (2026-10-08): negative when the measured cross line is past the place point.
     pivot_past_line_m: Optional[float] = Field(default=None, ge=-0.30, le=0.30)
+    # D-507 addendum (2026-10-08): a site-map bend, sent only to a robot announcing lane_bend.
+    bend_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
+    bend_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
+    bend_radius_m: Optional[float] = Field(default=None, gt=0, le=0.5)
 
 
 def _expect(body: LineJunctionRequest):
     """D-507 2: the optional fields as one dict, or None for an old client (behaviour unchanged)."""
     fields = dict(map_id=body.map_id, expect_in_m=body.expect_in_m, expect_tol_m=body.expect_tol_m,
-                  pivot_past_line_m=body.pivot_past_line_m)
+                  pivot_past_line_m=body.pivot_past_line_m, bend_in_m=body.bend_in_m,
+                  bend_tol_m=body.bend_tol_m, bend_radius_m=body.bend_radius_m)
     return fields if any(v is not None for v in fields.values()) else None
 
 
@@ -228,9 +233,19 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
     calibration lease, as the other motion endpoints. CAMERA_LINE only (IR has no junctions)."""
     if body.stop_after_m is not None and body.action != "stop":
         raise ApiError("VALIDATION_ERROR", 400, "stop_after_m belongs to stop")
-    if body.turn_deg is not None and (body.action not in ("left", "right") or body.turn_deg == 0
-                                      or (body.turn_deg > 0) != (body.action == "left")):
+    if body.turn_deg is not None and body.action != "bend" and (
+            body.action not in ("left", "right") or body.turn_deg == 0
+            or (body.turn_deg > 0) != (body.action == "left")):
         raise ApiError("VALIDATION_ERROR", 400, "turn_deg is left (+) or right (-) and not 0")
+    bend = (body.bend_in_m, body.bend_tol_m, body.bend_radius_m)
+    if body.action == "bend" and (
+            None in bend or body.map_id is None or body.turn_deg is None or body.turn_deg == 0
+            or abs(body.turn_deg) > 90 or body.expect_in_m is not None or body.expect_tol_m is not None
+            or body.pivot_past_line_m is not None or body.advance_m is not None):
+        raise ApiError("VALIDATION_ERROR", 400, "bend needs turn_deg (0 < |turn_deg| <= 90), map_id, "
+                       "bend_in_m, bend_tol_m and bend_radius_m, and no window, pivot or advance")
+    if body.action != "bend" and any(v is not None for v in bend):
+        raise ApiError("VALIDATION_ERROR", 400, "bend_in_m, bend_tol_m and bend_radius_m belong to bend")
     if body.advance_m is not None and body.turn_deg is None:
         raise ApiError("VALIDATION_ERROR", 400, "advance_m belongs to a turn")
     if (body.expect_in_m is None) != (body.expect_tol_m is None):

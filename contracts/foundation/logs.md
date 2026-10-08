@@ -536,6 +536,12 @@
 - 결정: D-507 7
 - 교훈: 없음
 
+## 2026-10-08 · uncommitted · feat(core_common): `base_velocity.lane_bend` 능력 필드
+- 변경: `controls.py` `BaseVelocityControl.lane_bend`(bool|None)와 `pinky_controls(lane_bend=)`. 없으면 이전 이미지로 읽는다.
+- 증거: gateway `test_capabilities_controls.py`.
+- gate 변화: SOURCE.
+- 결정: D-507 보충
+
 ## 2026-10-08 · b570504a2 · core_common(protocol): line_authority (D-517 M2)
 - 변경: `protocol/line_authority.py` — 요청·상태 모델, `MAX_TTL_S` 2, `MAX_UNTIL_M` 10, `STAMP_TOL_S` 0.05, `SHRINK_TOL_M` 0.02, `AuthorityRefused`. `controls.py` `BaseVelocityControl.line_follow_authority`. 기본 설정 `line_follow.authority_required: false`. schemas.py 는 건드리지 않음(1338 판정).
 - 증거: CORE·Fleet 시험(위 모듈 로그).

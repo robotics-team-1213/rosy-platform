@@ -28,6 +28,10 @@ WINDOW_RETREAT_M = .01
 SIGHTING_POSE_S = .1
 ARRIVED_M = .005
 STEP_MARGIN_S = 2.  # advance and approach: distance / speed + this
+#: D-495 reacquisition after a turn (and the D-507 bend pass): within this travel, heading, time.
+REACQUIRE_M = .20
+REACQUIRE_HEADING_RAD = math.radians(30.)
+STEP_TIME_S = 5.
 
 
 def _point(pose, ahead, yaw, extra=0.):
