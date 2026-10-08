@@ -32,6 +32,7 @@ import http.client
 import json
 import math
 import os
+import socket
 import ssl
 import sys
 import threading
@@ -54,9 +55,23 @@ class Core:
     """One kept-alive HTTPS connection (a loaded Pi times out repeated TLS handshakes);
     reconnect once on a broken one (attempts=1: no retry, for a time-boxed loop). A network failure is (0, None), never an exception."""
 
-    def __init__(self, host, token, port, context):
+    def __init__(self, host, token, port, context, tls_host=None):
+        """tls_host: the certificate name to check when `host` is an address (Windows does not
+        resolve the robot's .local name); the TLS check is unchanged, only the name it is made against."""
         self.host, self.token, self.port, self.context = host, token, port, context
+        self.tls_host = tls_host
         self.conn = None
+
+    def _connection(self, timeout):
+        conn = http.client.HTTPSConnection(self.host, self.port, timeout=timeout, context=self.context)
+        if self.tls_host:
+            name, ctx = self.tls_host, self.context
+
+            def connect():
+                sock = socket.create_connection((self.host, self.port), timeout)
+                conn.sock = ctx.wrap_socket(sock, server_hostname=name)
+            conn.connect = connect
+        return conn
 
     def _headers(self):
         return {"Authorization": "Bearer " + self.token, "Content-Type": "application/json"}
@@ -66,8 +81,7 @@ class Core:
         for _ in range(attempts):
             try:
                 if self.conn is None:
-                    self.conn = http.client.HTTPSConnection(self.host, self.port, timeout=timeout,
-                                                            context=self.context)
+                    self.conn = self._connection(timeout)
                 self.conn.timeout = timeout
                 if self.conn.sock:
                     self.conn.sock.settimeout(timeout)
