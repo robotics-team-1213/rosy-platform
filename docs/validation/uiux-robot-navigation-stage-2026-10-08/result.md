@@ -73,3 +73,15 @@ CORE의 `GET /api/v1/navigation/state`에 기존 `NavigationManager.mapping_acti
 
 - LOCAL: 실제 FastAPI 자산과 합성 CORE 응답의 1366×768·390×844 정상, 지도 ID 불일치, 좌표계 불일치 캡처를 X: 세션 `evidence/route-direction/navigation-stage/`에 남겼다. 정상 두 폭과 지도 ID 불일치 데스크톱 화면을 원본으로 확인했다. 정상 PNG SHA-256은 390×844 `04ad05903db9d159a71e464f1e6528dfdc666ff4611ccc4e352dea46f1756e08`, 1366×768 `2df45d3b09835b1efea5f746c663047aee8d3c815978e56a6f9864faafd1f5c`다.
 - 지도 브라우저·키보드 조작 2 passed, `known_failures.py` 0 NEW (`logs/route-direction-browser.txt`). `impeccable detect --json`은 `[]` (`logs/impeccable-route-direction.json`). 실제 경로 추종·장치 및 G3 수용은 HOLD다.
+
+## 후속: 지연·단절·정보 없음의 내비게이션 증거
+
+주행과 위치 추정의 증거가 `delayed`이면 지도 HUD에 수신 경과 시간을 표시하고, `disconnected`와 `unavailable`은 각각 연결 끊김·정보 없음으로 구분한다. 주행 상태를 신뢰할 수 없는 동안 계획 경로는 숨기고 `주행 상태 확인 필요`를 표시한다. 목표 지정은 막되 초기 위치 설정의 별도 권한·기능 판단은 유지한다. 지도 위 HUD와 아래 로봇 상태 카드가 새 증거 상태를 모두 반영한 뒤 캡처했다.
+
+| 상태 | 1366×768 SHA-256 | 390×844 SHA-256 |
+|---|---|---|
+| 지연 | `F5EB4DCBA87A59E4283FAF0B1029499E37CD8C7CD3431F6D2E78B6451C96A046` | `FF766D7C20E2173161FA716985407447EB7E6E30C1219F8B6DAA32C0F0DB070D` |
+| 연결 끊김 | `163357C3A1F225582FFDADEF0BA57306B41A3C2761CB54D6F82B6FF9E71B09E1` | `55B88CB3A9A1E1D1A1AB67D6EBDBC9871C6AC1C392AD919E992E8986103B92A9` |
+| 정보 없음 | `11DCA550BB3DFA1E14CC31EFC13AE47431D7675303E136C3770594B34904BB63` | `8BAF5793BFF1012B9DFCCFD76D0B7227CCE76CC5A08969C4E3E6A283FA1F0D4A` |
+
+원본은 같은 X: 세션 `evidence/navigation-evidence/navigation-stage/operator-console-navigation-<상태>-<폭>x<높이>.png`에 있다. `navigation-stage-matrix.json` SHA-256은 `B20E8ABBF648C5D91929C25723B704F8B51702344EC92B62BBEFC21EC70FD38A`다. 실제 FastAPI 정적 자산과 합성 CORE 응답으로 찍은 **LOCAL** 화면이며 장치·현장 증거가 아니다. 2폭×3상태 브라우저 회귀 1 passed (`logs/navigation-evidence-settled.txt`), 지도 읽기·패키지 20 passed (`logs/navigation-evidence-regression.txt`), 둘 다 `known_failures.py` 0 NEW. 네 상태 중 정상 캡처는 위의 기존 행에 있다. `SAFE_STOP`, 403/501 거부, 최초 기동, 확인 대화상자와 물리 주행은 이 후속 회차의 수용 범위에 포함되지 않아 D-153 전체 G2/G3 판정은 HOLD다.

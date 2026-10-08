@@ -1,5 +1,5 @@
 import { createFieldMap } from "/assets/map.js";
-import { EVIDENCE_LABEL, HeadlessState, NAVIGATION_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { EVIDENCE_LABEL, HeadlessState, NAVIGATION_LABEL, enumLabel, evidenceAgeText } from "/common/core_ui_logic.js";
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; }
 
@@ -63,10 +63,18 @@ export function mount(root, ctx) {
   function setText(target, text) { if (target.textContent !== text) target.textContent = text; }
   function renderStage() {
     const evidence = new HeadlessState(state);
+    const evidenceLabel = (channel) => {
+      const kind = evidence.evidenceOf(channel);
+      if (kind !== "delayed") return EVIDENCE_LABEL[kind];
+      const stamp = Date.parse(state?.evidence?.[channel]?.received_at || "");
+      const age = Number.isFinite(stamp) ? Math.max(0, Math.floor((Date.now() - stamp) / 1000)) : null;
+      return `${EVIDENCE_LABEL.delayed}${age === null ? " · 시각 확인 불가" : evidenceAgeText(age)}`;
+    };
     const navigation = evidence.isFresh("navigation") ? state?.navigation : null;
-    setText(navStage, `주행 · ${navigation && ["PLANNING", "NAVIGATING"].includes(navigation) && !goalPoseReady()
+    setText(navStage, `주행 · ${state && !evidence.isFresh("navigation") ? evidenceLabel("navigation")
+      : navigation && ["PLANNING", "NAVIGATING"].includes(navigation) && !goalPoseReady()
       ? "위치 확인 중" : navigation ? enumLabel(NAVIGATION_LABEL, navigation) : "상태 확인 불가"}`);
-    const location = !evidence.isFresh("pose") ? EVIDENCE_LABEL[evidence.evidenceOf("pose")]
+    const location = !evidence.isFresh("pose") ? evidenceLabel("pose")
       : mapIdMismatch ? "지도 ID 불일치"
       : state?.localization?.state === "LOCALIZED"
         ? state.localization.pose_frame === "map" ? "지도 좌표 확인" : "지도 좌표 미확인"

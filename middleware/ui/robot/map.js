@@ -154,6 +154,8 @@ export function createFieldMap(options) {
     const path = state.path;
     if (!state.pathLoaded) return {visible: false, label: "확인 중"};
     if (!path) return {visible: false, label: "수신 실패"};
+    if (options.onlyActivePath && !["PLANNING", "NAVIGATING"].includes(getNavigation?.()))
+      return {visible: false, label: "주행 상태 확인 필요"};
     if (!Array.isArray(path.poses) || path.poses.length < 2) return {visible: false, label: "없음"};
     if (path.poses.some((pose) => !Number.isFinite(pose?.x) || !Number.isFinite(pose?.y)))
       return {visible: false, label: "좌표 확인 불가"};
@@ -162,8 +164,6 @@ export function createFieldMap(options) {
     if (!path.map_id || !state.occupancy?.map_id) return {visible: false, label: "지도 ID 미확인"};
     if (path.frame_id !== "map") return {visible: false, label: "지도 좌표 미확인"};
     if (!Number.isFinite(path.age_s) || path.age_s < 0) return {visible: false, label: "수신 나이 미확인"};
-    if (options.onlyActivePath && !["PLANNING", "NAVIGATING"].includes(getNavigation?.()))
-      return {visible: false, label: "주행 상태 확인 필요"};
     const age = Math.floor(path.age_s + (performance.now() - path.readAt) / 1000);
     return {visible: true, label: `마지막 수신 ${age}초 전`};
   }

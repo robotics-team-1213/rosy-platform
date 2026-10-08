@@ -1230,6 +1230,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             location = {"state": "LOCALIZED", "frame": "map", "map_id": "local-map"}
             path_info = {"map_id": "local-map", "frame_id": "map"}
             mapping_session = {"active": True, "readable": True}
+            evidence_mode = {"value": "fresh"}
             page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
             page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -1242,7 +1243,10 @@ def test_console_navigation_stage_local_captures(tmp_path):
                     state = json.loads(_response(client, path, TOKENS["operator"], "normal", "console").body)
                     state.update(mode="NAVIGATION", navigation="NAVIGATING", map_id=location["map_id"],
                                  localization={"state": location["state"], "pose_frame": location["frame"], "confidence": 0.92})
-                    state["evidence"]["navigation"] = {"evidence": "fresh", "received_at": datetime.now(timezone.utc).isoformat()}
+                    received_at = (datetime.now(timezone.utc) - timedelta(
+                        seconds=22 if evidence_mode["value"] == "delayed" else 0)).isoformat()
+                    for channel in ("navigation", "pose"):
+                        state["evidence"][channel] = {"evidence": evidence_mode["value"], "received_at": received_at}
                     response = Response(content=json.dumps(state), media_type="application/json")
                 elif path == "/api/v1/system/capabilities":
                     data = _response(client, path, TOKENS["operator"], "normal", "console").json()
@@ -1299,6 +1303,28 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 assert result["slotOrder"] == ["banner", "sense", "observe", "act"], result
             filename = f"operator-console-navigation-{viewport[0]}x{viewport[1]}.png"
             page.screenshot(path=str(capture_dir / filename), full_page=True)
+            for scenario, label in (("delayed", "지연"), ("disconnected", "연결 끊김"),
+                                    ("unavailable", "정보 없음")):
+                evidence_mode["value"] = scenario
+                page.wait_for_function("""expected => {
+                  const text = document.querySelector('.surface-map-stage')?.textContent || '';
+                  return text.includes('주행 · ' + expected) && text.includes('위치 추정 · ' + expected)
+                    && document.querySelector('[data-map-click="goal"]')?.disabled;
+                }""", arg=label)
+                if scenario == "delayed":
+                    assert "초 전" in stage.inner_text()
+                page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 주행 상태 확인 필요')")
+                assert "계획 경로 · 주행 상태 확인 필요" in stage.inner_text()
+                page.wait_for_function("""expected => {
+                  const values = document.querySelectorAll('[data-panel="console.overview"] .ui-readout dd');
+                  return values[1]?.textContent.includes(expected) && values[2]?.textContent.includes(expected);
+                }""", arg=label)
+                image = f"operator-console-navigation-{scenario}-{viewport[0]}x{viewport[1]}.png"
+                page.screenshot(path=str(capture_dir / image), full_page=True)
+                records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "scenario": scenario,
+                                "image": image, "synthetic": True, "errors": errors[:]})
+            evidence_mode["value"] = "fresh"
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 주행 중')")
             mapping_session["active"] = False
             page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 맵핑 세션 대기')")
             page.screenshot(path=str(capture_dir / f"operator-console-mapping-idle-{viewport[0]}x{viewport[1]}.png"), full_page=True)
@@ -1370,7 +1396,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 page.wait_for_function("""() => [...document.querySelectorAll('#surface-main > .surface-slot')]
                   .map(slot => slot.dataset.slot).join(',') === 'banner,sense,observe,act'""")
                 assert page.evaluate("document.activeElement?.classList.contains('surface-map-canvas')")
-            records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "image": filename,
+            records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "scenario": "normal", "image": filename,
                             "synthetic": True, "errors": errors, **result})
             context.close()
         browser.close()
