@@ -7020,3 +7020,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 경로 지시·차체 외곽·실물 수용은 미검증.
 - 결정: west edge에서 멀어진 회전교차로 구간을 곧바로 차선 침범으로 세지 않는다.
 - 교훈: 분기 지도에서는 선택 edge와 전체 network 최소 거리를 구분한다.
+
+## 2026-10-08 · uncommitted · 차선 추종 녹화 증거 준비
+
+- 변경: D-378 단계별 수용 목표와 장치 읽기 전용 관찰, TF 녹화 후보의 남은 증거 공백을 `docs/validation/lane-capture-readiness-2026-10-08/`에 기록했다.
+- 증거: `rosy_26` keep debug 39건/5초; Pilot 녹화 테스트 39 passed, known failures 0 new, harness lint 오류 0.
+- gate 변화: 없음. 실제 TF 게시·보정 revision·지도 자세·사람 검수와 실기 R0/R1/R2는 미확인.

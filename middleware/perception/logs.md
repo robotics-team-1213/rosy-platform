@@ -1267,3 +1267,9 @@
 - 원인: `bw1` 굽이 첫 HOLD frame 260의 가까운 기억 간격 0.290 m는 상한 0.259 m보다 넓고, 기존 오른쪽 대체 목표의 지도 중심선 거리 0.0357 m는 명목 차체 여유를 거의 소진했다. 이는 SIM 참 자세 기반 진단이다.
 - 증거: 거짓 오른쪽 선 시험을 수정 전 실패로 확인; 정상 오른쪽 대체·65° 굽이·전체 랩을 포함한 `test_lane_edge.py` 41 passed, perception 전체 2,754 passed/108 skipped, `known_failures.py` 0 new.
 - gate 변화: 없음. SOURCE/LOCAL만. 보정된 실물 R0·R1·R2는 열림.
+
+## 2026-10-08 · uncommitted · feat(control): Pilot 녹화에 TF 원본 추가
+
+- 변경: Pilot MCAP 명령과 세션 토픽 목록에 네임스페이스 TF와 전역 `/tf`, `/tf_static`을 추가했다. 실제 게시 경로가 어느 쪽이든 원본을 보존한다.
+- 증거: `test_pilot_recorder.py` 39 passed, `known_failures.py` 0 new. 실제 게시·시각 동기·보정 revision은 별도 확인이 필요하다.
+- gate 변화: SOURCE만. 지도 투영 라벨과 실기 차선 추종 수용은 열려 있다.
