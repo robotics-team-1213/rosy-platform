@@ -6,7 +6,7 @@ import {pinkyCore} from "./drivers/pinky_core.js";
 import {omxSim} from "./drivers/omx_sim.js";
 import {mountConnect} from "./screens/connect.js";
 import {mountDrive} from "./screens/drive.js";
-import {postJson} from "./client.js";
+import {postJson, prepareConsoleSession} from "./client.js";
 import {mountArm} from "./screens/arm.js";
 import {readControls, widgetPlan, fallbackPinkyControls, profileFromBaseVelocity} from "./controls.js";
 
@@ -75,11 +75,15 @@ for (const button of document.querySelectorAll("[data-estop]")) {
 for (const button of document.querySelectorAll("[data-goto]")) {
   button.addEventListener("click", () => {
     button.disabled = true;
+    const navigate = () => {
+      if (button.dataset.goto === "/console") prepareConsoleSession();
+      location.assign(button.dataset.goto);
+    };
     if (leaveDrive) {
       const notice = document.querySelector("#pilot-notice");
       if (notice) notice.textContent = "조종을 종료하고 지도를 여는 중입니다.";
-      leaveDrive(() => location.assign(button.dataset.goto));
-    } else location.assign(button.dataset.goto);
+      leaveDrive(navigate);
+    } else navigate();
   });
 }
 

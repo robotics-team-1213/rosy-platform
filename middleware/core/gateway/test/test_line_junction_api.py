@@ -112,7 +112,7 @@ def test_keep_debug_strategy_reaches_the_manager(core_client):
     for strategy, expected in ((7, False), ("both", False), ("corner_left", True)):  # a corner latches
         raw = json.dumps({"reason": None, "strategy": strategy, "stamp": 100.0})
         observation.keep_junction(services, raw, source_now=100.1, received_at=clock["t"])
-        assert (services.line_follow._corner_turn_at is not None) is expected, strategy
+        assert (services.line_follow._corner_left_at is not None) is expected, strategy
 
 
 def test_stale_or_other_keep_debug_is_not_a_sighting(core_client):
@@ -214,6 +214,19 @@ def test_d507_window_and_pivot_fields_validation(core_client):
     assert client.post(URL, json=straight, headers=OPERATOR).json()["state"] == "armed"
     far_edge = {**D507, "place_id": "J3", "pivot_past_line_m": -0.30}  # 2026-10-08: signed
     assert client.post(URL, json=far_edge, headers=OPERATOR).json()["state"] == "armed"
+
+
+def test_lane_turn_deg_belongs_to_a_straight_with_a_window(core_client):
+    """lap SIM 2: the straight's lane heading change, for the keeper corner hold's scope."""
+    client, services, clock = _active(core_client)
+    straight = {**BODY, "place_id": "J2", "map_id": "site_a", "expect_in_m": 0.5, "expect_tol_m": 0.1,
+                "lane_turn_deg": 52.0}
+    for bad in ({**D507, "lane_turn_deg": 10.0}, {**straight, "lane_turn_deg": 361.0},
+                {k: v for k, v in straight.items() if k not in ("expect_in_m", "expect_tol_m")}):
+        assert client.post(URL, json=bad, headers=OPERATOR).status_code == 400, bad
+    _pose(services, clock)
+    assert client.post(URL, json=straight, headers=OPERATOR).json()["state"] == "armed"
+    assert services.line_follow._junction["lane_turn"] == 52.0
 
 
 BEND = {**BODY, "action": "bend", "place_id": "B1", "turn_deg": 63.6, "map_id": "site_a",

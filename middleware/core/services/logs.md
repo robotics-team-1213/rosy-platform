@@ -867,3 +867,10 @@
 - gate 변화: ROS-SIM 기록(부분). DEVICE 열림
 - 결정: 없음
 - 교훈: 지도가 교차로를 말하는 자리의 keeper 모서리 금지는 곧은 spoke에서만 오독이다. 곡선 차로 위 `straight` 지시에서는 차로 자체를 막는다
+
+## 2026-10-08 · uncommitted · fix(core): 모서리 정지는 지시와 어긋나는 모서리만 (lap SIM 2 원인 1)
+- 변경: `junction_corner_hold` 범위를 좁혔다. `left`·`right` 는 반대쪽 모서리만, `straight` 는 새 선택 필드 `lane_turn_deg`(Fleet 지도 차로가 장소까지 도는 방향 변화)가 그 모서리 쪽으로 20° 이상이 아닐 때만 정지한다. 필드가 없으면 예전처럼 모든 모서리에서 정지. 리뷰 HIGH 반영: 모서리 방향마다 따로 2 s 래치(`_corner_left_at`·`_corner_right_at`), 반대 방향 한 프레임이 정지를 풀지 않는다(만료 때 포함)
+- 증거: 모델 PC 스냅숏 `test_junction_approach.py`·`test_line_junction_api.py` 108 passed, `test_trip_d507.py` 53 passed. 독립 Safety-Review code-reviewer(opus) 1차 REQUEST CHANGES(HIGH 래치) → 2차 APPROVE WITH NOTES
+- gate 변화: SOURCE. SIM은 lane-trip-lap-sim3 행
+- 결정: 같은 방향 모서리는 지시를 `armed` 로 둔다(47fa82b1a 이전 동작, 창·`junction_unexpected`·만료가 처리). 260919 회전교차로에는 안쪽 spoke가 없어 `straight` 의 차로 쪽 모서리 허용이 안전하다
+- 교훈: 지도 지시를 기준으로 keeper 판단을 막을 때는 지시가 말하는 방향과 keeper 방향이 같은지부터 본다. 곡선 차로 위 `straight` 는 방향이 없는 지시가 아니다

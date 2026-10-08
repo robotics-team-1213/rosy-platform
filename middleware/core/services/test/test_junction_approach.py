@@ -587,11 +587,11 @@ def corner(rig, strategy='corner_left', **kwargs):
     return rig.step(**kwargs)
 
 
-@pytest.mark.parametrize('strategy', ['corner_left', 'corner_right'])
-def test_a_corner_turn_near_the_expected_line_holds_instead_of_following(strategy):
+@pytest.mark.parametrize('action, turn, strategy', [('right', -90., 'corner_left'), ('left', 90., 'corner_right')])
+def test_a_corner_turn_near_the_expected_line_holds_instead_of_following(action, turn, strategy):
     rig = Rig()
     rig.step()
-    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)  # line .4 ahead
+    send(rig, action, turn, map_id='site', pivot_past_line_m=.1, **WINDOW)  # line .4 ahead
     decision, status = corner(rig, strategy)
     assert (decision.linear, decision.angular) == (0., 0.)
     assert (status.state, status.reason, status.junction.state) == ('HOLD', 'junction_corner_hold', 'armed')
@@ -601,6 +601,70 @@ def test_a_corner_turn_near_the_expected_line_holds_instead_of_following(strateg
     rig.now += 2.
     decision, status = corner(rig, 'both')                                 # the keeper follows again
     assert decision.linear > 0 and status.junction.state == 'armed'
+
+
+@pytest.mark.parametrize('action, turn, strategy', [('right', -90., 'corner_right'), ('left', 90., 'corner_left')])
+def test_a_corner_the_way_of_the_armed_turn_is_followed(action, turn, strategy):
+    """lap SIM 2: only a corner against the instruction is the misread line."""
+    rig = Rig()
+    rig.step()
+    send(rig, action, turn, map_id='site', pivot_past_line_m=.1, **WINDOW)
+    decision, status = corner(rig, strategy)
+    assert decision.linear > 0 and status.junction.state == 'armed'
+
+
+def test_a_corner_frame_the_other_way_never_ends_an_against_corners_latch():
+    """Review: right armed, keeper flips corner_left -> corner_right: still held, and an expiry
+    inside the latch keeps the hold (never drops the instruction into the wrong-way corner)."""
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)  # expires in 10 s
+    assert corner(rig, 'corner_left')[1].reason == 'junction_corner_hold'
+    for strategy in ('corner_right', 'both', 'corner_right'):
+        decision, status = corner(rig, strategy)
+        assert (decision.linear, decision.angular, status.reason) == (0., 0., 'junction_corner_hold')
+    rig.now += 9.5
+    corner(rig, 'corner_left')
+    rig.now += 1.                                                        # expired, latest frame right
+    decision, status = corner(rig, 'corner_right')
+    assert (decision.linear, status.reason) == (0., 'junction_corner_hold') and rig.m._junction['corner_held']
+
+
+def test_ring_straight_follows_the_lanes_left_corner_but_holds_a_right_one():
+    """lap SIM 2: SE straight on the left-curving ring_s (expected line .44 m ahead): the keeper's
+    corner_left is the ring itself; corner_right (out onto the spoke) still holds."""
+    rig = Rig()
+    rig.step()
+    send(rig, 'straight', map_id='site', expect_in_m=.232, expect_tol_m=.17, pivot_past_line_m=-.231,
+         lane_turn_deg=52.)
+    decision, status = corner(rig, 'corner_left')
+    assert decision.linear > 0 and status.reason != 'junction_corner_hold'
+    rig.now += 3.                                                      # past the latch
+    assert corner(rig, 'corner_right')[1].reason == 'junction_corner_hold'
+
+
+@pytest.mark.parametrize('lane_turn', [None, 0., 10., -52.])
+def test_a_straight_holds_a_corner_its_lane_does_not_turn(lane_turn):
+    """A straight spoke (or no lane_turn_deg: an older Fleet) keeps the lap SIM A hold."""
+    rig = Rig()
+    rig.step()
+    expect = dict(map_id='site', pivot_past_line_m=.1, **WINDOW)
+    if lane_turn is not None:
+        expect['lane_turn_deg'] = lane_turn
+    send(rig, 'straight', **expect)
+    assert corner(rig, 'corner_left')[1].reason == 'junction_corner_hold'
+
+
+@pytest.mark.parametrize('bad', [dict(action='right', lane_turn_deg=10.), dict(lane_turn_deg=361.),
+                                 dict(lane_turn_deg=float('nan')), dict(lane_turn_deg=10., window=False)])
+def test_lane_turn_deg_belongs_to_a_straight_with_a_window(bad):
+    rig = Rig()
+    rig.step()
+    action, expect = bad.pop('action', 'straight'), dict(map_id='site', **WINDOW)
+    if bad.pop('window', True) is False:
+        expect = dict(map_id='site')
+    with pytest.raises(ValueError, match='lane_turn_deg'):
+        send(rig, action, -90., **expect, **bad)
 
 
 def test_a_corner_far_before_the_expected_line_or_corner_ahead_follows():
