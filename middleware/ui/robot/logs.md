@@ -1158,3 +1158,9 @@
 - 변경: 모바일 지도 작업 버튼은 지도 위에 유지하고 레이어 선택을 지도 아래로 옮겼다. 데스크톱 지도 높이 그리드는 새 순서에 맞췄다.
 - 증거: [첫 화면 배치 검증](../../../docs/validation/uiux-robot-map-first-2026-10-08/result.md). 390×844·1366×768 Chromium 캡처, 지도 상태 시험 1 passed, 패키지 19 passed, 새 실패 0.
 - gate 변화: 해당 LOCAL 배치 셀 확인. 전체 G2·G3·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 320px 지도와 상태 가독성
+
+- 변경: 320px 지도 작업 버튼을 한 줄에 두고 상태 HUD를 지도 아래로 배치해 로봇·경로 가림을 없앴다. 더 넓은 폭의 HUD 위치는 유지했다.
+- 증거: [320px 지도 검증](../../../docs/validation/uiux-robot-map-320-2026-10-08/result.md). 세 폭 Chromium 캡처, 지도 시험 1 passed, 패키지 19 passed, 새 실패 0.
+- gate 변화: 320px LOCAL 배치 셀 추가 확인. 전체 G2·G3·DEVICE/FIELD는 HOLD.
