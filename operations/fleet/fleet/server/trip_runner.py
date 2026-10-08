@@ -505,6 +505,9 @@ class TripRunner:
     async def _step_bend(self, live: LiveTrip, index: int, s: float) -> bool:
         """D-507 addendum: True while a site-map bend on this lane is ahead (its instruction, sent
         within ``arm_distance_m`` of the arc start to a ``lane_bend`` robot, owns CORE's one slot)."""
+        arc = live.junction.get("arc") or {}
+        if arc.get("state") == "running" and arc.get("end_place_id") == live.place(index):
+            return False  # D-520: CORE drives this lane as an arc; its slot is for the end place's instruction
         bend = next_bend(live, index, s) if (live.view.get("caps") or {}).get("lane_bend") else None
         if bend is None:
             return False

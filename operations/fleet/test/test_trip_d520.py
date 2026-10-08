@@ -284,3 +284,28 @@ def test_a_right_at_an_arc_end_onto_a_spoke_goes_with_its_window():
     ports.core.see_junction()                                # segment_end pivot: CORE turns
     _ticks(runner, ports)
     assert runner._live["rosy_60"].sent["carried"] is True
+
+
+def test_no_bend_while_core_drives_the_lane_as_an_arc():
+    """Review 2026-10-08: a site-map bend drawn on ring_s would take CORE's one slot from SE's
+    instruction while the arc runs. With no arc running the same bend goes out (it is a real bend)."""
+    import math
+    from fleet.site_map import SitePlace, SiteMap, from_lane_graph
+    from test_trip_runner import LANE_GRAPH
+    base = from_lane_graph(LANE_GRAPH)
+    _, store0, _ = _setup()
+    ring = _arc(store0, "ring_s:fwd")
+    (ax, ay, entry), (_, _, leave) = ring.point_at(0.06), ring.point_at(0.24)
+    t = 0.2514 * math.tan(abs(leave - entry) / 2)
+    bend = SitePlace(id="B_RING", name="ring bend", kind="bend", x=ax + t * math.cos(entry),
+                     y=ay + t * math.sin(entry), yaw=entry, exit_yaw=leave, radius_m=0.2514)
+    site = SiteMap(map_id=base.map_id, places=[*base.places, bend], edges=base.edges)
+    caps = dataclasses.replace(ARC, lane_bend=True)
+    for arc, first in ((_arc_rec(1, "SW", "SE"), "straight"), (None, "bend")):
+        runner, store, ports = _setup(site, caps=caps)
+        _with_arc(ports, arc)
+        _plan(store, ports, "ring_s:fwd", 0.03, "NE")
+        run(runner.start("p1", "bob"))
+        ports.at(_arc(store, "ring_s:fwd"), 0.03)
+        _ticks(runner, ports)
+        assert [s[0] for s in ports.sent] == [first]
