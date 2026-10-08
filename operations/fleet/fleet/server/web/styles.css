@@ -741,6 +741,12 @@ main {
 .site-path h3 { margin: 0; }
 .site-path ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .site-path li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+/* D-517 10 화면 수용(1920×1080 무스크롤) — 넓은 단에서 관제 경로는 제목과 세 단어를 한 줄로 둔다(세 줄이면 레일이 넘친다). */
+@media (width >= 64rem) {
+  .site-path { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: var(--space-4); }
+  .site-path ul { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+  .site-path li { justify-content: flex-start; gap: var(--space-2); }
+}
 .address-drift[hidden] { display: none; }
 .address-drift .enroll-alarm { margin: 0; }
 .enroll-move-check[hidden] { display: none; }
