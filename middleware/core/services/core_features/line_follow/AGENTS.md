@@ -30,12 +30,14 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 
 | Directory | Purpose |
 |-----------|---------|
+| `arc/` | D-520 map-guided arc mixin (`lane_arc.py`): after a junction instruction's turn with `exit_segment`, drive omega = g*v*kappa on odom length to the next place, IR one-time correction, `segment_end` pivot; own size unit (`docs/plans/2026-10-08-line-follow-arc-subpackage.md`); same manager lock and generation |
 | `recovery/` | Lane recovery mixins of `LineFollowManager` (D-407 stuck, D-468 return, D-476 bridge, D-495 junction); same manager lock and generation, no own lock, thread, store or publisher |
 
 ## For AI Agents
 
 ### Working In This Directory
 
+- A live D-520 arc owns the tick (`_arc_tick` in `_tick_locked`): keeper reasons, the loss clock, D-468, D-476, D-407 and the junction gate do not run. `recovery` never imports `arc`; it calls the mixin methods.
 - Call `lane_recovery_rule` before the speed formula. `FOLLOW` is the only ordinary path that sets a non-zero command; D-407 back-off, D-468 return and D-476 bridge are the bounded exceptions and each needs its own evidence.
 - `body_stop.py` and `clearance.py` are `concern: safety` (D-430). Call them; change them only under safety change control.
 - Do not import `control.sensing` or OpenCV.
@@ -43,7 +45,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 
 ### Testing Requirements
 
-`middleware/core/gateway/test/test_line_follow.py`, `test_line_follow_body_stop.py`, `test_line_follow_stuck.py`, `test_line_follow_stuck_api.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `test_lane_return*.py`, `test_lane_bridge.py`, `test_line_junction.py`, `middleware/core/gateway/test/test_line_junction_api.py`, `middleware/core/services/test/test_line_authority.py`, `middleware/core/gateway/test/test_line_authority_api.py`
+`middleware/core/gateway/test/test_line_follow.py`, `test_line_follow_body_stop.py`, `test_line_follow_stuck.py`, `test_line_follow_stuck_api.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `test_lane_return*.py`, `test_lane_bridge.py`, `test_line_junction.py`, `test_lane_arc.py` (+ `test_lane_arc_off_golden.json`), `middleware/core/gateway/test/test_line_junction_api.py`, `test_line_arc_api.py`, `middleware/core/services/test/test_line_authority.py`, `middleware/core/gateway/test/test_line_authority_api.py`
 
 ## Dependencies
 

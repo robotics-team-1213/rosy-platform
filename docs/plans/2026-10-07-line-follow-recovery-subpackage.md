@@ -52,9 +52,9 @@ D-495 교차로 동작 브랜치가 main에 들어간 뒤에 한다. 같은 시�
 | `recovery/junction_bend.py` | `recovery/junction/bend.py` |
 
 - `git mv`만 한다. 동작, API, 설정 키, 이벤트 이름은 바꾸지 않는다. 재수출 shim은 두지 않는다. `junction/__init__.py`는 설명 문자열뿐이다.
-- import는 같은 변경에서 고친다: `line_follow/manager.py`, `core_api_web/api/deps.py`, 시험 `test_line_junction.py`, `test_junction_approach.py`, `test_junction_bend.py`, Fleet `test_trip_runner.py`(CORE 기동 상태 목록 대조).
+- import는 같은 변경에서 고친다: `line_follow/manager.py`, `core_api_web/api/deps.py`, 시험 `test_line_junction.py`, `test_junction_approach.py`, `test_junction_bend.py`, Fleet `test_trip_runner.py`(CORE 기동 상태 목록 대조). main 병합 뒤 D-520의 `line_follow/arc/lane_arc.py`와 `test_lane_arc.py`도.
 - `motion_admit.py`는 `recovery`에 남는다. `lane_bridge`와 `lane_return_decision`도 쓴다.
 - 지키는 것은 위와 같다. 교차로 믹스인은 그대로 `LineFollowManager`의 믹스인이고 매니저 잠금 하나와 generation 하나를 쓴다. 최종 발행자는 CORE CommandManager다.
-- 크기: `SIZE_UNITS`에 `core_features/line_follow/recovery/junction`을 더하고 파일은 가장 안쪽 단위로 센다. 옮긴 뒤 `recovery` 2093, `junction` 947(`__init__.py` 2줄 포함). 두 판정은 독립 재판정을 받는다.
+- 크기: `SIZE_UNITS`에 `core_features/line_follow/recovery/junction`을 더하고 파일은 가장 안쪽 단위로 센다. 옮긴 뒤 `recovery` 2093, `junction` 947(`__init__.py` 2줄 포함). main 병합(D-520) 뒤 2098, 959. 두 판정은 독립 재판정을 받는다.
 - 독립 검토: critic 에이전트(읽기 전용) 2026-10-08 승인(APPROVE WITH CHANGES, 요구 문구 반영). recovery 2093, junction 947.
 - 검증: `test_line_junction.py`, `test_junction_approach.py`, `test_junction_bend.py`, `test_junction_turn_site_basis.py`, gateway `test_line_junction_api.py`, `test_line_follow*.py`, Fleet `test_trip_runner.py`, `test/architecture`. `test/known_failures.py`가 새 실패 0이어야 한다.
