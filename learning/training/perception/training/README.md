@@ -348,6 +348,16 @@ authority·TTL·recipe/소스·실제 eval inventory·사본 bytes를 다시 검
 실제 마스크 승인0, 평가 frame/group UNKNOWN과 부족한 source proof는 구현 뒤에도 HOLD다.
 격리 synthetic 시험은 실제 사람 정답·GPU 학습·서비스 전환 수용이 아니다. 이 owner 경로를
 기존 서비스에 연결하거나 실제 학습을 실행하는 작업은 별도 실행 범위다.
+
+`drivable_head` recipe는 내부 `IndexedReview` owner가 반드시 필요하다. 공통 seed/epochs/lr/
+batch_size 외에 `parent_model`(lane-seg manifest 폴더), `parent_torchscript`(부모 TorchScript
+파일), `ignore_top`(0–239)을 입력한다. 승인된 카메라 provenance, 부모 파일 SHA·클래스
+순서와 데이터셋의 마지막 `drivable` 클래스를 확인하고 부모 파일도 재검사에 묶는다.
+실제 승인 프레임에서 부모 TorchScript·ONNX 추론 일치와 클래스 보존을 확인한 뒤
+헤드만 GPU에서 학습한다. train/val 모두 `ignore_top` 아래에 주행 가능/불가능
+화소가 있어야 한다. 출력 ONNX는 부모 차선 화소 보존을 재확인하고 `candidate`로만
+기록한다. 기존 intake·READY·장치 전달은 v13을 계속 거부하며, 후보 생성은 주행
+수용 증거가 아니다.
 # Indexed review producer composition
 
 The default `learning_cycle.py` CLI keeps indexed requests on HOLD without an

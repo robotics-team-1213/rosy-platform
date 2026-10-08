@@ -175,7 +175,7 @@ SIZE_VERDICTS = {
         "split: re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
         "(fleet/guide/situation.py, fleet/server/guide_service.py, web/guide-layer.js) "
         "over the map snapshot Fleet already holds. It does not call the network or emit a command. "
-        "D-523's ask parser stays in the previous count. No new robot command path or package owner. "
+        "Main measured 46507 before D-523's 194-line ask parser. No new robot command path or package owner. "
         "The site-map web/server split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; "
         "+150 allowance unchanged, measured from 46701. "
         "Previously re-judged at 46295 on 2026-10-09: D-523 adds fleet/ai/decision_pipeline.py "
