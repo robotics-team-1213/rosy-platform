@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · D-507 B13 Fleet trip 한 바퀴 수용 SIM
-- 2026-10-08 · uncommitted · 경로 시제품의 실행 중 조건 변경 폐기
-- 2026-10-08 · uncommitted · 정적 경로 시제품의 ROS 진입 제한
-- 2026-10-08 · uncommitted · 차선 경로 시작 위치 오차의 렌더러별 결과
-- 2026-10-08 · uncommitted · 정적 차선 경로 시작 위치 오차 ROS-SIM
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 재검증 반영: 호 중 bend 거절
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 병합 뒤 시험과 core_features 크기
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 안전 리뷰 반영과 main 병합
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) API 판 v1.143 → v1.145
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 단계 1 CORE: 지도 호 feed-forward, IR 한 번 보정, API v1.143
