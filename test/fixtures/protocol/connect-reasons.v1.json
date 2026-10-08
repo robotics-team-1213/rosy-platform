@@ -1,0 +1,331 @@
+{
+  "version": 1,
+  "doc": "D-535 connection failure reasons. Machine source for every client that connects to a robot (core_common.protocol.connect_reason, Rosy Pilot, Fleet console). CORE puts `reasons` codes in the ERR-101 `error.code` of the connection, peer-pairing and session routes with `detail.action` and `detail.retry`; HTTP statuses stay what each route already returned. A client classifies one observation: a transport failure before any answer (`transport`, closed vocabulary), an answer's `code` (a reason code, or an older ERR-102 code in `robot_codes`), else its `http_status` (`http_status`, then `http_5xx_fallback` / `http_fallback`), or a D-456 request status read (`request_states`; approved with authorization_available false is APPROVAL_EXPIRED). `retry` auto: the client may retry by itself with backoff; person: show the message and action and stop. D-370 failure-classes.v1.json stays the retry policy; this vector is what a person reads.",
+  "reasons": [
+    {
+      "code": "ROBOT_UNREACHABLE",
+      "retry": "auto",
+      "message": "로봇에 닿지 않습니다.",
+      "action": "로봇 전원과 Wi-Fi를 확인하고, 이 기기가 로봇과 같은 Wi-Fi에 있는지 보세요."
+    },
+    {
+      "code": "TLS_REQUIRED",
+      "retry": "person",
+      "message": "이 로봇은 HTTPS 연결만 받습니다.",
+      "action": "로봇 이름 주소(https://rosy-pinky-xxxx.local:8080)로 다시 연결하세요."
+    },
+    {
+      "code": "TLS_NAME_MISMATCH",
+      "retry": "person",
+      "message": "로봇 인증서의 이름이 연결한 주소와 다릅니다.",
+      "action": "IP 주소 대신 로봇 이름 주소(rosy-pinky-xxxx.local)로 연결하세요."
+    },
+    {
+      "code": "CA_UNKNOWN",
+      "retry": "person",
+      "message": "이 기기가 로봇 인증서를 아직 믿지 않습니다.",
+      "action": "로봇을 목록에서 지우고 다시 승인받아 로봇 인증서를 새로 받으세요."
+    },
+    {
+      "code": "CORE_NOT_READY",
+      "retry": "auto",
+      "message": "로봇은 켜져 있지만 CORE가 아직 준비되지 않았습니다.",
+      "action": "1분쯤 기다리세요. 계속되면 로봇 화면의 상태를 확인하세요."
+    },
+    {
+      "code": "API_VERSION_TOO_OLD",
+      "retry": "person",
+      "message": "로봇 소프트웨어가 이 앱보다 오래되었습니다.",
+      "action": "로봇을 최신 릴리스로 업데이트하세요."
+    },
+    {
+      "code": "PAIRING_UNAVAILABLE",
+      "retry": "person",
+      "message": "이 로봇은 지금 기기 승인을 받을 수 없습니다.",
+      "action": "관리자에게 로봇의 HTTPS 설정과 상태를 확인해 달라고 하세요."
+    },
+    {
+      "code": "PAIRING_REQUIRED",
+      "retry": "person",
+      "message": "이 기기는 이 로봇에 승인되어 있지 않습니다.",
+      "action": "로봇에 연결을 다시 요청하고 승인을 받으세요."
+    },
+    {
+      "code": "LAN_REQUIRED",
+      "retry": "person",
+      "message": "처음 승인은 로봇과 같은 Wi-Fi에서만 요청할 수 있습니다.",
+      "action": "로봇과 같은 Wi-Fi에 연결한 뒤 다시 요청하세요."
+    },
+    {
+      "code": "APPROVAL_PENDING",
+      "retry": "auto",
+      "message": "승인을 기다리는 중입니다.",
+      "action": "로봇 화면의 승인 코드를 입력하거나 관제에서 승인을 받으세요."
+    },
+    {
+      "code": "APPROVAL_CODE_WRONG",
+      "retry": "person",
+      "message": "승인 코드가 맞지 않습니다.",
+      "action": "로봇 화면의 6자 코드를 다시 확인해 입력하세요."
+    },
+    {
+      "code": "CONSOLE_APPROVAL_REQUIRED",
+      "retry": "person",
+      "message": "이 요청은 로봇 화면 코드로 승인할 수 없습니다.",
+      "action": "관제(Fleet) 또는 로봇 대시보드에서 관리자가 승인해야 합니다."
+    },
+    {
+      "code": "APPROVAL_EXPIRED",
+      "retry": "person",
+      "message": "승인 요청이나 승인 기간이 끝났습니다.",
+      "action": "로봇에 연결을 다시 요청하세요."
+    },
+    {
+      "code": "APPROVAL_DENIED",
+      "retry": "person",
+      "message": "승인이 거절되었습니다.",
+      "action": "관리자에게 확인한 뒤 다시 요청하세요."
+    },
+    {
+      "code": "RATE_LIMITED",
+      "retry": "auto",
+      "message": "요청이 너무 잦습니다.",
+      "action": "안내된 시간(Retry-After)만큼 기다린 뒤 다시 시도하세요."
+    },
+    {
+      "code": "SESSION_TAKEN",
+      "retry": "person",
+      "message": "다른 사람이 이 로봇을 쥐고 있습니다.",
+      "action": "지금 쥔 사람에게 끝내 달라고 하거나 끝날 때까지 기다리세요."
+    },
+    {
+      "code": "UNEXPECTED_RESPONSE",
+      "retry": "person",
+      "message": "로봇이 예상하지 못한 답을 했습니다.",
+      "action": "앱 로그를 남겨 담당자에게 알리세요."
+    }
+  ],
+  "transport": {
+    "dns_failure": "ROBOT_UNREACHABLE",
+    "timeout": "ROBOT_UNREACHABLE",
+    "no_route": "ROBOT_UNREACHABLE",
+    "connection_refused": "CORE_NOT_READY",
+    "plain_http_to_tls": "TLS_REQUIRED",
+    "tls_name_mismatch": "TLS_NAME_MISMATCH",
+    "tls_unknown_ca": "CA_UNKNOWN",
+    "tls_pin_mismatch": "CA_UNKNOWN",
+    "tls_handshake": "CA_UNKNOWN"
+  },
+  "robot_codes": {
+    "UNAUTHORIZED": "PAIRING_REQUIRED",
+    "PAIRING_INVALID": "PAIRING_REQUIRED",
+    "CALIBRATION_ACTIVE": "SESSION_TAKEN",
+    "ROBOT_OFFLINE": "ROBOT_UNREACHABLE",
+    "HARDWARE_NOT_READY": "CORE_NOT_READY"
+  },
+  "http_status": {
+    "401": "PAIRING_REQUIRED",
+    "404": "API_VERSION_TOO_OLD",
+    "409": "PAIRING_REQUIRED",
+    "429": "RATE_LIMITED",
+    "503": "CORE_NOT_READY"
+  },
+  "http_5xx_fallback": "CORE_NOT_READY",
+  "http_fallback": "UNEXPECTED_RESPONSE",
+  "request_states": {
+    "pending": "APPROVAL_PENDING",
+    "rejected": "APPROVAL_DENIED",
+    "expired": "APPROVAL_EXPIRED",
+    "cancelled": "PAIRING_REQUIRED"
+  },
+  "cases": [
+    {
+      "id": "transport_dns_failure",
+      "input": {
+        "transport": "dns_failure"
+      },
+      "expect": "ROBOT_UNREACHABLE"
+    },
+    {
+      "id": "transport_timeout",
+      "input": {
+        "transport": "timeout"
+      },
+      "expect": "ROBOT_UNREACHABLE"
+    },
+    {
+      "id": "transport_no_route",
+      "input": {
+        "transport": "no_route"
+      },
+      "expect": "ROBOT_UNREACHABLE"
+    },
+    {
+      "id": "transport_connection_refused",
+      "input": {
+        "transport": "connection_refused"
+      },
+      "expect": "CORE_NOT_READY"
+    },
+    {
+      "id": "transport_plain_http_to_tls",
+      "input": {
+        "transport": "plain_http_to_tls"
+      },
+      "expect": "TLS_REQUIRED"
+    },
+    {
+      "id": "transport_tls_name_mismatch",
+      "input": {
+        "transport": "tls_name_mismatch"
+      },
+      "expect": "TLS_NAME_MISMATCH"
+    },
+    {
+      "id": "transport_tls_unknown_ca",
+      "input": {
+        "transport": "tls_unknown_ca"
+      },
+      "expect": "CA_UNKNOWN"
+    },
+    {
+      "id": "transport_tls_pin_mismatch",
+      "input": {
+        "transport": "tls_pin_mismatch"
+      },
+      "expect": "CA_UNKNOWN"
+    },
+    {
+      "id": "transport_tls_handshake",
+      "input": {
+        "transport": "tls_handshake"
+      },
+      "expect": "CA_UNKNOWN"
+    },
+    {
+      "id": "code_wins_over_status",
+      "input": {
+        "code": "APPROVAL_EXPIRED",
+        "http_status": 409
+      },
+      "expect": "APPROVAL_EXPIRED"
+    },
+    {
+      "id": "calibration_lease_is_session_taken",
+      "input": {
+        "code": "CALIBRATION_ACTIVE",
+        "http_status": 409
+      },
+      "expect": "SESSION_TAKEN"
+    },
+    {
+      "id": "expired_token_is_pairing_required",
+      "input": {
+        "code": "UNAUTHORIZED",
+        "http_status": 401
+      },
+      "expect": "PAIRING_REQUIRED"
+    },
+    {
+      "id": "old_robot_409_is_pairing_required",
+      "input": {
+        "http_status": 409
+      },
+      "expect": "PAIRING_REQUIRED"
+    },
+    {
+      "id": "missing_route_is_too_old",
+      "input": {
+        "http_status": 404
+      },
+      "expect": "API_VERSION_TOO_OLD"
+    },
+    {
+      "id": "old_robot_429",
+      "input": {
+        "http_status": 429
+      },
+      "expect": "RATE_LIMITED"
+    },
+    {
+      "id": "old_robot_503",
+      "input": {
+        "http_status": 503
+      },
+      "expect": "CORE_NOT_READY"
+    },
+    {
+      "id": "other_5xx",
+      "input": {
+        "http_status": 502
+      },
+      "expect": "CORE_NOT_READY"
+    },
+    {
+      "id": "other_4xx",
+      "input": {
+        "http_status": 418
+      },
+      "expect": "UNEXPECTED_RESPONSE"
+    },
+    {
+      "id": "unknown_code_falls_back_to_status",
+      "input": {
+        "code": "SOMETHING_NEW",
+        "http_status": 403
+      },
+      "expect": "UNEXPECTED_RESPONSE"
+    },
+    {
+      "id": "success_is_not_a_failure",
+      "input": {
+        "http_status": 200
+      },
+      "expect": null
+    },
+    {
+      "id": "request_pending",
+      "input": {
+        "request_state": "pending"
+      },
+      "expect": "APPROVAL_PENDING"
+    },
+    {
+      "id": "request_rejected",
+      "input": {
+        "request_state": "rejected"
+      },
+      "expect": "APPROVAL_DENIED"
+    },
+    {
+      "id": "request_expired",
+      "input": {
+        "request_state": "expired"
+      },
+      "expect": "APPROVAL_EXPIRED"
+    },
+    {
+      "id": "request_cancelled",
+      "input": {
+        "request_state": "cancelled"
+      },
+      "expect": "PAIRING_REQUIRED"
+    },
+    {
+      "id": "request_approved_usable",
+      "input": {
+        "request_state": "approved",
+        "authorization_available": true
+      },
+      "expect": null
+    },
+    {
+      "id": "request_approved_but_unusable",
+      "input": {
+        "request_state": "approved",
+        "authorization_available": false
+      },
+      "expect": "APPROVAL_EXPIRED"
+    }
+  ]
+}
