@@ -101,8 +101,14 @@ SIZE_VERDICTS = {
         "at 604 (bend diagnostic)",
     ),
     "fleet/fleet/server/web/map-view.js": (
-        903,
-        "split: judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
+        831,
+        "split: measured at 831 on 2026-10-08 after the named camera backdrop seam was applied "
+        "(behaviour-preserving): the camera picture path (cameraMapCalibration, the top-down cache, "
+        "drawCameraTopDown, warpOnto, setCameraFrame, frameTurn, turnedUrl, bindCamera) is in "
+        "web/camera-backdrop.js, which map-view feeds its draw hook, calibrations and toPx; the D-517 10 "
+        "traffic drawing is in web/traffic-view.js (polling and toggle stay here). Still over the web "
+        "ceiling 800 with one job left, map drawing and its polling; re-judge after the next growth. "
+        "Previously judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
         "and the D-515 top-down camera warp made map-view.js own two jobs, map drawing (grid, robots, "
         "formation, mediation, metre site view) and the camera picture path. Move cameraMapCalibration, "
         "drawCameraTopDown, warpOnto, setCameraFrame, frameTurn, turnedUrl and bindCamera to a new "
