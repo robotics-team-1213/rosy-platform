@@ -1,0 +1,8 @@
+[Unit]
+Description=ROSY host-local SSH self-recovery check
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/default/rosy-ssh-watchdog
+ExecStart=/usr/local/sbin/rosy-ssh-watchdog

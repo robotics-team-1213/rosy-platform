@@ -1,0 +1,49 @@
+{
+ "first_seq": 1,
+ "sent": true,
+ "final": {
+  "t": 35.727,
+  "sim_t": 40.394,
+  "gt": [
+   -0.1018376205168909,
+   0.15641184752115417,
+   2.2206285276875657
+  ],
+  "odom": [
+   -0.10173054549987202,
+   0.15627058928631612,
+   2.218208886963323,
+   0.009787187412627848,
+   0.15077534942332735
+  ],
+  "state": "TRACKING",
+  "reason": "tracking",
+  "junction": {
+   "pending_action": null,
+   "place_id": null,
+   "state": "idle",
+   "seq": 3,
+   "turn_deg": null,
+   "reason": null,
+   "pivot_basis": null
+  },
+  "arc": {
+   "arc_seq": 2,
+   "from_place_id": "SE",
+   "end_place_id": "NE",
+   "curvature_1pm": 3.98,
+   "length_m": 0.4595,
+   "travelled_m": 0.4596,
+   "state": "ended",
+   "reason": "lane_arc_end_unarmed",
+   "ir_correction": {
+    "side": "right",
+    "phase": "done",
+    "away_m": 0.1212,
+    "level_m": 0.0707,
+    "used": true
+   }
+  }
+ },
+ "capability_at_end": true
+}

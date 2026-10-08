@@ -7,6 +7,40 @@ LAP_RETRY_S = 5.0
 LAP_RETRIES = 2
 
 
+def convoy_refusal(lives: dict, robot_id: str, leader: str, *, cycle=None, arcs=None, segments=None) -> tuple | None:
+    """D-517 9 M3: ``(code, detail)`` when ``robot_id`` may not follow ``leader``, else None. The leader
+    runs an open repeat trip, follows nobody, and laps the same cycle (``cycle`` places or ``arcs`` edges);
+    the follower's plan ``segments`` reach the leader's lane position over that loop only, so no shortcut
+    (a roundabout arc) puts it ahead of the leader."""
+    live = lives.get(leader)
+    if leader == robot_id:
+        return "TRIP_CONVOY_SELF", {"leader": leader}
+    if live is None or not live.open or not live.repeat:
+        return "TRIP_CONVOY_LEADER_NOT_RUNNING", {"leader": leader}
+    if live.convoy is not None:
+        return "TRIP_CONVOY_LEADER_IS_FOLLOWER", {"leader": leader, "follows": live.convoy}
+    edges = lambda ids: frozenset(arc.rsplit(":", 1)[0] for arc in ids)  # noqa: E731
+    if (cycle is not None and cycle != frozenset([live.request["to"], *live.request.get("via", ())])) or (
+            arcs is not None and edges(arcs) != edges(live.lap_arcs)):
+        return "TRIP_CONVOY_OTHER_LOOP", {"leader": leader}
+    if segments is not None and not _behind(live, segments, edges(live.lap_arcs)):
+        return "TRIP_CONVOY_NOT_BEHIND", {"leader": leader}
+    return None
+
+
+def _behind(leader: LiveTrip, segments: list, loop: frozenset) -> bool:
+    if leader.at is None:
+        return False
+    index, s = leader.at
+    target = arc_id(leader.segments[index])
+    for k, seg in enumerate(segments):
+        if seg["edge_id"] not in loop:
+            return False
+        if arc_id(seg) == target:
+            return k > 0 or seg["s_from"] < s
+    return False
+
+
 def lap_arcs(active, segments: list, request: dict, caps: dict, blocked, routing, max_turn_deg) -> tuple[str, ...]:
     """D-517 3: one lap's arcs planned from where ``segments`` end (else the plan's own: the lap check holds)."""
     if not segments:

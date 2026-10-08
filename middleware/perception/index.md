@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · refactor(control): P1a perception 증거 크기 단위 분리
+- 2026-10-08 · uncommitted · feat(control): 녹화 프레임에 지면·차선 근거 보존
 - 2026-10-08 · uncommitted · fix(control): 경로 시제품의 시뮬레이션 조건 상실 폐기
 - 2026-10-08 · uncommitted · fix(control): 정적 경로 시제품을 Gazebo 조건에 한정
 - 2026-10-08 · uncommitted · fix(perception): 정적 경로 끝에서 관측 후보 중단
-- 2026-10-08 · uncommitted · test(perception): 남쪽 출발 굽이 재획득과 긴 페인트 공백
-- 2026-10-08 · uncommitted · fix(perception): 지도 분기 보조의 경로 이탈 가드
