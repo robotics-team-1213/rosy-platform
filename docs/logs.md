@@ -7346,3 +7346,9 @@ osy-d395-s1d\`.
 - 변경: README 인지와 판단을 층·자리·지금 표로 줄이고, 아키텍처 색인 11·12행과 11·12장에 2026-10-09 경계만 남겼다. CONCEPTS에 Perception·World state·Decision candidate 용어를 더했다.
 - 증거: 워크트리 docs/github-glance. pytest test/test_readme_agent_start.py test/test_native_runtime_docs.py test/test_pi_wifi_deployment.py::test_wifi_runbook_is_linked_from_runtime_guide test/architecture/test_document_placement.py 17 passed. python tools/harness/rosy_harness.py lint 0 errors, 23 warnings(기존 last_verified). 새 상대 링크는 파일로 확인했다. generate가 docs/index.md를 다시 썼고, 그 뒤 lint도 0 errors, 23 warnings였다.
 - gate 변화: 없음. 문서 정합이며 구현·배포·장치 수용은 그대로다.
+
+## 2026-10-09 · uncommitted · docs: 10/7 경계 기억의 odom 반례 범위 측정
+
+- 변경: 원본 출처가 증명된 10/7 카메라 207장과 odom의 header stamp, 연속 자세 차이를 측정하고 같은 물리 경계 ID가 없는 한쪽 선 기억의 반례와 다음 shadow 검증을 기록했다.
+- 증거: `validation/lane-boundary-identity-2026-10-09/result.md`. 두 MCAP에서 prior odom 0.3초 이내 206/207, 최대 시각 차이 86.4 ms, 카메라 간 최대 odom 이동 7.8 mm. `evidence/measure_odom.py` 재실행으로 확인.
+- gate 변화: 없음. 사람 경계 ID·실물 이동 정답·주행 수용은 HOLD.
