@@ -38,7 +38,7 @@
 ## 최근 기록
 
 - 2026-10-09 · uncommitted · uiux(robot): 마지막 계획 경로의 불확실성 표시
+- 2026-10-09 · uncommitted · fix(robot): paired 연결에서 개발 입장 숨김
 - 2026-10-09 · uncommitted · uiux(robot): Pilot 인계 뒤 빈 지도 안내
 - 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 근거와 설정 카드 높이
 - 2026-10-09 · uncommitted · uiux(robot): 현재 내비게이션 지도 상태 재검증과 좌표 행 정리
-- 2026-10-08 · uncommitted · uiux(robot): Console 지도 미수신 상태 정합성

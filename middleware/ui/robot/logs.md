@@ -1219,6 +1219,11 @@
 - 증거: [Pilot→Robot Console 연속 화면](../../../docs/validation/uiux-pilot-console-continuity-2026-10-09/result.md). 390·2000px 실제 CORE 자산 캡처, 관련 브라우저 4 passed, `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 빈 지도 설명 근거 보강. 지도·SLAM 실제 실행과 DEVICE/FIELD·전체 G2/G3는 HOLD.
 
+## 2026-10-09 · uncommitted · fix(robot): paired 연결에서 개발 입장 숨김
+- 변경: 로그인 전 렌더가 개발 연결 버튼을 무조건 드러내던 동작을 고쳤다. CORE의 `/api/v1/auth/connection`이 `development`를 반환할 때만 기존 조회 경로가 버튼을 연다.
+- 증거: 모델 PC Chromium에서 paired 회귀 시험 수정 전 1 failed, 수정 후 paired·development·호환 경로 3 passed. 실기기 설치본은 별도 배포가 필요하다.
+- gate 변화: SOURCE UI 수정. 로봇 설치본·브라우저 신뢰 저장소·DEVICE/FIELD는 미확인.
+
 ## 2026-10-09 · uncommitted · uiux(robot): 마지막 계획 경로의 불확실성 표시
 
 - 변경: 마지막 수신 계획을 화살표 없는 점선으로 그리고 경과 시간과 현재 목표 일치 미확인을 Console에 보인다. 좁은 화면에서는 상태 문구를 줄바꿈한다.

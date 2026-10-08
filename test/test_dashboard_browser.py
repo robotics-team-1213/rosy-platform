@@ -522,6 +522,20 @@ def test_development_entry_logs_in_without_a_code():
             "document.querySelector('.entry-heading h1')?.textContent === '작업을 선택하세요'")
         browser.close()
 
+def test_paired_connection_never_offers_development_entry():
+    pytest.importorskip("playwright.sync_api")
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(
+            playwright, extra_init=DEV_ENTRY_INIT.replace("mode: 'development'", "mode: 'paired'"))
+        page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
+        page.wait_for_function(
+            "window.__apiCalls.some((call) => call.path === '/api/v1/auth/connection')")
+        assert page.locator("#dev-connect-row").is_hidden()
+        browser.close()
+
+
 def test_compatibility_development_entry_names_pending_reason():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
