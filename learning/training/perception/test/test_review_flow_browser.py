@@ -49,6 +49,20 @@ def browser_workspace(tmp_path):
         yield value
 
 
+def test_imported_approval_and_recheck_history_are_visible(browser_workspace):
+    page, store, expect = browser_workspace
+    expect(page.locator('#review-history-summary')).to_contain_text('객체 승인 · 픽셀 대기')
+    expect(page.locator('#review-history-events')).to_contain_text('검수자 식별 불가')
+    page.locator('#filter').select_option('approved')
+    page.locator('#reopen').click()
+    expect(page.locator('#review-history-events')).to_contain_text('재검수 시작')
+    review_masks.bind_classes(store, CLASSES)
+    review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, Conflict)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#review-history-summary')).to_contain_text('객체 대기 · 픽셀 대기')
+    expect(page.locator('#review-history-events')).to_contain_text('전체 채우기')
+
+
 @pytest.fixture
 def custom_class_workspace(request, tmp_path):
     source, human, images = fixture_inputs(tmp_path)
