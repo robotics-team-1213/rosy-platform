@@ -74,7 +74,8 @@ export function mount(root, ctx) {
     setText(navStage, `주행 · ${state?.mode === "SAFE_STOP" ? "안전 정지"
       : state && !evidence.isFresh("navigation") ? evidenceLabel("navigation")
       : navigation && ["PLANNING", "NAVIGATING"].includes(navigation) && !goalPoseReady()
-      ? "위치 확인 중" : navigation ? enumLabel(NAVIGATION_LABEL, navigation) : "상태 확인 불가"}`);
+      ? `${enumLabel(NAVIGATION_LABEL, navigation)} 보고 · 위치 확인 필요`
+      : navigation ? enumLabel(NAVIGATION_LABEL, navigation) : "상태 확인 불가"}`);
     const location = !evidence.isFresh("pose") ? evidenceLabel("pose")
       : mapIdMismatch ? "지도 ID 불일치"
       : state?.localization?.state === "LOCALIZED"

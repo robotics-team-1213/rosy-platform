@@ -88,3 +88,10 @@ CORE의 `GET /api/v1/navigation/state`에 기존 `NavigationManager.mapping_acti
 원본은 같은 X: 세션 `evidence/navigation-evidence/navigation-stage/operator-console-navigation-<상태>-<폭>x<높이>.png`에 있다. `navigation-stage-matrix.json` SHA-256은 `AED6CD47075074D8AF07708F9926330FB15B85935561B121D1435364EC9E8BB5`다. 실제 FastAPI 정적 자산과 합성 CORE 응답으로 찍은 **LOCAL** 화면이며 장치·현장 증거가 아니다. 2폭×3상태 브라우저 회귀 1 passed (`logs/navigation-evidence-settled.txt`), 지도 읽기·패키지 20 passed (`logs/navigation-evidence-regression.txt`), 둘 다 `known_failures.py` 0 NEW. 네 상태 중 정상 캡처는 위의 기존 행에 있다.
 
 안전 정지 상태에서는 CORE의 이동 기능 차단 계약을 따라 지도 목표를 비활성화하고 계획 경로를 숨긴다. 초기 위치 설정은 별도 권한·기능 조건으로 남긴다. 마지막 내비게이션 보고가 `NAVIGATING`이어도 현재 상태는 `안전 정지`로 우선 읽히며, 실제 정지 회로의 물리 readback을 이 화면 캡처로 주장하지 않는다. 두 폭의 `SAFE_STOP` 캡처를 포함한 Chromium 회귀 1 passed (`logs/navigation-safe-stop-run.txt`), 패키지 검사 19 passed (`logs/navigation-safe-stop-package.txt`), 둘 다 `known_failures.py` 0 NEW. `node --check`는 변경된 세 JS 파일에서 통과했다. 더 넓은 레이아웃 회귀 묶음은 출력 없이 장시간 멈춰 중단했으며 통과로 세지 않는다. 403/501 거부, 최초 기동, 확인 대화상자와 물리 주행은 이 후속 회차의 수용 범위에 포함되지 않아 D-153 전체 G2/G3 판정은 HOLD다.
+
+## 후속: 위치 불확실 중 주행 보고 보존
+
+CORE의 내비게이션 증거는 최신 `NAVIGATING`인데 위치 추정이 `SUSPECT`일 때, 이전 HUD의 `주행 · 위치 확인 중`은 주행 보고를 가렸다. 이제 `주행 · 주행 중 보고 · 위치 확인 필요`로 두 사실을 함께 표시한다. 이 문구는 물리 이동을 확정하지 않는다. 목표 버튼과 계획 경로는 기존처럼 차단하고, 초기 위치 설정은 별도 조건을 유지한다.
+
+- LOCAL: X: 세션 `evidence/navigation-status-honesty/navigation-stage/operator-console-navigation-suspect-{390x844,1366x768}.png`로 두 폭의 동일한 불일치 상태를 캡처했다. 정상 두 폭과 다른 상태의 캡처도 같은 폴더에 있다. 합성 CORE 응답을 사용했으며 장치 증거는 아니다.
+- Chromium 해당 상태 회귀와 캡처 **1 passed**, `known_failures.py` **0 NEW** (`logs/navigation-status-honesty-final.txt`). 매트릭스 10행의 브라우저 오류는 0건이다. DEVICE/FIELD, 실제 이동 확인, 전체 G2/G3는 HOLD다.

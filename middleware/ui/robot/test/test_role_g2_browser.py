@@ -1348,6 +1348,13 @@ def test_console_navigation_stage_local_captures(tmp_path):
             mapping_session["readable"] = False
             page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 세션 확인 불가')")
             page.screenshot(path=str(capture_dir / f"operator-console-mapping-unknown-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            if viewport[0] == 1366:
+                location["state"] = "SUSPECT"
+                page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 주행 중 보고 · 위치 확인 필요')
+                  && document.querySelector('[data-map-click="goal"]')?.disabled""")
+                page.screenshot(path=str(capture_dir / "operator-console-navigation-suspect-1366x768.png"), full_page=True)
+                location["state"] = "LOCALIZED"
+                page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled === false""")
             if viewport[0] == 390:
                 blue_pixels = """() => {
                   const canvas = document.querySelector('.surface-map-canvas');
@@ -1362,7 +1369,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 page.wait_for_function("""() => document.querySelector('[data-map-click="goal"]')?.disabled
                   && !document.querySelector('[data-map-click="pose"]')?.disabled""")
                 assert "위치 추정 · 위치 확인 필요" in stage.inner_text()
-                assert "주행 · 위치 확인 중" in stage.inner_text()
+                assert "주행 · 주행 중 보고 · 위치 확인 필요" in stage.inner_text()
                 assert "주행 목표를 막았습니다" in page.locator("#map-action-reason").inner_text()
                 assert page.locator('[data-map-click="goal"]').get_attribute("reason") == "위치 추정 확인 후 가능"
                 assert page.evaluate(blue_pixels) == 0
