@@ -7118,3 +7118,9 @@ osy-d395-s1d\`.
 - 변경: `route_a`가 마지막 지도 조각의 끝 20 mm 앞에서 관측 후보를 끊도록 하고, 남쪽 출발 `west:r → ring_s:f` 폐루프 두 실행을 `docs/validation/lane-route-terminal-ros-sim-2026-10-08/`에 기록했다.
 - 증거: 기존 실행은 경로 끝점에서 72.5 mm 떨어져 LOST; 수정 후 실행은 18.1 mm 앞에서 HOLD 후 LOST. `/cmd_vel` publisher는 CORE 하나. 호스트 관련 시험 103 passed, 10 skipped, 신규 실패 0.
 - gate 변화: 끝점 초과 방지만 검증. 굽이 최대 지도 중심선 편차 47.8 mm·교차로 완료 0건이므로 전체 차선 추종, 사람 승인 R0, 실물 수용은 HOLD.
+
+## 2026-10-08 · uncommitted · Rosy Cam 원격 입회 역할 정리
+
+- 변경: D-521을 제안하고 G4/G5 런북과 Rosy Cam 운영 가이드에 원격 관찰·현장 물리 차단·영상 단절 시 HOLD를 일치시켰다. 기존 G4/G5 승인·지도 게이트와 장치 설정은 바꾸지 않았다.
+- 증거: 현장 `ceiling_north` 프레임 수신(2026-10-08, 응답 시 나이 171 ms); `rosy_26`·`rosy_60`은 모두 motor, navigation inactive, 승인 마커·지도 없음. harness lint 0 errors/23 기존 경고, 문서 계약 시험 119 passed/2 failed(로그 제목·생성 index), 수정 후 두 실패 재실행 2 passed·known_failures 0 NEW.
+- gate 변화: 없음. 카메라 연결만으로 G4/G5 또는 ROSY Web 목적지 주행을 수용하지 않는다.

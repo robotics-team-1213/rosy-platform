@@ -111,7 +111,10 @@ from the manifest `signing_key_id`, or if the source revision differs.
 
 ## 1. Prepare before power-on
 
-- Two people for G4/G5: one operator and one person at the physical power cut.
+- For G4/G5, the operator may observe and command remotely through the live Rosy Cam
+  view (D-521). A person must remain beside the robot, able to operate the independent
+  physical power cut immediately. Confirm voice/contact and a stop signal before motion;
+  a camera or remote E-stop cannot fill that role. With no local person, hold G4/G5.
 - Wheels-off-ground stand, clear floor zone, tape measure/caliper, charger, and
   a wired LAN cable. Keep the E-stop reachable at all times.
 - Raspberry Pi 5, arm64 Raspberry Pi OS Lite, camera, LiDAR, and motors must be
