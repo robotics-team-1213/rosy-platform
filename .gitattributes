@@ -44,3 +44,5 @@ tools/harness/adr_gaps.txt merge=union
 # Model PC hang guard scripts run under Linux shells (no extension, so *.sh does not cover them).
 deploy/site/rosy-model-guard-check text eol=lf
 deploy/site/rosy-model-guard-remote text eol=lf
+# Lap SIM batch lists are read by bash on the model PC; a CRLF name made run dirs "lap_01".
+docs/validation/**/evidence/*batch*.txt text eol=lf
