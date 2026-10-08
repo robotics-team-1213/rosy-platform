@@ -7,5 +7,5 @@ ExecStartPre=/usr/bin/test -s %h/.config/rosy/pilot-%i.operator-token
 ExecStartPre=/usr/bin/test -r %h/rosy-ml/%i-ca.pem
 ExecStartPre=/usr/bin/test -f %h/rosy-ml/bin/fetch_http.py
 EnvironmentFile=%h/.config/rosy/pilot-%i.env
-Environment=PYTHONPATH=%h/rosy-ml/rosy-platform/tools/perception/dataset:%h/rosy-ml/rosy-platform/src/runtime/sensing
+Environment=PYTHONPATH=%h/rosy-ml/rosy-platform/learning/training/perception/dataset:%h/rosy-ml/rosy-platform/middleware/perception
 ExecStart=%h/rosy-ml/.venv/bin/python %h/rosy-ml/bin/fetch_http.py https://rosy-pinky-%i.local:8080 --token-file %h/.config/rosy/pilot-%i.operator-token --ca-file %h/rosy-ml/%i-ca.pem --dest %h/rosy-ml/rosy-platform/data/perception/raw --video-out %h/rosy-ml/rosy-platform/data/teleop/learning --codec h264 --since-id ${SINCE_ID}
