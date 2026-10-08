@@ -58,6 +58,77 @@ def load_frozen_lane(path, *, classes=None) -> tuple[LaneUNet, int]:
     return lane, n_classes
 
 
+def verify_parent_parity(lane, torchscript_path, onnx_path, frames, *, ignore_top=0):
+    """Check frozen lane and delivered ONNX on admitted camera inputs before head training."""
+    import numpy as np
+    import onnxruntime as ort
+
+    script = torch.jit.load(str(torchscript_path), map_location="cpu").eval()
+    session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+    input_name = session.get_inputs()[0].name
+    maximum = 0.0
+    ambiguous = 0
+    with torch.no_grad():
+        for x in frames:
+            x = x.cpu()
+            reference = script(x).numpy()
+            rebuilt = lane.eval()(x).numpy()
+            delivered = session.run(None, {input_name: x.numpy()})[0]
+            if (reference.shape != rebuilt.shape or reference.shape != delivered.shape
+                    or not all(np.isfinite(v).all() for v in (reference, rebuilt, delivered))):
+                raise ValueError("parent TorchScript/ONNX shape or finite logits differ")
+            maximum = max(maximum, float(np.max(np.abs(reference - rebuilt))),
+                          float(np.max(np.abs(reference - delivered))))
+            mismatch = reference.argmax(1)[:, ignore_top:] != delivered.argmax(1)[:, ignore_top:]
+            ordered = np.sort(reference[:, :, ignore_top:], axis=1)
+            margin = ordered[:, -1] - ordered[:, -2]
+            error = np.max(np.abs(reference[:, :, ignore_top:] - delivered[:, :, ignore_top:]), axis=1)
+            unstable = mismatch & (margin <= 2 * error + 1e-7)
+            ambiguous += int(unstable.sum())
+            if maximum > 1e-3 or np.any(mismatch & ~unstable):
+                raise ValueError(f"parent TorchScript/ONNX logits or lane pixels differ: max_abs={maximum}")
+    return {"samples": len(frames), "max_abs": maximum, "ambiguous_pixels": ambiguous}
+
+
+def verify_candidate_lane_parity(parent_onnx, candidate_onnx, frames, *, ignore_top=0):
+    """A new drivable channel may split only parent background on admitted inputs."""
+    import numpy as np
+    import onnxruntime as ort
+
+    parent = ort.InferenceSession(str(parent_onnx), providers=["CPUExecutionProvider"])
+    candidate = ort.InferenceSession(str(candidate_onnx), providers=["CPUExecutionProvider"])
+    checked = ambiguous = 0
+    for frame in frames:
+        x = frame.cpu().numpy()
+        original = parent.run(None, {parent.get_inputs()[0].name: x})[0]
+        output = candidate.run(None, {candidate.get_inputs()[0].name: x})[0]
+        if (output.shape != (original.shape[0], original.shape[1] + 1, *original.shape[2:])
+                or not np.isfinite(original).all() or not np.isfinite(output).all()):
+            raise ValueError("candidate ONNX output shape or finite logits differ")
+        parent_pixels = original.argmax(1)
+        candidate_pixels = output.argmax(1)
+        mapped = np.where(candidate_pixels == original.shape[1], 0, candidate_pixels)
+        mismatch = mapped[:, ignore_top:] != parent_pixels[:, ignore_top:]
+        ordered = np.sort(original[:, :, ignore_top:], axis=1)
+        margin = ordered[:, -1] - ordered[:, -2]
+        rebuilt = np.concatenate((np.maximum(output[:, :1], output[:, -1:]),
+                                  output[:, 1:-1]), axis=1)
+        error = np.max(np.abs(original[:, :, ignore_top:] - rebuilt[:, :, ignore_top:]), axis=1)
+        if np.max(error) > 1e-3:
+            raise ValueError("candidate ONNX changes parent lane pixels or logits")
+        unstable = mismatch & (margin <= 2 * error + 1e-7)
+        ambiguous += int(unstable.sum())
+        if np.any(mismatch & ~unstable):
+            raise ValueError("candidate ONNX changes parent lane pixels")
+        if ignore_top and np.any(candidate_pixels[:, :ignore_top] != 0):
+            raise ValueError("candidate ONNX paints ignored top rows")
+        checked += 1
+    if not checked:
+        raise ValueError("candidate parity requires admitted frames")
+    return {"samples": checked, "parent_lane_pixels_preserved": True,
+            "ambiguous_pixels": ambiguous}
+
+
 class LaneWithDrivable(nn.Module):
     """1x3xHxW -> 1x(C+1)xHxW logits: the lane model's C channels, then drivable."""
 

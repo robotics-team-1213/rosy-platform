@@ -6,9 +6,10 @@
 Only the committed ``--sha`` (default HEAD) is tested: uncommitted changes are not
 shipped. The commit travels as a git bundle (so guard tests that run git see a real
 ``.git``) into ``~/rosy-test/repo``, a clone of the public origin, and is checked out
-as a detached worktree under ``~/rosy-test/runs/``, removed afterwards. The venv
-``~/rosy-test/venv`` follows the CI install step (``.github/workflows/ci.yml``) and is
-rebuilt only when those inputs change. Each pytest runs under a 6 GB memory cap.
+as a detached worktree under ``~/rosy-test/runs/``, removed afterwards. Venvs
+under ``~/rosy-test/venvs/<deps-sha>`` follow the CI install step
+(``.github/workflows/ci.yml``); different dependency versions can run together.
+Each pytest runs under a 6 GB memory cap.
 
 Hosts: ``ROSY_TEST_HOSTS`` (space separated, first reachable wins), default model PC
 then AI PC. A missing host fails the gate; ``--local`` or ``ROSY_TEST_LOCAL=1``
@@ -44,7 +45,7 @@ FLEET_REQ = "deploy/site/requirements-fleet.txt"
 TAIL_LINES = 25
 # Seconds before one pytest invocation counts as hung (a failure).
 PYTEST_TIMEOUT = int(os.environ.get("ROSY_TEST_TIMEOUT", "5400"))
-STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}  # each includes a 600 s lock wait
+STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}
 
 # Fetch public main, unpack the bundle (stdin), check the commit out. Exit 3 = the
 # bundle's prerequisite commit is missing there; the caller resends a full bundle.
@@ -68,14 +69,12 @@ git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 # opencv-python-headless for CI's apt python3-opencv/python3-pil, and the playwright
 # package (no browser) because *_browser.py modules import it at collection. No system
 # site-packages: they leak Ubuntu's old cryptography/Jinja2 and give no rclpy.
-# Built in venv.new and swapped in: other sessions use ~/rosy-test/venv directly, so
-# it is never missing or half-built, and never swapped during a run's first 90 s
-# (imports). The replaced venv stays as venv.old-<time>; prune those by hand.
+# Each dependency hash has its own venv and lock. Old ~/rosy-test/venv remains for
+# other sessions that use it directly; a new hash never waits for their tests.
 VENV = r"""set -euo pipefail
-R=~/rosy-test; V=$R/venv; N=$R/venv.new; DEPS=$2; cd "$R/runs/$1"; shift 2
-exec 9>"$R/venv.lock"; flock -s -w 600 9
-[ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] && exit 0
-flock -u 9; flock -x -w 600 9
+R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; N=$R/venvs/.new-$DEPS; cd "$R/runs/$1"; shift 2
+mkdir -p "$R/venvs"
+exec 9>"$R/venvs/$DEPS.lock"; flock -x -w 600 9
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] && exit 0
 echo "[remote] building $N (CI install inputs changed)"
 rm -rf "$N"
@@ -100,25 +99,14 @@ $P wheel --no-deps --no-build-isolation --wheel-dir "$N/wheelhouse" "$@"
 $P install --no-deps --no-index "$N"/wheelhouse/*.whl
 $P check
 echo "$DEPS" > "$N/.deps-sha"
-[ "${ROSY_VENV_NO_SWAP:-}" = 1 ] && exit 0
 grep -rlI --exclude-dir=__pycache__ "$N" "$N/bin" | xargs -r sed -i "s|$N|$V|g"
-pat="rosy-test/ven""v/bin/python"  # split so this script's own command line never matches
-tries=0
-while pgrep -f "$pat" | xargs -r -n1 ps -o etimes= -p | awk '$1 < 90 {young = 1} END {exit !young}'; do
-  tries=$((tries + 1))
-  [ "$tries" -le 40 ] || { echo "[remote] runs kept starting for 10 min; $V left as it was" >&2; exit 1; }
-  echo "[remote] a run started under 90 s ago uses $V; waiting to swap"; sleep 15
-done
-[ -e "$V" ] && mv "$V" "$R/venv.old-$(date +%Y%m%d-%H%M%S)"
 mv "$N" "$V"
-echo "[remote] swapped in the new $V"
+echo "[remote] ready $V"
 """
 
-# ponytail: the venv lock is taken per step, so a run whose deps differ from a
-# concurrent run's can rebuild the venv between our install and our pytest.
 PYTEST = r"""set -euo pipefail
-R=~/rosy-test; V=$R/venv; cd "$R/runs/$1"; shift
-exec 9>"$R/venv.lock"; flock -s -w 600 9
+R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; cd "$R/runs/$1"; shift 2
+[ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] || { echo "[remote] venv hash mismatch" >&2; exit 1; }
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 exec systemd-run --user --scope -q -p MemoryMax=6G -- "$V/bin/python" -m pytest "$@" 2>&1
 """
@@ -127,6 +115,7 @@ CLEANUP = r"""R=~/rosy-test
 git -C "$R/repo" worktree remove --force "$R/runs/$1" 2>/dev/null || rm -rf "$R/runs/$1"
 git -C "$R/repo" worktree prune
 git -C "$R/repo" update-ref -d "refs/remote-pytest/$1" 2>/dev/null || true
+rm -f "$R/runs/$1.bundle"
 """
 
 
@@ -179,14 +168,20 @@ def deps(repo: Path, sha: str) -> tuple[str, list[str]]:
         raise SystemExit(f"[remote-pytest] no `pip3 wheel ... --wheel-dir` line in {CI}; update VENV")
     dirs = match.group(1).split()
     ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (CI, DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, *dirs)]
-    return hashlib.sha256("\n".join([VENV, *ids]).encode()).hexdigest()[:16], dirs
+    # Lock/swap changes do not change installed packages or need another venv build.
+    install = VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
+    return hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16], dirs
 
 
 def ship(repo: Path, host: str, sha: str, name: str) -> None:
     ref = f"refs/remote-pytest/{name}"
     git(repo, "update-ref", ref, sha)
     try:
-        for base in (bundle_base(repo, sha), None):
+        base0 = bundle_base(repo, sha)
+        # A sha that is the base or behind it gives an empty bundle, which git refuses.
+        if base0 and subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", sha, base0]).returncode == 0:
+            base0 = None
+        for base in (base0, None):
             data = subprocess.run(["git", "-C", str(repo), "bundle", "create", "-", ref,
                                    *([f"^{base}"] if base else [])], capture_output=True, check=True).stdout
             result = remote(host, SHIP, name, sha, PUBLIC, input=data, capture_output=True,
@@ -245,7 +240,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         for inv, log in zip(invocations, logs):
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
             codes.append(capture([*SSH, host, "bash -c " + shlex.quote(PYTEST) + " remote "
-                                  + " ".join(map(shlex.quote, [name, *inv, *PYTEST_TAIL]))], log))
+                                  + " ".join(map(shlex.quote, [name, deps_sha, *inv, *PYTEST_TAIL]))], log))
         return codes
     finally:
         remote(host, CLEANUP, name, capture_output=True, timeout=STEP_TIMEOUT["cleanup"])

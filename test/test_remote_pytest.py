@@ -48,6 +48,7 @@ def test_worst_exit_code_counts_nothing_collected_as_pass():
     assert rp.worst([0, 5]) == 0
     assert rp.worst([0, 1, 5]) == 1
     assert rp.worst([1, 4, 0]) == 4
+    assert rp.worst([0, -9]) == 1 and rp.worst([-9]) == 1  # killed by a signal is a failure
 
 
 def test_affected_selection_uses_local_invocations_when_full_and_drops_skipped():
@@ -62,11 +63,11 @@ def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
         pytest.skip("POSIX flock is required")
     root = tmp_path / "rosy-test"
     (root / "runs" / "run1").mkdir(parents=True)
-    (root / "venv").mkdir()
-    (root / "venv" / ".deps-sha").write_text("same\n")
+    (root / "venvs" / "same").mkdir(parents=True)
+    (root / "venvs" / "same" / ".deps-sha").write_text("same\n")
     lock = root / "venv.lock"
     holder = subprocess.Popen(
-        ["bash", "-c", f'exec 9>{shlex.quote(str(lock))}; flock -s 9; echo ready; sleep 5'],
+        ["bash", "-c", f'exec 9>{shlex.quote(str(lock))}; flock -x 9; echo ready; sleep 5'],
         stdout=subprocess.PIPE, text=True,
     )
     try:
@@ -77,6 +78,20 @@ def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
     finally:
         holder.terminate()
         holder.wait(timeout=2)
+
+
+def test_pytest_uses_the_same_dependency_environment_as_setup():
+    assert 'V=$R/venvs/$DEPS' in rp.VENV
+    assert 'V=$R/venvs/$DEPS' in rp.PYTEST
+    assert '[ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ]' in rp.PYTEST
+
+
+def test_lock_change_does_not_rebuild_venv_but_install_change_does(monkeypatch):
+    baseline = rp.deps(ROOT, "HEAD")[0]
+    monkeypatch.setattr(rp, "VENV", rp.VENV.replace("flock -x -w 600 9", "flock -x -w 60 9"))
+    assert rp.deps(ROOT, "HEAD")[0] == baseline
+    monkeypatch.setattr(rp, "VENV", rp.VENV.replace("$P check", "$P install extra\n$P check"))
+    assert rp.deps(ROOT, "HEAD")[0] != baseline
 
 
 def _git(cwd, *args):
@@ -108,3 +123,64 @@ def test_bundle_starts_at_origin_main_and_falls_back_to_full_history(tmp_path, m
     rp.ship(repo, "h", head, "run1")
     assert sent == [True, False]  # origin/main..sha first, then the whole history
     assert _git(repo, "for-each-ref", "refs/remote-pytest") == ""  # temporary ref removed
+
+
+def test_pushing_origin_main_itself_sends_a_full_bundle(tmp_path, monkeypatch):
+    # sha == origin/main (or behind it) would give an empty bundle, which git refuses.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    for n in range(2):
+        _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", str(n))
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    head, sent = _git(repo, "rev-parse", "HEAD"), []
+
+    def fake_remote(host, script, *args, input=None, **kw):
+        sent.append(subprocess.run(["git", "bundle", "list-heads", "-"], input=input, cwd=repo,
+                                   capture_output=True).returncode)
+        return subprocess.CompletedProcess([], 0, b"", b"")
+
+    monkeypatch.setattr(rp, "remote", fake_remote)
+    for sha in (head, _git(repo, "rev-parse", "HEAD~1")):
+        rp.ship(repo, "h", sha, "run2")
+    assert sent == [0, 0]
+
+
+def _fake_ssh(tmp_path, monkeypatch, fail_on):
+    """A fake ssh: `true` succeeds; a script containing `fail_on` exits 1, anything else 0."""
+    fake = tmp_path / "fake_ssh.py"
+    fake.write_text("import sys\nc = sys.argv[-1]\nif c != 'true':\n    sys.stdin.buffer.read()\n"
+                    f"sys.exit(1 if {fail_on!r} in c else 0)\n", encoding="utf-8")
+    monkeypatch.setattr(rp, "SSH", [sys.executable, str(fake)])
+    monkeypatch.setenv("ROSY_TEST_HOSTS", "h")
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+
+
+def test_ship_failure_is_a_nonzero_exit_and_leaves_no_ref(tmp_path, monkeypatch):
+    _fake_ssh(tmp_path, monkeypatch, "git bundle verify")
+    before = _git(ROOT, "for-each-ref", "refs/remote-pytest")
+    with pytest.raises(SystemExit) as exc:
+        rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"])
+    assert exc.value.code != 0
+    assert _git(ROOT, "for-each-ref", "refs/remote-pytest") == before  # this run left no ref
+
+
+def test_venv_failure_is_a_nonzero_exit(tmp_path, monkeypatch):
+    _fake_ssh(tmp_path, monkeypatch, "/.new-")
+    with pytest.raises(SystemExit) as exc:
+        rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"])
+    assert exc.value.code != 0
+
+
+def test_remote_pytest_failure_and_signal_death_propagate(tmp_path, monkeypatch):
+    _fake_ssh(tmp_path, monkeypatch, "systemd-run")
+    assert rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"]) == 1
+    monkeypatch.setattr(rp, "capture", lambda command, log, cwd=None: -9)
+    assert rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"]) == 1
+
+
+def test_timeout_is_a_failed_step(monkeypatch):
+    def hang(*a, **kw):
+        raise subprocess.TimeoutExpired("ssh", 1)
+    monkeypatch.setattr(rp.subprocess, "run", hang)
+    assert rp.remote("h", "true", timeout=1).returncode == 124

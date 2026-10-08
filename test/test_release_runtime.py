@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import subprocess
 
 import pytest
@@ -7,7 +8,6 @@ import pytest
 from layout import ActivationRecord, Layout, write_activation
 from release_fixture import signed_tree
 
-import os
 # CI runs as root in its container; a non-root POSIX host (the shared test PCs) cannot.
 # Windows keeps its existing behaviour.
 REQUIRES_ROOT = pytest.mark.skipif(os.name == "posix" and os.geteuid() != 0,
