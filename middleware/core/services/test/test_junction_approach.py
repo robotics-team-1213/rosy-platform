@@ -539,3 +539,41 @@ def test_an_odom_break_between_receipt_and_sighting_is_outside():
     rig.x += .2                                         # a jump: the trail restarts, a new epoch
     rig.step(seen=False)
     assert sight(rig, ahead=.1, seen=False)[1].junction.state == 'unexpected'
+
+
+# --- safety review 2026-10-08: the odometer is signed forward travel ---------------------
+
+def _reverse_then_forward(rig):
+    drive_to(rig, .3)
+    while rig.x > .1 + 1e-9:                            # a 0.2 m reverse (a D-468 retrace)
+        rig.step(dx=-.01)
+    drive_to(rig, .3)
+
+
+@pytest.mark.parametrize('ahead', [.2, .6])           # a line 0.4 m short, the real line
+def test_a_reverse_between_receipt_and_sighting_fails_the_window_closed(ahead):
+    rig = Rig()
+    rig.step()
+    send(rig, map_id='site', expect_in_m=.9, expect_tol_m=.1)
+    _reverse_then_forward(rig)                          # path 0.7 m, forward travel 0.3 m
+    assert rig.m._return_evidence.trail.odometer == pytest.approx(.3, abs=1e-6)
+    decision, status = sight(rig, ahead=ahead, seen=False)
+    assert decision.linear == 0. and status.junction.state == 'unexpected'
+
+
+def test_standing_jitter_does_not_move_the_odometer_or_close_the_window():
+    import random
+    noise = random.Random(7)
+    rig = Rig()
+    rig.step()
+    send(rig, map_id='site', expect_in_m=.5, expect_tol_m=.1)
+    drive_to(rig, .2)
+    trail = rig.m._return_evidence.trail
+    start, path = trail.odometer, trail.distance
+    for k in range(40):                                 # 2 s, +-2 mm pose noise, back on the spot
+        dx, dy = (0., 0.) if k == 39 else (noise.uniform(-.002, .002), noise.uniform(-.002, .002))
+        rig.x, rig.y = .2 + dx, dy
+        rig.step()
+    assert abs(trail.odometer - start) < .001
+    assert trail.distance - path > .02                   # the unsigned path length would have grown
+    assert sight(rig, ahead=.3, seen=False)[1].junction.state == 'turning'

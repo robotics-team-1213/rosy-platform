@@ -21,6 +21,9 @@ from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M
 
 MAX_EXPECT_IN_M, MAX_EXPECT_TOL_M, MAX_PIVOT_PAST_LINE_M = 2., .30, .30
 MAX_AHEAD_M = 2.
+#: The window fails closed once odom has fallen this far below its peak since receipt (a reverse,
+#: e.g. a D-468 retrace); standing jitter of a few mm stays under it.
+WINDOW_RETREAT_M = .01
 #: odom sample at the sighting's camera time: nearest trail sample within this.
 SIGHTING_POSE_S = .1
 ARRIVED_M = .005
@@ -77,9 +80,20 @@ class JunctionApproachMixin:
         pose = self._fresh_pose(now)
         if pose is None:
             return False
-        return dict(key=(self._return_evidence.epoch, pose.frame),
-                    odometer=self._return_evidence.trail.odometer,
+        odometer = self._return_evidence.trail.odometer
+        return dict(key=(self._return_evidence.epoch, pose.frame), odometer=odometer,
+                    peak=odometer, retreat=0., seen_to=pose.received_at,
                     expect_in=expect['expect_in_m'], tol=expect['expect_tol_m'])
+
+    def _track_retreat(self, w):
+        """Fold trail samples newer than the last fold into the window's largest fall below its
+        running peak since receipt. Every armed tick, so no sample leaves the trail unseen. Locked."""
+        trail = self._return_evidence.trail
+        for p, odo in zip(trail.samples, trail.odometers()):
+            if p.received_at > w['seen_to']:
+                w['peak'] = max(w['peak'], odo)
+                w['retreat'] = max(w['retreat'], w['peak']-odo)
+                w['seen_to'] = p.received_at
 
     def _anchor_sighting(self):
         """On a fresh sighting: anchor it at the odom pose of its camera time. A sighting without
@@ -103,11 +117,14 @@ class JunctionApproachMixin:
     def _in_window(self, j, now):
         """D-507 3: legacy no-window sightings pass; map-backed ones need a window. Travelled
         distance: odom path length from receipt to the sighting pose + junction_ahead_m against
-        expect_in_m - pivot (fail closed: no anchor, another odom run, no path length)."""
+        expect_in_m - pivot (fail closed: no anchor, another odom run, no path length, or odom
+        went back more than WINDOW_RETREAT_M since receipt, which a signed sum would hide)."""
         w, a = j.get('window'), self._anchor_now(now)
         if w is None:
             return j.get('map_id') is None
-        if a is None or a['key'] != w['key'] or a['odometer'] is None:
+        self._track_retreat(w)
+        if (a is None or a['key'] != w['key'] or a['odometer'] is None
+                or w['retreat'] > WINDOW_RETREAT_M):
             return False
         pivot = 0. if a['reason'] == 'junction_fork' else (j.get('pivot') or 0.)
         measured = a['odometer']-w['odometer']+a['ahead']
