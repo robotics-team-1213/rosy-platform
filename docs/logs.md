@@ -7032,3 +7032,9 @@ osy-d395-s1d\`.
 - 변경: 원본 화소가 증명된 10/7 두 MCAP을 현재 로컬 main에서 기본 지면과 11.8° 후보로 재생하고, R0 게이트 실패를 `docs/validation/lane-1007-r0-gate-2026-10-08/`에 고정했다.
 - 증거: 후보 pitch 첫 세션 RoadState TRACK 111/124이지만 페인트 위 목표 비율 등 6개 게이트 실패; 둘째 세션 STOP 83/83. 기본 지면은 두 세션 모두 STOP 207/207. 네 결과 모두 `validated=false`.
 - gate 변화: R0 HOLD 유지. 승인된 보정값·사람 동일 경계 정답·실기 주행 증거가 없다.
+
+## 2026-10-08 · uncommitted · Decision 오프라인 재생 선검증과 AI PC 재시험
+
+- 변경: 재생 입력 전체를 서버 호출 전에 검증하고 세트 SHA-256을 결과에 남긴다. 호출 오류는 결과 JSON을 보존하면서 CLI 실패 코드로 올린다. AI PC Laya CPU 호출·서버 중단 시험을 `docs/validation/decision-model-replay-2026-10-08/`에 기록했다.
+- 증거: 재생 시험 3 passed, known failures 0 new. AI PC 합성 2건 중 1건 일치·오류 0; 서버 중단 2건은 예측 없음·CLI exit 1. GPU 장치 노드 부재로 GPU/VLM 지연 미측정.
+- gate 변화: 없음. 사람 정답 L0, Kev, ModelProfile 배포, Fleet/CORE·현장 수용은 미검증.
