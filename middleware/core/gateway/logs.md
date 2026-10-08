@@ -988,3 +988,9 @@
 - 변경: `nav_msgs/Path.header.frame_id`와 수신 시 로봇 map ID를 점 좌표와 함께 스냅숏에 전달한다. 좌표계가 map이라고 확인되지 않은 경로는 로봇 지도에 그리지 않는다.
 - 증거: 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). ROS 실기 수신은 미확인.
 - gate 변화: LOCAL 경로 출처 근거 추가. DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · fix(device identity): system/info에 프로비저닝 UID 노출
+
+- 변경: `GET /api/v1/system/info`에 `device_uid`를 추가하고 Pi 시리얼을 `serial_number`로 읽는 계약을 API v1.150에 기록했다. 기존 Fleet 등록 DB는 자동 변경하지 않는다.
+- 증거: 관련 CORE/계약 테스트 97 passed, 신규 실패 0; 현장 실기 API 판독은 배포 후 확인.
+- gate 변화: SOURCE/LOCAL 확인, DEVICE/FIELD 미확인.

@@ -1,6 +1,7 @@
 """Independent, versioned pixel reviews. Never derive human truth from CAD/boxes."""
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import cv2
@@ -132,6 +133,36 @@ def pixels(store, review):
     if image is None or image.shape != (review['height'], review['width']) or image.dtype != np.uint8:
         raise ValueError('mask shape or index format differs')
     return image
+
+
+def draft_image(store, index, digest):
+    """Return an available draft for read-only preview, without changing review state."""
+    if not re.fullmatch(r'[0-9a-f]{64}', digest):
+        raise ValueError('draft SHA required')
+    review = get(store, index)
+    with store.connect() as db:
+        candidate = db.execute('SELECT path,sha256 FROM pixel_drafts '
+                               'WHERE frame=? AND sha256=? AND withdrawn=0',
+                               (index, digest)).fetchone()
+    if not candidate:
+        raise ValueError('selected draft is unavailable')
+    return encode(pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256'])))
+
+
+def draft_preview(store, index, digest):
+    """Visual comparison only; the indexed draft and review remain unchanged."""
+    review = get(store, index)
+    mask = cv2.imdecode(np.frombuffer(draft_image(store, index, digest), np.uint8), cv2.IMREAD_UNCHANGED)
+    photo = cv2.imdecode(np.frombuffer(store.image(index).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+    if photo is None or photo.shape[:2] != mask.shape:
+        raise ValueError('draft preview dimensions differ')
+    result = photo.copy()
+    for entry in review['classes']['classes']:
+        selected = mask == entry['index']
+        if np.any(selected):
+            color = np.asarray(entry['color'][::-1], dtype=np.uint8)
+            result[selected] = (photo[selected].astype(np.float32) * .45 + color * .55).astype(np.uint8)
+    return encode(result)
 
 
 def lane_boundary_violations(image, binding):

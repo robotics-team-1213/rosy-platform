@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(pilot): 운용 지도로 같은 탭 인증 인계
 - 2026-10-08 · uncommitted · uiux(pilot): 운용 지도 인계와 운전 모드 정리
 - 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트 overflow-y auto, 녹화본 12개 시험
 - 2026-10-07 · uncommitted · fix(pilot): 좁은 폭 녹화본 시트가 공용 ui-actions 를 칠하지 않게
 - 2026-10-07 · uncommitted · uiux(pilot): 접속 화면이 이 로봇의 연결 방식을 먼저 보여 준다
-- 2026-10-07 · uncommitted · uiux(pilot): 연결 실패 대상을 로비에 표시
