@@ -7166,3 +7166,9 @@ osy-d395-s1d\`.
 - 변경: 안전 리뷰(APPROVE, 고칠 것 다섯) 반영. (1) 호 끝의 `armed` `stop`은 장소와 무관하게(`place_id` 없음 포함) `junction_stop`으로 선다. (2) `exit_segment`가 있는데 `stop_point`로 호를 열지 않으면 오늘처럼 기본 전진 0.10 m(D-520 2항에 한 문장 추가). (3) 호 시간 한도와 보정 한도를 각속도 한도가 남기는 속도 min(v, cap/(g·|κ|)), min(v_c, cap/(g·|κ| + b))로 잰다. (4) kind `arc`는 매 틱 확신 있는 IR clear(신선·교정·`visible: false`)만 허가한다(`_arc_ir`와 `motion_admitted` 둘 다). (5) 크기 판정 두 개를 독립 재판정 문구로 바꿨다(`line_follow/arc` 310, `schemas.py` 1340). main c06ddcad5(D-520 Fleet 8c2c4e8f0, D-507 bend, D-517 M2 통행권)를 병합했다. 호가 가진 틱도 D-517 통행권 게이트를 거친다(D-520 2항 D-517 문장). API 판은 v1.145 그대로(main v1.143, d517-m3-convoy 워크트리 v1.144).
 - 증거: 변이 확인: 다른 장소 stop을 `arc_mismatch`로 되돌리면 2개, `_arc_ir`의 확신 clear 검사를 빼면 1개, `motion_admitted`의 검사를 빼면 1개 시험이 실패한 뒤 복구. 골든은 병합한 main c06ddcad5에서 다시 만든 궤적과도 같다. 나머지 시험 결과는 다음 기록 없이 이 브랜치 보고에 있다.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 병합 뒤 시험과 core_features 크기
+
+- 변경: main 병합 뒤 `core_features`가 12947줄로 판정 12772 +150을 넘었다. main만으로 12922(한도 그대로)이고 이 브랜치가 arc 단위 밖에 25줄(manager.py +11, model.py +14)을 더한다. 판정 행을 독립 재판정 대기 문구로 적었다.
+- 증거: services 1436 passed, gateway 2288 passed(17 skipped), api_web 139 passed 1 failed(`test_site_rooms` 자식 시간 초과, 단독 재실행 22 passed: 부하 중 시간 의존), 판 고정 89 passed, `test_module_structure` 34 passed(판정 갱신 뒤), known_failures 재확인 0 new(`X:\DevTemp\d520-core\run_final.txt`, `run_recheck.txt`).
+- gate 변화: 없음. `core_features` 독립 재판정이 남았다.

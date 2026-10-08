@@ -734,8 +734,14 @@ SIZE_VERDICTS = {
         "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
     "core_features": (
-        12_772,
-        "accept: Independently re-judged 2026-10-07 at 12772 after the condition of the 14934 verdict was met: "
+        12_947,
+        "accept: PENDING INDEPENDENT RE-JUDGE at 12947 (D-520 step 1 merged with main c06ddcad5, written by "
+        "the implementing executor, not a verdict): main alone sits at 12922 = 12772 +150 after D-517 M2 "
+        "(authority.py) and D-507 bend; this branch adds 25 core_features lines outside its own arc unit: "
+        "manager.py +11 (ArcMixin base, init, mode reset, status field, the arc hook and the arc tick's "
+        "authority gate) and model.py +14 (arc_enabled, arc_curvature_gain, arc_blind_max_m and their "
+        "checks). The arc logic itself is in the line_follow/arc unit. "
+        "Previously: accept: Independently re-judged 2026-10-07 at 12772 after the condition of the 14934 verdict was met: "
         "docs/plans/2026-10-07-line-follow-recovery-subpackage.md moved line_follow lane recovery "
         "(2320 lines) into its own size unit core/services/core_features/line_follow/recovery with its own "
         "verdict. The move, not new code, brings core_features back under its allowance (main had reached "
