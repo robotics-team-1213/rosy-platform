@@ -27,6 +27,8 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.localization.map_pose import MapPose
 from fleet.server.console_view import TripCaps
 from fleet.server.trip_ports import HttpLaneJunction, TripConfig
+from fleet.server import trip_runner
+from core_features.line_follow.recovery.junction import MANEUVER as CORE_MANEUVER
 from fleet.server.trip_runner import TripError, TripRunner
 from fleet.site_map import SiteMap, from_lane_graph
 from fleet.swarm.robots import RobotEndpoint
@@ -39,7 +41,7 @@ VIEWER = {"Authorization": "Bearer viewer-token"}
 # D-507 2 (2026-10-08): a turn goes only with a window, which only a junction_pivot robot takes.
 LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
 BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True)
-MANOEUVRE = ("turning", "advancing", "reacquiring", "bending")
+MANOEUVRE = CORE_MANEUVER  # the fake CORE is busy exactly when CORE is
 
 
 class FakeCore:
@@ -473,6 +475,30 @@ def test_a_90_degree_turn_waits_out_the_manoeuvre_then_moves_on():
     ports.at(bc, 0.5)
     _ticks(runner, ports)
     assert ports.sent[-1] == ("stop", "C", 0.5)
+
+
+def test_fleet_counts_every_core_manoeuvre_state_as_busy():
+    """Lap SIM B (3/20): Fleet's list lacked CORE's D-507 4 ``approaching``; one list, checked."""
+    assert set(trip_runner.MANOEUVRE) == set(CORE_MANEUVER)
+
+
+def test_no_instruction_goes_out_while_core_approaches_the_pivot_past_the_place():
+    """Lap SIM B: mid-approach the map pose is already on the next lane; the next place's
+    instruction would abort the turn (CORE answers ``aborted``, Fleet stops the trip)."""
+    runner, store, ports = _setup(_map(("A", 0, 0), ("B", 1, 0), ("C", 1, 0.5), edges=[
+        ("ab", "A", "B", [[0, 0], [1, 0]], "lane"), ("bc", "B", "C", [[1, 0], [1, 0.5]], "lane")]))
+    ab, bc = _arc(store, "ab:fwd"), _arc(store, "bc:fwd")
+    _plan(store, ports, "ab:fwd", 0.5, "C")
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports)
+    assert ports.sent == [("left", "B", None)]
+    ports.at(ab, ab.length_m - 0.05)
+    ports.core.see_junction()
+    ports.core.phase("approaching")
+    _ticks(runner, ports)
+    ports.at(bc, 0.05)  # the approach drives past the place point onto the next lane
+    _ticks(runner, ports, 10)
+    assert ports.sent == [("left", "B", None)] and runner.running()["state"] == "running"
 
 
 def test_a_turn_over_90_degrees_moves_on_by_core_or_by_the_pose():
