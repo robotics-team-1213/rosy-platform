@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · fix(api): Fleet 공개 신원 조회 예산 분리
+- 2026-10-09 · uncommitted · fix(api): 램프 식별 결과 조회
 - 2026-10-08 · uncommitted · test(api): Console 지도 증거 라우터 쿼리 보존
 - 2026-10-08 · uncommitted · fix(api): `POST /line-follow/junction` 선택 필드 `lane_turn_deg` (API v1.152)
 - 2026-10-08 · uncommitted · test(api): Pilot에서 실제 Console 지도 패널까지 인증 인계
-- 2026-10-08 · uncommitted · fix(api): API v1.150 표기 정렬
-- 2026-10-08 · uncommitted · fix(api): D-517 M2 통행권의 API Ref 번호를 v1.143으로 옮김

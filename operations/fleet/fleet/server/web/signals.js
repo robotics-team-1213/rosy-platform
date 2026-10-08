@@ -26,6 +26,10 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     if (presenceInFlight) return;
     presenceInFlight = true;
     try {
+      // D-525 4: a virtual manual green lasts while this console is open and visible.
+      if (isOperator() && !document.hidden && (view.traffic?.signals || []).length) {
+        await call("/api/fleet/traffic/signals/presence", { method: "POST" }).catch(() => {});
+      }
       await sendSignalPresence({ operator: isOperator(), visible: !document.hidden,
         configured: Object.keys(view.signals || {}).length > 0, call });
     } catch (_) {
@@ -142,13 +146,15 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
   }
 
   // D-525 가상 신호 — 장치가 아니라 Fleet 교통 규칙이다. 구동값·연결·관측 대신 단계와 남은 시간만 있다.
-  // 버튼은 자동·유지·전체 적색 셋이다. 수동 녹색은 운영자 있음 규칙과 함께 다음 단계에 온다.
+  // 버튼은 자동·유지·전체 적색과 입구마다 수동 녹색이다. 수동 녹색은 이 화면이 열려 있는 동안만 유지되고
+  // (presence), 닫히면 전체 적색이 된다(D-525 4).
   const VIRTUAL_ASPECT = { green: "녹", yellow: "황", all_red: "전체 적색" };
-  function virtualCommand(signalId, verb, label) {
+  function virtualCommand(signalId, verb, label, approach) {
     const life = scope.capture();
     life.check();
     return call(`/api/fleet/traffic/signals/${encodeURIComponent(signalId)}`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ verb }),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(approach ? { verb, approach } : { verb }),
     }).then(() => { life.check(); log(`${signalId} ${label}`, "good"); refreshState(); })
       .catch((err) => {
         if (!life.current() || err.name === "AbortError") return;
@@ -171,7 +177,8 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     kind.textContent = "가상";
     const tag = document.createElement("ui-tag");
     tag.setAttribute("status", row.errors?.length ? "crit" : row.mode === "cycle" ? "active" : "warn");
-    tag.textContent = row.errors?.length ? "설정 오류" : signalIntentLabel(row.mode);
+    tag.textContent = row.errors?.length ? "설정 오류"
+      : row.mode === "manual" ? `수동 · ${row.manual} 녹` : signalIntentLabel(row.mode);
     head.append(name, spacer, kind, tag);
     node.appendChild(head);
     const body = document.createElement("div");
@@ -194,7 +201,9 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     node.appendChild(body);
     const actions = document.createElement("div");
     actions.className = "robot-actions";
-    for (const [label, verb, cls] of [["자동", "cycle"], ["유지", "hold"], ["전체 적색", "all_red", "arming"]]) {
+    const verbs = [["자동", "cycle"], ["유지", "hold"], ["전체 적색", "all_red", "arming"],
+      ...(row.approaches || []).map((a) => [`녹 · ${a.approach}`, "set_aspect", "", a.approach])];
+    for (const [label, verb, cls, approach] of verbs) {
       const button = document.createElement("ui-button");
       button.setAttribute("kind", "quiet");
       button.type = "button";
@@ -202,7 +211,7 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
       button.disabled = !isOperator();
       if (!isOperator()) button.setAttribute("reason", "운영자만");
       if (cls) button.classList.add(cls);
-      button.addEventListener("click", scope.guard(() => virtualCommand(row.signal_id, verb, label)));
+      button.addEventListener("click", scope.guard(() => virtualCommand(row.signal_id, verb, label, approach)));
       actions.appendChild(button);
     }
     node.appendChild(actions);

@@ -608,7 +608,6 @@ DISABLED_WITHOUT_REASON = {
     ("middleware/ui/robot/panels/console/camera.js", "storage.disabled = state.recording || state.uploading;"): NATIVE,
     ("middleware/ui/robot/panels/console/docking.js", 'dock.type = "button"; dock.disabled = true;'): INITIAL,
     ("middleware/ui/robot/panels/console/docking.js", "select.disabled = locked || !hasDocks;"): NATIVE,
-    ("middleware/ui/robot/panels/console/map.js", "button.disabled = !enabled;"): NOTE + " (#map-action-reason)",
     ("middleware/ui/robot/panels/console/mode.js", "button.dataset.mode = mode.id; button.disabled = true;"): INITIAL,
     ("middleware/ui/robot/panels/console/teleop.js", "button.disabled = true;"): INITIAL,
     ("middleware/ui/robot/panels/console/teleop.js", "button.disabled = !can && button !== activeButton;"): NOTE + " (readinessStatus)",

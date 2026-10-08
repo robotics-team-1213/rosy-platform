@@ -174,12 +174,13 @@ class PeerReceiver:
             return {"request_id": request_id, "request_secret": secret, "display_code": row["display_code"],
                     "state": "pending", "paired": False, "expires_at": row["expires"].isoformat()}
 
-    def admit_proof(self, source):
-        """Shared pre-crypto budget for anonymous identity/challenge/session calls."""
+    def admit_proof(self, source, *, identity=False):
+        """Rate-limit public identity separately from challenge and session proofs."""
         with self._lock:
             self._prune()
-            key = 'proof:' + source
-            if len(self._rates.get(key, [])) >= 30 or (key not in self._rates and len(self._rates) >= 128):
+            key = ('identity:' if identity else 'proof:') + source
+            limit = 300 if identity else 30
+            if len(self._rates.get(key, [])) >= limit or (key not in self._rates and len(self._rates) >= 128):
                 raise Refused('proof rate limit reached')
             self._rates.setdefault(key, []).append(self.clock())
 
