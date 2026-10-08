@@ -144,6 +144,12 @@ class PeerClientTest {
     }
     @Test fun screenCodeConfirmApprovesThroughTheStatusPoll() {
         Fixture().use { f ->
+            var pendingCa: String? = "never pending"
+            f.approved = false
+            f.flow().connect({ pending -> pendingCa = pending.caSha256; f.approved = true }, { false })
+            assertNull(pendingCa)  // already-trusted TLS: nothing to compare
+        }
+        Fixture().use { f ->
             assertNull(confirmWhilePending(f))
             assertEquals(1, f.requests.count { it.path!!.endsWith("/confirm") && it.method == "POST" })
             assertThrows(IllegalArgumentException::class.java) { f.flow().confirm("abc234") }
@@ -238,8 +244,11 @@ class PeerClientTest {
     }
     @Test fun privateCaCannotIssueSessionUntilActualFingerprintAnswerThenReconnectUsesSavedCa() {
         Fixture().use { f ->
-            var compared = false
-            val session = f.flow(lobbyClient(f.candidate)).connect({}, { offer ->
+            var compared = false; var pendingCa: String? = "never pending"
+            f.approved = false
+            // The LCD card goes away on approval, so the pending dialog must already carry the CA to compare.
+            val session = f.flow(lobbyClient(f.candidate)).connect({ pending -> pendingCa = pending.caSha256; f.approved = true }, { offer ->
+                assertEquals(offer.sha256, pendingCa)
                 assertEquals(PeerProof.hash(f.ca.certificate.encoded), offer.sha256)
                 assertFalse(f.requests.any { it.path!!.endsWith("/session") || it.getHeader("Authorization") != null })
                 compared = true; true
