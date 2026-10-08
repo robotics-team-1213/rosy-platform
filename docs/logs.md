@@ -7149,6 +7149,12 @@ osy-d395-s1d\`.
 - 증거: 모델 PC의 Gazebo `RouteCameraFollower`가 `PINKY` 변경 프레임 뒤 `NoneType`; Gazebo 복구 뒤에도 `NoneType`. 호스트 회귀 11 passed, 신규 실패 0.
 - gate 변화: 없음. 이 설정 검사는 물리 장치 신원·Fleet 위치 권한·주행 수용을 대체하지 않는다.
 
+## 2026-10-08 · uncommitted · D-507 B13 Fleet trip 한 바퀴 수용 SIM
+
+- 변경: 진짜 Fleet 서버(`create_app`, `TripRunner`, `HttpLaneJunction`)로 서쪽 길에서 NW까지 `POST /trip` 20회를 모델 PC Gazebo(도메인 88)에서 돌려 `docs/validation/lane-trip-lap-sim-2026-10-08/`에 기록했다. 지도 자세만 Gazebo 참값이다.
+- 증거: trip 완료 0/20. 모서리 16/20, 굽이 16/16, SW 회전 시작 3/16·끝 0. 원인 A(굽이 뒤 SW 교차로를 keeper가 `corner_left`로 읽어 원형 교차로 역주행) 11, B(Fleet `MANOEUVRE`에 CORE `approaching` 없음 → 다음 곳 송신이 회전을 중단) 3, C(모서리 출구 D-468 이탈 → 국소 복귀 소진 → stall) 4, D·E 각 1. Fleet은 20/20 trip을 멈추고 로봇을 세웠다(hang 0). D-422 출처 `memory` 0, `near_stop` 0.
+- gate 변화: Fleet 차선 trip은 SIM에서 HOLD. 실제 지도 자세 오차·bridge 켬·장치 수용은 미검증.
+
 ## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 단계 1 CORE: 지도 호 feed-forward, IR 한 번 보정, API v1.143
 
 - 변경: 새 크기 단위 `core_features/line_follow/arc/`(분리 계획 `docs/plans/2026-10-08-line-follow-arc-subpackage.md`, 판정은 독립 재판정 대기)에 `lane_arc.py`(298줄)를 두었다. `POST /line-follow/junction`의 `exit_segment`(`map_id` 필수, 범위 밖 400, `arc_enabled` 꺼짐 409 `LANE_ARC_UNAVAILABLE`), 능력 `lane_arc`, `line_follow.arc` 상태(`core_common/protocol/line_arc.py`), `pivot_basis` `segment_end`, 정지 사유 `lane_arc_*`, 이벤트 `nav.lane_arc_end_unarmed`, 지시 `aborted` `arc_mismatch`, `motion_admitted` kind `arc`·`arc_edge`(`ir_side`). 호는 회전 끝에서 열리고(ω = g·v·κ, odom 투영 길이, 시간 한도), 호 동안 keeper 사유·손실 시계·D-476·D-468·D-407·교차로 게이트를 쓰지 않는다. 끝에서 `armed` 지시는 그 자리를 축으로 실행하고, 없으면 오늘의 추종과 이벤트, 호 기록 `reason`은 `lane_arc_end_unarmed`(Fleet 작업자 계약 메모). IR 한 번 보정(유예 0.03 m, away 0.12 m + 확신 있는 clear, level은 ψ₀ + κ·s까지 상한 0.18 m). 알려진 D-491 횡단보도 구역이 호 시작 0.20 m에 걸치면 `exit_segment`를 버린다(`junction.reason` `arc_crosswalk`). 설정 `arc_enabled`(기본 false)·`arc_curvature_gain`·`arc_blind_max_m`. API Reference v1.143(v1.142는 다른 두 브랜치가 씀), 판 고정 시험(Fleet 문서 고정 4개 포함, Fleet 코드 무변경). 카메라 호 맞춤(단계 2)과 `lane_arc_entry` 검사는 하지 않았다.
