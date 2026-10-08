@@ -55,12 +55,16 @@ def lane_action(graph: Graph, segments: list, index: int, config: RoutingConfig)
 
 
 def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, junction_turn: bool,
-                config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG) -> Optional[dict]:
+                config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG, repeat: bool = False) -> Optional[dict]:
     """None when the robot can drive every segment; otherwise ``TRIP_MODE_UNSUPPORTED`` detail.
 
     Any lane segment needs ``junction_turn`` (CORE's junction gate runs only with live keep-mode
     evidence, D-495): without it the robot neither stops at a junction nor takes a branch.
+    A ``repeat`` trip (D-517 2) never stops at its lap end, so that end may be part-way along
+    a lane; it still needs a place in the lap, where a hold stops it.
     """
+    if repeat and any(graph.arcs[arc_id(s)].drive_mode == "lane" for s in segments if arc_id(s) in graph.arcs)             and not any(ends_at_place(graph, s) for s in segments if arc_id(s) in graph.arcs):
+        return {"edge_id": segments[-1]["edge_id"], "reason": "LANE_END_NOT_A_PLACE"}
     for i, segment in enumerate(segments):
         arc = graph.arcs.get(arc_id(segment))
         if arc is None:
@@ -71,7 +75,7 @@ def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, jun
             continue
         if not junction_turn:
             return {"edge_id": segment["edge_id"], "reason": "JUNCTION_TURN_UNSUPPORTED"}
-        if i + 1 == len(segments) and ends_at_place(graph, segment) is None:
+        if i + 1 == len(segments) and not repeat and ends_at_place(graph, segment) is None:
             return {"edge_id": segment["edge_id"], "reason": "LANE_END_NOT_A_PLACE"}
         if lane_action(graph, segments, i, config) == STOP:
             continue  # the last place, or a hand-over
@@ -84,13 +88,9 @@ def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, jun
     return None
 
 
-def replan_hold(active, start_pose, remaining: list, request: dict, caps: dict, blocked: frozenset,
-                passed: set, map_version, config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG) -> Optional[dict]:
-    """D-489 9: plan again from ``start_pose`` (just before the next place) on the active map.
-
-    None when the route is unchanged (same map version); otherwise the hold to show the
-    operator: a new plan to confirm, or ``plan: None`` with the reason it cannot go on.
-    """
+def plan_again(active, start_pose, request: dict, caps: dict, blocked: frozenset, passed: set,
+               config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG) -> tuple[Optional[dict], Optional[dict]]:
+    """``(plan body, None)`` from ``start_pose`` on the active map, or ``(None, hold)`` saying why not."""
     to = request["to"]
     goal = to if isinstance(to, str) else (to["x"], to["y"], to.get("yaw"))
     try:
@@ -102,16 +102,33 @@ def replan_hold(active, start_pose, remaining: list, request: dict, caps: dict, 
             via=tuple(v for v in request.get("via", ()) if v not in passed), arrive_yaw=request.get("arrive_yaw"),
             speed_cap=request.get("speed_cap"), blocked_edges=blocked), config)
     except PlanError as exc:
-        return {"reason": "replan", "plan": None, "code": exc.code, "detail": exc.detail}
+        return None, {"reason": "replan", "plan": None, "code": exc.code, "detail": exc.detail}
     body = plan_body(plan)
     refused = unsupported(active[2], body["segments"], kind=caps.get("kind"), modes=frozenset(caps.get("modes") or ()),
-                          junction_turn=bool(caps.get("junction_turn")), config=config, max_turn_deg=max_turn_deg)
+                          junction_turn=bool(caps.get("junction_turn")), config=config, max_turn_deg=max_turn_deg,
+                          repeat=bool(request.get("repeat")))
     if refused is not None:
-        return {"reason": "replan", "plan": None, "code": "TRIP_MODE_UNSUPPORTED", "detail": refused}
-    old = [(s["edge_id"], s["forward"], s["s_to"]) for s in remaining]
-    new = [(s["edge_id"], s["forward"], s["s_to"]) for s in body["segments"]]
-    if old == new and plan.map_version == map_version:
+        return None, {"reason": "replan", "plan": None, "code": "TRIP_MODE_UNSUPPORTED", "detail": refused}
+    return body, None
+
+
+def route_key(segments: list) -> list:
+    """What makes two routes the same (D-489 9): the edges driven and where each ends."""
+    return [(s["edge_id"], s["forward"], s["s_to"]) for s in segments]
+
+
+def replan_hold(active, start_pose, remaining: list, request: dict, caps: dict, blocked: frozenset,
+                passed: set, map_version, config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG) -> Optional[dict]:
+    """D-489 9: plan again from ``start_pose`` (just before the next place) on the active map.
+
+    None when the route is unchanged (same map version); otherwise the hold to show the
+    operator: a new plan to confirm, or ``plan: None`` with the reason it cannot go on.
+    """
+    body, failed = plan_again(active, start_pose, request, caps, blocked, passed, config, max_turn_deg)
+    if failed is not None:
+        return failed
+    if route_key(remaining) == route_key(body["segments"]) and body["map_version"] == map_version:
         return None
-    return {"reason": "replan", "map_version": plan.map_version,
+    return {"reason": "replan", "map_version": body["map_version"],
             "plan": {k: body[k] for k in ("segments", "places", "actions")},
             "length_m": body["length_m"], "eta_s": body["eta_s"]}

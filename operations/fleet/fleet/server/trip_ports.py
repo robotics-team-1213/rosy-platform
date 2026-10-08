@@ -251,7 +251,7 @@ def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
 
 
 class LiveTrip:
-    """Runtime state of the one open trip (``trip_runner``); ``view`` is what is stored and returned."""
+    """Runtime state of one robot's trip (``trip_runner``); ``view`` is what is stored and returned."""
 
     def __init__(self, view: dict, graph, request: dict) -> None:
         self.view = view
@@ -270,6 +270,15 @@ class LiveTrip:
         self.pose_read_at: Optional[float] = None
         self.best_progress = -math.inf
         self.progress_at: Optional[float] = None
+        #: D-517 2: a repeat trip and the last lap's route (``route_key``) a new lap must match.
+        self.repeat = bool(request.get("repeat"))
+        self.lap_route: Optional[list] = None
+        #: Bumped when an operator confirms another plan (the block table's route id, D-517 3).
+        self.route_rev = 0
+        #: ``(segment index, s)`` where the last step located the robot.
+        self.at: Optional[tuple[int, float]] = None
+        #: The block table's answer for this robot (``TrafficService``): waiting_for, authority, refused_at_m.
+        self.traffic: Optional[dict] = None
 
     def junction_end(self, now: float, remaining: Optional[float], config: TripConfig) -> Optional[tuple]:
         """``(reason, detail)`` when CORE's junction state ends the trip, else None.

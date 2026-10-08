@@ -92,12 +92,12 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
             await end_trip(robot_id, "operator_cancel")
 
     async def guarded_estop_all(*args, **kwargs):
-        running = runner.running()
+        running = [view["robot_id"] for view in runner.open_trips()]
         try:
             return await estop_all(*args, **kwargs)
         finally:
-            if running is not None:
-                await end_trip(running["robot_id"], "operator_estop")
+            for robot_id in running:  # D-517 1: every robot's trip ends
+                await end_trip(robot_id, "operator_estop")
 
     console.goal, console.cancel, console.estop_all = guarded_goal, guarded_cancel, guarded_estop_all
     console.formation_start, console.line_follow_mode = guarded_formation_start, guarded_line_follow_mode

@@ -1047,6 +1047,9 @@ class _TripOf:
     def robot_busy(self, robot_id):
         return robot_id == self.robot
 
+    def open_trips(self):
+        return [{"robot_id": self.robot}] if self.robot else []
+
     async def cancel_robot(self, robot_id, reason):
         self.canceled.append((robot_id, reason))
 
@@ -1191,7 +1194,7 @@ def test_a_carried_out_instruction_is_never_sent_again():
     _ticks(runner, ports)
     ports.core.see_junction()  # CORE executes our straight through SE
     _ticks(runner, ports)
-    assert runner._live.sent["carried"]
+    assert runner._live["rosy_60"].sent["carried"]
     ports.core.j = None  # CORE went idle without our seeing it finish; SE is 0.32 m ahead
     ports.at(ring_s, 0.05)
     _ticks(runner, ports, 3, dt=3.0)
@@ -1206,7 +1209,7 @@ def test_already_done_from_core_counts_as_carried_out():
     ports.core.done_place = ("SE", "straight")  # it ran between two ticks
     ports.at(ring_s, ring_s.length_m - 0.02)
     _ticks(runner, ports)
-    assert runner.running() is not None and runner._live.sent["done"]
+    assert runner.running() is not None and runner._live["rosy_60"].sent["done"]
     _ticks(runner, ports)
     assert runner.running()["segment_index"] == 1 and ports.sent[-1] == ("straight", "NE", None)
 
@@ -1237,9 +1240,9 @@ def test_confirm_replan_forgets_the_last_instruction():
     run(runner.start("p1", "bob"))
     ports.blocked = frozenset({"ring_e"})
     _ticks(runner, ports)
-    held = runner._live.sent["seq"]
+    held = runner._live["rosy_60"].sent["seq"]
     run(runner.confirm_replan("p1", "bob"))
-    assert runner._live.sent is None and runner._live.replaceable == held
+    assert runner._live["rosy_60"].sent is None and runner._live["rosy_60"].replaceable == held
 
 
 def test_the_restart_halt_is_retried_until_it_takes_or_the_robot_leaves(tmp_path):

@@ -16,7 +16,7 @@ import uuid
 from typing import Annotated, Optional, Union
 
 from fastapi import Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from fleet.hub.hub import HubError
 from fleet.routing.snap import PlanError
@@ -45,6 +45,14 @@ class TripRequest(BaseModel):
     arrive_yaw: Optional[float] = Field(default=None, ge=-math.pi, le=math.pi, allow_inf_nan=False)
     speed_cap: Optional[float] = Field(default=None, gt=0.0, le=5.0, allow_inf_nan=False)
     execute: bool = False
+    #: D-517 2: lap ``via`` then ``to`` again and again; the cycle is place ids.
+    repeat: bool = False
+
+    @model_validator(mode="after")
+    def _cycle(self) -> "TripRequest":
+        if self.repeat and (not isinstance(self.to, str) or not self.via):
+            raise ValueError("repeat needs a place id in to and at least one via place")
+        return self
 
 
 def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTPException:
@@ -141,7 +149,12 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
 
     @app.get("/api/fleet/trips", dependencies=read_guard, tags=["fleet"])
     def fleet_trips() -> dict:
-        return {"running": runner.running(), "trips": runner.recent()}
+        return {"running": runner.running(), "open": runner.open_trips(), "trips": runner.recent()}
+
+    @app.get("/api/fleet/traffic", dependencies=read_guard, tags=["fleet"])
+    def fleet_traffic() -> dict:
+        """D-517 3 (M1): the block table of the last trip period; nothing of it is sent to robots."""
+        return runner.traffic.view()
 
     @app.get("/api/fleet/trips/{trip_id}", dependencies=read_guard, tags=["fleet"])
     def fleet_trip_view(trip_id: str) -> dict:
