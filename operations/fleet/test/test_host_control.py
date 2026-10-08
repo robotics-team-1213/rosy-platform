@@ -249,7 +249,7 @@ def test_helper_refuses_a_second_reboot_and_cancels_only_its_own(tmp_path):
     (tmp_path / "scheduled").write_text("USEC=1\nMODE=reboot\n")
     assert helper("reboot") == 3
     assert helper("cancel-reboot") == 4
-    assert (tmp_path / "calls").read_text().count("cancel") == 1
+    assert (tmp_path / "calls").read_text().splitlines().count("cancel") == 1
 
 
 @posix
