@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · Pinky 실물 차선 디버그 지면값 읽기 전용 대조
-- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 첫 화면 LOCAL 증거
-- 2026-10-09 · uncommitted · Pilot 태블릿 재연결과 현재 후보 출처 확인
-- 2026-10-09 · uncommitted · 10/6·10/7 주행영역 후보의 몸체 경로 재대조
-- 2026-10-09 · uncommitted · D-529 역할별 시험 실행 위치
+- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 우선 배치
+- 2026-10-09 · uncommitted · uiux(robot): 마지막 수신 계획 표시 검증
+- 2026-10-09 · uncommitted · 10/7 MCAP 원본 207프레임 검수 후보 갤러리
+- 2026-10-09 · uncommitted · uiux(pilot/robot): 같은 탭 운전석→운용 지도 검증
+- 2026-10-09 · uncommitted · 10/6·10/7 원본 검수 후보 시각 대조

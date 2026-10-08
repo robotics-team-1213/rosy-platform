@@ -628,6 +628,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                         routing_config=routing_config or site_maps.routing_config,
                         require_named_operator=require_named_operator, runner=trip_runner,
                         read_guard=read_guard)
+    from fleet.server.guide_service import GuideService, install_guide_routes  # D-536
+    app.state.guide = GuideService(gather=app.state.fleet_gather, poses=map_pose, site_maps=site_maps,
+                                   tracking=tracking if tracking is not None and tracking.enabled else None,
+                                   zones=trip_runner.traffic.zone_edges)
+    install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
 
     proposal_create = proposal_resolve = None
     if mission_service is not None:
@@ -678,10 +683,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 "frame_path": f"/api/vision/sources/{body.source_id}/frame",
                 "expires_in_s": 60}
 
-    from fleet.host_control import helper_from_environment
+    from fleet.host_control import UnavailableHostHelper, helper_from_config
     from fleet.server.host_control_routes import install_host_control_routes
-    install_host_control_routes(app, require_operator=require_operator,
-                                helper=helper_from_environment())
+    # D-524: without site-users or logins every caller is `site-console`, so no host control.
+    install_host_control_routes(
+        app, require_operator=require_operator, require_named_operator=require_named_operator,
+        helper=(helper_from_config() if principals or password_sessions is not None
+                else UnavailableHostHelper()))
 
     install_static_routes(app)
 

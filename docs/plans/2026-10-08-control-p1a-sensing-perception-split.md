@@ -1,7 +1,7 @@
 # control P1a 단계: sensing/perception 크기 단위 분리 계획
 
 **날짜:** 2026-10-08
-**상태:** 계획만 있다. 이동은 아직 하지 않았다. 브랜치 `fix/keep-flip-latch-after-pivot`(D-507 keep 제자리 회전 reset)은 이 문서만 더한다.
+**상태:** 2026-10-09에 1단계 크기 단위 계상을 `refactor/control-perception-size-unit`에서 검증했다. 실제 패키지 이동인 2단계는 아직 하지 않았다. 이 계획 문서는 원래 `fix/keep-flip-latch-after-pivot`(D-507 keep 제자리 회전 reset)에서 작성됐다.
 **이유:** `control` 크기 판정(45104, 2026-10-07)에는 조건이 붙어 있다. 다음 재판정에는 날짜가 붙은 P1a 단계(sensing/perception 이동)가 `docs/plans/`에 있어야 한다. 이 문서가 그 단계다. 2026-10-08 기준 `control`은 45251줄이다. 한도 45254(45104+150)까지 3줄 남았다. `line_observer_node.py`는 608줄이다. 1차 판정은 604줄이었고 D-507 keep 제자리 회전 reset 때문에 재판정했다. 옮길 자리가 없어 남은 부담은 이 단계로 넘긴다.
 
 ## 무엇을 옮기나

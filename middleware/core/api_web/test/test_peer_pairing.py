@@ -596,6 +596,26 @@ class ScreenCodeApproval(unittest.TestCase):
                      clock=lambda: self.now, display_dir=str(self.display))
         self.assertFalse(self.file.exists())
 
+    def test_screen_code_approves_with_a_clock_that_moves(self):
+        # Every real clock read differs; a fixed test clock hid the 409 that 8kcn returned (2026-10-09).
+        ticks = iter(range(1, 10_000))
+        base = self.now
+        self.receiver.clock = self.repo.clock = lambda: base + timedelta(microseconds=next(ticks))
+        request = self.request()
+        approved = self.receiver.confirm(request["request_id"], request["request_secret"], self.code(), "fixture")
+        self.assertEqual("approved", approved["state"])
+        self.assertIn(request["request_id"], self.repo.grants())
+
+    def test_hand_over_carries_the_ca_digest_the_requester_compares(self):
+        # First contact asks the requester to compare the CA digest; the LCD must be able to show it.
+        digest = "c0" * 32
+        self.receiver = PeerReceiver("rosy_01", Path(self.tmp.name) / "identity.pem", self.repo,
+                                     clock=lambda: self.now, display_dir=str(self.display),
+                                     anchor=lambda: {"tls_ca_sha256": digest})
+        self.request()
+        self.assertEqual(digest, json.loads(self.file.read_text(encoding="utf-8"))["tls_ca_sha256"])
+        self.assertEqual({"display_code", "approval_code", "expires_at"}, set(self.shown()[0]))
+
     def test_unwritable_display_never_breaks_the_request(self):
         self.receiver = PeerReceiver("rosy_01", Path(self.tmp.name) / "identity.pem", self.repo,
                                      clock=lambda: self.now, display_dir=str(self.display / "missing"))
