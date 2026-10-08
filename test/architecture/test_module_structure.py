@@ -105,9 +105,13 @@ SIZE_VERDICTS = {
         "at 604 (bend diagnostic)",
     ),
     "fleet/fleet/traffic": (
-        1095,
-        "split: re-judged at 1095 on 2026-10-09: main added signal_phase.py and the D-517 block edits. "
-        "+150 allowance measured from 1095. "
+        1242,
+        "split: measured at 1242 on 2026-10-09 after moving the three fleet.traffic YAML parsers "
+        "from cli.py into traffic/config.py without changing their validation or exits. D-525 S1 signal "
+        "phase and lane hold code remains in this traffic owner; the named lane-traffic seam in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split review. "
+        "Previously re-judged at 1095 on 2026-10-09: main added signal_phase.py and the D-517 block edits. "
+        "+150 allowance measured from 1242. "
         "Previously measured at 867 on 2026-10-08 when the lane traffic seam was applied (pure move, no shim, no "
         "behaviour change): blocks.py 425, lane_traffic.py 369, trip_authority.py 69, __init__.py 4, out of "
         "the fleet package count. Only server/trip_runner.py imports it; it imports routing.graph, "
@@ -166,15 +170,14 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_332,
-        "split: re-judged at 46332 on 2026-10-09: D-523 adds fleet/ai/decision_pipeline.py "
+        46_295,
+        "split: re-judged at 46295 on 2026-10-09: D-523 adds fleet/ai/decision_pipeline.py "
         "(194 lines), parsers that return an identity fact or an allowlisted choice and do not "
-        "call the network or emit a command, and Service Control (D-524) adds host_control.py and "
-        "host_control_routes.py, an allowlisted reboot and unit restart with no robot command path. "
-        "Main measured 46138 at this merge, past the 45955 judgement; the parser adds 194. "
-        "No new package owner or robot command path. The site-map web/server split in "
-        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; +150 allowance "
-        "unchanged, measured from 46332. "
+        "call the network or emit a command. Main measured 46083 after the traffic-config move; "
+        "D-525 S1 virtual signals and D-524 Service Control stay in the existing site, traffic, "
+        "and host-control owners. No new robot command path or package owner. The site-map "
+        "web/server split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; "
+        "+150 allowance unchanged, measured from 46295. "
         "Previously re-judged at 45723 on 2026-10-08 (independent re-judge, critic agent): 45571 was 46434 - 863 "
         "by arithmetic; measured 45699 after the traffic move because main's D-520 1-2 arc handshake and the "
         "CORE-approaching busy fix (91b15708b) landed beside D-517 M3, each in its existing owner; then +24 "
@@ -499,8 +502,11 @@ SIZE_VERDICTS = {
         "Re-judged 2026-10-06 at 36889 after D-473 added the development-session connection gate to the Fleet CLI and the console auto-session bootstrap (244 lines above 36645, all in cli.py and console.js, see their verdicts). No new command or motion owner; the B2 server/UI split and the +150 allowance stay unchanged",
     ),
     "fleet/fleet/cli.py": (
-        760,
-        "accept: re-judged at 760 on 2026-10-09. D-525 S1 reads fleet.traffic.signals into the same CLI entry (_traffic_signals); measured 760, two past 608+150. Argument parsing stays with that one owner. +150 allowance measured from 760. Previously D-473 added the development-session connection-mode gate to the Fleet CLI, growing it past 600 lines (measured 608). The argument parsing stays with the one CLI entry owner for now; follow-up split: move the connection-mode and session CLI parsing into its own module when the CLI next grows. Budgets and allowance unchanged",
+        705,
+        "accept: measured at 705 after moving fleet.traffic zone, signal and authority YAML parsers "
+        "to traffic/config.py. The CLI keeps entrypoint and session argument wiring; extract its "
+        "connection-mode/session parsing on further growth. Previously measured at 608 after D-473. "
+        "The 600-line ceiling and allowance are unchanged",
     ),
     "fleet/fleet/server/web/shared/styles.css": (
         809,
@@ -1014,13 +1020,6 @@ SIZE_VERDICTS = {
         897,
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
-    ),
-    "learning/training/perception/dataset/review_app.py": (
-        601,
-        "accept: re-judged at 601 on 2026-10-09. The one review server crossed 600 when "
-        "apply_object_draft and the object-draft queue joined it. Lane-edge SAM clips and "
-        "model object drafts stay pending for a person. No second server. "
-        "+150 allowance measured from 601.",
     ),
     "learning/training/perception/rosy_ml.py": (
         615,

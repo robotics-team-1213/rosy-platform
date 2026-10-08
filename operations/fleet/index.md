@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · refactor(fleet): traffic 설정 파서를 전용 단위로 이동
 - 2026-10-09 · uncommitted · uiux(fleet): D-517 trip error codes all have console text
 - 2026-10-08 · uncommitted · fix(fleet): 교차로 회전은 들어오는 차로 끝 방향에서 나가는 차로 접선까지 (lap SIM 2 원인 2)
 - 2026-10-08 · uncommitted · fix(fleet): 실행 끝난 장소는 로봇이 다음 차로에 있을 때만 넘어간다 (lap SIM 2 lap_12)
 - 2026-10-08 · uncommitted · fix(fleet): `straight` 지시에 지도 차로 방향 변화 `lane_turn_deg` (API v1.152)
-- 2026-10-08 · d3db27b9d · fix(fleet): D-517 사이트 통행권 꺼짐 + CORE 통행권 필수면 lane trip 거절
