@@ -482,6 +482,13 @@ class LaneEdgeFollower:
         for name, grid in (("LEFT", found["left_grid"]), ("RIGHT", found["right_grid"])):
             if not grid.any():
                 continue
+            if name == "RIGHT":
+                near = (view.x >= BEV_MIN_RANGE_M) & (view.x <= LOOKAHEAD_MAX_M)
+                left_y = view.y[(found["left_grid"] > 0) & near]
+                right_y = view.y[(grid > 0) & near]
+                if len(left_y) and len(right_y) and not (
+                        1.2 * half <= np.median(left_y) - np.median(right_y) <= 2.8 * half):
+                    continue  # a branch or wall line is not this lane's missing boundary
             target, supported = self._lookahead(view, grid, half)
             if supported:
                 source = name

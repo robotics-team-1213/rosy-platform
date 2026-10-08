@@ -6,7 +6,7 @@ const root = new URL("../../fleet/server/web/", import.meta.url);
 const html = readFileSync(new URL("index.html", root), "utf8");
 const roster = readFileSync(new URL("roster.js", root), "utf8");
 const consoleJs = readFileSync(new URL("console.js", root), "utf8");
-const vision = readFileSync(new URL("vision-view.js", root), "utf8");
+const vision = readFileSync(new URL("shared/vision-view.js", root), "utf8");
 
 test("the site path block sits in the roster panel above the robot list", () => {
   const panel = html.slice(html.indexOf('aria-labelledby="roster-heading"'), html.indexOf('aria-labelledby="vision-heading"'));

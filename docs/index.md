@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · docs: Decision 모델 호스트 역할과 파이프라인 명시
-- 2026-10-08 · uncommitted · docs(plan): 논문 가림·시간 지표를 ROSY 계약에 대조
-- 2026-10-08 · uncommitted · docs(plan): 세션 간 검토로 10/6 양성 시험 가정 수정
-- 2026-10-08 · uncommitted · docs(plan): 10/6·10/7 영상 기반 drivable·차선 기억 조사
-- 2026-10-08 · uncommitted · fix(push): 2026-10-08 pre-push 검사 복구
+- 2026-10-08 · uncommitted · 차선 추종 녹화 증거 준비
+- 2026-10-08 · uncommitted · 굽이 SIM의 전체 차로 중심선 투영
+- 2026-10-08 · uncommitted · 오른쪽 경계 대체 가드 SIM 회귀
+- 2026-10-08 · uncommitted · refactor(fleet): Cell 문서를 web/cell로 옮긴다
+- 2026-10-08 · uncommitted · docs(adr): D-518에 공유 읽기 이동을 기록한다

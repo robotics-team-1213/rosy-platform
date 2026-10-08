@@ -534,7 +534,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_lane_compliance_routes
     app.state.lane_compliance = LaneComplianceMonitor(
         lambda: console.robot_ids, poses=map_pose, site_maps=site_maps,
-        config=lane_compliance_config or LaneComplianceConfig())
+        config=lane_compliance_config or LaneComplianceConfig(), identity=identity)
     install_lane_compliance_routes(app, monitor=app.state.lane_compliance, read_guard=read_guard)
 
     install_console_routes(app, console=console, sightings=sightings,

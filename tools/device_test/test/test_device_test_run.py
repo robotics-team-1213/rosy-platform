@@ -6,12 +6,19 @@ import signal
 import sys
 from pathlib import Path
 
+import importlib.util
+
 import pytest
 import yaml
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-import run  # noqa: E402
+_TOOL = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_TOOL))
+# Load by path under a unique name: another suite already imports a different
+# top-level `run` module, and a bare `import run` would reuse that one.
+_spec = importlib.util.spec_from_file_location("device_test_run", _TOOL / "run.py")
+run = importlib.util.module_from_spec(_spec)
+sys.modules["device_test_run"] = run
+_spec.loader.exec_module(run)
 
 ROBOT = "rosy-pinky-test"
 PLAN = Path(__file__).resolve().parents[1] / "plans" / "d476_bridge_9dfk.yaml"
@@ -358,6 +365,7 @@ def test_sigterm_mid_stream_runs_cleanup_and_clears_the_marker(tmp_path):
 def test_ctrl_c_during_cleanup_does_not_skip_later_steps(tmp_path):
     robot = FakeRobot(reasons=["following", "obstacle_ahead"])
     handlers = []
+    before = signal.getsignal(signal.SIGINT)   # another suite may have installed its own
 
     def interrupt(method, path, mode):
         if method == "POST" and path == "/mode":
@@ -369,7 +377,7 @@ def test_ctrl_c_during_cleanup_does_not_skip_later_steps(tmp_path):
     assert code == 2 and "CLEANUP FAILED" in s["outcome"]
     assert {"cleanup:recording stop", "cleanup:overlay revert", "cleanup:hold release"} <= set(phases(s))
     assert robot.overlay == ORIGINAL and not robot.hold
-    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+    assert signal.getsignal(signal.SIGINT) is before   # restored to what it was, not forced to default
 
 
 @pytest.mark.parametrize("field", ["off_status", "idle_status"])

@@ -17,21 +17,22 @@ def rig(probe=lambda now,v,w: True, **config):
     bus=Bus()
     manager=LineFollowManager(bus,clock=lambda:clock[0],config=LineFollowConfig(
         body_front_x_m=.08,body_rear_x_m=-.08,body_half_width_m=.06,
-        cruise_speed=.04,max_linear=.04,recovery_local_enabled=True,**config))
+        cruise_speed=.04,max_linear=.04,**{"recovery_local_enabled":True,**config}))
     manager.bind_recovery(calibration_active=lambda:False,linear_ceiling=lambda:.04)
     manager.bind_return_motion(probe)
     manager.set_mode(LineFollowMode.CAMERA_LINE)
     return clock,bus,manager
 
 
-def frame(r,t,y=0.,uncertainty=.001,ground='CALIBRATED',x=0.,yaw=0.):
+def frame(r,t,y=0.,uncertainty=.001,ground='CALIBRATED',x=0.,yaw=0.,seen_y=None):
+    """seen_y: where the camera puts the robot across the lane (default: the odom y)."""
     clock,_,manager=r
     clock[0]=t
     manager.observe_return_pose(stamp_ns=round(t*1e9),source_now_ns=round(t*1e9),
         frame='odom',x=x,y=y,yaw=yaw,received_at=t)
     containment=LaneContainmentEvidence.model_validate(dict(stamp=t,geometry_id='rig-a',
         ground_source=ground,uncertainty_m=uncertainty,boundaries=[dict(side=side,
-        slope=-math.tan(yaw),intercept_m=(edge-y)/math.cos(yaw),observed_x_min_m=0.,observed_x_max_m=.4)
+        slope=-math.tan(yaw),intercept_m=(edge-(y if seen_y is None else seen_y))/math.cos(yaw),observed_x_min_m=0.,observed_x_max_m=.4)
         for side,edge in (('left',.1),('right',-.1))]))
     manager.observe(LineObservation(LineFollowMode.CAMERA_LINE,t,True,0.,.9,
         ground='NOMINAL' if ground=='NOMINAL' else None,containment=containment),received_at=t,source_now=t)
@@ -115,10 +116,28 @@ def test_replayed_scan_stamp_cannot_refresh_receipt_age():
     assert not manager.return_body_clear(9.1,.03,0.)
 
 
-def test_unknown_projection_cannot_resume_normal_following():
-    r=rig(lambda now,v,w:False)
-    action=frame(r,1.,uncertainty=None)
-    assert action.linear==action.angular==0
+def test_unknown_projection_follows_like_recovery_off_without_d468_motion():
+    # D-507 7: recovery_local_enabled on (robot default) with uncertainty unknown is not a
+    # departure. Following matches recovery off; D-468 neither stops nor moves the robot.
+    on,off=rig(lambda now,v,w:False),rig(lambda now,v,w:False,recovery_local_enabled=False)
+    for t in (1.,1.05,1.1):
+        a,b=frame(on,t,y=.01,uncertainty=None),frame(off,t,y=.01,uncertainty=None)
+        assert (a.linear,a.angular)==(b.linear,b.angular) and a.linear>0
+    status=on[2].status()
+    assert status.state=='TRACKING' and status.lane_return_containment=='unknown'
+    assert on[2]._return_controller.checkpoint is None
+    assert off[2].status().lane_return_containment is None
+
+
+def test_missing_body_geometry_follows_like_recovery_off():
+    clock=[1.]
+    manager=LineFollowManager(Bus(),clock=lambda:clock[0],config=LineFollowConfig(
+        cruise_speed=.04,max_linear=.04,recovery_local_enabled=True))
+    manager.bind_recovery(calibration_active=lambda:False,linear_ceiling=lambda:.04)
+    manager.bind_return_motion(lambda now,v,w:True)
+    manager.set_mode(LineFollowMode.CAMERA_LINE)
+    assert frame((clock,None,manager),1.).linear>0
+    assert manager.status().lane_return_containment=='unknown'
 
 
 def test_nominal_without_driver_and_expired_driver_stay_zero():
@@ -258,3 +277,84 @@ def test_zero_live_translation_ceiling_also_revokes_precomputed_search_turn():
     assert action.linear==0 and action.angular!=0
     r[2].bind_recovery(linear_ceiling=lambda:0.)
     assert not r[2].apply_if_current(action,lambda d:pytest.fail('revoked search turn applied'))
+
+
+def _hold_then_clear(hold_s=1., pose_during_hold=True, jump_at=None, kind='obstacle', drift=0.):
+    """Follow, a non-local HOLD (obstacle_ahead, open stuck, low_light frame) with the robot
+    standing, then it clears. drift: odom y per tick while the camera still sees the lane
+    centred. Returns every (controller phase, status reason) seen from the hold onward."""
+    # stuck: the obstacle escalates after 0.1 s and opens a stuck episode, which then owns the tick.
+    r=rig(body_lidar_x_m=0.,body_rotation_radius_m=.1,obstacle_escalate_s=.1 if kind=='stuck' else 5.)
+    manager=r[2]
+    seen=[]
+    stuck_seen=False
+    t=1.
+    for _ in range(5):
+        manager.observe_scan_points((),received_at=t)
+        assert frame(r,t).linear>0
+        t=round(t+.05,6)
+    x=manager._return_controller.trail.samples[-1].x
+    y=0.
+    for step in range(round(hold_s/.05)):
+        manager.observe_scan_points(((.10,0.),) if kind!='low_light' else (),received_at=t)
+        y+=drift
+        if not pose_during_hold:
+            r[0][0]=t
+            assert manager.tick(t).linear==0
+        elif kind=='low_light':
+            r[0][0]=t
+            manager.observe_return_pose(stamp_ns=round(t*1e9),source_now_ns=round(t*1e9),
+                frame='odom',x=x,y=y,yaw=0.,received_at=t)
+            manager.observe(LineObservation(LineFollowMode.CAMERA_LINE,t,False,None,0.,
+                quality_reason='low_light'),received_at=t,source_now=t)
+            assert manager.tick(t).linear==0
+        else:
+            if jump_at==step: x+=.2
+            d=frame(r,t,x=x,y=y,seen_y=0.)
+            # The robot stands; a stuck back-off command is not integrated into odom here.
+            assert kind=='stuck' or d.linear==0
+        stuck_seen|=manager._recovery.stuck_id is not None
+        seen.append((manager._return_controller.phase,manager.status().reason))
+        t=round(t+.05,6)
+    assert seen[0][0]=='tracking' and seen[0][1].endswith(
+        'low_light' if kind=='low_light' else 'obstacle_ahead'), seen
+    assert stuck_seen==(kind=='stuck')
+    for _ in range(20):
+        manager.observe_scan_points((),received_at=t)
+        frame(r,t,x=x,y=y,seen_y=0.)
+        seen.append((manager._return_controller.phase,manager.status().reason))
+        t=round(t+.05,6)
+    return seen
+
+
+def test_obstacle_hold_longer_than_the_gap_rule_keeps_tracking():
+    # Odom streams during a 1 s obstacle_ahead HOLD; the trail is fed, so no gap and no search.
+    seen=_hold_then_clear()
+    assert all(phase=='tracking' for phase,_ in seen), seen
+    assert not any('sensor_search' in (reason or '') for _,reason in seen)
+
+
+@pytest.mark.parametrize('kind',['stuck','low_light'])
+def test_other_non_local_holds_keep_the_trail_fed(kind):
+    seen=_hold_then_clear(kind=kind)
+    assert all(phase=='tracking' for phase,_ in seen), seen
+    assert not any('sensor_search' in (reason or '') for _,reason in seen)
+
+
+def test_slow_displacement_during_a_hold_fails_the_checkpoint_match():
+    # Rule (3): odom drifts 0.05 m sideways at 0.05 m/s over a 1 s hold (no gap, no jump),
+    # but the camera still sees the lane centred: the corridor no longer matches the checkpoint.
+    seen=_hold_then_clear(drift=.0025)
+    hold=seen[:20]
+    assert all(phase=='tracking' for phase,_ in hold), hold
+    assert ('departure_stop','lane_return_containment_unconfirmed') in seen[20:], seen
+
+
+def test_real_odom_gap_during_a_hold_still_opens_departure():
+    seen=_hold_then_clear(hold_s=.6,pose_during_hold=False)
+    assert any(phase!='tracking' for phase,_ in seen), seen
+
+
+def test_pose_jump_during_a_hold_still_opens_departure():
+    seen=_hold_then_clear(jump_at=10)
+    assert any(phase!='tracking' for phase,_ in seen), seen

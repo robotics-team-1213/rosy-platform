@@ -1,6 +1,6 @@
 // The operator saves a map reference. Captured map clicks never enter goal dispatch.
 import {pointerPose} from './start-point-layer.js';
-import {createPollGate} from './poll-gate.js';
+import {createPollGate} from '/console/assets/poll-gate.js';
 
 export function createStartPointView({scope, el, view, call, auth, onChanged}) {
   const source=el('start-point-source'), message=el('start-point-state'), canvas=el('map-canvas');

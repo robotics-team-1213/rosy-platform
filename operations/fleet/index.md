@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(fleet): D-472 독립 안전 검토 지적 반영
-- 2026-10-08 · uncommitted · feat(fleet): D-472 LED 신원 오케스트레이터와 확인 트랙
-- 2026-10-08 · uncommitted · D-515 관제 지도 천장 카메라를 위에서 본 직사각형으로
-- 2026-10-08 · uncommitted · feat(fleet): D-513 7 지도 화면 방향 `view_turn_deg`
-- 2026-10-08 · uncommitted · fix(fleet): D-507 굽은 길 옆 거리, main 병합
+- 2026-10-08 · uncommitted · feat(fleet): 지도 edge 굽이 후보 진단
+- 2026-10-08 · uncommitted · docs(fleet): 지도 교차로 창 누락 시 CORE HOLD 설명
+- 2026-10-08 · uncommitted · docs(fleet): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 2026-10-08 · uncommitted · fix(trip): D-507 pivot 검토 반영 — lane 차로만, 창 없으면 음수 pivot 없음
+- 2026-10-08 · uncommitted · fix(trip): D-507 회전 축을 지도의 첫 칠한 선에서 (SIM 발견 1–2)

@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dataset.build import read_eval_set
 from review_eval_companion import capture_eval_companions
 from review_provenance import _stable_bytes
-from store import file_hashes
+from store import file_hashes, _sha256
 
 
 def _require(condition, message):
@@ -203,17 +203,59 @@ def package_eval_companion(eval_folder, source_records, output, *, _descriptor_b
                 operator_collection_assertion_verified=False)
 
 
+def package_mcap_eval_companion(eval_folder, output):
+    """Seal a small receipt; verification reopens the original pinned MCAP."""
+    output = _output_path(output)
+    root = Path(eval_folder).absolute()
+    ref, _, raw = read_eval_set(root, with_manifest=True)
+    doc = _json(raw)
+    _require(doc.get('builder') == 'review_eval_bootstrap.py --publish (D-475)',
+             'human MCAP evaluation required')
+    inventory = file_hashes(root)
+    manifest = {'schema': 'rosy.pinky-fixed-eval-mcap-companion/1', 'eval_ref': ref,
+                'eval_manifest_sha256': _sha(raw), 'eval_files': inventory}
+    encoded = json.dumps(manifest, sort_keys=True, allow_nan=False).encode()
+    seal = _sha(encoded)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='mcap-eval-package-', dir=output.parent) as temporary:
+        stage = Path(temporary)
+        (stage / 'manifest.json').write_bytes(encoded)
+        (stage / 'COMPLETE').write_text(seal, encoding='ascii')
+        checked = capture_eval_companions([root], [stage], read_bytes=_stable_bytes)
+        _require(checked['frames'] and not checked['blockers'], 'MCAP frame proof incomplete')
+        def unchanged():
+            _require(read_eval_set(root, with_manifest=True) == (ref, {r['session'] for r in doc['frames']}, raw)
+                     and file_hashes(root) == inventory, 'evaluation changed before seal')
+            _require(all(_sha256(path) == digest for path, digest in checked['source_hashes'].items()),
+                     'MCAP source changed before seal')
+        unchanged()
+        _output_path(output)
+        output.mkdir(exist_ok=False)
+        (output / 'manifest.json').write_bytes(encoded)
+        unchanged()
+        with (output / 'COMPLETE').open('xb') as stream:
+            stream.write(seal.encode('ascii'))
+    return {'output': str(output), 'manifest_sha256': seal, 'eval_ref': ref,
+            'frames': len(checked['frames']), 'training_admission': False}
+
+
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--eval-folder',required=True)
-    parser.add_argument('--sources',required=True,help='JSON array of absolute raw-hash-pinned source descriptors')
+    parser.add_argument('--sources',help='JSON array of absolute raw-hash-pinned source descriptors')
+    parser.add_argument('--mcap',action='store_true',help='package human MCAP evaluation proof')
     parser.add_argument('--out',required=True,help='new absolute output directory; Windows X:/DevTemp only')
     args=parser.parse_args(argv)
     try:
-        source_path=Path(args.sources);raw=_stable_bytes(source_path)
-        result=package_eval_companion(args.eval_folder,_json(raw),args.out,
-                                      _descriptor_binding=(source_path,raw))
-        _require(_stable_bytes(source_path)==raw,'CLI source descriptor changed; artifact is not admission')
+        if args.mcap:
+            _require(args.sources is None, '--mcap does not accept video sources')
+            result=package_mcap_eval_companion(args.eval_folder,args.out)
+        else:
+            _require(args.sources is not None, '--sources required for D-379 evaluation')
+            source_path=Path(args.sources);raw=_stable_bytes(source_path)
+            result=package_eval_companion(args.eval_folder,_json(raw),args.out,
+                                          _descriptor_binding=(source_path,raw))
+            _require(_stable_bytes(source_path)==raw,'CLI source descriptor changed; artifact is not admission')
         print(json.dumps(result,sort_keys=True));return 0
     except (ValueError,OSError,KeyError,TypeError) as error:
         print(json.dumps({'status':'HOLD','error':str(error),'training_admission':False}));return 2

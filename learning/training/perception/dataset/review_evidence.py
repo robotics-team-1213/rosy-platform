@@ -281,12 +281,19 @@ def validate_authority(current):
                         'classes_sha256': current['pixel_classes_sha256'],
                         'classes_signature': current['classes_signature'], 'ignore_index': 255,
                         'complete_frame_review': True, 'background_reviewed': True}
+            approval = row.get('pixel_approval')
+            reviewed_unknown = isinstance(approval, dict) and approval.get('unknown_pixels_reviewed') is True
+            if reviewed_unknown:
+                count = approval.get('reviewed_unknown_count')
+                if (not row.get('fixed_eval_overlap') or not row['identity'].startswith('mcap:')
+                        or type(count) is not int or not 0 < count < row['width'] * row['height']):
+                    raise ValueError('invalid reviewed unknown approval')
+                expected.update(unknown_pixels_reviewed=True, reviewed_unknown_count=count)
             if (not row['complete_frame_review'] or not row['background_reviewed']
-                    or row.get('pixel_approval') != expected
+                    or approval != expected
                     or (row.get('fixed_eval_overlap') and not row['identity'].startswith('mcap:'))
                     or not row['mask_sha256'] or not current['pixel_classes_sha256']):
                 raise ValueError('invalid exact pixel approval binding')
-            approval = row['pixel_approval']
             for key in ('mask_version', 'width', 'height', 'ignore_index'):
                 if type(approval.get(key)) is not int:
                     raise ValueError('invalid exact pixel approval scalar type')
@@ -418,7 +425,9 @@ def verify_current(export, current):
         import cv2
         import numpy as np
         image = cv2.imdecode(np.frombuffer(payload[name], np.uint8), cv2.IMREAD_UNCHANGED)
+        unknown = row['pixel_approval'].get('reviewed_unknown_count', 0)
         if (image is None or image.dtype != np.uint8 or image.shape != (row['height'], row['width'])
-                or not np.isin(image, [c['index'] for c in normalized]).all()):
+                or int(np.count_nonzero(image == 255)) != unknown
+                or not np.isin(image, [c['index'] for c in normalized] + ([255] if unknown else [])).all()):
             raise ValueError('approved indexed mask payload invalid')
     return doc
