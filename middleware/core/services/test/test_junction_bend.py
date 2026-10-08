@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from core_features.line_follow.recovery.junction import JunctionRefused
+from core_features.line_follow.recovery.junction.gate import JunctionRefused
 from test_junction_turn_site_basis import SITE, site_rig, site_step
 from test_line_junction import BODY, Rig
 

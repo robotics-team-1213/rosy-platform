@@ -43,7 +43,7 @@ LOCALIZED = "LOCALIZED"
 #: CORE takes junction instructions only on CAMERA_LINE (IR_LINE: 409 JUNCTION_CAMERA_ONLY).
 LINE_MODES = ("CAMERA_LINE",)
 #: D-495 1: CORE is executing a junction manoeuvre; a new instruction would abort it. CORE's own
-#: ``recovery/junction.py`` ``MANEUVER`` (incl. D-507 4 ``approaching``); test_trip_runner pins both.
+#: ``recovery/junction/gate.py`` ``MANEUVER`` (incl. D-507 4 ``approaching``); test_trip_runner pins both.
 MANOEUVRE = ("approaching", "turning", "advancing", "reacquiring", "bending")
 #: D-520 2: CORE's ``line_follow.arc.reason`` for an arc that ended with no instruction armed
 #: (event ``nav.lane_arc_end_unarmed``); CORE then follows the lane as today.

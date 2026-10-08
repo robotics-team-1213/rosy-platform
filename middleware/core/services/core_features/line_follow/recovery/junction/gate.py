@@ -18,10 +18,10 @@ import math
 from dataclasses import replace
 
 from core_common.protocol.schemas import LineJunctionStatus
-from core_features.line_follow.recovery.junction_approach import (
+from core_features.line_follow.recovery.junction.approach import (
     MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
     JunctionApproachMixin, check_expect)
-from core_features.line_follow.recovery.junction_bend import JunctionBendMixin, check_bend
+from core_features.line_follow.recovery.junction.bend import JunctionBendMixin, check_bend
 
 JUNCTION_ACTIONS = ('straight', 'left', 'right', 'stop', 'bend')
 JUNCTION_REASONS = frozenset({'junction_transverse', 'junction_fork'})

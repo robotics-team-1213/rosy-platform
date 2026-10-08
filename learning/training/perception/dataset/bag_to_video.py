@@ -60,7 +60,8 @@ import numpy as np
 
 import extract
 from control.recording import (
-    CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
+    CAMERA_TELEMETRY_TOPIC, CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, SHADOW_TOPIC,
+    SIDE_TOPICS, ir_range_sample)
 
 SCHEMA = "rosy.teleop.video/1"
 ODOM_TOPIC = "odom"
@@ -70,7 +71,8 @@ SCAN_TOPIC = "scan"
 INTENT_TOPIC = "teleop/intent"
 PIX_FMT = "yuv420p"
 # Evidence stamped with its source image's header stamp (see the module docstring).
-STAMPED_TOPICS = ("line/observation", SHADOW_TOPIC, KEEP_DEBUG_TOPIC)
+STAMPED_TOPICS = ("line/observation", SHADOW_TOPIC, KEEP_DEBUG_TOPIC,
+                  CAMERA_TELEMETRY_TOPIC)
 STAMP_TOL_NS = 1_000             # payload stamp vs frame header stamp
 # Only this payload "source" is a frame's stamped evidence (IR_LINE shares the topic).
 STAMPED_SOURCES = {"line/observation": "CAMERA_LINE"}
@@ -111,7 +113,7 @@ def _stamp_ns(msg) -> int:
 
 def _side_name(topic: str):
     return next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC,
-                             INTENT_TOPIC, IR_RANGE_TOPIC)
+                             INTENT_TOPIC, IR_RANGE_TOPIC, CAMERA_TELEMETRY_TOPIC)
                  if extract._topic_is(topic, n)), None)
 
 

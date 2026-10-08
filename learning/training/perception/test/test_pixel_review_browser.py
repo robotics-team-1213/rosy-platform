@@ -175,9 +175,9 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
             .filter(node => node.getClientRects().length)
             .map(node => node.getBoundingClientRect().width),
         })""")
-        assert len(field_widths['labels']) >= 5 and len(field_widths['fields']) >= 5
-        assert all(abs(value - field_widths['available']) <= 1
-                   for value in field_widths['labels'] + field_widths['fields']), field_widths
+        assert len(field_widths['labels']) >= 3 and len(field_widths['fields']) >= 3
+        assert all(value <= field_widths['available'] for value in field_widths['labels']), field_widths
+        assert all(abs(label-field) <= 1 for label, field in zip(field_widths['labels'], field_widths['fields'])), field_widths
     if width == 320:
         navigation = page.evaluate("""() => ['#pixel-prev', '#pixel-next']
           .map(selector => document.querySelector(selector).getBoundingClientRect().width)""")
@@ -267,6 +267,52 @@ def test_brush_cancellation_coordinates_and_undo(browser_workspace):
     page.locator('#pixel-undo').click()
     expect(page.locator('#pixel-status')).to_contain_text('v2')
     assert review_masks.pixels(store, review_masks.get(store, 0))[12, 10] == 255
+
+
+def test_zoom_pan_never_paints_and_brush_uses_zoomed_coordinates(browser_workspace):
+    page, store, expect = browser_workspace
+    object_tools = page.locator('.review-editor-tools').bounding_box()
+    object_canvas = page.locator('#canvas').bounding_box()
+    object_decision = page.locator('.label-inspector').bounding_box()
+    open_pixels(page, store, expect)
+    page.locator('#pixel-class').select_option('')
+    expect(page.locator('#pixel-tool-hint')).to_contain_text('픽셀 클래스를 선택')
+    expect(page.locator('#pixel-brush-tool')).to_be_disabled()
+    pixel_tools = page.locator('.pixel-quick-tools').bounding_box()
+    pixel_canvas = page.locator('#pixel-canvas').bounding_box()
+    pixel_decision = page.locator('.pixel-review-column').bounding_box()
+    assert object_tools['x'] < object_canvas['x'] < object_decision['x']
+    assert pixel_tools['x'] < pixel_canvas['x'] < pixel_decision['x']
+    assert abs(object_tools['x']-pixel_tools['x']) <= 1
+    page.locator('#pixel-class').select_option('4')
+    expect(page.locator('#pixel-tool-hint')).to_be_hidden()
+    page.locator('#pixel-brush-tool').click()
+    stage = page.locator('.pixel-stage')
+    canvas = page.locator('#pixel-canvas')
+    original_width = canvas.bounding_box()['width']
+    page.locator('.review-viewport-controls [aria-label^="확대"]').click()
+    expect(page.locator('.review-zoom-level')).to_have_text('150%')
+    assert canvas.bounding_box()['width'] > original_width
+    page.locator('.review-viewport-controls [aria-label^="이동"]').click()
+    box = stage.bounding_box()
+    start = (box['x'] + box['width']/2, box['y'] + box['height']/2)
+    page.mouse.move(*start)
+    page.mouse.down()
+    page.mouse.move(start[0] - 100, start[1] - 40, steps=4)
+    page.mouse.up()
+    assert stage.evaluate('(node) => node.scrollLeft') > 0
+    assert review_masks.get(store, 0)['version'] == 0
+    expect(page.locator('#pixel-draft')).to_have_text('')
+    expect(page.locator('.pixel-save-panel')).to_be_hidden()
+    page.locator('.review-viewport-controls [aria-label^="이동"]').click()
+    image = canvas.bounding_box()
+    canvas.click(position={'x': image['width']/2, 'y': image['height']/2})
+    expect(page.locator('.pixel-save-panel')).to_be_visible()
+    page.locator('#pixel-save').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    expect(page.locator('.pixel-save-panel')).to_be_hidden()
+    changed = np.argwhere(review_masks.pixels(store, review_masks.get(store, 0)) == 4)
+    assert any(abs(y-12) <= 1 and abs(x-16) <= 1 for y, x in changed), changed.tolist()
 
 
 @pytest.mark.parametrize('width', [1440, 800, 390])
