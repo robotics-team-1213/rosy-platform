@@ -47,6 +47,10 @@ function enable() {
   $('reopen').disabled = locked;
   $('draw').disabled = $('add').disabled = locked || frame?.status === 'excluded';
   $('delete-selected').disabled = locked || frame?.status === 'excluded' || selected===null;
+  for (const button of $('object-quick-classes').querySelectorAll('button')) {
+    button.disabled = locked || frame?.status === 'excluded' || selected===null;
+    button.setAttribute('aria-pressed', String(selected!==null && frame.review.boxes[selected]?.label===button.value));
+  }
   $('candidates').disabled = locked || frame?.status === 'excluded' || !sourceCandidates().length;
   $('candidates').reason = !sourceCandidates().length ? '이 사진에는 가져올 원본 객체 후보가 없습니다.' : '';
   $('undo').disabled = locked || !undo || frame?.status === 'excluded';
@@ -205,7 +209,7 @@ function renderBoxes() {
     const top=document.createElement('div'); top.className='box-top';
     const number=document.createElement('span'); number.className='box-number'; number.textContent=`#${i+1}`; top.append(number);
     const pick=document.createElement('ui-button'); pick.setAttribute('kind','toggle'); pick.setAttribute('aria-pressed',String(selected===i)); pick.textContent=`박스 ${i+1} 선택`;
-    pick.onclick=()=> {selected=i; drawing=false; $('draw').setAttribute('aria-pressed','false'); renderBoxes(); paint();}; top.append(pick);
+    pick.onclick=()=> {selected=i; drawing=false; $('draw').setAttribute('aria-pressed','false'); renderBoxes(); paint(); enable();}; top.append(pick);
     top.append(selectField(`박스 ${i+1} 클래스`,classOptions,box.label,value => edit(boxes=> {boxes[i].label=value || null; if(value==='traffic_light') boxes[i].signal_state ??= 'unknown';})));
     if (box.label === 'traffic_light') top.append(selectField(`박스 ${i+1} 신호`,Object.entries(states),box.signal_state || 'unknown',value=>edit(boxes=>boxes[i].signal_state=value)));
     const remove=document.createElement('ui-button'); remove.setAttribute('kind','quiet'); remove.textContent=`박스 ${i+1} 삭제`; remove.onclick=()=> {selected=null;edit(boxes=>boxes.splice(i,1));}; top.insertBefore(remove,top.querySelector('label')); row.append(top);
@@ -224,6 +228,23 @@ function renderBoxes() {
       input.onchange=()=>edit(boxes=>boxes[i].bbox_xyxy[j]=Number(input.value)); label.append(input); coordinates.append(label);
     }); row.append(coordinates); $('boxes').append(row);
   });
+  enable();
+}
+function quickClasses() {
+  const row=$('object-quick-classes'); row.replaceChildren();
+  for (const cls of workspace.object_class_set.classes) {
+    const button=document.createElement('button'), swatch=document.createElement('i'), label=document.createElement('span'), key=document.createElement('kbd');
+    button.type='button'; button.value=cls.name; button.className='review-class-chip';
+    button.setAttribute('aria-label',`${cls.display} 클래스 지정${cls.hotkey ? ` · ${cls.hotkey.toUpperCase()}` : ''}`);
+    swatch.className='review-swatch'; swatch.setAttribute('aria-hidden','true');
+    if(cls.color) swatch.style.background=`rgb(${cls.color.join(',')})`;
+    label.textContent=cls.display; key.textContent=cls.hotkey?.toUpperCase()||'·';
+    button.append(swatch,label,key);
+    button.onclick=()=>{if(button.disabled||selected===null)return;
+      edit(boxes=>{boxes[selected].label=cls.name;if(cls.name==='traffic_light')boxes[selected].signal_state ??= 'unknown';});
+      $('canvas').focus({preventScroll:true});};
+    row.append(button);
+  }
   enable();
 }
 async function mutate(action, extras={}, restoring=false) {
@@ -392,6 +413,7 @@ async function load(index) {
     // An ordered list, not object keys: integer-like names would jump ahead of the others.
     classOptions=[['','클래스 선택 필요'],...classes.map(c=>[c.name,c.display])]; names=Object.fromEntries(classOptions);
     classColors=Object.fromEntries(classes.filter(c=>c.color).map(c=>[c.name,c.color]));
+    quickClasses();
     $('object-class-help').textContent=`객체 박스 · ${classes.map(c=>c.display).join(' · ')}. 종류와 경계를 확인하세요. 통로 안팎은 로봇·콘·표지판 등의 종류를 바꾸지 않습니다.`;
     let guide=$('obstacle-guide');
     if(!guide){guide=document.createElement('p');guide.id='obstacle-guide';guide.className='quiet';document.querySelector('.inspector-heading').append(guide);}

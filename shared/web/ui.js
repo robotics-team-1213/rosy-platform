@@ -620,6 +620,8 @@ export function actionIcon(button, name) {
     trash: "M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v6M14 11v6",
     undo: "M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2",
     pencil: "M4 20l4-.8L20 7l-3-3L4.8 16zM15 6l3 3",
+    image: "M4 4h16v16H4zM7 16l4-4 3 3 3-4 3 4M8 8h.01",
+    contrast: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 3v18",
     next: "M4 12h16m-7-7 7 7-7 7",
     list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
     box: "M4 4h16v16H4zM9 9h6v6H9z",
