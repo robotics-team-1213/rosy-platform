@@ -7064,3 +7064,9 @@ osy-d395-s1d\`.
 - 변경: 사용자 정정(2026-10-08)으로 반경을 충전기에서 잰다(`tether.charger_robot_frame`). `run.py --tether-check`가 사이트의 승인된 카메라-지도 보정으로 판정한 머리 위 프레임에 충전기, 반경 원, 로봇을 그려 `tether_check.jpg`를 남기고, 에이전트가 보고 `visual_check_ok`를 참으로 둬야 출발한다. 보정이 없거나 맞지 않으면 케이블 주행을 거부한다.
 - 증거: `python -m pytest tools/device_test/test -q` 호스트 시험(알려진 homography의 픽셀 위치, 거부 경로). 로봇은 움직이지 않았다.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · 차선 경계 완전 미관측 ROS SIM 재생
+
+- 변경: `edge_left`의 기억만으로 주행하지 않는 가드를 독립 Gazebo/ROS 그래프로 재생하고 `docs/validation/lane-blind-stop-sim-2026-10-08/result.md`에 원본 해시와 정지 자세를 기록했다.
+- 증거: 226프레임, 0.5835 m 진행, 지도 west 중심선 최대 거리 0.0193 m; `camera_line_not_visible` HOLD 뒤 `reselection_required` LOST. `/cmd_vel` publisher는 CORE 하나. 굽이 통과·실물 수용은 미달.
+- gate 변화: 없음.
