@@ -531,9 +531,24 @@ def scan_text(path: str, text: str, *,
     every repository check while protecting nothing.
     """
     findings: list[Finding] = []
+    lines = text.splitlines()
+    sha_table: tuple[int, int] | None = None
 
-    for number, line in enumerate(text.splitlines(), start=1):
+    for number, line in enumerate(lines, start=1):
         stripped = line.strip()
+        cells = None
+        if path.lower().endswith(".md") and stripped.startswith("|") and stripped.endswith("|"):
+            cells = [cell.strip() for cell in stripped[1:-1].split("|")]
+            if "SHA-256" in cells and number < len(lines):
+                separator = lines[number].strip()
+                if separator.startswith("|") and separator.endswith("|"):
+                    parts = [part.strip() for part in separator[1:-1].split("|")]
+                    if len(parts) == len(cells) and all(re.fullmatch(r":?-{3,}:?", part) for part in parts):
+                        sha_table = (len(cells), cells.index("SHA-256"))
+            elif sha_table and len(cells) != sha_table[0]:
+                sha_table = None
+        else:
+            sha_table = None
 
         if _PRIVATE_KEY.search(line):
             findings.append(Finding(path, number, "private-key", stripped[:120]))
@@ -593,6 +608,11 @@ def scan_text(path: str, text: str, *,
             continue
 
         entropy_line = _URL.sub(" ", line)
+        if sha_table and cells and len(cells) == sha_table[0]:
+            checksum = cells[sha_table[1]].strip("`")
+            if _SHA256.fullmatch(checksum):
+                cells[sha_table[1]] = ""
+                entropy_line = _URL.sub(" ", "|".join(cells))
         if path.replace("\\", "/").endswith(_ABSORPTION_INVENTORY_SUFFIX):
             try:
                 fields = next(csv.reader([line]))
