@@ -165,9 +165,15 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
     head.appendChild(modeTag);
     const link = view.stateUnavailable ? null : linkTag(robot.link);
-    if (link) {
-      const linkNode = tag(link.word, link.kind);
-      linkNode.dataset.link = robot.link;
+    // D-535: the server's reason (code, message, action) for a failed robot read.
+    const reason = view.stateUnavailable ? null : robot.link_reason;
+    if (link || reason) {
+      const linkNode = tag(link ? link.word : reason.message, link ? link.kind : "warn");
+      if (link) linkNode.dataset.link = robot.link;
+      if (reason) {
+        linkNode.dataset.reason = reason.code;
+        linkNode.title = `${reason.message} ${reason.action}`;
+      }
       head.appendChild(linkNode);
     }
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
