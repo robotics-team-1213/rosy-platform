@@ -68,11 +68,24 @@ def main():
         tx = pose[0] + target[0] * math.cos(pose[2]) - target[1] * math.sin(pose[2])
         ty = pose[1] + target[0] * math.sin(pose[2]) + target[1] * math.cos(pose[2])
         target_offset = round(arc.project(tx, ty)[0], 4)
+    view = follower._view
+    near = (view.x >= 0.09) & (view.x <= 0.25)
+    left_y = view.y[(follower.last["memory"] > 0) & near]
+    right_y = view.y[(follower.last["right_memory"] > 0) & near]
+    pair_gap = round(float(np.median(left_y) - np.median(right_y)), 4) if len(left_y) and len(right_y) else None
+    right_target, right_supported = follower._lookahead(view, follower.last["right_memory"], 0.0925)
+    right_target_offset = None
+    if right_target is not None:
+        tx = pose[0] + right_target[0] * math.cos(pose[2]) - right_target[1] * math.sin(pose[2])
+        ty = pose[1] + right_target[0] * math.sin(pose[2]) + right_target[1] * math.cos(pose[2])
+        right_target_offset = round(arc.project(tx, ty)[0], 4)
     print(json.dumps({"frame_index": args.frame_index, "stamp": float(stamps[args.frame_index]),
                       "keeper_rows": len(rows), "image_frames": len(stamps),
                       "keeper_strategy": keep[float(stamps[args.frame_index])].get("strategy"),
                       "follower_source": follower.last.get("source"), "target_m": target,
                       "target_map_offset_m": target_offset, "lane_half_width_m": 0.0925,
+                      "near_pair_gap_m": pair_gap, "right_fallback_supported": right_supported,
+                      "right_fallback_target_map_offset_m": right_target_offset,
                       "left_memory": signed_memory(follower._left, pose, arc),
                       "right_memory": signed_memory(follower._right, pose, arc)}, indent=2))
 

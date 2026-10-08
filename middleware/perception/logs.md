@@ -1261,3 +1261,9 @@
 - 받아들인 대가: 서서 도는(vx < 0.01, |wz| > 0.15) 낮은 신뢰도 weave는 매 프레임 keeper를 다시 시작하므로 거기서는 flipping hold가 쌓이지 않는다. vx가 0.01을 넘으면 hold가 다시 무장된다. keep 조향은 항상 앞으로 가므로(1 − 0.65|e|) 정상 주행 weave는 이 경우에 들지 않는다
 - 증거: `test_keep_pivot.py` 9건(대가 시험, 오래된 twist(skew > 0.30 s)는 reset하지 않음 — `pose_if_fresh` 변이로 실패 확인), `test_lane_paint_source.py` 고정 문자열 갱신
 - gate 변화: 없음. 호스트 SOURCE만
+
+## 2026-10-08 · uncommitted · fix(control): 오른쪽 경계 기억 대체 전 차로 폭 검사
+- 변경: `LaneEdgeFollower._pursue`가 왼쪽 목표를 낼 수 없어 오른쪽 기억을 쓰려 할 때, 가까운 창에 좌우 기억이 함께 있으면 중앙 간격을 기존 시드 범위 [1.2, 2.8] × 차로 반폭과 대조한다. 범위 밖이면 오른쪽 대체를 거절한다. 왼쪽 출력과 두 기억의 비교 창이 없는 경우는 그대로다.
+- 원인: `bw1` 굽이 첫 HOLD frame 260의 가까운 기억 간격 0.290 m는 상한 0.259 m보다 넓고, 기존 오른쪽 대체 목표의 지도 중심선 거리 0.0357 m는 명목 차체 여유를 거의 소진했다. 이는 SIM 참 자세 기반 진단이다.
+- 증거: 거짓 오른쪽 선 시험을 수정 전 실패로 확인; 정상 오른쪽 대체·65° 굽이·전체 랩을 포함한 `test_lane_edge.py` 41 passed, perception 전체 2,754 passed/108 skipped, `known_failures.py` 0 new.
+- gate 변화: 없음. SOURCE/LOCAL만. 보정된 실물 R0·R1·R2는 열림.

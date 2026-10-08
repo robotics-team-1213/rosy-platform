@@ -747,8 +747,10 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        45_104,
-        f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
+        45_258,
+        f"split: re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
+        "the existing ROS-free lane_bev owner with one focused regression; the P1a sensing split "
+        f"still applies. Deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
         "+133, with reviews), the camera AE/AWB re-lock (camera_controls/camera_visibility/v4l2_controls +77; "
         "lock mixin camera_lock.py split out of camera_detect_node) and the D-468 sim-sensor flag (+15). The "
