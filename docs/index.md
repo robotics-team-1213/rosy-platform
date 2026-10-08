@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · uiux(fleet): 지도 마커 비율 LOCAL 화면 기록
 - 2026-10-09 · uncommitted · Fleet 지도 증거 SHA-256 문맥 표기
 - 2026-10-09 · uncommitted · 공개 증거 SHA-256 문맥 표기
 - 2026-10-09 · uncommitted · Pinky 실물 차선 디버그 지면값 읽기 전용 대조
 - 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 첫 화면 LOCAL 증거
-- 2026-10-09 · uncommitted · Pilot 태블릿 재연결과 현재 후보 출처 확인
