@@ -499,6 +499,9 @@ def test_no_instruction_goes_out_while_core_approaches_the_pivot_past_the_place(
     ports.at(bc, 0.05)  # the approach drives past the place point onto the next lane
     _ticks(runner, ports, 10)
     assert ports.sent == [("left", "B", None)] and runner.running()["state"] == "running"
+    ports.core.done()  # the turn ends: the next place's instruction goes out
+    _ticks(runner, ports)
+    assert ports.sent[-1] == ("stop", "C", pytest.approx(0.45, abs=0.01))
 
 
 def test_a_turn_over_90_degrees_moves_on_by_core_or_by_the_pose():
