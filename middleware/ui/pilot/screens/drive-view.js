@@ -299,11 +299,6 @@ export function buildControls(profile) {
     autoToggle.setAttribute("kind", "segment");
     modes.append(autoToggle);
   }
-  const goal = el("ui-button", "지도 목표", {type: "button", kind: "segment", "data-drive-goal": ""});
-  goal.setAttribute("kind", "segment");
-  goal.disabled = true;
-  goal.setAttribute("reason", "목표 내비게이션 기능 확인 중");
-  modes.append(goal);
   left.append(modes);
   left.append(pedals);
   if (profile.autonomy?.includes("line")) {
