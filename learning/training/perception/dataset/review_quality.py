@@ -1,6 +1,6 @@
-"""Report lower-image clipping; optionally exclude pending review frames.
+"""Report lower-image clipping for human labelability review.
 
-Usage: python review_quality.py --state <review-state> --threshold 0.15 [--apply]
+Usage: python review_quality.py --state <review-state> --threshold 0.15
 The threshold is chosen from a measured session, not a universal camera setting.
 """
 import argparse
@@ -12,7 +12,7 @@ import numpy as np
 from review_app import ReviewStore
 
 
-def triage(store, threshold, *, apply=False):
+def triage(store, threshold):
     if not 0 < threshold < 1:
         raise ValueError('threshold must be between 0 and 1')
     rows = []
@@ -24,12 +24,8 @@ def triage(store, threshold, *, apply=False):
         gray = cv2.cvtColor(photo, cv2.COLOR_BGR2GRAY)
         fraction = float(np.mean(gray[gray.shape[0] // 2:] >= 245))
         candidate = fraction >= threshold
-        changed = bool(apply and candidate and frame['status'] == 'pending')
-        if changed:
-            store.update(frame['index'], {'version': frame['version'], 'action': 'exclude'})
         rows.append({'frame': frame['index'], 'clipped_fraction': round(fraction, 4),
-                     'candidate': candidate, 'status': 'excluded' if changed else frame['status'],
-                     'changed': changed})
+                     'candidate': candidate, 'status': frame['status']})
     return rows
 
 
@@ -37,10 +33,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', required=True)
     parser.add_argument('--threshold', required=True, type=float)
-    parser.add_argument('--apply', action='store_true', help='exclude pending candidates in the review ledger')
     args = parser.parse_args()
-    rows = triage(ReviewStore(args.state), args.threshold, apply=args.apply)
-    print(json.dumps({'threshold': args.threshold, 'applied': args.apply, 'frames': rows},
+    rows = triage(ReviewStore(args.state), args.threshold)
+    print(json.dumps({'threshold': args.threshold, 'frames': rows},
                      ensure_ascii=False))
 
 
