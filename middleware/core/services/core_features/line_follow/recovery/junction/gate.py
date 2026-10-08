@@ -19,7 +19,7 @@ from dataclasses import replace
 
 from core_common.protocol.schemas import LineJunctionStatus
 from core_features.line_follow.recovery.junction.approach import (
-    CORNER_TURNS, MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
+    MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
     JunctionApproachMixin, check_expect)
 from core_features.line_follow.recovery.junction.bend import JunctionBendMixin, check_bend
 
@@ -146,9 +146,10 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 self._junction_ahead = (float(ahead_m) if type(ahead_m) in (int, float)
                                         and 0 <= ahead_m <= MAX_AHEAD_M else None, reason)
             self._keep_corner_at = float(received_at) if corner_turning is True else None
-            if strategy in CORNER_TURNS:
-                self._corner_turn_at = float(received_at)  # latched CORNER_LATCH_S (review)
-                self._corner_turn_left = strategy == 'corner_left'
+            if strategy == 'corner_left':  # each way latched CORNER_LATCH_S (review)
+                self._corner_left_at = float(received_at)
+            elif strategy == 'corner_right':
+                self._corner_right_at = float(received_at)
             # D-507 2: perception announces junction_ahead_m support on every keep_debug frame.
             self._junction_ahead_v_at = (float(received_at) if type(ahead_v) is int and ahead_v >= 1
                                          else None)

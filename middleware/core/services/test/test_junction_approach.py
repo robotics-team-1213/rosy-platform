@@ -613,6 +613,23 @@ def test_a_corner_the_way_of_the_armed_turn_is_followed(action, turn, strategy):
     assert decision.linear > 0 and status.junction.state == 'armed'
 
 
+def test_a_corner_frame_the_other_way_never_ends_an_against_corners_latch():
+    """Review: right armed, keeper flips corner_left -> corner_right: still held, and an expiry
+    inside the latch keeps the hold (never drops the instruction into the wrong-way corner)."""
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)  # expires in 10 s
+    assert corner(rig, 'corner_left')[1].reason == 'junction_corner_hold'
+    for strategy in ('corner_right', 'both', 'corner_right'):
+        decision, status = corner(rig, strategy)
+        assert (decision.linear, decision.angular, status.reason) == (0., 0., 'junction_corner_hold')
+    rig.now += 9.5
+    corner(rig, 'corner_left')
+    rig.now += 1.                                                        # expired, latest frame right
+    decision, status = corner(rig, 'corner_right')
+    assert (decision.linear, status.reason) == (0., 'junction_corner_hold') and rig.m._junction['corner_held']
+
+
 def test_ring_straight_follows_the_lanes_left_corner_but_holds_a_right_one():
     """lap SIM 2: SE straight on the left-curving ring_s (expected line .44 m ahead): the keeper's
     corner_left is the ring itself; corner_right (out onto the spoke) still holds."""
