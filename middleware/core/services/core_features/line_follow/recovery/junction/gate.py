@@ -146,7 +146,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 self._junction_ahead = (float(ahead_m) if type(ahead_m) in (int, float)
                                         and 0 <= ahead_m <= MAX_AHEAD_M else None, reason)
             self._keep_corner_at = float(received_at) if corner_turning is True else None
-            self._corner_turn_at = float(received_at) if strategy in CORNER_TURNS else None
+            if strategy in CORNER_TURNS:
+                self._corner_turn_at = float(received_at)  # latched CORNER_LATCH_S (review)
             # D-507 2: perception announces junction_ahead_m support on every keep_debug frame.
             self._junction_ahead_v_at = (float(received_at) if type(ahead_v) is int and ahead_v >= 1
                                          else None)

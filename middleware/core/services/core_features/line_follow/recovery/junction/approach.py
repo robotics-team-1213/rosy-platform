@@ -39,6 +39,9 @@ CORNER_TURNS = frozenset({'corner_left', 'corner_right'})
 #: ponytail: the 260919 keeper's corner range (perception CORNER_MAX_AHEAD_M 0.45); a corner it
 #: reads this close to the expected cross line is that line misread (lap SIM A), SIM-tuned.
 CORNER_HOLD_AHEAD_M = .45
+#: Review: a keeper flipping between a corner and 'both'/'none' must not steer in bursts; one
+#: corner frame holds this long (the keep_debug evidence window of the junction capabilities).
+CORNER_LATCH_S = 2.
 
 
 def _point(pose, ahead, yaw, extra=0.):
@@ -136,7 +139,7 @@ class JunctionApproachMixin:
         keeper turns a corner this frame: that corner is the junction's line misread (it would
         put the robot on a lane against the route). Locked."""
         w, at, trail = j.get('window'), self._corner_turn_at, self._return_evidence.trail
-        if w is None or at is None or not 0 <= now-at <= self._config.stale_after_s:
+        if w is None or at is None or not 0 <= now-at <= CORNER_LATCH_S:
             return False
         pose = self._fresh_pose(now)
         if pose is None or (self._return_evidence.epoch, pose.frame) != w['key']:

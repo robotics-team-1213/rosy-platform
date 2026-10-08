@@ -595,6 +595,10 @@ def test_a_corner_turn_near_the_expected_line_holds_instead_of_following(strateg
     decision, status = corner(rig, strategy)
     assert (decision.linear, decision.angular) == (0., 0.)
     assert (status.state, status.reason, status.junction.state) == ('HOLD', 'junction_corner_hold', 'armed')
+    for _ in range(10):                                                    # flipping to 'both' within
+        decision, status = corner(rig, 'both')                             # the latch: still held
+        assert decision.linear == 0. and status.reason == 'junction_corner_hold'
+    rig.now += 2.
     decision, status = corner(rig, 'both')                                 # the keeper follows again
     assert decision.linear > 0 and status.junction.state == 'armed'
 
@@ -623,3 +627,11 @@ def test_an_unmeasurable_window_fails_closed():
     send(rig, 'right', -90., map_id='site', expect_in_m=1.2, expect_tol_m=.1, pivot_past_line_m=.1)
     rig.m._return_evidence.epoch += 1                                    # odom restarted
     assert corner(rig)[1].reason == 'junction_corner_hold'
+
+
+def test_a_corner_frame_older_than_the_latch_no_longer_holds():
+    rig = Rig()
+    rig.step()
+    send(rig, 'right', -90., map_id='site', pivot_past_line_m=.1, **WINDOW)
+    rig.m.observe_junction('no_boundary', rig.now - 2.5, strategy='corner_left')
+    assert rig.step()[0].linear > 0
