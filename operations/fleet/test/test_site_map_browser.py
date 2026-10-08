@@ -48,6 +48,7 @@ def test_rectangular_camera_coordinates_are_display_only(page_site):
     page.locator("#plane-pick").check()
     expect(page.locator("#trip-pick")).not_to_be_checked()
     writes.clear()
+    page.locator("#map-viewport").scroll_into_view_if_needed()
     point = page.locator("#site-map-svg").evaluate("svg => { const p = new DOMPoint(400, 240).matrixTransform(svg.getScreenCTM()); return {x: p.x, y: p.y}; }")
     page.mouse.click(point["x"], point["y"])
     expect(page.locator("#plane-point")).to_contain_text("확인한 좌표 x")
