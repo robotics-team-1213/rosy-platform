@@ -45,17 +45,20 @@ from .sensing.perception.route_camera import RouteCameraFollower
 from .sensing.perception.route_hybrid import RouteHybridFollower
 from .sensing.perception.route_map import RouteMapFollower
 
-#: Fixed at startup: the edge follower and the odom subscription are built
-#: from these once, so a later change would silently run the wrong pipeline.
+#: Fixed at startup: the edge follower and odom subscription are built from these once (a change runs the wrong pipeline).
 _READ_ONLY = ParameterDescriptor(read_only=True)
 #: 'keep' mode: a gap between camera frames longer than this resets the keeper.
 KEEP_MAX_FRAME_GAP_S = 0.5
 
 
-#: A spin in place, judged on CORE's commanded (v, w): |w| over half D-495's 0.3 rad/s turn floor, |v| under
-#: CORE's junction_still_linear 0.01. Not on odom: a slow keep corner (cmd v 0.0188) reads vx ~0.001 (D-507 r4b).
+COMMANDED_PIVOT_LINEAR_MPS = 1e-3   # a pivot commands v exactly 0; slow keep steering commands ~0.01 m/s
+KEEP_CMD_STALE_WARN_FRAMES = 30     # 'keep': frames in a row with a stale received command before one warning
+
+
+#: A spin in place, judged on CORE's commanded (v, w): |w| over half D-495's 0.3 rad/s turn floor, |v| near 0.
+#: Not on odom: a slow keep corner (cmd v 0.0188) reads vx ~0.001 (D-507 r4b).
 def _spinning_in_place(twist):
-    return twist is not None and abs(twist[1]) > 0.15 and abs(twist[0]) < 0.01
+    return twist is not None and abs(twist[1]) > 0.15 and abs(twist[0]) < COMMANDED_PIVOT_LINEAR_MPS
 
 
 class LineObserverNode(Node):
@@ -72,16 +75,13 @@ class LineObserverNode(Node):
         self.declare_parameter('camera_washed_fraction', 0.4)
         self.declare_parameter('camera_min_pixels', 80)
         self.declare_parameter('require_camera_controls_stable', True)
-        # 'line' follows one bright line; 'lane' keeps the centre between two
-        # boundary lines; 'edge_left' holds the lane's left boundary a
-        # half-width off in bird's-eye view (bends, arcs). Both lane modes need
-        # a metric ground plane, edge_left also odometry (fail-closed without).
+        # 'line' follows one bright line; 'lane' keeps the centre between two boundary lines; 'edge_left'
+        # holds the lane's left boundary a half-width off in bird's-eye view (bends, arcs). Both lane
+        # modes need a metric ground plane, edge_left also odometry (fail-closed without).
         # 'centre' follows the centre line between both boundaries (fallback ladder).
-        # 'between' keeps the midpoint of the two boundary lines in image
-        # space (no ground plane, no odometry).
-        # 'keep' keeps the middle of the lane from ground-plane boundary lines
-        # found per frame (no odometry): the real-robot lane keeper (D-364 §2),
-        # on camera_ground_source NOMINAL + allow_nominal_ground, or GAZEBO.
+        # 'between' keeps the midpoint of the two boundary lines in image space (no ground plane, no odometry).
+        # 'keep' keeps the lane middle from ground-plane boundary lines found per frame: the real-robot
+        # lane keeper (D-364 §2), on camera_ground_source NOMINAL + allow_nominal_ground, or GAZEBO.
         # 'route_a'/'route_b' are the junction prototypes: route-driven
         # manoeuvres over the centre-line tracker (A) and planned-route
         # pursuit from a paint-localised pose (B). 'route_ab' is their
@@ -118,17 +118,15 @@ class LineObserverNode(Node):
         self.declare_parameter('gazebo_camera_pitch_rad', 0.0)
         self.declare_parameter('gazebo_camera_hfov_rad', 0.0)
         self.declare_parameter('gazebo_camera_max_range_m', 0.6)
-        # Lane mode only: odometry-bounded 90 deg corner turning. Off by
-        # default; without odometry the tracker never leaves FOLLOW.
+        # Lane mode only: odometry-bounded 90 deg corner turning; off by default, never leaves FOLLOW without odometry.
         self.declare_parameter('lane_corner_turning', False, _READ_ONLY)
         self.declare_parameter('camera_x_offset_m', 0.0)
         self.declare_parameter('debug_overlay', False, _READ_ONLY)
         self.declare_parameter('debug_overlay_max_hz', 5.0)
         self.declare_parameter('debug_lane_graph', '')
-        # route_a/route_b/route_ab only. route and route_start are declared by type,
-        # not value: an empty Python list default cannot be typed, and the
-        # config file's own empty-list override (line_follow.yaml) needs a
-        # declared element type (string / double) to resolve against.
+        # route_a/route_b/route_ab only. route and route_start are declared by type, not value: an
+        # empty Python list default cannot be typed, and the config file's own empty-list override
+        # (line_follow.yaml) needs a declared element type (string / double) to resolve against.
         self.declare_parameter('lane_graph_path', '', _READ_ONLY)
         self.declare_parameter('route', Parameter.Type.STRING_ARRAY, _READ_ONLY)
         self.declare_parameter('route_start', Parameter.Type.DOUBLE_ARRAY, _READ_ONLY)
@@ -150,7 +148,7 @@ class LineObserverNode(Node):
         self._between_keeper = LaneBetweenKeeper(
             default_lane_width_fraction=float(
                 self.get_parameter('camera_between_lane_width_fraction').value))
-        self._keep_last_stamp = None
+        self._keep_last_stamp, self._cmd_stale_frames = None, 0
         self._lane_keeper = LaneKeeper(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_turning=bool(self.get_parameter('lane_corner_turning').value), paint_half_width_m=self._paint_half_width_m)
@@ -440,14 +438,18 @@ class LineObserverNode(Node):
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
                 )
             elif mode == 'keep':
-                # A camera gap (or the first keep frame of this node) starts
-                # the keeper afresh: sides and steering remembered from before
-                # the gap may belong to another place. So does a spin in place (D-507: its swept view latched the flip hold).
+                # A camera gap (or the first keep frame of this node) starts the keeper afresh: sides and steering
+                # from before the gap may belong to another place. So does a commanded spin in place (D-507: its
+                # swept view latched the flip hold).
                 image_stamp = (float(msg.header.stamp.sec)
                                + float(msg.header.stamp.nanosec) * 1e-9)
+                cmd = pose_if_fresh(self._cmd_twist, self._cmd_stamp, image_stamp)
+                self._cmd_stale_frames = 0 if cmd is not None or self._cmd_twist is None else self._cmd_stale_frames + 1
+                if self._cmd_stale_frames >= KEEP_CMD_STALE_WARN_FRAMES:
+                    self.get_logger().warning('cmd_vel stale vs camera stamps; spin reset off (use_sim_time?)', once=True)
                 if (self._keep_last_stamp is None
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
-                        or _spinning_in_place(pose_if_fresh(self._cmd_twist, self._cmd_stamp, image_stamp))):
+                        or _spinning_in_place(cmd)):
                     self._lane_keeper.reset()
                     if self._paint_worker is not None:
                         self._paint_worker.reset()
@@ -575,8 +577,7 @@ class LineObserverNode(Node):
         yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y),
                          1.0 - 2.0 * (q.y * q.y + q.z * q.z))
         self._odom_pose = (float(pose.position.x), float(pose.position.y), yaw)
-        # The header stamp, not arrival time: edge_left compares it with the
-        # image stamp, so dead or delayed odometry is no pose.
+        # The header stamp, not arrival time: edge_left compares it with the image stamp (dead or delayed odom is no pose).
         self._odom_twist = (float(msg.twist.twist.linear.x), float(msg.twist.twist.angular.z))
         self._odom_stamp = (float(msg.header.stamp.sec)
                             + float(msg.header.stamp.nanosec) * 1e-9)

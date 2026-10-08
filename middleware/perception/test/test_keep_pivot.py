@@ -13,8 +13,8 @@ from test_lane_keep import GROUND, HALF, X_OFFSET, _render
 NODE = (Path(__file__).resolve().parents[1] / "control" / "line_observer_node.py").read_text(encoding="utf-8")
 _tree = ast.parse(NODE)
 _namespace = {}
-exec(compile(ast.Module(body=[n for n in _tree.body if isinstance(n, ast.FunctionDef)
-                              and n.name == "_spinning_in_place"], type_ignores=[]), "<node>", "exec"), _namespace)
+exec(compile(ast.Module(body=[n for n in _tree.body if ast.unparse(n).startswith(
+    ("def _spinning_in_place", "COMMANDED_PIVOT_LINEAR_MPS ="))], type_ignores=[]), "<node>", "exec"), _namespace)
 spinning = _namespace["_spinning_in_place"]
 #: The view sweeping past a lone line during the turn: hard left, hard right, ...
 SWEEP = [_render([(0.035, 0.0)]), _render([(-0.035, 0.0)])] * 2
@@ -57,8 +57,8 @@ def test_a_hold_latched_before_odometry_shows_the_spin_is_released_by_it():
 
 _KEEP = NODE.split("elif mode == 'keep':", 1)[1].split("self._lane_keeper.update(", 1)[0]
 _GATE = _KEEP.split("if (self._keep_last_stamp is None", 1)[1].split("self._lane_keeper.reset()", 1)[0]
-#: The node's own spin term of the keep reset gate, evaluated as written.
-_SPIN_TERM = "_spinning_in_place(" + _GATE.split("or _spinning_in_place(", 1)[1].rsplit("):", 1)[0]
+#: The node's own spin term of the keep reset gate (its fresh-command expression), evaluated as written.
+_SPIN_TERM = "_spinning_in_place(" + _KEEP.split("cmd = ", 1)[1].splitlines()[0] + ")"
 
 
 def _node_gate(cmd, odom, image_stamp=100.0, cmd_age_s=0.0):
@@ -69,6 +69,7 @@ def _node_gate(cmd, odom, image_stamp=100.0, cmd_age_s=0.0):
 
 
 def test_keep_mode_subscribes_the_commanded_twist_read_only():
+    assert "or _spinning_in_place(cmd)):" in _GATE
     assert "if mode == 'keep':" in NODE and "create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)" in NODE
     assert "create_publisher(Twist" not in NODE
     assert "self._cmd_twist, self._cmd_stamp = (msg.linear.x, msg.angular.z)" in NODE
@@ -76,10 +77,16 @@ def test_keep_mode_subscribes_the_commanded_twist_read_only():
 
 def test_a_slow_keep_corner_is_no_spin_although_odom_reads_still():
     # D-507 r4b: CORE commands (0.0188, 0.48); Gazebo odom reads vx ~0.001, wz 0.4.
-    assert spinning((0.001, 0.4))   # the measured twist alone looks like a spin (the regression)
-    assert not _node_gate(cmd=(0.0188, 0.48), odom=(0.001, 0.4))
+    assert spinning((0.0, 0.4))   # odom reading the corner as still looks like a spin (the regression)
+    assert not _node_gate(cmd=(0.0188, 0.48), odom=(0.0, 0.4))
     keeper = _drive((0.0188, 0.48))
     assert keeper.last["reason"] == "flipping"   # corner memory kept: no reset
+
+
+@pytest.mark.parametrize("v", [0.0108, 0.0108 * 0.6, 0.0108 * 0.7, 0.002])
+def test_the_slowest_keep_steering_commands_are_no_pivot(v):
+    # Keep's slowest command (0.0108 at e=1), scaled by the manual angular cap or a v-only scale.
+    assert not _node_gate(cmd=(v, 0.6), odom=(0.0, 0.6))
 
 
 def test_a_commanded_junction_turn_restarts_the_keeper():
