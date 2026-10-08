@@ -57,7 +57,7 @@ CORE는 마지막 `nav_msgs/Path`의 `frame_id`, 수신 때의 `map_id`, 서버 
 
 - 같은 X: 세션 `evidence/path-provenance/navigation-stage/`에 정상 1366×768·390×844, 경로 지도 ID 불일치 1366×768·390×844, `odom` 경로 390×844 캡처를 둔다. 파란 경로는 정상 근거에서만 보이며, 불일치에서도 로봇 위치 마커는 유지된다.
 - CORE 지도·브리지 41 passed (`logs/path-provenance-core.txt`), 로봇 화면 브라우저·패키지 21 passed (`logs/path-provenance-browser.txt`). 둘 다 `known_failures.py`에서 NEW 여부를 확인한다.
-- 수신 나이는 경로가 만들어진 시각이나 현재 목표에 속한다는 증거가 아니다. 작업 브랜치는 API Ref v1.141 기반이고 현재 공유 main은 v1.142여서 착지 전 API 버전·변경 이력의 재조정이 필요하다. 실제 Nav2 메시지 빈도, 현장 경로 추종·도착 및 G3 판정은 HOLD다.
+- 수신 나이는 경로가 만들어진 시각이나 현재 목표에 속한다는 증거가 아니다. 실제 Nav2 메시지 빈도, 현장 경로 추종·도착 및 G3 판정은 HOLD다.
 
 ## 후속: SLAM 맵핑 세션 읽기와 지도 HUD 공간
 
@@ -65,7 +65,7 @@ CORE의 `GET /api/v1/navigation/state`에 기존 `NavigationManager.mapping_acti
 
 - LOCAL: 실제 FastAPI 정적 자산과 합성 API 응답의 1366×768·390×844 정상/대기/조회 실패 캡처를 X: 세션 `evidence/slam-session-final/navigation-stage/`에 기록하고 두 폭을 육안 확인했다. 캡처는 로봇 readback이 아니다.
 - `test_navigation_readiness.py`와 해당 브라우저 시험 12 passed (`logs/slam-session-tests.txt`), 최종 HUD CSS 캡처 시험 1 passed (`logs/slam-session-browser-final.txt`), 계약·패키지 24 passed (`logs/slam-session-contract.txt`), `known_failures.py` 0 NEW. `impeccable detect --json`은 `[]` (`logs/impeccable-slam-session.json`).
-- 공유 main은 이 브랜치보다 앞서 있고 API Ref 버전이 독립적으로 진행 중이다. 이 브랜치의 v1.143 표기는 착지 전 최신 계약 이력과 양측 합의 확인이 필요하다. 장치 이미지, 실제 SLAM 처리·지도 생성, 전체 G2 상태 매트릭스, G3 운용자 평가는 HOLD다.
+- 현재 main의 API Ref v1.145와 이 브랜치의 추가 필드를 합쳐 후보 문서 버전을 v1.146으로 올렸다. 양측 계약 검토와 장치 이미지, 실제 SLAM 처리·지도 생성, 전체 G2 상태 매트릭스, G3 운용자 평가는 HOLD다.
 
 ## 후속: 마지막 계획 경로의 방향
 
@@ -95,3 +95,11 @@ CORE의 내비게이션 증거는 최신 `NAVIGATING`인데 위치 추정이 `SU
 
 - LOCAL: X: 세션 `evidence/navigation-status-honesty/navigation-stage/operator-console-navigation-suspect-{390x844,1366x768}.png`로 두 폭의 동일한 불일치 상태를 캡처했다. 정상 두 폭과 다른 상태의 캡처도 같은 폴더에 있다. 합성 CORE 응답을 사용했으며 장치 증거는 아니다.
 - Chromium 해당 상태 회귀와 캡처 **1 passed**, `known_failures.py` **0 NEW** (`logs/navigation-status-honesty-final.txt`). 매트릭스 10행의 브라우저 오류는 0건이다. DEVICE/FIELD, 실제 이동 확인, 전체 G2/G3는 HOLD다.
+
+## 현재 main 결합 검증
+
+`aba6737a7`의 API Ref v1.145 변경과 이 브랜치의 맵핑 세션·경로 근거를 합쳐 v1.146으로 정리했다. `app.py` 설명과 문서 버전 핀도 같다. 충돌 난 CORE API·서비스 로그는 양쪽 기록을 보존하고 목차를 재생성했다.
+
+- 계약·지도·패키지 관련 pytest **76 passed**, `known_failures.py` **0 NEW** (`logs/post-main-merge-targeted.txt`). Harness lint **0 error, 23 기존 경고** (`logs/post-main-merge-lint-after.txt`).
+- Chromium 내비게이션 상태 캡처 **1 passed**, 10개 매트릭스 행의 pageerror **0**, `known_failures.py` **0 NEW** (`logs/post-main-merge-browser.txt`). 모바일 390×844와 데스크톱 1366×768 원본은 같은 X: 세션의 `evidence/post-main-merge/navigation-stage/`에 있다.
+- 이 검증은 LOCAL 결합 후보의 근거다. 현장 설치 이미지, 실제 로봇의 SLAM·경로 추종·위치 readback 및 운영자 G3는 HOLD다.

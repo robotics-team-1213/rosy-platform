@@ -1140,3 +1140,9 @@
 - 변경: 최신 `NAVIGATING` 보고와 `SUSPECT` 위치 추정이 겹치면 HUD에 `주행 중 보고 · 위치 확인 필요`를 함께 보여 준다. 목표와 계획 경로 차단은 유지한다.
 - 증거: `docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md`의 두 폭 캡처와 `logs/navigation-status-honesty-final.txt` (Chromium 1 passed, 신규 실패 0, 매트릭스 브라우저 오류 0).
 - gate 변화: LOCAL 상태 해석 보강. 실물 이동·장치·현장 수용은 HOLD.
+
+## 2026-10-08 · 098e8d522 · 현재 main과 내비게이션 UI 결합 검증
+
+- 변경: API Ref 최신 v1.145와 맵핑 세션·경로 근거를 v1.146으로 결합했다. CORE API·서비스 로그 양쪽과 생성 목차를 보존했다.
+- 증거: `docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md`의 post-main-merge 두 폭 캡처, 계약·지도·패키지 76 passed, Chromium 1 passed, 신규 실패 0, lint 0 error.
+- gate 변화: LOCAL 결합 후보. 실제 로봇·운영자 G3·FIELD는 HOLD.

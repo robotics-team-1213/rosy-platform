@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · 098e8d522 · 현재 main과 내비게이션 UI 결합 검증
 - 2026-10-08 · 9318050f6 · 위치 불확실 중 주행 보고 보존
 - 2026-10-08 · uncommitted · uiux(robot): 안전 정지의 지도 목표 차단
 - 2026-10-08 · uncommitted · uiux(robot): 지도 HUD의 지연·단절 증거 분리
 - 2026-10-08 · uncommitted · uiux(robot): 계획 경로 끝 방향 표시
-- 2026-10-08 · uncommitted · uiux(robot): SLAM 세션 상태와 지도 HUD 밀도
