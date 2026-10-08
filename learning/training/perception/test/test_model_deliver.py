@@ -48,15 +48,16 @@ class FakeRunner:
         return r
 
 
-def _model(models: Path, verdict: str, files=None) -> str:
+def _model(models: Path, verdict: str, files=None, *, revision_prefix="lane-seg") -> str:
     onnx = models.parent / "src.onnx"
     onnx.write_bytes(b"fake-onnx")
     tmp = models.parent / "tmp"
     doc = export_cell.write_manifest(
-        tmp, onnx_path=onnx, classes=[("bg", "background"), ("lane", "lane_marking")],
+        tmp, onnx_path=onnx, classes=[("bg", "background"), ("lane", "lane_marking")]
+        + ([("drivable", "drivable")] if revision_prefix == "v13-drivable" else []),
         color="rgb", scale=1 / 255, mean=[0, 0, 0], std=[1, 1, 1], dataset_repo="org/ds",
         dataset_revision="a" * 40, camera_profile_revision="cam-1", trainer="t",
-        date="20260930")
+        date="20260930", revision_prefix=revision_prefix)
     rev = doc["model_revision"]
     models.mkdir(parents=True, exist_ok=True)
     tmp.rename(models / rev)
@@ -236,6 +237,15 @@ def test_push_refuses_failed_intake(tmp_path):
     runner = FakeRunner()
     rc = deliver.main(["push", "robot", rev, "--models", str(models), *SSH], runner=runner)
     assert rc != 0
+    assert runner.calls == []
+
+
+def test_push_refuses_old_v13_pass_report_without_trusted_lineage(tmp_path):
+    models = tmp_path / "models"
+    rev = _model(models, "pass", revision_prefix="v13-drivable")
+    runner = FakeRunner()
+    assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH],
+                        runner=runner) == 2
     assert runner.calls == []
 
 

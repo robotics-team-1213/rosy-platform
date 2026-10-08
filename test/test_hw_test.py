@@ -19,6 +19,11 @@ import time
 
 import pytest
 
+# CI runs as root in its container; a non-root POSIX host (the shared test PCs) cannot.
+# Windows keeps its existing behaviour.
+REQUIRES_ROOT = pytest.mark.skipif(os.name == "posix" and os.geteuid() != 0,
+                                   reason="needs root: fchown to the display group needs root")
+
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 POSIX = pytest.mark.skipif(os.name != "posix", reason="symlinks and FIFOs")
@@ -256,6 +261,7 @@ def test_a_display_without_the_buzzer_leaves_the_line_to_this_test(tmp_path):
     assert system.handoffs and system.beeps == [4] and result["state"] == "done"
 
 
+@REQUIRES_ROOT
 def test_a_display_that_does_not_answer_is_a_failure_and_nothing_is_driven(tmp_path):
     root = _root(tmp_path)
     _request(root)
@@ -270,6 +276,7 @@ def test_a_display_that_does_not_answer_is_a_failure_and_nothing_is_driven(tmp_p
     assert not (root / hw.HANDOFF_REQUEST).exists()  # the hand-over is withdrawn
 
 
+@REQUIRES_ROOT
 def test_the_hand_over_speaks_the_boot_display_s_protocol(tmp_path):
     """Both programs, one request: rosy-hw-test writes, the display plays and answers, D-247's result."""
     display = _display_module()
