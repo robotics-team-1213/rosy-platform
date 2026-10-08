@@ -7241,6 +7241,7 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 사람 경계 정답, 승인 보정, 학습 모델 실제 추론, 자율 주행 수용은 확인되지 않았다. 주행 허용 HOLD.
 
 ## 2026-10-09 · uncommitted · feat(core): D-520 호가 odom의 지도 원을 반지름 보정으로 따른다
-- 변경: `line_follow/arc/lane_arc.py`. 호를 열 때 odom에 원 하나를 놓는다. 회전 뒤면 회전 목표 yaw를 접선으로 하고, 이어지는 `straight`면 앞 호의 원을 그대로 쓴다. 매 틱 ω = g·v·κ + v·clamp(sign κ·36·e_r − 12·e_θ, ±1.5)이다. IR 보정의 away·level 동안은 0이다. |e_r| > 0.075 m면 `lane_arc_edge`로 선다. 첫 IR `left`·`right` 판정은 원을 옮긴다(몸이 칠한 선 중심에서 0.0325 m 안쪽). `motion_admitted`, D-422 sweep, 길이·시간 한도, 멈춤 HOLD는 그대로다. 시험 6개를 새로 넣었다(곡률 0.88/1.1배로 도는 로봇이 원에서 12 mm 안, 8° 틀린 회전 끝에서 원으로 돌아옴, 보정 상한, 반지름 한도 멈춤, 이어지는 호의 원 유지, IR 판정이 원을 옮김). 피드포워드만 보던 시험 셋은 그 뜻대로 보정 없는 틱을 보거나 이득 0으로 고쳤다.
-- 증거: 모델 PC pytest `test_lane_arc.py`·`test_line_arc_api.py`·`test_line_junction.py` 151 passed. SIM은 lap SIM 4.
+- 변경: `line_follow/arc/lane_arc.py`. 호를 열 때 odom에 원 하나를 놓는다. 회전 뒤면 회전 목표 yaw를 접선으로 하고, 이어지는 `straight`면 앞 호의 원을 그대로 쓴다. 매 틱 ω = g·v·κ + v·clamp(sign κ·(64·e_r + I) − 16·e_θ, ±1.5)이다. I는 150·∫e_r ds이고 |I| ≤ 1.0이며, 이어지는 호가 원과 함께 이어받는다. IR 보정의 away·level 동안 보정은 0이고 I도 쌓지 않는다. 보정 밖에서 |e_r| > 0.075 m면 `lane_arc_edge`로 선다. 원을 다시 쓰는 것은 같은 세대의 이어지는 `straight`뿐이다(안전 검토). 첫 IR `left`·`right` 판정은 원을 옮긴다(몸이 칠한 선 중심에서 0.0325 m 안쪽). `motion_admitted`, D-422 sweep, 길이·시간 한도, 멈춤 HOLD는 그대로다. 시험 6개를 새로 넣었다(곡률 0.88/1.1배로 도는 로봇이 원에서 12 mm 안, 8° 틀린 회전 끝에서 원으로 돌아옴, 보정 상한, 반지름 한도 멈춤, 이어지는 호의 원 유지, IR 판정이 원을 옮김). 피드포워드만 보던 시험 셋은 그 뜻대로 보정 없는 틱을 보거나 이득 0으로 고쳤다.
+- 증거: 모델 PC pytest `test_lane_arc.py` 77 passed(±κ 시험 포함), 앞서 `test_line_arc_api.py`·`test_line_junction.py`와 함께 151 passed. SIM은 lap SIM 4(`validation/lane-trip-lap-sim4-2026-10-09/`).
+- 검토: 독립 code-reviewer(opus) 2026-10-09 1차 REQUEST CHANGES(턴에서 옛 원 재사용) → 고친 뒤 APPROVE WITH NOTES.
 - gate 변화: 없음. DEVICE/FIELD HOLD(D-520 개정 2026-10-09 4항).
