@@ -168,6 +168,7 @@ window.fetch = async (input, options = {}) => {
     '/api/v1/system/capabilities': {
       teleop: true, slam: true, docking: {supported: false},
       navigation: {goal_navigation: true},
+      runtime: {drive: 'ready'},
     },
     '/api/v1/system/inventory': {
       descriptors: [
@@ -1233,6 +1234,51 @@ def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion(
         page.evaluate('finishOff()')
         page.wait_for_function("!document.querySelector('[data-line-mode=IR_LINE]').disabled")
         expect(page.locator('[data-line-mode=OFF]')).to_have_attribute('aria-pressed','true')
+        browser.close()
+
+
+@pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
+def test_compatibility_lane_follow_uses_drive_readiness_without_nav2(viewport):
+    from playwright.sync_api import sync_playwright, expect
+
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, width=viewport[0], height=viewport[1], extra_init="""
+          window.__rosyCapabilitiesOverride = {
+            teleop: true, navigation: {goal_navigation: false}, runtime: {drive: 'ready'}
+          };
+        """)
+        page.goto("http://rosy.test/dashboard#compatibility")
+        button = page.locator('[data-line-mode="IR_LINE"]')
+        page.wait_for_function("document.querySelector('#robot-mode')?.textContent === '수동'")
+        if output := os.environ.get("ROSY_SCREENSHOT_DIR"):
+            shots = Path(output)
+            shots.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(shots / f"lane-follow-no-nav2-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+        expect(button).to_be_enabled()
+        button.click()
+        dialog = page.locator("dialog.ui-confirm")
+        expect(dialog).to_have_count(1)
+        page.evaluate("""async () => {
+          const {session} = await import('/dashboard/assets/client.js');
+          const {updateLineFollowButtons} = await import('/dashboard/assets/telemetry.js');
+          session.capabilities.runtime.drive = 'disabled';
+          updateLineFollowButtons();
+        }""")
+        dialog.locator("ui-button[kind=irreversible]").click()
+        expect(dialog).to_have_count(0)
+        assert not page.evaluate("window.__apiCalls.some(call => call.path === '/api/v1/line-follow/mode')")
+        expect(button).to_be_disabled()
+        assert button.get_attribute("reason") == "구동 준비 확인 필요"
+        expect(page.locator('[data-line-mode="OFF"]')).to_be_enabled()
+        page.evaluate("""async () => {
+          const {session} = await import('/dashboard/assets/client.js');
+          const {updateLineFollowButtons} = await import('/dashboard/assets/telemetry.js');
+          session.capabilities.runtime.drive = 'ready';
+          updateLineFollowButtons();
+        }""")
+        button.click()
+        dialog.locator("ui-button[kind=irreversible]").click()
+        page.wait_for_function("window.__apiCalls.some(call => call.path === '/api/v1/line-follow/mode' && call.body.mode === 'IR_LINE')")
         browser.close()
 
 

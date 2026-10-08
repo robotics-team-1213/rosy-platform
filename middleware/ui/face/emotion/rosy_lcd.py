@@ -46,7 +46,11 @@ class LCD():
 
     def _write_data_buffer(self, buf):
         GPIO.output(DC_PIN, GPIO.HIGH)
-        self.spi.writebytes2(buf)
+        # Pi 5 SPI0 times out on DMA transfers >= 96 bytes on the field robots.
+        if isinstance(buf, np.ndarray):
+            buf = buf.ravel()
+        for i in range(0, len(buf), 64):
+            self.spi.writebytes2(buf[i:i + 64])
 
     def reset(self):
         GPIO.output(RST_PIN, GPIO.HIGH)
