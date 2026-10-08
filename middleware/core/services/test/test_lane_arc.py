@@ -642,3 +642,83 @@ def test_an_armed_bend_at_the_arc_end_is_an_unarmed_end(monkeypatch):
     assert status.arc.reason == 'lane_arc_end_unarmed'
     decision, status = rig.drive()
     assert status.state == 'TRACKING' and decision.linear > 0
+
+
+# --- radial tracking of the map circle (2026-10-09 addendum) ------------------------------------
+
+def _radial(rig):
+    """True distance outside the ring centre line; the rig's arc starts at the origin heading +x."""
+    return math.hypot(rig.x, rig.y - 1/K) - 1/K
+
+
+@pytest.mark.parametrize('turn_scale', [.88, 1., 1.1])
+def test_tracking_holds_the_circle_when_the_robot_turns_less_or_more(turn_scale):
+    """SIM stage 1: feed-forward alone drifted 33 mm outward on ring_s; odom feedback holds it."""
+    rig = ArcRig()
+    rig.open()
+    rig.turn_scale, worst = turn_scale, 0.
+    while running(rig):
+        rig.drive()
+        worst = max(worst, abs(_radial(rig)))
+    assert rig.m._arc['reason'] == 'lane_arc_end_unarmed' and worst <= .012
+    assert rig.m._arc['corr'] is None
+
+
+def test_the_circle_leaves_along_the_turn_target_not_where_the_turn_ended():
+    """A turn that ended 8 deg outward is steered back onto the circle tangent to the target yaw."""
+    rig = ArcRig()
+    rig.step()
+    rig.yaw = math.radians(-8.)
+    with rig.m._lock:
+        j = dict(place_id='SW', action='left', map_id='lab-a', exit_segment=dict(SEGMENT), target=0.)
+        assert rig.m._open_arc(j, rig.now) is None
+    assert rig.m._arc['centre'] == pytest.approx((0., 1/K))
+    decision, _ = rig.drive()
+    assert decision.angular > V*K                     # turns harder than feed-forward, back inward
+    while running(rig):
+        rig.drive()
+    assert abs(_radial(rig)) <= .015 and rig.m._arc['reason'] == 'lane_arc_end_unarmed'
+
+
+def test_correction_is_bounded():
+    rig = ArcRig()
+    rig.step()
+    rig.yaw = math.radians(-20.)
+    with rig.m._lock:
+        rig.m._open_arc(dict(place_id='SW', action='left', map_id='lab-a', exit_segment=dict(SEGMENT),
+                             target=0.), rig.now)
+    decision, _ = rig.drive()
+    assert decision.angular == pytest.approx(V*(K + 1.5))
+
+
+def test_far_off_the_circle_stops_lane_arc_edge():
+    rig = ArcRig()
+    rig.open()
+    rig.turn_scale = 0.                               # the robot never turns: it leaves the circle
+    _, status = rig.until(lambda d, s: not running(rig))
+    assert status.arc.reason == 'lane_arc_edge' and status.arc.ir_correction.used is False
+    assert _radial(rig) > .07
+
+
+def test_a_chained_straight_keeps_the_ring_circle():
+    rig = ArcRig()
+    rig.open()
+    centre = rig.m._arc['centre']
+    send(rig, 'straight', 'SE', segment=dict(SEGMENT, end_place_id='NE', length_m=.4595))
+    rig.until(lambda d, s: s.arc.arc_seq == 2)
+    assert rig.m._arc['centre'] == centre
+
+
+@pytest.mark.parametrize('side, radial', [('right', .0625), ('left', -.0625)])
+def test_an_ir_verdict_reanchors_the_circle(side, radial):
+    """IR is a measurement: the right IR on the outer line puts the body 0.0625 m outside."""
+    rig = ArcRig()
+    rig.open(dict(SEGMENT, length_m=1.))
+    _past_grace(rig)
+    with rig.m._lock:
+        pose = rig.m._fresh_pose(rig.now)
+    assert abs(rig.m._arc_error(rig.m._arc, pose)[0]) < .002
+    rig.drive(ir=side)
+    with rig.m._lock:
+        pose = rig.m._fresh_pose(rig.now)
+    assert rig.m._arc_error(rig.m._arc, pose)[0] == pytest.approx(radial, abs=.004)
