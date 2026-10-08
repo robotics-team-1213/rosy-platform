@@ -164,8 +164,15 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        45_723,
-        "split: re-judged at 45723 on 2026-10-08 (independent re-judge, critic agent): 45571 was 46434 - 863 "
+        45_923,
+        "split: re-judged at 45923 on 2026-10-08: D-523 adds fleet/ai/decision_pipeline.py "
+        "(194 lines), parsers that return an identity fact or an allowlisted choice and do not "
+        "call the network or emit a command. Main since 45723 added 6 production lines in the "
+        "existing trip and site-map owners, inside the old allowance; together the count passes "
+        "45723+150. No new package owner or robot command path. The site-map web/server split in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; +150 allowance "
+        "unchanged, measured from 45923. "
+        "Previously re-judged at 45723 on 2026-10-08 (independent re-judge, critic agent): 45571 was 46434 - 863 "
         "by arithmetic; measured 45699 after the traffic move because main's D-520 1-2 arc handshake and the "
         "CORE-approaching busy fix (91b15708b) landed beside D-517 M3, each in its existing owner; then +24 "
         "console web (site-path summary, settings close). No new owner or robot command path. The site-map "
