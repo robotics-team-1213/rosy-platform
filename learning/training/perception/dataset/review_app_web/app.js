@@ -1,5 +1,6 @@
 import { cssColor, canvasFont, clearPalette } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
+import { showHistory } from '/history.js';
 const font = (size, family) => canvasFont(size, family);
 
 const $ = id => document.getElementById(id);
@@ -140,6 +141,9 @@ async function select(index) {
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
   frameHeading();saveView();
+  $('review-history-summary').textContent='검수 기록을 불러오는 중…';
+  request(`/api/history/${index}`).then(value=>{if(serial===loadSerial)showHistory(value);})
+    .catch(()=>{if(serial===loadSerial)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 최신 내용 불러오기를 눌러 다시 확인하세요.';});
   $('source-info').textContent = frame.source.source_kind === 'mcap'
     ? `${frame.source.width} × ${frame.source.height} · MCAP ${frame.source.source_session} · ${frame.source.mcap.frame.bag} SHA ${frame.source.mcap.bags.find(b => b.name === frame.source.mcap.frame.bag).sha256} · ${frame.source.mcap.frame.topic} · log ${frame.source.mcap.frame.log_ns} · channel ${frame.source.mcap.frame.channel_id} · ordinal ${frame.source.mcap.frame.message_ordinal} · 가져올 때 원본 픽셀 검증`
     : `${frame.source.width} × ${frame.source.height} · ${frame.source.video || '원본 사진'} · frame ${frame.source.video_frame ?? index}`;
@@ -219,6 +223,8 @@ async function mutate(action, extras={}, restoring=false) {
     if(decided&&['all','pending'].includes($('filter').value)) $('drag-status').textContent=`사진 ${id+1} ${statuses[frame.status]} · ${advance?'다음 검수 대기 사진입니다.':'검수 대기 사진을 모두 처리했습니다.'}`;
     if(advance) {select(advance.index); return;}
     frameHeading();
+    request(`/api/history/${id}`).then(value=>{if(frame?.index===id)showHistory(value);})
+      .catch(()=>{if(frame?.index===id)$('review-history-summary').textContent='검수 기록을 불러오지 못했습니다. 최신 내용 불러오기를 눌러 다시 확인하세요.';});
     coordinatePreview=null; if (selected>=frame.review.boxes.length) selected=null;
     renderBoxes(); list(); paint();
   } catch(e) {coordinatePreview=null; error(e.message); renderBoxes(); paint(); $('save-status').textContent=`저장 실패 · ${e.message}`;}
