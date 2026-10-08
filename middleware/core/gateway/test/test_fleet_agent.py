@@ -63,6 +63,35 @@ def test_identity_from_config_reads_device_fields():
     assert ident.hardware_serial == "SN-7"
 
 
+def test_provisioned_identity_reaches_info_and_fleet_hello(monkeypatch, tmp_path):
+    from core_common import config as config_module, identity as identity_module
+    from core_common.identity import RobotIdentity
+
+    serial_path = tmp_path / "cpuinfo"
+    serial_path.write_text("Model: Raspberry Pi 5\nSerial\t: 8c1fe303e5a6694f\n", encoding="utf-8")
+    monkeypatch.setattr(identity_module, "CPUINFO_PATH", serial_path)
+    monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", tmp_path / "missing.yaml")
+    monkeypatch.delenv("ROSY_CONFIG", raising=False)
+    monkeypatch.setenv("ROSY_DEVICE_UID", "3645c5b2-aa69-41ee-970f-ac6bb202338a")
+    monkeypatch.setenv("ROSY_DEVICE_NAME", "rosy-pinky-9dfk")
+    config = config_module.load_config()
+    ident = RobotIdentity.from_config(config)
+
+    assert ident.device_uid == "3645c5b2-aa69-41ee-970f-ac6bb202338a"
+    assert ident.hardware_serial == "8c1fe303e5a6694f"
+    assert ident.info()["device_uid"] == ident.device_uid
+    assert ident.info()["serial_number"] == ident.hardware_serial
+
+
+def test_missing_board_serial_stays_unknown(monkeypatch, tmp_path):
+    from core_common import identity as identity_module
+    from core_common.identity import RobotIdentity
+
+    monkeypatch.setattr(identity_module, "CPUINFO_PATH", tmp_path / "missing")
+    ident = RobotIdentity.from_config({"robot": {"device_uid": "uid-7"}})
+    assert ident.info()["serial_number"] is None
+
+
 def test_identity_defaults_do_not_fake_device_facts():
     from core_common.identity import RobotIdentity
     ident = RobotIdentity(robot_id="rosy_07", robot_name="Pinky 07")
