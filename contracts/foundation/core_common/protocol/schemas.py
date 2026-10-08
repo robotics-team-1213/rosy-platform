@@ -33,6 +33,7 @@ from core_common.protocol.cell_goal_evidence import CellGoalEvidenceSubmission  
 from core_common.protocol.cell_app import (  # noqa: F401
     CellAppCompileRequest, CellAppDocumentSaveRequest, CellAppProposalRequest, CellOperatorCheckpoint)
 from core_common.protocol.lane_perception import LanePerceptionRequest, LanePerceptionStatus  # noqa: F401
+from core_common.protocol.line_arc import LineArcIrCorrection, LineArcStatus  # noqa: F401
 from core_common.protocol.vision_preview_status import VisionPreviewStatus  # noqa: F401
 from core_common.protocol.recording_start import RecordingStartRequest  # noqa: F401
 from core_common.protocol.overhead_detections import OverheadDetectionsPayload  # noqa: F401
@@ -1027,7 +1028,7 @@ class LineJunctionStatus(BaseModel):
     seq: int = 0
     turn_deg: Optional[float] = None      # D-495: signed bounded turn (left +)
     reason: Optional[str] = None          # D-495: why a maneuver aborted
-    pivot_basis: Optional[str] = None     # D-507 4: map | stop_point
+    pivot_basis: Optional[str] = None     # D-507 4: map | stop_point; D-520: segment_end
 
 
 class LineFollowStatus(BaseModel):
@@ -1053,6 +1054,7 @@ class LineFollowStatus(BaseModel):
     # following as recovery off). None when D-468 is not tracking or not configured.
     lane_return_containment: Optional[Literal['contained', 'unknown']] = None
     junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-494 decision 4
+    arc: Optional[LineArcStatus] = None  # D-520 2: the latest arc of this process, if any
 
 
 class TrafficPolicyStatus(BaseModel):
