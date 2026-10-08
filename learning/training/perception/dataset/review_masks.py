@@ -318,8 +318,15 @@ def update(store, index, body, conflict):
         elif action == 'approve':
             if body.get('complete_frame_review') is not True or body.get('background_reviewed') is not True:
                 raise ValueError('사진 전체와 기본 배경을 각각 확인하세요.')
-            if np.any(image == 255):
-                raise ValueError('미검수 픽셀이 남아 있습니다.')
+            unknown_count = int(np.count_nonzero(image == 255))
+            if unknown_count:
+                kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
+                if not kind or kind[0] != 'evaluation':
+                    raise ValueError('미검수 픽셀이 남아 있습니다.')
+                if (frame['source'].get('source_kind') != 'mcap'
+                        or body.get('unknown_pixels_reviewed') is not True
+                        or unknown_count == image.size):
+                    raise ValueError('가림 픽셀은 평가 작업공간에서 명시적으로 확인하세요.')
             if (frame['source'].get('fixed_eval_overlap') and
                     frame['source'].get('source_kind') != 'mcap'):
                 raise ValueError('고정 평가와 겹치는 자료는 학습 승인할 수 없습니다.')
@@ -340,6 +347,9 @@ def update(store, index, body, conflict):
                         'ignore_index': binding['ignore_index'], 'width': review['width'],
                         'height': review['height'], 'complete_frame_review': True,
                         'background_reviewed': True}
+            if unknown_count:
+                approval['unknown_pixels_reviewed'] = True
+                approval['reviewed_unknown_count'] = unknown_count
         db.execute('INSERT OR REPLACE INTO masks(frame,version,status,path,sha256,complete,background,approval) VALUES (?,?,?,?,?,?,?,?)',
                    (index, version, status, path, digest, complete, background,
                     json.dumps(approval) if approval else None))

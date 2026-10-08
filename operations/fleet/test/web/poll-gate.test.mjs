@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { NO_MAP_RETRY_MS, createPollGate, isRouteAbsent } from "../../fleet/server/web/poll-gate.js";
+import { NO_MAP_RETRY_MS, createPollGate, isRouteAbsent } from "../../fleet/server/web/shared/poll-gate.js";
 
 test("a 404 without a detail code means the route is not installed", () => {
   assert.equal(isRouteAbsent(404, undefined), true);

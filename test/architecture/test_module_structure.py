@@ -86,6 +86,12 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/server/trip_runner.py": (
+        604,
+        "accept: the 604-line Fleet trip state machine gained a read-only bend diagnostic on the "
+        "existing map-pose tick. Moving four lines would split its stop and persistence rules; "
+        "re-judge if trip execution grows beyond the standard allowance",
+    ),
     "fleet/fleet/server/web/map-view.js": (
         903,
         "split: judged at 903 on 2026-10-08 (independent re-judge, critic agent): the D-513 7 camera turn "
@@ -125,8 +131,11 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        43_623,
-        "split: re-judged at 43623 on 2026-10-08: main's 43217 verdict plus D-472 + Addendum 2026-10-08 "
+        43_809,
+        "split: re-judged at 43809 on 2026-10-08: map-bound bend candidate diagnostics in trip_ports "
+        "and trip_runner, with fake-port tests, stay in Fleet's existing trip owner. No robot command "
+        "or new service. The site-map web/server split plan and +150 allowance remain unchanged. "
+        "Previously re-judged at 43623 on 2026-10-08: main's 43217 verdict plus D-472 + Addendum 2026-10-08 "
         "LED identity (server/identity.py orchestrator and binding store, tracking/console route wiring), "
         "independently judged to stay with the existing Fleet server owner as its own module (critic agent, "
         "2026-10-08); no new owner, the site-map web/server split plan and +150 allowance remain unchanged. "
@@ -399,7 +408,7 @@ SIZE_VERDICTS = {
         608,
         "accept: D-473 added the development-session connection-mode gate to the Fleet CLI, growing it past 600 lines (measured 608). The argument parsing stays with the one CLI entry owner for now; follow-up split: move the connection-mode and session CLI parsing into its own module when the CLI next grows. Budgets and allowance unchanged",
     ),
-    "fleet/fleet/server/web/styles.css": (
+    "fleet/fleet/server/web/shared/styles.css": (
         809,
         "accept: the Fleet console page stylesheet crossed the 800 web ceiling (measured 809) through "
         "2026-10-06 UI/UX layout fixes (uniform peer widths, E-stop/cancel feedback placement, phone "
@@ -465,7 +474,13 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_335,
+        1_338,
+        "accept: independently re-judged at 1338 on 2026-10-08 (critic agent, read-only) for "
+        "D-507 7: one optional LineFollowStatus.lane_return_containment Literal['contained', "
+        "'unknown'] field (default None) with its two-line comment beside the D-407 stuck and D-494 "
+        "junction fields; written only by line_follow/recovery/lane_return_decision.py, documented in "
+        "the API & Protocol Reference and D-507. Additive, no envelope version change or runtime "
+        "owner. Zero-growth allowance remains. "
         "accept: independently re-judged at 1335 on 2026-10-07 (code-reviewer agent, read-only) for "
         "D-494 4 / D-495: one LineJunctionStatus model and a defaulted LineFollowStatus.junction field "
         "(always present, state idle) beside LineStuckStatus; additive, no envelope version change or "
@@ -732,8 +747,10 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "control": (
-        45_104,
-        f"split: deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
+        45_258,
+        f"split: re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
+        "the existing ROS-free lane_bev owner with one focused regression; the P1a sensing split "
+        f"still applies. Deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
         "+133, with reviews), the camera AE/AWB re-lock (camera_controls/camera_visibility/v4l2_controls +77; "
         "lock mixin camera_lock.py split out of camera_detect_node) and the D-468 sim-sensor flag (+15). The "
@@ -823,11 +840,14 @@ SIZE_VERDICTS = {
         "without it, REJECT.",
     ),
     "perception/control/line_observer_node.py": (
-        604,
+        608,
         "accept: with condition: one ROS adapter for the line observer; detection/keep/containment/paint "
-        "logic is ROS-free in sensing/perception. Judged 2026-10-07 at 604 for the D-468 paint inner edge "
-        "(read-only lane_paint_half_width_m, startup refusal). Condition: the node's next change moves "
-        "logic out first; a re-judge above 604 is REJECT. (independently re-judged 2026-10-07)",
+        "logic is ROS-free in sensing/perception. Judged 2026-10-07 at 604 (D-468 paint inner edge). "
+        "Re-judged 2026-10-08 at 608 for the D-507 keep spin-in-place reset (odom twist joins the "
+        "camera-gap reset; paint freshness deduplicated onto pose_if_fresh): no extraction target had "
+        "room (lane_keep.py 600, lane_bev.py over, control at its 45254 limit), so the debt moves to the "
+        "dated P1a step in docs/plans/2026-10-08-control-p1a-sensing-perception-split.md. Condition: no "
+        "further node growth before that step lands; a re-judge above 608 is REJECT.",
     ),
     # --- D-362 newly-covered files (web assets in src/ packages, ops roots). ---
     "perception/web/diagnostic.html": (

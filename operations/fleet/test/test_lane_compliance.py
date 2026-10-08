@@ -118,6 +118,7 @@ def test_config_from_mapping_refuses_bad_values():
     assert LaneComplianceConfig.from_mapping({"persist_n": 5}).persist_n == 5
     for bad in ({"persist_n": 0}, {"persist_n": 1.5}, {"warn_margin_m": -0.1},
                 {"act_timeout_s": 0}, {"warn_margin_m": float("nan")}, {"typo": 1},
-                {"max_lateral_m": 0}, {"heading_gate_deg": 90}, {"moving_min_m": -1}):
+                {"max_lateral_m": 0}, {"heading_gate_deg": 90}, {"moving_min_m": -1},
+                {"track_heading_min_m": 0}):
         with pytest.raises(ValueError):
             LaneComplianceConfig.from_mapping(bad)

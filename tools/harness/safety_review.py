@@ -203,6 +203,31 @@ EXEMPT: dict[str, str] = {
         "inside the body (creep into contact, in-place turn) keeps holding; inside_body(strict=) "
         "in core_common.robot_body keeps a point exactly on the outline (conservative). Creep "
         "and turn hold tests pass.",
+    "b4f96a974df15956b41086587c5003bb0bdc9794":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: import-only; console.py takes the pure "
+        "D-499 classify_link (link word for status rows, not on the estop_all path) from the frozen "
+        "console_view edge, where the function is now defined (link_class.py removed). No new "
+        "safety->decision module; estop_all and dispatch unchanged. Exemption approved by livsbittt.",
+    "d69299d04b9b47fc6c2390963d32ab3f50b48e68":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: adds NOMINAL_BODY = PINKY_PRO alias and its "
+        "public safety anchor; second name for an already public object, no new capability; "
+        "robot_body.py stays in the literal backlog. Exemption approved by livsbittt.",
+    "a7fab3bf383e27e992f92f1165d30d9bf67b85e9":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: clearance.return_scan_view: future-stamped "
+        "scans within SOURCE_FUTURE_TOLERANCE_S (0.1 s) count as age 0, beyond it dropped; 0.25 s "
+        "staleness bound unchanged; only feeds D-468 return evidence, not the D-422 body stop; scan "
+        "sequence high-water kept. Exemption approved by livsbittt.",
+    "c2fe98e028597c73084a882f680e9722e653bf6a":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: body_stop.py docstring wording only (Pinky C1 "
+        "-> the C1 LiDAR); no executable change. Exemption approved by livsbittt.",
+    "0f1e07f7effdc983fa2110dc21ba7b97fc9f40d2":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: console.py added read-only CORE power_health "
+        "projection; superseded by 6d2ad7327 which moved it out of the console state; no command, gate "
+        "or stop path reads it. Exemption approved by livsbittt.",
+    "6d2ad7327628942f2a27d847ce852bbd6e4635c0":  # git commit revision
+        "Independent security-reviewer agent, 2026-10-08: console.py removes the power_health display "
+        "from FleetConsole state (traffic/swarm inputs); projection now per-response in console_routes, "
+        "display-only. Exemption approved by livsbittt.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)

@@ -2488,6 +2488,60 @@
 - 증거: 영향 시험 58 passed, known_failures 0 NEW. 두 시험 모두 수정 전 코드에서 실패함을 확인
 - gate 변화: 없음. D-430 독립 검토(critic) APPROVE
 
+## 2026-10-08 · uncommitted · feat(fleet): D-511 감시가 LED 확인 트랙을 입력으로 쓴다
+- 변경: `LaneComplianceMonitor`가 지도 자세가 LOCALIZED가 아니면 D-472 `IdentityService.confirmed_track_pose`를 판정한다(CONFIRMED, `age_s` ≤ `fleet.map_pose.sighting_lease_s`, 활성 지도 map id). 결과에 `pose_source`(`map_pose`|`led_track`)·`heading_source`(`pose`|`track_motion`|`none`)를 싣고 바뀔 때 로그를 남긴다. 트랙에 yaw가 없어 `moving_min_m`을 넘게 움직인 이전 위치에서의 방향을 쓰고, 정지면 순수 판정이 방향 문 없이 가장 가까운 호를 고른다. `pose_state`는 지도 자세 그대로. API Ref v1.132(가산)
+- 증거: `test_lane_compliance_service.py` 신규 2개, `test_boundaries.py`(lane_compliance_service만 identity 읽기 허용, map pose·trip 모듈 금지) — fleet 묶음·`test/architecture`·`test/test_line_follow_contract_docs.py` + `test/known_failures.py` (X:/DevTemp/d511-led/)
+- gate 변화: 없음. SOURCE/LOCAL만. 실제 `ceiling_north` LED 실측(D-472 addendum 6)·현장 수용은 열려 있다
+- 결정: D-472 addendum 3. 확인 트랙은 D-494 arbitrated_pose·trip·initialpose·명령에 닿지 않는다
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(fleet): D-511 LED 트랙 입력 리뷰 반영
+- 변경: 카메라가 프레임을 건너뛰어 같은 위치가 와도 트랙이 신선한 동안 마지막 이동 방향을 유지한다. 방향은 odom이 움직임을 말하고 트랙이 새 잠정 설정 `fleet.lane_compliance.track_heading_min_m`(0.05 m, 카메라 blob 잡음 이상)을 넘게 움직였을 때만 잡는다. `pose_source`가 바뀌면 WARN/ACT 누적을 새로 시작한다. `identity.confirmed_track_pose`의 `age_s`를 0으로 자르지 않고, 감시는 `MAX_SIGHTING_FUTURE_S`(0.05 s)보다 미래인 트랙을 지도 자세 sighting처럼 거절한다. API Ref v1.132 행 문구 수정("margin exact" 삭제, 교차로에서 가로지르는 차로 가능), D-511 Open M1 공백 (4) 추가
+- 증거: `test_lane_compliance_service.py`(건너뛴 프레임·odom 정지·출처 전환·미래 시각), `test_led_identity.py`(음수 age), `test_lane_compliance.py`(설정 검증) — fleet 묶음·`test/architecture`·`test/test_line_follow_contract_docs.py` + `test/known_failures.py` (X:/DevTemp/d511-led/)
+- gate 변화: 없음. SOURCE/LOCAL만
+- 결정: D-472 addendum 3, D-511 Open (4)
+- 교훈: 없음
+## 2026-10-08 · uncommitted · fix(trip): D-507 회전 축을 지도의 첫 칠한 선에서 (SIM 발견 1–2)
+- 변경: `trip_ports.line_past` — 칠한 선 = 차로 합집합 경계(차로마다 중심선 둘레 `width_m` 띠). 장소에서 진행 방향(창이 있으면 로봇 yaw, 없으면 장소의 차로 방향)으로 처음 벗어나는 거리. `junction_fields`가 `pivot_past_line_m = −그 거리`를 보낸다. 0.30 m 안에 선이 없으면 나가는 차로 폭/2, 창 없음. API Ref v1.133.
+- 증거: `test_trip_d507.py` 260919 SW spoke SIM 자세(−0.655, −0.432, 64°): pivot −0.105, 창 기대 선 0.401(SIM 측정 0.402), 창 없음 −0.096. L자 −0.1, 곧게 지나감 폭/2·창 없음. 부호 변이 4건 실패 확인 뒤 복원.
+- gate 변화: SOURCE. SIM 재실행은 열림.
+- 결정: D-507 2 개정(2026-10-08 사용자 결정)
+
+## 2026-10-08 · uncommitted · fix(trip): D-507 pivot 검토 반영 — lane 차로만, 창 없으면 음수 pivot 없음
+- 변경: `line_past`는 `drive_mode: lane` 차로만 칠한 선으로 보고, 반올림 뒤 0.30 m에서 한 번만 자른다. 창을 보내지 않는 장소에는 음수 pivot을 보내지 않는다(CORE `stop_point`). 선이 없으면 예전대로 폭/2.
+- 증거: `test_trip_d507.py` free 차로, 0.30 경계(0.6→0.3, 0.604→None), SW 로봇 yaw 64° 대 차로 53.8°, 창 없는 두 경우. 변이(창 없이 음수 pivot) 2건 실패 확인 뒤 복원.
+- gate 변화: SOURCE.
+- 결정: D-507 2 개정 검토
+
+## 2026-10-08 · uncommitted · docs(fleet): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
+- 변경: main 병합으로 v1.133·v1.134가 다른 브랜치(D-507 7)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.135로 옮겼다. 앞 항목의 v1.133은 그 때의 번호다.
+- 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · docs(fleet): 지도 교차로 창 누락 시 CORE HOLD 설명
+- 변경: `trip_ports.py`의 창 누락 주석을 D-507 3항 보충 계약에 맞췄다. Fleet은 여전히 창이 없는 지도 지시를 보낼 수 있지만, 새 CORE는 가로선 감지에서 `junction_unexpected`로 멈추고 Fleet은 trip을 끝낸다. 기존 장치 CORE에는 이 변경이 적용되지 않는다.
+- 증거: `test_trip_d507.py`와 CORE 교차로·API·계약 시험 194건 통과. 실제 Fleet→CORE 폐루프 SIM은 미실행.
+- gate 변화: 없음. SIM·DEVICE는 열림.
+- 결정: D-507 3항 보충.
+
+## 2026-10-08 · uncommitted · feat(fleet): 지도 edge 굽이 후보 진단
+- 변경: 진행 중 lane trip의 활성 지도 edge에서 가까운 굽이를 찾아 `detail.bend_candidate`에 기록한다. 원본 자세의 나이·dead reckoning·지도 offset·yaw·버전을 검사하고, 근거 상실 또는 trip 종료 시 지운다. CORE 명령은 추가하지 않았다.
+- 증거: `test_trip_d507.py`의 실제 west edge 후보·낡은 자세(0.304 s 반올림 경계)·지도 ID/버전 변경·trip 종료 검사. 관련 pytest 217 통과 후 착지 게이트가 파일/패키지 크기 판정 2건을 발견해 중단됐다(깨끗한 main의 두 시험은 통과). 굽이 진단을 `trip_ports.py`로 모으고 P6 판정을 갱신한 뒤 해당 시험 포함 41 통과. `known_failures.py` 0 new, flake8 및 harness lint 0 error. SOURCE/LOCAL 범위.
+- gate 변화: 없음. Fleet→CORE 폐루프 SIM·장치·현장 검수는 열림.
+- 결정: B9 굽이 접근 허가는 같은 경계의 검수 및 음성 사례를 통과할 때까지 보류.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-507 4 교차로 회전 각을 전진 현으로 조준
+- 변경: `execute.turn_target`이 장소 점에서 나가는 차로를 따라 `ADVANCE_M`(0.10, D-495 기본) 앞 점으로의 방향과 진입 접선의 차이를 `turn_deg`로 낸다. trip 러너는 회전 지시에 이 각과 `advance_m` 0.10을 함께 보낸다. 분류(직진·좌·우)는 접선 각 그대로이고 150° 한도는 보내는 각으로 본다. CORE·API 문구는 그대로다(버전 없음).
+- 증거: 260919 SW(west.rev→ring_s.fwd) −114.6°→−108.9°, NE(east.rev→ring_n.fwd) −102.8°→−97.1°(접선 대비 +5.7°, (0.10−0.05)/(2·0.25)). 장소에서 0.10 m 직진 끝의 차로 중심선 거리 0.1 mm(접선 조준 9.8 mm). 곧은 차로 변화 없음. 부호 변이(현 오프셋을 반대로) 2건 실패 확인 뒤 복원. fleet routing·trip 시험 통과.
+- gate 변화: SOURCE. SIM 재실행(NE 차선 유지)·장치는 열림.
+- 결정: D-507 4항 개정(2026-10-08 사용자 결정).
+
+## 2026-10-08 · uncommitted · fix(fleet): D-507 4 검토 반영 — 보내는 현 각의 한도·부호 검사
+- 변경: 앞 항목의 "150° 한도는 보내는 각" 수정이 실제로 적용되지 않아 `unsupported`가 접선 각을 보고 있었다. 이제 분류는 접선 각, 좌·우는 보내는 현 각(반올림 0.1°)이 150° 초과·0·반대 부호면 `LANE_TURN_TOO_SHARP`(CORE `set_junction`이 셋 다 거절). `advance_m`은 나가는 차로 길이로 자르고 같은 점을 겨눈다(지도 schema가 차로 ≥ 0.1 m라 오늘 0.10은 잘리지 않음).
+- 증거: `test_routing_execute.py` 접선 95°·현 112.5° 한도 100 거절/120 통과, +25° 좌인데 현이 음수인 차로 거절, ADVANCE_M 0.30에서 0.15 m 차로 자름. 변이 2건(부호 검사 제거, 접선으로 한도) 실패 확인 뒤 복원. fleet routing·trip + 구조 시험 246 통과, 1 실패는 fleet 크기 판정(깨끗한 main 공유 체크아웃에서도 실패, 44433 > 43809+150).
+- gate 변화: SOURCE. SIM·장치는 열림.
+- 결정: D-507 4항 개정 문구에 부호·`advance_m` 자름을 더함.
+
 ## 2026-10-08 · uncommitted · feat(fleet): D-517 M0 고정 블록 통행권 계산
 - 변경: `fleet/routing/blocks.py` 블록 길이(몸체·정지 거리·불확실성·경로 감시 거리), 블록·구역·방향 잠금 양방 차로, 점유는 사실(UNKNOWN은 풀지 않음), 허가는 경로 위치별·줄지 않음·허가 범위만, 앞쪽 블록 먼저 주기, 공정 순서와 합류 대기 상한, 고리 수용 N·h ≤ S−1, 기다림 순환 판정, 위치를 한 번도 모르는 로봇이 있으면 새 허가 중지.
 - 증거: 모델 PC `test_blocks.py` 19 passed, 반복 360회(최대 50대, 위치 오차·UNKNOWN·정지·앞뒤 밀착·수용 2 구역) 실패 0. 독립 검토 2회 지적 반영.

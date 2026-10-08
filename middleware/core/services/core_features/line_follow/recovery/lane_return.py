@@ -258,24 +258,24 @@ class ReturnController:
         rate = min(.15, inp.angular_limit)
         return ReturnAction(self.phase, "sensor_search", angular=rate*(1 if self._search_attempt == 0 else -1))
 
-    def tick(self, inp):
-        _finite(inp.now, inp.linear_limit, inp.angular_limit)
-        if type(inp.epoch) is not int or inp.epoch < 0:
+    def observe(self, now, pose, epoch):
+        """Feed the trail only. The caller runs this on every tick, holds included, so a
+        gap means odom really stopped, not that the controller was idle (D-507 7 rule (2))."""
+        _finite(now)
+        if type(epoch) is not int or epoch < 0:
             raise ValueError("valid pose continuity epoch required")
-        if self._epoch is not None and self._epoch != inp.epoch:
+        if self._epoch is not None and self._epoch != epoch:
             self._path.clear()
             self.trail.samples.clear()
             self._count = 0
             self._last_evidence = self._candidate = self._last_pose = None
             self._reference_invalid = self.checkpoint is not None
-            self.phase, self._opened = "departure_stop", inp.now
+            self.phase, self._opened = "departure_stop", now
             self._approach.finished = True
-        self._epoch = inp.epoch
-        if inp.linear_limit < 0 or inp.angular_limit < 0:
-            raise ValueError("nonnegative live limits required")
-        p = inp.pose
-        fresh_pose = p is not None and self._fresh(inp.now, p.received_at)
-        if fresh_pose and (self._last_pose is None or p.stamp_ns != self._last_pose.stamp_ns):
+        self._epoch = epoch
+        p = pose
+        if (p is not None and self._fresh(now, p.received_at)
+                and (self._last_pose is None or p.stamp_ns != self._last_pose.stamp_ns)):
             if not self.trail.add(p):
                 # Retain the frozen corridor identity for rejection, but invalidate
                 # every moving retrace candidate. A jump must not adopt a new lane.
@@ -284,8 +284,16 @@ class ReturnController:
                 self._reference_invalid = True
                 self._candidate = None
                 if self.phase == "tracking":
-                    self.phase, self._opened = "departure_stop", inp.now
+                    self.phase, self._opened = "departure_stop", now
             self._last_pose = p
+
+    def tick(self, inp):
+        _finite(inp.now, inp.linear_limit, inp.angular_limit)
+        self.observe(inp.now, inp.pose, inp.epoch)
+        if inp.linear_limit < 0 or inp.angular_limit < 0:
+            raise ValueError("nonnegative live limits required")
+        p = inp.pose
+        fresh_pose = p is not None and self._fresh(inp.now, p.received_at)
         source_stamp = inp.corridor_stamp_ns
         lane = (inp.corridor if self._fresh(inp.now, inp.corridor_at)
                 and type(source_stamp) is int and source_stamp >= 0 else None)
@@ -310,12 +318,19 @@ class ReturnController:
                     self._last_evidence = source_stamp
                 if self._count >= 3 and entered and self._normal(lane) and abs(lane.heading) <= .12:
                     self.checkpoint = (p, lane)
+                    self._reference_invalid = False  # D-507 7: the new checkpoint is the reference
                     self._candidate = None
                 return ReturnAction(self.phase, "contained")
-            self.phase, self._opened = "departure_stop", inp.now
             self._count = 0
             self._last_evidence = None
             self._entered = False
+            # D-507 7: departure needs positive evidence -- the body geometrically over a
+            # ready boundary (margin + u < 0), or a proven-inside lane that is not the
+            # checkpointed one. Anything unproven is today's following (as recovery off).
+            if not ((lane is not None and lane.margin(self.body)+lane.uncertainty_m < 0)
+                    or (fresh_pose and inside)):
+                return ReturnAction(self.phase, "containment_unknown")
+            self.phase, self._opened = "departure_stop", inp.now
             self.rebase_retrace()
             return self._hold("containment_unconfirmed")
         # Perception continues on every tick; no movement if authority or data is absent.
@@ -343,6 +358,7 @@ class ReturnController:
                 self.phase = "tracking"
                 if self._normal(lane):
                     self.checkpoint = (p, lane)
+                    self._reference_invalid = False  # D-507 7: the new checkpoint is the reference
                 self._opened = self._search_start = self._search_pose = None
                 self._search_attempt = 0
                 self._candidate = None

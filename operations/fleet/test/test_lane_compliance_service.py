@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
 from fleet.localization.lane_compliance import ACT, OK, UNKNOWN, LaneComplianceConfig
-from fleet.localization.map_pose import MapPose, MapPoseTracker, OdomSample
+from fleet.localization.map_pose import MapPose, MapPoseConfig, MapPoseTracker, OdomSample
 from fleet.routing.graph import build_graph
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -126,5 +126,103 @@ def test_lane_compliance_endpoint_and_state_row(tmp_path):
         asyncio.run(app.state.lane_compliance.tick())       # no anchor, no map: UNKNOWN
         body = client.get("/api/fleet/robots/r1/lane-compliance", headers=viewer).json()
         assert body["robot_id"] == "r1" and body["level"] == UNKNOWN and body["margin_m"] is None
+        assert body["pose_source"] == "map_pose" and body["heading_source"] == "pose"
         rows = client.get("/api/fleet/state", headers=viewer).json()["robots"]
         assert rows[0]["lane_compliance"]["level"] == UNKNOWN
+
+
+class TrackPoses(Poses):
+    config = MapPoseConfig()
+
+    def active_map_id(self):
+        return "site_v1"
+
+
+class Identity:
+    """IdentityService stand-in: a confirmed track per robot."""
+
+    def __init__(self, tracks):
+        self.tracks = tracks
+
+    def confirmed_track_pose(self, robot_id):
+        return self.tracks.get(robot_id, {"state": "UNKNOWN", "x": None, "y": None, "yaw": None,
+                                          "age_s": None, "map_id": None})
+
+
+def track(x, y, age_s=0.2, map_id="site_v1"):
+    return {"state": "CONFIRMED", "x": x, "y": y, "yaw": None, "age_s": age_s, "map_id": map_id}
+
+
+def test_led_track_feeds_the_monitor_when_the_map_pose_is_not_localized():
+    unknown = MapPose(None, None, None, "UNKNOWN", None, 0.0, None)
+    identity = Identity({"led": track(1.0, 0.15)})
+    poses = TrackPoses({"led": unknown, "map": at(0.0)})
+    monitor = LaneComplianceMonitor(lambda: ["led", "map"], poses=poses, identity=identity,
+                                    site_maps=Maps((1, None, GRAPH, None)), config=LaneComplianceConfig(persist_n=1))
+    asyncio.run(monitor.tick())
+    view = monitor.view("led")                 # still: nearest arc, no heading gate
+    assert (view["pose_source"], view["heading_source"], view["level"]) == ("led_track", "none", ACT)
+    assert view["pose_state"] == "UNKNOWN" and view["margin_m"] < 0
+    assert monitor.view("map")["pose_source"] == "map_pose"
+    poses.moving.add("led")
+    identity.tracks["led"] = track(1.03, 0.15)    # blob jitter inside track_heading_min_m: no heading
+    asyncio.run(monitor.tick())
+    assert monitor.view("led")["heading_source"] == "none"
+    identity.tracks["led"] = track(1.20, 0.15)    # moved +x along the lane: heading from motion
+    asyncio.run(monitor.tick())
+    view = monitor.view("led")
+    assert (view["heading_source"], view["level"], view["edge_id"]) == ("track_motion", ACT, "ab")
+    identity.tracks["led"] = track(1.0, 0.15)     # moved -x: no one-way arc that way
+    asyncio.run(monitor.tick())
+    assert monitor.view("led")["level"] == UNKNOWN
+
+
+def test_a_skipped_camera_frame_keeps_the_motion_heading_and_odom_must_say_moving():
+    unknown = MapPose(None, None, None, "UNKNOWN", None, 0.0, None)
+    identity = Identity({"led": track(0.5, 0.0)})
+    poses = TrackPoses({"led": unknown})                     # odom says still
+    monitor = LaneComplianceMonitor(lambda: ["led"], poses=poses, identity=identity,
+                                    site_maps=Maps((1, None, GRAPH, None)))
+    asyncio.run(monitor.tick())
+    identity.tracks["led"] = track(0.6, 0.0)                 # blob moved, odom still: no heading
+    asyncio.run(monitor.tick())
+    assert monitor.view("led")["heading_source"] == "none"
+    poses.moving.add("led")
+    identity.tracks["led"] = track(0.7, 0.0)
+    asyncio.run(monitor.tick())
+    assert monitor.view("led")["heading_source"] == "track_motion"
+    for _ in range(2):                                       # camera skipped: same x, y while driving
+        asyncio.run(monitor.tick())
+        view = monitor.view("led")
+        assert (view["heading_source"], view["level"], view["edge_id"]) == ("track_motion", OK, "ab")
+
+
+def test_switching_pose_source_restarts_the_persistence_counts():
+    unknown = MapPose(None, None, None, "UNKNOWN", None, 0.0, None)
+    identity = Identity({"r": track(1.0, 0.15)})
+    poses = TrackPoses({"r": at(0.15)})                      # over the edge on the map pose
+    monitor = LaneComplianceMonitor(lambda: ["r"], poses=poses, identity=identity,
+                                    site_maps=Maps((1, None, GRAPH, None)), config=LaneComplianceConfig(persist_n=3))
+    for _ in range(2):
+        asyncio.run(monitor.tick())
+    assert monitor.view("r")["act_count"] == 2
+    poses.poses["r"] = unknown                               # map pose lost: LED track takes over
+    asyncio.run(monitor.tick())
+    view = monitor.view("r")
+    assert (view["pose_source"], view["act_count"], view["level"]) == ("led_track", 1, OK)
+
+
+def test_led_track_must_be_fresh_on_the_active_map_and_never_beats_a_localized_pose():
+    unknown = MapPose(None, None, None, "UNKNOWN", None, 0.0, None)
+    identity = Identity({"stale": track(1.0, 0.0, age_s=MapPoseConfig().sighting_lease_s + 0.1),
+                         "future": track(1.0, 0.0, age_s=-0.2),
+                         "other": track(1.0, 0.0, map_id="old_map"),
+                         "both": track(1.0, 0.15)})
+    poses = TrackPoses({"stale": unknown, "future": unknown, "other": unknown, "both": at(0.0)})
+    monitor = LaneComplianceMonitor(lambda: ["stale", "future", "other", "both"], poses=poses,
+                                    identity=identity, site_maps=Maps((1, None, GRAPH, None)))
+    asyncio.run(monitor.tick())
+    for robot_id in ("stale", "future", "other"):
+        assert monitor.view(robot_id)["level"] == UNKNOWN
+        assert monitor.view(robot_id)["pose_source"] == "map_pose"
+    assert monitor.view("both")["pose_source"] == "map_pose" and monitor.view("both")["offset_m"] == 0.0
