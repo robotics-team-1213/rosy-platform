@@ -7294,3 +7294,9 @@ osy-d395-s1d\`.
 - 변경: Pilot 조종 종료 요청부터 실제 Robot Console 지도 문서·인증 인계까지 LOCAL 연속 화면을 기록하고, 지도 없음 상태에서 현재 지도 열람을 단정하던 문구를 수정했다.
 - 증거: `validation/uiux-pilot-console-continuity-2026-10-09/result.md`. 2000×1200·390×844 전환 전후 캡처, 브라우저 4 passed / NEW 0.
 - gate 변화: 없음. 실제 로봇 정지·지도/SLAM, 설치본, DEVICE/FIELD 및 전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(robot): 마지막 수신 계획 표시 검증
+
+- 변경: API가 보장하는 마지막 계획과 현재 목표 연동의 경계를 Console 경로 모양·문구에 반영하고 LOCAL 반응형 증거를 기록했다.
+- 증거: `validation/uiux-robot-last-plan-2026-10-09/result.md`. 1366·390·320px 캡처, 브라우저 1 passed / NEW 0.
+- gate 변화: 없음. 실제 경로 추종·SLAM, 설치본, DEVICE/FIELD와 전체 G2/G3는 HOLD.
