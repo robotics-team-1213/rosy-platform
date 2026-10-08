@@ -1176,3 +1176,15 @@
 - 변경: `/dashboard`의 추종 선택과 확인창 재검사를 Nav2 목표 기능 대신 구동 준비·운용자 권한·비상 정지 상태에 맞췄다. `/console` 차선 추종과 D-344 보강 7항의 구분을 따른다.
 - 증거: [차선 추종 구동 조건 검증](../../../docs/validation/uiux-line-follow-gate-2026-10-08/result.md). 두 폭 전후 캡처, 새 시험 2 passed, 관련 회귀 5 passed·0 NEW. 별도 옛 인증·지도 시험은 기존 main에서도 동일하게 실패한다.
 - gate 변화: 해당 LOCAL 흐름 확인. 전체 G2/G3·설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · test(robot): 인증·지도 회귀에 유효한 합성 지도
+
+- 변경: `/dashboard`의 인증 교체·페이지 이탈 시험에 10×10 격자 지도를 제공한다. 비어 있던 `/api/v1/map` 응답 때문에 현재 지도 검증이 목표 확인창을 올바르게 막던 시험 불일치를 해소했다. 제품 동작은 변경하지 않았다.
+- 증거: [인증·지도 확인창 회귀 복구](../../../docs/validation/uiux-compat-auth-map-fixture-2026-10-08/result.md). 390×844·1366×768 확인창 캡처, 대상 2 passed, 지도 인접 묶음 5 passed, 0 NEW.
+- gate 변화: LOCAL 회귀 근거 복구. 전체 G2/G3·설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 기존 Dashboard 지도 위치 추정 게이트
+
+- 변경: `/dashboard`의 주행 목표·로봇 마커·경로 표시를 위치 추정, 증거 freshness, 안전 정지에 맞춰 `/console`과 일치시켰다. 초기 자세 설정은 위치 회복을 위해 유지한다.
+- 증거: [기존 Dashboard 지도 위치 추정 검증](../../../docs/validation/uiux-legacy-map-localization-2026-10-08/result.md). 390×844·1366×768 수정 전후 Chromium 캡처, 관련 시험 24 passed, known_failures 0 NEW.
+- gate 보류: LOCAL 합성 상태만 검증. 전체 G2/G3 및 DEVICE/FIELD는 HOLD.
