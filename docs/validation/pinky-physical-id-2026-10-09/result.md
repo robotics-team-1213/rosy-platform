@@ -47,6 +47,6 @@
 
 ## 2026-10-09 04:18 KST 읽기 재확인
 
-- 현장 PC `robttt-15Z95N-GP7QL`의 `rosy-site-stack.service`는 active이며 Fleet·Vision 컨테이너는 실행 중이었다. 설치 이미지 태그는 `ed006ce92cc4832619dc96d4d0e00f779b439ec9`였다.
+- 현장 PC `robttt-15Z95N-GP7QL`의 `rosy-site-stack.service`는 active이며 Fleet·Vision 컨테이너는 실행 중이었다. 설치 이미지 revision은 `ed006ce92cc4832619dc96d4d0e00f779b439ec9`였다.
 - 현장 PC에서 각 로봇의 사이트 CA와 TLS 호스트명 검증을 적용한 `GET /api/v1/auth/connection`은 `rosy-pinky-9dfk.local` → `paired`, `rosy_26`, HTTPS, HTTP 200; `rosy-pinky-8kcn.local` → `paired`, `rosy_60`, HTTPS, HTTP 200을 반환했다. 이 응답은 네트워크·인증서·논리 ID 확인이지 Rosy Cam 속 몸체의 현재 위치 확인은 아니다.
 - `rosy_60`의 인증 없는 `GET /api/v1/robot/state`는 401이었다. 현장 PC SSH 계정에서 서비스 viewer·operator 토큰을 읽을 수 없어 인증된 현재 안전 상태, LCD 픽셀과 이동 경로는 이 재확인에서 판정하지 않았다.
