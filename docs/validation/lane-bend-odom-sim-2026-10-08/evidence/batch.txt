@@ -1,0 +1,15 @@
+west_01
+west_02
+west_03
+west_04
+west_05
+west_06
+west_07
+west_08
+west_09
+west_10
+west_11
+west_12
+south_01 --x -1.15 --y -0.509 --yaw 0
+south_02 --x -1.15 --y -0.509 --yaw 0
+south_03 --x -1.15 --y -0.509 --yaw 0

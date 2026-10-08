@@ -535,3 +535,9 @@
 - gate 변화: 없음(additive).
 - 결정: D-507 7
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · feat(core_common): `base_velocity.lane_bend` 능력 필드
+- 변경: `controls.py` `BaseVelocityControl.lane_bend`(bool|None)와 `pinky_controls(lane_bend=)`. 없으면 이전 이미지로 읽는다.
+- 증거: gateway `test_capabilities_controls.py`.
+- gate 변화: SOURCE.
+- 결정: D-507 보충
