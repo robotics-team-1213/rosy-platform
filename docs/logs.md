@@ -7032,3 +7032,11 @@ osy-d395-s1d\`.
 - 변경: 원본 화소가 증명된 10/7 두 MCAP을 현재 로컬 main에서 기본 지면과 11.8° 후보로 재생하고, R0 게이트 실패를 `docs/validation/lane-1007-r0-gate-2026-10-08/`에 고정했다.
 - 증거: 후보 pitch 첫 세션 RoadState TRACK 111/124이지만 페인트 위 목표 비율 등 6개 게이트 실패; 둘째 세션 STOP 83/83. 기본 지면은 두 세션 모두 STOP 207/207. 네 결과 모두 `validated=false`.
 - gate 변화: R0 HOLD 유지. 승인된 보정값·사람 동일 경계 정답·실기 주행 증거가 없다.
+
+## 2026-10-08 · uncommitted · feat(site): 모델 PC 멈춤 대비
+
+- 변경: `deploy/site/install-model-pc-guard.sh`(워치독 iTCO_wdt, kernel.panic·softlockup 재부팅, ZFS zvol swap 끄고 zram 100%, 원격 점검 강제 명령과 reboot 한 줄 sudo), `install-model-guard-check.sh`·`rosy-model-guard-check`(관제 PC 10분 점검, 30분 연속 나쁘면 재부팅, 새벽 예약 재부팅 시간대 제외), 안내 `deploy/site/model-pc-guard.md`.
+- 증거: 2026-10-07 02:13 멈춤 로그(NV_ERR_NO_MEMORY, i915 Purging GPU memory, 17시간 정지), swap 32 GiB가 ZFS zvol. `test/test_model_pc_guard.py` 7 passed(모델 PC). 모델 PC `--dry-run` 확인.
+- gate 변화: 없음. 설치는 sudo 비밀번호를 아는 사람이 한 번 실행해야 한다.
+- 결정: 없음(사용자 선택: 워치독 + SSH 점검 + swap 이전)
+- 교훈: 확장자 없는 셸 스크립트는 `.gitattributes`에 `eol=lf`가 없으면 Windows `git archive`가 CRLF로 내보낸다.
