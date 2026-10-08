@@ -1,71 +1,55 @@
 #!/usr/bin/env bash
-# Install the model PC hang guard check on the site host (Ubuntu, systemd). Run once:
+# Install the host guard (D-530) on the guarding host: the site PC, or the model PC as the
+# site PC's reverse guard. Run once:
 #
-#   sudo deploy/site/install-model-guard-check.sh [--dry-run] [--host rosy@100.98.162.71]
+#   sudo deploy/site/install-host-guard.sh [--dry-run]
 #
-# Creates the rosy-model-guard system user, /etc/rosy/model-guard/id_ed25519 (only when
-# absent) and known_hosts, /usr/local/bin/rosy-model-guard-check, and the
-# rosy-model-guard.service/.timer (every 10 min). Prints the public key: pass it to
-# `sudo deploy/site/install-model-pc-guard.sh --site-key "<key>"` on the model PC. The
-# timer is enabled only once the model PC answers `health` with that key.
+# Creates the rosy-host-guard system user, /etc/rosy/host-guard/id_ed25519 (only when absent),
+# hosts.conf from host-guard.conf.example (only when absent; edit it), known_hosts for every pc
+# line, and /usr/local/bin/rosy-host-guard. Prints the public key for
+# `sudo deploy/hosts/common/install-guard-remote.sh --site-key "<key>"` on each watched PC, then
+# probes `health` on each. The units and their timer come from the site desired state:
+# `sudo python3 deploy/hosts/common/rosy-host-state install site`.
 set -euo pipefail
 
 DRY=0
-HOST=rosy@100.98.162.71
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1 ;;
-    --host) HOST=$2; shift ;;
-    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
 done
 HERE=$(cd "$(dirname "$0")" && pwd)
+DIR=/etc/rosy/host-guard
 run() { if [ "$DRY" = 1 ]; then echo "+ $*"; else "$@"; fi; }
 [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || { echo "run with sudo (or --dry-run)" >&2; exit 1; }
 
-id rosy-model-guard >/dev/null 2>&1 || run useradd --system --home /var/lib/rosy-model-guard --shell /usr/sbin/nologin rosy-model-guard
-run install -d -m 0750 -o rosy-model-guard -g rosy-model-guard /etc/rosy/model-guard /var/lib/rosy-model-guard
-if [ ! -f /etc/rosy/model-guard/id_ed25519 ]; then
-  run ssh-keygen -q -t ed25519 -N "" -C rosy-model-guard -f /etc/rosy/model-guard/id_ed25519
-  run chown rosy-model-guard:rosy-model-guard /etc/rosy/model-guard/id_ed25519 /etc/rosy/model-guard/id_ed25519.pub
+id rosy-host-guard >/dev/null 2>&1 || run useradd --system --home /var/lib/rosy-host-guard --shell /usr/sbin/nologin rosy-host-guard
+run install -d -m 0750 -o rosy-host-guard -g rosy-host-guard "$DIR" /var/lib/rosy-host-guard
+if [ ! -f "$DIR/id_ed25519" ]; then
+  run ssh-keygen -q -t ed25519 -N "" -C rosy-host-guard -f "$DIR/id_ed25519"
+  run chown rosy-host-guard:rosy-host-guard "$DIR/id_ed25519" "$DIR/id_ed25519.pub"
 fi
-if [ ! -s /etc/rosy/model-guard/known_hosts ]; then
-  run sh -c "ssh-keyscan -T 10 ${HOST#*@} > /etc/rosy/model-guard/known_hosts 2>/dev/null"
-fi
-run install -m 0755 "$HERE/rosy-model-guard-check" /usr/local/bin/rosy-model-guard-check
-cat_unit() {
-  if [ "$DRY" = 1 ]; then echo "+ write $1"; else cat > "$1"; fi
-}
-cat_unit /etc/systemd/system/rosy-model-guard.service <<EOF
-[Unit]
-Description=Rosy model PC hang guard check
-After=network-online.target
+[ -f "$DIR/hosts.conf" ] || run install -m 0644 "$HERE/host-guard.conf.example" "$DIR/hosts.conf"
+run install -m 0755 "$HERE/rosy-host-guard" /usr/local/bin/rosy-host-guard
 
-[Service]
-Type=oneshot
-User=rosy-model-guard
-Environment=GUARD_HOST=$HOST
-ExecStart=/usr/local/bin/rosy-model-guard-check
-EOF
-cat_unit /etc/systemd/system/rosy-model-guard.timer <<'EOF'
-[Unit]
-Description=Check the Rosy model PC every 10 minutes
-
-[Timer]
-OnBootSec=10min
-OnUnitActiveSec=10min
-
-[Install]
-WantedBy=timers.target
-EOF
-run systemctl daemon-reload
-echo "site guard public key (give to install-model-pc-guard.sh --site-key):"
-[ "$DRY" = 1 ] || cat /etc/rosy/model-guard/id_ed25519.pub
-if [ "$DRY" = 0 ] && sudo -u rosy-model-guard ssh -i /etc/rosy/model-guard/id_ed25519 -o BatchMode=yes \
-     -o UserKnownHostsFile=/etc/rosy/model-guard/known_hosts -o ConnectTimeout=10 "$HOST" health >/dev/null 2>&1; then
-  systemctl enable --now rosy-model-guard.timer && echo "timer enabled"
-else
-  echo "timer not enabled yet: install the key on the model PC, then rerun this script"
-fi
+targets=$(awk '!/^#/ && $2 == "pc" {print $3}' "$DIR/hosts.conf" 2>/dev/null || true)
+for target in $targets; do
+  case "$target" in *"<"*) echo "edit $DIR/hosts.conf: $target is still a placeholder"; continue ;; esac
+  grep -q "${target#*@}" "$DIR/known_hosts" 2>/dev/null ||
+    run sh -c "ssh-keyscan -T 10 ${target#*@} >> $DIR/known_hosts 2>/dev/null"
+done
+echo "guard public key (give to install-guard-remote.sh --site-key on each watched PC):"
+[ "$DRY" = 1 ] || cat "$DIR/id_ed25519.pub"
+[ "$DRY" = 1 ] && exit 0
+for target in $targets; do
+  case "$target" in *"<"*) continue ;; esac
+  if sudo -u rosy-host-guard ssh -i "$DIR/id_ed25519" -o BatchMode=yes -o ConnectTimeout=10 \
+       -o UserKnownHostsFile="$DIR/known_hosts" "$target" health; then
+    echo "$target: health OK"
+  else
+    echo "$target: no answer yet (install the key there, then rerun)"
+  fi
+done
