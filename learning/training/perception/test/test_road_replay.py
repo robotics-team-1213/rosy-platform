@@ -166,17 +166,17 @@ def test_a_real_gap_in_the_lines_degrades_and_recovers():
     assert rows[45]["keep"] is None               # the keeper holds
 
 
-def test_boundary_comparison_uses_current_paint_and_odom_memory():
+def test_boundary_comparison_stops_without_visible_paint_and_reacquires():
     metrics, rows = rr.replay(synthetic(64, blank=range(36, 40)),
                               dropouts=(), compare_boundary=True)
     assert metrics["boundary_comparison"]["frames"] == 64
     assert metrics["boundary_comparison"]["memory_before_both"] == 0
     assert any(r["boundary_tier"] == "BOTH" for r in rows[:36])
     assert rows[20]["boundary"]["on_paint"] is False
-    assert any(r["boundary_tier"] == "MEMORY" for r in rows[36:40])
+    assert all(r["boundary_tier"] == "STOP" for r in rows[36:40])
     assert rows[39]["keep"] is None
-    assert rows[39]["boundary"]["confidence"] < 1.0
-    assert rows[39]["boundary_candidate"] == rows[39]["boundary"]
+    assert rows[39]["boundary"] is None
+    assert rows[39]["boundary_candidate"] is None
     assert rows[-1]["boundary_tier"] in ("BOTH", "ONE")
 
 

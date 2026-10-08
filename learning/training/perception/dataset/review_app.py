@@ -162,6 +162,19 @@ class ReviewStore:
         with self.connect() as db:
             return [self.decoded(row) for row in db.execute('SELECT * FROM frames ORDER BY id')]
 
+    def history(self, index):
+        frame = self.get(index)
+        with self.connect() as db:
+            events = {}
+            for lane, table in (('object', 'events'), ('pixel', 'pixel_events')):
+                events[lane] = [dict(row) for row in db.execute(
+                    f'SELECT ts,action,version FROM {table} WHERE frame=? ORDER BY id DESC LIMIT 20',
+                    (index,))]
+        return {'source': frame['source'].get('annotation_source'),
+                'object_status': frame['status'],
+                'pixel_status': review_masks.get(self, index)['status'],
+                'events': events}
+
     def image(self, index):
         row = self.get(index)['source']
         path = (self.state / row['image']).resolve()
@@ -327,6 +340,8 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     if self.headers.get('If-None-Match') == tag:
                         return self.send(b'', 304, etag=tag)
                     return self.send(value, etag=tag)
+                if path.startswith('/api/history/'):
+                    return self.send(store.history(int(path.rsplit('/', 1)[1])))
                 if path == '/api/catalog':
                     return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
                                       'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),
@@ -393,7 +408,7 @@ def make_server(store, port=8767, host='127.0.0.1'):
                         return self.send(b'', 304, etag=etag, cache='no-cache')
                     return self.send(image.read_bytes(), mime=mimetypes.guess_type(image.name)[0],
                                      etag=etag, cache='no-cache')
-                files = {'/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css',
+                files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js'}
