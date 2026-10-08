@@ -303,6 +303,7 @@
 
 - 2026-10-09 · uncommitted · 공개 증거 SHA-256 문맥 표기
 - 2026-10-09 · uncommitted · Pinky 실물 차선 디버그 지면값 읽기 전용 대조
+- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 첫 화면 LOCAL 증거
 - 2026-10-09 · uncommitted · Pilot 태블릿 재연결과 현재 후보 출처 확인
 - 2026-10-09 · uncommitted · 10/6·10/7 주행영역 후보의 몸체 경로 재대조
 - 2026-10-09 · uncommitted · D-529 역할별 시험 실행 위치
