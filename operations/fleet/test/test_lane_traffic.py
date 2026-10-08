@@ -315,7 +315,7 @@ def test_a_robot_never_localized_holds_every_junction_instruction():
     for robot_id in ("a", "b"):
         live = runner._live[robot_id]
         assert live.traffic == {"waiting_for": ["c"], "authority_end_m": live.traffic["authority_end_m"],
-                                "refused_at_m": 0.0}
+                                "refused_at_m": 0.0, "front_d_m": live.traffic["front_d_m"], "pose_stamp": None}
         assert runner.traffic.holds(live, live.view["segment_index"])
 
 

@@ -23,9 +23,10 @@ from core_api_web.api.v1.common import (
     viewer,
 )
 from core_common.domain.tasks import TaskKind
+from core_common.protocol.line_authority import LineAuthorityRequest
 from core_common.protocol.schemas import DockState, LanePerceptionRequest, LanePerceptionStatus, RobotMode
 from core_api_web.api.deps import Mode
-from core_api_web.api.deps import JunctionRefused, LineFollowMode, LineStuckRefused
+from core_api_web.api.deps import AuthorityRefused, JunctionRefused, LineFollowMode, LineStuckRefused
 
 
 line_follow_router = APIRouter(prefix="/api/v1/line-follow", tags=["line-follow"])
@@ -102,7 +103,11 @@ class LineStuckDecisionRequest(BaseModel):
 
 
 def _status(svc: CoreServicesLike) -> dict:
-    return svc.line_follow.status().model_dump()
+    data = svc.line_follow.status().model_dump()
+    authority = getattr(svc.line_follow, "authority_status", lambda: None)()
+    if authority is not None:  # D-517 4: only while CORE enforces a Fleet authority
+        data["authority"] = authority
+    return data
 
 
 @line_follow_router.get("")
@@ -243,6 +248,22 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
         raise ApiError(exc.code, 409, str(exc)) from exc
     svc.state.set_line_follow(svc.line_follow.status())
     return {"accepted": result[0], "junction_seq": result[1], "state": result[2]}
+
+
+@line_follow_router.post("/authority")
+def set_line_authority(body: LineAuthorityRequest, auth: AuthContext = Depends(operator),
+                       svc: CoreServicesLike = Depends(get_services)):
+    """D-517 4 (M2): Fleet's movement authority for the trip leg. The same seat as /junction.
+    Accepted, or ignored (``accepted`` false, ``reason`` shrink: a smaller end on the same leg).
+    A 409 refusal also drops the held authority, so the robot stands."""
+    require_manual_released(svc)
+    require_calibration_owner(svc, auth, "line-follow authority")
+    try:
+        result = svc.line_follow.set_authority(body.authority_id, body.leg_id, body.pose_stamp,
+                                               body.until_m, body.ttl_s)
+    except AuthorityRefused as exc:
+        raise ApiError(exc.code, 409, exc.args[1]) from exc
+    return result
 
 
 @line_follow_router.post("/stuck/decision")

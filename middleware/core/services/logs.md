@@ -798,3 +798,15 @@
 - 증거: `test_junction_approach.py` — 전진 0.3 m·후진 0.2 m·전진 뒤 0.4 m 짧은 선과 진짜 선이 모두 `unexpected`(부호 없는 합이면 짧은 선이 창 안 0.9 m), 제자리 ±2 mm 떨림 2 s에 odometer 변화 < 1 mm이고 창 안 감지는 그대로 `turning`. 변이 A(부호 없는 합) 3건 실패, 변이 B(후진 검사 삭제) 1건 실패, 복원 뒤 69 통과. CORE services·api_web 1432 통과 13 skip, `known_failures` 신규 0.
 - gate 변화: SOURCE.
 - 결정: D-507 2·3항 2026-10-08 사용자 결정 (1), 안전 검토 REQUEST_CHANGES 1·2.
+
+## 2026-10-08 · b570504a2 · feat(core): D-517 M2 CORE 이동 통행권 (line_follow/authority.py)
+- 변경: `AuthorityMixin` — `set_authority(authority_id, leg_id, pose_stamp, until_m, ttl_s)`. odom 표본마다 CORE 벽시계·궤적·누적 경로 길이를 기록하고, `pose_stamp` 이전 표본 뒤 경로 길이를 빼서 남은 거리를 낸다. 남은 거리 ≤ `derived_stop_gap_m(min(cruise, max_linear))` 이면 선다(재출발은 + `obstacle_resume_hysteresis_m`). 같은 leg 에서 0.02 m 넘게 줄면 무시(ttl 미연장), `ttl_s` 만료·odom 낡음·궤적 변경·통행권 없음이면 선다. 설정 `authority_required` 또는 세션 첫 통행권 뒤에만 켜지고 모드 변경이 끝낸다. 게이트는 최종 결정을 0 으로만 만든다.
+- 증거: 모델 PC `test_line_authority.py` 13 통과(services·api_web·contracts·test/architecture 실행 2354 통과, 새 실패는 모델 PC의 git 없는 tar 환경 2건뿐이고 로컬 git 실행 41 통과). 변이: 만료 검사를 `+10 s` 로 바꾸면 2건 실패(`test_ttl_expiry_on_cores_clock_stands_the_robot`, `test_an_ignored_shrink_does_not_refresh_the_ttl`), 원본으로 통과.
+- gate 변화: SOURCE. SIM·DEVICE 전, 독립 Safety-Review 전.
+- 결정: D-517 4항 (M2). core_features 12921 (판정 12772+150=12922 안).
+
+## 2026-10-08 · 4fb9eb1c4 · fix(core): D-517 M2 리뷰 반영 — IR 설정 문구, 정지 거리 속도
+- 변경: (a14f0b847 와 함께) `ir_guard_enabled` 검증 문구를 D-517 전 그대로 되돌림(`authority_required` 는 자기 문구). 통행권 정지 거리는 `derived_stop_gap_m(max_linear)` — line follow 가 낼 수 있는 가장 빠른 속도(D-468 복귀 포함, cruise ≤ max_linear).
+- 증거: 모델 PC 수정 전 `test_config_flag_is_a_boolean`·`test_the_stop_gap_is_from_max_linear_not_cruise` 실패, 수정 뒤 대상 241 통과. services·gateway·test/ 전체는 main 과 같은 실패 목록(+ 병합 직후 생성 문서 낡음).
+- gate 변화: SOURCE. 독립 Safety-Review 재검토 전.
+- 결정: D-517 4항 독립 리뷰 MINOR 4·5. core_features 12922 (판정 12772+150 안).

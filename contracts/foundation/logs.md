@@ -535,3 +535,15 @@
 - gate 변화: 없음(additive).
 - 결정: D-507 7
 - 교훈: 없음
+
+## 2026-10-08 · b570504a2 · core_common(protocol): line_authority (D-517 M2)
+- 변경: `protocol/line_authority.py` — 요청·상태 모델, `MAX_TTL_S` 2, `MAX_UNTIL_M` 10, `STAMP_TOL_S` 0.05, `SHRINK_TOL_M` 0.02, `AuthorityRefused`. `controls.py` `BaseVelocityControl.line_follow_authority`. 기본 설정 `line_follow.authority_required: false`. schemas.py 는 건드리지 않음(1338 판정).
+- 증거: CORE·Fleet 시험(위 모듈 로그).
+- gate 변화: 없음(additive).
+- 결정: D-517 4항
+
+## 2026-10-08 · 887abb1a9 · feat(core_common): D-517 M2 controls 필드 line_follow_authority_required
+- 변경: `BaseVelocityControl.line_follow_authority_required`(bool|None), `pinky_controls(line_follow_authority_required=...)`.
+- 증거: 모델 PC `test_capabilities_controls.py` 통과.
+- gate 변화: SOURCE.
+- 결정: D-517 4항 독립 리뷰 3. API v1.142.

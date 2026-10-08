@@ -134,6 +134,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         junction_still_linear=float(raw.get("junction_still_linear", defaults.junction_still_linear)),
         junction_still_angular=float(raw.get("junction_still_angular", defaults.junction_still_angular)),
         site_floor_map_id=raw.get("site_floor_map_id", defaults.site_floor_map_id),
+        authority_required=_flag(raw, "authority_required", defaults.authority_required),
         lane_return_body_margin_m=float(raw.get(
             "lane_return_body_margin_m", defaults.lane_return_body_margin_m)),
         lane_return_checkpoint_fraction=float(raw.get(
