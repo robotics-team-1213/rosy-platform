@@ -31,6 +31,14 @@ def browser_tests_enabled() -> bool:
     return "1" in (os.environ.get("ROSY_RUN_BROWSER_TESTS"), os.environ.get("ROSY_BROWSER_TESTS"))
 
 
+def open_token_access(page) -> None:
+    """Open the paired console's token fallback before using its controls."""
+    page.wait_for_load_state("networkidle")
+    details = page.locator("#token-access")
+    if details.get_attribute("open") is None:
+        details.locator("summary").click()
+
+
 def safe_listener(host: str = "127.0.0.1") -> socket.socket:
     """A socket bound to a free port Chromium will load (never a restricted one)."""
     for _ in range(64):

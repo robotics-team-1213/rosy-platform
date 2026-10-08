@@ -7,7 +7,7 @@ import time
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, safe_listener
+from browser_harness import browser_tests_enabled, open_token_access, safe_listener
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -97,6 +97,7 @@ def test_token_switch_clears_start_reference_and_blocks_edits(browser_site):
     page.locator('#start-point-save').click()
     expect(page.locator('#start-point-state')).to_contain_text('X 1.00',timeout=10000)
     if page.locator('#topbar-more').is_visible(): page.locator('#topbar-more').click()
+    open_token_access(page)
     page.locator('#console-token').fill('invalid-token')
     page.locator('#token-save').click()
     expect(page.locator('#start-point-save')).to_be_disabled()
@@ -110,6 +111,7 @@ def test_connection_guide_replaces_loading_and_recovers(browser_site):
     errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
     expect(page.locator('#start-point-save')).to_be_enabled(timeout=15000)
     if page.locator('#topbar-more').is_visible(): page.locator('#topbar-more').click()
+    open_token_access(page)
     page.locator('#console-token').fill('')
     page.locator('#token-save').click()
     expect(page.locator('#connection-guide')).to_be_visible()
