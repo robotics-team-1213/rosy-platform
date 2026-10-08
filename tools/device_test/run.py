@@ -51,8 +51,7 @@ VALIDATE = ("sudo -n python3 -c 'import sys,yaml,hashlib,json; b=open(sys.argv[1
             "sort_keys=True))' ")
 
 
-class Abort(RuntimeError):
-    pass
+Abort = tether.Abort
 
 
 log = edge_drive.log
@@ -446,9 +445,9 @@ class Run:
             st = self.health()
             frames = self.camera("before" if preflight_only else "start")
             if preflight_only:
-                template = {"captured_at": self.r.now(), "pose_at_capture": st.get("pose"),
-                            "frames": frames, **{k: None for k in VERDICT_KEYS}, "note": "", "judged_by": "",
-                            "tether": None}    # or {cable_m, anchor_robot_frame, how}: tether.py
+                template = {"captured_at": self.r.now(), "pose_at_capture": st.get("pose"), "frames": frames,
+                            "localization_at_capture": st.get("localization"), **{k: None for k in VERDICT_KEYS},
+                            "note": "", "judged_by": "", "tether": None}   # see tether.py
                 path = self.ev / "camera_verdict.json"
                 path.write_text(json.dumps(template, indent=2), encoding="utf-8")
                 self.summary["outcome"] = "preflight"
@@ -573,6 +572,7 @@ def main(argv=None, robot=None):
     mode.add_argument("--preflight-only", action="store_true")
     mode.add_argument("--camera-verdict")
     mode.add_argument("--restore", metavar="EVIDENCE_DIR", help=f"undo a run that died, from its {MARKER}")
+    mode.add_argument("--tether-check", metavar="VERDICT", help="draw the declared tether (tether.py); no robot call")
     ap.add_argument("--evidence-dir")
     ap.add_argument("--summary-dir")
     ap.add_argument("--dry-run", action="store_true")
@@ -581,8 +581,8 @@ def main(argv=None, robot=None):
     if robot is None and not args.dry_run:
         if not args.token_file or not (args.ca_file or args.insecure):
             ap.error(f"pass --token-file (or {edge_drive.TOKEN_ENV}) and --ca-file or --insecure")
-    if args.restore:
-        return restore(robot or Live(args), args)
+    if args.restore or args.tether_check:
+        return (restore if args.restore else tether.tether_check)(robot or Live(args), args)
     if not args.plan:
         ap.error("--plan is required")
     plan = load_plan(args.plan)

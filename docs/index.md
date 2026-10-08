@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · D-512 개정 1 충전기 기준 반경과 tether 영상 확인
 - 2026-10-08 · uncommitted · D-512 개정 1 충전 케이블 tether 감시와 되돌아가기
 - 2026-10-08 · uncommitted · 차선 녹화 TF와 10/7 연속 검수 준비
 - 2026-10-08 · uncommitted · 10/7 현재 R0 재생 게이트
 - 2026-10-08 · uncommitted · 차선 추종 녹화 증거 준비
-- 2026-10-08 · uncommitted · 굽이 SIM의 전체 차로 중심선 투영
