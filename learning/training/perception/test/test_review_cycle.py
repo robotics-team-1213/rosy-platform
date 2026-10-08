@@ -126,6 +126,23 @@ def test_mask_requires_full_background_review_and_never_restores_object_approval
         review_masks.update(store, 1, {'version':0, 'action':'fill', 'label':0}, Conflict)
 
 
+def test_fill_unknown_preserves_known_labels_and_stays_pending(tmp_path):
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    marked = review_masks.update(store, 0, {'version':0, 'action':'paint',
+                                           'label':1, 'radius':2, 'points':[[8,9]]}, Conflict)
+    before = review_masks.pixels(store, marked).copy()
+    filled = review_masks.update(store, 0, {'version':marked['version'], 'action':'fill_unknown'}, Conflict)
+    after = review_masks.pixels(store, filled)
+    assert filled['status'] == 'pending' and filled['approval'] is None
+    assert np.array_equal(after[before != 255], before[before != 255])
+    assert np.all(after[before == 255] == 0)
+    with pytest.raises(ValueError, match='각각'):
+        review_masks.update(store, 0, {'version':filled['version'], 'action':'approve'}, Conflict)
+    restored = review_masks.update(store, 0, {'version':filled['version'], 'action':'undo'}, Conflict)
+    assert np.array_equal(review_masks.pixels(store, restored), before)
+
+
 def test_old_complete_export_cannot_resurrect_excluded_or_changed_frame(tmp_path):
     store = open_store(tmp_path)
     review_masks.bind_classes(store, CLASSES)
