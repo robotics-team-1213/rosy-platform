@@ -287,10 +287,10 @@ def test_the_handed_over_line_survives_a_stale_odom_tick_and_ends_on_a_new_epoch
     rig = armed_rig()
     bend_sighting_line_ahead(rig)
     until(rig, 'waiting')
-    site_step(rig, pose=False)                            # one tick without fresh odom
-    site_step(rig, pose=False)
-    rig.now += .4
-    site_step(rig)
+    rig.now += .3
+    site_step(rig, pose=False)                            # a tick with odom 0.35 s old: not fresh
+    assert rig.m._junction_held is True
+    site_step(rig)                                        # odom back, same continuous run
     assert rig.m._junction_held is True
     rig.m._return_evidence.epoch += 1                    # odom restarted: the line is unplaced
     site_step(rig)
