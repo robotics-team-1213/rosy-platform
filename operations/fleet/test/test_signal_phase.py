@@ -8,7 +8,9 @@ from fleet.routing.graph import build_graph
 from fleet.traffic.blocks import Layout, Robot, Span, TableState, Unit, build_layout, loop_capacity, step, wait_cycle
 from fleet.traffic.signal_phase import SignalPlan, SignalState, advance, alert, check, command, green
 
-from test_blocks import BODY, DEMO, U_DEMO, _demo_map
+from fleet.site_map import SiteMap, from_lane_graph
+from fleet.traffic.signal_phase import entering_arcs
+from test_blocks import BODY, DEMO, LANE_GRAPH, U_DEMO, _demo_map
 
 RING = ("ring_n", "ring_s", "ring_e", "ring_w")
 PLAN = SignalPlan("sig", "zone", (("in_a", 8.0), ("in_b", 8.0)), yellow_s=2.0, all_red_s=1.0)
@@ -33,6 +35,18 @@ def test_demo_roundabout_entrances_and_check():
     assert any("not an approach" in e for e in check(
         SignalPlan("s", "roundabout", (("east:fwd", 8.0), ("west:fwd", 8.0), ("ring_n:fwd", 8.0))), graph, layout))
     assert check(SignalPlan("s", "east#0", ()), graph, layout) == ["s: east#0 is not a zone"]
+
+
+def test_the_live_two_way_map_has_four_roundabout_entrances():
+    """The site's active map (2026-10-09, version 2) keeps east/west two-way as in lane_graph.yaml: four
+    entrances, so a demo two-entrance plan is refused there until the lanes are made one-way (D-517)."""
+    graph = build_graph(SiteMap.model_validate(from_lane_graph(LANE_GRAPH, map_id="map_v2_fleet").body()))
+    layout = build_layout(graph, DEMO, {"roundabout": (RING, 1)})
+    entries = sorted(entering_arcs(graph, layout, "roundabout"))
+    assert entries == ["east:fwd", "east:rev", "west:fwd", "west:rev"]
+    two = SignalPlan("sig", "roundabout", (("east:fwd", 8.0), ("west:fwd", 8.0)))
+    assert check(two, graph, layout) == ["sig: approaches without a phase: east:rev, west:rev"]
+    assert check(SignalPlan("sig", "roundabout", tuple((a, 8.0) for a in entries)), graph, layout) == []
 
 
 def _drive(state, plan, times, busy=lambda t: False):
