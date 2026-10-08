@@ -622,7 +622,7 @@ BEND = dict(map_id='lab-a', bend_in_m=.2, bend_tol_m=.1, bend_radius_m=.3)
 
 def test_a_bend_is_refused_while_an_arc_runs():
     """Re-verify fix 1: the arc drives this lane; a bend instruction is 409 JUNCTION_ARC_RUNNING."""
-    from core_features.line_follow.recovery.junction import JunctionRefused
+    from core_features.line_follow.recovery.junction.gate import JunctionRefused
     rig = ArcRig()
     rig.open()
     with pytest.raises(JunctionRefused) as refused:

@@ -1032,11 +1032,8 @@ def test_object_ribbon_class_click_saves_selected_box_only(browser_workspace):
     expect(chip).to_be_disabled()
     expect(page.locator('#object-quick-classes .ui-icon')).to_have_count(
         page.locator('#object-quick-classes button').count())
-    assert page.locator('.review-tool-ribbon').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y']
-    assert page.locator('.review-tool-ribbon ui-actions').bounding_box()['height'] < 60
-    tools = page.locator('.review-tool-ribbon ui-actions').bounding_box()
-    reload = page.locator('#reload').bounding_box()
-    assert reload['x'] + reload['width'] <= tools['x'] + tools['width']
+    assert page.locator('.review-editor-tools').bounding_box()['x'] < page.locator('#canvas').bounding_box()['x']
+    assert page.locator('.review-editor-tools').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y'] + 1
     expect(page.locator('#view-original .ui-icon')).to_have_count(1)
     expect(page.locator('#view-detail .ui-icon')).to_have_count(1)
     page.get_by_role('button', name='박스 1 선택', exact=True).click()
@@ -1047,6 +1044,45 @@ def test_object_ribbon_class_click_saves_selected_box_only(browser_workspace):
     assert store.get(0)['review']['boxes'][0]['label'] == 'obstacle_box'
     assert store.get(0)['status'] == 'pending'
     expect(page.locator('#approve')).to_be_disabled()
+
+
+def test_object_zoom_pan_and_draw_keep_source_coordinates(browser_workspace):
+    page, store, expect = browser_workspace
+    stage = page.locator('.image-stage')
+    canvas = page.locator('#canvas')
+    original_width = canvas.bounding_box()['width']
+    page.locator('.review-viewport-controls [aria-label^="확대"]').click()
+    assert canvas.bounding_box()['width'] > original_width
+    page.locator('.review-viewport-controls [aria-label^="이동"]').click()
+    stage.scroll_into_view_if_needed()
+    box = stage.bounding_box()
+    cx, cy = box['x']+box['width']/2, box['y']+box['height']/2
+    page.mouse.move(cx, cy)
+    page.mouse.down()
+    page.mouse.move(cx-80, cy-30, steps=4)
+    page.mouse.up()
+    assert stage.evaluate('(node) => node.scrollLeft') > 0
+    assert len(store.get(0)['review']['boxes']) == 1
+    page.locator('.review-viewport-controls [aria-label^="이동"]').click()
+    page.locator('#draw').click()
+    image = canvas.bounding_box()
+    box = stage.bounding_box()
+    x0, y0 = box['x']+box['width']/2-35, box['y']+box['height']/2-20
+    x1, y1 = x0+90, y0+90
+    expected = [round((x0-image['x'])*32/image['width'], 1), round((y0-image['y'])*24/image['height'], 1),
+                round((x1-image['x'])*32/image['width'], 1), round((y1-image['y'])*24/image['height'], 1)]
+    assert not stage.evaluate('(node) => node.classList.contains("review-pan")')
+    assert 0 < expected[0] < expected[2] < 32 and 0 < expected[1] < expected[3] < 24, (image, box, expected)
+    assert page.evaluate('([x,y]) => document.elementFromPoint(x,y)?.id', [x0,y0]) == 'canvas', (image,box,x0,y0)
+    page.mouse.move(x0, y0)
+    page.mouse.down()
+    page.mouse.move(x1, y1, steps=4)
+    page.mouse.up()
+    expect(page.locator('#boxes .box-row')).to_have_count(2)
+    actual = store.get(0)['review']['boxes'][-1]['bbox_xyxy']
+    assert all(abs(a-b) < 1 for a, b in zip(actual, expected)), (actual, expected)
+    page.keyboard.press('0')
+    expect(page.locator('.review-zoom-level')).to_have_text('100%')
 
 
 def test_custom_class_set_names_and_saves(custom_class_workspace):

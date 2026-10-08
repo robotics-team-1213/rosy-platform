@@ -77,10 +77,12 @@ OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception toolin
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: P6 subpackages counted as their own size unit (path relative to the colcon root): their lines
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
-#: docs/plans/2026-10-07-line-follow-recovery-subpackage.md, docs/plans/2026-10-08-line-follow-arc-subpackage.md
+#: docs/plans/2026-10-07-line-follow-recovery-subpackage.md (incl. its 2026-10-08 junction section),
+#: docs/plans/2026-10-08-line-follow-arc-subpackage.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
+              "core/services/core_features/line_follow/recovery/junction",
               "core/services/core_features/line_follow/arc")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
@@ -698,29 +700,28 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core/services/core_features/line_follow/recovery": (
-        2_987,
-        "split: independently re-judged at 3038 on 2026-10-08 (critic agent, read-only) after merging main "
-        "into feat/d507-bend-odom-pass; the recorded number stays 2987 so the +150 allowance is still "
-        "measured from it. The +51 over the 2987 verdict comes entirely from main's own commits, which landed "
-        "under main's 2713 accept: 06a7becd5 (junction window by travelled distance), 577ba9da5 (signed "
-        "forward odometer; a reverse closes the window) and 27ce8e6c0 (motion_admitted refuses non-finite "
-        "twists): junction.py +2, junction_approach.py +22 net, lane_return.py +23, motion_admit.py +4; the "
-        "merge resolution adds no lines to this unit. Junction code is now 945 (junction.py 530, "
-        "junction_approach.py 207, junction_bend.py 208). Every file stays below 600 (largest "
-        "stuck_recovery.py 573); junction, bend and motion admission remain LineFollowManager mixins under "
-        "the single manager lock and generation, with no own lock, thread, store or publisher, and CORE "
-        "CommandManager stays the final cmd_vel publisher, so this branch may land at 3038 without the move. "
-        "Previous verdict at 2987 (critic agent, after the bend pass safety review fixes e5735bd5f, D-507 "
-        "addendum junction_bend.py) triggered the 800-line junction condition of the 2713 verdict. Required "
-        "follow-up, still binding: a dated follow-up section in "
-        "docs/plans/2026-10-07-line-follow-recovery-subpackage.md with independent review, then a short "
-        "standalone refactor branch after this one lands that moves junction.py, junction_approach.py and "
-        "junction_bend.py with git mv into core_features/line_follow/recovery/junction/ as its own SIZE_UNITS "
-        "entry with its own verdict, in the same change as the recovery re-judge; pure move, no shim, imports "
-        "fixed in manager.py, core_api_web api/deps.py and test_line_junction.py, test_junction_approach.py, "
-        "test_junction_bend.py. motion_admit.py stays in recovery because lane_bridge and "
-        "lane_return_decision share it. The +150 allowance is not raised; the next junction change or +150 is "
-        "blocked until the split lands.",
+        2_098,
+        "split: re-judged at 2093, 2098 after merging main (D-520 motion_admit.py +5), on 2026-10-08 (critic agent, read-only) in refactor/junction-subpackage, "
+        "the binding follow-up of the 2987 verdict (docs/plans/2026-10-07-line-follow-recovery-subpackage.md, "
+        "2026-10-08 section): junction.py, junction_approach.py and junction_bend.py moved with git mv into "
+        "recovery/junction/ (gate.py, approach.py, bend.py), its own SIZE_UNITS entry; 3040 before the move = "
+        "2093 + 947; merging main brought D-520's motion_admit.py +5 (2098) and junction.py +12. Pure move, no shim, no behaviour change. What stays is D-407 stuck, D-468 lane return, "
+        "D-476 bridge and the shared D-507 6 motion_admit.py (lane_bridge and lane_return_decision use it); "
+        "every file below 600 (largest stuck_recovery.py 573); all LineFollowManager mixins under the single "
+        "manager lock and generation, no own lock, thread, store or publisher; CORE CommandManager stays the "
+        "final cmd_vel publisher. The +150 allowance is measured from 2098.",
+    ),
+    "core/services/core_features/line_follow/recovery/junction": (
+        959,
+        "split: judged at 947 on 2026-10-08 (critic agent, read-only, APPROVE WITH CHANGES applied) when it left recovery "
+        "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-08 section): gate.py 530 "
+        "(D-494 4 / D-495 instruction gate and bounded turn), approach.py 207 (D-507 2-4 window and pivot "
+        "approach), bend.py 208 (D-507 addendum map bend pass), __init__.py 2; merging main brought D-520's "
+        "gate.py +12 (542, arc refusals), so 959. Mixins of LineFollowManager "
+        "under its one lock and generation; motion admission stays recovery/motion_admit.py. Growth inside "
+        "+150 is open again (the 2987 verdict's block ends with this move); past 1109 re-judge, and no file "
+        "may pass 600 (gate.py is 542): split gate.py by state (e.g. the turn/approach maneuver out of the "
+        "gate) before that.",
     ),
     "core/services/core_features/line_follow/arc": (
         310,
@@ -1411,7 +1412,7 @@ def _over_budget() -> dict:
         for path in _files(name, CODE_SUFFIXES | {".sh"} | WEB_SUFFIXES):
             count = _lines(path)
             rel = _rel(path).as_posix()
-            unit = next((u for u in SIZE_UNITS if rel.startswith(u + "/")), None)
+            unit = max((u for u in SIZE_UNITS if rel.startswith(u + "/")), key=len, default=None)  # innermost
             if unit:
                 over[unit] += count
             else:

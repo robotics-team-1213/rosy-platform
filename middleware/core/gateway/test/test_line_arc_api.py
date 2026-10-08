@@ -5,7 +5,6 @@ from dataclasses import replace
 import pytest
 
 from core.line_follow_wiring import _line_follow_config
-from core_features.line_follow import LineFollowConfig
 from test_line_junction_api import BODY, OPERATOR, URL, VIEWER, _active, _pose
 
 SITE = dict(body_front_x_m=.08, body_rear_x_m=-.08, body_half_width_m=.06, body_lidar_x_m=0.,
@@ -82,9 +81,9 @@ def test_config_keys_defaults_and_start_refusal():
     for bad in (dict(arc_curvature_gain=0.79), dict(arc_curvature_gain=1.26),
                 dict(arc_blind_max_m=0), dict(arc_blind_max_m=1.01), dict(arc_enabled=1)):
         with pytest.raises(ValueError):
-            LineFollowConfig(**{**SITE, **bad})
+            _line_follow_config({**SITE, **bad})
     with pytest.raises(ValueError, match='ir_guard_speed_scale'):
-        LineFollowConfig(arc_enabled=True, ir_guard_speed_scale=0., **SITE)
+        _line_follow_config({**SITE, "arc_enabled": True, "ir_guard_speed_scale": 0.})
 
 
 def test_bend_while_an_arc_runs_is_409(core_client):

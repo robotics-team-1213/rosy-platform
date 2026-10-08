@@ -28,7 +28,7 @@ from fleet.localization.map_pose import MapPose
 from fleet.server.console_view import TripCaps
 from fleet.server.trip_ports import HttpLaneJunction, TripConfig
 from fleet.server import trip_runner
-from core_features.line_follow.recovery.junction import MANEUVER as CORE_MANEUVER
+from core_features.line_follow.recovery.junction.gate import MANEUVER as CORE_MANEUVER
 from fleet.server.trip_runner import TripError, TripRunner
 from fleet.site_map import SiteMap, from_lane_graph
 from fleet.swarm.robots import RobotEndpoint

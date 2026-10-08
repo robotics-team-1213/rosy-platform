@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 
-from core_features.line_follow.recovery.junction_approach import (
+from core_features.line_follow.recovery.junction.approach import (
     REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S)
 
 MAX_BEND_DEG, MAX_BEND_IN_M, MAX_BEND_TOL_M, MAX_BEND_RADIUS_M = 90., 2., .30, .5
