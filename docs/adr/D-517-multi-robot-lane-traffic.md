@@ -122,6 +122,21 @@
 - 시연 지도는 고리 차로를 일방으로 둔다(`east`, `west`).
 - D-494 1항·14항(trip 한 대, 해결기 제외)은 이 ADR의 1·5항으로 바뀐다. D-451의 "같은 방향 간격은 로봇이"는 trip 로봇에는 3항 블록이 대신한다. D-474 구역은 3항 구역의 한 종류다.
 
+### 4항 구현 노트 (M2 CORE 통행권, 2026-10-08, feat/d517-m2-authority)
+
+독립 Safety-Review 전의 구현 상태다. 계약 문구는 API Reference v1.142 `POST /api/v1/line-follow/authority` 행이 기준이다.
+
+- **필드.** `authority_id`·`leg_id` 1–128자, `pose_stamp` > 0, `until_m` 0–10 m, `ttl_s` 0 < s ≤ 2. 공유 schema는 `core_common.protocol.line_authority`다.
+- **`pose_stamp`의 시계.** 스냅숏 `odom_pose.stamp`와 같은 CORE 벽시계(UTC epoch 초)다. Fleet 지도 자세(`MapPose.odom_stamp`)는 그 자세에 들어간 가장 새 odom 표본의 `stamp`다. CORE 차선 매니저는 odom 표본마다 같은 벽시계 시각, odom 궤적(epoch, frame), 누적 경로 길이를 기록한다(최대 200개, 모드 변경과 odom 끊김에서 비움). `pose_stamp`와 같거나 이전인 가장 새 표본을 기준으로 삼아 실제보다 적게 달렸다고 보지 않는다. 기준 표본이 없으면 `AUTHORITY_POSE_STALE`, 가장 새 표본보다 0.05 s 넘게 앞서면 `AUTHORITY_POSE_FUTURE`, 0.3 s 안의 odom이 없으면 `AUTHORITY_ODOM_STALE`이다. 셋 다 409이고 쥔 통행권도 버린다.
+- **남은 거리.** `until_m` − 기준 표본 뒤 odom 경로 길이다. 경로 길이는 부호가 없어서 후진해도 남은 거리가 늘지 않는다. odom 궤적이 바뀌면(점프·재시작) 남은 거리를 모르므로 선다.
+- **정지점.** 남은 거리 ≤ d_stop(v)이면 선다. d_stop(v)는 `LineFollowConfig.derived_stop_gap_m(v)`(D-424 `stop_gap_m`: 여유 + 반응 × v + v²/2a)이고 v = `max_linear`다. line follow가 낼 수 있는 가장 빠른 속도(D-468 복귀 포함)이고 `cruise_speed` ≤ `max_linear`이다. 다시 가려면 남은 거리 > d_stop(v) + `obstacle_resume_hysteresis_m`이어야 한다. D-422 LiDAR 덮어쓰기(`obstacle_override`)는 쓰지 않는다.
+- **줄지 않음.** 같은 `leg_id`, 같은 odom 궤적, 만료 전 통행권보다 끝이 0.02 m 넘게 짧으면 무시하고 만료도 늦추지 않는다(응답 `accepted: false`, `reason: shrink`, 로그 한 줄). 0.02 m 안이면 쥔 끝을 두고 만료만 늦춘다(Fleet 지도 자세 잡음). 다른 `leg_id`, 만료 뒤, 궤적 변경 뒤에는 새 통행권이 대신한다. Fleet도 같은 trip 구간(`{trip_id}:{경로 개정}`)에 이미 보낸 끝보다 짧게 보내지 않는다(바퀴를 떼어 낸 만큼은 계획 미터로 보정).
+- **만료.** `ttl_s`는 CORE 차선 시계(`hold_s`와 같은 시계, 장치에서는 ROS 시계)로 잰다. 만료하면 `EXPIRED`로 선다.
+- **켜지는 조건.** 설정 `line_follow.authority_required: true`, 또는 이 차선 세션에서 통행권 요청을 한 번이라도 받은 뒤다. 모드 변경과 E-Stop이 세션을 끝낸다. 꺼져 있으면 매니저 출력은 바뀌지 않고 `GET /line-follow`에 `authority` 키도 없다.
+- **우선순위.** 통행권 판정은 그 틱의 최종 결정(교차로 게이트 뒤)을 0으로 만들 수만 있다. 몸체 정지, IR 가드, E-Stop은 결정을 먼저 0으로 만들므로 언제나 앞선다. 교차로 회전·D-468 복귀·D-476 bridge 동작도 통행권이 FREE가 아니면 0이 된다.
+- **Fleet.** 사이트 설정 `fleet.traffic.authority: true`(기본 false)이고 로봇 능력 `line_follow_authority`가 참일 때만 보낸다. trip 주기마다 표 계산 뒤 `until_m` = `authority_end_m` − 표가 쓴 앞 끝 `d`(0–10 m로 자름), `ttl_s` 2다. `d`는 blocks.py 정의대로 앞 끝이다: base 경로 위치 + 몸 `front_x_m`(`core_common.robot_body`, URDF 값). 표는 그 `d`와 그 자세의 odom 시각을 `live.traffic`의 `front_d_m`·`pose_stamp`로 내보내고 송신기는 다시 계산하지 않는다. CORE는 base odom 주행 거리를 빼므로 앞 끝이 통행권 끝 안에 남는다. 위치 `(at, at_stamp)`는 한 자세에서 한 번에 쓰고 trip이 끝나거나 다시 계획될 때 같이 지운다. 단계가 아직 진행 중인 로봇(교차로 상태를 기다리는 중 등)에는 그 주기에 보내지 않는다. `fleet.traffic.authority: true`이면 `line_follow_authority`가 참인 로봇은 능력 `line_follow_authority_required`(CORE 설정 `authority_required`)도 참이어야 `lane` trip을 연다. 아니면 422 `TRIP_AUTHORITY_NOT_REQUIRED`다. E-Stop·CORE 재시작 뒤 첫 통행권 전에 움직이는 틈을 막는다. 능력이 trip 중에 바뀌는 것은 trip 시작 때만 본다. 로봇마다 전송은 하나만 진행하고 주기 안에서 다시 보내지 않는다. 능력이 없는 로봇은 M1 교차로 보류만 쓰고 trip 보기에 `traffic_authority: hold_back`이 보인다. CORE가 `HOLDING`이라고 답한 trip 로봇은 정체로 끝나지 않는다.
+- **남은 일(Safety-Review).** 독립 리뷰 지적(앞 끝 기준점, 자세·시각 짝, 첫 통행권 전 강제, 정지 거리 속도, IR 설정 문구)은 반영했고 재검토를 기다린다. 시뮬레이션(`use_sim_time`)에서는 벽시계와 odom 기록 시각이 같은 콜백에서 찍혀 맞지만 장치 실측은 아직 없다.
+
 ### 개정 이력
 
 - rev 2 (2026-10-08, 독립 critic 검토 반영): 통행권을 자세 odom 시각 기준과 상대 `ttl_s`로 바꿈. 통행권은 줄지 않음. 고리 수용 한도 식을 구역과 다중 블록 점유를 반영해 고침. 불확실성 u를 실제 상한(0.195 m)과 경로 감시 거리로 다시 계산(블록 약 0.65 m, 시연 고리 3대). 반복 운행의 바퀴별 출발 검사, 복구, 합류 최대 대기, 양방 차로 방향 잠금, 전달 지연 측정을 더함. "moving block"을 고정 블록으로 고침.

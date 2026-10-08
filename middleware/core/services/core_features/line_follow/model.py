@@ -212,6 +212,7 @@ class LineFollowConfig:
     # and the D-468 retrace's rear path) and found no drop-off, hole or step. It is the floor
     # basis of motion_admitted's site basis (D-507 6 b/c); None = no declaration.
     site_floor_map_id: Optional[str] = None
+    authority_required: bool = False  # D-517 4: no motion without a live Fleet authority, even before one
     # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the producer's
     # uncertainty_m. 0 means every URDF footprint corner is inside only if uncertainty_m bounds
     # every lateral error; jitter and footprint tolerance not in it go in this body margin. The
@@ -266,8 +267,9 @@ class LineFollowConfig:
             raise ValueError("lane_auto_min_manual_angular must be nonnegative")
         if type(self.max_angular_follows_manual) is not bool:
             raise ValueError("max_angular_follows_manual must be a boolean")
-        if type(self.ir_guard_enabled) is not bool:
-            raise ValueError("ir_guard_enabled must be a boolean")
+        for name in ('ir_guard_enabled', 'authority_required'):
+            if type(getattr(self, name)) is not bool:
+                raise ValueError(f"{name} must be a boolean")
         guard = (self.ir_guard_edge_error, self.ir_guard_turn, self.ir_guard_speed_scale)
         if not all(_finite(value) for value in guard):
             raise ValueError("line-follow IR guard config must be finite")

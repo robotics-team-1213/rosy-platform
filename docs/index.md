@@ -301,7 +301,7 @@
 ## 최근 기록
 
 - 2026-10-08 · uncommitted · D-507 B13 Fleet trip 한 바퀴 수용 SIM
-- 2026-10-08 · uncommitted · fix(fleet): 굽이 지시가 정지·교통 대기를 따른다
-- 2026-10-08 · uncommitted · 정적 차선 경로 끝 정지 ROS-SIM
-- 2026-10-08 · uncommitted · 지도 밖 자세의 굽이 기억 ROS 거절
-- 2026-10-08 · uncommitted · 굽이 원본의 격리 ROS 관측 재발행
+- 2026-10-08 · uncommitted · 경로 시제품의 실행 중 조건 변경 폐기
+- 2026-10-08 · uncommitted · 정적 경로 시제품의 ROS 진입 제한
+- 2026-10-08 · uncommitted · 차선 경로 시작 위치 오차의 렌더러별 결과
+- 2026-10-08 · uncommitted · 정적 차선 경로 시작 위치 오차 ROS-SIM

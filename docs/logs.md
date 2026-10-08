@@ -7125,6 +7125,30 @@ osy-d395-s1d\`.
 - 증거: `test_trip_bend`·`test_trip_runner`·`test_trip_caps`·`test_lane_traffic`·`test_module_structure` 157 passed, known_failures 0 new. 새 시험 5개는 이전 코드에서 모두 실패한다. code-reviewer(opus) APPROVE.
 - gate 변화: 없음. 호스트 시험이며 CORE 굽이 의미·SIM·실물 수용은 미검증.
 
+## 2026-10-08 · uncommitted · 정적 차선 경로 시작 위치 오차 ROS-SIM
+
+- 변경: `route_a`의 선언 시작점과 Gazebo 실제 시작점을 80 mm, 50 mm 어긋나게 둔 폐루프 결과와 재현 스크립트를 `docs/validation/lane-route-start-offset-sim-2026-10-08/`에 기록했다.
+- 증거: 두 실행 모두 이동 0.0 m, `camera_line_not_visible` HOLD 후 LOST. 50 mm 실행의 `/cmd_vel` publisher는 CORE 하나였고, 원본 NPZ 해시를 기록했다.
+- gate 변화: 없음. 카메라가 선을 인식하지 못한 두 장면의 정지 증거이며 정적 `route_start` 위치 검증, Fleet 위치 권한, 실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 차선 경로 시작 위치 오차의 렌더러별 결과
+
+- 변경: 기존 10/6·10/7 원본을 현 소스에서 재생하고, 정적 `route_a` 시작 위치 ±20/40/80 mm 오프라인 스윕과 +40 mm Gazebo 출발을 `docs/validation/lane-route-start-disagreement-2026-10-08/`에 기록했다.
+- 증거: 오프라인 −40 mm는 1.0468 m 주행 중 지도 중심선 편차 최대 60.0 mm, 대응 ROS-SIM은 0.0 m에서 LOST. 두 렌더링은 동일 물리 장면이 아니다.
+- gate 변화: 없음. 정적 시작 위치의 운영 권한과 사람 승인 차선 정답, 실물 수용은 계속 HOLD.
+
+## 2026-10-08 · uncommitted · 정적 경로 시제품의 ROS 진입 제한
+
+- 변경: 물리 카메라 설정에서 `route_a/b/ab` 시제품 follower를 생성하지 않도록 observer의 Gazebo 조건을 고정하고 `docs/validation/lane-route-prototype-admission-2026-10-08/`에 ROS 노드 확인을 기록했다.
+- 증거: 관련 호스트 181 passed, 모델 PC의 PINKY형 설정 `NoneType`·Gazebo 설정 `RouteCameraFollower` readback. 실물 장치에는 적용하지 않았다.
+- gate 변화: 없음. 활성 Fleet 지도·독립 위치 승인과 실물 수용은 별도다.
+
+## 2026-10-08 · uncommitted · 경로 시제품의 실행 중 조건 변경 폐기
+
+- 변경: observer가 route 모드의 유효 카메라 프레임마다 Gazebo 조건을 다시 검사하고 깨지면 follower를 폐기하도록 했다. `docs/validation/lane-route-prototype-lifetime-2026-10-08/`에 ROS 파라미터 변경 readback을 기록했다.
+- 증거: 모델 PC의 Gazebo `RouteCameraFollower`가 `PINKY` 변경 프레임 뒤 `NoneType`; Gazebo 복구 뒤에도 `NoneType`. 호스트 회귀 11 passed, 신규 실패 0.
+- gate 변화: 없음. 이 설정 검사는 물리 장치 신원·Fleet 위치 권한·주행 수용을 대체하지 않는다.
+
 ## 2026-10-08 · uncommitted · D-507 B13 Fleet trip 한 바퀴 수용 SIM
 
 - 변경: 진짜 Fleet 서버(`create_app`, `TripRunner`, `HttpLaneJunction`)로 서쪽 길에서 NW까지 `POST /trip` 20회를 모델 PC Gazebo(도메인 88)에서 돌려 `docs/validation/lane-trip-lap-sim-2026-10-08/`에 기록했다. 지도 자세만 Gazebo 참값이다.

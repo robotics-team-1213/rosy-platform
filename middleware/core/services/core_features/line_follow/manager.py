@@ -9,6 +9,7 @@ import time
 from typing import Callable, Optional
 
 from core_common.protocol.schemas import LineFollowStatus
+from core_features.line_follow.authority import AuthorityMixin
 from core_features.line_follow.body_stop import BodyStopMixin
 from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.recovery.junction import JunctionMixin
@@ -26,7 +27,7 @@ from core_features.decision.contract import DecisionRequest
 from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recovery_rule
 
 
-class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, JunctionMixin):
+class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneReturnMixin, JunctionMixin):
     def __init__(self, events, *, config: Optional[LineFollowConfig] = None,
                  clock: Callable[[], float] = time.monotonic,
                  angular_ceiling: Optional[Callable[[], float]] = None) -> None:
@@ -66,6 +67,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
         self._init_recovery()  # D-407 (stuck_wiring.py)
         self._init_lane_return()  # D-468 source-time odometry and corridor evidence.
         self._init_junction()  # D-494 decision 4 (junction.py)
+        self._init_authority()  # D-517 4 (authority.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -115,6 +117,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
             self._recovery_reset(reason or default, self._clock())
             self._reset_lane_return()
             self._reset_junction()
+            self._init_authority()
             self._generation += 1
             self._mode = selected
             self._observation = None
@@ -399,10 +402,11 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, LaneReturnMixin, Junc
                         and self._observation.quality_reason in ('low_light', 'overexposed')):
                     self._recovery_reset('camera_' + self._observation.quality_reason, current)
                     self._end_bridge()  # D-476: invalid vision ends a bridge for good
-                    return self._junction_gate(current, decision)  # LOST also bypasses back-off.
+                    # LOST also bypasses back-off. D-517 4: the authority gate only ever zeroes.
+                    return self._authority_gate(current, self._junction_gate(current, decision))
                 local = self._apply_lane_return(current, decision)
-                return self._junction_gate(current, local if local is not None
-                                           else self._apply_recovery(current, decision))
+                return self._authority_gate(current, self._junction_gate(current, local if local is not None
+                                            else self._apply_recovery(current, decision)))
             finally:
                 if not self._path_evaluated:
                     # 풀림 지연은 연속으로 잰 틱만 센다 — LiDAR 끊김·계단 정지·OFF 틱이 끼면 처음부터.

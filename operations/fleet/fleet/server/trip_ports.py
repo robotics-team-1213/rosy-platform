@@ -78,12 +78,18 @@ class HttpLaneJunction:
         line = (await self._client(robot_id).state()).get("line_follow") or {}
         junction = line.get("junction")
         # D-507 3: the line-follow reason beside it, shown when the trip stops at an unexpected junction
-        return {**junction, "line_reason": line.get("reason")} if isinstance(junction, dict) else None
+        # D-520 2: ``arc`` is CORE's ``line_follow.arc`` record (arc_seq, from_place_id, state, ...)
+        return ({**junction, "line_reason": line.get("reason"), "arc": line.get("arc")}
+                if isinstance(junction, dict) else None)
 
     async def hold(self, robot_id: str) -> dict:
         # ponytail: CORE POST /line-follow/hold extends a hold-to-run session (D-344 8, it keeps the
         # robot going), so the immediate stop is mode OFF, the existing Fleet-allowed selection.
         return await self._client(robot_id).line_follow_mode("OFF")
+
+    async def send_authority(self, robot_id: str, body: dict) -> dict:
+        """D-517 4: ``POST /api/v1/line-follow/authority`` (``trip_authority``)."""
+        return await self._client(robot_id).line_follow_authority(body)
 
     async def line_follow_mode(self, robot_id: str) -> Optional[str]:
         mode = (await self._client(robot_id).line_follow()).get("mode")
@@ -123,6 +129,11 @@ class TripConfig:
     port_timeout_s: float = 1.5
     #: D-507 2: the narrowest ``expect_tol_m`` sent (site calibration knob, at most 0.30).
     expect_tol_min_m: float = 0.12
+    #: D-520 1: a lane within this of one circle is an ``exit_segment`` (260919 ring: 0.00007 m).
+    arc_fit_tol_m: float = 0.005
+    #: D-520 1: lane centre to the outer painted line's centre on a curve (260919 ring: line
+    #: radii 0.155/0.345 m, half of 0.19); the site map has no paint, so it is site config.
+    arc_outer_line_offset_m: float = 0.095
     #: Robots of trips open before a restart are stopped every this long, this many times at most.
     restart_retry_s: float = 10.0
     restart_attempts: int = 30
@@ -133,6 +144,8 @@ class TripConfig:
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
                     math.isfinite(value) and value > 0):
                 raise ValueError(f"fleet.trip.{item.name} must be a positive finite number")
+        if not 0.05 <= self.arc_outer_line_offset_m <= 0.20:  # D-520 1: CORE's range
+            raise ValueError("fleet.trip.arc_outer_line_offset_m must be in [0.05, 0.20]")
         if self.expect_tol_min_m > MAX_EXPECT_TOL_M:
             raise ValueError(f"fleet.trip.expect_tol_min_m must be at most {MAX_EXPECT_TOL_M}")
 
@@ -381,6 +394,11 @@ def _curve_offset_m(arc, s_to: float, remaining: float, pose: dict) -> float:
     return offset * sum(abs(wrap(b - a)) for a, b in zip(headings, headings[1:]))
 
 
+def arc_newer(seq, base: Optional[int]) -> bool:
+    """D-520 2: CORE opened arc ``seq`` after the one numbered ``base`` (None: none seen)."""
+    return isinstance(seq, int) and not isinstance(seq, bool) and (base is None or seq > base)
+
+
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
     if pose is None:
         return None
@@ -403,6 +421,8 @@ class LiveTrip:
         #: The last instruction CORE accepted: index, action, place, seq, at.
         self.sent: Optional[dict] = None
         self.first_seq: Optional[int] = None
+        #: D-520 2: CORE's last ``arc_seq`` at our first send; a newer arc is one of this trip's.
+        self.arc_base: Optional[int] = None
         #: Our held replan stop (seq) that the confirmed plan's action may replace while executing.
         self.replaceable: Optional[int] = None
         self.last_goal: Optional[tuple[float, float]] = None
@@ -431,6 +451,9 @@ class LiveTrip:
         self.at: Optional[tuple[int, float]] = None
         #: The block table's answer for this robot (``TrafficService``): waiting_for, authority, refused_at_m.
         self.traffic: Optional[dict] = None
+        #: D-517 4: the odom stamp of the pose ``at`` came from (set with it); CORE's last ``authority``.
+        self.at_stamp: Optional[float] = None
+        self.authority: Optional[dict] = None
         #: D-507 addendum: bend place ids CORE finished (or the robot passed without one).
         self.bends_done: set[str] = set()
 
