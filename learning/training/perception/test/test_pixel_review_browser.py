@@ -34,6 +34,22 @@ def test_unknown_highlight_is_visual_only(browser_workspace):
     assert review_masks.get(store, 0)['version'] == 0
 
 
+def test_sparse_unknown_pixels_are_visible_and_never_shown_as_zero_percent(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    filled = review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, ValueError)
+    review_masks.update(store, 0, {'version': filled['version'], 'action': 'paint',
+                                   'label': 255, 'radius': 0, 'points': [[10, 10]]}, ValueError)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#pixel-coverage')).to_contain_text('(<1%)')
+    sample = lambda: page.evaluate("""() => Array.from(document.querySelector('#pixel-canvas')
+        .getContext('2d').getImageData(10, 10, 1, 1).data)""")
+    highlighted = sample()
+    page.locator('#pixel-show-unknown').uncheck()
+    assert sample() != highlighted
+    expect(page.locator('#pixel-approve')).to_be_disabled()
+
+
 def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
     page, store, expect = browser_workspace
     review_masks.bind_classes(store, CLASSES)

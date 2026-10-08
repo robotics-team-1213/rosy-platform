@@ -80,9 +80,11 @@ function overlay(){ // Recoloured mask layer (D-469): rebuild when frame, versio
   const off=document.createElement('canvas');off.width=original.naturalWidth;off.height=original.naturalHeight;
   const other=off.getContext('2d');other.drawImage(maskImage,0,0);
   const data=other.getImageData(0,0,off.width,off.height),colors=palette();const opacity=Number($('pixel-opacity').value)/100;let unknown=0;
-  for(let i=0;i<data.data.length;i+=4){const value=data.data[i],color=colors[value];if(value===255)unknown++;if(!color||(value===255&&!$('pixel-show-unknown').checked)){data.data[i+3]=0;continue;}data.data[i]=color[0];data.data[i+1]=color[1];data.data[i+2]=color[2];data.data[i+3]=Math.round(opacity*(value===255?180:255));}
+  for(let i=0;i<data.data.length;i+=4)if(data.data[i]===255)unknown++;
+  const rare=unknown>0&&unknown*100<off.width*off.height;
+  for(let i=0;i<data.data.length;i+=4){const value=data.data[i],color=colors[value];if(!color||(value===255&&!$('pixel-show-unknown').checked)){data.data[i+3]=0;continue;}data.data[i]=color[0];data.data[i+1]=color[1];data.data[i+2]=color[2];data.data[i+3]=value===255&&rare?255:Math.round(opacity*(value===255?180:255));}
   unknownPixels=unknown;totalPixels=off.width*off.height;
-  $('pixel-coverage').textContent=`${workspace.workspace_kind==='evaluation'?'255 가림 후보':'미검수'} ${unknown.toLocaleString()}픽셀 / ${(off.width*off.height).toLocaleString()}픽셀 (${Math.round(unknown/(off.width*off.height)*100)}%)`;
+  $('pixel-coverage').textContent=`${workspace.workspace_kind==='evaluation'?'255 가림 후보':'미검수'} ${unknown.toLocaleString()}픽셀 / ${(off.width*off.height).toLocaleString()}픽셀 (${rare?'<1':Math.round(unknown/(off.width*off.height)*100)}%)`;
   other.putImageData(data,0,0);overlayCanvas=off;overlayKey=key;return off;
 }
 function sampleOverlay(){if(!sampleImage)return null;const off=document.createElement('canvas');off.width=original.naturalWidth;off.height=original.naturalHeight;const ctx=off.getContext('2d');ctx.drawImage(sampleImage,0,0);const data=ctx.getImageData(0,0,off.width,off.height),colors=palette(),opacity=Number($('pixel-opacity').value)/100;for(let i=0;i<data.data.length;i+=4){const value=data.data[i],color=colors[value];if(value===255||!color){data.data[i+3]=0;continue;}data.data[i]=color[0];data.data[i+1]=color[1];data.data[i+2]=color[2];data.data[i+3]=Math.round(opacity*255);}ctx.putImageData(data,0,0);return off;}
