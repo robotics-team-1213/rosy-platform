@@ -225,7 +225,8 @@ def main(argv=None) -> int:
         dataset_repo=dataset.parent.name, dataset_revision=dataset.name,
         camera_profile_revision=camera_profile,
         trainer=f"drivable_head (frozen {lane_doc['model_revision']}, ignore_top {args.ignore_top})",
-        val_iou={"drivable": result["val_drivable_iou"]}, **pre)
+        val_iou={"drivable": result["val_drivable_iou"]},
+        revision_prefix="v13-drivable", **pre)
     (out / "drivable_head_run.json").write_text(json.dumps({
         "lane_model_revision": lane_doc["model_revision"], "lane_sha256": _sha256(args.lane),
         "ignore_top": args.ignore_top, "seed": args.seed, "epochs": args.epochs, "lr": args.lr,

@@ -303,6 +303,6 @@
 
 - 2026-10-09 · uncommitted · 10/6·10/7 원본 검수 후보 시각 대조
 - 2026-10-09 · uncommitted · 10/6·10/7 주행영역 연속 검수 후보
-- 2026-10-09 · uncommitted · Pinky 실물 차선 디버그 지면값 읽기 전용 대조
-- 2026-10-09 · uncommitted · Pilot 태블릿 재연결과 현재 후보 출처 확인
-- 2026-10-09 · uncommitted · 10/6·10/7 주행영역 후보의 몸체 경로 재대조
+- 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 표시 LOCAL 검증
+- 2026-10-09 · uncommitted · docs(validation): lap SIM 4 — ring 호 주행 기본 켬, 모델 PC
+- 2026-10-09 · uncommitted · docs(adr): D-520 개정 — ring 호 주행 기본 켬, 장치 조건

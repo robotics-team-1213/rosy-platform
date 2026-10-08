@@ -63,6 +63,8 @@ surfaces:
     themes: [dark, light]
     surface: robot
     medium: web
+    breakpoints:
+      - {value: 23rem, reason: 320px 전화에서 운용 지도의 네 줄 상태 HUD가 로봇·경로를 가리므로 그 폭에서만 HUD를 캔버스 아래로 옮긴다. 390px는 지도 위 HUD를 유지한다.}
     ports:
       - {port: 8080, source: contracts/foundation/config/rosy_default.yaml}
     audience: 운용자·장비 운용 (D-153 §7 — /dashboard·/console·/setup·/device)
@@ -76,6 +78,8 @@ surfaces:
       - {id: manual-drive, transitional: "D-370 4항 1 — console.teleop, Pilot DEVICE 수용 뒤 링크 패널로"}
     grammar: spatial
     contracts: [shared_controls, typography_focus, dialog]
+    breakpoints:
+      - {value: 23rem, reason: 320px 화면에서 지도 조작이 지도 위에 겹치지 않도록 조작 영역을 아래로 배치한다.}
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/console-operate-fresh-1366x768.png
 
   - id: console
