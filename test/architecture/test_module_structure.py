@@ -147,8 +147,13 @@ SIZE_VERDICTS = {
         "growth allowance remain unchanged",
     ),
     "dashboard": (
-        10_473,
-        "split: D-447(b) adds a focused shared state-stream store to the already separated task "
+        10_668,
+        "split: re-judged at 10668 on 2026-10-08 (independent re-judge, critic agent): +195 since 10473 is "
+        "navigation-map UI in the existing map owner (map.js 534, panels/console/map.js 207: "
+        "trusted-localization and safe-stop goal gating, path/route evidence, map identity, mobile stage); "
+        "every asset under 800, no transport or command path. Next growth: move pathEvidence/setPath/"
+        "canMapClick/mapIdMismatch out of createFieldMap in map.js into a sibling goal-gate module. "
+        "Previously D-447(b) adds a focused shared state-stream store to the already separated task "
         "panels; package total crosses 10k on integration, while individual asset ceilings and "
         "the +150 package allowance stay unchanged. The stream, REST fallback and scope teardown "
         "remain one owner (five Node regressions pass). Group robot role resources by their "
@@ -159,8 +164,14 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        45_571,
-        "split: 45571 = 46434 - 863 after the pure move of routing/blocks.py, server/lane_traffic.py and "
+        45_723,
+        "split: re-judged at 45723 on 2026-10-08 (independent re-judge, critic agent): 45571 was 46434 - 863 "
+        "by arithmetic; measured 45699 after the traffic move because main's D-520 1-2 arc handshake and the "
+        "CORE-approaching busy fix (91b15708b) landed beside D-517 M3, each in its existing owner; then +24 "
+        "console web (site-path summary, settings close). No new owner or robot command path. The site-map "
+        "web/server split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; +150 "
+        "allowance unchanged, measured from 45723. "
+        "Previously 45571 = 46434 - 863 after the pure move of routing/blocks.py, server/lane_traffic.py and "
         "server/trip_authority.py into the fleet/fleet/traffic size unit (lane traffic seam, "
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md); no new judgement, the +150 allowance is "
         "still measured from the 46434 base. "
