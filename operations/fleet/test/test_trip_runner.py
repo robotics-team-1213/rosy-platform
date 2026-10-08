@@ -1248,8 +1248,13 @@ def test_a_carried_out_place_short_of_the_next_lane_keeps_the_pose_on_this_lane(
     assert runner._live["rosy_60"].sent["carried"]
     ports.core.j = None  # CORE closed it (the keeper lost the junction while backing off)
     ports.at(ring_s, ring_s.length_m - 0.26)
+    sent = len(ports.sent)
     _ticks(runner, ports)
     assert runner.view("p1")["state"] == "running" and runner.view("p1")["segment_index"] == 0
+    assert len(ports.sent) == sent                         # the carried-out straight is not sent again
+    ports.at(_arc(store, "ring_e:fwd"), 0.03)               # on the next lane: it moves on
+    _ticks(runner, ports)
+    assert runner.view("p1")["segment_index"] == 1
 
 
 def test_already_done_from_core_counts_as_carried_out():
