@@ -190,8 +190,10 @@ def test_a_lap_on_another_route_holds_until_the_operator_confirms_it():
     _ticks(runner, fleet)
     hold = runner.view("a")["hold"]
     assert hold["reason"] == "lap" and hold["plan"] is not None and fleet.p["a"].sent[-1][0] == "stop"
+    assert runner._live["a"].at is not None
     view = run(runner.confirm_replan("a", "bob"))
     assert view["hold"] is None and view["lap"] == 2 and view["segment_index"] == 0
+    assert runner._live["a"].at is None  # review LOW 7: no old-plan position in the table's new route
 
 
 def test_the_loop_capacity_refuses_one_more_repeat_trip():

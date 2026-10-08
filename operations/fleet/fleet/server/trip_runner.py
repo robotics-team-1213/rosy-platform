@@ -289,7 +289,7 @@ class TripRunner:
             live.view["detail"]["replan_confirmed_by"] = principal_id
             sent = live.sent
             live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
-            live.sent, live.last_goal, live.replan_pending = None, None, False
+            live.sent, live.last_goal, live.replan_pending, live.at = None, None, False, None
             self._describe(live)
             self._save(live)
             return live.view
