@@ -701,7 +701,7 @@ SIZE_VERDICTS = {
     ),
     "core/services/core_features/line_follow/recovery": (
         2_098,
-        "split: re-judged at 2093 on 2026-10-08 (critic agent, read-only) in refactor/junction-subpackage, "
+        "split: re-judged at 2093, 2098 after merging main (D-520 motion_admit.py +5), on 2026-10-08 (critic agent, read-only) in refactor/junction-subpackage, "
         "the binding follow-up of the 2987 verdict (docs/plans/2026-10-07-line-follow-recovery-subpackage.md, "
         "2026-10-08 section): junction.py, junction_approach.py and junction_bend.py moved with git mv into "
         "recovery/junction/ (gate.py, approach.py, bend.py), its own SIZE_UNITS entry; 3040 before the move = "
@@ -709,7 +709,7 @@ SIZE_VERDICTS = {
         "D-476 bridge and the shared D-507 6 motion_admit.py (lane_bridge and lane_return_decision use it); "
         "every file below 600 (largest stuck_recovery.py 573); all LineFollowManager mixins under the single "
         "manager lock and generation, no own lock, thread, store or publisher; CORE CommandManager stays the "
-        "final cmd_vel publisher. The +150 allowance is measured from 2093.",
+        "final cmd_vel publisher. The +150 allowance is measured from 2098.",
     ),
     "core/services/core_features/line_follow/recovery/junction": (
         959,
