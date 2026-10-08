@@ -130,9 +130,9 @@ def test_lane_corner_turning_is_on_by_robot_default_and_needs_odometry():
     assert "LaneCornerTracker" in source
     assert "self._corner_tracker.update(" in source
     assert "self._odom_pose, frame, ground" not in source
-    # Turning is still evidence: no motion output from this node.
-    assert "Twist" not in source
-    assert "'cmd_vel'" not in source
+    # Turning is still evidence: no motion output from this node (keep reads CORE's cmd_vel, D-507 r4b).
+    assert "create_publisher(Twist" not in source
+    assert source.count("'cmd_vel'") == source.count("create_subscription(Twist, 'cmd_vel'") == 1
 
 
 def test_edge_left_mode_runs_the_edge_follower_on_odometry_and_ground():
@@ -185,7 +185,7 @@ def test_debug_overlay_is_off_by_default_and_publishes_only_an_image():
     assert params["debug_overlay"] is False
     assert "CompressedImage, 'line/debug/compressed'" in source
     assert "render_debug(" in source
-    assert "Twist" not in source and "'cmd_vel'" not in source
+    assert "create_publisher(Twist" not in source
 
 
 def test_debug_overlay_failures_never_stop_line_observation():
