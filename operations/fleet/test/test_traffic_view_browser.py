@@ -93,6 +93,9 @@ API = {
     "/api/fleet/calibrations": {"calibrations": []},
     "/api/fleet/traffic": TRAFFIC,
     "/api/fleet/trips": {"running": OPEN[1], "trips": OPEN, "open": OPEN},
+    "/api/fleet/formation": {"active": False, "state": "IDLE", "leader": None, "formation": None, "spacing": None,
+                             "assignment": {}, "reason": None, "pending_triggers": [], "stream_evidence": {},
+                             "relay": None},
 }
 
 
@@ -220,7 +223,7 @@ def test_site_map_repeat_start_pairs_robot_and_start_place(site):
             page.clock.run_for(1500)
             expect(page.locator("#trip-repeat")).to_be_enabled()
             page.locator("#trip-repeat").click()
-            expect(page.locator("#notice")).to_contain_text("반복 운행")
+            expect(page.locator("#notice")).to_contain_text("운행 거절")
             expect(page.locator("#notice")).to_contain_text("고리 4/3대")
             assert [path for path, _ in posts] == ["/api/fleet/robots/rosy_02/trip", "/api/fleet/trips/p-9/start"]
             assert json.loads(posts[0][1]) == {"to": "start_s", "via": ["start_n"], "repeat": True}

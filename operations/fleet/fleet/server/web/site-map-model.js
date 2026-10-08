@@ -375,7 +375,8 @@ export function routePoint(segments, edges, r) {
 
 /**
  * What the 교통 layer draws, in map metres, or null when the table is for another map version.
- * bands: non-FREE blocks {points, state, robot}; zones: {lines, label, anchor}; ticks: authority ends.
+ * bands: non-FREE blocks {points, state, robot}; zones: {lines, label, anchor}; ticks: authority ends;
+ * centre: the middle of the lanes, so a zone label can sit on the outer side.
  */
 export function trafficDrawing(traffic, active, trips = []) {
   if (!traffic || !active?.map || traffic.map_version !== active.version) return null;
@@ -392,8 +393,8 @@ export function trafficDrawing(traffic, active, trips = []) {
     }
     if (zone && parts.length) {
       const lines = parts.map(([edge, s0, s1]) => partPoints(edges.get(edge), s0, s1, 0)).filter(Boolean);
-      const first = lines[0];
-      zones.push({ unit: unit.id, lines, anchor: first[Math.floor(first.length / 2)],
+      const knots = lengths(lines[0]);
+      zones.push({ unit: unit.id, lines, anchor: pointAt(lines[0], knots, knots.at(-1) / 2),
         label: `점유 ${(unit.holders || []).length}/${unit.capacity} · 대기 ${(unit.waiting || []).length}` });
     }
   }
@@ -403,7 +404,10 @@ export function trafficDrawing(traffic, active, trips = []) {
     const at = routePoint(plans.get(robot.robot_id), edges, robot.authority_end_m);
     if (at) ticks.push({ ...at, robot: robot.robot_id });
   }
-  return { bands, zones, ticks };
+  const xs = [...edges.values()].flatMap((edge) => edge.polyline.map((p) => p[0]));
+  const ys = [...edges.values()].flatMap((edge) => edge.polyline.map((p) => p[1]));
+  const centre = xs.length ? [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2] : [0, 0];
+  return { bands, zones, ticks, centre };
 }
 
 function waitingUnit(traffic, robotId) {
