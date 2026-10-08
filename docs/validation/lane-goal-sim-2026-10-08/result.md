@@ -22,3 +22,5 @@
 거리 수치는 저장소 루트에서 `python docs/validation/lane-goal-sim-2026-10-08/analyze_edge.py X:/DevTemp/bend-window-sim/edge-south1-frames.npz middleware/perception/map/map_v2_fleet/lane_graph.yaml --start-index 75`로 재계산한다. 75는 마지막 남쪽 직선 텔레포트 뒤의 첫 프레임이다. 이 계산은 지도 중심선과의 거리이며 실제 페인트·장애물 검수는 아니다.
 
 **결정:** 기억기가 한 굽이를 통과한 점은 다음 후보를 정하는 증거지만, 현재 `edge_left`를 trip 주행으로 대체하지 않는다. Fleet 지도에는 `bend` 장소 종류가 없고 굽이는 edge polyline에 있다. 지도 버전·현재 edge·굽이까지의 거리 창·신선한 odom을 결합한 단서를 만들고, 같은 경계의 검수와 벽/분기 음성 재생을 통과한 뒤에만 keeper의 `bend_expected` 및 짧은 기억 경로를 연결한다. D-476 bridge는 현재 좌회전 지시에서 거부되고 `reselection_required`를 처리하지 않으므로 설정만 켜서 이 공백을 해결했다고 보지 않는다.
+
+`bw1`의 첫 굽이 HOLD 자세(x≈−0.951, y≈−0.491)를 현재 지도 `west:rev`에 투영하면 edge 중심선에서 0.018 m, 진행 거리 `s=2.229 m`다. 현재 접선에 비해 0.25 m 앞은 +30.0°, 0.30 m 앞은 +60.1°다. `python docs/validation/lane-goal-sim-2026-10-08/analyze_map_bend.py middleware/perception/map/map_v2_fleet/lane_graph.yaml west:rev -0.951 -0.491`로 재계산했다. 이는 **SIM 참 자세를 지도에 투영한 후보**이지 현장 Fleet localization의 정확도 증명이 아니다. 다음 구현에서는 활성 trip의 실제 edge와 지도 버전이 이 값과 일치할 때만 굽이 단서를 만들고, 오래된 위치나 edge 바뀜에서는 즉시 폐기해야 한다.
