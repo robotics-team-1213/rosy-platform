@@ -2682,3 +2682,10 @@
 - 변경: 개발 인증 뒤 자동 열린 설정 메뉴를 닫고, 관제 경로 진단을 이상 요약 1행으로 접는 두 화면 변경을 한 후보 브랜치에 결합했다. 수동 설정 재개방과 경로 세부 펼침은 유지한다.
 - 증거: Chromium 개발 진입 4건+교통 화면 1건 5 passed, Node 경로 요약 5 passed, known_failures 0 NEW. 390·320·1440·1920 캡처와 한계는 `docs/validation/uiux-fleet-first-viewport-2026-10-08/result.md`.
 - gate 변화: 없음. LOCAL 결합 후보만 확인했고 DEVICE/FIELD와 전체 G2/G3는 HOLD.
+
+## 2026-10-08 · a90d9b705 · refactor(fleet): 차로 교통을 `fleet/traffic/` 하위 패키지로 옮김 (D-517 이음매)
+- 변경: `routing/blocks.py`, `server/lane_traffic.py`, `server/trip_authority.py`를 `fleet/traffic/`로 `git mv`(이름 유지). import만 고침, 호환 shim 없음, 동작 변화 없음. `traffic_reservations.py`는 server/에 둠(M4 재판정 때 결정)
+- 증거: 모델 PC a90d9b705 `operations/fleet/test/`·`test/architecture/` 2900 passed/151 skipped/4 failed. `test_learning_receiver` PIL·`test_site_map_api` node는 main에서도 실패, `test_colcon_roots`·`test_omx_policy_config`는 git 없는 스냅샷 탓(로컬 통과). 로컬 git 가드(document_placement, colcon_roots, platform_parts, harness_contracts, robot_literals) 131 passed
+- gate 변화: 없음(SOURCE)
+- 결정: `fleet/fleet/traffic` SIZE_UNITS 등록, 측정 867(blocks 425, lane_traffic 369, trip_authority 69, __init__ 4). fleet 패키지 판정 기준 46434→45571(옮긴 863줄만큼, 새 판정 아님). D-517 M4 뒤 재판정
+- 교훈: 없음
