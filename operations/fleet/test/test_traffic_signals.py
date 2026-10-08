@@ -57,6 +57,8 @@ def test_cycle_lights_one_approach_and_estop_turns_it_all_red():
     runner, _store, fleet, entries = _setup()
     runner.traffic.signal_command("sig", "cycle")
     fleet.advance(0.5)
+    assert _signals(runner)["sig"]["aspect"] == "all_red"  # the first period learns whether the zone is busy
+    fleet.advance(0.5)
     row = _signals(runner)["sig"]
     assert row["aspect"] == "green" and [a["lamp"] for a in row["approaches"]].count("green") == 1
     runner.traffic.signals_all_red()
@@ -87,9 +89,10 @@ def test_the_block_table_gets_the_green_approach(monkeypatch):
     seen = []
     real = blocks.step
     monkeypatch.setattr(blocks, "step", lambda *a, **k: seen.append(k["green"]) or real(*a, **k))
-    fleet.advance(0.5)
-    _signals(runner)
-    assert seen[-1] == {"roundabout": frozenset({entries[0]})}
+    for _ in range(2):  # the first period learns whether the zone is busy
+        fleet.advance(0.5)
+        _signals(runner)
+    assert seen == [{"roundabout": frozenset()}, {"roundabout": frozenset({entries[0]})}]
 
 
 def test_a_trip_across_a_signal_needs_core_authority():
