@@ -7239,3 +7239,8 @@ osy-d395-s1d\`.
 - 변경: 두 Pinky의 설치본과 ROS 토픽을 읽기 전용으로 확인하고, rosy_26 keep 디버그와 이미지 시각·투영값·페인트 실제 사용을 검증 기록에 남겼다.
 - 증거: rosy_26 디버그 84건 중 이미지 시각 83건 일치, 전략 none/flipping 84건, 목표점 0, denoise_fallback 84건. 장치의 shadow 모델 포인터가 없고 rosy_60은 keep 모드가 아니다.
 - gate 변화: 없음. 사람 경계 정답, 승인 보정, 학습 모델 실제 추론, 자율 주행 수용은 확인되지 않았다. 주행 허용 HOLD.
+
+## 2026-10-09 · uncommitted · feat(core): D-520 호가 odom의 지도 원을 반지름 보정으로 따른다
+- 변경: `line_follow/arc/lane_arc.py`. 호를 열 때 odom에 원 하나를 놓는다. 회전 뒤면 회전 목표 yaw를 접선으로 하고, 이어지는 `straight`면 앞 호의 원을 그대로 쓴다. 매 틱 ω = g·v·κ + v·clamp(sign κ·36·e_r − 12·e_θ, ±1.5)이다. IR 보정의 away·level 동안은 0이다. |e_r| > 0.075 m면 `lane_arc_edge`로 선다. 첫 IR `left`·`right` 판정은 원을 옮긴다(몸이 칠한 선 중심에서 0.0325 m 안쪽). `motion_admitted`, D-422 sweep, 길이·시간 한도, 멈춤 HOLD는 그대로다. 시험 6개를 새로 넣었다(곡률 0.88/1.1배로 도는 로봇이 원에서 12 mm 안, 8° 틀린 회전 끝에서 원으로 돌아옴, 보정 상한, 반지름 한도 멈춤, 이어지는 호의 원 유지, IR 판정이 원을 옮김). 피드포워드만 보던 시험 셋은 그 뜻대로 보정 없는 틱을 보거나 이득 0으로 고쳤다.
+- 증거: 모델 PC pytest `test_lane_arc.py`·`test_line_arc_api.py`·`test_line_junction.py` 151 passed. SIM은 lap SIM 4.
+- gate 변화: 없음. DEVICE/FIELD HOLD(D-520 개정 2026-10-09 4항).
