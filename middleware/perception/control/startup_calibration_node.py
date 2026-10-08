@@ -73,6 +73,7 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.declare_parameter('camera_extrinsic_profile_path', '')
         self.declare_parameter('calibration_store_root', '')  # '' = core_common default store root
         self.camera_capture = self.camera_extrinsic = None
+        self.camera_controls = ''
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                              reliability=ReliabilityPolicy.RELIABLE)
         self.status_pub = self.create_publisher(String, 'calibration/status', latched)
@@ -99,6 +100,9 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
         self.create_subscription(Range, 'us_sensor/range', self.on_us, qos_profile_sensor_data)
         self.create_subscription(Imu, 'imu_raw', self.on_imu, qos_profile_sensor_data)
         self.create_subscription(Image, 'camera/front', self.on_camera, qos_profile_sensor_data)
+        # Latched, same as the camera node's publisher, so a lock taken before
+        # this node started is still the one the pose fit records.
+        self.create_subscription(String, 'camera/controls', self.on_camera_controls, latched)
         self.hazards = {}
         self.safety_limits = (0., {})
         self.create_subscription(String, 'safety/motion_limits', self.on_motion_limits, 1)  # latest only (D-185 R2)
@@ -346,6 +350,9 @@ class StartupCalibrationNode(Node, CalibrationSequence, CalibrationRotation, Cal
                  valid and self.stamped(msg) and 5 <= mean <= 250 and contrast >= 2)
         if valid and getattr(self, 'camera_capture', None) is not None and self.stamped(msg):
             self.camera_capture_frame(pixels, msg.width, msg.height, msg.step)
+
+    def on_camera_controls(self, msg):
+        self.note_camera_controls(msg.data)
 
     def read_tf(self):
         try:

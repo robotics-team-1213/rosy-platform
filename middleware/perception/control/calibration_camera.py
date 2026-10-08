@@ -9,6 +9,11 @@ camera_extrinsic.py), and writes a CameraProfile candidate beside the
 calibration result. It changes no runtime parameter; applying the candidate
 is an operator decision (D-47 addendum, D-364, D-379).
 
+The fit runs once, while the robot is still and ``/camera/controls`` is a
+finished exposure lock. Sharpness is the drive camera's fixed 0, recorded on
+the candidate with that lock. A later exposure re-lock does not refit pitch
+or height and does not change sharpness.
+
 ROS-free mixin (D-171): the node feeds ``camera_capture_scan``/``_frame`` and
 supplies ``zero``/``stop_wander``/``publish``/``write_json``/``get_parameter``.
 Keep ``import time`` and ``time.monotonic()`` as written — the sim rig swaps
@@ -23,6 +28,7 @@ from pathlib import Path
 import numpy as np
 
 from .sensing.perception import camera_extrinsic as extrinsic
+from .sensing.perception.camera_controls import controls_are_locked, image_controls_record
 
 CAMERA_METHOD = 'startup_calibration/camera_extrinsic/1'
 
@@ -56,13 +62,17 @@ class CalibrationCamera:
             reason = 'No fresh odometry; cannot prove the robot is stationary'
         elif abs(odom[3]) > MAX_SPEED_MPS:
             reason = 'Robot is moving; stop it before the camera step'
+        elif not controls_are_locked(getattr(self, 'camera_controls', '')):
+            reason = ('Camera exposure is not locked; wait until /camera/controls is frozen '
+                      'before the pose fit')
         if reason:
             self.camera_extrinsic = {'state': 'refused', 'message': reason}
             self.publish()
             return False
         self.zero()
         self.stop_wander()
-        self.camera_capture = {'started': now, 'odom': tuple(odom[:3]), 'scans': [], 'frames': []}
+        self.camera_capture = {'started': now, 'odom': tuple(odom[:3]), 'scans': [], 'frames': [],
+                               'controls': str(self.camera_controls)}
         self.camera_extrinsic = {'state': 'capturing',
                                  'message': 'Hold still: capturing LiDAR walls and camera frames'}
         self.publish()
@@ -86,6 +96,10 @@ class CalibrationCamera:
         if capture['frames'] and capture['frames'][0].shape != gray.shape:
             return
         capture['frames'].append(gray)
+
+    def note_camera_controls(self, summary):
+        """Latest /camera/controls line. The pose fit keeps the value from its start."""
+        self.camera_controls = str(summary or '')
 
     def fresh_odom(self):
         """(x, y, yaw, speed) of a valid odometry sample at most .25 s old, else None."""
@@ -139,7 +153,8 @@ class CalibrationCamera:
                 'yaw_offset_rad': float(self.get_parameter('lidar_yaw_offset').value),
                 'lidar_x_m': float(mount[0]) if mount else extrinsic.LIDAR_X_OFFSET_M,
                 'tf_nose_rad': getattr(self, 'lidar_nose', None),
-                'profile_path': str(self.get_parameter('camera_extrinsic_profile_path').value)}
+                'profile_path': str(self.get_parameter('camera_extrinsic_profile_path').value),
+                'capture_controls': capture['controls']}
 
     def store_camera_candidate(self, candidate):
         """Also keep the run as a candidate version in the calibration store (D-47 addendum).
@@ -154,7 +169,8 @@ class CalibrationCamera:
                              sessions=[candidate['revision']],
                              intervals={'uncertainty': candidate['uncertainty'], 'fit_step': candidate['fit_step']},
                              extra={k: candidate[k] for k in ('score', 'score_at_base', 'wall_points', 'height_source',
-                                                             'recommended', 'why', 'source', 'lidar_yaw_check')
+                                                             'recommended', 'why', 'source', 'lidar_yaw_check',
+                                                             'image_controls')
                                     if k in candidate})
         except (ImportError, OSError, ValueError) as exc:
             return f'not stored: {exc}'
@@ -187,7 +203,8 @@ def load_profile(path):
     return profile
 
 
-def run_camera_extrinsic(*, scans, frames, yaw_offset_rad, lidar_x_m, tf_nose_rad, profile_path):
+def run_camera_extrinsic(*, scans, frames, yaw_offset_rad, lidar_x_m, tf_nose_rad, profile_path,
+                         capture_controls=None):
     """The whole fit, off the ROS thread. Returns {'candidate': ...} or {'error': ...}."""
     try:
         profile = load_profile(profile_path)
@@ -214,4 +231,6 @@ def run_camera_extrinsic(*, scans, frames, yaw_offset_rad, lidar_x_m, tf_nose_ra
                 f'{math.degrees(yaw_offset_rad):.2f}deg; scans={len(scans)} frames={len(frames)}; '
                 f'base={profile_path}'), yaw=yaw)
     candidate['recorded_unix_s'] = time.time()
+    if capture_controls is not None:
+        candidate['image_controls'] = image_controls_record(capture_controls)
     return {'candidate': candidate}

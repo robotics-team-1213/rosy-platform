@@ -119,6 +119,18 @@ def test_an_unusable_clock_waits_instead_of_locking(now, deadline):
     assert lock_action(True, now=now, deadline=deadline, attempts=0) == 'wait'
 
 
+def test_a_pose_fit_records_sharpness_off_with_the_lock_it_started_under():
+    from control.sensing.perception.camera_controls import controls_are_locked, image_controls_record
+    assert not controls_are_locked('')
+    assert not controls_are_locked('settling')
+    assert not controls_are_locked('auto (lock disabled by parameter)')
+    assert controls_are_locked('exposure=19999us gain=2.500 colour_gains=1.800,1.600')
+    assert controls_are_locked('v4l2 exposure=1.000 gain=0.000 white_balance=0.000')
+    assert image_controls_record('exposure=19999us gain=2.500 colour_gains=1.800,1.600') == {
+        'Sharpness': 0.0, 'NoiseReductionMode': 1,
+        'capture_controls': 'exposure=19999us gain=2.500 colour_gains=1.800,1.600'}
+
+
 def test_summary_records_what_the_camera_was_frozen_at():
     assert lock_summary(None) == 'auto'
     assert lock_summary(lock_controls(settled())) == (
