@@ -162,5 +162,5 @@ python docs/validation/lane-trip-lap-sim-2026-10-08/evidence/lap_analyze.py <run
 ```
 
 원시 기록(run마다 `log/cmd/keep/actions/events/trip.jsonl`, `summary.json`, rec run은 `rec/frames.npz`·`rec/keep.jsonl`, 묶음마다
-`sends.jsonl`·`fleet.sqlite3`·`batch.log`)은 저장소 밖 `X:\DevTemp\lap-sim\lap_sim_runs_full.tgz`(118,554,091 bytes, SHA-256
-`2ace91a4354a883375ff14d4e1922126022a4d9f4f3396e8a2e04ede815e5df2`)와 모델 PC `~/rosy_lapsim_ws/runs_a`, `runs`에 있다.
+`sends.jsonl`·`fleet.sqlite3`·`batch.log`)은 저장소 밖 `X:\DevTemp\lap-sim\lap_sim_runs_full.tgz`(118,554,091 bytes,
+SHA-256 `2ace91a4354a883375ff14d4e1922126022a4d9f4f3396e8a2e04ede815e5df2`)와 모델 PC `~/rosy_lapsim_ws/runs_a`, `runs`에 있다.
