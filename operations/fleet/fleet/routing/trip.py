@@ -148,7 +148,10 @@ def _goal(graph: Graph, target, arrive_yaw, config: RoutingConfig) -> tuple[Goal
         yaw = arrive_yaw if arrive_yaw is not None else getattr(place, "yaw", None)
         if _mid_lane(graph, target):  # D-517 2: a part-way place is its coordinates and yaw
             point, on_arcs = snap_goal(graph, *graph.place_xy(target), yaw, config)
-            return Goal(point, on_arcs=on_arcs), None
+            if yaw is None:
+                return Goal(point, on_arcs=on_arcs), None
+            any_way, any_arcs = snap_goal(graph, *graph.place_xy(target), None, config)
+            return Goal(point, on_arcs=on_arcs), Goal(any_way, on_arcs=any_arcs)
         loose = Goal(graph.place_xy(target), place=target)
         if yaw is None:
             return loose, None

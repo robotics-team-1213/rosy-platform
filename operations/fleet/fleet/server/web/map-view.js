@@ -11,10 +11,15 @@ import {
   streamEvidence, mapUpTurn, quarterTurn, siteViewTurn,
 } from "./site-layer.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
-import { NO_MAP_RETRY_MS, createPollGate } from "./poll-gate.js";
+import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import {drawStartPointMarks} from './start-point-layer.js';
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
+<<<<<<< HEAD
 import { trafficClock, trafficDrawing } from "./site-map-model.js";
+=======
+import { drawTrails } from "./trail-view.js";
+import { lensesMatch } from "/console/assets/map-fit.js";
+>>>>>>> main
 
 export function cameraMapCalibration(frame, calibrations, siteMap) {
   if (!frame || frame.state !== "live" || frame.rectified || !siteMap
@@ -23,9 +28,8 @@ export function cameraMapCalibration(frame, calibrations, siteMap) {
     && (siteMap.maps || []).some((map) => map.map_id === row.map_id)
     && row.image?.width === frame.image?.naturalWidth
     && row.image?.height === frame.image?.naturalHeight
-    && (!row.lens || (row.lens.kind === frame.lens?.kind
-      && row.lens.focal_mm === frame.lens?.focal_mm
-      && row.lens.hfov_deg === frame.lens?.hfov_deg))
+    // Vision's rule (D-457): a record without a lens only fits a frame without one; numbers to 1e-4.
+    && lensesMatch(row.lens ?? null, frame.lens ?? null)
     && Array.isArray(row.map_to_image) && row.map_to_image.length === 9) || null;
 }
 
@@ -570,7 +574,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
+<<<<<<< HEAD
     drawTraffic(ctx, toPx, t.scale);
+=======
+    drawTrails(ctx, view, toPx, 1.5, call);
+>>>>>>> main
     drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
     drawStartPointMarks(ctx, toPx, view.startPoints, view.siteMap.maps.map(row=>row.map_id), css('--series-secondary'), 2);
     if (layerOn("sightings")) {
@@ -705,6 +713,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ? `지도에서 로봇 목표 위치 선택. 호출 ${view.call.robot_id}`
       : "지도에서 로봇 목표 위치 선택");
     // 격자 픽셀 위에 그리므로 선 굵기도 격자 칸 단위다. 0.6칸이면 3 cm 남짓이다.
+    drawTrails(ctx, view, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 0.4, call);
     ctx.lineWidth = 0.6;
     view.robots.forEach((robot, index) => {
       const pose = robot.state && robot.state.pose;

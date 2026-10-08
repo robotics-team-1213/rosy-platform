@@ -36,7 +36,8 @@ ROOT = Path(__file__).resolve().parents[3]
 LANE_GRAPH = ROOT / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 OPERATOR = {"Authorization": "Bearer operator-token"}
 VIEWER = {"Authorization": "Bearer viewer-token"}
-LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True)
+# D-507 2 (2026-10-08): a turn goes only with a window, which only a junction_pivot robot takes.
+LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True, junction_pivot=True)
 BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True)
 MANOEUVRE = ("turning", "advancing", "reacquiring")
 
@@ -146,6 +147,7 @@ class Ports:
         self.core = FakeCore(self)
         self.sent: list[tuple] = []
         self.turns: list = []
+        self.advances: list = []
         self.expects: list = []  # D-507 2 fields per send (None: not sent)
         self.goals: list[tuple] = []
         self.canceled: list[str] = []
@@ -185,6 +187,7 @@ class Ports:
         reply = self.core.send(action, place_id, stop_after_m, expires_s, turn_deg)
         self.sent.append((action, place_id, None if stop_after_m is None else round(stop_after_m, 3)))
         self.turns.append(turn_deg)
+        self.advances.append(advance_m)
         self.expects.append(expect)
         return reply
 
@@ -440,9 +443,8 @@ def test_straight_is_refreshed_only_while_core_shows_it_armed_and_never_while_ex
 
 
 def test_an_expired_instruction_before_the_place_is_sent_again():
-    runner, store, ports = _setup(junction_expires_s=2.0)
-    arc = _arc(store, "east:fwd")
-    _plan(store, ports, "east:fwd", arc.length_m - 0.5, "NW")
+    runner, store, ports = _setup(_free_map("lane"), junction_expires_s=2.0)
+    _plan(store, ports, "ab:fwd", 0.5, "C")
     run(runner.start("p1", "bob"))
     _ticks(runner, ports)
     first = len(ports.sent)
@@ -457,6 +459,7 @@ def test_a_90_degree_turn_waits_out_the_manoeuvre_then_moves_on():
     run(runner.start("p1", "bob"))
     _ticks(runner, ports)
     assert ports.sent == [("left", "B", None)] and ports.turns == [pytest.approx(90.0, abs=0.1)]
+    assert ports.advances == [0.10]  # D-507 4: the advance turn_deg was aimed for, sent explicitly
     ports.at(ab, ab.length_m - 0.05)
     ports.core.see_junction()
     for state in MANOEUVRE:
@@ -1453,14 +1456,21 @@ def test_a_trip_store_failure_never_replaces_the_stop_result(tmp_path, caplog):
     async def broken(robot_id, reason):
         raise RuntimeError("trip store unavailable")
 
-    client.app.state.trip_runner.cancel_robot = broken
+    def store_down(_trip):
+        raise RuntimeError("trip store unavailable")
+
+    runner = client.app.state.trip_runner
+    runner.cancel_robot = broken
     with caplog.at_level(logging.ERROR):
-        estop = client.post("/api/fleet/estop", headers=OPERATOR)
         cancel = client.post("/api/fleet/robots/rosy_60/cancel", headers=OPERATOR)
         off = client.post("/api/fleet/robots/rosy_60/line-follow", json={"mode": "OFF"}, headers=OPERATOR)
+        runner._store.put_trip = store_down  # the E-stop closes the trip itself, then records it
+        estop = client.post("/api/fleet/estop", headers=OPERATOR)
     assert estop.status_code == 200 and estop.json()["total"] == 1 and ("estop",) in robot.calls
     assert cancel.status_code == 200 and off.status_code == 200
-    assert sum("could not end the trip" in r.message for r in caplog.records) == 3
+    assert sum("could not end the trip" in r.message for r in caplog.records) == 2
+    assert sum("could not record a trip ended by the E-stop" in r.message for r in caplog.records) == 1
+    assert runner.open_trips() == []
 
 
 def test_create_app_wires_the_real_trip_providers(tmp_path):

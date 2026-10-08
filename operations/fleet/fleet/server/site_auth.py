@@ -104,14 +104,20 @@ def assert_pairing_sync_token_isolated(sync_token: str, *, console_token: Option
 
 def build_authorize(console_token: Optional[str],
                     principals: Mapping[str, SitePrincipal],
-                    task_service, development=None):
+                    task_service, development=None, password_sessions=None):
     def authorize(request: Request,
                   authorization: Optional[str] = Header(default=None)) -> SitePrincipal:
+        bearer = bool(authorization and authorization.startswith("Bearer "))
         # D-473 3: a live development session is a named operator beside the configured credentials.
         principal = (development.principal(authorization[len("Bearer "):])
-                     if development is not None and authorization and authorization.startswith("Bearer ")
-                     else None)
-        if principal is None and principals:
+                     if development is not None and bearer else None)
+        request.state.site_auth_via = "development" if principal is not None else "bearer"
+        if principal is None and password_sessions is not None and not bearer:
+            # D-519 4: no Bearer header -> the console session cookie, CSRF-checked for unsafe methods.
+            principal = password_sessions.authenticate(request)
+            if principal is not None:
+                request.state.site_auth_via = "cookie"
+        if principal is None and (principals or password_sessions is not None):
             if not authorization or not authorization.startswith("Bearer "):
                 raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED",
                                                              "message": "valid site credential required"})
@@ -158,7 +164,7 @@ def build_authorize(console_token: Optional[str],
     return authorize
 
 
-def build_role_guards(authorize, principals: Mapping[str, SitePrincipal]):
+def build_role_guards(authorize, principals: Mapping[str, SitePrincipal], *, named_logins: bool = False):
     def require_viewer(principal: SitePrincipal = Depends(authorize)) -> SitePrincipal:
         return principal
 
@@ -177,7 +183,8 @@ def build_role_guards(authorize, principals: Mapping[str, SitePrincipal]):
 
     def require_named_operator(principal: SitePrincipal = Depends(require_operator)) -> SitePrincipal:
         # D-473 3: without site-users the only named operator is a development session.
-        if not principals and not principal.principal_id.startswith("development-"):
+        # D-519 4: a login (cookie) principal is named, so login-only site-users also count.
+        if not principals and not named_logins and not principal.principal_id.startswith("development-"):
             raise HTTPException(status_code=403, detail={
                 "code": "OPERATOR_IDENTITY_REQUIRED",
                 "message": "mission admission requires a configured named operator credential",

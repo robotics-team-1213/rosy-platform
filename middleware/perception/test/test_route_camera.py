@@ -225,3 +225,15 @@ def test_at_a_node_the_relock_does_not_wipe_a_correct_memory():
     assert tracker.last["route_seed"][1] is not None
     assert subject.state == "ONE"
     assert tracker._left, "a correct left memory was wiped"
+
+
+def test_unseen_memory_requires_an_aligned_active_route():
+    subject, pose = _locked_on_both("east:r", 0.9)
+    assert not subject.last["near_node"]
+    blank = np.full((lane_sim.HT, lane_sim.W), 109, np.uint8)
+    subject.update(0.6, pose, blank, lane_sim.GROUND, **lane_sim.KW)
+    assert subject.state == "MEMORY"
+    off_route = (pose[0] - 0.06 * math.sin(pose[2]),
+                 pose[1] + 0.06 * math.cos(pose[2]), pose[2])
+    subject.update(0.8, off_route, blank, lane_sim.GROUND, **lane_sim.KW)
+    assert subject.state == "STOP"

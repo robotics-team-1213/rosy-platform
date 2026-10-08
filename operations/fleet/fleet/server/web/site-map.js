@@ -2,6 +2,7 @@
 // and preview a D-490 trip plan. Only the D-494 운행 buttons start or cancel a trip.
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
+import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
@@ -9,7 +10,7 @@ import {
   tripStatusText, rectangularView, viewTurnOf, editViewTurn, loopCapacityText, repeatTripBody,
 } from '/console/assets/site-map-model.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
-import {warpImage} from '/console/assets/field-view.js';
+import {warpImage} from '/console/assets/field-warp.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
 import {parseLensHeader} from '/console/assets/vision-view.js';
 
@@ -280,6 +281,7 @@ $('connect').addEventListener('click', async () => {
     sessionStorage.setItem('rosy-console-token', $('credential').value);
     state.role = session.role;
     $('session').textContent = `${session.principal_id} · ${session.role}`;
+    loginForm.refresh(false);
     syncButtons();
     await load();
     notice(state.robotsError ? '지도를 읽었습니다 · 로봇 상태 확인 불가. 다시 접속하세요.'
@@ -291,6 +293,7 @@ $('connect').addEventListener('click', async () => {
       state.role = null;
       $('session').textContent = '접속 전';
     }
+    if (error.status === 401) loginForm.refresh(true);
     render();
     syncButtons();
     notice(siteMapErrorText(error));
@@ -569,4 +572,9 @@ $('estop').addEventListener('click', async () => {
 
 developmentToken($('credential').value).then(token => {
   if (token) { $('credential').value = token; $('credential').parentElement.hidden = true; $('connect').click(); }
+  else loginForm.refresh(true).then(cookie => { if (cookie) $('connect').click(); });
 }).catch(() => {});
+// D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
+const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
+  $('credential').value = ''; $('connect').click();
+}});

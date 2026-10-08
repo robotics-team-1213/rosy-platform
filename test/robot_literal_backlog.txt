@@ -90,4 +90,3 @@ middleware/core/services/core_features/localization/mission.py
 contracts/learning/src/rosy/contracts/learning/artifacts.py
 # D-449: preserved recording schema and Episode body validator; binds Pinky provenance only, grants no command authority. Product-profile registration remains the eventual owner.
 contracts/learning/src/rosy/contracts/learning/pinky.py
-operations/fleet/fleet/localization/lane_compliance.py

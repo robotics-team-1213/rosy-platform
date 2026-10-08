@@ -25,10 +25,12 @@ import httpx
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
-from fleet.routing.execute import arc_id, lane_action, plan_again, replan_hold, route_key, theta, unsupported
+from fleet.routing.execute import (advance_m, arc_id, ends_at_place, lane_action, plan_again, replan_hold, route_key,
+                                    turn_target, unsupported)
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
-                                     OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view)
-from fleet.server.lane_traffic import TrafficService
+                                     OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view,
+                                     record_bend_candidate)
+from fleet.server.lane_traffic import PAST_PLACE_M, TrafficService
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -40,6 +42,10 @@ LINE_MODES = ("CAMERA_LINE",)
 MANOEUVRE = ("turning", "advancing", "reacquiring")
 #: D-490 5: a plan may be started within this long on the same map version.
 PLAN_TTL_S = 30.0
+#: D-517 2/5: a failed lap check is tried again this often, this many times (D-438 rule budget),
+#: before it is the resolver's or the operator's.
+LAP_RETRY_S = 5.0
+LAP_RETRIES = 2
 #: CORE takes ``stop_after_m`` in [0, 2] (D-494 4).
 MAX_STOP_AFTER_M = 2.0
 _ROBOT_ERRORS = (RobotApiError, HubError, OSError, RuntimeError, ValueError, httpx.HTTPError)
@@ -70,7 +76,7 @@ class TripRunner:
                  engaged: Callable[[str], Optional[str]] = lambda _robot_id: None,
                  release_queue: Callable[[str], None] = lambda _robot_id: None,
                  roster: Optional[Callable[[], Iterable[str]]] = None,
-                 traffic: Optional[TrafficService] = None) -> None:
+                 traffic: Optional[TrafficService] = None, traffic_zones=None) -> None:
         self._store = store
         self._routing = routing_config
         self._caps, self._poses, self._junction = caps, poses, junction
@@ -86,7 +92,9 @@ class TripRunner:
         self._locks: dict[str, asyncio.Lock] = {}
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
-        self.traffic = traffic if traffic is not None else TrafficService(store, config)
+        #: Map poses read this period for robots the block table still pins without a trip (D-517 6).
+        self._parked: dict[str, Optional[MapPose]] = {}
+        self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones)
         self._traffic_warned = False
         self._refresh_warned_at = -math.inf
         #: D-494 5: never resume after a restart; ``run`` stops each robot (retried until it takes).
@@ -143,8 +151,11 @@ class TripRunner:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
             pose = await self._pose_checks(robot_id, graph, plan["segments"])
             graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
+            caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
+                         "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot}
+            lap_arcs = self._lap_arcs(plan["segments"], row["request"], caps_view) if repeat else ()
             if repeat:  # D-517 3: no await from this check to the trip opening
-                full = self.traffic.loop_full(plan["segments"], self._live.values())
+                full = self.traffic.loop_full(lap_arcs, self._live.values())
                 if full is not None:
                     raise TripError(422, "TRIP_LOOP_FULL", full)
             now = self._clock()
@@ -152,11 +163,9 @@ class TripRunner:
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
-                    "repeat": repeat, "lap": 1 if repeat else None,
-                    "caps": {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
-                             "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot}}
+                    "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view}
             live = LiveTrip(view, graph, row["request"])
-            live.lap_route = route_key(plan["segments"])
+            live.lap_route, live.lap_arcs = route_key(plan["segments"]), lap_arcs
             self._live[robot_id] = live
             self._restarted = [t for t in self._restarted if t["robot_id"] != robot_id]  # this trip owns it
             if not plan["segments"]:  # D-489 부록 4: already there
@@ -165,6 +174,16 @@ class TripRunner:
                 self._describe(live)
             self._save(live)
             return live.view
+
+    def _lap_arcs(self, segments: list, request: dict, caps: dict) -> tuple[str, ...]:
+        """D-517 3: the arcs of one lap, planned (as the next lap will be) from where ``segments`` end;
+        the plan's own arcs when that lap cannot be planned now (the lap check then holds the robot)."""
+        if not segments:
+            return ()
+        end = self._store.active()[2].arcs[arc_id(segments[-1])].point_at(segments[-1]["s_to"])
+        body, _hold = plan_again(self._store.active(), end, request, caps, frozenset(self._blocked()), set(),
+                                 self._routing, self.config.max_turn_deg)
+        return tuple(arc_id(seg) for seg in (body or {"segments": segments})["segments"])
 
     async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool):
         """D-494 start checks on the robot's capabilities; the caps, or ``TripError``."""
@@ -205,6 +224,26 @@ class TripRunner:
         self._save(live)
         return live.view
 
+    def close_all(self, reason: str) -> list[LiveTrip]:
+        """E-stop (D-517 1): every open trip ends now, before any await, so no step sends after it."""
+        closed = [live for live in self._live.values() if live.open]
+        for live in closed:
+            live.view.update(state="canceled", reason=reason)
+            live.view["detail"]["canceled_by"] = None
+        return closed
+
+    async def halt_closed(self, lives: list[LiveTrip]) -> None:
+        """Stop the robots of ``close_all`` at once (each halt bounded) and record each trip."""
+        async def halt(live: LiveTrip) -> None:
+            try:
+                live.view["detail"].update(await self._halt(live))
+            finally:
+                self._save(live)
+
+        for result in await asyncio.gather(*(halt(live) for live in lives), return_exceptions=True):
+            if isinstance(result, BaseException):
+                _LOG.error("could not record a trip ended by the E-stop", exc_info=result)
+
     async def _after_send(self, live: LiveTrip) -> None:
         """A send that was in flight when the trip closed (cancel) is stopped again."""
         if not live.open:
@@ -222,6 +261,16 @@ class TripRunner:
             hold = live.view["hold"]
             if hold is None:
                 raise TripError(409, "TRIP_NO_REPLAN")
+            if hold.get("plan") is None and hold.get("reason") == "lap":  # the operator retries the lap check
+                if await self._retry_lap(live, live.view["segment_index"]):
+                    self._describe(live)
+                    self._save(live)
+                    return live.view
+                hold = live.view["hold"]
+                if hold.get("plan") is not None:  # a changed lap: shown first, confirmed next
+                    self._describe(live)
+                    self._save(live)
+                    return live.view
             if hold.get("plan") is None:
                 raise TripError(409, "TRIP_REPLAN_FAILED", {"code": hold.get("code")})
             active = self._store.active()
@@ -234,11 +283,14 @@ class TripRunner:
             live.route_rev += 1
             if "lap_route" in hold:  # D-517 2: the operator took the changed lap
                 live.lap_route = hold["lap_route"]
+                live.lap_arcs = tuple(f"{edge}:{'fwd' if forward else 'rev'}"
+                                      for edge, forward, _s in hold["lap_route"])
                 live.view["lap"] += 1
             live.view["detail"]["replan_confirmed_by"] = principal_id
             sent = live.sent
             live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
-            live.sent, live.last_goal, live.replan_pending = None, None, False
+            live.sent, live.last_goal, live.replan_pending, live.at = None, None, False, None
+            live.lap_start = 0
             self._describe(live)
             self._save(live)
             return live.view
@@ -256,13 +308,14 @@ class TripRunner:
 
     async def _loop(self) -> None:
         while True:
+            started = time.monotonic()
             try:
                 await self.tick()
             except asyncio.CancelledError:
                 raise
             except Exception:  # the steps catch their own; this is the traffic table
                 _LOG.exception("trip loop tick failed")
-            await asyncio.sleep(self.config.period_s)
+            await asyncio.sleep(max(0.0, self.config.period_s - (time.monotonic() - started)))
 
     async def _loop_failed(self, live: LiveTrip) -> None:
         if not live.open:
@@ -281,16 +334,31 @@ class TripRunner:
             task = self._inflight.get(robot_id)
             if live.open and (task is None or task.done()):
                 self._inflight[robot_id] = asyncio.ensure_future(self._tick_robot(live))
+        for robot_id in self.traffic.pinned():  # an ended trip's robot blocks until a pose shows it left
+            task = self._inflight.get(robot_id)
+            if not self.robot_busy(robot_id) and (task is None or task.done()):
+                self._inflight[robot_id] = asyncio.ensure_future(self._watch(robot_id))
         pending = [task for task in self._inflight.values() if not task.done()]
         if pending:
             await asyncio.wait(pending, timeout=self.config.period_s)
+        self._inflight = {robot_id: task for robot_id, task in self._inflight.items() if not task.done()}
+        poses, self._parked = self._parked, {}
         try:
-            self.traffic.step(self._live.values())
+            self.traffic.step(self._live.values(), poses)
             self._traffic_warned = False
         except Exception:  # the table is shown only (M1); a fault never ends a trip
+            for live in self._live.values():  # no stale refusal holds a robot or hides a stall
+                live.traffic = None
             if not self._traffic_warned:
                 _LOG.exception("traffic table step failed (repeats muted until it works)")
             self._traffic_warned = True
+
+    async def _watch(self, robot_id: str) -> None:
+        """The map pose of a robot without a trip (hub cache, no forced REST read); none on failure."""
+        try:
+            self._parked[robot_id] = await self._call(self._poses.arbitrated_pose(robot_id))
+        except Exception:  # an unread pose keeps the pins
+            pass
 
     async def _tick_robot(self, live: LiveTrip) -> None:
         """Every failure ends at most this one trip."""
@@ -306,6 +374,7 @@ class TripRunner:
 
     async def _step(self, live: LiveTrip) -> None:
         robot_id = live.view["robot_id"]
+        live.view["detail"].pop("bend_candidate", None)
         pose = await self._pose(robot_id)
         if not live.open:
             return
@@ -344,6 +413,7 @@ class TripRunner:
             if index != live.view["segment_index"]:
                 live.view["segment_index"] = index
                 live.last_goal = None
+            record_bend_candidate(live, pose, self._store.active(), index, s)
             self._describe(live)
             last = index == len(live.segments) - 1
             if not last and not live.replan_pending and self._needs_replan(live, index):
@@ -354,6 +424,12 @@ class TripRunner:
                 self._describe(live)
             if live.repeat and live.view["hold"] is None and self._lap_due(live, index, remaining):
                 await self._next_lap(live, index)
+                index = live.view["segment_index"]  # finished laps may have been dropped
+                self._describe(live)
+                last = index == len(live.segments) - 1
+            elif self._lap_retry_due(live):
+                await self._retry_lap(live, index)
+                index = live.view["segment_index"]
                 self._describe(live)
                 last = index == len(live.segments) - 1
             if lane:
@@ -417,14 +493,21 @@ class TripRunner:
             elif state not in ("armed", None, "idle", "waiting"):
                 return
         stop_after = min(max(remaining, 0.0), MAX_STOP_AFTER_M) if action == STOP else None
-        turn = round(theta(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
+        turn = round(turn_target(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
+        advance = advance_m(live.graph, live.segments, index) if turn is not None else None
         expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
         if not live.open:
+            return
+        if action in (LEFT, RIGHT) and (expect or {}).get("expect_in_m") is None:
+            # D-507 2 (2026-10-08 user decision): without a window CORE could take any sighting,
+            # a misread bend included, as this turn; stop the trip instead of sending it.
+            await self._stop(live, "stopped", "junction_no_window",
+                             {"junction_place": place, "junction_action": action, "junction_fields": expect})
             return
         try:
             reply = await self._call(self._junction.send_junction(
                 live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s,
-                turn_deg=turn, expect=expect)) or {}
+                turn_deg=turn, advance_m=advance, expect=expect)) or {}
         except RobotApiError as exc:
             if exc.code == "JUNCTION_ODOM_STALE":  # D-507 2: no fresh odom at receipt; next tick sends again
                 live.view["detail"]["junction_retry"] = exc.code
@@ -519,14 +602,33 @@ class TripRunner:
         return now - live.progress_at >= self.config.stall_s
 
     def _traffic_holds(self, live: LiveTrip, index: int) -> bool:
-        """D-517 3 (M1): a block at or before this segment's place is refused to the robot."""
+        """D-517 3 (M1): a refused block starts before the robot is ``PAST_PLACE_M`` past this
+        segment's place, so the instruction would take it into that block."""
         refused = (live.traffic or {}).get("refused_at_m")
-        return refused is not None and refused <= live.progress(index, live.segments[index]["s_to"]) + 1e-6
+        return refused is not None and refused < live.progress(index, live.segments[index]["s_to"]) + PAST_PLACE_M
 
     def _lap_due(self, live: LiveTrip, index: int, remaining: float) -> bool:
         """At the lap's last place (within ``arm_distance_m``, before its action goes out) or past it."""
         tail = max((i for i in range(len(live.segments)) if live.place(i)), default=None)
         return tail is not None and (index > tail or (index == tail and remaining <= self.config.arm_distance_m))
+
+    def _lap_retry_due(self, live: LiveTrip) -> bool:
+        hold = live.view["hold"]
+        return (hold is not None and hold.get("reason") == "lap" and hold.get("plan") is None
+                and live.lap_tries <= LAP_RETRIES and self._clock() - live.lap_tried_at >= LAP_RETRY_S)
+
+    async def _retry_lap(self, live: LiveTrip, index: int) -> bool:
+        """Plan the failed lap again; True when it carries on (the held stop at the place may be replaced)."""
+        hold, live.view["hold"] = live.view["hold"], None
+        await self._next_lap(live, index)
+        if live.view["hold"] is not None or not live.open:
+            if live.view["hold"] is None:
+                live.view["hold"] = hold
+            return False
+        sent = live.sent
+        live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
+        live.sent, live.last_goal = None, None
+        return True
 
     async def _next_lap(self, live: LiveTrip, index: int) -> None:
         """D-517 2: plan the next lap from this lap's end after the D-494 start checks (named operator
@@ -549,11 +651,19 @@ class TripRunner:
                     "places": [*live.view["plan"]["places"], *body["places"]],
                     "actions": [*live.view["plan"]["actions"][:-1], *body["actions"]]}
             if route_key(body["segments"]) == live.lap_route:
-                live.view.update(plan=plan, lap=live.view["lap"] + 1)
+                live.lap_tries = 0
+                live.lap_arcs = tuple(arc_id(seg) for seg in body["segments"])
+                # Keep this lap and the next one: earlier laps are dropped so the plan stays bounded.
+                cut, live.lap_start = live.lap_start, len(plan["segments"]) - len(body["segments"]) - live.lap_start
+                live.view.update(plan=_from(live.graph, plan, cut), lap=live.view["lap"] + 1)
+                if cut:
+                    _dropped(live, segments[:cut])
                 return
             hold = {"map_version": body["map_version"], "lap_route": route_key(body["segments"]),
-                    "plan": {**plan, "segments": plan["segments"][index:]},
+                    "plan": _from(live.graph, plan, index),
                     "length_m": body["length_m"], "eta_s": body["eta_s"]}
+        if hold.get("plan") is None:
+            live.lap_tries, live.lap_tried_at = live.lap_tries + 1, self._clock()
         live.view["hold"] = {**hold, "reason": "lap"}
 
     def _needs_replan(self, live: LiveTrip, index: int) -> bool:
@@ -706,8 +816,27 @@ class TripRunner:
                                                                                 self._routing))
 
     def _save(self, live: LiveTrip) -> None:
+        if not live.open:
+            live.view["detail"].pop("bend_candidate", None)
         live.view["updated_at"] = self._clock()
         self._store.put_trip(live.view)
+
+
+def _from(graph, plan: dict, k: int) -> dict:
+    """``plan`` from segment ``k`` on, without the places (and their actions) of the segments before it."""
+    n = sum(1 for seg in plan["segments"][:k] if ends_at_place(graph, seg))
+    return {**plan, "segments": plan["segments"][k:], "places": plan["places"][n:], "actions": plan["actions"][n:]}
+
+
+def _dropped(live: LiveTrip, dropped: list) -> None:
+    """Every index and plan metre the trip keeps moves with the segments dropped from its front."""
+    cut = len(dropped)
+    live.view["segment_index"] -= cut
+    live.at = None if live.at is None else (live.at[0] - cut, live.at[1])
+    if live.sent is not None:
+        live.sent = {**live.sent, "index": live.sent["index"] - cut}
+    live.best_progress -= sum(seg["s_to"] - seg["s_from"] for seg in dropped)
+    live.trim_m += sum(live.graph.arcs[arc_id(seg)].length_m for seg in dropped)  # route metres (blocks)
 
 
 def _joined(old: list, new: list) -> list:

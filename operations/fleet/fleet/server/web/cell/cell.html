@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/console/assets/cell.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
+  <link rel="stylesheet" href="/console/assets/password-login.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/cell.js"></script>
 </head>
@@ -29,8 +30,12 @@
     <a href="/console/cell" aria-current="page">Cell</a>
   </nav>
   <div class="cell-access">
-    <ui-field id="credential" type="password" placeholder="운영자 토큰" aria-label="관제 운영자 토큰"></ui-field>
-    <ui-button id="connect" kind="primary">접속</ui-button>
+    <div id="password-login" class="password-login" hidden></div>
+    <details id="token-access" class="token-access" open>
+      <summary>토큰으로 접속</summary>
+      <ui-field id="credential" type="password" placeholder="운영자 토큰" aria-label="관제 운영자 토큰"></ui-field>
+      <ui-button id="connect" kind="primary">접속</ui-button>
+    </details>
   </div>
   <ui-status id="estop-feedback" hidden></ui-status>
   <main>

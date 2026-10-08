@@ -153,7 +153,10 @@ def test_traffic_bays_missions_and_localization_never_read_overhead_tracking():
 #: neither by import nor through the wiring attributes ``tracking.identity`` / ``app.state.identity``.
 IDENTITY_READERS = {"server/app.py", "server/console_routes.py", "server/identity.py",
                     "server/tracking.py", "server/tracking_routes.py", "server/sightings_config.py",
-                    "localization/lane_compliance.py"}
+                    "server/lane_compliance_service.py"}
+#: Never on that list: the D-494 map pose arbitration and the trip loop (addendum 3).
+IDENTITY_NEVER = ("server/map_pose_service.py", "localization/map_pose.py", "server/trip_*.py",
+                  "routing/execute.py")
 
 
 def _identity_reads(source: str) -> list[str]:
@@ -197,4 +200,19 @@ def test_only_the_wiring_and_lane_compliance_read_the_led_identity_binding():
         if rel in IDENTITY_READERS:
             continue
         offenders += [f"{rel} reads {name}" for name in _identity_reads(path.read_text(encoding="utf-8"))]
+    assert offenders == []
+
+
+def test_map_pose_and_trip_modules_never_read_the_led_identity_binding():
+    """D-511 lane compliance may judge a LED-confirmed track; MapPoseService and trips may not."""
+    paths = sorted({p for pattern in IDENTITY_NEVER for p in FLEET_PKG.glob(pattern)})
+    assert len(paths) >= 5                                   # the globs still find the modules
+    offenders = []
+    for path in paths:
+        rel = path.relative_to(FLEET_PKG).as_posix()
+        assert rel not in IDENTITY_READERS, rel
+        text = path.read_text(encoding="utf-8")
+        offenders += [f"{rel} reads {name}" for name in _identity_reads(text)]
+        if "confirmed_track_pose" in text:
+            offenders.append(f"{rel} reads confirmed_track_pose")
     assert offenders == []

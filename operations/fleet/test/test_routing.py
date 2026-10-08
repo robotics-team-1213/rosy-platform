@@ -470,3 +470,15 @@ def test_start_places_part_way_along_a_lane_are_goals_and_vias():
     with pytest.raises(PlanError) as err:  # nothing within twice the lane width
         plan_trip(build_graph(demo_site([far]), version=1), PlanRequest(1, start, "far"), CFG)
     assert err.value.code == "TRIP_OFF_MAP"
+
+
+def test_a_part_way_place_whose_yaw_cannot_be_reached_says_so():
+    """Review LOW 10: reachable facing the other way -> TRIP_ARRIVE_YAW_UNREACHABLE, not TRIP_NO_ROUTE."""
+    body = _map({"A": (0, 0), "B": (1, 0)}, [("ab", "A", "B", True)]).body()
+    body["places"].append({"id": "P", "name": "P", "x": 0.6, "y": 0.0, "yaw": math.pi, "kind": "start"})
+    site = SiteMap.model_validate(body)
+    with pytest.raises(PlanError) as err:  # facing west needs a U-turn at the junction B
+        _plan(site, (0.2, 0, 0), "P")
+    assert err.value.code == "TRIP_ARRIVE_YAW_UNREACHABLE"
+    body["places"][-1]["yaw"] = 0.0
+    assert _edges(_plan(SiteMap.model_validate(body), (0.2, 0, 0), "P")) == ["ab"]

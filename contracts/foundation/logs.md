@@ -358,7 +358,6 @@
 - gate 변화: 없음.
 - 결정: D-411 구현 부록 10.
 
-
 ## 2026-10-03 · uncommitted · feat(link): D-432 주소 없는 장비 접속
 
 - 변경: 공통 TXT에 Dock·Signal 역할, LinkPolicy·접속/페어링 모델·4자리 Cam 표시 별칭을 추가했다. 발견 캐시 BOM을 정리하고 멀티 NIC/충돌·TTL 수명을 고정했다.
@@ -366,13 +365,13 @@
 - gate 변화: 실제 장비의 제어·FIELD 관문은 이동하지 않는다.
 - 결정: D-432 2026-10-03 추가 결정.
 
-
 ## 2026-10-03 · uncommitted · fix(link): 현재 접속과 후속 코드 규약 구별
 
 - 변경: 사용자 보정으로 4자리 코드 발급·Cam 표시 별칭은 이번 적용에서 제외했다. 현재 로봇 8자·Cam 6자리 규약을 유지하며 D-432에 추후 통합을 기록했다. 실제 Pinky 접속 수정은 진행한다.
 - 증거: 영향받는 Python 2345 passed/84 skipped, quick tier 459 passed/2 skipped, Pilot PWA 87 passed/58 skipped. 코드 규약 보정 뒤 해당 인증·페어링 시험을 다시 실행한다. 공개 검증 기록은 docs/validation/discovery-link-2026-10-03/README.md.
 - gate 변화: Android 설치·실제 CORE 인증 확인은 실제 주행·Cam 화면 off 연속 송출·현장 트래픽 수용과 별개다. DEVICE/FIELD 이동 없음.
 - 결정: D-432 후속 결정: 접속은 지금, 짧은 코드 통합은 추후 적용.
+
 ## 2026-10-03 · e021264e6 · feat(face): D-433 상황표 `core_common.face_screen`
 
 - 변경: LCD 상황표 `screen_for`(D-433 1–18행), D-394 주행 카드 주기(`drive_due`, `drive_card_visible` — `core.bridge.display`에서 이동), `face-inputs.json` 엄격 읽기(`read_face_inputs`, `validate_face_inputs`: 링크·FIFO·16 KiB·소유자·schema 1·3 s). 표준 라이브러리만.
@@ -411,13 +410,11 @@
 
 - gate 변화: SOURCE/LOCAL. 실기 노출·조명·주행은 별도 검증이다.
 
-
 ## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 
 - 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
 - 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
 - gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.
-
 
 ## 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
 
@@ -471,7 +468,6 @@
 - 증거: SOURCE 구조 검사 포함 109 PASS, 0 NEW. 새 계약 모듈/입구 shape 변경 없음.
 - gate 변화: 계약 소유 경계만. 런타임 수용 없음.
 
-
 ## 2026-10-06 · uncommitted · feat(core_common): D-484 sighting/preview 스키마 additive
 
 - 변경: `SiteSightingPayload.corner_marker_ids`를 선택화하고 `calibration_source`("corner_markers"|"field_boundary", 마커 id와 상호 검증)를 추가. `PreviewRectification`에 `mode: "manual"|"auto"`(기본 manual, 과거 리스 호환) 추가 — auto는 코너를 Vision의 필드 캘리브레이션이 정한다. 기존 필드명·값은 불변.
@@ -491,6 +487,7 @@
 - 증거: `test_controls_contract.py` 9 PASS(생략 시 와이어에 없음, true 왕복, 잘못된 값 거절).
 - gate 변화: 없음. API Ref v1.112 행에 포함.
 - 결정: D-494, D-495 (Proposed)
+
 ## 2026-10-07 · uncommitted · feat(schemas): LineFollowStatus.junction
 - 변경: `LineJunctionStatus {pending_action, place_id, state, seq}`를 더하고 `LineFollowStatus.junction` 기본값 idle로 둔다(D-494 4항, additive)
 - 증거: `test_line_junction.py` 18 PASS, `test_line_junction_api.py` 8 PASS. services·api_web·contracts/foundation·line-follow 문서 시험 1859 PASS·18 skip, gateway 2187 PASS·17 skip, Fleet 버전 고정 시험 90 PASS, `test/known_failures.py` 0 new (2026-10-07 Windows)
@@ -524,9 +521,17 @@
 - 증거: perception 2712 PASS·109 skip, services+test/test_sim2real_gaps.py+test/architecture 1230 PASS·1 skip, gateway 2211 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). generate·lint 0 error
 - gate 변화: 없음. SOURCE 호스트 시험만. SIM 재실행(G-16)·매트 실측은 남음
 - 결정: D-468 구현 메모 정정, D-476 개정 1 수치 (2026-10-07)
+
 ## 2026-10-07 · uncommitted · feat(config): D-498 junction_turn_site_accepted
 - 변경: 기본 false, `ir_guard_enabled` 없이 true면 CORE 시작 거부. 주석에 켜는 순서(IR 보정 → 현장 겹 → SIM → DEVICE)
 - 증거: `test_junction_turn_site_basis.py` 15 PASS, `test_line_junction.py` 73 PASS. services·api_web·contracts/foundation·문서·perception 배선/lane_keep·test/architecture·Fleet 버전 고정 2297 PASS·19 skip, gateway 2212 PASS·17 skip, `test/known_failures.py` 0 new (2026-10-07 Windows). core_features 15050 (판정 14934+150=15084 안)
 - gate 변화: 없음. SOURCE 호스트 시험만. 현장 설정·SIM·DEVICE는 D-498 순서
 - 결정: D-498 (Proposed)
+- 교훈: 없음
+
+## 2026-10-07 · uncommitted · core_common(protocol): LineFollowStatus.lane_return_containment (D-507 7)
+- 변경: `protocol/schemas.py` `LineFollowStatus` 선택 필드 `lane_return_containment: contained | unknown | None`. API Ref v1.133.
+- 증거: core_features D-507 7 시험(`test_lane_return_manager.py`).
+- gate 변화: 없음(additive).
+- 결정: D-507 7
 - 교훈: 없음

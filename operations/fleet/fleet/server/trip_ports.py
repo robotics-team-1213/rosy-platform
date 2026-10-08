@@ -158,28 +158,84 @@ def pose_diagnostics(pose) -> dict:
 
 
 #: D-507 2: CORE takes ``expect_in_m`` in (0, 2], ``expect_tol_m`` in (0, 0.30] and
-#: ``pivot_past_line_m`` in [0, 0.30] (the D-495 ``MAX_ADVANCE_M``).
+#: ``pivot_past_line_m`` in [-0.30, 0.30] (the D-495 ``MAX_ADVANCE_M``, signed since 2026-10-08).
 MAX_EXPECT_IN_M = 2.0
 MAX_EXPECT_TOL_M = 0.30
 MAX_PIVOT_PAST_LINE_M = 0.30
-#: Along-track odom drift per metre dead-reckoned since the last sighting (wheel slip on carpet).
+#: Along-track odom drift per metre of odom travel (wheel slip on carpet): the map pose's
+#: dead-reckoned distance and, since CORE measures the window in odom path length (2026-10-08),
+#: the distance driven from the send to the place.
 ODOM_DRIFT_PER_M = 0.05
 #: ponytail: a fixed allowance for the send's HTTP time and CORE taking the instruction after the
 #: send starts; measure it on the site network and make it site config if it is off.
 SEND_ALLOWANCE_S = 0.2
 _monotonic = time.monotonic  # the read-to-send clock (a test replaces it)
-#: D-507 2: CORE projects ``expect_in_m`` straight ahead, so no window past this lane bend.
+#: D-507 B9 diagnostic: a lane heading change this large is a bend (``bend_candidate`` only).
 MAX_WINDOW_BEND_DEG = 15.0
-#: The lane heading is checked this often between the robot and the place.
+#: The lane heading is checked this often ahead of the robot.
 WINDOW_BEND_STEP_M = 0.02
+# D-507 B9 diagnostic only: inspect the current edge, never authorize motion from this.
+BEND_PREVIEW_M = 0.40
+BEND_MAX_ANGLE_DEG = 80.0  # keeper's non-square bend limit
+#: The cross line search steps this far, then halves the last step to 1 mm.
+LINE_STEP_M = 0.01
+
+
+def bend_candidate(arc, s: float, pose: dict, *, end_s: float | None = None) -> Optional[dict]:
+    """A nearby turn in this lane edge, using only a fresh, aligned map pose. No motion grant."""
+    if arc.drive_mode != "lane" or not isinstance(pose, dict):
+        return None
+    keys = ("x", "y", "yaw", "age_s", "dead_reckon_m")
+    if any(isinstance(pose.get(key), bool) or not isinstance(pose.get(key), (int, float))
+           or not math.isfinite(pose[key]) for key in keys):
+        return None
+    if not 0 <= pose["age_s"] <= 0.30 or not 0 <= pose["dead_reckon_m"] <= ENDPOINT_TOL_M:
+        return None
+    offset, projected_s, heading = arc.project(pose["x"], pose["y"])
+    if (offset > 0.04 or abs(projected_s - s) > ENDPOINT_TOL_M
+            or abs(math.degrees(wrap(pose["yaw"] - heading))) > MAX_WINDOW_BEND_DEG):
+        return None
+    limit = min(arc.length_m if end_s is None else end_s, s + BEND_PREVIEW_M)
+    if not math.isfinite(limit) or limit <= s:
+        return None
+    first, change = None, 0.0
+    steps = math.ceil((limit - s) / WINDOW_BEND_STEP_M)
+    for index in range(1, steps + 1):
+        ahead = (limit - s) * index / steps
+        _, _, future = arc.point_at(s + ahead)
+        change = math.degrees(wrap(future - heading))
+        if abs(change) > BEND_MAX_ANGLE_DEG:
+            return None
+        if first is None and abs(change) >= MAX_WINDOW_BEND_DEG:
+            first = ahead
+    if first is None:
+        return None
+    return {"arc_id": arc.id, "bend_in_m": round(first, 3),
+            "heading_change_deg": round(change, 1), "map_offset_m": round(offset, 3)}
+
+
+def record_bend_candidate(live: "LiveTrip", pose: MapPose, active, index: int, s: float) -> None:
+    """Put a map-bound, read-only bend hint in the current trip view when its evidence holds."""
+    if (live.view["hold"] is not None or active is None or active[0] != live.view["map_version"]
+            or pose.map_id not in (None, active[1].map_id)):
+        return
+    cue = bend_candidate(live.arc(index), s, vars(pose), end_s=live.segments[index]["s_to"])
+    if cue is not None:
+        live.view["detail"]["bend_candidate"] = {
+            **cue, "map_id": active[1].map_id, "map_version": active[0]}
 
 
 def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float, active,
                     config: TripConfig) -> Optional[dict]:
     """D-507 2 fields for a ``junction_pivot`` robot: ``map_id``, ``pivot_past_line_m`` (not for
-    ``stop``) and, where ``_straight_ahead`` allows, the window pair; none on another map version
+    ``stop``; the place minus the first painted line ``line_past`` finds along the lane heading at
+    the place, or the outgoing half-width and no window when it finds none) and the window pair:
+    ``expect_in_m`` = ``remaining``, the distance along the lane from the robot's snapped position
+    to the place, which CORE compares with its odom path length (2026-10-08 user decision, curves
+    included), when it is in (0, 2]; none on another map version
     (logged, ``detail.junction_fields_dropped``). ``arm_distance_m`` should be at least the
     keeper's 0.45 m + pivot + tol so the instruction comes first; SIM checks the default 0.6.
+    The trip loop never sends a ``left``/``right`` without the window (``junction_no_window``).
     """
     view = live.view
     caps, pose = view.get("caps") or {}, view.get("pose") or {}
@@ -192,50 +248,79 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
         view["detail"]["junction_fields_dropped"] = "map_version"
         return None
     fields = {"map_id": active[1].map_id}
-    if action in (STRAIGHT, LEFT, RIGHT):  # the place is on the outgoing lane's centre line (D-490)
-        width = live.arc(index + 1).width_m
-        fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
-    window = _straight_ahead(live, index, remaining, pose)
-    if window is None or not 0.0 < window[0] <= MAX_EXPECT_IN_M:
-        return fields  # no window: CORE keeps today's behaviour for this place
-    expect_in, lateral = window
+    expect_in = round(remaining, 3)
+    window = 0.0 < expect_in <= MAX_EXPECT_IN_M
+    if action in (STRAIGHT, LEFT, RIGHT):
+        # 2026-10-08: the first painted line past the place along the lane's heading there (on a
+        # curved approach the robot's heading is not the line's).
+        x, y, heading = live.arc(index).point_at(live.segments[index]["s_to"])
+        past = line_past(live.graph, x, y, heading)
+        if past is None:  # no line near the place: the old near-edge half-width, and no window
+            width = live.arc(index + 1).width_m
+            fields["pivot_past_line_m"] = round(min(width / 2, MAX_PIVOT_PAST_LINE_M), 3)
+            return fields
+        if window:
+            fields["pivot_past_line_m"] = -past
+        # No negative pivot without a window: map-backed CORE holds any unplaced sighting.
+    if not window:
+        return fields  # no window: map-backed CORE holds a junction sighting here
     speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
     if age is None or reckoned is None or live.pose_read_at is None:
         tol = MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
     else:
-        # ponytail: the map pose has no heading-direction error estimate, so it is odom drift over
-        # the distance dead-reckoned since the last sighting, plus how far the robot drives at its
-        # trip speed over the pose age, the measured read-to-send time and SEND_ALLOWANCE_S,
-        # floored by the site knob ``expect_tol_min_m``; replace with the provider's own covariance
-        # once MapPose reports one.
+        # ponytail: the map pose has no along-path error estimate, so it is odom drift over the
+        # distance dead-reckoned since the last sighting and over the path CORE measures to the
+        # place, plus how far the robot drives at its trip speed over the pose age, the measured
+        # read-to-send time and SEND_ALLOWANCE_S, floored by the site knob ``expect_tol_min_m``;
+        # replace with the provider's own covariance once MapPose reports one.
         latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
-        tol = max(config.expect_tol_min_m, ODOM_DRIFT_PER_M * reckoned + speed * latency + ENDPOINT_TOL_M)
-        tol += lateral  # CORE's straight-ahead point is this far beside the lane on a bend
+        tol = max(config.expect_tol_min_m,
+                  ODOM_DRIFT_PER_M * (reckoned + expect_in) + speed * latency + ENDPOINT_TOL_M)
+        tol += _curve_offset_m(live.arc(index), live.segments[index]["s_to"], remaining, pose)
     fields.update(expect_in_m=expect_in, expect_tol_m=round(min(tol, MAX_EXPECT_TOL_M), 3))
     return fields
 
 
-def _straight_ahead(live: "LiveTrip", index: int, remaining: float,
-                    pose: dict) -> Optional[tuple[float, float]]:
-    """``(place distance along the robot's heading, largest lane distance beside that ray)``, or None.
+def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
+    """How far along ``heading`` from ``(x, y)`` the first painted cross line is, or None when
+    ``(x, y)`` is off the lanes or the lanes run on past ``MAX_PIVOT_PAST_LINE_M``. Only
+    ``lane`` arcs are painted (a ``free`` arc is no tape).
 
-    CORE projects ``expect_in_m`` straight ahead, so a lane turning more than
-    ``MAX_WINDOW_BEND_DEG`` before the place (the 260919 ring) gets no window (a path-following
-    window is later work); a smaller bend widens it by the lane's distance beside the ray.
+    D-507 2 (2026-10-08): the painted lines are the edge of the lanes' union, each lane a band of
+    ``width_m`` around its centre line. A lane mouth breaks a line (the roundabout's outer line at
+    a spoke); an island keeps one (its inner line, the far edge the keeper measures at the 260919
+    SW spoke: 0.404 m here against 0.402 m in SIM).
     """
-    if pose.get("x") is None or pose.get("y") is None or pose.get("yaw") is None:
+    cos, sin = math.cos(heading), math.sin(heading)
+    near = [arc for arc in graph.arcs.values()
+            if arc.drive_mode == "lane" and arc.project(x, y)[0] <= MAX_PIVOT_PAST_LINE_M + arc.width_m]
+
+    def off(t: float) -> bool:
+        return all(arc.project(x + t * cos, y + t * sin)[0] > arc.width_m / 2 for arc in near)
+
+    if off(0.0):
         return None
-    arc, s_to = live.arc(index), live.segments[index]["s_to"]
-    heading = arc.point_at(s_to - remaining)[2]
-    cos, sin = math.cos(pose["yaw"]), math.sin(pose["yaw"])
-    steps, lateral = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M)), 0.0
-    for k in range(steps + 1):
-        x, y, yaw = arc.point_at(s_to - remaining * (1 - k / steps))
-        if abs(math.degrees(wrap(yaw - heading))) > MAX_WINDOW_BEND_DEG:
-            return None
-        lateral = max(lateral, abs(-(x - pose["x"]) * sin + (y - pose["y"]) * cos))
-    x, y, _yaw = arc.point_at(s_to)
-    return round((x - pose["x"]) * cos + (y - pose["y"]) * sin, 3), lateral
+    t, step = 0.0, LINE_STEP_M
+    while t <= MAX_PIVOT_PAST_LINE_M and not off(t + step):
+        t += step
+    while step > 0.001:
+        step /= 2
+        if not off(t + step):
+            t += step
+    past = round(t + step, 3)
+    return past if past <= MAX_PIVOT_PAST_LINE_M else None
+
+
+def _curve_offset_m(arc, s_to: float, remaining: float, pose: dict) -> float:
+    """A robot this far beside the lane drives a curve this much longer or shorter than its
+    centre line: the offset times the heading change (rad) along the rest of the lane. Safety
+    review 2026-10-08: the window compares travelled distance, so this widens it."""
+    if pose.get("x") is None or pose.get("y") is None:
+        return 0.0
+    offset = arc.project(pose["x"], pose["y"])[0]
+    steps = max(1, math.ceil(remaining / WINDOW_BEND_STEP_M))
+    headings = [arc.point_at(s_to - remaining * (1 - k / steps))[2] for k in range(steps + 1)]
+    return offset * sum(abs(wrap(b - a)) for a, b in zip(headings, headings[1:]))
 
 
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
@@ -273,6 +358,15 @@ class LiveTrip:
         #: D-517 2: a repeat trip and the last lap's route (``route_key``) a new lap must match.
         self.repeat = bool(request.get("repeat"))
         self.lap_route: Optional[list] = None
+        #: D-517 3: the arc ids of one lap of the cycle (via…, to); the loop it shares with others.
+        self.lap_arcs: tuple[str, ...] = ()
+        #: Failed lap checks in a row and when the last one ran (retried every ``LAP_RETRY_S``).
+        self.lap_tries = 0
+        self.lap_tried_at = -math.inf
+        #: Index of the current lap's first segment; finished laps before it are dropped (bounded plan).
+        self.lap_start = 0
+        #: Route metres (whole arcs) dropped from the plan's front so far; the block table shifts by it.
+        self.trim_m = 0.0
         #: Bumped when an operator confirms another plan (the block table's route id, D-517 3).
         self.route_rev = 0
         #: ``(segment index, s)`` where the last step located the robot.

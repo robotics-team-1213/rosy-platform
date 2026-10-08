@@ -5,7 +5,7 @@
 // ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
 import { MODE_LABEL, NAVIGATION_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
-import { addressReason } from "./address-drift.js";
+import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag } from "./link-tag.js";
 import { localizationTag, localizationUrgent, untrustedQueuedReason } from "./localization-badge.js";
 import { capabilityReason } from "./motion-readiness.js";

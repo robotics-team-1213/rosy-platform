@@ -37,7 +37,7 @@ def drive_to(rig, x, **kwargs):
 def test_window_takes_only_a_sighting_near_the_expected_cross_line(ahead, inside):
     rig = Rig()
     rig.step()
-    assert send(rig, pivot_past_line_m=.1, **WINDOW) == (True, 1, 'armed')  # cross line at x .4
+    assert send(rig, map_id='site', pivot_past_line_m=.1, **WINDOW) == (True, 1, 'armed')  # line at x .4
     drive_to(rig, .2)
     decision, status = sight(rig, ahead=ahead, seen=False)                 # measured .2 + ahead
     if inside:
@@ -114,6 +114,19 @@ def test_old_client_without_fields_turns_at_any_sighting_from_the_stop_point():
     assert rig.x == pytest.approx(.2, abs=1e-6)  # no approach
 
 
+@pytest.mark.parametrize('action', ['left', 'straight'])
+def test_map_junction_without_a_window_holds_an_early_sighting(action):
+    rig = Rig()
+    rig.step()
+    assert send(rig, action=action, map_id='site', pivot_past_line_m=.1) == (True, 1, 'armed')
+    drive_to(rig, .2)
+    decision, status = sight(rig, ahead=.1, seen=False)
+    assert (decision.linear, decision.angular) == (0., 0.)
+    assert (status.state, status.reason, status.junction.state) == (
+        'HOLD', 'junction_unexpected', 'unexpected')
+    assert rig.m._junction['state'] == 'armed' and status.junction.pending_action == action
+
+
 def test_window_needs_fresh_odom_when_it_arrives():
     rig = Rig()
     with pytest.raises(JunctionRefused) as refused:
@@ -124,7 +137,7 @@ def test_window_needs_fresh_odom_when_it_arrives():
 @pytest.mark.parametrize('expect', [dict(expect_in_m=.5), dict(expect_tol_m=.1),
                                     dict(expect_in_m=2.1, expect_tol_m=.1),
                                     dict(expect_in_m=.5, expect_tol_m=.31),
-                                    dict(pivot_past_line_m=.31)])
+                                    dict(pivot_past_line_m=.31), dict(pivot_past_line_m=-.31)])
 def test_invalid_window_fields_raise(expect):
     rig = Rig()
     rig.step()
@@ -163,6 +176,8 @@ def _approaching(rig, pivot=.1, reason='junction_transverse', step=None, **kwarg
 @pytest.mark.parametrize('pivot, reason, distance, basis', [
     (.1, 'junction_transverse', .3, 'map'),   # cross line .2 ahead + half lane width
     (.1, 'junction_fork', .2, 'map'),         # a fork turns at the measured branch end
+    (-.1, 'junction_transverse', .1, 'map'),  # 2026-10-08: the far edge, the place .1 before it
+    (-.25, 'junction_transverse', 0., 'map'),  # goal .15 is behind the robot at .2: turn here
     (None, 'junction_transverse', 0., 'stop_point')])  # no field: today's stop point
 def test_approach_distance(pivot, reason, distance, basis):
     rig = Rig()
@@ -260,6 +275,16 @@ def test_unexpected_clears_when_a_later_sighting_matches_while_still_seen(action
     assert rig.m._junction['outside'] is False
 
 
+def test_a_negative_pivot_expects_the_line_past_the_place():
+    """2026-10-08: the far edge (roundabout entry, T) is .1 past the place at .5: line at .6."""
+    for ahead, state in ((.4, 'turning'), (.2, 'unexpected')):
+        rig = Rig()
+        rig.step()
+        send(rig, pivot_past_line_m=-.1, **WINDOW)
+        drive_to(rig, .2)
+        assert sight(rig, ahead=ahead, seen=False)[1].junction.state == state
+
+
 def test_straight_pivot_biases_only_the_window():
     for ahead, state in ((.2, 'executing'), (.32, 'unexpected')):
         rig = Rig()
@@ -334,16 +359,17 @@ def test_approach_aborts_on_an_odom_epoch_change():
 # --- review 2: IR centre on the measured cross line (D-507 6, 2026-10-08) -------------------
 
 def test_cross_line_band_edges():
-    line = (.4, 0.)
-    assert cross_line_band((.3901, 0.), line, 0., .025, .01, .1)
-    assert not cross_line_band((.3899, 0.), line, 0., .025, .01, .1)
-    assert cross_line_band((.4349, 0.), line, 0., .025, .01, .1)
-    assert not cross_line_band((.4351, 0.), line, 0., .025, .01, .1)
+    line = (.4, 0.)                                                      # the tape centre
+    assert cross_line_band((.3776, 0.), line, 0., .025, .01, .1)         # .4 - .0125 - .01
+    assert not cross_line_band((.3774, 0.), line, 0., .025, .01, .1)
+    assert cross_line_band((.4224, 0.), line, 0., .025, .01, .1)         # .4 + .0125 + .01
+    assert not cross_line_band((.4226, 0.), line, 0., .025, .01, .1)
     assert cross_line_band((.41, .1099), line, 0., .025, .01, .1)       # lateral: half + error
     assert not cross_line_band((.41, -.1101), line, 0., .025, .01, .1)
     assert cross_line_band((.05, .41), (0., .4), math.pi/2, .025, 0., .1)  # at yaw pi/2
     assert not cross_line_band((.15, .41), (0., .4), math.pi/2, .025, 0., .1)
-    assert not cross_line_band((0., .39), (0., .4), math.pi/2, .025, 0., .1)
+    assert cross_line_band((0., .39), (0., .4), math.pi/2, .025, 0., .1)   # inside the tape half
+    assert not cross_line_band((0., .385), (0., .4), math.pi/2, .025, 0., .1)
 
 
 IR_ROW = dict(SITE, ir_row_x_m=.05)
@@ -358,9 +384,10 @@ def _band_straight(rig):
     assert rig.m._cross_band['kind'] == 'straight'
 
 
-@pytest.mark.parametrize('x, inside', [(.33, False), (.335, True), (.394, True), (.397, False)])
+@pytest.mark.parametrize('x, inside', [(.316, False), (.326, True), (.378, True), (.386, False)])
 def test_band_edges_carry_range_and_odom_error(x, inside):
-    # lower edge: x + .05 = .39 - .05 (x - .2) -> x = .3333; upper: x + .05 = .435 + .05 (x - .2) -> .3947
+    # tape centre .4 +/- .0125, error .01 + .05 (x - .2):
+    # lower edge: x + .05 = .3775 - .05 (x - .2) -> x = .3214; upper: x + .05 = .4225 + .05 (x - .2) -> .3816
     rig = site_rig(**IR_ROW)
     _band_straight(rig)
     while rig.x < x - .01:
@@ -436,7 +463,8 @@ def test_a_side_line_a_metre_later_is_lane_departure():
 
 @pytest.mark.parametrize('pivot, lateral, inside', [
     (None, .10, True), (None, .125, False),      # D-491 corridor half-width .10 + error
-    (.05, .06, True), (.05, .08, False)])         # Fleet's lane half-width (pivot_past_line_m)
+    (.05, .06, True), (.05, .08, False),         # Fleet's lane half-width (pivot_past_line_m)
+    (-.05, .10, True), (-.05, .125, False)])     # a negative pivot is no width: the corridor
 def test_band_lateral_bound(pivot, lateral, inside):
     rig = site_rig(**IR_ROW)
     site_step(rig)
@@ -460,3 +488,92 @@ def test_band_cleared_by_stop_and_mode_change(how):
     else:
         rig.m.set_mode(LineFollowMode.IR_LINE)
     assert rig.m._cross_band is None
+
+
+# --- 2026-10-08 user decision: the window compares travelled distance -------------------
+
+def drive_arc(rig, radius, length, ds=.01):
+    """Drive an arc to the left, odom only (x, y, yaw), ``ds`` per tick."""
+    for _ in range(round(length / ds)):
+        rig.yaw += ds / (2 * radius)
+        rig.x += ds * math.cos(rig.yaw)
+        rig.y += ds * math.sin(rig.yaw)
+        rig.yaw += ds / (2 * radius)
+        rig.step()
+
+
+ARC_R, ARC_L = .25, math.pi * .25                      # a half circle: path .785 m, chord .50 m
+
+
+@pytest.mark.parametrize('expect_in, inside', [(ARC_L + .2, True),            # the arc length
+                                               (2 * ARC_R + .2, False)])      # the straight line
+def test_curved_approach_compares_the_arc_length_not_the_straight_line(expect_in, inside):
+    rig = Rig()
+    rig.step()
+    send(rig, map_id='site', expect_in_m=round(expect_in, 3), expect_tol_m=.1)
+    drive_arc(rig, ARC_R, ARC_L)
+    assert math.dist((rig.x, rig.y), (0., 0.)) == pytest.approx(2 * ARC_R, abs=.01)
+    state = sight(rig, ahead=.2, seen=False)[1].junction.state
+    assert state == ('turning' if inside else 'unexpected')
+
+
+def test_a_bend_misread_0_3_m_before_the_place_is_outside():
+    """The SIM lap (R3-4): place 0.6 m on, its far line 0.1 m past it, a bend 0.3 m before it."""
+    rig = Rig()
+    rig.step()
+    send(rig, map_id='site', pivot_past_line_m=-.1, expect_in_m=.6, expect_tol_m=.12)
+    drive_to(rig, .1)
+    decision, status = sight(rig, ahead=.2, seen=False)                    # the bend at .3
+    assert decision.linear == 0. and status.junction.state == 'unexpected'
+    for _ in range(8):
+        rig.step(seen=False)
+    drive_to(rig, .3, seen=False)
+    assert sight(rig, ahead=.4, seen=False)[1].junction.state == 'turning'  # the far line at .7
+
+
+def test_an_odom_break_between_receipt_and_sighting_is_outside():
+    rig = Rig()
+    rig.step()
+    send(rig, map_id='site', expect_in_m=.5, expect_tol_m=.1)
+    drive_to(rig, .2)
+    rig.x += .2                                         # a jump: the trail restarts, a new epoch
+    rig.step(seen=False)
+    assert sight(rig, ahead=.1, seen=False)[1].junction.state == 'unexpected'
+
+
+# --- safety review 2026-10-08: the odometer is signed forward travel ---------------------
+
+def _reverse_then_forward(rig):
+    drive_to(rig, .3)
+    while rig.x > .1 + 1e-9:                            # a 0.2 m reverse (a D-468 retrace)
+        rig.step(dx=-.01)
+    drive_to(rig, .3)
+
+
+@pytest.mark.parametrize('ahead', [.2, .6])           # a line 0.4 m short, the real line
+def test_a_reverse_between_receipt_and_sighting_fails_the_window_closed(ahead):
+    rig = Rig()
+    rig.step()
+    send(rig, map_id='site', expect_in_m=.9, expect_tol_m=.1)
+    _reverse_then_forward(rig)                          # path 0.7 m, forward travel 0.3 m
+    assert rig.m._return_evidence.trail.odometer == pytest.approx(.3, abs=1e-6)
+    decision, status = sight(rig, ahead=ahead, seen=False)
+    assert decision.linear == 0. and status.junction.state == 'unexpected'
+
+
+def test_standing_jitter_does_not_move_the_odometer_or_close_the_window():
+    import random
+    noise = random.Random(7)
+    rig = Rig()
+    rig.step()
+    send(rig, map_id='site', expect_in_m=.5, expect_tol_m=.1)
+    drive_to(rig, .2)
+    trail = rig.m._return_evidence.trail
+    start, path = trail.odometer, trail.distance
+    for k in range(40):                                 # 2 s, +-2 mm pose noise, back on the spot
+        dx, dy = (0., 0.) if k == 39 else (noise.uniform(-.002, .002), noise.uniform(-.002, .002))
+        rig.x, rig.y = .2 + dx, dy
+        rig.step()
+    assert abs(trail.odometer - start) < .001
+    assert trail.distance - path > .02                   # the unsigned path length would have grown
+    assert sight(rig, ahead=.3, seen=False)[1].junction.state == 'turning'

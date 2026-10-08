@@ -143,6 +143,7 @@ async function select(index) {
     ? `${frame.source.width} × ${frame.source.height} · MCAP ${frame.source.source_session} · ${frame.source.mcap.frame.bag} SHA ${frame.source.mcap.bags.find(b => b.name === frame.source.mcap.frame.bag).sha256} · ${frame.source.mcap.frame.topic} · log ${frame.source.mcap.frame.log_ns} · channel ${frame.source.mcap.frame.channel_id} · ordinal ${frame.source.mcap.frame.message_ordinal} · 가져올 때 원본 픽셀 검증`
     : `${frame.source.width} × ${frame.source.height} · ${frame.source.video || '원본 사진'} · frame ${frame.source.video_frame ?? index}`;
   const candidates=sourceCandidates();
+  $('candidate-details').open = frame.status === 'pending' && candidates.length > 0 && frame.review.boxes.length === 0 && frame.version <= 1;
   $('candidate-source').textContent = candidates.length
     ? `원본 객체 후보 ${candidates.length}개 · 출처: ${frame.source.annotation_source || '원본 라벨 자료'} · 사람이 모든 박스를 확인해야 합니다.`
     : '원본 객체 후보가 없습니다. 자동 객체 탐지는 이 화면에서 실행하지 않습니다. 사진을 확인하고 필요한 박스를 직접 그리세요.';
@@ -170,9 +171,7 @@ function selectField(label, options, value, changed) {
 }
 function renderBoxes() {
   $('boxes').replaceChildren(); $('empty').hidden = !!frame.review.boxes.length;
-  $('empty').textContent = sourceCandidates().length
-    ? '현재 박스가 없습니다. 원본 초안을 가져오거나 사진을 확인한 뒤 필요한 박스를 그리세요.'
-    : '객체 초안이 없습니다. 사진 전체를 살펴보고 객체가 보이면 박스를 그리세요. 객체가 없을 때만 전체 확인 후 승인하세요.';
+  $('empty').textContent = '현재 박스 0개 · 사진 전체에서 필요한 박스를 그리세요. 객체가 없으면 전체 확인 후 승인하세요.';
   frame.review.boxes.forEach((box,i) => {
     const row=document.createElement('details'); row.className='box-row';row.open=selected===i||(selected===null&&i===0);
     const heading=document.createElement('summary');heading.textContent=`박스 ${i+1} · ${names[box.label??'']||'클래스 선택 필요'}`;

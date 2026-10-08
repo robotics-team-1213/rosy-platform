@@ -26,6 +26,9 @@ flowchart TB
     end
     fleet -->|미션 · CORE API| core
     dash["로봇 대시보드<br/>브라우저"] -->|웹 · API| core
+    model["모델 PC<br/>학습 · 독립 평가 · 승격 증거"] -.->|승인된 고정 산출물 · 목표| ai
+    ai["AI PC<br/>승인 버전 추론만"] -.->|사실 · 제안 · 목표| fleet
+    fleet -.->|제한된 질의 · 목표| ai
 ```
 
 | 구성 | 어디서 도나 | 하는 일 |
@@ -34,7 +37,10 @@ flowchart TB
 | **Fleet** | 현장 PC | 여러 로봇에 미션을 나누고 작업 원장을 소유한다. 로봇 모터를 직접 움직이지 않는다 |
 | **Vision** | 현장 PC | 천장 카메라 영상에서 로봇 위치를 뽑아 Fleet에 준다 |
 | **인지·내비게이션** | 각 로봇 | 차선·장애물 증거, 경로 계획. 명령은 CORE를 거친다 |
-| **학습** | 모델 PC | 주행 데이터로 인지 모델을 학습해 로봇에 배달한다 |
+| **학습·평가** | 모델 PC | 데이터·사람 정답으로 모델을 학습·평가하고 고정 산출물의 승격 증거를 만든다 |
+| **AI 추론** | AI PC | 승인된 모델 버전으로 정체 사실 또는 Mission/Task 후보만 낸다. Fleet 원장·장치 명령 권한은 없다. 현재는 오프라인 연결 시험 단계 |
+
+모델 PC → AI PC → Fleet → CORE의 Decision 경계와 VLM/텍스트 후보의 분리는 [파이프라인 설계](docs/plans/2026-10-08-decision-model-pipeline-design.md)에 있다. 점선은 **목표 연결**이며 현재 운영 연결이 아니다([D-516](docs/adr/D-516-offline-decision-model-replay-boundary.md)).
 
 ## 시작하기
 

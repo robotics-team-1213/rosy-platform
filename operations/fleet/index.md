@@ -91,7 +91,7 @@
 ## 최근 기록
 
 - 2026-10-08 · uncommitted · uiux(fleet-web): D-517 M1b 교통 층, 카드 한 줄, 예외 큐 행, 반복 운행 시작
-- 2026-10-08 · uncommitted · feat(fleet): D-517 M1a 로봇마다 trip, 반복 운행, Fleet 블록 표(표시만)
-- 2026-10-08 · uncommitted · fix(fleet): D-472 독립 안전 검토 지적 반영
-- 2026-10-08 · uncommitted · feat(fleet): D-472 LED 신원 오케스트레이터와 확인 트랙
-- 2026-10-08 · uncommitted · D-515 관제 지도 천장 카메라를 위에서 본 직사각형으로
+- 2026-10-08 · uncommitted · fix(fleet): D-517 M1a 리뷰 반영 — 끝난 trip의 점유 유지, 고리 키, 바퀴 재시도·정리
+- 2026-10-08 · uncommitted · fix(fleet): 지도 궤적·테더 검토 반영
+- 2026-10-08 · uncommitted · feat(fleet): 지도 궤적과 D-512 테더 표시
+- 2026-10-08 · uncommitted · docs(fleet): D-507 주행 거리 창의 API Ref 번호를 v1.139로 옮김, main 병합

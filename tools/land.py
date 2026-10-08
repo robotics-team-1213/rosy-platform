@@ -374,7 +374,12 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
                      if _test_dir(t) for p in (wt / _test_dir(t) / "web").glob("**/*.mjs"))
         mjs = list(dict.fromkeys(mjs))
         if mjs:
-            step(wt, ["node", "--test", *mjs], logdir / f"node-{round_no}.txt", "node")
+            # D-518: console modules import /console/assets/<name>; Node resolves those through
+            # the suite's register hook, as test_site_map_api.py does.
+            hooks = sorted({f"./{h.relative_to(wt).as_posix()}" for inv in invocations for t in inv
+                            if _test_dir(t) for h in (wt / _test_dir(t) / "web").glob("register-*.mjs")})
+            step(wt, ["node", *[a for h in hooks for a in ("--import", h)], "--test", *mjs],
+                 logdir / f"node-{round_no}.txt", "node")
             done.append(f"node --test {len(mjs)} file(s) ok")
         else:
             done.append("node skipped: no web/*.mjs under the selected test dirs")
