@@ -300,8 +300,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) API 판 v1.143 → v1.145
 - 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 단계 1 CORE: 지도 호 feed-forward, IR 한 번 보정, API v1.143
 - 2026-10-08 · uncommitted · D-507 4 회전각: 접선 + 6° 더 돌림(잠정)
 - 2026-10-08 · uncommitted · D-507 keep 명령 회전 판정 리뷰 반영
 - 2026-10-08 · uncommitted · D-507 keep 제자리 회전 판정을 CORE 명령 twist로
-- 2026-10-08 · uncommitted · D-512 개정 1 독립 안전 리뷰 반영과 픽셀 모드
