@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · 727d96501 · refactor(fleet-web): map-view.js 카메라 배경·교통 층 분리
 - 2026-10-08 · 7e883f418 · refactor(fleet): D-517 trip runner split — 바퀴·정지·교통 이음매
 - 2026-10-08 · uncommitted · uiux(fleet-web): D-517 M1b 교통 층, 카드 한 줄, 예외 큐 행, 반복 운행 시작
 - 2026-10-08 · uncommitted · fix(fleet): D-517 M1a 리뷰 반영 — 끝난 trip의 점유 유지, 고리 키, 바퀴 재시도·정리
 - 2026-10-08 · uncommitted · fix(fleet): 지도 궤적·테더 검토 반영
-- 2026-10-08 · uncommitted · feat(fleet): 지도 궤적과 D-512 테더 표시

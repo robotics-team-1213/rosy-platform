@@ -27,6 +27,8 @@ CANVAS_FILES = [
     COMMON / "evidence.js",
     FLEET / "map-view.js",
     FLEET / "trail-view.js",
+    FLEET / "camera-backdrop.js",
+    FLEET / "traffic-view.js",
     FLEET / "field-view.js",
     FLEET / "map-fit-view.js",
     FLEET / "shared" / "field-warp.js",
