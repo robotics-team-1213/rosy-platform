@@ -1909,6 +1909,34 @@ def test_operate_view_fits_and_does_not_crush(viewport, state):
     assert fit["estopInside"], f"{viewport}: 즉시 정지가 뷰포트 밖이다: {fit}"
 
 
+@pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
+def test_navigation_teleop_disabled_reasons_fit_the_action_column(viewport):
+    from playwright.sync_api import sync_playwright
+
+    init = """window.__rosyStateOverrides={robot_state:{mode:'NAVIGATION'}};"""
+    with sync_playwright() as playwright:
+        browser, page = _launch_page(playwright, extra_init=init, width=viewport[0], height=viewport[1])
+        page.goto("http://rosy.test/dashboard#compatibility")
+        page.wait_for_function("document.querySelector('#robot-mode')?.textContent === '내비게이션'")
+        page.wait_for_function("document.querySelector('.teleop-pad ui-button')?.hasAttribute('reason')")
+        if output := os.environ.get("ROSY_SCREENSHOT_DIR"):
+            shots = Path(output)
+            shots.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(shots / f"navigation-teleop-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+        sizes = page.evaluate("""() => {
+          const act=document.querySelector('.region-act');
+          const pad=document.querySelector('.teleop-pad');
+          return {act:[act.clientWidth,act.scrollWidth,act.clientHeight,act.scrollHeight],pad:[pad.clientWidth,pad.scrollWidth],
+            reasons:[...pad.querySelectorAll('ui-button')].map(button => button.querySelector('small[data-reason]')?.textContent)};
+        }""")
+        browser.close()
+    assert len(sizes["reasons"]) == 4 and all(sizes["reasons"]), sizes
+    assert sizes["act"][1] <= sizes["act"][0] + 1, sizes
+    if viewport[0] >= 1024:
+        assert sizes["act"][3] <= sizes["act"][2] + 1, sizes
+    assert sizes["pad"][1] <= sizes["pad"][0] + 1, sizes
+
+
 def test_wide_but_short_operate_view_keeps_three_columns():
     """D-359 US-008: at 1366x600 (height < 40rem) the frame lets go and the page scrolls, but the
     three regions stay side by side — the columns follow width only."""

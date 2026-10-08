@@ -1,0 +1,64 @@
+{
+  "schema": "rosy.lane-candidate-review-queue/1",
+  "status": "candidate_only_not_human_truth",
+  "source_kind": "mp4_derivative_from_verified_mcap",
+  "sessions": {
+    "20261006T082612Z_rosy_26": {
+      "frames": 2487,
+      "selected": 103,
+      "video_sha256": "e6c3785b4cbc0cbd8f81ce4b09b1202ec4c15792981ee803628becef5949dd13",
+      "sidecar_sha256": "767c05c7781e0f0cad3c827eb21e1c3f800588e0f2500fe6fb7dcbdde9896d65",
+      "windows": [
+        [
+          188,
+          211
+        ],
+        [
+          876,
+          892
+        ],
+        [
+          2118,
+          2140
+        ],
+        [
+          2448,
+          2463
+        ],
+        [
+          2464,
+          2486
+        ]
+      ]
+    },
+    "20261006T091340Z_rosy_26": {
+      "frames": 642,
+      "selected": 75,
+      "video_sha256": "cb4eb6d39c24a6a0cc4ad5adee615b0e21ef2ef781f6b8d68aa89fe9fff3c491",
+      "sidecar_sha256": "eec1f44a8c658749cac35cd72a990dc0979d44e0ff8c5fa8f331bea776ec141d",
+      "windows": [
+        [
+          180,
+          202
+        ],
+        [
+          387,
+          410
+        ],
+        [
+          440,
+          450
+        ],
+        [
+          625,
+          641
+        ]
+      ]
+    }
+  },
+  "rows": 178,
+  "queue_sha256": "a297fd4777a8042c24ddfc70ddb9173a14d3d9ed15631342299aa748060c3372",
+  "gallery_sha256": "7fb268d60be7f855ab93a7a8b64347f38761d935d17cda33102b02f17e20dc1d",
+  "human_approved_events": 0,
+  "lane_follow_acceptance": false
+}
