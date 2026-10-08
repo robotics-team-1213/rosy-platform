@@ -10,13 +10,13 @@ SCRIPT = Path(__file__).with_name("rosy-ssh-watchdog")
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="bash + /proc host script")
 
 
-def run(tmp_path, *, ssh=False, ts_alive=True, route=True, ping=True, neigh=False,
+def run(tmp_path, *, ssh=False, ts_alive=True, route=True, ping=True, neigh=None,
         uptime=7200, core_active=False, env=None):
     """One watchdog run with stubbed system commands; returns (stdout, action lines)."""
     stubs = tmp_path / "bin"
     stubs.mkdir(exist_ok=True)
     calls = tmp_path / "calls"
-    route_line = "default via 192.0.2.1 dev wlan0" if route else ""
+    route_line = route if isinstance(route, str) else ("default via 192.0.2.1 dev wlan0" if route else "")
     for name, body in {
         "timeout": ('shift; if [ "$1" = bash ]; then ' + ("echo SSH-2.0-x" if ssh else "exit 1")
                     + '; elif [ "$1" = tailscale ]; then ' + ("exit 0" if ts_alive else "exit 1")
@@ -26,7 +26,7 @@ def run(tmp_path, *, ssh=False, ts_alive=True, route=True, ping=True, neigh=Fals
                       'case "$1" in is-enabled) [ "$2" = ssh.socket ] && exit 1; exit 0;; '
                       f'is-active) exit {0 if core_active else 3};; esac; true'),
         "ip": (f'if [ "$1" = -4 ]; then echo "{route_line}"; '
-               f'else {"echo 192.0.2.1 dev wlan0 REACHABLE" if neigh else "true"}; fi'),
+               f'else {f"echo 192.0.2.1 dev wlan0 lladdr 00:00:5e:00:53:01 {neigh}" if neigh else "true"}; fi'),
         "ping": "exit 0" if ping else "exit 1",
         "awk": f'if [ "$#" -ge 2 ] && [ "$2" = /proc/uptime ]; then echo {uptime}; else exec /usr/bin/awk "$@"; fi',
     }.items():
@@ -70,16 +70,23 @@ def test_no_reboot_within_boot_grace(tmp_path):
     assert acted == ["restart ssh"] and "boot grace" in out
 
 
-def test_tailscale_and_gateway_never_reboot(tmp_path):
-    for _ in range(10):
-        _, acted = run(tmp_path, ssh=True, ts_alive=False, ping=False)
-        assert "reboot" not in acted
-    assert "restart tailscaled" in acted
+def test_tailscale_and_gateway_never_reboot_and_back_off(tmp_path):
+    acts = [run(tmp_path, ssh=True, ts_alive=False, ping=False)[1] for _ in range(10)]
+    assert all("reboot" not in a for a in acts)
+    assert [i for i, a in enumerate(acts) if "restart tailscaled" in a] == [0, 5]
+    assert [i for i, a in enumerate(acts) if "restart NetworkManager" in a] == [2, 5, 8]
 
 
-def test_no_default_route_or_icmp_drop_is_healthy(tmp_path):
+def test_no_default_route_link_route_or_icmp_drop_is_healthy(tmp_path):
     assert run(tmp_path, ssh=True, route=False)[1] == []
-    assert run(tmp_path, ssh=True, ping=False, neigh=True)[1] == []
+    assert run(tmp_path, ssh=True, route="default dev wg0 scope link")[1] == []
+    for _ in range(3):
+        assert run(tmp_path, ssh=True, ping=False, neigh="REACHABLE")[1] == []
+
+
+def test_stale_neighbour_is_not_a_live_gateway(tmp_path):
+    acts = [run(tmp_path, ssh=True, ping=False, neigh="STALE")[1] for _ in range(3)]
+    assert acts[2] == ["restart NetworkManager"]
 
 
 def test_robot_skips_network_manager_and_never_reboots_with_core_active(tmp_path):

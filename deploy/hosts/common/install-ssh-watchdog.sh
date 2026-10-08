@@ -11,8 +11,13 @@ systemctl cat rosy-network.service >/dev/null 2>&1 && robot=1
 install -m 0755 "$here/rosy-ssh-watchdog" /usr/local/sbin/rosy-ssh-watchdog
 install -m 0644 "$here/rosy-ssh-watchdog.service" /etc/systemd/system/rosy-ssh-watchdog.service
 install -m 0644 "$here/rosy-ssh-watchdog.timer" /etc/systemd/system/rosy-ssh-watchdog.timer
-# Rewritten on every install so a robot can never lose its robot setting.
-echo "ROSY_ROBOT=$robot" > /etc/default/rosy-ssh-watchdog
+# ROSY_ROBOT is rewritten on every install so a robot can never lose it; other
+# local settings (BOOT_GRACE_S, MAX_REBOOTS, ...) are kept.
+f=/etc/default/rosy-ssh-watchdog
+touch "$f"
+grep -v -e '^ROSY_ROBOT=' -e '^CHECK_GATEWAY=' "$f" > "$f.new" || true
+echo "ROSY_ROBOT=$robot" >> "$f.new"
+mv "$f.new" "$f"; chmod 0644 "$f"
 # sshd and tailscaled must come back on their own after any reboot.
 systemctl enable ssh >/dev/null 2>&1 || systemctl enable sshd >/dev/null 2>&1 || true
 if systemctl cat tailscaled.service >/dev/null 2>&1; then systemctl enable tailscaled >/dev/null 2>&1 || true; fi

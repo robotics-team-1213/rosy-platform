@@ -44,19 +44,30 @@ tailscale_ok() {
 gateway_ok() {
   # No default route (Tailscale-only, fallback AP) is not a failure; neither is a
   # gateway that drops ICMP while it still answers ARP.
+  # A link-scope default route (no "via", e.g. a VPN) has no gateway to probe.
   local gw dev
-  read -r gw dev < <(ip -4 route show default 2>/dev/null | awk '{print $3, $5; exit}')
+  read -r gw dev < <(ip -4 route show default 2>/dev/null | awk '
+    /^default/ { g=""; d=""; for (i=1;i<NF;i++) { if ($i=="via") g=$(i+1); if ($i=="dev") d=$(i+1) }
+                 print g, d; exit }')
   [ -z "${gw:-}" ] && return 0
   timeout 5 ping -c 1 -W 2 "$gw" >/dev/null 2>&1 && return 0
-  ip neigh show "$gw" dev "$dev" 2>/dev/null | grep -q -E 'REACHABLE|STALE|DELAY|PROBE'
+  # Only a confirmed REACHABLE neighbour counts; STALE/DELAY/PROBE linger after death.
+  ip neigh show "$gw" dev "${dev:-}" 2>/dev/null | grep -q REACHABLE
 }
 
-if ! tailscale_ok; then log "tailscaled not answering"; act systemctl restart tailscaled; fi
+if ! tailscale_ok; then
+  t=$(( $(num tailscale_failures) + 1 )); put tailscale_failures "$t"
+  log "tailscaled not answering ($t)"
+  # Restart on the 1st bad run, then every 5th (about 10 min), never a reboot.
+  [ $(( t % 5 )) = 1 ] && act systemctl restart tailscaled
+else
+  put tailscale_failures 0
+fi
 if [ "$ROSY_ROBOT" != 1 ] && ! gateway_ok; then
   n=$(( $(num gateway_failures) + 1 )); put gateway_failures "$n"
   log "gateway not answering ($n)"
-  # One NetworkManager restart per 3 bad runs, never a reboot.
-  [ $(( n % 3 )) = 1 ] && act systemctl restart NetworkManager
+  # NetworkManager restart after 3 bad runs (6 min) and every 3 after, never a reboot.
+  [ $(( n % 3 )) = 0 ] && act systemctl restart NetworkManager
 else
   put gateway_failures 0
 fi
