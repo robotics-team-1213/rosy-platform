@@ -221,7 +221,9 @@ def _helper_copy(tmp_path, role):
         (stub / name).write_text(f'#!/bin/sh\necho "{name} $*" >> {tmp_path}/calls\n')
     for path in stub.iterdir():
         path.chmod(0o755)
-    (tmp_path / "role").write_text(role + "\n")
+    (tmp_path / "conf").mkdir(exist_ok=True)
+    (tmp_path / "conf" / "role").write_text(role + "\n")
+    (tmp_path / "conf" / "units-user").write_text("pinky\n")
     text = HELPER.read_text(encoding="utf-8")
     for old, new in (("CONF=/etc/rosy/host-control", f"CONF={tmp_path / 'conf'}"),
                      ("/run/systemd/shutdown/scheduled", sched),
