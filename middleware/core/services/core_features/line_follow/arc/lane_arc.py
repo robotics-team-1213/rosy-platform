@@ -27,9 +27,12 @@ ARC_START_IR_GRACE_M = .03
 ARC_IR_AWAY_M = .12
 ARC_IR_LEVEL_MAX_M = 1.5*ARC_IR_AWAY_M
 #: D-520 2026-10-09 addendum: track the map circle in odom (feed-forward + bounded radial correction).
-#: kappa_corr = sign(k)*k_y*e_r - k_th*e_th, |kappa_corr| <= ARC_MAX_CORRECTION_1PM; critically damped
-#: (k_th = 2 sqrt(k_y)), distance constant ~0.17 m. e_r: odom radial error, + outward of the circle.
-ARC_GAIN_LATERAL_1PM2, ARC_GAIN_HEADING_1PM, ARC_MAX_CORRECTION_1PM = 36., 12., 1.5
+#: kappa_corr = sign(k)*(k_y*e_r + I) - k_th*e_th, |kappa_corr| <= ARC_MAX_CORRECTION_1PM, I = k_i times the
+#: integral of e_r over odom length, |I| <= ARC_MAX_INTEGRAL_1PM. Poles (distance) -11.5, -2.3 +- 2.8i
+#: (Routh: k_i < k_th*k_y); the integral removes the steady offset of a robot that turns less than
+#: commanded (lap SIM 4: Gazebo ~15 % at 0.08 m/s gave +0.02-0.04 m on P alone). e_r: + outward.
+ARC_GAIN_LATERAL_1PM2, ARC_GAIN_HEADING_1PM, ARC_MAX_CORRECTION_1PM = 64., 16., 1.5
+ARC_GAIN_INTEGRAL_1PM3, ARC_MAX_INTEGRAL_1PM = 150., 1.
 #: |e_r| past this stops lane_arc_edge (IR sees the paint near 0.0625 m; half lane 0.0925 m).
 ARC_MAX_RADIAL_M = .075
 #: An IR verdict puts the body this far inside the painted line's centre: tape half width 0.0125 m
@@ -156,11 +159,11 @@ class ArcMixin:
         # turn's target yaw (the map tangent), so a turn that ended off it is corrected, not followed.
         if (prev is not None and prev['state'] == 'ended' and prev.get('key') == key
                 and prev['end'] == j.get('place_id') and prev['k'] == k):
-            centre, yaw0 = prev['centre'], pose.yaw
+            centre, yaw0, integral = prev['centre'], pose.yaw, prev['integral']
         else:
             yaw0 = j['target'] if j.get('target') is not None and j['action'] != 'straight' else pose.yaw
-            centre = (pose.x-math.sin(yaw0)/k, pose.y+math.cos(yaw0)/k)
-        a.update(key=key, last=(pose.x, pose.y, pose.yaw), yaw0=yaw0, centre=centre)
+            centre, integral = (pose.x-math.sin(yaw0)/k, pose.y+math.cos(yaw0)/k), 0.
+        a.update(key=key, last=(pose.x, pose.y, pose.yaw), yaw0=yaw0, centre=centre, integral=integral)
         if v <= 0:
             return self._arc_stop('linear_limit_zero')
         self._arc_quiet()
@@ -233,8 +236,11 @@ class ArcMixin:
         if abs(e_r) > ARC_MAX_RADIAL_M:
             return self._arc_stop('lane_arc_edge')
         busy = a['corr'] is not None and a['corr']['phase'] in ('away', 'level')
+        if not busy:
+            a['integral'] = max(-ARC_MAX_INTEGRAL_1PM, min(ARC_MAX_INTEGRAL_1PM,
+                                                          a['integral'] + ARC_GAIN_INTEGRAL_1PM3*e_r*step))
         corr = 0. if busy else max(-ARC_MAX_CORRECTION_1PM, min(ARC_MAX_CORRECTION_1PM, math.copysign(
-            ARC_GAIN_LATERAL_1PM2, a['k'])*e_r - ARC_GAIN_HEADING_1PM*e_th))
+            1., a['k'])*(ARC_GAIN_LATERAL_1PM2*e_r + a['integral']) - ARC_GAIN_HEADING_1PM*e_th))
         # REP-103: a line under the left IR (sigma +1) bends right, as today's IR guard.
         w = cfg.arc_curvature_gain*v*a['k'] + v*corr - sigma*v*cfg.bridge_arm_max_curvature
         if abs(w) > cap:  # D-344 13: the same curvature, slower

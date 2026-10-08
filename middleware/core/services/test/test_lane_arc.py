@@ -549,6 +549,7 @@ def test_closed_loop_gain_09_corrects_without_heading_outward(offset, yaw0, monk
     Feed-forward only (no radial tracking): the drift the IR correction is there for."""
     monkeypatch.setattr(lane_arc, 'ARC_GAIN_LATERAL_1PM2', 0.)
     monkeypatch.setattr(lane_arc, 'ARC_GAIN_HEADING_1PM', 0.)
+    monkeypatch.setattr(lane_arc, 'ARC_GAIN_INTEGRAL_1PM3', 0.)
     r = 1/K
     rig = ArcRig(arc_curvature_gain=.9)
     rig.y, rig.yaw = -offset, yaw0
@@ -668,6 +669,17 @@ def test_tracking_holds_the_circle_when_the_robot_turns_less_or_more(turn_scale)
         worst = max(worst, abs(_radial(rig)))
     assert rig.m._arc['reason'] == 'lane_arc_end_unarmed' and worst <= .012
     assert rig.m._arc['corr'] is None
+
+
+def test_the_integral_removes_the_offset_of_a_robot_that_turns_15_percent_less():
+    """lap SIM 4: Gazebo turned ~15 % less than commanded; P alone held a steady +0.02 m."""
+    rig = ArcRig()
+    rig.open(dict(SEGMENT, length_m=1.))
+    rig.turn_scale, ends = .85, []
+    while running(rig):
+        rig.drive()
+        ends.append(_radial(rig))
+    assert max(abs(r) for r in ends) <= .012 and abs(ends[-1]) <= .003, (max(map(abs, ends)), ends[-1], ends[len(ends)//2])
 
 
 def test_the_circle_leaves_along_the_turn_target_not_where_the_turn_ended():
