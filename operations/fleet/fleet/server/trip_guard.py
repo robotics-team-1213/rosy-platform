@@ -94,6 +94,7 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
 
     async def guarded_estop_all(*args, **kwargs):
         closed = runner.close_all("operator_estop")  # D-517 1: no trip step sends after this line
+        runner.traffic.signals_all_red()  # D-525 4: virtual signals go all red with the E-stop
         try:
             return await estop_all(*args, **kwargs)
         finally:

@@ -427,6 +427,8 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     pixel_draft_indices = [row['frame'] for row in pixel_reviews
                                            if row['status'] == 'pending' and
                                            bool((review_masks.pixels(store, row) != 255).any())]
+                    pixel_candidate_indices = [row['frame'] for row in pixel_reviews if row['status'] == 'pending'
+                                               and (row['draft_candidates'] or row['frame'] in pixel_draft_indices)]
                     latest = next(iter(store.exports()), None)
                     preparation = None
                     if latest:
@@ -449,10 +451,11 @@ def make_server(store, port=8767, host='127.0.0.1'):
                                           and f['source'].get('original_video_verified') is not True
                                           for f in frames),
                                       'object_draft_first': object_draft_indices[0] if object_draft_indices else None,
-                                      'pixel_draft_first': pixel_draft_indices[0] if pixel_draft_indices else None,
+                                      'pixel_draft_first': pixel_candidate_indices[0] if pixel_candidate_indices else None,
                                       'pixel_counts': {state: pixel_statuses.count(state)
                                                        for state in ('approved', 'pending', 'excluded')}
                                                       | {'drafted': len(pixel_draft_indices),
+                                                         'candidates': len(pixel_candidate_indices),
                                                          'blank': pixel_statuses.count('pending') - len(pixel_draft_indices)}})
                 if path.startswith('/api/learning/images/'):
                     prefix, identifier, name = path.rsplit('/', 2)
