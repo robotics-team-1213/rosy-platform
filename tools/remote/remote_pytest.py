@@ -179,7 +179,9 @@ def deps(repo: Path, sha: str) -> tuple[str, list[str]]:
         raise SystemExit(f"[remote-pytest] no `pip3 wheel ... --wheel-dir` line in {CI}; update VENV")
     dirs = match.group(1).split()
     ids = [git(repo, "rev-parse", f"{sha}:{p}") for p in (CI, DEVICE_REQ, CRYPTO_REQ, FLEET_REQ, *dirs)]
-    return hashlib.sha256("\n".join([VENV, *ids]).encode()).hexdigest()[:16], dirs
+    # Lock/swap changes do not change installed packages or need another venv build.
+    install = VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
+    return hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16], dirs
 
 
 def ship(repo: Path, host: str, sha: str, name: str) -> None:

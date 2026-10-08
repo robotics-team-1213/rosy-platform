@@ -79,6 +79,14 @@ def test_matching_venv_does_not_wait_for_active_pytest(tmp_path):
         holder.wait(timeout=2)
 
 
+def test_lock_change_does_not_rebuild_venv_but_install_change_does(monkeypatch):
+    baseline = rp.deps(ROOT, "HEAD")[0]
+    monkeypatch.setattr(rp, "VENV", rp.VENV.replace("flock -s -w 600 9", "flock -s -w 60 9"))
+    assert rp.deps(ROOT, "HEAD")[0] == baseline
+    monkeypatch.setattr(rp, "VENV", rp.VENV.replace("$P check", "$P install extra\n$P check"))
+    assert rp.deps(ROOT, "HEAD")[0] != baseline
+
+
 def _git(cwd, *args):
     return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True,
                           text=True).stdout.strip()
