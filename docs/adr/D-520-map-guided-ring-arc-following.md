@@ -41,6 +41,7 @@
      - 그 차로 polyline이 한 원호에서 옆으로 허용치(「SIM으로 정할 값」) 안에 있다.
      - `drive_mode: lane`이다.
      - D-491 횡단보도 구역을 지나지 않는다.
+       - 이 검사는 CORE가 한다(`_arc_on_crosswalk`). Fleet 지도에는 횡단보도 구역이 없어서 Fleet은 이 조건을 보지 않는다(2026-10-08 Fleet 구현 검토).
    - 260919의 네 호는 `ring_s` 0.3739 m, `ring_w` 0.3739 m, `ring_n` 0.3722 m(각 약 85°), `ring_e` 0.4595 m(약 105°)다(`lane_graph.yaml`, 반지름 0.2514 m).
    - 능력 `lane_arc: true`(CORE가 이 객체를 받고 5항의 선언이 있음)가 있는 로봇에만 Fleet이 보낸다. 없으면 필드를 빼고 오늘처럼 보낸다.
    - **회전각과 `advance_m`(D-507 4항 개정).** `exit_segment`가 있으면 Fleet은 `turn_deg`를 접선 그대로 보낸다. 들어오는 차로의 `end_tangent`에서 나가는 차로의 `start_tangent`까지의 `theta`이고, `TURN_OVERTURN_DEG` 6°를 더하지 않는다. `advance_m`은 보내지 않는다. CORE는 `exit_segment`가 있으면 `advance_m`을 무시한다. 지금 `set_junction`은 `advance_m`이 없을 때 `DEFAULT_ADVANCE_M` 0.10 m를 쓰는데, 이 경우에는 그 값도 쓰지 않는다. `exit_segment`가 없으면 D-507 4항의 잠정 규칙(접선 + 6°, `advance_m` 0.10)이 그대로다. D-507 4항에 이 문장을 가리키는 줄을 더했다.
@@ -55,7 +56,7 @@
    - **들어감.** 다음 가운데 하나다.
      - (a) `exit_segment`가 있는 `left`·`right` 지시가 `turning`을 마쳤고 `pivot_basis`가 `map` 또는 `segment_end`다. 그 지시는 `advancing`·`reacquiring` 없이 그 자리에서 `done`이 된다(`_mark_done`). CORE는 새 호 기록을 연다.
      - (b) 앞 호가 끝난 자리에서, `end_place_id`의 `straight` 지시가 `exit_segment`를 실었다. 그 지시도 `done`이 되고 다음 호 기록이 곧바로 열린다.
-   - `pivot_basis: stop_point`면 호를 열지 않고 오늘처럼 전진·재획득한다.
+   - `pivot_basis: stop_point`면 호를 열지 않고 오늘처럼 전진·재획득한다. `stop_point` 폴백은 오늘처럼 기본 전진이다. `exit_segment`가 있어도 `DEFAULT_ADVANCE_M` 0.10 m를 쓰고, 1항의 `advance_m` 무시는 호가 열릴 때만이다(구현 리뷰 2026-10-08).
    - **기록.** 호 기록은 자기 번호 `arc_seq`를 갖는다. `line_follow.arc`는 `{arc_seq, from_place_id, end_place_id, curvature_1pm, length_m, travelled_m, state: running|ended|stopped, reason, ...}`이다. 매니저 잠금 안의 한 상태이고, 새 스레드·저장소·발행자는 없다. twist는 매니저 틱에서 같은 generation·evidence revision으로 CommandManager에 간다(D-18).
    - **호 주행 중의 지시 칸.** 칸은 비어 있다. 호는 `MANEUVER`도 Fleet `MANOEUVRE`도 아니다.
      - Fleet의 의무: 호가 도는 동안 `end_place_id`의 지시를 보낸다. 앞 지시가 `done`이 되면 바로 보낸다. 260919 호 길이 0.37–0.46 m는 `arm_distance_m` 0.6 m보다 짧아서 오늘의 무장 규칙으로도 곧 보내진다.

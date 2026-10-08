@@ -120,6 +120,13 @@ test('D-494 trip stop reasons name the configured stall time and loop errors', a
   assert.match(tripStatusText({...trip, reason: 'junction_no_window', detail: {junction_action: 'left', junction_place: 'SW'}}, MAP),
     /기대 창이 없어 좌·우 회전 지시를 보내지 않고 멈췄습니다/);  // D-507 2, 2026-10-08
   assert.equal(PLACE_KIND_LABEL.stall, undefined);
+  // D-520 2
+  assert.match(tripStatusText({...trip, reason: 'lane_arc', detail: {arc_reason: 'lane_arc_edge'}}, MAP),
+    /회전교차로 호를 달리던 로봇이 멈췄습니다 .* · 사유 lane_arc_edge/);
+  assert.match(tripStatusText({...trip, reason: 'junction', detail: {junction_reason: 'arc_mismatch'}}, MAP),
+    /다른 장소의 지시라 로봇이 버렸습니다/);
+  assert.match(tripStatusText({...trip, state: 'running', reason: null, detail: {arc_end_unarmed: {end_place_id: 'SE'}}}, MAP),
+    /호 끝에 다음 지시가 없어/);
 });
 
 test('teach status reads the recording, then what waits for confirm', async () => {

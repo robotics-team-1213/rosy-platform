@@ -2613,6 +2613,7 @@
 - gate 변화: 없음(동작 변경 없음)
 - 결정: map-view.js 1030→831, 판정 split 유지(다음 증가 때 다시 판정). camera-backdrop 141, traffic-view 82. fleet 패키지 45944→45968(+24, 머리말·import), 패키지 판정은 다른 단계가 다시 한다
 - 교훈: 없음
+
 ## 2026-10-08 · uncommitted · feat(fleet): 지도 굽이 장소와 trip의 `bend` 지시 (D-507 보충)
 - 변경: `site_map.py` 장소 종류 `bend`(꼭짓점, `yaw`·`exit_yaw`·`radius_m` 필수, 회전 15–90°, 다른 종류는 두 필드 불가, 저장 body는 굽이 필드가 없는 장소에서 그대로). `trip_ports.py` `bend_geometry`(두 접점이 이 차선에 있고 진행 방향으로 회전 부호), `next_bend`, `bend_fields`(`bend_in_m` = 차로를 따른 호 시작점까지 거리, `bend_tol_m` = 기존 `expect_tol_m` 식, 옆 항 없음), `_pose_tol`로 tol 식을 한 곳에 둠. `trip_runner.py` `_step_bend`: `lane_bend` 로봇에만, 지나지 않은 굽이가 있으면 그 굽이가 다음 장소보다 먼저, 호 시작점 0.6 m 안에서 보내고 절반 만료에 갱신, CORE가 끝내야(`bending`/`reacquiring` 뒤 `idle`) 장소 지시. `MANOEUVRE`에 `bending`, `_completed`는 굽이 지시를 장소 완료로 세지 않음. `TripCaps.lane_bend`.
 - 증거: `test_trip_bend.py` 9건(장소 검증, 기존 지도 body 그대로, 실제 west 간선 방향별 회전 부호·호 시작점, 능력 읽기, 굽이 구간에서만 보냄·기동 중 안 보냄·끝난 뒤 다음 장소, armed 굽이가 다음 장소를 막음, 굽이 없는 지도·`lane_bend` 없는 로봇은 `bend` 없음, unresolved면 trip 정지). FakeCore가 `bend`를 받도록 `test_trip_runner.py` 보충.
@@ -2630,3 +2631,61 @@
 - 증거: `test_lane_traffic.py::test_a_new_lap_drives_its_bends_again`, trip 시험 118 passed.
 - gate 변화: SOURCE.
 - 결정: D-507 보충, D-517
+
+## 2026-10-08 · 138ee8567 · feat(fleet): D-517 M2 통행권 전송 (server/trip_authority.py)
+- 변경: `fleet.traffic.authority`(기본 false) + 로봇 능력 `line_follow_authority` 일 때만 trip 주기마다 표 계산 뒤 `POST /api/v1/line-follow/authority`. `until_m` = `authority_end_m` − 표가 쓴 자세의 경로 위치, `pose_stamp` = `MapPose.odom_stamp`(새 필드), `ttl_s` 2, leg `{trip_id}:{route_rev}` 별로 줄지 않음. 로봇당 전송 하나, 주기 안 재시도 없음. trip 보기 `traffic_authority`(core|hold_back), CORE `HOLDING` 은 정체 아님.
+- 증거: 모델 PC `operations/fleet/test` 2712 통과·4 실패 — 4건 모두 이 브랜치 기준 main 에서도 실패(3건 main 재현, `test_grammar_separation` 은 main bfaf00df6 에서 고침). `test_trip_authority.py` 통과.
+- gate 변화: SOURCE.
+- 결정: D-517 4항 (M2). fleet 46053 (판정 45942+150 안), app.py 751.
+
+## 2026-10-08 · 311469e4c · fix(fleet): D-517 M2 리뷰 반영 — 앞 끝 d, 자세 짝, 첫 통행권 전 강제
+- 변경: (887abb1a9 와 함께) 표의 `d` = base 경로 위치 + 몸 `front_x_m`(blocks.py 정의, `PINKY_PRO` URDF 값). 표가 `live.traffic` 에 `front_d_m`·`pose_stamp` 를 내보내고 송신기는 다시 계산하지 않는다(`until_m` = 끝 − 앞 끝 d). `(live.at, live.at_stamp)` 를 한 자세에서 한 번에 쓰고 정지·재계획 때 같이 지운다. 단계가 진행 중인 로봇에는 그 주기에 보내지 않는다. `fleet.traffic.authority` 이고 `line_follow_authority` 인데 `line_follow_authority_required` 가 없으면 lane trip 시작 422 `TRIP_AUTHORITY_NOT_REQUIRED`.
+- 증거: 모델 PC 수정 전 `test_trip_authority.py` 수집 실패(새 능력 필드), 수정 뒤 대상 241 통과. `operations/fleet/test` 2718 통과·3 실패 — 3건 main(16115e269)에서도 실패(`test_document_imports`, `test_learning_receiver`, `test_site_map_api` node).
+- gate 변화: SOURCE. M1 표도 앞 끝 d 를 쓴다(blocks.py 정의대로 바로잡음).
+- 결정: D-517 4항 독립 리뷰 1·2·3. fleet 46092 (판정 45942+150 안). 능력은 trip 시작 때만 본다.
+
+## 2026-10-08 · uncommitted · feat(fleet): D-517 M3 차로 대열(리더–팔로워) 이동 블록
+- 변경: `routing/blocks.py` `Robot.convoy/follows/follow_end`, `follow()`(대열에서 가장 가까운 앞 로봇, 문턱 = 앞 끝 − 몸 − 두 u), 따라가는 로봇 하나의 블록만 이동 블록 끝 너머 구간에서 함께 허가(`TableState.shared`), 따라가지 않게 된 공유 허가에서 고정 블록 끝이 멈춤, 팔로워는 더 작은 끝을 받지 않고 그 주기 통행권 없음. `server/lane_traffic.py` 앞 끝을 같은 차로 순서로 팔로워 경로에 옮김(`_front_on`), `/traffic` 로봇 행 `front_d_m`·`convoy`. `POST /trip` `convoy {leader}`, 시작 거절 `TRIP_CONVOY_*`(`trip_laps.convoy_refusal`, `NOT_BEHIND`는 회전 교차로 지름길·앞에서 출발). 화면: 교통 층 대열 선, 카드 "대열 · rosy_01 뒤 0.5 m", 운행 칸 "대열 리더". API Ref v1.144
+- 증거: 모델 PC 대상 pytest(blocks/convoy/convoy_trips/lane_traffic/trip_*) 통과, 브라우저 2+2 통과(X:/DevTemp/d517-m3/shots), node 27 통과, 무작위 대열 soak 180회 180000 틱 겹침·추월·축소 0, 최소 간격 0.132 m(d_stop 0.12).
+- gate 변화: SOURCE. Safety-Review 대상(독립 검토 전).
+- 결정: D-517 9항 4 (M3). fleet 46434 — 판정 46107+150 초과, 다시 판정 필요.
+
+## 2026-10-08 · uncommitted · fix(fleet): D-517 M3 독립 Safety-Review 반영
+- 변경: (1) `lane_traffic._shift`가 `state.shared`(경로 구간 번호 키)도 바퀴 정리 때 옮긴다. 다른 표는 블록 키다. (2) 이동 블록 간격에 `MEMBER_REVERSE_M` 0.35 m(D-407 `recovery_back_m` 상한 0.20 + D-468 되짚기 0.15)를 더하고, CORE 읽기가 `RECOVERING`이거나 `stuck`이 열린 앞 로봇은 따라가지 않는다(`blocks.Robot.recovering`, `junction_state`의 `line_recovering`). caps에 복구 설정이 없어 출발 거절은 없다. (3) `_link`가 늦게 출발한 팔로워부터 정하고, 먼저 출발한 팔로워는 자기를 따라가는 나중 팔로워를 따라가지 않는다. (4) 용량 2 이상 구역에서는 함께 허가 예외가 없다(짝을 두 대로 셈). ADR M3 노트에 후진 상한, 상호 따라가기, 구역 용량, 합류 공정성.
+- 증거: 각 수정의 시험이 수정 전 실패. 모델 PC 대상 pytest 274 통과(58f866eee). 무작위 대열 soak 360회 360000 틱(바퀴 정리 + UNKNOWN/정체/리더 종료 180회 포함) 겹침·추월·축소·충돌 0.
+- gate 변화: SOURCE. Safety-Review 재검토 대기.
+- 결정: D-517 9항 4 리뷰 1–4. fleet 46464 (판정 46434+150 안).
+
+## 2026-10-08 · 482c98340 · feat(fleet): D-520 1–2 Fleet 쪽 — exit_segment, 접선 회전, 호 carried 판정
+- 변경: `routing/execute.exit_segment`가 나가는 차로 polyline을 원 하나로 맞춘다(Kasa). 장소에서 장소까지의 온 `lane` 차로, 점 6개 이상, 잔차 ≤ `fleet.trip.arc_fit_tol_m`(0.005), 0.5 ≤ |κ| ≤ 5.0, 길이 ≤ 1.0 m일 때만 `{curvature_1pm(왼쪽 +), length_m, outer_line_offset_m, end_place_id}`. `outer_line_offset_m`은 사이트 지도에 칠한 선이 없어 `fleet.trip.arc_outer_line_offset_m`(0.095)이다. 능력 `base_velocity.lane_arc: true`이고 `map_id`가 있는 지시에만 싣는다. 그때 `left`·`right`는 접선 `turn_deg`(6° 없음), `advance_m` 없음. `line_follow.arc.from_place_id`가 보낸 장소이고 `arc_seq`가 보낼 때보다 새로우면 그 지시는 carried(회전 뒤 호, 이어지는 `straight`). 이 trip의 호가 `stopped`면 trip `stopped`(`lane_arc`, `detail.arc_reason`), `reason: lane_arc_end_unarmed`면 `detail.arc_end_unarmed`만 남기고 계속. `arc_mismatch` 중단은 오늘의 `junction`. 콘솔 사유 문구 3개. API Ref trip 행에 문장 추가(판 올림은 CORE 쪽 D-520 항목)
+- 증거: 260919 ring 네 호 κ +3.978(반지름 0.2514), 잔차 ≤ 0.00007 m, 길이 0.3739/0.4595/0.3722/0.3739. east·west 잔차 ≥ 0.138 m. 변이 3건: κ 부호 뒤집기 → ring·합성 시험 실패, carried 호 규칙 끄기 → 6건 실패, `arc_seq` 새로움 무시 → 1건 실패, 모두 복원. `operations/fleet/test` 2725 passed/133 skipped/1 failed(`test_document_imports.py::test_each_console_document_reaches_only_its_modules`, 깨끗한 main 627ae3c0c에서도 같음), node `site-map.test.mjs` 15 passed, `test_module_structure.py` 34 passed
+- gate 변화: 없음(SOURCE만. SIM 단계 1 전이고 장치 `arc_enabled`는 꺼짐)
+- 결정: fleet 패키지 45979→46067(+88, 허용 46092까지 25 남음), trip_runner 686→709(허용 836). D-491 횡단보도 구간 제외는 Fleet이 구역을 모르므로 넣지 않았다(260919 ring에는 없음). 원 맞춤 허용치는 0.005 그대로
+- 교훈: 없음
+
+## 2026-10-08 · 7f67af26a · fix(fleet): D-520 검토 반영 — 호 기준선 전 송신 없음, 미무장 표시 지움, 오프셋 범위
+- 변경: `lane_arc` 로봇에는 `line_follow.arc`가 실린 교차로 상태를 한 번 읽기 전까지 지시를 보내지 않는다. CORE는 프로세스 동안 마지막 호를 들고 있어서, 기준선 없이 보내면 trip 전의 호가 이 trip의 호로 보여 멈추거나 carried가 될 수 있었다. 지금 호의 사유가 바뀌면 `detail.arc_end_unarmed`를 지운다. CORE 재시작이 `arc_seq`를 되돌린다는 주석(교차로 seq와 같음). `fleet.trip.arc_outer_line_offset_m`은 [0.05, 0.20]만 받는다. ADR D-520 1항에 횡단보도 제외는 CORE 검사(`_arc_on_crosswalk`)라는 줄(d9af50a27)
+- 증거: 검토의 변이 생존자 7건을 새 시험이 죽인다(기준선 문, 다른 장소의 호, `stop`의 `exit_segment`, `ARC_MIN_POINTS`, 온 차로 `s_from`, `arc_newer`의 bool, 미무장 표시 지우기). 모두 복원. `operations/fleet/test` 2732 passed/133 skipped/1 failed(`test_document_imports.py`, 깨끗한 main 627ae3c0c에서도 같음), node `site-map.test.mjs` 15 passed, `test_module_structure.py` 34 passed
+- gate 변화: 없음(SOURCE만)
+- 결정: fleet 패키지 46067→46073(허용 46092까지 19 남음), trip_runner 709→713(허용 836)
+- 교훈: 프로세스 수명 동안 남는 상대 쪽 번호(arc_seq)를 "새로움"으로 비교할 때는 첫 읽기를 기준선으로 잡기 전에 아무것도 보내지 않는다
+
+## 2026-10-08 · 91b15708b · fix(fleet): CORE `approaching`도 기동 중으로 센다; Fleet 목록을 CORE 목록에 묶음
+- 변경: `trip_runner.MANOEUVRE`에 D-507 4 `approaching`을 더했다. lap SIM 원인 B(3/20): 회전축 접근 중 지도 자세가 이미 다음 차로라 Fleet이 다음 장소 지시를 보내 CORE가 회전을 `aborted`(new_instruction)로 끊었다. `test_trip_runner.py`는 CORE `recovery/junction` `MANEUVER`를 import 해 두 목록이 같은 집합인지 보고, fake CORE도 그 목록으로 돈다. conftest 주석에 이 대조를 적음
+- 증거: 수정 전 새 시험 2개와 기존 `test_a_90_degree_turn_waits_out_the_manoeuvre_then_moves_on` 실패(접근 중 `stop C` 송신, 정지 판정), 수정 뒤 `operations/fleet/test` 2763 passed/133 skipped. 독립 검토 code-reviewer(opus) APPROVE WITH NOTES, LOW 5(접근 중 운영자 hold의 정지도 회전처럼 기다림: CORE 접근 시간 상한이 묶음, 취소·E-stop은 `halt_robot`이라 무관; 시험 conftest 주석·liveness 반영)
+- gate 변화: 없음(SOURCE). SIM은 굽이→교차로 넘겨주기 브랜치와 함께
+- 결정: 없음
+- 교훈: 두 프로세스가 같은 상태 이름 목록을 들면 한쪽 사본 대신 시험이 상대 상수를 import 해 대조한다
+
+## 2026-10-08 · e8ba5ada0 · 모바일 관제 첫 화면 결합 검증
+
+- 변경: 개발 인증 뒤 자동 열린 설정 메뉴를 닫고, 관제 경로 진단을 이상 요약 1행으로 접는 두 화면 변경을 한 후보 브랜치에 결합했다. 수동 설정 재개방과 경로 세부 펼침은 유지한다.
+- 증거: Chromium 개발 진입 4건+교통 화면 1건 5 passed, Node 경로 요약 5 passed, known_failures 0 NEW. 390·320·1440·1920 캡처와 한계는 `docs/validation/uiux-fleet-first-viewport-2026-10-08/result.md`.
+- gate 변화: 없음. LOCAL 결합 후보만 확인했고 DEVICE/FIELD와 전체 G2/G3는 HOLD.
+
+## 2026-10-08 · a90d9b705 · refactor(fleet): 차로 교통을 `fleet/traffic/` 하위 패키지로 옮김 (D-517 이음매)
+- 변경: `routing/blocks.py`, `server/lane_traffic.py`, `server/trip_authority.py`를 `fleet/traffic/`로 `git mv`(이름 유지). import만 고침, 호환 shim 없음, 동작 변화 없음. `traffic_reservations.py`는 server/에 둠(M4 재판정 때 결정)
+- 증거: 모델 PC a90d9b705 `operations/fleet/test/`·`test/architecture/` 2900 passed/151 skipped/4 failed. `test_learning_receiver` PIL·`test_site_map_api` node는 main에서도 실패, `test_colcon_roots`·`test_omx_policy_config`는 git 없는 스냅샷 탓(로컬 통과). 로컬 git 가드(document_placement, colcon_roots, platform_parts, harness_contracts, robot_literals) 131 passed
+- gate 변화: 없음(SOURCE)
+- 결정: `fleet/fleet/traffic` SIZE_UNITS 등록, 측정 867(blocks 425, lane_traffic 369, trip_authority 69, __init__ 4). fleet 패키지 판정 기준 46434→45571(옮긴 863줄만큼, 새 판정 아님). D-517 M4 뒤 재판정
+- 교훈: 없음

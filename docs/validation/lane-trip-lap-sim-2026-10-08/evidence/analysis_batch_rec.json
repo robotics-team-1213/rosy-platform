@@ -1,0 +1,1605 @@
+{
+ "n": 8,
+ "aggregate": {
+  "corner_pass": 6,
+  "bend_pass": 6,
+  "turn_started": 0,
+  "turn_done": 0,
+  "reacquire": 0,
+  "completed": 0,
+  "hang": 0
+ },
+ "runs": [
+  {
+   "run": "rec_1",
+   "result": "stopped",
+   "reason": "stall",
+   "stop_detail": {
+    "stop_sent": true,
+    "stall_s": 20.0
+   },
+   "stop_at": {
+    "gt": [
+     -1.196,
+     -0.458
+    ],
+    "where": "ws_corner",
+    "segment_index": 0
+   },
+   "max_segment_index": 0,
+   "corner_pass": false,
+   "d422_holds": {
+    "obstacle_ahead@ws_corner": 4
+   },
+   "d422_hold_list": [
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.27,
+      -0.4
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0092,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.269,
+      -0.404
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0076,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.268,
+      -0.407
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0011,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.267,
+      -0.411
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    }
+   ],
+   "lane_return": [
+    {
+     "reason": "lane_return_sensor_search",
+     "gt": [
+      -1.196,
+      -0.458
+     ],
+     "where": "ws_corner",
+     "containment": null,
+     "keep": null,
+     "confidence": 0.9
+    },
+    {
+     "reason": "lane_return_rotation_space_unconfirmed",
+     "gt": [
+      -1.196,
+      -0.458
+     ],
+     "where": "ws_corner",
+     "containment": null,
+     "keep": null,
+     "confidence": 0.9
+    },
+    {
+     "reason": "lane_return_sensor_search",
+     "gt": [
+      -1.196,
+      -0.458
+     ],
+     "where": "ws_corner",
+     "containment": null,
+     "keep": null,
+     "confidence": 0.9
+    },
+    {
+     "reason": "lane_return_search_candidate_finished",
+     "gt": [
+      -1.196,
+      -0.458
+     ],
+     "where": "ws_corner",
+     "containment": null,
+     "keep": null,
+     "confidence": 0.9
+    },
+    {
+     "reason": "lane_return_fleet_required",
+     "gt": [
+      -1.196,
+      -0.458
+     ],
+     "where": "ws_corner",
+     "containment": null,
+     "keep": null,
+     "confidence": 0.9
+    }
+   ],
+   "bend": "incomplete:armed",
+   "bend_states": [
+    "armed"
+   ],
+   "sw_states": [],
+   "turn_started": false,
+   "turn_done": false,
+   "reacquire": false,
+   "junction_sightings": [
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.579,
+      -0.081
+     ],
+     "during": "None:idle"
+    }
+   ],
+   "sw_min_dist_while_armed_m": NaN,
+   "near_stop": 0,
+   "fleet_sends": [
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.415,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.196,
+      -0.458
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.415,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.196,
+      -0.458
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.415,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.196,
+      -0.458
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "stop",
+     "place_id": "SW",
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -1.196,
+      -0.458
+     ],
+     "reply_state": "executing"
+    },
+    {
+     "action": "HOLD(mode OFF)",
+     "place_id": null,
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -1.196,
+      -0.458
+     ],
+     "reply_state": null
+    }
+   ],
+   "clean_end": {
+    "hang": false,
+    "stop_sent": true,
+    "core_state_after": "OFF",
+    "core_cmd_after": [
+     0.0,
+     0.0
+    ],
+    "trip_wall_s": 40.3
+   },
+   "completed": false
+  },
+  {
+   "run": "rec_2",
+   "result": "stopped",
+   "reason": "pose",
+   "stop_detail": {
+    "off_lane_m": 0.107,
+    "stop_sent": true
+   },
+   "stop_at": {
+    "gt": [
+     -0.572,
+     -0.073
+    ],
+    "where": "roundabout",
+    "segment_index": 0
+   },
+   "max_segment_index": 0,
+   "corner_pass": true,
+   "d422_holds": {
+    "obstacle_ahead@ws_corner": 2
+   },
+   "d422_hold_list": [
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.269,
+      -0.4
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0076,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.26,
+      -0.419
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    }
+   ],
+   "lane_return": [],
+   "bend": "pass",
+   "bend_states": [
+    "armed",
+    "bending",
+    "reacquiring"
+   ],
+   "sw_states": [
+    [
+     "armed",
+     null,
+     [
+      -0.603,
+      -0.378
+     ]
+    ]
+   ],
+   "turn_started": false,
+   "turn_done": false,
+   "reacquire": false,
+   "junction_sightings": [
+    {
+     "keep": "junction_fork",
+     "gt": [
+      -0.735,
+      -0.493
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.678,
+      -0.467
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.572,
+      -0.073
+     ],
+     "during": "None:idle"
+    }
+   ],
+   "sw_min_dist_while_armed_m": 0.058,
+   "near_stop": 0,
+   "fleet_sends": [
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.415,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.194,
+      -0.454
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "right",
+     "place_id": "SW",
+     "turn_deg": -120.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "pivot_past_line_m": -0.096,
+      "expect_in_m": 0.231,
+      "expect_tol_m": 0.166
+     },
+     "error": null,
+     "gt": [
+      -0.604,
+      -0.38
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "stop",
+     "place_id": "SW",
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.573,
+      -0.074
+     ],
+     "reply_state": "executing"
+    },
+    {
+     "action": "HOLD(mode OFF)",
+     "place_id": null,
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.573,
+      -0.073
+     ],
+     "reply_state": null
+    }
+   ],
+   "clean_end": {
+    "hang": false,
+    "stop_sent": true,
+    "core_state_after": "OFF",
+    "core_cmd_after": [
+     0.0,
+     0.0
+    ],
+    "trip_wall_s": 39.3
+   },
+   "completed": false
+  },
+  {
+   "run": "rec_3",
+   "result": "stopped",
+   "reason": "pose",
+   "stop_detail": {
+    "off_lane_m": 0.1,
+    "stop_sent": true
+   },
+   "stop_at": {
+    "gt": [
+     -0.581,
+     -0.087
+    ],
+    "where": "roundabout",
+    "segment_index": 0
+   },
+   "max_segment_index": 0,
+   "corner_pass": true,
+   "d422_holds": {
+    "obstacle_ahead@west_road": 1,
+    "obstacle_ahead@ws_corner": 1,
+    "junction_bend_blocked@south_road": 1,
+    "junction_bend_blocked@sw_bend_spoke": 1
+   },
+   "d422_hold_list": [
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.27,
+      0.243
+     ],
+     "where": "west_road",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.255,
+      -0.424
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "junction_bend_blocked",
+     "gt": [
+      -0.823,
+      -0.503
+     ],
+     "where": "south_road",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "junction_bend_blocked",
+     "gt": [
+      -0.733,
+      -0.496
+     ],
+     "where": "sw_bend_spoke",
+     "body_gap_m": 0.0014,
+     "clearance_source": "lidar"
+    }
+   ],
+   "lane_return": [],
+   "bend": "pass",
+   "bend_states": [
+    "armed",
+    "bending",
+    "reacquiring"
+   ],
+   "sw_states": [
+    [
+     "armed",
+     null,
+     [
+      -0.635,
+      -0.429
+     ]
+    ]
+   ],
+   "turn_started": false,
+   "turn_done": false,
+   "reacquire": false,
+   "junction_sightings": [
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.572,
+      -0.073
+     ],
+     "during": "None:idle"
+    },
+    {
+     "keep": "junction_fork",
+     "gt": [
+      -0.73,
+      -0.495
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.674,
+      -0.467
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.581,
+      -0.087
+     ],
+     "during": "None:idle"
+    }
+   ],
+   "sw_min_dist_while_armed_m": 0.068,
+   "near_stop": 0,
+   "fleet_sends": [
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.402,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.185,
+      -0.454
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "right",
+     "place_id": "SW",
+     "turn_deg": -120.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "pivot_past_line_m": -0.096,
+      "expect_in_m": 0.291,
+      "expect_tol_m": 0.156
+     },
+     "error": null,
+     "gt": [
+      -0.636,
+      -0.431
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "right",
+     "place_id": "SW",
+     "turn_deg": -120.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "pivot_past_line_m": -0.096,
+      "expect_in_m": 0.01,
+      "expect_tol_m": 0.185
+     },
+     "error": null,
+     "gt": [
+      -0.587,
+      -0.135
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "stop",
+     "place_id": "SW",
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.582,
+      -0.089
+     ],
+     "reply_state": "executing"
+    },
+    {
+     "action": "HOLD(mode OFF)",
+     "place_id": null,
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.582,
+      -0.088
+     ],
+     "reply_state": null
+    }
+   ],
+   "clean_end": {
+    "hang": false,
+    "stop_sent": true,
+    "core_state_after": "OFF",
+    "core_cmd_after": [
+     0.0,
+     0.0
+    ],
+    "trip_wall_s": 38.3
+   },
+   "completed": false
+  },
+  {
+   "run": "rec_4",
+   "result": "stopped",
+   "reason": "junction",
+   "stop_detail": {
+    "junction_place": null,
+    "junction_state": "waiting",
+    "stop_sent": true
+   },
+   "stop_at": {
+    "gt": [
+     -0.638,
+     -0.439
+    ],
+    "where": "sw_bend_spoke",
+    "segment_index": 0
+   },
+   "max_segment_index": 0,
+   "corner_pass": true,
+   "d422_holds": {
+    "obstacle_ahead@west_road": 3,
+    "obstacle_ahead@ws_corner": 2,
+    "junction_bend_blocked@south_road": 1
+   },
+   "d422_hold_list": [
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.273,
+      0.155
+     ],
+     "where": "west_road",
+     "body_gap_m": 0.0173,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.272,
+      0.034
+     ],
+     "where": "west_road",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.272,
+      -0.074
+     ],
+     "where": "west_road",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.266,
+      -0.408
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.263,
+      -0.414
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "junction_bend_blocked",
+     "gt": [
+      -0.798,
+      -0.505
+     ],
+     "where": "south_road",
+     "body_gap_m": 0.0032,
+     "clearance_source": "lidar"
+    }
+   ],
+   "lane_return": [],
+   "bend": "pass",
+   "bend_states": [
+    "armed",
+    "bending",
+    "reacquiring"
+   ],
+   "sw_states": [],
+   "turn_started": false,
+   "turn_done": false,
+   "reacquire": false,
+   "junction_sightings": [
+    {
+     "keep": "junction_transverse",
+     "gt": null,
+     "during": "None:idle"
+    },
+    {
+     "keep": "junction_fork",
+     "gt": [
+      -0.732,
+      -0.498
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.668,
+      -0.467
+     ],
+     "during": "B_SW:bending"
+    }
+   ],
+   "sw_min_dist_while_armed_m": NaN,
+   "near_stop": 0,
+   "fleet_sends": [
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.415,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.195,
+      -0.45
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "stop",
+     "place_id": "SW",
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.638,
+      -0.439
+     ],
+     "reply_state": "executing"
+    },
+    {
+     "action": "HOLD(mode OFF)",
+     "place_id": null,
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.638,
+      -0.439
+     ],
+     "reply_state": null
+    }
+   ],
+   "clean_end": {
+    "hang": false,
+    "stop_sent": true,
+    "core_state_after": "OFF",
+    "core_cmd_after": [
+     0.0,
+     0.0
+    ],
+    "trip_wall_s": 41.8
+   },
+   "completed": false
+  },
+  {
+   "run": "rec_5",
+   "result": "stopped",
+   "reason": "junction_no_window",
+   "stop_detail": {
+    "junction_place": "SW",
+    "junction_action": "right",
+    "junction_fields": {
+     "map_id": "map_v2_fleet"
+    },
+    "stop_sent": true
+   },
+   "stop_at": {
+    "gt": [
+     -0.584,
+     -0.109
+    ],
+    "where": "roundabout",
+    "segment_index": 0
+   },
+   "max_segment_index": 0,
+   "corner_pass": true,
+   "d422_holds": {
+    "obstacle_ahead@west_road": 2,
+    "obstacle_ahead@ws_corner": 2,
+    "obstacle_ahead@south_road": 1,
+    "junction_bend_blocked@south_road": 1
+   },
+   "d422_hold_list": [
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.271,
+      0.075
+     ],
+     "where": "west_road",
+     "body_gap_m": null,
+     "clearance_source": null
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.271,
+      -0.137
+     ],
+     "where": "west_road",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.268,
+      -0.405
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0053,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.267,
+      -0.409
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0108,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -0.964,
+      -0.492
+     ],
+     "where": "south_road",
+     "body_gap_m": 0.0175,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "junction_bend_blocked",
+     "gt": [
+      -0.862,
+      -0.5
+     ],
+     "where": "south_road",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    }
+   ],
+   "lane_return": [],
+   "bend": "pass",
+   "bend_states": [
+    "armed",
+    "bending",
+    "reacquiring"
+   ],
+   "sw_states": [
+    [
+     "armed",
+     null,
+     [
+      -0.626,
+      -0.422
+     ]
+    ]
+   ],
+   "turn_started": false,
+   "turn_done": false,
+   "reacquire": false,
+   "junction_sightings": [
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.638,
+      -0.439
+     ],
+     "during": "None:idle"
+    },
+    {
+     "keep": "junction_fork",
+     "gt": [
+      -0.727,
+      -0.495
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.675,
+      -0.471
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.636,
+      -0.435
+     ],
+     "during": "B_SW:reacquiring"
+    }
+   ],
+   "sw_min_dist_while_armed_m": 0.066,
+   "near_stop": 0,
+   "fleet_sends": [
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.426,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.205,
+      -0.451
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "right",
+     "place_id": "SW",
+     "turn_deg": -120.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "pivot_past_line_m": -0.096,
+      "expect_in_m": 0.282,
+      "expect_tol_m": 0.167
+     },
+     "error": null,
+     "gt": [
+      -0.628,
+      -0.424
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "stop",
+     "place_id": "SW",
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.584,
+      -0.113
+     ],
+     "reply_state": "executing"
+    },
+    {
+     "action": "HOLD(mode OFF)",
+     "place_id": null,
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.584,
+      -0.112
+     ],
+     "reply_state": null
+    }
+   ],
+   "clean_end": {
+    "hang": false,
+    "stop_sent": true,
+    "core_state_after": "OFF",
+    "core_cmd_after": [
+     0.0,
+     0.0
+    ],
+    "trip_wall_s": 39.3
+   },
+   "completed": false
+  },
+  {
+   "run": "rec_6",
+   "result": "stopped",
+   "reason": "stall",
+   "stop_detail": {
+    "stop_sent": true,
+    "stall_s": 20.0
+   },
+   "stop_at": {
+    "gt": [
+     -1.189,
+     -0.457
+    ],
+    "where": "ws_corner",
+    "segment_index": 0
+   },
+   "max_segment_index": 0,
+   "corner_pass": false,
+   "d422_holds": {
+    "obstacle_ahead@ws_corner": 3
+   },
+   "d422_hold_list": [
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.27,
+      -0.319
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.271,
+      -0.392
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0167,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.27,
+      -0.398
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.014,
+     "clearance_source": "lidar"
+    }
+   ],
+   "lane_return": [
+    {
+     "reason": "lane_return_sensor_search",
+     "gt": [
+      -1.189,
+      -0.457
+     ],
+     "where": "ws_corner",
+     "containment": null,
+     "keep": null,
+     "confidence": 0.9
+    },
+    {
+     "reason": "lane_return_search_candidate_finished",
+     "gt": [
+      -1.189,
+      -0.457
+     ],
+     "where": "ws_corner",
+     "containment": null,
+     "keep": null,
+     "confidence": 0.9
+    },
+    {
+     "reason": "lane_return_sensor_search",
+     "gt": [
+      -1.189,
+      -0.457
+     ],
+     "where": "ws_corner",
+     "containment": null,
+     "keep": null,
+     "confidence": 0.9
+    },
+    {
+     "reason": "lane_return_fleet_required",
+     "gt": [
+      -1.189,
+      -0.457
+     ],
+     "where": "ws_corner",
+     "containment": null,
+     "keep": null,
+     "confidence": 0.9
+    }
+   ],
+   "bend": "incomplete:armed",
+   "bend_states": [
+    "armed"
+   ],
+   "sw_states": [],
+   "turn_started": false,
+   "turn_done": false,
+   "reacquire": false,
+   "junction_sightings": [],
+   "sw_min_dist_while_armed_m": NaN,
+   "near_stop": 0,
+   "fleet_sends": [
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.43,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.206,
+      -0.453
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.406,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.189,
+      -0.457
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.406,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.189,
+      -0.457
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "stop",
+     "place_id": "SW",
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -1.189,
+      -0.457
+     ],
+     "reply_state": "executing"
+    },
+    {
+     "action": "HOLD(mode OFF)",
+     "place_id": null,
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -1.189,
+      -0.457
+     ],
+     "reply_state": null
+    }
+   ],
+   "clean_end": {
+    "hang": false,
+    "stop_sent": true,
+    "core_state_after": "OFF",
+    "core_cmd_after": [
+     0.0,
+     0.0
+    ],
+    "trip_wall_s": 39.3
+   },
+   "completed": false
+  },
+  {
+   "run": "rec_7",
+   "result": "stopped",
+   "reason": "junction_unexpected",
+   "stop_detail": {
+    "junction_place": "SW",
+    "junction_state": "unexpected",
+    "line_reason": "junction_unexpected",
+    "stop_sent": true
+   },
+   "stop_at": {
+    "gt": [
+     -0.628,
+     -0.412
+    ],
+    "where": "sw_bend_spoke",
+    "segment_index": 0
+   },
+   "max_segment_index": 0,
+   "corner_pass": true,
+   "d422_holds": {
+    "obstacle_ahead@west_road": 1,
+    "obstacle_ahead@ws_corner": 4,
+    "junction_bend_blocked@sw_bend_spoke": 1
+   },
+   "d422_hold_list": [
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.27,
+      -0.116
+     ],
+     "where": "west_road",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.271,
+      -0.39
+     ],
+     "where": "ws_corner",
+     "body_gap_m": null,
+     "clearance_source": null
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.27,
+      -0.399
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0126,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.27,
+      -0.402
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0024,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.264,
+      -0.416
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0034,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "junction_bend_blocked",
+     "gt": [
+      -0.736,
+      -0.495
+     ],
+     "where": "sw_bend_spoke",
+     "body_gap_m": 0.025,
+     "clearance_source": "lidar"
+    }
+   ],
+   "lane_return": [],
+   "bend": "pass",
+   "bend_states": [
+    "armed",
+    "bending",
+    "reacquiring"
+   ],
+   "sw_states": [
+    [
+     "armed",
+     null,
+     [
+      -0.637,
+      -0.427
+     ]
+    ],
+    [
+     "unexpected",
+     null,
+     [
+      -0.628,
+      -0.412
+     ]
+    ]
+   ],
+   "turn_started": false,
+   "turn_done": false,
+   "reacquire": false,
+   "junction_sightings": [
+    {
+     "keep": "junction_fork",
+     "gt": [
+      -0.736,
+      -0.495
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.675,
+      -0.465
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.646,
+      -0.437
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.628,
+      -0.412
+     ],
+     "during": "SW:unexpected"
+    }
+   ],
+   "sw_min_dist_while_armed_m": 0.233,
+   "near_stop": 0,
+   "fleet_sends": [
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.395,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.179,
+      -0.458
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "right",
+     "place_id": "SW",
+     "turn_deg": -120.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "pivot_past_line_m": -0.096,
+      "expect_in_m": 0.289,
+      "expect_tol_m": 0.149
+     },
+     "error": null,
+     "gt": [
+      -0.638,
+      -0.428
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "stop",
+     "place_id": "SW",
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.628,
+      -0.412
+     ],
+     "reply_state": "executing"
+    },
+    {
+     "action": "HOLD(mode OFF)",
+     "place_id": null,
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.628,
+      -0.412
+     ],
+     "reply_state": null
+    }
+   ],
+   "clean_end": {
+    "hang": false,
+    "stop_sent": true,
+    "core_state_after": "OFF",
+    "core_cmd_after": [
+     0.0,
+     0.0
+    ],
+    "trip_wall_s": 37.8
+   },
+   "completed": false
+  },
+  {
+   "run": "rec_8",
+   "result": "stopped",
+   "reason": "pose",
+   "stop_detail": {
+    "off_lane_m": 0.095,
+    "stop_sent": true
+   },
+   "stop_at": {
+    "gt": [
+     -0.583,
+     -0.094
+    ],
+    "where": "roundabout",
+    "segment_index": 0
+   },
+   "max_segment_index": 0,
+   "corner_pass": true,
+   "d422_holds": {
+    "obstacle_ahead@ws_corner": 2
+   },
+   "d422_hold_list": [
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.271,
+      -0.377
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    },
+    {
+     "reason": "obstacle_ahead",
+     "gt": [
+      -1.267,
+      -0.407
+     ],
+     "where": "ws_corner",
+     "body_gap_m": 0.0,
+     "clearance_source": "lidar"
+    }
+   ],
+   "lane_return": [],
+   "bend": "pass",
+   "bend_states": [
+    "armed",
+    "bending",
+    "reacquiring"
+   ],
+   "sw_states": [
+    [
+     "armed",
+     null,
+     [
+      -0.619,
+      -0.4
+     ]
+    ],
+    [
+     "executing",
+     null,
+     [
+      -0.583,
+      -0.095
+     ]
+    ]
+   ],
+   "turn_started": false,
+   "turn_done": false,
+   "reacquire": false,
+   "junction_sightings": [
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.628,
+      -0.412
+     ],
+     "during": "None:idle"
+    },
+    {
+     "keep": "junction_fork",
+     "gt": [
+      -0.732,
+      -0.492
+     ],
+     "during": "B_SW:bending"
+    },
+    {
+     "keep": "junction_transverse",
+     "gt": [
+      -0.675,
+      -0.464
+     ],
+     "during": "B_SW:bending"
+    }
+   ],
+   "sw_min_dist_while_armed_m": 0.068,
+   "near_stop": 0,
+   "fleet_sends": [
+    {
+     "action": "bend",
+     "place_id": "B_SW",
+     "turn_deg": 63.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "bend_in_m": 0.413,
+      "bend_tol_m": 0.12,
+      "bend_radius_m": 0.15
+     },
+     "error": null,
+     "gt": [
+      -1.192,
+      -0.452
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "right",
+     "place_id": "SW",
+     "turn_deg": -120.6,
+     "expect": {
+      "map_id": "map_v2_fleet",
+      "pivot_past_line_m": -0.096,
+      "expect_in_m": 0.257,
+      "expect_tol_m": 0.142
+     },
+     "error": null,
+     "gt": [
+      -0.62,
+      -0.402
+     ],
+     "reply_state": "armed"
+    },
+    {
+     "action": "stop",
+     "place_id": "SW",
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.583,
+      -0.096
+     ],
+     "reply_state": "executing"
+    },
+    {
+     "action": "HOLD(mode OFF)",
+     "place_id": null,
+     "turn_deg": null,
+     "expect": null,
+     "error": null,
+     "gt": [
+      -0.583,
+      -0.095
+     ],
+     "reply_state": null
+    }
+   ],
+   "clean_end": {
+    "hang": false,
+    "stop_sent": true,
+    "core_state_after": "OFF",
+    "core_cmd_after": [
+     0.0,
+     0.0
+    ],
+    "trip_wall_s": 37.8
+   },
+   "completed": false
+  }
+ ]
+}

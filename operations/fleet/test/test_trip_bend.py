@@ -28,14 +28,17 @@ def _bend_map(*bends) -> SiteMap:
                    edges=base.edges)
 
 
-def _trip(site_map, caps=BEND_CAPS, ahead=0.4):
-    """Start NW -> SE on west:rev with the SW bend's arc start ``ahead`` m in front; tick once."""
+def _trip(site_map, caps=BEND_CAPS, ahead=0.4, before=None):
+    """Start NW -> SE on west:rev with the SW bend's arc start ``ahead`` m in front; tick once
+    (``before(runner)`` runs ahead of that tick)."""
     runner, store, ports = _setup(site_map, caps=caps)
     arc = _arc(store, "west:rev")
     s_start = bend_geometry(SitePlace(**SW_BEND), arc)[0]
     _plan(store, ports, arc.id, s_start - ahead, "SE")
     run(runner.start("p1", "bob"))
     ports.at(arc, s_start - ahead)
+    if before is not None:
+        before(runner)
     _ticks(runner, ports)
     return runner, store, ports, arc, s_start
 
@@ -139,3 +142,69 @@ def test_bend_waits_until_the_lane_before_it_is_straight():
     ports.at(arc, s_start - 0.40)
     _ticks(runner, ports)
     assert ports.sent == [("bend", "B_SW", None)]
+
+
+# ---- holds gate the bend (a held robot never gets an instruction that restarts motion) ----
+
+def _hold(runner, hold):
+    runner._live["rosy_60"].view["hold"] = hold
+
+
+def test_a_held_trip_sends_no_bend_then_sends_it_once_on_release():
+    runner, store, ports, arc, s_start = _trip(
+        _bend_map(SW_BEND), before=lambda r: _hold(r, {"reason": "replan", "plan": None}))
+    _ticks(runner, ports, 3)
+    assert ports.sent == []
+    _hold(runner, None)
+    _ticks(runner, ports, 3)
+    assert ports.sent == [("bend", "B_SW", None)]
+    ports.core.phase("bending")
+    ports.at(arc, s_start + 0.02)
+    _ticks(runner, ports, 2)
+    ports.core.done()
+    _ticks(runner, ports, 3)
+    assert [a for a, *_ in ports.sent].count("bend") == 1                 # once per lap
+
+
+def test_a_held_trip_near_its_place_gets_the_stop_not_the_bend():
+    runner, store, ports, arc, s_start = _trip(
+        _bend_map(SW_BEND), ahead=0.15, before=lambda r: _hold(r, {"reason": "replan", "plan": None}))
+    _ticks(runner, ports, 2)
+    assert [a for a, *_ in ports.sent] == ["stop"]
+
+
+def test_traffic_hold_back_sends_no_bend_until_it_clears():
+    held = [True]
+
+    def hold_back(runner):
+        runner.traffic.holds = lambda live, index: held[0]
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND), before=hold_back)
+    _ticks(runner, ports, 3)
+    assert ports.sent == []
+    held[0] = False
+    _ticks(runner, ports, 3)
+    assert ports.sent == [("bend", "B_SW", None)]
+
+
+def test_no_bend_while_core_executes_another_instruction():
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND), ahead=0.58)  # corner: nothing yet
+    ports.core.send("straight", "NW", None, 15, None)
+    ports.core.phase("executing")
+    ports.at(arc, s_start - 0.40)
+    _ticks(runner, ports, 3)
+    assert ports.sent == []
+    ports.core.done()
+    _ticks(runner, ports)
+    assert ports.sent == [("bend", "B_SW", None)]
+
+
+def test_a_trip_closed_mid_step_sends_no_bend(monkeypatch):
+    from fleet.server import trip_runner
+
+    def closing(live, *args):
+        live.view["state"] = "canceled"
+        return real(live, *args)
+    real = trip_runner.bend_fields
+    monkeypatch.setattr(trip_runner, "bend_fields", closing)
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND))
+    assert ports.sent == []

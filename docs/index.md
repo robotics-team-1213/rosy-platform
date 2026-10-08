@@ -303,5 +303,5 @@
 - 2026-10-08 · uncommitted · D-522 개발 환경 원격 이동 권한
 - 2026-10-08 · uncommitted · D-521 원격 단독 입회 수정
 - 2026-10-08 · uncommitted · Rosy Cam 원격 입회 역할 정리
-- 2026-10-08 · uncommitted · 정적 차선 경로 끝 정지 ROS-SIM
-- 2026-10-08 · uncommitted · 지도 밖 자세의 굽이 기억 ROS 거절
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 재검증 반영: 호 중 bend 거절
+- 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 병합 뒤 시험과 core_features 크기

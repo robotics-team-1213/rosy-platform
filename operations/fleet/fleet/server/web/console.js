@@ -12,7 +12,7 @@ import { createVisionView } from "/console/assets/vision-view.js";
 import { applyRoleToControls } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
 import { addressMap, movableRobots, renumberBanner } from "/console/assets/address-drift.js";
-import { fleetRow, proxyRow, visionRow } from "./site-path.js";
+import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
 import { createPasswordLogin } from "./password-login.js";
@@ -331,8 +331,13 @@ let statePollInFlight = false;
 
 function paintSitePath() {
   const list = el("site-path-list");
-  list.replaceChildren(...[pathSample.proxy, pathSample.fleet, pathSample.vision].map((sample, index) => {
-    const row = [proxyRow, fleetRow, visionRow][index](sample);
+  const rows = [proxyRow(pathSample.proxy), fleetRow(pathSample.fleet), visionRow(pathSample.vision)];
+  const summary = sitePathSummary(rows);
+  const summaryNode = el("site-path-summary");
+  if (summaryNode.textContent !== summary) summaryNode.textContent = summary;
+  summaryNode.dataset.kind = rows.find((row) => row.kind === "crit")?.kind
+    || rows.find((row) => row.kind === "warn")?.kind || "good";
+  list.replaceChildren(...rows.map((row) => {
     const item = document.createElement("li");
     const name = document.createElement("b");
     name.textContent = row.name;

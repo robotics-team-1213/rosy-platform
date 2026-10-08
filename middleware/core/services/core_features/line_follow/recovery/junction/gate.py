@@ -18,10 +18,10 @@ import math
 from dataclasses import replace
 
 from core_common.protocol.schemas import LineJunctionStatus
-from core_features.line_follow.recovery.junction_approach import (
+from core_features.line_follow.recovery.junction.approach import (
     MAX_AHEAD_M, REACQUIRE_HEADING_RAD, REACQUIRE_M, STEP_MARGIN_S, STEP_TIME_S,
     JunctionApproachMixin, check_expect)
-from core_features.line_follow.recovery.junction_bend import JunctionBendMixin, check_bend
+from core_features.line_follow.recovery.junction.bend import JunctionBendMixin, check_bend
 
 JUNCTION_ACTIONS = ('straight', 'left', 'right', 'stop', 'bend')
 JUNCTION_REASONS = frozenset({'junction_transverse', 'junction_fork'})
@@ -150,10 +150,11 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                                          else None)
 
     def set_junction(self, action, place_id, expires_s, stop_after_m=None, turn_deg=None,
-                     advance_m=None, now=None, expect=None):
+                     advance_m=None, now=None, expect=None, exit_segment=None):
         """Store the next-junction instruction: (accepted, seq, state). Raises JunctionRefused
         unless line-follow is CAMERA_LINE (IR_LINE has no junction detection). During a
-        maneuver the same instruction is a no-op; a different one aborts it, unaccepted."""
+        maneuver the same instruction is a no-op; a different one aborts it, unaccepted.
+        D-520: with exit_segment advance_m is ignored; during an arc every instruction is armed."""
         if action not in JUNCTION_ACTIONS:
             raise ValueError('junction action must be straight, left, right, stop or bend')
         if not (isinstance(expires_s, (int, float)) and 0 < expires_s <= MAX_EXPIRES_S):
@@ -168,13 +169,17 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
         if advance_m is not None and (turn_deg is None or action == 'bend' or not 0 <= advance_m <= MAX_ADVANCE_M):
             raise ValueError('advance_m belongs to a turn and must be in [0, 0.30]')
         check_expect(expect, action, turn_deg)  # D-507 2; None is an old client
-        advance = DEFAULT_ADVANCE_M if advance_m is None else float(advance_m)
+        self._check_exit_segment(exit_segment, action, turn_deg, expect)
+        advance = (0. if exit_segment is not None else DEFAULT_ADVANCE_M if advance_m is None
+                   else float(advance_m))
         with self._lock:
             if self._mode.value == 'IR_LINE':
                 raise JunctionRefused('JUNCTION_CAMERA_ONLY',
                                       'junction instructions need CAMERA_LINE (IR has no junction detection)')
             if self._mode.value != 'CAMERA_LINE':
                 raise JunctionRefused('LINE_FOLLOW_NOT_ACTIVE', 'line-follow must be CAMERA_LINE')
+            if action == 'bend' and self._arc_running():  # D-520: the arc drives this lane, no bend
+                raise JunctionRefused('JUNCTION_ARC_RUNNING', 'a D-520 arc is running; send no bend')
             if self._junction_done_place == (place_id, action):
                 raise JunctionRefused('JUNCTION_ALREADY_DONE',
                                       f'{action} at {place_id} already ran; send the next place')
@@ -201,14 +206,14 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 raise JunctionRefused('JUNCTION_ODOM_STALE', 'no fresh odom to place the expected junction')
             self._junction_seq += 1
             self._cross_band = None  # a past straight crossing's band ends with the next instruction
-            state = ('armed' if action == 'straight' or turn_deg is not None
+            state = ('armed' if action == 'straight' or turn_deg is not None or self._arc_running()
                      else 'executing' if action == 'stop' else 'unresolved')
             self._junction = dict(action=action, place_id=place_id, seq=self._junction_seq,
                                   state=state, expires_at=current+float(expires_s),
                                   stop_after_m=float(stop_after_m or 0.), travel=0.,
                                   last=None, held=False, turn_deg=turn_deg, advance_m=advance,
                                   window=window, map_id=(expect or {}).get('map_id'),
-                                  pivot=(expect or {}).get('pivot_past_line_m'))
+                                  pivot=(expect or {}).get('pivot_past_line_m'), exit_segment=exit_segment)
             if pose is not None:  # D-507 addendum: odom travel counts from here
                 self._junction.update(bend_in=expect['bend_in_m'], tol=expect['bend_tol_m'],
                                       radius=expect['bend_radius_m'], anchor=None,
@@ -312,6 +317,8 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
         if seen:
             self._anchor_sighting()  # D-507 3-4
         j = self._junction
+        if j is not None and j.get('reason') == 'arc_mismatch':
+            j = None  # D-520 2: an arc end with another place's instruction is an unarmed end
         if j is None:
             if not seen:
                 if (self._junction_seen_at is None
@@ -444,6 +451,11 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
                 return self._maneuver_twist(j, now, 0., twist, decision,
                                             'junction_stopping' if j['sub'] == 'stopping'
                                             else 'junction_turning')
+            if j.get('exit_segment') is not None:  # D-520: stop_point or a crosswalk: today's advance
+                arc = self._open_arc(j, now) if j.get('pivot_basis') != 'stop_point' else False
+                if arc is not False:
+                    return arc or replace(decision, linear=0., angular=0.)
+                j['advance_m'] = DEFAULT_ADVANCE_M
             j['speed'] = self._half_trip_speed()  # at most half the trip speed (D-495 1b)
             if j['speed'] <= 0:
                 return self._abort(j, 'linear_limit_zero', decision)

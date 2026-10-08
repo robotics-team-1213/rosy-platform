@@ -221,7 +221,7 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
    알림은 글이 있을 때만 셋째 줄에 나온다(비상 정지 결과). */
 @media (width < 64rem) {
   body[data-surface="console"] .surface-main {
-    grid-template-areas: "status" "banner" "act" "sense" "observe";
+    grid-template-areas: "status" "banner" "observe" "act" "sense";
   }
   body[data-surface="console"] #surface-status { grid-area: status; }
   body[data-surface="console"] .surface-slot[data-slot="banner"] { grid-area: banner; }

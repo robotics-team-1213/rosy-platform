@@ -25,7 +25,7 @@ from fleet.swarm.robots import RobotEndpoint
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
 ROOT = Path(__file__).resolve().parents[3]
-SIZES = [(1920, 1080), (1280, 800), (390, 844)]
+SIZES = [(1920, 1080), (1280, 800), (390, 844), (320, 568)]
 
 PLACES = [{"id": "j_sw", "name": "남서", "x": 0, "y": 0, "kind": "junction"},
           {"id": "j_se", "name": "남동", "x": 2, "y": 0, "kind": "junction"},
@@ -159,6 +159,14 @@ def _shots(page, name, fits=False):
         page.clock.run_for(1500)  # a poll and a redraw at this size
         if out:
             page.screenshot(path=str(Path(out) / f"{name}-{width}x{height}.png"), full_page=True)
+        if width < 480:
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            assert page.locator("#site-path").bounding_box()["height"] <= 64
+            stop = page.locator("#estop").bounding_box()
+            assert stop and stop["x"] >= 0 and stop["y"] >= 0
+            assert stop["x"] + stop["width"] <= width and stop["y"] + stop["height"] <= height
+            if width == 390:
+                assert page.locator('[aria-labelledby="map-heading"]').bounding_box()["y"] < height
         if fits and (width, height) == (1920, 1080):  # D-517 10: the console never scrolls at 1920x1080
             fit = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll(
                 '.console-secondary > *, .console-primary > *')].map((n) => [n.className || n.tagName,
@@ -178,7 +186,7 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             page.clock.run_for(1500)  # the first 1 s traffic poll
             expect(page.locator("#traffic-toggle")).to_be_visible(timeout=15000)
             page.wait_for_function("() => window.__trafficLayer?.zones === 1", timeout=15000)
-            assert page.evaluate("window.__trafficLayer") == {"bands": 4, "zones": 1, "ticks": 2}
+            assert page.evaluate("window.__trafficLayer") == {"bands": 4, "zones": 1, "ticks": 2, "convoys": 0}
             expect(page.locator("#legend-traffic")).to_be_visible()
             # The merge wait becomes a 주의 row after merge_max_wait_s (20 s); a block wait alone is no row.
             expect(page.locator("#warning-list")).not_to_contain_text("합류 대기")
@@ -186,6 +194,13 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             expect(page.locator("#warning-list")).to_contain_text("rosy_02: 합류 대기")
             expect(page.locator('#roster article[data-robot-id="rosy_02"] .trip-line')).to_have_text(
                 "반복 운행 1바퀴째 · 교차로 대기 · rosy_01 통과 중")
+            expect(page.locator("#site-path-summary")).to_have_text("Vision 응답 404")
+            expect(page.locator("#site-path-summary")).to_have_attribute("data-kind", "warn")
+            expect(page.locator("#site-path-list")).to_be_hidden()
+            page.locator("#site-path summary").click()
+            expect(page.locator("#site-path-list")).to_be_visible()
+            expect(page.locator("#site-path-list")).to_contain_text("프록시")
+            page.locator("#site-path summary").click()
             _shots(page, "console-traffic", fits=True)
             page.set_viewport_size({"width": 1920, "height": 1080})
             before = page.locator("#map-canvas").evaluate("c => c.toDataURL()")

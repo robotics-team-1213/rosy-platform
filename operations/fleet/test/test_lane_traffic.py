@@ -10,7 +10,7 @@ import pytest
 from fleet.localization.map_pose import MapPose
 from fleet.routing.execute import ends_at_place, plan_body
 from fleet.routing.trip import PlanRequest, plan_trip
-from fleet.server.lane_traffic import TrafficService
+from fleet.traffic.lane_traffic import TrafficService
 from fleet.server.site_map_store import SiteMapStore
 from fleet.server.trip_ports import TripConfig
 from fleet.server.trip_runner import TripError, TripRunner
@@ -325,7 +325,7 @@ def test_a_robot_never_localized_holds_every_junction_instruction():
     for robot_id in ("a", "b"):
         live = runner._live[robot_id]
         assert live.traffic == {"waiting_for": ["c"], "authority_end_m": live.traffic["authority_end_m"],
-                                "refused_at_m": 0.0}
+                                "refused_at_m": 0.0, "front_d_m": live.traffic["front_d_m"], "pose_stamp": None}
         assert runner.traffic.holds(live, live.view["segment_index"])
 
 
@@ -382,7 +382,7 @@ def test_a_failing_block_table_drops_every_stale_answer(caplog):
 
 def test_the_hold_back_covers_the_entry_past_the_place():
     """Review MED 4: a block refused just past the place (within PAST_PLACE_M) holds the instruction."""
-    from fleet.server.lane_traffic import PAST_PLACE_M
+    from fleet.traffic.lane_traffic import PAST_PLACE_M
 
     runner, store, fleet = _setup(ids=("a",))
     _trip(runner, store, fleet, "a", "east:fwd", 0.2)
@@ -476,8 +476,8 @@ def test_a_repeat_trip_drops_finished_laps_and_the_table_follows():
 
 def test_a_shift_past_every_grant_drops_the_authority():
     """Review: two trims between table steps dropped all grants; authority must not outlive them."""
-    from fleet.routing import blocks
-    from fleet.server.lane_traffic import _shift
+    from fleet.traffic import blocks
+    from fleet.traffic.lane_traffic import _shift
     spans = (blocks.Span("a", 0, 1), blocks.Span("b", 1, 2), blocks.Span("c", 2, 3))
     state = blocks.TableState(held={"r": {0: ("a", True), 1: ("b", True)}}, authority={"r": 1.9})
     _shift(state, "r", spans, 2.0)

@@ -23,7 +23,9 @@ from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
 from .calibrated_values import calibrated
-from .sensing.perception.camera_ground import nominal_ground_plane, simulation_ground_plane
+from .sensing.perception.camera_ground import (
+    nominal_ground_plane, simulation_ground_allowed, simulation_ground_plane,
+)
 from .sensing.perception.image_frame import image_msg_to_frame
 from .sensing.perception.camera_visibility import visibility_reason
 from .sensing.perception.lane import (
@@ -214,6 +216,17 @@ class LineObserverNode(Node):
         and CAMERA_LINE keeps publishing None (visible:false) every frame
         rather than going silent (D-143: this node still owes CORE
         evidence)."""
+        # A static route_start anchors the first odometry pose without an
+        # independent map fix. Keep these junction prototypes in simulation
+        # until an active map and fresh localized start can authorize them.
+        if not simulation_ground_allowed(
+                source=self.get_parameter('camera_ground_source').value,
+                simulation_enabled=self.get_parameter('allow_simulation_ground').value,
+                use_sim_time=self.get_parameter('use_sim_time').value):
+            self.get_logger().warning(
+                f'{mode} prototype route modes require Gazebo simulation ground and clock; '
+                'no follower built, CAMERA_LINE will publish no observation')
+            return None
         graph_path = str(self.get_parameter('lane_graph_path').value)
         route = [str(key) for key in self.get_parameter('route').value]
         route_start = [float(v) for v in self.get_parameter('route_start').value]
@@ -472,6 +485,17 @@ class LineObserverNode(Node):
                               ground=self._ground_label(), stamp=image_stamp)
                 self._keep_debug_pub.publish(String(data=json.dumps(bundle, default=float)))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
+                if (mode in ('route_a', 'route_b', 'route_ab')
+                        and self._route_follower is not None
+                        and not simulation_ground_allowed(
+                            source=self.get_parameter('camera_ground_source').value,
+                            simulation_enabled=self.get_parameter('allow_simulation_ground').value,
+                            use_sim_time=self.get_parameter('use_sim_time').value)):
+                    # A geometry change invalidates the static map/odom anchor.
+                    # Require a fresh node instead of reviving stale memory.
+                    self._route_follower = None
+                    self.get_logger().warning(
+                        f'{mode} simulation context changed; route follower revoked', once=True)
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(
                     bright_threshold=int(self.get_parameter('camera_bright_threshold').value),

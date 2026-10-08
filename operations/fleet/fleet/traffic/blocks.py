@@ -8,6 +8,10 @@ Pure: no network, clock, or robot calls. Fleet (M1) feeds it map poses and sends
   route is cut into unit spans, so occupancy and authority are interval questions.
 - Occupancy is a fact: every unit the body (front ``d``, length ``L``) ± ``u`` touches.
   Grants never shrink (D-517 4): a granted unit stays held until the robot is past it.
+- D-517 9 M3 convoy: a follower ``follows`` the localized convoy member right ahead (moving block):
+  its authority ends at that member's rear − (d_stop + 2u + u_ahead), and only that member's units
+  may be granted to it as well. Without it (member unknown, off the shared arcs, trip ended) the
+  follower is back on fixed blocks, and a shared grant ends its authority while the member holds it.
 """
 
 from __future__ import annotations
@@ -123,6 +127,15 @@ class Robot:
     #: while the robot stands (D-517 4). What the robot held before keeps blocking others
     #: until it is localized on the new route.
     route_id: str = ""
+    #: D-517 9 M3: its convoy's leader (followers only); such a robot never re-sends an end smaller
+    #: than one it had: it gets none and stops on expiry (D-517 4).
+    convoy: Optional[str] = None
+    #: the convoy member it follows this tick (moving block) and the end that member's rear allows
+    follows: Optional[str] = None
+    follow_end: float = math.inf
+    #: CORE line follow is not plain following (a D-407 stuck or a RECOVERING state such as a D-468
+    #: retrace): it may reverse, so nobody follows it on a moving block (Safety-Review).
+    recovering: bool = False
 
 
 @dataclass
@@ -140,6 +153,8 @@ class TableState:
     last_occupied: dict[str, dict[str, bool]] = field(default_factory=dict)
     #: robot id -> {unit id: forward} kept from before a route change until it is localized
     pinned: dict[str, dict[str, bool]] = field(default_factory=dict)
+    #: robot id -> {span index: convoy member ahead} for its grants of units that member held too
+    shared: dict[str, dict[int, str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -181,7 +196,7 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
             kept = dict(state.last_occupied.get(robot.id, {}))
             kept.update({u: f for u, f in state.held.get(robot.id, {}).values()})
             state.pinned[robot.id] = kept
-            for table in (state.held, state.authority, state.last_occupied):
+            for table in (state.held, state.authority, state.last_occupied, state.shared):
                 table.pop(robot.id, None)
         state.route[robot.id] = robot.route_id
     occupied: dict[str, set[int]] = {}
@@ -198,6 +213,7 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
             rear = robot.d - robot.body_length_m - robot.uncertainty_m
             for i in [i for i in held if robot.spans[i].d1 <= rear and i not in occupied[robot.id]]:
                 del held[i]
+                state.shared.get(robot.id, {}).pop(i, None)
 
     granted: dict[str, set[str]] = {}
     blocking: dict[str, set[str]] = {}
@@ -219,24 +235,31 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
                 if layout.units[unit].two_way:
                     direction.setdefault(unit, forward)
 
-    def free_for(robot: Robot, span: Span, by: Mapping[str, set[str]]) -> tuple[bool, tuple[str, ...]]:
+    def free_for(robot: Robot, span: Span, by: Mapping[str, set[str]]) -> tuple[bool, tuple[str, ...], Optional[str]]:
+        """``(free, blockers, via)``; ``via``: the convoy member it follows, whose unit it may share where
+        the span reaches past the moving-block end (right behind that member, the same occurrence)."""
         unit = layout.units[span.unit]
         others = by.get(span.unit, set()) - {robot.id}
+        # Only a capacity-1 unit is shared: in a zone of capacity c the pair counts as two, never c + 1.
+        via = (robot.follows if unit.capacity == 1 and robot.follows in others and span.d1 > robot.follow_end
+               else None)
+        others = others - {via}
         locked = unit.two_way and span.unit in direction and direction[span.unit] != span.forward \
-            and bool(blocking.get(span.unit, set()) - {robot.id})
-        return len(others) < unit.capacity and not locked, tuple(sorted(others))
+            and bool(blocking.get(span.unit, set()) - {robot.id, via})
+        return len(others) < unit.capacity and not locked, tuple(sorted(others)), via
 
-    def grant(robot: Robot, index: int) -> None:
+    def grant(robot: Robot, index: int, via: Optional[str]) -> None:
         span = robot.spans[index]
         state.held[robot.id][index] = (span.unit, span.forward)
+        if via is not None:
+            state.shared.setdefault(robot.id, {})[index] = via
         add_grant(robot.id, span.unit, span.forward)
 
     unplaced = tuple(sorted(r.id for r in robots if r.d is None and not state.held.get(r.id)
                             and r.id not in state.last_occupied and r.id not in state.pinned))
     if unplaced:
         authority = {r.id: state.authority[r.id] for r in robots if r.d is not None and r.id in state.authority}
-        conflicts = tuple(sorted(u for u, rs in granted.items() if len(rs) > layout.units[u].capacity))
-        return TickResult(authority, {r.id: () for r in robots}, conflicts, unplaced)
+        return TickResult(authority, {r.id: () for r in robots}, _conflicts(layout, granted, state), unplaced)
 
     # 2. the unit under each localized front, against grants and real (unpadded) bodies
     present: dict[str, set[str]] = {u: set(rs) for u, rs in granted.items()}
@@ -255,8 +278,10 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
         if robot.d is None:
             continue
         front = next((i for i, s in enumerate(robot.spans) if s.d0 <= robot.d < s.d1), None)
-        if front is not None and front not in state.held[robot.id] and free_for(robot, robot.spans[front], present)[0]:
-            grant(robot, front)
+        ok, _others, via = (False, (), None) if front is None or front in state.held[robot.id] \
+            else free_for(robot, robot.spans[front], present)
+        if ok:
+            grant(robot, front, via)
             present.setdefault(robot.spans[front].unit, set()).add(robot.id)
 
     def inside_zone(robot: Robot) -> bool:
@@ -274,7 +299,9 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
         waiting_for[robot.id] = ()
         if robot.d is None:  # no new grant without a localized pose; it stops on expiry
             continue
-        want = robot.d + robot.uncertainty_m + robot.lookahead_m
+        full_want = robot.d + robot.uncertainty_m + robot.lookahead_m
+        want = min(full_want, robot.follow_end + robot.uncertainty_m)  # nothing past the member it follows
+        shared = state.shared.get(robot.id, {})
         # Coverage starts where the unit under the front starts, not at the estimate: a robot
         # whose own unit is not granted has no authority past that unit's start.
         end, blockers = None, ()
@@ -286,32 +313,81 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
             if index not in held:
                 if end >= want:
                     break
-                ok, others = free_for(robot, span, blocking)
+                ok, others, via = free_for(robot, span, blocking)
                 if not ok:
                     blockers = others
                     break
-                grant(robot, index)
+                grant(robot, index, via)
+            elif index in shared and shared[index] != robot.follows and shared[index] in blocking.get(span.unit, ()):
+                blockers = (shared[index],)  # shared with a member it no longer follows: fixed blocks end here
+                break
             end = span.d1
         if end is None:  # past the end of its route
             end = robot.spans[-1].d1
         # Grant-backed only: an estimate already past its grants never becomes authority (the
         # robot then stands), and an earlier value stays because its grants are still held.
-        issued = max(end - robot.uncertainty_m, state.authority.get(robot.id, -math.inf))
-        state.authority[robot.id] = issued
-        authority[robot.id] = issued
+        issued, last = min(end - robot.uncertainty_m, robot.follow_end), state.authority.get(robot.id, -math.inf)
         if end >= want or end >= robot.spans[-1].d1:
             state.waiting_since.pop(robot.id, None)
+            if want < full_want:  # standing back behind the member it follows
+                waiting_for[robot.id] = (robot.follows,)
         else:
             waiting_for[robot.id] = blockers
             state.waiting_since.setdefault(robot.id, now)
-    conflicts = tuple(sorted(u for u, rs in granted.items() if len(rs) > layout.units[u].capacity))
-    return TickResult(authority, waiting_for, conflicts)
+        if robot.convoy is not None and issued < last:  # D-517 4: no smaller end; it stops on expiry
+            waiting_for[robot.id] = waiting_for[robot.id] or (robot.follows or robot.convoy,)
+            continue
+        state.authority[robot.id] = authority[robot.id] = max(issued, last)
+    return TickResult(authority, waiting_for, _conflicts(layout, granted, state))
+
+
+def _conflicts(layout: Layout, granted: Mapping[str, set[str]], state: TableState) -> tuple[str, ...]:
+    """Units granted past capacity; a follower sharing a capacity-1 unit with the member it follows counts once."""
+    def paired(robot_id: str, unit: str, holders: set[str]) -> bool:
+        held = state.held.get(robot_id, {})
+        return any(i in held and held[i][0] == unit and member in holders
+                   for i, member in state.shared.get(robot_id, {}).items())
+
+    def count(unit: str, holders: set[str]) -> int:
+        return len({r for r in holders if layout.units[unit].capacity > 1 or not paired(r, unit, holders)})
+    return tuple(sorted(u for u, rs in granted.items() if count(u, rs) > layout.units[u].capacity))
+
+
+def follow(robot: Robot, members: Iterable[Robot], front_of: Callable[[Robot, float], Optional[float]],
+           stop_m: float) -> Optional[float]:
+    """D-517 9 M3: set ``robot.follows``/``follow_end`` from the nearest localized convoy member ahead
+    and return that member's front (None: fixed blocks only).
+
+    ``front_of(member, after)`` is that member's front in ``robot``'s route metres: the first place
+    past ``after`` on the same arcs, or None. ``after`` lies a body and both u behind ``robot``'s
+    front, so estimate noise between close robots never turns the member right ahead into one a lap
+    away (the robot then stands). The gap is ``stop_m`` (d_stop(v), plus any reverse travel the caller
+    bounds) + 2u + the member's u. A nearest member that is ``recovering`` is not followed: fixed blocks.
+    """
+    robot.follows, robot.follow_end = None, math.inf
+    if robot.d is None:
+        return None
+    best = None
+    for member in members:
+        if member.d is None or member.id == robot.id:
+            continue
+        front = front_of(member, robot.d - robot.body_length_m - robot.uncertainty_m - member.uncertainty_m)
+        if front is not None and (best is None or front < best[0]):
+            best = (front, member)
+    if best is None:
+        return None
+    front, member = best
+    if member.recovering:
+        return None
+    robot.follows = member.id
+    robot.follow_end = front - member.body_length_m - (stop_m + 2 * robot.uncertainty_m + member.uncertainty_m)
+    return front
 
 
 def release_robot(state: TableState, robot_id: str) -> None:
     """Drop every hold of a robot that evidence shows is off the lanes (operator, D-517 6)."""
     for table in (state.held, state.route, state.authority, state.waiting_since, state.last_occupied,
-                  state.pinned):
+                  state.pinned, state.shared):
         table.pop(robot_id, None)
 
 

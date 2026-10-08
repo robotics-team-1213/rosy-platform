@@ -212,6 +212,14 @@ class LineFollowConfig:
     # and the D-468 retrace's rear path) and found no drop-off, hole or step. It is the floor
     # basis of motion_admitted's site basis (D-507 6 b/c); None = no declaration.
     site_floor_map_id: Optional[str] = None
+    # D-520 map-guided arc (step 1, feed-forward only; off by default, model and robot). On it
+    # needs the site floor declaration above. curvature gain g in omega = g*v*kappa (D-500 measured
+    # motion response, [0.8, 1.25]); arc_blind_max_m: travel without a camera fit before
+    # lane_arc_blind (step 1 SIM default: the whole segment, 1.0 m).
+    arc_enabled: bool = False
+    arc_curvature_gain: float = 1.0
+    arc_blind_max_m: float = 1.0
+    authority_required: bool = False  # D-517 4: no motion without a live Fleet authority, even before one
     # D-468 containment (implementation note 2026-10-06): the corridor is eroded by the producer's
     # uncertainty_m. 0 means every URDF footprint corner is inside only if uncertainty_m bounds
     # every lateral error; jitter and footprint tolerance not in it go in this body margin. The
@@ -266,8 +274,9 @@ class LineFollowConfig:
             raise ValueError("lane_auto_min_manual_angular must be nonnegative")
         if type(self.max_angular_follows_manual) is not bool:
             raise ValueError("max_angular_follows_manual must be a boolean")
-        if type(self.ir_guard_enabled) is not bool:
-            raise ValueError("ir_guard_enabled must be a boolean")
+        for name in ('ir_guard_enabled', 'authority_required'):
+            if type(getattr(self, name)) is not bool:
+                raise ValueError(f"{name} must be a boolean")
         guard = (self.ir_guard_edge_error, self.ir_guard_turn, self.ir_guard_speed_scale)
         if not all(_finite(value) for value in guard):
             raise ValueError("line-follow IR guard config must be finite")
@@ -337,6 +346,13 @@ class LineFollowConfig:
             raise ValueError("junction_still_linear must be in (0, 0.05] m/s")
         if not _finite(self.junction_still_angular) or not 0.0 < self.junction_still_angular <= 0.2:
             raise ValueError("junction_still_angular must be in (0, 0.2] rad/s")
+        if type(self.arc_enabled) is not bool:
+            raise ValueError("arc_enabled must be a boolean")
+        if not (_finite(self.arc_curvature_gain) and 0.8 <= self.arc_curvature_gain <= 1.25
+                and _finite(self.arc_blind_max_m) and 0.0 < self.arc_blind_max_m <= 1.0):
+            raise ValueError("arc_curvature_gain must be in [0.8, 1.25] and arc_blind_max_m in (0, 1]")
+        if self.arc_enabled and (self.site_floor_map_id is None or not self.ir_guard_speed_scale > 0):
+            raise ValueError("arc_enabled needs site_floor_map_id (D-520 5) and ir_guard_speed_scale > 0")
         site = self.site_floor_map_id
         if site is None:
             return

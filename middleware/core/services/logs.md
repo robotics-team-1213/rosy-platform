@@ -798,6 +798,16 @@
 - 증거: `test_junction_approach.py` — 전진 0.3 m·후진 0.2 m·전진 뒤 0.4 m 짧은 선과 진짜 선이 모두 `unexpected`(부호 없는 합이면 짧은 선이 창 안 0.9 m), 제자리 ±2 mm 떨림 2 s에 odometer 변화 < 1 mm이고 창 안 감지는 그대로 `turning`. 변이 A(부호 없는 합) 3건 실패, 변이 B(후진 검사 삭제) 1건 실패, 복원 뒤 69 통과. CORE services·api_web 1432 통과 13 skip, `known_failures` 신규 0.
 - gate 변화: SOURCE.
 - 결정: D-507 2·3항 2026-10-08 사용자 결정 (1), 안전 검토 REQUEST_CHANGES 1·2.
+
+## 2026-10-08 · uncommitted · fix(maps): 수신 지도의 ID를 스냅숏에 보관
+- 변경: `MapSnapshotStore.set_map`이 선택 `map_id`를 격자와 같은 잠금 안에 저장한다. 로봇 상태 ID가 바뀌어도 기존 지도에 새 ID가 붙지 않는다.
+- 증거: gateway `test_map_snapshots.py` 11 passed. [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 계약 근거 추가. 실물 지도 전환은 HOLD.
+
+## 2026-10-08 · uncommitted · fix(maps): 계획 경로 수신 근거 보관
+- 변경: `MapSnapshotStore`는 경로 점과 함께 수신 때 map ID·frame ID·monotonic 시각을 보관하고 마지막 수신 나이를 원자적으로 읽는다. 기존 `get_path()` 점 목록 계약은 유지한다.
+- 증거: gateway 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 경로 출처 근거 추가. 실기 메시지 readback은 HOLD.
 ## 2026-10-08 · uncommitted · feat(line_follow): D-507 보충, 지도 굽이를 odom 호로 지남 (action `bend`)
 - 변경: `recovery/junction_bend.py`(새 mixin) — `bend` 지시는 `armed` 동안 카메라 추종을 그대로 두고 받은 뒤 odom 이동 거리를 센다. 곧은 확신 추종 틱이 닻(몸이 따라온 선)을 남긴다. 호 시작점 `bend_tol_m` + 0.25 m 앞부터 곧은 확신이 아닌 첫 틱(또는 호 시작점 `bend_tol_m` 앞)에서 `bending`: 닻 직선 + 반지름 `bend_radius_m` 호 + 나가는 직선을 pure pursuit로 좇고, `reacquiring`은 나가는 직선을 0.20 m·5 s 안에서 좇으며 D-495 재획득이나 다음 교차로 감지로 끝, 아니면 `unresolved`. 매 틱 D-495 기동 twist(D-422 몸 sweep, enforce 증명)와 `motion_admitted(..., 'bend', map_id)`(IR `clear`만). 거리(odom × 1.08 > 남은 경로 + 0.05)·시간 상한, 근거 상실 `bend_basis_lost`. `junction.py`는 action·검증·`MANEUVER`·운동 근거 종류만 고쳤고, D-495 재획득 상수는 `junction_approach.py`로 옮겼다(값 그대로).
 - 증거: `test_junction_bend.py` 26건(지시 없음과 비트 같음, 카메라 추종 뒤 호와 재획득, lead 창 안 손실로 넘겨받기, 장애물 HOLD에서는 넘겨받지 않음, 닻 없음, 창 밖 감지 unexpected, IR·스캔 stale 근거 상실, IR centre, D-422 막힘 HOLD·재개·오래 막히면 끝, 거리·시간 상한, unresolved, 다음 교차로 감지로 끝, 재전송이 거리 유지, 필드 검증). services 전체 1310 passed(첫 커밋 기준).
@@ -810,3 +820,22 @@
 - 증거: CORE `e5735bd5f`, 도메인 86·`rosy_bendodom`·포트 8113. 아래 길 진입 18회 굽이 통과 18/18, 회전교차로 입구 14/18(4회는 넘겨준 뒤 keeper `flipping` LOST). 서쪽 출발은 굽이 전 모서리 LOST(기준선 5/5)로 측정 불가. 독립 안전 검토 APPROVE WITH NOTES, 크기 재판정 split(후속 브랜치).
 - gate 변화: SIM 부분 통과(아래 길 진입). DEVICE 열림.
 - 결정: D-507 보충
+
+## 2026-10-08 · b570504a2 · feat(core): D-517 M2 CORE 이동 통행권 (line_follow/authority.py)
+- 변경: `AuthorityMixin` — `set_authority(authority_id, leg_id, pose_stamp, until_m, ttl_s)`. odom 표본마다 CORE 벽시계·궤적·누적 경로 길이를 기록하고, `pose_stamp` 이전 표본 뒤 경로 길이를 빼서 남은 거리를 낸다. 남은 거리 ≤ `derived_stop_gap_m(min(cruise, max_linear))` 이면 선다(재출발은 + `obstacle_resume_hysteresis_m`). 같은 leg 에서 0.02 m 넘게 줄면 무시(ttl 미연장), `ttl_s` 만료·odom 낡음·궤적 변경·통행권 없음이면 선다. 설정 `authority_required` 또는 세션 첫 통행권 뒤에만 켜지고 모드 변경이 끝낸다. 게이트는 최종 결정을 0 으로만 만든다.
+- 증거: 모델 PC `test_line_authority.py` 13 통과(services·api_web·contracts·test/architecture 실행 2354 통과, 새 실패는 모델 PC의 git 없는 tar 환경 2건뿐이고 로컬 git 실행 41 통과). 변이: 만료 검사를 `+10 s` 로 바꾸면 2건 실패(`test_ttl_expiry_on_cores_clock_stands_the_robot`, `test_an_ignored_shrink_does_not_refresh_the_ttl`), 원본으로 통과.
+- gate 변화: SOURCE. SIM·DEVICE 전, 독립 Safety-Review 전.
+- 결정: D-517 4항 (M2). core_features 12921 (판정 12772+150=12922 안).
+
+## 2026-10-08 · 4fb9eb1c4 · fix(core): D-517 M2 리뷰 반영 — IR 설정 문구, 정지 거리 속도
+- 변경: (a14f0b847 와 함께) `ir_guard_enabled` 검증 문구를 D-517 전 그대로 되돌림(`authority_required` 는 자기 문구). 통행권 정지 거리는 `derived_stop_gap_m(max_linear)` — line follow 가 낼 수 있는 가장 빠른 속도(D-468 복귀 포함, cruise ≤ max_linear).
+- 증거: 모델 PC 수정 전 `test_config_flag_is_a_boolean`·`test_the_stop_gap_is_from_max_linear_not_cruise` 실패, 수정 뒤 대상 241 통과. services·gateway·test/ 전체는 main 과 같은 실패 목록(+ 병합 직후 생성 문서 낡음).
+- gate 변화: SOURCE. 독립 Safety-Review 재검토 전.
+- 결정: D-517 4항 독립 리뷰 MINOR 4·5. core_features 12922 (판정 12772+150 안).
+
+## 2026-10-08 · 854d2de64 · refactor(core): 교차로 믹스인을 recovery/junction/ 하위 패키지로
+- 변경: `recovery/junction.py`·`junction_approach.py`·`junction_bend.py`를 `git mv`로 `recovery/junction/gate.py`·`approach.py`·`bend.py`. `__init__.py`는 설명 문자열뿐(shim 없음). import는 `manager.py`, `core_api_web/api/deps.py`, 시험 셋에서 고침. 동작·API·설정 키 변경 없음. 분리 계획 2026-10-08 후속 절.
+- 증거: `test_line_junction.py`·`test_junction_approach.py`·`test_junction_bend.py`·`test_junction_turn_site_basis.py`·gateway `test_line_junction_api.py` 등 207 passed, known_failures 0 new. `test_module_structure.py` 34 passed.
+- gate 변화: 없음(SOURCE, 동작 없음)
+- 결정: `SIZE_UNITS`에 `recovery/junction`, 파일은 가장 안쪽 단위로 셈. recovery 3040→2093, junction 947. critic 독립 재판정 APPROVE WITH CHANGES(문구 반영). 2987 판정의 교차로 증가 금지는 이 이동으로 끝남
+- 교훈: 없음

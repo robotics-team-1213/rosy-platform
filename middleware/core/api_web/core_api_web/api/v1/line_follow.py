@@ -23,9 +23,10 @@ from core_api_web.api.v1.common import (
     viewer,
 )
 from core_common.domain.tasks import TaskKind
+from core_common.protocol.line_authority import LineAuthorityRequest
 from core_common.protocol.schemas import DockState, LanePerceptionRequest, LanePerceptionStatus, RobotMode
 from core_api_web.api.deps import Mode
-from core_api_web.api.deps import JunctionRefused, LineFollowMode, LineStuckRefused
+from core_api_web.api.deps import AuthorityRefused, JunctionRefused, LineFollowMode, LineStuckRefused
 
 
 line_follow_router = APIRouter(prefix="/api/v1/line-follow", tags=["line-follow"])
@@ -102,7 +103,11 @@ class LineStuckDecisionRequest(BaseModel):
 
 
 def _status(svc: CoreServicesLike) -> dict:
-    return svc.line_follow.status().model_dump()
+    data = svc.line_follow.status().model_dump()
+    authority = getattr(svc.line_follow, "authority_status", lambda: None)()
+    if authority is not None:  # D-517 4: only while CORE enforces a Fleet authority
+        data["authority"] = authority
+    return data
 
 
 @line_follow_router.get("")
@@ -190,6 +195,16 @@ def hold_line_follow(auth: AuthContext = Depends(operator),
     return _status(svc)
 
 
+class LineExitSegment(BaseModel):
+    """D-520 1: the lane the robot enters after this place's turn is one circular arc to the next
+    place. Fleet sends it only to a robot announcing lane_arc, always with the instruction's map_id."""
+
+    curvature_1pm: float = Field(ge=-5.0, le=5.0)  # signed, left (CCW) +, 0.5 <= |k| <= 5
+    length_m: float = Field(gt=0, le=1.0)
+    outer_line_offset_m: float = Field(ge=0.05, le=0.20)
+    end_place_id: str = Field(min_length=1, max_length=128)
+
+
 class LineJunctionRequest(BaseModel):
     """D-494 decision 4: what to do at the next junction (Fleet trip loop)."""
 
@@ -206,6 +221,8 @@ class LineJunctionRequest(BaseModel):
     expect_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
     # signed (2026-10-08): negative when the measured cross line is past the place point.
     pivot_past_line_m: Optional[float] = Field(default=None, ge=-0.30, le=0.30)
+    # D-520 1: the arc after this place, sent only to a robot announcing lane_arc.
+    exit_segment: Optional[LineExitSegment] = None
     # D-507 addendum (2026-10-08): a site-map bend, sent only to a robot announcing lane_bend.
     bend_in_m: Optional[float] = Field(default=None, gt=0, le=2.0)
     bend_tol_m: Optional[float] = Field(default=None, gt=0, le=0.30)
@@ -248,16 +265,39 @@ def set_line_junction(body: LineJunctionRequest, auth: AuthContext = Depends(ope
     if body.pivot_past_line_m is not None and (body.action == "stop" or (
             body.action != "straight" and body.turn_deg is None)):
         raise ApiError("VALIDATION_ERROR", 400, "pivot_past_line_m belongs to straight or a turn")
+    if body.exit_segment is not None and (
+            body.map_id is None or abs(body.exit_segment.curvature_1pm) < 0.5
+            or not (body.action == "straight" or body.turn_deg is not None)):
+        raise ApiError("VALIDATION_ERROR", 400, "exit_segment needs map_id, 0.5 <= |curvature_1pm| <= 5 "
+                       "and straight or a turn with turn_deg")
     require_manual_released(svc)
     require_calibration_owner(svc, auth, "line-follow junction")
     try:
         result = svc.line_follow.set_junction(body.action, body.place_id, body.expires_s,
                                               body.stop_after_m, body.turn_deg, body.advance_m,
-                                              expect=_expect(body))
+                                              expect=_expect(body),
+                                              exit_segment=(None if body.exit_segment is None
+                                                            else body.exit_segment.model_dump()))
     except JunctionRefused as exc:
         raise ApiError(exc.code, 409, str(exc)) from exc
     svc.state.set_line_follow(svc.line_follow.status())
     return {"accepted": result[0], "junction_seq": result[1], "state": result[2]}
+
+
+@line_follow_router.post("/authority")
+def set_line_authority(body: LineAuthorityRequest, auth: AuthContext = Depends(operator),
+                       svc: CoreServicesLike = Depends(get_services)):
+    """D-517 4 (M2): Fleet's movement authority for the trip leg. The same seat as /junction.
+    Accepted, or ignored (``accepted`` false, ``reason`` shrink: a smaller end on the same leg).
+    A 409 refusal also drops the held authority, so the robot stands."""
+    require_manual_released(svc)
+    require_calibration_owner(svc, auth, "line-follow authority")
+    try:
+        result = svc.line_follow.set_authority(body.authority_id, body.leg_id, body.pose_stamp,
+                                               body.until_m, body.ttl_s)
+    except AuthorityRefused as exc:
+        raise ApiError(exc.code, 409, exc.args[1]) from exc
+    return result
 
 
 @line_follow_router.post("/stuck/decision")

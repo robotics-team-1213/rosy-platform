@@ -703,6 +703,21 @@
 - 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
 - gate 변화: 없음.
 
+## 2026-10-08 · uncommitted · fix(api): 지도 ID를 수신 격자와 함께 응답
+- 변경: `GET /api/v1/map`의 기존 `map_id` 필드는 스냅숏에 저장된 ID를 우선한다. 지도 수신 뒤 로봇 상태 ID만 바뀌면 이전 격자에 새 ID를 덧씌우지 않는다. 응답 스키마는 그대로다.
+- 증거: gateway `test_map_snapshots.py` 11 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL API 의미 근거 추가. 실물 readback은 HOLD.
+
+## 2026-10-08 · uncommitted · fix(api): 마지막 계획 경로 수신 근거 추가
+- 변경: `GET /api/v1/navigation/path`가 마지막 경로의 점과 선택 map ID·frame ID·서버 수신 나이를 응답한다. 최초 수신 전 `{poses: []}`은 그대로이며 현재 목표와의 동일성은 주장하지 않는다.
+- 증거: gateway 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 응답 근거 추가. 현재 목표 식별과 실물 readback은 HOLD.
+
+## 2026-10-08 · uncommitted · feat(api): SLAM 맵핑 세션 읽기
+
+- 변경: `GET /api/v1/navigation/state`에 CORE가 보유한 `mapping_active`를 읽기 전용으로 추가한다. 이는 수락된 세션 플래그이지 slam_toolbox 실행 증명이 아니다.
+- 증거: gateway readiness/API 시험과 로봇 브라우저 시험 12 passed, 계약·패키지 24 passed, [지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md).
+- gate 변화: LOCAL 세션 readback 근거 추가. 실제 SLAM 지도 갱신과 계약 착지 합의는 HOLD.
 ## 2026-10-08 · uncommitted · feat(api): `POST /line-follow/junction` action `bend`와 능력 `lane_bend` (v1.137)
 - 변경: `LineJunctionRequest` action `bend`, 선택 필드 `bend_in_m`(0, 2]·`bend_tol_m`(0, 0.30]·`bend_radius_m`(0, 0.5]. `bend`는 `turn_deg`(0 < |θ| ≤ 90)·`map_id`·세 필드가 필수이고 창·pivot·advance와 함께 둘 수 없으며, 세 필드는 다른 action에 둘 수 없다(400). `system.py` 능력 `lane_bend`(line-follow 매니저의 `supports_lane_bend`). API Ref v1.137, `app.py` 버전.
 - 증거: `test_line_junction_api.py::test_d507_bend_fields_validation`, `test_capabilities_controls.py` `lane_bend` 참·line-follow 없으면 거짓. gateway 2266 passed.
@@ -717,4 +732,21 @@
 ## 2026-10-08 · uncommitted · fix(api): D-507 보충 굽이 지시의 API Ref 번호를 v1.142로 옮김
 - 변경: main 병합으로 v1.141이 D-517 M1a에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.142로 옮겼다. 앞 항목의 v1.141은 그 때의 번호다.
 - 증거: `test/test_line_follow_contract_docs.py`, `test_protocol_version_alignment.py` 버전 핀 통과.
+- gate 변화: 없음.
+
+## 2026-10-08 · b570504a2 · feat(api): POST /line-follow/authority, 능력 line_follow_authority, v1.142
+- 변경: operator·수동 해제·보정 lease seat, 409 `LINE_FOLLOW_NOT_ACTIVE`·`AUTHORITY_ODOM_STALE`·`AUTHORITY_POSE_STALE`·`AUTHORITY_POSE_FUTURE`, 강제 중에만 `GET /line-follow` `authority`. 앱 설명 v1.142.
+- 증거: 모델 PC gateway 2208 통과(17 오류는 `rosy` wheel 없는 ROS bridge 모듈 수집 실패, 변경 무관), `test_line_authority_api.py`·`test_capabilities_controls.py` 통과.
+- gate 변화: SOURCE.
+- 결정: D-517 4항 (M2)
+
+## 2026-10-08 · 887abb1a9 · feat(core): D-517 M2 능력 line_follow_authority_required
+- 변경: `base_velocity` 능력에 `line_follow_authority_required`(설정 `line_follow.authority_required` 가 참이면 true, line-follow 없으면 false).
+- 증거: 모델 PC 수정 전 `test_d491_trip_caps_follow_robot_package_services_and_limits` 실패, 수정 뒤 통과.
+- gate 변화: SOURCE.
+- 결정: D-517 4항 독립 리뷰 3 (E-Stop·CORE 재시작 뒤 첫 통행권 전 강제). API v1.142.
+
+## 2026-10-08 · uncommitted · fix(api): D-517 M2 통행권의 API Ref 번호를 v1.143으로 옮김
+- 변경: main 병합으로 v1.142가 D-507 보충(굽이 지시)에 쓰여, 이 브랜치의 API Ref 행·`app.py`·버전 핀을 v1.143으로 옮겼다. 앞 두 항목의 v1.142는 그 때의 번호다. `base_velocity` 능력은 `lane_bend`와 `line_follow_authority`·`line_follow_authority_required`를 함께 낸다.
+- 증거: `test/test_line_follow_contract_docs.py`, fleet 버전 핀 시험, `test_capabilities_controls.py`.
 - gate 변화: 없음.
