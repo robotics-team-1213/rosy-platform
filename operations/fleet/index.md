@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(fleet): D-517 M1a 리뷰 반영 — 끝난 trip의 점유 유지, 고리 키, 바퀴 재시도·정리
 - 2026-10-08 · uncommitted · feat(fleet): D-517 M0 고정 블록 통행권 계산
 - 2026-10-08 · uncommitted · fix(fleet): D-507 4 검토 반영 — 보내는 현 각의 한도·부호 검사
 - 2026-10-08 · uncommitted · fix(fleet): D-507 4 교차로 회전 각을 전진 현으로 조준
 - 2026-10-08 · uncommitted · feat(fleet): 지도 edge 굽이 후보 진단
-- 2026-10-08 · uncommitted · docs(fleet): 지도 교차로 창 누락 시 CORE HOLD 설명
