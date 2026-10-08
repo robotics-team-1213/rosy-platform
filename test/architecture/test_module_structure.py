@@ -77,10 +77,11 @@ OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception toolin
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: P6 subpackages counted as their own size unit (path relative to the colcon root): their lines
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
-#: docs/plans/2026-10-07-line-follow-recovery-subpackage.md
+#: docs/plans/2026-10-07-line-follow-recovery-subpackage.md, docs/plans/2026-10-08-line-follow-arc-subpackage.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
-SIZE_UNITS = ("core/services/core_features/line_follow/recovery",)
+SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
+              "core/services/core_features/line_follow/arc")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -687,6 +688,15 @@ SIZE_VERDICTS = {
         "_body_clearance in body_stop.py; if junction code passes 800 lines, give it its own subpackage via "
         "docs/plans/2026-10-07-line-follow-recovery-subpackage.md follow-up. Split plan of record: "
         "docs/plans/2026-10-07-line-follow-recovery-subpackage.md; re-judge on the next +150",
+    ),
+    "core/services/core_features/line_follow/arc": (
+        1,
+        "accept: PENDING INDEPENDENT RE-JUDGE (written by the implementing executor, not an independent "
+        "verdict). D-520 2 puts map-guided arc following in its own size unit because line_follow/recovery "
+        "(2713 +150) and core_features (12772 +150) have no room for it. The unit is a LineFollowManager "
+        "mixin under the single manager lock and generation, no own lock, thread, store or publisher; CORE "
+        "CommandManager stays the final cmd_vel publisher; it calls the D-422 sweep, never changes it. "
+        "Split plan of record: docs/plans/2026-10-08-line-follow-arc-subpackage.md; re-judge on the next +150",
     ),
     "core_features": (
         12_772,
