@@ -30,7 +30,7 @@ from fleet.routing.execute import (advance_m, arc_id, lane_action, plan_again, r
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view,
                                      record_bend_candidate)
-from fleet.server.lane_traffic import TrafficService
+from fleet.server.lane_traffic import PAST_PLACE_M, TrafficService
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -553,9 +553,10 @@ class TripRunner:
         return now - live.progress_at >= self.config.stall_s
 
     def _traffic_holds(self, live: LiveTrip, index: int) -> bool:
-        """D-517 3 (M1): a block at or before this segment's place is refused to the robot."""
+        """D-517 3 (M1): a refused block starts before the robot is ``PAST_PLACE_M`` past this
+        segment's place, so the instruction would take it into that block."""
         refused = (live.traffic or {}).get("refused_at_m")
-        return refused is not None and refused <= live.progress(index, live.segments[index]["s_to"]) + 1e-6
+        return refused is not None and refused < live.progress(index, live.segments[index]["s_to"]) + PAST_PLACE_M
 
     def _lap_due(self, live: LiveTrip, index: int, remaining: float) -> bool:
         """At the lap's last place (within ``arm_distance_m``, before its action goes out) or past it."""

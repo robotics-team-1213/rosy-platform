@@ -345,3 +345,18 @@ def test_a_failing_block_table_drops_every_stale_answer(caplog):
     _ticks(runner, fleet, n=2)
     assert runner._live["a"].traffic is None and runner._live["b"].traffic is None
     assert sum("traffic table step failed" in r.getMessage() for r in caplog.records) == 1
+
+
+def test_the_hold_back_covers_the_entry_past_the_place():
+    """Review MED 4: a block refused just past the place (within PAST_PLACE_M) holds the instruction."""
+    from fleet.server.lane_traffic import PAST_PLACE_M
+
+    runner, store, fleet = _setup(ids=("a",))
+    _trip(runner, store, fleet, "a", "east:fwd", 0.2)
+    live = runner._live["a"]
+    index = next(i for i in range(len(live.segments)) if live.place(i))
+    place_m = live.progress(index, live.segments[index]["s_to"])
+    for refused, holds in ((place_m + 0.02, True), (place_m + PAST_PLACE_M - 1e-3, True),
+                           (place_m + PAST_PLACE_M + 0.01, False), (None, False)):
+        live.traffic = {"waiting_for": [], "authority_end_m": None, "refused_at_m": refused}
+        assert runner._traffic_holds(live, index) is holds, refused
