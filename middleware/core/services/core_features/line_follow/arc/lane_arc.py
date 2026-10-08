@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import math
 
-from core_common.protocol.schemas import LineArcStatus
+from core_common.protocol.line_arc import LineArcStatus
 from core_features.line_follow.crosswalk_zone import CORRIDOR_HALF_M
 from core_features.line_follow.model import LineFollowDecision
 from core_features.line_follow.recovery.junction import DEFAULT_ADVANCE_M, JunctionRefused
