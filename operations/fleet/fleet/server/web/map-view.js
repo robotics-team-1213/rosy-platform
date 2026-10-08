@@ -16,6 +16,7 @@ import {drawStartPointMarks} from './start-point-layer.js';
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
 import { drawTrails } from "./trail-view.js";
 import { lensesMatch } from "/console/assets/map-fit.js";
+import { trafficClock, trafficDrawing } from "./site-map-model.js";
 
 export function cameraMapCalibration(frame, calibrations, siteMap) {
   if (!frame || frame.state !== "live" || frame.rectified || !siteMap
@@ -72,7 +73,7 @@ function warpOnto(ctx, image, mapToImage, bounds, toPx) {
   }
 }
 
-export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable }) {
+export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
   let cameraFrame = null;
   let calibrations = [];
   let calibrationsAt = 0;
@@ -571,12 +572,92 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.restore();
 
     drawTrails(ctx, view, toPx, 1.5, call);
+    drawTraffic(ctx, toPx, t.scale);
     drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
     drawStartPointMarks(ctx, toPx, view.startPoints, view.siteMap.maps.map(row=>row.map_id), css('--series-secondary'), 2);
     if (layerOn("sightings")) {
       for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
     }
     flushChips(ctx);
+  }
+
+  // D-517 10 교통 층 — 블록 띠(점유 채움·허가 테두리·불명 빗금), 구역 윤곽과 "점유 a/b · 대기 n",
+  // 로봇마다 통행권 끝 가로 표시. 미터 좌표를 toPoint 하나로 그려 화면 방향·위에서 본 보기를 그대로 따른다.
+  // 테두리는 굵은 선에서 가는 선을 지운 따로 그린 판이라 밑의 실영상을 덮지 않는다.
+  function drawTraffic(ctx, toPoint, pxPerM) {
+    const drawing = layerOn("traffic") ? trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips) : null;
+    el("legend-traffic").hidden = !drawing || !(drawing.bands.length || drawing.zones.length);
+    if (!drawing) return;
+    const band = Math.max(6, Math.min(16, 0.09 * pxPerM));
+    const trace = (target, points) => {
+      target.beginPath();
+      points.forEach(([x, y], i) => { const p = toPoint(x, y); if (i) target.lineTo(p.x, p.y); else target.moveTo(p.x, p.y); });
+    };
+    const outline = (lines, colour, width, edge, dash = []) => {
+      const sheet = document.createElement("canvas");
+      sheet.width = ctx.canvas.width; sheet.height = ctx.canvas.height;
+      const o = sheet.getContext("2d");
+      o.setTransform(ctx.getTransform());
+      o.lineJoin = "round";
+      o.strokeStyle = colour;
+      o.lineWidth = width;
+      o.setLineDash(dash);
+      for (const line of lines) { trace(o, line); o.stroke(); }
+      o.setLineDash([]);
+      o.globalCompositeOperation = "destination-out";
+      o.lineWidth = width - 2 * edge;
+      o.lineCap = "round";
+      for (const line of lines) { trace(o, line); o.stroke(); }
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(sheet, 0, 0); ctx.restore();
+    };
+    for (const zone of drawing.zones) outline(zone.lines, css("--ink-quiet"), band + 10, 2);
+    const hatch = document.createElement("canvas");
+    hatch.width = hatch.height = 8;
+    const h = hatch.getContext("2d");
+    h.strokeStyle = css("--status-warn"); h.lineWidth = 2;
+    h.beginPath(); h.moveTo(0, 8); h.lineTo(8, 0); h.moveTo(-2, 2); h.lineTo(2, -2); h.moveTo(6, 10); h.lineTo(10, 6); h.stroke();
+    ctx.save();
+    ctx.lineCap = "butt"; ctx.lineJoin = "round"; ctx.lineWidth = band;
+    for (const item of drawing.bands) {
+      if (item.state === "GRANTED") continue;
+      trace(ctx, item.points);
+      ctx.strokeStyle = item.state === "OCCUPIED" ? colorOf(item.robot) : ctx.createPattern(hatch, "repeat");
+      ctx.globalAlpha = item.state === "OCCUPIED" ? 0.9 : 1;
+      ctx.stroke();
+    }
+    ctx.restore();
+    for (const item of drawing.bands.filter((b) => b.state === "GRANTED")) outline([item.points], colorOf(item.robot), band, 2);
+    for (const item of drawing.bands.filter((b) => b.state === "UNKNOWN")) outline([item.points], css("--status-warn"), band, 1.5, [4, 3]);
+    ctx.save();
+    ctx.lineCap = "round";
+    for (const tick of drawing.ticks) {
+      const p = toPoint(tick.x, tick.y);
+      const q = toPoint(tick.x + Math.cos(tick.angle) * 0.05, tick.y + Math.sin(tick.angle) * 0.05);
+      const span = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+      const nx = -(q.y - p.y) / span * band * 0.9, ny = (q.x - p.x) / span * band * 0.9;
+      for (const [colour, width] of [[css("--ground-deep"), 6], [colorOf(tick.robot), 3]]) {
+        ctx.beginPath(); ctx.moveTo(p.x - nx, p.y - ny); ctx.lineTo(p.x + nx, p.y + ny);
+        ctx.strokeStyle = colour; ctx.lineWidth = width; ctx.stroke();
+      }
+    }
+    ctx.restore();
+    // 통행권 끝에 로봇 이름 — 띠 색만으로는 어느 로봇의 블록인지 읽히지 않는다(같은 계열 색).
+    for (const tick of drawing.ticks) {
+      const p = toPoint(tick.x, tick.y);
+      drawChip(ctx, null, p.x, p.y - band - 14, tick.robot, "");
+    }
+    // 구역 글은 차로망 안쪽(가운데 쪽)에 둔다 — 띠·통행권 표시와 바깥 사각형 치수 글을 덮지 않는다.
+    const centre = toPoint(...drawing.centre);
+    for (const zone of drawing.zones) {
+      const p = toPoint(zone.anchor.x, zone.anchor.y);
+      const q = toPoint(zone.anchor.x + Math.cos(zone.anchor.angle) * 0.05, zone.anchor.y + Math.sin(zone.anchor.angle) * 0.05);
+      const span = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+      let nx = -(q.y - p.y) / span, ny = (q.x - p.x) / span;
+      if (nx * (centre.x - p.x) + ny * (centre.y - p.y) < 0) { nx = -nx; ny = -ny; }
+      const reach = band + 18 + Math.abs(nx) * 52;  // a sideways label needs room for its width
+      drawChip(ctx, null, p.x + nx * reach, p.y + ny * reach, zone.label, "");
+    }
+    window.__trafficLayer = { bands: drawing.bands.length, zones: drawing.zones.length, ticks: drawing.ticks.length };
   }
 
   function describeSightings() {
@@ -674,6 +755,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         ctx.stroke();
       }
     });
+    drawTraffic(ctx, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 1 / grid.resolution);
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
     drawSiteOverlay(ctx, grid);
@@ -715,11 +797,12 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         } catch (error) { if (error.name === "AbortError") return; calibrations = []; }
         // D-513 7: 활성 현장 지도의 화면 방향. 지도가 없거나(404/409) 읽지 못하면 기본 방향.
         try {
-          view.siteViewTurn = siteViewTurn(await call("/api/fleet/site-map/active", { signals: [life.signal] }));
+          view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
+          view.siteViewTurn = siteViewTurn(view.activeSiteMap);
           life.check();
         } catch (error) {
           if (error.name === "AbortError") return;
-          if (error.status === 404 || error.status === 409) view.siteViewTurn = 0; // no active map; else keep the last turn
+          if (error.status === 404 || error.status === 409) { view.siteViewTurn = 0; view.activeSiteMap = null; } // no active map; else keep the last turn
         }
       }
     } catch (err) {
@@ -737,7 +820,48 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   // resetPolling()(로그인) 전까지 멈춘다. 일시 실패는 다음 5 s 주기에 다시 묻는다.
   const mapGate = createPollGate({ slowCodes: { NO_MAP: NO_MAP_RETRY_MS } });
 
+  // D-517 10: 교통 표(1 s). Fleet 이 그 라우트를 모르면(404) 다음 로그인까지 묻지 않는다.
+  // 진행 중 trip 이 있을 때만 /trips 로 계획을 읽는다 — 통행권 끝을 계획 위에 놓는다.
+  const trafficGate = createPollGate();
+  let trafficInFlight = false;
+  scope.onDispose(() => { trafficInFlight = false; });
+  async function refreshTraffic() {
+    const life = scope.capture();
+    life.check();
+    if (auth.locked || trafficInFlight || !trafficGate.due()) return;
+    trafficInFlight = true;
+    try {
+      const traffic = await call("/api/fleet/traffic", { signals: [life.signal] });
+      life.check();
+      trafficGate.ok();
+      view.trafficTrips = traffic.robots.length
+        ? ((await call("/api/fleet/trips", { signals: [life.signal] })).open || []) : [];
+      life.check();
+      if (traffic.map_version !== null && traffic.map_version !== view.activeSiteMap?.version) {
+        view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
+        life.check();
+      }
+      view.traffic = traffic;
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      if (trafficGate.fail(err.status, err.code) === "absent") view.traffic = null;
+    } finally {
+      if (life.current()) trafficInFlight = false;
+    }
+    view.trafficClock = trafficClock(view.trafficClock, view.traffic, Date.now());
+    el("traffic-toggle").hidden = !view.traffic?.units?.length;
+    onTrafficChanged();
+  }
+  scope.listen(el("traffic-toggle"), "click", () => {
+    const on = !layerOn("traffic");
+    view.layers = { ...view.layers, traffic: on };
+    el("traffic-toggle").setAttribute("aria-pressed", String(on));
+    el("traffic-toggle").textContent = on ? "교통 켬" : "교통 끔";  // the quiet button has no pressed look
+    draw();
+  });
+
   function resetPolling() {
+    trafficGate.reset();
     mapGate.reset();
     sightingsUnavailable = false;
   }
@@ -902,5 +1026,5 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       cancelMapCameraExpiry = scope.timeout(() => { lastFrame = null; setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
     })));
   }
-  return { draw, refresh, refreshSightings, resetPolling, toWorld, streamEvidence, setCameraFrame, bindCamera };
+  return { draw, refresh, refreshSightings, refreshTraffic, resetPolling, toWorld, streamEvidence, setCameraFrame, bindCamera };
 }

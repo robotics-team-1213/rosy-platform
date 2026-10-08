@@ -112,7 +112,8 @@ function markLocked(reason = "auth") {
   connectionView.show(reason, auth.token);
   if (firstLock) {
     Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
-      stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {}});
+      stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {},
+      traffic: null, trafficTrips: [], trafficClock: null});
     visionView.reset(); visionView.refreshSources(); trackingView.reset(); startPointView.reset();
   }
   render();
@@ -132,7 +133,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4).
   return document.querySelectorAll(
-    "ui-button:not(#token-save):not(#topbar-more):not([data-login]):not(#roster-toggle):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
+    "ui-button:not(#token-save):not(#topbar-more):not([data-login]):not(#roster-toggle):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -774,6 +775,7 @@ formation.bind();
 const mapView = createMapView({ scope: pageScope,
   el, view, auth, call,
   onMapChanged: render,
+  onTrafficChanged: render,
   onMapUnavailable: () => {
     const selected = view.selected;
     if (selected) disarmGoal("지도를 확인할 수 없어 목표 지정 취소");
@@ -928,6 +930,7 @@ pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_
 pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => mapView.refresh(), MAP_MS);
 pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
+pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);
 pageScope.interval(() => trackingView.refresh(), STATE_MS);
 pageScope.interval(() => visionView.refreshFrame(), 1500);
 
