@@ -50,6 +50,7 @@ def repos(tmp_path, monkeypatch, request):
     git(main, "worktree", "add", "-q", str(wt), "-b", "feat/x", "main")
     monkeypatch.chdir(wt)
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
+    monkeypatch.setenv("ROSY_TEST_LOCAL", "1")  # fixture repos never go to the test hosts
     return main, wt
 
 

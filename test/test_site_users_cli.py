@@ -215,6 +215,8 @@ def test_add_prints_the_ownership_hint_when_it_cannot_chown(tmp_path, monkeypatc
 def test_validate_gates_restart_on_content_and_ownership(tmp_path, capsys):
     path = tmp_path / "site-users.yaml"
     _seed(path, _entry())
+    if os.name == "posix":
+        path.chmod(0o440)  # the published mode; a fresh file follows the umask (0644 under 022)
 
     gid = ["--gid", str(path.stat().st_gid)] if os.name == "posix" else []
     assert main(["validate", str(path), *gid]) == 0
@@ -232,6 +234,7 @@ def test_validate_gates_restart_on_content_and_ownership(tmp_path, capsys):
         path.chmod(0o460)
         with pytest.raises(SystemExit):
             main(["validate", str(path), "--gid", str(actual_gid)])  # group-writable
+        path.chmod(0o640)  # owner-writable again: only root can write through 0460
 
     path.write_text("users: [\n  broken", encoding="utf-8")
     with pytest.raises(SystemExit):
