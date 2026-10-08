@@ -47,7 +47,7 @@ export function mount(el, ctx) {
     const values = {
       mode: state.mode ? {evidence: "fresh", text: operatorModeLabel(state.mode), title: state.mode} : null,
       navigation: {...readout(state, "navigation", "내비게이션",
-        state.navigation ? `${enumLabel(NAVIGATION_LABEL, state.navigation)}${["PLANNING", "NAVIGATING"].includes(state.navigation) && !mapPoseTrusted ? " · 위치 확인 필요" : ""}` : null), title: state.navigation},
+        state.mode === "SAFE_STOP" ? "안전 정지 적용" : state.navigation ? `${enumLabel(NAVIGATION_LABEL, state.navigation)}${["PLANNING", "NAVIGATING"].includes(state.navigation) && !mapPoseTrusted ? " · 위치 확인 필요" : ""}` : null), title: state.navigation},
       pose: readout(state, "pose", "위치",
         !mapPoseTrusted ? "지도 위치 확인 불가" : Number.isFinite(pose?.x) && Number.isFinite(pose?.y)
           ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : null),

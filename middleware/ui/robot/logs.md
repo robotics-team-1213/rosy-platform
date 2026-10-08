@@ -1128,3 +1128,9 @@
 - 변경: 내비게이션·위치 추정의 지연 나이를 표시하고 단절·정보 없음을 구분한다. 주행 상태가 확인되지 않으면 마지막 계획 경로 선을 숨기고 이유를 우선 표시한다.
 - 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/navigation-evidence/navigation-stage/`의 2폭×3상태 캡처. Chromium 1 passed, 지도·패키지 20 passed, 새 실패 0.
 - gate 변화: LOCAL G2 일부 셀 보강. 실물·전체 G2·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 안전 정지의 지도 목표 차단
+
+- 변경: SAFE_STOP을 지도 HUD·로봇 카드에 우선 표시하고 목표 버튼과 계획 경로를 막는다. 초기 위치 설정은 기존 별도 조건을 유지한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: 같은 세션 `evidence/navigation-evidence/navigation-stage/`의 1366×768·390×844 안전 정지 캡처. Chromium 1 passed, 패키지 19 passed, 새 실패 0. 확장 회귀 묶음은 멈춰 중단했고 통과로 세지 않는다.
+- gate 변화: LOCAL G2 안전 정지 셀 보강. 장치·전체 G2·G3는 HOLD.

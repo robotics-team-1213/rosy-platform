@@ -1231,6 +1231,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             path_info = {"map_id": "local-map", "frame_id": "map"}
             mapping_session = {"active": True, "readable": True}
             evidence_mode = {"value": "fresh"}
+            safety_mode = {"value": "NAVIGATION"}
             page.add_init_script("sessionStorage.setItem('rosy.dashboard.token', 'rosy-dev-operator')")
             page.on("pageerror", lambda error: errors.append(str(error)))
 
@@ -1241,7 +1242,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
                     return
                 if path == "/api/v1/robot/state":
                     state = json.loads(_response(client, path, TOKENS["operator"], "normal", "console").body)
-                    state.update(mode="NAVIGATION", navigation="NAVIGATING", map_id=location["map_id"],
+                    state.update(mode=safety_mode["value"], navigation="NAVIGATING", map_id=location["map_id"],
                                  localization={"state": location["state"], "pose_frame": location["frame"], "confidence": 0.92})
                     received_at = (datetime.now(timezone.utc) - timedelta(
                         seconds=22 if evidence_mode["value"] == "delayed" else 0)).isoformat()
@@ -1325,6 +1326,22 @@ def test_console_navigation_stage_local_captures(tmp_path):
                                 "image": image, "synthetic": True, "errors": errors[:]})
             evidence_mode["value"] = "fresh"
             page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 주행 중')")
+            safety_mode["value"] = "SAFE_STOP"
+            page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 안전 정지')
+              && document.querySelector('[data-map-click="goal"]')?.disabled
+              && !document.querySelector('[data-map-click="pose"]')?.disabled
+              && document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 주행 상태 확인 필요')""")
+            assert page.locator("#shell-estop").is_visible()
+            assert "안전 정지 중" in page.locator("#map-action-reason").inner_text()
+            assert page.locator('[data-map-click="goal"]').get_attribute("reason") == "안전 정지 중 주행 목표 불가"
+            page.wait_for_function("""() => document.querySelector('[data-panel="console.overview"] .ui-readout')?.textContent.includes('안전 정지 적용')""")
+            stop_image = f"operator-console-navigation-safe-stop-{viewport[0]}x{viewport[1]}.png"
+            page.screenshot(path=str(capture_dir / stop_image), full_page=True)
+            records.append({"viewport": f"{viewport[0]}x{viewport[1]}", "scenario": "safe_stop",
+                            "image": stop_image, "synthetic": True, "errors": errors[:]})
+            safety_mode["value"] = "NAVIGATION"
+            page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 주행 중')
+              && !document.querySelector('[data-map-click="goal"]')?.disabled""")
             mapping_session["active"] = False
             page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 맵핑 세션 대기')")
             page.screenshot(path=str(capture_dir / f"operator-console-mapping-idle-{viewport[0]}x{viewport[1]}.png"), full_page=True)

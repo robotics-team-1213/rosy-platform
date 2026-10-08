@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · uiux(robot): 안전 정지의 지도 목표 차단
 - 2026-10-08 · uncommitted · uiux(robot): 지도 HUD의 지연·단절 증거 분리
 - 2026-10-08 · uncommitted · uiux(robot): 계획 경로 끝 방향 표시
 - 2026-10-08 · uncommitted · uiux(robot): SLAM 세션 상태와 지도 HUD 밀도
 - 2026-10-08 · uncommitted · uiux(robot): 계획 경로 수신 근거 표시
-- 2026-10-08 · uncommitted · uiux(robot): 표시 지도 ID와 로봇 ID 대조

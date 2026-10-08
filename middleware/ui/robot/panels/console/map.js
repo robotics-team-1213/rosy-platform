@@ -71,7 +71,8 @@ export function mount(root, ctx) {
       return `${EVIDENCE_LABEL.delayed}${age === null ? " · 시각 확인 불가" : evidenceAgeText(age)}`;
     };
     const navigation = evidence.isFresh("navigation") ? state?.navigation : null;
-    setText(navStage, `주행 · ${state && !evidence.isFresh("navigation") ? evidenceLabel("navigation")
+    setText(navStage, `주행 · ${state?.mode === "SAFE_STOP" ? "안전 정지"
+      : state && !evidence.isFresh("navigation") ? evidenceLabel("navigation")
       : navigation && ["PLANNING", "NAVIGATING"].includes(navigation) && !goalPoseReady()
       ? "위치 확인 중" : navigation ? enumLabel(NAVIGATION_LABEL, navigation) : "상태 확인 불가"}`);
     const location = !evidence.isFresh("pose") ? evidenceLabel("pose")
@@ -87,9 +88,10 @@ export function mount(root, ctx) {
   }
   const baseMapAction = () => (ctx.role === "operator" || ctx.role === "administrator")
     && capabilities?.navigation?.goal_navigation === true && commissioning?.runtime_mode === "hardware";
+  const safeStopped = () => state?.mode === "SAFE_STOP";
   const goalPoseReady = () => state && new HeadlessState(state).isFresh("pose")
     && (state.localization == null || (state.localization.state === "LOCALIZED" && state.localization.pose_frame === "map"));
-  const canMapAction = (mode) => baseMapAction() && (mode !== "goal" || goalPoseReady());
+  const canMapAction = (mode) => baseMapAction() && (mode !== "goal" || (!safeStopped() && goalPoseReady()));
   function renderReadiness() {
     readinessStatus.hidden = false;
     const errors = [["로봇 상태", readErrors.state], ["내비게이션 기능", readErrors.capabilities], ["실행 모드", readErrors.commissioning]]
@@ -112,6 +114,7 @@ export function mount(root, ctx) {
     const operator = ctx.role === "operator" || ctx.role === "administrator";
     const hardware = commissioning?.runtime_mode === "hardware";
     if (mapIdMismatch) clickReason.textContent = "로봇과 지도 ID가 달라 위치·주행 목표를 막았습니다. 지도 갱신을 기다리세요.";
+    else if (baseMapAction() && safeStopped()) clickReason.textContent = "안전 정지 중에는 주행 목표를 보낼 수 없습니다. 초기 위치 설정은 사용할 수 있습니다.";
     else if (baseMapAction() && !goalPoseReady()) clickReason.textContent = "현재 위치 추정이 확인되지 않아 주행 목표를 막았습니다. 초기 위치 설정은 사용할 수 있습니다.";
     else if (baseMapAction()) clickReason.textContent = "지도를 선택하면 확인 후 위치 또는 주행 목표를 전송합니다.";
     else if (!operator) clickReason.textContent = "위치·주행 목표 설정에는 운용자 권한이 필요합니다.";
@@ -142,9 +145,10 @@ export function mount(root, ctx) {
     onPathReadout: (evidence) => { setText(pathStage, `계획 경로 · ${evidence.label}`); },
     getDisplayPose: () => new HeadlessState(state).isFresh("pose") && state?.localization?.state === "LOCALIZED"
       && state.localization.pose_frame === "map" ? state.pose : null,
-    getNavigation: () => new HeadlessState(state).isFresh("navigation") && goalPoseReady() ? state.navigation : null,
+    getNavigation: () => !safeStopped() && new HeadlessState(state).isFresh("navigation") && goalPoseReady() ? state.navigation : null,
     canGoal: canMapAction,
-    goalReason: (mode) => mode === "goal" && baseMapAction() && !goalPoseReady() ? "위치 추정 확인 후 가능" : "",
+    goalReason: (mode) => mode === "goal" && baseMapAction()
+      ? safeStopped() ? "안전 정지 중 주행 목표 불가" : !goalPoseReady() ? "위치 추정 확인 후 가능" : "" : "",
     setAction: (text) => { setText(action, text); },
     onTargetReadout: (target) => {
       targetValue.textContent = target.unavailable
