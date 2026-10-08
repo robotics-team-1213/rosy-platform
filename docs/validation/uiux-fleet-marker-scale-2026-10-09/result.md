@@ -8,9 +8,8 @@
 
 | 캡처 | X: 아래 위치의 파일 | SHA-256 |
 |---|---|---|
-| 변경 후 데스크톱 지도 부분 | `fleet_marker_map_1920x1080.png` | SHA-256 `ecd340ec577d7acef6ff6bc1dcac280c 6e23fb75674246673cf830ececd82921` |
-| 변경 후 모바일 지도 부분 | `fleet_marker_map_320x568.png` | SHA-256 `aac04c2bc86404d7245da3d516d5fcf3 2b3764ad12911fee4cfecf41c637064f` |
-SHA-256 열의 두 부분을 공백 없이 이어 붙이면 원본 파일의 전체 digest다.
+| 변경 후 데스크톱 지도 부분 | `fleet_marker_map_1920x1080.png` | `ecd340ec577d7acef6ff6bc1dcac280c6e23fb75674246673cf830ececd82921` |
+| 변경 후 모바일 지도 부분 | `fleet_marker_map_320x568.png` | `aac04c2bc86404d7245da3d516d5fcf32b3764ad12911fee4cfecf41c637064f` |
 
 원본은 `X:/DevTemp/projects/rosy-platform/2026-10-09--fleet-marker-scale/`에 있다. 변경 전 전체 화면은 `X:/DevTemp/projects/rosy-platform/2026-10-09--fleet-console-current/fleet_console_exception_first.png` (SHA-256 `db91838529f2693cc13e84e6c63692ad36cc66c4dc7f3f5d32a46a247755cd22`)이며, 현재 소스 확인에서 브라우저 5건이 통과했다. 변경 후 관련 브라우저 6건 통과, `known_failures.py` NEW 0 (`2026-10-09--fleet-marker-regression.txt`).
 
