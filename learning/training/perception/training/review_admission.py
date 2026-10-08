@@ -129,7 +129,10 @@ class _Session:
         self.config_sha = _hash(config)
         self.paths = [Path(config['gate']).absolute(), Path(config['camera_profile']).absolute(),
                       *(Path(path).absolute() for path in source_files)]
-        self.bindings = {path: _stable_bytes(path) for path in self.paths}
+        try:
+            self.bindings = {path: _stable_bytes(path) for path in self.paths}
+        except (ValueError, OSError) as exc:
+            raise JobError(str(exc)) from exc
         if expected_file_hashes is not None:
             expected = {Path(path).absolute(): digest for path, digest in expected_file_hashes.items()}
             if {path: hashlib.sha256(raw).hexdigest() for path, raw in self.bindings.items()} != expected:
