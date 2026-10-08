@@ -292,12 +292,14 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
         self._bridge_hint = None
         return self._junction_hold('junction_unresolved', decision)
 
-    def _junction_done(self):
+    def _junction_done(self, keep_sighting=False):
         if self._junction is not None:
             self._mark_done(self._junction)
         self._junction = None
         self._bridge_hint = None
-        self._junction_seen_at = self._junction_first_seen = self._junction_anchor = None  # not the next
+        if not keep_sighting:  # not the next junction's
+            self._junction_seen_at = self._junction_first_seen = self._junction_anchor = None
+            self._junction_held = False
         self._junction_entry = None
 
     def _junction_gate(self, now, decision):
@@ -308,13 +310,16 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
             return decision
         if self._mode.value != 'CAMERA_LINE':
             return decision  # review M4: no junction detection on IR_LINE
-        seen = (self._junction_seen_at is not None
-                and 0 <= now-self._junction_seen_at <= self._config.stale_after_s)
+        fresh = (self._junction_seen_at is not None
+                 and 0 <= now-self._junction_seen_at <= self._config.stale_after_s)
+        if self._junction_held and not fresh and self._fresh_pose(now) is not None:
+            self._junction_held = self._line_ahead(now)  # until odom passes the handed-over line
+        seen = fresh or self._junction_held
         if seen and self._junction_entry is None:
             pose = self._fresh_pose(now)
             if pose is not None:
                 self._junction_entry = (pose.yaw, (self._return_evidence.epoch, pose.frame))
-        if seen:
+        if fresh:
             self._anchor_sighting()  # D-507 3-4
         j = self._junction
         if j is not None and j.get('reason') == 'arc_mismatch':
@@ -467,7 +472,7 @@ class JunctionMixin(JunctionApproachMixin, JunctionBendMixin):
             self._next_phase(j, 'reacquiring', now, STEP_TIME_S)
             self._odom_travel(j, now)
             self._junction_seen_at = self._junction_first_seen = self._junction_anchor = None
-            self._junction_entry = None  # the junction stop is over; the robot left it
+            self._junction_entry, self._junction_held = None, False  # the junction stop is over; the robot left it
             self._loss_started_at, self._lost_latched = None, False
             return self._junction_hold('junction_reacquiring', decision)  # follow from next frame
         # reacquiring: ordinary lane following drives; done on N consecutive confident frames.

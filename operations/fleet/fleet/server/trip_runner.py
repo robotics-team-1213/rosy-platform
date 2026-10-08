@@ -30,8 +30,8 @@ from fleet.routing.execute import (advance_m, arc_id, exit_segment, lane_action,
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
                                      pose_diagnostics, pose_view, record_bend_candidate)
-from fleet.server.lane_traffic import TrafficService
-from fleet.server.trip_authority import AuthoritySender
+from fleet.traffic.lane_traffic import TrafficService
+from fleet.traffic.trip_authority import AuthoritySender
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import (LAP_RETRIES, LAP_RETRY_S, carry_on, convoy_refusal, lap_arcs,  # noqa: F401
                                     lap_due, lap_retry_due)
@@ -524,7 +524,8 @@ class TripRunner:
         state, sent, seq = live.junction.get("state"), live.sent, live.junction.get("seq")
         ours = sent is not None and (sent["action"], sent["place"]) == ("bend", bend["place_id"])
         newer = ours and isinstance(seq, int) and isinstance(sent["seq"], int) and seq > sent["seq"]
-        finished = ours and (sent.get("done") or (sent.get("carried") and (state == "idle" or newer)))
+        # CORE idle, or waiting at the next junction it sighted to end the pass (lap SIM D), same seq
+        finished = ours and (sent.get("done") or (sent.get("carried") and (state in ("idle", "waiting") or newer)))
         if finished or (not ours and s >= bend["s_start"]):
             live.bends_done.add(bend["place_id"])  # finished, or passed without one: never again
             return await self._step_bend(live, index, s)

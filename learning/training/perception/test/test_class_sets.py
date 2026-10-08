@@ -125,6 +125,24 @@ def test_lane_lr5_file_binds_in_model_order_with_korean_display(tmp_path):
     assert classes[1]['display'] == '왼쪽 차선'
 
 
+def test_lane_lr6_drivable_requires_a_new_workspace_and_keeps_v12_indices(tmp_path):
+    import review_masks
+    folder = Path(__file__).resolve().parents[1] / 'classes'
+    old = (folder / 'lane_lr5.yaml').read_bytes()
+    new = (folder / 'lane_lr6_drivable.yaml').read_bytes()
+    (tmp_path / 'old').mkdir()
+    old_store = open_store(tmp_path / 'old')
+    old_classes = review_masks.bind_classes(old_store, old)['classes']
+    with pytest.raises(ValueError, match='workspace pixel classes differ'):
+        review_masks.bind_classes(old_store, new)
+    (tmp_path / 'new').mkdir()
+    new_store = open_store(tmp_path / 'new')
+    classes = review_masks.bind_classes(new_store, new)['classes']
+    assert classes[:5] == old_classes
+    assert classes[5] == {'index': 5, 'name': 'drivable', 'role': 'drivable',
+                          'color': [60, 200, 60], 'display': '주행 가능 영역'}
+
+
 def test_export_class_names_writes_a_data_yaml(tmp_path, monkeypatch):
     import sys
     import types

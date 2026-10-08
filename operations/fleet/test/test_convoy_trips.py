@@ -9,7 +9,7 @@ import pytest
 from core_common.robot_body import PINKY_PRO
 from fleet.routing.execute import plan_body
 from fleet.routing.trip import PlanRequest, plan_trip
-from fleet.server.lane_traffic import MEMBER_REVERSE_M
+from fleet.traffic.lane_traffic import MEMBER_REVERSE_M
 from fleet.server.trip_ports import TripError
 from test_lane_traffic import _arc
 from test_trip_authority import AUTH, _setup, _ticks

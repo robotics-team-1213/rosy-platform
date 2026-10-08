@@ -1152,3 +1152,9 @@
 - 변경: 공유 main의 Fleet convoy v1.146 행을 보존하고 로봇 맵핑 세션·경로 근거 행을 v1.147로 옮겼다. `app.py` 설명·버전 핀을 함께 맞췄다.
 - 증거: [지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). v1.147 계약 시험 5 passed, known_failures 0 NEW (`logs/v147-contract.txt`). 이전 v1.146 결합 테스트는 버전 표기 전의 근거로 남긴다.
 - gate 변화: SOURCE 계약 버전 재조정. 장치·현장 수용은 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 지도 레이어를 지도 아래로 배치
+
+- 변경: 모바일 지도 작업 버튼은 지도 위에 유지하고 레이어 선택을 지도 아래로 옮겼다. 데스크톱 지도 높이 그리드는 새 순서에 맞췄다.
+- 증거: [첫 화면 배치 검증](../../../docs/validation/uiux-robot-map-first-2026-10-08/result.md). 390×844·1366×768 Chromium 캡처, 지도 상태 시험 1 passed, 패키지 19 passed, 새 실패 0.
+- gate 변화: 해당 LOCAL 배치 셀 확인. 전체 G2·G3·DEVICE/FIELD는 HOLD.

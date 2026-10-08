@@ -6,8 +6,8 @@ import random
 
 import pytest
 
-from fleet.routing.blocks import Robot, Span, TableState, follow, loop_capacity, step
-from fleet.server.lane_traffic import _shift
+from fleet.traffic.blocks import Robot, Span, TableState, follow, loop_capacity, step
+from fleet.traffic.lane_traffic import _shift
 
 from test_blocks import _loop, _spans
 
@@ -175,7 +175,7 @@ def test_two_followers_that_read_each_other_ahead_do_not_both_stand(monkeypatch)
     other ahead; the earlier-started one drops the later one and moves."""
     from types import SimpleNamespace
 
-    import fleet.server.lane_traffic as lane_traffic
+    import fleet.traffic.lane_traffic as lane_traffic
     monkeypatch.setattr(lane_traffic, "_front_on", lambda graph, live, other, d, after, body: d if d > after else None)
     layout, cycle = _loop(10, 0.65)
     spans = _spans(cycle, 0, 3)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from fleet.routing.blocks import (
+from fleet.traffic.blocks import (
     BlockRules, Layout, Robot, Span, TableState, Unit, build_layout, loop_capacity, release_robot, step,
     wait_cycle)
 from fleet.routing.graph import build_graph

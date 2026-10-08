@@ -1295,13 +1295,21 @@ def test_console_navigation_stage_local_captures(tmp_path):
               mapTop: document.querySelector('[data-slot="observe"]').getBoundingClientRect().top,
               actionTop: document.querySelector('[data-slot="act"]').getBoundingClientRect().top,
               cameraTop: document.querySelector('[data-slot="sense"]').getBoundingClientRect().top,
+              canvasTop: document.querySelector('.surface-map-canvas').getBoundingClientRect().top,
+              canvasHeight: document.querySelector('.surface-map-canvas').getBoundingClientRect().height,
+              clicksBottom: document.querySelector('[aria-label="지도 작업"]').getBoundingClientRect().bottom,
+              layersTop: document.querySelector('[aria-label="지도 레이어"]').getBoundingClientRect().top,
             })""")
             assert result["overflowX"] == 0 and result["eStopVisible"] and errors == [], result
+            assert result["clicksBottom"] <= result["canvasTop"], result
+            assert result["layersTop"] >= result["canvasTop"] + result["canvasHeight"], result
             if viewport[0] < 1024:
                 assert result["mapTop"] < result["actionTop"] < result["cameraTop"], result
                 assert result["slotOrder"] == ["banner", "observe", "act", "sense"], result
+                assert result["canvasTop"] < 270, result
             else:
                 assert result["slotOrder"] == ["banner", "sense", "observe", "act"], result
+                assert result["canvasHeight"] >= 300, result
             filename = f"operator-console-navigation-{viewport[0]}x{viewport[1]}.png"
             page.screenshot(path=str(capture_dir / filename), full_page=True)
             for scenario, label in (("delayed", "지연"), ("disconnected", "연결 끊김"),
