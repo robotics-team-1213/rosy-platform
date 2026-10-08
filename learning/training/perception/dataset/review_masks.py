@@ -134,6 +134,28 @@ def pixels(store, review):
     return image
 
 
+def lane_boundary_violations(image, binding):
+    """Count drivable pixels beyond visible left/right lane edges per image row."""
+    by_name = {entry['name']: entry['index'] for entry in binding['classes']}
+    if not {'lane_left', 'lane_right', 'drivable'} <= by_name.keys():
+        return {'left': 0, 'right': 0}
+    drivable = by_name['drivable']
+    counts = {'left': 0, 'right': 0}
+    for row in image:
+        left = np.flatnonzero(row == by_name['lane_left'])
+        right = np.flatnonzero(row == by_name['lane_right'])
+        if left.size:
+            counts['left'] += int(np.count_nonzero(row[:left.min()] == drivable))
+        if right.size:
+            counts['right'] += int(np.count_nonzero(row[right.max() + 1:] == drivable))
+    return counts
+
+
+def require_inside_lane_boundaries(image, binding):
+    if any(lane_boundary_violations(image, binding).values()):
+        raise ValueError('drivable outside visible lane boundary')
+
+
 def from_color(raw, width, height, labelmap_raw, binding):
     mapping = build.parse_labelmap(Path('labelmap.txt'), binding['classes'], source_bytes=labelmap_raw)
     image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
@@ -337,9 +359,11 @@ def update(store, index, body, conflict):
             if not candidate:
                 raise ValueError('selected draft is unavailable')
             image = pixels(store, dict(review, path=candidate['path'], sha256=candidate['sha256']))
+            require_inside_lane_boundaries(image, binding)
         elif action == 'approve':
             if body.get('complete_frame_review') is not True or body.get('background_reviewed') is not True:
                 raise ValueError('사진 전체와 기본 배경을 각각 확인하세요.')
+            require_inside_lane_boundaries(image, binding)
             unknown_count = int(np.count_nonzero(image == 255))
             if unknown_count:
                 kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
