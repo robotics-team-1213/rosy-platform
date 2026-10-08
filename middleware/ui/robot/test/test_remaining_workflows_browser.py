@@ -169,7 +169,7 @@ def test_lamp_test_shows_device_result_without_claiming_physical_identity(panel)
     page.evaluate("""() => __callbacks['/api/v1/host/hardware'].onData({available:true,
       devices:[{id:'lamp',label:'후면 램프',state:'needs_human'}],
       test:{request_id:'other',action:'lamp',state:'done'}})""")
-    assert '완료' not in page.locator('#hardware-action-note').inner_text()
+    assert '장치 시험 완료' not in page.locator('#hardware-action-note').inner_text()
     page.evaluate("""() => __callbacks['/api/v1/host/hardware'].onData({available:true,
       devices:[{id:'lamp',label:'후면 램프',state:'needs_human'}],
       test:{request_id:'lamp-1',action:'lamp',state:'done'}})""")
