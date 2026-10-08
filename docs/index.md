@@ -302,7 +302,7 @@
 ## 최근 기록
 
 - 2026-10-09 · uncommitted · 10/7 MCAP 원본 207프레임 검수 후보 갤러리
+- 2026-10-09 · uncommitted · uiux(pilot/robot): 같은 탭 운전석→운용 지도 검증
 - 2026-10-09 · uncommitted · 10/6·10/7 원본 검수 후보 시각 대조
 - 2026-10-09 · uncommitted · 10/6·10/7 주행영역 연속 검수 후보
 - 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 표시 LOCAL 검증
-- 2026-10-09 · uncommitted · docs(validation): lap SIM 4 — ring 호 주행 기본 켬, 모델 PC
