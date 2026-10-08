@@ -145,8 +145,11 @@ class TripRunner:
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": engaged})
             pose = await self._pose_checks(robot_id, graph, plan["segments"])
             graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
+            caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
+                         "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot}
+            lap_arcs = self._lap_arcs(plan["segments"], row["request"], caps_view) if repeat else ()
             if repeat:  # D-517 3: no await from this check to the trip opening
-                full = self.traffic.loop_full(plan["segments"], self._live.values())
+                full = self.traffic.loop_full(lap_arcs, self._live.values())
                 if full is not None:
                     raise TripError(422, "TRIP_LOOP_FULL", full)
             now = self._clock()
@@ -154,11 +157,9 @@ class TripRunner:
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
-                    "repeat": repeat, "lap": 1 if repeat else None,
-                    "caps": {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
-                             "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot}}
+                    "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view}
             live = LiveTrip(view, graph, row["request"])
-            live.lap_route = route_key(plan["segments"])
+            live.lap_route, live.lap_arcs = route_key(plan["segments"]), lap_arcs
             self._live[robot_id] = live
             self._restarted = [t for t in self._restarted if t["robot_id"] != robot_id]  # this trip owns it
             if not plan["segments"]:  # D-489 부록 4: already there
@@ -167,6 +168,16 @@ class TripRunner:
                 self._describe(live)
             self._save(live)
             return live.view
+
+    def _lap_arcs(self, segments: list, request: dict, caps: dict) -> tuple[str, ...]:
+        """D-517 3: the arcs of one lap, planned (as the next lap will be) from where ``segments`` end;
+        the plan's own arcs when that lap cannot be planned now (the lap check then holds the robot)."""
+        if not segments:
+            return ()
+        end = self._store.active()[2].arcs[arc_id(segments[-1])].point_at(segments[-1]["s_to"])
+        body, _hold = plan_again(self._store.active(), end, request, caps, frozenset(self._blocked()), set(),
+                                 self._routing, self.config.max_turn_deg)
+        return tuple(arc_id(seg) for seg in (body or {"segments": segments})["segments"])
 
     async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool):
         """D-494 start checks on the robot's capabilities; the caps, or ``TripError``."""
@@ -236,6 +247,8 @@ class TripRunner:
             live.route_rev += 1
             if "lap_route" in hold:  # D-517 2: the operator took the changed lap
                 live.lap_route = hold["lap_route"]
+                live.lap_arcs = tuple(f"{edge}:{'fwd' if forward else 'rev'}"
+                                      for edge, forward, _s in hold["lap_route"])
                 live.view["lap"] += 1
             live.view["detail"]["replan_confirmed_by"] = principal_id
             sent = live.sent
@@ -555,6 +568,7 @@ class TripRunner:
                     "actions": [*live.view["plan"]["actions"][:-1], *body["actions"]]}
             if route_key(body["segments"]) == live.lap_route:
                 live.view.update(plan=plan, lap=live.view["lap"] + 1)
+                live.lap_arcs = tuple(arc_id(seg) for seg in body["segments"])
                 return
             hold = {"map_version": body["map_version"], "lap_route": route_key(body["segments"]),
                     "plan": {**plan, "segments": plan["segments"][index:]},

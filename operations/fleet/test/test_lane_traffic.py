@@ -256,7 +256,7 @@ def test_traffic_service_without_an_active_map_is_empty():
 
     service = TrafficService(NoMap())
     service.step([])
-    assert service.view()["units"] == [] and service.loop_full([{"edge_id": "e"}], []) is None
+    assert service.view()["units"] == [] and service.loop_full(("e:fwd",), []) is None
 
 
 def test_estop_ends_every_open_trip():
@@ -290,3 +290,20 @@ def test_a_robot_never_localized_holds_every_junction_instruction():
         assert live.traffic == {"waiting_for": ["c"], "authority_end_m": live.traffic["authority_end_m"],
                                 "refused_at_m": 0.0}
         assert runner._traffic_holds(live, live.view["segment_index"])
+
+
+def test_a_loop_is_its_lap_cycle_not_the_approach_to_it():
+    """Review HIGH 1: a trip that joins the loop from ring_w shares the loop of the trips on east."""
+    runner, store, fleet = _setup(ids=("a", "d"))
+    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
+    _trip(runner, store, fleet, "d", "ring_w:fwd", 0.05, to="start_s", via=("start_n",))
+    assert "ring_w" in {seg["edge_id"] for seg in runner._live["d"].segments}
+    _ticks(runner, fleet)
+    assert runner.traffic.view()["loop_capacity"] == [{"edges": ["east", "ring_n", "ring_s", "west"],
+                                                       "capacity": 3, "robots": ["a", "d"]}]
+    runner, store, fleet = _setup(ids=("a", "b", "c", "d"))
+    for robot_id, s in (("a", 0.2), ("b", 1.4), ("c", 2.6)):
+        _trip(runner, store, fleet, robot_id, "east:fwd", s)
+    with pytest.raises(TripError) as err:
+        _trip(runner, store, fleet, "d", "ring_w:fwd", 0.05, to="start_s", via=("start_n",))
+    assert (err.value.code, err.value.detail["robots"]) == ("TRIP_LOOP_FULL", 4)

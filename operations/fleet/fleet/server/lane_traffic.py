@@ -108,22 +108,21 @@ class TrafficService:
 
     # ---- start check ----------------------------------------------------------------------
 
-    def _loop(self, layout, graph, segments: list):
-        spans = layout.route(graph, [arc_id(seg) for seg in segments])
-        return frozenset(seg["edge_id"] for seg in segments), blocks.loop_capacity(spans, layout, self._held)
+    def _loop(self, layout, graph, lap_arcs) -> tuple[frozenset, int]:
+        return _edges(lap_arcs), blocks.loop_capacity(layout.route(graph, list(lap_arcs)), layout, self._held)
 
-    def loop_full(self, segments: list, lives: Iterable) -> Optional[dict]:
+    def loop_full(self, lap_arcs, lives: Iterable) -> Optional[dict]:
         """D-517 3: ``TRIP_LOOP_FULL`` detail when one more repeat trip on this loop breaks N·h ≤ S − 1.
 
-        A loop is the set of edges a repeat trip drives; trips on the same set share it.
+        A loop is the set of edges of one lap (the cycle via…, to), not the approach to it;
+        repeat trips whose laps drive the same set share it. S counts the lap's blocks only.
         """
         active = self._store.active()
         layout = self._layout_for(active)
-        if layout is None or not segments:
+        if layout is None or not lap_arcs:
             return None
-        edges, capacity = self._loop(layout, active[2], segments)
-        robots = 1 + sum(1 for live in lives if live.open and live.repeat
-                         and frozenset(seg["edge_id"] for seg in live.segments) == edges)
+        edges, capacity = self._loop(layout, active[2], lap_arcs)
+        robots = 1 + sum(1 for live in lives if live.open and live.repeat and _edges(live.lap_arcs) == edges)
         if robots <= capacity:
             return None
         return {"robots": robots, "capacity": capacity, "held_per_robot": self._held}
@@ -154,8 +153,8 @@ class TrafficService:
                           "waiting": sorted(r for r, u in refused_unit.items() if u == unit_id)})
         loops = {}
         for robot_id, live in trips.items():
-            if live.repeat:
-                edges, capacity = self._loop(layout, graph, live.segments)
+            if live.repeat and live.lap_arcs:
+                edges, capacity = self._loop(layout, graph, live.lap_arcs)
                 loops.setdefault(edges, {"edges": sorted(edges), "capacity": capacity, "robots": []})["robots"] \
                     .append(robot_id)
         cycle = blocks.wait_cycle(result.waiting_for)
@@ -171,6 +170,10 @@ class TrafficService:
             "wait_cycle": list(cycle) if cycle else None,
             "unplaced": list(result.unplaced),
         }
+
+
+def _edges(arc_ids) -> frozenset:
+    return frozenset(arc.rsplit(":", 1)[0] for arc in arc_ids)
 
 
 def _round(value: Optional[float]) -> Optional[float]:
