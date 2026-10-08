@@ -19,4 +19,3 @@ D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
 D-526 reserved in another active branch; D-527 lands independently
 D-530 reserved in another active branch (feat/host-management-guard, host desired state); D-531 lands independently
-D-535 reserved in another active branch (fix/robot-breakpoint-contract); D-538 lands independently; remove when its ADR lands

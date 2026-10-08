@@ -3,6 +3,7 @@
 contracts/foundation/config/rosy_default.yaml
 contracts/foundation/core_common/calibration_store.py
 contracts/foundation/core_common/profile.py
+contracts/foundation/core_common/protocol/connect_reason.py
 contracts/foundation/core_common/protocol/schemas.py
 middleware/ui/face/emotion/info_screen.py
 middleware/ui/face/emotion/wifi_qr.py
