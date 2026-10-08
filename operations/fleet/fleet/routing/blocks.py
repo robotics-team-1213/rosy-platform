@@ -152,6 +152,9 @@ class TickResult:
     #: robot id -> every robot blocking the unit it needs next (empty: not waiting on a robot)
     waiting_for: dict[str, tuple[str, ...]]
     conflicts: tuple[str, ...]        # units granted to more robots than capacity (must stay empty)
+    #: robots with no position ever (never localized, nothing held): nobody gets a new grant
+    #: while one exists, since its body could be anywhere. A trip starts only LOCALIZED (D-494).
+    unplaced: tuple[str, ...] = ()
 
 
 def _occupied(robot: Robot) -> set[int]:
@@ -227,6 +230,13 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
         span = robot.spans[index]
         state.held[robot.id][index] = (span.unit, span.forward)
         add_grant(robot.id, span.unit, span.forward)
+
+    unplaced = tuple(sorted(r.id for r in robots if r.d is None and not state.held.get(r.id)
+                            and r.id not in state.last_occupied and r.id not in state.pinned))
+    if unplaced:
+        authority = {r.id: state.authority[r.id] for r in robots if r.d is not None and r.id in state.authority}
+        conflicts = tuple(sorted(u for u, rs in granted.items() if len(rs) > layout.units[u].capacity))
+        return TickResult(authority, {r.id: () for r in robots}, conflicts, unplaced)
 
     # 2. the unit under each localized front, against grants and real (unpadded) bodies
     present: dict[str, set[str]] = {u: set(rs) for u, rs in granted.items()}

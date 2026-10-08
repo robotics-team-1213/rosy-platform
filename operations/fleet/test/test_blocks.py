@@ -106,7 +106,8 @@ def _run(layout, cycle, n, *, ticks, seed, unknown_rate=0.0, stall_rate=0.0, u=0
     for tick in range(ticks):
         for r in robots:
             r.lookahead_m = rng.choice((0.1, 0.3, 0.6))
-            r.d = None if rng.random() < unknown_rate else true_d[r.id] + rng.uniform(-u, u)
+            # a trip starts LOCALIZED (D-494): no unknown pose on the first tick
+            r.d = None if tick and rng.random() < unknown_rate else true_d[r.id] + rng.uniform(-u, u)
         result = step(layout, robots, state, now=tick * 0.5)
         conflicts.extend(result.conflicts)
         for r in robots:
@@ -169,6 +170,14 @@ def test_zone_capacity_two_holds_two_real_bodies_at_most():
     layout, cycle = _loop(30, 0.65, zone_at=(10, 4), zone_cap=2)
     conflicts, progress, shrinks = _run(layout, cycle, 6, ticks=500, seed=12, unknown_rate=0.1, stall_rate=0.2)
     assert conflicts == [] and shrinks == []
+
+
+def test_a_robot_never_localized_freezes_new_grants():
+    layout, cycle = _loop(8, 0.65)
+    ghost = Robot("ghost", _spans(cycle, 0, 3), None, 0.3, 0.05, 0.12)
+    other = Robot("other", _spans(cycle, 0, 3), 0.4, 0.6, 0.05, 0.12)
+    result = step(layout, [ghost, other], TableState(), now=0.0)
+    assert result.unplaced == ("ghost",) and result.authority_end == {}
 
 
 def test_a_robot_missing_from_a_tick_keeps_blocking_its_units():
