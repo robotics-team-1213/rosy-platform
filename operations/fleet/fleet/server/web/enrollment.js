@@ -2,7 +2,7 @@
 // 브라우저는 로봇에 닿지 않고 토큰을 보지 않는다. 코드는 Fleet 서버로만 간다.
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createEnrollmentPanel 이 화면 배선이다.
 
-import { createPollGate } from "./poll-gate.js";
+import { createPollGate } from "/console/assets/poll-gate.js";
 
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 

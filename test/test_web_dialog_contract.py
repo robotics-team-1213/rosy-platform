@@ -51,7 +51,7 @@ PINNED_CONFIRMS = {
     "middleware/ui/robot/telemetry.js": 1,
     "operations/fleet/fleet/server/web/camera-pairing.js": 2,
     "operations/fleet/fleet/server/web/camera-peer.js": 2,
-    "operations/fleet/fleet/server/web/cell.js": 1,
+    "operations/fleet/fleet/server/web/cell/cell.js": 1,
     "operations/fleet/fleet/server/web/confirmed-action.js": 1,
     "operations/fleet/fleet/server/web/console.js": 3,
     "operations/fleet/fleet/server/web/enrollment.js": 1,

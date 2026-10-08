@@ -8,12 +8,12 @@ import { createLineStuckPanel } from "./line-stuck.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
 import { createStartPointView } from "./start-point-view.js";
-import { createVisionView } from "./vision-view.js";
-import { applyRoleToControls } from "./authorization.js";
+import { createVisionView } from "/console/assets/vision-view.js";
+import { applyRoleToControls } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
-import { addressMap, movableRobots, renumberBanner } from "./address-drift.js";
+import { addressMap, movableRobots, renumberBanner } from "/console/assets/address-drift.js";
 import { fleetRow, proxyRow, visionRow } from "./site-path.js";
-import { createPollGate } from "./poll-gate.js";
+import { createPollGate } from "/console/assets/poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";

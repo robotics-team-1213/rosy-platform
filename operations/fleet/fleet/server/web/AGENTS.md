@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Static Fleet console UI (vanilla ES modules, no build step), served at `/console/assets/*`. It talks only to the Fleet server (`/api/fleet/*`), never to a robot API directly. `__init__.py` makes the folder a package so it ships with the install.
+Static Fleet console UI (vanilla ES modules, no build step), served at `/console/assets/*`. It talks only to the Fleet server (`/api/fleet/*`), never to a robot API directly. `__init__.py` makes the folder a package so it ships with the install. D-518 shared-read modules and the two shared stylesheets live in `shared/`. The Cell document lives in `cell/`. Browsers still request `/console/assets/<basename>`.
 
 ## Key Files
 
@@ -25,6 +25,7 @@ Static Fleet console UI (vanilla ES modules, no build step), served at `/console
 | `vision-view.js`, `field-view.js`, `field-layers.js` | Camera preview, field proposal/rectified view, layer toggles |
 | `site-map.html`, `site-map.js`, `site-map-model.js`, `site-map.css` | D-488 `/console/site-map`: 활성 지도·초안 보기, 장소·차로 초안 편집과 활성화, D-490 경로 미리보기, D-494 5 운행 칸(시작·취소·바뀐 경로 확인, 1 s 조회), D-494 6 지도 가르치기 칸(`site-map-teach.js`, 1 s 조회). 순수 계산은 `site-map-model.js` |
 | `map-fit.js`, `map-fit-view.js` | D-375 lane-paint map fit proposal (pure math / view) |
+| `field-warp.js` | Shared `warpImage` read (D-518). The install proposal screen stays in `field-view.js` |
 | `enrollment.js`, `camera-pairing.js` | Robot enrollment (D-361) and camera pairing approval (D-341) panels |
 | `address-drift.js`, `state-age.js`, `localization-badge.js`, `poll-gate.js`, `authorization.js` | Pure helpers: address drift text, queue state staleness (D-493), localization badge, 404 poll gate, role-lock reasons |
 | `package.json` | `{"type": "module"}` so node can run the tests |

@@ -6972,3 +6972,35 @@ osy-d395-s1d\`.
 - 변경: 루트 README·AGENTS에 모델 PC, AI PC, 현장 PC, 로봇의 역할과 권한을 기록하고 D-516 기반 Decision 파이프라인 설계를 연결했다. 후보 조사 보고서에서도 설계로 연결한다.
 - 증거: docs lint 0 errors, 문서 계약 pytest 121 passed, known_failures 0 new. 오프라인 합성 재생은 현장 모델 정확도나 활성화 증거가 아니다.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · docs(adr): 관제 웹의 위치는 문서 네 개다
+
+- 변경: D-518. 관제 웹은 operations/fleet/fleet/server/web에 두고 문서 넷(운용·설치·Cell·현장 지도)과 공유 읽기로 위치를 정했다. operations/ui/console 분리는 열지 않는다. 첫 구현은 네 엔트리의 import 울타리와 warpImage를 field-warp.js로 옮긴 것이다. site-map.js는 field-view.js를 가져오지 않는다. 하위 폴더 이동은 하지 않았다.
+- 증거: operations/fleet/test/test_document_imports.py, test_server_app.py::test_every_console_module_import_is_served, test_site_lanes_api.py — 19 passed, 1 warning. known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run.txt.
+- gate 변화: 없음
+- 결정: D-518 Accepted (2026-10-08, 사용자 선택: 문서 소유 + 하위 폴더)
+- 교훈: 패키지 폴더를 옮기면 서빙 주인만 같고 문서가 서로의 모듈을 가져오는 문제는 남는다. 울타리가 위치를 먼저 고정한다.
+
+## 2026-10-08 · uncommitted · refactor(fleet): 관제 공유 읽기를 web/shared로 옮긴다
+
+- 변경: D-518의 첫 폴더 이동. 공유 읽기 아홉 파일(address-drift, authorization, poll-gate, development-auth, map-fit, vision-view, field-warp, styles.css, doc-tabs.css)을 server/web/shared로 옮겼다. 공개 URL /console/assets/<파일이름>은 유지하고 allowlist가 실제 경로를 가리킨다. 다른 문서의 ./ import는 그 URL로 바꿨다. 같은 문서의 ./ 는 그대로다.
+- 증거: document imports, server app, site lanes, node --test, palette, queues, grammar, doc tabs, canvas, chrome, token scan, disabled controls, size verdict. 117 passed, 1 known failure (site-map.js canvas contract, already listed). known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run-shared.txt.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 공개 URL을 파일 이름에 고정하면 폴더를 옮겨도 브라우저 주소가 그대로다. node 시험은 그 지정자를 파일로 푸는 훅이 필요하다.
+
+## 2026-10-08 · uncommitted · docs(adr): D-518에 공유 읽기 이동을 기록한다
+
+- 변경: D-518 상태, 결정 5, 결과와 ADR Log 행을 구현에 맞췄다. 공유 읽기 아홉 파일은 web/shared에 있다. Cell, 현장 지도, 설치, 운용은 web/ 바로 아래에 있고 문서마다 옮긴다. 페이지 경로와 공개 URL은 그대로다.
+- 증거: 본문이 커밋 226e90f8f(울타리, warpImage 분리)와 671a439e7(web/shared)과 같다. harness lint 0 errors.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 없음
+
+## 2026-10-08 · uncommitted · refactor(fleet): Cell 문서를 web/cell로 옮긴다
+
+- 변경: D-518의 Cell 폴더 이동. cell.html, cell.css, cell.js, cell-document-editor.js를 server/web/cell로 옮겼다. 페이지는 /console/cell이고 공개 URL /console/assets/<파일이름>은 유지한다. allowlist가 실제 경로를 가리키고 /console/assets/cell/cell.js는 404다.
+- 증거: document imports, doc tabs, server app, node unit tests, surface icons, dialog contract. 58 passed, 1 warning. node hook으로 /console/assets/cell-document-editor.js를 읽었다. known_failures.py 0 new. 출력 X:/DevTemp/fleet-web-docs/run-cell.txt.
+- gate 변화: 없음
+- 결정: D-518
+- 교훈: 없음
