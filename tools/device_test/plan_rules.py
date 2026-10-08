@@ -12,6 +12,10 @@ import yaml
 
 MAX_LINEAR = 0.10            # m/s, rosy_default.yaml line_follow.max_linear (host default)
 OVERLAY_PATH = "/var/lib/rosy/core/.rosy/rosy.yaml"   # rosy-core.service HOME (D-189 D3); the only one
+# D-512 amendment 2: events that abort_on_events globs may not abort on. Only informational
+# notices: safety.policy_off is CORE's one-time D-400 note on the first autonomous twist with the
+# safety policy off (command/manager.py). Every other safety.* event (API Ref section 8) still aborts.
+OK_EVENTS = {"safety.policy_off"}
 
 
 def _num(lo, hi, lo_open=False, integer=False):
@@ -97,6 +101,8 @@ def load_plan(path):
         raise SystemExit(f"overlay_path must be {OVERLAY_PATH}")
     check_overlay(flatten(plan["overlay"]), plan.get("accepted_risks"))
     stop = plan.setdefault("stop", {})
+    if not set(stop.setdefault("ok_events", [])) <= OK_EVENTS:
+        raise SystemExit(f"stop.ok_events: only {sorted(OK_EVENTS)} (exact names, informational notices)")
     if not 0 < float(stop.get("duration_s", 0)) <= 600:
         raise SystemExit("stop.duration_s must be in (0, 600]")
     plan.setdefault("min_battery_percent", 40)

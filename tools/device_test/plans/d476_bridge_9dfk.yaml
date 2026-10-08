@@ -42,6 +42,9 @@ stop:
                      lane_bridge_blocked, lane_bridge_motion_unconfirmed, driver_released,
                      limit_level_too_low, angular_limit_zero]
   abort_on_events: ["safety.*"]
+  # Exact event names exempt from abort_on_events (plan_rules.OK_EVENTS only, D-512 amendment 2):
+  # the D-400 policy-off notice on CORE's own first CAMERA_LINE twist is not a stop.
+  ok_events: [safety.policy_off]
 
 # Seen at least once, or the run exits 1 (completed, missing expected).
 expect:
