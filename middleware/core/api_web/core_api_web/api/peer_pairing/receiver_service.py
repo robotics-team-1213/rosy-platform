@@ -322,8 +322,11 @@ class PeerReceiver:
                             "persist_requested": False, "persistent": False,
                             "issuer_id": SCREEN_CODE_ISSUER, "issuer_source": SCREEN_CODE_ISSUER,
                             "issuer_digest": self._identity.fingerprint, "approved_by": SCREEN_CODE_ISSUER,
-                            "revoked": False, "used_challenges": [], "approved_at": self.clock().isoformat(),
-                            "expires_at": (self.clock()+timedelta(hours=168)).isoformat()}
+                            # One clock read: with two, expires - approved came out a few microseconds over
+                            # the 168 h cap, the model refused every screen-code row and confirm answered 409
+                            # on real robots (2026-10-09, 8kcn on 055); fixed test clocks never showed it.
+                            "revoked": False, "used_challenges": [], "approved_at": now.isoformat(),
+                            "expires_at": (now+timedelta(hours=168)).isoformat()}
             try:
                 persisted = self.repo.approve_screen_code(relationship, row["expires"])
             except RepositoryDenied as exc:
