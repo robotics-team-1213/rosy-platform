@@ -1170,3 +1170,9 @@
 - 변경: 지도를 캔버스에 같은 축척으로 맞추고 남는 여백의 좌표 선택·전송을 막았다. 점유·비용·경로·로봇 마커가 같은 변환을 쓴다.
 - 증거: [지도 축척 검증](../../../docs/validation/uiux-robot-map-metric-2026-10-08/result.md). 320×568·390×844·1366×768 Chromium 캡처, 지도 좌표 시험 2 passed와 Console 세 폭 상태 시험 1 passed.
 - gate 변화: LOCAL 축척 셀 확인. 전체 G2/G3·설치본·DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 기존 화면의 차선 추종 구동 관문 일치
+
+- 변경: `/dashboard`의 추종 선택과 확인창 재검사를 Nav2 목표 기능 대신 구동 준비·운용자 권한·비상 정지 상태에 맞췄다. `/console` 차선 추종과 D-344 보강 7항의 구분을 따른다.
+- 증거: [차선 추종 구동 조건 검증](../../../docs/validation/uiux-line-follow-gate-2026-10-08/result.md). 두 폭 전후 캡처, 새 시험 2 passed, 관련 회귀 5 passed·0 NEW. 별도 옛 인증·지도 시험은 기존 main에서도 동일하게 실패한다.
+- gate 변화: 해당 LOCAL 흐름 확인. 전체 G2/G3·설치본·DEVICE/FIELD는 HOLD.
