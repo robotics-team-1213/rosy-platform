@@ -76,7 +76,7 @@ class TripRunner:
                  engaged: Callable[[str], Optional[str]] = lambda _robot_id: None,
                  release_queue: Callable[[str], None] = lambda _robot_id: None,
                  roster: Optional[Callable[[], Iterable[str]]] = None,
-                 traffic: Optional[TrafficService] = None) -> None:
+                 traffic: Optional[TrafficService] = None, traffic_zones=None) -> None:
         self._store = store
         self._routing = routing_config
         self._caps, self._poses, self._junction = caps, poses, junction
@@ -94,7 +94,7 @@ class TripRunner:
         self._inflight: dict[str, asyncio.Future] = {}
         #: Map poses read this period for robots the block table still pins without a trip (D-517 6).
         self._parked: dict[str, Optional[MapPose]] = {}
-        self.traffic = traffic if traffic is not None else TrafficService(store, config)
+        self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones)
         self._traffic_warned = False
         self._refresh_warned_at = -math.inf
         #: D-494 5: never resume after a restart; ``run`` stops each robot (retried until it takes).

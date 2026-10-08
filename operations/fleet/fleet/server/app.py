@@ -594,7 +594,6 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.trip_ports import HttpLaneJunction
     from fleet.server.trip_guard import engaged, install_trip_guard, release_queue
     from fleet.server.trip_runner import TripConfig, TripRunner
-    from fleet.server.lane_traffic import TrafficService
     install_lane_route_routes(app, console=console, task_service=task_service,
                               site_maps=site_maps, require_operator=require_operator,
                               operator_guard=operator_guard)
@@ -610,8 +609,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
                              cancel_goal=console.cancel, config=trip_config or TripConfig(),
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
-                             roster=lambda: console.robot_ids,
-                             traffic=TrafficService(site_maps, trip_config or TripConfig(), zones=traffic_zones))
+                             roster=lambda: console.robot_ids, traffic_zones=traffic_zones)
     install_trip_guard(console, trip_runner)
     app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
     if getattr(app.state, "stuck_resolver", None) is not None:  # D-494 5: no automatic answer on a trip
