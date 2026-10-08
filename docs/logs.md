@@ -7239,3 +7239,8 @@ osy-d395-s1d\`.
 - 변경: 두 Pinky의 설치본과 ROS 토픽을 읽기 전용으로 확인하고, rosy_26 keep 디버그와 이미지 시각·투영값·페인트 실제 사용을 검증 기록에 남겼다.
 - 증거: rosy_26 디버그 84건 중 이미지 시각 83건 일치, 전략 none/flipping 84건, 목표점 0, denoise_fallback 84건. 장치의 shadow 모델 포인터가 없고 rosy_60은 keep 모드가 아니다.
 - gate 변화: 없음. 사람 경계 정답, 승인 보정, 학습 모델 실제 추론, 자율 주행 수용은 확인되지 않았다. 주행 허용 HOLD.
+
+## 2026-10-09 · uncommitted · docs(adr): D-520 개정 — ring 호 주행 기본 켬, 장치 조건
+- 변경: 사용자 결정(2026-10-09 "둘 다")을 D-520 끝 「개정 2026-10-09」로 적었다. 내용은 진입 회전각, odom 원 추종, 기본 켬, 장치 조건이다. `line_follow.arc_enabled` 기본을 true로 바꿨다(`rosy_default.yaml`, `model.py`). 능력 `lane_arc`는 `arc_enabled`와 `site_floor_map_id` 선언이 함께 있을 때만 참이다. 선언 없는 `arc_enabled: true`는 시작 거부 대신 능력이 거짓이다. 장치 시험 계획은 `arc_enabled`를 false로만 둘 수 있다(`plan_rules.py`). 현장 바닥을 선언하는 `d476_bridge_9dfk.yaml`에 `arc_enabled: false`를 넣었다. API Reference의 `lane_arc`·`LANE_ARC_UNAVAILABLE`·호 명령 문장을 고치고 판을 올렸다.
+- 증거: 모델 PC pytest gateway·services·device_test 전체에서 plan 규칙 추가 뒤 device_test 129 passed. 새 실패는 plan 규칙을 넣기 전의 overlay 키 거절뿐이었고 그 뒤 0이다. SIM은 lap SIM 4.
+- gate 변화: 없음. 장치 사용은 SIM 합격, DEVICE 체크리스트, 사용자 승인 뒤다.
