@@ -38,7 +38,7 @@ OPERATOR = {"Authorization": "Bearer operator-token"}
 VIEWER = {"Authorization": "Bearer viewer-token"}
 LANE = TripCaps("pinky_pro", frozenset({"lane"}), 0.2, junction_turn=True)
 BOTH = TripCaps("pinky_pro", frozenset({"lane", "free"}), 0.2, junction_turn=True)
-MANOEUVRE = ("turning", "advancing", "reacquiring")
+MANOEUVRE = ("turning", "advancing", "reacquiring", "bending")
 
 
 class FakeCore:
@@ -75,8 +75,9 @@ class FakeCore:
         if self.mode != "CAMERA_LINE":
             raise RobotApiError("rosy_60", 409, "LINE_FOLLOW_NOT_ACTIVE", "line follow is off")
         if not 0 < expires_s <= 30 or (stop_after_m is not None and (action != "stop" or not 0 <= stop_after_m <= 2)) \
-                or (turn_deg is not None and (action not in ("left", "right") or not 0 < abs(turn_deg) <= 150
-                                              or (turn_deg > 0) != (action == "left"))):
+                or (turn_deg is not None and action != "bend" and (
+                    action not in ("left", "right") or not 0 < abs(turn_deg) <= 150
+                    or (turn_deg > 0) != (action == "left")))                 or (action == "bend" and (turn_deg is None or not 0 < abs(turn_deg) <= 90)):
             raise RobotApiError("rosy_60", 400, "VALIDATION_ERROR", "bad junction instruction")
         if self.done_place == (place_id, action):
             raise RobotApiError("rosy_60", 409, "JUNCTION_ALREADY_DONE", f"{action} at {place_id} already ran")
@@ -90,7 +91,7 @@ class FakeCore:
         if self.done_place is not None and self.done_place[0] != place_id:
             self.done_place = None
         self.seq += 1
-        state = ("armed" if action == "straight" or turn_deg is not None
+        state = ("armed" if action in ("straight", "bend") or turn_deg is not None
                  else "executing" if action == "stop" else "unresolved")
         self.j = {"action": action, "place_id": place_id, "seq": self.seq, "state": state, "reason": None,
                   "expires_at": self.ports.now + expires_s, "stop_after_m": stop_after_m or 0.0,

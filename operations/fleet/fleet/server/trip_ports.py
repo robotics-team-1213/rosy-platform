@@ -261,20 +261,64 @@ def junction_fields(live: "LiveTrip", index: int, action: str, remaining: float,
     if window is None:
         return fields  # no window: map-backed CORE holds a junction sighting here
     expect_in, lateral = window
+    fields.update(expect_in_m=expect_in, expect_tol_m=_pose_tol(live, config, lateral))
+    return fields
+
+
+def _pose_tol(live: "LiveTrip", config: TripConfig, lateral: float = 0.0) -> float:
+    """How well the map pose places the robot along its lane, at most ``MAX_EXPECT_TOL_M``."""
+    caps, pose = live.view.get("caps") or {}, live.view.get("pose") or {}
     speed, age, reckoned = caps.get("max_speed") or 0.0, pose.get("age_s"), pose.get("dead_reckon_m")
     if age is None or reckoned is None or live.pose_read_at is None:
-        tol = MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
-    else:
-        # ponytail: the map pose has no heading-direction error estimate, so it is odom drift over
-        # the distance dead-reckoned since the last sighting, plus how far the robot drives at its
-        # trip speed over the pose age, the measured read-to-send time and SEND_ALLOWANCE_S,
-        # floored by the site knob ``expect_tol_min_m``; replace with the provider's own covariance
-        # once MapPose reports one.
-        latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
-        tol = max(config.expect_tol_min_m, ODOM_DRIFT_PER_M * reckoned + speed * latency + ENDPOINT_TOL_M)
-        tol += lateral  # CORE's straight-ahead point is this far beside the lane on a bend
-    fields.update(expect_in_m=expect_in, expect_tol_m=round(min(tol, MAX_EXPECT_TOL_M), 3))
-    return fields
+        return MAX_EXPECT_TOL_M  # an unknown pose error is the widest window, never none
+    # ponytail: the map pose has no heading-direction error estimate, so it is odom drift over
+    # the distance dead-reckoned since the last sighting, plus how far the robot drives at its
+    # trip speed over the pose age, the measured read-to-send time and SEND_ALLOWANCE_S,
+    # floored by the site knob ``expect_tol_min_m``; replace with the provider's own covariance
+    # once MapPose reports one.
+    latency = age + (_monotonic() - live.pose_read_at) + SEND_ALLOWANCE_S
+    tol = max(config.expect_tol_min_m, ODOM_DRIFT_PER_M * reckoned + speed * latency + ENDPOINT_TOL_M)
+    return round(min(tol + lateral, MAX_EXPECT_TOL_M), 3)  # lateral: CORE's straight-ahead ray
+
+
+def bend_geometry(place, arc) -> Optional[tuple[float, float, float, float]]:
+    """``(s of the arc start, s of its end, signed turn deg, radius)`` of a ``bend`` place on this
+    lane arc in its direction of travel, or None. Both tangent points must lie on the arc and the
+    lane must run the bend's entering way at the start (either drawn direction of the place)."""
+    if getattr(place, "kind", None) != "bend" or arc.drive_mode != "lane":
+        return None
+    turn = wrap(place.exit_yaw - place.yaw)
+    for entry, delta in ((place.yaw, turn), (wrap(place.exit_yaw + math.pi), -turn)):
+        t = place.radius_m * math.tan(abs(delta) / 2)
+        off_a, s_a, heading = arc.project(place.x - t * math.cos(entry), place.y - t * math.sin(entry))
+        off_e, s_e, _ = arc.project(place.x + t * math.cos(entry + delta), place.y + t * math.sin(entry + delta))
+        if (max(off_a, off_e) <= ENDPOINT_TOL_M and s_e > s_a
+                and abs(math.degrees(wrap(heading - entry))) <= MAX_WINDOW_BEND_DEG):
+            return s_a, s_e, math.degrees(delta), place.radius_m
+    return None
+
+
+def next_bend(live: "LiveTrip", index: int, s: float) -> Optional[dict]:
+    """The first bend on this segment the robot has not passed and Fleet has not finished."""
+    found = []
+    for place_id, place in live.graph.places.items():
+        geometry = None if place_id in live.bends_done else bend_geometry(place, live.arc(index))
+        if geometry is not None and s < geometry[1] and geometry[0] < live.segments[index]["s_to"]:
+            found.append((geometry[0], place_id, geometry))
+    if not found:
+        return None
+    s_start, place_id, (_, s_end, turn, radius) = min(found)
+    return {"place_id": place_id, "s_start": s_start, "s_end": s_end, "turn_deg": turn, "radius_m": radius}
+
+
+def bend_fields(live: "LiveTrip", bend: dict, s: float, active, config: TripConfig) -> Optional[dict]:
+    """D-507 addendum: ``map_id``, ``bend_in_m`` (lane distance to the arc start), ``bend_tol_m``
+    and ``bend_radius_m``; None on another map version or when the arc start is not 0-2 m ahead."""
+    bend_in = round(bend["s_start"] - s, 3)
+    if active is None or active[0] != live.view["map_version"] or not 0.0 < bend_in <= MAX_EXPECT_IN_M:
+        return None
+    return {"map_id": active[1].map_id, "bend_in_m": bend_in, "bend_tol_m": _pose_tol(live, config),
+            "bend_radius_m": bend["radius_m"]}
 
 
 def line_past(graph, x: float, y: float, heading: float) -> Optional[float]:
@@ -362,6 +406,8 @@ class LiveTrip:
         self.pose_read_at: Optional[float] = None
         self.best_progress = -math.inf
         self.progress_at: Optional[float] = None
+        #: D-507 addendum: bend place ids CORE finished (or the robot passed without one).
+        self.bends_done: set[str] = set()
 
     def junction_end(self, now: float, remaining: Optional[float], config: TripConfig) -> Optional[tuple]:
         """``(reason, detail)`` when CORE's junction state ends the trip, else None.
