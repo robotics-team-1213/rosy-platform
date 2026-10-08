@@ -1,5 +1,6 @@
 """Direct entry to every Fleet console page in development mode, using real Chromium."""
 
+import os
 import threading
 import time
 from pathlib import Path
@@ -49,12 +50,28 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
-                page = browser.new_page()
+                page = browser.new_page(viewport={"width": 390, "height": 844} if path == "/console" else None)
                 page.goto(origin + path)
                 expect(page.locator(identity)).to_contain_text("development-", timeout=15000)
                 assert page.evaluate("sessionStorage.getItem('rosy-console-token')")
                 credential = "#credential" if path in {"/console/site-map", "/console/cell"} else "#console-token"
                 expect(page.locator(credential)).to_be_hidden()
+                if path == "/console":
+                    expect(page.locator("#topbar-more")).to_have_attribute("aria-expanded", "false")
+                    expect(page.locator("#topbar-extra")).to_be_hidden()
+                    expect(page.locator("#connection-guide")).to_be_hidden()
+                    expect(page.locator("#map-stage")).not_to_have_attribute("data-map-state", "auth", timeout=20000)
+                    assert page.locator("ui-topbar").bounding_box()["height"] < 170
+                    output = os.environ.get("ROSY_UX_EVIDENCE_DIR")
+                    if output:
+                        target = Path(output)
+                        target.mkdir(parents=True, exist_ok=True)
+                        page.screenshot(path=str(target / "fleet-dev-menu-390x844.png"))
+                        page.set_viewport_size({"width": 1440, "height": 900})
+                        page.screenshot(path=str(target / "fleet-dev-menu-1440x900.png"))
+                        page.set_viewport_size({"width": 390, "height": 844})
+                    page.locator("#topbar-more").click()
+                    expect(page.locator("#topbar-extra")).to_be_visible()
             finally:
                 browser.close()
     finally:

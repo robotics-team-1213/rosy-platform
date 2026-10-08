@@ -1080,3 +1080,75 @@
 - 변경: wide 고정 프레임에서 감지·지도·조작 세 열에 같은 스크롤바 자리를 예약한다. 콘솔 셸 시험이 실제 패널 폭을 검사한다.
 - 증거: `docs/validation/uiux-robot-column-width-2026-10-07/result.md`; 1280px 네 패널 폭 차이 15.01→0.01px, 역할 셸 브라우저 9 passed, G1 90 passed, 각 known_failures 0 NEW.
 - gate 변화: LOCAL 동등 폭 G2 부분 근거. 전체 상태·실물·운영자 G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 지도 중심 운용 화면
+
+- 변경: 모바일 지도 → 조작 → 감지 순서, 지도 경로·로봇 마커 가독성, 최신 상태 기반 주행·위치 추정·SLAM 기능 표기. 지도 조작 제한 사유는 지도 아래에 둔다.
+- 증거: [검토 기록](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/navigation-stage/`의 1366×768·390×844 LOCAL 캡처. 지도·레이아웃 11 passed, 최종 뷰포트·지도 3 passed, 각 `known_failures.py` 0 NEW. 넓은 회귀에서 남은 차선 추종 1건은 변경 전 공유 main에서도 동일하게 실패.
+- gate 변화: 로봇 운용 LOCAL 지도 가독성 근거 추가. 현재 이미지·실기 경로·사용자 G3 및 전체 G2는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 운용 폭별 문서·초점 순서 일치
+
+- 변경: 모바일 지도→조작→감지, 데스크톱 감지→지도→조작의 보이는 순서에 맞춰 셸 슬롯 DOM 순서를 동기화한다. 폭 전환 때 패널 안 키보드 초점을 복원한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). 실제 CORE fixture의 1366×768·390×844 캡처와 320×568 오류 캡처, 순서·초점 3 passed, 모바일 뷰포트 2 passed. 추가 레이아웃 13 passed/2 failed는 공유 main에서 같은 `/setup` 시험 2건 실패로 재현.
+- gate 변화: LOCAL 접근 순서 부분 근거. 실물·G3·전체 G2는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 위치 추정 불확실 시 목표·표시 정합성
+
+- 변경: 지도 목표는 최신 pose와 `LOCALIZED/map` 확인 뒤에만 허용한다. 초기 위치 설정은 복구 조작으로 유지한다. `SUSPECT`에서는 계획 경로·현재 좌표를 숨기고 지도와 로봇 요약에 위치 확인 필요를 표시한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/goal-gate/navigation-stage/`의 정상 2폭·SUSPECT 모바일 캡처. 브라우저·지도 3 passed, 추가 요약·오류·패키지 회귀 21 passed, 각 `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 상태 전환과 목표 버튼 근거 추가. 장치 pose·주행 readback, 전체 G2와 G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 표시 지도 ID와 로봇 ID 대조
+
+- 변경: 지도와 로봇의 `map_id`가 충돌하면 두 좌표 버튼을 막고 불일치를 알린다. 다른 지도 위에 경로·로봇·목표 마커를 겹치지 않으며 ID 일치 뒤 복구한다. 기존 `/dashboard`도 공용 지도 비교를 쓴다. CORE 점유 지도는 수신 ID를 격자와 함께 저장한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/map-identity/navigation-stage/`의 두 폭 정상·불일치 캡처. 관련 Chromium·패키지 21 passed, CORE 지도 스냅숏 11 passed, 각 `known_failures.py` 0 NEW. 추가 패널 묶음 21 passed/1 failed는 공유 main에서도 재현한 차선 추종 확인 시험이다.
+- gate 변화: LOCAL 지도 정합성 부분 근거. 서버 경로 시각·목표 식별, 실물 readback, 전체 G2·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 계획 경로 수신 근거 표시
+
+- 변경: 지도 위 계획 경로를 CORE 수신 나이·경로 지도 ID·좌표계가 확인될 때만 그린다. HUD는 마지막 수신 나이를 표시하고 근거가 없거나 다른 지도·좌표계이면 이유를 표시한다. 주행 상태 전환 시 이전 선을 지우고 늦은 HTTP 응답은 무시한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/path-provenance/navigation-stage/`의 두 폭 정상·경로 ID 불일치와 모바일 odom 캡처. CORE 지도·브리지 41 passed, 화면 브라우저·패키지 21 passed.
+- gate 변화: LOCAL 경로 출처·레이아웃 부분 근거. 현재 목표 식별과 실물·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): SLAM 세션 상태와 지도 HUD 밀도
+
+- 변경: 지도 HUD는 capability와 CORE 맵핑 세션을 구분하고 조회 실패를 확인 불가로 남긴다. 상태 네 항목을 자동 줄바꿈으로 배치해 지도 상단 가림을 줄였다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/slam-session-final/navigation-stage/`의 1366×768·390×844 세션 활성/대기/조회 실패 캡처. Chromium 1 passed, 계약·패키지 24 passed, `impeccable detect` `[]`.
+- gate 변화: LOCAL 부분 근거. 장치·전체 G2·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 계획 경로 끝 방향 표시
+
+- 변경: 지도에 마지막 수신 계획 경로의 끝 방향 화살표를 그린다. 좌표·지도 근거가 없으면 경로와 함께 숨기며 현재 목표나 실제 주행 방향으로 주장하지 않는다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/route-direction/navigation-stage/`의 모바일·데스크톱 및 불일치 캡처. 브라우저 2 passed, 새 실패 0, `impeccable detect` `[]`.
+- gate 변화: LOCAL 경로 방향 가독성 근거. 실제 추종과 장치·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 지도 HUD의 지연·단절 증거 분리
+
+- 변경: 내비게이션·위치 추정의 지연 나이를 표시하고 단절·정보 없음을 구분한다. 주행 상태가 확인되지 않으면 마지막 계획 경로 선을 숨기고 이유를 우선 표시한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/navigation-evidence/navigation-stage/`의 2폭×3상태 캡처. Chromium 1 passed, 지도·패키지 20 passed, 새 실패 0.
+- gate 변화: LOCAL G2 일부 셀 보강. 실물·전체 G2·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 안전 정지의 지도 목표 차단
+
+- 변경: SAFE_STOP을 지도 HUD·로봇 카드에 우선 표시하고 목표 버튼과 계획 경로를 막는다. 초기 위치 설정은 기존 별도 조건을 유지한다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: 같은 세션 `evidence/navigation-evidence/navigation-stage/`의 1366×768·390×844 안전 정지 캡처. Chromium 1 passed, 패키지 19 passed, 새 실패 0. 확장 회귀 묶음은 멈춰 중단했고 통과로 세지 않는다.
+- gate 변화: LOCAL G2 안전 정지 셀 보강. 장치·전체 G2·G3는 HOLD.
+
+## 2026-10-08 · 9318050f6 · 위치 불확실 중 주행 보고 보존
+
+- 변경: 최신 `NAVIGATING` 보고와 `SUSPECT` 위치 추정이 겹치면 HUD에 `주행 중 보고 · 위치 확인 필요`를 함께 보여 준다. 목표와 계획 경로 차단은 유지한다.
+- 증거: `docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md`의 두 폭 캡처와 `logs/navigation-status-honesty-final.txt` (Chromium 1 passed, 신규 실패 0, 매트릭스 브라우저 오류 0).
+- gate 변화: LOCAL 상태 해석 보강. 실물 이동·장치·현장 수용은 HOLD.
+
+## 2026-10-08 · 098e8d522 · 현재 main과 내비게이션 UI 결합 검증
+
+- 변경: API Ref 최신 v1.145와 맵핑 세션·경로 근거를 v1.146으로 결합했다. CORE API·서비스 로그 양쪽과 생성 목차를 보존했다.
+- 증거: `docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md`의 post-main-merge 두 폭 캡처, 계약·지도·패키지 76 passed, Chromium 1 passed, 신규 실패 0, lint 0 error.
+- gate 변화: LOCAL 결합 후보. 실제 로봇·운영자 G3·FIELD는 HOLD.
+
+## 2026-10-08 · 5ee382a0f · API Ref v1.147 충돌 정리
+
+- 변경: 공유 main의 Fleet convoy v1.146 행을 보존하고 로봇 맵핑 세션·경로 근거 행을 v1.147로 옮겼다. `app.py` 설명·버전 핀을 함께 맞췄다.
+- 증거: [지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). v1.147 계약 시험 5 passed, known_failures 0 NEW (`logs/v147-contract.txt`). 이전 v1.146 결합 테스트는 버전 표기 전의 근거로 남긴다.
+- gate 변화: SOURCE 계약 버전 재조정. 장치·현장 수용은 HOLD.
