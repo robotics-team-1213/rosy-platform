@@ -66,3 +66,10 @@ CORE의 `GET /api/v1/navigation/state`에 기존 `NavigationManager.mapping_acti
 - LOCAL: 실제 FastAPI 정적 자산과 합성 API 응답의 1366×768·390×844 정상/대기/조회 실패 캡처를 X: 세션 `evidence/slam-session-final/navigation-stage/`에 기록하고 두 폭을 육안 확인했다. 캡처는 로봇 readback이 아니다.
 - `test_navigation_readiness.py`와 해당 브라우저 시험 12 passed (`logs/slam-session-tests.txt`), 최종 HUD CSS 캡처 시험 1 passed (`logs/slam-session-browser-final.txt`), 계약·패키지 24 passed (`logs/slam-session-contract.txt`), `known_failures.py` 0 NEW. `impeccable detect --json`은 `[]` (`logs/impeccable-slam-session.json`).
 - 공유 main은 이 브랜치보다 앞서 있고 API Ref 버전이 독립적으로 진행 중이다. 이 브랜치의 v1.143 표기는 착지 전 최신 계약 이력과 양측 합의 확인이 필요하다. 장치 이미지, 실제 SLAM 처리·지도 생성, 전체 G2 상태 매트릭스, G3 운용자 평가는 HOLD다.
+
+## 후속: 마지막 계획 경로의 방향
+
+지도에서 파란 선의 끝을 화살표로 그려 마지막 수신 계획 경로의 진행 방향을 읽게 했다. 화살표는 경로 좌표의 마지막 서로 다른 두 점에서 계산하며 로봇 위치 마커·사용자가 전송한 목표 마커와 구분된다. 경로 지도 ID나 `map` 좌표계가 맞지 않으면 선과 화살표를 함께 숨긴다. 화살표는 로봇이 지금 그 방향으로 움직이거나 해당 목표를 실행 중이라는 증거가 아니다.
+
+- LOCAL: 실제 FastAPI 자산과 합성 CORE 응답의 1366×768·390×844 정상, 지도 ID 불일치, 좌표계 불일치 캡처를 X: 세션 `evidence/route-direction/navigation-stage/`에 남겼다. 정상 두 폭과 지도 ID 불일치 데스크톱 화면을 원본으로 확인했다. 정상 PNG SHA-256은 390×844 `04ad05903db9d159a71e464f1e6528dfdc666ff4611ccc4e352dea46f1756e08`, 1366×768 `2df45d3b09835b1efea5f746c663047aee8d3c815978e56a6f9864faafd1f5c`다.
+- 지도 브라우저·키보드 조작 2 passed, `known_failures.py` 0 NEW (`logs/route-direction-browser.txt`). `impeccable detect --json`은 `[]` (`logs/impeccable-route-direction.json`). 실제 경로 추종·장치 및 G3 수용은 HOLD다.

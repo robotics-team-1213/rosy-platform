@@ -245,9 +245,9 @@ export function createFieldMap(options) {
     const frame = new GridFrame(state.occupancy);
     if (layers.path && pathEvidence().visible) {
       const scale = window.devicePixelRatio || 1;
+      const points = state.path.poses.map((pose) => frame.worldToCanvas(pose.x, pose.y, canvas.width, canvas.height));
       ctx.beginPath();
-      state.path.poses.forEach((pose, index) => {
-        const point = frame.worldToCanvas(pose.x, pose.y, canvas.width, canvas.height);
+      points.forEach((point, index) => {
         if (index === 0) ctx.moveTo(point.x, point.y);
         else ctx.lineTo(point.x, point.y);
       });
@@ -256,6 +256,22 @@ export function createFieldMap(options) {
       ctx.strokeStyle = cssColor("route");
       ctx.lineWidth = 4 * scale;
       ctx.stroke();
+      // 마지막 수신 계획의 끝 방향만 표시한다. 현재 목표나 실제 주행 궤적 표시는 아니다.
+      const end = points[points.length - 1];
+      const previous = points.slice(0, -1).reverse().find((point) => Math.hypot(end.x - point.x, end.y - point.y) > scale);
+      if (previous) {
+        ctx.save();
+        ctx.translate(end.x, end.y);
+        ctx.rotate(Math.atan2(end.y - previous.y, end.x - previous.x));
+        ctx.fillStyle = cssColor("route");
+        ctx.beginPath();
+        ctx.moveTo(5 * scale, 0);
+        ctx.lineTo(-9 * scale, -6 * scale);
+        ctx.lineTo(-9 * scale, 6 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
     }
     if (cross) {
       ctx.save();

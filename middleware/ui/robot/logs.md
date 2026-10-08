@@ -1116,3 +1116,9 @@
 - 변경: 지도 HUD는 capability와 CORE 맵핑 세션을 구분하고 조회 실패를 확인 불가로 남긴다. 상태 네 항목을 자동 줄바꿈으로 배치해 지도 상단 가림을 줄였다.
 - 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/slam-session-final/navigation-stage/`의 1366×768·390×844 세션 활성/대기/조회 실패 캡처. Chromium 1 passed, 계약·패키지 24 passed, `impeccable detect` `[]`.
 - gate 변화: LOCAL 부분 근거. 장치·전체 G2·G3는 HOLD.
+
+## 2026-10-08 · uncommitted · uiux(robot): 계획 경로 끝 방향 표시
+
+- 변경: 지도에 마지막 수신 계획 경로의 끝 방향 화살표를 그린다. 좌표·지도 근거가 없으면 경로와 함께 숨기며 현재 목표나 실제 주행 방향으로 주장하지 않는다.
+- 증거: [지도 화면 후속 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md), X: `projects/rosy-platform/2026-10-08--151842--robot-nav-stage--268890/evidence/route-direction/navigation-stage/`의 모바일·데스크톱 및 불일치 캡처. 브라우저 2 passed, 새 실패 0, `impeccable detect` `[]`.
+- gate 변화: LOCAL 경로 방향 가독성 근거. 실제 추종과 장치·G3는 HOLD.
