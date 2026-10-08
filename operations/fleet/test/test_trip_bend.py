@@ -104,6 +104,21 @@ def test_bend_instruction_goes_out_only_on_the_bend_stretch():
     assert ports.sent[1][1] == "SW" and ports.sent[1][0] != "bend"        # then the next place
 
 
+def test_a_bend_core_ended_on_the_next_junction_counts_done_and_the_place_goes_out():
+    """Lap SIM D (rec_4): CORE ended the pass on the SW sighting and waits there (same seq) 6 mm
+    before the arc end on Fleet's map; Fleet must count the bend done and send the SW turn."""
+    runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND))
+    ports.core.phase("bending")
+    ports.at(arc, s_start + 0.02)
+    _ticks(runner, ports)
+    ports.core.j = None
+    ports.core.see_junction()                                             # CORE 'waiting', same seq
+    assert ports.core.status()["state"] == "waiting" and ports.core.status()["seq"] == 1
+    _ticks(runner, ports)
+    assert ports.sent[1][:2] == ("right", "SW") and ports.expects[1]["expect_in_m"] > 0
+    assert runner.running()["state"] == "running"
+
+
 def test_an_armed_bend_holds_the_next_place_back():
     runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND), ahead=0.15)  # SW within 0.6 m
     _ticks(runner, ports, 3)
