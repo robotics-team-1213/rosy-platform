@@ -16,7 +16,7 @@ import {drawStartPointMarks} from './start-point-layer.js';
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { drawTrails } from "./trail-view.js";
 import { drawTraffic } from "./traffic-view.js";
-import { trafficClock } from "./site-map-model.js";
+import { trafficClock } from "/console/assets/site-map-model.js";
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
   const camera = createCameraBackdrop({ scope, el, view, draw });

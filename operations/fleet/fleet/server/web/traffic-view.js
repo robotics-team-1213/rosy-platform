@@ -1,6 +1,6 @@
 // D-517 10 교통 층 그리기 (map-view.js 에서 분리). 폴링과 토글은 map-view.js 가 가진다.
 
-import { trafficDrawing } from "./site-map-model.js";
+import { trafficDrawing } from "/console/assets/site-map-model.js";
 
 // D-517 10 교통 층 — 블록 띠(점유 채움·허가 테두리·불명 빗금), 구역 윤곽과 "점유 a/b · 대기 n",
 // 로봇마다 통행권 끝 가로 표시. 미터 좌표를 toPoint 하나로 그려 화면 방향·위에서 본 보기를 그대로 따른다.

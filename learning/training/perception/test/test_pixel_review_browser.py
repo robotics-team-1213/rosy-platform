@@ -5,7 +5,8 @@ import pytest
 from browser_harness import browser_tests_enabled
 import numpy as np
 
-from test_review_flow_browser import browser_workspace
+from test_review_flow_browser import browser_workspace, serve
+from test_review_app import bright_store
 from test_review_cycle import CLASSES
 import review_masks
 
@@ -18,6 +19,31 @@ def open_pixels(page, store, expect, index=0):
     base = page.url.split('?')[0].rstrip('/')
     page.goto(base + f'/pixels?frame={index}', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
+
+
+def test_detail_view_and_mask_toggle_do_not_change_review(tmp_path):
+    with serve(bright_store(tmp_path)) as (page, store, expect):
+        open_pixels(page, store, expect)
+        before = store.image(0).read_bytes()
+        mask = review_masks.get(store, 0)
+        page.locator('#pixel-mask-visible').uncheck()
+        pixel = lambda: page.evaluate("""() => Array.from(document.querySelector('#pixel-canvas')
+            .getContext('2d').getImageData(16, 12, 1, 1).data)""")
+        original = pixel()
+        page.locator('#pixel-view-detail').click()
+        expect(page.locator('#pixel-view-status')).to_contain_text('명암 보정 보기')
+        assert pixel() != original
+        page.keyboard.press('v')
+        expect(page.locator('#pixel-view-original')).to_have_attribute('aria-pressed', 'true')
+        assert pixel() == original
+        page.locator('#pixel-mask-visible').check()
+        assert pixel() != original
+        assert store.image(0).read_bytes() == before
+        assert review_masks.get(store, 0)['version'] == mask['version']
+        page.goto(page.url.split('/pixels')[0] + '/?frame=0', wait_until='networkidle')
+        page.locator('#view-detail').click()
+        expect(page.locator('#view-status')).to_contain_text('명암 보정 보기')
+        assert store.get(0)['version'] == 1
 
 
 def test_unknown_highlight_is_visual_only(browser_workspace):
