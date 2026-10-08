@@ -7,10 +7,11 @@ see host-guard.conf.example) lists one host per line:
   <name> pc <ssh-target> <quiet HH:MM-HH:MM or ->
   <name> robot <host>:<port>
 
-A pc answers `health` through its forced command (rosy-host-guard-remote). Recovery ladder:
+A pc answers `health` through its forced command (rosy-host-guard-remote); restart and reboot run
+the D-524 Service Control helper there (reboot = shutdown -r +10). Recovery ladder:
 GUARD_BAD_CHECKS bad answers in a row -> restart the watched user units that are down (or reboot
 when none are down); still bad at twice that count -> reboot. Never inside the host's quiet
-window (its nightly reboot), never within GUARD_MIN_UPTIME_S of boot. An unreachable pc is only
+window (its nightly reboot; a reboot whose +10 min lands in the window is not sent), never within GUARD_MIN_UPTIME_S of boot. An unreachable pc is only
 logged: the hardware watchdog and the host-local rosy-ssh-watchdog own that case. Robots are only
 probed on their CORE port; their recovery belongs to D-412 and the rosy-* units.
 
@@ -36,6 +37,7 @@ MIN_AVAIL_PCT = int(os.environ.get("GUARD_MIN_AVAIL_PCT", "3"))
 MAX_SWAP_PCT = int(os.environ.get("GUARD_MAX_SWAP_PCT", "80"))
 MAX_LOAD_PER_CORE = float(os.environ.get("GUARD_MAX_LOAD_PER_CORE", "4"))
 MIN_UPTIME_S = int(os.environ.get("GUARD_MIN_UPTIME_S", "3600"))
+REBOOT_DELAY_MIN = 10  # D-524 helper reboots with shutdown -r +10
 
 
 def now_hhmm() -> str:
@@ -74,7 +76,12 @@ def act(name: str, action: str, reason: str) -> None:
         f.write(json.dumps({"time": int(time.time()), "host": name, "action": action, "reason": reason}) + "\n")
 
 
-def check_pc(name: str, target: str, entry: dict) -> None:
+def plus_minutes(hhmm: str, minutes: int) -> str:
+    total = (int(hhmm[:2]) * 60 + int(hhmm[3:]) + minutes) % 1440
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
     answer = ssh(target, "health")
     if answer is None:
         entry["state"] = "unreachable"
@@ -106,6 +113,9 @@ def check_pc(name: str, target: str, entry: dict) -> None:
         if uptime < MIN_UPTIME_S:
             print(f"{name}: would reboot, but it booted {uptime}s ago", flush=True)
             return
+        if in_quiet(quiet, plus_minutes(now_hhmm(), REBOOT_DELAY_MIN)):
+            print(f"{name}: would reboot, but the delayed reboot lands in its nightly window", flush=True)
+            return
         ssh(target, "reboot")
         act(name, "reboot", reason)
         entry.update(bad=0, restarted=False)
@@ -128,7 +138,7 @@ def main() -> int:
             if in_quiet(line[3], now):
                 entry["state"] = "quiet"
             else:
-                check_pc(name, line[2], entry)
+                check_pc(name, line[2], line[3], entry)
         else:
             print(f"{name}: unknown kind {kind}", flush=True)
             continue

@@ -22,7 +22,7 @@
    ```bash
    sudo deploy/site/install-host-guard.sh
    ```
-2. 모델 PC에서 대비를 설치하고 그 키를 등록한다. 키는 `rosy-host-guard-remote`(`health`, `restart <사용자 유닛>`, `reboot`)만 실행할 수 있다.
+2. 모델 PC에서 대비를 설치하고 그 키를 등록한다. 키는 `rosy-host-guard-remote`(`health`, `restart <유닛>`, `reboot`)만 실행할 수 있고, 다시 시작과 재부팅은 D-524 도우미 `rosy-host-control`이 한다(`rosy-host-state install model --approve ...`로 설치).
    ```bash
    sudo deploy/site/install-model-pc-guard.sh --site-key "ssh-ed25519 AAAA... rosy-host-guard"
    ```

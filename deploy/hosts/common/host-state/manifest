@@ -12,3 +12,9 @@ report masked suspend.target
 report masked hibernate.target
 report masked hybrid-sleep.target
 approval file /etc/ssh/sshd_config.d/10-rosy.conf common/sshd-10-rosy.conf
+# D-524 Service Control helper: the one execution path for restart-unit and reboot (Fleet operator
+# and this guard). deploy/site/rosy-host-control lands with D-524; until then this line reports
+# "not in this copy". Root rights for the guard: approval only.
+approval file /usr/local/sbin/rosy-host-control deploy/site/rosy-host-control 0755
+approval file /etc/sudoers.d/rosy-host-control common/sudoers-rosy-host-control.in 0440
+approval file /etc/rosy/host-control/role role/host-control-role

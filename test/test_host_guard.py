@@ -86,6 +86,11 @@ def test_nothing_runs_inside_the_nightly_window(tmp_path, now, window):
     assert json.loads((tmp_path / "state/status.json").read_text())["pc1"]["state"] == "quiet"
 
 
+def test_a_reboot_whose_ten_minute_delay_lands_in_the_window_is_held(tmp_path):
+    calls = _guard(tmp_path, LOW_MEMORY, runs=4, now="05:45")
+    assert calls == ["health"] * 4 and _actions(tmp_path) == []
+
+
 def test_robots_are_probed_and_never_recovered(tmp_path):
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -122,7 +127,8 @@ def test_the_forced_command_reports_down_units_in_health(tmp_path):
 
 def test_the_forced_command_restarts_only_listed_user_units(tmp_path):
     result, calls = _remote(tmp_path, "restart pinky-nav2.service")
-    assert result.returncode == 0 and calls == ["--user restart -- pinky-nav2.service"]
+    assert result.returncode == 0
+    assert calls == ["sudo -n /usr/local/sbin/rosy-host-control restart-unit pinky-nav2.service"]
     for i, bad in enumerate(("restart ssh.service", "restart pinky-nav2.service extra", "restart *", "rm -rf /",
                              "reboot now", "health; reboot")):
         (tmp_path / str(i)).mkdir()
@@ -131,6 +137,6 @@ def test_the_forced_command_restarts_only_listed_user_units(tmp_path):
         assert calls == [], bad
 
 
-def test_the_forced_command_reboots_through_its_one_sudo_line(tmp_path):
+def test_the_forced_command_reboots_only_through_the_d524_helper(tmp_path):
     result, calls = _remote(tmp_path, "reboot")
-    assert result.returncode == 0 and calls == ["sudo -n /usr/bin/systemctl reboot"]
+    assert result.returncode == 0 and calls == ["sudo -n /usr/local/sbin/rosy-host-control reboot"]

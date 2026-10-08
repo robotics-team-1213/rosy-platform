@@ -3,10 +3,11 @@
 #
 #   sudo deploy/hosts/common/install-guard-remote.sh [--dry-run] [--site-key "ssh-ed25519 AAAA... rosy-host-guard"] [--unit <user unit>]...
 #
-# Installs /usr/local/sbin/rosy-host-guard-remote, a sudoers line that lets the login user run only
-# `systemctl reboot`, /etc/rosy/host-guard/units (the user units the guard may restart; --unit
-# replaces the list), and with --site-key an authorized_keys entry that can run nothing but the
-# forced command. Idempotent. --dry-run prints what would change and needs no root.
+# Installs /usr/local/sbin/rosy-host-guard-remote, /etc/rosy/host-guard/units (the units the guard
+# watches and may ask the D-524 helper to restart; --unit replaces the list), and with --site-key an
+# authorized_keys entry that can run nothing but the forced command. The helper and its one sudoers
+# line are desired state (rosy-host-state install <role> --approve ..., D-530). Idempotent.
+# --dry-run prints what would change and needs no root.
 set -euo pipefail
 
 DRY=0
@@ -32,8 +33,6 @@ put() {  # put <path> <mode> <content>
 [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || { echo "run with sudo (or --dry-run)" >&2; exit 1; }
 
 run install -m 0755 "$HERE/rosy-host-guard-remote" /usr/local/sbin/rosy-host-guard-remote
-put /etc/sudoers.d/rosy-host-guard 0440 "$USER_NAME ALL=(root) NOPASSWD: /usr/bin/systemctl reboot"
-[ "$DRY" = 1 ] || visudo -cf /etc/sudoers.d/rosy-host-guard >/dev/null
 if [ ${#UNITS[@]} -gt 0 ]; then
   run install -d -m 0755 /etc/rosy/host-guard
   put /etc/rosy/host-guard/units 0644 "$(printf '%s\n' "${UNITS[@]}")"
@@ -47,4 +46,4 @@ if [ -n "$SITE_KEY" ]; then
     printf '%s\n' "$LINE" >> "$KEYS" && chown "$USER_NAME:$USER_NAME" "$KEYS" && chmod 0600 "$KEYS"
   fi
 fi
-echo "done. Check: sudo -l -U $USER_NAME; cat /etc/rosy/host-guard/units"
+echo "done. Check: sudo -l -U $USER_NAME (rosy-host-control line); cat /etc/rosy/host-guard/units"

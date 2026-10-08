@@ -10,7 +10,8 @@ install copies the role's host-state folder and the common one to /usr/local/lib
 --approve. check compares the host with that copy: it fixes safe lines, reports the rest and
 writes /var/lib/rosy-host-state/status.json. It never pulls the repo.
 
-Manifest line: <policy> <kind> <args>. Kinds: file <path> <role/x|common/x> [mode], enabled <unit>,
+Manifest line: <policy> <kind> <args>. Kinds: file <path> <role/x|common/x|deploy/x> [mode] (a source
+ending in .in gets @LOGIN@ replaced; sudoers files must pass visudo -c), enabled <unit>,
 disabled <unit>, masked <unit>, linger, wifi-allow. ROSY_HOST_STATE_ROOT prefixes every absolute
 path (tests).
 """
@@ -79,11 +80,24 @@ def wifi_allowed() -> list[str]:
     return [n.strip() for n in path.read_text(encoding="utf-8").splitlines() if n.strip()]
 
 
+def want_bytes(source: str, dirs: dict[str, Path]) -> bytes:
+    """Bytes the host should hold. A source ending in .in gets @LOGIN@ replaced by the login."""
+    base, rel = source.split("/", 1)
+    path = dirs[base] / rel
+    if not path.is_file():
+        raise RuntimeError(f"source {source} is not in this copy")
+    data = path.read_bytes()
+    return data.replace(b"@LOGIN@", login_user().encode()) if source.endswith(".in") else data
+
+
 def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
     """Return a one-line description of the drift, or None when the host matches."""
     if kind == "file":
         target, source = args[0], args[1]
-        want = (dirs[source.split("/", 1)[0]] / source.split("/", 1)[1]).read_bytes()
+        try:
+            want = want_bytes(source, dirs)
+        except RuntimeError as exc:
+            return f"{target}: {exc}"
         mode = int(args[2], 8) if len(args) > 2 else 0o644
         path = host(target)
         if not path.exists():
@@ -120,7 +134,10 @@ def drift(kind: str, args: list[str], dirs: dict[str, Path]) -> str | None:
 
 def file_diff(args: list[str], dirs: dict[str, Path]) -> str:
     target, source = args[0], args[1]
-    want = (dirs[source.split("/", 1)[0]] / source.split("/", 1)[1]).read_text(encoding="utf-8")
+    try:
+        want = want_bytes(source, dirs).decode("utf-8")
+    except RuntimeError:
+        return ""
     path = host(target)
     have = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
     return "".join(difflib.unified_diff(have.splitlines(True), want.splitlines(True),
@@ -135,8 +152,11 @@ def fix(kind: str, args: list[str], dirs: dict[str, Path]) -> str:
         old = path.read_bytes() if path.exists() else None
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(path.name + ".rosy-tmp")
-        shutil.copyfile(dirs[source.split("/", 1)[0]] / source.split("/", 1)[1], tmp)
+        tmp.write_bytes(want_bytes(source, dirs))
         tmp.chmod(int(args[2], 8) if len(args) > 2 else 0o644)
+        if target.startswith("/etc/sudoers.d/") and sh("visudo", "-cf", str(tmp)).returncode != 0:
+            tmp.unlink()  # a broken sudoers file disables sudo for everyone
+            raise RuntimeError(f"{target}: visudo -c failed, not installed")
         os.replace(tmp, path)
         if target.startswith("/etc/ssh/"):
             # A broken sshd config would lock everyone out: test it, roll back on failure.
@@ -184,7 +204,8 @@ def line_id(kind: str, args: list[str]) -> str:
 def repo_dirs(role: str) -> dict[str, Path]:
     if role not in ROLE_DIRS:
         raise SystemExit(f"role must be one of {', '.join(ROLE_DIRS)}")
-    return {"common": HERE / "host-state", "role": HERE.parent.parent / ROLE_DIRS[role] / "host-state"}
+    deploy = HERE.parent.parent
+    return {"common": HERE / "host-state", "role": deploy / ROLE_DIRS[role] / "host-state", "deploy": deploy}
 
 
 def install(role: str, dry_run: bool, approve: list[str]) -> int:
@@ -212,9 +233,16 @@ def install(role: str, dry_run: bool, approve: list[str]) -> int:
 def copy_approved(role: str) -> None:
     dirs = repo_dirs(role)
     lib = host(LIB)
-    for name, src in dirs.items():
+    for name in ("common", "role", "deploy"):
         shutil.rmtree(lib / name, ignore_errors=True)
-        shutil.copytree(src, lib / name)
+    for name in ("common", "role"):
+        shutil.copytree(dirs[name], lib / name)
+    for _policy, kind, args in read_manifest(dirs):  # deploy/<path> sources (D-524 helper)
+        if kind == "file" and args[1].startswith("deploy/"):
+            src = dirs["deploy"] / args[1].split("/", 1)[1]
+            if src.is_file():
+                (lib / args[1]).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, lib / args[1])
     (lib / "role-name").write_text(role + "\n", encoding="utf-8")
     user = os.environ.get("SUDO_USER", "")
     if user and user != "root":
@@ -227,7 +255,7 @@ def copy_approved(role: str) -> None:
 
 def check() -> int:
     lib = host(LIB)
-    dirs = {"common": lib / "common", "role": lib / "role"}
+    dirs = {"common": lib / "common", "role": lib / "role", "deploy": lib / "deploy"}
     status = {"time": int(time.time()), "fixed": [], "drift": [], "awaiting_approval": [], "errors": []}
     for policy, kind, args in read_manifest(dirs):
         found = drift(kind, args, dirs)

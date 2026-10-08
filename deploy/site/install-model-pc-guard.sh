@@ -14,8 +14,9 @@
 #   3. swap: turns the zvol swap off and comments its fstab line; zram grows to 100 % of RAM
 #      (compressed RAM, not ZFS). The 4 GiB encrypted swap partition stays.
 #   4. remote guard: deploy/hosts/common/install-guard-remote.sh (forced command
-#      rosy-host-guard-remote, one sudoers reboot line, and with --site-key the guard's key;
-#      deploy/site/install-host-guard.sh is the site host side, D-530).
+#      rosy-host-guard-remote and with --site-key the guard's key; deploy/site/install-host-guard.sh
+#      is the site host side). Its restart and reboot run the D-524 helper, installed with
+#      `rosy-host-state install model --approve ...` (D-530).
 # Idempotent. --dry-run prints what would change and needs no root.
 set -euo pipefail
 
@@ -69,7 +70,7 @@ if [ -f /etc/default/zramswap ]; then
   run systemctl restart zramswap.service
 fi
 
-# 4. remote guard command, its one sudo right and the site key (D-530, shared with the AI PC)
+# 4. remote guard forced command and the site key (D-530, shared with the AI PC)
 remote_args=()
 [ "$DRY" = 1 ] && remote_args+=(--dry-run)
 [ -n "$SITE_KEY" ] && remote_args+=(--site-key "$SITE_KEY")

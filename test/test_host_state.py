@@ -11,6 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 TOOL = ROOT / "deploy" / "hosts" / "common" / "rosy-host-state"
 ROLES = {"site": "site", "model": "model_pc", "ai": "ai_pc"}
+PENDING_D524 = "deploy/site/rosy-host-control"
 
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="needs POSIX fakes on PATH")
 
@@ -31,6 +32,8 @@ def _fakes(tmp_path, units=None, sshd_rc=0, wifi=""):
         "nmcli": '[ "$1" = -t ] && cat "$FAKE/nmcli.out"\n',
         "sshd": f"exit {sshd_rc}\n",
         "sysctl": "",
+        "visudo": 'grep -q "^Bad" "$2" && exit 1
+',
     }
     for name, body in scripts.items():
         path = bin_dir / name
@@ -156,6 +159,27 @@ def test_wifi_autoconnect_is_cut_only_outside_a_nonempty_allow_list(tmp_path):
     assert [c for c in _calls(fake) if "modify" in c] == ["nmcli connection modify old:cafe connection.autoconnect no"]
 
 
+def test_sudoers_gets_the_login_and_a_broken_file_is_never_installed(tmp_path):
+    _lib(tmp_path, "safe file /etc/sudoers.d/rosy-host-control common/s.in 0440
+", "",
+         {"common/s.in": "@LOGIN@ ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control
+"})
+    fake, bin_dir = _fakes(tmp_path)
+    assert _run(tmp_path, bin_dir, fake, "check").returncode == 0
+    sudoers = tmp_path / "host/etc/sudoers.d/rosy-host-control"
+    assert sudoers.read_text() == "op ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control
+"
+    assert sudoers.stat().st_mode & 0o777 == 0o440
+    assert _run(tmp_path, bin_dir, fake, "check").returncode == 0  # idempotent: no drift now
+
+    (tmp_path / "host/usr/local/lib/rosy-host-state/common/s.in").write_text("Bad line
+")
+    result = _run(tmp_path, bin_dir, fake, "check")
+    assert result.returncode == 1 and "visudo -c failed" in result.stdout
+    assert sudoers.read_text().startswith("op ALL")
+    assert not list(sudoers.parent.glob("*.rosy-tmp"))
+
+
 @pytest.mark.parametrize("role", sorted(ROLES))
 def test_every_role_manifest_parses_and_its_sources_exist(role):
     dirs = {"common": ROOT / "deploy/hosts/common/host-state", "role": ROOT / "deploy" / ROLES[role] / "host-state"}
@@ -168,7 +192,11 @@ def test_every_role_manifest_parses_and_its_sources_exist(role):
             assert line[0] in ("safe", "report", "approval"), raw
             kinds.add((line[1], line[2] if len(line) > 2 else ""))
             if line[1] == "file":
-                src = dirs[line[3].split("/")[0]] / line[3].split("/", 1)[1]
+                base, rel = line[3].split("/", 1)
+                src = (ROOT / "deploy" if base == "deploy" else dirs[base]) / rel
+                if line[3] == PENDING_D524:
+                    assert line[0] == "approval", raw  # lands with D-524 (feat/host-control)
+                    continue
                 assert src.is_file(), raw
                 assert b"\r\n" not in src.read_bytes(), src
     assert ("enabled", "rosy-nightly-reboot.timer") in kinds
