@@ -453,8 +453,8 @@ def test_plan_overlay_rules(tmp_path, key, value, why):
 
 def test_waiver_needs_a_named_dated_acceptance(tmp_path):
     plan = yaml.safe_load(PLAN.read_text(encoding="utf-8"))
-    assert run.load_plan(PLAN)["accepted_risks"][0]["key"] == "line_follow.bridge_site_no_dropoffs"
-    for broken in ([], [{"key": "line_follow.bridge_site_no_dropoffs", "date": "2026-10-08", "reason": "x"}]):
+    assert run.load_plan(PLAN)["accepted_risks"][0]["key"] == "line_follow.site_floor_map_id"
+    for broken in ([], [{"key": "line_follow.site_floor_map_id", "date": "2026-10-08", "reason": "x"}]):
         plan["accepted_risks"] = broken
         p = tmp_path / "w.yaml"
         p.write_text(yaml.safe_dump(plan), encoding="utf-8")
