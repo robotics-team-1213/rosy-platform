@@ -45,6 +45,8 @@ RULES = {
     "line_follow.bridge_distance_scale": _num(1.08, 2.0),
     "line_follow.bridge_time_margin_s": _num(0.5, 2.0),
     "line_follow.ir_guard_enabled": (lambda v: v is True, "true (the guard may only be turned on)"),
+    # D-520 addendum 2026-10-09: on by default; a device run may only turn it off until its DEVICE checklist.
+    "line_follow.arc_enabled": (lambda v: v is False, "false (no ring arc before the D-520 DEVICE checklist)"),
     "line_follow.recovery_local_enabled": (_bool, "bool"),
     "line_follow.cruise_speed": _num(0, MAX_LINEAR, lo_open=True),
     "line_follow.max_linear": _num(0, MAX_LINEAR, lo_open=True),
