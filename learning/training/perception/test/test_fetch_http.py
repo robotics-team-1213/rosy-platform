@@ -140,6 +140,15 @@ def test_only_without_a_match_fails(server, tmp_path, capsys):
     assert "no complete recording" in capsys.readouterr().err
 
 
+def test_since_id_skips_older_recordings_without_downloading(server, tmp_path):
+    base, state = server
+    assert _main(base, tmp_path, lambda *a: pytest.fail("must not convert"), "--since-id", RID2) == 0
+    assert state["paths"] == ["/api/v1/recordings"]
+    assert _leftovers(tmp_path) == []
+    assert _main(base, tmp_path, lambda *a: pytest.fail("must not convert"),
+                 "--since-id", "not-an-id") == 2
+
+
 def test_a_tampered_member_fails_and_leaves_nothing(server, tmp_path):
     base, state = server
     state["archive"] = _recording(tamper=True)

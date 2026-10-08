@@ -3,7 +3,7 @@ the robot's sha256 manifest, convert with bag_to_video and check frame/action pa
 
 Usage: fetch_http.py <base> [--token-file FILE] [--dest data/perception/raw]
                      [--video-out data/teleop/learning] [--codec hevc|h264] [--only ID]
-                     [--ca-file DEVICE-CA.pem]
+                     [--ca-file DEVICE-CA.pem] [--since-id ID]
 
 `rosy_ml fetch` fills <base> from the robot's `_rosy._tcp` advertisement
 (`https://<tls_host>:<port>` when it says tls=required, with --ca-file).
@@ -301,10 +301,14 @@ def main(argv=None, *, convert=default_convert) -> int:
     ap.add_argument("--video-out", help="bag_to_video --out (default data/teleop/learning)")
     ap.add_argument("--codec", choices=("hevc", "h264"), default="hevc")
     ap.add_argument("--only", metavar="ID")
+    ap.add_argument("--since-id", metavar="ID", help="include this recording ID and later IDs")
     ap.add_argument("--ca-file", help="device CA for an https base (the URL name must match the certificate)")
     ap.add_argument("--timeout", type=float, default=600.0, help="per download socket timeout (s)")
     ap.add_argument("--list-timeout", type=float, default=LIST_TIMEOUT_S)
     args = ap.parse_args(argv)
+    if args.since_id and not _id_ok(args.since_id):
+        print("refused: --since-id must be a recording ID", file=sys.stderr)
+        return 2
     token_file = args.token_file or os.environ.get(TOKEN_ENV)
     token = Path(token_file).read_text(encoding="utf-8").strip() \
         if token_file and Path(token_file).is_file() else ""
@@ -340,7 +344,8 @@ def main(argv=None, *, convert=default_convert) -> int:
     dest = Path(args.dest)
     dest.mkdir(parents=True, exist_ok=True)
     items = [item for item in listing["items"] if isinstance(item, dict) and item.get("status") == "complete"
-             and (not args.only or item.get("id") == args.only)]
+             and (not args.only or item.get("id") == args.only)
+             and (not args.since_id or str(item.get("id") or "") >= args.since_id)]
     if args.only and not items:
         print(f"no complete recording {args.only} on the robot", file=sys.stderr)
         return 1
