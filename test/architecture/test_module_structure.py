@@ -164,8 +164,11 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        45_723,
-        "split: re-judged at 45723 on 2026-10-08 (independent re-judge, critic agent): 45571 was 46434 - 863 "
+        45_955,
+        "split: re-judged at 45955 on 2026-10-08: Service Control (D-524) adds host_control.py and "
+        "host_control_routes.py, an allowlisted reboot and unit restart with no robot command path. "
+        "+150 allowance measured from 45955. "
+        "Previously re-judged at 45723 on 2026-10-08 (independent re-judge, critic agent): 45571 was 46434 - 863 "
         "by arithmetic; measured 45699 after the traffic move because main's D-520 1-2 arc handshake and the "
         "CORE-approaching busy fix (91b15708b) landed beside D-517 M3, each in its existing owner; then +24 "
         "console web (site-path summary, settings close). No new owner or robot command path. The site-map "
@@ -616,8 +619,10 @@ SIZE_VERDICTS = {
         "protocol/lane_perception.py; one re-export preserves the single public schema import point.",
     ),
     "fleet/fleet/server/app.py": (
-        602,
-        "accept: one existing composition/lifespan owner wires bounded route siblings; "
+        756,
+        "accept: re-judged at 756 on 2026-10-08: Service Control (D-524) adds one route install; "
+        "the allowlist and helper stay in host_control.py. +150 allowance measured from 756. "
+        "Previously: one existing composition/lifespan owner wires bounded route siblings; "
         "camera identity/approval and calibrated reference persistence remain in their "
         "dedicated modules. Independent review confirmed both mounts and cleanup, "
         "no CORE/pose initialization/motion/grant authority change. Keep the600 threshold "
