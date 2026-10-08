@@ -44,6 +44,8 @@
 
 **현재 증거:** `tools/decision_replay.py`와 AI PC의 Laya CPU 합성 2건은 호출 연결만 확인했다. 1/2 일치값을 정확도로 해석하지 않는다. 실제 막힘 사람 정답 세트와 Kev 실측은 아직 없다([후보 조사](../reference/jev-local-decision-alternatives-2026-10-08.md)).
 
+재검증에서는 전체 입력 선검증과 세트 SHA-256 기록, 서버 오류 시 실패 종료 코드를 더하고 AI PC CPU 호출·서버 중단을 각각 확인했다([2026-10-08 결과](../validation/decision-model-replay-2026-10-08/result.md)). GPU·Kev·현장 경로는 아직 검증되지 않았다.
+
 ## 2. 오프라인 비교와 승격
 
 1. 모델 PC에서 작업별 입력·출력 계약을 고정한다. 텍스트 후보는 같은 사건·질문·허용 선택지·세트 hash를 Laya, Kev, 규칙 기준선에 재생한다. VLM은 D-492의 LiDAR 거리와 정지 프레임으로 정체만 평가한다. 서로 다른 작업의 점수를 합쳐 한 모델을 선정하지 않는다.
