@@ -785,3 +785,8 @@
 - gate 변화: LOCAL 사용자 흐름 근거 보강. 설치 앱·실제 정지 readback·지도/SLAM·전체 G2/G3·DEVICE/FIELD는 HOLD.
 ## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다
 - 실기(태블릿 Gboard 한국어): 코드가 한글로 바뀌어 입력됐고, 키보드가 "승인 코드 확인" 버튼을 가렸다. 입력칸을 `VISIBLE_PASSWORD`(라틴 배열)로 바꾸고 코드 알파벳만 남기는 필터, 키보드 완료 키로 보내기를 넣었다. 연결 기록을 지운 뒤 옛 실패 문구가 남던 것을 "기록을 지웠습니다"로 바꾸고, 승인 폐기(401/403/409)도 만료처럼 "다시 승인 요청" 대화상자를 연다. 코드 거절은 클래스·HTTP 상태만 로그에 남긴다.
+
+## 2026-10-09 · uncommitted · docs(pilot): 한글 키보드 승인 코드 수정의 기록 보완
+- 변경: 823847295의 "승인 코드 입력칸이 한글 키보드에서 깨졌다" 기록에 빠진 표준 항목을 보완한다. 입력칸 `VISIBLE_PASSWORD`, 코드 알파벳 필터, 완료 키 보내기, 승인 폐기(401/403/409) 재요청 대화상자.
+- 증거: 823847295 Android 단위 시험(LinkStatusTest), 8kcn 태블릿 로그 "Approval code not accepted: PeerRefused HTTP 409".
+- gate 변화: SOURCE/LOCAL. 실기 화면 코드 승인은 릴리스 056 이후 DEVICE에서 확인.
