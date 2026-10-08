@@ -21,7 +21,7 @@ if [ $# -ge 2 ]; then
     case "$local_sha" in
       *[!0]*)
         # An annotated tag pushes a tag object; compare the commit it names.
-        local_sha=$(git rev-parse "$local_sha^{commit}" 2>/dev/null || echo "$local_sha")
+        local_sha=$(git rev-parse --verify -q "$local_sha^{commit}" 2>/dev/null || echo "$local_sha")
         if [ -n "$PUSH_SHA" ] && [ "$PUSH_SHA" != "$local_sha" ]; then
           echo "[pre-push] this push carries several commits ($PUSH_SHA, $local_sha); the gate tests one. Push one ref at a time." >&2
           exit 1
