@@ -318,6 +318,7 @@ def select(repo: Repo, changed: list[str]) -> Selection:
         add(guard, "guard set (D-436 1)")
 
     touched_modules: dict[str, dict] = {}
+    broad_fallback_modules: dict[str, dict] = {}
     for path in changed:
         trigger = next((why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
         if trigger:
@@ -343,6 +344,7 @@ def select(repo: Repo, changed: list[str]) -> Selection:
                 else:
                     # No test names this file: the narrowing has nothing to stand on.
                     add("test", f"module {module['name']} ({path}; no test names it, whole root suite)")
+                    broad_fallback_modules[module["name"]] = module
             else:
                 for test in tests:
                     add(test, f"module {module['name']} ({path})")
@@ -378,9 +380,18 @@ def select(repo: Repo, changed: list[str]) -> Selection:
             if not _under(test, module["path"]) and repo.imports_prefix(test, prefixes):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
 
-    sel.local_invocations = pack(repo, sorted(sel.reasons))
     if sel.escalations:
         sel.mode = "full"
+        # CI runs the entire root suite in parallel shards for FULL. The local
+        # pre-push gate keeps the module's functional tests and all named tests,
+        # rather than repeating that 15k-test CI suite in one SSH invocation.
+        if "test" in sel.reasons and all("whole root suite" in why for why in sel.reasons["test"]):
+            sel.reasons.pop("test", None)
+            for module in broad_fallback_modules.values():
+                for test in module.get("functional") or []:
+                    add(test, f"module {module['name']} (FULL local functional)")
+    sel.local_invocations = pack(repo, sorted(sel.reasons))
+    if sel.mode == "full":
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
     sel.invocations = pack(repo, sorted(sel.reasons))
     return sel
