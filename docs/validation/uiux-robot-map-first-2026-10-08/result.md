@@ -15,8 +15,8 @@
 
 X: `projects/rosy-platform/2026-10-08--203351--robot-map-first--8a512d/evidence/corrected/navigation-stage/`에 정상·지연·연결 끊김·정보 없음·안전 정지 등의 합성 CORE 캡처와 `navigation-stage-matrix.json`이 있다. 정상 이미지 SHA-256:
 
-- `operator-console-navigation-390x844.png`: `7016B21A3B815D116F51B8E1C7C8F9D6B08EA20261EBAD26CB141256AA451EF7`
-- `operator-console-navigation-1366x768.png`: `0D94417212B8A8B7C5B4363A77015C9ACA22414A86B3CFFA6C73DBCBC8A10CE2`
+- SHA-256 `operator-console-navigation-390x844.png`: `7016B21A3B815D116F51B8E1C7C8F9D6B08EA20261EBAD26CB141256AA451EF7`
+- SHA-256 `operator-console-navigation-1366x768.png`: `0D94417212B8A8B7C5B4363A77015C9ACA22414A86B3CFFA6C73DBCBC8A10CE2`
 
 실제 FastAPI 자산을 Chromium에서 띄운 지도 상태·폭 전환 검사는 **1 passed**, 패키지 검사는 **19 passed**. `known_failures.py`는 두 로그 모두 **0 NEW**, 정상 캡처 두 건의 브라우저 오류는 0이다. 실행 기록은 같은 X: 세션의 `logs/corrected.txt`, `logs/package.txt`다. 지도 캔버스가 작업 버튼 뒤, 레이어 버튼 앞에 오는지와 데스크톱 지도 높이가 300px 이상인지 브라우저 단언으로 고정했다.
 

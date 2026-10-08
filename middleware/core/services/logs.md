@@ -839,3 +839,24 @@
 - gate 변화: 없음(SOURCE, 동작 없음)
 - 결정: `SIZE_UNITS`에 `recovery/junction`, 파일은 가장 안쪽 단위로 셈. recovery 3040→2093, junction 947. critic 독립 재판정 APPROVE WITH CHANGES(문구 반영). 2987 판정의 교차로 증가 금지는 이 이동으로 끝남
 - 교훈: 없음
+
+## 2026-10-08 · 070959eea · fix(core): 굽이 통과 중 본 교차로를 교차로 게이트로 넘김
+- 변경: lap SIM 원인 A(11/20). `recovery/junction/bend.py` 호 끝에서 목격을 지우지 않고(진입 yaw만), 통과가 끝날 때 넘겨받은 뒤 시작된 목격 묶음의 마지막 목격이 같은 odom 실행에 잰 가로선이 아직 앞이면(`approach.py` `_line_ahead`) 목격을 남겨 `waiting`(HOLD), 정지 진입 방향은 굽이 나가는 방향. `gate.py`는 odom이 그 선을 지날 때까지 그 목격을 감지로 셈(`_junction_held`, 낡은 odom 한 틱은 유지, epoch 바뀌면 끝). 리뷰 반영 6ef90b792·7cb2d775a. D-507 보충 8항
+- 증거: 수정 전 새 시험 4개 실패(굽이 뒤 `idle`, 다음 회전이 keeper를 따름), 수정 뒤 모델 PC 스냅숏 288 passed(교차로·굽이·arc·API·Fleet bend), 넓은 묶음 526 passed. 독립 Safety-Review code-reviewer(opus) APPROVE WITH NOTES. SIM은 아래 결과 행
+- gate 변화: SOURCE. SIM(모델 PC) 결과 기록 전
+- 결정: 크기 junction 959→978(판정 959+150 안)
+- 교훈: 한 칸을 쥔 기동이 끝날 때 그 기동 중 본 다음 근거를 지우면 다음 지시가 그 근거 없이 시작된다. 끝낼 때 넘길 것과 버릴 것을 측정(odom 앞인지)으로 가른다
+
+## 2026-10-08 · 7cb2d775a · test(sim): 굽이→교차로 넘겨주기 SIM (모델 PC)
+- 변경: `docs/validation/bend-junction-handoff-sim-2026-10-08` (lap 하네스, 도메인 89·`rosy_handoff`·포트 8288/8289)
+- 증거: 12회. SW 회전 끝 10/11(lap SIM 전 0/16), 넘겨주기 10/11, trip 완료 0/12. 원인 A·B·D로 끝난 run 0. 넘겨주지 못한 1회는 굽이 중 목격이 없던 run(모서리 오독, `fix/junction-corner-hold` 몫). 나머지 정지는 모두 SW 회전 뒤 회전교차로 둘레(D-520 호 주행 꺼짐)
+- gate 변화: ROS-SIM 기록(부분). DEVICE 열림
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-10-08 · 8fa0df8f6 · fix(core): 기대 교차로 앞 keeper 모서리 회전은 HOLD junction_corner_hold
+- 변경: lap SIM 원인 A. 기대 창이 있는 지도 지시가 `armed` 이고 감지가 없을 때 `line/keep_debug` `strategy` 가 `corner_left`·`corner_right`(2 s 래치)이고 기대 가로선이 0.45 m + tol 안이면 keeper 의 모서리 회전 대신 HOLD(461259067, 5ec173670). 창을 잴 수 없으면 HOLD. 그 정지 중 지시가 만료되면 풀지 않고 새 지시나 모드 변경까지 HOLD(8fa0df8f6, fail closed). API Ref v1.148
+- 증거: 모델 PC 스냅숏 영향 묶음 423 passed, 교차로·Fleet d507 130 passed. 새 만료·목격 테스트는 수정 전 gate.py 에서 실패. 독립 Safety-Review code-reviewer(opus) APPROVE WITH NOTES
+- gate 변화: SOURCE. SIM은 lane-trip-lap-sim2 행
+- 결정: 없음
+- 교훈: 정지 사유를 새로 만들면 그 정지가 만료·재전송·모드 변경 중 어디서 풀리는지와 관제가 그 사유로 무엇을 하는지를 같이 정한다. 아니면 조용한 정지(stall 20 s)나 만료 뒤 풀림이 된다

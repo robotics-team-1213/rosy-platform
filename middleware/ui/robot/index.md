@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · uiux(robot): 지도 격자와 경로의 실제 축척 보존
+- 2026-10-08 · uncommitted · uiux(robot): 320px 지도와 상태 가독성
 - 2026-10-08 · uncommitted · uiux(robot): 지도 레이어를 지도 아래로 배치
 - 2026-10-08 · 5ee382a0f · API Ref v1.147 충돌 정리
 - 2026-10-08 · 098e8d522 · 현재 main과 내비게이션 UI 결합 검증
-- 2026-10-08 · 9318050f6 · 위치 불확실 중 주행 보고 보존
-- 2026-10-08 · uncommitted · uiux(robot): 안전 정지의 지도 목표 차단
