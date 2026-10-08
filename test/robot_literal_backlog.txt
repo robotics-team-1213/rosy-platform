@@ -59,6 +59,7 @@ middleware/perception/tools/gz/rig_reload_navigation.py
 middleware/perception/tools/gz/run_calibration_spaces.py
 middleware/perception/tools/gz/track_run_monitor.py
 middleware/core/services/core_features/line_follow/clearance.py
+middleware/core/services/core_features/line_follow/arc/lane_arc.py
 integrations/simulation/gazebo/config/simulation_actuation.yaml
 integrations/simulation/gazebo/config/worlds.yaml
 integrations/simulation/gazebo/launch/gz_multi.launch.py
