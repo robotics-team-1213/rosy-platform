@@ -1334,3 +1334,10 @@
 - 변경: route 모드의 유효 프레임마다 Gazebo 조건을 재검사하고, 깨지면 follower를 폐기한다. 설정을 복구해도 노드 재시작 전에는 되살리지 않는다.
 - 증거: 재현 테스트 수정 전 1 failed, 수정 후 관련 11 passed·신규 실패 0. 모델 PC ROS 노드에서 Gazebo follower가 `PINKY` 전환 프레임 뒤 `NoneType`이 되고 재설정 후에도 유지됐다. [기록](../../docs/validation/lane-route-prototype-lifetime-2026-10-08/result.md).
 - gate 변화: 실행 중 조건 상실의 관측 폐기만 확인. 설정값은 하드웨어 증명이 아니며 운영 차선 추종은 HOLD.
+
+## 2026-10-08 · uncommitted · feat(control): 녹화 프레임에 지면·차선 근거 보존
+
+- 원인: 10/6 원본 3,129프레임의 R0 재생은 모두 STOP이었고 공칭 또는 미승인 후보 지면을 사용했다. Pilot은 차선 관측 진단을 담지만 스냅샷은 담지 않았으며, 둘 다 카메라 보정 상태가 빠져 있었다.
+- 변경: Pilot·스냅샷에 `camera/calibration/status`, 스냅샷에 `line/keep_debug`를 저장한다. 직접 MCAP 추출과 MP4 sidecar는 카메라 상태를 과거 방향 2.5초 이내에서만 연결한다. 스냅샷 side-topic 예산은 프레임당 8 KB로 조정했다.
+- 증거: 감지 전체 2,821 passed·110 skipped·NEW 0, 녹화·변환 집중 154 passed. 학습 전체의 Bash 선택 실패 5개는 같은 `main`에서도 재현했고 Git Bash를 앞에 둔 해당 파일 11 passed. [검증 기록](../../docs/validation/lane-ground-recording-2026-10-08/result.md).
+- gate 변화: SOURCE/LOCAL 증거만 추가. `camera_detect_node`의 보정 상태와 `line_observer_node`의 실제 투영은 서로 다른 출처다. 사람 승인 정답·실물 보정·ROS 폐루프·실물 주행은 HOLD.

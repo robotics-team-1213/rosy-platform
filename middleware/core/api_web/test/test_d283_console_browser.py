@@ -39,11 +39,13 @@ def test_pilot_map_link_opens_real_console_with_same_tab_session(tmp_path, width
 
         def serve(route):
             request = route.request
-            path = urlsplit(request.url).path
+            parsed = urlsplit(request.url)
+            path = parsed.path
             authorization = request.headers.get("authorization", "")
             if path == "/api/v1/ui/surfaces/console":
                 console_auth.append(authorization)
-            response = client.get(path, headers={"Authorization": authorization})
+            response = client.get(path + (f"?{parsed.query}" if parsed.query else ""),
+                                  headers={"Authorization": authorization})
             route.fulfill(status=response.status_code, headers={
                 "content-type": response.headers.get("content-type", "application/octet-stream"),
                 "cache-control": "no-store",
@@ -56,7 +58,10 @@ def test_pilot_map_link_opens_real_console_with_same_tab_session(tmp_path, width
         page.goto("http://rosy.test/pilot")
         page.locator("ui-topbar [data-goto='/console']").click()
         page.wait_for_url("**/console")
-        page.locator('[data-panel="console.map"] .surface-map-stage').wait_for(timeout=20_000)
+        page.locator('[data-panel="console.map"] .surface-map-stage').wait_for(state="attached", timeout=20_000)
+        page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
+        assert "지도 데이터가 아직 없습니다" in page.locator('[data-panel="console.map"] ui-empty').inner_text()
+        assert "연결을 확인" not in page.locator('[data-panel="console.map"] ui-empty').inner_text()
         assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == token
         assert f"Bearer {token}" in console_auth
         assert page.locator("#shell-role").inner_text() == "운용자"
