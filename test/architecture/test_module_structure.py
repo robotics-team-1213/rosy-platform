@@ -1030,10 +1030,9 @@ SIZE_VERDICTS = {
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
         1182,
-        "accept: re-judged at 1182 on 2026-10-09. D-483 draws the first 16 digits of the "
-        "pair-request TLS CA on this same LCD card so a first-contact tablet can compare them. "
-        "Zero growth allowance remains. "
-        "Previously re-judged at 1177 on 2026-10-08 for D-472 4/5: the identity blink's SIGKILL reap, "
+        "accept: re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "
+        "the first 16 digits of the validated TLS CA fingerprint for tablet comparison; "
+        "zero growth allowance remains. Previously re-judged at 1177 on 2026-10-08 for D-472 4/5: the identity blink's SIGKILL reap, "
         "hard 3.5 s cut and immediate refusal answer stay with the one process that spawns "
         "lamp_pattern; IDENTIFY_OVER and the identify age constants may later move to "
         "core_common.face_screen; zero growth allowance remains. "

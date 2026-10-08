@@ -1212,3 +1212,15 @@
 - 변경: Console과 기존 Dashboard에서 맵핑 세션 수락을 실제 SLAM 실행·지도 갱신과 구별했다. 데스크톱 현장 설정 카드가 같은 행 높이로 늘어나지 않게 했다.
 - 증거: [맵핑 세션 화면 검증](../../../docs/validation/uiux-robot-slam-truth-2026-10-09/result.md). 320·390·1366px Console, 390·1366px Dashboard 캡처; 관련 브라우저 3 passed, `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 표시 근거 보강. 설치 이미지·실제 SLAM·DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(robot): Pilot 인계 뒤 빈 지도 안내
+
+- 변경: 지도 데이터가 없을 때 현재 지도를 볼 수 있다고 단정하지 않도록 Robot Console의 비하드웨어 모드 안내를 바로잡았다.
+- 증거: [Pilot→Robot Console 연속 화면](../../../docs/validation/uiux-pilot-console-continuity-2026-10-09/result.md). 390·2000px 실제 CORE 자산 캡처, 관련 브라우저 4 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 빈 지도 설명 근거 보강. 지도·SLAM 실제 실행과 DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(robot): 마지막 계획 경로의 불확실성 표시
+
+- 변경: 마지막 수신 계획을 화살표 없는 점선으로 그리고 경과 시간과 현재 목표 일치 미확인을 Console에 보인다. 좁은 화면에서는 상태 문구를 줄바꿈한다.
+- 증거: [마지막 계획 경로 화면](../../../docs/validation/uiux-robot-last-plan-2026-10-09/result.md). 320·390·1366px CORE Console 캡처; 브라우저 1 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 계획 경로 표시 근거 보강. 현재 목표 연동·실제 추종, 설치본·DEVICE/FIELD·전체 G2/G3는 HOLD.
