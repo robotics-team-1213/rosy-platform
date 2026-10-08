@@ -78,7 +78,9 @@ class HttpLaneJunction:
         line = (await self._client(robot_id).state()).get("line_follow") or {}
         junction = line.get("junction")
         # D-507 3: the line-follow reason beside it, shown when the trip stops at an unexpected junction
-        return {**junction, "line_reason": line.get("reason")} if isinstance(junction, dict) else None
+        # D-520 2: ``arc`` is CORE's ``line_follow.arc`` record (arc_seq, from_place_id, state, ...)
+        return ({**junction, "line_reason": line.get("reason"), "arc": line.get("arc")}
+                if isinstance(junction, dict) else None)
 
     async def hold(self, robot_id: str) -> dict:
         # ponytail: CORE POST /line-follow/hold extends a hold-to-run session (D-344 8, it keeps the
@@ -328,6 +330,11 @@ def _curve_offset_m(arc, s_to: float, remaining: float, pose: dict) -> float:
     return offset * sum(abs(wrap(b - a)) for a, b in zip(headings, headings[1:]))
 
 
+def arc_newer(seq, base: Optional[int]) -> bool:
+    """D-520 2: CORE opened arc ``seq`` after the one numbered ``base`` (None: none seen)."""
+    return isinstance(seq, int) and not isinstance(seq, bool) and (base is None or seq > base)
+
+
 def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
     if pose is None:
         return None
@@ -350,6 +357,8 @@ class LiveTrip:
         #: The last instruction CORE accepted: index, action, place, seq, at.
         self.sent: Optional[dict] = None
         self.first_seq: Optional[int] = None
+        #: D-520 2: CORE's last ``arc_seq`` at our first send; a newer arc is one of this trip's.
+        self.arc_base: Optional[int] = None
         #: Our held replan stop (seq) that the confirmed plan's action may replace while executing.
         self.replaceable: Optional[int] = None
         self.last_goal: Optional[tuple[float, float]] = None

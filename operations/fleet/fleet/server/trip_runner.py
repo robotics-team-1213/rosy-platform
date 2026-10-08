@@ -28,8 +28,8 @@ from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import (advance_m, arc_id, exit_segment, lane_action, plan_again, replan_hold, route_key,
                                    theta, turn_target, unsupported)
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
-                                     OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view,
-                                     record_bend_candidate)
+                                     OPEN, LiveTrip, TripError, arc_newer, junction_fields, pose_diagnostics,
+                                     pose_view, record_bend_candidate)
 from fleet.server.lane_traffic import TrafficService
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import LAP_RETRIES, LAP_RETRY_S, carry_on, lap_arcs, lap_due, lap_retry_due  # noqa: F401
@@ -42,6 +42,9 @@ LOCALIZED = "LOCALIZED"
 LINE_MODES = ("CAMERA_LINE",)
 #: D-495 1: CORE is executing a junction manoeuvre; a new instruction would abort it.
 MANOEUVRE = ("turning", "advancing", "reacquiring")
+#: D-520 2: CORE's ``line_follow.arc.reason`` for an arc that ended with no instruction armed
+#: (event ``nav.lane_arc_end_unarmed``); CORE then follows the lane as today.
+ARC_END_UNARMED = "lane_arc_end_unarmed"
 #: D-490 5: a plan may be started within this long on the same map version.
 PLAN_TTL_S = 30.0
 #: CORE takes ``stop_after_m`` in [0, 2] (D-494 4).
@@ -347,10 +350,21 @@ class TripRunner:
         try:
             if live.arc(live.view["segment_index"]).drive_mode == "lane":
                 live.junction = await self._call(self._junction.junction_state(robot_id)) or {}
-                sent = live.sent
-                if sent is not None and live.junction.get("seq") == sent["seq"] and \
-                        live.junction.get("state") in (*MANOEUVRE, "executing"):
-                    sent["carried"] = True  # CORE took it on: never sent again
+                sent, arc = live.sent, live.junction.get("arc")
+                live.junction["arc"] = arc = arc if isinstance(arc, dict) else {}
+                if sent is not None and (live.junction.get("seq") == sent["seq"] and live.junction.get("state") in (
+                        *MANOEUVRE, "executing") or (arc.get("from_place_id") == sent["place"]
+                                                     and arc_newer(arc.get("arc_seq"), sent.get("arc_before")))):
+                    sent["carried"] = True  # CORE took it on (D-520 2: or opened its arc): never sent again
+                if live.first_seq is not None and arc_newer(arc.get("arc_seq"), live.arc_base):
+                    if arc.get("state") == "stopped":  # D-520 2: CORE holds and never reopens the arc
+                        await self._stop(live, "stopped", "lane_arc", {
+                            "arc_reason": arc.get("reason"), "arc_place": arc.get("from_place_id"),
+                            "arc_end_place": arc.get("end_place_id")})
+                        return
+                    if arc.get("reason") == ARC_END_UNARMED:  # CORE follows on: shown, not an end
+                        live.view["detail"]["arc_end_unarmed"] = {
+                            "end_place_id": arc.get("end_place_id"), "travelled_m": arc.get("travelled_m")}
             else:  # a free segment: no stale lane ``waiting`` may end it
                 live.junction = {}
             if not live.open:
@@ -488,12 +502,12 @@ class TripRunner:
         await self._after_send(live)
         if reply.get("accepted") is False:  # CORE aborted a manoeuvre instead: an operator decides
             raise _JunctionAborted(reply.get("junction_seq"))
-        seq = reply.get("junction_seq")
+        seq, arc_before = reply.get("junction_seq"), live.junction.get("arc", {}).get("arc_seq")
         live.replaceable = None
         live.sent = {"index": index, "action": action, "place": place, "seq": seq, "at": now,
-                     "done": bool(reply.get("already_done"))}
+                     "done": bool(reply.get("already_done")), "arc_before": arc_before}
         if live.first_seq is None:
-            live.first_seq = seq if isinstance(seq, int) else 0
+            live.first_seq, live.arc_base = (seq if isinstance(seq, int) else 0), arc_before
 
     async def _step_free(self, live: LiveTrip, index: int, s: float) -> None:
         segment = live.segments[index]
