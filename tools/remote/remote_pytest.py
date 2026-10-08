@@ -33,27 +33,31 @@ from pathlib import Path
 
 DEFAULT_HOSTS = "rosy@100.98.162.71 ai@100.108.76.123"
 PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
-SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5"]
+SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+       "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
 PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider"]
 CI = ".github/workflows/ci.yml"
 DEVICE_REQ = "deploy/robot/pinky_pro/image/device-python-requirements.txt"
 CRYPTO_REQ = "deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt"
 FLEET_REQ = "deploy/site/requirements-fleet.txt"
 TAIL_LINES = 25
+# Seconds before one pytest invocation counts as hung (a failure).
+PYTEST_TIMEOUT = int(os.environ.get("ROSY_TEST_TIMEOUT", "5400"))
+STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}  # each includes a 600 s lock wait
 
 # Fetch public main, unpack the bundle (stdin), check the commit out. Exit 3 = the
 # bundle's prerequisite commit is missing there; the caller resends a full bundle.
 SHIP = r"""set -euo pipefail
 R=~/rosy-test; NAME=$1; SHA=$2
 mkdir -p "$R/runs"
-exec 8>"$R/repo.lock"; flock 8  # concurrent runs fetching into one repo race on ref locks
+trap 'rm -f "$R/runs/$NAME.bundle"' EXIT
+exec 8>"$R/repo.lock"; flock -w 600 8  # concurrent runs fetching into one repo race on ref locks
 [ -d "$R/repo/.git" ] || git clone -q --no-checkout "$3" "$R/repo"
 cd "$R/repo"
 git fetch -q "$3" +refs/heads/main:refs/remotes/origin/main || echo "[remote] fetching public main failed" >&2
 cat > "$R/runs/$NAME.bundle"
-git bundle verify -q "$R/runs/$NAME.bundle" >/dev/null 2>&1 || { rm -f "$R/runs/$NAME.bundle"; exit 3; }
+git bundle verify -q "$R/runs/$NAME.bundle" >/dev/null 2>&1 || exit 3
 git fetch -q "$R/runs/$NAME.bundle" "+refs/remote-pytest/$NAME:refs/remote-pytest/$NAME"
-rm -f "$R/runs/$NAME.bundle"
 git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 """
 
@@ -68,7 +72,7 @@ git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 # (imports). The replaced venv stays as venv.old-<time>; prune those by hand.
 VENV = r"""set -euo pipefail
 R=~/rosy-test; V=$R/venv; N=$R/venv.new; DEPS=$2; cd "$R/runs/$1"; shift 2
-exec 9>"$R/venv.lock"; flock 9
+exec 9>"$R/venv.lock"; flock -w 600 9
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] && exit 0
 echo "[remote] building $N (CI install inputs changed)"
 rm -rf "$N"
@@ -96,7 +100,10 @@ echo "$DEPS" > "$N/.deps-sha"
 [ "${ROSY_VENV_NO_SWAP:-}" = 1 ] && exit 0
 grep -rlI --exclude-dir=__pycache__ "$N" "$N/bin" | xargs -r sed -i "s|$N|$V|g"
 pat="rosy-test/ven""v/bin/python"  # split so this script's own command line never matches
+tries=0
 while pgrep -f "$pat" | xargs -r -n1 ps -o etimes= -p | awk '$1 < 90 {young = 1} END {exit !young}'; do
+  tries=$((tries + 1))
+  [ "$tries" -le 40 ] || { echo "[remote] runs kept starting for 10 min; $V left as it was" >&2; exit 1; }
   echo "[remote] a run started under 90 s ago uses $V; waiting to swap"; sleep 15
 done
 [ -e "$V" ] && mv "$V" "$R/venv.old-$(date +%Y%m%d-%H%M%S)"
@@ -106,9 +113,9 @@ echo "[remote] swapped in the new $V"
 
 # ponytail: the venv lock is taken per step, so a run whose deps differ from a
 # concurrent run's can rebuild the venv between our install and our pytest.
-PYTEST = r"""set -uo pipefail
+PYTEST = r"""set -euo pipefail
 R=~/rosy-test; V=$R/venv; cd "$R/runs/$1"; shift
-exec 9>"$R/venv.lock"; flock -s 9
+exec 9>"$R/venv.lock"; flock -s -w 600 9
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 exec systemd-run --user --scope -q -p MemoryMax=6G -- "$V/bin/python" -m pytest "$@" 2>&1
 """
@@ -125,11 +132,16 @@ def git(repo: Path, *args: str) -> str:
                           text=True, encoding="utf-8").stdout.strip()
 
 
-def remote(host: str, script: str, *args: str, **kw) -> subprocess.CompletedProcess:
+def remote(host: str, script: str, *args: str, timeout: float, **kw) -> subprocess.CompletedProcess:
+    """Run script on host; a timeout is a failed step (exit 124), never a pass."""
     command = "bash -c " + shlex.quote(script) + " remote " + " ".join(map(shlex.quote, args))
     if "input" not in kw:
         kw["stdin"] = subprocess.DEVNULL
-    return subprocess.run([*SSH, host, command], **kw)
+    try:
+        return subprocess.run([*SSH, host, command], timeout=timeout, **kw)
+    except subprocess.TimeoutExpired:
+        print(f"[remote-pytest] {host}: step timed out after {timeout:.0f} s", file=sys.stderr, flush=True)
+        return subprocess.CompletedProcess([], 124, b"", b"")
 
 
 def reachable(host: str) -> bool:
@@ -174,11 +186,12 @@ def ship(repo: Path, host: str, sha: str, name: str) -> None:
         for base in (bundle_base(repo, sha), None):
             data = subprocess.run(["git", "-C", str(repo), "bundle", "create", "-", ref,
                                    *([f"^{base}"] if base else [])], capture_output=True, check=True).stdout
-            result = remote(host, SHIP, name, sha, PUBLIC, input=data, capture_output=True)
+            result = remote(host, SHIP, name, sha, PUBLIC, input=data, capture_output=True,
+                            timeout=STEP_TIMEOUT["ship"])
             if result.returncode == 0:
                 return
             if result.returncode != 3 or not base:
-                raise SystemExit(f"[remote-pytest] shipping {sha[:10]} to {host} failed:\n"
+                raise SystemExit(f"[remote-pytest] shipping {sha[:10]} to {host} failed (exit {result.returncode}):\n"
                                  + result.stderr.decode(errors="replace"))
             print(f"[remote-pytest] {host} lacks {base[:10]}; sending the full history", flush=True)
     finally:
@@ -188,16 +201,21 @@ def ship(repo: Path, host: str, sha: str, name: str) -> None:
 def capture(command: list[str], log: Path, cwd: Path | None = None) -> int:
     """Run, write all output to log, print the tail; return the exit code."""
     log.parent.mkdir(parents=True, exist_ok=True)
-    proc = subprocess.run(command, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, env={**os.environ, "PYTHONUTF8": "1"})
-    text = proc.stdout.decode("utf-8", errors="replace")
+    try:
+        proc = subprocess.run(command, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, env={**os.environ, "PYTHONUTF8": "1"},
+                              timeout=PYTEST_TIMEOUT)
+        code, out = proc.returncode, proc.stdout
+    except subprocess.TimeoutExpired as exc:
+        code, out = 124, (exc.stdout or b"") + f"\n[remote-pytest] timed out after {PYTEST_TIMEOUT} s\n".encode()
+    text = out.decode("utf-8", errors="replace")
     log.write_text(text, encoding="utf-8")
     print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
-    return proc.returncode
+    return code
 
 
 def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo: Path | None = None,
-        local: bool = False, label: str | None = None) -> list[int]:
+        local: bool = False, label: str | None = None, require_host: bool = False) -> list[int]:
     """Run each pytest invocation for commit sha; one exit code per invocation."""
     repo = Path(git(repo or Path.cwd(), "rev-parse", "--show-toplevel"))
     sha = git(repo, "rev-parse", f"{sha}^{{commit}}")
@@ -205,6 +223,9 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
         return []
     host = None if local else pick_host()
     if host is None:
+        if require_host and not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
+            raise SystemExit("[remote-pytest] no test host reachable; a local run would test the working"
+                             " tree, not the commit. Set ROSY_TEST_LOCAL=1 to run here anyway.")
         if not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
             print("[remote-pytest] WARNING: no test host reachable; running pytest on this machine"
                   " (working tree, not only the commit)", file=sys.stderr, flush=True)
@@ -212,10 +233,10 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
                 for inv, log in zip(invocations, logs)]
     name = f"{label or sha[:10]}-{secrets.token_hex(3)}"
     print(f"[remote-pytest] {sha[:10]} on {host} (~/rosy-test/runs/{name})", flush=True)
-    ship(repo, host, sha, name)
     try:
+        ship(repo, host, sha, name)
         deps_sha, dirs = deps(repo, sha)
-        if remote(host, VENV, name, deps_sha, *dirs).returncode != 0:
+        if remote(host, VENV, name, deps_sha, *dirs, timeout=STEP_TIMEOUT["venv"]).returncode != 0:
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
         codes = []
         for inv, log in zip(invocations, logs):
@@ -224,7 +245,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
                                   + " ".join(map(shlex.quote, [name, *inv, *PYTEST_TAIL]))], log))
         return codes
     finally:
-        remote(host, CLEANUP, name, capture_output=True)
+        remote(host, CLEANUP, name, capture_output=True, timeout=STEP_TIMEOUT["cleanup"])
 
 
 def affected_invocations(selection: dict, skip: set[str]) -> list[list[str]]:
@@ -234,7 +255,8 @@ def affected_invocations(selection: dict, skip: set[str]) -> list[list[str]]:
 
 
 def worst(codes: list[int]) -> int:
-    return max((0 if c == 5 else c for c in codes), default=0)
+    """Any failure is nonzero: 5 (nothing collected) passes, a signal (negative code) fails."""
+    return max((0 if c == 5 else 1 if c < 0 else c for c in codes), default=0)
 
 
 def default_log_dir(sha: str) -> Path:
@@ -250,6 +272,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--affected-json", help="`rosy_harness.py affected --json` output file, or -")
     parser.add_argument("--skip", action="append", default=[], help="drop this path from the affected set")
     parser.add_argument("--local", action="store_true", help="run here (same as ROSY_TEST_LOCAL=1)")
+    parser.add_argument("--require-host", action="store_true",
+                        help="fail instead of running locally when no host answers (ROSY_TEST_LOCAL=1 overrides)")
     parser.add_argument("pytest_args", nargs="*", help="one pytest invocation (after --)")
     args = parser.parse_args(argv)
     invocations = [args.pytest_args] if args.pytest_args else []
@@ -259,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     sha = git(Path.cwd(), "rev-parse", f"{args.sha}^{{commit}}")
     log_dir = args.log_dir or default_log_dir(sha)
     logs = [log_dir / f"run-{i}.txt" for i in range(1, len(invocations) + 1)]
-    codes = run(invocations, logs, sha, local=args.local)
+    codes = run(invocations, logs, sha, local=args.local, require_host=args.require_host)
     for inv, code, log in zip(invocations, codes, logs):
         print(f"[remote-pytest] exit {code}: {' '.join(inv)} ({log})")
     return worst(codes)

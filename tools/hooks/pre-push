@@ -12,12 +12,20 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 # Git passes `<remote> <url>` and `<local ref> <local sha> <remote ref> <remote sha>`
-# lines on stdin. Test the first local sha being pushed (not a deletion), else HEAD.
-# Without the two arguments (a manual `git show ...:pre-push | bash`) stdin is the script.
+# lines on stdin. The gate tests that one pushed commit (deletions skipped); a push of
+# several different commits is refused. Without the two arguments (a manual
+# `git show ...:pre-push | bash`) stdin is the script, and HEAD is tested.
 PUSH_SHA=""
 if [ $# -ge 2 ]; then
   while read -r _ local_sha _ _; do
-    case "$local_sha" in *[!0]*) PUSH_SHA="${PUSH_SHA:-$local_sha}" ;; esac
+    case "$local_sha" in
+      *[!0]*)
+        if [ -n "$PUSH_SHA" ] && [ "$PUSH_SHA" != "$local_sha" ]; then
+          echo "[pre-push] this push carries several commits ($PUSH_SHA, $local_sha); the gate tests one. Push one ref at a time." >&2
+          exit 1
+        fi
+        PUSH_SHA="$local_sha" ;;
+    esac
   done
 fi
 PUSH_SHA="${PUSH_SHA:-$(git rev-parse HEAD)}"
@@ -107,13 +115,15 @@ FAST_SUITES=(
 # only the guards and the suites mapped from the changed files (owning module,
 # direct reverse dependents, referencing tests) run: the full suite runs on
 # GitHub Actions runners (ci.yml), never here.
-AFFECTED_BASE="$(git merge-base HEAD origin/main 2>/dev/null || echo main)"
+AFFECTED_BASE="$(git merge-base "$PUSH_SHA" origin/main 2>/dev/null || echo main)"
 # --skip: the fast suites (most of the guard set) run first; do not run them twice.
 AFFECTED_SKIP=()
 for suite in "${FAST_SUITES[@]}"; do AFFECTED_SKIP+=(--skip "$suite"); done
 echo "[pre-push] fast contract suites, then affected tier (D-436, base ${AFFECTED_BASE}), commit ${PUSH_SHA:0:10}"
-"$PY" tools/harness/rosy_harness.py affected --base "$AFFECTED_BASE" --json \
-  | "$PY" tools/remote/remote_pytest.py --sha "$PUSH_SHA" --affected-json - "${AFFECTED_SKIP[@]}" \
-      -- "${FAST_SUITES[@]}"
+# --require-host: a local run would test this working tree, not the pushed commit, so no
+# reachable test host fails the push unless ROSY_TEST_LOCAL=1 is set on purpose.
+"$PY" tools/harness/rosy_harness.py affected --base "$AFFECTED_BASE" --head "$PUSH_SHA" --json \
+  | "$PY" tools/remote/remote_pytest.py --sha "$PUSH_SHA" --require-host --affected-json - \
+      "${AFFECTED_SKIP[@]}" -- "${FAST_SUITES[@]}"
 
 echo "[pre-push] fast gate green"
