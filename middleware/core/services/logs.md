@@ -823,3 +823,10 @@
 - 증거: 모델 PC 수정 전 `test_config_flag_is_a_boolean`·`test_the_stop_gap_is_from_max_linear_not_cruise` 실패, 수정 뒤 대상 241 통과. services·gateway·test/ 전체는 main 과 같은 실패 목록(+ 병합 직후 생성 문서 낡음).
 - gate 변화: SOURCE. 독립 Safety-Review 재검토 전.
 - 결정: D-517 4항 독립 리뷰 MINOR 4·5. core_features 12922 (판정 12772+150 안).
+
+## 2026-10-08 · 854d2de64 · refactor(core): 교차로 믹스인을 recovery/junction/ 하위 패키지로
+- 변경: `recovery/junction.py`·`junction_approach.py`·`junction_bend.py`를 `git mv`로 `recovery/junction/gate.py`·`approach.py`·`bend.py`. `__init__.py`는 설명 문자열뿐(shim 없음). import는 `manager.py`, `core_api_web/api/deps.py`, 시험 셋에서 고침. 동작·API·설정 키 변경 없음. 분리 계획 2026-10-08 후속 절.
+- 증거: `test_line_junction.py`·`test_junction_approach.py`·`test_junction_bend.py`·`test_junction_turn_site_basis.py`·gateway `test_line_junction_api.py` 등 207 passed, known_failures 0 new. `test_module_structure.py` 34 passed.
+- gate 변화: 없음(SOURCE, 동작 없음)
+- 결정: `SIZE_UNITS`에 `recovery/junction`, 파일은 가장 안쪽 단위로 셈. recovery 3040→2093, junction 947. critic 독립 재판정 APPROVE WITH CHANGES(문구 반영). 2987 판정의 교차로 증가 금지는 이 이동으로 끝남
+- 교훈: 없음

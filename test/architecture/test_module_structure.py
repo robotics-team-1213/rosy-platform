@@ -77,11 +77,13 @@ OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception toolin
 HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: P6 subpackages counted as their own size unit (path relative to the colcon root): their lines
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
-#: docs/plans/2026-10-07-line-follow-recovery-subpackage.md
+#: docs/plans/2026-10-07-line-follow-recovery-subpackage.md (incl. its 2026-10-08 junction section),
+#: docs/plans/2026-10-08-line-follow-arc-subpackage.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
-              "core/services/core_features/line_follow/recovery/junction")
+              "core/services/core_features/line_follow/recovery/junction",
+              "core/services/core_features/line_follow/arc")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -524,8 +526,13 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_338,
-        "accept: independently re-judged at 1338 on 2026-10-08 (critic agent, read-only) for "
+        1_340,
+        "accept: independently re-judged at 1340 (2026-10-08, read-only critic agent) for D-520 step 1: "
+        "+2 lines, one re-export import and the optional LineFollowStatus.arc field (default None). The "
+        "arc record models live in core_common/protocol/line_arc.py and the field cannot move because "
+        "LineFollowStatus is defined here. Additive, no envelope version change. Zero-growth allowance "
+        "remains. "
+        "Previously independently re-judged at 1338 on 2026-10-08 (critic agent, read-only) for "
         "D-507 7: one optional LineFollowStatus.lane_return_containment Literal['contained', "
         "'unknown'] field (default None) with its two-line comment beside the D-407 stuck and D-494 "
         "junction fields; written only by line_follow/recovery/lane_return_decision.py, documented in "
@@ -693,30 +700,52 @@ SIZE_VERDICTS = {
         "accept: sim-only read-only viewer server (HTTP handler + ROS subscriptions); the pure logic already lives in live_view_model.py and the page in lane_live_view.html, covered by test_lane_live_view*.py and test_live_view_model.py (X5)",
     ),
     "core/services/core_features/line_follow/recovery": (
-        2_093,
-        "split: re-judged at 2093 on 2026-10-08 (critic agent, read-only) in refactor/junction-subpackage, "
+        2_098,
+        "split: re-judged at 2093, 2098 after merging main (D-520 motion_admit.py +5), on 2026-10-08 (critic agent, read-only) in refactor/junction-subpackage, "
         "the binding follow-up of the 2987 verdict (docs/plans/2026-10-07-line-follow-recovery-subpackage.md, "
         "2026-10-08 section): junction.py, junction_approach.py and junction_bend.py moved with git mv into "
         "recovery/junction/ (gate.py, approach.py, bend.py), its own SIZE_UNITS entry; 3040 before the move = "
-        "2093 + 947. Pure move, no shim, no behaviour change. What stays is D-407 stuck, D-468 lane return, "
+        "2093 + 947; merging main brought D-520's motion_admit.py +5 (2098) and junction.py +12. Pure move, no shim, no behaviour change. What stays is D-407 stuck, D-468 lane return, "
         "D-476 bridge and the shared D-507 6 motion_admit.py (lane_bridge and lane_return_decision use it); "
         "every file below 600 (largest stuck_recovery.py 573); all LineFollowManager mixins under the single "
         "manager lock and generation, no own lock, thread, store or publisher; CORE CommandManager stays the "
-        "final cmd_vel publisher. The +150 allowance is measured from 2093.",
+        "final cmd_vel publisher. The +150 allowance is measured from 2098.",
     ),
     "core/services/core_features/line_follow/recovery/junction": (
-        947,
-        "split: judged at 947 on 2026-10-08 (critic agent, read-only) when it left recovery "
+        959,
+        "split: judged at 947 on 2026-10-08 (critic agent, read-only, APPROVE WITH CHANGES applied) when it left recovery "
         "(docs/plans/2026-10-07-line-follow-recovery-subpackage.md, 2026-10-08 section): gate.py 530 "
         "(D-494 4 / D-495 instruction gate and bounded turn), approach.py 207 (D-507 2-4 window and pivot "
-        "approach), bend.py 208 (D-507 addendum map bend pass), __init__.py 2. Mixins of LineFollowManager "
+        "approach), bend.py 208 (D-507 addendum map bend pass), __init__.py 2; merging main brought D-520's "
+        "gate.py +12 (542, arc refusals), so 959. Mixins of LineFollowManager "
         "under its one lock and generation; motion admission stays recovery/motion_admit.py. Growth inside "
-        "+150 is open again (the 2987 verdict's block ends with this move); past 1097 re-judge, and a file "
-        "nearing 600 (gate.py) splits by state (e.g. the turn/approach maneuver out of the gate) first.",
+        "+150 is open again (the 2987 verdict's block ends with this move); past 1109 re-judge, and no file "
+        "may pass 600 (gate.py is 542): split gate.py by state (e.g. the turn/approach maneuver out of the "
+        "gate) before that.",
+    ),
+    "core/services/core_features/line_follow/arc": (
+        310,
+        "accept: independently re-judged 2026-10-08 at 299 (lane_arc.py 298, read-only critic agent). "
+        "D-520 2 puts map-guided arc following in its own size unit because line_follow/recovery "
+        "(2713 +150) and core_features (12772 +150) have no room for it. One cohesive LineFollowManager "
+        "mixin under the single manager lock and generation, with no own lock, thread, store or publisher. "
+        "CORE CommandManager stays the final cmd_vel publisher, and the D-422 sweep is called, never "
+        "changed. Dependency runs arc to recovery only. Split plan of record: "
+        "docs/plans/2026-10-08-line-follow-arc-subpackage.md; re-judge on the next +150. Measured 310 "
+        "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
     "core_features": (
-        12_772,
-        "accept: Independently re-judged 2026-10-07 at 12772 after the condition of the 14934 verdict was met: "
+        12_947,
+        "accept: independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
+        "read-only critic agent). Main alone is 12922 (12772 +150, after D-517 M2 authority.py and D-507 "
+        "bend). This branch adds 25 lines outside its arc unit. manager.py +11 is the thinnest possible "
+        "hook: ArcMixin base, init and reset calls, the status arc field, and two early returns for the arc "
+        "tick and authority gate. model.py +14 is three arc_* config fields with a comment, plus their "
+        "validation. The arc logic is in the line_follow/arc size unit. Moving the validation to the arc "
+        "unit would create a model/lane_arc import cycle for about 5 lines, so it stays. Condition: the next "
+        "core_features growth must move code out (candidate: junction code to recovery, per the recovery "
+        "verdict), not raise this number again. Re-judge on the next +150. "
+        "Previously: accept: Independently re-judged 2026-10-07 at 12772 after the condition of the 14934 verdict was met: "
         "docs/plans/2026-10-07-line-follow-recovery-subpackage.md moved line_follow lane recovery "
         "(2320 lines) into its own size unit core/services/core_features/line_follow/recovery with its own "
         "verdict. The move, not new code, brings core_features back under its allowance (main had reached "
