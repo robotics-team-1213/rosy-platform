@@ -748,6 +748,7 @@ def test_drive_map_handoff_reaches_console_after_stop_readback(base_url, viewpor
             assert button.get_attribute("data-goto") == "/console"
             assert button.inner_text() == "운용 지도"
             assert page.locator('[aria-label="운전 모드"] [data-drive-goal]').count() == 0
+            page.evaluate("sessionStorage.setItem('rosy.dashboard.token', 'old-surface-token')")
             modes_before, teleop_before = len(dev_server.MODE_LOG), len(dev_server.TELEOP_LOG)
             arrived = []
 
@@ -759,6 +760,9 @@ def test_drive_map_handoff_reaches_console_after_stop_readback(base_url, viewpor
             page.route("**/console", console)
             button.click()
             page.wait_for_url("**/console")
+            assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == dev_server.DEV_TOKEN
+            assert page.evaluate("localStorage.getItem('rosy.dashboard.paired')") is None
+            assert dev_server.DEV_TOKEN not in page.url
             assert arrived and "IDLE" in arrived[0]["modes"]
             assert any(item["linear"] == 0 and item["angular"] == 0 for item in arrived[0]["teleop"])
             assert errors == []
