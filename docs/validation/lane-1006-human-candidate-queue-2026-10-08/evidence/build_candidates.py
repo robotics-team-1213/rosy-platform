@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from hashlib import sha256
 import csv, json, subprocess
 from PIL import Image

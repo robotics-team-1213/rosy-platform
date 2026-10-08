@@ -71,7 +71,7 @@ LEGACY_FINAL_PUBLISHER = (
 #: repoint or edit the line and this guard goes red until the pin moves.
 RECORDING_SIDE_TOPIC = (
     "middleware/perception/control/recording.py",
-    'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC)',
+    'SIDE_TOPICS = ("cmd_vel", "line/observation", SHADOW_TOPIC, SCAN_TOPIC, ODOM_TOPIC,',
 )
 
 #: D-411 A: the Pilot recorder's rosbag2 topic list records the CORE final
