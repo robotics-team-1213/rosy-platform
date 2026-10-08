@@ -68,17 +68,17 @@ def test_provisioned_identity_reaches_info_and_fleet_hello(monkeypatch, tmp_path
     from core_common.identity import RobotIdentity
 
     serial_path = tmp_path / "cpuinfo"
-    serial_path.write_text("Model: Raspberry Pi 5\nSerial\t: 8c1fe303e5a6694f\n", encoding="utf-8")
+    serial_path.write_text("Model: Raspberry Pi 5\nSerial\t: 0123456789abcdef\n", encoding="utf-8")
     monkeypatch.setattr(identity_module, "CPUINFO_PATH", serial_path)
     monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", tmp_path / "missing.yaml")
     monkeypatch.delenv("ROSY_CONFIG", raising=False)
-    monkeypatch.setenv("ROSY_DEVICE_UID", "3645c5b2-aa69-41ee-970f-ac6bb202338a")
-    monkeypatch.setenv("ROSY_DEVICE_NAME", "rosy-pinky-9dfk")
+    monkeypatch.setenv("ROSY_DEVICE_UID", "550e8400-e29b-41d4-a716-446655440000")
+    monkeypatch.setenv("ROSY_DEVICE_NAME", "rosy-pinky-test")
     config = config_module.load_config()
     ident = RobotIdentity.from_config(config)
 
-    assert ident.device_uid == "3645c5b2-aa69-41ee-970f-ac6bb202338a"
-    assert ident.hardware_serial == "8c1fe303e5a6694f"
+    assert ident.device_uid == "550e8400-e29b-41d4-a716-446655440000"
+    assert ident.hardware_serial == "0123456789abcdef"
     assert ident.info()["device_uid"] == ident.device_uid
     assert ident.info()["serial_number"] == ident.hardware_serial
 
