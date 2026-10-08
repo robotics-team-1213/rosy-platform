@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · feat(api): SLAM 맵핑 세션 읽기
-- 2026-10-08 · uncommitted · fix(api): 마지막 계획 경로 수신 근거 추가
-- 2026-10-08 · uncommitted · fix(api): 지도 ID를 수신 격자와 함께 응답
-- 2026-10-08 · uncommitted · fix(api): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
-- 2026-10-08 · uncommitted · fix(api): D-507 pivot_past_line_m [−0.30, 0.30]과 v1.133
+- 2026-10-08 · uncommitted · fix(api): D-517 M2 통행권의 API Ref 번호를 v1.143으로 옮김
+- 2026-10-08 · 887abb1a9 · feat(core): D-517 M2 능력 line_follow_authority_required
+- 2026-10-08 · b570504a2 · feat(api): POST /line-follow/authority, 능력 line_follow_authority, v1.142
+- 2026-10-08 · uncommitted · fix(api): D-507 보충 굽이 지시의 API Ref 번호를 v1.142로 옮김
+- 2026-10-08 · uncommitted · fix(api): D-507 보충 굽이 지시의 API Ref 번호를 v1.141로 옮김

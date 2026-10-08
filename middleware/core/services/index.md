@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(maps): 계획 경로 수신 근거 보관
-- 2026-10-08 · uncommitted · fix(maps): 수신 지도의 ID를 스냅숏에 보관
-- 2026-10-08 · uncommitted · fix(line_follow): 창 odometer를 부호 있는 전진 거리로, 후진하면 창 닫힘 (D-507 2, 안전 검토 1·2)
-- 2026-10-08 · uncommitted · feat(line_follow): 교차로 기대 창을 주행 거리로 비교 (D-507 2·3, 사용자 결정 1)
-- 2026-10-08 · uncommitted · fix(line_follow): D-507 6 motion_admitted refuses non-finite twists
+- 2026-10-08 · 854d2de64 · refactor(core): 교차로 믹스인을 recovery/junction/ 하위 패키지로
+- 2026-10-08 · 4fb9eb1c4 · fix(core): D-517 M2 리뷰 반영 — IR 설정 문구, 정지 거리 속도
+- 2026-10-08 · b570504a2 · feat(core): D-517 M2 CORE 이동 통행권 (line_follow/authority.py)
+- 2026-10-08 · uncommitted · test(line_follow): D-507 굽이 통과 모델 PC SIM
+- 2026-10-08 · uncommitted · feat(line_follow): D-507 보충, 지도 굽이를 odom 호로 지남 (action `bend`)

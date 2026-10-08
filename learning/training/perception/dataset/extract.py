@@ -62,15 +62,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "contracts" / "foun
 
 from frames import FrameSelector  # noqa: E402
 from control.recording import (  # noqa: E402
-    CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, IR_RANGE_TOPIC, KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC,
-    SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
+    CAMERA_TELEMETRY_TOPIC, CAMERA_TOPIC, COMPRESSED_CAMERA_TOPIC, IR_RANGE_TOPIC,
+    KEEP_DEBUG_TOPIC, ODOM_TOPIC, SCAN_TOPIC, SHADOW_TOPIC, SIDE_TOPICS, ir_range_sample)
 from control.sensing.perception.image_frame import image_msg_to_frame  # noqa: E402
 
 STRING_SCHEMA = "std_msgs/msg/String"
 JPEG_Q = 95
 # Class (a) of the clock rule: payloads carrying the stamp of the image they judged.
 # Keeper diagnostics follow their source frame too; they remain evidence, not labels.
-STAMPED_SIDE_TOPICS = (SHADOW_TOPIC, "line/observation", KEEP_DEBUG_TOPIC)
+STAMPED_SIDE_TOPICS = (SHADOW_TOPIC, "line/observation", KEEP_DEBUG_TOPIC,
+                       CAMERA_TELEMETRY_TOPIC)
 SIDE_LOOKAHEAD_S = 0.5  # a stamped side message may be logged this long after its frame
 STAMP_TOL_S = 1e-6  # equal stamps: within 1 us (JSON float seconds keep ~0.2 us at epoch scale)
 CAMERA_LINE = "CAMERA_LINE"  # the only line/observation source that judged an image
@@ -347,7 +348,8 @@ def _mcap_frames(files, skipped=None, truncated=None):
             while early and early[0][0] / 1e9 + SIDE_LOOKAHEAD_S < t:
                 early.popleft()
             # Channels carry absolute, possibly namespaced topics.
-            name = next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, IR_RANGE_TOPIC)
+            name = next((n for n in (*SIDE_TOPICS, KEEP_DEBUG_TOPIC, IR_RANGE_TOPIC,
+                                     CAMERA_TELEMETRY_TOPIC)
                          if _topic_is(ch.topic, n)), None)
             if name is not None:
                 if name == IR_RANGE_TOPIC:

@@ -25,12 +25,13 @@ import httpx
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
-from fleet.routing.execute import (advance_m, arc_id, lane_action, plan_again, replan_hold, route_key, turn_target,
-                                   unsupported)
+from fleet.routing.execute import (advance_m, arc_id, exit_segment, lane_action, plan_again, replan_hold, route_key,
+                                   theta, turn_target, unsupported)
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
-                                     OPEN, LiveTrip, TripError, junction_fields, pose_diagnostics, pose_view,
-                                     record_bend_candidate)
+                                     OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
+                                     pose_diagnostics, pose_view, record_bend_candidate)
 from fleet.server.lane_traffic import TrafficService
+from fleet.server.trip_authority import AuthoritySender
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import LAP_RETRIES, LAP_RETRY_S, carry_on, lap_arcs, lap_due, lap_retry_due  # noqa: F401
 from fleet.swarm.transport import RobotApiError
@@ -40,8 +41,12 @@ _LOG = logging.getLogger(__name__)
 LOCALIZED = "LOCALIZED"
 #: CORE takes junction instructions only on CAMERA_LINE (IR_LINE: 409 JUNCTION_CAMERA_ONLY).
 LINE_MODES = ("CAMERA_LINE",)
-#: D-495 1: CORE is executing a junction manoeuvre; a new instruction would abort it.
-MANOEUVRE = ("turning", "advancing", "reacquiring")
+#: D-495 1: CORE is executing a junction manoeuvre; a new instruction would abort it. CORE's own
+#: ``recovery/junction/gate.py`` ``MANEUVER`` (incl. D-507 4 ``approaching``); test_trip_runner pins both.
+MANOEUVRE = ("approaching", "turning", "advancing", "reacquiring", "bending")
+#: D-520 2: CORE's ``line_follow.arc.reason`` for an arc that ended with no instruction armed
+#: (event ``nav.lane_arc_end_unarmed``); CORE then follows the lane as today.
+ARC_END_UNARMED = "lane_arc_end_unarmed"
 #: D-490 5: a plan may be started within this long on the same map version.
 PLAN_TTL_S = 30.0
 #: CORE takes ``stop_after_m`` in [0, 2] (D-494 4).
@@ -70,7 +75,7 @@ class TripRunner:
                  engaged: Callable[[str], Optional[str]] = lambda _robot_id: None,
                  release_queue: Callable[[str], None] = lambda _robot_id: None,
                  roster: Optional[Callable[[], Iterable[str]]] = None,
-                 traffic: Optional[TrafficService] = None, traffic_zones=None) -> None:
+                 traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False) -> None:
         self._store = store
         self._routing = routing_config
         self._caps, self._poses, self._junction = caps, poses, junction
@@ -87,6 +92,7 @@ class TripRunner:
         #: robot id -> its step still running; that robot skips periods until it ends (D-517 7).
         self._inflight: dict[str, asyncio.Future] = {}
         self.traffic = traffic if traffic is not None else TrafficService(store, config, zones=traffic_zones)
+        self.authority = AuthoritySender(junction, authority, config.port_timeout_s)  # D-517 4 (M2)
         self._refresh_warned_at = -math.inf
         self.halts = TripHalts(store, junction, config, self._call, clock, cancel_goal,
                                lambda robot_id: self._release_queue(robot_id), self.robot_busy, roster)
@@ -140,7 +146,10 @@ class TripRunner:
             pose = await self._pose_checks(robot_id, graph, plan["segments"])
             graph = self._graph_for(plan["map_version"])  # the awaits above may have seen an activation
             caps_view = {"kind": caps.kind, "modes": sorted(caps.modes), "max_speed": caps.max_speed,
-                         "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot}
+                         "junction_turn": caps.junction_turn, "junction_pivot": caps.junction_pivot,
+                         "lane_arc": caps.lane_arc,
+                         "line_follow_authority": getattr(caps, "line_follow_authority", False),
+                         "lane_bend": caps.lane_bend}
             arcs = lap_arcs(self._store.active(), plan["segments"], row["request"], caps_view,
                             frozenset(self._blocked()), self._routing, self.config.max_turn_deg) if repeat else ()
             if repeat:  # D-517 3: no await from this check to the trip opening
@@ -152,7 +161,8 @@ class TripRunner:
                     "state": "started", "reason": None, "detail": {}, "map_version": plan["map_version"],
                     "plan": {k: plan[k] for k in ("segments", "places", "actions")}, "segment_index": 0,
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
-                    "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view}
+                    "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view,
+                    "traffic_authority": self.authority.mode(caps)}
             live = LiveTrip(view, graph, row["request"])
             live.lap_route, live.lap_arcs = route_key(plan["segments"]), arcs
             self._live[robot_id] = live
@@ -179,6 +189,8 @@ class TripRunner:
         floor = caps.site_floor_map_id  # D-507 9: absent (older CORE) or null declares no floor
         if lane and floor is not None and floor != map_id:
             raise TripError(422, "TRIP_SITE_FLOOR_MISMATCH", {"site_floor_map_id": floor, "map_id": map_id})
+        if lane and self.authority.mode(caps) == "core" and caps.line_follow_authority_required is not True:
+            raise TripError(422, "TRIP_AUTHORITY_NOT_REQUIRED")  # D-517 4: no first-authority gap after a restart
         return caps
 
     async def _pose_checks(self, robot_id: str, graph, segments: list) -> MapPose:
@@ -265,10 +277,11 @@ class TripRunner:
                 live.lap_arcs = tuple(f"{edge}:{'fwd' if forward else 'rev'}"
                                       for edge, forward, _s in hold["lap_route"])
                 live.view["lap"] += 1
+                live.bends_done.clear()  # D-507 addendum: the new lap drives its bends again
             live.view["detail"]["replan_confirmed_by"] = principal_id
             sent = live.sent
             live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
-            live.sent, live.last_goal, live.replan_pending, live.at = None, None, False, None
+            live.sent, live.last_goal, live.replan_pending, live.at, live.at_stamp = None, None, False, None, None
             live.lap_start = 0
             self._describe(live)
             self._save(live)
@@ -319,6 +332,7 @@ class TripRunner:
             await asyncio.wait(pending, timeout=self.config.period_s)
         self._inflight = {robot_id: task for robot_id, task in self._inflight.items() if not task.done()}
         self.traffic.period(self._live.values())
+        self.authority.period(live for r, live in self._live.items() if r not in self._inflight)  # mid-step: none
 
     async def _tick_robot(self, live: LiveTrip) -> None:
         """Every failure ends at most this one trip."""
@@ -346,16 +360,29 @@ class TripRunner:
         try:
             if live.arc(live.view["segment_index"]).drive_mode == "lane":
                 live.junction = await self._call(self._junction.junction_state(robot_id)) or {}
-                sent = live.sent
-                if sent is not None and live.junction.get("seq") == sent["seq"] and \
-                        live.junction.get("state") in (*MANOEUVRE, "executing"):
-                    sent["carried"] = True  # CORE took it on: never sent again
+                # D-520 2: CORE's arc record; a CORE restart resets arc_seq (as the junction seq)
+                sent, arc = live.sent, live.junction.get("arc")
+                arc = arc if isinstance(arc, dict) else {}
+                if sent is not None and (live.junction.get("seq") == sent["seq"] and live.junction.get("state") in (
+                        *MANOEUVRE, "executing") or (arc.get("from_place_id") == sent["place"]
+                                                     and arc_newer(arc.get("arc_seq"), sent.get("arc_before")))):
+                    sent["carried"] = True  # CORE took it on (D-520 2: or opened its arc): never sent again
+                if live.first_seq is not None and arc_newer(arc.get("arc_seq"), live.arc_base):
+                    if arc.get("state") == "stopped":  # D-520 2: CORE holds and never reopens the arc
+                        await self._stop(live, "stopped", "lane_arc", {
+                            "arc_reason": arc.get("reason"), "arc_place": arc.get("from_place_id"),
+                            "arc_end_place": arc.get("end_place_id")})
+                        return
+                    live.view["detail"].pop("arc_end_unarmed", None)
+                    if arc.get("reason") == ARC_END_UNARMED:  # CORE follows on: shown, not an end
+                        live.view["detail"]["arc_end_unarmed"] = {
+                            "end_place_id": arc.get("end_place_id"), "travelled_m": arc.get("travelled_m")}
             else:  # a free segment: no stale lane ``waiting`` may end it
                 live.junction = {}
             if not live.open:
                 return
             index, s, off = self._locate(live, pose)
-            live.at = (index, s)
+            live.at, live.at_stamp = (index, s), getattr(pose, "odom_stamp", None)  # one pose, one assignment
             remaining = live.segments[index]["s_to"] - s
             lane = live.arc(index).drive_mode == "lane"
             if lane and self.traffic.holds(live, index):  # CORE waits at the junction for the block
@@ -429,6 +456,10 @@ class TripRunner:
     # ---- steps --------------------------------------------------------------------------
 
     async def _step_lane(self, live: LiveTrip, index: int, remaining: float) -> None:
+        if (live.view["caps"] or {}).get("lane_arc") and "arc" not in live.junction:
+            return  # D-520 2: no arc baseline read yet; an old CORE arc would pass as this trip's (bends too)
+        if await self._step_bend(live, index, live.segments[index]["s_to"] - remaining):
+            return  # D-507 addendum: a bend ahead on this lane comes before its place
         place = live.place(index)
         if place is None or remaining > self.config.arm_distance_m:
             return
@@ -438,10 +469,8 @@ class TripRunner:
             return  # D-517 3 (M1): nothing tells the robot to drive into a refused block
         state, sent, now = live.junction.get("state"), live.sent, self._clock()
         same = sent is not None and (sent["index"], sent["action"], sent["place"]) == (index, action, place)
-        if state in MANOEUVRE:
-            return  # a new instruction would abort CORE's turn
-        if state == "executing" and live.junction.get("seq") != live.replaceable:
-            return  # CORE is carrying out an instruction; only our own held replan stop may be replaced
+        if self._core_busy(live):
+            return
         if same:
             if action == STOP or sent.get("carried") or sent.get("done"):
                 return  # one stop per place (CORE measures it from receipt); a carried-out place is done
@@ -453,9 +482,17 @@ class TripRunner:
             elif state not in ("armed", None, "idle", "waiting"):
                 return
         stop_after = min(max(remaining, 0.0), MAX_STOP_AFTER_M) if action == STOP else None
-        turn = round(turn_target(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
-        advance = advance_m(live.graph, live.segments, index) if turn is not None else None
         expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
+        arc = None  # D-520 1: only to a lane_arc robot, and only with the map_id
+        if action != STOP and (live.view["caps"] or {}).get("lane_arc") and (expect or {}).get("map_id"):
+            arc = exit_segment(live.graph, live.segments, index, fit_tol_m=self.config.arc_fit_tol_m,
+                               outer_line_offset_m=self.config.arc_outer_line_offset_m)
+        if arc is not None:
+            expect = {**expect, "exit_segment": arc}
+        # D-520 1: with an exit_segment the plain tangent and no advance_m (CORE starts the arc there)
+        turn = (round((theta if arc else turn_target)(live.graph, live.segments, index), 1)
+                if action in (LEFT, RIGHT) else None)
+        advance = advance_m(live.graph, live.segments, index) if turn is not None and arc is None else None
         if not live.open:
             return
         if action in (LEFT, RIGHT) and (expect or {}).get("expect_in_m") is None:
@@ -464,10 +501,54 @@ class TripRunner:
             await self._stop(live, "stopped", "junction_no_window",
                              {"junction_place": place, "junction_action": action, "junction_fields": expect})
             return
+        await self._send(live, index, action, place, stop_after, turn_deg=turn, advance_m=advance, expect=expect)
+
+    async def _step_bend(self, live: LiveTrip, index: int, s: float) -> bool:
+        """D-507 addendum: True while a site-map bend on this lane is ahead (its instruction, sent
+        within ``arm_distance_m`` of the arc start to a ``lane_bend`` robot, owns CORE's one slot)."""
+        arc = live.junction.get("arc") or {}
+        if arc.get("state") == "running" and arc.get("end_place_id") == live.place(index):
+            return False  # D-520: CORE drives this lane as an arc; its slot is for the end place's instruction
+        bend = next_bend(live, index, s) if (live.view.get("caps") or {}).get("lane_bend") else None
+        if bend is None:
+            return False
+        state, sent, seq = live.junction.get("state"), live.sent, live.junction.get("seq")
+        ours = sent is not None and (sent["action"], sent["place"]) == ("bend", bend["place_id"])
+        newer = ours and isinstance(seq, int) and isinstance(sent["seq"], int) and seq > sent["seq"]
+        finished = ours and (sent.get("done") or (sent.get("carried") and (state == "idle" or newer)))
+        if finished or (not ours and s >= bend["s_start"]):
+            live.bends_done.add(bend["place_id"])  # finished, or passed without one: never again
+            return await self._step_bend(live, index, s)
+        if live.view["hold"] is not None or self.traffic.holds(live, index):
+            # held (operator, replan, lap or D-517 traffic): only the place's stop may go out; a bend
+            # passed while held counts as passed (at most one per lap)
+            return False
+        if self._core_busy(live) or bend["s_start"] - s > self.config.arm_distance_m or (
+                ours and state == "armed" and self._clock() - sent["at"] < self.config.junction_expires_s / 2):
+            return True
+        fields = bend_fields(live, bend, s, self._store.active(), self.config)
+        if fields is None:
+            return True  # another map version: the bend is not sent and its place waits
+        await self._send(live, index, "bend", bend["place_id"], None, turn_deg=round(bend["turn_deg"], 1),
+                         expect=fields)
+        return True
+
+    @staticmethod
+    def _core_busy(live: LiveTrip) -> bool:
+        """A new instruction would abort CORE's manoeuvre, or CORE is carrying one out (only our own
+        held replan stop may be replaced)."""
+        state = live.junction.get("state")
+        return state in MANOEUVRE or (state == "executing" and live.junction.get("seq") != live.replaceable)
+
+    async def _send(self, live: LiveTrip, index: int, action: str, place: str, stop_after: Optional[float],
+                    **kwargs) -> None:
+        """Send one junction instruction to an open trip's robot and record it as ``live.sent``."""
+        if not live.open:
+            return
+        now = self._clock()
         try:
             reply = await self._call(self._junction.send_junction(
-                live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s,
-                turn_deg=turn, advance_m=advance, expect=expect)) or {}
+                live.view["robot_id"], action, place, stop_after, self.config.junction_expires_s, **kwargs)) or {}
         except RobotApiError as exc:
             if exc.code == "JUNCTION_ODOM_STALE":  # D-507 2: no fresh odom at receipt; next tick sends again
                 live.view["detail"]["junction_retry"] = exc.code
@@ -479,12 +560,12 @@ class TripRunner:
         await self._after_send(live)
         if reply.get("accepted") is False:  # CORE aborted a manoeuvre instead: an operator decides
             raise _JunctionAborted(reply.get("junction_seq"))
-        seq = reply.get("junction_seq")
+        seq, arc_before = reply.get("junction_seq"), (live.junction.get("arc") or {}).get("arc_seq")
         live.replaceable = None
         live.sent = {"index": index, "action": action, "place": place, "seq": seq, "at": now,
-                     "done": bool(reply.get("already_done"))}
+                     "done": bool(reply.get("already_done")), "arc_before": arc_before}
         if live.first_seq is None:
-            live.first_seq = seq if isinstance(seq, int) else 0
+            live.first_seq, live.arc_base = (seq if isinstance(seq, int) else 0), arc_before
 
     async def _step_free(self, live: LiveTrip, index: int, s: float) -> None:
         segment = live.segments[index]
@@ -531,7 +612,7 @@ class TripRunner:
     def _completed(self, live: LiveTrip, index: int) -> bool:
         """CORE finished our instruction for this place: idle again, or a newer seq."""
         sent, junction = live.sent, live.junction
-        if sent is None or sent["index"] != index or sent["action"] == STOP:
+        if sent is None or sent["index"] != index or sent["action"] in (STOP, "bend"):
             return False
         if sent.get("done"):
             return True
@@ -555,7 +636,8 @@ class TripRunner:
         progress = live.progress(index, s)
         if (live.progress_at is None or progress >= live.best_progress + self.config.stall_m
                 or live.view["hold"] is not None or live.junction.get("state") in MANOEUVRE
-                or (live.traffic or {}).get("waiting_for")):  # D-517 4: waiting for a block is no stall
+                or (live.traffic or {}).get("waiting_for")  # D-517 4: waiting for a block is no stall
+                or (live.authority or {}).get("state") == "HOLDING"):  # nor at the authority's end
             live.best_progress = max(live.best_progress, progress)
             live.progress_at = now
             return False
@@ -616,6 +698,7 @@ class TripRunner:
         A trip already closed (a cancel that landed mid-tick) keeps its state; the robot is
         still stopped again.
         """
+        live.at, live.at_stamp = None, None
         if live.open:
             live.view.update(state=state, reason=reason)
             live.view["detail"].update(detail or {})

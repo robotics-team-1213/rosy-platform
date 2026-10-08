@@ -207,6 +207,26 @@ def test_d507_window_and_pivot_fields_validation(core_client):
     assert client.post(URL, json=far_edge, headers=OPERATOR).json()["state"] == "armed"
 
 
+BEND = {**BODY, "action": "bend", "place_id": "B1", "turn_deg": 63.6, "map_id": "site_a",
+        "bend_in_m": 0.5, "bend_tol_m": 0.12, "bend_radius_m": 0.064}
+
+
+def test_d507_bend_fields_validation(core_client):
+    client, services, clock = _active(core_client)
+    for bad in ({"turn_deg": None}, {"turn_deg": 0}, {"turn_deg": 91}, {"map_id": None},
+                {"bend_in_m": None}, {"bend_in_m": 2.01}, {"bend_tol_m": 0.31}, {"bend_radius_m": 0.51},
+                {"expect_in_m": 0.5, "expect_tol_m": 0.1}, {"pivot_past_line_m": 0.1}, {"advance_m": 0.1}):
+        body = {k: v for k, v in {**BEND, **bad}.items() if v is not None}
+        assert client.post(URL, json=body, headers=OPERATOR).status_code == 400, body
+    assert client.post(URL, json={**BODY, "bend_in_m": 0.5}, headers=OPERATOR).status_code == 400
+    refused = client.post(URL, json=BEND, headers=OPERATOR)  # no odom: the travel cannot start
+    assert refused.status_code == 409 and refused.json()["error"]["code"] == "JUNCTION_ODOM_STALE"
+    _pose(services, clock)
+    assert client.post(URL, json=BEND, headers=OPERATOR).json() == {
+        "accepted": True, "junction_seq": 1, "state": "armed"}
+    assert client.post(URL, json={**BEND, "turn_deg": -40}, headers=OPERATOR).json()["junction_seq"] == 2
+
+
 def test_d507_keep_debug_junction_ahead_reaches_the_manager(core_client):
     _, services, clock = _active(core_client)
     raw = json.dumps({"reason": "junction_transverse", "stamp": clock["t"], "junction_ahead_m": 0.25})

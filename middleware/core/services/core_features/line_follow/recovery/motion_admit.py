@@ -13,10 +13,15 @@ from core_common.robot_body import RobotBody
 from core_features.line_follow.clearance import body_envelope_gap, body_path_gap
 
 #: IR guard verdicts (manager._ir_guard) each kind may move on; 'stale' never. Bridge: D-476
-#: rev 1; approach/turn/advance: D-498 (not on the line); return/retrace: D-468 starts on it.
+#: rev 1 and the bend pass (its blind arc, the same fence); approach/turn/advance: D-498 (not on
+#: the line); return/retrace: D-468 starts on it.
 _OFF_LINE, _ANY = frozenset({'clear', 'left', 'right'}), frozenset({'clear', 'left', 'right', 'centre'})
-IR_ALLOWED = {'bridge': frozenset({'clear'}), 'approach': _OFF_LINE, 'turn': _OFF_LINE,
-              'advance': _OFF_LINE, 'return': _ANY, 'retrace': _ANY}
+#: D-520 2: the map-guided arc runs on 'clear' only; its one IR correction ('arc_edge') on the
+#: side that opened it (ir_side) or 'clear'.
+IR_ALLOWED = {'bridge': frozenset({'clear'}), 'bend': frozenset({'clear'}),  # bend: D-507 addendum
+              'approach': _OFF_LINE, 'turn': _OFF_LINE,
+              'advance': _OFF_LINE, 'return': _ANY, 'retrace': _ANY,
+              'arc': frozenset({'clear'}), 'arc_edge': _OFF_LINE}
 
 
 class MotionAdmitMixin:
@@ -27,7 +32,7 @@ class MotionAdmitMixin:
         except Exception:  # noqa: BLE001 - unreadable liveness: the proof is required
             return True
 
-    def _motion_basis(self, now, kind, map_id=None, centre_ok=False):
+    def _motion_basis(self, now, kind, map_id=None, centre_ok=False, ir_side=None):
         """Capability basis: 'enforce' when the live (or unknown) proof is bound and configured,
         None when it is live but cannot admit (fail closed), else 'site' if its standing part
         holds for `kind` (centre_ok: see motion_admitted)."""
@@ -40,23 +45,25 @@ class MotionAdmitMixin:
                 return None
         c, at, ir = self._config, self._clearance_at, self._ir_guard(now)
         site = (c.site_floor_map_id is not None and map_id in (None, c.site_floor_map_id)
-                and c.ir_guard_enabled and (ir in IR_ALLOWED[kind] or (
+                and c.ir_guard_enabled and (kind != 'arc' or ir != 'clear' or not self._ir_observation.visible)
+                and (ir in IR_ALLOWED[kind] and ir in ('clear', ir_side or ir) or (
                     centre_ok and ir == 'centre' and kind in ('approach', 'advance')))
                 and c.obstacle_mode == 'path' and c.body_stop_known and self._scan_points is not None
                 and at is not None and 0 <= now-at <= c.clearance_stale_s)
         return 'site' if site else None
 
-    def motion_admitted(self, now, linear, angular, kind, map_id=None, centre_ok=False):
+    def motion_admitted(self, now, linear, angular, kind, map_id=None, centre_ok=False, ir_side=None):
         """May this (linear, angular) of `kind` go out? map_id: the opening instruction's SiteMap.
-        centre_ok: IR row inside the camera's cross-line band (user 2026-10-08), approach/advance."""
-        if kind not in IR_ALLOWED:
-            raise ValueError(f"unknown motion kind {kind!r}")
+        centre_ok: IR row inside the camera's cross-line band (user 2026-10-08), approach/advance.
+        ir_side: 'left' | 'right', required by and only for 'arc_edge' (D-520 2)."""
+        if kind not in IR_ALLOWED or (kind == 'arc_edge') != (ir_side in ('left', 'right')):
+            raise ValueError(f"unknown motion kind {kind!r} or ir_side {ir_side!r}")
         if not (math.isfinite(linear) and math.isfinite(angular)):
             return False  # NaN compares False everywhere below and would pass the sweep
         with self._lock:
             if self._proof_live():
                 return self._return_probe(now, linear, angular)  # unbound: False
-            if self._motion_basis(now, kind, map_id, centre_ok) is None or (
+            if self._motion_basis(now, kind, map_id, centre_ok, ir_side) is None or (
                     linear < 0 and kind != 'retrace'):
                 return False
             return not (linear or angular) or self._sweep_clear(now, linear, angular)

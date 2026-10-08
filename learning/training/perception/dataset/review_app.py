@@ -21,6 +21,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+import cv2
+import numpy as np
+
 import class_sets
 import review_return
 from learning_workspace import Workspace, WORKFLOWS
@@ -31,6 +34,24 @@ import review_masks
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[4] / 'shared' / 'web'
 SHARED_ASSETS = json.loads((COMMON / 'shared-assets.json').read_text(encoding='utf-8'))['shared_assets']
+
+
+def detail_preview(store, index):
+    frame = store.get(index)
+    photo = cv2.imdecode(np.frombuffer(store.image(index).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+    if photo is None or photo.shape[:2] != (frame['source']['height'], frame['source']['width']):
+        raise ValueError('source image dimensions differ')
+    light, a, b = cv2.split(cv2.cvtColor(photo, cv2.COLOR_BGR2LAB))
+    # Preserve flat areas: local sharpening must not invent texture in clipped regions.
+    blurred = cv2.GaussianBlur(light, (0, 0), 3)
+    light = cv2.addWeighted(light, 1.6, blurred, -0.6, 0)
+    curve = np.rint(255 * (np.arange(256) / 255) ** 1.5).astype(np.uint8)
+    light = cv2.LUT(light, curve)
+    enhanced = cv2.cvtColor(cv2.merge((light, a, b)), cv2.COLOR_LAB2BGR)
+    ok, data = cv2.imencode('.png', enhanced)
+    if not ok:
+        raise ValueError('preview encoding failed')
+    return data.tobytes()
 
 
 class Conflict(ValueError):
@@ -161,6 +182,19 @@ class ReviewStore:
     def list_frames(self):
         with self.connect() as db:
             return [self.decoded(row) for row in db.execute('SELECT * FROM frames ORDER BY id')]
+
+    def history(self, index):
+        frame = self.get(index)
+        with self.connect() as db:
+            events = {}
+            for lane, table in (('object', 'events'), ('pixel', 'pixel_events')):
+                events[lane] = [dict(row) for row in db.execute(
+                    f'SELECT ts,action,version FROM {table} WHERE frame=? ORDER BY id DESC LIMIT 20',
+                    (index,))]
+        return {'source': frame['source'].get('annotation_source'),
+                'object_status': frame['status'],
+                'pixel_status': review_masks.get(self, index)['status'],
+                'events': events}
 
     def image(self, index):
         row = self.get(index)['source']
@@ -327,6 +361,8 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     if self.headers.get('If-None-Match') == tag:
                         return self.send(b'', 304, etag=tag)
                     return self.send(value, etag=tag)
+                if path.startswith('/api/history/'):
+                    return self.send(store.history(int(path.rsplit('/', 1)[1])))
                 if path == '/api/catalog':
                     return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
                                       'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),
@@ -393,7 +429,10 @@ def make_server(store, port=8767, host='127.0.0.1'):
                         return self.send(b'', 304, etag=etag, cache='no-cache')
                     return self.send(image.read_bytes(), mime=mimetypes.guess_type(image.name)[0],
                                      etag=etag, cache='no-cache')
-                files = {'/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css',
+                if path.startswith('/api/view-images/'):
+                    return self.send(detail_preview(store, int(path.rsplit('/', 1)[1])),
+                                     mime='image/png')
+                files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js'}

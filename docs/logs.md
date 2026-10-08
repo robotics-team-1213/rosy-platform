@@ -7082,3 +7082,105 @@ osy-d395-s1d\`.
 - 변경: 앞 기록의 명령 |v| < 0.01(odom 정지 기준인 `junction_still_linear`)은 가장 느린 keep 명령(e=1에서 0.0108, 각속도 상한이나 v 배율이면 더 낮음)과 너무 가까워, 제자리 회전 기준을 `COMMANDED_PIVOT_LINEAR_MPS` = 1e-3으로 바꿨다. 실제 회전은 v를 정확히 0으로 명령한다. 받은 명령이 카메라 시각보다 0.3 s 넘게 늦은 keep 프레임이 30번 이어지면 한 번 경고한다(`use_sim_time` 불일치면 초기화가 조용히 꺼진다). `test/test_module_separation.py`의 `FINAL_TOPIC_EXCEPTIONS`에 이 노드의 읽기 전용 `cmd_vel` 구독 줄을 고정했다. 노드는 608줄이다.
 - 증거: 호스트 pytest `test_keep_pivot` 16개(느린 명령 0.0108, ×0.6, ×0.7, 0.002 → 초기화 없음, 기준을 0.01로 되돌리면 실패), `test_lane_keep`, `test_line_observer_wiring`, `test_lane_paint_source`, `test_latest_only_subscriptions`, `test/test_module_separation.py` 통과. `test/architecture/`는 `test_safety_separation::test_decision_and_learning_use_only_safety_public_api` 하나가 실패하고, 같은 실패가 main 64d7a68a8에서도 난다. Gazebo 재실행과 실기는 하지 않았다.
 - gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · D-507 4 회전각: 접선 + 6° 더 돌림(잠정)
+
+- 변경: Fleet `turn_target`(`operations/fleet/fleet/routing/execute.py`)이 현(chord) 조준 대신 접선 각 `theta`에 회전 방향으로 `TURN_OVERTURN_DEG` = 6.0°를 더한 값을 보낸다. 더하는 것은 나가는 차로가 `advance_m` 안에서 회전 반대쪽으로 휠 때(`advance_m` 점으로의 현이 시작 접선보다 회전 반대쪽으로 `BEND_MIN_DEG` = 1° 넘게)뿐이고, 곧은 차로와 회전 쪽으로 휘는 차로는 접선 그대로다. 분류는 `theta`, 150° 한도·부호·0 검사는 보내는 각, `advance_m` 명시·클램프는 그대로다. 260919에서는 ring 진입(SW −120.6°, NE −108.8°)과 ring 출구(NW→SW −114.1°, SE→NE −110.0°)가 모두 해당한다. 출구 spoke도 첫 0.1 m에서 회전 반대쪽으로 휜다(현 편차 약 5.9°). D-507 4항에 개정 문장을 더했다. API 변경 없음.
+- 증거: D-507 SIM 4c차(54회, d507-sim 워크트리 `docs/validation/d507-lane-trip-sim-2026-10-08/result.md` 「4c차 회전각」): 현 조준은 SW 5 s 유지 0/3, NE 재획득 0/3, 접선 −6°는 3/3, 3/3(−9°도 같음), 10 s 유지는 어느 각도도 없음. 호스트 pytest `operations/fleet/test/` 2704 passed, 2 failed(`test_document_imports`, `test_grammar_separation`: 콘솔 문서·시트, 이 브랜치가 고치지 않은 파일, 기준 868a4bb99에서 온 실패), known_failures 2 new(같은 둘). 부호 변이(+→−, 반대쪽 판정 뒤집기)에서 `test_routing_execute`·`test_trip_d507` 실패 확인 후 복구. Gazebo 재실행과 실기는 하지 않았다.
+- gate 변화: 없음. 잠정값이라 링 추종을 고친 뒤 SIM에서 다시 잰다(보정 후보).
+
+## 2026-10-08 · uncommitted · 차선 경계 완전 미관측 ROS SIM 재생
+
+- 변경: `edge_left`의 기억만으로 주행하지 않는 가드를 독립 Gazebo/ROS 그래프로 재생하고 `docs/validation/lane-blind-stop-sim-2026-10-08/result.md`에 원본 해시와 정지 자세를 기록했다.
+- 증거: 226프레임, 0.5835 m 진행, 지도 west 중심선 최대 거리 0.0193 m; `camera_line_not_visible` HOLD 뒤 `reselection_required` LOST. `/cmd_vel` publisher는 CORE 하나. 굽이 통과·실물 수용은 미달.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · 굽이 공백의 지도 경계 기억 반례 재생
+
+- 변경: 독립 ROS SIM의 frame 192를 `route_a`로 재생하고, 경로에서 80 mm 벗어난 자세의 분기 보조 우회를 고친 결과와 재현 스크립트를 `docs/validation/lane-route-gap-replay-2026-10-08/`에 기록했다.
+- 증거: 원래 자세는 MEMORY 후보, 측면 오차 +0.0609 m 교란 자세는 수정 후 STOP. 기존 관련 시험 77 passed, 10 skipped.
+- gate 변화: 없음. 오프라인 SIM 프레임 후보이며 ROS 폐루프·Fleet 활성 지도·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 굽이 원본의 격리 ROS 관측 재발행
+
+- 변경: `line_observer_node`의 `route_a`에 녹화 영상·odom·clock 125프레임을 독립 ROS domain 97에서 재발행하고 `docs/validation/lane-route-ros-graph-2026-10-08/`에 재현 스크립트와 결과를 기록했다.
+- 증거: 카메라 관측 125/125 수신, 첫 무관측 frame 192는 `visible=true`, confidence 0.6. 중복 사용 중이던 domain 83의 첫 시도는 증거에서 제외했고 전용 노드를 종료했다.
+- gate 변화: 없음. 노드 배선 증거이며 CORE 수용·Gazebo 폐루프·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 지도 밖 자세의 굽이 기억 ROS 거절
+
+- 변경: 같은 굽이 영상의 frame 192 odom 위치만 80 mm 옮겨 독립 ROS domain 97에서 재발행하고 `docs/validation/lane-route-ros-graph-2026-10-08b/`에 변환·재현 절차와 결과를 기록했다.
+- 증거: 관측 125/125 수신; frame 191 visible, 교란한 192 invisible(confidence 0), 원래 자세의 193 visible. 종료 뒤 전용 노드 없음.
+- gate 변화: 없음. 합성 위치 오차에 대한 관측 노드 반례이며 CORE·폐루프·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 정적 차선 경로 끝 정지 ROS-SIM
+
+- 변경: `route_a`가 마지막 지도 조각의 끝 20 mm 앞에서 관측 후보를 끊도록 하고, 남쪽 출발 `west:r → ring_s:f` 폐루프 두 실행을 `docs/validation/lane-route-terminal-ros-sim-2026-10-08/`에 기록했다.
+- 증거: 기존 실행은 경로 끝점에서 72.5 mm 떨어져 LOST; 수정 후 실행은 18.1 mm 앞에서 HOLD 후 LOST. `/cmd_vel` publisher는 CORE 하나. 호스트 관련 시험 103 passed, 10 skipped, 신규 실패 0.
+- gate 변화: 끝점 초과 방지만 검증. 굽이 최대 지도 중심선 편차 47.8 mm·교차로 완료 0건이므로 전체 차선 추종, 사람 승인 R0, 실물 수용은 HOLD.
+
+## 2026-10-08 · uncommitted · fix(fleet): 굽이 지시가 정지·교통 대기를 따른다
+
+- 변경: `trip_runner._step_bend`가 trip hold, D-517 교통 대기(`traffic.holds`), `live.open`, CORE `executing`(교체 가능한 우리 stop 제외)일 때 `bend`를 보내지 않는다. 정지 중에는 곳(place)의 stop만 나간다. 두 단계의 송신·응답과 슬롯 검사를 `_send`, `_core_busy`로 합쳤다.
+- 증거: `test_trip_bend`·`test_trip_runner`·`test_trip_caps`·`test_lane_traffic`·`test_module_structure` 157 passed, known_failures 0 new. 새 시험 5개는 이전 코드에서 모두 실패한다. code-reviewer(opus) APPROVE.
+- gate 변화: 없음. 호스트 시험이며 CORE 굽이 의미·SIM·실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 정적 차선 경로 시작 위치 오차 ROS-SIM
+
+- 변경: `route_a`의 선언 시작점과 Gazebo 실제 시작점을 80 mm, 50 mm 어긋나게 둔 폐루프 결과와 재현 스크립트를 `docs/validation/lane-route-start-offset-sim-2026-10-08/`에 기록했다.
+- 증거: 두 실행 모두 이동 0.0 m, `camera_line_not_visible` HOLD 후 LOST. 50 mm 실행의 `/cmd_vel` publisher는 CORE 하나였고, 원본 NPZ 해시를 기록했다.
+- gate 변화: 없음. 카메라가 선을 인식하지 못한 두 장면의 정지 증거이며 정적 `route_start` 위치 검증, Fleet 위치 권한, 실물 수용은 미검증.
+
+## 2026-10-08 · uncommitted · 차선 경로 시작 위치 오차의 렌더러별 결과
+
+- 변경: 기존 10/6·10/7 원본을 현 소스에서 재생하고, 정적 `route_a` 시작 위치 ±20/40/80 mm 오프라인 스윕과 +40 mm Gazebo 출발을 `docs/validation/lane-route-start-disagreement-2026-10-08/`에 기록했다.
+- 증거: 오프라인 −40 mm는 1.0468 m 주행 중 지도 중심선 편차 최대 60.0 mm, 대응 ROS-SIM은 0.0 m에서 LOST. 두 렌더링은 동일 물리 장면이 아니다.
+- gate 변화: 없음. 정적 시작 위치의 운영 권한과 사람 승인 차선 정답, 실물 수용은 계속 HOLD.
+
+## 2026-10-08 · uncommitted · 정적 경로 시제품의 ROS 진입 제한
+
+- 변경: 물리 카메라 설정에서 `route_a/b/ab` 시제품 follower를 생성하지 않도록 observer의 Gazebo 조건을 고정하고 `docs/validation/lane-route-prototype-admission-2026-10-08/`에 ROS 노드 확인을 기록했다.
+- 증거: 관련 호스트 181 passed, 모델 PC의 PINKY형 설정 `NoneType`·Gazebo 설정 `RouteCameraFollower` readback. 실물 장치에는 적용하지 않았다.
+- gate 변화: 없음. 활성 Fleet 지도·독립 위치 승인과 실물 수용은 별도다.
+
+## 2026-10-08 · uncommitted · 경로 시제품의 실행 중 조건 변경 폐기
+
+- 변경: observer가 route 모드의 유효 카메라 프레임마다 Gazebo 조건을 다시 검사하고 깨지면 follower를 폐기하도록 했다. `docs/validation/lane-route-prototype-lifetime-2026-10-08/`에 ROS 파라미터 변경 readback을 기록했다.
+- 증거: 모델 PC의 Gazebo `RouteCameraFollower`가 `PINKY` 변경 프레임 뒤 `NoneType`; Gazebo 복구 뒤에도 `NoneType`. 호스트 회귀 11 passed, 신규 실패 0.
+- gate 변화: 없음. 이 설정 검사는 물리 장치 신원·Fleet 위치 권한·주행 수용을 대체하지 않는다.
+
+## 2026-10-08 · uncommitted · D-507 B13 Fleet trip 한 바퀴 수용 SIM
+
+- 변경: 진짜 Fleet 서버(`create_app`, `TripRunner`, `HttpLaneJunction`)로 서쪽 길에서 NW까지 `POST /trip` 20회를 모델 PC Gazebo(도메인 88)에서 돌려 `docs/validation/lane-trip-lap-sim-2026-10-08/`에 기록했다. 지도 자세만 Gazebo 참값이다.
+- 증거: trip 완료 0/20. 모서리 16/20, 굽이 16/16, SW 회전 시작 3/16·끝 0. 원인 A(굽이 뒤 SW 교차로를 keeper가 `corner_left`로 읽어 원형 교차로 역주행) 11, B(Fleet `MANOEUVRE`에 CORE `approaching` 없음 → 다음 곳 송신이 회전을 중단) 3, C(모서리 출구 D-468 이탈 → 국소 복귀 소진 → stall) 4, D·E 각 1. Fleet은 20/20 trip을 멈추고 로봇을 세웠다(hang 0). D-422 출처 `memory` 0, `near_stop` 0.
+- gate 변화: Fleet 차선 trip은 SIM에서 HOLD. 실제 지도 자세 오차·bridge 켬·장치 수용은 미검증.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 단계 1 CORE: 지도 호 feed-forward, IR 한 번 보정, API v1.143
+
+- 변경: 새 크기 단위 `core_features/line_follow/arc/`(분리 계획 `docs/plans/2026-10-08-line-follow-arc-subpackage.md`, 판정은 독립 재판정 대기)에 `lane_arc.py`(298줄)를 두었다. `POST /line-follow/junction`의 `exit_segment`(`map_id` 필수, 범위 밖 400, `arc_enabled` 꺼짐 409 `LANE_ARC_UNAVAILABLE`), 능력 `lane_arc`, `line_follow.arc` 상태(`core_common/protocol/line_arc.py`), `pivot_basis` `segment_end`, 정지 사유 `lane_arc_*`, 이벤트 `nav.lane_arc_end_unarmed`, 지시 `aborted` `arc_mismatch`, `motion_admitted` kind `arc`·`arc_edge`(`ir_side`). 호는 회전 끝에서 열리고(ω = g·v·κ, odom 투영 길이, 시간 한도), 호 동안 keeper 사유·손실 시계·D-476·D-468·D-407·교차로 게이트를 쓰지 않는다. 끝에서 `armed` 지시는 그 자리를 축으로 실행하고, 없으면 오늘의 추종과 이벤트, 호 기록 `reason`은 `lane_arc_end_unarmed`(Fleet 작업자 계약 메모). IR 한 번 보정(유예 0.03 m, away 0.12 m + 확신 있는 clear, level은 ψ₀ + κ·s까지 상한 0.18 m). 알려진 D-491 횡단보도 구역이 호 시작 0.20 m에 걸치면 `exit_segment`를 버린다(`junction.reason` `arc_crosswalk`). 설정 `arc_enabled`(기본 false)·`arc_curvature_gain`·`arc_blind_max_m`. API Reference v1.143(v1.142는 다른 두 브랜치가 씀), 판 고정 시험(Fleet 문서 고정 4개 포함, Fleet 코드 무변경). 카메라 호 맞춤(단계 2)과 `lane_arc_entry` 검사는 하지 않았다.
+- 증거: 호스트 pytest services 1384 passed, gateway 2275 passed(17 skipped), api_web 140 passed, Fleet 판 고정 4파일 89 passed, `test/architecture` 크기 판정 외 통과 → 판정 갱신 뒤 재실행 통과, known_failures 0 new(`X:\DevTemp\d520-core\run*.txt`). 골든: `arc_enabled: false`의 틱별 결정이 main 627ae3c0c에서 만든 `test_lane_arc_off_golden.json`과 같다(246·250틱). 변이 확인: `arc` IR 허용에 left/right 추가, arc 후진 허용, 보정 횟수 검사 제거, 끝 길이 +0.05에서 각각 시험 실패 후 복구. Gazebo·실기는 하지 않았다.
+- gate 변화: 없음. 단계 1 SIM(모델 PC)과 크기 판정 두 개(`line_follow/arc` 299, `schemas.py` 1340)의 독립 재판정이 남았다.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) API 판 v1.143 → v1.145
+
+- 변경: 착지 전 재확인에서 feat/d517-m2-authority가 v1.143으로, feat/d517-m3-lane-convoy 워크트리가 v1.144로 올라가 있어, 이 브랜치의 API Reference 판과 변경 이력 행, 판 고정(app.py, `test/test_line_follow_contract_docs.py`, Fleet 문서 고정 시험 4개)을 v1.145로 옮겼다. 계약 내용은 같다.
+- 증거: 모든 브랜치의 API Reference 머리 판을 다시 읽음(v1.142 feat/d507-bend-odom-pass, v1.143 feat/d517-m2-authority, v1.144 d517-m3-convoy 워크트리). 판 고정 시험 재실행.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 안전 리뷰 반영과 main 병합
+
+- 변경: 안전 리뷰(APPROVE, 고칠 것 다섯) 반영. (1) 호 끝의 `armed` `stop`은 장소와 무관하게(`place_id` 없음 포함) `junction_stop`으로 선다. (2) `exit_segment`가 있는데 `stop_point`로 호를 열지 않으면 오늘처럼 기본 전진 0.10 m(D-520 2항에 한 문장 추가). (3) 호 시간 한도와 보정 한도를 각속도 한도가 남기는 속도 min(v, cap/(g·|κ|)), min(v_c, cap/(g·|κ| + b))로 잰다. (4) kind `arc`는 매 틱 확신 있는 IR clear(신선·교정·`visible: false`)만 허가한다(`_arc_ir`와 `motion_admitted` 둘 다). (5) 크기 판정 두 개를 독립 재판정 문구로 바꿨다(`line_follow/arc` 310, `schemas.py` 1340). main c06ddcad5(D-520 Fleet 8c2c4e8f0, D-507 bend, D-517 M2 통행권)를 병합했다. 호가 가진 틱도 D-517 통행권 게이트를 거친다(D-520 2항 D-517 문장). API 판은 v1.145 그대로(main v1.143, d517-m3-convoy 워크트리 v1.144).
+- 증거: 변이 확인: 다른 장소 stop을 `arc_mismatch`로 되돌리면 2개, `_arc_ir`의 확신 clear 검사를 빼면 1개, `motion_admitted`의 검사를 빼면 1개 시험이 실패한 뒤 복구. 골든은 병합한 main c06ddcad5에서 다시 만든 궤적과도 같다. 나머지 시험 결과는 다음 기록 없이 이 브랜치 보고에 있다.
+- gate 변화: 없음.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 병합 뒤 시험과 core_features 크기
+
+- 변경: main 병합 뒤 `core_features`가 12947줄로 판정 12772 +150을 넘었다. main만으로 12922(한도 그대로)이고 이 브랜치가 arc 단위 밖에 25줄(manager.py +11, model.py +14)을 더한다. 판정 행을 독립 재판정 대기 문구로 적었다.
+- 증거: services 1436 passed, gateway 2288 passed(17 skipped), api_web 139 passed 1 failed(`test_site_rooms` 자식 시간 초과, 단독 재실행 22 passed: 부하 중 시간 의존), 판 고정 89 passed, `test_module_structure` 34 passed(판정 갱신 뒤), known_failures 재확인 0 new(`X:\DevTemp\d520-core\run_final.txt`, `run_recheck.txt`).
+- gate 변화: 없음. `core_features` 독립 재판정이 남았다.
+
+## 2026-10-08 · uncommitted · D-520 (feat/d520-core-arc-feedforward) 재검증 반영: 호 중 bend 거절
+
+- 변경: 재검증 HIGH. 호가 도는 동안 `end_place_id` 의 `bend` 가 `armed` 되면 호 끝 `_start_turn` 을 거쳐 `_bend_step` 이 `j['bound']` 를 읽다 `KeyError` 로 `tick()` 이 깨졌다. 호가 도는 동안 `action: bend` 를 409 `JUNCTION_ARC_RUNNING` 으로 거절하고, 호 끝의 `armed` `bend` 는 `aborted`·`arc_mismatch`(지시 없는 끝)로 처리한다. API Reference v1.145 항목에 적었다. Fleet 은 호가 도는 그 차로에서 굽이를 보내지 않는다(`_step_bend`). 다만 Fleet 이 아직 호 시작을 못 본 상태에서 보내면 이 409 를 모르는 코드로 다시 던진다.
+- 증거: 단위 시험 2개(거절, 끝의 armed bend), API 시험 1개(409). 변이 확인: 거절을 빼면 2개 실패, 끝 guard 를 빼면 리뷰가 본 `KeyError: 'bound'` 로 1개 실패, 각각 복구. 골든: 병합 때의 main c06ddcad5(d5b75ff06^2)에서 다시 만든 궤적이 저장한 골든, 이 브랜치의 호 꺼짐 궤적과 같다(차이 없음, 골든 갱신 없음). services 1438 passed, gateway 관련 159 passed, api_web 140 passed(13 skipped), `test_module_structure` 와 판 고정 36 passed, known_failures 0 new(`X:\DevTemp\d520-core\run_rv.txt`).
+- gate 변화: 없음.

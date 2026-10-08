@@ -49,6 +49,20 @@ def browser_workspace(tmp_path):
         yield value
 
 
+def test_imported_approval_and_recheck_history_are_visible(browser_workspace):
+    page, store, expect = browser_workspace
+    expect(page.locator('#review-history-summary')).to_contain_text('객체 승인 · 픽셀 대기')
+    expect(page.locator('#review-history-events')).to_contain_text('검수자 식별 불가')
+    page.locator('#filter').select_option('approved')
+    page.locator('#reopen').click()
+    expect(page.locator('#review-history-events')).to_contain_text('재검수 시작')
+    review_masks.bind_classes(store, CLASSES)
+    review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, Conflict)
+    page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
+    expect(page.locator('#review-history-summary')).to_contain_text('객체 대기 · 픽셀 대기')
+    expect(page.locator('#review-history-events')).to_contain_text('전체 채우기')
+
+
 @pytest.fixture
 def custom_class_workspace(request, tmp_path):
     source, human, images = fixture_inputs(tmp_path)
@@ -1010,6 +1024,65 @@ def test_class_select_lists_the_workspace_class_set(browser_workspace):
     page, store, expect = browser_workspace
     options = page.locator('#boxes .box-top select').first.locator('option')
     expect(options).to_have_text(['클래스 선택 필요', '로봇', '장애물 상자', '콘', '신호등', '표지판', '사람 발'])
+
+
+def test_object_ribbon_class_click_saves_selected_box_only(browser_workspace):
+    page, store, expect = browser_workspace
+    chip = page.locator('#object-quick-classes button[value="obstacle_box"]')
+    expect(chip).to_be_disabled()
+    expect(page.locator('#object-quick-classes .ui-icon')).to_have_count(
+        page.locator('#object-quick-classes button').count())
+    assert page.locator('.review-editor-tools').bounding_box()['x'] < page.locator('#canvas').bounding_box()['x']
+    assert page.locator('.review-editor-tools').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y'] + 1
+    expect(page.locator('#view-original .ui-icon')).to_have_count(1)
+    expect(page.locator('#view-detail .ui-icon')).to_have_count(1)
+    page.get_by_role('button', name='박스 1 선택', exact=True).click()
+    expect(chip).to_be_enabled()
+    chip.click()
+    expect(page.locator('#save-status')).to_contain_text('서버 저장됨')
+    expect(chip).to_have_attribute('aria-pressed', 'true')
+    assert store.get(0)['review']['boxes'][0]['label'] == 'obstacle_box'
+    assert store.get(0)['status'] == 'pending'
+    expect(page.locator('#approve')).to_be_disabled()
+
+
+def test_object_zoom_pan_and_draw_keep_source_coordinates(browser_workspace):
+    page, store, expect = browser_workspace
+    stage = page.locator('.image-stage')
+    canvas = page.locator('#canvas')
+    original_width = canvas.bounding_box()['width']
+    page.locator('.review-viewport-controls [aria-label^="확대"]').click()
+    assert canvas.bounding_box()['width'] > original_width
+    page.locator('.review-viewport-controls [aria-label^="이동"]').click()
+    stage.scroll_into_view_if_needed()
+    box = stage.bounding_box()
+    cx, cy = box['x']+box['width']/2, box['y']+box['height']/2
+    page.mouse.move(cx, cy)
+    page.mouse.down()
+    page.mouse.move(cx-80, cy-30, steps=4)
+    page.mouse.up()
+    assert stage.evaluate('(node) => node.scrollLeft') > 0
+    assert len(store.get(0)['review']['boxes']) == 1
+    page.locator('.review-viewport-controls [aria-label^="이동"]').click()
+    page.locator('#draw').click()
+    image = canvas.bounding_box()
+    box = stage.bounding_box()
+    x0, y0 = box['x']+box['width']/2-35, box['y']+box['height']/2-20
+    x1, y1 = x0+90, y0+90
+    expected = [round((x0-image['x'])*32/image['width'], 1), round((y0-image['y'])*24/image['height'], 1),
+                round((x1-image['x'])*32/image['width'], 1), round((y1-image['y'])*24/image['height'], 1)]
+    assert not stage.evaluate('(node) => node.classList.contains("review-pan")')
+    assert 0 < expected[0] < expected[2] < 32 and 0 < expected[1] < expected[3] < 24, (image, box, expected)
+    assert page.evaluate('([x,y]) => document.elementFromPoint(x,y)?.id', [x0,y0]) == 'canvas', (image,box,x0,y0)
+    page.mouse.move(x0, y0)
+    page.mouse.down()
+    page.mouse.move(x1, y1, steps=4)
+    page.mouse.up()
+    expect(page.locator('#boxes .box-row')).to_have_count(2)
+    actual = store.get(0)['review']['boxes'][-1]['bbox_xyxy']
+    assert all(abs(a-b) < 1 for a, b in zip(actual, expected)), (actual, expected)
+    page.keyboard.press('0')
+    expect(page.locator('.review-zoom-level')).to_have_text('100%')
 
 
 def test_custom_class_set_names_and_saves(custom_class_workspace):
