@@ -18,11 +18,6 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-for _path in (ROOT / path for path in
-              ("middleware/core/gateway", "middleware/core/events", "middleware/core/services",
-               "middleware/core/api_web", "middleware/perception")):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
 httpx = pytest.importorskip("httpx")
 
@@ -44,6 +39,11 @@ def _write_code(directory: Path) -> None:
 
 @pytest.fixture
 def core_app(tmp_path, monkeypatch):
+    for path in ("middleware/core/gateway", "middleware/core/events", "middleware/core/services",
+                 "middleware/core/api_web", "middleware/perception"):
+        source = str(ROOT / path)
+        if source not in sys.path:
+            monkeypatch.syspath_prepend(source)
     from core_api_web.api.app import create_app
     from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
