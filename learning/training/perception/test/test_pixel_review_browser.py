@@ -20,6 +20,20 @@ def open_pixels(page, store, expect, index=0):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
 
 
+def test_unknown_highlight_is_visual_only(browser_workspace):
+    page, store, expect = browser_workspace
+    open_pixels(page, store, expect)
+    y, x = np.argwhere(review_masks.pixels(store, review_masks.get(store, 0)) == 255)[0]
+    pixel = lambda: page.evaluate("""([x, y]) => Array.from(document.querySelector('#pixel-canvas')
+        .getContext('2d').getImageData(x, y, 1, 1).data)""", [int(x), int(y)])
+    highlight = page.locator('#pixel-show-unknown')
+    expect(highlight).to_be_checked()
+    marked = pixel()
+    highlight.uncheck()
+    assert pixel() != marked
+    assert review_masks.get(store, 0)['version'] == 0
+
+
 def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
     page, store, expect = browser_workspace
     review_masks.bind_classes(store, CLASSES)

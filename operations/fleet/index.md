@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(fleet): D-507 4 검토 반영 — 보내는 현 각의 한도·부호 검사
+- 2026-10-08 · uncommitted · fix(fleet): D-507 4 교차로 회전 각을 전진 현으로 조준
 - 2026-10-08 · uncommitted · feat(fleet): 지도 edge 굽이 후보 진단
 - 2026-10-08 · uncommitted · docs(fleet): 지도 교차로 창 누락 시 CORE HOLD 설명
 - 2026-10-08 · uncommitted · docs(fleet): D-507 2·4 부호 있는 pivot의 API Ref 번호를 v1.135로 옮김
-- 2026-10-08 · uncommitted · fix(trip): D-507 pivot 검토 반영 — lane 차로만, 창 없으면 음수 pivot 없음
-- 2026-10-08 · uncommitted · fix(trip): D-507 회전 축을 지도의 첫 칠한 선에서 (SIM 발견 1–2)
