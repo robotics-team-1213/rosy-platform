@@ -166,7 +166,7 @@ def test_ship_failure_is_a_nonzero_exit_and_leaves_no_ref(tmp_path, monkeypatch)
 
 
 def test_venv_failure_is_a_nonzero_exit(tmp_path, monkeypatch):
-    _fake_ssh(tmp_path, monkeypatch, "venv.new")
+    _fake_ssh(tmp_path, monkeypatch, "/.new-")
     with pytest.raises(SystemExit) as exc:
         rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"])
     assert exc.value.code != 0
