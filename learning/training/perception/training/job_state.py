@@ -128,8 +128,10 @@ class Job:
             self._save()
             raise
 
-    def finish(self):
+    def finish(self, outcome="ready"):
         if self.lock is None or self.state["outcome"] == "rejected":
             raise JobError("cannot finish unlocked/rejected job")
-        self.state["outcome"] = "ready"
+        if outcome not in ("ready", "candidate"):
+            raise JobError("unsupported job outcome")
+        self.state["outcome"] = outcome
         self._save()
