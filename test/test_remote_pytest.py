@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
@@ -47,6 +49,7 @@ def test_worst_exit_code_counts_nothing_collected_as_pass():
     assert rp.worst([0, 5]) == 0
     assert rp.worst([0, 1, 5]) == 1
     assert rp.worst([1, 4, 0]) == 4
+    assert rp.worst([0, -9]) == 1 and rp.worst([-9]) == 1  # killed by a signal is a failure
 
 
 def test_affected_selection_uses_local_invocations_when_full_and_drops_skipped():
@@ -85,3 +88,46 @@ def test_bundle_starts_at_origin_main_and_falls_back_to_full_history(tmp_path, m
     rp.ship(repo, "h", head, "run1")
     assert sent == [True, False]  # origin/main..sha first, then the whole history
     assert _git(repo, "for-each-ref", "refs/remote-pytest") == ""  # temporary ref removed
+
+
+def _fake_ssh(tmp_path, monkeypatch, fail_on):
+    """A fake ssh: `true` succeeds; a script containing `fail_on` exits 1, anything else 0."""
+    fake = tmp_path / "fake_ssh.py"
+    fake.write_text("import sys
+c = sys.argv[-1]
+sys.stdin.buffer.read() if c != 'true' else None
+"
+                    f"sys.exit(1 if {fail_on!r} in c else 0)
+", encoding="utf-8")
+    monkeypatch.setattr(rp, "SSH", [sys.executable, str(fake)])
+    monkeypatch.setenv("ROSY_TEST_HOSTS", "h")
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+
+
+def test_ship_failure_is_a_nonzero_exit_and_leaves_no_ref(tmp_path, monkeypatch):
+    _fake_ssh(tmp_path, monkeypatch, "git bundle verify")
+    with pytest.raises(SystemExit) as exc:
+        rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"])
+    assert exc.value.code != 0
+    assert _git(ROOT, "for-each-ref", "refs/remote-pytest") == ""
+
+
+def test_venv_failure_is_a_nonzero_exit(tmp_path, monkeypatch):
+    _fake_ssh(tmp_path, monkeypatch, "venv.new")
+    with pytest.raises(SystemExit) as exc:
+        rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"])
+    assert exc.value.code != 0
+
+
+def test_remote_pytest_failure_and_signal_death_propagate(tmp_path, monkeypatch):
+    _fake_ssh(tmp_path, monkeypatch, "systemd-run")
+    assert rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"]) == 1
+    monkeypatch.setattr(rp, "capture", lambda command, log, cwd=None: -9)
+    assert rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"]) == 1
+
+
+def test_timeout_is_a_failed_step(monkeypatch):
+    def hang(*a, **kw):
+        raise subprocess.TimeoutExpired("ssh", 1)
+    monkeypatch.setattr(rp.subprocess, "run", hang)
+    assert rp.remote("h", "true", timeout=1).returncode == 124

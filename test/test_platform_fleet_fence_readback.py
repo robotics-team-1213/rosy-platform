@@ -242,13 +242,12 @@ def test_redirect_and_slow_response_refuse_without_following_or_caching():
 
 
 # run_cell_owner.main() first refuses to run on a host that exposes cameras or serial
-# adapters (the simulation cell owner must not get hardware grants). That guard looks at
-# the machine running pytest, so on a test PC with /dev/video* it fires before the fence
-# check this test is about. CI runners and the laptop have no such devices.
-@pytest.mark.skipif(Path("/dev/serial/by-id").exists() or bool(list(Path("/dev").glob("video*"))),
-                    reason="this host has /dev/video* or /dev/serial devices; the cell owner's "
-                           "hardware-grant guard fires before the Fleet fence check")
+# adapters. That guard looks at the machine running pytest, so hide those devices here:
+# this test is about the Fleet fence check that follows.
 def test_owner_entrypoint_requires_fleet_readback_before_loading_ros(monkeypatch):
+    real_exists, real_glob = Path.exists, Path.glob
+    monkeypatch.setattr(Path, "exists", lambda self: False if str(self).endswith("by-id") else real_exists(self))
+    monkeypatch.setattr(Path, "glob", lambda self, pat: iter(()) if pat == "video*" else real_glob(self, pat))
     import importlib.util
     import builtins
     original_import = builtins.__import__
