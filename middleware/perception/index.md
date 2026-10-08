@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-08 · uncommitted · fix(perception): 양쪽 경계 미관측 시 기억 주행 후보 정지
 - 2026-10-08 · 4cb87d467 · fix(perception): B9를 keeper 입력 bend_expected 뒤로 (장치 검토 반영)
 - 2026-10-08 · e192ef089 · fix(perception): B9 독립 검토 반영
 - 2026-10-08 · 05462b7d9 · fix(perception): 남서 굽이를 굽이로 읽는다 (D-507 B9)
 - 2026-10-08 · uncommitted · feat(control): Pilot 녹화에 TF 원본 추가
-- 2026-10-08 · uncommitted · fix(control): 오른쪽 경계 기억 대체 전 차로 폭 검사

@@ -22,13 +22,12 @@ the floor instead:
 Frame: base_link, x ahead, y LEFT positive (REP 103). Output keeps the lane
 contract: error > 0 means steer right. No ground plane or no odometry means
 no output: the boundary memory cannot be carried without odometry. Odometry
-older than ODOM_MAX_SKEW_S against the image counts as none, and memory not
-refreshed by fresh paint for MEMORY_MAX_AGE_S is forgotten, so frozen
-odometry cannot drive on remembered paint for ever.
+older than ODOM_MAX_SKEW_S against the image counts as none. In the base
+follower, when both boundaries disappear, memory is retained for reacquisition
+but emits no drive candidate; it is forgotten after MEMORY_MAX_AGE_S.
 
 On the 260919 lap the inner block's outline is one closed line on the
-robot's left, so holding it at a half-width drives the whole lap with no
-junction decision (the roundabout is taken on its outer arc).
+robot's left. A fully unseen bend now stops until route evidence is available.
 """
 
 from __future__ import annotations
@@ -370,6 +369,10 @@ class LaneEdgeFollower:
             self._view_key = key
         return self._view
 
+    def _allow_unseen_memory(self) -> bool:
+        # Route followers may override only with an active, aligned map gate.
+        return False
+
     def update(self, now_s: float, pose, bgr: np.ndarray, ground, *,
                lane_half_width_m: float,
                roi_top_fraction: float = 0.25,
@@ -465,6 +468,8 @@ class LaneEdgeFollower:
               or now_s - self._fresh_at > MEMORY_MAX_AGE_S):
             self._forget()
             return None
+        elif not self._allow_unseen_memory():
+            return None  # neither lane boundary is observed: no drive evidence
         left_grid = self._one_line(self._left.grid(view, pose),
                                    None if left is None else labels == left)
         right_grid = self._one_line(self._right.grid(view, pose),
