@@ -42,6 +42,10 @@ LINE_MODES = ("CAMERA_LINE",)
 MANOEUVRE = ("turning", "advancing", "reacquiring")
 #: D-490 5: a plan may be started within this long on the same map version.
 PLAN_TTL_S = 30.0
+#: D-517 2/5: a failed lap check is tried again this often, this many times (D-438 rule budget),
+#: before it is the resolver's or the operator's.
+LAP_RETRY_S = 5.0
+LAP_RETRIES = 2
 #: CORE takes ``stop_after_m`` in [0, 2] (D-494 4).
 MAX_STOP_AFTER_M = 2.0
 _ROBOT_ERRORS = (RobotApiError, HubError, OSError, RuntimeError, ValueError, httpx.HTTPError)
@@ -237,6 +241,16 @@ class TripRunner:
             hold = live.view["hold"]
             if hold is None:
                 raise TripError(409, "TRIP_NO_REPLAN")
+            if hold.get("plan") is None and hold.get("reason") == "lap":  # the operator retries the lap check
+                if await self._retry_lap(live, live.view["segment_index"]):
+                    self._describe(live)
+                    self._save(live)
+                    return live.view
+                hold = live.view["hold"]
+                if hold.get("plan") is not None:  # a changed lap: shown first, confirmed next
+                    self._describe(live)
+                    self._save(live)
+                    return live.view
             if hold.get("plan") is None:
                 raise TripError(409, "TRIP_REPLAN_FAILED", {"code": hold.get("code")})
             active = self._store.active()
@@ -387,6 +401,10 @@ class TripRunner:
                 self._describe(live)
             if live.repeat and live.view["hold"] is None and self._lap_due(live, index, remaining):
                 await self._next_lap(live, index)
+                self._describe(live)
+                last = index == len(live.segments) - 1
+            elif self._lap_retry_due(live):
+                await self._retry_lap(live, index)
                 self._describe(live)
                 last = index == len(live.segments) - 1
             if lane:
@@ -563,6 +581,24 @@ class TripRunner:
         tail = max((i for i in range(len(live.segments)) if live.place(i)), default=None)
         return tail is not None and (index > tail or (index == tail and remaining <= self.config.arm_distance_m))
 
+    def _lap_retry_due(self, live: LiveTrip) -> bool:
+        hold = live.view["hold"]
+        return (hold is not None and hold.get("reason") == "lap" and hold.get("plan") is None
+                and live.lap_tries <= LAP_RETRIES and self._clock() - live.lap_tried_at >= LAP_RETRY_S)
+
+    async def _retry_lap(self, live: LiveTrip, index: int) -> bool:
+        """Plan the failed lap again; True when it carries on (the held stop at the place may be replaced)."""
+        hold, live.view["hold"] = live.view["hold"], None
+        await self._next_lap(live, index)
+        if live.view["hold"] is not None or not live.open:
+            if live.view["hold"] is None:
+                live.view["hold"] = hold
+            return False
+        sent = live.sent
+        live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
+        live.sent, live.last_goal = None, None
+        return True
+
     async def _next_lap(self, live: LiveTrip, index: int) -> None:
         """D-517 2: plan the next lap from this lap's end after the D-494 start checks (named operator
         only at the first start). The same route as the last lap carries on without a stop; a
@@ -584,12 +620,15 @@ class TripRunner:
                     "places": [*live.view["plan"]["places"], *body["places"]],
                     "actions": [*live.view["plan"]["actions"][:-1], *body["actions"]]}
             if route_key(body["segments"]) == live.lap_route:
+                live.lap_tries = 0
                 live.view.update(plan=plan, lap=live.view["lap"] + 1)
                 live.lap_arcs = tuple(arc_id(seg) for seg in body["segments"])
                 return
             hold = {"map_version": body["map_version"], "lap_route": route_key(body["segments"]),
                     "plan": {**plan, "segments": plan["segments"][index:]},
                     "length_m": body["length_m"], "eta_s": body["eta_s"]}
+        if hold.get("plan") is None:
+            live.lap_tries, live.lap_tried_at = live.lap_tries + 1, self._clock()
         live.view["hold"] = {**hold, "reason": "lap"}
 
     def _needs_replan(self, live: LiveTrip, index: int) -> bool:

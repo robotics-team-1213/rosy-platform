@@ -360,3 +360,35 @@ def test_the_hold_back_covers_the_entry_past_the_place():
                            (place_m + PAST_PLACE_M + 0.01, False), (None, False)):
         live.traffic = {"waiting_for": [], "authority_end_m": None, "refused_at_m": refused}
         assert runner._traffic_holds(live, index) is holds, refused
+
+
+def test_a_failed_lap_check_is_tried_again_then_left_to_the_operator():
+    """Review MED 5: every LAP_RETRY_S up to LAP_RETRIES times, and on the operator's confirm."""
+    from fleet.server.trip_runner import LAP_RETRIES, LAP_RETRY_S
+
+    runner, store, fleet = _setup(ids=("a",))
+    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
+    live, tail = _to_tail(runner, store, fleet, "a", anchor_age_s=2.5)
+    _ticks(runner, fleet)
+    assert runner.view("a")["hold"]["code"] == "TRIP_POSE_UNTRUSTED" and live.lap_tries == 1
+    _ticks(runner, fleet, n=int(LAP_RETRY_S / 0.5) - 1)
+    assert live.lap_tries == 1  # not yet
+    _ticks(runner, fleet, n=1 + int(LAP_RETRY_S / 0.5) * LAP_RETRIES)
+    assert live.lap_tries == 1 + LAP_RETRIES and runner.view("a")["hold"]["reason"] == "lap"
+    _ticks(runner, fleet, n=int(LAP_RETRY_S / 0.5) * 2)
+    assert live.lap_tries == 1 + LAP_RETRIES  # the budget is spent: the resolver or the operator
+    fleet.at("a", live.arc(tail), live.segments[tail]["s_to"] - 0.3)  # a fresh sighting again
+    view = run(runner.confirm_replan("a", "bob"))
+    assert view["hold"] is None and view["lap"] == 2 and live.lap_tries == 0
+
+
+def test_a_failed_lap_check_carries_on_once_a_retry_passes():
+    runner, store, fleet = _setup(ids=("a",))
+    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))
+    live, tail = _to_tail(runner, store, fleet, "a", anchor_age_s=2.5)
+    _ticks(runner, fleet)
+    assert runner.view("a")["hold"]["reason"] == "lap" and fleet.p["a"].sent[-1][0] == "stop"
+    fleet.at("a", live.arc(tail), live.segments[tail]["s_to"] - 0.3)
+    _ticks(runner, fleet, n=10)
+    view = runner.view("a")
+    assert view["hold"] is None and view["lap"] == 2 and view["state"] == "running"

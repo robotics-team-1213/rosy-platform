@@ -367,6 +367,9 @@ class LiveTrip:
         self.lap_route: Optional[list] = None
         #: D-517 3: the arc ids of one lap of the cycle (via…, to); the loop it shares with others.
         self.lap_arcs: tuple[str, ...] = ()
+        #: Failed lap checks in a row and when the last one ran (retried every ``LAP_RETRY_S``).
+        self.lap_tries = 0
+        self.lap_tried_at = -math.inf
         #: Bumped when an operator confirms another plan (the block table's route id, D-517 3).
         self.route_rev = 0
         #: ``(segment index, s)`` where the last step located the robot.
