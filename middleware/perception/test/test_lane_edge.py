@@ -146,6 +146,21 @@ def test_one_boundary_gap_reacquires_while_moving():
 
 
 @pytest.mark.parametrize("side", [1.0, -1.0])
+def test_bend_with_one_boundary_gap_stays_inside_nominal_body_margin(side):
+    turn = side * math.radians(65.0)
+    centre = np.array([(-1.0, 0.0), (0.45, 0.0),
+                       (0.45 + 1.2 * math.cos(turn), 1.2 * math.sin(turn))])
+    world = lane(centre)
+    world.paint[int((world.y1 - H - 0.03) * 1000):int((world.y1 - H + 0.03) * 1000),
+                int((0.28 - world.x0) * 1000):int((0.43 - world.x0) * 1000)] = 0
+    log, pose = drive(world, steps=100, pose=(-0.3, 0.0, 0.0))
+    assert all(obs is not None for _, obs, _ in log)
+    assert pose[2] == pytest.approx(turn, abs=math.radians(6))
+    # Nominal half-width 92.5 mm minus body half-width 56.55 mm is 35.95 mm.
+    assert max(_distance_to_polyline(p[:2], centre) for p, _, _ in log) < 0.035
+
+
+@pytest.mark.parametrize("side", [1.0, -1.0])
 def test_65_degree_bend_is_followed(side):
     """The 260919 chevrons: both lines bend ~65 deg (run 184434 stopped here)."""
     turn = side * math.radians(65.0)
