@@ -49,7 +49,15 @@ class RelationshipReasons(unittest.TestCase):
         self.assertEqual("APPROVAL_EXPIRED", self.code(grant))
         self.now -= timedelta(days=8)
         self.receiver.revoke(self.owner_id, grant)
-        self.assertEqual("PAIRING_REQUIRED", self.code(grant))
+        self.assertEqual("APPROVAL_REVOKED", self.code(grant))
+
+    def test_request_for_an_old_receiver_key_is_identity_changed(self):
+        info = self.receiver.identity()
+        fields = {"receiver_id": info["receiver_id"], "receiver_key_sha256": "0" * 64, "client_id": "tablet-a",
+                  "label": "Tablet", "client_public_key": self.pub, "role": "operator", "nonce": "b" * 64}
+        with self.assertRaises(Refused) as refused:
+            self.receiver.request(fields, self.sign("request", fields), "fixture")
+        self.assertEqual("IDENTITY_CHANGED", refused.exception.code)
 
     def test_http_refusal_names_tls_and_keeps_the_older_detail(self):
         plain = TestClient(_app(self), base_url="http://receiver.test")
@@ -62,7 +70,7 @@ class RelationshipReasons(unittest.TestCase):
         self.assertEqual("LAN_REQUIRED", _reason(secure.post(f"{BASE}/requests", json={}), 403))
         lan = TestClient(_app(self), base_url="https://receiver.test", client=("192.168.10.20", 4000))
         lost = lan.get(f"{BASE}/requests/{'x' * 32}", headers={"X-Request-Secret": "y" * 43})
-        self.assertEqual("APPROVAL_EXPIRED", _reason(lost, 409))
+        self.assertEqual("APPROVAL_TIMEOUT", _reason(lost, 409))
         self.assertEqual("request unavailable or changed", lost.json()["detail"])
         request = self.request()
         lan.get(f"{BASE}/requests/{request['request_id']}", headers={"X-Request-Secret": request["request_secret"]})

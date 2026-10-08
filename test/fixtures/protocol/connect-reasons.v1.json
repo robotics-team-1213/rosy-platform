@@ -51,6 +51,12 @@
       "action": "로봇에 연결을 다시 요청하고 승인을 받으세요."
     },
     {
+      "code": "IDENTITY_CHANGED",
+      "retry": "person",
+      "message": "로봇의 신원 키가 기억한 것과 다릅니다. 연결을 막았습니다.",
+      "action": "로봇을 다시 설치한 것이 확실할 때만 연결 기록을 지우고 다시 승인받으세요. 모르면 관리자에게 알리세요."
+    },
+    {
       "code": "LAN_REQUIRED",
       "retry": "person",
       "message": "처음 승인은 로봇과 같은 Wi-Fi에서만 요청할 수 있습니다.",
@@ -75,16 +81,34 @@
       "action": "관제(Fleet) 또는 로봇 대시보드에서 관리자가 승인해야 합니다."
     },
     {
+      "code": "APPROVAL_TIMEOUT",
+      "retry": "person",
+      "message": "승인 요청이 시간 안에 승인되지 않아 끝났습니다.",
+      "action": "로봇을 다시 선택해 새 요청을 보내세요."
+    },
+    {
+      "code": "APPROVAL_CANCELLED",
+      "retry": "person",
+      "message": "승인 요청이 취소되었습니다.",
+      "action": "로봇을 다시 선택해 새 요청을 보내세요."
+    },
+    {
       "code": "APPROVAL_EXPIRED",
       "retry": "person",
-      "message": "승인 요청이나 승인 기간이 끝났습니다.",
-      "action": "로봇에 연결을 다시 요청하세요."
+      "message": "승인 사용 기한이 끝났습니다.",
+      "action": "로봇에 연결을 다시 요청해 승인받으세요."
     },
     {
       "code": "APPROVAL_DENIED",
       "retry": "person",
-      "message": "승인이 거절되었습니다.",
-      "action": "관리자에게 확인한 뒤 다시 요청하세요."
+      "message": "승인이 거절되었습니다(관제에서 거절했거나 승인 코드가 5번 틀림).",
+      "action": "관리자에게 확인한 뒤 새 요청을 보내세요."
+    },
+    {
+      "code": "APPROVAL_REVOKED",
+      "retry": "person",
+      "message": "로봇이 이 기기의 승인을 더 쓰지 않습니다(폐기 또는 승인한 관리자 권한 변경).",
+      "action": "관리자에게 확인한 뒤 다시 승인받으세요."
     },
     {
       "code": "RATE_LIMITED",
@@ -135,8 +159,8 @@
   "request_states": {
     "pending": "APPROVAL_PENDING",
     "rejected": "APPROVAL_DENIED",
-    "expired": "APPROVAL_EXPIRED",
-    "cancelled": "PAIRING_REQUIRED"
+    "expired": "APPROVAL_TIMEOUT",
+    "cancelled": "APPROVAL_CANCELLED"
   },
   "cases": [
     {
@@ -302,14 +326,14 @@
       "input": {
         "request_state": "expired"
       },
-      "expect": "APPROVAL_EXPIRED"
+      "expect": "APPROVAL_TIMEOUT"
     },
     {
       "id": "request_cancelled",
       "input": {
         "request_state": "cancelled"
       },
-      "expect": "PAIRING_REQUIRED"
+      "expect": "APPROVAL_CANCELLED"
     },
     {
       "id": "request_approved_usable",
