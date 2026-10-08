@@ -122,11 +122,15 @@ def test_turn_end_with_map_pivot_opens_the_arc_and_the_instruction_is_done():
         send(rig, 'left', 'SW', 64., SEGMENT)
 
 
-def test_stop_point_opens_no_arc_and_advance_m_is_ignored():
+def test_stop_point_opens_no_arc_and_advances_the_default():
+    """Review fix 2: exit_segment without an arc (stop_point) is today's turn: DEFAULT_ADVANCE_M."""
     rig = _window_rig()                       # no pivot_past_line_m: stop_point
     decision, status = rig.until(lambda d, s: s.junction.state not in ('turning', 'armed'), seen=False)
     assert status.arc is None and status.junction.pivot_basis == 'stop_point'
-    assert status.junction.state == 'reacquiring'   # advance 0 (advance_m 0.2 ignored)
+    assert status.junction.state == 'advancing' and rig.m._junction['advance_m'] == .10
+    start = (rig.x, rig.y)
+    rig.until(lambda d, s: s.junction.state != 'advancing', seen=False)
+    assert math.hypot(rig.x - start[0], rig.y - start[1]) == pytest.approx(.10, abs=.01)
 
 
 # --- command ------------------------------------------------------------------------------------
@@ -563,3 +567,42 @@ def test_closed_loop_gain_09_corrects_without_heading_outward(offset, yaw0):
     radial = math.atan2(rig.y - r, rig.x)                 # the ring tangent (CCW) is radial + 90 deg
     outward = math.cos(rig.yaw - radial)                  # > 0: heading away from the centre
     assert outward <= math.sin(V*.5*(K*.9+B)*.05) + 1e-6
+
+
+# --- safety review fixes 2026-10-08 -------------------------------------------------------------
+
+@pytest.mark.parametrize('place', ['NE', None])
+def test_an_armed_stop_of_any_place_holds_at_segment_end(place):
+    rig = ArcRig()
+    rig.open()
+    rig.m.set_junction('stop', place, 10.)
+    rig.until(lambda d, s: not running(rig))
+    decision, status = rig.drive(junction=True)
+    assert (decision.linear, status.reason, status.junction.state) == (0., 'junction_stop', 'executing')
+    assert status.arc.reason == 'segment_end' and rig.events.seen == []
+
+
+def test_limits_use_the_speed_the_angular_cap_leaves():
+    """Review fix 3: tight kappa 5 and cap 0.2: v 0.04 on the arc, 0.2/(5+4) in the correction."""
+    rig = ArcRig(max_angular=.2)
+    rig.open(dict(SEGMENT, curvature_1pm=5., length_m=.4))
+    assert rig.m._arc['deadline'] - rig.now == pytest.approx(.4/.04 + 2.)
+    _past_grace(rig)
+    before = rig.m._arc['deadline']
+    rig.drive(ir='left')
+    c = rig.m._arc['corr']
+    assert c['deadline'] - rig.now == pytest.approx(.30/(.2/9.) + 2.)
+    assert rig.m._arc['deadline'] - before == pytest.approx(.30/(.2/9.) + 2.)
+
+
+@pytest.mark.parametrize('enforce', [False, True])
+def test_a_low_confidence_visible_line_is_no_clear(enforce):
+    """Review fix 4: kind arc needs a confident clear (fresh, calibrated, not visible) every tick."""
+    rig = ArcRig(enforce=enforce)
+    rig.open(dict(SEGMENT, length_m=1.))
+    _past_grace(rig)
+    assert rig.drive()[0].linear > 0
+    rig.ir_conf = .2                          # _ir_guard reads it as clear
+    decision, status = rig.drive(ir='left')
+    assert rig.m._ir_guard(rig.now) == 'clear'
+    assert (decision.linear, status.arc.reason) == (0., 'lane_arc_motion_unconfirmed')

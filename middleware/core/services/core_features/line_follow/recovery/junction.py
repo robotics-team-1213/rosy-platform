@@ -428,10 +428,11 @@ class JunctionMixin(JunctionApproachMixin):
                 return self._maneuver_twist(j, now, 0., twist, decision,
                                             'junction_stopping' if j['sub'] == 'stopping'
                                             else 'junction_turning')
-            if j.get('exit_segment') is not None and j.get('pivot_basis') != 'stop_point':
-                arc = self._open_arc(j, now)  # D-520; False: a crosswalk, today's advance
+            if j.get('exit_segment') is not None:  # D-520: stop_point or a crosswalk: today's advance
+                arc = self._open_arc(j, now) if j.get('pivot_basis') != 'stop_point' else False
                 if arc is not False:
                     return arc or replace(decision, linear=0., angular=0.)
+                j['advance_m'] = DEFAULT_ADVANCE_M
             j['speed'] = self._half_trip_speed()  # at most half the trip speed (D-495 1b)
             if j['speed'] <= 0:
                 return self._abort(j, 'linear_limit_zero', decision)

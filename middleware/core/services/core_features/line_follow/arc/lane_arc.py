@@ -135,7 +135,9 @@ class ArcMixin:
             'end': segment['end_place_id'], 'k': float(segment['curvature_1pm']),
             'length': float(segment['length_m']), 'map_id': j.get('map_id'), 'travelled': 0.,
             'state': 'running', 'reason': None, 'corr': None, 'grace': set(), 'checked': False,
-            'deadline': now + (segment['length_m']/v if v > 0 else 0.) + STEP_MARGIN_S}
+            'deadline': now + STEP_MARGIN_S}
+        v = self._arc_capped(v, 0.)
+        a['deadline'] += segment['length_m']/v if v > 0 else 0.
         if pose is None:
             return self._arc_stop('lane_arc_pose_lost')
         a.update(key=(self._return_evidence.epoch, pose.frame), last=(pose.x, pose.y, pose.yaw),
@@ -146,6 +148,11 @@ class ArcMixin:
         self._status = self._status.model_copy(update={
             'state': 'RECOVERING', 'reason': 'lane_arc', 'linear': 0., 'angular': 0.})
         return None
+
+    def _arc_capped(self, v, bias):
+        """The speed the angular cap leaves for curvature g*|kappa| + bias (D-344 13), for limits."""
+        turn, cap = self._config.arc_curvature_gain*abs(self._arc['k']) + bias, self._angular_cap()
+        return min(v, cap/turn) if turn > 0 else v
 
     def _arc_quiet(self):
         """While the arc runs: no loss clock, no D-476 bridge, no D-468 controller (D-520 2)."""
@@ -227,6 +234,8 @@ class ArcMixin:
         if ir == 'centre':
             return 0, None, 'lane_arc_edge'  # the body is on the line
         side = ir if ir in ('left', 'right') else None
+        if side is None and self._ir_observation.visible and (c is None or c['phase'] != 'away'):
+            return 0, None, 'lane_arc_motion_unconfirmed'  # a clear must be confident (not visible)
         if c is None and a['travelled'] < ARC_START_IR_GRACE_M:  # entry grace: spoke line ends
             if side:
                 a['grace'].add(side)
@@ -237,7 +246,8 @@ class ArcMixin:
                 return 0, 'arc', None
             if c is not None or (first and side in a['grace']):
                 return 0, None, 'lane_arc_edge'  # a second verdict, or the body was there already
-            v_c = self._arc_speed()*self._config.ir_guard_speed_scale
+            v_c = self._arc_capped(self._arc_speed()*self._config.ir_guard_speed_scale,
+                                   self._config.bridge_arm_max_curvature)
             if v_c <= 0:
                 return 0, None, 'lane_arc_edge'
             limit = (ARC_IR_AWAY_M+ARC_IR_LEVEL_MAX_M)/v_c + STEP_MARGIN_S
@@ -268,6 +278,10 @@ class ArcMixin:
         self._loss_started_at, self._lost_latched = None, False  # the loss clock starts afresh
         if j is not None and j['state'] == 'armed' and now > j['expires_at']:
             j = self._junction = None
+        if j is not None and j['state'] == 'armed' and j['action'] == 'stop':
+            a['reason'] = 'segment_end'  # review: an armed stop always holds, whatever its place
+            j.update(state='executing', held=True)
+            return None  # the junction gate holds junction_stop
         if j is None or j['state'] != 'armed' or j['place_id'] != a['end']:
             if j is not None and j['state'] == 'armed':
                 j.update(state='aborted', reason='arc_mismatch')
@@ -280,9 +294,6 @@ class ArcMixin:
         a['reason'], j['pivot_basis'] = 'segment_end', 'segment_end'
         self._junction_seen_at = self._junction_first_seen = self._junction_anchor = None
         self._junction_entry = None
-        if j['action'] == 'stop':
-            j.update(state='executing', held=True)
-            return None  # the junction gate holds junction_stop
         if j['action'] == 'straight':
             if j.get('exit_segment') is not None:
                 out = self._open_arc(j, now)

@@ -321,3 +321,13 @@ def test_arc_kinds_never_reverse(kind, side):
     site = Site()
     assert site.admit(-.02, 0., kind, ir_side=side) is False
     assert site.admit(.02, 0., kind, ir_side=side) is True
+
+
+def test_arc_needs_a_confident_clear():
+    """Review fix 4: a visible line below min_confidence reads 'clear' but does not admit kind arc."""
+    site = Site()
+    site.m.observe(LineObservation(LineFollowMode.IR_LINE, site.now, True, -.9, .2, ir_calibrated=True,
+                                   calibration_revision='r'), received_at=site.now)
+    assert site.m._ir_guard(site.now) == 'clear'
+    assert site.admit(.08, .3, 'arc') is False
+    assert site.admit(.04, 0., 'arc_edge', ir_side='left') is True   # away: the side or a clear

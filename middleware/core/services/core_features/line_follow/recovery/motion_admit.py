@@ -43,7 +43,8 @@ class MotionAdmitMixin:
                 return None
         c, at, ir = self._config, self._clearance_at, self._ir_guard(now)
         site = (c.site_floor_map_id is not None and map_id in (None, c.site_floor_map_id)
-                and c.ir_guard_enabled and (ir in IR_ALLOWED[kind] and ir in ('clear', ir_side or ir) or (
+                and c.ir_guard_enabled and (kind != 'arc' or ir != 'clear' or not self._ir_observation.visible)
+                and (ir in IR_ALLOWED[kind] and ir in ('clear', ir_side or ir) or (
                     centre_ok and ir == 'centre' and kind in ('approach', 'advance')))
                 and c.obstacle_mode == 'path' and c.body_stop_known and self._scan_points is not None
                 and at is not None and 0 <= now-at <= c.clearance_stale_s)
