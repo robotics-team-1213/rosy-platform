@@ -184,6 +184,23 @@ thumbnail을 다시 만들지 않고, 픽셀 검수의 마스크 오버레이 �
 python learning/training/perception/dataset/review_quality.py --state X:/DevTemp/<name>/state --threshold 0.15 > X:/DevTemp/<name>/exposure-preview.json
 ```
 
+모델 PC에서 로컬 Qwen 영상 모델의 **참고 의견**을 만들려면 다음을 실행한다.
+원본 사진·현재 indexed mask의 SHA를 검증하고 255 픽셀 수와 프레임별 시각 의견을
+새 보고서 폴더에 기록한다. 전체 실행이 끝나고 검수 결정 세대가 유지됐을 때만
+`<state>/vlm-feedback.json`을 갱신한다. `/pixels`는 해당 사진의 원본·마스크 SHA가
+보고서와 같을 때만 최신 의견으로 표시한다. 다른 사진의 변경은 이미 검사한 사진의
+의견을 숨기지 않으며, 해당 마스크가 바뀌면 오래된 의견으로 표시한다.
+
+```bash
+python learning/training/perception/dataset/vlm_mask_feedback.py \
+  --state <review-state> --out <new-report-directory>
+```
+
+Ollama `qwen3-vl:8b-instruct`는 모델 PC의 `127.0.0.1:11434`에서만 사용한다.
+`--limit N`은 시험용 부분 보고서이며 앱에 게시하지 않는다. AI는 승인·제외·학습 자격을
+바꾸지 않는다. `no_obvious_concern`도 검수 완료가 아니다. 255가 남으면 사람 픽셀
+승인이 거절되며, VLM이 판단을 보류하거나 잘못 읽을 수 있으므로 원본을 직접 확인한다.
+
 ### 클래스셋 (D-485)
 
 객체 클래스는 첫 실행의 `--object-classes <data.yaml>`로 정한다. 파일은 Ultralytics `data.yaml`의 `names`(목록 또는 번호 사전)를 읽고, 선택 항목 `display`(이름별 표시 문구)와 `colors`(이름별 `[r, g, b]`)를 받는다. 생략하면 D-423의 기본 6개 클래스다. 한 작업 공간은 객체 클래스셋 하나와 픽셀 클래스셋 하나에 묶인다. 다른 모델의 클래스로 검수하려면 다른 `--state`로 새 작업 공간을 만든다.

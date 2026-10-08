@@ -603,6 +603,12 @@ roots:
     d427_target: tools/icons
     wave: none
     concern: other
+  - path: tools/remote
+    part: tools
+    d427_target: tools/remote
+    wave: none
+    note: remote_pytest.py runs pytest on the model PC / AI PC; not shipped.
+    concern: other
   - path: tools/release
     part: tools
     d427_target: tools/release
