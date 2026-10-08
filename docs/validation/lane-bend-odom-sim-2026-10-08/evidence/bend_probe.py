@@ -45,6 +45,9 @@ def lane(radius):
 
 def run(p, a):
     arc, (s_start, s_end, turn, radius) = lane(a.radius)
+    # One place id per run: CORE keeps the last done (place_id, action) across mode changes (D-495
+    # R1), as a trip does between two passes of the same bend through other places.
+    place_id = 'B_SW_'+Path(a.out).name
     p.set_pose(a.x, a.y, a.yaw)
     t0 = p.t()
     p.mode('CAMERA_LINE')
@@ -61,7 +64,7 @@ def run(p, a):
             if (j.get('state') in (None, 'idle', 'armed') and done_at is None and 0 < bend_in <= ARM_M
                     and (sent_at is None or time.monotonic()-sent_at > EXPIRES_S/2)):
                 code, _ = p.call('POST', '/api/v1/line-follow/junction', {
-                    'action': 'bend', 'place_id': 'B_SW', 'expires_s': EXPIRES_S, 'turn_deg': round(turn, 1),
+                    'action': 'bend', 'place_id': place_id, 'expires_s': EXPIRES_S, 'turn_deg': round(turn, 1),
                     'map_id': MAP_ID, 'bend_in_m': bend_in, 'bend_tol_m': TOL_M, 'bend_radius_m': radius})
                 if code == 200:  # as Fleet: JUNCTION_ODOM_STALE is sent again on the next tick
                     sent_at = time.monotonic()
