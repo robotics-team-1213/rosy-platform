@@ -58,7 +58,7 @@ def test_pilot_map_link_opens_real_console_with_same_tab_session(tmp_path, width
         page.goto("http://rosy.test/pilot")
         page.locator("ui-topbar [data-goto='/console']").click()
         page.wait_for_url("**/console")
-        page.locator('[data-panel="console.map"] .surface-map-stage').wait_for(timeout=20_000)
+        page.locator('[data-panel="console.map"] .surface-map-stage').wait_for(state="attached", timeout=20_000)
         page.wait_for_function("document.querySelector('#map-status')?.getAttribute('state') === 'empty'")
         assert "지도 데이터가 아직 없습니다" in page.locator('[data-panel="console.map"] ui-empty').inner_text()
         assert "연결을 확인" not in page.locator('[data-panel="console.map"] ui-empty').inner_text()
