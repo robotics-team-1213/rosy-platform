@@ -30,6 +30,20 @@ journalctl --user -u rosy-pilot-fetch@9dfk.service -n 80 --no-pager
 
 ## v13 검수 앱 코드 릴리스
 
+승인된 모델 코드 후보가 적용된 뒤에는 [D-561](../../docs/adr/D-561-model-review-ui-signed-code-follow.md)의 별도 사용자 타이머가 검수 UI도 버전별 릴리스로 전환한다. 모델 PC에서 설치된 D-446 `state.json`의 현재 sequence를 `MINIMUM_SEQUENCE`에 기록한다. 기존 화면보다 오래된 후보가 처음 실행될 때 활성화되지 않게 하는 기준이다. `REVIEW_HOST`는 현재 검수 서비스가 바인딩하는 사설 IPv4다. 먼저 타이머를 한 번 수동 실행해 `waiting for a newer accepted model-code release`를 확인한 뒤 활성화한다.
+
+```bash
+install -m 0755 deploy/model_pc/auto_review_release.py ~/rosy-ml/bin/auto_review_release.py
+install -m 0644 deploy/model_pc/rosy-review-release-update.{service,timer} ~/.config/systemd/user/
+printf 'REVIEW_HOST=%s\nMINIMUM_SEQUENCE=%s\n' '<model-pc-private-ip>' '<current-model-code-sequence>' > ~/.config/rosy/review-release.env
+chmod 600 ~/.config/rosy/review-release.env
+systemctl --user daemon-reload
+systemctl --user start rosy-review-release-update.service
+systemctl --user enable --now rosy-review-release-update.timer
+```
+
+새 서명 후보의 자동 적용 뒤 `systemctl --user status rosy-review-release-update.service`와 `readlink -f ~/rosy-ml/review-v13-code/current`를 대조한다. 후보 발행·서명은 D-446에 따른다. 이 타이머는 `main`의 새 커밋만으로 검수 화면을 바꾸지 않는다.
+
 검수 앱은 모델 PC의 `~/rosy-ml/review-v13-code/releases/<release>/`에 완전한 실행 소스를 보존하고, 사용자 서비스 `rosy-review-v13.service`는 `~/rosy-ml/review-v13-code/current` 링크를 실행한다. 검수 기록인 `~/rosy-ml/review-v13-drivable/state`는 릴리스 밖에 둔다. 기존 런타임 폴더를 다시 풀거나 교체해도 `current`가 가리키는 화면은 바뀌지 않는다. 배포 결정은 [D-545](../../docs/adr/D-545-model-pc-review-versioned-release.md)을 따른다.
 
 첫 전환에서는 **현재 모델 PC에서 실제 실행 중인, 검수 스튜디오가 적용된 코드 폴더**에서 코드 전용 입력을 만든다. 그 폴더에는 과거 `state/`가 들어 있을 수 있으므로 반드시 제외한다. 이후에는 검증한 정확한 Git 커밋의 전체 검수 앱 소스를 모델 PC의 별도 준비 폴더에 전송한 후 같은 명령을 사용한다. `review_app.py`, `review_app_web/`, `shared/web/` 및 해당 모듈의 Python import 경로를 포함해야 한다. 소스 폴더에는 DB, 영상, 모델 가중치나 비밀을 넣지 않는다. 릴리스 이름은 출처를 식별할 수 있게 고정하며 재사용하지 않는다. 전송 자체는 자동 갱신되지 않으며, 이 명령을 실행해야 화면이 전환된다.

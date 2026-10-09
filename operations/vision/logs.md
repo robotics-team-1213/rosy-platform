@@ -382,6 +382,11 @@
 - 증거: 합성 시험(테이프 위 색 덱 로봇, 파란 사각형 위 상자, 확정 전 0.35 보고, 의자 부분)과 각 조건 변이 시 실패 확인. 실프레임 D4/D5: 0.35 보고 2프레임 뒤 유령 0, 8kcn 9/9. A·B·C 변화 없음. blob 16개 약 9 ms
 - gate 변화: 없음
 
+## 2026-10-09 · 3284df22e · feat(vision): 천장 검출 minMarkerPerimeterRate 0.015 (D-562)
+- 변경: `detect.py`가 `_detector_parameters`가 돌려준 객체에 `minMarkerPerimeterRate = 0.015`를 둔다(4.6 segfault 회피로 새 객체를 만들지 않음). 로봇 윗면이 40 mm 스티커만 받기 때문이다.
+- 증거: 실 천장 프레임 + 승인 보정 위 88배치 시뮬레이션에서 40 mm 스티커 39/88 → 54/88, 실프레임 124장의 오검출 수는 기본값과 같은 3(번호 17, 칠한 원·케이블). 새 시험 `test_vision_detect.py`(10 px 마커는 0.015에서만 검출). 원격 로그 X:/DevTemp/marker-id-plan/run-1.txt.
+- gate 변화: SOURCE. 현장 Vision 갱신 뒤 실제 스티커로 MARKER 확인은 열림.
+
 ## 2026-10-09 · uncommitted · feat(vision): D-560 S1 지도 평면 영상 `mode: map`
 - 변경: lease `rectification`에 `{"mode": "map"}`(다른 필드 거절). 트래커가 Fleet에서 읽은 승인 보정 기록을 `IngestServer.report_calibration`으로 ingest에 넘기고(두 번째 Fleet 클라이언트 없음), `/frame`이 `rectify.map_plane_jpeg`로 최신 원본을 지도 평면(track_bounds_m + 0.15 m, 400 px/m, 긴 변 ≤ 1920 px, 화면 밖 어두운 고정색)에 편다. 헤더 `X-Frame-Rectified: map`·`X-Frame-Plane`·`X-Frame-Calibration`, 기록 없음·source·map·렌즈·비율 불일치는 409 `plane-unavailable`(원본 대체 없음). 펴기는 `asyncio.to_thread`로 이벤트 루프 밖에서 (프레임, revision)마다 한 번. API Reference §10.6.1, v1.166
 - 증거: 원격 pytest operations/vision/test 428 passed, operations/fleet/test/test_server_app.py 41 passed, known_failures 0 new. 실프레임(`ceiling_north`, `paint-7b220d432c2a`) 평면 1244×624에 활성 지도 차선 6개를 D-560 식으로 그려 도로 가운데 놓임을 눈으로 확인(X:\DevTemp\cam-map-plane-s1\plane-lanes.png)
