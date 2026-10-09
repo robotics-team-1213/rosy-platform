@@ -15,9 +15,10 @@ The same fixed-seed probes go through the PyTorch model and onnxruntime; a max
 absolute difference above --tolerance (1e-3) or any shape change fails and
 writes nothing (--rtol adds a relative bound for pixel-valued box outputs).
 --int8 adds a QDQ copy (onnxruntime quantize_static on --calib frames in the
---color order, fed under the model's own input name; int8 activations, per-channel
-int8 weights; --int8-fp32-nodes, default first and last Conv for lane_seg, stay
-fp32 and are listed in metrics int8_fp32_nodes) and records its distance
+--color order, fed under the model's own input name, with the task's INT8_RECIPES
+entry: lane_seg s8s8 per-channel with its first and last Conv fp32, object_det the
+earlier uint8-activation per-tensor defaults; --int8-fp32-nodes overrides the fp32
+nodes; metrics int8_recipe, int8_fp32_nodes, int8_calibration_frames) and records its distance
 from fp32 on the random probes (int8_vs_fp32, and int8_vs_fp32_rel scaled by the
 output peak) in the manifest metrics; the intake gate's max_int8_vs_fp32_rel
 judges it. Random probes are not camera frames, so that distance is coarse.
@@ -156,53 +157,92 @@ def calibration_frames(calib_dir, hw, color):
         yield np.ascontiguousarray(image.transpose(2, 0, 1)[None], np.float32) / 255.0
 
 
-#: --int8 nodes left fp32 when --int8-fp32-nodes is not given. lane_seg: the image-in and
-#: logits-out convs; all-int8 cost drivable IoU (0.898 vs fp32), with these two fp32 the
-#: Pi 5 runs ~0.61x fp32 latency at lane_line IoU 0.992 / drivable 0.948 vs fp32 (2026-10-09).
-INT8_FP32_DEFAULT = {"lane_seg": ("first_conv", "last_conv"), "object_det": ()}
+#: --int8 recipe per task (recorded as metrics.int8_recipe).
+#: lane_seg "s8s8-pc-pre": quant_pre_process, int8 activations, per-channel int8 weights, the
+#:   image-in and logits-out convs left fp32, calibration memory capped. All-int8 cost drivable
+#:   IoU (0.898 vs fp32); with those two convs fp32 the Pi 5 runs ~0.61x fp32 latency at
+#:   lane_line IoU 0.992 / drivable 0.948 vs fp32 (2026-10-09).
+#: object_det "u8s8-pt": the earlier quantize_static defaults (uint8 activations, per-tensor
+#:   weights, no pre-process, no cap), unchanged until it is measured on its own.
+INT8_RECIPES = {
+    "lane_seg": {"name": "s8s8-pc-pre", "pre_process": True, "per_channel": True,
+                 "activation": "QInt8", "fp32_nodes": ("first_conv", "last_conv"), "cap": True},
+    "object_det": {"name": "u8s8-pt", "pre_process": False, "per_channel": False,
+                   "activation": "QUInt8", "fp32_nodes": (), "cap": False},
+}
 #: Calibration holds at most this many frames of intermediate outputs at once; uncapped,
 #: 200 lane frames kept every activation and hung the 16 GB model PC (2026-10-09).
 CALIB_MAX_INTERMEDIATE = 7
 
 
+def _only(convs, what, model_path):
+    if len(convs) > 1:
+        raise ValueError(f"{what} is ambiguous in {model_path}: {convs}; name the node instead")
+    return convs
+
+
 def fp32_node_names(model_path, keep) -> list:
-    """Node names for quantize_static nodes_to_exclude: each `keep` item is a node name or
-    first_conv / last_conv (graph order, which ONNX keeps topological)."""
+    """Node names for quantize_static nodes_to_exclude: each `keep` item is a node name,
+    first_conv (the Conv reading a graph input) or last_conv (the Conv writing a graph
+    output). When no Conv touches the graph input or output directly, the first or last
+    Conv in graph order (ONNX keeps it topological) is taken; two such Convs is an error."""
     import onnx
-    nodes = onnx.load(str(model_path)).graph.node
-    convs = [n.name for n in nodes if n.op_type == "Conv"]
-    alias = {"first_conv": convs[:1], "last_conv": convs[-1:]}
-    known = {n.name for n in nodes if n.name}
+    graph = onnx.load(str(model_path)).graph
+    convs = [n for n in graph.node if n.op_type == "Conv"]
+    inputs = {i.name for i in graph.input} - {t.name for t in graph.initializer}
+    outputs = {o.name for o in graph.output}
+    alias = {  # resolved only when asked for: an unused alias may be ambiguous
+        "first_conv": lambda: _only([n.name for n in convs if set(n.input) & inputs], "first_conv",
+                                    model_path) or [n.name for n in convs[:1]],
+        "last_conv": lambda: _only([n.name for n in convs if set(n.output) & outputs], "last_conv",
+                                   model_path) or [n.name for n in convs[-1:]],
+    }
+    known = {n.name for n in graph.node if n.name}
     names = []
     for item in keep:
-        found = alias.get(item, [item])
+        found = alias[item]() if item in alias else [item]
         if not found or not all(n in known for n in found):
             raise ValueError(f"--int8-fp32-nodes {item!r} names no node of {model_path}")
         names += found
     return list(dict.fromkeys(names))
 
 
-def quantize_int8(fp32_path, int8_path, calib_dir, hw, color, fp32_nodes=()) -> list:
-    """onnxruntime quantize_static (QDQ, int8 activations, per-channel int8 weights) of the
-    quant_pre_process'd graph, fed under the model's own input name; `fp32_nodes` (see
-    fp32_node_names) stay fp32. Returns the excluded node names. Calibration memory is
-    capped (CALIB_MAX_INTERMEDIATE); on a shared PC still run it under
-    `systemd-run --user --scope -p MemoryMax=3G`."""
+def _calibration_cap_supported() -> bool:
+    import inspect
+    from onnxruntime.quantization.calibrate import MinMaxCalibrater
+    return "max_intermediate_outputs" in inspect.signature(MinMaxCalibrater.__init__).parameters
+
+
+def quantize_int8(fp32_path, int8_path, calib_dir, hw, color, task, fp32_nodes=None) -> dict:
+    """onnxruntime quantize_static (QDQ) with the task's INT8_RECIPES entry, fed under the
+    model's own input name; `fp32_nodes` (fp32_node_names; None = the recipe's) stay fp32.
+    Returns the manifest metrics int8_recipe, int8_fp32_nodes (comma-joined) and
+    int8_calibration_frames. A capped recipe refuses an onnxruntime without
+    CalibMaxIntermediateOutputs and leaves out the last frame when the count is a multiple
+    of the cap; on a shared PC still run it under `systemd-run --user --scope -p MemoryMax=3G`."""
     import itertools
+    import shutil
     import tempfile
 
     import onnxruntime as ort
     from onnxruntime.quantization import CalibrationDataReader, QuantFormat, QuantType, quantize_static
     from onnxruntime.quantization.shape_inference import quant_pre_process
 
+    recipe = INT8_RECIPES[task]
+    if recipe["cap"] and not _calibration_cap_supported():
+        raise RuntimeError(f"onnxruntime {ort.__version__} lacks CalibMaxIntermediateOutputs: "
+                           "uncapped calibration can exhaust host memory; upgrade onnxruntime")
     with tempfile.TemporaryDirectory() as tmp:
         pre = Path(tmp) / "pre.onnx"
-        quant_pre_process(str(fp32_path), str(pre), skip_symbolic_shape=True)
+        if recipe["pre_process"]:
+            quant_pre_process(str(fp32_path), str(pre), skip_symbolic_shape=True)
+        else:
+            shutil.copyfile(fp32_path, pre)
         name = ort.InferenceSession(str(pre), providers=["CPUExecutionProvider"]).get_inputs()[0].name
-        excluded = fp32_node_names(pre, fp32_nodes)
+        excluded = fp32_node_names(pre, recipe["fp32_nodes"] if fp32_nodes is None else fp32_nodes)
         count = len(_calibration_paths(calib_dir))
         # ORT 1.26 raises "No data is collected" when the count is a multiple of the cap.
-        if count > 1 and count % CALIB_MAX_INTERMEDIATE == 0:
+        if recipe["cap"] and count > 1 and count % CALIB_MAX_INTERMEDIATE == 0:
             count -= 1
         frames = itertools.islice(calibration_frames(calib_dir, hw, color), count)
 
@@ -211,11 +251,16 @@ def quantize_int8(fp32_path, int8_path, calib_dir, hw, color, fp32_nodes=()) -> 
                 frame = next(frames, None)
                 return None if frame is None else {name: frame}
 
-        quantize_static(str(pre), str(int8_path), Reader(), quant_format=QuantFormat.QDQ,
-                        per_channel=True, activation_type=QuantType.QInt8, weight_type=QuantType.QInt8,
-                        nodes_to_exclude=excluded,
-                        extra_options={"CalibMaxIntermediateOutputs": CALIB_MAX_INTERMEDIATE})
-    return excluded
+        options = dict(per_channel=recipe["per_channel"],
+                       activation_type=getattr(QuantType, recipe["activation"]),
+                       weight_type=QuantType.QInt8)
+        if excluded:
+            options["nodes_to_exclude"] = excluded
+        if recipe["cap"]:
+            options["extra_options"] = {"CalibMaxIntermediateOutputs": CALIB_MAX_INTERMEDIATE}
+        quantize_static(str(pre), str(int8_path), Reader(), quant_format=QuantFormat.QDQ, **options)
+    return {"int8_recipe": recipe["name"], "int8_fp32_nodes": ",".join(excluded),
+            "int8_calibration_frames": count}
 
 
 def write_object_manifest(out_dir, *, onnx_path, input_hw, color, scale, mean, std, dataset_repo,
@@ -268,7 +313,7 @@ def _arguments():
     ap.add_argument("--calib", help="--int8: folder of calibration frames (.jpg/.png)")
     ap.add_argument("--int8-fp32-nodes", nargs="*", metavar="NODE",
                     help="--int8: nodes left fp32 (names, first_conv, last_conv); none given = all int8; "
-                         f"default per task {INT8_FP32_DEFAULT}")
+                         "default: the task's INT8_RECIPES fp32_nodes")
     for name in ("--dataset-repo", "--dataset-revision", "--camera-profile-revision", "--trainer"):
         ap.add_argument(name, required=True)
     return ap
@@ -324,8 +369,8 @@ def _convert(args, hw, out, staged, staged_int8):
     final, precision = staged, "fp32"
     if args.int8:
         final, precision = staged_int8, "int8"
-        keep = INT8_FP32_DEFAULT[args.task] if args.int8_fp32_nodes is None else args.int8_fp32_nodes
-        metrics["int8_fp32_nodes"] = quantize_int8(staged, final, args.calib, hw, args.color, keep)
+        metrics.update(quantize_int8(staged, final, args.calib, hw, args.color, args.task,
+                                     args.int8_fp32_nodes))
         # Random probes, not camera frames: a coarse, scale-free distance for the intake gate.
         q = parity(onnx_runner(staged), onnx_runner(final), probes, float("inf"))
         metrics["int8_vs_fp32"] = q["max_abs_diff"]

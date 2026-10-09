@@ -185,22 +185,25 @@ def test_int8_quantizes_a_graph_whose_input_is_named_images(tmp_path):
     calib = tmp_path / "calib"
     calib.mkdir()
     cv2.imwrite(str(calib / "a.png"), np.full((32, 32, 3), 128, np.uint8))
-    convert.quantize_int8(fp32, tmp_path / "int8.onnx", calib, (32, 32), "rgb")
+    convert.quantize_int8(fp32, tmp_path / "int8.onnx", calib, (32, 32), "rgb", "object_det")
     assert (tmp_path / "int8.onnx").stat().st_size > 0
 
 
-# --- 2026-10-09: int8 with the first and last Conv kept fp32 (lane_seg Pi latency) ---
+# --- 2026-10-09: int8 recipes per task; lane_seg keeps its first and last Conv fp32 ---
 
-def _three_conv_model(tmp_path):
+def _conv_model(tmp_path, convs=(("x", "a"), ("a", "b"), ("b", "y")), tail=None):
+    """Named Convs conv0.. over (input, output) pairs; tail: (op, input) writing y."""
     onnx = pytest.importorskip("onnx")
     from onnx import TensorProto, helper
     w = np.random.default_rng(0).standard_normal((3, 3, 3, 3)).astype(np.float32)
     nodes = [helper.make_node("Conv", [src, f"w{i}"], [dst], name=f"conv{i}", pads=[1, 1, 1, 1])
-             for i, (src, dst) in enumerate((("x", "a"), ("a", "b"), ("b", "y")))]
+             for i, (src, dst) in enumerate(convs)]
+    if tail:
+        nodes.append(helper.make_node(tail[0], list(tail[1:]), ["y"], name="tail"))
     graph = helper.make_graph(
         nodes, "g", [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1, 3, 32, 32])],
         [helper.make_tensor_value_info("y", TensorProto.FLOAT, [1, 3, 32, 32])],
-        [helper.make_tensor(f"w{i}", TensorProto.FLOAT, w.shape, w.flatten()) for i in range(3)])
+        [helper.make_tensor(f"w{i}", TensorProto.FLOAT, w.shape, w.flatten()) for i in range(len(convs))])
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)])
     model.ir_version = 8
     path = tmp_path / "fp32.onnx"
@@ -208,8 +211,17 @@ def _three_conv_model(tmp_path):
     return path
 
 
+def _calib(tmp_path, count):
+    cv2 = pytest.importorskip("cv2")
+    calib = tmp_path / "calib"
+    calib.mkdir()
+    for i in range(count):
+        cv2.imwrite(str(calib / f"{i:02d}.png"), np.full((32, 32, 3), 9 * i, np.uint8))
+    return calib
+
+
 def test_fp32_node_names_resolve_aliases_and_refuse_unknown_names(tmp_path):
-    path = _three_conv_model(tmp_path)
+    path = _conv_model(tmp_path)
     assert convert.fp32_node_names(path, ("first_conv", "last_conv")) == ["conv0", "conv2"]
     assert convert.fp32_node_names(path, ("conv1", "conv1")) == ["conv1"]
     assert convert.fp32_node_names(path, ()) == []
@@ -217,33 +229,72 @@ def test_fp32_node_names_resolve_aliases_and_refuse_unknown_names(tmp_path):
         convert.fp32_node_names(path, ("nope",))
 
 
-def test_lane_seg_int8_keeps_the_first_and_last_conv_fp32():
-    assert convert.INT8_FP32_DEFAULT["lane_seg"] == ("first_conv", "last_conv")
-    assert convert.INT8_FP32_DEFAULT["object_det"] == ()
+def test_last_conv_falls_back_to_graph_order_behind_a_tail_op(tmp_path):
+    path = _conv_model(tmp_path, convs=(("x", "a"), ("a", "b"), ("b", "c")), tail=("Relu", "c"))
+    assert convert.fp32_node_names(path, ("first_conv", "last_conv")) == ["conv0", "conv2"]
 
 
-def test_int8_leaves_the_named_convs_fp32_with_a_cap_multiple_of_frames(tmp_path):
-    """7 frames is a multiple of the calibration cap, which ORT 1.26 refuses unless trimmed."""
-    onnx = pytest.importorskip("onnx")
-    pytest.importorskip("onnxruntime.quantization")
-    cv2 = pytest.importorskip("cv2")
-    fp32 = _three_conv_model(tmp_path)
-    calib = tmp_path / "calib"
-    calib.mkdir()
-    for i in range(convert.CALIB_MAX_INTERMEDIATE):
-        cv2.imwrite(str(calib / f"{i}.png"), np.full((32, 32, 3), 20 * i, np.uint8))
-    out = tmp_path / "int8.onnx"
-    excluded = convert.quantize_int8(fp32, out, calib, (32, 32), "rgb", ("first_conv", "last_conv"))
-    assert excluded == ["conv0", "conv2"]
-    graph = onnx.load(str(out)).graph
+def test_two_convs_on_the_graph_input_are_ambiguous(tmp_path):
+    path = _conv_model(tmp_path, convs=(("x", "a"), ("x", "b")), tail=("Add", "a", "b"))
+    with pytest.raises(ValueError, match="ambiguous"):
+        convert.fp32_node_names(path, ("first_conv",))
+    assert convert.fp32_node_names(path, ("last_conv",)) == ["conv1"]   # unused alias is not judged
+
+
+def test_int8_recipes_per_task():
+    lane, obj = convert.INT8_RECIPES["lane_seg"], convert.INT8_RECIPES["object_det"]
+    assert (lane["name"], lane["fp32_nodes"], lane["per_channel"], lane["activation"]) == (
+        "s8s8-pc-pre", ("first_conv", "last_conv"), True, "QInt8")
+    # object_det keeps the earlier quantize_static defaults until measured on its own
+    assert (obj["name"], obj["fp32_nodes"], obj["per_channel"], obj["activation"], obj["pre_process"],
+            obj["cap"]) == ("u8s8-pt", (), False, "QUInt8", False, False)
+
+
+def _qdq(onnx, path):
+    graph = onnx.load(str(path)).graph
     producer = {o: n.op_type for n in graph.node for o in n.output}
     inits = {i.name: i for i in graph.initializer}
     convs = {n.name: n for n in graph.node if n.op_type == "Conv"}
+    dq = {n.output[0]: n for n in graph.node if n.op_type == "DequantizeLinear"}
+    act_q = next(n for n in graph.node if n.op_type == "QuantizeLinear" and n.input[0] not in inits)
+    return producer, inits, convs, dq, inits[act_q.input[2]].data_type
+
+
+@pytest.mark.parametrize("count,used", [(1, 1), (6, 6), (7, 6), (8, 8), (14, 13)])
+def test_lane_seg_int8_keeps_first_and_last_conv_fp32_and_trims_cap_multiples(tmp_path, count, used):
+    """A frame count that is a multiple of the cap makes ORT 1.26 collect nothing: the last frame is left out."""
+    onnx = pytest.importorskip("onnx")
+    pytest.importorskip("onnxruntime.quantization")
+    out = tmp_path / "int8.onnx"
+    metrics = convert.quantize_int8(_conv_model(tmp_path), out, _calib(tmp_path, count), (32, 32), "rgb",
+                                    "lane_seg")
+    assert metrics == {"int8_recipe": "s8s8-pc-pre", "int8_fp32_nodes": "conv0,conv2",
+                       "int8_calibration_frames": used}
+    producer, inits, convs, dq, act_type = _qdq(onnx, out)
     assert producer.get(convs["conv1"].input[1]) == "DequantizeLinear"      # middle conv int8
     for kept in ("conv0", "conv2"):
         assert convs[kept].input[1] in inits                                 # fp32 weight, no DQ
-    weight_dq = next(n for n in graph.node if n.op_type == "DequantizeLinear"
-                     and n.output[0] == convs["conv1"].input[1])
-    assert len(onnx.numpy_helper.to_array(inits[weight_dq.input[1]]).shape) == 1  # per-channel scales
-    act_q = next(n for n in graph.node if n.op_type == "QuantizeLinear" and n.input[0] not in inits)
-    assert inits[act_q.input[2]].data_type == onnx.TensorProto.INT8          # s8 activations
+    scales = onnx.numpy_helper.to_array(inits[dq[convs["conv1"].input[1]].input[1]])
+    assert scales.shape == (3,)                                              # per-channel
+    assert act_type == onnx.TensorProto.INT8                                 # s8 activations
+
+
+def test_object_det_int8_keeps_the_earlier_u8_per_tensor_recipe(tmp_path):
+    onnx = pytest.importorskip("onnx")
+    pytest.importorskip("onnxruntime.quantization")
+    out = tmp_path / "int8.onnx"
+    metrics = convert.quantize_int8(_conv_model(tmp_path), out, _calib(tmp_path, 7), (32, 32), "rgb",
+                                    "object_det")
+    assert metrics == {"int8_recipe": "u8s8-pt", "int8_fp32_nodes": "", "int8_calibration_frames": 7}
+    producer, inits, convs, dq, act_type = _qdq(onnx, out)
+    assert all(producer.get(c.input[1]) == "DequantizeLinear" for c in convs.values())
+    assert onnx.numpy_helper.to_array(inits[dq[convs["conv1"].input[1]].input[1]]).shape == ()  # per-tensor
+    assert act_type == onnx.TensorProto.UINT8
+
+
+def test_capped_recipe_refuses_an_onnxruntime_without_the_cap(tmp_path, monkeypatch):
+    pytest.importorskip("onnxruntime.quantization")
+    monkeypatch.setattr(convert, "_calibration_cap_supported", lambda: False)
+    with pytest.raises(RuntimeError, match="CalibMaxIntermediateOutputs"):
+        convert.quantize_int8(_conv_model(tmp_path), tmp_path / "q.onnx", _calib(tmp_path, 2), (32, 32),
+                              "rgb", "lane_seg")
