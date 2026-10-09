@@ -85,3 +85,15 @@ def _longest_block(rows, x_rows) -> tuple[float, float] | None:
         return None
     half = BEV_CELL_M * 0.5
     return (round(float(x_rows[best[0]]) - half, 4), round(float(x_rows[best[1]]) + half, 4))
+
+
+def keep_crosswalk(view, grid: np.ndarray, crosswalk_mask: np.ndarray | None,
+                   shape: tuple[int, int]) -> tuple[float, float] | None:
+    """The keeper's D-491 crosswalk: stripes in its paint grid, else (D-597 9) the learned crosswalk
+    class mask (HxW 0/1 at the frame's `shape`, from the paint's own inference) on the same view."""
+    found = crosswalk_extent(grid, view.x[:, 0], view.y[0, :])
+    if found is not None or crosswalk_mask is None:
+        return found
+    if not isinstance(crosswalk_mask, np.ndarray) or crosswalk_mask.shape != tuple(shape):
+        raise ValueError("crosswalk_mask must be an array of the frame's height x width")
+    return crosswalk_class_extent(view.sample(crosswalk_mask > 0), view.x[:, 0], view.y[0, :])
