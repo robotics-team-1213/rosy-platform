@@ -387,6 +387,20 @@ export는 manifest `dataset`에 `annotation_origin`, `adr`를 같이 적는다. 
 이 D-554 계보(부모 lane-seg revision·ONNX sha256, 64자리 dataset revision, 파생 annotation)가 있는
 `v13-drivable`만 받아 lane_seg shadow 슬롯에 넣는다. 그 밖의 v13은 계속 거부하고 lane_seg에는 promote가 없다.
 
+2026-10-09 시험에서 `qwen3-vl:8b-instruct`는 일부러 망가뜨린 겹침 17장에 모두 `ok`라고 답했다. 그래서
+VLM `judge` 대신 검토자 시트를 쓴다.
+
+```bash
+python dataset/lane_derived_drivable.py sheets --out <OUT> --dest <SHEETS> [--per-sheet 20] [--seed S] [--canaries 0.1]
+python dataset/lane_derived_drivable.py import-verdicts --out <OUT> --sheets <SHEETS> \
+    --verdicts verdicts.jsonl --judge-name <검토자> --instructions <검토 지침 파일>
+```
+
+`sheets`는 모든 프레임을 번호(T0001…) 타일로 그리고, 알려진 오류를 넣은 canary 타일을 약 10% 섞는다.
+canary 목록은 `canaries.json`에만 있고 시트에는 표시하지 않는다. `import-verdicts`는 canary의
+`concern` 비율이 0.9 미만이거나 canary가 아닌 타일에 판정이 하나라도 없으면 거부한다. 결과는
+`judge.jsonl`·`judge-run.json` 형식으로 쓰고, 그다음 `finalize`는 그대로다.
+
 `judge`는 조언용이다. `concern` 프레임만 `finalize`가 빼고 manifest의 `judge.dropped`에 남긴다.
 `finalize`는 `judge` 블록(모델, endpoint, prompt sha256, 판정 수, 제외 목록)과 프레임별 판정을 적는다.
 train_job은 이 블록이 없거나 train/val 프레임 중 판정이 `ok`/`uncertain`이 아닌 것이 있으면 거부한다.

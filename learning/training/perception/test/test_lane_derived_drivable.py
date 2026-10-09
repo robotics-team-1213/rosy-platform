@@ -138,3 +138,53 @@ def test_tool_commit_is_recorded_never_unknown(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="tool commit unknown"):
         ldd._git_commit("unknown")
     assert ldd._git_commit("a" * 40) == "a" * 40
+
+
+def _derived(tmp_path, n=12):
+    src = _source(tmp_path, [("train", f"f{i}", _frame()) for i in range(n)])
+    out = tmp_path / "out"
+    ldd.derive(src, out)
+    return out
+
+
+def test_sheets_cover_every_frame_and_hide_canaries(tmp_path):
+    out = _derived(tmp_path)
+    dest = tmp_path / "sheets"
+    result = ldd.sheets(out, dest, per_sheet=4, seed=1, canaries=0.25)
+    index = json.loads((dest / "index.json").read_text())
+    hidden = json.loads((dest / "canaries.json").read_text())
+    assert result == {"sheets": 4, "tiles": 15, "canaries": 3}
+    assert {t["image"] for tile, t in index["tiles"].items() if tile not in hidden} == {
+        f["image"] for f in json.loads((out / "manifest.json").read_text())["frames"]}
+    assert {h["kind"] for h in hidden.values()} <= set(ldd.CANARY_KINDS)
+    assert sorted(p.name for p in dest.glob("sheet-*.png")) == index["sheets"]
+    assert cv2.imread(str(dest / "sheet-001.png")).shape[1] == 4 * 320
+
+
+def test_import_verdicts_needs_canaries_caught_and_every_tile(tmp_path):
+    out = _derived(tmp_path)
+    dest = tmp_path / "sheets"
+    ldd.sheets(out, dest, per_sheet=6, seed=2, canaries=0.25)
+    index = json.loads((dest / "index.json").read_text())["tiles"]
+    hidden = json.loads((dest / "canaries.json").read_text())
+    instructions = tmp_path / "instructions.md"
+    instructions.write_text("review rules")
+    real = sorted(t for t in index if t not in hidden)
+
+    def write(rows):
+        path = tmp_path / "verdicts.jsonl"
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+        return path
+    lazy = write([{"tile": t, "verdict": "ok", "reason": ""} for t in index])
+    with pytest.raises(ValueError, match="canary concern rate"):
+        ldd.import_verdicts(out, dest, lazy, "reviewer-a", instructions)
+    rows = [{"tile": t, "verdict": "concern", "reason": "wrong"} for t in hidden]
+    with pytest.raises(ValueError, match="lack a verdict"):
+        ldd.import_verdicts(out, dest, write(rows + [{"tile": real[0], "verdict": "ok"}]), "reviewer-a", instructions)
+    rows += [{"tile": t, "verdict": "concern" if t == real[0] else "ok", "reason": "x"} for t in real]
+    result = ldd.import_verdicts(out, dest, write(rows), "reviewer-a", instructions)
+    assert result["canary_rate"] == 1.0 and result["counts"] == {"ok": 11, "concern": 1, "uncertain": 0}
+    _, final = ldd.finalize(out)
+    assert final["judge"]["model"] == "reviewer-a" and len(final["judge"]["dropped"]) == 1
+    assert final["judge"]["prompt_sha256"] == hashlib.sha256(b"review rules").hexdigest()
+    ldd.verify_dataset(out, finalized=True)

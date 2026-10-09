@@ -9,6 +9,10 @@ so these masks are never D-475 evaluation truth.
   derive   --src DIR --out DIR [--min-both-rows 20] [--ignore-top 110] [--stripe-min 150]
            [--tool-commit SHA]   (required outside a git checkout, e.g. a git archive snapshot)
   judge    --out DIR [--endpoint URL] [--model NAME] [--limit N] [--splits train,val,test]
+  sheets   --out DIR --dest DIR [--per-sheet 20] [--seed S] [--canaries 0.1]
+           numbered review sheets of every frame; canary tiles (known corruptions) only in canaries.json
+  import-verdicts --out DIR --sheets DIR --verdicts FILE --judge-name NAME --instructions FILE
+           reviewer jsonl {tile, verdict ok|concern|uncertain, reason}; refused below 0.9 canary concern
   finalize --out DIR   (drops "concern" frames, writes the judge block that training requires)
 
 Per frame: everything starts 255; source lane classes 1..4 are copied; on each row >= ignore_top
@@ -245,6 +249,127 @@ def judge(out, ask, limit=None, *, model, endpoint, splits=("train", "val", "tes
     return rows
 
 
+CANARY_KINDS = ("drivable_over_wall", "wall_over_road", "drivable_outside_lines", "drivable_removed")
+SHEET_COLORS = {DRIVABLE: (0, 255, 0), 0: (128, 128, 128), 1: (255, 0, 0), 2: (0, 0, 255),
+                3: (0, 255, 255), 4: (0, 128, 255)}
+LEGEND = ("green drivable | grey wall | magenta unlabelled | blue lane_left | red lane_right | "
+          "yellow crosswalk | orange speed_bump")
+
+
+def _corrupt(mask, kind, ignore_top):
+    """A known-wrong copy of mask for a canary tile, or None when this frame cannot show that error."""
+    bad, below = mask.copy(), np.arange(mask.shape[0])[:, None] >= ignore_top
+    source = {"drivable_over_wall": mask == 0, "wall_over_road": mask == DRIVABLE,
+              "drivable_outside_lines": (mask == IGNORE) & below, "drivable_removed": mask == DRIVABLE}[kind]
+    if source.sum() < 500:
+        return None
+    bad[source] = {"drivable_over_wall": DRIVABLE, "wall_over_road": 0,
+                   "drivable_outside_lines": DRIVABLE, "drivable_removed": IGNORE}[kind]
+    return bad
+
+
+def _tile(image, mask, label, ignore_top):
+    view = image.copy()
+    for value, color in SHEET_COLORS.items():
+        pixels = mask == value
+        view[pixels] = (image[pixels] * .45 + np.asarray(color) * .55).astype(np.uint8)
+    unknown = (mask == IGNORE) & (np.arange(mask.shape[0])[:, None] >= ignore_top)
+    view[unknown] = (image[unknown] * .45 + np.asarray((255, 0, 255)) * .55).astype(np.uint8)
+    head = np.full((40, image.shape[1] * 2, 3), 255, np.uint8)
+    cv2.putText(head, label, (8, 31), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 0, 0), 2, cv2.LINE_AA)
+    return np.vstack([head, np.hstack([image, view])])
+
+
+def sheets(out, dest, *, per_sheet=20, seed=0, canaries=0.1):
+    """Numbered review sheets of every frame plus secret canary tiles (known corruptions)."""
+    out, dest = Path(out), Path(dest)
+    if dest.exists():
+        raise ValueError("new sheets directory required")
+    raw = (out / "manifest.json").read_bytes()
+    doc = verify_dataset(out)
+    ignore_top = doc["params"]["ignore_top"]
+    rng = np.random.default_rng(seed)
+    frames = doc["frames"]
+    load = lambda f: (cv2.imread(str(out / f["image"])),  # noqa: E731
+                      cv2.imread(str(out / f["mask"]), cv2.IMREAD_UNCHANGED))
+    items = [(f, None) for f in frames]
+    wanted, secret = round(len(frames) * canaries), []
+    for number, index in enumerate(rng.permutation(len(frames))):
+        if len(secret) >= wanted:
+            break
+        kind = CANARY_KINDS[number % len(CANARY_KINDS)]
+        if _corrupt(load(frames[index])[1], kind, ignore_top) is not None:
+            secret.append(len(items))
+            items.append((frames[index], kind))
+    order = rng.permutation(len(items))
+    dest.mkdir(parents=True)
+    index, hidden, page, tiles = {}, {}, [], []
+    for position, item_number in enumerate(order, 1):
+        frame, kind = items[item_number]
+        tile_id = f"T{position:04d}"
+        image, mask = load(frame)
+        if kind is not None:
+            mask = _corrupt(mask, kind, ignore_top)
+            hidden[tile_id] = {"kind": kind, "image": frame["image"]}
+        sheet_name = f"sheet-{(position - 1) // per_sheet + 1:03d}.png"
+        index[tile_id] = {"image": frame["image"], "sheet": sheet_name}
+        tiles.append(_tile(image, mask, tile_id, ignore_top))
+        if len(tiles) == per_sheet or position == len(order):
+            tiles += [np.full_like(tiles[0], 255)] * (len(tiles) % 2)
+            grid = np.vstack([np.hstack(tiles[i:i + 2]) for i in range(0, len(tiles), 2)])
+            legend = np.full((50, grid.shape[1], 3), 255, np.uint8)
+            cv2.putText(legend, f"{sheet_name}  {LEGEND}", (8, 33), cv2.FONT_HERSHEY_SIMPLEX, .75,
+                        (0, 0, 0), 2, cv2.LINE_AA)
+            cv2.imwrite(str(dest / sheet_name), np.vstack([legend, grid]))
+            page.append(sheet_name)
+            tiles = []
+    (dest / "index.json").write_text(json.dumps({"dataset_manifest_sha256": _sha(raw), "seed": seed,
+                                                 "per_sheet": per_sheet, "sheets": page, "tiles": index},
+                                                indent=1) + "\n", encoding="utf-8")
+    (dest / "canaries.json").write_text(json.dumps(hidden, indent=1) + "\n", encoding="utf-8")
+    return {"sheets": len(page), "tiles": len(index), "canaries": len(hidden)}
+
+
+def import_verdicts(out, sheets_dir, verdicts, judge_name, instructions, *, min_canary_rate=0.9):
+    """Reviewer tile verdicts -> judge.jsonl + judge-run.json; refuses a reviewer who misses canaries."""
+    out, sheets_dir = Path(out), Path(sheets_dir)
+    doc = verify_dataset(out)
+    index = json.loads((sheets_dir / "index.json").read_text(encoding="utf-8"))
+    hidden = json.loads((sheets_dir / "canaries.json").read_text(encoding="utf-8"))
+    if index["dataset_manifest_sha256"] != _sha((out / "manifest.json").read_bytes()):
+        raise ValueError("sheets were made from a different dataset manifest")
+    answers = {}
+    for line in Path(verdicts).read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if (row.get("tile") not in index["tiles"] or row.get("verdict") not in VERDICTS
+                or not isinstance(row.get("reason", ""), str) or row["tile"] in answers):
+            raise ValueError(f"bad or duplicate verdict row: {line[:120]}")
+        answers[row["tile"]] = row
+    if not hidden:
+        raise ValueError("sheets have no canary tiles")
+    caught = sum(answers.get(tile, {}).get("verdict") == "concern" for tile in hidden)
+    rate = caught / len(hidden)
+    if rate < min_canary_rate:
+        raise ValueError(f"canary concern rate {rate:.2f} < {min_canary_rate}: reviewer verdicts refused")
+    missing = sorted(tile for tile in index["tiles"] if tile not in hidden and tile not in answers)
+    if missing:
+        raise ValueError(f"{len(missing)} tiles lack a verdict, e.g. {missing[:5]}")
+    masks = {f["image"]: f["mask_sha256"] for f in doc["frames"]}
+    rows = [{"item": index["tiles"][tile]["image"], "mask_sha256": masks[index["tiles"][tile]["image"]],
+             "verdict": answers[tile]["verdict"], "reason": answers[tile].get("reason", ""), "tile": tile}
+            for tile in sorted(index["tiles"]) if tile not in hidden]
+    (out / "judge.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    (out / "judge-run.json").write_text(json.dumps({
+        "model": judge_name, "endpoint": "sheets:" + sheets_dir.name,
+        "prompt_sha256": _sha(Path(instructions).read_bytes()), "splits": ["train", "val", "test"],
+        "seconds": 0, "canaries": {"count": len(hidden), "concern": caught, "rate": rate}}) + "\n",
+        encoding="utf-8")
+    return {"frames": len(rows), "canary_rate": rate,
+            "counts": {v: sum(r["verdict"] == v for r in rows) for v in VERDICTS}}
+
+
 def finalize(out):
     """Drop judge 'concern' frames; record verdicts and the judge block; rewrite and rehash the manifest."""
     out = Path(out)
@@ -293,6 +418,18 @@ def main(argv=None):
     p.add_argument("--model", default=MODEL)
     p.add_argument("--limit", type=int)
     p.add_argument("--splits", default="train,val,test")
+    p = sub.add_parser("sheets")
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--dest", type=Path, required=True)
+    p.add_argument("--per-sheet", type=int, default=20)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--canaries", type=float, default=0.1)
+    p = sub.add_parser("import-verdicts")
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--sheets", type=Path, required=True)
+    p.add_argument("--verdicts", type=Path, required=True)
+    p.add_argument("--judge-name", required=True)
+    p.add_argument("--instructions", type=Path, required=True)
     p = sub.add_parser("finalize")
     p.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -314,6 +451,12 @@ def main(argv=None):
         rows = judge(args.out, ask, args.limit, model=args.model, endpoint=endpoint,
                      splits=tuple(args.splits.split(",")))
         print(json.dumps({v: sum(r["verdict"] == v for r in rows) for v in VERDICTS}))
+    elif args.command == "sheets":
+        print(json.dumps(sheets(args.out, args.dest, per_sheet=args.per_sheet, seed=args.seed,
+                                canaries=args.canaries)))
+    elif args.command == "import-verdicts":
+        print(json.dumps(import_verdicts(args.out, args.sheets, args.verdicts, args.judge_name,
+                                         args.instructions)))
     else:
         digest, doc = finalize(args.out)
         print(json.dumps({"manifest_sha256": digest, "frames": len(doc["frames"]),
