@@ -8,7 +8,7 @@ import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watc
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
   planIsCurrent, planPolylines, siteMapErrorText, tripStatusText, rectangularView, viewTurnOf, editViewTurn,
-  planTrip, tripRefusalText, planSummaryText, planeView,
+  planTrip, tripRefusalText, planSummaryText, planeView, addApproach, removeApproach, mergeCrosswalks,
 } from '/console/assets/site-map-model.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
@@ -24,7 +24,7 @@ const W = 800, H = 480;
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, open: [], guide: null};
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, open: [], guide: null, band: null};
 const ROBOT_POLL_MS = 1000;
 let plane = null, planeEpoch = 0;
 let calibrations = [];
@@ -76,6 +76,14 @@ function render() {
     el('rect', {...background.field, class: 'plane-border'}, svg);
   }
   const line = points => points.map(([x, y]) => view.toPx(x, y).join(',')).join(' ');
+  // D-573 1/7: crosswalk areas under the lanes (read-only polygons) and their waiting bands.
+  for (const crosswalk of map.crosswalks || []) {
+    const zone = el('polygon', {points: line(crosswalk.polygon), 'data-crosswalk': crosswalk.id,
+      class: `crosswalk${state.selected?.crosswalk === crosswalk.id ? ' selected' : ''}`}, svg);
+    el('title', {}, zone).textContent = `횡단보도 ${crosswalk.id} · 차로 ${(crosswalk.lanes || []).join(', ') || '저장 때 계산'}`;
+    for (const band of crosswalk.approach || []) el('polygon', {class: 'crosswalk-approach', points: line(band)}, svg);
+  }
+  if (state.band?.length) el('polyline', {class: 'band-draft', points: line(state.band)}, svg);
   for (const edge of map.edges) {
     const path = el('polyline', {points: line(edge.polyline), 'data-edge': edge.id,
       class: `edge ${edge.drive_mode}${state.selected?.edge === edge.id ? ' selected' : ''}`}, svg);
@@ -165,14 +173,22 @@ function select(selection) {
   const map = state.working;
   const place = selection?.place && map?.places.find(item => item.id === selection.place);
   const edge = selection?.edge && map?.edges.find(item => item.id === selection.edge);
+  const crosswalk = selection?.crosswalk && (map?.crosswalks || []).find(item => item.id === selection.crosswalk);
   const reason = operatorReason();
   $('place-form').hidden = !place || Boolean(reason);
   $('edge-form').hidden = !edge || Boolean(reason);
+  $('crosswalk-form').hidden = !crosswalk || Boolean(reason);
+  if (!crosswalk) state.band = null;
   gate('apply-edit', reason || (place || edge ? '' : '초안 보기에서 장소나 차로를 고르세요'));
   if (place) {
     $('selection').textContent = `장소 ${place.id}`;
     $('place-name').value = place.name;
     $('place-kind').value = place.kind;
+  } else if (crosswalk) {
+    $('selection').textContent = `횡단보도 ${crosswalk.id} · 대기 띠 ${(crosswalk.approach || []).length}개`;
+    $('crosswalk-lanes').textContent = `덮는 차로 ${(crosswalk.lanes || []).join(', ') || '저장할 때 계산합니다'} · 출처 ${crosswalk.revision}`;
+    $('crosswalk-band').replaceChildren(...(crosswalk.approach || []).map((band, index) =>
+      new Option(`띠 ${index + 1} · 점 ${band.length}개`, String(index))));
   } else if (edge) {
     $('selection').textContent = `차로 ${edge.id} · ${edge.from} → ${edge.to}`;
     $('edge-direction').value = edge.direction;
@@ -192,6 +208,13 @@ function syncButtons() {
   gate('import-camera-map', reason || (!$('camera-map-file').files.length ? '카메라 지도 JSON 파일을 고르세요' : ''));
   gate('map-view-turn', reason || (!state.working ? '고칠 지도가 없습니다' : ''));
   gate('save-draft', reason || (!state.working ? '고칠 지도가 없습니다' : (state.dirty ? '' : '고친 내용이 없습니다')));
+  const crosswalk = state.selected?.crosswalk;
+  const bands = (state.working?.crosswalks || []).find(item => item.id === crosswalk)?.approach || [];
+  $('site-map-svg').classList.toggle('drawing', state.band !== null);
+  gate('band-draw', reason || (!crosswalk ? '횡단보도를 고르세요' : state.band !== null ? '띠를 그리는 중입니다' : bands.length >= 4 ? '대기 띠는 4개까지입니다' : ''));
+  gate('band-finish', reason || (state.band === null ? '대기 띠 그리기를 먼저 누르세요' : state.band.length < 3 ? '지도에서 점을 세 개 이상 찍으세요' : ''));
+  gate('band-delete', reason || (!bands.length ? '지울 대기 띠가 없습니다' : ''));
+  gate('import-crosswalks', reason || (!state.working ? '고칠 지도가 없습니다' : ''));
   gate('activate', reason || (!state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : '')));
   status('draft-status', state.loadState === 'pending' ? '초안 조회 중'
     : state.loadState === 'error' ? '초안 확인 불가 · 다시 접속하세요'
@@ -287,7 +310,7 @@ $('token-save').addEventListener('click', async () => {
   state.loadState = 'pending';
   state.planEpoch += 1;
   state.robotsError = false;
-  state.active = state.draft = state.working = state.selected = state.plan = state.point = state.guide = null;
+  state.active = state.draft = state.working = state.selected = state.plan = state.point = state.guide = state.band = null;
   state.open = [];
   state.dirty = false;
   $('trip-place').replaceChildren();
@@ -445,10 +468,50 @@ $('site-map-svg').addEventListener('click', event => {
     clearPlan();
     return;
   }
-  const target = event.target.closest('[data-place], [data-edge]');
+  if (state.band !== null && state.view) {  // D-573: drawing a waiting band on the draft
+    const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(event.currentTarget.getScreenCTM().inverse());
+    state.band.push(state.view.toMap(at.x, at.y));
+    render(); syncButtons();
+    return;
+  }
+  const target = event.target.closest('[data-place], [data-edge], [data-crosswalk]');
   if (!target) return;
-  select(target.dataset.place ? {place: target.dataset.place} : {edge: target.dataset.edge});
+  select(target.dataset.place ? {place: target.dataset.place}
+    : target.dataset.crosswalk ? {crosswalk: target.dataset.crosswalk} : {edge: target.dataset.edge});
+  syncButtons();
 });
+
+// D-573 1/7: waiting bands are drawn on the draft; the polygon itself is lane_graph's.
+$('band-draw').addEventListener('click', () => {
+  state.band = [];
+  $('map-source').value = 'draft';
+  render(); syncButtons();
+  notice('지도에서 대기 띠의 꼭짓점을 차례로 찍고 띠 닫기를 누르세요.');
+});
+$('band-finish').addEventListener('click', () => guarded(async () => {
+  const sel = state.selected;
+  state.working = addApproach(state.working, sel.crosswalk, state.band);
+  state.band = null;
+  state.dirty = true;
+  select(sel);
+  notice('대기 띠를 초안에 넣었습니다. 저장할 때 차로에 닿는지, 바닥 안인지 확인합니다.');
+}));
+$('band-delete').addEventListener('click', () => guarded(async () => {
+  const sel = state.selected;
+  state.working = removeApproach(state.working, sel.crosswalk, Number($('crosswalk-band').value || 0));
+  state.dirty = true;
+  $('map-source').value = 'draft';
+  select(sel);
+  notice('대기 띠를 초안에서 지웠습니다. 저장해야 남습니다.');
+}));
+$('import-crosswalks').addEventListener('click', () => guarded(async () => {
+  const got = await request('/api/fleet/site-map/lane-graph-crosswalks');
+  state.working = mergeCrosswalks(state.working, got.crosswalks || []);
+  state.dirty = true;
+  $('map-source').value = 'draft';
+  select(null);
+  notice(`${got.source}에서 횡단보도 ${(got.crosswalks || []).length}개를 초안에 넣었습니다. 그린 대기 띠는 그대로 둡니다. 저장해야 남습니다.`);
+}));
 
 $('trip-pick').addEventListener('change', () => {
   $('site-map-svg').classList.toggle('picking', $('trip-pick').checked);

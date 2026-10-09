@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   arrowMarks, editEdge, editPlace, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
+  addApproach, removeApproach, mergeCrosswalks,
 } from '../../fleet/server/web/shared/site-map-model.js';
 
 const MAP = {
@@ -195,4 +196,22 @@ test('D-513 7: the map keeps one view turn and refuses other angles', () => {
   assert.equal(viewTurnOf(turned), 90);
   assert.equal(MAP.view_turn_deg, undefined);
   assert.throws(() => editViewTurn(MAP, 45), /0·90·180·270/);
+});
+
+test('D-573 waiting bands are added mm-rounded, capped at four, removed by index and kept across a lane_graph merge', () => {
+  const map = {...MAP, crosswalks: [{id: 'cw1', polygon: [[0.9, -0.1], [1.1, -0.1], [1.1, 0.1]], approach: [], lanes: ['ab'], revision: 'r1'}]};
+  const band = [[0.9, 0.1], [1.1, 0.1], [1.10049, 0.3]];
+  const one = addApproach(map, 'cw1', band);
+  assert.deepEqual(one.crosswalks[0].approach, [[[0.9, 0.1], [1.1, 0.1], [1.1, 0.3]]]);
+  assert.deepEqual(map.crosswalks[0].approach, []);  // pure
+  assert.throws(() => addApproach(map, 'cw1', band.slice(0, 2)));
+  assert.throws(() => addApproach(map, 'nope', band));
+  let full = one;
+  for (let i = 0; i < 3; i += 1) full = addApproach(full, 'cw1', band);
+  assert.throws(() => addApproach(full, 'cw1', band));
+  assert.deepEqual(removeApproach(one, 'cw1', 0).crosswalks[0].approach, []);
+  assert.throws(() => removeApproach(map, 'cw1', 0));
+  const merged = mergeCrosswalks(one, [{id: 'cw1', polygon: [[0, 0], [1, 0], [1, 1]], approach: [], lanes: [], revision: 'r2'},
+    {id: 'cw2', polygon: [[2, 0], [3, 0], [3, 1]], approach: [], lanes: [], revision: 'r2'}]);
+  assert.deepEqual(merged.crosswalks.map(c => [c.id, c.revision, c.approach.length]), [['cw1', 'r2', 1], ['cw2', 'r2', 0]]);
 });
