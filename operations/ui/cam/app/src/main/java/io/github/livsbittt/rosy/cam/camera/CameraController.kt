@@ -46,6 +46,7 @@ class CameraController(
     private val link: OverheadLink?,
     private val onError: (Throwable) -> Unit,
     private val onLighting: (LightingStatus) -> Unit = {},
+    private val onExposure: (ExposureStatus) -> Unit = {},
 ) {
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
         Thread(r, "overhead-analysis")
@@ -65,6 +66,15 @@ class CameraController(
     @Volatile private var lastLumaNs = 0L
     @Volatile private var generation = 0
     private var camera: Camera? = null
+    private var exposurePolicy: ExposureAssistPolicy? = null
+    private var exposureStep = 0.0
+    private var exposureEnabled = false
+    private var exposureApplied = 0
+    private var exposureFailed = false
+    private var exposureShown: ExposureStatus? = null
+    @Volatile private var measureExposure = false
+    @Volatile private var latestStats: StatsSample? = null
+    private data class StatsSample(val stats: LumaStats, val generation: Int, val atMs: Long)
     private var torchObserver: Observer<Int>? = null
     private var lighting = LightingStatus()
     private var thermalBlocked = false
@@ -171,9 +181,20 @@ class CameraController(
         emitLighting()
     }
 
+    /** D-544: bounded AE compensation nudge; default off, 0 whenever it is off or the camera rebinds. */
+    fun setExposureAssist(enabled: Boolean) {
+        if (stopped) return
+        exposureEnabled = enabled
+        measureExposure = enabled && exposurePolicy != null
+        exposureFailed = false
+        if (!enabled) latestStats = null
+        evaluateExposure()
+    }
+
     fun setThermalBlocked(blocked: Boolean) {
         if (thermalBlocked == blocked) return
         thermalBlocked = blocked
+        evaluateExposure()
         if (blocked) {
             setLightRequested(false)
             requestTorch(false, force = true)
@@ -256,6 +277,17 @@ class CameraController(
             this.camera = camera
             lighting = lighting.copy(supported = camera.cameraInfo.hasFlashUnit(), torchOn = false,
                 dark = false, message = null)
+            val range = camera.cameraInfo.exposureState
+            exposureStep = range.exposureCompensationStep.toDouble()
+            exposureApplied = 0
+            exposureShown = null
+            exposurePolicy = if (range.isExposureCompensationSupported && exposureStep > 0.0) {
+                val limit = minOf((ExposureAssistPolicy.LIMIT_EV / exposureStep).toInt(),
+                    range.exposureCompensationRange.upper, -range.exposureCompensationRange.lower)
+                val step = maxOf(1, Math.round(ExposureAssistPolicy.STEP_EV / exposureStep).toInt())
+                if (limit >= 1) ExposureAssistPolicy(minOf(step, limit), limit) else null
+            } else null
+            measureExposure = exposureEnabled && exposurePolicy != null
             val observer = Observer<Int> { state ->
                 if (stopped || generation != epoch || this.camera !== camera) return@Observer
                 lighting = lighting.copy(torchOn = state == TorchState.ON)
@@ -362,13 +394,17 @@ class CameraController(
         lastLumaNs = now
         val plane = image.planes.firstOrNull() ?: return
         val crop = image.cropRect
+        if (measureExposure) LumaStats.measure(plane.buffer, plane.rowStride, plane.pixelStride,
+            crop.left, crop.top, crop.right, crop.bottom)?.let {
+            latestStats = StatsSample(it, epoch, SystemClock.elapsedRealtime())
+        }
         val luma = YPlaneLuma.mean(plane.buffer, plane.rowStride, plane.pixelStride,
             crop.left, crop.top, crop.right, crop.bottom) ?: return
         latestLuma = LumaSample(luma, epoch, SystemClock.elapsedRealtime())
         if (!lightPending.compareAndSet(false, true)) return
         main.post {
             lightPending.set(false)
-            if (!stopped && epoch == generation) evaluateLight()
+            if (!stopped && epoch == generation) { evaluateLight(); evaluateExposure() }
         }
     }
 
@@ -384,6 +420,40 @@ class CameraController(
             lighting.supported, thermalBlocked, lighting.torchOn)
         if (!torchFailure) requestTorch(desired)
         emitLighting()
+    }
+
+    private fun evaluateExposure() {
+        val policy = exposurePolicy
+        val bound = camera
+        val now = SystemClock.elapsedRealtime()
+        val sample = latestStats?.takeIf { it.generation == generation && now - it.atMs in 0..1000 }
+        val target = if (policy == null) 0 else
+            policy.update(sample?.stats, now, exposureEnabled && !exposureFailed, thermalBlocked || lighting.torchOn)
+        if (bound != null && target != exposureApplied) {
+            exposureApplied = target
+            try {
+                val future = bound.cameraControl.setExposureCompensationIndex(target)
+                future.addListener({
+                    if (stopped || camera !== bound) return@addListener
+                    try { future.get() } catch (error: Exception) {
+                        exposureFailed = true
+                        Log.w(TAG, "exposure compensation failed", error)
+                    }
+                }, ContextCompat.getMainExecutor(context))
+            } catch (error: Exception) {
+                exposureFailed = true
+                Log.w(TAG, "exposure compensation unavailable", error)
+            }
+            Log.i(TAG, "exposure_ev index=$target step=$exposureStep")
+        }
+        val status = ExposureStatus(policy != null, exposureEnabled, policy?.verdict ?: ExposureVerdict.OK,
+            target, if (exposureEnabled) sample?.stats else null)
+        val shown = exposureShown
+        if (shown == null || shown.supported != status.supported || shown.enabled != status.enabled ||
+            shown.verdict != status.verdict || shown.index != status.index) {
+            exposureShown = status
+            onExposure(status)
+        }
     }
 
     private fun emitLighting() {
@@ -469,6 +539,9 @@ class CameraController(
         lightRequest.cancel()
         synchronized(photoStore) { generation++; photoStore.clear() }
         latestLuma = null
+        latestStats = null
+        exposurePolicy = null
+        exposureApplied = 0
         lastLumaNs = 0L
         torchDeadline?.let(main::removeCallbacks)
         torchDeadline = null
