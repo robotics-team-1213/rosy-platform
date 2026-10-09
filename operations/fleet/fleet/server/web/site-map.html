@@ -17,6 +17,7 @@
 </head>
 <body>
 <ui-shell grammar="procedure">
+  <a class="skip-link" href="#site-map-main">본문으로 건너뛰기</a>
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <ui-topbar>
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
@@ -54,7 +55,14 @@
     <a href="/console/cell">Cell</a>
   </nav>
   <ui-status id="estop-feedback" hidden></ui-status>
-  <main>
+  <main id="site-map-main" tabindex="-1">
+    <nav class="task-nav" aria-label="현장 지도 작업">
+      <a href="#map-heading">지도 보기</a>
+      <a href="#trip-heading">경로 미리보기</a>
+      <a href="#run-heading">운행 확인</a>
+      <a href="#edit-heading">지도 편집</a>
+      <a href="#teach-heading">가르치기</a>
+    </nav>
     <ui-text id="notice" role="status" aria-live="polite">접속하면 활성 지도와 초안을 읽습니다. 경로 미리보기는 로봇을 움직이지 않습니다.</ui-text>
     <ui-section aria-labelledby="map-heading">
       <ui-head>
