@@ -551,6 +551,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_viewer=require_viewer, read_guard=read_guard,
                            operator_guard=operator_guard, site_lanes=site_lanes,
                            require_operator=require_operator,
+                           require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
                            tracking=tracking, identity=identity)
     if tracking is not None and tracking.enabled:
@@ -561,9 +562,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.server.start_point_routes import install_start_point_routes
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources,
                                                               calibrations=tracking.calibrations),
-                                   read_guard=read_guard, require_operator=require_operator)
+                                   read_guard=read_guard, require_named_operator=require_named_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
-                          require_operator=require_operator,
+                          require_operator=require_operator, require_named_operator=require_named_operator,
                           # D-519: login accounts are configured named operators too.
                           auth_configured=bool(principals or console_token) or password_sessions is not None)
 
@@ -596,8 +597,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.trip_guard import engaged, install_trip_guard, release_queue
     from fleet.server.trip_runner import TripConfig, TripRunner
     install_lane_route_routes(app, console=console, task_service=task_service,
-                              site_maps=site_maps, require_operator=require_operator,
-                              operator_guard=operator_guard)
+                              site_maps=site_maps, require_named_operator=require_named_operator)
 
     async def _trip_caps(robot_id: str):
         """D-494 1: trip caps from the capability cache; None for an older image or no answer."""
@@ -627,6 +627,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                           require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,
+                        require_operator=require_operator,
                         require_named_operator=require_named_operator, runner=trip_runner,
                         read_guard=read_guard)
     from fleet.server.guide_service import GuideService, install_guide_routes  # D-536
@@ -658,6 +659,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     install_intent_routes(app, console=console, task_service=task_service,
                           require_operator=require_operator,
+                          require_named_operator=require_named_operator,
                           operator_guard=operator_guard,
                           local_stop_fanout=partial(
                               fanout_local_omx_stops, configured_omx, stop_transport),

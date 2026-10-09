@@ -19,9 +19,11 @@ function formatFormationCause([code, robot]) {
 }
 import { formationReason } from "./motion-readiness.js";
 
-export function createFormation({ scope, el, view, log, call, render }) {
+export function createFormation({ scope, el, view, log, call, render, namedReason = () => "" }) {
   function setOff(id, off, reason) {
     const button = el(id);
+    // D-540 9: 대형을 열고·바꾸고·재개하는 것은 움직임이다. 해제(formation-stop)는 멈춤이라 열려 있다.
+    if (id !== "formation-stop" && namedReason()) [off, reason] = [true, namedReason()];
     button.disabled = off;
     if (off) button.setAttribute("reason", reason);
     else button.removeAttribute("reason");

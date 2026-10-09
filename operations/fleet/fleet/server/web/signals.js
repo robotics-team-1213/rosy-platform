@@ -20,7 +20,8 @@ export async function sendSignalPresence({ operator, visible, configured, call }
   }
 }
 
-export function createSignals({ scope, el, view, log, call, refreshState, isOperator = () => false }) {
+export function createSignals({ scope, el, view, log, call, refreshState, isOperator = () => false,
+  namedReason = () => "" }) {
   let presenceInFlight = false;
   async function presence() {
     if (presenceInFlight) return;
@@ -128,8 +129,11 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
       button.setAttribute("kind", "quiet");
       button.type = "button";
       button.textContent = label;
-      button.disabled = !row.online;
-      if (!row.online) button.setAttribute("reason", "오프라인");
+      // D-540 9: 점멸·전체정지는 멈춤이라 열려 있다. 나머지 명령은 이름 있는 운영자만.
+      const why = !row.online ? "오프라인"
+        : body_.mode === "flash_red" || body_.mode === "all_red" ? "" : namedReason();
+      button.disabled = Boolean(why);
+      if (why) button.setAttribute("reason", why);
       if (kind) button.classList.add(kind);
       button.addEventListener("click", scope.guard(() => command(row.signal_id, body_, label)));
       return button;

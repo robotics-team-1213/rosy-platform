@@ -3510,3 +3510,33 @@ def test_paired_console_keeps_the_token_field_and_never_asks_for_a_session(conso
         assert posts == []
         assert not errors, f"페이지 오류: {errors}"
         browser.close()
+
+
+def test_shared_token_operator_sees_why_motion_is_locked_but_can_still_stop(console_url):
+    """D-540 9: site-console may stop but not move; moving controls say why, stops stay usable."""
+    from playwright.sync_api import sync_playwright
+
+    named = "이름 있는 운영자 로그인이 필요합니다"
+    api = {"/api/fleet/state": SNAPSHOT, "/api/fleet/map": MAP_GRID,
+           "/api/fleet/formation": {"active": True, "state": "RUNNING"},
+           "/api/fleet/session": {"principal_id": "site-console", "role": "operator"},
+           "/api/fleet/dispatch-control": {"generation": 7, "dispatch_enabled": False,
+                                           "rearm_available": True, "queued_tasks": 2,
+                                           "unresolved_actions": 0}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        # Rearm reopens dispatch (queued tasks move), so it is locked with the same reason.
+        page.wait_for_function(f'() => document.querySelector("#dispatch-rearm")?.getAttribute("reason") === "{named}"')
+        assert page.locator("#dispatch-rearm").get_attribute("disabled") is not None
+        goal = page.locator('#roster ui-button[data-goal-robot-id]').first
+        goal.wait_for()
+        page.wait_for_function(f'() => document.querySelector("#formation-reform")?.getAttribute("reason") === "{named}"')
+        assert goal.get_attribute("reason") == named
+        assert page.locator("#formation-stop").get_attribute("reason") != named
+        assert page.locator("#formation-stop").get_attribute("disabled") is None
+        assert page.locator("#estop").get_attribute("disabled") is None
+        cancel = page.locator("#roster .robot-actions ui-button", has_text="취소").first
+        assert cancel.get_attribute("reason") != named
+        assert not errors
+        browser.close()

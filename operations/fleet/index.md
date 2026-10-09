@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.158
+- 2026-10-09 · uncommitted · fix(fleet): D-540 9 안전 리뷰 반영 — claim 열기, rearm 이름, follow_cancel
+- 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.157
+- 2026-10-09 · uncommitted · fix(fleet): 움직이는 경로는 이름 있는 운영자, 멈춤은 열림 (D-540 9)
 - 2026-10-09 · uncommitted · fix(fleet): 늦은 응답 한 번에 로봇이 오프라인으로 바뀌었다가 돌아오던 깜빡임
-- 2026-10-09 · uncommitted · fix(fleet): 느린 상태 수집이 모든 로봇 상태를 도착 즉시 낡게 만들었다
-- 2026-10-09 · uncommitted · fix(fleet): 연결 재시도 브라우저 검사 복구
-- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 순서
-- 2026-10-09 · uncommitted · uiux(fleet): 지도 로봇 방향 마커 화면 비율
