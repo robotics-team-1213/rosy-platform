@@ -1,7 +1,7 @@
 # 막힘 측정은 한 운행일에 겹치되, 주인은 나뉜다
 
 - 날짜: 2026-10-09 (Asia/Seoul)
-- 기준: 로컬 main `c91b4c9cdf4033027b971bd3fcdd405229d97c61`에서 읽은 ADR과 소스
+- 기준: 로컬 main `c91b4c9cd`에서 읽은 ADR과 소스
 - 상태: 검토 정리. Accepted·Proposed ADR을 대체하지 않는다. 자격 발급, `--stuck-resolver` 가동, 로컬 복귀 승격, VLM 구현, 일반 World State 계약을 승인하지 않는다.
 - 범위: [D-407](../adr/D-407-lane-stuck-recovery-console-then-local.md), [D-435](../adr/D-435-work-orchestration-fleet-and-device-authority.md), [D-438](../adr/D-438-fleet-stuck-resolver-rules-model-human.md), [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md), [D-495](../adr/D-495-lane-junction-bounded-turn-and-junction-defaults.md), [D-503](../adr/D-503-autonomy-chain-facts-and-exception-queue.md), [D-516](../adr/D-516-offline-decision-model-replay-boundary.md), [D-523](../adr/D-523-ai-pc-ask-returns-facts-or-candidates.md), [D-356](../adr/D-356-perception-learning-loop-and-model-delivery.md)
 - 제외: 코드 변경, 현장 DB 건수 조회, 배포·장치 수용

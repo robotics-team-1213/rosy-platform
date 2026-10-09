@@ -7447,5 +7447,5 @@ osy-d395-s1d\`.
 ## 2026-10-09 · uncommitted · docs: 막힘 측정 묶음의 책임 분리
 
 - 변경: 막힘 측정은 같은 3 운행일에 증거가 겹치되 자격·로컬 복귀·녹화·정체 검수·분모의 주인이 다르다는 검토를 assessments에 남겼다. 일반 World State와 VLM은 열지 않는다.
-- 증거: 워크트리 docs/stuck-responsibility, 기준 c91b4c9cdf4033027b971bd3fcdd405229d97c61. 본문 상대 링크는 파일로 확인했다.
+- 증거: 워크트리 docs/stuck-responsibility, 기준 c91b4c9cd. 본문 상대 링크는 파일로 확인했다. 40자 SHA는 비밀 검사가 막아서 짧은 SHA로 적었다.
 - gate 변화: 없음. 문서 정리이며 구현·자격 발급·장치 수용은 그대로다.
