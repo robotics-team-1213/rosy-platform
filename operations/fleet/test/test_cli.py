@@ -116,6 +116,18 @@ def test_console_mission_api_requires_shared_database_and_named_users(tmp_path):
         cli.run_console(no_named_users)
 
 
+def test_console_mission_api_runs_on_development_sessions_without_site_users(tmp_path, monkeypatch):
+    # D-548: a development session is the named operator, so no site-users.yaml is needed.
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "development")
+    captured = {}
+    monkeypatch.setattr("uvicorn.run", lambda app, **kwargs: captured.update(app=app))
+    cli.run_console(cli.parse_args([
+        "console", "--robots", str(_write(tmp_path)), "--tasks-db", str(tmp_path / "fleet.sqlite3"),
+        "--mission-api", "--connection-mode", "development",
+    ]))
+    assert captured["app"].state.mission_service is not None
+
+
 def test_console_mission_api_persists_candidates_without_enabling_dispatch(
         tmp_path, monkeypatch):
     robots = _write(tmp_path)

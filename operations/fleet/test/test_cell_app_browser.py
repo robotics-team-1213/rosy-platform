@@ -63,11 +63,11 @@ def browser_site(tmp_path):
 def _prepare(page):
     from playwright.sync_api import expect
 
-    if "operator-1" not in page.locator("#session").inner_text():
+    if "operator-1" not in page.locator("#user-role").inner_text():
         open_token_access(page)
-        page.locator("#credential input").fill("operator-secret")
-        page.locator("#connect").click()
-    expect(page.locator("#session")).to_have_text("operator-1 · 운영자")
+        page.locator("#console-token").fill("operator-secret")
+        page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_have_text("operator-1 · 운영자")
     for kind in ("recipe", "cell"):
         path = ROOT / f"operations/processes/cell/examples/omx_sim/{kind}.yaml"
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -110,7 +110,7 @@ def test_cell_emergency_stop_uses_console_session_and_reports_uncertainty(browse
     page.evaluate("sessionStorage.setItem('rosy-console-token', 'operator-secret')")
     page.reload()
     page.set_viewport_size({"width": width, "height": height})
-    assert page.locator("#credential input").input_value() == "operator-secret"
+    assert page.locator("#console-token").input_value() == "operator-secret"
     replies = {"status": 200}
     sent = []
 
@@ -155,8 +155,8 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
     page.set_viewport_size({"width": width, "height": height})
     status = page.locator("#saved-status")
     expect(status).to_contain_text("접속하면 저장된 문서를 확인할 수 있습니다")
-    page.locator("#credential input").fill("operator-secret")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-secret")
+    page.locator("#token-save").click()
     expect(status).to_contain_text("저장된 문서가 없습니다")
     expect(status).to_contain_text("레시피와 셀 문서를 작성하고 저장하세요")
     assert page.locator("#saved").is_hidden()
@@ -229,8 +229,8 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(status=503, body="unavailable"))
-    page.locator("#credential input").fill("operator-secret")
-    page.locator("#connect").click()
+    page.locator("#console-token").fill("operator-secret")
+    page.locator("#token-save").click()
     status = page.locator("#saved-status")
     expect(status).to_have_attribute("state", "error")
     expect(status).to_contain_text("접속 상태를 확인하고 다시 시도하세요")
@@ -242,7 +242,7 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
     page.unroute("**/api/fleet/cell-app/documents")
     open_token_access(page)
     page.evaluate("window.scrollTo(0, 0)")
-    page.locator("#connect").click()
+    page.locator("#token-save").click()
     expect(status).to_have_attribute("state", "empty")
     _prepare(page)
     expect(page.locator("#saved li")).to_have_count(2)
@@ -253,10 +253,9 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
         page.locator("#saved").scroll_into_view_if_needed()
         page.screenshot(path=str(Path(output) / f"fleet-cell-list-recovered-{width}x{height}.png"))
     open_token_access(page)
-    page.locator("#credential input").fill("different-token")
+    page.locator("#console-token").fill("different-token")
     expect(status).to_have_attribute("state", "unavailable")
     assert page.locator("#saved").is_hidden()
-    expect(page.locator("#session")).to_have_text("접속 전")
     expect(page.locator("#notice")).to_contain_text("운영자 계정으로 접속해")
 
 
@@ -271,9 +270,9 @@ def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice, 
     expect(page.locator("#saved li")).to_have_count(2)
     page.route("**/api/fleet/session", lambda route: route.fulfill(status=denial, body="unauthorized"))
     open_token_access(page)
-    page.locator("#connect").click()
+    page.locator("#token-save").click()
     expect(page.locator("#notice")).to_contain_text(notice)
-    expect(page.locator("#session")).to_have_text("접속 전")
+    expect(page.locator("#user-role")).to_have_text("인증 필요")
     expect(page.locator("#saved-status")).to_contain_text("접속하면")
     assert page.locator("#saved").is_hidden()
     assert page.locator("#propose").is_disabled()
@@ -444,11 +443,9 @@ def test_reviewed_generation_conflict_and_cancel_are_explicit(browser_site, widt
     stop = page.locator("#estop").bounding_box()
     assert title["x"] + title["width"] <= stop["x"] + 1, (title, stop)
     assert page.locator("#estop").evaluate("node => node.scrollWidth <= node.clientWidth")
-    if width < 480:
-        connect = page.locator("#connect").bounding_box()
-        session = page.locator("#session").bounding_box()
-        assert connect["x"] + connect["width"] <= width, connect
-        assert session["x"] + session["width"] <= stop["x"] + 1, session
+    if width < 480:  # D-540 2: identity folds behind 설정; the header stays within 20% of the height
+        header = page.locator("ui-topbar").bounding_box()
+        assert header["height"] <= height * 0.2, header
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"fleet-cell-cancel-confirm-{width}x{height}.png"))
     dialog.locator("ui-button[kind='quiet']").click()
@@ -572,9 +569,9 @@ def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(brow
 
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
-    page.locator("#credential input").fill("operator-secret")
-    page.locator("#connect").click()
-    expect(page.locator("#session")).to_contain_text("operator-1")
+    page.locator("#console-token").fill("operator-secret")
+    page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_contain_text("operator-1")
     job = {"mission_id": "sheet-held", "status": "HOLD", "current_step_index": 0,
            "reason": "OPERATOR_SHEET_ACCESS_UNAVAILABLE", "steps": [
                {"step_index": 0, "status": "HOLD", "step": {"inputs": {
@@ -625,9 +622,9 @@ def test_structured_drafts_compile_box_only_and_survive_reload(browser_site):
     expect(page.locator("#summary")).to_contain_text("16회 전송")
     assert "slip_sheet" not in json.loads(page.locator("#recipe-document").input_value())
     page.reload()
-    page.locator("#credential input").fill("operator-secret")
-    page.locator("#connect").click()
-    expect(page.locator("#session")).to_contain_text("operator-1")
+    page.locator("#console-token").fill("operator-secret")
+    page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_contain_text("operator-1")
     for kind in ("recipe", "cell"):
         page.locator(f"#{kind}-load").click()
         expect(page.locator("#notice")).to_contain_text("저장된 문서를 불러왔습니다")

@@ -2,6 +2,7 @@ import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
+import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 
 const $ = id => document.getElementById(id);
@@ -24,28 +25,16 @@ function jobStatusLabel(status, reason) {
 function jobReasonLabel(reason) {
   return !reason ? '' : JOB_REASON_LABEL[reason] || '사유 확인 필요 · 진행 원장 상세를 확인하세요';
 }
-$('credential').value = sessionStorage.getItem('rosy-console-token') || '';
-const request = createFleetClient({credential: () => $('credential').value, origin: location.origin});
-function stopNotice(message, state) {
-  const notice = $('estop-feedback');
-  notice.textContent = message;
-  notice.setAttribute('state', state);
-  notice.hidden = false;
-}
-$('estop').addEventListener('click', async () => {
-  stopNotice('비상 정지 요청 중…', 'pending');
-  try {
-    const result = await request('/api/fleet/estop', {method: 'POST'});
-    const summary = result.total > 0
-      ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
-      : '정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.';
-    stopNotice(summary, result.total > 0 && result.stopped === result.total ? 'warning' : 'error');
-  } catch (error) {
-    stopNotice(error.status >= 500 || !error.status
-      ? '비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요.'
-      : `비상 정지 요청 거절 — ${error.message}`, 'error');
-  }
-});
+// Read once: a token typed while the page starts is the person's own 접속, not a stored session.
+const stored = sessionStorage.getItem('rosy-console-token') || '';
+$('console-token').value = stored;
+const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
+bindEstop(request);
+bindTopbarToggle();
+tickClock();
+setInterval(tickClock, 1000);
+watchFleet(request);
+$('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
 let editEpoch = 0;
 async function api(path, options) {
   const epoch = editEpoch;
@@ -76,7 +65,6 @@ function invalidate() {
 }
 function clearSession() {
   role = null; clearJobSnapshot(); invalidate();
-  $('session').textContent = '접속 전';
   revisions.clear();
   for (const kind of ['recipe', 'cell']) {
     $(kind + '-revision').setAttribute('state', 'empty');
@@ -98,7 +86,7 @@ function refreshControls() {
     control.disabled = busy;
     control.setAttribute('reason', busy ? '요청 처리 중' : '');
   }
-  for (const id of ['connect', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
+  for (const id of ['token-save', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
     $(id).disabled = busy;
     $(id).setAttribute('reason', busy ? '요청 처리 중' : '');
   }
@@ -127,7 +115,9 @@ async function action(fn) {
   $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
     if (error.status === 401 || error.status === 403) clearSession();
-    if (error.status === 401) loginForm.refresh(true);
+    // A 403 here is one Cell action refused, not a lost session: the words change, the E-stop stays live.
+    if (error.status === 403) showSignedOut({fold: false, refused: false});
+    if (error.status === 401) { showSignedOut(); loginForm.refresh(true); }
     else if (error.status === 409) clearJobSnapshot();
     $('notice').textContent = error.status === 403
       ? '이 계정에는 Cell 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.' : error.message;
@@ -312,22 +302,19 @@ for (const kind of ['recipe', 'cell']) {
     loaded(kind, revision); await list(); $('notice').textContent = '문서 저장 완료 · 실행 가능 여부는 미리보기에서 확인하세요.';
   }));
 }
-$('credential').addEventListener('input', () => {
+$('console-token').addEventListener('input', () => {
   editEpoch++; clearSession();
   $('notice').textContent = '운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.';
 });
-$('connect').addEventListener('click', () => action(async () => {
+$('token-save').addEventListener('click', () => action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
-  const roleName = role === 'operator' ? '운영자' :
-    role === 'viewer' ? '조회 전용' :
-      role === 'policy-admin' ? '정책 관리자' : '권한 없음';
-  $('session').textContent = `${session.principal_id} · ${roleName}`;
+  showSession(session);
   loginForm.refresh(false);
   await list(); $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
 }));
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
 const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
-  $('credential').value = ''; editEpoch++; clearSession(); $('connect').click();
+  $('console-token').value = ''; editEpoch++; clearSession(); $('token-save').click();
 }});
 $('compile').addEventListener('click', () => action(async () => {
   invalidate();
@@ -461,7 +448,11 @@ for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
   });
 }
 refreshControls();
-developmentToken($('credential').value).then(token => {
-  if (token) { $('credential').value = token; $('credential').parentElement.hidden = true; $('connect').click(); }
-  else loginForm.refresh(true).then(cookie => { if (cookie) $('connect').click(); });
+developmentToken($('console-token').value).then(token => {
+  if (token) { $('console-token').value = token; $('token-access').hidden = true; $('token-save').click(); }
+  // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
+  else loginForm.refresh(true).then(cookie => {
+    if (cookie || stored) $('token-save').click();
+    else if (!role && !busy) showSignedOut();  // not if someone connected meanwhile
+  });
 }).catch(() => {});
