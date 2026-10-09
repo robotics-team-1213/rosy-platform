@@ -1,4 +1,4 @@
-// D-457 관제 카메라 추적 상태줄·"배경 다시 학습". 그림은 map-view.js 가 view.cameraTracking 으로 그린다.
+// D-457 관제 카메라 추적 상태줄. "배경 다시 학습"은 설치·보정 문서의 tracking-relearn.js 다(D-540 5). 그림은 map-view.js 가 view.cameraTracking 으로 그린다.
 // 표시 전용 — 목표·교통정리·미션에 넘기지 않는다.
 
 import { classifyTracking, trackingStatusLine, positionRows, displayLeaseMs,
@@ -6,20 +6,13 @@ import { classifyTracking, trackingStatusLine, positionRows, displayLeaseMs,
 } from "./tracking-layer.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
-const RELEARN_WARNING = "배경을 다시 학습합니다. 트랙 위의 로봇과 물건을 모두 치운 뒤 진행하세요 — "
-  + "남아 있으면 배경으로 굳어 추적되지 않습니다(약 10초). 계속할까요?";
-
-export function createTrackingView({ scope, el, view, call, auth, onChanged = () => {},
-  confirmedAction }) {
+export function createTrackingView({ scope, el, view, call, auth, onChanged = () => {} }) {
   const line = el("tracking-state");
-  const relearn = el("tracking-relearn");
   const legend = el("legend-tracking");
   const positions = el("tracking-positions");
   const positionBody = el("tracking-position-rows");
   let inFlight = false;
-  let relearning = false;
   let unavailable = false; // 라우트 없음(404) — 이 Fleet 에 추적이 설정되지 않았다(카메라 source 없음)
-  let sources = [];
   let cancelExpiry = () => {};
   let driftHistory = [];        // 폴링별 trackingDriftSample 결과 — 교정 낡음 판정 재료
   let previousPoses = new Map(); // 직전 폴링의 MATCHED 자세(정지 로봇 가림)
@@ -40,7 +33,6 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
       previousPoses = rememberTrackingPoses(next);
       view.trackingDrift = calibrationDriftVerdict(driftHistory);
     }
-    sources = (body?.sources || []).map((source) => source.source_id);
     legend.hidden = !(next.robots.length || next.unknown.length);
     if (positions && positionBody) {
       const rows = positionRows(next);
@@ -72,7 +64,6 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
     if (auth.locked) {
       show(null);
       line.hidden = true;
-      relearn.hidden = true;
       return;
     }
     inFlight = true;
@@ -90,52 +81,22 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
     show(body, performance.now() - started);
     if (unavailable || auth.locked) {
       line.hidden = true;
-      relearn.hidden = true;
     } else {
       const status = body ? trackingStatusLine(body)
         : { state: "warn", text: "관제 카메라 추적 상태를 읽지 못했습니다" };
       line.hidden = false;
       line.dataset.state = status.state;
       line.textContent = status.text;
-      relearn.hidden = !sources.length;
     }
   }
 
-  scope.listen(relearn, "click", async () => {
-    await confirmedAction.run({
-      message: RELEARN_WARNING, opener: relearn,
-      eligible: () => !auth.locked && auth.role === "operator" && sources.length > 0 && !relearning,
-      request: async owner => {
-        const selectedSources = [...sources];
-        relearning = true;
-        try {
-          for (const sourceId of selectedSources) {
-            await call("/api/fleet/tracking/relearn", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ source_id: sourceId }), signals: [owner.signal],
-            });
-            owner.check();
-          }
-          line.dataset.state = "warn";
-          line.textContent = "배경을 다시 학습합니다. 트랙을 비워 주세요(약 10초).";
-        } finally { relearning = false; }
-      },
-      onError: error => {
-        line.dataset.state = "warn";
-        line.textContent = "배경 다시 학습 실패: " + (error.message || error);
-      },
-    });
-  });
-
   function reset() {
     unavailable = false;
-    sources = [];
     driftHistory = [];
     previousPoses = new Map();
     view.trackingDrift = null;
     show(null);
     line.hidden = true;
-    relearn.hidden = true;
   }
 
   return { refresh, reset };
