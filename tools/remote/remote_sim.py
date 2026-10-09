@@ -64,8 +64,9 @@ INNER = r"""set -eo pipefail
 export PATH=/usr/bin:/bin:$PATH  # ~/.local/bin may hold another python3 (Isaac's 3.11 on the model PC)
 source /opt/ros/jazzy/setup.bash
 [ -n "${PYDEPS:-}" ] && export PYTHONPATH="$PYDEPS${PYTHONPATH:+:$PYTHONPATH}"
-colcon --log-base "$OUT/colcon-log" build --packages-up-to gz_sim --build-base "$OUT/build" \
-  --install-base "$OUT/install" > "$OUT/colcon.txt" 2>&1 || { tail -40 "$OUT/colcon.txt"; exit 1; }
+COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
+colcon --log-base "$OUT/colcon-log" build --base-paths $COLCON_ROOTS --packages-up-to gz_sim \
+  --build-base "$OUT/build" --install-base "$OUT/install" > "$OUT/colcon.txt" 2>&1 || { tail -40 "$OUT/colcon.txt"; exit 1; }
 source "$OUT/install/setup.bash"
 eval "$BENCH_CMD"
 """
@@ -260,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", help="host address or role (model, ai, site) instead of the best")
     parser.add_argument("--sha", default="HEAD")
     parser.add_argument("--log-dir", type=Path)
-    parser.add_argument("--minutes", type=int, default=45, help="wall limit incl. the colcon build")
+    parser.add_argument("--minutes", type=int, default=45, help="wall limit, compile time included")
     parser.add_argument("bench", nargs="?", choices=[*BENCHES, "cmd"])
     parser.add_argument("bench_args", nargs="*", help="after --: bench args, or the command for cmd")
     args = parser.parse_args(argv)
