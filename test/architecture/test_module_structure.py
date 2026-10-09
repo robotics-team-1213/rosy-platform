@@ -699,6 +699,14 @@ SIZE_VERDICTS = {
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
         "exchange and binding check",
     ),
+    "vision/rosy_vision/track/background_blob.py": (
+        605,
+        "accept: one owner (the frozen-background blob detector: learn, replay, baked suspects, ghost heal, "
+        "D-596 identify hold and the D-600 masked learn share one MOG2 model and its learning frames; mask "
+        "and fill rules already live in robot_mask.py). Crossed 600 on 2026-10-10 when D-596 (540) and "
+        "D-600 (584) merged, plus the hold-stops-fill guard. Self-judged; next growth moves the suspect/ghost "
+        "healing into its own module. ROS-free, host-testable (X5)",
+    ),
     "vision/rosy_vision/ingest.py": (
         671,
         "accept: one owner (the rosy-overhead/1 receive endpoint — handshake, per-source connection "
