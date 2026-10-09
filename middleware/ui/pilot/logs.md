@@ -821,3 +821,9 @@
 - 증거: 브라우저 시험 2건은 `browser_tests_enabled()` 옵트인이다. 이 착지의 Chromium 실행은 하지 않았다.
 - gate 변화: 없음. 호스트 UI. 장치 화면은 릴리스 전이다.
 - 결정: D-460 결정 2.
+
+## 2026-10-10 · uncommitted · feat(pilot): Android 두 로봇 독립 연결 (D-582)
+
+- 변경: 선택한 첫 로봇을 유지한 채 두 번째 로봇을 별도 세션·프록시·WebView로 열고, 종료·배경 전환은 두 연결 모두 닫는다. 같은 localhost의 포트별 쿠키는 분리되지 않아 첫 카메라가 403이 된 실기 반례를 프록시별 쿠키 이름으로 수정했다. 두 번째 연결도 일시 실패 후 정상 응답이 오면 연결 경고를 해제한다.
+- 증거: Android unit test의 두 mock CORE 카메라·teleop 분리, 무관한 쿠키 403, 각 프록시 종료 0. Lenovo 태블릿에서 8kcn/9dfk의 두 카메라와 두 조종 화면을 동시에 열어 X:/DevTemp/projects/rosy-platform/2026-10-09--235857--pilot-dual-client--1d9963/evidence/에 캡처했다. 정상 웹소켓 종료가 연결 장애로 표시될 수 있는 경로도 구분했다.
+- gate 변화: Android SOURCE. 두 실물 로봇의 동시 주행·정지 readback은 FIELD 별도.
