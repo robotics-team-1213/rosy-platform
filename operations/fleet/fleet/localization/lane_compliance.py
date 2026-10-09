@@ -11,7 +11,8 @@ at a junction the arc along the direction of travel wins. The lateral offset is 
 that arc's tangent (left +). The body margin is
 ``width_m / 2 - (|offset| + body_half_width_m)``: the gap between the body side and the lane edge,
 negative once the body crosses it. ``MapPose.yaw`` is ``base_footprint`` forward; on a one-way
-lane the heading gate also accepts the opposite heading during reverse recovery. The body half width is the URDF nominal from
+lane the heading gate also accepts the opposite heading during reverse recovery. The body half width
+is the URDF nominal from
 ``core_common.robot_body`` (D-424), never a local number.
 
 Levels: OK; WARN after ``persist_n`` consecutive samples with ``margin < warn_margin_m``; ACT after
@@ -58,7 +59,8 @@ class LaneComplianceConfig:
 
     def __post_init__(self) -> None:
         for name in ("warn_margin_m", "act_timeout_s", "heading_gate_deg", "moving_min_m",
-                     "moving_min_deg", "track_heading_min_m") + (("max_lateral_m",) if self.max_lateral_m is not None else ()):
+                     "moving_min_deg", "track_heading_min_m") + (
+                         ("max_lateral_m",) if self.max_lateral_m is not None else ()):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                 raise ValueError(f"fleet.lane_compliance.{name} must be a finite number")
