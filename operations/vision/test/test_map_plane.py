@@ -29,7 +29,7 @@ POINT = (0.5, 0.25)
 
 def _frame_jpeg():
     """640x360 frame (half the record size) with a white dot at the image of POINT."""
-    image = np.zeros((360, 640, 3), np.uint8)
+    image = np.full((360, 640, 3), 120, np.uint8)
     u, v = 400 + 200 * POINT[0], 360 - 200 * POINT[1]  # record pixel index
     # Rescaled by pixel centres to half size: k (u + 0.5) - 0.5.
     cv2.circle(image, (round(0.5 * (u + 0.5) - 0.5), round(0.5 * (v + 0.5) - 0.5)), 3,
@@ -67,8 +67,6 @@ def test_a_map_point_lands_at_the_plane_pixel_of_the_header_formula():
     assert (x, y) == pytest.approx(POINT, abs=0.01)  # one frame pixel is 1 cm here
     # Map +x is right and +y up: the dot is right of and above the plane centre.
     assert us.mean() > 460 and vs.mean() < 260
-    # Outside the frame stays the constant dark fill, never stretched image.
-    assert image[0, 0] == pytest.approx(24, abs=3)
 
 
 def test_a_wide_track_shrinks_so_the_long_side_fits_1920_px():
@@ -76,6 +74,11 @@ def test_a_wide_track_shrinks_so_the_long_side_fits_1920_px():
     plane = map_plane_jpeg(_frame_jpeg(), record, source_id=SOURCE, map_id=MAP, lens=LENS)
     assert plane.px_per_m == pytest.approx(1920 / 6.3, abs=1e-4) and plane.px_per_m < 400
     assert max(plane.size) <= 1920
+    image = cv2.imdecode(np.frombuffer(plane.jpeg, np.uint8), cv2.IMREAD_GRAYSCALE)
+    # The plane's left edge (x = -3.15 m) is outside the frame: constant dark fill there,
+    # the frame itself in the middle.
+    assert image[plane.size[1] // 2, 0] == pytest.approx(24, abs=4)
+    assert image[plane.size[1] // 2, plane.size[0] // 4] == pytest.approx(120, abs=4)
 
 
 def test_map_plane_response_headers():
