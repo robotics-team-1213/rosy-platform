@@ -222,3 +222,20 @@ def test_visible_hysteresis_enters_at_035_and_exits_below_025():
 def test_visible_hysteresis_rejects_inverted_thresholds():
     with pytest.raises(ValueError):
         VisibleHysteresis(enter=.2, exit=.3)
+
+
+V13 = (ClassSpec(0, "background", "background"), ClassSpec(1, "lane_left", "lane_marking"),
+       ClassSpec(2, "lane_right", "lane_marking"), ClassSpec(3, "crosswalk", "ignore"),
+       ClassSpec(4, "speed_bump", "ignore"), ClassSpec(5, "drivable", "drivable"))
+
+
+def test_inner_half_of_a_touching_boundary_line_is_drivable():
+    """D-554 item 10: drivable 110-209 (centred); lane_left 100-109 touches it, lane_right does
+    not (gap 210-211), so only lane_left 105-109 joins the target: mean x 157 -> -2.5/160."""
+    mask = np.zeros((240, 320), np.int64)
+    mask[:, 100:110], mask[:, 110:210], mask[:, 212:222] = 1, 5, 2
+    ev = lane_evidence(_logits(mask, 6), V13)
+    assert ev.error == pytest.approx(-2.5 / 160)
+    mask[:, 210:212] = 5  # now lane_right touches too: 212-216 joins, mean x 160.5
+    assert lane_evidence(_logits(mask, 6), V13).error == pytest.approx(1.0 / 160)
+

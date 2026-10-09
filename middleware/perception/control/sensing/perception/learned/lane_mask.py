@@ -10,6 +10,10 @@ the lane is right of centre, the LaneObservation convention in lane.py.
 confidence = fraction of band rows with a target pixel x mean max-softmax on
 target pixels. `wall` role pixels (D-373 decision 9) are never a target;
 wall_fraction is their share of the near-field band.
+The road edge is a boundary line's centre (D-554 item 10): with a drivable
+class, the inner half of each lane_left / lane_right run that touches drivable
+in its row is drivable target too (lane_left: centre to right edge,
+lane_right: left edge to centre). Models without drivable are unchanged.
 Target components smaller than MIN_COMPONENT_PX are dropped before any of
 that: in the 2026-10-02 audit speckle took `visible` from 0.896 to 1.000 and
 offset jitter up 31 %; the filter brought it back to 0.885 and +1 %.
@@ -75,6 +79,24 @@ def _drop_small(mask: np.ndarray, min_px: int) -> np.ndarray:
     return keep[labels]
 
 
+def _with_inner_line_half(drivable: np.ndarray, labels: np.ndarray, classes) -> np.ndarray:
+    index = {c.name: c.index for c in classes}
+    if not drivable.any() or "lane_left" not in index or "lane_right" not in index:
+        return drivable
+    out = drivable.copy()
+    w = labels.shape[1]
+    for name in ("lane_left", "lane_right"):
+        line = labels == index[name]
+        for row in np.flatnonzero(line.any(axis=1)):
+            step = np.diff(np.r_[0, line[row].astype(np.int8), 0])
+            for a, b in zip(np.flatnonzero(step == 1), np.flatnonzero(step == -1) - 1):
+                if name == "lane_left" and b + 1 < w and drivable[row, b + 1]:
+                    out[row, (a + b + 1) // 2:b + 1] = True
+                elif name == "lane_right" and a > 0 and drivable[row, a - 1]:
+                    out[row, a:(a + b) // 2 + 1] = True
+    return out
+
+
 def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...], *,
                   min_component_px: int = MIN_COMPONENT_PX) -> LaneMaskEvidence:
     if logits.ndim != 4 or logits.shape[0] != 1 or logits.shape[1] != len(classes):
@@ -101,7 +123,8 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...], *,
 
     wall = _target("wall")
     wall_fraction = float(wall.mean())
-    target = _drop_small(_target("drivable") & ~wall, min_component_px)
+    target = _drop_small(_with_inner_line_half(_target("drivable") & ~wall, band_labels, classes),
+                         min_component_px)
     if target.mean() < DRIVABLE_MIN_FRACTION:
         target = _drop_small(_target("lane_marking") & ~wall, min_component_px)
     if not target.any():
