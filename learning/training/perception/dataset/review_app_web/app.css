@@ -259,6 +259,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
   #pixel-main > .ui-workspace-bar { margin-block: var(--space-2); }
   .pixel-frame-strip { margin-block: var(--space-1); }
   .pixel-frame-strip .frame-thumb { width: 2.5rem; }
+  #pixel-canvas { width: auto; height: clamp(12rem, calc(100dvh - 20rem), 24rem); max-width: 100%; }
 }
 @media (width < 64rem) {
   .review-stage, .pixel-editor-column { display: flex; flex-direction: column; }
