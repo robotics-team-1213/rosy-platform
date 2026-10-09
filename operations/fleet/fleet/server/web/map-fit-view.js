@@ -10,7 +10,7 @@ import {
   fitFromCalibration,
 } from "/console/assets/map-fit.js";
 import { warpImage } from "./field-view.js";
-import { drawStartPointMarks } from "./start-point-layer.js";
+import { drawStartPointMarks, picturePose } from "./start-point-layer.js";
 
 // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 토큰에서 푼다(테마를 따른다).
 const tone = (name) => window.RosyPalette.cssColor(name);
@@ -57,16 +57,9 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
   // D-540 5: 시작점(start-point-view.js)은 이 그림에서 고른다. canvas 는 object-fit: contain 이다.
   const mapFitPick = (clientX, clientY) => {
     if (!mapFitPick.ready()) return null;
-    const rect = canvas.getBoundingClientRect();
-    const scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
-    if (!(scale > 0)) return null;
-    const px = (clientX - rect.left - (rect.width - canvas.width * scale) / 2) / scale;
-    const py = (clientY - rect.top - (rect.height - canvas.height * scale) / 2) / scale;
-    if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) return null;
-    const [x, y] = project(shownTop.layout.canvasToMap, px, py);
-    const b = shownTop.bounds;
-    if (x < b.min_x || x > b.max_x || y < b.min_y || y > b.max_y) return null;
-    return { x, y, source: shownTop.source, mapId: shownTop.mapId };
+    const pose = picturePose(canvas.getBoundingClientRect(), canvas, shownTop.layout.canvasToMap,
+      shownTop.bounds, clientX, clientY);
+    return pose && { ...pose, source: shownTop.source, mapId: shownTop.mapId };
   };
   mapFitPick.ready = () => Boolean(shownTop) && !figure.hidden;
   view.mapFitPick = mapFitPick;

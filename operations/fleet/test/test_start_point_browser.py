@@ -87,8 +87,8 @@ LEASE={'source_id':'north','lease':'test-lease','frame_path':'/api/vision/source
 FRAME='<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#556070"/></svg>'
 
 
-def open_install(page):
-    page.route('**/api/fleet/site-lanes',lambda route:route.fulfill(status=200,json=SITE_LANES))
+def open_install(page, lanes=SITE_LANES):
+    page.route('**/api/fleet/site-lanes',lambda route:route.fulfill(status=200,json=lanes))
     page.route('**/api/fleet/vision/sources',lambda route:route.fulfill(status=200,json={'sources':['north']}))
     page.route('**/api/fleet/vision/lease',lambda route:route.fulfill(status=200,json=LEASE))
     page.route('**/api/vision/sources/north/frame',lambda route:route.fulfill(
@@ -142,6 +142,39 @@ def test_saved_start_point_is_drawn_on_the_install_picture(browser_site):
     # 640/6.6 px per m from x0=-0.1, y1=3.7: (1, .5) -> (106.667, 310.303).
     page.wait_for_function("window.startArcs.some(a=>Math.abs(a[0]-106.667)<.01 && Math.abs(a[1]-310.303)<.01)")
     assert not [call for call in robot.calls if call[0]=='navigation_goal']
+
+
+def test_calibration_changed_during_pick_cancels_it_and_saves_nothing(browser_site):
+    from playwright.sync_api import expect
+    page, robot, tracking=browser_site
+    puts=[];page.on('request',lambda r:puts.append(r.url) if r.method in ('PUT','DELETE') else None)
+    open_install(page)
+    expect(page.locator('#map-fit-figure')).to_be_visible(timeout=15000)
+    expect(page.locator('#start-point-pick')).to_be_enabled(timeout=15000)
+    page.locator('#start-point-pick').click()
+    expect(page.locator('#start-point-pick')).to_have_text('위치 선택 취소')
+    tracking.approve({**APPROVAL,'source_id':'north','map_id':'track','frame_seq':77},approved_by='op')
+    expect(page.locator('#start-point-pick')).to_have_text('카메라 평면에서 시작 위치 선택',timeout=10000)
+    canvas=page.locator('#map-fit-canvas'); box=canvas.bounding_box()
+    canvas.click(position={'x':box['width']/2,'y':box['height']/2})
+    assert page.locator('#start-point-x').input_value()==''
+    assert not puts
+    assert not [call for call in robot.calls if call[0]=='navigation_goal']
+
+
+def test_picture_of_another_map_cannot_be_picked(browser_site):
+    """Lanes for another map: map-fit-view fleetFit refuses the calibration, so no picture and no pick."""
+    from playwright.sync_api import expect
+    page, robot, tracking=browser_site
+    other={'maps':[{**SITE_LANES['maps'][0],'map_id':'other'}]}
+    open_install(page, other)
+    expect(page.locator('#start-point-pick')).to_be_enabled(timeout=15000)
+    page.wait_for_timeout(3000)
+    expect(page.locator('#map-fit-figure')).to_be_hidden()
+    page.locator('#start-point-pick').click()
+    expect(page.locator('#start-point-state')).to_contain_text('그림이 보일 때')
+    expect(page.locator('#start-point-pick')).to_have_text('카메라 평면에서 시작 위치 선택')
+    assert page.locator('#start-point-x').input_value()==''
 
 
 def test_shared_site_token_cannot_write_start_points(browser_site):
