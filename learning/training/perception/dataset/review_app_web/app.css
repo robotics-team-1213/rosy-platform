@@ -227,7 +227,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
 .workspace > .photo-sidebar { order: 1; }
 #editor, #pixel-main { padding-top: var(--space-3); }
 #pixel-main { position: relative; }
-#pixel-title { padding-right: 8rem; margin-bottom: 0; }
+#pixel-title { padding-right: calc(var(--space-6) * 4); margin-bottom: 0; }
 #pixel-reload { position: absolute; top: var(--space-3); right: var(--space-5); }
 #frame-progress { margin-top: 0; }
 #review-content { display: flex; flex-direction: column; }
@@ -263,14 +263,13 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-quiet); f
   #pixel-reload { right: var(--space-3); }
   #frame-progress { margin-top: 0; }
   .frame-navigation { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-1); margin-block: 0 var(--space-1); }
-  .frame-navigation ui-button { width: 100%; min-width: 0; font-size: var(--text-label); }
+  .frame-navigation ui-button { width: 100%; min-width: 0; }
   .frame-navigation ui-button > span, .pixel-ribbon-nav ui-button > span,
   .review-editor-tools .toolbar ui-button > span, .pixel-quick-actions ui-button > span { display: none; }
   .frame-navigation ui-button, .pixel-ribbon-nav ui-button,
   .review-editor-tools .toolbar ui-button, .pixel-quick-actions ui-button { justify-content: center; }
   #next-pending::after { content: 'N'; font: var(--text-micro) var(--mono); }
   .frame-navigation [data-spacer] { display: none; }
-  .pixel-editor-column .pixel-ribbon-nav ui-button { font-size: var(--text-label); }
   .review-editor-canvas > .review-view-bar, .pixel-editor-column .review-view-bar { gap: var(--space-1); }
   .review-viewport-controls { margin-inline-start: 0; }
   .review-result { margin-block: var(--space-2); }
