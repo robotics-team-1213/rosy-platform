@@ -137,6 +137,11 @@ class MapPoseService:
         return tracker is not None and tracker.moved_since(
             self._wall() - self.config.max_odom_age_s, min_m, math.radians(min_deg))
 
+    def odom_to_map(self, robot_id: str):
+        """D-581 trail anchor: the tracker's (map <- odom, newest odom, anchor captured_at, epoch)."""
+        tracker = self._tracker(robot_id)
+        return tracker.odom_to_map() if tracker is not None else None
+
     def arbitrated_pose(self, robot_id: str) -> Optional[MapPose]:
         """The robot's map pose for trip execution and the D-511 lane-compliance monitor
         (D-511 2 widens D-494 3); None for a robot not on the roster."""

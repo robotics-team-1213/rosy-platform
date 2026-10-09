@@ -198,6 +198,9 @@ def _formation_stream_evidence(stats, leader: str, assignment) -> dict:
             rate_hz=stats.follower_tx_hz.get(rid),
             sample_count=stats.follower_tx.get(rid, 0),
         )
+        hold = getattr(stats, "follower_anchor_hold", {}).get(rid)
+        if hold:   # D-581: frames flow, but they are anchor holds; the follower is not moving
+            evidence[rid]["anchor_hold"] = hold
     return evidence
 
 

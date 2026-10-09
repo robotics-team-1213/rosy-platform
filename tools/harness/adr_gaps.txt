@@ -33,4 +33,3 @@ D-585 ADR reserved on branch docs/adr-model-driven-lap (cd786b876), not yet on m
 D-586 ADR reserved on branch docs/adr-model-driven-lap (cd786b876), not yet on main; remove when it lands
 D-581 reserved in another active branch (refs/adr/D-581)
 D-583 reserved in another active branch (refs/adr/D-583)
-D-581 reserved in another active branch (Trail follow in a Fleet-anchored frame from ceiling camera); remove when it lands
