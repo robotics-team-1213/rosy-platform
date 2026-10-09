@@ -886,3 +886,7 @@
 - 변경: `StateManager.set_trip_lease_provider` — 스냅숏의 `trip_lease`·`trip_lease_ended`를 live로 읽는다. lease 자체는 `core/trip_lease.py`(gateway)에 둔다: core_features 크기 판정이 증가를 막는다. lease 동작: Fleet trip lease 한 개(로봇당). 같은 토큰·같은 `lease_id`만 renew, 그 밖은 `TRIP_LEASED`. TTL 1–10 s(기본 5) CORE 단조 시계. 만료·넘겨받기는 lease를 지운 뒤 락 밖에서 `halt`(CORE 배선: line-follow 끔, 내비게이션 취소, NAVIGATION→IDLE). 읽기는 만료시키지 않는다(5 Hz 타이머만) — 지난 lease는 처리될 때까지 계속 막는다. `trip_lease_ended`는 끝난 뒤 10 s 보인다. `trip_lease.renewed`는 lease당 30 s에 한 번. 주인 토큰의 teleop·다른 출발지 `/ws/state`는 `trip_lease.shared_token` 한 번.
 - 증거: `middleware/core/gateway/test/test_trip_lease.py`(모델 PC).
 - gate 변화: SOURCE. Safety-Review·SIM(Fleet kill → IDLE)·DEVICE 열림.
+## 2026-10-09 · uncommitted · feat(core): lane_return이 Fleet에 위치를 청한다 (D-546 5)
+- 변경: `localization/pose_request.py`(`PoseRequests`: 사유당 하나, `ttl_s` 30 s, 같은 사유는 id 유지), `recovery/lane_return_pose_request.py`(`fleet` 단계 또는 1 s 넘은 `pose_stale`에서 열고 그 밖의 틱·리셋에서 닫음, `resume_after_pose`는 수락된 결정 뒤 D-407 RESUME). `LocalizationAssist.on_result accepted`가 요청을 닫는다.
+- 증거: `middleware/core/services/test/test_lane_return_pose_request.py`.
+- gate 변화: SOURCE. Safety-Review 대상(line_follow/recovery, localization). SIM·DEVICE 열림.

@@ -2804,3 +2804,7 @@
 - 변경: `--mission-api`는 `--users-file` 대신 살아 있는 개발 연결 모드(D-473)로도 시작한다. 개발 세션은 이미 이름 있는 운용자다.
 - 증거: test_cli.py.
 - gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+## 2026-10-09 · uncommitted · feat(fleet): 로봇의 위치 요청에 답한다 (D-546 6)
+- 변경: `localization/pose_request.py`(천장 카메라 LOCALIZED·기준 2 s 이내 자세 → `source: overhead` 결정 ttl 5 s, 그 밖은 중재기 → `resolve_pose_with_model`(미구현, `None`) → `needs_human` 배지). `LocalizationService`가 `lane_return_*`로 서 있는 로봇의 `GET /localization/request`를 읽는다. 천장 카메라 답은 `--localization-overhead-cue`가 켜졌을 때만.
+- 증거: `test_localization_pose_request.py`, `test_transport_localization.py`.
+- gate 변화: SOURCE. VLM(D-546 8)은 AI PC 주인 동의 대기.
