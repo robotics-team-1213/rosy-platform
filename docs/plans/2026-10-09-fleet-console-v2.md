@@ -116,7 +116,7 @@
 
 ### (i) CORE trip lease (D-541) — 두 브랜치, Safety-Review
 
-- **(i1) `feat/core-trip-lease`:** CORE `PUT/DELETE /api/v1/trip-lease`, `/takeover`, lease 검사를 `require_calibration_owner` 안 한 곳에(모든 구동·모드 쓰기와 움직이는 막힘 답이 지남) + `/ws/swarm/reference` 프레임 버림, `stuck_resolver` 토큰은 WAIT·ABORT만, 같은 토큰의 다른 `lease_id` 409, IDLE·MANUAL·도킹·비상 정지·ABORT·만료·넘겨받기에서 끝(주인의 lane ↔ free 전환은 유지), 만료 시 IDLE, 스냅숏 `trip_lease`·`trip_lease_ended`, 능력 `trip_lease`, 보정 lease 배타. API Ref 한 버전. D-430 체인 표 한 줄.
+- **(i1) `feat/core-trip-lease`:** CORE `PUT/DELETE /api/v1/trip-lease`, `/takeover`, lease 검사를 `require_calibration_owner` 안 한 곳에(모든 구동·모드 쓰기와 움직이는 막힘 답이 지남) + `/ws/swarm/reference` 프레임 버림 + `POST /calibration/session` 여는 처리의 따로 검사, 주인 아닌 `/navigation/cancel`·line-follow 끄기는 lease 끝 + IDLE, `stuck_resolver` 토큰은 WAIT·ABORT만, 같은 토큰의 다른 `lease_id` 409, IDLE·MANUAL·도킹·비상 정지·ABORT·만료·넘겨받기에서 끝(주인의 lane ↔ free 전환은 유지), 만료 시 IDLE, 스냅숏 `trip_lease`·`trip_lease_ended`, 능력 `trip_lease`, 보정 lease 배타. API Ref 한 버전. D-430 체인 표 한 줄.
   - 파일: `middleware/core/api_web/core_api_web/api/v1/{common.py,control.py,line_follow.py,navigation.py,docking.py,calibration.py}` + 새 `trip_lease.py`, 서비스 쪽 lease 상태(보정 lease 상태 모양 재사용), `core_common.protocol` 스키마.
   - 시험: D-541 Validation CORE 단위 전부, 특히 live lease 아래 lane → free → lane 유지. 로봇 대시보드·Pilot이 409 `TRIP_LEASED`를 받았을 때 문장 표시(대시보드는 이 브랜치, Pilot `넘겨받기`는 Pilot 저장소 작업으로 따로).
 - **(i2) `feat/fleet-trip-lease-holder`:** Fleet trip 시작에서 lease 열기, 주기 renew, 잃으면 `stopped(lease_lost)`·명령 0·다시 열지 않음, 끝에서 DELETE, `fleet.trip_lease_required`(기본 false), `fleet.trip_lease_ttl_s`(기본 5, ≤ 10). lease를 여는 CORE 토큰이 Fleet 전용인지 설정 검사와 시험. 릴리스 노트: Wi-Fi 끊김이 TTL을 넘으면 trip이 끝난다(현장별 10 s까지). 카드 운행 한 줄에 끝 이유.
