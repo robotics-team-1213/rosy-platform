@@ -146,9 +146,16 @@ BUZZER_OFF_S = 0.12
 #: A fleet identify is not a health sound (D-472). Two middle beeps, once, and it
 #: does not replace the health sound the robot is already in.
 BUZZER_CALL_HZ = 1400
+#: D-546: the reversing alarm — one 80 ms 1 kHz beep every BUZZER_REVERSE_S while CORE
+#: names the lane-recovery phase ``retrace``. Not a state sound: it repeats while it lasts.
+BUZZER_REVERSE_HZ = 1000
+BUZZER_REVERSE_S = 1.0
+#: D-546: the recovering lamp and LCD line outlast the last RECOVERING tick by this long, so
+#: they do not flicker between phases. The beep and an e-stop do not wait for it.
+RECOVERY_HOLD_S = 1.5
 BUZZER_PATTERNS = {"ready": (1, BUZZER_FREQUENCY_HZ), "failed": (3, BUZZER_FREQUENCY_HZ),
                    "caution": (2, BUZZER_LOW_HZ), "emergency": (4, 2500),
-                   "call": (2, BUZZER_CALL_HZ)}
+                   "call": (2, BUZZER_CALL_HZ), "reverse": (1, BUZZER_REVERSE_HZ)}
 #: Caution again inside this window stays silent (a battery near the threshold). Ready and
 #: failed always sound on a real transition (review L2): they are the news a person waits for.
 BUZZER_REPEAT_S = 300.0
@@ -335,8 +342,10 @@ class Buzzer:
             self._frequency = frequency
         for index in range(count):
             self._pwm.start(BUZZER_DUTY)
-            self._sleep(on_s)
-            self._pwm.stop()
+            try:
+                self._sleep(on_s)
+            finally:
+                self._pwm.stop()  # a failed sleep must not leave the piezo on
             if index + 1 < count:
                 self._sleep(off_s)
         return count
@@ -671,6 +680,8 @@ class FaceDisplay:
         self._state: str | None = None
         self._sounded: dict[str, float] = {}
         self._sound: str | None = None
+        self._reversed_at: float | None = None
+        self._held: tuple[str, float] | None = None
         self._tested: str | None = None
         self._faces = faces
         self._strip = strip
@@ -701,13 +712,18 @@ class FaceDisplay:
         return {"CORE_READY": "ready", "FAILED": "failed"}.get(kind, "booting")
 
     @staticmethod
-    def lamp_pattern_for(view: dict, state: str) -> str | None:
+    def lamp_pattern_for(view: dict, state: str, core: dict | None = None) -> str | None:
         """D-380/D-381: the table's pattern for the state, CORE's mode and its
-        navigation; the stage-only mapping only on a release too old to carry
+        navigation; D-546: and its lane-recovery phase from the face hand-over.
+        The stage-only mapping only on a release too old to carry
         core_common.robot_state."""
         if robot_state is None:
             return LAMP_PATTERNS.get(state)
-        return robot_state.lamp_pattern(state, view.get("robot_mode"), view.get("nav_state"))
+        try:
+            return robot_state.lamp_pattern(state, view.get("robot_mode"), view.get("nav_state"),
+                                            core.get("recovery") if core else None)
+        except TypeError:  # a core_common from before D-546 takes three arguments
+            return robot_state.lamp_pattern(state, view.get("robot_mode"), view.get("nav_state"))
 
     def _announce(self, state: str, pattern: str | None, now: float) -> None:
         sound = SOUNDS.get(state)
@@ -739,7 +755,7 @@ class FaceDisplay:
             if core is None or core.get("estop") is not False or core.get("caution"):
                 return True
             view = read_view(self.root, self._battery_value)
-            return self.lamp_pattern_for(view, self.robot_state_of(view)) not in IDENTIFY_OVER
+            return self.lamp_pattern_for(view, self.robot_state_of(view), core) not in IDENTIFY_OVER
         identifying = request["action"].startswith("identify_")
         identify_ready = identifying and self._lamp is not None and self._lamp.available(for_identify=True)
         if identifying and (not identify_ready or unsafe_identity()):
@@ -751,7 +767,7 @@ class FaceDisplay:
                  "state": state, "detail": "안전·상태 표시가 우선 — 식별 점멸 거절"},
                 ensure_ascii=False, sort_keys=True) + "\n")
             return state
-        if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution"):
+        if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution", "recovering", "bridging"):
             return None
         if self.screen and (self.screen["kind"] in ("stopped", "update", "shutdown")
                             or self.screen["row"] == "failed" or self.screen.get("strip_tone") == "caution"):
@@ -778,6 +794,25 @@ class FaceDisplay:
         return state
 
     def _core(self) -> dict | None:
+        """CORE's face hand-over with D-546's recovery hold: an e-stop clears ``recovery`` at
+        once; a phase that just ended is held 1.5 s as ``return`` (lamp and LCD, no beep)."""
+        core = self._read_core()
+        if core is None:
+            return None
+        now = self._clock()
+        phase = core.get("recovery")
+        if core.get("estop") is not False:
+            self._held = None
+            return {**core, "recovery": None} if phase else core
+        if phase:
+            self._held = (phase, now)
+        elif self._held and now - self._held[1] < RECOVERY_HOLD_S:
+            return {**core, "recovery": "return" if self._held[0] == "retrace" else self._held[0]}
+        else:
+            self._held = None
+        return core
+
+    def _read_core(self) -> dict | None:
         """CORE's face hand-over, strictly read; None when missing, stale or not CORE's."""
         if face_screen is None:
             return None
@@ -867,7 +902,8 @@ class FaceDisplay:
         state = self.robot_state_of(view)
         if state != self._state:
             self._state = state
-        pattern = self.lamp_pattern_for(view, state)
+        core = self._core()
+        pattern = self.lamp_pattern_for(view, state, core)
         screen = self.screen = self.screen_of(view, now)
         if screen and screen["kind"] == "light":
             pattern = "illumination"
@@ -911,7 +947,18 @@ class FaceDisplay:
         # A synchronous buzzer pattern can last hundreds of milliseconds. Show
         # the lamp and any status card first, especially on emergency entry.
         self._announce(state, pattern, now)
+        self._reverse_alarm(core, pattern, now)
         return redrawn
+
+    def _reverse_alarm(self, core: dict | None, pattern: str | None, now: float) -> None:
+        """D-546: one reversing beep per BUZZER_REVERSE_S while CORE says ``retrace``; silent
+        otherwise, and the moment the phase, the hand-over or the recovering lamp is gone."""
+        if (not core or core.get("estop") is not False or core.get("recovery") != "retrace"
+                or pattern != "recovering"):
+            self._reversed_at = None
+        elif self._reversed_at is None or now - self._reversed_at >= BUZZER_REVERSE_S:
+            self._reversed_at = now
+            self._buzzer.announce("reverse")
 
     def _draw_shutdown(self, now: float) -> bool:
         view = read_view(self.root, self._battery_value)
