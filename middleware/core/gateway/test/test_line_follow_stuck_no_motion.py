@@ -45,7 +45,7 @@ def _lane(m, t, **kw):
 
 def _ir_centre(m, t):
     m.observe(LineObservation(source=IR, stamp=t, visible=True, error=0.0, confidence=0.9,
-                              ir_calibrated=True), received_at=t, source_now=t)
+                              ir_calibrated=True, calibration_revision="r1"), received_at=t, source_now=t)
 
 
 #: reason -> (config overrides, angular ceiling, per-tick feed)
