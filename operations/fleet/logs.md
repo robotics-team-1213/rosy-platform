@@ -2889,6 +2889,19 @@
 - 변경: `--pose-request-overhead/--no-pose-request-overhead`(기본 켜짐)는 위치 요청 답만, `--localization-overhead-cue`는 기본 꺼짐으로 복원. 답 횟수는 요청이 닫혔다 열려도 lane_return이 놓거나 `lane_return_corridor_verified`까지 유지하고 중재기 답도 센다.
 - 증거: `test_localization_pose_request.py`, `test_cli.py`.
 - gate 변화: SOURCE.
+
+## 2026-10-09 · uncommitted · test(fleet): API 기준서 v1.166 참조 갱신
+
+- 변경: D-531 굽이 단계 선택 필드로 기준서가 v1.166이 되면서 Fleet 문서 계약 테스트의 버전 기대값을 함께 갱신한다. Fleet 실행 코드는 바뀌지 않는다.
+- 증거: 문서 계약 집중 테스트와 `known_failures.py`.
+- gate 변화: SOURCE 계약 일치. Fleet 계획·현장 주행 수용은 별도.
+
+## 2026-10-09 · uncommitted · feat(fleet): trips from the console robot card (D-540 (d))
+- 변경: 첫 커밋은 순수 이동 — `web/roster.js`의 큐 규칙·행 채우기(`attentionItems`·`attentionKey`·`openDecisionKey`·`syncRows`·`fillQueues`·`setTriageHead`)와 `line-stuck.js`의 버튼 헬퍼를 새 `web/queues.js`로. 이어서 `shared/site-map-model.js`에 운행 경로 공용 함수(`planTrip`·`startTrip`·`cancelTrip`·`tripRefusalText`·`planSummaryText`·`repeatTripReason`·`tripEndText`)를 두고 `site-map.js`가 그것을 부른다(현장 지도 운행 칸은 (e)까지 남음). 새 `web/card-trip.js`: 카드 `운행…`(토글, 카드 안 폼: 활성 지도 목적지·`경로 보기`·`운행 시작`, 출발 자리·`반복 운행 시작`, "고리 n/m대"), `대형·대열` 블록의 대열(팔로워·리더·출발 자리 → `POST /trip` `convoy`). 카드 `취소` → `운행 취소`(quiet, 확인 없음): 열린 trip이면 trip 취소(실패하면 목표 취소로 이어짐), 없으면 목표 취소 + 켜진 차선 주행 OFF; 이름 없는 운영자도 누름, 오프라인 로봇의 열린 trip도 취소. 끝난 trip(stopped·failed)은 카드 줄과 주의 큐 행에 이유(D-541 lease 끝 이유 포함)를 보이고 다음 trip까지 카드를 펼친다. 관제 지도 찍어 목적지 고르기는 넣지 않았다(목록만). 서버 경로는 그대로. DESIGN.md `#cancel-all` quiet(D-540 6).
+- 증거: 모델 PC `operations/fleet/test/`+공통 가드+`test_fleet_console_browser.py`(브라우저 켬). 새 `test_console_card_trips_browser.py` 5건, node `card-trip.test.mjs`·`trip-path.test.mjs` 통과. 나머지 3328 통과, 실패는 fleet 크기 판정 1건 + 브라우저 9건이고 그 9건은 기준 main `3b6072a46` 스냅숏에서도 같이 실패한다(NEW 0, 화면 문구·버튼 순서에 맞춘 시험 고침 포함). 캡처 `X:/DevTemp/fleet-card-trips/{before,after}/`.
+- gate 변화: 없음. fleet 크기 판정 독립 재심 수락, main 병합 뒤 48481로 기록. 리뷰 반영: trip 취소가 실패하면 차선 주행 OFF도 보냄(trip guard가 서버에서 trip을 끝냄), 취소 범위는 누를 때 계산, 레일 행 높이 `max-content`(관제 카메라 칸 겹침), queues↔card-trip import 순환 제거. 가벼운 Safety-Review 필요(카드 운행 시작 경로, 운행 취소 의미 합치기). 착지·푸시 안 함.
+- 결정: D-540 Proposed 그대로, D-517 10항 개정 줄은 수락 때 확정(이 단계에서 문구 안 바꿈).
+- 교훈: 1 s 폴링이 카드를 다시 만들면 `<select>` 목록이 닫힌다 — 고르는 중인 카드는 `roster.place`가 그대로 둔다.
 ## 2026-10-09 · uncommitted · feat(fleet): Rosy Cam 지도 평면 영상을 받아 그대로 그린다 (D-560 S2)
 - 변경: `shared/vision-view.js`가 lease `rectification: {"mode": "map"}`로 평면을 따로 받는다(`fetchMapPlane`, `createPlaneFeed`). `X-Frame-Plane`은 유한한 수 다섯, min < max, px_per_m > 0일 때만 받는다. 409 `plane-unavailable`, lease 422(옛 Fleet 계약), `X-Frame-Rectified: map`이 아닌 응답(옛 Vision)은 평면 없음 상태로 두고 30 s 뒤 다시 묻는다. 관제 현장 지도(`camera-backdrop.js`)는 신선한(3000 ms) 평면이고 그 revision이 이 현장 지도의 승인 보정이면 평면을 같은 `toPx`(view_turn_deg 포함)로 사각형에 그대로 그리고, 아니면 D-515 삼각형 펴기로 대신한다. map-tag는 "Rosy Cam 평면 영상" / "브라우저 보정(대체)". 교정 어긋남은 그대로 그림을 내린다. 썸네일·크게 보기는 원본 그대로. 현장 지도 탭 "직사각형 평면 영상 불러오기"는 평면을 먼저 받고 점 잡기는 `x = min_x + u/ppm`, `y = max_y − v/ppm`(화면 방향을 먼저 푼다), `warpImage`는 평면이 없을 때만. 설치·보정 확인 그림(`field-view.js`)은 승인 보정이 있으면 평면을 보여 준다.
 - 증거: node `map-plane.test.mjs` 5건(헤더, 식 왕복, 0/90/180/270° 배치·점 잡기). AI PC 브라우저: 새 `test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409`, `test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_409` 통과, `test_site_map_browser.py` 56 passed, 관제·작업 흐름 브라우저 묶음은 기준 커밋 d08b96805와 같은 10 failed(새 실패 없음; `test_stale_camera_calibration_drops_the_frame_and_warns`는 기준에서도 `goto networkidle` 시간 초과). 실데이터(`paint-7b220d432c2a`, raw.jpg를 D-560 기하로 cv2 평면화) 관제·현장 지도 0°/90° 캡처 `X:/DevTemp/fleet-map-plane/`에서 차선이 도로 가운데에 놓인다.

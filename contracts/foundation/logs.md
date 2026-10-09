@@ -570,3 +570,9 @@
 - 변경: 최대 1초 유효한 `RouteContext` 검증, `LineFollowStatus` 문맥·발행 시각, `base_velocity.route_context` 선택 능력을 추가했다. 기존 설정은 꺼짐이다.
 - 증거: foundation 856 passed, 5 skipped, `known_failures.py` 신규 실패 0.
 - gate 변화: D-531 P1 SOURCE 후보. 소비자 P2/P3는 별도.
+
+## 2026-10-09 · uncommitted · fix(core_common): D-531 굽이 단계 문맥
+
+- 변경: `RouteContext`에 굽이 전용 선택 필드 `bend_phase`(`bending|reacquiring`)를 추가하고 비움 메시지·다른 장소 종류에서는 거절한다.
+- 증거: `test_route_context.py` 집중 검사. 계약 v1.166.
+- gate 변화: SOURCE. 기본 꺼짐과 실제 영상·SIM·DEVICE 수용 대기는 그대로다.

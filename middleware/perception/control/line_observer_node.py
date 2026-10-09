@@ -22,6 +22,7 @@ from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
+from .route_context_input import RouteContextInput, bend_expected
 from .calibrated_values import calibrated
 from .sensing.perception.camera_ground import (
     nominal_ground_plane, simulation_ground_allowed, simulation_ground_plane,
@@ -154,6 +155,7 @@ class LineObserverNode(Node):
         self._lane_keeper = LaneKeeper(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_turning=bool(self.get_parameter('lane_corner_turning').value), paint_half_width_m=self._paint_half_width_m)
+        self._route_context_input = RouteContextInput()
         self._paint_worker = self._build_paint_worker()
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
@@ -204,6 +206,10 @@ class LineObserverNode(Node):
                 Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
         if mode == 'keep':   # read only: CORE stays the sole final cmd_vel publisher (D-18, D-143)
             self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)
+            route_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                                   durability=DurabilityPolicy.VOLATILE)
+            self.create_subscription(
+                String, 'line/route_context', self._on_route_context, route_qos)
         if self._ir_calibration is None:
             self.get_logger().warning(
                 'IR line calibration disabled; IR_LINE will remain fail-closed')
@@ -328,7 +334,8 @@ class LineObserverNode(Node):
     def _stamp(self) -> float:
         return self.get_clock().now().nanoseconds * 1e-9
 
-    def _publish(self, source, observation, *, stamp=None, quality=None, containment=None) -> None:
+    def _publish(self, source, observation, *, stamp=None, quality=None, containment=None,
+                 route_context_seq=None) -> None:
         payload = line_observation_payload(
             source, self._stamp() if stamp is None else stamp, observation,
             ir_calibrated=(source == 'IR_LINE' and self._ir_calibration is not None),
@@ -341,7 +348,12 @@ class LineObserverNode(Node):
             payload['quality'] = quality
         if containment is not None:
             payload['containment'] = containment
+        if route_context_seq is not None and source == 'CAMERA_LINE':
+            payload['route_context_seq'] = route_context_seq
         self.observation_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
+
+    def _on_route_context(self, msg: String) -> None:
+        self._route_context_input.receive(msg.data)
 
     def _on_ir(self, msg: UInt16MultiArray) -> None:
         observation = None
@@ -409,6 +421,7 @@ class LineObserverNode(Node):
         mode = None
         ground = None
         quality = None
+        route_context_seq = None
         if (bool(self.get_parameter(
                 'require_camera_controls_stable').value)
                 and not self._camera_controls_stable):
@@ -457,6 +470,9 @@ class LineObserverNode(Node):
                 # swept view latched the flip hold).
                 image_stamp = (float(msg.header.stamp.sec)
                                + float(msg.header.stamp.nanosec) * 1e-9)
+                route_context = self._route_context_input.for_frame(image_stamp)
+                route_context_seq = route_context.seq if route_context is not None else None
+                bend_rules = bend_expected(route_context)
                 cmd = pose_if_fresh(self._cmd_twist, self._cmd_stamp, image_stamp)
                 self._cmd_stale_frames = 0 if cmd is not None or self._cmd_twist is None else self._cmd_stale_frames + 1
                 if self._cmd_stale_frames >= KEEP_CMD_STALE_WARN_FRAMES:
@@ -472,7 +488,8 @@ class LineObserverNode(Node):
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
                 observation = self._lane_keeper.update(
                     frame, ground, paint_mask=paint,
-                    lane_half_width_m=float(self.get_parameter('lane_half_width_m').value))
+                    lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
+                    bend_expected=bend_rules)
                 bundle = keep_debug_payload(
                               self._lane_keeper.last, ground, self._lane_keeper._x_offset,
                               paint_source_used=paint_used,
@@ -483,7 +500,10 @@ class LineObserverNode(Node):
                               image_size=[frame.shape[1], frame.shape[0]],
                               camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
                               corner_turning=bool(self.get_parameter('lane_corner_turning').value),
-                              ground=self._ground_label(), stamp=image_stamp)
+                              ground=self._ground_label(), stamp=image_stamp,
+                              route_context_v=1,
+                              route_context_seq=route_context.seq if route_context is not None else None,
+                              route_context_effect={'bend_rules': True} if bend_rules else None)
                 self._keep_debug_pub.publish(String(data=json.dumps(bundle, default=float)))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
                 if (mode in ('route_a', 'route_b', 'route_ab')
@@ -555,7 +575,8 @@ class LineObserverNode(Node):
                 camera_x=self._lane_keeper._x_offset, geometry_bounds=self._ground_error,
                 paint_half_width_m=self._paint_half_width_m)
         self._publish('CAMERA_LINE', observation, stamp=source_stamp,
-                      quality=quality, containment=containment)
+                      quality=quality, containment=containment,
+                      route_context_seq=route_context_seq)
         self._publish_debug(msg, frame, observation)
 
     def _publish_debug(self, msg, frame, observation) -> None:

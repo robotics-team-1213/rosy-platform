@@ -29,6 +29,7 @@ COLORS = ("rgb", "bgr")
 PRECISIONS = ("fp32", "int8")
 MANIFEST_NAME = "model_manifest.json"
 REVISION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+VERSION_PATTERN = re.compile(r"v\d+\.\d+\.\d{2}")  # D-558 model_version, optional (legacy has none)
 
 
 class ManifestError(ValueError):
@@ -80,6 +81,7 @@ class ModelManifest:
     raw: dict
     output_layout: str = "nchw_logits"
     backend: str = "onnx"
+    model_version: str | None = None
 
     def ncnn_files(self) -> tuple[Path, Path]:
         if self.backend != "ncnn":
@@ -269,6 +271,9 @@ def load_manifest(path: str | Path) -> ModelManifest:
                 or classes[-1].get("role") != "drivable"
                 or sum(c.get("role") == "drivable" for c in classes if isinstance(c, dict)) != 1):
             raise ManifestError("output.classes: v13-drivable needs one final drivable channel")
+    version = doc.get("model_version")
+    if version is not None and (not isinstance(version, str) or not VERSION_PATTERN.fullmatch(version)):
+        raise ManifestError("model_version: expected v<major>.<minor>.<two-digit patch> (D-558)")
     task = doc.get("task")
     if task not in TASKS:
         raise ManifestError(f"task: one of {TASKS}")
@@ -291,6 +296,7 @@ def load_manifest(path: str | Path) -> ModelManifest:
         raw=doc,
         output_layout=LAYOUTS[task],
         backend=backend,
+        model_version=version,
     )
 
 

@@ -46,7 +46,8 @@ def _setup(tmp_path):
                   replay_root=str(evaluation.parent), camera_profile=str(profile),
                   intake_out=str(tmp_path / "intake"),
                   training=dict(seed=1, epochs=1, lr=0.001, batch_size=1, recipe="drivable_head",
-                                parent_model=str(parent), parent_torchscript=str(script), ignore_top=110))
+                                parent_model=str(parent), parent_torchscript=str(script), ignore_top=110,
+                                model_version="v13.1.00"))
     return config, Path(path), script
 
 

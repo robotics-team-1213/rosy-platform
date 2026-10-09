@@ -1,0 +1,90 @@
+"""D-558 drivable model version ledger."""
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[4]
+_MODEL = ROOT / "learning" / "training" / "perception" / "model"
+if str(_MODEL) not in sys.path:
+    sys.path.insert(0, str(_MODEL))
+
+import drivable_versions as dv  # noqa: E402
+
+REV = "v13-drivable-20261010-aaaaaaaa"
+
+
+def test_repo_ledger_holds_the_rejected_first_candidate():
+    (first,) = [e for e in dv.load() if e["version"] == "v13.0.00"]
+    assert first["revision"] == "v13-drivable-20261009-982b09a9" and first["status"] == "rejected"
+    assert first["onnx_sha256"].startswith("982b09a9")
+    assert first["dataset"] == "v13-lane-derived" and first["dataset_sha256"].startswith("f9d23ea8")
+
+
+def test_cli_stores_the_dataset_hash_split(tmp_path):
+    ledger = tmp_path / "l.yaml"
+    dv.save([], ledger)
+    assert dv.main(["--ledger", str(ledger), "add", "v13.1.00", REV, "--onnx-sha256", "b" * 64,
+                    "--dataset", "d@" + "c" * 64, "--rule", "r", "--note", "n"]) == 0
+    (entry,) = dv.load(ledger)
+    assert entry["dataset"] == "d" and entry["dataset_sha256"] == "c" * 64
+    assert dv.main(["--ledger", str(ledger), "add", "v13.2.00", "v13-drivable-20261010-dddddddd",
+                    "--onnx-sha256", "b" * 64, "--dataset", "no-hash", "--rule", "r", "--note", "n"]) == 2
+
+
+def test_saved_ledger_matches_the_repo_file(tmp_path):
+    dv.save(dv.load(), tmp_path / "l.yaml")
+    assert (tmp_path / "l.yaml").read_text(encoding="utf-8") == dv.LEDGER.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("version", ["v13.1.0", "13.1.00", "v13.1.100", "v13.x.00", None, 13])
+def test_version_format(version):
+    assert dv.version_error(version, REV)
+
+
+def test_major_must_match_lineage():
+    assert dv.version_error("v13.1.00", REV) is None
+    assert "major 12" in dv.version_error("v12.1.00", REV)
+
+
+def test_intake_error_cases(tmp_path):
+    ledger = tmp_path / "l.yaml"
+    dv.save([], ledger)
+    assert "needs model_version" in dv.intake_error({"model_revision": REV}, ledger)
+    assert dv.intake_error({"model_revision": REV, "model_version": "v13.1.00"}, ledger) is None
+    assert dv.main(["--ledger", str(ledger), "add", "v13.1.00", "v13-drivable-20261010-bbbbbbbb",
+                    "--onnx-sha256", "b" * 64, "--dataset", "d@" + "c" * 64,
+                    "--rule", "D-554 1-9", "--note", "first"]) == 0
+    assert "one version, one revision" in dv.intake_error(
+        {"model_revision": REV, "model_version": "v13.1.00"}, ledger)
+    assert dv.intake_error({"model_revision": "v13-drivable-20261010-bbbbbbbb",
+                            "model_version": "v13.1.00"}, ledger) is None
+
+
+def test_cli_refuses_duplicates_and_changes_status(tmp_path, capsys):
+    ledger = tmp_path / "l.yaml"
+    dv.save(dv.load(), ledger)
+    base = ["--ledger", str(ledger)]
+    dup = [*base, "add", "v13.0.00", "v13-drivable-20261010-cccccccc", "--onnx-sha256", "c" * 64,
+           "--dataset", "d@" + "d" * 64, "--rule", "r", "--note", "n"]
+    assert dv.main(dup) == 2 and "duplicate version" in capsys.readouterr().err
+    assert dv.main([*base, "set-status", "v13.0.00", "retired"]) == 0
+    assert dv.load(ledger)[0]["status"] == "retired"
+    assert dv.main([*base, "set-status", "v13.9.00", "retired"]) == 2
+    assert dv.main([*base, "show", "v13.0.00"]) == 0
+    assert "v13-drivable-20261009-982b09a9" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("version, word", [("v12.1.00", "major 12"), ("v13.1", "two-digit"), (None, "exactly")])
+def test_drivable_head_config_needs_lineage_model_version(version, word):
+    sys.path.insert(0, str(ROOT / "learning" / "training" / "perception" / "training"))
+    import train_job
+    from job_state import JobError
+    training = dict(seed=1, epochs=1, lr=0.001, batch_size=1, recipe="drivable_head",
+                    parent_model="p", parent_torchscript="t", ignore_top=110, model_version=version)
+    if version is None:
+        del training["model_version"]
+    config = {key: "unused" for key in ("store", "dataset", "gate", "replay_root", "intake_out",
+                                        "camera_profile")}
+    with pytest.raises(JobError, match=word):
+        train_job.run({**config, "training": training}, "unused")

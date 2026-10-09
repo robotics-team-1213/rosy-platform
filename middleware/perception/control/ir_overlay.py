@@ -129,11 +129,12 @@ def operator_overlay_problem(data) -> Optional[str]:
             return "learned_lane_pointer must be an absolute path"
     if params.get("paint_source") == "learned" and not params.get("learned_lane_pointer"):
         return "learned paint needs learned_lane_pointer in the same file"
-    # D-408 measured cadence is at most two frames; a Pi has four cores and
-    # CORE/IO must retain capacity. Do not expose unbounded thread counts here.
-    for key in ("learned_paint_every_n", "learned_paint_threads"):
-        if key in params and (type(params[key]) is not int or not 1 <= params[key] <= 2):
-            return f"{key} must be an integer in [1, 2]"
+    # every_n up to 4: measured Pi 5 lane-seg inference is ~240-300 ms, about
+    # 2.4 frames at 8 Hz, so every_n 2 never serves a mask (0/84 live, 9dfk).
+    # Threads stay at 2: a Pi has four cores and CORE/IO must retain capacity.
+    for key, high in (("learned_paint_every_n", 4), ("learned_paint_threads", 2)):
+        if key in params and (type(params[key]) is not int or not 1 <= params[key] <= high):
+            return f"{key} must be an integer in [1, {high}]"
     return None
 
 

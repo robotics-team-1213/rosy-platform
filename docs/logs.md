@@ -1,4 +1,4 @@
-# docs logs
+﻿# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -7492,3 +7492,45 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-557 Accepted. D-520·D-495·D-507·D-500은 대체하지 않는다.
 - 교훈: 없음
+
+## 2026-10-09 · uncommitted · fix(route context): 굽이 진행·재획득 단계 표시
+
+- 변경: D-531의 B9 굽이 단계가 실제 `line/route_context`에 실리도록 `bend_phase`를 추가하고 API reference를 v1.166으로 올렸다. 접근 창이 지난 뒤에는 `ahead_m` 대신 단계로 표시한다.
+- 증거: 공통 스키마·CORE 계산·인식 소비자 집중 테스트. 설정 기본값은 꺼짐.
+- gate 변화: SOURCE만. 실물 434프레임·폐루프 SIM·DEVICE·FIELD 수용 대기.
+
+## 2026-10-09 · uncommitted · docs: 활성 웹 화면 레이아웃 와이어프레임
+
+- 변경: Fleet, Robot, Pilot, Games, Learning의 16개 화면/상태에 대한 목적·역할·이동·좌우 영역·모바일 와이어프레임과 디자인 문서 작성.
+- 근거: surfaces.yaml, 화면 HTML, D-425/D-501/D-543/D-153. Fleet 좌측 레일은 D-501 개정 전 제안으로 표시.
+- gate: 설계 산출물만 작성. 런타임 적용, G1/G2/G3, 장치·현장 수용은 별도.
+
+## 2026-10-09 · uncommitted · docs: 활성 웹 화면 설계 재평가
+
+- 변경: Fleet 관제 그림의 지도:개입 3:2 구도를 복원하고 활성 웹 설계 문서에 계약·모바일·상태·접근성 재평가를 추가.
+- 근거: D-493, D-501, D-543, D-153; impeccable Operate와 web interface guidelines.
+- gate: 설계 검토. 런타임 UI, 320px G2, G3, 장치·현장 수용은 별도.
+
+## 2026-10-09 · uncommitted · docs(lane): Fleet 계획과 한쪽선 주행 증거 설계
+
+- 변경: D-520 호를 중심 prior로, 동기화된 지도 자세와 확인된 한쪽 바닥선을 제한 보정 증거로 쓰는 후보를 계획에 기록했다. D-531 거부 문맥과 D-476 직선 손실 bridge의 책임을 구분했다.
+- 근거: ring lap SIM 4의 NE +14…15° 진입 오차·반지름 실패와 진입 관측성 실험, 기존 D-520·D-531·D-476 계약.
+- gate 변화: 설계 후보만. 자세·바닥선 불확실도 계측, 사람 정답, 폐루프 SIM, DEVICE 판정 대기.
+
+## 2026-10-09 · uncommitted · docs(lane): 링 진입 자세 오차 원시 로그 재계산
+
+- 변경: 기존 SIM 9회에서 첫 링 호의 지도 접선 대비 실제 방향과 오돔·참값 차이를 원시 로그로 다시 계산했다. 해시와 재현 스크립트를 새 validation 기록에 둔다.
+- 증거: NE 기본 4회 +15.497…+16.273°, 참값 기반 비교 4회 +2.905…+3.357°; 같은 시점 오돔·참값 차이 최대 1.657 mm·0.096°.
+- gate 변화: ROS-SIM 기록의 오프라인 분석. 지도 자세의 실물 오차·카메라 바닥선 정체·DEVICE·FIELD는 여전히 미검증.
+
+## 2026-10-09 · uncommitted · docs(lane): NE 호 blind 거리와 반지름 오차 교차점
+
+- 변경: 기본·참값 기반 비교 각 4회에서 링 호의 참값 반지름 오차가 25 mm·50 mm에 처음 닿는 로그상 주행 거리를 재계산했다.
+- 증거: 기본 첫 25 mm 0.1104–0.1281 m, 첫 50 mm 0.2927–0.3124 m; 비교는 둘 다 미도달. 원시 로그 해시 8개 일치.
+- gate 변화: ROS-SIM 기록의 사후 분석. 현재 `arc_blind_max_m: 1.0`의 실물 허용 근거는 아니다.
+
+## 2026-10-09 · uncommitted · docs(lane): Fleet pivot 기록 공백 확인
+
+- 변경: Fleet map-pose 조회와 trip 요약, CORE Pilot 녹화의 시각 결합 공백을 차선 보정 설계에 명시했다.
+- 증거: `MapPose.odom_stamp`와 지도 조회 응답, `trip_ports.pose_view`의 요약 필드, D-379 녹화·학습 경로를 소스에서 대조했다.
+- gate 변화: 원본 동기화·실물 오차 상한은 미확보. Fleet 계획은 prior로 유지하고 주행 보정 승격은 보류한다.

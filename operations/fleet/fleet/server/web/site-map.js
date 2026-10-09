@@ -7,9 +7,9 @@ import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
-  planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripErrorText, tripStartReason,
+  planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripStartReason,
   tripStatusText, rectangularView, viewTurnOf, editViewTurn, loopCapacityText, repeatTripBody, convoyLeaders,
-  planeView,
+  planTrip, startTrip, cancelTrip, tripRefusalText, planSummaryText, repeatTripReason, planeView,
 } from '/console/assets/site-map-model.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {warpImage} from '/console/assets/field-warp.js';
@@ -171,11 +171,8 @@ function syncButtons() {
   gate('trip-pick', reason);
   gate('trip-start', inspecting || tripStartReason({role: state.role, plan: state.plan, active: state.active, running: state.running}));
   gate('trip-cancel', tripCancelReason({role: state.role, running: state.running}));
-  const starts = (state.active?.map.places || []).filter(place => place.kind === 'start');
   gate('trip-repeat', inspecting || reason || (!state.active ? '활성 지도가 없습니다' : robotReason
-    || (state.running ? '이 로봇은 이미 운행 중입니다' : '')
-    || (starts.length < 2 ? '반복 운행에는 출발 자리가 두 곳 이상 필요합니다'
-      : $('trip-start-place').value ? '' : '출발 자리를 고르세요')));
+    || repeatTripReason({active: state.active, running: state.running, start: $('trip-start-place').value})));
   $('trip-confirm').hidden = !state.running?.hold;
   gate('trip-confirm', inspecting || reason || (state.running?.hold?.plan ? '' : '다시 계산한 경로가 없습니다 · 운행을 취소하세요'));
   teach.sync();
@@ -514,13 +511,12 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
   const to = $('trip-pick').checked ? state.point : $('trip-place').value;
   state.plan = null;
   try {
-    const plan = await request(`/api/fleet/robots/${encodeURIComponent($('trip-robot').value)}/trip`, {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({to})});
+    const plan = await planTrip(request, $('trip-robot').value, {to});
     if (epoch !== state.planEpoch) return;
     state.plan = plan;
   } catch (error) {
     if (epoch !== state.planEpoch) return;
-    status('trip-summary', error.code ? tripErrorText(error.code, error.detail) : error.message, 'error');
+    status('trip-summary', tripRefusalText(error), 'error');
     $('trip-actions').replaceChildren();
     render();
     return;
@@ -532,8 +528,7 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
     status('trip-summary', `지도가 v${plan.map_version}로 바뀌었습니다 · 다시 계산하세요`, 'error');
     return;
   }
-  status('trip-summary', `${plan.segments.length}개 차로 · ${plan.length_m.toFixed(2)} m · 약 ${Math.round(plan.eta_s)} s`
-    + ` · 지도 v${plan.map_version} · 실행하지 않음 · 운행 시작으로 출발`, 'ready');
+  status('trip-summary', `${planSummaryText(plan)} · 실행하지 않음 · 운행 시작으로 출발`, 'ready');
   $('trip-actions').replaceChildren(...actionRows(plan, state.active.map).map(text => {
     const row = document.createElement('li');
     row.textContent = text;
@@ -543,22 +538,22 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
   render();
 }));
 
-async function tripAction(path, done) {
+async function tripAction(send, done) {
   try {
-    const trip = await request(path, {method: 'POST'});
+    const trip = await send();
     const open = ['started', 'running'].includes(trip.state);
     state.open = [...state.open.filter(item => item.trip_id !== trip.trip_id), ...(open ? [trip] : [])];
     status('trip-run', tripStatusText(trip, state.active?.map), open ? 'pending' : 'ready');
     notice(done);
   } catch (error) {  // the poll rewrites #trip-run each second; the refusal stays in the notice
-    notice(`운행 거절 · ${error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error)}`);
+    notice(`운행 거절 · ${tripRefusalText(error)}`);
   }
   syncButtons();
 }
 
 $('trip-start').addEventListener('click', () => {
   const plan = state.plan;
-  if (plan) tripAction(`/api/fleet/trips/${encodeURIComponent(plan.plan_id)}/start`, '운행을 시작했습니다.');
+  if (plan) tripAction(() => startTrip(request, plan.plan_id), '운행을 시작했습니다.');
 });
 // D-517 2: the selected robot and its start place make one lap trip over every start place; Fleet
 // plans it (POST /trip repeat) and the same click starts it. A refusal of either step stays in the notice.
@@ -567,17 +562,17 @@ $('trip-repeat').addEventListener('click', async () => {
   const robot = $('trip-robot').value, place = $('trip-start-place').selectedOptions[0]?.textContent;
   gate('trip-repeat', '출발하는 중');
   try {
-    const plan = await request(`/api/fleet/robots/${encodeURIComponent(robot)}/trip`, {method: 'POST',
-      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(repeatTripBody(state.active?.map, $('trip-start-place').value, $('trip-leader').value))});
+    const plan = await planTrip(request, robot, repeatTripBody(state.active?.map, $('trip-start-place').value, $('trip-leader').value));
     const follows = $('trip-leader').value ? ` · ${$('trip-leader').value} 뒤 대열` : '';
-    await tripAction(`/api/fleet/trips/${encodeURIComponent(plan.plan_id)}/start`, `반복 운행을 시작했습니다 · ${robot} · ${place}${follows}`);
+    await tripAction(() => startTrip(request, plan.plan_id), `반복 운행을 시작했습니다 · ${robot} · ${place}${follows}`);
   } catch (error) {
-    notice(`반복 운행 거절 · ${error.code ? tripErrorText(error.code, error.detail) : siteMapErrorText(error)}`);
+    notice(`반복 운행 거절 · ${tripRefusalText(error)}`);
     syncButtons();
   }
 });
 $('trip-confirm').addEventListener('click', () => {
-  if (state.running) tripAction(`/api/fleet/trips/${encodeURIComponent(state.running.trip_id)}/confirm-replan`, '바뀐 경로로 계속합니다.');
+  const trip = state.running;
+  if (trip) tripAction(() => request(`/api/fleet/trips/${encodeURIComponent(trip.trip_id)}/confirm-replan`, {method: 'POST'}), '바뀐 경로로 계속합니다.');
 });
 $('trip-cancel').addEventListener('click', async () => {
   const trip = state.running;
@@ -586,7 +581,7 @@ $('trip-cancel').addEventListener('click', async () => {
     message: '운행을 취소할까요? 로봇은 바로 멈춥니다. 차선 주행이면 차선 주행을 끄고(OFF), 좌표 주행이면 목표를 취소합니다.',
     action: '운행 취소', opener: $('trip-cancel'),
   });
-  if (allowed) tripAction(`/api/fleet/trips/${encodeURIComponent(trip.trip_id)}/cancel`, '운행을 취소했습니다.');
+  if (allowed) tripAction(() => cancelTrip(request, trip.trip_id), '운행을 취소했습니다.');
 });
 
 bindEstop(request);

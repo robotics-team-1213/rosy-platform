@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · fix(core): D-531 굽이 단계 문맥 발행
 - 2026-10-09 · uncommitted · fix(core): 위치 요청은 Fleet 결정의 수락 결과만 닫고 RESUME (D-546 5, safety review)
 - 2026-10-09 · uncommitted · feat(core): lane_return이 Fleet에 위치를 청한다 (D-546 5)
 - 2026-10-09 · uncommitted · fix(line_follow): 호 시작 전 경로 문맥
 - 2026-10-09 · uncommitted · feat(line_follow): D-531 계획의 짧은 문맥 계산
-- 2026-10-09 · uncommitted · feat(core): D-541 trip lease 상태 제공자 (`state/manager.py`)
