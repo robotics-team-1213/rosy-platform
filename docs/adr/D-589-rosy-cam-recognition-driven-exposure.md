@@ -21,9 +21,9 @@
    - `marker_rate`: 기대한 상단 ArUco(로봇 `robot_markers`) 중 최근 창에서 검출된 비율. 마커가 없는 현장에서는 빠진다.
    - `score`: 위를 한 숫자로 묶은 값. `clip`·`crush`가 각 0.05를 넘으면 크게 깎는다. 식은 Vision 코드의 한 곳에 두고 단위 시험으로 고정한다.
 2. **바꿀 수 있는 것(허용 목록).** 기하(화각·초점·배율·해상도·회전·렌즈)는 바꾸지 않는다. 그래서 `map_to_image` 보정(D-375·D-457·D-560)은 유지된다.
-   - AE 보정 지수(EV 단계): 범위 −6 … +3.
+   - AE 보정: 실제 EV로 −2.0 … +1.0, 1/3 EV 단계. 선로의 `ev`는 CameraX 보정 지수다. Vision이 `camera_state.supported.ev_step`으로 EV를 지수로 바꾸고, 폰은 같은 EV 범위와 기기 범위의 교집합으로 자른다.
    - AE 잠금과 AWB 잠금: 켬·끔.
-   - 노출 시간 상한: 기본 `1/120 s`. 움직이는 로봇 번짐을 막는다. 기기가 지원할 때만 Camera2 interop으로 건다.
+   - 노출 시간 상한: 자동 노출을 켠 채로는 AE 목표 fps 범위의 하한으로만 걸 수 있다. 폰은 열 때문에 30 fps를 넘는 범위를 고르지 않으므로 실제 상한은 약 `1/30 s`(33 333 µs)다. Vision은 기본으로 `33333`을 요청하고 실제 값은 `applied.max_exposure_us`로 안다. 더 짧은 노출(로봇 번짐 감소)은 수동 노출이 필요해 이 ADR 밖이다.
    - 안티밴딩: `60 Hz`로 고정. 지원하지 않으면 자동.
    - 조리개는 고정이라 바꾸지 않는다. 같은 역할을 노출 시간과 ISO가 한다. ISO는 자동 노출이 정하게 두고 직접 쓰지 않는다.
 3. **누가 결정하나: Vision이 재고 정하고, 폰이 한도 안에서 적용한다.**
@@ -38,8 +38,8 @@
    - **기록:** Vision은 source별로 (설정, 점수, 시각)을 남긴다. 다음 맞춤은 마지막으로 가장 좋았던 설정에서 시작한다.
 5. **선로(동결 표면은 바꾸지 않는다).**
    - 프레임 헤더 `ROF1`과 `hello`는 그대로다.
-   - 하향 `{"type":"camera","seq":n,"ev":i,"ae_lock":b,"awb_lock":b,"max_exposure_us":u|null,"antibanding":"60hz"|"auto"}`. 지금 앱은 모르는 type을 기록만 하고 무시한다.
-   - 상향 `{"type":"camera_state","seq":n,"applied":{…같은 키…},"supported":{…},"exposure_us":u|null,"iso":i|null}`. 지금 Vision은 hello 뒤 텍스트를 무시한다.
+   - 하향 `{"type":"camera","seq":n,"ev":i,"ae_lock":b,"awb_lock":b,"max_exposure_us":u|null,"antibanding":"60hz"|"auto"}`. 지금 앱은 모르는 type을 기록만 하고 무시한다. 폰은 요청을 받은 뒤 60 초 동안만 유효로 보므로 Vision은 현재 요청을 20 초마다 다시 보낸다. 60 초 동안 오지 않으면 폰은 로컬 보정으로 돌아가고 잠금을 푼다.
+   - 상향 `{"type":"camera_state","seq":n,"applied":{ev,ae_lock,awb_lock,max_exposure_us,antibanding,mode},"supported":{ev_min,ev_max,ev_step,ae_lock,awb_lock,max_exposure_us,antibanding_60hz},"exposure_us":u|null,"iso":i|null,"thermal":t}`. `mode`는 `vision`·`local`·`disabled`·`thermal_hold`이고 `applied`는 카메라가 확인한 값만 싣는다. 변경 때와 hello 직후에 보낸다. 지금 Vision은 hello 뒤 텍스트를 무시한다.
    - 두 메시지의 예시는 공유 벡터 `test/fixtures/protocol/overhead-ingest.v1.json`에 추가하고 Kotlin과 Python 시험이 같이 읽는다.
 6. **기본값과 끄기.**
    - 현장 source는 기본 켜짐이다. 사용자 지시("오토")에 따라 D-544의 기본 꺼짐을 이 기능에서는 바꾼다.
