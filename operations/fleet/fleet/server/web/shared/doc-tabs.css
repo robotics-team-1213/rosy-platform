@@ -28,3 +28,12 @@
 @media (width < 64rem) {
   .doc-tabs { padding-inline: var(--space-3); }
 }
+.task-nav { display: flex; gap: var(--space-1); min-width: 0; }
+.task-nav a { display: flex; align-items: center; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); color: var(--ink-quiet); text-decoration: none; border-radius: var(--radius-control); }
+.task-nav a:hover, .task-nav a:focus-visible { color: var(--ink); background: var(--surface-raised); }
+.task-nav a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+main:has(> .task-nav) [id$="-heading"] { scroll-margin-top: var(--space-4); }
+/* One scrolling row at every width: a side column shifted the content off the stop feedback
+   and a phone grid pushed the map below the first screen. */
+.task-nav { overflow-x: auto; scrollbar-width: thin; }
+.task-nav a { flex: 0 0 auto; white-space: nowrap; }

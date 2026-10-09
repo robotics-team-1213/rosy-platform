@@ -32,3 +32,20 @@ D-570 reserved in another active branch (refs/adr/D-570)
 D-571 reserved in another active branch (refs/adr/D-571)
 D-572 reserved in another active branch (refs/adr/D-572)
 D-573 reserved in another active branch (refs/adr/D-573)
+D-563 reserved in another active branch (drivable near-road false negative, map-pose labels); remove when it lands
+D-566 reserved in another active branch (v13.1.00 off-road gate, model PC long-job guard); remove when it lands
+D-563 reserved in another active branch (feat/v13-drivable-outside-band); remove when it lands
+D-563 reserved in another active branch (map-projected labels, existing assets and gaps); remove when it lands
+D-563 reserved in another active branch (drivable near-road false negative and map-pose recording labels); remove when it lands
+D-566 reserved in another active branch (v13.1.00 off-road gate and model PC long-job guard); remove when it lands
+D-571 ADR reserved on branch feat/rosy-cam-map-plane (971523db2), not yet on main; remove when it lands
+D-572 ADR reserved on branch fix/mdns-roster-gate (8c9468977), not yet on main; remove when it lands
+D-574 reserved in another active branch (feat/v13-map-projected-labels); remove when it lands
+D-574 ADR reserved on branch feat/v13-map-projected-labels (4f65d142c), not yet on main; remove when it lands
+D-576 ADR reserved on branch feat/v13-drivable-outside-band (6f3f784d5), not yet on main; remove when it lands
+D-583 reserved in another active branch (refs/adr/D-583)
+D-585 reserved on adr-model-lap for model-driven lane lap acceptance; remove when it lands
+D-586 reserved on adr-model-lap for capture_group annotated revision; remove when it lands
+D-587 reserved on marker-sightings for ceiling marker map pose; remove when it lands
+D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
+D-589 reserved on cam-auto-tune for recognition-driven exposure; remove when it lands

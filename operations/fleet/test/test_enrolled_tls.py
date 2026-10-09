@@ -69,8 +69,7 @@ def test_secure_manual_and_list_code_never_downgrade(tmp_path, manual):
 def test_ca_digest_is_der_and_config_cannot_register_or_change_identity(tmp_path):
     bindings, row, _, file = approved(tmp_path)
     assert bindings.binding('rosy_09').context().check_hostname
-    with pytest.raises(EnrollmentTlsError, match='already enrolled'):
-        bindings.validate([])
+    assert bindings.validate([]) == ['rosy_09']  # pending: the root-owned file is the approval
     with pytest.raises(EnrollmentTlsError, match='hostname'):
         bindings.validate([dict(robot_id='rosy_09', hostname='other')])
     file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[])))
@@ -455,3 +454,254 @@ def test_logout_identity_failure_retains_pending_marker(tmp_path, monkeypatch):
         assert calls[-1].url.path == '/api/v1/auth/logout' and calls[-1].url.scheme == 'https'
 
     asyncio.run(scenario())
+
+
+SECURE = '192.168.1.203:8080'
+
+
+def pending_service(tmp_path, monkeypatch, core, identity, bindings, static=()):
+    """A renumbered TLS robot: an approved binding, no enrolled row (D-565)."""
+    old, _, _, discovery, store, _ = build(tmp_path, {}, static=static)
+    discovered(monkeypatch, [])
+    discovery.replace_scan([{**scan_row(SECURE), 'transport': 'https'}])
+    calls = []
+
+    def receive(request):
+        calls.append(request)
+        if request.url.path.endswith('/identity'):
+            assert 'Authorization' not in request.headers
+            return httpx.Response(200, json=identity)
+        return core.handle(request)
+    service = EnrollmentService(store, old._roster, key=old._key, clock=old._clock, discovery=discovery,
+                                tls_bindings=bindings, transport=httpx.MockTransport(receive))
+    return service, store, calls
+
+
+def test_pending_binding_is_accepted_at_start_and_not_marked(tmp_path):
+    old, _, _, _, store, _ = build(tmp_path, {})
+    bindings, _, _, _ = approved(tmp_path)
+    service = EnrollmentService(store, old._roster, key=old._key, tls_bindings=bindings)
+    service.load()
+    assert store.tls_markers() == {} and bindings.markers([]) == []
+
+
+@pytest.mark.parametrize('manual', [False, True])
+def test_https_enroll_through_pending_binding_when_robot_id_matches(tmp_path, monkeypatch, manual):
+    bindings, binding, identity, _ = approved(tmp_path)
+    core = FakeCore()
+    service, store, calls = pending_service(tmp_path, monkeypatch, core, identity, bindings)
+    asyncio.run(service.enroll(code=CODE, principal_id='alice',
+                               **({'address': SECURE} if manual else {'discovery_name': NAME})))
+    assert store.get('rosy_09')['state'] == 'active' and 'rosy_09' in service._roster.robot_ids
+    assert store.tls_markers()['rosy_09'] == dict(robot_id='rosy_09', origin='https://'+NAME+'.local:8080',
+                                                   ca_sha256=binding['tls_ca_sha256'])
+    assert calls[0].url.path.endswith('/identity')  # identity proven before the code is sent
+    assert all(r.url.scheme == 'https' and r.extensions['sni_hostname'] == NAME+'.local' for r in calls)
+
+
+def test_pending_binding_refuses_other_robot_id_and_logs_token_out(tmp_path, monkeypatch):
+    bindings, _, identity, _ = approved(tmp_path)
+    core = FakeCore(robot_id='rosy_77')
+    service, store, calls = pending_service(tmp_path, monkeypatch, core, identity, bindings)
+    with pytest.raises(EnrollmentError) as refused:
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert refused.value.code == 'code_consumed' and refused.value.reason == 'tls_binding_mismatch'
+    assert core.logged_out == [core.token] and store.rows() == [] and store.tls_markers() == {}
+    assert all(r.url.scheme == 'https' for r in calls)
+
+
+def test_pending_binding_identity_mismatch_never_sends_the_code(tmp_path, monkeypatch):
+    bindings, _, identity, _ = approved(tmp_path)
+    identity['receiver_id'] = 'rosy_77'
+    service, store, calls = pending_service(tmp_path, monkeypatch, FakeCore(), identity, bindings)
+    with pytest.raises(EnrollmentError, match='approved TLS binding') as refused:
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', address=SECURE))
+    assert refused.value.code == 'tls_binding_mismatch'
+    assert [r.url.path for r in calls] == ['/api/v1/auth/peer-pairing/identity'] and store.rows() == []
+
+
+def test_https_without_matching_pending_binding_is_refused(tmp_path, monkeypatch):
+    bindings, row, identity, file = approved(tmp_path)
+    file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[{**row, 'hostname': 'other.local'}])))
+    service, store, calls = pending_service(tmp_path, monkeypatch, FakeCore(), identity, EnrolledTlsBindings(file))
+    with pytest.raises(EnrollmentError, match='HTTPS requires'):
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert calls == [] and store.rows() == []
+
+
+def test_pending_binding_on_an_enrolled_hostname_refuses_start(tmp_path):
+    old, _, _, discovery, store, _ = build(tmp_path, {PINNED: FakeCore()})
+    discovery.replace_scan([scan_row()])
+    asyncio.run(old.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    _, row, _, file = approved(tmp_path)
+    file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[{**row, 'robot_id': 'rosy_41'}])))
+    with pytest.raises(EnrollmentTlsError, match='hostname'):
+        EnrollmentService(store, old._roster, key=old._key, tls_bindings=EnrolledTlsBindings(file))
+    store.delete('rosy_09')  # once that row is gone the renumbered binding is a pending one
+    EnrollmentService(store, old._roster, key=old._key, tls_bindings=EnrolledTlsBindings(file))
+
+
+def test_pending_enroll_refuses_after_binding_file_changed(tmp_path, monkeypatch):
+    bindings, _, identity, file = approved(tmp_path)
+    service, store, calls = pending_service(tmp_path, monkeypatch, FakeCore(), identity, bindings)
+    file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[])))
+    with pytest.raises(EnrollmentTlsError, match='changed'):
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert calls == [] and store.rows() == []
+
+
+@pytest.mark.parametrize('manual', [False, True])
+def test_http_advertised_name_with_a_binding_is_refused_before_any_request(tmp_path, manual):
+    service, network, _, discovery, store, _ = build(tmp_path, {SECURE: FakeCore()})
+    bindings, _, _, _ = approved(tmp_path)
+    service = EnrollmentService(store, service._roster, key=service._key, discovery=discovery,
+                                tls_bindings=bindings, transport=httpx.MockTransport(network))
+    discovery.replace_scan([{**scan_row(SECURE), 'transport': 'http'}])
+    with pytest.raises(EnrollmentError) as refused:
+        asyncio.run(service.enroll(code=CODE, principal_id='alice',
+                                   **({'address': SECURE} if manual else {'discovery_name': NAME})))
+    assert refused.value.code == 'tls_binding_required' and network.requests == [] and store.rows() == []
+
+
+def test_bound_robot_id_answering_over_http_is_consumed_and_logged_out(tmp_path):
+    core = FakeCore()
+    service, network, _, discovery, store, _ = build(tmp_path, {SECURE: core})
+    bindings, _, _, _ = approved(tmp_path)
+    service = EnrollmentService(store, service._roster, key=service._key, discovery=discovery,
+                                tls_bindings=bindings, transport=httpx.MockTransport(network))
+    with pytest.raises(EnrollmentError) as refused:  # no scan row: only the robot's own answer tells
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', address=SECURE))
+    assert refused.value.code == 'code_consumed' and refused.value.reason == 'tls_binding_required'
+    assert core.logged_out == [core.token] and store.rows() == []
+
+
+def test_pending_path_keeps_robot_id_conflict(tmp_path, monkeypatch):
+    from fakes import FakeRobot
+    bindings, _, identity, _ = approved(tmp_path)
+    core = FakeCore()
+    service, store, _ = pending_service(tmp_path, monkeypatch, core, identity, bindings,
+                                        static=(FakeRobot('rosy_09'),))
+    with pytest.raises(EnrollmentError) as refused:
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert refused.value.reason == 'robot_id_conflict' and core.logged_out == [core.token]
+    assert store.rows() == []
+
+
+def test_two_pending_bindings_on_one_hostname_are_refused_at_enroll(tmp_path, monkeypatch):
+    _, row, identity, file = approved(tmp_path)
+    file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[row, {**row, 'robot_id': 'rosy_41'}])))
+    service, store, calls = pending_service(tmp_path, monkeypatch, FakeCore(), identity, EnrolledTlsBindings(file))
+    with pytest.raises(EnrollmentError, match='HTTPS requires'):
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert calls == [] and store.rows() == []
+
+
+def renumber_service(tmp_path, monkeypatch, core, *, proven=True):
+    """D-580: rosy_09 enrolled through this binding here; the robot comes back as core.robot_id."""
+    _, row, identity, file = approved(tmp_path)
+    identity['receiver_id'] = core.robot_id
+    old, _, _, discovery, store, _ = build(tmp_path, {})
+    if proven:  # what unenroll records (test_unenroll_remembers_the_binding_it_was_enrolled_through)
+        store.renumber_tls(row['hostname'], row['tls_ca_sha256'], 'rosy_09', 'rosy_09')
+    bindings = EnrolledTlsBindings(file, store)
+    service, store, calls = pending_service(tmp_path, monkeypatch, core, identity, bindings)
+    return service, store, calls, bindings, file
+
+
+def test_unenroll_remembers_the_binding_it_was_enrolled_through(tmp_path, monkeypatch):
+    bindings, binding, identity, file = approved(tmp_path)
+    core = FakeCore()
+    service, store, _ = pending_service(tmp_path, monkeypatch, core, identity, None)
+    bindings = EnrolledTlsBindings(file, store)
+    service._tls_bindings = bindings
+    asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert store.tls_renumbers() == {}
+    assert not bindings.proven(bindings.binding('rosy_09'))
+    assert asyncio.run(service.unenroll('rosy_09', principal_id='alice'))['state'] == 'removed'
+    assert store.tls_renumbers()[NAME+'.local'] == dict(hostname=NAME+'.local', ca_sha256=binding['tls_ca_sha256'],
+                                                       file_robot_id='rosy_09', robot_id='rosy_09')
+    assert bindings.proven(bindings.binding('rosy_09'))
+
+
+def test_renumbered_robot_re_enrolls_through_its_proven_binding_without_editing_the_file(tmp_path, monkeypatch):
+    core = FakeCore(robot_id='rosy_41')
+    service, store, calls, bindings, file = renumber_service(tmp_path, monkeypatch, core)
+    asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert store.get('rosy_41')['state'] == 'active' and 'rosy_41' in service._roster.robot_ids
+    assert store.tls_markers()['rosy_41']['origin'] == 'https://'+NAME+'.local:8080'
+    assert all(r.url.scheme == 'https' for r in calls)
+    assert bindings.binding('rosy_41').hostname == NAME+'.local' and bindings.binding('rosy_09') is None
+    assert any(a['action'] == 'tls_renumber' and a['target'] == 'rosy_09->rosy_41' and a['principal_id'] == 'alice'
+               for a in store.audit_rows())
+    # The file id stays claimed: rosy_09 never enrolls over plain HTTP.
+    assert bindings.claims(set(), {'rosy_09'})
+    # A restart reads the same file and the learned id; the file still says rosy_09.
+    assert 'rosy_09' in file.read_text()
+    restarted = EnrolledTlsBindings(file, store)
+    assert restarted.validate(store.rows()) == [] and restarted.binding('rosy_41') is not None
+
+
+def test_failed_store_after_renumber_restores_the_binding_and_logs_the_token_out(tmp_path, monkeypatch):
+    core = FakeCore(robot_id='rosy_41')
+    service, store, _, bindings, _ = renumber_service(tmp_path, monkeypatch, core)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError('fixture')
+    monkeypatch.setattr(service._roster, 'add', broken)
+    with pytest.raises(EnrollmentError) as refused:
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert refused.value.reason == 'store_failed' and core.logged_out == [core.token]
+    assert store.rows() == [] and bindings.binding('rosy_09') is not None and bindings.binding('rosy_41') is None
+    assert store.tls_renumbers()[NAME+'.local']['robot_id'] == 'rosy_09'
+    assert not any(a['action'] == 'tls_renumber' for a in store.audit_rows())
+
+
+def test_never_enrolled_binding_keeps_the_d565_id_check(tmp_path, monkeypatch):
+    core = FakeCore(robot_id='rosy_41')
+    service, store, calls, bindings, _ = renumber_service(tmp_path, monkeypatch, core, proven=False)
+    with pytest.raises(EnrollmentError) as refused:
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    # The identity probe names rosy_41, not the binding's rosy_09: the code never leaves Fleet.
+    assert refused.value.code == 'tls_binding_mismatch'
+    assert [r.url.path for r in calls] == ['/api/v1/auth/peer-pairing/identity']
+    assert store.rows() == [] and bindings.binding('rosy_09') is not None
+
+
+def test_renumber_refuses_an_id_another_binding_owns(tmp_path, monkeypatch):
+    core = FakeCore(robot_id='rosy_41')
+    service, store, _, bindings, file = renumber_service(tmp_path, monkeypatch, core)
+    row = json.loads(file.read_text())['robots'][0]
+    other = tmp_path/'other'
+    other.mkdir()
+    _, other_row, _, _ = approved(other)  # its own CA: one CA per robot
+    file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[
+        row, {**other_row, 'robot_id': 'rosy_41', 'hostname': 'other.local'}])))
+    service._tls_bindings = EnrolledTlsBindings(file, store)
+    with pytest.raises(EnrollmentError) as refused:
+        asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
+    assert refused.value.reason == 'robot_id_conflict' and core.logged_out == [core.token]
+    assert store.rows() == [] and store.tls_renumbers()[NAME+'.local']['robot_id'] == 'rosy_09'
+
+
+def test_learned_id_applies_only_to_the_unchanged_file_row_and_the_file_wins(tmp_path):
+    _, row, _, file = approved(tmp_path)
+    old, _, _, _, store, _ = build(tmp_path, {})
+    store.renumber_tls(row['hostname'], row['tls_ca_sha256'], 'rosy_09', 'rosy_41')
+    assert set(EnrolledTlsBindings(file, store)._approved) == {'rosy_41'}
+    for changed in ({'tls_ca_sha256': '0'*64}, {'robot_id': 'rosy_45'}):  # admin re-approved the row
+        store.renumber_tls(row['hostname'], changed.get('tls_ca_sha256', row['tls_ca_sha256']), 'rosy_09', 'rosy_41')
+        if 'robot_id' in changed:
+            file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[{**row, **changed}])))
+        assert set(EnrolledTlsBindings(file, store)._approved) == {changed.get('robot_id', 'rosy_09')}
+    # A learned id another file row now names: the file wins, Fleet still starts.
+    other = tmp_path/'other'
+    other.mkdir()
+    _, other_row, _, _ = approved(other)
+    file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[
+        row, {**other_row, 'robot_id': 'rosy_41', 'hostname': 'other.local'}])))
+    store.renumber_tls(row['hostname'], row['tls_ca_sha256'], 'rosy_09', 'rosy_41')
+    assert set(EnrolledTlsBindings(file, store)._approved) == {'rosy_09', 'rosy_41'}
+    # Two rows sharing one CA: no learned id for either (one CA per robot, D-565).
+    file.write_text(json.dumps(dict(version='rosy.enrolled-tls/1', robots=[
+        row, {**row, 'robot_id': 'rosy_42', 'hostname': 'other.local'}])))
+    assert set(EnrolledTlsBindings(file, store)._approved) == {'rosy_09', 'rosy_42'}

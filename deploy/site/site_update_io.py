@@ -123,6 +123,9 @@ def load_config(path: Path) -> dict:
                 or not Path(token).is_file() or Path(token).is_symlink()):
             raise ConfigError('functional token_file must be an absolute regular file')
         ids = check['required_ids']
+        # D-580: "enrolled" = Fleet's own roster, so a renumber needs no edit here.
+        if ids == 'enrolled' and check['path'] == '/api/fleet/state':
+            continue
         if not isinstance(ids, list) or not ids or any(not isinstance(i, str) or not i for i in ids):
             raise ConfigError('functional required_ids must contain configured IDs')
     return {"repo": raw["repo"], "key_id": raw["key_id"], "public_key": Path(raw["public_key"]),
@@ -222,8 +225,10 @@ class Http:
 
 # -- helpers ----------------------------------------------------------------------
 
-def functional_reason(config: dict, http: Http) -> str:
+def functional_inventory(config: dict, http: Http) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     origin = urlsplit(config['health_url'])
+    observed = {}
+    missing = {}
     for check in config.get('functional_checks', []):
         try:
             payload = http.functional(f'{origin.scheme}://{origin.netloc}{check["path"]}',
@@ -231,13 +236,24 @@ def functional_reason(config: dict, http: Http) -> str:
             collection, field = _FUNCTIONAL_PATHS[check['path']]
             rows = payload[collection]
             if not isinstance(rows, list):
-                return 'functional API collection has invalid structure'
+                raise Rejected('functional API collection has invalid structure')
             ids = {row[field] if field else row for row in rows}
-            if not set(check['required_ids']) <= ids:
-                return 'functional API is missing configured IDs'
+            if not ids or any(not isinstance(item, str) or not item for item in ids):
+                raise Rejected('functional API collection is empty or invalid')
         except (Transient, OSError, ValueError, KeyError, TypeError):
-            return 'functional API validation failed'
-    return ''
+            raise Rejected('functional API validation failed') from None
+        observed[check['path']] = sorted(ids)
+        required = ids if check['required_ids'] == 'enrolled' else set(check['required_ids'])
+        missing[check['path']] = sorted(required - ids)
+    return observed, missing
+
+
+def functional_reason(config: dict, http: Http) -> str:
+    try:
+        _, missing = functional_inventory(config, http)
+    except Rejected as error:
+        return str(error)
+    return 'functional API is missing configured IDs' if any(missing.values()) else ''
 
 
 def _check_length(expected, received: int) -> None:

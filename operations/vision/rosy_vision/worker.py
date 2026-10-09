@@ -6,12 +6,13 @@ import math
 import time
 import asyncio
 import logging
+from dataclasses import replace
 from typing import Callable
 
 from rosy_vision.detect import detect_markers
 from rosy_vision.field_calib import FieldCalibrator
 from rosy_vision.field_detect import detect_field_jpeg
-from rosy_vision.project import CameraMap, project_frame
+from rosy_vision.project import CameraMap, project_frame, project_place_markers
 
 MAX_FUTURE_S = 0.05
 #: Field-boundary detection cadence (D-484): the camera is fixed, so the quad is
@@ -19,6 +20,8 @@ MAX_FUTURE_S = 0.05
 FIELD_INTERVAL_S = 1.0
 #: Minimum spacing between paint registrations while orientation stays unresolved.
 PAINT_RETRY_S = 5.0
+#: D-564: place markers do not move; Fleet's teach freshness is 2 s.
+PLACE_MARKER_INTERVAL_S = 0.5
 
 logger = logging.getLogger("rosy_vision")
 
@@ -57,6 +60,8 @@ class VisionWorker:
         self._last_field_at = -math.inf
         self._last_paint_at = -math.inf
         self._paint_task: asyncio.Task | None = None
+        self._last_place_at = -math.inf
+        self._place_task: asyncio.Task | None = None
 
     async def process_latest(self) -> tuple:
         if self.source_id != self.camera.source_id:
@@ -74,16 +79,17 @@ class VisionWorker:
             return ()
 
         markers = self.detector(frame.jpeg)
+        camera = self._camera()
         # Installer guidance only (phone status); ids, never pixels, leave this process.
         self.ingest.report_markers(
             self.source_id,
-            [marker_id for marker_id in (self.camera.corner_marker_ids or ())
+            [marker_id for marker_id in (camera.corner_marker_ids or ())
              if marker_id in markers],
-            [robot for robot, marker_id in self.camera.robot_markers.items() if marker_id in markers],
+            [robot for robot, marker_id in camera.robot_markers.items() if marker_id in markers],
         )
         homography = await self._field_calibration_step(frame) if self.calibrator else None
         sightings = project_frame(
-            self.camera,
+            camera,
             source_id=self.source_id,
             seq=frame.header.seq,
             captured_at=frame.captured_at,
@@ -96,6 +102,8 @@ class VisionWorker:
         finally:
             # A rejected sighting must not cost the frame its tracking step, and a tracking
             # failure must not mask the sighting error.
+            if self.camera.place_markers:
+                self._publish_place_markers(frame, markers, homography)
             if self.tracker is not None:
                 try:
                     await self.tracker.process(frame, markers)
@@ -104,6 +112,39 @@ class VisionWorker:
                     logger.error("tracking step failed source=%s error_type=%s",
                                  self.source_id, type(exc).__name__)
         return sightings
+
+    def _camera(self) -> CameraMap:
+        """D-580: the robot markers Fleet named on the tracking config read, else the site YAML."""
+        config = getattr(self.tracker, "config", None)
+        markers = config.get("robot_markers") if isinstance(config, dict) else None
+        if not isinstance(markers, dict):
+            return self.camera
+        try:
+            return replace(self.camera, robot_markers=dict(markers))
+        except (TypeError, ValueError, AttributeError):
+            return self.camera
+
+    def _publish_place_markers(self, frame, markers, homography) -> None:
+        """D-564: one in-flight send at most every ``PLACE_MARKER_INTERVAL_S``; never blocks the frame loop."""
+        if self._place_task is not None and not self._place_task.done():
+            return
+        now = self.clock()
+        if now - self._last_place_at < PLACE_MARKER_INTERVAL_S:
+            return
+        payload = project_place_markers(self.camera, seq=frame.header.seq, captured_at=frame.captured_at,
+                                        markers=markers, homography=homography)
+        if payload is None:
+            return
+        self._last_place_at = now
+        self._place_task = asyncio.create_task(self._send_place_markers(payload))
+
+    async def _send_place_markers(self, payload) -> None:
+        """A rejection is logged by type, never raised."""
+        try:
+            await self.publisher.publish_place_markers(payload)
+        except Exception as exc:  # noqa: BLE001 - logged by type only, never the body
+            logger.error("place marker publish failed source=%s error_type=%s",
+                         self.source_id, type(exc).__name__)
 
     async def _field_calibration_step(self, frame):
         """D-484: re-measure the field quad at a fixed cadence and report the state.

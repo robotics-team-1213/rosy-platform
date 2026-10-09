@@ -2,6 +2,7 @@
 
 D-410 splits operate and install. D-450 keeps Cell on `/console/cell`.
 D-518 adds the site-map document and names the shared-read modules; D-519 adds password-login.js; D-540 adds fleet-header.js.
+D-540 5 moves the start points and the background relearn from the console to install.
 An entry that reaches another document's module fails this test.
 """
 
@@ -25,6 +26,7 @@ SHARED = {
     "map-fit.js",
     "vision-view.js",
     "field-warp.js",
+    "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
 }
 
@@ -34,13 +36,13 @@ OWN = {
         "formation.js",
         "map-view.js",
         "roster.js",
+        "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
+        "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
         "line-stuck.js",
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
         "tracking-view.js",
         "tracking-layer.js",
-        "start-point-view.js",
-        "start-point-layer.js",
         "trail-view.js",
         "site-path.js",
         "site-layer.js",
@@ -48,7 +50,6 @@ OWN = {
         "camera-warp.js",
         "camera-backdrop.js",
         "traffic-view.js",
-        "guide-layer.js",
         "motion-readiness.js",
         "link-tag.js",
         "localization-badge.js",
@@ -63,6 +64,9 @@ OWN = {
         "field-layers.js",
         "map-fit-view.js",
         "peer-picker.js",
+        "start-point-view.js",  # D-540 5: 카메라 설치·보정
+        "start-point-layer.js",
+        "tracking-relearn.js",  # D-540 5 / D-539: 배경 다시 학습
     },
     "cell.js": {
         "cell-document-editor.js",

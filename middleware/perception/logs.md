@@ -1354,3 +1354,28 @@
 - 변경: keep 모드에서만 CORE `line/route_context`를 VOLATILE로 구독한다. 공통 스키마와 영상 시각 기준 미래·0.5초 경과·만료를 검사한 뒤 기대 굽이 창에서만 기존 B9 `bend_expected`를 준다. 잘못된 메시지·비움·시계 역행은 문맥을 폐기한다. 사용한 `seq`를 관측과 keep_debug에 함께 싣는다.
 - 검증: route input 6 passed(기록된 SIM 굽이 클립 포함), keeper·wiring 집중 143 passed·2 skipped, 구조 34 passed. 실물 라벨 434프레임은 로컬에 없어서 2 skipped이며 별도 재생이 필요하다.
 - gate 변화: 기본 CORE 설정 `route_context_enabled=false` 유지. SOURCE 코드 연결만 확인했으며 문맥 켬 실물 재생·폐루프 SIM·DEVICE·FIELD 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · fix(control): D-531 굽이 중 B9 문맥
+
+- 변경: 신선한 CORE `bend_phase`가 굽이 진행·재획득을 가리킬 때도 기존 B9 기대 굽이 규칙을 사용한다. 문맥 부재·만료 시 기존 판단으로 돌아간다.
+- 증거: `test_route_context_input.py` 집중 검사. 계약 v1.166.
+- gate 변화: SOURCE. 실물 434프레임·폐루프 SIM·DEVICE·FIELD 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · fix(control): 운영 overlay `learned_paint_every_n` 허용 범위 1~4
+
+- 변경: `ir_overlay.py`가 `learned_paint_every_n`을 [1, 4]로 받는다(`learned_paint_threads`는 [1, 2] 그대로). `line_observer_overrides apply --paint-every-n 1..4`로 쓸 수 있다. paint_worker 게이트는 바꾸지 않았다.
+- 이유: 9dfk 실물에서 `learned_paint_every_n: 2`가 84프레임 중 0프레임에 학습 마스크를 썼다(전부 `denoise_fallback`). 카메라 8 Hz에서 every_n 2의 컷오프는 250 ms인데 Pi 5 추론은 약 240~300 ms(약 2.4프레임)다. 전에는 범위 밖 값이 overlay 전체를 건너뛰게 해 운영자가 올릴 수 없었다. D-408 ADR은 기본값 2만 적고 범위를 계약으로 두지 않는다.
+- 증거: `test_ir_overlay.py` 경계(4 허용, 5 거부). 실물 9dfk 0/84(2026-10-09), 시뮬레이션 every_n 4는 300 ms에서 50%.
+- gate 변화: SOURCE. 기본값 2는 그대로. DEVICE에서 every_n 3~4 적중률은 HOLD.
+
+## 2026-10-09 · uncommitted · feat(control): 학습 페인트 마스크 오돔 보정 재사용 (D-570)
+
+- 변경: `learned/paint_motion.py`(오돔 기록, 바닥 평면 호모그래피, 최근접 warp)를 새로 두었다. `LearnedPaintWorker.mask_for`에 `motion`·`max_age_s`·`reuse_n`·`when_idle`을 더했다. `line_observer_node`에는 `learned_paint_motion_compensation`(기본 꺼짐)·`max_age_s` 0.9·`max_dxy_m` 0.10·`max_dyaw_rad` 0.40·`cadence`를 두었다. keep_debug에 `paint_mask_age_s`·`paint_compensated`·`paint_motion_dxy_m`·`paint_motion_dyaw_rad`·`paint_fallback_reason`을 싣는다. 운영 overlay와 `line_observer_overrides`에서 보정과 cadence를 켤 수 있다.
+- 증거: 원격 pytest 6파일(새 `test_learned_paint_motion.py` 포함) 통과, known_failures 신규 0. 시뮬레이션(`test/paint_reuse_sim.py`) 300 ms·every_n 4에서 old 50 %(직진)/0 %(회전 0.32 rad/s), new 100 %/100 %이며 옮긴 IoU는 0.87/0.90이다.
+- gate 변화: SOURCE. 장치 기본은 꺼짐이다. 재생 도구(학습 페인트+오돔), 9dfk DEVICE 사용률·CPU 측정은 HOLD.
+
+## 2026-10-09 · uncommitted · fix(control): D-570 리뷰 반영 — 재사용 기록 명확화, 워커 시계 상한, idle 주기 제거
+
+- 변경: keep_debug의 `paint_compensated`·`paint_fallback_reason`을 `paint_reuse`(warped|unwarped|fresh|none)와 `paint_warp_skipped`(off|no_mask|too_old|clock_back|no_odom|motion_bound)로 바꾸었다. 옮긴 마스크도 워커 시계로 max(stale_s, max_age_s)+0.1 s 안이어야 하고, warp 뒤 40 px 조각 제거를 거친다. `max_age_s`·`max_dxy_m`·`max_dyaw_rad`는 읽기 전용이다. idle 주기(워커 상태, overlay 키, CLI 플래그)는 뺐다.
+- 증거: 보정 꺼짐에서 `_paint_for`가 D-570 이전 인자를 넘기는 시험, 원점 밖 자세의 같은 상대 움직임에서 같은 H가 나오는 시험. 시뮬레이션 300 ms·every_n 4: 직진 IoU 0.84, 회전 0.90, 사용 100 %/100 %.
+- gate 변화: SOURCE. 장치 기본은 꺼짐이다.

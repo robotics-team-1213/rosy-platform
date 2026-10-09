@@ -90,16 +90,17 @@ test("a configured marker is drawn without a CORE map pose", () => {
   assert.equal(out.robots.length, 1);
   assert.equal(out.robots[0].pose, null);
   assert.equal(out.robots[0].measured, true);
-  assert.equal(offsetLabel(out.robots[0]), "rosy_01 · 마커 관측");
+  assert.equal(offsetLabel(out.robots[0]), "rosy_01");
 });
 
 test("map coordinates retain signs, metres and measured versus inferred provenance", () => {
   const out = classifyTracking({ robots: [{ robot_id: "rosy_01", status: "MARKER",
     camera: { x: -1.234, y: .456 }, pose: null, offset_m: null }],
-    unknown: [{ x: .25, y: -.5 }] });
+    unknown: [{ x: .25, y: -.5 }, { x: 1, y: 0, marker_id: 41 }] });
   assert.deepEqual(positionRows(out), [
     { name: "rosy_01", x: "-1.23", y: "0.46", basis: "마커 관측" },
     { name: "미확인 1", x: "0.25", y: "-0.50", basis: "무마커 추론 · 이름 미확정" },
+    { name: "ArUco 41", x: "1.00", y: "0.00", basis: "마커 관측 · 미등록" },
   ]);
   assert.deepEqual(positionRows(classifyTracking(null)), []);
 });

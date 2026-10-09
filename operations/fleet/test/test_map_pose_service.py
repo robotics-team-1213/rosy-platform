@@ -319,3 +319,18 @@ def test_a_failed_read_with_a_cancelled_waiter_is_retrieved():
         assert service._refreshing == {}
 
     asyncio.run(run())
+
+
+def test_d577_stuck_pose_tells_a_lost_pose_from_no_source():
+    """Safety review 1: UNKNOWN after a sighting (stale odom) is a lost pose, not "Fleet does not know"."""
+    wall = Wall()
+    service = MapPoseService(lambda: ["r1"], wall=wall)
+    assert service.stuck_pose("r1") == {"state": UNKNOWN, "age_s": None, "sourced": False}
+    for i in range(3):
+        wall.now = T0 + 0.1 * i
+        service.observe_state("r1", state(wall.now))
+        service.observe_sighting(row(wall.now))
+    assert service.stuck_pose("r1")["state"] == LOCALIZED
+    wall.now = T0 + 10.0                                   # odom older than max_odom_age_s
+    assert service.stuck_pose("r1") == {"state": UNKNOWN, "age_s": None, "sourced": True}
+    assert service.stuck_pose("nobody") is None

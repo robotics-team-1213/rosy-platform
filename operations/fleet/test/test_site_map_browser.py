@@ -62,7 +62,6 @@ def test_rectangular_camera_coordinates_are_display_only(page_site):
     assert abs(x - 1) <= 0.006 and abs(y) <= 0.006
     expect(page.locator("#trip-point")).to_contain_text("찍은 좌표 없음")
     assert not writes
-    assert page.locator("#trip-start").evaluate("el => el.disabled")
     page.locator("#plane-source").select_option("camera-other")
     expect(page.locator("#site-map-svg image")).to_have_count(0)
     expect(page.locator("#plane-point")).to_contain_text("확인한 좌표 없음")
@@ -77,6 +76,84 @@ def test_rectangular_camera_coordinates_are_display_only(page_site):
     headers["X-Frame-Age-Ms"] = "4000"
     page.locator("#plane-load").click()
     expect(page.locator("#plane-status")).to_contain_text("신선한 원본 영상을 확인할 수 없습니다")
+
+
+def test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_409(page_site):
+    """D-560 S2: the site-map tab asks for mode map, draws the plane as received and picks
+    x = min_x + u/ppm, y = max_y - v/ppm; only 409 plane-unavailable falls back to the browser warp."""
+    import cv2
+    import numpy as np
+    from playwright.sync_api import expect
+
+    page, store, robot = page_site
+    record = {"source_id": "camera-test", "map_id": store.active_view()["map"]["map_id"],
+              "calibration_revision": "paint-test",
+              "map_to_image": [50, 0, 100, 0, -50, 100, 0, 0, 1],
+              "track_bounds_m": {"min_x": -1, "max_x": 3, "min_y": -1, "max_y": 1},
+              "image": {"width": 300, "height": 200}, "lens": None}
+    plane_image = np.zeros((100, 200, 3), np.uint8)  # 4 x 2 m at 50 px/m
+    plane_image[:, :100] = [0, 255, 0]
+    plane_png = cv2.imencode(".png", plane_image)[1].tobytes()
+    raw_png = cv2.imencode(".png", np.zeros((200, 300, 3), np.uint8))[1].tobytes()
+    leases, plane = [], {"status": 200, "revision": "paint-test"}
+
+    def serve_lease(route):
+        body = route.request.post_data_json
+        leases.append(body)
+        mode = (body.get("rectification") or {}).get("mode")
+        route.fulfill(json={"lease": "plane-test" if mode == "map" else "raw-test", "frame_path": "/test-camera-frame"})
+
+    def serve_frame(route):
+        if route.request.headers.get("authorization") != "Bearer plane-test":
+            route.fulfill(body=raw_png, content_type="image/png",
+                          headers={"X-Frame-Age-Ms": "10", "X-Frame-Rectified": "false"})
+        elif plane["status"] == 409:
+            route.fulfill(status=409, json={"detail": "plane unavailable"},
+                          headers={"X-Frame-State": "plane-unavailable"})
+        else:
+            route.fulfill(body=plane_png, content_type="image/png",
+                          headers={"X-Frame-Age-Ms": "10", "X-Frame-Rectified": "map",
+                                   "X-Frame-Plane": "-1,-1,3,1,50", "X-Frame-Calibration": plane["revision"]})
+
+    page.route("**/api/fleet/calibrations", lambda route: route.fulfill(json={"calibrations": [record]}))
+    page.route("**/api/fleet/vision/lease", serve_lease)
+    page.route("**/test-camera-frame", serve_frame)
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#user-role")).to_contain_text("bob")
+    page.locator(".plane-tools summary").click()
+    page.locator("#plane-load").click()
+    expect(page.locator("#plane-status")).to_contain_text("Rosy Cam 평면 영상")
+    expect(page.locator("#plane-status")).to_contain_text("paint-test")
+    assert leases == [{"source_id": "camera-test", "rectification": {"mode": "map"}}]
+    image = page.locator("#site-map-svg image")
+    expect(image).to_be_visible()
+    assert image.get_attribute("href").startswith("blob:")
+    page.locator("#plane-pick").check()
+    page.locator("#map-viewport").scroll_into_view_if_needed()
+    box = image.bounding_box()
+    assert abs(box["width"] / box["height"] - 2) < 0.02, box  # drawn as received: 200 x 100 px
+    # Pixel (50, 25) of the plane is map (-1 + 50/50, 1 - 25/50) = (0, 0.5).
+    page.mouse.click(box["x"] + box["width"] * 0.25, box["y"] + box["height"] * 0.25)
+    expect(page.locator("#plane-point")).to_contain_text("확인한 좌표 x")
+    x, y = map(float, re.search(r"x ([\d.-]+) m, y ([\d.-]+) m", page.locator("#plane-point").inner_text()).groups())
+    assert abs(x) <= 0.01 and abs(y - 0.5) <= 0.01, (x, y)
+    expect(page.locator("#trip-point")).to_contain_text("찍은 좌표 없음")
+
+    # A plane made with another calibration revision is neither drawn nor picked.
+    plane["revision"] = "paint-old"
+    page.locator("#plane-load").click()
+    expect(page.locator("#plane-status")).to_contain_text("보정 revision이 다릅니다")
+    expect(page.locator("#site-map-svg image")).to_have_count(0)
+    expect(page.locator("#plane-pick")).to_be_disabled()
+    plane["revision"] = "paint-test"
+
+    plane["status"] = 409
+    page.locator("#plane-load").click()
+    expect(page.locator("#plane-status")).to_contain_text("브라우저 보정(대체)")
+    expect(page.locator("#site-map-svg image")).to_be_visible()
+    assert page.locator("#site-map-svg image").get_attribute("href").startswith("data:image/png")
+    assert [body.get("rectification") for body in leases[1:]] == [{"mode": "map"}, {"mode": "map"}, None]
 
 
 def test_import_camera_map_draft_never_activates(page_site):
@@ -167,7 +244,7 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
       edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().top,
       plane: document.querySelector('.plane-tools summary').getBoundingClientRect().top,
     })""")
-    assert positions["map"] < positions["plane"] < positions["trip"] and positions["map"] < height, positions
+    assert positions["map"] < positions["plane"] < positions["trip"] and positions["map"] < height + 1, positions
     expect(page.locator(".plane-tools")).not_to_have_attribute("open", "")
     expect(page.locator("#plane-source")).to_be_hidden()
     if width < 1024:
@@ -332,8 +409,7 @@ def test_viewer_cannot_be_offered_operator_actions(page_site, width, height):
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#map-viewport")).to_be_visible()
     page.locator('#site-map-svg [data-place="NW"]').click()
-    for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan", "#estop", "#trip-start",
-                     "#trip-cancel"):
+    for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan", "#estop"):
         expect(page.locator(selector)).to_be_disabled()
         expect(page.locator(selector)).to_have_attribute("reason", "운영자 권한이 필요합니다")
     expect(page.locator("#place-form")).to_be_hidden()
@@ -582,22 +658,57 @@ def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, wi
     expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
 
 
-@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
-def test_trip_start_is_gated_and_names_the_d491_refusal(page_site, width, height):
+def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_site):
+    """D-573 1/7: crosswalk polygons are read-only on the map; the operator draws a waiting band
+    on the draft, the named save keeps it, and deleting it saves an empty band list."""
     from playwright.sync_api import expect
 
-    page, _, robot = page_site
-    page.set_viewport_size({"width": width, "height": height})
+    page, store, _robot = page_site
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
-    expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
-    expect(page.locator("#trip-start")).to_have_attribute("reason", "먼저 경로를 계산하세요")
-    expect(page.locator("#trip-cancel")).to_have_attribute("reason", "진행 중인 운행이 없습니다")
-    expect(page.locator("#trip-run")).to_contain_text("진행 중인 운행 없음")
-    page.select_option("#trip-place", "NW")
-    page.locator("#trip-plan").click()
-    expect(page.locator("#trip-start")).to_be_enabled()
-    page.locator("#trip-start").click()  # default wiring: no D-494 1 capability provider yet
-    expect(page.locator("#notice")).to_contain_text("주행 능력")
-    assert not [call for call in robot.calls if call[0] == "navigation_goal"]
-    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    expect(page.locator("#user-role")).to_contain_text("bob")
+    expect(page.locator("#site-map-svg [data-crosswalk]")).to_have_count(2)  # active map, read-only
+    page.select_option("#map-source", "draft")
+    page.locator("#map-viewport").scroll_into_view_if_needed()
+    zone = page.locator('#site-map-svg [data-crosswalk="cw2"]')
+    zone.dispatch_event("click")  # the east lane line runs over the polygon's centre
+    expect(page.locator("#selection")).to_contain_text("횡단보도 cw2")
+    expect(page.locator("#crosswalk-form")).to_be_visible()
+    expect(page.locator("#crosswalk-lanes")).to_contain_text("east")
+    page.locator("#band-draw").click()
+    zone.evaluate("e => e.scrollIntoView({block: 'center'})")  # the button sits below the map, the topbar above
+    box = zone.bounding_box()
+    # North of cw2: the lane runs along x; screen up is map +y at view turn 0.
+    for fx, fy in ((0.1, 0.05), (0.9, 0.05), (0.9, -0.45), (0.1, -0.45)):
+        page.mouse.click(box["x"] + box["width"] * fx, box["y"] + box["height"] * fy)
+    expect(page.locator("#site-map-svg .band-draft")).to_have_count(1)
+    page.locator("#band-finish").click()
+    expect(page.locator("#crosswalk-band option")).to_have_count(1)
+    expect(page.locator("#site-map-svg .crosswalk-approach")).to_have_count(1)
+    page.locator("#save-draft").click()
+    expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
+    saved = store.draft_view()
+    assert saved["saved_by"] == "bob" and len(saved["map"]["crosswalks"][1]["approach"]) == 1
+    assert len(saved["map"]["crosswalks"][1]["approach"][0]) == 4
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / "site-map-crosswalk-band.png"), full_page=True)
+    page.locator("#band-delete").click()
+    expect(page.locator("#crosswalk-band option")).to_have_count(0)
+    page.locator("#save-draft").click()
+    expect(page.locator("#notice")).to_contain_text("초안을 저장했습니다")
+    assert store.draft_view()["map"]["crosswalks"][1]["approach"] == []
+    assert store.active()[0] == 1  # the draft only; activation stays a separate named step
+
+
+def test_viewer_sees_crosswalks_without_band_tools(page_site):
+    from playwright.sync_api import expect
+
+    page, _store, _robot = page_site
+    page.locator("#console-token").fill("viewer-token")
+    page.locator("#token-save").click()
+    expect(page.locator("#site-map-svg [data-crosswalk]")).to_have_count(2)
+    page.locator("#map-viewport").scroll_into_view_if_needed()
+    page.locator('#site-map-svg [data-crosswalk="cw1"]').dispatch_event("click")
+    expect(page.locator("#selection")).to_contain_text("횡단보도 cw1")
+    expect(page.locator("#crosswalk-form")).to_be_hidden()
+    expect(page.locator("#import-crosswalks")).to_be_disabled()

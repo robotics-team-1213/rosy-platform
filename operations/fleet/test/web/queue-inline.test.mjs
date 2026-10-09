@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { cardExpanded, createRoster, mustExpand, openDecisionKey } = await import("../../fleet/server/web/roster.js");
+const { cardExpanded, createRoster, mustExpand } = await import("../../fleet/server/web/roster.js");
+const { openDecisionKey } = await import("../../fleet/server/web/queues.js");
 const { replanView } = await import("../../fleet/server/web/trip-replan.js");
 
 const nominal = (extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop: false } }, ...extra });

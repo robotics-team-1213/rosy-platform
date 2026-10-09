@@ -8,7 +8,6 @@ import { createLineStuckPanel } from "./line-stuck.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
-import { createStartPointView } from "./start-point-view.js";
 import { createVisionView } from "/console/assets/vision-view.js";
 import { applyRoleToControls, namedOperatorReason } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
@@ -111,8 +110,8 @@ function markLocked(reason = "auth") {
   if (firstLock) {
     Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
       stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {},
-      traffic: null, trafficTrips: [], trafficClock: null});
-    visionView.reset(); visionView.refreshSources(); trackingView.reset(); startPointView.reset();
+      traffic: null, trafficTrips: [], endedTrips: [], trafficClock: null});
+    visionView.reset(); visionView.refreshSources(); trackingView.reset();
   }
   render();
   // D-473 4 — the first 401 of a lock asks once whether this console is in development mode.
@@ -140,6 +139,7 @@ const view = {
   sightings: [],   // 카메라 관측 — 표시 전용, CORE pose 와 섞지 않는다
   cameraTracking: { robots: [], unknown: [] }, // D-457 관제 카메라 추적 — 표시·교차확인 전용
   robots: [],
+  robotNames: {}, // enrolled robot_id -> verified discovery hostname; presentation only
   cardChoice: {},  // D-540 3: robot_id -> the operator's fold {open, attention}
   queueChoice: null,  // D-540 3: the queue row the operator opened or closed {key, open}
   selected: null, // 목표 지정을 기다리는 robot_id
@@ -272,7 +272,7 @@ function render() {
   if (view.robots.length) {
     const order = [...view.robots.keys()].sort((a, b) =>
       roster.needsAttention(view.robots[b]) - roster.needsAttention(view.robots[a]));
-    rosterBox.replaceChildren(...order.map((index) => roster.card(view.robots[index], index)));
+    roster.place(rosterBox, order.map((index) => roster.card(view.robots[index], index)));
   } else {
     const message = auth.locked ? "관제에 접속하면 등록 로봇과 연결 상태를 확인할 수 있습니다."
       : view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
@@ -288,7 +288,7 @@ function render() {
       rosterBox.replaceChildren(empty);
     }
   }
-  if (focusedId) {
+  if (focusedId && document.activeElement !== focused) {  // a kept card (roster.place) still has it
     const nextCard = [...rosterBox.querySelectorAll("article")]
       .find((card) => card.dataset.robotId === focusedId);
     const nextFocused = focusedButton >= 0
@@ -297,13 +297,13 @@ function render() {
   }
   signals.render();
   roster.fillQueues();
+  roster.trip.syncConvoy();  // D-540 (d) 대형·대열
   lineStuck.render();
   tripReplan.render();
 
   formation.fillLeaders();
   mapView.draw();
   applyRoleToControls(auth.role, operatorControls());
-  startPointView.updateAuthorization();
   const hint = el("hint");
   const point = view.selected && view.cursor && view.map
     ? mapView.toWorld(view.map, view.cursor.col, view.cursor.row) : null;
@@ -436,6 +436,30 @@ async function refreshDiscovery() {
     const snapshot = await call("/api/fleet/discovery");
     life.check();
     discoveryGate.ok();
+    let names = { ...view.robotNames };
+    try {
+      const listing = await call("/api/fleet/enrollment/robots");
+      life.check();
+      names = Object.fromEntries((listing.robots || [])
+        .filter((row) => row.robot_id && row.hostname)
+        .map((row) => [row.robot_id, row.hostname]));
+    } catch (err) {
+      if (err.name === "AbortError") return;
+    }
+    for (const device of snapshot.devices || []) {
+      if (device.status === "enrolled" && device.robot_id && device.name) names[device.robot_id] = device.name;
+    }
+    if (JSON.stringify(names) !== JSON.stringify(view.robotNames)) {
+      view.robotNames = names;
+      render();
+    }
+    const pending = snapshot.scanner_online
+      ? (snapshot.devices || []).filter((device) => device.status === "registration_pending") : [];
+    const pendingNote = el("discovery-pending");
+    const summary = pending.length
+      ? `발견됐지만 미등록 ${pending.length}대: ${pending.map((device) => device.name).join(", ")}` : "";
+    if (pendingNote.firstElementChild.textContent !== summary) pendingNote.firstElementChild.textContent = summary;
+    pendingNote.hidden = !summary;
     await refreshAddresses();
     life.check();
     // 검색기 임대(45 s)가 끊기면 새 주소 안내가 멈춘다 — 대기와 구별해 알린다.
@@ -800,8 +824,7 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, confirmedAction, onChanged: () => mapView.draw() });
-const startPointView = createStartPointView({scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw()});
+const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
 
 // 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
 el("console-token").value = auth.token;

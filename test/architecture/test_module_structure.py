@@ -79,13 +79,15 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
 #: docs/plans/2026-10-07-line-follow-recovery-subpackage.md (incl. its 2026-10-08 junction section),
 #: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
-#: docs/plans/2026-10-09-core-localization-size-unit.md
+#: docs/plans/2026-10-09-core-localization-size-unit.md,
+#: docs/plans/2026-10-09-core-swarm-size-unit.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
               "core/services/core_features/line_follow/arc",
               "core/services/core_features/localization",
+              "core/services/core_features/swarm",
               "fleet/fleet/traffic",
               "perception/control/sensing/perception")
 
@@ -93,6 +95,14 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "deploy/site/rosy_site_autoupdate.py": (
+        616,
+        "accept: D-569 adds only the authenticated inventory baseline to the existing signed "
+        "site update state machine. HTTP, filesystem and functional inventory parsing live in "
+        "site_update_io.py; candidate verification lives in verify_candidate.py. The updater "
+        "keeps selection, switch journal and rollback together, covered by test_site_autoupdate.py. "
+        "Re-judge on further growth",
+    ),
     "core/gateway/core/services.py": (
         603,
         "accept: independently judged at 603 (2026-10-09, read-only critic agent) for D-541 step 1: "
@@ -103,7 +113,11 @@ SIZE_VERDICTS = {
         "tests. Budget and allowance unchanged",
     ),
     "fleet/fleet/server/trip_runner.py": (
-        686,
+        837,
+        "split: re-judged at 837 on 2026-10-09 (author's record; NEEDS the independent re-judge): D-517 3 no stop "
+        "inside a zone adds one arrival line (a stop short of a zone counts from that point); the zone rules live in "
+        "server/trip_laps.py and traffic/zone_hold.py, the runner only calls them. The named split stays the next "
+        "step. +150 allowance measured from 837. Previously "
         "split: measured at 686 on 2026-10-08 after the named seam was applied (D-517 split, behaviour-preserving): "
         "lap helpers are in server/trip_laps.py, halts and restart halts in server/trip_halts.py, the traffic "
         "hold-back and the tick's pinned/step block in lane_traffic.TrafficService (holds/watch/period). What "
@@ -117,8 +131,12 @@ SIZE_VERDICTS = {
         "at 604 (bend diagnostic)",
     ),
     "fleet/fleet/traffic": (
-        1509,
-        "split: measured at 1509 on 2026-10-09. D-551 adds traffic/trip_advice.py "
+        1884,
+        "split: measured at 1884 on 2026-10-09. D-525 rev 4 adds traffic/signal_agent.py (the standalone "
+        "AI PC demand controller, stdlib only) and demand mode in signal_phase.py and lane_traffic.py. The named "
+        "lane-traffic seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "
+        "+150 allowance measured from 1884. "
+        "Previously measured at 1509 on 2026-10-09. D-551 adds traffic/trip_advice.py "
         "(display-only signal advice) and D-525 rev 3 extends signal_phase.py and "
         "lane_traffic.py. The named lane-traffic seam in "
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "
@@ -187,7 +205,47 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        48_118,
+        50_187,
+        "split: re-judged at 50187 on 2026-10-10 after merging D-581 over main 49877 (+310; self-judged after "
+        "an independent REQUEST CHANGES review whose fixes are in). One new pure module "
+        "fleet/swarm/anchor.py (ceiling-anchored TRAIL reference: smoothed map<-odom per robot, odom-reset, "
+        "stale and jump stops, explicit anchor_hold samples, the anchored relay factory and status), its hook "
+        "in swarm/relay.py, a stream-evidence key in console_view.py, MapPoseTracker.odom_to_map and four "
+        "console.py lines. It reads the existing D-494 3 map pose owner; no new robot command path. Previously "
+        "split: re-judged at 49877 on 2026-10-10 after merging D-580 (+145 over main 49732; the enrolled "
+        "roster drives camera robot_ids/markers and the autoupdate required_ids in existing owners "
+        "enrollment*.py, sightings*.py, roster.py, site_update_io.py; no command path, no new owner). Previously "
+        "split: re-judged at 49732 on 2026-10-10 after the crosswalk Fleet map-zone change "
+        "(+271 over 49461). Crosswalk geometry and API stay with site_map.py and its existing "
+        "routes/store; editing and display stay in site-map.js and map-view.js. No new command "
+        "owner or transport was added. The map module split plan and +150 package allowance "
+        "remain in force. Previously "
+        "split: re-judged at 49461 on 2026-10-10: +158 since 49303 across the Fleet map "
+        "view/observation presentation and D-577 lane-lost handling. The former stays in web "
+        "map/tracking owners; the latter adds pure rules to stuck_resolver.py and queue display "
+        "without adding a motion or transport owner. The resolver file has its own split verdict; "
+        "the package +150 allowance remains. See docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md. Previously "
+        "split: re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
+        "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "
+        "web/map-view.js; existing owners, display only, no command path, no new owner). Previously "
+        "split: re-judged at 49125 on 2026-10-09: power, dock, and charge tags stay with the "
+        "existing card and attention-queue owners (roster.js +20, queues.js +7, "
+        "power-health-view.js +1). A battery level other than ok and DOCK_FAILED join the "
+        "queue that already lists power.problem. No new package owner and no robot command "
+        "path. +150 allowance unchanged, measured from 49125. Previously "
+        "split: re-judged at 48952 on 2026-10-09 after merging D-564 (+241 over main 48711; floor place markers: "
+        "ingest and lease in server/sightings.py, teach-from-marker in teach_service.py and teach_routes.py, "
+        "console list in web/site-map-teach.js; existing owners, no command path, no new owner). Previously "
+        "split: re-judged at 48711 on 2026-10-09 merging D-560 S2 (+230 over main 48481; Fleet draws Rosy Cam's "
+        "map plane, display only): web/shared/vision-view.js plane header, lease, freshness rule and feed, "
+        "web/camera-backdrop.js plane draw, web/site-map.js plane view, web/field-view.js plane check and "
+        "map-metre grid. Existing owners, no command or stop path, no new owner; the D-515 warp stays as the "
+        "fallback. +150 allowance unchanged. Previously "
+        "split: re-judged at 48481 on 2026-10-09 (independent re-judge, critic agent): D-540 (d) robot card trips: "
+        "web/card-trip.js 230 (card 운행 form, convoy block), shared/site-map-model.js +40 (one plan/start/cancel "
+        "path, site-map.js uses it, −4), queues.js split from roster.js done (roster.js −117). No new route or "
+        "package owner. site-map.js trip/repeat/convoy controls are removed in D-540 step (e), which must "
+        "net-shrink. +150 allowance unchanged, measured from 48481. Previously "
         "split: re-judged at 48118 on 2026-10-09 after merging D-546 6 (Fleet answers a robot's pose request: localization/pose_request.py, service hook, transport call; no command or stop path) with D-555; +150 allowance unchanged. Previously re-judged at 47953 on 2026-10-09 (independent re-judge, critic agent): D-555 enrolled-robot hub pairing"
         " adds +317 production lines over main 47636: server/enrollment.py +173 (hub link issue/revoke on the existing "
         "register row, TLS fence and enrolled client), web/enrollment.js +57, cli.py +31 (hub digest load at startup), "
@@ -622,8 +680,12 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_344,
-        "accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
+        1_353,
+        "accept: re-judged at 1353 on 2026-10-10 for D-581 (self-judged after the independent review): four "
+        "optional PoseSample fields (anchor, for_robot_id, anchor_age_s, anchor_hold) and their comment; additive, "
+        "envelope 1.0 kept, no new model. Previously: accept: re-judged at 1347 on 2026-10-09 for D-559 (independent read-only critic agent ACCEPT): SwarmFollowParams.mode (one Literal field "
+        "and its comment) and PoseSample.frame (one optional Literal field); additive, envelope 1.0 kept, "
+        "no new model. Previously: accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
         "one RouteContext import and two optional LineFollowStatus fields; the bounded model and "
         "validation live in protocol/route_context.py. No new runtime owner or envelope version, and "
         "the zero-growth allowance remains. "
@@ -719,7 +781,11 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1248,
+        1251,
+        "accept: re-judged at 1251 on 2026-10-10 for D-581: the app injects the anchor relay "
+        "factory, while console keeps its existing formation lifecycle and reads relay status; "
+        "relay construction and anchoring live in fleet/swarm/anchor.py. "
+        "No goal, stop or admission path changed; the zero growth allowance remains. Previously "
         "accept: re-judged at 1248 on 2026-10-09 after merging D-526 with the degraded-link row: "
         "a late robot answer is shown as degraded, not offline (online stays false), and D-526 adds an "
         "alarm_sources hook so the tether watch can raise TETHER_STOP_FAILED; neither changes a goal, stop "
@@ -795,6 +861,13 @@ SIZE_VERDICTS = {
         "recovery without introducing another writer. Configured back-off, active recovery and "
         "stale-decision tests plus independent reproduction cover this safety boundary.",
     ),
+    "core/services/core_features/swarm/manager.py": (
+        634,
+        "accept: D-581 (2026-10-10, re-judged at 634 after the review fixes: anchor_withheld hold) adds the Fleet-anchored "
+        "sample kind (_sample_kind, _own_pose, odom provider) to the one follower state machine; the "
+        "trail geometry stays in swarm/trail.py and the anchoring in Fleet. One lock owner, ROS-free, "
+        "covered by core_features test_swarm*.py. Re-judge on further growth",
+    ),
     "core/services/core_features/docking/manager.py": (
         663,
         "accept: 930 -> 663 after the parking-only phases moved to docking/parking_phases.py and the phase/"
@@ -856,9 +929,19 @@ SIZE_VERDICTS = {
         "D-546 pose_request and package init as one localization domain. No runtime move, new owner, store, "
         "publisher or command path. Re-judge after +150.",
     ),
+    "core/services/core_features/swarm": (
+        799,
+        "accept: registered at 799 on 2026-10-09 for D-559 (feat/swarm-trail-follow) after its review "
+        "fixes, independently judged ACCEPT at 771 (read-only critic agent, 2026-10-09); "
+        "docs/plans/2026-10-09-core-swarm-size-unit.md registers the follower state machine, follow goal "
+        "and D-559 trail/pure pursuit as one swarm domain. No runtime move; CommandManager slot, safety "
+        "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
+    ),
     "core_features": (
-        12_270,
-        "accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
+        11_814,
+        "accept: re-measured at 11814 on 2026-10-09 after core_features/swarm (771) became its own size "
+        "unit under docs/plans/2026-10-09-core-swarm-size-unit.md (combined measure 12585 with D-559). "
+        "Previously: accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
         "the cohesive 922-line localization package is now its own size unit under "
         "docs/plans/2026-10-09-core-localization-size-unit.md. The combined pre-split measure was "
         "13192; moving this domain out fulfills the previous split condition without moving runtime code. "
@@ -964,11 +1047,14 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "perception/control/sensing/perception": (
-        11_035,
+        11_324,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
-        "package move needs its own review and ARM64 image proof. Judged at 11035 on 2026-10-09.",
+        "package move needs its own review and ARM64 image proof. Judged at 11035 on 2026-10-09; "
+        "re-judged at 11324 the same day for D-570 (learned/paint_motion.py ground-plane warp and "
+        "odom history, plus the reuse gate in learned/paint_worker.py), which lives in the learned "
+        "backend it serves and does not change the split plan.",
     ),
     "control": (
         34_446,
@@ -1107,6 +1193,14 @@ SIZE_VERDICTS = {
         "accept: the harness gate itself (lint/generate) — one CLI owner pinned by "
         "test/test_harness_contracts.py (X5)",
     ),
+    "learning/training/perception/model/deliver.py": (
+        626,
+        "accept: the lane_seg paint slot (2026-10-10) parametrises the existing pointer scripts "
+        "(push, rollback, release-hold, status) instead of copying them; the remote shell text, "
+        "argument checks and journal stay in one file so the default shadow scripts stay "
+        "byte-identical (golden test in learning/training/perception/test/test_model_deliver.py). "
+        "Split the remote_script builders out if it grows again",
+    ),
     "learning/training/perception/rosy_ml.py": (
         615,
         "accept: the operator CLI is one argparse dispatcher over the wrapped tools (deliver, "
@@ -1172,6 +1266,13 @@ SIZE_VERDICTS = {
         "managed authorized_keys, temporary password (wall + boot clock, boot id) and boot cleanup share "
         "one lock and one audit trail; splitting would spread the root trust boundary over several files "
         "the image layer must install and the twin must cover. Split the password half out if it grows further",
+    ),
+    "tools/device_test/run.py": (
+        609,
+        "accept: D-512 agent-run device test driver; preflight, verdict, hold, overlay with its CORE "
+        "restart (and the tether rebase across the odometry reset), drive loop and byte-for-byte undo "
+        "are one ordered sequence whose cleanup must see every step. Move the overlay/restart half "
+        "into its own module when it grows further",
     ),
     "tools/device_twin/scenarios.py": (
         703,

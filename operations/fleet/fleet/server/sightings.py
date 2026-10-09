@@ -4,15 +4,22 @@ from __future__ import annotations
 
 import hmac
 import math
+import re
 import time
-from dataclasses import dataclass
-from typing import Callable, Sequence
+from dataclasses import dataclass, replace
+from typing import Callable, Iterable, Sequence
 
+from core_common.protocol.place_markers import PlaceMarkerPayload
 from core_common.protocol.sightings import SiteSightingPayload
 from fleet.server.sighting_store import SightingStore
 
 SIGHTING_LEASE_S = 1.0
 MAX_FUTURE_S = 0.05
+#: D-564: a place marker observation teaches a place only this long after capture.
+PLACE_MARKER_LEASE_S = 2.0
+#: D-562: a robot's ceiling marker id is its robot number, robots are 40-49.
+ROBOT_NUMBER_MARKERS = range(40, 50)
+_ROBOT_NUMBER = re.compile(r"rosy_(\d{2})")
 
 
 class SightingError(ValueError):
@@ -40,6 +47,26 @@ class SightingSource:
     credential: str = "static"
     # D-484: where the worker measures the image-to-map calibration from.
     calibration_source: str = "corner_markers"
+    # D-564: floor place marker ids this source may report (display and teach only).
+    place_markers: tuple[int, ...] = ()
+    # D-580: `robot_ids: enrolled` follows the live roster; the YAML markers are then overrides.
+    follow_roster: bool = False
+    marker_overrides: tuple[tuple[str, int], ...] = ()
+
+
+def follow_roster(source: SightingSource, roster: Iterable[str]) -> SightingSource:
+    """D-580: targets = the roster; marker = YAML override, else the robot number (D-562)."""
+    if not source.follow_roster:
+        return source
+    robot_ids = tuple(sorted(set(roster)))
+    overrides = dict(source.marker_overrides)
+    used = {*overrides.values(), *(source.corner_marker_ids or ()), *source.place_markers}
+    markers = {rid: marker for rid, marker in overrides.items() if rid in robot_ids}
+    for rid in robot_ids:
+        number = _ROBOT_NUMBER.fullmatch(rid)
+        if rid not in markers and number and int(number[1]) in ROBOT_NUMBER_MARKERS and int(number[1]) not in used:
+            markers[rid] = int(number[1])
+    return replace(source, robot_ids=robot_ids, robot_markers=tuple(sorted(markers.items())))
 
 
 class SightingService:
@@ -73,7 +100,8 @@ class SightingService:
                 raise ValueError("sighting source ids must be unique")
             if source.token in tokens:
                 raise ValueError("sighting source tokens must be unique")
-            if (not source.robot_ids or any(not isinstance(robot_id, str) for robot_id in source.robot_ids)
+            if ((not source.robot_ids and not source.follow_roster)
+                    or any(not isinstance(robot_id, str) for robot_id in source.robot_ids)
                     or not set(source.robot_ids).issubset(known)):
                 raise ValueError(f"sighting source {source.source_id!r} has an unknown robot target")
             if len(set(source.robot_ids)) != len(source.robot_ids):
@@ -97,10 +125,18 @@ class SightingService:
             tokens.add(source.token)
             self._by_id[source.source_id] = source
         self._latest: dict[str, dict] = store.load_latest() if store is not None else {}
+        #: D-564: (source_id, marker_id) -> newest accepted place marker row; memory only.
+        self._place_markers: dict[tuple[str, int], dict] = {}
 
     @property
     def sources(self) -> tuple[SightingSource, ...]:
         return tuple(self._sources)
+
+    def retarget(self, roster: Iterable[str]) -> None:
+        """The live roster changed (SiteRoster.sync); `robot_ids: enrolled` sources follow it."""
+        self.known_robot_ids = frozenset(roster)
+        self._sources = [follow_roster(source, self.known_robot_ids) for source in self._sources]
+        self._by_id = {source.source_id: source for source in self._sources}
 
     @property
     def enabled(self) -> bool:
@@ -147,6 +183,56 @@ class SightingService:
             self._store.save_sighting(row)
         self._latest[payload.robot_id] = row
         return self._render(row, now)
+
+    def accept_place_markers(self, authorization: str | None, payload: PlaceMarkerPayload) -> dict:
+        """D-564: same token, map, calibration and ordering checks as a sighting."""
+        source = self._authenticate(authorization)
+        if any(m.marker_id not in source.place_markers for m in payload.markers):
+            raise SightingError(403, "PLACE_MARKER_FORBIDDEN", "source cannot report this place marker")
+        if payload.map_id != source.map_id:
+            raise SightingError(409, "MAP_MISMATCH", "place marker map does not match source configuration")
+        if payload.calibration_revision != source.calibration_revision:
+            raise SightingError(409, "CALIBRATION_MISMATCH",
+                                "place marker calibration does not match source configuration")
+        now = self._clock()
+        age_s = now - payload.captured_at
+        if age_s < -MAX_FUTURE_S:
+            raise SightingError(409, "SIGHTING_FUTURE", "capture time is in the future")
+        if age_s > PLACE_MARKER_LEASE_S:
+            raise SightingError(409, "SIGHTING_STALE", "place marker exceeded the teach lease")
+        if any(payload.captured_at <= self._place_markers.get((source.source_id, m.marker_id),
+                                                              {"captured_at": -math.inf})["captured_at"]
+               for m in payload.markers):
+            raise SightingError(409, "SIGHTING_OUT_OF_ORDER", "place marker is not newer than readback")
+        rows = []
+        for marker in payload.markers:
+            row = {**marker.model_dump(mode="json"), "source_id": source.source_id, "map_id": payload.map_id,
+                   "calibration_revision": payload.calibration_revision,
+                   "captured_at": payload.captured_at, "seq": payload.seq, "received_at": now}
+            self._place_markers[(source.source_id, marker.marker_id)] = row
+            rows.append(self._render(row, now, PLACE_MARKER_LEASE_S))
+        return {"markers": rows}
+
+    def place_markers_snapshot(self) -> dict:
+        now = self._clock()
+        return {"markers": [self._render(row, now, PLACE_MARKER_LEASE_S)
+                            for row in self._place_markers.values()],
+                "ts": now, "lease_s": PLACE_MARKER_LEASE_S}
+
+    def fresh_place_marker(self, marker_id: int) -> dict | None:
+        """The newest place marker row within the lease whose source config still matches, else None."""
+        now = self._clock()
+        best = None
+        for (source_id, seen_id), row in self._place_markers.items():
+            source = self._by_id.get(source_id)
+            if (seen_id != marker_id or source is None or marker_id not in source.place_markers
+                    or row["map_id"] != source.map_id
+                    or row["calibration_revision"] != source.calibration_revision
+                    or not -MAX_FUTURE_S <= now - row["captured_at"] <= PLACE_MARKER_LEASE_S):
+                continue
+            if best is None or row["captured_at"] > best["captured_at"]:
+                best = row
+        return dict(best) if best is not None else None
 
     def snapshot(self) -> dict:
         now = self._clock()
@@ -196,9 +282,9 @@ class SightingService:
             raise SightingError(401, "SIGHTING_UNAUTHORIZED", "source token required")
         return matched
 
-    def _render(self, row: dict, now: float) -> dict:
+    def _render(self, row: dict, now: float, lease_s: float | None = None) -> dict:
         out = dict(row)
         age_s = max(0.0, now - float(row["captured_at"]))
         out["age_ms"] = round(age_s * 1000.0)
-        out["stale"] = age_s > self.lease_s
+        out["stale"] = age_s > (self.lease_s if lease_s is None else lease_s)
         return out

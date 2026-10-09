@@ -7,7 +7,7 @@ import os
 import ssl
 import stat
 from typing import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -113,8 +113,12 @@ class EnrolledTlsBinding:
 
 
 class EnrolledTlsBindings:
-    def __init__(self, path: Path | str):
+    """The root-owned file approves hostname + CA; with a store, a renumbered re-enroll (D-580)
+    replaces only the robot_id of the binding whose hostname and CA it proved."""
+
+    def __init__(self, path: Path | str, store=None):
         self.path = Path(path)
+        self._store = store
         self._approved = self._read()
         for binding in self._approved.values():
             binding.context()
@@ -147,18 +151,89 @@ class EnrolledTlsBindings:
                         or not isinstance(binding.tls_ca_file, str)):
                     raise ValueError()
                 bindings[binding.robot_id] = binding
-            return bindings
+            self._rows = tuple(bindings.values())
         except (ValueError, TypeError, KeyError):
             raise EnrollmentTlsError('invalid enrolled TLS binding file') from None
+        #: hostname -> the file row: what the root-owned file approved before any learned id.
+        self._file = {b.hostname: b for b in bindings.values()}
+        if self._store is None:
+            return bindings
+        renamed = {}
+        for binding in bindings.values():
+            learned = self._learned(binding)
+            if learned is not None and learned not in bindings:  # the file wins a collision
+                binding = replace(binding, robot_id=learned)
+            renamed[binding.robot_id] = binding
+        return renamed
 
-    def validate(self, rows: list[dict]) -> None:
+    def _learned(self, row: EnrolledTlsBinding) -> str | None:
+        """D-580: the id this file row's robot last enrolled with here, if the row is unchanged.
+
+        Only when hostname, CA and the file's robot_id are all as they were when the robot proved
+        them, and no other file row shares the CA or hostname (one CA per robot, D-565).
+        """
+        learned = self._store.tls_renumbers().get(row.hostname) if self._store is not None else None
+        if (learned is None or learned['ca_sha256'] != row.tls_ca_sha256
+                or learned['file_robot_id'] != row.robot_id
+                or sum(b.tls_ca_sha256 == row.tls_ca_sha256 or b.hostname == row.hostname
+                       for b in self._rows) != 1):
+            return None
+        return learned['robot_id']
+
+    def proven(self, binding: EnrolledTlsBinding) -> bool:
+        """A robot was enrolled here through exactly this hostname + CA (renumber eligibility)."""
+        row = self._file.get(binding.hostname)
+        return row is not None and self._learned(row) == binding.robot_id
+
+    def remember(self, robot_id: str) -> None:
+        """Record that robot_id's binding was enrolled here (called when it is unenrolled)."""
+        binding = self.binding(robot_id)
+        if binding is not None and self._store is not None:
+            self._store.renumber_tls(binding.hostname, binding.tls_ca_sha256,
+                                     self._file[binding.hostname].robot_id, robot_id)
+
+    def renumber(self, binding: EnrolledTlsBinding, robot_id: str) -> EnrolledTlsBinding:
+        """D-580: the robot proved this binding's CA and hostname and now reports robot_id."""
+        if (self._store is None or self.binding(binding.robot_id) != binding or robot_id in self._approved
+                or robot_id in {b.robot_id for b in self._rows if b.hostname != binding.hostname}):
+            raise EnrollmentTlsError('TLS binding cannot be renumbered')
+        self._store.renumber_tls(binding.hostname, binding.tls_ca_sha256,
+                                 self._file[binding.hostname].robot_id, robot_id)
+        approved = {key: value for key, value in self._approved.items() if key != binding.robot_id}
+        approved[robot_id] = replace(binding, robot_id=robot_id)
+        # Built from memory, not re-read: a concurrent file edit still trips binding()'s check.
+        self._approved = approved
+        return approved[robot_id]
+
+    def validate(self, rows: list[dict]) -> list[str]:
+        """Return pending robot_ids: approved (the root-owned file) but not enrolled yet."""
         rows = {row['robot_id']: row for row in rows}
-        if not self._approved.keys() <= rows.keys():
-            raise EnrollmentTlsError('TLS binding requires an already enrolled robot')
+        owners = {}
+        for robot_id, row in rows.items():
+            name = str(row['hostname']).lower().rstrip('.')
+            owners[name if name.endswith('.local') else name + '.local'] = robot_id
         for robot_id, binding in self._approved.items():
-            name = str(rows[robot_id]['hostname']).lower().rstrip('.')
-            if binding.hostname != (name if name.endswith('.local') else name + '.local'):
+            owner = owners.get(binding.hostname)
+            # An enrolled binding names its own row; a pending one may not name another robot's row.
+            if owner != robot_id and (robot_id in rows or owner is not None):
                 raise EnrollmentTlsError('TLS hostname differs from enrolled identity')
+        return sorted(self._approved.keys() - rows.keys())
+
+    def claims(self, hostnames: set[str], robot_ids: set[str]) -> bool:
+        """True when an approved binding (pending or bound) owns one of these names or ids."""
+        names = {name.lower().rstrip('.') for name in hostnames if name}
+        names |= {name + '.local' for name in names if not name.endswith('.local')}
+        # A renumbered binding still claims its file id: that id never comes back over HTTP.
+        return any(b.hostname in names or b.robot_id in robot_ids
+                   or self._file[b.hostname].robot_id in robot_ids for b in self._approved.values())
+
+    def pending(self, rows: list[dict], hostname: str, port: int) -> EnrolledTlsBinding | None:
+        """The one unenrolled binding at this hostname:port. Selection only: TLS proves it."""
+        enrolled = {row['robot_id'] for row in rows}
+        name = hostname.lower().rstrip('.')
+        found = [b.robot_id for b in self._approved.values()
+                 if b.robot_id not in enrolled and b.hostname == name and b.port == port]
+        return self.binding(found[0]) if len(found) == 1 else None
 
     def binding(self, robot_id: str) -> EnrolledTlsBinding | None:
         original = self._approved.get(robot_id)
@@ -177,17 +252,19 @@ class EnrolledTlsBindings:
                              tls_ca_file=binding.tls_ca_file, discovery=True)
 
     def markers(self, rows: list[dict]) -> list[dict]:
-        self.validate(rows)
+        pending = self.validate(rows)
         return [dict(robot_id=b.robot_id, origin=f'https://{b.hostname}:{b.port}', ca_sha256=b.tls_ca_sha256)
-                for robot_id in self._approved for b in [self.binding(robot_id)]]
+                for robot_id in self._approved if robot_id not in pending for b in [self.binding(robot_id)]]
 
 
 class EnrollmentIdentityTransport(httpx.AsyncBaseTransport):
     """Below DiscoveryTransport: authenticate the same selected TLS location before secrets."""
 
     def __init__(self, endpoint: RobotEndpoint, bindings: EnrolledTlsBindings,
-                 inner: httpx.AsyncBaseTransport | None = None):
+                 inner: httpx.AsyncBaseTransport | None = None, any_receiver: bool = False):
         self.endpoint, self.bindings = endpoint, bindings
+        #: D-580 renumbered re-enroll: CA and hostname still prove the device; system/info names it.
+        self.any_receiver = any_receiver
         self.before_send: Callable[[httpx.Request], None] | None = None
         self.context = bindings.binding(endpoint.robot_id).context()
         self.inner = inner or httpx.AsyncHTTPTransport(verify=self.context, retries=0)
@@ -207,7 +284,8 @@ class EnrollmentIdentityTransport(httpx.AsyncBaseTransport):
                     raise EnrollmentTlsError('TLS identity response exceeds its limit')
             from core_common.protocol.peer_pairing import IdentitySnapshot
             identity = IdentitySnapshot.model_validate_json(bytes(body))
-            if response.status_code != 200 or identity.receiver_id != self.endpoint.robot_id:
+            if response.status_code != 200 or (not self.any_receiver
+                                               and identity.receiver_id != self.endpoint.robot_id):
                 raise EnrollmentTlsError('authenticated TLS receiver identity differs')
             if identity.tls_hostname is not None and identity.tls_hostname != binding.hostname:
                 raise EnrollmentTlsError('authenticated TLS receiver hostname differs')

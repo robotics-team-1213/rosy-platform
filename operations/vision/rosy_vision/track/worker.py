@@ -44,7 +44,7 @@ from rosy_vision.track.fleet_client import TrackPublishError
 from rosy_vision.track import led_identity
 from rosy_vision.track.model import (
     Calibration, Detection, DetectorResult, Frame, RobotDetector, ROBOT_TOP_HEIGHT_M,
-    ROTATION_RADIUS_M, MAX_DETECTIONS,
+    ROTATION_RADIUS_M, MAX_DETECTIONS, ROBOT_MARKER_IDS,
 )
 from rosy_vision.track import geometry
 
@@ -146,6 +146,10 @@ class TrackWorker:
             self._config_log.failed((("error_type", type(exc).__name__),))
         else:
             self._config_log.ok()
+            # D-560: the ingest warps the map plane with the same record tracking uses.
+            self.ingest.report_calibration(self.camera.source_id,
+                                           (self._config or {}).get("calibration"),
+                                           self.camera.map_id)
 
     async def run_config_sync(self, stop_event: asyncio.Event,
                               interval_s: float = CONFIG_REFRESH_S) -> None:
@@ -271,7 +275,7 @@ class TrackWorker:
         matrix = geometry.as_matrix(calibration.image_to_map)
         camera = geometry.camera_from_homography(matrix, calibration.image_size, calibration.hfov_deg)
         measured = []
-        for marker_id in self.camera.robot_markers.values():
+        for marker_id in sorted(set(self.camera.robot_markers.values()).union(ROBOT_MARKER_IDS)):
             quad = markers.get(marker_id)
             if quad is None:
                 continue

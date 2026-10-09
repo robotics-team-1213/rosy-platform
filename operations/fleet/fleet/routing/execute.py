@@ -190,8 +190,9 @@ def plan_again(active, start_pose, request: dict, caps: dict, blocked: frozenset
 
 
 def route_key(segments: list) -> list:
-    """What makes two routes the same (D-489 9): the edges driven and where each ends."""
-    return [(s["edge_id"], s["forward"], s["s_to"]) for s in segments]
+    """What makes two routes the same (D-489 9): the edges driven and where each ends. A zero-length
+    segment drives nothing (a plan from a place may start at the very end of the lane into it)."""
+    return [(s["edge_id"], s["forward"], s["s_to"]) for s in segments if s["s_to"] - s["s_from"] > 1e-6]
 
 
 def replan_hold(active, start_pose, remaining: list, request: dict, caps: dict, blocked: frozenset,

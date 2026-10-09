@@ -14,12 +14,13 @@ from pathlib import Path
 WEB = Path(__file__).resolve().parents[1] / "fleet" / "server" / "web"
 CONSOLE = WEB / "console.js"
 ROSTER = WEB / "roster.js"
+QUEUES = WEB / "queues.js"
 INDEX = WEB / "index.html"
 
 
 def console_source() -> str:
-    # 큐 렌더는 roster.js 팩토리가 가진다. 셸(console.js)은 호출만 남겼다.
-    return CONSOLE.read_text(encoding="utf-8") + ROSTER.read_text(encoding="utf-8")
+    # 큐 렌더는 queues.js가 가지고 roster.js 팩토리가 그것을 엮는다. 셸(console.js)은 호출만 남겼다.
+    return "".join(path.read_text(encoding="utf-8") for path in (CONSOLE, ROSTER, QUEUES))
 
 
 def test_hitl_names_the_robot_and_the_honest_path():
@@ -62,15 +63,16 @@ def test_the_queues_panel_heads_the_rail():
 
 def test_queue_and_roster_attention_share_one_rule():
     """D-493 — 카드에 빨간 표지(릴레이 끊김)가 붙은 로봇이 큐에 없던 회차(2026-10-07)의 회귀 방지."""
-    source = ROSTER.read_text(encoding="utf-8")
-    assert "function attentionItems(robot)" in source
-    assert "return view.stateUnavailable || attentionItems(robot).length > 0;" in source
-    assert "for (const item of attentionItems(r))" in source
+    roster, queues = ROSTER.read_text(encoding="utf-8"), QUEUES.read_text(encoding="utf-8")
+    assert "function attentionItems(robot)" in queues
+    assert "const { attentionItems, attentionKey, fillQueues } = createQueues(" in roster
+    assert "return view.stateUnavailable || attentionItems(robot).length > 0;" in roster
+    assert "for (const item of attentionItems(r))" in queues
 
 
 def test_queue_flags_stale_state_from_the_server_age_plus_receive_time():
     """D-493 — state_age_s 에 받은 뒤 흐른 시간을 더한다. 서버/브라우저 시계 차는 쓰지 않는다."""
-    roster = ROSTER.read_text(encoding="utf-8")
+    roster = QUEUES.read_text(encoding="utf-8")
     assert "staleAgeS(robot, view.receivedAtMs, Date.now())" in roster
     assert "상태 오래됨 — ${staleS}초 전 값" in roster
     assert "view.receivedAtMs = Date.now();" in CONSOLE.read_text(encoding="utf-8")
@@ -91,7 +93,7 @@ def test_the_rail_is_the_one_scroll_and_decisions_open_in_the_queue():
     replan confirm open inside the queue row; the separate panel and the all-robots toggle are gone."""
     styles = (WEB / "shared" / "styles.css").read_text(encoding="utf-8")
     index = INDEX.read_text(encoding="utf-8")
-    roster = ROSTER.read_text(encoding="utf-8")
+    roster = ROSTER.read_text(encoding="utf-8") + QUEUES.read_text(encoding="utf-8")
     assert "#fleet-main > .console-secondary { position: relative; min-height: 0; overflow-y: auto;" in styles
     assert "ui-shell:has(> #fleet-main) { height: 100dvh; }" in styles
     assert "max-height: min(20dvh, 12rem)" not in styles
@@ -101,3 +103,15 @@ def test_the_rail_is_the_one_scroll_and_decisions_open_in_the_queue():
     assert "dataset.decisionSlot = row.key;" in roster
     assert 'decision: "stuck"' in roster and 'decision: "replan"' in roster
     assert "export function mustExpand(robot)" in roster
+
+
+def test_d577_lane_lost_hold_rows_name_the_reason_and_rise_after_the_deadline():
+    """D-577 8: R5 holds the robot and asks a human. The row names why; with no human answer
+    30 s after the escalation it says so and moves to the top. Console only (no phone/messenger)."""
+    stuck_js = (WEB / "line-stuck.js").read_text(encoding="utf-8")
+    for reason in ("peer_behind", "attempts", "local_disabled", "crosswalk", "pose", "refused", "rule_budget"):
+        assert f'"lane_lost_hold:{reason}"' in stuck_js
+    queues = QUEUES.read_text(encoding="utf-8")
+    assert "HUMAN_DEADLINE_S = 30" in queues
+    assert "30초 넘게 답 없음" in queues
+    assert "overdue" in queues

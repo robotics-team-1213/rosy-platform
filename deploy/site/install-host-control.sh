@@ -22,6 +22,9 @@
 # container mounts it (compose.yaml), never Vision. Prints the public key for --fleet-key.
 # Then, on the site PC, write /etc/rosy/fleet-host-control/targets (`<role> <user>@<host
 # name>` per line) and known_hosts (ssh-keyscan of each host name), and restart the stack.
+# --from on each PC (D-530, applied 2026-10-09): site PC = the Docker pool 172.16.0.0/12 (the compose
+# subnet changes when the stack restarts); model and AI PCs = "<site PC LAN address>". Targets use LAN
+# addresses, not tailnet names: Tailscale SSH bypasses authorized_keys forced commands.
 # Idempotent. --dry-run prints what would change and needs no root.
 set -euo pipefail
 

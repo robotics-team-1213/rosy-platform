@@ -96,8 +96,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--users-file", default=None, type=Path,
                          help="개인별 Fleet API 토큰 digest 및 역할을 담은 root 관리 파일")
     console.add_argument("--stuck-resolver", action="store_true",
-                         help="D-438: answer lane stucks with rules for robots that have a "
-                              "resolver_token in robots.yaml; others go to the console")
+                         help="D-577 2: accepted for compatibility; the resolver is on by default")
+    console.add_argument("--no-stuck-resolver", action="store_false", dest="stuck_resolver_on",
+                         help="D-438/D-577 2: turn off the Fleet stuck resolver (on by default; it "
+                              "answers only robots with a resolver_token in robots.yaml, others go "
+                              "to the console)")
     console.add_argument("--tls-cert", default=None, type=Path,
                          help="HTTPS server certificate chain; pair with --tls-key")
     console.add_argument("--tls-key", default=None, type=Path,
@@ -116,6 +119,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="site YAML; its fleet.routing section sets the D-490 planner costs, "
                               "fleet.map_pose the D-494 trip map pose limits, "
                               "fleet.lane_compliance the D-511 lane watch thresholds")
+    console.add_argument("--site-config-optional", default=None, type=Path, metavar="PATH",
+                         help="like --site-config, but a missing file is only logged and defaults apply")
     console.add_argument("--no-localization-service", dest="localization_service",
                          action="store_false", default=True,
                          help="D-395: do not run the Fleet localization service (on by default)")
@@ -343,6 +348,19 @@ async def run_formation(args: argparse.Namespace) -> None:
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
+def _resolve_optional_site_config(args) -> None:
+    """``--site-config-optional PATH``: becomes ``--site-config`` when the file exists, else defaults apply."""
+    optional = getattr(args, "site_config_optional", None)
+    if optional is None:
+        return
+    if getattr(args, "site_config", None) is not None:
+        sys.exit("--site-config and --site-config-optional cannot be combined")
+    if Path(optional).is_file():
+        args.site_config = optional
+    else:
+        print(f"site config {optional} not found; using defaults", file=sys.stderr)
+
+
 def _hub_link(args) -> dict | None:
     """D-555: what robots receive with a hub credential, or None when not configured."""
     hostname, ca = getattr(args, "hub_link_hostname", None), getattr(args, "hub_link_ca", None)
@@ -370,6 +388,7 @@ def run_console(args: argparse.Namespace) -> None:
     from fleet.server.console import FleetConsole
     from fleet.server.sightings import SightingService
 
+    _resolve_optional_site_config(args)
     tls_cert = getattr(args, "tls_cert", None)
     tls_key = getattr(args, "tls_key", None)
     if bool(tls_cert) != bool(tls_key):
@@ -501,6 +520,8 @@ def run_console(args: argparse.Namespace) -> None:
             sources, known_robot_ids=[rid for source in sources for rid in source.robot_ids]
             if enrollment_store is not None else console.robot_ids, store=store,
         )
+        if enrollment_store is None:
+            sighting_service.retarget(console.robot_ids)  # D-580; enrolled robots sync via SiteRoster
         from fleet.server.tracking import TrackingService
         from fleet.server.tracking_calibration import TrackingCalibrationStore
 
@@ -536,7 +557,7 @@ def run_console(args: argparse.Namespace) -> None:
             console=console, task_service=task_service, sighting_service=sighting_service,
             enrollment_store=enrollment_store, robot_key=robot_key, robot_key_error=robot_key_error,
             discovery=discovery, tls_file=getattr(args, "enrolled_tls_bindings_file", None),
-            hub_link=hub_link if enrolled_hub else None)
+            hub_link=hub_link if enrolled_hub else None, tracking_service=tracking_service)
     from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids
 
     try:
@@ -565,13 +586,15 @@ def run_console(args: argparse.Namespace) -> None:
         pose_request_overhead=getattr(args, "pose_request_overhead", True),
         lane_rules=getattr(args, "localization_lane_rules", None))
     stuck_resolver_clients = None
-    if getattr(args, "stuck_resolver", False):
+    if getattr(args, "stuck_resolver_on", True):
         stuck_resolver_clients = {
             ep.robot_id: HttpRobotClient(dataclasses.replace(ep, token=ep.resolver_token))
             for ep in endpoints if ep.resolver_token}
         if not stuck_resolver_clients:
-            print("warning: --stuck-resolver set but no robot has a resolver_token; "
-                  "every stuck will be escalated", file=sys.stderr)
+            print("note: stuck resolver on, but no robot has a resolver_token; "
+                  "every stuck goes to the console (no_resolver_token)", file=sys.stderr)
+        else:
+            print("stuck resolver answers: " + ", ".join(sorted(stuck_resolver_clients)), file=sys.stderr)
     central_registry = None
     if getattr(args, "central", False):
         # D-454 1단계: 중앙 프로파일 — 등록 로스터가 정본이므로 등록 저장소가 필요하다.
@@ -672,6 +695,7 @@ def _build_site_map(args, tasks_db):
         site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
         source = getattr(args, "site_map_import", None)
         if source is not None:
+            site_maps.import_source = Path(source)
             # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
             # report; the default "site" would filter every sighting (map pose UNKNOWN).
             site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
@@ -724,6 +748,9 @@ def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
 
     kept = []
     for source in sources:
+        if source.follow_roster:  # D-580: targets come from the roster, never a typo
+            kept.append(source)
+            continue
         unknown = set(source.robot_ids) - known
         if unknown - retired:
             sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")

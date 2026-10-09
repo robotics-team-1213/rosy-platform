@@ -47,9 +47,10 @@ GitHub에 보이는 이 절이 착수 순서의 공개 기준이다. 같은 규�
 5. **테스트는 기존 실패와 비교한다.** 워크트리에서 관련 pytest 결과를 저장소
    밖의 `run-1.txt`에 남기고 `python test/known_failures.py`에 그 파일을 넘긴다.
    pytest는 이 노트북에서 돌리지 않는다. `tools/remote/remote_pytest.py`가 모델 PC(OMEN),
-   그다음 AI PC에서 돌리고 로그를 `X:\DevTemp\<이름>\`로 가져온다. pre-push와
-   `tools/land.py`가 이를 쓴다. 두 PC 모두 닿지 않을 때만 로컬로 돌린다. 커밋된
-   HEAD만 보내므로 먼저 커밋한다. Gazebo는 원래대로 모델 PC나 현장 PC에서만 돌린다.
+   AI PC, 현장 PC 가운데 여유가 있는 곳(현장 PC는 맨 뒤, D-568)에서 돌리고 로그를 `X:\DevTemp\<이름>\`로 가져온다. pre-push와
+   `tools/land.py`가 이를 쓴다. 시험 PC가 하나도 닿지 않으면 노트북으로 넘어가지 않고 10분 동안 30초마다 다시 시도한 뒤 실패로 끝낸다(D-584). 그 시험은 "확인 못 함"이고 착지와 푸시는 하지 않는다. `--local`과 `ROSY_TEST_LOCAL`은 오류로 거절한다. 커밋된
+   HEAD만 보내므로 먼저 커밋한다. Gazebo는 노트북에서 돌리지 않고
+   `python tools/remote/remote_pytest.py --pick sim`이 고른 PC에서 돌린다.
    실험실 PC의 경로는 `X:\DevTemp\<이름>\run-1.txt`다. exit 1의 `NEW`는 그
    브랜치의 실패다. 고친 실패의 줄은 같은 커밋에서 `test/known_failures.txt`에서
    뺀다. 그 브랜치가 만든 실패를 그 파일에 넣지 않는다. 호스트 pytest 통과는

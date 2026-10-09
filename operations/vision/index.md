@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · feat(vision): D-564 장소 마커 투영과 전송
+- 2026-10-09 · uncommitted · fix(vision): D-560 S1 독립 리뷰 반영, API v1.167
+- 2026-10-09 · uncommitted · feat(vision): D-560 S1 지도 평면 영상 `mode: map`
+- 2026-10-09 · 3284df22e · feat(vision): 천장 검출 minMarkerPerimeterRate 0.015 (D-562)
 - 2026-10-09 · uncommitted · fix(vision): D-547 addendum 리뷰 반영 — 어두운 배경 조건, 확정 전 보고
-- 2026-10-09 · uncommitted · fix(vision): D-547 addendum 후보 없는 유령 치유
-- 2026-10-09 · uncommitted · refactor(vision): LED 링 뒤 쓰이지 않는 challenge 인자 제거
-- 2026-10-09 · uncommitted · fix(vision): LED 확인 판정이 현장에서 늘 frames_missing이었다 (D-472)
-- 2026-10-09 · uncommitted · fix(vision): D-547 리뷰 반영 — 유령 확정·전체 blob 치유·명목 footprint

@@ -21,7 +21,7 @@
   <ui-shell grammar="exception">
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <ui-topbar>
-    <ui-brand><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
+    <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
     <div class="spacer"></div>
     <!-- D-359 §6.4 — 좁은 창에서 접속·역할·테마는 이 토글 뒤로 접힌다. 넓은 창에서는 토글이 숨고 줄에 선다. -->
     <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="접속과 화면 표시" title="접속과 화면 표시" data-action-icon="settings"><span class="topbar-more-label">접속</span></ui-button>
@@ -110,29 +110,8 @@
           <thead><tr><th scope="col">대상</th><th scope="col">X (m)</th><th scope="col">Y (m)</th><th scope="col">관측 기준</th></tr></thead>
           <tbody id="tracking-position-rows"></tbody>
         </table>
-        <div data-role-lock>
-          <ui-button kind="quiet" id="tracking-relearn" type="button" hidden>배경 다시 학습</ui-button>
-          <ui-status id="tracking-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
-        </div>
       </div>
       <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
-      <details class="note" id="start-point-tools">
-        <summary>시작점 설정</summary>
-      <section aria-labelledby="start-point-heading">
-        <h3 id="start-point-heading">시작점 · 무마커 지도 기준</h3>
-        <p class="hint">위치와 방향을 저장합니다. 지도 원점과 로봇 위치는 바뀌지 않으며 로봇은 움직이지 않습니다. 방향 0°는 +X, 90°는 +Y입니다.</p>
-        <div class="start-point-fields">
-        <label class="start-point-camera">보정 카메라 <select class="ui-field" id="start-point-source" disabled aria-label="시작점 보정 카메라"></select></label>
-        <label>X (m) <input class="ui-field" id="start-point-x" type="number" step="0.001" required disabled></label>
-        <label>Y (m) <input class="ui-field" id="start-point-y" type="number" step="0.001" required disabled></label>
-        <label>방향 (°) <input class="ui-field" id="start-point-yaw" type="number" min="-180" max="180" step="0.1" value="0" required disabled></label>
-        </div>
-        <ui-actions><ui-button kind="quiet" id="start-point-pick" type="button" disabled>지도에서 시작 위치 선택</ui-button>
-          <ui-button kind="primary" id="start-point-save" type="button" disabled>시작점 저장</ui-button>
-          <ui-button kind="quiet" id="start-point-delete" type="button" disabled>시작점 지우기</ui-button></ui-actions>
-        <p class="hint" id="start-point-state" role="status">시작점 상태 확인 중</p>
-      </section>
-      </details>
       <details class="note">
         <summary>관제 범위 안내</summary>
         <p>이 화면은 Rosy Fleet 사이트 관제입니다. 위에서 내려다본 천장 카메라와 지도로 여러 로봇을 봅니다. 로봇 한 대의 전방 카메라·수동 조작·비상정지는 그 로봇의 Rosy Robot 화면에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>
@@ -158,6 +137,7 @@
       <section class="panel" aria-labelledby="roster-heading">
         <div class="roster-block">
           <h2 id="roster-heading">등록 로봇</h2>
+          <p id="discovery-pending" class="hint" role="status" hidden><span></span> · <a href="/console/install">설치·보정에서 등록</a></p>
           <!-- D-493 — 발행 상태와 전체 주행 취소는 모든 로봇에 대한 일이라 로봇 목록 머리에 선다. -->
           <section id="dispatch-control" class="dispatch-control" role="status"
                    aria-live="polite" aria-labelledby="dispatch-control-title">
@@ -221,7 +201,7 @@
         <h2 id="fleet-operations-heading">대형·신호·기록</h2>
         <div class="formation" aria-labelledby="formation-heading" data-role-lock>
           <div class="robot-head">
-            <h3 id="formation-heading">대형</h3>
+            <h3 id="formation-heading">대형·대열</h3>
             <span class="spacer"></span>
             <ui-status id="formation-role-lock" class="role-lock-note" state="forbidden" hidden>운영자 권한이 필요합니다</ui-status>
             <ui-tag id="formation-state" status="neutral" title="IDLE">대기</ui-tag>
@@ -237,6 +217,7 @@
               <option value="GRID">GRID</option>
               <option value="CIRCLE">CIRCLE</option>
               <option value="FOLLOW">FOLLOW</option>
+              <option value="TRAIL">TRAIL 자취 따라가기</option>
             </select>
             <label for="formation-spacing">간격 m</label>
             <input class="ui-field" id="formation-spacing" type="number" min="0.2" max="3" step="0.1" value="0.6">
@@ -250,6 +231,18 @@
             <ui-button kind="quiet" id="formation-stop" type="button">해제</ui-button>
           </div>
           <p class="hint" id="formation-detail" title="리더를 고르고 무장하면 나머지가 슬롯으로 따라붙습니다"></p>
+          <details class="convoy-form-wrap"><summary>대열 — 반복 운행 따라가기</summary><div class="formation-form">
+            <label for="convoy-follower">팔로워</label>
+            <select class="ui-field" id="convoy-follower"></select>
+            <label for="convoy-leader">리더</label>
+            <select class="ui-field" id="convoy-leader"></select>
+            <label for="convoy-start">출발 자리</label>
+            <select class="ui-field" id="convoy-start"></select>
+          </div>
+          <div class="robot-actions formation-actions">
+            <ui-button kind="primary" id="convoy-go" type="button">대열 시작</ui-button>
+          </div>
+          <p class="hint" id="convoy-detail" role="status"></p></details>
         </div>
 
         <div class="signals" aria-labelledby="signals-heading">

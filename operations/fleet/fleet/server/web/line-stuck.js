@@ -4,6 +4,8 @@
 // 상태 폴링은 1 s 마다 다시 그리므로, 바뀐 항목만 다시 만든다 — 확인 단계와 포커스가
 // 폴링에 지워지지 않게 한다. 색은 클래스로만 준다(CSP style-src 'self').
 
+import { primaryButton, quietButton, setReason } from "./queues.js";
+
 export const DECISIONS = Object.freeze(["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]);
 
 export const DECISION_LABEL = Object.freeze({
@@ -49,6 +51,16 @@ const ESCALATION_REASON = Object.freeze({
   estop: "비상정지",
   calibration: "보정 중",
   no_resolver_token: "자동 판단 토큰 없음",
+  // D-577 1: R5 held the robot (WAIT) instead of backing off after a lost lane.
+  "lane_lost_hold:peer_behind": "차선 잃음 — 뒤에 다른 로봇",
+  "lane_lost_hold:attempts": "차선 잃음 — 후진 시도 소진",
+  "lane_lost_hold:local_disabled": "차선 잃음 — 로컬 복구 꺼짐",
+  "lane_lost_hold:crosswalk": "차선 잃음 — 횡단보도 안",
+  "lane_lost_hold:crosswalk_unknown": "차선 잃음 — 횡단보도 여부 모름",
+  "lane_lost_hold:peer_unknown": "차선 잃음 — 주변 로봇 위치 모름",
+  "lane_lost_hold:pose": "차선 잃음 — Fleet 위치 오래됨",
+  "lane_lost_hold:refused": "차선 잃음 — 후진 거절됨",
+  "lane_lost_hold:rule_budget": "차선 잃음 — 자동 판단 횟수 소진",
 });
 
 /** One line about what the Fleet resolver did for this stuck. */
@@ -58,6 +70,7 @@ export function resolverText(note) {
     if (note.escalated === "human_claimed") return "운영자가 맡음";
     const code = note.escalated.startsWith("core:") ? note.escalated.slice(5) : "";
     const why = code ? `CORE 응답 ${code}` : ESCALATION_REASON[note.escalated] || note.escalated;
+    if (note.decision) return `자동 판단 ${note.rule}: ${DECISION_LABEL[note.decision] || note.decision} — 사람 확인 필요 (${why})`;
     return `자동 판단 불가 — 사람 확인 필요 (${why})`;
   }
   return `자동 판단 ${note.rule}: ${DECISION_LABEL[note.decision] || note.decision}`;
@@ -168,30 +181,6 @@ export function refusalText(robotId, decision, err) {
     : code === "ROBOT_UNREACHABLE" ? "전달 실패" : "거부";
   const raw = code ? `${code}: ${message}` : message;
   return `${robotId} ${DECISION_LABEL[decision] || decision} ${verb} — ${why}${raw ? ` (${raw})` : ""}`;
-}
-
-// 계약(D-359 §5.2)은 버튼마다 글자 kind 를 요구한다 — 변수 kind 헬퍼는 정적 검사가
-// 못 본다. 종류별 헬퍼가 리터럴을 담는다.
-export function quietButton(text) {
-  const node = document.createElement("ui-button");
-  node.setAttribute("kind", "quiet");
-  node.type = "button";
-  node.textContent = text;
-  return node;
-}
-
-export function primaryButton(text) {
-  const node = document.createElement("ui-button");
-  node.setAttribute("kind", "primary");
-  node.type = "button";
-  node.textContent = text;
-  return node;
-}
-
-export function setReason(node, reason) {
-  node.disabled = Boolean(reason);
-  if (reason) node.setAttribute("reason", reason);
-  else node.removeAttribute("reason");
 }
 
 export function createLineStuckPanel({ scope, view, call, log, isOperator, namedReason = () => "" }) {

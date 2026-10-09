@@ -180,7 +180,9 @@ class FakeRobot:
             await self.follow_gate.wait()
         if self.follow_error is not None:
             raise self.follow_error
-        return {"role": "follower", "active": True}
+        if params.mode == "trail" and getattr(self, "offset_only", False):
+            return {"role": "follower", "active": True}  # a CORE from before D-559
+        return {"role": "follower", "active": True, "mode": params.mode}
 
     async def swarm_cancel(self) -> dict:
         self._record("swarm_cancel")

@@ -1,8 +1,12 @@
 # Copy outside the repository to /etc/rosy/site/site-cameras.yaml.
 # Marker IDs, map dimensions and revisions below are illustrative; survey and
 # calibrate the real installation before accepting sightings.
-# robot_ids are enrolled robots that are on the floor. robot_markers may be {}
-# when those robots have no ceiling marker (D-457). A placeholder id is not a robot.
+# robot_ids: enrolled (D-580) follows Fleet's live roster: enrolling, renumbering or
+# unenrolling a robot in the console needs no edit here. A list of ids still works
+# (fixed targets). A placeholder id is not a robot.
+# A robot's marker id equals its robot number: rosy_NN wears DICT_4X4_50 id NN,
+# robots are 40-49, 7 is the dock tag and 30-38 are corners/places (D-562). With
+# robot_ids: enrolled, robot_markers lists only exceptions ({} = numbers for all).
 sources:
   # credential: static (default) - the phone is given a fixed token by hand (rosyov:// link).
   # credential: paired - D-341: the phone asks the site to connect and an operator approves it in the
@@ -12,15 +16,18 @@ sources:
     phone_token_env: ROSY_PHONE_CEILING_NORTH
     token_env: ROSY_FLEET_CEILING_NORTH_TOKEN
     fleet_base_url: https://proxy:8443
-    robot_ids: [rosy_01]
+    robot_ids: enrolled
     map_id: replace-with-surveyed-map-id
     calibration_revision: replace-after-calibration
     processor_revision: aruco-opencv-4.12
     corner_marker_ids: [30, 31, 32, 33]
     corner_world_m: [[0.0, 0.0], [4.0, 0.0], [4.0, 2.0], [0.0, 2.0]]
-    robot_markers:
-      rosy_01: 7
+    robot_markers: {}
     heading_edge: [1, 2]
+    # D-564: floor place markers Fleet may teach draft places from (34 start-south,
+    # 35 start-north, 36 charge, 37 park, 38 stop). Lay each sticker with the same
+    # edge forward as the robot stickers (heading_edge). Omit to send none.
+    place_markers: [34, 35, 36, 37, 38]
 
   # A second source needs its own sighting token wired in too: add a secret file and its
   # token_env (here ROSY_FLEET_CEILING_SOUTH_TOKEN) to ROSY_CREDENTIAL_PATHS of both the fleet
@@ -32,12 +39,12 @@ sources:
   #   credential: paired
   #   token_env: ROSY_FLEET_CEILING_SOUTH_TOKEN
   #   fleet_base_url: https://proxy:8443
-  #   robot_ids: [rosy_01]
+  #   robot_ids: [rosy_40]
   #   map_id: replace-with-surveyed-map-id
   #   calibration_revision: replace-after-calibration
   #   processor_revision: aruco-opencv-4.12
   #   corner_marker_ids: [30, 31, 32, 33]
   #   corner_world_m: [[0.0, 0.0], [4.0, 0.0], [4.0, 2.0], [0.0, 2.0]]
   #   robot_markers:
-  #     rosy_01: 7
+  #     rosy_40: 40
   #   heading_edge: [1, 2]

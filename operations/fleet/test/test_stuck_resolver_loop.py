@@ -435,3 +435,95 @@ def test_trip_robot_is_answered_with_wait_only():
     asyncio.run(loop.run_once())
     assert not [c for c in resolver_robot.calls if c[0] == "line_stuck_decision"]
     assert board.view("rosy_01")["resolver"]["escalated"] == "no_rule"
+
+
+# ---- D-577 (a): the 9dfk incident (2026-10-09, rosy_41) replayed ----
+
+# CORE reported cause lane_lost (HOLD reason camera_line_not_visible) after both local back-offs.
+LANE_LOST_9DFK = {**STUCK, "stuck_id": "stuck-9dfk", "cause": "lane_lost", "attempts": 2,
+                  "max_attempts": 2, "local_enabled": True, "held_s": 7.0}
+
+
+def _state_9dfk() -> dict:
+    state = _state(stuck=LANE_LOST_9DFK)
+    state["line_follow"]["reason"] = "camera_line_not_visible"
+    return state
+
+
+def _decisions(robot):
+    return [c[2] for c in robot.calls if c[0] == "line_stuck_decision"]
+
+
+def test_d577_9dfk_without_a_resolver_credential_goes_to_a_human_untouched():
+    robot = FakeRobot("rosy_01", state=_state_9dfk())
+    console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "rest-token")], [robot])
+    board = LineStuckBoard(clock=FakeClock())
+    loop = StuckResolverLoop(SharedGather(console, board), board,
+                             StuckResolver(ResolverConfig(), painted=painted_track),
+                             clients=lambda: {}, clock=FakeClock())
+    asyncio.run(loop.run_once())
+    assert board.view("rosy_01")["resolver"]["escalated"] == "no_resolver_token"
+    assert _decisions(robot) == []
+
+
+def test_d577_9dfk_with_a_credential_waits_and_raises_a_human_row():
+    loop, board, resolver_robot = _setup(state=_state_9dfk())
+    asyncio.run(loop.run_once())
+    asyncio.run(loop.run_once())
+    assert _decisions(resolver_robot) == ["WAIT"]                    # once, never RESUME
+    note = board.view("rosy_01")["resolver"]
+    assert (note["tier"], note["rule"], note["decision"], note["escalated"]) == (
+        "human", "R5", "WAIT", "lane_lost_hold:attempts")
+    rows = [(a["decision"], a["escalated"]) for a in board.answers()]
+    assert rows == [("WAIT", None), ("ESCALATE", "lane_lost_hold:attempts")]
+
+
+def test_d577_refused_wait_still_raises_the_human_row():
+    robot = FakeRobot("rosy_01", state=_state_9dfk())
+    robot.stuck_decision_error = RobotApiError("rosy_01", 409, "STUCK_DECISION_REFUSED", "no")
+    loop, board, _ = _setup(state=_state_9dfk(), resolver_robot=robot)
+    asyncio.run(loop.run_once())
+    asyncio.run(loop.run_once())
+    assert _decisions(robot) == ["WAIT"]
+    assert board.view("rosy_01")["resolver"]["escalated"] == "lane_lost_hold:attempts"
+
+
+def test_d577_the_loop_feeds_the_fleet_map_pose_into_r3():
+    lost = {**LANE_LOST_9DFK, "attempts": 0}
+    state = _state(stuck=lost)
+    state["line_follow"]["crosswalk"] = None
+    loop, board, resolver_robot = _setup(state=state)
+    loop.map_pose = lambda robot_id: {"state": "UNKNOWN", "age_s": None, "sourced": True}   # pose lost
+    asyncio.run(loop.run_once())
+    assert _decisions(resolver_robot) == ["WAIT"]
+    assert board.view("rosy_01")["resolver"]["escalated"] == "lane_lost_hold:pose"
+
+
+def test_d577_trip_robot_lane_lost_gets_no_answer():
+    loop, board, resolver_robot = _setup(state=_state_9dfk())
+    loop.trip_busy = lambda robot_id: True
+    asyncio.run(loop.run_once())
+    assert _decisions(resolver_robot) == []
+    assert board.view("rosy_01")["resolver"]["escalated"] == "no_rule"
+
+
+def test_d577_board_note_reports_its_age_for_the_queue_deadline():
+    clock = FakeClock()
+    board = LineStuckBoard(clock=clock)
+    board.observe([{"robot_id": "rosy_01", "online": True, "state": _state()}])
+    board.note_resolver("rosy_01", "stuck-abc", tier="human", rule="R5", decision="WAIT",
+                        escalated="lane_lost_hold:peer_behind")
+    clock.advance(31.0)
+    assert board.view("rosy_01")["resolver"]["age_s"] == 31.0
+
+
+def test_d577_r5_wait_transport_failure_is_resent_once_then_escalated():
+    robot = FakeRobot("rosy_01", state=_state_9dfk())
+    robot.stuck_decision_error = httpx.ConnectError("down")
+    loop, board, _ = _setup(state=_state_9dfk(), resolver_robot=robot)
+    asyncio.run(loop.run_once())
+    assert _decisions(robot) == ["WAIT"]
+    assert (board.view("rosy_01")["resolver"] or {}).get("escalated") is None
+    asyncio.run(loop.run_once())
+    assert _decisions(robot) == ["WAIT", "WAIT"]
+    assert board.view("rosy_01")["resolver"]["escalated"] == "lane_lost_hold:attempts"

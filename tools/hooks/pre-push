@@ -6,7 +6,7 @@
 #   and the secret-scan/scorecard/robot-literal classes followed (36743819104)
 #   because this tier never read those files. Measured cost: ~3 min on Windows.
 # 2026-10-03 (D-436): + affected tier after the fast suites.
-# 2026-10-08: pytest runs on the model PC, then the AI PC (tools/remote/remote_pytest.py),
+# 2026-10-08: pytest runs on a lab PC (tools/remote/remote_pytest.py; host by headroom, D-568),
 #   on the commit being pushed; an unavailable test host stops the push.
 # Install: tools/hooks/install.sh   Uninstall: rm .git/hooks/pre-push
 set -euo pipefail
@@ -122,10 +122,9 @@ AFFECTED_BASE="$(git merge-base "$PUSH_SHA" origin/main 2>/dev/null || echo main
 AFFECTED_SKIP=()
 for suite in "${FAST_SUITES[@]}"; do AFFECTED_SKIP+=(--skip "$suite"); done
 echo "[pre-push] fast contract suites, then affected tier (D-436, base ${AFFECTED_BASE}), commit ${PUSH_SHA:0:10}"
-# --require-host: a local run would test this working tree, not the pushed commit, so no
-# reachable test host fails the push unless ROSY_TEST_LOCAL=1 is set on purpose.
+# D-584: no reachable test host waits, then fails the push; there is no local run.
 "$PY" tools/harness/rosy_harness.py affected --base "$AFFECTED_BASE" --head "$PUSH_SHA" --json \
-  | "$PY" tools/remote/remote_pytest.py --sha "$PUSH_SHA" --require-host --affected-json - \
+  | "$PY" tools/remote/remote_pytest.py --sha "$PUSH_SHA" --affected-json - \
       "${AFFECTED_SKIP[@]}" -- "${FAST_SUITES[@]}"
 
 echo "[pre-push] fast gate green"

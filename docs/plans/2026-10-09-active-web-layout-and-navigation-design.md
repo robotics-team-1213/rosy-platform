@@ -1,7 +1,7 @@
 ﻿# ROSY 활성 웹 화면 전체 레이아웃·내비게이션 설계
 
 **작성:** 2026-10-09
-**상태:** 화면 구조 제안. 코드 적용·ADR 변경·사용성 수용 전.
+**상태:** 화면 구조 기준. 일부 코드 적용과 16화면 기본·빈 상태 브라우저 루프 완료. 상태별 G2·G3·설치 이미지·현장 수용 전.
 **범위:** `shared/web/surfaces.yaml`의 활성 웹 사용자 화면 5개 제품, 16개 주요 화면/상태.
 
 ## 한눈에 보기
@@ -46,7 +46,7 @@
 | Pilot | 접속 게이트 `/pilot 접속 상태` | 조종자 | 대상·영상·제어권이 준비되었는가 | 세션 시작 | 인증·세션·안전 조건 | 접속 상태 | [데스크톱](../assets/rosy-web-wireframe-pilot-connect.png) · [모바일](../assets/rosy-web-wireframe-pilot-connect-mobile.png) |
 | Pilot | 직접 주행 `/pilot 주행 상태` | 조종자 | 영상과 제어권이 유효한가 | hold-to-run·중지·종료 | 영상/명령 시각과 CORE 상태 | 접속 게이트 | [데스크톱](../assets/rosy-web-wireframe-pilot-drive.png) · [모바일](../assets/rosy-web-wireframe-pilot-drive-mobile.png) |
 | Pilot | OMX-AI Gazebo 연습 `/pilot 연습 상태` | 개발/연습자 | 시뮬레이션 세션인가 | 팔 연습·중지 | 시뮬레이터 반응 | 접속 게이트 | [데스크톱](../assets/rosy-web-wireframe-pilot-arm.png) · [모바일](../assets/rosy-web-wireframe-pilot-arm-mobile.png) |
-| Games | 경기 보드 `/board` | 경기 호스트 | 경기 단계·점수·필드는 어떤가 | 경기 진행·중지 | 경기 이벤트·필드 관측 | 경기 준비 | [데스크톱](../assets/rosy-web-wireframe-games-board.png) · [모바일](../assets/rosy-web-wireframe-games-board-mobile.png) |
+| Games | 경기 보드 `/` (PreviewServer) | 경기 호스트 | 경기 단계·점수·필드는 어떤가 | 경기 진행·중지 | 경기 이벤트·필드 관측 | 경기 준비 | [데스크톱](../assets/rosy-web-wireframe-games-board.png) · [모바일](../assets/rosy-web-wireframe-games-board-mobile.png) |
 | Learning | 작업 목록 `/learning` | 검수자 | 어떤 학습 작업이 대기·실패·완료인가 | 작업 선택·결과 확인 | 작업 상태·export 자격 | 작업 목록 | [데스크톱](../assets/rosy-web-wireframe-learning-jobs.png) · [모바일](../assets/rosy-web-wireframe-learning-jobs-mobile.png) |
 | Learning | 객체 검수 `/` | 검수자 | 박스가 원본과 일치하는가 | 박스 수정·전체 확인·승인 | 독립 객체 승인 상태 | 작업 목록/다음 사진 | [데스크톱](../assets/rosy-web-wireframe-learning-object.png) · [모바일](../assets/rosy-web-wireframe-learning-object-mobile.png) |
 | Learning | 픽셀 검수 `/pixels` | 검수자 | 미검수 영역 없이 경계가 맞는가 | 마스크 수정·전체/배경 확인·승인 | 독립 픽셀 승인 상태 | 작업 목록/다음 사진 | [데스크톱](../assets/rosy-web-wireframe-learning-pixel.png) · [모바일](../assets/rosy-web-wireframe-learning-pixel-mobile.png) |
@@ -97,6 +97,21 @@ flowchart LR
 | P2 | 좌상단 `홈`과 아이콘은 정적 그림이므로 클릭, 초점, 세션 이탈 절차를 증명하지 않는다. | 구현 시 `<a>` 내비게이션, 텍스트+장식 아이콘, 보이는 초점, Pilot 이탈 전 중지/세션 처리, 저장하지 않은 편집의 이탈 안내를 확인한다. |
 
 **판정:** 역할과 정보 구조를 논의할 설계 기준으로는 사용 가능하다. 상용 UI 합격 판정은 보류한다. Fleet 탐색 계약, 320px, 상태별 화면, 조작/복귀 증거가 남아 있다. 최신 웹 인터페이스 가이드의 링크 의미·키보드·초점·이탈 경고 기준은 구현 시 적용한다: <https://github.com/vercel-labs/web-interface-guidelines>.
+
+## 현행 계약을 지키는 적용 방법
+
+2026-10-09의 실제 HTML/CSS를 다시 확인했다. Fleet는 이미 네 문서의 상단 탭(`doc-tabs.css`), 관제의 지도:개입 3:2(`shared/styles.css`), 설치의 작업 선택기(`#install-chooser`), 공통 머리(`fleet-header.js`)를 갖고 있다. 따라서 그림의 세 칼럼을 모든 화면에 강제하지 않는다. 다음 네 층으로 구현한다.
+
+| 층 | 실제 이동/정보 | 구현 규칙 |
+|---|---|---|
+| 제품 홈 | 좌상단 `Rosy Fleet` → `/console` | 네 문서의 `ui-brand href`를 같게 둔다. `UiBrand`가 의미 있는 `<a>`로 만든다. Pilot처럼 제어 세션이 있는 제품에는 단순 링크를 복제하지 않는다. |
+| 문서 이동 | 관제 / 설치·보정 / 현장 지도 / Cell | D-501의 상단 네 탭과 현재 표시를 유지한다. 320px에서는 실제 네 항목의 가시성·스크롤 발견성·초점 위치를 측정한다. 좌측에 같은 네 링크를 중복하지 않는다. |
+| 문서 내부 작업 | 설치 선택기, 지도 초안/검증/운행, Cell 1–5단계 | 각 문서 안에서만 왼쪽 단계 탐색을 쓴다. URL 앵커와 제목·현재 단계를 연결하고, 키보드와 뒤로 가기를 유지한다. 관제는 왼쪽 지도 폭을 보전하므로 별도 단계 레일을 두지 않는다. |
+| 선택 맥락 | 관제 개입·로봇 선택, 지도 요소·검증, Cell 제안/원장 | 근거·차단 사유·다음 행동이 있을 때만 오른쪽 칸을 연다. 선택이 없으면 안내로 접고 지도·영상·편집 영역을 넓힌다. 390/320px에서는 전체 폭 시트/본문 후속 단계로 읽히게 한다. |
+
+**화면 상태 계약:** 각 화면의 `fresh / delayed / disconnected / unavailable`, 빈 데이터, 권한 거부, SAFE_STOP을 동일한 자리의 상태·시각·출처·다음 행동으로 표현한다. 명령은 요청/수락/관측 결과를 분리하고, 실제 읽기 근거가 없는 성공 문구를 만들지 않는다. `Cell`의 제안 ID와 Fleet 승인·진행으로의 인계는 실제 링크·권한·복귀 대상을 확인한 뒤 연결한다.
+
+**실행 단위:** (1) Fleet 홈 링크와 320/390/1366/1920 탭·머리 검증, (2) Fleet 설치/지도/Cell의 내부 단계 탐색과 선택 맥락, (3) Robot·Pilot·Games·Learning 각각의 기존 소유 화면에 같은 홈/상태/복귀 규칙 적용, (4) 각 화면의 G1·G2·G3와 설치 이미지·현장 확인. 새 API나 제어 권한은 이 화면 작업에서 만들지 않는다. 한 단위가 끝날 때마다 실제 화면 캡처와 작업 성공/복귀를 기록한다.
 
 ## 적용 순서와 수용 기준
 

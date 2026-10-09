@@ -94,6 +94,9 @@ class _Ingest:
     def report_markers(self, source_id, corners_seen, robots_seen):
         self.reports.append((source_id, list(corners_seen), list(robots_seen)))
 
+    def report_calibration(self, source_id, record, map_id):
+        self.calibration = (source_id, record, map_id)
+
 
 def test_robot_marker_uses_approved_fit_when_corners_absent_even_during_blob_learning():
     client = _Client()
@@ -122,6 +125,19 @@ def test_marker_frame_retains_blobs_for_single_deduplication_in_fleet():
     assert len(result.detections) == 3
     assert [d.x for d in result.detections if d.marker_id is None] == [1, 1.22]
 
+
+
+def test_an_unassigned_robot_sticker_is_sent_and_other_ids_are_not():
+    # D-575: id 41 (D-562 robot range) has no robot in robot_markers yet; Fleet shows it
+    # as an unknown robot. A game marker (12) on the floor is not a robot.
+    worker = TrackWorker(camera=CAMERA, ingest=_Ingest(), client=_Client(),
+                         detector=_Detector(DetectorResult((), "OK")),
+                         decode=lambda jpeg: np.full((360, 640, 3), 120, np.uint8))
+    markers = {7: ((98, 48), (102, 48), (102, 52), (98, 52)),
+               41: ((198, 48), (202, 48), (202, 52), (198, 52)),
+               12: ((298, 48), (302, 48), (302, 52), (298, 52))}
+    _, result = worker._detect(JPEG, 99.75, markers, CONFIG["calibration"], None, None)
+    assert sorted(d.marker_id for d in result.detections) == [7, 41]
 
 def _frame(seq=1, captured_at=99.75, jpeg=JPEG):
     return SimpleNamespace(header=SimpleNamespace(seq=seq), jpeg=jpeg, captured_at=captured_at,
@@ -172,6 +188,20 @@ def test_the_approved_record_is_used_when_markers_are_missing(make_worker):
     assert [(d.x, d.y) for d in payload.detections] == [(1.2345, 0.4321), (2.5, 1.0)]
     assert detector.calls[0][1].image_size == (640, 360)
     assert detector.calls[0][0].captured_at == 99.75
+
+
+def test_the_read_record_is_handed_to_the_ingest_for_the_map_plane(make_worker):
+    """D-560: the ingest warps the map plane with the record tracking reads, no second client."""
+    worker, _ = make_worker(configs=[CONFIG])
+    asyncio.run(worker.refresh_config())
+    assert worker.ingest.calibration == ("ceiling_north", CONFIG["calibration"], "map_v2_fleet")
+
+
+def test_a_config_without_calibration_clears_the_ingest_record(make_worker):
+    worker, _ = make_worker(configs=[CONFIG, {**CONFIG, "calibration": None}])
+    asyncio.run(worker.refresh_config())
+    asyncio.run(worker.refresh_config())
+    assert worker.ingest.calibration == ("ceiling_north", None, "map_v2_fleet")
 
 
 def test_corner_markers_win_over_the_record(make_worker):

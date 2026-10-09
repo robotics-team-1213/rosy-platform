@@ -538,6 +538,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               gather=_gather_state, gather_rest=_rest_state)
     map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
     console.set_state_sink(map_pose.observe_state)
+    from fleet.swarm.anchor import anchored_relay_factory
+    console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
     if localization_service is not None:
         localization_service.set_overhead_pose(map_pose.arbitrated_pose)   # D-546 6 (a)
     app.state.map_pose = map_pose
@@ -582,6 +584,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         app.state.stuck_resolver = StuckResolverLoop(
             app.state.fleet_gather, app.state.line_stuck, resolver_core,
             clients=lambda: stuck_resolver_clients)
+        app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
         hub.set_event_callback(_fan_out_events(
@@ -639,8 +642,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_site_map_routes(app, site_maps=site_maps, route_active=lambda: trip_runner.running() is not None,
                             read_guard=read_guard, require_named_operator=require_named_operator)
     from fleet.server.teach_routes import TeachService, install_teach_routes  # D-494 6
+    marker_sources = sightings is not None and any(s.place_markers for s in sightings.sources)  # D-564
     install_teach_routes(app, service=TeachService(poses=map_pose_port or map_pose, site_maps=site_maps,
-                                                   roster=lambda: console.robot_ids),
+                                                   roster=lambda: console.robot_ids,
+                                                   place_markers=sightings.fresh_place_marker
+                                                   if marker_sources else None),
                          read_guard=read_guard, require_named_operator=require_named_operator)
     from fleet.server.tether_routes import install_tether_routes  # D-512 map display half, D-526 watch
     install_tether_routes(app, console=console, trip_runner=trip_runner, read_guard=read_guard,

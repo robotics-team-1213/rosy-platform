@@ -31,6 +31,8 @@ class ResolverConfig:
     # ponytail: one body size for every robot; read per-robot geometry when kinds differ.
     peer_band_half_width_m: float = 0.15
     peer_radius_m: float = 0.083          # reach is measured to the peer's body, not its centre
+    #: D-577 1: R3 trusts a known Fleet map pose only while it is LOCALIZED and this fresh.
+    pose_max_age_s: float = 2.0
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,8 @@ class Answer:
     # D-453: one yield segment. None on WAIT / BACK_AND_RETRY / RESUME.
     yield_m: Optional[float] = None
     yield_turn_rad: Optional[float] = None
+    # D-577 1: R5 sends this WAIT and hands the stuck to a human in the same pass.
+    escalate: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -175,7 +179,8 @@ class StuckResolver:
         if answer.decision == "YIELD" and answer.yield_m is not None:
             self._sent_yield[answer.robot_id] = (
                 answer.stuck_id, round(answer.yield_turn_rad or 0.0, 3), round(answer.yield_m, 3))
-        if answer.rule.startswith("R") and chain.retries.get(answer.stuck_id, 0) == 0:
+        if (answer.rule.startswith("R") and answer.rule != "R5"   # D-577 1: R5 stops, spends no budget
+                and chain.retries.get(answer.stuck_id, 0) == 0):
             chain.rule_answers += 1                   # a transport resend is the same answer
         if answer.decision == "RESUME" and answer.rule != "meet":
             chain.resume_id = answer.stuck_id
@@ -185,7 +190,7 @@ class StuckResolver:
         chain = self._chains.get(answer.robot_id)
         if chain is None:
             return None
-        if code is None:
+        if code is None and answer.escalate is None:
             if answer.decision == "RESUME" and answer.rule == "meet":
                 chain.resume_id = answer.stuck_id
                 self._plans.pop(answer.robot_id, None)
@@ -194,6 +199,12 @@ class StuckResolver:
             return None
         if code == MISMATCH:
             return None
+        if answer.escalate is not None:               # D-577 1 R5: WAIT, then a human whatever CORE said
+            if code in TRANSPORT and chain.retries.get(answer.stuck_id, 0) == 0:
+                chain.retries[answer.stuck_id] = 1    # WAIT stops; resending it once is safe
+                chain.answered.discard(answer.stuck_id)
+                return None
+            return self._escalate(chain, answer.robot_id, answer.stuck_id, answer.escalate)
         if answer.stuck_id != chain.stuck_id and answer.stuck_id not in chain.answered:
             return None                               # late reply from an older chain
         if code == REFUSED:
@@ -273,9 +284,13 @@ class StuckResolver:
             rule = ("meet", "WAIT")                   # resume only after a finished segment
         if rule is None:
             return self._escalate(chain, rid, sid, "no_rule")
+        if rule[0] == "R5":                           # result() raises the human row after the send
+            return Answer(rid, sid, "WAIT", "R5", escalate=f"lane_lost_hold:{rule[2]}")
         # §5: the one transport resend repeats an answer already counted; never block it.
         if chain.rule_answers >= self.config.rule_budget and chain.retries.get(sid) != 1:
             return self._escalate(chain, rid, sid, "rule_budget")
+        if stuck.get("cause") == "lane_lost" and rule[1] not in ("WAIT", "BACK_AND_RETRY"):
+            return self._escalate(chain, rid, sid, "no_rule")   # D-577 1: never RESUME/YIELD on lane_lost
         if len(rule) == 4:
             return Answer(rid, sid, rule[1], rule[0], yield_m=rule[3], yield_turn_rad=rule[2])
         return Answer(rid, sid, rule[1], rule[0])
@@ -306,8 +321,11 @@ class StuckResolver:
             candidates.append(("R1", "WAIT"))
         if cause == "obstacle_ahead" and not peer and can_back:
             candidates.append(("R2", "BACK_AND_RETRY"))
-        if cause == "lane_lost" and can_back:
-            candidates.append(("R3", "BACK_AND_RETRY"))
+        if cause == "lane_lost":
+            from fleet.server.stuck_lane_lost import lane_lost_hold
+
+            hold = lane_lost_hold(row, stuck, rows, chain, self.config)
+            return ("R3", "BACK_AND_RETRY") if hold is None else ("R5", "WAIT", hold)
         if peer and can_back:
             candidates.append(("R2", "BACK_AND_RETRY"))      # after a refused WAIT
         for rule in candidates:
@@ -318,7 +336,7 @@ class StuckResolver:
     def _next_segment(self, row, rows) -> Optional[Answer]:
         """The robot finished one segment and is holding off the resume path."""
         stuck = _stuck_of(row)
-        if stuck is None or stuck.get("phase") != "YIELDED":
+        if stuck is None or stuck.get("phase") != "YIELDED" or stuck.get("cause") == "lane_lost":
             return None
         meet = self._meet(row, rows)
         if meet is None:
@@ -523,7 +541,12 @@ def peer_ahead(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) ->
     """R1's judgement: an online peer inside the front band. None = this robot has no pose.
 
     Shared with the Fleet stuck-episode log, so the recorded value is what R1 would see."""
-    me = _pose_of(row)
+    return _peer_in_band(row, rows, config, 1.0)
+
+
+def _peer_in_band(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig,
+                  sign: float, *, pose_of=_pose_of, strict: bool = False) -> Optional[bool]:
+    me = pose_of(row)
     if me is None:
         return None
     x0, y0, yaw = me
@@ -531,11 +554,13 @@ def peer_ahead(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) ->
     for other in rows:
         if other is row or not other.get("online", True):
             continue
-        pose = _pose_of(other)
+        pose = pose_of(other)
         if pose is None:
+            if strict:
+                return None
             continue
         dx, dy = pose[0] - x0, pose[1] - y0
-        ahead, side = c * dx + s * dy, -s * dx + c * dy
+        ahead, side = sign * (c * dx + s * dy), -s * dx + c * dy
         if 0.0 < ahead <= config.peer_reach_m + config.peer_radius_m and abs(side) <= config.peer_band_half_width_m:
             return True
     return False

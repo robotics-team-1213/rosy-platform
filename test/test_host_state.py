@@ -104,6 +104,16 @@ def test_check_fixes_only_the_safe_lines_and_reports_the_rest(tmp_path):
     assert status["awaiting_approval"] == ["/etc/ssh/sshd_config.d/10-rosy.conf: missing"]
 
 
+def test_only_awaiting_approval_items_do_not_fail_the_check(tmp_path):
+    _lib(tmp_path, "approval file /etc/ssh/sshd_config.d/10-rosy.conf common/s.conf\nsafe wifi-allow\n", "",
+         {"common/s.conf": "x\n"})
+    fake, bin_dir = _fakes(tmp_path, wifi="site-net:802-11-wireless:yes\n")
+    result = _run(tmp_path, bin_dir, fake, "check")
+    assert result.returncode == 0, result.stdout
+    status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
+    assert status["awaiting_approval"] and not status["drift"] and not status["errors"]
+
+
 def test_a_matching_host_is_clean(tmp_path):
     _lib(tmp_path, "safe file /etc/a.conf common/a.conf\nsafe enabled a.timer\n", "", {"common/a.conf": "x\n"})
     _host_file(tmp_path, "/etc/a.conf", "x\n")
@@ -118,7 +128,7 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tmp_path):
     result = _run(tmp_path, bin_dir, fake, "install", "model", "--dry-run")
     assert result.returncode == 0, result.stderr
     assert "+OnCalendar=*-*-* 06:03:00" in result.stdout
-    assert "[approval] /etc/ssh/sshd_config.d/10-rosy.conf: missing: skip (needs --approve)" in result.stdout
+    assert "[approval] /etc/systemd/system.conf.d/rosy-watchdog.conf: missing: skip (needs --approve)" in result.stdout
     assert not (tmp_path / "host").exists()
     assert [c for c in _calls(fake) if not c.startswith(("systemctl is-", "nmcli -t"))] == []
 
@@ -126,14 +136,13 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tmp_path):
 def test_install_applies_approval_lines_only_when_named(tmp_path):
     fake, bin_dir = _fakes(tmp_path)
     assert _run(tmp_path, bin_dir, fake, "install", "ai").returncode == 0
-    sshd = tmp_path / "host/etc/ssh/sshd_config.d/10-rosy.conf"
+    sshd = tmp_path / "host/etc/systemd/system.conf.d/rosy-watchdog.conf"
     assert not sshd.exists()
     assert (tmp_path / "host/etc/systemd/system/rosy-nightly-reboot.timer").read_bytes() == \
         (ROOT / "deploy/ai_pc/host-state/rosy-nightly-reboot.timer").read_bytes()
     assert (tmp_path / "host/usr/local/lib/rosy-host-state/login").read_text() == "op\n"
-    assert _run(tmp_path, bin_dir, fake, "install", "ai", "--approve", "/etc/ssh/sshd_config.d/10-rosy.conf").returncode == 0
-    assert sshd.read_text().startswith("# D-530")
-    assert "systemctl reload ssh" in _calls(fake)
+    assert _run(tmp_path, bin_dir, fake, "install", "ai", "--approve", "/etc/systemd/system.conf.d/rosy-watchdog.conf").returncode == 0
+    assert sshd.read_text().startswith("[Manager]")
 
 
 def test_a_broken_sshd_config_is_rolled_back(tmp_path):
@@ -151,7 +160,7 @@ def test_wifi_autoconnect_is_cut_only_outside_a_nonempty_allow_list(tmp_path):
     _lib(tmp_path, "safe wifi-allow\n", "", {})
     wifi = "site-net:802-11-wireless:yes\nold\\:cafe:802-11-wireless:yes\nlab:802-11-wireless:no\ntailscale0:tun:yes\n"
     fake, bin_dir = _fakes(tmp_path, wifi=wifi)
-    assert _run(tmp_path, bin_dir, fake, "check").returncode == 1  # no allow list: refuse, report
+    assert _run(tmp_path, bin_dir, fake, "check").returncode == 0  # no allow list: not configured, fine
     assert not any("modify" in c for c in _calls(fake))
     _host_file(tmp_path, "/etc/rosy/host-state/wifi-allow", "site-net\n")
     _run(tmp_path, bin_dir, fake, "check")
@@ -258,9 +267,72 @@ def test_an_overwritten_file_is_backed_up_and_the_report_names_the_backup(tmp_pa
 
 
 def test_hang_settings_wait_for_approval_on_every_pc():
-    """D-530 decision: the hardware watchdog and kernel panic settings are installed only after approval."""
+    """D-530 decision: the hardware watchdog (with its iTCO_wdt load unit) and panic settings need approval."""
+    names = ("system/rosy-watchdog-load.service", "system.conf.d/rosy-watchdog.conf", "sysctl.d/90-rosy-hang.conf")
     for role in ROLES.values():
         manifest = ROOT / "deploy" / role / "host-state" / "manifest"
-        for line in manifest.read_text(encoding="utf-8").splitlines():
-            if "rosy-watchdog.conf" in line or "90-rosy-hang.conf" in line:
-                assert line.startswith("approval"), (role, line)
+        lines = manifest.read_text(encoding="utf-8").splitlines()
+        for name in names:
+            found = [ln for ln in lines if name in ln and not ln.startswith("#")]
+            assert found and all(ln.startswith("approval") for ln in found), (role, name)
+    unit = (ROOT / "deploy/hosts/common/host-state/rosy-watchdog-load.service").read_text()
+    assert "ExecStart=/usr/sbin/modprobe iTCO_wdt" in unit and "RemainAfterExit=yes" in unit
+
+
+def test_ssh_password_login_stays_on():
+    """User decision 2026-10-09: no manifest installs the key-only sshd drop-in."""
+    for folder in (ROOT / "deploy/hosts/common/host-state", *(ROOT / "deploy" / r / "host-state" for r in ROLES.values())):
+        text = (folder / "manifest").read_text(encoding="utf-8")
+        assert not any("sshd" in ln for ln in text.splitlines() if not ln.startswith("#")), folder
+
+
+def test_installer_and_host_state_write_the_same_sudoers_file():
+    """install-host-control.sh and the D-530 template must give byte-identical files, or check reports drift."""
+    env = {**os.environ, "SUDO_USER": "op"}
+    out = subprocess.run(["bash", str(ROOT / "deploy/site/install-host-control.sh"), "--role", "model", "--dry-run"],
+                         env=env, capture_output=True, text=True, timeout=60, check=True).stdout.splitlines()
+    start = out.index("+ write /etc/sudoers.d/rosy-host-control (0440)")
+    installer = out[start + 1].removeprefix("    ") + "\n"
+    template = (ROOT / "deploy/hosts/common/host-state/sudoers-rosy-host-control.in").read_text(encoding="utf-8")
+    assert template.replace("@LOGIN@", "op") == installer
+
+
+def test_avahi_interfaces_pick_physical_ones_and_restart_only_on_change(tmp_path):
+    net = tmp_path / "sys/class/net"
+    for name, physical in (("eth0", 1), ("wlan0", 1), ("lo", 0), ("docker0", 1), ("br-1a2b", 1), ("veth9", 0),
+                           ("tailscale0", 0), ("virbr0", 1), ("zt0", 1), ("dummy0", 0)):
+        (net / name).mkdir(parents=True)
+        if physical:
+            (net / name / "device").mkdir()
+    conf = tmp_path / "etc/avahi/avahi-daemon.conf"
+    conf.parent.mkdir(parents=True)
+    conf.write_text("[server]\nuse-ipv4=yes\n#allow-interfaces=eth0\n[wide-area]\n")
+    tool = ROOT / "deploy/hosts/common/rosy-avahi-interfaces"
+    env = {**os.environ, "ROSY_AVAHI_ROOT": str(tmp_path)}
+
+    def run():
+        return subprocess.run([sys.executable, str(tool)], env=env, capture_output=True, text=True, timeout=30)
+
+    assert run().stdout == "set allow-interfaces=eth0,wlan0\n"
+    assert conf.read_text() == "[server]\nuse-ipv4=yes\nallow-interfaces=eth0,wlan0\n[wide-area]\n"
+    assert run().stdout == ""  # unchanged: no write, no restart
+    (net / "enp3s0").mkdir()
+    (net / "enp3s0/device").mkdir()
+    assert run().stdout == "set allow-interfaces=enp3s0,eth0,wlan0\n"
+    assert conf.read_text().count("allow-interfaces") == 1
+
+
+def test_avahi_interfaces_unit_is_in_the_common_manifest():
+    manifest = (ROOT / "deploy/hosts/common/host-state/manifest").read_text(encoding="utf-8")
+    assert "safe enabled rosy-avahi-interfaces.service" in manifest
+    unit = (ROOT / "deploy/hosts/common/rosy-avahi-interfaces.service").read_text(encoding="utf-8")
+    assert "Before=avahi-daemon.service" in unit
+
+
+def test_avahi_restart_never_blocks_its_own_start_job():
+    """rosy-avahi-interfaces runs Before=avahi-daemon; a blocking restart from inside it deadlocks."""
+    script = (ROOT / "deploy" / "hosts" / "common" / "rosy-avahi-interfaces").read_text(encoding="utf-8")
+    for line in script.splitlines():
+        if "try-restart" in line or '"restart"' in line:
+            assert "--no-block" in line, line
+

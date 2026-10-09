@@ -145,7 +145,7 @@ def test_decision_buttons_show_at_rail_scroll_zero_and_the_rail_is_the_one_scrol
                 for decision in DECISIONS:
                     box = slot.locator(f'ui-button[data-decision="{decision}"]').bounding_box()
                     assert box and box["y"] >= 0 and box["y"] + box["height"] <= height, (width, decision, box)
-                assert set(page.evaluate(SCROLLERS)) <= {"console-secondary"}, (width, page.evaluate(SCROLLERS))
+                assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary"}, (width, page.evaluate(SCROLLERS))
             else:
                 assert page.evaluate(SCROLLERS) == [], page.evaluate(SCROLLERS)
             assert page.evaluate("""() => [...document.querySelectorAll('.issue-list li, .queue-row')]

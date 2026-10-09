@@ -33,6 +33,7 @@ Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot
 | `map_projected_drivable.py` | D-563 3: map road raster (lane_graph centrelines +-0.0925 m, STL line paint, 2 mm, cached) projected into the robot camera at the fused pose, 0.15-0.40 m ahead -> `rosy.map-projected-drivable/1` (`map_projected`); review/finalize with `lane_derived_drivable.py` sheets/import-verdicts/finalize |
 | `edge_capture.py` | Edge-capture loop steps: `frames` (one camera frame per second whose 40x30 thumb changed), `drafts` (v2: autolabel LiDAR mask + lane-model components >= 40 px, 255 elsewhere), `verified` (model PC: mp4 frames by log time + indexed drafts bound to classes.yaml), `sam3` (model PC GPU, lazy import: v3 = drop lane-model lane, fill 255 with SAM floor/wall, SAM white line over non-wall; receipt-v3.json), `import` (review_ingest); merges are pure functions |
 | `edge_capture_session.py` | One re-runnable loop pass per recording id (`--from N`): operator-SSH copy verified by `fetch_http.verify`, bag_to_video, autolabel + frames, model-PC prelabel, v2 drafts, model-PC verified + SAM 3 + review import (review unit stopped for the import, always restarted) |
+| `lane_failure.py`, `lane_failure_loop.py` (D-578) | Lane-failure analysis loop on the model PC: `collect` (keep_debug `no_boundary`/`washed` episodes, sensor facts, the robot's own model revision re-run, hidden canaries), `vlm` (pinned VLM identity facts only, or the `fake` backend), `sheets` (contact sheets for a Claude reviewer; never hand out `key.json`), `import-verdicts` (refused below the canary threshold), `fuse` (rule `lane_failure.SUPPORT`; only final `model_miss` frames become `verified-inputs.jsonl` label candidates, pose goes to the stuck handoff) |
 
 ## For AI Agents
 
@@ -51,7 +52,7 @@ Recordings to datasets (D-356, D-373, D-379): pull finished sessions off a robot
 python -m pytest learning/training/perception/test -q -p no:cacheprovider
 ```
 
-Relevant files: `test_dataset_build.py`, `test_dataset_extract.py`, `test_dataset_harvest.py`, `test_dataset_publish.py`, `test_bag_to_video.py`, `test_shrink_session.py`, `test_autolabel_geometry.py`, `test_edge_capture_*.py`, `test_d379_*.py` (incl. `test_d379_evalset.py`). Needs `mcap`, `numpy`, `cv2`; tests skip where a package is missing.
+Relevant files: `test_dataset_build.py`, `test_dataset_extract.py`, `test_dataset_harvest.py`, `test_dataset_publish.py`, `test_bag_to_video.py`, `test_shrink_session.py`, `test_autolabel_geometry.py`, `test_edge_capture_*.py`, `test_d379_*.py` (incl. `test_d379_evalset.py`), `test_lane_failure.py`. Needs `mcap`, `numpy`, `cv2`; tests skip where a package is missing.
 
 ### Edge-capture loop
 

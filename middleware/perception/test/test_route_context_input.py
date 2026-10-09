@@ -27,6 +27,15 @@ def test_valid_bend_context_applies_only_in_lead_window():
     assert not bend_expected(inbox.for_frame(10.3))
 
 
+def test_bend_phase_keeps_b9_available_for_reacquisition_without_an_approach_window():
+    inbox = RouteContextInput()
+    for phase in ('bending', 'reacquiring'):
+        inbox.receive(_context(ahead_m=None, bend_phase=phase))
+        assert bend_expected(inbox.for_frame(10.3))
+    inbox.receive(_context(ahead_m=None))
+    assert not bend_expected(inbox.for_frame(10.3))
+
+
 def test_future_stale_and_expired_context_never_applies():
     inbox = RouteContextInput()
     inbox.receive(_context())

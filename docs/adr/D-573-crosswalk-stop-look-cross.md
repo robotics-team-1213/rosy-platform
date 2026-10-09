@@ -1,0 +1,313 @@
+## D-573 횡단보도에서는 서고, 보고, 건넌다 — 지도 구역이 기준이고 카메라는 확인, LiDAR로 사람 자리를 보고, 비었다고 증명될 때만 건너며 시간이 지나도 건너지 않는다
+
+**Status:** Proposed (2026-10-09). 사용자 요구(2026-10-09): "횡단보도에서는 멈추고, 사람이 있는지(또는 건너려는지) 확인한 다음에만 건넌다." 개정 1(2026-10-09, 사용자 답): 보행자는 사람과 인형 둘 다이고 인형은 0.15 m 이상(2항), 이름 있는 운영자의 "카메라 보고 확인" 한 번 허락(4a항). 문서만이고 제품 코드는 바꾸지 않았다. CORE 정지 경로와 Fleet 통행권을 바꾸므로 구현 브랜치마다 **Safety-Review 대상**이다(8항). 구현 순서는 [계획](../plans/2026-10-09-crosswalk-stop-and-look.md)이다. SOURCE, SIM, DEVICE 수용은 각각 따로다.
+
+**부분 개정:** [D-384](D-384-road-state-estimator-and-road-behaviour.md) 결정 4 "교차로 절차"의 횡단보도 줄(제27조)을 이 ADR이 구체화한다. 그 절차의 거리 상수(감속 0.6 m, 선 앞 0.15–0.22 m 정지, 1.0 s, 서행 0.03 m/s 1.0 s)는 횡단보도에서는 쓰지 않고 2항의 유도값으로 바꾼다.
+
+잇는 결정: [D-2](D-2-cmd-vel.md)/[D-18](D-18-rosy-core.md)(최종 `cmd_vel`은 CORE 하나) · [D-344](D-344-pilot-assisted-autonomy.md) §11(앞 물체 정지는 차선 추종이 소유) · [D-422](D-422-line-follow-body-referenced-obstacle-stop.md)/[D-424](D-424-one-robot-body-for-every-near-check.md)(URDF 몸, 정지 간격 `g(v)`, UNKNOWN 띠) · [D-430](D-430-safety-as-a-separate-concern.md)(안전 검토) · [D-438](D-438-fleet-stuck-resolver-rules-model-human.md)(막힘 해결기) · [D-491](D-491-ir-guard-crosswalk-zone.md)(횡단보도 구역, odom 고정) · [D-507](D-507-lane-trip-leg-structure-and-site-floor.md)(trip 구간) · [D-517](D-517-multi-robot-lane-traffic.md)(고정 블록, CORE 통행권) · [D-525](D-525-virtual-signal-fleet-zone-gate.md)(구역 입구 게이트) · [D-541](D-541-core-fleet-trip-lease.md)(trip lease) · [D-162](D-162-scene-context-profiles.md)(장면 `crosswalk`는 정지 사유가 아님).
+
+### Context
+
+2026-10-09 `main`(`97e5101a1`)에서 읽은 것이다.
+
+1. **규칙은 있고 실행은 없다.**
+   - D-384 결정 4는 "보행자가 있거나 건너려 하면 멈춘다. 시간 초과로 무시하지 않는다"를 적었다.
+   - 상태 기계 `core_features/road_behaviour/`(ROS-free)에는 이 규칙의 자리가 있다.
+     - 입력 `pedestrian_at_crosswalk`가 있다(`model.py:120`).
+     - 상태 `YIELD_CHECK`·`CREEP`·`CROSS`가 있다(`model.py:27-36`).
+     - 이 입력이 참이면 상한이 0이다(`machine.py:223-224`).
+   - 그러나 패키지 밖에서 이 모듈을 가져다 쓰는 곳이 없다. 시험 `middleware/core/services/test/test_road_behaviour.py`만 부른다. D-384 개정 1의 3항은 "CORE `traffic_policy`·`line_follow`가 가져다 쓴다"고 했지만 연결되지 않았다. D-517 Context도 같은 사실을 적었다.
+2. **CORE가 횡단보도를 아는 길은 D-491 카메라 구역 하나다.**
+   - `line_follow/crosswalk_zone.py` `CrosswalkZones`가 구역을 만든다. 입력은 인식의 `CrosswalkExtentEvidence {near_m, far_m}`(`contracts/foundation/core_common/protocol/lane_containment.py:22`)이다. 이 구역을 영상 시각의 odom 자세에 고정하고(`holds()`), `uncertainty_m ≤ 0.015`일 때만 받는다(`observe()` l.34-41).
+   - 소비자는 둘뿐이다. IR 가드 휴식(`line_follow/manager.py:485-486`, 사유 `ir_guard_crosswalk`)과 지도 호 검사 `_arc_on_crosswalk`(`line_follow/arc/lane_arc.py:118-135`)다. 호 검사의 주석은 "Fleet has no zone data, so CORE checks"다.
+   - 구역이 없거나 낡으면 IR 가드는 쉬지 않는다(D-491 2항, fail-closed). 그런데 이 ADR에서는 같은 "구역 없음"이 "멈출 이유 없음"이 되어 열린 쪽으로 실패한다. 그래서 같은 수명 규칙을 그대로 쓸 수 없다(3항 4).
+   - 교통 정책의 `crosswalk_visible`(`traffic_policy/manager.py:42,617`)은 사다리 검출이다. map_v2_fleet에서는 꺼져 있고, 나란한 줄무늬 횡단보도를 보지 못한다(D-491 Context).
+3. **지도에는 위치가 있지만 Fleet은 모른다.**
+   - `map_v2_fleet/scripts/lane_graph.py`가 `lane_graph.yaml` 최상위 `crosswalks[].polygon`을 만든다(D-491 구현 메모).
+   - Fleet 현장 지도에는 횡단보도가 없다. `PlaceKind`는 `park, charge, stop, junction, turnaround, start, bend`뿐이다(`operations/fleet/fleet/site_map.py:41`). `operations/fleet` 코드에 crosswalk는 한 곳도 없다.
+   - D-517 블록(`operations/fleet/fleet/traffic/blocks.py`)의 단위는 일반 블록, 교차로 구역, 양방 차로 구역, D-525 신호 구역뿐이다.
+4. **사람을 가리는 인식은 없다.**
+   - 학습 클래스는 `floor, lane_line, wall, drivable, stop_line, crosswalk(ignore)`이다(`learning/training/perception/dataset/labels.py:33-40`). 사람 클래스가 없다.
+   - 지금 사람을 볼 수 있는 센서는 LiDAR 평면 하나다.
+     - CORE는 `scan`을 구독한다(`gateway/core/bridge/ros_bridge.py:138`).
+     - 몸 기준 정지에 쓴다(`line_follow/body_stop.py` `BodyStopMixin._body_clearance`).
+     - LiDAR는 바닥 위 0.125 m에 있고 `range_min`은 약 0.15 m다(D-384 개정 4, D-422).
+5. **막힘은 풀리는 쪽으로 설계되어 있다.**
+   - D-407 막힘(`LineStuckStatus`, `schemas.py:1009`)의 원인은 `obstacle_ahead`와 `lane_lost`다. 답에는 `RESUME`·`BACK_AND_RETRY`가 있다.
+   - D-438 해결기(`stuck_resolver.py`)와 비전 모델은 `obstacle_ahead`에 `RESUME`을 고를 수 있다.
+   - 횡단보도의 사람을 이 원인으로 올리면, 사람이 있는데 "건너라"는 답이 나갈 길이 열린다.
+6. **trip 정체 규칙이 기다림을 끝낸다.** 통행권 안에서 20 s 동안 0.05 m 미만으로 움직이면 trip이 정체로 끝난다(D-517 Context, `trip_ports.py`). 사람을 기다리는 로봇이 정체로 끝나면 차선 주행이 꺼진다.
+7. **Gazebo 월드에 보행자가 없다.** `integrations/simulation/gazebo/worlds/` 어디에도 `actor`나 pedestrian 모델이 없다.
+8. **`line_follow` 소유.**
+   - D-384 결정 5는 `core_features/line_follow/*`를 차선 유지 세션 소유로 두었다.
+   - 2026-10-09 `line_follow` 커밋 15개는 모두 D-520 호 주행과 D-531 경로 문맥 작업이다(마지막 `cd9f9be91`).
+   - D-384 원문은 다른 세션(`pl3` 신원)이 썼다. 이 ADR의 구현은 그 세션과 겹치는 파일을 건드린다(6항).
+
+### Decision
+
+**원칙.**
+- 횡단보도에서 기본값은 "서 있음"이다. 건너는 것은 증명이 있을 때만이다.
+- "모름"은 "사람 있음"과 같다. 시간이 지나도 이 판정은 바뀌지 않는다.
+- 사람 판정은 로봇이 자기 센서로 한다. Fleet은 위치를 알리고 순서를 정한다.
+- 판정을 넘는 길은 하나다. 이름 있는 운영자가 신선한 카메라 증거를 보고 그 로봇의 그 횡단보도 한 번을 허락하는 것이다(4a항, 개정 1). 시간, 해결기, 모델은 이 길을 쓰지 못한다.
+
+1. **로봇이 횡단보도를 아는 길: 지도가 기준, 카메라는 확인, 어긋나면 횡단보도로 본다.**
+   - **지도 구역(기준).** Fleet 현장 지도에 `crosswalks[]`를 둔다. 횡단보도는 점이 아니라 면이므로 `PlaceKind`에 넣지 않는다. 항목은 다음과 같다.
+     - `id`
+     - `polygon`(map 좌표). `lane_graph.yaml`의 `crosswalks[].polygon`을 그대로 가져온다. 손으로 다시 그리지 않는다.
+     - `approach[]`: 양쪽 보도 대기 띠의 다각형. 현장 지도 편집기에서 그린다.
+     - `lanes[]`: 그 구역이 덮는 차로 id. 지도 생성 시 다각형과 차로 polyline의 교차로 결정적으로 계산한다.
+     - 출처 `revision`
+   - **Fleet이 CORE에 알린다.** trip 로봇에 D-517 통행권 요청(`POST /api/v1/line-follow/authority`)의 선택 필드 `crosswalks: [{id, near_m, far_m, half_width_m, approach: [{x0_m, x1_m, y0_m, y1_m}]}]`로 보낸다.
+     - 거리는 통행권과 같은 `pose_stamp` 기준 경로 거리다. 통행권 끝 안팎과 관계없이 앞 `arm_distance_m` 안의 구역만 보낸다.
+     - 대기 띠는 그 자세의 진행 방향 틀(앞 x, 왼쪽 y)로 투영한 상자다.
+     - CORE는 이것을 통행권과 같은 방식으로 odom에 고정한다. 기준 표본 이후 odom 경로 길이를 빼서 쓴다.
+     - 새 엔드포인트를 만들지 않는다. 통행권은 이미 자세 시각 보정, 만료, 줄지 않음 규칙을 가졌다.
+     - 이 필드는 API Reference 추가 행이고 공유 schema `core_common.protocol.line_authority`를 바꾼다.
+   - **횡단보도가 있는 지도에서 `lane` trip을 여는 조건.** Fleet은 로봇의 통행권 능력(`line_follow_authority`, `line_follow_crosswalk`)을 요구한다. 없으면 trip을 열지 않는다(`TRIP_CROSSWALK_UNSUPPORTED`). 지도 구역이 있는데 그것을 로봇에 전할 길이 없는 trip은 없다.
+   - **카메라 구역(확인).** D-491 결정 4의 `CrosswalkExtentEvidence`가 그대로 두 번째 출처다. trip이 없는 CAMERA_LINE(사람이 켠 차선 주행)에서는 카메라가 유일한 출처다. 이 경우 카메라가 놓친 횡단보도는 지켜지지 않는다. 이것은 알려진 한계이고, 횡단보도가 있는 현장의 무인 주행은 trip으로만 한다(수용 조건).
+   - **어긋날 때.** 두 출처의 합집합을 쓴다.
+     - 지도에는 있는데 카메라가 못 봤다: 횡단보도로 보고 선다.
+     - 카메라는 봤는데 지도에 없다: 횡단보도로 보고 선다. 사건 `line_follow.crosswalk_unmapped`를 낸다(Fleet은 지도 차이로 기록).
+     - 같은 구역이면(odom에서 겹치면) 한 구역으로 합친다. 가까운 끝은 둘 중 가까운 쪽, 먼 끝은 둘 중 먼 쪽이다.
+     - 카메라는 차로 옆 너비를 모른다. 카메라만 있는 구역의 옆 범위는 차로 반폭 + 대기 띠 기본값 `crosswalk_approach_default_m`(현장 설정, 2항)이다.
+
+2. **서는 자리, 보는 시간, "비었다"의 뜻.** 모든 기하는 `RobotBody`(D-424, `contracts/foundation/core_common/robot_body.py:91`)와 LiDAR 장착값에서 유도한다. 손 숫자를 두지 않는다.
+   - **서는 자리.** 몸 앞끝(`front_x_m`)에서 구역 가까운 끝까지의 간격 `s_wait`에서 선다.
+     - `s_wait = max(g(v_app), range_min − (front_x_m − lidar_x_m) + body_margin)`
+     - `g(v)`는 D-422/D-424 정지 간격이다. `v_app`는 접근 속도다.
+     - 둘째 항은 구역 전체가 LiDAR 사각(`range_min`) 밖에 있게 한다. 그래야 구역 안 모든 점을 실제로 볼 수 있다.
+     - Pinky 공칭값: `range_min` 0.15, `front_x − lidar_x` 0.059, 여유 0.02이므로 약 0.11 m다. D-384의 0.15–0.22 m를 대신한다.
+     - 접근은 구역 앞 `g(v_cruise) + s_wait`부터 `v_app`(기본 `creep`, 아래)로 줄인다.
+   - **선 뒤 보기(look).** 완전히 선 뒤(odom 속도 0 확인) 보기 창을 연다. 보기 영역 A는 다음의 합이다.
+     - 구역 다각형
+     - 양쪽 대기 띠
+     - 구역 너머로 몸 길이(`front_x_m − rear_x_m`) + `g(v_cross)`만큼 이어진 출구 띠(건넌 뒤 설 자리)
+   - **"비었다"의 뜻.** 한 스캔이 "빔"인 조건은 셋 다 참일 때다.
+     - (a) A 안에 반사가 하나도 없다. 몸 윤곽 안과 `lidar_self_mask` 반사는 뺀다(D-424 2항).
+     - (b) A를 덮는 빔이 모두 A보다 먼 유한 반사를 가진다. 반사 없는 빔(inf/0/NaN)과, 앞 물체에 가려 A를 지나지 못하는 빔이 덮는 부분은 UNKNOWN이다. UNKNOWN은 빔이 아니다(D-424 2항과 같은 뜻).
+     - (c) 스캔이 신선하다(`obstacle_sensor_stale`와 같은 한도). odom 고정이 유효하다.
+   - **건너는 조건.** 보기 창 `crosswalk_look_s` 동안 받은 스캔이 모두 "빔"이고, 그 수가 `crosswalk_look_min_scans` 이상이어야 한다. 한 스캔이라도 빔이 아니면 창을 처음부터 다시 연다.
+     - 기본값은 `crosswalk_look_s` 1.0 s(D-384의 1.0 s 정지를 잇는다), `crosswalk_look_min_scans`는 스캔 주기 × 0.8이다.
+     - "건너려는 사람"은 대기 띠의 물체로 판정한다. 대기 띠 안의 어떤 물체도 사람으로 본다.
+   - **지금의 사람 판정(LiDAR 점유, 보수).** A 안의 바닥·벽이 아닌 모든 반사를 사람으로 본다. 다른 로봇, 상자, 사람 손 모두 같다. 시간 초과는 없다. 벽이 A에 걸리면 영원히 서게 되므로, 대기 띠는 편집기에서 벽을 피해 그린다. 지도 검사가 벽(현장 바닥 경계, D-507)과 겹치는 띠를 거부한다.
+   - **현장의 보행자: 실제 사람의 손·다리와 인형 둘 다(개정 1, 2026-10-09 사용자 결정).**
+     - LiDAR 빔 평면은 바닥 위 0.125 m다. URDF `rosy.urdf.xacro` LiDAR 높이이고, D-384 개정 4에 적었다.
+     - 그 평면이 보는 최소 키에 여유 0.025 m를 둔다. 여유의 근거는 둘이다.
+       - 장착 기울기 2°: 보기 영역의 먼 끝 약 0.6 m에서 ±0.021 m
+       - 매트 바닥 굴곡 약 0.004 m
+     - 그래서 **인형은 0.15 m 이상이어야 한다.** 이것이 현장 규칙이다. 로봇 몸체가 다르면 그 로봇 URDF의 LiDAR 높이 + 0.025 m로 다시 계산하고, 현장에 섞인 로봇 중 가장 높은 값을 쓴다.
+     - 0.15 m보다 낮은 인형은 카메라 사람 모델(10항)이 들어오기 전까지 보이지 않는다. 그런 인형은 이 게이트에 없는 것과 같다. 그 높이에서는 D-422 초음파 원뿔만 몸 앞을 본다.
+     - 실제 사람의 다리는 평면을 지나므로 보인다. 손은 평면 높이(0.125 m ± 0.025 m)에 있을 때만 보인다.
+   - **건너기.** 속도 상한은 `min(cruise, crosswalk_cross_speed)`(기본은 차선 서행값)다. 건너는 동안에도 같은 판정을 계속한다.
+     - 몸 앞 남은 구역이나 출구 띠에 반사가 생기면 그 자리에서 선다(HOLD). 다시 1.0 s 빔이면 간다.
+     - 몸이 이미 구역 안에 있을 때 대기 띠에만 물체가 생기면 계속 건넌다. 구역을 빨리 비우는 쪽이 사람에게 안전하다. D-422 몸 정지는 언제나 따로 앞선다.
+     - 앞지르기와 구역 안 정지 대기는 하지 않는다(5항).
+   - **끝.** 몸 뒤끝이 먼 끝 + 여유를 지나면 그 구역의 게이트를 닫는다.
+
+3. **센서가 없거나 낡거나 모르면 건너지 않는다.**
+   1. 스캔이 늦거나 끊기면 UNKNOWN이다.
+   2. odom 고정이 깨지면(D-468 결정 3의 무효화: frame 변경, 시각 역행, 큰 점프, stale) UNKNOWN이다.
+   3. LiDAR 정면각 보정 기록이 없는 로봇은 URDF 공칭값(정면 180°)을 쓴다. 공칭과 보정 차이의 상한만큼 A를 넓힌다.
+   4. **한 번 무장한 구역은 잃어도 "없음"이 되지 않는다.** 앞에 구역이 들어와 게이트가 무장된 뒤 그 구역을 잃으면 `crosswalk_zone_lost`로 서고 4항으로 간다. 이유는 다음과 같다.
+      - D-491의 수명 규칙(먼 끝 지남, 0.3 rad 회전, 차로 밖, epoch 변경으로 버림)은 IR 가드에서는 안전 쪽이다. 여기서 같은 규칙을 쓰면 열린 쪽으로 실패한다.
+      - 게이트는 D-491 `CrosswalkZones`의 odom 고정 코드를 재사용하지만 수명은 따로 둔다.
+
+4. **계속 막히면: 기다리고, 알리고, 사람이 본다. 시간이 지나도 건너지 않는다.**
+   - CORE는 선 채로 기다린다. 기다림에는 기한이 없다.
+   - `crosswalk_report_s`(기본 10 s, D-384 `t_blocked`) 동안 빔이 아니면 D-407 막힘을 연다. 원인은 새 값 `crosswalk_blocked`이고, 세부 사유는 `person_present` | `look_unknown` | `sensor_stale` | `zone_lost` 중 하나다.
+   - **이 원인에 CORE가 받는 답은 `WAIT`·`ABORT`·`MANUAL`·`CROSS_CONFIRMED`뿐이다.** `RESUME`·`BACK_AND_RETRY`·`YIELD`는 `STUCK_DECISION_REFUSED`(`reason: crosswalk_gate`)다.
+     - 막힘이 닫히는 길은 셋이다.
+       - 게이트가 스스로 빔을 확인해 `cleared`로 닫는다.
+       - 운영자가 끝낸다(`ABORT`, 또는 D-541 넘겨받기 뒤 `MANUAL`).
+       - 이름 있는 운영자가 `CROSS_CONFIRMED`로 한 번 허락한다(4a항).
+   - **D-438 해결기.** 이 원인에는 규칙도 비전 모델도 쓰지 않는다. 바로 사람에게 올린다(`ESCALATE`, 단계 `crosswalk`). `CROSS_CONFIRMED`는 사람 단계에만 있다. 해결기 역할(`stuck_resolver` 토큰)과 모델 출력에는 이 값이 없다. CORE도 그 역할의 이 값을 403으로 거절한다.
+     - 콘솔 판단 창에는 로봇 카메라 미리보기 한 장을 보인다(D-438 3항의 한 장 규칙). 함께 LiDAR 점유 그림(A와 반사)과 사유, 기다린 시간을 보인다.
+     - 미리보기는 사람에게 보이기 위한 것이다. 모델 입력이나 저장에 쓰지 않는다.
+   - **trip 정체 예외.** 게이트가 서 있게 하는 동안은 trip 정체(`_stalled`)로 세지 않는다. 지금 `hold`·교차로 동작과 D-517 통행권 대기를 건너뛰는 것과 같다. 그래서 trip은 사람을 기다리는 동안 끝나지 않는다. 운영자 화면에는 4항의 막힘으로 남는다.
+
+4a. **운영자 "카메라 보고 확인"(개정 1, 2026-10-09 사용자 결정): 한 로봇, 한 횡단보도, 한 번.**
+   - **누가.** D-540 9항의 이름 있는 운영자만 한다. 로그인 세션이나 개발 세션이어야 하고, 공유 토큰은 403이다. Fleet이 D-541 lease 주인 토큰으로 CORE에 보낸다. 해결기와 모델은 이 값을 낼 수 없다.
+   - **무엇을 보고.** 판단 창은 증거 한 장을 보이고, 그 나이(초)를 함께 보인다. 증거는 다음 둘 중 하나 이상이다.
+     - 로봇 앞 카메라 프레임: CORE가 낸 미리보기다. `evidence_id`는 CORE 프레임 번호이고 스탬프는 CORE 시계다.
+     - Rosy Cam 잘라낸 이미지: Fleet이 그 횡단보도 다각형으로 자른다. `evidence_id`는 Rosy Cam 프레임 id이고 스탬프는 Fleet 시계다.
+   - **증거 나이 한도.** 한도는 `crosswalk_confirm_max_age_s`(기본 2 s, 현장 설정, 상한 5 s)다.
+     - Fleet은 누르는 순간 나이가 한도를 넘으면 버튼을 막는다. 보내기 직전에 다시 재고, 넘으면 `CROSS_EVIDENCE_STALE`로 거절한다.
+     - CORE는 앞 카메라 증거면 자기 프레임 기록으로 나이를 다시 잰다. 기록에 없거나 한도를 넘으면 `STUCK_DECISION_REFUSED`(`reason: evidence_stale`)다. Rosy Cam 증거만 있으면 Fleet이 잰 나이를 받고, 그 값도 한도 안이어야 한다.
+   - **본문.** `{decision: CROSS_CONFIRMED, stuck_id, crosswalk_id, evidence_id, evidence_source: robot_camera|rosy_cam, evidence_age_s, operator_name, confirm_id}`. CORE는 다음이 모두 맞아야 받는다.
+     - `stuck_id`가 지금 막힘과 같다.
+     - 그 막힘의 원인이 `crosswalk_blocked`다.
+     - `crosswalk_id`가 게이트가 지금 무장한 구역과 같다. 카메라만 있는 구역이면 게이트가 붙인 로컬 id다.
+     - 같은 `confirm_id`를 처음 받는다.
+     - 비상 정지가 걸려 있지 않다.
+     - 사유가 `zone_lost`나 `sensor_stale`가 아니다. 그 둘은 증거로 덮을 수 없다. LiDAR나 odom을 다시 얻어야 한다.
+   - **한 번만.** 허락은 그 로봇, 그 `crosswalk_id`, 그 막힘에 묶인다. 수명은 다음과 같다.
+     - 받은 뒤 `crosswalk_confirm_ttl_s`(기본 5 s) 안에 몸이 구역 가까운 끝을 넘지 않으면 사라진다. 그러면 다시 `looking`으로 간다.
+     - 넘으면 몸 뒤끝이 먼 끝 + 여유를 지날 때 소모된다.
+     - 다음은 그 즉시 허락을 지운다: 모드 변경, E-Stop, D-541 lease 끝, 통행권 만료, 구역 잃음, CORE 재시작.
+     - 같은 `confirm_id`를 다시 보내면 `reason: confirm_reused`로 거절한다. 다음 횡단보도에는 넘어가지 않는다.
+   - **허락이 푸는 것.** 2항의 "비었다" 판정 가운데 대기 띠·구역의 점유와 UNKNOWN에 따른 기다림과 보기 창만 푼다.
+   - **허락이 풀지 않는 것.**
+     - D-422 몸 정지: 몸이 갈 경로 안의 물체와 `obstacle_sensor_stale`
+     - 건너는 중 몸 경로 안 구역 반사에 따른 HOLD(2항 "건너기")
+     - IR 가드, E-Stop
+     - D-517 통행권 끝·만료, D-541 lease
+     - 속도 상한 `crosswalk_cross_speed`
+     - 즉 허락은 기다림만 없앤다. 충돌 정지는 없애지 않는다.
+   - **감사.** CORE 사건은 `line_follow.crosswalk_confirmed {confirm_id, crosswalk_id, stuck_id, by, operator_name, evidence_id, evidence_source, evidence_age_s}`이고, 끝날 때 `line_follow.crosswalk_confirm_ended {confirm_id, reason: crossed|expired|cancelled}`를 낸다. Fleet 감사 행에는 운영자, 시각, 증거 id, 나이, 결과를 남긴다. 증거 이미지는 감사용으로 `evidence_id`만 남기고 저장하지 않는다(D-438 3항 한 장 규칙).
+   - **화면.** 판단 창의 버튼은 `카메라 보고 확인`이다. 증거와 나이("앞 카메라 · 0.8초 전")를 버튼 바로 위에 둔다. 확인 대화상자에는 "이 로봇이 이 횡단보도를 한 번 건넙니다. 충돌 정지는 그대로입니다."를 쓴다. 로봇 카드에는 "횡단보도 · 운영자 확인 통과 · {이름}"을 보이고, 예외 큐 행은 감사 기록으로 닫힌다.
+   - **API Reference.** 막힘 결정 값 `CROSS_CONFIRMED`와 그 본문, 거절 사유 `evidence_stale`·`confirm_reused`·`crosswalk_mismatch`, 사건 두 개, Fleet 경로 `POST /api/fleet/robots/{id}/line-stuck/decision`의 같은 값(이름 있는 운영자)을 추가 행으로 둔다. 버전은 착지 순서대로 다음 빈 번호를 쓴다.
+
+5. **여러 대: 횡단보도는 D-517 구역이다. 한 번에 한 대, 그 위에서 서지 않는다.**
+   - Fleet은 `crosswalks[].lanes`의 각 구간을 D-517 블록 표에서 **횡단보도 구역**(수용 1)으로 자른다. 블록 경계는 다음과 같다.
+     - 구역 앞 경계: 구역 가까운 끝에서 `s_wait`(그 현장 가장 긴 몸 기준) 앞
+     - 구역 뒤 경계: 먼 끝에서 몸 길이 + `g(v)` 뒤
+   - **횡단보도 위에서 통행권이 끝나지 않는다.** 구역은 출구 블록까지 함께 허가될 때만 허가한다(꼬리 물기 금지). 출구가 막혀 있으면 앞 경계에서 통행권이 끝난다. 그래서 줄을 선 로봇은 늘 횡단보도 앞에 선다.
+   - **양방 차로.** 구역은 차로 단위 수용 1이다. 반대 방향 차로의 로봇은 자기 차로 구간을 따로 쥔다. 사람 판정은 각 로봇이 따로 한다. 다른 로봇이 A 안에 있으면 그 로봇도 사람으로 본다. 그래서 반대편 로봇이 다 건너야 이쪽이 간다. 순환 대기는 생기지 않는다. 각 로봇의 대기 자리는 구역 밖이고, 구역 안 로봇은 A가 비면 나가기 때문이다.
+   - **순서.** D-517 3항의 요청 시각 순서를 그대로 쓴다. 새 대기열을 만들지 않는다.
+   - **D-525 신호.** 신호 구역 안에 횡단보도가 있으면, 초록은 블록 허가만 연다. 로봇의 서고 보기는 그대로 한다. 신호 초록이 사람 판정을 대신하지 않는다(D-384 "초록은 기다림을 줄일 수 있을 뿐").
+
+6. **사는 곳: CORE `line_follow` 안의 작은 횡단보도 게이트. `road_behaviour`는 지금 연결하지 않는다.**
+   - 새 순수 모듈 `core_features/line_follow/crosswalk_gate.py`를 둔다. 입력은 셋이다. 구역 목록(지도·카메라), 스캔 점, odom이다.
+   - 상태: `none` → `armed` → `approaching` → `looking` → `crossing` → `none`, 그리고 `waiting`(빔 아님)이다.
+   - 출력: 속도 상한(0 포함)과 사유.
+   - 매니저는 이 상한을 D-517 통행권 판정과 같은 자리(교차로 게이트 뒤, 그 틱의 최종 결정)에 `min`으로만 넣는다. 우선순위는 D-422 몸 정지, IR 가드, E-Stop보다 뒤다. 그것들은 늘 먼저 0으로 만든다. 게이트는 어떤 정지도 풀지 못한다.
+   - **`road_behaviour`를 지금 연결하지 않는 이유.**
+     - 그 상태 기계는 필수 입력(`road_state`, 장애물, 다른 로봇, 회전)이 없으면 FAULT다(`table.py:37`, `t_stale` 0.3 s). 그 입력을 내는 추정기(D-384 R0–R2)가 아직 R0이다.
+     - 횡단보도 하나를 위해 그것을 켜면, 연결되지 않은 교차로 상태까지 CORE 경로에 들어온다.
+     - 나중에 `road_behaviour`를 연결할 때 이 게이트 상태가 그 `pedestrian_at_crosswalk` 입력이 된다. 같은 판정을 두 번 만들지 않는다.
+   - **소유와 조율.**
+     - 게이트 모듈, 설정, 상태 필드, 막힘 원인은 이 ADR의 구현 브랜치가 만든다.
+     - `line_follow/manager.py`의 연결 몇 줄과 `crosswalk_zone.py` 공유는 차선 유지 세션(지금 D-520·D-531 작업 중)의 검토를 받는다. 착지 전에 그 세션의 진행 브랜치와 `git merge main`으로 겹침을 확인한다.
+     - D-384 결정 5의 "인터페이스를 제안하고 소유 세션이 정한다"를 따른다.
+   - **상태 노출.** `GET /line-follow`와 상태 스냅숏의 `line_follow.crosswalk {state, zone_id, source: map|camera|both, reason, waiting_s, look_progress}`를 둔다. 없으면 키가 없다. API Reference 추가 행이다.
+
+7. **Fleet 화면.** D-517 10항 틀 안에서 새 패널 없이 한다.
+   - **현장 지도 편집기.**
+     - "횡단보도" 층에 `lane_graph.yaml`에서 가져온 다각형을 읽기 전용으로 보인다.
+     - 대기 띠는 그리고 고칠 수 있다.
+     - 벽과 겹치거나 차로를 덮지 않는 띠는 저장 전에 거부한다.
+   - **관제 로봇 카드 한 줄.** "횡단보도 확인 중", "횡단보도 · 사람 있음 12 s", "횡단보도 · 센서 확인 불가", "횡단보도 건너는 중" 가운데 하나다.
+   - **관제 지도.** 횡단보도 다각형을 그린다. 상태색은 역할 토큰만 쓴다(D-359). 비어 있음은 윤곽, 확인 중은 주의, 사람 있음·모름은 경고다. 로봇이 보는 A의 반사점은 그 로봇을 고를 때만 겹쳐 그린다.
+   - **예외 큐.** 4항 막힘(`crosswalk_blocked`)은 최우선 행이다. 판단 창에는 카메라 한 장(나이 표시) + 점유 그림 + `기다림 계속`·`카메라 보고 확인`(4a항, 이름 있는 운영자)·`운행 끝`·`넘겨받기`만 둔다.
+
+8. **Safety-Review 범위(D-430 §5 trailer).** 다음 브랜치는 독립 리뷰와 `Safety-Review:` trailer가 필요하다.
+   - CORE 게이트 연결: 정지 우선순위, 풀지 못함, 무장 뒤 구역 잃음, UNKNOWN 판정, 막힘 답 거부.
+   - 통행권 `crosswalks` 필드: 자세 시각 고정, 줄지 않음과의 관계, 만료.
+   - Fleet 블록 표의 횡단보도 구역: 구역 위에서 통행권이 끝나지 않음, 출구 동시 허가.
+   - 해결기 원인 처리: 해결기와 모델에는 움직이는 답이 없다.
+   - 운영자 확인 `CROSS_CONFIRMED`(4a항): CORE 처리와 Fleet 경로·버튼 둘 다 리뷰한다.
+   - 리뷰 항목:
+     1. 게이트가 어떤 경로로도 0을 0이 아니게 만들지 못하는지
+     2. "모름"이 모두 서 있음으로 가는지
+     3. 시간으로 풀리는 길이 없는지
+     4. 운영자 확인이 이름 없는 운영자, 해결기, 오래된 증거, 다른 로봇, 다른 횡단보도, 재사용에서 거절되는지
+     5. 운영자 확인이 몸 정지, E-Stop, 통행권, lease를 끄지 못하는지
+   - 화면 브랜치는 버튼과 대화상자 부분만 Safety-Review 대상이다. 나머지 화면은 디자인 검토만 받는다.
+
+9. **수용.**
+   - **SOURCE(호스트, 모델 PC의 git-archive 스냅숏).** 아래 Validation 시험.
+   - **SIM(모델 PC 또는 관제 PC Gazebo, 이 노트북 금지).**
+     - map_v2_fleet 260919 두 횡단보도에 보행자 모델을 둔다. LiDAR 평면(0.125 m)을 넘는 키로, 정해진 경로를 오가는 모델이다. gz `actor`가 시뮬 LiDAR에 보이지 않으면 운동학으로 움직이는 충돌 상자로 대신한다.
+     - S1 빈 횡단보도: 서고, 1 s 보고, 건넌다.
+     - S2 보행자가 위에 있음: 떠날 때까지 기다린다.
+     - S3 대기 띠에서 다가옴: 기다린다.
+     - S4 10분 머묾: 건너지 않고, 막힘이 사람에게 올라간다.
+     - S5 건너는 중 진입: 선다.
+     - S6 스캔 끊김: 선다.
+     - S7 지도만 있음 / 카메라만 있음: 둘 다 선다.
+     - S8 두 대 같은 방향: 횡단보도 위에서 서는 순간 0.
+     - S9 양방 두 대: 교착 0.
+     - 판정은 보행자–로봇 몸 최소 거리, 구역 위 정지 0회, 시간 초과 통과 0회다.
+   - **DEVICE/FIELD.** 실물 한 대, 사람이 옆에서 E-stop을 쥔다. 사람 다리나 손을 A 안·대기 띠·밖에 두는 표를 20회 녹화한다. 이어서 두 대 trip 10바퀴를 돈다. 호스트·SIM 통과는 장치 수용이 아니다.
+
+10. **나중: 카메라 사람 모델은 더하는 거부권일 뿐이다.**
+    - 사람(person) 클래스나 검출기가 들어오면, 그 출력은 "사람 있음"을 더할 수만 있다. LiDAR가 빔이라고 해도 모델이 사람이라고 하면 서고 기다린다. 모델이 "사람 없음"이라고 해서 LiDAR의 반사나 UNKNOWN을 빔으로 바꾸지 않는다.
+    - 모델이 없거나, 늦거나, 신뢰도가 낮으면 이 게이트에는 영향이 없다. 그 경우는 LiDAR 판정만으로 한다(D-430, 모델은 안전 기능이 아님).
+    - 0.15 m 미만 인형이 보이게 되는 길은 이것 하나다. 그때도 거부권일 뿐이다.
+    - **자료.** D-379 라벨 규격과 D-459 검수 앱에 클래스 두 개를 더한다: `person`(실제 사람의 손·다리·몸)과 `figurine`(현장 보행자 인형). 모을 자료는 다음과 같다.
+      - 로봇 앞 카메라 실주행 프레임: 두 횡단보도, 인형 키 여러 개(0.15 m 미만 포함), 가림과 역광
+      - 같은 장면의 사람 없는 프레임: 오탐률을 재는 데 쓴다
+      - Rosy Cam 위에서 본 프레임
+    - 합격 기준(재현율 우선, 놓침 상한)과 클래스 목록 확정은 별도 ADR(D-356 슬롯)이다. 계획의 (i) 브랜치다.
+    - Rosy Cam(위에서 보는 현장 카메라)의 사람 표시도 같은 규칙이다. 더할 수만 있다.
+
+### 기존 결정과 관계
+
+| 결정 | 관계 |
+|---|---|
+| D-384 결정 4 | 횡단보도 줄을 구체화한다. 거리·시간 상수를 2항 유도값으로 바꾼다. `road_behaviour`는 나중에 이 게이트 상태를 입력으로 받는다 |
+| D-491 | 카메라 구역과 odom 고정을 재사용한다. 수명은 게이트가 따로 둔다(3항 4). IR 가드 휴식은 그대로다 |
+| D-422 / D-424 | 몸, `g(v)`, UNKNOWN 뜻을 그대로 쓴다. 몸 정지는 게이트보다 먼저다 |
+| D-407 / D-438 | 새 막힘 원인 `crosswalk_blocked`를 둔다. 해결기·모델의 움직이는 답은 없다. 해결기는 바로 사람에게 올리고, 사람 단계에 `CROSS_CONFIRMED`를 둔다(4a항) |
+| D-540 9항 | `카메라 보고 확인`은 이름 있는 운영자만 한다 |
+| D-517 | 횡단보도 구역(수용 1, 출구 동시 허가)을 둔다. 통행권 선택 필드 `crosswalks`를 더한다. 정체 예외를 둔다 |
+| D-525 | 초록은 허가만 연다. 보기는 그대로 한다 |
+| D-541 | `CROSS_CONFIRMED`는 lease 주인(Fleet) 토큰으로만 간다. lease 끝은 허락을 지운다 |
+| D-162 | 장면 `crosswalk`는 여전히 정지 사유가 아니다. 정지 사유는 지도·카메라 구역과 LiDAR 판정이다 |
+
+### Alternatives
+
+| 대안 | 판단 |
+|---|---|
+| `road_behaviour` 전체를 지금 CORE에 연결 | 필수 입력이 없어 FAULT로 선다. 연결 안 된 교차로 상태까지 들어온다. 기각(6항) |
+| 카메라 구역만 사용 | 놓친 횡단보도에서 서지 않는다. 열린 쪽 실패다. trip에는 기각, trip 없는 차선 주행의 한계로만 남긴다 |
+| Fleet이 사람을 판정해 통행권으로만 막기 | Fleet은 사람을 보지 못한다(Rosy Cam은 아직 사람을 모름). 링크가 끊기면 판단이 없다. 로봇 판정이 먼저이고, Fleet 표시는 나중에 더하는 거부권으로만 둔다 |
+| 시간이 지나면 서행으로 건넘 | 사용자 요구와 제27조 위반이다. 기각 |
+| 운영자 "건너기" 답(제한 없음) | 버튼 하나가 사람 판정을 이긴다. 기각. 대신 4a항으로 묶는다: 이름 있는 운영자, 신선한 증거, 한 로봇·한 횡단보도·한 번, 충돌 정지 유지 |
+| 운영자 확인 없이 넘겨받기·수동 조종만 허용(첫 안) | 가짜 기다림(벽 반사, 놓인 물건)마다 사람이 차선 주행을 끊고 손으로 몰아야 한다. 사용자 결정으로 바꿈 |
+| D-384의 0.15–0.22 m 정지 거리 | 손 숫자다. LiDAR 사각과 관계가 없다. 기각 |
+| 카메라 사람 모델로 "빔" 판정 | 놓침이 곧 충돌이다. 더하는 거부권으로만 둔다(10항) |
+
+### Consequences
+
+- 횡단보도마다 최소 정지 + 1 s 보기 + 서행 통과가 더해진다. 고리 한 바퀴 시간이 늘어난다.
+- 보수 판정 때문에 가짜 기다림이 생긴다. 다른 로봇이 A에 있을 때, 대기 띠에 물건이 놓였을 때, 반사 없는 빔이 있을 때다. 가짜 통과보다 낫고, 사람에게 올라가 보인다.
+- 횡단보도가 있는 현장의 무인 trip에는 CORE 통행권(D-517 M2)과 이 게이트가 필요하다.
+- LiDAR 평면(0.125 m)보다 낮은 물체는 보이지 않는다. 그런 물체는 D-422 초음파·몸 정지만 본다. 현장 인형은 0.15 m 이상이어야 한다(2항).
+- 운영자 확인은 책임을 이름 있는 사람에게 옮긴다. 그 기록이 감사에 남는다.
+
+### Open questions
+
+- 닫힘(개정 1): 보행자는 사람과 인형 둘 다다. 인형은 0.15 m 이상이다. 운영자 확인은 4a항이다.
+- 장착 기울기 2° 가정은 실측이 아니다. 로봇별 LiDAR 평면 높이·기울기를 보정 기록(D-47)으로 재면 0.15 m를 다시 정한다.
+- 대기 띠 기본 폭 `crosswalk_approach_default_m`(카메라만 있는 구역)과 실제 현장 띠 크기. 260919 매트의 차로 옆 공간을 실측한 뒤 정한다.
+- 반사 없는 빔(UNKNOWN)이 열린 방향에서 너무 자주 나오면 기다림이 길어진다. SIM과 현장에서 비율을 재고, 필요하면 "A 너머 최대 거리" 규칙을 별도 개정으로 본다.
+
+### Validation (먼저 실패해야 하는 시험)
+
+구현 브랜치는 각 시험이 main에서 실패하는 것을 `run.txt`로 남긴 뒤 고친다.
+
+1. **게이트(순수):**
+   - 빈 A에서 정지 → 1.0 s → 건넘.
+   - A 안 반사 하나 → 무기한 0. 가짜 시계를 1시간 흘려도 0이다.
+   - 대기 띠 반사 → 0.
+   - 반사 없는 빔이 A를 덮음 → 0.
+   - 가려진 영역 → 0.
+   - 스캔 stale → 0.
+   - odom 무효화 → 0.
+   - 무장 뒤 구역 잃음 → 0과 `zone_lost`.
+   - 건너는 중 앞 구역 반사 → 0, 대기 띠 반사 → 계속.
+   - 1 s 안 한 스캔 실패 → 창을 다시 연다.
+2. **서는 자리:** `s_wait`가 `RobotBody`·`range_min`에서 나온다. 공칭 Pinky 약 0.11 m. 상수 0.15/0.22가 코드에 없다(grep 시험).
+3. **출처:** 지도만 / 카메라만 / 둘 다 겹침 합치기 / 어긋남에서 모두 선다. 카메라만 있는 구역에 `crosswalk_unmapped` 사건이 난다.
+4. **우선순위:** 몸 정지·IR 가드·E-Stop·통행권 만료 0을 게이트가 풀지 못한다(표 시험).
+5. **막힘:** `crosswalk_blocked`에 `RESUME`·`BACK_AND_RETRY`·`YIELD`는 거부된다. `WAIT`·`ABORT`는 받는다. 해결기는 규칙·모델 없이 `ESCALATE`한다.
+6. **Fleet:**
+   - `lane_graph.yaml` → 현장 지도 `crosswalks` 결정성.
+   - 통행권 `crosswalks` 거리(자세 시각 기준).
+   - 블록 표에서 횡단보도 구역 위 통행권 끝 0회(무작위 N대).
+   - 출구 동시 허가.
+   - 게이트 대기 중 trip 정체로 끝나지 않음.
+   - 능력 없는 로봇의 trip 거절 `TRIP_CROSSWALK_UNSUPPORTED`.
+7. **운영자 확인(4a항):**
+   - 증거 나이 > 한도 → Fleet `CROSS_EVIDENCE_STALE`, CORE `evidence_stale`.
+   - 공유 토큰이나 이름 없는 세션 → 403. 해결기 역할 → 403.
+   - 같은 `confirm_id` 재사용 → `confirm_reused`.
+   - 다른 `crosswalk_id`나 다음 횡단보도 → 거절.
+   - `ttl` 지남 → 다시 `looking`.
+   - 사유 `zone_lost`·`sensor_stale` → 거절.
+   - 허락 중에도 몸 경로 안 반사 → 0(D-422 몸 정지가 꺼지지 않음).
+   - 허락 중 E-Stop·통행권 만료·lease 끝 → 0, 허락 지움.
+   - 감사 사건 두 개의 필드.
+8. **SIM/DEVICE:** 9항. SIM에 S10을 더한다: 0.12 m 인형은 보지 못함(알려진 한계 기록), 0.15 m 인형은 봄. 운영자 확인으로 한 번 건넘. 그 중 몸 경로에 상자 → 정지.

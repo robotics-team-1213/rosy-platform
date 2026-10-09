@@ -137,11 +137,25 @@ class MapPoseService:
         return tracker is not None and tracker.moved_since(
             self._wall() - self.config.max_odom_age_s, min_m, math.radians(min_deg))
 
+    def odom_to_map(self, robot_id: str):
+        """D-581 trail anchor: the tracker's (map <- odom, newest odom, anchor captured_at, epoch)."""
+        tracker = self._tracker(robot_id)
+        return tracker.odom_to_map() if tracker is not None else None
+
     def arbitrated_pose(self, robot_id: str) -> Optional[MapPose]:
         """The robot's map pose for trip execution and the D-511 lane-compliance monitor
         (D-511 2 widens D-494 3); None for a robot not on the roster."""
         tracker = self._tracker(robot_id)
         return tracker.pose(self._wall(), self.active_map_id()) if tracker is not None else None
+
+    def stuck_pose(self, robot_id: str) -> Optional[dict]:
+        """D-577 1: R3's pose input. `sourced` = a sighting ever reached this robot's tracker, so an
+        UNKNOWN is a lost pose rather than "Fleet has no map pose for it"."""
+        tracker = self._tracker(robot_id)
+        if tracker is None:
+            return None
+        pose = tracker.pose(self._wall(), self.active_map_id())
+        return {"state": pose.state, "age_s": pose.age_s, "sourced": tracker.sourced}
 
 
 def install_map_pose_routes(app, *, service: MapPoseService, read_guard) -> None:

@@ -1,0 +1,10 @@
+[Unit]
+Description=Check accepted model code for a review UI update
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=10min
+Unit=rosy-review-release-update.service
+
+[Install]
+WantedBy=timers.target
