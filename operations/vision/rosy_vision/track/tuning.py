@@ -83,6 +83,10 @@ EV_THIRDS = range(-6, 4)
 CLIP_TUNE = 0.02
 CRUSH_TUNE = 0.05
 MAX_STEPS = 6
+#: A tune (steps and the lock's settle) that has not ended this long after it started takes the
+#: current setting as locked, unconfirmed: a phone that echoes without ae_lock (options write
+#: failed, torch on) or a link to an app without camera_state must not suspend tracking forever.
+TUNE_DEADLINE_S = 90.0
 #: Locked: tune again when clip or crush passes RETUNE_HARD (a scene that already did at the
 #: lock: when it gets RETUNE_HYSTERESIS worse), at most once per backoff (5 min, doubling) ...
 RETUNE_HARD = 0.15
@@ -113,8 +117,8 @@ class Measurement:
     clip: float
     crush: float
     marker_rate: float | None = None
-    lane_source: str = "paint"
-    luma: float = 0.0  # median track luma (8-bit), for the light-change guard  # "paint" (site mesh) or "bright" (brightest share of the track)
+    lane_source: str = "paint"  # "paint" (site mesh) or "bright" (brightest share of the track)
+    luma: float = 0.0  # median track luma (8-bit), for the light-change guard
 
 
 def score(m: Measurement) -> float:
@@ -360,6 +364,9 @@ class Tuner:
             self.last_score = score(sample)
             self._recent = [r for r in self._recent if now - r[0] < DWELL_S] + [
                 (now, sample.clip, sample.crush, sample.luma)]
+        if (self._phase in ("tuning", "settle") and self._tuned_at is not None
+                and now - self._tuned_at >= TUNE_DEADLINE_S):
+            self._expire()
         if state is None:
             return None
         if state.mode == "disabled":  # the phone's own switch wins (over thermal hold too)
@@ -498,12 +505,27 @@ class Tuner:
             logger.info("camera tuning locked ev=%.2f index=%d clip=%.3f crush=%.3f",
                         self._real(self._want.ev), self._want.ev, values[0], values[1])
 
+    def _expire(self) -> None:
+        """Tune deadline: keep the current setting as locked, unconfirmed, and relearn once."""
+        logger.warning("camera tuning deadline: lock unconfirmed, kept ev index=%s",
+                       None if self._want is None else self._want.ev)
+        self._locked = self._want
+        self._phase = "locked"
+        self._baseline = None  # taken from the first full window (_watch)
+        self._shift_since = None
+        if not self._relearn_sent:
+            self._relearn = self._relearn_sent = True
+
     def _watch(self, now: float, sample: Measurement | None) -> None:
         """Locked: tune again on clip/crush (with hysteresis and backoff) or a light change."""
-        if sample is None or not self._recent or self._baseline is None:
+        if sample is None or not self._recent:
             return
         if now - self._recent[0][0] < DWELL_S - SETTLE_S:
             return  # judge a full window, never one frame (a hand, a sleeve)
+        if self._baseline is None:  # locked by the deadline: this window is the baseline
+            clip, crush, luma = (statistics.median(r[i] for r in self._recent) for i in (1, 2, 3))
+            self._baseline = (max(clip, crush), luma_ev(luma), self.last_score or 0.0)
+            return
         worst = max(statistics.median(r[1] for r in self._recent),
                     statistics.median(r[2] for r in self._recent))
         base_worst, base_ev, _ = self._baseline

@@ -28,11 +28,12 @@ robots VisionWorker already sighted from this frame's measured calibration.
 D-589: each step also measures the frame (tuning.Scorer, on the detection thread) and drives
 the per-source Tuner on the event loop; its ``camera`` messages go to the phone over the
 ingest connection (never awaited inline) and its status rides on the detections payload as
-``tuning``. While a tune runs, detection is suspended: the payload says LEARNING and the
-intermediate settings are not learned. Once the lock is confirmed and settled the detector
+``tuning``. While a tune runs, the background detection pauses (LEARNING; ArUco robot markers
+are still reported) and the intermediate settings are not learned. Once the lock is confirmed and settled the detector
 learns again once (``camera_changed``, an automatic reset that replays a D-539 background kept
 under the same settings; never the operator relearn). Outside a tune, a camera change is new
-``applied`` settings in mode "vision", a return to "vision" from another mode, or a new link.
+``applied`` settings in mode "vision" (the lock included) or a return to "vision" from another mode.
+A tune that does not end within tuning.TUNE_DEADLINE_S keeps its setting and relearns once.
 With ``auto_tune`` off nothing is sent and ``tuning`` is left out; camera changes still relearn.
 A Fleet that refuses ``tuning`` (422) gets the payload again without it, and never again.
 """
@@ -157,7 +158,6 @@ class TrackWorker:
         self._presence = tuning.MarkerPresence()
         self._measurement: tuning.Measurement | None = None  # the last step's, set on the thread
         self._camera_seen: str | None = None
-        self._camera_link = None
         self._was_vision = False
         self._relearn_due: str | None = None
         self._send_tuning = True
@@ -228,11 +228,11 @@ class TrackWorker:
         # D-589: decided from the last tuner step (one frame earlier); the phone applies a new
         # request later than that anyway.
         suspend = self.auto_tune and self.tuner.active
-        event = self._camera_event(link, camera_state)
+        event = self._camera_event(camera_state)
         if suspend:
             event = None  # an intermediate tune step: not a background to learn
         if self._relearn_due is not None:  # the lock is confirmed and settled: learn once
-            event, self._relearn_due = (self._relearn_due, False), None
+            event, self._relearn_due = (self._relearn_due or None, False), None
         self._measurement = None
         step = await asyncio.get_running_loop().run_in_executor(
             self._executor, functools.partial(
@@ -283,15 +283,17 @@ class TrackWorker:
             task = asyncio.ensure_future(self.ingest.send_camera(self.camera.source_id, message))
             self._sends.add(task)
             task.add_done_callback(self._sends.discard)
-        if self.tuner.take_relearn() and camera_state is not None:
-            self._relearn_due = camera_state.applied.fingerprint()
+        if self.tuner.take_relearn():
+            # Unknown settings (no camera_state, e.g. the deadline after a link switch): "" resets
+            # without a D-539 replay.
+            self._relearn_due = "" if camera_state is None else camera_state.applied.fingerprint()
         return self.tuner.status(now)
 
-    def _camera_event(self, link, state) -> tuple[str, bool] | None:
+    def _camera_event(self, state) -> tuple[str, bool] | None:
         """(fingerprint, first) when the camera changed for tracking, else None (D-589 4).
 
-        A change is new applied settings in mode "vision", a return to "vision" from another
-        mode, or a new link. ``first`` marks the first settings ever reported: they only name
+        A change is new applied settings (the lock included) in mode "vision" or a return to
+        "vision" from another mode; a reconnect with the same settings is none. ``first`` marks the first settings ever reported: they only name
         the settings an already learned background was made under.
         """
         vision = state is not None and state.mode == "vision"
@@ -300,10 +302,9 @@ class TrackWorker:
             fingerprint = state.applied.fingerprint()
             if self._camera_seen is None:
                 event = (fingerprint, True)
-            elif (fingerprint != self._camera_seen or link != self._camera_link
-                  or not self._was_vision):
+            elif fingerprint != self._camera_seen or not self._was_vision:
                 event = (fingerprint, False)
-            self._camera_seen, self._camera_link = fingerprint, link
+            self._camera_seen = fingerprint
         self._was_vision = vision
         return event
 
@@ -381,9 +382,9 @@ class TrackWorker:
         and measure the frame for tuning (``self._measurement``). ``camera`` is a D-589 camera
         change (fingerprint, first); ``suspend`` (a tune runs) skips detection: LEARNING."""
         if camera is not None:
-            # D-589: an automatic reset, not an operator relearn.
+            # D-589: an automatic reset, not an operator relearn. No fingerprint: plain reset.
             changed = getattr(self.detector, "camera_changed", None)
-            if changed is not None:
+            if changed is not None and camera[0] is not None:
                 changed(camera[0], first=camera[1])
             elif not camera[1]:
                 self.detector.reset()
@@ -413,9 +414,10 @@ class TrackWorker:
         except (cv2.error, ValueError, np.linalg.LinAlgError) as exc:  # tracking goes on unscored
             logger.warning("tuning score failed source=%s error=%s",
                            self.camera.source_id, type(exc).__name__)
-        if suspend:
-            return calibration, DetectorResult((), "LEARNING")
-        result = self.detector.detect(Frame(image, captured_at), calibration)
+        if suspend:  # only the background detection pauses; markers below still count
+            result = DetectorResult((), "LEARNING")
+        else:
+            result = self.detector.detect(Frame(image, captured_at), calibration)
         self._identity_sample(image, captured_at, calibration, result)
         matrix = geometry.as_matrix(calibration.image_to_map)
         camera = geometry.camera_from_homography(matrix, calibration.image_size, calibration.hfov_deg)

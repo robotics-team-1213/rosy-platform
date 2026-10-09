@@ -630,7 +630,7 @@ def test_auto_tune_off_sends_nothing_leaves_tuning_out_and_still_relearns_on_cha
                                 (tuning.locked_setting(-3).fingerprint(), False)]
 
 
-def test_camera_changes_are_new_settings_a_return_to_vision_or_a_new_link():
+def test_camera_changes_are_new_settings_or_a_return_to_vision_not_a_plain_reconnect():
     detector = _Camera()
     worker, ingest, clock = _tuning_worker(_camera_state(), auto_tune=False, detector=detector)
     fp = UNLOCKED_0.fingerprint()
@@ -641,12 +641,15 @@ def test_camera_changes_are_new_settings_a_return_to_vision_or_a_new_link():
         elif index == 5:
             ingest.state = _camera_state()  # back to vision with the same settings: a change
         elif index == 7:
-            ingest.link = 2  # reconnect, same settings: a change
+            ingest.link = 2  # reconnect with the same settings and lock: no change
         elif index == 9:
             ingest.state = _camera_state(seq=9)  # the 20 s echo, identical settings: no change
+        elif index == 11:
+            ingest.link = 3
+            ingest.state = _camera_state(tuning.locked_setting(0))  # reconnect, lock changed
 
-    _frames(worker, clock, 12, between=script)
-    assert detector.cameras == [(fp, True), (fp, False), (fp, False)]
+    _frames(worker, clock, 13, between=script)
+    assert detector.cameras == [(fp, True), (fp, False), (tuning.locked_setting(0).fingerprint(), False)]
 
 
 def test_a_detector_without_camera_changed_is_reset_except_for_the_first_report():
@@ -673,3 +676,74 @@ def test_an_old_app_shows_unsupported_after_a_while():
     worker, ingest, clock = _tuning_worker(None)
     payloads = _frames(worker, clock, int(tuning.UNSUPPORTED_S * 3) + 3)
     assert payloads[0].tuning.state == "waiting" and payloads[-1].tuning.state == "unsupported"
+
+
+class _Unlockable(_TuningIngest):
+    """A phone that echoes every request but never reports AE locked (options write failed)."""
+
+    async def send_camera(self, source_id, message):
+        self.sent.append(message)
+        seq, setting = protocol.parse_camera(message)
+        unlocked = protocol.CameraSetting(setting.ev, False, False, 33333, "60hz")
+        self.state = _camera_state(unlocked, seq=seq)
+        return True
+
+
+def _deadline_worker(ingest, detector):
+    clock = SimpleNamespace(now=0.0)
+    client = _Client()
+    client.configs = [CONFIG]
+    worker = TrackWorker(camera=CAMERA, ingest=ingest, client=client, detector=detector,
+                         decode=lambda jpeg: np.full((360, 640, 3), 120, np.uint8),
+                         clock=lambda: clock.now)
+    asyncio.run(worker.refresh_config())
+    return worker, clock
+
+
+def test_a_lock_the_phone_never_confirms_ends_at_the_deadline():
+    detector = _Camera()
+    ingest = _Unlockable(_camera_state(mode="local"))
+    worker, clock = _deadline_worker(ingest, detector)
+    frames = int(tuning.TUNE_DEADLINE_S * 3) + 6
+    payloads = _frames(worker, clock, frames)
+    assert any(m["ae_lock"] for m in ingest.sent)  # the lock was asked for, never confirmed
+    deadline = int(tuning.TUNE_DEADLINE_S * 3)
+    assert all(p.status == "LEARNING" for p in payloads[1:deadline - 3])
+    assert payloads[-1].status == "OK" and payloads[-1].tuning.state == "locked"
+    assert detector.cameras == [(UNLOCKED_0.fingerprint(), False)]  # one relearn, unconfirmed
+
+
+def test_a_link_switch_mid_tune_to_an_app_without_camera_state_ends_at_the_deadline():
+    detector = _Camera()
+    ingest = _TuningIngest(_camera_state(mode="local"))
+    worker, clock = _deadline_worker(ingest, detector)
+
+    def switch(index):
+        if index == 3:  # the tune has started; the new phone never reports camera_state
+            ingest.link, ingest.state, ingest.echo = 2, None, False
+
+    payloads = _frames(worker, clock, int(tuning.TUNE_DEADLINE_S * 3) + 6, between=switch)
+    assert payloads[5].status == "LEARNING"
+    assert payloads[-1].status == "OK"
+    assert detector.cameras == [] and detector.resets == 1  # settings unknown: plain reset
+
+
+def test_robot_markers_are_still_reported_while_a_tune_pauses_the_background():
+    detector = _Camera()
+    worker, ingest, clock = _tuning_worker(_camera_state(mode="local"), detector=detector)
+    quad = ((98, 48), (102, 48), (102, 52), (98, 52))
+
+    async def run():
+        out = []
+        for index in range(1, 6):
+            out.append(await worker.process(_frame(seq=index, captured_at=99.75 + index / 3), {7: quad}))
+            await asyncio.sleep(0)
+            clock.now += 1 / 3
+        return out
+    try:
+        payloads = asyncio.run(run())
+    finally:
+        worker.close()
+    assert worker.tuner.active
+    assert payloads[-1].status == "OK" and [d.marker_id for d in payloads[-1].detections] == [7]
+    assert len(detector.calls) == 1  # only the frame before the tune started ran the detector

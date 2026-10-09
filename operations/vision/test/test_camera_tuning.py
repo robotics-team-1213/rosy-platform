@@ -378,3 +378,44 @@ def test_phone_switch_off_wins_over_thermal_and_sends_nothing():
     phone.thermal = 4
     _run(tuner, phone, 0.0, 30.0, _scene())
     assert phone.sent == [] and tuner.status()["state"] == "off"
+
+
+def test_an_echo_without_ae_lock_ends_the_tune_at_the_deadline():
+    class NoLock(Phone):
+        def receive(self, now, message):
+            super().receive(now, message)
+            self.applied = CameraSetting(self.applied.ev, False, False, 33333, "60hz")
+
+    tuner, phone = Tuner(), NoLock()
+    flags = []
+    _run(tuner, phone, 0.0, tuning.TUNE_DEADLINE_S + 20.0, _scene(),
+         watch=lambda now: flags.append((now, tuner.active, tuner.take_relearn())))
+    assert [now for now, active, _ in flags if active][-1] < tuning.TUNE_DEADLINE_S + 0.5
+    assert [now for now, _, relearn in flags if relearn] == pytest.approx(
+        [min(now for now, _, _ in flags if now >= tuning.TUNE_DEADLINE_S)])
+    assert tuner.status()["state"] == "locked"
+    assert _requests(phone) == [(0, False), (0, True)]  # no endless re-asking
+
+
+def test_a_link_switch_mid_tune_without_camera_state_ends_at_the_deadline():
+    tuner, phone = Tuner(), Phone()
+    end = _run(tuner, phone, 0.0, 3.0, _scene())
+    assert tuner.active
+    now = end
+    while now < tuning.TUNE_DEADLINE_S + 5.0:  # the new link never reports camera_state
+        tuner.update(now, link=2, state=None, sample=_scene()(0, False, now))
+        now += STEP_S
+    assert not tuner.active and tuner.take_relearn() is True and tuner.take_relearn() is False
+
+
+def test_a_deadline_lock_takes_its_baseline_from_the_next_full_window():
+    class NoLock(Phone):
+        def receive(self, now, message):
+            super().receive(now, message)
+            self.applied = CameraSetting(self.applied.ev, False, False, 33333, "60hz")
+
+    tuner, phone = Tuner(), NoLock()
+    end = _run(tuner, phone, 0.0, tuning.TUNE_DEADLINE_S + 10.0, _scene())
+    count = len(_requests(phone))
+    _run(tuner, phone, end, 400.0, lambda ev, locked, now: Measurement(4.5, 0.3, 0.005, luma=120.0))
+    assert len(_requests(phone)) > count  # clip past the limit still tunes again
