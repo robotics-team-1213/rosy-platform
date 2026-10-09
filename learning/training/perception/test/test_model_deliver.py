@@ -899,8 +899,7 @@ def test_paint_slot_scripts_never_name_shadow_or_the_watcher_hold():
     scripts = [_push_script(slot="paint", audit=AUDIT)] + [
         deliver.remote_script(a, None, slot="paint", audit=AUDIT) for a in ("rollback", "release-hold")]
     for s in scripts:
-        assert f"{ROOT_M}/shadow" not in s and f"{ROOT_M}/hold " not in s and f"{ROOT_M}/hold
-" not in s
+        assert f"{ROOT_M}/shadow" not in s and not re.search(rf"{ROOT_M}/hold(?![.\w])", s)
         assert f"{ROOT_M}/paint.hold" in s
     assert f"mv {ROOT_M}/paint.previous {ROOT_M}/paint" in scripts[1]
     assert '"push-paint"' in scripts[0] and '"rollback-paint"' in scripts[1]
