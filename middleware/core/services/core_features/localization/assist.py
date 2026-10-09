@@ -265,7 +265,11 @@ class LocalizationAssist:
         })
         if accepted:
             self._cancel_navigation()
-            if self.pose_requests.clear("answered"):
+            # Only Fleet's answer to the open pose request closes it (a human initialpose or a
+            # homing result carries another request_id and must not trigger the RESUME).
+            open_request = self.pose_requests.current()
+            if (open_request is not None and open_request["request_id"] == request_id
+                    and source is not None and self.pose_requests.clear("answered")):
                 self._run(self.on_pose_answered, "line follow resume on pose answer")
 
     def _cancel_navigation(self) -> None:

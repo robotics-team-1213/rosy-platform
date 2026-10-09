@@ -31,7 +31,7 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · feat(core): GET /localization/request, API v1.160 (D-546 5)
+- 2026-10-09 · uncommitted · feat(core): GET /localization/request, API v1.163 (D-546 5)
 - 2026-10-09 · uncommitted · feat(core): 장치 개발 모드 표식 (D-548)
 - 2026-10-09 · uncommitted · fix(api): D-541 Safety-Review 반영
 - 2026-10-09 · uncommitted · feat(api): D-541 trip lease 경로와 울타리 (API v1.157)

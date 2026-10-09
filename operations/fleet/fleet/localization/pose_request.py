@@ -23,6 +23,8 @@ OVERHEAD_ANCHOR_FRESH_S = 2.0
 DECISION_TTL_S = 5.0
 #: An open request is answered again after this (the decision ttl plus the 3 s scan check).
 RETRY_S = DECISION_TTL_S + 3.0
+#: Answers per lane_return hold; a request still open after this many is a human's.
+MAX_ANSWERS = 3
 
 
 def is_live(request: Mapping) -> bool:

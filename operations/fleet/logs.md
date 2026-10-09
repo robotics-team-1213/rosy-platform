@@ -2808,3 +2808,7 @@
 - 변경: `localization/pose_request.py`(천장 카메라 LOCALIZED·기준 2 s 이내 자세 → `source: overhead` 결정 ttl 5 s, 그 밖은 중재기 → `resolve_pose_with_model`(미구현, `None`) → `needs_human` 배지). `LocalizationService`가 `lane_return_*`로 서 있는 로봇의 `GET /localization/request`를 읽는다. 천장 카메라 답은 `--localization-overhead-cue`가 켜졌을 때만.
 - 증거: `test_localization_pose_request.py`, `test_transport_localization.py`.
 - gate 변화: SOURCE. VLM(D-546 8)은 AI PC 주인 동의 대기.
+## 2026-10-09 · uncommitted · fix(fleet): 위치 요청 3번 답해도 열려 있으면 needs_human, 천장 카메라 답 기본 켜짐 (D-546 6)
+- 변경: `MAX_ANSWERS` 3 뒤 `needs_human`(lane_return이 놓을 때까지 고정). `--localization-overhead-cue` 기본 켜짐, 끄기 `--no-localization-overhead-cue`(사용자 결정, D-257 5 개정 제안은 D-546에 기록).
+- 증거: `test_localization_pose_request.py`.
+- gate 변화: SOURCE.

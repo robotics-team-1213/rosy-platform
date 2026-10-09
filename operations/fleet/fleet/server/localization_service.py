@@ -91,9 +91,9 @@ def default_lane_rules() -> Optional[Path]:
 
 
 def build_localization_service(console, sightings, *, enabled: bool = True,
-                               overhead_cue: bool = False,
+                               overhead_cue: bool = True,
                                lane_rules: Optional[Path] = None) -> Optional["LocalizationService"]:
-    """CLI wiring: on unless disabled; the overhead cue stays off unless asked for."""
+    """CLI wiring: on unless disabled; the overhead cue is on unless turned off (D-546)."""
     if not enabled:
         return None
     slots, squares = service_logic.parse_reference_squares(
@@ -184,8 +184,8 @@ class LocalizationService:
     async def run(self) -> None:
         logger.info("localization service: polling every %.1f s, %d squares, overhead sighting cue %s",
                     self._poll_s, len(self._squares),
-                    "ON (D-257 amendment not accepted: bench use only)" if self.overhead_cue
-                    else "OFF (D-257 amendment not accepted)")
+                    "ON (D-546 amends D-257 5, proposed)" if self.overhead_cue
+                    else "OFF (--no-localization-overhead-cue)")
         while True:
             try:
                 await self.tick()
@@ -245,22 +245,35 @@ class LocalizationService:
     async def _pose_request(self, rid: str, client: RobotClient, state: Mapping, now: float) -> None:
         """D-546 6: answer the robot's open pose request: overhead, arbiter, model, then a human."""
         reason = str(((state.get("line_follow") or {}).get("reason")) or "")
-        request = None
-        if reason.startswith("lane_return_"):          # only a held lane_return can have asked
-            try:
-                request = await self._bounded(client.localization_request())
-            except Exception as exc:
-                logger.debug("localization: %s pose request unreadable: %s", rid, exc)
-                return
+        if not reason.startswith("lane_return_"):       # only a held lane_return can have asked
+            self._pose_req.pop(rid, None)               # lane_return let go: a new episode
+            return
+        try:
+            request = await self._bounded(client.localization_request())
+        except Exception as exc:
+            logger.debug("localization: %s pose request unreadable: %s", rid, exc)
+            return
         if request is None:
-            self._pose_req.pop(rid, None)               # closed: the next one starts afresh
+            asked = self._pose_req.get(rid)
+            if asked is None or not asked.get("failed"):
+                self._pose_req.pop(rid, None)           # closed: the next one starts afresh
             return
         if not pose_request.is_live(request):
             return                                      # older than its ttl: ignored, never answered
         asked = self._pose_req.get(rid)
-        if asked is not None and asked["request_id"] == request.get("request_id"):
-            if asked["state"] == "needs_human" or now - asked["at"] < pose_request.RETRY_S:
-                return
+        if asked is not None:
+            if asked["state"] == "needs_human" and asked.get("failed"):
+                return                                  # sticky until lane_return lets go
+            if asked["request_id"] == request.get("request_id"):
+                if asked["state"] == "needs_human" or now - asked["at"] < pose_request.RETRY_S:
+                    return
+        tries = asked["tries"] if asked is not None else 0
+        if tries >= pose_request.MAX_ANSWERS:           # answered and still open: it keeps failing
+            logger.warning("localization: %s pose request still open after %d answers: needs_human",
+                           rid, tries)
+            self._pose_req[rid] = {"request_id": request.get("request_id"), "at": now, "by": None,
+                                   "state": "needs_human", "tries": tries, "failed": True}
+            return
         pose = self._overhead_pose(rid) if self._overhead_pose is not None and self.overhead_cue else None
         decision = pose_request.overhead_decision(request, pose)
         if decision is not None:
@@ -277,7 +290,8 @@ class LocalizationService:
             await self._post_decision(rid, client, decision,
                                       (decision.pose.x, decision.pose.y, decision.pose.yaw), now)
         record = {"request_id": request.get("request_id"), "at": now, "by": by,
-                  "state": "answered" if by else "needs_human"}
+                  "state": "answered" if by else "needs_human",
+                  "tries": tries + (1 if decision is not None else 0)}
         if by is None and (asked is None or asked["state"] != "needs_human"):
             logger.warning("localization: %s pose request %s (%s) has no Fleet answer: needs_human",
                            rid, request.get("request_id"), request.get("reason"))

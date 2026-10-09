@@ -1,7 +1,9 @@
 """D-546 5: lane_return asks Fleet for a pose (CORE side); host-level, fakes, no ROS."""
 import json
 import pytest
+from core_common.protocol.localization import DecisionSource, LocalizationDecision, MapPose
 from core_features.line_follow.model import LineFollowMode
+from core_features.line_follow.recovery.stuck_recovery import AnswerRefused
 from core_features.localization import LocalizationAssist, PoseRequests
 from test_lane_return_manager import rig, frame
 
@@ -103,10 +105,52 @@ def test_assist_accepted_result_clears_the_request_and_resumes_line_follow():
     assist=LocalizationAssist(events,lambda:'rosy_test')
     resumed=[]
     assist.on_pose_answered=lambda:resumed.append(1)
-    assist.pose_requests.open('fleet_required',{})
-    result=lambda ok: json.dumps({'request_id':'pose-1','accepted':ok,'state':'LOCALIZED' if ok else 'CANDIDATES'})
+    assist.publish_decision=lambda payload:None
+    rid=assist.pose_requests.open('fleet_required',{})['request_id']
+    result=lambda ok,req=rid: json.dumps({'request_id':req,'accepted':ok,'state':'LOCALIZED' if ok else 'CANDIDATES'})
+    decide=lambda req: assist.decide(LocalizationDecision(request_id=req,pose=MapPose(x=1,y=2,yaw=0),
+                                                          source=DecisionSource.OVERHEAD))
+    # A human initialpose (another request_id) accepted: neither closes the request nor resumes.
+    decide('human-1')
+    assist.on_result(result(True,'human-1'))
+    assist.on_result(result(True))                    # right id, but Fleet sent no decision for it
+    assert assist.pose_requests.current() is not None and not resumed
+    decide(rid)
     assist.on_result(result(False))
     assert assist.pose_requests.current() is not None and not resumed   # the robot's check failed
     assist.on_result(result(True))
     assert assist.pose_requests.current() is None and resumed==[1]
     assert 'localization.request_cleared' in events.names()
+
+
+def test_refused_resume_holds_and_the_next_request_retries():
+    r,book,_=rigged(lambda now,v,w:v==0)
+    exhaust_local(r)
+    for step in range(1,12): frame(r,6.+step*.05,.055-step*.005)
+    real=r[2]._recovery.answer
+    def refuse(*a,**k): raise AnswerRefused('STUCK_DECISION_REFUSED','RESUME refused: no_scan')
+    r[2]._recovery.answer=refuse
+    book.clear('answered'); r[2].resume_after_pose()
+    assert r[2]._return_controller.phase=='fleet' and r[2].status().stuck is not None   # still held
+    frame(r,6.6,0.)
+    assert book.current() is not None                  # the fleet phase asks again
+    r[2]._recovery.answer=real
+    book.clear('answered'); r[2].resume_after_pose()
+    assert r[2].status().stuck is None
+
+
+def test_a_decision_after_line_follow_off_is_a_no_op():
+    r,book,_=rigged(lambda now,v,w:v==0)
+    exhaust_local(r)
+    r[2].set_mode(LineFollowMode.OFF)
+    r[2].resume_after_pose()
+    assert r[2].status().mode=='OFF' and book.current() is None
+
+
+def test_request_closes_on_a_tick_without_lane_return_even_when_no_reset_ran():
+    r,book,_=rigged(lambda now,v,w:v==0)
+    exhaust_local(r)
+    assert book.current() is not None
+    r[2]._mode=LineFollowMode.OFF        # e.g. driver_released sets OFF without the reset path
+    r[2].tick(7.)
+    assert book.current() is None

@@ -546,6 +546,9 @@ def test_pose_request_404_until_lane_return_asks_then_200_with_the_evidence(core
     assert body["evidence"]["odom_pose"] == {"x": 1.0, "y": 2.0}
     assert body["request_id"] and body["robot_id"] and body["created_at"] > 0
     assert client.get("/api/v1/localization/request", headers=VIEWER).status_code == 403
+    from core_common.protocol.localization import DecisionSource, LocalizationDecision, MapPose
+    services.localization.decide(LocalizationDecision(
+        request_id=body["request_id"], pose=MapPose(x=1.0, y=2.0, yaw=0.0), source=DecisionSource.OVERHEAD))
     services.localization.on_result(json.dumps(
         {"request_id": body["request_id"], "accepted": True, "state": "LOCALIZED"}))
     assert client.get("/api/v1/localization/request", headers=OPERATOR).status_code == 404

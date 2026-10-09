@@ -39,17 +39,21 @@
 
 **나중 단계 (메모만)** — 여러 번 "조금 앞 / 조금 뒤"로 움직이며 한 걸음마다 위치를 확인하는 기동은 별도 ADR이다. 이 ADR의 신호는 그 기동에도 그대로 쓰이도록 `recovery`를 단계 이름이 아니라 "움직이는 복구"로 정의했다.
 
-### 구현 노트: 위치 요청 첫 조각 (2026-10-09, `feat/d546-pose-request`, API v1.160)
+### 구현 노트: 위치 요청 첫 조각 (2026-10-09, `feat/d546-pose-request`, API v1.163)
 
 결정 5–7을 설계에서 이렇게 좁혀 구현했다. 상태는 여전히 Proposed다. 호스트 pytest만 있고 SIM·DEVICE는 없다.
 
 - **전송은 토픽이 아니라 CORE 읽기 경로다.** 설계의 `localization/request` 토픽 대신 `GET /api/v1/localization/request`(`LOCALIZE_ASSIST`, 없거나 만료면 404 `NO_REQUEST`)다. Fleet이 이미 로봇마다 REST로 읽고, 새 ROS 채널과 sensing 노드 변경이 없다. 이벤트 `localization.request`·`localization.request_cleared`가 함께 난다.
 - **필드:** `{request_id, robot_id, reason: pose_stale|fleet_required, created_at, age_s, ttl_s, evidence}`. `ttl_s`는 30 s(열린 질문 2의 기본값). `evidence`는 `{phase, odom_pose {x, y, yaw, frame, stamp_ns, age_s}|null, lane {visible, confidence, error, quality_reason, stamp}|null}`이고 카메라 프레임은 싣지 않는다. `since`는 `created_at`+`age_s`로 대신한다. 같은 사유로 열려 있는 동안은 `request_id`·`created_at`을 유지하고 증거만 갱신한다. `ttl_s`가 지나면 사라지고 lane_return이 다음 틱에 새 `request_id`로 다시 연다.
 - **언제 연다:** lane_return이 `fleet` 단계(`fleet_required`, 즉시)이거나, `pose_stale` HOLD가 1 s 넘게 이어질 때(`POSE_STALE_ASK_S`; odom 한 샘플 누락은 요청이 아니다). lane_return의 다른 틱, line follow 리셋·OFF, 수락된 결정은 닫는다. 로봇은 그동안 기존 HOLD로 선다(`recovery`는 HOLD라서 없다).
-- **답과 재개:** Fleet은 기존 `POST /localization/decision`으로 답하고 `request_id`를 그대로 싣는다. 로봇의 3 s 스캔 확인이 통과해 `localization.result accepted`가 오면 CORE가 요청을 닫고, `fleet` 단계였다면 기존 D-407 `RESUME`(`by: fleet_pose`)으로 차선 확인을 다시 연다. RESUME이 거절되면(스캔 없음 등) 요청이 다음 틱에 새로 열린다. `pose_stale`만이었다면 odom 증거가 돌아오는 즉시 lane_return이 이어간다. 결정 TTL은 `ttl_s` 5 s(로봇이 수신 시각부터 센다).
-- **Fleet 답의 순서 (결정 6):** (a) 천장 카메라 지도 자세 — `MapPoseService.arbitrated_pose`가 `LOCALIZED`이고 기준 sighting이 2 s 안일 때만(`DEGRADED`·`UNKNOWN`·낡은 기준·로봇 자신의 odom 자세는 쓰지 않는다). `source: overhead`, `cues: [overhead]`. D-257 5가 아직 개정되지 않았으므로 기존 `--localization-overhead-cue` 플래그가 켜져 있을 때만 쓴다. (b) 로봇이 `CANDIDATES`이고 D-395 중재기가 결정할 수 있으면(`Arbiter.pending`) 중재기에 맡긴다(`source: candidate`는 기존 경로가 보낸다). (c) `fleet.localization.pose_request.resolve_pose_with_model` — **구현하지 않았고 늘 `None`을 돌려준다.** 결정 8(VLM, AI PC)이 들어올 자리이고 `source: "vlm"`도 아직 없다. (d) 아무것도 못 내면 콘솔 배지 "위치 확인 필요"(`needs_human`)를 켠다. `fleet_required`는 CORE가 이미 D-407 정지 요청을 올린 상태이므로 콘솔에는 둘 다 보인다. 같은 요청은 8 s(결정 TTL 5 s + 스캔 확인 3 s) 뒤에야 다시 답한다. `ttl_s`가 지난 요청은 무시한다.
+- **답과 재개:** Fleet은 기존 `POST /localization/decision`으로 답하고 `request_id`를 그대로 싣는다. 로봇의 3 s 스캔 확인이 통과해 `localization.result accepted`가 오고 그 `request_id`가 열린 요청의 id이며 Fleet이 보낸 결정일 때만 CORE가 요청을 닫고(사람의 initialpose·homing 결과는 닫지도 RESUME하지도 않는다), `fleet` 단계였다면 기존 D-407 `RESUME`(`by: fleet_pose`)으로 차선 확인을 다시 연다. RESUME이 거절되면(스캔 없음 등) 요청이 다음 틱에 새로 열린다. `pose_stale`만이었다면 odom 증거가 돌아오는 즉시 lane_return이 이어간다. 결정 TTL은 `ttl_s` 5 s(로봇이 수신 시각부터 센다).
+- **Fleet 답의 순서 (결정 6):** (a) 천장 카메라 지도 자세 — `MapPoseService.arbitrated_pose`가 `LOCALIZED`이고 기준 sighting이 2 s 안일 때만(`DEGRADED`·`UNKNOWN`·낡은 기준·로봇 자신의 odom 자세는 쓰지 않는다). `source: overhead`, `cues: [overhead]`. D-257 5 개정(아래)에 따라 `--localization-overhead-cue`가 기본 켜짐이고 `--no-localization-overhead-cue`로 끈다. (b) 로봇이 `CANDIDATES`이고 D-395 중재기가 결정할 수 있으면(`Arbiter.pending`) 중재기에 맡긴다(`source: candidate`는 기존 경로가 보낸다). (c) `fleet.localization.pose_request.resolve_pose_with_model` — **구현하지 않았고 늘 `None`을 돌려준다.** 결정 8(VLM, AI PC)이 들어올 자리이고 `source: "vlm"`도 아직 없다. (d) 아무것도 못 내면 콘솔 배지 "위치 확인 필요"(`needs_human`)를 켠다. `fleet_required`는 CORE가 이미 D-407 정지 요청을 올린 상태이므로 콘솔에는 둘 다 보인다. 같은 요청은 8 s(결정 TTL 5 s + 스캔 확인 3 s) 뒤에야 다시 답하고, 3번 답해도 요청이 열려 있으면(로봇이 거절했거나 실패) `needs_human`으로 올리며 lane_return이 놓을 때까지 다시 답하지 않는다. `ttl_s`가 지난 요청은 무시한다.
 - **이 조각에 없는 것:** 요청 중 LCD `Waiting for position`·`caution` 신호(결정 5의 표시), `source: vlm`, 차선 그래프 제약(결정 6 ③), 장치·SIM 수용. 신호 쪽 결정 1–4a와는 파일이 겹치지 않는다.
 - **Safety-Review:** line_follow/recovery와 localization을 건드린다(`python tools/harness/safety_review.py main HEAD` 결과는 PR/보고에 적는다).
+
+### 개정 제안: D-257 5 (2026-10-09, 사용자 결정, 미수락)
+
+천장 카메라는 로봇의 위치 요청(결정 5)에 **믿을 수 있을 때** 답할 수 있다: 지도 자세가 `LOCALIZED`이고 기준 sighting이 2 s 이내일 때. 답은 `source: overhead` 결정이고 **로봇의 3 s 스캔 확인이 받을지 정한다.** 이 ADR이 Accepted가 될 때 D-257 5 본문에 옮긴다. 사용자 결정으로 `--localization-overhead-cue`는 기본 켜짐이다(끄기: `--no-localization-overhead-cue`). 이 플래그는 중재기·감시의 sighting 단서도 함께 켠다.
 
 ### 개정 목록 (수락 뒤 적용)
 

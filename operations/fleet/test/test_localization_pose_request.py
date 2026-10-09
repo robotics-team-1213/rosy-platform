@@ -127,3 +127,42 @@ def test_a_closed_request_clears_the_human_flag():
 
 def test_the_model_hook_is_a_named_stub_that_answers_nothing():
     assert pose_request.resolve_pose_with_model(request(), {}) is None
+
+
+def test_a_request_that_keeps_failing_goes_to_a_human_after_three_answers():
+    r = robot()
+    svc, clock = rig(r, trusted())
+    ticks(svc, clock, 40.0)                      # the request stays open: every answer was refused
+    assert len(r.decisions) == pose_request.MAX_ANSWERS
+    view = svc.view("r1")
+    assert view["needs_human"] and view["pose_request"]["failed"]
+    r.pose_request = request(request_id="pose-2")        # CORE reopened it after its ttl
+    ticks(svc, clock, 20.0)
+    assert len(r.decisions) == pose_request.MAX_ANSWERS and svc.view("r1")["needs_human"]
+    r._state["line_follow"]["reason"] = "following"      # lane_return let go: a new episode
+    ticks(svc, clock, 1.0)
+    assert not svc.view("r1")["needs_human"]
+
+
+def test_a_request_closed_after_the_answer_is_not_a_failure():
+    r = robot()
+    svc, clock = rig(r, trusted())
+    ticks(svc, clock, 1.0)
+    r.pose_request = None                                # accepted: CORE closed it
+    ticks(svc, clock, 1.0)
+    r.pose_request = request(request_id="pose-2")
+    ticks(svc, clock, 1.0)
+    assert len(r.decisions) == 2 and not svc.view("r1")["needs_human"]
+
+
+def test_the_overhead_cue_is_on_by_default_and_can_be_turned_off(tmp_path):
+    from fleet import cli
+    from fleet.server.localization_service import build_localization_service
+    robots = tmp_path / "robots.yaml"
+    robots.write_text("robots: []" + chr(10), encoding="utf-8")
+    assert cli.parse_args(["console", "--robots", str(robots)]).localization_overhead_cue is True
+    assert cli.parse_args(["console", "--robots", str(robots),
+                           "--no-localization-overhead-cue"]).localization_overhead_cue is False
+    console = type("C", (), {"clients": staticmethod(lambda: {})})()
+    assert build_localization_service(console, None).overhead_cue is True
+    assert build_localization_service(console, None, overhead_cue=False).overhead_cue is False
