@@ -1,24 +1,32 @@
 """Ceiling robot sticker yaw offset from one straight forward drive (D-587 5).
 
-    python3 ceiling_marker_yaw.py --robot rosy_41 --current-offset-deg 0
-        [--fleet https://127.0.0.1:8443] [--seconds 10] [--dev-session] [--insecure]
+Runs inside the site Vision container (it has OpenCV and rosy_vision), or on a PC with the
+repo's operations/vision, contracts/foundation and operations/apps/games on PYTHONPATH. Needs no sighting,
+so it works before any ``marker_yaw_offset_deg`` is installed (a robot without one sends no
+sightings, D-587 4):
+
+    docker exec -i [-e ROSY_FLEET_TOKEN] rosy-site-vision-1 python3 - \
+        --robot rosy_41 --marker 41 --fleet https://proxy:8443 --insecure \
+        [--dev-session --origin https://127.0.0.1:8443] \
+        [--source ceiling_north] [--heading-edge 0,1] [--seconds 12] \
+        < tools/calibration/ceiling_marker_yaw.py
 
 Drive the robot straight forward for 0.3 m or more while this runs (Fleet manual drive or
-the CORE dashboard). It reads ``GET /api/fleet/sightings`` for that robot, takes the travel
-direction from the positions (main axis, oriented by time) and compares the sighting yaw
-with it. While driving forward the travel direction is the robot front, so the difference
-is what the sticker offset is missing. The odom heading is not used: it is in the odom
-frame, whose turn against the map is unknown.
+the CORE dashboard). The tool reads the raw ceiling frames through a viewer lease, detects
+the robot's ArUco marker, projects it with the source's approved D-457 record and the same
+parallax step and geometry gate as the Vision sightings (``track.marker_sightings.marker_pose``),
+takes the travel direction from the marker positions (main axis, oriented by time) and
+compares the raw marker yaw with it. While driving forward the travel direction is the robot
+front, so the difference is the sticker offset. The odom heading is not used: it is in the
+odom frame, whose turn against the map is unknown.
 
-``--current-offset-deg`` is required and must be the value installed now (0 when the robot
-has none): the sighting yaw already has it removed, so a wrong value gives a wrong result.
-Prints the new ``marker_yaw_offset_deg`` value for site-cameras.yaml (current + difference)
-and the nearest multiple of 90. It never writes any file or config; the operator installs
-the line. Refuses (exit 2) with fewer than 5 samples, under 0.25 m of travel, more than
-0.02 m off a straight line or more than 5 deg of yaw spread.
+Prints the ``marker_yaw_offset_deg`` value for site-cameras.yaml and the nearest multiple of
+90. It never writes any file or config; the operator installs the line. Refuses (exit 2)
+with fewer than 5 samples, under 0.25 m of travel, more than 0.02 m off a straight line or
+more than 5 deg of yaw spread.
 
 Token: ``ROSY_FLEET_TOKEN`` (viewer or above), or ``--dev-session`` on a development-mode
-site. The token is never printed. Stdlib only, so it runs with the site PC's python3.
+site. The token is never printed. ``estimate`` is stdlib only.
 """
 from __future__ import annotations
 
@@ -47,7 +55,9 @@ def _wrap(angle: float) -> float:
 
 
 def estimate(samples: Sequence[tuple[float, float, float, float]], current_offset_deg: float = 0.0) -> dict:
-    """samples: (captured_at, x, y, yaw rad) sightings of one forward straight drive."""
+    """samples: (captured_at, x, y, yaw rad) of one marker over a forward straight drive.
+
+    With the raw marker yaw and current_offset_deg 0 the result is the sticker offset."""
     rows = sorted(samples)
     if len(rows) < MIN_SAMPLES:
         raise EstimateError(f"only {len(rows)} sightings; need {MIN_SAMPLES}")
@@ -84,46 +94,84 @@ def estimate(samples: Sequence[tuple[float, float, float, float]], current_offse
             "nearest_90_deg": nearest if nearest <= 180 else nearest - 360}
 
 
-def _request(fleet: str, path: str, token: str | None, context, body: dict | None = None) -> dict:
-    headers = {"Origin": fleet, "Content-Type": "application/json"}
+#: Browser origin Fleet checks on session requests; --origin sets it (the site's own console URL).
+ORIGIN: list[str] = []
+
+
+def _request(fleet: str, path: str, token: str | None, context, body: dict | None = None,
+             *, raw: bool = False):
+    headers = {"Origin": ORIGIN[0] if ORIGIN else fleet, "Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(fleet + path, headers=headers, method="GET" if body is None else "POST",
                                      data=None if body is None else json.dumps(body).encode("utf-8"))
     with urllib.request.urlopen(request, context=context, timeout=5) as response:
-        return json.loads(response.read())
+        data = response.read()
+        return (data, dict(response.headers)) if raw else json.loads(data)
 
 
-def collect(fleet: str, robot: str, seconds: float, token: str | None, context) -> list[tuple]:
-    seen: dict[float, tuple] = {}
+def collect(fleet: str, *, source: str, marker: int, heading_edge: tuple[int, int], seconds: float,
+            token: str | None, context) -> list[tuple]:
+    """(captured_at, x, y, raw marker yaw) from the raw frames; needs rosy_vision (Vision container)."""
+    from rosy_vision.detect import detect_markers
+    from rosy_vision.track.calibration import from_record
+    from rosy_vision.track.marker_sightings import marker_pose, solved_camera
+
+    records = _request(fleet, "/api/fleet/calibrations", token, context).get("calibrations", [])
+    record = next((r for r in records if r.get("source_id") == source), None)
+    if record is None:
+        raise EstimateError(f"no approved calibration record for {source}")
+    samples: dict[float, tuple] = {}
+    lease, lease_at = None, -math.inf
     end = time.monotonic() + seconds
     while time.monotonic() < end:
-        for row in _request(fleet, "/api/fleet/sightings", token, context).get("sightings", []):
-            if row.get("robot_id") == robot and not row.get("stale"):
-                seen[row["captured_at"]] = (row["captured_at"], row["x"], row["y"], row["yaw"])
-        time.sleep(0.2)
-    return list(seen.values())
+        if time.monotonic() - lease_at > 50:
+            lease = _request(fleet, "/api/fleet/vision/lease", token, context, {"source_id": source})
+            lease_at = time.monotonic()
+        try:
+            jpeg, headers = _request(fleet, lease["frame_path"], lease["lease"], context, raw=True)
+        except OSError:
+            time.sleep(0.25)
+            continue
+        captured_at = float(headers.get("X-Frame-Captured-At", "nan"))
+        size = (int(headers.get("X-Frame-Width", 0)), int(headers.get("X-Frame-Height", 0)))
+        quad = detect_markers(jpeg).get(marker)
+        calibration = from_record(record, source_id=source, map_id=record["map_id"], frame_size=size,
+                                  lens=record.get("lens")) if min(size) > 0 else None
+        camera = solved_camera(calibration) if calibration is not None else None
+        if quad is not None and camera is not None and math.isfinite(captured_at):
+            pose = marker_pose(calibration, quad, heading_edge, camera)
+            if pose is not None:
+                samples[captured_at] = (captured_at, *pose)
+        time.sleep(0.25)
+    return list(samples.values())
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--robot", required=True)
-    parser.add_argument("--fleet", default="https://127.0.0.1:8443")
-    parser.add_argument("--seconds", type=float, default=10.0)
-    parser.add_argument("--current-offset-deg", type=float, required=True,
-                        help="the marker_yaw_offset_deg installed now for this robot (0 when none)")
+    parser.add_argument("--robot", required=True, help="robot id for the printed config line")
+    parser.add_argument("--marker", type=int, required=True, help="its ArUco id (D-562: robot number)")
+    parser.add_argument("--source", default="ceiling_north")
+    parser.add_argument("--heading-edge", default="0,1", help="the source's heading_edge corners")
+    parser.add_argument("--fleet", default="https://proxy:8443")
+    parser.add_argument("--seconds", type=float, default=12.0)
     parser.add_argument("--dev-session", action="store_true", help="ask a development-mode site for a session")
     parser.add_argument("--insecure", action="store_true", help="skip TLS verification (site self-signed cert)")
+    parser.add_argument("--origin", help="Origin header for session requests (default: --fleet)")
     args = parser.parse_args(argv)
     fleet = args.fleet.rstrip("/")
+    ORIGIN[:] = [args.origin] if args.origin else []
+    edge = tuple(int(v) for v in args.heading_edge.split(","))
     context = ssl._create_unverified_context() if args.insecure else None
     token = os.environ.get("ROSY_FLEET_TOKEN")
     if args.dev_session:
         token = _request(fleet, "/api/fleet/auth/development-session", None, context, {})["token"]
-    print(f"drive {args.robot} straight forward now; reading sightings for {args.seconds:.0f} s", flush=True)
-    samples = collect(fleet, args.robot, args.seconds, token, context)
+    print(f"drive {args.robot} straight forward now; reading marker {args.marker} for {args.seconds:.0f} s",
+          flush=True)
     try:
-        result = estimate(samples, args.current_offset_deg)
+        samples = collect(fleet, source=args.source, marker=args.marker, heading_edge=edge,
+                          seconds=args.seconds, token=token, context=context)
+        result = estimate(samples, 0.0)
     except EstimateError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
