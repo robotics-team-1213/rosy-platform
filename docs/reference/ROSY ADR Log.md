@@ -575,3 +575,4 @@
 | D-589 | Rosy Cam은 인식이 잘 되도록 노출을 스스로 계속 맞춘다 — Vision이 인식 품질로 재고, 폰이 한정된 설정만 바꾼다 | Accepted (2026-10-10, 사용자 지시; S1 Vision·S2 앱·S3 Fleet·S4 현장 별도) |
 | D-590 | Pilot Android 로봇 목록에서 두 로봇을 선택하고, 두 카메라와 공용 조이스틱 하나로 각 CORE에 같은 teleop을 보낸다. 두 MANUAL 승인·공통 수동 상한·신선한 카메라를 요구하고 한쪽 실패 시 함께 0을 요청한다. leader/follower 추종은 별도 모드다 | Accepted (2026-10-10, 사용자 요청; SOURCE·DEVICE·FIELD 별도) |
 | D-591 | 차선추종 몸 정지 간격 0.02 m(Pinky Pro): `obstacle_blind_floor: false`로 LiDAR range_min 사각 바닥(약 0.04–0.09 m)을 끄고 `obstacle_latency_s: 0`, 정지 간격 = 0.02 + 제동; 벽 옆 굽이마다 서던 문제(8kcn 0.048 m), 기억한 점·초음파·0.02 m 안 정지는 유지 | Accepted |
+| D-593 | 운영자가 지도에 찍은 위치(`POST /api/fleet/robots/{id}/map-pin`, 이름 있는 운영자)가 D-494 지도 자세의 앵커가 된다: 즉시 LOCALIZED, odom 다리 한도는 sighting과 같고, 다음 sighting이 0.15 m/20°로 검사한다; trip 중 거절, overhead 답 아님 | Proposed (2026-10-10, 사용자 지시; SOURCE·호스트 테스트만) |

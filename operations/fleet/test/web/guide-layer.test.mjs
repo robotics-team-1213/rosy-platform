@@ -43,6 +43,9 @@ test('chip text names the robot and its uncertainty', () => {
   assert.equal(poseLabel(GUIDE.robots[0]), 'rosy_01 · ±0.05 m');
   assert.equal(poseLabel(GUIDE.robots[1]), 'rosy_02 · 위치 모름');
   assert.equal(poseLabel(GUIDE.robots[2]), 'rosy_03 · ±0.20 m · 추정');
+  // D-593: an operator pin says so, with its anchor age
+  assert.equal(poseLabel({robot_id: 'rosy_40', pose: {u_m: 0.12, state: 'LOCALIZED', anchor_source: 'operator_pin', anchor_age_s: 3.6}}),
+    'rosy_40 · ±0.12 m · 운영자 핀 4 s');
 });
 
 test('fitView keeps robot rings inside the view at every turn', () => {

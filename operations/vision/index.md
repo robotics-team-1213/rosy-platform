@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · fix(vision): D-589 S1 재검토 반영 — 맞춤 기한, 맞춤 중 마커, 재연결
 - 2026-10-10 · uncommitted · feat(vision): D-589 S1 독립 리뷰 반영 — 언덕 오르기 대신 지키며 잡고 잠그기
 - 2026-10-10 · uncommitted · feat(vision): D-589 S1 인식 점수·EV 언덕 오르기·camera/camera_state·배경 재학습 연동
 - 2026-10-10 · uncommitted · feat(vision): D-587 이름 있는 천장 로봇 마커를 sighting으로
 - 2026-10-09 · uncommitted · feat(vision): D-564 장소 마커 투영과 전송
-- 2026-10-09 · uncommitted · fix(vision): D-560 S1 독립 리뷰 반영, API v1.167

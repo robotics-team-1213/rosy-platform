@@ -8,10 +8,11 @@ import threading
 import time
 from typing import Callable, Optional
 
-from core_common.protocol.schemas import LineFollowStatus
+from core_common.protocol.schemas import LineCrosswalkStatus, LineFollowStatus
 from core_features.line_follow.authority import AuthorityMixin
 from core_features.line_follow.arc.lane_arc import ArcMixin
 from core_features.line_follow.body_stop import BodyStopMixin
+from core_features.line_follow.crosswalk_gate import CrosswalkGateMixin
 from core_features.line_follow.clearance import Point, path_clearance
 from core_features.line_follow.recovery.junction.gate import JunctionMixin
 from core_features.line_follow.recovery.stuck_wiring import StuckRecoveryMixin
@@ -30,7 +31,7 @@ from core_features.decision.lane import FOLLOW, LANE_ACTIONS, STOP, lane_recover
 
 
 class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneReturnMixin, JunctionMixin,
-                        ArcMixin):
+                        ArcMixin, CrosswalkGateMixin):
     def __init__(self, events, *, config: Optional[LineFollowConfig] = None,
                  clock: Callable[[], float] = time.monotonic,
                  angular_ceiling: Optional[Callable[[], float]] = None) -> None:
@@ -74,6 +75,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
         self._init_junction()  # D-494 decision 4 (junction.py)
         self._init_arc()  # D-520 (arc/lane_arc.py)
         self._init_authority()  # D-517 4 (authority.py)
+        self._init_crosswalk_gate()  # D-573 (crosswalk_gate.py)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """Use the bridge's line clock for defaults (mode change, loss start)."""
@@ -125,6 +127,7 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             self._reset_junction()
             self._reset_arc(reason or default)
             self._init_authority()
+            self._xwalk.reset()
             self._generation += 1
             self._mode = selected
             self._observation = None
@@ -253,7 +256,10 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
 
     def status(self) -> LineFollowStatus:
         with self._lock:
-            return self._status.model_copy(update={'junction': self._junction_status(),
+            zone = self._xwalk.status(self._clock())  # D-573 6: absent while the gate is off
+            crosswalk = ({'crosswalk': None if zone is None else LineCrosswalkStatus(**zone),
+                          'crosswalk_reported': True} if self._config.crosswalk_gate_enabled else {})
+            return self._status.model_copy(update={**crosswalk, 'junction': self._junction_status(),
                                                    'arc': self._arc_status(),
                                                    'route_context': self._route_context_current,
                                                    'route_context_published_at_s':
@@ -453,16 +459,18 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
                 # D-468 trail feed; observe() still raises on an invalid epoch, as tick() did.
                 self._feed_return_trail(current)
                 if decision is self._arc_out:  # D-520: the arc owns this tick (no D-468/D-476/D-407,
-                    return self._authority_gate(current, decision)  # no junction gate); D-517 4 stops it
+                    # no junction gate); D-517 4 and D-573 only ever lower it
+                    return self._crosswalk_gate(current, self._authority_gate(current, decision))
                 if (self._mode is LineFollowMode.CAMERA_LINE and self._observation is not None
                         and self._observation.quality_reason in ('low_light', 'overexposed')):
                     self._recovery_reset('camera_' + self._observation.quality_reason, current)
                     self._end_bridge()  # D-476: invalid vision ends a bridge for good
                     # LOST also bypasses back-off. D-517 4: the authority gate only ever zeroes.
-                    return self._authority_gate(current, self._junction_gate(current, decision))
+                    return self._crosswalk_gate(current, self._authority_gate(
+                        current, self._junction_gate(current, decision)))
                 local = self._apply_lane_return(current, decision)
-                return self._authority_gate(current, self._junction_gate(current, local if local is not None
-                                            else self._apply_recovery(current, decision)))
+                return self._crosswalk_gate(current, self._authority_gate(current, self._junction_gate(
+                    current, local if local is not None else self._apply_recovery(current, decision))))
             finally:
                 if not self._path_evaluated:
                     # 풀림 지연은 연속으로 잰 틱만 센다 — LiDAR 끊김·계단 정지·OFF 틱이 끼면 처음부터.

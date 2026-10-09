@@ -135,6 +135,10 @@ class TripConfig:
     junction_wait_s: float = 10.0
     #: A trip starts only within this long after the pose's sighting anchor.
     start_anchor_age_s: float = 2.0
+    #: D-593 7 (user, 2026-10-10): an operator-pin anchor up to the map pose's anchor age limit
+    #: (10 s) also starts a trip, but only while odom has moved at most this much since the pin.
+    pin_start_still_m: float = 0.02
+    pin_start_still_deg: float = 2.0
     #: No ``stall_m`` of progress along the plan for this long (outside a junction manoeuvre or a
     #: replan hold) stops the trip (site config ``fleet.trip.stall_s``).
     stall_s: float = 20.0
@@ -160,6 +164,8 @@ class TripConfig:
                 raise ValueError(f"fleet.trip.{item.name} must be a positive finite number")
         if not 0.05 <= self.arc_outer_line_offset_m <= 0.20:  # D-520 1: CORE's range
             raise ValueError("fleet.trip.arc_outer_line_offset_m must be in [0.05, 0.20]")
+        if self.pin_start_still_m > 0.10 or self.pin_start_still_deg > 10.0:  # D-593 7: "not moved"
+            raise ValueError("fleet.trip.pin_start_still_m/deg must be at most 0.10 m / 10 deg")
         if self.expect_tol_min_m > MAX_EXPECT_TOL_M:
             raise ValueError(f"fleet.trip.expect_tol_min_m must be at most {MAX_EXPECT_TOL_M}")
 

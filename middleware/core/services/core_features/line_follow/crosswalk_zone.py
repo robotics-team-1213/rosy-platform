@@ -32,9 +32,15 @@ class CrosswalkZones:
         crosswalk = evidence.crosswalk
         if crosswalk is None or evidence.uncertainty_m is None or evidence.uncertainty_m > MAX_UNCERTAINTY_M:
             return
+        # D-573: the lane corridor across the zone (inner paint edges at its near/far ends, body
+        # frame at the image), None when a side was not seen. Only the crosswalk gate reads it.
+        edges = {b.side: [b.slope*x+b.intercept_m for x in (crosswalk.near_m, crosswalk.far_m)]
+                 for b in evidence.boundaries}
         self._zones.append(dict(epoch=epoch, stamp_ns=round(evidence.stamp*1e9), near=crosswalk.near_m,
                                 far=crosswalk.far_m, uncertainty=evidence.uncertainty_m,
-                                received_at=received_at, anchor=None))
+                                received_at=received_at, anchor=None,
+                                left=max(edges["left"]) if "left" in edges else None,
+                                right=min(edges["right"]) if "right" in edges else None))
         del self._zones[:-MAX_ZONES]
 
     def holds(self, evidence, *, now, guard, ir_x, max_length, odom_error_fraction, range_error_fraction=0.):
