@@ -60,6 +60,7 @@ def test_keep_bend_stops_early_or_follows_centreline_through_turn():
         assert all(obs is None for _, obs, _ in records[step:]), stops
         assert pose[:2] == stopped_at[:2], (pose, stopped_at)
         assert distance_to_polyline(pose[:2], centre) < 0.02, pose
+        print(f"bend outcome=STOP step={step}, position={stopped_at[:2]}")
         return
 
     turn_direction = centre[2] - centre[1]
@@ -74,3 +75,4 @@ def test_keep_bend_stops_early_or_follows_centreline_through_turn():
     assert turn_progress > 0.06, diagnostic
     assert pose[2] > math.radians(10), diagnostic
     assert max_error < 0.035, diagnostic
+    print(f"bend outcome=FOLLOW {diagnostic}")
