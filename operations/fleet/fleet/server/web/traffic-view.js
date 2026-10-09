@@ -109,7 +109,6 @@ export function drawSignalLamps(ctx, toPoint, { view, css, on }) {
   const drawing = on ? trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips) : null;
   if (!drawing?.signals?.length) return;
   const lampColour = { green: css("--status-good"), yellow: css("--status-warn"), red: css("--status-crit") };
-  const mono = css("--font-mono") || "monospace";
   for (const stop of drawing.signals) {
     const back = 0.17, side = 0.13;  // m upstream of the stop line, m to the approach's right
     const mx = stop.x - Math.cos(stop.angle) * back + Math.sin(stop.angle) * side;
@@ -117,7 +116,7 @@ export function drawSignalLamps(ctx, toPoint, { view, css, on }) {
     const { x: cx, y: cy } = toPoint(mx, my);
     const label = stop.count ? `${signalLampText(stop.lamp)} ${stop.count}` : signalLampText(stop.lamp);
     ctx.save();
-    ctx.font = `600 12px ${mono}`;
+    ctx.font = window.RosyPalette.canvasFont(12, "mono");
     const w = 30 + ctx.measureText(label).width, h = 22;
     ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 11);
     ctx.fillStyle = css("--ground-deep"); ctx.fill();
@@ -126,7 +125,7 @@ export function drawSignalLamps(ctx, toPoint, { view, css, on }) {
     ctx.fillStyle = lampColour[stop.lamp] || lampColour.red; ctx.fill();
     ctx.fillStyle = css("--ink"); ctx.textAlign = "left"; ctx.textBaseline = "middle";
     ctx.fillText(label, cx - w / 2 + 22, cy + 0.5);
-    ctx.font = `600 10px ${mono}`; ctx.fillStyle = css("--status-warn"); ctx.textAlign = "center";
+    ctx.fillStyle = css("--status-warn"); ctx.textAlign = "center";
     ctx.fillText("가상", cx, cy - h / 2 - 7);
     ctx.restore();
   }
