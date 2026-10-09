@@ -2970,3 +2970,11 @@
 - 변경: 관제 지도 아래에서 시작점 도구와 `배경 다시 학습`을 뺐다(범례·추적 상태줄·`관제 범위 안내`는 남김). 설치·보정 `카메라 설치·보정`이 시작점(D-513, `start-point-view.js`)과 새 `tracking-relearn.js`(D-539)를 가진다. 시작점은 맵 맞춤 위에서 본 그림에서 고르고(`picturePose`: 여백·트랙 밖·퇴화 변환은 자세 없음) 표시도 그 그림에 한다. 관제 `cameraPick`/`pointerPose`와 시작점 표시는 지웠다. 서버 경로는 그대로, 시작점 쓰기는 이름 있는 운영자(D-540 9). 카메라 승인 패널 하나로 합치기와 `#vision-heading` 중복은 이 브랜치 밖.
 - 증거: node `start-point-layer.test.mjs` 5건. OMEN `operations/fleet/test/` 3210 passed, 3 failed: `test_cell_app_browser`·`test_site_map_browser[320-568]`은 깨끗한 main(039e21ab0)에서도 실패, `test_console_card_trips_browser`는 부하 탓(AI PC 단독 8 passed). `test/test_fleet_console_browser.py`는 main과 같은 8 failed. main 병합(ad7655ce9) 뒤 AI PC `operations/fleet/test/` 3266 passed, 5 skipped, 0 NEW. 캡처 `X:/DevTemp/setup-tools/{before,after}-*.png`.
 - gate 변화: SOURCE. fleet 크기 +33(새 모듈 62, 관제 쪽 −120).
+
+## 2026-10-09 · a7203b3c5 · feat(fleet): D-577 (a) 판단기 기본 켜짐 + 차선 상실 R3 조건·R5
+- 변경: `fleet console`이 판단기를 기본으로 돌린다(`--no-stuck-resolver`로 끔, `--stuck-resolver`는 호환). `lane_lost`의 R3 `BACK_AND_RETRY`는 로컬 복구 켜짐·시도·예산 남음·R3 거절 없음·`line_follow.crosswalk` 없음·Fleet 지도 자세 모름 또는 LOCALIZED ≤ 2 s·뒤 띠 동료 없음일 때만. 아니면 R5 `WAIT` + `lane_lost_hold:<이유>` 사람 올림(막힘마다 한 번, 예산 안 씀, CORE가 WAIT 거절해도 올림). `lane_lost`에 RESUME·YIELD 없음. trip 로봇은 M4 그대로. 판단기 메모 `age_s`, 큐는 30 s 무응답 올림 행을 맨 위로(콘솔만). API v1.172.
+- 증거: 먼저 실패 19건(`X:/DevTemp/d577a/red.txt`, e8f4dec52). 모델 PC `operations/fleet/test/` + `test/test_line_follow_contract_docs.py` 3144 passed, 144 skipped(67c942071), `known_failures` 0 new. 9dfk 재현: 자격 없음 → `no_resolver_token`, 자격 있음 → R5 WAIT 한 번 + `lane_lost_hold:attempts`.
+- gate 변화: SOURCE 후보. Safety-Review 전, 착지·푸시 안 함. 로봇 자격 발급·`recovery_local_enabled`·AI 행동·비전은 꺼진 채(사용자 승인 대기).
+- 안전 검토 보완(2026-10-10): 잃은 자세(`UNKNOWN`이지만 목격 출처 있었음) → `pose`, 뒤 띠는 신뢰 지도 자세로만 재고 모르면 `peer_unknown`, `line_follow.crosswalk` 보고 없음 → `crosswalk_unknown`(지금은 R3가 사실상 닫힘), R5 WAIT 전송 실패 한 번 재전송, 시작 시 답할 로봇 출력. 새 시험 10건 먼저 실패(`X:/DevTemp/d577a/red2.txt`), 모델 PC fleet 3162 passed, 0 new. API v1.173.
+- 결정: D-577 Accepted (2026-10-09, 사용자)
+- 교훈: 모델 PC로 `git archive` 200 MB를 보내면 느린 링크에서 40분이 넘는다. `repo`에 bundle(origin/main..HEAD)을 fetch해 거기서 archive하면 1분 안이다.
