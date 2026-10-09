@@ -2297,3 +2297,86 @@ def test_an_old_hand_over_without_recovery_and_an_unknown_value_signal_nothing(t
     _face_inputs(tmp_path, recovery="teleporting")
     assert display._core()["recovery"] is None
 
+
+def test_the_recovering_lamp_and_lcd_are_held_1_5_s_but_the_beep_stops_at_once(tmp_path):
+    module, display, lamp, clock, gpio, _spawn = _recovering(tmp_path, recovery="retrace")
+    display.step()
+    beeps = len(_starts(gpio))
+    _face_inputs(tmp_path, recovery=None)
+    clock.now += 1.0
+    display.step()
+    assert lamp.pattern == "recovering" and display.screen["strip"] == "Recovering: returning to lane"
+    assert len(_starts(gpio)) == beeps  # the reversing beep did not wait for the hold
+    clock.now += 0.4
+    display.step()
+    assert lamp.pattern == "recovering"
+    clock.now += 0.2  # 1.6 s after the last RECOVERING tick
+    display.step()
+    assert lamp.pattern == "ready" and "Recovering" not in str(display.screen["strip"])
+    assert module.RECOVERY_HOLD_S == 1.5
+
+
+def test_an_estop_in_the_handover_stops_every_recovery_signal_even_with_a_stale_mode(tmp_path):
+    # status-inputs still says the robot navigates (it is up to 10 s old); face-inputs has the e-stop.
+    module, display, lamp, clock, gpio, _spawn = _recovering(tmp_path, recovery="retrace")
+    display.step()
+    beeps = len(_starts(gpio))
+    _face_inputs(tmp_path, recovery="retrace", estop=True, robot_mode="NAVIGATION")
+    clock.now += 1
+    display.step()
+    assert len(_starts(gpio)) == beeps and display._reversed_at is None
+    assert lamp.pattern != "recovering" and display.screen["kind"] == "stopped"
+    _face_inputs(tmp_path, recovery=None, estop=True, robot_mode="EMERGENCY")  # and no hold afterwards
+    clock.now += 0.2
+    display.step()
+    assert lamp.pattern != "recovering"
+    display._core = lambda: {"estop": True, "recovery": "retrace"}  # direct: the beep guard itself
+    display._reverse_alarm(display._core(), "recovering", clock.now + 5)
+    assert len(_starts(gpio)) == beeps
+
+
+def test_an_old_lamp_helper_leaves_the_lamp_out_but_the_beep_and_lcd_still_work(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    gpio = FakeGPIO()
+    display, lamp, _clock, _rendered, lines = _state_loop(module, tmp_path, gpio=gpio, spawn=FakeSpawn(code=64),
+                                                          wall=lambda: WALL)
+    _face_inputs(tmp_path, recovery="retrace")
+    display.step()
+    display.step()
+    assert display.screen["strip"] == "Recovering: reversing"
+    assert ("change", module.BUZZER_REVERSE_HZ) in gpio.events
+    assert any("lamp_pattern recovering ended with 64" in line for line in lines)
+
+
+def test_a_muted_buzzer_makes_no_reversing_beep(tmp_path):
+    _module, display, lamp, _clock, gpio, _spawn = _recovering(tmp_path, recovery="retrace")
+    display._buzzer.enabled = False  # ROSY_BUZZER_ENABLED=false
+    display.step()
+    assert _starts(gpio) == [] and lamp.pattern == "recovering"
+
+
+def test_a_core_common_from_before_d546_still_gets_a_lamp_pattern(tmp_path, monkeypatch):
+    module = _display()
+    seen = []
+
+    def old(state, robot_mode=None, nav_state=None):
+        seen.append((state, robot_mode, nav_state))
+        return "ready"
+    monkeypatch.setattr(module.robot_state, "lamp_pattern", old)
+    view = {"robot_mode": "NAVIGATION", "nav_state": "IDLE"}
+    assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "ready"
+    assert seen == [("ready", "NAVIGATION", "IDLE")]
+
+
+def test_the_piezo_is_stopped_even_when_the_beep_sleep_fails():
+    module = _display()
+    gpio = FakeGPIO()
+
+    def broken(_seconds):
+        raise RuntimeError("sleep failed")
+    with pytest.raises(RuntimeError):
+        module.Buzzer(gpio, 22, True, broken).announce("reverse")
+    assert gpio.events[-2:] == [("start", module.BUZZER_DUTY), ("stop",)]
+

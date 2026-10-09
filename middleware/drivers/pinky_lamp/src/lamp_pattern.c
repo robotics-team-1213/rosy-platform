@@ -182,7 +182,7 @@ static int known(const char *pattern)
 int main(int argc, char **argv)
 {
     if (argc != 2 || !known(argv[1])) {
-        fprintf(stderr, "usage: lamp_pattern booting|ready|failed|caution|manual|illumination|navigating|blocked|docking|emergency|recovering|bridging|test|off\n");
+        fprintf(stderr, "usage: lamp_pattern booting|ready|failed|caution|manual|illumination|navigating|blocked|docking|emergency|recovering|bridging|test|identify_blue|identify_amber|off\n");
         return 64;
     }
     const char *pattern = argv[1];
