@@ -187,3 +187,63 @@ def test_int8_quantizes_a_graph_whose_input_is_named_images(tmp_path):
     cv2.imwrite(str(calib / "a.png"), np.full((32, 32, 3), 128, np.uint8))
     convert.quantize_int8(fp32, tmp_path / "int8.onnx", calib, (32, 32), "rgb")
     assert (tmp_path / "int8.onnx").stat().st_size > 0
+
+
+# --- 2026-10-09: int8 with the first and last Conv kept fp32 (lane_seg Pi latency) ---
+
+def _three_conv_model(tmp_path):
+    onnx = pytest.importorskip("onnx")
+    from onnx import TensorProto, helper
+    w = np.random.default_rng(0).standard_normal((3, 3, 3, 3)).astype(np.float32)
+    nodes = [helper.make_node("Conv", [src, f"w{i}"], [dst], name=f"conv{i}", pads=[1, 1, 1, 1])
+             for i, (src, dst) in enumerate((("x", "a"), ("a", "b"), ("b", "y")))]
+    graph = helper.make_graph(
+        nodes, "g", [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1, 3, 32, 32])],
+        [helper.make_tensor_value_info("y", TensorProto.FLOAT, [1, 3, 32, 32])],
+        [helper.make_tensor(f"w{i}", TensorProto.FLOAT, w.shape, w.flatten()) for i in range(3)])
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)])
+    model.ir_version = 8
+    path = tmp_path / "fp32.onnx"
+    onnx.save(model, path)
+    return path
+
+
+def test_fp32_node_names_resolve_aliases_and_refuse_unknown_names(tmp_path):
+    path = _three_conv_model(tmp_path)
+    assert convert.fp32_node_names(path, ("first_conv", "last_conv")) == ["conv0", "conv2"]
+    assert convert.fp32_node_names(path, ("conv1", "conv1")) == ["conv1"]
+    assert convert.fp32_node_names(path, ()) == []
+    with pytest.raises(ValueError):
+        convert.fp32_node_names(path, ("nope",))
+
+
+def test_lane_seg_int8_keeps_the_first_and_last_conv_fp32():
+    assert convert.INT8_FP32_DEFAULT["lane_seg"] == ("first_conv", "last_conv")
+    assert convert.INT8_FP32_DEFAULT["object_det"] == ()
+
+
+def test_int8_leaves_the_named_convs_fp32_with_a_cap_multiple_of_frames(tmp_path):
+    """7 frames is a multiple of the calibration cap, which ORT 1.26 refuses unless trimmed."""
+    onnx = pytest.importorskip("onnx")
+    pytest.importorskip("onnxruntime.quantization")
+    cv2 = pytest.importorskip("cv2")
+    fp32 = _three_conv_model(tmp_path)
+    calib = tmp_path / "calib"
+    calib.mkdir()
+    for i in range(convert.CALIB_MAX_INTERMEDIATE):
+        cv2.imwrite(str(calib / f"{i}.png"), np.full((32, 32, 3), 20 * i, np.uint8))
+    out = tmp_path / "int8.onnx"
+    excluded = convert.quantize_int8(fp32, out, calib, (32, 32), "rgb", ("first_conv", "last_conv"))
+    assert excluded == ["conv0", "conv2"]
+    graph = onnx.load(str(out)).graph
+    producer = {o: n.op_type for n in graph.node for o in n.output}
+    inits = {i.name: i for i in graph.initializer}
+    convs = {n.name: n for n in graph.node if n.op_type == "Conv"}
+    assert producer.get(convs["conv1"].input[1]) == "DequantizeLinear"      # middle conv int8
+    for kept in ("conv0", "conv2"):
+        assert convs[kept].input[1] in inits                                 # fp32 weight, no DQ
+    weight_dq = next(n for n in graph.node if n.op_type == "DequantizeLinear"
+                     and n.output[0] == convs["conv1"].input[1])
+    assert len(onnx.numpy_helper.to_array(inits[weight_dq.input[1]]).shape) == 1  # per-channel scales
+    act_q = next(n for n in graph.node if n.op_type == "QuantizeLinear" and n.input[0] not in inits)
+    assert inits[act_q.input[2]].data_type == onnx.TensorProto.INT8          # s8 activations
