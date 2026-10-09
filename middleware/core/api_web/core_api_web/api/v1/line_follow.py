@@ -20,6 +20,7 @@ from core_api_web.api.v1.common import (
     require_calibration_owner,
     require_manual_released,
     localized_start,
+    stop_ends_trip_lease,
     viewer,
 )
 from core_common.domain.tasks import TaskKind
@@ -140,6 +141,7 @@ def set_line_follow_mode(body: LineFollowModeRequest,
             if not ok:
                 raise ApiError("MODE_CONFLICT", 409, reason)
             svc.state.set_mode(RobotMode.IDLE)
+        stop_ends_trip_lease(svc, auth)
         return _status(svc)
 
     # Turning line-follow OFF above only stops motion, so it stays open to all.

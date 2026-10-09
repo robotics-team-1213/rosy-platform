@@ -29,6 +29,7 @@ from typing import Protocol
 # runtime/gateway/test/test_v1_import_boundary.py 가 고정한다.
 from core_features.calibration import CalibrationSessionError
 from core_features.command.arbitration import Mode
+from core_common.protocol.trip_lease import DEFAULT_TTL_S as TRIP_LEASE_DEFAULT_TTL_S, TripLeaseError
 from core_features.diagnostics.collector import worst
 from core_features.docking.database import DockError, DockInstance, DockType
 from core_features.line_follow import LineFollowMode
@@ -47,6 +48,8 @@ from core_common.protocol.schemas import VisionPreviewStatus, VisionEvidenceReco
 #: 라우터용 재수출 면. __all__ 선언으로 재수출임을 명시한다(F401 진정).
 __all__ = [
     "CalibrationSessionError",
+    "TRIP_LEASE_DEFAULT_TTL_S",
+    "TripLeaseError",
     "Mode",
     "NavigationError",
     "DockError",
@@ -107,6 +110,7 @@ class CoreServicesLike(Protocol):
     state: Any
     swarm: Any
     traffic_policy: Any
+    trip_lease: Any
     vision: Any
     vision_stream: Any
     waypoints: Any

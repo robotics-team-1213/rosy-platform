@@ -32,7 +32,7 @@
 ## 최근 기록
 
 - 2026-10-09 · uncommitted · feat(core): 장치 개발 모드 표식 (D-548)
+- 2026-10-09 · uncommitted · fix(api): D-541 Safety-Review 반영
+- 2026-10-09 · uncommitted · feat(api): D-541 trip lease 경로와 울타리 (API v1.157)
 - 2026-10-09 · uncommitted · docs(core): 화면 코드 승인 409 수정의 gate 기록 보완 (D-483)
 - 2026-10-09 · uncommitted · fix(core): LCD hand-over에 CA 확인 값 (D-483 보완)
-- 2026-10-09 · uncommitted · fix(api): Fleet 공개 신원 조회 예산 분리
-- 2026-10-09 · uncommitted · fix(api): 램프 식별 결과 조회

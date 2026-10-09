@@ -881,3 +881,8 @@
 - gate 변화: ROS-SIM 기록(부분). DEVICE 열림
 - 결정: keeper는 바꾸지 않았다. ring 통과는 D-520 호 주행 또는 keeper 지도 사전(새 입력)의 결정이 필요하다. B9 fixture 그대로
 - 교훈: 0.25 m 원 차로에서는 한쪽 경계가 늘 시야 밖이다. 보이는 온전한 차로가 내 차로라는 keeper 가정은 회전교차로 둘레에서 틀린다
+
+## 2026-10-09 · uncommitted · feat(core): D-541 trip lease 상태 제공자 (`state/manager.py`)
+- 변경: `StateManager.set_trip_lease_provider` — 스냅숏의 `trip_lease`·`trip_lease_ended`를 live로 읽는다. lease 자체는 `core/trip_lease.py`(gateway)에 둔다: core_features 크기 판정이 증가를 막는다. lease 동작: Fleet trip lease 한 개(로봇당). 같은 토큰·같은 `lease_id`만 renew, 그 밖은 `TRIP_LEASED`. TTL 1–10 s(기본 5) CORE 단조 시계. 만료·넘겨받기는 lease를 지운 뒤 락 밖에서 `halt`(CORE 배선: line-follow 끔, 내비게이션 취소, NAVIGATION→IDLE). 읽기는 만료시키지 않는다(5 Hz 타이머만) — 지난 lease는 처리될 때까지 계속 막는다. `trip_lease_ended`는 끝난 뒤 10 s 보인다. `trip_lease.renewed`는 lease당 30 s에 한 번. 주인 토큰의 teleop·다른 출발지 `/ws/state`는 `trip_lease.shared_token` 한 번.
+- 증거: `middleware/core/gateway/test/test_trip_lease.py`(모델 PC).
+- gate 변화: SOURCE. Safety-Review·SIM(Fleet kill → IDLE)·DEVICE 열림.

@@ -301,7 +301,7 @@ def test_field_view_review_fixes_are_served():
     page = client.get("/console").text
     field_view = client.get("/console/assets/field-view.js").text
     vision_view = client.get("/console/assets/vision-view.js").text
-    styles = client.get("/console/assets/styles.css").text
+    styles = client.get("/console/assets/styles.css").text + client.get("/console/assets/fleet-header.css").text
 
     # Re-warp only when the frame, corners or size change; a hidden layer returns before warp.
     assert "if (warped?.key !== key)" in field_view

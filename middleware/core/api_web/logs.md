@@ -803,6 +803,15 @@
 - 증거: test_peer_pairing.py의 움직이는 시계 시험(수정 전 실패), 8kcn 055 코드와 그 오버레이 사본으로 같은 traceback 재현.
 - gate 변화: SOURCE. 실기 확인은 릴리스 056 이후 DEVICE(9dfk·8kcn 화면 코드 승인).
 
+## 2026-10-09 · uncommitted · feat(api): D-541 trip lease 경로와 울타리 (API v1.157)
+- 변경: `PUT/DELETE /api/v1/trip-lease`, `POST /trip-lease/takeover`. 검사는 `require_calibration_owner` 한 곳(구동·모드 쓰기와 움직이는 막힘 답 전부), `/ws/swarm/reference` 주인 아닌 프레임 버림, `POST /calibration/session` lease 중 409 `TRIP_LEASED`. 주인 아닌 `navigation/cancel`·line-follow OFF는 lease 끝 + IDLE. lease 주인의 `navigation/goal`은 line-follow가 켜져 있어도 받는다(lane → free 전환; ADR 5항이 전제한 동작, 이전에는 409 `LINE_FOLLOW_ACTIVE`). 능력 `base_velocity.trip_lease`, 상태 선택 필드 `trip_lease`·`trip_lease_ended`(없으면 키 없음).
+- 증거: `test_trip_lease.py`(경로 표 완전성 시험 포함), 이벤트 카탈로그 시험.
+- gate 변화: SOURCE. lease가 없으면 동작은 v1.156과 같다.
+
+## 2026-10-09 · uncommitted · fix(api): D-541 Safety-Review 반영
+- 변경: 끝난 `lease_id`의 PUT은 새 lease를 열지 않고 404 `NOT_FOUND`+`detail.ended`(넘겨받기 뒤 Fleet renew가 사람의 MANUAL보다 먼저 와도 로봇을 다시 쥐지 못함). `/localization/mission` 409 `TRIP_LEASED`, `/localization/decision`·`suspect` 423 `TRIP_LEASED`. DOCKING에서 lease 열기 409 `MODE_CONFLICT`. halt는 line-follow/nav 정지가 실패해도 IDLE로 간다.
+- 증거: `test_trip_lease.py` 새 시험 10개(수정 전 실패, 모델 PC).
+- gate 변화: SOURCE.
 ## 2026-10-09 · uncommitted · feat(core): 장치 개발 모드 표식 (D-548)
 - 변경: `/etc/rosy/dev-mode`가 있는 장치 CORE만 공용 `rosy-dev-*` 토큰을 받는다(`core_common.config.dev_auth_enabled`, `deps._refused_in_device_mode`). 기동 때 `auth.development_mode`. 공용 개발 토큰은 장치에서 `host/ssh/*` 403. API v1.156.
 - 증거: test_auth_pairing.py(표식 유무·이벤트), test_host_ssh.py(셸 거부).

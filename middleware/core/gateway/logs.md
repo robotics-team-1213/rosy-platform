@@ -994,3 +994,8 @@
 - 변경: `GET /api/v1/system/info`에 `device_uid`를 추가하고 Pi 시리얼을 `serial_number`로 읽는 계약을 API v1.150에 기록했다. 기존 Fleet 등록 DB는 자동 변경하지 않는다.
 - 증거: 관련 CORE/계약 테스트 97 passed, 신규 실패 0; 현장 실기 API 판독은 배포 후 확인.
 - gate 변화: SOURCE/LOCAL 확인, DEVICE/FIELD 미확인.
+
+## 2026-10-09 · uncommitted · feat(core): D-541 trip lease 배선
+- 변경: `core/trip_lease.py`(`TripLeaseManager` + `build_trip_lease`), `CoreServices.trip_lease`. 모드 리스너가 NAVIGATION 밖으로 가는 모든 전이에서 lease를 끝낸다(EMERGENCY는 `estop`, 나머지 `mode_left`), e-stop 리스너도 끝낸다. `halt_trip`이 만료·넘겨받기·주인 아닌 멈춤에서 IDLE로 둔다. `ros_bridge._tick_power`(5 Hz)가 `trip_lease.expire_due()`를 부른다.
+- 증거: `test/test_trip_lease.py` 만료·비상 정지·도킹 시험.
+- gate 변화: SOURCE.
