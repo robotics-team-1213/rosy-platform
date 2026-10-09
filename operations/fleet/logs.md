@@ -2727,6 +2727,13 @@
 - gate 변화: 없음(SOURCE)
 - 결정: 회전 지시에는 싣지 않는다(방향은 action 이 말한다)
 - 교훈: 없음
+## 2026-10-08 · uncommitted · feat(fleet): D-526 1단계 Fleet tether 감시 (API v1.156)
+- 변경: `server/tether_watch.py` `TetherWatch`가 0.5 s마다 테더가 있는 로봇의 지도 자세(상태 pose, odom 프레임 제외)로 기준점 거리·펼친 누적 회전·자세 나이를 재고, 반경+0.15 m·405°·2 s 초과면 기존 로봇 E-Stop(`hub.scatter_estop`)을 보내고 trip을 `tether_trip`으로 끝낸다. 래치, 테더 POST가 재무장. `GET /api/fleet/tethers` 행 `watch`, 지도 원은 트립이면 `--status-crit`. `platform_parts.yaml` safety_modules에 태그(D-430)
+- 증거: `test_tether_routes.py`(반경, ±180° 넘는 회전, 자세 없음, 테더 없음, 정지 재시도, 실제 앱의 로봇 estop 호출), `web/trail-view.test.mjs`. 모델 PC 결과는 브랜치 보고
+- gate 변화: 없음(SOURCE). safety 태그 파일이라 독립 Safety-Review 전에는 착지하지 않음
+- 결정: 되돌아가기는 Fleet가 하지 않는다(로봇 odom 길은 D-512 도구에 있다). Fleet 한도는 D-512 도구 한도 위의 backstop
+- 교훈: 없음
+
 ## 2026-10-08 · uncommitted · fix(fleet): 실행 끝난 장소는 로봇이 다음 차로에 있을 때만 넘어간다 (lap SIM 2 lap_12)
 - 변경: `_locate` 의 `done`(CORE가 우리 지시를 끝냄 + `pass_window_m` 안)에 다음 차로 반폭 안 조건을 더했다
 - 증거: lap_12 `off_lane_m` 0.276은 ring_e까지 거리(참값 ring_s 밖 0.07 m). CORE가 D-407 후진 중 SE `straight` 를 닫자 Fleet이 SE 0.26 m 앞에서 ring_e로 넘어가 거기서 위치를 쟀다. 새 시험은 고치기 전 실패, 모델 PC `test_trip_runner.py` 87 passed
