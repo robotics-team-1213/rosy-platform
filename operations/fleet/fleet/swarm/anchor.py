@@ -83,7 +83,7 @@ REFRESH_S = 0.5
 MAX_STEP_S = 0.2
 #: The leader's streamed odom must sit within this speed x (age of the tracker's newest odom) +
 #: margin of that odom: farther, the stream and the tracker are not in one odom frame (a CORE or
-#: driver restart the 2 Hz tracker has not seen yet). Above any Pinky speed.
+#: driver restart the 2 Hz tracker has not seen yet). Above any supported robot speed.
 LEADER_ODOM_MPS = 0.5
 LEADER_ODOM_MARGIN_M = 0.10
 #: An odom refresh (robot REST read) gives up after this (s).

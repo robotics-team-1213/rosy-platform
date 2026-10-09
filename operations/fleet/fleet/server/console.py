@@ -45,7 +45,6 @@ from fleet.swarm.session import (
     SessionError,
     SessionState,
 )
-from fleet.swarm.anchor import anchor_status, formation_relay_kwargs
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient, require_capability
 
@@ -144,7 +143,9 @@ class FleetConsole(TripAware):
         self._formation_leader = None
         #: 시험이 가짜 릴레이를 끼우는 자리. 운용에서는 None 이라 세션의 기본값을 쓴다.
         self._relay_factory = relay_factory
-        self.formation_poses = None   # D-581: the map pose service (app.py) anchors TRAIL formations
+        # The app composition root supplies D-581 anchoring without this safety-tagged file
+        # importing the decision-layer implementation.
+        self.formation_relay_factory = None
         self.fleet_name = fleet_name
         # e-stop 은 hub 의 scatter 를 그대로 쓴다 — 흩뿌림의 규칙을 두 군데 두지 않는다.
         self._hub = SiteHub(list(endpoints), dict(self._clients), fleet_name=fleet_name,
@@ -1093,6 +1094,7 @@ class FleetConsole(TripAware):
         stream_evidence = _formation_stream_evidence(
             stats, self._formation_leader, session.assignment,
         )
+        relay_anchor = getattr(session.relay, "anchor", None)
         return {
             "active": session.state in (SessionState.ARMING, SessionState.RUNNING,
                                         SessionState.HOLDING),
@@ -1106,7 +1108,7 @@ class FleetConsole(TripAware):
             "reason": list(session.reason) if session.reason else None,
             "pending_triggers": [list(t) for t in session.pending_triggers],
             "stream_evidence": stream_evidence,
-            "anchor": anchor_status(session.relay),   # D-581
+            "anchor": None if relay_anchor is None else relay_anchor.status(),   # D-581
             "relay": None if stats is None else {
                 "paused": stats.paused,
                 "leader_rx_hz": round(stats.leader_rx_hz, 2),
@@ -1166,8 +1168,10 @@ class FleetConsole(TripAware):
             raise HubError("NO_FOLLOWERS", "a formation needs at least one follower")
         leader = self._client(leader_id)
         followers = [self._clients[rid] for rid in follower_ids]
-        kwargs = formation_relay_kwargs(self._relay_factory, self.formation_poses,
-                                        lambda: session.spec.formation is Formation.TRAIL)
+        kwargs = {} if self._relay_factory is None else {"relay_factory": self._relay_factory}
+        if self._relay_factory is None and self.formation_relay_factory is not None:
+            kwargs["relay_factory"] = self.formation_relay_factory(
+                lambda: session.spec.formation is Formation.TRAIL)
         member_order = [rid for rid in self._order if rid == leader_id or rid in follower_ids]
         session = FormationSession(leader, followers,
                                    self._spec(formation, spacing, max_speed),
