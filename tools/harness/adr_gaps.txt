@@ -18,8 +18,5 @@ D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; imp
 D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
 D-556 reserved in another active branch (Fresh odom veto for carried one-sided lane boundary)
-D-559 reserved on feat/swarm-trail-follow; remove when its ADR lands
-D-560 reserved on feat/rosy-cam-map-plane; remove when its ADR lands
 D-559 reserved in another active branch (swarm trail follow, feat/swarm-trail-follow); remove when it lands
 D-560 reserved in another active branch (fleet S2 capture); remove when it lands
-D-561 reserved by another session (refs/adr only, no ADR body yet); remove when it lands or is released
