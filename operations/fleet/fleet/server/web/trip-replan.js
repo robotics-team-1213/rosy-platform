@@ -1,7 +1,7 @@
-// D-494 5 / D-540 3 — a trip held at a place for a changed route asks the operator. The answer lives in
-// the queue row's slot: `바뀐 경로로 계속` (POST /trips/{id}/confirm-replan, named operator on the server)
-// or `운행 취소` (a stop: quiet, no confirm, D-540 6). Fleet decides and refuses; the screen says why.
+// D-494 5 / D-540 3 — a trip held at a place for a changed route asks the operator in its queue row:
+// `바뀐 경로로 계속` (confirm-replan, named operator on the server) or `운행 취소` (a stop: quiet, no confirm).
 import { tripErrorText } from "/console/assets/site-map-model.js";
+import { primaryButton, quietButton, setReason } from "./line-stuck.js";
 
 /** What the slot shows for one held trip: the changed route, or why there is none. */
 export function replanView(trip, { operator, busy = false }) {
@@ -16,21 +16,8 @@ export function replanView(trip, { operator, busy = false }) {
   return { facts, confirmReason: lock || (plan ? "" : "다시 계산한 경로가 없습니다"), cancelReason: lock };
 }
 
-function button(kind, text, reason) {
-  const node = document.createElement("ui-button");
-  if (kind === "primary") node.setAttribute("kind", "primary");
-  else node.setAttribute("kind", "quiet");
-  node.type = "button";
-  node.textContent = text;
-  node.disabled = Boolean(reason);
-  if (reason) node.setAttribute("reason", reason);
-  return node;
-}
-
 export function createTripReplan({ scope, view, call, log, isOperator }) {
-  const busy = new Set();     // trip ids with an answer in flight
-  const results = new Map();  // trip id -> { text, kind }
-  const signatures = new Map();
+  const busy = new Set(), results = new Map(), signatures = new Map();  // by trip id / robot id
 
   async function send(trip, verb, done) {
     if (busy.has(trip.trip_id)) return;
@@ -41,14 +28,14 @@ export function createTripReplan({ scope, view, call, log, isOperator }) {
       await call(`/api/fleet/trips/${encodeURIComponent(trip.trip_id)}/${verb}`, { method: "POST" });
       life.check();
       results.set(trip.trip_id, { text: `${trip.robot_id} ${done}`, kind: "good" });
-      log(`${trip.robot_id} ${done}`, "good");
     } catch (err) {
       if (err.name === "AbortError") return;
       const why = err.code ? tripErrorText(err.code, err.detail) : err.message;
-      results.set(trip.trip_id, { text: `${trip.robot_id} 거절 · ${why}`, kind: "bad" });
-      log(`${trip.robot_id} 운행 거절 · ${why}`, "bad");
+      results.set(trip.trip_id, { text: `${trip.robot_id} 운행 거절 · ${why}`, kind: "bad" });
     } finally {
       if (life.current()) {
+        const last = results.get(trip.trip_id);
+        if (last) log(last.text, last.kind);
         busy.delete(trip.trip_id);
         render();
       }
@@ -56,10 +43,9 @@ export function createTripReplan({ scope, view, call, log, isOperator }) {
   }
 
   function body(trip) {
-    const box = document.createElement("div");
-    box.className = "stuck-item replan-item";
-    box.dataset.tripId = trip.trip_id;
     const spec = replanView(trip, { operator: isOperator(), busy: busy.has(trip.trip_id) });
+    const box = document.createElement("div");
+    box.className = "stuck-item";
     const facts = document.createElement("p");
     facts.className = "stuck-resolver";
     facts.textContent = spec.facts;
@@ -67,12 +53,14 @@ export function createTripReplan({ scope, view, call, log, isOperator }) {
     actions.className = "stuck-actions";
     actions.setAttribute("role", "group");
     actions.setAttribute("aria-label", `${trip.robot_id} 바뀐 경로 확인`);
-    const go = button("primary", "바뀐 경로로 계속", spec.confirmReason);
-    go.dataset.replan = "confirm";
-    go.addEventListener("click", scope.guard(() => send(trip, "confirm-replan", "바뀐 경로로 계속합니다")));
-    const stop = button("quiet", "운행 취소", spec.cancelReason);
-    stop.dataset.replan = "cancel";
-    stop.addEventListener("click", scope.guard(() => send(trip, "cancel", "운행을 취소했습니다")));
+    const go = primaryButton("바뀐 경로로 계속");
+    const stop = quietButton("운행 취소");
+    for (const [node, key, reason, verb, done] of [[go, "confirm", spec.confirmReason, "confirm-replan", "바뀐 경로로 계속합니다"],
+      [stop, "cancel", spec.cancelReason, "cancel", "운행을 취소했습니다"]]) {
+      node.dataset.replan = key;
+      setReason(node, reason);
+      node.addEventListener("click", scope.guard(() => send(trip, verb, done)));
+    }
     actions.append(go, stop);
     box.append(facts, actions);
     const last = results.get(trip.trip_id);
@@ -88,13 +76,11 @@ export function createTripReplan({ scope, view, call, log, isOperator }) {
   }
 
   function render() {
-    for (const trip of view.stateUnavailable ? [] : view.trafficTrips || []) {
-      if (!trip.hold) continue;
+    for (const trip of view.stateUnavailable ? [] : (view.trafficTrips || []).filter((row) => row.hold)) {
       const slot = document.querySelector(`[data-decision-slot="${CSS.escape(`${trip.robot_id}|replan`)}"]`);
-      if (!slot) continue;
       const signature = JSON.stringify([trip.trip_id, trip.hold, busy.has(trip.trip_id),
         results.get(trip.trip_id) || null, isOperator()]);
-      if (slot.firstElementChild && signatures.get(trip.robot_id) === signature) continue;
+      if (!slot || (slot.firstElementChild && signatures.get(trip.robot_id) === signature)) continue;
       const focusKey = slot.contains(document.activeElement) ? document.activeElement.dataset.replan : null;
       slot.replaceChildren(body(trip));
       signatures.set(trip.robot_id, signature);

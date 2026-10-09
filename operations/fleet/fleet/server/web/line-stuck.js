@@ -169,7 +169,7 @@ export function refusalText(robotId, decision, err) {
 
 // 계약(D-359 §5.2)은 버튼마다 글자 kind 를 요구한다 — 변수 kind 헬퍼는 정적 검사가
 // 못 본다. 종류별 헬퍼가 리터럴을 담는다.
-function quietButton(text) {
+export function quietButton(text) {
   const node = document.createElement("ui-button");
   node.setAttribute("kind", "quiet");
   node.type = "button";
@@ -177,7 +177,7 @@ function quietButton(text) {
   return node;
 }
 
-function primaryButton(text) {
+export function primaryButton(text) {
   const node = document.createElement("ui-button");
   node.setAttribute("kind", "primary");
   node.type = "button";
@@ -185,7 +185,7 @@ function primaryButton(text) {
   return node;
 }
 
-function setReason(node, reason) {
+export function setReason(node, reason) {
   node.disabled = Boolean(reason);
   if (reason) node.setAttribute("reason", reason);
   else node.removeAttribute("reason");

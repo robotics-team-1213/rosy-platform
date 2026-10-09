@@ -61,6 +61,16 @@ export function cardExpanded({ must, selected, attention, choice }) {
   return attention !== "";
 }
 
+// D-540 3 — a disclosure (queue row, folded card line, fold) shows and hides; it never moves a robot.
+function disclosure(className, expanded, onClick) {
+  const node = document.createElement("button");
+  node.type = "button";
+  node.className = className;
+  node.setAttribute("aria-expanded", String(expanded));
+  node.addEventListener("click", onClick);
+  return node;
+}
+
 function blockWith(button, reason) {
   button.disabled = Boolean(reason);
   if (reason) button.setAttribute("reason", reason);
@@ -194,10 +204,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const tripLine = view.stateUnavailable ? "" : trafficCardLine(view.traffic, robot.robot_id);
     if (!cardExpanded({ must, selected, attention, choice: view.cardChoice?.[robot.robot_id] })) {
       node.dataset.collapsed = "";
-      const line = document.createElement("button");
-      line.type = "button";
-      line.className = "robot-line";
-      line.setAttribute("aria-expanded", "false");
+      const line = disclosure("robot-line", false, fold(true));
       line.title = "카드 펼치기";
       const battery = nodeWithText("span", "robot-line-battery");
       battery.dataset.fact = "battery";
@@ -205,7 +212,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         nodeWithText("strong", "", powerHealthView(robot, view.receivedAtMs, Date.now()).battery));
       line.append(nodeWithText("b", "", robot.robot_id),
         nodeWithText("span", "trip-line", tripLine || (robot.yielding ? "비켜서는 중" : nav.text)), battery);
-      line.addEventListener("click", fold(true));
       node.appendChild(line);
       return node;
     }
@@ -265,13 +271,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       head.appendChild(locTag);
     }
     if (!must && !selected) {
-      const shut = document.createElement("button");
-      shut.type = "button";
-      shut.className = "robot-fold";
-      shut.setAttribute("aria-expanded", "true");
+      const shut = disclosure("robot-fold", true, fold(false));
       shut.textContent = "접기";
       shut.setAttribute("aria-label", `${robot.robot_id} 카드 접기`);
-      shut.addEventListener("click", fold(false));
       head.appendChild(shut);
     }
     node.appendChild(head);
@@ -568,19 +570,15 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         li = document.createElement("li");
         li.dataset.key = row.key;
         li.dataset.decision = row.decision || "";
-        const line = row.decision ? document.createElement("button") : li;
+        const line = row.decision ? disclosure("queue-row", false, scope.guard(() => {
+          view.queueChoice = { key: row.key, open: line.getAttribute("aria-expanded") !== "true" };
+          render();
+        })) : li;
         if (row.decision) {
           const body = nodeWithText("div", "queue-decision");
           body.id = `decision-${row.key.replace(/[^A-Za-z0-9_-]/g, "_")}`;
           body.dataset.decisionSlot = row.key;
-          line.type = "button";
-          line.className = "queue-row";
           line.setAttribute("aria-controls", body.id);
-          line.addEventListener("click", scope.guard(() => {
-            const shut = line.getAttribute("aria-expanded") === "true";
-            view.queueChoice = { key: row.key, open: !shut };
-            render();
-          }));
           li.append(line, body);
         }
         line.append(document.createElement("b"), nodeWithText("span", "queue-text"));
