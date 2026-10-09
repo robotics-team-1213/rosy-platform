@@ -37,7 +37,8 @@
 #discovery-retry { margin-top: var(--space-2); }
 .roster-block { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2) var(--space-3); }
 .roster-block > h2 { margin: 0; }
-.roster-block > #roster, .roster-block > .address-drift, .roster-block > #site-path { grid-column: 1 / -1; }
+.roster-block > #roster, .roster-block > .address-drift, .roster-block > #site-path, .roster-block > #discovery-pending { grid-column: 1 / -1; }
+#discovery-pending { margin: 0; }
 /* 알릴 발행 상태가 있으면 띠가 머리 아래 한 줄을 다 쓴다. 없으면 전체 주행 취소 버튼만 머리 줄에 선다. */
 .roster-block > .dispatch-control { grid-column: 1 / -1; grid-row: 2; }
 .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 2; grid-row: 1; }
@@ -197,13 +198,11 @@ main {
   #fleet-main { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
   #fleet-main > .console-secondary { position: relative; min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; }  /* holds its .sr-only boxes */
   #fleet-main > .console-secondary { grid-auto-rows: max-content; }  /* rows fit their panel: a shrunk camera panel never runs under the next */
-  #fleet-main > .console-primary { min-height: 0; display: flex; flex-direction: column; overflow: clip; }  /* fixed: never a scroll */
+  #fleet-main > .console-primary { min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
   /* 지도 칸: 머리, 남는 높이를 다 쓰는 지도, 그 아래 범례·배경 학습·접힘 한 줄(넘치면 다음 줄). */
-  #fleet-main > .console-primary > .panel { flex: 1; min-height: 0; display: grid; align-items: center;
-    grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) repeat(3, auto); column-gap: var(--space-4); }
-  #fleet-main > .console-primary > .panel > :is(.map-head, .map-stage) { grid-column: 1 / -1; }
+  #fleet-main > .console-primary > .panel { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; align-items: stretch; }
   /* 지도와 큰 영상은 칸을 채울 뿐 칸 높이를 정하지 않는다(그림 고유 크기가 문서를 밀지 않게). */
-  #fleet-main .map-stage { align-self: stretch; min-height: 12rem; }
+  #fleet-main .map-stage { flex: none; min-height: max(20rem, calc(100dvh - 18rem)); }
   #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { position: absolute; inset: 0; width: 100%; height: 100%; }
   #fleet-main .field-mismatch { position: relative; z-index: 1; }
   .ops-block { gap: var(--space-2); }
@@ -302,6 +301,9 @@ main {
 #map-canvas:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset-outer);
+}
+@media (width < 64rem) {
+  .map-stage #map-canvas { height: min(110vw, 30rem); }
 }
 
 .hint {
@@ -741,11 +743,7 @@ main {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "head" "controls" "meta";
   }
-  .panel[aria-labelledby="map-heading"] { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-4); }
-  .panel[aria-labelledby="map-heading"] > * { flex: 1 1 100%; }
-  .panel[aria-labelledby="map-heading"] > .legend { flex: 1 1 auto; margin-top: var(--space-2); }
-  .panel[aria-labelledby="map-heading"] > .tracking-bar { flex: 0 1 auto; margin-top: var(--space-2); }
-  .panel[aria-labelledby="map-heading"] > .note:not([open]) { flex: 0 0 auto; margin-top: var(--space-2); padding-block: 0; border-left: 0; }
+  .panel[aria-labelledby="map-heading"] > :is(.legend, .tracking-bar, .note:not([open])) { margin-top: var(--space-2); }
 }
 @media (width >= 110rem) {
   .ops-block { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
