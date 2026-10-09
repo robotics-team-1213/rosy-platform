@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · fix(fleet,vision): D-564 독립 검토 반영
+- 2026-10-09 · uncommitted · feat(fleet): D-564 바닥 장소 마커로 초안 장소 가르치기
 - 2026-10-09 · uncommitted · fix(fleet): 위치 요청 천장 카메라 플래그 분리, 답 횟수 유지 (D-546 6, review)
 - 2026-10-09 · uncommitted · fix(fleet): 위치 요청 3번 답해도 열려 있으면 needs_human, 천장 카메라 답 기본 켜짐 (D-546 6)
 - 2026-10-09 · uncommitted · feat(fleet): 로봇의 위치 요청에 답한다 (D-546 6)
-- 2026-10-09 · uncommitted · uiux(fleet): 큐 항목이 그 자리에서 결정으로 펼친다, 레일 하나만 스크롤, 접힌 로봇 카드 (D-540 3, 계획 (c))
-- 2026-10-09 · uncommitted · fix(fleet): 관제 카메라 추적 표시가 1초마다 깜박이지 않게 한다
