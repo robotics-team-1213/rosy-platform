@@ -88,9 +88,11 @@ exec 9>"$R/venvs/$DEPS.lock"; flock -x -w 600 9
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] && exit 0
 echo "[remote] building $N (CI install inputs changed)"
 rm -rf "$N"
+# The site PC (Ubuntu 26.04) has no system 3.12; `uv python install 3.12` puts one in ~/.local/bin.
+PY=/usr/bin/python3; "$PY" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null || PY=~/.local/bin/python3.12
 UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)
-if [ -n "$UV" ]; then "$UV" venv -q --seed -p /usr/bin/python3 "$N"
-else /usr/bin/python3 -m venv "$N"; fi
+if [ -n "$UV" ]; then "$UV" venv -q --seed -p "$PY" "$N"
+else "$PY" -m venv "$N"; fi
 P="$N/bin/python -m pip -q --disable-pip-version-check --no-cache-dir"
 REQ=deploy/robot/pinky_pro/image/device-python-requirements.txt
 $P install --require-hashes --no-deps --only-binary=:all: -r "$REQ"
@@ -130,7 +132,8 @@ for f in "$J"/*.lock; do
   [ -e "$f" ] || continue; read -r pid _ fc fm < "$f" || true
   if kill -0 "$pid" 2>/dev/null; then c=$((c+${fc:-0})); m=$((m+${fm:-0})); else rm -f "$f"; fi
 done
-py=0; /usr/bin/python3 -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null && py=1
+py=0; for p in /usr/bin/python3 ~/.local/bin/python3.12; do
+  "$p" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null && py=1 && break; done
 s=0; [ -f /opt/ros/jazzy/share/ros_gz_sim/package.xml ] && [ -f /opt/ros/jazzy/share/nav2_bringup/package.xml ] && s=1
 b=0; [ -e "$J/busy" ] && b=1
 echo "$(nproc) $(cut -d' ' -f1 /proc/loadavg)" \
