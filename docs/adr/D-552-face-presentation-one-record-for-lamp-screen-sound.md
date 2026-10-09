@@ -28,7 +28,7 @@
 
 ### 사용자 결정 (2026-10-09, 리뷰 뒤)
 
-1. **소리.** CORE 주의 코드와 걸린 e-stop도 램프와 같은 소리를 낸다. 주의 소리는 5분(`BUZZER_REPEAT_S`)에 한 번만 울리도록 그대로 제한하고, 같은 제한을 `ready`에도 건다. 주의는 **약 2 s 유지된 뒤에만** 울린다(`CAUTION_DEBOUNCE_S`, 깜박이는 주의는 조용하다). 램프와 바는 즉시 바뀐다.
+1. **소리.** CORE 주의 코드와 걸린 e-stop도 램프와 같은 소리를 낸다. 주의 소리는 5분(`BUZZER_REPEAT_S`)에 한 번만 울리도록 그대로 제한하고, 같은 제한을 caution 뒤에 오는 `ready`(깜박이는 경우)에만 건다. e-stop·실패가 풀린 뒤의 `ready`는 운영자가 기다리는 신호라 늘 울린다. 주의는 **약 2 s 유지된 뒤에만** 울린다(`CAUTION_DEBOUNCE_S`, 깜박이는 주의는 조용하다). 램프와 바는 즉시 바뀐다.
 2. **막힘.** 경로 막힘(`blocked`)은 주황 caution으로 둔다.
 3. **섞인 설치.** `presentation`이 없고 `robot_state`는 있는 릴리스에서도 램프는 CORE의 모드(EMERGENCY 포함)·복구 단계를 따르고(`robot_state.lamp_pattern`, D-546 이전 `core_common`은 세 인자 호출), 화면은 `screen_for`로 STOPPED 카드와 얼굴을 그린다. 소리와 후진음은 `rosy-face`가 레코드 `sound`·`reversing`에서 읽고, 레코드가 없을 때만 같은 필드를 옛 규칙으로 채운다(`SOUNDS` 복사본은 시험이 레코드의 것과 같음을 지킨다).
 
@@ -40,6 +40,6 @@
 
 ### 열린 질문
 
-1. caution 소리(낮은음 두 번, 300 s 제한, 2 s 유지)가 현장에서 거슬리지 않는지, e-stop 해제 뒤 300 s 안에는 ready 소리가 나지 않는 것이 괜찮은지(DEVICE).
+1. caution 소리(낮은음 두 번, 300 s 제한, 2 s 유지)가 현장에서 거슬리지 않는지(DEVICE).
 2. `CORE not responding` 카드 동안 램프를 파일의 10 s 모드로 두는 예외를 `booting`/`caution`으로 바꿀지. 부팅 때마다 CORE_READY 직후 1–2 s 동안 깜박이는 문제가 있어 지금은 두었다.
 3. 주행 카드의 `⚡` 글자는 DejaVu에 없어 `CHG`로 바꿨다.

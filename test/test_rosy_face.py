@@ -1081,7 +1081,7 @@ def test_caution_is_not_repeated_within_the_window_but_ready_and_failed_always_s
         _status(tmp_path, "CORE_READY", runtime_mode="hardware")
         clock.now += 20
         display.step()
-    assert len(_starts(gpio)) == 1 + 2  # caution once (two tones); ready inside its window is silent
+    assert len(_starts(gpio)) == 1 + 2  # caution -> ready -> caution -> ready flap: one chirp, caution once
 
     for _ in range(2):
         _status(tmp_path, "FAILED:rosy-core")
@@ -1090,14 +1090,14 @@ def test_caution_is_not_repeated_within_the_window_but_ready_and_failed_always_s
         _status(tmp_path, "CORE_READY", runtime_mode="hardware")
         clock.now += 1
         display.step()
-    assert len(_starts(gpio)) == 3 + 2 * 3  # failed sounds every time; ready inside its window does not
+    assert len(_starts(gpio)) == 3 + 2 * (3 + 1)  # failed and the ready after it sound every time
 
     clock.now += module.BUZZER_REPEAT_S
     _status(tmp_path, "CORE_READY", runtime_mode="hardware", devices=caution)
     display.step()
     clock.now += module.CAUTION_DEBOUNCE_S
     display.step()
-    assert len(_starts(gpio)) == 3 + 2 * 3 + 2
+    assert len(_starts(gpio)) == 3 + 2 * (3 + 1) + 2
 
 
 def test_ready_and_held_ready_share_one_sound(tmp_path):
@@ -1211,10 +1211,10 @@ def test_entering_emergency_sounds_even_with_a_healthy_state(tmp_path):
 
     _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="IDLE")
     clock.now += 1
-    display.step()  # leaving EMERGENCY: ready lamp again
+    display.step()  # leaving EMERGENCY is the ready chirp again, once
 
     assert spawn.patterns == ["ready", "emergency", "ready"]
-    assert len(_starts(gpio)) == 5  # the ready chirp is inside its 300 s window: lamp back, no new beep
+    assert len(_starts(gpio)) == 6
 
 
 def test_emergency_card_and_lamp_are_visible_before_the_entry_sound(tmp_path):
@@ -2406,7 +2406,7 @@ def test_a_mixed_install_without_the_presentation_record_keeps_core_modes_and_fa
 def test_the_fallback_sound_table_matches_the_record(monkeypatch):
     module = _display()
     assert module.SOUNDS == module.presentation.SOUNDS
-    assert "ready" in module.REPEAT_LIMITED and "caution" in module.REPEAT_LIMITED
+    assert module.REPEAT_LIMITED == {"caution"}
 
 
 def test_a_flapping_caution_never_sounds_but_a_held_one_sounds_once(tmp_path):

@@ -165,7 +165,7 @@ BUZZER_PATTERNS = {"ready": (1, BUZZER_FREQUENCY_HZ), "failed": (3, BUZZER_FREQU
 #: Caution again inside this window stays silent (a battery near the threshold). Ready and
 #: failed always sound on a real transition (review L2): they are the news a person waits for.
 BUZZER_REPEAT_S = 300.0
-REPEAT_LIMITED = frozenset({"caution", "ready"})
+REPEAT_LIMITED = frozenset({"caution"})
 #: A caution (health or a CORE code) must hold this long before it sounds: a flapping one stays silent.
 CAUTION_DEBOUNCE_S = 2.0
 #: D-247 6's buzzer test, when handed over: three 150 ms beeps, like rosy-hw-test.
@@ -750,8 +750,8 @@ class FaceDisplay:
 
     def _announce(self, sound: str | None, now: float) -> None:
         """Sound ``pres.sound`` on a change (D-381: the e-stop alarm replaces the health sound; ready and
-        held ready are one sound). A caution must hold CAUTION_DEBOUNCE_S first, and caution/ready repeat
-        at most every BUZZER_REPEAT_S; the e-stop and failed are news a person waits for."""
+        held ready are one sound). A caution must hold CAUTION_DEBOUNCE_S first; caution, and the ready that
+        follows it, repeat at most every BUZZER_REPEAT_S. The e-stop, failed and the ready after them always sound."""
         if sound == "caution":
             self._caution_since = now if self._caution_since is None else self._caution_since
             if now - self._caution_since < CAUTION_DEBOUNCE_S:
@@ -762,7 +762,9 @@ class FaceDisplay:
         if sound is None or sound == previous:
             return
         last = self._sounded.get(sound)
-        if sound in REPEAT_LIMITED and last is not None and now - last < BUZZER_REPEAT_S:
+        # ready is limited only when it follows a caution (the flapping case); after an e-stop or a failure it is news.
+        if ((sound in REPEAT_LIMITED or (sound == "ready" and previous == "caution"))
+                and last is not None and now - last < BUZZER_REPEAT_S):
             return
         self._sounded[sound] = now
         self._buzzer.announce(sound)
