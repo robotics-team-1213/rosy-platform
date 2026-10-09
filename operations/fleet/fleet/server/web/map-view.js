@@ -541,8 +541,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   };
 
   function describeSightings() {
-    const fresh = view.sightings.filter((s) => s.state === "fresh").length;
-    return `카메라 관측 ${fresh}/${view.sightings.length}대`;
+    const observed = new Set(view.sightings.filter((s) => s.state === "fresh").map((s) => s.robot_id));
+    for (const row of view.cameraTracking?.robots || []) observed.add(row.robotId);
+    return `카메라 관측 ${observed.size}/${Math.max(view.robots.length, observed.size)}대`;
   }
 
   function activeCall(robotId) {
