@@ -33,12 +33,16 @@ Warn = Callable[[str], None]
 
 
 def line_observation(services, raw: str, *, source_now: float,
-                     received_at: float) -> None:
+                     received_at: float, expected_context_seq: int | None = None) -> None:
     """Accept normalized evidence only; malformed or wrong-source data cannot drive."""
     source = None
     try:
         data = json.loads(raw)
         source = LineFollowMode(data["source"])
+        context_seq = data.get("route_context_seq")
+        if context_seq is not None and (type(context_seq) is not int or
+                                        context_seq != expected_context_seq):
+            raise ValueError("route context sequence mismatch")
         if type(data.get("visible")) is not bool:
             raise ValueError("visible must be a boolean")
         visible = data["visible"]
@@ -91,7 +95,8 @@ def line_observation(services, raw: str, *, source_now: float,
         })
 
 
-def keep_junction(services, raw: str, *, source_now: float, received_at: float) -> None:
+def keep_junction(services, raw: str, *, source_now: float, received_at: float,
+                  expected_context_seq: int | None = None) -> None:
     """D-494 decision 4 / D-495: the keeper's junction HOLD reason and corner_turning flag.
 
     A sighting HOLDs line-follow and also starts an armed D-495 bounded turn, so it gates
@@ -102,6 +107,10 @@ def keep_junction(services, raw: str, *, source_now: float, received_at: float) 
     names its corner turn (lap SIM A: CORE holds it near an expected junction)."""
     try:
         data = json.loads(raw)
+        context_seq = data.get("route_context_seq")
+        if context_seq is not None and (type(context_seq) is not int or
+                                        context_seq != expected_context_seq):
+            return
         reason, stamp, corner = data.get("reason"), data.get("stamp"), data.get("corner_turning")
         ahead, ahead_v = data.get("junction_ahead_m"), data.get("junction_ahead_v")
         strategy = data.get("strategy")

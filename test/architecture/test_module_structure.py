@@ -78,12 +78,14 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: P6 subpackages counted as their own size unit (path relative to the colcon root): their lines
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
 #: docs/plans/2026-10-07-line-follow-recovery-subpackage.md (incl. its 2026-10-08 junction section),
-#: docs/plans/2026-10-08-line-follow-arc-subpackage.md
+#: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
+#: docs/plans/2026-10-09-core-localization-size-unit.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
               "core/services/core_features/line_follow/arc",
+              "core/services/core_features/localization",
               "fleet/fleet/traffic",
               "perception/control/sensing/perception")
 
@@ -620,8 +622,12 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_341,
-        "accept: independently re-judged at 1341 (2026-10-09, read-only critic agent) for D-541 step 1: "
+        1_344,
+        "accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
+        "one RouteContext import and two optional LineFollowStatus fields; the bounded model and "
+        "validation live in protocol/route_context.py. No new runtime owner or envelope version, and "
+        "the zero-growth allowance remains. "
+        "Previously independently re-judged at 1341 (2026-10-09, read-only critic agent) for D-541 step 1: "
         "+1 line, one import of TripLeaseFields from core_common/protocol/trip_lease.py, which holds the "
         "lease models and the absent-key serializer; StateSnapshot is defined here, so the base-class swap "
         "is the only hook. Additive, no envelope version change. Zero-growth allowance remains. "
@@ -843,9 +849,23 @@ SIZE_VERDICTS = {
         "docs/plans/2026-10-08-line-follow-arc-subpackage.md; re-judge on the next +150. Measured 310 "
         "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
+    "core/services/core_features/localization": (
+        922,
+        "accept: independently re-judged at 922 on 2026-10-09 (read-only safety reviewer); "
+        "docs/plans/2026-10-09-core-localization-size-unit.md registers assist, halt, mission, "
+        "D-546 pose_request and package init as one localization domain. No runtime move, new owner, store, "
+        "publisher or command path. Re-judge after +150.",
+    ),
     "core_features": (
-        13_105,
-        "accept: re-judged at 13105 on 2026-10-09 for D-546 5: CORE raises and clears the pose request (localization/pose_request.py, lane_return_pose_request.py); no motion path, D-468 gates unchanged; +150 allowance unchanged. Previously independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
+        12_270,
+        "accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
+        "the cohesive 922-line localization package is now its own size unit under "
+        "docs/plans/2026-10-09-core-localization-size-unit.md. The combined pre-split measure was "
+        "13192; moving this domain out fulfills the previous split condition without moving runtime code. "
+        "Keep the +150 parent allowance and re-judge at the next growth. "
+        "Previously re-judged at 13105 on 2026-10-09 for D-546 5: CORE raises and clears the pose request "
+        "(localization/pose_request.py, lane_return_pose_request.py); no motion path, D-468 gates unchanged. "
+        "Previously independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
         "read-only critic agent). Main alone is 12922 (12772 +150, after D-517 M2 authority.py and D-507 "
         "bend). This branch adds 25 lines outside its arc unit. manager.py +11 is the thinnest possible "
         "hook: ArcMixin base, init and reset calls, the status arc field, and two early returns for the arc "

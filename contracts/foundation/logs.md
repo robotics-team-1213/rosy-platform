@@ -564,3 +564,9 @@
 - 변경: `DEV_MODE_MARKER = /etc/rosy/dev-mode`. 장치 모드의 `dev_auth_enabled()`는 `ROSY_DEV_AUTH` 대신 이 파일만 본다. 없으면 D-193 7 그대로.
 - 증거: test_auth_pairing.py의 load_config 병합 확인.
 - gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+
+## 2026-10-09 · uncommitted · feat(core_common): D-531 문맥 스키마
+
+- 변경: 최대 1초 유효한 `RouteContext` 검증, `LineFollowStatus` 문맥·발행 시각, `base_velocity.route_context` 선택 능력을 추가했다. 기존 설정은 꺼짐이다.
+- 증거: foundation 856 passed, 5 skipped, `known_failures.py` 신규 실패 0.
+- gate 변화: D-531 P1 SOURCE 후보. 소비자 P2/P3는 별도.

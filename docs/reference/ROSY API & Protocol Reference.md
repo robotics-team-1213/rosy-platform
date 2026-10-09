@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.164
+**Version:** v1.165
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -15,6 +15,33 @@
 ---
 
 # 1. 버저닝 및 폐기 정책
+
+### D-531 경로 문맥 발행 (v1.165, 기본 꺼짐)
+
+`line_follow.route_context_enabled: true`인 CORE는 `line/route_context`에
+`std_msgs/String` JSON을 RELIABLE, KEEP_LAST 1, VOLATILE로 발행한다.
+활성 문맥은 5 Hz로 갱신하며 지시 변경 시 바로 발행한다. 지시 완료·만료,
+모드 변경, odom 소실·epoch 변경, E-Stop 시 `{ "v": 1, "seq": null }`로 비운다.
+활성 메시지는 `{v: 1, seq, place_id, map_id, kind, stamp_s, valid_until_s}`와
+선택 필드 `ahead_m: [lo, hi]`, `lane_turn_deg`, `curvature_1pm`을 갖는다.
+`kind`는 `junction|bend|ring`; 시각은 ROS clock 기준이고 유효 기간은 최대 1초다.
+`exit_segment`가 지시에 있어도 실제 호 주행이 시작되기 전에는 `junction`이다.
+`ahead_m`의 각 값은 −0.5~2.0 m, `|lane_turn_deg|`는 360° 이하,
+ring의 `|curvature_1pm|`는 0.5~5.0 1/m이다. 경로 문맥은 인식 보조 증거이며
+주행 명령이 아니다. CORE만 최종 `cmd_vel`을 발행한다.
+
+켜진 경우 `GET /api/v1/line-follow`와 상태 스냅숏의 `line_follow`에는
+`route_context`(현재 발행 중인 문맥 또는 null)와 `route_context_published_at_s`
+(마지막 발행 ROS 시각 또는 null)가 추가된다. `rosy.controls/1`의
+`base_velocity.route_context: true`는 설정이 켜졌음을 뜻하며 주행 가능성이나
+현장 수용을 뜻하지 않는다. 인식의 `line/observation`과 `line/keep_debug`가
+선택 필드 `route_context_seq`를 실으면 CORE는 현재 발행 문맥의 `seq`와
+다른 프레임을 거절한다. 필드가 없거나 null이면 기존 인식 경로와 같다.
+거절한 카메라 프레임은 `invalid_observation`으로 무효화해 즉시 HOLD하고,
+그 프레임의 교차로 감지도 받지 않는다.
+
+기본값은 false이며 이때 토픽과 능력 필드는 없다. 인식 소비자와 경계 판정은
+별도 단계로 검증한다(D-531 P2/P3).
 
 ### D-468 추가 차선 경계 증거 (v1.106)
 
@@ -2552,6 +2579,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.165 | 2026-10-09 | Additive (D-531 P1, 기본 꺼짐): CORE `line/route_context` 경로 증거, `line_follow.route_context`·`route_context_published_at_s` 상태, `base_velocity.route_context` 능력, 인식 `route_context_seq` 역검증. 기존 주행 판단 불변; P2/P3와 SIM·DEVICE 별도 검증 |
 | v1.164 | 2026-10-09 | Additive (D-546 5–7 첫 조각, feat/d546-pose-request, Safety-Review 대상): `GET /api/v1/localization/request`, 오류 `NO_REQUEST`, 이벤트 `localization.request`·`localization.request_cleared`. lane_return(D-468)이 `pose_stale`(1 s 이상) 또는 `fleet_required` 에서 CORE 의 위치 요청을 열고 닫는다. 기존 필드·경로는 그대로이며 옛 Fleet 은 요청을 읽지 않을 뿐이다. 장치 기본값(`localization` 꺼짐)은 그대로다. |
 | v1.163 | 2026-10-09 | Additive (D-555, feat/enrolled-hub-pairing, 보안 검토·Safety-Review 대상): `GET`/`PUT`/`DELETE /api/v1/fleet/link`(TLS 리스너, 관리자 또는 사이트 등록 토큰), 능력 최상위 `fleet_link_provisioning`, 사건 `fleet.link_provisioned`·`fleet.link_cleared`, 오류 `FLEET_GOAL_ACTIVE`·`FLEET_LINK_CONFIG_INVALID`(409), `GET` `arm_state`·`arm_deadline_s`, Fleet 강제 해제 `?force=true`. SAF-003 `configured` 는 지금 설정을 읽는다(실행 중 페어링·해제를 따른다). Fleet `POST`/`DELETE /api/fleet/robots/{robot_id}/hub-link`, 허브는 등록 로봇 HELLO 를 digest 로 확인. 스키마 변경 없음 — envelope 1.0 유지 |
 | v1.162 | 2026-10-09 | Additive (D-541 7 Fleet side, feat/fleet-trip-lease-holder, Safety-Review 대상): 사이트 설정 `fleet.trip_lease_required`(기본 false)·`fleet.trip_lease_ttl_s`(기본 5, 1–10). 참이면 `POST /api/fleet/trips/{plan_id}/start` 가 CORE trip lease 를 열고(trip 마다 새 uuid `lease_id`), 주기마다 renew, 끝에서 정지 뒤 DELETE. 새 시작 거절 422 `TRIP_LEASE_UNSUPPORTED`, 409 `TRIP_ROBOT_LEASED`·`TRIP_ROBOT_MANUAL`·`CALIBRATION_ACTIVE`·`TRIP_LEASE_REFUSED`. 새 끝 `stopped`/`lease_lost`(`detail.lease_reason` `taken_over`·`expired`·`mode_left`·`estop`·`leased`·`core_restarted`·`renew_timeout`, `lease_by`), 다시 열지 않음. trip 보기 `lease`. 거짓이면 이전과 같다. Wi-Fi 끊김이 `ttl_s` 를 넘으면 trip 이 끝난다(현장별 10 s까지) |

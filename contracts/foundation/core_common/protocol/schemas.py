@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
+from core_common.protocol.route_context import RouteContext
 
 from core_common.protocol.access import LoginPairRequest, CameraPairApprovalRequest, SshPairRequest  # noqa: F401
 from core_common.protocol.access import ConnectionInfo, SiteRoomsSnapshot  # noqa: F401
@@ -1056,6 +1057,8 @@ class LineFollowStatus(BaseModel):
     lane_return_containment: Optional[Literal['contained', 'unknown']] = None
     junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-494 decision 4
     arc: Optional[LineArcStatus] = None  # D-520 2: the latest arc of this process, if any
+    route_context: Optional[RouteContext] = None
+    route_context_published_at_s: Optional[float] = None
 
 
 class TrafficPolicyStatus(BaseModel):
