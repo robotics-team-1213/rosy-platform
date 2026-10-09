@@ -607,8 +607,12 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_341,
-        "accept: independently re-judged at 1341 (2026-10-09, read-only critic agent) for D-541 step 1: "
+        1_344,
+        "accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
+        "one RouteContext import and two optional LineFollowStatus fields; the bounded model and "
+        "validation live in protocol/route_context.py. No new runtime owner or envelope version, and "
+        "the zero-growth allowance remains. "
+        "Previously independently re-judged at 1341 (2026-10-09, read-only critic agent) for D-541 step 1: "
         "+1 line, one import of TripLeaseFields from core_common/protocol/trip_lease.py, which holds the "
         "lease models and the absent-key serializer; StateSnapshot is defined here, so the base-class swap "
         "is the only hook. Additive, no envelope version change. Zero-growth allowance remains. "

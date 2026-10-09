@@ -7461,3 +7461,9 @@ osy-d395-s1d\`.
 - 변경: API reference v1.163에 `line/route_context`, 상태·능력·seq 역검증을 문서화했다. D-531 P2/P3의 인식 보조 및 경계 거부는 아직 계약만 있다.
 - 증거: services 1500 passed, contracts 856 passed/5 skipped, API 149 passed/15 skipped. gateway 전체 2421 passed/17 skipped, 문서 버전 문자열 1건 수정 뒤 집중 34 passed. harness lint 0 errors/24 기존 검증 SHA 경고. ROS-SIM·DEVICE·FIELD 수용 없음.
 - gate 변화: D-531 P1 SOURCE 후보.
+
+## 2026-10-09 · uncommitted · fix(route context): 전환 시 지시 번호와 호 시작 조건
+
+- 변경: D-531에서 인식 seq를 마지막 발행값 대신 현재 지시/실행 중 호와 비교하도록 명확히 했다. 호가 시작되기 전 `exit_segment`는 `junction`이고, 다른 seq의 카메라 프레임은 `invalid_observation` HOLD다. API reference v1.163 설명·문서 버전 pin을 맞췄다.
+- 증거: 독립 안전 검토, 관련 services 6·gateway 46·문서/구조 36 passed. D-168 `schemas.py` 1344줄 재판정 수용.
+- gate 변화: P1 SOURCE 후보. ROS-SIM·DEVICE·FIELD 미확인.

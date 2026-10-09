@@ -25,6 +25,7 @@
 활성 메시지는 `{v: 1, seq, place_id, map_id, kind, stamp_s, valid_until_s}`와
 선택 필드 `ahead_m: [lo, hi]`, `lane_turn_deg`, `curvature_1pm`을 갖는다.
 `kind`는 `junction|bend|ring`; 시각은 ROS clock 기준이고 유효 기간은 최대 1초다.
+`exit_segment`가 지시에 있어도 실제 호 주행이 시작되기 전에는 `junction`이다.
 `ahead_m`의 각 값은 −0.5~2.0 m, `|lane_turn_deg|`는 360° 이하,
 ring의 `|curvature_1pm|`는 0.5~5.0 1/m이다. 경로 문맥은 인식 보조 증거이며
 주행 명령이 아니다. CORE만 최종 `cmd_vel`을 발행한다.
@@ -36,6 +37,8 @@ ring의 `|curvature_1pm|`는 0.5~5.0 1/m이다. 경로 문맥은 인식 보조 �
 현장 수용을 뜻하지 않는다. 인식의 `line/observation`과 `line/keep_debug`가
 선택 필드 `route_context_seq`를 실으면 CORE는 현재 발행 문맥의 `seq`와
 다른 프레임을 거절한다. 필드가 없거나 null이면 기존 인식 경로와 같다.
+거절한 카메라 프레임은 `invalid_observation`으로 무효화해 즉시 HOLD하고,
+그 프레임의 교차로 감지도 받지 않는다.
 
 기본값은 false이며 이때 토픽과 능력 필드는 없다. 인식 소비자와 경계 판정은
 별도 단계로 검증한다(D-531 P2/P3).

@@ -352,14 +352,14 @@ class RosBridge:
         self._svc.vision.models.accept("perception/learned/status", msg.data, now=time.monotonic())
 
     def _on_lane_perception(self, msg: String) -> None:
+        source_now = self._node.get_clock().now().nanoseconds / 1e9
         self._svc.vision.lane_perception.accept(
             msg.data, now=time.monotonic(),
-            source_now=self._node.get_clock().now().nanoseconds / 1e9)
+            source_now=source_now)
         observation.keep_junction(  # D-494/D-495: junction sighting (holds; starts a turn)
-            self._svc, msg.data, source_now=self._node.get_clock().now().nanoseconds * 1e-9,
+            self._svc, msg.data, source_now=source_now,
             received_at=self._line_clock(),
-            expected_context_seq=(self._route_context_previous[0]
-                                  if self._route_context_previous is not None else None))
+            expected_context_seq=self._current_route_context_seq(source_now))
 
     def _on_object_det_model_status(self, msg: String) -> None:
         self._svc.vision.models.accept("perception/learned/object_det/status", msg.data,
@@ -381,8 +381,14 @@ class RosBridge:
         observation.line_observation(
             self._svc, msg.data,
             source_now=source_now, received_at=self._line_clock(),
-            expected_context_seq=(self._route_context_previous[0]
-                                  if self._route_context_previous is not None else None))
+            expected_context_seq=self._current_route_context_seq(source_now))
+
+    def _current_route_context_seq(self, ros_now: float):
+        if self.route_context_pub is None or self._svc.safety.estop:
+            return None
+        context = self._svc.line_follow.route_context(
+            ros_now=ros_now, now=self._line_clock())
+        return None if context is None else context.seq
 
     def _on_road_observation(self, msg: String) -> None:
         """Decode road evidence; invalid data invalidates an enforced lease."""

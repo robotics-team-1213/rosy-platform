@@ -23,7 +23,7 @@
    | `v` | 1 | — |
    | `seq`, `place_id`, `map_id` | 이 문맥을 만든 지시 | 지시 |
    | `stamp_s`, `valid_until_s` | CORE ROS 시계(sim 시간 포함) 기준 만든 시각과 만료 | CORE |
-   | `kind` | 앞 장소의 종류: `junction`, `bend`, `ring` | `left`·`right`·`straight`(창 있음) → `junction`; `bend` → `bend`; `exit_segment`가 있는 지시의 나가는 호, 또는 그 호 끝의 이어지는 지시 → `ring` |
+   | `kind` | 현재 구간의 종류: `junction`, `bend`, `ring` | `left`·`right`·`straight`(창 있음) → `junction`; `bend` → `bend`; 실제 D-520 호가 `running`인 동안만 `ring`. `exit_segment`가 있어도 호 시작 전 접근 차로는 `junction` |
    | `ahead_m` | `[lo, hi]`: 지금 자세에서 그 장소의 기대 가로선(`junction`) 또는 호 시작점(`bend`)까지 차로를 따른 거리의 창 | `expect_in_m − pivot_past_line_m − 전진 거리 ± expect_tol_m`, `bend_in_m − 전진 거리 ± bend_tol_m`. 창이 없는 지시는 이 필드 없음 |
    | `lane_turn_deg` | 장소까지 차로의 방향 변화(왼쪽 +) | `lane_turn_deg`(straight), `turn_deg`(bend) |
    | `curvature_1pm` | 지금 달리는 차로의 부호 있는 곡률(왼쪽 +). `ring`일 때만 | `exit_segment.curvature_1pm` |
@@ -43,7 +43,7 @@
    - `valid_until_s − stamp_s ≤ 1.0 s`. CORE는 지시의 만료(`expires_s`)보다 늦은 값을 쓰지 않는다.
    - `seq`가 null이 아니고, 스키마 검사(범위: `ahead_m` 각 값 [−0.5, 2.0], lo ≤ hi; |`lane_turn_deg`| ≤ 360; 0.5 ≤ |`curvature_1pm`| ≤ 5.0)를 통과한다. 어기면 그 메시지 전체를 버리고 마지막 문맥도 지운다.
    - **문맥 없음 = main.** 결정·사유·목표·`junction_ahead_m`이 main keeper와 비트 단위로 같다. 달라지는 것은 `line/keep_debug`에 붙는 진단 필드 `route_context_seq`(null)와 `route_context_v: 1`뿐이다. 이것이 실패 방식이다. 통로가 끊기거나 CORE가 꺼지거나 노드가 다시 떠도 keeper는 오늘의 keeper다.
-   - **CORE 쪽 되맞춤.** keeper는 그 프레임에 쓴 문맥의 `route_context_seq`를 `line/keep_debug`와 `line/observation`에 싣는다. CORE는 null이 아닌 그 값이 지금 자기가 가진 지시의 `seq`와 다르면 그 관측을 근거로 쓰지 않는다. 그 관측은 `no_observation`과 같이 다룬다. 끝난 지시의 문맥으로 내린 판단으로는 움직이지 않는다.
+   - **CORE 쪽 되맞춤.** keeper는 그 프레임에 쓴 문맥의 `route_context_seq`를 `line/keep_debug`와 `line/observation`에 싣는다. CORE는 마지막 발행 seq가 아니라 콜백 시점 현재 지시 또는 실제 달리는 호의 seq와 비교한다. null이 아닌 값이 다르면 카메라 관측을 `invalid_observation`으로 무효화해 즉시 HOLD하고 그 프레임의 교차로 감지는 받지 않는다. 끝난 지시의 문맥으로 내린 판단으로는 움직이지 않는다.
 
 4. **keeper에서의 쓰임: 거부로만.** 문맥은 keeper가 이미 할 수 있는 판단을 좁힌다. 새 주행을 만들지 않는다.
    - (a) **B9 게이트.** `bend_expected = (kind == 'bend' and ahead_m이 [0, JUNCTION_AHEAD_M + BEND_LEAD_M]과 겹침) or (CORE 굽이 상태가 bending·reacquiring임을 문맥이 실음)`. 상수는 keeper `JUNCTION_AHEAD_M` 0.45 m와 D-507 굽이 보충 `BEND_LEAD_M` 0.25 m다. corner turning이 꺼져 있으면 지금처럼 게이트도 꺼진다. 이것이 D-507 B9 구현 메모 (3)·(4)의 배선이다. 굽이 앞 공백((5))은 D-507 굽이 보충의 CORE 넘겨받기가 맡는다. 이 ADR은 keeper가 공백에서 달리게 하지 않는다. `bend_ahead`의 "차로 쪽 경계가 없으면 HOLD"는 그대로다.
@@ -79,7 +79,7 @@
    - **SOURCE.**
      1. 지시 → 문맥: 지시 종류별 `kind`, `ahead_m`(전진 거리 반영, D-468 역추적처럼 뒤로 간 거리는 빼서 창이 늘어남), `lane_turn_deg`, `curvature_1pm`. 창 없는 지시는 `ahead_m` 없음. 설정 꺼짐이면 토픽 없음.
      2. 비우기: `done`·`aborted`·만료·모드 변경·odom epoch 변경·E-stop 틱에 `seq: null` 한 번. QoS가 VOLATILE·RELIABLE·depth 1임을 `test_bridge_timers`처럼 고정.
-     3. 되맞춤: 다른 `seq`를 실은 관측은 CORE가 `no_observation`으로 다룬다. null은 지금처럼 받는다.
+     3. 되맞춤: 다른 `seq`를 실은 관측은 CORE가 `invalid_observation`으로 무효화한다. 마지막 발행 seq와 현재 지시 seq가 다른 전환 구간, 호 시작 전 `exit_segment`가 있는 지시, null 입력을 시험한다.
      4. keeper 신선도: 낡음(0.5 s), 만료, 미래 시각, 범위 밖, `seq` null, 스키마 위반 각각에서 결정이 main과 비트 단위로 같음.
      5. B9 배선: `bend` 창 안에서만 `bend_expected` 참, corner turning 끔이면 거짓, 창 밖·다른 kind에서 거짓.
      6. 곡률 거르기: 합성 ring 프레임(바깥선 현 + SE spoke 두 경계)에서 spoke 쌍이 빠지고 결정이 HOLD 또는 바깥선 기반이 됨. 곧은 차로 프레임에 `ring` 문맥을 주면 주행 → HOLD만 생기고 HOLD → 주행 0.

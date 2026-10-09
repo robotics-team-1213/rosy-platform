@@ -19,13 +19,10 @@ def route_context(junction, arc, *, mono_now, ros_now, odom_key, odometer, mode=
         window = junction.get("window")
         if window is not None and window.get("key") != odom_key:
             return None
-        segment = junction.get("exit_segment")
-        kind = "ring" if segment is not None else "bend" if junction.get("action") == "bend" else "junction"
+        kind = "bend" if junction.get("action") == "bend" else "junction"
         source = dict(seq=junction.get("seq"), place_id=junction.get("place_id"),
                       map_id=junction.get("map_id"), kind=kind)
-        if segment is not None:
-            source["curvature_1pm"] = segment.get("curvature_1pm")
-        elif kind == "bend":
+        if kind == "bend":
             if junction.get("bend_in") is not None and junction.get("tol") is not None:
                 distance = junction["bend_in"] - junction.get("travel", 0.)
                 source["ahead_m"] = (round(distance-junction["tol"], 3),

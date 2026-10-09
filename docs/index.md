@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · fix(route context): 전환 시 지시 번호와 호 시작 조건
 - 2026-10-09 · uncommitted · docs(api): D-531 CORE 경로 문맥 P1
 - 2026-10-09 · uncommitted · docs(adr): D-549 중앙 인증 Rosy Auth 제안
 - 2026-10-09 · uncommitted · docs(adr): D-548 장치 개발 모드 표식
 - 2026-10-09 · uncommitted · docs: Fleet 5개 작업 캡처 기준선
-- 2026-10-09 · uncommitted · docs: 화면 목적·인계·공간 평가 기준

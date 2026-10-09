@@ -892,3 +892,9 @@
 - 변경: 현재 지시·호 주행의 원래 seq·odom 진행 거리·만료를 묶어 junction/bend/ring 경로 문맥을 계산한다. 신선한 odom과 CAMERA_LINE 모드가 없으면 만들지 않는다. 발행 중인 문맥과 시각을 상태에서 읽는다.
 - 증거: services 1500 passed, `known_failures.py` 신규 실패 0. ROS-SIM·DEVICE 미확인.
 - gate 변화: D-531 P1 SOURCE 후보. 차선 선택 규칙은 그대로다.
+
+## 2026-10-09 · uncommitted · fix(line_follow): 호 시작 전 경로 문맥
+
+- 변경: `exit_segment`가 있는 접근 지시를 `junction`으로 내고 실제 호가 running일 때만 `ring` 곡률을 낸다. 독립 검토에서 발견한 접근 차로 오거부 위험을 막는다.
+- 증거: `test_route_context.py` 6 passed(호 시작 전 사례 포함).
+- gate 변화: P1 SOURCE 후보.

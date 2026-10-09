@@ -41,6 +41,13 @@ def test_running_arc_outlives_completed_junction_but_requires_its_odom_key():
                          odom_key=(2, "odom"), odometer=1.2) is None
 
 
+def test_outgoing_ring_curvature_is_not_sent_on_approach_before_arc_opens():
+    context = route_context(_junction(exit_segment={"curvature_1pm": 3.0}), None,
+                            mono_now=10., ros_now=100., odom_key=(2, "odom"), odometer=1.2)
+    assert context.kind == "junction"
+    assert context.curvature_1pm is None
+
+
 def test_off_or_unmapped_instruction_never_yields_a_context():
     assert route_context(_junction(), None, mono_now=10.0, ros_now=100.0,
                          odom_key=(2, "odom"), odometer=1.2, mode="OFF") is None
@@ -70,6 +77,10 @@ def test_manager_publishes_only_when_enabled_and_with_fresh_matching_pose():
     assert enabled.status().route_context_published_at_s == 100.
     enabled.set_route_context_publication(None, 100.1)
     assert enabled.status().route_context is None
+    enabled.set_junction("straight", "NW", 2., expect=dict(
+        map_id="track-v1", expect_in_m=.5, expect_tol_m=.05,
+        pivot_past_line_m=.1, lane_turn_deg=0.))
+    assert enabled.route_context(ros_now=100.1, now=10.).seq != published.seq
     assert disabled.route_context(ros_now=100., now=10.) is None
     assert enabled.route_context(ros_now=100., now=10.5) is None
     enabled.set_mode("OFF")

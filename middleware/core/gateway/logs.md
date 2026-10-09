@@ -1005,3 +1005,9 @@
 - 변경: `ros_bridge`가 기본 꺼짐 설정에서 경로 문맥 토픽을 만들지 않는다. 켜면 VOLATILE/RELIABLE depth 1로 5 Hz 문맥을 발행하고 지시 소실·E-Stop·시계 역행에 clear를 보낸다. 인식 증거의 `route_context_seq`가 현재 지시와 다르면 거절한다.
 - 증거: gateway 전체 2421 passed/17 skipped, API 문서 버전 문자열 1건 실패를 수정한 뒤 관련 34 passed·`known_failures.py` 신규 실패 0. ROS 2 DDS·SIM·DEVICE는 아직 재실행하지 않았다.
 - gate 변화: D-531 P1 SOURCE 후보. 실제 주행 허가 변화 없음.
+
+## 2026-10-09 · uncommitted · fix(core): 문맥 전환의 현재 지시 확인
+
+- 변경: 인식 콜백이 마지막 발행 seq 대신 그 순간 CORE의 지시/호 seq를 확인한다. 다른 번호의 관측은 즉시 무효화하고 교차로 감지는 버린다.
+- 증거: gateway 관련 46 passed, 독립 안전 검토, 문서/구조 36 passed. ROS 그래프는 미검증.
+- gate 변화: P1 SOURCE 후보.
