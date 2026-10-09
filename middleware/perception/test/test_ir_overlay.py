@@ -139,9 +139,20 @@ def test_learned_paint_overlay_loads_the_existing_keep_pipeline(tmp_path):
     assert usable_operator_overlay(str(target))[0] == str(target)
 
 
+def test_learned_paint_every_n_accepts_four(tmp_path):
+    target = tmp_path / "four.yaml"
+    target.write_text(OPERATOR + "    paint_source: learned
+"
+                      "    learned_lane_pointer: /var/lib/rosy/models/shadow
+"
+                      "    learned_paint_every_n: 4
+", encoding="utf-8")
+    assert usable_operator_overlay(str(target))[0] == str(target)
+
+
 @pytest.mark.parametrize("extra", [
     "paint_source: unknown", "paint_source: learned", "learned_paint_threads: 0",
-    "learned_paint_threads: true", "learned_paint_every_n: 0",
+    "learned_paint_threads: true", "learned_paint_every_n: 0", "learned_paint_every_n: 5", "learned_paint_threads: 3",
     "learned_lane_pointer: relative/path",
 ])
 def test_unsafe_paint_overlay_is_skipped(tmp_path, extra):
