@@ -1,6 +1,6 @@
 ## D-559 리더 자취 따라가기(path replay) — 팔로워 CORE가 리더가 실제로 지나간 길을 그대로 다시 달린다
 
-**Status:** Proposed (2026-10-09, 사용자 요청 "관제에서 리더를 정하면 팔로워가 리더가 실제로 간 길을 정확히 따라간다". 구현은 feat/swarm-trail-follow, 호스트 테스트와 모델 PC Gazebo SIM 증거만. DEVICE·현장 수용 없음)
+**Status:** Proposed (2026-10-09, 사용자 요청 "관제에서 리더를 정하면 팔로워가 리더가 실제로 간 길을 정확히 따라간다". 구현은 feat/swarm-trail-follow, 호스트 테스트와 AI PC Gazebo SIM(두 대, 참값 최대 편차 0.032–0.066 m, RMS 0.014–0.019 m, 접촉 0, D-395 loc_assist 끔 — [기록](../validation/d559-trail-follow-sim-2026-10-09/result.md)). DEVICE·현장 수용 없음)
 
 잇는 결정: [D-20](D-20-swarm-fleet.md)(추종 계산은 로봇, Fleet은 지정·릴레이) · [D-31](D-31-fleet.md) · [D-60](D-60-navigation-swarm.md)(추종은 Navigation moving goal, v2 pure-pursuit 훅 예약) · [D-422](D-422-line-follow-body-referenced-obstacle-stop.md)(몸체 기준 장애물 정지) · [D-400](D-400-core-safety-policy-off-shadow-enforce.md) · [D-517](D-517-multi-robot-lane-traffic.md)(M3 차로 대열) · [D-550](D-550-fleet-robot-communication-contract.md)(규칙 M) · [D-494](D-494-fleet-trip-execution-m2-contracts.md)(trip 로봇 움직임 거절)
 
