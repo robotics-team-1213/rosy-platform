@@ -1,0 +1,10 @@
+schema: rosy.drivable-versions/1
+models:
+- version: v13.0.00
+  revision: v13-drivable-20261009-982b09a9
+  onnx_sha256: 982b09a9fc1d0fe83b294329db07e5c9feba21b2bae1d3cdd0aa4ff90b09e711
+  dataset: v13-lane-derived@f9d23ea881478a0c6e76359f9740da8497a7e9468b5f64a2e80bec62c11bfb6e
+  rules:
+  - D-554 1-8
+  status: rejected
+  note: ignores white lines, paints all carpet (docs/validation/v13-drivable-d554-shadow-drive-2026-10-09.md)
