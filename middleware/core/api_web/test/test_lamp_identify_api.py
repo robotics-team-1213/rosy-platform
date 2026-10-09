@@ -47,4 +47,4 @@ def test_lamp_identify_without_a_color_uses_the_robot_s_configured_colour(monkey
         monkeypatch.setattr(host_hardware, "_last_test", {})
         with pytest.raises(ApiError):
             host_hardware.host_lamp_identify(LampIdentifyRequest(), auth, unset)
-    assert [json.loads(w[1])["action"] for w in writes] == ["identify_blue", "identify_amber", "identify_amber"]
+    assert [json.loads(w[1])["action"] for w in writes] == ["identify_blue", "identify_amber", "identify_blue", "identify_amber", "identify_amber"]
