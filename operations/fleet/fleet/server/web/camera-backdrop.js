@@ -5,10 +5,14 @@
 import { mapUpTurn, quarterTurn } from "./site-layer.js";
 import { lensesMatch } from "/console/assets/map-fit.js";
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
+import { createPlaneFeed, planeToMap } from "/console/assets/vision-view.js";
+
+const FRESH_MS = 3000;
+
+const fresh = (frame) => Number.isFinite(frame.ageMs) && frame.ageMs >= 0 && frame.ageMs <= FRESH_MS;
 
 export function cameraMapCalibration(frame, calibrations, siteMap) {
-  if (!frame || frame.state !== "live" || frame.rectified || !siteMap
-    || !Number.isFinite(frame.ageMs) || frame.ageMs < 0 || frame.ageMs > 3000) return null;
+  if (!frame || frame.state !== "live" || frame.rectified || !siteMap || !fresh(frame)) return null;
   return (calibrations || []).find((row) => row.source_id === frame.source
     && (siteMap.maps || []).some((map) => map.map_id === row.map_id)
     && row.image?.width === frame.image?.naturalWidth
@@ -16,6 +20,21 @@ export function cameraMapCalibration(frame, calibrations, siteMap) {
     // Vision's rule (D-457): a record without a lens only fits a frame without one; numbers to 1e-4.
     && lensesMatch(row.lens ?? null, frame.lens ?? null)
     && Array.isArray(row.map_to_image) && row.map_to_image.length === 9) || null;
+}
+
+// D-560: a fresh Vision map plane counts when its revision is an approved calibration of this site's map.
+export function planeCalibration(frame, calibrations, siteMap) {
+  if (!frame || !siteMap || !fresh(frame)) return null;
+  return (calibrations || []).find((row) => row.source_id === frame.source
+    && row.calibration_revision === frame.calibrationRevision
+    && (siteMap.maps || []).some((map) => map.map_id === row.map_id)) || null;
+}
+
+// D-560 4: canvas affine [a, b, c, d, e, f] that lays plane pixels on the view through the map's toPx
+// (x = min_x + u / ppm, y = max_y - v / ppm), so the view turn applies to the picture as to the lanes.
+export function planeAffine(plane, width, height, toPx) {
+  const at = (u, v) => { const m = planeToMap(plane, u, v); const p = toPx(m.x, m.y); return [p.x, p.y]; };
+  return affineFromTriangles([[0, 0], [width, 0], [0, height]], [at(0, 0), at(width, 0), at(0, height)]);
 }
 
 // D-515: 원본 영상을 삼각형마다 아핀으로 옮겨 사이트 사각형 위에 위에서 본 그림으로 그린다.
@@ -64,14 +83,31 @@ function warpOnto(ctx, image, mapToImage, bounds, toPx) {
 export function createCameraBackdrop({ scope, el, view, draw }) {
   let cameraFrame = null;
   let calibrations = [];
+  // D-560: Vision's map plane is the picture; the D-515 raw warp is only the fallback.
+  let planes = null;
+  const planeFrame = () => planes?.current() ?? null;
   const setCalibrations = (rows) => { calibrations = rows; };
-  const calibration = () => cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
-  const drawTopDown = (ctx, record, bounds, toPx, width, height, dpr, rot) =>
-    drawCameraTopDown(ctx, cameraFrame.image, record, bounds, toPx, width, height, dpr, rot);
+  const usesPlane = () => Boolean(planeCalibration(planeFrame(), calibrations, view.siteMap));
+  const calibration = () => planeCalibration(planeFrame(), calibrations, view.siteMap)
+    || cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
+  function drawTopDown(ctx, record, bounds, toPx, width, height, dpr, rot) {
+    if (!usesPlane()) {
+      drawCameraTopDown(ctx, cameraFrame.image, record, bounds, toPx, width, height, dpr, rot);
+      return;
+    }
+    const { image, plane } = planeFrame();
+    const affine = planeAffine(plane, image.naturalWidth, image.naturalHeight, toPx);
+    if (!affine) return;
+    ctx.save();
+    ctx.transform(...affine);
+    ctx.drawImage(image, 0, 0);
+    ctx.restore();
+  }
+  const redraw = () => { if (!view.map && view.siteMap) draw(); };
 
   function setCameraFrame(frame) {
     cameraFrame = frame?.state === "live" ? frame : null;
-    if (!view.map && view.siteMap) draw();
+    redraw();
   }
   // D-513 7: 크게 보기·썸네일도 이 카메라 보정의 지도 방향으로 돌린다. 펴 놓은 미리보기도
   // 모서리 순서를 지켜 펴므로 같은 회전이다. 보정이 없으면 0 — 받은 URL 그대로다.
@@ -100,6 +136,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     // D-493: the raw frame shows in one place at a time — the rail thumbnail, or the map stage
     // (#map-birdseye) when there is no map or the operator asks for the large view. CSS picks the place.
     const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
+    planes = createPlaneFeed({ scope, visionView, onChange: redraw });
     const setLive = (url) => {
       birdseye.hidden = !url;
       if (url) birdseye.src = url;
@@ -126,7 +163,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     let cancelMapCameraExpiry = () => {};
     scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
       cancelMapCameraExpiry();
-      if (frame.state !== "live" || !Number.isFinite(frame.ageMs) || frame.ageMs < 0 || frame.ageMs > 3000) {
+      if (frame.state !== "live" || !fresh(frame)) {
         lastFrame = null; setCameraFrame(null); setLive(null); return;
       }
       lastFrame = frame;
@@ -134,8 +171,9 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       frame.image?.closest?.(".vision-frame")?.setAttribute("data-turn", String(frameTurn(frame)));
       setCameraFrame(frame);
       showFrame();
+      planes.refresh(calibrations.some((row) => row.source_id === frame.source));
       cancelMapCameraExpiry = scope.timeout(() => { lastFrame = null; setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
     })));
   }
-  return { calibration, setCalibrations, drawTopDown, setCameraFrame, bindCamera };
+  return { calibration, usesPlane, setCalibrations, drawTopDown, setCameraFrame, bindCamera };
 }

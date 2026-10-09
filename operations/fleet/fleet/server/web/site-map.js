@@ -9,11 +9,12 @@ import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
   planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripErrorText, tripStartReason,
   tripStatusText, rectangularView, viewTurnOf, editViewTurn, loopCapacityText, repeatTripBody, convoyLeaders,
+  planeView, planePixelAt,
 } from '/console/assets/site-map-model.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {warpImage} from '/console/assets/field-warp.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
-import {parseLensHeader} from '/console/assets/vision-view.js';
+import {parseLensHeader, fetchMapPlane, planeToMap} from '/console/assets/vision-view.js';
 
 const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
@@ -310,6 +311,7 @@ $('token-save').addEventListener('click', async () => {
 
 function clearPlane() {
   planeEpoch += 1;
+  if (plane?.received) URL.revokeObjectURL(plane.url);
   plane = null;
   $('plane-pick').checked = false;
   $('plane-point').textContent = '확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.';
@@ -338,7 +340,25 @@ $('plane-load').addEventListener('click', async () => {
   gate('plane-load', '불러오는 중');
   let url;
   try {
-    const {view, field} = rectangularView(record, shown()?.map_id, W, H, viewTurnOf(shown()));
+    const turn = viewTurnOf(shown());
+    const {view, field} = rectangularView(record, shown()?.map_id, W, H, turn);
+    // D-560: Vision's map plane first; the browser warp below only when Vision cannot make one.
+    const got = await fetchMapPlane(request, record.source_id, null, AbortSignal.timeout(10000));
+    if (got.state === 'error') throw new Error(`Vision 응답 ${got.status}`);
+    if (got.state === 'live') {
+      if (!(got.ageMs >= 0 && got.ageMs <= 3000)) throw new Error('신선한 평면 영상을 확인할 수 없습니다.');
+      if (got.blob.size > 8 * 1024 * 1024) throw new Error('영상 크기가 너무 큽니다.');
+      url = URL.createObjectURL(got.blob);
+      const image = new Image(); image.src = url; await image.decode();
+      const p = got.plane, size = {width: image.naturalWidth, height: image.naturalHeight};
+      const bounds = {min_x: p.min_x, max_x: p.min_x + size.width / p.ppm, min_y: p.max_y - size.height / p.ppm, max_y: p.max_y};
+      if (epoch !== planeEpoch) return;
+      plane = {mapId: record.map_id, ...planeView(bounds, W, H, turn), bounds, url, received: {plane: p, size, turn}};
+      url = null;  // the plane owns it until clearPlane
+      $('plane-status').textContent = `불러온 평면 영상 · Rosy Cam 평면 영상 · ${record.source_id} · ${got.calibrationRevision || '보정 미상'} · ${new Date().toLocaleTimeString()} · 표시 전용`;
+      render();
+      return;
+    }
     const lease = await request('/api/fleet/vision/lease', {method: 'POST',
       headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source_id: record.source_id})});
     const path = new URL(lease.frame_path, location.origin);
@@ -364,7 +384,7 @@ $('plane-load').addEventListener('click', async () => {
     warpImage(canvas.getContext('2d'), image, h, canvas.width, canvas.height, document.createElement('canvas'));
     if (epoch !== planeEpoch) return;
     plane = {mapId: record.map_id, view, field, bounds: record.track_bounds_m, url: canvas.toDataURL('image/png')};
-    $('plane-status').textContent = `불러온 평면 영상 · ${record.source_id} · ${new Date().toLocaleTimeString()} · 표시 전용`;
+    $('plane-status').textContent = `불러온 평면 영상 · 브라우저 보정(대체) · ${record.source_id} · ${new Date().toLocaleTimeString()} · 표시 전용`;
     render();
   } catch (error) {
     if (epoch === planeEpoch) $('plane-status').textContent = `평면 영상 확인 실패 · ${siteMapErrorText(error)}`;
@@ -387,7 +407,12 @@ $('site-map-svg').addEventListener('click', event => {
   if ($('plane-pick').checked) {
     if (plane?.mapId !== shown()?.map_id) return;
     const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(event.currentTarget.getScreenCTM().inverse());
-    const [x, y] = plane.view.toMap(at.x, at.y);
+    const r = plane.received;  // D-560 4: a received plane picks by its own scale and origin
+    let x, y;
+    if (r) {
+      const {u, v} = planePixelAt(plane.field, r.turn, r.size, at.x, at.y);
+      ({x, y} = planeToMap(r.plane, u, v));
+    } else [x, y] = plane.view.toMap(at.x, at.y);
     const b = plane.bounds;
     if (x < b.min_x || x > b.max_x || y < b.min_y || y > b.max_y) return;
     plane.point = {x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000};

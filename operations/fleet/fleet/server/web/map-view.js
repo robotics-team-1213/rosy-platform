@@ -560,7 +560,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
           + (camera.calibration()
             ? (view.trackingDrift
               ? " · 카메라 교정 어긋남 — 맞춤 재수락 필요"
-              : ` · Rosy Cam 실영상 · ${camera.calibration().calibration_revision}`) : "")
+              : ` · ${camera.usesPlane() ? "Rosy Cam 평면 영상" : "브라우저 보정(대체)"} · ${camera.calibration().calibration_revision}`) : "")
           + callLabel;
         el("map-canvas").setAttribute("aria-label",
           `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 이 지도에서는 목표를 지정할 수 없습니다.`

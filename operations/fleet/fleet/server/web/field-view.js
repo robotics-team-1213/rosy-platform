@@ -8,6 +8,7 @@ import {
 } from "./field-layers.js";
 import { multiply3, fieldToMap } from "/console/assets/map-fit.js";
 import { warpImage } from "/console/assets/field-warp.js";
+import { createPlaneFeed } from "/console/assets/vision-view.js";
 
 export { warpImage };
 
@@ -39,6 +40,8 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
   let proposal = null; // { corners, confidence, aspect, shape, source }
   let lastFrame = null;
   let warped = null; // { key, data } — 같은 프레임·모서리·크기면 다시 펴지 않는다.
+  // D-560 4: 승인 보정이 있으면 Vision 지도 평면 영상을 그대로 보여 준다. 없으면 아래 예전 경로다.
+  const planes = createPlaneFeed({ scope, visionView, onChange: () => renderRectified() });
 
   view.layers = parseLayers(storageGet(LAYER_STORAGE_KEY));
   const toggles = [...document.querySelectorAll("[data-layer]")];
@@ -126,13 +129,18 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
     const active = activeCorners();
     updateMismatch(active);
     const frame = lastFrame;
+    const shot = planes.current();
+    const plane = shot?.source === visionView.currentSource() && view.hasFleetCalibration?.(shot.source) ? shot : null;
     // D-375 대체 경로: 경기장 모서리가 없고 운영자가 지도 맞춤을 수락했으면 지도 사각형을 그 homography 로 편다.
-    const byMap = !active && frame && !frame.rectified ? view.mapFieldFallback?.(frame) ?? null : null;
-    const show = view.layers.rectified && frame && frame.source === visionView.currentSource()
-      && (frame.rectified || active || byMap);
+    const byMap = !plane && !active && frame && !frame.rectified ? view.mapFieldFallback?.(frame) ?? null : null;
+    const show = view.layers.rectified && (plane || (frame && frame.source === visionView.currentSource()
+      && (frame.rectified || active || byMap)));
     figure.hidden = !show;
     if (!show) return;
-    const mapSize = byMap ? {
+    const mapSize = plane ? {
+      width: Math.round(plane.image.naturalWidth / plane.plane.ppm * 1000) / 1000,
+      height: Math.round(plane.image.naturalHeight / plane.plane.ppm * 1000) / 1000,
+    } : byMap ? {
       width: Math.round((byMap.bounds.max_x - byMap.bounds.min_x) * 1000) / 1000,
       height: Math.round((byMap.bounds.max_y - byMap.bounds.min_y) * 1000) / 1000,
     } : null;
@@ -146,7 +154,9 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
     const { field } = layout;
     ctx.fillStyle = tone("--ground-deep");
     ctx.fillRect(0, 0, layout.width, layout.height);
-    if (frame.rectified) {
+    if (plane) {
+      ctx.drawImage(plane.image, field.x, field.y, field.width, field.height);
+    } else if (frame.rectified) {
       // Vision 이 확인한 모서리로 이미 펴서 보냈다(D-318). 바깥은 없다.
       ctx.drawImage(frame.image, field.x, field.y, field.width, field.height);
     } else {
@@ -173,7 +183,8 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
     ctx.strokeRect(field.x + 1, field.y + 1, field.width - 2, field.height - 2);
     ctx.restore();
     if (size) drawMetric(ctx, field, size);
-    const source = frame.rectified ? "Vision 보정 프레임"
+    const source = plane ? `Rosy Cam 평면 영상(보정 ${plane.calibrationRevision})`
+      : frame.rectified ? "Vision 보정 프레임"
       : byMap ? "수락한 지도 맞춤으로 편 원본(모서리가 화면 밖이어도 됨)"
         : `${active.kind === "제안" ? "제안으로" : "확인한 모서리로"} 편 원본`;
     caption.textContent = `위에서 본 경기장 · ${source} · 경기장 밖은 가림`
@@ -266,6 +277,7 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
   let sizeSource = null;
   scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
     lastFrame = frame;
+    planes.refresh(Boolean(view.layers.rectified && view.hasFleetCalibration?.(frame.source)));
     if (frame.source !== sizeSource) {
       sizeSource = frame.source;
       loadSize(frame.source);

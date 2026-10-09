@@ -396,6 +396,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     render();
   })));
 
+  view.hasFleetCalibration = (source) => calibrations.some((row) => row?.source_id === source);
   // 경기장 뷰: 승인된 추적 보정이 있으면 그것으로, 없으면 이 브라우저 초안으로 지도 사각형을 편다.
   view.mapFieldFallback = (frame) => {
     const fit = frame && !frame.rectified ? (fleetFit(frame.source) || draftFor(frame.source)) : null;
