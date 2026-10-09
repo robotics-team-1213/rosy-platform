@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · feat(fleet): D-541 7 Fleet trip lease holder (Safety-Review)
 - 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.161
 - 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.160
 - 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.158
 - 2026-10-09 · uncommitted · fix(fleet): D-540 9 안전 리뷰 반영 — claim 열기, rearm 이름, follow_cancel
-- 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.157

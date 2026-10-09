@@ -89,6 +89,10 @@ D-460은 사람 운전자 사이의 운전석 임대를 거절했다: (a) D-411 
 
 **References:** `middleware/core/api_web/core_api_web/api/v1/{common.py,control.py,calibration.py,line_follow.py,navigation.py}`, `middleware/core/services/core_features/command/manager.py`, `operations/fleet/fleet/server/{trip_runner.py,trip_ports.py,trip_guard.py}`, `X:\DevTemp\fleet-ui-audit\features.md`.
 
+### 열린 질문
+
+- **끝난 lease 뒤 주인 토큰의 목표(2026-10-09 Fleet 쪽 안전 검토, feat/fleet-trip-lease-holder).** lease가 끝나면(넘겨받기·만료·`mode_left`) CORE에는 lease가 없어서 Fleet 토큰의 `/navigation/goal`을 받는다. Fleet은 잃음을 다음 renew(≤ 0.5 s)에 알고 trip을 닫지만, 그 사이 이미 보낸 목표가 늦게 닿으면 자유 구간 로봇이 넘겨받은 뒤 다시 NAVIGATION으로 움직인다(D-463 앞점, ≤ 0.2 m, 그 뒤 Fleet이 취소한다). 닫는 길: 구동 쓰기가 `trip_lease_id`를 싣고 CORE가 끝난 id를 실은 쓰기를 409로 거절한다. **현장이 `fleet.trip_lease_required: true`로 바꾸기 전에 해야 한다.**
+
 ### 개정 이력
 
 - rev 1 (2026-10-09, 독립 검토 반영): lease에 운전 방식 저장을 없앰(주인의 lane ↔ free 전환은 유지), 검사를 `require_calibration_owner` 안 한 곳으로(`/swarm/follow`, initialpose, SLAM, 움직이는 막힘 답, `/ws/swarm/reference` 포함), `stuck_resolver` 토큰 규칙, 다른 `lease_id` 409, Fleet 전용 CORE 토큰 전제, `fleet.trip_lease_ttl_s`(≤ 10 s)와 Wi-Fi 끊김 메모. D-460·D-494·D-430에 개정 줄.
