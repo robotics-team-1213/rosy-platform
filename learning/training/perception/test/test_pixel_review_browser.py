@@ -7,7 +7,7 @@ from browser_harness import browser_tests_enabled
 import numpy as np
 
 from test_review_flow_browser import browser_workspace, serve
-from test_review_app import bright_store
+from test_review_app import bright_store, open_store
 from test_review_cycle import CLASSES
 import review_masks
 
@@ -20,6 +20,23 @@ def open_pixels(page, store, expect, index=0):
     base = page.url.split('?')[0].rstrip('/')
     page.goto(base + f'/pixels?frame={index}', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
+
+
+def test_review_workspace_purpose_stays_visible_on_photo_change(tmp_path):
+    store = open_store(tmp_path)
+    with serve(store) as (page, _, expect):
+        open_pixels(page, store, expect)
+        expect(page.locator('#pixel-workspace-mode')).to_contain_text('학습 후보')
+        expect(page.locator('#pixel-view-status')).to_contain_text('학습 후보')
+        page.locator('#pixel-next').click()
+        expect(page.locator('#pixel-view-status')).to_contain_text('학습 후보')
+    with store.connect() as db:
+        db.execute("INSERT OR REPLACE INTO metadata (key,value) VALUES ('workspace_kind','evaluation')")
+    with serve(store) as (page, _, expect):
+        open_pixels(page, store, expect)
+        expect(page.locator('#pixel-workspace-mode')).to_contain_text('고정 평가')
+        expect(page.locator('#pixel-view-status')).to_contain_text('학습 제외')
+        expect(page.locator('#pixel-preparation')).to_be_hidden()
 
 
 def test_detail_view_and_mask_toggle_do_not_change_review(tmp_path):
