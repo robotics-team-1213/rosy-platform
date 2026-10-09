@@ -189,7 +189,7 @@ rosy_ml fetch pinky-005 --http --ca-file device-ca.pem --only <recording-id>
    unit drop-in(`ReadWritePaths`)을 넣는다. store를 NAS나 Drive로 옮길 때는 마운트한 뒤
    `store`만 바꾸고 스크립트를 다시 실행한다.
 5. **HF 토큰은 `backend: hf`일 때만.** 비공개 HF 저장소를 보게 할 때만 read 권한 토큰을
-   `sudoedit /etc/rosy/site/secrets/hf_token`에 붙여 넣는다. store만 쓰면 토큰 파일은 만들지 않는다.
+   `sudoedit /etc/rosy/site-secrets/hf_token`에 붙여 넣는다. store만 쓰면 토큰 파일은 만들지 않는다.
 6. 스크립트를 다시 실행하면 타이머를 켜고, 서비스 사용자로 `rosy_ml doctor --watch-config`를
    돌린다.
 
