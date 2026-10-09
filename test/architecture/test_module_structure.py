@@ -125,8 +125,12 @@ SIZE_VERDICTS = {
         "at 604 (bend diagnostic)",
     ),
     "fleet/fleet/traffic": (
-        1509,
-        "split: measured at 1509 on 2026-10-09. D-551 adds traffic/trip_advice.py "
+        1884,
+        "split: measured at 1884 on 2026-10-09. D-525 rev 4 adds traffic/signal_agent.py (the standalone "
+        "AI PC demand controller, stdlib only) and demand mode in signal_phase.py and lane_traffic.py. The named "
+        "lane-traffic seam in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "
+        "+150 allowance measured from 1884. "
+        "Previously measured at 1509 on 2026-10-09. D-551 adds traffic/trip_advice.py "
         "(display-only signal advice) and D-525 rev 3 extends signal_phase.py and "
         "lane_traffic.py. The named lane-traffic seam in "
         "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md remains the next split. "
@@ -982,11 +986,14 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "perception/control/sensing/perception": (
-        11_035,
+        11_324,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
-        "package move needs its own review and ARM64 image proof. Judged at 11035 on 2026-10-09.",
+        "package move needs its own review and ARM64 image proof. Judged at 11035 on 2026-10-09; "
+        "re-judged at 11324 the same day for D-570 (learned/paint_motion.py ground-plane warp and "
+        "odom history, plus the reuse gate in learned/paint_worker.py), which lives in the learned "
+        "backend it serves and does not change the split plan.",
     ),
     "control": (
         34_446,
