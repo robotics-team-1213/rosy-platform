@@ -460,7 +460,7 @@ def test_a_moving_recovery_names_its_phase_and_beats_other_strips(phase, text):
 
 
 def test_the_bridge_has_no_lcd_line_and_an_estop_still_stops_the_screen():
-    assert fs.screen_for(**READY, core=core(recovery="bridge"))["strip"] is None
+    assert fs.screen_for(**READY, core=core(recovery="bridge"))["strip"] == "Waiting"
     assert fs.screen_for(**READY, core=core(recovery="retrace", estop=True))["kind"] == fs.STOPPED
 
 

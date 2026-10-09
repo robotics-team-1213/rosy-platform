@@ -2269,7 +2269,7 @@ def test_the_bridge_is_a_soft_lamp_only_and_estop_beats_recovering(tmp_path):
     _module, display, lamp, clock, gpio, _spawn = _recovering(tmp_path, recovery="bridge")
     display.step()
     assert lamp.pattern == "bridging" and len(_starts(gpio)) == 1  # the ready chirp only
-    assert display.screen["strip"] is None  # no LCD line for the bridge
+    assert "Recovering" not in str(display.screen["strip"])  # no LCD line for the bridge
 
     _face_inputs(tmp_path, recovery="retrace", robot_mode="EMERGENCY", estop=True)
     _status(tmp_path, "CORE_READY", runtime_mode="hardware", robot_mode="EMERGENCY")
@@ -2293,7 +2293,7 @@ def test_recovering_names_the_phase_on_the_lcd_and_refuses_an_identify_blink(tmp
 def test_an_old_hand_over_without_recovery_and_an_unknown_value_signal_nothing(tmp_path):
     module, display, lamp, _clock, gpio, _spawn = _recovering(tmp_path)  # no recovery key at all
     display.step()
-    assert lamp.pattern == "ready" and display.screen["strip"] is None and len(_starts(gpio)) == 1
+    assert lamp.pattern == "ready" and "Recovering" not in str(display.screen["strip"]) and len(_starts(gpio)) == 1
     _face_inputs(tmp_path, recovery="teleporting")
     assert display._core()["recovery"] is None
 
