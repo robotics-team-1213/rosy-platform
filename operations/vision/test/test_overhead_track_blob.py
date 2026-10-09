@@ -471,24 +471,24 @@ def test_a_wrong_kept_background_is_guessed_and_healed_without_rewriting_the_sto
 
 # D-547 addendum: ghosts without a suspect.
 
-def _coloured_robot_floor(image=None):
-    image = _floor() if image is None else image
-    image[141:159, 291:309] = (60, 60, 120)  # not dark, so the suspect search misses it
+def _cabled_robot_floor(image=None):
+    image = _with_square(18, image=image)
+    image[141:159, 297:303] = (40, 160, 230)  # a cable splits the dark body: no suspect
     return image
 
 
-def test_an_unsuspected_ghost_is_never_reported_and_healed_after_three_frames():
-    detector = _learned(floor=_coloured_robot_floor)
+def test_an_unconfirmed_ghost_is_reported_capped_then_healed():
+    detector = _learned(floor=_cabled_robot_floor)
     assert detector._suspects == []
     model = detector._model
-    for index in range(GHOST_CONFIRM_FRAMES - 1):
-        assert detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections == ()
-        assert detector._model is model
+    for index in range(GHOST_CONFIRM_FRAMES - 1):  # visible, at a guess's score, until confirmed
+        (seen,) = detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections
+        assert seen.score <= BAKED_SCORE_MAX and detector._model is model
     assert detector.detect(Frame(_floor(), 12.0), CAL).detections == ()
     assert detector._model is not model  # healed
     for index in range(3):
         assert detector.detect(Frame(_floor(), 12.34 + index / 3), CAL).detections == ()
-    (found,) = detector.detect(Frame(_coloured_robot_floor(), 14.0), CAL).detections
+    (found,) = detector.detect(Frame(_cabled_robot_floor(), 14.0), CAL).detections
     assert found.score > BAKED_SCORE_MAX  # back on the healed spot: a live blob
 
 
@@ -501,12 +501,49 @@ def test_a_visible_robot_is_never_healed_wherever_it_stands(cx):
     assert detector._model is model
 
 
+def _tape_floor(image=None):
+    image = _floor() if image is None else image
+    image[137:163, 260:340] = 40  # a dark tape band: long, so it is no suspect
+    return image
+
+
+def test_a_robot_with_a_coloured_deck_on_dark_tape_is_reported_and_never_healed():
+    detector = _learned(floor=_tape_floor)
+    assert detector._suspects == []
+    model = detector._model
+    for index in range(6):
+        frame = _tape_floor()
+        frame[141:159, 291:309] = (60, 60, 120)  # not floor coloured: never a ghost
+        (seen,) = detector.detect(Frame(frame, 11.0 + index / 3), CAL).detections
+        assert seen.score > BAKED_SCORE_MAX
+    assert detector._model is model
+
+
+def _blue_square_floor(image=None):
+    image = _floor() if image is None else image
+    image[139:161, 289:311] = (200, 60, 20)  # a blue start square: not dark
+    return image
+
+
+def test_a_floor_coloured_box_on_a_blue_square_is_seen_and_leaves_no_phantom():
+    detector = _learned(floor=_blue_square_floor)
+    model = detector._model
+    for index in range(4):
+        frame = _blue_square_floor()
+        frame[141:159, 291:309] = 125  # a grey box on the square
+        (seen,) = detector.detect(Frame(frame, 11.0 + index / 3), CAL).detections
+        assert seen.score > BAKED_SCORE_MAX
+    for index in range(3):  # removed
+        assert detector.detect(Frame(_blue_square_floor(), 12.5 + index / 3), CAL).detections == ()
+    assert detector._model is model
+
+
 def test_a_large_dark_occluder_like_a_chair_is_not_healed():
-    detector = _learned(floor=_coloured_robot_floor)
+    detector = _learned(floor=_cabled_robot_floor)
     model = detector._model
     for index in range(10):
-        frame = _coloured_robot_floor()
-        frame[130:170, 280:320] = (20, 30, 40)  # a chair seat over the spot and the floor around it
+        frame = _cabled_robot_floor()
+        frame[141:159, 291:309] = (20, 60, 110)  # a chair part over the spot: not floor coloured
         frame[60:90, 420:450] = (20, 30, 40)    # and on plain floor elsewhere
         frame[250:270, 420:440] = 140             # floor-coloured paper on plain floor
         detector.detect(Frame(frame, 11.0 + index / 3), CAL)
