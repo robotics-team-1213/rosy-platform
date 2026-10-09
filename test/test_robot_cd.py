@@ -372,3 +372,13 @@ def test_source_mismatch_also_counts_toward_the_preparation_limit(tmp_path, monk
     coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path}, gh=github_for([run()]))
     assert coordinator.tick() == "prepare_retry"
     assert "ValueError" in json.loads((tmp_path / "state.json").read_text())["last_error"]
+
+
+def test_state_dir_too_long_for_payload_paths_is_refused(tmp_path):
+    tool = module()
+    long_dir = tmp_path / ("s" * (tool.MAX_STATE_DIR + 1))
+    config = {**CONFIG, "repo_id": 7, "state_dir": str(long_dir), "trusted_root": str(ROOT)}
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(ValueError, match="MAX_PATH"):
+        tool.load_config(path)
