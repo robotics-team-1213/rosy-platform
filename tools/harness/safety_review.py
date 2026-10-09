@@ -259,6 +259,27 @@ EXEMPT: dict[str, str] = {
         "Independent security-reviewer agent, 2026-10-08: console.py removes the power_health display "
         "from FleetConsole state (traffic/swarm inputs); projection now per-response in console_routes, "
         "display-only. Exemption approved by livsbittt.",
+    "b64ce7a4f3413eee968066ca2efa3386c7507c1a":  # git commit revision
+        "Independent D-581 review, 2026-10-10: history-only exemption, NOT approval of this commit "
+        "alone. Its missing anchor_hold and odom-epoch guard were repaired by 1c362f141, "
+        "efba0585f and ee79d749a before the first remote main candidate containing D-581. "
+        "Only the integrated ae08cac387 source was host-tested (24 passed); TRAIL driving remains "
+        "HOLD. See docs/validation/d581-trail-anchor-safety-review-2026-10-10/result.md.",
+    "198986fef42452854bbca127246f9435358e7306":  # git commit revision
+        "Independent D-581 review, 2026-10-10: formation status reads an anchor from a relay "
+        "double; read-only projection, no stop, rearm or command authority change. Historical "
+        "exemption applies to the integrated ae08cac387 source only. See docs/validation/"
+        "d581-trail-anchor-safety-review-2026-10-10/result.md.",
+    "93ec99d5ba4b16934d5e6f01e5cfb4347488b09a":  # git commit revision
+        "Independent D-581 review, 2026-10-10: moves the anchored relay factory into swarm/anchor; "
+        "the TRAIL condition and per-session anchor construction remain. Historical exemption "
+        "applies to integrated ae08cac387 only. See docs/validation/"
+        "d581-trail-anchor-safety-review-2026-10-10/result.md.",
+    "8754cc2b5ed904a000733ae2a92e83a3509e7225":  # git commit revision
+        "Independent D-581 review, 2026-10-10: moves relay kwargs and status into the anchor "
+        "helper; provided factory wins and missing poses keep the default relay/status None. "
+        "Historical exemption applies to integrated ae08cac387 only. See docs/validation/"
+        "d581-trail-anchor-safety-review-2026-10-10/result.md.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
