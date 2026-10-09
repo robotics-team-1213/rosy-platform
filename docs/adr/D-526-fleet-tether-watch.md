@@ -14,14 +14,14 @@
 
 ### Decision
 
-1. **감시 대상과 입력.** Fleet `TetherWatch`(`operations/fleet/fleet/server/tether_watch.py`)가 테더 선언이 있는 로봇만 0.5 s마다 본다. 자세는 지도와 같은 출처다: 신선한 hub heartbeat 상태, 아니면 CORE REST 상태(`FleetConsole._gather_state`)의 `pose {x, y, yaw}`. `localization.pose_frame`이 `odom`이거나, 값이 없거나 유한하지 않으면 그 틱은 자세가 없다. 매 틱 잰다:
+1. **감시 대상과 입력.** Fleet `TetherWatch`(`operations/fleet/fleet/server/tether_watch.py`)가 테더 선언이 있는 로봇만 0.5 s마다 본다. 자세는 지도와 같은 출처다: 신선한 hub heartbeat 상태, 아니면 CORE REST 상태(`FleetConsole._gather_state`)의 `pose {x, y, yaw}`. 지도 자세는 신뢰하는 자세만이다(`fleet.localization.trust.classify == TRUSTED`: `localization`이 LOCALIZED이고 `pose_frame`이 `map`, Fleet 추적·교통정리와 같은 규칙). `localization`이 없는 로봇(D-395 이전), odom, 후보·의심·모름 상태, 값이 유한하지 않은 자세는 그 틱의 자세가 없다. 자세는 새 상태일 때만 센다: 상태의 `timestamp`가 직전 읽기와 같으면(캐시된 heartbeat, 얼어붙은 CORE) 새 자세가 아니다. 매 틱 잰다:
    - 거리: 자세와 `anchor_xy`의 거리.
    - 회전: 선언(POST) 뒤 첫 자세부터 연속한 두 yaw 차이를 (−π, π]로 접어(`math.remainder`) 더한 펼친 누적 yaw. ±180° 경계를 넘어도 한쪽으로 쌓인다.
    - 자세 나이: 마지막 신선한 자세(없으면 선언 시각)부터의 시간.
 2. **정지 조건과 정지 경로.** 아래 가운데 하나면 트립이다.
    - `tether_radius`: 거리 > `radius_m` + 0.15 m(`RADIUS_SLACK_M`).
    - `tether_turn`: |누적 회전| > 405°(`TURN_LIMIT_DEG` = 360 + 45).
-   - `tether_pose_stale`: 자세 나이 > 2 s(`STALE_S`). 닫힌 쪽으로 실패한다. 연결이 끊긴 로봇, odom 자세만 주는 로봇(D-395 이전, 픽셀 모드)도 여기에 걸린다.
+   - `tether_pose_stale`: 자세 나이 > 2 s(`STALE_S`). 닫힌 쪽으로 실패한다. 연결이 끊긴 로봇, odom 자세만 주는 로봇, `localization`이 없거나 신뢰하지 못하는 로봇도 여기에 걸린다. 지도 자세가 없는 로봇은 2 s 안에 세워진다(fail-closed). 오버헤드 카메라 추적(D-395/D-515)이 그 로봇에 지도 자세를 줄 때까지 그렇다.
 
    트립이면 기존 로봇 E-Stop을 그 로봇 하나에 보낸다(`console.hub.scatter_estop`, 전체 정지와 같은 `RobotClient.estop()`). 이어서 그 로봇의 열린 trip을 `tether_trip`으로 끝낸다(`TripRunner.cancel_robot`, 기존 경로). 새 정지 경로나 새 CORE API는 만들지 않는다. E-Stop을 고른 이유: 항법 취소와 line-follow OFF는 수동 조종(teleop, D-512 도구의 MANUAL)을 세우지 못한다. CORE E-Stop은 모든 모드를 세우고 래치된다.
 3. **되돌아가기는 운영자 몫이다.** Fleet는 되돌아가기를 지시하지 않는다. 이유:
@@ -35,9 +35,9 @@
    - 운영자는 Fleet `radius_m`을 도구의 정지 반경(케이블 − 여유)과 같게 선언한다. 지도 원이 그 반경이다. Fleet는 그보다 0.15 m 바깥에서 트립한다. 도구 여유 0.3 m 안쪽이라 케이블 끝에 닿기 전이다.
    - 회전: 도구는 360°에서 트립해 270° 아래로 되감는다. Fleet는 405°에서 트립한다.
    - 그래서 도구가 살아 있으면 도구가 먼저 트립하고 되돌아가며, 되돌아가는 동안 거리와 회전이 줄어 Fleet는 트립하지 않는다. 도구가 죽었거나 사람이 몰면 Fleet가 E-Stop으로 세운다. 이때 E-Stop이 도구의 되돌아가기도 막는다. 의도한 것이다(1차 보호가 실패했다).
-   - 회전 기준점이 다르다. 도구는 주행 시작부터, Fleet는 테더 POST부터 센다. 결정 4대로 POST를 케이블을 놓은 순간에 하면 Fleet 값이 도구 값보다 크거나 같다. 그러면 Fleet가 먼저 트립할 수 있다. 그래서 45° 여유를 둔다. 주행 시작 직전에 POST하면 두 기준이 같아진다.
-6. **감사.** 1단계는 Fleet 로그(`fleet.tether_watch`)에 남긴다: 트립(`robot`, `trip`, `distance_m`, `turn_deg`, `pose_age_s`), 정지 보냄, 정지 실패(오류 코드). 테더 설정·해제는 기존 named operator 경로라 `set_by`가 남는다. 지속 감사(작업 DB의 API 감사 행)는 2단계다.
-7. **D-430.** `tether_watch.py`를 `platform_parts.yaml` `safety_modules`에 태그하고 `TetherWatch`·`map_pose`를 공개 앵커로 둔다(Fleet 서버는 `decision` 관심사라 공개 앵커만 import한다). 이 파일은 표준 라이브러리만 쓴다. 정지는 CORE의 공개 경로(E-Stop)로만 요청한다. 래치를 자동으로 풀지 않는다.
+   - 회전 기준점이 다르다. 도구는 주행 시작부터, Fleet는 테더 POST부터 센다(그래서 테더 POST는 주행 직전에 한다). 결정 4대로 POST를 케이블을 놓은 순간에 하면 Fleet 값이 도구 값보다 크거나 같다. 그러면 Fleet가 먼저 트립할 수 있다. 그래서 45° 여유를 둔다. 주행 시작 직전에 POST하면 두 기준이 같아진다.
+6. **감사.** 1단계는 Fleet 로그(`fleet.tether_watch`)에 남긴다: 트립(`robot`, `trip`, `distance_m`, `turn_deg`, `pose_age_s`), 정지 보냄, 정지 실패(오류 코드). 정지 한 번은 3 s(`STOP_TIMEOUT_S`) 안에 끝나야 하고, 한 로봇의 정지가 걸려도 다른 로봇은 같은 틱에서 처리된다. E-Stop이 10번(`ALARM_AFTER_FAILS`) 연달아 실패하면 `TETHER_STOP_FAILED`를 관제 `alarms`에 올리고(critical 로그) 재시도는 계속한다. 감시 루프의 마지막 틱 나이는 `GET /api/fleet/tethers`의 `watch_age_s`와 행 `watch.tick_age_s`이고, 지도는 2 s 넘게 틱이 없으면 테더를 트립 색으로 그린다. 루프가 죽으면 error 로그를 남긴다. 테더 설정·해제는 주체와 반경 변화(이전→새)를 로그로 남긴다. 테더 설정·해제는 기존 named operator 경로라 `set_by`가 남는다. 지속 감사(작업 DB의 API 감사 행)는 2단계다.
+7. **D-430.** `tether_watch.py`를 `platform_parts.yaml` `safety_modules`에 태그하고 `TetherWatch`·`map_pose`를 공개 앵커로 둔다(Fleet 서버는 `decision` 관심사라 공개 앵커만 import한다). 이 파일은 표준 라이브러리와 신뢰 규칙 `fleet.localization.trust`만 쓴다. 정지는 CORE의 공개 경로(E-Stop)로만 요청한다. 래치를 자동으로 풀지 않는다.
 8. **D-480 층.**
 
    | 항목 | 층 | 지금 |
