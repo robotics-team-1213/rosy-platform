@@ -188,7 +188,6 @@ class RosBridge:
         self._dock_timer = node.create_timer(1.0 / 20.0, self._tick_docking)
         self._dock_ticks = 0
         self._swarm_timer = node.create_timer(1.0 / 5.0, self._tick_swarm)
-        self._trail_timer = node.create_timer(1.0 / 20.0, self._tick_trail)  # D-559
         self._line_follow_timer = node.create_timer(1.0 / 20.0, self._tick_line_follow)
         self._goals = GoalTracker()
 
@@ -430,6 +429,7 @@ class RosBridge:
     def _tick_line_follow(self) -> None:
         # D-395 P2-7 mission ends and rotate/nudge twists ride this 20 Hz timer.
         self._svc.loc_mission.tick()
+        self._tick_trail()  # D-559 swarm trail follow rides this 20 Hz timer too
         if not self._svc.line_follow.active or self._svc.safety.estop:
             self._publish_route_context(None)
             return
