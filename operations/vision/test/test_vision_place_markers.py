@@ -83,13 +83,60 @@ def test_worker_sends_place_markers_at_most_twice_a_second_and_a_rejection_does_
     worker = VisionWorker(source_id="ceiling_north", ingest=ingest, camera=_camera(), publisher=publisher,
                           detector=lambda _jpeg: _markers(), clock=lambda: clock.now)
 
-    for seq, now in ((1, 100.0), (2, 100.2), (3, 100.6)):
-        clock.now = now
-        ingest.frame = _frame(seq, now - 0.05)
-        asyncio.run(worker.process_latest())
+    async def frames():
+        for seq, now in ((1, 100.0), (2, 100.2), (3, 100.6)):
+            clock.now = now
+            ingest.frame = _frame(seq, now - 0.05)
+            await worker.process_latest()
+            await asyncio.sleep(0)   # let the background send run
+
+    asyncio.run(frames())
 
     assert [s.seq for s in publisher.sent] == [1, 2, 3]
     assert [p.seq for p in publisher.places] == [1, 3]
+
+
+def test_a_hanging_place_marker_send_does_not_hold_robot_sightings_or_start_a_second_send():
+    clock = SimpleNamespace(now=100.0)
+    ingest = _Ingest()
+
+    class Hanging(_Publisher):
+        async def publish_place_markers(self, payload):
+            self.places.append(payload)
+            await asyncio.Event().wait()   # never answers
+
+    publisher = Hanging()
+    worker = VisionWorker(source_id="ceiling_north", ingest=ingest, camera=_camera(), publisher=publisher,
+                          detector=lambda _jpeg: _markers(), clock=lambda: clock.now)
+
+    async def frames():
+        for seq, now in ((1, 100.0), (2, 100.6), (3, 101.2)):
+            clock.now = now
+            ingest.frame = _frame(seq, now - 0.05)
+            await asyncio.wait_for(worker.process_latest(), timeout=1.0)
+            await asyncio.sleep(0)
+
+    asyncio.run(frames())
+    assert [s.seq for s in publisher.sent] == [1, 2, 3]
+    assert [p.seq for p in publisher.places] == [1]
+
+
+def test_place_marker_yaw_matches_fleet_map_convention_at_plus_and_minus_90_degrees():
+    """Image +y is map +y here (corners 30..33 at y 0 then 2), so a sticker whose heading edge
+    points to image +y faces map +y: yaw +pi/2, the counter-clockwise map yaw Fleet stores."""
+    def facing(rotate):
+        # heading_edge (1, 2) is the quad's right side for an unrotated quad; rotate the corners
+        cx, cy, h = 300, 200, 10
+        corners = [(cx - h, cy - h), (cx + h, cy - h), (cx + h, cy + h), (cx - h, cy + h)]
+        if rotate == 90:     # right side now points to image +y
+            corners = [(cx + h, cy - h), (cx + h, cy + h), (cx - h, cy + h), (cx - h, cy - h)]
+        if rotate == -90:    # right side now points to image -y
+            corners = [(cx - h, cy + h), (cx - h, cy - h), (cx + h, cy - h), (cx + h, cy + h)]
+        markers = {**_markers(), 34: tuple(corners)}
+        return project_place_markers(_camera(), seq=1, captured_at=1.0, markers=markers).markers[0].yaw
+
+    assert math.isclose(facing(90), math.pi / 2, abs_tol=1e-6)
+    assert math.isclose(facing(-90), -math.pi / 2, abs_tol=1e-6)
 
 
 def test_publisher_posts_place_markers_to_their_own_endpoint_with_the_source_token():

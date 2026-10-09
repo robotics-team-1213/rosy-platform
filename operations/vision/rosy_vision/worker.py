@@ -60,6 +60,7 @@ class VisionWorker:
         self._last_paint_at = -math.inf
         self._paint_task: asyncio.Task | None = None
         self._last_place_at = -math.inf
+        self._place_task: asyncio.Task | None = None
 
     async def process_latest(self) -> tuple:
         if self.source_id != self.camera.source_id:
@@ -100,7 +101,7 @@ class VisionWorker:
             # A rejected sighting must not cost the frame its tracking step, and a tracking
             # failure must not mask the sighting error.
             if self.camera.place_markers:
-                await self._publish_place_markers(frame, markers, homography)
+                self._publish_place_markers(frame, markers, homography)
             if self.tracker is not None:
                 try:
                     await self.tracker.process(frame, markers)
@@ -110,8 +111,10 @@ class VisionWorker:
                                  self.source_id, type(exc).__name__)
         return sightings
 
-    async def _publish_place_markers(self, frame, markers, homography) -> None:
-        """D-564: at most every ``PLACE_MARKER_INTERVAL_S``; a rejection is logged, never raised."""
+    def _publish_place_markers(self, frame, markers, homography) -> None:
+        """D-564: one in-flight send at most every ``PLACE_MARKER_INTERVAL_S``; never blocks the frame loop."""
+        if self._place_task is not None and not self._place_task.done():
+            return
         now = self.clock()
         if now - self._last_place_at < PLACE_MARKER_INTERVAL_S:
             return
@@ -120,6 +123,10 @@ class VisionWorker:
         if payload is None:
             return
         self._last_place_at = now
+        self._place_task = asyncio.create_task(self._send_place_markers(payload))
+
+    async def _send_place_markers(self, payload) -> None:
+        """A rejection is logged by type, never raised."""
         try:
             await self.publisher.publish_place_markers(payload)
         except Exception as exc:  # noqa: BLE001 - logged by type only, never the body
