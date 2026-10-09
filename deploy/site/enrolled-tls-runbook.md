@@ -98,10 +98,11 @@ TLS 필수 로봇은 HTTP로 먼저 등록할 수 없다. 관리자가 binding �
    때까지 기다린다.
 2. 로봇 번호를 바꾸고 재부팅한다. 호스트 이름과 CA는 그대로다.
 3. 콘솔에서 로봇 화면의 코드로 등록한다(목록 또는 주소). binding 파일은 고치지 않고
-   Fleet도 재시작하지 않는다. 옛 ID가 이 Fleet에 등록되었던 binding이면 Fleet은 같은
-   호스트 이름·CA를 TLS로 증명한 로봇이 알리는 새 ID를 받고, 그 ID를 등록 DB에 적는다
-   (감사 `tls_renumber`, 대상 `rosy_60->rosy_40`). binding 파일의 `robot_id`는 옛 값으로
-   남아도 된다. Fleet DB가 이긴다. 파일에서 CA를 바꾸면 배운 ID는 쓰이지 않는다.
+   Fleet도 재시작하지 않는다. 1단계의 등록 해제가 그 binding(호스트 이름·CA·파일 행 ID)을
+   등록 DB에 기록했으므로, Fleet은 같은 호스트 이름·CA를 TLS로 증명한 로봇이 알리는 새
+   ID를 받고 DB에 적는다(감사 `tls_renumber`, 대상 `rosy_60->rosy_40`). binding 파일의
+   `robot_id`는 옛 값으로 남는다. 그 옛 ID는 HTTP 등록에 계속 막힌다. 관리자가 파일 행의
+   CA나 `robot_id`를 바꾸면 파일이 이긴다. 이 기록은 D-580 배포 뒤의 등록 해제부터 생긴다.
 4. 카메라(`site-cameras.yaml` `robot_ids: enrolled`)와 갱신 검사(`required_ids:
    "enrolled"`)를 쓰는 사이트는 그대로 따라온다. 목록을 적은 사이트는 그 목록을 고친다.
 

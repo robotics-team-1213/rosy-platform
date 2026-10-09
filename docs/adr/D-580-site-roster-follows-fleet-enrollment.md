@@ -14,12 +14,12 @@
 
 ### Decision
 
-1. **번호를 바꾼 TLS 로봇은 증명한 binding으로 다시 등록한다.** 대기 binding(D-565)의 `robot_id`가 이 Fleet에 등록되었다가 등록 해제된 ID(`retired_robot_ids`: 등록 해제 감사 행 또는 `pending_logout`)이면, 그 binding으로 들어온 로봇이 다른 `robot_id`를 알려도 받는다.
+1. **번호를 바꾼 TLS 로봇은 증명한 binding으로 다시 등록한다.** TLS로 묶인 등록을 콘솔에서 해제하면 Fleet 등록 DB의 `robot_tls_renumber(hostname, ca_sha256, file_robot_id, robot_id)`에 그 binding의 호스트 이름·CA 지문·파일 행 `robot_id`·등록 ID를 적는다(그 장치가 이 binding으로 여기 등록되었다는 기록). 대기 binding(D-565)이 이 기록과 맞으면(호스트 이름·CA·파일 행 ID가 그대로, 다른 파일 행과 CA·호스트 이름을 나누지 않음) 그 binding으로 들어온 로봇이 다른 `robot_id`를 알려도 받는다.
    - 연결·인증은 D-565와 같다. TCP 목적지는 binding 호스트 이름의 발견 결과이고, 인증서는 binding의 CA와 호스트 이름으로 검증한다. 코드 전 identity의 `tls_hostname`·`tls_ca_sha256`이 binding과 같아야 한다. `receiver_id`만 대조하지 않는다.
-   - 코드 교환 뒤 `system/info`의 `robot_id`(같은 TLS)가 새 ID다. 그 ID가 다른 binding의 ID이면 `code_consumed`(reason `robot_id_conflict`)이고 토큰을 로그아웃한다. 등록부·명단의 ID와 겹치면 기존 `robot_id_conflict`다.
-   - 저장: Fleet 등록 DB의 `robot_tls_renumber(hostname, ca_sha256, robot_id)`에 배운 ID를 쓰고, 감사에 `tls_renumber`/`renumbered`, 대상 `옛ID->새ID`, 운영자 이름을 남긴다. 그 뒤는 D-565와 같다(downgrade 방지 기록, 명단 추가).
-   - 한 번도 등록되지 않은 대기 binding은 지금처럼 `robot_id`가 같아야 한다(`409 tls_binding_mismatch`, 코드는 나가지 않는다). 잘못 적은 binding을 잡는 D-565의 일관성 검사를 남긴다.
-2. **binding의 우선순위.** binding 파일이 호스트 이름·포트·CA를 승인한다. Fleet이 배운 `robot_id`는 파일 행의 호스트 이름과 CA 지문이 둘 다 같을 때만 그 행의 `robot_id`를 대신한다. 파일에서 CA를 바꾸면 배운 ID는 쓰이지 않는다. 배운 ID가 파일의 다른 행 ID와 겹치면 Fleet은 시작을 거절한다. 실행 중 파일이 바뀌면 거절하는 규칙은 그대로다.
+   - 코드 교환 뒤 `system/info`의 `robot_id`(같은 TLS)가 새 ID다. 그 ID가 다른 binding의 ID(배운 ID 또는 파일 행 ID)이면 `code_consumed`(reason `robot_id_conflict`)이고 토큰을 로그아웃한다. 등록부·명단의 ID와 겹치면 기존 `robot_id_conflict`다.
+   - 저장: 같은 표에 새 ID를 쓰고, 명단 추가까지 성공하면 감사에 `tls_renumber`/`renumbered`, 대상 `옛ID->새ID`, 운영자 이름을 남긴다. 그 사이에 실패하면 행을 지우고 배운 ID를 옛 ID로 되돌린 뒤 같은 TLS로 토큰을 로그아웃한다. 그 뒤는 D-565와 같다(downgrade 방지 기록, 명단 추가).
+   - 기록이 없는 대기 binding(처음 들어오는 로봇, 이 변경 전에 해제된 로봇)은 지금처럼 `robot_id`가 같아야 한다(`409 tls_binding_mismatch`, 코드는 나가지 않는다). 잘못 적은 binding을 잡는 D-565의 일관성 검사를 남긴다.
+2. **binding의 우선순위.** binding 파일이 호스트 이름·포트·CA를 승인한다. Fleet이 배운 `robot_id`는 그 파일 행의 호스트 이름·CA 지문·`robot_id`가 기록 때와 같을 때만 그 행의 `robot_id`를 대신한다. 관리자가 파일 행의 CA나 `robot_id`를 바꾸면 파일이 이긴다(다시 승인한 것이다). 배운 ID가 파일의 다른 행 ID와 겹쳐도 파일이 이기고 Fleet은 뜬다. 번호를 바꾼 binding은 파일 행의 옛 ID도 계속 차지한다. 그 ID는 HTTP로 등록되지 않는다. 실행 중 파일이 바뀌면 거절하는 규칙은 그대로다.
 3. **카메라는 명단을 따를 수 있다.** `site-cameras.yaml`의 source에 `robot_ids: enrolled`를 쓰면 그 source의 대상은 Fleet의 살아 있는 명단(`robots.yaml` + 등록부)이다. 등록·해제 때 `SiteRoster.sync`가 sighting과 추적 source를 함께 바꾼다. 마커는 YAML `robot_markers`에 적은 로봇은 그 값, 아니면 `rosy_NN`의 NN(40–49, D-562)이다. 모서리·장소 마커·YAML 값과 겹치는 번호는 배정하지 않는다. 목록을 적은 source는 이전과 같다.
 4. **Vision은 Fleet이 준 마커를 쓴다.** Fleet은 기존 source 토큰 인증 `GET /api/fleet/detections/config`에 `robot_markers`를 더한다(API v1.173). Vision은 그 값으로 sighting과 설치 안내를 만들고, 읽지 못했거나 값이 틀리면(모서리와 겹침 등) YAML 값을 쓴다. `heading_edge`(스티커 위 = 로봇 앞)는 YAML 그대로다.
 5. **갱신 기능 검사는 명단을 따른다.** `autoupdate.conf`의 `/api/fleet/state` 검사에 `"required_ids": "enrolled"`를 쓸 수 있다. 고정 목록이 없으니 번호를 바꿔도 `inventory-drift`가 생기지 않고, D-569의 전환 전후 기준선 비교(잃은 로봇은 롤백)는 그대로다. 카메라 source 검사는 목록만 받는다. `site_functional_setup.py`는 로봇 검사를 `"enrolled"`로 쓴다.
@@ -28,6 +28,7 @@
 
 - **신뢰의 닻은 그대로 로봇의 CA 키와 root 소유 binding 파일이다.** 새 CA를 승인하는 경로는 없다. Fleet DB는 이미 승인된 (호스트 이름, CA) 쌍의 `robot_id`만 바꾼다. 그 쌍을 TLS로 증명한 장치만, 운영자가 화면 코드로 승인한 등록에서만 바꾼다.
 - **`robot_id`는 인증이 아니다.** D-565 보안 절과 같다. `receiver_id`·`system/info`는 로봇이 알리는 값이다. binding CA 키를 가진 장치는 어떤 ID든 알릴 수 있고, 이 결정은 그 ID를 받는 범위를 "이 Fleet에 등록되었던 binding"으로 넓힌다. 겹침 거절(등록부·명단·다른 binding)이 남는다. 로봇마다 자기 CA를 써야 한다는 조건도 남는다.
+- **보안 검토(2026-10-09, 독립 리뷰).** CRITICAL·HIGH 없음. MEDIUM 2건을 고쳤다: 자격을 등록 해제 감사의 ID만으로 판단하던 것(→ 호스트 이름·CA·파일 행 기록), 저장 실패 때 바뀐 binding이 남고 토큰 로그아웃이 실패하던 것(→ 되돌린 뒤 로그아웃). LOW 중 충돌 때 시작 거절(→ 파일 우선), 파일 재승인을 덮던 것, CA를 나누는 행, 옛 ID의 HTTP 재사용을 고쳤다. 남은 LOW: 등록된 HTTP 로봇이 스스로 고른 ID로 `enrolled` source의 마커 번호를 받는다(표시·지도 자세 입력, 명령 경로 아님).
 - **남는 위험.** (a) Fleet DB에 쓸 수 있으면 `robot_tls_renumber` 행으로 승인된 binding의 ID를 바꿀 수 있다. 같은 DB가 이미 봉인된 토큰과 downgrade 방지 기록을 들고 있고, CA·호스트 이름은 바꾸지 못하므로 새 장치를 들이지는 못한다. (b) 등록 해제된 로봇은 운영자가 그 화면 코드를 입력하면 다른 번호로 돌아올 수 있다. 영구히 내보낼 로봇은 관리자가 binding 행을 지운다.
 - **카메라 마커는 표시와 지도 자세 입력이다.** 명령 경로가 아니다. Fleet이 주는 값은 source 토큰으로 인증된 요청에만 가고, Vision은 모양이 틀린 값을 버린다.
 
@@ -51,6 +52,7 @@
 
 ### Consequences
 
+- 번호 바꾸기 자격은 이 변경이 배포된 뒤의 등록 해제부터 기록된다. 그 전에 해제된 로봇은 D-565 sudo 절차를 쓴다.
 - 사이트에서 한 번만 바꾼다: `site-cameras.yaml`의 `robot_ids`를 `enrolled`로(마커 예외만 `robot_markers`에), `autoupdate.conf`의 로봇 `required_ids`를 `"enrolled"`로. 그 뒤 번호 바꾸기는 콘솔 등록 해제 → 로봇 번호 변경 → 콘솔 화면 코드 등록이다.
 - 새 TLS 로봇(처음 보는 CA)은 여전히 관리자가 binding 파일에 행과 CA를 넣는다.
 - Vision 추적이 꺼진 source는 Fleet 설정을 읽지 않으므로 YAML 마커만 쓴다.
