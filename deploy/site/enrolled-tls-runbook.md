@@ -86,8 +86,10 @@ credential key를 지우거나 TLS 검증을 끄지 않는다.
 TLS 필수 로봇은 HTTP로 먼저 등록할 수 없다. 관리자가 binding 행을 먼저 두고, 콘솔에서
 화면 코드로 등록한다. Fleet은 HTTPS 스캔 행의 `.local` 이름·포트와 같은 대기 binding
 하나를 고르고, 그 CA·호스트 이름으로 TLS를 검증하고, 코드 전에 identity `receiver_id`,
-코드 뒤에 `system/info` `robot_id`가 binding ID와 같을 때만 저장한다. 다르면
-`409 tls_binding_mismatch`이고 받은 토큰은 로그아웃된다. 맞는 binding이 없으면
+코드 뒤에 `system/info` `robot_id`가 binding ID와 같을 때만 저장한다. 코드 전에
+다르면 `409 tls_binding_mismatch`, 코드 뒤에 다르면 `409 code_consumed`(reason
+`tls_binding_mismatch`)이고 받은 토큰은 로그아웃된다. binding이 가진 이름·주소는 HTTP로
+등록되지 않는다. 로봇마다 자기 CA를 쓴다. 맞는 binding이 없으면
 `409 tls_binding_required`다. HTTP로 내려가지 않는다.
 
 번호 바꾸기(예: rosy_26 → rosy_41, D-562):
