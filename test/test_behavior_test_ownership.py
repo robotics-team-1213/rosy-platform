@@ -48,6 +48,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_lane_return_sensors.py",
     "middleware/core/gateway/test/test_line_follow_body_stop.py",
     "middleware/core/gateway/test/test_line_follow_ir_guard.py",
+    # 9fe70b694 (2026-10-10): CAMERA_LINE LOST auto-resume through the CORE line-follow bridge.
+    "middleware/core/gateway/test/test_line_follow_lost_resume.py",
     "middleware/core/gateway/test/test_line_follow_obstacle.py",
     "middleware/core/gateway/test/test_line_follow_obstacle_path.py",
     # D-407 (2026-10-02): the stuck back-off through core.bridge.traffic_gate and the
