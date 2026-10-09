@@ -6,7 +6,7 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const {
-  CAUSE_LABEL, DECISIONS, PHASE_LABEL, confirmText, decisionButtons, needsConfirm, outcomeText,
+  CAUSE_LABEL, DECISIONS, PHASE_LABEL, aiLines, confirmText, decisionButtons, needsConfirm, outcomeText,
   pendingStucks, rearText, refusalText, resolverText, stuckFacts,
 } = await import("../../fleet/server/web/line-stuck.js");
 
@@ -145,4 +145,13 @@ test("D-540 9: an unnamed operator may WAIT or ABORT but not answer with motion"
   for (const decision of ["RESUME", "BACK_AND_RETRY", "MANUAL"]) assert.equal(buttons[decision].reason, named);
   assert.match(refusalText("rosy_01", "RESUME", { status: 403, code: "OPERATOR_IDENTITY_REQUIRED", message: "" }),
     /이름 있는 운영자 로그인이 필요합니다/);
+});
+
+test("D-577 8: the AI chip says whether AI judgment exists, and each live fact shows confidence and evidence", () => {
+  assert.deepEqual(aiLines({}), []);
+  assert.deepEqual(aiLines({ ai: { state: "absent" }, ai_facts: [] }), ["AI 판단 없음"]);
+  assert.deepEqual(aiLines({ ai: { state: "present", owner_mode: "owner_busy" } }), ["AI 판단 없음 (소유자 사용 중)"]);
+  assert.deepEqual(aiLines({ ai: { state: "present", owner_mode: "shared" }, ai_facts: [
+    { kind: "stalled", confidence: 0.82, source: "analyzer:stalled@0.1", evidence: { events: [12] } }] }),
+  ["AI 판단 있음", 'AI 사실 stalled · 신뢰도 82% · analyzer:stalled@0.1 · 근거 {"events":[12]}']);
 });
