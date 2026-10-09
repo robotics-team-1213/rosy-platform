@@ -213,12 +213,7 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_617,
-        "split: re-judged at 50617 on 2026-10-10 for D-577 (b) (+213; self-judged). The stuck evidence "
-        "picture lives in the existing D-407 owners: LineStuckBoard holds one frame per open stuck "
-        "(line_stuck.py), one read route beside the line-stuck list (console_routes.py), "
-        "HttpRobotClient.front_frame (transport.py), and the queue row picture and alert in line-stuck.js. "
-        "No new owner and no robot command path. Previously "
+        50_404,
         "split: re-judged at 50404 on 2026-10-10 for D-593 (+217 over the D-587 branch; self-judged). "
         "The operator map pin is MapPoseTracker.add_pin and the anchor kind in the existing D-494 3 owner "
         "(localization/map_pose.py), one route beside the map-pose read (map_pose_service.py), the pin "
