@@ -213,7 +213,11 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_404,
+        50_607,
+        "split: re-judged at 50607 on 2026-10-10 after D-596 (+312 over its main 957d4028c; self-judged, "
+        "NEEDS the independent re-judge). One new pure module fleet/server/identity_triggers.py (automatic "
+        "LED identify rules), parallel per-colour requests in server/identity.py, the guide finding and the "
+        "roster LED button; the identity binding stays observation-only, no robot command path. Previously "
         "split: re-judged at 50404 on 2026-10-10 for D-593 (+217 over the D-587 branch; self-judged). "
         "The operator map pin is MapPoseTracker.add_pin and the anchor kind in the existing D-494 3 owner "
         "(localization/map_pose.py), one route beside the map-pose read (map_pose_service.py), the pin "
