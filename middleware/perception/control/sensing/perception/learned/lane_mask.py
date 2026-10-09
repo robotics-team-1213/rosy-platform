@@ -15,7 +15,15 @@ that: in the 2026-10-02 audit speckle took `visible` from 0.896 to 1.000 and
 offset jitter up 31 %; the filter brought it back to 0.885 and +1 %.
 VisibleHysteresis is the per-stream visible latch; the node owns one.
 Shadow evidence only: nothing here commands motion (D-209). Promotion past
-shadow needs the D-205 replay bench, not these unit numbers."""
+shadow needs the D-205 replay bench, not these unit numbers.
+
+on_floor (D-588 floor gate on the D-408 paint mask): lane_marking pixels the
+model put on a wall are not floor paint. Per column, the wall body is the wall
+pixels of 8-connected wall components that touch the top image row (a wall in
+view rises above the frame top; a stray wall speck on the floor does not). From
+the lowest wall-body pixel the gate walks down through wall and lane_marking
+pixels; every lane_marking pixel above the first other pixel is dropped. Tape on
+the floor is kept wherever floor shows between it and the wall."""
 
 from __future__ import annotations
 
@@ -132,17 +140,51 @@ class VisibleHysteresis:
         return ev if self.on else replace(ev, visible=False, error=None)
 
 
-def lane_marking_mask(logits: np.ndarray, classes, size: tuple[int, int] | None = None) -> np.ndarray:
+class NoWallClass(ValueError):
+    """The floor gate needs a `wall` role class and the model has none."""
+
+
+def on_floor(labels: np.ndarray, wall_index, lane_index) -> np.ndarray:
+    """bool HxW: True below the wall foot of each column (the rule in the module doc).
+    Columns without a wall body are all True."""
+    h = labels.shape[0]
+    wall = np.isin(labels, wall_index)
+    lane = np.isin(labels, lane_index)
+    n, comp = cv2.connectedComponents(wall.astype(np.uint8), connectivity=8)
+    body = np.zeros(n, bool)
+    body[np.unique(comp[0])] = True
+    body[0] = False
+    body = body[comp]
+    rows = np.arange(h)[:, None]
+    has_body = body.any(axis=0)
+    lowest = np.where(has_body, h - 1 - np.argmax(body[::-1], axis=0), -1)
+    stop = ~(wall | lane) & (rows > lowest[None, :])
+    first = np.where(stop.any(axis=0), np.argmax(stop, axis=0), h)
+    foot = np.where(has_body, first - 1, -1)
+    return rows > foot[None, :]
+
+
+def lane_marking_mask(logits: np.ndarray, classes, size: tuple[int, int] | None = None, *,
+                      floor_gate: bool = False) -> np.ndarray:
     """uint8 0/1 mask of pixels whose argmax class has the lane_marking role (D-408).
 
     size (width, height) resizes it with nearest neighbour to the camera frame, so the
-    lane keeper reads the same pixel grid as its ground plane."""
+    lane keeper reads the same pixel grid as its ground plane. floor_gate drops lane
+    pixels that are not on the floor (on_floor, D-588); it raises NoWallClass when the
+    model has no wall role, so the caller falls back instead of trusting ungated paint."""
     if logits.ndim != 4 or logits.shape[0] != 1 or logits.shape[1] != len(classes):
         raise ValueError(f"logits shape {logits.shape} does not match {len(classes)} classes")
     if not np.isfinite(logits).all():
         raise NonFiniteLogits("non-finite logits")
     labels = logits[0].argmax(axis=0)
-    mask = np.isin(labels, [c.index for c in classes if c.role == "lane_marking"]).astype(np.uint8)
+    lane_index = [c.index for c in classes if c.role == "lane_marking"]
+    mask = np.isin(labels, lane_index)
+    if floor_gate:
+        wall_index = [c.index for c in classes if c.role == "wall"]
+        if not wall_index:
+            raise NoWallClass("floor gate needs a wall role class")
+        mask &= on_floor(labels, wall_index, lane_index)
+    mask = mask.astype(np.uint8)
     if size is not None and (mask.shape[1], mask.shape[0]) != tuple(size):
         mask = cv2.resize(mask, tuple(size), interpolation=cv2.INTER_NEAREST)
     return mask

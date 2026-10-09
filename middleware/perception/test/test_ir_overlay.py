@@ -156,7 +156,20 @@ def test_learned_paint_motion_compensation_loads(tmp_path):
     assert usable_operator_overlay(str(target))[0] == str(target)
 
 
+def test_learned_paint_floor_gate_can_be_switched_off(tmp_path):
+    target = tmp_path / "d588.yaml"
+    target.write_text(OPERATOR + "    paint_source: learned
+"
+                      "    learned_lane_pointer: /var/lib/rosy/models/shadow
+"
+                      "    learned_paint_floor_gate: false
+",
+                      encoding="utf-8")
+    assert usable_operator_overlay(str(target))[0] == str(target)
+
+
 @pytest.mark.parametrize("extra", [
+    "learned_paint_floor_gate: 0",
     "paint_source: unknown", "paint_source: learned", "learned_paint_threads: 0",
     "learned_paint_threads: true", "learned_paint_every_n: 0", "learned_paint_every_n: 5", "learned_paint_threads: 3",
     "learned_lane_pointer: relative/path", "learned_paint_motion_compensation: 1", "learned_paint_cadence: idle",

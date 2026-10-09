@@ -73,9 +73,10 @@ class _OrtSession:
 
 
 class LaneSegModel:
-    def __init__(self, manifest: ModelManifest, session):
+    def __init__(self, manifest: ModelManifest, session, *, floor_gate: bool = False):
         self.manifest = manifest
         self._session = session
+        self.floor_gate = floor_gate   # D-588: paint masks drop lane pixels on walls
 
     @property
     def model_revision(self) -> str:
@@ -83,9 +84,12 @@ class LaneSegModel:
 
     @classmethod
     def open(cls, folder, *, session_factory: Callable | None = None,
-             threads: int = 2, allow_spinning: bool = True) -> "LaneSegModel":
+             threads: int = 2, allow_spinning: bool = True, floor_gate: bool = False) -> "LaneSegModel":
         manifest = load_manifest(folder)
         verify_files(manifest)
+        if floor_gate and not any(c.role == "wall" for c in manifest.classes):
+            # D-588 fail closed: no wall class, no gated paint (the keeper uses its fallback).
+            raise ManifestError("floor gate needs a wall role class; this model has none")
         factory = session_factory or (lambda p, t: _OrtSession(p, t, allow_spinning))
         try:
             if session_factory is None and manifest.backend == "ncnn":
@@ -97,7 +101,7 @@ class LaneSegModel:
             raise
         except Exception as exc:
             raise ManifestError(f"session: {exc}") from exc
-        model = cls(manifest, session)
+        model = cls(manifest, session, floor_gate=floor_gate)
         spec = manifest.input
         out = session.run(np.zeros(spec.shape, np.float32))
         expected = (1, len(manifest.classes), spec.height, spec.width)
@@ -119,7 +123,8 @@ class LaneSegModel:
         paint path, which has no use for lane_evidence (8.7 ms on the Pi)."""
         t0 = time.perf_counter()
         logits = self._session.run(preprocess(bgr, self.manifest.input))
-        mask = lane_marking_mask(logits, self.manifest.classes, size=(bgr.shape[1], bgr.shape[0]))
+        mask = lane_marking_mask(logits, self.manifest.classes, size=(bgr.shape[1], bgr.shape[0]),
+                                 floor_gate=self.floor_gate)
         return mask, (time.perf_counter() - t0) * 1000.0
 
     def infer_with_mask(self, bgr: np.ndarray) -> tuple[InferResult, np.ndarray]:
@@ -128,7 +133,8 @@ class LaneSegModel:
         t0 = time.perf_counter()
         logits = self._session.run(preprocess(bgr, self.manifest.input))
         evidence = lane_evidence(logits, self.manifest.classes)
-        mask = lane_marking_mask(logits, self.manifest.classes, size=(bgr.shape[1], bgr.shape[0]))
+        mask = lane_marking_mask(logits, self.manifest.classes, size=(bgr.shape[1], bgr.shape[0]),
+                                 floor_gate=self.floor_gate)
         return (InferResult(evidence, (time.perf_counter() - t0) * 1000.0, self.manifest.model_revision),
                 mask)
 
