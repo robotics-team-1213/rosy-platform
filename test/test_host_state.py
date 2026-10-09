@@ -128,7 +128,7 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tmp_path):
     result = _run(tmp_path, bin_dir, fake, "install", "model", "--dry-run")
     assert result.returncode == 0, result.stderr
     assert "+OnCalendar=*-*-* 06:03:00" in result.stdout
-    assert "[approval] /etc/ssh/sshd_config.d/10-rosy.conf: missing: skip (needs --approve)" in result.stdout
+    assert "[approval] /etc/systemd/system.conf.d/rosy-watchdog.conf: missing: skip (needs --approve)" in result.stdout
     assert not (tmp_path / "host").exists()
     assert [c for c in _calls(fake) if not c.startswith(("systemctl is-", "nmcli -t"))] == []
 
@@ -136,14 +136,13 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tmp_path):
 def test_install_applies_approval_lines_only_when_named(tmp_path):
     fake, bin_dir = _fakes(tmp_path)
     assert _run(tmp_path, bin_dir, fake, "install", "ai").returncode == 0
-    sshd = tmp_path / "host/etc/ssh/sshd_config.d/10-rosy.conf"
+    sshd = tmp_path / "host/etc/systemd/system.conf.d/rosy-watchdog.conf"
     assert not sshd.exists()
     assert (tmp_path / "host/etc/systemd/system/rosy-nightly-reboot.timer").read_bytes() == \
         (ROOT / "deploy/ai_pc/host-state/rosy-nightly-reboot.timer").read_bytes()
     assert (tmp_path / "host/usr/local/lib/rosy-host-state/login").read_text() == "op\n"
-    assert _run(tmp_path, bin_dir, fake, "install", "ai", "--approve", "/etc/ssh/sshd_config.d/10-rosy.conf").returncode == 0
-    assert sshd.read_text().startswith("# D-530")
-    assert "systemctl reload ssh" in _calls(fake)
+    assert _run(tmp_path, bin_dir, fake, "install", "ai", "--approve", "/etc/systemd/system.conf.d/rosy-watchdog.conf").returncode == 0
+    assert sshd.read_text().startswith("[Manager]")
 
 
 def test_a_broken_sshd_config_is_rolled_back(tmp_path):
