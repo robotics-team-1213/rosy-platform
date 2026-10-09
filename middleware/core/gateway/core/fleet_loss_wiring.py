@@ -25,8 +25,9 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
                      localization) -> FleetLossMonitor:
     """Validate the config, normalise the stored policy, and bind the monitor."""
     # One predicate with the agent (agent.fleet_link_configured): a robot has a Fleet link
-    # when its startup config carries an approved token and a site location. Decided once:
-    # a later rejected hello or stop() is a lost link, not a robot without Fleet (I1).
+    # when its config carries an approved token and a site location. Read from config, not
+    # from the agent: a later rejected hello or stop() is a lost link, not a robot without
+    # Fleet (I1). Only PUT/DELETE /fleet/link change the config at runtime (D-555 5).
     configured = fleet_link_configured(config.get("fleet") or {})
     # Fail fast only on a robot with a Fleet link; a robot without Fleet must boot
     # unaffected by Fleet-loss settings (D-419 scope) — one warning, defaults.
@@ -54,7 +55,7 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
 
     return FleetLossMonitor(
         events=events,
-        link_configured=lambda: configured,
+        link_configured=lambda: fleet_link_configured(config.get("fleet") or {}),
         link_connected=lambda: fleet_agent.connected,
         link_last_rx=lambda: fleet_agent.last_rx,
         # Link freshness is the heartbeat's own silence budget, not the policy timeout.

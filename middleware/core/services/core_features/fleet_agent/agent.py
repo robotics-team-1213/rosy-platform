@@ -189,6 +189,15 @@ class FleetAgent:
         if self._task:
             self._task.cancel()
 
+    def relink(self, fleet_cfg: dict) -> None:
+        """D-555: the Fleet link changed at runtime. Swap `config["fleet"]` and restart only
+        this task; SAF-003 reads the same config dict, so it follows the new link."""
+        self.stop()
+        self._task = None
+        self._pending = None
+        self.config["fleet"] = fleet_cfg
+        self.start()
+
     def hello_payload(self, pairing_token: str) -> dict:
         """PRT-002 hello 본문. 신원은 RobotIdentity 실값에서 온다 (D-170 인접)."""
         hello = HelloPayload(
