@@ -97,7 +97,7 @@
 
 ### 남은 항목 (Safety-Review 2026-10-10, 구현 (a))
 
-1. 뒤 띠는 `localization`을 보고하지 않는 LEGACY 로봇의 odom 자세도 받는다. D-573이 `crosswalk: null`을 내서 R3가 열리기 전에 닫아야 한다.
+1. ~~뒤 띠는 `localization`을 보고하지 않는 LEGACY 로봇의 odom 자세도 받는다.~~ **닫힘(2026-10-10, `feat/stuck-5s-fleet-ai`).** 뒤 띠는 이제 자신과 동료 모두 `localization`을 보고하는 신뢰 지도 자세로만 잰다. 동료가 온라인인데 어느 한쪽이 LEGACY(odom)면 R5 `peer_unknown`이다(`stuck_lane_lost.peer_behind`). D-573 횡단보도 관문을 켜도 R3가 odom 자세로 열리지 않는다.
 2. R5 전송이 실패한 뒤 다음 주기에 R3 조건이 모두 참이면 R3가 고를 수 있다.
 3. Fleet 정지(작업 취소)로 끊긴 R5 전송은 사람에게 올라가지 않는다.
 

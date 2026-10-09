@@ -45,11 +45,21 @@ def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig) -> Optional[
 
 
 def peer_behind(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) -> Optional[bool]:
-    """D-577 1: R1's band mirrored behind the robot, on trust-gated map poses (D-395) only.
+    """D-577 1: R1's band mirrored behind the robot, on trusted map poses (D-395) only.
 
-    None = an online peer exists and this robot's or a peer's pose is missing or untrusted:
-    R3 must not back off blind (safety review 2026-10-09). No online peer = False."""
+    None = an online peer exists and this robot's or a peer's pose is missing, untrusted or
+    LEGACY (no `localization`: an odom pose, not the painted map; D-577 남은 항목 1, closed
+    2026-10-10): R3 must not back off blind. No online peer = False."""
     others = [other for other in rows if other is not row and other.get("online", True)]
     if not others:
         return False
-    return _peer_in_band(row, others, config, -1.0, pose_of=_map_pose, strict=True)
+    return _peer_in_band(row, others, config, -1.0, pose_of=_trusted_map_pose, strict=True)
+
+
+def _trusted_map_pose(row: Mapping):
+    from fleet.localization.trust import LEGACY, classify
+
+    state = row.get("state")
+    if not isinstance(state, Mapping) or classify(state) == LEGACY:
+        return None
+    return _map_pose(row)
