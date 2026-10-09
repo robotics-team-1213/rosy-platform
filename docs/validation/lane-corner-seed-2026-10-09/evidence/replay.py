@@ -18,8 +18,8 @@ from road_replay_inputs import session_frames  # noqa: E402
 from control.sensing.perception.camera_ground import nominal_ground_plane  # noqa: E402
 from control.sensing.perception.lane_keep import LaneKeeper  # noqa: E402
 
-CATALOG_SHA = "036c620b8379a9945216b552f2915774941ae7f5377052388489009a126ed5a0"
-SOURCE_SHA = "ab5378c963d8a04277b155086c4655456ebb6e0e9b34154caf07b843f397c57d"
+CATALOG_SHA256 = "036c620b8379a9945216b552f2915774941ae7f5377052388489009a126ed5a0"
+SOURCE_SHA256 = "ab5378c963d8a04277b155086c4655456ebb6e0e9b34154caf07b843f397c57d"
 GROUPS_1006 = {"20261006T082612Z_rosy_26": 2487, "20261006T091340Z_rosy_26": 642}
 GROUPS_1007 = {"20261007T143038Z_rosy_60": 124, "20261007T143211Z_rosy_60": 83}
 
@@ -31,7 +31,7 @@ def digest(data):
 def frames(source):
     if source.is_file():
         content = source.read_bytes()
-        assert digest(content) == CATALOG_SHA
+        assert digest(content) == CATALOG_SHA256
         for item in map(json.loads, content.splitlines()):
             image = Path(item["image"])
             assert digest(image.read_bytes()) == item["image_sha256"]
@@ -40,7 +40,7 @@ def frames(source):
             yield item["capture_group"], int(image.stem), item["mcap"]["frame"]["header_stamp_ns"] * 1e-9, bgr
         return
     source_record = (source / "source-readback-1006.json").read_bytes()
-    assert digest(source_record) == SOURCE_SHA
+    assert digest(source_record) == SOURCE_SHA256
     source_sessions = {row["id"]: row for row in json.loads(source_record)["sessions"]}
     for group in GROUPS_1006:
         session = source / group
@@ -77,7 +77,7 @@ def main():
         assert plane is not None
         models[str(pitch)] = (plane, LaneKeeper(camera_x_offset_m=float(candidate["x_offset_m"]), corner_turning=True))
     result = {"keeper_sha256": digest((REPO / "middleware/perception/control/sensing/perception/lane_keep.py").read_bytes()),
-              "source_sha256": CATALOG_SHA if args.source.is_file() else SOURCE_SHA,
+              "source_sha256": CATALOG_SHA256 if args.source.is_file() else SOURCE_SHA256,
               "rows": {pitch: [] for pitch in models}}
     counts = Counter()
     last_group = last_stamp = None
