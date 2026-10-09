@@ -661,7 +661,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   actionIcon(exit, "back");
   actions.append(fitButton, fillButton, toolsButton, exit);
   element.hud.append(recordingFact, actions);
-  const compactHud = window.matchMedia("(width < 22rem) and (height < 40rem)");
+  const compactHud = window.matchMedia("(width < 30rem)");
   const lanePanel = element.hud.querySelectorAll("details.pilot-models")[1];
   function placeCompactTools() {
     hideTools();

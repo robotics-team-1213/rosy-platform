@@ -84,6 +84,9 @@ FULL_SUITES = (
 # games test_preview.py). `ros`: none (host conditions), base (/opt/ros) or
 # overlay (+ colcon install, which also builds). `gating: False` reports only.
 ROOT_SHARDS = 3
+# D-553 1: the slowest suites split by test file, like the root shards. fleet
+# alone held the CI critical path at ~580 s of a ~12 min run.
+SUITE_SHARDS = {"fleet": 3, "sensing": 2}
 CI_FULL_MATRIX = (
     {"name": "learning-policy", "invocations": [
         ["learning/registry/policy/test"], ["learning/training/omx/test"], ["learning/training/pinky/test"],
@@ -406,7 +409,15 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
     """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
     if sel.mode == "full":
         root_tests = sorted(t for t in repo.test_files if _under(t, "test"))
-        entries = [dict(e) for e in CI_FULL_MATRIX]
+        entries = []
+        for entry in CI_FULL_MATRIX:
+            n = SUITE_SHARDS.get(entry["name"], 1)
+            files = sorted(t for t in repo.test_files if _under(t, entry["invocations"][0][0])) if n > 1 else []
+            if len(files) < n or n == 1:
+                entries.append(dict(entry))
+                continue
+            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{n}", invocations=[files[i::n]])
+                        for i in range(n)]
         for i in range(ROOT_SHARDS):
             entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
                             "invocations": [root_tests[i::ROOT_SHARDS]], "ros": "overlay"})

@@ -91,7 +91,9 @@ async def ws_state(websocket: WebSocket):
     rate = float(svc.config.get("state", {}).get("rate_hz", 10.0))
     try:
         svc.pilot_recording.link_opened(token_id)     # D-411: the Pilot link for recording ownership
+        origin = websocket.client.host if websocket.client else ""
         while True:
+            svc.trip_lease.note_use(token_id, origin, "ws_state")   # D-541 1: shared owner token
             await websocket.send_json(svc.state.snapshot().model_dump())
             await asyncio.sleep(1.0 / rate)
     except WebSocketDisconnect:
@@ -282,9 +284,10 @@ async def ws_swarm_reference(websocket: WebSocket):
             if reference is None:
                 continue
             if (getattr(svc.modes, "motion_reserved", False)
-                    or svc.calibration.blocking(token_id) is not None):
-                # D-321 addendum: a leader pose from anyone but the calibration
-                # owner must not steer a follower during the lease. Drop the
+                    or svc.calibration.blocking(token_id) is not None
+                    or svc.trip_lease.blocking(token_id) is not None):
+                # D-321 addendum / D-541 3: a leader pose from anyone but the calibration
+                # or trip lease owner must not steer a follower during the lease. Drop the
                 # frame (like a malformed one); SWM-004 holds on silence.
                 continue
             try:

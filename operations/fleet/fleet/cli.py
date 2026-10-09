@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
-from fleet.traffic.config import _traffic_authority, _traffic_signals, _traffic_zones
+from fleet.traffic.config import _traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
 from fleet.swarm.relay import Relay
 from fleet.swarm.robots import RobotEndpoint, load_robots
@@ -376,8 +376,6 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("--cell-job-stack-tol-m requires --mission-api")
     if mission_api and tasks_db is None:
         sys.exit("--tasks-db is required with --mission-api")
-    if mission_api and site_users is None:
-        sys.exit("--users-file is required with --mission-api for named operator authorization")
     development_sessions = None
     if getattr(args, "connection_mode", "paired") == "development":
         # D-473 1: both settings or nothing; a missing one keeps paired, never the other way round.
@@ -392,6 +390,9 @@ def run_console(args: argparse.Namespace) -> None:
             development_sessions = DevelopmentSessions()
             print("warning: development connection mode: same-LAN browsers get 1 h operator sessions",
                   file=sys.stderr)
+    # D-548: a development session is a named operator (D-473 3), so it stands in for site-users.
+    if mission_api and site_users is None and development_sessions is None:
+        sys.exit("--users-file is required with --mission-api for named operator authorization")
     if args.host not in LOOPBACK_HOSTS and not (console_token or users_file is not None):
         sys.exit("--token or --users-file 없이 루프백 밖으로 열 수 없다")
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
@@ -565,7 +566,7 @@ def run_console(args: argparse.Namespace) -> None:
                      site_maps=site_maps, routing_config=routing_config,
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
                      traffic_zones=_traffic_zones(args), traffic_authority=_traffic_authority(args),
-                     traffic_signals=_traffic_signals(args),
+                     traffic_signals=_traffic_signals(args), traffic_signal_advice=_traffic_signal_advice(args),
                      identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args))
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""

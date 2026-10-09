@@ -72,6 +72,7 @@ class BaseVelocityControl(_Wire):
     line_follow_authority: bool | None = None  # D-517 4: POST /line-follow/authority is enforced
     line_follow_authority_required: bool | None = None  # D-517 4: enforced before any authority too
     line_follow_advice: bool | None = None  # D-525: POST /line-follow/advice is shown (display only)
+    trip_lease: bool | None = None  # D-541 1: CORE takes PUT/DELETE /trip-lease and /trip-lease/takeover
 
 
 class JointRange(_Wire):
@@ -164,7 +165,8 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                    lane_arc: bool | None = None, site_floor_map_id: str | None = None,
                    line_follow_authority: bool | None = None,
                    line_follow_authority_required: bool | None = None,
-                   line_follow_advice: bool | None = None) -> dict:
+                   line_follow_advice: bool | None = None,
+                   trip_lease: bool | None = None) -> dict:
     """Pinky's controls from its adapter manifest's `provides` (D-411 §8).
 
     `autonomy` is what the caller provides (not live readiness); pivot/fine are Pinky profile constants.
@@ -181,5 +183,6 @@ def pinky_controls(*, provides, max_linear: float, max_angular: float,
                                          site_floor_map_id=site_floor_map_id,
                                          line_follow_authority=line_follow_authority,
                                          line_follow_authority_required=line_follow_authority_required,
-                                         line_follow_advice=line_follow_advice))
+                                         line_follow_advice=line_follow_advice,
+                                         trip_lease=trip_lease))
     return ControlsDescriptor(items=tuple(items)).model_dump(by_alias=True, mode="json", exclude_none=True)
