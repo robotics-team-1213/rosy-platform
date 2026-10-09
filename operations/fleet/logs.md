@@ -2,7 +2,7 @@
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 
-## 2026-10-09 · uiux(fleet): 현장 지도·Cell 내부 단계 탐색
+## 2026-10-09 · uncommitted · uiux(fleet): 현장 지도·Cell 내부 단계 탐색
 
 - 변경: 현장 지도와 Cell에 본문 건너뛰기 및 단계 앵커를 추가하고, 넓은 화면에는 왼쪽 작업 탐색, 320px에는 두 열로 모든 단계를 노출했다. D-501의 네 문서 상단 탭과 D-493의 관제 지도 비율은 유지했다.
 - 증거: Playwright Chromium 148 정적 DOM/CSS 확인에서 두 화면의 320/1366px 가로 넘침 0, 모든 단계 링크와 건너뛰기 대상 존재. 실제 Fleet 서버·장치 상태를 포함한 G2/G3 증거는 별개다.
