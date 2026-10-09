@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 import sqlite3
@@ -69,6 +70,8 @@ class SiteHub:
         # link unavailable for that robot; never fall back to the REST token.
         self._tokens = {e.robot_id: e.fleet_pairing_token for e in endpoints
                         if e.fleet_pairing_token is not None}
+        #: D-555: enrolled robots' hub credentials, SHA-256 hex only (no plaintext here).
+        self._digests: dict[str, str] = {}
         self._clients = clients if clients is not None else {}
         self._paired: set[str] = set()
         # robot_id -> the socket session that last completed HELLO for it.
@@ -92,10 +95,21 @@ class SiteHub:
             raise ValueError("pairing token must be non-empty")
         self._tokens[robot_id] = token
 
+    def set_pairing_digest(self, robot_id: str, digest: str | None) -> None:
+        """D-555: accept HELLO whose token hashes to ``digest``. None revokes and unpairs."""
+        if digest is not None:
+            self._digests[robot_id] = digest
+            return
+        self._digests.pop(robot_id, None)
+        self._paired.discard(robot_id)
+        if self._sessions.pop(robot_id, None) is not None:
+            self.registry.record(robot_id).online = False
+
     def drop(self, robot_id: str) -> None:
         """SiteRoster only: forget the robot's client, pairing and live session."""
         self._clients.pop(robot_id, None)
         self._tokens.pop(robot_id, None)
+        self._digests.pop(robot_id, None)
         self._paired.discard(robot_id)
         self._sessions.pop(robot_id, None)
         self.registry.record(robot_id).online = False
@@ -164,9 +178,14 @@ class SiteHub:
             return _error("PROTOCOL_UNSUPPORTED", "hello protocol major is not supported")
         if session is not None and session.robot_id not in (None, hello.robot_id):
             return _error("PAIRING_INVALID", "session is bound to another robot")
+        presented = hello.pairing_token.encode()
+        digest = self._digests.get(hello.robot_id)
         expected = self._tokens.get(hello.robot_id)
-        if expected is None or not hmac.compare_digest(
-                expected.encode(), hello.pairing_token.encode()):
+        if digest is not None:  # D-555: constant-time compare of digests
+            valid = hmac.compare_digest(digest.encode(), hashlib.sha256(presented).hexdigest().encode())
+        else:
+            valid = expected is not None and hmac.compare_digest(expected.encode(), presented)
+        if not valid:
             return _error("PAIRING_INVALID", "unknown robot or token")
             
         # Check UUID duplicates
