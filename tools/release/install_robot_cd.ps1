@@ -49,7 +49,9 @@ New-Item -ItemType Directory -Path $base -Force | Out-Null
 $installedConfig = Join-Path $base "config.json"
 [IO.File]::WriteAllText($installedConfig, ($config | ConvertTo-Json -Depth 8), $utf8)
 $entry = Join-Path $snapshot "tools/release/robot_cd.py"
-$action = New-ScheduledTaskAction -Execute $Python -Argument ('-B "{0}" --config "{1}"' -f $entry, $installedConfig) -WorkingDirectory $snapshot
+# D-553: keep the coordinator's own output; preparation refusals print their reason only there.
+$log = Join-Path $config.state_dir "task-output.log"
+$action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument ('/c ""{0}" -B "{1}" --config "{2}" >> "{3}" 2>&1"' -f $Python, $entry, $installedConfig, $log) -WorkingDirectory $snapshot
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes)
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 60) -StartWhenAvailable
 $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
