@@ -10,7 +10,7 @@ from pathlib import Path
 
 from test_panel_copy_evidence_browser import panel, pytestmark  # noqa: F401
 
-ADVICE = """(signal, expiresIn) => window.__callbacks['/api/v1/line-follow'].onData({mode:'CAMERA_LINE', state:'FOLLOWING',
+ADVICE = """([signal, expiresIn]) => window.__callbacks['/api/v1/line-follow'].onData({mode:'CAMERA_LINE', state:'FOLLOWING',
   advice: {advice_id:'a1', leg_id:'leg-1', seq:1, fleet_epoch:'e1', pose_stamp:1.0, ttl_s:2.0,
            expires_in_s: expiresIn, signal}})"""
 
