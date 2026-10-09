@@ -13,6 +13,19 @@
 
 `rosy_26`의 `/var/lib/rosy/models/shadow`는 존재하지 않았다. 읽은 `line/keep_debug` 한 프레임은 `paint_source_used=denoise_fallback`, `paint_model_revision=null`, `camera_geometry_source=NOMINAL`, `strategy=corner_right`, `boundaries=[]`였다. `paint_points_v=1`과 점 48개는 있었지만, 이 한 프레임만으로 그 점들이 자기 차로의 경계라고 증명할 수 없다. `target_m=[0.306,-0.189]`, `lane_width_m=0.185`는 corner 후보의 목표이며, 사람 승인 정답이나 물리 주행 허가가 아니다. 직전 [실물 readback](../lane-live-ground-readback-2026-10-09/result.md)의 84프레임 모두 `denoise_fallback`이었던 결과와 같은 방향이지만, 이번 표본은 한 프레임이다.
 
+### 연속 프레임 재확인
+
+같은 설치본에서 ROS 토픽을 다시 읽은 10.374초, 84프레임(`stamp` 1791519309.446691–1791519319.8202236)의 결과는 아래와 같다. 원문은 공개 저장소 밖 `X:/DevTemp/rosy-lane-20261009-readback/keep-debug.txt`에 두었고 SHA-256은 `775c5f8f19ea26b34bc138fe375f429350963587316edd46cc8237b2494bda7f`이다.
+
+| 항목 | 결과 |
+|---|---:|
+| `strategy=none`, `target_m=null` | 84/84 |
+| `reason=junction_transverse` / `no_boundary` | 46 / 38 |
+| `paint_source_used=denoise_fallback`, `paint_model_revision=null` | 84/84 |
+| `boundaries` 1개 / 0개 | 46 / 38 |
+
+같은 시각 ROS 노드 목록에 `line_observer_node`는 있고 `learned_lane_node`는 없었다. 이는 이 구독 창에서 학습 도색이 사용되지 않았다는 증거다. 앞의 한 프레임 `corner_right`가 이 창에도 계속 나왔다고 말할 수는 없다. 토픽 관측은 로봇 이동·차로 위치·명령 수용을 기록하지 않았으므로 84/84 HOLD를 주행 성공 또는 실패율로 세지 않는다.
+
 ## 주행 로직 판단
 
 Fleet의 계획은 계속 활용한다. 이미 [D-520](../../adr/D-520-map-guided-ring-arc-following.md)은 선택한 `exit_segment`의 곡률·길이를 CORE의 원형 구간 주행 목표로 쓰고, 카메라 도색 점으로 그 호를 보정하는 단계 2를 정했다. [D-476](../../adr/D-476-lane-loss-expected-road-bridge.md)은 확신했던 차로가 잠깐 사라진 경우 최근 차로의 연장선과 Fleet 방향 힌트로 제한된 거리를 잇는 경로다. 둘 다 CORE의 장애물·바닥·몸 쓸기 판정과 단일 최종 `cmd_vel`을 통과해야 한다.
