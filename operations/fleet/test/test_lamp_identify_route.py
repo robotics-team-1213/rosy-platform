@@ -11,7 +11,7 @@ class Robot:
     def __init__(self):
         self.colors = []
 
-    async def identify_lamp(self, color=None):
+    async def identify_lamp(self, color=None, quiet=False):
         self.colors.append(color)
         return {"accepted": True, "request_id": "test-request", "color": color or "blue"}
 
@@ -52,7 +52,7 @@ def test_identify_is_bounded_to_one_known_robot_and_never_claims_visual_identity
     assert busy.status_code == 409 and busy.json()["detail"]["code"] == "IDENTIFY_BUSY"
     assert client.post("/api/fleet/robots/rosy_60/identify", json={"color": "blue"}).status_code == 404
     assert client.post(path, json={"color": "red"}).status_code == 422
-    assert robot.colors == [None]
+    assert robot.colors == ["blue"]  # D-596 7: Fleet names blue first
 
 
 def test_a_parked_robot_is_asked_too():
@@ -60,4 +60,4 @@ def test_a_parked_robot_is_asked_too():
     robot = Robot()
     answer = _client(robot, moving=False).post("/api/fleet/robots/rosy_26/identify")
     assert answer.status_code == 200 and answer.json()["state"] == "pending_visual_confirmation"
-    assert robot.colors == [None]
+    assert robot.colors == ["blue"]  # D-596 7: Fleet names blue first

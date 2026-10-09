@@ -150,13 +150,23 @@ class IdentityService:
             free = [c for c in LAMP_IDENTIFY_COLORS if c not in used]
             if not free:
                 raise IdentityError(409, "IDENTIFY_BUSY", "두 색 모두 LED 확인 중입니다. 잠시 뒤에 다시 시도하세요")
-            if color is None and used:
-                color = free[0]
+            auto = reason != "operator"
+            if color is None:
+                # D-596 7: blue first. Amber is also the caution lamp (1 s on, 1 s off) and Fleet
+                # cannot read a robot's lamp state, so automatic requests never use amber and an
+                # operator gets amber only while blue is busy (its verdict needs a predicted place).
+                color = "blue" if "blue" in free else None if auto else free[0]
+                if color is None:
+                    raise IdentityError(409, "IDENTIFY_BUSY", "파랑 LED 확인이 진행 중입니다")
             started = self._clock()
             self._asked_at[robot_id] = started
-            self.triggers.asked(robot_id)
-            # None: the robot's own configured colour (CORE lamp_identify.color / D-472 4 default).
-            result = await client.identify_lamp(color)
+            self.triggers.asked(robot_id, auto=auto)
+            try:  # D-596 7: automatic requests are silent (no call chirp) where the robot supports it
+                result = await client.identify_lamp(color, quiet=auto)
+            except Exception as exc:
+                if not (auto and getattr(exc, "status", None) == 422):
+                    raise
+                result = await client.identify_lamp(color)  # ponytail: payload before 2026-10-10 has no quiet
             if not isinstance(result, Mapping):
                 result = {}
             color = result.get("color")
@@ -180,7 +190,7 @@ class IdentityService:
         clients = self._clients()
         watched = {rid for s in self.tracking.sources for rid in s.robot_ids if rid in clients}
         skip = {rid for rid in watched
-                if now - self._asked_at.get(rid, -math.inf) < self.config.auto_min_interval_s
+                if now - self._asked_at.get(rid, -math.inf) < self.config.auto_min_interval_s * self.triggers.backoff(rid)
                 or self.confirmed_track_pose(rid)["state"] == "CONFIRMED"}
         skip |= {p.robot_id for p in self._open()}
         due = self.triggers.due(now, self.tracking.snapshot(),
@@ -238,6 +248,13 @@ class IdentityService:
             raise IdentityError(422, "IDENTIFY_BAD_VERDICT", "matched verdict needs x and y") from None
         if not (math.isfinite(x) and math.isfinite(y)):
             raise IdentityError(422, "IDENTIFY_BAD_VERDICT", "matched verdict needs finite x and y")
+        # D-596 7: the blob must be where the asked robot is expected, so a decoy elsewhere showing the
+        # same pattern (amber = the caution lamp) is never named; amber without an expected place is refused.
+        predicted = self._predicted(robot_id)
+        if predicted is None and pending.color == "amber":
+            return self._unknown(robot_id, "no_prediction", source.source_id)
+        if predicted is not None and math.hypot(x - predicted[0], y - predicted[1]) > self.config.auto_near_m:
+            return self._unknown(robot_id, "far_from_robot", source.source_id)
         now = self._clock()
         found = self._continue(latest, x, y)
         if isinstance(found, str):
@@ -252,6 +269,15 @@ class IdentityService:
         self._last[robot_id] = {"state": "CONFIRMED", "reason": None, "at": now, "source_id": source.source_id}
         self._pending.pop(robot_id, None)  # done: this colour is free again
         return {"robot_id": robot_id, "state": "CONFIRMED", "source_id": source.source_id}
+
+    def _predicted(self, robot_id: str) -> Optional[tuple[float, float]]:
+        """Where the robot should be: its last ceiling marker, else its map-frame pose; None unknown."""
+        marker = self.triggers.last_marker(robot_id)
+        if marker is not None:
+            return marker
+        row = next((r for r in self.tracking.snapshot().get("robots") or [] if r.get("robot_id") == robot_id), {})
+        pose = row.get("pose")
+        return None if not pose else (float(pose["x"]), float(pose["y"]))
 
     def on_detections(self, source_id: str, payload) -> None:
         """Follow every binding on this source to its continuing detection, or drop it."""

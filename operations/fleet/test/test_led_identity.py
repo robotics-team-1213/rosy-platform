@@ -30,8 +30,9 @@ class Robot:
     def __init__(self, color="amber", prefix="req"):
         self.calls, self.color, self.prefix = [], color, prefix
 
-    async def identify_lamp(self, color=None):
+    async def identify_lamp(self, color=None, quiet=False):
         self.calls.append(color)
+        self.quiet = quiet
         return {"accepted": True, "request_id": f"{self.prefix}-{len(self.calls)}", "color": color or self.color}
 
 
@@ -73,20 +74,20 @@ def _confirm(clock, tracking, identity, robot_id="rosy_60"):
     return started, _verdict(identity, started["request_id"])
 
 
-def test_a_standing_robot_is_asked_in_its_own_colour():
-    """D-596 1: no IDENTIFY_NOT_MOVING; the robot is never told to move."""
+def test_a_standing_robot_is_asked_in_blue():
+    """D-596 1: no IDENTIFY_NOT_MOVING; the robot is never told to move. D-596 7: blue first."""
     clock, tracking, identity, robots = _setup()
     with pytest.raises(IdentityError) as unknown:
         asyncio.run(identity.request("rosy_99"))
     assert unknown.value.status_code == 404
     started = asyncio.run(identity.request("rosy_60"))  # no state at all: parked
-    assert robots["rosy_60"].calls == [None]  # the robot picks its configured colour
-    assert started["color"] == "amber" and started["not_after"] - clock.now == 6.0
+    assert robots["rosy_60"].calls == ["blue"] and robots["rosy_60"].quiet is False  # operator: chirps
+    assert started["color"] == "blue" and started["not_after"] - clock.now == 6.0
     assert tracking.config_for(AUTH)["identity_challenge"] == {
-        "request_id": "req-1", "color": "amber", "not_before": 1000.0, "not_after": 1006.0}
+        "request_id": "req-1", "color": "blue", "not_before": 1000.0, "not_after": 1006.0}
     with pytest.raises(IdentityError) as again:
         asyncio.run(identity.request("rosy_60"))
-    assert again.value.code == "IDENTIFY_BUSY" and robots["rosy_60"].calls == [None]
+    assert again.value.code == "IDENTIFY_BUSY" and robots["rosy_60"].calls == ["blue"]
     clock.now += 8.1  # window + grace over without a verdict
     assert tracking.config_for(AUTH)["identity_challenges"] == []
 
@@ -94,13 +95,13 @@ def test_a_standing_robot_is_asked_in_its_own_colour():
 def test_two_robots_on_one_source_blink_in_parallel_in_different_colours():
     """D-596 1: one request per colour per source; the second robot is asked for the free colour."""
     clock, tracking, identity, robots = _setup()
-    robots["rosy_26"] = Robot("amber", prefix="b26")  # both amber: Fleet must name blue for the second
+    robots["rosy_26"] = Robot("amber", prefix="b26")
     first = asyncio.run(identity.request("rosy_60"))
-    second = asyncio.run(identity.request("rosy_26"))
-    assert (first["color"], second["color"]) == ("amber", "blue")
-    assert robots["rosy_26"].calls == ["blue"]
+    second = asyncio.run(identity.request("rosy_26"))   # an operator gets amber while blue is busy
+    assert (first["color"], second["color"]) == ("blue", "amber")
+    assert robots["rosy_26"].calls == ["amber"]
     challenges = tracking.config_for(AUTH)["identity_challenges"]
-    assert [(c["request_id"], c["color"]) for c in challenges] == [("req-1", "amber"), ("b26-1", "blue")]
+    assert [(c["request_id"], c["color"]) for c in challenges] == [("req-1", "blue"), ("b26-1", "amber")]
     assert {p["robot_id"] for p in identity.snapshot()["pendings"]} == {"rosy_60", "rosy_26"}
     clock.now += 6.2
     _detections(tracking, clock, (1.05, 1.0), (2.0, 1.0))
@@ -117,7 +118,7 @@ def test_a_third_colour_request_on_a_busy_source_is_refused():
                                        calibration_revision="cal-1", corner_marker_ids=None),)
     asyncio.run(identity.request("rosy_60"))
     with pytest.raises(IdentityError) as same:
-        asyncio.run(identity.request("rosy_26", "amber"))
+        asyncio.run(identity.request("rosy_26", "blue"))
     assert same.value.code == "IDENTIFY_BUSY" and robots["rosy_26"].calls == []
     asyncio.run(identity.request("rosy_26"))
     with pytest.raises(IdentityError) as full:

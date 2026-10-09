@@ -123,3 +123,12 @@ def test_steady_colour_tags_the_single_anonymous_blob():
     assert _decide(_samples(lambda t: {LEFT: BLUE}, blobs=(LEFT,)))["reason"] == "none"  # never off
     blink = _decide(_samples(lambda t: {LEFT: BLUE} if _blinking(t) else {}, blobs=(LEFT,)))
     assert blink["state"] == "matched" and "mode" not in blink["evidence"]  # the blink wins
+
+
+def test_a_caution_lamp_decodes_like_the_amber_identify():
+    """D-596 7: caution is amber 1 s on / 1 s off, so Vision alone cannot tell it from an amber identify.
+    Fleet therefore never asks amber automatically and gates the verdict on the asked robot's place."""
+    caution = lambda t: {RIGHT: AMBER} if int(t) % 2 == 0 else {}
+    decoy = _decide(_samples(caution, color="amber"))
+    assert decoy["state"] == "matched" and (decoy["x"], decoy["y"]) == (RIGHT.map_x, RIGHT.map_y)
+    assert _decide(_samples(caution, color="blue"))["reason"] == "none"

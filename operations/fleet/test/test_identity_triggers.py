@@ -75,24 +75,26 @@ class Clock:
 
 
 class Robot:
-    def __init__(self, name, color):
-        self.name, self.color, self.calls = name, color, []
+    def __init__(self, name, color, old_core=False):
+        self.name, self.color, self.old_core, self.calls = name, color, old_core, []
 
-    async def identify_lamp(self, color=None):
-        self.calls.append(color)
+    async def identify_lamp(self, color=None, quiet=False):
+        if quiet and self.old_core:  # a CORE before D-596 refuses the unknown field
+            raise type("RobotApiError", (Exception,), {"status": 422})()
+        self.calls.append((color, quiet))
         return {"accepted": True, "request_id": f"{self.name}-{len(self.calls)}", "color": color or self.color}
 
 
-def test_tick_asks_both_lost_robots_in_parallel_in_two_colours_once_per_interval():
+def _site(old_core=False):
     clock = Clock()
     source = SightingSource(source_id="ceiling_north", token="tok", robot_ids=("rosy_40", "rosy_41"),
                             map_id="map_v2_fleet", calibration_revision="cal-1", corner_marker_ids=None,
                             robot_markers=(("rosy_40", 40), ("rosy_41", 41)))
     tracking = TrackingService([source], calibrations=TrackingCalibrationStore(), clock=clock)
-    robots = {"rosy_40": Robot("r40", "amber"), "rosy_41": Robot("r41", "amber")}
+    robots = {"rosy_40": Robot("r40", "amber", old_core), "rosy_41": Robot("r41", "amber")}
     identity = IdentityService(lambda: robots, tracking=tracking, clock=clock)
     tracking.identity = identity
-    seq = iter(range(1, 100))
+    seq = iter(range(1, 1000))
 
     def frame(*detections):
         tracking.observe_states([{"robot_id": rid, "online": True, "state": dict(SAFE)} for rid in robots],
@@ -102,21 +104,73 @@ def test_tick_asks_both_lost_robots_in_parallel_in_two_colours_once_per_interval
             processor_revision="background-blob/1", captured_at=clock.now, seq=next(seq), status="OK",
             detections=tuple(OverheadDetection(x=x, y=y, footprint_m=0.18, score=0.9, marker_id=m)
                              for x, y, m in detections)))
+    return clock, source, identity, robots, frame
 
+
+def test_tick_asks_lost_robots_silently_in_blue_only_and_backs_off():
+    clock, _source, identity, robots, frame = _site()
+    hidden = ((1.1, 1.0, None), (2.1, 1.0, None))
     frame((1.0, 1.0, 40), (2.0, 1.0, 41))
     assert asyncio.run(identity.tick()) == []
     clock.now += 0.5
-    frame((1.1, 1.0, None), (2.1, 1.0, None))                  # both markers hidden, blobs remain
+    frame(*hidden)                                             # both markers hidden, blobs remain
     assert asyncio.run(identity.tick()) == []
-    clock.now += 3.0
-    frame((1.1, 1.0, None), (2.1, 1.0, None))
-    started = asyncio.run(identity.tick())
-    assert sorted((s["robot_id"], s["color"], s["trigger"]) for s in started) == [
-        ("rosy_40", "amber", "marker_missing"), ("rosy_41", "blue", "marker_missing")]
-    assert robots["rosy_40"].calls == [None] and robots["rosy_41"].calls == ["blue"]
-    clock.now += 10.0                                          # windows over, nothing confirmed
-    frame((1.1, 1.0, None), (2.1, 1.0, None))
-    assert asyncio.run(identity.tick()) == []                  # 30 s per robot
-    clock.now += 21.0
-    frame((1.1, 1.0, None), (2.1, 1.0, None))
-    assert len(asyncio.run(identity.tick())) == 2
+    asked = {}
+
+    def tick(step):
+        clock.now += step
+        frame(*hidden)
+        for started in asyncio.run(identity.tick()):
+            asked.setdefault(started["robot_id"], []).append(round(clock.now - 1000.5, 1))
+            assert (started["color"], started["trigger"]) == ("blue", "marker_missing")
+
+    tick(3.0)
+    assert asked == {"rosy_40": [3.0]}                         # blue is busy: rosy_41 waits (never amber)
+    for _ in range(80):                                        # 800 s later
+        tick(10.0)
+    assert asked["rosy_41"][0] == 13.0
+    # Marker still hidden: 30 s, then 2 min, then every 5 min (D-596 7).
+    assert [b - a for a, b in zip(asked["rosy_40"], asked["rosy_40"][1:])][:4] == [30.0, 120.0, 300.0, 300.0]
+    assert all(quiet for _color, quiet in robots["rosy_40"].calls)
+    frame((1.0, 1.0, 40), (2.1, 1.0, None))                    # marker seen again: the backoff restarts
+    assert identity.triggers.backoff("rosy_40") == 1
+
+
+def test_an_older_core_without_quiet_is_asked_again_with_the_chirp():
+    clock, _source, identity, robots, frame = _site(old_core=True)
+    frame((1.0, 1.0, 40))
+    asyncio.run(identity.tick())
+    clock.now += 0.5
+    frame((1.1, 1.0, None))
+    asyncio.run(identity.tick())                               # marker missing from now
+    clock.now += 3.5
+    frame((1.1, 1.0, None))
+    (started,) = asyncio.run(identity.tick())
+    assert started["robot_id"] == "rosy_40" and robots["rosy_40"].calls == [("blue", False)]
+
+
+def _verdict(identity, source, request_id, x, y, at):
+    return identity.accept_verdict(source, {
+        "source_id": "ceiling_north", "map_id": "map_v2_fleet", "request_id": request_id, "state": "matched",
+        "x": x, "y": y, "captured_at": at, "calibration_revision": "cal-1", "evidence": {}})
+
+
+def test_a_caution_lamp_decoy_elsewhere_is_never_named():
+    """D-596 7: caution blinks amber 1 s on / 1 s off like the amber identify. Vision may match a robot in
+    caution; Fleet names a blob only within auto_near_m of where the asked robot was last seen."""
+    clock, source, identity, robots, frame = _site()
+    frame((1.0, 1.0, 40))
+    identity.triggers.due(clock.now, identity.tracking.snapshot(), {}, watched={"rosy_40", "rosy_41"},
+                          skip=set(), last_reason={})          # remembers rosy_40's marker at (1.0, 1.0)
+    started = asyncio.run(identity.request("rosy_40", "amber"))
+    clock.now += 6.2
+    frame((1.1, 1.0, None), (2.5, 1.0, None))                 # asked robot and a caution decoy
+    decoy = _verdict(identity, source, started["request_id"], 2.5, 1.0, clock.now - 1.0)
+    assert (decoy["state"], decoy["reason"]) == ("UNKNOWN", "far_from_robot")
+    real = _verdict(identity, source, started["request_id"], 1.1, 1.0, clock.now - 1.0)
+    assert real["state"] == "CONFIRMED"
+    # Amber for a robot Fleet never placed: refused (it could be any caution lamp).
+    other = asyncio.run(identity.request("rosy_41", "amber"))
+    clock.now += 6.2
+    frame((1.1, 1.0, None), (2.5, 1.0, None))
+    assert _verdict(identity, source, other["request_id"], 2.5, 1.0, clock.now - 1.0)["reason"] == "no_prediction"

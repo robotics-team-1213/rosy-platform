@@ -24,6 +24,9 @@ from typing import Mapping, Optional
 #: An odom pose this close to (0, 0) after one farther than ODOM_RESET_FROM_M is an odom reset.
 ODOM_RESET_AT_M = 0.05
 ODOM_RESET_FROM_M = 0.3
+#: D-596 7: auto_min_interval_s times this, by automatic requests since the marker was last seen
+#: (30 s, 2 min, then 5 min while it stays hidden).
+BACKOFF = (1, 4, 10)
 
 
 def _point(raw) -> Optional[tuple[float, float]]:
@@ -41,6 +44,7 @@ class AutoTriggers:
         self._lost_since: dict[str, float] = {}
         self._odom: dict[str, tuple[float, float]] = {}
         self._reset_at: dict[str, float] = {}
+        self._auto_asked: dict[str, int] = {}  # automatic requests since the marker was last seen
 
     def due(self, now: float, snapshot: Mapping, states: Mapping[str, Optional[Mapping]], *,
             watched: set, skip: set, last_reason: Mapping[str, Optional[str]]) -> list[tuple[str, str]]:
@@ -71,9 +75,19 @@ class AutoTriggers:
                 found.append((robot_id, "odom_reset"))
         return found
 
-    def asked(self, robot_id: str) -> None:
+    def asked(self, robot_id: str, *, auto: bool = False) -> None:
         """A request went out: the odom reset is answered, a new one must happen first."""
         self._reset_at.pop(robot_id, None)
+        if auto:
+            self._auto_asked[robot_id] = self._auto_asked.get(robot_id, 0) + 1
+
+    def backoff(self, robot_id: str) -> int:
+        """Multiplier of the per-robot interval for the next automatic request."""
+        return BACKOFF[min(max(self._auto_asked.get(robot_id, 0) - 1, 0), len(BACKOFF) - 1)]
+
+    def last_marker(self, robot_id: str) -> Optional[tuple[float, float]]:
+        marker = self._marker.get(robot_id)
+        return None if marker is None else (marker[1], marker[2])
 
     def _remember(self, robot_id: str, row: Mapping, state: Optional[Mapping], now: float) -> None:
         if row.get("status") == "MARKER":
@@ -81,6 +95,7 @@ class AutoTriggers:
             if point is not None:
                 self._marker[robot_id] = (now, *point)
             self._lost_since.pop(robot_id, None)
+            self._auto_asked.pop(robot_id, None)
         elif robot_id in self._marker:
             self._lost_since.setdefault(robot_id, now)
         pose = _point((state or {}).get("pose") or {}) if isinstance(state, Mapping) else None
