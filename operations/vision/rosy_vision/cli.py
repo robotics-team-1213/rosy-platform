@@ -334,7 +334,7 @@ async def _run_vision(args: argparse.Namespace) -> int:
                 detector = None if state is None else BackgroundBlobDetector(
                     store=BackgroundStore(state / f"{config.camera.source_id}.npz"))
                 tracker = TrackWorker(camera=config.camera, ingest=ingest, client=client,
-                                      detector=detector)
+                                      detector=detector, sightings=publisher)
                 trackers.append(tracker)
             calibrator = None
             if config.camera.calibration_source == "field_boundary":

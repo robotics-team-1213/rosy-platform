@@ -400,3 +400,8 @@
 - 변경: `place_markers` 설정(공유 검사), `project_place_markers`(로봇 마커와 같은 호모그래피·`heading_edge`, 높이 보정 없음), 워커가 0.5 s에 한 번 이하로 `/api/fleet/place-markers`에 보내고 실패는 유형만 로그.
 - 증거: `test_vision_place_markers.py`, `test_vision_config.py` 포함 vision 전체, 모델 PC exit 0, 신규 실패 0.
 - gate 변화: 없음(SOURCE).
+
+## 2026-10-10 · uncommitted · feat(vision): D-587 이름 있는 천장 로봇 마커를 sighting으로
+- 변경: 추적 단계가 승인 보정(D-457)을 쓴 프레임에서 `robot_markers`의 마커를 네 모서리 투영 → 윗면 높이 0.125 m 시차 보정 → 모서리 기하 문턱 → URDF 부착(−0.017, 0)과 로봇별 `marker_yaw_offset_deg`로 로봇 자세를 만들어 `calibration_source: approved_record` sighting으로 보낸다(`track/marker_sightings.py`). `project_frame`도 같은 부착·오프셋을 쓴다. 같은 프레임에 이미 sighting이 나간 로봇은 다시 보내지 않는다. 렌즈 FOV가 없으면 보내지 않는다.
+- 증거: 현장 원본 150장(2026-10-10 01:15, 로봇 정지)을 이 코드로 돌려 rosy_40 150/150, rosy_41 148/150 전송, 방향 표준편차 0.09°/0.57°(최대 0.7°/1.7°), 위치 표준편차 0.3 mm 이하. 모델 PC pytest operations/vision/test + tools/calibration 506 통과, known_failures 0 new.
+- gate 변화: SOURCE. 사이트 릴리스·설정 설치·주행 확인 전
