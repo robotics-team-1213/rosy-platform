@@ -1384,3 +1384,8 @@
 - 변경: `lane_boundary_identity.py`가 정지 odom에서 새 좌·우 선 성분과 기억의 공통 BEV 거리 행 횡중심 이동을 비교한다. `lane_bev.py`는 20 mm 초과 시 기억을 버리고 `boundary_identity_unconfirmed`로 관측을 중단하며 코너 인계도 막는다. 기존 동선·명령 소유권은 그대로다.
 - 근거: 합성 같은 자세에서 30 mm 옮긴 단일 선이 이전 좌/우 경계로 승격되어 error +0.252/-0.218을 냈다. 수정 전 반례 시험 실패, 수정 후 `test_lane_edge.py` 전체 통과. `docs/validation/lane-stationary-boundary-identity-2026-10-10/result.md`.
 - gate 변화: SOURCE 후보. 일반 keep 모드·RoadState·ROS-SIM·장치·현장 수용은 별도이며, 동일 위치의 다른 물리 선은 카메라+odom만으로 구분되지 않는다.
+
+## 2026-10-10 · uncommitted · feat(control): keep closed-loop gap diagnostic
+- Change: Added two host closed-loop cases for the operational LaneKeeper using rendered floor paint and the CORE steering-law mirror.
+- Evidence: A 0.20 m missing left stripe on a straight is crossed; a 65 degree bend with route context stops about 0.18 m before its vertex when the parallel boundary vanishes. Related host tests: 111 passed, 2 skipped, 0 new failures.
+- Gate: HOST-SIM diagnostic only. Bend completion, ROS-SIM, device and field acceptance remain HOLD; CORE command ownership unchanged.
