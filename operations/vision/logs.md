@@ -396,3 +396,7 @@
 - 변경: main이 v1.166(D-531 굽이 단계)을 먼저 가져가 D-560 S1은 API Reference v1.167이다(위 항목의 v1.166은 v1.167로 읽는다). `X-Frame-Plane`의 `max_x`·`min_y`를 반올림한 영상 크기에서 다시 정해 사각형이 영상 크기 / `px_per_m`와 같다. `MapPlane`이 펴기에 쓴 행렬을 싣고, 헤더 식과 1e-9 m로 맞는지 시험한다. 보정 revision은 `[A-Za-z0-9._:-]{1,96}`만 받는다(헤더로 나간다). 공유 펴기 작업이 자기 실패를 회수한다. 평면은 그 source에 `--track`이 켜져 있어야 나온다는 문장을 §10.6.1과 ADR S1에 넣었다
 - 증거: 원격 pytest 결과는 이 브랜치 보고에 남긴다. 실프레임 평면 1244×624 다시 확인(X:/DevTemp/cam-map-plane-s1/plane-lanes.png)
 - gate 변화: 없음
+## 2026-10-09 · uncommitted · feat(vision): D-564 장소 마커 투영과 전송
+- 변경: `place_markers` 설정(공유 검사), `project_place_markers`(로봇 마커와 같은 호모그래피·`heading_edge`, 높이 보정 없음), 워커가 0.5 s에 한 번 이하로 `/api/fleet/place-markers`에 보내고 실패는 유형만 로그.
+- 증거: `test_vision_place_markers.py`, `test_vision_config.py` 포함 vision 전체, 모델 PC exit 0, 신규 실패 0.
+- gate 변화: 없음(SOURCE).

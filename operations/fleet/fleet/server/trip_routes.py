@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import logging
 import math
+import sqlite3
 import time
 import uuid
 from typing import Annotated, Optional, Union
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from fleet.hub.hub import HubError
@@ -48,6 +49,14 @@ class SignalCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     verb: str = Field(min_length=1, max_length=16)
     approach: Optional[str] = Field(default=None, min_length=1, max_length=128)  # set_aspect only
+
+
+class SignalDemand(BaseModel):
+    """D-525 rev 4: the AI PC controller asks for a green; ``approach`` None says it is alive, nobody waits."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    approach: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    ttl_s: float = Field(gt=0.0, le=5.0, allow_inf_nan=False)
+    reason: str = Field(default="", max_length=200)
 
 
 class TripRequest(BaseModel):
@@ -192,11 +201,38 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         """D-525 4: the operator's console is open; a manual green lasts while this keeps coming."""
         return runner.traffic.signal_presence()
 
+    @app.post("/api/fleet/traffic/signals/{signal_id}/demand", tags=["fleet"])
+    def fleet_traffic_signal_demand(signal_id: str, body: SignalDemand, request: Request,
+                                    principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """D-525 rev 4: a controller (AI PC) asks for a green for one approach for ``ttl_s`` (≤ 5 s). Fleet
+        still decides: the zone must be free and every change goes through yellow and all red. Robots
+        never get permission from it. 409 SIGNAL_NOT_DEMAND unless an operator enabled ``demand``."""
+        try:
+            row, fresh = runner.traffic.signal_demand(signal_id, body.approach, body.ttl_s, body.reason)
+        except KeyError:
+            raise _refuse("SIGNAL_UNKNOWN", status=404)
+        except PermissionError:
+            raise _refuse("SIGNAL_NOT_DEMAND", status=409)
+        except ValueError:
+            raise _refuse("SIGNAL_APPROACH", status=422)
+        if fresh:  # audited at low rate: a new demand, not every 0.5 s repeat (site_auth skips this path)
+            _LOG.info("signal %s demand %s by %s: %s", signal_id, body.approach, principal.principal_id, body.reason)
+            store = getattr(getattr(request.app.state, "task_service", None), "store", None)
+            if store is not None:
+                try:
+                    audit = store.begin_api_audit(principal_id=principal.principal_id, role=principal.role,
+                                                  method="POST", path=request.url.path)
+                    store.finish_api_audit(audit, status_code=200)
+                except (OSError, sqlite3.Error, ValueError, KeyError):
+                    _LOG.exception("signal demand audit failed; the demand stands (Fleet still decides)")
+        return row
+
     @app.post("/api/fleet/traffic/signals/{signal_id}", tags=["fleet"])
     def fleet_traffic_signal(signal_id: str, body: SignalCommand,
                              principal: SitePrincipal = Depends(require_named_operator)) -> dict:
-        """D-525 4: operator verb for a virtual signal: ``cycle``, ``hold``, ``all_red``, or ``set_aspect``
-        with ``approach`` (green for that approach while the operator's console sends presence)."""
+        """D-525 4: operator verb for a virtual signal: ``cycle``, ``hold``, ``all_red``, ``demand`` (rev 4:
+        the next green follows controller demands), or ``set_aspect`` with ``approach`` (green for that
+        approach while the operator's console sends presence)."""
         try:
             return runner.traffic.signal_command(signal_id, body.verb, body.approach)
         except KeyError:

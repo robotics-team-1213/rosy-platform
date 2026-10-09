@@ -5,3 +5,7 @@ safe file /etc/systemd/system/rosy-nightly-reboot.timer role/rosy-nightly-reboot
 safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-reboot.service
 safe enabled rosy-nightly-reboot.timer
 report wifi-allow
+# Hardware watchdog and panic: approved 2026-10-09 (D-530 2). Ubuntu blacklists iTCO_wdt, so modules-load is needed.
+approval file /etc/modules-load.d/rosy-watchdog.conf common/rosy-modules-load-watchdog.conf
+approval file /etc/systemd/system.conf.d/rosy-watchdog.conf common/rosy-watchdog.conf
+approval file /etc/sysctl.d/90-rosy-hang.conf common/90-rosy-hang.conf
