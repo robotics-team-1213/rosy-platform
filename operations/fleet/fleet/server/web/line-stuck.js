@@ -293,7 +293,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     previews.set(robotId, { stuck_id: stuckId, state: "loading" });
     let entry;
     try {
-      const preview = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-stuck/preview`
+      const preview = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/line-stuck/evidence`
         + `?stuck_id=${encodeURIComponent(stuckId)}`);
       entry = { stuck_id: stuckId, state: "ok", preview, at: Date.now() };
     } catch (err) {

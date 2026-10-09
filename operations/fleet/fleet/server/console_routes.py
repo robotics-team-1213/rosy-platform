@@ -214,8 +214,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         return {"pending": board.pending(), "answers": board.answers(),
                 "observed_age_s": board.observed_age_s()}
 
-    @app.get("/api/fleet/robots/{robot_id}/line-stuck/preview", dependencies=read_guard, tags=["line-stuck"])
-    async def line_stuck_preview(robot_id: str, stuck_id: str = Query(
+    @app.get("/api/fleet/robots/{robot_id}/line-stuck/evidence", dependencies=read_guard, tags=["line-stuck"])
+    async def line_stuck_evidence(robot_id: str, stuck_id: str = Query(
             min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")) -> dict:
         # D-577 8: the stuck's one evidence picture, asked of the robot on first read and held in
         # memory until the stuck closes. A failed read is not kept: the next read asks again.

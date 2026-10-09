@@ -56,7 +56,7 @@ def _gather(client):
 
 
 def _preview(client, stuck_id="stuck-abc"):
-    return client.get(f"/api/fleet/robots/rosy_01/line-stuck/preview?stuck_id={stuck_id}",
+    return client.get(f"/api/fleet/robots/rosy_01/line-stuck/evidence?stuck_id={stuck_id}",
                       headers={"Authorization": f"Bearer {VIEWER}"})
 
 
@@ -109,7 +109,7 @@ def test_a_robot_without_a_fresh_frame_answers_unavailable_and_is_asked_again_la
 
 def test_the_preview_needs_a_site_credential(tmp_path):
     client = _client(FramedRobot("rosy_01", state=_state()), tmp_path)
-    assert client.get("/api/fleet/robots/rosy_01/line-stuck/preview?stuck_id=stuck-abc").status_code == 401
+    assert client.get("/api/fleet/robots/rosy_01/line-stuck/evidence?stuck_id=stuck-abc").status_code == 401
 
 
 def test_the_robot_client_reads_status_then_the_frame_of_that_sequence():
