@@ -11,6 +11,9 @@ websocket 도 fleet 도 등장하지 않는다.
 D-559 trail 모드는 Nav2 를 쓰지 않는다. 리더 자취(trail.py)를 20 Hz `trail_tick` 이
 조향해 CommandManager 의 NAVIGATION 슬롯에 넣는다 — 차선 추종과 같은 길이라 SAF-004
 클리핑과 D-400 정책을 지나고, D-422 몸체 정지는 `obstacle_gap` 이 맡는다.
+
+D-581: 로봇에 map pose 가 없는 현장에서는 Fleet 이 천장 카메라로 리더를 이 로봇의 odom
+프레임에 옮겨 보낸다(`anchor: fleet`, `for_robot_id`). 그때 자취와 자기 위치는 둘 다 odom 이다.
 """
 
 from __future__ import annotations
@@ -52,7 +55,7 @@ class SwarmManager:
     def __init__(self, events, state_manager, nav, safety, capability,
                  clock=time.monotonic, docking_active_provider=None,
                  map_id_provider=None, robot_id: str = "", pose_provider=None,
-                 twist_sink=None, obstacle_gap=None) -> None:
+                 twist_sink=None, obstacle_gap=None, odom_provider=None) -> None:
         self._events = events
         self._state = state_manager
         self.nav = nav
@@ -91,6 +94,8 @@ class SwarmManager:
         self._pose = pose_provider or (lambda: None)
         self._twist_sink = twist_sink or (lambda twist: None)
         self._obstacle_gap = obstacle_gap
+        # D-581: own odom pose (x, y, yaw, age_s) for a Fleet-anchored trail.
+        self._odom = odom_provider or (lambda: None)
         self._reset_trail()
 
     # --- 조회 -----------------------------------------------------------------
@@ -114,8 +119,12 @@ class SwarmManager:
         #: D-422 hold latched with the resume gap of the judgement that stopped us (None = clear).
         self._trail_resume: Optional[float] = None
         self._trail_sample_at: Optional[float] = None
-        self._trail_broken: Optional[str] = None  # latched: trail_lost
-        self._ref_odom = False
+        self._trail_broken: Optional[str] = None  # latched: trail_lost, reference_frame_changed
+        #: D-581 kind of the last leader sample ("map" | "fleet") and why it was unusable.
+        self._ref_kind: Optional[str] = None
+        self._ref_bad: Optional[str] = None
+        #: The kind the trail was seeded in. One trail never mixes map and odom points.
+        self._trail_kind: Optional[str] = None
 
     @property
     def holding(self) -> bool:
@@ -151,7 +160,8 @@ class SwarmManager:
                 "trail": None if self._trail is None else {
                     "leader_s": round(self._trail.leader_s, 3),
                     "progress": round(self._trail.progress, 3),
-                    "hold_reason": self._trail_hold},
+                    "hold_reason": self._trail_hold,
+                    "anchor": "fleet" if self._trail_kind == "fleet" else None},
                 "stream_age_s": (
                     None if self._last_sample_at is None
                     else round(self._clock() - self._last_sample_at, 3)
@@ -320,7 +330,10 @@ class SwarmManager:
             ours = self._map_id()
             session = self._session
             formation = self._formation_label(params)
-            mismatched = bool(reference.map_id and ours and reference.map_id != ours)
+            # D-581: a Fleet-anchored sample lives in our odom frame; its map_id names the
+            # site camera map, not ours, so the robot map comparison does not apply to it.
+            mismatched = bool(reference.anchor is None and reference.map_id and ours
+                              and reference.map_id != ours)
             announce = False
             resumed = False
             spec = None
@@ -340,7 +353,7 @@ class SwarmManager:
                 self._holding = False
                 self._map_mismatch = None
                 if params.mode == "trail":
-                    join_error = self._feed_trail(reference)
+                    join_error = self._feed_trail(reference, params)
                 elif (self._last_goal_at is not None
                         and now - self._last_goal_at < _MIN_GOAL_INTERVAL_S):
                     # SWM-002: <=2 Hz. 버리지 않고 들고 있다가 tick 에서 낸다.
@@ -376,21 +389,48 @@ class SwarmManager:
         # 락 밖에서 부른다. 취소와 뒤바뀌어도 토큰이 맞지 않으면 저쪽이 버린다.
         return self.nav.moving_goal(spec, source="swarm", session=session)
 
-    def _feed_trail(self, reference: ReferencePose) -> Optional[TrailError]:
+    def _sample_kind(self, reference: ReferencePose,
+                     params: SwarmFollowParams) -> tuple[Optional[str], Optional[str]]:
+        """(kind, hold reason). "map": the leader's own map pose. "fleet" (D-581): Fleet put the
+        leader into OUR odom frame. Anything else is unusable, with the reason it holds."""
+        if reference.anchor is None:
+            # Only a pose the leader itself calls "map": "odom" is no place on our map, and a
+            # leader that does not say (pre-D-559, or no pose yet) is not trusted for a trail.
+            return ("map", None) if reference.frame == "map" else (None, "reference_frame_not_map")
+        if (reference.anchor == "fleet" and reference.frame == "odom" and self._robot_id
+                and reference.for_robot_id == self._robot_id
+                and params.source is SwarmReferenceSource.FLEET):
+            # Fleet says it has no anchor now: hold, but the stream (and the leader) is alive.
+            return (None, "anchor_withheld") if reference.anchor_hold else ("fleet", None)
+        return None, "reference_anchor_invalid"  # another robot's odom, or an unknown anchor
+
+    def _own_pose(self, kind: Optional[str]):
+        """Own pose for the trail kind; the last item is its age (s). None = not available."""
+        return self._odom() if kind == "fleet" else self._pose()
+
+    def _feed_trail(self, reference: ReferencePose,
+                    params: SwarmFollowParams) -> Optional[TrailError]:
         """D-559: one leader sample into the trail. Locked. The error ends the follow."""
-        # Only a pose the leader itself calls "map": "odom" is no place on our map, and a
-        # leader that does not say (pre-D-559, or no pose yet) is not trusted for a trail.
-        self._ref_odom = reference.frame != "map"
-        if self._ref_odom:
+        kind, self._ref_bad = self._sample_kind(reference, params)
+        if self._ref_bad == "anchor_withheld":
+            # The jump bound restarts here: a leader that drove on during a long withhold is
+            # not bridged by a straight line afterwards (trail_lost), a short one still is.
+            self._trail_sample_at = self._clock()
+        if kind is None:
+            return None
+        self._ref_kind = kind
+        if self._trail_kind is not None and kind != self._trail_kind:
+            self._trail_broken = "reference_frame_changed"  # latched until a new follow
             return None
         if self._trail is None:
-            own = self._pose()
-            if own is None or own[3] != "map":
+            own = self._own_pose(kind)
+            if own is None or (kind == "map" and own[3] != "map"):
                 return None  # seeded by a later sample; trail_tick holds meanwhile
             try:
                 self._trail = Trail(own[:2], (reference.x, reference.y))
             except TrailError as exc:
                 return exc
+            self._trail_kind = kind
         else:
             # A jump bounded by how far a robot of our ceiling could drive since the last
             # sample: at 10 Hz anything past 0.3 m is a relocalisation, not driving.
@@ -414,7 +454,8 @@ class SwarmManager:
             now = self._clock()
             dt = 0.05 if self._trail_at is None else min(now - self._trail_at, 0.2)
             self._trail_at = now
-            own = self._pose()
+            fleet = (self._trail_kind or self._ref_kind) == "fleet"
+            own = self._own_pose("fleet" if fleet else "map")
             twist = None
             if self._holding:
                 reason = "stream_lost"
@@ -422,11 +463,11 @@ class SwarmManager:
                 reason = "map_mismatch"
             elif self._trail_broken is not None:
                 reason = self._trail_broken
-            elif self._ref_odom:
-                reason = "reference_frame_not_map"
-            elif own is None or own[3] != "map":
+            elif self._ref_bad is not None:
+                reason = self._ref_bad
+            elif not fleet and (own is None or own[3] != "map"):
                 reason = "own_pose_not_map"
-            elif own[4] > OWN_POSE_MAX_AGE_S:
+            elif own is None or own[-1] > OWN_POSE_MAX_AGE_S:
                 reason = "own_pose_stale"
             elif self._trail is None:
                 reason = "waiting_for_leader"
@@ -463,7 +504,8 @@ class SwarmManager:
             self._trail_linear = 0.0 if twist is None else twist[0]
             announce = reason != self._trail_hold and reason in (
                 "trail_lost", "reference_frame_not_map", "own_pose_not_map", "own_pose_stale", "obstacle",
-                "obstacle_sensor_stale")
+                "obstacle_sensor_stale", "reference_anchor_invalid", "reference_frame_changed",
+                "anchor_withheld")
             self._trail_hold = reason
             # Under our lock: a cancel after this point clears what we wrote.
             self._twist_sink(twist)
