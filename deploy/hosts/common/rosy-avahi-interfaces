@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""Limit avahi to physical interfaces (D-530): sets allow-interfaces= in avahi-daemon.conf.
+
+Docker veth/bridge interfaces made avahi advertise Fleet on link-local IPv6 addresses nobody can
+reach. Physical = /sys/class/net/<if>/device exists and the name is not lo/docker*/br-*/veth*/
+tailscale*/virbr*/zt*. Idempotent; avahi is restarted only when the value changed.
+ROSY_AVAHI_ROOT prefixes /sys and /etc (tests).
+"""
+
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(os.environ.get("ROSY_AVAHI_ROOT", "/"))
+SKIP = ("lo", "docker", "br-", "veth", "tailscale", "virbr", "zt")
+
+
+def physical() -> list[str]:
+    net = ROOT / "sys/class/net"
+    names = sorted(p.name for p in net.iterdir()) if net.is_dir() else []
+    return [n for n in names if not n.startswith(SKIP) and (net / n / "device").exists()]
+
+
+def main() -> int:
+    conf = ROOT / "etc/avahi/avahi-daemon.conf"
+    ifaces = physical()
+    if not conf.is_file() or not ifaces:  # no avahi, or nothing to allow: leave it as it is
+        return 0
+    line = "allow-interfaces=" + ",".join(ifaces)
+    text = conf.read_text(encoding="utf-8")
+    if re.search(rf"^{re.escape(line)}$", text, re.M):
+        return 0
+    if re.search(r"^\s*allow-interfaces\s*=", text, re.M):
+        new = re.sub(r"^\s*allow-interfaces\s*=.*$", line, text, count=1, flags=re.M)
+    elif re.search(r"^#\s*allow-interfaces\s*=", text, re.M):
+        new = re.sub(r"^#\s*allow-interfaces\s*=.*$", line, text, count=1, flags=re.M)
+    else:
+        new = re.sub(r"^\[server\]\s*$", "[server]\n" + line, text, count=1, flags=re.M)
+    if new == text:
+        raise SystemExit(f"{conf}: no [server] section")
+    tmp = conf.with_name(conf.name + ".rosy-tmp")
+    tmp.write_text(new, encoding="utf-8")
+    os.replace(tmp, conf)
+    print(f"set {line}")
+    if not os.environ.get("ROSY_AVAHI_ROOT"):
+        subprocess.run(["systemctl", "try-restart", "avahi-daemon.service"], check=False)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
