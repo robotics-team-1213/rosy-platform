@@ -553,6 +553,23 @@ def test_new_short_fragment_cannot_become_a_one_side_target():
     assert target is not None and strategy == "left_only"
 
 
+def test_short_fragment_requires_a_boundary_seen_in_the_previous_image():
+    full = _render([(HALF, 0.0)])
+    fragment = full.copy()
+    fragment[np.isfinite(X) & ((X < 0.22) | (X > 0.30))] = 100
+
+    fresh = _keeper()
+    assert fresh.update(fragment, GROUND, lane_half_width_m=HALF) is None
+    assert fresh.last["strategy"] == "none"
+
+    tracked = _keeper()
+    assert tracked.update(full, GROUND, lane_half_width_m=HALF) is not None
+    obs = tracked.update(fragment, GROUND, lane_half_width_m=HALF)
+    assert obs is not None and tracked.last["strategy"] == "left_only"
+    assert tracked.last["boundaries"][0]["tracked"] is True
+    assert abs(tracked.last["target_m"][1]) < 0.03
+
+
 def test_mid_turn_keeps_turning_toward_the_new_lane():
     # Latched left, then the robot has turned ~15 deg left: the corner line now
     # runs at 75 deg and its meeting point with the heading has moved away.
