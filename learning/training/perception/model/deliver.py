@@ -7,6 +7,16 @@ deliver.py promote <host>        (D-423: active <- shadow, the old active -> pre
 push: [--allow-unsigned] [--check KEYS_DIR]  object_det must be signed (sign_model.py)
 deliver.py release-hold <host>   (removes the hold file; the pointer is not changed)
 deliver.py status <host>
+push/rollback/release-hold/status: [--slot shadow|paint]  (lane_seg; paint is the D-408
+        learned paint pointer <root>/paint with paint.previous and paint.hold, moved only by
+        hand; shadow, shadow.previous, hold and the site watcher never touch it.
+        Nothing reads paint by default: line_observer uses it only when
+        /etc/rosy/line_observer_overrides.yaml sets learned_lane_pointer:
+        /var/lib/rosy/models/paint, and host_lane_perception.py still reads shadow.
+        paint.hold is a record of the manual change only: the watcher never pushes paint,
+        so there is nothing for it to stop. status --slot paint prints the paint lines,
+        then the usual shadow status. The first paint push leaves no paint.previous, so
+        rollback --slot paint refuses until a second push.)
 common: [--task lane_seg|object_det] [--user rosy] [--identity KEY] [--known-hosts FILE]
         [--journal-dir DIR] (private local attempt files, fsynced before each network step)
         [--root /var/lib/rosy/models]  (the task's pointers live under learned/slots.task_root:
@@ -92,6 +102,10 @@ LOCK_BUSY_EXIT = 75  # only flock -w running out (flock -E); the body never exit
 HELD_EXIT = 76  # --unless-held found the hold file; nothing was touched
 HISTORY_EXIT = 3  # history.jsonl not appendable (before: nothing changed; after: see stderr)
 LOCK_NAME, HISTORY_NAME, HOLD_NAME = ".lock", "history.jsonl", "hold"
+#: lane_seg pointer files deliver.py may move. shadow: the D-373 slot the site watcher fills.
+#: paint: the D-408 learned paint model (line_observer learned_lane_pointer), moved only by
+#: hand, with its own paint.previous and paint.hold so shadow and the watcher are untouched.
+POINTER_SLOTS = ("shadow", "paint")
 OBSERVE_SEPARATOR = "--- hold"
 _HISTORY_LINE = ('{"ts":"%s","action":%s,"revision":"%s","previous":"%s",'
                  '"operator":%s,"host_of_operator":%s,"tool_commit":%s}\\n')
@@ -144,7 +158,8 @@ def _safe_word(expr: str) -> str:
 def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                   checks=(), report=None, stage: str | None = None, audit=None,
                   unless_held: bool = False, history: int = 5,
-                  lock_wait: int = LOCK_WAIT_S, privileged: bool = True) -> str:
+                  lock_wait: int = LOCK_WAIT_S, privileged: bool = True,
+                  slot: str = "shadow") -> str:
     """Shell text for one remote step. Every path is shlex.quote'd.
 
     checks: [(sha256, file name), ...] of the model: manifest-listed files and
@@ -158,16 +173,23 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
     unless_held (the site watcher): if the hold file exists, exit 76 untouched.
     release-hold removes the hold file; the pointer is not changed.
     privileged=False drops sudo -n and the owner/mode flags so the script runs
-    as an ordinary user in tests; main() never passes it."""
+    as an ordinary user in tests; main() never passes it.
+    slot: the pointer (POINTER_SLOTS) push, rollback, release-hold and status act on;
+    a slot other than shadow uses <slot>.previous, <slot>.hold and "<action>-<slot>"
+    in hold and history."""
+    if slot not in POINTER_SLOTS:
+        raise ValueError(f"unknown slot {slot!r}")
     q = shlex.quote
     a = audit or {}
     s = f"{SUDO} " if privileged else ""
     own = f" -o {OWNER} -g {GROUP}" if privileged else ""
     dmode, fmode = (" -m 0750", " -m 0640") if privileged else ("", "")
-    ptr, prev, tmp = q(f"{root}/shadow"), q(f"{root}/shadow.previous"), q(f"{root}/shadow.tmp")
+    ptr, prev, tmp = q(f"{root}/{slot}"), q(f"{root}/{slot}.previous"), q(f"{root}/{slot}.tmp")
     act, act_prev = q(f"{root}/active"), q(f"{root}/previous")  # D-423 slots
     lock, hist = q(f"{root}/{LOCK_NAME}"), q(f"{root}/{HISTORY_NAME}")
-    hold, hold_tmp = q(f"{root}/{HOLD_NAME}"), q(f"{root}/{HOLD_NAME}.tmp")
+    hold_name = HOLD_NAME if slot == "shadow" else f"{slot}.{HOLD_NAME}"
+    hold, hold_tmp = q(f"{root}/{hold_name}"), q(f"{root}/{hold_name}.tmp")
+    tag = "" if slot == "shadow" else f"-{slot}"
     ts = '"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'
 
     def check(folder: str, *, quiet: bool = False, files=None) -> str:
@@ -242,7 +264,7 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
         stage_dir = stage.rsplit("/", 1)[0]
         partial_path, final_path = f"{root}/{rev}.partial", f"{root}/{rev}"
         partial, final = q(partial_path), q(final_path)
-        pointer_src = q(f"{stage_dir}/shadow")
+        pointer_src = q(f"{stage_dir}/{slot}")
         installs = [f"install{own}{fmode} {q(f'{stage}/{name}')} "
                     f"{q(f'{partial_path}/{name}')}" for _, name in everything]
         report_dst = f"{final_path}/{report[1]}"
@@ -267,7 +289,7 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                 f"else mv {partial} {final}; fi",
                 check(final_path),
                 *history_ready(),
-                *([] if unless_held else write_hold("push", q(rev))),
+                *([] if unless_held else write_hold("push" + tag, q(rev))),
                 f"cur=$(cat {ptr} 2>/dev/null || true)",
                 f'if [ "$cur" != {final} ]; then',
                 f"  if test -f {ptr}; then",
@@ -280,21 +302,21 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                 f"  mv {tmp} {ptr}",
                 "  sync",
                 "fi",
-                *history_line("push", q(rev), '"${cur##*/}"'),
+                *history_line("push" + tag, q(rev), '"${cur##*/}"'),
             ], skip_if_held=unless_held),
         ])
     if action == "rollback":
         return "\n".join([
             "set -e",
             *locked([
-                f"test -f {prev} || {{ echo 'no shadow.previous to roll back to' >&2; exit 1; }}",
+                f"test -f {prev} || {{ echo 'no {slot}.previous to roll back to' >&2; exit 1; }}",
                 f"cur=$(cat {ptr} 2>/dev/null || true)",
                 f"new=$(cat {prev})",
                 *history_ready(),
-                *write_hold("rollback", '"${new##*/}"'),
+                *write_hold("rollback" + tag, '"${new##*/}"'),
                 f"mv {prev} {ptr}",
                 "sync",
-                *history_line("rollback", '"${new##*/}"', '"${cur##*/}"'),
+                *history_line("rollback" + tag, '"${new##*/}"', '"${cur##*/}"'),
             ]),
         ])
     if action == "promote":  # D-423: active <- shadow; the old active -> previous
@@ -336,7 +358,7 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
                 f"cur=$(cat {ptr} 2>/dev/null || true)",
                 *history_ready(),
                 f"rm -f {hold}",
-                *history_line("release-hold", '"${cur##*/}"', '"${cur##*/}"'),
+                *history_line("release-hold" + tag, '"${cur##*/}"', '"${cur##*/}"'),
             ]),
         ])
     if action == "observe":  # machine-read by watch.py and rosy_ml
@@ -352,6 +374,13 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
             return [f"cur=$({s}cat {pointer} 2>/dev/null)",
                     f"ver=$({s}{sed} \"$cur/{MANIFEST_NAME}\" 2>/dev/null)",
                     f'echo "{label}: $cur${{ver:+ ($ver)}}"']
+        if slot != "shadow":  # the slot's lines first, then the unchanged shadow status
+            return "\n".join([
+                *versioned(slot, ptr),
+                f"echo \"{slot} previous: $({s}cat {prev} 2>/dev/null)\"",
+                f"echo \"{hold_name}: $({s}cat {hold} 2>/dev/null || echo none)\"",
+                remote_script("status", None, root, history=history, privileged=privileged),
+            ])
         return "\n".join([
             *versioned("shadow", ptr),
             f"echo \"previous: $({s}cat {prev} 2>/dev/null)\"",
@@ -410,7 +439,7 @@ def _push(args, ssh, scp, runner) -> int:
     except ManifestError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
-    if rev.startswith("v13-drivable-") and args.task != "lane_seg":
+    if rev.startswith("v13-drivable-") and (args.task != "lane_seg" or args.slot != "shadow"):
         print("refused: v13-drivable goes only to the lane_seg shadow slot (D-554)", file=sys.stderr)
         return 2
     folder = Path(args.models) / rev
@@ -475,12 +504,12 @@ def _push(args, ssh, scp, runner) -> int:
     r = _run(runner, [*ssh, target, remote_script("push", rev, args.root, checks=checks,
                                                   report=report_check, audit=_audit(args),
                                                   unless_held=args.unless_held,
-                                                  stage=f"{stage_dir}/{rev}")], t,
+                                                  stage=f"{stage_dir}/{rev}", slot=args.slot)], t,
              long_step=True)
     if r.returncode != 0:
         return _remote_rc(r)
     print(r.stdout or "", end="")
-    print(f"shadow -> {args.root}/{rev} on {args.host}")
+    print(f"{args.slot} -> {args.root}/{rev} on {args.host}")
     return 0
 
 
@@ -502,7 +531,10 @@ def _dispatch(args, ssh, scp, runner):
     if args.action == 'push':
         return _push(args, ssh, scp, runner)
     extra = ({'history': max(args.history, 0)} if args.action == 'status' else {'audit': _audit(args)})
-    action = 'rollback-active' if getattr(args, 'slot', 'shadow') == 'active' else args.action
+    slot = getattr(args, 'slot', 'shadow')
+    action = 'rollback-active' if slot == 'active' else args.action
+    if action != 'promote' and slot in POINTER_SLOTS:
+        extra['slot'] = slot
     result = _run(runner, [*ssh, f'{args.user}@{args.host}',
                            remote_script(action, None, args.root, **extra)], args.timeout)
     if result.returncode != 0:
@@ -518,9 +550,15 @@ def main(argv=None, runner=subprocess.run) -> int:
         p = sub.add_parser(name)
         p.add_argument("host")
         p.add_argument("--task", choices=TASKS, default="lane_seg")
+        # rollback alone takes active: it is the only command that moves the D-423 active
+        # pointer back; promote has no --slot because it always copies shadow to active.
         if name == "rollback":
-            p.add_argument("--slot", choices=("shadow", "active"), default="shadow",
-                           help="active: back to the model before the last promote (D-423)")
+            p.add_argument("--slot", choices=(*POINTER_SLOTS, "active"), default="shadow",
+                           help="active: back to the model before the last promote (D-423); "
+                                "paint: back to paint.previous (lane_seg)")
+        elif name != "promote":
+            p.add_argument("--slot", choices=POINTER_SLOTS, default="shadow",
+                           help="paint: the D-408 learned paint pointer (lane_seg; own previous and hold)")
         if name == "push":
             p.add_argument("revision")
             p.add_argument("--models", default=str(ROOT / "data" / "perception" / "models"))
@@ -557,6 +595,9 @@ def main(argv=None, runner=subprocess.run) -> int:
     if args.task in FLAT_TASKS and (args.action == "promote" or getattr(args, "slot", "shadow") == "active"):
         print(f"refused: {args.task} keeps the flat D-373 layout (shadow only); promote and "
               f"rollback --slot active are for per-task slots such as object_det", file=sys.stderr)
+        return 2
+    if getattr(args, "slot", "shadow") == "paint" and args.task not in FLAT_TASKS:
+        print(f"refused: the paint slot is a lane_seg pointer, not {args.task}", file=sys.stderr)
         return 2
     args.root = task_root(args.task, args.root)
     try:

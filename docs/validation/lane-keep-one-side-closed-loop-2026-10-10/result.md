@@ -1,0 +1,14 @@
+# Operational keep mode: one-side loss and bend in a host closed loop
+
+2026-10-10. Evidence tier: **host kinematic SIM**. The test inverse-projects a 1 mm floor-paint raster through the declared Gazebo camera geometry, feeds each rendered frame to the operational `LaneKeeper`, applies the existing `lane_sim.core_command` mirror of CORE's `line_follow` law every 0.2 seconds, then renders the next frame at the new pose. It does not include a ROS graph, LiDAR, Fleet, an approved physical camera calibration, a swept robot body, or a device run. Reproduction is in [`test_lane_keep_closed_loop.py`](../../../middleware/perception/test/test_lane_keep_closed_loop.py), which reuses [`lane_sim.py`](../../../middleware/perception/test/lane_sim.py).
+
+| Scene | Outcome | Observation |
+| --- | --- | --- |
+| Straight, left paint removed over x=0.35-0.55 m | Crossed | `right_only` occurred while the other line was absent. Observation continued through x=0.8 m. After 75 ticks x>0.8 m and maximum centre-line deviation was below 20 mm. |
+| 65-degree left bend, both stripes painted, `bend_expected=True` | Stopped before turn | `no_boundary` at about x=0.267 m, around 0.18 m before the vertex at x=0.45 m. A fitted bend candidate remained visible in the stopping frame. |
+
+Before the bend, `bend_ahead` limits a straight-on target. The right parallel boundary is detected through about x=0.260 m, then disappears from view. Only the bend line remains. [`bend_target`](../../../middleware/perception/control/sensing/perception/lane_keep_bend.py) holds when its centre line is still beyond the turn radius and no parallel side boundary supports the approach. This creates an approximately 0.18 m **observation gap**. A line trend or `bend_expected` alone does not complete the lap.
+
+Run from the repository root: `python -m pytest middleware/perception/test/test_lane_keep_closed_loop.py -q -rfE -p no:cacheprovider`. This run: **2 passed**. The first test is a positive host closed-loop case for a missing straight boundary. The second pins the current bend STOP location as a diagnostic; a passing test does not mean the bend was driven.
+
+A next logic candidate would require route bend context, the immediately preceding paired-boundary state, and repeated odometry-compensated observation of the bend line before extending a target for a distance limited by body clearance and stopping distance. It must first reject fork, transverse stripe, and wall counterexamples under the same camera geometry. The physical boundary identities, occlusion cause, and reappearance in the October 7 recording still lack D-475 human review, so they cannot become approved evaluation truth. The candidate is not wired into operational `keep`, and CORE remains the sole final `/cmd_vel` owner.
