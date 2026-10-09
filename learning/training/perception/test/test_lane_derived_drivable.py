@@ -89,6 +89,48 @@ def test_outside_band_width_and_stops():
     assert not (out == 0).any()
 
 
+def _perspective(left_until=200, right_until=200, wobble=0):
+    """Lines widen toward the bottom: right edge of lane_left 100-(y-110)/2, left edge of lane_right
+    220+(y-110)/2, 8 px wide; each drawn only down to its *_until row (then it has left the view)."""
+    image = np.random.default_rng(0).integers(60, 110, (240, 320, 3)).astype(np.uint8)
+    src = np.zeros((240, 320), np.uint8)
+    src[:110] = 255
+    for y in range(110, 240):
+        xl, xr = 100 - (y - 110) // 2 + (wobble if y % 2 else -wobble), 220 + (y - 110) // 2
+        if y <= left_until:
+            src[y, max(xl - 7, 0):xl + 1] = 1
+        if y <= right_until:
+            src[y, xr:xr + 8] = 2
+    return image, src
+
+
+def test_near_rows_extend_the_road_from_the_fitted_lines():
+    image, src = _perspective()
+    out, both = ldd.derive_mask(src, image)
+    assert both == 91
+    assert (out[230, 41:280] == ldd.DRIVABLE).all()  # 100-60 .. 220+60, extrapolated
+    assert (out[239, 0:320] != 0).all() and (out[230, :40] == 255).all()  # no band beside a missing line
+    out, _ = ldd.derive_mask(src, image, near=dict(ldd.NEAR, fit_rows=0))
+    assert not (out[201:] == ldd.DRIVABLE).any()
+
+
+def test_near_rows_use_the_visible_line_and_its_outside_band():
+    image, src = _perspective(right_until=239)
+    out, _ = ldd.derive_mask(src, image)
+    assert (out[230, 41:280] == ldd.DRIVABLE).all() and (out[230, 280:288] == 2).all()
+    assert (out[230, 288:] == 0).all()  # right line visible: its outside band holds
+    assert (out[230, :40] == 255).all()
+
+
+def test_near_extension_refused_on_a_bad_fit_or_narrow_road():
+    image, src = _perspective(wobble=6)
+    out, _ = ldd.derive_mask(src, image)
+    assert not (out[201:] == ldd.DRIVABLE).any()
+    image, src = _perspective()
+    out, _ = ldd.derive_mask(src, image, near=dict(ldd.NEAR, min_width=250))  # row 201 is ~210 wide
+    assert (out[200] == ldd.DRIVABLE).any() and not (out[201:] == ldd.DRIVABLE).any()
+
+
 def test_derive_needs_left_before_right():
     image, src = _frame(wall=False)
     src[110:, 40:50], src[110:, 270:280] = 2, 1
