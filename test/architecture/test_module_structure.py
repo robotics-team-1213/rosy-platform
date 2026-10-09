@@ -1064,10 +1064,11 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1239,
-        "accept: re-judged at 1239 on 2026-10-09 for D-548: the DEV prefix on the face strip and the status "
-        "line belongs to the process that draws them; zero growth allowance remains. "
-        "Previously re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
+        1265,
+        "accept: re-judged at 1265 on 2026-10-09 after merging D-552 with D-548 (the DEV prefix now rides the status bar on faces and card bars). Previously 1256 (+26) on 2026-10-09 for D-552 and its review (sound and reversing read from the record, the caution hold, the mixed-install fallback): the lamp, the status bar, the expression and the sound "
+        "now come from one core_common.presentation record, so the stage-only lamp fallback, the bar painter and one "
+        "record call replace the old lamp/strip calls here and every rule lives in core_common; zero growth allowance "
+        "remains. Previously re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
         "the e-stop clear and the reversing beep (D-546) and the bounded identity pulse with the normal lamp off "
         "(D-537) all stay with the one process that owns the buzzer and the lamp; zero growth allowance remains. "
         "Previously 1229 for D-546 and 1183 for D-472/D-537. Previously re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "
