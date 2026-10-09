@@ -10,6 +10,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -98,7 +99,7 @@ def switch(current: Path, target: Path) -> None:
 
 def install(source: Path | None, release: str, root: Path, state: Path | None,
             python: Path | None, host: str, port: int, unit: Path) -> Path:
-    if not release or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for char in release) or release in (".", ".."):
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", release) or release in (".", ".."):
         raise ValueError("release must be one safe path component")
     address = ipaddress.IPv4Address(host)
     allowed = ("127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
