@@ -185,8 +185,16 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        47_327,
-        "split: re-judged at 47327 on 2026-10-09 (author's record; NEEDS the independent re-judge with "
+        47_636,
+        "split: re-judged at 47636 on 2026-10-09 (independent re-judge, critic agent): D-540 3 (+183 over "
+        "main 47453) puts stuck decisions and the replan confirm inline in the queue rows (roster.js +102, "
+        "new web/trip-replan.js 92 calling the existing confirm-replan/cancel routes), one rail scroll and "
+        "collapsed robot cards; the old #stuck-panel and roster-toggle are removed, not left beside. No new "
+        "robot command path or package owner. site-map.js trip-confirm stays until D-540 step (e) removes it. "
+        "Next growth (D-540 step (d) trip controls on the card): first move attentionItems/attentionKey/"
+        "openDecisionKey/syncRows/fillQueues/setTriageHead and the line-stuck button helpers to "
+        "web/queues.js; roster.js keeps the card. +150 allowance unchanged, measured from 47636. Previously "
+        "re-judged at 47327 on 2026-10-09 (author's record; NEEDS the independent re-judge with "
         "the D-550 10 Safety-Review): D-550 10 goal lease adds +211 production lines over main 47116: "
         "the safety-tagged fleet/server/goal_lease.py (123, lease table, per-source renewal gates, send, "
         "cancel), +24 cli floor check, +24 background_workers renew loop and attempt check, +13 app "
