@@ -1,4 +1,4 @@
-"""D-457 2: corner markers win; an approved record is used only for its source, map, lens and aspect."""
+"""D-457 2, D-595: an approved record wins and is used only for its source, map, lens and aspect; corner markers only without one."""
 
 import json
 from pathlib import Path
