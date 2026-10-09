@@ -161,7 +161,7 @@
 
 - **남은 초(`signal_phase.forecast`).** 입구마다 `{lamp, left_s, green_in_s, exact}`. `left_s`는 지금 등이 남은 시간, `green_in_s`는 그 입구가 녹색이 될 때까지. 지금 등의 끝(`cycle`)만 정확(`exact`)하고, 다음 녹색은 구역이 비어야 켜지므로 늘 하한이다(화면 `≥7`). `hold`, 운영자 `all_red`는 시간을 모른다(None). 수동 녹색은 그 입구의 녹색까지만.
 - **로봇마다 다음 신호.** trip 로봇의 경로에서 다음 신호 구역: `{signal_id, approach, distance_m(앞 끝 → 정지선, 음수면 이미 안), may_enter(그 구역을 이미 허가로 쥠), lamp, left_s, green_in_s, exact, advisory: true, virtual: true}`. `GET /api/fleet/traffic/signals/ahead/{robot_id}`(viewer; 없으면 404 `SIGNAL_NONE_AHEAD`)와 `/api/fleet/traffic` 로봇 행의 `signal_ahead`.
-- **화면.** 정지선마다 T map 식 알약: 등 하나와 남은 초("적 7", 하한이면 "적 ≥7"), 주황(`--status-warn`) 점선 테두리와 위에 "가상" 글. 녹색 등은 실제 신호처럼 `--status-good`. 로봇 카드: 정지선 1.5 m 안이면 "가상 신호 sig_ring 적 · 녹색까지 ≥7 s · 정지선 0.40 m"(허가를 쥐었으면 "· 진입 허가").
+- **화면.** 입구마다 정지선 0.17 m 앞, 접근 차로 오른쪽 0.13 m(다가오는 로봇이 보는 자리)에 로봇 층 위로 T map 식 알약: 등 하나와 남은 초("적 7", 하한이면 "적 ≥7"), 주황(`--status-warn`) 점선 테두리와 위에 "가상" 글. 녹색 등은 실제 신호처럼 `--status-good`. 로봇 카드: 정지선 1.5 m 안이면 "가상 신호 sig_ring 적 · 녹색까지 ≥7 s · 정지선 0.40 m"(허가를 쥐었으면 "· 진입 허가").
 - **CORE가 묻는 길(다음 단계, 로봇 이미지 변경).** 지금 CORE→Fleet 연결(FleetAgent)은 HELLO·HEARTBEAT(1 s)·EVENT만 있다. (a) CORE가 페어링 토큰으로 위 REST를 부르거나, (b) Fleet이 로봇 heartbeat 답에 `signal_ahead`를 선택 필드로 싣는다. 사용자 결정 뒤 API Reference·공유 schema와 함께 연다.
 
 ### 개정 이력
