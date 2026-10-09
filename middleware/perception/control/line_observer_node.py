@@ -10,6 +10,7 @@ import math
 import os
 
 import cv2
+import numpy as np
 import rclpy
 import yaml
 from rclpy.node import Node
@@ -42,6 +43,7 @@ from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
+from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
@@ -95,6 +97,9 @@ class LineObserverNode(Node):
         # D-408: keep-mode paint source: threshold (default) | denoise | learned (+ denoise fallback).
         self.declare_parameter('paint_source', 'threshold', _READ_ONLY)
         self.declare_parameter('learned_lane_pointer', '', _READ_ONLY)
+        # D-NNN: what of the learned model's output becomes paint: its lane_marking classes (default), or
+        # the boundaries of the drivable way through its drivable class (lane_marking when it has none).
+        self.declare_parameter('learned_paint_target', 'lane_marking', _READ_ONLY)
         self.declare_parameter('learned_paint_stale_s', 0.6, _READ_ONLY)
         # D-408 CPU: infer on every Nth keep frame (the mask is reused in between), on 1 thread.
         self.declare_parameter('learned_paint_every_n', 2, _READ_ONLY)
@@ -389,7 +394,10 @@ class LineObserverNode(Node):
             raise ValueError(f"paint_source must be threshold, denoise or learned, got {source!r}")
         if source != 'learned':
             return None
-        from .sensing.perception.learned.paint_worker import LearnedPaintWorker
+        from .sensing.perception.learned.paint_worker import TARGETS, LearnedPaintWorker
+        target = str(self.get_parameter('learned_paint_target').value)
+        if target not in TARGETS:
+            raise ValueError(f"learned_paint_target must be one of {TARGETS}, got {target!r}")
         from .sensing.perception.learned.runner import LaneSegModel, ModelSlot, add_learned_site
         add_learned_site()
         pointer = str(self.get_parameter('learned_lane_pointer').value)
@@ -403,7 +411,7 @@ class LineObserverNode(Node):
             folder, threads=threads, allow_spinning=False)) if pointer else None
         return LearnedPaintWorker(slot,
                                   stale_s=float(self.get_parameter('learned_paint_stale_s').value),
-                                  warn=self.get_logger().warning)
+                                  warn=self.get_logger().warning, target=target)
 
     def _paint_for(self, frame, ground, stamp=None):
         """(paint mask or None, source actually used) for one keep frame (D-408)."""
@@ -425,12 +433,16 @@ class LineObserverNode(Node):
                 frame, every_n if motion is not None else reuse_n, stamp,
                 clean=lambda m: clean_learned_mask(m, ground.horizon_row),
                 motion=motion, max_age_s=float(self.get_parameter('learned_paint_max_age_s').value),
-                reuse_n=reuse_n)
+                reuse_n=reuse_n, clean_drivable=lambda way: clean_learned_mask(boundary_paint(
+                    way > 0, lateral_px_per_m(np.arange(way.shape[0]), focal_px=ground.focal_px,
+                                              principal_y=ground.principal_y, pitch_rad=ground.pitch_rad,
+                                              height_m=ground.height_m),
+                    self._paint_half_width_m), ground.horizon_row))
             reuse = self._paint_worker.reuse
             if compensate and motion is None and reuse and reuse['paint_warp_skipped'] == 'off':
                 reuse['paint_warp_skipped'] = 'no_odom'
             if mask is not None:
-                return mask, 'learned'
+                return mask, 'learned_drivable' if self._paint_worker.used_paint_kind == 'drivable' else 'learned'
         return denoise_white_mask(frame, ground.horizon_row), (
             'denoise' if source == 'denoise' else 'denoise_fallback')
 
@@ -534,8 +546,12 @@ class LineObserverNode(Node):
                               paint_source_used=paint_used,
                               paint_source_requested=str(self.get_parameter('paint_source').value),
                               paint_model_revision=(self._paint_worker.used_model_revision
-                                                    if paint_used == 'learned' and self._paint_worker is not None
-                                                    else None),
+                                                    if paint_used in ('learned', 'learned_drivable')
+                                                    and self._paint_worker is not None else None),
+                              paint_target_requested=(self._paint_worker.target
+                                                      if self._paint_worker is not None else None),
+                              paint_drivable=(self._paint_worker.used_drivable
+                                              if self._paint_worker is not None else None),
                               **((self._paint_worker.reuse or {}) if self._paint_worker is not None else {}),
                               image_size=[frame.shape[1], frame.shape[0]],
                               camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),

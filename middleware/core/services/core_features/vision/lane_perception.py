@@ -5,7 +5,9 @@ import json
 import math
 import threading
 
-_SOURCES = frozenset({"threshold", "denoise", "learned", "denoise_fallback"})
+_SOURCES = frozenset({"threshold", "denoise", "learned", "learned_drivable", "denoise_fallback"})
+#: D-NNN: the keeper's drivable-way paint is the learned model too; the API reports it as learned.
+_LEARNED = frozenset({"learned", "learned_drivable"})
 _EMPTY = dict(applied_paint_source=None, applied_model_revision=None, applied_source_age_s=None)
 
 
@@ -41,7 +43,7 @@ class LanePerceptionStore:
             if revision is not None and (not isinstance(revision, str) or not revision
                                          or revision.strip() != revision or len(revision) > 128):
                 raise ValueError("invalid model revision")
-            if doc["paint_source_used"] == "learned" and (requested != "learned" or revision is None):
+            if doc["paint_source_used"] in _LEARNED and (requested != "learned" or revision is None):
                 raise ValueError("learned source needs producer request and served-mask revision")
         except (ValueError, TypeError):
             self.clear()
@@ -50,7 +52,8 @@ class LanePerceptionStore:
             if self._entry is not None and (stamp <= self._entry["stamp"] or now < self._entry["at"]):
                 self._entry = None  # reset/reordered camera clock must not preserve old evidence
                 return False
-            self._entry = dict(source=doc["paint_source_used"], requested=requested,
+            source = "learned" if doc["paint_source_used"] in _LEARNED else doc["paint_source_used"]
+            self._entry = dict(source=source, requested=requested,
                                revision=revision, stamp=float(stamp), at=float(now))
         return True
 

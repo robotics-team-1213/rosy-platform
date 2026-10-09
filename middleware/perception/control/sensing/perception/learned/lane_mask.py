@@ -73,12 +73,32 @@ class LaneMaskEvidence:
 def preprocess(bgr: np.ndarray, spec: InputSpec) -> np.ndarray:
     if bgr.ndim != 3 or bgr.shape[2] != 3:
         raise ValueError("expected an HxWx3 BGR frame")
-    if bgr.shape[:2] != (spec.height, spec.width):
-        bgr = cv2.resize(bgr, (spec.width, spec.height), interpolation=cv2.INTER_AREA)
+    frame_h = spec.crop[0] if spec.crop is not None else spec.height
+    if bgr.shape[:2] != (frame_h, spec.width):
+        bgr = cv2.resize(bgr, (spec.width, frame_h), interpolation=cv2.INTER_AREA)
+    if spec.crop is not None:
+        bgr = bgr[spec.crop[2]:spec.crop[3]]
     img = bgr[..., ::-1] if spec.color == "rgb" else bgr
     x = img.astype(np.float32) * np.float32(spec.scale)
     x = (x - np.asarray(spec.mean, np.float32)) / np.asarray(spec.std, np.float32)
     return np.ascontiguousarray(x.transpose(2, 0, 1)[None])
+
+
+#: uncrop_logits: the background logit of rows outside an input crop (all others are 0).
+UNCROPPED_BACKGROUND_LOGIT = 1.0
+
+
+def uncrop_logits(logits: np.ndarray, spec: InputSpec, classes) -> np.ndarray:
+    """Logits of a cropped-input model (manifest `input.crop`) placed back on the full frame
+    grid: rows outside the crop are background (not predicted, so never lane or drivable).
+    Without a crop the logits are returned as they are."""
+    if spec.crop is None:
+        return logits
+    frame_h, _, row_from, row_to = spec.crop
+    out = np.zeros(logits.shape[:2] + (frame_h, logits.shape[3]), np.float32)
+    out[:, [c.index for c in classes if c.role == "background"][0]] = UNCROPPED_BACKGROUND_LOGIT
+    out[:, :, row_from:row_to] = logits
+    return out
 
 
 def _softmax(logits: np.ndarray) -> np.ndarray:
