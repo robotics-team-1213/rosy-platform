@@ -226,6 +226,7 @@ def test_training_moves_only_the_head_and_learns(tmp_path):
     near = result["val_near_centre_drivable"]  # left half drivable: cols 110-159 of 110-210
     assert near["label"] == pytest.approx(50 / 101) and near["pred"] > 0.8 * near["label"]
     assert result["val_outside_band_fp_raw"] is not None and result["val_near_centre_drivable_raw"]
+    assert result["val_beyond_line_fp"] is None  # no lane_left / lane_right classes in this set
     assert result["selection"]["fp_lambda"] == 1.0 and result["selection"]["pos_weight"] == 1.0
     best = next(r for r in result["history"] if r["epoch"] == result["best_epoch"])
     assert best["score"] == max(r["score"] for r in result["history"] if r["score"] is not None)

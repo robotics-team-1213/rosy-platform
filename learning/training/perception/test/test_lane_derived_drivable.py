@@ -11,7 +11,7 @@ import lane_derived_drivable as ldd
 
 def _frame(wall=True):
     """240x320: rows <110 ignored, lane_left col 40-49, lane_right col 270-279, wall right of it."""
-    image = np.random.default_rng(0).integers(60, 110, (240, 320, 3)).astype(np.uint8)  # textured carpet
+    image = np.repeat(np.random.default_rng(0).integers(60, 110, (240, 320, 1)), 3, axis=2).astype(np.uint8)  # textured carpet
     mask = np.zeros((240, 320), np.uint8)
     mask[:110] = 255
     mask[110:, 40:50] = 1
@@ -74,12 +74,12 @@ def test_rows_above_ignore_top_are_unknown_for_every_class():
 
 def test_outside_band_width_and_stops():
     """lane_left 100-109, lane_right 200-209: W 90, k 0.5 -> 45 px bands, then 255."""
-    image = np.random.default_rng(0).integers(60, 110, (240, 320, 3)).astype(np.uint8)
+    image = np.repeat(np.random.default_rng(0).integers(60, 110, (240, 320, 1)), 3, axis=2).astype(np.uint8)
     src = np.zeros((240, 320), np.uint8)
     src[110:, 100:110], src[110:, 200:210] = 1, 2
     src[150, 80], src[170, 90] = 3, 255  # a lane-class pixel stops the band; source 255 is skipped
     image[160, 230] = 220  # bright paint stops the band
-    out, _ = ldd.derive_mask(src, image)
+    out, _ = ldd.derive_mask(src, image, outside_k=0.5)
     assert (out[120, 55:100] == 0).all() and (out[120, :55] == 255).all()
     assert (out[120, 210:255] == 0).all() and (out[120, 255:] == 255).all()
     assert (out[150, 81:100] == 0).all() and (out[150, :80] == 255).all()
@@ -87,12 +87,33 @@ def test_outside_band_width_and_stops():
     assert out[170, 90] == 255 and (out[170, 55:90] == 0).all()
     out, _ = ldd.derive_mask(src, image, outside_k=0)
     assert not (out == 0).any()
+    out, _ = ldd.derive_mask(src, image)  # D-576 default k=inf: to the edge or the next stop
+    assert (out[120, :100] == 0).all() and (out[120, 210:] == 0).all()
+    assert (out[150, 81:100] == 0).all() and (out[150, :80] == 255).all()
+
+
+def test_outside_is_blocked_only_on_both_line_rows_d576():
+    """Rows 110-159 show only lane_right: their outer sides stay 255 (sheets4 review)."""
+    image = np.repeat(np.random.default_rng(0).integers(60, 110, (240, 320, 1)), 3, axis=2).astype(np.uint8)
+    src = np.zeros((240, 320), np.uint8)
+    src[160:, 100:110], src[110:, 200:210] = 1, 2
+    out, both = ldd.derive_mask(src, image)
+    assert both == 80 and (out[130] == np.where(src[130] == 2, 2, 255)).all()
+    assert (out[200, 110:200] == ldd.DRIVABLE).all() and (out[200, :100] == 0).all()
+    assert (out[200, 210:] == 0).all()
+
+
+def test_coloured_mat_inside_the_band_is_not_drivable():
+    image, src = _frame(wall=False)
+    image[200:220, 150:200] = (40, 40, 200)  # red mat (BGR), saturation ~204
+    out, _ = ldd.derive_mask(src, image)
+    assert (out[202:218, 152:198] == 255).all() and out[230, 150] == ldd.DRIVABLE
 
 
 def _perspective(left_until=200, right_until=200, wobble=0):
     """Lines widen toward the bottom: right edge of lane_left 100-(y-110)/2, left edge of lane_right
     220+(y-110)/2, 8 px wide; each drawn only down to its *_until row (then it has left the view)."""
-    image = np.random.default_rng(0).integers(60, 110, (240, 320, 3)).astype(np.uint8)
+    image = np.repeat(np.random.default_rng(0).integers(60, 110, (240, 320, 1)), 3, axis=2).astype(np.uint8)
     src = np.zeros((240, 320), np.uint8)
     src[:110] = 255
     for y in range(110, 240):
@@ -118,7 +139,9 @@ def test_near_rows_use_the_visible_line_and_its_outside_band():
     image, src = _perspective(right_until=239)
     out, _ = ldd.derive_mask(src, image)
     assert (out[230, 41:280] == ldd.DRIVABLE).all() and (out[230, 280:288] == 2).all()
-    assert (out[230, 288:] == 0).all()  # right line visible: its outside band holds
+    assert (out[230, 288:] == 255).all()  # near-extension row: outer side stays 255 (D-576)
+    out, _ = ldd.derive_mask(src, image, outside_k=0.5)
+    assert (out[230, 288:] == 0).all()  # a finite k keeps the item 10 band beside a visible line
     assert (out[230, :40] == 255).all()
 
 

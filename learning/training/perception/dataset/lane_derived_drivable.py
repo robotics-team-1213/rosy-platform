@@ -7,7 +7,7 @@ class 5 drivable. Labels are derived, never approved: evaluation_use is training
 so these masks are never D-475 evaluation truth.
 
   derive   --src DIR --out DIR [--min-both-rows 20] [--ignore-top 110] [--stripe-min 150]
-           [--outside-k 0.5] [--near-fit 30] [--near-max-resid 3] [--near-min-width 20]
+           [--outside-k inf] [--near-fit 30] [--near-max-resid 3] [--near-min-width 20]
            [--tool-commit SHA]   (required outside a git checkout, e.g. a git archive snapshot)
   sheets   --out DIR --dest DIR --key FILE [--per-sheet 20] [--seed S] [--canaries 0.1]
            numbered review sheets of every frame; canary tiles (known corruptions) listed only in
@@ -26,7 +26,11 @@ where lane_left and lane_right both exist and max(L) < min(R), source-0 pixels s
 become 5, except bright ones (gray >= stripe_min: unlabelled paint) which stay 255.
 Outside band negatives (0, D-554 item 9): on those rows, with W = min(R) - max(L) - 1, up to
 round(outside_k * W) pixels left of min(L) and right of max(R), walking outward and stopping at the
-first lane-class or bright pixel; only source-0 pixels become 0.
+first lane-class or bright pixel; only source-0 pixels become 0. D-576: outside_k defaults to inf
+(recorded as null): on those both-line rows the outside runs to the frame edge or the next
+lane/paint pixel, and near-extension rows (item 10) keep their outer sides 255.
+Coloured mats and kerbs (HSV saturation >= MAT min_sat with value >= min_val) inside the band
+stay 255, not drivable.
 Near extension (D-554 item 10): below the lowest qualifying row, where a line has left the frame,
 max(L) and min(R) are extrapolated from a linear fit over the lowest near_fit qualifying rows
 (skipped when either fit's RMS residual > near_max_resid px); an observed edge wins in its row.
@@ -47,6 +51,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
 
 SCHEMA = "rosy.lane-derived-drivable/1"
 ORIGIN = "derived_from_reviewed_lanes"
@@ -76,6 +81,10 @@ WALL = {"min_gray": 125, "max_std": 12.0, "window": 7, "min_area": 200}
 STRIPE_MIN = 150
 # Near-field extension: fit window (rows), max RMS fit residual (px), min road width (px).
 NEAR = {"fit_rows": 30, "max_resid": 3.0, "min_width": 20}
+# Coloured mats / kerbs are not road (sheets4 review 2026-10-09: 302 tiles "green on coloured mats").
+# 226 derived frames: drivable carpet saturation median 46, p90 112, with a separate tail from red/
+# blue/orange mats and yellow kerbs; 110 with value >= 50 (dark carpet has noisy saturation).
+MAT = {"min_sat": 110, "min_val": 50}
 APPROVAL_KEYS = ("approved", "approval", "mask_decision", "review_approved")
 VERDICTS = ("ok", "concern", "uncertain")
 MIN_CANARIES, MIN_CANARY_FRACTION, MIN_CANARY_RATE = 20, 0.08, 0.9
@@ -107,8 +116,8 @@ def _near_fits(rows, near):
     return fits
 
 
-def derive_mask(src, image, *, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN, outside_k=0.5,
-                near=NEAR):
+def derive_mask(src, image, *, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN, outside_k=math.inf,
+                near=NEAR, mat=MAT):
     """Source 5-class mask + BGR image -> (6-class mask, both_rows)."""
     out = np.full(src.shape, IGNORE, np.uint8)
     lane = (src >= 1) & (src <= 4)
@@ -119,9 +128,11 @@ def derive_mask(src, image, *, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN,
     outside = np.zeros(src.shape, bool)
     height, width_px = src.shape
 
-    def fill(row, xl, xr, left, right):
+    def fill(row, xl, xr, left, right, outer=True):
         band[row, max(xl + 1, 0):max(xr, 0)] = True
-        width = round(outside_k * (xr - xl - 1))
+        if not outer:
+            return
+        width = width_px if math.isinf(outside_k) else round(outside_k * (xr - xl - 1))
         if left.size:
             edge = left.min()
             n = _run(stop[row, max(edge - width, 0):edge][::-1])
@@ -146,8 +157,11 @@ def derive_mask(src, image, *, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN,
         xr = int(np.clip(right.min() if right.size else round(np.polyval(fits[1], row)), -1, width_px))
         if xr - xl - 1 < near["min_width"]:
             break
-        fill(row, xl, xr, left, right)
-    out[band & (src == 0) & (gray < stripe_min)] = DRIVABLE
+        # D-576: unbounded outside only on both-line rows; a finite k keeps item 10 behaviour.
+        fill(row, xl, xr, left, right, outer=not math.isinf(outside_k))
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    mat = (hsv[..., 1] >= mat["min_sat"]) & (hsv[..., 2] >= mat["min_val"])
+    out[band & (src == 0) & (gray < stripe_min) & ~mat] = DRIVABLE
     out[outside & (src == 0)] = 0
     k = (wall["window"], wall["window"])
     mean = cv2.blur(gray, k)
@@ -196,7 +210,7 @@ def _write_manifest(out, doc):
 
 
 def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN,
-           outside_k=0.5, near=NEAR, tool_commit=None):
+           outside_k=math.inf, near=NEAR, tool_commit=None):
     src, out = Path(src), Path(out)
     if out.exists():
         raise ValueError("new output directory required")
@@ -243,7 +257,8 @@ def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL, stripe_min=
                       "dataset_revision": source.get("dataset_revision")},
            "tool": {"name": "lane_derived_drivable.py", "git_commit": tool_commit},
            "params": {"min_both_rows": min_both_rows, "ignore_top": ignore_top, "wall": dict(wall),
-                      "stripe_min": stripe_min, "outside_k": outside_k,
+                      "stripe_min": stripe_min, "outside_k": None if math.isinf(outside_k) else outside_k,
+                      "outside_rows": "both lines visible (D-576)", "mat": dict(MAT),
                       "near": dict(near)},
            "classes": CLASSES, "ignore_index": IGNORE, "skipped_frames": skipped, "frames": frames}
     return _write_manifest(out, doc), doc
@@ -585,7 +600,7 @@ def main(argv=None):
     p.add_argument("--min-both-rows", type=int, default=20)
     p.add_argument("--ignore-top", type=int, default=110)
     p.add_argument("--stripe-min", type=int, default=STRIPE_MIN)
-    p.add_argument("--outside-k", type=float, default=0.5)
+    p.add_argument("--outside-k", type=float, default=math.inf, help="inf (default, D-576): to the edge")
     p.add_argument("--near-fit", type=int, default=NEAR["fit_rows"], help="0 disables near extension")
     p.add_argument("--near-max-resid", type=float, default=NEAR["max_resid"])
     p.add_argument("--near-min-width", type=int, default=NEAR["min_width"])

@@ -15,7 +15,8 @@ class, the inner half of each lane_left / lane_right run that touches drivable
 in its row is drivable target too (lane_left: centre to right edge,
 lane_right: left edge to centre). Models without drivable are unchanged.
 Before that union, drivable is cut to the region reachable from the robot's
-road ahead without crossing a lane line (D-566 item 4, lane_bounded_drivable).
+road ahead without crossing a lane line (D-566 item 4, lane_bounded_drivable),
+with everything beyond lane_left / lane_right blocked on rows showing both (D-576).
 Target components smaller than MIN_COMPONENT_PX are dropped before any of
 that: in the 2026-10-02 audit speckle took `visible` from 0.896 to 1.000 and
 offset jitter up 31 %; the filter brought it back to 0.885 and +1 %.
@@ -38,13 +39,19 @@ DRIVABLE_MIN_FRACTION = 0.02
 #: 320x240 model input, the same floor as lane_keep_lines.DENOISE_MIN_AREA_PX.
 MIN_COMPONENT_PX = 40
 #: lane_bounded_drivable: going up, a row's filled span may be at most this many
-#: times the narrowest span below it (not just the row below, or 1.15 per row
-#: compounds through a line gap), so a gap cannot leak the fill sideways.
+#: times the widest unclipped span of the CLAMP_ROWS rows below it, so a gap in
+#: a line cannot leak the fill sideways. Clipped rows never become the reference
+#: (or 1.15 per row compounds through the gap), and a window rather than the
+#: narrowest row keeps one noisy narrow row from choking the road above (v13.1.01
+#: val 2026-10-09: near-centre 0.65 -> 0.15 with a narrowest-row reference).
 #: Perspective narrows the road upward; 1.15 leaves room for curves.
 MAX_ROW_GROWTH = 1.15
-#: Seed search depth: the drivable pixel nearest the centre column within this
-#: many rows of the lowest drivable row.
-SEED_ROWS = 8
+CLAMP_ROWS = 10
+#: Seed search depth: rows above the lowest drivable row in which the seed
+#: region is chosen: the centre column's, or when a line covers the centre
+#: column there the one with most drivable pixels (D-576: a line across the
+#: bottom centre must not leave the fill in a sliver beside it).
+SEED_ROWS = 15
 #: Shadow `visible` latch on confidence (audit 2026-10-02): on at 0.35, off below 0.25.
 VISIBLE_ENTER = 0.35
 VISIBLE_EXIT = 0.25
@@ -96,53 +103,84 @@ def _row_runs(passable: np.ndarray, touch: np.ndarray) -> np.ndarray:
     return np.isin(run, hit[hit > 0])
 
 
+def beyond_boundary(labels: np.ndarray, left_idx: int, right_idx: int) -> np.ndarray:
+    """D-576 per-row rule: on rows showing both lines with max(lane_left) < min(lane_right),
+    the pixels left of the leftmost lane_left and right of the rightmost lane_right.
+
+    Endpoint extensions of the lines were tried first and cut the robot's own road at V corners,
+    far line ends and crosswalks (sheets4 review, 2026-10-09), so other rows are left alone."""
+    cols = np.arange(labels.shape[-1])
+    left, right = labels == left_idx, labels == right_idx
+    has = left.any(-1) & right.any(-1)
+    first = np.where(left.any(-1), left.argmax(-1), -1)
+    last = np.where(right.any(-1), labels.shape[-1] - 1 - right[..., ::-1].argmax(-1), labels.shape[-1])
+    max_left = np.where(left.any(-1), labels.shape[-1] - 1 - left[..., ::-1].argmax(-1), -1)
+    min_right = np.where(right.any(-1), right.argmax(-1), labels.shape[-1])
+    rows = (has & (max_left < min_right))[..., None]
+    return rows & ((cols < first[..., None]) | (cols > last[..., None]))
+
+
 def lane_bounded_drivable(labels: np.ndarray, drivable_idx: int, lane_idxs, *, ignore_top: int = 0,
-                          through_idxs=(), max_row_growth: float = MAX_ROW_GROWTH) -> np.ndarray:
+                          through_idxs=(), max_row_growth: float = MAX_ROW_GROWTH,
+                          boundary: tuple[int, int] | None = None) -> np.ndarray:
     """Drivable pixels 4-connected to the road ahead without entering a lane pixel (D-566 item 4).
 
-    Seed: the drivable pixel nearest the centre column in the lowest SEED_ROWS rows that hold
-    drivable. The fill walks up and down from the seed row, row by row, keeping runs of passable
-    pixels (drivable, or through_idxs such as crosswalk paint, never lane_idxs) that touch the
-    kept run of the neighbouring row. Going up, a row wider than max_row_growth x the narrowest
-    span below keeps only its run nearest the middle of the row below, clipped around it. Returns a bool mask of drivable pixels only."""
+    Seed region: within the lowest SEED_ROWS rows that hold drivable, the region of the centre
+    column's lowest drivable pixel, or when the centre column has none there (a line covers it)
+    the region with most drivable pixels in those rows; seed at its pixel nearest the centre
+    column. Region: the seed's 4-connected component of passable pixels (drivable, or
+    through_idxs such as crosswalk paint, never lane_idxs). Going up from the seed row, a region
+    row wider than max_row_growth x the widest unclipped span of the CLAMP_ROWS rows below keeps
+    only its run nearest the middle of the row below, clipped around it (the first CLAMP_ROWS
+    rows above the seed only build that reference). Below the seed row, runs
+    touching the row above are kept. boundary=(lane_left, lane_right) first blocks what lies
+    beyond those lines on rows showing both (beyond_boundary, D-576). Returns a bool mask of
+    drivable pixels only."""
     drivable = labels == drivable_idx
     passable = (drivable | np.isin(labels, list(through_idxs))) & ~np.isin(labels, list(lane_idxs))
+    if boundary is not None:
+        passable &= ~beyond_boundary(labels, *boundary)
     passable[:ignore_top] = False
     out = np.zeros(labels.shape, bool)
     rows = np.flatnonzero((drivable & passable).any(axis=1))
     if not rows.size:
         return out
-    centre = (labels.shape[1] - 1) / 2.0
-    ys, xs = np.nonzero(drivable[max(rows.max() - SEED_ROWS + 1, 0):rows.max() + 1] & passable[
-        max(rows.max() - SEED_ROWS + 1, 0):rows.max() + 1])
-    pick = np.argmin(np.abs(xs - centre))
-    seed_row = int(ys[pick]) + max(rows.max() - SEED_ROWS + 1, 0)
-    seed = np.zeros(labels.shape[1], bool)
-    seed[xs[pick]] = True
-    out[seed_row] = _row_runs(passable[seed_row], seed)
+    low = max(rows.max() - SEED_ROWS + 1, 0)
+    _, comp = cv2.connectedComponents(passable.astype(np.uint8), connectivity=4)
+    ys, xs = np.nonzero(drivable[low:rows.max() + 1] & passable[low:rows.max() + 1])
+    ids = comp[ys + low, xs]
+    centre = ids[xs == labels.shape[1] // 2]
+    # The centre column's region when the robot's front is drivable there; when a line covers it,
+    # the region with most drivable pixels in the seed rows (D-576, drive frame 32).
+    best = centre[np.argmax(ys[xs == labels.shape[1] // 2])] if centre.size else np.bincount(ids).argmax()
+    pick = np.flatnonzero(ids == best)[np.argmin(np.abs(xs[ids == best] - (labels.shape[1] - 1) / 2.0))]
+    seed_row, seed_col = int(ys[pick]) + low, int(xs[pick])
+    region = comp == best
     cols = np.arange(labels.shape[1])
-    for step, stop in ((-1, ignore_top - 1), (1, labels.shape[0])):
-        below = out[seed_row]
-        narrowest = np.inf
-        for row in range(seed_row + step, stop, step):
-            keep = _row_runs(passable[row], below)
+    out[seed_row] = _row_runs(passable[seed_row], cols == seed_col)
+    below, recent = out[seed_row], []
+    for row in range(seed_row - 1, ignore_top - 1, -1):
+        warm = len(recent) < CLAMP_ROWS
+        # The first CLAMP_ROWS rows only build the reference (one seed row can be a sliver), from
+        # the runs touching the row below so an off-road strip joined further up stays out.
+        keep = _row_runs(region[row], below) if warm else region[row].copy()
+        kept = np.flatnonzero(keep)
+        if not kept.size:
+            break
+        width = max_row_growth * max(recent[-CLAMP_ROWS:]) if not warm else np.inf
+        if kept[-1] - kept[0] + 1 <= width:
+            recent.append(int(kept[-1] - kept[0]) + 1)
+        else:  # too wide: the one run nearest the middle of the row below, then clip around it
+            span = np.flatnonzero(below)
+            mid = (span[0] + span[-1]) / 2.0
+            keep = _row_runs(keep, cols == kept[np.argmin(np.abs(kept - mid))])
+            keep &= np.abs(cols - mid) <= width / 2.0
             if not keep.any():
                 break
-            if step < 0:
-                span = np.flatnonzero(below)
-                narrowest = min(narrowest, span[-1] - span[0] + 1)
-                width = max_row_growth * narrowest
-                mid = (span[0] + span[-1]) / 2.0
-                kept = np.flatnonzero(keep)
-                if kept[-1] - kept[0] + 1 > width:  # too wide: first the one run nearest mid,
-                    keep = _row_runs(keep, cols == kept[np.argmin(np.abs(kept - mid))])
-                    kept = np.flatnonzero(keep)
-                if kept[-1] - kept[0] + 1 > width:  # then clip that run around mid
-                    keep &= np.abs(cols - mid) <= width / 2.0
-                    if not keep.any():
-                        break
-            out[row] = keep
-            below = keep
+        out[row] = below = keep
+    below = out[seed_row]
+    for row in range(seed_row + 1, labels.shape[0]):
+        below = out[row] = _row_runs(passable[row], below)
     return out & drivable
 
 
@@ -195,8 +233,10 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...], *,
         roles = {}
         for c in classes:
             roles.setdefault(c.role, []).append(c.index)
-        drivable = lane_bounded_drivable(band_labels, roles["drivable"][0], roles.get("lane_marking", ()),
-                                         through_idxs=roles.get("ignore", ()))
+        names = {c.name: c.index for c in classes}
+        drivable = lane_bounded_drivable(
+            band_labels, roles["drivable"][0], roles.get("lane_marking", ()), through_idxs=roles.get("ignore", ()),
+            boundary=(names["lane_left"], names["lane_right"]) if {"lane_left", "lane_right"} <= set(names) else None)
     target = _drop_small(_with_inner_line_half(drivable & ~wall, band_labels, classes),
                          min_component_px)
     if target.mean() < DRIVABLE_MIN_FRACTION:

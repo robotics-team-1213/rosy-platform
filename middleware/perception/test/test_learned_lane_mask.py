@@ -269,3 +269,57 @@ def test_lane_bounded_growth_clamp_stops_a_leak_through_a_line_gap():
     out = lane_bounded_drivable(labels, 5, [1, 2], ignore_top=110, through_idxs=[3])
     assert out[150, 150] and not out[202, 150]
 
+
+def test_beyond_both_lines_is_blocked_only_on_rows_showing_both_d576():
+    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+
+    labels = np.full((240, 320), 5, np.int64)
+    labels[:110] = 0
+    labels[110:, 100:110], labels[160:, 210:220] = 1, 2  # lane_right only from row 160 down
+    out = lane_bounded_drivable(labels, 5, [1, 2], ignore_top=110, boundary=(1, 2))
+    assert out[200, 110:210].all() and not out[200, :100].any() and not out[200, 220:].any()
+    assert out[130, 150]  # the road above lane_right's top is still the road
+
+
+def test_v_corner_and_crosswalk_keep_the_own_road_d576():
+    """A lane_left that turns into a V corner above the road, and a crosswalk row across it,
+    must not cut the robot's own road (sheets4 tiles T0006, T0413)."""
+    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+
+    labels = np.full((240, 320), 5, np.int64)
+    labels[:110] = 0
+    labels[150:, 100:110], labels[150:, 210:220] = 1, 2
+    for x in range(100, 220):  # V corner: lane_left bends right across the top of the road
+        labels[150 - (x - 100) // 8: 152 - (x - 100) // 8, x] = 1
+    labels[200:206, 110:210] = 3  # crosswalk paint across the road
+    out = lane_bounded_drivable(labels, 5, [1, 2], ignore_top=110, through_idxs=[3], boundary=(1, 2))
+    assert out[230, 110:210].all() and out[180, 110:210].all() and out[160, 150]
+
+
+def test_line_across_the_bottom_centre_seeds_the_larger_side_d576():
+    """Drive frame 32 (2026-10-09): lane_left covers the bottom centre and slants up-left; the
+    floor left of it is mostly not drivable, so the road is the larger region on the right."""
+    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+
+    labels = np.full((240, 320), 5, np.int64)
+    labels[:110] = 0
+    labels[180:, :60] = 0
+    for y in range(150, 240):  # 20 px wide line, x 150-169 at the bottom, 1.2 px left per row up
+        x = 150 - int(1.2 * (239 - y))
+        labels[y, max(x, 0):max(x + 20, 0)] = 1
+    out = lane_bounded_drivable(labels, 5, [1, 2], ignore_top=110, boundary=(1, 2))
+    assert out[230, 250] and out[200, 250] and out[130, 160]
+    assert not out[230, 100:150].any()  # the sliver beside the line on the left is not the road
+
+
+def test_beyond_boundary_marks_only_rows_with_both_lines():
+    from control.sensing.perception.learned.lane_mask import beyond_boundary
+
+    labels = np.zeros((3, 320), np.int64)
+    labels[0, 50:60], labels[0, 250:260] = 1, 2
+    labels[1, 250:260] = 2  # lane_right only
+    labels[2, 250:260], labels[2, 20:30] = 1, 2  # lane_right left of lane_left: not a road row
+    beyond = beyond_boundary(labels, 1, 2)
+    assert beyond[0, :50].all() and not beyond[0, 50:260].any() and beyond[0, 260:].all()
+    assert not beyond[1].any() and not beyond[2].any()
+

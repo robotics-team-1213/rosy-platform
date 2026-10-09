@@ -533,6 +533,7 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
                                              {k: inputs["lane_derived"][k] for k in ("annotation_origin", "adr")}),
                          val_iou={"drivable": metrics["val_drivable_iou_all"]},
                          metrics={k: metrics[k] for k in ("val_outside_band_fp", "val_outside_band_fp_raw",
+                                                          "val_beyond_line_fp", "val_beyond_line_fp_raw",
                                                           "val_near_centre_drivable",
                                                           "val_near_centre_drivable_raw", "selection")},
                          experiment={"tracker": "local", "run_id": out.name,
