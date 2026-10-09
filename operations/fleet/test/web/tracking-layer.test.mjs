@@ -90,7 +90,7 @@ test("a configured marker is drawn without a CORE map pose", () => {
   assert.equal(out.robots.length, 1);
   assert.equal(out.robots[0].pose, null);
   assert.equal(out.robots[0].measured, true);
-  assert.equal(offsetLabel(out.robots[0]), "rosy_01 · 마커 관측");
+  assert.equal(offsetLabel(out.robots[0]), "rosy_01");
 });
 
 test("map coordinates retain signs, metres and measured versus inferred provenance", () => {

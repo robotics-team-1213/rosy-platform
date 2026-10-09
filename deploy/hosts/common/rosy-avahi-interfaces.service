@@ -5,6 +5,7 @@ After=local-fs.target
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
 ExecStart=/usr/bin/python3 /usr/local/sbin/rosy-avahi-interfaces
 
 [Install]

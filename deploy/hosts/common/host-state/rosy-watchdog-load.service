@@ -1,0 +1,13 @@
+[Unit]
+Description=Load the iTCO hardware watchdog (kmod deny-lists it; modules-load.d cannot) (D-530)
+DefaultDependencies=no
+After=systemd-modules-load.service
+Before=sysinit.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/modprobe iTCO_wdt
+
+[Install]
+WantedBy=sysinit.target
