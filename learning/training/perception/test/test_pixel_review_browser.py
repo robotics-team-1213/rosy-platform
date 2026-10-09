@@ -39,6 +39,14 @@ def test_review_workspace_purpose_stays_visible_on_photo_change(tmp_path):
         expect(page.locator('#pixel-preparation')).to_be_hidden()
 
 
+def test_short_desktop_view_keeps_entire_photo_in_view(browser_workspace):
+    page, store, expect = browser_workspace
+    page.set_viewport_size({'width': 1262, 'height': 632})
+    open_pixels(page, store, expect)
+    canvas = page.locator('#pixel-canvas').bounding_box()
+    assert canvas and canvas['y'] + canvas['height'] <= 632
+
+
 def test_detail_view_and_mask_toggle_do_not_change_review(tmp_path):
     with serve(bright_store(tmp_path)) as (page, store, expect):
         open_pixels(page, store, expect)
