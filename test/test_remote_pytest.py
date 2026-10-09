@@ -95,12 +95,15 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
     try:
         (jobs / "live.lock").write_text(f"{live.pid} pytest 2 6\n")
         (jobs / "dead.lock").write_text("999999999 sim 6 8\n")
+        (jobs / "odd.lock").write_text(f"{live.pid} sim 6 7.5\n")  # counts 0, does not abort
+        (jobs / "evil.lock").write_text(f"{live.pid} sim a[$(touch {jobs}/pwned)] 1\n")
         script = rp.PROBE.replace("J=~/rosy-jobs", f"J={shlex.quote(str(jobs))}")
         fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()
     finally:
         live.kill()
     assert len(fields) == 9 and fields[-2:] == ["2", "6"]
     assert not (jobs / "dead.lock").exists() and (jobs / "live.lock").exists()
+    assert not (jobs / "pwned").exists()
 
 
 def test_site_pc_pytest_gets_a_cpu_quota(monkeypatch, tmp_path):

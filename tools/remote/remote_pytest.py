@@ -130,6 +130,7 @@ exec systemd-run --user --scope -q -p MemoryMax=6G ${CPU:+-p CPUQuota=$CPU} -- \
 PROBE = r"""J=~/rosy-jobs; c=0; m=0
 for f in "$J"/*.lock; do
   [ -e "$f" ] || continue; read -r pid _ fc fm < "$f" || true
+  case "$fc$fm" in ''|*[!0-9]*) fc=0 fm=0;; esac  # whole numbers only; never evaluate file text
   if kill -0 "$pid" 2>/dev/null; then c=$((c+${fc:-0})); m=$((m+${fm:-0})); else rm -f "$f"; fi
 done
 py=0; for p in /usr/bin/python3 ~/.local/bin/python3.12; do
