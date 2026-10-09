@@ -503,6 +503,32 @@ def test_sidecar_row_takes_the_camera_line_even_when_an_ir_line_is_logged_first(
     assert row["side"]["line/observation"]["n"] == "cam"
 
 
+def test_camera_telemetry_matches_source_frame_stamp_and_keeps_profile_revision():
+    assert b2v._side_name('/rosy_01/camera/telemetry') == 'camera/telemetry'
+    frames = [{'log_ns': 1_000_000_000, 'stamp_ns': 1_000_000_000},
+              {'log_ns': 1_100_000_000, 'stamp_ns': 1_100_000_000}]
+    side = {'camera/telemetry': ([1_020_000_000, 1_120_000_000],
+                                 [{'stamp': 1.1, 'profile_revision': 'wrong-frame'},
+                                  {'stamp': 1.1, 'profile_revision': 'cam-v2'}])}
+    first, second = b2v.sidecar_rows(frames, side, 0.5)
+    assert first['side']['camera/telemetry'] is None
+    assert second['side']['camera/telemetry']['profile_revision'] == 'cam-v2'
+
+
+def test_camera_ground_status_uses_past_message_and_expires_after_publisher_gap():
+    name = 'camera/calibration/status'
+    assert b2v._side_name('/rosy_01/' + name) == name
+    frames = [{'log_ns': int(t * 1e9), 'stamp_ns': int(t * 1e9)}
+              for t in (1.0, 1.6, 3.5, 3.7, 3.9)]
+    side = {name: ([1_100_000_000, 3_800_000_000],
+                   [{'mode': 'homography', 'active': True, 'source_sha256': 'a' * 64},
+                    {'mode': 'nominal', 'active': False, 'source_sha256': ''}])}
+    rows = list(b2v.sidecar_rows(frames, side, 0.5))
+    assert [row['side'][name]['active'] if row['side'][name] else None for row in rows] == [
+        None, True, True, None, False]
+    assert rows[2]['dt'][name] == pytest.approx(-2.4)
+
+
 def test_ir_range_attaches_the_latest_sample_and_ignores_a_bad_array():
     assert b2v._side_name("/rosy_01/ir_sensor/range") == "ir_sensor/range"
     assert b2v._side_name("/rosy_01/us_sensor/range") is None

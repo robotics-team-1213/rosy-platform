@@ -79,7 +79,7 @@ def test_mobile_topbar_wraps_without_overlapping_brand_navigation_or_stop():
     assert result["estop"]["right"] <= 390
 
 
-def test_mobile_console_puts_controls_before_long_sensor_and_map_panels():
+def test_mobile_console_puts_navigation_before_controls_and_camera():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = _page(browser, 390, 844)
@@ -89,7 +89,7 @@ def test_mobile_console_puts_controls_before_long_sensor_and_map_panels():
         )""")
         browser.close()
 
-    assert positions["act"] < positions["sense"] < positions["observe"]
+    assert positions["observe"] < positions["act"] < positions["sense"]
 
 
 def test_desktop_console_keeps_three_regions_and_active_controls_inside_viewport():

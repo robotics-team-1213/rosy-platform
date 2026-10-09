@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
-- 2026-10-08 · uncommitted · fix(api): D-517 M2 통행권의 API Ref 번호를 v1.143으로 옮김
-- 2026-10-08 · 887abb1a9 · feat(core): D-517 M2 능력 line_follow_authority_required
-- 2026-10-08 · b570504a2 · feat(api): POST /line-follow/authority, 능력 line_follow_authority, v1.142
-- 2026-10-08 · uncommitted · fix(api): D-507 보충 굽이 지시의 API Ref 번호를 v1.142로 옮김
-- 2026-10-08 · uncommitted · fix(api): D-507 보충 굽이 지시의 API Ref 번호를 v1.141로 옮김
+- 2026-10-09 · uncommitted · docs(core): 화면 코드 승인 409 수정의 gate 기록 보완 (D-483)
+- 2026-10-09 · uncommitted · fix(core): LCD hand-over에 CA 확인 값 (D-483 보완)
+- 2026-10-09 · uncommitted · fix(api): Fleet 공개 신원 조회 예산 분리
+- 2026-10-09 · uncommitted · fix(api): 램프 식별 결과 조회
+- 2026-10-08 · uncommitted · test(api): Console 지도 증거 라우터 쿼리 보존

@@ -15,6 +15,11 @@ from types import SimpleNamespace
 
 import pytest
 
+# CI runs as root in its container; a non-root POSIX host (the shared test PCs) cannot.
+# Windows keeps its existing behaviour.
+REQUIRES_ROOT = pytest.mark.skipif(os.name == "posix" and os.geteuid() != 0,
+                                   reason="needs root: fchown of the hand-over file to its group needs root")
+
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/pinky_pro/native"
 IMAGE = ROOT / "deploy/robot/pinky_pro/image"
@@ -545,6 +550,7 @@ def test_group_and_mode_are_set_before_any_byte_is_written(tmp_path, monkeypatch
     assert all(position == 0 and size == 0 for _name, position, size in seen)
 
 
+@REQUIRES_ROOT
 def test_closing_or_failing_the_ap_removes_the_handoff(tmp_path, monkeypatch):
     network = _network()
     monkeypatch.setattr(network, "_display_gid", lambda: 0)
@@ -1504,6 +1510,26 @@ def test_identity_pulse_is_owned_by_face_and_requires_fresh_safe_state(tmp_path)
     assert spawn.patterns == ["ready", "identify_blue", "ready"]
 
 
+def test_identity_pulse_temporarily_uses_a_disabled_normal_lamp(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+    spawn = FakeSpawn(code=0)
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    lamp.enabled = False
+    display.step()
+    assert spawn.patterns == []
+    display._core = lambda: {"estop": False, "robot_mode": "IDLE", "nav_state": "IDLE", "caution": []}
+
+    _hand_over(tmp_path, "identify_blue")
+    assert display.handle_test() == "done"
+    assert spawn.patterns == ["identify_blue"]
+    assert lamp.enabled is False
+    display.step()
+    assert spawn.patterns == ["identify_blue"]
+    assert lamp.pattern == "ready"
+
+
 def test_identity_pulse_runs_on_a_moving_robot_and_restores_its_drive_pattern(tmp_path):
     # D-472 addendum 5: Fleet asks moving robots; the blink stands in for the drive pattern.
     module = _display()
@@ -2133,6 +2159,23 @@ def test_every_card_renders_on_the_panel_size(screen):
     image = render({"stage": "CORE_READY", "device_name": "rosy-pinky-e4us", "screen": screen})
 
     assert image.size == (320, 240)
+
+
+def test_the_peer_request_card_draws_the_ca_digest_the_tablet_asks_for(monkeypatch):
+    # First contact asks the requester to compare the CA digest; the LCD shows its first 16 digits.
+    module = _display()
+    info_screen = _info_screen()
+    drawn = []
+    real = info_screen.render_notice
+    monkeypatch.setattr(info_screen, "render_notice", lambda title, lines, **kw: drawn.append(list(lines)) or real(title, lines, **kw))
+    render = module.card_renderer(info_screen)
+    peer = {"requests": [{"display_code": "K7QM", "approval_code": "ABC234"}]}
+
+    render({"stage": "CORE_READY", "screen": {"kind": "status", "row": "peer_request",
+                                              "peer": dict(peer, tls_ca_sha256="0123456789abcdef" + "f" * 48)}})
+    render({"stage": "CORE_READY", "screen": {"kind": "status", "row": "peer_request", "peer": peer}})
+
+    assert drawn == [["K7QM  ABC234", "CA 0123 4567 89ab cdef"], ["K7QM  ABC234"]]
 
 
 def test_the_strip_paints_only_its_band():

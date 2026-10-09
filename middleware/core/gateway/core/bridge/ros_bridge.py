@@ -513,10 +513,11 @@ class RosBridge:
     def _on_map(self, msg: OccupancyGrid) -> None:
         try:
             grid = translate.grid_from_occupancy(msg)
-            self._svc.maps.set_map(grid)
             current = self._svc.state.map_id
-            if current is None or str(current).startswith("occupancy:"):
-                self._svc.state.set_map_id(occupancy_map_id(grid))
+            map_id = occupancy_map_id(grid) if current is None or str(current).startswith("occupancy:") else current
+            self._svc.maps.set_map(grid, map_id=map_id)
+            if map_id != current:
+                self._svc.state.set_map_id(map_id)
         except ValueError as exc:
             self._node.get_logger().warning(f"ignored occupancy map: {exc}")
 

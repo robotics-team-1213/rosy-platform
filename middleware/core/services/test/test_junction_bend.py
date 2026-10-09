@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from core_features.line_follow.recovery.junction import JunctionRefused
+from core_features.line_follow.recovery.junction.gate import JunctionRefused
 from test_junction_turn_site_basis import SITE, site_rig, site_step
 from test_line_junction import BODY, Rig
 
@@ -197,6 +197,113 @@ def test_next_junction_seen_after_the_arc_ends_the_pass():
     until(rig, 'reacquiring')
     decision, status = site_step(rig, move=True, seen=False, junction=True)
     assert status.junction.state == 'idle' and status.junction.seq == 1
+
+
+def sight(rig, ahead):
+    """The keeper's junction HOLD with its measured cross line, in the next rig tick's frame."""
+    rig.m.observe_junction('junction_transverse', round(rig.now+.05, 6), ahead_m=ahead, ahead_v=1)
+
+
+def bend_sighting_line_ahead(rig, ahead=.4):
+    """Drive into the arc, sight the next junction's line once mid-arc (lap SIM A: 0.39-0.45 m
+    ahead, inside the pass), then let the keeper stop reporting it (it reads a corner)."""
+    until(rig, 'bending')
+    for _ in range(3):
+        site_step(rig, move=True)
+    sight(rig, ahead)
+    site_step(rig, move=True)
+    trail = rig.m._return_evidence.trail
+    return trail.odometer + ahead  # the line, on the odometer
+
+
+def test_a_line_sighted_during_the_pass_is_handed_to_the_junction_and_waits():
+    """Lap SIM A (11/20): the sighting must outlive the arc end; the pass ends in 'waiting' (HOLD)."""
+    rig = armed_rig()
+    bend_sighting_line_ahead(rig)
+    for _ in range(200):
+        decision, status = site_step(rig, move=True)
+        if status.junction.state not in ('bending', 'reacquiring'):
+            break
+    assert (status.junction.state, status.junction.seq) == ('waiting', 1)
+    assert (decision.linear, decision.angular) == (0., 0.) and status.reason == 'junction_waiting'
+
+
+def test_the_next_turn_takes_the_handed_over_sighting_without_a_new_one():
+    """No fresh sighting after the pass (the keeper reads the line as a corner): the instruction
+    still finds its junction in the window and stops to turn instead of following the keeper."""
+    rig = armed_rig()
+    line = bend_sighting_line_ahead(rig)
+    until(rig, 'waiting')
+    pivot = .1
+    expect_in = line-rig.m._return_evidence.trail.odometer+pivot
+    assert rig.m.set_junction('right', 'J1', 10., None, -90., None, expect=dict(
+        map_id='lab-a', expect_in_m=expect_in, expect_tol_m=.1, pivot_past_line_m=pivot))[2] == 'armed'
+    decision, status = site_step(rig, move=True)
+    assert status.junction.state in ('turning', 'approaching') and decision.angular == 0.
+    assert status.reason in ('junction_stopping', 'junction_approaching')
+
+
+def test_a_handed_over_line_outside_the_window_holds_unexpected():
+    rig = armed_rig()
+    line = bend_sighting_line_ahead(rig)
+    until(rig, 'waiting')
+    rig.m.set_junction('right', 'J1', 10., None, -90., None, expect=dict(
+        map_id='lab-a', expect_in_m=line-rig.m._return_evidence.trail.odometer+.5, expect_tol_m=.1,
+        pivot_past_line_m=.1))
+    decision, status = site_step(rig, move=True)
+    assert (decision.linear, status.junction.state) == (0., 'unexpected')
+
+
+def test_a_straight_through_a_handed_over_line_ends_once_odom_passes_it():
+    rig = armed_rig()
+    line = bend_sighting_line_ahead(rig, ahead=.3)
+    until(rig, 'waiting')
+    rig.m.set_junction('straight', 'J1', 10., None, None, None, expect=dict(
+        map_id='lab-a', expect_in_m=line-rig.m._return_evidence.trail.odometer, expect_tol_m=.1))
+    decision, status = site_step(rig, move=True)
+    assert status.junction.state == 'executing' and decision.linear > 0
+    while rig.m._return_evidence.trail.odometer < line-.005:
+        assert site_step(rig, move=True)[1].junction.state == 'executing'
+    while rig.m._return_evidence.trail.odometer < line+.005:
+        decision, status = site_step(rig, move=True)
+    assert status.junction.state == 'idle' and decision.linear > 0
+
+
+def test_a_sighting_run_begun_before_the_take_over_is_not_handed_over():
+    """Review: the keeper's junction reason on the bend's own corner can start the pass and stay
+    fresh into it; only a run of sightings that begins inside the pass is the next junction."""
+    rig = armed_rig()
+    while rig.x < .2:
+        site_step(rig, move=True)
+    for _ in range(8):                                    # one run: before the take-over and on
+        sight(rig, .4)
+        decision, status = site_step(rig, move=True)
+    assert status.junction.state == 'bending'
+    decision, status = until(rig, 'idle')
+    assert decision.linear > 0
+
+
+def test_the_handed_over_line_survives_a_stale_odom_tick_and_ends_on_a_new_epoch():
+    rig = armed_rig()
+    bend_sighting_line_ahead(rig)
+    until(rig, 'waiting')
+    rig.now += .3
+    site_step(rig, pose=False)                            # a tick with odom 0.35 s old: not fresh
+    assert rig.m._junction_held is True
+    site_step(rig)                                        # odom back, same continuous run
+    assert rig.m._junction_held is True
+    rig.m._return_evidence.epoch += 1                    # odom restarted: the line is unplaced
+    site_step(rig)
+    assert rig.m._junction_held is False
+
+
+def test_a_sighting_without_a_measured_line_is_not_handed_over():
+    """No junction_ahead_m (old keeper): nothing places the line, so the pass ends as before."""
+    rig = armed_rig()
+    until(rig, 'bending')
+    site_step(rig, move=True, junction=True)
+    decision, status = until(rig, 'idle')
+    assert decision.linear > 0
 
 
 def test_resend_while_armed_keeps_the_measured_travel():

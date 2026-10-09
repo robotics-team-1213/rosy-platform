@@ -408,6 +408,7 @@ class LineObserverNode(Node):
         frame = None
         mode = None
         ground = None
+        quality = None
         if (bool(self.get_parameter(
                 'require_camera_controls_stable').value)
                 and not self._camera_controls_stable):
@@ -485,6 +486,17 @@ class LineObserverNode(Node):
                               ground=self._ground_label(), stamp=image_stamp)
                 self._keep_debug_pub.publish(String(data=json.dumps(bundle, default=float)))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
+                if (mode in ('route_a', 'route_b', 'route_ab')
+                        and self._route_follower is not None
+                        and not simulation_ground_allowed(
+                            source=self.get_parameter('camera_ground_source').value,
+                            simulation_enabled=self.get_parameter('allow_simulation_ground').value,
+                            use_sim_time=self.get_parameter('use_sim_time').value)):
+                    # A geometry change invalidates the static map/odom anchor.
+                    # Require a fresh node instead of reviving stale memory.
+                    self._route_follower = None
+                    self.get_logger().warning(
+                        f'{mode} simulation context changed; route follower revoked', once=True)
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(
                     bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
@@ -516,6 +528,9 @@ class LineObserverNode(Node):
                             image_stamp,
                             pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
                             frame, ground, **lane_kwargs)
+                        if mode == 'route_a' and self._route_follower.last.get('reason') == 'washed':
+                            observation = None
+                            quality = dict(valid=False, reason='overexposed')
                 elif bool(self.get_parameter('lane_corner_turning').value):
                     image_stamp = (float(msg.header.stamp.sec)
                                    + float(msg.header.stamp.nanosec) * 1e-9)
@@ -539,7 +554,8 @@ class LineObserverNode(Node):
                 source=str(self.get_parameter('camera_ground_source').value).upper(),
                 camera_x=self._lane_keeper._x_offset, geometry_bounds=self._ground_error,
                 paint_half_width_m=self._paint_half_width_m)
-        self._publish('CAMERA_LINE', observation, stamp=source_stamp, containment=containment)
+        self._publish('CAMERA_LINE', observation, stamp=source_stamp,
+                      quality=quality, containment=containment)
         self._publish_debug(msg, frame, observation)
 
     def _publish_debug(self, msg, frame, observation) -> None:

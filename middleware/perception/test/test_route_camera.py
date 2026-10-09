@@ -1,10 +1,13 @@
 """Prototype A: route-driven junction manoeuvres over centre-line following."""
 
 import math
+from pathlib import Path
 
+import cv2
 import lane_sim
 import numpy as np
 import pytest
+from control.sensing.perception.lane_bev import BEV_CELL_M
 from control.sensing.perception.route_camera import MANOEUVRE_MAX_TRAVEL_M, RouteCameraFollower
 from lane_scenarios import (
     GRAPH,
@@ -61,6 +64,59 @@ def test_south_west_bend_reacquires_on_the_route():
     assert result["reached_end"] and result["branch_ok"] and not result["wrong_way"]
     assert "MEMORY" in result["tiers"]
     assert result["max_centre_dev_m"] <= 0.040
+
+
+def test_camera_candidate_stops_when_pose_is_outside_the_active_route():
+    """A visible line cannot authorise a different lane after odom diverges."""
+    pose = (-1.15, -0.511, 0.0)
+    subject = RouteCameraFollower(GRAPH, ["west:r", "ring_s:f"],
+                                  start_pose=pose, camera_x_offset_m=CAM_X)
+    image = WORLD.render(pose)
+    assert subject.update(0.0, pose, image, lane_sim.GROUND, **lane_sim.KW) is not None
+    off_route = (pose[0], pose[1] + 0.08, pose[2])
+    assert subject.update(0.2, off_route, image, lane_sim.GROUND, **lane_sim.KW) is None
+    assert subject.state == "STOP"
+    assert not subject.locked
+    assert subject.update(0.4, pose, image, lane_sim.GROUND, **lane_sim.KW) is None
+    assert subject.state == "STOP"
+
+
+def test_washed_bev_stops_even_with_a_locked_route_near_a_node():
+    """A bright but still partly textured Gazebo frame must not start a blind turn."""
+    image = cv2.imread(str(Path(__file__).resolve().parents[3] /
+                          'docs/validation/lane-route-wash-gate-2026-10-09/evidence/camera-loss.png'))
+    assert image is not None
+    pose = (-1.270897, 0.180065, -1.61405)
+    subject = RouteCameraFollower(GRAPH, ['west:r', 'ring_s:f'],
+                                  start_pose=pose, camera_x_offset_m=.03317)
+    subject.locked = True
+    ground = lane_sim.simulation_ground_plane(
+        source='GAZEBO', simulation_enabled=True, use_sim_time=True,
+        width_px=320, height_px=240, height_m=.06343, pitch_rad=math.radians(8),
+        hfov_rad=2 * math.atan(160 / 281.6), max_range_m=.6)
+    assert subject.update(25.25, pose, image, ground, lane_half_width_m=.0925,
+                          bright_threshold=180, roi_top_fraction=.4,
+                          roi_bottom_fraction=1., washed_fraction=.4) is None
+    assert subject.state == 'STOP'
+    assert subject.last['reason'] == 'washed'
+    assert subject.update(25.375, None, image, ground, lane_half_width_m=.0925,
+                          bright_threshold=180, washed_fraction=.4) is None
+    assert subject.last['reason'] == 'washed'  # fresh image evidence survives odometry loss
+    assert subject.update(25.5, None, np.zeros_like(image), ground, lane_half_width_m=.0925,
+                          bright_threshold=180, washed_fraction=.4) is None
+    assert subject.last == {}  # no stale exposure evidence on a subsequent frame
+
+
+def test_washed_bev_cannot_start_a_route_manoeuvre():
+    points = directed_points(GRAPH, 'west:r')
+    dx, dy = points[-1] - points[-2]
+    pose = (float(points[-1][0]), float(points[-1][1]), math.atan2(dy, dx))
+    subject = RouteCameraFollower(GRAPH, ['west:r', 'ring_s:f'], start_pose=pose)
+    subject.locked = True
+    white = np.full_like(WORLD.render(pose), 255)
+    assert subject.update(1.0, pose, white, lane_sim.GROUND, **dict(lane_sim.KW, washed_fraction=.4)) is None
+    assert subject.state == 'STOP'
+    assert subject.last['reason'] == 'washed'
 
 
 def test_south_west_bend_stops_before_a_long_paint_gap():
@@ -237,9 +293,21 @@ def test_route_manoeuvre_stops_when_pose_leaves_the_lane():
         assert subject.state == ("MANOEUVRE_ABORT" if active else "STOP")
 
 
+def test_route_manoeuvre_cannot_override_odometry_jump_stop():
+    subject, pose = _locked_on_both("east:r", 0.35)
+    blank = np.full((lane_sim.HT, lane_sim.W), 109, np.uint8)
+    odom = (pose[0], pose[1] + 0.08, pose[2])
+    assert subject.update(0.6, pose, blank, lane_sim.GROUND,
+                          odom_pose=odom, **lane_sim.KW) is None
+    assert subject.state == "STOP"
+    assert subject.last["reason"] == "odom_discontinuity"
+    assert subject.update(0.8, pose, blank, lane_sim.GROUND,
+                          odom_pose=odom, **lane_sim.KW) is None
+
+
 def test_off_node_a_stale_memory_is_replaced_by_a_route_seeded_line():
     """East:r 0.9 m in (off-node), locked on BOTH. The odometry that carries
-    the boundary memory then jumps 0.25 m sideways (the memory no longer
+    the boundary memory has drifted 0.25 m sideways (the memory no longer
     lies on any line) and only the right line is in view: the tracker's own
     pair seed has no pair and its memory refuses a line that does not
     continue it (RESEED_MAX_GAP_M). The localised pose arms the relock,
@@ -248,11 +316,12 @@ def test_off_node_a_stale_memory_is_replaced_by_a_route_seeded_line():
     subject, pose = _locked_on_both("east:r", 0.9)
     assert not subject.last["near_node"]
     tracker = subject._tracker
-    odom = (pose[0] - 0.25 * math.sin(pose[2]), pose[1] + 0.25 * math.cos(pose[2]), pose[2])
+    for memory in (tracker._left, tracker._right):
+        memory._keys[:, 1] += round(0.25 / BEV_CELL_M)
     frame = _world_right_of(pose).render(pose)
-    subject.update(0.6, pose, frame, lane_sim.GROUND, odom_pose=odom, **lane_sim.KW)
+    subject.update(0.6, pose, frame, lane_sim.GROUND, **lane_sim.KW)
     assert subject.state not in ("BOTH", "ONE")
-    subject.update(0.8, pose, frame, lane_sim.GROUND, odom_pose=odom, **lane_sim.KW)
+    subject.update(0.8, pose, frame, lane_sim.GROUND, **lane_sim.KW)
     assert subject.relock
     picks = tracker.last["route_seed"]
     assert picks[0] is None and picks[1] is not None

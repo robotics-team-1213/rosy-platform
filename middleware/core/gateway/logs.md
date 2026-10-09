@@ -978,3 +978,19 @@
 - gate 변화: 없음. 호스트 시험만.
 - 결정: D-507 8
 - 교훈: 없음
+
+## 2026-10-08 · uncommitted · fix(bridge): 점유 지도 수신 시 ID와 격자를 묶음
+- 변경: `_on_map`은 수신 격자와 그때의 map ID를 같이 저장한다. 이후 상태 map ID가 바뀌어도 API가 오래된 격자를 새 지도처럼 말하지 않는다.
+- 증거: `test_map_snapshots.py` 11 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). ROS 실기 수신은 미확인.
+- gate 변화: LOCAL 스냅숏 계약 근거 추가. DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · fix(bridge): 경로 frame과 지도 ID 수신 근거 보존
+- 변경: `nav_msgs/Path.header.frame_id`와 수신 시 로봇 map ID를 점 좌표와 함께 스냅숏에 전달한다. 좌표계가 map이라고 확인되지 않은 경로는 로봇 지도에 그리지 않는다.
+- 증거: 지도·브리지 41 passed, [로봇 지도 화면 검증](../../../docs/validation/uiux-robot-navigation-stage-2026-10-08/result.md). ROS 실기 수신은 미확인.
+- gate 변화: LOCAL 경로 출처 근거 추가. DEVICE/FIELD는 HOLD.
+
+## 2026-10-08 · uncommitted · fix(device identity): system/info에 프로비저닝 UID 노출
+
+- 변경: `GET /api/v1/system/info`에 `device_uid`를 추가하고 Pi 시리얼을 `serial_number`로 읽는 계약을 API v1.150에 기록했다. 기존 Fleet 등록 DB는 자동 변경하지 않는다.
+- 증거: 관련 CORE/계약 테스트 97 passed, 신규 실패 0; 현장 실기 API 판독은 배포 후 확인.
+- gate 변화: SOURCE/LOCAL 확인, DEVICE/FIELD 미확인.
