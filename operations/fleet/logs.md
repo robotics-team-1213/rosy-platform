@@ -2822,6 +2822,45 @@
 - 증거: `test_cell_app_browser.py`의 목적·503 안내·가로 넘침 검사와 1440/390 캡처, Cell API·운영자 문구 검사. D-540의 큐 승인 이동 전이므로 현행 승인 위치를 정확히 적었다.
 - gate 변화: Cell 입구의 LOCAL/SOURCE 결함 일부 수정. 공통 머리·실제 Fleet 큐 인계·전체 G1/G2/G3·DEVICE/FIELD는 HOLD.
 
+## 2026-10-09 · uncommitted · fix(fleet): 움직이는 경로는 이름 있는 운영자, 멈춤은 열림 (D-540 9)
+
+- 변경: 목표·차선 주행 선택(`OFF` 제외)·`/route`·LED 찾기·막힘 `RESUME`/`BACK_AND_RETRY`/`MANUAL`과 claim·대형 시작/변경/재개·물리 신호 명령(`all_red`/`flash_red` 제외)·시작점 쓰기·`/do`(멈춤 동사만인 요청 제외)는 `require_named_operator`. 공유 토큰·루프백 `site-console`은 403 `OPERATOR_IDENTITY_REQUIRED`. 비상 정지·전체 취소·로봇 취소·작업 취소·대형 해제·막힘 `WAIT`/`ABORT`·trip 취소(이전엔 이름 필요)는 어느 운영자에게나 열림. 화면은 같은 조작을 `reason="이름 있는 운영자 로그인이 필요합니다"`로 잠근다. API Ref v1.156.
+- 현장 이행(배포 전): 관제 PC에서 `python -m fleet.server.site_users hash-password`로 해시 → `site-users.yaml`에 운영자마다 `login`·`password_scrypt`·`role: operator` 줄 → Fleet 재시작 → 다른 PC에서 로그인, 목표 한 번, 감사 actor가 로그인 이름인지 확인. 개발 연결 모드(D-473) 현장은 변화 없음. 줄이 없는 채 배포돼도 멈춤은 된다.
+- 증거: 모델 PC `operations/fleet/test/` + 콘솔·작업 흐름 브라우저 + 계약 문서 3180 passed, 9 failed — 9개 모두 기준 main 6e5c91a1e에서도 같은 실패(레이아웃·설치 흐름, 이 브랜치와 무관). 브라우저 없는 fleet 묶음 2940 passed, `known_failures.py` 0 NEW. node(register 훅) 201 passed. 새 표 시험 `test_named_operator_motion_routes.py`는 구현 전 30건 실패를 먼저 확인했다.
+- gate 변화: LOCAL/MODEL-PC 권한 표 근거. Safety-Review 대기, DEVICE/FIELD(현장 로그인 이행) HOLD.
+- 교훈: 직접 `console.goal` 경로(작업 저장소 없음)는 이름 있는 운영자가 생길 수 없어 HTTP로는 닿지 않는다. 지울지 별도 판단.
+
+## 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.157
+
+- 변경: main이 v1.156을 D-551에 먼저 썼으므로 위 항목의 API Ref 번호는 v1.157이다. main을 병합하고 막힘 결정 행은 main의 값별 권한 설명을 "구현됨"으로 고쳐 합쳤다.
+- 증거: `rosy_harness.py lint` 0 error. 시험은 병합 뒤 다시 돌린다(아래 결과는 보고에).
+- gate 변화: 없음.
+
+## 2026-10-09 · uncommitted · fix(fleet): D-540 9 안전 리뷰 반영 — claim 열기, rearm 이름, follow_cancel
+
+- 변경: `/line-stuck/claim`은 다시 열림(콘솔이 `ABORT` 확인 전에 claim 하고 403을 삼켜, 이름 없는 운영자의 중단 사이에 해결기가 움직이는 답을 낼 수 있었다). `/dispatch/rearm`은 이름 있는 운영자(대기 작업·재시작 뒤 남은 작업이 움직이고 OMX 팔을 다시 연다), 콘솔 재허가 버튼도 같은 사유로 잠근다. `/do`의 `follow_cancel`은 멈춤 동사. `cell-jobs/{id}/cancel`·`teach/stop`은 멈춤이 아니라(HOLD 작업 정리·녹화 종료) 이름 요구를 유지하고 API Ref v1.157 행에 적었다.
+- 운영 메모: `tools/sim/d407_stuck_scenarios.py`(막힘 답 전송)와 `tools/sim/d395_s2_bench.py`(목표 전송)는 이제 공유 토큰으로는 403이다. 개발 연결 세션(D-473) 토큰이나 `site-users.yaml` 운영자 토큰을 넘긴다. `deploy/robot/omx/g2_runner.py`의 rearm 호출도 같다.
+- 증거: 새 시험 3건(claim 열림, rearm 403, follow_cancel 열림)이 수정 전 모델 PC에서 실패, 수정 뒤 결과는 보고에.
+- gate 변화: 없음. Safety-Review 재검토 대기.
+
+## 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.158
+
+- 변경: main이 v1.157을 D-541(CORE trip lease)에 먼저 썼으므로 위 두 항목의 API Ref 번호는 v1.158이다. main 병합.
+- 증거: `rosy_harness.py lint` 0 error.
+- gate 변화: 없음.
+
+## 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.160
+
+- 변경: main이 v1.158(D-526)·v1.159(D-548)를 먼저 썼으므로 위 항목들의 API Ref 번호는 v1.160이다. 리뷰 승인 뒤 한 커밋으로 합치고 main 병합.
+- 증거: `rosy_harness.py lint`, 모델 PC 시험은 보고에.
+- gate 변화: 없음.
+
+## 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.161
+
+- 변경: main이 v1.160을 D-550 10(목표 임대)에 먼저 썼으므로 D-540 9 API Ref 번호는 v1.161이다. main 병합.
+- 증거: `rosy_harness.py lint`.
+- gate 변화: 없음.
+
 ## 2026-10-09 · uncommitted · fix(fleet): 관제 카메라 추적 표시가 1초마다 깜박이지 않게 한다
 - 변경: console.js가 `/api/fleet/tracking`을 STATE_MS(1 s) 대신 TRACKING_MS(400 ms)마다 읽는다. 표시 수명(D-457 6: 최대 1 s − 서버 age − 요청 지연)은 그대로
 - 원인: 2026-10-09 현장(site-54057e6872f3) 콘솔에서 "추적 중"과 "위치 수명 만료"가 번갈아 떴다. 1 s 폴링이면 다음 응답이 항상 수명 뒤에 와 표시가 매 주기 끊긴다(현장 폴링 간격 0.34–1.47 s 측정)

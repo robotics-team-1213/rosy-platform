@@ -91,7 +91,7 @@
 ## 최근 기록
 
 - 2026-10-09 · uncommitted · fix(fleet): 관제 카메라 추적 표시가 1초마다 깜박이지 않게 한다
-- 2026-10-09 · uncommitted · uiux(fleet): Cell 화면 목적과 미구성 복구 안내
-- 2026-10-09 · uncommitted · fix(fleet): 후진 중 차로 여유 감시 유지
-- 2026-10-09 · uncommitted · feat(fleet): 미션 API가 개발 세션으로도 시작 (D-548)
-- 2026-10-09 · uncommitted · uiux(fleet): 네 문서 공통 머리와 비상 정지 규칙 하나 (D-540 2)
+- 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.161
+- 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.160
+- 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.158
+- 2026-10-09 · uncommitted · fix(fleet): D-540 9 안전 리뷰 반영 — claim 열기, rearm 이름, follow_cancel
