@@ -7,6 +7,18 @@ const font = (size, family) => canvasFont(size, family);
 const $ = id => document.getElementById(id);
 reviewViewport(document.querySelector('.image-stage'),$('canvas'),document.querySelector('.review-view-bar'),()=>!gesture);
 document.querySelector('.review-editor-tools').prepend(document.querySelector('.review-tool-ribbon'));
+const objectCanvasColumn=document.querySelector('.review-editor-canvas');
+objectCanvasColumn.querySelector('.image-stage').before(document.querySelector('.review-view-bar'));
+objectCanvasColumn.querySelector('.image-stage').after($('candidate-details'));
+document.querySelector('.review-stage').append(document.querySelector('.review-editor-tools'));
+const objectResult=document.createElement('p');
+objectResult.id='object-result';objectResult.className='review-result';objectResult.setAttribute('role','status');
+objectCanvasColumn.querySelector('.image-stage').after(objectResult);
+objectResult.after($('object-quick-classes'));
+for(const [id,key] of [['prev-frame','ArrowLeft'],['next-frame','ArrowRight'],['next-pending','N'],['undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
+$('undo').title='마지막 저장 라벨 수정 되돌리기 · Ctrl+Z';
+for(const [id,label] of [['prev-frame','이전 사진'],['next-frame','다음 사진'],['next-pending','다음 검수 대기']]){$(id).setAttribute('aria-label',label);$(id).title=label;}
+for(const button of document.querySelectorAll('.review-editor-tools .toolbar ui-button'))button.setAttribute('aria-label',button.title);
 // Filled from the workspace's bound class set (D-485), in class index order.
 let names = {'':'클래스 선택 필요'}, classOptions = [['','클래스 선택 필요']], classColors = {};
 const states = {unknown:'알 수 없음', red:'빨강', yellow:'노랑', green:'초록', off:'꺼짐'};
@@ -32,6 +44,7 @@ function draftStatus() {
   $('source-preview').hidden=$('candidates').hidden=!source;
   $('source-preview').setAttribute('aria-pressed',String(draftPreview==='source'));
   $('model-preview').setAttribute('aria-pressed',String(draftPreview==='model'));
+  objectResult.textContent=`객체 ${statuses[frame.status]} · ${$('save-status').textContent||'불러오는 중'} · 저장 박스 ${current}개 · ${draftPreview?`미적용 ${draftPreview==='model'?'모델':'원본'} 초안 미리보기`:'초안 미리보기 없음'} · ${selected===null?'박스를 선택하면 클래스·좌표를 확인할 수 있습니다.':`박스 ${selected+1} ${names[frame.review.boxes[selected]?.label??'']} · ${frame.review.boxes[selected]?.bbox_xyxy.join(', ')}`}`;
 }
 
 function error(message='') { $('error').textContent = message; $('error').hidden = !message; }
@@ -93,6 +106,7 @@ function enable() {
     $(id).reason=busy||gesture?'현재 작업을 마친 뒤 이동할 수 있습니다.':!ready?'사진을 불러오는 중입니다.':!available?reason:'';
     $(id).disabled=busy||!!gesture||!ready||!available;
   }
+  if(frame)draftStatus();
 }
 async function request(path, body) {
   const response = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json', 'X-Pinky-Token':workspace.token}, body:JSON.stringify(body)});
@@ -193,6 +207,7 @@ async function select(index) {
   modelDrafts=[];draftPreview=null;$('model-draft-panel').hidden=true;
   for (const link of document.querySelectorAll('a[href^="/pixels"]')) link.href = `/pixels?frame=${frame.index}`;
   $('complete').checked = false; drawing = false; $('draw').setAttribute('aria-pressed','false');
+  $('save-status').textContent='사진을 불러오는 중…';
   $('frame-title').textContent = `사진 ${index+1}`; $('status').textContent = statuses[frame.status];
   frameHeading();saveView();
   $('review-history-summary').textContent='검수 기록을 불러오는 중…';
@@ -388,6 +403,9 @@ function shortcut(event) {
 }
 document.addEventListener('keydown',event=> {
   if(event.key==='Escape' && gesture) {event.preventDefault();cancelGesture();}
+  if(event.code==='KeyZ' && (event.ctrlKey||event.metaKey) && !event.shiftKey && !event.isComposing && !event.target?.matches?.(TEXT_ENTRY) && !event.repeat && !$('undo').disabled) {
+    event.preventDefault();$('undo').click();return;
+  }
   if(event.key==='Delete' && document.activeElement===$('canvas') && selected!==null && canDrag() && !gesture) {
     event.preventDefault(); $('delete-selected').click();
   }
