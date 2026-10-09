@@ -2895,3 +2895,9 @@
 - 변경: D-531 굽이 단계 선택 필드로 기준서가 v1.166이 되면서 Fleet 문서 계약 테스트의 버전 기대값을 함께 갱신한다. Fleet 실행 코드는 바뀌지 않는다.
 - 증거: 문서 계약 집중 테스트와 `known_failures.py`.
 - gate 변화: SOURCE 계약 일치. Fleet 계획·현장 주행 수용은 별도.
+
+## 2026-10-09 · uncommitted · fix(uiux): Fleet 이름표 홈 이동
+
+- 변경: 네 Fleet 문서의 Rosy Fleet 이름표를 `/console` 링크로 연결. D-501 문서 탭과 비상 정지는 유지.
+- 근거: D-501 2항의 이름표 홈 링크와 UiBrand의 href 동작.
+- gate: SOURCE 변경. 브라우저·장치·현장 수용은 별도.
