@@ -200,6 +200,37 @@ def test_stale_ultrasonic_is_ignored():
     assert status.state == "TRACKING" and status.clearance_source is None
 
 
+def test_blind_floor_off_lets_lane_follow_pass_a_wall_at_d591_gap():
+    """D-591: with obstacle_blind_floor off and no reaction time the stop gap is margin +
+    braking (~0.02 m at cruise), so a wall 0.048 m off the body (8kcn, 2026-10-10) no longer
+    holds; a return under 0.02 m still stops."""
+    near = _wall(0.048 + LIDAR_TO_FRONT)
+    floored = _step(_manager(), near, range_min=0.15)[1]
+    assert floored.reason == "obstacle_ahead"
+    m = _manager(obstacle_blind_floor=False, obstacle_latency_s=0.0)
+    status = _step(m, near, range_min=0.15)[1]
+    assert status.state == "TRACKING"
+    assert status.stop_gap_m == pytest.approx(0.02 + 0.04 ** 2 / (2 * 0.5), abs=1e-4)
+    touching = _step(_manager(obstacle_blind_floor=False, obstacle_latency_s=0.0),
+                     _wall(0.015 + LIDAR_TO_FRONT), range_min=0.15)[1]
+    assert touching.reason == "obstacle_ahead"
+
+
+def test_pinky_pro_turns_the_blind_floor_off():
+    raw = yaml.safe_load((REPO / "middleware/apps/device/pinky/profile/config/core.yaml").read_text(encoding="utf-8"))
+    assert raw["line_follow"]["obstacle_blind_floor"] is False
+    assert raw["line_follow"]["obstacle_latency_s"] == 0.0
+    assert raw["line_follow"]["obstacle_ultrasonic_half_angle_deg"] == 5.0
+
+
+def test_narrow_ultrasonic_cone_keeps_a_side_echo_off_the_path():
+    """D-591 4: a 0.10 m echo spread over +-15 deg reaches 0.026 m off-axis; at +-5 deg 0.009 m."""
+    wide = ultrasonic_points(0.10, sensor_x_m=0.0267, half_angle_deg=15.0)
+    narrow = ultrasonic_points(0.10, sensor_x_m=0.0267, half_angle_deg=5.0)
+    assert max(abs(y) for _, y in wide) == pytest.approx(0.0259, abs=1e-3)
+    assert max(abs(y) for _, y in narrow) == pytest.approx(0.0087, abs=1e-3)
+
+
 def test_the_lidar_blind_zone_floor_holds_whatever_the_ultrasonic_says():
     """Review H1: range_min 0.17 -- a return nearer than that vanishes, so stop before it does.
     No echo, a far echo or the wall's own echo never lift the floor."""
