@@ -145,7 +145,8 @@ def _majority(values):
 
 def _tile(ctx, first, last, frames_per_tile, kind=None):
     """One review tile: sampled frames of rows[first..last] with facts; kind makes a canary copy."""
-    source, rows, run = ctx["source"], ctx["rows"], ctx["runner"](rows[first:last + 1])
+    source, rows = ctx["source"], ctx["rows"]
+    run = ctx["runner"](rows[first:last + 1])
     t_first, span = rows[0]["t"], rows[first:last + 1]
     frames = []
     for i in lf.sample(first, last, frames_per_tile):
