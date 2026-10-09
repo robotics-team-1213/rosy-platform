@@ -39,7 +39,7 @@
 5. **선로(동결 표면은 바꾸지 않는다).**
    - 프레임 헤더 `ROF1`과 `hello`는 그대로다.
    - 하향 `{"type":"camera","seq":n,"ev":i,"ae_lock":b,"awb_lock":b,"max_exposure_us":u|null,"antibanding":"60hz"|"auto"}`. 지금 앱은 모르는 type을 기록만 하고 무시한다. 폰은 요청을 받은 뒤 60 초 동안만 유효로 보므로 Vision은 현재 요청을 20 초마다 다시 보낸다. 60 초 동안 오지 않으면 폰은 로컬 보정으로 돌아가고 잠금을 푼다.
-   - 상향 `{"type":"camera_state","seq":n,"applied":{ev,ae_lock,awb_lock,max_exposure_us,antibanding,mode},"supported":{ev_min,ev_max,ev_step,ae_lock,awb_lock,max_exposure_us,antibanding_60hz},"exposure_us":u|null,"iso":i|null,"thermal":t}`. `mode`는 `vision`·`local`·`disabled`·`thermal_hold`이고 `applied`는 카메라가 확인한 값만 싣는다. 변경 때, hello 직후, 그리고 받은 `camera` 메시지마다(20 초 재송신의 확인) 보낸다. Vision은 `applied`가 실제로 바뀐 때만 새 설정으로 본다. 폰은 500 ms보다 가까이 온 `camera` 요청은 버린다. 지금 Vision은 hello 뒤 텍스트를 무시한다.
+   - 상향 `{"type":"camera_state","seq":n,"applied":{ev,ae_lock,awb_lock,max_exposure_us,antibanding,mode},"supported":{ev_min,ev_max,ev_step,ae_lock,awb_lock,max_exposure_us,antibanding_60hz},"exposure_us":u|null,"iso":i|null,"thermal":t}`. `mode`는 `vision`·`local`·`disabled`·`thermal_hold`이고 `applied`는 카메라가 확인한 값만 싣는다. 변경 때, hello 직후, 그리고 받은 `camera` 메시지마다(20 초 재송신의 확인) 보낸다. Vision은 `applied`가 실제로 바뀐 때만 새 설정으로 본다. 500 ms보다 가까이 온 `camera` 요청은 버리지 않고 가장 새 것 하나를 기다렸다가 간격이 지나면 적용한다. 그 seq는 적용된 뒤에야 `camera_state`로 돌아온다. 지금 Vision은 hello 뒤 텍스트를 무시한다.
    - 두 메시지의 예시는 공유 벡터 `test/fixtures/protocol/overhead-ingest.v1.json`에 추가하고 Kotlin과 Python 시험이 같이 읽는다.
 6. **기본값과 끄기.**
    - 현장 source는 기본 켜짐이다. 사용자 지시("오토")에 따라 D-544의 기본 꺼짐을 이 기능에서는 바꾼다.
@@ -50,6 +50,7 @@
    - 폰 열 상태가 SEVERE(3) 이상이면 맞춤 구간을 멈추고 마지막 잠금 설정을 유지한다.
    - 화면은 D-544 이전과 같이 화면 보호로 끈다. 촬영은 계속한다.
    - 손전등(`AutoLightPolicy`)은 이 고리에서 켜지 않는다.
+   - 손전등이 켜지거나 꺼지면 노출 변화로 본다. 그동안 AE 잠금을 풀고, 다시 안정된 뒤(1 초와 그 뒤 첫 캡처 결과)에만 잠근다. 손전등 빛에서 고른 노출로 잠기지 않게 하기 위해서다.
    - 표시 전용(D-457 6)이다. 카메라 설정 변경은 로봇 명령과 무관하다.
 8. **보이는 것.**
    - Vision 상태(`/api/fleet/tracking`의 source 행)에 `tuning: {state, score, ev, locked}`를 더한다.
