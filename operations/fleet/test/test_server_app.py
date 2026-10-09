@@ -132,6 +132,17 @@ def test_vision_lease_accepts_only_bounded_preview_rectification():
     assert auto.status_code == 200
     assert VisionLeaseSigner("v" * 32).verify(
         auto.json()["lease"], source_id="ceiling-north")["rectification"]["mode"] == "auto"
+    # D-560: the map plane passes through as {"mode": "map"} and takes no other field.
+    plane = client.post("/api/fleet/vision/lease", json={
+        "source_id": "ceiling-north", "rectification": {"mode": "map"},
+    })
+    plane_extra = client.post("/api/fleet/vision/lease", json={
+        "source_id": "ceiling-north", "rectification": {"mode": "map", "fx": 1.0},
+    })
+    assert plane.status_code == 200
+    assert VisionLeaseSigner("v" * 32).verify(
+        plane.json()["lease"], source_id="ceiling-north")["rectification"] == {"mode": "map"}
+    assert plane_extra.status_code == 422
 
 
 def test_vision_lease_endpoint_fails_closed_when_preview_is_not_configured():

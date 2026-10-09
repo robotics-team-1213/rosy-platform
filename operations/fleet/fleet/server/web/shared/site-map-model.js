@@ -173,9 +173,14 @@ export function rectangularView(record, mapId, width, height, turn = 0) {
   if (Math.abs(determinant) < 1e-12 || ![b.min_x, b.max_x].every(x =>
     [b.min_y, b.max_y].every(y => h[6] * x + h[7] * y + h[8] > 1e-9)))
     throw new Error('카메라 보정의 평면 범위를 확인하세요.');
+  return planeView(b, width, height, turn);
+}
+
+// A map-aligned picture of bounds ``b`` (m): the view, and its rectangle drawn unturned around its
+// centre, then turned (D-513 7).
+export function planeView(b, width, height, turn = 0) {
   const places = [{x: b.min_x, y: b.min_y}, {x: b.max_x, y: b.max_y}];
   const view = fitView({places, edges: []}, width, height, 24, turn);
-  // The rectified picture is map-aligned: draw it unturned around its centre, then turn it.
   const [cx, cy] = view.toPx((b.min_x + b.max_x) / 2, (b.min_y + b.max_y) / 2);
   const fw = (b.max_x - b.min_x) * view.scale, fh = (b.max_y - b.min_y) * view.scale;
   return {view, field: {x: cx - fw / 2, y: cy - fh / 2, width: fw, height: fh,
