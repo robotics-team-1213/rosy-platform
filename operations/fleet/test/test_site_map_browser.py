@@ -676,6 +676,7 @@ def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_sit
     expect(page.locator("#crosswalk-form")).to_be_visible()
     expect(page.locator("#crosswalk-lanes")).to_contain_text("east")
     page.locator("#band-draw").click()
+    zone.scroll_into_view_if_needed()  # the button sits below the map
     box = zone.bounding_box()
     # North of cw2: the lane runs along x; screen up is map +y at view turn 0.
     for fx, fy in ((0.1, 0.05), (0.9, 0.05), (0.9, -0.45), (0.1, -0.45)):

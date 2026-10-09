@@ -60,7 +60,7 @@ def test_lanes_are_derived_and_a_map_without_crosswalks_keeps_its_body():
 
 def test_a_waiting_band_beside_the_lane_is_kept():
     site = SiteMap.model_validate(_with_band(_imported(), NORTH_BAND))
-    assert [list(map(list, band)) for band in site.crosswalks[1].approach] == NORTH_BAND
+    assert [list(map(list, band)) for band in site.crosswalks[1].approach] == [NORTH_BAND]
     assert SiteMap.model_validate(site.body()) == site
 
 
