@@ -135,6 +135,7 @@ function operatorControls() {
 
 const view = {
   map: null,
+  pinning: null,   // D-593 위치를 찍을 로봇 id(운영자 핀), 아니면 null
   siteMap: null,   // D-257 천장 카메라 사각형 (GET /api/fleet/site-map)
   sightings: [],   // 카메라 관측 — 표시 전용, CORE pose 와 섞지 않는다
   cameraTracking: { robots: [], unknown: [] }, // D-457 관제 카메라 추적 — 표시·교차확인 전용
@@ -660,6 +661,47 @@ function focusGoalButton(robotId) {
     .find(button => button.dataset.goalRobotId === robotId)?.focus({preventScroll: true});
 }
 
+// D-593 운영자 핀: 누른 점 = 위치, 끈 방향 = 로봇 앞(3 px 미만이면 지금 지도 자세의 방향, 없으면 0).
+let pinStart = null;
+function canvasWorld(event) {
+  const rect = el("map-canvas").getBoundingClientRect();
+  const scale = Math.min(rect.width / view.map.width, rect.height / view.map.height);
+  const offX = (rect.width - view.map.width * scale) / 2, offY = (rect.height - view.map.height * scale) / 2;
+  const col = (event.clientX - rect.left - offX) / scale, rowFromTop = (event.clientY - rect.top - offY) / scale;
+  if (col < 0 || rowFromTop < 0 || col >= view.map.width || rowFromTop >= view.map.height) return null;
+  const row = view.map.height - rowFromTop;
+  return { x: view.map.origin.x + col * view.map.resolution, y: view.map.origin.y + row * view.map.resolution,
+    px: event.clientX, py: event.clientY };
+}
+pageScope.listen(el("map-canvas"), "pointerdown", (event) => {
+  if (!view.pinning || !view.map) return;
+  pinStart = canvasWorld(event);
+});
+pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
+  const life = pageScope.capture();
+  const start = pinStart, end = view.map ? canvasWorld(event) : null;
+  pinStart = null;
+  const robotId = view.pinning;
+  if (!robotId || !start) return;
+  const dragged = end && Math.hypot(end.px - start.px, end.py - start.py) >= 3;
+  const current = (view.guide?.robots || []).find((row) => row.robot_id === robotId)?.pose;
+  const yaw = dragged ? Math.atan2(end.y - start.y, end.x - start.x) : (typeof current?.yaw === "number" ? current.yaw : 0);
+  view.pinning = null;
+  el("map-canvas").classList.add("idle");
+  render();
+  const deg = (yaw * 180 / Math.PI).toFixed(0);
+  await confirmedAction.run({message: `${robotId}의 지도 위치를 (${start.x.toFixed(2)}, ${start.y.toFixed(2)}) m, 방향 ${deg}°로 찍을까요? 로봇에는 아무것도 보내지 않습니다.`,
+    opener: el("map-canvas"), eligible: () => !view.stateUnavailable && !namedReason(),
+    request: async (owner) => {
+      const pose = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/map-pin`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x: start.x, y: start.y, yaw }), signals: [owner.signal] });
+      if (!owner.current() || !life.current()) return;
+      log(`${robotId} 운영자 핀 (${start.x.toFixed(2)}, ${start.y.toFixed(2)}) ${deg}° · ${pose.state}`, "good");
+      mapView.refreshGuide?.();
+    }, onError: (err) => log(`${robotId} 위치 찍기 거절 — ${err.message}`, "bad")});
+});
+
 pageScope.listen(el("map-canvas"), "click", async (event) => {
   const life = pageScope.capture();
   life.check();
@@ -687,6 +729,9 @@ pageScope.listen(el("map-canvas"), "click", async (event) => {
 pageScope.listen(el("map-canvas"), "keydown", async (event) => {
   const life = pageScope.capture();
   life.check();
+  if (view.pinning && event.key === "Escape") {  // D-593: 위치 찍기 취소
+    event.preventDefault(); view.pinning = null; el("map-canvas").classList.add("idle"); render(); return;
+  }
   if (!view.selected || !view.map || !view.cursor) return;
   const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
   if (event.key in moves) {
