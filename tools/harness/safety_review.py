@@ -47,6 +47,8 @@ EXEMPT: dict[str, str] = {
         "command, stop, admission or authority reader; D-499 link classification remains. "
         "Model-PC link-reason, dispatch-stop-latch and cancel-all tests passed 48/48. "
         "See docs/validation/d535-link-reason-safety-review-2026-10-09/result.md; "
+        "a second independent review fixed missing SSL verify_code handling and passed 60 focused tests "
+        "(docs/validation/d535-link-reason-review-2026-10-09/result.md); "
         "no device or motion acceptance.",
     "f8165b2a44d01ff628d5bd75ec923953bd09d000":  # git commit revision
         "Independently reviewed by Codex /root on 2026-10-05: D-463 retains existing "
@@ -235,14 +237,6 @@ EXEMPT: dict[str, str] = {
         "Independent security-reviewer agent, 2026-10-08: console.py removes the power_health display "
         "from FleetConsole state (traffic/swarm inputs); projection now per-response in console_routes, "
         "display-only. Exemption approved by livsbittt.",
-    "cd7464f3241145b28c1d2fa21aa734e7ccb6940f":  # git commit revision
-        "Independent Codex /root review, 2026-10-09: D-535 adds only a link_reason field to "
-        "snapshot rows after existing classify_link; no goal, stop, latch, admission or motion "
-        "method changed. The reason classifier uses closed codes and cannot alter dispatch inputs. "
-        "An unconfigured SSL verification error could raise before _remember; fixed by the follow-up "
-        "getattr guard and regression test. Fleet link, snapshot, cancel-all and stop-latch tests: "
-        "60 passed, 0 new. See docs/validation/d535-link-reason-review-2026-10-09/result.md; "
-        "no device or physical-stop acceptance.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
