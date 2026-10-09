@@ -22,10 +22,19 @@ class RecognitionTuningTest {
     // --- clamping and capability fallbacks ---
 
     @Test
-    fun evIsClampedToTheAllowListInsideTheDeviceRange() {
-        assertEquals(-6, RecognitionTuning.clamp(req(ev = -40), s21).ev)
-        assertEquals(3, RecognitionTuning.clamp(req(ev = 9), s21).ev)
-        assertEquals(-1, RecognitionTuning.clamp(req(ev = -1), s21).ev)
+    fun evIsClampedToMinus2PlusOneEvInsideTheDeviceRange() {
+        // 0.1 EV per index: -2.0..+1.0 EV is index -20..10.
+        assertEquals(-20, RecognitionTuning.clamp(req(ev = -40), s21).ev)
+        assertEquals(10, RecognitionTuning.clamp(req(ev = 19), s21).ev)
+        assertEquals(-7, RecognitionTuning.clamp(req(ev = -7), s21).ev)
+        // 1/6 EV per index: -12..6, despite 1/6 not being exact in binary.
+        val sixth = s21.copy(evMin = -12, evMax = 12, evStep = 1.0 / 6)
+        assertEquals(-12 to 6, RecognitionTuning.evIndexBounds(sixth))
+        // 1/3 EV: ceil(-6) = -6, floor(3) = 3.
+        assertEquals(-6 to 3, RecognitionTuning.evIndexBounds(s21.copy(evMin = -6, evMax = 6, evStep = 1.0 / 3)))
+        // 0.3 EV: ceil(-6.67) = -6, floor(3.33) = 3, never beyond the real EV bounds.
+        assertEquals(-6 to 3, RecognitionTuning.evIndexBounds(s21.copy(evStep = 0.3)))
+        // The device range wins when narrower.
         val narrow = s21.copy(evMin = -2, evMax = 2)
         assertEquals(-2, RecognitionTuning.clamp(req(ev = -6), narrow).ev)
         assertEquals(2, RecognitionTuning.clamp(req(ev = 3), narrow).ev)

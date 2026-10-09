@@ -4,6 +4,7 @@ import io.github.livsbittt.rosy.cam.link.CameraApplied
 import io.github.livsbittt.rosy.cam.link.CameraSupported
 import io.github.livsbittt.rosy.cam.link.ServerMessage
 import kotlin.math.ceil
+import kotlin.math.floor
 
 /** A Camera2 `CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES` entry. */
 data class FpsRange(val lower: Int, val upper: Int)
@@ -127,9 +128,9 @@ class RecognitionTuning(private val freshMs: Long = VISION_FRESH_MS) {
         /** AE/AWB locks wait this long after an EV write so the AE converges on the new EV before freezing. */
         const val SETTLE_MS = 1_000L
 
-        /** D-589 2 allow-list bounds for the EV index. */
-        const val EV_MIN = -6
-        const val EV_MAX = 3
+        /** D-589 2 allow-list bounds in real EV; the index bounds follow from the device's EV step. */
+        const val EV_MIN = -2.0
+        const val EV_MAX = 1.0
 
         /** Fps ranges above this are never chosen for the exposure cap: the sensor would run hotter for 3 fps. */
         const val MAX_SENSOR_FPS = 30
@@ -140,8 +141,7 @@ class RecognitionTuning(private val freshMs: Long = VISION_FRESH_MS) {
         /** Cuts [req] down to the allow-list and to what [caps] says the camera can do. */
         fun clamp(req: ServerMessage.Camera, caps: CameraCapabilities): CameraSettings {
             val evOk = caps.evStep > 0.0 && caps.evMin < caps.evMax
-            val lo = maxOf(caps.evMin, EV_MIN)
-            val hi = minOf(caps.evMax, EV_MAX)
+            val (lo, hi) = evIndexBounds(caps)
             return CameraSettings(
                 ev = if (evOk && lo <= hi) req.ev.coerceIn(lo, hi) else 0,
                 aeLock = req.aeLock && caps.aeLock,
@@ -149,6 +149,17 @@ class RecognitionTuning(private val freshMs: Long = VISION_FRESH_MS) {
                 fpsRange = req.maxExposureUs?.let { pickRange(it, caps.capRanges) },
                 antibanding = if (req.antibanding == Antibanding.HZ60.wire && caps.antibanding60) Antibanding.HZ60 else Antibanding.AUTO,
             )
+        }
+
+        /**
+         * Index range for [EV_MIN]..[EV_MAX] EV at the device step (ceil / floor, with a small tolerance for
+         * steps like 1/6 that are not exact in binary), intersected with the device range.
+         */
+        internal fun evIndexBounds(caps: CameraCapabilities): Pair<Int, Int> {
+            if (caps.evStep <= 0.0) return 0 to 0
+            val lo = ceil(EV_MIN / caps.evStep - 1e-9).toInt()
+            val hi = floor(EV_MAX / caps.evStep + 1e-9).toInt()
+            return maxOf(caps.evMin, lo) to minOf(caps.evMax, hi)
         }
 
         /**
