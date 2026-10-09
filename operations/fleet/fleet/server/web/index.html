@@ -77,6 +77,15 @@
         <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
         <!-- D-517 10 — 교통 층 하나. Fleet 블록 표가 있을 때만 보인다. 표시 선호라 권한과 무관하다. -->
         <ui-button kind="quiet" id="traffic-toggle" type="button" aria-pressed="true" aria-controls="map-canvas" hidden>교통 켬</ui-button>
+        <!-- D-594 — Fleet 이 기록한 지나온 길. 범위와 로봇은 표시 선호라 권한과 무관하다(trail-view.js). -->
+        <details class="trail-control" id="trail-control">
+          <summary>지나온 길</summary>
+          <div class="trail-panel">
+            <label>범위 <select id="trail-range"><option value="120">최근 2분</option><option value="600">최근 10분</option><option value="trip">이번 운행</option></select></label>
+            <div class="trail-robots" id="trail-robots" role="group" aria-label="경로를 보일 로봇"></div>
+            <p class="hint">실선 위치 확정 · 파선 추정 · 점선 천장 카메라만</p>
+          </div>
+        </details>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
       </div>
       <div class="map-stage" id="map-stage" data-map-state="loading">

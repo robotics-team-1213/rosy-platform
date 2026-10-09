@@ -1,7 +1,11 @@
-"""D-472 LED identity: ask one robot to blink, let Vision find the blob, keep the binding.
+"""D-472 LED identity: ask a robot to blink, let Vision find the blob, keep the binding.
 
-One request at a time, at most ``window_s`` (6 s), only for a moving robot without a
-confirmed identity. Fleet calls the robot's CORE ``POST /host/lamp/identify`` (the robot's
+D-596 (amends D-472 4 and addendum 5): a robot without a confirmed identity is asked whether it
+moves or stands (Vision holds its background learning for the window, so asking never needs a
+move). Requests run in parallel, one per identify colour on a camera source: a second robot on
+the same source gets the colour still free, by name. Each window is at most ``window_s`` (6 s).
+``auto_request`` (default on) asks by itself on the identity_triggers.py rules, at most once per
+robot per ``auto_min_interval_s``, never during an E-stop. Fleet calls the robot's CORE ``POST /host/lamp/identify`` (the robot's
 own colour; rosy-face may refuse), names the window and colour to every Vision source that
 watches that robot (``identity_challenge`` in the detections config), and takes the first
 ``matched`` verdict whose revisions are current. The binding then follows the nearest
@@ -23,6 +27,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional
 
+from fleet.server.identity_triggers import AutoTriggers
+
 LAMP_IDENTIFY_COLORS = ("blue", "amber")  # CORE LampIdentifyRequest.color values (D-472 4)
 
 
@@ -43,15 +49,20 @@ class IdentityConfig:
     overlap_m: float = 0.30          # D-457 gate
     track_step_m: float = 0.25       # one detection frame's continuation distance
     track_lost_s: float = 1.0
+    # Unused since D-596 (a standing robot is asked too); kept so an existing site YAML still loads.
     moving_linear_mps: float = 0.02
     moving_angular_rps: float = 0.1
-    retry_s: float = 10.0            # CORE lamp cooldown (HW_TEST_COOLDOWN_S)
-    auto_request: bool = False       # off until the ceiling_north LED measurement passes
+    retry_s: float = 10.0
+    auto_request: bool = True        # D-596 2: on (user decision 2026-10-10)
+    auto_min_interval_s: float = 30.0  # D-596 2: at most one request per robot per this
+    auto_marker_missing_s: float = 3.0
+    auto_near_m: float = 0.5
 
     def __post_init__(self) -> None:
         numbers = (self.window_s, self.verdict_grace_s, self.identity_ttl_s, self.overlap_m,
                    self.track_step_m, self.track_lost_s, self.moving_linear_mps,
-                   self.moving_angular_rps, self.retry_s)
+                   self.moving_angular_rps, self.retry_s, self.auto_min_interval_s,
+                   self.auto_marker_missing_s, self.auto_near_m)
         if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0
                    for v in numbers):
             raise ValueError("identity settings must be positive numbers")
@@ -77,6 +88,7 @@ class _Pending:
     sources: tuple[str, ...]
     not_before: float
     not_after: float
+    reason: str = "operator"
 
 
 @dataclass
@@ -100,75 +112,94 @@ class IdentityService:
         self.config = config
         self._clock = clock
         self._lock = asyncio.Lock()
-        self._pending: Optional[_Pending] = None
+        self._pending: dict[str, _Pending] = {}  # robot_id -> open request (D-596: one per colour per source)
         self._bindings: dict[str, _Binding] = {}
         self._last: dict[str, dict] = {}       # robot_id -> last outcome (readback)
         self._asked_at: dict[str, float] = {}
+        self.triggers = AutoTriggers(config)
 
     # --- request ---------------------------------------------------------------------
 
+    def _open(self) -> list[_Pending]:
+        """Requests whose window plus verdict grace has not passed (expired ones are dropped)."""
+        now = self._clock()
+        for robot_id, pending in list(self._pending.items()):
+            if now > pending.not_after + self.config.verdict_grace_s:
+                del self._pending[robot_id]
+        return sorted(self._pending.values(), key=lambda p: p.not_before)
+
     def busy(self) -> bool:
-        pending = self._pending
-        return pending is not None and self._clock() <= pending.not_after + self.config.verdict_grace_s
+        return bool(self._open())
 
-    def moving(self, robot_id: str) -> bool:
-        state = None if self.tracking is None else self.tracking.robot_state(robot_id)
-        velocity = (state or {}).get("velocity")
-        if not isinstance(velocity, Mapping):
-            return False
-        try:
-            linear, angular = abs(float(velocity.get("linear", 0.0))), abs(float(velocity.get("angular", 0.0)))
-        except (TypeError, ValueError):
-            return False
-        return linear >= self.config.moving_linear_mps or angular >= self.config.moving_angular_rps
-
-    async def request(self, robot_id: str, color: Optional[str] = None) -> dict:
+    async def request(self, robot_id: str, color: Optional[str] = None, *, reason: str = "operator") -> dict:
         client = self._clients().get(robot_id)
         if client is None:
             raise IdentityError(404, "UNKNOWN_ROBOT", robot_id)
         async with self._lock:
-            if self.busy():
-                raise IdentityError(409, "IDENTIFY_BUSY", "다른 로봇의 LED 확인이 끝날 때까지 기다리세요")
+            open_ = self._open()
+            if any(p.robot_id == robot_id for p in open_):
+                raise IdentityError(409, "IDENTIFY_BUSY", "이 로봇의 LED 확인이 진행 중입니다")
             if self.confirmed_track_pose(robot_id)["state"] == "CONFIRMED":
                 raise IdentityError(409, "IDENTIFY_ALREADY_CONFIRMED", "이미 확인된 트랙이 있습니다")
-            if not self.moving(robot_id):
-                raise IdentityError(409, "IDENTIFY_NOT_MOVING", "움직이는 로봇에만 LED 확인을 요청합니다")
+            sources = () if self.tracking is None else tuple(
+                s.source_id for s in self.tracking.sources if robot_id in s.robot_ids)
+            # D-596 1: one colour per source at a time; with one in use the other is asked for by name.
+            used = {p.color for p in open_ if not p.sources or not sources or set(p.sources) & set(sources)}
+            if color in used:
+                raise IdentityError(409, "IDENTIFY_BUSY", "같은 색 LED 확인이 진행 중입니다")
+            free = [c for c in LAMP_IDENTIFY_COLORS if c not in used]
+            if not free:
+                raise IdentityError(409, "IDENTIFY_BUSY", "두 색 모두 LED 확인 중입니다. 잠시 뒤에 다시 시도하세요")
+            auto = reason != "operator"
+            if color is None:
+                # D-596 7: blue first. Amber is also the caution lamp (1 s on, 1 s off) and Fleet
+                # cannot read a robot's lamp state, so automatic requests never use amber and an
+                # operator gets amber only while blue is busy (its verdict needs a predicted place).
+                color = "blue" if "blue" in free else None if auto else free[0]
+                if color is None:
+                    raise IdentityError(409, "IDENTIFY_BUSY", "파랑 LED 확인이 진행 중입니다")
             started = self._clock()
             self._asked_at[robot_id] = started
-            # None: the robot's own configured colour (CORE lamp_identify.color / D-472 4 default).
-            result = await client.identify_lamp(color)
+            self.triggers.asked(robot_id, auto=auto)
+            # D-596 7: automatic requests are silent (no call chirp); a payload before D-596 still chirps.
+            result = await client.identify_lamp(color, quiet=auto)
             if not isinstance(result, Mapping):
                 result = {}
             color = result.get("color")
-            if result.get("accepted") is not True or color not in LAMP_IDENTIFY_COLORS:
+            # A robot that answers with a colour already blinking on its source cannot be told apart.
+            if result.get("accepted") is not True or color not in LAMP_IDENTIFY_COLORS or color in used:
                 self._last[robot_id] = {"state": "UNKNOWN", "reason": "not_accepted", "at": started}
                 raise IdentityError(502, "IDENTIFY_NOT_ACCEPTED", "로봇이 LED 확인을 수락하지 않았습니다")
-            sources = () if self.tracking is None else tuple(
-                s.source_id for s in self.tracking.sources if robot_id in s.robot_ids)
-            self._pending = _Pending(robot_id, str(result.get("request_id")), color, sources,
-                                     started, started + self.config.window_s)
-            self._last[robot_id] = {"state": "PENDING", "reason": None, "at": started}
-            return {"robot_id": robot_id, "request_id": self._pending.request_id, "color": color,
-                    "not_after": self._pending.not_after, "sources": list(sources),
-                    "state": "pending_visual_confirmation"}
+            pending = _Pending(robot_id, str(result.get("request_id")), color, sources,
+                               started, started + self.config.window_s, reason)
+            self._pending[robot_id] = pending
+            self._last[robot_id] = {"state": "PENDING", "reason": None, "at": started, "trigger": reason}
+            return {"robot_id": robot_id, "request_id": pending.request_id, "color": color,
+                    "not_after": pending.not_after, "sources": list(sources),
+                    "state": "pending_visual_confirmation", "trigger": reason}
 
-    async def tick(self) -> Optional[dict]:
-        """Auto mode: ask the next moving robot without a confirmed identity (sorted, one at a time)."""
-        if not self.config.auto_request or self.busy():
-            return None
+    async def tick(self) -> list[dict]:
+        """D-596 2: ask every robot the trigger rules name (colours permitting); the started requests."""
+        if not self.config.auto_request or self.tracking is None:
+            return []
         now = self._clock()
-        for robot_id in sorted(self._clients()):
-            if (now - self._asked_at.get(robot_id, -math.inf) < self.config.retry_s
-                    or not self.moving(robot_id)
-                    or self.confirmed_track_pose(robot_id)["state"] == "CONFIRMED"):
-                continue
+        clients = self._clients()
+        watched = {rid for s in self.tracking.sources for rid in s.robot_ids if rid in clients}
+        skip = {rid for rid in watched
+                if now - self._asked_at.get(rid, -math.inf) < self.config.auto_min_interval_s * self.triggers.backoff(rid)
+                or self.confirmed_track_pose(rid)["state"] == "CONFIRMED"}
+        skip |= {p.robot_id for p in self._open()}
+        due = self.triggers.due(now, self.tracking.snapshot(),
+                                {rid: self.tracking.robot_state(rid) for rid in watched},
+                                watched=watched, skip=skip,
+                                last_reason={rid: (self._last.get(rid) or {}).get("reason") for rid in watched})
+        started = []
+        for robot_id, reason in due:
             try:
-                return await self.request(robot_id)
-            except IdentityError:
+                started.append(await self.request(robot_id, reason=reason))
+            except Exception:  # busy colours, or a robot that is down: asked again on a later tick
                 continue
-            except Exception:  # a robot that is down is asked again after retry_s
-                continue
-        return None
+        return started
 
     async def run(self, interval_s: float = 1.0) -> None:
         while True:
@@ -177,16 +208,19 @@ class IdentityService:
 
     # --- Vision side -----------------------------------------------------------------
 
+    def challenges_for(self, source_id: str) -> list[dict]:
+        """Every open request this source should decode (D-596: at most one per colour)."""
+        return [{"request_id": p.request_id, "color": p.color, "not_before": p.not_before,
+                 "not_after": p.not_after} for p in self._open() if source_id in p.sources]
+
     def challenge_for(self, source_id: str) -> Optional[dict]:
-        pending = self._pending
-        if pending is None or source_id not in pending.sources or not self.busy():
-            return None
-        return {"request_id": pending.request_id, "color": pending.color,
-                "not_before": pending.not_before, "not_after": pending.not_after}
+        """The oldest open request (v1.130 field, for a Vision without ``identity_challenges``)."""
+        challenges = self.challenges_for(source_id)
+        return challenges[0] if challenges else None
 
     def accept_verdict(self, source, body: Mapping) -> dict:
-        pending = self._pending
-        if pending is None or body.get("request_id") != pending.request_id or not self.busy():
+        pending = next((p for p in self._open() if p.request_id == body.get("request_id")), None)
+        if pending is None:
             raise IdentityError(409, "IDENTIFY_NOT_PENDING", "no open identity request with this id")
         if source.source_id not in pending.sources or body.get("map_id") != source.map_id:
             raise IdentityError(409, "IDENTIFY_SOURCE_MISMATCH", "this source was not asked or is on another map")
@@ -210,6 +244,13 @@ class IdentityService:
             raise IdentityError(422, "IDENTIFY_BAD_VERDICT", "matched verdict needs x and y") from None
         if not (math.isfinite(x) and math.isfinite(y)):
             raise IdentityError(422, "IDENTIFY_BAD_VERDICT", "matched verdict needs finite x and y")
+        # D-596 7: the blob must be where the asked robot is expected, so a decoy elsewhere showing the
+        # same pattern (amber = the caution lamp) is never named; amber without an expected place is refused.
+        predicted = self._predicted(robot_id)
+        if predicted is None and pending.color == "amber":
+            return self._unknown(robot_id, "no_prediction", source.source_id)
+        if predicted is not None and math.hypot(x - predicted[0], y - predicted[1]) > self.config.auto_near_m:
+            return self._unknown(robot_id, "far_from_robot", source.source_id)
         now = self._clock()
         found = self._continue(latest, x, y)
         if isinstance(found, str):
@@ -222,8 +263,17 @@ class IdentityService:
                                             found[0], found[1], latest.captured_at, now,
                                             dict(body.get("evidence") or {}))
         self._last[robot_id] = {"state": "CONFIRMED", "reason": None, "at": now, "source_id": source.source_id}
-        self._pending = None  # done: the next robot may be asked
+        self._pending.pop(robot_id, None)  # done: this colour is free again
         return {"robot_id": robot_id, "state": "CONFIRMED", "source_id": source.source_id}
+
+    def _predicted(self, robot_id: str) -> Optional[tuple[float, float]]:
+        """Where the robot should be: its last ceiling marker, else its map-frame pose; None unknown."""
+        marker = self.triggers.last_marker(robot_id)
+        if marker is not None:
+            return marker
+        row = next((r for r in self.tracking.snapshot().get("robots") or [] if r.get("robot_id") == robot_id), {})
+        pose = row.get("pose")
+        return None if not pose else (float(pose["x"]), float(pose["y"]))
 
     def on_detections(self, source_id: str, payload) -> None:
         """Follow every binding on this source to its continuing detection, or drop it."""
@@ -308,16 +358,17 @@ class IdentityService:
                 and binding.calibration_revision in self.tracking.revisions(source))
 
     def snapshot(self) -> dict:
-        pending = self._pending if self.busy() else None
+        open_ = [{"robot_id": p.robot_id, "request_id": p.request_id, "color": p.color,
+                  "sources": list(p.sources), "not_before": p.not_before, "not_after": p.not_after,
+                  "trigger": p.reason} for p in self._open()]
         robots = sorted(set(self._clients()) | set(self._bindings) | set(self._last))
         return {
             "ts": self._clock(),
             "use": "observation-only",
-            "pending": None if pending is None else {
-                "robot_id": pending.robot_id, "request_id": pending.request_id, "color": pending.color,
-                "sources": list(pending.sources), "not_before": pending.not_before,
-                "not_after": pending.not_after},
+            "pending": open_[0] if open_ else None,   # v1.130: the oldest open request
+            "pendings": open_,                        # D-596: every open request
             "robots": [{**self.confirmed_track_pose(rid), "last": self._last.get(rid)} for rid in robots],
             "config": {"window_s": self.config.window_s, "identity_ttl_s": self.config.identity_ttl_s,
-                       "overlap_m": self.config.overlap_m, "auto_request": self.config.auto_request},
+                       "overlap_m": self.config.overlap_m, "auto_request": self.config.auto_request,
+                       "auto_min_interval_s": self.config.auto_min_interval_s},
         }

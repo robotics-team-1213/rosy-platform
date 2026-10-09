@@ -188,7 +188,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                                                          "message": "no robot served a map"})
         return grid
 
-    # D-472: one robot at a time (IdentityService); CORE and rosy-face keep the final safety decision.
+    # D-472/D-596: one request per colour per source (IdentityService); CORE and rosy-face keep the final safety decision.
     if identity is None:
         identity = IdentityService(console.clients, tracking=tracking)
     app.state.identity = identity

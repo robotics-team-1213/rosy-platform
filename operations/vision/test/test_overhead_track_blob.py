@@ -636,3 +636,52 @@ def test_a_camera_change_during_an_operator_relearn_still_keeps_it(tmp_path):
     replay = BackgroundBlobDetector(store=store)
     replay.camera_changed(LOCKED)
     assert replay.detect(Frame(_parked_robot_floor(), 100.0), CAL).status == "OK"
+
+
+# D-596 1: an LED identify window freezes the background (a standing robot blinks).
+
+def _lamp_on(image):
+    image[141:159, 291:309] = (255, 0, 0)  # the whole robot top lit blue: foreground, not floor
+    return image
+
+
+def test_a_held_window_keeps_a_blinking_baked_robot_as_its_guess():
+    detector = _learned(floor=_parked_robot_floor)
+    unheld = detector.detect(Frame(_lamp_on(_parked_robot_floor()), 11.0), CAL).detections
+    assert not any(d.score <= BAKED_SCORE_MAX for d in unheld)  # unheld: the guess is gone
+    detector.hold(20.0)
+    for index in range(6):
+        frame = _parked_robot_floor() if index % 2 else _lamp_on(_parked_robot_floor())
+        (guess,) = detector.detect(Frame(frame, 12.0 + index / 3), CAL).detections
+        assert guess.score <= BAKED_SCORE_MAX and guess.x == pytest.approx(2.995, abs=0.006)
+    assert len(detector._suspects) == 1
+
+
+def test_a_held_window_heals_no_ghost_until_it_ends():
+    detector = _learned(floor=_parked_robot_floor)
+    detector.hold(13.0)
+    for index in range(GHOST_CONFIRM_FRAMES + 2):
+        assert detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections == ()
+    assert len(detector._suspects) == 1  # not confirmed while held
+    assert detector.detect(Frame(_floor(), 13.5), CAL).detections == ()
+    assert detector._suspects == []      # healed on the first frame after the window
+
+
+def test_a_scene_change_in_a_held_window_starts_no_learn():
+    detector = _learned()
+    detector.hold(12.0)
+    bright = np.full((360, 640, 3), 200, np.uint8)
+    assert detector.detect(Frame(bright, 11.0), CAL).status == "SCENE_CHANGED"
+    assert detector.detect(Frame(_with_square(18), 11.34), CAL).status == "OK"
+    assert detector.detect(Frame(bright, 12.5), CAL).status == "SCENE_CHANGED"
+    assert detector.detect(Frame(_floor(), 12.84), CAL).status == "LEARNING"
+
+
+def test_no_learning_frame_is_taken_in_a_held_window():
+    detector = BackgroundBlobDetector()
+    detector.hold(5.0)
+    for index in range(10):
+        assert detector.detect(Frame(_with_square(18), index / 2), CAL).status == "LEARNING"
+    assert detector._learned == 0
+    assert detector.detect(Frame(_floor(), 5.5), CAL).status == "LEARNING"
+    assert detector._learned == 1

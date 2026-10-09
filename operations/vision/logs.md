@@ -406,6 +406,12 @@
 - 증거: 현장 원본 150장(2026-10-10 01:15, 로봇 정지)을 이 코드로 돌려 rosy_40 150/150, rosy_41 148/150 전송, 방향 표준편차 0.09°/0.57°(최대 0.7°/1.7°), 위치 표준편차 0.3 mm 이하. 모델 PC pytest operations/vision/test + tools/calibration 506 통과, known_failures 0 new.
 - gate 변화: SOURCE. 사이트 릴리스·설정 설치·주행 확인 전
 
+## 2026-10-10 · uncommitted · feat(vision): D-596 LED 판정 2–3 fps, 동시 요청, 배경 멈춤
+
+- 변경: `track/led_identity.py` `led-identity/2` — `min_off_s` 0.8, `max_off_s` 2.2, `max_gap_s` 1.1, 익명 blob 하나일 때 정색 표시(`evidence.mode: steady`). 추적 워커가 `identity_challenges`의 요청마다 판정하고, 열린 창 끝까지 `BackgroundBlobDetector.hold`로 배경을 얼린다(학습 프레임·장면 변경 재학습·유령 치유 없음, 박힌 로봇의 추정은 램프가 켜져도 유지)
+- 증거: 현장 프레임 2묶음(2026-10-10 06:47, 2.5 fps, 간격 최대 0.76 s)에 후면 빛을 그려 넣은 6 s 창 264개: 이전 값 6 `matched`(나머지 frames_missing), 새 값 264. 빛 없는 대조 0. 모델 PC pytest 통과
+- gate 변화: SOURCE. 실제 램프 가시성 미측정
+
 ## 2026-10-10 · uncommitted · fix(vision): D-595 수락한 보정 고정
 - 변경: `field_calib.FieldCalibrator`가 처음 받아들인 필드 사각형을 고정한다. 문턱 안 다시 감지는 사각형·호모그래피를 바꾸지 않고 `drift_px`로만 보고하고, 문턱 밖 이동이 3번 이어질 때만 새 사각형을 받는다. `track.calibration.choose`는 쓸 수 있는 Fleet 승인 기록을 먼저 쓰고, 그 프레임의 모서리 마커는 기록이 없을 때만 쓴다(D-457 2의 마커 우선을 대체).
 - 증거: 현장 읽기 표본(2026-10-10 05:12–05:20, 변경 없음) 승인 기록 `paint-7b220d432c2a`·평면 사각형 20회 같음, 필드 제안 20회 `field runs past the frame`. 원격 pytest 결과는 브랜치 보고에 남긴다.
@@ -437,4 +443,9 @@
 ## 2026-10-10 · uncommitted · docs(api): D-589 API 버전 v1.184로 다시 매김
 - 변경: main이 v1.182·v1.183(D-577)을 먼저 가져가 D-589 S1은 v1.184다. 앞 항목들의 v1.181·v1.182는 v1.184로 읽는다
 - 증거: API Reference 머리글·변경표 행·라우트 두 줄·app.py 두 문자열·버전 고정 시험 6곳이 v1.184
+- gate 변화: 없음
+
+## 2026-10-10 · uncommitted · merge(vision): D-589을 main(D-595·D-596)과 합치고 API v1.186
+- 변경: main의 D-596(LED 확인 2–3 fps, 색마다 동시 요청, 확인 창 동안 배경 얼림)·D-595(승인 기록 우선 순서)와 D-589를 합쳤다. `TrackWorker._detect`는 D-589 카메라 변경·맞춤 정지와 D-596 `hold`를 함께 받는다. 맞춤 정지 중에도 배경만 멈추고 마커는 낸다. LED 확인 창이 열린 동안에는 튜너에 측정을 넘기지 않아 맞춤 단계·다시 맞추기 판정이 일어나지 않는다(노출이 바뀌면 점멸이 가려진다). 요청 재송신은 그대로다. 배경 얼림(`hold`)은 카메라 재학습 뒤 학습도 창 뒤로 미룬다. main이 v1.184·v1.185를 가져가 D-589는 API Reference v1.186이다(머리글, 두 경로 메모, `app.py` 두 문자열, 버전 고정 시험 다섯 파일)
+- 증거: 원격 pytest 결과와 수는 이 브랜치 보고에 남긴다. 확인 창 중 맞춤 멈춤 시험 `test_no_tune_step_is_judged_while_an_led_identify_window_is_open`
 - gate 변화: 없음

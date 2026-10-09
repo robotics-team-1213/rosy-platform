@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · feat(fleet): D-594 로봇 경로 기록과 콘솔 표시
 - 2026-10-10 · uncommitted · fix(safety): D-581 앱 주입 커밋 독립 검토
 - 2026-10-10 · uncommitted · fix(safety): D-581 후속 콘솔 정리 커밋 독립 검토
 - 2026-10-10 · uncommitted · fix(safety): D-581 통합 이력 독립 검토
 - 2026-10-10 · uncommitted · uiux(pilot): 2대 공용 조이스틱 (D-590)
-- 2026-10-10 · 3e92fc7c4 · fix(perception): int8 recipe per task; 3831b20d intake PASS on the capture-group revision

@@ -8,7 +8,15 @@ pattern: on (<= max_on_s), off for [min_off_s, max_off_s], on again (<= max_on_s
 
 ``matched`` only when exactly one chain shows it, every frame of the window is there
 (no gap over max_gap_s, ends included), the newest frame is fresh and one calibration
-revision covers the window. Anything else is ``ambiguous`` with a reason: ``none``,
+revision covers the window.
+
+D-596 3 (camera at 2-3 fps): the measured off time is the gap between the last "on" frame
+before and the first after, so it is always longer than the lamp's 1 s off; min_off_s 0.8 s
+still refuses a one-frame flicker (two frame intervals at 3 fps is 0.67 s) and max_off_s 2.2 s
+and max_gap_s 1.1 s let one dropped frame through at 2 fps. Steady colour: when the blink is not
+decoded but the window holds exactly one anonymous blob in every frame and it turns the colour
+on (an off frame, then at least ``steady_min_on`` on frames in a row), that blob matches with
+``evidence.mode = "steady"`` (a quick tag for a single anonymous robot). Anything else is ``ambiguous`` with a reason: ``none``,
 ``multiple``, ``frames_missing``, ``stale``, ``calibration_changed``. A chain that loses
 its blob (occlusion, merge) ends there and cannot match across the hole.
 
@@ -25,7 +33,7 @@ from typing import Mapping, Sequence
 import cv2
 import numpy as np
 
-PROCESSOR_REVISION = "led-identity/1"
+PROCESSOR_REVISION = "led-identity/2"
 #: D-472 4: Fleet's window is at most 6 s; a little slack for clock rounding.
 MAX_WINDOW_S = 6.5
 #: Frames kept per challenge (6 s at 10 fps); a faster camera stops sampling, then reads as frames missing.
@@ -45,10 +53,11 @@ class LedConfig:
     ring_outer: float = 1.6       # x blob radius
     on_fraction: float = 0.02     # lit share of the ring at or above: on
     off_fraction: float = 0.005   # at or below: off; between: unsure
-    min_off_s: float = 0.5
-    max_off_s: float = 1.8
+    min_off_s: float = 0.8
+    max_off_s: float = 2.2
     max_on_s: float = 1.7
-    max_gap_s: float = 0.7        # a longer hole between frames (or at a window end): frames missing
+    max_gap_s: float = 1.1        # a longer hole between frames (or at a window end): frames missing
+    steady_min_on: int = 2        # D-596 3: on frames in a row for a steady-colour match
     max_step_px: float = 60.0     # blob link distance between consecutive frames
     stale_s: float = 1.5          # newest frame older than this at decision time: stale
 
@@ -103,10 +112,17 @@ def decide(samples: Sequence[Sample], *, not_before: float, not_after: float, no
     if evidence["max_gap_s"] > config.max_gap_s:
         return _ambiguous("frames_missing", evidence)
     matches = []
-    for chain in _chains(window, config.max_step_px):
+    chains = _chains(window, config.max_step_px)
+    for chain in chains:
         found = _blink(chain, config)
         if found is not None:
             matches.append((chain, found))
+            evidence["candidates"].append(found)
+    if not matches and len(chains) == 1 and all(len(s.blobs) == 1 for s in window):
+        found = _steady(chains[0], config)
+        if found is not None:
+            matches.append((chains[0], found))
+            evidence["mode"] = "steady"
             evidence["candidates"].append(found)
     if len(matches) != 1:
         return _ambiguous("none" if not matches else "multiple", evidence)
@@ -174,4 +190,19 @@ def _blink(chain, config: LedConfig) -> dict | None:
             return {"off_s": round(off_s, 3), "on1_s": round(on1_s, 3), "on2_s": round(on2_s, 3),
                     "min_on_share": round(on_share, 4), "max_off_share": round(off_share, 4),
                     "frames": len(chain)}
+    return None
+
+
+def _steady(chain, config: LedConfig) -> dict | None:
+    """D-596 3: an off frame, then ``steady_min_on`` on frames in a row; None otherwise."""
+    run, seen_off = 0, False
+    for t, _b, share in chain:
+        if share <= config.off_fraction:
+            seen_off, run = True, 0
+        elif share >= config.on_fraction and seen_off:
+            run += 1
+            if run >= config.steady_min_on:
+                return {"on_at": round(t, 3), "on_frames": run, "frames": len(chain)}
+        else:
+            run = 0
     return None

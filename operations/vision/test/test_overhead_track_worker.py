@@ -756,3 +756,42 @@ def test_robot_markers_are_still_reported_while_a_tune_pauses_the_background():
     assert worker.tuner.active
     assert payloads[-1].status == "OK" and [d.marker_id for d in payloads[-1].detections] == [7]
     assert len(detector.calls) == 1  # only the frame before the tune started ran the detector
+
+
+class _HoldingDetector(_Detector):
+    def __init__(self):
+        super().__init__()
+        self.holds = []
+
+    def hold(self, until):
+        self.holds.append(until)
+
+
+def test_two_parallel_challenges_are_each_answered_and_hold_the_background(make_worker):
+    # D-596: identity_challenges carries one open request per colour; the detector is held through both.
+    blue = {"request_id": "req-b", "color": "blue", "not_before": 100.0, "not_after": 104.0}
+    amber = {"request_id": "req-a", "color": "amber", "not_before": 101.0, "not_after": 105.0}
+    detector = _HoldingDetector()
+    worker, client = make_worker(configs=[{**CONFIG, "identity_challenge": blue,
+                                           "identity_challenges": [blue, amber, blue]}], detector=detector)
+    asyncio.run(worker.refresh_config())
+    for i in range(20):
+        asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
+    assert sorted(body["request_id"] for body in client.identity) == ["req-a", "req-b"]
+    assert set(detector.holds) == {105.0}
+    assert all(body["processor_revision"] == "led-identity/2" for body in client.identity)
+
+
+def test_no_tune_step_is_judged_while_an_led_identify_window_is_open():
+    """D-589 x D-596: an exposure step mid-window would hide the blink; the request stays fresh."""
+    challenge = {"request_id": "r1", "color": "blue", "not_before": 99.0, "not_after": 104.5}  # window <= 6 s
+    clock = SimpleNamespace(now=0.0)
+    ingest = _TuningIngest(_camera_state(mode="local"))
+    client = _Client()
+    client.configs = [{**CONFIG, "identity_challenges": [challenge]}]
+    worker = TrackWorker(camera=CAMERA, ingest=ingest, client=client, detector=_Camera(),
+                         decode=lambda jpeg: np.full((360, 640, 3), 120, np.uint8),
+                         clock=lambda: clock.now)
+    asyncio.run(worker.refresh_config())
+    _frames(worker, clock, 12)  # inside the window: the tune does not start, nothing is scored
+    assert ingest.sent == [] and worker.tuner.status()["state"] == "waiting"

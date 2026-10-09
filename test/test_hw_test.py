@@ -124,7 +124,7 @@ def _run(root: Path, system: FakeSystem) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-@pytest.mark.parametrize("action", ["identify_blue", "identify_amber"])
+@pytest.mark.parametrize("action", ["identify_blue", "identify_amber", "identify_amber_quiet"])
 def test_identity_request_only_hands_off_to_the_face_owner(tmp_path, action):
     root = _root(tmp_path, env="ROSY_LAMP_ENABLED=true")
     _request(root, action)
