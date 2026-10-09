@@ -857,11 +857,12 @@ else {
     if (-not $DeviceName) { Fail "could not allocate a unique Pinky device name after 32 attempts" }
 }
 if ($robotNumberSource -eq "auto" -and -not $reviewedPlan) {
-    # Draw from the free slots instead of taking the lowest one so two operator
-    # PCs with separate registries are less likely to hand out the same DDS domain.
-    $freeNumbers = @(1..61 | Where-Object { @($registry.robot_numbers) -notcontains $_ })
-    if ($freeNumbers.Count -eq 0) { Fail "no free robot number remains in the registry (1-61)" }
-    $RobotNumber = [int]($freeNumbers | Get-Random)
+    # D-562: the robot number is also its ceiling ArUco id (DICT_4X4_50), so automatic
+    # numbers are 40-49 in registration order. The registry is per PC; site-wide
+    # uniqueness still rests on Fleet's robot_id_conflict refusal.
+    $freeNumbers = @(40..49 | Where-Object { @($registry.robot_numbers) -notcontains $_ })
+    if ($freeNumbers.Count -eq 0) { Fail "no free robot number remains in the registry (40-49, D-562)" }
+    $RobotNumber = [int]$freeNumbers[0]
 }
 # Checked again after drawing or loading a plan: a tampered plan must never
 # reach the writer with an identity the bundle validator would later refuse.

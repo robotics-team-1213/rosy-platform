@@ -682,3 +682,43 @@ def test_console_development_mode_requires_the_task_database(tmp_path, monkeypat
 
     with pytest.raises(SystemExit, match="--tasks-db is required with --connection-mode development"):
         cli.run_console(args)
+
+
+def test_site_config_optional_present_absent_and_both(tmp_path, capsys):
+    base = ["console", "--robots", str(_write(tmp_path))]
+    site = tmp_path / "fleet-site.yaml"
+    site.write_text("fleet: {}\n", encoding="utf-8")
+    args = cli.parse_args(base + ["--site-config-optional", str(site)])
+    cli._resolve_optional_site_config(args)
+    assert args.site_config == site
+
+    args = cli.parse_args(base + ["--site-config-optional", str(tmp_path / "none.yaml")])
+    cli._resolve_optional_site_config(args)
+    assert args.site_config is None
+    assert "using defaults" in capsys.readouterr().err
+
+    args = cli.parse_args(base + ["--site-config", str(site), "--site-config-optional", str(site)])
+    with pytest.raises(SystemExit, match="cannot be combined"):
+        cli._resolve_optional_site_config(args)
+
+
+def test_site_config_example_is_a_valid_roundabout_signal():
+    from types import SimpleNamespace
+
+    from fleet.routing.graph import build_graph
+    from fleet.traffic import signal_phase
+    from fleet.traffic.blocks import build_layout
+    from test_blocks import DEMO, _demo_map
+
+    example = Path(__file__).resolve().parents[3] / "deploy" / "site" / "fleet-site.yaml.example"
+    args = SimpleNamespace(site_config=example)
+    zones, plans = cli._traffic_zones(args), cli._traffic_signals(args)
+    assert list(zones) == ["roundabout"] and len(plans) == 1
+    graph = build_graph(_demo_map())
+    layout = build_layout(graph, DEMO, zones)
+    assert signal_phase.check(plans[0], graph, layout) == []
+
+
+def test_site_compose_reads_the_optional_fleet_site_config():
+    compose = (Path(__file__).resolve().parents[3] / "deploy" / "site" / "compose.yaml").read_text(encoding="utf-8")
+    assert "--site-config-optional\n      - /run/rosy-config/fleet-site.yaml" in compose
