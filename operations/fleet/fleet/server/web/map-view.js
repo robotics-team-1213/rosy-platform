@@ -677,15 +677,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       life.check();
       view.siteMap = siteMap;
       el("map-stage").dataset.siteMap = "configured";
-      // Show the read-only site layer while a robot map request is still pending.
-      if (!view.map && !auth.locked) showSiteMap();
       if (Date.now() - calibrationsAt > 30000) {
-        try {
-          const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
-          life.check();
-          camera.setCalibrations(result.calibrations || []);
-          calibrationsAt = Date.now();
-        } catch (error) { if (error.name === "AbortError") return; camera.setCalibrations([]); }
         // D-513 7: 활성 현장 지도의 화면 방향. 지도가 없거나(404/409) 읽지 못하면 기본 방향.
         try {
           view.activeSiteMap = await call("/api/fleet/site-map/active", { signals: [life.signal] });
@@ -695,6 +687,17 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
           if (error.name === "AbortError") return;
           if (error.status === 404 || error.status === 409) { view.siteViewTurn = 0; view.activeSiteMap = null; } // no active map; else keep the last turn
         }
+        // The first site draw must use the active map turn; drawing at 0° then turning to 90°
+        // makes the whole map jump while the camera and robot map requests are still pending.
+        if (!view.map && !auth.locked) showSiteMap();
+        try {
+          const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
+          life.check();
+          camera.setCalibrations(result.calibrations || []);
+          calibrationsAt = Date.now();
+        } catch (error) { if (error.name === "AbortError") return; camera.setCalibrations([]); }
+      } else if (!view.map && !auth.locked) {
+        showSiteMap();
       }
     } catch (err) {
       if (err.name === "AbortError") return;
