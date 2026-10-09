@@ -15,7 +15,8 @@ import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import {drawStartPointMarks} from './start-point-layer.js';
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { drawTrails } from "./trail-view.js";
-import { drawTraffic } from "./traffic-view.js";
+import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
+import { drawGuide } from "./guide-layer.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
@@ -519,6 +520,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     traffic(ctx, toPx, t.scale);
     drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
     drawStartPointMarks(ctx, toPx, view.startPoints, view.siteMap.maps.map(row=>row.map_id), css('--series-secondary'), 2);
+    guide(ctx, toPx);
     if (layerOn("sightings")) {
       for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
     }
@@ -527,6 +529,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
 
   const traffic = (ctx, toPoint, pxPerM) =>
     drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, drawChip, on: layerOn("traffic") });
+  // D-536: 로봇 몸체 원·방향·불확실성 고리와 안내 목표. "로봇" 층을 따른다.
+  const guide = (ctx, toPoint) => {
+    drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip, on: layerOn("poses") });
+    drawSignalLamps(ctx, toPoint, { view, css, on: layerOn("traffic") });  // D-525 rev 3: above the robots
+  };
 
   function describeSightings() {
     const fresh = view.sightings.filter((s) => s.state === "fresh").length;
@@ -625,6 +632,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       }
     });
     traffic(ctx, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 1 / grid.resolution);
+    guide(ctx, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; });
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
     drawSiteOverlay(ctx, grid);
@@ -694,6 +702,27 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const trafficGate = createPollGate();
   let trafficInFlight = false;
   scope.onDispose(() => { trafficInFlight = false; });
+  // D-536: 로봇 상황(1 s, 교통 표와 같은 주기). 모르는 라우트(404)면 다음 로그인까지 묻지 않는다.
+  const guideGate = createPollGate();
+  let guideInFlight = false;
+  scope.onDispose(() => { guideInFlight = false; });
+  async function refreshGuide() {
+    const life = scope.capture();
+    life.check();
+    if (auth.locked || guideInFlight || !guideGate.due()) return;
+    guideInFlight = true;
+    try {
+      view.guide = await call("/api/fleet/guide", { signals: [life.signal] });
+      life.check();
+      guideGate.ok();
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      if (guideGate.fail(err.status, err.code) === "absent") view.guide = null;
+    } finally {
+      if (life.current()) guideInFlight = false;
+    }
+    onTrafficChanged();  // the roster's exception queue reads view.guide too
+  }
   async function refreshTraffic() {
     const life = scope.capture();
     life.check();
@@ -827,6 +856,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     draw();
   }
 
-  return { draw, refresh, refreshSightings, refreshTraffic, resetPolling, toWorld, streamEvidence,
+  return { draw, refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling, toWorld, streamEvidence,
     setCameraFrame: camera.setCameraFrame, bindCamera: camera.bindCamera };
 }

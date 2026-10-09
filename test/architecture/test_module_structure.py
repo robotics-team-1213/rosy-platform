@@ -84,7 +84,8 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
               "core/services/core_features/line_follow/arc",
-              "fleet/fleet/traffic")
+              "fleet/fleet/traffic",
+              "perception/control/sensing/perception")
 
 CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
@@ -170,15 +171,20 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_083,
-        "split: measured at 46083 on 2026-10-09 after traffic config moved to its counted "
-        "subpackage. D-525 S1 adds virtual signal view and trip-loop wiring within Fleet's existing "
-        "site and traffic owners; D-524 Service Control stays in the host-control owner. No new robot "
-        "command path or package owner; continue the server/web split in "
-        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md. +150 allowance from 46083. "
-        "Previously re-judged at 45955 on 2026-10-08: Service Control (D-524) adds host_control.py and "
-        "host_control_routes.py, an allowlisted reboot and unit restart with no robot command path. "
-        "+150 allowance measured from 45955. "
+        46_701,
+        "split: re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
+        "(fleet/guide/situation.py, fleet/server/guide_service.py, web/guide-layer.js) "
+        "over the map snapshot Fleet already holds. It does not call the network or emit a command. "
+        "Main measured 46507 before D-523's 194-line ask parser. No new robot command path or package owner. "
+        "The site-map web/server split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; "
+        "+150 allowance unchanged, measured from 46701. "
+        "Previously re-judged at 46295 on 2026-10-09: D-523 adds fleet/ai/decision_pipeline.py "
+        "(194 lines), parsers that return an identity fact or an allowlisted choice and do not "
+        "call the network or emit a command. Main measured 46083 after the traffic-config move; "
+        "D-525 S1 virtual signals and D-524 Service Control stay in the existing site, traffic, "
+        "and host-control owners. No new robot command path or package owner. The site-map "
+        "web/server split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; "
+        "+150 allowance unchanged, measured from 46295. "
         "Previously re-judged at 45723 on 2026-10-08 (independent re-judge, critic agent): 45571 was 46434 - 863 "
         "by arithmetic; measured 45699 after the traffic move because main's D-520 1-2 arc handshake and the "
         "CORE-approaching busy fix (91b15708b) landed beside D-517 M3, each in its existing owner; then +24 "
@@ -664,8 +670,11 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1225,
-        "accept: re-judged at 1225 on 2026-10-07: D-499 adds a read-only link class "
+        1229,
+        "accept: re-judged at 1229 on 2026-10-09: D-535 records link_reason beside the "
+        "existing link class on a gathered robot row. No goal, stop, or admission path "
+        "changed. The zero growth allowance remains. Previously re-judged at 1225 on "
+        "2026-10-07: D-499 adds a read-only link class "
         "to each gathered robot row using the existing address-status snapshot; provider "
         "failure falls back to an empty status map. No goal, stop, or admission path changed. "
         "The zero growth allowance remains. Previously re-judged at 1202: D-493 records each gathered state observation "
@@ -885,9 +894,16 @@ SIZE_VERDICTS = {
         "docs/validation/ui-release-integration-2026-10-04/README.md records the independent review. "
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
+    "perception/control/sensing/perception": (
+        11_035,
+        "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
+        "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
+        "colcon package, ROS adapters and CORE command ownership do not change; the later "
+        "package move needs its own review and ARM64 image proof. Judged at 11035 on 2026-10-09.",
+    ),
     "control": (
-        45_394,
-        f"split: 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
+        34_446,
+        f"split: P1a size unit on 2026-10-09: control 45481 = 34446 remaining + 11035 in the separate perception evidence unit (docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). No import or deploy change. Previously 45394 = main verdict 45258 + 136 for the D-507 B9 bend rule gated on bend_expected (default off; lane_keep_bend.py new 108, lane_keep_junction.py +18, lane_keep_pairs.py +10). Re-judged at 45258 on 2026-10-08: the right-boundary fallback width guard stays in "
         "the existing ROS-free lane_bev owner with one focused regression; the P1a sensing split "
         f"still applies. Deploy closure needs only sensing + safety provider (P1a); {CONTROL_SPLIT} "
         "(re-judged 2026-10-07 at 44926 after lane containment projection uncertainty (lane_containment.py "
@@ -1029,11 +1045,11 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1182,
-        "accept: re-judged at 1182 on 2026-10-09 for D-483: the peer request LCD now "
-        "shows the first 16 digits of the TLS CA digest for first-contact comparison; "
-        "card_renderer remains the single LCD owner, and test/test_rosy_face.py covers the row. "
-        "Previously re-judged at 1177 on 2026-10-08 for D-472 4/5: the identity blink's SIGKILL reap, "
+        1183,
+        "accept: re-judged at 1183 on 2026-10-09 for D-472/D-537: identify may briefly use a normally disabled lamp through rosy-face while the normal pattern stays off; "
+        "zero growth allowance remains. Previously re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "
+        "the first 16 digits of the validated TLS CA fingerprint for tablet comparison; "
+        "zero growth allowance remains. Previously re-judged at 1177 on 2026-10-08 for D-472 4/5: the identity blink's SIGKILL reap, "
         "hard 3.5 s cut and immediate refusal answer stay with the one process that spawns "
         "lamp_pattern; IDENTIFY_OVER and the identify age constants may later move to "
         "core_common.face_screen; zero growth allowance remains. "

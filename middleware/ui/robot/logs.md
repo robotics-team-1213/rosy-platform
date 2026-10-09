@@ -1218,3 +1218,19 @@
 - 변경: 지도 데이터가 없을 때 현재 지도를 볼 수 있다고 단정하지 않도록 Robot Console의 비하드웨어 모드 안내를 바로잡았다.
 - 증거: [Pilot→Robot Console 연속 화면](../../../docs/validation/uiux-pilot-console-continuity-2026-10-09/result.md). 390·2000px 실제 CORE 자산 캡처, 관련 브라우저 4 passed, `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 빈 지도 설명 근거 보강. 지도·SLAM 실제 실행과 DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · fix(robot): paired 연결에서 개발 입장 숨김
+- 변경: 로그인 전 렌더가 개발 연결 버튼을 무조건 드러내던 동작을 고쳤다. CORE의 `/api/v1/auth/connection`이 `development`를 반환할 때만 기존 조회 경로가 버튼을 연다.
+- 증거: 모델 PC Chromium에서 paired 회귀 시험 수정 전 1 failed, 수정 후 paired·development·호환 경로 3 passed. 실기기 설치본은 별도 배포가 필요하다.
+- gate 변화: SOURCE UI 수정. 로봇 설치본·브라우저 신뢰 저장소·DEVICE/FIELD는 미확인.
+
+## 2026-10-09 · uncommitted · uiux(robot): 마지막 계획 경로의 불확실성 표시
+
+- 변경: 마지막 수신 계획을 화살표 없는 점선으로 그리고 경과 시간과 현재 목표 일치 미확인을 Console에 보인다. 좁은 화면에서는 상태 문구를 줄바꿈한다.
+- 증거: [마지막 계획 경로 화면](../../../docs/validation/uiux-robot-last-plan-2026-10-09/result.md). 320·390·1366px CORE Console 캡처; 브라우저 1 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 계획 경로 표시 근거 보강. 현재 목표 연동·실제 추종, 설치본·DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · feat(robot): 설치·정비 화면에 후면 램프 대조 시험
+- 변경: 기체 ID의 일회성 몸체 대조를 위해 기존 CORE host/hardware/test 램프 자가 시험을 설치·정비 패널에 연결했다. 관리자와 장치 상태를 확인한 뒤 요청 ID가 같은 장치 결과만 표시하고, 완료를 물리 신원 확인으로 표현하지 않는다.
+- 증거: 역할·요청 ID·장치 완료 문구를 검사하는 브라우저 회귀 시험을 추가했다. 역할 PC 실행 결과와 장치 설치본은 별도 기록한다.
+- gate 변화: SOURCE 구현. ARTIFACT·DEVICE/FIELD는 설치·현장 확인 전까지 HOLD.

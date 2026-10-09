@@ -408,6 +408,7 @@ class LineObserverNode(Node):
         frame = None
         mode = None
         ground = None
+        quality = None
         if (bool(self.get_parameter(
                 'require_camera_controls_stable').value)
                 and not self._camera_controls_stable):
@@ -527,6 +528,9 @@ class LineObserverNode(Node):
                             image_stamp,
                             pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
                             frame, ground, **lane_kwargs)
+                        if mode == 'route_a' and self._route_follower.last.get('reason') == 'washed':
+                            observation = None
+                            quality = dict(valid=False, reason='overexposed')
                 elif bool(self.get_parameter('lane_corner_turning').value):
                     image_stamp = (float(msg.header.stamp.sec)
                                    + float(msg.header.stamp.nanosec) * 1e-9)
@@ -550,7 +554,8 @@ class LineObserverNode(Node):
                 source=str(self.get_parameter('camera_ground_source').value).upper(),
                 camera_x=self._lane_keeper._x_offset, geometry_bounds=self._ground_error,
                 paint_half_width_m=self._paint_half_width_m)
-        self._publish('CAMERA_LINE', observation, stamp=source_stamp, containment=containment)
+        self._publish('CAMERA_LINE', observation, stamp=source_stamp,
+                      quality=quality, containment=containment)
         self._publish_debug(msg, frame, observation)
 
     def _publish_debug(self, msg, frame, observation) -> None:

@@ -46,5 +46,14 @@ deploy/site/rosy-model-guard-check text eol=lf
 deploy/site/rosy-model-guard-remote text eol=lf
 deploy/site/rosy-host-control text eol=lf
 deploy/site/rosy-host-control-remote text eol=lf
+# Host guard scripts run under Linux shells (no extension, so *.sh does not cover them).
+deploy/site/rosy-host-guard text eol=lf
+deploy/hosts/common/rosy-host-guard-remote text eol=lf
+deploy/hosts/common/rosy-host-state text eol=lf
+# D-530: host-state files are compared byte for byte with the installed copies on the hosts.
+deploy/*/host-state/** text eol=lf
+deploy/hosts/common/host-state/** text eol=lf
 # Lap SIM batch lists are read by bash on the model PC; CRLF left a CR at the end of each run name.
 docs/validation/**/evidence/*batch*.txt text eol=lf
+tools/hooks/pre-push text eol=lf
+deploy/hosts/** text eol=lf

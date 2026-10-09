@@ -69,6 +69,7 @@ class TrafficService:
         self._busy: Optional[frozenset] = None
         self._signal_clock = signal_clock
         self._present_until = -math.inf  # D-525 4: a manual green needs an operator present
+        self._ahead: dict[str, dict] = {}  # robot id -> its next signal (D-525 rev 3)
         # ponytail: one body for the whole site (Pinky); the longest registered body (D-517 3 L)
         # comes from robot capabilities once a second kind joins.
         self._body, self._length = body, body.front_x_m - body.rear_x_m
@@ -260,6 +261,7 @@ class TrafficService:
         now = self._clock()
         result = blocks.step(layout, robots, self._state, now, green=self._green())
         self._busy = result.busy
+        self._ahead = self._signals_ahead(robots)
         refused_unit: dict[str, str] = {}
         for robot in robots:
             live, waiting = trips[robot.id], result.waiting_for.get(robot.id, ())
@@ -279,6 +281,8 @@ class TrafficService:
                             "authority_end_m": result.authority_end.get(robot.id), "refused_at_m": refused, **used}
         self._view = self._make_view(active[0], layout, active[2], trips, result, refused_unit, robots, gaps)
         self._view["signals"] = self._signal_view(active[2])
+        for row in self._view["robots"]:
+            row["signal_ahead"] = self.signal_ahead(row["robot_id"])
         self._hand_over(layout, trips, robots, refused_unit, now)
 
     def _hand_over(self, layout, trips: dict, robots, refused_unit: dict, now: float) -> None:
@@ -313,6 +317,10 @@ class TrafficService:
     def view(self) -> dict:
         return self._view
 
+    def zone_edges(self) -> dict[str, tuple]:
+        """Site zones ``{zone: (edges, capacity)}`` (D-536 guide reads them)."""
+        return dict(self._zones)
+
     # ---- D-525 virtual signals ------------------------------------------------------------
 
     def _green(self) -> dict[str, frozenset]:
@@ -325,6 +333,33 @@ class TrafficService:
             signal_phase.advance(plan, state, now, self._busy is None or plan.zone in self._busy)
             green[plan.zone] = frozenset() if self._signal_errors.get(signal_id) else signal_phase.green(plan, state)
         return green
+
+    def _signals_ahead(self, robots) -> dict[str, dict]:
+        """D-525 rev 3: each localized trip robot's next signalled zone on its route: the signal, the
+        approach it enters from, front-to-stop-line metres (negative: already past it) and whether it
+        already holds that zone (may enter; the D-517 authority is still what lets it move)."""
+        zones = {plan.zone: plan.id for plan in self._signals.values()}
+        out = {}
+        for robot in robots:
+            if robot.d is None or not zones:
+                continue
+            held = self._state.held.get(robot.id, {})
+            for index, span in enumerate(robot.spans):
+                if span.unit in zones and span.d1 > robot.d:
+                    out[robot.id] = {"signal_id": zones[span.unit], "approach": span.entry,
+                                     "distance_m": round(span.d0 - robot.d, 3), "may_enter": index in held}
+                    break
+        return out
+
+    def signal_ahead(self, robot_id: str) -> Optional[dict]:
+        """The next signal on this robot's trip with its approach's countdown (advisory), or None."""
+        ahead = self._ahead.get(robot_id)
+        if ahead is None:
+            return None
+        plan = self._signals[ahead["signal_id"]]
+        row = next((a for a in self._signal_row(plan, None)["approaches"] if a["approach"] == ahead["approach"]), {})
+        return {"robot_id": robot_id, **ahead, "virtual": True, "advisory": True,
+                **{k: row.get(k) for k in ("lamp", "left_s", "green_in_s", "exact")}}
 
     def signal_command(self, signal_id: str, verb: str, approach: Optional[str] = None) -> dict:
         """Operator verb (D-525 4): ``cycle``, ``hold``, ``all_red`` or ``set_aspect`` (green for one
@@ -378,20 +413,24 @@ class TrafficService:
         left = {"green": (plan.phases[state.phase][1] - held) if state.mode == "cycle" else None,
                 "yellow": plan.yellow_s - held, "all_red": plan.all_red_s - held}[state.aspect]
         approaches = []
+        errors = self._signal_errors.get(plan.id) or []
+        busy = self._busy is None or plan.zone in self._busy
+        ahead = signal_phase.forecast(plan, state, now, busy)
         for approach, green_s in plan.phases:
             lamp = "green" if approach in lit else "yellow" if state.aspect == "yellow" and approach == last else "red"
-            row = {"approach": approach, "lamp": lamp, "green_s": green_s}
+            row = {"approach": approach, "lamp": lamp, "green_s": green_s,
+                   **({"left_s": None, "green_in_s": None, "exact": False} if errors else
+                      {k: ahead[approach][k] for k in ("left_s", "green_in_s", "exact")})}
             if graph is not None and approach in graph.arcs:  # the stop line: where the approach meets the zone
                 arc = graph.arcs[approach]
                 x, y, yaw = arc.point_at(arc.length_m)
                 row["stop_line"] = {"x": round(x, 3), "y": round(y, 3), "yaw": round(yaw, 4)}
             approaches.append(row)
-        errors = self._signal_errors.get(plan.id) or []
         manual = plan.phases[state.manual][0] if state.mode == "manual" and state.manual is not None else None
         return {"signal_id": plan.id, "zone": plan.zone, "virtual": True, "mode": state.mode, "manual": manual,
                 "aspect": "all_red" if errors else state.aspect,
                 "left_s": None if left is None or errors else round(max(0.0, left), 1),
-                "zone_busy": self._busy is None or plan.zone in self._busy,
+                "zone_busy": busy,
                 "approaches": approaches, "errors": errors, "alert": signal_phase.alert(plan, state, now)}
 
     def _signal_view(self, graph) -> list[dict]:

@@ -102,6 +102,17 @@ def test_no_ground_or_no_odometry_is_no_output():
     assert all(obs is None for _, obs, _ in log)
 
 
+@pytest.mark.parametrize("jump", [(0.0, 0.08, 0.0), (0.0, 0.0, 1.0)])
+def test_odometry_jump_stops_and_does_not_reuse_boundary_memory(jump):
+    world = lane([(-1.0, 0.0), (1.5, 0.0)])
+    follower = LaneEdgeFollower(camera_x_offset_m=CAM_X)
+    frame = world.render((0.0, 0.0, 0.0))
+    assert follower.update(0.0, (0.0, 0.0, 0.0), frame, GROUND, **KW) is not None
+    assert follower.update(0.2, jump, frame, GROUND, **KW) is None
+    assert follower.last.get("reason") == "odom_discontinuity"
+    assert follower.update(0.4, jump, frame, GROUND, **KW) is None
+
+
 def test_one_line_alone_never_seeds():
     """No lane-width pair, no memory: a lone line at +h is not trusted."""
     world = World().line([(-1.0, H), (1.5, H)])

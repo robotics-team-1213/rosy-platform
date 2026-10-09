@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · 공개 검증 기록의 커밋 해시 문맥
-- 2026-10-09 · uncommitted · 10/7 MCAP 원본 207프레임 검수 후보 갤러리
-- 2026-10-09 · uncommitted · uiux(pilot/robot): 같은 탭 운전석→운용 지도 검증
-- 2026-10-09 · uncommitted · 10/6·10/7 원본 검수 후보 시각 대조
-- 2026-10-09 · uncommitted · 10/6·10/7 주행영역 연속 검수 후보
+- 2026-10-09 · uncommitted · docs: Fleet 5개 작업 캡처 기준선
+- 2026-10-09 · uncommitted · docs: 화면 목적·인계·공간 평가 기준
+- 2026-10-09 · uncommitted · docs: Fleet 현장 위치·SLAM 실행 상태 재검증
+- 2026-10-09 · uncommitted · docs: SIM 벽 근처 LiDAR HOLD 원인 범위
+- 2026-10-09 · uncommitted · docs: SIM 정지 사유의 IR 횡단선 판별

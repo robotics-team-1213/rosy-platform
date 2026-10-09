@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸의 Enter가 코드를 보내지 않았다
+- 2026-10-09 · uncommitted · docs(pilot): 한글 키보드 승인 코드 수정의 기록 보완
 - 2026-10-09 · uncommitted · Pilot 브라우저 시험의 개발 토큰 출처 정리
 - 2026-10-09 · uncommitted · uiux(pilot): Robot 운용 지도 같은 탭 인계 검증
 - 2026-10-09 · uncommitted · fix(pilot): 연결 상태와 이유를 늘 보인다 (D-483 보완)
-- 2026-10-08 · uncommitted · fix(pilot): 운용 지도로 같은 탭 인증 인계
-- 2026-10-08 · uncommitted · uiux(pilot): 운용 지도 인계와 운전 모드 정리

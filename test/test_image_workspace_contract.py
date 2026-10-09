@@ -10,6 +10,11 @@ from pathlib import Path
 
 import pytest
 
+# CI runs as root in its container; a non-root POSIX host (the shared test PCs) cannot.
+# Windows keeps its existing behaviour.
+REQUIRES_ROOT = pytest.mark.skipif(os.name == "posix" and os.geteuid() != 0,
+                                   reason="needs root: image-workspace.sh requires root")
+
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE_DIR = ROOT / "deploy" / "robot" / "pinky_pro" / "image"
@@ -156,6 +161,7 @@ def test_boot_mountpoint_is_created_inside_the_mounted_root_filesystem():
     assert root_mount < boot_directory < boot_mount
 
 
+@REQUIRES_ROOT
 @bash_only
 def test_workspace_rejects_a_non_native_host_before_mutation(tmp_path):
     work_root, _ = _fixture(tmp_path)
@@ -169,6 +175,7 @@ def test_workspace_rejects_a_non_native_host_before_mutation(tmp_path):
     assert not any(work_root.iterdir())
 
 
+@REQUIRES_ROOT
 @bash_only
 def test_workspace_never_mutates_the_cached_base_and_is_disposable(tmp_path):
     work_root, _ = _fixture(tmp_path)
@@ -183,6 +190,7 @@ def test_workspace_never_mutates_the_cached_base_and_is_disposable(tmp_path):
     assert not any(work_root.iterdir())
 
 
+@REQUIRES_ROOT
 @bash_only
 def test_each_run_uses_a_unique_workspace_and_exports_mount_paths(tmp_path):
     _fixture(tmp_path)
@@ -202,6 +210,7 @@ def test_each_run_uses_a_unique_workspace_and_exports_mount_paths(tmp_path):
     assert first_boot == f"{first_root}/boot/firmware"
 
 
+@REQUIRES_ROOT
 @bash_only
 def test_workspace_discovers_pi_partitions_and_cleans_up_in_reverse(tmp_path):
     _fixture(tmp_path)
@@ -232,6 +241,7 @@ def test_workspace_discovers_pi_partitions_and_cleans_up_in_reverse(tmp_path):
     assert root_mount < boot_mount < callback < boot_unmount < root_unmount < detach
 
 
+@REQUIRES_ROOT
 @bash_only
 def test_partial_mount_failure_detaches_loop_and_removes_workspace(tmp_path):
     work_root, _ = _fixture(tmp_path)

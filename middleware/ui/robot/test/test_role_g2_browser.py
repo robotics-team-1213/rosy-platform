@@ -1286,6 +1286,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 마지막 수신')")
             assert "주행 · 주행 중" in stage.inner_text()
             assert "계획 경로 · 마지막 수신" in stage.inner_text()
+            assert "목표 일치 미확인" in stage.inner_text()
             assert "위치 추정 · 지도 좌표 확인" in stage.inner_text()
             page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 세션 수락 · 지도 갱신 미확인')")
             assert "SLAM · 세션 수락 · 지도 갱신 미확인" in stage.inner_text()

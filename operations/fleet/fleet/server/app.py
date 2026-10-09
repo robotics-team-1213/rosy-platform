@@ -628,6 +628,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                         routing_config=routing_config or site_maps.routing_config,
                         require_named_operator=require_named_operator, runner=trip_runner,
                         read_guard=read_guard)
+    from fleet.server.guide_service import GuideService, install_guide_routes  # D-536
+    app.state.guide = GuideService(gather=app.state.fleet_gather, poses=map_pose, site_maps=site_maps,
+                                   tracking=tracking if tracking is not None and tracking.enabled else None,
+                                   zones=trip_runner.traffic.zone_edges)
+    install_guide_routes(app, service=app.state.guide, read_guard=read_guard)
 
     proposal_create = proposal_resolve = None
     if mission_service is not None:

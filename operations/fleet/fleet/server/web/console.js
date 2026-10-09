@@ -936,6 +936,7 @@ pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => mapView.refresh(), MAP_MS);
 pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
 pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);
+pageScope.interval(() => mapView.refreshGuide(), STATE_MS);  // D-536
 pageScope.interval(() => trackingView.refresh(), STATE_MS);
 pageScope.interval(() => visionView.refreshFrame(), 1500);
 

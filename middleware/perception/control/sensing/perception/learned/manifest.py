@@ -248,6 +248,27 @@ def load_manifest(path: str | Path) -> ModelManifest:
     if not isinstance(doc, dict) or doc.get("schema") not in (SCHEMA, NCNN_SCHEMA):
         raise ManifestError(f"schema: expected {SCHEMA} or {NCNN_SCHEMA}")
     revision = check_revision(doc.get("model_revision"))
+    if revision.startswith("v13-drivable-"):
+        parent = doc.get("parent_lane_model")
+        if (not isinstance(parent, dict) or set(parent) != {
+                "model_revision", "onnx_sha256", "torchscript_sha256"}
+                or not isinstance(parent["model_revision"], str)
+                or not re.fullmatch(r"lane-seg-[A-Za-z0-9._-]+", parent["model_revision"])
+                or not isinstance(parent["onnx_sha256"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", parent["onnx_sha256"])
+                or not isinstance(parent["torchscript_sha256"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", parent["torchscript_sha256"])):
+            raise ManifestError("parent_lane_model: v13-drivable needs lane-seg revision, ONNX and TorchScript sha256")
+        dataset_doc = doc.get("dataset")
+        dataset_revision = dataset_doc.get("revision") if isinstance(dataset_doc, dict) else None
+        if not isinstance(dataset_revision, str) or not re.fullmatch(r"[0-9a-f]{64}", dataset_revision):
+            raise ManifestError("dataset.revision: v13-drivable needs 64 lowercase hex chars")
+        output_doc = doc.get("output")
+        classes = output_doc.get("classes") if isinstance(output_doc, dict) else None
+        if (not isinstance(classes, list) or not classes or not isinstance(classes[-1], dict)
+                or classes[-1].get("role") != "drivable"
+                or sum(c.get("role") == "drivable" for c in classes if isinstance(c, dict)) != 1):
+            raise ManifestError("output.classes: v13-drivable needs one final drivable channel")
     task = doc.get("task")
     if task not in TASKS:
         raise ManifestError(f"task: one of {TASKS}")

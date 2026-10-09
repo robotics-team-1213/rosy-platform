@@ -48,7 +48,7 @@ export function mount(root, ctx) {
   stage.setAttribute("role", "group");
   stage.setAttribute("aria-label", "주행 관측");
   const navStage = el("span", "", "주행 · 확인 중");
-  const pathStage = el("span", "", "계획 경로 · 확인 중");
+  const pathStage = el("span", "surface-map-path-evidence", "계획 경로 · 확인 중");
   const locationStage = el("span", "", "위치 추정 · 확인 중");
   const slamStage = el("span", "", "SLAM · 확인 중");
   stage.append(navStage, pathStage, locationStage, slamStage);

@@ -43,8 +43,13 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
                     val code = EditText(activity).apply {
                         // D-483 M1: the LCD may list several requests; ours is the line with our display code.
                         hint = "로봇 화면에서 ${pending.code} 옆의 승인 코드"
-                        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-                        filters = arrayOf(InputFilter.AllCaps(), InputFilter.LengthFilter(6))
+                        // Site tablets default to a Korean keyboard, which turned the typed code into Hangul
+                        // (2026-10-09 device walk). VISIBLE_PASSWORD asks for a Latin layout; the filter keeps
+                        // only the code alphabet whatever the keyboard sends.
+                        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                        filters = arrayOf(InputFilter.AllCaps(), LinkStatus.codeFilter, InputFilter.LengthFilter(6))
+                        // Set before show(): an IME that is already attached keeps the old options (2026-10-09 walk).
+                        isSingleLine = true; imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
                     }
                     val note = TextView(activity)
                     val form = LinearLayout(activity).apply {
@@ -58,12 +63,18 @@ class PeerApprovalUi(private val activity: Activity, private val signer: () -> P
                     dialog!!.show()
                     val send = dialog!!.getButton(AlertDialog.BUTTON_POSITIVE)
                     // D-483: the dialog stays open; the status poll closes it once the request is approved.
+                    // The keyboard covers the button on the tablet; its Done key sends the code too.
+                    // A hardware or IME Enter arrives as IME_NULL with a KEYCODE_ENTER down event, not as IME_ACTION_DONE.
+                    code.setOnEditorActionListener { _, action, event -> LinkStatus.sendsCode(action, event?.keyCode, event?.action).also { if (it) send.performClick() } }
                     send.setOnClickListener {
                         val typed = code.text.toString().trim().uppercase()
                         if (!PeerClient.APPROVAL_CODE.matches(typed)) { note.text = "승인 코드는 로봇 화면의 6자입니다."; return@setOnClickListener }
                         send.isEnabled = false; note.text = "승인 코드를 확인하는 중입니다."
                         Thread {
                             val outcome = runCatching { flow.confirm(typed) }.exceptionOrNull()
+                            // Class and HTTP status only: never the code or a response body.
+                            if (outcome != null) android.util.Log.w("RosyPilot", "Approval code not accepted: ${outcome.javaClass.simpleName}" +
+                                ((outcome as? PeerRefused)?.let { " HTTP ${it.status}" } ?: "") + (outcome.cause?.let { " cause ${it.javaClass.simpleName}" } ?: ""))
                             main.post {
                                 if (!owns()) return@post
                                 send.isEnabled = true

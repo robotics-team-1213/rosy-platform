@@ -176,7 +176,7 @@ export function createFieldMap(options) {
     if (path.frame_id !== "map") return {visible: false, label: "지도 좌표 미확인"};
     if (!Number.isFinite(path.age_s) || path.age_s < 0) return {visible: false, label: "수신 나이 미확인"};
     const age = Math.floor(path.age_s + (performance.now() - path.readAt) / 1000);
-    return {visible: true, label: `마지막 수신 ${age}초 전`};
+    return {visible: true, label: `마지막 수신 ${age}초 전 · 목표 일치 미확인`};
   }
   function setPath(path) {
     state.path = path ? {...path, readAt: performance.now()} : null;
@@ -262,27 +262,15 @@ export function createFieldMap(options) {
         if (index === 0) ctx.moveTo(point.x, point.y);
         else ctx.lineTo(point.x, point.y);
       });
+      // API로는 마지막 계획과 현재 목표의 연결 여부를 확인할 수 없어 점선으로 구분한다.
+      ctx.save();
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = cssColor("route");
       ctx.lineWidth = 4 * scale;
+      ctx.setLineDash([8 * scale, 6 * scale]);
       ctx.stroke();
-      // 마지막 수신 계획의 끝 방향만 표시한다. 현재 목표나 실제 주행 궤적 표시는 아니다.
-      const end = points[points.length - 1];
-      const previous = points.slice(0, -1).reverse().find((point) => Math.hypot(end.x - point.x, end.y - point.y) > scale);
-      if (previous) {
-        ctx.save();
-        ctx.translate(end.x, end.y);
-        ctx.rotate(Math.atan2(end.y - previous.y, end.x - previous.x));
-        ctx.fillStyle = cssColor("route");
-        ctx.beginPath();
-        ctx.moveTo(5 * scale, 0);
-        ctx.lineTo(-9 * scale, -6 * scale);
-        ctx.lineTo(-9 * scale, 6 * scale);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
+      ctx.restore();
     }
     if (cross) {
       ctx.save();

@@ -179,13 +179,15 @@ def test_whole_video_connects_adjacent_frames_even_different_group_aliases():
     assert target.source_components(rows, {}) == [[0, 1]]
 
 
-def build_fixture(tmp_path, shared_group=False):
+def build_fixture(tmp_path, shared_group=False, with_drivable=False):
     from test_review_authority import encoded, refs, reseal
     from dataset.build import load_classes, content_sha
     from store import Store
     np = pytest.importorskip('numpy'); cv2 = pytest.importorskip('cv2')
     store = Store(tmp_path / 'store'); bundle = tmp_path / 'bundle'; bundle.mkdir()
-    classes_raw = b'classes:\n - {index: 0, name: floor, role: background}\n - {index: 1, name: lane_line, role: lane_marking}\n'
+    classes_raw = (b'classes:\n - {index: 0, name: floor, role: background}\n'
+                   b' - {index: 1, name: lane_line, role: lane_marking}\n'
+                   + (b' - {index: 2, name: drivable, role: drivable}\n' if with_drivable else b''))
     classes = load_classes('captured', require_color=False, source_bytes=classes_raw)
     class_sha = hashlib.sha256(classes_raw).hexdigest()
     signature = hashlib.sha256(json.dumps(classes, sort_keys=True).encode()).hexdigest()
@@ -216,7 +218,10 @@ def build_fixture(tmp_path, shared_group=False):
                       video=video_path.name, video_frame=0, fixed_eval_overlap=False, objects=[])
         review = dict(index=i, image_sha256=image_sha, boxes=[], review_status='approved', complete_frame_review=True)
         human = dict(review, video=source['video'], video_frame=0)
-        ok, mask = cv2.imencode('.png', np.full((16, 16), 1, np.uint8)); assert ok
+        mask_pixels = np.full((16, 16), 1, np.uint8)
+        if with_drivable:
+            mask_pixels[:, :8], mask_pixels[:, 8:] = 2, 0
+        ok, mask = cv2.imencode('.png', mask_pixels); assert ok
         mask_raw = mask.tobytes(); mask_sha = hashlib.sha256(mask_raw).hexdigest()
         approval = dict(image_sha256=image_sha, mask_sha256=mask_sha, mask_version=1, width=16, height=16,
                         classes_sha256=class_sha, classes_signature=signature, ignore_index=255,

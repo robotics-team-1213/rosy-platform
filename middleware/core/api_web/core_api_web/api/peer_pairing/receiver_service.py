@@ -31,25 +31,43 @@ _UNSYNCED = object()
 
 
 class Refused(ValueError):
-    pass
+    """``code`` is the D-535 reason a client shows; the message stays internal."""
+    code = "PAIRING_REQUIRED"
+
+    def __init__(self, message, code=None, *, retry_after_s=None):
+        super().__init__(message)
+        if code is not None:
+            self.code = code
+        if retry_after_s is not None:
+            self.retry_after_s = retry_after_s
 
 
 class RateLimited(Refused):
-    pass
+    code = "RATE_LIMITED"
+    retry_after_s = 60
 
 
 class CodeBudgetSpent(RateLimited):
-    pass
+    code = "CONSOLE_APPROVAL_REQUIRED"
 
 
 class RoleRefused(Refused):
-    pass
+    code = "CONSOLE_APPROVAL_REQUIRED"
 
 
 class WrongCode(Refused):
     def __init__(self, remaining):
-        super().__init__("wrong approval code")
+        super().__init__("wrong approval code", "APPROVAL_CODE_WRONG" if remaining > 0 else "APPROVAL_DENIED")
         self.remaining = remaining
+
+
+#: D-535: why a request that is no longer pending cannot be confirmed, cancelled or decided.
+#: An approved one keeps the default (PAIRING_REQUIRED): the requester reads status, which says approved.
+_ENDED = {"expired": "APPROVAL_TIMEOUT", "rejected": "APPROVAL_DENIED", "cancelled": "APPROVAL_CANCELLED"}
+
+
+def _changed(row):
+    return Refused("request changed", _ENDED.get(row["state"], "PAIRING_REQUIRED"))
 
 
 def _code_hash(code):
@@ -122,10 +140,22 @@ class PeerReceiver:
                 os.chmod(temporary, 0o640)
                 os.replace(temporary, target)
             self._display_shown = shown
+            self._display_warned = False  # D-535: pairing_state() reads the hand-over as working again
         except OSError as exc:
             if not self._display_warned:  # The type only: never the code.
                 self._display_warned = True
                 _log.warning("peer approval display hand-over unavailable (%s)", type(exc).__name__)
+
+    def pairing_state(self):
+        """D-535 public word: ``full`` (no room for a request), ``console_only`` (the LCD cannot show a
+        screen code), else ``open``. Counts only; no request detail leaves this method."""
+        with self._lock:
+            self._prune()
+            if len(self._live()) >= PENDING_LIMIT:
+                return "full"
+        shown = self._display_dir is not None and os.path.isdir(self._display_dir) \
+            and os.access(self._display_dir, os.W_OK)
+        return "open" if shown and not self._display_warned else "console_only"
 
     def _display_ca(self):
         """The bootstrap CA digest the LCD shows beside the codes; cached once it validates, else None."""
@@ -158,22 +188,24 @@ class PeerReceiver:
             if len(json.dumps(fields).encode()) > 4096:
                 raise Refused("request too large")
             if fields["receiver_id"] != self.receiver_id or fields["receiver_key_sha256"] != self._identity.fingerprint:
-                raise Refused("receiver identity mismatch")
+                raise Refused("receiver identity mismatch", "IDENTITY_CHANGED")
             verify(fields["client_public_key"], signature, "request", fields)
+        except Refused:
+            raise
         except (ValueError, ProofDenied) as exc:
             raise Refused("request proof rejected") from exc
         with self._lock:
             self._prune()
             if len(self._live()) >= PENDING_LIMIT:
-                raise Refused("request limit reached")
+                raise RateLimited("request limit reached")
             if len(self._live(source)) >= SOURCE_PENDING_LIMIT:
-                raise Refused("source pending limit reached")
+                raise RateLimited("source pending limit reached")
             if len(self._pending) >= ROW_LIMIT:
                 # An approved row stays until keep_until (_prune) so its requester can still read the result.
                 ended = sorted((k for k, v in self._pending.items() if v["state"] in ("rejected", "cancelled", "expired")),
                                key=lambda k: self._pending[k]["created"])
                 if not ended:
-                    raise Refused("request limit reached")
+                    raise RateLimited("request limit reached")
                 del self._pending[ended[0]]
             if any(v["fields"]["client_public_key"] == fields["client_public_key"] and
                    v["fields"]["nonce"] == fields["nonce"] for v in self._pending.values()):
@@ -199,13 +231,13 @@ class PeerReceiver:
             key = ('identity:' if identity else 'proof:') + source
             limit = 300 if identity else 30
             if len(self._rates.get(key, [])) >= limit or (key not in self._rates and len(self._rates) >= 128):
-                raise Refused('proof rate limit reached')
+                raise RateLimited('proof rate limit reached')
             self._rates.setdefault(key, []).append(self.clock())
 
     def _row(self, request_id, secret=None):
         row = self._pending.get(request_id)
         if not row or (secret is not None and not hmac.compare_digest(row["secret_hash"], hashlib.sha256(secret.encode()).digest())):
-            raise Refused("request unavailable")
+            raise Refused("request unavailable", "APPROVAL_TIMEOUT")
         if row['state'] == 'pending':
             stored = self.repo.grants().get(request_id)
             if stored is not None:
@@ -239,7 +271,7 @@ class PeerReceiver:
             self._prune()
             row = self._row(request_id, secret)
             if row.get('last_poll') and (self.clock() - row['last_poll']).total_seconds() < 2:
-                raise Refused('status polling interval is two seconds')
+                raise RateLimited('status polling interval is two seconds', retry_after_s=2)
             row['last_poll'] = self.clock()
             return self._view(request_id, row)
 
@@ -265,7 +297,7 @@ class PeerReceiver:
         with self._lock:
             row = self._row(request_id)
             if row["state"] != "pending" or revision != row["revision"]:
-                raise Refused("request changed")
+                raise _changed(row)
             try:
                 self.repo.owner(token_id)
                 if action == "approve":
@@ -298,7 +330,7 @@ class PeerReceiver:
             self._admit_source(source)
             row = self._row(request_id, secret)
             if row["state"] != "pending":
-                raise Refused("request changed")
+                raise _changed(row)
             fields = row["fields"]
             if fields["role"] not in {"viewer", "operator"}:
                 raise RoleRefused("screen code approves operator at most")
@@ -322,8 +354,11 @@ class PeerReceiver:
                             "persist_requested": False, "persistent": False,
                             "issuer_id": SCREEN_CODE_ISSUER, "issuer_source": SCREEN_CODE_ISSUER,
                             "issuer_digest": self._identity.fingerprint, "approved_by": SCREEN_CODE_ISSUER,
-                            "revoked": False, "used_challenges": [], "approved_at": self.clock().isoformat(),
-                            "expires_at": (self.clock()+timedelta(hours=168)).isoformat()}
+                            # One clock read: with two, expires - approved came out a few microseconds over
+                            # the 168 h cap, the model refused every screen-code row and confirm answered 409
+                            # on real robots (2026-10-09, 8kcn on 055); fixed test clocks never showed it.
+                            "revoked": False, "used_challenges": [], "approved_at": now.isoformat(),
+                            "expires_at": (now+timedelta(hours=168)).isoformat()}
             try:
                 persisted = self.repo.approve_screen_code(relationship, row["expires"])
             except RepositoryDenied as exc:
@@ -340,7 +375,7 @@ class PeerReceiver:
             self._admit_source(source)
             row = self._row(request_id, secret)
             if row["state"] != "pending":
-                raise Refused("request changed")
+                raise _changed(row)
             row["state"] = "cancelled"
             row["revision"] += 1
             self._sync_display()
@@ -348,20 +383,25 @@ class PeerReceiver:
 
     def _grant(self, grant_id):
         grant = self.repo.grants().get(grant_id)
-        if (not grant or grant["revoked"] or
-                (grant["expires_at"] is not None and datetime.fromisoformat(grant["expires_at"]) <= self.clock())
-                or grant["receiver_key_sha256"] != self._identity.fingerprint or grant["receiver_id"] != self.receiver_id):
+        # D-535: unknown needs a request, revoked was withdrawn, another receiver key is a changed identity.
+        if not grant:
             raise Refused("relationship unavailable")
+        if grant["revoked"]:
+            raise Refused("relationship unavailable", "APPROVAL_REVOKED")
+        if grant["receiver_key_sha256"] != self._identity.fingerprint or grant["receiver_id"] != self.receiver_id:
+            raise Refused("relationship unavailable", "IDENTITY_CHANGED")
+        if grant["expires_at"] is not None and datetime.fromisoformat(grant["expires_at"]) <= self.clock():
+            raise Refused("relationship unavailable", "APPROVAL_EXPIRED")
         if grant["issuer_source"] == SCREEN_CODE_ISSUER:
             if not screen_code_dated(grant, self.clock()):
-                raise Refused("relationship unavailable")
+                raise Refused("relationship unavailable", "APPROVAL_EXPIRED")
             return grant  # D-483 5: no issuer token; expiry, revocation and receiver key are checked above.
         try:
             issuer = self.repo.owner(grant["issuer_id"])
             if issuer["digest"] != grant["issuer_digest"] or issuer["source"] != grant["issuer_source"]:
                 raise RepositoryDenied("issuer identity changed")
         except RepositoryDenied as exc:
-            raise Refused("issuer unavailable") from exc
+            raise Refused("issuer unavailable", "APPROVAL_REVOKED") from exc
         return grant
 
     def challenge(self, grant_id):
@@ -369,7 +409,7 @@ class PeerReceiver:
             self._prune()
             grant = self._grant(grant_id)
             if len(self._challenges) >= 64:
-                raise Refused("challenge limit reached")
+                raise RateLimited("challenge limit reached")
             challenge_id = secrets.token_urlsafe(24)
             fields = {"relationship_id": grant_id, "challenge_id": challenge_id, "nonce": secrets.token_hex(32),
                       "receiver_id": self.receiver_id, "receiver_key_sha256": self._identity.fingerprint,

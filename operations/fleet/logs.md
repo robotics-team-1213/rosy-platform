@@ -2765,3 +2765,15 @@
 - 증거: 1920×1080 기존 마커 상자 161.94px. 변경 후 데스크톱·320px 마커 42px 이하, 지도 라벨 겹침·모바일 래스터 회귀 6 passed / NEW 0. `docs/validation/uiux-fleet-marker-scale-2026-10-09/result.md`.
 - gate 변화: 없음. LOCAL 합성 화면이며 DEVICE/FIELD/G3는 HOLD.
 - 결정: 지도와 경로·거리 라벨을 읽을 수 있도록 마커의 화면상 크기를 제한한다.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 순서
+
+- 변경: 현장 지도 뒤에 경로 미리보기·운행을 이어 배치하고 초안 편집을 뒤로 옮겼다. 표시 전용 평면 영상 도구는 키보드로 여는 접힌 항목으로 시작한다.
+- 증거: [현장 지도 작업 순서](../../docs/validation/uiux-fleet-site-map-task-order-2026-10-09/result.md). 1440·390·320px 전후 화면, FastAPI/Chromium 7 passed, `known_failures.py` 0 NEW.
+- gate 변화: LOCAL 작업 흐름·반응형 근거 보강. 실제 지도·로봇 주행, 설치본·DEVICE/FIELD·전체 G2/G3는 HOLD.
+
+## 2026-10-09 · uncommitted · fix(fleet): 연결 재시도 브라우저 검사 복구
+
+- 변경: 인증 후 접히는 토큰 입력을 재접속 검사에서 다시 열고, 연결 안내가 해당 입력에 초점을 줄 때도 펼친다. 비동기 인증 조회가 사용자가 다시 연 입력을 뒤늦게 접지 않도록 접는 시점을 조정했다.
+- 증거: CI `37854678441`의 Fleet 브라우저 실패 19건을 모델 PC Chromium에서 다시 실행해 19 passed (46.09s). 비밀번호 로그인 브라우저 검사 1 passed, 변경 JavaScript 구문 검사 통과.
+- gate 변화: LOCAL/MODEL-PC 재현 검사 복구. 새 CI 전체 결과와 설치본·DEVICE/FIELD 수용은 별도 확인한다.

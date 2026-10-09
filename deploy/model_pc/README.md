@@ -4,7 +4,7 @@
 
 `rosy-pilot-fetch@.timer`는 모델 PC 사용자 세션에서 종료된 Pilot 녹화를 10분마다 확인한다. 수신은 기존 `fetch_http.py`가 CORE의 정지 판정, 장치 TLS, Operator 권한, 원본 SHA-256, MP4 변환과 조작 짝 검사를 수행한다. 이 작업은 원본·영상까지이며 픽셀 초안, 사람 승인, 학습은 별도 단계다.
 
-설치 전 모델 PC의 `~/rosy-ml/bin/fetch_http.py`와 checkout의 `tools/perception/dataset/bag_to_video.py`를 확인하고, 이 버전의 수신기를 모델 PC에 배치한다. 각 로봇 인스턴스의 장치 CA를 `~/rosy-ml/<id>-ca.pem`, 읽기 전용 Operator 토큰을 `~/.config/rosy/pilot-<id>.operator-token`에 배치한다. `~/.config/rosy/pilot-<id>.env`에는 `SINCE_ID=<첫 자동 수집 세션 ID>`를 넣는다. 기존 세션에 조작 짝이 없어 실패가 반복되는 것을 막는 경계다. 파일 내용과 로봇 주소를 Git에 넣지 않는다. 한 로봇의 예:
+설치 전 모델 PC의 `~/rosy-ml/bin/fetch_http.py`와 checkout의 `learning/training/perception/dataset/bag_to_video.py`를 확인하고, 이 버전의 수신기를 모델 PC에 배치한다. 각 로봇 인스턴스의 장치 CA를 `~/rosy-ml/<id>-ca.pem`, 읽기 전용 Operator 토큰을 `~/.config/rosy/pilot-<id>.operator-token`에 배치한다. `~/.config/rosy/pilot-<id>.env`에는 `SINCE_ID=<첫 자동 수집 세션 ID>`를 넣는다. 기존 세션에 조작 짝이 없어 실패가 반복되는 것을 막는 경계다. 파일 내용과 로봇 주소를 Git에 넣지 않는다. 한 로봇의 예:
 
 ```bash
 mkdir -p ~/.config/systemd/user

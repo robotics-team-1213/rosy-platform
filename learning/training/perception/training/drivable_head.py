@@ -12,10 +12,8 @@ max(background', drivable) == bg, so lane pixels never change (an exact tie
 between bg and a lane class with s > 0 goes to the lane class instead of drivable). Rows above
 ignore_top are forced to background, as the delivered v11 ROI wrapper does.
 
-    python drivable_head.py --lane v11.torchscript.pt --lane-manifest model_manifest.json \
-        --dataset <store>/datasets/<name>/<content_sha> --out <model folder> --ignore-top 110
-
-The dataset needs exactly one class with role "drivable"; its other classes only
+Direct CLI export is held until this head is called inside the trusted D-464
+IndexedReview training admission. The dataset needs exactly one class with role "drivable"; its other classes only
 count as "not drivable", and its ignore_index pixels are left out. Val IoU is
 scored where the lane model says background (the only pixels the head can
 change); the IoU over all labelled pixels is reported beside it.
@@ -23,17 +21,15 @@ change); the IoU over all labelled pixels is reported beside it.
 
 from __future__ import annotations
 
-import argparse
 import copy
-import hashlib
-import json
-import re
-from pathlib import Path
+
+if __name__ == "__main__":
+    raise SystemExit("v13-drivable training requires trusted owner IndexedReview admission")
 
 import torch
 from torch import nn
 
-from rosy_lane_model import HEIGHT, WIDTH, LaneUNet, RosyLaneDataset
+from rosy_lane_model import HEIGHT, WIDTH, LaneUNet
 
 # State-dict names of the pinky-lane-segmentation LaneUNet -> rosy_lane_model.LaneUNet.
 KEY_RENAMES = ((".body.", "."), ("middle.", "bottleneck."))
@@ -60,6 +56,77 @@ def load_frozen_lane(path, *, classes=None) -> tuple[LaneUNet, int]:
     if classes is not None and len(classes) != n_classes:
         raise ValueError(f"{path}: {n_classes} output channels, {len(classes)} classes given")
     return lane, n_classes
+
+
+def verify_parent_parity(lane, torchscript_path, onnx_path, frames, *, ignore_top=0):
+    """Check frozen lane and delivered ONNX on admitted camera inputs before head training."""
+    import numpy as np
+    import onnxruntime as ort
+
+    script = torch.jit.load(str(torchscript_path), map_location="cpu").eval()
+    session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+    input_name = session.get_inputs()[0].name
+    maximum = 0.0
+    ambiguous = 0
+    with torch.no_grad():
+        for x in frames:
+            x = x.cpu()
+            reference = script(x).numpy()
+            rebuilt = lane.eval()(x).numpy()
+            delivered = session.run(None, {input_name: x.numpy()})[0]
+            if (reference.shape != rebuilt.shape or reference.shape != delivered.shape
+                    or not all(np.isfinite(v).all() for v in (reference, rebuilt, delivered))):
+                raise ValueError("parent TorchScript/ONNX shape or finite logits differ")
+            maximum = max(maximum, float(np.max(np.abs(reference - rebuilt))),
+                          float(np.max(np.abs(reference - delivered))))
+            mismatch = reference.argmax(1)[:, ignore_top:] != delivered.argmax(1)[:, ignore_top:]
+            ordered = np.sort(reference[:, :, ignore_top:], axis=1)
+            margin = ordered[:, -1] - ordered[:, -2]
+            error = np.max(np.abs(reference[:, :, ignore_top:] - delivered[:, :, ignore_top:]), axis=1)
+            unstable = mismatch & (margin <= 2 * error + 1e-7)
+            ambiguous += int(unstable.sum())
+            if maximum > 1e-3 or np.any(mismatch & ~unstable):
+                raise ValueError(f"parent TorchScript/ONNX logits or lane pixels differ: max_abs={maximum}")
+    return {"samples": len(frames), "max_abs": maximum, "ambiguous_pixels": ambiguous}
+
+
+def verify_candidate_lane_parity(parent_onnx, candidate_onnx, frames, *, ignore_top=0):
+    """A new drivable channel may split only parent background on admitted inputs."""
+    import numpy as np
+    import onnxruntime as ort
+
+    parent = ort.InferenceSession(str(parent_onnx), providers=["CPUExecutionProvider"])
+    candidate = ort.InferenceSession(str(candidate_onnx), providers=["CPUExecutionProvider"])
+    checked = ambiguous = 0
+    for frame in frames:
+        x = frame.cpu().numpy()
+        original = parent.run(None, {parent.get_inputs()[0].name: x})[0]
+        output = candidate.run(None, {candidate.get_inputs()[0].name: x})[0]
+        if (output.shape != (original.shape[0], original.shape[1] + 1, *original.shape[2:])
+                or not np.isfinite(original).all() or not np.isfinite(output).all()):
+            raise ValueError("candidate ONNX output shape or finite logits differ")
+        parent_pixels = original.argmax(1)
+        candidate_pixels = output.argmax(1)
+        mapped = np.where(candidate_pixels == original.shape[1], 0, candidate_pixels)
+        mismatch = mapped[:, ignore_top:] != parent_pixels[:, ignore_top:]
+        ordered = np.sort(original[:, :, ignore_top:], axis=1)
+        margin = ordered[:, -1] - ordered[:, -2]
+        rebuilt = np.concatenate((np.maximum(output[:, :1], output[:, -1:]),
+                                  output[:, 1:-1]), axis=1)
+        error = np.max(np.abs(original[:, :, ignore_top:] - rebuilt[:, :, ignore_top:]), axis=1)
+        if np.max(error) > 1e-3:
+            raise ValueError("candidate ONNX changes parent lane pixels or logits")
+        unstable = mismatch & (margin <= 2 * error + 1e-7)
+        ambiguous += int(unstable.sum())
+        if np.any(mismatch & ~unstable):
+            raise ValueError("candidate ONNX changes parent lane pixels")
+        if ignore_top and np.any(candidate_pixels[:, :ignore_top] != 0):
+            raise ValueError("candidate ONNX paints ignored top rows")
+        checked += 1
+    if not checked:
+        raise ValueError("candidate parity requires admitted frames")
+    return {"samples": checked, "parent_lane_pixels_preserved": True,
+            "ambiguous_pixels": ambiguous}
 
 
 class LaneWithDrivable(nn.Module):
@@ -174,67 +241,3 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
     return {"history": history, "best_epoch": best["epoch"] if best else None,
             "val_drivable_iou": best["val_drivable_iou"] if best else None,
             "val_drivable_iou_all": best["val_drivable_iou_all"] if best else None}
-
-
-def _sha256(path) -> str:
-    with open(path, "rb") as f:
-        return hashlib.file_digest(f, "sha256").hexdigest()
-
-
-def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("--lane", required=True, help="frozen lane model, TorchScript")
-    p.add_argument("--lane-manifest", required=True,
-                   help="the lane model's model_manifest.json (its classes and input are kept)")
-    p.add_argument("--dataset", required=True,
-                   help="store dataset version folder datasets/<name>/<content_sha> with a drivable class")
-    p.add_argument("--out", required=True)
-    p.add_argument("--ignore-top", type=int, required=True,
-                   help="rows forced to background, as the delivered lane model (v11: 110; 0 for none)")
-    p.add_argument("--epochs", type=int, default=20)
-    p.add_argument("--lr", type=float, default=3e-4)
-    p.add_argument("--batch-size", type=int, default=16)
-    p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    args = p.parse_args(argv)
-
-    import export_cell  # torch-free import; export() needs torch, which we have
-
-    torch.manual_seed(args.seed)
-    lane_doc = json.loads(Path(args.lane_manifest).read_text(encoding="utf-8"))
-    if lane_doc["input"]["shape"] != [1, 3, HEIGHT, WIDTH]:
-        raise SystemExit(f"lane model input {lane_doc['input']['shape']}, need [1, 3, {HEIGHT}, {WIDTH}]")
-    camera_profile = lane_doc["camera_profile_revision"]
-    dataset = Path(args.dataset).resolve()
-    if not re.fullmatch(r"[0-9a-f]{64}", dataset.name):
-        raise SystemExit(f"{dataset}: not a store dataset version folder <name>/<content_sha>")
-    lane_classes = [(c["name"], c["role"]) for c in lane_doc["output"]["classes"]]
-    lane, _ = load_frozen_lane(args.lane, classes=lane_classes)
-    pre = {k: lane_doc["input"][k] for k in ("color", "scale", "mean", "std")}
-    train_ds = RosyLaneDataset(args.dataset, "train", **pre)
-    val_ds = RosyLaneDataset(args.dataset, "val", **pre)
-    model = LaneWithDrivable(lane, ignore_top=args.ignore_top)
-    result = train_head(model, train_ds, val_ds, epochs=args.epochs, lr=args.lr,
-                        batch_size=args.batch_size, device=args.device)
-    if result["val_drivable_iou"] is None:
-        raise SystemExit("no val drivable IoU: the val split has no labelled drivable/non-drivable pixels")
-    out = Path(args.out)
-    model = model.cpu().eval()
-    doc = export_cell.export(
-        model, out, classes=lane_classes + [("drivable", "drivable")],
-        dataset_repo=dataset.parent.name, dataset_revision=dataset.name,
-        camera_profile_revision=camera_profile,
-        trainer=f"drivable_head (frozen {lane_doc['model_revision']}, ignore_top {args.ignore_top})",
-        val_iou={"drivable": result["val_drivable_iou"]},
-        revision_prefix="v13-drivable", **pre)
-    (out / "drivable_head_run.json").write_text(json.dumps({
-        "lane_model_revision": lane_doc["model_revision"], "lane_sha256": _sha256(args.lane),
-        "ignore_top": args.ignore_top, "seed": args.seed, "epochs": args.epochs, "lr": args.lr,
-        **result}, indent=2) + "\n", encoding="utf-8")
-    print(f"OK {doc['model_revision']} drivable IoU {result['val_drivable_iou']:.3f} "
-          f"(all labelled pixels {result['val_drivable_iou_all']:.3f}) -> {out}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
