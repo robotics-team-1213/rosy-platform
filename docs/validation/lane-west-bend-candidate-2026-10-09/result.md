@@ -35,11 +35,11 @@ U1의 링 호 세 구간에서 도색 **중심** 교차 표본은 0개였으나 
 
 | 로그 | `log.jsonl` SHA-256 |
 | --- | --- |
-| T3 | `0ebce9b28278bde6f1fd7fdcc143650178add0f86df5c6c9bad53e40f4aae202` |
-| U1 | `bad57e8c783657a9b32d0f25f7dc624a4bd7370a100dd21caede04dafae3d4ce` |
-| U2 | `4fc29543a1c469a0488df9553ebe8083866a85f80e85c09800911e69193a15c9` |
-| A1 | `4b15b187cd66345935c5c247da47056b2418e8ecb6d63b8746cc1c61bafcea19` |
-| A2 | `83b2c19e3c6c497b3b6fd37f045dda7b0252f623e1d75e474ddc2cad43fe971e` |
+| T3 log SHA-256 | `0ebce9b28278bde6f1fd7fdcc143650178add0f86df5c6c9bad53e40f4aae202` |
+| U1 log SHA-256 | `bad57e8c783657a9b32d0f25f7dc624a4bd7370a100dd21caede04dafae3d4ce` |
+| U2 log SHA-256 | `4fc29543a1c469a0488df9553ebe8083866a85f80e85c09800911e69193a15c9` |
+| A1 log SHA-256 | `4b15b187cd66345935c5c247da47056b2418e8ecb6d63b8746cc1c61bafcea19` |
+| A2 log SHA-256 | `83b2c19e3c6c497b3b6fd37f045dda7b0252f623e1d75e474ddc2cad43fe971e` |
 
 재현 시 `run_closed_loop.sh`를 격리 모델 PC에서 먼저 실행하고, CORE 준비 후 `WEST_BEND=1 REC=1 OUTD=<고유 디렉터리> bash closed_loop_batch.sh one_lap.txt`를 실행한다. `MODEL=unet` 또는 `threshold`, `ROUTE_CONTEXT_ENABLED=true` 또는 `false`를 첫 스크립트에 준다. `OUTD`는 매번 새 경로를 쓴다. 실행이 끝나면 자신의 ROS launch와 동일 partition 프로세스만 종료한다. [검사 스크립트](evidence/audit_path.py)에 각 `log.jsonl` 경로를 준다.
 
