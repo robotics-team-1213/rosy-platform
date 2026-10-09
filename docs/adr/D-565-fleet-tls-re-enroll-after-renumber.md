@@ -21,7 +21,7 @@
 3. **행이 없는 HTTPS 대상은 대기 binding으로만 등록한다.**
    - 고르기: 목록 등록은 스캔 행의 `hostname`·`port`, 주소 직접 입력은 그 주소의 HTTPS 스캔 행들의 호스트 이름(하나여야 한다)·포트로, 아직 등록되지 않은 binding 중 `hostname`·`port`가 같은 것 **하나**를 고른다. 없거나 여럿이면 `409 tls_binding_required`. 광고는 고르는 데만 쓴다.
    - 연결: 그 binding의 `robot_id`로 기존 TLS 등록 클라이언트(`DiscoveryTransport` + `EnrollmentIdentityTransport`)를 만든다. TCP 목적지는 binding 호스트 이름의 발견 결과이고, 인증서는 binding CA와 호스트 이름으로 검증한다. 코드를 보내기 전에 공개 identity의 `receiver_id`(그리고 알리면 `tls_hostname`·`tls_ca_sha256`)가 binding과 같아야 한다. 다르면 코드는 나가지 않고 `409 tls_binding_mismatch`, TLS 이름을 찾지 못하면 `502 unreachable`이다.
-   - 받아들이기: 코드 교환 뒤 `whoami`·`system/info`를 같은 TLS로 읽는다. 보고된 `robot_id`가 binding의 `robot_id`와 같을 때만 저장한다. 다르면 `409 tls_binding_mismatch`이고 받은 토큰을 같은 TLS로 로그아웃한다.
+   - 받아들이기: 코드 교환 뒤 `whoami`·`system/info`를 같은 TLS로 읽는다. 보고된 `robot_id`가 binding의 `robot_id`와 같을 때만 저장한다. 다르면 `409 code_consumed`(reason `tls_binding_mismatch`, D-361 소모 모양)이고 받은 토큰을 같은 TLS로 로그아웃한다.
    - 저장: 행을 넣을 때 binding의 origin(`https://<hostname>:<port>`)과 CA DER SHA256을 downgrade 방지 기록으로 같이 남긴다. 기동 때 묶인 행이 받는 것과 같다. 실패하면 행과 기록을 함께 지운다.
    - HTTP로 내려가는 경로는 없다. 자동 재시도도 없다.
 4. **기존 가드는 그대로다.** `robot_id_conflict`, `pending_logout`, 코드 소모·소각 규칙, 관리자 코드 거절, 실행 중 binding 파일이 바뀌면 거절(`TLS bindings changed; explicit reviewed restart required`), 기록된 origin·CA와 다른 설정 거절.
@@ -29,10 +29,12 @@
 ### 보안
 
 - **승인.** binding 파일은 root(또는 실행 UID) 소유, 그룹·다른 사용자 쓰기 없음, 심볼릭·하드링크 거절이다(`enrollment_tls.py` `_public_file`). 이 파일을 쓸 수 있는 사람은 사이트 관리자뿐이므로 행 하나가 "이 CA로 이 이름을 증명하는 장치를 이 `robot_id`로 받는다"는 운영자 승인이다. 이 결정은 승인 주체를 바꾸지 않는다. 바뀐 것은 승인이 등록보다 먼저 올 수 있다는 것뿐이다.
-- **세 가지가 모두 맞아야 한다.** (a) TLS: binding CA가 서명하고 binding 호스트 이름을 SAN에 가진 인증서, (b) 코드 전 identity의 `receiver_id`, (c) 코드 교환 뒤 `system/info`의 `robot_id`. CA 키를 가진 다른 로봇이 같은 이름을 흉내 내도 (b)·(c)에서 거절된다. (b)·(c)는 TLS 안에서 읽으므로 경로 위의 공격자가 바꿀 수 없다.
+- **신뢰의 닻은 로봇의 CA 키다.** 확인은 셋이다. (a) TLS: binding CA가 서명하고 binding 호스트 이름을 SAN에 가진 인증서, (b) 코드 전 identity의 `receiver_id`, (c) 코드 교환 뒤 `system/info`의 `robot_id`. (b)·(c)는 로봇이 스스로 알리는 값이라 인증이 아니다. TLS 안에서 읽으므로 경로 위에서 바꿀 수는 없지만, binding CA 키를 가진 장치는 아무 ID나 알릴 수 있다. (b)·(c)는 잘못 고친 binding(ID와 로봇 번호가 다름)을 잡는 일관성 검사다. 그래서 **로봇마다 자기 CA를 가져야 한다.** 두 로봇이 CA 하나를 나누면 한 로봇의 키로 다른 로봇의 binding을 통과할 수 있다. 관리자는 binding의 CA 지문이 다른 행과 겹치지 않는지 확인한다.
 - **광고를 믿지 않는다.** 스캔 행은 binding을 고르는 데만 쓴다. 광고가 다른 binding의 이름을 대도 연결은 그 binding의 CA·이름으로 검증되고 (b)·(c)가 맞아야 한다. 광고된 주소가 무엇이든 코드는 TLS 검증 전에 나가지 않는다.
+- **HTTP로 새지 않는다.** 승인 binding(대기·등록 모두)이 가진 호스트 이름이나 주소는 HTTP 경로에서 요청 전에 `409 tls_binding_required`로 거절한다. 스캔 행이 없어 이름을 모르는 주소 입력이면 HTTP로 읽은 `robot_id`·호스트 이름을 binding이 가지는지 보고, 가지면 소모 거절(`code_consumed`, reason `tls_binding_required`)과 토큰 로그아웃을 한다. 이 경우 코드는 이미 평문으로 나갔으니 운영자는 로봇을 재시작해 새 코드를 받는다.
 - **화면 코드는 그대로 필요하다.** 대기 binding은 코드 없이 아무것도 하지 않는다. 운영자가 로봇 화면의 코드를 읽어 입력하는 D-361의 결속은 남는다.
 - **남는 위험.** binding 파일을 쓸 수 있는 관리자 계정이 뚫리면 대기 binding으로 낯선 장치를 승인할 수 있다. 이는 기존 binding 파일과 같은 위험이며 새로 생기지 않는다. 오래 남은 대기 binding은 기동 경고로 보인다.
+- **기존 문제(이 결정 밖).** 거절 뒤 토큰 로그아웃이 실패하면(로봇이 응답 없음) 그 토큰은 등록부에 기록되지 않은 채 로봇에 남아 만료까지 유효하다. D-361 등록 경로에 원래 있던 동작이며 D-565가 새로 만들지 않았다. 따로 다룬다.
 
 ### 관계
 
@@ -49,7 +51,7 @@
 2. 로봇 번호를 바꾸고 재부팅한다(D-562). 로봇의 호스트 이름과 CA는 그대로다.
 3. 관리자가 binding 파일의 그 행에서 `robot_id`만 새 ID(예: rosy_41)로 바꾼다. `hostname`·`port`·`tls_ca_file`·`tls_ca_sha256`은 그대로 둔다. 소유자·권한은 그대로다.
 4. 승인된 배포 절차로 Fleet을 재시작한다. 로그에 `TLS bindings pending enrollment (D-565): rosy_41`이 보인다.
-5. 콘솔에서 로봇 화면의 코드로 등록한다(목록 또는 주소). 성공하면 그 행은 TLS로 묶인 등록이다. `tls_binding_mismatch`이면 binding의 ID와 로봇의 `ROSY_ROBOT_NUMBER`가 다르다. 토큰은 이미 로그아웃되었으니 binding이나 로봇 번호를 고친 뒤 새 코드로 다시 한다.
+5. 콘솔에서 로봇 화면의 코드로 등록한다(목록 또는 주소). 성공하면 그 행은 TLS로 묶인 등록이다. `tls_binding_mismatch`(오류 코드 또는 `code_consumed`의 reason)이면 binding의 ID와 로봇의 `ROSY_ROBOT_NUMBER`가 다르다. 토큰은 이미 로그아웃되었으니 binding이나 로봇 번호를 고친 뒤 새 코드로 다시 한다.
 
 ### Alternatives
 
