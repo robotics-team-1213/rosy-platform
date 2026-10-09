@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import shlex
+import time
 import shutil
 import sys
 from pathlib import Path
@@ -100,8 +101,11 @@ def test_pick_prints_one_host_or_exits_1(monkeypatch, capsys):
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     monkeypatch.setenv("ROSY_TEST_HOSTS", "a@1 b@2")
     monkeypatch.setattr(rp, "probe", lambda h: host(sim=h == "b@2"))
+    reserved = []
+    monkeypatch.setattr(rp, "remote", lambda h, script, *args, **kw: reserved.append((h, script, args)))
     assert rp.main(["--pick", "sim"]) == 0
     assert capsys.readouterr().out == "b@2\n"
+    assert reserved == [("b@2", rp.RESERVE, ("sim", "6", "8", "600"))]
     monkeypatch.setattr(rp, "probe", lambda h: None)
     assert rp.main(["--pick", "sim"]) == 1
     assert capsys.readouterr().out == ""
@@ -126,11 +130,16 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
         (jobs / "dead.lock").write_text("999999999 sim 6 8\n")
         (jobs / "odd.lock").write_text(f"{live.pid} sim 6 7.5\n")  # counts 0, does not abort
         (jobs / "evil.lock").write_text(f"{live.pid} sim a[$(touch {jobs}/pwned)] 1\n")
+        now = int(time.time())
+        (jobs / "soon.resv").write_text(f"{now + 600} pytest 2 6\n")  # reserved, not started yet
+        (jobs / "old.resv").write_text(f"{now - 1} pytest 2 6\n")
+        (jobs / "junk.resv").write_text("soon pytest 2 6\n")
         script = rp.PROBE.replace("J=~/rosy-jobs", f"J={shlex.quote(str(jobs))}")
         fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()
     finally:
         live.kill()
-    assert len(fields) == 11 and fields[-3:] == ["2", "6", "0"]
+    assert len(fields) == 11 and fields[-3:] == ["4", "12", "0"]
+    assert (jobs / "soon.resv").exists() and not (jobs / "old.resv").exists() and not (jobs / "junk.resv").exists()
     assert rp.parse_probe(" ".join(fields))["lock_gb"] == 6
     assert not (jobs / "dead.lock").exists() and (jobs / "live.lock").exists()
     assert not (jobs / "pwned").exists()

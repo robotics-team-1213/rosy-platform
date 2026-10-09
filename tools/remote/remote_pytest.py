@@ -46,6 +46,9 @@ DEFAULT_HOSTS = f"rosy@100.98.162.71 ai@100.108.76.123 {SITE_HOST}"
 NEEDS = {"pytest": (2, 6), "sim": (6, 8)}
 SITE_RESERVE = (2, 4)
 SITE_CPU_QUOTA = "400%"
+# Seconds a placement reservation (~/rosy-jobs/<name>.resv) counts before the job lock replaces it:
+# pytest waits up to 600 s for the repo lock and 3600 s for a venv build; --pick gives the script 10 min.
+RESERVE_S = {"pytest": 4500, "pick": 600}
 PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
@@ -63,6 +66,7 @@ STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}
 # bundle's prerequisite commit is missing there; the caller resends a full bundle.
 SHIP = r"""set -euo pipefail
 R=~/rosy-test; NAME=$1; SHA=$2
+mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) pytest 2 6" > ~/rosy-jobs/"$NAME".resv  # D-568 2
 mkdir -p "$R/runs"
 trap 'rm -f "$R/runs/$NAME.bundle"' EXIT
 exec 8>"$R/repo.lock"; flock -w 600 8  # concurrent runs fetching into one repo race on ref locks
@@ -122,14 +126,20 @@ echo "[remote] ready $V"
 PYTEST = r"""set -euo pipefail
 R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; CPU=$3; cd "$R/runs/$1"
 [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$DEPS" ] || { echo "[remote] venv hash mismatch" >&2; exit 1; }
-mkdir -p ~/rosy-jobs; echo "$$ pytest 2 6" > ~/rosy-jobs/"$1".lock; shift 3
+mkdir -p ~/rosy-jobs; echo "$$ pytest 2 6" > ~/rosy-jobs/"$1".lock; rm -f ~/rosy-jobs/"$1".resv; shift 3
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 exec systemd-run --user --scope -q -p MemoryMax=6G ${CPU:+-p CPUQuota=$CPU} -- \
   nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@" 2>&1
 """
 
-# One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb site. Dead-pid locks go.
-PROBE = r"""J=~/rosy-jobs; c=0; m=0
+# One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb site. Dead-pid
+# locks and expired reservations (<expiry epoch> <class> <cores> <GB>) go; both count toward the budget.
+PROBE = r"""J=~/rosy-jobs; c=0; m=0; now=$(date +%s)
+for f in "$J"/*.resv; do
+  [ -e "$f" ] || continue; read -r t _ fc fm < "$f" || true
+  case "$t$fc$fm" in ''|*[!0-9]*) rm -f "$f"; continue;; esac
+  if [ "$t" -gt "$now" ]; then c=$((c+fc)); m=$((m+fm)); else rm -f "$f"; fi
+done
 for f in "$J"/*.lock; do
   [ -e "$f" ] || continue; read -r pid _ fc fm < "$f" || true
   case "$fc$fm" in ''|*[!0-9]*) fc=0 fm=0;; esac  # whole numbers only; never evaluate file text
@@ -144,8 +154,11 @@ echo "ROSYPROBE $(nproc) $(cut -d' ' -f1 /proc/loadavg)" \
   "$(awk '/^MemAvailable:/{a=$2} /^MemTotal:/{t=$2} END{print a, t}' /proc/meminfo) $py $s $b $c $m $st"
 """
 
+# --pick: reserve the class budget on the chosen host until the Gazebo script writes its own lock.
+RESERVE = r"""mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) $1 $2 $3" > ~/rosy-jobs/pick-$(date +%s%N).resv"""
+
 CLEANUP = r"""R=~/rosy-test
-rm -f ~/rosy-jobs/"$1".lock
+rm -f ~/rosy-jobs/"$1".lock ~/rosy-jobs/"$1".resv
 git -C "$R/repo" worktree remove --force "$R/runs/$1" 2>/dev/null || rm -rf "$R/runs/$1"
 git -C "$R/repo" worktree prune
 git -C "$R/repo" update-ref -d "refs/remote-pytest/$1" 2>/dev/null || true
@@ -274,7 +287,7 @@ def ship(repo: Path, host: str, sha: str, name: str) -> None:
         for base in (base0, None):
             data = subprocess.run(["git", "-C", str(repo), "bundle", "create", "-", ref,
                                    *([f"^{base}"] if base else [])], capture_output=True, check=True).stdout
-            result = remote(host, SHIP, name, sha, PUBLIC, input=data, capture_output=True,
+            result = remote(host, SHIP, name, sha, PUBLIC, str(RESERVE_S["pytest"]), input=data, capture_output=True,
                             timeout=STEP_TIMEOUT["ship"])
             if result.returncode == 0:
                 return
@@ -397,6 +410,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.pick:
         chosen = placed_hosts(args.pick)
         if chosen:
+            remote(chosen[0], RESERVE, args.pick, *map(str, NEEDS[args.pick]), str(RESERVE_S["pick"]),
+                   capture_output=True, timeout=STEP_TIMEOUT["cleanup"])
             print(chosen[0])
         return 0 if chosen else 1
     invocations = [args.pytest_args] if args.pytest_args else []
