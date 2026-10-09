@@ -22,7 +22,6 @@ D-559 reserved in another active branch (feat/route-context-core-publish); D-560
 D-559 reserved in another active branch (swarm trail follow, feat/swarm-trail-follow); remove when it lands
 D-563 reserved in another active branch (map-projected labels, existing assets and gaps); remove when it lands
 D-563 reserved in another active branch (drivable near-road false negative and map-pose recording labels); remove when it lands
-D-564 reserved in another active branch (ceiling place markers teach); remove when it lands
 D-565 reserved on fix/fleet-tls-renumber-enroll; remove when it lands
 D-566 reserved in another active branch (v13.1.00 off-road gate and model PC long-job guard); remove when it lands
 D-567 reserved in another active branch (Fleet planning review); remove when it lands
