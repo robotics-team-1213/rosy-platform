@@ -1,6 +1,6 @@
 # 실물 카메라 `line` 관측의 밝은 페인트 모호성
 
-**판정: 인식 반례 확인, 주행 사건 판정 보류.** 2026-10-09 11:31:48 KST에 정지 상태를 유지하며 `rosy_60`의 전방 카메라 프레임과 같은 영상 stamp의 `CAMERA_LINE` 관측을 읽었다. 로봇 설정·명령·파일은 변경하지 않았다. 원본 영상의 물리적 페인트 역할은 사람 정답으로 승인되지 않았다.
+**판정: 인식 반례 확인, 주행 사건 판정 보류.** 2026-10-09 11:31:48 KST에 주행 명령을 보내지 않고 `rosy_60`의 전방 카메라 프레임과 같은 영상 stamp의 `CAMERA_LINE` 관측을 읽었다. 로봇 설정·명령·파일은 변경하지 않았다. 원본 영상의 물리적 페인트 역할은 사람 정답으로 승인되지 않았다.
 
 ## 재현 증거
 
@@ -18,7 +18,13 @@
 | 기존 `keep` | 동일 프레임에 현재 장치 지면 설정 `PINKY`를 적용하면 지면 평면이 없어 `None`, `reason=no_ground`. | 목표인 차로 안 유지에 맞는 구현이다. 검증된 카메라 지면 보정값 없이 모드명만 바꾸는 것은 해결이 아니다. |
 | 학습 마스크/지도 | 이 프레임의 사람 승인 차로·횡단선 GT가 없다. | 현재 분류 정답이나 주행 허가를 만들 수 없다. 승인 GT·분리 평가 후 섀도에서 비교한다. |
 
-`line_observer_node._ground()`는 명시된 `NOMINAL` 프로필 또는 허용된 GAZEBO 평면만 만든다. 장치에서는 `camera_ground_source=PINKY`, `allow_nominal_ground=false`, `nominal_camera_profile_id` 미설정이었다. `keep`의 기존 횡단 표시 거절 및 한쪽 경계 반폭 추정은 오프라인 후보로 유지하되, 이 프레임에서 실제 두 경계가 옳게 선택되는지는 보정 프로필과 사람 GT로 다시 검증해야 한다.
+`line_observer_node._ground()`는 명시된 `NOMINAL` 프로필 또는 허용된 GAZEBO 평면만 만든다. 장치에서는 `camera_ground_source=PINKY`, `allow_nominal_ground=false`, `nominal_camera_profile_path`가 빈 값이었다. `keep`의 기존 횡단 표시 거절 및 한쪽 경계 반폭 추정은 오프라인 후보로 유지하되, 이 프레임에서 실제 두 경계가 옳게 선택되는지는 보정 프로필과 사람 GT로 다시 검증해야 한다.
+
+추가 읽기 전용 확인에서 `nominal_camera_profile_path`는 빈 값이고 기본 보정 저장소 `/var/lib/rosy/calibration`도 없었다. 동일 PNG를 저장소의 `camera_nominal.yaml`(피치 8°)과 10/6 재생의 후보 피치 11.8°로 각각 `LaneKeeper(corner_turning=True)`에 오프라인 입력했다. 두 경우 모두 관측 `None`, `reason=no_boundary`, 선택 경계 0개였다. 두 프로필은 촬영 당시 승인 보정값이 아니므로 이 결과는 **안전한 거절 후보**일 뿐 검출 성능의 수용값이 아니다. 현재 프레임만으로 보정값을 역산하거나 임의의 피치를 승격하지 않는다.
+
+같은 장치에서 기존 `tools/calibration/camera_capture.py`를 SSH 표준 입력으로 실행한 읽기 전용 정지 수집은 scan 40개, 영상 15개, odom 121개, 수집 fault 0개를 기록했다. 출력은 `X:/DevTemp/lane-live-readonly-20261009/camera-auto-candidate.json`, SHA-256 `bedbb4af817edb7ed405aac774d0e582086b13cc3ee85c25cdca2c988ffaa6948`이다. 계산기는 피치 `0.36826 rad`(약 21.1°), 높이 `0.0634 m`를 냈지만 `recommended=false`, 사유 `too few wall returns in view`였다. 높이는 `height_source=base`이며 실측값이 아니다. 보정 저장소·로봇 설정에는 적용하지 않았다.
+
+이 **거절된** 후보를 같은 PNG에 대입한 민감도 시험에서는 `corner_turning=false`가 `no_boundary`로 멈췄으나 `corner_turning=true`는 선택 경계 0개·횡단 후보 2개에서 `strategy=corner_left`, `error=-0.6`, `confidence=0.6`을 냈다. 이는 21.1°가 실제 카메라 피치라는 근거가 아니며, 잘못된 지면 투영과 모서리 규칙이 결합하면 STOP이 회전 후보로 바뀔 수 있다는 반사실 반례다. 자동 보정의 거절 판정과 승인된 장치별 지면 프로필을 `keep` 전환의 필수 게이트로 유지한다.
 
 ## 주행 권한과 다음 검증
 
