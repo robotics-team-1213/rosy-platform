@@ -10,7 +10,7 @@ import { createSignals } from "./signals.js";
 import { createTrackingView } from "./tracking-view.js";
 import { createStartPointView } from "./start-point-view.js";
 import { createVisionView } from "/console/assets/vision-view.js";
-import { applyRoleToControls } from "/console/assets/authorization.js";
+import { applyRoleToControls, namedOperatorReason } from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
 import { addressMap, movableRobots, renumberBanner } from "/console/assets/address-drift.js";
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
@@ -52,6 +52,9 @@ pageScope.onResume(layoutConsole);
 
 // 셸 폴링 운율과 로그 상한은 셸이 가진다. 지도 격자·오버레이 임계는 map-view.js에 있다.
 const STATE_MS = 1000;
+// D-457 6: a tracking position shows for at most 1 s minus its age and the request time, so
+// polling at 1 s always left a gap and the markers blinked; poll well inside the lifetime.
+const TRACKING_MS = 400;
 const MAP_MS = 5000;
 const LOG_MAX = 120;
 
@@ -210,8 +213,10 @@ async function refreshDispatchControl(life = pageScope.capture()) {
       detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개 · 미확정 동작 ${state.unresolved_actions}개`;
     }
     rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
-    rearm.disabled = auth.locked || !state.rearm_available;
-    if (rearm.disabled) rearm.setAttribute("reason", auth.locked ? "관제 토큰 필요" : "재허가 조건 미충족");
+    // D-540 9: 재허가는 대기 작업을 다시 움직이므로 이름 있는 운영자만.
+    const rearmNamed = namedOperatorReason(auth.role, auth.principal);
+    rearm.disabled = auth.locked || !state.rearm_available || Boolean(rearmNamed);
+    if (rearm.disabled) rearm.setAttribute("reason", auth.locked ? "관제 토큰 필요" : rearmNamed || "재허가 조건 미충족");
     else rearm.removeAttribute("reason");
     return state;
   } catch (err) {
@@ -569,7 +574,7 @@ async function commitGoal(col, row) {
   life.check();
   if (!view.selected || !view.map) return;
   const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
-  if (view.stateUnavailable || auth.role !== "operator" ||
+  if (view.stateUnavailable || auth.role !== "operator" || namedReason() ||
       !selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
     disarmGoal("안전·연결·권한 상태를 확인할 수 없어 목표 지정 취소");
     render();
@@ -729,7 +734,9 @@ pageScope.listen(el("cancel-all"), "click", async () => {
 
 // D-262: 대형 패널은 formation.js 팩토리가 가진다. 셸은 지도 오버레이와
 // 명렬 렌더를 쥐고, 대형 상태는 view.formation 으로 공유한다.
-const formation = createFormation({ scope: pageScope, el, view, log, call, render });
+// D-540 9: 움직이는 조작의 잠금 사유. 멈춤(비상 정지·취소·대형 해제·막힘 대기/중단)에는 쓰지 않는다.
+const namedReason = () => namedOperatorReason(auth.role, auth.principal);
+const formation = createFormation({ scope: pageScope, el, view, log, call, render, namedReason });
 formation.bind();
 
 // Fleet 분해 4: 현장 지도 뷰는 map-view.js 팩토리가 그린다.
@@ -748,12 +755,12 @@ const mapView = createMapView({ scope: pageScope,
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ scope: pageScope, el, view, log, call, render,
-  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", confirmedAction });
+  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction });
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
-  isOperator: () => auth.role === "operator" });
+  isOperator: () => auth.role === "operator", namedReason });
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
-  isOperator: () => auth.role === "operator" });
+  isOperator: () => auth.role === "operator", namedReason });
 
 // D-415 — 로그 지우기
 pageScope.listen(el("log-clear"), "click", () => {
@@ -783,7 +790,7 @@ function refreshDiagnostics() {
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
-  isOperator: () => auth.role === "operator" && !auth.locked });
+  isOperator: () => auth.role === "operator" && !auth.locked, namedReason });
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
 const visionView = createVisionView({
   scope: pageScope, el, call, rawOnly: true,
@@ -886,7 +893,7 @@ pageScope.interval(() => mapView.refresh(), MAP_MS);
 pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
 pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);
 pageScope.interval(() => mapView.refreshGuide(), STATE_MS);  // D-536
-pageScope.interval(() => trackingView.refresh(), STATE_MS);
+pageScope.interval(() => trackingView.refresh(), TRACKING_MS);
 pageScope.interval(() => visionView.refreshFrame(), 1500);
 
 pageScope.onResume(() => {

@@ -2747,6 +2747,11 @@
 - 결정: D-520 `exit_segment` 경로(`theta`)는 다른 세션 몫이라 그대로 둔다(result.md에 기록)
 - 교훈: 지도 polyline 끝 몇 cm의 방향을 로봇 자세처럼 쓰지 않는다. 회전 목표는 로봇이 실제로 달린 구간의 방향에서 잰다
 
+## 2026-10-08 · a5c1bb395 · fix(fleet): 개발 세션 인증 뒤 모바일 설정 메뉴 복귀
+- 변경: 잠금 때문에 자동으로 연 Fleet Console 설정 메뉴만 인증 성공 후 접는다. 사용자가 직접 연 설정은 유지한다.
+- 증거: 390×844 회귀 수정 전 실패·수정 후 통과, 1440×900 화면 캡처, `known_failures.py` 0 new. `docs/validation/uiux-fleet-dev-menu-2026-10-08/result.md`.
+- gate 변화: 없음. LOCAL 브라우저 증거만이며 D-153 전체 G1/G2/G3 및 설치 이미지 수용은 HOLD.
+
 ## 2026-10-09 · uncommitted · uiux(fleet): D-517 trip error codes all have console text
 - 변경: `web/shared/site-map-model.js` 에 `TRIP_AUTHORITY_SITE_OFF`, `TRIP_AUTHORITY_NOT_REQUIRED`, `TRIP_CONVOY_NOT_BEHIND`, `TRIP_ROBOT_BUSY`, `TRIP_GOAL_REFUSED` 운영자 문구 추가(전에는 원시 코드가 보였다); `test/test_trip_error_labels.py` 가 Fleet 이 내는 모든 `TRIP_*` 코드에 문구가 있는지 지킨다
 - 증거: 모델 PC `operations/fleet/test/` (아래 커밋 메시지)
@@ -2804,6 +2809,70 @@
 - 변경: `--mission-api`는 `--users-file` 대신 살아 있는 개발 연결 모드(D-473)로도 시작한다. 개발 세션은 이미 이름 있는 운용자다.
 - 증거: test_cli.py.
 - gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+
+## 2026-10-09 · uncommitted · fix(fleet): 후진 중 차로 여유 감시 유지
+
+- 변경: 일방 차로에서 후진 복구 방향도 같은 물리 차로에 투영한다. 양방향 차로의 진행 방향별 호 선택과 차로 밖 UNKNOWN은 유지한다. Fleet 감시 판정만 바꾸며 로봇 명령은 보내지 않는다.
+- 증거: 모델 PC에서 수정 전 2 failed/9 passed, 수정 후 차로 판정·감시 20 passed, `known_failures.py` 0 NEW (`X:/DevTemp/fleet-reverse-lane-{red,green2}/run-1.txt`).
+- gate 변화: SOURCE/LOCAL 회귀 근거. D-511 M1/M2, 현장 지도 자세·Rosy Cam·실물 주행 수용은 아직 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(fleet): Cell 화면 목적과 미구성 복구 안내
+
+- 변경: Cell 첫 화면에 문서 준비→미리보기→작업 제안→현재 5단계 승인·진행의 목적을 드러냈다. Cell 서비스 미구성 응답은 원시 코드 대신 사이트 설치 담당자의 다음 행동으로 설명한다.
+- 증거: `test_cell_app_browser.py`의 목적·503 안내·가로 넘침 검사와 1440/390 캡처, Cell API·운영자 문구 검사. D-540의 큐 승인 이동 전이므로 현행 승인 위치를 정확히 적었다.
+- gate 변화: Cell 입구의 LOCAL/SOURCE 결함 일부 수정. 공통 머리·실제 Fleet 큐 인계·전체 G1/G2/G3·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · fix(fleet): 움직이는 경로는 이름 있는 운영자, 멈춤은 열림 (D-540 9)
+
+- 변경: 목표·차선 주행 선택(`OFF` 제외)·`/route`·LED 찾기·막힘 `RESUME`/`BACK_AND_RETRY`/`MANUAL`과 claim·대형 시작/변경/재개·물리 신호 명령(`all_red`/`flash_red` 제외)·시작점 쓰기·`/do`(멈춤 동사만인 요청 제외)는 `require_named_operator`. 공유 토큰·루프백 `site-console`은 403 `OPERATOR_IDENTITY_REQUIRED`. 비상 정지·전체 취소·로봇 취소·작업 취소·대형 해제·막힘 `WAIT`/`ABORT`·trip 취소(이전엔 이름 필요)는 어느 운영자에게나 열림. 화면은 같은 조작을 `reason="이름 있는 운영자 로그인이 필요합니다"`로 잠근다. API Ref v1.156.
+- 현장 이행(배포 전): 관제 PC에서 `python -m fleet.server.site_users hash-password`로 해시 → `site-users.yaml`에 운영자마다 `login`·`password_scrypt`·`role: operator` 줄 → Fleet 재시작 → 다른 PC에서 로그인, 목표 한 번, 감사 actor가 로그인 이름인지 확인. 개발 연결 모드(D-473) 현장은 변화 없음. 줄이 없는 채 배포돼도 멈춤은 된다.
+- 증거: 모델 PC `operations/fleet/test/` + 콘솔·작업 흐름 브라우저 + 계약 문서 3180 passed, 9 failed — 9개 모두 기준 main 6e5c91a1e에서도 같은 실패(레이아웃·설치 흐름, 이 브랜치와 무관). 브라우저 없는 fleet 묶음 2940 passed, `known_failures.py` 0 NEW. node(register 훅) 201 passed. 새 표 시험 `test_named_operator_motion_routes.py`는 구현 전 30건 실패를 먼저 확인했다.
+- gate 변화: LOCAL/MODEL-PC 권한 표 근거. Safety-Review 대기, DEVICE/FIELD(현장 로그인 이행) HOLD.
+- 교훈: 직접 `console.goal` 경로(작업 저장소 없음)는 이름 있는 운영자가 생길 수 없어 HTTP로는 닿지 않는다. 지울지 별도 판단.
+
+## 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.157
+
+- 변경: main이 v1.156을 D-551에 먼저 썼으므로 위 항목의 API Ref 번호는 v1.157이다. main을 병합하고 막힘 결정 행은 main의 값별 권한 설명을 "구현됨"으로 고쳐 합쳤다.
+- 증거: `rosy_harness.py lint` 0 error. 시험은 병합 뒤 다시 돌린다(아래 결과는 보고에).
+- gate 변화: 없음.
+
+## 2026-10-09 · uncommitted · fix(fleet): D-540 9 안전 리뷰 반영 — claim 열기, rearm 이름, follow_cancel
+
+- 변경: `/line-stuck/claim`은 다시 열림(콘솔이 `ABORT` 확인 전에 claim 하고 403을 삼켜, 이름 없는 운영자의 중단 사이에 해결기가 움직이는 답을 낼 수 있었다). `/dispatch/rearm`은 이름 있는 운영자(대기 작업·재시작 뒤 남은 작업이 움직이고 OMX 팔을 다시 연다), 콘솔 재허가 버튼도 같은 사유로 잠근다. `/do`의 `follow_cancel`은 멈춤 동사. `cell-jobs/{id}/cancel`·`teach/stop`은 멈춤이 아니라(HOLD 작업 정리·녹화 종료) 이름 요구를 유지하고 API Ref v1.157 행에 적었다.
+- 운영 메모: `tools/sim/d407_stuck_scenarios.py`(막힘 답 전송)와 `tools/sim/d395_s2_bench.py`(목표 전송)는 이제 공유 토큰으로는 403이다. 개발 연결 세션(D-473) 토큰이나 `site-users.yaml` 운영자 토큰을 넘긴다. `deploy/robot/omx/g2_runner.py`의 rearm 호출도 같다.
+- 증거: 새 시험 3건(claim 열림, rearm 403, follow_cancel 열림)이 수정 전 모델 PC에서 실패, 수정 뒤 결과는 보고에.
+- gate 변화: 없음. Safety-Review 재검토 대기.
+
+## 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.158
+
+- 변경: main이 v1.157을 D-541(CORE trip lease)에 먼저 썼으므로 위 두 항목의 API Ref 번호는 v1.158이다. main 병합.
+- 증거: `rosy_harness.py lint` 0 error.
+- gate 변화: 없음.
+
+## 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.160
+
+- 변경: main이 v1.158(D-526)·v1.159(D-548)를 먼저 썼으므로 위 항목들의 API Ref 번호는 v1.160이다. 리뷰 승인 뒤 한 커밋으로 합치고 main 병합.
+- 증거: `rosy_harness.py lint`, 모델 PC 시험은 보고에.
+- gate 변화: 없음.
+
+## 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.161
+
+- 변경: main이 v1.160을 D-550 10(목표 임대)에 먼저 썼으므로 D-540 9 API Ref 번호는 v1.161이다. main 병합.
+- 증거: `rosy_harness.py lint`.
+- gate 변화: 없음.
+
+## 2026-10-09 · uncommitted · feat(fleet): D-541 7 Fleet trip lease holder (Safety-Review)
+- 변경: 새 `fleet/traffic/trip_lease.py` `TripLease`. 사이트 설정 `fleet.trip_lease_required`(기본 false)·`fleet.trip_lease_ttl_s`(기본 5, 1–10, `traffic/config.py`). 참이면 trip 시작이 pose 검사 뒤 `PUT /api/v1/trip-lease`를 연다(trip마다 새 uuid `lease_id`). 능력 `trip_lease`가 없으면 422 `TRIP_LEASE_UNSUPPORTED`, CORE 거절은 `TRIP_ROBOT_LEASED`·`TRIP_ROBOT_MANUAL`·`CALIBRATION_ACTIVE`·`TRIP_LEASE_REFUSED`. 그 뒤 시작 거절은 lease를 놓는다. 주기마다 자기 슬롯에서 renew(`trip_authority`와 같은 꼴). 404·409·그 밖 4xx·`renewed:false`·`ttl_s` 동안 확인된 renew 없음 → `stopped`/`lease_lost`(`detail.lease_reason`, `lease_by`), 자유 구간만 navigation cancel, 다시 열지 않음. 끝마다 정지 뒤 `DELETE`. `RobotApiError.detail`, `HttpRobotClient.trip_lease*`. 설정이 참이면 관제 토큰이 로봇 REST 토큰과 같을 때 app 시작 거절(D-541 1 주인 = 그 토큰). 관제 trip 줄에 `CORE 점유 중`과 끝 이유. API Ref v1.162.
+- 결정: 설정 false면 lease를 열지 않는다(계획 되돌리기 줄 "현장 설정 false(lease를 열지 않음)"과 과제 지시를 따름). D-541 7의 "능력 없는 로봇: 설정이 참이면 거절" 문장만으로는 false일 때 지원 로봇에 여는지가 열려 있다.
+- 증거: 모델 PC `operations/fleet/test/` + `test/architecture/test_module_structure.py` 2971 passed / 131 skipped, known_failures 0 new. 새 `test_trip_lease.py` 22개(커밋 c0d7295a2에서 수집 실패 = 구현 전 실패).
+- 크기: trip_runner.py 826(판정 686 + 150), fleet 46931(46866 + 150), fleet/traffic 1653(1509 + 150). 판정은 고치지 않았다.
+- gate 변화: SOURCE. SIM(Fleet kill → 5 s 안 IDLE)·DEVICE(Pilot 넘겨받기)·현장 설정 true는 열림.
+
+## 2026-10-09 · uncommitted · fix(fleet): 관제 카메라 추적 표시가 1초마다 깜박이지 않게 한다
+- 변경: console.js가 `/api/fleet/tracking`을 STATE_MS(1 s) 대신 TRACKING_MS(400 ms)마다 읽는다. 표시 수명(D-457 6: 최대 1 s − 서버 age − 요청 지연)은 그대로
+- 원인: 2026-10-09 현장(site-54057e6872f3) 콘솔에서 "추적 중"과 "위치 수명 만료"가 번갈아 떴다. 1 s 폴링이면 다음 응답이 항상 수명 뒤에 와 표시가 매 주기 끊긴다(현장 폴링 간격 0.34–1.47 s 측정)
+- 증거: test_overhead_tracking_console.py가 TRACKING_MS ≤ 500 ms와 그 사용을 고정
+- gate 변화: 없음. 현장 반영 뒤 깜박임 재확인 전
 ## 2026-10-09 · uncommitted · uiux(fleet): 큐 항목이 그 자리에서 결정으로 펼친다, 레일 하나만 스크롤, 접힌 로봇 카드 (D-540 3, 계획 (c))
 - 변경: `#stuck-panel`을 없애고 막힘 다섯 답(같은 값, 같은 비활성 사유, 경로 권한 그대로)을 최우선 큐 행 펼침으로 옮겼다. 재계획 확인(`바뀐 경로로 계속` / `운행 취소`, quiet·확인 없음)을 큐 행으로 더했다(`web/trip-replan.js`, 현장 지도 칸은 (e)까지 남는다). 한 번에 한 행, 가장 급한 결정이 먼저 펼친다. 넓은 단은 문서가 스크롤하지 않고 레일만 스크롤한다(큐 12rem·로봇 목록 15rem 상한 제거, 지도 칸은 남는 높이를 채움). 로봇 카드는 정상이면 한 줄(이름·운행 한 줄·배터리), 예외·선택이면 펼침, 오프라인·비상 정지 래치·안전 상태 미확인·보정 lease(`robot.calibration`, (h1) 필드)는 접기 없이 펼침. `전체 로봇 보기` 토글 제거. Cell 승인은 제안 대기 목록을 읽는 경로가 없어 이 브랜치에 넣지 않았다.
 - 증거: ai PC(모델 PC가 첫 실행 중 응답 끊김) `operations/fleet/test/`+`test_module_structure` 1 failed(fleet 단위 크기 판정, 아래), 관제 브라우저 묶음+새 `test_console_queue_inline_browser.py`는 main 스냅숏과 같은 실패만. node `queue-inline.test.mjs` 7건. 캡처 `X:\DevTemp\fleet-queue\{before,after}\`.

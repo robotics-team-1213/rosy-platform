@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · feat(fleet): 미션 API가 개발 세션으로도 시작 (D-548)
-- 2026-10-09 · uncommitted · uiux(fleet): 네 문서 공통 머리와 비상 정지 규칙 하나 (D-540 2)
-- 2026-10-09 · uncommitted · fix(fleet): 늦은 응답 한 번에 로봇이 오프라인으로 바뀌었다가 돌아오던 깜빡임
-- 2026-10-09 · uncommitted · fix(fleet): 느린 상태 수집이 모든 로봇 상태를 도착 즉시 낡게 만들었다
-- 2026-10-09 · uncommitted · fix(fleet): 연결 재시도 브라우저 검사 복구
+- 2026-10-09 · uncommitted · fix(fleet): 관제 카메라 추적 표시가 1초마다 깜박이지 않게 한다
+- 2026-10-09 · uncommitted · feat(fleet): D-541 7 Fleet trip lease holder (Safety-Review)
+- 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.161
+- 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.160
+- 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.158

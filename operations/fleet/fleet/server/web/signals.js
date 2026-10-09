@@ -20,12 +20,17 @@ export async function sendSignalPresence({ operator, visible, configured, call }
   }
 }
 
-export function createSignals({ scope, el, view, log, call, refreshState, isOperator = () => false }) {
+export function createSignals({ scope, el, view, log, call, refreshState, isOperator = () => false,
+  namedReason = () => "" }) {
   let presenceInFlight = false;
   async function presence() {
     if (presenceInFlight) return;
     presenceInFlight = true;
     try {
+      // D-550 10: operator goals' leases are renewed only while a visible operator console says so.
+      if (isOperator() && !document.hidden) {
+        await call("/api/fleet/goal-lease/presence", { method: "POST" }).catch(() => {});
+      }
       // D-525 4: a virtual manual green lasts while this console is open and visible.
       if (isOperator() && !document.hidden && (view.traffic?.signals || []).length) {
         await call("/api/fleet/traffic/signals/presence", { method: "POST" }).catch(() => {});
@@ -128,8 +133,11 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
       button.setAttribute("kind", "quiet");
       button.type = "button";
       button.textContent = label;
-      button.disabled = !row.online;
-      if (!row.online) button.setAttribute("reason", "오프라인");
+      // D-540 9: 점멸·전체정지는 멈춤이라 열려 있다. 나머지 명령은 이름 있는 운영자만.
+      const why = !row.online ? "오프라인"
+        : body_.mode === "flash_red" || body_.mode === "all_red" ? "" : namedReason();
+      button.disabled = Boolean(why);
+      if (why) button.setAttribute("reason", why);
       if (kind) button.classList.add(kind);
       button.addEventListener("click", scope.guard(() => command(row.signal_id, body_, label)));
       return button;

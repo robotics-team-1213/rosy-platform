@@ -749,17 +749,15 @@ main {
 }
 
 .log-panel[open] > summary { display: flex; align-items: center; min-height: var(--target-secondary); margin-bottom: 0; }
-/* 한 열 단: 로봇 목록 머리는 제목 한 줄, 그 아래 전체 주행 취소·전체 보기 한 줄이다(제목이 글자 단위로 접히지 않게). */
+/* 한 열 단: 로봇 목록 머리는 제목 한 줄, 그 아래 전체 주행 취소 한 줄이다(제목이 글자 단위로 접히지 않게). */
 @media (width < 64rem) {
   .roster-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .roster-block > h2 { grid-column: 1 / -1; }
   .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 1; grid-row: 2; justify-content: flex-start; }
   .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]):not(:has(#cancel-all-result:not([hidden]))) > div { display: none; }
   .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]):not(:has(#cancel-all-result:not([hidden]))) #cancel-all { width: 100%; }
-  .roster-block > #roster-toggle { grid-column: 2; grid-row: 2; width: 100%; }
   .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) { display: grid; grid-template-columns: minmax(0, 1fr); }
   .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) > div { margin-right: 0; }
   .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) #cancel-all { width: 100%; }
-  .roster-block:has(#cancel-all-result:not([hidden])) > #roster-toggle { grid-column: 1 / -1; grid-row: 3; }
   .roster-block > .dispatch-control { grid-row: 3; }
 }

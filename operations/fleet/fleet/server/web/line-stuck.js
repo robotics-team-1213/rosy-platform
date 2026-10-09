@@ -114,10 +114,12 @@ export function stuckFacts(stuck) {
 }
 
 /** One button per CORE decision, disabled with the first reason that applies. */
-export function decisionButtons(stuck, { operator, busy = false }) {
+export function decisionButtons(stuck, { operator, namedReason = "", busy = false }) {
   return DECISIONS.map((decision) => {
     let reason = "";
     if (!operator) reason = "운영자 권한이 필요합니다";
+    // D-540 9: 대기·중단은 멈춤이라 열려 있고, 움직이는 답만 이름 있는 운영자다.
+    else if (namedReason && decision !== "WAIT" && decision !== "ABORT") reason = namedReason;
     else if (stuck.robot_online === false) reason = "로봇 연결이 끊겼습니다";
     else if (busy) reason = "답을 보내는 중";
     else if (decision === "BACK_AND_RETRY" && !stuck.local_enabled) {
@@ -156,6 +158,7 @@ export function refusalText(robotId, decision, err) {
     why = REFUSAL_REASON[reason] || "CORE가 거부했습니다";
   } else if (code === "EMERGENCY_ACTIVE") why = "비상정지 중입니다";
   else if (code === "CALIBRATION_ACTIVE") why = "보정 세션이 로봇을 쥐고 있습니다";
+  else if (code === "OPERATOR_IDENTITY_REQUIRED") why = "이름 있는 운영자 로그인이 필요합니다";
   else if (err && err.status === 403) why = "운영자 권한이 필요합니다";
   else if (code === "ROBOT_UNREACHABLE") why = "로봇에 닿지 않아 답이 전해지지 않았습니다";
   else if (code === "STUCK_DECISION_OUTCOME_UNKNOWN") {
@@ -191,7 +194,7 @@ export function setReason(node, reason) {
   else node.removeAttribute("reason");
 }
 
-export function createLineStuckPanel({ scope, view, call, log, isOperator }) {
+export function createLineStuckPanel({ scope, view, call, log, isOperator, namedReason = () => "" }) {
   // robot_id -> { stuck_id, decision } (확인 단계), { stuck_id, text, kind } (마지막 결과)
   const confirming = new Map();
   const results = new Map();
@@ -293,7 +296,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator }) {
 
     // render() already dropped a confirm step whose stuck id is no longer the live one.
     const pending = confirming.get(robotId);
-    const specs = decisionButtons(stuck, { operator: isOperator(), busy: busy.has(robotId) });
+    const specs = decisionButtons(stuck, { operator: isOperator(), namedReason: namedReason(), busy: busy.has(robotId) });
     const actions = document.createElement("div");
     actions.className = "stuck-actions";
     actions.setAttribute("role", "group");
@@ -384,7 +387,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator }) {
       // 시계처럼 매 폴링 바뀌는 값은 서명에서 뺀다.
       const { held_s: _held, ask_remaining_s: _ask, observed_age_s: _age, ...stable } = stuck;
       const signature = JSON.stringify([stable, confirming.get(robot.robot_id) || null,
-        results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator()]);
+        results.get(robot.robot_id) || null, busy.has(robot.robot_id), isOperator(), namedReason()]);
       const node = slot.firstElementChild;
       if (!node || signatures.get(robot.robot_id) !== signature) {
         slot.replaceChildren(item(robot.robot_id, stuck));

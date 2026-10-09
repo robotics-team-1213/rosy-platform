@@ -67,6 +67,9 @@ test("replan slot: confirm needs an operator and a plan; cancel (a stop) needs o
     { facts: "바뀐 경로 3.1 m · 약 42초 · 장소 2곳", confirmReason: "", cancelReason: "" });
   assert.equal(replanView(held, { operator: false }).confirmReason, "운영자 권한이 필요합니다");
   assert.equal(replanView(held, { operator: true, busy: true }).cancelReason, "답을 보내는 중");
+  const named = replanView(held, { operator: true, named: "이름 있는 운영자 로그인이 필요합니다" });
+  assert.equal(named.confirmReason, "이름 있는 운영자 로그인이 필요합니다");  // a move (D-540 9)
+  assert.equal(named.cancelReason, "");                                   // a stop stays open
   const failed = { ...held, hold: { reason: "lap", plan: null, code: "PLAN_NO_ROUTE" } };
   const spec = replanView(failed, { operator: true });
   assert.equal(spec.confirmReason, "다시 계산한 경로가 없습니다");

@@ -77,7 +77,7 @@ function blockWith(button, reason) {
   else button.removeAttribute("reason");
 }
 
-export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator,
+export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
   moveAddress = null, moveAddressBlocked = () => "", confirmedAction }) {
   // D-493 — 예외 큐와 로봇 카드의 "주의" 보기는 이 한 규칙을 쓴다. 카드에 빨간 표지가 붙은
   // 로봇이 큐에 없으면 "예외가 먼저"(D-201)가 거짓말이 된다(2026-10-07 회차: 릴레이 끊김).
@@ -412,13 +412,13 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const currentLineFollow = state.line_follow || {};
     const lineFollowActive = currentLineFollow.mode === "CAMERA_LINE" || currentLineFollow.mode === "IR_LINE";
     // D-359 §5.3 — 사유는 비활성과 같은 조건에서 첫 번째로 걸린 것을 말한다.
-    blockWith(aim, view.stateUnavailable ? "Fleet 상태 확인 불가"
+    blockWith(aim, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
         : capabilityReason(robot.capabilities, "navigation.goal_navigation")
           || (!view.map ? "지도 없음"
           : estop === true ? "비상정지 중"
             : estop !== false ? "안전 상태 확인 불가"
-              : lineFollowActive ? "라인 추종 중" : ""));
+              : lineFollowActive ? "라인 추종 중" : "")));
     if (offlineWhyId) aim.setAttribute("aria-describedby", offlineWhyId);
     aim.addEventListener("click", scope.guard(() => {
       view.selected = view.selected === robot.robot_id ? null : robot.robot_id;
@@ -479,7 +479,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       fallback.textContent = lineFollow.mode === "IR_LINE" ? "IR 추적 중지" : "IR 추적 선택";
       blockWith(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
         : !robot.online ? "로봇 오프라인"
-          : !isOperator() ? "운영자 권한이 필요합니다" : "");
+          : !isOperator() ? "운영자 권한이 필요합니다"
+            // D-540 9: IR 추적 선택은 움직임, 중지(OFF)는 멈춤이다.
+            : lineFollow.mode !== "IR_LINE" ? namedReason() : "");
       fallback.addEventListener("click", scope.guard(async () => {
         const life = scope.capture();
         life.check();
@@ -511,6 +513,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     identify.type = "button";
     identify.textContent = "LED로 찾기";
     blockWith(identify, !isOperator() ? "운영자 권한이 필요합니다"
+      : namedReason() ? namedReason()
       : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
         : estop !== false ? "안전 상태 확인이 필요합니다" : "");
     identify.addEventListener("click", scope.guard(async () => {

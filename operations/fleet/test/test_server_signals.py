@@ -53,6 +53,17 @@ def _observed(*, red=True, yellow=False, green=False, pending=False, frozen=Fals
     return observed_body(lamps=lamps, pending=pending, frozen=frozen)
 
 
+def _named_client(tmp_path, signals: SignalConsole) -> TestClient:
+    # D-540 9: a non-stop signal command needs a named operator (site-users need the task store).
+    from hashlib import sha256
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=set())
+    users = {sha256(b"signal-operator").hexdigest(): {"principal_id": "bob", "role": "operator"}}
+    return TestClient(create_app(FleetConsole([], [], signal_console=signals),
+                                 task_service=tasks, site_users=users))
+
+
 def _client(*, signals: SignalConsole = None, robots=(), token=None) -> TestClient:
     endpoints = [RobotEndpoint(robot_id=r.robot_id, base_url=f"http://127.0.0.1:808{i}",
                                token="t") for i, r in enumerate(robots)]
@@ -420,10 +431,10 @@ def test_verify_is_visible_on_the_signals_endpoint():
     assert body["signals"]["signal_1"]["verify"]["state"] == "absent"
 
 
-def test_signal_command_endpoint_posts_and_answers_the_row():
+def test_signal_command_endpoint_posts_and_answers_the_row(tmp_path):
     sig = FakeSignal("signal_1")
     signals = _console(sig)
-    resp = _client(signals=signals, token="signal-operator").post(
+    resp = _named_client(tmp_path, signals).post(
         "/api/fleet/signals/signal_1/command",
         headers={"Authorization": "Bearer signal-operator"},
         json={"mode": "manual", "lamps": {"red": False, "yellow": False, "green": True}})
@@ -440,7 +451,7 @@ def test_unknown_signal_is_404_not_502():
     assert resp.json()["detail"]["code"] == "UNKNOWN_SIGNAL"
 
 
-def test_a_refusing_signal_comes_back_as_502_with_the_device_code():
+def test_a_refusing_signal_comes_back_as_502_with_the_device_code(tmp_path):
     sig = FakeSignal("signal_1")
 
     async def refuse(body):
@@ -448,7 +459,7 @@ def test_a_refusing_signal_comes_back_as_502_with_the_device_code():
 
     sig.command = refuse
     signals = _console(sig)
-    resp = _client(signals=signals, token="signal-operator").post(
+    resp = _named_client(tmp_path, signals).post(
         "/api/fleet/signals/signal_1/command",
         headers={"Authorization": "Bearer signal-operator"},
         json={"mode": "manual", "lamps": {"red": True, "yellow": False, "green": True}})

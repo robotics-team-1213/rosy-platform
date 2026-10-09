@@ -25,6 +25,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 SHA = re.compile(r"[0-9a-f]{40}")
+MAX_STATE_DIR = 64
 RELEASE = re.compile(r"(?:payload-(?:reserved-)?)?(\d{4}\.\d{2}\.\d{2})-(\d{3})")
 
 
@@ -334,6 +335,11 @@ def load_config(path):
         raise ValueError("invalid signing key name")
     if not Path(config["state_dir"]).is_absolute() or Path(config["state_dir"]).resolve().is_relative_to(ROOT):
         raise ValueError("state and downloads must be outside the trusted signer installation")
+    # The payload is extracted under <state>/<id>/attempt-N/x/.<id>.partial-*/ and its
+    # deepest file is ~120 characters; past Windows MAX_PATH (260) extraction fails.
+    # A 95-character state path stalled release 045 for four days (D-553).
+    if len(str(Path(config["state_dir"]).resolve())) > MAX_STATE_DIR:
+        raise ValueError(f"state_dir longer than {MAX_STATE_DIR} characters; payload paths would pass MAX_PATH")
     if config.get("ssh_jump") and not re.fullmatch(r"[A-Za-z0-9_.@-]+", config["ssh_jump"]):
         raise ValueError("invalid SSH jump")
     if Path(config["trusted_root"]).resolve() != ROOT.resolve():
