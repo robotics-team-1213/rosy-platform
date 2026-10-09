@@ -17,6 +17,8 @@ AI PC에는 팀원의 5클래스 차선 자료 `data-v13`(schema `pinky-lane-dat
 5. **평가 정답이 아니다.** 유도 val/test는 학습 중 검증에만 쓴다. D-475의 사람 고정 평가 세트를 대신하지 않고, 그 세트와 섞지 않는다.
 6. **shadow까지만 연다.** 결과는 `candidate`이며 revision은 `v13-drivable-YYYYMMDD-<sha8>`이다. intake와 `deliver.py push`는 이 계보가 있는 `v13-drivable-*`를 lane_seg shadow 슬롯에만 허용한다. active·promote는 계속 막는다. drivable 출력은 조향 권한이 없다. 주행 시험은 기존 차선 경로로 달리면서 shadow 출력을 기록하는 것이며, CORE가 유일한 최종 `/cmd_vel` 발행자다. D-475 §8의 조향 오차 게이트를 통과하기 전에는 shadow 밖으로 승격하지 않는다.
 
+7. **provisional 카메라 출처를 이 후보에만 허용한다** (사용자 결정 2026-10-09). `data-v13`은 8kcn·9dfk·rosy_26·옛 v11 영상을 섞었고, 그 전부를 덮는 승인된 CameraProfile은 없다. 입력이 위 3항의 D-554 자료이고 결과가 shadow 전용 `candidate`일 때만 `accepted: false` 카메라 출처로 학습할 수 있다. 그 사실은 모델 manifest와 run 기록에 `camera_provenance: provisional`로 남긴다. 이 표시가 있는 모델은 shadow 밖으로 나갈 수 없고, 다른 recipe나 사람 검수 자료의 카메라 출처 요구는 그대로다. 부모 v11도 같은 영상으로 학습됐고 조향 권한이 없다는 점이 이 예외의 근거다.
+
 ### Rejected
 
 - 좌·우 선 하나만 있는 행에서 선 반대쪽 전체를 drivable로 칠하기: 표본에서 도로가 아닌 바닥과 벽까지 덮었다.
