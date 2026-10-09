@@ -563,6 +563,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
                            tracking=tracking, identity=identity)
+    from fleet.server.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only
+    app.state.ai_facts = install_ai_routes(app, read_guard=read_guard, authorize=authorize,
+                                           db_path=task_service.store.path if task_service else None)
+    app.state.line_stuck.ai_view = app.state.ai_facts.robot_view
     if tracking is not None and tracking.enabled:
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,

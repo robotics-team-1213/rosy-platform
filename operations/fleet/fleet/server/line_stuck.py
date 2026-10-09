@@ -10,6 +10,7 @@ to the operator verbatim. The clearances and preview seq live only in the
 
 from __future__ import annotations
 
+import base64
 import logging
 import sqlite3
 import time
@@ -48,8 +49,11 @@ class LineStuckBoard:
         self._log = log
         self._observed_at: Optional[float] = None
         self._resolver: dict[tuple[str, str], dict] = {}
+        # D-577 8: one front-camera frame per open stuck, memory only (never disk, bus or event).
+        self._previews: dict[tuple[str, str], dict] = {}
         # Episode context, injected by the app once the services exist (None = not known).
         self.trip_busy: Optional[Callable[[str], bool]] = None
+        self.ai_view: Optional[Callable[[str], dict]] = None   # D-577 8: AI chip + live facts (shadow)
         self.map_pose: Optional[Callable[[str], object]] = None
         self.peer_config = ResolverConfig()   # the app sets the resolver's own when it runs
         self._peaks: dict[str, dict] = {}     # robot_id -> held_s / attempts maxima
@@ -69,8 +73,31 @@ class LineStuckBoard:
         return self._resolver.get((robot_id, stuck_id))
 
     def _drop_notes(self, robot_id: str, keep: Optional[str] = None) -> None:
-        for key in [k for k in self._resolver if k[0] == robot_id and k[1] != keep]:
-            del self._resolver[key]
+        for notes in (self._resolver, self._previews):
+            for key in [k for k in notes if k[0] == robot_id and k[1] != keep]:
+                del notes[key]
+
+    def is_open(self, robot_id: str, stuck_id: str) -> bool:
+        entry = self._open.get(robot_id)
+        return entry is not None and entry["stuck_id"] == stuck_id
+
+    def keep_preview(self, robot_id: str, stuck_id: str, jpeg: bytes, status: dict) -> None:
+        """D-577 8: hold this stuck's one picture until the stuck closes (a closed one is not kept)."""
+        if self.is_open(robot_id, stuck_id) and (robot_id, stuck_id) not in self._previews:
+            age_ms = status.get("age_ms")
+            self._previews[(robot_id, stuck_id)] = {
+                "jpeg": bytes(jpeg), "sequence": status.get("sequence"), "source": status.get("source"),
+                "age_at_fetch_s": age_ms / 1000.0 if isinstance(age_ms, (int, float)) else 0.0,
+                "fetched_at": self._clock()}
+
+    def preview(self, robot_id: str, stuck_id: str) -> Optional[dict]:
+        kept = self._previews.get((robot_id, stuck_id))
+        if kept is None:
+            return None
+        return {"robot_id": robot_id, "stuck_id": stuck_id, "sequence": kept["sequence"],
+                "source": kept["source"], "media_type": "image/jpeg",
+                "age_s": round(kept["age_at_fetch_s"] + max(0.0, self._clock() - kept["fetched_at"]), 2),
+                "jpeg_base64": base64.b64encode(kept["jpeg"]).decode("ascii")}
 
     def observed_age_s(self) -> Optional[float]:
         """Seconds since the last gather (None = never gathered since start)."""
@@ -213,6 +240,8 @@ class LineStuckBoard:
         # D-577 8: the console's human deadline counts from the resolver's note.
         shown["resolver"] = None if note is None else {
             **note, "age_s": round(max(0.0, self._clock() - note["at"]), 2)}
+        if self.ai_view is not None:
+            shown.update(self.ai_view(robot_id))
         return shown
 
     def pending(self) -> list[dict]:
