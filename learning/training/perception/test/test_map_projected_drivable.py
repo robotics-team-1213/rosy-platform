@@ -175,3 +175,13 @@ def test_only_the_robots_own_road_is_drivable():
     none, why = mpd.label_frame(_render(raster, (0, 0, 0)), _pose(y=mpd.HALF_WIDTH_M), CAMERA,
                                 mpd.ground_grid(CAMERA), raster, {"seed_radius_m": 0.004})
     assert none is None and why["reason"] == "robot_off_road"
+
+
+def test_cli_exposes_every_param(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(mpd, "robot_camera", lambda *a, **k: (_ for _ in ()).throw(StopIteration))
+    monkeypatch.setattr(mpd.argparse.ArgumentParser, "parse_args",
+                        lambda self, argv=None: seen.setdefault("args", mpd.argparse.ArgumentParser.parse_known_args(self, argv)[0]))
+    with pytest.raises(StopIteration):
+        mpd.main(["derive", "--session", "s", "--ceiling", "c", "--robot", "r", "--out", "o"])
+    assert all(hasattr(seen["args"], key) for key in mpd.PARAMS if key != "pitch_sigma_rad")

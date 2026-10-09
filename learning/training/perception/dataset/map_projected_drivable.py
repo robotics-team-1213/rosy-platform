@@ -346,7 +346,7 @@ def main(argv=None):
     p.add_argument("--pitch-deg", type=float, help="session camera pitch override")
     p.add_argument("--height-m", type=float, help="session camera height override")
     p.add_argument("--pitch-sigma-deg", type=float, default=math.degrees(PARAMS["pitch_sigma_rad"]))
-    for key in ("near_m", "far_m", "min_line_iou", "min_spacing_s"):
+    for key in ("near_m", "far_m", "min_line_iou", "min_spacing_s", "own_road_radius_m", "seed_radius_m"):
         p.add_argument("--" + key.replace("_", "-"), type=float, default=PARAMS[key])
     for key in ("ignore_top", "stripe_min", "line_tol_px", "min_line_px"):
         p.add_argument("--" + key.replace("_", "-"), type=int, default=PARAMS[key])
