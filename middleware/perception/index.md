@@ -68,8 +68,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · feat(control): keep closed-loop gap diagnostic
 - 2026-10-10 · uncommitted · fix(control): 정지 경계 교체 모순에서 기억 중단
 - 2026-10-09 · uncommitted · fix(control): D-570 리뷰 반영 — 재사용 기록 명확화, 워커 시계 상한, idle 주기 제거
 - 2026-10-09 · uncommitted · feat(control): 학습 페인트 마스크 오돔 보정 재사용 (D-570)
 - 2026-10-09 · uncommitted · fix(control): 운영 overlay `learned_paint_every_n` 허용 범위 1~4
-- 2026-10-09 · uncommitted · fix(control): D-531 굽이 중 B9 문맥
