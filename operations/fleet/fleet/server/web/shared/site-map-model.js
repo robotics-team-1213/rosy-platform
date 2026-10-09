@@ -39,6 +39,8 @@ export const TRIP_ERROR_LABEL = {
   TRIP_AUTHORITY_NOT_REQUIRED: '현장은 통행권을 보내는데 이 로봇 CORE는 통행권 없이 움직입니다 · 로봇 설정에서 통행권 필수를 켜세요',
   // D-525 가상 신호
   TRIP_SIGNAL_START_IN_ZONE: '신호 교차로 안에서는 출발할 수 없습니다 · 교차로 밖으로 옮긴 뒤 다시 하세요',
+  // D-517 3: 구역 안에서는 서지 않는다
+  TRIP_STOP_IN_ZONE: '경로 위에 구역(교차로) 밖에 설 장소가 없습니다 · 다른 목적지를 고르세요',
   TRIP_SIGNAL_NEEDS_AUTHORITY: '경로가 신호 교차로를 지나는데 이 로봇은 통행권(CORE)을 받지 않습니다 · 적색에서 선다는 보장이 없습니다',
   TRIP_ROBOT_BUSY: '이 로봇은 운행 중입니다 · 운행을 먼저 취소하세요',
   TRIP_ALREADY_STARTED: '이미 출발시킨 경로입니다',
@@ -136,14 +138,16 @@ export function tripErrorText(code, detail = {}) {
 }
 
 /** Map metres <-> SVG pixels; map y goes up, SVG y goes down. ``turn`` (0/90/180/270) turns the
- * whole view clockwise on screen (D-513 7) so the map reads the way the turned camera picture does. */
-export function fitView(map, width, height, pad = 24, turn = 0) {
+ * whole view clockwise on screen (D-513 7) so the map reads the way the turned camera picture does.
+ * ``discs`` ({x, y, r} metres, D-540 4 robot rings) are kept inside the view too. */
+export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
   const q = turn * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
   const rot = (x, y) => [x * c + y * s, -x * s + y * c];
   const xs = [], ys = [];
   const add = (x, y) => { const [rx, ry] = rot(x, y); xs.push(rx); ys.push(ry); };
   for (const place of map.places) add(place.x, place.y);
   for (const edge of map.edges) for (const [x, y] of edge.polyline) add(x, y);
+  for (const {x, y, r} of discs) for (const [dx, dy] of [[-r, -r], [r, r]]) add(x + dx, y + dy);  // any 90° turn of a box
   if (!xs.length) { xs.push(0); ys.push(0); }
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
   const scale = Math.min((width - 2 * pad) / Math.max(maxX - minX, 1e-6),
@@ -304,6 +308,10 @@ export function tripStatusText(trip, map) {
   if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
   if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
   if (trip.hold) parts.push('바뀐 경로 확인 대기 · 장소에서 서 있음');
+  if (trip.stop_moved) {  // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): never stands inside a zone
+    const {from, to} = trip.stop_moved;
+    parts.push(`목적지 ${names.get(from) || from || '좌표'} → ${names.get(to) || to} · 교차로 안에 서지 않도록 다음 지점에서 섭니다`);
+  }
   if (trip.reason === 'stall' && Number.isFinite(trip.detail?.stall_s)) {
     parts.push(`${trip.detail.stall_s}초 넘게 ${TRIP_REASON_LABEL.stall}`);
   } else if (trip.reason) {

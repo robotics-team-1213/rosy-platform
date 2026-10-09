@@ -267,15 +267,16 @@ def test_an_overwritten_file_is_backed_up_and_the_report_names_the_backup(tmp_pa
 
 
 def test_hang_settings_wait_for_approval_on_every_pc():
-    """D-530 decision: the hardware watchdog (with its iTCO_wdt modules-load file) and panic settings need approval."""
-    names = ("modules-load.d/rosy-watchdog.conf", "system.conf.d/rosy-watchdog.conf", "sysctl.d/90-rosy-hang.conf")
+    """D-530 decision: the hardware watchdog (with its iTCO_wdt load unit) and panic settings need approval."""
+    names = ("system/rosy-watchdog-load.service", "system.conf.d/rosy-watchdog.conf", "sysctl.d/90-rosy-hang.conf")
     for role in ROLES.values():
         manifest = ROOT / "deploy" / role / "host-state" / "manifest"
         lines = manifest.read_text(encoding="utf-8").splitlines()
         for name in names:
             found = [ln for ln in lines if name in ln and not ln.startswith("#")]
             assert found and all(ln.startswith("approval") for ln in found), (role, name)
-    assert (ROOT / "deploy/hosts/common/host-state/rosy-modules-load-watchdog.conf").read_text() == "iTCO_wdt\n"
+    unit = (ROOT / "deploy/hosts/common/host-state/rosy-watchdog-load.service").read_text()
+    assert "ExecStart=/usr/sbin/modprobe iTCO_wdt" in unit and "RemainAfterExit=yes" in unit
 
 
 def test_ssh_password_login_stays_on():

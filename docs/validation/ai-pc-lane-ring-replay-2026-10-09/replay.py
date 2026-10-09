@@ -1,4 +1,4 @@
-﻿import argparse, hashlib, json, time
+import argparse, hashlib, json, time
 from pathlib import Path
 import cv2
 import numpy as np

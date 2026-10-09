@@ -79,13 +79,15 @@ HARD_TIER = 1_000  # a file above this gets zero growth allowance
 #: leave the package total and the unit always carries a verdict with the package +150 allowance.
 #: docs/plans/2026-10-07-line-follow-recovery-subpackage.md (incl. its 2026-10-08 junction section),
 #: docs/plans/2026-10-08-line-follow-arc-subpackage.md,
-#: docs/plans/2026-10-09-core-localization-size-unit.md
+#: docs/plans/2026-10-09-core-localization-size-unit.md,
+#: docs/plans/2026-10-09-core-swarm-size-unit.md
 #: Add a unit only by a dated docs/plans split plan with independent review, in the same change as
 #: the parent package's re-judge. A unit is an existing Python subpackage of a PACKAGES member.
 SIZE_UNITS = ("core/services/core_features/line_follow/recovery",
               "core/services/core_features/line_follow/recovery/junction",
               "core/services/core_features/line_follow/arc",
               "core/services/core_features/localization",
+              "core/services/core_features/swarm",
               "fleet/fleet/traffic",
               "perception/control/sensing/perception")
 
@@ -111,7 +113,11 @@ SIZE_VERDICTS = {
         "tests. Budget and allowance unchanged",
     ),
     "fleet/fleet/server/trip_runner.py": (
-        686,
+        837,
+        "split: re-judged at 837 on 2026-10-09 (author's record; NEEDS the independent re-judge): D-517 3 no stop "
+        "inside a zone adds one arrival line (a stop short of a zone counts from that point); the zone rules live in "
+        "server/trip_laps.py and traffic/zone_hold.py, the runner only calls them. The named split stays the next "
+        "step. +150 allowance measured from 837. Previously "
         "split: measured at 686 on 2026-10-08 after the named seam was applied (D-517 split, behaviour-preserving): "
         "lap helpers are in server/trip_laps.py, halts and restart halts in server/trip_halts.py, the traffic "
         "hold-back and the tick's pinned/step block in lane_traffic.TrafficService (holds/watch/period). What "
@@ -199,7 +205,15 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        48_952,
+        49_303,
+        "split: re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
+        "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "
+        "web/map-view.js; existing owners, display only, no command path, no new owner). Previously "
+        "split: re-judged at 49125 on 2026-10-09: power, dock, and charge tags stay with the "
+        "existing card and attention-queue owners (roster.js +20, queues.js +7, "
+        "power-health-view.js +1). A battery level other than ok and DOCK_FAILED join the "
+        "queue that already lists power.problem. No new package owner and no robot command "
+        "path. +150 allowance unchanged, measured from 49125. Previously "
         "split: re-judged at 48952 on 2026-10-09 after merging D-564 (+241 over main 48711; floor place markers: "
         "ingest and lease in server/sightings.py, teach-from-marker in teach_service.py and teach_routes.py, "
         "console list in web/site-map-teach.js; existing owners, no command path, no new owner). Previously "
@@ -647,8 +661,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_344,
-        "accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
+        1_347,
+        "accept: re-judged at 1347 on 2026-10-09 for D-559 (independent read-only critic agent ACCEPT): SwarmFollowParams.mode (one Literal field "
+        "and its comment) and PoseSample.frame (one optional Literal field); additive, envelope 1.0 kept, "
+        "no new model. Previously: accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
         "one RouteContext import and two optional LineFollowStatus fields; the bounded model and "
         "validation live in protocol/route_context.py. No new runtime owner or envelope version, and "
         "the zero-growth allowance remains. "
@@ -881,9 +897,19 @@ SIZE_VERDICTS = {
         "D-546 pose_request and package init as one localization domain. No runtime move, new owner, store, "
         "publisher or command path. Re-judge after +150.",
     ),
+    "core/services/core_features/swarm": (
+        799,
+        "accept: registered at 799 on 2026-10-09 for D-559 (feat/swarm-trail-follow) after its review "
+        "fixes, independently judged ACCEPT at 771 (read-only critic agent, 2026-10-09); "
+        "docs/plans/2026-10-09-core-swarm-size-unit.md registers the follower state machine, follow goal "
+        "and D-559 trail/pure pursuit as one swarm domain. No runtime move; CommandManager slot, safety "
+        "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
+    ),
     "core_features": (
-        12_270,
-        "accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
+        11_814,
+        "accept: re-measured at 11814 on 2026-10-09 after core_features/swarm (771) became its own size "
+        "unit under docs/plans/2026-10-09-core-swarm-size-unit.md (combined measure 12585 with D-559). "
+        "Previously: accept: independently re-judged at 12270 on 2026-10-09 (read-only safety reviewer): "
         "the cohesive 922-line localization package is now its own size unit under "
         "docs/plans/2026-10-09-core-localization-size-unit.md. The combined pre-split measure was "
         "13192; moving this domain out fulfills the previous split condition without moving runtime code. "

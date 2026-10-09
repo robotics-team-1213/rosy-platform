@@ -13,7 +13,7 @@ from core_common.capability import Capability
 from core_features.calibration import CalibrationSessionManager
 from core.trip_lease import TripLeaseManager, build_trip_lease  # D-541
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
-from core_features.command.manager import CommandManager
+from core_features.command.manager import CommandManager, Twist
 from core.teleop_config import teleop_timeout_ms
 from core.fleet_loss_wiring import build_fleet_loss
 from core.line_follow_wiring import (  # noqa: F401 (tests import the parser here)
@@ -491,6 +491,9 @@ class CoreServices:
             # 쥔 채 묻는다.
             docking_active_provider=lambda: docking.active,
             map_id_provider=lambda: state.map_id,
+            # D-559 trail: own pose, the NAVIGATION slot and the D-422 judge of line follow.
+            pose_provider=state.pose_sample, obstacle_gap=line_follow.obstacle_gap,
+            twist_sink=lambda t: command.set_nav_twist(None if t is None else Twist(*t)),
         )
         nav.session_closed_listener = swarm.on_navigation_session_closed
         nav.docking_active_provider = lambda: (

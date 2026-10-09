@@ -295,6 +295,30 @@ class LineFollowManager(BodyStopMixin, StuckRecoveryMixin, AuthorityMixin, LaneR
             self._clearance_at = float(now)
             self._remember_near(float(now))  # D-422: returns that slip under range_min
 
+    def obstacle_gap(self, linear: float, angular: float, now: Optional[float] = None):
+        """D-559: this obstacle judgement for another CORE mode's twist (swarm trail follow).
+
+        (gap, stop, resume), gap None = nothing in the way; None = no fresh obstacle sensor.
+        Path mode with the URDF body is the D-422 sweep; sector mode is the front distance.
+        Line-follow's own intent and gap status are left as they were.
+        """
+        c = self._config
+        current = self._clock() if now is None else now
+        with self._lock:
+            if self._clearance_at is None or current - self._clearance_at > c.clearance_stale_s:
+                return None
+            if self._scan_points is None:
+                return self._clearance, c.sector_stop_m, c.sector_resume_m
+            saved = self._intended, self._gap_status, self._gap_resume
+            self._intended = (float(linear), float(angular))
+            try:
+                if c.body_stop_known:
+                    gap, _, stop, resume = self._body_clearance(current)
+                    return gap, stop, resume
+                return self._path_clearance(), c.sector_stop_m, c.sector_resume_m
+            finally:
+                self._intended, self._gap_status, self._gap_resume = saved
+
     def _set_clearance(self, distance: Optional[float], now: Optional[float] = None,
                        stop: Optional[float] = None, resume: Optional[float] = None) -> None:
         """여유 거리와 떨림 방지(stop < resume) 판정. 잠금 안에서 부른다.

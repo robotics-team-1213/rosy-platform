@@ -80,7 +80,7 @@
 
 **6a. 2026-10-09 승인과 적용 결과.**
 
-- **하드웨어 워치독과 panic.** 사용자가 관제 PC와 AI PC에 승인했고 `--approve`로 적용했다. 모델 PC는 학습 중 오탐 재부팅 위험으로 제외한다(매니페스트에는 `approval`로 남는다). Ubuntu가 `iTCO_wdt`를 막아 두므로 `/etc/modules-load.d/rosy-watchdog.conf`(내용 `iTCO_wdt`)가 있어야 `/dev/watchdog0`이 생긴다. 이 파일을 `rosy-watchdog.conf`, `90-rosy-hang.conf`와 같이 세 역할 매니페스트의 `approval` 줄로 둔다(AI PC는 이전에 없었다).
+- **하드웨어 워치독과 panic.** 사용자가 관제 PC와 AI PC에 승인했고 `--approve`로 적용했다. 모델 PC는 학습 중 오탐 재부팅 위험으로 제외한다(매니페스트에는 `approval`로 남는다). Ubuntu의 `/lib/modprobe.d/blacklist_linux_*.conf`가 `iTCO_wdt`를 막아 두므로 `modules-load.d`로는 올릴 수 없다. 2026-10-09 재확인에서 systemd-modules-load가 "Module 'iTCO_wdt' is deny-listed (by kmod)"라며 건너뛰었다. 명시적 `modprobe iTCO_wdt`는 블랙리스트를 무시하고, 올라온 뒤 systemd PID 1이 핑 간격 안에 `/dev/watchdog0`을 스스로 열었다("Using hardware watchdog /dev/watchdog0: 'iTCO_wdt'", reexec 없음). 그래서 `/etc/systemd/system/rosy-watchdog-load.service`(oneshot, `modprobe iTCO_wdt`)를 켠다. 이 유닛을 `rosy-watchdog.conf`, `90-rosy-hang.conf`와 같이 세 역할 매니페스트의 `approval` 줄(파일과 enabled)로 둔다(AI PC는 이전에 없었다).
 - **관제 PC Wi-Fi 허용 목록.** 적용했다. 호스트의 `/etc/rosy/host-state/wifi-allow`가 허용할 연결 이름을 한 줄에 하나씩 적고, `--approve wifi`로 설치하면 그 목록에 없는 저장된 연결의 자동 연결만 끈다(삭제하지 않는다). 현장에서는 영상과 장치용 두 개만 남기고 나머지 7개는 자동 연결을 껐다. 이름이 네트워크를 드러내므로 목록은 저장소에 넣지 않는다(D-226). 지우려면 연결의 자동 연결을 다시 켜면 된다.
 - **D-524 Fleet 키.** 연결했다. 관제 PC는 docker 풀 `172.16.0.0/12`에서 오는 키를 받는다(스택을 다시 띄우면 docker 서브넷이 바뀐다. 172.20에서 172.18로 바뀐 것을 봤다). 모델 PC와 AI PC는 관제 PC의 LAN 주소에서 오는 키를 받고, 대상은 LAN 주소로 적는다. Tailscale SSH는 `authorized_keys` 강제 명령을 건너뛰기 때문이다. 절차는 `deploy/site/README.md`의 Service Control 절과 `install-host-control.sh` 머리말.
 

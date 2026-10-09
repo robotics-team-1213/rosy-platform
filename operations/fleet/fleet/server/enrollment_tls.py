@@ -151,14 +151,33 @@ class EnrolledTlsBindings:
         except (ValueError, TypeError, KeyError):
             raise EnrollmentTlsError('invalid enrolled TLS binding file') from None
 
-    def validate(self, rows: list[dict]) -> None:
+    def validate(self, rows: list[dict]) -> list[str]:
+        """Return pending robot_ids: approved (the root-owned file) but not enrolled yet."""
         rows = {row['robot_id']: row for row in rows}
-        if not self._approved.keys() <= rows.keys():
-            raise EnrollmentTlsError('TLS binding requires an already enrolled robot')
+        owners = {}
+        for robot_id, row in rows.items():
+            name = str(row['hostname']).lower().rstrip('.')
+            owners[name if name.endswith('.local') else name + '.local'] = robot_id
         for robot_id, binding in self._approved.items():
-            name = str(rows[robot_id]['hostname']).lower().rstrip('.')
-            if binding.hostname != (name if name.endswith('.local') else name + '.local'):
+            owner = owners.get(binding.hostname)
+            # An enrolled binding names its own row; a pending one may not name another robot's row.
+            if owner != robot_id and (robot_id in rows or owner is not None):
                 raise EnrollmentTlsError('TLS hostname differs from enrolled identity')
+        return sorted(self._approved.keys() - rows.keys())
+
+    def claims(self, hostnames: set[str], robot_ids: set[str]) -> bool:
+        """True when an approved binding (pending or bound) owns one of these names or ids."""
+        names = {name.lower().rstrip('.') for name in hostnames if name}
+        names |= {name + '.local' for name in names if not name.endswith('.local')}
+        return any(b.hostname in names or b.robot_id in robot_ids for b in self._approved.values())
+
+    def pending(self, rows: list[dict], hostname: str, port: int) -> EnrolledTlsBinding | None:
+        """The one unenrolled binding at this hostname:port. Selection only: TLS proves it."""
+        enrolled = {row['robot_id'] for row in rows}
+        name = hostname.lower().rstrip('.')
+        found = [b.robot_id for b in self._approved.values()
+                 if b.robot_id not in enrolled and b.hostname == name and b.port == port]
+        return self.binding(found[0]) if len(found) == 1 else None
 
     def binding(self, robot_id: str) -> EnrolledTlsBinding | None:
         original = self._approved.get(robot_id)
@@ -177,9 +196,9 @@ class EnrolledTlsBindings:
                              tls_ca_file=binding.tls_ca_file, discovery=True)
 
     def markers(self, rows: list[dict]) -> list[dict]:
-        self.validate(rows)
+        pending = self.validate(rows)
         return [dict(robot_id=b.robot_id, origin=f'https://{b.hostname}:{b.port}', ca_sha256=b.tls_ca_sha256)
-                for robot_id in self._approved for b in [self.binding(robot_id)]]
+                for robot_id in self._approved if robot_id not in pending for b in [self.binding(robot_id)]]
 
 
 class EnrollmentIdentityTransport(httpx.AsyncBaseTransport):

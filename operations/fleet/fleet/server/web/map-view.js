@@ -328,7 +328,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.beginPath();
       ctx.arc(cam.x, cam.y, size * 0.9, 0, Math.PI * 2);
       ctx.stroke();
-      drawChip(ctx, null, cam.x, cam.y - size * 1.8, offsetLabel(row), row.warn ? "warn" : undefined);
+      const markers = new Set((view.siteMap?.maps || []).flatMap((map) => map.sources || [])
+        .map((source) => source.robot_markers?.[row.robotId]).filter(Number.isInteger));
+      const label = row.measured && !row.pose && markers.size === 1
+        ? `ArUco ${[...markers][0]}` : offsetLabel(row);
+      drawChip(ctx, null, cam.x, cam.y - size * 1.8, label, row.warn ? "warn" : undefined);
     }
     ctx.fillStyle = css("--ink-quiet");
     for (const item of tracking.unknown) {
@@ -336,6 +340,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.beginPath();
       ctx.arc(p.x, p.y, size * 0.35, 0, Math.PI * 2);
       ctx.fill();
+      if (item.markerId !== undefined) drawChip(ctx, null, p.x, p.y - size * 1.8, `ArUco ${item.markerId} · 미등록`);
     }
     ctx.restore();
   }
@@ -536,11 +541,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawCrosswalks(ctx, toPx, 1.5);
     drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
-    drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);
+    drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
     drawStartPointMarks(ctx, toPx, view.startPoints, view.siteMap.maps.map(row=>row.map_id), css('--series-secondary'), 2);
     guide(ctx, toPx);
     if (layerOn("sightings")) {
-      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(7, t.scale * 0.09), 1.5);
+      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
     }
     flushChips(ctx);
   }
@@ -675,6 +680,19 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     el("legend-sighting").hidden = !view.siteMap && !view.sightings.length;
   }
 
+  function showSiteMap() {
+    const canvas = el("map-canvas");
+    canvas.removeAttribute("aria-hidden");
+    canvas.setAttribute("role", "img");
+    canvas.tabIndex = -1;
+    canvas.classList.add("idle");
+    el("map-stage").dataset.mapState = "site";
+    el("map-empty").hidden = true;
+    syncLegend("site");
+    draw();
+    onMapUnavailable();
+  }
+
   async function refreshSiteMap() {
     const life = scope.capture();
     life.check();
@@ -683,6 +701,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       life.check();
       view.siteMap = siteMap;
       el("map-stage").dataset.siteMap = "configured";
+      // Show the read-only site layer while a robot map request is still pending.
+      if (!view.map && !auth.locked) showSiteMap();
       if (Date.now() - calibrationsAt > 30000) {
         try {
           const result = await call("/api/fleet/calibrations", { signals: [life.signal] });
@@ -813,16 +833,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       if (!auth.locked) mapFailure = mapGate.fail(err.status, err.code);
       if (view.siteMap && !auth.locked) {
         // 점유 격자 없이 카메라 사각형만 있다 — 관측 전용 뷰. 목표 지정은 계속 막힌다.
-        const canvas = el("map-canvas");
-        canvas.removeAttribute("aria-hidden");
-        canvas.setAttribute("role", "img"); // 관측 전용 — 누를 수 있는 버튼이 아니다
-        canvas.tabIndex = -1;
-        canvas.classList.add("idle");
-        el("map-stage").dataset.mapState = "site";
-        el("map-empty").hidden = true;
-        syncLegend("site");
-        draw();
-        onMapUnavailable();
+        showSiteMap();
         return;
       }
       const canvas = el("map-canvas");

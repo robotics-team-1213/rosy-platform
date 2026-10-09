@@ -69,7 +69,7 @@ function render() {
   const background = plane?.mapId === map.map_id ? plane : null;
   svg.classList.toggle('has-plane', Boolean(background));
   $('map-view-turn').value = String(viewTurnOf(map));
-  const view = background?.view || fitView(map, W, H, 24, viewTurnOf(map));
+  const view = background?.view || fitView(map, W, H, LABEL_PAD, viewTurnOf(map), robotDiscs(map));
   state.view = view;
   if (background) {
     el('image', {...background.field, href: background.url, preserveAspectRatio: 'none'}, svg);
@@ -117,12 +117,19 @@ function render() {
     const [px, py] = view.toPx(background.point.x, background.point.y);
     el('circle', {cx: px, cy: py, r: 6, class: 'target'}, svg);
   }
-  drawRobots();
+  drawRobots(false);
+}
+
+// D-540 4: robot rings stay on the map — the fit includes them.
+const LABEL_PAD = 24;  // the same margin as before; a label with no room above its ring goes below it
+function robotDiscs(map) {
+  if (map.map_id !== state.active?.map.map_id) return [];
+  return (state.guide?.robots || []).filter(row => row.pose).map(row => ({x: row.pose.x, y: row.pose.y, r: row.body_radius_m + row.pose.u_m}));
 }
 
 // D-540 4: the 관제 map's /guide marks (body, heading, uncertainty ring) and each open trip's line and
 // next place, in this map's frame and view turn. Read-only; redrawn alone so a poll never eats a click.
-function drawRobots() {
+function drawRobots(refit = true) {
   const svg = $('site-map-svg'), map = shown();
   svg.querySelector('#robot-layer')?.remove();
   if (!map || !state.view || map.map_id !== state.active?.map.map_id) return;
@@ -140,6 +147,7 @@ function drawRobots() {
     }
   }
   const toPoint = (x, y) => { const [px, py] = state.view.toPx(x, y); return {x: px, y: py}; };
+  let off = false;
   for (const {row, p, r, ring, alert, tip} of guideMarks(state.guide, toPoint)) {
     const g = el('g', {class: `robot ${tint(row.robot_id)} ${row.pose.state.toLowerCase()}${row.online ? '' : ' offline'}`,
       'data-robot': row.robot_id, ...(alert ? {'data-alert': alert} : {})}, layer);
@@ -150,8 +158,14 @@ function drawRobots() {
       const deg = Math.atan2(tip.y - p.y, tip.x - p.x) * 180 / Math.PI;
       el('polygon', {class: 'robot-tip', points: '2,0 -7,-5 -7,5', transform: `translate(${tip.x} ${tip.y}) rotate(${deg})`}, g);
     }
-    el('text', {class: 'robot-label', x: p.x, y: p.y - ring - 6}, g).textContent = poseLabel(row);
+    const label = el('text', {class: 'robot-label', x: p.x, y: p.y - ring - 6}, g);
+    label.textContent = poseLabel(row);
+    const half = label.getComputedTextLength() / 2 + 4;  // keep the whole label on the map
+    label.setAttribute('x', Math.min(Math.max(p.x, half), W - half));
+    if (p.y - ring - 6 < 16) label.setAttribute('y', p.y + ring + 16);
+    off ||= p.x - ring < 0 || p.x + ring > W || p.y - ring < 0 || p.y + ring > H;
   }
+  if (off && refit && !plane) render();  // a ring left the fitted view: fit again (a poll, not a click, redraws)
 }
 
 function select(selection) {

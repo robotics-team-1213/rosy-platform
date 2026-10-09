@@ -1,8 +1,4 @@
 main { display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 90rem; margin: 0 auto; word-break: keep-all; overflow-wrap: break-word; }
-@media (width >= 64rem) {
-  main:has(> .task-nav) { grid-template-columns: 11rem minmax(0, 1fr); }
-  main > :not(.task-nav) { grid-column: 2; }
-}
 ui-section { display: grid; gap: var(--space-3); }
 .map-workflow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "trip edit" "run edit"; gap: var(--space-4); align-items: start; }
 .map-workflow > [aria-labelledby="trip-heading"] { grid-area: trip; }
@@ -56,7 +52,7 @@ a { color: var(--ink); }
 #robot-layer .degraded .robot-body { fill-opacity: .18; stroke-dasharray: 4 3; }
 #robot-layer [data-alert="warn"] .robot-body { stroke: var(--status-warn); stroke-width: 3px; }
 #robot-layer [data-alert="crit"] .robot-body { stroke: var(--status-crit); stroke-width: 3px; }
-#robot-layer .offline { opacity: .4; }
+#robot-layer .offline { opacity: var(--disabled-opacity); }
 #robot-layer .robot-heading { stroke: currentColor; stroke-width: 3px; stroke-linecap: round; }
 #robot-layer .robot-tip { fill: currentColor; }
 #robot-layer .robot-label { fill: var(--ink); font: var(--text-micro) var(--mono); text-anchor: middle; paint-order: stroke; stroke: var(--surface-flat); stroke-width: 3px; }

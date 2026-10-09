@@ -17,7 +17,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
 .theme-choice ui-button { min-width: var(--target-secondary); padding-inline: 0; justify-content: center; }
 #theme-choice-label { white-space: nowrap; }
 
-/* D-414 — 비상 정지: 팔각 아이콘과 보이는 동사. 래치 부제는 아이콘 줄 아래로 접힌다. 네 문서가 같은 크기다(D-540 2). */
+/* D-414 — 비상 정지: 팔각 아이콘과 보이는 동사. 상세 절차는 화면 낭독기에 남긴다. */
 .estop {
   min-width: var(--target-irreversible);
   min-height: var(--target-irreversible);
@@ -34,7 +34,17 @@ ui-topbar input[type="checkbox"] { width: auto; }
   flex: none;
 }
 .estop span { white-space: nowrap; }
-.estop small { flex-basis: 100%; text-align: center; }
+.estop small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 #estop[disabled][reason] > small:not([data-reason]) { display: none; }
 
 /* D-359 §6.4 — 넓은 창(90rem 이상): 접힘 칸은 상자가 없고(display: contents) 항목이 머리 줄에

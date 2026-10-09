@@ -3,7 +3,8 @@
 
 // D-359 §5.2 — 카드의 짧은 값은 공용 <ui-tag>다. 주행(nav)·도착(ok)은 색이 아니라
 // ink인 active, 나머지는 태그의 warn/crit 어휘 그대로다.
-import { MODE_LABEL, NAVIGATION_LABEL, enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+import { MODE_LABEL, NAVIGATION_LABEL, DOCK_STATE_LABEL, POWER_MODE_LABEL,
+  enumLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
 import { addressReason } from "/console/assets/address-drift.js";
 import { linkTag } from "./link-tag.js";
@@ -102,6 +103,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
   function card(robot, index) {
     const node = document.createElement("article");
+    const displayName = view.robotNames?.[robot.robot_id] || robot.robot_id;
     // D-82 로봇 사다리 — 지도 삼각형과 같은 색 순서(view.robots 인덱스)로 카드의
     // 정체 띠가 돈다. CSS 의 .s0/.s1/.s2 가 --robot-1..3 을 붙인다. 표시 순서가
     // 예외 우선으로 바뀌어도 색은 로봇에 붙어 있다.
@@ -117,6 +119,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     const state = view.stateUnavailable ? {} : (robot.state || {});
     const pose = state.pose;
+    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
     const nav = navTag(state);
     // D-540 3: one line when nominal; the four must-expand states keep the card open.
     const attention = attentionKey(robot);
@@ -135,8 +138,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       battery.dataset.fact = "battery";
       battery.append(nodeWithText("span", "sr-only", "배터리 "),
         nodeWithText("strong", "", powerHealthView(robot, view.receivedAtMs, Date.now()).battery));
-      line.append(nodeWithText("b", "", robot.robot_id),
+      line.append(nodeWithText("b", "", displayName),
         nodeWithText("span", "trip-line", tripLine || (robot.yielding ? "비켜서는 중" : nav.text)), battery);
+      if (displayName !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
       node.appendChild(line);
       return node;
     }
@@ -153,9 +157,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     const head = nodeWithText("div", "robot-head");
     const robotName = document.createElement("b");
-    robotName.textContent = robot.robot_id;
+    robotName.textContent = displayName;
     const spacer = nodeWithText("span", "spacer");
-    head.append(robotName, spacer);
+    head.append(robotName);
+    if (displayName !== robot.robot_id) head.append(nodeWithText("small", "hint", `Fleet ID ${robot.robot_id}`));
+    head.append(spacer);
     // D-359 US-009 — 모드 글은 공용 MODE_LABEL, 열거값은 title에만 둔다.
     const modeTag = tag(
       view.stateUnavailable ? "상태 확인 불가" : robot.online ? enumLabel(MODE_LABEL, state.mode) : "오프라인",
@@ -163,6 +169,27 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable && robot.online && state.mode) modeTag.title = state.mode;
     else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
     head.appendChild(modeTag);
+    if (!view.stateUnavailable && robot.online) {
+      const powerMode = state.power?.mode;
+      if (powerMode) {
+        const powerTag = tag(enumLabel(POWER_MODE_LABEL, powerMode), "");
+        powerTag.title = String(powerMode);
+        powerTag.dataset.power = String(powerMode);
+        head.appendChild(powerTag);
+      }
+      const dock = state.docking?.state;
+      if (dock) {
+        const dockTag = tag(enumLabel(DOCK_STATE_LABEL, dock), dock === "DOCK_FAILED" ? "crit" : "");
+        dockTag.title = String(dock);
+        dockTag.dataset.dock = String(dock);
+        head.appendChild(dockTag);
+      }
+      const chargeTag = tag(power.charging, "");
+      chargeTag.dataset.charging = power.charging;
+      const chargeState = robot.power_health?.battery?.charging_state;
+      if (typeof chargeState === "string") chargeTag.title = chargeState;
+      head.appendChild(chargeTag);
+    }
     const link = view.stateUnavailable ? null : linkTag(robot.link);
     // D-535: the server's reason (code, message, action) for a failed robot read.
     const reason = view.stateUnavailable ? null : robot.link_reason;
@@ -210,8 +237,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     }
 
     const facts = nodeWithText("div", "facts");
-    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
-    const battery = power.battery;
+    const battery = power.battery.endsWith("%") && typeof power.voltage === "number"
+      ? `${power.battery} · ${power.voltage.toFixed(2)} V` : power.battery;
     const rows = [
       ["pose", "위치", pose ? `${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}` : "—"],
       ["yaw", "방향", pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],
@@ -236,6 +263,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       } else {
         valueEl = document.createElement("strong");
         valueEl.textContent = value;
+        if (key === "battery" && typeof power.observedAgeS === "number")
+          valueEl.title = `${power.observedAgeS}초 전`;
       }
       cellEl.append(labelEl, valueEl);
       facts.appendChild(cellEl);
@@ -243,11 +272,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     node.appendChild(facts);
 
     if (!view.stateUnavailable) {
-      const when = typeof power.observedAgeS === "number" ? ` · 전원 근거 ${power.observedAgeS}초 전` : "";
-      const charging = nodeWithText("p", "hint", `충전: ${power.charging}${when}`);
-      charging.dataset.fact = "charging";
-      node.appendChild(charging);
-      if (power.problem) node.appendChild(nodeWithText("p", "hint", power.problem));
       if (power.safetyRelease) node.appendChild(nodeWithText("p", "hint", power.safetyRelease));
       const diagnostics = Object.entries(stateStale ? {} : state.diagnostics_summary || {})
         .filter(([, status]) => status === "WARNING" || status === "ERROR" || status === "UNKNOWN")

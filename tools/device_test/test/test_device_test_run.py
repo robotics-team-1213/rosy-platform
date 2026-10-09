@@ -1149,3 +1149,49 @@ def test_identify_on_real_frames_of_the_nw_robot_blue_blink():
     assert ev["blob_frames"] >= 10 and ev["distance_px"] < 10 and "not judged" in ev["colour_check"]
     with pytest.raises(IDENT.Refused, match="3 of 13|already changed|from the picked"):
         IDENT.judge(found, (90.0, 50.0), 20.0, 13, "blue")        # a pick on another robot
+
+
+def _live_with_site(responses):
+    """A Live with only the site half wired: `responses` answers each _site call in turn."""
+    import urllib.error
+    import live_transport
+
+    live = object.__new__(live_transport.Live)
+    live.site_url, live.source = "https://site.test", "cam-1"
+    calls, clock = [], [100.0]
+
+    def site(path, body=None, token=None):
+        calls.append(path)
+        out = responses.pop(0)
+        if isinstance(out, int):
+            raise urllib.error.HTTPError(path, out, "x", {}, None)
+        return out
+
+    live._site = site
+    live.now = lambda: clock[0]
+    live.sleep = lambda s: None
+    return live, calls, clock
+
+
+def test_overhead_reuses_the_lease_until_it_nears_expiry():
+    lease = json.dumps({"frame_path": "/f", "lease": "t", "expires_in_s": 60}).encode()
+    live, calls, clock = _live_with_site([lease, b"j1", b"j2", lease, b"j3"])
+    assert live.overhead() == b"j1"
+    assert live.overhead() == b"j2"
+    clock[0] += 51  # past expiry minus the 10 s margin: a new lease
+    assert live.overhead() == b"j3"
+    assert calls == ["/api/fleet/vision/lease", "/f", "/f", "/api/fleet/vision/lease", "/f"]
+
+
+def test_overhead_retries_a_rate_limit_and_renews_a_refused_lease():
+    lease = json.dumps({"frame_path": "/f", "lease": "t"}).encode()
+    live, calls, _ = _live_with_site([429, lease, 403, lease, b"jpg"])
+    assert live.overhead() == b"jpg"
+    assert calls.count("/api/fleet/vision/lease") == 3
+
+
+def test_overhead_gives_up_after_three_rate_limits_and_on_other_errors():
+    live, _, _ = _live_with_site([429, 429, 429])
+    assert live.overhead() is None
+    live, calls, _ = _live_with_site([500])
+    assert live.overhead() is None and len(calls) == 1
