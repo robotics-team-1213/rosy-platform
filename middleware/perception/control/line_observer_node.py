@@ -41,6 +41,8 @@ from .sensing.perception.lane import (
 from .sensing.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
+from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX
+from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
 from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
 from .sensing.perception.paint_localizer import PaintMap
@@ -100,6 +102,15 @@ class LineObserverNode(Node):
         # Turning moves the image between frames: above this |odom wz| (or with no fresh odom) the
         # mask is not reused (cadence 1: every frame infers, a late mask falls back to denoise).
         self.declare_parameter('learned_paint_reuse_max_wz', 0.15)
+        # D-570: move an older mask to this frame by the odometry between the two frame stamps
+        # (ground-plane homography); within these bounds the turn-rate rule above does not apply.
+        self.declare_parameter('learned_paint_motion_compensation', False, _READ_ONLY)
+        self.declare_parameter('learned_paint_max_age_s', 0.9)
+        self.declare_parameter('learned_paint_max_dxy_m', 0.10)
+        self.declare_parameter('learned_paint_max_dyaw_rad', 0.40)
+        # 'every_n': submit every Nth keep frame; 'idle': the newest frame once the worker is idle,
+        # at most every Nth frame (never queues a frame behind a running inference).
+        self.declare_parameter('learned_paint_cadence', 'every_n', _READ_ONLY)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)
@@ -157,6 +168,7 @@ class LineObserverNode(Node):
             corner_turning=bool(self.get_parameter('lane_corner_turning').value), paint_half_width_m=self._paint_half_width_m)
         self._route_context_input = RouteContextInput()
         self._paint_worker = self._build_paint_worker()
+        self._odom_history = OdomHistory()
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
         if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):
@@ -390,6 +402,8 @@ class LineObserverNode(Node):
         threads = int(self.get_parameter('learned_paint_threads').value)
         if every_n < 1 or threads < 1:
             raise ValueError('learned_paint_every_n and learned_paint_threads must be >= 1')
+        if str(self.get_parameter('learned_paint_cadence').value) not in ('every_n', 'idle'):
+            raise ValueError('learned_paint_cadence must be every_n or idle')
         slot = ModelSlot(pointer, opener=lambda folder: LaneSegModel.open(
             folder, threads=threads, allow_spinning=False)) if pointer else None
         return LearnedPaintWorker(slot,
@@ -405,15 +419,44 @@ class LineObserverNode(Node):
             return None, 'threshold'
         if source == 'learned' and self._paint_worker is not None:
             every_n = int(self.get_parameter('learned_paint_every_n').value)
+            reuse_n = every_n
             wz = pose_if_fresh(self._odom_twist and self._odom_twist[1], self._odom_stamp, stamp)
             if wz is None or abs(wz) > float(self.get_parameter('learned_paint_reuse_max_wz').value):
-                every_n = 1
+                reuse_n = 1
+            # D-570: with fresh odometry the warped path replaces the turn-rate rule; without it, today's rule.
+            compensate = bool(self.get_parameter('learned_paint_motion_compensation').value)
+            motion = self._paint_motion(ground) if compensate and wz is not None else None
             mask = self._paint_worker.mask_for(
-                frame, every_n, stamp, clean=lambda m: clean_learned_mask(m, ground.horizon_row))
+                frame, every_n if motion is not None else reuse_n, stamp,
+                clean=lambda m: clean_learned_mask(m, ground.horizon_row),
+                motion=motion, max_age_s=float(self.get_parameter('learned_paint_max_age_s').value),
+                reuse_n=reuse_n, when_idle=str(self.get_parameter('learned_paint_cadence').value) == 'idle')
+            reuse = self._paint_worker.reuse
+            if compensate and motion is None and reuse and reuse['paint_fallback_reason'] == 'off':
+                reuse['paint_fallback_reason'] = 'no_odom'
             if mask is not None:
                 return mask, 'learned'
         return denoise_white_mask(frame, ground.horizon_row), (
             'denoise' if source == 'denoise' else 'denoise_fallback')
+
+    def _paint_motion(self, ground):
+        """motion(mask, src_stamp, dst_stamp) for the paint worker (D-570): the mask warped by the
+        odometry between the two stamps, or why not (no_odom / motion_bound)."""
+        cut = max(0, int(math.ceil(ground.horizon_row)) + HORIZON_MARGIN_PX)
+
+        def motion(mask, src_stamp, dst_stamp):
+            src, dst = self._odom_history.pose_at(src_stamp), self._odom_history.pose_at(dst_stamp)
+            if src is None or dst is None:
+                return 'no_odom'
+            moved = mask_homography(
+                ground, self._lane_keeper._x_offset, src, dst, mask.shape, cut,
+                max_dxy_m=float(self.get_parameter('learned_paint_max_dxy_m').value),
+                max_dyaw_rad=float(self.get_parameter('learned_paint_max_dyaw_rad').value))
+            if isinstance(moved, str):
+                return moved
+            homography, dxy, dyaw = moved
+            return warp_mask(mask, homography, cut), dxy, dyaw
+        return motion
 
     def _on_camera(self, msg: Image) -> None:
         observation = None
@@ -497,6 +540,7 @@ class LineObserverNode(Node):
                               paint_model_revision=(self._paint_worker.used_model_revision
                                                     if paint_used == 'learned' and self._paint_worker is not None
                                                     else None),
+                              **((self._paint_worker.reuse or {}) if self._paint_worker is not None else {}),
                               image_size=[frame.shape[1], frame.shape[0]],
                               camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
                               corner_turning=bool(self.get_parameter('lane_corner_turning').value),
@@ -631,6 +675,7 @@ class LineObserverNode(Node):
         self._odom_twist = (float(msg.twist.twist.linear.x), float(msg.twist.twist.angular.z))
         self._odom_stamp = (float(msg.header.stamp.sec)
                             + float(msg.header.stamp.nanosec) * 1e-9)
+        self._odom_history.add(self._odom_stamp, *self._odom_pose)
 
     def _on_cmd_vel(self, msg: Twist) -> None:   # Twist has no header: stamped on arrival (node clock, sim time in SIM)
         self._cmd_twist, self._cmd_stamp = (msg.linear.x, msg.angular.z), self.get_clock().now().nanoseconds * 1e-9

@@ -49,6 +49,10 @@ def overlay_for(args) -> dict:
         params["learned_lane_pointer"] = args.model_pointer
     if args.paint_every_n is not None:
         params["learned_paint_every_n"] = args.paint_every_n
+    if args.paint_motion_compensation:
+        params["learned_paint_motion_compensation"] = True
+    if args.paint_cadence is not None:
+        params["learned_paint_cadence"] = args.paint_cadence
     return {NODE_KEY: {"ros__parameters": params}}
 
 
@@ -101,6 +105,10 @@ def main(argv=None, run=subprocess.run) -> int:
     apply.add_argument("--model-pointer", help="absolute model pointer, required for learned paint")
     apply.add_argument("--paint-every-n", type=int, choices=range(1, 5), metavar="1..4",
                        help="learned paint: submit inference every Nth keep frame (node default 2)")
+    apply.add_argument("--paint-motion-compensation", action="store_true",
+                       help="learned paint: warp older masks by odometry (D-570)")
+    apply.add_argument("--paint-cadence", choices=("every_n", "idle"),
+                       help="learned paint: idle = newest frame once the worker is idle, at most every Nth")
     apply.add_argument("--no-debug-overlay", action="store_true")
     clear = sub.add_parser("clear", help="remove the overlay, then restart rosy-camera")
     for command in (apply, clear):
