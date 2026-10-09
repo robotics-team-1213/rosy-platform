@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 MAX_DETECTIONS = 16
 DetectorStatus = Literal["OK", "LEARNING", "CALIBRATION_REQUIRED", "SCENE_CHANGED"]
 STATUSES = get_args(DetectorStatus)
-TuningState = Literal["off", "waiting", "tuning", "locked", "paused"]
+TuningState = Literal["off", "waiting", "tuning", "locked", "paused", "unsupported"]
 TUNING_STATES = get_args(TuningState)
 
 

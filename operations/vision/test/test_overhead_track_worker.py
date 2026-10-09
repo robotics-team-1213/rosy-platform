@@ -500,19 +500,23 @@ def test_frames_before_the_challenge_arrives_still_fill_the_window(make_worker):
 # -- D-589 recognition tuning -------------------------------------------------------------------
 
 from rosy_vision import protocol  # noqa: E402
+from rosy_vision.track import tuning  # noqa: E402
 
-INGEST_VECTORS = json.loads((Path(__file__).resolve().parents[3]
-                             / "test/fixtures/protocol/overhead-ingest.v1.json").read_text(encoding="utf-8"))
-STATE_EXAMPLE = INGEST_VECTORS["messages"]["camera_state_example"]
+UNLOCKED_0 = protocol.CameraSetting(0, False, False, 33333, "60hz")
+
+
+def _camera_state(setting=UNLOCKED_0, *, seq=0, mode="vision", thermal=0):
+    return protocol.CameraState(seq, setting, mode, -20, 20, 0.1, 16000, 200, thermal)
 
 
 class _TuningIngest(_Ingest):
-    """An ingest with a connected phone that reports ``camera_state``."""
+    """An ingest with a connected phone that applies every camera message (mode vision)."""
 
-    def __init__(self, state=None):
+    def __init__(self, state=None, *, echo=True):
         super().__init__()
         self.link = 1
         self.state = state
+        self.echo = echo
         self.sent = []
 
     def camera_link(self, source_id):
@@ -521,6 +525,9 @@ class _TuningIngest(_Ingest):
 
     async def send_camera(self, source_id, message):
         self.sent.append(message)
+        if self.echo:
+            seq, setting = protocol.parse_camera(message)
+            self.state = _camera_state(setting, seq=seq)
         return True
 
 
@@ -529,86 +536,140 @@ class _Camera(_Detector):
         super().__init__()
         self.cameras = []
 
-    def camera_changed(self, fingerprint):
+    def camera_changed(self, fingerprint, *, first=False):
         self.threads.add(threading.get_ident())
-        self.cameras.append(fingerprint)
+        self.cameras.append((fingerprint, first))
 
 
-def _state(**changes):
-    body = json.loads(json.dumps(STATE_EXAMPLE))
-    for key, value in changes.items():
-        if key in ("ev", "ae_lock", "mode"):
-            body["applied"][key] = value
-        else:
-            body[key] = value
-    return protocol.parse_camera_state(body)
+class _Refusing(_Client):
+    """A Fleet from before D-589: the tuning field is an unknown field (422)."""
+
+    async def publish(self, payload):
+        self.published.append(payload)
+        if payload.tuning is not None:
+            raise TrackPublishError(422, "VALIDATION_ERROR", "extra field")
+        return {"accepted": True}
 
 
-def _tuning_worker(state=None, *, auto_tune=True, detector=None):
+def _tuning_worker(state=None, *, auto_tune=True, detector=None, client=None, echo=True, tuner=None):
     clock = SimpleNamespace(now=0.0)
-    ingest = _TuningIngest(state)
-    worker = TrackWorker(camera=CAMERA, ingest=ingest, client=_Client([CONFIG]), detector=detector or _Camera(),
+    ingest = _TuningIngest(state, echo=echo)
+    client = client or _Client()
+    client.configs = [CONFIG]
+    worker = TrackWorker(camera=CAMERA, ingest=ingest, client=client, detector=detector or _Camera(),
                          decode=lambda jpeg: np.full((360, 640, 3), 120, np.uint8),
-                         clock=lambda: clock.now, auto_tune=auto_tune)
+                         clock=lambda: clock.now, auto_tune=auto_tune, tuner=tuner)
     asyncio.run(worker.refresh_config())
     return worker, ingest, clock
 
 
-def test_each_step_scores_the_frame_and_reports_tuning_to_fleet():
-    worker, ingest, _ = _tuning_worker()
+def _frames(worker, clock, count, *, start=1, between=None):
+    """Process ``count`` frames at 3 fps in one loop, letting the fire-and-forget sends run."""
+    async def run():
+        payloads = []
+        for index in range(start, start + count):
+            if between is not None:
+                between(index)
+            payloads.append(await worker.process(_frame(seq=index, captured_at=99.75 + index / 3), {}))
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            clock.now += 1 / 3
+        return payloads
     try:
-        payload = asyncio.run(worker.process(_frame(), {}))
+        return asyncio.run(run())
     finally:
         worker.close()
+
+
+def test_each_step_measures_the_frame_and_reports_tuning_to_fleet():
+    worker, ingest, clock = _tuning_worker()
+    (payload,) = _frames(worker, clock, 1)
     assert payload.tuning is not None and payload.tuning.state == "waiting"
     assert payload.tuning.score is not None  # measured even before the phone reports
     assert ingest.sent == []  # nothing is sent before the phone's first camera_state
 
 
-def test_the_tuner_sends_camera_messages_once_the_phone_reports():
-    worker, ingest, clock = _tuning_worker(_state(seq=0, ev=0, ae_lock=False))
-    try:
-        payload = asyncio.run(worker.process(_frame(), {}))
-    finally:
-        worker.close()
-    assert len(ingest.sent) == 1
-    seq, setting = protocol.parse_camera(ingest.sent[0])
-    assert (seq, setting.ev, setting.ae_lock, setting.max_exposure_us) == (1, 0, False, 33333)
-    assert payload.tuning.state == "tuning" and payload.tuning.ev == 0.0
-
-
-def test_auto_tune_off_sends_nothing_and_reports_state_off():
-    worker, ingest, _ = _tuning_worker(_state(), auto_tune=False)
-    try:
-        payload = asyncio.run(worker.process(_frame(), {}))
-    finally:
-        worker.close()
-    assert ingest.sent == []
-    assert payload.tuning.state == "off" and payload.tuning.ev == -0.1 and payload.tuning.locked is True
-
-
-def test_newly_applied_settings_in_mode_vision_reset_the_detector_once():
+def test_a_tune_suspends_detection_then_relearns_once_after_the_lock():
     detector = _Camera()
-    worker, ingest, _ = _tuning_worker(_state(), detector=detector)
-    try:
-        asyncio.run(worker.process(_frame(seq=1, captured_at=99.75), {}))
-        asyncio.run(worker.process(_frame(seq=2, captured_at=99.85), {}))
-        ingest.state = _state(ev=-3, mode="local")  # the phone's own loop: no relearn
-        asyncio.run(worker.process(_frame(seq=3, captured_at=99.95), {}))
-        ingest.state = _state(ev=-3)
-        asyncio.run(worker.process(_frame(seq=4, captured_at=100.05), {}))
-    finally:
-        worker.close()
-    assert detector.cameras == [_state().applied.fingerprint(), _state(ev=-3).applied.fingerprint()]
-    assert detector.resets == 0  # the automatic path, never the operator relearn
-    assert detector.threads and threading.get_ident() not in detector.threads
+    worker, ingest, clock = _tuning_worker(_camera_state(mode="local"), detector=detector)
+    payloads = _frames(worker, clock, 40)
+    requests = [(m["ev"], m["ae_lock"]) for m in ingest.sent]
+    assert requests[0] == (0, False) and (0, True) in requests  # clean grey frame: lock at once
+    learning = [p.status for p in payloads[1:12]]
+    assert learning == ["LEARNING"] * 11  # the tune: published as LEARNING, nothing detected
+    locked = tuning.locked_setting(0).fingerprint()
+    assert detector.cameras == [(locked, False)]  # no reset for the step, one after the lock
+    assert payloads[-1].status == "OK" and payloads[-1].tuning.state == "locked"
+    assert len(detector.calls) == sum(p.status == "OK" for p in payloads) > 0
+    assert detector.resets == 0  # never the operator relearn
 
 
-def test_a_detector_without_camera_changed_is_reset():
+def test_the_phone_already_locked_at_the_last_lock_is_adopted_without_suspending(tmp_path):
+    log = tuning.TuningLog(tmp_path / "cam.tuning.json")
+    log.save([{"kind": "lock", "ev": 0.0, "setting": tuning.locked_setting(0).as_dict()}])
+    detector = _Camera()
+    worker, ingest, clock = _tuning_worker(_camera_state(tuning.locked_setting(0), seq=55),
+                                           detector=detector, tuner=tuning.Tuner(log=log))
+    payloads = _frames(worker, clock, 20)
+    assert all(p.status == "OK" for p in payloads)
+    assert [(m["ev"], m["ae_lock"]) for m in ingest.sent] == [(0, True)]
+    assert detector.cameras == [(tuning.locked_setting(0).fingerprint(), True)]
+
+
+def test_auto_tune_off_sends_nothing_leaves_tuning_out_and_still_relearns_on_change():
+    detector = _Camera()
+    worker, ingest, clock = _tuning_worker(_camera_state(), auto_tune=False, detector=detector)
+
+    def change(index):
+        if index == 3:
+            ingest.state = _camera_state(tuning.locked_setting(-3))
+
+    payloads = _frames(worker, clock, 5, between=change)
+    assert ingest.sent == [] and all(p.tuning is None for p in payloads)
+    assert detector.cameras == [(UNLOCKED_0.fingerprint(), True),
+                                (tuning.locked_setting(-3).fingerprint(), False)]
+
+
+def test_camera_changes_are_new_settings_a_return_to_vision_or_a_new_link():
+    detector = _Camera()
+    worker, ingest, clock = _tuning_worker(_camera_state(), auto_tune=False, detector=detector)
+    fp = UNLOCKED_0.fingerprint()
+
+    def script(index):
+        if index == 3:
+            ingest.state = _camera_state(mode="local")  # the phone's own loop: not a change
+        elif index == 5:
+            ingest.state = _camera_state()  # back to vision with the same settings: a change
+        elif index == 7:
+            ingest.link = 2  # reconnect, same settings: a change
+        elif index == 9:
+            ingest.state = _camera_state(seq=9)  # the 20 s echo, identical settings: no change
+
+    _frames(worker, clock, 12, between=script)
+    assert detector.cameras == [(fp, True), (fp, False), (fp, False)]
+
+
+def test_a_detector_without_camera_changed_is_reset_except_for_the_first_report():
     detector = _Detector()
-    worker, ingest, _ = _tuning_worker(_state(), detector=detector)
-    try:
-        asyncio.run(worker.process(_frame(), {}))
-    finally:
-        worker.close()
+    worker, ingest, clock = _tuning_worker(_camera_state(), auto_tune=False, detector=detector)
+
+    def change(index):
+        if index == 3:
+            ingest.state = _camera_state(tuning.locked_setting(-3))
+
+    _frames(worker, clock, 4, between=change)
     assert detector.resets == 1
+
+
+def test_a_fleet_that_refuses_tuning_gets_the_payload_without_it_and_never_again():
+    client = _Refusing()
+    worker, _, clock = _tuning_worker(client=client)
+    payloads = _frames(worker, clock, 3)
+    assert [p.tuning is None for p in client.published] == [False, True, True, True]
+    assert all(p.tuning is None for p in payloads)
+
+
+def test_an_old_app_shows_unsupported_after_a_while():
+    worker, ingest, clock = _tuning_worker(None)
+    payloads = _frames(worker, clock, int(tuning.UNSUPPORTED_S * 3) + 3)
+    assert payloads[0].tuning.state == "waiting" and payloads[-1].tuning.state == "unsupported"

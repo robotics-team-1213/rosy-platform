@@ -609,10 +609,20 @@ def test_a_camera_change_learns_again_and_replays_a_matching_kept_background(tmp
 def test_first_settings_report_after_learning_keeps_the_background():
     detector = _learned()
     assert detector.detect(Frame(_floor(), 11.0), CAL).status == "OK"
-    detector.camera_changed(LOCKED)  # only names the settings the background was learned under
+    detector.camera_changed(LOCKED, first=True)  # only names the settings learned under
     assert detector.detect(Frame(_floor(), 11.5), CAL).status == "OK"
-    detector.camera_changed(OTHER)
+    detector.camera_changed(LOCKED)  # the same settings again, but a new link or back to Vision
     assert detector.detect(Frame(_floor(), 12.0), CAL).status == "LEARNING"
+
+
+def test_first_settings_report_while_learning_restarts_the_learn_with_replay(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _kept(store, LOCKED)
+    after = BackgroundBlobDetector(store=store)
+    assert after.detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"  # no settings known yet
+    after.camera_changed(LOCKED, first=True)
+    result = after.detect(Frame(_parked_robot_floor(), 101.0), CAL)
+    assert result.status == "OK" and len(result.detections) == 1
 
 
 def test_a_camera_change_during_an_operator_relearn_still_keeps_it(tmp_path):

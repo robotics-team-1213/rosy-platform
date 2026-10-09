@@ -233,11 +233,12 @@ class BackgroundBlobDetector:
         self._restore_pending = False
         self._save = self._store is not None
 
-    def camera_changed(self, fingerprint: str) -> None:
-        """D-589: the phone applied other camera settings. Learn again (an automatic reset, not
-        an operator relearn) and replay a kept background made under exactly these settings.
-        The first report only names the settings when the background is already learned."""
-        first = self._camera is None
+    def camera_changed(self, fingerprint: str, *, first: bool = False) -> None:
+        """D-589: the camera changed (new settings, back to Vision control, a new link, or a
+        tune's confirmed lock). Learn again (an automatic reset, not an operator relearn) and
+        replay a kept background made under exactly these settings. ``first`` (the first
+        settings ever reported) only names the settings when the background is already learned.
+        An operator relearn in progress is kept, under these settings."""
         self._camera = fingerprint
         if first and self._ready:
             return

@@ -21,12 +21,16 @@ FAILURE_LOG_INTERVAL_S while it keeps failing.
 ``seq`` is this worker's own counter, not the phone header seq (a phone reconnect restarts
 that); Fleet orders detections by ``captured_at``.
 
-D-589: each step also scores the frame for recognition (tuning.Scorer, on the detection
-thread) and drives the per-source Tuner on the event loop; its ``camera`` messages go to the
-phone over the ingest connection and its status rides on the detections payload as ``tuning``.
-When the phone reports newly applied settings in mode "vision", the detector learns again
-(``camera_changed``, an automatic reset, never the operator relearn). With ``auto_tune`` off
-nothing is sent; the score is still reported, with state "off".
+D-589: each step also measures the frame (tuning.Scorer, on the detection thread) and drives
+the per-source Tuner on the event loop; its ``camera`` messages go to the phone over the
+ingest connection (never awaited inline) and its status rides on the detections payload as
+``tuning``. While a tune runs, detection is suspended: the payload says LEARNING and the
+intermediate settings are not learned. Once the lock is confirmed and settled the detector
+learns again once (``camera_changed``, an automatic reset that replays a D-539 background kept
+under the same settings; never the operator relearn). Outside a tune, a camera change is new
+``applied`` settings in mode "vision", a return to "vision" from another mode, or a new link.
+With ``auto_tune`` off nothing is sent and ``tuning`` is left out; camera changes still relearn.
+A Fleet that refuses ``tuning`` (422) gets the payload again without it, and never again.
 """
 
 from __future__ import annotations
@@ -142,6 +146,11 @@ class TrackWorker:
         self._presence = tuning.MarkerPresence()
         self._measurement: tuning.Measurement | None = None  # the last step's, set on the thread
         self._camera_seen: str | None = None
+        self._camera_link = None
+        self._was_vision = False
+        self._relearn_due: str | None = None
+        self._send_tuning = True
+        self._sends: set[asyncio.Future] = set()
         self._clock = clock
 
     @property
@@ -200,28 +209,43 @@ class TrackWorker:
         challenge = _challenge(config.get("identity_challenge"), self.led_config)
         link_of = getattr(self.ingest, "camera_link", None)
         link, camera_state = (None, None) if link_of is None else link_of(self.camera.source_id)
-        # D-589 (d): only settings applied for Vision count as a camera change.
-        fingerprint = (camera_state.applied.fingerprint()
-                       if camera_state is not None and camera_state.mode == "vision" else None)
+        # D-589: decided from the last tuner step (one frame earlier); the phone applies a new
+        # request later than that anyway.
+        suspend = self.auto_tune and self.tuner.active
+        event = self._camera_event(link, camera_state)
+        if suspend:
+            event = None  # an intermediate tune step: not a background to learn
+        if self._relearn_due is not None:  # the lock is confirmed and settled: learn once
+            event, self._relearn_due = (self._relearn_due, False), None
         self._measurement = None
         step = await asyncio.get_running_loop().run_in_executor(
             self._executor, functools.partial(
                 self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
-                lens, relearn, fingerprint))
+                lens, relearn, event, suspend))
         if challenge is not None:
             await self._report_identity(challenge, frame.captured_at)
         if step is None:
             return None
         calibration, result = step
-        status = await self._tune(link, camera_state, self._measurement)
+        status = self._tune(link, camera_state, self._measurement)
         payload = build_payload(
             source_id=self.camera.source_id, map_id=self.camera.map_id,
             calibration_revision=None if calibration is None else calibration.revision,
             processor_revision=self.detector.processor_revision, captured_at=frame.captured_at,
-            seq=self._seq, result=result, tuning=status)
+            seq=self._seq, result=result, tuning=status if self._send_tuning else None)
         self._seq = (self._seq + 1) % _SEQ_MODULUS
         try:
-            await self.client.publish(payload)
+            try:
+                await self.client.publish(payload)
+            except TrackPublishError as exc:
+                if exc.status_code != 422 or payload.tuning is None:
+                    raise
+                # A Fleet older than D-589 refuses the field: once without it, then never again.
+                logger.warning("Fleet refused the tuning field source=%s; not sent again",
+                               self.camera.source_id)
+                self._send_tuning = False
+                payload = payload.model_copy(update={"tuning": None})
+                await self.client.publish(payload)
         except TrackPublishError as exc:
             self._publish_log.failed((("status", exc.status_code), ("code", exc.code)))
         except httpx.HTTPError as exc:
@@ -230,18 +254,40 @@ class TrackWorker:
             self._publish_log.ok()
         return payload
 
-    async def _tune(self, link, camera_state, measurement) -> dict:
+    def _tune(self, link, camera_state, measurement) -> dict | None:
         """D-589: drive the tuner and send its camera message; the status for Fleet."""
         if not self.auto_tune:
-            value = None if measurement is None else round(tuning.score(measurement), 3)
-            ev = (None if camera_state is None or camera_state.ev_step <= 0
-                  else round(camera_state.applied.ev * camera_state.ev_step, 2))
-            return {"state": "off", "score": value, "ev": ev,
-                    "locked": bool(camera_state is not None and camera_state.applied.ae_lock)}
-        message = self.tuner.update(self._clock(), link=link, state=camera_state, sample=measurement)
+            return None
+        now = self._clock()
+        message = self.tuner.update(now, link=link, state=camera_state, sample=measurement)
         if message is not None and link is not None:
-            await self.ingest.send_camera(self.camera.source_id, message)
-        return self.tuner.status()
+            # Fire and forget: a slow phone must not hold the tracking step.
+            task = asyncio.ensure_future(self.ingest.send_camera(self.camera.source_id, message))
+            self._sends.add(task)
+            task.add_done_callback(self._sends.discard)
+        if self.tuner.take_relearn() and camera_state is not None:
+            self._relearn_due = camera_state.applied.fingerprint()
+        return self.tuner.status(now)
+
+    def _camera_event(self, link, state) -> tuple[str, bool] | None:
+        """(fingerprint, first) when the camera changed for tracking, else None (D-589 4).
+
+        A change is new applied settings in mode "vision", a return to "vision" from another
+        mode, or a new link. ``first`` marks the first settings ever reported: they only name
+        the settings an already learned background was made under.
+        """
+        vision = state is not None and state.mode == "vision"
+        event = None
+        if vision:
+            fingerprint = state.applied.fingerprint()
+            if self._camera_seen is None:
+                event = (fingerprint, True)
+            elif (fingerprint != self._camera_seen or link != self._camera_link
+                  or not self._was_vision):
+                event = (fingerprint, False)
+            self._camera_seen, self._camera_link = fingerprint, link
+        self._was_vision = vision
+        return event
 
     async def _report_identity(self, challenge: dict, now: float) -> None:
         """D-472: once the window has passed, send Fleet the verdict (never an image)."""
@@ -293,17 +339,17 @@ class TrackWorker:
             for color in self.led_config.hues}))
 
     def _detect(self, jpeg: bytes, captured_at: float, markers, record, lens,
-                relearn: int | None, camera: str | None = None
+                relearn: int | None, camera: tuple[str, bool] | None = None, suspend: bool = False
                 ) -> tuple[Calibration | None, DetectorResult] | None:
         """Detection-thread half of a step: relearn, decode, choose the calibration, detect,
-        and score the frame for tuning (``self._measurement``)."""
-        if camera is not None and camera != self._camera_seen:
-            # D-589: newly applied camera settings; an automatic reset, not an operator relearn.
-            self._camera_seen = camera
+        and measure the frame for tuning (``self._measurement``). ``camera`` is a D-589 camera
+        change (fingerprint, first); ``suspend`` (a tune runs) skips detection: LEARNING."""
+        if camera is not None:
+            # D-589: an automatic reset, not an operator relearn.
             changed = getattr(self.detector, "camera_changed", None)
             if changed is not None:
-                changed(camera)
-            else:
+                changed(camera[0], first=camera[1])
+            elif not camera[1]:
                 self.detector.reset()
         if relearn is not None:
             if self._relearn_seen is not None and relearn > self._relearn_seen:
@@ -317,8 +363,6 @@ class TrackWorker:
         calibration = choose(self.camera, markers, record, frame_size=size, lens=lens)
         if calibration is None:
             return None, DetectorResult((), "CALIBRATION_REQUIRED")
-        result = self.detector.detect(Frame(image, captured_at), calibration)
-        self._identity_sample(image, captured_at, calibration, result)
         robot_ids = set(self.camera.robot_markers.values()).union(ROBOT_MARKER_IDS)
         rate = self._presence.rate(captured_at, robot_ids.intersection(markers))
         try:
@@ -326,6 +370,10 @@ class TrackWorker:
         except (cv2.error, ValueError, np.linalg.LinAlgError) as exc:  # tracking goes on unscored
             logger.warning("tuning score failed source=%s error=%s",
                            self.camera.source_id, type(exc).__name__)
+        if suspend:
+            return calibration, DetectorResult((), "LEARNING")
+        result = self.detector.detect(Frame(image, captured_at), calibration)
+        self._identity_sample(image, captured_at, calibration, result)
         matrix = geometry.as_matrix(calibration.image_to_map)
         camera = geometry.camera_from_homography(matrix, calibration.image_size, calibration.hfov_deg)
         measured = []
