@@ -39,6 +39,13 @@
 
 현재 이탈 위치에 정상 경로 기록이 없으면 바로 '원래 자리로 돌아가기'를 보장하지 않는다. 그 경우에도 현재 센서로 후보 탐색을 수행한다. 차선이 보이는 이탈과 차로가 없는 상태를 구별하는 추가 계약·검증이 필요하다. Accepted는 구현/설치/실주행 통과를 의미하지 않는다. 실행 순서와 남은 증거는 `docs/plans/2026-10-05-lane-return.md`에 기록한다.
 
+### 개정 제안: 위치 요청 (D-546 5, 미수락, 2026-10-09)
+
+[D-546](D-546-recovery-manoeuvre-signals-and-fleet-pose-request.md)이 Accepted가 되면 적용한다. 그 전에는 이 ADR이 그대로 이긴다.
+
+- `fleet_required`와 1 s 넘게 이어진 `pose_stale` HOLD는 D-407 경로 외에 CORE의 위치 요청(`GET /localization/request`)도 연다. 요청은 움직임을 만들지 않는다. 로봇은 HOLD로 서서 기다리고, 수락된 Fleet 결정이 오면 `fleet` 단계는 D-407 `RESUME`과 같은 길(`restart_verification`)로 차선 확인을 다시 연다.
+- 신호 의무(RECOVERING 동안 `recovery` 필드·앰버 램프·후진 경고음, D-546 1–4a)는 별개로 제안되어 있다.
+
 ### Implementation note: 차로 안 판정 여유 (2026-10-06)
 
 Decision 2의 "차체 footprint와 경계의 부호 있는 여유 및 예측 여유"를 구현에서 고정 상수 없이 정한다. 상태와 결정 항목은 바꾸지 않는다.
