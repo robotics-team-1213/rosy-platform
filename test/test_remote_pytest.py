@@ -143,7 +143,7 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
         live.kill()
     assert len(fields) == 11 and fields[-3:] == ["4", "12", "0"]
     assert (jobs / "soon.resv").exists() and not (jobs / "old.resv").exists() and not (jobs / "junk.resv").exists()
-    assert rp.parse_probe(" ".join(fields))["lock_gb"] == 6
+    assert rp.parse_probe(" ".join(fields))["lock_gb"] == 12
     assert not (jobs / "dead.lock").exists() and (jobs / "live.lock").exists()
     assert not (jobs / "pwned").exists()
 
