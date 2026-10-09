@@ -45,6 +45,9 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # CORE's return sensor adapter binds the control policy deadline and the
     # line-follow provider; the pure scan tests live in services/test.
     "middleware/core/gateway/test/test_lane_return_sensors.py",
+    # D-573 (c) gateway seam: the crosswalk_gate_enabled config flag in line_follow_wiring and the
+    # scan feed through core.bridge.observation into the real line-follow manager.
+    "middleware/core/gateway/test/test_crosswalk_gate_wiring.py",
     "middleware/core/gateway/test/test_line_follow_body_stop.py",
     "middleware/core/gateway/test/test_line_follow_ir_guard.py",
     "middleware/core/gateway/test/test_line_follow_obstacle.py",
