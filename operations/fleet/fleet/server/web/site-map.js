@@ -69,7 +69,7 @@ function render() {
   const background = plane?.mapId === map.map_id ? plane : null;
   svg.classList.toggle('has-plane', Boolean(background));
   $('map-view-turn').value = String(viewTurnOf(map));
-  const view = background?.view || fitView(map, W, H, LABEL_PAD, viewTurnOf(map), roomDiscs(map));
+  const view = background?.view || fitView(map, W, H, LABEL_PAD, viewTurnOf(map));
   state.view = view;
   if (background) {
     el('image', {...background.field, href: background.url, preserveAspectRatio: 'none'}, svg);
@@ -121,14 +121,9 @@ function render() {
 }
 
 // D-595: the fit depends only on the map and its view turn, never on robot poses or their uncertainty
-// rings, so a 1 s poll never re-fits (zooms) the map. A fixed room past the outermost place or lane
-// keeps a robot body on the edge in view (D-540 4); a ring further out is clipped, not re-fitted.
-const LABEL_PAD = 24;  // the same margin as before; a label with no room above its ring goes below it
-const ROBOT_ROOM_M = 0.15;
-function roomDiscs(map) {
-  return [...map.places, ...map.edges.flatMap(edge => edge.polyline.map(([x, y]) => ({x, y})))]
-    .map(({x, y}) => ({x, y, r: ROBOT_ROOM_M}));
-}
+// rings, so a 1 s poll never re-fits (zooms) the map. A ring past the map edge is clipped; its label is
+// clamped onto the map (D-540 4).
+const LABEL_PAD = 24;  // a label with no room above its ring goes below it
 
 // D-540 4: the 관제 map's /guide marks (body, heading, uncertainty ring) and each open trip's line and
 // next place, in this map's frame and view turn. Read-only; redrawn alone so a poll never eats a click.

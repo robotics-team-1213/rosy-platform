@@ -1431,16 +1431,24 @@ def test_stale_camera_calibration_keeps_the_frozen_picture_and_warns(console_url
                                    "X-Source-Lens": "kind=wide;focal_mm=2.2;hfov_deg=104.1"})
 
         page.route("**/api/vision/sources/ceiling_north/frame", serve_frame)
-        page.goto(console_url, wait_until="networkidle")
+        # The 1 s tracking poll keeps the network busy; networkidle never comes (timed out on main too).
+        page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function(
             "() => document.querySelector('#map-tag')?.textContent.includes('카메라 교정 어긋남')",
             timeout=20000)
         tag = page.inner_text("#map-tag")
         assert "paint-test" in tag, tag
-        # 수락된 보정의 실영상(빨강)이 사이트 가운데에 그대로 있다.
-        assert page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
-                             "const p = c.getContext('2d').getImageData(c.width / 2, c.height / 2, 1, 1).data; "
-                             "return p[0] > 150 && p[1] < 100; }")
+        # 수락된 보정의 실영상(빨강)이 사이트 안에 그대로 있다. 표본 점은 로봇 차이 선(0.2→0.8 대각선)과
+        # 0.5 m 격자를 피한다(siteBounds 0.25 여유, fitTransform pad 32, 화면 회전 없음).
+        pixel = page.evaluate("""async () => {
+          const { fitTransform, project } = await import('/console/assets/site-layer.js');
+          const c = document.querySelector('#map-canvas'), g = c.getContext('2d');
+          const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+          const t = fitTransform({ min_x: -0.25, min_y: -0.25, max_x: 1.25, max_y: 1.25 }, r.width, r.height, 32);
+          const p = project(t, 0.25, 0.75);
+          return [...g.getImageData(Math.round(p.px * dpr), Math.round(p.py * dpr), 1, 1).data];
+        }""")
+        assert pixel[0] > 150 and pixel[1] < 100, pixel
         assert page.evaluate("() => document.querySelector('#map-canvas')?.getAttribute('aria-label')"
                              ".includes('맵 고정을 다시 하세요')")
         assert not errors
