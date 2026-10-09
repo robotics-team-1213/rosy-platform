@@ -199,6 +199,22 @@ def test_relearn_counter_resets_the_detector_once_per_change(make_worker):
     assert detector.resets == 1
 
 
+def test_an_operator_relearn_calls_relearn_when_the_detector_keeps_backgrounds(make_worker):
+    """D-539: the operator relearn is the empty-track statement the detector may keep."""
+    class _Keeping(_Detector):
+        relearns = 0
+
+        def relearn(self):
+            self.relearns += 1
+
+    detector = _Keeping()
+    worker, _ = make_worker(configs=[CONFIG, {**CONFIG, "relearn_seq": 1}], detector=detector)
+    for seq in (1, 2):
+        asyncio.run(worker.refresh_config())
+        asyncio.run(worker.process(_frame(seq=seq, captured_at=99.75 + seq), {}))
+    assert (detector.relearns, detector.resets) == (1, 0)
+
+
 def test_a_lower_relearn_counter_is_a_new_baseline_not_a_relearn(make_worker):
     """A Fleet restart starts the counter at 0 again; only an increase asks for a relearn."""
     detector = _Detector()
