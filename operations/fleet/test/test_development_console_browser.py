@@ -52,6 +52,27 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
             browser = playwright.chromium.launch(headless=True)
             try:
                 page = browser.new_page(viewport={"width": 390, "height": 844} if path == "/console" else None)
+                active_map_requests = []
+                active_map_released = [False]
+                active_map = {"version": 1, "map": {"map_id": "site", "view_turn_deg": 90}}
+                def active_map_route(route):
+                    if active_map_released[0]:
+                        route.fulfill(json=active_map)
+                    else:
+                        active_map_requests.append(route)
+                if path == "/console":
+                    page.route("**/api/fleet/site-map", lambda route: route.fulfill(json={"maps": [{
+                        "map_id": "site", "bounds_m": {"min_x": 0, "max_x": 2, "min_y": 0, "max_y": 2},
+                        "polygon_m": [[0, 0], [2, 0], [2, 2], [0, 2]], "sources": [],
+                    }]}))
+                    # A slow robot map must not leave the authenticated site view locked.
+                    page.route("**/api/fleet/map", lambda route: None)
+                    page.route("**/api/fleet/site-map/active", active_map_route)
+                    page.route("**/api/fleet/tracking", lambda route: route.fulfill(json={
+                        "lease_s": 1, "sources": [{"source_id": "camera", "status": "OK", "age_ms": 50}],
+                        "robots": [{"robot_id": "rosy_01", "status": "MARKER",
+                                    "camera": {"x": 1, "y": 1}, "pose": None}], "unknown": [],
+                    }))
                 page.goto(origin + path)
                 # D-540 2: the development principal id lives in title; the badge says development once.
                 expect(page.locator(identity)).to_have_attribute("title", re.compile("^development-"), timeout=15000)
@@ -64,7 +85,18 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
                     expect(page.locator("#topbar-more")).to_have_attribute("aria-expanded", "false")
                     expect(page.locator("#topbar-extra")).to_be_hidden()
                     expect(page.locator("#connection-guide")).to_be_hidden()
-                    expect(page.locator("#map-stage")).not_to_have_attribute("data-map-state", "auth", timeout=20000)
+                    for _ in range(100):
+                        if active_map_requests:
+                            break
+                        page.wait_for_timeout(100)
+                    assert active_map_requests
+                    assert page.locator("#map-stage").get_attribute("data-map-state") != "site"
+                    active_map_released[0] = True
+                    for request in active_map_requests:
+                        request.fulfill(json=active_map)
+                    expect(page.locator("#map-stage")).to_have_attribute("data-map-state", "site", timeout=10000)
+                    expect(page.locator("#map-canvas")).to_have_attribute("role", "img")
+                    expect(page.locator("#map-tag")).to_contain_text("카메라 관측 1/1대", timeout=10000)
                     assert page.locator("ui-topbar").bounding_box()["height"] < 170
                     output = os.environ.get("ROSY_UX_EVIDENCE_DIR")
                     if output:

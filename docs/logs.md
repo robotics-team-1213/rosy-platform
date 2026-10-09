@@ -7565,6 +7565,12 @@ osy-d395-s1d\`.
 - 증거: `docs/validation/lane-parallel-correction-baseline-2026-10-09/result.md`; trip `arrived`, 호 최대 반지름 오차 34/41/30 mm. SIM 충돌 상자 외접 원의 도색선 중심 여유 최소 −35.1 mm로 재계산했고, 두 실물 로봇의 측정·적용 보정과 차체 범위를 분리했다.
 - gate 변화: ROS-SIM 완주만 관측. 실제 차체 형상·도색선 허용 범위와 오차·정지 여유, 후보 병렬 보정, 두 로봇 DEVICE는 미판정/HOLD.
 
+## 2026-10-09 · uncommitted · docs(lane): 서쪽 모서리 Fleet 굽이 후보 폐루프
+
+- 변경: 지도 서쪽 바깥 모서리를 SIM 전용 `bend` 장소로 넣고 기존 CORE 굽이 지시와 선택적 D-531 경로 문맥을 폐루프에서 비교했다. 제품 지도와 주행 기본 설정은 건드리지 않았다.
+- 증거: `docs/validation/lane-west-bend-candidate-2026-10-09/result.md`; U-Net 문맥 켬 2회 모두 서쪽 모서리를 지나고 1회 `arrived`, 1회 링 `arc_mismatch` 정지. 문맥 끔 2회는 모서리 통과 뒤 연결 실패 1회, 굽이 `odom` 중단 1회. SIM 차체 표본·도색 중심선 대리값은 모두 안전 승격 근거가 아니다.
+- gate 변화: 서쪽 모서리 지도 굽이 후보의 ROS-SIM 유효성만 확인. 반복 완주·승인 경계·연속 sweep·DEVICE/FIELD는 HOLD.
+
 ## 2026-10-09 · uncommitted · feat(perception): lane_seg int8 with first/last Conv fp32 (int8-hf)
 
 - 변경: `convert.py --int8`를 quant_pre_process 뒤 s8 활성·채널별 s8 가중치 QDQ로 바꾸고, `--int8-fp32-nodes`(lane_seg 기본 `first_conv last_conv`, object_det 기본 없음)로 남길 fp32 노드를 고른다. 보정 메모리 상한 `CalibMaxIntermediateOutputs=7`과 그 배수 프레임 수를 하나 줄이는 처리(ORT 1.26)를 넣었다. 새 결정이 아니라 D-423 3항(보정 이미지 int8, 판정은 intake)의 매개변수다.

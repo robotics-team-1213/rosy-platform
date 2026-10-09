@@ -52,7 +52,9 @@ export function classifyTracking(body) {
   }
   const unknown = [];
   for (const item of body?.unknown || []) {
-    if (item && finite(item.x) && finite(item.y)) unknown.push({ x: item.x, y: item.y });
+    if (!item || !finite(item.x) || !finite(item.y)) continue;
+    // D-575: a seen marker no robot is assigned to keeps its id on the map.
+    unknown.push({ x: item.x, y: item.y, ...(Number.isInteger(item.marker_id) ? { markerId: item.marker_id } : {}) });
   }
   robots.sort((a, b) => a.robotId.localeCompare(b.robotId));
   return { robots, unknown };
@@ -126,8 +128,9 @@ export function rememberTrackingPoses(tracking) {
 export function positionRows(tracking) {
   return [...tracking.robots.map(row => ({ name: row.robotId, x: row.camera.x.toFixed(2),
     y: row.camera.y.toFixed(2), basis: row.measured ? "마커 관측" : "무마커 추론" })),
-  ...tracking.unknown.map((row, index) => ({ name: `미확인 ${index + 1}`, x: row.x.toFixed(2),
-    y: row.y.toFixed(2), basis: "무마커 추론 · 이름 미확정" }))];
+  ...tracking.unknown.map((row, index) => ({
+    name: row.markerId === undefined ? `미확인 ${index + 1}` : `ArUco ${row.markerId}`, x: row.x.toFixed(2),
+    y: row.y.toFixed(2), basis: row.markerId === undefined ? "무마커 추론 · 이름 미확정" : "마커 관측 · 미등록" }))];
 }
 
 export function displayLeaseMs(body, elapsedMs = 0) {

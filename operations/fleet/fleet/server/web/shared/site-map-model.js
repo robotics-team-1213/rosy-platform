@@ -39,6 +39,8 @@ export const TRIP_ERROR_LABEL = {
   TRIP_AUTHORITY_NOT_REQUIRED: '현장은 통행권을 보내는데 이 로봇 CORE는 통행권 없이 움직입니다 · 로봇 설정에서 통행권 필수를 켜세요',
   // D-525 가상 신호
   TRIP_SIGNAL_START_IN_ZONE: '신호 교차로 안에서는 출발할 수 없습니다 · 교차로 밖으로 옮긴 뒤 다시 하세요',
+  // D-517 3: 구역 안에서는 서지 않는다
+  TRIP_STOP_IN_ZONE: '경로 위에 구역(교차로) 밖에 설 장소가 없습니다 · 다른 목적지를 고르세요',
   TRIP_SIGNAL_NEEDS_AUTHORITY: '경로가 신호 교차로를 지나는데 이 로봇은 통행권(CORE)을 받지 않습니다 · 적색에서 선다는 보장이 없습니다',
   TRIP_ROBOT_BUSY: '이 로봇은 운행 중입니다 · 운행을 먼저 취소하세요',
   TRIP_ALREADY_STARTED: '이미 출발시킨 경로입니다',
@@ -92,6 +94,7 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_START_INVALID: '출발 자리가 차로 위에 없거나 차로 방향과 다르게 놓였습니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
   SITE_MAP_INVALID: '지도에 맞지 않는 값이 있습니다',
+  SITE_MAP_NO_LANE_GRAPH: '가져올 lane_graph가 설정되지 않았거나 읽을 수 없습니다',
   // D-494 6 teach
   TEACH_BUSY: '다른 로봇을 기록하는 중입니다 · 한 번에 한 대만 가르칩니다',
   TEACH_NOT_RECORDING: '기록 중이 아닙니다',
@@ -305,6 +308,10 @@ export function tripStatusText(trip, map) {
   if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
   if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
   if (trip.hold) parts.push('바뀐 경로 확인 대기 · 장소에서 서 있음');
+  if (trip.stop_moved) {  // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): never stands inside a zone
+    const {from, to} = trip.stop_moved;
+    parts.push(`목적지 ${names.get(from) || from || '좌표'} → ${names.get(to) || to} · 교차로 안에 서지 않도록 다음 지점에서 섭니다`);
+  }
   if (trip.reason === 'stall' && Number.isFinite(trip.detail?.stall_s)) {
     parts.push(`${trip.detail.stall_s}초 넘게 ${TRIP_REASON_LABEL.stall}`);
   } else if (trip.reason) {
@@ -636,4 +643,33 @@ export function trafficAttention(traffic, robotId, clock, now) {
 /** "고리 2/3대" per repeat loop, or '' when no repeat trip runs. */
 export function loopCapacityText(traffic) {
   return (traffic?.loop_capacity || []).map((loop) => `고리 ${loop.robots.length}/${loop.capacity}대`).join(" · ");
+}
+
+/** D-573 1: append one waiting band (map metres, mm-rounded) to crosswalk ``id``; the server
+ * checks it reaches the lane and stays on the site floor when the draft is saved. */
+export function addApproach(map, id, points) {
+  if (points.length < 3) throw new Error('대기 띠는 점이 세 개 이상이어야 합니다');
+  const next = copy(map);
+  const crosswalk = (next.crosswalks || []).find(item => item.id === id);
+  if (!crosswalk) throw new Error(`없는 횡단보도 ${id}`);
+  if ((crosswalk.approach || []).length >= 4) throw new Error('대기 띠는 횡단보도마다 4개까지입니다');
+  const mm = value => Math.round(value * 1000) / 1000;
+  crosswalk.approach = [...(crosswalk.approach || []), points.map(([x, y]) => [mm(x), mm(y)])];
+  return next;
+}
+
+export function removeApproach(map, id, index) {
+  const next = copy(map);
+  const crosswalk = (next.crosswalks || []).find(item => item.id === id);
+  if (!crosswalk?.approach?.[index]) throw new Error('지울 대기 띠가 없습니다');
+  crosswalk.approach.splice(index, 1);
+  return next;
+}
+
+/** D-573 1: lane_graph crosswalks replace the draft's polygons by id; drawn bands are kept. */
+export function mergeCrosswalks(map, imported) {
+  const next = copy(map);
+  const had = new Map((next.crosswalks || []).map(item => [item.id, item]));
+  next.crosswalks = imported.map(item => ({...copy(item), approach: had.get(item.id)?.approach || []}));
+  return next;
 }

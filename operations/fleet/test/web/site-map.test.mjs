@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   arrowMarks, editEdge, editPlace, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
+  addApproach, removeApproach, mergeCrosswalks,
 } from '../../fleet/server/web/shared/site-map-model.js';
 
 const MAP = {
@@ -93,6 +94,9 @@ test('D-494 trip panel text and button reasons', async () => {
     assert.ok(tripStatusText({...trip, pose: {...trip.pose, state}}, MAP).includes(`자세 ${label} ·`));
   }
   assert.match(tripStatusText({...trip, state: 'stopped', reason: 'restart'}, MAP), /자동으로 다시 출발하지 않습니다/);
+  // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): the moved destination is shown
+  assert.match(tripStatusText({...trip, stop_moved: {from: 'A', to: 'B'}}, MAP), /목적지 .+ → .+ · 교차로 안에 서지 않도록 다음 지점에서 섭니다/);
+  assert.match(tripStatusText({...trip, stop_moved: {from: null, to: 'B'}}, MAP), /목적지 좌표 → /);
   const plan = {map_version: 1, expires_at: 100};
   const active = {version: 1};
   assert.equal(tripStartReason({role: 'operator', plan, active, running: null, now: 99}), '');
@@ -192,4 +196,22 @@ test('D-513 7: the map keeps one view turn and refuses other angles', () => {
   assert.equal(viewTurnOf(turned), 90);
   assert.equal(MAP.view_turn_deg, undefined);
   assert.throws(() => editViewTurn(MAP, 45), /0·90·180·270/);
+});
+
+test('D-573 waiting bands are added mm-rounded, capped at four, removed by index and kept across a lane_graph merge', () => {
+  const map = {...MAP, crosswalks: [{id: 'cw1', polygon: [[0.9, -0.1], [1.1, -0.1], [1.1, 0.1]], approach: [], lanes: ['ab'], revision: 'r1'}]};
+  const band = [[0.9, 0.1], [1.1, 0.1], [1.10049, 0.3]];
+  const one = addApproach(map, 'cw1', band);
+  assert.deepEqual(one.crosswalks[0].approach, [[[0.9, 0.1], [1.1, 0.1], [1.1, 0.3]]]);
+  assert.deepEqual(map.crosswalks[0].approach, []);  // pure
+  assert.throws(() => addApproach(map, 'cw1', band.slice(0, 2)));
+  assert.throws(() => addApproach(map, 'nope', band));
+  let full = one;
+  for (let i = 0; i < 3; i += 1) full = addApproach(full, 'cw1', band);
+  assert.throws(() => addApproach(full, 'cw1', band));
+  assert.deepEqual(removeApproach(one, 'cw1', 0).crosswalks[0].approach, []);
+  assert.throws(() => removeApproach(map, 'cw1', 0));
+  const merged = mergeCrosswalks(one, [{id: 'cw1', polygon: [[0, 0], [1, 0], [1, 1]], approach: [], lanes: [], revision: 'r2'},
+    {id: 'cw2', polygon: [[2, 0], [3, 0], [3, 1]], approach: [], lanes: [], revision: 'r2'}]);
+  assert.deepEqual(merged.crosswalks.map(c => [c.id, c.revision, c.approach.length]), [['cw1', 'r2', 1], ['cw2', 'r2', 0]]);
 });
