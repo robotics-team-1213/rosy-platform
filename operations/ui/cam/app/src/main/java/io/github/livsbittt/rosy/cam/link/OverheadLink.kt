@@ -138,6 +138,14 @@ class OverheadLink(
     @Volatile
     var sensor: SensorInfo = OverheadConfig.DEFAULT.let { SensorInfo(it.width, it.height, 0) }
 
+    /** D-589: called on the OkHttp thread for each well-formed `camera` message of the current connection. */
+    @Volatile
+    var onCamera: ((ServerMessage.Camera) -> Unit)? = null
+
+    /** Last `camera_state` published; sent now when connected and again after every hello. */
+    @Volatile
+    private var cameraState: String? = null
+
     // Guarded by lock.
     private var socket: WebSocket? = null
     private var generation = 0
@@ -249,6 +257,13 @@ class OverheadLink(
         return true
     }
 
+    /** D-589 5: sends [json] (`camera_state`) if streaming and keeps it for the next connection's hello. */
+    fun publishCameraState(json: String) {
+        cameraState = json
+        val ws = synchronized(lock) { socket } ?: return
+        if (_status.value.state == LinkState.STREAMING) ws.send(json)
+    }
+
     private fun connect() {
         val gen: Int
         synchronized(lock) {
@@ -338,6 +353,7 @@ class OverheadLink(
             pinRetryAvailable.set(true)
             val s = sensor
             webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg, lens))
+            cameraState?.let { webSocket.send(it) }
             Log.i(TAG, "connected to ${pairing.wsUrl}")
             _status.update { it.copy(state = LinkState.STREAMING, error = null, stopped = false) }
         }
@@ -359,6 +375,11 @@ class OverheadLink(
                     Log.w(TAG, "invalid server message (${msg.reason}): $text")
                     _status.update { it.copy(error = LinkError.InvalidConfig(msg.reason)) }
                 }
+                is ServerMessage.Camera -> {
+                    Log.i(TAG, "camera $msg")
+                    onCamera?.invoke(msg)
+                }
+                is ServerMessage.BadCamera -> Log.w(TAG, "ignored bad camera message (${msg.reason}): $text")
                 is ServerMessage.Unknown -> Log.d(TAG, "ignored message type ${msg.type}")
             }
         }

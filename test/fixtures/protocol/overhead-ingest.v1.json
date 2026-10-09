@@ -128,6 +128,39 @@
       ],
       "rx_fps": 2.9,
       "dropped": 0
+    },
+    "camera_example": {
+      "type": "camera",
+      "seq": 12,
+      "ev": -1,
+      "ae_lock": true,
+      "awb_lock": true,
+      "max_exposure_us": 8333,
+      "antibanding": "60hz"
+    },
+    "camera_state_example": {
+      "type": "camera_state",
+      "seq": 12,
+      "applied": {
+        "ev": -1,
+        "ae_lock": true,
+        "awb_lock": true,
+        "max_exposure_us": 33333,
+        "antibanding": "60hz",
+        "mode": "vision"
+      },
+      "supported": {
+        "ev_min": -20,
+        "ev_max": 20,
+        "ev_step": 0.1,
+        "ae_lock": true,
+        "awb_lock": true,
+        "max_exposure_us": 33333,
+        "antibanding_60hz": true
+      },
+      "exposure_us": 16000,
+      "iso": 200,
+      "thermal": 0
     }
   },
   "hello_lens": {
