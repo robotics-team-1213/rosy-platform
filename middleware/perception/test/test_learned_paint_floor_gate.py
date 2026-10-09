@@ -3,7 +3,9 @@
 import numpy as np
 import pytest
 
-from control.sensing.perception.learned.lane_mask import NoWallClass, lane_marking_mask, on_floor
+from control.sensing.perception.lane_keep_lines import clean_learned_mask
+from control.sensing.perception.learned.lane_mask import (
+    FOOT_GAP_FRACTION, WALL_CODE, NoWallClass, floor_paint, lane_marking_mask)
 from control.sensing.perception.learned.manifest import ClassSpec, ManifestError
 from control.sensing.perception.learned.runner import LaneSegModel
 
@@ -12,6 +14,7 @@ CLASSES = (ClassSpec(0, "floor", "background"), ClassSpec(1, "lane_line", "lane_
            ClassSpec(2, "wall", "wall"), ClassSpec(3, "drivable", "drivable"))
 H, W = 240, 320
 WALL_FOOT = 100   # rows 0..99 are wall, the floor starts at row 100
+HORIZON = 60.0    # gap tolerance below the foot: floor(0.25 * (99 - 60)) = 9 rows
 
 
 def _scene() -> np.ndarray:
@@ -28,7 +31,15 @@ def _logits(labels: np.ndarray, n_classes: int = len(CLASSES)) -> np.ndarray:
 
 
 def _gated(labels):
-    return lane_marking_mask(_logits(labels), CLASSES, floor_gate=True).astype(bool)
+    return floor_paint(lane_marking_mask(_logits(labels), CLASSES, floor_gate=True), HORIZON).astype(bool)
+
+
+def test_gated_mask_carries_wall_codes_and_ungated_stays_binary():
+    labels = _scene()
+    labels[150:240, 40:60] = LANE
+    gated = lane_marking_mask(_logits(labels), CLASSES, floor_gate=True)
+    assert set(np.unique(gated)) == {0, 1, WALL_CODE} and (gated[:WALL_FOOT] == WALL_CODE).all()
+    assert set(np.unique(lane_marking_mask(_logits(labels), CLASSES))) == {0, 1}
 
 
 def test_lane_pixels_painted_on_the_wall_are_dropped():
@@ -60,10 +71,18 @@ def test_floor_lines_are_kept():
     assert np.array_equal(_gated(labels), expected)
 
 
-def test_corner_tape_near_the_wall_is_kept_when_floor_shows_between():
+def test_band_along_the_wall_foot_behind_a_short_floor_gap_is_dropped():
     labels = _scene()
-    labels[WALL_FOOT + 2:WALL_FOOT + 8, 0:320] = LANE   # transverse corner tape two floor rows below the wall
-    labels[WALL_FOOT + 8:240, 300:310] = LANE            # and the line running into it
+    labels[WALL_FOOT + 4:WALL_FOOT + 10, :] = LANE      # 4 floor rows, then paint hugging the foot
+    labels[150:240, 40:60] = LANE                        # a real line well away from the wall
+    assert np.array_equal(_gated(labels), (labels == LANE) & (np.arange(H)[:, None] >= 150))
+
+
+def test_corner_tape_near_the_wall_is_kept_when_floor_shows_between():
+    gap = int(FOOT_GAP_FRACTION * (WALL_FOOT - 1 - HORIZON)) + 2
+    labels = _scene()
+    labels[WALL_FOOT + gap:WALL_FOOT + gap + 6, 0:320] = LANE   # transverse corner tape on the floor
+    labels[WALL_FOOT + gap + 6:240, 300:310] = LANE              # and the line running into it
     assert np.array_equal(_gated(labels), labels == LANE)
 
 
@@ -80,7 +99,6 @@ def test_columns_without_a_wall_are_untouched():
     labels = np.full((H, W), FLOOR, np.int64)
     labels[0:240, 100:120] = LANE                # a line reaching the top row, no wall in view
     assert np.array_equal(_gated(labels), labels == LANE)
-    assert on_floor(labels, [WALL], [LANE]).all()
 
 
 def test_gate_needs_a_wall_class():
@@ -91,13 +109,23 @@ def test_gate_needs_a_wall_class():
         lane_marking_mask(logits, classes, floor_gate=True)
 
 
-def test_gated_mask_is_resized_to_the_frame():
+def test_clean_learned_mask_applies_the_gate_to_codes_at_frame_size():
     labels = _scene()
     labels[150:240, 40:60] = LANE
     labels[60:90, 250:300] = LANE
-    mask = lane_marking_mask(_logits(labels), CLASSES, size=(640, 480), floor_gate=True)
-    assert mask.shape == (480, 640) and mask.dtype == np.uint8
-    assert mask[300:480, 80:120].all() and not mask[120:180, 500:600].any()
+    codes = lane_marking_mask(_logits(labels), CLASSES, size=(640, 480), floor_gate=True)
+    assert codes.shape == (480, 640) and codes.dtype == np.uint8
+    paint = clean_learned_mask(codes, 2 * HORIZON)
+    assert set(np.unique(paint)) == {0, 1}
+    assert paint[300:480, 80:120].all() and not paint[:300].any()
+
+
+def test_clean_learned_mask_leaves_binary_masks_as_before():
+    mask = np.zeros((H, W), np.uint8)
+    mask[150:240, 40:60] = 1
+    mask[70:90, 250:300] = 1                     # no wall codes: no gate, only the D-408 cleaning
+    paint = clean_learned_mask(mask, HORIZON)
+    assert paint[150:240, 40:60].all() and paint[75:90, 250:300].all()
 
 
 # --- LaneSegModel: the paint path reads the gate; no wall class fails closed at open -----------------------
@@ -136,8 +164,9 @@ def test_model_infer_mask_applies_the_gate_when_opened_with_it(tmp_path):
     frame = np.zeros((H, W, 3), np.uint8)
     gated = LaneSegModel.open(folder, session_factory=lambda p, t: _Session(labels), floor_gate=True)
     plain = LaneSegModel.open(folder, session_factory=lambda p, t: _Session(labels))
-    assert np.array_equal(gated.infer_mask(frame)[0].astype(bool), (labels == LANE) & (np.arange(H)[:, None] >= 150))
-    assert plain.infer_mask(frame)[0][60:90, 250:300].all()
+    codes = gated.infer_mask(frame)[0]
+    assert np.array_equal(floor_paint(codes, HORIZON).astype(bool), (labels == LANE) & (np.arange(H)[:, None] >= 150))
+    assert plain.infer_mask(frame)[0][60:90, 250:300].all() and plain.infer_mask(frame)[0].max() == 1
     assert np.array_equal(gated.infer_with_mask(frame)[1], gated.infer_mask(frame)[0])
 
 

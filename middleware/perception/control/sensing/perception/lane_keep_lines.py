@@ -317,7 +317,11 @@ def drop_small_components(mask: np.ndarray) -> np.ndarray:
 
 def clean_learned_mask(mask: np.ndarray, horizon_row: float) -> np.ndarray:
     """A learned paint mask the way the keeper reads it: binary, cut above the horizon (same
-    margin as floor_white_mask), then blobs smaller than a tape fragment dropped (D-408)."""
+    margin as floor_white_mask), then blobs smaller than a tape fragment dropped (D-408).
+    A floor-gated mask (wall codes, D-588) first keeps only the lane paint on the floor."""
+    if mask.max(initial=0) > 1:
+        from .learned.lane_mask import floor_paint
+        mask = floor_paint(mask, horizon_row)
     out = (mask > 0).astype(np.uint8)
     out[:max(0, min(out.shape[0], int(math.ceil(horizon_row)) + HORIZON_MARGIN_PX))] = 0
     return drop_small_components(out)

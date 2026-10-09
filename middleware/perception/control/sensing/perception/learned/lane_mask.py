@@ -17,13 +17,20 @@ VisibleHysteresis is the per-stream visible latch; the node owns one.
 Shadow evidence only: nothing here commands motion (D-209). Promotion past
 shadow needs the D-205 replay bench, not these unit numbers.
 
-on_floor (D-588 floor gate on the D-408 paint mask): lane_marking pixels the
-model put on a wall are not floor paint. Per column, the wall body is the wall
-pixels of 8-connected wall components that touch the top image row (a wall in
-view rises above the frame top; a stray wall speck on the floor does not). From
-the lowest wall-body pixel the gate walks down through wall and lane_marking
-pixels; every lane_marking pixel above the first other pixel is dropped. Tape on
-the floor is kept wherever floor shows between it and the wall."""
+floor_paint (D-588 floor gate on the D-408 paint mask): lane_marking pixels the
+model put on a wall, or on the wall's foot, are not lane paint. With floor_gate,
+lane_marking_mask returns codes (0 other, 1 lane, 2 wall) and clean_learned_mask
+turns them into paint with floor_paint, which knows the horizon:
+1. Wall body: wall pixels of 8-connected wall components touching the top image
+   row (a wall in view rises above the frame top; a stray speck on the floor
+   does not). Per column, the foot is its lowest wall-body pixel.
+2. From the foot the column walks down through wall and lane pixels; every lane
+   pixel above the first other pixel is dropped (paint on the wall face).
+3. A lane component most of whose pixels sit within a short floor gap below the
+   foot is dropped whole (paint along the wall foot). Short means up to
+   FOOT_GAP_FRACTION x (foot row - horizon row) rows: points within about 20 %
+   of the wall's distance along that ray. Tape farther from the wall stays whole.
+Columns without a wall body are untouched."""
 
 from __future__ import annotations
 
@@ -144,24 +151,56 @@ class NoWallClass(ValueError):
     """The floor gate needs a `wall` role class and the model has none."""
 
 
-def on_floor(labels: np.ndarray, wall_index, lane_index) -> np.ndarray:
-    """bool HxW: True below the wall foot of each column (the rule in the module doc).
-    Columns without a wall body are all True."""
-    h = labels.shape[0]
-    wall = np.isin(labels, wall_index)
-    lane = np.isin(labels, lane_index)
+#: lane_marking_mask codes with floor_gate (clean_learned_mask reads them).
+LANE_CODE, WALL_CODE = 1, 2
+#: Step 3 of floor_paint, from the 2026-10-10 SIM replay (D-588): 0.25 removed the wall-foot band
+#: that bent the right boundary to -17 deg; 0.35 already reached the real tape 7.5 cm off the wall.
+FOOT_GAP_FRACTION = 0.25
+#: A component is wall-foot paint when more than this share of it is near the foot.
+FOOT_COMPONENT_SHARE = 0.5
+
+
+def _barrier_runs(barrier: np.ndarray) -> np.ndarray:
+    """Per pixel, the length of the run of barrier pixels ending there (0 off a barrier)."""
+    rows = np.arange(barrier.shape[0])[:, None]
+    last_open = np.maximum.accumulate(np.where(barrier, -1, rows), axis=0)
+    return rows - last_open
+
+
+def floor_paint(codes: np.ndarray, horizon_row: float, *,
+                gap_fraction: float = FOOT_GAP_FRACTION) -> np.ndarray:
+    """uint8 0/1 lane paint on the floor from lane_marking_mask codes (rule in the module doc)."""
+    h = codes.shape[0]
+    lane = codes == LANE_CODE
+    wall = codes == WALL_CODE
     n, comp = cv2.connectedComponents(wall.astype(np.uint8), connectivity=8)
-    body = np.zeros(n, bool)
-    body[np.unique(comp[0])] = True
-    body[0] = False
-    body = body[comp]
+    top = np.zeros(n, bool)
+    top[np.unique(comp[0])] = True
+    top[0] = False
+    body = top[comp]
     rows = np.arange(h)[:, None]
     has_body = body.any(axis=0)
-    lowest = np.where(has_body, h - 1 - np.argmax(body[::-1], axis=0), -1)
-    stop = ~(wall | lane) & (rows > lowest[None, :])
-    first = np.where(stop.any(axis=0), np.argmax(stop, axis=0), h)
-    foot = np.where(has_body, first - 1, -1)
-    return rows > foot[None, :]
+    foot = np.where(has_body, h - 1 - np.argmax(body[::-1], axis=0), h)   # no body: nothing is above
+    below = rows > foot[None, :]
+    runs = _barrier_runs(~(wall | lane) & below)
+
+    def walk_end(gap):
+        """Last row reached from the foot when barrier runs up to `gap` rows are crossed."""
+        stop = runs > gap[None, :]
+        first = np.where(stop.any(axis=0), np.argmax(stop, axis=0), h + gap)
+        return np.where(has_body, first - gap - 1, -1)
+
+    paint = lane & (rows > walk_end(np.zeros_like(foot))[None, :])
+    gap = np.floor(gap_fraction * np.maximum(foot - horizon_row, 0.0)).astype(int)
+    near = paint & (rows <= walk_end(gap)[None, :])
+    if near.any():
+        count, labels = cv2.connectedComponents(paint.astype(np.uint8), connectivity=8)
+        total = np.bincount(labels.ravel(), minlength=count)
+        hugging = np.bincount(labels.ravel(), weights=near.ravel(), minlength=count)
+        drop = hugging > FOOT_COMPONENT_SHARE * np.maximum(total, 1)
+        drop[0] = False
+        paint &= ~drop[labels]
+    return paint.astype(np.uint8)
 
 
 def lane_marking_mask(logits: np.ndarray, classes, size: tuple[int, int] | None = None, *,
@@ -169,22 +208,22 @@ def lane_marking_mask(logits: np.ndarray, classes, size: tuple[int, int] | None 
     """uint8 0/1 mask of pixels whose argmax class has the lane_marking role (D-408).
 
     size (width, height) resizes it with nearest neighbour to the camera frame, so the
-    lane keeper reads the same pixel grid as its ground plane. floor_gate drops lane
-    pixels that are not on the floor (on_floor, D-588); it raises NoWallClass when the
-    model has no wall role, so the caller falls back instead of trusting ungated paint."""
+    lane keeper reads the same pixel grid as its ground plane. floor_gate adds the wall
+    pixels as WALL_CODE for floor_paint (D-588; clean_learned_mask applies it); it raises
+    NoWallClass when the model has no wall role, so the caller falls back instead of
+    trusting ungated paint."""
     if logits.ndim != 4 or logits.shape[0] != 1 or logits.shape[1] != len(classes):
         raise ValueError(f"logits shape {logits.shape} does not match {len(classes)} classes")
     if not np.isfinite(logits).all():
         raise NonFiniteLogits("non-finite logits")
     labels = logits[0].argmax(axis=0)
     lane_index = [c.index for c in classes if c.role == "lane_marking"]
-    mask = np.isin(labels, lane_index)
+    mask = np.isin(labels, lane_index).astype(np.uint8)
     if floor_gate:
         wall_index = [c.index for c in classes if c.role == "wall"]
         if not wall_index:
             raise NoWallClass("floor gate needs a wall role class")
-        mask &= on_floor(labels, wall_index, lane_index)
-    mask = mask.astype(np.uint8)
+        mask[np.isin(labels, wall_index)] = WALL_CODE
     if size is not None and (mask.shape[1], mask.shape[0]) != tuple(size):
         mask = cv2.resize(mask, tuple(size), interpolation=cv2.INTER_NEAREST)
     return mask
