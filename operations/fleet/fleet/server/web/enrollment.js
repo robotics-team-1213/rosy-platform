@@ -4,6 +4,10 @@
 
 import { createPollGate } from "/console/assets/poll-gate.js";
 
+const ALARM_TEXT = {
+  ROBOT_ADDRESS_UNVERIFIED: "주행 중 로봇의 주소가 바뀜 — 상태를 모름",
+  TETHER_STOP_FAILED: "케이블 감시 정지 명령 실패 — 로봇 확인",
+};
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 export function normalizeCode(text) {
@@ -389,7 +393,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     const alarms = listing.alarms || [];
     const banner = el("enroll-alarm");
     banner.hidden = alarms.length === 0;
-    banner.textContent = alarms.map((a) => `${a.robot_id}: 주행 중 로봇의 주소가 바뀜 — 상태를 모름`).join(" · ");
+    banner.textContent = alarms.map((a) => `${a.robot_id}: ${ALARM_TEXT[a.code] || ALARM_TEXT.ROBOT_ADDRESS_UNVERIFIED}`).join(" · ");
     const addBlocked = !manage || Date.now() < state.blockedUntil;
     el("enroll-address-add").disabled = addBlocked;
     if (addBlocked) el("enroll-address-add").setAttribute("reason", !manage ? "운영자 권한이 필요합니다" : "잠시 뒤 다시 시도");

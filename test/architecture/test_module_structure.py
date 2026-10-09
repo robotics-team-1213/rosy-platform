@@ -185,14 +185,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_866,
-        "split: re-judged at 46866 on 2026-10-09. Measured past 46701 from the "
-        "degraded-link console row (a late answer is degraded, not offline) and "
-        "D-551's display-only advice wiring outside the traffic unit. No new "
-        "package owner. The site-map web/server split in "
-        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; "
-        "+150 allowance unchanged, measured from 46866. "
-        "Previously re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
+        47_012,
+        "split: re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
+        "(server/tether_watch.py, tether_routes.py, trail-view colour) and its tests. It stops a "
+        "tethered robot only through the existing per-robot CORE E-Stop and adds no command path "
+        "or package owner. The site-map split stays next; +150 allowance unchanged, measured "
+        "from 47012. Previously re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
         "(fleet/guide/situation.py, fleet/server/guide_service.py, web/guide-layer.js) "
         "over the map snapshot Fleet already holds. It does not call the network or emit a command. "
         "Main measured 46507 before D-523's 194-line ask parser. No new robot command path or package owner. "
@@ -685,10 +683,13 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1243,
-        "accept: re-judged at 1243 on 2026-10-09: a late robot answer is shown as "
-        "degraded, not offline, on the gathered row. online stays false, so goal, "
-        "stop, and admission decisions are unchanged. The zero growth allowance remains. "
+        1248,
+        "accept: re-judged at 1248 on 2026-10-09 after merging D-526 with the degraded-link row: "
+        "a late robot answer is shown as degraded, not offline (online stays false), and D-526 adds an "
+        "alarm_sources hook so the tether watch can raise TETHER_STOP_FAILED; neither changes a goal, stop "
+        "or admission path. Previously 1243 (degraded link) and 1234 (D-526). D-526 adds an alarm_sources hook so the "
+        "tether watch can raise TETHER_STOP_FAILED beside the held-robot alarm; five lines, "
+        "no goal, stop, or admission path changed. The zero growth allowance remains. "
         "Previously re-judged at 1229 on 2026-10-09: D-535 records link_reason beside the "
         "existing link class on a gathered robot row. No goal, stop, or admission path "
         "changed. The zero growth allowance remains. Previously re-judged at 1225 on "
@@ -1063,8 +1064,10 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1230,
-        "accept: re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
+        1239,
+        "accept: re-judged at 1239 on 2026-10-09 for D-548: the DEV prefix on the face strip and the status "
+        "line belongs to the process that draws them; zero growth allowance remains. "
+        "Previously re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
         "the e-stop clear and the reversing beep (D-546) and the bounded identity pulse with the normal lamp off "
         "(D-537) all stay with the one process that owns the buzzer and the lamp; zero growth allowance remains. "
         "Previously 1229 for D-546 and 1183 for D-472/D-537. Previously re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "

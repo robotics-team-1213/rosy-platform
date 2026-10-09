@@ -103,6 +103,8 @@ except ImportError:
     face_screen = None
 
 STATUS_DIR = "run/rosy-boot"
+#: D-548: root's marker that this robot accepts the shared rosy-dev-* API tokens.
+DEV_MODE_FILE = "etc/rosy/dev-mode"
 LOGIN_CODE = re.compile(r"^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$")
 LOGIN_ROLES = frozenset({"viewer", "operator", "administrator"})
 POLL_S = 0.5  # D-433: the files and the situation table; face frames tick faster
@@ -245,6 +247,10 @@ def read_view(root: Path, battery: tuple[float, float] | None) -> dict:
     if view["stage"] == "CORE_READY":
         view.update(_login_view(root))
     view.update(_state_view(view, status))
+    if (root / DEV_MODE_FILE).is_file():
+        view["dev_mode"] = True
+        if view.get("state_line"):
+            view["state_line"] = "DEV " + view["state_line"]
     return view
 
 
@@ -919,7 +925,10 @@ class FaceDisplay:
         redrawn = False
         if kind == "face" and screen["overlay"] is None:
             # The face plays from tick(); a strip rides every frame.
-            self.animating = (screen["face"], screen["strip"], screen["strip_tone"])
+            strip, tone = screen["strip"], screen["strip_tone"]
+            if view.get("dev_mode"):  # D-548: a dev-mode robot says so on every face frame
+                strip, tone = (f"DEV {strip}" if strip else "DEV MODE"), tone or "info"
+            self.animating = (screen["face"], strip, tone)
             self._drawn = None
         else:
             self.animating = None
