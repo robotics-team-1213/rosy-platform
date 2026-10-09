@@ -388,8 +388,7 @@ async function refreshState() {
     view.stateLoaded = true;
     if (view.selected) {
       const selectedRobot = view.robots.find((robot) => robot.robot_id === view.selected);
-      const lagging = !selectedRobot?.online && selectedRobot?.link === "degraded";
-      if ((!selectedRobot?.online && !lagging) || (!lagging && selectedRobot.state?.safety?.estop !== false)) {
+      if (!selectedRobot?.online || selectedRobot.state?.safety?.estop !== false) {
         disarmGoal("안전·연결 상태가 바뀌어 목표 지정 취소");
       }
     }
