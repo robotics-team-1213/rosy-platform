@@ -289,3 +289,9 @@
 - 변경: 쓴 값·확인된 값·진행 중 호출을 순수 클래스 `TuningWriter`로 옮겼다. 바인드마다 세대를 바꿔 이전 바인드의 응답을 버리고, CameraX가 카메라 id별로 남겨 두는 Camera2 interop 옵션을 지운다. 잠금은 노출 변화(EV·상한·안티밴딩)가 확인되고 1 s 지난 뒤, 확인이 없으면 3 s 뒤에 건다. 바인드 시각부터 잰다. 손전등이 켜지면 Vision 아래에서도 AE를 잠그지 않는다. 설정 스위치가 열 유지보다 먼저다(꺼짐이면 뜨거워도 `disabled`로 기본값). 노출 상한은 보고한 값을 그대로 돌려받으면 같은 범위를 고른다. 500 ms 안의 연속 요청은 버리되 seq는 돌려준다. 화면은 실제 EV(예: EV −1.0)를 보이고, Vision 중에는 D-544 줄을 숨긴다. 설정 줄 전체가 체크박스다. onOpen과 `publishCameraState`는 같은 잠금 안에서 STREAMING과 캐시 전송을 처리한다. 공유 벡터 `camera_example.max_exposure_us`를 33333으로 바꿨다(S1과 같은 변경).
 - 증거: Gradle `testDebugUnitTest assembleDebug` 성공, JVM 409 passed(`RecognitionTuningTest` 22, 새 `TuningWriterTest` 5). 로그 X: `DevTemp/cam-auto-tune-s2/build-3.txt`.
 - gate 변화: 없음(SOURCE 부분 근거). 폰에 설치하지 않았다.
+
+## 2026-10-10 · uncommitted · fix(cam): D-589 S2 재리뷰 반영
+
+- 변경: 손전등이 켜지거나 꺼지면 노출 변화로 보고(`TuningWriter.touch`) 잠금을 SETTLE_MS 동안, 그리고 그 뒤 촬영 결과가 한 장 올 때까지 풀어 둔다. 손전등 빛의 노출로 다시 잠그지 않는다. 열 유지 중에는 아무것도 바꾸지 않는다. 잠금은 마지막 변화 뒤의 촬영 결과가 있어야 걸리고, 바인드 뒤에는 첫 촬영 결과부터 시간을 잰다. 500 ms 안에 온 요청은 버리지 않고 기다렸다가(가장 새 것) 간격이 끝나면 적용하며, 기다리는 동안은 seq를 돌려주지 않는다. `step` KDoc에 fps·안티밴딩 "확인"은 적용이지 수렴이 아님을 적었다.
+- 증거: Gradle `testDebugUnitTest assembleDebug` 성공, JVM 413 passed(`RecognitionTuningTest` 23, `TuningWriterTest` 8). 시험이 손전등 끔 직후 재잠금 결함(목표가 같으면 잠금을 풀지 않던 조기 반환)을 잡아 고쳤다. 로그 X: `DevTemp/cam-auto-tune-s2/build-5.txt`.
+- gate 변화: 없음(SOURCE 부분 근거). 폰에 설치하지 않았다.
