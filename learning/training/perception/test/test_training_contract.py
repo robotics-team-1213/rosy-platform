@@ -94,6 +94,23 @@ def test_v13_requires_parent_and_content_addressed_dataset(tmp_path):
             load_manifest(out)
 
 
+def test_v13_model_version_is_written_and_lineage_bound(tmp_path):
+    """D-558: model_version lands in the manifest; only v13.* on v13-drivable."""
+    lineage = {"model_revision": "lane-seg-20260930-abcd1234", "onnx_sha256": "b" * 64,
+               "torchscript_sha256": "c" * 64}
+    classes = [("background", "background"), ("lane", "lane_marking"), ("road", "drivable")]
+    v13 = dict(revision_prefix="v13-drivable", dataset_revision="a" * 64,
+               parent_lane_model=lineage, classes=classes)
+    out, doc = _write(tmp_path, **v13, model_version="v13.1.00")
+    assert doc["model_version"] == "v13.1.00" and load_manifest(out).model_version == "v13.1.00"
+    for bad in ("v12.1.00", "v13.1.0"):
+        with pytest.raises(ValueError, match="model_version"):
+            _write(tmp_path, **v13, model_version=bad)
+    with pytest.raises(ValueError, match="model_version"):
+        _write(tmp_path, model_version="v13.1.00")
+    assert "model_version" not in _write(tmp_path)[1]
+
+
 def test_write_manifest_rejects_bad_role(tmp_path):
     with pytest.raises(ValueError):
         _write(tmp_path, classes=[("a", "background"), ("b", "nonsense")])

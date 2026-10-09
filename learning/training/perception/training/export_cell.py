@@ -76,7 +76,7 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
                    dataset_repo, dataset_revision, camera_profile_revision, trainer,
                    val_iou=None, date=None, precision="fp32", experiment=None,
                    revision_prefix="lane-seg", parent_lane_model=None, dataset_annotation=None,
-                   camera_provenance=None) -> dict:
+                   camera_provenance=None, model_version=None) -> dict:
     """precision: "fp32", or "int8" for a QDQ graph (onnxruntime quantize_static);
     intake.py refuses a label the graph contradicts. experiment: optional tracker link
     {"tracker": "wandb", "run_id", "url", "project"} or {"tracker": "local", "run_id", "path"} (path relative, e.g. runs/<run_id>)
@@ -104,8 +104,12 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
             raise ValueError("v13-drivable parent_lane_model needs lane-seg revision, ONNX and TorchScript sha256")
         if camera_provenance not in (None, "accepted", "provisional"):
             raise ValueError("camera_provenance must be accepted or provisional")
-    elif parent_lane_model is not None or dataset_annotation is not None or camera_provenance is not None:
-        raise ValueError("parent_lane_model, dataset_annotation and camera_provenance only apply to v13-drivable")
+        if model_version is not None and not re.fullmatch(r"v13\.\d+\.\d{2}", str(model_version)):
+            raise ValueError("v13-drivable model_version must be v13.<minor>.<two-digit patch> (D-558)")
+    elif (parent_lane_model is not None or dataset_annotation is not None or camera_provenance is not None
+          or model_version is not None):
+        raise ValueError("parent_lane_model, dataset_annotation, camera_provenance and model_version "
+                         "only apply to v13-drivable")
     exp_doc = _experiment_doc(experiment) if experiment is not None else None
     if precision not in PRECISIONS:
         raise ValueError(f"precision must be one of {PRECISIONS}, not {precision!r}")
@@ -137,6 +141,8 @@ def write_manifest(out_dir, *, onnx_path, classes, color, scale, mean, std,
         doc["parent_lane_model"] = dict(parent_lane_model)
     if camera_provenance is not None:
         doc["camera_provenance"] = camera_provenance
+    if model_version is not None:
+        doc["model_version"] = model_version
     (out_dir / "model_manifest.json").write_text(
         json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Fail here rather than at intake: validate with the robot-side loader when importable.
