@@ -201,8 +201,10 @@ main {
   #fleet-main > .console-primary > .panel { flex: 1; min-height: 0; display: grid; align-items: center;
     grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) repeat(3, auto); column-gap: var(--space-4); }
   #fleet-main > .console-primary > .panel > :is(.map-head, .map-stage) { grid-column: 1 / -1; }
+  /* 지도와 큰 영상은 칸을 채울 뿐 칸 높이를 정하지 않는다(그림 고유 크기가 문서를 밀지 않게). */
   #fleet-main .map-stage { align-self: stretch; min-height: 12rem; }
-  #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { height: 100%; }
+  #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #fleet-main .field-mismatch { position: relative; z-index: 1; }
   .ops-block { gap: var(--space-2); }
   .ops-block > h2 { margin: 0; }
   /* D-501 — 탭 줄 높이만큼 오른쪽 열을 줄인다. 대형 칸 간격은 ops-block의 gap이 맡는다. */

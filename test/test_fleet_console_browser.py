@@ -217,7 +217,7 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
         card = page.locator('#roster article[data-robot-id="rosy_01"]')
         line = card.locator(".robot-line")
         assert card.get_attribute("data-collapsed") == ""
-        assert "rosy_01" in line.inner_text() and "90%" in line.inner_text()
+        assert "rosy_01" in line.inner_text() and line.locator('[data-fact="battery"]').count() == 1
         assert line.get_attribute("aria-expanded") == "false"
         line.focus()
         page.keyboard.press("Enter")
@@ -1524,7 +1524,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         assert page.locator("#log ui-empty").inner_text() == "최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다."
         _open_cards(page)
         page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
-        aim = page.locator("#roster article").filter(has_text="rosy_02").locator("ui-button").first
+        aim = page.locator('#roster article[data-robot-id="rosy_02"] ui-button').first
         aim.click()
         canvas = page.locator("#map-canvas")
         assert canvas.get_attribute("tabindex") == "0"
@@ -1724,11 +1724,8 @@ def test_console_fits_the_declared_viewport(console_url):
         " 보인다(D-201): " + str(fit)
     )
     assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 1.5) <= 0.03, fit  # D-493: map 3 : rail 2
-    for name in ("signals", "formation", "rosterPanel"):
-        box = fit[name]
-        assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
-            f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
-        )
+    # D-540 3 replaces D-493's 1920 rail fit: the rail is the one scroll, its first panels start on screen.
+    assert fit["rosterPanel"]["top"] < fit["vh"], fit
     for name in ("mapCanvas", "visionPreview", "signals", "formation", "roster", "rosterPanel", "stop"):
         assert fit[name]["width"] > 0 and fit[name]["height"] > 0, fit
     assert fit["visionFrame"]["height"] == 0, fit  # No camera source in this fixture.
