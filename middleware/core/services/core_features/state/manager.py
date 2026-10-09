@@ -95,11 +95,17 @@ class StateManager:
         self._safety_policy_provider: Optional[Callable[[], Optional[dict]]] = None
         self._safety_policy_error: Optional[str] = None  # last logged error type
         self._localization_provider: Optional[Callable[[], object]] = None
+        self._trip_lease_provider: Optional[Callable[[], tuple]] = None
 
     def set_localization_provider(self, provider: Optional[Callable[[], object]]) -> None:
         """D-395 P2-1: read live, so the stale timeout and the odom frame flag apply."""
         with self._lock:
             self._localization_provider = provider
+
+    def set_trip_lease_provider(self, provider: Optional[Callable[[], tuple]]) -> None:
+        """D-541: ``() -> (lease or None, ended or None)``, read live so ``expires_in_s`` ticks."""
+        with self._lock:
+            self._trip_lease_provider = provider
 
     def set_hitl_requested(self, requested: bool) -> None:
         with self._lock:
@@ -265,6 +271,9 @@ class StateManager:
                     log.warning("safety_policy block unavailable: %s: %s", type(exc).__name__, exc)
         localization_provider = self._localization_provider
         localization = localization_provider() if localization_provider is not None else None
+        trip_lease_provider = self._trip_lease_provider
+        trip_lease, trip_lease_ended = (trip_lease_provider() if trip_lease_provider is not None
+                                        else (None, None))
         with self._lock:
             self._seq += 1
             now = self._clock()
@@ -304,4 +313,6 @@ class StateManager:
                 safety_policy=safety_policy,
                 localization=localization,
                 odom_pose=self._odom_pose,
+                trip_lease=trip_lease,
+                trip_lease_ended=trip_lease_ended,
             )

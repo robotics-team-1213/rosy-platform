@@ -91,6 +91,15 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "core/gateway/core/services.py": (
+        603,
+        "accept: independently judged at 603 (2026-10-09, read-only critic agent) for D-541 step 1: "
+        "D-541 adds only the trip_lease import, field, build_trip_lease call and kwarg; lease logic and "
+        "wiring live in core/trip_lease.py (fleet_loss_wiring pattern). services.py stays CORE composition. "
+        "On next growth, split: move the pure config parsers (_battery/_power/_traffic_policy_config, "
+        "_simulation_docking, _seeded_dock_database) to core/*_wiring.py, re-exporting _battery_config for "
+        "tests. Budget and allowance unchanged",
+    ),
     "fleet/fleet/server/trip_runner.py": (
         686,
         "split: measured at 686 on 2026-10-08 after the named seam was applied (D-517 split, behaviour-preserving): "
@@ -592,8 +601,12 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_340,
-        "accept: independently re-judged at 1340 (2026-10-08, read-only critic agent) for D-520 step 1: "
+        1_341,
+        "accept: independently re-judged at 1341 (2026-10-09, read-only critic agent) for D-541 step 1: "
+        "+1 line, one import of TripLeaseFields from core_common/protocol/trip_lease.py, which holds the "
+        "lease models and the absent-key serializer; StateSnapshot is defined here, so the base-class swap "
+        "is the only hook. Additive, no envelope version change. Zero-growth allowance remains. "
+        "Previously independently re-judged at 1340 (2026-10-08, read-only critic agent) for D-520 step 1: "
         "+2 lines, one re-export import and the optional LineFollowStatus.arc field (default None). The "
         "arc record models live in core_common/protocol/line_arc.py and the field cannot move because "
         "LineFollowStatus is defined here. Additive, no envelope version change. Zero-growth allowance "
