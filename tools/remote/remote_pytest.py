@@ -16,8 +16,9 @@ Hosts: ``ROSY_TEST_HOSTS`` (space separated), default model PC, AI PC, site PC. 
 host is measured (cores, load, memory, ``~/rosy-jobs/*.lock``, ``~/rosy-jobs/busy``)
 and the ones above the class floor are used, most headroom first; the site PC only
 when no other host qualifies (D-568). Several invocations are spread over the chosen
-hosts at once (D-553). A missing host fails the gate; ``--local`` or ``ROSY_TEST_LOCAL=1``
-is for explicit diagnostics.
+hosts at once (D-553). Pytest never runs on this machine (D-584): when no host is reachable
+the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (default 600), then the
+gate fails with "no test host reachable (D-584)". ``--local`` and ``ROSY_TEST_LOCAL`` are rejected.
 Logs land in ``--log-dir`` (default ``X:/DevTemp/remote-pytest/<sha>``), one
 ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
 collected, counts as 0). Standard library only.
@@ -36,6 +37,7 @@ import secrets
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 SITE_HOST = "robttt@100.82.51.8"  # live Fleet: last, Fleet reserve, CPU cap (D-568 3)
@@ -60,6 +62,8 @@ FLEET_REQ = "deploy/site/requirements-fleet.txt"
 TAIL_LINES = 25
 # Seconds before one pytest invocation counts as hung (a failure).
 PYTEST_TIMEOUT = int(os.environ.get("ROSY_TEST_TIMEOUT", "5400"))
+# D-584: how long run() waits for a test host before failing, and the poll interval (seconds).
+WAIT_S, POLL_S = 600.0, 30.0
 STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}
 
 # Fetch public main, unpack the bundle (stdin), check the commit out. Exit 3 = the
@@ -238,11 +242,19 @@ def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[s
     return [r[3] for r in ranked if not r[0]] or [r[3] for r in ranked], notes
 
 
+LOCAL_REFUSED = ("[remote-pytest] {what} is removed (D-584): tests never run on the operator laptop."
+                 " Wait for a test host or report the tests as not run.")
+
+
+def refuse_local() -> None:
+    """D-584: a leftover ROSY_TEST_LOCAL is an error, not a silent pass."""
+    if os.environ.get("ROSY_TEST_LOCAL") is not None:
+        raise SystemExit(LOCAL_REFUSED.format(what="ROSY_TEST_LOCAL"))
+
+
 def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[str]:
-    """Hosts for cls by measured headroom (D-568), printing why; empty when forced local or none fits."""
-    if os.environ.get("ROSY_TEST_LOCAL") == "1":
-        print(f"[remote-pytest] {cls} -> no host: ROSY_TEST_LOCAL=1 forces this machine", file=sys.stderr, flush=True)
-        return []
+    """Hosts for cls by measured headroom (D-568), printing why; empty when none fits."""
+    refuse_local()
     if hosts is None:
         hosts = os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split()
     if not hosts:
@@ -324,22 +336,26 @@ def capture(command: list[str], log: Path, cwd: Path | None = None) -> int:
 
 
 def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo: Path | None = None,
-        local: bool = False, label: str | None = None, require_host: bool = True) -> list[int]:
-    """Run each pytest invocation for commit sha; one exit code per invocation."""
+        label: str | None = None, wait: float = WAIT_S, poll: float = POLL_S, sleep=time.sleep,
+        clock=time.monotonic) -> list[int]:
+    """Run each pytest invocation for commit sha on a test host; one exit code per invocation.
+
+    No host: retry every poll s for up to wait s, then fail (D-584); never runs pytest here.
+    """
+    refuse_local()
     repo = Path(git(repo or Path.cwd(), "rev-parse", "--show-toplevel"))
     sha = git(repo, "rev-parse", f"{sha}^{{commit}}")
     if not invocations:
         return []
-    hosts = [] if local else placed_hosts("pytest")
-    if not hosts:
-        if require_host and not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
-            raise SystemExit("[remote-pytest] no test host reachable; a local run would test the working"
-                             " tree, not the commit. Use --local only for explicit diagnostics.")
-        if not local and os.environ.get("ROSY_TEST_LOCAL") != "1":
-            print("[remote-pytest] WARNING: no test host reachable; running pytest on this machine"
-                  " (working tree, not only the commit)", file=sys.stderr, flush=True)
-        return [capture([sys.executable, "-m", "pytest", *inv, *PYTEST_TAIL], log, cwd=repo)
-                for inv, log in zip(invocations, logs)]
+    deadline = clock() + wait
+    hosts = placed_hosts("pytest")
+    while not hosts:
+        if clock() + poll > deadline:
+            raise SystemExit(f"[remote-pytest] no test host reachable (D-584) after {wait:.0f} s;"
+                             " the tests did not run. Report them as not run; do not land or push.")
+        print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
+        sleep(poll)
+        hosts = placed_hosts("pytest")
     hosts = hosts[:len(invocations)]
     if len(hosts) == 1:
         return run_on(hosts[0], invocations, logs, sha, repo, label)
@@ -408,13 +424,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--log-dir", type=Path)
     parser.add_argument("--affected-json", help="`rosy_harness.py affected --json` output file, or -")
     parser.add_argument("--skip", action="append", default=[], help="drop this path from the affected set")
-    parser.add_argument("--local", action="store_true", help="run here (same as ROSY_TEST_LOCAL=1)")
-    parser.add_argument("--require-host", action="store_true",
-                        help="fail instead of running locally when no host answers (ROSY_TEST_LOCAL=1 overrides)")
+    parser.add_argument("--local", action="store_true", help=argparse.SUPPRESS)  # removed, rejected (D-584)
+    parser.add_argument("--require-host", action="store_true", help="no-op: always the behaviour (D-584)")
+    parser.add_argument("--wait", type=float, default=WAIT_S, help="seconds to wait for a test host (default 600)")
+    parser.add_argument("--retry-poll", type=float, default=POLL_S, help="seconds between host probes (default 30)")
     parser.add_argument("--pick", choices=sorted(NEEDS),
                         help="only print the host with the most headroom for this job class (D-568)")
     parser.add_argument("pytest_args", nargs="*", help="one pytest invocation (after --)")
     args = parser.parse_args(argv)
+    if args.local:
+        raise SystemExit(LOCAL_REFUSED.format(what="--local"))
     if args.pick:
         chosen = placed_hosts(args.pick)
         if chosen:
@@ -429,7 +448,7 @@ def main(argv: list[str] | None = None) -> int:
     sha = git(Path.cwd(), "rev-parse", f"{args.sha}^{{commit}}")
     log_dir = args.log_dir or default_log_dir(sha)
     logs = [log_dir / f"run-{i}.txt" for i in range(1, len(invocations) + 1)]
-    codes = run(invocations, logs, sha, local=args.local, require_host=args.require_host)
+    codes = run(invocations, logs, sha, wait=args.wait, poll=args.retry_poll)
     for inv, code, log in zip(invocations, codes, logs):
         print(f"[remote-pytest] exit {code}: {' '.join(inv)} ({log})")
     return worst(codes)

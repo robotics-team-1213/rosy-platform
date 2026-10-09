@@ -357,19 +357,13 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     if (wt / HARNESS).is_file():
         step(wt, [python, HARNESS, "lint"], logdir / f"lint-{round_no}.txt", "lint")
         done.append("lint ok")
-    env = dict(ENV)
-    if args.browser:
-        env.update(ROSY_RUN_BROWSER_TESTS="1", ROSY_BROWSER_TESTS="1")
     logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(invocations) + 1)]
     if args.browser:
-        # Playwright/Chromium are not on the test hosts, so browser runs stay on this machine.
-        codes = [step(wt, [python, "-m", "pytest", *inv, *remote_pytest.PYTEST_TAIL], log, "pytest", env,
-                      allow_fail=True)[0] for inv, log in zip(invocations, logs)]
-    else:
-        # HEAD is the candidate (merge commit included); the runner ships it to the model/AI PC.
-        # Unlike pre-push (--require-host), no reachable host falls back to a local run of this
-        # same merged worktree with a warning: land tests what it lands either way.
-        codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
+        raise Stop("browser tests need Chromium, which only a test host can supply, and never run on this"
+                   " laptop (D-584); run them on a host and report them as not run here")
+    # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
+    # no host means it waits, then fails, and nothing lands).
+    codes = remote_pytest.run(invocations, logs, "HEAD", repo=wt, label=f"land-{round_no}")
     for inv, log, code in zip(invocations, logs, codes):
         # 2/3/4 (interrupted, internal error, usage/path error) and 5 (nothing collected)
         # print no FAILED lines, so known_failures would wave them through.
@@ -501,7 +495,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--main-checkout", help="path of the worktree that has main checked out")
     parser.add_argument("--tests", default="auto", help='auto | none | "<pytest args>"')
     parser.add_argument("--node", action="store_true", help="also node --test the selected test dirs' web/*.mjs")
-    parser.add_argument("--browser", action="store_true", help="set ROSY_RUN_BROWSER_TESTS=1 ROSY_BROWSER_TESTS=1")
+    parser.add_argument("--browser", action="store_true", help="refused: browser tests never run on this laptop (D-584)")
     parser.add_argument("--max-rounds", type=int, default=5)
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
     args = parser.parse_args(argv)
