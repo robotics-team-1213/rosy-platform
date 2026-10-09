@@ -561,3 +561,15 @@ def test_a_missing_package_is_a_config_error_not_transient(tmp_path, monkeypatch
     assert rc == intake.CONFIG_EXIT == 4
     assert report["config_error"] is True and report["transient"] is False
     assert "onnx" in report["reasons"][0]
+
+
+def test_v13_lineage_accepts_d554_and_d563_annotations_only():
+    from intake_eval_gate import v13_lineage_error
+    def doc(origin, adr):
+        return {"task": "lane_seg", "camera_provenance": "provisional",
+                "parent_lane_model": {"model_revision": "lane-seg-20261006-abcd1234", "onnx_sha256": "b" * 64},
+                "dataset": {"revision": "a" * 64, "annotation_origin": origin, "adr": adr}}
+    assert v13_lineage_error(doc("derived_from_reviewed_lanes", "D-554")) is None
+    assert v13_lineage_error(doc("map_projected", "D-563")) is None
+    assert v13_lineage_error(doc("map_projected", "D-554")) is not None
+    assert v13_lineage_error(doc("human_reviewed", "D-563")) is not None

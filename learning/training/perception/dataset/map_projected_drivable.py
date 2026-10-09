@@ -9,6 +9,8 @@
 bag_to_video.py output. --ceiling is a ceiling_record.py recording after ceiling_pose.py detect
 (poses.jsonl, calibration.json). Review, canaries and finalize are lane_derived_drivable.py's
 sheets / import-verdicts / finalize on the same --out (its verify_dataset knows this schema).
+  overlays --out DIR --dest PNG [--count 24]   sample label overlays for a quick look
+One command from (robot session, ceiling recording) to review sheets: tools/capture/map_labels_run.sh.
 
 Road raster (map_v2_fleet, 2 mm, cached under data/perception/cache): road = every lane_graph
 centreline (segments and parking spur) +- 0.0925 m, i.e. up to the white line centres (D-563
@@ -260,6 +262,25 @@ def derive(out, *, frames, odom, robot_inputs, ceiling, camera, camera_values, c
     return ldd._write_manifest(out, doc), doc
 
 
+def overlays(out, dest, count=24, seed=0):
+    """A grid of `count` random frames: image | labels (green drivable, cyan not drivable)."""
+    out = Path(out)
+    frames = ldd.verify_dataset(out)["frames"]
+    pick = np.random.default_rng(seed).permutation(len(frames))[:count]
+    tiles = []
+    for i in sorted(pick):
+        f = frames[i]
+        image = cv2.imread(str(out / f["image"]))
+        mask = cv2.imread(str(out / f["mask"]), cv2.IMREAD_UNCHANGED)
+        tiles.append(ldd._tile(image, mask, f"{Path(f['image']).stem[-6:]} iou {f['line_iou']}", 0))
+    if not tiles:
+        raise ValueError("no frames")
+    tiles += [np.full_like(tiles[0], 255)] * (-len(tiles) % 4)
+    grid = np.vstack([np.hstack(tiles[i:i + 4]) for i in range(0, len(tiles), 4)])
+    cv2.imwrite(str(dest), grid)
+    return len(pick)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -284,7 +305,14 @@ def main(argv=None):
     for key in FUSE:
         p.add_argument("--" + key.replace("_", "-"), type=float, default=FUSE[key])
     p.add_argument("--tool-commit")
+    p = sub.add_parser("overlays")
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--dest", type=Path, required=True)
+    p.add_argument("--count", type=int, default=24)
     args = parser.parse_args(argv)
+    if args.command == "overlays":
+        print(json.dumps({"tiles": overlays(args.out, args.dest, args.count)}))
+        return 0
     if args.video is not None and args.sidecar is None:
         parser.error("--video needs --sidecar")
     camera, values, source = robot_camera(args.robot, root=args.calibration_root,

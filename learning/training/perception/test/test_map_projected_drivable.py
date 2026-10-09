@@ -133,3 +133,10 @@ def test_map_projected_dataset_reviews_and_admits_drivable_head(tmp_path, monkey
         train_job.run(config, tmp_path / "job")
     assert (seen["lane_derived"]["annotation_origin"], seen["lane_derived"]["adr"]) == ("map_projected", "D-563")
     assert seen["lane_derived"]["judge"]["canaries"]["rate"] == 1.0
+
+
+def test_overlays_grid(tmp_path):
+    import cv2
+    out = _derived(tmp_path, n=5)
+    assert mpd.overlays(out, tmp_path / "quick.png", count=24) == 5
+    assert cv2.imread(str(tmp_path / "quick.png")).shape[1] == 4 * 640

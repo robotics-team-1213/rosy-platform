@@ -4,7 +4,9 @@ import re
 
 import numpy as np
 
-V13_ANNOTATION = {"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"}
+# D-554 lane-derived labels, or D-563 map-projected labels (same lineage and quality gates).
+V13_ANNOTATIONS = ({"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
+                   {"annotation_origin": "map_projected", "adr": "D-563"})
 
 
 def v13_lineage_error(doc: dict) -> str | None:
@@ -15,10 +17,10 @@ def v13_lineage_error(doc: dict) -> str | None:
             or not re.fullmatch(r"lane-seg-[A-Za-z0-9._-]+", str(parent.get("model_revision")))
             or not re.fullmatch(r"[0-9a-f]{64}", str(parent.get("onnx_sha256")))
             or not re.fullmatch(r"[0-9a-f]{64}", str(dataset.get("revision")))
-            or any(dataset.get(key) != value for key, value in V13_ANNOTATION.items())
+            or {k: dataset.get(k) for k in ("annotation_origin", "adr")} not in V13_ANNOTATIONS
             or doc.get("camera_provenance") not in ("accepted", "provisional")):
         return ("v13-drivable needs lane_seg parent_lane_model lineage, a 64-hex dataset revision, "
-                "dataset annotation_origin derived_from_reviewed_lanes with adr D-554 and a camera_provenance "
+                "dataset annotation_origin derived_from_reviewed_lanes (D-554) or map_projected (D-563) and a camera_provenance "
                 "mark (D-554 item 7: provisional stays in the lane_seg shadow slot)")
     return None
 
