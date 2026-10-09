@@ -1354,3 +1354,9 @@
 - 변경: keep 모드에서만 CORE `line/route_context`를 VOLATILE로 구독한다. 공통 스키마와 영상 시각 기준 미래·0.5초 경과·만료를 검사한 뒤 기대 굽이 창에서만 기존 B9 `bend_expected`를 준다. 잘못된 메시지·비움·시계 역행은 문맥을 폐기한다. 사용한 `seq`를 관측과 keep_debug에 함께 싣는다.
 - 검증: route input 6 passed(기록된 SIM 굽이 클립 포함), keeper·wiring 집중 143 passed·2 skipped, 구조 34 passed. 실물 라벨 434프레임은 로컬에 없어서 2 skipped이며 별도 재생이 필요하다.
 - gate 변화: 기본 CORE 설정 `route_context_enabled=false` 유지. SOURCE 코드 연결만 확인했으며 문맥 켬 실물 재생·폐루프 SIM·DEVICE·FIELD 수용은 HOLD.
+
+## 2026-10-09 · uncommitted · fix(control): D-531 굽이 중 B9 문맥
+
+- 변경: 신선한 CORE `bend_phase`가 굽이 진행·재획득을 가리킬 때도 기존 B9 기대 굽이 규칙을 사용한다. 문맥 부재·만료 시 기존 판단으로 돌아간다.
+- 증거: `test_route_context_input.py` 집중 검사. 계약 v1.166.
+- gate 변화: SOURCE. 실물 434프레임·폐루프 SIM·DEVICE·FIELD 수용은 HOLD.

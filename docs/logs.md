@@ -7492,3 +7492,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-557 Accepted. D-520·D-495·D-507·D-500은 대체하지 않는다.
 - 교훈: 없음
+
+## 2026-10-09 · uncommitted · fix(route context): 굽이 진행·재획득 단계 표시
+
+- 변경: D-531의 B9 굽이 단계가 실제 `line/route_context`에 실리도록 `bend_phase`를 추가하고 API reference를 v1.166으로 올렸다. 접근 창이 지난 뒤에는 `ahead_m` 대신 단계로 표시한다.
+- 증거: 공통 스키마·CORE 계산·인식 소비자 집중 테스트. 설정 기본값은 꺼짐.
+- gate 변화: SOURCE만. 실물 434프레임·폐루프 SIM·DEVICE·FIELD 수용 대기.

@@ -826,3 +826,9 @@
 - 변경: `GET /api/v1/localization/request`(`LOCALIZE_ASSIST`, 404 `NO_REQUEST`), 이벤트 `localization.request`·`localization.request_cleared`. API 기준서 v1.164과 버전 고정 테스트 갱신.
 - 증거: `middleware/core/gateway/test/test_localization_api.py`.
 - gate 변화: SOURCE.
+
+## 2026-10-09 · uncommitted · docs(api): 경로 문맥 굽이 단계 v1.166
+
+- 변경: CORE API 설명의 계약 버전을 v1.166으로 맞춘다. `line_follow.route_context`의 굽이 단계는 선택 필드이며 기본 경로 문맥은 꺼져 있다.
+- 증거: `test_line_follow_contract_docs.py`.
+- gate 변화: SOURCE 계약 일치. 실제 주행 수용은 별도.
