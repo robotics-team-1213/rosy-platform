@@ -534,7 +534,7 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
                          val_iou={"drivable": metrics["val_drivable_iou_all"]},
                          metrics={k: metrics[k] for k in ("val_outside_band_fp", "val_outside_band_fp_raw",
                                                           "val_beyond_line_fp", "val_beyond_line_fp_raw",
-                                                          "val_near_centre_drivable",
+                                                          "val_beyond_line_coverage", "val_near_centre_drivable",
                                                           "val_near_centre_drivable_raw", "selection")},
                          experiment={"tracker": "local", "run_id": out.name,
                                      "path": "jobs/" + out.name})

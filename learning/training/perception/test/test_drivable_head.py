@@ -227,6 +227,7 @@ def test_training_moves_only_the_head_and_learns(tmp_path):
     assert near["label"] == pytest.approx(50 / 101) and near["pred"] > 0.8 * near["label"]
     assert result["val_outside_band_fp_raw"] is not None and result["val_near_centre_drivable_raw"]
     assert result["val_beyond_line_fp"] is None  # no lane_left / lane_right classes in this set
+    assert result["val_beyond_line_coverage"] == {"frames": 0, "val_frames": len(val)}
     assert result["selection"]["fp_lambda"] == 1.0 and result["selection"]["pos_weight"] == 1.0
     best = next(r for r in result["history"] if r["epoch"] == result["best_epoch"])
     assert best["score"] == max(r["score"] for r in result["history"] if r["score"] is not None)
@@ -284,3 +285,30 @@ def test_candidate_job_exports_without_ready_or_lane_changes(tmp_path, monkeypat
     assert json.loads((out / 'state.json').read_text())['outcome'] == 'candidate'
     assert (Path(result['artifact']) / 'candidate_parity.json').is_file()
     assert not list(tmp_path.rglob('READY'))
+
+
+def test_beyond_line_fp_counts_only_frames_with_lane_classes(tmp_path):
+    """D-576 on a D-554 + D-563 union: map-projected frames carry no lane classes."""
+    classes = [{"index": i, "name": n, "role": r, "color": [0, 0, 0]} for i, (n, r) in enumerate(LANE_CLASSES)]
+    classes.append({"index": 5, "name": "drivable", "role": "drivable", "color": [0, 255, 0]})
+    root = tmp_path / "ds"
+    (root / "images").mkdir(parents=True)
+    (root / "masks").mkdir()
+    frames = []
+    for split in ("train", "val"):
+        for i, lanes in enumerate((True, False)):
+            m = np.full((240, 320), 255, np.uint8)
+            m[120:, 60:250] = 5
+            if lanes:
+                m[120:, :50], m[120:, 50:60], m[120:, 250:260], m[120:, 260:] = 0, 1, 2, 0
+            img, mask = f"images/{split}{i}.png", f"masks/{split}{i}.png"
+            cv2.imwrite(str(root / img), np.full((240, 320, 3), 90, np.uint8))
+            cv2.imwrite(str(root / mask), m)
+            frames.append({"image": img, "mask": mask, "session": split, "split": split})
+    (root / "manifest.json").write_text(json.dumps({
+        "schema": "rosy.perception.dataset/1", "classes": classes, "frames": frames, "ignore_index": 255}))
+    train, val = rlm.RosyLaneDataset(root, "train"), rlm.RosyLaneDataset(root, "val")
+    result = dh.train_head(dh.LaneWithDrivable(_lane()), train, val, epochs=1, lr=1e-3, batch_size=2,
+                           device="cpu", log=None)
+    assert result["val_beyond_line_coverage"] == {"frames": 1, "val_frames": 2}
+    assert result["val_beyond_line_fp"] is not None

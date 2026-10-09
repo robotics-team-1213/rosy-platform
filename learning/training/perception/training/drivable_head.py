@@ -24,7 +24,8 @@ non-drivable / drivable labelled pixels) and the best epoch maximises IoU - fp_l
 FP and the near-centre fraction are scored after the robot's lane-bounded post-process
 (lane_mask.lane_bounded_drivable, D-566 item 4, blocking beyond both lines per row, D-576); the
 raw model values are kept as *_raw. val_beyond_line_fp: label-0 pixels beyond lane_left /
-lane_right on rows showing both (lane_mask.beyond_boundary) predicted drivable (D-576).
+lane_right on rows showing both (lane_mask.beyond_boundary) predicted drivable (D-576), so only
+frames with lane classes count; val_beyond_line_coverage gives how many val frames that was.
 
 Head variants (D-566 item 5, ``training.head``): "local" (default) is a 3x3 conv on the last
 decoder features. "context" adds the lane model's bottleneck features through dilated 3x3
@@ -292,6 +293,7 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
         band_fp = {"post": [0, 0], "raw": [0, 0]}
         near = {"post": [0, 0, 0], "raw": [0, 0, 0]}  # predicted drivable, labelled drivable, pixels
         beyond_fp = {"post": [0, 0], "raw": [0, 0]}
+        coverage = [0, 0]  # val frames with beyond-line label pixels, val frames (D-576 on a union)
         roles, names = {}, {c["name"]: c["index"] for c in val_ds.classes}
         for c in val_ds.classes:
             roles.setdefault(c["role"], []).append(c["index"])
@@ -316,6 +318,8 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
                 band = (y == 0) & keep & truth.any(dim=-1, keepdim=True)
                 beyond = None if boundary is None else (
                     torch.from_numpy(beyond_boundary(y.cpu().numpy(), *boundary)).to(device) & (y == 0) & keep)
+                coverage[0] += 0 if beyond is None else int(beyond.flatten(1).any(1).sum())
+                coverage[1] += len(y)
                 for kind, p in (("post", post), ("raw", pred)):
                     if beyond is not None:
                         beyond_fp[kind][0] += int((p & beyond).sum())
@@ -333,6 +337,9 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
                   for suffix, f in (("", band_fp["post"]), ("_raw", band_fp["raw"]))},
                **{"val_beyond_line_fp" + suffix: f[0] / f[1] if f[1] else None
                   for suffix, f in (("", beyond_fp["post"]), ("_raw", beyond_fp["raw"]))},
+               # Frames without lane classes (map-projected labels) add no beyond pixels: the FP is over
+               # the frames that have them, and this says how many that was.
+               "val_beyond_line_coverage": {"frames": coverage[0], "val_frames": coverage[1]},
                **{"val_near_centre_drivable" + suffix: {"pred": n[0] / n[2], "label": n[1] / n[2]}
                   if n[2] else None for suffix, n in (("", near["post"]), ("_raw", near["raw"]))}}
         row["score"] = None if iou is None else iou - fp_lambda * (row["val_outside_band_fp"] or 0.0)
@@ -351,7 +358,7 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
             "val_drivable_iou_all": best["val_drivable_iou_all"] if best else None,
             **{k: best[k] if best else None for k in ("val_outside_band_fp", "val_outside_band_fp_raw",
                                                       "val_beyond_line_fp", "val_beyond_line_fp_raw",
-                                                      "val_near_centre_drivable",
+                                                      "val_beyond_line_coverage", "val_near_centre_drivable",
                                                       "val_near_centre_drivable_raw")},
             "selection": {"score": "val_drivable_iou - fp_lambda * val_outside_band_fp",
                           "fp_lambda": fp_lambda, "pos_weight": pos_weight,
