@@ -187,7 +187,7 @@ def test_draft_preserves_original_size_ignore_and_verified_resume(tmp_path, monk
     classes = (SimpleNamespace(index=0, name="floor", role="background"),
                SimpleNamespace(index=1, name="lane_line", role="lane_marking"))
     spec = SimpleNamespace(height=8, width=8, shape=(1, 3, 8, 8), color="bgr",
-                           scale=1.0 / 255, mean=(0, 0, 0), std=(1, 1, 1))
+                           scale=1.0 / 255, mean=(0, 0, 0), std=(1, 1, 1), crop=None)
 
     class Session:
         def run(self, image):
