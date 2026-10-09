@@ -335,17 +335,14 @@ export function repeatTripBody(map, start, leader = '') {
     ...(leader ? {convoy: {leader}} : {})};
 }
 
-// D-540 (d): the one trip path for the site map and the 관제 robot card — plan (a preview, nothing
-// moves), then start that plan; cancel stops an open trip. Server routes are the D-494 ones.
+// D-540 (d): the one trip path — plan (a preview on the site map and the 관제 card, nothing moves), then
+// the card starts that plan. Server routes are the D-494 ones; the card cancels through roster.js.
 const JSON_POST = {method: 'POST', headers: {'Content-Type': 'application/json'}};
 export function planTrip(request, robotId, body) {
   return request(`/api/fleet/robots/${encodeURIComponent(robotId)}/trip`, {...JSON_POST, body: JSON.stringify(body)});
 }
 export function startTrip(request, planId) {
   return request(`/api/fleet/trips/${encodeURIComponent(planId)}/start`, {method: 'POST'});
-}
-export function cancelTrip(request, tripId) {
-  return request(`/api/fleet/trips/${encodeURIComponent(tripId)}/cancel`, {method: 'POST'});
 }
 /** Why a trip request was refused, in operator words. */
 export function tripRefusalText(error) {
@@ -380,11 +377,6 @@ export function tripStartReason({role, plan, active, running, now = Date.now() /
   return '';
 }
 
-export function tripCancelReason({role, running}) {
-  if (role !== 'operator') return role ? '운영자 권한이 필요합니다' : '관제 접속이 필요합니다';
-  return running ? '' : '진행 중인 운행이 없습니다';
-}
-
 /** One line for the teach panel from `GET /api/fleet/teach`. */
 export function teachStatusText(view) {
   const live = view?.recording;
@@ -412,7 +404,7 @@ export function newestPending(view) {
 }
 
 // ---- D-517 10 교통 층 — GET /api/fleet/traffic 을 그릴 것·카드 한 줄·예외 큐 행으로 바꾼다 ----
-// 관제 화면(map-view.js·roster.js)과 이 페이지의 운행 칸이 같이 쓴다.
+// 관제 화면(map-view.js·roster.js·card-trip.js)이 쓴다.
 // 표가 말하는 것만 옮긴다. M1 에서 Fleet 은 블록 표를 계산해 보이기만 하고 로봇에 보내지 않는다.
 // 좌표는 활성 지도 미터다. 화면 방향(D-513 7)과 위에서 본 보기(D-515)는 그리는 쪽의 toPx 가 맡는다.
 
