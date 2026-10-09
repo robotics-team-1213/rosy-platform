@@ -213,7 +213,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        49_877,
+        50_252,
+        "split: re-judged at 50252 on 2026-10-10 after feat/vision-calibration-drift-watch "
+        "(+375 over 49877; the robot-free calibration drift watch lives in the new display-only "
+        "tracking_drift.py — pure verdict math and a 60 s proposal reader, no commands — plus "
+        "small drift_provider wiring in tracking.py/app.py/cli.py and its tests; no command path, "
+        "no new transport). Previously "
         "split: re-judged at 49877 on 2026-10-10 after merging D-580 (+145 over main 49732; the enrolled "
         "roster drives camera robot_ids/markers and the autoupdate required_ids in existing owners "
         "enrollment*.py, sightings*.py, roster.py, site_update_io.py; no command path, no new owner). Previously "
