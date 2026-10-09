@@ -36,6 +36,10 @@ def test_lamp_identify_without_a_color_uses_the_robot_s_configured_colour(monkey
     assert host_hardware.host_lamp_identify(LampIdentifyRequest(), auth, robot("rosy_26"))["color"] == "blue"
     monkeypatch.setattr(host_hardware, "_last_test", {})
     assert host_hardware.host_lamp_identify(LampIdentifyRequest(), auth, robot("rosy_60"))["color"] == "amber"
+    # D-562 renumbered ids keep the same colours: 9dfk rosy_41 blue, 8kcn rosy_40 amber.
+    for rid, colour in (("rosy_41", "blue"), ("rosy_40", "amber")):
+        monkeypatch.setattr(host_hardware, "_last_test", {})
+        assert host_hardware.host_lamp_identify(LampIdentifyRequest(), auth, robot(rid))["color"] == colour
     monkeypatch.setattr(host_hardware, "_last_test", {})
     configured = robot("rosy_26", {"lamp_identify": {"color": "amber"}})
     assert host_hardware.host_lamp_identify(LampIdentifyRequest(), auth, configured)["color"] == "amber"

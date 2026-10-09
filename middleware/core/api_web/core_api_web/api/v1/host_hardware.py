@@ -401,7 +401,8 @@ def host_lamp_identify(
 #: D-472 4: colours lamp_pattern can show for an identity blink (amber = the ADR's orange).
 LAMP_IDENTIFY_COLORS = ("blue", "amber")
 #: D-472 4 default per robot (config, not wire schema); CORE config ``lamp_identify.color`` overrides it.
-LAMP_IDENTIFY_DEFAULT_COLORS = {"rosy_26": "blue", "rosy_60": "amber"}
+#: D-562 renumbers 9dfk rosy_26 -> rosy_41 and 8kcn rosy_60 -> rosy_40; the old ids stay until both are renumbered.
+LAMP_IDENTIFY_DEFAULT_COLORS = {"rosy_41": "blue", "rosy_40": "amber", "rosy_26": "blue", "rosy_60": "amber"}
 
 
 def _identify_color(svc: CoreServicesLike):
