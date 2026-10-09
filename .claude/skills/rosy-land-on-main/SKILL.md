@@ -86,6 +86,8 @@ It loops merge main -> auto-resolve ADR Log/logs.md/index.md conflicts -> D-436 
 -> `known_failures` -> `--ff-only`, stops on any NEW failure or other conflict, and never pushes.
 The manual steps below are what it does.
 
+테스트는 시험 PC에서만 돈다(D-584): 닿는 PC가 없으면 10분 기다린 뒤 실패하고 착지하지 않는다. 노트북 로컬 실행(`--local`, `ROSY_TEST_LOCAL`)은 없다. 못 돌린 시험은 "확인 못 함"으로 보고한다.
+
 ```dot
 digraph land {
   "merge main into branch, rerun tests" -> "new failures?";
