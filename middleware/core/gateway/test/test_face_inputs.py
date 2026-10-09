@@ -24,7 +24,8 @@ NOW = datetime(2026, 10, 3, 12, 0, 0, tzinfo=timezone.utc)
 
 
 def _snapshot(mode="NAVIGATION", navigation="NAVIGATING", estop=False, charging=False,
-              docking_state="UNDOCKED", line_mode="OFF", line_state="OFF", activity=None):
+              docking_state="UNDOCKED", line_mode="OFF", line_state="OFF", activity=None,
+              line_reason=""):
     return SimpleNamespace(
         battery=SimpleNamespace(percent=55.55, voltage=7.81),
         battery_status=SimpleNamespace(charging=charging),
@@ -34,7 +35,7 @@ def _snapshot(mode="NAVIGATION", navigation="NAVIGATING", estop=False, charging=
         velocity=SimpleNamespace(linear=0.123, angular=0.0),
         docking=SimpleNamespace(state=DockState(docking_state)),
         safety=SimpleNamespace(estop=estop),
-        line_follow=SimpleNamespace(mode=line_mode, state=line_state),
+        line_follow=SimpleNamespace(mode=line_mode, state=line_state, reason=line_reason),
         hitl_requested=False,
         activity=None if activity is None else SimpleNamespace(kind=activity),
     )
@@ -196,3 +197,20 @@ def test_a_wake_card_rides_the_handover():
 def test_bridge_cadence_is_the_shared_one():
     assert display.drive_due is fs.drive_due
     assert (display.DRIVE_EVERY_S, display.DRIVE_HOLD_S) == (fs.DRIVE_EVERY_S, fs.DRIVE_HOLD_S)
+
+
+@pytest.mark.parametrize("mode,state,reason,phase", [
+    ("CAMERA", "RECOVERING", "lane_return_measured_path_return", "retrace"),
+    ("CAMERA", "RECOVERING", "lane_return_lane_heading_align", "return"),
+    ("CAMERA", "RECOVERING", "lane_return_sensor_search", "return"),
+    ("CAMERA", "RECOVERING", "lane_bridge", "bridge"),
+    ("CAMERA", "HOLD", "lane_return_measured_path_return", None),  # not moving: no signal
+    ("CAMERA", "RECOVERING", "something_else", None),
+    ("OFF", "RECOVERING", "lane_bridge", None),
+    ("CAMERA", "TRACKING", "tracking", None),
+])
+def test_recovery_phase_rides_the_handover_only_while_moving(mode, state, reason, phase):
+    payload = _payload(_snapshot(line_mode=mode, line_state=state, line_reason=reason))
+
+    assert payload["recovery"] == phase and payload["schema"] == 1
+    assert fs.validate_face_inputs(payload, NOW)["recovery"] == phase

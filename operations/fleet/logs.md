@@ -2777,3 +2777,13 @@
 - 변경: 인증 후 접히는 토큰 입력을 재접속 검사에서 다시 열고, 연결 안내가 해당 입력에 초점을 줄 때도 펼친다. 비동기 인증 조회가 사용자가 다시 연 입력을 뒤늦게 접지 않도록 접는 시점을 조정했다.
 - 증거: CI `37854678441`의 Fleet 브라우저 실패 19건을 모델 PC Chromium에서 다시 실행해 19 passed (46.09s). 비밀번호 로그인 브라우저 검사 1 passed, 변경 JavaScript 구문 검사 통과.
 - gate 변화: LOCAL/MODEL-PC 재현 검사 복구. 새 CI 전체 결과와 설치본·DEVICE/FIELD 수용은 별도 확인한다.
+
+## 2026-10-09 · uncommitted · fix(fleet): 느린 상태 수집이 모든 로봇 상태를 도착 즉시 낡게 만들었다
+- 변경: `SharedGather`가 행마다 실제로 읽은 시각(D-493 `_state_mono`, 콘솔 단조 시계)을 추적 시계로 바꿔 `TrackingService.observe_states(observed=...)`에 넘긴다. 없으면 예전처럼 수집 시작 시각이다.
+- 증거: 현장 2026-10-09 `/api/fleet/state` 수집 3.34–3.49 s > `STATE_FRESH_S` 2.0 s. 9dfk가 −0.0275 m/s로 움직이는 동안 LED 확인이 계속 `IDENTIFY_NOT_MOVING`이었고 천장 카메라 추적은 `NO_POSE`였다. 새 시험 2개(수정 전 실패) 포함 63 passed.
+- gate 변화: SOURCE. 현장 Fleet 갱신 뒤 LED 확인·추적 연결 확인.
+
+## 2026-10-09 · uncommitted · fix(fleet): 늦은 응답 한 번에 로봇이 오프라인으로 바뀌었다가 돌아오던 깜빡임
+- 변경: 마지막 응답 뒤 `LINK_DEGRADED_S`(10 s) 안의 읽기 실패는 연결 단어 `degraded`(응답 지연, 주의)와 `link_degraded_s`로 보인다. `online`은 그대로 False라 교통·핸드오프·목표 판단은 바뀌지 않는다. 카드·예외 큐·연결 수 pill·목표 해제는 `degraded`를 오프라인으로 보지 않는다. 10 s를 넘으면 지금처럼 `unreachable`이다.
+- 증거: 현장 2026-10-09 두 로봇 모두 hub 없이 REST 수집(3.4–4.5 s, 로봇 부하 평균 13), 5 s 제한을 넘는 한 번의 읽기가 카드를 오프라인으로 바꿨다. test_link_on_snapshot 새 시험 2개 포함 14 passed, link-tag.test.mjs 2 passed. web 전체 node 실패 10개는 main과 같은 목록.
+- gate 변화: SOURCE/LOCAL. 현장 Fleet 갱신 뒤 관제 화면 확인.

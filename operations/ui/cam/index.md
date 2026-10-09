@@ -16,6 +16,7 @@
 | D-377 | 앱 이름 규칙: Rosy + 영어 한 단어 — 표시 이름 `Rosy <Word>`, id·폴더 끝 `<word>`, 패키지 `rosy_<word>`, Android `io.github.livsbittt.rosy.<word>`, Gradle `rosy-<word>`, 아이콘 `<word>.svg`; Rosy Cam·Vision·Console·Robot·Pilot |
 | D-391 | 앱은 사이트 연결을 같은 모양(이름·CA·자격, IP 없음)으로 저장하고, 기기 연결 서버는 Fleet "기기 연결"이 맡는다 |
 | D-432 | 모든 앱·장치는 공통 발견·연결 규약을 쓰고, 개발 모드에서는 코드 없이 연결한다 |
+| D-544 | 천장 카메라(Rosy Cam)는 나쁜 조명을 스스로 재고 노출 보정만 한정된 범위에서 고친다 — 기본 꺼짐, 폰이 닫는 고리, 기하 보정은 건드리지 않는다 |
 
 ## 계획·결과 문서
 
@@ -33,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · feat(cam): D-544 노출 자동 보정 1단계 (기본 꺼짐)
 - 2026-10-07 · uncommitted · Cam 페어링 복구 오류와 신뢰 위험의 색 구분
 - 2026-10-06 · uncommitted · uiux(cam): 좁은 폰의 인증서 지문 묶음
 - 2026-10-06 · uncommitted · uiux(cam): Pairing/Peer 합성 화면과 안전 영역
 - 2026-10-06 · uncommitted · uiux(cam): Pairing 결정 조작 너비
-- 2026-10-06 · uncommitted · uiux(cam): 송출 대기 화면 버튼 너비
