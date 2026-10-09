@@ -85,8 +85,8 @@ def score(rows, ped):
     last_fy = front(rows[-1]['gt'])[1]
     collided = min_gap is not None and min_gap <= COLLIDE_M
     return {
-        'verdict': ('collision' if collided else 'stopped_before' if before
-                    else 'passed' if last_fy < FAR_Y else 'other'),
+        'verdict': ('collision' if collided else 'passed' if last_fy < FAR_Y
+                    else 'stopped_before' if before else 'other'),
         'stopped_before_crosswalk': bool(before),
         'first_stop': before[0] if before else (stops[0] if stops else None),
         'stops': stops,
@@ -147,6 +147,8 @@ def run(p, a):
         else:
             still = None
         time.sleep(0.2)
+    _, trip = fleet(a, 'GET', f"/api/fleet/trips/{view['trip_id']}")
+    p.action('fleet', path='trip_view', resp=trip)
     code, resp = fleet(a, 'POST', f"/api/fleet/trips/{view['trip_id']}/cancel")
     p.action('fleet', path='cancel', code=code, resp=resp)
     p.mode('OFF')
@@ -155,7 +157,8 @@ def run(p, a):
         rows = [x for x in p.rows if x['t'] >= t0]
     if a.ped != 'none':
         unspawn(p)
-    return {'result': end, 'ped': a.ped, 'trip_id': view['trip_id'], **score(rows, a.ped)}
+    return {'result': end, 'ped': a.ped, 'trip_id': view['trip_id'],
+            'trip_at_end': {k: trip.get(k) for k in ('state', 'reason', 'hold', 'detail')}, **score(rows, a.ped)}
 
 
 def self_check():
@@ -177,6 +180,9 @@ def self_check():
     assert s['verdict'] == 'collision' and s['entered_crosswalk'], s
     s = score(rows(), 'none')
     assert s['verdict'] == 'passed' and not s['stops'] and s['min_gap_to_ped_m'] is None, s
+    pause = rows(stop_y=0.10)[:60] + [dict(r, sim_t=r['sim_t']+6.0) for r in rows()[25:]]
+    s = score(pause, 'none')
+    assert s['verdict'] == 'passed' and s['stopped_before_crosswalk'], s
     assert set(PEDS) - {'none'} == {k for k, (m, _) in PEDS.items() if m and (MODELS/m/'model.sdf').is_file()}
     print('self-check OK')
     return 0

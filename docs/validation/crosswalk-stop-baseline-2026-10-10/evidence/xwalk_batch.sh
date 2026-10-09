@@ -20,7 +20,7 @@ while read -r name ped; do
   echo "=== $name $ped $(date +%T)" >> $OUTD/batch.log
   rm -rf "$OUTD/$name"; mkdir -p "$OUTD/$name"
   timeout 300 python3 "$X/xwalk_run.py" --out "$OUTD/$name" --ped "$ped" > "$OUTD/$name/probe.out" 2>&1
-  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('result'), d.get('verdict'), d.get('min_gap_to_ped_m'), (d.get('first_stop') or {}).get('reason'), d.get('error'))" \
+  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('result'), d.get('verdict'), d.get('min_gap_to_ped_m'), (d.get('first_stop') or {}).get('reason'), (d.get('trip_at_end') or {}).get('state'), d.get('error'))" \
     "$OUTD/$name/summary.json" >> $OUTD/batch.log 2>&1
 done < "$1"
 kill $F
