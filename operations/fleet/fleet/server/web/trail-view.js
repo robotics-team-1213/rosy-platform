@@ -5,6 +5,8 @@
 // map-view 가 자기 toPx(격자 칸 또는 D-513 7 로 돌린 미터 뷰)를 넘기므로 지도와 같이 돈다.
 export const TRAIL_S = 120, TRAIL_MAX = 600, TRAIL_STEP_M = 0.01, TETHER_POLL_MS = 5000, WATCH_STALE_S = 2;
 
+const watching = (view) => view.watchAge != null && view.watchAge <= WATCH_STALE_S; // null: no tick yet
+
 const mapPose = (robot) => (robot?.state?.localization?.pose_frame === "odom" ? null : robot?.state?.pose);
 
 export function recordTrails(trails, robots, now) {
@@ -55,7 +57,7 @@ export function drawTrails(ctx, view, toPx, lineWidth, call) {
     // 로봇이 원 밖이면 주의 색, D-526 감시가 정지를 내렸으면 위험 색 — 테더 자체는 경계선일 뿐 경고가 아니다.
     const outside = pose && Math.hypot(pose.x - ax, pose.y - ay) > r;
     // 감시 루프가 멈췄거나(마지막 틱이 2 s 넘게 전, 또는 틱 없음) 죽었으면 정지 못 하니 트립과 같은 위험 색.
-    const tripped = tether.watch?.state === "tripped" || !(view.watchAge <= WATCH_STALE_S);
+    const tripped = tether.watch?.state === "tripped" || !watching(view);
     ctx.strokeStyle = ctx.fillStyle = window.RosyPalette.cssColor(
       tripped ? "--status-crit" : outside ? "--status-warn" : "--ink-quiet");
     ctx.beginPath(); // 원도 toPx 로 점을 찍는다 — 격자 y 뒤집기와 화면 회전을 그대로 따른다.
@@ -70,5 +72,5 @@ export function drawTrails(ctx, view, toPx, lineWidth, call) {
   ctx.restore();
   window.__trailOverlay = { segments: drawn, tethers: (view.tethers || []).length,
     tripped: (view.tethers || []).filter((t) => t.watch?.state === "tripped").map((t) => t.robot_id),
-    watchRunning: view.watchAge <= WATCH_STALE_S };
+    watchRunning: watching(view) };
 }
