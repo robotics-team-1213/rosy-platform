@@ -1,7 +1,4 @@
 main { display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 90rem; margin: 0 auto; word-break: keep-all; overflow-wrap: break-word; }
-.site-access { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4) 0; max-width: 90rem; margin: 0 auto; }
-.site-access[hidden] { display: none; }
-#credential { flex: 1; min-width: 0; }
 ui-section { display: grid; gap: var(--space-3); }
 .map-workflow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "trip edit" "run edit"; gap: var(--space-4); align-items: start; }
 .map-workflow > [aria-labelledby="trip-heading"] { grid-area: trip; }
@@ -42,10 +39,6 @@ a { color: var(--ink); }
 #site-map-svg .target { fill: var(--series-goal); pointer-events: none; }
 #site-map-svg .teach { fill: none; stroke: var(--series-secondary); stroke-width: 4px; stroke-dasharray: 2 4; stroke-linecap: round; pointer-events: none; }
 #trip-actions { margin: 0; padding-inline-start: var(--space-5); }
-.estop { min-width: var(--target-irreversible); min-height: var(--target-irreversible); width: auto; height: auto; display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; }
-.estop .ui-icon { width: calc(var(--target-irreversible) * 0.55); height: calc(var(--target-irreversible) * 0.55); flex: none; }
-.estop span { white-space: nowrap; }
-.estop small { flex-basis: 100%; text-align: center; }
 #estop-feedback { margin: var(--space-2) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line-14); background: var(--surface-flat); }
 @media (width < 64rem) {
   .map-workflow { grid-template-columns: minmax(0, 1fr); grid-template-areas: "trip" "run" "edit"; }
@@ -57,11 +50,6 @@ a { color: var(--ink); }
 @media (width < 30rem) {
   .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
   .draft-actions { grid-template-columns: minmax(0, 1fr); }
-  ui-topbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8.5rem); grid-template-areas: "brand estop" "session estop"; gap: var(--space-1); }
-  ui-topbar ui-brand { grid-area: brand; min-width: 0; }
-  ui-topbar ui-brand small, ui-topbar [data-spacer], #estop small { display: none; }
-  #session { grid-area: session; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  #estop { grid-area: estop; }
 }
 /* D-501 — 탭 줄을 이 문서의 가운데 90rem 본문과 같은 가장자리에 둔다. */
 .doc-tabs { max-width: 90rem; margin-inline: auto; padding-inline: var(--space-4); }

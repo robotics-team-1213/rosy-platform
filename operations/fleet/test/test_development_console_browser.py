@@ -1,6 +1,7 @@
 """Direct entry to every Fleet console page in development mode, using real Chromium."""
 
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -25,8 +26,8 @@ ROOT = Path(__file__).resolve().parents[3]
 @pytest.mark.parametrize("path, identity", [
     ("/console", "#user-role"),
     ("/console/install", "#user-role"),
-    ("/console/site-map", "#session"),
-    ("/console/cell", "#session"),
+    ("/console/site-map", "#user-role"),
+    ("/console/cell", "#user-role"),
 ])
 def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identity):
     from playwright.sync_api import expect, sync_playwright
@@ -52,10 +53,13 @@ def test_direct_development_entry_needs_no_operator_token(tmp_path, path, identi
             try:
                 page = browser.new_page(viewport={"width": 390, "height": 844} if path == "/console" else None)
                 page.goto(origin + path)
-                expect(page.locator(identity)).to_contain_text("development-", timeout=15000)
+                # D-540 2: the development principal id lives in title; the badge says development once.
+                expect(page.locator(identity)).to_have_attribute("title", re.compile("^development-"), timeout=15000)
+                expect(page.locator(identity)).to_have_text("운영자")
+                expect(page.locator("#development-badge")).to_be_visible()
+                expect(page.locator("#estop")).to_be_enabled()
                 assert page.evaluate("sessionStorage.getItem('rosy-console-token')")
-                credential = "#credential" if path in {"/console/site-map", "/console/cell"} else "#console-token"
-                expect(page.locator(credential)).to_be_hidden()
+                expect(page.locator("#console-token")).to_be_hidden()
                 if path == "/console":
                     expect(page.locator("#topbar-more")).to_have_attribute("aria-expanded", "false")
                     expect(page.locator("#topbar-extra")).to_be_hidden()

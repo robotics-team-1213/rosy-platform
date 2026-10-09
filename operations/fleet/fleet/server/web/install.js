@@ -18,6 +18,7 @@ import { createPasswordLogin } from "./password-login.js";
 import { createPageScope } from "/common/scope.js";
 import { createTaskChooser } from "/common/task-chooser.js";
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
+import { bindEstop, bindTopbarToggle, showSession, showSignedOut, stopNotice, tickClock, watchFleet } from "/console/assets/fleet-header.js";
 
 const pageScope = createPageScope();
 
@@ -41,21 +42,14 @@ const auth = {
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다.
   locked: false,
 };
-function stopNotice(message = "", state = "warning") {
-  const notice = el("estop-feedback");
-  notice.textContent = message;
-  notice.hidden = !message;
-  notice.setAttribute("state", state);
-}
-
 function authHeaders() {
   return auth.token ? { "Authorization": `Bearer ${auth.token}` } : {};
 }
 
 function operatorControls() {
-  // 화면 테마(data-theme-choice)와 머리 토글은 권한과 무관다(D-359 §2.5·§6.4).
+  // 화면 테마(data-theme-choice)와 머리 토글은 권한과 무관다(D-359 §2.5·§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return [...document.querySelectorAll(
-    "ui-button:not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)")]
+    "ui-button:not(#estop):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not([data-theme-choice]), main input, main select:not(#vision-source)")]
     .filter(control => !control.closest(".ui-task-chooser")
       && !control.closest("#peer-picker")
       && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel"].includes(control.id));
@@ -65,21 +59,14 @@ function applyRole() {
   applyRoleToControls(auth.role, operatorControls());
 }
 
-function setTopbarOpen(open) {
-  el("topbar-more").setAttribute("aria-expanded", String(open));
-  el("topbar-extra").dataset.open = String(open);
-}
-
-function markLocked() {
+function markLocked(reason = "auth") {
   stopNotice();
   // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
   if (!auth.locked) loginForm.refresh(true);
   auth.locked = true;
-  setTopbarOpen(true);
   auth.role = null;
   peerPicker?.reset();
-  el("user-role").textContent = "인증 필요";
-  el("user-role").setAttribute("status", "crit");
+  showSignedOut({refused: reason === "auth"});
   const pill = el("online-pill");
   pill.textContent = "접속 전";
   pill.setAttribute("status", "neutral");
@@ -189,13 +176,7 @@ peerPicker = createPeerPicker({scope: pageScope, el, call,
     select.value = source; select.dispatchEvent(new Event("change")); select.focus();
   }});
 
-pageScope.listen(el("topbar-more"), "click", () => {
-  setTopbarOpen(el("topbar-more").getAttribute("aria-expanded") !== "true");
-});
-
-function tickClock() {
-  el("clock").textContent = new Date().toTimeString().slice(0, 8);
-}
+bindTopbarToggle((node, type, fn) => pageScope.listen(node, type, fn));
 
 el("console-token").value = auth.token;
 function saveToken() {
@@ -227,28 +208,7 @@ pageScope.listen(el("console-token"), "keydown", (event) => {
 
 // 전체 정지는 한 번의 누름으로 즉시 실행된다(D-414 — 비상 정지는 확인 없는
 // 비상 출구다. D-371이 대화상자 위에서 살아 있게 했던 이유를 끝까지 밀었다).
-pageScope.listen(el("estop"), "click", async () => {
-  const life = pageScope.capture();
-  life.check();
-  stopNotice("비상 정지 요청 중…", "pending");
-  try {
-    const result = await call("/api/fleet/estop", { method: "POST" });
-    life.check();
-    const summary = result.total > 0
-      ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
-      : "정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.";
-    stopNotice(summary, result.total > 0 && result.stopped === result.total ? "warning" : "error");
-    log(summary, "bad");
-    (result.robots || []).filter((r) => !r.stopped)
-      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    stopNotice(err.status >= 500 || !err.status
-      ? "비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요."
-      : `비상 정지 요청 거절 — ${err.message}`, "error");
-    log(`전체 정지 실패 — ${err.message}`, "bad");
-  }
-});
+bindEstop(call, {listen: (node, type, fn) => pageScope.listen(node, type, fn), life: () => pageScope.capture(), log});
 
 let discoveryPending = false;
 let scannerLost = false;
@@ -323,12 +283,7 @@ async function refreshAuthorization(renewed = false) {
     auth.principal = identity.principal_id;
     if (identity.principal_id.startsWith("development-")) el("token-access").hidden = true;
     loginForm.refresh(false);
-    const roleName = identity.role === "operator" ? "운영자" :
-      identity.role === "viewer" ? "조회 전용" :
-        identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
-    el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
-    el("user-role").title = el("user-role").textContent;
-    el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
+    showSession(identity);
     const pill = el("online-pill");
     if (pill.dataset.locked === "true") {
       delete pill.dataset.locked;
@@ -357,12 +312,13 @@ async function refreshAuthorization(renewed = false) {
         }
       } catch (_issueError) { /* Paired and unavailable consoles keep the token prompt. */ }
     }
-    if (!auth.locked) markLocked();
+    if (!auth.locked) markLocked(_err.status === 401 ? "auth" : "connection");
   }
 }
 
 tickClock();
 pageScope.interval(tickClock, 1000);
+watchFleet(fleetClient, {interval: (fn, ms) => pageScope.interval(fn, ms)});
 applyRole();
 refreshAuthorization();
 visionView.refreshSources();

@@ -93,6 +93,8 @@ class FleetConsole(TripAware):
         self._capability_display = CapabilityDisplay(self._clients, self._clock)
         self._capability_cache = self._capability_display.cache
         self._hub_state_max_age_s = hub_state_max_age_s
+        #: Extra alarm rows from other watchers (D-526 tether watch): callables returning alarm dicts.
+        self.alarm_sources: list = []
         # 하달한 목표는 Fleet 이 기억한다. 로봇 상태 스냅샷에는 목표가 없고, 있어서도 안 된다
         # — 미션은 Fleet 쪽 개념이고 로봇은 원자 액션만 받는다 (D-12). 화면의 목표 표시는
         # "내가 무엇을 시켰는가"이지 로봇이 되돌려 준 값이 아니다.
@@ -1010,8 +1012,11 @@ class FleetConsole(TripAware):
         await self.formation_stop()
 
     def alarms(self) -> list[dict]:
-        return [{"robot_id": rid, "code": "ROBOT_ADDRESS_UNVERIFIED", "reason": hold["reason"]}
+        rows = [{"robot_id": rid, "code": "ROBOT_ADDRESS_UNVERIFIED", "reason": hold["reason"]}
                 for rid, hold in sorted(self._held.items()) if hold.get("alarm")]
+        for source in self.alarm_sources:
+            rows.extend(source())
+        return rows
 
     async def estop_all(self) -> dict:
         """전 대상 정지 요청. 한 대가 거절해도 나머지에 계속 내린다.
