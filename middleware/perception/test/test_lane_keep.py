@@ -518,6 +518,16 @@ def test_corner_side_needs_an_open_end_or_a_latch():
     assert keeper.update(_render([], transverse_x=0.19), GROUND, lane_half_width_m=HALF) is None
 
 
+def test_cold_corner_without_a_side_boundary_holds():
+    # The closed-side line has left the view. A cropped crossbar alone cannot
+    # establish which physical lane the robot should turn into.
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.0, corner_turning=True)
+    assert keeper.update(_render_corner(0.26, "left"), GROUND, lane_half_width_m=HALF) is None
+    assert keeper.last["strategy"] == "none"
+    keeper.update(_render([(HALF, 0.0)]), GROUND, lane_half_width_m=HALF)
+    assert keeper.update(_render_corner(0.26, "left"), GROUND, lane_half_width_m=HALF) is None
+
+
 def test_mid_turn_keeps_turning_toward_the_new_lane():
     # Latched left, then the robot has turned ~15 deg left: the corner line now
     # runs at 75 deg and its meeting point with the heading has moved away.
