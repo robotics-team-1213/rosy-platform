@@ -576,3 +576,13 @@
 - 변경: `RouteContext`에 굽이 전용 선택 필드 `bend_phase`(`bending|reacquiring`)를 추가하고 비움 메시지·다른 장소 종류에서는 거절한다.
 - 증거: `test_route_context.py` 집중 검사. 계약 v1.166.
 - gate 변화: SOURCE. 기본 꺼짐과 실제 영상·SIM·DEVICE 수용 대기는 그대로다.
+
+## 2026-10-09 · uncommitted · fix: route context 시험 파일명 중복 해소
+
+- 변경: foundation 계약 시험 파일을 	est_route_context_contract.py로 바꿔 core services의 동명 시험과 pytest 수집 충돌을 해소했다.
+- 증거: GitHub CI 37914451689 core-domain의 import file mismatch; 시험 본문 5125 passed, 수집 1 error.
+- gate 변화: CI 동일 묶음 재검증 대기.
+## 2026-10-09 · uncommitted · feat(core_common): D-564 `PlaceMarkerPayload`와 `check_place_marker_ids`
+- 변경: 장소 마커 전송 스키마(본문 `source_id` 거절, id 0–49, 한 프레임 안 중복 거절)와 두 설정 파서가 같이 쓰는 id 검사.
+- 증거: foundation 시험 묶음 모델 PC exit 0, 신규 실패 0.
+- gate 변화: 없음.

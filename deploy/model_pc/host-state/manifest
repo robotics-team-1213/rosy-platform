@@ -5,5 +5,6 @@ safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-rebo
 safe enabled rosy-nightly-reboot.timer
 safe enabled rosy-model-watch.timer
 # Written by deploy/site/install-model-pc-guard.sh; absent on 2026-10-09, so this reports until it runs.
+approval file /etc/modules-load.d/rosy-watchdog.conf common/rosy-modules-load-watchdog.conf
 approval file /etc/systemd/system.conf.d/rosy-watchdog.conf common/rosy-watchdog.conf
 approval file /etc/sysctl.d/90-rosy-hang.conf common/90-rosy-hang.conf

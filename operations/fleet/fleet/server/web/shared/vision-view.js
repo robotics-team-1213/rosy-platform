@@ -6,8 +6,74 @@ const DEFAULT_RECTIFICATION = Object.freeze({
 // D-484: 자동 보정 — 코너는 Vision의 필드 경계 캘리브레이션이 정한다. 렌즈 왜곡값은 없이 보낸다.
 const AUTO_RECTIFICATION = Object.freeze({ mode: "auto" });
 
+// D-560 2: Vision이 승인 보정으로 편 지도 평면 영상(지도 +x 오른쪽, +y 위).
+const MAP_RECTIFICATION = Object.freeze({ mode: "map" });
+
 // 프레임 나이가 이보다 크면 받았어도 "지연"으로 표시한다(폴링 1.5 s 의 두 배).
 export const FRAME_LATE_MS = 3000;
+
+// X-Frame-Plane "min_x,min_y,max_x,max_y,px_per_m" → { min_x, min_y, max_x, max_y, ppm } or null.
+export function parsePlaneHeader(value) {
+  const parts = String(value ?? "").split(",").map((part) => part.trim());
+  if (parts.length !== 5 || parts.some((part) => part === "")) return null;
+  const [min_x, min_y, max_x, max_y, ppm] = parts.map(Number);
+  if (![min_x, min_y, max_x, max_y, ppm].every(Number.isFinite)) return null;
+  return min_x < max_x && min_y < max_y && ppm > 0 ? { min_x, min_y, max_x, max_y, ppm } : null;
+}
+// D-560 4: plane pixel (u, v) ↔ map metres, by scale and origin only.
+export const planeToMap = (plane, u, v) => ({ x: plane.min_x + u / plane.ppm, y: plane.max_y - v / plane.ppm });
+export const mapToPlane = (plane, x, y) => ({ u: (x - plane.min_x) * plane.ppm, v: (plane.max_y - y) * plane.ppm });
+// The header rectangle must be the picture: within 1 px of the image size, else the plane is unusable.
+export const planeFitsImage = (plane, width, height) =>
+  Math.abs((plane.max_x - plane.min_x) * plane.ppm - width) <= 1
+  && Math.abs((plane.max_y - plane.min_y) * plane.ppm - height) <= 1;
+
+// Approved calibrations of ``source`` on a map of ``siteMap`` (anything with maps[].map_id).
+export const planeCalibrationsFor = (calibrations, siteMap, source) => (calibrations || []).filter((row) =>
+  row?.source_id === source && (siteMap?.maps || []).some((map) => map.map_id === row.map_id));
+// D-560: a plane frame counts while fresh and while its revision is one of those calibrations.
+export function planeCalibration(frame, calibrations, siteMap) {
+  if (!frame?.calibrationRevision || !(frame.ageMs >= 0 && frame.ageMs <= FRAME_LATE_MS)) return null;
+  return planeCalibrationsFor(calibrations, siteMap, frame.source)
+    .find((row) => row.calibration_revision === frame.calibrationRevision) || null;
+}
+
+// One map-plane frame for ``source``. ``held`` is the previous result's lease, reused while valid.
+// → { state: "live", plane, calibrationRevision, ageMs, blob, lease }
+//   | { state: "plane-unavailable", lease } (409, an old Vision or Fleet that knows no map mode)
+//   | { state: "error", status, lease }.  The caller falls back to its browser warp on plane-unavailable.
+export async function fetchMapPlane(call, source, held, signal) {
+  let lease = held?.source === source && Date.now() < held.expiresAt ? held : null;
+  if (!lease) {
+    try {
+      const issued = await call("/api/fleet/vision/lease", {
+        method: "POST", signals: [signal], headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_id: source, rectification: MAP_RECTIFICATION }),
+      });
+      const life = Number(issued.expires_in_s);
+      lease = { ...issued, source, expiresAt: Date.now() + (life > 0 ? Math.max(1, life - 5) : 45) * 1000 };
+    } catch (error) {
+      if (error.status === 422) return { state: "plane-unavailable", lease: null };
+      throw error;
+    }
+  }
+  const path = new URL(lease.frame_path, location.origin);
+  if (path.origin !== location.origin || path.username || path.password) throw new Error("영상 주소를 확인하세요.");
+  const response = await fetch(path, {
+    signal, credentials: "omit", redirect: "error", cache: "no-store",
+    headers: { Authorization: `Bearer ${lease.lease}` },
+  });
+  if (response.status === 409 && response.headers.get("X-Frame-State") === "plane-unavailable") {
+    return { state: "plane-unavailable", lease };
+  }
+  if (!response.ok) return { state: "error", status: response.status, lease: response.status === 401 || response.status === 403 ? null : lease };
+  const plane = parsePlaneHeader(response.headers.get("X-Frame-Plane"));
+  // A Vision without D-560 answers with its raw or corner preview; never draw that as the plane.
+  if (response.headers.get("X-Frame-Rectified") !== "map" || !plane) return { state: "plane-unavailable", lease };
+  const age = response.headers.get("X-Frame-Age-Ms");
+  return { state: "live", plane, calibrationRevision: response.headers.get("X-Frame-Calibration"),
+    ageMs: age === null ? NaN : Number(age), blob: await response.blob(), lease };
+}
 
 // 프레임 응답 → 배지. 배지는 화면에 보이는 영상의 실제 상태만 말한다(2026-09-30 태블릿 점검:
 // 영상이 보이는데 "인증 대기"로 남던 결함). DOM 없는 순수 함수라 node 로 시험한다.
@@ -84,6 +150,57 @@ export function resolveSavedProfile(storage, source, lensKind) {
     + `지금 카메라는 ${LENS_NAMES[lensKind]}라 기본값으로 보여 줍니다. 이 렌즈에 맞게 다시 맞추세요.` };
 }
 
+// D-560: the latest map-plane picture for one screen. Call refresh() after each preview frame (with
+// wanted = false when the screen has no calibration to draw it with). After plane-unavailable it asks
+// again only PLANE_RETRY_MS later, so a Vision that cannot make a plane is a state, not an error loop.
+// A transient error keeps the current frame until it expires and waits PLANE_ERROR_MS.
+const PLANE_RETRY_MS = 30000;
+const PLANE_ERROR_MS = 5000;
+export function createPlaneFeed({ scope, visionView, onChange, now = Date.now }) {
+  let frame = null, busy = false, retryAt = 0, cancelExpiry = () => {};
+  function drop() {
+    cancelExpiry();
+    cancelExpiry = () => {};
+    if (frame) URL.revokeObjectURL(frame.url);
+    const had = Boolean(frame);
+    frame = null;
+    return had;
+  }
+  async function refresh(wanted = true) {
+    if (!wanted) { if (drop()) onChange(); return; }
+    if (busy || now() < retryAt) return;
+    busy = true;
+    const life = scope.capture();
+    try {
+      const got = await visionView.fetchPlane();
+      if (got.state === "plane-unavailable") { retryAt = now() + PLANE_RETRY_MS; drop(); return; }
+      if (got.state !== "live") { retryAt = now() + PLANE_ERROR_MS; return; }
+      const url = URL.createObjectURL(got.blob);
+      const image = new Image();
+      image.src = url;
+      const decoded = await image.decode().then(() => true, () => false);
+      if (!life.current() || !decoded) { URL.revokeObjectURL(url); if (!decoded) retryAt = now() + PLANE_ERROR_MS; return; }
+      if (!planeFitsImage(got.plane, image.naturalWidth, image.naturalHeight)) {
+        URL.revokeObjectURL(url);
+        retryAt = now() + PLANE_RETRY_MS;
+        drop();
+        return;
+      }
+      drop();
+      frame = { image, url, source: got.source, plane: got.plane,
+        calibrationRevision: got.calibrationRevision, ageMs: got.ageMs };
+      cancelExpiry = scope.timeout(() => { drop(); onChange(); }, Math.max(0, FRAME_LATE_MS - got.ageMs) || 0);
+    } catch (error) {
+      if (error.name !== "AbortError") retryAt = now() + PLANE_ERROR_MS;
+    } finally {
+      busy = false;
+      if (life.current()) onChange();
+    }
+  }
+  scope.onDispose(drop);
+  return { refresh, current: () => frame };
+}
+
 // D-410 — 운용 화면(/console)에는 보정 칸이 없다. 없는 칸은 빈 상대로 둔다:
 // 읽기는 비어 있고 쓰기는 무해하다. 보정 흐름 자체는 설치 화면에서만 열린다.
 const absentPanel = () => ({
@@ -116,6 +233,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   const adjustmentState = el("vision-adjustment-state") || absentPanel();
   let lease = null;
   let leaseExpiresAt = 0;
+  let planeLease = null;
   let objectUrl = null;
   let busy = false;
   let previewLifetime = new AbortController();
@@ -410,6 +528,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   }
 
   function reset() {
+    planeLease = null;
     currentLens = null;
     currentLensInfo = null;
     lease = null;
@@ -424,6 +543,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
 
   scope.listen(select, "change", () => {
     lease = null;
+    planeLease = null;
     proposalCorners = null;
     currentLens = null;
     currentLensInfo = null;
@@ -587,6 +707,16 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
     fetchMapProposal: () => fetchFieldProposal("map-proposal"),
     // 지도 맞춤 행렬은 원본 프레임 픽셀 기준이라 화면 보정 미리보기에서는 원본으로 바꾼다.
     showRaw: () => { if (viewMode !== "raw") selectViewMode("raw"); },
+    // D-560: the map plane for the selected source on its own lease (the preview lease keeps its mode).
+    async fetchPlane() {
+      const source = select.value;
+      if (!source) return { state: "no-source" };
+      const life = scope.capture();
+      const got = await fetchMapPlane(call, source, planeLease, life.signal);
+      life.check();
+      planeLease = got.lease;
+      return { ...got, source };
+    },
     currentSource: () => select.value,
     currentLensInfo: () => currentLensInfo,
     currentCorners: () => readProfile().corners,

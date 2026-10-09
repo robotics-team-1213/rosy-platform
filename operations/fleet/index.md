@@ -91,7 +91,7 @@
 ## 최근 기록
 
 - 2026-10-09 · uncommitted · fix(fleet): TLS 로봇 번호 변경 뒤 재등록 (D-565)
-- 2026-10-09 · uncommitted · fix(uiux): Fleet 이름표 홈 이동
-- 2026-10-09 · uncommitted · feat(fleet): trips from the console robot card (D-540 (d))
-- 2026-10-09 · uncommitted · test(fleet): API 기준서 v1.166 참조 갱신
-- 2026-10-09 · uncommitted · fix(fleet): 위치 요청 천장 카메라 플래그 분리, 답 횟수 유지 (D-546 6, review)
+- 2026-10-09 · uncommitted · fix(fleet,vision): D-564 독립 검토 반영
+- 2026-10-09 · uncommitted · feat(fleet): D-564 바닥 장소 마커로 초안 장소 가르치기
+- 2026-10-09 · uncommitted · feat(fleet): site map robot positions, trip panel removed (D-540 (e))
+- 2026-10-09 · uncommitted · fix(fleet): D-560 S2 리뷰 반영

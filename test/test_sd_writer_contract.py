@@ -401,31 +401,29 @@ def test_script_has_no_plain_password_or_shell_string_escape_hatch():
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
-def test_omitted_robot_number_is_drawn_from_free_registry_slots(writer_case):
-    taken = [number for number in range(1, 62) if number not in (17, 42)]
+def test_omitted_robot_number_is_the_lowest_free_slot_in_40_to_49(writer_case):
+    # D-562: robot number = ceiling marker id; 17 is free but outside 40-49.
+    taken = [number for number in range(1, 62) if number not in (17, 42, 45)]
     writer_case["registry"].write_text(
         json.dumps({"robot_numbers": taken, "device_names": [], "device_uids": []}),
         encoding="utf-8",
     )
 
-    drawn = set()
-    for _ in range(6):
-        completed = _run(writer_case, omit=("-RobotNumber",))
-        assert completed.returncode == 0, completed.stderr
-        plan = json.loads(completed.stdout)
-        assert plan["robot_number_source"] == "auto"
-        assert plan["ros_domain_id"] == 40 + plan["robot_number"]
-        assert plan["namespace"] == "rosy_{:02d}".format(plan["robot_number"])
-        drawn.add(plan["robot_number"])
-
-    assert drawn <= {17, 42}
+    completed = _run(writer_case, omit=("-RobotNumber",))
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    assert plan["robot_number_source"] == "auto"
+    assert plan["robot_number"] == 42
+    assert plan["ros_domain_id"] == 82
+    assert plan["namespace"] == "rosy_42"
     assert not writer_case["marker"].exists()
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 def test_full_registry_refuses_automatic_robot_number(writer_case):
+    # 1-39 and 50-61 stay free for operator-chosen numbers but never auto (D-562).
     writer_case["registry"].write_text(
-        json.dumps({"robot_numbers": list(range(1, 62)), "device_names": [], "device_uids": []}),
+        json.dumps({"robot_numbers": list(range(40, 50)), "device_names": [], "device_uids": []}),
         encoding="utf-8",
     )
 
