@@ -12,6 +12,7 @@ import { capabilityReason } from "./motion-readiness.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { trafficAttention, trafficCardLine } from "/console/assets/site-map-model.js";
+import { guideAttention } from "./guide-layer.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -88,6 +89,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     }
     // D-517 10: 교착·30 s 넘는 위치 불명·긴 합류 대기·고리 수용 초과. 블록 대기 자체는 정상이라 행이 아니다.
     items.push(...trafficAttention(view.traffic, robot.robot_id, view.trafficClock, Date.now()));
+    items.push(...guideAttention(view.guide, robot.robot_id));  // D-536 coordinate guides
     if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
     if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });
@@ -165,9 +167,15 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
     head.appendChild(modeTag);
     const link = view.stateUnavailable ? null : linkTag(robot.link);
-    if (link) {
-      const linkNode = tag(link.word, link.kind);
-      linkNode.dataset.link = robot.link;
+    // D-535: the server's reason (code, message, action) for a failed robot read.
+    const reason = view.stateUnavailable ? null : robot.link_reason;
+    if (link || reason) {
+      const linkNode = tag(link ? link.word : reason.message, link ? link.kind : "warn");
+      if (link) linkNode.dataset.link = robot.link;
+      if (reason) {
+        linkNode.dataset.reason = reason.code;
+        linkNode.title = `${reason.message} ${reason.action}`;
+      }
       head.appendChild(linkNode);
     }
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";

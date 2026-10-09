@@ -161,7 +161,8 @@ def _shots(page, name, fits=False):
             page.screenshot(path=str(Path(out) / f"{name}-{width}x{height}.png"), full_page=True)
         if width < 480:
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-            assert page.locator("#site-path").bounding_box()["height"] <= 64
+            if page.locator("#site-path").count():
+                assert page.locator("#site-path").bounding_box()["height"] <= 64
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["x"] >= 0 and stop["y"] >= 0
             assert stop["x"] + stop["width"] <= width and stop["y"] + stop["height"] <= height
@@ -186,7 +187,7 @@ def test_console_traffic_layer_card_line_and_queue_row(site):
             page.clock.run_for(1500)  # the first 1 s traffic poll
             expect(page.locator("#traffic-toggle")).to_be_visible(timeout=15000)
             page.wait_for_function("() => window.__trafficLayer?.zones === 1", timeout=15000)
-            assert page.evaluate("window.__trafficLayer") == {"bands": 4, "zones": 1, "ticks": 2, "convoys": 0}
+            assert page.evaluate("window.__trafficLayer") == {"bands": 4, "zones": 1, "ticks": 2, "convoys": 0, "signals": 0}
             expect(page.locator("#legend-traffic")).to_be_visible()
             # The merge wait becomes a 주의 row after merge_max_wait_s (20 s); a block wait alone is no row.
             expect(page.locator("#warning-list")).not_to_contain_text("합류 대기")

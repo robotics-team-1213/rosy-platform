@@ -25,12 +25,9 @@ from urllib.parse import urlparse
 import cv2
 import numpy as np
 
-import class_sets
-import review_return
+import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence
-import review_ingest
-import review_masks
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback
 
 STATIC = Path(__file__).with_name('review_app_web')
 COMMON = Path(__file__).resolve().parents[4] / 'shared' / 'web'
@@ -388,6 +385,8 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     return self.send(value, etag=tag)
                 if path.startswith('/api/history/'):
                     return self.send(store.history(int(path.rsplit('/', 1)[1])))
+                if path.startswith('/api/vlm-feedback/'):
+                    return self.send(vlm_mask_feedback.read_current_feedback(store.state, int(path.rsplit('/', 1)[1])))
                 if path == '/api/catalog':
                     return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
                                       'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),
@@ -406,9 +405,10 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     _, _, frame_id, digest = path.rsplit('/', 3)
                     return self.send(review_masks.draft_image(store, int(frame_id), digest),
                                      mime='image/png', cache='no-cache')
-                if path.startswith('/api/draft-preview/'):
+                if path.startswith(('/api/draft-preview/', '/api/draft-merge-preview/')):
                     _, _, frame_id, digest = path.rsplit('/', 3)
-                    return self.send(review_masks.draft_preview(store, int(frame_id), digest),
+                    merged = path.startswith('/api/draft-merge-preview/')
+                    return self.send(review_masks.draft_preview(store, int(frame_id), digest, merge=merged),
                                      mime='image/png', cache='no-cache')
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.get(store, int(path.rsplit('/', 1)[1])))
@@ -427,6 +427,8 @@ def make_server(store, port=8767, host='127.0.0.1'):
                     pixel_draft_indices = [row['frame'] for row in pixel_reviews
                                            if row['status'] == 'pending' and
                                            bool((review_masks.pixels(store, row) != 255).any())]
+                    pixel_candidate_indices = [row['frame'] for row in pixel_reviews if row['status'] == 'pending'
+                                               and (row['draft_candidates'] or row['frame'] in pixel_draft_indices)]
                     latest = next(iter(store.exports()), None)
                     preparation = None
                     if latest:
@@ -449,10 +451,11 @@ def make_server(store, port=8767, host='127.0.0.1'):
                                           and f['source'].get('original_video_verified') is not True
                                           for f in frames),
                                       'object_draft_first': object_draft_indices[0] if object_draft_indices else None,
-                                      'pixel_draft_first': pixel_draft_indices[0] if pixel_draft_indices else None,
+                                      'pixel_draft_first': pixel_candidate_indices[0] if pixel_candidate_indices else None,
                                       'pixel_counts': {state: pixel_statuses.count(state)
                                                        for state in ('approved', 'pending', 'excluded')}
                                                       | {'drafted': len(pixel_draft_indices),
+                                                         'candidates': len(pixel_candidate_indices),
                                                          'blank': pixel_statuses.count('pending') - len(pixel_draft_indices)}})
                 if path.startswith('/api/learning/images/'):
                     prefix, identifier, name = path.rsplit('/', 2)

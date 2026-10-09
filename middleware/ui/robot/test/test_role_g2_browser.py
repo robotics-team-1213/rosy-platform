@@ -1286,9 +1286,10 @@ def test_console_navigation_stage_local_captures(tmp_path):
             page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('계획 경로 · 마지막 수신')")
             assert "주행 · 주행 중" in stage.inner_text()
             assert "계획 경로 · 마지막 수신" in stage.inner_text()
+            assert "목표 일치 미확인" in stage.inner_text()
             assert "위치 추정 · 지도 좌표 확인" in stage.inner_text()
-            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 맵핑 세션 활성')")
-            assert "SLAM · 맵핑 세션 활성" in stage.inner_text()
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 세션 수락 · 지도 갱신 미확인')")
+            assert "SLAM · 세션 수락 · 지도 갱신 미확인" in stage.inner_text()
             filename = f"operator-console-navigation-{viewport[0]}x{viewport[1]}.png"
             page.screenshot(path=str(capture_dir / filename), full_page=True)
             result = page.evaluate("""() => ({
@@ -1360,7 +1361,7 @@ def test_console_navigation_stage_local_captures(tmp_path):
             page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 주행 중')
               && !document.querySelector('[data-map-click="goal"]')?.disabled""")
             mapping_session["active"] = False
-            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 맵핑 세션 대기')")
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 세션 없음')")
             page.screenshot(path=str(capture_dir / f"operator-console-mapping-idle-{viewport[0]}x{viewport[1]}.png"), full_page=True)
             mapping_session["readable"] = False
             page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 세션 확인 불가')")
