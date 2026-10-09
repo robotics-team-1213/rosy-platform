@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from rosy_vision.track.background_blob import (
-    BAKED_SCORE_MAX, PROCESSOR_REVISION, BackgroundBlobDetector, BackgroundStore,
+    BAKED_SCORE_MAX, GHOST_CONFIRM_FRAMES, PROCESSOR_REVISION, BackgroundBlobDetector, BackgroundStore,
 )
 from rosy_vision.track.model import ROBOT_TOP_HEIGHT_M, ROTATION_RADIUS_M, Calibration, Frame
 
@@ -300,6 +300,8 @@ def test_without_a_kept_background_a_parked_robot_is_learned_and_only_guessed(tm
     _learned(detector, floor=_parked_robot_floor)
     (guess,) = detector.detect(Frame(_parked_robot_floor(), 11.0), CAL).detections  # D-547
     assert guess.score <= BAKED_SCORE_MAX
+    assert (guess.x, guess.y) == pytest.approx((2.995, 2.105), abs=0.006)
+    assert not detector._store.path.exists()  # a startup learn is not kept
 
 
 def test_the_startup_learn_is_not_kept_only_an_operator_relearn_is(tmp_path):
@@ -356,7 +358,7 @@ def test_a_baked_robot_is_guessed_while_its_spot_shows_the_background():
     assert result.status == "OK" and len(result.detections) == 1
     guess = result.detections[0]
     assert (guess.x, guess.y) == pytest.approx((2.995, 2.105), abs=0.006)
-    assert guess.footprint_m == pytest.approx(0.2031, abs=0.003)
+    assert guess.footprint_m == pytest.approx(2.0 * ROTATION_RADIUS_M)  # nominal: the core is smaller
     assert 0.0 < guess.score <= BAKED_SCORE_MAX
 
 
@@ -395,3 +397,72 @@ def test_a_clean_learn_has_no_suspects_and_detects_as_before():
     result = detector.detect(Frame(_with_square(18), 11.0), CAL)
     assert len(result.detections) == 1 and result.detections[0].score > BAKED_SCORE_MAX
     assert detector.detect(Frame(_floor(), 11.34), CAL).detections == ()
+
+
+def test_a_one_frame_occluder_over_a_baked_robot_is_not_healed():
+    detector = _learned(floor=_parked_robot_floor)
+    for colour in ((255, 255, 255), (140, 170, 230)):  # paper, a hand
+        frame = _parked_robot_floor()
+        frame[134:168, 284:318] = colour
+        assert detector.detect(Frame(frame, 11.0), CAL).detections == ()
+        (guess,) = detector.detect(Frame(_parked_robot_floor(), 11.34), CAL).detections
+        assert guess.score <= BAKED_SCORE_MAX
+    assert len(detector._suspects) == 1 and detector._frames is not None
+
+
+def test_a_ghost_needs_consecutive_frames_and_is_never_reported_meanwhile():
+    detector = _learned(floor=_parked_robot_floor)
+    for index in range(GHOST_CONFIRM_FRAMES - 1):
+        assert detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections == ()
+    assert len(detector._suspects) == 1
+    assert detector.detect(Frame(_floor(), 12.0), CAL).detections == ()
+    assert detector._suspects == [] and detector._frames is None
+
+
+def _robot_with_deck(image=None):
+    image = _floor() if image is None else image
+    image[139:161, 289:311] = (60, 60, 120)  # deck and LiDAR ring: not dark, not floor, not shadow
+    image[145:157, 295:307] = 30  # the dark core is what the suspect search finds
+    return image
+
+
+def test_the_whole_ghost_blob_is_healed_and_a_robot_parking_there_is_seen_whole():
+    detector = _learned(floor=_robot_with_deck)
+    assert len(detector._suspects) == 1
+    for index in range(GHOST_CONFIRM_FRAMES + 2):
+        assert detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections == ()
+    background = detector._model.getBackgroundImage()
+    assert np.abs(background[139:161, 289:311].astype(int) - 120).max() <= 3  # deck ring too
+    (found,) = detector.detect(Frame(_robot_with_deck(), 13.0), CAL).detections
+    assert found.footprint_m == pytest.approx(2.0 * math.sqrt(22 * 22 * 1e-4 / math.pi), abs=0.003)
+
+
+def test_without_suspects_the_learning_frames_are_freed():
+    assert _learned()._frames is None
+    assert _learned(floor=_parked_robot_floor)._frames is not None
+
+
+@pytest.mark.parametrize("how", ["relearn", "scene"])
+def test_relearn_and_scene_change_clear_suspects(how):
+    detector = _learned(floor=_parked_robot_floor)
+    if how == "relearn":
+        detector.relearn()
+    else:
+        bright = np.full((360, 640, 3), 200, np.uint8)
+        assert detector.detect(Frame(bright, 11.0), CAL).status == "SCENE_CHANGED"
+    assert detector._suspects == [] and len(detector._frames) == 0
+
+
+def test_a_wrong_kept_background_is_guessed_and_healed_without_rewriting_the_store(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    before = BackgroundBlobDetector(store=store)
+    before.relearn()  # an operator relearn with the robot still parked
+    _learned(before, floor=_parked_robot_floor)
+    kept = store.path.read_bytes()
+    after = BackgroundBlobDetector(store=store)
+    (guess,) = after.detect(Frame(_parked_robot_floor(), 100.0), CAL).detections
+    assert guess.score <= BAKED_SCORE_MAX
+    for index in range(GHOST_CONFIRM_FRAMES + 2):
+        assert after.detect(Frame(_floor(), 101.0 + index / 3), CAL).detections == ()
+    assert after._suspects == [] and after._frames is None
+    assert store.path.read_bytes() == kept

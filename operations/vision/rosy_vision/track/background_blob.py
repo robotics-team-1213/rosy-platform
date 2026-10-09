@@ -26,10 +26,14 @@ blobs in the track (darkness is the max of B, G, R against the track median, so 
 not dark; the footprint window and a solidity/aspect test reject sign bases with poles and
 tape). Each is a baked suspect. Per frame only the suspects' patches are checked: while the
 live patch still shows the background the suspect is reported as a guess (score at most
-BAKED_SCORE_MAX); when the patch is foreground and the live pixels there are no longer dark,
-the robot left and the spot is a ghost: it is not reported, the learning frames are rebuilt
-with live floor pixels in that patch (keeping each frame's own noise), MOG2 is relearned from
-them and the suspect is dropped. The learning frames are held only while suspects remain.
+BAKED_SCORE_MAX, footprint the nominal 2 x rotation radius: the blob is only the dark core).
+When the patch is foreground and its live pixels have the learned floor colour (the ring just
+outside the suspect or the track median) for GHOST_CONFIRM_FRAMES frames in a row, the robot
+left and the spot is a ghost. A one-frame occluder (hand, paper) does not count. Ghost blobs
+are never reported; on confirmation the learning frames get live floor pixels in the ghost
+zone and in every foreground blob touching it (keeping each frame's own noise), MOG2 is
+relearned from them and the suspect is dropped. Frames are collected in every learn and freed
+at ready when there are no suspects, or when the last suspect heals.
 """
 
 from __future__ import annotations
@@ -82,8 +86,15 @@ BAKED_MAX_ASPECT = 2.0
 BAKED_SCORE_MAX = 0.35
 #: The spot still shows the background while less than this share of the blob is foreground.
 BAKED_MATCH_MAX_FOREGROUND = 0.3
-#: A ghost: at least this share of the blob is no longer dark in the live frame.
+#: A ghost: at least this share of the blob has the floor colour in the live frame ...
 GHOST_FLOOR_FRACTION = 0.9
+#: ... within this BGR distance of a learned floor colour: the track median, or one of the
+#: GHOST_RING_COLOURS commonest colours (16-level bins) in the ring just outside the suspect, so
+#: lane paint beside a parked robot counts as floor ...
+GHOST_COLOUR_TOL = 40.0
+GHOST_RING_COLOURS = 32
+#: ... on this many frames in a row (about 1 s at 3 fps), so a passing occluder is not healed.
+GHOST_CONFIRM_FRAMES = 3
 #: The ghost zone (not reported, relearned) is the blob dilated by this many pixels.
 GHOST_MARGIN_PX = 4
 
@@ -178,8 +189,7 @@ class BackgroundBlobDetector:
         self._ready = False
         self._save = False  # D-539: this learn is an operator relearn to keep
         self._frames: collections.deque | None = collections.deque(maxlen=self._learning_frames)
-        self._suspects: list[tuple] = []  # D-547: (box, blob, zone, guess)
-        self._dark_level = 0.0
+        self._suspects: list[list] = []  # D-547: [box, blob, zone, guess, floor colours, ghost streak]
 
     def _new_model(self):
         model = cv2.createBackgroundSubtractorMOG2(
@@ -243,7 +253,20 @@ class BackgroundBlobDetector:
         found, ghosts = self._check_suspects(image, foreground) if self._suspects else ([], [])
         count, labels, stats, centroids = cv2.connectedComponentsWithStats(foreground, connectivity=8)
         # A ghost's foreground can reach past its zone (MOG2 edge, closing): drop whole blobs.
-        skip = {int(label) for (y0, y1, x0, x1), zone in ghosts for label in labels[y0:y1, x0:x1][zone]}
+        skip, heals = set(), []
+        for suspect, confirmed in ghosts:
+            (y0, y1, x0, x1), _blob, zone, _guess, refs, _streak = suspect
+            touching = set(np.unique(labels[y0:y1, x0:x1][zone]).tolist()) - {0}
+            skip |= touching
+            if confirmed:  # heal the zone and the whole ghost blob, where it has the floor colour
+                where = np.isin(labels, list(touching))
+                where[y0:y1, x0:x1] |= zone
+                rows, cols = np.nonzero(where)
+                box = (int(rows.min()), int(rows.max()) + 1, int(cols.min()), int(cols.max()) + 1)
+                part = where[box[0]:box[1], box[2]:box[3]]
+                heals.append((box, part & _floor_like(image[box[0]:box[1], box[2]:box[3]], refs)))
+        if heals:
+            self._heal(image, heals)
         for label in range(1, count):
             if label in skip:
                 continue
@@ -277,13 +300,16 @@ class BackgroundBlobDetector:
         background = self._model.getBackgroundImage()
         if background is not None and background.ndim == 3:
             bright = background.max(axis=2)
-            self._dark_level = BAKED_DARK_RATIO * float(np.median(bright[mask > 0]))
-            dark = np.where((bright < self._dark_level) & (mask > 0), 255, 0).astype(np.uint8)
+            dark_level = BAKED_DARK_RATIO * float(np.median(bright[mask > 0]))
+            dark = np.where((bright < dark_level) & (mask > 0), 255, 0).astype(np.uint8)
             dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, _OPEN_KERNEL)
             dark = cv2.bitwise_and(cv2.morphologyEx(dark, cv2.MORPH_CLOSE, _CLOSE_KERNEL), mask)
             count, labels, stats, centroids = cv2.connectedComponentsWithStats(dark, connectivity=8)
             height, width = dark.shape
             grow = np.ones((2 * GHOST_MARGIN_PX + 1,) * 2, np.uint8)
+            ring_grow = np.ones((6 * GHOST_MARGIN_PX + 1,) * 2, np.uint8)
+            floor = (mask > 0) & (dark == 0)
+            track_colour = np.median(background[floor], axis=0) if floor.any() else np.zeros(3)
             for label in range(1, count):
                 pixels = int(stats[label, cv2.CC_STAT_AREA])
                 detection = self._measure(pixels, centroids[label], work_to_map, camera)
@@ -297,39 +323,47 @@ class BackgroundBlobDetector:
                 hull_px = cv2.contourArea(hull) + cv2.arcLength(hull, True) / 2 + 1
                 if long + 1 > BAKED_MAX_ASPECT * (short + 1) or pixels < BAKED_MIN_SOLIDITY * hull_px:
                     continue
-                y0, x0 = max(0, top - GHOST_MARGIN_PX), max(0, left - GHOST_MARGIN_PX)
-                y1, x1 = min(height, top + h + GHOST_MARGIN_PX), min(width, left + w + GHOST_MARGIN_PX)
+                pad = 3 * GHOST_MARGIN_PX  # room for the ring
+                y0, x0 = max(0, top - pad), max(0, left - pad)
+                y1, x1 = min(height, top + h + pad), min(width, left + w + pad)
                 blob = labels[y0:y1, x0:x1] == label
                 zone = cv2.dilate(blob.astype(np.uint8), grow) > 0
-                guess = Detection(detection.x, detection.y, detection.footprint_m,
-                                  min(detection.score, BAKED_SCORE_MAX))
-                self._suspects.append(((y0, y1, x0, x1), blob, zone, guess))
+                ring = (cv2.dilate(blob.astype(np.uint8), ring_grow) > 0) & ~zone & floor[y0:y1, x0:x1]
+                patch = background[y0:y1, x0:x1]
+                bins, counts = np.unique(patch[ring] // 16, axis=0, return_counts=True)
+                common = bins[np.argsort(counts)[::-1][:GHOST_RING_COLOURS]] * 16 + 8
+                refs = np.vstack([track_colour, common]).astype(np.float32)
+                # The dark core is smaller than the robot: report the nominal footprint.
+                guess = Detection(detection.x, detection.y, _NOMINAL_M, min(detection.score, BAKED_SCORE_MAX))
+                self._suspects.append([(y0, y1, x0, x1), blob, zone, guess, refs, 0])
             if self._suspects:
                 logger.info("baked robot suspects count=%d", len(self._suspects))
         if not self._suspects:
             self._frames = None  # nothing to heal later
 
     def _check_suspects(self, image: np.ndarray, foreground: np.ndarray) -> tuple[list, list]:
-        """Guesses for suspects whose spot still shows the background, and ghost (box, zone)s,
-        which are healed here and not reported this frame."""
-        guesses, kept, heals, ghosts = [], [], [], []
+        """Guesses for suspects whose spot still shows the background, and (suspect, confirmed)
+        ghosts; confirmed ghosts leave the suspect list and are healed by the caller."""
+        guesses, kept, ghosts = [], [], []
         for suspect in self._suspects:
-            (y0, y1, x0, x1), blob, zone, guess = suspect
-            patch = foreground[y0:y1, x0:x1]
+            (y0, y1, x0, x1), blob, _zone, guess, refs, streak = suspect
             total = int(np.count_nonzero(blob))
-            if np.count_nonzero(patch[blob]) < BAKED_MATCH_MAX_FOREGROUND * total:
+            if np.count_nonzero(foreground[y0:y1, x0:x1][blob]) < BAKED_MATCH_MAX_FOREGROUND * total:
+                suspect[5] = 0
                 guesses.append(guess)
                 kept.append(suspect)
                 continue
-            floor = image[y0:y1, x0:x1].max(axis=2) >= self._dark_level
+            floor = _floor_like(image[y0:y1, x0:x1], refs)
             if np.count_nonzero(floor[blob]) >= GHOST_FLOOR_FRACTION * total:
-                ghosts.append(((y0, y1, x0, x1), zone))
-                heals.append(((y0, y1, x0, x1), zone & floor))
+                suspect[5] = streak + 1
+                confirmed = suspect[5] >= GHOST_CONFIRM_FRAMES
+                ghosts.append((suspect, confirmed))
+                if confirmed:
+                    continue
             else:
-                kept.append(suspect)  # something dark is there now: the live path decides
+                suspect[5] = 0  # something not floor is there now: the live path decides
+            kept.append(suspect)
         self._suspects = kept
-        if heals:
-            self._heal(image, heals)
         return guesses, ghosts
 
     def _heal(self, image: np.ndarray, heals: list) -> None:
@@ -382,6 +416,12 @@ class BackgroundBlobDetector:
             self._view = (work_to_map, mask, int(np.count_nonzero(mask)), camera)
             self._view_key = key
         return self._view
+
+
+def _floor_like(image: np.ndarray, refs: np.ndarray) -> np.ndarray:
+    """Pixels within GHOST_COLOUR_TOL (BGR distance) of any reference floor colour."""
+    distance = np.linalg.norm(image[:, :, None, :].astype(np.float32) - refs, axis=3)
+    return distance.min(axis=2) <= GHOST_COLOUR_TOL
 
 
 def _work_image(image: np.ndarray) -> np.ndarray:
