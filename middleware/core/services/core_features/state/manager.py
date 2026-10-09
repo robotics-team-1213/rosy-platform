@@ -78,6 +78,7 @@ class StateManager:
         #: any pose arrived (the zero pose is no place).
         self._pose_frame: Optional[str] = None
         self._odom_pose: Optional[OdomPose] = None
+        self._odom_mono: Optional[float] = None  # D-581: receipt on the monotonic clock (age)
         self._odom_rejected_logged = False
         self._velocity = Velocity()
         self._battery = Battery()
@@ -154,6 +155,15 @@ class StateManager:
             age = float("inf") if at is None else self._monotonic() - at
             return self._pose.x, self._pose.y, self._pose.yaw, self._pose_frame, age
 
+    def odom_sample(self) -> Optional[tuple[float, float, float, float]]:
+        """D-581: (x, y, yaw, age_s) of the odom-frame pose; None before the first one."""
+        with self._lock:
+            odom = self._odom_pose
+            if odom is None or self._odom_mono is None:
+                return None
+            # Age on the monotonic clock: a backward wall-clock step must not make it look fresh.
+            return odom.x, odom.y, odom.yaw, self._monotonic() - self._odom_mono
+
     def set_odom_pose(self, x: float, y: float, yaw: float) -> None:
         """D-494 2: odom-frame pose, stamped with the wall clock at receipt.
 
@@ -168,6 +178,7 @@ class StateManager:
                     log.warning("non-finite odom pose dropped (x=%r y=%r yaw=%r)", x, y, yaw)
                 return
             self._odom_pose = OdomPose(x=x, y=y, yaw=yaw, stamp=stamp)
+            self._odom_mono = self._monotonic()
 
     def set_velocity(self, linear: float, angular: float) -> None:
         with self._lock:

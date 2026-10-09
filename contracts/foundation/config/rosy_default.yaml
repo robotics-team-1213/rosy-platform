@@ -135,6 +135,7 @@ line_follow:                       # D-143 selected-source, fail-closed policy
   obstacle_resume_hysteresis_m: 0.03
   obstacle_ultrasonic_half_angle_deg: 15.0   # forward echo counts across this cone (body_ultrasonic_x_m)
   obstacle_ultrasonic_stale_s: 0.3 # older readings are ignored (never used to go)
+  obstacle_blind_floor: true       # D-591: false = no range_min floor on the stop gap (Pinky Pro)
   obstacle_escalate_s: 5.0         # publish nav.line_obstacle_hold once after this long in obstacle_ahead
   ir_guard_enabled: false          # D-344 §12 IR lane-departure guard; turn on only after IR calibration
   ir_guard_edge_error: 0.3         # |IR error| at or above this = boundary under a side sensor

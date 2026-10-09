@@ -5,7 +5,8 @@ the rotation radius (clearance.rotation_gap). Every method runs under the manage
 ``self._lock`` except ``observe_ultrasonic`` and ``bind_motion_envelope``, which take it.
 
 Review fixes (2026-10-02):
-- The LiDAR blind-zone floor always applies; an ultrasonic echo only adds points (H1).
+- The LiDAR blind-zone floor applies unless obstacle_blind_floor is off (D-591: robots
+  drives beside walls); an ultrasonic echo only adds points (H1).
 - Returns that slip under the LiDAR range_min are remembered in an odometry frame
   integrated from the twist that actually went to the wheels (note_wheels, fed by the one
   cmd_vel publisher), so a curved path or an in-place turn still sees them (H2, M2). They
@@ -232,7 +233,7 @@ class BodyStopMixin:
             stop = resume = c.obstacle_body_margin_m
         else:
             stop, resume = self._stop_resume_gaps(linear)
-            blind = self._blind_gap()
+            blind = self._blind_gap() if c.obstacle_blind_floor else None
             if blind is not None and blind > stop:
                 # Stop before a straight-ahead return slips under range_min (always, review H1).
                 resume += blind - stop
