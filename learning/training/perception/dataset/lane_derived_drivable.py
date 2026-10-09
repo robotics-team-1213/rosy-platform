@@ -52,6 +52,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+_ROOT = Path(__file__).resolve().parents[4]
+for _p in (_ROOT / "middleware" / "perception", _ROOT / "contracts" / "foundation"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+from control.sensing.perception.learned.lane_mask import beyond_boundary  # noqa: E402  D-576
+
 
 SCHEMA = "rosy.lane-derived-drivable/1"
 ORIGIN = "derived_from_reviewed_lanes"
@@ -410,20 +416,18 @@ def _corrupt(mask, kind, ignore_top):
     on at least max(CANARY_MIN_PX, CANARY_MIN_FRACTION of its labelled pixels)."""
     bad, below = mask.copy(), np.arange(mask.shape[0])[:, None] >= ignore_top
     road = mask == DRIVABLE
-    if kind == "drivable_over_offroad":
-        for row in np.flatnonzero((mask == 0).any(axis=1) & road.any(axis=1) & below[:, 0]):
-            cols, zeros = np.flatnonzero(road[row]), np.flatnonzero(mask[row] == 0)
-            lane = (mask[row] >= 1) & (mask[row] <= 4)
-            for span in ((slice(0, zeros[zeros < cols.min()].max() + 1) if (zeros < cols.min()).any() else None),
-                         (slice(zeros[zeros > cols.max()].min(), mask.shape[1]) if (zeros > cols.max()).any() else None)):
-                if span is not None:
-                    bad[row, span][~lane[span]] = DRIVABLE
+    # Green canaries paint only over real label 0 (cyan): a 255 pixel can be real green in the
+    # near-extension rows, so reviewers could not tell those canaries apart (sheets5 review).
+    beyond = (mask == 0) & below & beyond_boundary(mask, 1, 2)
+    if kind == "drivable_over_offroad":  # label-0 floor/wall that is not beyond a line
+        bad[(mask == 0) & below & ~beyond] = DRIVABLE
+    elif kind == "drivable_outside_lines":  # beyond the lines on both-line rows
+        bad[beyond] = DRIVABLE
     elif kind == "wall_over_road":
         xs = np.nonzero(road)[1]
         bad[road & (np.arange(mask.shape[1])[None, :] <= (np.median(xs) if xs.size else -1))] = 0
     else:
-        source = {"drivable_outside_lines": (mask == IGNORE) & below, "drivable_removed": road}[kind]
-        bad[source] = {"drivable_outside_lines": DRIVABLE, "drivable_removed": 0}[kind]
+        bad[road] = 0  # drivable_removed
     need = max(CANARY_MIN_PX, CANARY_MIN_FRACTION * int((mask != IGNORE).sum()))
     return bad if int((bad != mask).sum()) >= need else None
 

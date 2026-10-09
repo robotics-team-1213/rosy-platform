@@ -171,15 +171,30 @@ def test_canaries_change_at_least_800px_and_15_percent_of_labelled():
     assert (removed[mask == ldd.DRIVABLE] == 0).all()  # cyan, not unknown
     wall = ldd._corrupt(mask, "wall_over_road", 110)
     assert (wall[mask == ldd.DRIVABLE] == 0).sum() >= 0.5 * (mask == ldd.DRIVABLE).sum()
-    off = ldd._corrupt(mask, "drivable_over_offroad", 110)
-    assert (off[110:, :50] == ldd.DRIVABLE).all() and (off[110:, 270:] == ldd.DRIVABLE).all()
-    assert (off[110:, 50:60] == 1).all() and (off[:110] == 255).all()
+    outside = ldd._corrupt(mask, "drivable_outside_lines", 110)
+    assert (outside[110:, :50] == ldd.DRIVABLE).all() and (outside[110:, 270:] == ldd.DRIVABLE).all()
+    assert (outside[110:, 50:60] == 1).all() and (outside[:110] == 255).all()
+    assert ldd._corrupt(mask, "drivable_over_offroad", 110) is None  # no label 0 that is not beyond
+    walled = mask.copy()
+    walled[110:150, 60:260] = 0  # a wall across the top of the road (label 0, not beyond a line)
+    off = ldd._corrupt(walled, "drivable_over_offroad", 110)
+    assert (off[110:150, 60:260] == ldd.DRIVABLE).all() and (off[110:, :50] == 0).all()
     narrow = _labelled((150, 160))  # 1300 px of road < 15 % of 41600 labelled
     assert ldd._corrupt(narrow, "drivable_removed", 110) is None
     assert ldd._corrupt(narrow, "wall_over_road", 110) is None
     tiny = np.full((240, 320), 255, np.uint8)
     tiny[200:220, 100:130] = ldd.DRIVABLE  # 600 px: under the 800 px floor
     assert ldd._corrupt(tiny, "drivable_removed", 110) is None
+
+
+def test_green_canaries_never_paint_over_unknown_pixels():
+    """Near-extension rows: beyond the lines is 255 and may be real green, so it is off limits."""
+    mask = _labelled()
+    mask[200:, :50], mask[200:, 270:] = 255, 255
+    mask[200:, 260:270] = 255  # lane_right gone in the near rows: not both-line rows
+    for kind in ("drivable_outside_lines", "drivable_over_offroad"):
+        bad = ldd._corrupt(mask, kind, 110)
+        assert bad is None or not ((mask == 255) & (bad != 255)).any()
 
 
 def test_derive_needs_left_before_right():
