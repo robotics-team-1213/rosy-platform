@@ -214,7 +214,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_857,
+        51_209,
+        "split: re-judged at 51209 on 2026-10-10 after merging D-594 robot path history over main 50857 (+352): "
+        "one new display/replay owner fleet/server/path_history.py (recorder, site-DB store, viewer read route; "
+        "reads the existing D-395 trust, D-494 3 map pose and D-457 tracking owners, never commands or stops a "
+        "robot), wired at the app composition root (app.py +9, console.py untouched); web/trail-view.js fetches "
+        "the record, index.html +9 and styles.css +6. Self-judged; independent re-judge pending. Previously "
         "split: re-judged at 50857 on 2026-10-10 after D-577 (b)+(c) over main 50460 (+397; independent "
         "read-only critic). (b) evidence picture/alert in existing owners line_stuck.py, line-stuck.js, "
         "queues.js, console_routes.py, HttpRobotClient.front_frame; (c) one new shadow-only module "
@@ -1075,7 +1080,7 @@ SIZE_VERDICTS = {
         "The feature grouping, file budgets and 150 allowance are unchanged.",
     ),
     "perception/control/sensing/perception": (
-        11_737,
+        12_004,
         "accept: P1a separates the ROS-free camera and lane evidence subpackage as a size unit "
         "(docs/plans/2026-10-08-control-p1a-sensing-perception-split.md). The Python import path, "
         "colcon package, ROS adapters and CORE command ownership do not change; the later "
@@ -1085,7 +1090,10 @@ SIZE_VERDICTS = {
         "backend it serves and does not change the split plan. Re-judged at 11737 on 2026-10-10 "
         "for D-597 (learned/drivable_paint.py: the drivable way and its boundary paint for keep mode, "
         "plus input.crop in manifest/lane_mask/runner and the paint worker's drivable kind), which "
-        "also lives in the learned backend it serves; the split plan is unchanged.",
+        "also lives in the learned backend it serves; the split plan is unchanged. Re-judged at 12004 "
+        "on 2026-10-10 for D-597 amendment 2 (learned/drivable_steer.py: centre steering and the "
+        "closed-corner pivot, plus the crosswalk fallback in crosswalk_stripes.py), again inside the "
+        "learned backend it serves; the split plan is unchanged.",
     ),
     "control": (
         34_619,
