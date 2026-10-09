@@ -213,7 +213,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        49_461,
+        49_732,
+        "split: re-judged at 49732 on 2026-10-10 after the crosswalk Fleet map-zone change "
+        "(+271 over 49461). Crosswalk geometry and API stay with site_map.py and its existing "
+        "routes/store; editing and display stay in site-map.js and map-view.js. No new command "
+        "owner or transport was added. The map module split plan and +150 package allowance "
+        "remain in force. Previously "
         "split: re-judged at 49461 on 2026-10-10: +158 since 49303 across the Fleet map "
         "view/observation presentation and D-577 lane-lost handling. The former stays in web "
         "map/tracking owners; the latter adds pure rules to stuck_resolver.py and queue display "
