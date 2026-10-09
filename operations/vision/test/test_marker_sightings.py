@@ -108,7 +108,8 @@ def test_no_sighting_without_the_approved_record_or_a_solvable_camera():
     measured = _calibration().__class__(**{**_calibration().__dict__, "revision": "map_v2_fleet"})
     assert _sightings(markers, calibration=measured) == ()   # project_frame's measured path
     assert robot_sightings(CAMERA, None, markers, captured_at=1.0, seq=1) == ()
-    assert _sightings(markers, calibration=_calibration(lens=None)) == ()  # no lens: no parallax
+    no_lens = _calibration().__class__(**{**_calibration().__dict__, "hfov_deg": None})
+    assert _sightings(markers, calibration=no_lens) == ()  # no lens: no parallax, no sighting
 
 
 @pytest.mark.parametrize("bad", [

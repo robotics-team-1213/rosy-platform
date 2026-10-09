@@ -23,6 +23,9 @@ sources:
     robot_markers:
       rosy_40: 40
     heading_edge: [1, 2]
+    # D-587: sticker top edge direction from the robot front (deg, CCW +), per robot; omit = 0.
+    # Measure it with tools/calibration/ceiling_marker_yaw.py (one straight forward drive).
+    # marker_yaw_offset_deg: {rosy_40: 0}
     # D-564: floor place markers Fleet may teach draft places from (34 start-south,
     # 35 start-north, 36 charge, 37 park, 38 stop). Lay each sticker with the same
     # edge forward as the robot stickers (heading_edge). Omit to send none.
