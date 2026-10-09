@@ -165,7 +165,7 @@ class TripRunner:
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False),
                              "lane_bend": caps.lane_bend}
-                plan, request, lap_route, arcs = stop_points(  # D-517 3: no stop inside a zone
+                plan, request, lap_route, arcs, moved = stop_points(  # D-517 3: no stop inside a zone
                     self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
                     self.config.max_turn_deg, self.traffic)
                 leader = (request.get("convoy") or {}).get("leader")
@@ -191,7 +191,7 @@ class TripRunner:
                     "hold": None, "pose": pose_view(pose), "created_at": now, "updated_at": now,
                     "repeat": repeat, "lap": 1 if repeat else None, "caps": caps_view,
                     "traffic_authority": self.authority.mode(caps), "convoy": leader and {"leader": leader},
-                    "lease": lease}
+                    "lease": lease, "stop_moved": moved}
             live = LiveTrip(view, graph, request)
             live.lap_route, live.lap_arcs = lap_route, arcs
             self._live[robot_id] = live
@@ -530,7 +530,7 @@ class TripRunner:
                 return
             elif state not in ("armed", None, "idle", "waiting"):
                 return
-        back = (hold_back_m(self.traffic, live.segments[index]) or 0.0) if live.view["hold"] else 0.0  # D-517 3: zone
+        back = (hold_back_m(self.traffic, live.segments[index]) or 0.0) if action == STOP else 0.0  # D-517 3: zone
         stop_after = min(max(remaining - back, 0.0), MAX_STOP_AFTER_M) if action == STOP else None
         expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
         arc = None  # D-520 1: only to a lane_arc robot, and only with the map_id
@@ -684,6 +684,7 @@ class TripRunner:
         if sent is None or (sent["index"], sent["action"]) != (index, STOP):
             return False
         holding = live.junction.get("seq") == sent["seq"] and live.junction.get("state") == "executing"
+        remaining -= hold_back_m(self.traffic, live.segments[index]) or 0.0  # D-517 3: it stops short of a zone
         return remaining <= self.config.arrive_lane_m or (holding and remaining <= self.config.pass_window_m)
 
     def _stalled(self, live: LiveTrip, index: int, s: float) -> bool:

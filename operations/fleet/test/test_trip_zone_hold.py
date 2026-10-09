@@ -65,6 +65,7 @@ def test_a_lap_ending_at_a_zone_corner_never_holds_inside_the_zone_and_releases_
     assert (live.request["to"], live.request["via"], live.request["cycle"]) == ("NE", ["NW", "SE"], ["SE", "NW"])
     assert [s["edge_id"] for s in view["plan"]["segments"]] == ["east", "ring_n", "west", "ring_s", "east"]
     assert view["plan"]["places"][-1] == "NE" and view["hold"] is None
+    assert view["stop_moved"] == {"from": "SE", "to": "NE"}
     unholdable = set()
     for i, seg in enumerate(live.segments):  # a hold stops clear of the zone, or never happens there
         back = hold_back_m(runner.traffic, seg)
@@ -111,11 +112,37 @@ def test_the_next_lap_holds_where_it_can_stand_outside_the_zone():
     assert view["plan"]["places"][-1] == "NE"
 
 
-def test_a_trip_that_would_stop_inside_a_zone_is_refused():
+def test_a_one_way_trip_to_a_zone_corner_goes_on_to_the_next_place_and_stops_outside():
+    """2026-10-09 user decision "다음 지점까지 가서 섬": SE ends ring_s (in the zone), so the trip goes on to NE."""
     runner, store, fleet = _setup()
-    with pytest.raises(TripError) as err:  # a one-way trip ends at NE: its nose and body pin the roundabout
-        _trip(runner, store, fleet, to="NE", via=(), repeat=False)
-    assert (err.value.code, err.value.detail) == ("TRIP_STOP_IN_ZONE", {"place": "NE", "repeat": False})
+    view = _trip(runner, store, fleet, to="SE", via=("NW",), repeat=False)
+    live = runner._live["a"]
+    assert view["stop_moved"] == {"from": "SE", "to": "NE"}
+    assert (live.request["to"], live.request["via"]) == ("NE", ["NW", "SE"])
+    assert [s["edge_id"] for s in view["plan"]["segments"]] == ["east", "ring_n", "west", "ring_s", "east"]
+    assert view["plan"]["places"][-1] == "NE" and view["plan"]["actions"][-1]["action"] == "stop"
+    last = len(live.segments) - 1
+    back = hold_back_m(runner.traffic, live.segments[last])
+    assert 0 < back < 0.6
+    live.view["segment_index"] = last
+    fleet.at("a", live.arc(last), live.segments[last]["s_to"] - 0.5)
+    _ticks(runner, fleet)
+    assert fleet.p["a"].sent[-1] == ("stop", "NE", round(0.5 - back, 3))  # short of NE, outside the roundabout
+    fleet.at("a", live.arc(last), live.segments[last]["s_to"] - back)
+    assert not _zone_units(runner, store, live.arc(last).point_at(live.segments[last]["s_to"] - back))
+    _ticks(runner, fleet)
+    assert runner.view("a")["state"] == "arrived"
+
+
+def test_a_trip_with_no_place_outside_the_zones_is_refused():
+    runner, store, fleet = _setup()
+    view = _trip(runner, store, fleet, to="NE", via=(), repeat=False)  # NE over east: holds short, not moved
+    assert view["stop_moved"] is None and view["plan"]["places"][-1] == "NE"
+    runner, store, fleet = _setup()
+    fleet.blocked = frozenset({"east", "west"})  # only roundabout lanes left after SE
+    with pytest.raises(TripError) as err:
+        _trip(runner, store, fleet, to="SE", via=(), repeat=False)
+    assert (err.value.code, err.value.detail) == ("TRIP_STOP_IN_ZONE", {"place": "SE", "repeat": False})
     assert runner._live == {}
     runner, store, fleet = _setup()
     fleet.blocked = frozenset()  # open chords: SE via NW laps the ring itself, no place outside the zone
@@ -123,8 +150,8 @@ def test_a_trip_that_would_stop_inside_a_zone_is_refused():
         _trip(runner, store, fleet)
     assert (err.value.code, err.value.detail) == ("TRIP_STOP_IN_ZONE", {"place": "SE", "repeat": True})
     runner, store, fleet = _setup(zones=False)  # no site zones: unchanged
-    view = _trip(runner, store, fleet, to="NE", via=(), repeat=False)
-    assert view["state"] == "started"
+    view = _trip(runner, store, fleet, to="SE", via=("NW",), repeat=False)
+    assert view["state"] == "started" and view["stop_moved"] is None
 
 
 def test_a_blocked_edge_is_never_the_first_arc_of_a_lap():
