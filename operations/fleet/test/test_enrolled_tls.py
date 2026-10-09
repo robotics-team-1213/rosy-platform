@@ -596,9 +596,10 @@ def test_two_pending_bindings_on_one_hostname_are_refused_at_enroll(tmp_path, mo
     assert calls == [] and store.rows() == []
 
 
-def renumber_service(tmp_path, monkeypatch, core, identity, *, retired=True):
-    """D-580: rosy_09 was enrolled through this binding and unenrolled; the robot comes back renumbered."""
-    _, _, _, file = approved(tmp_path)
+def renumber_service(tmp_path, monkeypatch, core, *, retired=True):
+    """D-580: rosy_09 was enrolled through this binding and unenrolled; the robot comes back as core.robot_id."""
+    _, _, identity, file = approved(tmp_path)
+    identity['receiver_id'] = core.robot_id
     old, _, _, discovery, store, _ = build(tmp_path, {})
     if retired:
         store.audit(action='unenroll', outcome='removed', principal_id='alice', target='rosy_09')
@@ -608,10 +609,8 @@ def renumber_service(tmp_path, monkeypatch, core, identity, *, retired=True):
 
 
 def test_renumbered_robot_re_enrolls_through_its_proven_binding_without_editing_the_file(tmp_path, monkeypatch):
-    _, binding, identity, _ = approved(tmp_path)
-    identity['receiver_id'] = 'rosy_41'
     core = FakeCore(robot_id='rosy_41')
-    service, store, calls, bindings, file = renumber_service(tmp_path, monkeypatch, core, identity)
+    service, store, calls, bindings, file = renumber_service(tmp_path, monkeypatch, core)
     asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
     assert store.get('rosy_41')['state'] == 'active' and 'rosy_41' in service._roster.robot_ids
     assert store.tls_markers()['rosy_41']['origin'] == 'https://'+NAME+'.local:8080'
@@ -626,9 +625,8 @@ def test_renumbered_robot_re_enrolls_through_its_proven_binding_without_editing_
 
 
 def test_never_enrolled_binding_keeps_the_d565_id_check(tmp_path, monkeypatch):
-    _, _, identity, _ = approved(tmp_path)
     core = FakeCore(robot_id='rosy_41')
-    service, store, _, bindings, _ = renumber_service(tmp_path, monkeypatch, core, identity, retired=False)
+    service, store, _, bindings, _ = renumber_service(tmp_path, monkeypatch, core, retired=False)
     with pytest.raises(EnrollmentError) as refused:
         asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
     assert refused.value.reason == 'tls_binding_mismatch' and core.logged_out == [core.token]
