@@ -200,6 +200,10 @@ def test_fit_camera_recovers_session_pitch_and_height():
     cam, fit = mpd.fit_camera(samples, CAMERA, raster, pitch_deg=np.arange(8.0, 13.01, 0.5),
                               height_m=(0.055, 0.059, 0.063))
     assert (fit["pitch_deg"], fit["height_m"]) == (11.0, 0.059) and fit["median_iou"] > 0.9
+    assert fit["passing"] == 3
+    fixed = Camera(320, 240, CAMERA.fx, CAMERA.cx, CAMERA.cy, CAMERA.pitch_rad, 0.059, CAMERA.x_offset_m)
+    _, pitch_only = mpd.fit_camera(samples, fixed, raster, pitch_deg=np.arange(8.0, 13.01, 0.5))
+    assert (pitch_only["pitch_deg"], pitch_only["height_m"]) == (11.0, 0.059)
     assert cam.pitch_rad == pytest.approx(math.radians(11.0))
 
 

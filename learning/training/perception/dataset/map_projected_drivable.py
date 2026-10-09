@@ -240,11 +240,15 @@ def _moved(pose, last, p):
                             >= math.radians(p["dedupe_yaw_deg"]))
 
 
-def fit_camera(samples, camera, raster, *, pitch_deg=np.arange(8.0, 14.01, 0.25),
-               height_m=np.arange(0.055, 0.0651, 0.002), params=PARAMS):
-    """Session pitch/height: the pair maximising the median projected-line vs observed-white IoU
-    over samples [(bgr, fused pose)]. -> (Camera, {"pitch_deg", "height_m", "median_iou", "frames"})."""
-    p = {**PARAMS, **params, "min_line_iou": 0.0}
+def fit_camera(samples, camera, raster, *, pitch_deg=np.arange(8.0, 14.01, 0.25), height_m=None,
+               params=PARAMS):
+    """Session pitch (and height when height_m lists candidates; default: keep the camera's, since
+    pitch and height trade off on real frames and a joint fit ran to the grid edges): the value with
+    the most samples passing min_line_iou, then the highest median IoU, over [(bgr, fused pose)].
+    -> (Camera, {"pitch_deg", "height_m", "median_iou", "passing", "frames"})."""
+    p = {**PARAMS, **params}
+    need, p["min_line_iou"] = p["min_line_iou"], 0.0
+    height_m = (camera.height_m,) if height_m is None else height_m
     best = None
     for pitch in pitch_deg:
         for height in height_m:
@@ -255,13 +259,13 @@ def fit_camera(samples, camera, raster, *, pitch_deg=np.arange(8.0, 14.01, 0.25)
             ious = [v for v in ious if v is not None]
             if len(ious) * 2 < len(samples) or not ious:
                 continue
-            score = float(np.median(ious))
+            score = (sum(v >= need for v in ious), float(np.median(ious)))
             if best is None or score > best[0]:
                 best = (score, cam, float(pitch), float(height), len(ious))
     if best is None:
         raise ValueError("camera fit: too few frames with lines in view")
     return best[1], {"pitch_deg": round(best[2], 3), "height_m": round(best[3], 4),
-                     "median_iou": round(best[0], 4), "frames": best[4]}
+                     "median_iou": round(best[0][1], 4), "passing": best[0][0], "frames": best[4]}
 
 
 def fit_samples(frames, detections, odom, clock_offset_s, *, count=40, spacing_s=2.0, fuse_params=FUSE,
