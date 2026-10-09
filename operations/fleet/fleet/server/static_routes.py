@@ -21,6 +21,8 @@ CONSOLE_ASSETS = {
     "cell-document-editor.js": ("cell/cell-document-editor.js", "application/javascript"),
     "cell.css": ("cell/cell.css", "text/css"),
     "doc-tabs.css": ("shared/doc-tabs.css", "text/css"),
+    "fleet-header.css": ("shared/fleet-header.css", "text/css"),
+    "fleet-header.js": ("shared/fleet-header.js", "application/javascript"),
     "styles.css": ("shared/styles.css", "text/css"),
     "console.js": ("console.js", "application/javascript"),
     "confirmed-action.js": ("confirmed-action.js", "application/javascript"),
