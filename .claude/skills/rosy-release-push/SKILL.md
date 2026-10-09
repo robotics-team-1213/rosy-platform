@@ -31,6 +31,9 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
 2. **Pick the release id and build.** The format is `YYYY.MM.DD-NNN`. `NNN` continues
    across dates (012 → 013 → 014). Check `/opt/rosy/releases/` on the robot and the
    existing tags. Never reuse an id: an existing id is only re-checked, never overwritten.
+   Reserve it before any manual, delta or branch release, with the same tag `robot_cd.py`
+   uses (D-553 addendum 3); `Reference already exists` (HTTP 422) means the id is taken, take the next:
+   `gh api --method POST repos/robotics-team-1213/rosy-platform/git/refs -f ref=refs/tags/payload-reserved-<id> -f sha=$(git rev-parse origin/main)`
    ```bash
    gh workflow run build-native-payload.yml --ref main -f release_id=<id>
    # The run is titled "Pinky payload <id>"; take its id instead of reading the list by eye.
