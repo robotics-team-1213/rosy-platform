@@ -221,12 +221,14 @@ class Guard(threading.Thread):
 # --- loop -----------------------------------------------------------------------------------
 
 class Model:
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, threads=2):
         import onnxruntime as ort
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = threads   # Pi 4 cores under the robot's load: 2 was fastest
         self.manifest = load_manifest(model_dir)
         verify_files(self.manifest)
         path = self.manifest.onnx_file()
-        self.session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        self.session = ort.InferenceSession(str(path), options, providers=["CPUExecutionProvider"])
         self.input = self.session.get_inputs()[0].name
         self.classes = self.manifest.classes
 
@@ -344,6 +346,7 @@ def main(argv=None):
     ap.add_argument("--gain", type=float, default=Limits.gain)
     ap.add_argument("--min-fraction", type=float, default=Limits.min_fraction)
     ap.add_argument("--max-age-s", type=float, default=Limits.max_age_s)
+    ap.add_argument("--threads", type=int, default=2, help="ONNX Runtime intra-op threads")
     ap.add_argument("--device", help="robot name in the PC calibration store")
     ap.add_argument("--lidar-forward-deg", type=float)
     ap.add_argument("--out", required=True)
@@ -358,7 +361,7 @@ def main(argv=None):
     lim = Limits(args.linear, args.max_angular, args.gain, args.min_fraction, args.max_age_s, args.max_s)
     core = Core(args.robot, Path(token_file).read_text(encoding="utf-8").strip(), args.port,
                 tls_context(args.ca_file, args.insecure))
-    model = Model(args.model)
+    model = Model(args.model, args.threads)
     rows = run(args, core, model, lim)
     s = summary(rows)
     Path(args.out, "summary.json").write_text(json.dumps({"args": vars(args), **s}, indent=1), encoding="utf-8")
