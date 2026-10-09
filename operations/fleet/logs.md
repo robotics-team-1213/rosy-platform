@@ -2979,7 +2979,7 @@
 - 결정: D-577 Accepted (2026-10-09, 사용자)
 - 교훈: 모델 PC로 `git archive` 200 MB를 보내면 느린 링크에서 40분이 넘는다. `repo`에 bundle(origin/main..HEAD)을 fetch해 거기서 archive하면 1분 안이다.
 
-## 2026-10-10 - fix(fleet): keep the armed CORE arc end instruction
+## 2026-10-10 · uncommitted · fix(fleet): keep the armed CORE arc end instruction
 
 - Change: while CORE's arc is running, retain its armed end-place instruction if Fleet map localization has advanced to the next segment. A hold STOP still takes priority.
 - Evidence: D-520 handshake and the 2026-10-09 U2 SE-to-NE early replacement that ended in arc_mismatch. Regression tests cover the early crossing, next instruction after consumption, and hold STOP.
