@@ -9,11 +9,9 @@ drivable_target   logits -> the robot's own drivable way on the model grid, or N
                   the model's drivable class, without its row-growth clamp: the clamp keeps the
                   run nearest the middle of the row below (a tie goes left), which would choose
                   a junction branch against D-384. Holes enclosed by the region (a box, a stray
-                  label) are filled: they are not a fork. Where the region leaves the view through
-                  two or more exits (the model labels every reachable junction branch drivable;
-                  at a T or a ring entry the branches open sideways), the way goes to the
-                  rightmost exit; otherwise, where it splits row by row, the rightmost branch is
-                  followed: D-384 decision 2, keep right when no route says otherwise.
+                  label) are filled: they are not a fork. Where the region splits into branches
+                  (the model labels every reachable junction branch drivable), the rightmost
+                  branch is followed: D-384 decision 2, keep right when no route says otherwise.
                   Too little of it in the near band (DRIVABLE_MIN_FRACTION, the shadow evidence
                   rule) is no target.
 boundary_paint    that way at frame size -> synthetic boundary paint: per row, a strip one painted
@@ -106,7 +104,11 @@ def view_exits(region: np.ndarray, top: int, near_row: int, road_px: int) -> lis
 
 
 def right_exit_way(region: np.ndarray, top: int = 0) -> tuple[np.ndarray | None, int]:
-    """(the way to the rightmost exit, exits) when the region leaves the view through two or more
+    """CANDIDATE, not used by drivable_target: replay 2026-10-10 (docs/validation/
+    drivable-branch-replay-2026-10-10.md) took the right branch at ring entries but also read open
+    floor, walls and straight lanes reaching both frame sides as two exits. It needs a junction gate first.
+
+    (the way to the rightmost exit, exits) when the region leaves the view through two or more
     exits (view_exits; top is the first row the model sees) above the near band: a junction, even
     one whose branches open sideways (a T, a ring entry) or rejoin beyond the view. The way is the near band plus the far region nearer
     to the rightmost exit than to any other (D-384 decision 2). (None, exits) with fewer than two."""
@@ -142,10 +144,6 @@ def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0) -> tupl
     if "drivable" not in roles:
         return None, dict(reason="no_drivable_class", branches=0, near_fraction=0.0)
     labels = logits[0].argmax(axis=0)
-    # The first row the model sees: a bundle that crops inside its graph pads the rows above with
-    # background, which ignore_top (manifest input.crop) does not know about.
-    seen = (labels != roles["background"][0]).any(axis=1) if "background" in roles else labels.any(axis=1)
-    view_top = max(ignore_top, int(np.argmax(seen)))
     # `ignore` paint inside the road (crosswalk, speed bump) is road for the way: as a pass-through
     # only (lane_bounded_drivable through_idxs) it would leave holes that cut the way's rows apart.
     labels = np.where(np.isin(labels, roles.get("ignore", [])), roles["drivable"][0], labels)
@@ -154,10 +152,7 @@ def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0) -> tupl
         labels, roles["drivable"][0], roles.get("lane_marking", ()), ignore_top=ignore_top,
         max_row_growth=math.inf,
         boundary=(names["lane_left"], names["lane_right"]) if {"lane_left", "lane_right"} <= set(names) else None)
-    region = fill_holes(region)
-    way, branches = right_exit_way(region, view_top)
-    if way is None:
-        way, branches = right_branch(region)
+    way, branches = right_branch(fill_holes(region))
     band = way[int(way.shape[0] * (1 - NEAR_FIELD_FRACTION)):]
     near = float(band.mean())
     if near < DRIVABLE_MIN_FRACTION:
