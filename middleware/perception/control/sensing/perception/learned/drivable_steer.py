@@ -31,11 +31,11 @@ import numpy as np
 
 LOOKAHEAD_M = 0.25
 ROW_BAND_M = 0.03
-CORRIDOR_HALF_M = 0.05
+CORRIDOR_HALF_M = 0.03
 #: corridor share of way pixels for a row to count as open straight ahead
 CORRIDOR_FILL = 0.8
-PIVOT_AHEAD_M = 0.24
-PIVOT_RELEASE_M = 0.30
+PIVOT_AHEAD_M = 0.14
+PIVOT_RELEASE_M = 0.22
 PIVOT_ERROR = 0.5
 PIVOT_CONFIDENCE = 0.37
 BOTH_CONFIDENCE = 0.9
@@ -68,7 +68,7 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     height, width = way.shape
     rows = np.flatnonzero(way.any(axis=1))
     rows = rows[rows > ground.principal_y - ground.focal_px * math.tan(ground.pitch_rad)]   # below horizon
-    out = dict(target_m=None, ahead_m=0.0, exit=None, both=False)
+    out = dict(target_m=None, ahead_m=0.0, exit=None, both=False, exit_point_m={})
     if not rows.size:
         return out
     first = np.argmax(way[rows], axis=1)
@@ -100,7 +100,11 @@ def way_target(way: np.ndarray, ground, x_offset: float, half: float, lookahead:
     for side, edge in (("left", open_left), ("right", open_right)):
         hit = edge & above
         if int(hit.sum()) >= SIDE_EXIT_ROWS:
-            reach[side] = float(xs[hit].max())
+            far = int(np.argmax(np.where(hit, xs, -np.inf)))
+            reach[side] = float(xs[far])
+            # the point to arc toward: where the way leaves the view on that side, farthest out
+            out["exit_point_m"][side] = (round(float(xs[far]), 3),
+                                                       round(float((y_left if side == "left" else y_right)[far]), 3))
     if len(reach) == 2:
         out["exit"] = "left" if reach["left"] > reach["right"] + EXIT_TIE_M else "right"
     elif reach:
@@ -167,9 +171,13 @@ class DrivableSteer:
         if info["target_m"] is None or ahead < PIVOT_AHEAD_M and side is None and ahead < 0.12:
             self._smoothed = None
             return None, None, dict(info, strategy="none", reason="drivable_closed")
-        tx, ty = _to_current(info["target_m"], source_pose, current_pose)
+        strategy, target = "drivable_centre", info["target_m"]
+        if ahead < LOOKAHEAD_M and side is not None:
+            # closed before the lookahead with a side exit (a bend, an L-corner): arc toward the exit
+            strategy, target = f"drivable_turn_{side}", info["exit_point_m"][side]
+        tx, ty = _to_current(target, source_pose, current_pose)
         self._smoothed = ty if self._smoothed is None else SMOOTHING * self._smoothed + (1 - SMOOTHING) * ty
         error = max(-1.0, min(1.0, -self._smoothed / half))
         confidence = BOTH_CONFIDENCE if info["both"] else ONE_CONFIDENCE
-        return error, confidence, dict(info, strategy="drivable_centre", target_now_m=(round(tx, 3), round(self._smoothed, 3)))
+        return error, confidence, dict(info, strategy=strategy, target_now_m=(round(tx, 3), round(self._smoothed, 3)))
 
