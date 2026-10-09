@@ -1,7 +1,7 @@
 ﻿# ROSY 활성 웹 화면 전체 레이아웃·내비게이션 설계
 
 **작성:** 2026-10-09
-**상태:** 화면 구조 제안. 코드 적용·ADR 변경·사용성 수용 전.
+**상태:** 화면 구조 기준. 일부 코드 적용과 16화면 기본·빈 상태 브라우저 루프 완료. 상태별 G2·G3·설치 이미지·현장 수용 전.
 **범위:** `shared/web/surfaces.yaml`의 활성 웹 사용자 화면 5개 제품, 16개 주요 화면/상태.
 
 ## 한눈에 보기
@@ -46,7 +46,7 @@
 | Pilot | 접속 게이트 `/pilot 접속 상태` | 조종자 | 대상·영상·제어권이 준비되었는가 | 세션 시작 | 인증·세션·안전 조건 | 접속 상태 | [데스크톱](../assets/rosy-web-wireframe-pilot-connect.png) · [모바일](../assets/rosy-web-wireframe-pilot-connect-mobile.png) |
 | Pilot | 직접 주행 `/pilot 주행 상태` | 조종자 | 영상과 제어권이 유효한가 | hold-to-run·중지·종료 | 영상/명령 시각과 CORE 상태 | 접속 게이트 | [데스크톱](../assets/rosy-web-wireframe-pilot-drive.png) · [모바일](../assets/rosy-web-wireframe-pilot-drive-mobile.png) |
 | Pilot | OMX-AI Gazebo 연습 `/pilot 연습 상태` | 개발/연습자 | 시뮬레이션 세션인가 | 팔 연습·중지 | 시뮬레이터 반응 | 접속 게이트 | [데스크톱](../assets/rosy-web-wireframe-pilot-arm.png) · [모바일](../assets/rosy-web-wireframe-pilot-arm-mobile.png) |
-| Games | 경기 보드 `/board` | 경기 호스트 | 경기 단계·점수·필드는 어떤가 | 경기 진행·중지 | 경기 이벤트·필드 관측 | 경기 준비 | [데스크톱](../assets/rosy-web-wireframe-games-board.png) · [모바일](../assets/rosy-web-wireframe-games-board-mobile.png) |
+| Games | 경기 보드 `/` (PreviewServer) | 경기 호스트 | 경기 단계·점수·필드는 어떤가 | 경기 진행·중지 | 경기 이벤트·필드 관측 | 경기 준비 | [데스크톱](../assets/rosy-web-wireframe-games-board.png) · [모바일](../assets/rosy-web-wireframe-games-board-mobile.png) |
 | Learning | 작업 목록 `/learning` | 검수자 | 어떤 학습 작업이 대기·실패·완료인가 | 작업 선택·결과 확인 | 작업 상태·export 자격 | 작업 목록 | [데스크톱](../assets/rosy-web-wireframe-learning-jobs.png) · [모바일](../assets/rosy-web-wireframe-learning-jobs-mobile.png) |
 | Learning | 객체 검수 `/` | 검수자 | 박스가 원본과 일치하는가 | 박스 수정·전체 확인·승인 | 독립 객체 승인 상태 | 작업 목록/다음 사진 | [데스크톱](../assets/rosy-web-wireframe-learning-object.png) · [모바일](../assets/rosy-web-wireframe-learning-object-mobile.png) |
 | Learning | 픽셀 검수 `/pixels` | 검수자 | 미검수 영역 없이 경계가 맞는가 | 마스크 수정·전체/배경 확인·승인 | 독립 픽셀 승인 상태 | 작업 목록/다음 사진 | [데스크톱](../assets/rosy-web-wireframe-learning-pixel.png) · [모바일](../assets/rosy-web-wireframe-learning-pixel-mobile.png) |

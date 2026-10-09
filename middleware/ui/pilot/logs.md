@@ -808,3 +808,9 @@
 - 변경: 키보드 옵션(한 줄·완료)을 대화상자 표시 전에 정하고, Enter는 `IME_NULL`+`KEYCODE_ENTER` 누름으로 와도 보내도록 `LinkStatus.sendsCode` 한 곳에서 판정한다. 키를 뗄 때는 보내지 않는다.
 - 증거: 2026-10-09 태블릿 실기(8kcn 056): 키보드가 열린 채 Enter와 확인 단추가 반응하지 않았고, 키보드를 닫은 뒤 단추로 승인됐다. LinkStatusTest 5 passed(새 `codeFieldSendsOnDoneOrEnterDownOnly`). 같은 날 실기에서 LCD 코드 승인(8kcn)과 관제 승인(9dfk) 모두 연결됨까지 확인.
 - gate 변화: SOURCE/LOCAL. Enter 전송의 실기 확인은 다음 새 페어링에서.
+
+## 2026-10-09 · uncommitted · uiux(pilot): 브랜드에서 안전하게 접속 홈으로 복귀
+
+- 변경: 브랜드를 `/pilot` 홈 링크로 만들고 주행 중 클릭은 기존 `leaveDrive` 종료 절차를 거쳐 정지·IDLE 처리 뒤 이동한다. Gazebo 팔 연습에서는 진행 중 목표의 취소 확인 없이 이탈하지 않도록 링크를 비활성으로 표시하고 취소 안내를 남긴다.
+- 증거: 로컬 Chromium의 320/390/1200px 접속·주행, 320/1200px Gazebo 연습 캡처. 주행 홈 복귀 전 가짜 CORE의 `IDLE` 및 선속도·각속도 0 기록을 확인했다.
+- gate 변화: 없음. 실제 태블릿·로봇 readback과 G3는 별도.

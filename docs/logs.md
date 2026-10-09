@@ -7541,6 +7541,12 @@ osy-d395-s1d\`.
 - 근거: 실제 Fleet HTML/CSS와 D-493/D-501/D-543.
 - gate: 구현 방법 기록. Fleet 홈 링크 외 화면 적용과 G1/G2/G3는 별도.
 
+## 2026-10-09 · uncommitted · uiux: 활성 웹 16화면 브라우저 루프
+
+- 변경: 16화면의 로컬 Chromium 캡처·가로 넘침·홈·탭·정지·오류를 검증 기록으로 남겼다. 설계의 Games 보드 경로를 실제 PreviewServer `/`로 정정하고 적용 상태를 일부 코드 적용으로 갱신했다.
+- 증거: `docs/validation/active-web-visual-loop-2026-10-09/result.md`, `captures.sha256`, 원본 PNG는 `X:/DevTemp/rosy-web-visual-loop/`.
+- gate 변화: 없음. 일부 G2 셀만 확인했으며 전체 G2·G3·현장 수용은 HOLD.
+
 ## 2026-10-09 · uncommitted · docs(lane): D-567 병렬 보정 검증 계약
 
 - 변경: Fleet 호를 유지한 채 지도 자세·승인 바닥 경계의 제한 보정 후보, STOP·시간 출처, D-557 우선 SIM과 두 로봇 DEVICE 단계를 Proposed ADR과 실행 계획에 기록했다.
