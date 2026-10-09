@@ -367,6 +367,7 @@ class EnrollmentService:
                 # D-555: never the digest itself.
                 "hub_linked": bool(row.get("hub_digest")), "hub_host": row.get("hub_host"),
                 "hub_online": bool(row.get("hub_digest")) and self._hub_online(row["robot_id"]),
+                "hub_linkable": self._hub_link is not None and self._tls_bound(row["robot_id"]),
             })
         return {"available": self.available, "unavailable_reason": self.unavailable_reason,
                 "static_robot_ids": sorted(self._roster.static_ids), "robots": robots,
@@ -760,6 +761,9 @@ class EnrollmentService:
 
     # --- hub link (D-555) ------------------------------------------------------
 
+    def _tls_bound(self, robot_id: str) -> bool:
+        return self._tls_bindings is not None and self._tls_bindings.binding(robot_id) is not None
+
     def _hub_online(self, robot_id: str) -> bool:
         record = self._console().hub.registry.find(robot_id)
         return record is not None and bool(record.online)
@@ -771,7 +775,7 @@ class EnrollmentService:
         if row is None or row["state"] == "pending_logout":
             raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
         self._tls_fence(row)
-        if self._tls_bindings is None or self._tls_bindings.binding(robot_id) is None:
+        if not self._tls_bound(robot_id):
             self._store.audit(action=action, outcome="tls_binding_required",
                               principal_id=principal_id, target=robot_id)
             raise EnrollmentError("tls_binding_required", 409,

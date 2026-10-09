@@ -140,8 +140,15 @@ export function rowText(row) {
     lines.push("발급한 관리자 세션의 만료에 묶였습니다 — 카드 관리자 토큰으로 발급한 코드면 90일");
   }
   if (row.expiry_warning && row.state === "active") lines.push(`곧 만료(${row.expires_at}) — 새 코드 준비`);
+  // D-555: where this robot's state comes from.
+  if (row.hub_linked) lines.push(`허브 연결됨(${row.hub_host || "?"}) · 수집: ${row.hub_online ? "허브" : "REST"}`);
+  else if (row.state === "active") lines.push("수집: REST");
   return lines;
 }
+
+const ACTION_LABELS = {
+  move: "새 주소로 옮기기…", unenroll: "등록 해제…", "hub-link": "허브 연결", "hub-unlink": "허브 연결 해제",
+};
 
 export function canManage(identity) {
   return identity?.role === "operator" && Boolean(identity.principal_id)
@@ -154,6 +161,8 @@ export function rowActions(row, manage) {
   if (row.state === "pending_logout") return [];
   const actions = [];
   if (row.state === "address_changed") actions.push("move");
+  if (row.hub_linked) actions.push("hub-unlink");
+  else if (row.hub_linkable && row.state === "active") actions.push("hub-link");
   actions.push("unenroll");
   return actions;
 }
@@ -330,6 +339,24 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
       openMove(row.robot_id, address);
       return;
     }
+    if (action === "hub-link" || action === "hub-unlink") {
+      // D-555: Fleet makes and delivers the credential; the browser never sees it.
+      cancelCandidate();
+      try {
+        const result = await call(`/api/fleet/robots/${encodeURIComponent(row.robot_id)}/hub-link`,
+          { method: action === "hub-link" ? "POST" : "DELETE" });
+        life.check();
+        showResult([action === "hub-link" ? `${row.robot_id} 허브 연결됨`
+          : result.robot_cleared ? `${row.robot_id} 허브 연결 해제됨`
+            : `${row.robot_id} 허브 연결 해제됨 — 로봇에 닿지 않아 로봇 쪽 토큰은 허브가 거절합니다.`], false);
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        showResult([err?.detail?.message || "허브 연결 실패"], true);
+      }
+      await refresh();
+      life.check();
+      return;
+    }
     {
       cancelCandidate();
       // D-371 — 등록 해제는 사이트 토큰 회수라 되돌리려면 다시 등록해야 한다. 대상을 이름으로 묻는다.
@@ -383,7 +410,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
         item.append(small);
       }
       for (const action of rowActions(row, manage)) {
-        const node = button(action === "move" ? "새 주소로 옮기기…" : "등록 해제…", () => act(action, row));
+        const node = button(ACTION_LABELS[action], () => act(action, row));
         node.dataset.action = action;
         item.append(node);
       }

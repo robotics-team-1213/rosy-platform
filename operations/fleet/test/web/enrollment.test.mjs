@@ -60,6 +60,8 @@ test("viewers and the shared console token see no enrollment buttons", () => {
   assert.deepEqual(rowActions(row, true), ["move", "unenroll"]);
   assert.deepEqual(rowActions({ ...row, state: "active" }, true), ["unenroll"]);
   assert.deepEqual(rowActions({ ...row, state: "pending_logout" }, true), []);
+  assert.deepEqual(rowActions({ ...row, state: "active", hub_linkable: true }, true), ["hub-link", "unenroll"]);
+  assert.deepEqual(rowActions({ ...row, state: "active", hub_linked: true }, true), ["hub-unlink", "unenroll"]);
   assert.deepEqual(discoveryActions({ enrollable: true }, false, 0, 1), []);
   assert.deepEqual(discoveryActions({ enrollable: false }, true, 0, 1), []);
 });
@@ -72,6 +74,9 @@ test("row text follows the register state", () => {
   assert.ok(rowText({ state: "active", legacy_lifetime: true }).some((l) => /7일 뒤 새 코드/.test(l)));
   assert.ok(rowText({ state: "active", lifetime_shortened: true }).some((l) => /관리자 세션의 만료/.test(l)));
   assert.ok(rowText({ state: "active", hold: "conflict" }).some((l) => /신원 충돌/.test(l)));
+  assert.ok(rowText({ state: "active" }).includes("수집: REST"));
+  assert.ok(rowText({ state: "active", hub_linked: true, hub_host: "site.local", hub_online: true })
+    .includes("허브 연결됨(site.local) · 수집: 허브"));
 });
 
 test("discovery labels include enrolled and the renamed event-link state", () => {
