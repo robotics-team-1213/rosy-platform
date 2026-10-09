@@ -24,7 +24,11 @@
    odom이 리셋되면(CORE 재시작) 핀도 사라진다.
 5. **표시와 감사.** `map-pose`에 `anchor_source`(`sighting` \| `operator_pin`)를 더한다. 핀 뒤 odom이 오기 전까지 `source`는 `operator_pin`이다. 콘솔은 "운영자 핀"과 앵커 나이를 보인다. 모든 핀은 site map 이벤트 `map_pin`이 된다. 이벤트에는 운영자, 자세, map_id, 직전 자세 상태가 들어가고, HTTP 감사도 따로 남는다.
 6. **로봇에 보내지 않는다.** D-546 6항 (a)의 overhead 답은 `anchor_source == sighting`일 때만 낸다. 핀은 로봇 AMCL 초기화가 아니다. 로봇에 핀을 넣는 일은 D-395 운영자 결정이 할 일이다.
-7. **trip 시작 조건은 그대로다.** 시작은 앵커 나이 2 s 이하(`start_anchor_age_s`)를 요구한다. 그래서 카메라 없이 핀만 있으면, 핀을 찍은 뒤 2 s 안에 시작해야 한다. 그 trip은 앵커 나이 10 s에서 `DEGRADED`가 된다. 핀만으로 오래 달리는 것은 이 결정의 범위가 아니다. 그 한도를 넓히려면 별도 결정이 필요하다.
+7. **멈춰 있으면 핀으로 출발한다.** 사용자 결정(2026-10-10): "멈춰 있으면 핀으로 출발".
+   - trip 시작은 원래 앵커 나이 2 s 이하(`start_anchor_age_s`)를 요구한다. 앵커가 운영자 핀이면 2 s가 지나도 지도 자세가 `LOCALIZED`인 동안(앵커 나이 10 s 이하) 시작할 수 있다. 단, 핀 뒤로 로봇이 움직이지 않았어야 한다.
+   - 움직이지 않았다는 기준은 핀 이후 odom 경로 합 `dead_reckon_m` 0.02 m 이하이고 회전 합 `bridge_turn_deg` 2° 이하인 것이다. 값은 `fleet.trip.pin_start_still_m`과 `pin_start_still_deg`이고, 상한은 0.10 m와 10°다.
+   - odom이 리셋되면 앵커가 사라져 `UNKNOWN`이 되므로 시작할 수 없다. 그 밖의 경우에는 2 s 규칙이 그대로다.
+   - 달리는 동안의 규칙은 바뀌지 않는다. 다리 한도 1.5 m, 270°, 10 s를 지키고, 카메라 불일치는 `DEGRADED`가 된다. 핀만으로 시작한 trip은 앵커 나이 10 s에서 `DEGRADED`가 된다. 그 전에 sighting이 앵커를 이어받아야 계속 달린다.
 
 ### 오차와 안전
 
@@ -37,9 +41,9 @@
 |---|---|
 | 핀을 sighting으로 넣는다(`POST /api/fleet/sightings`) | 기각. source 토큰과 보정 revision이 카메라의 것이다. 사람의 입력을 카메라 관측으로 꾸미게 된다 |
 | 핀은 `DEGRADED`로 시작한다 | 기각. 그러면 trip과 D-581을 열 수 없어 사용자 목적을 이루지 못한다 |
-| 핀 앵커에 더 긴 나이·거리 한도 | 보류. 사용자가 정한 한도는 기존 다리 한도다 |
+| 핀 앵커에 더 긴 나이·거리 한도 | 보류. 사용자가 정한 한도는 기존 다리 한도다. 시작만 7항(멈춰 있으면 10 s까지)으로 넓혔다 |
 | D-395 운영자 결정 재사용 | 기각. 로봇 AMCL로 가는 경로다. 지도 자세 앵커가 아니다 |
 
 ### Validation
 
-- `operations/fleet/test/test_map_pose_pin.py`: 즉시 LOCALIZED, odom 다리, 한도, odom 낡음, sighting 일치·불일치, 핀 이전 sighting, odom 리셋, 다른 지도, 경로 권한·이벤트·trip 중 거절, overhead 답 제외.
+- `operations/fleet/test/test_map_pose_pin.py`: 즉시 LOCALIZED, odom 다리, 한도, odom 낡음, sighting 일치·불일치, 핀 이전 sighting, odom 리셋, 다른 지도, 경로 권한·이벤트·trip 중 거절, overhead 답 제외. `test_trip_runner.py`: 멈춘 핀 시작, 0.03 m·2.5°·sighting 앵커 거절, 문턱 상한.

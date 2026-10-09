@@ -157,6 +157,8 @@ class MapPose:
     odom_stamp: Optional[float] = None
     #: D-593: what set the anchor, `sighting` or `operator_pin`; None without one.
     anchor_source: Optional[str] = None
+    #: D-593: summed |odom heading change| since the anchor (deg), the turn twin of `dead_reckon_m`.
+    bridge_turn_deg: float = 0.0
 
 
 def _wrap(angle: float) -> float:
@@ -369,7 +371,8 @@ class MapPoseTracker:
                     or (active_map_id is not None and anchor.map_id != active_map_id)
                     or turned > math.radians(cfg.max_bridge_turn_deg) or anchor_age > cfg.max_anchor_age_s)
         return MapPose(x, y, yaw, DEGRADED if degraded else LOCALIZED, source, bridged, age,
-                       anchor_age, anchor.map_id, odom_stamp=latest.stamp, anchor_source=anchor.kind, **diag)
+                       anchor_age, anchor.map_id, odom_stamp=latest.stamp, anchor_source=anchor.kind,
+                       bridge_turn_deg=math.degrees(turned), **diag)
 
     def _reset(self, since: float) -> None:
         self._epoch += 1

@@ -342,6 +342,31 @@ def test_start_refuses_with_every_d491_code_in_order():
     assert _code(runner.start("p2", "bob")) == "TRIP_BUSY"  # this robot already has an open trip (D-517 1)
 
 
+
+def test_d593_a_still_operator_pin_starts_up_to_its_anchor_age_limit():
+    """D-593 7 (user 2026-10-10): a pin older than 2 s starts only while odom has not moved."""
+    def pin(moved_m=0.0, turned_deg=0.0, anchor=8.0, source="operator_pin"):
+        x, y, yaw = ring_s.point_at(0.1)
+        ports.pose = MapPose(x, y, yaw, "LOCALIZED", source, moved_m, 0.1, anchor,
+                             anchor_source=source, bridge_turn_deg=turned_deg)
+
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    ports.core.mode = "CAMERA_LINE"
+    ring_s = _arc(store, "ring_s:fwd")
+    for kwargs in ({"moved_m": 0.03}, {"turned_deg": 2.5}, {"source": "sighting"}):
+        pin(**kwargs)
+        assert _code(runner.start("p1", "bob")) == "TRIP_POSE_UNTRUSTED"
+    pin(moved_m=0.02, turned_deg=2.0)
+    assert run(runner.start("p1", "bob"))["state"] == "started"
+
+
+def test_d593_pin_still_thresholds_are_bounded():
+    with pytest.raises(ValueError):
+        TripConfig(pin_start_still_m=0.2)
+    with pytest.raises(ValueError):
+        TripConfig(pin_start_still_deg=15.0)
+
 def _activate_again(store):
     draft = store.save_draft(SiteMap.model_validate(store.active_view()["map"]), expected_revision=None,
                              principal_id="bob")

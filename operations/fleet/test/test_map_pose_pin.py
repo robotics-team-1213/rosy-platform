@@ -36,6 +36,8 @@ def test_pin_moves_with_odom():
     assert (pose.state, pose.source, pose.anchor_source) == (LOCALIZED, BRIDGED, OPERATOR_PIN)
     assert (pose.x, pose.y) == pytest.approx((1.0, 2.3))
     assert pose.dead_reckon_m == pytest.approx(0.3)
+    tr.add_odom(odom(0.6, x=0.3, yaw=0.1), T0 + 0.6)
+    assert tr.pose(T0 + 0.6, "m").bridge_turn_deg == pytest.approx(math.degrees(0.1))
 
 
 def test_pin_keeps_the_sighting_bridge_limits():
