@@ -1,6 +1,26 @@
 """Pure quality judgments for fixed perception evaluation (D-379). No I/O."""
 
+import re
+
 import numpy as np
+
+V13_ANNOTATION = {"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"}
+
+
+def v13_lineage_error(doc: dict) -> str | None:
+    """D-554: a v13-drivable manifest may pass intake and reach the lane_seg shadow slot only with
+    parent lane model lineage, a content-addressed dataset and derived-lane annotation; else refuse."""
+    parent, dataset = doc.get("parent_lane_model"), doc.get("dataset")
+    if (doc.get("task") != "lane_seg" or not isinstance(parent, dict) or not isinstance(dataset, dict)
+            or not re.fullmatch(r"lane-seg-[A-Za-z0-9._-]+", str(parent.get("model_revision")))
+            or not re.fullmatch(r"[0-9a-f]{64}", str(parent.get("onnx_sha256")))
+            or not re.fullmatch(r"[0-9a-f]{64}", str(dataset.get("revision")))
+            or any(dataset.get(key) != value for key, value in V13_ANNOTATION.items())
+            or doc.get("camera_provenance") not in ("accepted", "provisional")):
+        return ("v13-drivable needs lane_seg parent_lane_model lineage, a 64-hex dataset revision, "
+                "dataset annotation_origin derived_from_reviewed_lanes with adr D-554 and a camera_provenance "
+                "mark (D-554 item 7: provisional stays in the lane_seg shadow slot)")
+    return None
 
 
 

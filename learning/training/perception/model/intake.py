@@ -49,7 +49,8 @@ from control.sensing.perception.learned.detector import ObjectDetModel  # noqa: 
 from control.sensing.perception.learned.manifest import TASKS  # noqa: E402
 from control.sensing.perception.learned.runner import LaneSegModel  # noqa: E402
 
-from intake_eval_gate import _number, compare_to_champion, judge_eval, _eval_gate_error  # noqa: E402
+from intake_eval_gate import (_number, compare_to_champion, judge_eval, _eval_gate_error,  # noqa: E402
+                              v13_lineage_error)
 
 DEFAULT_GATE = Path(__file__).resolve().parent / "intake_gate.yaml"
 REPORT_NAME = "intake_report.json"
@@ -485,8 +486,8 @@ def run(source: str, *, out, gate_path=DEFAULT_GATE, root=ROOT, max_frames=None,
                                 store=store)
         manifest = load_manifest(folder)
         report["model_revision"] = manifest.model_revision
-        if manifest.model_revision.startswith("v13-drivable-"):
-            raise ValueError("v13-drivable trusted owner lineage admission is not implemented (D-532)")
+        if manifest.model_revision.startswith("v13-drivable-") and v13_lineage_error(manifest.raw):
+            raise ValueError(v13_lineage_error(manifest.raw))
         verify_files(manifest)
         check_precision(manifest)
         # deliver.py push refuses a model whose files differ from these.

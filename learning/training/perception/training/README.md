@@ -358,6 +358,60 @@ batch_size 외에 `parent_model`(lane-seg manifest 폴더), `parent_torchscript`
 화소가 있어야 한다. 출력 ONNX는 부모 차선 화소 보존을 재확인하고 `candidate`로만
 기록한다. 기존 intake·READY·장치 전달은 v13을 계속 거부하며, 후보 생성은 주행
 수용 증거가 아니다.
+
+### D-554 차선 파생 drivable 데이터셋
+
+`drivable_head`는 `IndexedReview` 대신 D-554 파생 데이터셋도 받는다. 사람이 검수한 5클래스
+차선 마스크(`pinky-lane-dataset-v1`)에서 drivable(5)과 벽 음성(0)을 규칙으로 만든 것이다.
+manifest `schema`가 `rosy.lane-derived-drivable/1`, `annotation_origin`이
+`derived_from_reviewed_lanes`, `adr`가 `D-554`이고, 모든 이미지·마스크 sha256이 실행 시작과
+학습·export 경계마다 다시 맞아야 한다. 부모 파일과 trainer 소스 해시도 같은 경계에서 다시 본다.
+부모 결합(`validate_drivable_parent`, parity)은 그대로이고 출력은 `v13-drivable` `candidate`뿐이다.
+이 라벨은 `evaluation_use: training_val_only`라서 D-475 평가 정답으로 쓰지 않는다. 이 데이터셋으로
+baseline/enhanced recipe는 돌리지 않는다.
+
+모델 PC에서 실행한다(`learning/training/perception`에서):
+
+```bash
+python dataset/lane_derived_drivable.py derive --src ~/rosy-ml/data/v13-lane-ai/data-v13 \
+    --out ~/rosy-ml/data/v13-lane-derived/out [--min-both-rows 20] [--ignore-top 110] [--stripe-min 150] \
+    [--tool-commit <git get-tar-commit-id 값>]   # git checkout 밖(git archive 사본)에서는 필수
+python dataset/lane_derived_drivable.py sheets --out ~/rosy-ml/data/v13-lane-derived/out --dest <SHEETS>     --key <SHEETS 밖의 key.json> [--per-sheet 20] [--seed S] [--canaries 0.1]
+python dataset/lane_derived_drivable.py import-verdicts --out ~/rosy-ml/data/v13-lane-derived/out     --sheets <SHEETS> --key <key.json> --verdicts verdicts.jsonl --judge-name <검토자>     --instructions <검토 지침 파일> [--reviewed-manifest <검토한 manifest.json> [--drop-unreviewed]]
+python dataset/lane_derived_drivable.py finalize --out ~/rosy-ml/data/v13-lane-derived/out
+python dataset/publish.py ~/rosy-ml/data/v13-lane-derived/out --store <store> --name v13-lane-derived
+python training/train_job.py config.json --out <store>/jobs/<new-job>
+```
+
+export는 manifest `dataset`에 `annotation_origin`, `adr`를 같이 적는다. intake와 `deliver.py push`는
+이 D-554 계보(부모 lane-seg revision·ONNX sha256, 64자리 dataset revision, 파생 annotation)가 있는
+`v13-drivable`만 받아 lane_seg shadow 슬롯에 넣는다. 그 밖의 v13은 계속 거부하고 lane_seg에는 promote가 없다.
+
+2026-10-09 시험에서 `qwen3-vl:8b-instruct`는 일부러 망가뜨린 겹침 17장에 모두 `ok`라고 답했다. 그래서
+VLM 판정은 없앴고 판정은 검토자 시트로만 들어온다(`import-verdicts`).
+
+`sheets`는 모든 프레임을 번호(T0001…) 타일로 그리고, 알려진 오류를 넣은 canary 타일을 약 10% 섞는다.
+canary 목록은 `--key` 파일에만 있고, 이 파일은 시트 폴더 밖이어야 한다. canary는 20개 이상이고 프레임 수의
+8% 이상이어야 한다. `import-verdicts`는 canary의 `concern` 비율이 0.9 미만이거나 canary가 아닌 타일에
+판정이 하나라도 없으면 거부한다. 마스크를 다시 만든 뒤에는 `--reviewed-manifest`로 검토한 manifest를 준다.
+이미지가 같고 새 마스크가 옛 마스크에서 라벨을 255로만 바꾼 프레임만 판정을 이어받는다. 나머지는
+판정 없음으로 거부되고, `--drop-unreviewed`를 주면 `unreviewed`로 기록해 `finalize`가 뺀다.
+
+`finalize`는 `concern`·`unreviewed` 프레임을 빼고 manifest의 `judge.dropped`에 남긴다. `judge` 블록에는
+모델(검토자), prompt sha256(지침 파일), 판정 수, canary 블록 `{count, caught, rate}`, 제외 목록이 들어간다.
+train_job은 이 블록이나 canary 조건이 없거나 train/val 프레임 중 판정이 `ok`/`uncertain`이 아닌 것이
+있으면 거부한다. `training.ignore_top`이 자료의 `params.ignore_top`과 다르면 거부한다.
+도구 commit은 40자리 hex여야 하고 `unknown`은 거부한다.
+D-554 7항: 이 파생 자료의 `drivable_head`만 `accepted: false` 카메라 출처로 학습할 수 있다. run 기록과 모델
+manifest에 `camera_provenance: provisional`이 남고, intake·push는 이 표시가 없는 v13을 거부한다.
+lane_seg는 shadow 슬롯만 있어 이 모델은 shadow 밖으로 나가지 않는다. 다른 recipe와 자료는 여전히 승인된
+카메라 출처가 필요하다.
+`config.json`은 위 `drivable_head` 형식 그대로이고 `dataset`에 publish가 찍은
+`v13-lane-derived@<content_sha>`를 넣는다. 벽 판정 값(`WALL`: 밝기 125, 7x7 표준편차 12, 면적 200)은
+아레나 프레임으로 맞춘 기본값이며 manifest `params.wall`에 남는다. 두 차선 사이에서 밝기 150 이상인
+화소(라벨 없는 페인트 줄)는 drivable이 아니라 255로 둔다(`params.stripe_min`). 벽은 그 열의 가장 위
+차선 계열 화소보다 위에만 둔다(선 너머 바닥은 벽이 아니다). `ignore_top` 위 행은 모든 클래스가 255다.
+
 # Indexed review producer composition
 
 The default `learning_cycle.py` CLI keeps indexed requests on HOLD without an
