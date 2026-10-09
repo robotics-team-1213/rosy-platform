@@ -293,6 +293,17 @@ def test_remote_pytest_failure_and_signal_death_propagate(tmp_path, monkeypatch)
     assert rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"]) == 1
 
 
+def test_setup_steps_run_at_low_priority_and_capped_on_site_hosts(monkeypatch):
+    sent = []
+    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **kw: sent.append(cmd[-1]) or
+                        subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(rp, "SITES", {"site@9"})
+    rp.remote("model@1", rp.VENV, "x", timeout=1)
+    rp.remote("site@9", rp.SHIP, "x", timeout=1, input=b"")
+    assert sent[0].startswith("nice -n 15 ionice -c3 bash -c ")
+    assert sent[1].startswith("systemd-run --user --scope -q -p MemoryMax=6G -p CPUQuota=400% -- nice -n 15")
+
+
 def test_timeout_is_a_failed_step(monkeypatch):
     def hang(*a, **kw):
         raise subprocess.TimeoutExpired("ssh", 1)

@@ -158,9 +158,16 @@ def git(repo: Path, *args: str) -> str:
                           text=True, encoding="utf-8").stdout.strip()
 
 
+def capped(host: str) -> str:
+    """Command prefix for repo copy, venv build and cleanup: low priority, site hosts also capped (D-568 3-4)."""
+    scope = (f"systemd-run --user --scope -q -p MemoryMax=6G -p CPUQuota={SITE_CPU_QUOTA} -- "
+             if host in SITES else "")
+    return scope + "nice -n 15 ionice -c3 "
+
+
 def remote(host: str, script: str, *args: str, timeout: float, **kw) -> subprocess.CompletedProcess:
-    """Run script on host; a timeout is a failed step (exit 124), never a pass."""
-    command = "bash -c " + shlex.quote(script) + " remote " + " ".join(map(shlex.quote, args))
+    """Run script on host under capped(host); a timeout is a failed step (exit 124), never a pass."""
+    command = capped(host) + "bash -c " + shlex.quote(script) + " remote " + " ".join(map(shlex.quote, args))
     if "input" not in kw:
         kw["stdin"] = subprocess.DEVNULL
     try:
