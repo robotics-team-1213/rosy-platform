@@ -2966,3 +2966,9 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 가짜 시계(`page.clock`) 아래에서는 폴링 응답이 진짜 네트워크로 와서, 찍기 전에 로봇 수를 기다려야 한다.
+
+## 2026-10-10 - fix(fleet): keep the armed CORE arc end instruction
+
+- Change: while CORE's arc is running, retain its armed end-place instruction if Fleet map localization has advanced to the next segment. A hold STOP still takes priority.
+- Evidence: D-520 handshake and the 2026-10-09 U2 SE-to-NE early replacement that ended in arc_mismatch. Regression tests cover the early crossing, next instruction after consumption, and hold STOP.
+- Gate: docs/validation/lane-arc-end-guard-2026-10-10/result.md. Isolated U-Net SIM reached the destination twice, but ring_n sampled body margin crossed the outer paint centre in 18/44 and 27/45 samples. Lane containment and field driving remain HOLD.
