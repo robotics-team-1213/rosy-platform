@@ -16,14 +16,17 @@ sys.path[:0] = [str(ROOT / 'middleware/perception'),
 
 from control.sensing.perception.camera_visibility import visibility_reason  # noqa: E402
 from control.sensing.perception.lane_bev import BirdsEye  # noqa: E402
+from control.sensing.perception.route_camera import RouteCameraFollower  # noqa: E402
+from lane_scenarios import GRAPH  # noqa: E402
 from lane_sim import simulation_ground_plane  # noqa: E402
 
 
 def analyze(path):
     data = np.load(path)
-    frames, stamps = data['frames'], data['stamp']
+    frames, stamps, poses = data['frames'], data['stamp'], data['gt']
     assert frames.ndim == 4 and frames.shape[1:] == (240, 320, 3)
     assert len(frames) == len(stamps) and len(frames) > 0
+    assert poses.shape == (len(frames), 3) and np.all(np.isfinite(poses))
     assert np.all(np.isfinite(stamps)) and np.all(np.diff(stamps) > 0)
     ground = simulation_ground_plane(
         source='GAZEBO', simulation_enabled=True, use_sim_time=True,
@@ -49,6 +52,24 @@ def analyze(path):
             'near_40': near_fraction > .4,
             'global_75': all_fraction > .75,
         })
+    paired = {}
+    for fraction in (.4, .75):
+        follower = RouteCameraFollower(
+            GRAPH, ['west:r', 'ring_s:f'], start_pose=tuple(poses[0]),
+            camera_x_offset_m=.03317)
+        counts = {'both_labels': 0, 'visible': 0, 'washed': 0}
+        for frame, stamp, pose in zip(frames, stamps, poses):
+            observation = follower.update(
+                float(stamp), tuple(pose), frame, ground,
+                lane_half_width_m=.0925, bright_threshold=180,
+                roi_top_fraction=.4, roi_bottom_fraction=1.,
+                washed_fraction=fraction)
+            tracker = follower.last.get('tracker', {})
+            counts['both_labels'] += (tracker.get('left_label') is not None
+                                     and tracker.get('right_label') is not None)
+            counts['visible'] += observation is not None
+            counts['washed'] += follower.last.get('reason') == 'washed'
+        paired[str(fraction)] = counts
     return {
         'input_sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
         'frames': len(rows),
@@ -59,6 +80,7 @@ def analyze(path):
         'first_global_40': next((row for row in rows if row['global_40']), None),
         'first_near_40': next((row for row in rows if row['near_40']), None),
         'max_near': max(rows, key=lambda row: row['near']),
+        'route_a_replay': paired,
     }
 
 
