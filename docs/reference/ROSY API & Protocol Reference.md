@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.165
+**Version:** v1.166
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -384,9 +384,9 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 |---|---|---|---|
 | POST | `/api/v1/teleop` | Operator | §11. 기능 보류 시 409 `CAPABILITY_WITHHELD`. 다른 토큰의 보정 세션 중 409 `CALIBRATION_ACTIVE` (v1.68) — owner 의 teleop 은 D-342 한도 안에서 그대로 동작 |
 | POST | `/api/v1/mode` | Operator | `{mode: MANUAL\|NAVIGATION\|IDLE}`. 다른 토큰의 보정 세션 중 MANUAL·NAVIGATION 은 409 `CALIBRATION_ACTIVE`, IDLE 은 멈춤이라 허용 (v1.68) |
-| POST | `/api/v1/swarm/follow` | Operator | SWM-002 `{target_robot_id, distance, lateral, max_speed, stream_timeout_ms, source, members}`. `source: fleet(기본)\|peer(예약, D-21 — 요청하면 501)`. `members` 는 대형 명단을 `robots.yaml` 순서로 — 비어 있으면 리더 승계를 하지 않고, 있으면 리더 상실 시 `swarm.succession` 을 낸 뒤 follow 를 끝낸다. `max_speed` 는 SAF-004 상한을 넘으면 400 이고, 추종 구간 동안 실제 상한으로 적용된다 — Nav2 가 무엇을 내보내든 `cmd_vel` 은 이 값으로 클리핑된다(D-31). 적용 중인 값은 `GET /safety/state` 의 `limits.session_linear` 에 보인다. 미지원 로봇은 501 `CAPABILITY_NOT_SUPPORTED` (SWM-005/CAP-003), 도킹/언도킹 중에는 409 `DOCKING_ACTIVE`, 맵핑 세션 중에는 409 `MAPPING_ACTIVE`, E-Stop 중에는 409 `EMERGENCY_ACTIVE`. 추종 중 `POST /navigation/cancel` 이나 MANUAL 전환은 대형을 끝내고 `swarm.aborted` 를 낸다 |
+| POST | `/api/v1/swarm/follow` | Operator | SWM-002 `{target_robot_id, distance, lateral, max_speed, stream_timeout_ms, source, members, mode}`. `mode: offset(기본)\|trail` (D-559, v1.166): `trail` 은 리더가 실제로 지나간 자취를 `distance`(자취 위 경로 거리) 뒤에서 CORE 가 직접 조향해 따라간다 — Nav2 목표를 내지 않고, 그 동안 Nav2 twist 는 버린다. `trail` 에서 `lateral` ≠ 0 은 400 `VALIDATION_ERROR`. 응답의 `mode` 가 `trail` 이 아니면 그 로봇은 trail 을 모른다(옛 CORE 는 필드를 버리고 offset 으로 따라간다). 첫 리더 표본이 1.5 m 넘게 떨어져 있으면 follow 를 끝내고 `swarm.aborted`(`reason: trail_join_too_far`)를 낸다. `source: fleet(기본)\|peer(예약, D-21 — 요청하면 501)`. `members` 는 대형 명단을 `robots.yaml` 순서로 — 비어 있으면 리더 승계를 하지 않고, 있으면 리더 상실 시 `swarm.succession` 을 낸 뒤 follow 를 끝낸다. `max_speed` 는 SAF-004 상한을 넘으면 400 이고, 추종 구간 동안 실제 상한으로 적용된다 — Nav2 가 무엇을 내보내든 `cmd_vel` 은 이 값으로 클리핑된다(D-31). 적용 중인 값은 `GET /safety/state` 의 `limits.session_linear` 에 보인다. 미지원 로봇은 501 `CAPABILITY_NOT_SUPPORTED` (SWM-005/CAP-003), 도킹/언도킹 중에는 409 `DOCKING_ACTIVE`, 맵핑 세션 중에는 409 `MAPPING_ACTIVE`, E-Stop 중에는 409 `EMERGENCY_ACTIVE`. 추종 중 `POST /navigation/cancel` 이나 MANUAL 전환은 대형을 끝내고 `swarm.aborted` 를 낸다 |
 | POST | `/api/v1/swarm/cancel` | Operator | SWM-002 |
-| GET | `/api/v1/swarm/state` | Viewer | SWM-006 — `{role, formation, active, holding, target_robot_id, source, max_speed, map_mismatch, stream_age_s}`. `map_mismatch` 는 거부 중인 리더의 `map_id` 다. 상태 스냅샷의 `swarm` 필드는 그중 `role`·`formation`·`active` 다 |
+| GET | `/api/v1/swarm/state` | Viewer | SWM-006 — `{role, formation, active, holding, target_robot_id, source, max_speed, map_mismatch, mode, trail, stream_age_s}`. `mode`·`trail` 은 D-559 (v1.166): `trail` 은 trail 모드에서 자취가 생긴 뒤 `{leader_s, progress, hold_reason}`(경로 거리 m; `hold_reason` 은 아래 `swarm.hold` 의 trail 사유, `stream_lost`, `map_mismatch`, `waiting_for_leader` 또는 null), 아니면 null. `map_mismatch` 는 거부 중인 리더의 `map_id` 다. 상태 스냅샷의 `swarm` 필드는 그중 `role`·`formation`·`active` 다 |
 | GET | `/api/v1/calibration/session` | Viewer | D-321 부록 (v1.68) — `{session: Session\|null}`. `Session` = `{id, kind, label, owner: {id, role, label}, started_at, ttl_s, elapsed_s, remaining_s}`. `owner.id` 는 `GET /auth/whoami` 의 `id` 와 같은 불투명 토큰 id |
 | POST | `/api/v1/calibration/session` | Operator | `{kind, label?, ttl_s?}` → 201 `{session}`. 모드가 IDLE·MANUAL 이 아니거나 navigation·도킹·line-follow·swarm 이 돌고 있으면 409 `MODE_CONFLICT`. `kind` 는 `^[a-z][a-z0-9_]{0,31}$`(알려진 값 `drive`·`camera`·`imu`·`ir`·`lidar`·`odometry`), `label` ≤ 80자(비면 `kind`), `ttl_s` 5–300(기본 30). 호출 토큰이 owner 가 된다. 세션은 로봇당 하나 — 이미 있으면(같은 토큰이어도) 409 `CALIBRATION_ACTIVE` + `detail.session` |
 | POST | `/api/v1/calibration/session/{id}/heartbeat` | Operator | owner 만. `ttl_s` 를 다시 채운 `{session}`. 다른 토큰 403 `FORBIDDEN`, 없거나 만료된 id 404 `NOT_FOUND`. `ttl_s` 안에 heartbeat 가 없으면 세션은 만료되고 `calibration.session_expired` 가 한 번 발행된다 |
@@ -950,10 +950,14 @@ Leader 로봇 → Fleet ≥10 Hz, Fleet → Follower 릴레이 ≥5 Hz. envelope
 { "protocol_version": "1.0", "msg_id": "...", "type": "pose",
   "ts": "2026-08-29T12:00:00.123Z",
   "payload": { "robot_id": "rosy_01", "pose": { "x": 1.1, "y": 0.5, "yaw": 0.2 }, "seq": 8123,
-               "map_id": "site_a" } }
+               "map_id": "site_a", "frame": "map" } }
 ```
 
 Follower의 rosy_core은 스트림 수신 여부를 `stream_timeout_ms`(기본 1000 ms)로 감시하고 단절 시 SWM-004 정책(HOLD)을 적용한다.
+
+`frame` 은 v1.166 additive 다(D-559): `map` 또는 `odom`. 리더의 map TF 가 2 s 넘게 끊기면 보고 pose 는
+odom 으로 떨어지는데, 그 좌표는 맵의 장소가 아니다. trail 팔로워는 `odom` 표본을 자취에 넣지 않고 멈춘다
+(`hold_reason: reference_frame_odom`). 필드가 없으면(옛 리더) 확인하지 않는다.
 
 `map_id` 는 v1.7 additive 다. 좌표만으로는 받는 쪽이 그것이 자기 맵의 좌표인지 알 수 없고,
 다른 맵의 리더를 따라가면 그럴듯해 보이는 엉뚱한 지점으로 간다 — 웨이포인트가 MAP-002 로
@@ -1081,8 +1085,8 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `robot.online/offline` | info/warning | Fleet | `{robot_id}` |
 | `pairing.requested/approved/revoked` | warning | Fleet | `{robot_id}` |
 | `swarm.role_assigned` | info | 로봇 | `{role, formation, target_robot_id, reference_source, by}` |
-| `swarm.hold` | warning | 로봇 | `{reason, formation, stream_timeout_ms, reference_map_id, map_id}` — `reason`: `reference stream lost`(+`stream_timeout_ms`) \| `map_mismatch`(+`reference_map_id`, `map_id`) |
-| `swarm.aborted` | warning | 로봇 | `{formation, reason, robots, by}` — `reason`: `canceled` \| `estop` \| `docking` \| `stuck` \| `manual` \| `navigation_canceled` \| `localization`(D-395 로봇이 `LOCALIZED` 를 벗어남, v1.72) |
+| `swarm.hold` | warning | 로봇 | `{reason, formation, stream_timeout_ms, reference_map_id, map_id}` — `reason`: `reference stream lost`(+`stream_timeout_ms`) \| `map_mismatch`(+`reference_map_id`, `map_id`) \| D-559 trail (v1.166): `trail_lost`(자취에서 0.30 m 넘게 벗어났거나 리더가 한 표본에 1.5 m 넘게 건너뜀, follow 를 다시 걸 때까지 유지) \| `reference_frame_odom` \| `own_pose_not_map` \| `obstacle`(D-422 몸체 정지) \| `obstacle_sensor_stale` |
+| `swarm.aborted` | warning | 로봇 | `{formation, reason, robots, by}` — `reason`: `canceled` \| `estop` \| `docking` \| `stuck` \| `manual` \| `navigation_canceled` \| `localization`(D-395 로봇이 `LOCALIZED` 를 벗어남, v1.72) \| `trail_join_too_far`(D-559, v1.166) |
 | `swarm.succession` | warning | 로봇 | `{leader, dead, role, by}` — 명단이 공유된 대형에서 리더(`dead`)를 잃은 팔로워가 follow 를 끝내고 낸다. `leader` 는 `next_leader` 규칙이 고른 다음 리더(없으면 `null`), `role` 은 이 로봇의 새 역할, `by`: `followers` |
 
 ---
@@ -1664,7 +1668,7 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 | POST | `/api/fleet/robots/{robot_id}/line-stuck/decision` | `operator` bearer for `WAIT`·`ABORT`; named `operator` (D-540 9, v1.161) for `RESUME`·`BACK_AND_RETRY`·`MANUAL` | D-407 (v1.77): `{stuck_id, decision: WAIT\|RESUME\|BACK_AND_RETRY\|MANUAL\|ABORT}`; permission by value (D-540 9, v1.161): WAIT and ABORT stay open to any `operator` like the CORE route; RESUME, BACK_AND_RETRY, MANUAL and YIELD need a named operator (403 `OPERATOR_IDENTITY_REQUIRED`), and on a robot under a D-541 trip lease CORE answers the moving values from a non-owner token with 409 `TRIP_LEASED`; `stuck_id` 1-64 chars of `[A-Za-z0-9_.:-]` (CORE ids are `stuck-<12 hex>`), extra fields 422. Forwarded unchanged to that robot's `POST /api/v1/line-follow/stuck/decision` with the robot credential; Fleet never refuses on CORE's behalf. 200 `{robot_id, actor_id, answer, result}` (`result` is CORE's body incl. `outcome`). A CORE 409 (`STUCK_ID_MISMATCH`, `STUCK_DECISION_REFUSED` with its reason, `EMERGENCY_ACTIVE`, `CALIBRATION_ACTIVE`) is returned as 409 `{code, message, robot_id, robot_status}` with CORE's code and message verbatim; other robot error statuses are 502 with the same body, unknown robot 404. A transport failure is 502 `{code, message, robot_id, transport}`: `ROBOT_UNREACHABLE` when the connection was never made (not delivered), `STUCK_DECISION_OUTCOME_UNKNOWN` on a timeout or a dropped reply (CORE may have applied the answer; re-read the stuck before answering again). Every forwarded answer is recorded with the site principal in memory and, with durable task storage, in the `fleet_line_stuck_answers` table of the Fleet journal database, keyed by the API audit `request_id` (§10.10). D-438 (v1.91) nullable columns: `tier` (`human` for this route, `rule` for a resolver answer), `rule` (`R1`–`R3`, resolver only), `escalated` (hand-off reason). Every resolver hand-off to a human is its own row with `decision: "ESCALATE"`, `accepted` null, `tier: "human"`, `escalated` = the reason and `principal_id: "fleet-resolver"`. A database created before v1.91 gains the three columns when Fleet opens it (rows written before stay null). |
 | POST | `/api/fleet/robots/{robot_id}/line-stuck/claim` | `operator` bearer (D-540 9: open, the console claims before an `ABORT` confirm) | D-438 (v1.91): `{stuck_id}` — 사람이 그 막힘을 맡는다. 판단기는 맡은 막힘에 답하지 않고 `human_claimed` 로 올린다. 200 `{robot_id, stuck_id, claimed_by}`, 모르는 로봇 404 `UNKNOWN_ROBOT`. `.../line-stuck/decision` 도 404 확인 뒤 먼저 맡고, CORE 전달이 실패해도 맡음을 유지한다. 로봇 행 `line_stuck.resolver` = `{tier, rule, decision, escalated, at}` 또는 null(escalated 사유: `no_rule`, `rule_budget`, `deadline`, `restuck_after_resume`, `estop`, `calibration`, `no_resolver_token`, `human_claimed`, `core:<CODE>`). 판단기 답은 `principal_id: "fleet-resolver"` 로 기록하고, 전송 실패는 `ROBOT_UNREACHABLE` 이면 `accepted=false`, 아니면 null. 설정: `robots.yaml` 의 `resolver_token`(비어 있지 않은 따옴표 문자열, `token`·`fleet_pairing_token` 과 달라야 함), `fleet console --stuck-resolver`. `robots.yaml` 로봇만 판단기 클라이언트를 가진다(등록 D-361 로봇은 아직 없음) |
 | POST | `/api/fleet/robots/{robot_id}/line-follow` | `operator` bearer for `{mode: "OFF"}`; named `operator` (D-540 9, v1.161) for `IR_LINE` | Forwards the bounded line-follow selection to CORE `PUT /api/v1/line-follow/mode`. OFF stops, so it stays open |
-| POST | `/api/fleet/formation/start` · `/reform` · `/resume` | named `operator` (D-540 9, v1.161) | D-20 formation. `/api/fleet/formation/stop` stays `operator` bearer (a stop) |
+| POST | `/api/fleet/formation/start` · `/reform` · `/resume` | named `operator` (D-540 9, v1.161) | D-20 formation. `formation: TRAIL` (D-559, v1.166) = COLUMN slots, every follower armed with `mode: trail` and `distance` = slot × spacing behind the leader on its path; a follower whose follow reply lacks `mode: trail` is disarmed and the start fails `ARMING_FAILED` (`TRAIL_NOT_SUPPORTED`). `/api/fleet/formation/stop` stays `operator` bearer (a stop) |
 | POST | `/api/fleet/signals/{signal_id}/command` | `operator` bearer for `mode` `all_red`·`flash_red`; named `operator` (D-540 9, v1.161) otherwise | D-443 physical signal. `manual` without any configured credential still answers 401 `UNAUTHORIZED` first |
 
 v1.136: 진행 중인 lane trip의 `detail.bend_candidate`는 읽기 전용 지도 굽이 **후보**다. 현재 활성 지도 버전이 trip과 같고, 자세가 `LOCALIZED`이며 나이 ≤0.30 s, dead reckoning ≤0.05 m, 현재 edge 중심선에서 ≤0.04 m, 투영 진행 거리 차 ≤0.05 m, 접선과 yaw 차 ≤15°일 때만 기록한다. 값은 `{map_id, map_version, arc_id, bend_in_m, heading_change_deg, map_offset_m}`이며 0.40 m 앞까지의 edge polyline에서 접선 변화 ≥15°와 전체 변화 ≤80°를 찾는다. 다음 tick에서 근거가 사라지거나 trip이 끝나면 삭제한다. CORE로 보내는 지시나 운동 허가가 아니며 페인트·벽·분기의 같은 경계 확인을 뜻하지 않는다.
@@ -2579,6 +2583,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.166 | 2026-10-09 | Additive (D-559, feat/swarm-trail-follow): `POST /api/v1/swarm/follow` 선택 필드 `mode: offset\|trail`(기본 offset, 이전과 같다), `GET /api/v1/swarm/state` 의 `mode`·`trail`, §7.8 `payload.frame: map\|odom`, `swarm.hold` trail 사유, `swarm.aborted` `trail_join_too_far`, Fleet `formation: TRAIL`. trail 은 CORE 가 NAVIGATION 슬롯을 직접 조향한다(SAF-004 클리핑·D-400·D-422 몸체 정지를 지난다). envelope 1.0 유지 |
 | v1.165 | 2026-10-09 | Additive (D-531 P1, 기본 꺼짐): CORE `line/route_context` 경로 증거, `line_follow.route_context`·`route_context_published_at_s` 상태, `base_velocity.route_context` 능력, 인식 `route_context_seq` 역검증. 기존 주행 판단 불변; P2/P3와 SIM·DEVICE 별도 검증 |
 | v1.164 | 2026-10-09 | Additive (D-546 5–7 첫 조각, feat/d546-pose-request, Safety-Review 대상): `GET /api/v1/localization/request`, 오류 `NO_REQUEST`, 이벤트 `localization.request`·`localization.request_cleared`. lane_return(D-468)이 `pose_stale`(1 s 이상) 또는 `fleet_required` 에서 CORE 의 위치 요청을 열고 닫는다. 기존 필드·경로는 그대로이며 옛 Fleet 은 요청을 읽지 않을 뿐이다. 장치 기본값(`localization` 꺼짐)은 그대로다. |
 | v1.163 | 2026-10-09 | Additive (D-555, feat/enrolled-hub-pairing, 보안 검토·Safety-Review 대상): `GET`/`PUT`/`DELETE /api/v1/fleet/link`(TLS 리스너, 관리자 또는 사이트 등록 토큰), 능력 최상위 `fleet_link_provisioning`, 사건 `fleet.link_provisioned`·`fleet.link_cleared`, 오류 `FLEET_GOAL_ACTIVE`·`FLEET_LINK_CONFIG_INVALID`(409), `GET` `arm_state`·`arm_deadline_s`, Fleet 강제 해제 `?force=true`. SAF-003 `configured` 는 지금 설정을 읽는다(실행 중 페어링·해제를 따른다). Fleet `POST`/`DELETE /api/fleet/robots/{robot_id}/hub-link`, 허브는 등록 로봇 HELLO 를 digest 로 확인. 스키마 변경 없음 — envelope 1.0 유지 |
