@@ -153,7 +153,15 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
 def main() -> int:
     STATE.mkdir(parents=True, exist_ok=True)
     status_file = STATE / "status.json"
-    status = json.loads(status_file.read_text(encoding="utf-8")) if status_file.exists() else {}
+    try:
+        status = json.loads(status_file.read_text(encoding="utf-8")) if status_file.exists() else {}
+        if not isinstance(status, dict):
+            raise ValueError("status.json is not an object")
+    except (OSError, ValueError) as exc:
+        # A corrupt state file must not stop the guard for good: start clean. The
+        # reboot cap restarts too, but the 1 h gap is re-learned from the next reboot.
+        print(f"rosy-host-guard: unreadable {status_file} ({exc}); starting from empty state", file=sys.stderr)
+        status = {}
     now = now_hhmm()
     for raw in CONFIG.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].split()

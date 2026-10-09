@@ -53,6 +53,14 @@ def test_a_healthy_pc_is_never_touched(tmp_path):
     assert json.loads((tmp_path / "state/status.json").read_text())["pc1"]["state"] == "ok"
 
 
+@pytest.mark.parametrize("junk", ["", "{not json", "[1, 2]"])
+def test_a_corrupt_state_file_does_not_stop_the_guard(tmp_path, junk):
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state/status.json").write_text(junk)
+    assert _guard(tmp_path, HEALTHY) == ["health"]
+    assert json.loads((tmp_path / "state/status.json").read_text())["pc1"]["state"] == "ok"
+
+
 def test_three_bad_answers_without_a_down_unit_reboot_once(tmp_path):
     assert _guard(tmp_path, LOW_MEMORY, runs=3) == ["health"] * 3 + ["reboot"]
     assert _actions(tmp_path) == ["reboot"]
