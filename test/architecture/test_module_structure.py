@@ -187,8 +187,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        48_118,
-        "split: re-judged at 48118 on 2026-10-09 after merging D-546 6 (Fleet answers a robot's pose request: localization/pose_request.py, service hook, transport call; no command or stop path) with D-555; +150 allowance unchanged. Previously re-judged at 47953 on 2026-10-09 (independent re-judge, critic agent): D-555 enrolled-robot hub pairing"
+        48_322,
+        "split: re-judged at 48322 on 2026-10-09 for D-560 S2 (Fleet draws Rosy Cam's map plane, display "
+        "only): web/shared/vision-view.js plane header, lease and feed, web/camera-backdrop.js plane draw, "
+        "web/site-map.js and shared/site-map-model.js received-plane view and pick, web/field-view.js plane "
+        "check. Existing owners, no command or stop path, no new owner; the D-515 warp stays as the fallback. "
+        "+150 allowance unchanged. Previously re-judged at 48118 on 2026-10-09 after merging D-546 6 (Fleet answers a robot's pose request: localization/pose_request.py, service hook, transport call; no command or stop path) with D-555; +150 allowance unchanged. Previously re-judged at 47953 on 2026-10-09 (independent re-judge, critic agent): D-555 enrolled-robot hub pairing"
         " adds +317 production lines over main 47636: server/enrollment.py +173 (hub link issue/revoke on the existing "
         "register row, TLS fence and enrolled client), web/enrollment.js +57, cli.py +31 (hub digest load at startup), "
         "hub/hub.py +25 (SHA-256 digest HELLO check beside the old token path), enrollment_routes.py +17, swarm/transpo"
