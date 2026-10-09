@@ -405,3 +405,8 @@
 - 변경: 추적 단계가 승인 보정(D-457)을 쓴 프레임에서 `robot_markers`의 마커를 네 모서리 투영 → 윗면 높이 0.125 m 시차 보정 → 모서리 기하 문턱 → URDF 부착(−0.017, 0)과 로봇별 `marker_yaw_offset_deg`로 로봇 자세를 만들어 `calibration_source: approved_record` sighting으로 보낸다(`track/marker_sightings.py`). `project_frame`도 같은 부착·오프셋을 쓴다. 같은 프레임에 이미 sighting이 나간 로봇은 다시 보내지 않는다. 렌즈 FOV가 없으면 보내지 않는다.
 - 증거: 현장 원본 150장(2026-10-10 01:15, 로봇 정지)을 이 코드로 돌려 rosy_40 150/150, rosy_41 148/150 전송, 방향 표준편차 0.09°/0.57°(최대 0.7°/1.7°), 위치 표준편차 0.3 mm 이하. 모델 PC pytest operations/vision/test + tools/calibration 506 통과, known_failures 0 new.
 - gate 변화: SOURCE. 사이트 릴리스·설정 설치·주행 확인 전
+
+## 2026-10-10 · uncommitted · fix(vision): D-595 수락한 보정 고정
+- 변경: `field_calib.FieldCalibrator`가 처음 받아들인 필드 사각형을 고정한다. 문턱 안 다시 감지는 사각형·호모그래피를 바꾸지 않고 `drift_px`로만 보고하고, 문턱 밖 이동이 3번 이어질 때만 새 사각형을 받는다. `track.calibration.choose`는 쓸 수 있는 Fleet 승인 기록을 먼저 쓰고, 그 프레임의 모서리 마커는 기록이 없을 때만 쓴다(D-457 2의 마커 우선을 대체).
+- 증거: 현장 읽기 표본(2026-10-10 05:12–05:20, 변경 없음) 승인 기록 `paint-7b220d432c2a`·평면 사각형 20회 같음, 필드 제안 20회 `field runs past the frame`. 원격 pytest 결과는 브랜치 보고에 남긴다.
+- gate 변화: 없음(SOURCE).
