@@ -1,6 +1,6 @@
 // 예외 큐 (Fleet 분해 3에서 roster.js로부터 옮김, D-540 단계 (d) 크기 재판정). 주의/개입 큐의
 // 규칙(attentionItems, D-493 한 규칙)과 행 채우기, 큐 펼침의 버튼 헬퍼를 가진다. 카드는 roster.js다.
-import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+import { BATTERY_LEVEL_LABEL, DOCK_STATE_LABEL, EVIDENCE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { localizationUrgent } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
@@ -82,6 +82,13 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     if (!robot.online) return [{ severity: "warn", text: `: ${EVIDENCE_LABEL.disconnected}` }, ...stuck];
     if (!state) return [{ severity: "warn", text: ": 상태 확인 불가" }, ...stuck];
     const items = [];
+    const level = state.battery_status?.level;
+    if (level && level !== "ok") {
+      const severe = level === "critical" || level === "deep";
+      items.push({ severity: severe ? "crit" : "warn", text: `: ${enumLabel(BATTERY_LEVEL_LABEL, level)}` });
+    }
+    if (state.docking?.state === "DOCK_FAILED")
+      items.push({ severity: "warn", text: `: ${enumLabel(DOCK_STATE_LABEL, "DOCK_FAILED")}` });
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());
     if ("power_health" in robot && power.problem)
       items.push({ severity: "warn", text: `: ${power.problem}` });
