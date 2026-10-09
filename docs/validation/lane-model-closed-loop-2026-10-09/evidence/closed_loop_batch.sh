@@ -1,7 +1,5 @@
 #!/bin/bash
-# Lap SIM 4 batch: lap SIM 3's ring_batch.sh with workspace ~/rosy_ring4_ws, domain 93, partition rosy_ring4,
-# ports 8588 (CORE) / 8589 (Fleet), into $OUTD (default runs). List: <name> <lap_trip args> per line.
-#   [REC=1] OUTD=runs setsid nohup bash ring4_batch.sh list.txt > ~/rosy_ring4_ws/batch.out 2>&1 < /dev/null &
+# One isolated Fleet lap; provide a unique OUTD and the fixed one_lap.txt.
 WS=${WS:-$HOME/rosy_lane_loop_ws}; H=$WS/src/rosy-platform/docs/validation/lane-trip-lap-sim-2026-10-08/evidence
 OUTD=${OUTD:-runs}
 cd "$WS" || exit 1
@@ -19,7 +17,7 @@ while read -r name args; do
   if [ -e "$OUTD/$name" ]; then echo "run exists: $OUTD/$name" >&2; break; fi
   mkdir -p "$OUTD/$name"
   [ "$REC" = "1" ] && { python3 "$H/lap_record.py" --out "$OUTD/$name/rec" --duration 1300 > "$OUTD/$name/rec.out" 2>&1 & R=$!; }
-  eval timeout 1200 python3 "$H/lap_trip.py" --base http://127.0.0.1:8594 --fleet http://127.0.0.1:8595 --out "$OUTD/$name" $args > "$OUTD/$name/probe.out" 2>&1
+  timeout 1200 python3 "$H/lap_trip.py" --base http://127.0.0.1:8594 --fleet http://127.0.0.1:8595 --out "$OUTD/$name" $args > "$OUTD/$name/probe.out" 2>&1
   [ "$REC" = "1" ] && { kill -INT $R; wait $R; }
   python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('result'), d.get('reason'), d.get('error'))" \
     "$OUTD/$name/summary.json" >> $OUTD/batch.log 2>&1

@@ -1,21 +1,17 @@
 #!/bin/bash
 # Model-PC isolated closed-loop lane model comparison; never a device launch.
-# One Pinky on map_v2_fleet_real in keep mode, launched through d495_real.launch.py.
+# One Pinky on map_v2_fleet_real in keep mode, with selectable paint input.
 #
 #   [BRIDGE=1] [SITE=1] [RECOVERY=true] bash run_sim.sh      # nohup it; it waits on the launch
 #
-# CORE overlay (ROSY_CONFIG, the documented overlay path) = gz_sim config/map_v2_fleet_core.yaml
-# with api_port $PORT plus the site layer below. Payload line_follow.yaml is untouched (H1).
-# Body geometry and obstacle_mode path come from the pinky_pro robot package core.yaml; the
-# overlay repeats obstacle_mode path only to make it explicit. No control.sensor_adapter (off,
-# as on the device): the D-498 'site' basis is the only turn basis here.
+# CORE overlay declares the same site floor and IR/path guards for every model.
 WS=${WS:-$HOME/rosy_lane_loop_ws}
 PORT=${PORT:-8594}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 MODEL=${MODEL:-threshold}
 case "$MODEL" in
-  threshold) PAINT_SOURCE=threshold; MODEL_POINTER= ;;
-  pidnet|unet) PAINT_SOURCE=learned; MODEL_POINTER="$WS/model_candidates/$MODEL/pointer" ;;
+  threshold) PAINT_SOURCE=threshold; MODEL_ARGS=() ;;
+  pidnet|unet|v11|v13_drivable) PAINT_SOURCE=learned; MODEL_ARGS=("learned_lane_pointer:=$WS/model_candidates/$MODEL/pointer") ;;
   *) echo "unknown MODEL=$MODEL" >&2; exit 2 ;;
 esac
 cd "$WS" || exit 1
@@ -47,7 +43,7 @@ for p in $(pgrep -u "$(id -u)"); do
 done
 sleep 4
 cp "$(ros2 pkg prefix control)/share/control/map/map_v2_fleet/worlds/map_v2_fleet_real.world" "$RUN/loop_fleet_real.world"
-ros2 launch "$HERE/closed_loop.launch.py" core_overlay:="$RUN/core_overlay.yaml" world:="$RUN/loop_fleet_real.world" camera_lane_mode:=keep paint_source:="$PAINT_SOURCE" learned_lane_pointer:="$MODEL_POINTER" "$@" > "$RUN/launch.log" 2>&1 &
+ros2 launch "$HERE/closed_loop.launch.py" core_overlay:="$RUN/core_overlay.yaml" world:="$RUN/loop_fleet_real.world" camera_lane_mode:=keep paint_source:="$PAINT_SOURCE" "${MODEL_ARGS[@]}" "$@" > "$RUN/launch.log" 2>&1 &
 LPID=$!
 echo "sim up: model=$MODEL CORE http://127.0.0.1:$PORT (launch pid $LPID)"
 wait $LPID

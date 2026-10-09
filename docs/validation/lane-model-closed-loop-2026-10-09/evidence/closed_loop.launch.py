@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""D-495/D-498 sim-only copy of gz_sim map_v2_fleet_real.launch.py (model PC).
+"""Model-PC-only D-495 map launch with a selectable lane paint source.
 
 Differences from the product launch, nothing else:
 1. bridge_params = d495_bridge.yaml (Gazebo scan/odom on *_gz) and d495_sim_aux.py, which
@@ -9,8 +9,9 @@ Differences from the product launch, nothing else:
    the payload line_follow.yaml and the Gazebo-ground dict, so the D-491 IR guard has an
    IR_LINE observation. lane_corner_turning and camera_x_offset_m still come from the payload
    file (H1; this file overrides neither).
-3. The world file is a byte copy under another name (run_sim.sh), so a peer's pkill on
+3. The world file is a byte copy under another name, so a peer's pkill on
    "map_v2_fleet_real.world" does not hit this run.
+4. paint_source and learned_lane_pointer are simulator launch arguments only.
 CORE stays on sim time with the stock overlay path (core_overlay:=...). No sim_sensors (no enforce).
 """
 
