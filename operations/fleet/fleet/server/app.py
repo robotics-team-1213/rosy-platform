@@ -132,6 +132,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                post_action_observation_source=None,
                site_lanes: Optional[Mapping] = None,
                stuck_resolver_clients: Optional[Mapping[str, object]] = None,
+               stuck_resolver_enrolled: frozenset = frozenset(),
+               stuck_resolver_ai=None,
                pairing=None, pairing_sync_token: Optional[str] = None,
                localization_service=None, deployment_profile: str = "production",
                central_registry=None, tracking=None,
@@ -583,8 +585,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         app.state.line_stuck.peer_config = resolver_core.config   # episodes judge peers as R1 does
         app.state.stuck_resolver = StuckResolverLoop(
             app.state.fleet_gather, app.state.line_stuck, resolver_core,
-            clients=lambda: stuck_resolver_clients)
+            # Enrolled robots the site config names answer with Fleet's own enrolled CORE credential
+            # (operator, carries STUCK_DECIDE): D-503 6 by user go 2026-10-10, per robot id.
+            clients=lambda: {**{rid: client for rid, client in console.clients().items()
+                                if rid in stuck_resolver_enrolled}, **stuck_resolver_clients})
         app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
+        app.state.stuck_resolver.ai_ask = stuck_resolver_ai       # D-577 shadow facts, None = off
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
         hub.set_event_callback(_fan_out_events(

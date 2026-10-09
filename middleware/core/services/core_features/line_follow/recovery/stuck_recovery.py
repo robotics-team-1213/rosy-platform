@@ -39,9 +39,7 @@ DECISIONS = ("WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT", "YIELD")
 #: D-573 4: a person may be on the crosswalk; only a stopping answer or the operator's own end.
 CROSSWALK = "crosswalk_blocked"
 CROSSWALK_DECISIONS = ("WAIT", "MANUAL", "ABORT")
-#: 2026-10-10 user: zero command for stuck_report_s in an active mode, any reason. Fleet answers it;
-#: CORE never backs off on its own for it (no ASKING fallback). detail = the HOLD/LOST reason.
-NO_MOTION = "no_motion"
+NO_MOTION = "no_motion"  # 2026-10-10 user: zero command for stuck_report_s, any reason; Fleet answers
 _TURN_RATE = 0.3          # rad/s. One yield segment turns, then creeps forward.
 _TURN_SKIP = 0.15         # rad. Smaller than this and the crawl starts at once.
 _TURN_CLEAR_M = 0.02      # clearance outside the rotation radius a turn requires
@@ -511,11 +509,8 @@ class StuckRecovery:
         )
         if not ask:
             return
-        if inp.cause == CROSSWALK:
-            self._console_only("crosswalk_gate", inp.now)  # no local back-off, no ASKING fallback
-            return
-        if inp.cause == NO_MOTION:
-            self._console_only("no_motion", inp.now)  # Fleet decides; no unasked local back-off
+        if inp.cause in (CROSSWALK, NO_MOTION):  # no local back-off, no ASKING fallback
+            self._console_only("crosswalk_gate" if inp.cause == CROSSWALK else NO_MOTION, inp.now)
             return
         if self._attempts >= self._config.recovery_max_attempts:
             self._console_only("attempts_exhausted", inp.now)

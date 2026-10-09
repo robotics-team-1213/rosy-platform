@@ -48,6 +48,7 @@ class LineStuckBoard:
         self._log = log
         self._observed_at: Optional[float] = None
         self._resolver: dict[tuple[str, str], dict] = {}
+        self._ai: dict[tuple[str, str], Optional[list]] = {}   # D-577 shadow facts; None = AI absent
         # Episode context, injected by the app once the services exist (None = not known).
         self.trip_busy: Optional[Callable[[str], bool]] = None
         self.map_pose: Optional[Callable[[str], object]] = None
@@ -65,12 +66,19 @@ class LineStuckBoard:
             "tier": tier, "rule": rule, "decision": decision, "escalated": escalated,
             "at": self._clock()}
 
+    def note_ai(self, robot_id: str, stuck_id: str, facts: Optional[list]) -> None:
+        """D-577 shadow: the AI PC's checked facts for this stuck (None = no usable reply)."""
+        if self._open.get(robot_id, {}).get("stuck_id") == stuck_id:   # a late reply for a closed one drops
+            self._ai[(robot_id, stuck_id)] = facts
+
     def resolver_note(self, robot_id: str, stuck_id: str) -> Optional[dict]:
         return self._resolver.get((robot_id, stuck_id))
 
     def _drop_notes(self, robot_id: str, keep: Optional[str] = None) -> None:
         for key in [k for k in self._resolver if k[0] == robot_id and k[1] != keep]:
             del self._resolver[key]
+        for key in [k for k in self._ai if k[0] == robot_id and k[1] != keep]:
+            del self._ai[key]
 
     def observed_age_s(self) -> Optional[float]:
         """Seconds since the last gather (None = never gathered since start)."""
@@ -213,6 +221,7 @@ class LineStuckBoard:
         # D-577 8: the console's human deadline counts from the resolver's note.
         shown["resolver"] = None if note is None else {
             **note, "age_s": round(max(0.0, self._clock() - note["at"]), 2)}
+        shown["ai_facts"] = self._ai.get((robot_id, entry["stuck_id"]))
         return shown
 
     def pending(self) -> list[dict]:

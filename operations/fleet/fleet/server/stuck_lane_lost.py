@@ -10,7 +10,7 @@ from typing import Iterable, Mapping, Optional
 from fleet.server.stuck_resolver import ResolverConfig, _map_pose, _peer_in_band
 
 
-def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig) -> Optional[str]:
+def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig, rule: str = "R3") -> Optional[str]:
     """D-577 1: why R3 may not back off (the R5 reason), or None when every precondition holds.
 
     The rear clearance, blind spot and travelled path stay CORE's re-check (D-407 §4)."""
@@ -18,7 +18,7 @@ def lane_lost_hold(row, stuck, rows, chain, config: ResolverConfig) -> Optional[
         return "local_disabled"
     if int(stuck.get("attempts") or 0) >= int(stuck.get("max_attempts") or 0):
         return "attempts"
-    if "R3" in chain.retired:
+    if rule in chain.retired:
         return "refused"
     if chain.rule_answers >= config.rule_budget:
         return "rule_budget"

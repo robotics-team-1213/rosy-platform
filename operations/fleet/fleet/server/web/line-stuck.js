@@ -19,6 +19,7 @@ export const DECISION_LABEL = Object.freeze({
 export const CAUSE_LABEL = Object.freeze({
   obstacle_ahead: "앞 물체로 멈춤",
   lane_lost: "차선을 잃고 멈춤",
+  no_motion: "5초 넘게 움직이지 않음",
 });
 
 export const PHASE_LABEL = Object.freeze({
@@ -61,6 +62,16 @@ const ESCALATION_REASON = Object.freeze({
   "lane_lost_hold:pose": "차선 잃음 — Fleet 위치 오래됨",
   "lane_lost_hold:refused": "차선 잃음 — 후진 거절됨",
   "lane_lost_hold:rule_budget": "차선 잃음 — 자동 판단 횟수 소진",
+  // 2026-10-10: the same holds for a no_motion stuck (zero command >= stuck_report_s, any reason).
+  "no_motion_hold:peer_behind": "멈춤 — 뒤에 다른 로봇",
+  "no_motion_hold:attempts": "멈춤 — 후진 시도 소진",
+  "no_motion_hold:local_disabled": "멈춤 — 로컬 복구 꺼짐",
+  "no_motion_hold:crosswalk": "멈춤 — 횡단보도 안",
+  "no_motion_hold:crosswalk_unknown": "멈춤 — 횡단보도 여부 모름",
+  "no_motion_hold:peer_unknown": "멈춤 — 주변 로봇 위치 모름",
+  "no_motion_hold:pose": "멈춤 — Fleet 위치 오래됨",
+  "no_motion_hold:refused": "멈춤 — 후진 거절됨",
+  "no_motion_hold:rule_budget": "멈춤 — 자동 판단 횟수 소진",
 });
 
 /** One line about what the Fleet resolver did for this stuck. */
