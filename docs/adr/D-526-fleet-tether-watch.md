@@ -14,7 +14,7 @@
 
 ### Decision
 
-1. **감시 대상과 입력.** Fleet `TetherWatch`(`operations/fleet/fleet/server/tether_watch.py`)가 테더 선언이 있는 로봇만 0.5 s마다 본다. 자세는 지도와 같은 출처다: 신선한 hub heartbeat 상태, 아니면 CORE REST 상태(`FleetConsole._gather_state`)의 `pose {x, y, yaw}`. 지도 자세는 신뢰하는 자세만이다(`fleet.localization.trust.classify == TRUSTED`: `localization`이 LOCALIZED이고 `pose_frame`이 `map`, Fleet 추적·교통정리와 같은 규칙). `localization`이 없는 로봇(D-395 이전), odom, 후보·의심·모름 상태, 값이 유한하지 않은 자세는 그 틱의 자세가 없다. 자세는 새 상태일 때만 센다: 상태의 `timestamp`가 직전 읽기와 같으면(캐시된 heartbeat, 얼어붙은 CORE) 새 자세가 아니다. 매 틱 잰다:
+1. **감시 대상과 입력.** Fleet `TetherWatch`(`operations/fleet/fleet/server/tether_watch.py`)가 테더 선언이 있는 로봇만 0.5 s마다 본다. 자세는 지도와 같은 출처다: 신선한 hub heartbeat 상태, 아니면 CORE REST 상태(`FleetConsole._gather_state`)의 `pose {x, y, yaw}`. 지도 자세는 신뢰하는 자세만이다(`fleet.localization.trust.classify == TRUSTED`: `localization`이 LOCALIZED이고 `pose_frame`이 `map`, Fleet 추적·교통정리와 같은 규칙). `localization`이 없는 로봇(D-395 이전), odom, 후보·의심·모름 상태, 값이 유한하지 않은 자세는 그 틱의 자세가 없다. 자세의 신선도는 CORE가 채널별로 판정한 `state.evidence.pose`에서 온다(`evidence == "fresh"`, `STALE_POSE_S` 2 s). 그 항목이 없으면(구형 CORE) 자세가 없고 2 s 뒤 정지한다. 상태의 `timestamp`는 스냅샷을 만든 시각이라 얼어붙은 자세에도 바뀌므로, 같은 `timestamp`가 반복되는 캐시된 hub 상태를 거르는 데만 쓴다(heartbeat 1 Hz, 틱 0.5 s라 두 번 반복돼도 그 틱만 건너뛰고, 정지는 2 s 자세 나이만 정한다). 매 틱 잰다:
    - 거리: 자세와 `anchor_xy`의 거리.
    - 회전: 선언(POST) 뒤 첫 자세부터 연속한 두 yaw 차이를 (−π, π]로 접어(`math.remainder`) 더한 펼친 누적 yaw. ±180° 경계를 넘어도 한쪽으로 쌓인다.
    - 자세 나이: 마지막 신선한 자세(없으면 선언 시각)부터의 시간.

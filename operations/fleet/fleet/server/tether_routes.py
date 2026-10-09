@@ -27,10 +27,16 @@ def install_tether_routes(app, *, console, trip_runner, read_guard, require_name
 
     stamps: dict[str, object] = {}
 
-    async def pose(robot_id: str):  # the map's pose: a hub heartbeat or CORE REST state that is new since the last read
-        state = (await console._gather_state(robot_id))[0]
-        stamp = (state or {}).get("timestamp")  # robot clock: used only to tell one state from the next
-        if stamp is None or stamps.get(robot_id) == stamp:  # a cached or frozen state is no fresh pose
+    async def pose(robot_id: str):
+        """The map's pose, counted only when CORE judges its pose channel fresh (evidence.pose, STALE_POSE_S)
+        and the state is new since the last read (the stamp catches a cached hub state; a repeated stamp skips
+        that tick only, the 2 s pose age in the watch decides). Missing evidence (older CORE) is no pose."""
+        state = (await console._gather_state(robot_id))[0] or {}
+        evidence = (state.get("evidence") or {}).get("pose")
+        if not isinstance(evidence, dict) or evidence.get("evidence") != "fresh":
+            return None
+        stamp = state.get("timestamp")  # robot clock: used only to tell one state from the next
+        if stamp is None or stamps.get(robot_id) == stamp:
             return None
         stamps[robot_id] = stamp
         return map_pose(state)

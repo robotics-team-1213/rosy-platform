@@ -152,6 +152,7 @@ def test_a_failed_stop_is_retried_until_core_answers():
 
 POSE = {"x": 1, "y": 2, "yaw": 0.5}
 MAP_OK = {"state": "LOCALIZED", "pose_frame": "map"}
+FRESH = {"pose": {"evidence": "fresh"}}
 
 
 def test_map_pose_needs_a_trusted_map_pose():
@@ -232,7 +233,7 @@ def test_repeated_stop_failures_raise_an_operator_alarm_and_keep_retrying():
 
 def test_trip_stops_through_the_existing_core_estop_client_and_shows_in_the_list(tmp_path):
     robot = FakeRobot("rosy_60", state={"robot_id": "rosy_60", "pose": {"x": 4.0, "y": 0.0, "yaw": 0.0},
-                                           "localization": MAP_OK, "timestamp": "t1"})
+                                           "localization": MAP_OK, "timestamp": "t1", "evidence": FRESH})
     client = _client(tmp_path, robot=robot)  # no lifespan: this test runs the only watch tick
     assert client.post(URL, json=BODY, headers=OPERATOR).status_code == 200
     asyncio.run(client.app.state.tether_watch.tick())
@@ -246,7 +247,7 @@ def test_trip_stops_through_the_existing_core_estop_client_and_shows_in_the_list
 
 def _tripped_client(tmp_path, **state):
     robot = FakeRobot("rosy_60", state={"robot_id": "rosy_60", "pose": {"x": 4.0, "y": 0.0, "yaw": 0.0},
-                                        "localization": MAP_OK, "timestamp": "t1", **state})
+                                        "localization": MAP_OK, "timestamp": "t1", "evidence": FRESH, **state})
     client = _client(tmp_path, robot=robot)
     assert client.post(URL, json=BODY, headers=OPERATOR).status_code == 200
     return client, robot
@@ -264,7 +265,7 @@ def test_a_frozen_pose_stamp_trips_pose_stale_and_a_legacy_robot_is_stopped(tmp_
         clock.now += 0.5
     assert watch.view("rosy_60")["trip"] == "tether_pose_stale" and robot.calls.count(("estop",)) == 1
     legacy = FakeRobot("rosy_60", state={"robot_id": "rosy_60", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
-                                         "timestamp": "t1"})
+                                         "timestamp": "t1", "evidence": FRESH})
     (tmp_path / "legacy").mkdir()
     client = _client(tmp_path / "legacy", robot=legacy)
     client.post(URL, json=BODY, headers=OPERATOR)
@@ -300,3 +301,45 @@ def test_a_failing_trip_cancel_does_not_hide_the_delivered_estop(tmp_path):
     asyncio.run(client.app.state.tether_watch.tick())
     view = client.app.state.tether_watch.view("rosy_60")
     assert robot.calls.count(("estop",)) == 1 and view["stop_sent"] is True and view["stop_error"] is None
+
+
+def _run_ticks(client, robot, n, stamp):
+    """n ticks 0.5 s apart; ``stamp(k)`` is the state timestamp CORE reports at tick k."""
+    watch, clock = client.app.state.tether_watch, Clock()
+    watch._clock = clock
+    for k in range(n):
+        robot._state["timestamp"] = stamp(k)
+        asyncio.run(watch.tick())
+        clock.now += 0.5
+    return watch
+
+
+def test_a_frozen_pose_with_a_moving_timestamp_trips_unless_core_calls_it_fresh(tmp_path):
+    n = int(STALE_S / 0.5) + 2
+    client, robot = _tripped_client(tmp_path, evidence={"pose": {"evidence": "delayed"}})
+    robot._state["pose"] = {"x": 0.0, "y": 0.0, "yaw": 0.0}
+    client.app.state.tethers["rosy_60"]["anchor_xy"] = [0.0, 0.0]
+    watch = _run_ticks(client, robot, n, lambda k: f"t{k}")  # stamp changes, evidence stale
+    assert watch.view("rosy_60")["trip"] == "tether_pose_stale"
+    (tmp_path / "ok").mkdir()
+    client, robot = _tripped_client(tmp_path / "ok")  # fresh evidence
+    robot._state["pose"] = {"x": 0.0, "y": 0.0, "yaw": 0.0}
+    client.app.state.tethers["rosy_60"]["anchor_xy"] = [0.0, 0.0]
+    watch = _run_ticks(client, robot, n, lambda k: f"t{k}")
+    assert watch.view("rosy_60")["trip"] is None
+    (tmp_path / "old").mkdir()
+    client, robot = _tripped_client(tmp_path / "old")
+    del robot._state["evidence"]  # older CORE: no pose evidence
+    robot._state["pose"] = {"x": 0.0, "y": 0.0, "yaw": 0.0}
+    client.app.state.tethers["rosy_60"]["anchor_xy"] = [0.0, 0.0]
+    watch = _run_ticks(client, robot, n, lambda k: f"t{k}")
+    assert watch.view("rosy_60")["trip"] == "tether_pose_stale"
+
+
+def test_a_stamp_repeating_at_the_1_hz_heartbeat_does_not_trip_on_its_own(tmp_path):
+    client, robot = _tripped_client(tmp_path)
+    robot._state["pose"] = {"x": 0.0, "y": 0.0, "yaw": 0.0}
+    client.app.state.tethers["rosy_60"]["anchor_xy"] = [0.0, 0.0]
+    watch = _run_ticks(client, robot, 12, lambda k: f"t{k // 2}")  # every stamp seen twice
+    assert watch.view("rosy_60")["trip"] is None
+    assert watch.view("rosy_60")["pose_age_s"] <= 1.0
