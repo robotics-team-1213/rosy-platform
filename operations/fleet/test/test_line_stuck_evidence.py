@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotApiError
 
@@ -40,8 +42,10 @@ def _state(stuck=STUCK) -> dict:
 
 def _client(robot, tmp_path):
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "rest-token")], [robot])
-    app = create_app(console, site_users={
-        sha256(VIEWER.encode()).hexdigest(): {"principal_id": "watcher", "role": "viewer"}})
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    app = create_app(console, task_service=FleetTaskService(store, robot_ids={"rosy_01"}),
+                     start_task_dispatcher=False, site_users={
+                         sha256(VIEWER.encode()).hexdigest(): {"principal_id": "watcher", "role": "viewer"}})
     client = TestClient(app)
     client.app.state.fleet_gather.max_age_s = 0.0
     return client
@@ -71,7 +75,8 @@ def test_the_open_stuck_gets_one_frame_kept_in_memory_with_its_age(tmp_path):
     assert 0.4 <= body["age_s"] < 5.0
     assert second.json()["jpeg_base64"] == body["jpeg_base64"]
     assert robot.calls.count(("front_frame",)) == 1          # one picture per stuck
-    assert not any(tmp_path.rglob("*"))                      # D-577 8: nothing on disk
+    on_disk = [p for p in tmp_path.rglob("*") if p.is_file() and b"fake-jpeg" in p.read_bytes()]
+    assert on_disk == []                                     # D-577 8: memory only, never disk
 
 
 def test_a_closed_stuck_drops_its_picture_and_a_wrong_id_has_none(tmp_path):
