@@ -31,6 +31,5 @@ D-574 ADR reserved on branch feat/v13-map-projected-labels (4f65d142c), not yet 
 D-576 ADR reserved on branch feat/v13-drivable-outside-band (6f3f784d5), not yet on main; remove when it lands
 D-585 reserved on adr-model-lap for model-driven lane lap acceptance; remove when it lands
 D-586 reserved on adr-model-lap for capture_group annotated revision; remove when it lands
-D-587 reserved on marker-sightings for ceiling marker map pose; remove when it lands
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
 D-589 reserved on cam-auto-tune for recognition-driven exposure; remove when it lands
