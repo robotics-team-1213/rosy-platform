@@ -118,6 +118,9 @@ def test_model_miss_needs_visible_paint_and_no_wall():
     weak = lf.fuse(summary, along, {"cause": "model_miss", "confidence": 0.3, "reason": ""})
     assert weak["route"] == "human_queue" and "confidence" in weak["why"]
     assert lf.fuse(summary, along, None)["route"] == "human_queue"
+    # Lines the model marks across the view are never a model miss, even with no wall close by.
+    across = _summary(_across_map(), 1.2, dict(KEEP_9DFK, transverse=0))
+    assert "model_miss" not in lf.fuse(across, along, None)["supported"]
 
 
 def test_keeper_logic_needs_the_model_to_see_lines_along():
@@ -129,11 +132,14 @@ def test_keeper_logic_needs_the_model_to_see_lines_along():
 def test_parse_verdicts_validation():
     tiles = {"T001": "s", "T002": "s"}
     rows = ['{"tile": "T001", "cause": "ok", "confidence": 0.9, "reason": "held"}',
-            '{"tile": "T002", "cause": "pose_off_lane", "reason": "wall"}']
+            '{"tile": "T002", "cause": "pose_off_lane", "confidence": 1, "reason": "wall"}']
     got = lf.parse_verdicts(rows, tiles)
     assert got["T002"]["confidence"] == 1.0
     for bad in (rows[:1], rows + rows[:1], [rows[0], rows[1].replace("pose_off_lane", "turn_left")],
-                [rows[0], rows[1].replace('"reason": "wall"', '"reason": "wall", "confidence": 2')]):
+                [rows[0], rows[1].replace('"confidence": 1', '"confidence": 2')],
+                [rows[0], rows[1].replace('"confidence": 1, ', '')],          # confidence is required
+                [rows[0], '["T002", "ok"]']):                                  # not an object
+
         with pytest.raises(ValueError):
             lf.parse_verdicts(bad, tiles)
 
@@ -141,12 +147,14 @@ def test_parse_verdicts_validation():
 def test_canary_scoring_refuses_a_careless_reviewer():
     hidden = {f"C{i}": {"cause": c} for i, c in enumerate(("model_miss", "pose_off_lane", "camera_exposure", "ok"))}
     right = {t: {"cause": h["cause"]} for t, h in hidden.items()}
-    assert lf.score_canaries(hidden, right, 12)["rate"] == 1.0
+    assert lf.score_canaries(hidden, right, 12) == ({"count": 4, "caught": 4, "rate": 1.0}, {})
     with pytest.raises(ValueError, match="canaries for"):
         lf.score_canaries(hidden, right, 20)                     # 20 real tiles need 5
     wrong = dict(right, C0={"cause": "pose_off_lane"})
-    with pytest.raises(ValueError, match="canary accuracy"):
+    with pytest.raises(lf.CanaryRefused, match="canary accuracy") as refused:
         lf.score_canaries(hidden, wrong, 12)
+    assert "C0" not in str(refused.value) and "model_miss" not in str(refused.value)   # counts only
+    assert refused.value.misses == {"C0": {"expected": "model_miss", "said": "pose_off_lane"}}
 
 
 def test_canary_transforms():
@@ -213,8 +221,8 @@ class _Vlm:
         return json.dumps(VLM_9DFK if self.calls <= 3 else
                           {"lines_direction": "along", "lane_line_count": 2, "wall_close": "no", "on_road": "yes"})
 
-    def close(self):
-        pass
+    def unload(self):
+        raise AssertionError("unload is opt-in")
 
 
 def _verdicts(path, canary_t3="model_miss"):
@@ -245,6 +253,32 @@ def test_cli_vlm_sheets_import_fuse(run, tmp_path):
     assert {c["annotation_note"].split()[1] for c in candidates} == {"T002"}
     assert all(c["capture_group"] == "20261009T130633Z_rosy_41" and "mask" not in c for c in candidates)
     assert "| T001 |" in (run / "report.md").read_text(encoding="utf-8")
+    # A second fuse rewrites label-candidates/: nothing stale survives, the file exists even when empty.
+    (run / "label-candidates" / "images" / "stale.jpg").write_bytes(b"old")
+    loop.fuse_run(argparse.Namespace(run=run))
+    assert not (run / "label-candidates" / "images" / "stale.jpg").exists()
+    (run / "verdicts.jsonl").write_text("")
+    with pytest.raises(ValueError, match="differ from what import-verdicts recorded"):
+        loop.fuse_run(argparse.Namespace(run=run))
+
+
+def test_cli_fuse_writes_empty_candidates(run, tmp_path):
+    loop.sheets(argparse.Namespace(run=run, per_sheet=3))
+    rows = _verdicts(tmp_path / "v.jsonl").read_text().replace('"cause": "model_miss", "confidence": 0.8, "reason": "tape',
+                                                              '"cause": "model_miss", "confidence": 0.3, "reason": "tape')
+    (tmp_path / "v2.jsonl").write_text(rows)
+    loop.import_verdicts(argparse.Namespace(run=run, verdicts=tmp_path / "v2.jsonl", reviewer="r"))
+    assert loop.fuse_run(argparse.Namespace(run=run))["label_candidate_frames"] == 0
+    assert (run / "label-candidates" / "verified-inputs.jsonl").read_text() == ""
+
+
+def test_cli_import_refuses_facts_changed_after_sheets(run, tmp_path):
+    loop.vlm(argparse.Namespace(run=run), backend=_Vlm())
+    loop.sheets(argparse.Namespace(run=run, per_sheet=3))
+    with (run / "vlm.jsonl").open("a") as fh:
+        fh.write("\n")
+    with pytest.raises(ValueError, match="vlm.jsonl changed"):
+        loop.import_verdicts(argparse.Namespace(run=run, verdicts=_verdicts(tmp_path / "v.jsonl"), reviewer="r"))
 
 
 def test_cli_import_refuses_missed_canaries(run, tmp_path):
@@ -253,3 +287,12 @@ def test_cli_import_refuses_missed_canaries(run, tmp_path):
         loop.import_verdicts(argparse.Namespace(run=run, verdicts=_verdicts(tmp_path / "v.jsonl", "ok"),
                                                 reviewer="careless"))
     assert (run / "review-refused.json").exists() and not (run / "review.json").exists()
+    refused = (run / "review-refused.json").read_text(encoding="utf-8")
+    assert "T003" not in refused and "expected" not in refused and '"caught": 3' in refused
+    misses = json.loads((run / "canary-misses.json").read_text(encoding="utf-8"))
+    assert misses == {"T003": {"expected": "model_miss", "said": "ok"}}
+    assert not any("miss" in p.name for p in (run / "sheets").iterdir())
+    # One try per run, even with correct answers now: the reviewer has seen these canaries.
+    with pytest.raises(ValueError, match="collect a new run"):
+        loop.import_verdicts(argparse.Namespace(run=run, verdicts=_verdicts(tmp_path / "v2.jsonl"),
+                                                reviewer="second try"))

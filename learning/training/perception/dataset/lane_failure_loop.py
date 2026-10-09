@@ -10,16 +10,19 @@ Run the steps in order on one new run folder RUN:
            sensor facts, the robot's own model revision re-run on them, and hidden canary tiles
            (bank: hand-labelled windows; synthetic: re-exposed / erased-mask / keeper-drop / ok copies
            of frames where both boundaries were held). RUN/key.json is the canary key.
-  vlm      --run RUN [--backend ollama|fake] [--url URL] [--model NAME] [--timeout 90]
-           identity facts per frame from the fixed prompt (lane_failure.VLM_PROMPT); facts only
+  vlm      --run RUN [--backend ollama|fake] [--url URL] [--model NAME] [--timeout 90] [--unload]
+           identity facts per frame from the fixed prompt (lane_failure.VLM_PROMPT); facts only.
+           --unload sends keep_alive 0, which unloads the model for every user of that Ollama
   sheets   --run RUN [--per-sheet 3]
            RUN/sheets/: contact sheets (raw | overlay per frame + facts panel), index.json and
            REVIEW.md. Give a reviewer only this folder, never RUN/key.json.
   import-verdicts --run RUN --verdicts FILE --reviewer NAME
            reviewer JSONL {tile, cause, confidence, reason}; refused when canary accuracy is below
-           lane_failure.MIN_CANARY_RATE or there are too few canaries
+           lane_failure.MIN_CANARY_RATE or there are too few canaries. One try per run: after a refusal
+           only a new collect (new seed, new canaries) can be reviewed; misses go to canary-misses.json
   fuse     --run RUN
-           rule fusion per episode -> final.jsonl, label-candidates/verified-inputs.jsonl (model_miss
+           rule fusion per episode (rewrites label-candidates/ every time) -> final.jsonl,
+           label-candidates/verified-inputs.jsonl (model_miss
            only; no draft mask, pending human labels via review_ingest), stuck-handoff.jsonl,
            perception-issue.jsonl, human-queue.jsonl, report.md, report.json
 
@@ -30,6 +33,7 @@ import argparse
 import hashlib
 import json
 import random
+import shutil
 import sys
 import time
 import urllib.request
@@ -49,6 +53,11 @@ CAL_TOPIC, KEEP_TOPIC = "camera/calibration/status", "line/keep_debug"
 
 def _sha(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def _file_sha(path):
+    """sha256 of a file, or None when it does not exist (VLM not run)."""
+    return _sha(Path(path).read_bytes()) if Path(path).exists() else None
 
 
 def _jsonl(path, rows):
@@ -108,9 +117,11 @@ def _session_frames(session):
         if ext != "jpg":
             continue
         cal = side.get(CAL_TOPIC)
+        scan_dt = extra["dt"].get("scan")  # scan log time - frame log time; latest at or before the frame
+        scan = side.get("scan") if scan_dt is not None and -lf.MAX_SCAN_DT_S <= scan_dt <= 0 else None
         rows.append({"ordinal": ordinal, "t": t, "log_ns": extra["log_ns"], "jpg": item,
                      "keep": lf.keep_fields(side.get(KEEP_TOPIC)),
-                     "lidar_front_m": lf.lidar_front_m(side.get("scan"), forward),
+                     "lidar_front_m": lf.lidar_front_m(scan, forward),
                      "odom": side.get("odom"), "calibration_active": cal.get("active") if isinstance(cal, dict) else None})
     bags = extract._mcap_files(session)
     bag_shas = [_sha(b.read_bytes()) for b in bags]
@@ -172,7 +183,8 @@ def collect(args):
     commit = _git_commit(args.tool_commit)
     models, runners = _models(args.models), {}
     model_for = dict(x.split("=", 1) for x in args.model_for)
-    bank = json.loads(Path(args.canary_bank).read_text(encoding="utf-8")) if args.canary_bank else []
+    bank_raw = Path(args.canary_bank).read_bytes() if args.canary_bank else b"[]"
+    bank = json.loads(bank_raw)
     rng = random.Random(args.seed)
     real, ok_sources, bank_tiles = [], [], []
     for name in dict.fromkeys([*args.session, *[b["session"] for b in bank]]):
@@ -201,8 +213,7 @@ def collect(args):
             idx = [i for i, t in enumerate(times) if entry["t0"] <= t - times[0] <= entry["t1"]]
             if not idx:
                 raise ValueError(f"canary bank window has no frames: {entry}")
-            bank_tiles.append((_tile(ctx, idx[0], idx[-1], args.frames),
-                               {"cause": entry["cause"], "kind": "bank", "entry": entry}))
+            bank_tiles.append((_tile(ctx, idx[0], idx[-1], args.frames), {"cause": entry["cause"], "kind": "bank"}))
     need = lf.canaries_needed(len(real)) - len(bank_tiles)
     if need > 0 and not ok_sources:
         raise ValueError("no held-lane stretch to build synthetic canaries from")
@@ -233,7 +244,8 @@ def collect(args):
     (out / "key.json").write_text(json.dumps(key, indent=1) + "\n", encoding="utf-8")
     (out / "run.json").write_text(json.dumps({
         "schema": "rosy.lane-failure-run/1", "run": out.name, "tool_commit": commit,
-        "sessions": args.session, "canary_bank": bank, "frames_per_episode": args.frames,
+        "sessions": args.session, "canary_bank": {"sha256": _sha(bank_raw), "entries": len(bank)},
+        "frames_per_episode": args.frames,
         "models": {rev: str(models.get(rev)) for rev in runners}, "seed": args.seed,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, indent=1) + "\n", encoding="utf-8")
     return {"tiles": len(tiles), "episodes": len(real), "canaries": len(key)}
@@ -266,7 +278,8 @@ class Ollama:
                 "messages": [{"role": "user", "content": lf.VLM_PROMPT, "images": [base64.b64encode(png).decode()]}]}
         return self._call("/api/chat", body)["message"]["content"]
 
-    def close(self):
+    def unload(self):
+        """keep_alive 0 frees the model for EVERY user of this Ollama, not only this run: opt-in."""
         self._call("/api/generate", {"model": self.model, "keep_alive": 0})
 
 
@@ -278,7 +291,7 @@ class Fake:
         return json.dumps({"lines_direction": "unsure", "lane_line_count": None, "wall_close": "unsure",
                            "on_road": "unsure"})
 
-    def close(self):
+    def unload(self):
         pass
 
 
@@ -289,26 +302,25 @@ def vlm(args, backend=None):
     done = {(r["tile"], r["frame"]) for r in _read_jsonl(path)}
     asked = 0
     with path.open("a", encoding="utf-8") as fh:
-        try:
-            for tile in _read_jsonl(run / "tiles.jsonl"):
-                for k, frame in enumerate(tile["frames"]):
-                    if (tile["tile"], k) in done:
-                        continue
-                    t0 = time.time()
-                    try:
-                        text = backend.ask(cv2.imread(str(run / frame["file"])))
-                        facts = lf.parse_vlm(text)
-                    except (OSError, ValueError, KeyError) as exc:
-                        text, facts = "", dict(lf.UNSURE_VLM, error=f"{type(exc).__name__}: {exc}"[:200])
-                    fh.write(json.dumps({"tile": tile["tile"], "frame": k, "facts": facts, "reply": text[:400],
-                                         "seconds": round(time.time() - t0, 2), "model": backend.model,
-                                         "model_digest": backend.digest, "endpoint": getattr(backend, "url", "fake"),
-                                         "prompt_id": lf.VLM_PROMPT_ID,
-                                         "prompt_sha256": _sha(lf.VLM_PROMPT.encode())}) + "\n")
-                    fh.flush()
-                    asked += 1
-        finally:
-            backend.close()
+        for tile in _read_jsonl(run / "tiles.jsonl"):
+            for k, frame in enumerate(tile["frames"]):
+                if (tile["tile"], k) in done:
+                    continue
+                t0 = time.time()
+                try:
+                    text = backend.ask(cv2.imread(str(run / frame["file"])))
+                    facts = lf.parse_vlm(text)
+                except (OSError, ValueError, KeyError) as exc:
+                    text, facts = "", dict(lf.UNSURE_VLM, error=f"{type(exc).__name__}: {exc}"[:200])
+                fh.write(json.dumps({"tile": tile["tile"], "frame": k, "facts": facts, "reply": text[:400],
+                                     "seconds": round(time.time() - t0, 2), "model": backend.model,
+                                     "model_digest": backend.digest, "endpoint": getattr(backend, "url", "fake"),
+                                     "prompt_id": lf.VLM_PROMPT_ID,
+                                     "prompt_sha256": _sha(lf.VLM_PROMPT.encode())}) + "\n")
+                fh.flush()
+                asked += 1
+    if getattr(args, "unload", False):  # after success only; Ollama's keep_alive (2m) ends it otherwise
+        backend.unload()
     return {"asked": asked}
 
 
@@ -405,7 +417,8 @@ def sheets(args):
         cv2.imwrite(str(dest / name), np.vstack(images))
         names.append(name)
         index.update({t["tile"]: name for t in group})
-    (dest / "index.json").write_text(json.dumps({"run": run.name, "tiles": index}, indent=1) + "\n",
+    (dest / "index.json").write_text(json.dumps({"run": run.name, "tiles": index,
+                                                 "vlm_sha256": _file_sha(run / "vlm.jsonl")}, indent=1) + "\n",
                                      encoding="utf-8")
     (dest / "REVIEW.md").write_text(REVIEW.format(run=run.name, tiles=len(index), sheets=", ".join(names)),
                                     encoding="utf-8")
@@ -415,21 +428,36 @@ def sheets(args):
 # --- verdicts and fusion -------------------------------------------------------------------------
 
 def import_verdicts(args):
+    """One import per run. A refused batch ends the run: the reviewer has seen these canaries, so a
+    retry needs a fresh collect (new run, new seed, new canaries). Refusal output carries counts only;
+    which tiles missed goes to canary-misses.json beside key.json, never into sheets/."""
     run = Path(args.run)
-    index = json.loads((run / "sheets" / "index.json").read_text(encoding="utf-8"))["tiles"]
+    if (run / "review-refused.json").exists():
+        raise ValueError("this run's review was refused; collect a new run (new seed, new canaries)")
+    sheet_index = json.loads((run / "sheets" / "index.json").read_text(encoding="utf-8"))
+    if sheet_index.get("vlm_sha256") != _file_sha(run / "vlm.jsonl"):
+        raise ValueError("vlm.jsonl changed after the sheets were made; the reviewer saw other facts")
+    index = sheet_index["tiles"]
     key = json.loads((run / "key.json").read_text(encoding="utf-8"))
     raw = Path(args.verdicts).read_bytes()
     answers = lf.parse_verdicts(raw.decode("utf-8").splitlines(), index)
-    record = {"reviewer": args.reviewer, "verdicts_sha256": _sha(raw),
+    kinds = [h["kind"] for h in key.values()]
+    record = {"reviewer": args.reviewer, "verdicts_sha256": _sha(raw), "vlm_sha256": sheet_index["vlm_sha256"],
               "instructions_sha256": _sha((run / "sheets" / "REVIEW.md").read_bytes()),
+              "canary_kinds": {"bank": kinds.count("bank"), "synthetic": len(kinds) - kinds.count("bank")},
               "imported_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     try:
-        record["canaries"] = lf.score_canaries(key, answers, len(index) - len(key))
+        record["canaries"], misses = lf.score_canaries(key, answers, len(index) - len(key))
     except ValueError as exc:
+        if isinstance(exc, lf.CanaryRefused):
+            record["canaries"] = exc.block
+            (run / "canary-misses.json").write_text(json.dumps(exc.misses, indent=1) + "\n", encoding="utf-8")
         (run / "review-refused.json").write_text(json.dumps(dict(record, refused=str(exc)), indent=1) + "\n",
                                                  encoding="utf-8")
         raise
+    (run / "canary-misses.json").write_text(json.dumps(misses, indent=1) + "\n", encoding="utf-8")
     _jsonl(run / "verdicts.jsonl", [answers[t] for t in sorted(answers)])
+    record["imported_sha256"] = _file_sha(run / "verdicts.jsonl")
     (run / "review.json").write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
     return record["canaries"]
 
@@ -454,9 +482,14 @@ def _candidate_rows(run, tile, out):
 def fuse_run(args):
     run = Path(args.run)
     review = json.loads((run / "review.json").read_text(encoding="utf-8"))
+    if (_file_sha(run / "verdicts.jsonl") != review["imported_sha256"]
+            or _file_sha(run / "vlm.jsonl") != review["vlm_sha256"]):
+        raise ValueError("verdicts.jsonl or vlm.jsonl differ from what import-verdicts recorded")
     key = json.loads((run / "key.json").read_text(encoding="utf-8"))
     verdicts = {r["tile"]: r for r in _read_jsonl(run / "verdicts.jsonl")}
     votes = _vlm_by_tile(run)
+    shutil.rmtree(run / "label-candidates", ignore_errors=True)  # never keep candidates of an older fuse
+    (run / "label-candidates").mkdir()
     finals, routes, candidates = [], {k: [] for k in ("stuck_handoff", "perception_issue", "human_queue")}, []
     for tile in _read_jsonl(run / "tiles.jsonl"):
         if tile["tile"] in key:
@@ -475,8 +508,7 @@ def fuse_run(args):
     _jsonl(run / "final.jsonl", finals)
     for name, rows in routes.items():
         _jsonl(run / f"{name.replace('_', '-')}.jsonl", rows)
-    if candidates:
-        _jsonl(run / "label-candidates" / "verified-inputs.jsonl", candidates)
+    _jsonl(run / "label-candidates" / "verified-inputs.jsonl", candidates)
     meta = json.loads((run / "run.json").read_text(encoding="utf-8"))
     vlm_rows = _read_jsonl(run / "vlm.jsonl")
     meta.update(reviewer=review["reviewer"], canaries={k: review["canaries"][k] for k in ("count", "caught", "rate")},
@@ -509,6 +541,8 @@ def main(argv=None):
     p.add_argument("--url", default="http://127.0.0.1:11434")
     p.add_argument("--model", default="qwen3-vl:8b-instruct")
     p.add_argument("--timeout", type=float, default=90)
+    p.add_argument("--unload", action="store_true",
+                   help="unload the model when done (keep_alive 0 frees it for every user of that Ollama)")
     p = sub.add_parser("sheets")
     p.add_argument("--run", required=True)
     p.add_argument("--per-sheet", type=int, default=3)

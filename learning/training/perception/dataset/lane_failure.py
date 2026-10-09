@@ -33,6 +33,7 @@ LANE_SEEN_FRACTION = 0.01  # lane_marking share of the near band that counts as 
 ACROSS_DEG = 20.0          # a lane component flatter than this in the image runs across the view
 MIN_COMPONENT_PX = 40      # as lane_mask.MIN_COMPONENT_PX
 MIN_REVIEW_CONFIDENCE = 0.6
+MAX_SCAN_DT_S = 0.2       # as autolabel.MAX_SCAN_DT_S: an older scan is no fact about this frame
 MIN_CANARIES, MIN_CANARY_FRACTION, MIN_CANARY_RATE = 4, 0.25, 0.8
 VLM_ENUMS = {"lines_direction": ("along", "across", "both", "none", "unsure"),
              "wall_close": ("yes", "no", "unsure"), "on_road": ("yes", "no", "unsure")}
@@ -234,9 +235,9 @@ SUPPORT = {
     # The robot is across the lane or nose to a wall: the camera cannot show a road to keep.
     "pose_off_lane": lambda e: e["across_view"] or (e["wall_close_lidar"] and not e["vlm_lines_along"]),
     # Paint is in view (VLM) or at least not ruled out, the model did not mark it along the road,
-    # and neither a wall in the face nor a bad exposure explains the miss.
+    # and neither a transverse view (the lines marked run across) nor a bad exposure explains the miss.
     "model_miss": lambda e: (not e["model_lane_along"] and not e["vlm_no_lines"] and not e["exposure_bad"]
-                             and not (e["wall_close_lidar"] and e["across_view"])),
+                             and not e["across_view"]),
     # The model marked lines along the road but keep still lost the boundary.
     "keeper_logic": lambda e: e["model_lane_along"] and e["keep_failing"] and not e["across_view"],
     "geometry_calibration": lambda e: e["model_lane_along"] and e["keep_failing"],
@@ -265,13 +266,15 @@ def fuse(summary, vlm, verdict):
 # --- reviewer verdicts and canaries --------------------------------------------------------------
 
 def parse_verdicts(lines, tiles):
-    """Reviewer JSONL rows {tile, cause, confidence 0..1, reason[, label_action]} -> {tile: row}."""
+    """Reviewer JSONL rows {tile, cause, confidence 0..1, reason} (all required) -> {tile: row}."""
     answers = {}
     for line in lines:
         if not line.strip():
             continue
         row = json.loads(line)
-        conf = row.get("confidence", 1.0)
+        if not isinstance(row, dict):
+            raise ValueError(f"verdict row is not an object: {line[:160]}")
+        conf = row.get("confidence")
         if (row.get("tile") not in tiles or row["tile"] in answers or row.get("cause") not in CAUSES
                 or not isinstance(row.get("reason"), str) or isinstance(conf, bool)
                 or not isinstance(conf, (int, float)) or not 0 <= conf <= 1):
@@ -287,18 +290,28 @@ def canaries_needed(real_tiles):
     return max(MIN_CANARIES, math.ceil(MIN_CANARY_FRACTION * real_tiles))
 
 
+class CanaryRefused(ValueError):
+    """The batch is refused. str() carries counts and rate only; .misses (which tiles, which
+    causes) is for the operator's private record, never for a reviewer."""
+
+    def __init__(self, block, misses):
+        super().__init__(f"canary accuracy {block['rate']:.2f} < {MIN_CANARY_RATE} "
+                         f"({block['caught']}/{block['count']}): verdicts refused")
+        self.block, self.misses = block, misses
+
+
 def score_canaries(hidden, answers, real_tiles):
-    """{count, caught, rate, misses}; raises when the batch must be refused."""
+    """({count, caught, rate}, misses); raises ValueError / CanaryRefused when the batch is refused."""
     if len(hidden) < canaries_needed(real_tiles):
         raise ValueError(f"{len(hidden)} canaries for {real_tiles} tiles; "
                          f"at least {canaries_needed(real_tiles)} required")
     misses = {t: {"expected": h["cause"], "said": answers[t]["cause"]}
               for t, h in hidden.items() if answers[t]["cause"] != h["cause"]}
     block = {"count": len(hidden), "caught": len(hidden) - len(misses),
-             "rate": round((len(hidden) - len(misses)) / len(hidden), 3), "misses": misses}
+             "rate": round((len(hidden) - len(misses)) / len(hidden), 3)}
     if block["rate"] < MIN_CANARY_RATE:
-        raise ValueError(f"canary accuracy {block['rate']:.2f} < {MIN_CANARY_RATE}: verdicts refused ({misses})")
-    return block
+        raise CanaryRefused(block, misses)
+    return block, misses
 
 
 CANARY_KINDS = ("erased_mask", "keeper_drop", "dark", "bright", "ok_run")
