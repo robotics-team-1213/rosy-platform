@@ -249,7 +249,8 @@ class TrackWorker:
         """Detection-thread half of a step: relearn, decode, choose the calibration, detect."""
         if relearn is not None:
             if self._relearn_seen is not None and relearn > self._relearn_seen:
-                self.detector.reset()  # if this raises, the old baseline stays: tried again
+                # D-539: an operator relearn may be kept for restarts; other detectors just reset.
+                getattr(self.detector, "relearn", self.detector.reset)()  # if this raises, tried again
             self._relearn_seen = relearn
         image = self.decode(jpeg)
         if image is None:

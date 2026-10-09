@@ -33,6 +33,7 @@ from rosy_vision.pairing_sync import PairedCredentials, PairingSync
 from rosy_vision.publish import SightingPublishError, SightingPublisher
 from rosy_vision.vision_config import load_vision_sources
 from rosy_vision.track.fleet_client import TrackClient
+from rosy_vision.track.background_blob import BackgroundBlobDetector, BackgroundStore
 from rosy_vision.track.worker import TrackWorker
 from rosy_vision.worker import VisionWorker
 from core_common.protocol.vision_preview import VisionLeaseSigner
@@ -326,7 +327,11 @@ async def _run_vision(args: argparse.Namespace) -> int:
             if getattr(args, "track", False):
                 client = await stack.enter_async_context(
                     TrackClient(config.fleet_base_url, config.sighting_token))
-                tracker = TrackWorker(camera=config.camera, ingest=ingest, client=client)
+                state = getattr(args, "track_state", None)
+                detector = None if state is None else BackgroundBlobDetector(
+                    store=BackgroundStore(state / f"{config.camera.source_id}.npz"))
+                tracker = TrackWorker(camera=config.camera, ingest=ingest, client=client,
+                                      detector=detector)
                 trackers.append(tracker)
             calibrator = None
             if config.camera.calibration_source == "field_boundary":
@@ -422,6 +427,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     vision.add_argument("--track", action="store_true",
                         help="D-457 markerless tracking: publish anonymous floor detections to Fleet "
                              "(needs an approved paint-fit calibration or all four corner markers)")
+    vision.add_argument("--track-state", type=Path, default=None, metavar="DIR",
+                        help="D-539: keep the operator-relearned empty-track background here "
+                             "(track pixels only) so a restart does not learn parked robots")
 
     link = sub.add_parser(
         "pair-link",

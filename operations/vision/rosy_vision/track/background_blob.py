@@ -12,11 +12,22 @@ robot height. Only blobs whose floor-equivalent diameter is inside the footprint
 kept; no heading is reported. More than SCENE_CHANGE_FRACTION of the track in the foreground
 (light change, camera knocked) drops the frame as SCENE_CHANGED and learns again. A relearn
 with robots on the track bakes them in: relearn on an empty track.
+
+D-539: an operator relearn is the empty-track statement, so with a BackgroundStore the frames
+of that learn are kept (track pixels only; the rest is blacked out) under the calibration
+revision. After a restart (site update, nightly reboot: robots are usually parked on the mat)
+the first learn replays them instead of learning the parked robots. A different revision or
+frame size learns live as before; a light change since then trips SCENE_CHANGED on the first
+frame and learns live. Replay happens once per process, so that cannot loop.
 """
 
 from __future__ import annotations
 
+import json
+import logging
 import math
+import os
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -27,6 +38,8 @@ from rosy_vision.track.model import (
     ROBOT_TOP_HEIGHT_M, ROTATION_RADIUS_M, SCENE_CHANGE_FRACTION,
     Calibration, Detection, DetectorResult, Frame,
 )
+
+logger = logging.getLogger("rosy_vision.track")
 
 PROCESSOR_REVISION = "background-blob/1"
 #: Detection runs on a copy whose long side is at most this many pixels.
@@ -42,6 +55,45 @@ _FOREGROUND = 200  # MOG2 mask: 255 foreground, 127 shadow, 0 background
 _OPEN_KERNEL = np.ones((3, 3), np.uint8)  # removes speckle
 _CLOSE_KERNEL = np.ones((CLOSE_KERNEL_PX, CLOSE_KERNEL_PX), np.uint8)
 _NOMINAL_M = 2.0 * ROTATION_RADIUS_M
+#: JPEG quality of kept background frames (the live frames are phone JPEGs already).
+STORE_JPEG_QUALITY = 95
+
+
+class BackgroundStore:
+    """One file per source: the masked frames of the last operator relearn (D-539)."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = Path(path)
+
+    def save(self, revision: str, frames: list[np.ndarray]) -> None:
+        encoded = {}
+        for index, image in enumerate(frames):
+            ok, data = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, STORE_JPEG_QUALITY])
+            if not ok:
+                raise ValueError("background frame did not encode")
+            encoded[f"f{index:03d}"] = data.ravel()
+        meta = json.dumps({"revision": revision, "shape": list(frames[0].shape),
+                           "count": len(frames)}).encode("utf-8")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_name(self.path.name + ".new")
+        with temporary.open("wb") as stream:
+            np.savez(stream, meta=np.frombuffer(meta, np.uint8), **encoded)
+        os.replace(temporary, self.path)
+
+    def load(self, revision: str, shape: tuple[int, ...]) -> list[np.ndarray] | None:
+        """The kept frames for this revision and work size, else None (missing or unreadable)."""
+        try:
+            with np.load(self.path, allow_pickle=False) as data:
+                meta = json.loads(bytes(data["meta"]).decode("utf-8"))
+                if meta.get("revision") != revision or tuple(meta.get("shape") or ()) != tuple(shape):
+                    return None
+                frames = [cv2.imdecode(data[f"f{index:03d}"], cv2.IMREAD_COLOR)
+                          for index in range(int(meta["count"]))]
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+        if not frames or any(image is None or image.shape != tuple(shape) for image in frames):
+            return None
+        return frames
 
 
 class BackgroundBlobDetector:
@@ -58,7 +110,8 @@ class BackgroundBlobDetector:
                  learning_min_s: float = LEARNING_MIN_S,
                  scene_change_fraction: float = SCENE_CHANGE_FRACTION,
                  footprint_m: tuple[float, float] = (FOOTPRINT_MIN_M, FOOTPRINT_MAX_M),
-                 robot_height_m: float = ROBOT_TOP_HEIGHT_M) -> None:
+                 robot_height_m: float = ROBOT_TOP_HEIGHT_M,
+                 store: BackgroundStore | None = None) -> None:
         low, high = footprint_m
         if not 0.0 < low < high:
             raise ValueError("footprint window must be 0 < min < max")
@@ -76,16 +129,26 @@ class BackgroundBlobDetector:
         self._shape: tuple[int, ...] | None = None
         self._view_key: tuple | None = None
         self._view: tuple = ()
+        self._store = store
+        self._restore_pending = store is not None  # D-539: once per process, at the first learn
         self.reset()
 
     def reset(self) -> None:
-        """Learn the background again from the next frames (operator relearn, scene change)."""
+        """Learn the background again from the next frames (scene change, new frame size)."""
         self._model = cv2.createBackgroundSubtractorMOG2(
             history=self._learning_frames, varThreshold=16, detectShadows=True)
         self._model.setShadowThreshold(SHADOW_TAU)
         self._learned = 0
         self._first_at: float | None = None
         self._ready = False
+        self._keep: list[np.ndarray] | None = None
+
+    def relearn(self) -> None:
+        """Operator relearn: the track is empty, so these frames are kept for restarts (D-539)."""
+        self.reset()
+        self._restore_pending = False
+        if self._store is not None:
+            self._keep = []
 
     def detect(self, frame: Frame, calib: Calibration) -> DetectorResult:
         image = _work_image(frame.image)
@@ -97,16 +160,33 @@ class BackgroundBlobDetector:
         if track_px == 0:
             return DetectorResult((), "CALIBRATION_REQUIRED")  # track out of view or beyond the horizon
         if image.shape != self._shape:
+            keep = self._keep
             self.reset()
+            self._keep = None if keep is None else []  # an operator relearn restarts, still kept
             self._shape = image.shape
+        if self._restore_pending and not self._ready and self._learned == 0:
+            self._restore_pending = False
+            kept = self._store.load(calib.revision, image.shape)
+            if kept is not None:
+                for background in kept:
+                    self._model.apply(background, learningRate=-1)
+                self._ready = True
         if not self._ready:
             self._model.apply(image, learningRate=-1)
+            if self._keep is not None:
+                self._keep.append(cv2.bitwise_and(image, image, mask=mask))
             if self._first_at is None or frame.captured_at < self._first_at:
                 self._first_at = frame.captured_at  # first frame, or the clock stepped back
             self._learned += 1
             if (self._learned >= self._learning_frames
                     and frame.captured_at - self._first_at >= self._learning_min_s):
                 self._ready = True
+                if self._keep:
+                    keep, self._keep = self._keep[-self._learning_frames:], None
+                    try:
+                        self._store.save(calib.revision, keep)
+                    except (OSError, ValueError) as exc:  # tracking goes on; the next restart learns live
+                        logger.warning("background not kept path=%s error=%s", self._store.path, type(exc).__name__)
             return DetectorResult((), "LEARNING")
         raw = self._model.apply(image, learningRate=0)
         foreground = np.where(raw >= _FOREGROUND, 255, 0).astype(np.uint8)
