@@ -21,7 +21,7 @@ Run the steps in order on one new run folder RUN:
   fuse     --run RUN
            rule fusion per episode -> final.jsonl, label-candidates/verified-inputs.jsonl (model_miss
            only; no draft mask, pending human labels via review_ingest), stuck-handoff.jsonl,
-           perception-issues.jsonl, human-queue.jsonl, report.md, report.json
+           perception-issue.jsonl, human-queue.jsonl, report.md, report.json
 
 Canary bank JSON: [{"session": ID, "t0": s, "t1": s, "cause": CAUSE, "labelled_by": WHO, "note": ...}],
 t0/t1 in seconds after the session's first camera frame.
