@@ -57,6 +57,22 @@ def audit(session):
     odom.sort()
     camera.sort()
     cmd_times, odom_times = [row[0] for row in cmd], [row[0] for row in odom]
+    valid_pose_frames = jumps = 0
+    max_pose_step = 0.0
+    previous = None
+    for start in camera:
+        j = bisect.bisect_right(odom_times, start) - 1
+        pose = odom[j] if j >= 0 and start - odom[j][0] <= 0.30 else None
+        if pose is None:
+            previous = None
+            continue
+        valid_pose_frames += 1
+        if previous is not None:
+            step = max(math.hypot(pose[1] - previous[1], pose[2] - previous[2]),
+                       0.0925 * abs(math.remainder(pose[3] - previous[3], 2.0 * math.pi)))
+            max_pose_step = max(max_pose_step, step)
+            jumps += step > 0.06
+        previous = pose
     active = suspect = eligible = 0
     min_translation = None
     for start in camera:
@@ -80,6 +96,9 @@ def audit(session):
             "eligible_windows": eligible, "active_windows": active,
             "no_progress_proxy_windows": suspect,
             "min_active_translation_m": min_translation,
+            "causal_pose_frames": valid_pose_frames,
+            "max_camera_pose_step_m": max_pose_step,
+            "camera_pose_jumps_gt_60mm": jumps,
             "max_header_log_skew_s": max(map(abs, header_log_skews), default=None),
             "max_odom_gap_s": max((b - a for a, b in zip(odom_times, odom_times[1:])),
                                   default=None)}

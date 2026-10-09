@@ -55,6 +55,9 @@
     "active_windows": 78,
     "no_progress_proxy_windows": 0,
     "min_active_translation_m": 2.892316642782945e-06,
+    "causal_pose_frames": 2486,
+    "max_camera_pose_step_m": 0.00650575312316361,
+    "camera_pose_jumps_gt_60mm": 0,
     "max_header_log_skew_s": 0.10159778594970703,
     "max_odom_gap_s": 0.0538945198059082
   },
@@ -82,6 +85,9 @@
     "active_windows": 109,
     "no_progress_proxy_windows": 0,
     "min_active_translation_m": 5.249780428080866e-06,
+    "causal_pose_frames": 642,
+    "max_camera_pose_step_m": 0.0065875864957819375,
+    "camera_pose_jumps_gt_60mm": 0,
     "max_header_log_skew_s": 0.06719493865966797,
     "max_odom_gap_s": 0.05153965950012207
   },
@@ -101,6 +107,9 @@
     "active_windows": 106,
     "no_progress_proxy_windows": 0,
     "min_active_translation_m": 0.005497419404139463,
+    "causal_pose_frames": 123,
+    "max_camera_pose_step_m": 0.007817158833837783,
+    "camera_pose_jumps_gt_60mm": 0,
     "max_header_log_skew_s": 0.0700521469116211,
     "max_odom_gap_s": 0.10600042343139648
   },
@@ -120,6 +129,9 @@
     "active_windows": 71,
     "no_progress_proxy_windows": 0,
     "min_active_translation_m": 0.006120489463328427,
+    "causal_pose_frames": 83,
+    "max_camera_pose_step_m": 0.00652862124470637,
+    "camera_pose_jumps_gt_60mm": 0,
     "max_header_log_skew_s": 0.04573631286621094,
     "max_odom_gap_s": 0.1067192554473877
   }
