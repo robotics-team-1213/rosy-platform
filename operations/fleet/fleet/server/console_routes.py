@@ -85,13 +85,22 @@ class SharedGather:
         self._at = 0.0
         self.gathered_at = 0.0  # D-493: server UTC epoch s of the last real gather (display only)
 
+    def _observed_at(self, robots) -> dict:
+        """Each row's own read time (D-493 ``_state_mono``, console clock) on the tracking clock."""
+        console_clock = getattr(self._console, "_clock", time.monotonic)
+        mono_now, track_now = console_clock(), self._tracking.now()
+        return {row["robot_id"]: track_now - max(0.0, mono_now - row["_state_mono"])
+                for row in robots
+                if isinstance(row, dict) and isinstance(row.get("_state_mono"), (int, float))}
+
     async def __call__(self) -> dict:
         async with self._lock:
             if self._snapshot is None or self._clock() - self._at >= self.max_age_s:
                 gathered_at = self._tracking.now() if self._tracking is not None else None
                 snapshot = await self._console.snapshot()
                 if self._tracking is not None:
-                    self._tracking.observe_states(snapshot["robots"], now=gathered_at)
+                    self._tracking.observe_states(snapshot["robots"], now=gathered_at,
+                                                  observed=self._observed_at(snapshot["robots"]))
                 self._board.observe(snapshot["robots"], self._console.hub.registry.events_since)
                 await asyncio.to_thread(self._board.flush)   # episode SQLite off the loop
                 self._snapshot, self._at = snapshot, self._clock()

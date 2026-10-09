@@ -176,16 +176,21 @@ class TrackingService:
     def now(self) -> float:
         return self._clock()
 
-    def observe_states(self, robots: Sequence[Mapping], *, now: Optional[float] = None) -> None:
+    def observe_states(self, robots: Sequence[Mapping], *, now: Optional[float] = None,
+                       observed: Optional[Mapping[str, float]] = None) -> None:
         """Remember the robot states the console state route just gathered.
 
         ``now`` is when the gather started (default: the clock now), so a slow robot read
-        never makes its state look fresher than it is. An online row with a state replaces
-        the robot's entry; any other row for that robot (offline, or no state) drops it, so
-        a robot that went away keeps no stale pose.
+        never makes its state look fresher than it is. ``observed`` (robot_id -> this clock)
+        is when each robot's own state was read; it wins over ``now``. Without it a whole
+        gather slower than ``state_fresh_s`` left every state stale on arrival, so LED
+        identify always answered IDENTIFY_NOT_MOVING (site, 2026-10-09: 3.4 s gathers).
+        An online row with a state replaces the robot's entry; any other row for that robot
+        (offline, or no state) drops it, so a robot that went away keeps no stale pose.
         """
         if now is None:
             now = self._clock()
+        observed = observed or {}
         for row in robots:
             if not isinstance(row, Mapping):
                 continue
@@ -194,7 +199,7 @@ class TrackingService:
                 continue
             state = row.get("state")
             if row.get("online") and isinstance(state, Mapping):
-                self._states[robot_id] = (dict(state), now)
+                self._states[robot_id] = (dict(state), observed.get(robot_id, now))
             else:
                 self._states.pop(robot_id, None)
 
