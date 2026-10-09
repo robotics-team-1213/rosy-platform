@@ -92,6 +92,6 @@
 
 - 2026-10-09 · uncommitted · fix(fleet,vision): D-564 독립 검토 반영
 - 2026-10-09 · uncommitted · feat(fleet): D-564 바닥 장소 마커로 초안 장소 가르치기
+- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도·Cell 내부 단계 탐색
 - 2026-10-09 · uncommitted · fix(uiux): Fleet 이름표 홈 이동
 - 2026-10-09 · uncommitted · feat(fleet): trips from the console robot card (D-540 (d))
-- 2026-10-09 · uncommitted · test(fleet): API 기준서 v1.166 참조 갱신
