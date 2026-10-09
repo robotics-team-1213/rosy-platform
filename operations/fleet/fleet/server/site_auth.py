@@ -142,7 +142,10 @@ def build_authorize(console_token: Optional[str],
         if (task_service is not None and request.method == "POST"
                 and request.url.path.startswith("/api/fleet/")
                 and request.url.path != "/api/fleet/sightings"
-                and request.url.path != "/api/fleet/policy-evidence"):
+                and request.url.path != "/api/fleet/policy-evidence"
+                # D-525 rev 4: a signal demand repeats every 0.5 s; the route audits only a new one
+                and not (request.url.path.startswith("/api/fleet/traffic/signals/")
+                         and request.url.path.endswith("/demand"))):
             try:
                 request.state.site_api_audit_id = task_service.store.begin_api_audit(
                     principal_id=principal.principal_id, role=principal.role,
