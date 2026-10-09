@@ -73,7 +73,7 @@
 ## 최근 기록
 
 - 2026-10-09 · uncommitted · feat(face): 개발 모드 로봇은 LCD에 DEV (D-548)
+- 2026-10-09 · uncommitted · feat(model-pc): v13 검수 앱 버전별 배포
 - 2026-10-09 · 2af714d5a · feat(deploy): D-530 호스트 바라는 상태·드리프트 점검·가드
 - 2026-10-09 · uncommitted · docs(decision): split model test hosts
 - 2026-10-08 · uncommitted · AI PC 오프라인 Decision watchdog
-- 2026-10-08 · uncommitted · fix(face): D-472 SIGKILL 뒤 wait 시간 초과 처리

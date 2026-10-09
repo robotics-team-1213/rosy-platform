@@ -528,6 +528,31 @@ def test_cold_corner_without_a_side_boundary_holds():
     assert keeper.update(_render_corner(0.26, "left"), GROUND, lane_half_width_m=HALF) is None
 
 
+def test_short_closed_side_fragment_cannot_seed_a_turn():
+    # 10/6 candidate: an across line plus a 61 mm edge fragment at the image border.
+    a, b = np.array([0.25, -0.128]), np.array([0.328, 0.096])
+    direction = (b - a) / np.linalg.norm(b - a)
+    transverse = [((a + b) / 2, direction, [a, b], False)]
+    keeper = LaneKeeper(corner_turning=True)
+    assert keeper._corner(transverse, HALF, [], [{"side": "left", "length_m": 0.061}]) is None
+    assert keeper._corner(transverse, HALF, [], [{"side": "left", "length_m": 0.185}]) is not None
+
+
+def test_new_short_fragment_cannot_become_a_one_side_target():
+    # A 61 mm fragment at the image border is not an established lane edge.
+    keeper = LaneKeeper()
+    line = {"side": "left", "length_m": 0.061, "y_at_side_x_m": 0.144,
+            "tracked": False, "pursuit_m": [0.25, 0.01]}
+    target, strategy = keeper._choose([line], [], HALF)
+    assert target is None and strategy == "none"
+    line["tracked"] = True
+    target, strategy = keeper._choose([line], [], HALF)
+    assert target is not None and strategy == "left_only"
+    line["tracked"] = False
+    target, strategy = keeper._choose([line], [], HALF, bend_expected=True)
+    assert target is not None and strategy == "left_only"
+
+
 def test_mid_turn_keeps_turning_toward_the_new_lane():
     # Latched left, then the robot has turned ~15 deg left: the corner line now
     # runs at 75 deg and its meeting point with the heading has moved away.

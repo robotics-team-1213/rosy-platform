@@ -2778,6 +2778,10 @@
 - 증거: CI `37854678441`의 Fleet 브라우저 실패 19건을 모델 PC Chromium에서 다시 실행해 19 passed (46.09s). 비밀번호 로그인 브라우저 검사 1 passed, 변경 JavaScript 구문 검사 통과.
 - gate 변화: LOCAL/MODEL-PC 재현 검사 복구. 새 CI 전체 결과와 설치본·DEVICE/FIELD 수용은 별도 확인한다.
 
+## 2026-10-09 · uncommitted · fix(fleet): 느린 상태 수집이 모든 로봇 상태를 도착 즉시 낡게 만들었다
+- 변경: `SharedGather`가 행마다 실제로 읽은 시각(D-493 `_state_mono`, 콘솔 단조 시계)을 추적 시계로 바꿔 `TrackingService.observe_states(observed=...)`에 넘긴다. 없으면 예전처럼 수집 시작 시각이다.
+- 증거: 현장 2026-10-09 `/api/fleet/state` 수집 3.34–3.49 s > `STATE_FRESH_S` 2.0 s. 9dfk가 −0.0275 m/s로 움직이는 동안 LED 확인이 계속 `IDENTIFY_NOT_MOVING`이었고 천장 카메라 추적은 `NO_POSE`였다. 새 시험 2개(수정 전 실패) 포함 63 passed.
+- gate 변화: SOURCE. 현장 Fleet 갱신 뒤 LED 확인·추적 연결 확인.
 ## 2026-10-09 · uncommitted · feat(fleet): 미션 API가 개발 세션으로도 시작 (D-548)
 - 변경: `--mission-api`는 `--users-file` 대신 살아 있는 개발 연결 모드(D-473)로도 시작한다. 개발 세션은 이미 이름 있는 운용자다.
 - 증거: test_cli.py.

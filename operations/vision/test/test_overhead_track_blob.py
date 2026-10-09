@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from rosy_vision.track.background_blob import PROCESSOR_REVISION, BackgroundBlobDetector
+from rosy_vision.track.background_blob import PROCESSOR_REVISION, BackgroundBlobDetector, BackgroundStore
 from rosy_vision.track.model import ROBOT_TOP_HEIGHT_M, ROTATION_RADIUS_M, Calibration, Frame
 
 CAL = Calibration(source_id="ceiling_north", map_id="map_v2_fleet", revision="paint-3f9a1c2b7d40",
@@ -273,3 +273,72 @@ def test_known_lens_corrects_position_and_size_for_the_robot_height():
 def test_bad_settings_are_refused(kwargs):
     with pytest.raises(ValueError):
         BackgroundBlobDetector(**kwargs)
+
+
+# D-539: the operator-relearned empty track survives a restart.
+
+def _parked_robot_floor():
+    return _with_square(18)
+
+
+def test_a_restart_replays_the_operator_relearn_and_sees_a_parked_robot_at_once(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    before = BackgroundBlobDetector(store=store)
+    before.relearn()
+    _learned(before)
+    assert store.path.exists()
+    after = BackgroundBlobDetector(store=store)  # site update or nightly reboot, robot parked
+    result = after.detect(Frame(_parked_robot_floor(), 100.0), CAL)
+    assert result.status == "OK" and len(result.detections) == 1
+    assert result.detections[0].x == pytest.approx(2.995, abs=0.006)
+
+
+def test_without_a_kept_background_a_restart_learns_the_parked_robot_as_before(tmp_path):
+    detector = BackgroundBlobDetector(store=BackgroundStore(tmp_path / "ceiling_north.npz"))
+    _learned(detector, floor=_parked_robot_floor)
+    assert detector.detect(Frame(_parked_robot_floor(), 11.0), CAL).detections == ()
+
+
+def test_the_startup_learn_is_not_kept_only_an_operator_relearn_is(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    _learned(BackgroundBlobDetector(store=store), floor=_parked_robot_floor)
+    assert not store.path.exists()
+
+
+def test_another_calibration_revision_learns_live(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    before = BackgroundBlobDetector(store=store)
+    before.relearn()
+    _learned(before)
+    moved = _calibration(CAL.image_to_map)
+    moved = type(moved)(**{**moved.__dict__, "revision": "paint-000000000000"})
+    assert BackgroundBlobDetector(store=store).detect(Frame(_floor(), 100.0), moved).status == "LEARNING"
+
+
+def test_kept_frames_hold_only_track_pixels(tmp_path):
+    narrow = _calibration(CAL.image_to_map, bounds=(1.0, 1.0, 5.4, 2.6))
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    detector = BackgroundBlobDetector(store=store)
+    detector.relearn()
+    _learned(detector, calibration=narrow)
+    frames = store.load(narrow.revision, (360, 640, 3))
+    assert frames is not None and len(frames) == 30
+    # Floor x < 1.0 m is pixel u < 100: outside the track; beyond the 8 px margin it is black.
+    assert frames[0][:, :80].max() <= 8 and frames[0][150:200, 200:500].min() >= 100
+
+
+@pytest.mark.parametrize("content", [b"", b"not a background", b"PKtruncated"])
+def test_an_unreadable_store_learns_live(tmp_path, content):
+    path = tmp_path / "ceiling_north.npz"
+    path.write_bytes(content)
+    detector = BackgroundBlobDetector(store=BackgroundStore(path))
+    assert detector.detect(Frame(_floor(), 0.0), CAL).status == "LEARNING"
+
+
+def test_a_truncated_kept_background_learns_live(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    before = BackgroundBlobDetector(store=store)
+    before.relearn()
+    _learned(before)
+    store.path.write_bytes(store.path.read_bytes()[:4096])
+    assert BackgroundBlobDetector(store=store).detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"

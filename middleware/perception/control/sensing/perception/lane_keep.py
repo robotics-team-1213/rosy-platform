@@ -413,7 +413,7 @@ class LaneKeeper:
                 dict({k: v for k, v in record.items()
                       if k not in ("centre", "direction", "_wrong_side")},
                      rejected=True, reason="pair_conflict"))
-        target, strategy = self._choose(left, right, half)
+        target, strategy = self._choose(left, right, half, bend_expected and bool(bends))
         # A lane seen on both sides is followed; a corner is only looked for
         # when it is not (a line across between two lane lines is a stop
         # line, a crosswalk or a junction mouth, not an L-corner).
@@ -521,7 +521,7 @@ class LaneKeeper:
             elif (right_reach - left_reach > CORNER_ASYMMETRY_M
                     and abs(left_reach - half) <= CORNER_CLOSED_TOLERANCE_M):
                 side = "right"
-        if side is not None and not any(row["side"] != side for row in seed_boundaries): side = None
+        if side and not any(r["side"] != side and r["length_m"] >= half for r in seed_boundaries): side = None
         if side is not None:
             self._corner_side = side
         if self._corner_side is not None:
@@ -569,7 +569,7 @@ class LaneKeeper:
                 best = (gap, side, wrong_side)
         return None if best is None else best[1:]
 
-    def _choose(self, left, right, half):
+    def _choose(self, left, right, half, bend_expected=False):
         """Target (x, y) and strategy from the side-classified boundaries."""
         for record in left + right:
             record['selected'] = False
@@ -589,8 +589,8 @@ class LaneKeeper:
             heading = l["direction"] + r["direction"]
             point, _ = _pursuit_point(middle, heading / np.linalg.norm(heading), self._lookahead)
             return point, "both"
-        candidates = [r for r in left + right
-                      if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * lane]
+        candidates = [r for r in left + right if abs(r["y_at_side_x_m"]) <= ONE_MAX_DISTANCE_FRACTION * lane
+                      and (bend_expected or r["tracked"] or r["length_m"] >= half)]
         if not candidates:
             return None, "none"
         # The boundary continuous with last frame's first, then the nearest.

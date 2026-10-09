@@ -15,7 +15,7 @@ import { NO_MAP_RETRY_MS, createPollGate } from "/console/assets/poll-gate.js";
 import {drawStartPointMarks} from './start-point-layer.js';
 import { createCameraBackdrop } from "./camera-backdrop.js";
 import { drawTrails } from "./trail-view.js";
-import { drawTraffic } from "./traffic-view.js";
+import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
 import { drawGuide } from "./guide-layer.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
 
@@ -530,8 +530,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const traffic = (ctx, toPoint, pxPerM) =>
     drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, drawChip, on: layerOn("traffic") });
   // D-536: 로봇 몸체 원·방향·불확실성 고리와 안내 목표. "로봇" 층을 따른다.
-  const guide = (ctx, toPoint) =>
+  const guide = (ctx, toPoint) => {
     drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip, on: layerOn("poses") });
+    drawSignalLamps(ctx, toPoint, { view, css, on: layerOn("traffic") });  // D-525 rev 3: above the robots
+  };
 
   function describeSightings() {
     const fresh = view.sightings.filter((s) => s.state === "fresh").length;

@@ -7437,6 +7437,11 @@ osy-d395-s1d\`.
 - 증거: D-543, `docs/plans/2026-10-09-uiux-purpose-and-layout-pipeline.md`의 Fleet SOURCE 진단. 현행 D-493 지도 비율과 D-501 네 탭은 유지한다.
 - gate 변화: 없음. UI 코드 변경, G1/G2/G3 재평가, 사용자 작업 입회, DEVICE/FIELD 수용은 후속 단계다.
 
+## 2026-10-09 · uncommitted · docs: Fleet 5개 작업 캡처 기준선
+
+- 변경: D-543 평가표에 관제·설치·현장 지도·Cell·접속 머리의 작업 목적, 인계, 8축 점수와 첫 실패를 기록했다.
+- 증거: 모델 PC 개발 세션의 `X:\DevTemp\fleet-ui-audit\` 24개 캡처와 `metrics.txt` (`59f8427c1`). 해당 SHA 이후 Fleet 웹 파일이 변경되어 현행 후보 G2 증거는 아니다.
+- gate 변화: 없음. 현행 SHA 재촬영, 실제 작업 완수, 접근성, DEVICE/FIELD 수용은 HOLD.
 ## 2026-10-09 · uncommitted · docs(adr): D-548 장치 개발 모드 표식
 - 변경: D-548 Accepted(D-193 7 개정), Log 행, API reference v1.156(`auth.development_mode`, 장치 개발 토큰 예외).
 - 증거: rosy_harness lint (D-544~547 빈칸은 다른 세션 선점).

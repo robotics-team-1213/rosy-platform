@@ -342,7 +342,7 @@ def run_lamp(system: System, request_id: str) -> tuple[str, str]:
 
 def run_identify(system: System, request_id: str, action: str) -> tuple[str, str]:
     """Identity light is never driven behind rosy-face's safety/state owner."""
-    if not lamp_owned(_read_text(system.path(DISPLAY_ENV))) or not _display_takes_it(system):
+    if system.unit_state("rosy-face.service") != "active" or not _display_takes_it(system):
         return UNAVAILABLE, "rosy-face가 램프를 소유하지 않음 — 식별 점멸 거절"
     return system.handoff(action, request_id)
 

@@ -21,6 +21,7 @@ import io.github.livsbittt.rosy.cam.BuildConfig
 import io.github.livsbittt.rosy.cam.MainActivity
 import io.github.livsbittt.rosy.cam.R
 import io.github.livsbittt.rosy.cam.camera.CameraController
+import io.github.livsbittt.rosy.cam.camera.ExposureStatus
 import io.github.livsbittt.rosy.cam.camera.LightingStatus
 import io.github.livsbittt.rosy.cam.camera.LensChoice
 import io.github.livsbittt.rosy.cam.camera.LensPick
@@ -83,6 +84,7 @@ data class StreamState(
     /** How the last connect reached the site (mDNS, "수동 주소", not found); null before the first lookup. */
     val route: SiteRoute? = null,
     val lighting: LightingStatus = LightingStatus(),
+    val exposure: ExposureStatus = ExposureStatus(),
     val photoSaving: Boolean = false,
     val photoName: String? = null,
     val photoFailed: Boolean = false,
@@ -240,6 +242,7 @@ class StreamService : LifecycleService() {
                     endSession()
                 },
                 onLighting = { status -> if (sessionActive) _state.update { it.copy(lighting = status) } },
+                onExposure = { status -> if (sessionActive) _state.update { it.copy(exposure = status) } },
             )
             link = newLink
             camera = newCamera
@@ -264,6 +267,7 @@ class StreamService : LifecycleService() {
             }
             newLink?.start()
             newCamera.start(OverheadConfig.DEFAULT, pick?.camera?.id)
+            newCamera.setExposureAssist(store.autoExposure.first())
 
             // Lens changes from the settings screen apply live: rebind, then a fresh hello.
             launch {
@@ -333,7 +337,7 @@ class StreamService : LifecycleService() {
         healthMonitor = null
         _state.update { current ->
             current.copy(running = false, previewOnly = false, health = null, lens = null, lensSwitchFailed = false,
-                photoSaving = false, lighting = LightingStatus(),
+                photoSaving = false, lighting = LightingStatus(), exposure = ExposureStatus(),
                 link = lastLink?.status?.value ?: current.link)
         }
     }
@@ -427,6 +431,13 @@ class StreamService : LifecycleService() {
         /** Local activity controls only; no exported command receiver. */
         fun requestLight(requested: Boolean) {
             activeService?.camera?.setLightRequested(requested)
+        }
+
+        /** D-544: persists the operator's choice and applies it to the running camera. */
+        fun setExposureAssist(enabled: Boolean) {
+            val service = activeService ?: return
+            service.lifecycleScope.launch { SettingsStore(service.applicationContext).saveAutoExposure(enabled) }
+            service.camera?.setExposureAssist(enabled)
         }
 
         fun savePhoto() {
