@@ -2804,3 +2804,10 @@
 - 변경: `--mission-api`는 `--users-file` 대신 살아 있는 개발 연결 모드(D-473)로도 시작한다. 개발 세션은 이미 이름 있는 운용자다.
 - 증거: test_cli.py.
 - gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+
+## 2026-10-09 · uncommitted · docs(fleet): Fleet 호출 지도
+- 변경: `docs/call-map.md`를 추가했다. 브라우저·Fleet·CORE·프록시의 현재 호출과, D-540 밖에 남아 구현 때 접을 메모를 적는다. `AGENTS.md` Key Files에 한 줄을 넣었다.
+- 증거: 기준 local main `3b6072a46`의 소스 대조. 그 사이에 착지한 D-540 (a)(c), D-541 7, D-550 10을 지도에 반영했다. 시험 없음. 현장 이미지 확인 없음.
+- gate 변화: 없음. 소스 지도이며 현장 수용이 아니다.
+- 결정: 없음. 계약은 ADR과 API Reference. 화면 구조는 Proposed D-540.
+- 교훈: 호출이 맞는 것과 화면 자리가 하나인 것은 다른 기록이다. 후자는 D-540이 이미 처분한다.
