@@ -86,11 +86,14 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
             secrets.append(token_value)
         robot_ids = row["robot_ids"]
         robot_markers = row["robot_markers"]
-        if (not isinstance(robot_ids, list) or not robot_ids
+        # D-580: `robot_ids: enrolled` follows Fleet's roster; robot_markers are then overrides.
+        if robot_ids == "enrolled":
+            robot_ids = list(robot_markers) if isinstance(robot_markers, dict) else []
+        elif (not isinstance(robot_ids, list) or not robot_ids
                 or any(not isinstance(robot_id, str) or not robot_id.strip() for robot_id in robot_ids)
-                or len(set(robot_ids)) != len(robot_ids)
-                or not isinstance(robot_markers, dict)
-                or set(robot_markers) - set(robot_ids)):
+                or len(set(robot_ids)) != len(robot_ids)):
+            raise ValueError(f"sources[{index}] robot_markers must be a subset of unique robot_ids")
+        if not isinstance(robot_markers, dict) or set(robot_markers) - set(robot_ids):
             raise ValueError(f"sources[{index}] robot_markers must be a subset of unique robot_ids")
         if not isinstance(row["fleet_base_url"], str) or not row["fleet_base_url"].strip():
             raise ValueError(f"sources[{index}].fleet_base_url is required")
@@ -119,7 +122,8 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
         except ValueError as exc:
             raise ValueError(f"sources[{index}].{exc}") from exc
         try:  # D-587 4
-            yaw_offsets = check_marker_yaw_offsets(row.get("marker_yaw_offset_deg"), robot_markers)
+            yaw_offsets = check_marker_yaw_offsets(row.get("marker_yaw_offset_deg"),
+                                                   None if row["robot_ids"] == "enrolled" else robot_ids)
         except ValueError as exc:
             raise ValueError(f"sources[{index}].{exc}") from exc
         camera = CameraMap(

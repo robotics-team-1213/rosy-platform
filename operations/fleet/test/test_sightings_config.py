@@ -80,7 +80,7 @@ def test_place_markers_are_distinct_ids_apart_from_corners_and_robots(tmp_path, 
 
 
 @pytest.mark.parametrize("bad, message", [
-    ({"rosy_02": 90}, "no robot marker"), ({"rosy_01": "90"}, "finite degrees"),
+    ({"rosy_02": 90}, "not a robot of this source"), ({"rosy_01": "90"}, "finite degrees"),
     ({"rosy_01": True}, "finite degrees"), ({"rosy_01": 400}, "finite degrees"),
     ({"rosy_01": float("nan")}, "finite degrees"), ([90], "map robot ids"),
 ])
@@ -89,7 +89,46 @@ def test_marker_yaw_offsets_name_marker_robots_with_finite_degrees(tmp_path, bad
     good = _write(tmp_path / "s.yaml", [_row(robot_markers={"rosy_01": 40},
                                              marker_yaw_offset_deg={"rosy_01": 180})])
     assert load_sighting_sources(good, environ=ENV)[0].source_id == "ceiling_north"
+    enrolled = _write(tmp_path / "s.yaml", [_row(robot_ids="enrolled", robot_markers={},
+                                                 marker_yaw_offset_deg={"rosy_41": 180})])
+    assert load_sighting_sources(enrolled, environ=ENV)[0].follow_roster  # D-580: any roster robot
     config = _write(tmp_path / "s.yaml", [_row(robot_markers={"rosy_01": 40},
                                                marker_yaw_offset_deg=bad)])
     with pytest.raises(ValueError, match=message):
+
+
+def test_enrolled_source_follows_the_roster_with_robot_number_markers(tmp_path):
+    """D-580: `robot_ids: enrolled` -> live roster targets, marker = robot number unless overridden."""
+    from types import SimpleNamespace
+    from fleet.server.roster import SiteRoster
+    from fleet.server.sightings import SightingService
+    from fleet.server.tracking import TrackingService
+    from fleet.server.tracking_calibration import TrackingCalibrationStore
+
+    config = _write(tmp_path / "sightings.yaml", [_row(robot_ids="enrolled", robot_markers={"rosy_41": 45})])
+    source, = load_sighting_sources(config, environ=ENV)
+    assert source.follow_roster and source.robot_ids == () and source.marker_overrides == (("rosy_41", 45),)
+    sightings = SightingService([source], known_robot_ids=[])
+    tracking = TrackingService(sightings.sources, calibrations=TrackingCalibrationStore())
+    console = SimpleNamespace(robot_ids=["rosy_40", "rosy_41", "rosy_45", "rosy_31", "robot-x"])
+    roster = SiteRoster(console, sightings=sightings, tracking=tracking)
+    roster.sync()
+    current, = sightings.sources
+    assert current.robot_ids == ("robot-x", "rosy_31", "rosy_40", "rosy_41", "rosy_45")
+    # rosy_45's number is the override of rosy_41; rosy_31 is outside 40-49; robot-x has no number.
+    assert dict(current.robot_markers) == {"rosy_40": 40, "rosy_41": 45}
+    assert tracking.sources == sightings.sources
+    assert tracking.config_for("Bearer runtime-secret")["robot_markers"] == {"rosy_40": 40, "rosy_41": 45}
+    console.robot_ids = ["rosy_41"]  # rosy_40 unenrolled: its target and marker go with it
+    roster.sync()
+    assert sightings.sources[0].robot_ids == ("rosy_41",) and dict(sightings.sources[0].robot_markers) == {"rosy_41": 45}
+    assert sightings.known_robot_ids == {"rosy_41"}
+
+
+def test_fixed_robot_ids_still_refuse_markers_outside_them(tmp_path):
+    config = _write(tmp_path / "sightings.yaml", [_row(robot_markers={"rosy_02": 40})])
+    with pytest.raises(ValueError, match="outside robot_ids"):
+        load_sighting_sources(config, environ=ENV)
+    config = _write(tmp_path / "sightings.yaml", [_row(robot_ids="all")])
+    with pytest.raises(ValueError, match="enrolled"):
         load_sighting_sources(config, environ=ENV)

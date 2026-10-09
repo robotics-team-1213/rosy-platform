@@ -29,11 +29,8 @@ D-572 ADR reserved on branch fix/mdns-roster-gate (8c9468977), not yet on main; 
 D-574 reserved in another active branch (feat/v13-map-projected-labels); remove when it lands
 D-574 ADR reserved on branch feat/v13-map-projected-labels (4f65d142c), not yet on main; remove when it lands
 D-576 ADR reserved on branch feat/v13-drivable-outside-band (6f3f784d5), not yet on main; remove when it lands
-D-578 reserved in another active branch (lane failure analysis loop); remove when it lands
-D-580 ADR reserved on branch feat/fleet-managed-site-roster (ba60466fe), not yet on main; remove when it lands
-D-581 ADR reserved on branch feat/trail-fleet-anchored-frame (95af21738), not yet on main; remove when it lands
-D-582 ADR reserved on branch feat/pilot-two-robots (1542fa0b8), not yet on main; remove when it lands
-D-583 ADR reserved on branch feat/drive-turn-signals (ab7f6efcc), not yet on main; remove when it lands
-D-584 ADR reserved on branch fix/tests-never-local (1d194bf71), not yet on main; remove when it lands
 D-585 ADR reserved on branch docs/adr-model-driven-lap (cd786b876), not yet on main; remove when it lands
 D-586 ADR reserved on branch docs/adr-model-driven-lap (cd786b876), not yet on main; remove when it lands
+D-581 reserved in another active branch (refs/adr/D-581)
+D-583 reserved in another active branch (refs/adr/D-583)
+D-581 reserved in another active branch (Trail follow in a Fleet-anchored frame from ceiling camera); remove when it lands

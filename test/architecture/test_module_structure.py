@@ -205,7 +205,20 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        49_303,
+        49_877,
+        "split: re-judged at 49877 on 2026-10-10 after merging D-580 (+145 over main 49732; the enrolled "
+        "roster drives camera robot_ids/markers and the autoupdate required_ids in existing owners "
+        "enrollment*.py, sightings*.py, roster.py, site_update_io.py; no command path, no new owner). Previously "
+        "split: re-judged at 49732 on 2026-10-10 after the crosswalk Fleet map-zone change "
+        "(+271 over 49461). Crosswalk geometry and API stay with site_map.py and its existing "
+        "routes/store; editing and display stay in site-map.js and map-view.js. No new command "
+        "owner or transport was added. The map module split plan and +150 package allowance "
+        "remain in force. Previously "
+        "split: re-judged at 49461 on 2026-10-10: +158 since 49303 across the Fleet map "
+        "view/observation presentation and D-577 lane-lost handling. The former stays in web "
+        "map/tracking owners; the latter adds pure rules to stuck_resolver.py and queue display "
+        "without adding a motion or transport owner. The resolver file has its own split verdict; "
+        "the package +150 allowance remains. See docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md. Previously "
         "split: re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
         "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "
         "web/map-view.js; existing owners, display only, no command path, no new owner). Previously "

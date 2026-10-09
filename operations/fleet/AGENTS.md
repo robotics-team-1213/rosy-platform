@@ -39,7 +39,7 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/server/signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 형식 (`observer_url`·`observer_map` 포함) |
 | `fleet/server/app.py` | FastAPI 표면 — `/api/fleet/*` 와 `/console` UI |
 | `fleet/server/web/` | 관제 UI 정적 자산 (CSP `style-src 'self'` — 인라인 스타일 금지) |
-| `fleet/site_map.py` | D-488 `rosy.site_map/1` 스키마(장소·방향 있는 차로·회전 금지)와 `lane_graph.yaml` 가져오기. 순수 |
+| `fleet/site_map.py` | D-488 `rosy.site_map/1` 스키마(장소·방향 있는 차로·회전 금지·D-573 횡단보도 구역)와 `lane_graph.yaml` 가져오기. 순수 |
 | `fleet/routing/` | D-489/D-490 경로 계획기: 차로 단위 상태 A*(`graph`·`cost`·`planner`·`snap`·`trip`). 표준 라이브러리만, 네트워크·DB·시계 없음 |
 | `fleet/server/site_map_store.py`, `site_map_routes.py`, `trip_routes.py` | 지도 초안·활성 버전 저장과 활성화(이름 있는 운영자, 진행 중 trip이 있으면 거절), `POST /trip` 계획 응답과 계획 본문 저장 |
 | `fleet/server/trip_runner.py` | D-494 5 / D-517 서버 trip 루프(로봇마다 trip 하나, 반복 운행): 시작 검사·상태기계(재시작 뒤 `stopped`)·0.5 s 루프(`lane` 교차로 지시, `free` D-463 점)·다음 장소 재계획 대기. 능력·지도 자세·교차로 지시는 `trip_ports.py`의 포트로 주입, 실행 가능 규칙은 `fleet/routing/execute.py`, trip 중 다른 이동 거절은 `trip_guard.py` |

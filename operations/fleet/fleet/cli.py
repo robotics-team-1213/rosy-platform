@@ -520,6 +520,8 @@ def run_console(args: argparse.Namespace) -> None:
             sources, known_robot_ids=[rid for source in sources for rid in source.robot_ids]
             if enrollment_store is not None else console.robot_ids, store=store,
         )
+        if enrollment_store is None:
+            sighting_service.retarget(console.robot_ids)  # D-580; enrolled robots sync via SiteRoster
         from fleet.server.tracking import TrackingService
         from fleet.server.tracking_calibration import TrackingCalibrationStore
 
@@ -557,7 +559,7 @@ def run_console(args: argparse.Namespace) -> None:
             console=console, task_service=task_service, sighting_service=sighting_service,
             enrollment_store=enrollment_store, robot_key=robot_key, robot_key_error=robot_key_error,
             discovery=discovery, tls_file=getattr(args, "enrolled_tls_bindings_file", None),
-            hub_link=hub_link if enrolled_hub else None)
+            hub_link=hub_link if enrolled_hub else None, tracking_service=tracking_service)
     from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids
 
     try:
@@ -695,6 +697,7 @@ def _build_site_map(args, tasks_db):
         site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
         source = getattr(args, "site_map_import", None)
         if source is not None:
+            site_maps.import_source = Path(source)
             # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
             # report; the default "site" would filter every sighting (map pose UNKNOWN).
             site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
@@ -747,6 +750,9 @@ def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
 
     kept = []
     for source in sources:
+        if source.follow_roster:  # D-580: targets come from the roster, never a typo
+            kept.append(source)
+            continue
         unknown = set(source.robot_ids) - known
         if unknown - retired:
             sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")

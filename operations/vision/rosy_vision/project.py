@@ -78,10 +78,10 @@ class CameraMap:
         if any(type(marker_id) is not int or marker_id < 0
                for marker_id in self.robot_markers.values()):
             raise ValueError("robot marker ids must be non-negative integers")
-        if (set(self.marker_yaw_offset_deg) - set(self.robot_markers)
-                or not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
-                           for v in self.marker_yaw_offset_deg.values())):
-            raise ValueError("marker yaw offsets must be finite degrees for robots with markers")
+        # D-580 may swap robot_markers for Fleet's roster, so offsets are not tied to them here.
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                   for v in self.marker_yaw_offset_deg.values()):
+            raise ValueError("marker yaw offsets must be finite degrees")
 
 
 def marker_homography(camera: CameraMap, markers: Mapping[int, Sequence[Point]]):

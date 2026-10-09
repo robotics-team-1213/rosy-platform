@@ -322,46 +322,15 @@ class StuckResolver:
         if cause == "obstacle_ahead" and not peer and can_back:
             candidates.append(("R2", "BACK_AND_RETRY"))
         if cause == "lane_lost":
-            hold = self._lane_lost_hold(row, stuck, rows, chain)
+            from fleet.server.stuck_lane_lost import lane_lost_hold
+
+            hold = lane_lost_hold(row, stuck, rows, chain, self.config)
             return ("R3", "BACK_AND_RETRY") if hold is None else ("R5", "WAIT", hold)
         if peer and can_back:
             candidates.append(("R2", "BACK_AND_RETRY"))      # after a refused WAIT
         for rule in candidates:
             if rule[0] not in chain.retired:
                 return rule
-        return None
-
-    def _lane_lost_hold(self, row, stuck, rows, chain) -> Optional[str]:
-        """D-577 1: why R3 may not back off (the R5 reason), or None when every precondition holds.
-
-        The rear clearance, blind spot and travelled path stay CORE's re-check (D-407 §4)."""
-        if not stuck.get("local_enabled"):
-            return "local_disabled"
-        if int(stuck.get("attempts") or 0) >= int(stuck.get("max_attempts") or 0):
-            return "attempts"
-        if "R3" in chain.retired:
-            return "refused"
-        if chain.rule_answers >= self.config.rule_budget:
-            return "rule_budget"
-        # D-573: CORE reports `line_follow.crosswalk` null outside a zone and a mapping inside one.
-        # Absent = this CORE does not report it (none does yet): fail closed.
-        line_follow = (row.get("state") or {}).get("line_follow") or {}
-        if "crosswalk" not in line_follow:
-            return "crosswalk_unknown"
-        if line_follow["crosswalk"] is not None:
-            return "crosswalk"
-        pose = row.get("map_pose")                    # set by the loop from the Fleet map pose service
-        # UNKNOWN passes only for a robot Fleet never had a sighting source for; a lost pose holds.
-        if isinstance(pose, Mapping) and (pose.get("state") != "UNKNOWN" or pose.get("sourced") is not False):
-            age = pose.get("age_s")
-            if (pose.get("state") != "LOCALIZED" or not isinstance(age, (int, float))
-                    or not 0.0 <= age <= self.config.pose_max_age_s):
-                return "pose"
-        behind = peer_behind(row, rows, self.config)
-        if behind is None:
-            return "peer_unknown"
-        if behind:
-            return "peer_behind"
         return None
 
     def _next_segment(self, row, rows) -> Optional[Answer]:
@@ -573,17 +542,6 @@ def peer_ahead(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) ->
 
     Shared with the Fleet stuck-episode log, so the recorded value is what R1 would see."""
     return _peer_in_band(row, rows, config, 1.0)
-
-
-def peer_behind(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig) -> Optional[bool]:
-    """D-577 1: R1's band mirrored behind the robot, on trust-gated map poses (D-395) only.
-
-    None = an online peer exists and this robot's or a peer's pose is missing or untrusted:
-    R3 must not back off blind (safety review 2026-10-09). No online peer = False."""
-    others = [other for other in rows if other is not row and other.get("online", True)]
-    if not others:
-        return False
-    return _peer_in_band(row, others, config, -1.0, pose_of=_map_pose, strict=True)
 
 
 def _peer_in_band(row: Mapping, rows: Iterable[Mapping], config: ResolverConfig,

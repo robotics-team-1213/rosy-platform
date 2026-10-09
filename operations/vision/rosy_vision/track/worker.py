@@ -170,19 +170,22 @@ class TrackWorker:
                 pass
 
     async def process(self, frame, markers: Mapping[int, Sequence[Point]],
-                      sighted: frozenset[str] = frozenset()) -> OverheadDetectionsPayload | None:
+                      sighted: frozenset[str] = frozenset(),
+                      camera: CameraMap | None = None) -> OverheadDetectionsPayload | None:
         """Track one frame and publish the result; None when skipped (undecodable, or busy).
 
-        ``sighted``: robots this frame already produced a sighting for (D-587 1)."""
+        D-587 1: ``sighted`` are robots this frame already produced a sighting for; ``camera``
+        is VisionWorker's CameraMap for this frame (D-580 roster markers), default ours."""
         if self._busy:
             return None
         self._busy = True
         try:
-            return await self._process(frame, markers, sighted)
+            return await self._process(frame, markers, sighted, camera or self.camera)
         finally:
             self._busy = False
 
-    async def _process(self, frame, markers, sighted=frozenset()) -> OverheadDetectionsPayload | None:
+    async def _process(self, frame, markers, sighted=frozenset(),
+                       camera: CameraMap | None = None) -> OverheadDetectionsPayload | None:
         config = self._config or {}
         relearn = config.get("relearn_seq")
         if type(relearn) is not int:
@@ -198,7 +201,7 @@ class TrackWorker:
                 lens, relearn))
         sightings = ()
         if step is not None and self.sightings is not None:
-            sightings = robot_sightings(self.camera, step[0], markers, captured_at=frame.captured_at,
+            sightings = robot_sightings(camera or self.camera, step[0], markers, captured_at=frame.captured_at,
                                         seq=frame.header.seq, skip=sighted)
         if challenge is not None:
             await self._report_identity(challenge, frame.captured_at)

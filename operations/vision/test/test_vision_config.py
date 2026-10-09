@@ -139,7 +139,29 @@ def test_marker_yaw_offsets_reach_the_camera_map_and_bad_ones_refuse_start(tmp_p
     camera = load_vision_sources(path, environ=ENV)[0].camera
     assert camera.marker_yaw_offset_deg == {"rosy_01": -90.0}
     assert load_vision_sources(_write(tmp_path / "s.yaml", [_source()]), environ=ENV)[0].camera.marker_yaw_offset_deg == {}
-    for bad in ({"rosy_02": 0}, {"rosy_01": "180"}, {"rosy_01": 361}):
+    # D-580 roster source: a robot on its default marker (no YAML override) may carry an offset.
+    enrolled = _write(tmp_path / "s.yaml", [_source(robot_ids="enrolled", robot_markers={},
+                                                    marker_yaw_offset_deg={"rosy_40": 180})])
+    assert load_vision_sources(enrolled, environ=ENV)[0].camera.marker_yaw_offset_deg == {"rosy_40": 180.0}
+    for bad in ({"rosy_02": 0}, {"rosy_01": "180"}, {"rosy_01": 361}, {"bad id": 0}):
         with pytest.raises(ValueError, match="marker_yaw_offset_deg"):
             load_vision_sources(_write(tmp_path / "s.yaml", [_source(marker_yaw_offset_deg=bad)]),
                                 environ=ENV)
+
+
+def test_enrolled_robot_ids_take_markers_from_fleet_and_fall_back_to_yaml(tmp_path):
+    """D-580: Fleet's tracking config names the roster markers; the YAML is the fallback."""
+    from types import SimpleNamespace
+    from rosy_vision.worker import VisionWorker
+
+    path = _write(tmp_path / "site-cameras.yaml", [_source(robot_ids="enrolled", robot_markers={"rosy_41": 45})])
+    camera = load_vision_sources(path, environ={"ROSY_PHONE_CEILING_NORTH": "p",
+                                                "ROSY_FLEET_CEILING_NORTH": "f"})[0].camera
+    tracker = SimpleNamespace(config=None)
+    worker = VisionWorker(source_id="ceiling_north", ingest=None, camera=camera, publisher=None, tracker=tracker)
+    assert worker._camera().robot_markers == {"rosy_41": 45}  # Fleet not read yet
+    tracker.config = {"robot_markers": {"rosy_40": 40, "rosy_41": 45}}
+    assert worker._camera().robot_markers == {"rosy_40": 40, "rosy_41": 45}
+    assert worker._camera().heading_edge == camera.heading_edge  # sticker front stays the YAML's (D-562)
+    tracker.config = {"robot_markers": {"rosy_40": 30}}  # would hide a corner: refused, YAML kept
+    assert worker._camera().robot_markers == {"rosy_41": 45}

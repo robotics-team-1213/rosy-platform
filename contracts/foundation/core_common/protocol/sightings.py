@@ -115,21 +115,23 @@ class SiteSightingPayload(BaseModel):
         return value
 
 
-def check_marker_yaw_offsets(value, robot_markers) -> dict[str, float]:
+def check_marker_yaw_offsets(value, robot_ids) -> dict[str, float]:
     """D-587 4: per-robot sticker yaw offset in degrees (robot front to sticker top edge, CCW +).
 
-    Shared by the Vision and Fleet site-camera parsers. Keys must be robots of this source's
-    ``robot_markers``; values finite numbers with |value| <= 360. Missing means nominal 0.
+    Shared by the Vision and Fleet site-camera parsers. Keys must be this source's
+    ``robot_ids`` (None for a D-580 ``robot_ids: enrolled`` source: any robot id); values
+    finite numbers with |value| <= 360. Missing means nominal 0.
     """
     if value is None:
         return {}
     if not isinstance(value, dict):
         raise ValueError("marker_yaw_offset_deg must map robot ids to degrees")
-    known = set(robot_markers)
+    allowed = None if robot_ids is None else set(robot_ids)
     offsets = {}
     for robot_id, degrees in value.items():
-        if robot_id not in known:
-            raise ValueError(f"marker_yaw_offset_deg names {robot_id!r}, which has no robot marker")
+        if (not isinstance(robot_id, str) or not _ROBOT_ID.fullmatch(robot_id)
+                or (allowed is not None and robot_id not in allowed)):
+            raise ValueError(f"marker_yaw_offset_deg names {robot_id!r}, which is not a robot of this source")
         if (isinstance(degrees, bool) or not isinstance(degrees, (int, float))
                 or not math.isfinite(degrees) or abs(degrees) > 360.0):
             raise ValueError(f"marker_yaw_offset_deg for {robot_id!r} must be finite degrees within +-360")

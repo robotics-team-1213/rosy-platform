@@ -2978,3 +2978,14 @@
 - 안전 검토 보완(2026-10-10): 잃은 자세(`UNKNOWN`이지만 목격 출처 있었음) → `pose`, 뒤 띠는 신뢰 지도 자세로만 재고 모르면 `peer_unknown`, `line_follow.crosswalk` 보고 없음 → `crosswalk_unknown`(지금은 R3가 사실상 닫힘), R5 WAIT 전송 실패 한 번 재전송, 시작 시 답할 로봇 출력. 새 시험 10건 먼저 실패(`X:/DevTemp/d577a/red2.txt`), 모델 PC fleet 3162 passed, 0 new. API v1.173.
 - 결정: D-577 Accepted (2026-10-09, 사용자)
 - 교훈: 모델 PC로 `git archive` 200 MB를 보내면 느린 링크에서 40분이 넘는다. `repo`에 bundle(origin/main..HEAD)을 fetch해 거기서 archive하면 1분 안이다.
+## 2026-10-09 · uncommitted · feat(fleet): D-573 횡단보도 구역을 현장 지도에
+- 변경: `rosy.site_map/1` `crosswalks[] {id, polygon, approach[], lanes[], revision}`. 다각형은 `lane_graph.yaml`에서 그대로(`cw1`.., `lane_graph:<sha12>`), `lanes`는 검증 때마다 차로 교차로 유도, 대기 띠는 현장 지도 편집기에서 그리고 지운다(초안, 이름 있는 운영자 저장). 띠가 차로에 닿지 않거나 D-507 9 바닥(차로 + 0.30 m) 밖이면 `SITE_MAP_INVALID`. `GET /site-map/lane-graph-crosswalks`로 이미 활성 지도가 있는 현장도 가져온다. 관제 지도에 읽기 전용 윤곽. `PlaceKind` 그대로. CORE·교통·통행권 변경 없음. API v1.174.
+- 증거: red `X:/DevTemp/crosswalk-zones/red.txt`(시험만, 수집 실패). 모델 PC `operations/fleet/test/` 전체(브라우저 포함) 3230 passed, 53 failed: 52개는 같은 부분 스냅숏의 깨끗한 main에서도 실패(deploy/·integrations/ 빠짐), 1개(`test_the_open_form_fits_every_viewport_without_rail_overflow`)는 부하 중 DOM 재그림 흔들림이고 단독 3/3 통과 (X:/DevTemp/crosswalk-zones/run.txt). 편집기 캡처 `X:/DevTemp/crosswalk-zones/site-map-crosswalk-band.png`.
+- gate 변화: 없음(SOURCE). 관제 지도 윤곽은 캔버스라 브라우저 시험 없음.
+- 열림: 바닥 검사는 띠 꼭짓점만 본다(오목한 바닥에서 변이 밖으로 나가는 띠는 통과). 상태색·카드 줄은 (f), CORE 전달은 (d).
+
+## 2026-10-10 · uncommitted · fix(fleet): keep the armed CORE arc end instruction
+
+- Change: while CORE's arc is running, retain its armed end-place instruction if Fleet map localization has advanced to the next segment. A hold STOP still takes priority.
+- Evidence: D-520 handshake and the 2026-10-09 U2 SE-to-NE early replacement that ended in arc_mismatch. Regression tests cover the early crossing, next instruction after consumption, and hold STOP.
+- Gate: docs/validation/lane-arc-end-guard-2026-10-10/result.md. Isolated U-Net SIM reached the destination twice, but ring_n sampled body margin crossed the outer paint centre in 18/44 and 27/45 samples. Lane containment and field driving remain HOLD.

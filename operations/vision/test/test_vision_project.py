@@ -153,4 +153,4 @@ def test_project_frame_applies_the_robot_marker_yaw_offset():
     assert math.isclose(sighting.yaw, -math.pi / 2, abs_tol=1e-6)
     assert (sighting.x, sighting.y) == pytest.approx((2.0, 1.0 - 0.017))
     with pytest.raises(ValueError, match="marker yaw offsets"):
-        CameraMap(**{**_camera().__dict__, "marker_yaw_offset_deg": {"rosy_99": 90.0}})
+        CameraMap(**{**_camera().__dict__, "marker_yaw_offset_deg": {"rosy_01": float("inf")}})
