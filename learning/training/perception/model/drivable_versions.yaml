@@ -36,5 +36,5 @@ models:
   rules:
   - D-554 1-10
   - D-566 1-5
-  status: candidate
+  status: shadow
   note: head=context; raw fp 0.008, post fp 0.005, near 0.886 vs label 0.793; intake PASS
