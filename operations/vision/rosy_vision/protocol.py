@@ -312,6 +312,7 @@ class CameraState:
     exposure_us: int | None = None
     iso: int | None = None
     thermal: int = -1          # PowerManager THERMAL_STATUS_*, -1 unknown
+    ae_lock_supported: bool = True  # supported.ae_lock
 
 
 def _int(value: object) -> bool:
@@ -393,4 +394,4 @@ def parse_camera_state(message: object) -> CameraState:
     if not _int(thermal) or not -1 <= thermal <= 6:
         raise CameraMessageError("thermal", "thermal must be an integer -1..6")
     return CameraState(seq, setting, mode, ev_min, ev_max, float(ev_step),
-                       numbers["exposure_us"], numbers["iso"], thermal)
+                       numbers["exposure_us"], numbers["iso"], thermal, supported["ae_lock"])

@@ -16,12 +16,16 @@ whose long side is at most WORK_LONG_SIDE pixels, on luma (OpenCV BGR to gray):
 - ``marker_rate``: share of the robot markers present (seen in the last MARKER_PRESENT_S)
   that this frame shows. Left out (None) when no robot marker is present.
 
-``score`` is the only formula. Bounded hill climb (D-589 4): ``Tuner`` is a pure state
-machine driven with the caller's clock, the phone's last ``camera_state`` and the score
-samples. It climbs in real EV (-2.0..+1.0, 1/3 EV levels, sent as the device's compensation
-index), sends one setting at a time, waits for the phone to echo its seq in mode "vision", then
-scores DWELL_S seconds (the first SETTLE_S are AE settling and not scored), and locks AE and AWB
-at the best level. Display only (D-457 6): a camera setting never reaches a robot command.
+``score`` is the only formula. It is telemetry (shown to Fleet), not control: on the
+2026-10-10 site frames it was flat within +-0.01 across every exposure that neither clips nor
+crushes, below the 0.022 noise of one dwell, so nothing can be ranked by it (D-589 4).
+
+Guarded expose-and-lock (D-589 4): ``Tuner`` is a pure state machine driven with the caller's
+clock, the phone's last ``camera_state`` and the measurements. From the last locked EV, with
+AE free, one DWELL_S dwell (the first SETTLE_S are AE settling) after the phone echoes the seq
+in mode "vision": clip above CLIP_TUNE steps 1/3 EV down, crush above CRUSH_TUNE steps up,
+else AE and AWB lock. Locked, it tunes again only on clip/crush past RETUNE_HARD or a sustained
+light change. No probing. Display only (D-457 6): a camera setting never reaches a robot command.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ import json
 import logging
 import math
 import os
+import random
 import statistics
 import time
 from dataclasses import dataclass
@@ -70,16 +75,26 @@ MARKER_PRESENT_S = 600.0
 
 DWELL_S = 4.0
 SETTLE_S = 1.0
-#: The climb works in real EV: -2.0 .. +1.0 in 1/3 EV levels (thirds -6 .. +3). Each level is
-#: sent as the nearest compensation index (``ev`` = level / supported.ev_step); on an S21-class
-#: phone one index is 0.1 EV, so index -6..+3 alone would only be -0.6..+0.3 EV.
+#: Tune levels in real EV: -2.0 .. +1.0 in 1/3 EV (thirds -6 .. +3), each sent as the nearest
+#: compensation index (``ev`` = level / supported.ev_step; on an S21-class phone 0.1 EV).
 EV_THIRDS = range(-6, 4)
-#: A candidate level must beat the best so far by this much to win (keeps a tie where it is).
-MIN_GAIN = 0.01
-DROP_FRACTION = 0.25
-DROP_HOLD_S = 60.0
-PROBE_INTERVAL_S = 30 * 60.0
-RETUNE_MIN_S = 5 * 60.0
+#: A tune steps down 1/3 EV while the track clips more than CLIP_TUNE, up while it crushes more
+#: than CRUSH_TUNE, and locks otherwise; never back to a level it left, at most MAX_STEPS steps.
+CLIP_TUNE = 0.02
+CRUSH_TUNE = 0.05
+MAX_STEPS = 6
+#: Locked: tune again when clip or crush passes RETUNE_HARD (a scene that already did at the
+#: lock: when it gets RETUNE_HYSTERESIS worse), at most once per backoff (5 min, doubling) ...
+RETUNE_HARD = 0.15
+RETUNE_HYSTERESIS = 0.05
+BACKOFF_START_S = 5 * 60.0
+#: ... or when the track median brightness moves more than LUMA_SHIFT_EV for LUMA_HOLD_S.
+LUMA_SHIFT_EV = 0.5
+LUMA_HOLD_S = 60.0
+#: Luma to linear light for that comparison (sRGB-like encoding).
+DISPLAY_GAMMA = 2.2
+#: Connected this long without a camera_state: an app without D-589 ("unsupported").
+UNSUPPORTED_S = 15.0
 #: The phone keeps a request fresh for protocol.CAMERA_FRESH_S (60 s) only, then unlocks and
 #: falls back to its local loop: the current setting is sent again this often, echoed or not.
 RESEND_S = 20.0
@@ -89,7 +104,7 @@ HISTORY_MAX = 64
 MAX_EXPOSURE_US = 33333
 ANTIBANDING = "60hz"
 
-STATES = ("off", "waiting", "tuning", "locked", "paused")
+STATES = ("off", "waiting", "tuning", "locked", "paused", "unsupported")
 
 
 @dataclass(frozen=True)
@@ -98,7 +113,8 @@ class Measurement:
     clip: float
     crush: float
     marker_rate: float | None = None
-    lane_source: str = "paint"  # "paint" (site mesh) or "bright" (brightest share of the track)
+    lane_source: str = "paint"
+    luma: float = 0.0  # median track luma (8-bit), for the light-change guard  # "paint" (site mesh) or "bright" (brightest share of the track)
 
 
 def score(m: Measurement) -> float:
@@ -148,7 +164,7 @@ class Scorer:
             carpet_median, noise = _robust(values)
             source = "bright"
         contrast = (lane - carpet_median) / max(noise, 1.0)
-        return Measurement(float(contrast), clip, crush, marker_rate, source)
+        return Measurement(float(contrast), clip, crush, marker_rate, source, float(np.median(inside)))
 
     def _masks_for(self, calib: Calibration, shape: tuple[int, int]):
         key = (calib.image_to_map, calib.image_size, calib.track_bounds_m, shape, id(self.paint))
@@ -204,7 +220,7 @@ def _work_image(image: np.ndarray) -> np.ndarray:
 
 
 def tuning_setting(index: int) -> CameraSetting:
-    """AE and AWB free: the phone's AE converges at this compensation index (climb steps)."""
+    """AE and AWB free: the phone's AE converges at this compensation index (tune steps)."""
     return CameraSetting(index, False, False, MAX_EXPOSURE_US, ANTIBANDING)
 
 
@@ -220,8 +236,13 @@ def ev_levels(state: CameraState) -> list[int]:
                    for third in EV_THIRDS})
 
 
+def luma_ev(luma: float) -> float:
+    """A gamma-encoded 8-bit luma as linear light in EV (log2), for comparing scene brightness."""
+    return math.log2(max(luma, 1.0) / 255.0) * DISPLAY_GAMMA
+
+
 class TuningLog:
-    """Per source (setting, real EV, score, time) records in one small JSON file (atomic replace)."""
+    """Per source records (setting, clip, crush, luma, score, time) in one small JSON file."""
 
     def __init__(self, path: Path | None) -> None:
         self.path = None if path is None else Path(path)
@@ -257,48 +278,67 @@ def _record_ev(record: dict) -> float | None:
 
 
 class Tuner:
-    """Bounded hill climb over EV for one source (D-589 4). Not thread safe; one caller.
+    """Guarded expose-and-lock for one source (D-589 4). Not thread safe; one caller.
 
-    Call ``update`` once per frame with the phone's last ``camera_state`` and the frame's
-    measurement (or None); it returns a ``camera`` message to send, or None. ``now`` is a
-    monotonic clock; records carry ``wall`` time. Nothing is sent before the phone's first
-    ``camera_state`` on a link: its ``supported.ev_step`` turns EV into the index.
+    Call ``update`` once per frame with the link, the phone's last ``camera_state`` and the
+    frame's measurement (or None); it returns a ``camera`` message to send, or None.
+    ``active`` is true while a tune runs (tracking publishes LEARNING and ignores the steps);
+    ``take_relearn`` is true once when the lock is confirmed and settled (learn the background
+    again, once). ``now`` is a monotonic clock; records carry ``wall`` time. Nothing is sent
+    before the phone's first ``camera_state`` on a link: its ``supported.ev_step`` turns EV
+    into the index.
     """
 
-    def __init__(self, *, log: TuningLog | None = None, wall: Callable[[], float] = time.time) -> None:
+    def __init__(self, *, log: TuningLog | None = None, wall: Callable[[], float] = time.time,
+                 seq: int | None = None) -> None:
         self.log = log or TuningLog(None)
         self.wall = wall
         self.history: list[dict] = self.log.load()
-        self._phase = "waiting"     # waiting, climb, settle, lock, locked, paused
+        self._phase = "waiting"      # waiting, tuning, settle, locked, paused
         self._want: CameraSetting | None = None
-        self._seq = 0
+        # Random start: a restarted Vision never reuses a seq the phone may still echo.
+        self._seq = random.randrange(1, 0x100000000) if seq is None else seq
         self._sent_at: float | None = None
         self._link = None
+        self._link_at: float | None = None
         self._state: CameraState | None = None
-        self._dwell_at: float | None = None  # when the phone echoed the current request
-        self._dwell: list[tuple[float, float, float]] = []      # (score, clip, crush) this dwell
-        self._recent: list[tuple[float, float, float, float]] = []  # (t, score, clip, crush), last DWELL_S
+        self._echo_at: float | None = None   # when the phone echoed the current request
+        self._dwell: list[tuple[float, float, float, float]] = []  # (clip, crush, luma, score)
+        self._recent: list[tuple[float, float, float, float]] = []  # (t, clip, crush, luma), last DWELL_S
         self._levels: list[int] = [0]
-        self._results: dict[int, float | None] = {}  # level position -> dwell score (None: unreachable)
-        self._dir = 1
-        self._origin = 0
-        self._probe = False
+        self._position = 0
+        self._visited: set[int] = set()
+        self._steps = 0
         self._locked: CameraSetting | None = None
-        self._baseline: float | None = None
-        self._baseline_hard = False
-        self._low_since: float | None = None
+        self._baseline: tuple[float, float, float] | None = None  # (worst of clip/crush, luma EV, score)
+        self._relearn = False
+        self._relearn_sent = False
+        self._shift_since: float | None = None
         self._tuned_at: float | None = None
-        self._probed_at: float | None = None
+        self._backoff = BACKOFF_START_S
         self.last_score: float | None = None
 
     # -- status -------------------------------------------------------------
 
-    def status(self) -> dict:
+    @property
+    def active(self) -> bool:
+        """A tune is running: its intermediate settings are not backgrounds to learn."""
+        return self._phase == "tuning" or (self._phase == "settle" and not self._relearn_sent)
+
+    def take_relearn(self) -> bool:
+        """True once after a lock is confirmed and settled."""
+        relearn, self._relearn = self._relearn, False
+        return relearn
+
+    def status(self, now: float | None = None) -> dict:
         state = self._state
         if state is not None and state.mode == "disabled":
             name = "off"
+        elif (state is None and self._link is not None and self._link_at is not None and now is not None
+              and now - self._link_at >= UNSUPPORTED_S):
+            name = "unsupported"  # connected, frames arrive, never a camera_state: an older app
         else:
-            name = {"waiting": "waiting", "climb": "tuning", "settle": "tuning", "lock": "locked",
+            name = {"waiting": "waiting", "tuning": "tuning", "settle": "tuning",
                     "locked": "locked", "paused": "paused"}[self._phase]
         ev = None if state is None or state.ev_step <= 0 else round(state.applied.ev * state.ev_step, 2)
         return {"state": name,
@@ -312,42 +352,44 @@ class Tuner:
                sample: Measurement | None = None) -> dict | None:
         if link != self._link:  # a new connection: send at once once the phone has reported
             self._link = link
+            self._link_at = now
             self._sent_at = None
-            self._dwell_at = None
+            self._echo_at = None
         self._state = state
         if sample is not None:
-            value = score(sample)
+            self.last_score = score(sample)
             self._recent = [r for r in self._recent if now - r[0] < DWELL_S] + [
-                (now, value, sample.clip, sample.crush)]
-            self.last_score = statistics.median(r[1] for r in self._recent)
-        if state is None or state.mode == "disabled":
-            return None  # nothing known yet on this link, or the phone's own switch is off
+                (now, sample.clip, sample.crush, sample.luma)]
+        if state is None:
+            return None
+        if state.mode == "disabled":  # the phone's own switch wins (over thermal hold too)
+            if self._phase != "waiting":
+                self._phase = "waiting"  # switched on again: tune (or adopt) afresh
+            return None
         if state.thermal >= protocol.THERMAL_SEVERE or state.mode == "thermal_hold":
             if self._phase != "paused":
                 logger.info("camera tuning paused thermal=%d mode=%s", state.thermal, state.mode)
-                self._phase = "paused"
-                if self._locked is not None:
-                    self._request(self._locked)
+                self._phase = "paused"  # the phone keeps what it has; keep it fresh
             return self._send(now)
         if self._phase == "paused":
-            if self._locked is not None:
-                self._enter_lock(self._locked)
-            else:
-                self._phase = "waiting"
+            self._phase = "waiting"  # cooled down: tune again
         if self._phase == "waiting":
             if sample is None:
                 return None
-            self._start(now, probe=False)
+            if not self._adopt(now):
+                self._start(now)
         if self._echoed():
-            if self._dwell_at is None:
-                self._dwell_at = now
+            if self._echo_at is None:
+                self._echo_at = now
                 self._dwell = []
-            if sample is not None and now - self._dwell_at >= SETTLE_S:
-                self._dwell.append((score(sample), sample.clip, sample.crush))
-            if self._phase == "locked":
+            if sample is not None and now - self._echo_at >= SETTLE_S:
+                self._dwell.append((sample.clip, sample.crush, sample.luma, score(sample)))
+            if self._phase == "tuning" and now - self._echo_at >= DWELL_S and self._dwell:
+                self._step(now)
+            elif self._phase == "settle":
+                self._settle(now)
+            elif self._phase == "locked":
                 self._watch(now, sample)
-            elif now - self._dwell_at >= DWELL_S and self._dwell:
-                self._finish_dwell(now)
         return self._send(now)
 
     def _echoed(self) -> bool:
@@ -360,7 +402,7 @@ class Tuner:
             self._want = setting
             self._seq = self._seq % 0xFFFFFFFF + 1  # 0 is the phone's "none seen"
             self._sent_at = None
-            self._dwell_at = None
+            self._echo_at = None
 
     def _send(self, now: float) -> dict | None:
         if self._want is None or (self._sent_at is not None and now - self._sent_at < RESEND_S):
@@ -371,113 +413,112 @@ class Tuner:
     def _real(self, index: int) -> float:
         return round(index * self._state.ev_step, 3) if self._state.ev_step > 0 else 0.0
 
-    def _start(self, now: float, *, probe: bool) -> None:
-        self._tuned_at = now
-        self._probe = probe
-        self._levels = ev_levels(self._state)
-        target = self._real(self._locked.ev) if probe and self._locked is not None else self._last_best()
-        self._origin = min(range(len(self._levels)),
-                           key=lambda i: abs(self._real(self._levels[i]) - target))
-        self._results = {}
-        self._dir = 1
-        self._low_since = None
-        self._phase = "climb"
-        logger.info("camera tuning start ev=%.2f probe=%s", self._real(self._levels[self._origin]), probe)
-        self._request(tuning_setting(self._levels[self._origin]))
-
-    def _last_best(self) -> float:
+    def _last_locked(self) -> float:
         for record in reversed(self.history):
             if record.get("kind") == "lock" and _record_ev(record) is not None:
                 return _record_ev(record)
         return 0.0
 
-    def _record(self, kind: str, setting: CameraSetting, value: float) -> None:
+    def _nearest(self, target: float) -> int:
+        return min(range(len(self._levels)), key=lambda i: abs(self._real(self._levels[i]) - target))
+
+    def _adopt(self, now: float) -> bool:
+        """Startup: the phone is already locked at the last locked setting: keep it, no tune."""
+        state = self._state
+        self._levels = ev_levels(state)
+        if not any(r.get("kind") == "lock" for r in self.history):
+            return False
+        index = self._levels[self._nearest(self._last_locked())]
+        if not (state.mode == "vision" and state.applied.ae_lock and state.applied.ev == index):
+            return False
+        logger.info("camera tuning adopts the phone's lock ev=%.2f", self._real(index))
+        self._request(locked_setting(index))
+        self._locked = self._want
+        self._phase = "settle"
+        self._relearn_sent = True  # nothing changed: no relearn, only a fresh baseline
+        self._tuned_at = now
+        return True
+
+    def _start(self, now: float) -> None:
+        self._tuned_at = now
+        self._levels = ev_levels(self._state)
+        self._position = self._nearest(self._last_locked())
+        self._visited = {self._position}
+        self._steps = 0
+        self._shift_since = None
+        self._phase = "tuning"
+        logger.info("camera tuning start ev=%.2f", self._real(self._levels[self._position]))
+        self._request(tuning_setting(self._levels[self._position]))
+
+    def _medians(self) -> tuple[float, float, float, float]:
+        return tuple(statistics.median(d[i] for d in self._dwell) for i in range(4))
+
+    def _record(self, kind: str, setting: CameraSetting, values) -> None:
+        clip, crush, luma, value = values
         self.history.append({"kind": kind, "setting": setting.as_dict(), "ev": self._real(setting.ev),
+                             "clip": round(clip, 4), "crush": round(crush, 4), "luma": round(luma, 1),
                              "score": round(value, 4), "at": round(self.wall(), 3)})
         self.history = self.history[-HISTORY_MAX:]
         if kind == "lock":
             self.log.save(self.history)
 
-    def _finish_dwell(self, now: float) -> None:
-        value = statistics.median(d[0] for d in self._dwell)
-        want = self._want
-        if self._phase == "climb":
-            reached = self._state.applied.ev == want.ev
-            self._results[self._levels.index(want.ev)] = value if reached else None  # clamped
-            if reached:
-                self._record("measure", want, value)
-            nxt = self._next_position()
-            if nxt is not None:
-                self._request(tuning_setting(self._levels[nxt]))
-                return
-            best = self._best_position()
-            index = self._state.applied.ev if best is None else self._levels[best]
-            if index == want.ev:
-                self._enter_lock(locked_setting(index))
-            else:
-                self._phase = "settle"
-                self._request(tuning_setting(index))
-        elif self._phase == "settle":
-            self._enter_lock(locked_setting(want.ev))
-        elif self._phase == "lock":
-            self._baseline = value
-            self._baseline_hard = (statistics.median(d[1] for d in self._dwell) > CLIP_CRUSH_HARD
-                                   or statistics.median(d[2] for d in self._dwell) > CLIP_CRUSH_HARD)
-            self._locked = want
+    def _step(self, now: float) -> None:
+        """One dwell of a tune: step 1/3 EV away from clip or crush, else lock here."""
+        values = self._medians()
+        clip, crush = values[0], values[1]
+        self._record("measure", self._want, values)
+        move = -1 if clip > CLIP_TUNE else (1 if crush > CRUSH_TUNE else 0)
+        target = self._position + move
+        if (move and self._steps < MAX_STEPS and 0 <= target < len(self._levels)
+                and target not in self._visited):
+            self._position = target
+            self._visited.add(target)
+            self._steps += 1
+            self._request(tuning_setting(self._levels[target]))
+            return
+        self._phase = "settle"
+        self._relearn_sent = False
+        self._request(locked_setting(self._levels[self._position]))
+
+    def _settle(self, now: float) -> None:
+        """Lock echoed: after SETTLE_S relearn once, then one dwell gives the baseline."""
+        if not self._state.applied.ae_lock and self._state.ae_lock_supported:
+            return  # the phone has not locked yet
+        if not self._relearn_sent and now - self._echo_at >= SETTLE_S:
+            self._relearn = self._relearn_sent = True
+        if now - self._echo_at >= DWELL_S and self._dwell:
+            values = self._medians()
+            self._baseline = (max(values[0], values[1]), luma_ev(values[2]), values[3])
+            if self._baseline[0] <= RETUNE_HARD:
+                self._backoff = BACKOFF_START_S
+            self._locked = self._want
             self._phase = "locked"
-            self._low_since = None
-            self._probed_at = now
-            self._record("lock", want, value)
-            logger.info("camera tuning locked ev=%.2f index=%d score=%.3f",
-                        self._real(want.ev), want.ev, value)
-
-    def _enter_lock(self, setting: CameraSetting) -> None:
-        self._phase = "lock"
-        self._request(setting)
-        self._dwell_at = None  # a fresh baseline dwell, also when the setting stays the same
-
-    def _best_position(self) -> int | None:
-        best, best_value = None, -math.inf
-        for position, value in self._results.items():  # insertion order: the origin first
-            if value is not None and (best is None or value > best_value + MIN_GAIN):
-                best, best_value = position, value
-        return best
-
-    def _next_position(self) -> int | None:
-        best = self._best_position()
-        base = self._origin if best is None else best
-        for direction in (self._dir, -self._dir):
-            candidate = base + direction
-            if candidate in self._results or not 0 <= candidate < len(self._levels):
-                continue
-            if self._probe and abs(candidate - self._origin) > 1:
-                continue
-            self._dir = direction
-            return candidate
-        return None
+            self._shift_since = None
+            self._record("lock", self._want, values)
+            logger.info("camera tuning locked ev=%.2f index=%d clip=%.3f crush=%.3f",
+                        self._real(self._want.ev), self._want.ev, values[0], values[1])
 
     def _watch(self, now: float, sample: Measurement | None) -> None:
-        """Locked: tune again on a sustained drop, on clip/crush, and probe every 30 min."""
-        if sample is None or not self._recent:
+        """Locked: tune again on clip/crush (with hysteresis and backoff) or a light change."""
+        if sample is None or not self._recent or self._baseline is None:
             return
-        clip = statistics.median(r[2] for r in self._recent)
-        crush = statistics.median(r[3] for r in self._recent)
-        since = math.inf if self._tuned_at is None else now - self._tuned_at
-        window_full = now - self._recent[0][0] >= DWELL_S - SETTLE_S
-        if (window_full and max(clip, crush) > CLIP_CRUSH_HARD
-                and (not self._baseline_hard or since >= RETUNE_MIN_S)):
-            logger.info("camera tuning again clip=%.3f crush=%.3f", clip, crush)
-            self._start(now, probe=False)
+        if now - self._recent[0][0] < DWELL_S - SETTLE_S:
+            return  # judge a full window, never one frame (a hand, a sleeve)
+        worst = max(statistics.median(r[1] for r in self._recent),
+                    statistics.median(r[2] for r in self._recent))
+        base_worst, base_ev, _ = self._baseline
+        limit = RETUNE_HARD if base_worst <= RETUNE_HARD else base_worst + RETUNE_HYSTERESIS
+        if worst > limit and now - self._tuned_at >= self._backoff:
+            logger.info("camera tuning again worst=%.3f limit=%.3f backoff_s=%.0f", worst, limit, self._backoff)
+            self._backoff *= 2
+            self._start(now)
             return
-        if self._baseline is not None and self.last_score < (1.0 - DROP_FRACTION) * self._baseline:
-            if self._low_since is None:
-                self._low_since = now
-            if now - self._low_since >= DROP_HOLD_S and since >= RETUNE_MIN_S:
-                logger.info("camera tuning again score=%.3f baseline=%.3f", self.last_score, self._baseline)
-                self._start(now, probe=False)
-                return
+        shift = abs(luma_ev(statistics.median(r[3] for r in self._recent)) - base_ev)
+        if shift > LUMA_SHIFT_EV:
+            if self._shift_since is None:
+                self._shift_since = now
+            if now - self._shift_since >= LUMA_HOLD_S:
+                logger.info("camera tuning again light shift_ev=%.2f", shift)
+                self._start(now)
         else:
-            self._low_since = None
-        if self._probed_at is not None and now - self._probed_at >= PROBE_INTERVAL_S and since >= RETUNE_MIN_S:
-            self._probed_at = now
-            self._start(now, probe=True)
+            self._shift_since = None
