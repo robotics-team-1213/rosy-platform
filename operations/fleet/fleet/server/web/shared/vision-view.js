@@ -23,6 +23,20 @@ export function parsePlaneHeader(value) {
 // D-560 4: plane pixel (u, v) ↔ map metres, by scale and origin only.
 export const planeToMap = (plane, u, v) => ({ x: plane.min_x + u / plane.ppm, y: plane.max_y - v / plane.ppm });
 export const mapToPlane = (plane, x, y) => ({ u: (x - plane.min_x) * plane.ppm, v: (plane.max_y - y) * plane.ppm });
+// The header rectangle must be the picture: within 1 px of the image size, else the plane is unusable.
+export const planeFitsImage = (plane, width, height) =>
+  Math.abs((plane.max_x - plane.min_x) * plane.ppm - width) <= 1
+  && Math.abs((plane.max_y - plane.min_y) * plane.ppm - height) <= 1;
+
+// Approved calibrations of ``source`` on a map of ``siteMap`` (anything with maps[].map_id).
+export const planeCalibrationsFor = (calibrations, siteMap, source) => (calibrations || []).filter((row) =>
+  row?.source_id === source && (siteMap?.maps || []).some((map) => map.map_id === row.map_id));
+// D-560: a plane frame counts while fresh and while its revision is one of those calibrations.
+export function planeCalibration(frame, calibrations, siteMap) {
+  if (!frame?.calibrationRevision || !(frame.ageMs >= 0 && frame.ageMs <= FRAME_LATE_MS)) return null;
+  return planeCalibrationsFor(calibrations, siteMap, frame.source)
+    .find((row) => row.calibration_revision === frame.calibrationRevision) || null;
+}
 
 // One map-plane frame for ``source``. ``held`` is the previous result's lease, reused while valid.
 // → { state: "live", plane, calibrationRevision, ageMs, blob, lease }
@@ -36,7 +50,8 @@ export async function fetchMapPlane(call, source, held, signal) {
         method: "POST", signals: [signal], headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source_id: source, rectification: MAP_RECTIFICATION }),
       });
-      lease = { ...issued, source, expiresAt: Date.now() + 45000 };
+      const life = Number(issued.expires_in_s);
+      lease = { ...issued, source, expiresAt: Date.now() + (life > 0 ? Math.max(1, life - 5) : 45) * 1000 };
     } catch (error) {
       if (error.status === 422) return { state: "plane-unavailable", lease: null };
       throw error;
@@ -138,8 +153,10 @@ export function resolveSavedProfile(storage, source, lensKind) {
 // D-560: the latest map-plane picture for one screen. Call refresh() after each preview frame (with
 // wanted = false when the screen has no calibration to draw it with). After plane-unavailable it asks
 // again only PLANE_RETRY_MS later, so a Vision that cannot make a plane is a state, not an error loop.
+// A transient error keeps the current frame until it expires and waits PLANE_ERROR_MS.
 const PLANE_RETRY_MS = 30000;
-export function createPlaneFeed({ scope, visionView, onChange }) {
+const PLANE_ERROR_MS = 5000;
+export function createPlaneFeed({ scope, visionView, onChange, now = Date.now }) {
   let frame = null, busy = false, retryAt = 0, cancelExpiry = () => {};
   function drop() {
     cancelExpiry();
@@ -151,27 +168,30 @@ export function createPlaneFeed({ scope, visionView, onChange }) {
   }
   async function refresh(wanted = true) {
     if (!wanted) { if (drop()) onChange(); return; }
-    if (busy || Date.now() < retryAt) return;
+    if (busy || now() < retryAt) return;
     busy = true;
     const life = scope.capture();
     try {
       const got = await visionView.fetchPlane();
-      if (got.state !== "live") {
-        if (got.state === "plane-unavailable") retryAt = Date.now() + PLANE_RETRY_MS;
-        drop();
-        return;
-      }
+      if (got.state === "plane-unavailable") { retryAt = now() + PLANE_RETRY_MS; drop(); return; }
+      if (got.state !== "live") { retryAt = now() + PLANE_ERROR_MS; return; }
       const url = URL.createObjectURL(got.blob);
       const image = new Image();
       image.src = url;
       const decoded = await image.decode().then(() => true, () => false);
-      if (!life.current() || !decoded) { URL.revokeObjectURL(url); return; }
+      if (!life.current() || !decoded) { URL.revokeObjectURL(url); if (!decoded) retryAt = now() + PLANE_ERROR_MS; return; }
+      if (!planeFitsImage(got.plane, image.naturalWidth, image.naturalHeight)) {
+        URL.revokeObjectURL(url);
+        retryAt = now() + PLANE_RETRY_MS;
+        drop();
+        return;
+      }
       drop();
       frame = { image, url, source: got.source, plane: got.plane,
         calibrationRevision: got.calibrationRevision, ageMs: got.ageMs };
       cancelExpiry = scope.timeout(() => { drop(); onChange(); }, Math.max(0, FRAME_LATE_MS - got.ageMs) || 0);
     } catch (error) {
-      if (error.name !== "AbortError") drop();
+      if (error.name !== "AbortError") retryAt = now() + PLANE_ERROR_MS;
     } finally {
       busy = false;
       if (life.current()) onChange();

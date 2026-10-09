@@ -1,10 +1,12 @@
 // D-560 S2: Vision map-plane header, pixel↔map formula, and the two screens' placement of the plane.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mapToPlane, parsePlaneHeader, planeToMap } from "../../fleet/server/web/shared/vision-view.js";
-import { planeAffine, planeCalibration } from "../../fleet/server/web/camera-backdrop.js";
+import {
+  createPlaneFeed, mapToPlane, parsePlaneHeader, planeCalibration, planeFitsImage, planeToMap,
+} from "../../fleet/server/web/shared/vision-view.js";
+import { planeAffine } from "../../fleet/server/web/camera-backdrop.js";
 import { fitTransform, project, quarterTurn } from "../../fleet/server/web/site-layer.js";
-import { planePixelAt, planeView } from "../../fleet/server/web/shared/site-map-model.js";
+import { planeView } from "../../fleet/server/web/shared/site-map-model.js";
 
 const PLANE = { min_x: -0.15, min_y: -0.15, max_x: 6.55, max_y: 3.75, ppm: 400 };
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} vs ${b}`);
@@ -47,21 +49,26 @@ test("the console lays plane pixels where toPx puts the same map point, with and
   }
 });
 
-test("the site-map tab picks the map point under the click through the plane pixel, with any view turn", () => {
-  const size = { width: 2680, height: 1560 };
-  const bounds = { min_x: PLANE.min_x, max_x: PLANE.min_x + size.width / PLANE.ppm,
-    min_y: PLANE.max_y - size.height / PLANE.ppm, max_y: PLANE.max_y };
+test("the site-map tab's view over the plane rectangle picks x = min_x + u/ppm, y = max_y − v/ppm at any turn", () => {
   for (const rot of [0, 90, 180, 270]) {
-    const { view, field } = planeView(bounds, 800, 480, rot);
-    for (const [x, y] of [[0, 0], [6.4, 3.6], [1.25, 2.5]]) {
-      const [px, py] = view.toPx(x, y);
-      const { u, v } = planePixelAt(field, rot, size, px, py);
-      const at = mapToPlane(PLANE, x, y);
-      close(u, at.u, 1e-6); close(v, at.v, 1e-6);
-      const back = planeToMap(PLANE, u, v);
-      close(back.x, x); close(back.y, y);
+    const { view, field } = planeView(PLANE, 800, 480, rot);
+    const cx = field.x + field.width / 2, cy = field.y + field.height / 2;
+    const q = rot * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
+    for (const [u, v] of [[0, 0], [2680, 1560], [500, 1000]]) {
+      // The SVG image is drawn unturned over ``field`` then rotated by ``rot`` about its centre.
+      const fx = field.x + u * field.width / 2680 - cx, fy = field.y + v * field.height / 1560 - cy;
+      const [x, y] = view.toMap(cx + fx * c - fy * s, cy + fx * s + fy * c);
+      const want = planeToMap(PLANE, u, v);
+      close(x, want.x); close(y, want.y);
     }
   }
+});
+
+test("a plane whose rectangle is not its picture (more than 1 px off) is not used", () => {
+  assert.ok(planeFitsImage(PLANE, 2680, 1560));
+  assert.ok(planeFitsImage(PLANE, 2681, 1559));
+  assert.ok(!planeFitsImage(PLANE, 2682, 1560));
+  assert.ok(!planeFitsImage(PLANE, 2680, 1500));
 });
 
 test("the console uses a plane only while fresh and of an approved calibration on this site map", () => {
@@ -75,4 +82,65 @@ test("the console uses a plane only while fresh and of an approved calibration o
   }
   assert.equal(planeCalibration(frame, [cal], { maps: [{ map_id: "other" }] }), null);
   assert.equal(planeCalibration(null, [cal], siteMap), null);
+  // Fleet's site lanes ({maps: [{map_id}]}) name the maps on the install page.
+  assert.equal(planeCalibration(frame, [cal], { maps: [{ map_id: "map_v2_fleet", source_ids: [] }] }), cal);
+});
+
+function feedHarness(answers) {
+  const timers = [];
+  let clock = 1000, changes = 0, fetches = 0;
+  const scope = {
+    capture: () => ({ current: () => true }),
+    timeout: (fn, ms) => { const t = { at: clock + ms, fn, live: true }; timers.push(t); return () => { t.live = false; }; },
+    onDispose: () => {},
+  };
+  const visionView = { fetchPlane: async () => { fetches += 1; return answers.shift(); } };
+  const feed = createPlaneFeed({ scope, visionView, onChange: () => { changes += 1; }, now: () => clock });
+  return {
+    feed, fetches: () => fetches, changes: () => changes,
+    advance(ms) {
+      clock += ms;
+      for (const t of timers) if (t.live && t.at <= clock) { t.live = false; t.fn(); }
+    },
+  };
+}
+const live = (extra = {}) => ({ state: "live", source: "ceiling_north", plane: { ...PLANE, max_x: PLANE.min_x + 2, max_y: PLANE.min_y + 1, ppm: 100 },
+  calibrationRevision: "paint-7b2", ageMs: 1000, blob: new Blob(["x"]), ...extra });
+
+test("the plane feed drops a frame at 3000 ms age and backs off after errors and plane-unavailable", async (t) => {
+  const OldImage = globalThis.Image;
+  globalThis.Image = class { constructor() { this.naturalWidth = 200; this.naturalHeight = 100; } decode() { return Promise.resolve(); } };
+  t.after(() => { globalThis.Image = OldImage; });
+  const h = feedHarness([live(), { state: "error", status: 503 }, live(), { state: "plane-unavailable" }]);
+  await h.feed.refresh();
+  assert.equal(h.feed.current().calibrationRevision, "paint-7b2");
+  h.advance(1000);
+  await h.feed.refresh();                       // transient error: the fresh frame stays
+  assert.ok(h.feed.current());
+  await h.feed.refresh();                       // within the 5 s error backoff: no request
+  assert.equal(h.fetches(), 2);
+  h.advance(1000);                              // 3000 ms after capture: dropped
+  assert.equal(h.feed.current(), null);
+  h.advance(3000);
+  await h.feed.refresh();                       // still inside the error backoff
+  assert.equal(h.fetches(), 2);
+  h.advance(1000);
+  await h.feed.refresh();
+  assert.ok(h.feed.current());
+  await h.feed.refresh();                       // not busy, not backing off: asks and gets 409
+  assert.equal(h.feed.current(), null);
+  h.advance(29000);
+  await h.feed.refresh();                       // 30 s plane-unavailable backoff
+  assert.equal(h.fetches(), 4);
+  await h.feed.refresh(false);
+  assert.equal(h.fetches(), 4);
+});
+
+test("the plane feed rejects a picture that does not match its rectangle", async (t) => {
+  const OldImage = globalThis.Image;
+  globalThis.Image = class { constructor() { this.naturalWidth = 300; this.naturalHeight = 100; } decode() { return Promise.resolve(); } };
+  t.after(() => { globalThis.Image = OldImage; });
+  const h = feedHarness([live()]);
+  await h.feed.refresh();
+  assert.equal(h.feed.current(), null);
 });

@@ -187,14 +187,6 @@ export function planeView(b, width, height, turn = 0) {
     transform: `rotate(${turn} ${cx} ${cy})`}};
 }
 
-// D-560 4: SVG point → pixel (u, v) of a ``size`` px plane image filling ``field`` turned by ``turn``.
-export function planePixelAt(field, turn, size, px, py) {
-  const q = -turn * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
-  const cx = field.x + field.width / 2, cy = field.y + field.height / 2, dx = px - cx, dy = py - cy;
-  const x = cx + dx * c - dy * s, y = cy + dx * s + dy * c;
-  return {u: (x - field.x) * size.width / field.width, v: (y - field.y) * size.height / field.height};
-}
-
 export function lengths(points) {
   const knots = [0];
   for (let i = 1; i < points.length; i += 1) {

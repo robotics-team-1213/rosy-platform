@@ -5,7 +5,7 @@
 import { mapUpTurn, quarterTurn } from "./site-layer.js";
 import { lensesMatch } from "/console/assets/map-fit.js";
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
-import { createPlaneFeed, planeToMap } from "/console/assets/vision-view.js";
+import { createPlaneFeed, planeCalibration, planeCalibrationsFor, planeToMap } from "/console/assets/vision-view.js";
 
 const FRESH_MS = 3000;
 
@@ -20,14 +20,6 @@ export function cameraMapCalibration(frame, calibrations, siteMap) {
     // Vision's rule (D-457): a record without a lens only fits a frame without one; numbers to 1e-4.
     && lensesMatch(row.lens ?? null, frame.lens ?? null)
     && Array.isArray(row.map_to_image) && row.map_to_image.length === 9) || null;
-}
-
-// D-560: a fresh Vision map plane counts when its revision is an approved calibration of this site's map.
-export function planeCalibration(frame, calibrations, siteMap) {
-  if (!frame || !siteMap || !fresh(frame)) return null;
-  return (calibrations || []).find((row) => row.source_id === frame.source
-    && row.calibration_revision === frame.calibrationRevision
-    && (siteMap.maps || []).some((map) => map.map_id === row.map_id)) || null;
 }
 
 // D-560 4: canvas affine [a, b, c, d, e, f] that lays plane pixels on the view through the map's toPx
@@ -99,6 +91,11 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     const affine = planeAffine(plane, image.naturalWidth, image.naturalHeight, toPx);
     if (!affine) return;
     ctx.save();
+    ctx.beginPath();  // the plane never paints outside the site view the warp would cover
+    [[bounds.min_x, bounds.min_y], [bounds.max_x, bounds.min_y], [bounds.max_x, bounds.max_y], [bounds.min_x, bounds.max_y]]
+      .forEach(([x, y], k) => { const p = toPx(x, y); if (k) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); });
+    ctx.closePath();
+    ctx.clip();
     ctx.transform(...affine);
     ctx.drawImage(image, 0, 0);
     ctx.restore();
@@ -171,7 +168,8 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       frame.image?.closest?.(".vision-frame")?.setAttribute("data-turn", String(frameTurn(frame)));
       setCameraFrame(frame);
       showFrame();
-      planes.refresh(calibrations.some((row) => row.source_id === frame.source));
+      // Ask Vision only when the site view can draw it (no grid map, a site map, a calibration on it).
+      planes.refresh(!view.map && planeCalibrationsFor(calibrations, view.siteMap, frame.source).length > 0);
       cancelMapCameraExpiry = scope.timeout(() => { lastFrame = null; setCameraFrame(null); setLive(null); }, Math.max(0, 3000 - frame.ageMs));
     })));
   }

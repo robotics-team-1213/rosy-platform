@@ -8,7 +8,7 @@ import {
 } from "./field-layers.js";
 import { multiply3, fieldToMap } from "/console/assets/map-fit.js";
 import { warpImage } from "/console/assets/field-warp.js";
-import { createPlaneFeed } from "/console/assets/vision-view.js";
+import { createPlaneFeed, planeCalibration, planeCalibrationsFor } from "/console/assets/vision-view.js";
 
 export { warpImage };
 
@@ -130,16 +130,19 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
     updateMismatch(active);
     const frame = lastFrame;
     const shot = planes.current();
-    const plane = shot?.source === visionView.currentSource() && view.hasFleetCalibration?.(shot.source) ? shot : null;
+    // Same rule as the console (D-560): source, revision, a map Fleet's site lanes know.
+    const { calibrations = [], siteMap = null } = view.planeContext?.() || {};
+    const planeRecord = shot?.source === visionView.currentSource() ? planeCalibration(shot, calibrations, siteMap) : null;
+    const plane = planeRecord ? shot : null;
     // D-375 대체 경로: 경기장 모서리가 없고 운영자가 지도 맞춤을 수락했으면 지도 사각형을 그 homography 로 편다.
     const byMap = !plane && !active && frame && !frame.rectified ? view.mapFieldFallback?.(frame) ?? null : null;
     const show = view.layers.rectified && (plane || (frame && frame.source === visionView.currentSource()
       && (frame.rectified || active || byMap)));
     figure.hidden = !show;
     if (!show) return;
+    const round3 = (value) => Math.round(value * 1000) / 1000;
     const mapSize = plane ? {
-      width: Math.round(plane.image.naturalWidth / plane.plane.ppm * 1000) / 1000,
-      height: Math.round(plane.image.naturalHeight / plane.plane.ppm * 1000) / 1000,
+      width: round3(plane.plane.max_x - plane.plane.min_x), height: round3(plane.plane.max_y - plane.plane.min_y),
     } : byMap ? {
       width: Math.round((byMap.bounds.max_x - byMap.bounds.min_x) * 1000) / 1000,
       height: Math.round((byMap.bounds.max_y - byMap.bounds.min_y) * 1000) / 1000,
@@ -182,38 +185,50 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
     ctx.setLineDash(active?.kind === "제안" ? [6, 4] : []);
     ctx.strokeRect(field.x + 1, field.y + 1, field.width - 2, field.height - 2);
     ctx.restore();
-    if (size) drawMetric(ctx, field, size);
+    const track = planeRecord?.track_bounds_m;
+    const trackSize = track ? { width: round3(track.max_x - track.min_x), height: round3(track.max_y - track.min_y) } : null;
+    // The plane's grid sits on whole map metres (origin at its top-left corner in map coordinates).
+    if (size) drawMetric(ctx, field, size, plane ? plane.plane : undefined, trackSize ? `트랙 ${trackSize.width} m` : undefined);
     const source = plane ? `Rosy Cam 평면 영상(보정 ${plane.calibrationRevision})`
       : frame.rectified ? "Vision 보정 프레임"
       : byMap ? "수락한 지도 맞춤으로 편 원본(모서리가 화면 밖이어도 됨)"
         : `${active.kind === "제안" ? "제안으로" : "확인한 모서리로"} 편 원본`;
-    caption.textContent = `위에서 본 경기장 · ${source} · 경기장 밖은 가림`
-      + (mapSize ? ` · 지도 ${size.width}×${size.height} m`
+    caption.textContent = `위에서 본 경기장 · ${source}${plane ? "" : " · 경기장 밖은 가림"}`
+      + (trackSize ? ` · 트랙 ${trackSize.width}×${trackSize.height} m`
+        : mapSize ? ` · 지도 ${size.width}×${size.height} m`
         : size ? ` · 표시 축척 ${size.width}×${size.height} m(이 브라우저만)` : " · 축척 미입력")
       + " · 표시 전용, 관측·주행에 쓰지 않음";
     canvas.setAttribute("aria-label", caption.textContent);
   }
 
-  function drawMetric(ctx, field, size) {
+  // Grid lines on multiples of the step in map metres; ``origin`` is the field's top-left (min_x, max_y).
+  // The default origin (0, 0) keeps the browser-only views' lines counted from the top-left corner.
+  function drawMetric(ctx, field, size, origin = { min_x: 0, max_y: 0 }, label = `${size.width} m`) {
     const pxPerM = field.width / size.width;
+    const pxPerMy = field.height / size.height;
     const step = [0.05, 0.1, 0.25, 0.5, 1, 2, 5].find((s) => size.width / s <= 16) || 10;
+    const inside = (lo, hi) => {
+      const out = [];
+      for (let k = Math.floor(lo / step + 1e-9) + 1; k * step < hi - 1e-9; k += 1) out.push(k * step);
+      return out;
+    };
     ctx.save();
     if (view.layers.grid) {
       ctx.strokeStyle = tone("--line-30");
       ctx.lineWidth = 1;
-      for (let x = step; x < size.width - 1e-9; x += step) {
-        const px = field.x + x * pxPerM;
+      for (const x of inside(origin.min_x, origin.min_x + size.width)) {
+        const px = field.x + (x - origin.min_x) * pxPerM;
         ctx.beginPath(); ctx.moveTo(px, field.y); ctx.lineTo(px, field.y + field.height); ctx.stroke();
       }
-      for (let y = step; y < size.height - 1e-9; y += step) {
-        const py = field.y + y * (field.height / size.height);
+      for (const y of inside(origin.max_y - size.height, origin.max_y)) {
+        const py = field.y + (origin.max_y - y) * pxPerMy;
         ctx.beginPath(); ctx.moveTo(field.x, py); ctx.lineTo(field.x + field.width, py); ctx.stroke();
       }
     }
     ctx.fillStyle = tone("--ink");
     ctx.font = window.RosyPalette.canvasFont(12, "mono");
     ctx.textBaseline = "bottom";
-    ctx.fillText(`${size.width} m`, field.x + field.width / 2 - 16, field.y - 2);
+    ctx.fillText(label, field.x + field.width / 2 - 16, field.y - 2);
     ctx.fillText(`격자 ${step} m`, field.x + 4, field.y + field.height - 4);
     ctx.restore();
   }
@@ -277,7 +292,8 @@ export function createFieldView({ scope, el, view, visionView, onLayersChanged }
   let sizeSource = null;
   scope.subscribe(() => visionView.onFrame(scope.guard((frame) => {
     lastFrame = frame;
-    planes.refresh(Boolean(view.layers.rectified && view.hasFleetCalibration?.(frame.source)));
+    const { calibrations = [], siteMap = null } = view.planeContext?.() || {};
+    planes.refresh(Boolean(view.layers.rectified) && planeCalibrationsFor(calibrations, siteMap, frame.source).length > 0);
     if (frame.source !== sizeSource) {
       sizeSource = frame.source;
       loadSize(frame.source);
