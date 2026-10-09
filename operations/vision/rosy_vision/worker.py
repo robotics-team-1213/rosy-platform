@@ -115,7 +115,7 @@ class VisionWorker:
 
     def _camera(self) -> CameraMap:
         """D-580: the robot markers Fleet named on the tracking config read, else the site YAML."""
-        config = self.tracker.config if self.tracker is not None else None
+        config = getattr(self.tracker, "config", None)
         markers = config.get("robot_markers") if isinstance(config, dict) else None
         if not isinstance(markers, dict):
             return self.camera

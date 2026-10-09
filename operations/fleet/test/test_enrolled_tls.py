@@ -626,10 +626,12 @@ def test_renumbered_robot_re_enrolls_through_its_proven_binding_without_editing_
 
 def test_never_enrolled_binding_keeps_the_d565_id_check(tmp_path, monkeypatch):
     core = FakeCore(robot_id='rosy_41')
-    service, store, _, bindings, _ = renumber_service(tmp_path, monkeypatch, core, retired=False)
+    service, store, calls, bindings, _ = renumber_service(tmp_path, monkeypatch, core, retired=False)
     with pytest.raises(EnrollmentError) as refused:
         asyncio.run(service.enroll(code=CODE, principal_id='alice', discovery_name=NAME))
-    assert refused.value.reason == 'tls_binding_mismatch' and core.logged_out == [core.token]
+    # The identity probe names rosy_41, not the binding's rosy_09: the code never leaves Fleet.
+    assert refused.value.code == 'tls_binding_mismatch'
+    assert [r.url.path for r in calls] == ['/api/v1/auth/peer-pairing/identity']
     assert store.rows() == [] and store.tls_renumbers() == {} and bindings.binding('rosy_09') is not None
 
 
