@@ -32,7 +32,7 @@
 
 ### Addendum (2026-10-09, first live run)
 
-- 045가 멈춘 실제 원인은 Windows MAX_PATH였다. 상태 폴더가 95자라 `install/include/...visibility_control.h` 풀기가 260자를 넘어 실패했다. `load_config`는 64자를 넘는 `state_dir`를 거부한다(가장 깊은 페이로드 파일 약 120자 + `<id>/attempt-N/x/.<id>.partial-*` 약 60자). 운영 PC의 상태 폴더는 `X:\DevTempobot-cd`로 옮겼다.
+- 045가 멈춘 실제 원인은 Windows MAX_PATH였다. 상태 폴더가 95자라 `install/include/...visibility_control.h` 풀기가 260자를 넘어 실패했다. `load_config`는 64자를 넘는 `state_dir`를 거부한다(가장 깊은 페이로드 파일 약 120자 + `<id>/attempt-N/x/.<id>.partial-*` 약 60자). 운영 PC의 상태 폴더는 `X:\DevTemp\robot-cd`로 옮겼다.
 - 예약 작업 안에서 Windows OpenSSH `-J`가 상속된 stdin 때문에 두 번째 로봇에서 60 s 동안 멈췄다. `run_ssh`는 `stdin=DEVNULL`로 부른다.
 - `install_robot_cd.ps1`은 작업 출력을 `<state_dir>/task-output.log`에 남긴다. 준비 거부 이유는 그 출력에만 찍힌다.
 
