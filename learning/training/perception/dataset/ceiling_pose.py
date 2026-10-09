@@ -16,7 +16,7 @@ direction from the centre to the heading-edge midpoint (site config heading_edge
 nearest detection within max_gap_s, carried to the stamp by the odometry's relative motion;
 the stamp is unusable without a detection, without odometry, or when the detections before and
 after it disagree once carried (pose/clock error). robot time = site time + clock_offset_s;
-``estimate_clock_offset`` takes it from the motion onset in both series.
+``estimate_clock_offset`` takes it from the yaw-rate cross-correlation of both series.
 """
 from __future__ import annotations
 
@@ -151,19 +151,24 @@ def fuse(detections, odom, stamps, *, clock_offset_s=0.0, params=FUSE):
     return out
 
 
-def estimate_clock_offset(detections, odom, *, moved_m=0.03, max_reproj_m=FUSE["max_reproj_m"]):
-    """robot - site clock from the first time each series has moved moved_m from its start, or None."""
-    def onset(t, x, y):
-        far = np.hypot(np.asarray(x) - x[0], np.asarray(y) - y[0]) > moved_m
-        return float(np.asarray(t)[far.argmax()]) if far.any() else None
-    if not detections or not len(odom):
-        return None
+def estimate_clock_offset(detections, odom, *, max_lag_s=5.0, step_s=0.05, max_reproj_m=FUSE["max_reproj_m"]):
+    """robot - site clock (s): the lag that best correlates the odometry and ceiling yaw rates, or None.
+
+    Yaw rate, not motion onset: on 2026-10-09 real drives the onset was off by 1.5 s (a nudge before
+    the drive), the yaw-rate correlation agreed within 0.1 s on both sessions."""
     d = sorted((r for r in detections if r["reproj_err"] <= max_reproj_m), key=lambda r: r["t"])
-    if not d:
+    if len(d) < 10 or len(odom) < 10:
         return None
-    a = onset([r["t"] for r in d], [r["x"] for r in d], [r["y"] for r in d])
-    b = onset(odom.t, odom.x, odom.y)
-    return None if a is None or b is None else b - a
+    t, yaw = np.array([r["t"] for r in d]), np.unwrap([r["yaw"] for r in d])
+    grid = np.arange(max(t[0], odom.t[0]) + max_lag_s, min(t[-1], odom.t[-1]) - max_lag_s, 0.25)
+    if grid.size < 20:
+        return None
+    a = np.abs(np.gradient(np.interp(grid, odom.t, odom.yaw), grid))
+    if a.std() == 0:
+        return None
+    best = max((np.corrcoef(a, np.abs(np.gradient(np.interp(grid, t + lag, yaw), grid)))[0, 1], lag)
+               for lag in np.arange(-max_lag_s, max_lag_s + step_s / 2, step_s))
+    return None if not np.isfinite(best[0]) else round(float(best[1]), 3)
 
 
 def main(argv=None):

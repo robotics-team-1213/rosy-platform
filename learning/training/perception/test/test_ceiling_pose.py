@@ -83,9 +83,18 @@ def test_fuse_carries_detections_by_odometry_and_flags_gaps_and_disagreement():
     assert cp.fuse(dets, _odom(), [99.5], clock_offset_s=0.0)[0]["reason"] == "no_odom"
 
 
-def test_clock_offset_from_motion_onset():
-    assert cp.estimate_clock_offset(_detections(5.0), _odom()) == pytest.approx(5.0, abs=1.0)
-    assert cp.estimate_clock_offset([], _odom()) is None
+def test_clock_offset_from_yaw_rate_correlation():
+    rng = np.random.default_rng(0)
+    t = np.arange(100.0, 160.0, 0.05)
+    yaw = np.cumsum(np.where((t % 10) < 3, 0.5, 0.0) * 0.05)  # turns of 3 s every 10 s
+    odom = PoseSeries(t, np.zeros_like(t), np.zeros_like(t), yaw)
+    site = np.arange(96.0, 155.0, 0.33)  # site clock = robot - 3.2
+    dets = [{"t": s, "x": 0.0, "y": 0.0, "yaw": float(np.interp(s + 3.2, t, yaw) + 1.0 + rng.normal(0, 0.02)),
+             "reproj_err": 0.001} for s in site]
+    assert cp.estimate_clock_offset(dets, odom) == pytest.approx(3.2, abs=0.15)
+    assert cp.estimate_clock_offset([], odom) is None
+    still = PoseSeries(t, np.zeros_like(t), np.zeros_like(t), np.zeros_like(t))
+    assert cp.estimate_clock_offset(dets, still) is None
 
 
 def test_detect_reads_a_saved_calibration_listing(tmp_path):
