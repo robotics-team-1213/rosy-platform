@@ -2,7 +2,7 @@
 
 ## 설치 식별
 
-- 원격 `main`과 현장 설치 후보: `247561153ca1032bb4fb65123c1b247adb1240a6`.
+- 원격 `main`과 현장 설치 후보: `247561153ca1` (`site-247561153ca1`). 전체 SHA 일치는 현장 설치 로그와 이미지 태그에서 확인했다.
 - GitHub CI `37859420794` 성공, ARM64 site build `37859420877` 성공. `site-247561153ca1` 릴리스 서명 기록은 정확한 source commit과 tag에 `signed`를 남겼다.
 - 현장 자동 갱신 기록: `staging` → `switched` → `installed` (2026-10-08 23:46–23:50 UTC). `/opt/rosy/candidate`가 위 SHA 후보를 가리켰다. site stack과 자동 갱신 타이머는 active였고 proxy·Fleet·Vision 컨테이너는 위 SHA 이미지로 `healthy`였다. SSH 터널을 통한 `/healthz`는 HTTP 200이었다.
 
