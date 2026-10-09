@@ -308,7 +308,8 @@ class MainActivity : Activity() {
                 check(approved != null && approved.authorized()) { "approval required" }
                 check(approved.target.id != session?.target?.id) { "same robot selected twice" }
                 relay = PilotProxy(approved, AssetBundle(assets),
-                    { message -> main.post { if (version == secondaryVersion) status.text = "${candidate.name} · 연결 끊김 · $message" } })
+                    { message -> main.post { if (version == secondaryVersion) status.text = "${candidate.name} · 연결 끊김 · $message" } },
+                    { main.post { if (version == secondaryVersion) connectedLabel?.let { status.text = it } } })
                 relay.verifyIdentity(); relay.start(5000, false)
                 val ready = relay
                 main.post {
