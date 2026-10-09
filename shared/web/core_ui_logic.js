@@ -104,6 +104,23 @@ export const DOCK_STATE_LABEL = Object.freeze({
   DOCK_FAILED: "도킹 실패",
 });
 
+// PowerMode on StateSnapshot.power. The enum stays in title. IDLE here is the
+// dimmed power mode, so the word is not the robot-mode word for IDLE ("대기").
+export const POWER_MODE_LABEL = Object.freeze({
+  ACTIVE: "상시",
+  IDLE: "유휴",
+  STANDBY: "절전",
+});
+
+// BatteryLevel. ok stays off the attention queue. The other three are the
+// existing triage names, used as the queue state.
+export const BATTERY_LEVEL_LABEL = Object.freeze({
+  ok: "정상",
+  warning: "배터리 부족",
+  critical: "배터리 위험",
+  deep: "배터리 고갈",
+});
+
 // Host Agent network modes (API Ref host/network). The enum stays in the request body.
 export const NETWORK_MODE_LABEL = Object.freeze({
   SITE_STA: "사업장 Wi-Fi",
