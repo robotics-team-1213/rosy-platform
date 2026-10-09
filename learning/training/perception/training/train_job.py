@@ -526,8 +526,9 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
                          dataset_annotation=(None if "lane_derived" not in inputs else
                                              {k: inputs["lane_derived"][k] for k in ("annotation_origin", "adr")}),
                          val_iou={"drivable": metrics["val_drivable_iou_all"]},
-                         metrics={k: metrics[k] for k in ("val_outside_band_fp", "val_near_centre_drivable",
-                                                          "selection")},
+                         metrics={k: metrics[k] for k in ("val_outside_band_fp", "val_outside_band_fp_raw",
+                                                          "val_near_centre_drivable",
+                                                          "val_near_centre_drivable_raw", "selection")},
                          experiment={"tracker": "local", "run_id": out.name,
                                      "path": "jobs/" + out.name})
             candidate_parity = verify_candidate_lane_parity(parent["onnx"],

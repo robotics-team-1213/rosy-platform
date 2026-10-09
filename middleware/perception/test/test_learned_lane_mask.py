@@ -130,7 +130,10 @@ def _reference_evidence(logits, classes):
         return np.isin(band_labels, idx) if idx else np.zeros_like(band_labels, bool)
 
     wall = _target("wall")
-    target = _target("drivable") & ~wall
+    target = _target("drivable")
+    if target.any():  # D-566 item 4 post-process, the same call as lane_evidence
+        target = lm.lane_bounded_drivable(band_labels, 3, [1])
+    target &= ~wall
     if target.mean() < lm.DRIVABLE_MIN_FRACTION:
         target = _target("lane_marking") & ~wall
     if not target.any():
@@ -238,4 +241,31 @@ def test_inner_half_of_a_touching_boundary_line_is_drivable():
     assert ev.error == pytest.approx(-2.5 / 160)
     mask[:, 210:212] = 5  # now lane_right touches too: 212-216 joins, mean x 160.5
     assert lane_evidence(_logits(mask, 6), V13).error == pytest.approx(1.0 / 160)
+
+
+def test_lane_bounded_drives_only_the_road_reached_from_the_front():
+    """D-566 item 4: lines at 100-109 and 210-219; drivable everywhere else below row 110."""
+    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+
+    labels = np.full((240, 320), 5, np.int64)
+    labels[:110] = 0
+    labels[110:, 100:110], labels[110:, 210:220] = 1, 2
+    out = lane_bounded_drivable(labels, 5, [1, 2], ignore_top=110)
+    assert out[110:, 110:210].all()  # the road between the lines
+    assert not out[:, :100].any() and not out[:, 220:].any()  # off-road blobs: not connected
+
+
+def test_lane_bounded_growth_clamp_stops_a_leak_through_a_line_gap():
+    from control.sensing.perception.learned.lane_mask import lane_bounded_drivable
+
+    labels = np.full((240, 320), 5, np.int64)
+    labels[:110] = 0
+    labels[110:, 100:110], labels[110:, 210:220] = 1, 2
+    labels[150:160, 100:110] = 5  # a 10-row gap in lane_left
+    out = lane_bounded_drivable(labels, 5, [1, 2], ignore_top=110)
+    assert out[150:160].sum(axis=1).max() <= 1.15 * 100 + 1  # clipped to 1.15 x the narrowest below
+    assert not out[110:150, :100].any()  # the leak does not spread above the gap
+    labels[200:205, 120:200] = 3  # crosswalk paint across the road: passable with through_idxs
+    out = lane_bounded_drivable(labels, 5, [1, 2], ignore_top=110, through_idxs=[3])
+    assert out[150, 150] and not out[202, 150]
 

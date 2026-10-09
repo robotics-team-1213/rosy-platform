@@ -21,6 +21,8 @@ the fraction of label-0 pixels in rows that hold drivable labels (D-554 item 9 b
 walls) that the model calls drivable, and the near-centre drivable fraction (rows of the
 bottom 40 %, cols 110-210) predicted vs labelled. D-566: pos_weight balances the loss (train
 non-drivable / drivable labelled pixels) and the best epoch maximises IoU - fp_lambda * FP.
+FP and the near-centre fraction are scored after the robot's lane-bounded post-process
+(lane_mask.lane_bounded_drivable, D-566 item 4); the raw model values are kept as *_raw.
 """
 
 from __future__ import annotations
@@ -30,10 +32,12 @@ import copy
 if __name__ == "__main__":
     raise SystemExit("v13-drivable training requires trusted owner IndexedReview admission")
 
+import numpy as np
 import torch
 from torch import nn
 
 from rosy_lane_model import HEIGHT, WIDTH, LaneUNet
+from control.sensing.perception.learned.lane_mask import lane_bounded_drivable  # D-566 item 4
 
 # State-dict names of the pinky-lane-segmentation LaneUNet -> rosy_lane_model.LaneUNet.
 KEY_RENAMES = ((".body.", "."), ("middle.", "bottleneck."))
@@ -224,8 +228,11 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
             total, count = total + loss.item() * len(x), count + len(x)
         model.eval()
         counts = {"all": [0, 0], "lane_background": [0, 0]}
-        band_fp = [0, 0]
-        near = [0, 0, 0]  # predicted drivable, labelled drivable, pixels
+        band_fp = {"post": [0, 0], "raw": [0, 0]}
+        near = {"post": [0, 0, 0], "raw": [0, 0, 0]}  # predicted drivable, labelled drivable, pixels
+        roles = {}
+        for c in val_ds.classes:
+            roles.setdefault(c["role"], []).append(c["index"])
         with torch.no_grad():
             for x, y in val_dl:
                 x, y = x.to(device), y.to(device)
@@ -238,19 +245,24 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
                 for name, scope in (("all", keep), ("lane_background", keep & lane_bg)):
                     counts[name][0] += int((pred & truth & scope).sum())
                     counts[name][1] += int(((pred | truth) & scope).sum())
+                post = torch.from_numpy(np.stack([lane_bounded_drivable(
+                    a, drivable_channel, roles.get("lane_marking", ()), ignore_top=model.ignore_top,
+                    through_idxs=roles.get("ignore", ())) for a in answer.cpu().numpy()])).to(device)
                 band = (y == 0) & keep & truth.any(dim=-1, keepdim=True)
-                band_fp[0] += int((pred & band).sum())
-                band_fp[1] += int(band.sum())
-                near[0] += int(pred[..., NEAR_ROWS, NEAR_COLS].sum())
-                near[1] += int(truth[..., NEAR_ROWS, NEAR_COLS].sum())
-                near[2] += pred[..., NEAR_ROWS, NEAR_COLS].numel()
+                for kind, p in (("post", post), ("raw", pred)):
+                    band_fp[kind][0] += int((p & band).sum())
+                    band_fp[kind][1] += int(band.sum())
+                    near[kind][0] += int(p[..., NEAR_ROWS, NEAR_COLS].sum())
+                    near[kind][1] += int(truth[..., NEAR_ROWS, NEAR_COLS].sum())
+                    near[kind][2] += p[..., NEAR_ROWS, NEAR_COLS].numel()
         ious = {k: (i / u if u else None) for k, (i, u) in counts.items()}
         iou = ious["lane_background"]
         row = {"epoch": epoch, "train_loss": total / max(count, 1), "val_drivable_iou": iou,
                "val_drivable_iou_all": ious["all"],
-               "val_outside_band_fp": band_fp[0] / band_fp[1] if band_fp[1] else None,
-               "val_near_centre_drivable": {"pred": near[0] / near[2], "label": near[1] / near[2]}
-               if near[2] else None}
+               **{"val_outside_band_fp" + suffix: f[0] / f[1] if f[1] else None
+                  for suffix, f in (("", band_fp["post"]), ("_raw", band_fp["raw"]))},
+               **{"val_near_centre_drivable" + suffix: {"pred": n[0] / n[2], "label": n[1] / n[2]}
+                  if n[2] else None for suffix, n in (("", near["post"]), ("_raw", near["raw"]))}}
         row["score"] = None if iou is None else iou - fp_lambda * (row["val_outside_band_fp"] or 0.0)
         history.append(row)
         if iou is not None and (best is None or row["score"] > best["score"]):
@@ -265,7 +277,8 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
     return {"history": history, "best_epoch": best["epoch"] if best else None,
             "val_drivable_iou": best["val_drivable_iou"] if best else None,
             "val_drivable_iou_all": best["val_drivable_iou_all"] if best else None,
-            "val_outside_band_fp": best["val_outside_band_fp"] if best else None,
-            "val_near_centre_drivable": best["val_near_centre_drivable"] if best else None,
+            **{k: best[k] if best else None for k in ("val_outside_band_fp", "val_outside_band_fp_raw",
+                                                      "val_near_centre_drivable",
+                                                      "val_near_centre_drivable_raw")},
             "selection": {"score": "val_drivable_iou - fp_lambda * val_outside_band_fp",
                           "fp_lambda": fp_lambda, "pos_weight": pos_weight}}

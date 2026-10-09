@@ -14,6 +14,8 @@ The road edge is a boundary line's centre (D-554 item 10): with a drivable
 class, the inner half of each lane_left / lane_right run that touches drivable
 in its row is drivable target too (lane_left: centre to right edge,
 lane_right: left edge to centre). Models without drivable are unchanged.
+Before that union, drivable is cut to the region reachable from the robot's
+road ahead without crossing a lane line (D-566 item 4, lane_bounded_drivable).
 Target components smaller than MIN_COMPONENT_PX are dropped before any of
 that: in the 2026-10-02 audit speckle took `visible` from 0.896 to 1.000 and
 offset jitter up 31 %; the filter brought it back to 0.885 and +1 %.
@@ -35,6 +37,14 @@ DRIVABLE_MIN_FRACTION = 0.02
 #: 8-connected target components below this many pixels are noise. 40 px at the
 #: 320x240 model input, the same floor as lane_keep_lines.DENOISE_MIN_AREA_PX.
 MIN_COMPONENT_PX = 40
+#: lane_bounded_drivable: going up, a row's filled span may be at most this many
+#: times the narrowest span below it (not just the row below, or 1.15 per row
+#: compounds through a line gap), so a gap cannot leak the fill sideways.
+#: Perspective narrows the road upward; 1.15 leaves room for curves.
+MAX_ROW_GROWTH = 1.15
+#: Seed search depth: the drivable pixel nearest the centre column within this
+#: many rows of the lowest drivable row.
+SEED_ROWS = 8
 #: Shadow `visible` latch on confidence (audit 2026-10-02): on at 0.35, off below 0.25.
 VISIBLE_ENTER = 0.35
 VISIBLE_EXIT = 0.25
@@ -77,6 +87,63 @@ def _drop_small(mask: np.ndarray, min_px: int) -> np.ndarray:
     keep = np.zeros(n, bool)
     keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= min_px
     return keep[labels]
+
+
+def _row_runs(passable: np.ndarray, touch: np.ndarray) -> np.ndarray:
+    """The contiguous runs of a passable row that contain a touch pixel."""
+    run = np.cumsum(passable & ~np.r_[False, passable[:-1]]) * passable
+    hit = np.unique(run[touch & passable])
+    return np.isin(run, hit[hit > 0])
+
+
+def lane_bounded_drivable(labels: np.ndarray, drivable_idx: int, lane_idxs, *, ignore_top: int = 0,
+                          through_idxs=(), max_row_growth: float = MAX_ROW_GROWTH) -> np.ndarray:
+    """Drivable pixels 4-connected to the road ahead without entering a lane pixel (D-566 item 4).
+
+    Seed: the drivable pixel nearest the centre column in the lowest SEED_ROWS rows that hold
+    drivable. The fill walks up and down from the seed row, row by row, keeping runs of passable
+    pixels (drivable, or through_idxs such as crosswalk paint, never lane_idxs) that touch the
+    kept run of the neighbouring row. Going up, a row wider than max_row_growth x the narrowest
+    span below keeps only its run nearest the middle of the row below, clipped around it. Returns a bool mask of drivable pixels only."""
+    drivable = labels == drivable_idx
+    passable = (drivable | np.isin(labels, list(through_idxs))) & ~np.isin(labels, list(lane_idxs))
+    passable[:ignore_top] = False
+    out = np.zeros(labels.shape, bool)
+    rows = np.flatnonzero((drivable & passable).any(axis=1))
+    if not rows.size:
+        return out
+    centre = (labels.shape[1] - 1) / 2.0
+    ys, xs = np.nonzero(drivable[max(rows.max() - SEED_ROWS + 1, 0):rows.max() + 1] & passable[
+        max(rows.max() - SEED_ROWS + 1, 0):rows.max() + 1])
+    pick = np.argmin(np.abs(xs - centre))
+    seed_row = int(ys[pick]) + max(rows.max() - SEED_ROWS + 1, 0)
+    seed = np.zeros(labels.shape[1], bool)
+    seed[xs[pick]] = True
+    out[seed_row] = _row_runs(passable[seed_row], seed)
+    cols = np.arange(labels.shape[1])
+    for step, stop in ((-1, ignore_top - 1), (1, labels.shape[0])):
+        below = out[seed_row]
+        narrowest = np.inf
+        for row in range(seed_row + step, stop, step):
+            keep = _row_runs(passable[row], below)
+            if not keep.any():
+                break
+            if step < 0:
+                span = np.flatnonzero(below)
+                narrowest = min(narrowest, span[-1] - span[0] + 1)
+                width = max_row_growth * narrowest
+                mid = (span[0] + span[-1]) / 2.0
+                kept = np.flatnonzero(keep)
+                if kept[-1] - kept[0] + 1 > width:  # too wide: first the one run nearest mid,
+                    keep = _row_runs(keep, cols == kept[np.argmin(np.abs(kept - mid))])
+                    kept = np.flatnonzero(keep)
+                if kept[-1] - kept[0] + 1 > width:  # then clip that run around mid
+                    keep &= np.abs(cols - mid) <= width / 2.0
+                    if not keep.any():
+                        break
+            out[row] = keep
+            below = keep
+    return out & drivable
 
 
 def _with_inner_line_half(drivable: np.ndarray, labels: np.ndarray, classes) -> np.ndarray:
@@ -123,7 +190,14 @@ def lane_evidence(logits: np.ndarray, classes: tuple[ClassSpec, ...], *,
 
     wall = _target("wall")
     wall_fraction = float(wall.mean())
-    target = _drop_small(_with_inner_line_half(_target("drivable") & ~wall, band_labels, classes),
+    drivable = _target("drivable")
+    if drivable.any():  # D-566 item 4: only the road reachable without crossing a line
+        roles = {}
+        for c in classes:
+            roles.setdefault(c.role, []).append(c.index)
+        drivable = lane_bounded_drivable(band_labels, roles["drivable"][0], roles.get("lane_marking", ()),
+                                         through_idxs=roles.get("ignore", ()))
+    target = _drop_small(_with_inner_line_half(drivable & ~wall, band_labels, classes),
                          min_component_px)
     if target.mean() < DRIVABLE_MIN_FRACTION:
         target = _drop_small(_target("lane_marking") & ~wall, min_component_px)
