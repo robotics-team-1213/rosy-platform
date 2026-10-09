@@ -115,9 +115,11 @@ def localized_start(svc: CoreServicesLike) -> Iterator[None]:
 
 
 def require_calibration_owner(svc: CoreServicesLike, auth: AuthContext, action: str) -> None:
-    """D-321 addendum: while a calibration lease is alive only its owner drives.
+    """D-321 addendum / D-541 3: while a calibration or Fleet trip lease is alive only its owner drives.
 
-    E-stop is never routed through here — anyone can always stop the robot.
+    Every motion and mode write passes here, so a new drive route that calls it is fenced too.
+    E-stop and the stops (IDLE, cancel, line-follow OFF, WAIT/ABORT) are never routed through
+    here — anyone can always stop the robot.
     """
     if getattr(svc.modes, "motion_reserved", False):
         raise ApiError("MODE_CONFLICT", 409, "lane perception configuration is being applied")
@@ -128,6 +130,35 @@ def require_calibration_owner(svc: CoreServicesLike, auth: AuthContext, action: 
             f"{action} refused: calibration '{session['label']}' is in progress",
             detail={"session": session},
         )
+    trip = getattr(svc, "trip_lease", None)
+    lease = trip.blocking(auth.token_id) if trip is not None else None
+    if lease is not None:
+        raise ApiError(
+            "TRIP_LEASED", 409,
+            f"{action} refused: Fleet trip '{lease['trip_id']}' ({lease['operator_name']}) holds this robot",
+            detail=lease,
+        )
+
+
+def owns_trip_lease(svc: CoreServicesLike, auth: AuthContext) -> bool:
+    """D-541 5: the caller holds the live Fleet trip lease."""
+    trip = getattr(svc, "trip_lease", None)
+    return trip is not None and trip.owns(auth.token_id)
+
+
+def lease_actor(auth: AuthContext) -> str:
+    """``by`` of a trip lease end: the token's label, else its role."""
+    return auth.label or auth.role
+
+
+def stop_ends_trip_lease(svc: CoreServicesLike, auth: AuthContext) -> None:
+    """D-541 5: a non-owner's navigation cancel or line-follow OFF ends the lease and goes IDLE.
+
+    Otherwise a free segment keeps NAVIGATION and the lease, and Fleet resends the goal.
+    """
+    trip = getattr(svc, "trip_lease", None)
+    if trip is not None and trip.blocking(auth.token_id) is not None:
+        trip.end("mode_left", by=lease_actor(auth), halt=True)
 
 
 def apply_mode(svc: CoreServicesLike, auth: AuthContext, new_mode: Mode) -> None:
