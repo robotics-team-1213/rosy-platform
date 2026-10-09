@@ -7,6 +7,7 @@ class 5 drivable. Labels are derived, never approved: evaluation_use is training
 so these masks are never D-475 evaluation truth.
 
   derive   --src DIR --out DIR [--min-both-rows 20] [--ignore-top 110] [--stripe-min 150]
+           [--outside-k 0.5]
            [--tool-commit SHA]   (required outside a git checkout, e.g. a git archive snapshot)
   sheets   --out DIR --dest DIR --key FILE [--per-sheet 20] [--seed S] [--canaries 0.1]
            numbered review sheets of every frame; canary tiles (known corruptions) listed only in
@@ -22,6 +23,9 @@ require its canary block (count >= MIN_CANARIES, count/frames >= MIN_CANARY_FRAC
 Per frame: everything starts 255; source lane classes 1..4 are copied; on each row >= ignore_top
 where lane_left and lane_right both exist and max(L) < min(R), source-0 pixels strictly between
 become 5, except bright ones (gray >= stripe_min: unlabelled paint) which stay 255.
+Outside band negatives (0, D-554 item 9): on those rows, with W = min(R) - max(L) - 1, up to
+round(outside_k * W) pixels left of min(L) and right of max(R), walking outward and stopping at the
+first lane-class or bright pixel; only source-0 pixels become 0.
 Wall negatives (0): bright, low-texture source-0 regions connected to row ignore_top,
 outside the drivable band and above the topmost lane-class pixel of their column (floor beyond a
 line is never wall). Rows above ignore_top are 255 for every class. Everything else stays 255.
@@ -67,20 +71,36 @@ def _sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def derive_mask(src, image, *, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN):
+def _run(stops):
+    """Pixels walked before the first stop in an outward-ordered slice."""
+    hit = np.flatnonzero(stops)
+    return int(hit[0]) if hit.size else stops.size
+
+
+def derive_mask(src, image, *, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN, outside_k=0.5):
     """Source 5-class mask + BGR image -> (6-class mask, both_rows)."""
     out = np.full(src.shape, IGNORE, np.uint8)
     lane = (src >= 1) & (src <= 4)
     out[lane] = src[lane]
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    stop = lane | (gray >= stripe_min)
     band = np.zeros(src.shape, bool)
+    outside = np.zeros(src.shape, bool)
     both = 0
     for row in range(ignore_top, src.shape[0]):
         left, right = np.flatnonzero(src[row] == 1), np.flatnonzero(src[row] == 2)
         if left.size and right.size and left.max() < right.min():
             both += 1
             band[row, left.max() + 1:right.min()] = True
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
+            width = round(outside_k * (right.min() - left.max() - 1))
+            edge = left.min()
+            n = _run(stop[row, max(edge - width, 0):edge][::-1])
+            outside[row, edge - n:edge] = True
+            edge = right.max() + 1
+            n = _run(stop[row, edge:edge + width])
+            outside[row, edge:edge + n] = True
     out[band & (src == 0) & (gray < stripe_min)] = DRIVABLE
+    out[outside & (src == 0)] = 0
     k = (wall["window"], wall["window"])
     mean = cv2.blur(gray, k)
     std = np.sqrt(np.maximum(cv2.blur(gray * gray, k) - mean * mean, 0))
@@ -128,7 +148,7 @@ def _write_manifest(out, doc):
 
 
 def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL, stripe_min=STRIPE_MIN,
-           tool_commit=None):
+           outside_k=0.5, tool_commit=None):
     src, out = Path(src), Path(out)
     if out.exists():
         raise ValueError("new output directory required")
@@ -154,7 +174,7 @@ def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL, stripe_min=
             if image is None or source_mask is None or source_mask.shape != image.shape[:2]:
                 raise ValueError(f"{split}/{image_path.name}: unreadable or mismatched frame")
             mask, both = derive_mask(source_mask, image, ignore_top=ignore_top, wall=wall,
-                                     stripe_min=stripe_min)
+                                     stripe_min=stripe_min, outside_k=outside_k)
             if both < min_both_rows:
                 skipped += 1
                 continue
@@ -175,7 +195,7 @@ def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL, stripe_min=
                       "dataset_revision": source.get("dataset_revision")},
            "tool": {"name": "lane_derived_drivable.py", "git_commit": tool_commit},
            "params": {"min_both_rows": min_both_rows, "ignore_top": ignore_top, "wall": dict(wall),
-                      "stripe_min": stripe_min},
+                      "stripe_min": stripe_min, "outside_k": outside_k},
            "classes": CLASSES, "ignore_index": IGNORE, "skipped_frames": skipped, "frames": frames}
     return _write_manifest(out, doc), doc
 
@@ -431,6 +451,7 @@ def main(argv=None):
     p.add_argument("--min-both-rows", type=int, default=20)
     p.add_argument("--ignore-top", type=int, default=110)
     p.add_argument("--stripe-min", type=int, default=STRIPE_MIN)
+    p.add_argument("--outside-k", type=float, default=0.5)
     p.add_argument("--tool-commit")
     p = sub.add_parser("sheets")
     p.add_argument("--out", type=Path, required=True)
@@ -453,7 +474,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == "derive":
         digest, doc = derive(args.src, args.out, min_both_rows=args.min_both_rows, ignore_top=args.ignore_top,
-                             stripe_min=args.stripe_min, tool_commit=args.tool_commit)
+                             stripe_min=args.stripe_min, outside_k=args.outside_k,
+                             tool_commit=args.tool_commit)
         print(json.dumps({"manifest_sha256": digest, "frames": len(doc["frames"]),
                           "skipped_frames": doc["skipped_frames"]}))
     elif args.command == "sheets":

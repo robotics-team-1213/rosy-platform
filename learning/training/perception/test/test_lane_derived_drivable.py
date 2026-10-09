@@ -50,8 +50,8 @@ def test_derive_mask_band_lanes_walls_and_ignore():
     assert (out[200:210, 100:120] == 3).all()  # crosswalk kept, not drivable
     assert (out[150, 50:270] == ldd.DRIVABLE).all()
     assert (out[115:155, 290:] == 0).sum() > 0.9 * 40 * 30  # wall negatives
-    assert (out[230, 285:] == 255).all()  # carpet outside lanes stays unknown
-    assert (out[180:200, 0:40] == 255).all()
+    assert (out[230, 280:] == 0).all()  # outside band: W 220 -> 110 px, cut by the image edge
+    assert (out[180:200, 0:40] == 0).all()
     assert (out[182:198, 122:138] == 255).all()  # stripe is not road
 
 
@@ -70,6 +70,23 @@ def test_rows_above_ignore_top_are_unknown_for_every_class():
     src[100:110, 40:50] = 1
     out, _ = ldd.derive_mask(src, image)
     assert (out[:110] == 255).all()
+
+
+def test_outside_band_width_and_stops():
+    """lane_left 100-109, lane_right 200-209: W 90, k 0.5 -> 45 px bands, then 255."""
+    image = np.random.default_rng(0).integers(60, 110, (240, 320, 3)).astype(np.uint8)
+    src = np.zeros((240, 320), np.uint8)
+    src[110:, 100:110], src[110:, 200:210] = 1, 2
+    src[150, 80], src[170, 90] = 3, 255  # a lane-class pixel stops the band; source 255 is skipped
+    image[160, 230] = 220  # bright paint stops the band
+    out, _ = ldd.derive_mask(src, image)
+    assert (out[120, 55:100] == 0).all() and (out[120, :55] == 255).all()
+    assert (out[120, 210:255] == 0).all() and (out[120, 255:] == 255).all()
+    assert (out[150, 81:100] == 0).all() and (out[150, :80] == 255).all()
+    assert (out[160, 210:230] == 0).all() and (out[160, 230:] == 255).all()
+    assert out[170, 90] == 255 and (out[170, 55:90] == 0).all()
+    out, _ = ldd.derive_mask(src, image, outside_k=0)
+    assert not (out == 0).any()
 
 
 def test_derive_needs_left_before_right():

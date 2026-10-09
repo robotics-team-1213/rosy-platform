@@ -16,7 +16,9 @@ Direct CLI export is held until this head is called inside the trusted D-464
 IndexedReview training admission. The dataset needs exactly one class with role "drivable"; its other classes only
 count as "not drivable", and its ignore_index pixels are left out. Val IoU is
 scored where the lane model says background (the only pixels the head can
-change); the IoU over all labelled pixels is reported beside it.
+change); the IoU over all labelled pixels is reported beside it, and the outside-band FP:
+the fraction of label-0 pixels in rows that hold drivable labels (D-554 item 9 band, not
+walls) that the model calls drivable.
 """
 
 from __future__ import annotations
@@ -215,6 +217,7 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
             total, count = total + loss.item() * len(x), count + len(x)
         model.eval()
         counts = {"all": [0, 0], "lane_background": [0, 0]}
+        band_fp = [0, 0]
         with torch.no_grad():
             for x, y in val_dl:
                 x, y = x.to(device), y.to(device)
@@ -227,19 +230,25 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
                 for name, scope in (("all", keep), ("lane_background", keep & lane_bg)):
                     counts[name][0] += int((pred & truth & scope).sum())
                     counts[name][1] += int(((pred | truth) & scope).sum())
+                band = (y == 0) & keep & truth.any(dim=-1, keepdim=True)
+                band_fp[0] += int((pred & band).sum())
+                band_fp[1] += int(band.sum())
         ious = {k: (i / u if u else None) for k, (i, u) in counts.items()}
         iou = ious["lane_background"]
         row = {"epoch": epoch, "train_loss": total / max(count, 1), "val_drivable_iou": iou,
-               "val_drivable_iou_all": ious["all"]}
+               "val_drivable_iou_all": ious["all"],
+               "val_outside_band_fp": band_fp[0] / band_fp[1] if band_fp[1] else None}
         history.append(row)
         if iou is not None and (best is None or iou > best["val_drivable_iou"]):
             best, best_state = row, copy.deepcopy(model.drivable.state_dict())
         if log:
             fmt = lambda v: "-" if v is None else f"{v:.3f}"  # noqa: E731
             log(f"epoch {epoch}/{epochs} loss {row['train_loss']:.4f} "
-                f"drivable={fmt(iou)} (all labelled pixels {fmt(ious['all'])})")
+                f"drivable={fmt(iou)} (all labelled pixels {fmt(ious['all'])}) "
+                f"outside-band FP {fmt(row['val_outside_band_fp'])}")
     if best_state is not None:
         model.drivable.load_state_dict(best_state)
     return {"history": history, "best_epoch": best["epoch"] if best else None,
             "val_drivable_iou": best["val_drivable_iou"] if best else None,
-            "val_drivable_iou_all": best["val_drivable_iou_all"] if best else None}
+            "val_drivable_iou_all": best["val_drivable_iou_all"] if best else None,
+            "val_outside_band_fp": best["val_outside_band_fp"] if best else None}

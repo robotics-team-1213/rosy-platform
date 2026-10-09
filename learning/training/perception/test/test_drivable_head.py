@@ -193,6 +193,7 @@ def test_training_moves_only_the_head_and_learns(tmp_path):
     assert all(torch.equal(before[k], after[k]) for k in before)  # weights and BN stats
     assert result["val_drivable_iou"] > 0.5
     assert result["val_drivable_iou_all"] is not None
+    assert result["val_outside_band_fp"] < 0.5  # floor beside drivable rows stays floor
 
 
 def test_dataset_without_one_drivable_class_is_refused(tmp_path):
