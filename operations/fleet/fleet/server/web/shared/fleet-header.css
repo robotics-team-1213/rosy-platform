@@ -90,7 +90,7 @@ ui-topbar input[type="checkbox"] { width: auto; }
   .topbar-extra .theme-choice { flex-wrap: wrap; }
 }
 
-@media (width < 22.5rem) {
+@media (width < 22rem) {
   #topbar-more > span:not(.sr-only) { display: none; }
 }
 
