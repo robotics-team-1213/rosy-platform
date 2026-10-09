@@ -396,8 +396,11 @@ async function refreshState() {
     el("fleet-name").textContent = snapshot.fleet.name || "사이트";
     const pill = el("online-pill");
     delete pill.dataset.locked;
-    pill.textContent = `${snapshot.fleet.online}/${snapshot.fleet.total} 연결`;
-    pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
+    // A robot answering late (link "degraded") still counts as connected on the pill.
+    const linked = snapshot.robots.filter(robot => robot.online || robot.link === "degraded").length;
+    pill.textContent = `${linked}/${snapshot.fleet.total} 연결`;
+    pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral"
+      : linked === snapshot.fleet.total ? "warn" : "crit");
     render();
     if (requestedRobotFocus) {
       const card = [...el("roster").querySelectorAll("article")]
