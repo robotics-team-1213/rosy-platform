@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · uiux(fleet): Cell 화면 목적과 미구성 복구 안내
 - 2026-10-09 · uncommitted · fix(fleet): 연결 재시도 브라우저 검사 복구
 - 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 순서
 - 2026-10-09 · uncommitted · uiux(fleet): 지도 로봇 방향 마커 화면 비율
 - 2026-10-09 · uncommitted · uiux(fleet): 연결 뒤 토큰 접기와 현장 지도 우선 배치
-- 2026-10-09 · uncommitted · refactor(fleet): traffic 설정 파서를 전용 단위로 이동

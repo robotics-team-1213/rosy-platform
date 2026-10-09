@@ -39,6 +39,10 @@
   </div>
   <ui-status id="estop-feedback" hidden></ui-status>
   <main>
+    <div class="cell-intro">
+      <h1>Cell 작업 준비</h1>
+      <ui-text id="cell-purpose">레시피와 셀 문서를 준비해 계획을 미리 본 뒤 작업을 제안합니다. 승인·진행 확인은 아래 5단계에서, 로봇 상태·예외 확인은 관제에서 합니다.</ui-text>
+    </div>
     <ui-text id="notice" role="status" aria-live="polite">운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.</ui-text>
     <div class="documents">
       <ui-section aria-labelledby="recipe-heading">
@@ -80,7 +84,7 @@
         <label>실행 인스턴스 ID<input class="ui-field" id="instance" autocomplete="off"></label>
         <label>요청 키<input class="ui-field" id="request-key" autocomplete="off"></label>
       </div>
-      <ui-text>작업을 제안한 뒤 관제에서 운영자가 별도로 승인합니다. 통신 오류가 나면 같은 요청 키로 결과를 확인하세요.</ui-text>
+      <ui-text>작업을 제안한 뒤 아래 5단계에서 운영자가 승인합니다. 통신 오류가 나면 같은 요청 키로 결과를 확인하세요.</ui-text>
       <div class="actions"><ui-button id="propose" kind="primary" disabled>작업 제안</ui-button><ui-button id="new-proposal" kind="quiet">새 작업 준비</ui-button></div>
       <pre id="proposal" aria-label="작업 제안 결과"></pre>
     </ui-section>

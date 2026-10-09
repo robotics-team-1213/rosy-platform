@@ -130,7 +130,10 @@ async function action(fn) {
     if (error.status === 401) loginForm.refresh(true);
     else if (error.status === 409) clearJobSnapshot();
     $('notice').textContent = error.status === 403
-      ? '이 계정에는 Cell 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.' : error.message;
+      ? '이 계정에는 Cell 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'
+      : error.code === 'CELL_APP_UNCONFIGURED'
+        ? 'Cell 작업을 사용할 수 없습니다. 사이트 설치 담당자에게 Cell 서비스 구성을 확인해 달라고 요청하세요.'
+        : error.message;
     if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
   }
   finally { busy = false; refreshControls(); }
@@ -156,7 +159,9 @@ async function list() {
   try { result = await api('/api/fleet/cell-app/documents'); }
   catch (error) {
     status.setAttribute('state', 'error');
-    status.textContent = '저장된 문서를 확인하지 못했습니다. 접속 상태를 확인하고 다시 시도하세요.';
+    status.textContent = error.code === 'CELL_APP_UNCONFIGURED'
+      ? 'Cell 서비스 구성을 확인해야 문서를 열 수 있습니다. 사이트 설치 담당자에게 문의하세요.'
+      : '저장된 문서를 확인하지 못했습니다. 접속 상태를 확인하고 다시 시도하세요.';
     throw error;
   }
   saved.replaceChildren(...result.documents.map(item => {
@@ -368,7 +373,7 @@ $('propose').addEventListener('click', () => action(async () => {
   $('proposal').textContent = `제안 ${result.proposal.proposal_id}\n상태 ${jobStatusLabel(result.mission?.status || result.proposal.state)}\n운영자 별도 승인 대기`;
   $('mission-id').value = result.proposal.proposal_id;
   clearJobSnapshot();
-  $('notice').textContent = '제안 완료 · 관제에서 별도 승인 후 진행 상태를 확인하세요.';
+  $('notice').textContent = '제안 완료 · 아래 5단계에서 운영자 승인과 진행 상태를 확인하세요.';
 }));
 function renderLayout() {
   if (!layoutData) return;
