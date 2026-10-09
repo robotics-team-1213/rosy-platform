@@ -275,7 +275,8 @@ def test_hang_settings_wait_for_approval_on_every_pc():
         for name in names:
             found = [ln for ln in lines if name in ln and not ln.startswith("#")]
             assert found and all(ln.startswith("approval") for ln in found), (role, name)
-    assert (ROOT / "deploy/hosts/common/host-state/rosy-modules-load-watchdog.conf").read_text() == "iTCO_wdt\n"
+    unit = (ROOT / "deploy/hosts/common/host-state/rosy-watchdog-load.service").read_text()
+    assert "ExecStart=/usr/sbin/modprobe iTCO_wdt" in unit and "RemainAfterExit=yes" in unit
 
 
 def test_ssh_password_login_stays_on():
