@@ -809,6 +809,12 @@
 - 증거: 2026-10-09 태블릿 실기(8kcn 056): 키보드가 열린 채 Enter와 확인 단추가 반응하지 않았고, 키보드를 닫은 뒤 단추로 승인됐다. LinkStatusTest 5 passed(새 `codeFieldSendsOnDoneOrEnterDownOnly`). 같은 날 실기에서 LCD 코드 승인(8kcn)과 관제 승인(9dfk) 모두 연결됨까지 확인.
 - gate 변화: SOURCE/LOCAL. Enter 전송의 실기 확인은 다음 새 페어링에서.
 
+## 2026-10-09 · uncommitted · uiux(pilot): 브랜드에서 안전하게 접속 홈으로 복귀
+
+- 변경: 브랜드를 `/pilot` 홈 링크로 만들고 주행 중 클릭은 기존 `leaveDrive` 종료 절차를 거쳐 정지·IDLE 처리 뒤 이동한다. Gazebo 팔 연습에서는 진행 중 목표의 취소 확인 없이 이탈하지 않도록 링크를 비활성으로 표시하고 취소 안내를 남긴다.
+- 증거: 로컬 Chromium의 320/390/1200px 접속·주행, 320/1200px Gazebo 연습 캡처. 주행 홈 복귀 전 가짜 CORE의 `IDLE` 및 선속도·각속도 0 기록을 확인했다.
+- gate 변화: 없음. 실제 태블릿·로봇 readback과 G3는 별도.
+
 ## 2026-10-09 · uncommitted · uiux(pilot): 로비 자기 방 운전 상태 라벨 (D-460 결정 2)
 
 - 변경: 접속 화면 로비의 맨 앞에 자기 방 운전 상태 라벨(`ui-tag[data-lobby-self]`)을 단다. 판정은 같은 origin의 `GET /api/v1/robot/state`만으로, MANUAL이고 `|linear| > 0.002`이면 "운전 중", 아니면 "대기"다. rooms 라우터는 다른 기기의 CoreServices를 보지 않으므로 다른 방의 운전 상태는 각 기기가 자기 화면에서 표시한다. D-460 결정 2 본문에 그 구현 정정을 적었다.
