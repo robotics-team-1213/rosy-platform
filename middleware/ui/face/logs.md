@@ -249,3 +249,9 @@
 - 변경: rosy-face가 `approval.json`의 `tls_ca_sha256` 앞 16자리를 코드 줄 아래 `CA xxxx xxxx xxxx xxxx`로 그린다(`face_screen.read_peer_approval`가 소문자 64자리만 통과). Pilot의 인증서 확인 대화상자가 같은 16자리를 보인다.
 - 증거: `test_rosy_face.py` peer 카드 시험, `test_face_screen.py` 103 passed.
 - gate 변화: SOURCE. LCD 실기 확인은 다음 릴리스에서.
+
+## 2026-10-09 · fix(face): LCD 변경 영역만 SPI로 전송
+
+- 변경: `show_panel`이 이전 RGB565 패널과 다른 최소 사각형만 전송한다. 동일 프레임은 건너뛰고, 절전·지우기·전송 실패 뒤에는 전체 화면을 다시 보낸다. Pi 5의 64바이트 전송 상한은 유지한다.
+- 증거: 활성 기체의 기존 드라이버는 5초 동안 약 20,024회 쓰기와 1,274,921바이트를 전송해 약 1.7 fps였다. 변경 영역·절전 복귀·실패 후 재전송을 포함한 얼굴 모듈 호스트 시험 70 passed, `known_failures.py` 0 NEW.
+- gate 변화: SOURCE/LOCAL 후보. 개선 속도와 LCD 픽셀 판독은 설치 후 DEVICE에서 측정해야 한다.
