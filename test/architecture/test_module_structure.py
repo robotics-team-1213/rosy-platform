@@ -787,10 +787,10 @@ SIZE_VERDICTS = {
         1255,
         "accept: re-judged at 1255 on 2026-10-10 (console.py grew to 1255 after the D-581 " +
         "follow-ups; the drift-watch merge adds no console.py lines). " +
-        "No goal, stop or admission path changed; the zero growth allowance remains. Previously " +
-        1251,
+        "No goal, stop or admission path changed; the zero growth allowance remains. Previously "
         "accept: re-judged at 1251 on 2026-10-10 for D-581: the app injects the anchor relay "
-        "factory, while console keeps its existing formation lifecycle and reads relay status; "        "relay construction and anchoring live in fleet/swarm/anchor.py. "
+        "factory, while console keeps its existing formation lifecycle and reads relay status; "
+        "relay construction and anchoring live in fleet/swarm/anchor.py. "
         "No goal, stop or admission path changed; the zero growth allowance remains. Previously "
         "accept: re-judged at 1248 on 2026-10-09 after merging D-526 with the degraded-link row: "
         "a late robot answer is shown as degraded, not offline (online stays false), and D-526 adds an "
