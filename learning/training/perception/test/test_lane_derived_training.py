@@ -28,7 +28,7 @@ def _setup(tmp_path):
     gate = tmp_path / "gate.json"
     gate.write_text(json.dumps({"require_eval": True, "eval_set": evaluation.name, "min_lane_marking_iou": 0.1}))
     profile = tmp_path / "profile.json"
-    profile.write_text('{"accepted":true}')
+    profile.write_text('{"accepted":false}')  # D-554 item 7: provisional camera allowed here
     parent = tmp_path / "parent"
     raw = tmp_path / "source.onnx"
     raw.write_bytes(b"parent onnx")
@@ -69,6 +69,7 @@ def test_derived_dataset_admits_drivable_head_and_rechecks_hashes(tmp_path, monk
     assert seen["lane_derived"]["annotation_origin"] == "derived_from_reviewed_lanes"
     assert seen["lane_derived"]["adr"] == "D-554"
     assert seen["lane_derived"]["judge"]["counts"]["ok"] == 2
+    assert seen["camera_provenance"] == "provisional"
     assert seen["parent_lane_model"]["model_revision"].startswith("lane-seg-")
     assert "learning/training/perception/dataset/lane_derived_drivable.py" in seen["source_files"]
     assert not (tmp_path / "job").exists()
@@ -124,7 +125,8 @@ def test_robot_loader_reads_six_class_d554_shadow_output(tmp_path):
                    camera_profile_revision="cam", trainer="t", revision_prefix="v13-drivable",
                    parent_lane_model={"model_revision": "lane-seg-20261006-5f5ddcd9",
                                       "onnx_sha256": "b" * 64, "torchscript_sha256": "c" * 64},
-                   dataset_annotation={"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"})
+                   dataset_annotation={"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
+                   camera_provenance="provisional")
     manifest = load_manifest(tmp_path / "v13")
     assert [c.role for c in manifest.classes][-1] == "drivable" and len(manifest.classes) == 6
     logits = np.zeros((1, 6, 240, 320), np.float32)

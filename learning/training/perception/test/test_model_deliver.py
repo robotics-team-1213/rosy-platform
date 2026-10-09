@@ -49,7 +49,7 @@ class FakeRunner:
 
 
 def _model(models: Path, verdict: str, files=None, *, revision_prefix="lane-seg",
-           dataset_annotation=None) -> str:
+           dataset_annotation=None, camera_provenance=None) -> str:
     onnx = models.parent / "src.onnx"
     onnx.write_bytes(b"fake-onnx")
     tmp = models.parent / "tmp"
@@ -63,7 +63,7 @@ def _model(models: Path, verdict: str, files=None, *, revision_prefix="lane-seg"
         parent_lane_model=({"model_revision": "lane-seg-20260930-abcd1234", "onnx_sha256": "b" * 64,
                             "torchscript_sha256": "c" * 64}
                            if revision_prefix == "v13-drivable" else None),
-        dataset_annotation=dataset_annotation)
+        dataset_annotation=dataset_annotation, camera_provenance=camera_provenance)
     rev = doc["model_revision"]
     models.mkdir(parents=True, exist_ok=True)
     tmp.rename(models / rev)
@@ -260,7 +260,8 @@ D554 = {"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"}
 
 def test_push_v13_with_d554_lineage_reaches_lane_shadow_only(tmp_path):
     models = tmp_path / "models"
-    rev = _model(models, "pass", revision_prefix="v13-drivable", dataset_annotation=D554)
+    rev = _model(models, "pass", revision_prefix="v13-drivable", dataset_annotation=D554,
+                 camera_provenance="provisional")
     runner = FakeRunner()
     assert deliver.main(["push", "robot", rev, "--models", str(models), "--task", "object_det", *SSH],
                         runner=runner) == 2
@@ -270,10 +271,25 @@ def test_push_v13_with_d554_lineage_reaches_lane_shadow_only(tmp_path):
     assert f"{ROOT_M}/shadow" in runner.calls[2][-1]
 
 
+def test_push_refuses_v13_without_camera_provenance_mark(tmp_path):
+    models = tmp_path / "models"
+    rev = _model(models, "pass", revision_prefix="v13-drivable", dataset_annotation=D554)
+    runner = FakeRunner()
+    assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH], runner=runner) == 2
+    assert runner.calls == []
+
+
+def test_provisional_lane_model_never_leaves_shadow(tmp_path):
+    runner = FakeRunner()
+    for argv in (["promote", "robot"], ["rollback", "robot", "--slot", "active"]):
+        assert deliver.main([*argv, *SSH], runner=runner) == 2
+    assert runner.calls == []
+
+
 def test_push_refuses_v13_with_other_annotation(tmp_path):
     models = tmp_path / "models"
     rev = _model(models, "pass", revision_prefix="v13-drivable",
-                 dataset_annotation=dict(D554, adr="D-532"))
+                 dataset_annotation=dict(D554, adr="D-532"), camera_provenance="provisional")
     runner = FakeRunner()
     assert deliver.main(["push", "robot", rev, "--models", str(models), *SSH], runner=runner) == 2
     assert runner.calls == []

@@ -80,7 +80,8 @@ def test_v13_drivable_intake_holds_until_review_lineage_is_verified(tmp_path):
         revision_prefix="v13-drivable",
         parent_lane_model={"model_revision": "lane-seg-20261006-abcd1234", "onnx_sha256": "b" * 64,
                            "torchscript_sha256": "c" * 64},
-        dataset_annotation={"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"})
+        dataset_annotation={"annotation_origin": "derived_from_reviewed_lanes", "adr": "D-554"},
+        camera_provenance="provisional")
     rc, report = intake.run(str(derived), out=tmp_path / "accepted", root=tmp_path)
     assert rc != 0 and "D-554" not in " ".join(report["reasons"])
 

@@ -260,8 +260,10 @@ def _run(config, out, indexed_review, admission_stack):
     camera = json.loads(camera_raw)
     if not isinstance(camera.get("accepted"), bool):
         raise JobError("camera provenance must state accepted boolean explicitly")
-    if drivable_head and camera["accepted"] is not True:
+    if drivable_head and camera["accepted"] is not True and not derived:
         raise JobError("drivable_head requires accepted camera provenance")
+    # D-554 item 7: only the derived shadow-only candidate may train on provisional camera provenance.
+    camera_provenance = "accepted" if camera["accepted"] is True else "provisional"
     parent = (validate_drivable_parent(training["parent_model"], training["parent_torchscript"],
                                       dataset_doc["classes"]) if drivable_head else None)
     source_files = [HERE / name for name in
@@ -283,6 +285,8 @@ def _run(config, out, indexed_review, admission_stack):
     if parent is not None:
         inputs["parent_lane_model"] = parent["lineage"]
         inputs["parent_files"] = {str(path): digest for path, digest in parent["hashes"].items()}
+    if drivable_head:
+        inputs["camera_provenance"] = camera_provenance
     if derived:
         inputs["lane_derived"] = {"annotation_origin": derived_doc["annotation_origin"],
                                   "adr": derived_doc["adr"], "source": derived_doc["source"],
@@ -507,6 +511,7 @@ def _run_drivable_candidate(config, out, dataset, profile, training, parent, inp
                          camera_profile_revision="training-provenance-" + sha(profile),
                          trainer="rosy-frozen-drivable-head", revision_prefix="v13-drivable",
                          parent_lane_model=parent["lineage"],
+                         camera_provenance=inputs["camera_provenance"],
                          dataset_annotation=(None if "lane_derived" not in inputs else
                                              {k: inputs["lane_derived"][k] for k in ("annotation_origin", "adr")}),
                          val_iou={"drivable": metrics["val_drivable_iou_all"]},

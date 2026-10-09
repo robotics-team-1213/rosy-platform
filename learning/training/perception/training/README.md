@@ -391,6 +391,10 @@ export는 manifest `dataset`에 `annotation_origin`, `adr`를 같이 적는다. 
 `finalize`는 `judge` 블록(모델, endpoint, prompt sha256, 판정 수, 제외 목록)과 프레임별 판정을 적는다.
 train_job은 이 블록이 없거나 train/val 프레임 중 판정이 `ok`/`uncertain`이 아닌 것이 있으면 거부한다.
 도구 commit은 40자리 hex여야 하고 `unknown`은 거부한다.
+D-554 7항: 이 파생 자료의 `drivable_head`만 `accepted: false` 카메라 출처로 학습할 수 있다. run 기록과 모델
+manifest에 `camera_provenance: provisional`이 남고, intake·push는 이 표시가 없는 v13을 거부한다.
+lane_seg는 shadow 슬롯만 있어 이 모델은 shadow 밖으로 나가지 않는다. 다른 recipe와 자료는 여전히 승인된
+카메라 출처가 필요하다.
 `config.json`은 위 `drivable_head` 형식 그대로이고 `dataset`에 publish가 찍은
 `v13-lane-derived@<content_sha>`를 넣는다. 벽 판정 값(`WALL`: 밝기 125, 7x7 표준편차 12, 면적 200)은
 아레나 프레임으로 맞춘 기본값이며 manifest `params.wall`에 남는다. 두 차선 사이에서 밝기 150 이상인
