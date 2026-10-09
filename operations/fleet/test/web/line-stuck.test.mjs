@@ -132,3 +132,13 @@ test("resolverText says what the Fleet resolver did, or why a human is needed", 
     "자동 판단 불가 — 사람 확인 필요 (CORE 응답 ROBOT_UNREACHABLE)");
   assert.equal(resolverText({ tier: "human", escalated: "human_claimed" }), "운영자가 맡음");
 });
+
+test("D-540 9: an unnamed operator may WAIT or ABORT but not answer with motion", () => {
+  const named = "이름 있는 운영자 로그인이 필요합니다";
+  const buttons = byDecision(decisionButtons(STUCK, { operator: true, namedReason: named }));
+  assert.equal(buttons.WAIT.reason, "");
+  assert.equal(buttons.ABORT.reason, "");
+  for (const decision of ["RESUME", "BACK_AND_RETRY", "MANUAL"]) assert.equal(buttons[decision].reason, named);
+  assert.match(refusalText("rosy_01", "RESUME", { status: 403, code: "OPERATOR_IDENTITY_REQUIRED", message: "" }),
+    /이름 있는 운영자 로그인이 필요합니다/);
+});

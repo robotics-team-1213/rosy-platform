@@ -41,7 +41,13 @@ def browser_site(tmp_path):
     sightings=SightingService([source],known_robot_ids=console.robot_ids)
     tracking=TrackingService([source],calibrations=TrackingCalibrationStore(tmp_path/'sightings.sqlite3'))
     tracking.approve({**APPROVAL,'source_id':'north','map_id':'track'},approved_by='op')
-    app=create_app(console,console_token='operator-secret',web_common=ROOT/'shared/web',
+    # D-540 9: start-point writes need a named operator, so the token names one.
+    from hashlib import sha256
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    users={sha256(b'operator-secret').hexdigest():{'principal_id':'op','role':'operator'}}
+    tasks=FleetTaskService(FleetTaskStore(tmp_path/'tasks.sqlite3'),robot_ids={'robot-a'})
+    app=create_app(console,site_users=users,task_service=tasks,web_common=ROOT/'shared/web',
                    sightings=sightings,tracking=tracking,start_task_dispatcher=False)
     listener=safe_listener()
     origin=f'http://127.0.0.1:{listener.getsockname()[1]}'

@@ -7447,3 +7447,31 @@ osy-d395-s1d\`.
 - 변경: D-543 평가표에 관제·설치·현장 지도·Cell·접속 머리의 작업 목적, 인계, 8축 점수와 첫 실패를 기록했다.
 - 증거: 모델 PC 개발 세션의 `X:\DevTemp\fleet-ui-audit\` 24개 캡처와 `metrics.txt` (`59f8427c1`). 해당 SHA 이후 Fleet 웹 파일이 변경되어 현행 후보 G2 증거는 아니다.
 - gate 변화: 없음. 현행 SHA 재촬영, 실제 작업 완수, 접근성, DEVICE/FIELD 수용은 HOLD.
+## 2026-10-09 · uncommitted · docs(adr): D-548 장치 개발 모드 표식
+- 변경: D-548 Accepted(D-193 7 개정), Log 행, API reference v1.156(`auth.development_mode`, 장치 개발 토큰 예외).
+- 증거: rosy_harness lint (D-544~547 빈칸은 다른 세션 선점).
+- gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+## 2026-10-09 · uncommitted · docs(adr): D-549 중앙 인증 Rosy Auth 제안
+- 변경: D-549 Proposed와 Log 행. 현장 하나의 계정 저장소, 역할 셋, 콘솔 쿠키(D-519), 로봇은 Ed25519 접근 토큰 검증만, 로봇 자체 경로는 복구용. 단계 A/B/C와 열린 질문 4개.
+- 증거: 2026-10-09 인증 현황 조사(CORE 토큰·Fleet site-users 두 저장소).
+- gate 변화: 없음(제안).
+
+
+## 2026-10-09 · uncommitted · docs: 막힘 측정 묶음의 책임 분리
+
+- 변경: 막힘 측정은 같은 3 운행일에 증거가 겹치되 자격·로컬 복귀·녹화·정체 검수·분모의 주인이 다르다는 검토를 assessments에 남겼다. 일반 World State와 VLM은 열지 않는다.
+- 증거: 워크트리 docs/stuck-responsibility, 기준 c91b4c9cd. 본문 상대 링크는 파일로 확인했다. 40자 SHA는 비밀 검사가 막아서 짧은 SHA로 적었다.
+- gate 변화: 없음. 문서 정리이며 구현·자격 발급·장치 수용은 그대로다.
+
+## 2026-10-09 · uncommitted · docs: 막힘 측정 재구분
+
+- 변경: 막힘 측정 검토에 같은 날의 재구분을 붙였다. 측정 표의 결정은 규칙·운용자·시간초과·스킬·장치 가드·교통 게이트이고, 자세·몸 치수·미션·연결 없음은 입력이다. 안전 한 칸은 두지 않는다.
+- 증거: 워크트리 docs/stuck-responsibility의 D-407, D-422, D-430, D-435, D-438, D-541 본문. 첫 표는 출발로 남겼다. 재구분은 자격 발급·판단기 가동·로컬 복귀 승격·VLM·World 계약을 승인하지 않는다.
+- gate 변화: 없음. 문서 정리이며 구현·자격 발급·장치 수용은 그대로다.
+
+## 2026-10-09 · uncommitted · docs(adr): D-557 링 주행의 다음 증거
+- 변경: D-557 Accepted. 다음 주행 증거는 모델 PC `map_v2_fleet_real`에서 `keep`과 D-520 `exit_segment` 호 한 바퀴다. 그 기록이 가리키는 한 곳만 고친다. 바닥 로봇은 지도 프레임 LOCALIZED로 저장 링을 따를 수 있을 때까지 세워 둔다.
+- 증거: D-520이 인용한 D-507 SIM 4c차(재획득 뒤 10 s 유지 0/54). 이 커밋은 시뮬을 돌리지 않았다. `python tools/harness/rosy_harness.py lint` 0 errors, 24 warnings(기존 last_verified 지연). `python -m pytest test/test_network_topology_contracts.py test/test_harness_contracts.py -q` 121 passed. `known_failures` 0 new.
+- gate 변화: 없음
+- 결정: D-557 Accepted. D-520·D-495·D-507·D-500은 대체하지 않는다.
+- 교훈: 없음

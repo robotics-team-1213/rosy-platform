@@ -83,3 +83,21 @@ def test_both_queues_exist_in_the_markup():
     assert 'id="critical-list"' in index
     assert "주의 요망" in index
     assert "최우선 개입" in index
+
+
+def test_the_rail_is_the_one_scroll_and_decisions_open_in_the_queue():
+    """D-540 3 (A1/A2 of the 2026-10-09 audit): the queue and the roster have no height cap or own
+    scroll; the rail scrolls, the document and the map column do not. The stuck answers and the
+    replan confirm open inside the queue row; the separate panel and the all-robots toggle are gone."""
+    styles = (WEB / "shared" / "styles.css").read_text(encoding="utf-8")
+    index = INDEX.read_text(encoding="utf-8")
+    roster = ROSTER.read_text(encoding="utf-8")
+    assert "#fleet-main > .console-secondary { position: relative; min-height: 0; overflow-y: auto;" in styles
+    assert "ui-shell:has(> #fleet-main) { height: 100dvh; }" in styles
+    assert "max-height: min(20dvh, 12rem)" not in styles
+    assert "#roster { min-height: 0; max-height" not in styles
+    assert "#roster { max-height" not in styles
+    assert 'id="stuck-panel"' not in index and 'id="roster-toggle"' not in index
+    assert "dataset.decisionSlot = row.key;" in roster
+    assert 'decision: "stuck"' in roster and 'decision: "replan"' in roster
+    assert "export function mustExpand(robot)" in roster

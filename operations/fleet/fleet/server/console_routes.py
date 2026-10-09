@@ -109,7 +109,7 @@ class SharedGather:
 
 
 def install_console_routes(app, *, console, sightings, require_viewer,
-                           read_guard, operator_guard, require_operator,
+                           read_guard, operator_guard, require_operator, require_named_operator,
                            site_lanes=None, answer_log_path=None, tracking=None,
                            identity=None) -> None:
     # D-407: open lane stucks, read from each gather. CORE's stuck block is the truth.
@@ -193,7 +193,10 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         identity = IdentityService(console.clients, tracking=tracking)
     app.state.identity = identity
 
-    @app.post("/api/fleet/robots/{robot_id}/identify", dependencies=operator_guard, tags=["fleet"])
+    # D-540 9: moving routes need a named operator; stops (WAIT/ABORT, formation stop) stay open.
+    named_guard = [Depends(require_named_operator)]
+
+    @app.post("/api/fleet/robots/{robot_id}/identify", dependencies=named_guard, tags=["fleet"])
     async def identify_robot(robot_id: str, body: Optional[IdentifyLampRequest] = None) -> dict:
         try:
             return await identity.request(robot_id, None if body is None else body.color)
@@ -220,6 +223,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
               tags=["line-stuck"])
     async def line_stuck_decision(robot_id: str, body: LineStuckDecisionRequest, request: Request,
                                   principal: SitePrincipal = Depends(require_operator)) -> dict:
+        if body.decision not in ("WAIT", "ABORT"):
+            require_named_operator(principal)
         client = console.clients().get(robot_id)
         if client is None:
             raise http_error(HubError("UNKNOWN_ROBOT", robot_id))
@@ -263,6 +268,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         return {"robot_id": robot_id, "actor_id": principal.principal_id,
                 "answer": answer, "result": result}
 
+    # D-540 9: claim stays open; the console claims before an ABORT confirm.
     @app.post("/api/fleet/robots/{robot_id}/line-stuck/claim", dependencies=operator_guard,
               tags=["line-stuck"])
     async def line_stuck_claim(robot_id: str, body: LineStuckClaimRequest,
@@ -280,7 +286,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     async def formation_state() -> dict:
         return console.formation_status()
 
-    @app.post("/api/fleet/formation/start", dependencies=operator_guard, tags=["formation"])
+    @app.post("/api/fleet/formation/start", dependencies=named_guard, tags=["formation"])
     async def formation_start(body: FormationRequest) -> dict:
         try:
             return await console.formation_start(body.leader, body.formation,
@@ -289,14 +295,14 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         except (HubError, RobotApiError, OSError) as exc:
             raise http_error(exc) from exc
 
-    @app.post("/api/fleet/formation/reform", dependencies=operator_guard, tags=["formation"])
+    @app.post("/api/fleet/formation/reform", dependencies=named_guard, tags=["formation"])
     async def formation_reform(body: ReformRequest) -> dict:
         try:
             return await console.formation_reform(body.formation, body.spacing, body.max_speed)
         except (HubError, RobotApiError, OSError) as exc:
             raise http_error(exc) from exc
 
-    @app.post("/api/fleet/formation/resume", dependencies=operator_guard, tags=["formation"])
+    @app.post("/api/fleet/formation/resume", dependencies=named_guard, tags=["formation"])
     async def formation_resume() -> dict:
         try:
             return await console.formation_resume()

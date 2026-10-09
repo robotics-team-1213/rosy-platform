@@ -185,14 +185,39 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_866,
-        "split: re-judged at 46866 on 2026-10-09. Measured past 46701 from the "
-        "degraded-link console row (a late answer is degraded, not offline) and "
-        "D-551's display-only advice wiring outside the traffic unit. No new "
-        "package owner. The site-map web/server split in "
-        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; "
-        "+150 allowance unchanged, measured from 46866. "
-        "Previously re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
+        48_118,
+        "split: re-judged at 48118 on 2026-10-09 after merging D-546 6 (Fleet answers a robot's pose request: localization/pose_request.py, service hook, transport call; no command or stop path) with D-555; +150 allowance unchanged. Previously re-judged at 47953 on 2026-10-09 (independent re-judge, critic agent): D-555 enrolled-robot hub pairing"
+        " adds +317 production lines over main 47636: server/enrollment.py +173 (hub link issue/revoke on the existing "
+        "register row, TLS fence and enrolled client), web/enrollment.js +57, cli.py +31 (hub digest load at startup), "
+        "hub/hub.py +25 (SHA-256 digest HELLO check beside the old token path), enrollment_routes.py +17, swarm/transpo"
+        "rt.py +10, enrollment_store.py +9, console_builders.py +3. No new package owner and no duplication. The only n"
+        "ew robot call is the credential PUT/GET/DELETE /api/v1/fleet/link through the existing TLS-bound enrolled clie"
+        "nt, gated on the robot's fleet_link_provisioning capability; it adds no drive, goal or E-Stop path. Next growt"
+        "h: D-555 hub-link code leaves enrollment.py (956, hard tier 1000) for its own module, and the queues.js move n"
+        "amed below still precedes D-540 (d). The site-map web/server split in docs/plans/2026-10-07-fleet-site-map-web"
+        "-server-seam.md stays next; +150 allowance unchanged, measured from 47953. Previously "
+        "re-judged at 47636 on 2026-10-09 (independent re-judge, critic agent): D-540 3 (+183 over "
+        "main 47453) puts stuck decisions and the replan confirm inline in the queue rows (roster.js +102, "
+        "new web/trip-replan.js 92 calling the existing confirm-replan/cancel routes), one rail scroll and "
+        "collapsed robot cards; the old #stuck-panel and roster-toggle are removed, not left beside. No new "
+        "robot command path or package owner. site-map.js trip-confirm stays until D-540 step (e) removes it. "
+        "Next growth (D-540 step (d) trip controls on the card): first move attentionItems/attentionKey/"
+        "openDecisionKey/syncRows/fillQueues/setTriageHead and the line-stuck button helpers to "
+        "web/queues.js; roster.js keeps the card. +150 allowance unchanged, measured from 47636. Previously "
+        "re-judged at 47327 on 2026-10-09 (author's record; NEEDS the independent re-judge with "
+        "the D-550 10 Safety-Review): D-550 10 goal lease adds +211 production lines over main 47116: "
+        "the safety-tagged fleet/server/goal_lease.py (123, lease table, per-source renewal gates, send, "
+        "cancel), +24 cli floor check, +24 background_workers renew loop and attempt check, +13 app "
+        "presence route and wiring, +13 transport, +10 trip_runner, +4 signals.js presence; console.py "
+        "net -1. No new package owner; the only new robot call is the lease renewal of a goal Fleet "
+        "already sent. The site-map web/server split in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; +150 allowance unchanged, "
+        "measured from 47327. "
+        "Previously re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
+        "(server/tether_watch.py, tether_routes.py, trail-view colour) and its tests. It stops a "
+        "tethered robot only through the existing per-robot CORE E-Stop and adds no command path "
+        "or package owner. The site-map split stays next; +150 allowance unchanged, measured "
+        "from 47012. Previously re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
         "(fleet/guide/situation.py, fleet/server/guide_service.py, web/guide-layer.js) "
         "over the map snapshot Fleet already holds. It does not call the network or emit a command. "
         "Main measured 46507 before D-523's 194-line ask parser. No new robot command path or package owner. "
@@ -535,15 +560,6 @@ SIZE_VERDICTS = {
         "connection-mode/session parsing on further growth. Previously measured at 608 after D-473. "
         "The 600-line ceiling and allowance are unchanged",
     ),
-    "fleet/fleet/server/web/shared/styles.css": (
-        809,
-        "accept: the Fleet console page stylesheet crossed the 800 web ceiling (measured 809) through "
-        "2026-10-06 UI/UX layout fixes (uniform peer widths, E-stop/cancel feedback placement, phone "
-        "server-loss state, formation resume). It stays the one token-only stylesheet of the console page "
-        "owner and adds no palette or runtime owner. Re-judge as split, with a dated Fleet item added to "
-        "docs/plans/2026-10-04-ui-release-and-live-refinement.md, before any further growth past 809. "
-        "Web ceiling and growth allowance unchanged",
-    ),
     "ui/face/emotion/info_screen.py": (
         602,
         "accept: the LCD info-screen renderer crossed 600 lines (measured 602) when the 2026-10-06 "
@@ -579,8 +595,11 @@ SIZE_VERDICTS = {
         "grows past 800",
     ),
     "fleet/fleet/server/enrollment.py": (
-        664,
-        "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
+        956,
+        "accept: re-judged 2026-10-09 at 956 (independent re-judge, critic agent; was 932 author's record) when "
+        "D-555 hub link issue/revoke joined: it reuses the same register row, TLS fence and enrolled "
+        "client, so it stays with that state machine. The next D-555 growth first moves the hub link "
+        "(link_hub, unlink_hub, _hub_*, _clear_robot_link) into its own module (e.g. enrollment_hub.py); past HARD_TIER (1000) it must. Before: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
         "pending logout share one state machine over the register), ROS-free, host-testable (X5); "
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
         "exchange and binding check",
@@ -694,10 +713,13 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1243,
-        "accept: re-judged at 1243 on 2026-10-09: a late robot answer is shown as "
-        "degraded, not offline, on the gathered row. online stays false, so goal, "
-        "stop, and admission decisions are unchanged. The zero growth allowance remains. "
+        1248,
+        "accept: re-judged at 1248 on 2026-10-09 after merging D-526 with the degraded-link row: "
+        "a late robot answer is shown as degraded, not offline (online stays false), and D-526 adds an "
+        "alarm_sources hook so the tether watch can raise TETHER_STOP_FAILED; neither changes a goal, stop "
+        "or admission path. Previously 1243 (degraded link) and 1234 (D-526). D-526 adds an alarm_sources hook so the "
+        "tether watch can raise TETHER_STOP_FAILED beside the held-robot alarm; five lines, "
+        "no goal, stop, or admission path changed. The zero growth allowance remains. "
         "Previously re-judged at 1229 on 2026-10-09: D-535 records link_reason beside the "
         "existing link class on a gathered robot row. No goal, stop, or admission path "
         "changed. The zero growth allowance remains. Previously re-judged at 1225 on "
@@ -822,8 +844,8 @@ SIZE_VERDICTS = {
         "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
     "core_features": (
-        12_947,
-        "accept: independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
+        13_105,
+        "accept: re-judged at 13105 on 2026-10-09 for D-546 5: CORE raises and clears the pose request (localization/pose_request.py, lane_return_pose_request.py); no motion path, D-468 gates unchanged; +150 allowance unchanged. Previously independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
         "read-only critic agent). Main alone is 12922 (12772 +150, after D-517 M2 authority.py and D-507 "
         "bend). This branch adds 25 lines outside its arc unit. manager.py +11 is the thinnest possible "
         "hook: ArcMixin base, init and reset calls, the status arc field, and two early returns for the arc "
@@ -1072,8 +1094,11 @@ SIZE_VERDICTS = {
         "learning/training/perception/test/test_rosy_ml.py (X5, D-411 fetch --http)",
     ),
     "deploy/robot/pinky_pro/native/rosy-face.py": (
-        1230,
-        "accept: re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
+        1265,
+        "accept: re-judged at 1265 on 2026-10-09 after merging D-552 with D-548 (the DEV prefix now rides the status bar on faces and card bars). Previously 1256 (+26) on 2026-10-09 for D-552 and its review (sound and reversing read from the record, the caution hold, the mixed-install fallback): the lamp, the status bar, the expression and the sound "
+        "now come from one core_common.presentation record, so the stage-only lamp fallback, the bar painter and one "
+        "record call replace the old lamp/strip calls here and every rule lives in core_common; zero growth allowance "
+        "remains. Previously re-judged at 1230 on 2026-10-09 after merging D-546 with D-472/D-537: the 1.5 s recovery hold, "
         "the e-stop clear and the reversing beep (D-546) and the bounded identity pulse with the normal lamp off "
         "(D-537) all stay with the one process that owns the buzzer and the lamp; zero growth allowance remains. "
         "Previously 1229 for D-546 and 1183 for D-472/D-537. Previously re-judged at 1182 on 2026-10-09 for D-483: the same LCD card now shows "

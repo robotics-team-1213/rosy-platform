@@ -136,7 +136,14 @@ services:
       ROSY_CREDENTIAL_PATHS: '{"ROSY_PHONE_CEILING_NORTH":"/run/secrets/phone_ingress_token","ROSY_FLEET_CEILING_NORTH_TOKEN":"/run/secrets/fleet_sighting_token","ROSY_VISION_PREVIEW_SECRET":"/run/secrets/vision_preview_secret"}'
       SSL_CERT_FILE: /run/secrets/site_ca
     volumes:
-      - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
+      # Vision reads only its camera file. Never the whole config dir: Fleet roster, users and
+      # CORE credentials live there (D-524 security review). Secrets sit outside it too.
+      - type: bind
+        source: "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}/site-cameras.yaml"
+        target: /run/rosy-config/site-cameras.yaml
+        read_only: true
+        bind:
+          create_host_path: false
       - vision_state:/var/lib/rosy-vision
     secrets:
       - phone_ingress_token

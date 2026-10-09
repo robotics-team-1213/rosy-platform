@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
-- 2026-10-09 · uncommitted · fix(fleet): 늦은 응답 한 번에 로봇이 오프라인으로 바뀌었다가 돌아오던 깜빡임
-- 2026-10-09 · uncommitted · fix(fleet): 느린 상태 수집이 모든 로봇 상태를 도착 즉시 낡게 만들었다
-- 2026-10-09 · uncommitted · fix(fleet): 연결 재시도 브라우저 검사 복구
-- 2026-10-09 · uncommitted · uiux(fleet): 현장 지도 경로 작업 순서
-- 2026-10-09 · uncommitted · uiux(fleet): 지도 로봇 방향 마커 화면 비율
+- 2026-10-09 · uncommitted · fix(fleet): 위치 요청 천장 카메라 플래그 분리, 답 횟수 유지 (D-546 6, review)
+- 2026-10-09 · uncommitted · fix(fleet): 위치 요청 3번 답해도 열려 있으면 needs_human, 천장 카메라 답 기본 켜짐 (D-546 6)
+- 2026-10-09 · uncommitted · feat(fleet): 로봇의 위치 요청에 답한다 (D-546 6)
+- 2026-10-09 · uncommitted · uiux(fleet): 큐 항목이 그 자리에서 결정으로 펼친다, 레일 하나만 스크롤, 접힌 로봇 카드 (D-540 3, 계획 (c))
+- 2026-10-09 · uncommitted · fix(fleet): 관제 카메라 추적 표시가 1초마다 깜박이지 않게 한다

@@ -472,6 +472,8 @@ DECLARED_READS = {
         "/etc/ssh",
         # D-411: lists and streams Pilot recordings; ReadOnlyPaths. CORE never writes there.
         "/var/lib/rosy/pilot-recordings",
+        # D-548: root's bench marker, only stat()ed; CORE never writes /etc/rosy.
+        "/etc/rosy/dev-mode",
     },
     "rosy-navigation.service": {
         "/var/lib/rosy/maps/site.yaml", "/etc/rosy/line_follow.yaml", "/etc/rosy/profile.yaml",

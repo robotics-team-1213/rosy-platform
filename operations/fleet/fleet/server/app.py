@@ -53,6 +53,7 @@ from fleet.server.console_routes import install_console_routes
 from fleet.server.background_workers import proposal_expiry_loop as _proposal_expiry_loop
 from fleet.server.background_workers import goal_evidence_expiry_loop
 from fleet.server.background_workers import lane_compliance_loop
+from fleet.server.background_workers import attempt_open, goal_lease_renew_loop
 from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
 from fleet.server.signal_routes import install_signal_routes
 from fleet.server.ingest_routes import address_reasons, install_discovery_routes, install_ingest_routes
@@ -140,7 +141,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                development_sessions=None,
                site_maps=None, routing_config=None, map_pose_config=None,
                trip_caps_port=None, map_pose_port=None, lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
-               traffic_signal_advice=False,
+               traffic_signal_advice=False, trip_lease=None,
                identity_config=None, lane_compliance_config=None) -> FastAPI:
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
@@ -332,9 +333,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         if localization_service is not None:
             localization_task = asyncio.create_task(localization_service.run())
         trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
+        lease_task = (asyncio.create_task(goal_lease_renew_loop(console, _LOG))  # D-550 10
+                      if getattr(getattr(console, "goal_leases", None), "ttl_s", 0) > 0 else None)
         identity_task = asyncio.create_task(identity.run()) if identity.config.auto_request else None
         lane_task = asyncio.create_task(lane_compliance_loop(  # D-511 M0
             app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
+        tether_task = app.state.tether_watch.start()  # D-526
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
                 _task_dispatch_loop(console, task_service, drive_cancel))
@@ -365,7 +369,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
                                goal_evidence_worker, mission_feedback_scheduler,
                                mission_model_turn_worker_task, localization_task,
-                               signal_task, resolver_task, trip_task, identity_task, lane_task):
+                               signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
+                               lease_task):
                 if background is not None:
                     background.cancel()
                     try:
@@ -533,6 +538,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                               gather=_gather_state, gather_rest=_rest_state)
     map_pose.active_map_id()   # start-up warning when no sighting source reports the active map
     console.set_state_sink(map_pose.observe_state)
+    if localization_service is not None:
+        localization_service.set_overhead_pose(map_pose.arbitrated_pose)   # D-546 6 (a)
     app.state.map_pose = map_pose
     install_ingest_routes(app, console=console, console_token=console_token, hub=hub,
                           sightings=sightings, policy_evidence=policy_evidence,
@@ -551,6 +558,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_viewer=require_viewer, read_guard=read_guard,
                            operator_guard=operator_guard, site_lanes=site_lanes,
                            require_operator=require_operator,
+                           require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
                            tracking=tracking, identity=identity)
     if tracking is not None and tracking.enabled:
@@ -561,9 +569,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         from fleet.server.start_point_routes import install_start_point_routes
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources,
                                                               calibrations=tracking.calibrations),
-                                   read_guard=read_guard, require_operator=require_operator)
+                                   read_guard=read_guard, require_named_operator=require_named_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer,
-                          require_operator=require_operator,
+                          require_operator=require_operator, require_named_operator=require_named_operator,
                           # D-519: login accounts are configured named operators too.
                           auth_configured=bool(principals or console_token) or password_sessions is not None)
 
@@ -596,13 +604,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.trip_guard import engaged, install_trip_guard, release_queue
     from fleet.server.trip_runner import TripConfig, TripRunner
     install_lane_route_routes(app, console=console, task_service=task_service,
-                              site_maps=site_maps, require_operator=require_operator,
-                              operator_guard=operator_guard)
+                              site_maps=site_maps, require_named_operator=require_named_operator)
 
     async def _trip_caps(robot_id: str):
         """D-494 1: trip caps from the capability cache; None for an older image or no answer."""
         return trip_caps(await console._capability_display.shown(robot_id, wait_s=2.0))
 
+    if (trip_lease or {}).get("required") and console_token and console.uses_rest_token(console_token):
+        # D-541 1: the lease owner is the robot REST token; browsers hold the console token
+        raise ValueError("D-541: a robot REST token must be Fleet's own, not the console token")
     # D-494 5: the planner's caps closure, the trip map pose service, CORE's junction API.
     trip_runner = TripRunner(store=site_maps, routing_config=routing_config or site_maps.routing_config,
                              caps=trip_caps_port or _trip_caps, poses=map_pose_port or map_pose,
@@ -611,8 +621,18 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              cancel_goal=console.cancel, config=trip_config or TripConfig(),
                              engaged=partial(engaged, console), release_queue=partial(release_queue, console),
                              roster=lambda: console.robot_ids, traffic_zones=traffic_zones, authority=traffic_authority,
-                             traffic_signals=traffic_signals, signal_advice=traffic_signal_advice)
+                             traffic_signals=traffic_signals, signal_advice=traffic_signal_advice,
+                             lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
+                             renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    if task_service is not None:  # D-550 10: a dispatch goal's lease lives as long as its attempt
+        console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
+
+    @app.post("/api/fleet/goal-lease/presence", tags=["fleet"])
+    def fleet_goal_lease_presence(principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """D-550 10: a named operator's console is open; operator goals are renewed while it keeps coming."""
+        console.goal_leases.operator_present()
+        return {"present": True}
     app.state.line_stuck.trip_busy = trip_runner.robot_busy   # stuck episode context (D-407)
     if getattr(app.state, "stuck_resolver", None) is not None:  # D-517 5: stopping answers only on a trip
         app.state.stuck_resolver.trip_busy = trip_runner.robot_busy
@@ -622,11 +642,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_teach_routes(app, service=TeachService(poses=map_pose_port or map_pose, site_maps=site_maps,
                                                    roster=lambda: console.robot_ids),
                          read_guard=read_guard, require_named_operator=require_named_operator)
-    from fleet.server.tether_routes import install_tether_routes  # D-512 map display half
-    install_tether_routes(app, robot_ids=lambda: console.robot_ids, read_guard=read_guard,
+    from fleet.server.tether_routes import install_tether_routes  # D-512 map display half, D-526 watch
+    install_tether_routes(app, console=console, trip_runner=trip_runner, read_guard=read_guard,
                           require_named_operator=require_named_operator)
     install_trip_routes(app, console=console, site_maps=site_maps, caps_for=_trip_caps,
                         routing_config=routing_config or site_maps.routing_config,
+                        require_operator=require_operator,
                         require_named_operator=require_named_operator, runner=trip_runner,
                         read_guard=read_guard)
     from fleet.server.guide_service import GuideService, install_guide_routes  # D-536
@@ -658,6 +679,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     install_intent_routes(app, console=console, task_service=task_service,
                           require_operator=require_operator,
+                          require_named_operator=require_named_operator,
                           operator_guard=operator_guard,
                           local_stop_fanout=partial(
                               fanout_local_omx_stops, configured_omx, stop_transport),

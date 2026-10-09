@@ -4,6 +4,12 @@ const previousState = new WeakMap();
 // reason으로 보인다. 네이티브 입력은 사유를 그릴 자리가 없으므로, 입력을 담은
 // [data-role-lock] 묶음의 보이는 공용 안내(.role-lock-note)를 켜고 aria-describedby로 잇는다.
 export const OPERATOR_REASON = "운영자 권한이 필요합니다";
+// D-540 9: 움직이는 조작은 이름 있는 운영자만. 공유 토큰(site-console)은 보기와 멈춤만 한다.
+export const NAMED_OPERATOR_REASON = "이름 있는 운영자 로그인이 필요합니다";
+
+export function namedOperatorReason(role, principal) {
+  return role === "operator" && (!principal || principal === "site-console") ? NAMED_OPERATOR_REASON : "";
+}
 
 function lockNote(control) {
   return control.closest?.("[data-role-lock]")?.querySelector(".role-lock-note") || null;

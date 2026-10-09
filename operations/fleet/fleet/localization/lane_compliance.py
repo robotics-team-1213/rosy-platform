@@ -10,8 +10,9 @@ may be the crossing lane. Of those the nearest is used, so on a two-way edge and
 at a junction the arc along the direction of travel wins. The lateral offset is signed against
 that arc's tangent (left +). The body margin is
 ``width_m / 2 - (|offset| + body_half_width_m)``: the gap between the body side and the lane edge,
-negative once the body crosses it. ``MapPose.yaw`` is ``base_footprint`` forward, so a robot
-backing along a one-way lane has no arc and reads UNKNOWN. The body half width is the URDF nominal from
+negative once the body crosses it. ``MapPose.yaw`` is ``base_footprint`` forward; on a one-way
+lane the heading gate also accepts the opposite heading during reverse recovery. The body half width
+is the URDF nominal from
 ``core_common.robot_body`` (D-424), never a local number.
 
 Levels: OK; WARN after ``persist_n`` consecutive samples with ``margin < warn_margin_m``; ACT after
@@ -58,7 +59,8 @@ class LaneComplianceConfig:
 
     def __post_init__(self) -> None:
         for name in ("warn_margin_m", "act_timeout_s", "heading_gate_deg", "moving_min_m",
-                     "moving_min_deg", "track_heading_min_m") + (("max_lateral_m",) if self.max_lateral_m is not None else ()):
+                     "moving_min_deg", "track_heading_min_m") + (
+                         ("max_lateral_m",) if self.max_lateral_m is not None else ()):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                 raise ValueError(f"fleet.lane_compliance.{name} must be a finite number")
@@ -130,12 +132,14 @@ def sample(pose, graph, body_half_width_m: float = BODY_HALF_WIDTH_M,
         return LaneSample(state)
     x, y, yaw = pose.x, pose.y, pose.yaw
     gate = math.radians(config.heading_gate_deg)
+    reversible_edges = {arc.edge_id for arc in arcs if not arc.forward}
     best = None
     for arc in arcs:
         dist, s, tangent = arc.project(x, y)
         limit = arc.width_m if config.max_lateral_m is None else config.max_lateral_m
         if (END_EPS_M < s < arc.length_m - END_EPS_M and dist <= limit
-                and (yaw is None or abs(_wrap(tangent - yaw)) <= gate)
+                and (yaw is None or abs(_wrap(tangent - yaw)) <= gate or
+                     (arc.edge_id not in reversible_edges and abs(_wrap(tangent - yaw + math.pi)) <= gate))
                 and (best is None or dist < best[1])):
             best = (arc, dist, s, tangent)
     if best is None:

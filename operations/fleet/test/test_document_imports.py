@@ -1,7 +1,7 @@
 """Fleet console documents reach only their own modules and shared reads.
 
 D-410 splits operate and install. D-450 keeps Cell on `/console/cell`.
-D-518 adds the site-map document and names the shared-read modules; D-519 adds password-login.js.
+D-518 adds the site-map document and names the shared-read modules; D-519 adds password-login.js; D-540 adds fleet-header.js.
 An entry that reaches another document's module fails this test.
 """
 
@@ -21,6 +21,7 @@ SHARED = {
     "poll-gate.js",
     "development-auth.js",
     "password-login.js",
+    "fleet-header.js",  # D-540 2: the one header of the four documents
     "map-fit.js",
     "vision-view.js",
     "field-warp.js",
@@ -34,6 +35,7 @@ OWN = {
         "map-view.js",
         "roster.js",
         "line-stuck.js",
+        "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
         "tracking-view.js",
         "tracking-layer.js",

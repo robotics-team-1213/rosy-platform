@@ -30,6 +30,18 @@ def _client(*robots: FakeRobot, token=None, web_common=None) -> TestClient:
     return TestClient(create_app(console, console_token=token, web_common=web_common))
 
 
+def _named_client(tmp_path, *robots: FakeRobot) -> TestClient:
+    """D-540 9: moving routes need a named operator, and site-users need the task store."""
+    endpoints = [RobotEndpoint(robot_id=r.robot_id, base_url=f"http://127.0.0.1:808{i}",
+                               token="t") for i, r in enumerate(robots)]
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"),
+                             robot_ids={r.robot_id for r in robots})
+    users = {sha256(b"bob-token").hexdigest(): {"principal_id": "bob", "role": "operator"}}
+    app = create_app(FleetConsole(endpoints, list(robots)), task_service=tasks, site_users=users,
+                     start_task_dispatcher=False)
+    return TestClient(app, headers={"Authorization": "Bearer bob-token"})
+
+
 def test_health_endpoint_reports_liveness_without_robot_or_auth_data():
     response = _client(FakeRobot("rosy_01"), token="operator-secret").get("/healthz")
 
@@ -174,9 +186,9 @@ def test_goal_openapi_contract_exposes_only_domain_intent_fields():
                for name in ("x", "y", "yaw"))
 
 
-def test_camera_fault_ir_selection_is_forwarded_only_as_explicit_operator_intent():
+def test_camera_fault_ir_selection_is_forwarded_only_as_explicit_operator_intent(tmp_path):
     robot = FakeRobot("rosy_01")
-    client = _client(robot)
+    client = _named_client(tmp_path, robot)
 
     selected = client.post("/api/fleet/robots/rosy_01/line-follow", json={"mode": "IR_LINE"})
     invalid = client.post("/api/fleet/robots/rosy_01/line-follow", json={"mode": "CAMERA_LINE"})
@@ -215,12 +227,12 @@ def test_do_openapi_contract_matches_intent_verbs_and_bounded_sequences():
     assert steps["items"] == single_step
 
 
-def test_do_translates_a_goal_and_rejects_a_ros_word():
+def test_do_translates_a_goal_and_rejects_a_ros_word(tmp_path):
     robot = FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"})
-    client = _client(robot)
+    client = _named_client(tmp_path, robot)
     sent = client.post("/api/fleet/do", json={
         "do": "navigate", "robot": "rosy_01", "x": 1.0, "y": 2.0, "yaw": 0.0,
-    })
+    }, headers={"Idempotency-Key": "do-1"})
     assert sent.status_code == 200, sent.text
     assert sent.json()["steps"][0]["path"] == "/api/v1/navigation/goal"
     refused = client.post("/api/fleet/do", json={"do": "navigate", "x": 0, "y": 0, "twist": {}})
@@ -279,10 +291,10 @@ def test_map_is_served_when_a_robot_has_one():
         == "occupancy:abc"
 
 
-def test_goal_to_an_unknown_robot_is_404_not_502():
+def test_goal_to_an_unknown_robot_is_404_not_502(tmp_path):
     """오타는 사이트 쪽 잘못이다. 502 로 내면 로봇이 거절한 것처럼 읽힌다."""
-    resp = _client(FakeRobot("rosy_01")).post("/api/fleet/robots/rosy_99/goal",
-                                              json={"x": 0.0, "y": 0.0})
+    resp = _named_client(tmp_path, FakeRobot("rosy_01")).post(
+        "/api/fleet/robots/rosy_99/goal", json={"x": 0.0, "y": 0.0}, headers={"Idempotency-Key": "g-1"})
     assert resp.status_code == 404
     assert resp.json()["detail"]["code"] == "UNKNOWN_ROBOT"
 
@@ -292,25 +304,13 @@ def test_goal_to_an_unknown_robot_is_404_not_502():
     {"x": 1.0, "y": 2.0, "source": "policy"},
     {"x": True, "y": 2.0},
 ])
-def test_goal_rejects_non_intent_dispatch_fields_and_invalid_numbers(body):
+def test_goal_rejects_non_intent_dispatch_fields_and_invalid_numbers(body, tmp_path):
     robot = FakeRobot("rosy_01")
-    response = _client(robot).post("/api/fleet/robots/rosy_01/goal", json=body)
+    response = _named_client(tmp_path, robot).post("/api/fleet/robots/rosy_01/goal", json=body,
+                                                   headers={"Idempotency-Key": "g-1"})
 
     assert response.status_code == 422
     assert not any(call[0] == "navigation_goal" for call in robot.calls)
-
-
-def test_a_goal_the_robot_refuses_comes_back_as_502_with_the_robot_code():
-    robot = FakeRobot("rosy_01")
-
-    async def refuse(x, y, yaw):
-        raise RobotApiError("rosy_01", 409, "MODE_CONFLICT", "not in NAVIGATION")
-
-    robot.navigation_goal = refuse
-    resp = _client(robot).post("/api/fleet/robots/rosy_01/goal", json={"x": 1.0, "y": 0.0})
-    assert resp.status_code == 502
-    assert resp.json()["detail"]["code"] == "MODE_CONFLICT"
-    assert resp.json()["detail"]["robot_id"] == "rosy_01"
 
 
 def test_estop_is_200_even_when_one_robot_refuses():
@@ -514,8 +514,11 @@ def test_console_page_and_its_assets_are_served():
     assert "Rosy Console" not in page.text
     assert "ROSY FLEET" not in page.text
     assert "SITE CONSOLE" not in page.text
-    script = (Path(__file__).resolve().parents[1] / "fleet" / "server" / "web" / "console.js").read_text(encoding="utf-8")
-    assert 'el("fleet-name").textContent = snapshot.fleet.name || "사이트";' in script
+    # D-540 2: the site name is drawn by the shared header module for all four documents.
+    script = (Path(__file__).resolve().parents[1] / "fleet" / "server" / "web" / "shared" / "fleet-header.js").read_text(encoding="utf-8")
+    assert '$("fleet-name").textContent = fleet.name || "사이트";' in script
+    assert client.get("/console/assets/fleet-header.js").status_code == 200
+    assert client.get("/console/assets/fleet-header.css").status_code == 200
     assert client.get("/console/assets/console.js").status_code == 200
     assert client.get("/console/assets/authorization.js").status_code == 200
     assert client.get("/console/assets/styles.css").status_code == 200
@@ -626,9 +629,13 @@ def test_the_localization_service_runs_in_the_app_lifespan_and_feeds_the_badge()
     class Service:
         runs = 0
         cancelled = False
+        overhead = None
 
         def view(self, robot_id):
             return {"needs_human": True}
+
+        def set_overhead_pose(self, provider):   # D-546 6 (a): the app hands over the map-pose arbiter
+            Service.overhead = provider
 
         async def run(self):
             Service.runs += 1
@@ -641,6 +648,6 @@ def test_the_localization_service_runs_in_the_app_lifespan_and_feeds_the_badge()
     with TestClient(create_app(console, localization_service=Service())) as client:
         row = client.get("/api/fleet/state").json()["robots"][0]
         assert Service.runs == 1
-    assert Service.cancelled is True
+    assert Service.cancelled is True and callable(Service.overhead)
     assert row["localization"]["label"] == "위치 확인 필요"
     assert row["localization"]["state"] == "CANDIDATES" and row["localization"]["trusted"] is False

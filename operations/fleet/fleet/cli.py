@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
-from fleet.traffic.config import _traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones
+from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
+                                   _trip_lease)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
 from fleet.swarm.relay import Relay
 from fleet.swarm.robots import RobotEndpoint, load_robots
@@ -84,6 +85,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--enrolled-tls-bindings-file",
                          default=os.environ.get("ROSY_ENROLLED_TLS_BINDINGS_FILE") or None, type=Path,
                          help="public approved TLS bindings for existing encrypted enrollments")
+    console.add_argument("--hub-link-hostname", default=None,
+                         help="D-555: the site's approved <name>.local robots dial for the hub")
+    console.add_argument("--hub-link-ca", default=None, type=Path,
+                         help="D-555: public site CA PEM robots pin for the hub (pair with --hub-link-hostname)")
     console.add_argument("--vision-preview-secret-env", default=None,
                          help="dedicated Fleet-to-Vision preview lease signing secret")
     console.add_argument("--lan-camera-proxy", action="store_true",
@@ -117,6 +122,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--localization-overhead-cue", action="store_true", default=False,
                          help="D-395: feed overhead sightings to the localization arbiter and "
                               "monitor. Off by default: the D-257 amendment is not accepted")
+    console.add_argument("--pose-request-overhead", action=argparse.BooleanOptionalAction,
+                         default=True,
+                         help="D-546: answer a robot's pose request from the trusted overhead pose "
+                              "(LOCALIZED, anchor <= 2 s; the robot's 3 s scan check decides). "
+                              "On by default (user decision 2026-10-09); --no-pose-request-overhead "
+                              "turns it off. Does not touch the arbiter/monitor cue")
     console.add_argument("--localization-lane-rules", default=None, type=Path,
                          help="lane_rules.yaml with reference_squares (default: map_v2_fleet)")
     console.add_argument("--sightings-db", default=None, type=Path,
@@ -332,6 +343,25 @@ async def run_formation(args: argparse.Namespace) -> None:
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
+def _hub_link(args) -> dict | None:
+    """D-555: what robots receive with a hub credential, or None when not configured."""
+    hostname, ca = getattr(args, "hub_link_hostname", None), getattr(args, "hub_link_ca", None)
+    if hostname is None and ca is None:
+        return None
+    from core_common.protocol.discovery_txt import HOSTNAME
+
+    hostname = (hostname or "").lower().rstrip(".")
+    if not HOSTNAME.fullmatch(hostname) or ca is None:
+        sys.exit("--hub-link-hostname <name>.local and --hub-link-ca go together")
+    try:
+        pem = ca.read_text(encoding="ascii")
+    except (OSError, UnicodeDecodeError):
+        sys.exit("--hub-link-ca is not a readable PEM file")
+    if len(pem) > 16384 or "-----BEGIN CERTIFICATE-----" not in pem:
+        sys.exit("--hub-link-ca must be one PEM certificate under 16 KiB")
+    return {"expected_hostname": hostname, "ca_pem": pem}
+
+
 def run_console(args: argparse.Namespace) -> None:
     """관제 서버를 연다. uvicorn 이 자기 루프를 돌리므로 여기는 async 가 아니다."""
     import uvicorn
@@ -376,8 +406,6 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("--cell-job-stack-tol-m requires --mission-api")
     if mission_api and tasks_db is None:
         sys.exit("--tasks-db is required with --mission-api")
-    if mission_api and site_users is None:
-        sys.exit("--users-file is required with --mission-api for named operator authorization")
     development_sessions = None
     if getattr(args, "connection_mode", "paired") == "development":
         # D-473 1: both settings or nothing; a missing one keeps paired, never the other way round.
@@ -392,6 +420,9 @@ def run_console(args: argparse.Namespace) -> None:
             development_sessions = DevelopmentSessions()
             print("warning: development connection mode: same-LAN browsers get 1 h operator sessions",
                   file=sys.stderr)
+    # D-548: a development session is a named operator (D-473 3), so it stands in for site-users.
+    if mission_api and site_users is None and development_sessions is None:
+        sys.exit("--users-file is required with --mission-api for named operator authorization")
     if args.host not in LOOPBACK_HOSTS and not (console_token or users_file is not None):
         sys.exit("--token or --users-file 없이 루프백 밖으로 열 수 없다")
     if args.host not in LOOPBACK_HOSTS and tasks_db is None:
@@ -441,7 +472,8 @@ def run_console(args: argparse.Namespace) -> None:
     if pairing_configured and not console_token:
         sys.exit("--token or --token-env is required to protect the CORE registry endpoint")
     console = FleetConsole(endpoints, [HttpRobotClient(ep) for ep in endpoints],
-                           signal_console=signal_console, event_store=event_store)
+                           signal_console=signal_console, event_store=event_store,
+                           goal_lease_ttl_s=_goal_lease_ttl_s(args))
     sightings_db = getattr(args, "sightings_db", None)
     sightings_config = getattr(args, "sightings_config", None)
     if sightings_db is not None and sightings_config is None:
@@ -475,9 +507,14 @@ def run_console(args: argparse.Namespace) -> None:
         # D-457: approved tracking calibrations live beside the sightings (memory without a DB).
         tracking_service = TrackingService(
             sighting_service.sources, calibrations=TrackingCalibrationStore(sightings_db))
+    hub_link = _hub_link(args)
+    # D-555: enrolled robots pair at runtime, so the route is up whenever that can happen.
+    enrolled_hub = (enrollment_store is not None and event_store is not None and bool(console_token)
+                    and (hub_link is not None
+                         or any(row.get("hub_digest") for row in enrollment_store.rows())))
     # The outbound CORE Agent route is enabled only for robots with a separate
     # pairing credential. REST-only console configurations remain unchanged.
-    hub = console.hub if pairing_configured else None
+    hub = console.hub if pairing_configured or enrolled_hub else None
     task_service = None
     if tasks_db is not None:
         from fleet.server.task_service import FleetTaskService
@@ -498,7 +535,8 @@ def run_console(args: argparse.Namespace) -> None:
         enrollment, roster = build_enrollment(
             console=console, task_service=task_service, sighting_service=sighting_service,
             enrollment_store=enrollment_store, robot_key=robot_key, robot_key_error=robot_key_error,
-            discovery=discovery, tls_file=getattr(args, "enrolled_tls_bindings_file", None))
+            discovery=discovery, tls_file=getattr(args, "enrolled_tls_bindings_file", None),
+            hub_link=hub_link if enrolled_hub else None)
     from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids
 
     try:
@@ -524,6 +562,7 @@ def run_console(args: argparse.Namespace) -> None:
     localization_service = build_localization_service(
         console, sighting_service, enabled=getattr(args, "localization_service", True),
         overhead_cue=getattr(args, "localization_overhead_cue", False),
+        pose_request_overhead=getattr(args, "pose_request_overhead", True),
         lane_rules=getattr(args, "localization_lane_rules", None))
     stuck_resolver_clients = None
     if getattr(args, "stuck_resolver", False):
@@ -566,6 +605,7 @@ def run_console(args: argparse.Namespace) -> None:
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
                      traffic_zones=_traffic_zones(args), traffic_authority=_traffic_authority(args),
                      traffic_signals=_traffic_signals(args), traffic_signal_advice=_traffic_signal_advice(args),
+                     trip_lease=_trip_lease(args),
                      identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args))
     signals_note = f", {len(signal_eps)} signals" if signal_console is not None else ""
@@ -575,6 +615,28 @@ def run_console(args: argparse.Namespace) -> None:
     tls_options = ({"ssl_certfile": str(tls_cert), "ssl_keyfile": str(tls_key)}
                    if tls_cert is not None else {})
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", **tls_options)
+
+
+def _goal_lease_ttl_s(args) -> float:
+    """D-550 10: ``fleet.goal_lease_ttl_s`` of ``--site-config``; 0 (default) = no goal lease.
+    Otherwise floor..5 s: CORE takes at most 5 s; the floor is 2 x ``fleet.trip.port_timeout_s`` +
+    ``period_s`` (3.5 s by default), so a trip step that times out once on its pose read and once
+    on its renewal still renews before the lease runs out."""
+    import yaml
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        value = (site_config.get("fleet") or {}).get("goal_lease_ttl_s", 0)
+    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"goal lease config: {exc}")
+    trip = _trip_config(args)
+    floor = 2 * trip.port_timeout_s + trip.period_s
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
+            value == 0 or floor <= value <= 5):
+        sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
+    return float(value)
 
 
 def _trip_config(args):
