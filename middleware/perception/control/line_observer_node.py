@@ -537,11 +537,10 @@ class LineObserverNode(Node):
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
                         or _spinning_in_place(cmd)):
                     self._lane_keeper.reset()
-                    # A drivable pivot turns toward the way it saw: keep its masks (odometry moves the target).
-                    if self._paint_worker is not None and (self._drivable_steer is None or not _spinning_in_place(cmd)):
+                    # D-597 amendment 2: the drivable way is steered from directly (odometry moves its target,
+                    # latest_way drops it after stale_s), so a gap or a pivot keeps the mask and the pivot latch.
+                    if self._paint_worker is not None and self._drivable_steer is None:
                         self._paint_worker.reset()
-                    if self._drivable_steer is not None and not _spinning_in_place(cmd):
-                        self._drivable_steer.reset()
                 self._keep_last_stamp = image_stamp
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
@@ -568,7 +567,7 @@ class LineObserverNode(Node):
                     self._lane_keeper.last.pop('junction_ahead_m', None)
                     paint_used = 'learned_drivable'
                 elif self._drivable_steer is not None:
-                    self._drivable_steer.reset()
+                    self._drivable_steer.lost(image_stamp)
                 bundle = keep_debug_payload(
                               self._lane_keeper.last, ground, self._lane_keeper._x_offset,
                               paint_source_used=paint_used,
