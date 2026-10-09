@@ -27,10 +27,11 @@ def audit(session):
     scan_count = 0
     header_log_skews = []
     namespaces = set()
-    hashes = {}
+    hashes = []
     for path in files:
         with path.open("rb") as raw:
-            hashes[path.name] = hashlib.file_digest(raw, "sha256").hexdigest()
+            hashes.append({"bag": path.name,
+                           "sha256": hashlib.file_digest(raw, "sha256").hexdigest()})
             raw.seek(0)
             for _, channel, message, value in make_reader(
                     raw, decoder_factories=[DecoderFactory()]).iter_decoded_messages():
