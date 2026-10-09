@@ -228,7 +228,6 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `line_follow_authority_required`: config line_follow.authority_required (enforced before any).
     # `line_follow_advice` (D-525): POST /line-follow/advice is stored and shown, display only.
     # `trip_lease` (D-541 1): CORE holds the Fleet trip lease and fences non-owner motion.
-    # `fleet_link_provisioning` (D-555 3): PUT/DELETE /fleet/link exists (TLS listener only).
     limits = svc.safety.limits
     trip_max_linear = min(limits.max_linear, limits.fleet_linear)
     if svc.line_follow is not None:
@@ -258,8 +257,10 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
                                           svc.line_follow.config, "authority_required", False) is True,
                                       line_follow_advice=svc.line_follow is not None and getattr(
                                           svc, "line_advice", None) is not None,
-                                      trip_lease=getattr(svc, "trip_lease", None) is not None,
-                                      fleet_link_provisioning=getattr(svc, "fleet_agent", None) is not None)
+                                      trip_lease=getattr(svc, "trip_lease", None) is not None)
+    # `fleet_link_provisioning` (D-555 3, v1.160 additive): PUT/DELETE /fleet/link exists (TLS
+    # listener only). Top level, not in `controls`: a robot without a drive pairs too.
+    data["fleet_link_provisioning"] = getattr(svc, "fleet_agent", None) is not None
     return data
 
 

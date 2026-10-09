@@ -25,7 +25,7 @@
    - `PUT`은 비밀 덮어쓰기 파일 `~/.rosy/fleet-link.yaml`(`ROSY_FLEET_LINK`로 바꿀 수 있음)과 CA `~/.rosy/fleet-link-ca.pem`을 CORE 사용자 소유 0600으로 원자적으로 쓴다(`mkstemp` + `fsync` + `os.replace`). `load_config`는 이 파일의 `fleet` 블록만 마지막에 병합하고, 그 전에 아래 층의 `pairing_token`·`hub_url`·`discovery`를 지운다. POSIX에서 그룹·남에게 열린 파일은 경고하고 읽지 않는다.
    - 그 다음 FleetAgent 작업만 다시 시작한다(`FleetAgent.relink`). CORE와 다른 서비스는 그대로다. `DELETE`는 두 파일을 지우고 아래 층의 링크(있으면)로 돌아가 에이전트를 다시 시작한다.
    - `GET /api/v1/fleet/link`(viewer)는 `{configured, provisioned, expected_hostname, hub_url, enabled, connected}`만 준다. 토큰은 어떤 응답·사건·로그에도 없다. 사건 `fleet.link_provisioned`·`fleet.link_cleared`는 호출 토큰 id만 싣는다.
-   - 능력: `rosy.controls/1` `base_velocity`에 `fleet_link_provisioning: true`. Fleet은 이 플래그가 없는 로봇에 보내지 않는다(`409 robot_unsupported`).
+   - 능력: `GET /system/capabilities` 최상위 `fleet_link_provisioning: true`(주행이 없는 로봇도 페어링하므로 `controls` 항목이 아니다). Fleet은 이 플래그가 없는 로봇에 보내지 않는다(`409 robot_unsupported`).
 4. **허브는 등록 로봇을 digest로 확인한다.** `SiteHub`는 등록 로봇의 digest를 들고, HELLO 토큰의 SHA-256을 `hmac.compare_digest`로 비교한다(상수 시간). Fleet 기동 때 등록 행의 digest를 허브에 올린다. 허브 경로는 `robots.yaml` 페어링이 있거나, 등록 저장소·`--events-db`·콘솔 토큰이 있고 `--hub-link-*`가 설정됐거나 digest가 있는 등록 행이 있으면 켠다. 콘솔은 지금처럼 허브 상태가 신선하면(≤ 3 s) 허브, 아니면 REST로 모으고, 등록 행에 "수집: 허브|REST"를 보인다.
 5. **SAF-003은 살아 있는 설정을 본다.** `link_configured`는 기동 때 값 대신 지금 `config["fleet"]`로 판정한다. 그래서 실행 중 페어링이 CORE 재시작 없이 SAF-003을 붙이고, 해제가 뗀다. 거절된 HELLO나 `stop()`은 여전히 끊긴 링크다(설정은 PUT·DELETE만 바꾼다).
 6. **회수와 교체.**

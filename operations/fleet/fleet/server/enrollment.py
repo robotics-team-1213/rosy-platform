@@ -803,9 +803,7 @@ class EnrollmentService:
             caps = await client.capabilities()
         except (RobotApiError, httpx.HTTPError, ValueError):  # ValueError: EnrollmentTlsError
             raise EnrollmentError("unreachable", 502, "the robot is not reachable") from None
-        items = ((caps.get("controls") or {}).get("items") if isinstance(caps, dict) else None) or []
-        if not any(isinstance(item, dict) and item.get("fleet_link_provisioning") is True
-                   for item in items):
+        if not (isinstance(caps, dict) and caps.get("fleet_link_provisioning") is True):
             raise EnrollmentError("robot_unsupported", 409,
                                   "this robot image cannot take a hub link (fleet_link_provisioning)")
         token = secrets.token_urlsafe(32)

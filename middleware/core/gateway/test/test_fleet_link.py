@@ -131,9 +131,8 @@ def test_delete_removes_the_link_and_restarts_the_agent_without_it(robot):
 
 def test_capability_announces_provisioning(robot):
     https, _, seats, _, _ = robot
-    controls = https.get("/api/v1/system/capabilities", headers=seats["screen"]).json()["controls"]
-    base = next(item for item in controls["items"] if item["kind"] == "base_velocity")
-    assert base["fleet_link_provisioning"] is True
+    caps = https.get("/api/v1/system/capabilities", headers=seats["screen"]).json()
+    assert caps["fleet_link_provisioning"] is True
 
 
 def test_load_config_merges_the_link_last(tmp_path, monkeypatch):

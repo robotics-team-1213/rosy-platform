@@ -30,8 +30,7 @@ class LinkClient:
         self.deletes = 0
 
     async def capabilities(self) -> dict:
-        item = {"kind": "base_velocity", "fleet_link_provisioning": True} if self.provisioning else {}
-        return {"controls": {"items": [item]}}
+        return {"fleet_link_provisioning": True} if self.provisioning else {}
 
     async def fleet_link_put(self, body: dict) -> dict:
         self.puts.append(body)
