@@ -108,9 +108,15 @@ def blobs(ref, baseline, frames):
 
 def judge(found, pick, radius, n_frames, color, floor=None):
     """The evidence when every strong blob on the floor sits at the pick, did not change before, and
-    is not clearly the wrong colour. Refused otherwise. Off-floor blobs are only recorded."""
+    is not clearly the wrong colour. Refused otherwise. Off-floor and background blobs are only recorded."""
     off = [b for b in found if not on_floor(b["center"], floor)]
     found = [b for b in found if on_floor(b["center"], floor)]
+    # Away from the pick, a change that was already changing before the request is background (another
+    # robot's animated face, 2026-10-10): the identify blink starts only after the request. At the pick
+    # a change during the baseline still refuses below, and a change that starts after it still counts.
+    background = [b for b in found
+                  if b["before"] and math.hypot(b["center"][0] - pick[0], b["center"][1] - pick[1]) > radius]
+    found = [b for b in found if b not in background]
     if not (math.isfinite(radius) and radius > 0):
         _refuse(f"radius {radius} px is not a positive number (calibration past the horizon?)")
     if not found or found[0]["frames"] < MIN_FRAMES:
@@ -139,7 +145,8 @@ def judge(found, pick, radius, n_frames, color, floor=None):
             "colour_check": f"hue {best['hue']} sat {best['sat']}: " + (
                 f"within {HUE_TOL} of {color}" if best["sat"] >= COLOUR_MIN_S else "not judged (unsaturated)"),
             "others": [{k: b[k] for k in ("center", "frames", "before", "pixels")} for b in found[1:4]],
-            "off_floor": [{k: b[k] for k in ("center", "frames", "before", "pixels")} for b in off[:3]]}
+            "off_floor": [{k: b[k] for k in ("center", "frames", "before", "pixels")} for b in off[:3]],
+            "background": [{k: b[k] for k in ("center", "frames", "before", "pixels")} for b in background[:3]]}
 
 
 def identify(robot, pick, radius, out_dir, floor=None):
