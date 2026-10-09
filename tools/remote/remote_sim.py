@@ -248,7 +248,9 @@ def run_sim(host: str, prof_key: str, mode: str, bench_cmd: str, bench_args: lis
                                  stdin=subprocess.DEVNULL, capture_output=True, timeout=600)
         if fetched.returncode == 0 and fetched.stdout:
             with tarfile.open(fileobj=io.BytesIO(fetched.stdout)) as tar:
-                tar.extractall(log_dir / "out", filter="data")
+                # Skip links: ROS and colcon "latest" links are absolute paths on the host.
+                tar.extractall(log_dir / "out", filter=lambda m, path: None if m.issym() or m.islnk()
+                               else tarfile.data_filter(m, path))
         return code
     finally:
         rp.remote(host, STOP, name, capture_output=True, timeout=120)
