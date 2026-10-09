@@ -431,3 +431,16 @@ def test_fps_counts_accepted_payloads_over_three_seconds():
         service.accept(AUTH, _payload(calibration_revision="cal-v3", seq=index,
                                       captured_at=clock.now - 0.05))
     assert service.snapshot()["sources"][0]["fps"] == 2.0
+
+
+def test_approved_revision_is_the_record_on_the_source_map_until_revoked():
+    """D-587 2: the sighting service asks this for an approved_record sighting."""
+    service, _ = _service()
+    source = service.sources[0]
+    assert service.approved_revision(source) is None
+    record = service.approve(APPROVAL, approved_by="op")
+    assert service.approved_revision(source) == record["calibration_revision"]
+    assert record["calibration_revision"].startswith("paint-")
+    assert service.approved_revision(_source(map_id="other_map")) is None
+    service.revoke("ceiling_north", principal_id="op")
+    assert service.approved_revision(source) is None

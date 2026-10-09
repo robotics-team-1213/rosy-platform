@@ -77,3 +77,19 @@ def test_place_markers_are_distinct_ids_apart_from_corners_and_robots(tmp_path, 
     config = _write(tmp_path / "s.yaml", [_row(robot_markers={"rosy_01": 7}, place_markers=bad)])
     with pytest.raises(ValueError, match=message):
         load_sighting_sources(config, environ=ENV)
+
+
+@pytest.mark.parametrize("bad, message", [
+    ({"rosy_02": 90}, "no robot marker"), ({"rosy_01": "90"}, "finite degrees"),
+    ({"rosy_01": True}, "finite degrees"), ({"rosy_01": 400}, "finite degrees"),
+    ({"rosy_01": float("nan")}, "finite degrees"), ([90], "map robot ids"),
+])
+def test_marker_yaw_offsets_name_marker_robots_with_finite_degrees(tmp_path, bad, message):
+    """D-587 4: a per-robot sticker yaw offset is accepted; a bad one refuses start."""
+    good = _write(tmp_path / "s.yaml", [_row(robot_markers={"rosy_01": 40},
+                                             marker_yaw_offset_deg={"rosy_01": 180})])
+    assert load_sighting_sources(good, environ=ENV)[0].source_id == "ceiling_north"
+    config = _write(tmp_path / "s.yaml", [_row(robot_markers={"rosy_01": 40},
+                                               marker_yaw_offset_deg=bad)])
+    with pytest.raises(ValueError, match=message):
+        load_sighting_sources(config, environ=ENV)
