@@ -72,6 +72,17 @@ class LearnedPaintWorker:
             return None, None
         return mask, summary
 
+    def latest_way(self) -> tuple[np.ndarray, float] | None:
+        """(the newest drivable way at frame size, its frame stamp) while its frame was submitted
+        no more than stale_s ago, else None (D-597 amendment 2: steered from directly, not warped)."""
+        with self._lock:
+            result = self._result
+        if result is None or result[2].get("paint_kind") != "drivable" or result[2]["stamp"] is None:
+            return None
+        if self._clock() - result[0] > self._stale_s:
+            return None
+        return result[1], result[2]["stamp"]
+
     def mask_for(self, frame: np.ndarray, every_n: int = 1, stamp: float | None = None,
                  clean: Callable[[np.ndarray], np.ndarray] | None = None, *,
                  motion: Callable | None = None, max_age_s: float = 0.0,
