@@ -103,11 +103,17 @@ P="$N/bin/python -m pip -q --disable-pip-version-check --no-cache-dir"
 REQ=deploy/robot/pinky_pro/image/device-python-requirements.txt
 $P install --require-hashes --no-deps --only-binary=:all: -r "$REQ"
 grep -o '^[A-Za-z0-9._-]*==[^ ]*' "$REQ" > "$N/constraints.txt"
-norm() { tr 'A-Z_.' 'a-z--'; }
-cut -d= -f1 "$N/constraints.txt" | norm > "$N/pinned.txt"
-while read -r line; do
-  grep -qx "$(printf %s "${line%%==*}" | norm)" "$N/pinned.txt" || echo "$line"
-done < deploy/site/requirements-fleet.txt > "$N/fleet-extra.txt"
+"$N/bin/python" - "$N/constraints.txt" deploy/site/requirements-fleet.txt "$N/fleet-extra.txt" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+normalize = lambda name: re.sub(r"[-_.]+", "-", name).lower()
+pinned = {normalize(line.split("==", 1)[0]) for line in Path(sys.argv[1]).read_text().splitlines()}
+extra = (line for line in Path(sys.argv[2]).read_text().splitlines(keepends=True)
+         if normalize(line.split("==", 1)[0]) not in pinned)
+Path(sys.argv[3]).write_text("".join(extra))
+PY
 $P install -c "$N/constraints.txt" -r "$N/fleet-extra.txt" pytest setuptools wheel flake8 httpx pyyaml \
   jsonschema ext4 numpy pillow opencv-python-headless playwright
 $P install --require-hashes --no-deps --only-binary=:all: \
