@@ -1221,3 +1221,15 @@ def test_identify_off_floor_never_turns_a_wrong_pick_into_a_pass():
     with pytest.raises(IDENT.Refused, match="another strong change"):   # on the floor, two changes still refuse
         IDENT.judge([_blob((321, 240), 12), _blob((250, 200), 10)], (320.0, 240.0), 30.0, 30, "blue", floor)
     assert IDENT.floor_polygon([0.0] * 9, None, run.tether._project) is None
+
+
+def test_identify_records_a_change_elsewhere_that_began_before_the_request():
+    found = [_blob((533, 600), 31, before=15), _blob((321, 240), 10)]     # another robot's animated face
+    ev = IDENT.judge(found, (320.0, 240.0), 30.0, 30, "blue")
+    assert ev["blob_center"] == [321, 240] and ev["background"][0]["center"] == [533, 600]
+    with pytest.raises(IDENT.Refused, match="already changed in"):        # at the pick it still refuses
+        IDENT.judge([_blob((321, 240), 10, before=4)], (320.0, 240.0), 30.0, 30, "blue")
+    with pytest.raises(IDENT.Refused, match="another strong change"):     # a new change elsewhere still refuses
+        IDENT.judge([_blob((321, 240), 12), _blob((533, 600), 10)], (320.0, 240.0), 30.0, 30, "blue")
+    with pytest.raises(IDENT.Refused, match="no lamp change seen"):       # only background: nothing blinked
+        IDENT.judge([_blob((533, 600), 31, before=15)], (320.0, 240.0), 30.0, 30, "blue")
