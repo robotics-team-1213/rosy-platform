@@ -109,7 +109,7 @@ def test_9dfk_wall_case_is_pose_never_a_label():
 
 
 def test_model_miss_needs_visible_paint_and_no_wall():
-    summary = _summary(np.zeros((240, 320), np.uint8), 1.2, KEEP_9DFK)
+    summary = _summary(np.zeros((240, 320), np.uint8), 1.2, dict(KEEP_9DFK, transverse=0, rejected=[]))
     along = {"lines_direction": "along", "lane_line_count": 2, "wall_close": "no", "on_road": "yes"}
     got = lf.fuse(summary, along, {"cause": "model_miss", "confidence": 0.8, "reason": "tape visible"})
     assert got["final"] == "model_miss" and got["route"] == "label_candidate"
