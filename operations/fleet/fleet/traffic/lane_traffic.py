@@ -50,8 +50,6 @@ JUMP_MARGIN_M = 0.05
 #: A refused front is taken once this many periods in a row agree with it (a robot moved by hand, a real
 #: correction). A one-frame glitch never gets there. Until then the robot holds every instruction.
 JUMP_SETTLE_PERIODS = 3
-#: ``hold_back_m`` scan step along the lane.
-HOLD_STEP_M = 0.02
 #: D-525 4 / D-443: a manual green lasts while a named operator's console says it is there this often.
 PRESENCE_S = 10.0
 
@@ -468,23 +466,6 @@ class TrafficService:
             self._warned = True
 
     # ---- start check ----------------------------------------------------------------------
-
-    def hold_back_m(self, segment: dict) -> Optional[float]:
-        """D-517 3 (2026-10-09 signal SIM): how far before the end of ``segment`` a robot stands clear of
-        every site zone (``_under``: what a standing robot pins), 0 at the end itself, scanning back to
-        its ``s_from``; None when no such point (the segment runs inside a zone). A robot never holds
-        inside a zone: there it keeps the zone from every other robot, and a signal never turns green."""
-        active = self._store.active()
-        layout = self._layout_for(active) if self._zones else None
-        arc = active[2].arcs.get(arc_id(segment)) if layout is not None else None
-        if arc is None:
-            return 0.0
-        back = 0.0
-        while back <= segment["s_to"] - segment["s_from"] + 1e-9:
-            if not self._zones.keys() & self._under(layout, active[2], arc.point_at(segment["s_to"] - back)).keys():
-                return back
-            back += HOLD_STEP_M
-        return None
 
     def _loop(self, layout, graph, lap_arcs) -> tuple[frozenset, int]:
         return _edges(lap_arcs), blocks.loop_capacity(layout.route(graph, list(lap_arcs)), layout, self._held)

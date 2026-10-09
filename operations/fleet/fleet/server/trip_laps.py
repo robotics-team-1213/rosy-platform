@@ -1,7 +1,8 @@
 """D-517 2/3: repeat-trip lap bookkeeping, pure on ``LiveTrip`` and plans (no robot calls)."""
 from fleet.routing.execute import arc_id, ends_at_place, plan_again, plan_body, route_key
 from fleet.routing.trip import _assemble
-from fleet.server.trip_ports import LiveTrip
+from fleet.server.trip_ports import LiveTrip, TripError
+from fleet.traffic.zone_hold import hold_back_m
 
 #: D-517 2/5: a failed lap check is retried this often, this many times (D-438), then it is the operator's.
 LAP_RETRY_S = 5.0
@@ -58,14 +59,14 @@ def tail(graph, segments: list):
 
 
 def lap_end_out_of_zones(active, plan: dict, request: dict, caps: dict, blocked, routing, max_turn_deg,
-                         hold_back) -> tuple[dict, dict, list] | None:
+                         traffic) -> tuple[dict, dict, list] | None:
     """D-517 3 (2026-10-09 signal SIM): a lap holds at its last place, so that place must be one a robot
-    can stand at outside every zone (``hold_back(segment)`` is not None). Else the lap end moves on along
+    can stand at outside every zone (``hold_back_m(traffic, segment)`` is not None). Else the lap end moves on along
     the next lap to the first place that is; the old end becomes the cycle's last via. ``(plan, request,
     lap route)``, unchanged when nothing moves; None when no place of the next lap will do."""
     graph = active[2]
     last = tail(graph, plan["segments"])
-    if last is None or hold_back(last) is not None:
+    if last is None or hold_back_m(traffic, last) is not None:
         return plan, request, route_key(plan["segments"])
     to, via = request["to"], list(request.get("via", ()))
     if not isinstance(to, str):
@@ -73,7 +74,7 @@ def lap_end_out_of_zones(active, plan: dict, request: dict, caps: dict, blocked,
     end = graph.arcs[arc_id(plan["segments"][-1])].point_at(plan["segments"][-1]["s_to"])
     lap, _hold = plan_again(active, end, request, caps, blocked, set(), routing, max_turn_deg)
     k = next((k for k, seg in enumerate((lap or {}).get("segments", ()))
-              if ends_at_place(graph, seg) and hold_back(seg) is not None), None)
+              if ends_at_place(graph, seg) and hold_back_m(traffic, seg) is not None), None)
     if k is None:
         return None
     joined = _joined(plan["segments"], [seg for seg in lap["segments"][:k + 1] if seg["s_to"] - seg["s_from"] > 1e-6])
@@ -87,6 +88,36 @@ def lap_end_out_of_zones(active, plan: dict, request: dict, caps: dict, blocked,
                             blocked, set(), routing, max_turn_deg)
     same = nxt is not None and {s["edge_id"] for s in nxt["segments"]} == {s["edge_id"] for s in joined}
     return plan, moved, route_key(nxt["segments"] if same else joined)
+
+
+def stop_points(active, plan: dict, request: dict, caps: dict, blocked, routing, max_turn_deg,
+                traffic) -> tuple[dict, dict, list, tuple[str, ...]]:
+    """D-517 3 (2026-10-09 signal SIM): no trip stops inside a site zone. A repeat trip's lap end moves on
+    to a place it can hold clear of zones (``lap_end_out_of_zones``); a trip that ends in a zone is refused
+    ``TRIP_STOP_IN_ZONE``, as is a lap with no such place. ``(plan, request, lap route, lap arcs)``."""
+    if not request.get("repeat"):
+        if plan["segments"] and hold_back_m(traffic, plan["segments"][-1]) != 0.0:
+            raise TripError(422, "TRIP_STOP_IN_ZONE", {"place": ends_at_place(active[2], plan["segments"][-1]),
+                                                       "repeat": False})
+        return plan, request, route_key(plan["segments"]), ()
+    moved = lap_end_out_of_zones(active, plan, request, caps, blocked, routing, max_turn_deg, traffic)
+    if moved is None:
+        to = request["to"]
+        raise TripError(422, "TRIP_STOP_IN_ZONE", {"place": to if isinstance(to, str) else None, "repeat": True})
+    plan, request, lap_route = moved
+    return plan, request, lap_route, lap_arcs(active, plan["segments"], request, caps, blocked, routing, max_turn_deg)
+
+
+def next_lap(active, end, request: dict, caps: dict, blocked, routing, max_turn_deg,
+             traffic) -> tuple[dict | None, dict | None]:
+    """D-517 2 ``plan_again`` for the next lap; D-517 3: one whose last place cannot be held outside every
+    zone is a failed lap check (``TRIP_STOP_IN_ZONE``), held at this lap's end."""
+    body, hold = plan_again(active, end, request, caps, blocked, set(), routing, max_turn_deg)
+    last = tail(active[2], body["segments"]) if body is not None else None
+    if last is None or hold_back_m(traffic, last) is not None:
+        return body, hold
+    return None, {"reason": "replan", "plan": None, "code": "TRIP_STOP_IN_ZONE",
+                  "detail": {"place": ends_at_place(active[2], last)}}
 
 
 def lap_due(live: LiveTrip, index: int, remaining: float, config) -> bool:

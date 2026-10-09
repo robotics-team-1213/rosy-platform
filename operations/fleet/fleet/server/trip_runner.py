@@ -25,8 +25,7 @@ import httpx
 from fleet.hub.hub import HubError
 from fleet.lane_route import STEP_M
 from fleet.routing.cost import LEFT, RIGHT, STOP
-from fleet.routing.execute import (advance_m, arc_id, ends_at_place, exit_segment, lane_action, plan_again,
-                                   replan_hold, route_key, turn_target, unsupported)
+from fleet.routing.execute import advance_m, arc_id, exit_segment, lane_action, replan_hold, turn_target, unsupported
 from fleet.server.trip_ports import (LaneJunctionPort, MapPose, MapPosePort, TripCapsPort, TripConfig,  # noqa: F401
                                      OPEN, LiveTrip, TripError, arc_newer, bend_fields, junction_fields, next_bend,
                                      pose_diagnostics, pose_view, record_bend_candidate)
@@ -36,7 +35,7 @@ from fleet.traffic.trip_authority import AuthoritySender
 from fleet.traffic.trip_lease import TripLease
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import (LAP_RETRIES, LAP_RETRY_S, carry_on, convoy_refusal, lap_arcs,  # noqa: F401
-                                    lap_due, lap_end_out_of_zones, lap_retry_due, tail)
+                                    hold_back_m, lap_due, lap_retry_due, next_lap, stop_points)
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger(__name__)
@@ -166,9 +165,9 @@ class TripRunner:
                              "line_follow_authority": getattr(caps, "line_follow_authority", False),
                              "line_follow_advice": getattr(caps, "line_follow_advice", False),
                              "lane_bend": caps.lane_bend}
-                plan, request, lap_route = self._stop_points(plan, row["request"], caps_view, repeat)
-                arcs = lap_arcs(self._store.active(), plan["segments"], request, caps_view,
-                                frozenset(self._blocked()), self._routing, self.config.max_turn_deg) if repeat else ()
+                plan, request, lap_route, arcs = stop_points(  # D-517 3: no stop inside a zone
+                    self._store.active(), plan, row["request"], caps_view, frozenset(self._blocked()), self._routing,
+                    self.config.max_turn_deg, self.traffic)
                 leader = (request.get("convoy") or {}).get("leader")
                 refused = leader and (self.convoy_refusal(robot_id, leader, arcs=arcs, segments=plan["segments"]) or (
                     self.authority.mode(caps) != "core" and ("TRIP_CONVOY_NO_AUTHORITY", {"leader": leader})))
@@ -203,23 +202,6 @@ class TripRunner:
                 self._describe(live)
             self._save(live)
             return live.view
-
-    def _stop_points(self, plan: dict, request: dict, caps_view: dict, repeat: bool) -> tuple[dict, dict, list]:
-        """D-517 3 (2026-10-09 signal SIM): no trip stops inside a site zone. A repeat trip's lap end moves
-        on to a place it can hold clear of zones (``lap_end_out_of_zones``); a trip that ends there is
-        refused (``TRIP_STOP_IN_ZONE``), as is a lap with no such place."""
-        graph = self._store.active()[2]
-        if repeat:
-            moved = lap_end_out_of_zones(self._store.active(), plan, request, caps_view, frozenset(self._blocked()),
-                                         self._routing, self.config.max_turn_deg, self.traffic.hold_back_m)
-            if moved is None:
-                raise TripError(422, "TRIP_STOP_IN_ZONE", {"place": request["to"] if isinstance(request["to"], str)
-                                                           else None, "repeat": True})
-            return moved
-        if plan["segments"] and self.traffic.hold_back_m(plan["segments"][-1]) != 0.0:
-            raise TripError(422, "TRIP_STOP_IN_ZONE", {"place": ends_at_place(graph, plan["segments"][-1]),
-                                                       "repeat": False})
-        return plan, request, route_key(plan["segments"])
 
     async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool):
         """D-494 start checks on the robot's capabilities; the caps, or ``TripError``."""
@@ -466,16 +448,14 @@ class TripRunner:
             resolver = (live.traffic or {}).get("resolver") or {}
             # D-517 5: a wait cycle; only before this place is instructed (review M1: a hold over a turn
             # CORE carries out would freeze ``_locate``), else the resolver's next period says human
-            # D-517 3: never a hold at a place a robot cannot stand at outside every zone; the next place
-            holdable = lambda: self.traffic.hold_back_m(live.segments[index]) is not None  # noqa: E731
             if (resolver.get("decision") == "replan" and live.view["hold"] is None and not last
                     and remaining <= self.config.arm_distance_m and not self._core_busy(live)
-                    and (live.sent is None or live.sent["index"] != index) and holdable()):
+                    and (live.sent is None or live.sent["index"] != index)):
                 self._replan(live, index, frozenset(resolver["blocked_edges"]))
             if not last and not live.replan_pending and self._needs_replan(live, index):
                 live.replan_pending = True
             if (live.replan_pending and live.view["hold"] is None and not last
-                    and remaining <= self.config.arm_distance_m and holdable()):
+                    and remaining <= self.config.arm_distance_m):
                 self._replan(live, index)
                 self._describe(live)
             if live.repeat and live.view["hold"] is None and lap_due(live, index, remaining, self.config):
@@ -550,8 +530,7 @@ class TripRunner:
                 return
             elif state not in ("armed", None, "idle", "waiting"):
                 return
-        # D-517 3: a hold stops short of its place where standing at it would be inside a zone
-        back = (self.traffic.hold_back_m(live.segments[index]) or 0.0) if live.view["hold"] is not None else 0.0
+        back = (hold_back_m(self.traffic, live.segments[index]) or 0.0) if live.view["hold"] else 0.0  # D-517 3: zone
         stop_after = min(max(remaining - back, 0.0), MAX_STOP_AFTER_M) if action == STOP else None
         expect = junction_fields(live, index, action, remaining, self._store.active(), self.config)
         arc = None  # D-520 1: only to a lane_arc robot, and only with the map_id
@@ -740,12 +719,8 @@ class TripRunner:
             graph = self._graph_for(live.view["map_version"])
             await self._caps_checks(robot_id, graph, segments[index:], True)
             await self._pose_checks(robot_id, graph, segments[index:])
-            body, hold = plan_again(self._store.active(), end, live.request, live.view["caps"] or {},
-                                    frozenset(self._blocked()), set(), self._routing, self.config.max_turn_deg)
-            last = tail(graph, body["segments"]) if body is not None else None
-            if last is not None and self.traffic.hold_back_m(last) is None:  # D-517 3: it would hold in a zone
-                body, hold = None, {"reason": "replan", "plan": None, "code": "TRIP_STOP_IN_ZONE",
-                                    "detail": {"place": ends_at_place(graph, last)}}
+            body, hold = next_lap(self._store.active(), end, live.request, live.view["caps"] or {}, frozenset(
+                self._blocked()), self._routing, self.config.max_turn_deg, self.traffic)
         except TripError as exc:
             body, hold = None, {"plan": None, "code": exc.code, "detail": exc.detail}
         if not live.open:
@@ -762,9 +737,9 @@ class TripRunner:
     def _replan(self, live: LiveTrip, index: int, closed: frozenset = frozenset()) -> None:
         """D-489 9: plan again from just before the next place; a changed route holds there.
         ``closed``: edges Fleet's resolver plans around (D-517 5), on top of ``blocked``."""
-        live.replan_pending = False
         segment = live.segments[index]
-        live.view["hold"] = replan_hold(
+        live.replan_pending = hold_back_m(self.traffic, segment) is None  # D-517 3: no hold in a zone; the next place
+        live.view["hold"] = None if live.replan_pending else replan_hold(
             self._store.active(), live.arc(index).point_at(max(segment["s_to"] - 0.01, segment["s_from"])),
             live.segments[index:], live.request, live.view.get("caps") or {}, frozenset(self._blocked()) | closed,
             {live.place(i) for i in range(index)}, live.view["map_version"], self._routing,

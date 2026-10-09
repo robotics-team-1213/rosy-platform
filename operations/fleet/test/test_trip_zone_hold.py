@@ -11,6 +11,7 @@ from fleet.routing.trip import PlanRequest, plan_trip
 from fleet.server.site_map_store import SiteMapStore
 from fleet.server.trip_ports import TripConfig
 from fleet.server.trip_runner import TripError, TripRunner
+from fleet.traffic.zone_hold import hold_back_m
 from test_blocks import _demo_map
 from test_lane_traffic import START_N, Fleet, _s_of, _ticks
 from test_routing import demo_site
@@ -66,7 +67,7 @@ def test_a_lap_ending_at_a_zone_corner_never_holds_inside_the_zone_and_releases_
     assert view["plan"]["places"][-1] == "NE" and view["hold"] is None
     unholdable = set()
     for i, seg in enumerate(live.segments):  # a hold stops clear of the zone, or never happens there
-        back = runner.traffic.hold_back_m(seg)
+        back = hold_back_m(runner.traffic, seg)
         if live.place(i) and back is None:
             unholdable.add(live.place(i))
         elif live.place(i):
@@ -86,7 +87,7 @@ def test_a_lap_ending_at_a_zone_corner_never_holds_inside_the_zone_and_releases_
     _ticks(runner, fleet)
     view = runner.view("a")
     assert (view["hold"]["reason"], view["hold"]["code"]) == ("lap", "TRIP_POSE_UNTRUSTED")
-    back = runner.traffic.hold_back_m(live.segments[tail])
+    back = hold_back_m(runner.traffic, live.segments[tail])
     assert back > 0 and fleet.p["a"].sent[-1] == ("stop", "NE", round(before - back, 3))  # short of NE
     # standing where that stop holds it: clear of the zone, and the zone is FREE again
     held_at = live.arc(tail).point_at(live.segments[tail]["s_to"] - back)
