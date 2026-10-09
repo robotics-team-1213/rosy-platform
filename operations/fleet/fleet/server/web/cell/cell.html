@@ -17,6 +17,7 @@
 </head>
 <body>
 <ui-shell grammar="procedure">
+  <a class="skip-link" href="#cell-main">본문으로 건너뛰기</a>
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <ui-topbar>
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b>Rosy Fleet</b><small id="fleet-name">사이트</small></ui-brand>
@@ -54,7 +55,15 @@
     <a href="/console/cell" aria-current="page">Cell</a>
   </nav>
   <ui-status id="estop-feedback" hidden></ui-status>
-  <main>
+  <main id="cell-main" tabindex="-1">
+    <nav class="task-nav" aria-label="Cell 작업 단계">
+      <a href="#recipe-heading">1 레시피</a>
+      <a href="#cell-heading">2 셀 설정</a>
+      <a href="#preview-heading">3 적재 계획</a>
+      <a href="#proposal-heading">4 작업 제안</a>
+      <a href="#mission-heading">5 승인·진행</a>
+      <a href="#saved-heading">저장된 문서</a>
+    </nav>
     <div class="cell-intro">
       <h1>Cell 작업 준비</h1>
       <ui-text id="cell-purpose">레시피와 셀 문서를 준비해 계획을 미리 본 뒤 작업을 제안합니다. 승인·진행 확인은 아래 5단계에서, 로봇 상태·예외 확인은 관제에서 합니다.</ui-text>

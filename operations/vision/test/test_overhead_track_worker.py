@@ -94,6 +94,9 @@ class _Ingest:
     def report_markers(self, source_id, corners_seen, robots_seen):
         self.reports.append((source_id, list(corners_seen), list(robots_seen)))
 
+    def report_calibration(self, source_id, record, map_id):
+        self.calibration = (source_id, record, map_id)
+
 
 def test_robot_marker_uses_approved_fit_when_corners_absent_even_during_blob_learning():
     client = _Client()
@@ -172,6 +175,20 @@ def test_the_approved_record_is_used_when_markers_are_missing(make_worker):
     assert [(d.x, d.y) for d in payload.detections] == [(1.2345, 0.4321), (2.5, 1.0)]
     assert detector.calls[0][1].image_size == (640, 360)
     assert detector.calls[0][0].captured_at == 99.75
+
+
+def test_the_read_record_is_handed_to_the_ingest_for_the_map_plane(make_worker):
+    """D-560: the ingest warps the map plane with the record tracking reads, no second client."""
+    worker, _ = make_worker(configs=[CONFIG])
+    asyncio.run(worker.refresh_config())
+    assert worker.ingest.calibration == ("ceiling_north", CONFIG["calibration"], "map_v2_fleet")
+
+
+def test_a_config_without_calibration_clears_the_ingest_record(make_worker):
+    worker, _ = make_worker(configs=[CONFIG, {**CONFIG, "calibration": None}])
+    asyncio.run(worker.refresh_config())
+    asyncio.run(worker.refresh_config())
+    assert worker.ingest.calibration == ("ceiling_north", None, "map_v2_fleet")
 
 
 def test_corner_markers_win_over_the_record(make_worker):

@@ -1,6 +1,7 @@
 # fleet logs
 
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
+
 2026-09-15 이전 이력은 [사이트 패브릭 계획](../../docs/plans/2026-09-14-site-middleware-role-fabric.md), [군집 대형 슬라이스 결과](../../docs/plans/2026-09-08-swarm-formation-slice-results.md)와 `git log -- src/fleet`를 본다.
 
 ## 2026-09-15 · uncommitted · docs(harness): start the fleet harness record
@@ -2908,3 +2909,11 @@
 - 변경: 네 Fleet 문서의 Rosy Fleet 이름표를 `/console` 링크로 연결. D-501 문서 탭과 비상 정지는 유지.
 - 근거: D-501 2항의 이름표 홈 링크와 UiBrand의 href 동작.
 - gate: SOURCE 변경. 브라우저·장치·현장 수용은 별도.
+
+## 2026-10-09 · uncommitted · uiux(fleet): 현장 지도·Cell 내부 단계 탐색
+
+- 변경: 현장 지도와 Cell에 본문 건너뛰기 및 단계 앵커를 추가하고, 넓은 화면에는 왼쪽 작업 탐색, 320px에는 두 열로 모든 단계를 노출했다. D-501의 네 문서 상단 탭과 D-493의 관제 지도 비율은 유지했다.
+- 증거: Playwright Chromium 148 정적 DOM/CSS 확인에서 두 화면의 320/1366px 가로 넘침 0, 모든 단계 링크와 건너뛰기 대상 존재. 실제 Fleet 서버·장치 상태를 포함한 G2/G3 증거는 별개다.
+- gate 변화: 없음. UI 전체 수용은 HOLD.
+- 결정: 없음.
+- 교훈: 좁은 화면에서 가로 스크롤만 두면 뒤 단계가 처음에 보이지 않아 두 열로 모두 노출했다.
