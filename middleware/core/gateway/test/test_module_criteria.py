@@ -80,6 +80,11 @@ ALLOWED = Counter({
     # absent values stay None and do not authorize motion.
     ("bridge/observation.py", "getattr", "services.state", '"map_id"'): 1,
     ("bridge/observation.py", "getattr", "msg", '"header"'): 1,
+    # Accepted (D-555): optional public link state on the injected FleetAgent; a double without
+    # the fields reads as armed / never relinked (boot behaviour). Decides only when SAF-003
+    # counts the link, never motion.
+    ("fleet_loss_wiring.py", "getattr", "fleet_agent", '"armed"'): 1,
+    ("fleet_loss_wiring.py", "getattr", "fleet_agent", '"relinked_at"'): 1,
 })
 
 

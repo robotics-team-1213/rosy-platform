@@ -107,6 +107,7 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
     def _lane_return_step(self, now, decision, bridge_state):
         c=self._config
         if self._mode is not LineFollowMode.CAMERA_LINE:
+            self._drop_pose_request('line_follow_inactive')  # D-546 5: OFF/driver_released ticks too
             return None
         if not c.recovery_local_enabled:
             return self._bridge_alone(now,decision,bridge_state)
@@ -156,6 +157,7 @@ class LaneReturnDecisionMixin(LaneBridgeMixin):
             turn_clear=(self.motion_admitted(now,0.,turn,'return')
                         and self.motion_admitted(now,0.,-turn,'return')),
             linear_limit=linear,angular_limit=angular))
+        self._note_pose_request(now,action,view)  # D-546 5
         if bridge is not None:
             return bridge  # D-468 only measured this tick; the bridge owns the twist.
         if action.phase=='tracking' and not action.recovered:

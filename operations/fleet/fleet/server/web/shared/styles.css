@@ -629,9 +629,10 @@ main {
 .queue-decision > .stuck-item { border-left-width: 1px; }
 
 /* D-407 판단 요청 — 큐 행의 펼침. 원인은 crit 태그, 답 다섯은 한 줄에서 접힌다. */
-.stuck-item { display: grid; gap: var(--space-2); padding: var(--space-3); background: var(--surface-raised);
+.stuck-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); padding: var(--space-3); background: var(--surface-raised);
   border: 1px solid var(--line-10); border-left: 4px solid var(--status-crit); border-radius: var(--radius-control); }
 .stuck-item.offline { border-left-color: var(--status-warn); }
+.stuck-item ui-tag { max-width: 100%; white-space: normal; line-height: var(--leading-copy); }
 .stuck-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .stuck-facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0; }
 .stuck-facts div { display: flex; gap: var(--space-1); align-items: baseline; }

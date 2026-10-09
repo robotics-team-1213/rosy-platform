@@ -361,7 +361,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
         if (action === "hub-unlink" && err?.detail?.code === "fleet_goal_active") {
           // D-555: forced revoke during a goal; the robot then loses the link and SAF-003 stops it.
           const forced = await dialogs.confirmIrreversible({
-            message: `"${row.robot_id}" 에 Fleet 목표가 진행 중입니다. 강제로 허브 연결을 해제하면 로봇은 링크를 잃고 SAF-003 정지(STOP/HOLD)가 걸립니다.`,
+            message: `"${row.robot_id}" 에 Fleet 목표가 진행 중입니다. 해제하면 로봇은 링크를 잃고 SAF-003 정지(STOP/HOLD)가 걸립니다. "${row.robot_id}" 의 허브 연결을 강제로 해제할까요?`,
             action: "강제 해제",
             opener: () => el("enrolled-list")?.querySelector(`li[data-robot-id="${CSS.escape(row.robot_id)}"] ui-button[data-action="hub-unlink"]`),
           });
