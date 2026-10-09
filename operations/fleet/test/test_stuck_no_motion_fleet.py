@@ -71,10 +71,7 @@ def test_site_config_names_enrolled_robots(tmp_path):
     from fleet.cli import _stuck_resolver_enrolled
 
     path = tmp_path / "fleet-site.yaml"
-    path.write_text("fleet:
-  stuck_resolver:
-    enrolled_robots: [rosy_40, rosy_41]
-",
+    path.write_text("fleet:\n  stuck_resolver:\n    enrolled_robots: [rosy_40, rosy_41]\n",
                     encoding="utf-8")
     assert _stuck_resolver_enrolled(SimpleNamespace(site_config=str(path))) == {"rosy_40", "rosy_41"}
     assert _stuck_resolver_enrolled(SimpleNamespace(site_config=None)) == frozenset()
