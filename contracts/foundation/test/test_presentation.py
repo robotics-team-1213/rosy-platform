@@ -137,3 +137,22 @@ def test_light_assist_is_the_illumination_lamp():
     screen = {"kind": fs.LIGHT, "row": "light"}
     record = pr.present(state=rs.READY, core=core(), screen=screen)
     assert record.lamp == "illumination" and record.status_text == "Light"
+
+
+def test_estop_failed_and_emergency_are_never_masked():
+    noisy = dict(caution=["line_follow_hold", "dock_failed"], recovery="retrace", nav_state="BLOCKED")
+    for mode in (None, "IDLE", "MANUAL", "NAVIGATION", "DOCKING"):  # a stale or unknown mode under a latch
+        record = both(rs.CAUTION, core(estop=True, robot_mode=mode, **noisy))[1]
+        assert (record.lamp, record.status_level, record.sound, record.reversing) == (
+            "emergency", pr.DANGER, "emergency", False)
+    for recovery in (None, "retrace", "return", "bridge"):
+        record = both(rs.READY, core(robot_mode="EMERGENCY", recovery=recovery, **{**noisy, "recovery": recovery}))[1]
+        assert (record.lamp, record.sound, record.reversing) == ("emergency", "emergency", False)
+        failed = both(rs.FAILED, core(estop=True, robot_mode="EMERGENCY", recovery=recovery,
+                                      caution=["dock_failed"]))[1]
+        assert (failed.lamp, failed.status_level, failed.sound) == ("failed", pr.DANGER, "failed")
+    # the files' view alone (CORE gone) also keeps EMERGENCY and FAILED on top
+    assert pr.present(state=rs.READY, robot_mode="EMERGENCY", core=None).lamp == "emergency"
+    assert pr.present(state=rs.FAILED, robot_mode="NAVIGATION", core=None).lamp == "failed"
+    # and CORE's unknown mode does not hide the files' EMERGENCY
+    assert pr.present(state=rs.READY, robot_mode="EMERGENCY", core=core(robot_mode=None)).lamp == "emergency"
