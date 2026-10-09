@@ -85,6 +85,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--enrolled-tls-bindings-file",
                          default=os.environ.get("ROSY_ENROLLED_TLS_BINDINGS_FILE") or None, type=Path,
                          help="public approved TLS bindings for existing encrypted enrollments")
+    console.add_argument("--hub-link-hostname", default=None,
+                         help="D-555: the site's approved <name>.local robots dial for the hub")
+    console.add_argument("--hub-link-ca", default=None, type=Path,
+                         help="D-555: public site CA PEM robots pin for the hub (pair with --hub-link-hostname)")
     console.add_argument("--vision-preview-secret-env", default=None,
                          help="dedicated Fleet-to-Vision preview lease signing secret")
     console.add_argument("--lan-camera-proxy", action="store_true",
@@ -339,6 +343,25 @@ async def run_formation(args: argparse.Namespace) -> None:
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
+def _hub_link(args) -> dict | None:
+    """D-555: what robots receive with a hub credential, or None when not configured."""
+    hostname, ca = getattr(args, "hub_link_hostname", None), getattr(args, "hub_link_ca", None)
+    if hostname is None and ca is None:
+        return None
+    from core_common.protocol.discovery_txt import HOSTNAME
+
+    hostname = (hostname or "").lower().rstrip(".")
+    if not HOSTNAME.fullmatch(hostname) or ca is None:
+        sys.exit("--hub-link-hostname <name>.local and --hub-link-ca go together")
+    try:
+        pem = ca.read_text(encoding="ascii")
+    except (OSError, UnicodeDecodeError):
+        sys.exit("--hub-link-ca is not a readable PEM file")
+    if len(pem) > 16384 or "-----BEGIN CERTIFICATE-----" not in pem:
+        sys.exit("--hub-link-ca must be one PEM certificate under 16 KiB")
+    return {"expected_hostname": hostname, "ca_pem": pem}
+
+
 def run_console(args: argparse.Namespace) -> None:
     """관제 서버를 연다. uvicorn 이 자기 루프를 돌리므로 여기는 async 가 아니다."""
     import uvicorn
@@ -484,9 +507,14 @@ def run_console(args: argparse.Namespace) -> None:
         # D-457: approved tracking calibrations live beside the sightings (memory without a DB).
         tracking_service = TrackingService(
             sighting_service.sources, calibrations=TrackingCalibrationStore(sightings_db))
+    hub_link = _hub_link(args)
+    # D-555: enrolled robots pair at runtime, so the route is up whenever that can happen.
+    enrolled_hub = (enrollment_store is not None and event_store is not None and bool(console_token)
+                    and (hub_link is not None
+                         or any(row.get("hub_digest") for row in enrollment_store.rows())))
     # The outbound CORE Agent route is enabled only for robots with a separate
     # pairing credential. REST-only console configurations remain unchanged.
-    hub = console.hub if pairing_configured else None
+    hub = console.hub if pairing_configured or enrolled_hub else None
     task_service = None
     if tasks_db is not None:
         from fleet.server.task_service import FleetTaskService
@@ -507,7 +535,8 @@ def run_console(args: argparse.Namespace) -> None:
         enrollment, roster = build_enrollment(
             console=console, task_service=task_service, sighting_service=sighting_service,
             enrollment_store=enrollment_store, robot_key=robot_key, robot_key_error=robot_key_error,
-            discovery=discovery, tls_file=getattr(args, "enrolled_tls_bindings_file", None))
+            discovery=discovery, tls_file=getattr(args, "enrolled_tls_bindings_file", None),
+            hub_link=hub_link if enrolled_hub else None)
     from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids
 
     try:
