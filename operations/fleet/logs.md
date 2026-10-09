@@ -2804,6 +2804,12 @@
 - 변경: `--mission-api`는 `--users-file` 대신 살아 있는 개발 연결 모드(D-473)로도 시작한다. 개발 세션은 이미 이름 있는 운용자다.
 - 증거: test_cli.py.
 - gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.
+
+## 2026-10-09 · uncommitted · fix(fleet): 후진 중 차로 여유 감시 유지
+
+- 변경: 일방 차로에서 후진 복구 방향도 같은 물리 차로에 투영한다. 양방향 차로의 진행 방향별 호 선택과 차로 밖 UNKNOWN은 유지한다. Fleet 감시 판정만 바꾸며 로봇 명령은 보내지 않는다.
+- 증거: 모델 PC에서 수정 전 2 failed/9 passed, 수정 후 차로 판정·감시 20 passed, `known_failures.py` 0 NEW (`X:/DevTemp/fleet-reverse-lane-{red,green2}/run-1.txt`).
+- gate 변화: SOURCE/LOCAL 회귀 근거. D-511 M1/M2, 현장 지도 자세·Rosy Cam·실물 주행 수용은 아직 HOLD.
 ## 2026-10-09 · uncommitted · fix(fleet): 움직이는 경로는 이름 있는 운영자, 멈춤은 열림 (D-540 9)
 
 - 변경: 목표·차선 주행 선택(`OFF` 제외)·`/route`·LED 찾기·막힘 `RESUME`/`BACK_AND_RETRY`/`MANUAL`과 claim·대형 시작/변경/재개·물리 신호 명령(`all_red`/`flash_red` 제외)·시작점 쓰기·`/do`(멈춤 동사만인 요청 제외)는 `require_named_operator`. 공유 토큰·루프백 `site-console`은 403 `OPERATOR_IDENTITY_REQUIRED`. 비상 정지·전체 취소·로봇 취소·작업 취소·대형 해제·막힘 `WAIT`/`ABORT`·trip 취소(이전엔 이름 필요)는 어느 운영자에게나 열림. 화면은 같은 조작을 `reason="이름 있는 운영자 로그인이 필요합니다"`로 잠근다. API Ref v1.156.
@@ -2835,4 +2841,10 @@
 
 - 변경: main이 v1.158(D-526)·v1.159(D-548)를 먼저 썼으므로 위 항목들의 API Ref 번호는 v1.160이다. 리뷰 승인 뒤 한 커밋으로 합치고 main 병합.
 - 증거: `rosy_harness.py lint`, 모델 PC 시험은 보고에.
+- gate 변화: 없음.
+
+## 2026-10-09 · uncommitted · docs(api): D-540 9 권한 변경은 v1.161
+
+- 변경: main이 v1.160을 D-550 10(목표 임대)에 먼저 썼으므로 D-540 9 API Ref 번호는 v1.161이다. main 병합.
+- 증거: `rosy_harness.py lint`.
 - gate 변화: 없음.

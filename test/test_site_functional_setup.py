@@ -18,7 +18,7 @@ CONFIG={'repo':'test/repo','health_url':'https://site.example.invalid/healthz','
 
 def test_plan_adds_viewer_preserves_existing_and_selects_enrolled_ids():
  users=copy.deepcopy(USERS);cfg=copy.deepcopy(CONFIG)
- next_users,next_config=module().build_plan(users,cfg,['robot-b','robot-a'],['camera-a'],'b'*64,'/etc/rosy/site/secrets/health.token')
+ next_users,next_config=module().build_plan(users,cfg,['robot-b','robot-a'],['camera-a'],'b'*64,'/etc/rosy/site-secrets/health.token')
  assert users==USERS and cfg==CONFIG
  assert next_users['users'][0]==USERS['users'][0]
  assert next_users['users'][1]['role']=='viewer'
@@ -33,11 +33,11 @@ def test_plan_adds_viewer_preserves_existing_and_selects_enrolled_ids():
  {'cfg':{**CONFIG,'functional_checks':[{'path':'custom','token_file':'existing','required_ids':['x']}]}}
 ])
 def test_plan_refuses_existing_principal_digest_collision_and_local_check(changes):
- with pytest.raises(ValueError):module().build_plan(changes.get('users',USERS),changes.get('cfg',CONFIG),['r'],['s'],changes.get('digest','b'*64),'/etc/rosy/site/secrets/health.token')
+ with pytest.raises(ValueError):module().build_plan(changes.get('users',USERS),changes.get('cfg',CONFIG),['r'],['s'],changes.get('digest','b'*64),'/etc/rosy/site-secrets/health.token')
 
 def test_idempotent_plan_does_not_add_duplicate_user():
- m=module();users,cfg=m.build_plan(USERS,CONFIG,['r'],['s'],'b'*64,'/etc/rosy/site/secrets/health.token')
- users2,cfg2=m.build_plan(users,cfg,['r'],['s'],'b'*64,'/etc/rosy/site/secrets/health.token')
+ m=module();users,cfg=m.build_plan(USERS,CONFIG,['r'],['s'],'b'*64,'/etc/rosy/site-secrets/health.token')
+ users2,cfg2=m.build_plan(users,cfg,['r'],['s'],'b'*64,'/etc/rosy/site-secrets/health.token')
  assert users2==users and cfg2==cfg
 
 

@@ -27,6 +27,10 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     if (presenceInFlight) return;
     presenceInFlight = true;
     try {
+      // D-550 10: operator goals' leases are renewed only while a visible operator console says so.
+      if (isOperator() && !document.hidden) {
+        await call("/api/fleet/goal-lease/presence", { method: "POST" }).catch(() => {});
+      }
       // D-525 4: a virtual manual green lasts while this console is open and visible.
       if (isOperator() && !document.hidden && (view.traffic?.signals || []).length) {
         await call("/api/fleet/traffic/signals/presence", { method: "POST" }).catch(() => {});
