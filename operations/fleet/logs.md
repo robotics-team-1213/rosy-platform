@@ -2995,3 +2995,9 @@
 - Change: while CORE's arc is running, retain its armed end-place instruction if Fleet map localization has advanced to the next segment. A hold STOP still takes priority.
 - Evidence: D-520 handshake and the 2026-10-09 U2 SE-to-NE early replacement that ended in arc_mismatch. Regression tests cover the early crossing, next instruction after consumption, and hold STOP.
 - Gate: docs/validation/lane-arc-end-guard-2026-10-10/result.md. Isolated U-Net SIM reached the destination twice, but ring_n sampled body margin crossed the outer paint centre in 18/44 and 27/45 samples. Lane containment and field driving remain HOLD.
+
+## 2026-10-10 · uncommitted · uiux(fleet): 좁은 지도 패널에서 전체 지도 가독성 확대
+
+- 변경: 활성 지도 캔버스의 최소 높이를 데스크톱 28rem, 30rem 미만 화면에서는 최대 30rem·150vw로 높였다. 지도 좌표·축척 계산과 비상정지 동작은 그대로다.
+- 증거: 현장 PC Chromium에서 설치 화면의 CSS 응답에 후보 규칙을 적용해 1262×632 지도 높이 344→448px, 320×800 높이 352→480px, 두 폭 모두 가로 넘침 0을 확인했다. 후보 스크린샷은 X:/DevTemp/rosy-map-large-1262.png, rosy-map-large-320.png에 보관한다.
+- gate 변화: 후보 화면 미리보기만 확인. 새 이미지 설치와 실제 설치 화면 확인 전 FIELD 수용은 보류한다.
