@@ -574,7 +574,8 @@ developmentToken($('console-token').value).then(token => {
   if (token) { $('console-token').value = token; $('token-access').hidden = true; $('token-save').click(); }
   // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
   else loginForm.refresh(true).then(cookie => {
-    if (cookie || stored) $('token-save').click(); else showSignedOut();
+    if (cookie || stored) $('token-save').click();
+    else if (!state.role && state.loadState === 'idle') showSignedOut();  // not if someone connected meanwhile
   });
 }).catch(() => {});
 // D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.

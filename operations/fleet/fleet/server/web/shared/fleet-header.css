@@ -103,7 +103,8 @@ ui-topbar input[type="checkbox"] { width: auto; }
   }
   ui-topbar ui-brand { container-type: inline-size; }
   #clock { font-size: var(--text-micro); }
-  #estop { align-self: stretch; padding-inline: var(--space-2); gap: var(--space-1); }
+  /* 두 줄 높이를 늘여 채우지 않는다 — 문서마다 줄 높이가 1–2px 달라도 정지 크기는 같다(D-540 2). */
+  #estop { align-self: center; padding-inline: var(--space-2); gap: var(--space-1); }
   #estop .ui-icon { width: var(--space-5); height: var(--space-5); }
   .topbar-extra { grid-row: 3; }
 }
