@@ -98,6 +98,13 @@ class HttpLaneJunction:
         """D-551: ``POST /api/v1/line-follow/advice`` (``trip_advice``)."""
         return await self._client(robot_id).line_follow_advice(body)
 
+    async def trip_lease(self, robot_id: str, body: dict) -> dict:
+        """D-541 7: ``PUT /api/v1/trip-lease`` with Fleet's own robot token (``fleet.traffic.trip_lease``)."""
+        return await self._client(robot_id).trip_lease(body)
+
+    async def trip_lease_release(self, robot_id: str, lease_id: str) -> dict:
+        return await self._client(robot_id).trip_lease_release(lease_id)
+
     async def line_follow_mode(self, robot_id: str) -> Optional[str]:
         mode = (await self._client(robot_id).line_follow()).get("mode")
         return mode if isinstance(mode, str) else None

@@ -2861,6 +2861,13 @@
 - 증거: `rosy_harness.py lint`.
 - gate 변화: 없음.
 
+## 2026-10-09 · uncommitted · feat(fleet): D-541 7 Fleet trip lease holder (Safety-Review)
+- 변경: 새 `fleet/traffic/trip_lease.py` `TripLease`. 사이트 설정 `fleet.trip_lease_required`(기본 false)·`fleet.trip_lease_ttl_s`(기본 5, 1–10, `traffic/config.py`). 참이면 trip 시작이 pose 검사 뒤 `PUT /api/v1/trip-lease`를 연다(trip마다 새 uuid `lease_id`). 능력 `trip_lease`가 없으면 422 `TRIP_LEASE_UNSUPPORTED`, CORE 거절은 `TRIP_ROBOT_LEASED`·`TRIP_ROBOT_MANUAL`·`CALIBRATION_ACTIVE`·`TRIP_LEASE_REFUSED`. 그 뒤 시작 거절은 lease를 놓는다. 주기마다 자기 슬롯에서 renew(`trip_authority`와 같은 꼴). 404·409·그 밖 4xx·`renewed:false`·`ttl_s` 동안 확인된 renew 없음 → `stopped`/`lease_lost`(`detail.lease_reason`, `lease_by`), 자유 구간만 navigation cancel, 다시 열지 않음. 끝마다 정지 뒤 `DELETE`. `RobotApiError.detail`, `HttpRobotClient.trip_lease*`. 설정이 참이면 관제 토큰이 로봇 REST 토큰과 같을 때 app 시작 거절(D-541 1 주인 = 그 토큰). 관제 trip 줄에 `CORE 점유 중`과 끝 이유. API Ref v1.162.
+- 결정: 설정 false면 lease를 열지 않는다(계획 되돌리기 줄 "현장 설정 false(lease를 열지 않음)"과 과제 지시를 따름). D-541 7의 "능력 없는 로봇: 설정이 참이면 거절" 문장만으로는 false일 때 지원 로봇에 여는지가 열려 있다.
+- 증거: 모델 PC `operations/fleet/test/` + `test/architecture/test_module_structure.py` 2971 passed / 131 skipped, known_failures 0 new. 새 `test_trip_lease.py` 22개(커밋 c0d7295a2에서 수집 실패 = 구현 전 실패).
+- 크기: trip_runner.py 826(판정 686 + 150), fleet 46931(46866 + 150), fleet/traffic 1653(1509 + 150). 판정은 고치지 않았다.
+- gate 변화: SOURCE. SIM(Fleet kill → 5 s 안 IDLE)·DEVICE(Pilot 넘겨받기)·현장 설정 true는 열림.
+
 ## 2026-10-09 · uncommitted · fix(fleet): 관제 카메라 추적 표시가 1초마다 깜박이지 않게 한다
 - 변경: console.js가 `/api/fleet/tracking`을 STATE_MS(1 s) 대신 TRACKING_MS(400 ms)마다 읽는다. 표시 수명(D-457 6: 최대 1 s − 서버 age − 요청 지연)은 그대로
 - 원인: 2026-10-09 현장(site-54057e6872f3) 콘솔에서 "추적 중"과 "위치 수명 만료"가 번갈아 떴다. 1 s 폴링이면 다음 응답이 항상 수명 뒤에 와 표시가 매 주기 끊긴다(현장 폴링 간격 0.34–1.47 s 측정)

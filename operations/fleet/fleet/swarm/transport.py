@@ -33,12 +33,13 @@ _missing_invalid_status_logged = False
 class RobotApiError(Exception):
     """로봇이 4xx/5xx 를 돌려줬다. `code` 는 ERR-101 본문의 것, 없으면 `HTTP_<status>`."""
 
-    def __init__(self, robot_id: str, status: int, code: str, message: str) -> None:
+    def __init__(self, robot_id: str, status: int, code: str, message: str, detail: Optional[dict] = None) -> None:
         super().__init__(f"{robot_id}: {code} ({status}) {message}")
         self.robot_id = robot_id
         self.status = status
         self.code = code
         self.message = message
+        self.detail = detail  # ERR-101 ``detail`` when it is an object (D-541: why a trip lease ended)
 
 
 def _invalid_status_class():
@@ -232,14 +233,15 @@ class HttpRobotClient:
                 raise RobotApiError(self.robot_id, resp.status_code, "BAD_RESPONSE",
                                     f"expected a JSON object, got {type(data).__name__}")
             return data
-        code, message = f"HTTP_{resp.status_code}", resp.text
+        code, message, detail = f"HTTP_{resp.status_code}", resp.text, None
         try:
             err = resp.json().get("error") or {}
             code = str(err.get("code") or code)
             message = str(err.get("message") or message)
+            detail = err.get("detail") if isinstance(err.get("detail"), dict) else None
         except (ValueError, AttributeError):
             pass
-        raise RobotApiError(self.robot_id, resp.status_code, code, message)
+        raise RobotApiError(self.robot_id, resp.status_code, code, message, detail)
 
     async def _get(self, path: str) -> dict:
         return self._check(await self._http.get(path, headers=self._headers()))
@@ -318,6 +320,14 @@ class HttpRobotClient:
     async def line_follow_authority(self, body: dict) -> dict:
         """D-517 4: one movement authority ``{authority_id, leg_id, pose_stamp, until_m, ttl_s}``."""
         return await self._post("/api/v1/line-follow/authority", body)
+
+    async def trip_lease(self, body: dict) -> dict:
+        """D-541 1: open or renew the trip lease ``{lease_id, trip_id, holder, operator_name, ttl_s}``."""
+        return self._check(await self._http.put("/api/v1/trip-lease", json=body, headers=self._headers()))
+
+    async def trip_lease_release(self, lease_id: str) -> dict:
+        """D-541 1: the owner's normal end of its trip lease."""
+        return self._check(await self._http.delete(f"/api/v1/trip-lease/{lease_id}", headers=self._headers()))
 
     async def line_follow_advice(self, body: dict) -> dict:
         """D-551: one signal advice ``LineAdviceRequest`` (display only, never a permission)."""
