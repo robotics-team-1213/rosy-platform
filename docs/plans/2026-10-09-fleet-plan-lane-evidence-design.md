@@ -29,6 +29,12 @@
 
 ## 구분 실험과 통과선
 
+### 현재 기록 경로에서 확인한 빈칸 (2026-10-09)
+
+Fleet `GET /api/fleet/robots/{robot_id}/map-pose`는 `map_id`, `odom_stamp`, 관측 나이와 오돔 추측 거리를 읽을 수 있다. 반면 trip에 보관하는 `pose_view`는 위치·방향을 반올림하고 `map_id`·`odom_stamp`를 빼므로, trip 기록만으로 pivot의 Fleet 자세를 CORE 오돔·영상 프레임에 재결합할 수 없다. CORE Pilot 녹화와 D-379 학습 job도 Fleet 지도 자세를 동일 시각의 영상 메타데이터로 묶는 경로가 아니다. D-546 위치 요청은 길을 잃은 뒤 판정을 구하는 복구 경로이며 호 진입 중 연속 보정의 오차 상한은 주지 않는다.
+
+현장 계측은 기존 읽기 API에서 **같은 로봇·활성 `map_id`·`odom_stamp`와 각 HTTP 조회 전후 시각**을 원본 그대로 보존하고, Rosy Cam sighting의 `captured_at`·source·quality 및 영상 프레임 시각을 별도 기록과 결합해야 한다. 조회 시각만 같은 샘플을 같은 센서 시각으로 취급하지 않는다. 누락·시각 역전·지도 불일치가 있으면 그 구간은 판정 불가로 남긴다. 독립 측정 자세와 차체·정지 거리 계측을 더하기 전에는 Fleet의 `LOCALIZED` 상태나 trip의 휴리스틱 `expect_tol_m`을 횡방향·방향 오차 상한으로 승격하지 않는다.
+
 | 단계 | 입력과 비교 | 통과 기준 |
 |---|---|---|
 | 계측 | 같은 pivot의 Fleet 지도 자세, CORE odom/TF, 독립 Rosy Cam 또는 LiDAR 벽 자세와 영상 시각; 바닥선/벽 provenance, 카메라 외부 보정, 카펫 회전 응답, 차체 여유·정지 거리 | 지도↔odom 방향·옆 오차의 상한과 지연을 수치로 제시. 없는 값은 unknown |
