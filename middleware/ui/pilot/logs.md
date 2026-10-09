@@ -790,6 +790,12 @@
 - 변경: Pilot 주행→0 속도·IDLE 요청→실제 CORE Console 지도 문서의 인증 인계를 한 브라우저 탭에서 검증한다. 쿼리와 지도 없음 상태를 보존한다.
 - 증거: [Pilot→Robot Console 연속 화면](../../../docs/validation/uiux-pilot-console-continuity-2026-10-09/result.md). 2000·390px 전환 전후 캡처, 관련 브라우저 4 passed, `known_failures.py` 0 NEW.
 - gate 변화: LOCAL 사용자 흐름 근거 보강. 설치 앱·실제 정지 readback·지도/SLAM·전체 G2/G3·DEVICE/FIELD는 HOLD.
+
+## 2026-10-09 · uncommitted · Pilot 브라우저 시험의 개발 토큰 출처 정리
+
+- 변경: 운전 화면 시험은 dev_server의 토큰을, 실제 CORE 연계 시험은 `rosy_dev_auth.yaml`의 operator 토큰을 직접 사용한다. 시험 코드에 같은 값을 다시 적지 않는다.
+- 증거: 공개 저장소 비밀값 검사와 Pilot 시험 수집·관련 실행으로 확인한다.
+- gate 변화: 없음. 실제 장치 인증이나 주행 수용의 증거가 아니다.
 ## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다
 - 실기(태블릿 Gboard 한국어): 코드가 한글로 바뀌어 입력됐고, 키보드가 "승인 코드 확인" 버튼을 가렸다. 입력칸을 `VISIBLE_PASSWORD`(라틴 배열)로 바꾸고 코드 알파벳만 남기는 필터, 키보드 완료 키로 보내기를 넣었다. 연결 기록을 지운 뒤 옛 실패 문구가 남던 것을 "기록을 지웠습니다"로 바꾸고, 승인 폐기(401/403/409)도 만료처럼 "다시 승인 요청" 대화상자를 연다. 코드 거절은 클래스·HTTP 상태만 로그에 남긴다.
 
