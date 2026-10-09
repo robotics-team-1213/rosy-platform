@@ -69,4 +69,4 @@ A는 몇십 분, B는 하루 내내 걸렸다. 차이는 코드 품질이 아니
 - 카드: `.claude/skills/rosy-fast-field-test/SKILL.md`, `.claude/skills/rosy-release-push/SKILL.md`, `.claude/skills/rosy-land-on-main/SKILL.md`
 - [학습한 출력이 런타임에 실제로 쓰이는지부터 확인한다](check-the-runtime-consumes-a-learned-output-before-training-it-2026-10-10.md) — 같은 날의 짝 교훈. 소비 경로가 없으면 포인터 교체는 효과가 없다.
 - [pre-push가 남의 미푸시 커밋으로 빨개진다](prepush-gate-red-from-other-sessions-unpushed-commits-2026-10-10.md)
-- [D-592](../../adr/D-592-drivable-steering-field-test-pc-loop.md), D-597(drivable keep 조향 소스, 브랜치 `feat/drivable-keep-steer`), [D-553](../../adr/D-553-cd-speed-parallel-build-and-test-pcs.md), [D-584](../../adr/D-584-tests-never-run-on-operator-laptop.md), [D-548](../../adr/D-548-device-dev-mode-marker.md)
+- [D-592](../../adr/D-592-drivable-steering-field-test-pc-loop.md), [D-597](../../adr/D-597-drivable-keep-steering-source.md), [D-553](../../adr/D-553-cd-speed-parallel-build-and-test-pcs.md), [D-584](../../adr/D-584-tests-never-run-on-operator-laptop.md), [D-548](../../adr/D-548-device-dev-mode-marker.md)
