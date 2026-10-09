@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · fix(vision): D-539 운영자 재학습 배경을 재시작 뒤에도 쓴다
 - 2026-10-08 · uncommitted · feat(vision): D-472 LED 점멸 검출과 Fleet 판정
 - 2026-10-08 · uncommitted · refactor(vision): D-513 7 화면 회전 키 제거
 - 2026-10-08 · uncommitted · feat(vision): D-513 7 화면 회전 키 허용
 - 2026-10-07 · uncommitted · fix(vision): 직선 차로를 원본 해상도 경계 중심에 맞춘다
-- 2026-10-07 · uncommitted · fix(vision): 도로 경계와 흰색 무늬를 구분하고 ROI 가장자리 연결 유지
