@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · feat(fleet): site map robot positions, trip panel removed (D-540 (e))
 - 2026-10-09 · uncommitted · fix(fleet): D-560 S2 리뷰 반영
 - 2026-10-09 · uncommitted · feat(fleet): Rosy Cam 지도 평면 영상을 받아 그대로 그린다 (D-560 S2)
 - 2026-10-09 · uncommitted · uiux(fleet): 현장 지도·Cell 내부 단계 탐색
 - 2026-10-09 · uncommitted · fix(uiux): Fleet 이름표 홈 이동
-- 2026-10-09 · uncommitted · feat(fleet): trips from the console robot card (D-540 (d))
