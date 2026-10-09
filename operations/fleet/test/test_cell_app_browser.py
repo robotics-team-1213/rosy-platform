@@ -259,6 +259,29 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
     expect(page.locator("#notice")).to_contain_text("운영자 계정으로 접속해")
 
 
+def test_cell_explains_work_and_unconfigured_service(browser_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = browser_site
+    expect(page.locator("#cell-purpose")).to_contain_text("레시피와 셀 문서를 준비")
+    expect(page.locator("#cell-purpose")).to_contain_text("5단계")
+    page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(
+        status=503, json={"detail": {"code": "CELL_APP_UNCONFIGURED"}}))
+    open_token_access(page)
+    page.locator("#console-token").fill("operator-secret")
+    page.locator("#token-save").click()
+    expect(page.locator("#notice")).to_contain_text("Cell 서비스 구성을 확인")
+    expect(page.locator("#saved-status")).to_contain_text("Cell 서비스 구성을 확인")
+    assert "CELL_APP_UNCONFIGURED" not in page.locator("main").inner_text()
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        Path(output).mkdir(parents=True, exist_ok=True)
+        for width, height in ((1440, 900), (390, 844)):
+            page.set_viewport_size({"width": width, "height": height})
+            page.evaluate("window.scrollTo(0, 0)")
+            page.screenshot(path=str(Path(output) / f"fleet-cell-purpose-{width}x{height}.png"))
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+
+
 @pytest.mark.parametrize("denial,notice", [(401, "토큰"), (403, "운영자 토큰을 확인하고 다시 접속하세요")])
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice, width, height):
