@@ -535,15 +535,6 @@ SIZE_VERDICTS = {
         "connection-mode/session parsing on further growth. Previously measured at 608 after D-473. "
         "The 600-line ceiling and allowance are unchanged",
     ),
-    "fleet/fleet/server/web/shared/styles.css": (
-        809,
-        "accept: the Fleet console page stylesheet crossed the 800 web ceiling (measured 809) through "
-        "2026-10-06 UI/UX layout fixes (uniform peer widths, E-stop/cancel feedback placement, phone "
-        "server-loss state, formation resume). It stays the one token-only stylesheet of the console page "
-        "owner and adds no palette or runtime owner. Re-judge as split, with a dated Fleet item added to "
-        "docs/plans/2026-10-04-ui-release-and-live-refinement.md, before any further growth past 809. "
-        "Web ceiling and growth allowance unchanged",
-    ),
     "ui/face/emotion/info_screen.py": (
         602,
         "accept: the LCD info-screen renderer crossed 600 lines (measured 602) when the 2026-10-06 "
