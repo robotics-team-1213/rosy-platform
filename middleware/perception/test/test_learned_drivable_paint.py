@@ -8,7 +8,7 @@ import pytest
 from control.sensing.perception.lane_keep import LaneKeeper, clean_learned_mask
 from control.sensing.perception.lane_keep_lines import PAINT_HALF_WIDTH_M
 from control.sensing.perception.learned.drivable_paint import (
-    boundary_paint, drivable_target, lateral_px_per_m, right_branch)
+    boundary_paint, drivable_target, lateral_px_per_m, right_branch, right_exit_way)
 from control.sensing.perception.learned.lane_mask import preprocess, uncrop_logits
 from control.sensing.perception.learned.manifest import ClassSpec, ManifestError, load_manifest
 from control.sensing.perception.learned.paint_worker import LearnedPaintWorker
@@ -59,6 +59,40 @@ def test_right_branch_starts_on_the_road_under_the_robot():
     region[15:, 0:5] = True                                  # another strip, bottom left, not joined
     way, branches = right_branch(region)
     assert branches == 1 and way[12, 15:25].all() and not way[:, 0:5].any()
+
+
+def test_a_t_junction_opening_sideways_turns_right():
+    # Replay 2026-10-10 (docs/validation/drivable-branch-replay-2026-10-10): at a T the crossbar opens
+    # to both frame sides and no row splits, so the row scan saw one branch and went straight.
+    labels = np.zeros((240, 320), np.int64)
+    labels[150:, 120:200] = 5                                # the robot's own road
+    labels[125:150, :] = 5                                   # the crossing road, both ways out of view
+    labels[118:125, :] = 1                                   # its far line
+    way, info = drivable_target(_logits(labels), CLASSES, ignore_top=112)
+    assert info["reason"] == "ok" and info["branches"] == 2
+    assert way[135, 300:].all() and not way[135, :20].any() and way[220, 120:200].all()
+
+
+def test_a_ring_entry_takes_the_right_branch_behind_a_model_hole():
+    # Replay 2026-10-10, 8kcn at a ring entry: the ring road to the right showed only beyond a patch
+    # the model left unlabelled, joined to the road ahead near the top of the view.
+    region = np.zeros((240, 320), bool)
+    region[160:, 100:220] = True                             # own road
+    region[125:160, 0:200] = True                            # ring road going left in front of the island
+    region[112:125, 180:] = True                             # far rows joining to the right
+    region[112:150, 260:] = True                             # ring road going right, behind the hole
+    way, exits = right_exit_way(region, 112)
+    assert exits == 2 and way[140, 280:].all() and not way[140, :40].any()
+
+
+def test_a_ragged_far_edge_and_an_open_floor_are_one_exit():
+    region = np.zeros((240, 320), bool)
+    region[112:, 60:260] = True
+    region[112:116, 150:175] = False                         # a notch in the far edge
+    assert right_exit_way(region, 112) == (None, 1)
+    region = np.zeros((240, 320), bool)
+    region[112:, 40:] = True                                 # the 9dfk ring exit of D-592: one open floor
+    assert right_exit_way(region, 112) == (None, 1)
 
 
 def test_crosswalk_paint_on_the_road_does_not_cut_the_way():
