@@ -18,3 +18,5 @@ D-440 ADR (per-device power policy) is reserved on feat/device-power-policy; imp
 D-448 Unused: model-PC code update ADR was renumbered to D-446 during concurrent work
 D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
 D-556 reserved in another active branch (Fresh odom veto for carried one-sided lane boundary)
+D-558 reserved in another active branch (feat/route-context-core-publish); D-560 lands independently
+D-559 reserved in another active branch (feat/route-context-core-publish); D-560 lands independently
