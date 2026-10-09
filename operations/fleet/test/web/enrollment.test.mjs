@@ -75,8 +75,12 @@ test("row text follows the register state", () => {
   assert.ok(rowText({ state: "active", lifetime_shortened: true }).some((l) => /관리자 세션의 만료/.test(l)));
   assert.ok(rowText({ state: "active", hold: "conflict" }).some((l) => /신원 충돌/.test(l)));
   assert.ok(rowText({ state: "active" }).includes("수집: REST"));
-  assert.ok(rowText({ state: "active", hub_linked: true, hub_host: "site.local", hub_online: true })
-    .includes("허브 연결됨(site.local) · 수집: 허브"));
+  assert.ok(rowText({ state: "active", hub_linked: true, hub_host: "site.local", hub_state: "online" })
+    .includes("허브 연결(site.local) · 수집: 허브"));
+  assert.ok(rowText({ state: "active", hub_linked: true, hub_host: "site.local", hub_state: "checking" })
+    .includes("허브 연결(site.local) · 확인 중 · 수집: REST"));
+  assert.ok(rowText({ state: "active", hub_linked: true, hub_host: "site.local", hub_state: "failed" })
+    .includes("허브 연결 실패(site.local) · SAF-003 적용 · 수집: REST"));
 });
 
 test("discovery labels include enrolled and the renamed event-link state", () => {

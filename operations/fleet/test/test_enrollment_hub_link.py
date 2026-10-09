@@ -265,3 +265,26 @@ def test_unlink_clears_fleet_first_even_when_the_tls_binding_fails(tmp_path, bin
     assert result["robot_cleared"] is False and client.deletes == 0
     assert store.get("rosy_09")["hub_digest"] is None
     assert hello(console, token).payload["code"] == "PAIRING_INVALID"
+
+
+def test_forced_unlink_revokes_during_a_goal_and_hub_state_follows_the_grace(tmp_path):
+    from core_common.config import FLEET_LINK_ARM_GRACE_S
+
+    service, _, console, store = enrolled(tmp_path)
+    asyncio.run(service.link_hub("rosy_09", principal_id="alice"))
+    client = console._clients["rosy_09"]
+    token = client.puts[-1]["pairing_token"]
+    listed = lambda: next(r for r in service.listing()["robots"] if r["robot_id"] == "rosy_09")
+    assert listed()["hub_state"] == "checking"
+    service._clock.now += FLEET_LINK_ARM_GRACE_S
+    assert listed()["hub_state"] == "failed"
+    assert hello(console, token).type is EnvelopeType.WELCOME
+    assert listed()["hub_state"] == "online"
+
+    client.goal = True
+    with pytest.raises(EnrollmentError, match="Fleet goal"):
+        asyncio.run(service.unlink_hub("rosy_09", principal_id="alice"))
+    result = asyncio.run(service.unlink_hub("rosy_09", principal_id="alice", force=True))
+    assert result["hub_linked"] is False and store.get("rosy_09")["hub_digest"] is None
+    assert hello(console, token).payload["code"] == "PAIRING_INVALID"
+    assert store.audit_rows()[-1]["outcome"].startswith("forced_")

@@ -96,8 +96,8 @@ class FleetAgent:
         #: time.monotonic() of the last message received from the hub, or None.
         self.last_rx: float | None = None
         fleet_cfg = (config or {}).get("fleet") or {}
-        #: D-555: unarmed from a relink to the next WELCOME (SAF-003); why boot used a default.
-        self.armed, self.config_fallback = True, None
+        #: D-555: unarmed from a relink (relinked_at) to WELCOME or grace (SAF-003); boot defaults.
+        self.armed, self.relinked_at, self.config_fallback = True, None, None
         try:
             self.reply_timeout_s = heartbeat_reply_timeout_s(fleet_cfg)
         except ValueError:
@@ -196,7 +196,7 @@ class FleetAgent:
         """D-555: swap `config["fleet"]` (SAF-003 reads it) and restart only this task."""
         self.stop()
         self._task = self._pending = None
-        self.armed = False
+        self.armed, self.relinked_at = False, self._clock()
         self.config["fleet"] = fleet_cfg
         self.start()
 

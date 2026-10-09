@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import logging
 
+from core_common.config import fleet_link_arm_state
 from core_features.fleet_agent.agent import HEARTBEAT_PERIOD_S, fleet_link_configured
 from core_features.safety.fleet_loss import (
     DEFAULT_TIMEOUT_S,
@@ -57,9 +58,12 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
 
     monitor = FleetLossMonitor(
         events=events,
-        # D-555: after a runtime relink the link counts only once the hub has welcomed it.
+        # D-555: after a runtime relink the link counts once the hub welcomed it, or at the
+        # latest after FLEET_LINK_ARM_GRACE_S (a link that never comes up is then lost, as at boot).
         link_configured=lambda: (fleet_link_configured(config.get("fleet") or {})
-                                 and getattr(fleet_agent, "armed", True)),
+                                 and fleet_link_arm_state(getattr(fleet_agent, "armed", True),
+                                                          getattr(fleet_agent, "relinked_at", None),
+                                                          fleet_agent._clock()) != "pending"),
         link_connected=lambda: fleet_agent.connected,
         link_last_rx=lambda: fleet_agent.last_rx,
         # Link freshness is the heartbeat's own silence budget, not the policy timeout.

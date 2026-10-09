@@ -93,9 +93,9 @@ def install_enrollment_routes(app: FastAPI, enrollment: EnrollmentService, *,
             raise _refusal(exc) from None
 
     @app.delete("/api/fleet/robots/{robot_id}/hub-link", tags=["fleet-enrollment"])
-    async def hub_link_delete(robot_id: str, principal=Depends(hub_guard)) -> dict:
+    async def hub_link_delete(robot_id: str, force: bool = False, principal=Depends(hub_guard)) -> dict:
         try:
-            return await enrollment.unlink_hub(robot_id, principal_id=principal.principal_id)
+            return await enrollment.unlink_hub(robot_id, principal_id=principal.principal_id, force=force)
         except (EnrollmentError, HubError) as exc:
             raise _refusal(exc) from None
 

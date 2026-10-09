@@ -17,8 +17,10 @@ from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import operator, viewer
 from core_common.config import (
     FLEET_LINK_KEYS,
+    FLEET_LINK_ARM_GRACE_S,
     ConfigError,
     clear_fleet_link,
+    fleet_link_arm_state,
     fleet_link_layer,
     load_config,
     merge_fleet_link,
@@ -60,6 +62,8 @@ def _readback(svc: CoreServicesLike) -> dict:
     fleet = svc.config.get("fleet") or {}
     agent = svc.fleet_agent
     discovery = fleet.get("discovery") if isinstance(fleet.get("discovery"), dict) else {}
+    now, relinked_at = agent._clock(), agent.relinked_at
+    arm = fleet_link_arm_state(agent.armed, relinked_at, now)
     return {
         "configured": bool(fleet.get("pairing_token")) and bool(discovery or fleet.get("hub_url")),
         "provisioned": fleet_link_layer() is not None,
@@ -68,6 +72,10 @@ def _readback(svc: CoreServicesLike) -> dict:
         "enabled": bool(agent.enabled),
         "connected": bool(agent.connected),
         "fleet_goal_active": svc.nav.fleet_goal() is not None,
+        # D-555: pending = waiting for the first WELCOME; grace_expired = SAF-003 counts it lost.
+        "arm_state": arm,
+        "arm_deadline_s": (round(max(0.0, relinked_at + FLEET_LINK_ARM_GRACE_S - now), 1)
+                           if arm == "pending" else None),
     }
 
 

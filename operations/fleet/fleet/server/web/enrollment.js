@@ -141,10 +141,17 @@ export function rowText(row) {
   }
   if (row.expiry_warning && row.state === "active") lines.push(`곧 만료(${row.expires_at}) — 새 코드 준비`);
   // D-555: where this robot's state comes from.
-  if (row.hub_linked) lines.push(`허브 연결됨(${row.hub_host || "?"}) · 수집: ${row.hub_online ? "허브" : "REST"}`);
+  if (row.hub_linked) lines.push(HUB_STATE_TEXT[row.hub_state || (row.hub_online ? "online" : "checking")](row.hub_host || "?"));
   else if (row.state === "active") lines.push("수집: REST");
   return lines;
 }
+
+// D-555: checking = CORE waits for the first WELCOME (≤ 35 s); failed = CORE counts the link lost.
+const HUB_STATE_TEXT = {
+  online: (host) => `허브 연결(${host}) · 수집: 허브`,
+  checking: (host) => `허브 연결(${host}) · 확인 중 · 수집: REST`,
+  failed: (host) => `허브 연결 실패(${host}) · SAF-003 적용 · 수집: REST`,
+};
 
 const ACTION_LABELS = {
   move: "새 주소로 옮기기…", unenroll: "등록 해제…", "hub-link": "허브 연결", "hub-unlink": "허브 연결 해제",
@@ -351,9 +358,29 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
             : `${row.robot_id} 허브 연결 해제됨 — 로봇에 닿지 않아 로봇 쪽 토큰은 허브가 거절합니다.`], false);
       } catch (err) {
         if (err.name === "AbortError") return;
-        showResult([err?.detail?.code === "fleet_goal_active"
-          ? "Fleet 목표가 진행 중입니다 — 목표가 끝난 뒤 다시 하세요."
-          : err?.detail?.message || "허브 연결 실패"], true);
+        if (action === "hub-unlink" && err?.detail?.code === "fleet_goal_active") {
+          // D-555: forced revoke during a goal; the robot then loses the link and SAF-003 stops it.
+          const forced = await dialogs.confirmIrreversible({
+            message: `"${row.robot_id}" 에 Fleet 목표가 진행 중입니다. 강제로 허브 연결을 해제하면 로봇은 링크를 잃고 SAF-003 정지(STOP/HOLD)가 걸립니다.`,
+            action: "강제 해제",
+            opener: () => el("enrolled-list")?.querySelector(`li[data-robot-id="${CSS.escape(row.robot_id)}"] ui-button[data-action="hub-unlink"]`),
+          });
+          life.check();
+          if (forced) {
+            try {
+              await call(`/api/fleet/robots/${encodeURIComponent(row.robot_id)}/hub-link?force=true`, { method: "DELETE" });
+              life.check();
+              showResult([`${row.robot_id} 허브 연결 강제 해제됨 — 로봇에 SAF-003 정지가 걸립니다.`], false);
+            } catch (again) {
+              if (again.name === "AbortError") return;
+              showResult([again?.detail?.message || "허브 연결 해제 실패"], true);
+            }
+          }
+        } else {
+          showResult([err?.detail?.code === "fleet_goal_active"
+            ? "Fleet 목표가 진행 중입니다 — 목표가 끝난 뒤 다시 하세요."
+            : err?.detail?.message || "허브 연결 실패"], true);
+        }
       }
       await refresh();
       life.check();

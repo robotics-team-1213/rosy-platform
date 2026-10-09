@@ -29,6 +29,8 @@ from typing import Any, Callable, Optional
 
 import httpx
 
+from core_common.config import FLEET_LINK_ARM_GRACE_S
+
 from fleet.server.discovery import is_rfc1918
 from fleet.server.enrollment_store import (
     EnrollmentStore,
@@ -238,6 +240,9 @@ class EnrollmentService:
         self._gates: dict[str, RobotGate] = {}
         self._tokens: dict[str, str] = {}
         self._hub_locks: dict[str, asyncio.Lock] = {}
+        #: D-555: when Fleet last delivered each robot's credential (Fleet start for older links).
+        self._hub_linked_at: dict[str, float] = {}
+        self._started_at = clock()
 
     def _tls_fence(self, row: dict) -> None:
         marker = self._store.tls_markers().get(row['robot_id'])
@@ -369,6 +374,7 @@ class EnrollmentService:
                 # D-555: never the digest itself.
                 "hub_linked": bool(row.get("hub_digest")), "hub_host": row.get("hub_host"),
                 "hub_online": bool(row.get("hub_digest")) and self._hub_online(row["robot_id"]),
+                "hub_state": self._hub_state(row),
                 "hub_linkable": self._hub_link is not None and self._tls_client(row["robot_id"]) is not None,
             })
         return {"available": self.available, "unavailable_reason": self.unavailable_reason,
@@ -766,6 +772,16 @@ class EnrollmentService:
     def _tls_bound(self, robot_id: str) -> bool:
         return self._tls_bindings is not None and self._tls_bindings.binding(robot_id) is not None
 
+    def _hub_state(self, row: dict) -> str | None:
+        """`online`, `checking` (inside CORE's arm grace) or `failed` (CORE's SAF-003 counts the
+        link as lost), mirroring FLEET_LINK_ARM_GRACE_S without asking the robot."""
+        if not row.get("hub_digest"):
+            return None
+        if self._hub_online(row["robot_id"]):
+            return "online"
+        since = self._hub_linked_at.get(row["robot_id"], self._started_at)
+        return "checking" if self._clock() - since < FLEET_LINK_ARM_GRACE_S else "failed"
+
     def _hub_online(self, robot_id: str) -> bool:
         record = self._console().hub.registry.find(robot_id)
         return record is not None and bool(record.online)
@@ -864,6 +880,7 @@ class EnrollmentService:
                 # The robot's code only: a message could carry anything the request held.
                 raise EnrollmentError("robot_refused", 502, f"the robot did not take the hub link ({code})",
                                       detail={"robot_code": code}) from None
+            self._hub_linked_at[robot_id] = self._clock()
             self._store.audit(action="hub_link", outcome="rotated" if old[0] else "linked",
                               principal_id=principal_id, target=robot_id)
             return next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
@@ -879,18 +896,25 @@ class EnrollmentService:
         except Exception:  # unreachable, held address, old image: Fleet's side is cleared anyway
             return False
 
-    async def unlink_hub(self, robot_id: str, *, principal_id: str) -> dict:
-        """Revoke: clear the digest here first (no TLS needed for that), then ask the robot."""
+    async def unlink_hub(self, robot_id: str, *, principal_id: str, force: bool = False) -> dict:
+        """Revoke: clear the digest here first (no TLS needed for that), then ask the robot.
+
+        ``force`` (named operator, confirmed in the console) revokes during a Fleet goal too:
+        the robot then sees a lost link and SAF-003 STOP/HOLD applies (the safe direction).
+        """
         async with self._hub_lock(robot_id):
             self._require_available()
             row = self._store.get(robot_id)
             if row is None or row["state"] == "pending_logout":
                 raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
-            await self._refuse_during_fleet_goal(robot_id, self._tls_client(robot_id))
+            if not force:
+                await self._refuse_during_fleet_goal(robot_id, self._tls_client(robot_id))
             self._store.update(robot_id, hub_digest=None, hub_host=None)
+            self._hub_linked_at.pop(robot_id, None)
             self._console().hub.set_pairing_digest(robot_id, None)
             cleared = await self._clear_robot_link(robot_id)
-            self._store.audit(action="hub_unlink", outcome="cleared" if cleared else "robot_not_cleared",
+            outcome = "cleared" if cleared else "robot_not_cleared"
+            self._store.audit(action="hub_unlink", outcome=f"forced_{outcome}" if force else outcome,
                               principal_id=principal_id, target=robot_id)
             return {**next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id),
                     "robot_cleared": cleared, "was_linked": bool(row.get("hub_digest"))}

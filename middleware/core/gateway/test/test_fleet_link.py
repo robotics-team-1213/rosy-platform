@@ -240,3 +240,52 @@ def test_a_symlinked_link_file_is_ignored(tmp_path, monkeypatch):
     link.symlink_to(real)
     monkeypatch.setenv("ROSY_FLEET_LINK", str(link))
     assert fleet_link_layer() is None
+
+
+def test_a_relink_that_never_welcomes_arms_saf003_after_the_grace(tmp_path):
+    """Re-review A: no WELCOME (bad CA, refused HELLO) must not leave SAF-003 off for good."""
+    from types import SimpleNamespace
+
+    from core_common.config import FLEET_LINK_ARM_GRACE_S
+    from core_features.fleet_agent.agent import FleetAgent
+    from core.fleet_loss_wiring import build_fleet_loss
+
+    now = [1000.0]
+    config = {"fleet": {}, "safety": {}}
+    agent = FleetAgent(SimpleNamespace(), SimpleNamespace(subscribe=lambda _cb: lambda: None),
+                       config, SimpleNamespace(robot_id="rosy_09"))
+    agent._clock = lambda: now[0]
+    goal = [None]
+    stopped = []
+    nav = SimpleNamespace(fleet_goal=lambda: goal[0], home=lambda **_: None,
+                          cancel=lambda **kw: stopped.append(kw["correlation_id"]) or True)
+    events = SimpleNamespace(publish=lambda *a, **k: None)
+    monitor = build_fleet_loss(config, events=events, fleet_agent=agent, nav=nav,
+                               safety=SimpleNamespace(fleet_loss_policy="STOP"), localization=None)
+    monitor.clock = lambda: now[0]
+    agent.relink({"pairing_token": TOKEN, "discovery": {"expected_hostname": SITE_HOST,
+                                                          "ca_file": str(tmp_path / "ca.pem")}})
+    agent.enabled = False  # what a refused HELLO or a CA error does; WELCOME never comes
+    goal[0] = ("attempt-7", SimpleNamespace(x=1.0, y=2.0, yaw=0.0))  # a Fleet goal starts
+    monitor.tick()
+    assert monitor.status()["configured"] is False and stopped == []
+    now[0] += FLEET_LINK_ARM_GRACE_S
+    monitor.tick()  # armed by the grace: link down, the outage starts now
+    assert monitor.status()["configured"] is True
+    now[0] += monitor.timeout_s
+    monitor.tick()
+    assert stopped == ["attempt-7"] and monitor.status()["applied"] == "STOP"
+
+
+def test_get_shows_the_arm_state(robot):
+    from core_common.config import FLEET_LINK_ARM_GRACE_S
+
+    https, svc, seats, _, _ = robot
+    agent = svc.fleet_agent
+    assert https.get("/api/v1/fleet/link", headers=seats["screen"]).json()["arm_state"] == "armed"
+    agent.armed, agent.relinked_at = False, agent._clock()
+    body = https.get("/api/v1/fleet/link", headers=seats["screen"]).json()
+    assert body["arm_state"] == "pending" and 0 < body["arm_deadline_s"] <= FLEET_LINK_ARM_GRACE_S
+    agent.relinked_at -= FLEET_LINK_ARM_GRACE_S
+    body = https.get("/api/v1/fleet/link", headers=seats["screen"]).json()
+    assert body["arm_state"] == "grace_expired" and body["arm_deadline_s"] is None

@@ -52,6 +52,17 @@ def overlay_path() -> Path:
 
 #: D-555: keys the private Fleet link file owns inside `fleet`.
 FLEET_LINK_KEYS = ("pairing_token", "hub_url", "discovery")
+#: D-555: a relinked Fleet link counts for SAF-003 from its first WELCOME, or at the latest this
+#: long after the relink: HELLO 5 s + discovery 25 s (mDNS 3, DNS fallback 12, TLS health
+#: connect 5 + read 5) + 5 s slack. Past it a link that never came up is a lost link, as at boot.
+FLEET_LINK_ARM_GRACE_S = 35.0
+
+
+def fleet_link_arm_state(armed: bool, relinked_at: float | None, now: float) -> str:
+    """`armed` (welcomed, or never relinked), `pending` (inside the grace) or `grace_expired`."""
+    if armed or relinked_at is None:
+        return "armed"
+    return "pending" if now - relinked_at < FLEET_LINK_ARM_GRACE_S else "grace_expired"
 
 
 def fleet_link_path() -> Path:
