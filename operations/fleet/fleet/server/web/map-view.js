@@ -353,6 +353,22 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.closePath();
   }
 
+  // D-573 1/7: 활성 현장 지도의 횡단보도 면(점선 윤곽)과 대기 띠. 읽기 전용이고, 상태색은 (f)에서 더한다.
+  function drawCrosswalks(ctx, toPoint, lineWidth) {
+    ctx.save();
+    ctx.lineWidth = lineWidth;
+    for (const crosswalk of layerOn("site") ? view.activeSiteMap?.map?.crosswalks || [] : []) {
+      ctx.setLineDash([]);
+      ctx.strokeStyle = css("--series-secondary");
+      for (const band of crosswalk.approach || []) { tracePolygon(ctx, band, toPoint); ctx.stroke(); }
+      ctx.setLineDash([lineWidth * 3, lineWidth * 2]);
+      ctx.strokeStyle = css("--ink");
+      tracePolygon(ctx, crosswalk.polygon, toPoint);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // 점유 격자 위에 사이트 사각형 윤곽과 카메라 관측을 겹친다(같은 map 프레임).
   function drawSiteOverlay(ctx, grid) {
     const toCell = (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; };
@@ -366,6 +382,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.stroke();
     }
     ctx.restore();
+    drawCrosswalks(ctx, toCell, 0.5);
     drawCameraTracking(ctx, toCell, size, 0.5);
     if (!layerOn("sightings")) return;
     for (const s of view.sightings) drawSighting(ctx, s, toCell, size, 0.5);
@@ -516,6 +533,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
+    drawCrosswalks(ctx, toPx, 1.5);
     drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
     drawCameraTracking(ctx, toPx, Math.max(7, t.scale * 0.09), 1.5);

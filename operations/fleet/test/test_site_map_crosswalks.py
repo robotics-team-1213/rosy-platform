@@ -73,7 +73,7 @@ def test_a_waiting_band_beside_the_lane_is_kept():
     lambda b: b["crosswalks"][0].update({"revision": ""}),
     lambda b: b["crosswalks"][0].update({"kind": "zebra"}),                              # unknown field
     lambda b: _with_band(b, [[0.309, -0.38], [0.429, -0.38], [0.429, -0.30], [0.309, -0.30]]),  # off its lane
-    lambda b: _with_band(b, [[0.309, -0.438], [0.429, -0.438], [0.429, 0.0], [0.309, 0.0]]),    # into the wall
+    lambda b: _with_band(b, [[0.309, -0.58], [0.429, -0.58], [0.429, -0.95], [0.309, -0.95]]),    # into the wall
     lambda b: b["crosswalks"][1].update({"approach": [NORTH_BAND] * 5}),                 # too many bands
 ])
 def test_invalid_crosswalks_are_refused(change):
@@ -105,7 +105,7 @@ def test_crosswalk_writes_need_a_named_operator_and_invalid_bands_are_site_map_i
     shared = TestClient(create_app(FleetConsole([RobotEndpoint("rosy_60", "http://x", "t")], [FakeRobot("rosy_60")]),
                                    console_token="op", site_maps=SiteMapStore()))
     assert shared.put("/api/fleet/site-map/draft", json=body, headers={"Authorization": "Bearer op"}).status_code == 403
-    wall = _with_band(_imported(), [[0.309, -0.438], [0.429, -0.438], [0.429, 0.0], [0.309, 0.0]])
+    wall = _with_band(_imported(), [[0.309, -0.58], [0.429, -0.58], [0.429, -0.95], [0.309, -0.95]])
     refused = client.put("/api/fleet/site-map/draft", json={"map": wall}, headers=OPERATOR)
     assert refused.status_code == 422 and refused.json()["detail"]["code"] == "SITE_MAP_INVALID"
     assert "site floor" in refused.text and store.draft_view()["map"] is None

@@ -671,7 +671,7 @@ def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_sit
     page.select_option("#map-source", "draft")
     page.locator("#map-viewport").scroll_into_view_if_needed()
     zone = page.locator('#site-map-svg [data-crosswalk="cw2"]')
-    zone.click()
+    zone.dispatch_event("click")  # the east lane line runs over the polygon's centre
     expect(page.locator("#selection")).to_contain_text("횡단보도 cw2")
     expect(page.locator("#crosswalk-form")).to_be_visible()
     expect(page.locator("#crosswalk-lanes")).to_contain_text("east")
@@ -707,6 +707,7 @@ def test_viewer_sees_crosswalks_without_band_tools(page_site):
     page.locator("#token-save").click()
     expect(page.locator("#site-map-svg [data-crosswalk]")).to_have_count(2)
     page.locator("#map-viewport").scroll_into_view_if_needed()
-    page.locator('#site-map-svg [data-crosswalk="cw1"]').click()
+    page.locator('#site-map-svg [data-crosswalk="cw1"]').dispatch_event("click")
+    expect(page.locator("#selection")).to_contain_text("횡단보도 cw1")
     expect(page.locator("#crosswalk-form")).to_be_hidden()
     expect(page.locator("#import-crosswalks")).to_be_disabled()

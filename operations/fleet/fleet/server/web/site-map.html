@@ -80,7 +80,7 @@
       <div id="map-viewport" class="map-viewport" role="region" aria-label="현장 지도 가로 이동" tabindex="0" hidden>
         <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
       </div>
-      <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 색 원은 로봇(점선 고리 = 위치 불확실성, 막대 = 방향), 색 선은 운행 경로입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
+      <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 점선 면은 횡단보도, 색 면은 그 대기 띠입니다. 색 원은 로봇(점선 고리 = 위치 불확실성, 막대 = 방향), 색 선은 운행 경로입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
       <details class="plane-tools">
         <summary>평면 영상 도구 · 표시 전용</summary>
         <div class="plane-tools-body">
@@ -128,6 +128,17 @@
             <option value="lane">차선 따라가기</option><option value="free">지도 좌표 추종</option></select></label>
           <label>속도 상한 (m/s)<input class="ui-field" id="edge-speed" type="number" min="0.01" max="5" step="0.01"></label>
         </div>
+        <div id="crosswalk-form" class="form" hidden>
+          <ui-text id="crosswalk-lanes"></ui-text>
+          <label>대기 띠<select class="ui-field" id="crosswalk-band" aria-label="이 횡단보도의 대기 띠"></select></label>
+          <div class="actions">
+            <ui-button id="band-draw" kind="quiet">대기 띠 그리기</ui-button>
+            <ui-button id="band-finish" kind="quiet" disabled>띠 닫기</ui-button>
+            <ui-button id="band-delete" kind="quiet" disabled>띠 지우기</ui-button>
+          </div>
+          <ui-text>횡단보도 면은 lane_graph에서 가져오고 고치지 않습니다. 대기 띠는 보도 쪽에 차로에 닿게, 바닥(차로 + 0.30 m) 안에 그립니다. 벽에 닿는 띠는 저장할 때 거절됩니다.</ui-text>
+        </div>
+        <ui-button id="import-crosswalks" kind="quiet" disabled>lane_graph 횡단보도 가져오기</ui-button>
         <div class="actions draft-actions">
           <ui-button id="apply-edit" kind="quiet" disabled>초안에 반영</ui-button>
           <ui-button id="save-draft" kind="primary" disabled>초안 저장</ui-button>

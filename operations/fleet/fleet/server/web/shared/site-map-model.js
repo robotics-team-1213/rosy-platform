@@ -635,3 +635,32 @@ export function trafficAttention(traffic, robotId, clock, now) {
 export function loopCapacityText(traffic) {
   return (traffic?.loop_capacity || []).map((loop) => `고리 ${loop.robots.length}/${loop.capacity}대`).join(" · ");
 }
+
+/** D-573 1: append one waiting band (map metres, mm-rounded) to crosswalk ``id``; the server
+ * checks it reaches the lane and stays on the site floor when the draft is saved. */
+export function addApproach(map, id, points) {
+  if (points.length < 3) throw new Error('대기 띠는 점이 세 개 이상이어야 합니다');
+  const next = copy(map);
+  const crosswalk = (next.crosswalks || []).find(item => item.id === id);
+  if (!crosswalk) throw new Error(`없는 횡단보도 ${id}`);
+  if ((crosswalk.approach || []).length >= 4) throw new Error('대기 띠는 횡단보도마다 4개까지입니다');
+  const mm = value => Math.round(value * 1000) / 1000;
+  crosswalk.approach = [...(crosswalk.approach || []), points.map(([x, y]) => [mm(x), mm(y)])];
+  return next;
+}
+
+export function removeApproach(map, id, index) {
+  const next = copy(map);
+  const crosswalk = (next.crosswalks || []).find(item => item.id === id);
+  if (!crosswalk?.approach?.[index]) throw new Error('지울 대기 띠가 없습니다');
+  crosswalk.approach.splice(index, 1);
+  return next;
+}
+
+/** D-573 1: lane_graph crosswalks replace the draft's polygons by id; drawn bands are kept. */
+export function mergeCrosswalks(map, imported) {
+  const next = copy(map);
+  const had = new Map((next.crosswalks || []).map(item => [item.id, item]));
+  next.crosswalks = imported.map(item => ({...copy(item), approach: had.get(item.id)?.approach || []}));
+  return next;
+}
