@@ -374,13 +374,12 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
             return [f"cur=$({s}cat {pointer} 2>/dev/null)",
                     f"ver=$({s}{sed} \"$cur/{MANIFEST_NAME}\" 2>/dev/null)",
                     f'echo "{label}: $cur${{ver:+ ($ver)}}"']
-        shadow = remote_script("status", None, root, history=history, privileged=privileged)
         if slot != "shadow":  # the slot's lines first, then the unchanged shadow status
             return "\n".join([
                 *versioned(slot, ptr),
                 f"echo \"{slot} previous: $({s}cat {prev} 2>/dev/null)\"",
                 f"echo \"{hold_name}: $({s}cat {hold} 2>/dev/null || echo none)\"",
-                shadow,
+                remote_script("status", None, root, history=history, privileged=privileged),
             ])
         return "\n".join([
             *versioned("shadow", ptr),
