@@ -90,8 +90,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · fix(fleet): TLS 로봇 번호 변경 뒤 재등록 (D-565)
 - 2026-10-09 · uncommitted · fix(uiux): Fleet 이름표 홈 이동
 - 2026-10-09 · uncommitted · feat(fleet): trips from the console robot card (D-540 (d))
 - 2026-10-09 · uncommitted · test(fleet): API 기준서 v1.166 참조 갱신
 - 2026-10-09 · uncommitted · fix(fleet): 위치 요청 천장 카메라 플래그 분리, 답 횟수 유지 (D-546 6, review)
-- 2026-10-09 · uncommitted · fix(fleet): 위치 요청 3번 답해도 열려 있으면 needs_human, 천장 카메라 답 기본 켜짐 (D-546 6)
