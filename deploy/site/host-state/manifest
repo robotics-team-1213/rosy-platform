@@ -1,4 +1,5 @@
 # D-530 site PC desired state (role: site). Format: deploy/hosts/common/host-state/manifest.
+# Firewall, stack and Wi-Fi lines touch the network: install applies them only with --approve firewall / wifi.
 # Nightly reboot and Docker upgrade were copied byte for byte from the site PC on 2026-10-09.
 safe file /etc/systemd/system/rosy-nightly-reboot.timer role/rosy-nightly-reboot.timer
 safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-reboot.service
@@ -9,9 +10,9 @@ safe file /usr/local/sbin/rosy-docker-upgrade role/rosy-docker-upgrade 0755
 safe enabled rosy-docker-upgrade.timer
 safe enabled rosy-site-autoupdate.timer
 safe enabled rosy-site-firewall-check.timer
-report enabled rosy-site-firewall.service
-report enabled rosy-site-stack.service
-report wifi-allow
+approval=firewall enabled rosy-site-firewall.service
+approval=firewall enabled rosy-site-stack.service
+approval=wifi wifi-allow
 safe file /etc/systemd/system/rosy-host-guard.service role/rosy-host-guard.service
 safe file /etc/systemd/system/rosy-host-guard.timer role/rosy-host-guard.timer
 report enabled rosy-host-guard.timer
