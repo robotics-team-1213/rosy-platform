@@ -35,7 +35,7 @@ def _ceiling(tmp_path, frames):
 
 
 def test_detect_maps_marker_centre_and_heading(tmp_path):
-    rec = _ceiling(tmp_path, [(700, 300, 0), (500, 600, 1), (20, 20, 0)])
+    rec = _ceiling(tmp_path, [(700, 300, 0), (500, 600, 1), (1000, 700, 2)])
     poses, frames = cp.detect(rec, 41)
     assert frames == 3 and len(poses) == 3
     first, second = poses[0], poses[1]
@@ -43,6 +43,7 @@ def test_detect_maps_marker_centre_and_heading(tmp_path):
     assert first["y"] == pytest.approx((480 - 330 + 0.5) / PX_PER_M, abs=1e-3)
     assert first["yaw"] == pytest.approx(math.pi / 2, abs=0.05)  # marker top edge = map +y
     assert second["yaw"] == pytest.approx(0.0, abs=0.05)         # turned a quarter clockwise
+    assert abs(poses[2]["yaw"]) == pytest.approx(math.pi, abs=0.05)  # upside down
     assert first["reproj_err"] < 0.002 and first["src"] == "aruco" and first["t"] == 100.0
     assert cp.detect(rec, 42)[0] == []
 
