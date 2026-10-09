@@ -86,6 +86,13 @@ class TrackingService:
     def enabled(self) -> bool:
         return bool(self.sources)
 
+    def retarget(self, sources: Sequence[SightingSource]) -> None:
+        """D-580: the sighting service's sources after a roster change (same ids and tokens)."""
+        if [s.source_id for s in sources] != [s.source_id for s in self.sources]:
+            raise ValueError("tracking sources cannot change identity")
+        self.sources = tuple(sources)
+        self._by_id = {source.source_id: source for source in self.sources}
+
     def authenticate(self, authorization: Optional[str]) -> SightingSource:
         candidate = authorization or ""
         matched: Optional[SightingSource] = None
@@ -102,7 +109,9 @@ class TrackingService:
         usable = record is not None and record.map_id == source.map_id
         config = {"source_id": source.source_id, "map_id": source.map_id,
                   "calibration": record.to_dict() if usable else None,
-                  "relearn_seq": self._sources[source.source_id].relearn_seq}
+                  "relearn_seq": self._sources[source.source_id].relearn_seq,
+                  # D-580: Vision uses these over its YAML (the roster's numbers, D-562).
+                  "robot_markers": dict(source.robot_markers)}
         if self.identity is not None:
             config["identity_challenge"] = self.identity.challenge_for(source.source_id)
         return config

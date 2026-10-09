@@ -1165,7 +1165,7 @@ Fleet만 재시작한다. 기존 사용자와 enrollment, 키, 타이머 상태�
 ```json
 "functional_checks": [
   {"path": "/api/fleet/state", "token_file": "/etc/rosy/site-secrets/<viewer-token-file>",
-   "required_ids": ["<robot-id>"]},
+   "required_ids": "enrolled"},
   {"path": "/api/fleet/vision/sources", "token_file": "/etc/rosy/site-secrets/<viewer-token-file>",
    "required_ids": ["<camera-source-id>"]}
 ]
@@ -1181,7 +1181,10 @@ missing `required_ids` as `inventory-drift` in the journal and
 observed before staging must remain; a loss triggers rollback. The setup tool
 still requires configured IDs to match when it first provisions the gate.
 A stale ID must be reconciled with Fleet enrollment; mDNS discovery alone does
-not enroll a robot or prove its identity.
+not enroll a robot or prove its identity. `"required_ids": "enrolled"` (D-580,
+`/api/fleet/state` only) takes the robots from Fleet's own roster, so enrolling,
+renumbering or unenrolling in the console needs no edit here; the before/after
+baseline still rolls back a lost robot. An explicit list still works.
 Hosts without this setting retain the liveness-only gate. Listing a camera is
 not proof of advancing frames, and listing a robot is not physical acceptance.
 Record actual camera frame reception separately without sending motion.
