@@ -108,7 +108,7 @@ def cancel_pending_task_queue(task_service, console, robot_id: Optional[str] = N
 def install_task_dispatch_routes(
     app, *, console, task_service, configured_omx,
     stop_transport, require_viewer, require_operator,
-    read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None, require_named_operator=None,
+    read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None, require_named_operator,
 ) -> None:
     drive_cancel = drive_cancel or DriveCancelFence()
     if require_named_operator is not None:
@@ -122,11 +122,11 @@ def install_task_dispatch_routes(
         def dispatch_control_readback() -> dict:
             return task_service.store.dispatch_control()
 
-        @app.post("/api/fleet/dispatch/rearm", dependencies=operator_guard,
-                  tags=["fleet-control"])
+        # D-540 9: rearm reopens dispatch, so queued tasks start moving; a named operator.
+        @app.post("/api/fleet/dispatch/rearm", tags=["fleet-control"])
         async def dispatch_rearm(
             body: DispatchRearmRequest,
-            principal: SitePrincipal = Depends(require_operator),
+            principal: SitePrincipal = Depends(require_named_operator),
         ) -> dict:
             try:
                 control = task_service.store.rearm_dispatch(
@@ -180,11 +180,12 @@ def install_task_dispatch_routes(
                 control["omx_local_rearm"] = local_rearm
             return control
 
-    @app.post("/api/fleet/robots/{robot_id}/goal", dependencies=operator_guard, tags=["fleet"])
+    # D-540 9: a goal moves the robot, so the operator must be named.
+    @app.post("/api/fleet/robots/{robot_id}/goal", tags=["fleet"])
     async def fleet_goal(
         robot_id: str, body: GoalRequest,
         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-        principal: SitePrincipal = Depends(require_operator),
+        principal: SitePrincipal = Depends(require_named_operator),
     ) -> dict:
         try:
             if console.trip_busy(robot_id):  # D-494 5: refused before a task is queued for it
@@ -220,6 +221,8 @@ def install_task_dispatch_routes(
         robot_id: str, body: LineFollowModeRequest,
         principal: SitePrincipal = Depends(require_operator),
     ) -> dict:
+        if body.mode != "OFF":  # D-540 9: OFF stops, so it stays open
+            require_named_operator(principal)
         try:
             result = await console.line_follow_mode(robot_id, body.mode)
             return {"robot_id": robot_id, "actor_id": principal.principal_id, "result": result}

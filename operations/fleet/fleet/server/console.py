@@ -32,7 +32,7 @@ from core_common.succession import next_leader
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
-from fleet.server import bays, traffic
+from fleet.server import bays, goal_lease, traffic
 from fleet.server.console_view import (
     CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
@@ -74,7 +74,7 @@ class FleetConsole(TripAware):
         relay_factory=None,
         signal_console=None,
         event_store=None,
-        hub_state_max_age_s: float = 3.0,
+        hub_state_max_age_s: float = 3.0, goal_lease_ttl_s: float = 0.0,
     ) -> None:
         if len(endpoints) != len(clients):
             raise ValueError("endpoints and clients must line up one for one")
@@ -99,6 +99,7 @@ class FleetConsole(TripAware):
         # — 미션은 Fleet 쪽 개념이고 로봇은 원자 액션만 받는다 (D-12). 화면의 목표 표시는
         # "내가 무엇을 시켰는가"이지 로봇이 되돌려 준 값이 아니다.
         self._goals: dict[str, dict] = {}
+        self.goal_leases = goal_lease.GoalLeases(goal_lease_ttl_s, self._clients, clock, lambda r: r in self._yielding)
         #: 달리는 로봇이 점유한 경로. 교행 판정의 재료이자, 왜 기다리는지의 근거다.
         self._claims: dict[str, list] = {}
         #: 남의 경로와 부딪혀 아직 못 내려간 미션. 앞이 비면 그대로 다시 내려간다.
@@ -210,7 +211,7 @@ class FleetConsole(TripAware):
         self._agent_pairing_tokens.pop(robot_id, None)
         self._hub.drop(robot_id)
         for table in (self._goals, self._claims, self._queued, self._yielding, self._seen,
-                      self._held, self._trusted, self._loc_null_since):
+                      self._held, self._trusted, self._loc_null_since, self.goal_leases):
             table.pop(robot_id, None)
         return client
 
@@ -329,7 +330,7 @@ class FleetConsole(TripAware):
         # 않으면 화면은 방금 출발한 미션을 한 주기 동안 계속 "대기 중"으로 보여 준다.
         for row in robots:
             row["queued"] = _shown(self._queued.get(row["robot_id"]))
-            row["goal"] = self._goals.get(row["robot_id"])
+            row["goal"] = self.goal_leases.view(row["robot_id"], self._goals.get(row["robot_id"]))
             row["yielding"] = self._yielding.get(row["robot_id"])
             hold = self._held.get(row["robot_id"])
             row["held"] = hold["reason"] if hold is not None else None
@@ -398,7 +399,7 @@ class FleetConsole(TripAware):
 
     async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
                    task_id: str | None = None, attempt_id: str | None = None,
-                   attempt_seq: int | None = None) -> dict:
+                   attempt_seq: int | None = None, lease_source: str | None = None) -> dict:
         """한 대에 목표 하나. 로봇은 원자 액션만 받는다 (D-12).
 
         내려간 뒤 그 로봇의 계획 경로를 읽어, 이미 달리는 다른 로봇의 경로와 부딪히면
@@ -412,7 +413,7 @@ class FleetConsole(TripAware):
         그때는 `bays` 로 비켜설 자리를 찾아 그 로봇을 먼저 치운다 (`_make_room`).
         """
         client = self._client(robot_id)
-        await require_capability(client, "navigation.goal_navigation")
+        caps = await require_capability(client, "navigation.goal_navigation")
         if self._clients.get(robot_id) is not client:
             raise RuntimeError("robot connection changed during capability check")
         if robot_id in self._formation_members():
@@ -442,10 +443,7 @@ class FleetConsole(TripAware):
             return {"accepted": False, "queued": True, "dispatch_attempted": False,
                     "cancel_confirmed": False, "blocked_by": robot_id, "waiting_on": [robot_id],
                     "reason": "LOCALIZATION_UNTRUSTED"}
-        if attempt_id is None:
-            result = await client.navigation_goal(x, y, yaw)
-        else:
-            result = await client.navigation_goal(x, y, yaw, correlation_id=attempt_id)
+        result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
         # 로봇이 받아들인 뒤에만 기억한다 — 거절된 목표가 화면에 남으면 운영자는 가지도
         # 않을 곳으로 로봇이 간다고 읽는다.
         self._goals[robot_id] = {"x": x, "y": y, "yaw": yaw}
@@ -454,7 +452,7 @@ class FleetConsole(TripAware):
         route = await self._route_of(robot_id)
         blocker = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(robot_id,))
         if blocker is not None:
-            cancel_receipt = await self._client(robot_id).navigation_cancel()
+            cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
             if not self._cancel_confirmed(cancel_receipt):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._goals.pop(robot_id, None)
@@ -478,7 +476,7 @@ class FleetConsole(TripAware):
                           if rid != robot_id and self._untrusted_blocks(rid, intended)), None)
         if untrusted is not None:
             # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
-            cancel_receipt = await self._client(robot_id).navigation_cancel()
+            cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
             if not self._cancel_confirmed(cancel_receipt):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._goals.pop(robot_id, None)
@@ -612,7 +610,7 @@ class FleetConsole(TripAware):
             await self._send_to_bay(robot_id, bay, mover)
             yielded.append(robot_id)
 
-        cancel_receipt = await self._client(mover).navigation_cancel()
+        cancel_receipt = await self.goal_leases.cancel(mover, self._client(mover))
         if not self._cancel_confirmed(cancel_receipt):
             raise RuntimeError("navigation goal cancellation was not confirmed")
         self._goals.pop(mover, None)
@@ -631,7 +629,7 @@ class FleetConsole(TripAware):
     async def _send_to_bay(self, robot_id: str, bay: tuple, mover: str) -> None:
         """한 대를 비켜설 자리로. 제 미션이 있었다면 대기열에 넣어 돌아오게 한다."""
         client = self._client(robot_id)
-        await require_capability(client, "navigation.goal_navigation")
+        caps = await require_capability(client, "navigation.goal_navigation")
         if self._clients.get(robot_id) is not client:
             raise RuntimeError("robot connection changed during capability check")
         if robot_id in self._formation_members():
@@ -643,7 +641,7 @@ class FleetConsole(TripAware):
             self._queued[robot_id] = {**own, "blocked_by": mover, "waiting_on": [mover],
                                       "reason": "YIELDED"}
         self._claims.pop(robot_id, None)
-        await client.navigation_goal(bay[0], bay[1], 0.0)
+        await self.goal_leases.send(robot_id, client, caps, bay[0], bay[1], 0.0, None, "yield")
         self._yielding[robot_id] = {"bay": {"x": bay[0], "y": bay[1]}, "for": mover}
 
     async def _observe(self) -> None:
@@ -921,7 +919,7 @@ class FleetConsole(TripAware):
         return False
 
     async def cancel(self, robot_id: str) -> dict:
-        result = await self._client(robot_id).navigation_cancel()
+        result = await self.goal_leases.cancel(robot_id, self._client(robot_id))
         self._goals.pop(robot_id, None)
         self._held.get(robot_id) or self._claims.pop(robot_id, None)  # D-361: held keeps its claim
         self._queued.pop(robot_id, None)
@@ -941,7 +939,7 @@ class FleetConsole(TripAware):
             route = ([here] if here is not None else []) + list(self._claims.get(robot_id) or [])
             if robot_id == mover or goal is None or not trust.blocks(route, last):
                 continue
-            if not self._cancel_confirmed(await self._client(robot_id).navigation_cancel()):
+            if not self._cancel_confirmed(await self.goal_leases.cancel(robot_id, self._client(robot_id))):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._goals.pop(robot_id, None)
             self._claims.pop(robot_id, None)
@@ -952,7 +950,7 @@ class FleetConsole(TripAware):
             here, bay = self._pose_of(robot_id), (yielding["bay"]["x"], yielding["bay"]["y"])
             if robot_id == mover or not trust.blocks(([here] if here else []) + [bay], last):
                 continue
-            if not self._cancel_confirmed(await self._client(robot_id).navigation_cancel()):
+            if not self._cancel_confirmed(await self.goal_leases.cancel(robot_id, self._client(robot_id))):
                 raise RuntimeError("navigation goal cancellation was not confirmed")
             self._yielding.pop(robot_id, None)
             held.append(robot_id)
@@ -1025,6 +1023,7 @@ class FleetConsole(TripAware):
         움직이는 것이 이 버튼에서 가장 나쁜 결과다. 로봇 쪽 e-stop 과 deadman 은 관제와
         무관하게 살아 있다(설계 §3).
         """
+        self.goal_leases.clear()  # D-550 10: a leased goal is never renewed past an E-stop
         # 대형이 살아 있으면 먼저 푼다. 릴레이가 참조를 계속 밀어 넣는 채로 로봇만 세우면,
         # e-stop 을 푸는 순간 팔로워가 밀린 참조를 향해 달려나간다.
         if self._formation is not None and self._formation_members():

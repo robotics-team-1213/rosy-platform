@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from fleet.hub.hub import HubError
 from fleet.server.http_errors import http_error
-from fleet.server.signals import SignalApiError
+from fleet.server.signals import SAFE_MODES, SignalApiError
 from fleet.server.site_auth import SitePrincipal
 
 
@@ -17,7 +17,7 @@ class SignalCommandRequest(BaseModel):
     cycle: Optional[dict[str, int]] = None
 
 
-def install_signal_routes(app, *, signals, require_viewer, require_operator,
+def install_signal_routes(app, *, signals, require_viewer, require_operator, require_named_operator,
                           auth_configured: bool) -> None:
     def configured():
         if signals is None:
@@ -45,6 +45,8 @@ def install_signal_routes(app, *, signals, require_viewer, require_operator,
                       principal: SitePrincipal = Depends(require_operator)) -> dict:
         if body.mode == "manual":
             require_authenticated_operator()
+        if body.mode not in SAFE_MODES:  # D-540 9: all_red/flash_red stop, so they stay open
+            require_named_operator(principal)
         try:
             return await configured().command(signal_id, body.model_dump(exclude_none=True),
                                               actor=principal.principal_id if auth_configured else None)

@@ -22,6 +22,7 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 
 ROOT = Path(__file__).resolve().parents[3]
+pytestmark = pytest.mark.usefixtures("unnamed_operator_drives")
 RING = ("ring_s", "ring_e", "ring_n", "ring_w")
 LANE_GRAPH = ROOT / "middleware" / "perception" / "map" / "map_v2_fleet" / "lane_graph.yaml"
 
@@ -39,6 +40,19 @@ def _localized(x: float, y: float, frame: str = "map") -> dict:
         "pose": {"x": x, "y": y, "yaw": 0.0},
         "localization": {"state": "LOCALIZED", "pose_frame": frame},
     }
+
+
+@pytest.fixture
+def unnamed_operator_drives(monkeypatch):
+    """These tests cover lane geometry on the direct (no task store) path. D-540 9 names the
+    operator on /route; test_named_operator_motion_routes.py covers that refusal."""
+    import fleet.server.app as app_module
+    real = app_module.build_role_guards
+
+    def guards(*args, **kwargs):
+        viewer, operator, _named, proposer = real(*args, **kwargs)
+        return viewer, operator, operator, proposer
+    monkeypatch.setattr(app_module, "build_role_guards", guards)
 
 
 def _client(state: dict):

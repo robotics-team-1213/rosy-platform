@@ -55,7 +55,11 @@ async def _robot_call(console, call) -> dict:
     return await console._client(robot)._post(call.path, call.body or None)
 
 
-def install_intent_routes(app, *, console, task_service, require_operator,
+# D-540 9: these only stop; any other verb moves something and needs a named operator.
+STOP_VERBS = frozenset({"estop", "cancel", "stop", "formation_stop", "follow_cancel"})
+
+
+def install_intent_routes(app, *, console, task_service, require_operator, require_named_operator,
                           operator_guard, local_stop_fanout, cancel_pending) -> None:
     @app.post(
         "/api/fleet/do",
@@ -76,6 +80,8 @@ def install_intent_routes(app, *, console, task_service, require_operator,
             calls = interpret(body)
         except IntentError as exc:
             raise HTTPException(status_code=400, detail={"code": exc.code, "message": str(exc)}) from exc
+        if any(call.verb not in STOP_VERBS for call in calls):
+            require_named_operator(principal)
         steps = []
         for call in calls:
             try:

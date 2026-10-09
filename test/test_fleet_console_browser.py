@@ -179,10 +179,13 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         assert "끊김" in roster, "연결이 끊긴 팔로워의 증거 태그가 없다"
         assert "지연" not in roster, "정상 스트림(4.8 Hz)에 지연 태그가 붙었다 — 정상은 무색이어야 한다"
         assert "0.60m" in page.inner_text("#formation-detail"), "슬롯 요약이 사라졌다"
-        assert [card.get_attribute("data-robot-id") for card in page.locator("#roster article").all()] == ["rosy_03"]
+        # D-540 3: every robot has a card; the nominal ones are one line, the exception is open.
+        assert [card.get_attribute("data-robot-id")
+                for card in page.locator("#roster article:not([data-collapsed])").all()] == ["rosy_03"]
+        assert [card.get_attribute("data-robot-id")
+                for card in page.locator("#roster article[data-collapsed]").all()] == ["rosy_01", "rosy_02"]
         save_temp_screenshot(page, "fleet_console_exception_first.png")
-        page.locator("#roster-toggle").click()
-        assert page.locator("#roster-toggle").get_attribute("aria-expanded") == "true"
+        _open_cards(page)
         # D-82/§7.3 색 예산 — 색칠은 문제 있는 한 대(rosy_03: 끊김 crit + 대기
         # warn)에만 몰리고 정상 로봇은 무색이다("one coloured row").
         per_robot = page.evaluate(
@@ -210,15 +213,22 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        assert "개입할 로봇 없음" in page.inner_text("#roster")
-        assert page.locator("#roster article").count() == 0
-        toggle = page.locator("#roster-toggle")
-        assert toggle.get_attribute("aria-expanded") == "false"
-        toggle.focus()
+        # D-540 3: the nominal robot is one line (name · trip/nav · battery); Enter opens it, 접기 folds it.
+        card = page.locator('#roster article[data-robot-id="rosy_01"]')
+        line = card.locator(".robot-line")
+        assert card.get_attribute("data-collapsed") == ""
+        assert "rosy_01" in line.inner_text() and line.locator('[data-fact="battery"]').count() == 1
+        assert line.get_attribute("aria-expanded") == "false"
+        line.focus()
         page.keyboard.press("Enter")
-        assert toggle.get_attribute("aria-expanded") == "true"
-        assert page.locator("#roster article").count() == 1
-        assert page.locator("#roster article").get_attribute("data-robot-id") == "rosy_01"
+        page.wait_for_function("() => !document.querySelector('#roster article').hasAttribute('data-collapsed')")
+        assert card.locator(".robot-actions").is_visible()
+        fold = card.locator(".robot-fold")
+        assert fold.get_attribute("aria-expanded") == "true"
+        page.wait_for_timeout(1500)  # a poll keeps the operator's choice
+        assert not page.evaluate("document.querySelector('#roster article').hasAttribute('data-collapsed')")
+        fold.click()
+        page.wait_for_function("() => document.querySelector('#roster article').hasAttribute('data-collapsed')")
         assert not errors
         browser.close()
 
@@ -240,7 +250,7 @@ def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(conso
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#roster-toggle").click()
+        _open_cards(page)
         card = page.locator('#roster article[data-robot-id="rosy_01"]')
         page.wait_for_function("() => document.querySelector('#roster [data-fact=battery] strong')?.textContent === '63%'")
         assert "충전 확인" in card.locator('[data-fact="charging"]').inner_text()
@@ -274,7 +284,7 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#roster-toggle").click()
+        _open_cards(page)
         goals = page.locator("#roster ui-button[data-goal-robot-id]")
         assert goals.count() == 2
         for goal in goals.all():
@@ -287,6 +297,14 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
             assert "수동 주행만 지원" in page.inner_text("#formation-detail")
         assert not errors
         browser.close()
+
+
+def _open_cards(page):
+    """D-540 3: a nominal robot card is one line; open each so its facts and actions show."""
+    page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
+    while page.locator("#roster .robot-line").count():
+        page.locator("#roster .robot-line").first.click()
+    page.evaluate("() => document.activeElement?.blur()")
 
 
 def _open_console(playwright, api, posts=None, init_script=""):
@@ -469,7 +487,6 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width
         assert page.evaluate("window.__stateCalls") == 1
         assert "로봇 목록 불러오는 중" in page.inner_text("#roster")
         assert page.locator(".queues-panel").is_hidden()
-        assert page.locator("#roster-toggle").is_hidden()
         for state in ("loading", "recovered"):
             if state == "recovered":
                 page.evaluate("snapshot => window.__releaseState(snapshot)", SNAPSHOT)
@@ -504,7 +521,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
         browser, page, errors = _open_console(p, api)
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#roster-toggle").click()
+        _open_cards(page)
         page.wait_for_function("() => document.querySelector('#roster article')?.textContent.includes('1.00')")
         api["/api/fleet/state"] = (500, {"detail": "gather failed"})
         page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === 'Fleet 서버 없음'"
@@ -512,7 +529,6 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
         assert not errors
         assert "1.00" not in page.inner_text("#roster")
         assert "상태 확인 불가" in page.inner_text("#roster")
-        assert page.locator("#roster-toggle").is_hidden()
         assert "로봇 위치 확인 불가" in page.inner_text("#map-tag")
         assert "로봇 위치 확인 불가" in page.locator("#map-canvas").get_attribute("aria-label")
         assert page.locator("#roster article ui-button").first.is_disabled()
@@ -643,7 +659,7 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         page.wait_for_timeout(100)
         assert ('POST', '/api/fleet/dispatch/rearm') not in calls
         robot['state']['line_follow']['mode'] = 'OFF'
-        page.locator('#roster-toggle').click()
+        _open_cards(page)
         page.wait_for_function('() => !document.querySelector("ui-button[data-goal-robot-id=rosy_01]").disabled')
         page.locator('ui-button[data-goal-robot-id="rosy_01"]').click()
         page.locator('#map-canvas').press('Enter')
@@ -757,11 +773,6 @@ def test_fleet_cancel_all_requires_confirm_and_logs_each_robot_honestly(console_
         assert "1/3 · 물리 정지 미확인" in summary.inner_text()
         result_box = summary.bounding_box()
         assert result_box and result_box["y"] >= 0 and result_box["y"] + result_box["height"] <= height
-        if width < 1024:
-            dispatch = page.locator("#dispatch-control").bounding_box()
-            all_robots = page.locator("#roster-toggle").bounding_box()
-            assert dispatch and all_robots and all_robots["y"] >= dispatch["y"] + dispatch["height"]
-            assert abs(dispatch["width"] - all_robots["width"]) <= 1
         page.get_by_text("rosy_02 주행 취소 응답 없음 — 대형 추종 ConnectError · 내비게이션 ConnectError · 차선 추종 ConnectError").wait_for()
         page.get_by_text("rosy_03 주행 취소 실패 — 주소 미확인 — 차선 추종 끄기 미전송").wait_for()
         page.get_by_text("대기 작업 2개 취소 · 로봇 취소 확인 대기 작업 1개").wait_for()
@@ -956,7 +967,7 @@ def test_armed_goal_is_withdrawn_when_safety_becomes_unknown(console_url):
         browser, page, errors = _open_console(playwright, api, posts=posts,
                                                init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#roster-toggle").click()
+        _open_cards(page)
         page.locator("ui-button[data-goal-robot-id='rosy_01']").click()
         assert page.locator(".robot.selected").count() == 1
         robot["state"]["safety"] = None
@@ -1464,28 +1475,28 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
-        page.locator("#roster-toggle").click()
-        page.locator("#roster-toggle").evaluate("node => node.blur()")
+        _open_cards(page)
+        # D-540 3: every card is listed, exceptions first (rosy_03), then the robots' own order.
         page.keyboard.press("ArrowDown")
         page.wait_for_function(
             "() => document.activeElement"
             " && document.activeElement.matches('#roster article')"
-            " && document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
+            " && document.activeElement.querySelector('b')?.textContent === 'rosy_03'"
         )
         page.evaluate("() => { window.__focusedCard = document.activeElement; }")
         page.wait_for_function("() => !window.__focusedCard.isConnected", timeout=3000)
         assert page.evaluate(
             "() => document.activeElement.matches('#roster article')"
-            " && document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
+            " && document.activeElement.querySelector('b')?.textContent === 'rosy_03'"
         )
         page.keyboard.press("ArrowDown")
         page.wait_for_function(
-            "() => document.activeElement.querySelector('b')?.textContent === 'rosy_02'"
+            "() => document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
         )
         page.keyboard.press("Enter")
         page.wait_for_function(
             "() => document.querySelectorAll('.robot.selected').length === 1"
-            " && document.querySelector('.robot.selected b')?.textContent === 'rosy_02'"
+            " && document.querySelector('.robot.selected b')?.textContent === 'rosy_01'"
         )
         page.keyboard.press("Escape")
         page.wait_for_function(
@@ -1511,9 +1522,9 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
                                                init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
         assert page.locator("#log ui-empty").inner_text() == "최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다."
-        page.locator("#roster-toggle").click()
+        _open_cards(page)
         page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
-        aim = page.locator("#roster article").filter(has_text="rosy_02").locator("ui-button").first
+        aim = page.locator('#roster article[data-robot-id="rosy_02"] ui-button').first
         aim.click()
         canvas = page.locator("#map-canvas")
         assert canvas.get_attribute("tabindex") == "0"
@@ -1563,7 +1574,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
         browser, page, errors = _open_console(p, api, posts=posts,
                                               init_script="window.confirm = () => true")
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#roster-toggle").click()
+        _open_cards(page)
         page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         page.wait_for_function("() => !document.querySelector('#roster article ui-button')?.disabled")
         page.locator("#roster article").filter(has_text="rosy_01").locator("ui-button").first.click()
@@ -1637,7 +1648,7 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
             "/api/fleet/formation": {"active": False, "state": "IDLE"},
         })
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.querySelectorAll('#roster article, #roster-toggle').length > 0")
+        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
         # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
         assert page.locator(".queues-panel").is_hidden()
         browser.close()
@@ -1713,11 +1724,8 @@ def test_console_fits_the_declared_viewport(console_url):
         " 보인다(D-201): " + str(fit)
     )
     assert abs(fit["primary"]["width"] / fit["secondary"]["width"] - 1.5) <= 0.03, fit  # D-493: map 3 : rail 2
-    for name in ("signals", "formation", "rosterPanel"):
-        box = fit[name]
-        assert box is not None and box["bottom"] <= fit["vh"] and box["top"] >= 0, (
-            f"{name} 이(가) 뷰포트 밖이다(D-201): {box}"
-        )
+    # D-540 3 replaces D-493's 1920 rail fit: the rail is the one scroll, its first panels start on screen.
+    assert fit["rosterPanel"]["top"] < fit["vh"], fit
     for name in ("mapCanvas", "visionPreview", "signals", "formation", "roster", "rosterPanel", "stop"):
         assert fit[name]["width"] > 0 and fit[name]["height"] > 0, fit
     assert fit["visionFrame"]["height"] == 0, fit  # No camera source in this fixture.
@@ -1747,7 +1755,8 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
         assert fit["stop"]["bottom"] <= fit["vh"]
         if scenario == "delayed":
             assert "지연" in page.inner_text("#roster")
-            assert page.locator("#roster").evaluate("e => e.scrollHeight > e.clientHeight")
+            # D-540 3: the roster has no scroll of its own; the rail is the one scroll.
+            assert page.locator("#roster").evaluate("e => e.scrollHeight <= e.clientHeight")
         elif scenario == "disconnected":
             assert "닿지 않음" in page.inner_text("#roster")
             assert page.locator(".queues-panel").is_visible()
@@ -2123,7 +2132,7 @@ def test_camera_fault_ir_fallback_decline_sends_no_request(console_url):
             playwright, api, posts=posts, init_script=DECLINE_CONFIRM
         )
         page.goto(console_url, wait_until="networkidle")
-        page.locator("#roster-toggle").click()
+        _open_cards(page)
         fallback = page.get_by_role("button", name="IR 추적 선택", exact=True)
         fallback.wait_for(state="visible")
         fallback.click()
@@ -2146,12 +2155,9 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
         browser, page, errors = _open_console(playwright, API)
         page.set_viewport_size({"width": width, "height": 844})
         page.goto(console_url, wait_until="networkidle")
-        assert page.locator("#roster article").count() == 1
-        assert "rosy_03" in page.locator("#roster article").inner_text()
+        assert page.locator("#roster article:not([data-collapsed])").count() == 1
+        assert "rosy_03" in page.locator("#roster article:not([data-collapsed])").inner_text()
         save_temp_screenshot(page, f"fleet_console_mobile_default_{width}.png")
-        cancel = page.locator("#cancel-all").bounding_box()
-        all_robots = page.locator("#roster-toggle").bounding_box()
-        assert cancel and all_robots and abs(cancel["width"] - all_robots["width"]) <= 1, (cancel, all_robots)
         actions = page.locator("#roster article .robot-actions")
         action_widths, actions_width = actions.locator("ui-button").evaluate_all(
             "buttons => [buttons.map(button => button.getBoundingClientRect().width), "
@@ -2161,8 +2167,7 @@ def test_mobile_console_has_no_horizontal_overflow(console_url, width):
             assert abs(action_widths[2] - actions_width) <= 1, action_widths
         else:
             assert abs(action_widths[2] - action_widths[0]) <= 1, action_widths
-        page.locator("#roster-toggle").click()
-        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
+        _open_cards(page)
         save_temp_screenshot(page, f"fleet_console_mobile_{width}.png")
         layout = page.evaluate("""() => ({
           overflow: document.documentElement.scrollWidth - innerWidth,
@@ -2631,7 +2636,7 @@ def test_roster_mode_tag_speaks_korean_and_keeps_the_enum_in_title(console_url):
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, API)
         page.goto(console_url, wait_until="networkidle")
-        page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
+        _open_cards(page)
         first_tag = page.locator("#roster article").first.locator(".robot-head ui-tag").first
         assert first_tag.inner_text() == "내비게이션"
         assert first_tag.get_attribute("title") == "NAVIGATION"
@@ -3311,7 +3316,7 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
         page.route("**/api/fleet/robots/rosy_01/line-stuck/claim", claim)
         page.route("**/api/fleet/robots/rosy_01/line-stuck/decision", decision)
         page.goto(console_url, wait_until="networkidle")
-        panel = page.locator("#stuck-panel")
+        panel = page.locator("#critical-list")  # D-540 3: the answers open in the queue row
         panel.wait_for(state="visible")
         item = panel.locator('.stuck-item[data-robot-id="rosy_01"]')
         assert "앞 물체로 멈춤" in item.text_content()
@@ -3348,7 +3353,7 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
         assert "정지 거리 안에 아직 물체가 있습니다" in text
         assert "STUCK_DECISION_REFUSED: RESUME refused: object_within_stop_distance" in text
         assert result.get_attribute("data-kind") == "bad"
-        assert page.locator("#stuck-panel [style]").count() == 0
+        assert page.locator("#critical-list [style]").count() == 0
         assert not errors
         save_temp_screenshot(page, "fleet_line_stuck_panel.png")
         browser.close()
@@ -3374,11 +3379,11 @@ def test_line_stuck_answer_in_flight_blocks_a_second_submit_then_shows_success(c
 
         page.route("**/api/fleet/robots/rosy_01/line-stuck/decision", decision)
         page.goto(console_url, wait_until="networkidle")
-        item = page.locator('#stuck-panel .stuck-item[data-robot-id="rosy_01"]')
+        item = page.locator('#critical-list .stuck-item[data-robot-id="rosy_01"]')
         wait = item.locator('ui-button[data-decision="WAIT"]')
         wait.click()
         page.wait_for_function("() => document.querySelector("
-                               "'#stuck-panel ui-button[data-decision=\"WAIT\"]')"
+                               "'#critical-list ui-button[data-decision=\"WAIT\"]')"
                                "?.getAttribute('aria-disabled') === 'true'")
         assert "답을 보내는 중" in wait.get_attribute("reason")
         wait.click(force=True)
@@ -3407,7 +3412,7 @@ def test_line_stuck_confirm_follows_the_live_stuck_and_an_offline_robot(console_
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api, posts=posts)
         page.goto(console_url, wait_until="networkidle")
-        item = page.locator('#stuck-panel .stuck-item[data-robot-id="rosy_01"]')
+        item = page.locator('#critical-list .stuck-item[data-robot-id="rosy_01"]')
         resume = item.locator('ui-button[data-decision="RESUME"]')
         resume.click()
         item.locator(".stuck-confirm").wait_for(state="visible")
@@ -3417,19 +3422,19 @@ def test_line_stuck_confirm_follows_the_live_stuck_and_an_offline_robot(console_
         api["/api/fleet/state"] = _stuck_api(local_enabled=True, stuck_id="stuck-new")[
             "/api/fleet/state"]
         page.locator('.stuck-item[data-stuck-id="stuck-new"]').wait_for(state="attached")
-        assert page.locator("#stuck-panel .stuck-confirm").count() == 0
-        assert page.locator('#stuck-panel ui-button[data-decision="RESUME"]').get_attribute(
+        assert page.locator("#critical-list .stuck-confirm").count() == 0
+        assert page.locator('#critical-list ui-button[data-decision="RESUME"]').get_attribute(
             "aria-expanded") == "false"
 
         # Open the confirm step again, then the robot drops off: send is blocked too.
-        page.locator('#stuck-panel ui-button[data-decision="BACK_AND_RETRY"]').click()
-        yes = page.locator('#stuck-panel ui-button[data-focus-key="confirm-yes"]')
+        page.locator('#critical-list ui-button[data-decision="BACK_AND_RETRY"]').click()
+        yes = page.locator('#critical-list ui-button[data-focus-key="confirm-yes"]')
         yes.wait_for(state="visible")
         assert yes.get_attribute("aria-disabled") == "false"
         api["/api/fleet/state"] = _stuck_api(local_enabled=True, stuck_id="stuck-new",
                                              robot_online=False)["/api/fleet/state"]
-        page.locator("#stuck-panel .stuck-item.offline").wait_for(state="attached")
-        buttons = page.locator("#stuck-panel .stuck-actions ui-button")
+        page.locator("#critical-list .stuck-item.offline").wait_for(state="attached")
+        buttons = page.locator("#critical-list .stuck-actions ui-button")
         assert buttons.count() == 5
         for index in range(5):
             assert buttons.nth(index).get_attribute("aria-disabled") == "true"
@@ -3509,4 +3514,34 @@ def test_paired_console_keeps_the_token_field_and_never_asks_for_a_session(conso
         assert page.is_visible("#console-token")
         assert posts == []
         assert not errors, f"페이지 오류: {errors}"
+        browser.close()
+
+
+def test_shared_token_operator_sees_why_motion_is_locked_but_can_still_stop(console_url):
+    """D-540 9: site-console may stop but not move; moving controls say why, stops stay usable."""
+    from playwright.sync_api import sync_playwright
+
+    named = "이름 있는 운영자 로그인이 필요합니다"
+    api = {"/api/fleet/state": SNAPSHOT, "/api/fleet/map": MAP_GRID,
+           "/api/fleet/formation": {"active": True, "state": "RUNNING"},
+           "/api/fleet/session": {"principal_id": "site-console", "role": "operator"},
+           "/api/fleet/dispatch-control": {"generation": 7, "dispatch_enabled": False,
+                                           "rearm_available": True, "queued_tasks": 2,
+                                           "unresolved_actions": 0}}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="networkidle")
+        # Rearm reopens dispatch (queued tasks move), so it is locked with the same reason.
+        page.wait_for_function(f'() => document.querySelector("#dispatch-rearm")?.getAttribute("reason") === "{named}"')
+        assert page.locator("#dispatch-rearm").get_attribute("disabled") is not None
+        goal = page.locator('#roster ui-button[data-goal-robot-id]').first
+        goal.wait_for()
+        page.wait_for_function(f'() => document.querySelector("#formation-reform")?.getAttribute("reason") === "{named}"')
+        assert goal.get_attribute("reason") == named
+        assert page.locator("#formation-stop").get_attribute("reason") != named
+        assert page.locator("#formation-stop").get_attribute("disabled") is None
+        assert page.locator("#estop").get_attribute("disabled") is None
+        cancel = page.locator("#roster .robot-actions ui-button", has_text="취소").first
+        assert cancel.get_attribute("reason") != named
+        assert not errors
         browser.close()

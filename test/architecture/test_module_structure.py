@@ -185,13 +185,25 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        47_248,
-        "split: re-judged at 47248 on 2026-10-09: D-546 6 adds the pose-request answer "
-        "(localization/pose_request.py, a LocalizationService step, RobotClient.localization_request) "
-        "and its tests. It reads one CORE route and posts the existing localization decision; it adds "
-        "no command path or package owner, and the VLM hook returns None. The site-map split stays "
-        "next; +150 allowance unchanged, measured from 47248. Previously "
-        "re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
+        47_789,
+        "split: re-judged at 47789 on 2026-10-09 for D-546 6: Fleet answers a robot's pose request (localization/pose_request.py, the service hook and transport call), no command or stop path; +150 allowance unchanged. Previously re-judged at 47636 on 2026-10-09 (independent re-judge, critic agent): D-540 3 (+183 over "
+        "main 47453) puts stuck decisions and the replan confirm inline in the queue rows (roster.js +102, "
+        "new web/trip-replan.js 92 calling the existing confirm-replan/cancel routes), one rail scroll and "
+        "collapsed robot cards; the old #stuck-panel and roster-toggle are removed, not left beside. No new "
+        "robot command path or package owner. site-map.js trip-confirm stays until D-540 step (e) removes it. "
+        "Next growth (D-540 step (d) trip controls on the card): first move attentionItems/attentionKey/"
+        "openDecisionKey/syncRows/fillQueues/setTriageHead and the line-stuck button helpers to "
+        "web/queues.js; roster.js keeps the card. +150 allowance unchanged, measured from 47636. Previously "
+        "re-judged at 47327 on 2026-10-09 (author's record; NEEDS the independent re-judge with "
+        "the D-550 10 Safety-Review): D-550 10 goal lease adds +211 production lines over main 47116: "
+        "the safety-tagged fleet/server/goal_lease.py (123, lease table, per-source renewal gates, send, "
+        "cancel), +24 cli floor check, +24 background_workers renew loop and attempt check, +13 app "
+        "presence route and wiring, +13 transport, +10 trip_runner, +4 signals.js presence; console.py "
+        "net -1. No new package owner; the only new robot call is the lease renewal of a goal Fleet "
+        "already sent. The site-map web/server split in "
+        "docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; +150 allowance unchanged, "
+        "measured from 47327. "
+        "Previously re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
         "(server/tether_watch.py, tether_routes.py, trail-view colour) and its tests. It stops a "
         "tethered robot only through the existing per-robot CORE E-Stop and adds no command path "
         "or package owner. The site-map split stays next; +150 allowance unchanged, measured "
@@ -819,8 +831,8 @@ SIZE_VERDICTS = {
         "(lane_arc.py 309) after the same review's four safety fixes, inside 299 +150.",
     ),
     "core_features": (
-        12_947,
-        "accept: independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
+        13_105,
+        "accept: re-judged at 13105 on 2026-10-09 for D-546 5: CORE raises and clears the pose request (localization/pose_request.py, lane_return_pose_request.py); no motion path, D-468 gates unchanged; +150 allowance unchanged. Previously independently re-judged 2026-10-08 at 12947 (D-520 step 1 merged with main c06ddcad5; "
         "read-only critic agent). Main alone is 12922 (12772 +150, after D-517 M2 authority.py and D-507 "
         "bend). This branch adds 25 lines outside its arc unit. manager.py +11 is the thinnest possible "
         "hook: ArcMixin base, init and reset calls, the status arc field, and two early returns for the arc "
