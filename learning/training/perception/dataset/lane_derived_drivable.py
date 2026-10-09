@@ -51,6 +51,9 @@ SCHEMA = "rosy.lane-derived-drivable/1"
 ORIGIN = "derived_from_reviewed_lanes"
 ADR = "D-554"
 SOURCE_SCHEMA = "pinky-lane-dataset-v1"
+# Schemas verify_dataset (and so sheets, import-verdicts, finalize, train_job) admits: this one and
+# D-563 map-projected labels (map_projected_drivable.py), each with its own origin and ADR.
+ADMITTED = {SCHEMA: (ORIGIN, ADR), "rosy.map-projected-drivable/1": ("map_projected", "D-563")}
 IGNORE = 255
 DRIVABLE = 5
 # Parent v11 output order and roles (lane-seg-20261006-5f5ddcd9) + one final drivable class,
@@ -243,13 +246,13 @@ def derive(src, out, *, min_both_rows=20, ignore_top=110, wall=WALL, stripe_min=
 
 
 def verify_dataset(folder, *, finalized=False):
-    """D-554 admission: schema/origin/adr/classes match and every image/mask hash verifies.
+    """D-554 admission (D-563 map-projected too): schema/origin/adr/classes match and every image/mask hash verifies.
     finalized (training): finalize wrote the judge block and every train/val frame was judged
     ok or uncertain."""
     folder = Path(folder)
     doc = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
-    if (doc.get("schema") != SCHEMA or doc.get("annotation_origin") != ORIGIN
-            or doc.get("adr") != ADR or doc.get("evaluation_use") != "training_val_only"
+    if (ADMITTED.get(doc.get("schema")) != (doc.get("annotation_origin"), doc.get("adr"))
+            or doc.get("evaluation_use") != "training_val_only"
             or doc.get("classes") != CLASSES or doc.get("ignore_index") != IGNORE):
         raise ValueError("not a D-554 lane-derived drivable dataset")
     frames = doc.get("frames")
