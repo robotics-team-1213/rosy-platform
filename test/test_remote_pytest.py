@@ -109,6 +109,9 @@ def test_pick_prints_one_host_or_exits_1(monkeypatch, capsys):
     monkeypatch.setattr(rp, "probe", lambda h: None)
     assert rp.main(["--pick", "sim"]) == 1
     assert capsys.readouterr().out == ""
+    monkeypatch.setenv("ROSY_TEST_LOCAL", "1")
+    assert rp.main(["--pick", "sim"]) == 1
+    assert "ROSY_TEST_LOCAL=1" in capsys.readouterr().err
 
 
 def test_probe_parser_reads_only_the_rosyprobe_line():

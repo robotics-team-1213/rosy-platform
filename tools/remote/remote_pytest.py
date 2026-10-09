@@ -235,10 +235,12 @@ def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[s
 def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[str]:
     """Hosts for cls by measured headroom (D-568), printing why; empty when forced local or none fits."""
     if os.environ.get("ROSY_TEST_LOCAL") == "1":
+        print(f"[remote-pytest] {cls} -> no host: ROSY_TEST_LOCAL=1 forces this machine", file=sys.stderr, flush=True)
         return []
     if hosts is None:
         hosts = os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split()
     if not hosts:
+        print(f"[remote-pytest] {cls} -> no host: ROSY_TEST_HOSTS is empty", file=sys.stderr, flush=True)
         return []
     with ThreadPoolExecutor(len(hosts)) as pool:
         probes = list(pool.map(probe, hosts))
