@@ -171,8 +171,15 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        46_701,
-        "split: re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
+        46_965,
+        "split: re-judged at 46965 on 2026-10-09 (author's record; needs the independent re-judge with "
+        "the D-550 10 Safety-Review): D-550 10 goal lease adds fleet/server/goal_lease.py (80 lines, the "
+        "lease table, send and renew) and +60 across cli/app/background_workers/trip_runner/trip_guard/"
+        "transport wiring; console.py stays at 1229. Branch base measured 46825. No new package owner; "
+        "the only new robot call is the lease renewal of a goal Fleet already sent. The site-map web/server "
+        "split in docs/plans/2026-10-07-fleet-site-map-web-server-seam.md stays next; +150 allowance "
+        "unchanged, measured from 46965. "
+        "Previously re-judged at 46701 on 2026-10-09: D-536 adds a read-only guide "
         "(fleet/guide/situation.py, fleet/server/guide_service.py, web/guide-layer.js) "
         "over the map snapshot Fleet already holds. It does not call the network or emit a command. "
         "Main measured 46507 before D-523's 194-line ask parser. No new robot command path or package owner. "
