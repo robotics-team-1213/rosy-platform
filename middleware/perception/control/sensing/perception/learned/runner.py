@@ -134,7 +134,9 @@ class LaneSegModel:
         learned_paint_target drivable: the drivable way (drivable_paint.drivable_target, kind
         "drivable"), or the lane_marking mask (kind "lane_marking") when the model has no
         drivable class or too little of it is near; info says which and why. Rows above a
-        cropped model's input (manifest input.crop) are never drivable."""
+        cropped model's input (manifest input.crop) are never drivable. With a class named
+        `crosswalk`, info["crosswalk_mask"] is its mask at the frame's size (the D-491 crosswalk
+        extent, D-597 amendment); the paint worker takes it out of info."""
         t0 = time.perf_counter()
         logits = self._logits(bgr)
         spec, size = self.manifest.input, (bgr.shape[1], bgr.shape[0])
@@ -144,6 +146,10 @@ class LaneSegModel:
             mask, kind = lane_marking_mask(logits, self.manifest.classes, size=size), "lane_marking"
         else:
             mask, kind = cv2.resize(way.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST), "drivable"
+        crosswalk = [c.index for c in self.manifest.classes if c.name == "crosswalk"]
+        if crosswalk:
+            info["crosswalk_mask"] = cv2.resize((logits[0].argmax(axis=0) == crosswalk[0]).astype(np.uint8),
+                                                size, interpolation=cv2.INTER_NEAREST)
         return mask, kind, info, (time.perf_counter() - t0) * 1000.0
 
     def infer_with_mask(self, bgr: np.ndarray) -> tuple[InferResult, np.ndarray]:

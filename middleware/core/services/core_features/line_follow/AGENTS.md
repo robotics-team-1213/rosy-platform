@@ -46,7 +46,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 
 ### Testing Requirements
 
-`middleware/core/gateway/test/test_line_follow.py`, `test_line_follow_body_stop.py`, `test_line_follow_stuck.py`, `test_line_follow_stuck_api.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `test_lane_return*.py`, `test_lane_bridge.py`, `test_line_junction.py`, `test_lane_arc.py` (+ `test_lane_arc_off_golden.json`), `middleware/core/gateway/test/test_line_junction_api.py`, `test_line_arc_api.py`, `middleware/core/services/test/test_line_authority.py`, `middleware/core/gateway/test/test_line_authority_api.py`, `middleware/core/services/test/test_crosswalk_gate.py`, `middleware/core/gateway/test/test_crosswalk_gate_wiring.py`
+`middleware/core/gateway/test/test_line_follow.py`, `test_line_follow_lost_resume.py` (D-407 개정 2026-10-10), `test_line_follow_body_stop.py`, `test_line_follow_stuck.py`, `test_line_follow_stuck_api.py`, `middleware/core/services/test/test_line_stuck_recovery.py`, `test_lane_return*.py`, `test_lane_bridge.py`, `test_line_junction.py`, `test_lane_arc.py` (+ `test_lane_arc_off_golden.json`), `middleware/core/gateway/test/test_line_junction_api.py`, `test_line_arc_api.py`, `middleware/core/services/test/test_line_authority.py`, `middleware/core/gateway/test/test_line_authority_api.py`, `middleware/core/services/test/test_crosswalk_gate.py`, `middleware/core/gateway/test/test_crosswalk_gate_wiring.py`
 
 ## Dependencies
 

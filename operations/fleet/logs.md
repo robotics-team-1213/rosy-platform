@@ -3001,3 +3001,9 @@
 - Change: `SightingService.accept` takes `calibration_source: approved_record` only when its revision is the source's current approved D-457 record (`TrackingService.approved_revision`, wired in `cli.py`); otherwise 409 `CALIBRATION_MISMATCH`. Site config key `marker_yaw_offset_deg` is validated with Vision's shared check. API v1.177.
 - Evidence: model PC pytest of sightings/tracking/map pose/site map/roster/version pins/ownership/module structure 426 passed, gateway site sightings + module criteria 16 passed, known_failures 0 new.
 - Gate: SOURCE. The live site needs a release and the config line before D-494 anchors from the ceiling camera.
+
+
+## 2026-10-10 · uncommitted · fix(fleet): D-595 지도 맞춤 고정과 교정 어긋남 경고
+- 변경: 현장 지도 탭 `fitView`가 로봇 링(몸 + `u_m`)을 맞춤에 넣고 1 s 폴마다 다시 맞추던 것(be14cf129)을 없앴다. 맞춤은 장소·차로·`view_turn_deg`로만 정한다(be14cf129 이전 맞춤). 지도 밖 링은 잘리고 이름표는 지도 안에 붙는다. 관제 지도는 교정 어긋남이 떠도 수락된 보정의 실영상을 내리지 않고 경고 띠와 "맵 고정을 다시 하세요" 문구만 얹는다.
+- 증거: 현장 읽기 표본에서 Fleet 기록·평면은 고정이었고, 흔들림은 브라우저 맞춤에서 났다(ADR D-595 Context). 브라우저 시험 `test_site_map_fit_stays_fixed_while_robots_move[0,90]`, `test_stale_camera_calibration_keeps_the_frozen_picture_and_warns`.
+- gate 변화: 없음(SOURCE). 현장 화면 확인은 배포 뒤.
