@@ -289,3 +289,35 @@ def test_installer_and_host_state_write_the_same_sudoers_file():
     installer = out[start + 1].removeprefix("    ") + "\n"
     template = (ROOT / "deploy/hosts/common/host-state/sudoers-rosy-host-control.in").read_text(encoding="utf-8")
     assert template.replace("@LOGIN@", "op") == installer
+
+
+def test_avahi_interfaces_pick_physical_ones_and_restart_only_on_change(tmp_path):
+    net = tmp_path / "sys/class/net"
+    for name, physical in (("eth0", 1), ("wlan0", 1), ("lo", 0), ("docker0", 1), ("br-1a2b", 1), ("veth9", 0),
+                           ("tailscale0", 0), ("virbr0", 1), ("zt0", 1), ("dummy0", 0)):
+        (net / name).mkdir(parents=True)
+        if physical:
+            (net / name / "device").mkdir()
+    conf = tmp_path / "etc/avahi/avahi-daemon.conf"
+    conf.parent.mkdir(parents=True)
+    conf.write_text("[server]\nuse-ipv4=yes\n#allow-interfaces=eth0\n[wide-area]\n")
+    tool = ROOT / "deploy/hosts/common/rosy-avahi-interfaces"
+    env = {**os.environ, "ROSY_AVAHI_ROOT": str(tmp_path)}
+
+    def run():
+        return subprocess.run([sys.executable, str(tool)], env=env, capture_output=True, text=True, timeout=30)
+
+    assert run().stdout == "set allow-interfaces=eth0,wlan0\n"
+    assert conf.read_text() == "[server]\nuse-ipv4=yes\nallow-interfaces=eth0,wlan0\n[wide-area]\n"
+    assert run().stdout == ""  # unchanged: no write, no restart
+    (net / "enp3s0").mkdir()
+    (net / "enp3s0/device").mkdir()
+    assert run().stdout == "set allow-interfaces=enp3s0,eth0,wlan0\n"
+    assert conf.read_text().count("allow-interfaces") == 1
+
+
+def test_avahi_interfaces_unit_is_in_the_common_manifest():
+    manifest = (ROOT / "deploy/hosts/common/host-state/manifest").read_text(encoding="utf-8")
+    assert "safe enabled rosy-avahi-interfaces.service" in manifest
+    unit = (ROOT / "deploy/hosts/common/rosy-avahi-interfaces.service").read_text(encoding="utf-8")
+    assert "Before=avahi-daemon.service" in unit

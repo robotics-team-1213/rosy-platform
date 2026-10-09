@@ -18,3 +18,7 @@ approval file /etc/ssh/sshd_config.d/10-rosy.conf common/sshd-10-rosy.conf
 approval file /usr/local/sbin/rosy-host-control deploy/site/rosy-host-control 0755
 approval file /etc/sudoers.d/rosy-host-control common/sudoers-rosy-host-control.in 0440
 approval file /etc/rosy/host-control/role role/host-control-role
+# mDNS only on physical interfaces (no docker veth/bridge link-local advertisements).
+safe file /usr/local/sbin/rosy-avahi-interfaces deploy/hosts/common/rosy-avahi-interfaces 0755
+safe file /etc/systemd/system/rosy-avahi-interfaces.service deploy/hosts/common/rosy-avahi-interfaces.service
+safe enabled rosy-avahi-interfaces.service
