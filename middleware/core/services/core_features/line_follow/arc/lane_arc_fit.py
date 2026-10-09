@@ -28,6 +28,25 @@ def fit_circle_candidate(points, expected_centre_m, radius_m, *, point_sigma_m, 
     cx, cy = (float(v) for v in expected_centre_m)
     selected = [(float(x), float(y)) for x, y in points
                 if abs(math.hypot(x-cx, y-cy)-radius_m) <= radial_gate_m]
+    # A spoke enters the radial band at its crossing, but its local direction
+    # differs from the expected circle tangent (D-520's 45 mm / 30 deg gate).
+    tangent_points = []
+    for x, y in selected:
+        nearby = [(px, py) for px, py in selected if math.hypot(px-x, py-y) <= 0.045]
+        if len(nearby) < 4:
+            continue
+        mx = sum(px for px, _ in nearby)/len(nearby)
+        my = sum(py for _, py in nearby)/len(nearby)
+        xx = sum((px-mx)**2 for px, _ in nearby)
+        xy = sum((px-mx)*(py-my) for px, py in nearby)
+        yy = sum((py-my)**2 for _, py in nearby)
+        if xx+yy <= 1e-12 or math.hypot(xx-yy, 2*xy)/(xx+yy) < 0.5:
+            continue
+        direction = 0.5*math.atan2(2*xy, xx-yy)
+        tangent = math.atan2(x-cx, cy-y)
+        if abs(math.cos(direction-tangent)) >= math.cos(math.radians(30)):
+            tangent_points.append((x, y))
+    selected = tangent_points
     if len(selected) < 8:
         return None
 
