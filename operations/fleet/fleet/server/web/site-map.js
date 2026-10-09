@@ -9,12 +9,12 @@ import {
   PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, editEdge, editPlace, fitView,
   planIsCurrent, planPolylines, siteMapErrorText, tripCancelReason, tripStartReason,
   tripStatusText, rectangularView, viewTurnOf, editViewTurn, loopCapacityText, repeatTripBody, convoyLeaders,
-  planTrip, startTrip, cancelTrip, tripRefusalText, planSummaryText, repeatTripReason,
+  planTrip, startTrip, cancelTrip, tripRefusalText, planSummaryText, repeatTripReason, planeView,
 } from '/console/assets/site-map-model.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {warpImage} from '/console/assets/field-warp.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
-import {parseLensHeader} from '/console/assets/vision-view.js';
+import {parseLensHeader, fetchMapPlane, planeFitsImage} from '/console/assets/vision-view.js';
 
 const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
@@ -308,6 +308,7 @@ $('token-save').addEventListener('click', async () => {
 
 function clearPlane() {
   planeEpoch += 1;
+  if (plane?.url.startsWith('blob:')) URL.revokeObjectURL(plane.url);
   plane = null;
   $('plane-pick').checked = false;
   $('plane-point').textContent = '확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.';
@@ -336,7 +337,31 @@ $('plane-load').addEventListener('click', async () => {
   gate('plane-load', '불러오는 중');
   let url;
   try {
-    const {view, field} = rectangularView(record, shown()?.map_id, W, H, viewTurnOf(shown()));
+    const turn = viewTurnOf(shown());
+    const {view, field} = rectangularView(record, shown()?.map_id, W, H, turn);
+    // D-560: Vision's map plane first; the browser warp below only when Vision cannot make one.
+    const got = await fetchMapPlane(request, record.source_id, null, AbortSignal.timeout(10000));
+    if (got.state === 'error') throw new Error(`Vision 응답 ${got.status}`);
+    if (got.state === 'live') {
+      // The plane's coordinates are only as good as the calibration this page picked them against.
+      if (!got.calibrationRevision || got.calibrationRevision !== record.calibration_revision)
+        throw new Error('보정 revision이 다릅니다 — 다시 불러오세요.');
+      if (!(got.ageMs >= 0 && got.ageMs <= 3000)) throw new Error('신선한 평면 영상을 확인할 수 없습니다.');
+      if (got.blob.size > 8 * 1024 * 1024) throw new Error('영상 크기가 너무 큽니다.');
+      url = URL.createObjectURL(got.blob);
+      const image = new Image(); image.src = url; await image.decode();
+      if (epoch !== planeEpoch) return;
+      if (planeFitsImage(got.plane, image.naturalWidth, image.naturalHeight)) {
+        // Header rectangle = picture, so the view's toMap is x = min_x + u/ppm, y = max_y - v/ppm (D-560 4).
+        plane = {mapId: record.map_id, ...planeView(got.plane, W, H, turn), bounds: got.plane, url};
+        url = null;  // the plane owns it until clearPlane
+        $('plane-status').textContent = `불러온 평면 영상 · Rosy Cam 평면 영상 · ${record.source_id} · ${got.calibrationRevision} · ${new Date().toLocaleTimeString()} · 표시 전용`;
+        render();
+        return;
+      }
+      URL.revokeObjectURL(url);  // a picture that is not its rectangle is no plane: use the browser warp
+      url = null;
+    }
     const lease = await request('/api/fleet/vision/lease', {method: 'POST',
       headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source_id: record.source_id})});
     const path = new URL(lease.frame_path, location.origin);
@@ -362,7 +387,7 @@ $('plane-load').addEventListener('click', async () => {
     warpImage(canvas.getContext('2d'), image, h, canvas.width, canvas.height, document.createElement('canvas'));
     if (epoch !== planeEpoch) return;
     plane = {mapId: record.map_id, view, field, bounds: record.track_bounds_m, url: canvas.toDataURL('image/png')};
-    $('plane-status').textContent = `불러온 평면 영상 · ${record.source_id} · ${new Date().toLocaleTimeString()} · 표시 전용`;
+    $('plane-status').textContent = `불러온 평면 영상 · 브라우저 보정(대체) · ${record.source_id} · ${new Date().toLocaleTimeString()} · 표시 전용`;
     render();
   } catch (error) {
     if (epoch === planeEpoch) $('plane-status').textContent = `평면 영상 확인 실패 · ${siteMapErrorText(error)}`;
