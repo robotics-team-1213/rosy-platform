@@ -20,6 +20,7 @@
    - 자세 불확실도를 화면으로 옮긴 폭만큼 경계 근처를 255로 둔다. 먼 행일수록 넓어진다.
    - 투영 라벨과 화면 선 유도 라벨이 크게 어긋나는 프레임은 학습에서 빼고 기록한다(자세·시각 동기 오류 탐지).
    - 투영 라벨도 사람 승인이 아니다. `annotation_origin: map_projected`로 따로 표시하고, D-554와 같은 카나리아 판정을 거친다.
+   - **기존 자산과 빈 곳(2026-10-09 조사).** 도로 형상은 `map_v2_fleet`의 `lane_graph.yaml` 중심선(1 cm, 차선 반폭 92.5 mm, 선 폭 25 mm)과 `lane_graph.paint_masks()`의 2 mm 칠 래스터가 있다. 아직 "도로/섬/선"을 답하는 래스터는 없다. 중심선 ±0.0925 m를 같은 2 mm 격자에 칠해 만든다. 로봇의 AMCL `map→odom`은 이미 녹화의 `tf`에 들어 있다. 프레임 자세는 이를 씨앗으로 쓰고, `PaintLocalizer`(칠 입자 필터)로 다듬고, 세션별 카메라 pitch를 맞춘다(보정 기록 간 pitch 표준편차 1.95°). 투영은 `docs/validation/lane-sim-paint-source-2026-10-09/evidence/compare.py`의 `projected_paint`와 `dataset/geometry.py` `Camera.project`를 넓혀 쓴다. 투영 칠과 관측한 흰 선 마스크의 IoU가 낮은 프레임은 뺀다. pitch 1° 오차가 0.6 m 앞에서 약 9 cm, 0.15 m 앞에서 약 7 mm이므로 투영 라벨은 약 0.4 m 앞까지만 둔다. 녹화 토픽(`PILOT_TOPICS`)에 `amcl_pose`와 `localization/state`를 더해 자세 공분산과 위치 확정 여부로 프레임을 거른다. 천장 추적은 yaw가 없고 오차가 1–6 cm라서 교차 확인에만 쓴다. STL과 실제 매트의 정합은 아직 검증하지 않았으므로 첫 단계에서 잰다.
 4. **평가에 "앞길 막힘"을 넣는다.** 학습 검증과 실물 shadow 기록에 아래 40% 가운데 열의 drivable 비율과 drivable 오탐(9항 띠) 비율을 함께 기록한다. 앞길이 도로인데 drivable이 기준보다 적으면 실패로 센다.
 
 ### Rejected
