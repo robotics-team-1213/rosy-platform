@@ -66,6 +66,20 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
      the two push lines below. It never pushes.
    - Each phase prints its wall time. Release 021 (a 98 MB artifact) took 99 s to download
      and 28 s for everything else.
+3a. **Delta instead of a build (D-553 addendum 3).** When the commit only changes files the payload
+   ships verbatim (Python modules, launch/config, native-runtime scripts) and both robots hold the
+   base release this PC prepared, skip steps 1-3:
+   ```powershell
+   python tools/release/make_delta_release.py --base-dir X:\DevTemp\rosy-release-<base>\x\<base> --base-tarball X:\DevTemp\rosy-release-<base>\<base>.tar.gz --release-id <new-id>
+   ```
+   It refuses C/C++/interface/package.xml/setup.py changes, added or deleted shipped files and
+   anything without a verbatim copy in the base (`--not-shipped <prefix>` for paths that never reach
+   a robot). The tarball is signed with the same key and pushed with step 5 as usual; the robot
+   rebuilds the full release from the base and activation verifies all of it. Deltas are never
+   published (D-412). A robot without that base refuses with `DELTA_BASE_MISSING`.
+   Branch builds: `gh workflow run build-native-payload.yml --ref <branch> -f release_id=<id>` works
+   too; `source-ref.txt` records the branch, and only main may be published. Hold the robot
+   (`rosy-update-hold.ps1 -Hold`) so auto-update does not replace a bench build.
 4. **Manual fallback** (the same steps by hand). The artifact folder drops dotfiles such
    as `install/.colcon_install_layout`, so signing it fails with `CHECKSUM_FILE_MISSING`.
    Sign from the tarball. The tarball has no top-level directory. Compare `ros-packages.txt`
