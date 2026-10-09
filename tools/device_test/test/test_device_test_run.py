@@ -1233,3 +1233,34 @@ def test_identify_records_a_change_elsewhere_that_began_before_the_request():
         IDENT.judge([_blob((321, 240), 12), _blob((533, 600), 10)], (320.0, 240.0), 30.0, 30, "blue")
     with pytest.raises(IDENT.Refused, match="no lamp change seen"):       # only background: nothing blinked
         IDENT.judge([_blob((533, 600), 31, before=15)], (320.0, 240.0), 30.0, 30, "blue")
+
+
+class _ZeroingRestart(FakeRobot):
+    """CORE restart starts odometry again at zero, as the real one does."""
+    def ssh(self, cmd, stdin=b""):
+        out = super().ssh(cmd, stdin)
+        if cmd == "sudo -n systemctl restart rosy-core" and out[0] == 0:
+            self.x = self.y = self.yaw = 0.0
+        return out
+
+
+def test_a_core_restart_that_zeroes_odometry_keeps_the_checked_tether(tmp_path):
+    robot = _ZeroingRestart()
+    robot.x, robot.y, robot.yaw = 0.35, 0.21, 1.21                   # left by an earlier drive
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0], pose_at_capture={"x": 0.35, "y": 0.21, "yaw": 1.21})
+    assert "first driving pose" not in s["outcome"] and "moved" not in s["outcome"], s["outcome"]
+    assert s["tether"]["max_charger_m"] is not None and s["tether"]["max_charger_m"] >= 1.5
+
+
+def test_a_robot_moved_before_the_core_restart_still_aborts(tmp_path):
+    robot = _ZeroingRestart()
+    real = robot.ssh
+
+    def pushed_while_the_overlay_is_written(cmd, stdin=b""):
+        if "sudo -n tee" in cmd:
+            robot.x = 0.2                                              # moved after the verdict check
+        return real(cmd, stdin)
+    robot.ssh = pushed_while_the_overlay_is_written
+    code, s = tgo(tmp_path, robot, [-1.5, 0.0])
+    assert code == 2 and "pose just before the CORE restart" in s["outcome"] and not robot.teleops, s["outcome"]
+    assert_restored(robot, tmp_path)
