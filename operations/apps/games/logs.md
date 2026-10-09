@@ -359,3 +359,9 @@
 - 변경: 시간 근거 없는 이전 형식의 경기 응답을 1280·390·320px에 렌더하고 좁은 폭의 동등 패널·넘침·정지를 확인한다.
 - 증거: X: `2026-10-07-games-csp-final/run.txt` 29 passed(확장 전), `2026-10-07-games-unavailable/run.txt` 확장 3 passed, `games_board_unavailable_{1280x800,390x800,320x568}.png`, 각 `known_failures.py` 0 NEW.
 - gate 변화: LOCAL G2 시간 결측 전화 폭 일부 근거 추가. 실제 경기·정지 readback과 사용자 G3는 HOLD.
+
+## 2026-10-09 · uncommitted · uiux(games): 경기 보드 홈과 본문 건너뛰기
+
+- 변경: 이름표를 실제 호스트 진입점 `/`에 연결하고 경기 필드로 건너뛰는 링크·본문 초점 대상을 추가했다.
+- 증거: 로컬 Chromium 320/1366px에서 홈 클릭, 건너뛰기 대상, 정지 버튼과 가로 넘침 0을 확인했다.
+- gate 변화: 없음. 실제 경기 호스트·두 로봇 정지 readback은 별도.

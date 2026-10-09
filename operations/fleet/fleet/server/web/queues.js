@@ -5,7 +5,7 @@ import { localizationUrgent } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { trafficAttention, tripEndText } from "/console/assets/site-map-model.js";
-import { guideAttention } from "./guide-layer.js";
+import { guideAttention } from "/console/assets/guide-layer.js";
 
 function nodeWithText(tagName, className = "", text) {
   const node = document.createElement(tagName);
