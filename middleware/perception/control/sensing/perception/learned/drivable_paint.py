@@ -81,33 +81,39 @@ def right_branch(region: np.ndarray) -> tuple[np.ndarray, int]:
     return out, branches
 
 
-def view_exits(region: np.ndarray, top: int, near_row: int, min_px: int) -> list[tuple[np.ndarray, np.ndarray]]:
+def view_exits(region: np.ndarray, top: int, near_row: int, road_px: int) -> list[tuple[np.ndarray, np.ndarray]]:
     """Where the region leaves the view between rows top and near_row, in order from left to right:
     runs of region pixels along the left column (upward), the top row, then the right column (downward).
-    Gaps shorter than min_px are bridged (a ragged far edge); runs shorter than min_px are dropped.
-    Each exit is its (rows, cols)."""
+    A top-row pixel counts 1/road_px and a side pixel 1/(near_row - top), so a run or gap is a share of
+    the road's width or of the far view's height: gaps under MIN_BRANCH_WIDTH_FRACTION are bridged
+    (a ragged far edge), runs under it dropped. Each exit is its (rows, cols)."""
     width = region.shape[1]
+    top += int(np.argmax(region[top:top + 3].any(axis=1)))   # the model's first row may be left blank
     side = np.arange(near_row - 1, top, -1)
     rows = np.r_[side, np.full(width, top), side[::-1]]
     cols = np.r_[np.zeros(side.size, int), np.arange(width), np.full(side.size, width - 1)]
+    step = np.r_[np.full(side.size, 1.0 / max(near_row - top, 1)), np.full(width, 1.0 / max(road_px, 1)),
+                 np.full(side.size, 1.0 / max(near_row - top, 1))]
+    at = np.cumsum(step)
     merged: list[list[int]] = []
     for first, last in _runs(region[rows, cols]):
-        if merged and first - merged[-1][1] - 1 < min_px:
+        if merged and at[first - 1] - at[merged[-1][1]] < MIN_BRANCH_WIDTH_FRACTION:
             merged[-1][1] = last
         else:
             merged.append([first, last])
-    return [(rows[a:b + 1], cols[a:b + 1]) for a, b in merged if b - a + 1 >= min_px]
+    return [(rows[a:b + 1], cols[a:b + 1]) for a, b in merged
+            if at[b] - at[a] + step[a] >= MIN_BRANCH_WIDTH_FRACTION]
 
 
 def right_exit_way(region: np.ndarray, top: int = 0) -> tuple[np.ndarray | None, int]:
     """(the way to the rightmost exit, exits) when the region leaves the view through two or more
-    exits (view_exits; top is the first row the model sees) above the near band: a junction, even one whose branches open sideways (a T,
-    a ring entry) or rejoin beyond the view. The way is the near band plus the far region nearer
+    exits (view_exits; top is the first row the model sees) above the near band: a junction, even
+    one whose branches open sideways (a T, a ring entry) or rejoin beyond the view. The way is the near band plus the far region nearer
     to the rightmost exit than to any other (D-384 decision 2). (None, exits) with fewer than two."""
     height = region.shape[0]
     near_row = int(height - NEAR_FIELD_FRACTION * (height - top))
     near_width = int(np.count_nonzero(region[near_row:], axis=1).max(initial=0))
-    exits = view_exits(region, top, near_row, max(2, int(MIN_BRANCH_WIDTH_FRACTION * near_width)))
+    exits = view_exits(region, top, near_row, near_width)
     if len(exits) < 2:
         return None, len(exits)
     # ponytail: straight-line distance to each exit, not distance through the region; a branch that
@@ -136,6 +142,10 @@ def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0) -> tupl
     if "drivable" not in roles:
         return None, dict(reason="no_drivable_class", branches=0, near_fraction=0.0)
     labels = logits[0].argmax(axis=0)
+    # The first row the model sees: a bundle that crops inside its graph pads the rows above with
+    # background, which ignore_top (manifest input.crop) does not know about.
+    seen = (labels != roles["background"][0]).any(axis=1) if "background" in roles else labels.any(axis=1)
+    view_top = max(ignore_top, int(np.argmax(seen)))
     # `ignore` paint inside the road (crosswalk, speed bump) is road for the way: as a pass-through
     # only (lane_bounded_drivable through_idxs) it would leave holes that cut the way's rows apart.
     labels = np.where(np.isin(labels, roles.get("ignore", [])), roles["drivable"][0], labels)
@@ -145,7 +155,7 @@ def drivable_target(logits: np.ndarray, classes, *, ignore_top: int = 0) -> tupl
         max_row_growth=math.inf,
         boundary=(names["lane_left"], names["lane_right"]) if {"lane_left", "lane_right"} <= set(names) else None)
     region = fill_holes(region)
-    way, branches = right_exit_way(region, ignore_top)
+    way, branches = right_exit_way(region, view_top)
     if way is None:
         way, branches = right_branch(region)
     band = way[int(way.shape[0] * (1 - NEAR_FIELD_FRACTION)):]

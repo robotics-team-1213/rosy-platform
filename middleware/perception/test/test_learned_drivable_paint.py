@@ -61,14 +61,15 @@ def test_right_branch_starts_on_the_road_under_the_robot():
     assert branches == 1 and way[12, 15:25].all() and not way[:, 0:5].any()
 
 
-def test_a_t_junction_opening_sideways_turns_right():
+@pytest.mark.parametrize("ignore_top", [112, 0])           # 0: a bundle cropping inside its graph
+def test_a_t_junction_opening_sideways_turns_right(ignore_top):
     # Replay 2026-10-10 (docs/validation/drivable-branch-replay-2026-10-10): at a T the crossbar opens
     # to both frame sides and no row splits, so the row scan saw one branch and went straight.
     labels = np.zeros((240, 320), np.int64)
     labels[150:, 120:200] = 5                                # the robot's own road
     labels[125:150, :] = 5                                   # the crossing road, both ways out of view
     labels[118:125, :] = 1                                   # its far line
-    way, info = drivable_target(_logits(labels), CLASSES, ignore_top=112)
+    way, info = drivable_target(_logits(labels), CLASSES, ignore_top=ignore_top)
     assert info["reason"] == "ok" and info["branches"] == 2
     assert way[135, 300:].all() and not way[135, :20].any() and way[220, 120:200].all()
 
