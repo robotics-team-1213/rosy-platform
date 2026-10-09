@@ -4,7 +4,9 @@ Every 0.5 s it reads ``GET /api/fleet/traffic`` (signals, each trip robot's ``si
 ``GET /api/fleet/guide`` (D-536 map pose and lane of every robot) and, for every approach of a signal
 in ``demand`` mode where a robot waits, sends ``POST /api/fleet/traffic/signals/{id}/demand``
 (ttl 2 s). A signal with nobody waiting gets a keep-alive (no approach) so Fleet knows the controller
-is alive. It sends nothing else: no robot command, no signal verb. Fleet decides every green (the
+is alive. It sends nothing else: no robot command, no signal verb. A signal in any other mode (the
+default ``occupancy``, D-525 rev 6, or an operator's cycle/hold/all_red) gets nothing, and a 409 from a
+mode change between read and send is dropped quietly. Fleet decides every green (the
 zone must be free) and the robots still move only on their D-517 authority.
 
 A robot waits at approach A when either
@@ -131,8 +133,11 @@ def run(fleet: Fleet, clock=time.monotonic, sleep=time.sleep, polls: Optional[in
         for send in sends:
             try:
                 fleet.demand(send)
-            except urllib.error.HTTPError as exc:      # e.g. 409 SIGNAL_NOT_DEMAND: an operator changed the mode
-                _LOG.warning("demand %s refused: %s %s", send, exc.code, exc.read()[:200])
+            except urllib.error.HTTPError as exc:
+                if exc.code == 409:   # SIGNAL_NOT_DEMAND: an operator left demand mode (e.g. occupancy) after the read
+                    _LOG.debug("demand %s refused: not in demand mode", send)
+                else:
+                    _LOG.warning("demand %s refused: %s %s", send, exc.code, exc.read()[:200])
             except OSError as exc:
                 _LOG.warning("demand %s failed: %s", send, exc)
         if polls is not None:

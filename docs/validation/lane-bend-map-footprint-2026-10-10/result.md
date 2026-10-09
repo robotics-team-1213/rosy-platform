@@ -18,8 +18,10 @@
 
 첫 서쪽 접촉 후보(`west_01`)는 GT `[-0.6571, -0.4845, 0.4336]`, `sim_t=232.178`에서 몸체 hull이 페인트에 닿았다. 당시 로그는 `reason=junction_bending`, 전방 IR 3개 600 mm, `body_gap_m=0.1516`으로 기록한다. 따라서 장애물 통과 여유만으로 차선 페인트 여유를 보증할 수 없다는 반례다. [앞선 합성 급굽이 폐루프](../lane-keep-core-bend-loop-2026-10-10/result.md)의 몸체 접촉과 같은 종류의 취약점이며, 실제 지도 남쪽 경로에 그 합성 결과를 그대로 일반화하지 않는다.
 
+나중 서쪽 10회의 마지막 GT는 모두 굽이 전의 `(x≈-1.27, y≈-0.39)`에 모인다. 모든 실행의 최종 junction 상태는 `idle`, 최종 사유는 `obstacle_ahead` 6회와 `camera_reselection_required` 4회다. 전방 IR은 600 mm를 기록하지만 `obstacle_ahead` 실행의 최종 LiDAR 몸체 간격은 0–0.6 mm다. 이것은 굽이 알고리즘의 주행 성공 근거가 아니라, 서쪽 접근부의 장애물 판정·카메라 재선택·경로 시작 위치를 따로 진단해야 한다는 근거다.
+
 ## 판정과 다음 검증
 
 샘플에서 접촉한 서쪽 두 실행은 차선 추종 성공으로 수용할 수 없다. 남쪽은 샘플 접촉이 없어도 최소 간격 1.4–2.20 mm보다 샘플 사이 이동이 최대 10–11 mm로 크다. 연속 궤적의 비접촉은 증명되지 않았다. STL의 흰 칠에는 차선 이외의 표식도 포함되므로, 접촉 화소를 승인된 물리 경계 ID나 차선 침범 정답으로 부르지 않는다([D-475](../../adr/D-475-human-reviewed-fixed-eval-truth.md)). 서쪽의 나중 실행은 굽이 자체에 들어가지 않아 안전한 주행 성공의 근거가 아니다.
 
-차선 주행 목표의 다음 SIM 수용 조건은 같은 지도·URDF·제어 버전으로 서쪽과 남쪽 재실행, 1 mm 미만 오차의 연속 몸체 swept-envelope 검사, 선 소실/재획득과 STOP 원인 분리, 사람 검수 경계 ID와의 대조다. 기존 [D-507](../../adr/D-507-lane-trip-leg-structure-and-site-floor.md)의 CORE odom 굽이 소유와 [D-531](../../adr/D-531-route-context-to-lane-keeper.md)의 keeper 문맥 veto를 유지한다. 경계 정답이 없는 페인트 화소를 근거로 제어 권한이나 단일선 추종을 확대하지 않는다. 장치·현장 수용 근거는 아직 없다.
+차선 주행 목표의 다음 SIM 수용 조건은 같은 지도·URDF·제어 버전으로 서쪽과 남쪽 재실행, 1 mm 미만 오차의 연속 몸체 swept-envelope 검사, 서쪽 접근부 `obstacle_ahead`의 LiDAR 원인과 선 소실/재획득 STOP 원인 분리, 사람 검수 경계 ID와의 대조다. 기존 [D-507](../../adr/D-507-lane-trip-leg-structure-and-site-floor.md)의 CORE odom 굽이 소유와 [D-531](../../adr/D-531-route-context-to-lane-keeper.md)의 keeper 문맥 veto를 유지한다. 경계 정답이 없는 페인트 화소를 근거로 제어 권한이나 단일선 추종을 확대하지 않는다. 장치·현장 수용 근거는 아직 없다.

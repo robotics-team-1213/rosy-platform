@@ -629,6 +629,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
                              renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
     install_trip_guard(console, trip_runner)
+    from fleet.server.map_pose_service import install_map_pin_route  # D-593
+    install_map_pin_route(app, service=map_pose, require_named_operator=require_named_operator,
+                          record_event=site_maps.record_event, busy=trip_runner.robot_busy)
     if task_service is not None:  # D-550 10: a dispatch goal's lease lives as long as its attempt
         console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
 
