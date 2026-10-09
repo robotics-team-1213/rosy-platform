@@ -17,5 +17,6 @@ safe file /etc/systemd/system/rosy-host-guard.service role/rosy-host-guard.servi
 safe file /etc/systemd/system/rosy-host-guard.timer role/rosy-host-guard.timer
 report enabled rosy-host-guard.timer
 approval disabled rosy-site-update.timer
+approval file /etc/modules-load.d/rosy-watchdog.conf common/rosy-modules-load-watchdog.conf
 approval file /etc/systemd/system.conf.d/rosy-watchdog.conf common/rosy-watchdog.conf
 approval file /etc/sysctl.d/90-rosy-hang.conf common/90-rosy-hang.conf

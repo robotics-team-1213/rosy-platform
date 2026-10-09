@@ -268,12 +268,23 @@ def test_an_overwritten_file_is_backed_up_and_the_report_names_the_backup(tmp_pa
 
 
 def test_hang_settings_wait_for_approval_on_every_pc():
-    """D-530 decision: the hardware watchdog and kernel panic settings are installed only after approval."""
+    """D-530 decision: the hardware watchdog (with its iTCO_wdt modules-load file) and panic settings need approval."""
+    names = ("modules-load.d/rosy-watchdog.conf", "system.conf.d/rosy-watchdog.conf", "sysctl.d/90-rosy-hang.conf")
     for role in ROLES.values():
         manifest = ROOT / "deploy" / role / "host-state" / "manifest"
-        for line in manifest.read_text(encoding="utf-8").splitlines():
-            if "rosy-watchdog.conf" in line or "90-rosy-hang.conf" in line:
-                assert line.startswith("approval"), (role, line)
+        lines = manifest.read_text(encoding="utf-8").splitlines()
+        for name in names:
+            found = [ln for ln in lines if name in ln and not ln.startswith("#")]
+            assert found and all(ln.startswith("approval") for ln in found), (role, name)
+    assert (ROOT / "deploy/hosts/common/host-state/rosy-modules-load-watchdog.conf").read_text() == "iTCO_wdt
+"
+
+
+def test_ssh_password_login_stays_on():
+    """User decision 2026-10-09: no manifest installs the key-only sshd drop-in."""
+    for folder in (ROOT / "deploy/hosts/common/host-state", *(ROOT / "deploy" / r / "host-state" for r in ROLES.values())):
+        text = (folder / "manifest").read_text(encoding="utf-8")
+        assert not any("sshd" in ln for ln in text.splitlines() if not ln.startswith("#")), folder
 
 
 def test_installer_and_host_state_write_the_same_sudoers_file():
