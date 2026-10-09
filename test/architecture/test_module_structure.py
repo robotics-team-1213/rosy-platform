@@ -201,7 +201,10 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        48_952,
+        49_130,
+        "split: re-judged at 49130 on 2026-10-09 after merging D-575 (+178 over main 48952; a seen ceiling "
+        "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "
+        "web/map-view.js; existing owners, display only, no command path, no new owner). Previously "
         "split: re-judged at 48952 on 2026-10-09 after merging D-564 (+241 over main 48711; floor place markers: "
         "ingest and lease in server/sightings.py, teach-from-marker in teach_service.py and teach_routes.py, "
         "console list in web/site-map-teach.js; existing owners, no command path, no new owner). Previously "
