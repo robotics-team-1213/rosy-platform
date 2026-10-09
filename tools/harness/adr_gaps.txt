@@ -31,5 +31,4 @@ D-574 ADR reserved on branch feat/v13-map-projected-labels (4f65d142c), not yet 
 D-576 ADR reserved on branch feat/v13-drivable-outside-band (6f3f784d5), not yet on main; remove when it lands
 D-581 reserved in another active branch (trail follow from ceiling camera); remove when it lands
 D-581 reserved in another active branch (refs/adr/D-581)
-D-583 reserved in another active branch (refs/adr/D-583)
 D-581 reserved in another active branch (Trail follow in a Fleet-anchored frame from ceiling camera); remove when it lands
