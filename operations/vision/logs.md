@@ -370,6 +370,18 @@
 - 증거: test_overhead_track_worker.py·test_led_identity.py 30 passed.
 - gate 변화: 없음(동작 같음).
 
+## 2026-10-09 · uncommitted · fix(vision): D-547 addendum 후보 없는 유령 치유
+- 변경: 후보가 덮지 않는 로봇 크기(0.06–0.39 m) 전경 blob도, 실시간은 바닥 색이고 학습된 배경은 트랙 중앙값에서 멀면 유령으로 보아 보고하지 않고 같은 자리 연속 3프레임 뒤 치유한다. 학습 프레임은 프로세스 동안 보관(30장, 640×360에서 약 20 MB). 학습된 배경 캐시를 후보 검색과 분리
+- 원인: 2026-10-09 16:38 현장에서 8kcn이 떠난 자리에 유령(점수 0.89–0.95)이 남음. 15:20 학습에서 후보 검색이 그 로봇을 놓쳐 1–6항 치유가 돌지 않음
+- 증거: 합성 프레임 시험 3건(후보 없는 유령 치유, 보이는 로봇 비치유 ×3, 의자·바닥 색 종이 비치유)과 학습 프레임 보관 기대값 변경. 실프레임 D4 재현: main 유령 9/9 → 0/9, 8kcn 9/9 유지. A·B·C 변화 없음
+- gate 변화: 없음. 현장 확인 전
+
+## 2026-10-09 · uncommitted · fix(vision): D-547 addendum 리뷰 반영 — 어두운 배경 조건, 확정 전 보고
+- 변경: 후보 없는 유령은 학습된 배경이 절반 이상 어두울 때만(전체 프레임 지도로 먼저 거름), 확정 전에는 점수 0.35 이하로 보고, 처음 자리 기준 연속 3프레임 뒤 치유하고 지도 x/y·footprint를 로그로 남긴다. CALIBRATION_REQUIRED에서 연속 기록 지움, 치유 영역 안 후보 제거, 팽창 커널 상수화
+- 원인: 독립 리뷰가 파란 사각형 위 회색 상자가 첫 프레임부터 숨고 치유되어 치운 뒤 유령이 남는 것(S1), 확정 전 숨김, blob 16개에서 30–47 ms를 찾음
+- 증거: 합성 시험(테이프 위 색 덱 로봇, 파란 사각형 위 상자, 확정 전 0.35 보고, 의자 부분)과 각 조건 변이 시 실패 확인. 실프레임 D4/D5: 0.35 보고 2프레임 뒤 유령 0, 8kcn 9/9. A·B·C 변화 없음. blob 16개 약 9 ms
+- gate 변화: 없음
+
 ## 2026-10-09 · uncommitted · feat(vision): D-560 S1 지도 평면 영상 `mode: map`
 - 변경: lease `rectification`에 `{"mode": "map"}`(다른 필드 거절). 트래커가 Fleet에서 읽은 승인 보정 기록을 `IngestServer.report_calibration`으로 ingest에 넘기고(두 번째 Fleet 클라이언트 없음), `/frame`이 `rectify.map_plane_jpeg`로 최신 원본을 지도 평면(track_bounds_m + 0.15 m, 400 px/m, 긴 변 ≤ 1920 px, 화면 밖 어두운 고정색)에 편다. 헤더 `X-Frame-Rectified: map`·`X-Frame-Plane`·`X-Frame-Calibration`, 기록 없음·source·map·렌즈·비율 불일치는 409 `plane-unavailable`(원본 대체 없음). 펴기는 `asyncio.to_thread`로 이벤트 루프 밖에서 (프레임, revision)마다 한 번. API Reference §10.6.1, v1.166
 - 증거: 원격 pytest operations/vision/test 428 passed, operations/fleet/test/test_server_app.py 41 passed, known_failures 0 new. 실프레임(`ceiling_north`, `paint-7b220d432c2a`) 평면 1244×624에 활성 지도 차선 6개를 D-560 식으로 그려 도로 가운데 놓임을 눈으로 확인(X:\DevTemp\cam-map-plane-s1\plane-lanes.png)

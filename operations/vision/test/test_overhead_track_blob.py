@@ -416,7 +416,7 @@ def test_a_ghost_needs_consecutive_frames_and_is_never_reported_meanwhile():
         assert detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections == ()
     assert len(detector._suspects) == 1
     assert detector.detect(Frame(_floor(), 12.0), CAL).detections == ()
-    assert detector._suspects == [] and detector._frames is None
+    assert detector._suspects == [] and len(detector._frames) == 30  # kept for later ghosts
 
 
 def _robot_with_deck(image=None):
@@ -437,9 +437,9 @@ def test_the_whole_ghost_blob_is_healed_and_a_robot_parking_there_is_seen_whole(
     assert found.footprint_m == pytest.approx(2.0 * math.sqrt(22 * 22 * 1e-4 / math.pi), abs=0.003)
 
 
-def test_without_suspects_the_learning_frames_are_freed():
-    assert _learned()._frames is None
-    assert _learned(floor=_parked_robot_floor)._frames is not None
+def test_the_learning_frames_are_kept_with_or_without_suspects():
+    assert len(_learned()._frames) == 30
+    assert len(_learned(floor=_parked_robot_floor)._frames) == 30
 
 
 @pytest.mark.parametrize("how", ["relearn", "scene"])
@@ -464,5 +464,87 @@ def test_a_wrong_kept_background_is_guessed_and_healed_without_rewriting_the_sto
     assert guess.score <= BAKED_SCORE_MAX
     for index in range(GHOST_CONFIRM_FRAMES + 2):
         assert after.detect(Frame(_floor(), 101.0 + index / 3), CAL).detections == ()
-    assert after._suspects == [] and after._frames is None
+    assert after._suspects == []
     assert store.path.read_bytes() == kept
+
+
+
+# D-547 addendum: ghosts without a suspect.
+
+def _cabled_robot_floor(image=None):
+    image = _with_square(18, image=image)
+    image[141:159, 297:303] = (40, 160, 230)  # a cable splits the dark body: no suspect
+    return image
+
+
+def test_an_unconfirmed_ghost_is_reported_capped_then_healed():
+    detector = _learned(floor=_cabled_robot_floor)
+    assert detector._suspects == []
+    model = detector._model
+    for index in range(GHOST_CONFIRM_FRAMES - 1):  # visible, at a guess's score, until confirmed
+        (seen,) = detector.detect(Frame(_floor(), 11.0 + index / 3), CAL).detections
+        assert seen.score <= BAKED_SCORE_MAX and detector._model is model
+    assert detector.detect(Frame(_floor(), 12.0), CAL).detections == ()
+    assert detector._model is not model  # healed
+    for index in range(3):
+        assert detector.detect(Frame(_floor(), 12.34 + index / 3), CAL).detections == ()
+    (found,) = detector.detect(Frame(_cabled_robot_floor(), 14.0), CAL).detections
+    assert found.score > BAKED_SCORE_MAX  # back on the healed spot: a live blob
+
+
+@pytest.mark.parametrize("cx", [150, 300, 450])
+def test_a_visible_robot_is_never_healed_wherever_it_stands(cx):
+    detector = _learned()
+    model = detector._model
+    for index in range(10):
+        assert len(detector.detect(Frame(_with_square(18, cx=cx), 11.0 + index / 3), CAL).detections) == 1
+    assert detector._model is model
+
+
+def _tape_floor(image=None):
+    image = _floor() if image is None else image
+    image[137:163, 260:340] = 40  # a dark tape band: long, so it is no suspect
+    return image
+
+
+def test_a_robot_with_a_coloured_deck_on_dark_tape_is_reported_and_never_healed():
+    detector = _learned(floor=_tape_floor)
+    assert detector._suspects == []
+    model = detector._model
+    for index in range(6):
+        frame = _tape_floor()
+        frame[141:159, 291:309] = (60, 60, 120)  # not floor coloured: never a ghost
+        (seen,) = detector.detect(Frame(frame, 11.0 + index / 3), CAL).detections
+        assert seen.score > BAKED_SCORE_MAX
+    assert detector._model is model
+
+
+def _blue_square_floor(image=None):
+    image = _floor() if image is None else image
+    image[139:161, 289:311] = (200, 60, 20)  # a blue start square: not dark
+    return image
+
+
+def test_a_floor_coloured_box_on_a_blue_square_is_seen_and_leaves_no_phantom():
+    detector = _learned(floor=_blue_square_floor)
+    model = detector._model
+    for index in range(4):
+        frame = _blue_square_floor()
+        frame[141:159, 291:309] = 125  # a grey box on the square
+        (seen,) = detector.detect(Frame(frame, 11.0 + index / 3), CAL).detections
+        assert seen.score > BAKED_SCORE_MAX
+    for index in range(3):  # removed
+        assert detector.detect(Frame(_blue_square_floor(), 12.5 + index / 3), CAL).detections == ()
+    assert detector._model is model
+
+
+def test_a_large_dark_occluder_like_a_chair_is_not_healed():
+    detector = _learned(floor=_cabled_robot_floor)
+    model = detector._model
+    for index in range(10):
+        frame = _cabled_robot_floor()
+        frame[141:159, 291:309] = (20, 60, 110)  # a chair part over the spot: not floor coloured
+        frame[60:90, 420:450] = (20, 30, 40)    # and on plain floor elsewhere
+        frame[250:270, 420:440] = 140             # floor-coloured paper on plain floor
+        detector.detect(Frame(frame, 11.0 + index / 3), CAL)
+    assert detector._model is model

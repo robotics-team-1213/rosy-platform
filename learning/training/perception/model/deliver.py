@@ -347,10 +347,15 @@ def remote_script(action: str, rev: str | None, root: str = REMOTE_ROOT, *,
             f"{s}cat {hold} 2>/dev/null || true",
         ])
     if action == "status":
+        def versioned(label: str, pointer: str) -> list[str]:  # D-558: model_version beside the revision
+            sed = r"""sed -n 's/.*"model_version": *"\(v[0-9][0-9.]*\)".*/\1/p'"""
+            return [f"cur=$({s}cat {pointer} 2>/dev/null)",
+                    f"ver=$({s}{sed} \"$cur/{MANIFEST_NAME}\" 2>/dev/null)",
+                    f'echo "{label}: $cur${{ver:+ ($ver)}}"']
         return "\n".join([
-            f"echo \"shadow: $({s}cat {ptr} 2>/dev/null)\"",
+            *versioned("shadow", ptr),
             f"echo \"previous: $({s}cat {prev} 2>/dev/null)\"",
-            f"echo \"active: $({s}cat {act} 2>/dev/null)\"",
+            *versioned("active", act),
             f"echo \"active previous: $({s}cat {act_prev} 2>/dev/null)\"",
             f"echo \"hold: $({s}cat {hold} 2>/dev/null || echo none)\"",
             f"{s}ls -1 {q(root)} 2>/dev/null || true",
