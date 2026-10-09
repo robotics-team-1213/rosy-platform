@@ -1814,6 +1814,19 @@ def test_face_owns_the_screen_with_a_fresh_handover(tmp_path):
     assert opened == ["basic"]
 
 
+def test_a_dev_mode_robot_says_dev_on_the_face_and_the_card(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, face="basic")
+    (tmp_path / "etc/rosy").mkdir(parents=True)
+    (tmp_path / "etc/rosy/dev-mode").write_text("", encoding="ascii")
+    display, _lcd, _clock, _rendered, _opened, _lines = _face_loop(module, tmp_path)
+
+    display.step()
+    assert display.animating == ("basic", "DEV Waiting", "info")
+    assert module.read_view(tmp_path, None)["state_line"].startswith("DEV ")
+
+
 def test_a_stale_handover_brings_back_the_status_card(tmp_path):
     module = _display()
     _status(tmp_path, "CORE_READY", runtime_mode="hardware")

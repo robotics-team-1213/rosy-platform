@@ -19,7 +19,7 @@ from typing import Any, Optional
 from fastapi import Depends, Header, Request
 
 from core_api_web.api.errors import ApiError
-from core_common.config import ConfigError, patch_local_config
+from core_common.config import ConfigError, dev_auth_enabled, patch_local_config
 from core_common.protocol.peer_pairing import SCREEN_CODE_ISSUER
 from typing import Protocol
 
@@ -267,7 +267,10 @@ def _configured_records(config: dict) -> list[dict[str, Any]]:
 
 
 def _refused_in_device_mode(record: dict[str, Any]) -> bool:
-    return record["legacy"] or record["digest"] in DEV_TOKEN_DIGESTS
+    # D-548: the dev-mode marker opens the three shared dev tokens, nothing else plaintext.
+    if record["digest"] in DEV_TOKEN_DIGESTS:
+        return not dev_auth_enabled()
+    return record["legacy"]
 
 
 #: D-407 review L4: a key that lives only for this CORE process. A token record without a
@@ -372,8 +375,9 @@ class AuthContext:
     def __init__(self, token_id: str, role: str, *, source: str = "manual",
                  expires_at: Optional[str] = None, label: str = "",
                  created_at: Optional[str] = None,
-                 principal_ref: Optional[str] = None) -> None:
+                 principal_ref: Optional[str] = None, shared_dev: bool = False) -> None:
         self.token_id = token_id
+        self.shared_dev = shared_dev  # D-548: one of the three public rosy-dev-* tokens
         self.principal_ref = principal_ref or token_id
         self.role = role
         self.source = source
@@ -405,7 +409,8 @@ def authenticate(config: dict, bearer: Optional[str], query_token: Optional[str]
             return AuthContext(token_id=item["id"], role=item["role"], source=item["source"],
                                expires_at=item["expires_at"], label=item["label"],
                                created_at=item["created_at"],
-                               principal_ref=principal_ref(item))
+                               principal_ref=principal_ref(item),
+                               shared_dev=item["digest"] in DEV_TOKEN_DIGESTS)
     raise ApiError("UNAUTHORIZED", 401, "missing or invalid token")
 
 

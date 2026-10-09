@@ -802,3 +802,8 @@
 - 변경: 823847295의 "화면 코드 승인이 실기에서 항상 409였다" 기록에 빠진 gate 항목을 보완한다. `PeerReceiver.confirm`이 승인 시각과 만료 시각을 한 번의 시계 읽기로 정해 168 h 모양 검사를 통과한다.
 - 증거: test_peer_pairing.py의 움직이는 시계 시험(수정 전 실패), 8kcn 055 코드와 그 오버레이 사본으로 같은 traceback 재현.
 - gate 변화: SOURCE. 실기 확인은 릴리스 056 이후 DEVICE(9dfk·8kcn 화면 코드 승인).
+
+## 2026-10-09 · uncommitted · feat(core): 장치 개발 모드 표식 (D-548)
+- 변경: `/etc/rosy/dev-mode`가 있는 장치 CORE만 공용 `rosy-dev-*` 토큰을 받는다(`core_common.config.dev_auth_enabled`, `deps._refused_in_device_mode`). 기동 때 `auth.development_mode`. 공용 개발 토큰은 장치에서 `host/ssh/*` 403. API v1.156.
+- 증거: test_auth_pairing.py(표식 유무·이벤트), test_host_ssh.py(셸 거부).
+- gate 변화: SOURCE. DEVICE(표식 켬·끔, LCD DEV, SSH 403)는 열림.

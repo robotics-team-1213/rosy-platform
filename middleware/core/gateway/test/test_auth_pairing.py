@@ -433,6 +433,44 @@ def test_device_mode_refuses_dev_tokens_even_with_dev_auth(robot, monkeypatch, t
         assert client.get("/api/v1/robot/state", headers=CARD).status_code == 200
 
 
+def test_device_dev_mode_marker_opens_only_the_shared_dev_tokens(robot, monkeypatch, tmp_path):
+    from core_common import config as core_config
+
+    marker = tmp_path / "dev-mode"
+    monkeypatch.setattr(core_config, "DEV_MODE_MARKER", marker)
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "device")
+    monkeypatch.delenv("ROSY_DEV_AUTH", raising=False)
+    overrides = _card_config([{"token": "plain-" + "operator-value", "role": "operator"}])
+
+    # D-548: no marker is D-193 7 unchanged.
+    tc, _svc, _state, _events = robot(config_overrides=overrides, dev_auth=True)
+    assert tc.get("/api/v1/robot/state", headers=DEV_ADMIN).status_code == 401
+
+    marker.write_text("", encoding="ascii")
+    assert [item["role"] for item in core_config.load_config()["auth"]["tokens"]] == [
+        "administrator", "operator", "viewer"]
+    tc, _svc, _state, events = robot(config_overrides=overrides, dev_auth=True)
+    assert tc.get("/api/v1/robot/state", headers=DEV_ADMIN).status_code == 200
+    assert tc.get("/api/v1/robot/state", headers=DEV_VIEWER).status_code == 200
+    assert tc.get("/api/v1/robot/state", headers=bearer("plain-" + "operator-value")).status_code == 401
+    assert tc.get("/api/v1/robot/state", headers=CARD).status_code == 200
+
+
+def test_device_dev_mode_publishes_a_warning(core_client, monkeypatch, tmp_path):
+    from core_api_web.api.app import create_app
+    from core_common import config as core_config
+
+    marker = tmp_path / "dev-mode"
+    marker.write_text("", encoding="ascii")
+    monkeypatch.setattr(core_config, "DEV_MODE_MARKER", marker)
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "device")
+    tc, svc = core_client()
+    events: list = []
+    svc.events.subscribe(events.append)
+    create_app(svc.config, svc)
+    assert [event.type for event in events if event.type.startswith("auth.")] == ["auth.development_mode"]
+
+
 def test_device_mode_publishes_a_warning_for_refused_credentials(core_client, monkeypatch):
     monkeypatch.setenv("ROSY_DEPLOYMENT", "device")
     from core_api_web.api.app import create_app

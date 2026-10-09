@@ -85,10 +85,16 @@ def _find_default_config() -> Path:
     return Path(__file__).resolve().parents[1] / "config" / DEFAULT_CONFIG_NAME
 
 
+#: D-548: root가 한 로봇에 이 파일을 만들면 그 로봇만 공용 개발 토큰을 연다.
+#: 파일이 없으면 D-193 7 그대로 닫힌다.
+DEV_MODE_MARKER = Path("/etc/rosy/dev-mode")
+
+
 def dev_auth_enabled() -> bool:
-    """개발 토큰을 병합하는가. 장치 모드는 ROSY_DEV_AUTH 를 무시한다(D-193 7)."""
+    """개발 토큰을 병합하는가. 장치 모드는 ROSY_DEV_AUTH 를 무시하고(D-193 7)
+    개발 모드 표식 파일만 본다(D-548)."""
     if os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device":
-        return False
+        return DEV_MODE_MARKER.is_file()
     return os.environ.get("ROSY_DEV_AUTH", "").strip() == "1"
 
 
