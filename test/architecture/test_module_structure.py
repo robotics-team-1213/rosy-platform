@@ -625,7 +625,7 @@ SIZE_VERDICTS = {
     ),
     "foundation/core_common/protocol/schemas.py": (
         1_347,
-        "accept: re-judged at 1347 on 2026-10-09 for D-559: SwarmFollowParams.mode (one Literal field "
+        "accept: re-judged at 1347 on 2026-10-09 for D-559 (independent read-only critic agent ACCEPT): SwarmFollowParams.mode (one Literal field "
         "and its comment) and PoseSample.frame (one optional Literal field); additive, envelope 1.0 kept, "
         "no new model. Previously: accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
         "one RouteContext import and two optional LineFollowStatus fields; the bounded model and "
@@ -861,8 +861,9 @@ SIZE_VERDICTS = {
         "publisher or command path. Re-judge after +150.",
     ),
     "core/services/core_features/swarm": (
-        771,
-        "accept: registered at 771 on 2026-10-09 for D-559 (feat/swarm-trail-follow); "
+        799,
+        "accept: registered at 799 on 2026-10-09 for D-559 (feat/swarm-trail-follow) after its review "
+        "fixes, independently judged ACCEPT at 771 (read-only critic agent, 2026-10-09); "
         "docs/plans/2026-10-09-core-swarm-size-unit.md registers the follower state machine, follow goal "
         "and D-559 trail/pure pursuit as one swarm domain. No runtime move; CommandManager slot, safety "
         "clip, D-400 and the D-422 judgement stay with their owners and are injected. Re-judge after +150.",
