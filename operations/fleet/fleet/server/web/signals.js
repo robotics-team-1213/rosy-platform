@@ -28,7 +28,9 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     presenceInFlight = true;
     try {
       // D-550 10: operator goals' leases are renewed only while a visible operator console says so.
-      if (isOperator() && !document.hidden) {
+      // Only while some robot holds a leased goal: with leases off (the default) nothing new is sent.
+      const leased = (view.robots || []).some((r) => r?.goal?.goal_lease === "leased");
+      if (isOperator() && !document.hidden && leased) {
         await call("/api/fleet/goal-lease/presence", { method: "POST" }).catch(() => {});
       }
       // D-525 4: a virtual manual green lasts while this console is open and visible.
