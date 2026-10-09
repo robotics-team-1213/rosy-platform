@@ -121,6 +121,8 @@ class TripCaps:
     #: D-517 4: CORE enforces a movement authority (``_required``: before any, too); absent means no.
     line_follow_authority: bool = False
     line_follow_authority_required: bool = False
+    #: D-551: CORE shows a signal advice (``POST /line-follow/advice``, display only); absent means no.
+    line_follow_advice: bool = False
     #: D-507 addendum: CORE takes action ``bend`` (a site-map bend on odometry); absent means no.
     lane_bend: bool = False
 
@@ -148,6 +150,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                             lane_arc=item.get("lane_arc") is True,
                             line_follow_authority=item.get("line_follow_authority") is True,
                             line_follow_authority_required=item.get("line_follow_authority_required") is True,
+                            line_follow_advice=item.get("line_follow_advice") is True,
                             lane_bend=item.get("lane_bend") is True)
     return None
 
