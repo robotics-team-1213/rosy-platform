@@ -284,13 +284,3 @@ def test_candidate_job_exports_without_ready_or_lane_changes(tmp_path, monkeypat
     assert json.loads((out / 'state.json').read_text())['outcome'] == 'candidate'
     assert (Path(result['artifact']) / 'candidate_parity.json').is_file()
     assert not list(tmp_path.rglob('READY'))
-
-
-def test_beyond_line_is_outside_each_rows_boundary_lines():
-    labels = np.zeros((2, 320), np.int64)
-    labels[0, 50:60], labels[0, 250:260] = 1, 2
-    labels[1, 250:260] = 2  # no lane_left in this row: nothing beyond it on the left
-    beyond = dh.beyond_line(labels, 1, 2)
-    assert beyond[0, :50].all() and not beyond[0, 50:260].any() and beyond[0, 260:].all()
-    assert not beyond[1, :260].any() and beyond[1, 260:].all()
-

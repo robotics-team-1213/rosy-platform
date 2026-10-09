@@ -22,9 +22,9 @@ walls) that the model calls drivable, and the near-centre drivable fraction (row
 bottom 40 %, cols 110-210) predicted vs labelled. D-566: pos_weight balances the loss (train
 non-drivable / drivable labelled pixels) and the best epoch maximises IoU - fp_lambda * FP.
 FP and the near-centre fraction are scored after the robot's lane-bounded post-process
-(lane_mask.lane_bounded_drivable, D-566 item 4, with D-576 closed boundary walls); the raw model
-values are kept as *_raw. val_beyond_line_fp: label-0 pixels beyond a row's lane_left / lane_right
-predicted drivable (D-576).
+(lane_mask.lane_bounded_drivable, D-566 item 4, blocking beyond both lines per row, D-576); the
+raw model values are kept as *_raw. val_beyond_line_fp: label-0 pixels beyond lane_left /
+lane_right on rows showing both (lane_mask.beyond_boundary) predicted drivable (D-576).
 
 Head variants (D-566 item 5, ``training.head``): "local" (default) is a 3x3 conv on the last
 decoder features. "context" adds the lane model's bottleneck features through dilated 3x3
@@ -46,7 +46,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from rosy_lane_model import HEIGHT, WIDTH, LaneUNet
-from control.sensing.perception.learned.lane_mask import lane_bounded_drivable  # D-566 item 4
+from control.sensing.perception.learned.lane_mask import beyond_boundary, lane_bounded_drivable  # D-566/D-576
 
 # State-dict names of the pinky-lane-segmentation LaneUNet -> rosy_lane_model.LaneUNet.
 KEY_RENAMES = ((".body.", "."), ("middle.", "bottleneck."))
@@ -256,14 +256,6 @@ def _drivable_index(dataset) -> int:
 NEAR_ROWS, NEAR_COLS = slice(144, 240), slice(110, 211)  # bottom 40 %, centre cols (D-563/D-566)
 
 
-def beyond_line(labels: np.ndarray, left_idx: int, right_idx: int) -> np.ndarray:
-    """D-576: label pixels left of the row's leftmost lane_left or right of its rightmost lane_right."""
-    cols = np.arange(labels.shape[-1])
-    left, right = labels == left_idx, labels == right_idx
-    first = np.where(left.any(-1), left.argmax(-1), -1)
-    last = np.where(right.any(-1), labels.shape[-1] - 1 - right[..., ::-1].argmax(-1), labels.shape[-1])
-    return (cols < first[..., None]) | (cols > last[..., None])
-
 
 def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_size, device,
                log=print, pos_weight=None, fp_lambda=1.0) -> dict:
@@ -323,7 +315,7 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
                     for a in answer.cpu().numpy()])).to(device)
                 band = (y == 0) & keep & truth.any(dim=-1, keepdim=True)
                 beyond = None if boundary is None else (
-                    torch.from_numpy(beyond_line(y.cpu().numpy(), *boundary)).to(device) & (y == 0) & keep)
+                    torch.from_numpy(beyond_boundary(y.cpu().numpy(), *boundary)).to(device) & (y == 0) & keep)
                 for kind, p in (("post", post), ("raw", pred)):
                     if beyond is not None:
                         beyond_fp[kind][0] += int((p & beyond).sum())
