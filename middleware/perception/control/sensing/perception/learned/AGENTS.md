@@ -21,6 +21,7 @@ Learned (ONNX) lane-perception backend, D-356 / D-373. ROS-free pre/post-process
 | `shadow.py` | `perception/learned/shadow` payload pairing learned and rule error; no command fields |
 | `status.py` | `perception/learned/status` payload: counters, latency, "no shadow model loaded" |
 | `paint_worker.py` | `LearnedPaintWorker`: one thread infers on the latest frame; keeper takes the newest mask within `stale_s` or falls back (D-408) |
+| `paint_motion.py` | D-570: `OdomHistory` (pose at a frame stamp), ground-plane homography that moves an older paint mask to the current frame by odometry, bounded by age/dxy/dyaw; no odom or too much motion = fallback |
 
 ## For AI Agents
 

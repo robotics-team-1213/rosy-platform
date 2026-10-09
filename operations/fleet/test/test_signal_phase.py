@@ -247,3 +247,115 @@ def test_forecast_counts_down_like_a_traffic_light():
     assert forecast(PLAN, state, 12.0, False)["in_b"]["green_in_s"] is None   # holding: no time known
     command(PLAN, state, "all_red", 13.0)
     assert all(r["left_s"] is None and r["green_in_s"] is None for r in forecast(PLAN, state, 13.0, False).values())
+
+
+# ---- D-525 rev 4: demand mode (an AI PC controller asks, the phase machine decides) ----------------
+
+def _ask(state, t, asks=(), busy=False):
+    """One 0.5 s controller poll: a demand per waiting approach (or a keep-alive), then a Fleet period."""
+    from fleet.traffic.signal_phase import demand
+    for approach in asks or (None,):
+        demand(PLAN, state, approach, t, 2.0, "test")
+    advance(PLAN, state, t, busy)
+    return state.aspect, sorted(green(PLAN, state))
+
+
+def _ticks(start, stop):
+    return [start + i * 0.5 for i in range(int((stop - start) / 0.5))]
+
+
+def test_demand_lights_a_demanded_approach_only_when_the_zone_is_free_and_holds_it_open_ended():
+    from fleet.traffic.signal_phase import demand
+    state = SignalState()
+    command(PLAN, state, "demand", 0.0)
+    assert {_ask(state, t)[0] for t in _ticks(0.0, 5.0)} == {"all_red"}     # nobody waits: all red
+    assert demand(PLAN, state, "in_b", 5.0, 2.0, "robot a waiting 0.3 m") is True
+    assert demand(PLAN, state, "in_b", 5.2, 2.0) is False                     # a repeat is not new
+    assert _ask(state, 5.5, ["in_b"], busy=True) == ("all_red", [])           # zone not free: no green
+    assert _ask(state, 6.0, ["in_b"]) == ("green", ["in_b"])
+    for t in _ticks(6.5, 60.0):                                               # nobody else asks
+        assert _ask(state, t) == ("green", ["in_b"])                          # green holds, open-ended
+
+
+def test_demand_keeps_min_green_while_its_approach_still_asks():
+    state = SignalState()
+    command(PLAN, state, "demand", 0.0)
+    assert _ask(state, 1.0, ["in_a"]) == ("green", ["in_a"])                  # green from t = 1
+    seen = {t: _ask(state, t, ["in_a", "in_b"]) for t in _ticks(1.5, 12.0)}
+    assert seen[4.5] == ("green", ["in_a"]) and seen[5.0] == ("yellow", [])  # min green 4 s
+    assert seen[7.5] == ("all_red", []) and seen[8.0] == ("green", ["in_b"])  # in_b asked first of the rest
+    assert all(len(g) <= 1 for g in [v[1] for v in seen.values()])
+
+
+def test_demand_switches_at_once_when_the_green_approach_no_longer_asks():
+    state = SignalState()
+    command(PLAN, state, "demand", 0.0)
+    _ask(state, 1.0, ["in_a"])
+    assert _ask(state, 1.5, ["in_a"]) == ("green", ["in_a"])
+    for t in _ticks(2.0, 4.5):                                                # in_a's demand expires (ttl 2)
+        _ask(state, t)
+    assert _ask(state, 4.5, ["in_b"]) == ("yellow", [])                       # 3 s green < min, nobody on it
+
+
+def test_demand_queue_is_oldest_first_ties_in_phase_order():
+    from fleet.traffic.signal_phase import demand, queue
+    state = SignalState()
+    command(PLAN, state, "demand", 0.0)
+    demand(PLAN, state, "in_b", 0.5, 2.0)
+    demand(PLAN, state, "in_a", 0.7, 2.0)
+    assert queue(PLAN, state, 0.8) == ["in_b", "in_a"]
+    tie = SignalState()
+    command(PLAN, tie, "demand", 0.0)
+    demand(PLAN, tie, "in_b", 0.5, 2.0)
+    demand(PLAN, tie, "in_a", 0.5, 2.0)
+    assert queue(PLAN, tie, 0.8) == ["in_a", "in_b"]
+    assert _ask(tie, 1.0, ["in_a", "in_b"]) == ("green", ["in_a"])
+    with pytest.raises(ValueError):
+        demand(PLAN, tie, "nope", 1.0, 2.0)
+
+
+def test_a_silent_controller_drops_demand_to_cycle_with_an_alert():
+    state = SignalState()
+    command(PLAN, state, "demand", 0.0)
+    _ask(state, 1.0, ["in_b"])
+    assert _ask(state, 1.5, ["in_b"]) == ("green", ["in_b"])
+    advance(PLAN, state, 6.0, False)
+    assert state.mode == "demand"                                             # 4.5 s silent: still demand
+    advance(PLAN, state, 6.6, False)
+    assert state.mode == "cycle" and alert(PLAN, state, 6.6) == "controller_lost"
+    seen = _drive(state, PLAN, [6.6 + i * 0.5 for i in range(40)])
+    assert "yellow" in {a for _t, a, _g in seen}                              # cycling again
+    command(PLAN, state, "demand", 30.0)
+    assert alert(PLAN, state, 30.0) is None
+    never = SignalState()                                                     # enabled, controller never speaks
+    command(PLAN, never, "demand", 0.0)
+    advance(PLAN, never, 5.5, False)
+    assert never.mode == "cycle" and never.lost
+
+
+def test_estop_all_red_is_immediate_in_demand_and_a_restart_refuses_demands():
+    from fleet.traffic.signal_phase import demand
+    state = SignalState()
+    command(PLAN, state, "demand", 0.0)
+    _ask(state, 1.0, ["in_a"])
+    assert green(PLAN, state) == {"in_a"}
+    command(PLAN, state, "all_red", 1.2)                                      # E-stop
+    assert state.aspect == "all_red" and state.mode == "all_red"
+    with pytest.raises(PermissionError):
+        demand(PLAN, state, "in_a", 1.3, 2.0)
+    assert _drive(state, PLAN, [2.0, 10.0])[-1][1] == "all_red"
+    with pytest.raises(PermissionError):
+        demand(PLAN, SignalState(), "in_a", 0.0, 2.0)                         # restart: all_red mode
+
+
+def test_demand_forecast_is_open_ended_green_and_a_queue_lower_bound():
+    from fleet.traffic.signal_phase import forecast
+    state = SignalState()
+    command(PLAN, state, "demand", 0.0)
+    _ask(state, 1.0, ["in_a"])
+    f = forecast(PLAN, state, 2.0, False)
+    assert f["in_a"] == {"lamp": "green", "left_s": None, "green_in_s": 0.0, "exact": False}
+    assert f["in_b"]["green_in_s"] is None                                    # not asked: unknown
+    _ask(state, 2.0, ["in_a", "in_b"])
+    f = forecast(PLAN, state, 2.0, False)
+    assert f["in_b"]["green_in_s"] == 3.0 + 2.0 + 1.0 and not f["in_b"]["exact"]  # rest of min green + y + r
