@@ -582,3 +582,4 @@
 | D-591 | 차선추종 몸 정지 간격 0.02 m(Pinky Pro): `obstacle_blind_floor: false`로 LiDAR range_min 사각 바닥(약 0.04–0.09 m)을 끄고 `obstacle_latency_s: 0`, 정지 간격 = 0.02 + 제동; 벽 옆 굽이마다 서던 문제(8kcn 0.048 m), 기억한 점·초음파·0.02 m 안 정지는 유지 | Accepted |
 | D-599 | drivable 주행 모델은 팀 crop128 `v13-drivable-20261010-ede0ae96`(로봇 포장본 `lane-seg-20261010-71edcb6d`): 사람 검수 1,428장·선 밖 음성, test IoU 0.989·선 밖 오검 0.8%; D-554 계보 밖이라 intake 없이 실물 시험만, intake·승격 규칙은 사용자가 정함; 추론은 로봇(늦으면 Fleet), Pi 지연 측정 전 매 프레임 주장 금지, 교차로는 D-384 결정 2, 조향 배선은 D-592·D-597 | Accepted |
 | D-593 | 운영자가 지도에 찍은 위치(`POST /api/fleet/robots/{id}/map-pin`, 이름 있는 운영자)가 D-494 지도 자세의 앵커가 된다: 즉시 LOCALIZED, odom 다리 한도는 sighting과 같고, 다음 sighting이 0.15 m/20°로 검사한다; trip 중 거절, overhead 답 아님 | Proposed (2026-10-10, 사용자 지시; SOURCE·호스트 테스트만) |
+| D-600 | Rosy Cam 배경 학습은 Fleet이 아는 로봇 자리를 배우지 않고, 로봇이 비킨 뒤 그 바닥을 채운다 | Proposed (2026-10-10, 사용자 지시 "Fleet으로 직접 옮겨서 할 수 있게 만들어"; SOURCE·호스트 테스트·실프레임 오프라인 평가, 현장 확인과 로봇 비키기 별도) |
