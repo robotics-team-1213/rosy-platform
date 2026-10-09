@@ -35,3 +35,5 @@ D-586 reserved on adr-model-lap for capture_group annotated revision; remove whe
 D-587 reserved on marker-sightings for ceiling marker map pose; remove when it lands
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
 D-589 reserved on cam-auto-tune for recognition-driven exposure; remove when it lands
+D-592 reserved on fix/boundary-counterexample for drivable steering field test; remove when it lands
+D-593 reserved on feat/ceiling-marker-sightings for ceiling marker sightings; remove when it lands
