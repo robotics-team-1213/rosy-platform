@@ -34,6 +34,8 @@ OWN = {
         "formation.js",
         "map-view.js",
         "roster.js",
+        "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
+        "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
         "line-stuck.js",
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",

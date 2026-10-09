@@ -4,6 +4,8 @@
 // 상태 폴링은 1 s 마다 다시 그리므로, 바뀐 항목만 다시 만든다 — 확인 단계와 포커스가
 // 폴링에 지워지지 않게 한다. 색은 클래스로만 준다(CSP style-src 'self').
 
+import { primaryButton, quietButton, setReason } from "./queues.js";
+
 export const DECISIONS = Object.freeze(["WAIT", "RESUME", "BACK_AND_RETRY", "MANUAL", "ABORT"]);
 
 export const DECISION_LABEL = Object.freeze({
@@ -168,30 +170,6 @@ export function refusalText(robotId, decision, err) {
     : code === "ROBOT_UNREACHABLE" ? "전달 실패" : "거부";
   const raw = code ? `${code}: ${message}` : message;
   return `${robotId} ${DECISION_LABEL[decision] || decision} ${verb} — ${why}${raw ? ` (${raw})` : ""}`;
-}
-
-// 계약(D-359 §5.2)은 버튼마다 글자 kind 를 요구한다 — 변수 kind 헬퍼는 정적 검사가
-// 못 본다. 종류별 헬퍼가 리터럴을 담는다.
-export function quietButton(text) {
-  const node = document.createElement("ui-button");
-  node.setAttribute("kind", "quiet");
-  node.type = "button";
-  node.textContent = text;
-  return node;
-}
-
-export function primaryButton(text) {
-  const node = document.createElement("ui-button");
-  node.setAttribute("kind", "primary");
-  node.type = "button";
-  node.textContent = text;
-  return node;
-}
-
-export function setReason(node, reason) {
-  node.disabled = Boolean(reason);
-  if (reason) node.setAttribute("reason", reason);
-  else node.removeAttribute("reason");
 }
 
 export function createLineStuckPanel({ scope, view, call, log, isOperator, namedReason = () => "" }) {

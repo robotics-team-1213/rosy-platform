@@ -369,6 +369,23 @@
 - 변경: 링이 요청과 상관없이 표본을 모으므로 `_detect`·`_identity_sample`의 `challenge` 인자를 지웠다. `MAX_SAMPLES`가 약 5.8 fps 위에서 링 범위를 정한다는 한계를 주석으로 남겼다(독립 검증 지적).
 - 증거: test_overhead_track_worker.py·test_led_identity.py 30 passed.
 - gate 변화: 없음(동작 같음).
+
+## 2026-10-09 · uncommitted · fix(vision): D-547 addendum 후보 없는 유령 치유
+- 변경: 후보가 덮지 않는 로봇 크기(0.06–0.39 m) 전경 blob도, 실시간은 바닥 색이고 학습된 배경은 트랙 중앙값에서 멀면 유령으로 보아 보고하지 않고 같은 자리 연속 3프레임 뒤 치유한다. 학습 프레임은 프로세스 동안 보관(30장, 640×360에서 약 20 MB). 학습된 배경 캐시를 후보 검색과 분리
+- 원인: 2026-10-09 16:38 현장에서 8kcn이 떠난 자리에 유령(점수 0.89–0.95)이 남음. 15:20 학습에서 후보 검색이 그 로봇을 놓쳐 1–6항 치유가 돌지 않음
+- 증거: 합성 프레임 시험 3건(후보 없는 유령 치유, 보이는 로봇 비치유 ×3, 의자·바닥 색 종이 비치유)과 학습 프레임 보관 기대값 변경. 실프레임 D4 재현: main 유령 9/9 → 0/9, 8kcn 9/9 유지. A·B·C 변화 없음
+- gate 변화: 없음. 현장 확인 전
+
+## 2026-10-09 · uncommitted · fix(vision): D-547 addendum 리뷰 반영 — 어두운 배경 조건, 확정 전 보고
+- 변경: 후보 없는 유령은 학습된 배경이 절반 이상 어두울 때만(전체 프레임 지도로 먼저 거름), 확정 전에는 점수 0.35 이하로 보고, 처음 자리 기준 연속 3프레임 뒤 치유하고 지도 x/y·footprint를 로그로 남긴다. CALIBRATION_REQUIRED에서 연속 기록 지움, 치유 영역 안 후보 제거, 팽창 커널 상수화
+- 원인: 독립 리뷰가 파란 사각형 위 회색 상자가 첫 프레임부터 숨고 치유되어 치운 뒤 유령이 남는 것(S1), 확정 전 숨김, blob 16개에서 30–47 ms를 찾음
+- 증거: 합성 시험(테이프 위 색 덱 로봇, 파란 사각형 위 상자, 확정 전 0.35 보고, 의자 부분)과 각 조건 변이 시 실패 확인. 실프레임 D4/D5: 0.35 보고 2프레임 뒤 유령 0, 8kcn 9/9. A·B·C 변화 없음. blob 16개 약 9 ms
+- gate 변화: 없음
+
+## 2026-10-09 · 3284df22e · feat(vision): 천장 검출 minMarkerPerimeterRate 0.015 (D-562)
+- 변경: `detect.py`가 `_detector_parameters`가 돌려준 객체에 `minMarkerPerimeterRate = 0.015`를 둔다(4.6 segfault 회피로 새 객체를 만들지 않음). 로봇 윗면이 40 mm 스티커만 받기 때문이다.
+- 증거: 실 천장 프레임 + 승인 보정 위 88배치 시뮬레이션에서 40 mm 스티커 39/88 → 54/88, 실프레임 124장의 오검출 수는 기본값과 같은 3(번호 17, 칠한 원·케이블). 새 시험 `test_vision_detect.py`(10 px 마커는 0.015에서만 검출). 원격 로그 X:/DevTemp/marker-id-plan/run-1.txt.
+- gate 변화: SOURCE. 현장 Vision 갱신 뒤 실제 스티커로 MARKER 확인은 열림.
 ## 2026-10-09 · uncommitted · feat(vision): D-564 장소 마커 투영과 전송
 - 변경: `place_markers` 설정(공유 검사), `project_place_markers`(로봇 마커와 같은 호모그래피·`heading_edge`, 높이 보정 없음), 워커가 0.5 s에 한 번 이하로 `/api/fleet/place-markers`에 보내고 실패는 유형만 로그.
 - 증거: `test_vision_place_markers.py`, `test_vision_config.py` 포함 vision 전체, 모델 PC exit 0, 신규 실패 0.

@@ -42,7 +42,8 @@ def test_drivable_recipe_requires_owner_before_job_or_gpu(tmp_path, monkeypatch)
     args, authority, _, config = fixture(tmp_path)
     config['training'] = dict(seed=1, epochs=1, lr=0.001, batch_size=1,
                               recipe='drivable_head', parent_model=str(tmp_path / 'parent'),
-                              parent_torchscript=str(tmp_path / 'lane.pt'), ignore_top=110)
+                              parent_torchscript=str(tmp_path / 'lane.pt'), ignore_top=110,
+                              model_version='v13.1.00')
     monkeypatch.setattr(train_job, 'Job', lambda *a: pytest.fail('no Job without owner'))
     monkeypatch.setattr(train_job, 'gpu_lease', lambda: pytest.fail('no GPU without owner'))
     with pytest.raises(JobError, match='independent indexed review'):
@@ -54,7 +55,8 @@ def test_drivable_recipe_rejects_unaccepted_camera_before_parent_or_job(tmp_path
     args, authority, _, config = fixture(tmp_path)
     config['training'] = dict(seed=1, epochs=1, lr=0.001, batch_size=1,
                               recipe='drivable_head', parent_model=str(tmp_path / 'missing'),
-                              parent_torchscript=str(tmp_path / 'missing.pt'), ignore_top=110)
+                              parent_torchscript=str(tmp_path / 'missing.pt'), ignore_top=110,
+                              model_version='v13.1.00')
     monkeypatch.setattr(train_job, 'Job', lambda *a: pytest.fail('no Job with unaccepted camera'))
     with pytest.raises(JobError, match='accepted camera'):
         train_job.run(config, tmp_path / 'job', indexed_review=context(args, authority))
@@ -75,7 +77,8 @@ def test_drivable_recipe_refuses_nonindexed_dataset_even_with_owner(tmp_path, mo
     config['dataset'] = 'indexed@' + digest
     config['training'] = dict(seed=1, epochs=1, lr=0.001, batch_size=1,
                               recipe='drivable_head', parent_model=str(tmp_path / 'missing'),
-                              parent_torchscript=str(tmp_path / 'missing.pt'), ignore_top=110)
+                              parent_torchscript=str(tmp_path / 'missing.pt'), ignore_top=110,
+                              model_version='v13.1.00')
     Path(config['camera_profile']).write_text('{"accepted":true}')
     monkeypatch.setattr(train_job, 'Job', lambda *a: pytest.fail('no Job with unindexed dataset'))
     with pytest.raises(JobError, match='indexed dataset'):
@@ -121,7 +124,8 @@ def test_drivable_parent_files_enter_indexed_admission_and_remain_bound(tmp_path
     Path(config['camera_profile']).write_text('{"accepted":true}')
     config['training'] = dict(seed=1, epochs=1, lr=0.001, batch_size=1,
                               recipe='drivable_head', parent_model=str(parent),
-                              parent_torchscript=str(script), ignore_top=110)
+                              parent_torchscript=str(script), ignore_top=110,
+                              model_version='v13.1.00')
     owner = context(args, authority)
     original_open = owner.open
     seen = []

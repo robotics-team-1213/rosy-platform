@@ -111,7 +111,7 @@ function markLocked(reason = "auth") {
   if (firstLock) {
     Object.assign(view, {robots: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
       stateLoaded: false, stateUnavailable: false, selected: null, cursor: null, formation: null, signals: {},
-      traffic: null, trafficTrips: [], trafficClock: null});
+      traffic: null, trafficTrips: [], endedTrips: [], trafficClock: null});
     visionView.reset(); visionView.refreshSources(); trackingView.reset(); startPointView.reset();
   }
   render();
@@ -272,7 +272,7 @@ function render() {
   if (view.robots.length) {
     const order = [...view.robots.keys()].sort((a, b) =>
       roster.needsAttention(view.robots[b]) - roster.needsAttention(view.robots[a]));
-    rosterBox.replaceChildren(...order.map((index) => roster.card(view.robots[index], index)));
+    roster.place(rosterBox, order.map((index) => roster.card(view.robots[index], index)));
   } else {
     const message = auth.locked ? "관제에 접속하면 등록 로봇과 연결 상태를 확인할 수 있습니다."
       : view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
@@ -288,7 +288,7 @@ function render() {
       rosterBox.replaceChildren(empty);
     }
   }
-  if (focusedId) {
+  if (focusedId && document.activeElement !== focused) {  // a kept card (roster.place) still has it
     const nextCard = [...rosterBox.querySelectorAll("article")]
       .find((card) => card.dataset.robotId === focusedId);
     const nextFocused = focusedButton >= 0
@@ -297,6 +297,7 @@ function render() {
   }
   signals.render();
   roster.fillQueues();
+  roster.trip.syncConvoy();  // D-540 (d) 대형·대열
   lineStuck.render();
   tripReplan.render();
 

@@ -23,3 +23,16 @@ def test_detect_markers_decodes_jpeg_and_returns_four_pixel_corners():
 
 def test_detect_markers_returns_empty_for_invalid_jpeg():
     assert detect_markers(b"not a jpeg") == {}
+
+
+def test_detect_markers_finds_a_ten_pixel_robot_sticker_in_a_ceiling_frame():
+    # D-562: a 40 mm sticker (30 mm black) is ~10 px wide in the 1280x720 ceiling
+    # frame; the OpenCV default minMarkerPerimeterRate 0.03 misses it.
+    frame = np.full((720, 1280), 60, dtype=np.uint8)  # dark robot top
+    frame[297:313, 597:613] = 255  # white rim
+    frame[300:310, 600:610] = cv2.resize(generate_marker_image(40, 60), (10, 10),
+                                         interpolation=cv2.INTER_AREA)
+    ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    assert ok
+
+    assert set(detect_markers(encoded.tobytes())) == {40}

@@ -2889,6 +2889,25 @@
 - 변경: `--pose-request-overhead/--no-pose-request-overhead`(기본 켜짐)는 위치 요청 답만, `--localization-overhead-cue`는 기본 꺼짐으로 복원. 답 횟수는 요청이 닫혔다 열려도 lane_return이 놓거나 `lane_return_corridor_verified`까지 유지하고 중재기 답도 센다.
 - 증거: `test_localization_pose_request.py`, `test_cli.py`.
 - gate 변화: SOURCE.
+
+## 2026-10-09 · uncommitted · test(fleet): API 기준서 v1.166 참조 갱신
+
+- 변경: D-531 굽이 단계 선택 필드로 기준서가 v1.166이 되면서 Fleet 문서 계약 테스트의 버전 기대값을 함께 갱신한다. Fleet 실행 코드는 바뀌지 않는다.
+- 증거: 문서 계약 집중 테스트와 `known_failures.py`.
+- gate 변화: SOURCE 계약 일치. Fleet 계획·현장 주행 수용은 별도.
+
+## 2026-10-09 · uncommitted · feat(fleet): trips from the console robot card (D-540 (d))
+- 변경: 첫 커밋은 순수 이동 — `web/roster.js`의 큐 규칙·행 채우기(`attentionItems`·`attentionKey`·`openDecisionKey`·`syncRows`·`fillQueues`·`setTriageHead`)와 `line-stuck.js`의 버튼 헬퍼를 새 `web/queues.js`로. 이어서 `shared/site-map-model.js`에 운행 경로 공용 함수(`planTrip`·`startTrip`·`cancelTrip`·`tripRefusalText`·`planSummaryText`·`repeatTripReason`·`tripEndText`)를 두고 `site-map.js`가 그것을 부른다(현장 지도 운행 칸은 (e)까지 남음). 새 `web/card-trip.js`: 카드 `운행…`(토글, 카드 안 폼: 활성 지도 목적지·`경로 보기`·`운행 시작`, 출발 자리·`반복 운행 시작`, "고리 n/m대"), `대형·대열` 블록의 대열(팔로워·리더·출발 자리 → `POST /trip` `convoy`). 카드 `취소` → `운행 취소`(quiet, 확인 없음): 열린 trip이면 trip 취소(실패하면 목표 취소로 이어짐), 없으면 목표 취소 + 켜진 차선 주행 OFF; 이름 없는 운영자도 누름, 오프라인 로봇의 열린 trip도 취소. 끝난 trip(stopped·failed)은 카드 줄과 주의 큐 행에 이유(D-541 lease 끝 이유 포함)를 보이고 다음 trip까지 카드를 펼친다. 관제 지도 찍어 목적지 고르기는 넣지 않았다(목록만). 서버 경로는 그대로. DESIGN.md `#cancel-all` quiet(D-540 6).
+- 증거: 모델 PC `operations/fleet/test/`+공통 가드+`test_fleet_console_browser.py`(브라우저 켬). 새 `test_console_card_trips_browser.py` 5건, node `card-trip.test.mjs`·`trip-path.test.mjs` 통과. 나머지 3328 통과, 실패는 fleet 크기 판정 1건 + 브라우저 9건이고 그 9건은 기준 main `3b6072a46` 스냅숏에서도 같이 실패한다(NEW 0, 화면 문구·버튼 순서에 맞춘 시험 고침 포함). 캡처 `X:/DevTemp/fleet-card-trips/{before,after}/`.
+- gate 변화: 없음. fleet 크기 판정 독립 재심 수락, main 병합 뒤 48481로 기록. 리뷰 반영: trip 취소가 실패하면 차선 주행 OFF도 보냄(trip guard가 서버에서 trip을 끝냄), 취소 범위는 누를 때 계산, 레일 행 높이 `max-content`(관제 카메라 칸 겹침), queues↔card-trip import 순환 제거. 가벼운 Safety-Review 필요(카드 운행 시작 경로, 운행 취소 의미 합치기). 착지·푸시 안 함.
+- 결정: D-540 Proposed 그대로, D-517 10항 개정 줄은 수락 때 확정(이 단계에서 문구 안 바꿈).
+- 교훈: 1 s 폴링이 카드를 다시 만들면 `<select>` 목록이 닫힌다 — 고르는 중인 카드는 `roster.place`가 그대로 둔다.
+
+## 2026-10-09 · uncommitted · fix(uiux): Fleet 이름표 홈 이동
+
+- 변경: 네 Fleet 문서의 Rosy Fleet 이름표를 `/console` 링크로 연결. D-501 문서 탭과 비상 정지는 유지.
+- 근거: D-501 2항의 이름표 홈 링크와 UiBrand의 href 동작.
+- gate: SOURCE 변경. 브라우저·장치·현장 수용은 별도.
 ## 2026-10-09 · uncommitted · feat(fleet): D-564 바닥 장소 마커로 초안 장소 가르치기
 - 변경: `POST /api/fleet/place-markers`(source 토큰, 2 s, source·marker별 순서)·`GET` 보기, `POST /api/fleet/teach/place-from-marker`(이름 있는 운영자; 새 초안 장소 또는 `place_id` 이동, 이동한 장소에 닿는 차로 끝도 옮김), `sightings_config.py` `place_markers` 검증, 지도 가르치기 패널 "마커로 등록". 로봇에 보내는 것 없음. API v1.167.
 - 증거: 모델 PC `remote_pytest.py` 관련 묶음(fleet 13 파일·vision·foundation·version alignment·architecture) exit 0, `known_failures.py` 신규 0 (X:/DevTemp/place-markers/run-1.txt).

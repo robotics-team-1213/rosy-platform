@@ -1,6 +1,6 @@
 # D-531 P2 경로 문맥 입력 SOURCE 점검
 
-- 후보 커밋: `a903e8ef462bff1b9417de174715853d66c52a19` (`feat/route-context-keeper-input`). 공유 `main` 착지 전 후보이다.
+- 후보 커밋: `a903e8ef462b` (`feat/route-context-keeper-input`). 공유 `main` 착지 전 후보이다.
 - 실행: 모델 PC 원격 pytest `middleware/perception/test/test_route_context_input.py middleware/perception/test/test_lane_keep_bend.py middleware/perception/test/test_line_observer_wiring.py test/architecture/test_module_structure.py`.
 - 결과: **107 passed, 2 skipped**, `known_failures.py` **NEW 0**. 원시 로그 `X:/DevTemp/route-context-keeper/run-1.txt`, SHA-256 `f2c96b54cceb2e4dba91566dccd613c111254707e6b9ca18341941b484bebbc8`.
 - 확인한 것: 스키마 거부, clear·시계 역행·0.5초 경과·만료 시 문맥 폐기, 기대 굽이 창만 B9 입력, 기록된 SIM 굽이 클립의 입력 경로, ROS 노드 구독·관측/디버그 seq 배선, 구조 검사.

@@ -19,6 +19,9 @@ def _detector_parameters(aruco):
 
 
 _PARAMETERS = _detector_parameters(cv2.aruco)
+# D-562: a 40 mm robot sticker is ~10 px on the 1280x720 ceiling frame; the
+# 0.03 default drops it. 0.015 kept the wrong-id count on 124 real frames.
+_PARAMETERS.minMarkerPerimeterRate = 0.015
 
 
 def _marker_detector(aruco):
