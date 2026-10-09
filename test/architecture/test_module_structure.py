@@ -185,8 +185,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        47_012,
-        "split: re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
+        47_324,
+        "split: re-judged at 47324 on 2026-10-09 (author's verdict; needs an independent re-judge): "
+        "D-555 adds the enrolled-robot hub link (server/enrollment.py link_hub/unlink_hub, hub digest "
+        "check, CLI flags, console control) and its tests. Robots get a hub credential only over the "
+        "TLS-bound enrollment; no robot command path or package owner is added. The site-map split "
+        "stays next; +150 allowance unchanged, measured from 47324. Previously re-judged at 47012 on 2026-10-09: D-526 adds the safety-tagged tether watch "
         "(server/tether_watch.py, tether_routes.py, trail-view colour) and its tests. It stops a "
         "tethered robot only through the existing per-robot CORE E-Stop and adds no command path "
         "or package owner. The site-map split stays next; +150 allowance unchanged, measured "
@@ -568,8 +572,11 @@ SIZE_VERDICTS = {
         "grows past 800",
     ),
     "fleet/fleet/server/enrollment.py": (
-        664,
-        "accept: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
+        885,
+        "accept: re-judged 2026-10-09 at 885 (author's verdict; needs an independent re-judge) when "
+        "D-555 hub link issue/revoke joined: it reuses the same register row, TLS fence and enrolled "
+        "client, so it stays with that state machine. If the file grows past 1035, split the hub link "
+        "into its own module. Before: one owner (D-361 robot enrollment — exchange, binding, pinned-address gate, unenroll and "
         "pending logout share one state machine over the register), ROS-free, host-testable (X5); "
         "re-judged 2026-10-01 at 664 when move-address became a screen-code re-pairing on the same "
         "exchange and binding check",
