@@ -66,3 +66,19 @@ python3 ~/rosy-ml/bin/install_review_release.py <previous-release-id> \
 ```
 
 설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다.
+
+## 헤드리스 Gazebo 준비 (D-571)
+
+모델 PC는 시뮬레이션의 기본 실행 위치다. 2026-10-09 rootless `--dry-run`에서 `approval=sim` apt 줄은 차이가 없었다(필요한 패키지가 이미 설치됨). 패키지가 빠지면 소유자가 저장소 checkout에서 한 번 실행한다.
+
+```bash
+python3 deploy/hosts/common/rosy-host-state install model --dry-run      # root 없이 차이만
+sudo python3 deploy/hosts/common/rosy-host-state install model --approve sim
+```
+
+`rosy` 계정은 docker 소켓 권한이 없어 이미지 경로는 쓰지 않는다. 네이티브 실행은 `~/rosy-test/runs/sim-*`에서 실행마다 8코어(`CPUQuota=800%`), 6 GB(`MemoryMax`), `nice 10`, 45분으로 제한한다. 코어당 부하 0.9 초과나 남은 메모리 4 GB 미만이면 실행기가 이 PC를 고르지 않는다. 실행과 점검은 개발 PC에서 한다.
+
+```bash
+python tools/remote/remote_sim.py --check
+python tools/remote/remote_sim.py --host model swarm_bench -- --scenario follow --duration 90
+```

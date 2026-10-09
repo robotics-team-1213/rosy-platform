@@ -1585,3 +1585,14 @@ Rosy Cam의 공식 `촬영 조명 요청` 버튼만 조작한다. 그 요청 안
 조작은 검증된 장치·앱의 최신 UI를 확인하며, 잠긴 보안 화면·미지원 렌즈·발열
 제한·중복/변경 UI는 거절한다. 보안 잠금을 우회하거나 송출을 자동 시작하지 않는다.
 화면 방향 등 UI 배치가 인식 범위를 벗어나면 수동 조작이 필요하다.
+
+## 헤드리스 Gazebo 컨테이너 (D-571)
+
+관제 PC는 운영이 우선이다. 호스트에는 ROS를 설치하지 않고(26.04에는 Jazzy 데비안도 없다), 시뮬레이션은 `rosy-sim:jazzy` 컨테이너로만 돈다. 이미지 빌드는 수 GB를 내려받고 colcon 빌드를 하므로 운영 시간 밖에 docker 그룹 계정으로 한 번 실행한다(sudo 불필요). 저장소 checkout에서:
+
+```bash
+git archive HEAD | nice -n 10 docker build -t rosy-sim:jazzy -f deploy/sim/Dockerfile -
+docker image ls rosy-sim
+```
+
+이 PC에는 apt 시뮬 줄이 없으므로 `rosy-host-state install site`는 시뮬과 관계없다. 실행기(`tools/remote/remote_sim.py`)는 이 PC를 마지막 수단으로 쓰고, 시작할 때 코어당 부하 0.3 초과, 남은 메모리 8 GB 미만, 이미 도는 `gz sim` 중 하나라도 있으면 거절한다. 실행은 `docker run --network none --cpus 2 --memory 4G --memory-swap 4G --cpu-shares 256 --pids-limit 4096`, `nice 10`, 45분 상한이고 포트를 열지 않는다. 끝나면 `rosy-sim-*` 컨테이너만 지운다. Fleet·Vision·Proxy 컨테이너는 건드리지 않는다. 이미지를 지우려면 `docker image rm rosy-sim:jazzy`.
