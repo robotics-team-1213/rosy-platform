@@ -196,7 +196,7 @@ main {
   ui-shell:has(> #fleet-main) { height: 100dvh; }
   #fleet-main { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
   #fleet-main > .console-secondary { min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; }
-  #fleet-main > .console-primary { min-height: 0; display: flex; flex-direction: column; }
+  #fleet-main > .console-primary { min-height: 0; display: flex; flex-direction: column; overflow: clip; }  /* fixed: never a scroll */
   /* 지도 칸: 머리, 남는 높이를 다 쓰는 지도, 그 아래 범례·배경 학습·접힘 한 줄(넘치면 다음 줄). */
   #fleet-main > .console-primary > .panel { flex: 1; min-height: 0; display: grid; align-items: center;
     grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) repeat(3, auto); column-gap: var(--space-4); }

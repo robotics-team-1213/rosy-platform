@@ -186,7 +186,10 @@ def test_one_queue_row_open_at_a_time_and_the_replan_confirm_round_trips(site):
         assert "바뀐 경로 3.2 m" in slot.inner_text()
         _shot(page, "console-replan-1440x900.png")
         slot.locator('ui-button[data-replan="confirm"]').click()
-        page.clock.run_for(300)
+        for _ in range(50):  # the answer lands on the real network clock
+            page.clock.run_for(100)
+            if "바뀐 경로로 계속합니다" in slot.inner_text():
+                break
         assert ("/api/fleet/trips/t-rosy_02/confirm-replan", None) in posts
         assert "바뀐 경로로 계속합니다" in slot.inner_text()
         assert not errors
