@@ -16,6 +16,7 @@ import { createCameraBackdrop } from "./camera-backdrop.js";
 import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
 import { drawGuide } from "/console/assets/guide-layer.js";
+import { noRobotServesGrid } from "./motion-readiness.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
@@ -812,6 +813,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     if (auth.locked || !mapGate.due()) return;
     let mapFailure = "retry";
     try {
+      // The same answer as Fleet's NO_MAP, without a request that can only 404.
+      if (noRobotServesGrid(view.robots)) throw Object.assign(new Error("NO_MAP"), { status: 404, code: "NO_MAP" });
       const grid = await call("/api/fleet/map");
       life.check();
       mapGate.ok();
