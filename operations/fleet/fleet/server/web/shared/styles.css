@@ -42,7 +42,6 @@
 .roster-block > .dispatch-control { grid-column: 1 / -1; grid-row: 2; }
 .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 2; grid-row: 1; }
 .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; }
-.roster-block > #roster-toggle { grid-column: 3; grid-row: 1; }
 .console-primary, .console-secondary { min-width: 0; display: grid; gap: var(--space-4); }
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .ops-block > h2, .ops-block > .console-diagnostics, .ops-block > .log-panel { grid-column: 1 / -1; margin: 0; }
@@ -171,8 +170,6 @@ body {
 .dispatch-control:is(:not([data-state]), [data-state="absent"]) { justify-content: flex-end; padding: 0; border: 0; background: none; }
 .dispatch-control:is(:not([data-state]), [data-state="absent"]) :is(#dispatch-control-title, #dispatch-control-detail) { display: none; }
 
-/* ui-button의 display 규칙보다 hidden 속성이 우선해야 빈 목록에서 토글이 사라진다. */
-#roster-toggle[hidden] { display: none; }
 
 
 main {
@@ -194,8 +191,15 @@ main {
   .map-stage #map-canvas, .map-birdseye { height: max(20rem, calc(100dvh - 20rem)); }
   /* 접속 안내 띠가 보이는 동안은 그 높이만큼 지도가 줄어 첫 화면에 머문다. */
   body:has(#connection-guide:not([hidden])) :is(.map-stage #map-canvas, .map-birdseye) { height: max(20rem, calc(100dvh - 27rem)); }
-  .queues-panel:not([hidden]) { max-height: min(20dvh, 12rem); overflow-y: auto; }
-  #roster { min-height: 0; max-height: min(15rem, 30dvh); overflow-y: auto; }
+  /* D-540 3 — 문서는 스크롤하지 않는다. 지도 열은 머리 아래 높이를 채우고 레일 하나만 스크롤한다.
+     큐와 로봇 목록은 자기 높이 상한과 자체 스크롤이 없다. */
+  ui-shell:has(> #fleet-main) { height: 100dvh; }
+  #fleet-main { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+  #fleet-main > .console-secondary { min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; }
+  #fleet-main > .console-primary { min-height: 0; display: flex; flex-direction: column; }
+  #fleet-main > .console-primary > .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  #fleet-main .map-stage { flex: 1; min-height: 12rem; }
+  #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { height: 100%; }
   .ops-block { gap: var(--space-2); }
   .ops-block > h2 { margin: 0; }
   /* D-501 — 탭 줄 높이만큼 오른쪽 열을 줄인다. 대형 칸 간격은 ops-block의 gap이 맡는다. */
@@ -344,10 +348,6 @@ main {
   .robot-actions ui-button { min-height: var(--target-secondary); }
   .robot .hint { font-size: var(--text-micro); margin: var(--space-1) 0 0; }
 }
-/* D-417 — 중간 폭(태블릿 세로)에서도 로스터가 지도를 밀어내지 않게 한다. */
-@media (width >= 30rem) and (width < 64rem) {
-  #roster { max-height: min(52dvh, 36rem); overflow-y: auto; }
-}
 .robot.s0 { border-left-color: var(--robot-1); }
 .robot.s1 { border-left-color: var(--robot-2); }
 .robot.s2 { border-left-color: var(--robot-3); }
@@ -363,6 +363,15 @@ main {
 .robot-head .spacer { flex: 1; }
 /* D-517 10 — 운행 상태 한 줄. 이름 줄 바로 아래, 값과 같은 mono 글자. */
 .robot .trip-line { margin: var(--space-1) 0 0; font-family: var(--mono); font-size: var(--text-label); color: var(--ink); overflow-wrap: anywhere; }
+/* D-540 3 — 정상 로봇은 한 줄: 이름 · 운행 한 줄 · 배터리. 줄 전체가 펼침 단추다. */
+.robot[data-collapsed] { padding: 0; }
+.robot-line { all: unset; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3);
+  width: 100%; min-height: var(--target-secondary); padding: var(--space-2) var(--space-3); cursor: pointer; }
+.robot-line b { font-family: var(--mono); font-size: var(--text-body); letter-spacing: var(--track-wide); }
+.robot-line .trip-line { flex: 1 1 8rem; margin: 0; min-width: 0; color: var(--ink-quiet); }
+.robot-line-battery strong { font-family: var(--mono); font-size: var(--text-label); }
+.robot-fold { all: unset; box-sizing: border-box; min-height: var(--target-secondary); padding: 0 var(--space-2);
+  border-radius: var(--radius-control); color: var(--ink-quiet); font-size: var(--text-label); cursor: pointer; }
 
 .facts {
   display: grid;
@@ -569,6 +578,7 @@ main {
 /* ADR-1000: Warning / Critical Queues */
 .queues-container {
   display: flex;
+  flex-direction: column;
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
@@ -578,9 +588,6 @@ main {
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   border: 1px solid var(--line-10);
-  /* D-201 — 큐는 목록이다: 프레임 안에서 스크롤되고 문서를 밀지 않는다. */
-  max-height: 16rem;
-  overflow-y: auto;
 }
 .warning-queue {
   border-left: 4px solid var(--status-warn);
@@ -601,17 +608,22 @@ main {
   background: var(--ground-raise);
   margin-bottom: var(--space-1);
   border-radius: var(--radius-control);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
+.issue-list li[data-decision]:not([data-decision=""]) { padding: 0; }
+/* D-540 3 — 결정이 있는 행은 펼침 단추다. 펼친 자리에 그 결정이 열린다(한 번에 하나). */
+.queue-row { all: unset; box-sizing: border-box; display: block; width: 100%; min-height: var(--target-secondary);
+  padding: var(--space-2); border-radius: var(--radius-control); cursor: pointer; overflow-wrap: anywhere; }
+.queue-row::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--ink-quiet); }
+.queue-row[aria-expanded="true"]::before { content: "▾"; }
+.queue-row:focus-visible, .robot-line:focus-visible, .robot-fold:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.queue-decision { padding: 0 var(--space-2) var(--space-2); }
+.queue-decision[hidden] { display: none; }
+.queue-decision > .stuck-item { border-left-width: 1px; }
 
-/* D-407 판단 요청 — 예외 큐 아래. 원인은 crit 태그, 답 다섯은 한 줄에서 접힌다. */
-.stuck-panel { margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--line-14); }
-.stuck-panel h3 { margin: 0; font-size: var(--text-title); font-weight: var(--weight-emphasis); }
-.stuck-panel h3 small { color: var(--ink-quiet); font-weight: var(--weight-label); }
-.stuck-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-3); }
+/* D-407 판단 요청 — 큐 행의 펼침. 원인은 crit 태그, 답 다섯은 한 줄에서 접힌다. */
 .stuck-item { display: grid; gap: var(--space-2); padding: var(--space-3); background: var(--surface-raised);
   border: 1px solid var(--line-10); border-left: 4px solid var(--status-crit); border-radius: var(--radius-control); }
 .stuck-item.offline { border-left-color: var(--status-warn); }

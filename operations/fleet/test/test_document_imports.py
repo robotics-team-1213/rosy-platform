@@ -35,6 +35,7 @@ OWN = {
         "map-view.js",
         "roster.js",
         "line-stuck.js",
+        "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
         "tracking-view.js",
         "tracking-layer.js",
