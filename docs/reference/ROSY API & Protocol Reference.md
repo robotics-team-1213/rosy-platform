@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.176
+**Version:** v1.177
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -2631,6 +2631,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.177 | 2026-10-10 | 동작 변경 + Additive (D-525 rev 5, feat/signal-occupancy-default): 가상 신호의 새 기본 모드이자 Fleet 재시작 상태는 `occupancy`(점유 기반)다(이전 `all_red`). 이 모드에서 신호는 D-517 구역 허가에 단계 관문을 더하지 않고(모든 입구 허용, 수용 1이 한 대만 들임) 등은 살아 있는 구역 상태에서 나온다: 비어 있음 모두 `green`, 허가만 쥠 그 입구 `green`·나머지 `yellow`(화면 주황), 점유·모름 모두 `red`. `POST /api/fleet/traffic/signals/{id}` 동사 `occupancy` 추가. `GET /api/fleet/traffic` `signals[]` `occupancy {state free\|reserved\|occupied\|unknown, holder, approach}`, `mode: occupancy`이면 `aspect`는 요약이고 `left_s`·입구 `left_s` null, `green_in_s`는 초록 0 아니면 null. `signal_ahead`(로봇 행과 `GET /api/fleet/traffic/signals/ahead/{robot_id}`)에 `mode`·`occupancy`. 설정 오류 신호의 입구 `lamp`는 늘 `red`. 등은 표시·참고이고 허가는 D-517만 준다. Robot API, D-551 advice `lamp` 값(green/yellow/red), CORE 명령과 envelope 1.0 그대로 |
 | v1.176 | 2026-10-10 | Additive (D-581, feat/trail-fleet-anchored-frame): §7.8 `anchor: fleet`·`for_robot_id`·`anchor_age_s`·`anchor_hold`(기준이 없을 때 침묵 대신 정지 표본, `swarm.hold` `anchor_withheld`, `stream_evidence[*].anchor_hold`) — TRAIL 대형에서 리더가 `frame: odom` 이면 Fleet 이 천장 카메라 기준(D-494 3)으로 팔로워마다 그 팔로워 odom 좌표의 표본을 만들어 보낸다(D-31 개정, `map` 프레임은 바이트 그대로). trail 팔로워는 자기 id 표본만 받아 자기 `odom_pose` 로 달린다. `swarm.hold` 사유 `reference_anchor_invalid`·`reference_frame_changed`, `swarm/state` `trail.anchor`, Fleet formation 상태 `anchor`. 안전 경로(D-422·SAF-004·D-400·스트림 단절) 변화 없음 |
 | v1.175 | 2026-10-09 | Additive (D-580, feat/fleet-managed-site-roster): `GET /api/fleet/detections/config` `robot_markers`. `site-cameras.yaml` source `robot_ids: enrolled`(Fleet 명단을 따른다; `GET /api/fleet/site-map` 등의 `robot_ids`·`robot_markers`는 등록·해제 때 바뀐다). `POST /api/fleet/enrollment/robots`: 등록되었다 해제된 TLS binding은 다른 `robot_id`를 받는다(새 오류 코드 없음, 다른 binding의 ID면 `code_consumed` reason `robot_id_conflict`); 감사 동작 `tls_renumber`. `autoupdate.conf` `/api/fleet/state` 검사 `required_ids: "enrolled"` |
 | v1.174 | 2026-10-09 | Additive (D-573 1, feat/crosswalk-fleet-map-zones): `rosy.site_map/1` 선택 필드 `crosswalks[] {id, polygon, approach[], lanes[], revision}`(lane_graph 다각형, 차로는 유도, 대기 띠는 편집기에서 그림; 차로에 닿지 않거나 D-507 9 바닥 밖이면 `SITE_MAP_INVALID`), `GET /api/fleet/site-map/lane-graph-crosswalks`(`SITE_MAP_NO_LANE_GRAPH`). 지도 자료와 표시만, CORE·교통·통행권 변경 없음 |

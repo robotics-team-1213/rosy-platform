@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  loopCapacityText, repeatTripBody, routePoint, tripErrorText, tripStartReason, trafficAttention, trafficCardLine, trafficClock, trafficDrawing, unitParts,
+  loopCapacityText, occupancyLampText, repeatTripBody, routePoint, signalAheadText, signalText, tripErrorText, tripStartReason,
+  trafficAttention, trafficCardLine, trafficClock, trafficDrawing, unitParts,
 } from '../../fleet/server/web/shared/site-map-model.js';
 
 // A square loop: east (0,0)->(2,0) cut in 3 blocks, ring (2,0)->(2,1) one zone, west (2,1)->(0,1)->(0,0).
@@ -122,4 +123,32 @@ test('TRIP_BUSY is per robot and TRIP_LOOP_FULL names robots and capacity', () =
   assert.equal(tripErrorText('TRIP_LOOP_FULL', {robots: 4, capacity: 3, held_per_robot: 3}),
     '고리 수용 한도를 넘어 출발할 수 없습니다 · 고리 4/3대');
   assert.equal(tripStartReason({role: 'operator', plan: {}, running: {trip_id: 'a'}}), '이 로봇은 이미 운행 중입니다');
+});
+
+test('occupancy-mode signals (D-525 rev 5) say green, orange or red with the zone state in words', () => {
+  const sig = (state, holder, lamps) => ({signal_id: 'sig', zone: 'ring_zone', mode: 'occupancy', errors: [],
+    occupancy: {state, holder, approach: holder ? 'a:fwd' : null},
+    approaches: Object.entries(lamps).map(([approach, lamp]) => ({approach, lamp,
+      stop_line: {x: 2, y: 0, yaw: Math.PI / 2}}))});
+  const free = sig('free', null, {'a:fwd': 'green', 'b:fwd': 'green'});
+  assert.equal(occupancyLampText(free, free.approaches[0]), '초록 · 비어 있음');
+  assert.equal(signalText(free), '가상 신호 sig · 점유 기반(기본) · 비어 있음');
+  const reserved = sig('reserved', 'rosy_01', {'a:fwd': 'green', 'b:fwd': 'yellow'});
+  assert.deepEqual(reserved.approaches.map((row) => occupancyLampText(reserved, row)),
+    ['초록 · 진입 차례 · rosy_01', '주황 · 점유 예정 · rosy_01']);
+  const occupied = sig('occupied', 'rosy_03', {'a:fwd': 'red', 'b:fwd': 'red'});
+  assert.equal(occupancyLampText(occupied, occupied.approaches[1]), '적 · 점유 중 · rosy_03');
+  assert.equal(signalText(occupied), '가상 신호 sig · 점유 기반(기본) · 점유 중 · rosy_03');
+  const unknown = sig('unknown', null, {'a:fwd': 'red'});
+  assert.equal(occupancyLampText(unknown, unknown.approaches[0]), '적 · 상태 모름 · 적색');
+  assert.equal(occupancyLampText({...free, mode: 'cycle'}, free.approaches[0]), null);
+  assert.equal(occupancyLampText({...free, errors: ['x']}, free.approaches[0]), null);
+  const drawing = trafficDrawing({...TRAFFIC, signals: [occupied]}, ACTIVE, []);
+  assert.deepEqual(drawing.signals.map((s) => s.text), ['적 · 점유 중 · rosy_03', '적 · 점유 중 · rosy_03']);
+  assert.ok(drawing.zones[0].label.endsWith('가상 신호 sig · 점유 기반(기본) · 점유 중 · rosy_03'));
+  const cycle = trafficDrawing({...TRAFFIC, signals: [{...occupied, mode: 'cycle', aspect: 'all_red',
+    approaches: [{approach: 'a:fwd', lamp: 'red', green_in_s: 7, exact: false, stop_line: {x: 2, y: 0, yaw: 0}}]}]}, ACTIVE, []);
+  assert.equal(cycle.signals[0].text, '적 ≥7');
+  assert.equal(signalAheadText({signal_id: 'sig', mode: 'occupancy', lamp: 'yellow', distance_m: 0.4,
+    occupancy: {state: 'reserved', holder: 'rosy_01'}, may_enter: false}), '가상 신호 sig 주황 · 점유 예정 · rosy_01 · 정지선 0.40 m');
 });

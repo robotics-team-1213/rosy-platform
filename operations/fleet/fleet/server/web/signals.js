@@ -156,9 +156,16 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
   }
 
   // D-525 가상 신호 — 장치가 아니라 Fleet 교통 규칙이다. 구동값·연결·관측 대신 단계와 남은 시간만 있다.
-  // 버튼은 자동·유지·전체 적색과 입구마다 수동 녹색이다. 수동 녹색은 이 화면이 열려 있는 동안만 유지되고
+  // 기본은 점유 기반(rev 5): 등은 구역의 실제 D-517 상태를 따른다(비면 초록, 허가만 쥐면 주황, 들어가면 적).
+  // 버튼은 점유 기반·자동·유지·전체 적색과 입구마다 수동 녹색이다. 수동 녹색은 이 화면이 열려 있는 동안만 유지되고
   // (presence), 닫히면 전체 적색이 된다(D-525 4).
   const VIRTUAL_ASPECT = { green: "녹", yellow: "황", all_red: "전체 적색" };
+  const OCCUPANCY_STATE = { free: "비어 있음", reserved: "점유 예정", occupied: "점유 중" };
+  const occupancyMeta = (row) => {
+    const state = row.occupancy?.state;
+    const who = row.occupancy?.holder ? ` · ${row.occupancy.holder}` : "";
+    return OCCUPANCY_STATE[state] ? `${OCCUPANCY_STATE[state]}${state === "free" ? "" : who}` : "상태 모름 · 적색";
+  };
   function virtualCommand(signalId, verb, label, approach) {
     const life = scope.capture();
     life.check();
@@ -186,10 +193,11 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     kind.setAttribute("status", "neutral");
     kind.textContent = "가상";
     const tag = document.createElement("ui-tag");
-    tag.setAttribute("status", row.errors?.length ? "crit" : ["cycle", "demand"].includes(row.mode) ? "active" : "warn");
+    tag.setAttribute("status", row.errors?.length ? "crit" : ["occupancy", "cycle", "demand"].includes(row.mode) ? "active" : "warn");
     // D-525 rev 4: 요청 모드는 AI PC 제어기가 요청만 하고 Fleet이 단계를 정한다.
     tag.textContent = row.errors?.length ? "설정 오류"
       : row.mode === "manual" ? `수동 · ${row.manual} 녹`
+      : row.mode === "occupancy" ? "점유 기반(기본)"
       : row.mode === "demand" ? `요청(AI)${row.demands?.length ? ` · ${row.demands[0].approach} 대기` : ""}`
       : signalIntentLabel(row.mode);
     head.append(name, spacer, kind, tag);
@@ -201,7 +209,8 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     for (const approach of row.approaches || []) {
       const dot = document.createElement("i");
       dot.className = `lamp ${approach.lamp} on`;
-      dot.title = `${approach.approach} · ${({ green: "녹", yellow: "황", red: "적" })[approach.lamp]}`;
+      dot.title = `${approach.approach} · ${(row.mode === "occupancy"
+        ? { green: "초록", yellow: "주황", red: "적" } : { green: "녹", yellow: "황", red: "적" })[approach.lamp]}`;
       lamps.appendChild(dot);
     }
     body.appendChild(lamps);
@@ -209,12 +218,13 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     meta.className = "signal-meta";
     const left = typeof row.left_s === "number" ? ` ${Math.ceil(row.left_s)} s` : "";
     meta.textContent = row.errors?.length ? row.errors[0]
+      : row.mode === "occupancy" ? `${occupancyMeta(row)} · 구역 ${row.zone}`
       : `${VIRTUAL_ASPECT[row.aspect] || row.aspect}${left} · 구역 ${row.zone}${row.aspect === "all_red" && row.zone_busy && row.mode !== "all_red" ? " · 비기를 기다림" : ""}${row.alert === "controller_lost" ? " · AI 제어기 끊김, 자동 순환" : ""}`;
     body.appendChild(meta);
     node.appendChild(body);
     const actions = document.createElement("div");
     actions.className = "robot-actions";
-    const verbs = [["자동", "cycle"], ["AI 요청", "demand"], ["유지", "hold"], ["전체 적색", "all_red", "arming"],
+    const verbs = [["점유 기반(기본)", "occupancy"], ["자동", "cycle"], ["AI 요청", "demand"], ["유지", "hold"], ["전체 적색", "all_red", "arming"],
       ...(row.approaches || []).map((a) => [`녹 · ${a.approach}`, "set_aspect", "", a.approach])];
     for (const [label, verb, cls, approach] of verbs) {
       const button = document.createElement("ui-button");

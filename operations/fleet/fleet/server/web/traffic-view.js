@@ -1,6 +1,6 @@
 // D-517 10 교통 층 그리기 (map-view.js 에서 분리). 폴링과 토글은 map-view.js 가 가진다.
 
-import { signalLampText, trafficDrawing } from "/console/assets/site-map-model.js";
+import { trafficDrawing } from "/console/assets/site-map-model.js";
 
 // D-517 10 교통 층 — 블록 띠(점유 채움·허가 테두리·불명 빗금), 구역 윤곽과 "점유 a/b · 대기 n",
 // 로봇마다 통행권 끝 가로 표시. 미터 좌표를 toPoint 하나로 그려 화면 방향·위에서 본 보기를 그대로 따른다.
@@ -104,7 +104,8 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
 
 // D-525 rev 3: T-map 식 신호 알약 — 정지선 앞 접근 차로 오른쪽(다가오는 로봇이 보는 자리)에 등 하나와 남은 초.
 // 주황 점선 테두리와 "가상" 글자로 실제 신호기가 아님을 말한다(색만으로 말하지 않는다). "≥7"은 구역이 비어야
-// 켜지는 다음 녹색의 하한이다. 로봇 층 위에 그려 몸체 원에 가리지 않는다.
+// 켜지는 다음 녹색의 하한이다. 로봇 층 위에 그려 몸체 원에 가리지 않는다. 점유 기반(rev 5)에서는 초록·주황·적과
+// "비어 있음"·"점유 예정 · rosy_01"·"점유 중 · rosy_01" 글이다(주황은 --status-warn, 황색 등과 같은 색).
 export function drawSignalLamps(ctx, toPoint, { view, css, on }) {
   const drawing = on ? trafficDrawing(view.traffic, view.activeSiteMap, view.trafficTrips) : null;
   if (!drawing?.signals?.length) return;
@@ -114,7 +115,7 @@ export function drawSignalLamps(ctx, toPoint, { view, css, on }) {
     const mx = stop.x - Math.cos(stop.angle) * back + Math.sin(stop.angle) * side;
     const my = stop.y - Math.sin(stop.angle) * back - Math.cos(stop.angle) * side;
     const { x: cx, y: cy } = toPoint(mx, my);
-    const label = stop.count ? `${signalLampText(stop.lamp)} ${stop.count}` : signalLampText(stop.lamp);
+    const label = stop.text;  // "적 ≥7", or rev 5 occupancy "주황 · 점유 예정 · rosy_01"
     ctx.save();
     ctx.font = window.RosyPalette.canvasFont(12, "mono");
     const w = 30 + ctx.measureText(label).width, h = 22;
