@@ -24,7 +24,7 @@ from typing import Awaitable, Callable, Optional, Sequence
 
 from core_common.protocol.schemas import RobotMode, SwarmFollowParams
 from fleet.formation.assignment import GreedyDistanceAssigner, SlotAssigner
-from fleet.formation.geometry import SlotOffset
+from fleet.formation.geometry import Formation, SlotOffset
 from fleet.swarm.arming import (
     ArmingFailed,
     FormationSpec,
@@ -432,10 +432,10 @@ class FormationSession:
                 target_robot_id=self._leader.robot_id,
                 distance=offset.distance, lateral=offset.lateral,
                 max_speed=spec.max_speed, stream_timeout_ms=spec.stream_timeout_ms,
-                members=order,
+                members=order, mode="trail" if spec.formation is Formation.TRAIL else "offset",
             )
             try:
-                await follower.follow(params)
+                reply = await follower.follow(params)
             except RobotApiError as exc:
                 # 거절이다 — 이 로봇은 무장되지 않았다.
                 await self._disarm(armed)
@@ -445,6 +445,11 @@ class FormationSession:
                 # 이 로봇도 함께 푼다 — 무장된 채 잊히는 것보다 두 번 푸는 것이 낫다.
                 await self._disarm([*armed, follower])
                 raise ArmingFailed(follower.robot_id, "TRANSPORT", str(exc)) from exc
+            if params.mode == "trail" and (reply or {}).get("mode") != "trail":
+                # D-559: an older CORE ignores the field and follows by offset. It is armed.
+                await self._disarm([*armed, follower])
+                raise ArmingFailed(follower.robot_id, "TRAIL_NOT_SUPPORTED",
+                                   "robot did not report trail follow")
             armed.append(follower)
 
     async def _disarm(self, armed: Sequence[RobotClient]) -> None:
