@@ -116,7 +116,7 @@ def test_imported_approval_and_recheck_history_are_visible(browser_workspace):
 @pytest.fixture
 def custom_class_workspace(request, tmp_path):
     source, human, images = fixture_inputs(tmp_path)
-    data = getattr(request, 'param', 'names: [car, traffic_light]\ndisplay: {car: 자동차}\n')
+    data = getattr(request, 'param', 'names: [car, traffic_light]\ndisplay: {car: 자동차}\ncolors: {car: [12, 34, 56]}\n')
     record = class_sets.from_data_yaml(data.encode(), 'detect')
     with serve(ReviewStore(tmp_path / 'state', source, human, images, record)) as value:
         yield value
@@ -1163,6 +1163,8 @@ def test_object_zoom_pan_and_draw_keep_source_coordinates(browser_workspace):
 
 def test_custom_class_set_names_and_saves(custom_class_workspace):
     page, store, expect = custom_class_workspace
+    icon = page.locator('#object-quick-classes button[value="car"] .ui-icon')
+    assert icon.evaluate('node => getComputedStyle(node).color') == 'rgb(12, 34, 56)'
     select = page.locator('#boxes .box-top select').first
     expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', '신호등'])
     select.select_option('car')
