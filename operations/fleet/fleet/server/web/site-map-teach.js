@@ -49,16 +49,21 @@ export function createTeachPanel(host) {
     try {
       fresh = (await host.request('/api/fleet/place-markers')).markers.filter(marker => !marker.stale);
     } catch (_error) { /* no place marker source on this site: the list stays empty */ }
-    const ids = [...new Set(fresh.map(marker => marker.marker_id))].sort((a, b) => a - b);
-    const key = ids.join(',');
+    const newest = new Map();  // per id the newest sighting, the one Fleet teaches from
+    for (const marker of fresh) {
+      if (!(newest.get(marker.marker_id)?.captured_at >= marker.captured_at)) newest.set(marker.marker_id, marker);
+    }
+    const ids = [...newest.keys()].sort((a, b) => a - b);
+    const labels = ids.map(id => {
+      const marker = newest.get(id);
+      const deg = Math.round(marker.yaw * 180 / Math.PI);
+      return `마커 ${id} · ${marker.x.toFixed(2)}, ${marker.y.toFixed(2)} m · ${deg}°`;
+    });
+    const key = labels.join('|');  // rounded pose too, so a moved sticker relabels
     if (key === markersKey) return;
     markersKey = key;
     const kept = $('teach-marker').value;
-    $('teach-marker').replaceChildren(...ids.map(id => {
-      const marker = fresh.find(m => m.marker_id === id);
-      const deg = Math.round(marker.yaw * 180 / Math.PI);
-      return new Option(`마커 ${id} · ${marker.x.toFixed(2)}, ${marker.y.toFixed(2)} m · ${deg}°`, String(id));
-    }));
+    $('teach-marker').replaceChildren(...ids.map((id, i) => new Option(labels[i], String(id))));
     if (ids.includes(Number(kept))) $('teach-marker').value = kept;
   }
 
