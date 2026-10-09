@@ -2,7 +2,7 @@
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.168
+**Version:** v1.169
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -1789,6 +1789,7 @@ credential, separate from site users, CORE REST, and FleetAgent pairing.
 | GET | `/api/fleet/peers` | site viewer+ | D-452 `PeerCatalogue`: bounded role catalogue, separate discovery/approval/readiness; no credentials or automatic enrollment |
 | GET | `/api/fleet/discovery` | site viewer+ | `{scanner_online, scanner_state, scanner_age_s, devices[]}` with status `registration_pending`, `pairing_pending`, `verified_online`, or `conflict` |
 | GET | `/api/fleet/discovery/addresses` | site viewer+ | `{scanner_state, all_outside, robots[]}`: per roster robot `{robot_id, origin, pinned, pinned_is_name, status, in_subnet, seen_addresses[], movable}`; status `in_scanned_subnet`, `outside_scanned_subnets`, `seen_at_other_address`, or `unknown`. Explains only: nothing resolves or follows a new address (D-361 3, D-370 5.3); no credentials |
+| POST | `/api/fleet/enrollment/robots` | named operator | D-361 화면 코드 등록 `{code, discovery_name}` 또는 `{code, address}`. D-565 (v1.169): HTTPS(`tls=required`) 대상에 등록 행이 없으면 아직 등록되지 않은 승인 binding(`rosy.enrolled-tls/1`) 중 `hostname`·`port`가 같은 하나로만 TLS(그 CA·호스트 이름, 코드 전 identity `receiver_id`)로 짝짓고, `system/info` `robot_id`가 binding과 같을 때만 저장한다. 409 `tls_binding_required`(맞는 binding 없음), 409 `tls_binding_required`는 승인 binding이 가진 이름·주소를 HTTP로 등록하려 할 때도 요청 전에 낸다. 409 `tls_binding_mismatch`(코드 전 identity `receiver_id`가 binding과 다름, 코드는 나가지 않음), 409 `code_consumed` reason `tls_binding_mismatch`(코드 뒤 `system/info` `robot_id`가 binding과 다름) 또는 reason `tls_binding_required`(binding이 가진 ID·이름이 HTTP로 답함), 둘 다 토큰 로그아웃, 502 `unreachable`(binding 이름을 찾지 못함). HTTP로 내려가지 않는다 |
 | POST | `/api/fleet/robots/{robot_id}/hub-link` | named operator | D-555 (v1.163): issue (or rotate) the enrolled robot's hub credential, store only its SHA-256, deliver it once with `PUT /api/v1/fleet/link` over the TLS-bound enrollment. 409 `tls_binding_required` (plain-HTTP enrollment), `hub_link_unavailable` (no `--hub-link-hostname`/`--hub-link-ca`, `--events-db` or console token), `robot_unsupported` (no `fleet_link_provisioning`), `not_active`; 502 `unreachable`, `robot_refused` (digest rolled back). 409 `fleet_goal_active` when a Fleet goal runs (this console's goal table or the robot's `fleet_goal_active`, or CORE's `FLEET_GOAL_ACTIVE`). Rotation drops the hub session made with the old credential. Returns the enrollment row |
 | DELETE | `/api/fleet/robots/{robot_id}/hub-link` | named operator | D-555 (v1.163): 409 `fleet_goal_active` as above unless `?force=true` (named operator, confirmed in the console): then the digest and hub session are cleared during the goal too and the robot's SAF-003 STOP/HOLD applies (audit `forced_…`). Otherwise the digest is cleared and the hub session dropped first, then one robot `DELETE /api/v1/fleet/link` attempt behind the TLS fence (a changed or missing binding gives `robot_cleared: false`). `{…row, robot_cleared, was_linked}`. Enrollment rows add `hub_linked`, `hub_host`, `hub_online`, `hub_state` (`online` \| `checking` within 35 s of delivery or Fleet start \| `failed`), `hub_linkable` (never the digest) |
 
@@ -2607,6 +2608,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.169 | 2026-10-09 | 동작 변경 (D-565, fix/fleet-tls-renumber-enroll, 보안 검토 대상): `POST /api/fleet/enrollment/robots`가 등록 행이 없는 HTTPS 로봇을 아직 등록되지 않은 승인 binding으로 등록한다(CA·호스트 이름·`robot_id` 셋이 맞아야 함). 새 오류 409 `tls_binding_mismatch`. Fleet 기동은 등록되지 않은 binding을 거절하지 않고 경고한다(다른 등록 행의 호스트 이름이면 계속 거절). v1.167·v1.168은 다른 브랜치(D-560·D-564)가 선점 |
 | v1.168 | 2026-10-09 | Additive (D-564, feat/ceiling-place-markers): 바닥 장소 마커 `POST`/`GET /api/fleet/place-markers`(source token, 2 s), `POST /api/fleet/teach/place-from-marker`(이름 있는 운영자, 초안 장소 추가·이동), 공유 스키마 `PlaceMarkerPayload`, 사이트 카메라 설정 `place_markers`. 표시·가르치기만, 로봇 명령 없음. v1.166은 다른 브랜치(feat/route-context-bend-phase)가 쓴다 |
 | v1.167 | 2026-10-09 | Additive (D-560 S1, feat/rosy-cam-map-plane): Vision 미리보기 lease `rectification`에 `{"mode": "map"}`(다른 필드 없음). Vision이 추적용 승인 보정 기록으로 원본을 지도 평면(track_bounds_m + 0.15 m, 400 px/m, 긴 변 ≤ 1920 px)에 펴서 `X-Frame-Rectified: map`·`X-Frame-Plane`·`X-Frame-Calibration`과 함께 돌려주고, 기록이 없거나 source·map·렌즈·비율이 다르면 409 `X-Frame-State: plane-unavailable`(원본 대체 없음). `manual`·`auto`와 원본 프레임·추적 불변. 스키마·envelope 1.0 변경 없음 |
 | v1.166 | 2026-10-09 | Additive (D-531 굽이 단계 보완, 기본 꺼짐): `line/route_context`의 선택 필드 `bend_phase: bending|reacquiring`. CORE 굽이 진행·재획득 단계의 B9 기대 굽이 창을 표시한다. Fleet 경로 지시와 CORE의 최종 주행 권한은 그대로이며 실물 재생·SIM·DEVICE 수용은 별도 |
