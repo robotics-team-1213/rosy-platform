@@ -369,7 +369,7 @@
 - 변경: 링이 요청과 상관없이 표본을 모으므로 `_detect`·`_identity_sample`의 `challenge` 인자를 지웠다. `MAX_SAMPLES`가 약 5.8 fps 위에서 링 범위를 정한다는 한계를 주석으로 남겼다(독립 검증 지적).
 - 증거: test_overhead_track_worker.py·test_led_identity.py 30 passed.
 - gate 변화: 없음(동작 같음).
-## 2026-10-09 · feat/ceiling-place-markers · feat(vision): D-564 장소 마커 투영과 전송
+## 2026-10-09 · uncommitted · feat(vision): D-564 장소 마커 투영과 전송
 - 변경: `place_markers` 설정(공유 검사), `project_place_markers`(로봇 마커와 같은 호모그래피·`heading_edge`, 높이 보정 없음), 워커가 0.5 s에 한 번 이하로 `/api/fleet/place-markers`에 보내고 실패는 유형만 로그.
 - 증거: `test_vision_place_markers.py`, `test_vision_config.py` 포함 vision 전체, 모델 PC exit 0, 신규 실패 0.
 - gate 변화: 없음(SOURCE).
