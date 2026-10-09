@@ -124,7 +124,7 @@ fun StreamScreen(
                     null -> null
                     TuningMode.VISION -> stringResource(R.string.tuning_vision,
                         listOfNotNull(
-                            stringResource(if (applied.aeLock) R.string.tuning_locked else R.string.tuning_adjusting),
+                            stringResource(if (applied.locked) R.string.tuning_locked else R.string.tuning_adjusting),
                             tuning.evText,
                             if (applied.antibanding == Antibanding.HZ60) "60Hz" else null,
                         ).joinToString(" · "))
@@ -134,7 +134,8 @@ fun StreamScreen(
                 }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 val exposure = state.exposure
                 if (exposure.supported) {
-                    Text(stringResource(when {
+                    // While Vision sets the camera the D-544 assist is idle; its line would only mislead.
+                    if (tuning.mode != TuningMode.VISION) Text(stringResource(when {
                         !exposure.enabled -> R.string.exposure_off
                         exposure.verdict == ExposureVerdict.OVER -> R.string.exposure_over
                         exposure.verdict == ExposureVerdict.UNDER -> R.string.exposure_under

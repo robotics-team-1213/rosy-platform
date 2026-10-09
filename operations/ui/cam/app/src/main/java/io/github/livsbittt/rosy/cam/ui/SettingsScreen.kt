@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -135,8 +136,16 @@ fun SettingsScreen(
             Text(stringResource(R.string.settings_locked), style = MaterialTheme.typography.bodyLarge)
         }
         LensSection(lens, backCameras, running = locked, onLens = onLens)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Checkbox(checked = recognitionExposure, onCheckedChange = onRecognitionExposure)
+        // The whole row is one checkbox for touch and TalkBack, labelled by its text.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .toggleable(value = recognitionExposure, role = Role.Checkbox, onValueChange = onRecognitionExposure)
+                .padding(vertical = 4.dp),
+        ) {
+            Checkbox(checked = recognitionExposure, onCheckedChange = null)
             Text(stringResource(R.string.settings_recognition_exposure))
         }
         Text(

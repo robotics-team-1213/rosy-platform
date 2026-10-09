@@ -198,7 +198,7 @@
     <string name="tuning_disabled">인식 자동 노출 꺼짐 · 설정에서 켤 수 있음</string>
     <string name="tuning_thermal_hold">인식 자동 노출: 폰이 뜨거워 현재 설정 유지 · %1$s</string>
     <string name="settings_recognition_exposure">인식 자동 노출 (Vision)</string>
-    <string name="settings_recognition_exposure_note">Vision이 인식 품질을 보고 노출 보정·잠금·안티밴딩을 맞춥니다. 화각·초점·해상도는 바꾸지 않습니다. 끄면 Vision 요청을 무시합니다.</string>
+    <string name="settings_recognition_exposure_note">Vision이 인식 품질을 보고 노출 보정·잠금·노출 시간 상한·안티밴딩을 맞춥니다. 화각·초점·해상도는 바꾸지 않습니다. 끄면 Vision 요청을 무시합니다.</string>
     <string name="light_enable">촬영 조명 요청</string>
     <string name="light_disable">조명 요청 취소</string>
     <string name="photo_save">현재 사진 저장</string>

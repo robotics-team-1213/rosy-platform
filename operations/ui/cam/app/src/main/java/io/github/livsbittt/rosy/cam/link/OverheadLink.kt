@@ -259,9 +259,13 @@ class OverheadLink(
 
     /** D-589 5: sends [json] (`camera_state`) if streaming and keeps it for the next connection's hello. */
     fun publishCameraState(json: String) {
-        cameraState = json
-        val ws = synchronized(lock) { socket } ?: return
-        if (_status.value.state == LinkState.STREAMING) ws.send(json)
+        // Under the lock that onOpen also holds while it turns STREAMING and sends the cached state: each state goes
+        // out exactly once per connection, and never before hello.
+        synchronized(lock) {
+            cameraState = json
+            val ws = socket ?: return
+            if (_status.value.state == LinkState.STREAMING) ws.send(json)
+        }
     }
 
     private fun connect() {
@@ -353,9 +357,11 @@ class OverheadLink(
             pinRetryAvailable.set(true)
             val s = sensor
             webSocket.send(Protocol.hello(pairing.source, appVersion, device, s.width, s.height, s.rotationDeg, lens))
-            cameraState?.let { webSocket.send(it) }
             Log.i(TAG, "connected to ${pairing.wsUrl}")
-            _status.update { it.copy(state = LinkState.STREAMING, error = null, stopped = false) }
+            synchronized(lock) {
+                _status.update { it.copy(state = LinkState.STREAMING, error = null, stopped = false) }
+                cameraState?.let { webSocket.send(it) }
+            }
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
