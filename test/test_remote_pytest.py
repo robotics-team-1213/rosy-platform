@@ -17,10 +17,10 @@ import remote_pytest as rp  # noqa: E402
 
 
 def host(nproc=24, load1=1.0, avail_gb=12.0, total_gb=15.0, pytest=True, sim=False, busy=False,
-         lock_cores=0, lock_gb=0):
+         lock_cores=0, lock_gb=0, site=False):
     """A fake PROBE result."""
     return {"nproc": nproc, "load1": load1, "avail_gb": avail_gb, "total_gb": total_gb, "pytest": pytest,
-            "sim": sim, "busy": busy, "lock_cores": lock_cores, "lock_gb": lock_gb}
+            "sim": sim, "busy": busy, "lock_cores": lock_cores, "lock_gb": lock_gb, "site": site}
 
 
 def test_most_headroom_first_and_floor_skips_full_hosts():
@@ -58,6 +58,27 @@ def test_site_pc_is_last_resort_with_fleet_reserve_and_busy_flag():
     assert chosen == [] and "busy" in notes[1]
 
 
+def test_site_pc_under_another_name_keeps_its_protections(monkeypatch, tmp_path):
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    monkeypatch.setattr(rp, "SITES", {rp.SITE_HOST})
+    other = "robttt@192.168.1.230"
+    roomy = host(nproc=8, load1=0.2, avail_gb=13, site=True)  # ~/rosy-jobs/site on the host
+    probes = {"model@1": host(), other: roomy}
+    monkeypatch.setattr(rp, "probe", probes.get)
+    assert rp.placed_hosts("pytest", list(probes)) == ["model@1"]  # last
+    _, notes = rp.place("pytest", [other], [roomy])
+    assert "5.8 cores, 9.0 GB free (site PC)" in notes[0]  # Fleet reserve taken off
+    probes["model@1"] = host(avail_gb=1)
+    assert rp.placed_hosts("pytest", list(probes)) == [other]
+    sent = []
+    monkeypatch.setattr(rp, "ship", lambda *a, **kw: None)
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
+    monkeypatch.setattr(rp, "capture", lambda command, log, cwd=None: sent.append(command[-1]) or 0)
+    rp.run_on(other, [["test/x.py"]], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None)
+    assert " 400% test/x.py" in sent[0]  # CPU cap
+
+
 def test_unreachable_and_forced_local(monkeypatch):
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     assert rp.place("pytest", ["a@1"], [None]) == ([], ["a@1: unreachable"])
@@ -87,10 +108,10 @@ def test_pick_prints_one_host_or_exits_1(monkeypatch, capsys):
 
 
 def test_probe_parser_reads_only_the_rosyprobe_line():
-    line = "ROSYPROBE 8 0.5 4194304 8388608 1 0 0 2 6"
+    line = "ROSYPROBE 8 0.5 4194304 8388608 1 0 0 2 6 1"
     p = rp.parse_probe(f"Welcome to Ubuntu\nlast login: today\n{line}\nbye\n")
-    assert p["nproc"] == 8 and p["avail_gb"] == 4 and p["pytest"] and not p["sim"] and p["lock_gb"] == 6
-    assert rp.parse_probe("8 0.5 4194304 8388608 1 0 0 2 6\n") is None
+    assert p["nproc"] == 8 and p["avail_gb"] == 4 and p["pytest"] and not p["sim"] and p["lock_gb"] == 6 and p["site"]
+    assert rp.parse_probe("8 0.5 4194304 8388608 1 0 0 2 6 0\n") is None
     assert rp.parse_probe("ROSYPROBE 8 0.5\n") is None
 
 
@@ -109,7 +130,7 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
         fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()
     finally:
         live.kill()
-    assert len(fields) == 10 and fields[-2:] == ["2", "6"]
+    assert len(fields) == 11 and fields[-3:] == ["2", "6", "0"]
     assert rp.parse_probe(" ".join(fields))["lock_gb"] == 6
     assert not (jobs / "dead.lock").exists() and (jobs / "live.lock").exists()
     assert not (jobs / "pwned").exists()

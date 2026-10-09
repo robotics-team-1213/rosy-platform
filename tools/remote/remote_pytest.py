@@ -39,6 +39,8 @@ import sys
 from pathlib import Path
 
 SITE_HOST = "robttt@100.82.51.8"  # live Fleet: last, Fleet reserve, CPU cap (D-568 3)
+# Site hosts: SITE_HOST plus every host whose probe finds ~/rosy-jobs/site (any ssh name).
+SITES = {SITE_HOST}
 DEFAULT_HOSTS = f"rosy@100.98.162.71 ai@100.108.76.123 {SITE_HOST}"
 # D-568 2: (free cores, free GB) a host needs for one job of the class.
 NEEDS = {"pytest": (2, 6), "sim": (6, 8)}
@@ -126,7 +128,7 @@ exec systemd-run --user --scope -q -p MemoryMax=6G ${CPU:+-p CPUQuota=$CPU} -- \
   nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@" 2>&1
 """
 
-# One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb. Dead-pid locks go.
+# One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb site. Dead-pid locks go.
 PROBE = r"""J=~/rosy-jobs; c=0; m=0
 for f in "$J"/*.lock; do
   [ -e "$f" ] || continue; read -r pid _ fc fm < "$f" || true
@@ -137,8 +139,9 @@ py=0; for p in /usr/bin/python3 ~/.local/bin/python3.12; do
   "$p" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null && py=1 && break; done
 s=0; [ -f /opt/ros/jazzy/share/ros_gz_sim/package.xml ] && [ -f /opt/ros/jazzy/share/nav2_bringup/package.xml ] && s=1
 b=0; [ -e "$J/busy" ] && b=1
+st=0; [ -e "$J/site" ] && st=1
 echo "ROSYPROBE $(nproc) $(cut -d' ' -f1 /proc/loadavg)" \
-  "$(awk '/^MemAvailable:/{a=$2} /^MemTotal:/{t=$2} END{print a, t}' /proc/meminfo) $py $s $b $c $m"
+  "$(awk '/^MemAvailable:/{a=$2} /^MemTotal:/{t=$2} END{print a, t}' /proc/meminfo) $py $s $b $c $m $st"
 """
 
 CLEANUP = r"""R=~/rosy-test
@@ -181,10 +184,10 @@ def parse_probe(out: str) -> dict | None:
     """The ROSYPROBE line of PROBE output (login-shell chatter around it is ignored), or None."""
     try:
         line = [ln for ln in out.splitlines() if ln.startswith("ROSYPROBE ")][-1]
-        n, load, avail, total, py, sim, busy, cores, gb = line.split()[1:]
+        n, load, avail, total, py, sim, busy, cores, gb, site = line.split()[1:]
         return {"nproc": int(n), "load1": float(load), "avail_gb": int(avail) / 2**20,
                 "total_gb": int(total) / 2**20, "pytest": py == "1", "sim": sim == "1", "busy": busy == "1",
-                "lock_cores": int(cores), "lock_gb": int(gb)}
+                "lock_cores": int(cores), "lock_gb": int(gb), "site": site == "1"}
     except (IndexError, ValueError):
         return None
 
@@ -197,7 +200,7 @@ def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[s
         if p is None:
             notes.append(f"{host}: unreachable")
             continue
-        site = host == SITE_HOST
+        site = host in SITES or p.get("site", False)
         cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
         mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
         why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else f"no {cls} capability" if not p[cls]
@@ -219,12 +222,13 @@ def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[st
         return []
     with ThreadPoolExecutor(len(hosts)) as pool:
         probes = list(pool.map(probe, hosts))
+    SITES.update(h for h, p in zip(hosts, probes) if p and p.get("site"))
     chosen, notes = place(cls, hosts, probes)
     for note in notes:
         print(f"[remote-pytest] {note}", file=sys.stderr, flush=True)
     if not chosen and cls == "pytest":
         # D-568 7: busy hosts must not stop the gate; the site PC never takes this fallback.
-        chosen = [h for h, p in zip(hosts, probes) if p and p["pytest"] and not p["busy"] and h != SITE_HOST]
+        chosen = [h for h, p in zip(hosts, probes) if p and p["pytest"] and not p["busy"] and h not in SITES]
         if chosen:
             print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones anyway",
                   file=sys.stderr, flush=True)
@@ -345,7 +349,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         codes = []
         for inv, log in zip(invocations, logs):
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
-            cpu = SITE_CPU_QUOTA if host == SITE_HOST else ""
+            cpu = SITE_CPU_QUOTA if host in SITES else ""
             codes.append(capture([*SSH, host, "bash -c " + shlex.quote(PYTEST) + " remote "
                                   + " ".join(map(shlex.quote, [name, deps_sha, cpu, *inv, *PYTEST_TAIL]))], log))
         return codes
