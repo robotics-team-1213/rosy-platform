@@ -27,10 +27,3 @@ D-585 reserved on adr-model-lap for model-driven lane lap acceptance; remove whe
 D-586 reserved on adr-model-lap for capture_group annotated revision; remove when it lands
 D-588 reserved for learned paint floor gate (refs/adr/D-588); remove when it lands
 D-589 reserved on cam-auto-tune for recognition-driven exposure; remove when it lands
-D-592 reserved in another active branch (boundary counterexample, refs/adr/D-592); remove when it lands
-D-593 reserved in another active branch (operator map pin (feat/operator-map-pin-anchor), refs/adr/D-593); remove when it lands
-D-594 reserved in another active branch (mapped lane bend body footprint, refs/adr/D-594); remove when it lands
-D-595 reserved in another active branch (keep closed-loop gap, refs/adr/D-595); remove when it lands
-D-596 reserved in another active branch (LED identify active / host control site config, refs/adr/D-596); remove when it lands
-D-597 reserved in another active branch (learned drivable readback, refs/adr/D-597); remove when it lands
-D-598 reserved in another active branch (refs/adr/D-598); remove when it lands
