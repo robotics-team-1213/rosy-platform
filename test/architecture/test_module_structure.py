@@ -205,13 +205,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_252,
-        "split: re-judged at 50252 on 2026-10-10 after feat/vision-calibration-drift-watch "
-        "(+375 over 49877; the robot-free calibration drift watch lives in the new display-only "
-        "tracking_drift.py — pure verdict math and a 60 s proposal reader, no commands — plus "
-        "small drift_provider wiring in tracking.py/app.py/cli.py and its tests; no command path, "
-        "no new transport). Previously "
-        "split: re-judged at 49877 on 2026-10-10 after merging D-580 (+145 over main 49732; the enrolled "
+        50_662,
+        "split: re-judged at 50662 on 2026-10-10 after feat/vision-calibration-drift-watch over the D-581 base 50187 " +
+        "(+375: the robot-free calibration drift watch lives in the new display-only tracking_drift.py - pure verdict math " +
+        "and a 60 s proposal reader, no commands - plus small drift_provider wiring in tracking.py/app.py/cli.py " +
+        "and its tests; no command path, no new transport). Previously "
+        "split: re-judged at 50187 on 2026-10-10 after merging D-581 over main 49877 (+310; self-judged after "
+        "an independent REQUEST CHANGES review whose fixes are in). One new pure module "
+        "fleet/swarm/anchor.py (ceiling-anchored TRAIL reference: smoothed map<-odom per robot, odom-reset, "
+        "stale and jump stops, explicit anchor_hold samples, the anchored relay factory and status), its hook "
+        "in swarm/relay.py, a stream-evidence key in console_view.py, MapPoseTracker.odom_to_map and four "
+        "console.py lines. It reads the existing D-494 3 map pose owner; no new robot command path. Previously "        "split: re-judged at 49877 on 2026-10-10 after merging D-580 (+145 over main 49732; the enrolled "
         "roster drives camera robot_ids/markers and the autoupdate required_ids in existing owners "
         "enrollment*.py, sightings*.py, roster.py, site_update_io.py; no command path, no new owner). Previously "
         "split: re-judged at 49732 on 2026-10-10 after the crosswalk Fleet map-zone change "
@@ -679,8 +683,10 @@ SIZE_VERDICTS = {
         "2026-10-01 at 887 after idempotent per-attempt phase projection joined the Mission event transaction",
     ),
     "foundation/core_common/protocol/schemas.py": (
-        1_347,
-        "accept: re-judged at 1347 on 2026-10-09 for D-559 (independent read-only critic agent ACCEPT): SwarmFollowParams.mode (one Literal field "
+        1_353,
+        "accept: re-judged at 1353 on 2026-10-10 for D-581 (self-judged after the independent review): four "
+        "optional PoseSample fields (anchor, for_robot_id, anchor_age_s, anchor_hold) and their comment; additive, "
+        "envelope 1.0 kept, no new model. Previously: accept: re-judged at 1347 on 2026-10-09 for D-559 (independent read-only critic agent ACCEPT): SwarmFollowParams.mode (one Literal field "
         "and its comment) and PoseSample.frame (one optional Literal field); additive, envelope 1.0 kept, "
         "no new model. Previously: accept: independently re-judged at 1344 (2026-10-09, read-only safety reviewer) for D-531 P1: "
         "one RouteContext import and two optional LineFollowStatus fields; the bounded model and "
@@ -778,7 +784,11 @@ SIZE_VERDICTS = {
         "see docs/validation/fleet-navigation-support-2026-10-05.md",
     ),
     "fleet/fleet/server/console.py": (
-        1248,
+        1251,
+        "accept: re-judged at 1251 on 2026-10-10 for D-581 (+4 after review M1): one import, the "
+        "formation_poses attribute, one formation_relay_kwargs call and one anchor_status line; the "
+        "relay construction and anchoring live in fleet/swarm/anchor.py. "
+        "No goal, stop or admission path changed; the zero growth allowance remains. Previously "
         "accept: re-judged at 1248 on 2026-10-09 after merging D-526 with the degraded-link row: "
         "a late robot answer is shown as degraded, not offline (online stays false), and D-526 adds an "
         "alarm_sources hook so the tether watch can raise TETHER_STOP_FAILED; neither changes a goal, stop "
@@ -853,6 +863,13 @@ SIZE_VERDICTS = {
         "stuck/body mixins. The added low-light guards invalidate decisions and bypass autonomous "
         "recovery without introducing another writer. Configured back-off, active recovery and "
         "stale-decision tests plus independent reproduction cover this safety boundary.",
+    ),
+    "core/services/core_features/swarm/manager.py": (
+        634,
+        "accept: D-581 (2026-10-10, re-judged at 634 after the review fixes: anchor_withheld hold) adds the Fleet-anchored "
+        "sample kind (_sample_kind, _own_pose, odom provider) to the one follower state machine; the "
+        "trail geometry stays in swarm/trail.py and the anchoring in Fleet. One lock owner, ROS-free, "
+        "covered by core_features test_swarm*.py. Re-judge on further growth",
     ),
     "core/services/core_features/docking/manager.py": (
         663,

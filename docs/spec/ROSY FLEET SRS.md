@@ -270,6 +270,7 @@ Formation Parameter: Center Position / Orientation / Robot Spacing / Robot Selec
 - Parameter: Leader ID / Follow Distance / Lateral Distance / Speed Limit / Formation Type
 - `GET /api/fleet/formation`은 릴레이 관측을 `stream_evidence[robot_id]`로 제공한다. 서버는 `state`(`fresh`/`delayed`/`disconnected`/`unavailable`), `age_s`, `reason`, `stale_after_s`, `source`를 판정한다. 마지막 표본이 1초를 넘거나 두 표본 이상에서 송수신 빈도가 2 Hz 미만이면 `delayed`다. 리더의 `source=leader_rx`는 Fleet의 마지막 수신, 팔로워의 `source=follower_tx`는 Fleet의 마지막 송신이다. 송신 시간은 팔로워 수신·실행 또는 물리 추종의 증거가 아니다. `follower_last_tx_age_s`는 원시 진단 값이며 브라우저가 임계값으로 재판정하지 않는다.
 - **하이브리드 구조(D-20):** Fleet은 Leader pose 스트림(SWM-003, ≥10 Hz 수신)을 Follower들에게 WS로 릴레이(≥5 Hz)하고, Follower에는 `swarm/follow` 명령을 1회 전달한다. **폐루프 추종 계산은 로봇 탑재(SWM-002)** — Fleet은 목표를 반복 계산·전송하지 않는다.
+- **천장 카메라 기준 trail(D-581):** 로봇에 map pose 가 없어 리더 스트림이 `frame: odom` 이면, TRAIL 대형에서 Fleet은 리더 표본을 팔로워마다 그 팔로워의 odom 좌표로 바꿔 보낸다(천장 카메라 기준 map pose, API Ref §7.8 `anchor`). 기준이 없거나 낡거나 튀면 그 팔로워에게는 보내지 않고 이유를 대형 상태 `anchor` 에 남긴다. `map` 프레임 리더는 위 릴레이 그대로다.
 - 로봇 간 직접 통신은 발생하지 않는다.
 
 ### FOR-004 Formation 안전 및 동적 속도 조절
