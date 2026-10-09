@@ -70,8 +70,8 @@ Avahi 주소 하나를 쓰고, 저장한 포트와 CA 검증은 유지한다. �
 읽기 성공을 각각 확인한다. 연결 복구 자체가 목표 재생·모드 변경·정지 해제를 뜻하지
 않는다. 테스트나 소스 통과는 실제 사이트의 통신·운용 수용을 대신하지 않는다.
 
-로봇을 정상 해제한 뒤에는 관리자가 그 ID의 공개 binding을 제거하거나 새 ID로 바꾼다.
-남은 binding은 대기 binding이 되어 시작 경고에 남는다. 같은 호스트 이름이 다른 ID로
+로봇을 영구히 내보내면 관리자가 그 공개 binding을 제거한다. 번호만 바꾸는 로봇은 그대로
+둔다(아래, D-580). 남은 binding은 대기 binding이 되어 시작 경고에 남는다. 같은 호스트 이름이 다른 ID로
 아직 등록부에 있으면(`pending_logout` 포함) 시작이 거절된다. 실행 중 binding/CA를 삭제·바꾸면
 기존 HTTP로 돌아가지 않고 실패한다. 처음 지정한 origin·CA DER 지문은 기존 등록부에
 공개 downgrade 방지 기록으로 함께 보존된다. 오프라인·만료·주소 변경·로그아웃 대기는
@@ -92,13 +92,23 @@ TLS 필수 로봇은 HTTP로 먼저 등록할 수 없다. 관리자가 binding �
 등록되지 않는다. 로봇마다 자기 CA를 쓴다. 맞는 binding이 없으면
 `409 tls_binding_required`다. HTTP로 내려가지 않는다.
 
-번호 바꾸기(예: rosy_26 → rosy_41, D-562):
+번호 바꾸기(예: rosy_60 → rosy_40, D-562). sudo가 필요 없다(D-580):
 
 1. 콘솔에서 옛 ID를 등록 해제하고 결과가 `removed`인지 본다. `pending_logout`이면 끝날
    때까지 기다린다.
 2. 로봇 번호를 바꾸고 재부팅한다. 호스트 이름과 CA는 그대로다.
-3. binding 파일의 그 행에서 `robot_id`만 새 ID로 바꾼다. 나머지 필드·소유자·권한은
-   그대로 둔다.
-4. 승인된 배포 절차로 Fleet을 재시작하고 대기 경고에 새 ID가 있는지 본다.
-5. 콘솔에서 로봇 화면의 코드로 등록한다(목록 또는 주소). `tls_binding_mismatch`이면
-   binding ID와 로봇 번호를 맞춘 뒤 새 코드로 다시 한다.
+3. 콘솔에서 로봇 화면의 코드로 등록한다(목록 또는 주소). binding 파일은 고치지 않고
+   Fleet도 재시작하지 않는다. 옛 ID가 이 Fleet에 등록되었던 binding이면 Fleet은 같은
+   호스트 이름·CA를 TLS로 증명한 로봇이 알리는 새 ID를 받고, 그 ID를 등록 DB에 적는다
+   (감사 `tls_renumber`, 대상 `rosy_60->rosy_40`). binding 파일의 `robot_id`는 옛 값으로
+   남아도 된다. Fleet DB가 이긴다. 파일에서 CA를 바꾸면 배운 ID는 쓰이지 않는다.
+4. 카메라(`site-cameras.yaml` `robot_ids: enrolled`)와 갱신 검사(`required_ids:
+   "enrolled"`)를 쓰는 사이트는 그대로 따라온다. 목록을 적은 사이트는 그 목록을 고친다.
+
+`code_consumed` reason `robot_id_conflict`이면 새 ID가 다른 binding이나 등록 로봇의 ID다.
+
+**sudo 경로(대신 쓰는 방법).** 한 번도 등록되지 않은 binding(처음 들어오는 로봇)이나
+Fleet DB의 배운 ID를 쓰지 않으려면 D-565 절차대로 한다: binding 파일의 그 행에서
+`robot_id`만 새 ID로 바꾸고, 승인된 배포 절차로 Fleet을 재시작해 대기 경고에 새 ID가
+있는지 본 뒤 콘솔에서 등록한다. `tls_binding_mismatch`이면 binding ID와 로봇 번호를 맞춘
+뒤 새 코드로 다시 한다. 배운 ID가 있는 호스트 이름은 파일의 ID보다 배운 ID가 먼저다.
