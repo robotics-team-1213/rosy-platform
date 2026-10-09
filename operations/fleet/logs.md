@@ -3001,3 +3001,9 @@
 - Change: `SightingService.accept` takes `calibration_source: approved_record` only when its revision is the source's current approved D-457 record (`TrackingService.approved_revision`, wired in `cli.py`); otherwise 409 `CALIBRATION_MISMATCH`. Site config key `marker_yaw_offset_deg` is validated with Vision's shared check. API v1.177.
 - Evidence: model PC pytest of sightings/tracking/map pose/site map/roster/version pins/ownership/module structure 426 passed, gateway site sightings + module criteria 16 passed, known_failures 0 new.
 - Gate: SOURCE. The live site needs a release and the config line before D-494 anchors from the ceiling camera.
+
+## 2026-10-10 · uncommitted · feat(fleet): D-600 robot regions for the tracking background
+
+- Change: `detections/config` carries `occupied` (marker > D-494 map pose incl. operator pin > LOCALIZED own pose, plus unassigned markers and last OK blobs); relearn reply adds `occupied`/`unlocated`; tracking source rows carry `unknown_floor`, drawn as a hatch; relearn copy says robots stay. API v1.181.
+- Evidence: model PC pytest operations/fleet/test exit 0, known_failures 0 new; guards (module structure after re-judge, safety separation, robot literals, behavior test ownership, version pins, tracking browser) on the model PC.
+- Gate: SOURCE. Needs a site release; nudge (moving a robot off unknown floor) is a follow-up.

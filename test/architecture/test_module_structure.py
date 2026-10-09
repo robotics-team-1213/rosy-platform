@@ -213,7 +213,12 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        50_404,
+        50_555,
+        "split: re-judged at 50555 on 2026-10-10 for D-600 (+151 over D-593; self-judged). The robot "
+        "regions for Vision's background learn are TrackingService.occupied in the existing D-457 owner "
+        "(server/tracking.py, map pose wired at the app root), the unknown-floor hatch in map-view.js and "
+        "tracking-layer.js, relearn copy in tracking-relearn.js; most new lines are tests. No new owner and "
+        "no robot command path. Previously "
         "split: re-judged at 50404 on 2026-10-10 for D-593 (+217 over the D-587 branch; self-judged). "
         "The operator map pin is MapPoseTracker.add_pin and the anchor kind in the existing D-494 3 owner "
         "(localization/map_pose.py), one route beside the map-pose read (map_pose_service.py), the pin "

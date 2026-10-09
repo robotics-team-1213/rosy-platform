@@ -405,3 +405,8 @@
 - 변경: 추적 단계가 승인 보정(D-457)을 쓴 프레임에서 `robot_markers`의 마커를 네 모서리 투영 → 윗면 높이 0.125 m 시차 보정 → 모서리 기하 문턱 → URDF 부착(−0.017, 0)과 로봇별 `marker_yaw_offset_deg`로 로봇 자세를 만들어 `calibration_source: approved_record` sighting으로 보낸다(`track/marker_sightings.py`). `project_frame`도 같은 부착·오프셋을 쓴다. 같은 프레임에 이미 sighting이 나간 로봇은 다시 보내지 않는다. 렌즈 FOV가 없으면 보내지 않는다.
 - 증거: 현장 원본 150장(2026-10-10 01:15, 로봇 정지)을 이 코드로 돌려 rosy_40 150/150, rosy_41 148/150 전송, 방향 표준편차 0.09°/0.57°(최대 0.7°/1.7°), 위치 표준편차 0.3 mm 이하. 모델 PC pytest operations/vision/test + tools/calibration 506 통과, known_failures 0 new.
 - gate 변화: SOURCE. 사이트 릴리스·설정 설치·주행 확인 전
+
+## 2026-10-10 · uncommitted · feat(vision): D-600 로봇을 그대로 둔 배경 학습
+- 변경: 모든 학습(운영자 재학습·재시작·장면 변화)이 Fleet `occupied` 로봇 자리를 빼고 배운다(`track/robot_mask.py`). 이전 배경(어둡지 않은 곳) 또는 inpainting한 모르는 바닥으로 바꾸고, 모르는 바닥은 연속 3프레임 비고 어두운 픽셀 12 px 밖일 때 채운다(5 s에 한 번). 저장본이 모르는 바닥 지도를 같이 저장한다. 페이로드에 `unknown_floor`.
+- 증거: 모델 PC pytest operations/vision/test 485 통과(새 시험 8개), known_failures 0 new. 실프레임 bg-seq 재생(X:\DevTempg-relearneplay-result.txt): 두 주차 로봇 0/24 → 24/24(오차 3.4/5.1 cm).
+- gate 변화: SOURCE. 현장 배포·재학습 확인 전
