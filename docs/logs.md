@@ -7424,3 +7424,9 @@ osy-d395-s1d\`.
 - 변경: 75% 격리 주행의 108개 원시 스캔과 CORE 상태를 맞추고, 맵 안쪽·서쪽 출발점 정지 스캔을 비교했다.
 - 증거: [LiDAR 재계측](validation/lane-route-wash-gate-2026-10-09/result.md#독립-lidar-hold). `obstacle_ahead` 시 정면 ±15° 0.381m, 측면 짧은 빔 0.065m, 정적 벽·몸 간격 약 0.053m. 개별 빔의 물체 ID는 미확정.
 - gate 변화: 없음. 몸 쓸림·IR 정지 유지, 실물 수용 HOLD.
+
+## 2026-10-09 · uncommitted · docs: Fleet 현장 위치·SLAM 실행 상태 재검증
+
+- 변경: 현장 Fleet/Vision과 두 Pinky의 읽기 전용 상태를 대조해 [실행 증거](validation/uiux-fleet-live-runtime-2026-10-09/result.md)를 기록했다.
+- 증거: [현장 실행 판독](validation/uiux-fleet-live-runtime-2026-10-09/result.md). 카메라 추적과 장치 연결은 살아 있으나 두 로봇은 `motor` 모드, 지도·현지화·G4 승인 증거가 없다.
+- gate 변화: 없음. 지도상 실명 위치·경로 추종·SLAM·물리 수용은 HOLD.
