@@ -116,6 +116,7 @@ def test_a_refused_restart_falls_through_to_a_reboot(tmp_path):
 @pytest.mark.parametrize("reply", ["garbage", "60 5 1.2", "x 5 1.2 24 7200 -"])
 def test_a_malformed_health_reply_does_not_stop_the_other_hosts(tmp_path, reply):
     conf = "bad pc op@bad 05:50-06:20\nshort\nrobot-x robot\nok pc op@ok 05:50-06:20\n"
+    calls = _guard(tmp_path, reply, runs=2, conf=conf)
     status = _status(tmp_path)
     assert {status[n]["state"] for n in ("bad", "short", "robot-x", "ok")} == {"error"}
     assert calls.count("health") == 4 and _actions(tmp_path) == []
@@ -153,7 +154,7 @@ def test_robots_are_probed_and_never_recovered(tmp_path):
     assert _actions(tmp_path) == []
 
 
-def _remote(tmp_path, command, units="pinky-nav2.service\n"):
+def _remote(tmp_path, command, units="pinky-nav2.service\n", role=None):
     bin_dir = tmp_path / "rbin"
     bin_dir.mkdir(exist_ok=True)
     for name, body in {"systemctl": 'echo "$*" >> "$CALLS"; case "$*" in *is-active*) exit 3;; esac',
