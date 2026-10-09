@@ -130,6 +130,9 @@ def test_d491_free_mode_needs_live_goal_navigation(core_client, monkeypatch):
     monkeypatch.setattr(system, "withhold_hardware_flags", lambda data, _reasons: data)
     svc.capability._data.setdefault("navigation", {})["goal_navigation"] = True
     assert _controls(client)["items"][0]["drive_modes"] == ["lane", "free"]
+    assert _controls(client)["items"][0]["goal_lease"] is True  # D-550 10: with goal navigation
+    svc.capability._data["navigation"]["goal_navigation"] = False
+    assert "goal_lease" not in _controls(client)["items"][0]
 
 
 @pytest.mark.parametrize("model", ["Pinky", "pinky-pro", "p" * 65, 7])

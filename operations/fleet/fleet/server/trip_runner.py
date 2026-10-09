@@ -77,11 +77,13 @@ class TripRunner:
                  release_queue: Callable[[str], None] = lambda _robot_id: None,
                  roster: Optional[Callable[[], Iterable[str]]] = None,
                  traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False,
-                 traffic_signals=()) -> None:
+                 traffic_signals=(), renew_lease: Optional[Callable[[str], Awaitable[None]]] = None) -> None:
         self._store = store
         self._routing = routing_config
         self._caps, self._poses, self._junction = caps, poses, junction
         self._goal, self._cancel_goal = goal, cancel_goal
+        #: D-550 10: renews the robot's leased trip goal each step (console.renew_goal_leases).
+        self._renew_lease = renew_lease
         #: Edges an operator or the traffic layer closed; a remaining one means "replan" (D-489 9).
         self._blocked = blocked
         self._clock = clock
@@ -364,6 +366,13 @@ class TripRunner:
 
     async def _step(self, live: LiveTrip) -> None:
         robot_id = live.view["robot_id"]
+        if self._renew_lease is not None:
+            # D-550 10: first, so a slow pose read does not starve it. Never ends the trip: a
+            # renewal that fails lets CORE cancel the goal when its lease runs out.
+            try:
+                await asyncio.wait_for(self._renew_lease(robot_id), self.config.port_timeout_s)
+            except Exception:
+                _LOG.warning("goal lease renewal for %s failed", robot_id, exc_info=True)
         live.view["detail"].pop("bend_candidate", None)
         pose = await self._pose(robot_id)
         if not live.open:

@@ -47,6 +47,8 @@ _HTTP_BY_CODE = {
     "MODE_CONFLICT": 409,
     "EMERGENCY_ACTIVE": 409,
     "NAVIGATION_ACTIVE": 409,
+    # D-550 10: a lease renewal for a goal that is no longer the active leased goal.
+    "GOAL_LEASE_NOT_ACTIVE": 409,
     "WAYPOINT_EXISTS": 409,
     "MAP_MISMATCH": 409,
     "MAPPING_ACTIVE": 409,

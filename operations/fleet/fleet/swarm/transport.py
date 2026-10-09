@@ -123,7 +123,10 @@ class RobotClient(Protocol):
 
     async def navigation_goal(
         self, x: float, y: float, yaw: float, *, correlation_id: str | None = None,
+        lease_ttl_s: float | None = None,
     ) -> dict: ...
+
+    async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict: ...
 
     async def line_follow_mode(self, mode: str) -> dict: ...
     async def line_follow(self) -> dict: ...
@@ -154,13 +157,15 @@ class RobotClient(Protocol):
     def events(self, types: Sequence[str]) -> AsyncIterator[dict]: ...
 
 
-async def require_capability(client: RobotClient, feature: str) -> None:
-    """Fresh CAP-001 preflight; cached presentation never authorizes a command."""
-    value = await client.capabilities()
+async def require_capability(client: RobotClient, feature: str) -> dict:
+    """Fresh CAP-001 preflight; cached presentation never authorizes a command.
+    Returns the capabilities it read."""
+    caps = value = await client.capabilities()
     for part in feature.split("."):
         value = value.get(part) if isinstance(value, dict) else None
     if value is not True:
         raise RobotApiError(client.robot_id, 501, "NOT_SUPPORTED", f"{feature} is not advertised")
+    return caps
 
 
 class _WebsocketSink:
@@ -272,11 +277,19 @@ class HttpRobotClient:
         return await self._get("/api/v1/navigation/path")
 
     async def navigation_goal(self, x: float, y: float, yaw: float, *,
-                              correlation_id: str | None = None) -> dict:
+                              correlation_id: str | None = None,
+                              lease_ttl_s: float | None = None) -> dict:
         body = {"x": x, "y": y, "yaw": yaw}
         if correlation_id is not None:
             body["correlation_id"] = correlation_id
+        if lease_ttl_s is not None:  # D-550 10: only to a robot that advertises goal_lease
+            body["lease_ttl_s"] = lease_ttl_s
         return await self._post("/api/v1/navigation/goal", body)
+
+    async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict:
+        """D-550 10: renew a leased goal; 409 GOAL_LEASE_NOT_ACTIVE once it is not active."""
+        return await self._post("/api/v1/navigation/goal/lease",
+                                {"correlation_id": correlation_id, "ttl_s": ttl_s})
 
     async def line_follow_mode(self, mode: str) -> dict:
         if mode not in {"IR_LINE", "OFF"}:

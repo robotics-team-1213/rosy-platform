@@ -39,12 +39,20 @@ class NavigationError(Exception):
 _IDLE_STATES = {NavigationState.IDLE, NavigationState.ARRIVED,
                 NavigationState.CANCELED, NavigationState.FAILED}
 
+#: D-550 10: largest goal lease (s); the API reference row pins 0 < ttl_s <= 5.
+GOAL_LEASE_MAX_S = 5.0
+
+
+def _check_lease_ttl(ttl_s: float) -> None:
+    if not (isinstance(ttl_s, (int, float)) and math.isfinite(ttl_s) and 0 < ttl_s <= GOAL_LEASE_MAX_S):
+        raise NavigationError("VALIDATION_ERROR", f"lease ttl must be 0 < ttl_s <= {GOAL_LEASE_MAX_S:g}")
+
 
 class NavigationManager:
     def __init__(self, events, state_manager, waypoints, safety,
                  map_id_provider=None, stuck_timeout_s: float = 30.0,
                  stuck_min_progress: float = 0.05, readiness=None,
-                 clock=time.monotonic) -> None:
+                 clock=time.monotonic, lease_clock=time.monotonic) -> None:
         self._events = events
         self._state = state_manager
         self._waypoints = waypoints
@@ -69,6 +77,11 @@ class NavigationManager:
         self.clock = clock
         self._last_progress_pos: Optional[tuple[float, float]] = None
         self._last_progress_ts: float = 0.0
+        #: D-550 10 goal lease: ``(correlation_id, expires_at)`` on ``lease_clock``, the host
+        #: monotonic clock (not ``clock``, which the bridge may swap for sim time). It counts only
+        #: while that correlation id is still the active goal.
+        self.lease_clock = lease_clock
+        self._lease: Optional[tuple[str, float]] = None
         # 목표는 uvicorn 워커(REST·WS)와 rclpy executor(브리지 타이머) 양쪽에서
         # 건드려진다(D-1). check-send-set 이 쪼개지면 취소가 목표를 놓친다.
         self._lock = threading.RLock()
@@ -125,7 +138,12 @@ class NavigationManager:
         return NavGoalSpec(x=float(x), y=float(y), yaw=float(yaw or 0.0))
 
     def goal(self, spec: NavGoalSpec, source: str = "api",
-             correlation_id: str | None = None) -> None:
+             correlation_id: str | None = None, lease_ttl_s: float | None = None) -> None:
+        if lease_ttl_s is not None:
+            # D-550 10: a lease is renewed by correlation id, so a leased goal needs one.
+            _check_lease_ttl(lease_ttl_s)
+            if correlation_id is None:
+                raise NavigationError("VALIDATION_ERROR", "lease_ttl_s needs a correlation_id")
         self.require_ready()
         executor = self._require_executor()
         if self._safety.estop:
@@ -150,6 +168,8 @@ class NavigationManager:
             self._set_state(NavigationState.PLANNING)
             self._active_correlation_id = correlation_id
             self._active_spec = spec
+            self._lease = (None if lease_ttl_s is None
+                           else (correlation_id, self.lease_clock() + lease_ttl_s))
         self._events.publish("nav.started", source="navigation_manager",
                              data={"goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw},
                                    "by": source, "correlation_id": correlation_id})
@@ -174,6 +194,30 @@ class NavigationManager:
                     or self._nav_state in _IDLE_STATES):
                 return None
             return self._active_correlation_id, self._active_spec
+
+    def renew_goal_lease(self, correlation_id: str, ttl_s: float) -> None:
+        """D-550 10: extend the lease of the active leased goal. Never revives a goal: a goal
+        that was cancelled, arrived, failed, replaced or never leased is GOAL_LEASE_NOT_ACTIVE."""
+        _check_lease_ttl(ttl_s)
+        with self._lock:
+            if (self._lease is None or self._lease[0] != correlation_id
+                    or self._active_correlation_id != correlation_id
+                    or self._nav_state in _IDLE_STATES):
+                raise NavigationError("GOAL_LEASE_NOT_ACTIVE",
+                                      f"no active leased goal with correlation_id {correlation_id!r}")
+            self._lease = (correlation_id, self.lease_clock() + ttl_s)
+
+    def expire_goal_lease(self) -> bool:
+        """D-550 10: cancel a leased goal whose lease ran out, on the SAF-003 STOP cancel path.
+        Ticked by the bridge (5 Hz). True when a goal was cancelled."""
+        with self._lock:
+            lease = self._lease
+            if lease is None or self.lease_clock() < lease[1]:
+                return False
+            # Dropped first: a renewal racing this expiry is refused, not revived.
+            self._lease = None
+        # A goal that already ended or was replaced is left alone (correlation id check).
+        return self.cancel(source="goal_lease", correlation_id=lease[0])
 
     def _refuse_while_docking(self) -> None:
         if self.docking_active_provider():

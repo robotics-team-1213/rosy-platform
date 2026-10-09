@@ -60,6 +60,8 @@ def install_trip_guard(console, runner, *, clock=time.monotonic) -> None:
     async def guarded_goal(robot_id, *args, trip: bool = False, **kwargs):
         if not trip:
             refuse([robot_id])
+        else:  # D-550 10: the trip loop, not the console loop, renews a trip goal's lease
+            kwargs["lease_renewer"] = "trip"
         result = await goal(robot_id, *args, **kwargs)
         console.trip_goal_sent_at[robot_id] = clock()
         return result

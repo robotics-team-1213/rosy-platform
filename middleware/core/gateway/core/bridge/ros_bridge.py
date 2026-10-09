@@ -563,6 +563,10 @@ class RosBridge:
                 self._svc.fleet_loss.tick()
             except Exception:  # a monitor fault must not stop the power timer
                 self._node.get_logger().error(f"fleet_loss tick failed:\n{traceback.format_exc()}")
+        try:  # D-550 10: a leased Fleet goal whose lease ran out is cancelled (SAF-003 cancel path)
+            self._svc.nav.expire_goal_lease()
+        except Exception:  # a lease fault must not stop the power timer
+            self._node.get_logger().error(f"goal lease tick failed:\n{traceback.format_exc()}")
         status = power.status()
         self._svc.state.set_power(status)
 
