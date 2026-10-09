@@ -5,7 +5,7 @@ run-name: Payload builder ${{ github.sha }}
 # snapshot prerequisites and rosdep apt packages already installed, so the
 # payload build skips ~3 min of apt. It only caches inputs the payload build
 # would install from the same pinned sources; build-native-payload.yml pulls
-# it by digest (input builder_image). No secrets: GITHUB_TOKEN pushes to GHCR.
+# it by digest (input builder_image). No stored secrets: the job token pushes to GHCR.
 
 on:
   workflow_dispatch:
