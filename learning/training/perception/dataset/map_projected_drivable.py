@@ -17,7 +17,8 @@ centreline (segments and parking spur) +- 0.0925 m, i.e. up to the white line ce
 2); line = the STL boundary-line paint; other paint = crosswalk bars; off-road = the rest of the
 map. Per usable frame (ceiling_pose.fuse), ground cells forward near_m..far_m of base are
 projected into the robot camera (camera_profile: URDF nominal < accepted record, D-397):
-road -> 5 drivable, off-road -> 0, line/other paint -> 255, everything else 255. A cell closer to
+road -> 5 drivable only on the robot's own road (4-connected to its map cell without crossing a line,
+within own_road_radius_m; D-576 4), other roads -> 0, off-road -> 0, line/other paint -> 255, everything else 255. A cell closer to
 a class boundary than the pose margin (sigma_m + forward * sigma_yaw + pitch error moved to the
 floor) stays 255, so far rows lose more. Rows above ignore_top are 255. A frame is rejected when
 fewer than min_line_px projected line pixels are in view, or the projected line cells and the
@@ -58,7 +59,7 @@ HALF_WIDTH_M = 0.0925
 OFF, ROAD, LINE, PAINT, WALL = 0, 1, 2, 3, 4
 PARAMS = {"near_m": 0.15, "far_m": 0.40, "ignore_top": 110, "stripe_min": ldd.STRIPE_MIN,
           "pitch_sigma_rad": math.radians(1.0), "min_line_iou": 0.3, "line_tol_px": 2, "min_line_px": 30,
-          "min_spacing_s": 0.5}
+          "min_spacing_s": 0.5, "own_road_radius_m": 0.6, "seed_radius_m": 0.03}
 
 
 def _sha(data):
@@ -149,6 +150,28 @@ def ground_grid(camera):
     return dx + camera.x_offset_m, b * (dx * c + camera.height_m * s)
 
 
+def own_road(raster, x, y, radius_m, seed_m):
+    """(row0, col0, bool window) of the road cells 4-connected to the robot's map cell without
+    crossing line/wall/off-road cells, inside a +-radius_m window (D-576 4), or None off-road."""
+    rm, cls = raster["raster_m"], raster["cls"]
+    row, col = int(round((raster["y1"] - y) / rm)), int(round((x - raster["x0"]) / rm))
+    n = int(radius_m / rm)
+    r0, c0 = max(row - n, 0), max(col - n, 0)
+    window = cls[r0:row + n + 1, c0:col + n + 1]
+    road = ((window == ROAD) | (window == PAINT)).astype(np.uint8)
+    if not road.size:
+        return None
+    _, labels = cv2.connectedComponents(road, connectivity=4)
+    s = int(seed_m / rm)
+    rr, cc = row - r0, col - c0
+    near = labels[max(rr - s, 0):rr + s + 1, max(cc - s, 0):cc + s + 1]
+    if not (near > 0).any():
+        return None
+    ys, xs = np.nonzero(near > 0)
+    pick = np.argmin((ys + max(rr - s, 0) - rr) ** 2 + (xs + max(cc - s, 0) - cc) ** 2)
+    return r0, c0, labels == near[ys[pick], xs[pick]]
+
+
 def label_frame(image, pose, camera, grid, raster, params=PARAMS):
     """(6-class mask, stats) or (None, stats with 'reason'). pose = fuse() row."""
     p = {**PARAMS, **params}
@@ -179,8 +202,18 @@ def label_frame(image, pose, camera, grid, raster, params=PARAMS):
     margin = (pose["sigma_m"] + forward * pose["sigma_yaw"]
               + (forward ** 2 + h ** 2) / h * p["pitch_sigma_rad"])
     near_edge[inside] = raster["boundary_m"][r, k] < margin[inside]
+    own = own_road(raster, pose["x"], pose["y"], p["own_road_radius_m"], p["seed_radius_m"])
+    if own is None:
+        return None, {"line_px": 0, "line_iou": None, "reason": "robot_off_road"}
+    r0, c0, mine = own
+    in_own = np.zeros(region.shape, bool)
+    wr, wc = r - r0, k - c0
+    ok = (wr >= 0) & (wr < mine.shape[0]) & (wc >= 0) & (wc < mine.shape[1])
+    in_own.flat[np.flatnonzero(inside)[ok]] = mine[wr[ok], wc[ok]]
     mask = np.full(region.shape, ldd.IGNORE, np.uint8)
-    mask[(cls == ROAD) & ~near_edge] = ldd.DRIVABLE
+    # D-576 4: only the robot's own road is drivable; any other road in view is blocked.
+    mask[(cls == ROAD) & ~near_edge & ~in_own] = 0
+    mask[(cls == ROAD) & ~near_edge & in_own] = ldd.DRIVABLE
     mask[(cls == OFF) & ~near_edge] = 0
     mask[:p["ignore_top"]] = ldd.IGNORE
     kernel = np.ones((2 * p["line_tol_px"] + 1,) * 2, np.uint8)

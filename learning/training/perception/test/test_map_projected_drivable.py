@@ -154,3 +154,21 @@ def test_wall_occludes_the_floor_behind_it():
     mask, stats = mpd.label_frame(image, _pose(*pose), CAMERA, mpd.ground_grid(CAMERA), raster)
     assert mask is not None and stats["line_iou"] > 0.5
     assert (forward[mask != 255] < 0.37 - 0.0).all()
+
+
+def test_only_the_robots_own_road_is_drivable():
+    """D-576 4: a parallel road beyond the left line is blocked (0), never drivable."""
+    raster = _raster()
+    ys = 1.0 - np.arange(1001) * R
+    other = (ys > mpd.HALF_WIDTH_M + 0.0125) & (ys <= 3 * mpd.HALF_WIDTH_M - 0.0125)
+    raster["cls"][other] = mpd.ROAD
+    raster["cls"][np.abs(ys - 3 * mpd.HALF_WIDTH_M) <= 0.0125] = mpd.LINE
+    raster["boundary_m"] = mpd.boundary_distance(raster["cls"], R)
+    mask, _ = mpd.label_frame(_render(raster, (0, 0, 0)), _pose(), CAMERA, mpd.ground_grid(CAMERA), raster)
+    forward, left = mpd.ground_grid(CAMERA)
+    assert (np.abs(left[mask == ldd.DRIVABLE]) < mpd.HALF_WIDTH_M).all()
+    blocked_other = (mask == 0) & (left > mpd.HALF_WIDTH_M + 0.0125) & (left < 3 * mpd.HALF_WIDTH_M - 0.0125)
+    assert blocked_other.sum() > 50
+    none, why = mpd.label_frame(_render(raster, (0, 0, 0)), _pose(y=mpd.HALF_WIDTH_M), CAMERA,
+                                mpd.ground_grid(CAMERA), raster, {"seed_radius_m": 0.004})
+    assert none is None and why["reason"] == "robot_off_road"
