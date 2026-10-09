@@ -108,7 +108,7 @@ def test_teach_place_from_marker_adds_or_moves_a_draft_place_and_refuses_stale(t
         clock.now += 2.5
         assert teach({"marker_id": 34, "name": "늦음"}).json()["detail"]["code"] == "PLACE_MARKER_STALE"
     events = [e for e in store.events() if e["action"] == "teach_place"]
-    assert [(e["detail"]["marker_id"], e["detail"]["updated"]) for e in events] == [(34, False), (36, True)]
+    assert [(e["detail"]["marker_id"], e["detail"]["updated"]) for e in events] == [(36, True), (34, False)]  # newest first
     assert store.active()[1].places[1].x == 2.0   # the active map is untouched
 
 
