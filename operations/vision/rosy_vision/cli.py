@@ -15,6 +15,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import secrets
 import ssl
 import socket
@@ -328,6 +329,8 @@ async def _run_vision(args: argparse.Namespace) -> int:
                 client = await stack.enter_async_context(
                     TrackClient(config.fleet_base_url, config.sighting_token))
                 state = getattr(args, "track_state", None)
+                if state is not None and not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*", config.camera.source_id):
+                    raise ValueError("--track-state needs source ids that are plain file names")
                 detector = None if state is None else BackgroundBlobDetector(
                     store=BackgroundStore(state / f"{config.camera.source_id}.npz"))
                 tracker = TrackWorker(camera=config.camera, ingest=ingest, client=client,

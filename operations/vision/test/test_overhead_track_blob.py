@@ -323,12 +323,22 @@ def test_kept_frames_hold_only_track_pixels(tmp_path):
     _learned(detector, calibration=narrow)
     frames = store.load(narrow.revision, (360, 640, 3))
     assert frames is not None and len(frames) == 30
-    # Floor x < 1.0 m is pixel u < 100: outside the track, so blacked out (JPEG noise aside).
-    assert frames[0][:, :90].max() <= 8 and frames[0][150:200, 200:500].min() >= 100
+    # Floor x < 1.0 m is pixel u < 100: outside the track; beyond the 8 px margin it is black.
+    assert frames[0][:, :80].max() <= 8 and frames[0][150:200, 200:500].min() >= 100
 
 
-def test_an_unreadable_store_learns_live(tmp_path):
+@pytest.mark.parametrize("content", [b"", b"not a background", b"PKtruncated"])
+def test_an_unreadable_store_learns_live(tmp_path, content):
     path = tmp_path / "ceiling_north.npz"
-    path.write_bytes(b"not a background")
+    path.write_bytes(content)
     detector = BackgroundBlobDetector(store=BackgroundStore(path))
     assert detector.detect(Frame(_floor(), 0.0), CAL).status == "LEARNING"
+
+
+def test_a_truncated_kept_background_learns_live(tmp_path):
+    store = BackgroundStore(tmp_path / "ceiling_north.npz")
+    before = BackgroundBlobDetector(store=store)
+    before.relearn()
+    _learned(before)
+    store.path.write_bytes(store.path.read_bytes()[:4096])
+    assert BackgroundBlobDetector(store=store).detect(Frame(_floor(), 100.0), CAL).status == "LEARNING"

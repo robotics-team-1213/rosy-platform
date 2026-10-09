@@ -671,6 +671,17 @@ private key readable only to root and group `10001` (`0440`, group `10001`),
 and make the certificate and CA readable by UID/GID `10001` (`0444`). Never
 commit these files. Provision the CA on ceiling phones and operator browsers.
 
+## Tracking background volume (D-539)
+
+Vision keeps the frames of the last operator **배경 다시 학습** in the named
+`vision_state` volume (`/var/lib/rosy-vision/track/<source_id>.npz`), track
+pixels plus an 8 px margin only, keyed by the calibration revision. After a
+restart (auto-update, nightly reboot) Vision replays them, so robots parked on
+the mat stay visible. Relearn only on an empty mat: a relearn with a robot on
+the track is kept too and replayed at every restart. To recover, relearn on an
+empty mat, or stop the stack and run `docker volume rm rosy-site_vision_state`;
+the next start then learns live as before.
+
 ## Durable task queue smoke check
 
 Fleet stores operator tasks in SQLite at `/var/lib/rosy/fleet.sqlite3`, on the
