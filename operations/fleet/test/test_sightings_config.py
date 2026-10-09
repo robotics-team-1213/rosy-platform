@@ -95,6 +95,7 @@ def test_marker_yaw_offsets_name_marker_robots_with_finite_degrees(tmp_path, bad
     config = _write(tmp_path / "s.yaml", [_row(robot_markers={"rosy_01": 40},
                                                marker_yaw_offset_deg=bad)])
     with pytest.raises(ValueError, match=message):
+        load_sighting_sources(config, environ=ENV)
 
 
 def test_enrolled_source_follows_the_roster_with_robot_number_markers(tmp_path):
