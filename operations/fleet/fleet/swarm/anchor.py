@@ -29,8 +29,19 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Iterable, Optional
 
 from fleet.localization.map_pose import LOCALIZED, UNKNOWN, Pose, compose, relative
+from fleet.swarm.relay import Relay
 
 log = logging.getLogger(__name__)
+
+
+def anchored_relay_factory(poses, enabled: Callable[[], bool]):
+    """FormationSession `relay_factory`: a Relay with a TrailAnchor over `poses` (MapPoseService),
+    refreshing both robots' odom from REST while it anchors."""
+    def build(leader, followers):
+        anchor = TrailAnchor(poses, leader.robot_id, [f.robot_id for f in followers], enabled=enabled,
+                             refresh=lambda rid: poses.refresh(rid, force_rest=True))
+        return Relay(leader, followers, anchor=anchor)
+    return build
 
 #: A camera anchor older than this stops the samples. At 0.15 m/s that is 0.75 m on odom alone,
 #: about 1-2 cm of wheel-odom drift; a missing marker (9dfk's small sticker) shows up here.

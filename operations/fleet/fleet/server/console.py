@@ -45,8 +45,7 @@ from fleet.swarm.session import (
     SessionError,
     SessionState,
 )
-from fleet.swarm.anchor import TrailAnchor
-from fleet.swarm.relay import Relay
+from fleet.swarm.anchor import anchored_relay_factory
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient, require_capability
 
@@ -1172,13 +1171,9 @@ class FleetConsole(TripAware):
         leader = self._client(leader_id)
         followers = [self._clients[rid] for rid in follower_ids]
         kwargs = {} if self._relay_factory is None else {"relay_factory": self._relay_factory}
-        poses = self.formation_poses
-        if self._relay_factory is None and poses is not None:
-            anchor = TrailAnchor(
-                poses, leader_id, follower_ids,
-                enabled=lambda: session.spec.formation is Formation.TRAIL,
-                refresh=lambda rid: poses.refresh(rid, force_rest=True))
-            kwargs["relay_factory"] = lambda lead, follow: Relay(lead, follow, anchor=anchor)
+        if self._relay_factory is None and self.formation_poses is not None:   # D-581
+            kwargs["relay_factory"] = anchored_relay_factory(
+                self.formation_poses, lambda: session.spec.formation is Formation.TRAIL)
         member_order = [rid for rid in self._order if rid == leader_id or rid in follower_ids]
         session = FormationSession(leader, followers,
                                    self._spec(formation, spacing, max_speed),
