@@ -100,6 +100,22 @@ def test_an_ok_state_keeps_the_face_core_chose():
     assert both(rs.READY, core(face="fun", robot_mode="MANUAL"))[1].expression == "fun"
 
 
+def test_a_fleet_question_replaces_a_line_hold_and_loses_to_recovery():
+    screen, record = both(rs.READY, core(robot_mode="NAVIGATION", nav_state="BLOCKED",
+                                          caution=["line_follow_hold"], signal="ask", face="happy"))
+    assert screen["strip"] == "?" and screen["face"] == "happy"
+    assert (record.lamp, record.expression, record.status_level) == ("ask", "happy", pr.OK)
+    held = both(rs.READY, core(robot_mode="NAVIGATION", caution=["line_follow_hold"]))[1]
+    assert held.lamp == "caution"
+    dock_screen, dock = both(rs.READY, core(caution=["dock_failed"], signal="ask"))
+    assert dock.lamp == "caution" and dock_screen["strip"] == fs.CAUTION_TEXT["dock_failed"]
+    back_screen, back = both(rs.READY, core(robot_mode="NAVIGATION", recovery="retrace", signal="ask",
+                                             caution=["line_follow_hold"]))
+    assert back.lamp == "recovering" and back_screen["strip"] == "Recovering: reversing"
+    left_screen, left = both(rs.READY, core(robot_mode="NAVIGATION", signal="left", face="happy"))
+    assert left_screen["strip"] == "Left" and left.lamp == "left" and left.expression == "happy"
+
+
 @pytest.mark.parametrize("hand_over, view, expected", [
     (core(battery_percent=64.0, battery_charging=True), None, (64.0, True)),
     (core(battery_percent=None, battery_charging=None), None, (None, None)),  # unknown is not 0 %

@@ -112,6 +112,44 @@ def test_measurement_noise_waits_for_the_one_second_write():
     assert display.face_inputs_due(jitter, first, 1.0, 0.0, 1.0)
 
 
+def test_asking_fleet_hands_a_question_mark_to_the_face():
+    snap = _snapshot(line_mode="CAMERA", line_state="HOLD")
+    snap.line_follow = SimpleNamespace(mode="CAMERA", state="HOLD", reason="stuck_asking",
+                                        angular=0.0, stuck=SimpleNamespace(phase="ASKING"))
+    payload = _payload(snap)
+    read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
+    answer = fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)
+
+    assert payload["signal"] == "ask" and answer["strip"] == "?"
+
+
+def test_a_junction_turn_hands_that_side_to_the_lamp():
+    snap = _snapshot()
+    snap.line_follow = SimpleNamespace(
+        mode="CAMERA", state="TRACKING", reason="tracking", angular=0.1, stuck=None,
+        junction=SimpleNamespace(pending_action="right", state="armed", turn_deg=-90))
+
+    assert _payload(snap)["signal"] == "right"
+
+
+def test_lane_tracking_does_not_invent_a_blinker():
+    snap = _snapshot()
+    snap.line_follow = SimpleNamespace(mode="CAMERA", state="TRACKING", reason="lane_edge_left",
+                                        angular=-0.5, stuck=None)
+
+    assert _payload(snap)["signal"] is None
+
+
+def test_a_moving_return_keeps_recovery_while_the_question_is_also_named():
+    hold = _payload(_snapshot(line_mode="CAMERA", line_state="HOLD",
+                              line_reason="lane_return_fleet_required"))
+    moving = _payload(_snapshot(line_mode="CAMERA", line_state="RECOVERING",
+                                line_reason="lane_return_fleet_required"))
+
+    assert hold["signal"] == "ask" and hold["recovery"] is None
+    assert moving["signal"] == "ask" and moving["recovery"] == "return"
+
+
 def test_the_goal_rides_the_drive_card_while_navigating():
     payload = display.face_inputs_payload(_snapshot(), face="happy", power_mode="ACTIVE", wake=None,
                                           written_at=NOW.isoformat(), goal_x=1.234, goal_y=-2.0)

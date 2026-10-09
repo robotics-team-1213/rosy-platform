@@ -2645,3 +2645,9 @@
 - 변경: `prepare-rosy-sd.ps1` 자동 번호가 1–61 무작위 대신 레지스트리의 40–49 가장 작은 빈 번호를 고르고, 다 차면 거절한다. 운영자가 적는 번호는 1–61 검사 그대로. 예시 `site-cameras.yaml.example`·`robots.yaml.example`은 `rosy_40`/마커 40.
 - 증거: test/test_sd_writer_contract.py(가장 작은 빈 번호 42, 40–49 가득 → 거절). 레지스트리는 PC별이라 사이트 전체 중복은 여전히 Fleet `robot_id_conflict`가 막는다.
 - gate 변화: SOURCE.
+
+## 2026-10-10 · uncommitted · feat(face): D-583 질문과 회전 램프
+- 변경: 표시 기록이 없는 옛 설치에서 `rosy-face`는 신호 인자를 먼저 부르고, 없으면 복구 인자, 없으면 세 인자로 돌아간다.
+- 증거: `test_rosy_face.py` 혼합 설치 시험.
+- gate 변화: SOURCE.
+- 결정: D-583

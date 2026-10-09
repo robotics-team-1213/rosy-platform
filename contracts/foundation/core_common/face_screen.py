@@ -195,6 +195,7 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "line_follow_state": _name(data.get("line_follow_state")),
         "caution": sorted(set(codes)),
         "recovery": _name(data.get("recovery"), RECOVERY_PHASES),
+        "signal": data.get("signal") if data.get("signal") in robot_state.DRIVE_SIGNALS else None,
         "drive": _card(data.get("drive")),
         "wake": wake,
     }
@@ -374,7 +375,11 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         return status("login")
 
     # Rows 9-11: strips under the face. Caution (Q3) outranks a test and calibration.
-    caution = [CAUTION_TEXT[code] for code in core.get("caution") or [] if code in CAUTION_TEXT]
+    codes = list(core.get("caution") or [])
+    # A fleet question replaces the generic line-hold sentence. Other cautions stay.
+    if core.get("signal") == "ask":
+        codes = [code for code in codes if code != "line_follow_hold"]
+    caution = [CAUTION_TEXT[code] for code in codes if code in CAUTION_TEXT]
     # Text and tone are assigned apart: a (text, "info") pair reads as an event emit
     # to the D-8 catalogue guard (test_event_catalogue.py).
     strip = tone = None
@@ -401,6 +406,21 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         strip = call_line
         tone = "info"
 
+    # A fleet question or a committed turn. Recovery, caution, a bench test,
+    # calibration and a call keep their own strip. The mode face stays.
+    ask_line = None
+    signal = core.get("signal")
+    if strip is None and signal == "ask":
+        ask_line = "?"
+        strip = ask_line
+        tone = "info"
+    elif strip is None and signal == "left":
+        strip = "Left"
+        tone = "info"
+    elif strip is None and signal == "right":
+        strip = "Right"
+        tone = "info"
+
     mode = core.get("robot_mode")
     wake = core.get("wake")
     power = core.get("power_mode") or "active"
@@ -410,8 +430,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
             and mode in ("IDLE", "MANUAL") and not core.get("battery_charging")
             and (percent is None or percent >= 20)):
         return {**answer, "kind": LIGHT, "row": "light", "backlight": 100}
-    # Row 18: standby sleeps the panel unless a wake card, a caution, or a call must be seen.
-    if power == "standby" and wake is None and tone != "caution" and call_line is None:
+    # Row 18: standby sleeps unless a wake card, a caution, a call, or a fleet question must be seen.
+    if power == "standby" and wake is None and tone != "caution" and call_line is None and ask_line is None:
         return {**answer, "kind": SLEEP, "row": "standby", "backlight": BACKLIGHT["standby"], "awake": False}
 
     face = core.get("face") if core.get("face") in FACES else DEFAULT_FACE
@@ -433,6 +453,6 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     elif strip is None and mode in SITUATION_LINE:
         strip = SITUATION_LINE[mode]
         tone = "info"
-    backlight = 100 if overlay is not None or call_line is not None else BACKLIGHT.get(power, 100)
+    backlight = 100 if overlay is not None or call_line is not None or ask_line is not None else BACKLIGHT.get(power, 100)
     return {**answer, "kind": FACE, "row": row, "face": face, "overlay": overlay, "strip": strip,
             "strip_tone": tone, "backlight": backlight}

@@ -1323,10 +1323,12 @@ def test_the_helper_knows_every_pattern_the_table_can_ask_for():
     names_block = source.split("static const char *names[]")[1].split("};")[0]
     known = set(re.findall(r'"([a-z]+)"', names_block))
 
-    askable = {module.robot_state.lamp_pattern(state, mode, nav)
+    askable = {module.robot_state.lamp_pattern(state, mode, nav, recovery, signal)
                for state in module.robot_state.STATES
                for mode in [*module.robot_state.ROBOT_MODES, None]
-               for nav in [*module.robot_state.NAV_STATES, None]}
+               for nav in [*module.robot_state.NAV_STATES, None]
+               for recovery in (None, "retrace", "return", "bridge")
+               for signal in (None, *module.robot_state.DRIVE_SIGNALS)}
 
     assert askable | {"illumination"} <= known, sorted(askable - known)
 
@@ -2403,6 +2405,9 @@ def test_a_mixed_install_without_the_presentation_record_keeps_core_modes_and_fa
     monkeypatch.setattr(module, "presentation", None)
     view = {"robot_mode": "NAVIGATION", "nav_state": "IDLE"}
     assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "recovering"
+    assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"signal": "ask"}) == "ask"
+    assert module.FaceDisplay.lamp_pattern_for(
+        view, "ready", {"recovery": "retrace", "signal": "ask"}) == "recovering"
     assert module.FaceDisplay.lamp_pattern_for({"robot_mode": "IDLE"}, "ready", {"robot_mode": "EMERGENCY"}) == "emergency"
     assert module.FaceDisplay.lamp_pattern_for(view, "caution") == "caution"
     _status(tmp_path, "CORE_READY", runtime_mode="hardware")
@@ -2411,6 +2416,13 @@ def test_a_mixed_install_without_the_presentation_record_keeps_core_modes_and_fa
     display.step()
     assert display.screen["kind"] == "stopped"  # the table still draws the STOPPED card
     old = module.robot_state.lamp_pattern
+
+    def recovery_only(state, mode=None, nav=None, recovery=None):
+        return "recovering" if recovery == "retrace" else "ready"
+
+    monkeypatch.setattr(module.robot_state, "lamp_pattern", recovery_only)  # D-546, no turn signal yet
+    assert module.FaceDisplay.lamp_pattern_for(
+        view, "ready", {"recovery": "retrace", "signal": "ask"}) == "recovering"
     monkeypatch.setattr(module.robot_state, "lamp_pattern", lambda state, mode=None, nav=None: "ready")  # pre-D-546
     assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "ready"
     monkeypatch.setattr(module.robot_state, "lamp_pattern", old)
