@@ -235,7 +235,7 @@ def _transport_kind(exc: BaseException, scheme: str) -> str | None:
     for item in chain:
         if isinstance(item, ssl.SSLCertVerificationError):
             # OpenSSL X509_V_ERR_HOSTNAME_MISMATCH: the leaf names another host (IP instead of .local).
-            return "tls_name_mismatch" if item.verify_code == 62 else "tls_unknown_ca"
+            return "tls_name_mismatch" if getattr(item, "verify_code", None) == 62 else "tls_unknown_ca"
     for item in chain:
         if isinstance(item, socket.gaierror):
             return "dns_failure"
