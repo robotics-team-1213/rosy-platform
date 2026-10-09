@@ -65,7 +65,7 @@ from collections import deque
 import numpy as np
 
 from .lane import LaneObservation
-from .crosswalk_stripes import crosswalk_extent
+from .crosswalk_stripes import crosswalk_class_extent, crosswalk_extent
 from .lane_bev import BEV_CELL_M, BirdsEye
 from .lane_keep_lines import (  # noqa: F401 — re-exported for callers and tests
     CORE_HALF_M,
@@ -274,11 +274,15 @@ class LaneKeeper:
         return (round(column, 1), round(row, 1))
 
     def update(self, bgr: np.ndarray, ground, *, lane_half_width_m: float = 0.0925,
-               paint_mask: np.ndarray | None = None, bend_expected: bool = False, **_ignored) -> LaneObservation | None:
+               paint_mask: np.ndarray | None = None, bend_expected: bool = False,
+               crosswalk_mask: np.ndarray | None = None, **_ignored) -> LaneObservation | None:
         """paint_mask (D-408): an HxW 0/1 paint mask from another source (learned model,
         OpenCV glare filter) used in place of floor_white_mask; rows above the horizon
         margin are dropped from it. bend_expected (D-507 B9, default off: the pre-B9 keeper): the route
-        expects a bend here (Fleet expect window, place kind 'bend', via CORE); with corner turning only."""
+        expects a bend here (Fleet expect window, place kind 'bend', via CORE); with corner turning only.
+        crosswalk_mask (D-597 amendment): an HxW 0/1 mask of the learned model's crosswalk class from
+        the paint's own inference; where the paint has no bars (the drivable way's boundary) the
+        D-491 crosswalk extent comes from it."""
         _validate_positive("lane_half_width_m", lane_half_width_m)
         if not isinstance(bgr, np.ndarray) or bgr.ndim not in (2, 3) or bgr.size == 0:
             raise ValueError("camera frame must be a non-empty grayscale or BGR array")
@@ -309,6 +313,11 @@ class LaneKeeper:
             self._forget()
             return None
         self.last["crosswalk"] = crosswalk_extent(grid, view.x[:, 0], view.y[0, :])  # D-491 §4
+        if self.last["crosswalk"] is None and crosswalk_mask is not None:
+            if not isinstance(crosswalk_mask, np.ndarray) or crosswalk_mask.shape != bgr.shape[:2]:
+                raise ValueError("crosswalk_mask must be an array of the frame's height x width")
+            self.last["crosswalk"] = crosswalk_class_extent(
+                view.sample(crosswalk_mask > 0), view.x[:, 0], view.y[0, :])
         points, self.last["paint_points_m"] = extract_paint_points(view, grid, FIT_STRIDE)
         rng = np.random.default_rng(self._seed)
         if len(points) > MAX_POINTS:
