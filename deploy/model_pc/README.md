@@ -27,3 +27,28 @@ journalctl --user -u rosy-pilot-fetch@9dfk.service -n 80 --no-pager
 4. 평가 통과 뒤 고정 ModelProfile **후보**와 digest, 최소 비식별 스모크 입력만 AI PC로 전달한다. 실제 전달 방식·인증·승인 스키마가 정해지기 전에는 자동 배포하지 않는다. AI PC는 자체 평가로 후보를 바꾸거나 승격하지 않는다.
 
 실제 장치 주소·계정·비밀, 원본 사건, 모델 가중치와 실행 로그는 이 공개 저장소에 넣지 않는다. 현재 Model PC의 GPU 인식은 확인했으나 Decision 전용 평가 환경과 사람 정답 세트는 아직 확인되지 않아 L0은 HOLD다.
+
+## v13 검수 앱 코드 릴리스
+
+검수 앱은 모델 PC의 `~/rosy-ml/review-v13-code/releases/<release>/`에 완전한 실행 소스를 보존하고, 사용자 서비스 `rosy-review-v13.service`는 `~/rosy-ml/review-v13-code/current` 링크를 실행한다. 검수 기록인 `~/rosy-ml/review-v13-drivable/state`는 릴리스 밖에 둔다. 기존 런타임 폴더를 다시 풀거나 교체해도 `current`가 가리키는 화면은 바뀌지 않는다. 배포 결정은 [D-545](../../docs/adr/D-545-model-pc-review-versioned-release.md)을 따른다.
+
+첫 전환에서는 **현재 모델 PC에서 실제 실행 중인, 검수 스튜디오가 적용된 코드 폴더**에서 코드 전용 입력을 만든다. 그 폴더에는 과거 `state/`가 들어 있을 수 있으므로 반드시 제외한다. 이후에는 검증한 정확한 Git 커밋의 전체 검수 앱 소스를 모델 PC의 별도 준비 폴더에 전송한 후 같은 명령을 사용한다. `review_app.py`, `review_app_web/`, `shared/web/` 및 해당 모듈의 Python import 경로를 포함해야 한다. 소스 폴더에는 DB, 영상, 모델 가중치나 비밀을 넣지 않는다. 릴리스 이름은 출처를 식별할 수 있게 고정하며 재사용하지 않는다. 전송 자체는 자동 갱신되지 않으며, 이 명령을 실행해야 화면이 전환된다.
+
+```bash
+# 첫 전환: 모델 PC에서 기존 실행 코드만 별도 입력으로 준비한다.
+mkdir -p /tmp/rosy-review-code-<release-id>
+rsync -a --exclude=/state/ <current-code-directory>/ /tmp/rosy-review-code-<release-id>/
+
+# 모델 PC의 검수 서비스 사용자 세션에서 실행. 스크립트는 저장소에서 모델 PC로 복사해 둔다.
+python3 ~/rosy-ml/bin/install_review_release.py <release-id> \
+  --source /tmp/rosy-review-code-<release-id> \
+  --state ~/rosy-ml/review-v13-drivable/state \
+  --python ~/rosy-ml/.venv/bin/python \
+  --host <model-pc-private-ip> --port 8774
+
+# 이전 릴리스로 명시적으로 되돌릴 때 (재복사·DB 변경 없음)
+python3 ~/rosy-ml/bin/install_review_release.py <previous-release-id> \
+  --host <model-pc-private-ip> --port 8774
+```
+
+설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다.
