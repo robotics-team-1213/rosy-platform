@@ -277,3 +277,9 @@
 - 변경: 필드 영역(10 % 안쪽)의 clip/crush/mean을 재고(`LumaStats`), 순수 정책(`ExposureAssistPolicy`: 히스테리시스, dwell 3 s, 최소 간격 4 s, ±1.5 EV 한도)이 CameraX `setExposureCompensationIndex` 하나만 움직인다. 설정 `auto_exposure_assist`는 기본 꺼짐이고 스트림 화면의 버튼으로 켠다. 끄면 측정을 멈추고 지수를 0으로 되돌리며, 재바인딩·열 차단·손전등 점등 중에는 조정하지 않는다. 프레임 헤더·hello·배율·크롭·렌즈·해상도는 바꾸지 않는다.
 - 증거: `ExposureAssistPolicyTest` 9 passed, `assembleDebug` 성공. 전체 `testDebugUnitTest` 376 중 1 실패(`CameraPeerClientTest.approvedSourceSurvivesInterruptionAndDhcp`, `127.0.0.2` 소켓 타임아웃; 이 변경이 닿지 않는 페어링 시험, 같은 시험만 다시 돌려도 실패. 깨끗한 main 대조 안 함).
 - gate 변화: SOURCE 부분 근거(전체 GO 판정 보류). LOCAL 녹화 프레임, DEVICE(S21 강한 빛)는 대기다. 다른 세션이 장치를 점검 중이라 설치하지 않았다.
+
+## 2026-10-10 · uncommitted · feat(cam): D-589 S2 Vision 인식 자동 노출 적용
+
+- 변경: 하향 `camera`를 엄격히 읽고(틀린 메시지는 기록만 하고 무시), 순수 정책 `RecognitionTuning`이 열 SEVERE(3) 유지 > 설정 스위치 꺼짐 > 60 s 안의 Vision 요청 > D-544 로컬 순으로 정한다. 허용 목록은 EV 지수(기기 범위 ∩ −6…+3), AE·AWB 잠금, 노출 상한(AE 목표 fps 하한, 30 fps 이하 범위만), 60 Hz 안티밴딩이다. EV는 CameraX, 나머지는 Camera2 interop 캡처 옵션으로 재바인딩 없이 쓴다. EV를 바꾸면 잠금은 1 s 뒤에 건다. 카메라가 확인한 값과 지원 범위, 노출 시간·ISO·열 상태를 상향 `camera_state`로 알리고 hello 뒤에 다시 보낸다. 설정 화면에 "인식 자동 노출 (Vision)"(기본 켜짐), 스트림 화면에 한 줄 상태를 더했다. 기하(렌즈·배율·초점·해상도)는 바꾸지 않는다. 공유 벡터에 `camera_example`·`camera_state_example`을 더했다.
+- 증거: Gradle `testDebugUnitTest assembleDebug` 성공, JVM 399 passed(새 `RecognitionTuningTest` 17, `CameraProtocolTest` 5, `OverheadLinkTest` +1). 로그 X: `DevTemp/cam-auto-tune-s2/`.
+- gate 변화: SOURCE 부분 근거. Python 쪽 벡터 시험(S1), S21 설치·현장(S4)은 대기다. 폰에 설치하지 않았다.
