@@ -19,6 +19,8 @@ services:
       - console
       - --robots
       - /run/rosy-config/robots.yaml
+      - --site-config-optional
+      - /run/rosy-config/fleet-site.yaml
       - --host
       - 0.0.0.0
       - --port
