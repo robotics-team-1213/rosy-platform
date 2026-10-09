@@ -81,6 +81,16 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "crosswalk_odom_error_fraction", defaults.crosswalk_odom_error_fraction)),
         crosswalk_range_error_fraction=float(raw.get(
             "crosswalk_range_error_fraction", defaults.crosswalk_range_error_fraction)),
+        crosswalk_gate_enabled=_flag(raw, "crosswalk_gate_enabled", defaults.crosswalk_gate_enabled),
+        crosswalk_look_s=float(raw.get("crosswalk_look_s", defaults.crosswalk_look_s)),
+        crosswalk_look_min_scans=_whole(raw, "crosswalk_look_min_scans", defaults.crosswalk_look_min_scans),
+        crosswalk_report_s=float(raw.get("crosswalk_report_s", defaults.crosswalk_report_s)),
+        crosswalk_cross_speed=float(raw.get("crosswalk_cross_speed", defaults.crosswalk_cross_speed)),
+        crosswalk_approach_default_m=float(raw.get(
+            "crosswalk_approach_default_m", defaults.crosswalk_approach_default_m)),
+        crosswalk_range_sigma_m=float(raw.get("crosswalk_range_sigma_m", defaults.crosswalk_range_sigma_m)),
+        crosswalk_persist_k=_whole(raw, "crosswalk_persist_k", defaults.crosswalk_persist_k),
+        crosswalk_persist_n=_whole(raw, "crosswalk_persist_n", defaults.crosswalk_persist_n),
         recovery_local_enabled=_flag(raw, "recovery_local_enabled", defaults.recovery_local_enabled),
         recovery_ask_s=float(raw.get("recovery_ask_s", defaults.recovery_ask_s)),
         recovery_back_m=float(raw.get("recovery_back_m", defaults.recovery_back_m)),
@@ -113,6 +123,7 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
             "obstacle_ultrasonic_half_angle_deg", defaults.obstacle_ultrasonic_half_angle_deg)),
         obstacle_ultrasonic_stale_s=float(raw.get(
             "obstacle_ultrasonic_stale_s", defaults.obstacle_ultrasonic_stale_s)),
+        obstacle_blind_floor=_flag(raw, "obstacle_blind_floor", defaults.obstacle_blind_floor),
         bridge_enabled=_flag(raw, "bridge_enabled", defaults.bridge_enabled),
         bridge_lookahead_m=float(raw.get("bridge_lookahead_m", defaults.bridge_lookahead_m)),
         bridge_coast_m=float(raw.get("bridge_coast_m", defaults.bridge_coast_m)),

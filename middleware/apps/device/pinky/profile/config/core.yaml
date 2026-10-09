@@ -35,6 +35,15 @@ line_follow:
   # A signal pole or wall more than the body half-width off that path does not
   # hold the lane. A return the body would meet on the path still stops.
   obstacle_mode: path
+  # D-591 (user decision 2026-10-10): lanes run beside walls, and a stop gap floored at the
+  # LiDAR range_min band (~0.04-0.09 m) held the robot at nearly every bend. The lane-follow
+  # body stop is the 0.02 m margin plus braking; returns that slip under range_min are still
+  # remembered from the twist and the ultrasonic still stops.
+  obstacle_blind_floor: false
+  obstacle_latency_s: 0.0
+  # D-591 4: one echo is spread over the whole cone; at +-15 deg a wall beside a bend read as
+  # a point inside the body width straight ahead. +-5 deg keeps the echo on the path.
+  obstacle_ultrasonic_half_angle_deg: 5.0
 
 safety:
   # SAF-002 teleop watchdog (default 500 ms). D-311 G4 requires a command-loss stop

@@ -302,6 +302,13 @@ class TrackingService:
             return None
         return entry[0]
 
+    def approved_revision(self, source: SightingSource) -> Optional[str]:
+        """D-587 2: the approved record's revision for this source's map, else None."""
+        record = self.calibrations.get(source.source_id)
+        if record is None or record.map_id != source.map_id:
+            return None
+        return record.calibration_revision
+
     def revisions(self, source: SightingSource) -> set[str]:
         return self._revisions(source)
 

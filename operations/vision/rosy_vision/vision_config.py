@@ -11,6 +11,7 @@ from typing import Mapping
 import yaml
 
 from core_common.protocol.place_markers import check_place_marker_ids
+from core_common.protocol.sightings import check_marker_yaw_offsets
 from rosy_vision.project import CameraMap
 
 _REQUIRED = {
@@ -20,7 +21,7 @@ _REQUIRED = {
 }
 _ALLOWED = _REQUIRED | {"heading_edge", "phone_token_env", "credential",
                         "corner_marker_ids", "calibration_source",
-                        "place_markers"}
+                        "place_markers", "marker_yaw_offset_deg"}
 CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
 CREDENTIAL_KINDS = ("static", "paired")
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
@@ -120,6 +121,11 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
                 robot_marker_ids=robot_markers.values())
         except ValueError as exc:
             raise ValueError(f"sources[{index}].{exc}") from exc
+        try:  # D-587 4
+            yaw_offsets = check_marker_yaw_offsets(row.get("marker_yaw_offset_deg"),
+                                                   None if row["robot_ids"] == "enrolled" else robot_ids)
+        except ValueError as exc:
+            raise ValueError(f"sources[{index}].{exc}") from exc
         camera = CameraMap(
             source_id=row["source_id"],
             map_id=row["map_id"],
@@ -131,6 +137,7 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
             heading_edge=heading_edge,
             calibration_source=calibration_source,
             place_markers=place_markers,
+            marker_yaw_offset_deg=yaw_offsets,
         )
         if camera.source_id in source_ids:
             raise ValueError("vision source ids must be unique")
