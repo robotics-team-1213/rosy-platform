@@ -61,6 +61,13 @@ function blockWith(button, reason) {
   else button.removeAttribute("reason");
 }
 
+// D-596: why a camera LED check did not name the robot (Vision/Fleet reason codes).
+const IDENTIFY_REASON = {
+  none: "점멸이 보이지 않음", multiple: "같은 점멸이 둘 이상", frames_missing: "카메라 프레임이 빠짐",
+  stale: "카메라 영상이 오래됨", calibration_changed: "보정이 바뀜", track_lost: "트랙을 놓침",
+  overlap: "다른 로봇과 겹침", not_accepted: "로봇이 거절함",
+};
+
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
   moveAddress = null, moveAddressBlocked = () => "", confirmedAction }) {
   const { attentionItems, attentionKey, fillQueues } = createQueues({ scope, el, view, render, streamEvidence });
@@ -493,17 +500,24 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
         : estop !== false ? "안전 상태 확인이 필요합니다" : "");
     identify.addEventListener("click", scope.guard(async () => {
+      const life = scope.capture();
       try {
-        const sortedIds = view.robots.map((row) => row.robot_id).sort();
-        const color = sortedIds.indexOf(robot.robot_id) % 2 === 0 ? "blue" : "amber";
-        await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/identify`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ color }),
-        });
+        // D-596: Fleet picks the colour (the robot's own, or the one still free on its camera) and asks
+        // a standing robot too; the robot is never moved.
+        const started = await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/identify`, { method: "POST" });
         // The robot face says CALL <id> for the same window. The map chip names who was called.
         view.call = { robot_id: robot.robot_id, until: Date.now() + 6000 };
         render();
-        log(`${robot.robot_id} 호출 · ${color === "blue" ? "파랑" : "주황"} LED · 얼굴에 이름 표시`, "info");
-      } catch (error) { log(`${robot.robot_id} LED 시험 거부 · ${error.message}`, "bad"); }
+        log(`${robot.robot_id} LED 확인 중 · ${started.color === "blue" ? "파랑" : "주황"} 점멸 · 얼굴에 이름 표시`, "info");
+        await new Promise((done) => setTimeout(done, 8500));  // 6 s window + Vision's verdict
+        if (!life.current()) return;
+        const readback = await call("/api/fleet/tracking/identity", { signals: [life.signal] });
+        const row = (readback.robots || []).find((item) => item.robot_id === robot.robot_id);
+        if (row?.state === "CONFIRMED") log(`${robot.robot_id} LED 확인됨 · 카메라 트랙에 이름을 붙였습니다`, "good");
+        else log(`${robot.robot_id} LED 확인 실패 · ${IDENTIFY_REASON[row?.reason] || row?.reason || "판정 없음"}`, "bad");
+      } catch (error) {
+        if (error.name !== "AbortError") log(`${robot.robot_id} LED 확인 거부 · ${error.message}`, "bad");
+      }
     }));
     actions.append(aim, trip.toggle(robot), cancel, identify);
     if (address?.action === "move" && moveAddress) {
