@@ -102,3 +102,16 @@ D-438(Accepted 2026-10-03)이 §2 의 "관제 운영자 권한 이상이 답한�
 4. **설정.** `line_follow.lost_auto_resume`(기본 `true`), `lost_resume_frames`, `lost_resume_s`. `false`면 옛 잠금이다. API Ref v1.181.
 
 **검증.** 호스트 단위 시험 `middleware/core/gateway/test/test_line_follow_lost_resume.py`(안정 프레임 뒤 풀림, 깜빡임·한 프레임 뒤 침묵에서 안 풀림, 앞 물체·IR 이탈·경계에서 안 풀림, 끔이면 잠금, IR_LINE 잠금, 후진 막힘 흐름 뒤 풀림)를 현장 PC에서 돌렸다. 장치·현장 수용은 아니다.
+
+## 개정 (2026-10-10): 5 s 동안 움직이지 않으면 원인과 무관하게 Fleet에 묻는다
+
+사용자 지시(2026-10-10): "로직에서 우리가 멈추게 되거나 어떤 상황 때문에 전혀 안 움직이는 게 5초 이상 지속되면, 이를 fleet 서버를 통해서 ai pc에서 이걸 어떻게 처리할지에 대해서 판단받고 이를 처리하게 하는 등의 로직이 필요할 것 같아. 신호등 진입을 관제 PC의 신호등을 보고 하듯이."
+
+1. **새 원인 `no_motion`.** 활성 차선 모드에서 line-follow 결정(D-517 권한·D-573 횡단보도·D-494 교차로 게이트 앞의 값)이 `line_follow.stuck_report_s`(기본 5.0 s, 0 = 끔, 설정 검사 [0, 60]) 동안 0이고 기존 원인(`crosswalk_blocked`·`obstacle_ahead`·`lane_lost`)이 없으면 막힘 하나를 연다. `detail`은 그 HOLD/LOST 사유다(`lane_departure`, `angular_limit_zero`, `obstacle_sensor_stale`, `nominal_ground_requires_driver` 등). 기존 원인이 먼저다.
+2. **로컬 후진 대체가 없다.** 열리면 곧바로 `WAITING_CONSOLE`(`nav.line_stuck_asked` `reason: no_motion`)이다. 답은 Fleet 판단기 또는 사람이 낸다. 답은 §2의 다섯 답(+YIELD)과 같고 CORE가 §4대로 다시 검사한다. 수락된 `BACK_AND_RETRY`는 §3의 후진·정착·재판단과 같다.
+3. **닫힘.** 결정이 다시 0이 아니면 `cleared`로 닫힌다. OFF·E-stop·운전자 hold 만료는 지금처럼 닫는다. D-520 arc나 D-468 로컬 복귀가 틱을 가진 동안은 세지 않는다. 저조도·과노출 HOLD는 지금처럼 복구를 매 틱 초기화하므로 이 원인을 열지 않는다(후속).
+4. **바뀌지 않는 것.** E-stop, 몸 정지(D-422), 신호·권한 게이트, CORE 단일 `/cmd_vel`(D-2)은 그대로다. Fleet 쪽 규칙은 [D-577](D-577-trouble-fleet-rules-and-ai-pc-realtime-situation-facts.md) 개정 2026-10-10이다. API Ref v1.184.
+
+**왜.** 2026-10-10 현장 기록: 8kcn이 HOLD/LOST로 40 s 넘게 답 없이 서 있었고(`X:\DevTemp\drivable-keep-run\drive-8kcn-2.txt`), 9dfk는 `HOLD lane_departure`로 90 s 서 있었다(`drive-9dfk-2.txt`). `lane_departure`는 막힘 원인이 아니어서 Fleet에 아무것도 가지 않았다.
+
+**검증.** 호스트 단위 시험 `middleware/core/gateway/test/test_line_follow_stuck_no_motion.py`(사유 다섯 가지 각각 5 s 뒤 한 번 열림·4.8 s 전에는 안 열림, 주행 중·OFF·`stuck_report_s: 0`이면 안 열림, 다시 움직이면 `cleared`, Fleet `BACK_AND_RETRY`는 CORE가 후진, 뒤가 막히면 거절)를 원격 pytest로 돌렸다. 실기는 다음 로봇 릴리스 뒤다.
