@@ -77,7 +77,8 @@ def lap_end_out_of_zones(active, plan: dict, request: dict, caps: dict, blocked,
     if k is None:
         return None
     joined = _joined(plan["segments"], [seg for seg in lap["segments"][:k + 1] if seg["s_to"] - seg["s_from"] > 1e-6])
-    body = plan_body(_assemble(graph, [(arc_id(s), s["s_from"], s["s_to"]) for s in joined], 0.0, routing))
+    ends = [graph.arcs[arc_id(s)].length_m if ends_at_place(graph, s) else s["s_to"] for s in joined]  # 4-decimal s
+    body = plan_body(_assemble(graph, [(arc_id(s), s["s_from"], e) for s, e in zip(joined, ends)], 0.0, routing))
     plan = {**plan, **{key: body[key] for key in ("segments", "places", "actions")}}
     moved = {**request, "to": ends_at_place(graph, lap["segments"][k]), "via": [*via, to],
              "cycle": request.get("cycle") or [to, *via]}  # the operator's cycle (convoy check)

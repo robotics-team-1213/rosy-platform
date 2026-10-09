@@ -12,15 +12,19 @@ from fleet.server.site_map_store import SiteMapStore
 from fleet.server.trip_ports import TripConfig
 from fleet.server.trip_runner import TripError, TripRunner
 from test_blocks import _demo_map
-from test_lane_traffic import START_N, Fleet, _s_of, _ticks, _trip
+from test_lane_traffic import START_N, Fleet, _s_of, _ticks
 from test_routing import demo_site
+from test_trip_runner import run
 
 RING = ("ring_n", "ring_s", "ring_e", "ring_w")
+#: The SIM's operator closure: every lap is the outer loop east -> ring_n -> west -> ring_s.
+CHORDS = frozenset({"ring_e", "ring_w"})
 CAPS = {"kind": "pinky_pro", "modes": ["lane"], "max_speed": 0.2, "junction_turn": True, "junction_pivot": True}
 
 
 def _setup(zones=True):
     fleet = Fleet(("a",))
+    fleet.blocked = CHORDS
     store = SiteMapStore(None, clock=lambda: fleet.now)
     store.import_if_empty(demo_site(), source="test")
     runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
@@ -28,6 +32,18 @@ def _setup(zones=True):
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(),
                         traffic_zones={"roundabout": (RING, 1)} if zones else None)
     return runner, store, fleet
+
+
+def _trip(runner, store, fleet, to="SE", via=("NW",), repeat=True):
+    """A trip from start_n on east, planned with ``fleet.blocked`` closed like the console plans it."""
+    graph = store.active()[2]
+    arc, s = graph.arcs["east:fwd"], _s_of(store, "east:fwd", START_N)
+    fleet.at("a", arc, s)
+    plan = plan_trip(graph, PlanRequest(store.active()[0], arc.point_at(s), to, via=tuple(via),
+                                        blocked_edges=fleet.blocked), store.routing_config)
+    store.record_plan(plan_id="a", robot_id="a", principal_id="bob", map_version=plan.map_version,
+                      request={"to": to, "via": list(via), "repeat": repeat}, result={"plan": plan_body(plan)})
+    return run(runner.start("a", "bob"))
 
 
 def _zone_units(runner, store, pose):
@@ -42,7 +58,7 @@ def _unit(runner, unit_id):
 def test_a_lap_ending_at_a_zone_corner_never_holds_inside_the_zone_and_releases_it():
     runner, store, fleet = _setup()
     graph = store.active()[2]
-    view = _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N), to="SE", via=("NW",))
+    view = _trip(runner, store, fleet)
     live = runner._live["a"]
     # SE is the end of ring_s (inside the zone): the lap end moved on to NE, reached over east
     assert (live.request["to"], live.request["via"], live.request["cycle"]) == ("NE", ["NW", "SE"], ["SE", "NW"])
@@ -81,7 +97,7 @@ def test_a_lap_ending_at_a_zone_corner_never_holds_inside_the_zone_and_releases_
 def test_the_next_lap_holds_where_it_can_stand_outside_the_zone():
     """Every lap after the first runs NE -> NE and never holds inside the roundabout."""
     runner, store, fleet = _setup()
-    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N), to="SE", via=("NW",))
+    _trip(runner, store, fleet)
     live = runner._live["a"]
     tail = len(live.segments) - 1
     live.view["segment_index"] = tail
@@ -95,13 +111,16 @@ def test_the_next_lap_holds_where_it_can_stand_outside_the_zone():
 def test_a_trip_that_would_stop_inside_a_zone_is_refused():
     runner, store, fleet = _setup()
     with pytest.raises(TripError) as err:  # a one-way trip ends at NE: its nose and body pin the roundabout
-        _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N), to="NE", via=(),
-              repeat=False)
+        _trip(runner, store, fleet, to="NE", via=(), repeat=False)
     assert (err.value.code, err.value.detail) == ("TRIP_STOP_IN_ZONE", {"place": "NE", "repeat": False})
     assert runner._live == {}
+    runner, store, fleet = _setup()
+    fleet.blocked = frozenset()  # open chords: SE via NW laps the ring itself, no place outside the zone
+    with pytest.raises(TripError) as err:
+        _trip(runner, store, fleet)
+    assert (err.value.code, err.value.detail) == ("TRIP_STOP_IN_ZONE", {"place": "SE", "repeat": True})
     runner, store, fleet = _setup(zones=False)  # no site zones: unchanged
-    view = _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N), to="NE", via=(),
-                 repeat=False)
+    view = _trip(runner, store, fleet, to="NE", via=(), repeat=False)
     assert view["state"] == "started"
 
 
@@ -125,8 +144,7 @@ def test_a_blocked_edge_is_never_the_first_arc_of_a_lap():
 def test_a_lap_with_closed_chords_carries_on_without_a_hold():
     """The SIM case: ring_e/ring_w closed, lap SE via NW; lap 2 was planned onto ring_e and held at SE."""
     runner, store, fleet = _setup(zones=False)
-    fleet.blocked = frozenset({"ring_e", "ring_w"})
-    _trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N), to="SE", via=("NW",))
+    _trip(runner, store, fleet)
     live = runner._live["a"]
     tail = len(live.segments) - 1
     live.view["segment_index"] = tail
