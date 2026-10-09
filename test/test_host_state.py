@@ -294,7 +294,7 @@ def test_apt_lines_wait_for_the_sim_approval_and_the_timer_only_reports(tmp_path
 
 
 def test_sim_packages_are_approval_only_and_never_on_the_site_pc():
-    """D-571: the site PC (Ubuntu 26.04, production) gets the container image, not apt sim packages."""
+    """D-571: the site PC is production only and excluded from simulation, so it gets no sim packages."""
     for role, folder in ROLES.items():
         lines = [line for line in (ROOT / "deploy" / folder / "host-state" / "manifest").read_text(
             encoding="utf-8").splitlines() if line.split()[1:2] == ["apt"]]

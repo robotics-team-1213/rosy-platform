@@ -76,7 +76,7 @@ python3 deploy/hosts/common/rosy-host-state install model --dry-run      # root 
 sudo python3 deploy/hosts/common/rosy-host-state install model --approve sim
 ```
 
-`rosy` 계정은 docker 소켓 권한이 없어 이미지 경로는 쓰지 않는다. 네이티브 실행은 `~/rosy-test/runs/sim-*`에서 실행마다 8코어(`CPUQuota=800%`), 6 GB(`MemoryMax`), `nice 10`, 45분으로 제한한다. 코어당 부하 0.9 초과나 남은 메모리 4 GB 미만이면 실행기가 이 PC를 고르지 않는다. 실행과 점검은 개발 PC에서 한다.
+네이티브 실행은 `~/rosy-test/runs/sim-*`에서 실행마다 8코어(`CPUQuota=800%`), 6 GB(`MemoryMax`), `nice 10`, 45분으로 제한한다. 코어당 부하 0.9 초과나 남은 메모리 4 GB 미만이면 실행기가 이 PC를 고르지 않는다. 실행과 점검은 개발 PC에서 한다.
 
 ```bash
 python tools/remote/remote_sim.py --check
