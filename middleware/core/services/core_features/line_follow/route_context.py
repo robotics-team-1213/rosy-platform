@@ -23,7 +23,10 @@ def route_context(junction, arc, *, mono_now, ros_now, odom_key, odometer, mode=
         source = dict(seq=junction.get("seq"), place_id=junction.get("place_id"),
                       map_id=junction.get("map_id"), kind=kind)
         if kind == "bend":
-            if junction.get("bend_in") is not None and junction.get("tol") is not None:
+            phase = junction.get("state")
+            if phase in ("bending", "reacquiring"):
+                source["bend_phase"] = phase
+            elif junction.get("bend_in") is not None and junction.get("tol") is not None:
                 distance = junction["bend_in"] - junction.get("travel", 0.)
                 source["ahead_m"] = (round(distance-junction["tol"], 3),
                                      round(distance+junction["tol"], 3))
