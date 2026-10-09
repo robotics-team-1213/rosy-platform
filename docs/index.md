@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · feat(capture): D-592 drivable 조향 실물 시험 첫 기록
 - 2026-10-10 · uncommitted · fix(safety): D-581 앱 주입 커밋 독립 검토
 - 2026-10-10 · uncommitted · fix(safety): D-581 후속 콘솔 정리 커밋 독립 검토
 - 2026-10-10 · uncommitted · fix(safety): D-581 통합 이력 독립 검토
 - 2026-10-10 · uncommitted · uiux(pilot): 2대 공용 조이스틱 (D-590)
-- 2026-10-10 · 3e92fc7c4 · fix(perception): int8 recipe per task; 3831b20d intake PASS on the capture-group revision
