@@ -122,8 +122,8 @@ def test_vision_cannot_reach_fleet_secrets():
     env = dict(line.split("=", 1) for line in
                (SITE / ".env.example").read_text(encoding="utf-8").splitlines()
                if re.match(r"^ROSY_SITE_\w+_DIR=", line))
-    config, secrets_dir = env["ROSY_SITE_CONFIG_DIR"].rstrip("/"), env["ROSY_SITE_SECRETS_DIR"]
-    assert not (secrets_dir + "/").startswith(config + "/") and secrets_dir != config
+    config, excluded_dir = env["ROSY_SITE_CONFIG_DIR"].rstrip("/"), env["ROSY_SITE_SECRETS_DIR"]
+    assert not (excluded_dir + "/").startswith(config + "/") and excluded_dir != config
     # Vision may mount exactly one config file, never a directory that could hold secrets.
     for item in services["vision"]["volumes"]:
         if isinstance(item, str):
