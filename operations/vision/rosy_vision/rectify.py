@@ -1,14 +1,42 @@
-"""Preview-only camera lens undistortion and plane rectification (D-318)."""
+"""Preview-only camera lens undistortion and plane rectification (D-318), and the
+D-560 map plane: the raw frame warped to a top-down picture of the map through the
+approved tracking calibration record. Both are display copies; the raw frame is untouched.
+"""
 
 from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from typing import Mapping
 
 import cv2
 import numpy as np
 from core_common.protocol.vision_preview import PreviewRectification
 
+from rosy_vision.track.calibration import from_record
 
-def rectify_jpeg(jpeg: bytes, settings: PreviewRectification) -> bytes:
-    """Return a newly encoded preview; never modifies the source JPEG/frame."""
+#: D-560 2: margin around ``track_bounds_m``, fixed scale, longest side, off-frame fill.
+PLANE_MARGIN_M = 0.15
+PLANE_PX_PER_M = 400.0
+PLANE_MAX_SIDE_PX = 1920
+PLANE_FILL_BGR = (24, 24, 24)
+
+
+@dataclass(frozen=True)
+class MapPlane:
+    """A map-plane JPEG. Pixel (u, v) in canvas coordinates (pixel edges) is map
+    ``x = min_x + u / px_per_m``, ``y = max_y - v / px_per_m``."""
+
+    jpeg: bytes
+    bounds_m: tuple[float, float, float, float]  # min_x, min_y, max_x, max_y, margin included
+    px_per_m: float
+    size: tuple[int, int]
+    revision: str
+    #: Frame pixel index to plane pixel index (row-major 3x3), the matrix the warp used.
+    image_to_plane: tuple[float, ...]
+
+
+def _decode(jpeg: bytes) -> np.ndarray:
     if not isinstance(jpeg, bytes) or not jpeg:
         raise ValueError("preview JPEG is empty")
     image = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
@@ -17,6 +45,57 @@ def rectify_jpeg(jpeg: bytes, settings: PreviewRectification) -> bytes:
     height, width = image.shape[:2]
     if width < 2 or height < 2 or width > 8192 or height > 8192:
         raise ValueError("preview dimensions are outside the supported range")
+    return image
+
+
+def _encode(image: np.ndarray) -> bytes:
+    ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    if not ok:
+        raise ValueError("preview JPEG encode failed")
+    return encoded.tobytes()
+
+
+def map_plane_jpeg(jpeg: bytes, record: Mapping | None, *, source_id: str, map_id: str,
+                   lens) -> MapPlane | None:
+    """The D-560 map plane of ``jpeg``, or None when the record does not fit this frame
+    (no record, another source/map/lens, or an aspect off by more than 1 %)."""
+    image = _decode(jpeg)
+    height, width = image.shape[:2]
+    calibration = from_record(record, source_id=source_id, map_id=map_id,
+                              frame_size=(width, height), lens=lens)
+    if calibration is None:
+        return None
+    b = calibration.track_bounds_m
+    min_x, min_y = round(b[0] - PLANE_MARGIN_M, 4), round(b[1] - PLANE_MARGIN_M, 4)
+    max_x, max_y = round(b[2] + PLANE_MARGIN_M, 4), round(b[3] + PLANE_MARGIN_M, 4)
+    span_x, span_y = max_x - min_x, max_y - min_y
+    if not (span_x > 0 and span_y > 0):
+        return None
+    # Floor to the 4 decimals the header carries, so the header is the exact scale used.
+    ppm = min(PLANE_PX_PER_M, math.floor(PLANE_MAX_SIDE_PX / max(span_x, span_y) * 1e4) / 1e4)
+    out_w = max(2, min(PLANE_MAX_SIDE_PX, round(span_x * ppm)))
+    out_h = max(2, min(PLANE_MAX_SIDE_PX, round(span_y * ppm)))
+    # The header rectangle is exactly the image at this scale (rounding moves max_x, min_y).
+    max_x, min_y = min_x + out_w / ppm, max_y - out_h / ppm
+    # Map metres to plane pixel index; OpenCV puts pixel centres on integers, the header
+    # formula uses pixel edges, hence the half pixel.
+    map_to_plane = np.array([[ppm, 0.0, -min_x * ppm - 0.5],
+                             [0.0, -ppm, max_y * ppm - 0.5],
+                             [0.0, 0.0, 1.0]])
+    image_to_plane = map_to_plane @ np.asarray(calibration.image_to_map, dtype=float).reshape(3, 3)
+    # ponytail: plane points beyond the camera horizon would sample a mirrored image; an
+    # overhead camera over track bounds + 15 cm never sees its horizon. Mask by w if one does.
+    plane = cv2.warpPerspective(image, image_to_plane, (out_w, out_h), flags=cv2.INTER_LINEAR,
+                                borderMode=cv2.BORDER_CONSTANT, borderValue=PLANE_FILL_BGR)
+    return MapPlane(jpeg=_encode(plane), bounds_m=(min_x, min_y, max_x, max_y), px_per_m=ppm,
+                    size=(out_w, out_h), revision=calibration.revision,
+                    image_to_plane=tuple(float(v) for v in image_to_plane.reshape(-1)))
+
+
+def rectify_jpeg(jpeg: bytes, settings: PreviewRectification) -> bytes:
+    """Return a newly encoded preview; never modifies the source JPEG/frame."""
+    image = _decode(jpeg)
+    height, width = image.shape[:2]
     if settings.is_identity:
         return jpeg
 
@@ -49,7 +128,4 @@ def rectify_jpeg(jpeg: bytes, settings: PreviewRectification) -> bytes:
                       dtype=np.float32)
     homography = cv2.getPerspectiveTransform(source, target)
     image = cv2.warpPerspective(image, homography, (out_width, out_height))
-    ok, encoded = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 88])
-    if not ok:
-        raise ValueError("preview JPEG encode failed")
-    return encoded.tobytes()
+    return _encode(image)
