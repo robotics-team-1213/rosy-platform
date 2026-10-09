@@ -193,7 +193,7 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         drive = {key: value for key, value in drive_payload(snapshot, goal_x=goal_x, goal_y=goal_y).items()
                  if key != "kind"}
     line_follow = snapshot.line_follow
-    stuck = getattr(line_follow, "stuck", None)
+    stuck = line_follow.stuck
     return {
         "schema": 1,
         "written_at": written_at,
@@ -212,8 +212,8 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         "caution": face_cautions(snapshot),
         "recovery": face_recovery(line_follow),
         "signal": drive_signal(
-            getattr(stuck, "phase", None), getattr(line_follow, "reason", None),
-            getattr(line_follow, "angular", None), getattr(line_follow, "junction", None)),
+            None if stuck is None else stuck.phase,
+            line_follow.reason, line_follow.angular, line_follow.junction),
         "drive": drive,
         "wake": wake,
     }

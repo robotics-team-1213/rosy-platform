@@ -35,7 +35,8 @@ def _snapshot(mode="NAVIGATION", navigation="NAVIGATING", estop=False, charging=
         velocity=SimpleNamespace(linear=0.123, angular=0.0),
         docking=SimpleNamespace(state=DockState(docking_state)),
         safety=SimpleNamespace(estop=estop),
-        line_follow=SimpleNamespace(mode=line_mode, state=line_state, reason=line_reason),
+        line_follow=SimpleNamespace(mode=line_mode, state=line_state, reason=line_reason,
+                                    angular=0.0, stuck=None, junction=None),
         hitl_requested=False,
         activity=None if activity is None else SimpleNamespace(kind=activity),
     )
@@ -115,7 +116,8 @@ def test_measurement_noise_waits_for_the_one_second_write():
 def test_asking_fleet_hands_a_question_mark_to_the_face():
     snap = _snapshot(line_mode="CAMERA", line_state="HOLD")
     snap.line_follow = SimpleNamespace(mode="CAMERA", state="HOLD", reason="stuck_asking",
-                                        angular=0.0, stuck=SimpleNamespace(phase="ASKING"))
+                                        angular=0.0, stuck=SimpleNamespace(phase="ASKING"),
+                                        junction=None)
     payload = _payload(snap)
     read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
     answer = fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)
@@ -135,7 +137,7 @@ def test_a_junction_turn_hands_that_side_to_the_lamp():
 def test_lane_tracking_does_not_invent_a_blinker():
     snap = _snapshot()
     snap.line_follow = SimpleNamespace(mode="CAMERA", state="TRACKING", reason="lane_edge_left",
-                                        angular=-0.5, stuck=None)
+                                        angular=-0.5, stuck=None, junction=None)
 
     assert _payload(snap)["signal"] is None
 
