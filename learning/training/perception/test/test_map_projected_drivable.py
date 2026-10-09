@@ -102,6 +102,8 @@ def test_derive_writes_admissible_manifest(tmp_path):
     assert (doc["schema"], doc["annotation_origin"], doc["adr"]) == (mpd.SCHEMA, "map_projected", "D-563")
     assert len(doc["frames"]) == 8 and doc["rejected"] == {"no_detection": 1}
     assert doc["params"]["ignore_top"] == 110 and doc["source"]["ceiling_calibration_revision"] == "paint-test"
+    assert 0.1 < doc["pose_stats"]["bottom_row_forward_m"] < 0.15
+    assert sum(doc["bottom40_fraction"].values()) == pytest.approx(1.0, abs=1e-3)
     assert doc["pose_stats"]["clock_offset_estimate_s"] is None or abs(doc["pose_stats"]["clock_offset_estimate_s"] - 2.0) < 1.0
     assert all(f["line_iou"] > 0.9 and f["drivable_px"] > 0 for f in doc["frames"])
     with pytest.raises(ValueError, match="new output"):
@@ -270,3 +272,12 @@ def test_union_holds_out_a_contiguous_val_block(tmp_path, monkeypatch):
     (tmp_path / "u" / "manifest.json").write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="union frames differ"):
         ldd.verify_dataset(tmp_path / "u")
+
+
+def test_near_limit_zero_labels_reach_the_image_bottom():
+    raster = _raster()
+    grid = mpd.ground_grid(CAMERA)
+    mask, _ = mpd.label_frame(_render(raster, (0, 0, 0)), _pose(), CAMERA, grid, raster, {"near_m": 0.0})
+    assert (mask[-1] == ldd.DRIVABLE).any()
+    default, _ = mpd.label_frame(_render(raster, (0, 0, 0)), _pose(), CAMERA, grid, raster)
+    assert not (default[-1] == ldd.DRIVABLE).any()

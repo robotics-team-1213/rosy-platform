@@ -315,6 +315,7 @@ def derive(out, *, frames, odom, robot_inputs, ceiling, camera, camera_values, c
             raise ValueError("clock offset estimate needs motion in both the odometry and the detections")
         clock_offset_s = estimated
     grid = ground_grid(camera)
+    bottom = np.zeros(3, np.int64)  # bottom 40 % rows: drivable, label 0, ignored (D-563 near rows)
     (out / "images").mkdir(parents=True)
     (out / "masks").mkdir()
     kept, rejected, last_t, last_pose, seen = [], {}, None, None, 0
@@ -347,6 +348,8 @@ def derive(out, *, frames, odom, robot_inputs, ceiling, camera, camera_values, c
                      "pose": {k: pose[k] for k in ("x", "y", "yaw", "sigma_m", "sigma_yaw", "anchor_dt")},
                      "line_iou": stats["line_iou"], "drivable_px": int((mask == ldd.DRIVABLE).sum()),
                      "offroad_px": int((mask == 0).sum())})
+        low = mask[int(0.6 * mask.shape[0]):]
+        bottom += [(low == ldd.DRIVABLE).sum(), (low == 0).sum(), (low == ldd.IGNORE).sum()]
     anchor = [f["pose"]["anchor_dt"] for f in kept]
     calibration = calibration_doc.get("record") or {}
     doc = {"schema": SCHEMA, "annotation_origin": ORIGIN, "adr": ADR, "evaluation_use": "training_val_only",
@@ -361,7 +364,11 @@ def derive(out, *, frames, odom, robot_inputs, ceiling, camera, camera_values, c
            "params": {**p, "fuse": dict({**FUSE, **fuse_params}), "half_width_m": HALF_WIDTH_M},
            "pose_stats": {"src": "aruco+odom", "detections": len(detections), "frames_seen": seen,
                           "clock_offset_s": clock_offset_s, "clock_offset_estimate_s": estimated,
-                          "anchor_dt_median_s": float(np.median(anchor)) if anchor else None},
+                          "anchor_dt_median_s": float(np.median(anchor)) if anchor else None,
+                          # near_m 0 = labels reach the image bottom; this is how near that is.
+                          "bottom_row_forward_m": round(float(np.nanmin(grid[0][-1])), 4)},
+           "bottom40_fraction": dict(zip(("drivable", "not_drivable", "ignored"),
+                                         (bottom / max(int(bottom.sum()), 1)).round(4).tolist())),
            "classes": ldd.CLASSES, "ignore_index": ldd.IGNORE, "skipped_frames": sum(rejected.values()),
            "rejected": rejected, "frames": kept}
     return ldd._write_manifest(out, doc), doc
