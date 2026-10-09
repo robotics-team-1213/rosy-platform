@@ -247,3 +247,25 @@ def test_union_of_d554_and_d563_admits_drivable_head(tmp_path, monkeypatch):
     assert v13_lineage_error(lineage) is None
     lineage["dataset"]["adr"] = "D-554+D-554"
     assert v13_lineage_error(lineage) is not None
+
+
+def test_union_holds_out_a_contiguous_val_block(tmp_path, monkeypatch):
+    from test_lane_derived_drivable import review
+    monkeypatch.setattr(ldd, "MIN_CANARIES", 1)
+    parts = []
+    for name in ("a", "b"):
+        out = _derived(tmp_path / name, n=10)
+        review(tmp_path / name, out, canaries=0.5)
+        ldd.finalize(out)
+        parts.append(out)
+    _, doc = ldd.union(parts, tmp_path / "u", val_last=0.2)
+    for i in (0, 1):
+        ts = [(f["t"], f["split"]) for f in doc["frames"] if f["part"] == i]
+        val = [t for t, split in ts if split == "val"]
+        assert val and min(val) > max(t for t, split in ts if split == "train")
+    assert ldd.verify_dataset(tmp_path / "u", finalized=True)["val_blocks"] == doc["val_blocks"]
+    manifest = json.loads((tmp_path / "u" / "manifest.json").read_text())
+    manifest["val_blocks"][0]["t0"] -= 100.0  # a widened block no longer matches the recorded frames
+    (tmp_path / "u" / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="union frames differ"):
+        ldd.verify_dataset(tmp_path / "u")

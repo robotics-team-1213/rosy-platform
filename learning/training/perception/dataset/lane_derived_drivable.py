@@ -298,8 +298,13 @@ def verify_dataset(folder, *, finalized=False):
     return doc
 
 
-def _union_frames(folder, parts):
-    """(frames, part docs) rebuilt from the parts, each verified finalized under its own schema."""
+def _in_val_block(frame, part, blocks):
+    return any(b["part"] == part and b["t0"] <= frame.get("t", float("nan")) <= b["t1"] for b in blocks)
+
+
+def _union_frames(folder, parts, val_blocks=()):
+    """(frames, part docs) rebuilt from the parts, each verified finalized under its own schema;
+    frames inside a recorded val block (part, t0..t1 of the frame's "t") become split "val"."""
     frames, docs = [], []
     for i, part in enumerate(parts):
         path = folder / part["dir"]
@@ -310,7 +315,9 @@ def _union_frames(folder, parts):
             raise ValueError("a union part must be a D-554 or D-563 dataset")
         docs.append(doc)
         frames += [dict(f, image=f"{part['dir']}/{f['image']}", mask=f"{part['dir']}/{f['mask']}", part=i,
-                        annotation_origin=doc["annotation_origin"], adr=doc["adr"]) for f in doc["frames"]]
+                        annotation_origin=doc["annotation_origin"], adr=doc["adr"],
+                        **({"split": "val"} if _in_val_block(f, i, val_blocks) else {}))
+                   for f in doc["frames"]]
     return frames, docs
 
 
@@ -320,7 +327,7 @@ def _union_label(docs):
 
 
 def _verify_union(folder, doc):
-    frames, docs = _union_frames(folder, doc.get("parts") or [])
+    frames, docs = _union_frames(folder, doc.get("parts") or [], doc.get("val_blocks") or [])
     if len(docs) < 2 or doc.get("frames") != frames:
         raise ValueError("union frames differ from their parts")
     if any(d["params"]["ignore_top"] != doc["params"]["ignore_top"] for d in docs):
@@ -331,8 +338,10 @@ def _verify_union(folder, doc):
     return doc
 
 
-def union(parts, out, *, tool_commit=None):
-    """Finalized datasets -> one store-ready folder: parts copied under parts/pN/, frames concatenated."""
+def union(parts, out, *, tool_commit=None, val_last=0.0):
+    """Finalized datasets -> one store-ready folder: parts copied under parts/pN/, frames concatenated.
+    val_last > 0: in every part whose frames carry "t", the last val_last of its frames by time form
+    one contiguous val block (recorded as val_blocks; for sessions that all have to train)."""
     import shutil
     out = Path(out)
     if out.exists():
@@ -344,13 +353,19 @@ def union(parts, out, *, tool_commit=None):
         verify_dataset(part, finalized=True)
         shutil.copytree(part, out / f"parts/p{i}")
         entries.append({"dir": f"parts/p{i}", "manifest_sha256": _sha((Path(part) / "manifest.json").read_bytes())})
-    frames, docs = _union_frames(out, entries)
+    blocks = []
+    if val_last > 0:
+        for i, entry in enumerate(entries):
+            ts = sorted(f["t"] for f in verify_dataset(out / entry["dir"])["frames"] if "t" in f)
+            if ts:
+                blocks.append({"part": i, "t0": ts[int(len(ts) * (1 - val_last))], "t1": ts[-1]})
+    frames, docs = _union_frames(out, entries, blocks)
     tops = {d["params"]["ignore_top"] for d in docs}
     if len(tops) != 1:
         raise ValueError(f"parts disagree on ignore_top {sorted(tops)}")
     origin, adr = _union_label(docs)
     doc = {"schema": UNION_SCHEMA, "annotation_origin": origin, "adr": adr, "evaluation_use": "training_val_only",
-           "parts": entries, "source": [d["source"] for d in docs],
+           "parts": entries, "val_blocks": blocks, "source": [d["source"] for d in docs],
            "tool": {"name": "lane_derived_drivable.py union", "git_commit": _git_commit(tool_commit)},
            "params": {"ignore_top": tops.pop()},
            "judge": {"parts": [{k: v for k, v in d["judge"].items() if k != "dropped"} for d in docs]},
@@ -625,6 +640,8 @@ def main(argv=None):
     p.add_argument("--out", type=Path, required=True)
     p = sub.add_parser("union")
     p.add_argument("--parts", type=Path, nargs="+", required=True)
+    p.add_argument("--val-last", type=float, default=0.0,
+                   help="hold out the last fraction of each timed part as one contiguous val block")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--tool-commit")
     args = parser.parse_args(argv)
@@ -640,7 +657,7 @@ def main(argv=None):
         print(json.dumps(sheets(args.out, args.dest, args.key, per_sheet=args.per_sheet, seed=args.seed,
                                 canaries=args.canaries)))
     elif args.command == "union":
-        digest, doc = union(args.parts, args.out, tool_commit=args.tool_commit)
+        digest, doc = union(args.parts, args.out, tool_commit=args.tool_commit, val_last=args.val_last)
         print(json.dumps({"manifest_sha256": digest, "frames": len(doc["frames"]), "adr": doc["adr"]}))
     elif args.command == "import-verdicts":
         print(json.dumps(import_verdicts(args.out, args.sheets, args.key, args.verdicts, args.judge_name,
