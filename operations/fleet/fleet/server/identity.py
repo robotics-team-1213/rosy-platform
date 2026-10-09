@@ -161,12 +161,8 @@ class IdentityService:
             started = self._clock()
             self._asked_at[robot_id] = started
             self.triggers.asked(robot_id, auto=auto)
-            try:  # D-596 7: automatic requests are silent (no call chirp) where the robot supports it
-                result = await client.identify_lamp(color, quiet=auto)
-            except Exception as exc:
-                if not (auto and getattr(exc, "status", None) == 422):
-                    raise
-                result = await client.identify_lamp(color)  # ponytail: payload before 2026-10-10 has no quiet
+            # D-596 7: automatic requests are silent (no call chirp); a payload before D-596 still chirps.
+            result = await client.identify_lamp(color, quiet=auto)
             if not isinstance(result, Mapping):
                 result = {}
             color = result.get("color")

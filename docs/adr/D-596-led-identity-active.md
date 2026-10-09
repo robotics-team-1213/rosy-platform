@@ -28,7 +28,7 @@
 6. **바뀌지 않는 것.** D-472 addendum 3: 확인 트랙은 D-511 입력과 콘솔 표시 전용이다. D-494 지도 자세 중재, trip, `initialpose`, 경로, 명령에 쓰지 않는다. D-472 5항: E-Stop·고장·주의·운행 상태 표시가 우선하고 `rosy-face`가 거절·중단한다. 로봇의 배터리 절약 기본값(`ROSY_LAMP_ENABLED=false`)은 그대로이고 식별할 때만 켰다가 끈다. API는 v1.181.
 
 7. **자동 요청은 조용히, 주황은 조심해서** (2026-10-10 조정 지시).
-   - 자동 요청은 호출음 없이 점멸한다: Fleet이 CORE `POST /host/lamp/identify`에 `quiet: true`를 보내고 CORE는 `identify_<색>_quiet`를 rosy-hw-test·rosy-face에 넘기며, rosy-face는 이때 `call` 소리를 내지 않는다. 운영자가 누른 "LED로 찾기"는 지금처럼 소리를 낸다. 이 로봇 쪽 변경은 다음 payload부터다. 이전 CORE가 `quiet`를 422로 거절하면 Fleet은 소리 있는 요청으로 다시 보낸다.
+   - 자동 요청은 호출음 없이 점멸한다: Fleet이 CORE `POST /host/lamp/identify?quiet=true`로 요청하고 CORE는 `identify_<색>_quiet`를 rosy-hw-test·rosy-face에 넘기며, rosy-face는 이때 `call` 소리를 내지 않는다. 운영자가 누른 "LED로 찾기"는 지금처럼 소리를 낸다. 이 로봇 쪽 변경은 다음 payload부터다. 이전 payload의 CORE는 쿼리를 무시하고 소리를 낸다(본문 스키마는 그대로라 거절은 없다).
    - 마커가 계속 안 보이는 로봇의 자동 요청 간격은 30 s → 2 min → 5 min으로 늘리고, 마커가 다시 보이면 처음으로 돌린다.
    - Fleet은 로봇의 램프 상태를 읽지 못하므로 주의(caution, 주황 1 s 켬·1 s 끔) 여부를 늘 모른다고 본다. 그래서 자동 요청은 파랑만 쓰고(파랑이 바쁘면 기다림), 운영자 요청도 기본은 파랑이며 주황은 파랑이 바쁠 때만 쓴다. 2항의 "자동 두 대 동시"는 이로써 운영자 요청에만 남는다.
    - Vision의 `matched` blob은 요청한 로봇의 마지막 천장 마커 자리(없으면 지도 자세)에서 `auto_near_m`(0.5 m) 안이어야 한다. 아니면 UNKNOWN `far_from_robot`. 예상 자리를 모르는 주황 요청은 UNKNOWN `no_prediction`. 다른 곳의 주의 상태 로봇은 이름을 얻지 못한다.

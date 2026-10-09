@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from core_common.protocol.evidence import EvidenceState, ValueEvidence
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
@@ -1343,7 +1343,6 @@ class LampIdentifyRequest(BaseModel):
     """A short, display-only LED challenge (color None: the robot's own); the face owner may refuse it."""
     model_config = ConfigDict(extra="forbid")
     color: Optional[Literal["blue", "amber"]] = None
-    quiet: StrictBool = False  # D-596: no call chirp (Fleet's automatic requests)
 
 
 class SshPasswordRequest(BaseModel):

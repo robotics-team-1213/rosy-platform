@@ -360,13 +360,11 @@ class HttpRobotClient:
 
     async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict:
         """D-472: None asks for the robot's configured colour; the answer names the one used.
-        D-596: ``quiet`` asks for no call chirp (sent only when true, so an older CORE still accepts)."""
+        D-596: ``quiet`` asks for no call chirp (a query flag: an older CORE ignores it and chirps)."""
         if color not in {None, "blue", "amber"}:
             raise ValueError("unsupported identification color")
-        body = {} if color is None else {"color": color}
-        if quiet:
-            body["quiet"] = True
-        return await self._post("/api/v1/host/lamp/identify", body)
+        return await self._post("/api/v1/host/lamp/identify" + ("?quiet=true" if quiet else ""),
+                                {} if color is None else {"color": color})
 
     # --- D-395 localization (contract §2) -------------------------------------------
 

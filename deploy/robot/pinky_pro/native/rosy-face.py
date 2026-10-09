@@ -190,7 +190,6 @@ LAMP_TEST_S = 10.0
 # the outcome goes to this unit's own runtime directory, which rosy-hw-test reads.
 TEST_REQUEST = "run/rosy-boot/display-test.request"
 TEST_RESULT = "run/rosy-display/display-test.json"
-#: D-596: ``identify_<colour>_quiet`` is the same blink without the call chirp (Fleet's automatic requests).
 TEST_ACTIONS = ("buzzer", "lamp", "identify_blue", "identify_amber", "identify_blue_quiet", "identify_amber_quiet")
 TEST_REQUEST_MAX_AGE_S = 30.0
 #: D-472 4: Fleet's identity window is <= 6 s from its request. rosy-hw-test passes an identify
@@ -813,12 +812,10 @@ class FaceDisplay:
         if request["action"] == "buzzer":
             state, detail = self._buzzer.test()
         elif self._lamp is not None and request["action"].startswith("identify_"):
-            # Once, at accept. self._sound stays the health sound, so the next
-            # ready transition still chirps. A refused call returns before this.
-            color, quiet = request["action"].removeprefix("identify_"), request["action"].endswith("_quiet")
-            if not quiet:
+            # Once at accept, never for D-596 identify_<colour>_quiet; self._sound stays the health sound.
+            if not request["action"].endswith("_quiet"):
                 self._buzzer.announce("call")
-            state, detail = self._lamp.identify(color.removesuffix("_quiet"), unsafe_identity)
+            state, detail = self._lamp.identify(request["action"][9:].removesuffix("_quiet"), unsafe_identity)
         elif self._lamp is not None:
             state, detail = self._lamp.test()
         else:

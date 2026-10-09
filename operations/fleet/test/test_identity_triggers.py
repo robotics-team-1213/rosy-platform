@@ -75,23 +75,21 @@ class Clock:
 
 
 class Robot:
-    def __init__(self, name, color, old_core=False):
-        self.name, self.color, self.old_core, self.calls = name, color, old_core, []
+    def __init__(self, name, color):
+        self.name, self.color, self.calls = name, color, []
 
     async def identify_lamp(self, color=None, quiet=False):
-        if quiet and self.old_core:  # a CORE before D-596 refuses the unknown field
-            raise type("RobotApiError", (Exception,), {"status": 422})()
         self.calls.append((color, quiet))
         return {"accepted": True, "request_id": f"{self.name}-{len(self.calls)}", "color": color or self.color}
 
 
-def _site(old_core=False):
+def _site():
     clock = Clock()
     source = SightingSource(source_id="ceiling_north", token="tok", robot_ids=("rosy_40", "rosy_41"),
                             map_id="map_v2_fleet", calibration_revision="cal-1", corner_marker_ids=None,
                             robot_markers=(("rosy_40", 40), ("rosy_41", 41)))
     tracking = TrackingService([source], calibrations=TrackingCalibrationStore(), clock=clock)
-    robots = {"rosy_40": Robot("r40", "amber", old_core), "rosy_41": Robot("r41", "amber")}
+    robots = {"rosy_40": Robot("r40", "amber"), "rosy_41": Robot("r41", "amber")}
     identity = IdentityService(lambda: robots, tracking=tracking, clock=clock)
     tracking.identity = identity
     seq = iter(range(1, 1000))
@@ -132,21 +130,10 @@ def test_tick_asks_lost_robots_silently_in_blue_only_and_backs_off():
     # Marker still hidden: 30 s, then 2 min, then every 5 min (D-596 7).
     assert [b - a for a, b in zip(asked["rosy_40"], asked["rosy_40"][1:])][:4] == [30.0, 120.0, 300.0, 300.0]
     assert all(quiet for _color, quiet in robots["rosy_40"].calls)
-    frame((1.0, 1.0, 40), (2.1, 1.0, None))                    # marker seen again: the backoff restarts
-    assert identity.triggers.backoff("rosy_40") == 1
-
-
-def test_an_older_core_without_quiet_is_asked_again_with_the_chirp():
-    clock, _source, identity, robots, frame = _site(old_core=True)
-    frame((1.0, 1.0, 40))
-    asyncio.run(identity.tick())
     clock.now += 0.5
-    frame((1.1, 1.0, None))
-    asyncio.run(identity.tick())                               # marker missing from now
-    clock.now += 3.5
-    frame((1.1, 1.0, None))
-    (started,) = asyncio.run(identity.tick())
-    assert started["robot_id"] == "rosy_40" and robots["rosy_40"].calls == [("blue", False)]
+    frame((1.0, 1.0, 40), (2.1, 1.0, None))                    # marker seen again: the backoff restarts
+    asyncio.run(identity.tick())
+    assert identity.triggers.backoff("rosy_40") == 1
 
 
 def _verdict(identity, source, request_id, x, y, at):

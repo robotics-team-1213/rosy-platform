@@ -10,9 +10,9 @@ import secrets
 import stat
 import threading
 import time
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, StrictBool
 
 from core_api_web.api.errors import ApiError
@@ -373,15 +373,17 @@ def host_lamp_identify(
     body: LampIdentifyRequest,
     auth: AuthContext = Depends(operator),
     svc: CoreServicesLike = Depends(get_services),
+    quiet: Annotated[bool, Query()] = False,
 ):
-    """Ask the sole face owner for a short visual challenge; no motion or identity claim."""
+    """Ask the sole face owner for a short visual challenge; no motion or identity claim.
+    D-596: ``?quiet=true`` (Fleet's automatic requests) blinks without the call chirp."""
     request_path, _result, _confirm = _test_paths(svc)
     color = body.color or _identify_color(svc)
     if color is None:
         raise ApiError("IDENTIFY_COLOR_UNSET", 409, "이 로봇의 식별 색이 설정되지 않았습니다")
     request_id = secrets.token_hex(8)
     # Milliseconds: rosy-hw-test refuses an identify older than 1.5 s (D-472 4, total <= 6 s).
-    action = f"identify_{color}" + ("_quiet" if body.quiet else "")
+    action = f"identify_{color}" + ("_quiet" if quiet else "")
     payload = json.dumps({"action": action, "request_id": request_id,
                           "by": auth.token_id,
                           "requested_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds")},
