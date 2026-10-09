@@ -87,6 +87,7 @@ import sys
 import time
 import stat
 import subprocess
+import types
 from typing import Callable
 
 sys.dont_write_bytecode = True
@@ -164,10 +165,13 @@ BUZZER_PATTERNS = {"ready": (1, BUZZER_FREQUENCY_HZ), "failed": (3, BUZZER_FREQU
 #: Caution again inside this window stays silent (a battery near the threshold). Ready and
 #: failed always sound on a real transition (review L2): they are the news a person waits for.
 BUZZER_REPEAT_S = 300.0
-REPEAT_LIMITED = frozenset({"caution"})
+REPEAT_LIMITED = frozenset({"caution", "ready"})
+#: A caution (health or a CORE code) must hold this long before it sounds: a flapping one stays silent.
+CAUTION_DEBOUNCE_S = 2.0
 #: D-247 6's buzzer test, when handed over: three 150 ms beeps, like rosy-hw-test.
 TEST_BEEPS, TEST_ON_S, TEST_OFF_S = 3, 0.15, 0.15
 #: robot state -> sound; booting is silent.
+#: Only for a release without core_common.presentation (tests pin it equal to presentation.SOUNDS).
 SOUNDS = {"ready": "ready", "ready_held": "ready", "failed": "failed", "caution": "caution"}
 #: robot state -> lamp_pattern argument (D-260 3). Fallback for a release without the
 #: rule table; with it, the table also folds CORE's mode in (D-380, robot_state.lamp_pattern).
@@ -686,6 +690,7 @@ class FaceDisplay:
         self._sounded: dict[str, float] = {}
         self._sound: str | None = None
         self._reversed_at: float | None = None
+        self._caution_since: float | None = None
         self._held: tuple[str, float] | None = None
         self._tested: str | None = None
         self._faces = faces
@@ -718,28 +723,41 @@ class FaceDisplay:
 
     @staticmethod
     def _present(view: dict, state: str, core: dict | None, screen: dict | None):
-        """The one record for lamp, bar, expression and sound (core_common.presentation); None on a
-        release without it, where the stage-only lamp mapping stands and no face is drawn."""
-        if presentation is None or robot_state is None:
-            return None
-        return presentation.present(state=state, robot_mode=view.get("robot_mode"),
-                                    nav_state=view.get("nav_state"), core=core, screen=screen,
-                                    battery_percent=view.get("battery_percent"))
+        """The one record for lamp, bar, expression and sound (core_common.presentation). A release
+        with the rule table but not the record gets the same fields from the old rules."""
+        if robot_state is not None and presentation is not None:
+            return presentation.present(state=state, robot_mode=view.get("robot_mode"),
+                                        nav_state=view.get("nav_state"), core=core, screen=screen,
+                                        battery_percent=view.get("battery_percent"))
+        lamp = LAMP_PATTERNS.get(state)
+        if robot_state is not None:
+            args = (state, (core or {}).get("robot_mode") or view.get("robot_mode"),
+                    (core or {}).get("nav_state") or view.get("nav_state"))
+            try:
+                lamp = robot_state.lamp_pattern(*args, (core or {}).get("recovery"))
+            except TypeError:  # a core_common from before D-546 takes three arguments
+                lamp = robot_state.lamp_pattern(*args)
+        bar = None if not screen or screen["kind"] != "face" else (
+            screen["face"], screen["strip"] or "", "caution" if screen["strip_tone"] == "caution" else "ok", None, None)
+        return types.SimpleNamespace(
+            state=state, lamp=lamp, bar=bar, sound="emergency" if lamp == "emergency" else SOUNDS.get(state),
+            reversing=bool(core) and core.get("estop") is False and lamp == "recovering"
+            and core.get("recovery") == "retrace")
 
     @staticmethod
     def lamp_pattern_for(view: dict, state: str, core: dict | None = None) -> str | None:
-        pres = FaceDisplay._present(view, state, core, None)
-        return pres.lamp if pres else LAMP_PATTERNS.get(state)
+        return FaceDisplay._present(view, state, core, None).lamp
 
-    def _announce(self, state: str, pattern: str | None, now: float) -> None:
-        sound = SOUNDS.get(state)
-        # D-381: while the emergency pattern holds, the sound is the e-stop alarm —
-        # entry is a real transition (the previous sound differs) so it sounds once,
-        # staying is silent (same sound), and leaving is the ready chirp again.
-        # Not repeat-limited: an e-stop is rare, and it is news a person waits for.
-        if pattern == "emergency":
-            sound = "emergency"
-        # Ready and held ready are one sound: moving between them is not a new sound.
+    def _announce(self, sound: str | None, now: float) -> None:
+        """Sound ``pres.sound`` on a change (D-381: the e-stop alarm replaces the health sound; ready and
+        held ready are one sound). A caution must hold CAUTION_DEBOUNCE_S first, and caution/ready repeat
+        at most every BUZZER_REPEAT_S; the e-stop and failed are news a person waits for."""
+        if sound == "caution":
+            self._caution_since = now if self._caution_since is None else self._caution_since
+            if now - self._caution_since < CAUTION_DEBOUNCE_S:
+                return  # not yet a caution: self._sound keeps the sound it had
+        else:
+            self._caution_since = None
         previous, self._sound = self._sound, sound
         if sound is None or sound == previous:
             return
@@ -838,7 +856,7 @@ class FaceDisplay:
 
     def screen_of(self, view: dict, now: float) -> dict | None:
         """D-433: the situation table's answer for this poll (None on a release without it)."""
-        if face_screen is None or robot_state is None or presentation is None:
+        if face_screen is None or robot_state is None:
             return None
         core = self._core()
         mode = core.get("robot_mode") if core else None
@@ -911,8 +929,7 @@ class FaceDisplay:
         core = self._core()
         screen = self.screen = self.screen_of(view, now)
         pres = self._present(view, state, core, screen)
-        pattern = pres.lamp if pres else LAMP_PATTERNS.get(state)
-        state = pres.state if pres else state
+        pattern = pres.lamp
         if self._lamp is not None:
             # D-380: a mode change switches the pattern without a sound; show() is
             # idempotent, so an unchanged pattern costs nothing.
@@ -947,22 +964,20 @@ class FaceDisplay:
                         self.lcd.img_show(self._render(card))
                     except Exception:
                         # A broken LCD must not swallow the entry alarm.
-                        self._announce(state, pattern, now)
+                        self._announce(pres.sound, now)
                         raise
                     self._drawn = key
                     self.draws += 1
                     redrawn = True
         # A synchronous buzzer pattern can last hundreds of milliseconds. Show
         # the lamp and any status card first, especially on emergency entry.
-        self._announce(state, pattern, now)
-        self._reverse_alarm(core, pattern, now)
+        self._announce(pres.sound, now)
+        self._reverse_alarm(pres.reversing, now)
         return redrawn
 
-    def _reverse_alarm(self, core: dict | None, pattern: str | None, now: float) -> None:
-        """D-546: one reversing beep per BUZZER_REVERSE_S while CORE says ``retrace``; silent
-        otherwise, and the moment the phase, the hand-over or the recovering lamp is gone."""
-        if (not core or core.get("estop") is not False or core.get("recovery") != "retrace"
-                or pattern != "recovering"):
+    def _reverse_alarm(self, reversing: bool, now: float) -> None:
+        """D-546: one reversing beep per BUZZER_REVERSE_S while ``Presentation.reversing``; silent otherwise."""
+        if not reversing:
             self._reversed_at = None
         elif self._reversed_at is None or now - self._reversed_at >= BUZZER_REVERSE_S:
             self._reversed_at = now

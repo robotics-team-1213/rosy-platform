@@ -2351,8 +2351,8 @@ def test_an_estop_in_the_handover_stops_every_recovery_signal_even_with_a_stale_
     clock.now += 0.2
     display.step()
     assert lamp.pattern != "recovering"
-    display._core = lambda: {"estop": True, "recovery": "retrace"}  # direct: the beep guard itself
-    display._reverse_alarm(display._core(), "recovering", clock.now + 5)
+    stopped = display._present({"robot_mode": "NAVIGATION"}, "ready", {"estop": True, "recovery": "retrace"}, None)
+    display._reverse_alarm(stopped.reversing, clock.now + 5)  # the record never asks for the beep under an e-stop
     assert len(_starts(gpio)) == beeps
 
 
@@ -2378,14 +2378,45 @@ def test_a_muted_buzzer_makes_no_reversing_beep(tmp_path):
     assert _starts(gpio) == [] and lamp.pattern == "recovering"
 
 
-def test_a_core_common_without_the_presentation_record_still_gets_a_lamp_pattern(tmp_path, monkeypatch):
+def test_a_mixed_install_without_the_presentation_record_keeps_core_modes_and_faces(tmp_path, monkeypatch):
     module = _display()
     monkeypatch.setattr(module, "presentation", None)
     view = {"robot_mode": "NAVIGATION", "nav_state": "IDLE"}
-    assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "ready"
+    assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "recovering"
+    assert module.FaceDisplay.lamp_pattern_for({"robot_mode": "IDLE"}, "ready", {"robot_mode": "EMERGENCY"}) == "emergency"
     assert module.FaceDisplay.lamp_pattern_for(view, "caution") == "caution"
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, robot_mode="EMERGENCY", estop=True)
     display, *_ = _face_loop(module, tmp_path)
-    assert display.screen_of({"stage": "CORE_READY"}, 0.0) is None  # no record, no face: the status card only
+    display.step()
+    assert display.screen["kind"] == "stopped"  # the table still draws the STOPPED card
+    old = module.robot_state.lamp_pattern
+    monkeypatch.setattr(module.robot_state, "lamp_pattern", lambda state, mode=None, nav=None: "ready")  # pre-D-546
+    assert module.FaceDisplay.lamp_pattern_for(view, "ready", {"recovery": "retrace"}) == "ready"
+    monkeypatch.setattr(module.robot_state, "lamp_pattern", old)
+
+
+def test_the_fallback_sound_table_matches_the_record(monkeypatch):
+    module = _display()
+    assert module.SOUNDS == module.presentation.SOUNDS
+    assert "ready" in module.REPEAT_LIMITED and "caution" in module.REPEAT_LIMITED
+
+
+def test_a_flapping_caution_never_sounds_but_a_held_one_sounds_once(tmp_path):
+    module, display, _lamp, clock, gpio, _spawn = _recovering(tmp_path)
+    display.step()
+    base = len(_starts(gpio))  # the ready chirp
+    for index in range(6):  # caution for 1 s, gone for 1 s: never reaches the 2 s hold
+        _face_inputs(tmp_path, caution=["line_follow_hold"] if index % 2 == 0 else [])
+        clock.now += 1.0
+        display.step()
+        display.step()
+    assert len(_starts(gpio)) == base
+    _face_inputs(tmp_path, caution=["line_follow_hold"])
+    for _ in range(6):
+        clock.now += 0.5
+        display.step()
+    assert len(_starts(gpio)) == base + 2  # two low tones, once
 
 
 def test_the_piezo_is_stopped_even_when_the_beep_sleep_fails():

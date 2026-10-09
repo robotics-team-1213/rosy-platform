@@ -283,7 +283,7 @@ def render_drive(payload: dict, size: tuple[int, int] = DEFAULT_SIZE) -> Image.I
         draw.rounded_rectangle((bar_x, bar_y, bar_x + filled, bar_y + bar_h),
                                radius=6, fill=color)
     if raw_percent is not None:
-        suffix = "%" + (" ⚡" if payload.get("charging") else "")
+        suffix = "%" + (" CHG" if payload.get("charging") else "")
         label, font = f"{percent:.0f}{suffix}", _font(16)
         if color == _CRIT:
             label_width = draw.textbbox((0, 0), label, font=font)[2]
