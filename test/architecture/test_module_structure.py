@@ -95,6 +95,14 @@ CONTROL_SPLIT = "docs/plans/2026-09-22-control-package-split-design.md"
 
 #: P6 verdicts: path (relative to src/) or package name -> (lines at verdict, verdict).
 SIZE_VERDICTS = {
+    "fleet/fleet/server/stuck_resolver.py": (
+        608,
+        "split: re-judged at 608 on 2026-10-10 after D-577 added bounded lane-lost "
+        "WAIT and escalation rules. This pure decision core still has no transport or robot "
+        "command authority; stuck_resolver_loop.py owns polling and dispatch. Keep chain state "
+        "here, and move the R1-R5 rule predicates into a sibling pure rules module on further "
+        "growth. See docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md",
+    ),
     "deploy/site/rosy_site_autoupdate.py": (
         616,
         "accept: D-569 adds only the authenticated inventory baseline to the existing signed "
@@ -205,12 +213,17 @@ SIZE_VERDICTS = {
         "split still applies. Owner hmi; source-boundary follow-up after device acceptance",
     ),
     "fleet": (
-        49_534,
-        "split: re-judged at 49534 on 2026-10-10 for D-581 (feat/trail-fleet-anchored-frame, self-judged, "
-        "independent review pending): +231, one new pure module fleet/swarm/anchor.py (ceiling-anchored "
-        "TRAIL reference: smoothed map<-odom per robot, jump/stale stops) plus its hook in swarm/relay.py, "
-        "the console relay wiring and MapPoseTracker.odom_to_map. It reads the existing D-494 3 map pose "
-        "owner and adds no new robot command path. Previously "
+        49_732,
+        "split: re-judged at 49732 on 2026-10-10 after the crosswalk Fleet map-zone change "
+        "(+271 over 49461). Crosswalk geometry and API stay with site_map.py and its existing "
+        "routes/store; editing and display stay in site-map.js and map-view.js. No new command "
+        "owner or transport was added. The map module split plan and +150 package allowance "
+        "remain in force. Previously "
+        "split: re-judged at 49461 on 2026-10-10: +158 since 49303 across the Fleet map "
+        "view/observation presentation and D-577 lane-lost handling. The former stays in web "
+        "map/tracking owners; the latter adds pure rules to stuck_resolver.py and queue display "
+        "without adding a motion or transport owner. The resolver file has its own split verdict; "
+        "the package +150 allowance remains. See docs/plans/2026-10-09-d577-trouble-fleet-ai-pc-realtime.md. Previously "
         "split: re-judged at 49303 on 2026-10-09 after merging D-575 (+178 over main 49125; a seen ceiling "
         "marker is shown: unassigned marker_id rows in server/tracking.py, label in web/tracking-layer.js and "
         "web/map-view.js; existing owners, display only, no command path, no new owner). Previously "

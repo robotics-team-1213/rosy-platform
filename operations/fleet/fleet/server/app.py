@@ -583,6 +583,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         app.state.stuck_resolver = StuckResolverLoop(
             app.state.fleet_gather, app.state.line_stuck, resolver_core,
             clients=lambda: stuck_resolver_clients)
+        app.state.stuck_resolver.map_pose = map_pose.stuck_pose   # D-577 1: R3 pose freshness
     if hub is not None and (task_service is not None or stuck_resolver_clients is not None):
         resolver = getattr(app.state, "stuck_resolver", None)
         hub.set_event_callback(_fan_out_events(

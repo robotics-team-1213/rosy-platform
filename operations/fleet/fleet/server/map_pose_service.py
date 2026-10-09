@@ -148,6 +148,15 @@ class MapPoseService:
         tracker = self._tracker(robot_id)
         return tracker.pose(self._wall(), self.active_map_id()) if tracker is not None else None
 
+    def stuck_pose(self, robot_id: str) -> Optional[dict]:
+        """D-577 1: R3's pose input. `sourced` = a sighting ever reached this robot's tracker, so an
+        UNKNOWN is a lost pose rather than "Fleet has no map pose for it"."""
+        tracker = self._tracker(robot_id)
+        if tracker is None:
+            return None
+        pose = tracker.pose(self._wall(), self.active_map_id())
+        return {"state": pose.state, "age_s": pose.age_s, "sourced": tracker.sourced}
+
 
 def install_map_pose_routes(app, *, service: MapPoseService, read_guard) -> None:
     unknown = HTTPException(status_code=404, detail={"code": "UNKNOWN_ROBOT",
