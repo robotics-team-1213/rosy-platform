@@ -78,6 +78,35 @@ def test_ignore_top_rows_are_background():
     assert bool((got[:, 110:] != 0).any())
 
 
+@pytest.mark.parametrize("head", ["context", "context_lane"])
+def test_context_heads_keep_lane_answer_and_export(tmp_path, head):
+    lane = _lane(8)
+    x = torch.rand(2, 3, 240, 320)
+    with torch.no_grad():
+        features, deep = dh.lane_features_and_bottleneck(lane, x)
+        assert torch.equal(lane.head(features), lane(x)) and deep.shape == (2, 64, 15, 20)
+    model = dh.LaneWithDrivable(lane, ignore_top=110, head=head).eval()
+    with torch.no_grad():
+        model.drivable.fuse[-1].bias.fill_(5.0)
+        lane_out, s = model.drivable_logit(x)
+        out = model(x)
+    assert s.shape == (2, 1, 240, 320) and out.shape == (2, 6, 240, 320)
+    want, got = lane(x).argmax(1), out.argmax(1)
+    drivable = got == 5
+    assert drivable.any() and torch.equal(torch.where(drivable, torch.zeros_like(got), got)[:, 110:],
+                                          want[:, 110:])
+    pytest.importorskip("onnx")
+    pytest.importorskip("onnxruntime")
+    parent, candidate = tmp_path / "parent.onnx", tmp_path / "candidate.onnx"
+    for module, path in ((lane, parent), (model, candidate)):
+        torch.onnx.export(module, torch.rand(1, 3, 240, 320), str(path), opset_version=17,
+                          input_names=["x"], output_names=["logits"])
+    parity = dh.verify_candidate_lane_parity(parent, candidate, [x[:1]], ignore_top=110)
+    assert parity["parent_lane_pixels_preserved"]
+    with pytest.raises(ValueError, match="head must be"):
+        dh.LaneWithDrivable(lane, head="wide")
+
+
 def test_load_frozen_lane_renames_keys_and_checks_parity(tmp_path):
     lane = _lane(1)
     loaded, n = dh.load_frozen_lane(_scripted(tmp_path, lane), classes=LANE_CLASSES)

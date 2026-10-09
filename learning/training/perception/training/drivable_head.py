@@ -21,6 +21,12 @@ the fraction of label-0 pixels in rows that hold drivable labels (D-554 item 9 b
 walls) that the model calls drivable, and the near-centre drivable fraction (rows of the
 bottom 40 %, cols 110-210) predicted vs labelled. D-566: pos_weight balances the loss (train
 non-drivable / drivable labelled pixels) and the best epoch maximises IoU - fp_lambda * FP.
+
+Head variants (D-566 item 5, ``training.head``): "local" (default) is a 3x3 conv on the last
+decoder features. "context" adds the lane model's bottleneck features through dilated 3x3
+convs at 1/16 scale (receptive field about the frame width) so the head can see which side of
+a line the road is; "context_lane" also feeds the lane model's class probabilities. All three
+produce the same single logit s, so the lane channels above are unchanged.
 """
 
 from __future__ import annotations
@@ -32,6 +38,7 @@ if __name__ == "__main__":
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from rosy_lane_model import HEIGHT, WIDTH, LaneUNet
 
@@ -135,18 +142,64 @@ def verify_candidate_lane_parity(parent_onnx, candidate_onnx, frames, *, ignore_
             "ambiguous_pixels": ambiguous}
 
 
+HEADS = ("local", "context", "context_lane")
+
+
+def lane_features_and_bottleneck(lane: LaneUNet, x):
+    """LaneUNet.features(x) plus its bottleneck output (N x 16*base x H/16 x W/16)."""
+    e1 = lane.enc1(x)
+    e2 = lane.enc2(lane.pool(e1))
+    e3 = lane.enc3(lane.pool(e2))
+    e4 = lane.enc4(lane.pool(e3))
+    b = lane.bottleneck(lane.pool(e4))
+    d4 = lane.dec4(torch.cat([lane.up4(b), e4], 1))
+    d3 = lane.dec3(torch.cat([lane.up3(d4), e3], 1))
+    d2 = lane.dec2(torch.cat([lane.up2(d3), e2], 1))
+    return lane.dec1(torch.cat([lane.up1(d2), e1], 1)), b
+
+
+def _cbr(cin, cout, k=3, dilation=1):
+    return [nn.Conv2d(cin, cout, k, padding=dilation * (k // 2), dilation=dilation, bias=False),
+            nn.BatchNorm2d(cout), nn.ReLU(inplace=True)]
+
+
+class ContextHead(nn.Module):
+    """Bottleneck context (dilations 1, 2, 4 at 1/16 scale: 15 cells = 240 px) upsampled onto
+    the last decoder features, optionally with the lane class probabilities, -> logit s."""
+
+    def __init__(self, width: int, deep: int, lane_classes: int = 0, mid: int = 32):
+        super().__init__()
+        self.context = nn.Sequential(*_cbr(deep, mid, 1), *_cbr(mid, mid), *_cbr(mid, mid, dilation=2),
+                                     *_cbr(mid, mid, dilation=4))
+        # 1x1 fuse first so the full-resolution 3x3 costs what the local head costs.
+        self.fuse = nn.Sequential(*_cbr(width + mid + lane_classes, width, 1), *_cbr(width, width),
+                                  nn.Conv2d(width, 1, 1))
+
+    def forward(self, features, deep, lane=None):
+        context = F.interpolate(self.context(deep), size=features.shape[-2:], mode="bilinear",
+                                align_corners=False)
+        parts = [features, context] + ([] if lane is None else [lane.softmax(1)])
+        return self.fuse(torch.cat(parts, 1))
+
+
 class LaneWithDrivable(nn.Module):
     """1x3xHxW -> 1x(C+1)xHxW logits: the lane model's C channels, then drivable."""
 
-    def __init__(self, lane: LaneUNet, *, ignore_top: int = 0):
+    def __init__(self, lane: LaneUNet, *, ignore_top: int = 0, head: str = "local"):
         super().__init__()
         if not 0 <= ignore_top < HEIGHT:
             raise ValueError(f"ignore_top must be in [0, {HEIGHT - 1}]")
-        self.lane, self.ignore_top = lane, int(ignore_top)
+        if head not in HEADS:
+            raise ValueError(f"head must be one of {HEADS}")
+        self.lane, self.ignore_top, self.head = lane, int(ignore_top), head
         width = lane.head.in_channels
-        self.drivable = nn.Sequential(
-            nn.Conv2d(width, width, 3, padding=1, bias=False), nn.BatchNorm2d(width),
-            nn.ReLU(inplace=True), nn.Conv2d(width, 1, 1))
+        if head == "local":
+            self.drivable = nn.Sequential(
+                nn.Conv2d(width, width, 3, padding=1, bias=False), nn.BatchNorm2d(width),
+                nn.ReLU(inplace=True), nn.Conv2d(width, 1, 1))
+        else:
+            self.drivable = ContextHead(width, lane.bottleneck[-2].num_features,
+                                        lane.head.out_channels if head == "context_lane" else 0)
 
     def train(self, mode: bool = True):
         super().train(mode)
@@ -156,9 +209,14 @@ class LaneWithDrivable(nn.Module):
     def drivable_logit(self, x):
         """(lane logits, head logit s) for the same features."""
         with torch.no_grad():
-            features = self.lane.features(x)
+            if self.head == "local":
+                features = self.lane.features(x)
+            else:
+                features, deep = lane_features_and_bottleneck(self.lane, x)
             lane = self.lane.head(features)
-        return lane, self.drivable(features)
+        if self.head == "local":
+            return lane, self.drivable(features)
+        return lane, self.drivable(features, deep, lane if self.head == "context_lane" else None)
 
     def forward(self, x):
         lane, s = self.drivable_logit(x)
@@ -268,4 +326,5 @@ def train_head(model: LaneWithDrivable, train_ds, val_ds, *, epochs, lr, batch_s
             "val_outside_band_fp": best["val_outside_band_fp"] if best else None,
             "val_near_centre_drivable": best["val_near_centre_drivable"] if best else None,
             "selection": {"score": "val_drivable_iou - fp_lambda * val_outside_band_fp",
-                          "fp_lambda": fp_lambda, "pos_weight": pos_weight}}
+                          "fp_lambda": fp_lambda, "pos_weight": pos_weight,
+                          "head": model.head}}
