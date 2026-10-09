@@ -406,7 +406,7 @@ def test_vision_worker_hands_each_fresh_frame_and_its_markers_to_the_tracker():
     calls = []
 
     class _Tracker:
-        async def process(self, frame, markers):
+        async def process(self, frame, markers, sighted=frozenset()):
             calls.append((frame.header.seq, sorted(markers)))
 
     class _Publisher:
@@ -425,7 +425,7 @@ def test_a_rejected_sighting_does_not_skip_tracking():
     calls = []
 
     class _Tracker:
-        async def process(self, frame, markers):
+        async def process(self, frame, markers, sighted=frozenset()):
             calls.append(frame.header.seq)
 
     class _Publisher:
@@ -442,7 +442,7 @@ def test_a_rejected_sighting_does_not_skip_tracking():
 
 def test_a_tracker_error_is_logged_and_does_not_mask_the_sighting_error(caplog):
     class _Tracker:
-        async def process(self, frame, markers):
+        async def process(self, frame, markers, sighted=frozenset()):
             raise ValueError("tracker broke")
 
     class _Publisher:

@@ -127,8 +127,10 @@ def _approved_service(approved, clock):
 
 
 def _approved_payload(**changes):
-    return _payload(corner_marker_ids=None, calibration_source="approved_record",
-                    calibration_revision="paint-7b220d432c2a", **changes)
+    body = _payload(corner_marker_ids=None, calibration_source="approved_record",
+                    calibration_revision="paint-7b220d432c2a")
+    body.update(changes)
+    return body
 
 
 def test_approved_record_sighting_passes_only_with_the_current_approved_revision():

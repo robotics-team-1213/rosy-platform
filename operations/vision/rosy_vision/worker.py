@@ -104,7 +104,8 @@ class VisionWorker:
                 self._publish_place_markers(frame, markers, homography)
             if self.tracker is not None:
                 try:
-                    await self.tracker.process(frame, markers)
+                    await self.tracker.process(
+                        frame, markers, frozenset(s.robot_id for s in sightings))
                 except Exception as exc:
                     # Do not log URLs, request bodies, headers, or arbitrary exception text.
                     logger.error("tracking step failed source=%s error_type=%s",

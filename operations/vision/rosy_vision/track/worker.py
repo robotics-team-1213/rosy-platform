@@ -20,6 +20,10 @@ FAILURE_LOG_INTERVAL_S while it keeps failing.
 
 ``seq`` is this worker's own counter, not the phone header seq (a phone reconnect restarts
 that); Fleet orders detections by ``captured_at``.
+
+D-587: with a ``sightings`` publisher, identified robot markers projected through the approved
+record are also sent as sightings (marker_sightings.py), after the detections, except for the
+robots VisionWorker already sighted from this frame's measured calibration.
 """
 
 from __future__ import annotations
@@ -40,7 +44,9 @@ from core_common.protocol.overhead_detections import OverheadDetection, Overhead
 from rosy_vision.project import CameraMap, Point
 from rosy_vision.track.background_blob import BackgroundBlobDetector
 from rosy_vision.track.calibration import choose
+from rosy_vision.publish import SightingPublishError
 from rosy_vision.track.fleet_client import TrackPublishError
+from rosy_vision.track.marker_sightings import robot_sightings
 from rosy_vision.track import led_identity
 from rosy_vision.track.model import (
     Calibration, Detection, DetectorResult, Frame, RobotDetector, ROBOT_TOP_HEIGHT_M,
@@ -105,8 +111,10 @@ class _FailureLog:
 class TrackWorker:
     def __init__(self, *, camera: CameraMap, ingest, client, detector: RobotDetector | None = None,
                  decode: Callable[[bytes], np.ndarray | None] = decode_jpeg,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic, sightings=None) -> None:
         self.camera = camera
+        #: D-587: SightingPublisher for identified robot markers, or None (display only).
+        self.sightings = sightings
         self.ingest = ingest
         self.client = client
         self.detector = detector if detector is not None else BackgroundBlobDetector()
@@ -118,6 +126,7 @@ class TrackWorker:
         self._executor: ThreadPoolExecutor | None = None
         self._publish_log = _FailureLog("detections not accepted", camera.source_id, clock)
         self._config_log = _FailureLog("tracking config read failed", camera.source_id, clock)
+        self._sighting_log = _FailureLog("marker sighting not accepted", camera.source_id, clock)
         # D-472: the one open identity challenge Fleet named, its ring samples, and the last reported.
         # D-472: LED samples of the last RING_S for every identify colour, kept before any
         # challenge arrives. Fleet's challenge reaches this worker on the CONFIG_REFRESH_S
@@ -160,18 +169,20 @@ class TrackWorker:
             except asyncio.TimeoutError:
                 pass
 
-    async def process(self, frame, markers: Mapping[int, Sequence[Point]]
-                      ) -> OverheadDetectionsPayload | None:
-        """Track one frame and publish the result; None when skipped (undecodable, or busy)."""
+    async def process(self, frame, markers: Mapping[int, Sequence[Point]],
+                      sighted: frozenset[str] = frozenset()) -> OverheadDetectionsPayload | None:
+        """Track one frame and publish the result; None when skipped (undecodable, or busy).
+
+        ``sighted``: robots this frame already produced a sighting for (D-587 1)."""
         if self._busy:
             return None
         self._busy = True
         try:
-            return await self._process(frame, markers)
+            return await self._process(frame, markers, sighted)
         finally:
             self._busy = False
 
-    async def _process(self, frame, markers) -> OverheadDetectionsPayload | None:
+    async def _process(self, frame, markers, sighted=frozenset()) -> OverheadDetectionsPayload | None:
         config = self._config or {}
         relearn = config.get("relearn_seq")
         if type(relearn) is not int:
@@ -185,6 +196,10 @@ class TrackWorker:
             self._executor, functools.partial(
                 self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
                 lens, relearn))
+        sightings = ()
+        if step is not None and self.sightings is not None:
+            sightings = robot_sightings(self.camera, step[0], markers, captured_at=frame.captured_at,
+                                        seq=frame.header.seq, skip=sighted)
         if challenge is not None:
             await self._report_identity(challenge, frame.captured_at)
         if step is None:
@@ -204,6 +219,15 @@ class TrackWorker:
             self._publish_log.failed((("error_type", type(exc).__name__),))
         else:
             self._publish_log.ok()
+        for sighting in sightings:
+            try:
+                await self.sightings.publish(sighting)
+            except SightingPublishError as exc:
+                self._sighting_log.failed((("status", exc.status_code), ("code", exc.code)))
+            except httpx.HTTPError as exc:
+                self._sighting_log.failed((("error_type", type(exc).__name__),))
+            else:
+                self._sighting_log.ok()
         return payload
 
     async def _report_identity(self, challenge: dict, now: float) -> None:

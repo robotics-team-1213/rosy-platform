@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
 from core_common.protocol.place_markers import PlaceMarkerPayload, PlaceMarkerPose
@@ -11,6 +11,17 @@ from core_common.protocol.sightings import SiteSightingPayload
 from games.field.homography import Homography, Point, fit
 
 MarkerQuad = tuple[Point, Point, Point, Point]
+
+#: D-587 4: nominal sticker centre on the robot (base_footprint x, y in m) is the top of the
+#: LiDAR, the robot top D-457 3 uses (geometry.yaml lidar x_m / y_m; drift-tested in
+#: test_marker_sightings.py). Per-robot yaw offsets come from the site config.
+MARKER_MOUNT_XY_M = (-0.017, 0.0)
+#: D-562: the black square of the 40 mm robot sticker (one white cell border).
+MARKER_SIDE_M = 0.030
+#: D-587 6: corner geometry a robot marker must have to become a sighting.
+MIN_MARKER_SIDE_PX = 6.0
+MARKER_SIDE_BAND = (0.6, 1.4)
+MAX_MARKER_SIDE_RATIO = 1.33
 
 
 @dataclass(frozen=True)
@@ -31,6 +42,8 @@ class CameraMap:
     calibration_source: str = "corner_markers"
     #: D-564: floor place marker ids (height 0, so no parallax), teach input only.
     place_markers: tuple[int, ...] = ()
+    #: D-587 4: robot id -> sticker top edge direction from the robot front (deg, CCW +).
+    marker_yaw_offset_deg: Mapping[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.source_id.strip() or not self.map_id.strip():
@@ -65,6 +78,10 @@ class CameraMap:
         if any(type(marker_id) is not int or marker_id < 0
                for marker_id in self.robot_markers.values()):
             raise ValueError("robot marker ids must be non-negative integers")
+        if (set(self.marker_yaw_offset_deg) - set(self.robot_markers)
+                or not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                           for v in self.marker_yaw_offset_deg.values())):
+            raise ValueError("marker yaw offsets must be finite degrees for robots with markers")
 
 
 def marker_homography(camera: CameraMap, markers: Mapping[int, Sequence[Point]]):
@@ -108,7 +125,7 @@ def project_frame(
         pose = _pose(camera, measured, markers.get(marker_id))
         if pose is None:
             continue
-        x, y, yaw = pose
+        x, y, yaw = robot_pose_from_marker(pose, camera.marker_yaw_offset_deg.get(robot_id, 0.0))
         sightings.append(SiteSightingPayload(
             robot_id=robot_id,
             x=x,
@@ -148,6 +165,47 @@ def project_place_markers(
         return None
     return PlaceMarkerPayload(map_id=camera.map_id, calibration_revision=camera.calibration_revision,
                               captured_at=captured_at, seq=seq, markers=tuple(poses))
+
+
+def robot_pose_from_marker(marker: tuple[float, float, float], yaw_offset_deg: float
+                           ) -> tuple[float, float, float]:
+    """D-587 4: the robot pose under a marker pose: yaw minus the offset, then the mount removed."""
+    x, y, marker_yaw = marker
+    yaw = math.atan2(math.sin(marker_yaw - math.radians(yaw_offset_deg)),
+                     math.cos(marker_yaw - math.radians(yaw_offset_deg)))
+    mx, my = MARKER_MOUNT_XY_M
+    return (x - (mx * math.cos(yaw) - my * math.sin(yaw)),
+            y - (mx * math.sin(yaw) + my * math.cos(yaw)), yaw)
+
+
+def marker_geometry_ok(pixels: Sequence[Point], mapped: Sequence[Point]) -> bool:
+    """D-587 6: a convex quad, shortest image side >= MIN_MARKER_SIDE_PX, map sides near the
+    sticker size and opposite side pairs of similar length. ``mapped`` is the quad on the map
+    plane at the marker height."""
+    if len(pixels) != 4 or len(mapped) != 4:
+        return False
+    try:
+        crosses = []
+        for i in range(4):
+            ax, ay = pixels[i]
+            bx, by = pixels[(i + 1) % 4]
+            cx, cy = pixels[(i + 2) % 4]
+            crosses.append((bx - ax) * (cy - by) - (by - ay) * (cx - bx))
+        pixel_sides = [math.dist(pixels[i], pixels[(i + 1) % 4]) for i in range(4)]
+        sides = [math.dist(mapped[i], mapped[(i + 1) % 4]) for i in range(4)]
+    except (TypeError, ValueError):
+        return False
+    if not all(math.isfinite(v) for v in (*crosses, *pixel_sides, *sides)):
+        return False
+    if not (all(c > 0 for c in crosses) or all(c < 0 for c in crosses)):
+        return False
+    if min(pixel_sides) < MIN_MARKER_SIDE_PX or min(sides) <= 0.0:
+        return False
+    low, high = MARKER_SIDE_BAND
+    if not low * MARKER_SIDE_M <= sum(sides) / 4 <= high * MARKER_SIDE_M:
+        return False
+    ratio = (sides[0] + sides[2]) / (sides[1] + sides[3])
+    return 1 / MAX_MARKER_SIDE_RATIO <= ratio <= MAX_MARKER_SIDE_RATIO
 
 
 def _measured(camera: CameraMap, markers, homography):

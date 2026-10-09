@@ -131,3 +131,15 @@ def test_place_markers_are_distinct_ids_apart_from_corners_and_robots(tmp_path, 
     assert load_vision_sources(_write(tmp_path / "c.yaml", [_source()]), environ=env)[0].camera.place_markers == ()
     with pytest.raises(ValueError, match=message):
         load_vision_sources(_write(tmp_path / "c.yaml", [_source(place_markers=bad)]), environ=env)
+
+
+def test_marker_yaw_offsets_reach_the_camera_map_and_bad_ones_refuse_start(tmp_path):
+    """D-587 4: per-robot sticker yaw offset, shared check with Fleet."""
+    path = _write(tmp_path / "s.yaml", [_source(marker_yaw_offset_deg={"rosy_01": -90})])
+    camera = load_vision_sources(path, environ=ENV)[0].camera
+    assert camera.marker_yaw_offset_deg == {"rosy_01": -90.0}
+    assert load_vision_sources(_write(tmp_path / "s.yaml", [_source()]), environ=ENV)[0].camera.marker_yaw_offset_deg == {}
+    for bad in ({"rosy_02": 0}, {"rosy_01": "180"}, {"rosy_01": 361}):
+        with pytest.raises(ValueError, match="marker_yaw_offset_deg"):
+            load_vision_sources(_write(tmp_path / "s.yaml", [_source(marker_yaw_offset_deg=bad)]),
+                                environ=ENV)
