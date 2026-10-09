@@ -444,7 +444,6 @@ def test_an_identity_challenge_is_answered_once_after_its_window_with_numbers_on
     asyncio.run(worker.refresh_config())
     for i in range(16):
         asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
-    assert len(worker._identity_samples) == 0  # the verdict cleared them
     (body,) = client.identity
     assert (body["request_id"], body["state"], body["reason"]) == ("req-1", "ambiguous", "none")
     assert body["evidence"]["frames"] == 14 and body["source_id"] == "ceiling_north"
@@ -452,3 +451,17 @@ def test_an_identity_challenge_is_answered_once_after_its_window_with_numbers_on
     asyncio.run(worker.process(_frame(seq=17, captured_at=105.0), {}))
     assert len(client.identity) == 1
 
+
+def test_frames_before_the_challenge_arrives_still_fill_the_window(make_worker):
+    # Site 2026-10-09: the challenge reaches vision on the 2 s config read, after its window opened.
+    # Sampling only from then left the head of the window empty -> every verdict frames_missing.
+    challenge = {"request_id": "req-2", "color": "blue", "not_before": 100.0, "not_after": 104.0}
+    worker, client = make_worker(configs=[CONFIG, {**CONFIG, "identity_challenge": challenge}])
+    asyncio.run(worker.refresh_config())                      # no challenge yet
+    for i in range(8):                                        # 100.0 .. 102.1 s, before vision knows
+        asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
+    asyncio.run(worker.refresh_config())                      # the challenge arrives late
+    for i in range(8, 16):
+        asyncio.run(worker.process(_frame(seq=i, captured_at=100.0 + i * 0.3), {}))
+    (body,) = client.identity
+    assert body["reason"] != "frames_missing" and body["evidence"]["frames"] == 14
