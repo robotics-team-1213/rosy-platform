@@ -7595,3 +7595,13 @@ osy-d395-s1d\`.
 - 변경: D-430 safety review 예외에 D-581 과거 커밋 4개를 정확한 SHA로 등록하고 독립 검토 결과를 docs/validation/d581-trail-anchor-safety-review-2026-10-10/result.md에 남겼다.
 - 증거: ae08 통합본 기준 AI PC 원격 테스트 24 passed, known_failures 0 new/0 known. 첫 커밋은 단독 거절이며 후속 epoch/hold/stream 보완을 포함한 통합본에만 이력 예외를 적용한다.
 - gate 변화: CI 이력 검토만 해소한다. D-581 TRAIL의 SIM·DEVICE·FIELD 주행 승인과 현장 운행은 HOLD.
+## 2026-10-10 · uncommitted · fix(safety): D-581 후속 콘솔 정리 커밋 독립 검토
+
+- 변경: 74b87f13b의 D-430 검토 근거를 정확한 커밋 예외와 검증 기록에 추가하고 CORE 시험 경로를 바로잡았다.
+- 증거: 독립 diff 검토에서 주석·동등한 상태 조회·릴레이 팩토리 선택 축약만 확인했다. 원격 모델 PC 집중 시험 16 passed, known_failures 0 new/0 known.
+- gate 변화: CI 이력 검토만 해소한다. D-581 TRAIL의 SIM·DEVICE·FIELD 주행 수용은 HOLD.
+## 2026-10-10 · uncommitted · fix(safety): D-581 앱 주입 커밋 독립 검토
+
+- 변경: 03d530eab의 D-430 정확한 커밋 예외와 사후 독립 검토 근거를 추가했다.
+- 증거: 작성자와 다른 통합 담당자가 앱 주입·기본 릴레이·팩토리 우선순위·조회 전용 상태를 검토했다. 모델 PC 원격 시험 55 passed, known_failures 0 new/0 known.
+- gate 변화: CI 이력 검토만 해소하며 TRAIL SIM·DEVICE·FIELD 주행 수용은 HOLD.

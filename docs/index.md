@@ -301,8 +301,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · fix(safety): D-581 앱 주입 커밋 독립 검토
+- 2026-10-10 · uncommitted · fix(safety): D-581 후속 콘솔 정리 커밋 독립 검토
 - 2026-10-10 · uncommitted · fix(safety): D-581 통합 이력 독립 검토
 - 2026-10-10 · uncommitted · uiux(pilot): 2대 공용 조이스틱 (D-590)
 - 2026-10-10 · 3e92fc7c4 · fix(perception): int8 recipe per task; 3831b20d intake PASS on the capture-group revision
-- 2026-10-09 · uncommitted · feat(perception): lane_seg int8 with first/last Conv fp32 (int8-hf)
-- 2026-10-09 · uncommitted · docs(lane): 서쪽 모서리 Fleet 굽이 후보 폐루프
