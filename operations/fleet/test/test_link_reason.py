@@ -33,6 +33,7 @@ def test_transport_failures_get_reasons():
         (_wrapped(ConnectionRefusedError(errno.ECONNREFUSED, "refused")), "CORE_NOT_READY"),
         (_wrapped(_verify(62)), "TLS_NAME_MISMATCH"),
         (_wrapped(_verify(20)), "CA_UNKNOWN"),
+        (_wrapped(ssl.SSLCertVerificationError("certificate verify failed")), "CA_UNKNOWN"),
         (httpx.ReadTimeout("slow"), "ROBOT_UNREACHABLE"),
     ]
     for exc, code in cases:

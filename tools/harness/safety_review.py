@@ -228,6 +228,14 @@ EXEMPT: dict[str, str] = {
         "Independent security-reviewer agent, 2026-10-08: console.py removes the power_health display "
         "from FleetConsole state (traffic/swarm inputs); projection now per-response in console_routes, "
         "display-only. Exemption approved by livsbittt.",
+    "cd7464f3241145b28c1d2fa21aa734e7ccb6940f":  # git commit revision
+        "Independent Codex /root review, 2026-10-09: D-535 adds only a link_reason field to "
+        "snapshot rows after existing classify_link; no goal, stop, latch, admission or motion "
+        "method changed. The reason classifier uses closed codes and cannot alter dispatch inputs. "
+        "An unconfigured SSL verification error could raise before _remember; fixed by the follow-up "
+        "getattr guard and regression test. Fleet link, snapshot, cancel-all and stop-latch tests: "
+        "60 passed, 0 new. See docs/validation/d535-link-reason-review-2026-10-09/result.md; "
+        "no device or physical-stop acceptance.",
 }
 MANIFEST = "tools/harness/platform_parts.yaml"
 TRAILER = re.compile(r"^Safety-Review:[ \t]*\S", re.MULTILINE)
