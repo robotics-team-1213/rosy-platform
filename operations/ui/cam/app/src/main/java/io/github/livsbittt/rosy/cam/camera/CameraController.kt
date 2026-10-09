@@ -83,7 +83,6 @@ class CameraController(
     private var exposurePolicy: ExposureAssistPolicy? = null
     private var exposureStep = 0.0
     private var exposureEnabled = false
-    private var exposureFailed = false
     private var exposureShown: ExposureStatus? = null
     @Volatile private var measureExposure = false
     @Volatile private var latestStats: StatsSample? = null
@@ -101,14 +100,9 @@ class CameraController(
     // D-589 S2: Vision-driven camera settings. Main thread only, except the capture-result volatiles.
     private val tuning = RecognitionTuning()
     private var capabilities: CameraCapabilities? = null
-    /** Last settings asked of the camera, and the part of them the camera confirmed. */
-    private var written = CameraSettings()
-    private var confirmed = CameraSettings()
-    private var evChangedAtMs: Long? = null
-    private var inFlight = 0
-    private var optionsFailed = false
+    /** Written, confirmed and in-flight camera-control state, per bind epoch. */
+    private val writer = TuningWriter { reportTuning() }
     private var tuningMode: TuningMode? = null
-    private var tuningSettled = true
     private var tuningShown: TuningStatus? = null
     private var reportedKey: List<Any?>? = null
     private var reportPending = false
@@ -226,7 +220,7 @@ class CameraController(
         if (stopped) return
         exposureEnabled = enabled
         measureExposure = enabled && exposurePolicy != null
-        exposureFailed = false
+        writer.clearFailures() // An explicit operator toggle may retry a failed camera control.
         if (!enabled) latestStats = null
         evaluateExposure()
     }
@@ -345,7 +339,10 @@ class CameraController(
                 if (limit >= 1) ExposureAssistPolicy(minOf(step, limit), limit) else null
             } else null
             measureExposure = exposureEnabled && exposurePolicy != null
-            capabilities = readCapabilities(camera)
+            val caps = readCapabilities(camera)
+            capabilities = caps
+            // Also clears the Camera2 interop options CameraX kept for this camera id from an earlier bind.
+            writer.bind(CameraXPort(camera, caps), SystemClock.elapsedRealtime())
             reportPending = true
             val observer = Observer<Int> { state ->
                 if (stopped || generation != epoch || this.camera !== camera) return@Observer
@@ -489,15 +486,12 @@ class CameraController(
         val mode = tuning.mode(now)
         // D-589 3: a fresh Vision request overrides the D-544 assist, which restarts from 0 once Vision goes quiet.
         val target = if (policy == null) 0 else policy.update(sample?.stats, now,
-            exposureEnabled && !exposureFailed && mode != TuningMode.VISION,
+            exposureEnabled && !writer.evFailed && mode != TuningMode.VISION,
             thermalBlocked || lighting.torchOn || mode == TuningMode.THERMAL_HOLD)
         val caps = capabilities
         if (bound != null && caps != null) {
-            val goal = tuning.target(mode, caps, written, target)
-            val next = RecognitionTuning.step(written, goal, evChangedAtMs, now)
-            if (next != written) write(bound, caps, next, now)
+            writer.drive(tuning.target(mode, caps, writer.written, target, torchOn = lighting.torchOn), now)
             tuningMode = mode
-            tuningSettled = next == goal
             reportTuning()
         }
         val status = ExposureStatus(policy != null, exposureEnabled, policy?.verdict ?: ExposureVerdict.OK,
@@ -512,60 +506,58 @@ class CameraController(
 
     private fun receiveCamera(msg: ServerMessage.Camera) {
         if (stopped) return
-        if (!tuning.receive(msg, SystemClock.elapsedRealtime())) {
-            Log.i(TAG, "camera seq=${msg.seq} ignored: recognition exposure switch is off")
+        when (tuning.receive(msg, SystemClock.elapsedRealtime())) {
+            RecognitionTuning.Receipt.APPLIED -> Unit
+            RecognitionTuning.Receipt.IGNORED_SWITCH_OFF ->
+                Log.i(TAG, "camera seq=${msg.seq} ignored: recognition exposure switch is off")
+            RecognitionTuning.Receipt.TOO_SOON -> Log.i(TAG, "camera seq=${msg.seq} dropped: too soon after the last one")
         }
         reportPending = true
         evaluateExposure()
     }
 
-    /** EV through CameraX; locks, exposure cap and anti-banding through Camera2 interop options, no rebind. */
-    @OptIn(ExperimentalCamera2Interop::class)
-    private fun write(bound: Camera, caps: CameraCapabilities, next: CameraSettings, now: Long) {
-        val prev = written
-        written = next
-        if (next.ev != prev.ev && !exposureFailed) {
-            evChangedAtMs = now
-            track(bound, "exposure compensation", onOk = { confirmed = confirmed.copy(ev = next.ev) },
-                onFail = { exposureFailed = true }) { bound.cameraControl.setExposureCompensationIndex(next.ev) }
-            Log.i(TAG, "exposure_ev index=${next.ev} step=$exposureStep")
-        }
-        if (next.copy(ev = 0) != prev.copy(ev = 0) && !optionsFailed) {
-            track(bound, "camera options", onOk = { confirmed = next.copy(ev = confirmed.ev) },
-                onFail = { optionsFailed = true }) {
-                Camera2CameraControl.from(bound.cameraControl).setCaptureRequestOptions(captureOptions(next, caps))
-            }
-            Log.i(TAG, "camera options ae_lock=${next.aeLock} awb_lock=${next.awbLock} " +
-                "fps=${next.fpsRange} antibanding=${next.antibanding.wire}")
-        }
-    }
-
     /**
-     * Counts a camera-control call in flight; on completion records success ([onOk]) or a real failure ([onFail],
-     * which stops that control until the next bind), then reports. A newer call to the same control cancels the
-     * older one; that is neither.
+     * EV through CameraX; locks, exposure cap and anti-banding through Camera2 interop options, no rebind.
+     * Answers arrive on the main thread; the writer drops those of an older bind.
      */
-    private fun track(bound: Camera, what: String, onOk: () -> Unit, onFail: () -> Unit, call: () -> ListenableFuture<*>) {
-        val future = try { call() } catch (error: Exception) {
-            onFail()
-            Log.w(TAG, "$what unavailable", error)
-            return
+    @OptIn(ExperimentalCamera2Interop::class)
+    private inner class CameraXPort(private val bound: Camera, private val caps: CameraCapabilities) : CameraPort {
+        override fun setEv(index: Int, done: (WriteOutcome) -> Unit) {
+            run("exposure compensation", done) { bound.cameraControl.setExposureCompensationIndex(index) }
+            Log.i(TAG, "exposure_ev index=$index step=$exposureStep")
         }
-        inFlight++
-        future.addListener({
-            if (stopped || camera !== bound) return@addListener
-            inFlight--
-            try {
-                future.get()
-                onOk()
-            } catch (error: Exception) {
-                if (error.cause !is CameraControl.OperationCanceledException) {
-                    onFail()
-                    Log.w(TAG, "$what failed", error)
-                }
+
+        override fun setOptions(settings: CameraSettings, done: (WriteOutcome) -> Unit) {
+            run("camera options", done) {
+                Camera2CameraControl.from(bound.cameraControl).setCaptureRequestOptions(captureOptions(settings, caps))
             }
-            reportTuning()
-        }, ContextCompat.getMainExecutor(context))
+            Log.i(TAG, "camera options ae_lock=${settings.aeLock} awb_lock=${settings.awbLock} " +
+                "fps=${settings.fpsRange} antibanding=${settings.antibanding.wire}")
+        }
+
+        override fun clearOptions(done: (WriteOutcome) -> Unit) {
+            run("clear camera options", done) { Camera2CameraControl.from(bound.cameraControl).clearCaptureRequestOptions() }
+        }
+
+        private fun run(what: String, done: (WriteOutcome) -> Unit, call: () -> ListenableFuture<*>) {
+            val future = try { call() } catch (error: Exception) {
+                Log.w(TAG, "$what unavailable", error)
+                done(WriteOutcome.FAILED)
+                return
+            }
+            future.addListener({
+                val outcome = try {
+                    future.get()
+                    WriteOutcome.OK
+                } catch (error: Exception) {
+                    if (error.cause is CameraControl.OperationCanceledException) WriteOutcome.CANCELLED else {
+                        Log.w(TAG, "$what failed", error)
+                        WriteOutcome.FAILED
+                    }
+                }
+                if (!stopped) done(outcome)
+            }, ContextCompat.getMainExecutor(context))
+        }
     }
 
     @OptIn(ExperimentalCamera2Interop::class)
@@ -583,12 +575,13 @@ class CameraController(
     private fun reportTuning() {
         val caps = capabilities ?: return
         val mode = tuningMode ?: return
-        val status = TuningStatus(mode, confirmed, exposureEnabled && exposurePolicy != null)
+        val confirmed = writer.confirmed
+        val status = TuningStatus(mode, confirmed, exposureEnabled && exposurePolicy != null, caps.evStep)
         if (status != tuningShown) {
             tuningShown = status
             onTuning(status)
         }
-        if (inFlight > 0 || !tuningSettled) return
+        if (!writer.readyToReport) return
         val key = listOf(tuning.lastSeq, confirmed, mode, tuning.thermal, caps)
         if (key == reportedKey && !reportPending) return
         reportedKey = key
@@ -703,11 +696,7 @@ class CameraController(
         exposurePolicy = null
         // A rebind starts from CameraX defaults; a fresh Vision request is applied again on the next tick.
         capabilities = null
-        written = CameraSettings()
-        confirmed = CameraSettings()
-        evChangedAtMs = null
-        inFlight = 0
-        optionsFailed = false
+        writer.unbind()
         tuningMode = null
         exposureNs = 0L
         sensorIso = 0

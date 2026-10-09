@@ -61,10 +61,13 @@ enum class TuningMode(val wire: String) {
     /** No fresh Vision request: CameraX defaults, EV from the D-544 local assist when that switch is on. */
     LOCAL("local"),
 
-    /** The "인식 자동 노출 (Vision)" switch is off: `camera` messages are ignored; otherwise as [LOCAL]. */
+    /**
+     * The "인식 자동 노출 (Vision)" switch is off: `camera` messages are ignored and the camera returns to [LOCAL]
+     * settings, also while the phone is hot (the operator's switch wins over the thermal hold).
+     */
     DISABLED("disabled"),
 
-    /** Thermal status SEVERE or worse: nothing changes, the last settings (locked or not) are kept. */
+    /** Switch on and thermal status SEVERE or worse: nothing changes, the last settings (locked or not) are kept. */
     THERMAL_HOLD("thermal_hold"),
 }
 
@@ -72,7 +75,7 @@ internal fun capUs(range: FpsRange): Long = 1_000_000L / range.lower
 
 /**
  * D-589 3, 7 precedence for the phone side, pure and clock-injected (milliseconds on a monotonic clock).
- * Order: thermal hold > settings switch off > fresh Vision request > local (D-544).
+ * Order: settings switch off > thermal hold > fresh Vision request > local (D-544).
  * Not thread-safe; the camera controller calls it on the main thread.
  */
 class RecognitionTuning(private val freshMs: Long = VISION_FRESH_MS) {
@@ -95,27 +98,43 @@ class RecognitionTuning(private val freshMs: Long = VISION_FRESH_MS) {
         if (!on) request = null
     }
 
-    /** Records [msg]. Returns false when the switch is off and the message is ignored. */
-    fun receive(msg: ServerMessage.Camera, nowMs: Long): Boolean {
+    enum class Receipt { APPLIED, IGNORED_SWITCH_OFF, TOO_SOON }
+
+    /**
+     * Records [msg]; its seq is echoed whatever happens. A request closer than [MIN_GAP_MS] to the previously
+     * applied one is dropped, so a burst cannot make the camera hunt.
+     */
+    fun receive(msg: ServerMessage.Camera, nowMs: Long): Receipt {
         lastSeq = msg.seq
-        if (!enabled) return false
+        if (!enabled) return Receipt.IGNORED_SWITCH_OFF
+        if (request != null && nowMs >= receivedAtMs && nowMs - receivedAtMs < MIN_GAP_MS) return Receipt.TOO_SOON
         request = msg
         receivedAtMs = nowMs
-        return true
+        return Receipt.APPLIED
     }
 
     fun mode(nowMs: Long): TuningMode = when {
-        thermal >= THERMAL_SEVERE -> TuningMode.THERMAL_HOLD
         !enabled -> TuningMode.DISABLED
+        thermal >= THERMAL_SEVERE -> TuningMode.THERMAL_HOLD
         fresh(nowMs) -> TuningMode.VISION
         else -> TuningMode.LOCAL
     }
 
-    /** The settings the camera should end up with in [mode]; [current] is what is written now. */
-    fun target(mode: TuningMode, caps: CameraCapabilities, current: CameraSettings, localEv: Int): CameraSettings =
+    /**
+     * The settings the camera should end up with in [mode]; [current] is what is written now. While the torch is
+     * on, AE is never locked under Vision: a lock taken in torch light would stay wrong after it goes off.
+     */
+    fun target(
+        mode: TuningMode,
+        caps: CameraCapabilities,
+        current: CameraSettings,
+        localEv: Int,
+        torchOn: Boolean = false,
+    ): CameraSettings =
         when (mode) {
             TuningMode.THERMAL_HOLD -> current
-            TuningMode.VISION -> request?.let { clamp(it, caps) } ?: CameraSettings(ev = localEv)
+            TuningMode.VISION -> request?.let { clamp(it, caps) }?.let { if (torchOn) it.copy(aeLock = false) else it }
+                ?: CameraSettings(ev = localEv)
             TuningMode.LOCAL, TuningMode.DISABLED -> CameraSettings(ev = localEv)
         }
 
@@ -125,8 +144,14 @@ class RecognitionTuning(private val freshMs: Long = VISION_FRESH_MS) {
     companion object {
         const val VISION_FRESH_MS = 60_000L
 
-        /** AE/AWB locks wait this long after an EV write so the AE converges on the new EV before freezing. */
+        /** AE/AWB locks wait this long after the exposure change is confirmed, so the AE converges first. */
         const val SETTLE_MS = 1_000L
+
+        /** Locks go on after this long even without a confirmation (a failed or stalled control). */
+        const val SETTLE_TIMEOUT_MS = 3_000L
+
+        /** Requests closer together than this are dropped (still echoed). */
+        const val MIN_GAP_MS = 500L
 
         /** D-589 2 allow-list bounds in real EV; the index bounds follow from the device's EV step. */
         const val EV_MIN = -2.0
@@ -164,23 +189,35 @@ class RecognitionTuning(private val freshMs: Long = VISION_FRESH_MS) {
 
         /**
          * With AE on, exposure time is bounded by the frame duration, i.e. 1 / range floor. Picks the lowest floor
-         * that meets [maxUs]; when none does, the highest floor (the closest cap the camera has).
+         * whose reported cap ([capUs]) meets [maxUs], so a reported cap sent back unchanged picks the same range;
+         * when none does, the highest floor (the closest cap the camera has).
          */
         internal fun pickRange(maxUs: Long, ranges: List<FpsRange>): FpsRange? {
-            val need = ceil(1_000_000.0 / maxUs).toInt()
-            return ranges.filter { it.lower >= need }.minWithOrNull(compareBy({ it.lower }, { it.upper }))
+            return ranges.filter { capUs(it) <= maxUs }.minWithOrNull(compareBy({ it.lower }, { it.upper }))
                 ?: ranges.maxWithOrNull(compareBy({ it.lower }, { -it.upper }))
         }
 
+        /** The part of the settings that changes the exposure and so must settle before a lock. */
+        private fun exposureKey(s: CameraSettings) = Triple(s.ev, s.fpsRange, s.antibanding)
+
         /**
-         * The step to write now toward [target]: an EV change goes in with the locks off, and the locks follow
-         * [SETTLE_MS] after the last EV write ([evChangedAtMs]).
+         * The step to write now toward [goal]. A change to EV, the exposure cap or anti-banding goes in with the
+         * locks off. The locks follow once [confirmed] shows that change and [SETTLE_MS] has passed since it was
+         * written ([changedAtMs], also set at bind), or after [SETTLE_TIMEOUT_MS] in any case.
          */
-        fun step(written: CameraSettings, target: CameraSettings, evChangedAtMs: Long?, nowMs: Long): CameraSettings {
-            if (target == written || !target.locked) return target
-            val settling = target.ev != written.ev ||
-                (evChangedAtMs != null && nowMs >= evChangedAtMs && nowMs - evChangedAtMs < SETTLE_MS)
-            return if (settling) target.copy(aeLock = false, awbLock = false) else target
+        fun step(
+            written: CameraSettings,
+            confirmed: CameraSettings,
+            goal: CameraSettings,
+            changedAtMs: Long?,
+            nowMs: Long,
+        ): CameraSettings {
+            if (goal == written || !goal.locked) return goal
+            val unlocked = goal.copy(aeLock = false, awbLock = false)
+            if (exposureKey(written) != exposureKey(goal)) return unlocked
+            val since = changedAtMs?.let { nowMs - it }?.takeIf { it >= 0 } ?: Long.MAX_VALUE
+            val confirmedAll = exposureKey(confirmed) == exposureKey(goal)
+            return if ((confirmedAll && since >= SETTLE_MS) || since >= SETTLE_TIMEOUT_MS) goal else unlocked
         }
     }
 }
@@ -190,11 +227,17 @@ data class TuningStatus(
     val mode: TuningMode? = null,
     val applied: CameraSettings = CameraSettings(),
     val localAssist: Boolean = false,
+    /** EV per index step of the bound camera, so the line shows real EV. */
+    val evStep: Double = 0.0,
 ) {
-    /** "EV −1", "EV 0", "EV +2" with a real minus sign. */
-    val evText: String get() = "EV " + when {
-        applied.ev < 0 -> "−${-applied.ev}"
-        applied.ev > 0 -> "+${applied.ev}"
-        else -> "0"
+    /** Real EV with one decimal and a real minus sign: "EV −1.0", "EV 0.0", "EV +0.5". */
+    val evText: String get() {
+        val ev = applied.ev * evStep
+        val text = String.format(java.util.Locale.ROOT, "%.1f", kotlin.math.abs(ev))
+        return "EV " + when {
+            text == "0.0" -> text
+            ev < 0 -> "−$text"
+            else -> "+$text"
+        }
     }
 }

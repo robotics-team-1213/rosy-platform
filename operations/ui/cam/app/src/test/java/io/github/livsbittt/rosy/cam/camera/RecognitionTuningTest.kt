@@ -77,6 +77,16 @@ class RecognitionTuningTest {
     }
 
     @Test
+    fun aReportedCapSentBackPicksTheSameRange() {
+        for (range in listOf(FpsRange(30, 30), FpsRange(15, 15), FpsRange(24, 24))) {
+            val echoed = capUs(range)
+            assertEquals("cap $echoed", echoed, RecognitionTuning.clamp(req(maxUs = echoed), s21).maxExposureUs)
+        }
+        assertEquals(FpsRange(30, 30), RecognitionTuning.clamp(req(maxUs = 33_333), s21).fpsRange)
+        assertEquals(FpsRange(15, 15), RecognitionTuning.clamp(req(maxUs = 66_666), s21).fpsRange)
+    }
+
+    @Test
     fun supportedReportsTheShortestReachableCap() {
         val s = s21.supported()
         assertEquals(-20, s.evMin)
@@ -92,7 +102,7 @@ class RecognitionTuningTest {
     fun freshVisionRulesForSixtySecondsThenLocalTakesOver() {
         val t = RecognitionTuning()
         assertEquals(TuningMode.LOCAL, t.mode(0))
-        assertTrue(t.receive(req(seq = 5), 1_000))
+        assertEquals(RecognitionTuning.Receipt.APPLIED, t.receive(req(seq = 5), 1_000))
         assertEquals(TuningMode.VISION, t.mode(1_000))
         assertEquals(TuningMode.VISION, t.mode(61_000))
         assertEquals(TuningMode.LOCAL, t.mode(61_001))
@@ -101,6 +111,27 @@ class RecognitionTuningTest {
         assertEquals(-1, target.ev)
         assertTrue(target.aeLock)
         assertEquals(CameraSettings(ev = 2), t.target(TuningMode.LOCAL, s21, target, localEv = 2))
+    }
+
+    @Test
+    fun requestsCloserThan500MsAreDroppedButEchoed() {
+        val t = RecognitionTuning()
+        t.receive(req(seq = 1, ev = -1), 0)
+        assertEquals(RecognitionTuning.Receipt.TOO_SOON, t.receive(req(seq = 2, ev = 3), 499))
+        assertEquals(2L, t.lastSeq)
+        assertEquals(-1, t.target(TuningMode.VISION, s21, CameraSettings(), 0).ev)
+        assertEquals(RecognitionTuning.Receipt.APPLIED, t.receive(req(seq = 3, ev = 3), 500))
+        assertEquals(3, t.target(TuningMode.VISION, s21, CameraSettings(), 0).ev)
+    }
+
+    @Test
+    fun torchLightNeverGetsAnAeLock() {
+        val t = RecognitionTuning()
+        t.receive(req(), 0)
+        val lit = t.target(TuningMode.VISION, s21, CameraSettings(), 0, torchOn = true)
+        assertFalse(lit.aeLock)
+        assertTrue(lit.awbLock)
+        assertTrue(t.target(TuningMode.VISION, s21, CameraSettings(), 0, torchOn = false).aeLock)
     }
 
     @Test
@@ -125,7 +156,7 @@ class RecognitionTuningTest {
         t.receive(req(seq = 1), 0)
         t.setEnabled(false)
         assertEquals(TuningMode.DISABLED, t.mode(1))
-        assertFalse(t.receive(req(seq = 2), 2))
+        assertEquals(RecognitionTuning.Receipt.IGNORED_SWITCH_OFF, t.receive(req(seq = 2), 2))
         assertEquals("ignored messages are still echoed", 2L, t.lastSeq)
         assertEquals(CameraSettings(ev = 1), t.target(TuningMode.DISABLED, s21, CameraSettings(ev = -1, aeLock = true), 1))
         t.setEnabled(true)
@@ -147,10 +178,12 @@ class RecognitionTuningTest {
         assertEquals(TuningMode.THERMAL_HOLD, t.mode(200_000))
         t.thermal = 4
         assertEquals(TuningMode.THERMAL_HOLD, t.mode(200_000))
-        // A switch off while hot holds too.
+        // The operator's switch wins over the hold: off releases to defaults even while hot.
         t.setEnabled(false)
-        assertEquals(TuningMode.THERMAL_HOLD, t.mode(200_000))
+        assertEquals(TuningMode.DISABLED, t.mode(200_000))
+        assertEquals(CameraSettings(), t.target(TuningMode.DISABLED, s21, locked, 0))
         t.setEnabled(true)
+        assertEquals(TuningMode.THERMAL_HOLD, t.mode(200_000))
         t.thermal = 2
         t.receive(req(ev = 2, ae = false, awb = false), 201_000)
         assertEquals(TuningMode.VISION, t.mode(201_000))
@@ -166,41 +199,60 @@ class RecognitionTuningTest {
         assertEquals(TuningMode.VISION, t.mode(0))
     }
 
-    // --- EV first, locks after settling ---
+    // --- exposure change first, locks after it is confirmed and settled ---
 
     @Test
-    fun locksFollowAnEvChangeAfterSettling() {
-        val target = CameraSettings(ev = -1, aeLock = true, awbLock = true)
-        val first = RecognitionTuning.step(CameraSettings(), target, null, 0)
-        assertEquals(CameraSettings(ev = -1), first)
-        // EV written at t=0: still unlocked inside the settle window, locked after it.
-        assertEquals(first, RecognitionTuning.step(first, target, 0, 999))
-        assertEquals(target, RecognitionTuning.step(first, target, 0, RecognitionTuning.SETTLE_MS))
+    fun locksWaitForTheConfirmedChangeAndTheSettleTime() {
+        val goal = CameraSettings(ev = -10, aeLock = true, awbLock = true)
+        val first = RecognitionTuning.step(CameraSettings(), CameraSettings(), goal, null, 0)
+        assertEquals(CameraSettings(ev = -10), first)
+        // Written at t=0 but not confirmed: unlocked even after SETTLE_MS.
+        assertEquals(first, RecognitionTuning.step(first, CameraSettings(), goal, 0, 2_000))
+        // Confirmed: unlocked inside SETTLE_MS, locked after it.
+        assertEquals(first, RecognitionTuning.step(first, first, goal, 0, 999))
+        assertEquals(goal, RecognitionTuning.step(first, first, goal, 0, RecognitionTuning.SETTLE_MS))
+        // Never confirmed: locked at the timeout anyway.
+        assertEquals(goal, RecognitionTuning.step(first, CameraSettings(), goal, 0, RecognitionTuning.SETTLE_TIMEOUT_MS))
+    }
+
+    @Test
+    fun capAndAntibandingChangesSettleLikeEv() {
+        val locked = CameraSettings(ev = -1, aeLock = true, awbLock = true)
+        val capped = locked.copy(fpsRange = FpsRange(30, 30))
+        assertEquals(capped.copy(aeLock = false, awbLock = false), RecognitionTuning.step(locked, locked, capped, 0, 600_000))
+        val banded = locked.copy(antibanding = Antibanding.HZ60)
+        assertEquals(banded.copy(aeLock = false, awbLock = false), RecognitionTuning.step(locked, locked, banded, 0, 600_000))
     }
 
     @Test
     fun aLockedCameraUnlocksToMoveEv() {
         val locked = CameraSettings(ev = -1, aeLock = true, awbLock = true)
         val next = locked.copy(ev = -2)
-        assertEquals(CameraSettings(ev = -2), RecognitionTuning.step(locked, next, 0, 600_000))
+        assertEquals(CameraSettings(ev = -2), RecognitionTuning.step(locked, locked, next, 0, 600_000))
+    }
+
+    @Test
+    fun aBindStartsTheSettleClock() {
+        // At bind nothing changes, but the lock still waits SETTLE_MS from the bind time.
+        val goal = CameraSettings(aeLock = true)
+        assertEquals(CameraSettings(), RecognitionTuning.step(CameraSettings(), CameraSettings(), goal, 5_000, 5_500))
+        assertEquals(goal, RecognitionTuning.step(CameraSettings(), CameraSettings(), goal, 5_000, 6_000))
     }
 
     @Test
     fun noSettleWhenNothingIsLockedOrNothingChanges() {
         val unlocked = CameraSettings(ev = 2, antibanding = Antibanding.HZ60)
-        assertEquals(unlocked, RecognitionTuning.step(CameraSettings(), unlocked, null, 0))
+        assertEquals(unlocked, RecognitionTuning.step(CameraSettings(), CameraSettings(), unlocked, null, 0))
         val locked = CameraSettings(ev = -1, aeLock = true)
-        assertEquals(locked, RecognitionTuning.step(locked, locked, 0, 1))
-        // Same EV, only the cap changes: locks stay.
-        val capped = locked.copy(fpsRange = FpsRange(30, 30))
-        assertEquals(capped, RecognitionTuning.step(locked, capped, 0, 600_000))
+        assertEquals(locked, RecognitionTuning.step(locked, locked, locked, 0, 1))
     }
 
     @Test
-    fun evTextUsesARealMinusSign() {
-        assertEquals("EV −1", TuningStatus(applied = CameraSettings(ev = -1)).evText)
-        assertEquals("EV 0", TuningStatus().evText)
-        assertEquals("EV +2", TuningStatus(applied = CameraSettings(ev = 2)).evText)
+    fun evTextShowsRealEvWithARealMinusSign() {
+        assertEquals("EV −1.0", TuningStatus(applied = CameraSettings(ev = -10), evStep = 0.1).evText)
+        assertEquals("EV 0.0", TuningStatus(evStep = 0.1).evText)
+        assertEquals("EV +0.5", TuningStatus(applied = CameraSettings(ev = 3), evStep = 1.0 / 6).evText)
+        assertEquals("EV 0.0", TuningStatus(applied = CameraSettings(ev = 3), evStep = 0.0).evText)
     }
 
     @Test
