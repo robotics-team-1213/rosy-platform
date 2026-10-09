@@ -278,3 +278,14 @@ def test_hang_settings_wait_for_approval_on_every_pc():
         for line in manifest.read_text(encoding="utf-8").splitlines():
             if "rosy-watchdog.conf" in line or "90-rosy-hang.conf" in line:
                 assert line.startswith("approval"), (role, line)
+
+
+def test_installer_and_host_state_write_the_same_sudoers_file():
+    """install-host-control.sh and the D-530 template must give byte-identical files, or check reports drift."""
+    env = {**os.environ, "SUDO_USER": "op"}
+    out = subprocess.run(["bash", str(ROOT / "deploy/site/install-host-control.sh"), "--role", "model", "--dry-run"],
+                         env=env, capture_output=True, text=True, timeout=60, check=True).stdout.splitlines()
+    start = out.index("+ write /etc/sudoers.d/rosy-host-control (0440)")
+    installer = out[start + 1].removeprefix("    ") + "\n"
+    template = (ROOT / "deploy/hosts/common/host-state/sudoers-rosy-host-control.in").read_text(encoding="utf-8")
+    assert template.replace("@LOGIN@", "op") == installer
