@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import hmac
 import math
+import re
 import time
-from dataclasses import dataclass
-from typing import Callable, Sequence
+from dataclasses import dataclass, replace
+from typing import Callable, Iterable, Sequence
 
 from core_common.protocol.place_markers import PlaceMarkerPayload
 from core_common.protocol.sightings import SiteSightingPayload
@@ -16,6 +17,9 @@ SIGHTING_LEASE_S = 1.0
 MAX_FUTURE_S = 0.05
 #: D-564: a place marker observation teaches a place only this long after capture.
 PLACE_MARKER_LEASE_S = 2.0
+#: D-562: a robot's ceiling marker id is its robot number, robots are 40-49.
+ROBOT_NUMBER_MARKERS = range(40, 50)
+_ROBOT_NUMBER = re.compile(r"rosy_(\d{2})")
 
 
 class SightingError(ValueError):
@@ -45,6 +49,24 @@ class SightingSource:
     calibration_source: str = "corner_markers"
     # D-564: floor place marker ids this source may report (display and teach only).
     place_markers: tuple[int, ...] = ()
+    # D-580: `robot_ids: enrolled` follows the live roster; the YAML markers are then overrides.
+    follow_roster: bool = False
+    marker_overrides: tuple[tuple[str, int], ...] = ()
+
+
+def follow_roster(source: SightingSource, roster: Iterable[str]) -> SightingSource:
+    """D-580: targets = the roster; marker = YAML override, else the robot number (D-562)."""
+    if not source.follow_roster:
+        return source
+    robot_ids = tuple(sorted(set(roster)))
+    overrides = dict(source.marker_overrides)
+    used = {*overrides.values(), *(source.corner_marker_ids or ()), *source.place_markers}
+    markers = {rid: marker for rid, marker in overrides.items() if rid in robot_ids}
+    for rid in robot_ids:
+        number = _ROBOT_NUMBER.fullmatch(rid)
+        if rid not in markers and number and int(number[1]) in ROBOT_NUMBER_MARKERS and int(number[1]) not in used:
+            markers[rid] = int(number[1])
+    return replace(source, robot_ids=robot_ids, robot_markers=tuple(sorted(markers.items())))
 
 
 class SightingService:
@@ -78,7 +100,8 @@ class SightingService:
                 raise ValueError("sighting source ids must be unique")
             if source.token in tokens:
                 raise ValueError("sighting source tokens must be unique")
-            if (not source.robot_ids or any(not isinstance(robot_id, str) for robot_id in source.robot_ids)
+            if ((not source.robot_ids and not source.follow_roster)
+                    or any(not isinstance(robot_id, str) for robot_id in source.robot_ids)
                     or not set(source.robot_ids).issubset(known)):
                 raise ValueError(f"sighting source {source.source_id!r} has an unknown robot target")
             if len(set(source.robot_ids)) != len(source.robot_ids):
@@ -108,6 +131,12 @@ class SightingService:
     @property
     def sources(self) -> tuple[SightingSource, ...]:
         return tuple(self._sources)
+
+    def retarget(self, roster: Iterable[str]) -> None:
+        """The live roster changed (SiteRoster.sync); `robot_ids: enrolled` sources follow it."""
+        self.known_robot_ids = frozenset(roster)
+        self._sources = [follow_roster(source, self.known_robot_ids) for source in self._sources]
+        self._by_id = {source.source_id: source for source in self._sources}
 
     @property
     def enabled(self) -> bool:

@@ -1195,3 +1195,41 @@ def test_overhead_gives_up_after_three_rate_limits_and_on_other_errors():
     assert live.overhead() is None
     live, calls, _ = _live_with_site([500])
     assert live.overhead() is None and len(calls) == 1
+
+
+def _blob(center, frames, before=0):
+    return {"center": list(center), "bbox": [center[0] - 3, center[1] - 3, center[0] + 3, center[1] + 3],
+            "pixels": 20, "frames": frames, "before": before, "hue": 120, "sat": 20}
+
+
+def test_identify_ignores_a_change_off_the_floor_and_records_it():
+    floor = IDENT.floor_polygon([100.0, 0.0, 320.0, 0.0, 100.0, 240.0, 0.0, 0.0, 1.0],
+                                {"min_x": -1.0, "min_y": -1.0, "max_x": 1.0, "max_y": 1.0}, run.tether._project)
+    assert IDENT.on_floor((320, 240), floor) and not IDENT.on_floor((600, 470), floor)
+    found = [_blob((600, 470), 25), _blob((321, 240), 10)]          # the off-floor change is the stronger one
+    ev = IDENT.judge(found, (320.0, 240.0), 30.0, 30, "blue", floor)
+    assert ev["blob_center"] == [321, 240] and ev["off_floor"][0]["center"] == [600, 470]
+    with pytest.raises(IDENT.Refused, match="the lamp blob at"):    # without a floor it still refuses
+        IDENT.judge([dict(b) for b in found], (320.0, 240.0), 30.0, 30, "blue")
+
+
+def test_identify_off_floor_never_turns_a_wrong_pick_into_a_pass():
+    floor = IDENT.floor_polygon([100.0, 0.0, 320.0, 0.0, 100.0, 240.0, 0.0, 0.0, 1.0],
+                                {"min_x": -1.0, "min_y": -1.0, "max_x": 1.0, "max_y": 1.0}, run.tether._project)
+    with pytest.raises(IDENT.Refused, match="no lamp change seen"):   # the blink was off the mat: nothing left
+        IDENT.judge([_blob((600, 470), 25)], (320.0, 240.0), 30.0, 30, "blue", floor)
+    with pytest.raises(IDENT.Refused, match="another strong change"):   # on the floor, two changes still refuse
+        IDENT.judge([_blob((321, 240), 12), _blob((250, 200), 10)], (320.0, 240.0), 30.0, 30, "blue", floor)
+    assert IDENT.floor_polygon([0.0] * 9, None, run.tether._project) is None
+
+
+def test_identify_records_a_change_elsewhere_that_began_before_the_request():
+    found = [_blob((533, 600), 31, before=15), _blob((321, 240), 10)]     # another robot's animated face
+    ev = IDENT.judge(found, (320.0, 240.0), 30.0, 30, "blue")
+    assert ev["blob_center"] == [321, 240] and ev["background"][0]["center"] == [533, 600]
+    with pytest.raises(IDENT.Refused, match="already changed in"):        # at the pick it still refuses
+        IDENT.judge([_blob((321, 240), 10, before=4)], (320.0, 240.0), 30.0, 30, "blue")
+    with pytest.raises(IDENT.Refused, match="another strong change"):     # a new change elsewhere still refuses
+        IDENT.judge([_blob((321, 240), 12), _blob((533, 600), 10)], (320.0, 240.0), 30.0, 30, "blue")
+    with pytest.raises(IDENT.Refused, match="no lamp change seen"):       # only background: nothing blinked
+        IDENT.judge([_blob((533, 600), 31, before=15)], (320.0, 240.0), 30.0, 30, "blue")
