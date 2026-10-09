@@ -39,6 +39,9 @@ class MainActivity : Activity() {
     private var secondaryWeb: WebView? = null
     private var secondaryProxy: PilotProxy? = null
     private var secondarySession: LobbySession? = null
+    private var groupRequested = false
+    private var groupDrive: GroupDrive? = null
+    private var groupEntry: Button? = null
     @Volatile private var secondaryVersion = 0L
     private var pairingDialog: AlertDialog? = null
     @Volatile private var session: LobbySession? = null
@@ -106,6 +109,9 @@ class MainActivity : Activity() {
         header.addView(views.button("다시 찾기", primary = true) { lastError = null; endSession { opening = false; status.text = "같은 Wi-Fi에서 로봇을 다시 찾고 있습니다…"; startDiscovery() }; opening = true })
         list.addView(header)
         status = views.label("같은 Wi-Fi에서 켜진 로봇을 찾고 있습니다…", 16f, true).apply { setPadding(0, views.dp(16), 0, views.dp(28)) }; list.addView(status)
+        groupEntry = views.button("2대 함께 조종", primary = true) { chooseGroupRobots() }.apply { isEnabled = false }
+        list.addView(groupEntry, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(16) })
+        list.addView(views.label("로봇 두 대를 연결해 카메라를 함께 보고, 공용 조이스틱으로 같은 명령을 보냅니다.", 14f, true))
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         list.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
         if (compact) {
@@ -127,10 +133,12 @@ class MainActivity : Activity() {
         }
         if (secondarySession != null && secondarySession?.authorized() != true) {
             closeSecondaryRobot()
+            if (groupRequested) { lastError = "두 번째 로봇 연결이 끝났습니다. 두 로봇을 다시 선택하세요."; returnToLobby(); return }
             status.text = "두 번째 로봇 연결이 끝났습니다. 다시 선택해 연결하세요."
         }
         if (web != null || opening) return
         val records = candidates.records()
+        groupEntry?.isEnabled = !cooling.coolingRequired && records.count { runCatching { candidates.addresses(it.host, it.port) != null }.getOrDefault(false) } >= 2
         reselect?.let { wanted -> records.firstOrNull { it.host == wanted.host && it.port == wanted.port }?.let { reselect = null; select(it); return } }
         status.text = lastError ?: if (cooling.coolingRequired) "태블릿 발열이 내려갈 때까지 조종 연결을 닫았습니다." else if (records.isEmpty()) discovery?.status ?: "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
         if (shownCandidates == records && shownCooling == cooling.coolingRequired) return
@@ -142,8 +150,16 @@ class MainActivity : Activity() {
                 LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(12) })
         }
     }
-    private fun select(incoming: Candidate) {
+    private fun chooseGroupRobots() {
+        val available = candidates.records().filter { runCatching { candidates.addresses(it.host, it.port) != null }.getOrDefault(false) }
+        if (available.size < 2) { status.text = "함께 조종하려면 연결 가능한 로봇 두 대가 필요합니다."; return }
+        AlertDialog.Builder(this).setTitle("첫 번째 로봇 선택")
+            .setItems(available.map { it.name }.toTypedArray()) { _, index -> select(available[index], group = true) }
+            .setNegativeButton("취소", null).show()
+    }
+    private fun select(incoming: Candidate, group: Boolean = false) {
         if (opening || sleeping || cooling.coolingRequired || web != null) return
+        groupRequested = group
         lastError = null; reselect = null
         val addresses =runCatching { candidates.addresses(incoming.host, incoming.port) }.getOrNull() ?: return
         val candidate = incoming.copy(addresses = addresses)
@@ -208,7 +224,7 @@ class MainActivity : Activity() {
                 val approved = reused ?: LobbyPairing.connect(candidate, offer, store, code)
                 if (version != attempt) return@execute
                 relay = PilotProxy(approved, AssetBundle(assets),
-                    { message -> main.post { if (version == attempt) status.text = "${candidate.name} · 연결 끊김 · $message" } },
+                    { message -> main.post { if (version == attempt) { status.text = "${candidate.name} · 연결 끊김 · $message"; groupDrive?.disarm("첫 번째 로봇 연결 끊김 · 두 로봇 정지 요청") } } },
                     { main.post { if (version == attempt) connectedLabel?.let { status.text = it } } })
                 relay.verifyIdentity(); relay.start(5000, false)
                 if (offer.mode == "paired" && version == attempt) vault.saveVerified(candidate, approved)
@@ -221,7 +237,7 @@ class MainActivity : Activity() {
                     bar.addView(button("로봇 목록") { returnToLobby() })
                     status = label("${candidate.name} · ${approved.target.id}", 18f).apply { setPadding(views.dp(20), 0, views.dp(20), 0); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
                     bar.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
-                    bar.addView(button("두 번째 로봇") { chooseSecondaryRobot(candidate) })
+                    if (!groupRequested) bar.addView(button("두 번째 로봇") { chooseSecondaryRobot(candidate) })
                     bar.addView(button("기기·연결") { deviceDetails(candidate) })
                     root.addView(bar)
                     healthText = label("태블릿 상태 확인 중", 14f); lastHealth?.let { renderHealth(it) }
@@ -233,10 +249,11 @@ class MainActivity : Activity() {
                     screens = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
                     screens!!.addView(view, LinearLayout.LayoutParams(0, -1, 1f))
                     root.addView(screens, LinearLayout.LayoutParams(-1, 0, 1f))
-                    loadRobotView(view, ready) { proxy === ready && web === view }
+                    if (!groupRequested) loadRobotView(view, ready) { proxy === ready && web === view }
                     val connectionLabel = when (approved.peerApproval?.persistent) { true -> "승인 유지 · 연결됨"; false -> "기간 제한 승인 · 연결됨"; null -> if (offer.mode == "development") "개발 연결" else "연결됨" }
                     connectedLabel = "${candidate.name} · ${approved.target.id} · $connectionLabel"
                     status.text = connectedLabel
+                    if (groupRequested) { status.text = "첫 번째 로봇 연결됨 · 두 번째 로봇을 선택하세요"; chooseSecondaryRobot(candidate) }
                 }
             } catch (error: Exception) {
                 // Exception messages and HTTP bodies can contain credentials; log class and locations only.
@@ -285,9 +302,10 @@ class MainActivity : Activity() {
                 runCatching { candidates.addresses(it.host, it.port) != null }.getOrDefault(false)
         }
         if (others.isEmpty()) { status.text = "다른 로봇을 찾지 못했습니다. 같은 Wi-Fi와 전원을 확인하세요."; return }
-        AlertDialog.Builder(this).setTitle("두 번째 로봇")
+        AlertDialog.Builder(this).setTitle(if (groupRequested) "함께 조종할 두 번째 로봇" else "두 번째 로봇")
             .setItems(others.map { it.name }.toTypedArray()) { _, index -> openSecondaryRobot(others[index]) }
-            .setNegativeButton("취소", null).show()
+            .setNegativeButton("취소") { _, _ -> if (groupRequested) returnToLobby() }
+            .setOnCancelListener { if (groupRequested) returnToLobby() }.show()
     }
     private fun openSecondaryRobot(incoming: Candidate) {
         closeSecondaryRobot()
@@ -308,7 +326,7 @@ class MainActivity : Activity() {
                 check(approved != null && approved.authorized()) { "approval required" }
                 check(approved.target.id != session?.target?.id) { "same robot selected twice" }
                 relay = PilotProxy(approved, AssetBundle(assets),
-                    { message -> main.post { if (version == secondaryVersion) status.text = "${candidate.name} · 연결 끊김 · $message" } },
+                    { message -> main.post { if (version == secondaryVersion) { status.text = "${candidate.name} · 연결 끊김 · $message"; groupDrive?.disarm("두 번째 로봇 연결 끊김 · 두 로봇 정지 요청") } } },
                     { main.post { if (version == secondaryVersion) connectedLabel?.let { status.text = it } } })
                 relay.verifyIdentity(); relay.start(5000, false)
                 val ready = relay
@@ -317,6 +335,14 @@ class MainActivity : Activity() {
                     if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0)
                         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                     secondarySession = approved; secondaryProxy = ready
+                    if (groupRequested) {
+                        val group = GroupDrive(this, session!!, approved) { if (groupRequested && web != null) status.text = it }
+                        groupDrive = group
+                        screens!!.removeAllViews()
+                        screens!!.addView(group.view(), LinearLayout.LayoutParams(-1, -1))
+                        status.text = "${session!!.target.id} + ${approved.target.id} · 함께 조종"
+                        return@post
+                    }
                     val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
                     val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
                     heading.addView(label("${candidate.name} · ${approved.target.id}", 16f), LinearLayout.LayoutParams(0, -2, 1f))
@@ -335,11 +361,13 @@ class MainActivity : Activity() {
                     if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0)
                         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                     status.text = "${candidate.name} · 두 번째 연결 실패 · ${LinkStatus.failure(error, candidate.secure)}"
+                    if (groupRequested) { lastError = status.text.toString(); returnToLobby() }
                 }
             }
         }
     }
     private fun closeSecondaryRobot() {
+        groupDrive?.close(); groupDrive = null
         secondaryVersion++
         peerUi.close()
         secondaryWeb?.evaluateJavascript("window.dispatchEvent(new Event('blur')); sessionStorage.clear();", null)
@@ -354,6 +382,7 @@ class MainActivity : Activity() {
         attempt++; peerUi.close(); screenSleep.revoke(); opening = false; main.removeCallbacks(refreshTick)
         connectedLabel = null
         closeSecondaryRobot()
+        groupRequested = false
         val closingAttempt = attempt
         pairingDialog?.dismiss(); pairingDialog = null
         web?.evaluateJavascript("window.dispatchEvent(new Event('blur')); sessionStorage.clear();", null)
