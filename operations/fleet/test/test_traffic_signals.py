@@ -179,3 +179,26 @@ def test_manual_green_needs_presence_and_falls_to_all_red_when_the_console_leave
     fleet.advance(10.5)                     # no presence for longer than PRESENCE_S
     row = _signals(runner)["sig"]
     assert row["mode"] == "all_red" and row["aspect"] == "all_red", "never back to cycle on its own"
+
+
+def test_signal_rows_carry_the_countdown_and_a_robot_sees_its_next_signal():
+    runner, store, fleet, entries = _setup()
+    runner.traffic.signal_command("sig", "cycle")
+    for _ in range(2):
+        fleet.advance(0.5)
+        row = _signals(runner)["sig"]
+    lit = [a for a in row["approaches"] if a["lamp"] == "green"][0]
+    assert lit["exact"] and 0 < lit["left_s"] <= 8.0 and lit["green_in_s"] == 0.0
+    red = [a for a in row["approaches"] if a["lamp"] == "red"][0]
+    assert red["green_in_s"] >= lit["left_s"] and red["exact"] is False
+    # a robot whose route crosses the signal: front-to-stop-line distance and its approach
+    from fleet.traffic import blocks as _blocks
+    robot = _blocks.Robot("a", runner.traffic._layout.route(store.active()[2], ["east:fwd", "ring_n:fwd"]),
+                          0.5, 0.3, 0.12, 0.12)
+    runner.traffic._ahead = runner.traffic._signals_ahead([robot])
+    ahead = runner.traffic.signal_ahead("a")
+    zone = next(s for s in robot.spans if s.unit == "roundabout")
+    assert ahead["signal_id"] == "sig" and ahead["approach"] == zone.entry and ahead["advisory"] is True
+    assert ahead["distance_m"] == round(zone.d0 - 0.5, 3) and ahead["may_enter"] is False
+    assert ahead["lamp"] in ("green", "red", "yellow") and "green_in_s" in ahead
+    assert runner.traffic.signal_ahead("nobody") is None

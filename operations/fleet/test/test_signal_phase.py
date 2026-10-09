@@ -224,3 +224,26 @@ def test_real_site_loop_never_enters_on_red_and_never_deadlocks(n, seed, edge_ra
     assert [(round(length, 2), entry) for unit, length, entry in cycle if unit == "roundabout"] == \
         [(0.37, "east:fwd"), (0.37, "west:fwd")]
     _simulate(layout, cycle, plan, n, seed, edge_rate, unknown_rate, u=U_DEMO, body=BODY, ticks=3200)
+
+
+def test_forecast_counts_down_like_a_traffic_light():
+    """D-525 rev 3: T-map style seconds; a future green is a lower bound (the zone must be free)."""
+    from fleet.traffic.signal_phase import forecast
+    state = SignalState()
+    command(PLAN, state, "cycle", 0.0)
+    advance(PLAN, state, 1.0, False)               # 1 s all red, then in_a green at 1 for 8 s
+    f = forecast(PLAN, state, 4.0, False)
+    assert f["in_a"] == {"lamp": "green", "left_s": 5.0, "green_in_s": 0.0, "exact": True}
+    assert f["in_b"] == {"lamp": "red", "left_s": 8.0, "green_in_s": 8.0, "exact": False}  # 5 + 2 + 1
+    _drive(state, PLAN, [9.0])                     # yellow
+    f = forecast(PLAN, state, 10.0, False)
+    assert f["in_a"]["lamp"] == "yellow" and f["in_a"]["left_s"] == 1.0
+    assert f["in_b"]["green_in_s"] == 2.0          # 1 yellow + 1 all red
+    assert f["in_a"]["green_in_s"] == 2.0 + 8 + 2 + 1  # after in_b's whole phase
+    _drive(state, PLAN, [11.0])                    # all red, zone busy: everything is a lower bound
+    f = forecast(PLAN, state, 11.5, True)
+    assert f["in_b"]["green_in_s"] == 0.5 and not f["in_b"]["exact"]
+    command(PLAN, state, "hold", 12.0)
+    assert forecast(PLAN, state, 12.0, False)["in_b"]["green_in_s"] is None   # holding: no time known
+    command(PLAN, state, "all_red", 13.0)
+    assert all(r["left_s"] is None and r["green_in_s"] is None for r in forecast(PLAN, state, 13.0, False).values())

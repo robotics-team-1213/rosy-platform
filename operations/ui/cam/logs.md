@@ -271,3 +271,9 @@
 - 변경: 임시 연결 실패·요청 과다·일반 거절·자격 증명 없는 만료는 주의 글자·테두리로, 지문/인증서·형식 오류와 미정리 자격 증명은 기존 위험 채움으로 표시한다. Debug 전용 미리보기는 거절 사유를 받아 두 시각 범주를 재생한다.
 - 증거: 현재 debug APK JVM 367 passed, 빌드 성공; 320×640/글자 200%와 390×844/글자 130%의 첫 화면·합성 6상태 및 위험/주의 비교 원본은 `docs/validation/uiux-cam-pairing-severity-2026-10-07/result.md`에 기록했다.
 - gate 변화: LOCAL G2 부분 근거. 실제 폰·현장 수신기·설치자 G3는 HOLD.
+
+## 2026-10-09 · uncommitted · feat(cam): D-544 노출 자동 보정 1단계 (기본 꺼짐)
+
+- 변경: 필드 영역(10 % 안쪽)의 clip/crush/mean을 재고(`LumaStats`), 순수 정책(`ExposureAssistPolicy`: 히스테리시스, dwell 3 s, 최소 간격 4 s, ±1.5 EV 한도)이 CameraX `setExposureCompensationIndex` 하나만 움직인다. 설정 `auto_exposure_assist`는 기본 꺼짐이고 스트림 화면의 버튼으로 켠다. 끄면 측정을 멈추고 지수를 0으로 되돌리며, 재바인딩·열 차단·손전등 점등 중에는 조정하지 않는다. 프레임 헤더·hello·배율·크롭·렌즈·해상도는 바꾸지 않는다.
+- 증거: `ExposureAssistPolicyTest` 9 passed, `assembleDebug` 성공. 전체 `testDebugUnitTest` 376 중 1 실패(`CameraPeerClientTest.approvedSourceSurvivesInterruptionAndDhcp`, `127.0.0.2` 소켓 타임아웃; 이 변경이 닿지 않는 페어링 시험, 같은 시험만 다시 돌려도 실패. 깨끗한 main 대조 안 함).
+- gate 변화: SOURCE 부분 근거(전체 GO 판정 보류). LOCAL 녹화 프레임, DEVICE(S21 강한 빛)는 대기다. 다른 세션이 장치를 점검 중이라 설치하지 않았다.

@@ -21,7 +21,7 @@ gates:
     evidence: "2026-10-04 Galaxy S21 correction installed with unchanged signer and pairing settings: dark while Dozing stays request false / torch false. Explicit request lit actual torch, expiry ended the request and stayed OFF in darkness beyond the former cooldown; camera stop/start restored default OFF. Actual operator PC request, duplicate no-renewal and cancel confirmed. Pinned-site fresh 1280x720 JPEGs continued with increasing sequences. Only these feature operations are verified; complete D-341/D-391 device matrix and surveyed marker/position acceptance remain pending."
   FIELD:
     state: PARKED
-adrs: [D-261, D-341, D-370, D-374, D-377, D-391, D-432]
+adrs: [D-261, D-341, D-370, D-374, D-377, D-391, D-432, D-544]
 plans:
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
   - docs/plans/2026-09-30-app-identity-rename-plan.md
