@@ -1,0 +1,215 @@
+{
+ "result": "arrived",
+ "reason": null,
+ "trip_id": "905a12c3757047a99c1341e33a5ee2e8",
+ "plan": {
+  "segments": [
+   {
+    "edge_id": "west",
+    "forward": false,
+    "s_from": 1.1874,
+    "s_to": 2.8649
+   },
+   {
+    "edge_id": "ring_s",
+    "forward": true,
+    "s_from": 0.0,
+    "s_to": 0.3738
+   },
+   {
+    "edge_id": "ring_e",
+    "forward": true,
+    "s_from": 0.0,
+    "s_to": 0.4595
+   },
+   {
+    "edge_id": "ring_n",
+    "forward": true,
+    "s_from": 0.0,
+    "s_to": 0.3722
+   }
+  ],
+  "places": [
+   "SW",
+   "SE",
+   "NE",
+   "NW"
+  ],
+  "actions": [
+   {
+    "place_id": "SW",
+    "action": "right",
+    "theta_deg": -114.6
+   },
+   {
+    "place_id": "SE",
+    "action": "straight",
+    "theta_deg": 11.4
+   },
+   {
+    "place_id": "NE",
+    "action": "straight",
+    "theta_deg": 11.5
+   },
+   {
+    "place_id": "NW",
+    "action": "stop",
+    "theta_deg": 0.0
+   }
+  ],
+  "length_m": 2.883
+ },
+ "final_view": {
+  "trip_id": "905a12c3757047a99c1341e33a5ee2e8",
+  "plan_id": "905a12c3757047a99c1341e33a5ee2e8",
+  "robot_id": "rosy_sim",
+  "started_by": "lapsim",
+  "state": "arrived",
+  "reason": null,
+  "detail": {},
+  "map_version": 1,
+  "plan": {
+   "segments": [
+    {
+     "edge_id": "west",
+     "forward": false,
+     "s_from": 1.1874,
+     "s_to": 2.8649
+    },
+    {
+     "edge_id": "ring_s",
+     "forward": true,
+     "s_from": 0.0,
+     "s_to": 0.3738
+    },
+    {
+     "edge_id": "ring_e",
+     "forward": true,
+     "s_from": 0.0,
+     "s_to": 0.4595
+    },
+    {
+     "edge_id": "ring_n",
+     "forward": true,
+     "s_from": 0.0,
+     "s_to": 0.3722
+    }
+   ],
+   "places": [
+    "SW",
+    "SE",
+    "NE",
+    "NW"
+   ],
+   "actions": [
+    {
+     "action": "right",
+     "place_id": "SW",
+     "theta_deg": -114.6
+    },
+    {
+     "action": "straight",
+     "place_id": "SE",
+     "theta_deg": 11.4
+    },
+    {
+     "action": "straight",
+     "place_id": "NE",
+     "theta_deg": 11.5
+    },
+    {
+     "action": "stop",
+     "place_id": "NW",
+     "theta_deg": 0.0
+    }
+   ]
+  },
+  "segment_index": 3,
+  "hold": null,
+  "pose": {
+   "x": -0.42,
+   "y": 0.213,
+   "yaw": -2.656,
+   "state": "LOCALIZED",
+   "source": "sim_ground_truth",
+   "dead_reckon_m": 0.0,
+   "age_s": 0.01,
+   "anchor_age_s": 0.008536085000059757
+  },
+  "created_at": 1791544349.1664166,
+  "updated_at": 1791544404.3171852,
+  "repeat": false,
+  "lap": null,
+  "caps": {
+   "kind": "pinky_pro",
+   "modes": [
+    "free",
+    "lane"
+   ],
+   "max_speed": 0.1,
+   "junction_turn": true,
+   "junction_pivot": true,
+   "lane_arc": true,
+   "line_follow_authority": true,
+   "line_follow_advice": true,
+   "lane_bend": true
+  },
+  "traffic_authority": "hold_back",
+  "convoy": null,
+  "lease": null,
+  "current_edge": "ring_n",
+  "drive_mode": "lane",
+  "next_place": "NW",
+  "next_action": "stop"
+ },
+ "trip_wall_s": 55.6,
+ "sim_s": 56.6,
+ "gt_path_m": 2.8211,
+ "final": {
+  "t": 69.461,
+  "sim_t": 90.31,
+  "gt": [
+   -0.4852395180097972,
+   0.16349094805373868,
+   -2.2972269308994218
+  ],
+  "odom": [
+   -0.4852395180097972,
+   0.16349094805373868,
+   -2.2972269308994218,
+   0.0,
+   0.0
+  ],
+  "state": "HOLD",
+  "reason": "junction_stop",
+  "keep": "no_boundary",
+  "body_gap_m": null,
+  "j": "executing",
+  "jr": null
+ },
+ "core_after_halt": {
+  "state": "HOLD",
+  "reason": "junction_stop",
+  "junction": {
+   "pending_action": "stop",
+   "place_id": "NW",
+   "state": "executing",
+   "seq": 6,
+   "turn_deg": null,
+   "reason": null,
+   "pivot_basis": null
+  },
+  "cmd": [
+   0.0,
+   0.0
+  ],
+  "odom": [
+   -0.4852395180097972,
+   0.16349094805373868,
+   -2.2972269308994218,
+   0.0,
+   0.0
+  ]
+ },
+ "capability_at_end": true
+}
