@@ -243,6 +243,12 @@ main {
 /* 늦게 들어오는 카메라 교정 설명이 배지를 늘려 지도를 아래로 밀지 않게 한다. */
 #map-tag { display: block; flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-head .spacer { flex: 1; }
+/* D-594 지나온 길: 지도 머리의 접이식 선택. 펼쳐도 지도를 밀지 않게 띄운다. */
+.trail-control { position: relative; flex: 0 0 auto; font-size: var(--text-label); }
+.trail-control > summary { cursor: pointer; min-height: var(--target-secondary); display: list-item; color: var(--ink-quiet); }
+.trail-control > summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.trail-panel { position: absolute; right: 0; z-index: 5; display: grid; gap: var(--space-2); min-width: 14rem; padding: var(--space-3); border: 1px solid var(--line-14); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.trail-robots { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); } .trail-panel .hint { margin: 0; font-size: var(--text-micro); }
 @media (width < 40rem) {
   .map-head { flex-wrap: wrap; }
   #map-tag { flex: 1 1 100%; }
