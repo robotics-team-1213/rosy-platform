@@ -17,6 +17,7 @@ import asyncio
 import contextlib
 import hashlib
 import hmac
+import itertools
 import json
 import logging
 import re
@@ -182,6 +183,10 @@ class _Source:
     # D-341: SHA-256 of a paired phone's bearer (never the bearer) and its credential id.
     credential_digest: bytes | None = None
     credential_id: str | None = None
+    # D-589: this connection's number (a reconnect gets a new one) and the phone's last
+    # valid camera_state; None until the phone reports one (older apps never do).
+    link: int = 0
+    camera_state: protocol.CameraState | None = None
 
 
 class IngestServer:
@@ -233,6 +238,7 @@ class IngestServer:
         self.config: dict = dict(protocol.DEFAULT_CONFIG if config is None else config)
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
+        self._links = itertools.count(1)
 
     async def start(self, host: str, port: int, *, ssl_context: ssl.SSLContext | None = None) -> Server:
         return await serve(
@@ -266,6 +272,23 @@ class IngestServer:
     def source_lens(self, source: str) -> dict | None:
         """The lens ``source`` reported in its hello, or None (older app, or not connected)."""
         return getattr(self._sources.get(source), "lens", None)
+
+    def camera_link(self, source: str) -> tuple[int | None, protocol.CameraState | None]:
+        """D-589: (connection number, last valid camera_state) of ``source``; (None, None) when
+        it is not connected."""
+        src = self._sources.get(source)
+        return (None, None) if src is None else (src.link, src.camera_state)
+
+    async def send_camera(self, source: str, message: dict) -> bool:
+        """D-589: send a downlink ``camera`` text message on ``source``'s connection."""
+        src = self._sources.get(source)
+        if src is None:
+            return False
+        try:
+            await src.connection.send(json.dumps(message, separators=(",", ":")))
+        except websockets.exceptions.ConnectionClosed:
+            return False
+        return True
 
     def report_markers(self, source: str, corners_seen, robots_seen) -> None:
         """Record which configured marker ids the worker saw on ``source``'s latest frame."""
@@ -616,7 +639,8 @@ class IngestServer:
                 return
         replaced = self._sources.get(source_name)
         src = _Source(name=source_name, connection=connection, lens=protocol.parse_hello_lens(hello),
-                      credential_digest=credential_digest, credential_id=credential_id)
+                      credential_digest=credential_digest, credential_id=credential_id,
+                      link=next(self._links))
         sensor = hello["sensor"]
         # app_version/device are free text from the phone: repr and cap them in the log.
         logger.info("source %s connected app=%r device=%r sensor=%sx%s rot=%s lens=%s credential=%s",
@@ -647,6 +671,8 @@ class IngestServer:
             async for message in connection:
                 if isinstance(message, (bytes, bytearray)):
                     self._handle_frame(src, bytes(message))
+                else:
+                    self._handle_text(src, message)
         except websockets.exceptions.ConnectionClosed:
             pass
         finally:
@@ -714,6 +740,24 @@ class IngestServer:
                 await src.connection.send(json.dumps(status))
             except websockets.exceptions.ConnectionClosed:
                 return
+
+    def _handle_text(self, src: _Source, message: str) -> None:
+        """D-589: keep a valid ``camera_state``; any other or malformed text is ignored."""
+        if src.credential_digest is not None and self._paired_verdict(src) != "ok":
+            return
+        if len(message) > protocol.MAX_TEXT_CHARS:
+            return
+        try:
+            state = protocol.parse_camera_state(json.loads(message))
+        except (ValueError, protocol.CameraMessageError) as exc:
+            logger.debug("source %s text message ignored reason=%s", src.name,
+                         getattr(exc, "reason", "json"))
+            return
+        previous = src.camera_state
+        if previous is None or (previous.applied, previous.enabled) != (state.applied, state.enabled):
+            logger.info("source %s camera applied %s enabled=%s seq=%d", src.name,
+                        state.applied.fingerprint(), state.enabled, state.seq)
+        src.camera_state = state
 
     def _handle_frame(self, src: _Source, message: bytes) -> None:
         if src.credential_digest is not None and self._paired_verdict(src) != "ok":

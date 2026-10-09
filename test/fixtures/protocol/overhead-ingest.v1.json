@@ -128,7 +128,70 @@
       ],
       "rx_fps": 2.9,
       "dropped": 0
+    },
+    "camera_example": {
+      "type": "camera",
+      "seq": 7,
+      "ev": -1,
+      "ae_lock": true,
+      "awb_lock": true,
+      "max_exposure_us": 8333,
+      "antibanding": "60hz"
+    },
+    "camera_state_example": {
+      "type": "camera_state",
+      "seq": 7,
+      "applied": {
+        "ev": -1,
+        "ae_lock": true,
+        "awb_lock": true,
+        "max_exposure_us": 8333,
+        "antibanding": "60hz",
+        "enabled": true
+      },
+      "supported": {
+        "ev_range": [-6, 3]
+      },
+      "exposure_us": 8000,
+      "iso": 400,
+      "thermal": 0
     }
+  },
+  "camera_tuning": {
+    "_doc": "D-589 text messages after hello. Downlink camera (Vision -> phone): every key required; seq u32, Vision's own counter; ev integer -6..3; ae_lock/awb_lock booleans; max_exposure_us null or 1..1000000 (Vision sends 8333 = 1/120 s); antibanding '60hz' or 'auto'. The phone clips to this allow list and its device, applies, and answers. Uplink camera_state (phone -> Vision): type; seq = the seq of the camera message the phone last processed (0 before any); applied = the same five keys as camera with what is really in effect, plus optional applied.enabled (default true; false = the phone's own switch is off and it ignores camera messages); supported is an object (optional ev_range [low, high] integers = the device's EV steps; other keys are informational); exposure_us and iso null or a non-negative integer (missing = null); optional thermal = Android THERMAL_STATUS_* 0..6 (Vision pauses tuning at 3 = SEVERE). Unknown extra keys are ignored on both sides; a known key with a wrong type or range rejects the whole message and the receiver ignores it. Geometry (zoom, focus, resolution, rotation, lens) is never in these messages.",
+    "ev_range": [-6, 3],
+    "antibanding": ["60hz", "auto"],
+    "thermal_severe": 3,
+    "camera_valid": [
+      {"name": "tuning_step", "message": {"type": "camera", "seq": 1, "ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": 8333, "antibanding": "60hz"}},
+      {"name": "locked_low", "message": {"type": "camera", "seq": 4294967295, "ev": -6, "ae_lock": true, "awb_lock": true, "max_exposure_us": null, "antibanding": "auto"}}
+    ],
+    "camera_invalid": [
+      {"name": "ev_above_range", "reason": "ev", "message": {"type": "camera", "seq": 1, "ev": 4, "ae_lock": false, "awb_lock": false, "max_exposure_us": 8333, "antibanding": "60hz"}},
+      {"name": "ev_float", "reason": "ev", "message": {"type": "camera", "seq": 1, "ev": -1.5, "ae_lock": false, "awb_lock": false, "max_exposure_us": 8333, "antibanding": "60hz"}},
+      {"name": "lock_not_bool", "reason": "lock", "message": {"type": "camera", "seq": 1, "ev": 0, "ae_lock": 1, "awb_lock": false, "max_exposure_us": 8333, "antibanding": "60hz"}},
+      {"name": "antibanding_50hz", "reason": "antibanding", "message": {"type": "camera", "seq": 1, "ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": 8333, "antibanding": "50hz"}},
+      {"name": "zero_exposure_cap", "reason": "max_exposure_us", "message": {"type": "camera", "seq": 1, "ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": 0, "antibanding": "60hz"}},
+      {"name": "negative_seq", "reason": "seq", "message": {"type": "camera", "seq": -1, "ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": 8333, "antibanding": "60hz"}}
+    ],
+    "camera_state_valid": [
+      {"name": "minimal", "message": {"type": "camera_state", "seq": 0, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto"}, "supported": {}},
+       "parsed": {"seq": 0, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto"}, "enabled": true, "ev_range": null, "exposure_us": null, "iso": null, "thermal": null}},
+      {"name": "phone_switch_off", "message": {"type": "camera_state", "seq": 3, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto", "enabled": false}, "supported": {"ev_range": [-4, 3], "ae_lock": true}, "exposure_us": 16000, "iso": 800, "thermal": 3, "future": 1},
+       "parsed": {"seq": 3, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto"}, "enabled": false, "ev_range": [-4, 3], "exposure_us": 16000, "iso": 800, "thermal": 3}}
+    ],
+    "camera_state_invalid": [
+      {"name": "applied_missing", "reason": "applied", "message": {"type": "camera_state", "seq": 1, "supported": {}}},
+      {"name": "applied_ev_out_of_range", "reason": "ev", "message": {"type": "camera_state", "seq": 1, "applied": {"ev": -7, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto"}, "supported": {}}},
+      {"name": "enabled_not_bool", "reason": "enabled", "message": {"type": "camera_state", "seq": 1, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto", "enabled": "no"}, "supported": {}}},
+      {"name": "supported_missing", "reason": "supported", "message": {"type": "camera_state", "seq": 1, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto"}}},
+      {"name": "ev_range_reversed", "reason": "supported", "message": {"type": "camera_state", "seq": 1, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto"}, "supported": {"ev_range": [3, -6]}}},
+      {"name": "iso_negative", "reason": "iso", "message": {"type": "camera_state", "seq": 1, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto"}, "supported": {}, "iso": -1}},
+      {"name": "exposure_float", "reason": "exposure_us", "message": {"type": "camera_state", "seq": 1, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto"}, "supported": {}, "exposure_us": 8000.5}},
+      {"name": "thermal_out_of_range", "reason": "thermal", "message": {"type": "camera_state", "seq": 1, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto"}, "supported": {}, "thermal": 7}},
+      {"name": "seq_bool", "reason": "seq", "message": {"type": "camera_state", "seq": true, "applied": {"ev": 0, "ae_lock": false, "awb_lock": false, "max_exposure_us": null, "antibanding": "auto"}, "supported": {}}},
+      {"name": "wrong_type", "reason": "type", "message": {"type": "status", "seq": 1}}
+    ]
   },
   "hello_lens": {
     "_doc": "Optional additive hello field (2026-09-30). Receivers log it and ignore unknown hello fields; a missing or malformed lens never rejects the hello. kind is 'wide' or 'standard'; focal_mm is the shortest LENS_INFO_AVAILABLE_FOCAL_LENGTHS value; hfov_deg is 2*atan(sensor long edge / (2*focal_mm)) over SENSOR_INFO_PHYSICAL_SIZE. Both rounded to 0.1.",

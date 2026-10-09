@@ -202,3 +202,68 @@ def test_huge_integer_focal_length_is_ignored_not_raised():
     # Built at runtime: a 400-digit literal in the shared fixture trips the tracked-file secret scan.
     hello = json.loads('{"lens": {"kind": "wide", "focal_mm": 1%s, "hfov_deg": 104.1}}' % ("0" * 400))
     assert protocol.parse_hello_lens(hello) is None
+
+
+# -- D-589 camera / camera_state ------------------------------------------------------------
+
+CAMERA = VECTORS["camera_tuning"]
+
+
+def test_camera_tuning_constants_match_the_vectors():
+    assert tuple(CAMERA["ev_range"]) == protocol.CAMERA_EV_RANGE
+    assert tuple(CAMERA["antibanding"]) == protocol.CAMERA_ANTIBANDING
+    assert CAMERA["thermal_severe"] == protocol.THERMAL_SEVERE
+
+
+def test_camera_example_round_trips_through_make_camera():
+    example = VECTORS["messages"]["camera_example"]
+    seq, setting = protocol.parse_camera(example)
+    assert protocol.make_camera(seq, setting) == example
+
+
+@pytest.mark.parametrize("vector", CAMERA["camera_valid"], ids=lambda v: v["name"])
+def test_valid_camera_message_parses_and_rebuilds(vector):
+    seq, setting = protocol.parse_camera(vector["message"])
+    assert protocol.make_camera(seq, setting) == vector["message"]
+
+
+@pytest.mark.parametrize("vector", CAMERA["camera_invalid"], ids=lambda v: v["name"])
+def test_invalid_camera_message_is_rejected_with_reason(vector):
+    with pytest.raises(protocol.CameraMessageError) as excinfo:
+        protocol.parse_camera(vector["message"])
+    assert excinfo.value.reason == vector["reason"]
+
+
+def _parsed(state: protocol.CameraState) -> dict:
+    return {"seq": state.seq, "applied": state.applied.as_dict(), "enabled": state.enabled,
+            "ev_range": None if state.ev_range is None else list(state.ev_range),
+            "exposure_us": state.exposure_us, "iso": state.iso, "thermal": state.thermal}
+
+
+def test_camera_state_example_parses():
+    state = protocol.parse_camera_state(VECTORS["messages"]["camera_state_example"])
+    assert state.seq == VECTORS["messages"]["camera_example"]["seq"]
+    assert state.applied == protocol.parse_camera(VECTORS["messages"]["camera_example"])[1]
+    assert state.enabled is True and state.ev_range == (-6, 3) and state.thermal == 0
+
+
+@pytest.mark.parametrize("vector", CAMERA["camera_state_valid"], ids=lambda v: v["name"])
+def test_valid_camera_state_parses(vector):
+    assert _parsed(protocol.parse_camera_state(vector["message"])) == vector["parsed"]
+
+
+@pytest.mark.parametrize("vector", CAMERA["camera_state_invalid"], ids=lambda v: v["name"])
+def test_invalid_camera_state_is_rejected_with_reason(vector):
+    with pytest.raises(protocol.CameraMessageError) as excinfo:
+        protocol.parse_camera_state(vector["message"])
+    assert excinfo.value.reason == vector["reason"]
+
+
+def test_camera_setting_fingerprint_changes_with_every_setting_key():
+    base = protocol.CameraSetting(-1, True, True, 8333, "60hz")
+    variants = [protocol.CameraSetting(0, True, True, 8333, "60hz"),
+                protocol.CameraSetting(-1, False, True, 8333, "60hz"),
+                protocol.CameraSetting(-1, True, False, 8333, "60hz"),
+                protocol.CameraSetting(-1, True, True, None, "60hz"),
+                protocol.CameraSetting(-1, True, True, 8333, "auto")]
+    assert len({base.fingerprint(), *(v.fingerprint() for v in variants)}) == 6
