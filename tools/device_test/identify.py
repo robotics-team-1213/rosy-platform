@@ -24,6 +24,12 @@ JOIN_PX = 15                # changed pixels closer than this belong to one blob
 MIN_FRAMES = 3              # a blob must change in at least 3 frames (>= 0.6 s of blink), else weak
 STRONG_SHARE = 0.5          # any blob changing in >= half the frames of the best one is a candidate
 RADIUS_M = 1.5 * PINKY_PRO.rotation_radius_m   # body circle plus pick tolerance, at the calibration scale
+# A change whose centre lies off the floor (the calibration's track_bounds_m, grown by FLOOR_MARGIN_M)
+# is recorded, not judged (user 2026-10-10: something past the right wall moved during every blink
+# while 9dfk's own blink was clear). Dropping a blob only removes evidence, so this can turn a pass
+# into "no lamp change seen", never a wrong robot into a pass. No margin: on 2026-10-10 the display
+# calibration put the mat's far corner ~100 px past the real wall, and 0.15 m reached that corner.
+FLOOR_MARGIN_M = 0.0
 # Colour (OpenCV hue 0-180). On 2026-10-08 the ceiling camera saw the lit lamp nearly white:
 # saturation 8-44 of 255 (median ~18), hue 43-74 scattered, so the hue said nothing and a hue
 # gate would have refused the true robot. The hue is judged only when the blob is clearly
@@ -54,6 +60,27 @@ def radius_px(map_to_image, floor_xy, project):
     return math.nan if any(not math.isfinite(r) for r in d) else max(d)
 
 
+def floor_polygon(map_to_image, bounds, project, margin=FLOOR_MARGIN_M, n=8):
+    """The floor (track_bounds_m grown by margin) as image points along its edges; None without bounds."""
+    try:
+        x0, y0 = bounds["min_x"] - margin, bounds["min_y"] - margin
+        x1, y1 = bounds["max_x"] + margin, bounds["max_y"] + margin
+    except (KeyError, TypeError):
+        return None
+    edge = [(x0 + (x1 - x0) * k / n, y0) for k in range(n)] + [(x1, y0 + (y1 - y0) * k / n) for k in range(n)]         + [(x1 - (x1 - x0) * k / n, y1) for k in range(n)] + [(x0, y1 - (y1 - y0) * k / n) for k in range(n)]
+    pts = [project(map_to_image, x, y) for x, y in edge]
+    return pts if all(math.isfinite(c) for p in pts for c in p) else None
+
+
+def on_floor(point, floor):
+    """True when point lies inside the floor polygon (or there is no polygon: everything counts)."""
+    if floor is None:
+        return True
+    import cv2
+    import numpy as np
+    return cv2.pointPolygonTest(np.array(floor, np.float32).reshape(-1, 1, 2), tuple(map(float, point)), False) >= 0
+
+
 def blobs(ref, baseline, frames):
     """Blobs of change against ref in the blink frames, strongest first: center, bbox, pixels,
     frames (blink frames changed), before (baseline frames changed there), hue/sat medians."""
@@ -79,9 +106,11 @@ def blobs(ref, baseline, frames):
     return sorted(out, key=lambda b: (b["frames"], b["pixels"]), reverse=True)
 
 
-def judge(found, pick, radius, n_frames, color):
-    """The evidence when every strong blob sits at the pick, did not change before, and is not
-    clearly the wrong colour. Refused otherwise."""
+def judge(found, pick, radius, n_frames, color, floor=None):
+    """The evidence when every strong blob on the floor sits at the pick, did not change before, and
+    is not clearly the wrong colour. Refused otherwise. Off-floor blobs are only recorded."""
+    off = [b for b in found if not on_floor(b["center"], floor)]
+    found = [b for b in found if on_floor(b["center"], floor)]
     if not (math.isfinite(radius) and radius > 0):
         _refuse(f"radius {radius} px is not a positive number (calibration past the horizon?)")
     if not found or found[0]["frames"] < MIN_FRAMES:
@@ -101,18 +130,19 @@ def judge(found, pick, radius, n_frames, color):
                     "(a steady LED, a charge light or something moving)")
     if color not in HUES:
         _refuse(f"CORE blinked colour {color!r}, not one of {sorted(HUES)}")
-    off = abs((best["hue"] - HUES[color] + 90) % 180 - 90)
-    if best["sat"] >= COLOUR_MIN_S and off > HUE_TOL:
-        _refuse(f"the lamp blob has hue {best['hue']} (saturation {best['sat']}), {off} from {color} "
+    hue_off = abs((best["hue"] - HUES[color] + 90) % 180 - 90)
+    if best["sat"] >= COLOUR_MIN_S and hue_off > HUE_TOL:
+        _refuse(f"the lamp blob has hue {best['hue']} (saturation {best['sat']}), {hue_off} from {color} "
                 f"{HUES[color]} (tolerance {HUE_TOL})")
     return {"blob_center": best["center"], "blob_bbox": best["bbox"], "pixel_count": best["pixels"],
             "blob_frames": best["frames"], "distance_px": best["distance_px"], "radius_px": round(radius, 1),
             "colour_check": f"hue {best['hue']} sat {best['sat']}: " + (
                 f"within {HUE_TOL} of {color}" if best["sat"] >= COLOUR_MIN_S else "not judged (unsaturated)"),
-            "others": [{k: b[k] for k in ("center", "frames", "before", "pixels")} for b in found[1:4]]}
+            "others": [{k: b[k] for k in ("center", "frames", "before", "pixels")} for b in found[1:4]],
+            "off_floor": [{k: b[k] for k in ("center", "frames", "before", "pixels")} for b in off[:3]]}
 
 
-def identify(robot, pick, radius, out_dir):
+def identify(robot, pick, radius, out_dir, floor=None):
     """Baseline, blink, judge. Saves identify_NN.jpg; returns tether.identity. Refused carries the
     evidence so far (frames, phase and time of each, the refusal) for the verdict."""
     import cv2
@@ -153,7 +183,7 @@ def identify(robot, pick, radius, out_dir):
         frames = window("blink", CAPTURE_S)
         if any(f.shape != baseline[0].shape for f in baseline + frames):
             _refuse("overhead frame size changed during the check")
-        ev.update(judge(blobs(baseline[0], baseline[1:], frames), pick, radius, len(frames), body.get("color")))
+        ev.update(judge(blobs(baseline[0], baseline[1:], frames), pick, radius, len(frames), body.get("color"), floor))
         return ev
     except Refused as exc:
         exc.evidence = {**ev, "radius_px": str(radius) if not math.isfinite(radius) else radius, "refused": str(exc)}
