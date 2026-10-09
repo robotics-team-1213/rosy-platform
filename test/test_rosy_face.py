@@ -2065,7 +2065,7 @@ def test_caution_is_a_strip_on_every_face_frame(tmp_path):
     display.tick()
 
     assert display.animating[:3] == ("basic", "Check the camera cable", "caution")
-    assert lcd.panels[-1][1:] == ("Check the camera cable", "caution")
+    assert lcd.panels[-1][1:3] == ("Check the camera cable", "caution")
 
 
 def test_a_handed_over_test_shows_its_strip(tmp_path):
@@ -2344,6 +2344,7 @@ def test_an_estop_in_the_handover_stops_every_recovery_signal_even_with_a_stale_
     _face_inputs(tmp_path, recovery="retrace", estop=True, robot_mode="NAVIGATION")
     clock.now += 1
     display.step()
+    beeps += 4  # the e-stop alarm, once: the latch alone is the emergency pattern now, with no reversing beep
     assert len(_starts(gpio)) == beeps and display._reversed_at is None
     assert lamp.pattern != "recovering" and display.screen["kind"] == "stopped"
     _face_inputs(tmp_path, recovery=None, estop=True, robot_mode="EMERGENCY")  # and no hold afterwards

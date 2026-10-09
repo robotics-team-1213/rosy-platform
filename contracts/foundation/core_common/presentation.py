@@ -95,7 +95,7 @@ def present(*, state: Any, robot_mode: Any = None, nav_state: Any = None,
     state = state if state in robot_state.STATES else robot_state.BOOTING
     estop = bool(core and core.get("estop"))
     if core:
-        mode, nav = core.get("robot_mode"), core.get("nav_state")
+        mode, nav = core.get("robot_mode") or robot_mode, core.get("nav_state") or nav_state  # CORE's 1 s value wins, else the files'
         recovery = core.get("recovery") if not estop else None
         if state not in (robot_state.FAILED, robot_state.BOOTING) and core.get("caution"):
             state = robot_state.CAUTION  # a CORE caution code is a caution, not just an amber strip
