@@ -36,7 +36,9 @@ def test_one_unseen_edge_offsets_from_the_seen_edge():
 
 def test_closed_ahead_pivots_toward_the_open_side_then_releases():
     steer = DrivableSteer()
-    error, confidence, debug = steer.update(_lane(0.5, -HALF, x_max=0.2) | _lane(0.5, 0.0, x_max=0.33), 1, G, XO, HALF)
+    error, confidence, debug = steer.update(_lane(0.5, -HALF, x_max=0.2) | _lane(0.5, 0.04, x_max=0.33), 1, G, XO, HALF)
+    assert debug["strategy"] == "drivable_turn_left" and error < -0.5     # closed at 0.2 m: arc left
+    error, confidence, debug = steer.update(_lane(0.5, -HALF, x_max=0.12) | _lane(0.5, 0.04, x_max=0.33), 3, G, XO, HALF)
     assert (error, confidence, debug["strategy"]) == (-PIVOT_ERROR, PIVOT_CONFIDENCE, "drivable_pivot_left")
     error, confidence, debug = steer.update(_lane(HALF, -HALF), 2, G, XO, HALF)
     assert debug["strategy"] == "drivable_centre" and abs(error) < 0.2
