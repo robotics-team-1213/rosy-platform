@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, safe_listener
+from browser_harness import browser_tests_enabled, open_token_access, safe_listener
 
 from test_site_map_trip import _app, _on_ring_s
 
@@ -229,6 +229,9 @@ def test_site_map_fits_declared_widths(page_site, width, height):
       label: document.querySelector('#site-map-svg .label').getBoundingClientRect().height,
       mapWindow: document.querySelector('.map-viewport').clientWidth,
       mapContent: document.querySelector('.map-viewport').scrollWidth,
+      sessionRight: document.querySelector('#session').getBoundingClientRect().right,
+      sessionOverflow: getComputedStyle(document.querySelector('#session')).overflowX,
+      stopLeft: document.querySelector('#estop').getBoundingClientRect().left,
       edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().width,
       trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().width,
       stop: document.querySelector('#estop').getBoundingClientRect().right
@@ -237,6 +240,8 @@ def test_site_map_fits_declared_widths(page_site, width, height):
     assert sizes["label"] >= 12, sizes
     if width < 1024:
         assert sizes["mapWindow"] <= width and sizes["mapContent"] > sizes["mapWindow"], sizes
+    if width < 480:
+        assert sizes["sessionRight"] <= sizes["stopLeft"] and sizes["sessionOverflow"] == "hidden", sizes
     assert abs(sizes["edit"] - sizes["trip"]) <= 1, sizes
     assert sizes["stop"] <= width, sizes
 
@@ -347,6 +352,7 @@ def test_failed_reconnect_clears_old_map_and_actions(page_site, width, height):
     page.locator("#credential input").fill("operator-token")
     page.locator("#connect").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
+    open_token_access(page)
     page.locator("#credential input").fill("invalid-token")
     page.locator("#connect").click()
     expect(page.locator("#session")).to_have_text("접속 전")
@@ -572,6 +578,7 @@ def test_changed_draft_warns_before_reconnect_discards_local_edits(page_site, wi
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-conflict-{width}x{height}.png"), full_page=True)
+    open_token_access(page)
     page.locator("#connect").click()
     expect(page.locator("#draft-status")).to_contain_text("저장된 초안")
 

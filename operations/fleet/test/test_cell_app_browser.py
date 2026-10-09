@@ -11,7 +11,7 @@ import time
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, safe_listener
+from browser_harness import browser_tests_enabled, open_token_access, safe_listener
 import yaml
 
 from test_cell_job_api import _setup
@@ -63,8 +63,10 @@ def browser_site(tmp_path):
 def _prepare(page):
     from playwright.sync_api import expect
 
-    page.locator("#credential input").fill("operator-secret")
-    page.locator("#connect").click()
+    if "operator-1" not in page.locator("#session").inner_text():
+        open_token_access(page)
+        page.locator("#credential input").fill("operator-secret")
+        page.locator("#connect").click()
     expect(page.locator("#session")).to_have_text("operator-1 · 운영자")
     for kind in ("recipe", "cell"):
         path = ROOT / f"operations/processes/cell/examples/omx_sim/{kind}.yaml"
@@ -238,6 +240,8 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
         status.scroll_into_view_if_needed()
         page.screenshot(path=str(Path(output) / f"fleet-cell-list-error-{width}x{height}.png"))
     page.unroute("**/api/fleet/cell-app/documents")
+    open_token_access(page)
+    page.evaluate("window.scrollTo(0, 0)")
     page.locator("#connect").click()
     expect(status).to_have_attribute("state", "empty")
     _prepare(page)
@@ -248,6 +252,7 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
     if output:
         page.locator("#saved").scroll_into_view_if_needed()
         page.screenshot(path=str(Path(output) / f"fleet-cell-list-recovered-{width}x{height}.png"))
+    open_token_access(page)
     page.locator("#credential input").fill("different-token")
     expect(status).to_have_attribute("state", "unavailable")
     assert page.locator("#saved").is_hidden()
@@ -265,6 +270,7 @@ def test_cell_auth_denial_clears_previous_session(browser_site, denial, notice, 
     _prepare(page)
     expect(page.locator("#saved li")).to_have_count(2)
     page.route("**/api/fleet/session", lambda route: route.fulfill(status=denial, body="unauthorized"))
+    open_token_access(page)
     page.locator("#connect").click()
     expect(page.locator("#notice")).to_contain_text(notice)
     expect(page.locator("#session")).to_have_text("접속 전")

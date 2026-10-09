@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · fix(face): LCD 변경 영역만 SPI로 전송
 - 2026-10-09 · uncommitted · fix(face): Pair request 카드에 CA 줄 (D-483 보완)
 - 2026-10-07 · uncommitted · uiux(face): D-504 LCD 표정 가장자리 보정
 - 2026-10-07 · uncommitted · uiux(face): D-504 표정 실루엣과 재생
 - 2026-10-06 · uncommitted · uiux(face): 주행 카드 저배터리 대비와 G3 부분 독회
-- 2026-10-04 · uncommitted · feat: 흰 조명 카드 렌더러 분리

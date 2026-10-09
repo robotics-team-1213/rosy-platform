@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Rosy team PC reboot at 06:05
+
+[Timer]
+OnCalendar=*-*-* 06:03:00
+Persistent=false
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

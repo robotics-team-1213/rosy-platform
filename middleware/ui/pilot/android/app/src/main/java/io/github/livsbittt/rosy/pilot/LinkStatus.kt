@@ -75,4 +75,10 @@ object LinkStatus {
 
     /** First 16 hex digits in fours: exactly what the robot LCD's "CA" line draws. */
     fun caShort(sha256: String): String = sha256.take(16).chunked(4).joinToString(" ")
+
+    /** The code field sends on the IME Done action, or on an Enter key-down (IME_NULL), never on key-up. */
+    fun sendsCode(action: Int, keyCode: Int?, keyAction: Int?): Boolean =
+        action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE ||
+            (action == android.view.inputmethod.EditorInfo.IME_NULL &&
+                keyCode == android.view.KeyEvent.KEYCODE_ENTER && keyAction == android.view.KeyEvent.ACTION_DOWN)
 }

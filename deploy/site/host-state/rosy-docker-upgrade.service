@@ -1,0 +1,10 @@
+[Unit]
+Description=Upgrade the Ubuntu Docker engine used by the ROSY site
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/rosy-docker-upgrade
+TimeoutStartSec=1800
+Nice=10

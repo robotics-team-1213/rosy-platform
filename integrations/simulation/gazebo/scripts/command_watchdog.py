@@ -59,8 +59,9 @@ def main(argv=None) -> int:
     if "--help" in argv:
         import sys as _sys
 
-        _sys.stdout.reconfigure(encoding=os.environ.get("PYTHONIOENCODING", "utf-8"),
-                                errors="replace")
+        # PYTHONIOENCODING is "codec" or "codec:errorhandler". The handler is not a codec name.
+        codec = os.environ.get("PYTHONIOENCODING", "utf-8").split(":", 1)[0] or "utf-8"
+        _sys.stdout.reconfigure(encoding=codec, errors="replace")
         print(__doc__)
         return 0
     if (argv.count('--sim-only') != 1
