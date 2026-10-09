@@ -1,5 +1,6 @@
 // D-494 6 지도 가르치기 panel: record a robot's map pose while a driver moves it with Pilot,
-// then confirm the simplified line as a draft lane, or add an address at the robot.
+// then confirm the simplified line as a draft lane, or add an address at the robot or at a
+// fresh floor place marker the ceiling camera sees (D-564).
 // Nothing here moves a robot. The draft changes only through the Fleet teach API.
 import {
   PLACE_KINDS, PLACE_KIND_LABEL, newestPending, siteMapErrorText, teachConfirmBody, teachStatusText,
@@ -12,6 +13,7 @@ export function createTeachPanel(host) {
   const $ = id => document.getElementById(id);
   let view = null;
   let drawn = '';
+  let markersKey = '';
   for (const kind of PLACE_KINDS) $('teach-place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
   function gate(id, reason) {
@@ -29,7 +31,9 @@ export function createTeachPanel(host) {
     const draftReason = host.dirty() ? '고친 초안을 먼저 저장하세요' : '';
     gate('teach-start', robot || (recording ? '기록 중입니다' : ''));
     gate('teach-stop', base || (recording ? '' : '기록 중이 아닙니다'));
-    gate('teach-place', robot || draftReason || ($('teach-place-name').value.trim() ? '' : '새 주소 이름을 적으세요'));
+    const named = $('teach-place-name').value.trim() ? '' : '새 주소 이름을 적으세요';
+    gate('teach-place', robot || draftReason || named);
+    gate('teach-marker-place', base || draftReason || ($('teach-marker').value ? '' : '보이는 장소 마커가 없습니다') || named);
     $('teach-form').hidden = !pending || Boolean(base);
     gate('teach-confirm', base || draftReason);
   }
@@ -40,8 +44,27 @@ export function createTeachPanel(host) {
       new Option('새 주소', ''));
   }
 
+  async function pollMarkers() {
+    let fresh = [];
+    try {
+      fresh = (await host.request('/api/fleet/place-markers')).markers.filter(marker => !marker.stale);
+    } catch (_error) { /* no place marker source on this site: the list stays empty */ }
+    const ids = [...new Set(fresh.map(marker => marker.marker_id))].sort((a, b) => a - b);
+    const key = ids.join(',');
+    if (key === markersKey) return;
+    markersKey = key;
+    const kept = $('teach-marker').value;
+    $('teach-marker').replaceChildren(...ids.map(id => {
+      const marker = fresh.find(m => m.marker_id === id);
+      const deg = Math.round(marker.yaw * 180 / Math.PI);
+      return new Option(`마커 ${id} · ${marker.x.toFixed(2)}, ${marker.y.toFixed(2)} m · ${deg}°`, String(id));
+    }));
+    if (ids.includes(Number(kept))) $('teach-marker').value = kept;
+  }
+
   async function poll() {
     if (host.role()) {
+      await pollMarkers();
       try {
         const next = await host.request('/api/fleet/teach');
         const shownBefore = newestPending(view)?.teach_id;
@@ -102,7 +125,15 @@ export function createTeachPanel(host) {
     $('teach-place-name').value = '';
     return `초안에 주소 ${out.place_id}를 더했습니다. 활성화는 따로 합니다.`;
   }));
-  for (const id of ['teach-robot', 'teach-place-name']) $(id).addEventListener('input', sync);
+  $('teach-marker-place').addEventListener('click', () => act(async () => {
+    const out = await post('/api/fleet/teach/place-from-marker', {marker_id: Number($('teach-marker').value),
+      name: $('teach-place-name').value.trim(), kind: $('teach-place-kind').value,
+      expected_revision: host.draft()?.revision || null});
+    await host.reload();
+    $('teach-place-name').value = '';
+    return `초안에 마커 자리 주소 ${out.place_id}를 더했습니다. 활성화는 따로 합니다.`;
+  }));
+  for (const id of ['teach-robot', 'teach-place-name', 'teach-marker']) $(id).addEventListener('input', sync);
   poll();
 
   return {
