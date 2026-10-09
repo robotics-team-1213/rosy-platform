@@ -5,6 +5,11 @@ import {reviewViewport} from '/viewport.js';
 const font = (size, family) => canvasFont(size, family);
 
 const $ = id => document.getElementById(id);
+const modeBadge=document.createElement('ui-status');
+modeBadge.id='object-workspace-mode';
+modeBadge.setAttribute('role','status');
+$('frame-progress').after(modeBadge);
+const inputPurpose=()=>workspace?.workspace_kind==='evaluation'?'고정 평가 · 학습 제외':'학습 후보 · 승인 후 수용 확인';
 reviewViewport(document.querySelector('.image-stage'),$('canvas'),document.querySelector('.review-view-bar'),()=>!gesture);
 document.querySelector('.review-editor-tools').prepend(document.querySelector('.review-tool-ribbon'));
 const objectCanvasColumn=document.querySelector('.review-editor-canvas');
@@ -54,7 +59,7 @@ function setView(detail) {
   $('view-original').setAttribute('aria-pressed',String(!detail));
   $('view-detail').setAttribute('aria-pressed',String(detail));
   if (!ready) return;
-  if (!detail) {image=sourceImage;$('view-status').textContent='원본 사진 · 학습 입력';paint();return;}
+  if (!detail) {image=sourceImage;$('view-status').textContent='원본 사진 · '+inputPurpose();paint();return;}
   const ticket=loadSerial,index=frame.index,next=new Image();
   $('view-status').textContent='명암 보정 화면을 불러오는 중…';
   next.onload=()=>{if(ticket!==loadSerial||!detailView)return;
@@ -89,7 +94,7 @@ function enable() {
   $('model-preview').disabled = !ready || !modelDrafts.length;
   $('undo').disabled = locked || !undo || frame?.status === 'excluded';
   $('undo').reason=locked?'작업 중':!undo?'수정 없음':frame?.status==='excluded'?'제외된 사진':'';
-  $('prepare').disabled = busy || loading || conflicted || forbidden || !!gesture || !workspace;
+  $('prepare').disabled = busy || loading || conflicted || forbidden || !!gesture || !workspace || workspace.workspace_kind==='evaluation';
   $('prepare').reason = loading ? '검수 내용을 불러오는 중입니다.' : forbidden ? '검수 권한이 거부되었습니다. 최신 내용을 다시 불러오세요.' : '';
   $('reload').disabled = busy || loading || !!gesture;
   $('view-original').disabled = $('view-detail').disabled = !ready || loading;
@@ -239,7 +244,7 @@ async function select(index) {
     }
     sourceImage=image=next; ready = true; $('image-message').hidden = true;
     $('save-status').textContent = `서버 저장됨 · v${frame.version}`; paint(); enable();
-    if(detailView)setView(true);else $('view-status').textContent='원본 사진 · 학습 입력';
+    if(detailView)setView(true);else $('view-status').textContent='원본 사진 · '+inputPurpose();
   };
   next.onerror = () => { if (serial === loadSerial) {error('원본 사진을 불러오지 못했습니다. 승인할 수 없습니다.'); enable();} };
   next.src = `/api/images/${index}?v=${frame.version}`;
@@ -465,7 +470,7 @@ function receipt(value, historical=false) {
   $('export-details').textContent=JSON.stringify(value,null,2);
 }
 $('prepare').onclick=async()=> {
-  if (busy || conflicted || forbidden) return; busy=true; enable(); error(); $('export-result').textContent='원본과 승인 라벨을 검증하는 중…';
+  if (busy || conflicted || forbidden || workspace?.workspace_kind==='evaluation') return; busy=true; enable(); error(); $('export-result').textContent='원본과 승인 라벨을 검증하는 중…';
   try {receipt(await request('/api/prepare',{}));} catch(e) {error(e.message); $('export-result').textContent=`자료 준비 실패 · ${e.message}`;$('export-result').scrollIntoView({block:'center'});} finally {busy=false; enable();}
 };
 async function load(index) {
@@ -473,6 +478,9 @@ async function load(index) {
   const started=performance.now();
   const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(loading&&seconds>=3)$('empty-review').querySelector('p').textContent=`서버 응답 대기 ${seconds}초 · 현재 사진과 결정 내용을 확인하고 있습니다.`;},1000);
   try {workspace=await request('/api/workspace'); loading=false; loadFailed=false; conflicted=false; forbidden=false; error();$('show-all').hidden=false;
+    modeBadge.textContent=workspace.workspace_kind==='evaluation'?'고정 평가 · 학습에서 제외':'학습 후보 · 승인 후 수용 확인';
+    modeBadge.setAttribute('state',workspace.workspace_kind==='evaluation'?'warning':'pending');
+    document.querySelector('#review-content > .preparation').hidden=workspace.workspace_kind==='evaluation';
     const classes=workspace.object_class_set.classes;
     // An ordered list, not object keys: integer-like names would jump ahead of the others.
     classOptions=[['','클래스 선택 필요'],...classes.map(c=>[c.name,c.display])]; names=Object.fromEntries(classOptions);

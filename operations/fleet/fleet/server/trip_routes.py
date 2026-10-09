@@ -76,8 +76,8 @@ def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTP
     return HTTPException(status_code=status, detail={"code": code, "detail": detail or {}})
 
 
-def install_trip_routes(app, *, console, site_maps, routing_config, require_named_operator, caps_for, runner,
-                        read_guard) -> None:
+def install_trip_routes(app, *, console, site_maps, routing_config, require_operator, require_named_operator,
+                        caps_for, runner, read_guard) -> None:
     app.state.trip_runner = runner
     not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE",
                        {"message": "start the plan with POST /api/fleet/trips/{plan_id}/start"}, 501)
@@ -154,7 +154,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_name
             raise trip_error(exc) from exc
 
     @app.post("/api/fleet/trips/{trip_id}/cancel", tags=["fleet"])
-    async def fleet_trip_cancel(trip_id: str, principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+    async def fleet_trip_cancel(trip_id: str,  # D-540 9: a stop stays open
+                                principal: SitePrincipal = Depends(require_operator)) -> dict:
         try:
             return await runner.cancel(trip_id, principal.principal_id)
         except TripError as exc:

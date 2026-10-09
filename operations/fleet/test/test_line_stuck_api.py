@@ -247,8 +247,9 @@ def test_the_console_serves_the_panel_module_and_its_shell(tmp_path):
 
     assert asset.status_code == 200 and "createLineStuckPanel" in asset.text
     assert ".style" not in asset.text   # CSP style-src 'self': classes only
-    for needle in ('id="stuck-panel"', 'id="stuck-list"', 'id="stuck-heading"'):
-        assert needle in page.text
+    # D-540 3: the answers open inside the critical queue row; there is no separate panel.
+    assert 'id="critical-list"' in page.text
+    assert 'id="stuck-panel"' not in page.text
 
 
 _REQUEST = httpx.Request("POST", "http://127.0.0.1:8080/api/v1/line-follow/stuck/decision")

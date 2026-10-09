@@ -14,13 +14,16 @@ from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore, InvalidTaskTransition
 from fleet.swarm.robots import RobotEndpoint
 
+# D-540 9: goals need a named operator; the token names the operator instead of `site-console`.
+OPERATOR_USERS = {sha256(b"operator-console").hexdigest(): {"principal_id": "operator", "role": "operator"}}
+
 
 def test_console_goal_creates_authenticated_persistent_operator_task(tmp_path):
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
     task_store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     task_service = FleetTaskService(task_store, robot_ids={"rosy_01"})
     console = FleetConsole([endpoint], [FakeRobot("rosy_01")])
-    app = create_app(console, console_token="operator-console", task_service=task_service,
+    app = create_app(console, site_users=OPERATOR_USERS, task_service=task_service,
                      start_task_dispatcher=False)
     client = TestClient(app)
     headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "ui-click-1"}
@@ -35,7 +38,7 @@ def test_console_goal_creates_authenticated_persistent_operator_task(tmp_path):
     assert response.json()["queued"] is True
     assert not console._client("rosy_01").calls
     assert task["source"] == "operator"
-    assert task["actor_id"] == "site-console"
+    assert task["actor_id"] == "operator"
 
     assert client.get(f"/api/fleet/tasks/{task['task_id']}").status_code == 401
     readback = client.get(f"/api/fleet/tasks/{task['task_id']}",
@@ -93,7 +96,7 @@ def test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_sep
     robot.navigation_goal = observe_goal
     console = FleetConsole([endpoint], [robot])
     app = create_app(
-        console, console_token="operator-console",
+        console, site_users=OPERATOR_USERS,
         task_service=FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                       robot_ids={"rosy_01"}),
     )
@@ -129,7 +132,7 @@ def test_task_dispatch_waits_for_explicit_clear_safety(tmp_path, safety):
     robot = FakeRobot("rosy_01", state=state)
     console = FleetConsole([endpoint], [robot])
     app = create_app(
-        console, console_token="operator-console",
+        console, site_users=OPERATOR_USERS,
         task_service=FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                       robot_ids={"rosy_01"}),
     )
@@ -153,7 +156,7 @@ def test_uncorrelated_core_completion_event_cannot_complete_a_fleet_task(tmp_pat
                            event_store=CoreEventStore(database))
     service = FleetTaskService(FleetTaskStore(database), robot_ids={"rosy_01"})
     service.store.rearm_dispatch(expected_generation=1, actor_id="test-operator")
-    app = create_app(console, console_token="operator-console", hub=console.hub,
+    app = create_app(console, site_users=OPERATOR_USERS, hub=console.hub,
                      task_service=service,
                      start_task_dispatcher=False)
     client = TestClient(app)
@@ -202,7 +205,7 @@ def test_repeated_console_goal_with_same_key_does_not_send_second_robot_command(
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
     robot = FakeRobot("rosy_01")
     app = create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                       robot_ids={"rosy_01"}),
         start_task_dispatcher=False,
@@ -223,7 +226,7 @@ def test_console_goal_requires_idempotency_key_when_task_service_is_enabled(tmp_
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
     robot = FakeRobot("rosy_01")
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                       robot_ids={"rosy_01"}),
         start_task_dispatcher=False,
@@ -242,7 +245,7 @@ def test_reusing_console_key_for_a_different_goal_is_a_conflict(tmp_path):
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
     robot = FakeRobot("rosy_01")
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                       robot_ids={"rosy_01"}),
         start_task_dispatcher=False,
@@ -263,7 +266,7 @@ def test_intent_navigation_cannot_bypass_task_audit_or_idempotency(tmp_path):
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
     robot = FakeRobot("rosy_01")
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                       robot_ids={"rosy_01"}),
         start_task_dispatcher=False,
@@ -286,7 +289,7 @@ def test_intent_navigation_requires_idempotency_key_when_task_store_is_enabled(t
     endpoint = RobotEndpoint("rosy_01", "http://robot.local", "rest-token")
     robot = FakeRobot("rosy_01")
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                       robot_ids={"rosy_01"}),
         start_task_dispatcher=False,
@@ -308,7 +311,7 @@ def test_task_cancel_only_cancels_queued_task_and_never_calls_core(tmp_path):
                                robot_ids={"rosy_01"})
     service.store.rearm_dispatch(expected_generation=1, actor_id="test-operator")
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=service, start_task_dispatcher=False,
     ))
     headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "cancel-me"}
@@ -333,7 +336,7 @@ def test_robot_cancel_cancels_pending_tasks_then_calls_core_immediately(tmp_path
     service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                robot_ids={"rosy_01"})
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=service, start_task_dispatcher=False,
     ))
     headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "stop-me"}
@@ -357,7 +360,7 @@ def test_estop_cancels_pending_tasks_after_sending_robot_stop(tmp_path):
     service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                robot_ids={"rosy_01"})
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=service, start_task_dispatcher=False,
     ))
     headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "estop-queue"}
@@ -382,7 +385,7 @@ def test_dispatched_task_cannot_use_queued_cancel_endpoint(tmp_path):
                                robot_ids={"rosy_01"})
     service.store.rearm_dispatch(expected_generation=1, actor_id="test-operator")
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=service, start_task_dispatcher=False,
     ))
     headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "running"}
@@ -413,7 +416,7 @@ def test_robot_cancel_failure_still_prevents_queued_task_dispatch(tmp_path):
     service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                robot_ids={"rosy_01"})
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=service, start_task_dispatcher=False,
     ))
     headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "stop-fail"}
@@ -435,7 +438,7 @@ def test_intent_cancel_and_stop_cancel_queued_tasks_before_robot_action(tmp_path
     service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                robot_ids={"rosy_01"})
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=service, start_task_dispatcher=False,
     ))
     headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "intent-stop"}
@@ -457,7 +460,7 @@ def test_intent_site_estop_cancels_all_queued_tasks_after_robot_stop(tmp_path):
     service = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"),
                                robot_ids={"rosy_01"})
     client = TestClient(create_app(
-        FleetConsole([endpoint], [robot]), console_token="operator-console",
+        FleetConsole([endpoint], [robot]), site_users=OPERATOR_USERS,
         task_service=service, start_task_dispatcher=False,
     ))
     headers = {"Authorization": "Bearer operator-console", "Idempotency-Key": "intent-estop"}
@@ -478,7 +481,7 @@ def test_dispatch_rearm_requires_operator_and_current_generation(tmp_path):
     service = FleetTaskService(store, robot_ids={"rosy_01"})
     app = create_app(
         FleetConsole([endpoint], [FakeRobot("rosy_01")]),
-        console_token="operator-console", task_service=service,
+        site_users=OPERATOR_USERS, task_service=service,
         start_task_dispatcher=False,
     )
 
@@ -515,7 +518,7 @@ def test_dispatch_rearm_refuses_unresolved_action_claims(tmp_path):
     )
     app = create_app(
         FleetConsole([endpoint], [FakeRobot("rosy_01")]),
-        console_token="operator-console", task_service=service,
+        site_users=OPERATOR_USERS, task_service=service,
         start_task_dispatcher=False,
     )
     with TestClient(app) as client:

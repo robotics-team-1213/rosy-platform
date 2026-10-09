@@ -34,7 +34,8 @@ def _client(robot, moving=True):
     # D-472 addendum 5: only a moving robot is asked; the tracking stub supplies its state.
     tracking = SimpleNamespace(sources=(), robot_state=lambda _rid: {"velocity": velocity})
     install_console_routes(app, console=Console(robot), sightings=None, require_viewer=nobody,
-                           read_guard=[], operator_guard=[], require_operator=nobody, tracking=tracking)
+                           read_guard=[], operator_guard=[], require_operator=nobody,
+                           require_named_operator=nobody, tracking=tracking)
     return TestClient(app)
 
 

@@ -88,7 +88,7 @@ def test_config_from_watch():
                  "replay_root": "/r"}
     cfg = rosy_ml.config_from_watch(watch_cfg, hostname="fleet-1")
     assert cfg["operator"] == "site:fleet-1" and cfg["robots"] == {"a": "h"}
-    assert cfg["hf_repo"] == "org/m" and cfg["hf_token_file"] == "/etc/rosy/site/secrets/hf_token"
+    assert cfg["hf_repo"] == "org/m" and cfg["hf_token_file"] == "/etc/rosy/site-secrets/hf_token"
     assert cfg["replay_root"] == "/r"
 
 

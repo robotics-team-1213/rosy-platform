@@ -30,6 +30,12 @@
    - 우리 PC를 GitHub self-hosted 러너로 붙이지 않는다. 저장소가 공개라 포크 PR이 러너에서 코드를 돌릴 수 있고, 페이로드는 ARM64 빌드라 x86 PC로는 줄지 않는다.
    - 현장 PC(robttt)는 시험 호스트에 넣지 않는다. 라이브 Fleet 스택이 돈다.
 
+### Addendum (2026-10-09, first live run)
+
+- 045가 멈춘 실제 원인은 Windows MAX_PATH였다. 상태 폴더가 95자라 `install/include/...visibility_control.h` 풀기가 260자를 넘어 실패했다. `load_config`는 64자를 넘는 `state_dir`를 거부한다(가장 깊은 페이로드 파일 약 120자 + `<id>/attempt-N/x/.<id>.partial-*` 약 60자). 운영 PC의 상태 폴더는 `X:\DevTemp\robot-cd`로 옮겼다.
+- 예약 작업 안에서 Windows OpenSSH `-J`가 상속된 stdin 때문에 두 번째 로봇에서 60 s 동안 멈췄다. `run_ssh`는 `stdin=DEVNULL`로 부른다.
+- `install_robot_cd.ps1`은 작업 출력을 `<state_dir>/task-output.log`에 남긴다. 준비 거부 이유는 그 출력에만 찍힌다.
+
 ### Consequences
 
 - push → 서명 롤아웃이 약 18–20분에서 약 7–8분(+카나리)이 된다.
