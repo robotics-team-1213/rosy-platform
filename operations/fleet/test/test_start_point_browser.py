@@ -49,9 +49,11 @@ def browser_site(tmp_path):
     from hashlib import sha256
     from fleet.server.task_service import FleetTaskService
     from fleet.server.task_store import FleetTaskStore
-    users={sha256(b'operator-secret').hexdigest():{'principal_id':'op','role':'operator'}}
+    users={sha256(b'operator-secret').hexdigest():{'principal_id':'op','role':'operator'},
+           # the unnamed shared credential resolves to the principal `site-console`
+           sha256(b'shared-secret').hexdigest():{'principal_id':'site-console','role':'operator'}}
     tasks=FleetTaskService(FleetTaskStore(tmp_path/'tasks.sqlite3'),robot_ids={'robot-a'})
-    app=create_app(console,console_token='shared-secret',site_users=users,task_service=tasks,web_common=ROOT/'shared/web',
+    app=create_app(console,site_users=users,task_service=tasks,web_common=ROOT/'shared/web',
                    sightings=sightings,tracking=tracking,start_task_dispatcher=False)
     listener=safe_listener()
     origin=f'http://127.0.0.1:{listener.getsockname()[1]}'
