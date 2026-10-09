@@ -26,8 +26,8 @@ FROM deps
 WORKDIR /opt/rosy/src
 COPY . .
 RUN . /opt/ros/jazzy/setup.sh \
-    && colcon build --packages-up-to gz_sim --build-base /opt/rosy/build \
-         --install-base /opt/rosy/install --log-base /opt/rosy/log \
+    && colcon --log-base /opt/rosy/log build --packages-up-to gz_sim --build-base /opt/rosy/build \
+         --install-base /opt/rosy/install \
     && rm -rf /opt/rosy/build /opt/rosy/log
 WORKDIR /
 CMD ["bash", "-c", ". /opt/rosy/install/setup.bash && ros2 launch gz_sim gz_multi.launch.py robots:=1 headless:=true"]

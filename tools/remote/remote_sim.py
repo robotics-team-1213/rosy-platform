@@ -63,8 +63,8 @@ echo "heavy=$(ps -eo pcpu=,args= | awk '$1 >= 50 && $0 !~ /rosy-test\/runs\/sim-
 INNER = r"""set -eo pipefail
 source /opt/ros/jazzy/setup.bash
 [ -n "${PYDEPS:-}" ] && export PYTHONPATH="$PYDEPS${PYTHONPATH:+:$PYTHONPATH}"
-colcon build --packages-up-to gz_sim --build-base "$OUT/build" --install-base "$OUT/install" \
-  --log-base "$OUT/colcon-log" > "$OUT/colcon.txt" 2>&1 || { tail -40 "$OUT/colcon.txt"; exit 1; }
+colcon --log-base "$OUT/colcon-log" build --packages-up-to gz_sim --build-base "$OUT/build" \
+  --install-base "$OUT/install" > "$OUT/colcon.txt" 2>&1 || { tail -40 "$OUT/colcon.txt"; exit 1; }
 source "$OUT/install/setup.bash"
 eval "$BENCH_CMD"
 """
