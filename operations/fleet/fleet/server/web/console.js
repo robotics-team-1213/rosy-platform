@@ -19,6 +19,7 @@ import { createPasswordLogin } from "./password-login.js";
 import { confirmIrreversible } from "/common/ui.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
+import { bindEstop, showFleet, showSession, showSignedOut, stopNotice, tickClock } from "/console/assets/fleet-header.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -67,12 +68,6 @@ const auth = {
   locked: false,
 };
 const confirmedAction = createConfirmedAction({scope: pageScope, identity: () => ({...auth}), confirm: confirmIrreversible});
-function stopNotice(message = "", state = "warning") {
-  const notice = el("estop-feedback");
-  notice.textContent = message;
-  notice.hidden = !message;
-  notice.setAttribute("state", state);
-}
 function cancelAllNotice(message = "", details = false) {
   const result = el("cancel-all-result"), link = el("cancel-all-details");
   result.textContent = message;
@@ -96,8 +91,7 @@ function markLocked(reason = "auth") {
   auth.locked = true;
   connectionView.open();
   auth.role = null;
-  el("user-role").textContent = "인증 필요";
-  el("user-role").setAttribute("status", "crit");
+  showSignedOut({fold: false, refused: reason === "auth"});
   applyRoleToControls(null, operatorControls());
   const pill = el("online-pill");
   pill.textContent = "접속 전";
@@ -131,9 +125,9 @@ function markUnlocked() {
 
 function operatorControls() {
   // 화면 테마(data-theme-choice)는 이 브라우저의 표시 선호라 권한과 무관하다(D-359 §2.5).
-  // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4).
+  // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#token-save):not(#topbar-more):not([data-login]):not(#roster-toggle):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
+    "ui-button:not(#estop):not(#token-save):not(#topbar-more):not([data-login]):not(#roster-toggle):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#traffic-toggle):not([data-theme-choice]), main input, main select:not(#vision-source)");
 }
 
 const view = {
@@ -393,11 +387,7 @@ async function refreshState() {
       }
     }
     view.signals = snapshot.signals || {};
-    el("fleet-name").textContent = snapshot.fleet.name || "사이트";
-    const pill = el("online-pill");
-    delete pill.dataset.locked;
-    pill.textContent = `${snapshot.fleet.online}/${snapshot.fleet.total} 연결`;
-    pill.setAttribute("status", snapshot.fleet.online === snapshot.fleet.total ? "neutral" : "crit");
+    showFleet(snapshot.fleet, snapshot.robots);
     render();
     if (requestedRobotFocus) {
       const card = [...el("roster").querySelectorAll("article")]
@@ -523,12 +513,7 @@ async function refreshAuthorization() {
     if (auth.role !== identity.role) confirmedAction.cancel();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
-    const roleName = identity.role === "operator" ? "운영자" :
-      identity.role === "viewer" ? "조회 전용" :
-        identity.role === "policy-admin" ? "정책 관리자" : "권한 없음";
-    el("user-role").textContent = `${identity.principal_id} · ${roleName}`;
-    el("user-role").title = el("user-role").textContent; // 넓은 머리에서 12rem으로 잘릴 때의 전문
-    el("user-role").setAttribute("status", identity.role === "operator" ? "good" : "neutral");
+    showSession(identity);
     // The session already proves the token: unlock now. The state gather can take seconds
     // when a robot times out, and must not hold the operator's controls locked behind it.
     const pill = el("online-pill");
@@ -707,30 +692,8 @@ pageScope.listen(el("map-canvas"), "keydown", async (event) => {
 
 // 전체 정지는 한 번의 누름으로 즉시 실행된다(D-413 — 비상 정지는 확인 없는 비상 출구.
 // D-371이 대화상자 위에서 살아 있게 한 이유를 끝까지 밀었다: 어떤 사위에도 즉시 눌린다).
-pageScope.listen(el("estop"), "click", async () => {
-  const life = pageScope.capture();
-  life.check();
-  stopNotice("비상 정지 요청 중…", "pending");
-  try {
-    const result = await call("/api/fleet/estop", { method: "POST" });
-    life.check();
-    const summary = result.total > 0
-      ? `정지 요청 응답: ${result.stopped}/${result.total} · 물리 정지 미확인`
-      : "정지 요청 대상 로봇 없음 — 등록 목록과 현장 상태를 확인하세요.";
-    stopNotice(summary, result.total > 0 && result.stopped === result.total ? "warning" : "error");
-    log(summary, "bad");
-    (result.robots || []).filter((r) => !r.stopped)
-      .forEach((r) => log(`  ${r.robot_id} 정지 요청 응답 없음 — ${r.error.code}`, "bad"));
-    await refreshDispatchControl();
-    life.check();
-  } catch (err) {
-    if (err.name === "AbortError") return;
-    stopNotice(err.status >= 500 || !err.status
-      ? "비상 정지 결과 확인 불가 — Fleet 연결과 로봇 상태를 즉시 확인하세요."
-      : `비상 정지 요청 거절 — ${err.message}`, "error");
-    log(`전체 정지 실패 — ${err.message}`, "bad");
-  }
-});
+bindEstop(call, {listen: (node, type, fn) => pageScope.listen(node, type, fn), life: () => pageScope.capture(), log,
+  after: () => refreshDispatchControl()});
 
 
 // D-421 — 래치 없는 전체 주행 취소. 응답은 CORE 응답 수이지 물리 정지가 아니다(D-298).
@@ -842,10 +805,6 @@ mapView.bindCamera(visionView);
 
 const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, confirmedAction, onChanged: () => mapView.draw() });
 const startPointView = createStartPointView({scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw()});
-
-function tickClock() {
-  el("clock").textContent = new Date().toTimeString().slice(0, 8);
-}
 
 // 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
 el("console-token").value = auth.token;

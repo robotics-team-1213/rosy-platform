@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install the guard's forced command on a watched PC (D-530). Run once per PC:
 #
-#   sudo deploy/hosts/common/install-guard-remote.sh [--dry-run] [--site-key "ssh-ed25519 AAAA... rosy-host-guard"] [--unit <user unit>]...
+#   sudo deploy/hosts/common/install-guard-remote.sh [--dry-run] [--site-key "ssh-ed25519 AAAA... rosy-host-guard"] [--unit <unit>]...
 #
 # Installs /usr/local/sbin/rosy-host-guard-remote, /etc/rosy/host-guard/units (the units the guard
 # watches and may ask the D-524 helper to restart; --unit replaces the list), and with --site-key an
@@ -41,8 +41,13 @@ if [ -n "$SITE_KEY" ]; then
   KEYS=/home/$USER_NAME/.ssh/authorized_keys
   LINE="command=\"/usr/local/sbin/rosy-host-guard-remote\",restrict $SITE_KEY"
   if [ "$DRY" = 1 ]; then echo "+ append to $KEYS: $LINE"
-  elif ! grep -qF "$SITE_KEY" "$KEYS" 2>/dev/null; then
+  elif ! grep -qxF -- "$LINE" "$KEYS" 2>/dev/null; then
     install -d -m 0700 -o "$USER_NAME" -g "$USER_NAME" "/home/$USER_NAME/.ssh"
+    if grep -qF -- "$SITE_KEY" "$KEYS" 2>/dev/null; then
+      echo "warning: $KEYS holds this key without the forced command; replacing that line" >&2
+      grep -vF -- "$SITE_KEY" "$KEYS" > "$KEYS.tmp" || true
+      mv "$KEYS.tmp" "$KEYS"
+    fi
     printf '%s\n' "$LINE" >> "$KEYS" && chown "$USER_NAME:$USER_NAME" "$KEYS" && chmod 0600 "$KEYS"
   fi
 fi

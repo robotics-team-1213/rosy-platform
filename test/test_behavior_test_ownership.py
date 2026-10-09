@@ -32,6 +32,10 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_site_floor_declaration.py",
     # D-494 HTTP-to-CORE seam; pure junction decisions stay in services/test.
     "middleware/core/gateway/test/test_line_junction_api.py",
+    # D-551 HTTP-to-CORE seam: the advice endpoint, plus the guards that the real
+    # line-follow manager never reads it (import walk, identical decisions);
+    # the pure AdviceStore ordering tests stay in contracts/foundation/test.
+    "middleware/core/gateway/test/test_line_advice_api.py",
     # CORE HTTP-to-Host seam and atomic mode/calibration admission integration;
     # the pure mask, observer and Host configuration tests stay with their owners.
     "middleware/core/gateway/test/test_lane_perception_api.py",

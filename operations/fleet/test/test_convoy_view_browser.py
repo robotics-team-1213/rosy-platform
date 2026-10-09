@@ -62,9 +62,9 @@ def test_site_map_starts_a_follower_behind_the_chosen_leader(site, convoy_api, m
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, "/console/site-map", posts, answers)
         try:
-            page.locator("#credential input").fill("operator-token")
-            page.locator("#connect").click()
-            expect(page.locator("#session")).to_contain_text("bob")
+            page.locator("#console-token").fill("operator-token")
+            page.locator("#token-save").click()
+            expect(page.locator("#user-role")).to_contain_text("bob")
             page.clock.run_for(1500)
             page.locator("#trip-robot").select_option("rosy_02")
             page.locator("#trip-start-place").select_option("start_s")

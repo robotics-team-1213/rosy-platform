@@ -448,7 +448,8 @@ export function trafficDrawing(traffic, active, trips = []) {
     for (const row of signal.approaches || []) {
       if (!row.stop_line) continue;
       signals.push({ x: row.stop_line.x, y: row.stop_line.y, angle: row.stop_line.yaw, lamp: row.lamp,
-        label: `${signal.signal_id} · ${signalLampText(row.lamp)}`, signal: signal.signal_id });
+        label: `${signal.signal_id} · ${signalLampText(row.lamp)}`, signal: signal.signal_id,
+        count: countdownText(row), approach: row.approach });
     }
   }
   const xs = [...edges.values()].flatMap((edge) => edge.polyline.map((p) => p[0]));
@@ -459,6 +460,23 @@ export function trafficDrawing(traffic, active, trips = []) {
 
 const LAMP_TEXT = { green: "녹", yellow: "황", red: "적" };
 export const signalLampText = (lamp) => LAMP_TEXT[lamp] || "적";
+
+/** D-525 rev 3 T-map style seconds for one approach: "7" (exact), "≥7" (a lower bound), "" (unknown). */
+export function countdownText(row) {
+  const s = row?.lamp === "red" ? row?.green_in_s ?? row?.left_s : row?.left_s;
+  if (typeof s !== "number") return "";
+  return `${row.exact ? "" : "≥"}${Math.ceil(s)}`;
+}
+
+/** Robot card text for the next signal on its route: "신호 sig 적 · 녹색까지 ≥7 s · 정지선 0.40 m". */
+export function signalAheadText(ahead) {
+  if (!ahead) return "";
+  const lamp = signalLampText(ahead.lamp);
+  const wait = ahead.lamp !== "green" && typeof ahead.green_in_s === "number"
+    ? ` · 녹색까지 ${ahead.exact ? "" : "≥"}${Math.ceil(ahead.green_in_s)} s` : "";
+  const where = ahead.distance_m >= 0 ? ` · 정지선 ${ahead.distance_m.toFixed(2)} m` : " · 교차로 안";
+  return `가상 신호 ${ahead.signal_id} ${lamp}${wait}${where}${ahead.may_enter ? " · 진입 허가" : ""}`;
+}
 
 /** D-525: the virtual signal a robot waits at (its waiting_for is `signal:<zone>`), or null. */
 export function signalWait(traffic, robotId) {
@@ -496,6 +514,7 @@ export function trafficCardLine(traffic, robotId) {
   const unit = waitingUnit(traffic, robotId);
   const signal = signalWait(traffic, robotId);
   if (held) parts.push("위치 불명 · 블록 유지");
+  else if (robot.signal_ahead && robot.signal_ahead.distance_m < 1.5) parts.push(signalAheadText(robot.signal_ahead));
   else if (signal) parts.push(`신호 대기 · ${signal.signal_id} 적색`);
   else if (unit && isZone(unit)) {
     const ahead = (unit.holders || []).filter((id) => id !== robotId);
@@ -506,6 +525,8 @@ export function trafficCardLine(traffic, robotId) {
     parts.push({ replan: "교착 · 다른 길 계획", wait: "교착 · 다른 로봇 대기" }[resolver.decision] || "교착 · 운영자 판단");
   }
   if (!parts.length) parts.push(robot.trip_state === "started" ? "운행 출발 대기" : "운행 중");
+  const advice = robot.advice;  // D-551: display-only signal advice to CORE
+  if (advice?.signal) parts.push(`신호 참고 전송 · seq ${advice.sent_seq}${advice.accepted ? "" : ` · ${advice.reason || "미수락"}`}`);
   return parts.join(" · ");
 }
 

@@ -161,6 +161,21 @@ def face_cautions(snapshot) -> list[str]:
     return codes
 
 
+def face_recovery(line_follow) -> Optional[str]:
+    """D-546: the moving lane-recovery phase the face signals, or None.
+
+    ``retrace`` is the reversing phase (beep), ``bridge`` the D-476 bridge (lamp
+    only), ``return`` every other D-468 move. A HOLD is not moving: no signal.
+    """
+    if line_follow.mode == "OFF" or line_follow.state != "RECOVERING":
+        return None
+    if line_follow.reason == "lane_return_measured_path_return":
+        return "retrace"
+    if line_follow.reason == "lane_bridge":
+        return "bridge"
+    return "return" if line_follow.reason.startswith("lane_return_") else None
+
+
 def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[str],
                         wake: Optional[dict], written_at: str,
                         goal_x: Optional[float] = None, goal_y: Optional[float] = None) -> dict[str, Any]:
@@ -193,6 +208,7 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         "line_follow_mode": line_follow.mode,
         "line_follow_state": line_follow.state,
         "caution": face_cautions(snapshot),
+        "recovery": face_recovery(line_follow),
         "drive": drive,
         "wake": wake,
     }

@@ -302,7 +302,7 @@
 ## 최근 기록
 
 - 2026-10-09 · uncommitted · docs(adr): D-549 중앙 인증 Rosy Auth 제안
+- 2026-10-09 · uncommitted · docs(adr): D-548 장치 개발 모드 표식
+- 2026-10-09 · uncommitted · docs: Fleet 5개 작업 캡처 기준선
 - 2026-10-09 · uncommitted · docs: 화면 목적·인계·공간 평가 기준
 - 2026-10-09 · uncommitted · docs: Fleet 현장 위치·SLAM 실행 상태 재검증
-- 2026-10-09 · uncommitted · docs: SIM 벽 근처 LiDAR HOLD 원인 범위
-- 2026-10-09 · uncommitted · docs: SIM 정지 사유의 IR 횡단선 판별

@@ -48,6 +48,9 @@ from fleet.swarm.session import (
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import RobotClient, require_capability
 
+#: A robot whose read fails within this many seconds of its last answer is shown as
+#: `degraded` (responding late), not `unreachable`; decisions still see online=False.
+LINK_DEGRADED_S = 10.0
 logger = logging.getLogger("fleet.console")
 
 #: 맵은 로봇마다 다시 받을 이유가 없다 — 한 사이트는 한 맵을 공유한다. 그래도 SLAM 으로
@@ -90,6 +93,8 @@ class FleetConsole(TripAware):
         self._capability_display = CapabilityDisplay(self._clients, self._clock)
         self._capability_cache = self._capability_display.cache
         self._hub_state_max_age_s = hub_state_max_age_s
+        #: Extra alarm rows from other watchers (D-526 tether watch): callables returning alarm dicts.
+        self.alarm_sources: list = []
         # 하달한 목표는 Fleet 이 기억한다. 로봇 상태 스냅샷에는 목표가 없고, 있어서도 안 된다
         # — 미션은 Fleet 쪽 개념이고 로봇은 원자 액션만 받는다 (D-12). 화면의 목표 표시는
         # "내가 무엇을 시켰는가"이지 로봇이 되돌려 준 값이 아니다.
@@ -114,6 +119,8 @@ class FleetConsole(TripAware):
         #: 마지막으로 본 로봇의 pose 와 주행 상태. 길을 막고 선 로봇을 찾으려면 좌표가
         #: 있어야 하는데, 로봇 상태는 스냅샷으로 들어온다.
         self._seen: dict[str, dict] = {}
+        # Console clock time of each robot's last answered state read (link grace below).
+        self._last_ok: dict[str, float] = {}
         #: D-395 P2-2: last pose traffic may use, per robot (`trust.trusted_xy`): only
         #: from a LOCALIZED map snapshot, never from a legacy-null one (S2 Finding 1).
         self._trusted: dict[str, tuple] = {}
@@ -280,6 +287,12 @@ class FleetConsole(TripAware):
                 robots.append({"robot_id": robot_id, "online": False, "goal": goal,
                                "queued": _shown(queued), "error": _error_of(result),
                                "state": None, "gather_source": None})
+                last_ok = self._last_ok.get(robot_id)
+                if last_ok is not None and 0.0 <= self._clock() - last_ok <= LINK_DEGRADED_S:
+                    # One missed read is not a lost robot: the console showed every slow answer
+                    # (site 2026-10-09, 3-5 s gathers on loaded robots) as offline and back.
+                    # `online` stays False for every decision; only the link word changes.
+                    robots[-1]["link_degraded_s"] = round(self._clock() - last_ok, 1)
             else:
                 state, source = result
                 hub_row = self._hub.registry.find(robot_id) if source == "hub" else None
@@ -287,6 +300,7 @@ class FleetConsole(TripAware):
                 observed = (hub_row.last_heartbeat_monotonic if hub_row is not None else None)
                 if observed is None:
                     observed = self._clock()
+                self._last_ok[robot_id] = self._clock()
                 robots.append({"robot_id": robot_id, "online": True, "goal": goal,
                                "queued": _shown(queued), "error": None,
                                "state": state, "gather_source": source,
@@ -295,6 +309,8 @@ class FleetConsole(TripAware):
             scheme = urlsplit(self._registered_endpoints.get(robot_id, "")).scheme
             exc = result if isinstance(result, BaseException) else None
             link = classify_link(exc, scheme=scheme, address_status=statuses.get(robot_id))
+            if link == "unreachable" and "link_degraded_s" in row:
+                link = "degraded"
             if link is not None:
                 row["link"] = link
             reason = link_reason(exc, scheme=scheme)
@@ -996,8 +1012,11 @@ class FleetConsole(TripAware):
         await self.formation_stop()
 
     def alarms(self) -> list[dict]:
-        return [{"robot_id": rid, "code": "ROBOT_ADDRESS_UNVERIFIED", "reason": hold["reason"]}
+        rows = [{"robot_id": rid, "code": "ROBOT_ADDRESS_UNVERIFIED", "reason": hold["reason"]}
                 for rid, hold in sorted(self._held.items()) if hold.get("alarm")]
+        for source in self.alarm_sources:
+            rows.extend(source())
+        return rows
 
     async def estop_all(self) -> dict:
         """전 대상 정지 요청. 한 대가 거절해도 나머지에 계속 내린다.

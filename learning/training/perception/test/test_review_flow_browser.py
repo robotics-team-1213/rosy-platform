@@ -78,6 +78,27 @@ def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_works
     assert review_masks.get(store, 0)['status'] == 'pending'
 
 
+def test_review_photo_and_result_are_in_first_view(browser_workspace):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    base = page.url.split('?')[0].rstrip('/')
+    for width, height in [(1280, 720), (390, 800)]:
+        page.set_viewport_size({'width': width, 'height': height})
+        for route, canvas, result in [('/', '#canvas', '#object-result'),
+                                      ('/pixels', '#pixel-canvas', '#pixel-result')]:
+            page.goto(base + route, wait_until='networkidle')
+            box = page.locator(canvas).bounding_box()
+            assert box and box['y'] <= height * .4, (route, width, height, box)
+            assert min(box['y'] + box['height'], height) - box['y'] >= box['height'] / 3
+            expect(page.locator(result)).to_contain_text('저장')
+            assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+            if width == 390:
+                actions = ['#prev-frame', '#next-frame', '#next-pending'] if route == '/' else ['#pixel-prev', '#pixel-next', '#pixel-undo']
+                for action in actions:
+                    expect(page.locator(f'{action} .ui-icon')).to_be_visible()
+                    assert page.locator(action).get_attribute('aria-label')
+
+
 def test_imported_approval_and_recheck_history_are_visible(browser_workspace):
     page, store, expect = browser_workspace
     expect(page.locator('#review-history-summary')).to_contain_text('객체 승인 · 픽셀 대기')
@@ -95,7 +116,7 @@ def test_imported_approval_and_recheck_history_are_visible(browser_workspace):
 @pytest.fixture
 def custom_class_workspace(request, tmp_path):
     source, human, images = fixture_inputs(tmp_path)
-    data = getattr(request, 'param', 'names: [car, traffic_light]\ndisplay: {car: 자동차}\n')
+    data = getattr(request, 'param', 'names: [car, traffic_light]\ndisplay: {car: 자동차}\ncolors: {car: [12, 34, 56]}\n')
     record = class_sets.from_data_yaml(data.encode(), 'detect')
     with serve(ReviewStore(tmp_path / 'state', source, human, images, record)) as value:
         yield value
@@ -197,7 +218,7 @@ def test_model_object_draft_is_visible_before_apply(tmp_path):
         page.goto(page.url.split('?')[0] + '?frame=2', wait_until='networkidle')
         expect(page.locator('#candidate-source')).to_contain_text('미적용 모델 초안 1개')
         expect(page.locator('#model-preview')).to_have_attribute('aria-pressed', 'true')
-        assert page.locator('#candidate-details').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y']
+        assert page.locator('#candidate-details').bounding_box()['y'] > page.locator('#canvas').bounding_box()['y']
         assert store.get(2)['review']['boxes'] == []
         page.on('dialog', lambda dialog: dialog.accept())
         page.locator('#model-candidates').click()
@@ -245,7 +266,7 @@ def test_catalog_import_reaches_pending_review_on_phone(browser_workspace, tmp_p
 
 
 @pytest.mark.parametrize('route,left,right', [('/', '.review-stage', '.label-inspector'),
-                                                   ('/pixels', '.pixel-layout > section', '.pixel-layout > aside')])
+                                                   ('/pixels', '.pixel-editor-column', '.pixel-review-column')])
 @pytest.mark.parametrize('width', [1440, 800, 390, 320])
 def test_review_editor_peer_widths(browser_workspace, route, left, right, width):
     page, _, _ = browser_workspace
@@ -255,23 +276,25 @@ def test_review_editor_peer_widths(browser_workspace, route, left, right, width)
         assert page.locator('#pixel-flood').get_attribute('disabled') is not None
     boxes = [page.locator(selector).bounding_box() for selector in (left, right)]
     assert all(box and box['width'] > 0 for box in boxes)
-    assert abs(boxes[0]['width'] - boxes[1]['width']) <= 1
+    if width >= 1024:
+        assert boxes[0]['width'] > boxes[1]['width']
+    else:
+        assert abs(boxes[0]['width'] - boxes[1]['width']) <= 1
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
     for pane in (left, right):
         actions = page.locator(f'{pane} ui-actions').first
         buttons = actions.locator('ui-button').all()
         if buttons:
-            widths = [button.bounding_box()['width'] for button in buttons]
-            assert max(widths) - min(widths) <= 1, widths
+            widths = [box['width'] for button in buttons if (box := button.bounding_box())]
+            if len(widths) > 1:
+                assert max(widths) - min(widths) <= 1, widths
     if width <= 390:
         if route == '/pixels':
             previous = page.locator('#pixel-prev').bounding_box()
             following = page.locator('#pixel-next').bounding_box()
-            reload = page.locator('#pixel-reload').bounding_box()
-            bar = page.locator('.ui-workspace-bar').first.bounding_box()
-            for action in (previous, following, reload):
-                assert abs(action['x'] - bar['x']) <= 1 and abs(action['width'] - bar['width']) <= 1
-            assert previous['y'] + previous['height'] <= following['y']
+            assert previous and following
+            assert abs(previous['y'] - following['y']) <= 1
+            assert previous['x'] + previous['width'] <= following['x']
     if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
         from pathlib import Path
         target = Path(output) / f'learning-{route.strip("/") or "objects"}-{width}.png'
@@ -882,8 +905,10 @@ def test_object_decision_and_preparation_result_are_visible(browser_workspace, w
     if width <= 390:
         navigation = page.locator('.frame-navigation').bounding_box()
         buttons = [page.locator(f'#{name}').bounding_box() for name in ('prev-frame', 'next-frame', 'next-pending')]
-        assert all(abs(button['width'] - navigation['width']) <= 1 for button in buttons)
-        assert buttons[0]['y'] < buttons[1]['y'] < buttons[2]['y']
+        assert abs(buttons[0]['y'] - buttons[1]['y']) <= 1
+        assert buttons[0]['x'] + buttons[0]['width'] <= buttons[1]['x']
+        assert abs(buttons[2]['width'] - navigation['width']) <= 1
+        assert buttons[2]['y'] > buttons[0]['y']
     shot('decision-result')
 
 
@@ -1021,6 +1046,14 @@ def test_phone_photo_list_is_one_strip_above_editor(browser_workspace):
     }""")
     # Hundreds of photos must not push the editor below a full-page thumbnail grid.
     assert layout == {'pageWidth': 390, 'rows': 1, 'direction': 'row', 'overflow': 'auto'}
+    toolbar = page.locator('.review-tool-ribbon ui-actions').bounding_box()
+    canvas = page.locator('#canvas').bounding_box()
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / 'learning-object-first-view-390x844.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+    assert toolbar['height'] < 60 and canvas['y'] < 844, (toolbar, canvas)
 
 
 def test_undo_restores_boxes_without_restoring_approval(browser_workspace):
@@ -1032,7 +1065,7 @@ def test_undo_restores_boxes_without_restoring_approval(browser_workspace):
     expect(page.locator('#boxes details')).to_have_count(0)
     expect(page.locator('#filter')).to_have_value('all')
     expect(page.locator('#undo')).not_to_have_attribute('disabled', '')
-    page.locator('#undo').focus(); page.keyboard.press('Enter')
+    page.locator('#undo').focus(); page.keyboard.press('Control+z')
     expect(page.locator('#boxes details')).to_have_count(1)
     expect(page.locator('#undo')).to_have_attribute('disabled', '')
     assert store.get(0)['review']['boxes'] == original
@@ -1140,6 +1173,8 @@ def test_object_zoom_pan_and_draw_keep_source_coordinates(browser_workspace):
 
 def test_custom_class_set_names_and_saves(custom_class_workspace):
     page, store, expect = custom_class_workspace
+    icon = page.locator('#object-quick-classes button[value="car"] .ui-icon')
+    assert icon.evaluate('node => getComputedStyle(node).color') == 'rgb(12, 34, 56)'
     select = page.locator('#boxes .box-top select').first
     expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', '신호등'])
     select.select_option('car')
