@@ -52,6 +52,9 @@ def _line_follow_config(raw: dict[str, Any]) -> LineFollowConfig:
         min_confidence=float(raw.get("min_confidence", defaults.min_confidence)),
         stale_after_s=float(raw.get("stale_after_s", defaults.stale_after_s)),
         lost_after_s=float(raw.get("lost_after_s", defaults.lost_after_s)),
+        lost_auto_resume=_flag(raw, "lost_auto_resume", defaults.lost_auto_resume),
+        lost_resume_frames=_whole(raw, "lost_resume_frames", defaults.lost_resume_frames),
+        lost_resume_s=float(raw.get("lost_resume_s", defaults.lost_resume_s)),
         ir_calibration_revision=raw.get("ir_calibration_revision") or None,
         # D-422: unset = derived (path + URDF body) or the pre-D-422 LiDAR-origin defaults.
         obstacle_stop_m=_optional_float(raw.get("obstacle_stop_m")),
