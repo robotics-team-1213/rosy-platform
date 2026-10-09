@@ -34,6 +34,8 @@ LOOKAHEAD_M = 0.20
 K_GAP = 2.0
 #: 가속 상한 (m/s²). 감속은 막지 않는다.
 ACCEL_MPS2 = 0.5
+#: 이보다 느린 명령은 0 이다. gap 에 지수로 다가가는 꼬리가 바퀴 데드밴드 안에서 끝없이 남지 않게.
+MIN_LINEAR = 0.01
 
 
 class TrailError(Exception):
@@ -131,7 +133,7 @@ def trail_twist(trail: Trail, x: float, y: float, yaw: float, *, gap: float, max
         return 0.0, 0.0, "trail_lost"
     linear = min(max_speed, K_GAP * (trail.leader_s - s - gap),
                  max(0.0, prev_linear) + ACCEL_MPS2 * max(0.0, dt))
-    if linear <= 0.0:
+    if linear < MIN_LINEAR:
         return 0.0, 0.0, None
     gx, gy = trail.point_at(min(s + lookahead, trail.leader_s))
     dx, dy = gx - x, gy - y

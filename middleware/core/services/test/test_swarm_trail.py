@@ -106,7 +106,7 @@ def test_the_follower_stops_when_the_leader_stops_and_moves_again_after():
 def test_a_reversing_leader_adds_no_trail_and_the_follower_stops():
     path = leader_poses([(6.0, SPEED, 0.0), (3.0, -0.1, 0.0)])
     trace, outputs, trail = run(path)
-    assert trail.leader_s == pytest.approx(6.0 * SPEED + 0.0, abs=CRUMB_SLACK)
+    assert trail.leader_s == pytest.approx(GAP + 6.0 * SPEED, abs=CRUMB_SLACK)
     assert outputs[-1][0] == 0.0
     assert trail.leader_s - trail.progress >= GAP - 0.02
 
