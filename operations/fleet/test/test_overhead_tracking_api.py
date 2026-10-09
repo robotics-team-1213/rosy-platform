@@ -93,7 +93,7 @@ def test_vision_writes_detections_and_reads_only_its_own_config(tmp_path):
         assert accepted.json() == {"accepted": True, "source_id": "ceiling_north", "seq": 41, "status": "OK"}
         config = client.get("/api/fleet/detections/config", headers=_auth(SOURCE_TOKEN))
         assert config.json() == {"source_id": "ceiling_north", "map_id": "map_v2_fleet",
-                                 "calibration": None, "relearn_seq": 0,
+                                 "calibration": None, "relearn_seq": 0, "robot_markers": {},
                                  "identity_challenge": None}  # D-472: no open LED request
         assert client.get("/api/fleet/detections/config").status_code == 401
         assert client.get("/api/fleet/tracking", headers=_auth(SOURCE_TOKEN)).status_code == 401
