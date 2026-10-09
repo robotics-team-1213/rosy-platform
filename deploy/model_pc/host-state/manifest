@@ -1,0 +1,9 @@
+# D-530 model PC desired state (role: model). Format: deploy/hosts/common/host-state/manifest.
+# Nightly reboot was copied byte for byte from the model PC on 2026-10-09.
+safe file /etc/systemd/system/rosy-nightly-reboot.timer role/rosy-nightly-reboot.timer
+safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-reboot.service
+safe enabled rosy-nightly-reboot.timer
+safe enabled rosy-model-watch.timer
+# Written by deploy/site/install-model-pc-guard.sh; absent on 2026-10-09, so this reports until it runs.
+report file /etc/systemd/system.conf.d/rosy-watchdog.conf common/rosy-watchdog.conf
+report file /etc/sysctl.d/90-rosy-hang.conf common/90-rosy-hang.conf
