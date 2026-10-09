@@ -197,8 +197,11 @@ main {
   #fleet-main { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
   #fleet-main > .console-secondary { min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; }
   #fleet-main > .console-primary { min-height: 0; display: flex; flex-direction: column; }
-  #fleet-main > .console-primary > .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: stretch; }
-  #fleet-main .map-stage { flex: 1; min-height: 12rem; }
+  /* 지도 칸: 머리, 남는 높이를 다 쓰는 지도, 그 아래 범례·배경 학습·접힘 한 줄(넘치면 다음 줄). */
+  #fleet-main > .console-primary > .panel { flex: 1; min-height: 0; display: grid; align-items: center;
+    grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) repeat(3, auto); column-gap: var(--space-4); }
+  #fleet-main > .console-primary > .panel > :is(.map-head, .map-stage) { grid-column: 1 / -1; }
+  #fleet-main .map-stage { align-self: stretch; min-height: 12rem; }
   #fleet-main :is(.map-stage #map-canvas, .map-birdseye) { height: 100%; }
   .ops-block { gap: var(--space-2); }
   .ops-block > h2 { margin: 0; }
