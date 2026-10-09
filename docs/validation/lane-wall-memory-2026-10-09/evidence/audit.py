@@ -12,6 +12,7 @@ sys.path[:0] = [str(ROOT / "tools/perception_prototype/realrun"),
 from replay import (BevVO, CENTRE_KW, FPS, GROUND, VIDEO, X_OFF,  # noqa: E402
                     comp_stats, wall_mask)
 from control.sensing.perception.lane_boundaries import LaneBoundaryTracker  # noqa: E402
+from control.sensing.perception.lane_keep import LaneKeeper  # noqa: E402
 
 
 def run(part, start, end, *, visual_odom=False):
@@ -52,12 +53,32 @@ def run(part, start, end, *, visual_odom=False):
     return result
 
 
+def run_keep(part, start, end):
+    cap = cv2.VideoCapture(VIDEO % part)
+    assert cap.isOpened(), VIDEO % part
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start)
+    keeper = LaneKeeper(camera_x_offset_m=X_OFF, corner_turning=True)
+    observation = None
+    for index in range(start, end + 1):
+        ok, frame = cap.read()
+        assert ok, (part, index)
+        observation = keeper.update(frame, GROUND, lane_half_width_m=.0925)
+    cap.release()
+    return dict(part=part, start=start, end=end, mode="keep",
+                strategy=keeper.last["strategy"],
+                error=None if observation is None else observation.error,
+                confidence=None if observation is None else observation.confidence)
+
+
 if __name__ == "__main__":
     cases = [run(4, 492, 492), run(4, 470, 492),
-             run(4, 470, 492, visual_odom=True), run(6, 96, 104)]
-    assert [case["tier"] for case in cases] == ["STOP", "BOTH", "BOTH", "BOTH"]
+             run(4, 470, 492, visual_odom=True), run(6, 96, 104),
+             run_keep(4, 470, 492), run_keep(6, 96, 104)]
+    assert [case["tier"] for case in cases[:4]] == ["STOP", "BOTH", "BOTH", "BOTH"]
     assert cases[1]["selected"]["left"]["wall_frac"] > .9
     assert cases[1]["selected"]["right"]["wall_frac"] > .7
     assert all(side["wall_frac"] < .05 for side in cases[3]["selected"].values())
+    assert (cases[4]["strategy"], cases[4]["confidence"]) == ("right_only", .6)
+    assert (cases[5]["strategy"], cases[5]["confidence"]) == ("both", .9)
     for case in cases:
         print(json.dumps(case))
