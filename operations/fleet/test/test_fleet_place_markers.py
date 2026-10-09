@@ -96,16 +96,18 @@ def test_teach_place_from_marker_adds_or_moves_a_draft_place_and_refuses_stale(t
         place = next(p for p in added.json()["draft"]["map"]["places"] if p["id"] == added.json()["place_id"])
         assert (place["x"], place["y"], place["yaw"], place["kind"]) == (1.5, 0.75, 1.0, "start")
         revision = added.json()["draft"]["revision"]
-        moved = teach({"marker_id": 34, "place_id": "B", "expected_revision": revision})
+        assert client.post("/api/fleet/place-markers", headers=SOURCE, json=_payload(
+            captured_at=NOW - 0.05, markers=[{"marker_id": 36, "x": 2.5, "y": 0.5, "yaw": -0.5}])).status_code == 200
+        moved = teach({"marker_id": 36, "place_id": "B", "expected_revision": revision})
         assert moved.status_code == 200, moved.text
         b = next(p for p in moved.json()["draft"]["map"]["places"] if p["id"] == "B")
-        assert (b["x"], b["y"], b["yaw"], b["name"], b["kind"]) == (1.5, 0.75, 1.0, "충전", "charge")
+        assert (b["x"], b["y"], b["yaw"], b["name"], b["kind"]) == (2.5, 0.5, -0.5, "충전", "charge")
         assert teach({"marker_id": 34, "place_id": "nope"}).json()["detail"]["code"] == "PLACE_UNKNOWN"
         assert teach({"marker_id": 34}).json()["detail"]["code"] == "PLACE_NAME_REQUIRED"
         clock.now += 2.5
         assert teach({"marker_id": 34, "name": "늦음"}).json()["detail"]["code"] == "PLACE_MARKER_STALE"
     events = [e for e in store.events() if e["action"] == "teach_place"]
-    assert [(e["detail"]["marker_id"], e["detail"]["updated"]) for e in events] == [(34, False), (34, True)]
+    assert [(e["detail"]["marker_id"], e["detail"]["updated"]) for e in events] == [(34, False), (36, True)]
     assert store.active()[1].places[1].x == 2.0   # the active map is untouched
 
 
@@ -122,3 +124,12 @@ def test_teach_from_marker_refuses_another_map_and_a_site_without_place_markers(
         answer = client.post("/api/fleet/teach/place-from-marker", json={"marker_id": 34, "name": "x"},
                              headers=OPERATOR)
         assert answer.status_code == 503 and answer.json()["detail"]["code"] == "PLACE_MARKERS_DISABLED"
+
+
+def test_site_map_page_offers_the_marker_action_under_the_csp(tmp_path):
+    client, _clock, _store = _app(tmp_path)
+    page = client.get("/console/site-map")
+    script = client.get("/console/assets/site-map-teach.js").text
+    assert 'id="teach-marker"' in page.text and 'id="teach-marker-place"' in page.text
+    assert "/api/fleet/teach/place-from-marker" in script and "/api/fleet/place-markers" in script
+    assert "innerHTML" not in script
