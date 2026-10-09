@@ -143,6 +143,7 @@ class RobotClient(Protocol):
     async def identify_lamp(self, color: Optional[str] = None) -> dict: ...
     # D-395 Phase 2 (contract §2): Fleet-assisted localization.
     async def localization_candidates(self) -> Optional[CandidateReport]: ...
+    async def localization_request(self) -> Optional[dict]: ...
     async def localization_decision(self, decision: LocalizationDecision) -> dict: ...
     async def localization_suspect(self, reason: str) -> dict: ...
 
@@ -344,6 +345,16 @@ class HttpRobotClient:
             body["yield_turn_rad"] = yield_turn_rad
         return await self._post("/api/v1/line-follow/stuck/decision", body)
 
+    async def fleet_link_put(self, body: dict) -> dict:
+        """D-555: deliver the hub credential. ``body`` holds a secret: never log it."""
+        return self._check(await self._http.put("/api/v1/fleet/link", json=body, headers=self._headers()))
+
+    async def fleet_link_get(self) -> dict:
+        return await self._get("/api/v1/fleet/link")
+
+    async def fleet_link_delete(self) -> dict:
+        return self._check(await self._http.delete("/api/v1/fleet/link", headers=self._headers()))
+
     async def estop(self) -> dict:
         return await self._post("/api/v1/safety/stop")
 
@@ -369,6 +380,14 @@ class HttpRobotClient:
         except ValidationError as exc:
             raise RobotApiError(self.robot_id, resp.status_code, "BAD_RESPONSE",
                                 f"not a candidate report: {exc.error_count()} errors") from exc
+
+    async def localization_request(self) -> Optional[dict]:
+        """D-546 5: the robot's open "where am I" request, or None (404 `NO_REQUEST`, or a CORE
+        without the route)."""
+        resp = await self._http.get("/api/v1/localization/request", headers=self._headers())
+        if resp.status_code == 404:
+            return None
+        return self._check(resp)
 
     async def localization_decision(self, decision: LocalizationDecision) -> dict:
         return await self._post("/api/v1/localization/decision", decision.model_dump(mode="json"))

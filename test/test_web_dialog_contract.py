@@ -54,7 +54,7 @@ PINNED_CONFIRMS = {
     "operations/fleet/fleet/server/web/cell/cell.js": 1,
     "operations/fleet/fleet/server/web/confirmed-action.js": 1,
     "operations/fleet/fleet/server/web/console.js": 3,
-    "operations/fleet/fleet/server/web/enrollment.js": 1,
+    "operations/fleet/fleet/server/web/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
     "operations/fleet/fleet/server/web/roster.js": 1,
     # Activation, camera-draft replacement (D-497), trip cancel (D-494).
     "operations/fleet/fleet/server/web/site-map.js": 3,

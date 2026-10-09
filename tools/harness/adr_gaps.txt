@@ -20,3 +20,4 @@ D-486 renumbered to D-489/D-490 on feat/fleet-map-address-route before landing
 D-554 reserved in another active branch (v13-drivable lane-derived training labels)
 D-555 reserved in another active branch (enrolled robot hub pairing)
 D-556 reserved in another active branch (Fresh odom veto for carried one-sided lane boundary)
+D-554 reserved in another active branch (refs/adr/D-554, no ADR body on main); D-555 lands independently; remove when its ADR lands

@@ -143,6 +143,7 @@ stay published below, but no per-package C6 scan covers them yet.
 | `docking/manager.py` ×5 | **Accepted.** None-tolerance for optional injections whose attribute is part of the injected type's public surface. |
 | `power/manager.py` | **Accepted.** Mode → attribute dispatch over the module's own config object. |
 | `system/host_agent_client.py` *(moved to `core_api_web/api/` under D-126 S5; out of this package's scan)* | **Platform guard, not a seam.** `AF_UNIX` is absent on the Windows dev host. |
+| `fleet_loss_wiring.py` ×2 — `getattr(fleet_agent, "armed", True)`, `getattr(fleet_agent, "relinked_at", None)` | **Accepted (D-555).** Optional public link state on the injected FleetAgent: an older agent or a test double without the fields reads as armed and never relinked, which is today's boot behaviour. The values only decide when SAF-003 starts counting the link (arm grace after a runtime relink); they never authorize motion. |
 
 | Reach | Verdict |
 |---|---|
