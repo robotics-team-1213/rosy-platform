@@ -90,6 +90,10 @@ ui-topbar input[type="checkbox"] { width: auto; }
   .topbar-extra .theme-choice { flex-wrap: wrap; }
 }
 
+@media (width < 22.5rem) {
+  #topbar-more > span:not(.sr-only) { display: none; }
+}
+
 /* compact: 두 줄 — 이름·설정 / 연결·시계, 비상 정지는 두 줄을 차지한다. 머리는 창 높이의 20% 이하다.
    D-359 US-008: 320px에서 "ROSY FLEET"가 두 줄로 접혔다(이름 칸 83px, 글자 119px). 시계와
    설정이 한 열을 나눠 쓰던 것을 풀어 이름이 시계 열 위까지 쓴다. 이름 칸을 크기
