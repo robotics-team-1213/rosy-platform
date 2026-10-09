@@ -44,6 +44,7 @@ from core_api_web.api.v1.routes import (
     system_router,
     traffic_router,
     trip_lease_router,
+    fleet_link_router,
     vision_router,
     waypoints_router,
     diagnostics_router,
@@ -194,6 +195,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(control_router)
     app.include_router(calibration_router)
     app.include_router(trip_lease_router)
+    app.include_router(fleet_link_router)
     app.include_router(line_follow_router)
     app.include_router(traffic_router)
     app.include_router(vision_router)
