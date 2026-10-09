@@ -179,6 +179,7 @@ class EnrollmentStore:
                 CREATE TABLE IF NOT EXISTS robot_tls_renumber (
                     hostname TEXT PRIMARY KEY,
                     ca_sha256 TEXT NOT NULL,
+                    file_robot_id TEXT NOT NULL,
                     robot_id TEXT NOT NULL
                 );
                 """
@@ -283,16 +284,16 @@ class EnrollmentStore:
                                        [(m['robot_id'], m['origin'], m['ca_sha256']) for m in markers])
 
     def tls_renumbers(self) -> dict[str, dict]:
-        """D-580: hostname -> {ca_sha256, robot_id} learned when a bound robot re-enrolled renumbered."""
+        """D-580: hostname -> {ca_sha256, file_robot_id, robot_id} of a binding enrolled here."""
         with closing(self._connect()) as connection:
             return {row['hostname']: dict(row) for row in connection.execute(
-                'SELECT hostname, ca_sha256, robot_id FROM robot_tls_renumber')}
+                'SELECT hostname, ca_sha256, file_robot_id, robot_id FROM robot_tls_renumber')}
 
-    def renumber_tls(self, hostname: str, ca_sha256: str, robot_id: str) -> None:
+    def renumber_tls(self, hostname: str, ca_sha256: str, file_robot_id: str, robot_id: str) -> None:
         with closing(self._connect()) as connection:
             with connection:
-                connection.execute('INSERT OR REPLACE INTO robot_tls_renumber VALUES (?, ?, ?)',
-                                   (hostname, ca_sha256, robot_id))
+                connection.execute('INSERT OR REPLACE INTO robot_tls_renumber VALUES (?, ?, ?, ?)',
+                                   (hostname, ca_sha256, file_robot_id, robot_id))
 
     def audit(self, *, action: str, outcome: str, principal_id: str | None,
               target: str | None, device_kind: str = ROBOT) -> None:

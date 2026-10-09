@@ -433,8 +433,8 @@ class EnrollmentService(HubLinkMixin):
         self._require_available()
         normalized = normalize_code(code)
         target, row, pending = self._candidate(discovery_name, address)
-        # D-580: a binding whose robot was enrolled here and then unenrolled may come back renumbered.
-        renumber = pending is not None and pending.robot_id in self._store.retired_robot_ids()
+        # D-580: a binding a robot enrolled through here (same hostname, CA, file row) may come back renumbered.
+        renumber = pending is not None and self._tls_bindings.proven(pending)
         async with self._http(target, pending, renumber) as http:
             try:
                 paired = await self._exchange(http, normalized, principal_id, target)
@@ -569,11 +569,10 @@ class EnrollmentService(HubLinkMixin):
         }
         self._store.insert(record, seal(self._key, token, slot="rest", robot_id=robot_id,
                                         token_id=token_id))
+        renamed = None
         try:
             if pending is not None and robot_id != pending.robot_id:
-                self._tls_bindings.renumber(pending, robot_id)
-                self._store.audit(action="tls_renumber", outcome="renumbered", principal_id=principal_id,
-                                  target=f"{pending.robot_id}->{robot_id}")
+                renamed = self._tls_bindings.renumber(pending, robot_id)
             if pending is not None:
                 # The downgrade fence a bound row gets at load: this id never goes back to HTTP.
                 self._store.remember_tls([dict(robot_id=robot_id, origin=f"https://{pending.hostname}:{pending.port}",
@@ -583,7 +582,12 @@ class EnrollmentService(HubLinkMixin):
             self._roster.add(endpoint, self._client(endpoint, gate))
         except Exception:
             self._store.delete(robot_id)
+            if renamed is not None:  # back to the old id, so the token logout still proves TLS
+                self._tls_bindings.renumber(renamed, pending.robot_id)
             raise
+        if renamed is not None:
+            self._store.audit(action="tls_renumber", outcome="renumbered", principal_id=principal_id,
+                              target=f"{pending.robot_id}->{robot_id}")
         self._gates[robot_id] = gate
         self._tokens[robot_id] = token
         self._store.audit(action="enroll", outcome="enrolled", principal_id=principal_id,
@@ -812,6 +816,8 @@ class EnrollmentService(HubLinkMixin):
         if row is None:
             raise EnrollmentError("not_enrolled", 404, "that robot is not enrolled")
         self._endpoint(row, "anonymous-bootstrap")  # validate before changing the mounted roster
+        if self._tls_bindings is not None:
+            self._tls_bindings.remember(robot_id)  # D-580: this binding may come back renumbered
         on_roster = robot_id in self._roster.robot_ids
         if on_roster:
             blocker = self._roster.removal_blockers(robot_id)

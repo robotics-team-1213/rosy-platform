@@ -151,31 +151,59 @@ class EnrolledTlsBindings:
                         or not isinstance(binding.tls_ca_file, str)):
                     raise ValueError()
                 bindings[binding.robot_id] = binding
+            self._rows = tuple(bindings.values())
         except (ValueError, TypeError, KeyError):
             raise EnrollmentTlsError('invalid enrolled TLS binding file') from None
+        #: hostname -> the file row: what the root-owned file approved before any learned id.
+        self._file = {b.hostname: b for b in bindings.values()}
         if self._store is None:
             return bindings
         renamed = {}
-        renumbers = self._store.tls_renumbers()
         for binding in bindings.values():
-            learned = renumbers.get(binding.hostname)
-            # Same hostname and CA the robot proved; a CA the file changed drops the learned id.
-            if learned is not None and learned['ca_sha256'] == binding.tls_ca_sha256:
-                binding = replace(binding, robot_id=learned['robot_id'])
-            if binding.robot_id in renamed:
-                raise EnrollmentTlsError('learned TLS robot_id conflicts with the binding file')
+            learned = self._learned(binding)
+            if learned is not None and learned not in bindings:  # the file wins a collision
+                binding = replace(binding, robot_id=learned)
             renamed[binding.robot_id] = binding
         return renamed
 
-    def renumber(self, binding: EnrolledTlsBinding, robot_id: str) -> None:
+    def _learned(self, row: EnrolledTlsBinding) -> str | None:
+        """D-580: the id this file row's robot last enrolled with here, if the row is unchanged.
+
+        Only when hostname, CA and the file's robot_id are all as they were when the robot proved
+        them, and no other file row shares the CA or hostname (one CA per robot, D-565).
+        """
+        learned = self._store.tls_renumbers().get(row.hostname) if self._store is not None else None
+        if (learned is None or learned['ca_sha256'] != row.tls_ca_sha256
+                or learned['file_robot_id'] != row.robot_id
+                or sum(b.tls_ca_sha256 == row.tls_ca_sha256 or b.hostname == row.hostname
+                       for b in self._rows) != 1):
+            return None
+        return learned['robot_id']
+
+    def proven(self, binding: EnrolledTlsBinding) -> bool:
+        """A robot was enrolled here through exactly this hostname + CA (renumber eligibility)."""
+        row = self._file.get(binding.hostname)
+        return row is not None and self._learned(row) == binding.robot_id
+
+    def remember(self, robot_id: str) -> None:
+        """Record that robot_id's binding was enrolled here (called when it is unenrolled)."""
+        binding = self.binding(robot_id)
+        if binding is not None and self._store is not None:
+            self._store.renumber_tls(binding.hostname, binding.tls_ca_sha256,
+                                     self._file[binding.hostname].robot_id, robot_id)
+
+    def renumber(self, binding: EnrolledTlsBinding, robot_id: str) -> EnrolledTlsBinding:
         """D-580: the robot proved this binding's CA and hostname and now reports robot_id."""
-        if self._store is None or self.binding(binding.robot_id) != binding or robot_id in self._approved:
+        if (self._store is None or self.binding(binding.robot_id) != binding or robot_id in self._approved
+                or robot_id in {b.robot_id for b in self._rows if b.hostname != binding.hostname}):
             raise EnrollmentTlsError('TLS binding cannot be renumbered')
-        self._store.renumber_tls(binding.hostname, binding.tls_ca_sha256, robot_id)
+        self._store.renumber_tls(binding.hostname, binding.tls_ca_sha256,
+                                 self._file[binding.hostname].robot_id, robot_id)
         approved = {key: value for key, value in self._approved.items() if key != binding.robot_id}
         approved[robot_id] = replace(binding, robot_id=robot_id)
         # Built from memory, not re-read: a concurrent file edit still trips binding()'s check.
         self._approved = approved
+        return approved[robot_id]
 
     def validate(self, rows: list[dict]) -> list[str]:
         """Return pending robot_ids: approved (the root-owned file) but not enrolled yet."""
@@ -195,7 +223,9 @@ class EnrolledTlsBindings:
         """True when an approved binding (pending or bound) owns one of these names or ids."""
         names = {name.lower().rstrip('.') for name in hostnames if name}
         names |= {name + '.local' for name in names if not name.endswith('.local')}
-        return any(b.hostname in names or b.robot_id in robot_ids for b in self._approved.values())
+        # A renumbered binding still claims its file id: that id never comes back over HTTP.
+        return any(b.hostname in names or b.robot_id in robot_ids
+                   or self._file[b.hostname].robot_id in robot_ids for b in self._approved.values())
 
     def pending(self, rows: list[dict], hostname: str, port: int) -> EnrolledTlsBinding | None:
         """The one unenrolled binding at this hostname:port. Selection only: TLS proves it."""
