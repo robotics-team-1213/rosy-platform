@@ -268,3 +268,7 @@ safety 태그 코드(§1의 root, 모듈 목록, 앵커 파일)를 바꾸는 변
 | 3. Safety Guard + D-400 | D-400 센서 정책은 모든 로봇에서 off다. Nav2·teleop 경로에 몸 기준 근접 정지가 없다 | P3-2 |
 | 4. 반응형 정책 엔벌로프 | 엔벌로프 스킬 계약이 없다 | P3-3 |
 | 5. Arbiter + MANUAL 선점 | OMX Arbiter 표와 MANUAL 선점이 없다 | P3-4(P4-1과 같은 ADR) |
+
+### 개정 제안
+
+- [D-541](D-541-core-fleet-trip-lease.md) (2026-10-09, Proposed): 안전 체인 "5. Arbiter + MANUAL 선점" 행의 소유 규칙에 "Fleet trip lease: 주인 아닌 움직임 거절, 만료·넘겨받기 시 IDLE"을 더한다. lease는 안전 층이 아니며 비상 정지·몸체 정지·watchdog이 언제나 앞선다.
