@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  localizationTag, localizationUrgent, robotPoseText, sitePoseText, untrustedQueuedReason,
+  localizationTag, localizationUrgent, robotMapPose, robotPoseText, sitePoseText, untrustedQueuedReason,
 } from "../../fleet/server/web/localization-badge.js";
 
 const row = (over) => ({ state: "LOCALIZED", pose_frame: "map", trusted: true, legacy: false,
@@ -52,4 +52,15 @@ test("the card names the robot pose frame and shows Fleet's site map pose apart"
     "지도 0.69, -0.44 · 추정·odom 이음");
   assert.equal(sitePoseText({ robot_id: "a", pose: { x: 1, y: 2, state: "LOCALIZED", source: "sighting" } }),
     "지도 1.00, 2.00 · 확정·카메라");
+});
+
+test("the map draws the robot's own pose only when it is a LOCALIZED map pose, never odom", () => {
+  const pose = { x: 0.9, y: 0.05, yaw: -0.12 };
+  // Field check 2026-10-10: a manual-only robot (localization null, no map) was drawn at odom coordinates.
+  assert.equal(robotMapPose({ localization: { pose_frame: null, legacy: true }, state: { pose, map_id: null, localization: null } }), null);
+  assert.equal(robotMapPose({ state: { pose, map_id: "m", localization: { state: "LOCALIZED", pose_frame: "odom" } } }), null);
+  assert.equal(robotMapPose({ state: { pose, map_id: "m", localization: { state: "DEGRADED", pose_frame: "map" } } }), null);
+  assert.equal(robotMapPose({ state: { pose, map_id: "m", localization: { state: "LOCALIZED", pose_frame: "map" } } }), pose);
+  assert.equal(robotMapPose({ state: { pose, map_id: "m", localization: null } }), pose);  // pre-D-395 Nav2 robot
+  assert.equal(robotMapPose({ state: null }), null);
 });

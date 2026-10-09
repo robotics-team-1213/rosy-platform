@@ -17,6 +17,7 @@ import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
 import { drawGuide } from "/console/assets/guide-layer.js";
 import { noRobotServesGrid } from "./motion-readiness.js";
+import { robotMapPose } from "./localization-badge.js";
 import { trafficClock } from "/console/assets/site-map-model.js";
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
@@ -159,7 +160,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
 
   function poseOf(robotId) {
     const robot = view.robots.find((r) => r.robot_id === robotId);
-    return robot && robot.state ? robot.state.pose : null;
+    return robotMapPose(robot);  // map frame only; never odom
   }
 
   function cellOf(grid, x, y) {
@@ -603,7 +604,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawTrails(ctx, view, (x, y) => { const c = cellOf(grid, x, y); return { x: c.cx, y: c.cy }; }, 0.4, call);
     ctx.lineWidth = 0.6;
     view.robots.forEach((robot, index) => {
-      const pose = robot.state && robot.state.pose;
+      // Only the robot's LOCALIZED map pose draws the triangle; otherwise Fleet's map pose (guide circle)
+      // and Rosy Cam tracking (ring) show where it is, each in its own layer.
+      const pose = robotMapPose(robot);
       if (!pose || !layerOn("poses")) return;
       const color = view.colors[index % view.colors.length];
       const cell = worldToCell(grid, pose.x, pose.y);

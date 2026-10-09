@@ -22,12 +22,28 @@ export function untrustedQueuedReason(who) {
 const SITE_POSE_STATE = { LOCALIZED: "확정", DEGRADED: "추정" };
 const SITE_POSE_SOURCE = { sighting: "카메라", bridged: "odom 이음" };
 
+function poseFrame(state, localization) {
+  return localization?.pose_frame || state.localization?.pose_frame || (state.map_id ? "map" : "odom");
+}
+
 /** "odom 0.90, 0.05": a row with no reported frame is odom unless the robot reports a map. */
 export function robotPoseText(state, localization) {
   const pose = state?.pose;
   if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) return "—";
-  const frame = localization?.pose_frame || state.localization?.pose_frame || (state.map_id ? "map" : "odom");
-  return `${frame} ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}`;
+  return `${poseFrame(state, localization)} ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}`;
+}
+
+/** The robot's own pose when it is a map pose the map may draw: map frame and LOCALIZED (a pre-D-395 robot
+ * with no localization block counts when it reports a map). Never odom: a manual-only robot's odom pose
+ * drawn on the map put it where it was not (field check 2026-10-10). Fleet's map pose and Rosy Cam
+ * tracking have their own layers (guide circle, tracking ring). */
+export function robotMapPose(robot) {
+  const state = robot?.state;
+  const pose = state?.pose;
+  if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y) || !Number.isFinite(pose.yaw)) return null;
+  if (poseFrame(state, robot.localization) !== "map") return null;
+  const loc = state.localization;
+  return loc == null || loc.state === "LOCALIZED" ? pose : null;
 }
 
 /** Fleet's site map pose: "지도 0.69, -0.44 · 확정·카메라", "지도 위치 모름", or null without a guide row. */
