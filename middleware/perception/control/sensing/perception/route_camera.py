@@ -343,6 +343,8 @@ class RouteCameraFollower:
         if pose is None or self._manoeuvre == "ABORTED" or self._route_invalidated:
             self._tracker.gate = None
             self._tracker.update(now_s, None, bgr, ground, **kwargs)
+            if self._tracker.last.get("reason") == "washed":
+                self.last["reason"] = "washed"
             if self._manoeuvre is not None:
                 # Latched, or a manoeuvre that lost odometry cannot be measured.
                 self._abort()

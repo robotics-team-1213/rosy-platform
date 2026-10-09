@@ -394,6 +394,10 @@ class LaneEdgeFollower:
                 pose = None
         if ground is None or pose is None:
             self._forget()
+            self.last = {}
+            if ground is not None:
+                self._follow(float(now_s), None, bgr, ground, float(lane_half_width_m),
+                             bright_threshold, float(washed_fraction))
             if self._corner is not None:
                 self._corner.update(now_s, None, bgr, ground,
                                     lane_half_width_m=lane_half_width_m,
@@ -429,6 +433,9 @@ class LaneEdgeFollower:
             return None
         if paint.sum() > washed_fraction * observable:
             self.last["reason"] = "washed"
+            return None
+        if pose is None:
+            self.last = {}
             return None
 
         if self._last_pose is not None:

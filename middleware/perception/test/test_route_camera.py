@@ -100,7 +100,10 @@ def test_washed_bev_stops_even_with_a_locked_route_near_a_node():
     assert subject.last['reason'] == 'washed'
     assert subject.update(25.375, None, image, ground, lane_half_width_m=.0925,
                           bright_threshold=180, washed_fraction=.4) is None
-    assert subject.last == {}  # a later odometry loss is not stale exposure evidence
+    assert subject.last['reason'] == 'washed'  # fresh image evidence survives odometry loss
+    assert subject.update(25.5, None, np.zeros_like(image), ground, lane_half_width_m=.0925,
+                          bright_threshold=180, washed_fraction=.4) is None
+    assert subject.last == {}  # no stale exposure evidence on a subsequent frame
 
 
 def test_washed_bev_cannot_start_a_route_manoeuvre():
