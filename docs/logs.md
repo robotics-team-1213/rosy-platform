@@ -7412,3 +7412,9 @@ osy-d395-s1d\`.
 - 변경: B9 동일 시작 자세의 새 Gazebo 영상에서 첫 카메라 STOP을 40% BEV 밝기 게이트로 재현하고, 75% 격리 폐루프의 차로 이탈·장애물 HOLD를 함께 기록했다.
 - 증거: [검증 결과](validation/lane-route-wash-gate-2026-10-09/result.md). 기본값은 경계가 보이는 40.6% 프레임을 버리고 LOST; 75%는 477/477 가시 후보여도 0.304m 뒤 lane_departure HOLD.
 - gate 변화: 제품 설정·운영 keep·CORE 구동 권한 변화 없음. 사람 정답 0건, DEVICE·현장 수용 HOLD.
+
+## 2026-10-09 · uncommitted · docs: SIM 정지 사유의 IR 횡단선 판별
+
+- 변경: 75% 재실행의 85개 카메라 프레임과 GT를 재생하고, `lane_departure`가 지도 차로 이탈 판정이 아닌 중앙 IR 선 검출 사유임을 분리했다.
+- 증거: [재계측](validation/lane-route-wash-gate-2026-10-09/result.md#75-정지-지점-재계측). 정지 GT 경로 가로 오차 약 18.2mm, 원래 로그 IR `[600,2600,600]`; `route_a`에는 D-491 구간 입력이 없고 keeper 후보도 완전한 경계·불확실도 조건을 통과하지 못했다.
+- gate 변화: 없음. IR·LiDAR 정지를 해제하지 않았고 교차부 완주, DEVICE·현장 수용은 HOLD.
