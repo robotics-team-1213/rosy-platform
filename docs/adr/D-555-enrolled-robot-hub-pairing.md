@@ -27,11 +27,13 @@
    - `GET /api/v1/fleet/link`(viewer)는 `{configured, provisioned, expected_hostname, hub_url, enabled, connected}`만 준다. 토큰은 어떤 응답·사건·로그에도 없다. 사건 `fleet.link_provisioned`·`fleet.link_cleared`는 호출 토큰 id만 싣는다.
    - 능력: `GET /system/capabilities` 최상위 `fleet_link_provisioning: true`(주행이 없는 로봇도 페어링하므로 `controls` 항목이 아니다). Fleet은 이 플래그가 없는 로봇에 보내지 않는다(`409 robot_unsupported`).
 4. **허브는 등록 로봇을 digest로 확인한다.** `SiteHub`는 등록 로봇의 digest를 들고, HELLO 토큰의 SHA-256을 `hmac.compare_digest`로 비교한다(상수 시간). Fleet 기동 때 등록 행의 digest를 허브에 올린다. 허브 경로는 `robots.yaml` 페어링이 있거나, 등록 저장소·`--events-db`·콘솔 토큰이 있고 `--hub-link-*`가 설정됐거나 digest가 있는 등록 행이 있으면 켠다. 콘솔은 지금처럼 허브 상태가 신선하면(≤ 3 s) 허브, 아니면 REST로 모으고, 등록 행에 "수집: 허브|REST"를 보인다.
-5. **SAF-003은 살아 있는 설정을 본다.** `link_configured`는 기동 때 값 대신 지금 `config["fleet"]`로 판정한다. 그래서 실행 중 페어링이 CORE 재시작 없이 SAF-003을 붙이고, 해제가 뗀다. 거절된 HELLO나 `stop()`은 여전히 끊긴 링크다(설정은 PUT·DELETE만 바꾼다).
+5. **SAF-003은 살아 있는 설정을 보되, 새 링크는 처음 WELCOME 뒤에만 센다.** `link_configured`는 기동 때 값 대신 지금 `config["fleet"]`로 판정하고, 실행 중 relink 뒤에는 에이전트가 허브의 WELCOME을 받을 때까지(`armed`) 링크를 세지 않는다. 그래서 실행 중 페어링이 CORE 재시작 없이 SAF-003을 붙이고, 해제가 뗀다. 거절된 HELLO나 `stop()`은 여전히 끊긴 링크다(설정은 PUT·DELETE만 바꾼다).
+   - **Fleet 목표 중에는 바꾸지 않는다(보안 검토 HIGH).** relink·회수·교체는 링크를 잠깐 끊는다. 목표가 진행 중이면 SAF-003이 STOP/HOLD/RETURN_HOME(움직임)을 걸 수 있다. CORE `PUT`·`DELETE`는 `nav.fleet_goal()`이 있으면 `409 FLEET_GOAL_ACTIVE`이고, Fleet은 연결·해제 전에 자기 목표 표(`console._goals`)와 로봇 `GET /fleet/link`의 `fleet_goal_active`를 보고 같은 이유(`fleet_goal_active`)로 거절한다. 콘솔은 "Fleet 목표가 진행 중입니다"를 보인다.
+   - 기동 때 잘못된 Fleet 설정(`fleet.heartbeat_reply_timeout_s`, SAF-003 시간)을 기본값으로 대신했으면 CORE는 그 사실을 기억하고 `PUT`을 `409 FLEET_LINK_CONFIG_INVALID`로 거절한다. 기본값 위에서 SAF-003이 무장되지 않게 한다.
 6. **회수와 교체.**
-   - "허브 연결 해제"(`DELETE /api/fleet/robots/{robot_id}/hub-link`): 로봇 `DELETE /api/v1/fleet/link`를 한 번 부르고, 결과와 관계없이 Fleet digest를 지우고 허브의 그 로봇 세션을 끊는다. 로봇에 닿지 못하면 응답이 `robot_cleared: false`이고, 남은 토큰은 HELLO에서 `PAIRING_INVALID`로 거절되어 에이전트가 스스로 멈춘다.
+   - "허브 연결 해제"(`DELETE /api/fleet/robots/{robot_id}/hub-link`): Fleet digest를 **먼저** 지우고 허브의 그 로봇 세션을 끊는다. TLS가 필요한 것은 그 다음 로봇 `DELETE /api/v1/fleet/link` 한 번뿐이다. TLS 묶음이 바뀌었거나 없거나 로봇에 닿지 못하면 응답이 `robot_cleared: false`이고, 남은 토큰은 HELLO에서 `PAIRING_INVALID`로 거절되어 에이전트가 스스로 멈춘다.
    - 등록 해제: 같은 로봇 `DELETE`를 한 번 시도하고 행과 함께 digest가 사라진다.
-   - 교체: 연결된 로봇에 "허브 연결"을 다시 하면 새 토큰이 옛것을 대신한다. Fleet은 새 digest를 먼저 저장·적용하고 전달이 실패하면 옛 digest로 되돌린다. 로봇이 새 토큰으로 곧바로 HELLO 해도 거절되지 않는다.
+   - 교체: 연결된 로봇에 "허브 연결"을 다시 하면 새 토큰이 옛것을 대신한다. Fleet은 새 digest를 먼저 저장·적용하고(옛 토큰으로 맺은 허브 세션은 그때 끊는다) 전달이 실패하면 옛 digest로 되돌린다. 로봇이 새 토큰으로 곧바로 HELLO 해도 거절되지 않는다. 로봇마다 `asyncio.Lock` 하나가 저장·전달·되돌림을 한 덩어리로 묶는다.
    - 자동 재시도는 없다. 감사 행(`hub_link`, `hub_unlink`)은 결과 단어만 남긴다.
 
 ### 보안
@@ -43,10 +45,14 @@
 | 비교(허브) | `hmac.compare_digest(sha256(presented), stored)`, 상수 시간 |
 | 평문 수명 | 생성부터 로봇 PUT 응답까지 한 호출. 로그·감사·응답·예외 문구에 없음(테스트가 로그를 검사) |
 | 전달 | TLS로 묶인 등록만(승인 CA + 신원 확인 뒤 Bearer). 평문 HTTP 등록은 `409 tls_binding_required`. CORE도 `https`가 아니면 `403 TLS_REQUIRED` |
-| 로봇 저장 | `~/.rosy/fleet-link.yaml` 0600, CORE 사용자 소유, 대시보드가 쓰는 `rosy.yaml`과 다른 파일. 느슨한 권한이면 읽지 않음 |
+| 로봇 저장 | `~/.rosy/fleet-link.yaml` 0600, CORE 사용자 소유, 대시보드가 쓰는 `rosy.yaml`과 다른 파일. 새로 만드는 `~/.rosy`는 0700. 읽을 때 `lstat`로 심볼릭 링크·다른 소유자·그룹/남 읽기 권한이면 경고하고 무시. 읽기·YAML 오류도 경고하고 무시(기동을 깨지 않음) |
+| 목표 중 변경 | CORE `409 FLEET_GOAL_ACTIVE`, Fleet `fleet_goal_active`. 새 링크는 첫 WELCOME 뒤에만 SAF-003 입력 |
+| 기동 기본값 | 잘못된 Fleet·SAF-003 설정을 기본값으로 대신한 CORE는 `PUT`을 `409 FLEET_LINK_CONFIG_INVALID`로 거절 |
+| 해제 경로 | `DELETE`는 `load_config(fleet_link=False)`로 아래 층 링크를 다시 계산한다(덮어쓰기 파일만이 아님) |
 | 로봇→허브 | 발견 프로필만(사이트 CA 고정 `wss`). 평문 `hub_url` 없음 |
-| 회수 | 해제·등록 해제가 Fleet digest를 지우고 허브 세션을 끊는다. 로봇에 남은 토큰은 HELLO에서 거절 |
-| 교체 | 다시 "허브 연결". 옛 토큰은 새 digest 저장 순간 죽는다 |
+| 회수 | 해제는 Fleet digest와 허브 세션을 먼저 지우고, TLS 울타리 뒤의 로봇 `DELETE`는 그 다음이다(실패해도 Fleet 쪽은 지워짐). 로봇에 남은 토큰은 HELLO에서 거절 |
+| 교체 | 다시 "허브 연결". 옛 토큰은 새 digest 저장 순간 죽고, 옛 토큰으로 맺은 허브 세션도 그때 끊긴다 |
+| CORE 자리 | **남은 위험(사용자 열린 항목).** 깨끗한 고침(위조할 수 없는 사이트 토큰 표식)은 이 변경 안에서 하지 못했다. CORE `/auth/pair`가 받는 `purpose`·`label`은 모두 화면 코드를 가진 호출자가 고른다. `pair-site` 같은 출처를 CORE가 기록해도 같은 호출자가 같은 값을 보낼 수 있어 위조 불가가 아니다. 진짜 구분에는 Fleet만 가진 자격(사이트 클라이언트 인증서 또는 관리자 서명 토큰)이 필요하다. 그래서 임시 조치는 지금 자리 그대로다: 관리자, 또는 화면 코드 출처(`pair-physical`·`pair-admin`)이고 라벨이 Fleet 등록 호출의 `site:`인 운영자 토큰, CORE TLS 리스너로만. 남는 위험: 로봇 화면 코드로 운영자 토큰을 받은 사람이 이 로봇의 허브 위치를 바꿀 수 있다(상태 밀기 방향, SAF-003 무장; 명령은 아님). 사용자가 사이트 전용 자격을 정할 때 이 자리를 그 자격으로 좁힌다 |
 
 ### Alternatives
 

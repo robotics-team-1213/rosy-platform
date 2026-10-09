@@ -97,10 +97,14 @@ class SiteHub:
 
     def set_pairing_digest(self, robot_id: str, digest: str | None) -> None:
         """D-555: accept HELLO whose token hashes to ``digest``. None revokes and unpairs."""
+        previous = self._digests.get(robot_id)
         if digest is not None:
             self._digests[robot_id] = digest
-            return
-        self._digests.pop(robot_id, None)
+            if previous is None or previous == digest:
+                return
+        else:
+            self._digests.pop(robot_id, None)
+        # Revoked or rotated: a socket welcomed with the old credential is no longer paired.
         self._paired.discard(robot_id)
         if self._sessions.pop(robot_id, None) is not None:
             self.registry.record(robot_id).online = False

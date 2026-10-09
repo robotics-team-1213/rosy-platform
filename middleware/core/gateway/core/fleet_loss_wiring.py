@@ -29,6 +29,7 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
     # from the agent: a later rejected hello or stop() is a lost link, not a robot without
     # Fleet (I1). Only PUT/DELETE /fleet/link change the config at runtime (D-555 5).
     configured = fleet_link_configured(config.get("fleet") or {})
+    fallback = None
     # Fail fast only on a robot with a Fleet link; a robot without Fleet must boot
     # unaffected by Fleet-loss settings (D-419 scope) — one warning, defaults.
     try:
@@ -39,6 +40,7 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
             raise
         logger.warning("ignoring invalid SAF-003 timing on a robot without a Fleet link: %s", exc)
         timeout_s = DEFAULT_TIMEOUT_S
+        fallback = f"SAF-003 timing: {exc}"
     policy, known = normalize_policy(safety.fleet_loss_policy)
     if not known:
         logger.warning("safety.fleet_loss_policy %r is unknown; SAF-003 uses STOP",
@@ -53,9 +55,11 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
                 raise RuntimeError("robot localization is not LOCALIZED")
             nav.home(source="fleet_loss")
 
-    return FleetLossMonitor(
+    monitor = FleetLossMonitor(
         events=events,
-        link_configured=lambda: fleet_link_configured(config.get("fleet") or {}),
+        # D-555: after a runtime relink the link counts only once the hub has welcomed it.
+        link_configured=lambda: (fleet_link_configured(config.get("fleet") or {})
+                                 and getattr(fleet_agent, "armed", True)),
         link_connected=lambda: fleet_agent.connected,
         link_last_rx=lambda: fleet_agent.last_rx,
         # Link freshness is the heartbeat's own silence budget, not the policy timeout.
@@ -67,3 +71,6 @@ def build_fleet_loss(config: dict, *, events, fleet_agent, nav, safety,
         return_home=return_home,
         timeout_s=timeout_s,
     )
+    #: D-555: PUT /fleet/link refuses to arm SAF-003 on these fallback defaults.
+    monitor.config_fallback = fallback
+    return monitor

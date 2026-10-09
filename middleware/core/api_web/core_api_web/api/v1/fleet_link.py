@@ -16,10 +16,11 @@ from core_api_web.api.deps import AuthContext, CoreServicesLike, get_services
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import operator, viewer
 from core_common.config import (
+    FLEET_LINK_KEYS,
     ConfigError,
     clear_fleet_link,
     fleet_link_layer,
-    local_overlay,
+    load_config,
     merge_fleet_link,
     write_fleet_link,
 )
@@ -66,7 +67,15 @@ def _readback(svc: CoreServicesLike) -> dict:
         "hub_url": fleet.get("hub_url"),
         "enabled": bool(agent.enabled),
         "connected": bool(agent.connected),
+        "fleet_goal_active": svc.nav.fleet_goal() is not None,
     }
+
+
+def _refuse_during_fleet_goal(svc: CoreServicesLike) -> None:
+    """D-555 review: a relink drops the link; with a Fleet goal running that would arm SAF-003."""
+    if svc.nav.fleet_goal() is not None:
+        raise ApiError("FLEET_GOAL_ACTIVE", 409,
+                       "a Fleet navigation goal is running; change the Fleet link after it ends")
 
 
 @fleet_link_router.get("")
@@ -84,6 +93,12 @@ async def put_fleet_link(request: Request, auth: AuthContext = Depends(link_seat
         # No field detail: pydantic's errors echo the input, and the input is the token.
         raise ApiError("VALIDATION_ERROR", 400,
                        "body must be {pairing_token, expected_hostname, ca_pem}") from None
+    _refuse_during_fleet_goal(svc)
+    fallback = (getattr(svc.fleet_agent, "config_fallback", None)
+                or getattr(svc.fleet_loss, "config_fallback", None))
+    if fallback:
+        raise ApiError("FLEET_LINK_CONFIG_INVALID", 409,
+                       f"boot used defaults for an invalid Fleet setting ({fallback}); fix it and restart CORE")
     hostname = body.expected_hostname.lower().rstrip(".")
     if not HOSTNAME.fullmatch(hostname):
         raise ApiError("VALIDATION_ERROR", 400, "expected_hostname must be an approved .local name")
@@ -104,13 +119,14 @@ async def put_fleet_link(request: Request, auth: AuthContext = Depends(link_seat
 @fleet_link_router.delete("")
 async def delete_fleet_link(auth: AuthContext = Depends(link_seat),
                             svc: CoreServicesLike = Depends(get_services)):
+    _refuse_during_fleet_goal(svc)
     try:
         removed = clear_fleet_link()
-        lower = (local_overlay().get("fleet") or {})
-    except (OSError, ConfigError) as exc:
-        raise ApiError("INTERNAL_ERROR", 500, f"failed to clear the fleet link: {exc}") from None
+        lower = load_config(fleet_link=False).get("fleet") or {}
+    except (OSError, ConfigError, ValueError) as exc:
+        raise ApiError("INTERNAL_ERROR", 500, f"failed to clear the fleet link: {type(exc).__name__}") from None
     # Back to whatever link the lower layers held (usually none).
-    fallback = {key: lower[key] for key in ("pairing_token", "hub_url", "discovery") if key in lower}
+    fallback = {key: lower[key] for key in FLEET_LINK_KEYS if key in lower}
     svc.fleet_agent.relink(merge_fleet_link(svc.config.get("fleet"), fallback))
     svc.events.publish("fleet.link_cleared", severity="warning", source="api",
                        data={"by": auth.token_id, "removed": removed})

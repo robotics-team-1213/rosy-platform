@@ -46,6 +46,9 @@ def _token(svc, name: str, role: str, source: str, label: str) -> dict:
 @pytest.fixture
 def robot(core_client, tmp_path, monkeypatch):
     monkeypatch.setenv("ROSY_FLEET_LINK", str(tmp_path / "link" / "fleet-link.yaml"))
+    overlay = tmp_path / "rosy.yaml"
+    overlay.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setenv("ROSY_CONFIG", str(overlay))
     tc, svc = core_client(config_overrides=TLS)
     relinked = []
 
@@ -178,6 +181,62 @@ def test_relink_restarts_only_the_agent_and_saf003_follows(tmp_path):
                                                           "ca_file": str(tmp_path / "ca.pem")}})
     # No running loop: start() defers to the API loop with the new link pending.
     assert agent.enabled is True and agent._pending == ("", TOKEN)
+    # Not armed until the hub welcomes the new link: no outage starts before it ever came up.
+    assert agent.armed is False and monitor.status()["configured"] is False
+    agent.armed = True  # what the WELCOME branch of FleetAgent._session sets
     assert monitor.status()["configured"] is True
     agent.relink({})
     assert agent.enabled is False and monitor.status()["configured"] is False
+
+
+@pytest.mark.parametrize("method", ["put", "delete"])
+def test_a_running_fleet_goal_refuses_relink(robot, monkeypatch, method):
+    https, svc, seats, relinked, folder = robot
+    monkeypatch.setattr(svc.nav, "fleet_goal", lambda: ("attempt-1", object()))
+    call = getattr(https, method)
+    response = (call("/api/v1/fleet/link", json=_body(), headers=seats["site"]) if method == "put"
+                else call("/api/v1/fleet/link", headers=seats["site"]))
+    assert response.status_code == 409 and response.json()["error"]["code"] == "FLEET_GOAL_ACTIVE"
+    assert relinked == [] and not (folder / "fleet-link.yaml").exists()
+
+
+def test_boot_fallback_defaults_refuse_a_new_link(robot):
+    https, svc, seats, relinked, _ = robot
+    svc.fleet_loss.config_fallback = "SAF-003 timing: fleet_loss_timeout_s out of range"
+    response = https.put("/api/v1/fleet/link", json=_body(), headers=seats["site"])
+    assert response.status_code == 409 and response.json()["error"]["code"] == "FLEET_LINK_CONFIG_INVALID"
+    assert relinked == []
+
+
+def test_delete_falls_back_to_the_lower_layer_link(robot, tmp_path):
+    https, _, seats, relinked, _ = robot
+    (tmp_path / "rosy.yaml").write_text(yaml.safe_dump(
+        {"fleet": {"hub_url": "ws://lower/ws/robots", "pairing_token": "lower" + "-tok"}}), encoding="utf-8")
+    assert https.put("/api/v1/fleet/link", json=_body(), headers=seats["site"]).status_code == 200
+    assert https.delete("/api/v1/fleet/link", headers=seats["site"]).status_code == 200
+    assert relinked[-1]["hub_url"] == "ws://lower/ws/robots" and "discovery" not in relinked[-1]
+
+
+def test_a_broken_link_file_never_breaks_boot(tmp_path, monkeypatch):
+    from core_common.config import fleet_link_layer
+
+    link = tmp_path / "fleet-link.yaml"
+    monkeypatch.setenv("ROSY_FLEET_LINK", str(link))
+    link.write_text("fleet: [unclosed", encoding="utf-8")
+    if os.name == "posix":
+        link.chmod(0o600)
+    assert fleet_link_layer() is None
+
+
+@pytest.mark.skipif(os.name != "posix", reason="symlinks and modes are POSIX here")
+def test_a_symlinked_link_file_is_ignored(tmp_path, monkeypatch):
+    from core_common.config import fleet_link_layer, write_fleet_link
+
+    real = tmp_path / "real" / "fleet-link.yaml"
+    monkeypatch.setenv("ROSY_FLEET_LINK", str(real))
+    write_fleet_link(TOKEN, SITE_HOST, "pem")
+    assert stat.S_IMODE(real.parent.stat().st_mode) == 0o700
+    link = tmp_path / "fleet-link.yaml"
+    link.symlink_to(real)
+    monkeypatch.setenv("ROSY_FLEET_LINK", str(link))
+    assert fleet_link_layer() is None

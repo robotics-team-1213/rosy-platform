@@ -14,6 +14,7 @@ from enrollment_fakes import CODE, NAME, PINNED, FakeCore, build, scan_row
 from core_common.protocol.schemas import Envelope, EnvelopeType, HelloPayload
 from fleet.server.enrollment import EnrollmentError
 from fleet.server.enrollment_store import EnrollmentStore
+from fleet.server.enrollment_tls import EnrollmentTlsError
 from fleet.swarm.transport import RobotApiError
 
 HUB_LINK = {"expected_hostname": "rosy-site.local", "ca_pem": "-----BEGIN CERTIFICATE-----\nx\n"}
@@ -28,6 +29,10 @@ class LinkClient:
         self.provisioning, self.put_error, self.delete_error = provisioning, put_error, delete_error
         self.puts: list[dict] = []
         self.deletes = 0
+        self.goal = False
+
+    async def fleet_link_get(self) -> dict:
+        return {"configured": bool(self.puts), "fleet_goal_active": self.goal}
 
     async def capabilities(self) -> dict:
         return {"fleet_link_provisioning": True} if self.provisioning else {}
@@ -135,8 +140,12 @@ def test_failed_delivery_rolls_back_and_rotation_kills_the_old_token(tmp_path, c
     assert hello(console, attempted).payload["code"] == "PAIRING_INVALID"
 
     client.put_error = None
+    assert hello(console, old).type is EnvelopeType.WELCOME
+    assert "rosy_09" in console.hub._sessions
     asyncio.run(service.link_hub("rosy_09", principal_id="alice"))
     new = client.puts[-1]["pairing_token"]
+    # Rotation drops the socket welcomed with the old credential.
+    assert "rosy_09" not in console.hub._sessions and not console.hub.registry.find("rosy_09").online
     assert store.audit_rows()[-1]["outcome"] == "rotated"
     assert hello(console, new).type is EnvelopeType.WELCOME
     assert hello(console, old).payload["code"] == "PAIRING_INVALID"
@@ -214,3 +223,45 @@ def test_route_needs_a_named_operator_and_refuses_plain_http(tmp_path):
     assert network.requests == []
     listed = client.get("/api/fleet/enrollment/robots", headers=_headers(VIEWER)).json()["robots"][0]
     assert listed["hub_linkable"] is False and listed["hub_linked"] is False
+
+
+def test_a_running_fleet_goal_blocks_link_and_unlink(tmp_path):
+    service, _, console, store = enrolled(tmp_path)
+    client = console._clients["rosy_09"]
+    client.goal = True
+    with pytest.raises(EnrollmentError) as refused:
+        asyncio.run(service.link_hub("rosy_09", principal_id="alice"))
+    assert refused.value.code == "fleet_goal_active" and client.puts == []
+    client.goal = False
+    asyncio.run(service.link_hub("rosy_09", principal_id="alice"))
+    digest = store.get("rosy_09")["hub_digest"]
+    console._goals["rosy_09"] = {"x": 0.0}  # a goal this console sent
+    with pytest.raises(EnrollmentError, match="Fleet goal"):
+        asyncio.run(service.unlink_hub("rosy_09", principal_id="alice"))
+    assert store.get("rosy_09")["hub_digest"] == digest and client.deletes == 0
+    del console._goals["rosy_09"]
+    # CORE's own refusal is surfaced with the same code, and nothing changes.
+    client.put_error = RobotApiError("rosy_09", 409, "FLEET_GOAL_ACTIVE", "goal")
+    with pytest.raises(EnrollmentError) as robot_refused:
+        asyncio.run(service.link_hub("rosy_09", principal_id="alice"))
+    assert robot_refused.value.code == "fleet_goal_active"
+    assert store.get("rosy_09")["hub_digest"] == digest
+
+
+@pytest.mark.parametrize("binding", ["changed", "missing"])
+def test_unlink_clears_fleet_first_even_when_the_tls_binding_fails(tmp_path, binding):
+    service, _, console, store = enrolled(tmp_path)
+    asyncio.run(service.link_hub("rosy_09", principal_id="alice"))
+    client = console._clients["rosy_09"]
+    token = client.puts[-1]["pairing_token"]
+
+    def bound(robot_id):
+        if binding == "changed":
+            raise EnrollmentTlsError("TLS bindings changed; explicit reviewed restart required")
+        return False
+
+    service._tls_bound = bound
+    result = asyncio.run(service.unlink_hub("rosy_09", principal_id="alice"))
+    assert result["robot_cleared"] is False and client.deletes == 0
+    assert store.get("rosy_09")["hub_digest"] is None
+    assert hello(console, token).payload["code"] == "PAIRING_INVALID"

@@ -351,7 +351,9 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
             : `${row.robot_id} 허브 연결 해제됨 — 로봇에 닿지 않아 로봇 쪽 토큰은 허브가 거절합니다.`], false);
       } catch (err) {
         if (err.name === "AbortError") return;
-        showResult([err?.detail?.message || "허브 연결 실패"], true);
+        showResult([err?.detail?.code === "fleet_goal_active"
+          ? "Fleet 목표가 진행 중입니다 — 목표가 끝난 뒤 다시 하세요."
+          : err?.detail?.message || "허브 연결 실패"], true);
       }
       await refresh();
       life.check();

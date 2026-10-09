@@ -96,6 +96,11 @@ class FleetAgent:
         #: time.monotonic() of the last message received from the hub, or None.
         self.last_rx: float | None = None
         fleet_cfg = (config or {}).get("fleet") or {}
+        #: D-555: False from a runtime relink until the next WELCOME; SAF-003 counts a lost
+        #: link only while armed, so a new link does not start an outage before it ever came up.
+        self.armed = True
+        #: D-555: why boot fell back to a default for an invalid Fleet setting, or None.
+        self.config_fallback: str | None = None
         try:
             self.reply_timeout_s = heartbeat_reply_timeout_s(fleet_cfg)
         except ValueError:
@@ -106,6 +111,7 @@ class FleetAgent:
             logger.warning("ignoring invalid fleet.heartbeat_reply_timeout_s on a robot "
                            "without a Fleet link", exc_info=True)
             self.reply_timeout_s = DEFAULT_REPLY_TIMEOUT_S
+            self.config_fallback = "fleet.heartbeat_reply_timeout_s is invalid"
         #: Injectable so tests run the real loop on a scaled clock.
         self.heartbeat_period_s = HEARTBEAT_PERIOD_S
         self.link_slack_s = LINK_SLACK_S
@@ -195,6 +201,7 @@ class FleetAgent:
         self.stop()
         self._task = None
         self._pending = None
+        self.armed = False
         self.config["fleet"] = fleet_cfg
         self.start()
 
@@ -314,6 +321,7 @@ class FleetAgent:
             # that never gets there is still a lost link (and does not stamp last_rx).
             return f"unexpected hello reply {reply.type.value}"
         self.last_rx = self._clock()
+        self.armed = True
         logger.info("Fleet agent welcomed by hub")
         last_event_seq = reply.payload.get("last_event_seq", 0)
         self._event_buffer = [e for e in self._event_buffer if e.seq > last_event_seq]

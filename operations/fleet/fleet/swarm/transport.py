@@ -338,6 +338,9 @@ class HttpRobotClient:
         """D-555: deliver the hub credential. ``body`` holds a secret: never log it."""
         return self._check(await self._http.put("/api/v1/fleet/link", json=body, headers=self._headers()))
 
+    async def fleet_link_get(self) -> dict:
+        return await self._get("/api/v1/fleet/link")
+
     async def fleet_link_delete(self) -> dict:
         return self._check(await self._http.delete("/api/v1/fleet/link", headers=self._headers()))
 

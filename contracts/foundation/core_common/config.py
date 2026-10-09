@@ -18,6 +18,7 @@ import hashlib
 import logging
 import os
 import re
+import stat
 import tempfile
 from .config_transaction import transaction
 from pathlib import Path
@@ -65,15 +66,28 @@ def fleet_link_ca_path() -> Path:
 
 
 def fleet_link_layer() -> dict[str, Any] | None:
-    """The provisioned `fleet` link block, or None. A file others can read is ignored (D-555)."""
+    """The provisioned `fleet` link block, or None (D-555). Never breaks boot: a symlink, a file
+    owned by another user or readable by group/others, or an unreadable file is ignored."""
     path = fleet_link_path()
-    if not path.is_file():
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
         return None
-    if os.name == "posix" and path.stat().st_mode & 0o077:
-        _LOG.warning("%s is readable by group or others; Fleet link ignored", path)
+    except OSError as exc:
+        _LOG.warning("%s unreadable (%s); Fleet link ignored", path, exc.strerror)
         return None
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+    if not stat.S_ISREG(info.st_mode):
+        _LOG.warning("%s is not a regular file (symlink?); Fleet link ignored", path)
+        return None
+    if os.name == "posix" and (info.st_mode & 0o077 or info.st_uid != os.geteuid()):
+        _LOG.warning("%s is readable by others or not owned by this user; Fleet link ignored", path)
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        _LOG.warning("%s could not be read as YAML; Fleet link ignored", path)
+        return None
     fleet = data.get("fleet") if isinstance(data, dict) else None
     return {key: fleet[key] for key in FLEET_LINK_KEYS if key in fleet} if isinstance(fleet, dict) else None
 
@@ -89,7 +103,7 @@ def merge_fleet_link(fleet: dict[str, Any] | None, link: dict[str, Any] | None) 
 
 
 def _write_private(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)  # mode applies only when created
     descriptor, temporary = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
     tmp = Path(temporary)  # mkstemp creates 0600
     try:
@@ -232,7 +246,7 @@ def _robot_package_layer(config: dict[str, Any], overlay: Any) -> dict[str, Any]
     return layer
 
 
-def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
+def load_config(explicit_path: Optional[str] = None, *, fleet_link: bool = True) -> dict[str, Any]:
     """기본값 → 로봇 패키지 core.yaml → ~/.rosy/rosy.yaml 또는 ROSY_CONFIG 순으로 병합해 반환한다.
 
     ROSY_CONFIG 가 있으면 ~/.rosy/rosy.yaml 대신 그것을 읽는다. 로봇 패키지 층의 오류는 ConfigError.
@@ -262,7 +276,7 @@ def load_config(explicit_path: Optional[str] = None) -> dict[str, Any]:
             overlay = yaml.safe_load(f) or {}
     config = _deep_merge(config, _robot_package_layer(config, overlay))
     config = _deep_merge(config, overlay)
-    link = fleet_link_layer()
+    link = fleet_link_layer() if fleet_link else None
     if link is not None:
         config["fleet"] = merge_fleet_link(config.get("fleet"), link)
     if device and dev_layer:
