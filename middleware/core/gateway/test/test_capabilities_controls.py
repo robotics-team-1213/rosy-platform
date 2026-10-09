@@ -90,6 +90,7 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert base["junction_pivot"] is False             # D-507 2: no keep_debug junction_ahead_m yet
     assert base["line_follow_authority"] is True       # D-517 4: the manager enforces an authority
     assert base["line_follow_authority_required"] is False  # config line_follow.authority_required off
+    assert base["line_follow_advice"] is True          # D-525: advice stored and shown, display only
     lf = svc.line_follow
     lf._config = dataclasses.replace(lf._config, authority_required=True)
     assert _controls(client)["items"][0]["line_follow_authority_required"] is True
@@ -116,6 +117,7 @@ def test_d491_trip_caps_follow_robot_package_services_and_limits(core_client):
     assert base["robot_kind"] == "other_base" and base["drive_modes"] == []
     assert base["junction_turn"] is False and base["junction_pivot"] is False
     assert base["line_follow_authority"] is False
+    assert base["line_follow_advice"] is False
     assert base["line_follow_authority_required"] is False
     assert base["lane_bend"] is False
     assert base["trip_max_linear"] == min(limits.max_linear, limits.fleet_linear)

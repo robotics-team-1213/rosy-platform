@@ -184,15 +184,74 @@ def test_every_role_manifest_parses_and_its_sources_exist(role):
             line = raw.split("#", 1)[0].split()
             if not line:
                 continue
-            assert line[0] in ("safe", "report", "approval"), raw
+            assert line[0] in ("safe", "report", "approval") or line[0].startswith("approval="), raw
             kinds.add((line[1], line[2] if len(line) > 2 else ""))
             if line[1] == "file":
                 base, rel = line[3].split("/", 1)
                 src = (ROOT / "deploy" if base == "deploy" else dirs[base]) / rel
-                if line[3] == PENDING_D524:
-                    assert line[0] == "approval", raw  # lands with D-524 (feat/host-control)
-                    continue
                 assert src.is_file(), raw
                 assert b"\r\n" not in src.read_bytes(), src
     assert ("enabled", "rosy-nightly-reboot.timer") in kinds
     assert ("file", "/etc/systemd/system/rosy-nightly-reboot.timer") in kinds
+
+
+def test_a_rootless_dry_run_treats_unreadable_files_as_not_comparable(tmp_path):
+    if os.name == "nt" or os.geteuid() == 0:
+        pytest.skip("needs a non-root POSIX user")
+    fake, bin_dir = _fakes(tmp_path)
+    locked = _host_file(tmp_path, "/etc/sudoers.d/rosy-host-control", "op ALL=(root) NOPASSWD: x\n")
+    locked.chmod(0)
+    try:
+        result = _run(tmp_path, bin_dir, fake, "install", "ai", "--dry-run")
+    finally:
+        locked.chmod(0o644)
+    assert result.returncode == 0, result.stderr
+    assert "/etc/sudoers.d/rosy-host-control: cannot compare without root" in result.stdout
+
+
+def test_a_failed_copy_keeps_the_old_approved_copy(tmp_path, monkeypatch):
+    import importlib.machinery
+    import importlib.util
+    monkeypatch.setenv("ROSY_HOST_STATE_ROOT", str(tmp_path / "host"))
+    monkeypatch.setenv("SUDO_USER", "op")
+    loader = importlib.machinery.SourceFileLoader("rosy_host_state_under_test", str(TOOL))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(mod)
+    mod.copy_approved("model")
+    lib = tmp_path / "host/usr/local/lib/rosy-host-state"
+    marker = lib / "common/manifest"
+    before = marker.read_bytes()
+
+    def boom(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(mod.shutil, "copyfile", boom)
+    with pytest.raises(OSError):
+        mod.copy_approved("model")
+    assert marker.read_bytes() == before and (lib / "role-name").read_text() == "model\n"
+    assert (lib / "login").read_text() == "op\n"
+
+
+def test_firewall_and_wifi_lines_wait_for_their_approval_group(tmp_path):
+    fake, bin_dir = _fakes(tmp_path)
+    assert _run(tmp_path, bin_dir, fake, "install", "site").returncode == 0
+    calls = _calls(fake)
+    assert not any("rosy-site-firewall.service" in c or "rosy-site-stack.service" in c for c in calls if " enable" in c)
+    assert not any("modify" in c for c in calls)
+    status = _run(tmp_path, bin_dir, fake, "install", "site", "--dry-run").stdout
+    assert "[approval=firewall] rosy-site-firewall.service" in status and "skip (needs --approve)" in status
+    assert _run(tmp_path, bin_dir, fake, "install", "site", "--approve", "firewall,wifi").returncode == 0
+    assert "systemctl enable --now rosy-site-firewall.service" in _calls(fake)
+    assert "systemctl enable --now rosy-site-stack.service" in _calls(fake)
+
+
+def test_an_overwritten_file_is_backed_up_and_the_report_names_the_backup(tmp_path):
+    _lib(tmp_path, "safe file /etc/a.conf common/a.conf\n", "", {"common/a.conf": "new\n"})
+    _host_file(tmp_path, "/etc/a.conf", "hand edited\n")
+    fake, bin_dir = _fakes(tmp_path)
+    result = _run(tmp_path, bin_dir, fake, "check")
+    assert result.returncode == 0, result.stdout
+    saved = list((tmp_path / "host/var/lib/rosy-host-state/backup").glob("*/etc/a.conf"))
+    assert len(saved) == 1 and saved[0].read_text() == "hand edited\n"
+    status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
+    assert "old content saved to" in status["fixed"][0] and "a.conf" in status["fixed"][0]
