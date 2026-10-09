@@ -24,6 +24,6 @@
 ### Consequences
 
 - `v13.1.00`은 intake를 다시 돌려도 1항 게이트 때문에 shadow로 가지 않는다. 비교 기록용 `candidate`로 원장에 남긴다.
-- 모델 PC의 멈춤 원인은 재부팅 뒤 `journalctl -k`(OOM 기록)와 당시 프로세스로 확인해, 이 ADR의 Problem 3항에 덧붙인다.
+- **멈춤 원인(재부팅 뒤 확인).** 모델 PC의 시스템 메모리는 15 GB다. 이전 부팅의 커널 기록에서 18:37–18:55 동안 NVIDIA 드라이버가 `Out of memory [NV_ERR_NO_MEMORY]`를 되풀이했다. 18:59에는 `Purging GPU memory ... 4732 pages left available`이 남았다. 시스템 메모리가 바닥나 응답이 멈췄고, 현장에서 19:54에 재부팅했다. 3항의 상한은 이 15 GB 기준으로 정한다(기본 약 9 GB).
 
 **Related:** [D-554](D-554-v13-drivable-lane-derived-labels.md), [D-558](D-558-drivable-model-semantic-version.md), [D-563](D-563-drivable-near-road-false-negative-and-map-pose-labels.md), [D-553](D-553-cd-speed-parallel-build-and-test-pcs.md).
