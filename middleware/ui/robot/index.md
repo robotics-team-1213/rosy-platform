@@ -37,8 +37,8 @@
 
 ## 최근 기록
 
+- 2026-10-10 · uncommitted · uiux(robot): 차선 추종 패널에 D-551 가상 신호 참고 칩
 - 2026-10-09 · uncommitted · feat(robot): 설치·정비 화면에 후면 램프 대조 시험
 - 2026-10-09 · uncommitted · uiux(robot): 마지막 계획 경로의 불확실성 표시
 - 2026-10-09 · uncommitted · fix(robot): paired 연결에서 개발 입장 숨김
 - 2026-10-09 · uncommitted · uiux(robot): Pilot 인계 뒤 빈 지도 안내
-- 2026-10-09 · uncommitted · uiux(robot): 맵핑 세션 근거와 설정 카드 높이
