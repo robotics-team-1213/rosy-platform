@@ -146,6 +146,16 @@ def test_identity_request_uses_face_owner_even_when_normal_lamp_is_off(tmp_path)
     assert owner.handoffs == [("identify_blue", "00112233445566778899aabb")]
     assert owner.lamps == []
 
+
+def test_identity_request_does_not_handoff_to_retired_display(tmp_path):
+    root = _root(tmp_path, env="ROSY_LAMP_ENABLED=false\n")
+    _request(root, "identify_blue")
+    retired = FakeSystem(root, display="inactive", retired="active")
+
+    assert _run(root, retired)["state"] == "unavailable"
+    assert retired.handoffs == [] and retired.lamps == []
+
+
 def test_an_identity_request_older_than_its_short_age_starts_nothing(tmp_path):
     # D-472 4: Fleet's 6 s window would be over before the blink; a bench test keeps 60 s.
     root = _root(tmp_path, env="ROSY_LAMP_ENABLED=true")
