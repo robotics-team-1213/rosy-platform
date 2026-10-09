@@ -238,9 +238,11 @@ def test_candidate_job_exports_without_ready_or_lane_changes(tmp_path, monkeypat
     monkeypatch.setattr(train_job, 'gpu_lease', nullcontext)
     out = tmp_path / 'candidate-job'
     result = train_job._run_drivable_candidate(config, out, dataset, profile, training,
-                                                parent, {'test': 'synthetic'}, lambda: None)
+                                                parent, {'test': 'synthetic', 'camera_provenance': 'accepted'},
+                                                lambda: None)
     assert result['status'] == 'candidate'
     assert result['revision'].startswith('v13-drivable-')
+    assert json.loads((Path(result['artifact']) / 'model_manifest.json').read_text())['camera_provenance'] == 'accepted'
     assert json.loads((out / 'state.json').read_text())['outcome'] == 'candidate'
     assert (Path(result['artifact']) / 'candidate_parity.json').is_file()
     assert not list(tmp_path.rglob('READY'))
