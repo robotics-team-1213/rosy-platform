@@ -42,7 +42,9 @@ BOTH_CONFIDENCE = 0.9
 ONE_CONFIDENCE = 0.6
 #: a side exit needs this many way rows on the frame border above the near band
 SIDE_EXIT_ROWS = 4
-EXIT_TIE_M = 0.05
+EXIT_TIE_M = 0.03
+#: without a way this long, the pivot latch and smoothing are forgotten
+FORGET_S = 1.5
 SMOOTHING = 0.5
 
 
@@ -134,12 +136,22 @@ class DrivableSteer:
         self._target = None
         self._pivot = None
         self._smoothed = None
+        self._lost_since = None
 
     def reset(self):
         self._key = self._target = self._pivot = self._smoothed = None
+        self._lost_since = None
+
+    def lost(self, stamp):
+        """No fresh way this frame: forget the latch only after FORGET_S without one."""
+        if self._lost_since is None:
+            self._lost_since = stamp
+        elif stamp - self._lost_since > FORGET_S:
+            self.reset()
 
     def update(self, way, way_key, ground, x_offset, half, source_pose=None, current_pose=None):
         """(error, confidence, debug) or (None, None, debug) for no target."""
+        self._lost_since = None
         if way_key != self._key:
             self._key, self._target = way_key, way_target(way, ground, x_offset, half)
         info = dict(self._target)

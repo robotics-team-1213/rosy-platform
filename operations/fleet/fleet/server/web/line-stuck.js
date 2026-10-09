@@ -249,7 +249,7 @@ export function refusalText(robotId, decision, err) {
 }
 
 export function createLineStuckPanel({ scope, view, call, log, isOperator, namedReason = () => "",
-  alert = browserAlert }) {
+  notify = browserAlert }) {
   // robot_id -> { stuck_id, decision } (확인 단계), { stuck_id, text, kind } (마지막 결과)
   const confirming = new Map();
   const alerted = new Map();
@@ -473,7 +473,7 @@ export function createLineStuckPanel({ scope, view, call, log, isOperator, named
     for (const key of [...signatures.keys()]) if (!live.has(key)) signatures.delete(key);
     for (const key of [...previews.keys()]) if (live.get(key) !== previews.get(key).stuck_id) previews.delete(key);
     for (const due of alertsDue(alerted, stucks)) {
-      alert(due.kind === "overdue" ? `${due.robotId}: 30초 넘게 답 없음 — 로봇은 멈춰 기다립니다`
+      notify(due.kind === "overdue" ? `${due.robotId}: 30초 넘게 답 없음 — 로봇은 멈춰 기다립니다`
         : `${due.robotId}: 판단 요청 — 차선 추종이 막혔습니다`);
     }
 
