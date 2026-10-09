@@ -328,7 +328,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       ctx.beginPath();
       ctx.arc(cam.x, cam.y, size * 0.9, 0, Math.PI * 2);
       ctx.stroke();
-      drawChip(ctx, null, cam.x, cam.y - size * 1.8, offsetLabel(row), row.warn ? "warn" : undefined);
+      const markers = new Set((view.siteMap?.maps || []).flatMap((map) => map.sources || [])
+        .map((source) => source.robot_markers?.[row.robotId]).filter(Number.isInteger));
+      const label = row.measured && !row.pose && markers.size === 1
+        ? `ArUco ${[...markers][0]}` : offsetLabel(row);
+      drawChip(ctx, null, cam.x, cam.y - size * 1.8, label, row.warn ? "warn" : undefined);
     }
     ctx.fillStyle = css("--ink-quiet");
     for (const item of tracking.unknown) {

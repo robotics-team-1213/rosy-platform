@@ -103,6 +103,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
   function card(robot, index) {
     const node = document.createElement("article");
+    const displayName = view.robotNames?.[robot.robot_id] || robot.robot_id;
     // D-82 로봇 사다리 — 지도 삼각형과 같은 색 순서(view.robots 인덱스)로 카드의
     // 정체 띠가 돈다. CSS 의 .s0/.s1/.s2 가 --robot-1..3 을 붙인다. 표시 순서가
     // 예외 우선으로 바뀌어도 색은 로봇에 붙어 있다.
@@ -137,8 +138,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       battery.dataset.fact = "battery";
       battery.append(nodeWithText("span", "sr-only", "배터리 "),
         nodeWithText("strong", "", powerHealthView(robot, view.receivedAtMs, Date.now()).battery));
-      line.append(nodeWithText("b", "", robot.robot_id),
+      line.append(nodeWithText("b", "", displayName),
         nodeWithText("span", "trip-line", tripLine || (robot.yielding ? "비켜서는 중" : nav.text)), battery);
+      if (displayName !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
       node.appendChild(line);
       return node;
     }
@@ -155,9 +157,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     const head = nodeWithText("div", "robot-head");
     const robotName = document.createElement("b");
-    robotName.textContent = robot.robot_id;
+    robotName.textContent = displayName;
     const spacer = nodeWithText("span", "spacer");
-    head.append(robotName, spacer);
+    head.append(robotName);
+    if (displayName !== robot.robot_id) head.append(nodeWithText("small", "hint", `Fleet ID ${robot.robot_id}`));
+    head.append(spacer);
     // D-359 US-009 — 모드 글은 공용 MODE_LABEL, 열거값은 title에만 둔다.
     const modeTag = tag(
       view.stateUnavailable ? "상태 확인 불가" : robot.online ? enumLabel(MODE_LABEL, state.mode) : "오프라인",
