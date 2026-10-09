@@ -5,7 +5,7 @@ the rotation radius (clearance.rotation_gap). Every method runs under the manage
 ``self._lock`` except ``observe_ultrasonic`` and ``bind_motion_envelope``, which take it.
 
 Review fixes (2026-10-02):
-- The LiDAR blind-zone floor applies unless obstacle_blind_floor is off (D-591: Pinky Pro
+- The LiDAR blind-zone floor applies unless obstacle_blind_floor is off (D-591: robots
   drives beside walls); an ultrasonic echo only adds points (H1).
 - Returns that slip under the LiDAR range_min are remembered in an odometry frame
   integrated from the twist that actually went to the wheels (note_wheels, fed by the one
