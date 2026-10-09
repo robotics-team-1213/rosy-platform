@@ -102,6 +102,8 @@ surfaces:
     grammar: exception
     contracts: [shared_controls, typography_focus, dialog]
     breakpoints:
+      - value: 22rem
+        reason: 320px에서 접속 글자만 접어 비상 정지 누름 면적과 머리 폭을 지킨다. 390px에서는 접속 글자를 보여 준다.
       - value: 90rem
         reason: 토큰·역할·테마·두 줄 비상 정지를 모두 편 머리의 자연 폭(약 1220–1300px)이 1440px 미만에 한 줄로 들지 않는다 — 비상 정지가 둘째 줄로 밀리거나 테마 이름표가 접히지 않게 그 아래에서 머리를 접는다
       - value: 110rem

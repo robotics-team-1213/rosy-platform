@@ -629,9 +629,13 @@ def test_the_localization_service_runs_in_the_app_lifespan_and_feeds_the_badge()
     class Service:
         runs = 0
         cancelled = False
+        overhead = None
 
         def view(self, robot_id):
             return {"needs_human": True}
+
+        def set_overhead_pose(self, provider):   # D-546 6 (a): the app hands over the map-pose arbiter
+            Service.overhead = provider
 
         async def run(self):
             Service.runs += 1
@@ -644,6 +648,6 @@ def test_the_localization_service_runs_in_the_app_lifespan_and_feeds_the_badge()
     with TestClient(create_app(console, localization_service=Service())) as client:
         row = client.get("/api/fleet/state").json()["robots"][0]
         assert Service.runs == 1
-    assert Service.cancelled is True
+    assert Service.cancelled is True and callable(Service.overhead)
     assert row["localization"]["label"] == "위치 확인 필요"
     assert row["localization"]["state"] == "CANDIDATES" and row["localization"]["trusted"] is False

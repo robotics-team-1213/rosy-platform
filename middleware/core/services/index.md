@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-09 · uncommitted · fix(core): 위치 요청은 Fleet 결정의 수락 결과만 닫고 RESUME (D-546 5, safety review)
+- 2026-10-09 · uncommitted · feat(core): lane_return이 Fleet에 위치를 청한다 (D-546 5)
 - 2026-10-09 · uncommitted · fix(line_follow): 호 시작 전 경로 문맥
 - 2026-10-09 · uncommitted · feat(line_follow): D-531 계획의 짧은 문맥 계산
 - 2026-10-09 · uncommitted · feat(core): D-541 trip lease 상태 제공자 (`state/manager.py`)
-- 2026-10-09 · uncommitted · test(sim): Fleet 한 바퀴 SIM 3차, 회전교차로 둘레 (모델 PC, main b23055884)
-- 2026-10-08 · uncommitted · fix(core): 모서리 정지는 지시와 어긋나는 모서리만 (lap SIM 2 원인 1)

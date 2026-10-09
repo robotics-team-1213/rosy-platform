@@ -822,3 +822,7 @@
 - 변경: 설정이 켜진 CORE만 `rosy.controls/1` `base_velocity.route_context: true`를 노출한다. 상태 조회는 CORE의 마지막 발행 문맥과 발행 시각을 읽는다.
 - 증거: api_web 149 passed, 15 skipped, `known_failures.py` 신규 실패 0. 실제 Fleet 소비는 미확인.
 - gate 변화: D-531 P1 SOURCE 후보.
+## 2026-10-09 · uncommitted · feat(core): GET /localization/request, API v1.164 (D-546 5)
+- 변경: `GET /api/v1/localization/request`(`LOCALIZE_ASSIST`, 404 `NO_REQUEST`), 이벤트 `localization.request`·`localization.request_cleared`. API 기준서 v1.164과 버전 고정 테스트 갱신.
+- 증거: `middleware/core/gateway/test/test_localization_api.py`.
+- gate 변화: SOURCE.

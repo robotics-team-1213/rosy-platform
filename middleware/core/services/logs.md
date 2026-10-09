@@ -898,3 +898,11 @@
 - 변경: `exit_segment`가 있는 접근 지시를 `junction`으로 내고 실제 호가 running일 때만 `ring` 곡률을 낸다. 독립 검토에서 발견한 접근 차로 오거부 위험을 막는다.
 - 증거: `test_route_context.py` 6 passed(호 시작 전 사례 포함).
 - gate 변화: P1 SOURCE 후보.
+## 2026-10-09 · uncommitted · feat(core): lane_return이 Fleet에 위치를 청한다 (D-546 5)
+- 변경: `localization/pose_request.py`(`PoseRequests`: 사유당 하나, `ttl_s` 30 s, 같은 사유는 id 유지), `recovery/lane_return_pose_request.py`(`fleet` 단계 또는 1 s 넘은 `pose_stale`에서 열고 그 밖의 틱·리셋에서 닫음, `resume_after_pose`는 수락된 결정 뒤 D-407 RESUME). `LocalizationAssist.on_result accepted`가 요청을 닫는다.
+- 증거: `middleware/core/services/test/test_lane_return_pose_request.py`.
+- gate 변화: SOURCE. Safety-Review 대상(line_follow/recovery, localization). SIM·DEVICE 열림.
+## 2026-10-09 · uncommitted · fix(core): 위치 요청은 Fleet 결정의 수락 결과만 닫고 RESUME (D-546 5, safety review)
+- 변경: `on_result`는 결과의 `request_id`가 열린 요청의 id이고 Fleet이 보낸 결정일 때만 닫고 `fleet_pose` RESUME을 건다(사람 initialpose·homing 제외). line follow가 CAMERA_LINE이 아닌 틱(OFF, driver_released)에서도 요청을 닫는다.
+- 증거: `test_lane_return_pose_request.py`.
+- gate 변화: SOURCE.

@@ -3,17 +3,20 @@ from core_features.line_follow.crosswalk_zone import CrosswalkZones
 from core_features.line_follow.recovery.lane_return import Footprint
 from core_features.line_follow.recovery.lane_return_evidence import LaneReturnEvidence
 from core_features.line_follow.recovery.lane_return_decision import LaneReturnDecisionMixin
+from core_features.line_follow.recovery.lane_return_pose_request import PoseRequestMixin
 
 
-class LaneReturnMixin(LaneReturnDecisionMixin):
+class LaneReturnMixin(LaneReturnDecisionMixin, PoseRequestMixin):
     def _init_lane_return(self):
         self._return_evidence = LaneReturnEvidence()
         self._crosswalks = CrosswalkZones()  # D-491
         self._return_controller = None
         self._return_motion = None
         self._init_bridge()  # D-476 (lane_bridge.py)
+        self._init_pose_request()  # D-546 5
 
     def _reset_lane_return(self):
+        self._drop_pose_request('line_follow_reset')
         self._return_evidence.reset()
         self._crosswalks.clear()
         self._return_controller = None
