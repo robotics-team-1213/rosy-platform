@@ -115,31 +115,14 @@ body[data-surface="console"] #vision-stage:fullscreen .surface-camera-frame,
 .traffic-policy-review p { margin: 0; overflow-wrap: anywhere; }
 [data-panel="setup.traffic_policy"] { gap: var(--space-5); }
 /* D-525/D-551 가상 신호 참고 — Fleet T-map 알약처럼 주황 점선 테두리와 "가상" 글자. 등 색 옆에 늘 글자가 있다. */
-.line-signal {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 2px dashed var(--status-warn);
-  border-radius: var(--radius-control);
-  background: var(--ground-deep);
-}
+.line-signal { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: var(--space-1) var(--space-2); padding: var(--space-2) var(--space-3); border: 2px dashed var(--status-warn); border-radius: var(--radius-control); background: var(--ground-deep); }
 .line-signal-kind { color: var(--status-warn); font: var(--weight-emphasis) var(--text-micro)/var(--leading-flat) var(--body); }
-.line-signal-lamp {
-  width: 0.875rem;
-  height: 0.875rem;
-  border-radius: 50%;
-  border: 2px solid var(--nominal-quiet);
-  background: transparent;
-}
+.line-signal-lamp { width: 0.875rem; height: 0.875rem; border-radius: 50%; border: 2px solid var(--nominal-quiet); }
 .line-signal[data-lamp="green"] .line-signal-lamp { background: var(--status-good); border-color: var(--status-good); }
 .line-signal[data-lamp="yellow"] .line-signal-lamp { background: var(--status-warn); border-color: var(--status-warn); }
 .line-signal[data-lamp="red"] .line-signal-lamp { background: var(--status-crit); border-color: var(--status-crit); }
-.line-signal-name { color: var(--nominal-quiet); overflow-wrap: anywhere; }
-.line-signal-text,
-.line-signal-stop,
-.line-signal-note { grid-column: 1 / -1; margin: 0; overflow-wrap: anywhere; }
+.line-signal-name, .line-signal-note, .line-signal[data-lamp="unknown"] .line-signal-text { color: var(--nominal-quiet); }
+.line-signal-name, .line-signal-text, .line-signal-stop, .line-signal-note { margin: 0; overflow-wrap: anywhere; }
+.line-signal-text, .line-signal-stop, .line-signal-note { grid-column: 1 / -1; }
 .line-signal-text { font: var(--weight-emphasis) var(--text-value)/var(--leading-dense) var(--body); }
-.line-signal[data-lamp="unknown"] .line-signal-text { color: var(--nominal-quiet); }
-.line-signal-note { color: var(--nominal-quiet); font-size: var(--text-micro); }
+.line-signal-note { font-size: var(--text-micro); }

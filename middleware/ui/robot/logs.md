@@ -1235,7 +1235,7 @@
 - 증거: 역할·요청 ID·장치 완료 문구를 검사하는 브라우저 회귀 시험을 추가했다. 역할 PC 실행 결과와 장치 설치본은 별도 기록한다.
 - gate 변화: SOURCE 구현. ARTIFACT·DEVICE/FIELD는 설치·현장 확인 전까지 HOLD.
 
-## 2026-10-10 · uiux/robot-signal-advice-chip · uiux(robot): 차선 추종 패널에 D-551 가상 신호 참고 칩
+## 2026-10-10 · uncommitted · uiux(robot): 차선 추종 패널에 D-551 가상 신호 참고 칩
 
 - 변경: Console 차선 추종 패널이 `GET /api/v1/line-follow`의 `advice`(D-525/D-551)를 "가상" 주황 점선 칩으로 보인다. 등 점과 함께 글자로 녹색/황색/적색, 남은 초·녹색까지 초(정확하지 않으면 ≥), 정지선까지 거리, "통과 허가는 관제 authority(통행권)" 문구를 쓴다. CORE가 준 `expires_in_s`가 지나거나 상태 읽기가 실패하면 "신호 정보 없음"이고 지난 녹색을 남기지 않는다. API 변화 없음.
 - 증거: `test/test_line_signal_advice_browser.py`(문구·점선 테두리·만료·읽기 실패·모르는 등).
