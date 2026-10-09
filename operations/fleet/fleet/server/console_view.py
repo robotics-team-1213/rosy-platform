@@ -39,11 +39,11 @@ class CapabilityDisplay:
 
     Stale-while-revalidate (field check 2026-10-10: a 0.05/0.2 s wait turned every slow read
     into "unknown", so the console flickered). A read older than ``refresh_s`` starts one
-    background refresh and answers the last good value with its age at once; only the very
-    first read waits up to ``wait_s``. A transport failure (timeout, refused, no route) keeps
-    the last good value; a robot answer replaces it (an error answer or a body that breaks
-    ``schema`` clears it). ``max_age_s`` bounds how old a kept value may still be shown
-    (None: until a refresh succeeds or the client is replaced or removed).
+    background refresh and answers the last good value with its age at once; only a first read
+    (or a kept value past ``max_age_s``) waits up to ``wait_s``. A transport failure (timeout,
+    refused, no route) keeps the last good value; a robot answer replaces it (an error answer
+    or a body that breaks ``schema`` clears it). ``max_age_s`` bounds how old a kept value may
+    still be shown (None: until a refresh succeeds or the client is replaced or removed).
     """
 
     def __init__(self, clients, clock, *, read_method="capabilities", schema=None,
@@ -76,8 +76,11 @@ class CapabilityDisplay:
             if task is None or task.done() or task.get_loop() is not asyncio.get_running_loop():
                 task = asyncio.create_task(self._refresh(robot_id, client))
                 self.pending[robot_id] = task
-            # Only a robot never read waits; otherwise the request answers the kept value now.
-            await asyncio.wait({task}, timeout=wait_s if cached is None else 0)
+            # Only a robot never read (or whose kept value outlived max_age_s) waits; otherwise
+            # the request answers the kept value now.
+            expired = (cached is None or cached[1] is not None and self.max_age_s is not None
+                       and self.clock() - cached[0] > self.max_age_s)
+            await asyncio.wait({task}, timeout=wait_s if expired else 0)
         return self._kept(robot_id, client)
 
     def _kept(self, robot_id, client):
