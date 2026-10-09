@@ -146,7 +146,7 @@ def test_estop_failed_and_emergency_are_never_masked():
         assert (record.lamp, record.status_level, record.sound, record.reversing) == (
             "emergency", pr.DANGER, "emergency", False)
     for recovery in (None, "retrace", "return", "bridge"):
-        record = both(rs.READY, core(robot_mode="EMERGENCY", recovery=recovery, **{**noisy, "recovery": recovery}))[1]
+        record = both(rs.READY, core(robot_mode="EMERGENCY", **{**noisy, "recovery": recovery}))[1]
         assert (record.lamp, record.sound, record.reversing) == ("emergency", "emergency", False)
         failed = both(rs.FAILED, core(estop=True, robot_mode="EMERGENCY", recovery=recovery,
                                       caution=["dock_failed"]))[1]
