@@ -44,6 +44,7 @@ from .lane import (
     _BRIGHT,
     _WASHED_FRACTION,
 )
+from .lane_boundary_identity import stationary_boundary_replaced
 
 #: Grid cell. A lane line is ten cells wide, and the 6 mm gap between the
 #: lap's crosswalk bars and the boundary is at least two, so the gap
@@ -423,6 +424,8 @@ class LaneEdgeFollower:
 
         edge = self._follow(float(now_s), pose, bgr, ground, float(lane_half_width_m),
                             bright_threshold, float(washed_fraction))
+        if self.last.get("reason") == "boundary_identity_unconfirmed":
+            return None  # a corner handoff cannot turn on the rejected stripe
         if self._corner is None:
             return edge
         manoeuvring = self._corner.state != "FOLLOW"
@@ -452,10 +455,12 @@ class LaneEdgeFollower:
             self.last = {}
             return None
 
+        stationary = False
         if self._last_pose is not None:
             dx, dy = pose[0] - self._last_pose[0], pose[1] - self._last_pose[1]
             dyaw = math.atan2(math.sin(pose[2] - self._last_pose[2]),
                               math.cos(pose[2] - self._last_pose[2]))
+            stationary = math.hypot(dx, dy) <= 0.002 and abs(dyaw) <= math.radians(1)
             self._odometer += max(math.hypot(dx, dy), half * abs(dyaw))
         self._last_pose = pose
 
@@ -469,11 +474,22 @@ class LaneEdgeFollower:
             if left is not None and self._left and not self._continues(
                     labels == left, left_grid):
                 left, seeded_right = None, None
-        right = self._match(labels, count, self._right.grid(view, pose), exclude=left)
+        right_grid = self._right.grid(view, pose)
+        right = self._match(labels, count, right_grid, exclude=left)
         if right is None:
             right = seeded_right
         if right is None and self._left:
             right = self._right_boundary(view, labels, stats, count, left, left_grid, half)
+
+        if stationary and ((left is not None and self._left and stationary_boundary_replaced(
+                labels == left, left_grid > 0, view.y)) or
+                (right is not None and self._right and stationary_boundary_replaced(
+                    labels == right, right_grid > 0, view.y))):
+            self._forget()
+            if self._corner is not None:
+                self._corner._abort()
+            self.last = {"reason": "boundary_identity_unconfirmed"}
+            return None
 
         fresh_length = 0.0
         for label, memory in ((left, self._left), (right, self._right)):
